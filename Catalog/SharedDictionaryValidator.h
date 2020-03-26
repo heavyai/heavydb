@@ -23,7 +23,7 @@
 #include "../Parser/ParserNode.h"
 
 void validate_shared_dictionary(
-    const Parser::CreateTableStmt* stmt,
+    const Parser::CreateTableBaseStmt* stmt,
     const Parser::SharedDictionaryDef* shared_dict_def,
     const std::list<ColumnDescriptor>& columns,
     const std::vector<Parser::SharedDictionaryDef>& shared_dict_defs_so_far,
@@ -34,7 +34,7 @@ const Parser::SharedDictionaryDef compress_reference_path(
     const std::vector<Parser::SharedDictionaryDef>& shared_dict_defs);
 
 void validate_shared_dictionary_order(
-    const Parser::CreateTableStmt* stmt,
+    const Parser::CreateTableBaseStmt* stmt,
     const Parser::SharedDictionaryDef* shared_dict_def,
     const std::vector<Parser::SharedDictionaryDef>& shared_dict_defs,
     const std::list<ColumnDescriptor>& columns);

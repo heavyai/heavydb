@@ -201,6 +201,9 @@ class AbstractFragmenter {
       const std::shared_ptr<Chunk_NS::Chunk>& chunk) = 0;
 
   virtual void dropColumns(const std::vector<int>& columnIds) = 0;
+
+  //! Iterates through chunk metadata to return whether any rows have been deleted.
+  virtual bool hasDeletedRows(const int delete_column_id) = 0;
 };
 
 }  // namespace Fragmenter_Namespace

@@ -58,7 +58,7 @@ const Parser::SharedDictionaryDef compress_reference_path(
 
 // Make sure the dependency of shared dictionaries does not form a cycle
 void validate_shared_dictionary_order(
-    const Parser::CreateTableStmt* stmt,
+    const Parser::CreateTableBaseStmt* stmt,
     const Parser::SharedDictionaryDef* shared_dict_def,
     const std::vector<Parser::SharedDictionaryDef>& shared_dict_defs,
     const std::list<ColumnDescriptor>& columns) {
@@ -127,7 +127,7 @@ const Parser::CompressDef* get_compression_for_column(
 
 // Validate shared dictionary directive against the list of columns seen so far.
 void validate_shared_dictionary(
-    const Parser::CreateTableStmt* stmt,
+    const Parser::CreateTableBaseStmt* stmt,
     const Parser::SharedDictionaryDef* shared_dict_def,
     const std::list<ColumnDescriptor>& columns,
     const std::vector<Parser::SharedDictionaryDef>& shared_dict_defs_so_far,

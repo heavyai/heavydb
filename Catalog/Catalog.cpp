@@ -56,10 +56,13 @@
 #include "QueryEngine/Execute.h"
 #include "QueryEngine/TableOptimizer.h"
 
+#include "DataMgr/FileMgr/FileMgr.h"
+#include "DataMgr/FileMgr/GlobalFileMgr.h"
 #include "DataMgr/ForeignStorage/ForeignStorageInterface.h"
 #include "Fragmenter/Fragmenter.h"
 #include "Fragmenter/SortedOrderFragmenter.h"
 #include "LockMgr/LockMgr.h"
+#include "MigrationMgr/MigrationMgr.h"
 #include "Parser/ParserNode.h"
 #include "QueryEngine/Execute.h"
 #include "QueryEngine/TableOptimizer.h"
@@ -83,8 +86,8 @@ using std::string;
 using std::vector;
 
 int g_test_against_columnId_gap{0};
+bool g_enable_fsi{false};
 extern bool g_cache_string_hash;
-extern bool g_enable_fsi;
 
 // Serialize temp tables to a json file in the Catalogs directory for Calcite parsing
 // under unit testing.
@@ -805,113 +808,8 @@ void Catalog::recordOwnershipOfObjectsInObjectPermissions() {
 
 void Catalog::checkDateInDaysColumnMigration() {
   cat_sqlite_lock sqlite_lock(this);
-  std::vector<int> tables_migrated = {};
-  std::unordered_map<int, std::vector<std::string>> tables_to_migrate;
-  sqliteConnector_.query("BEGIN TRANSACTION");
-  try {
-    sqliteConnector_.query(
-        "select name from sqlite_master WHERE type='table' AND "
-        "name='mapd_version_history'");
-    if (sqliteConnector_.getNumRows() == 0) {
-      sqliteConnector_.query(
-          "CREATE TABLE mapd_version_history(version integer, migration_history text "
-          "unique)");
-      sqliteConnector_.query(
-          "CREATE TABLE mapd_date_in_days_column_migration_tmp(table_id integer primary "
-          "key)");
-    } else {
-      sqliteConnector_.query(
-          "select * from mapd_version_history where migration_history = "
-          "'date_in_days_column'");
-      if (sqliteConnector_.getNumRows() != 0) {
-        // no need for further execution
-        sqliteConnector_.query("END TRANSACTION");
-        return;
-      }
-      LOG(INFO) << "Performing Date in days columns migration.";
-      sqliteConnector_.query(
-          "select name from sqlite_master where type='table' AND "
-          "name='mapd_date_in_days_column_migration_tmp'");
-      if (sqliteConnector_.getNumRows() != 0) {
-        sqliteConnector_.query(
-            "select table_id from mapd_date_in_days_column_migration_tmp");
-        if (sqliteConnector_.getNumRows() != 0) {
-          for (size_t i = 0; i < sqliteConnector_.getNumRows(); i++) {
-            tables_migrated.push_back(sqliteConnector_.getData<int>(i, 0));
-          }
-        }
-      } else {
-        sqliteConnector_.query(
-            "CREATE TABLE mapd_date_in_days_column_migration_tmp(table_id integer "
-            "primary key)");
-      }
-    }
-    sqliteConnector_.query_with_text_params(
-        "SELECT tables.tableid, tables.name, columns.name FROM mapd_tables tables, "
-        "mapd_columns columns where tables.tableid = columns.tableid AND "
-        "columns.coltype = ?1 AND columns.compression = ?2",
-        std::vector<std::string>{
-            std::to_string(static_cast<int>(SQLTypes::kDATE)),
-            std::to_string(static_cast<int>(EncodingType::kENCODING_DATE_IN_DAYS))});
-    if (sqliteConnector_.getNumRows() != 0) {
-      for (size_t i = 0; i < sqliteConnector_.getNumRows(); i++) {
-        tables_to_migrate[sqliteConnector_.getData<int>(i, 0)] = {
-            sqliteConnector_.getData<std::string>(i, 1),
-            sqliteConnector_.getData<std::string>(i, 2)};
-      }
-    }
-  } catch (const std::exception& e) {
-    LOG(ERROR) << "Failed to complete migraion on date in days column: " << e.what();
-    sqliteConnector_.query("ROLLBACK");
-    throw;
-  }
-  sqliteConnector_.query("END TRANSACTION");
-
-  for (auto& id_names : tables_to_migrate) {
-    if (std::find(tables_migrated.begin(), tables_migrated.end(), id_names.first) ==
-        tables_migrated.end()) {
-      sqliteConnector_.query("BEGIN TRANSACTION");
-      try {
-        LOG(INFO) << "Table: " << id_names.second[0]
-                  << " may suffer from issues with DATE column: " << id_names.second[1]
-                  << ". Running an OPTIMIZE command to solve any issues with metadata.";
-
-        auto executor = Executor::getExecutor(getCurrentDB().dbId);
-        TableDescriptorMapById::iterator tableDescIt =
-            tableDescriptorMapById_.find(id_names.first);
-        if (tableDescIt == tableDescriptorMapById_.end()) {
-          throw runtime_error("Table descriptor does not exist for table " +
-                              id_names.second[0] + " does not exist.");
-        }
-        auto td = tableDescIt->second;
-        TableOptimizer optimizer(td, executor.get(), *this);
-        optimizer.recomputeMetadata();
-
-        sqliteConnector_.query_with_text_params(
-            "INSERT INTO mapd_date_in_days_column_migration_tmp VALUES(?)",
-            std::vector<std::string>{std::to_string(id_names.first)});
-      } catch (const std::exception& e) {
-        LOG(ERROR) << "Failed to complete migraion on date in days column: " << e.what();
-        sqliteConnector_.query("ROLLBACK");
-        throw;
-      }
-      sqliteConnector_.query("COMMIT");
-    }
-  }
-
-  sqliteConnector_.query("BEGIN TRANSACTION");
-  try {
-    sqliteConnector_.query("DROP TABLE mapd_date_in_days_column_migration_tmp");
-    sqliteConnector_.query_with_text_params(
-        "INSERT INTO mapd_version_history(version, migration_history) values(?,?)",
-        std::vector<std::string>{std::to_string(MAPD_VERSION), "date_in_days_column"});
-  } catch (const std::exception& e) {
-    LOG(ERROR) << "Failed to complete migraion on date in days column: " << e.what();
-    sqliteConnector_.query("ROLLBACK");
-    throw;
-  }
-  sqliteConnector_.query("END TRANSACTION");
-  LOG(INFO) << "Migration successfull on Date in days columns";
+  migrations::MigrationMgr::migrateDateInDaysMetadata(
+      tableDescriptorMapById_, getCurrentDB().dbId, this, sqliteConnector_);
 }
 
 void Catalog::createDashboardSystemRoles() {
@@ -2640,23 +2538,30 @@ const ColumnDescriptor* Catalog::getDeletedColumn(const TableDescriptor* td) con
   return it != deletedColumnPerTable_.end() ? it->second : nullptr;
 }
 
-const bool Catalog::checkMetadataForDeletedRecs(int dbId,
-                                                int tableId,
-                                                int columnId) const {
-  // check if there are rows deleted by examining metadata for the deletedColumn metadata
-  ChunkKey chunkKeyPrefix = {dbId, tableId, columnId};
-  std::vector<std::pair<ChunkKey, ChunkMetadata>> chunkMetadataVec;
-  dataMgr_->getChunkMetadataVecForKeyPrefix(chunkMetadataVec, chunkKeyPrefix);
-  int64_t chunk_max{0};
+const bool Catalog::checkMetadataForDeletedRecs(const TableDescriptor* td,
+                                                int delete_column_id) const {
+  // check if there are rows deleted by examining the deletedColumn metadata
+  CHECK(td);
 
-  for (auto cm : chunkMetadataVec) {
-    chunk_max = cm.second.chunkStats.max.tinyintval;
-    // delete has occured
-    if (chunk_max == 1) {
-      return true;
+  if (table_is_temporary(td)) {
+    auto fragmenter = td->fragmenter;
+    CHECK(fragmenter);
+    return fragmenter->hasDeletedRows(delete_column_id);
+  } else {
+    ChunkKey chunk_key_prefix = {currentDB_.dbId, td->tableId, delete_column_id};
+    std::vector<std::pair<ChunkKey, ChunkMetadata>> chunk_metadata_vec;
+    dataMgr_->getChunkMetadataVecForKeyPrefix(chunk_metadata_vec, chunk_key_prefix);
+    int64_t chunk_max{0};
+
+    for (auto chunk_metadata : chunk_metadata_vec) {
+      chunk_max = chunk_metadata.second.chunkStats.max.tinyintval;
+      // delete has occured
+      if (chunk_max == 1) {
+        return true;
+      }
     }
+    return false;
   }
-  return false;
 }
 
 const ColumnDescriptor* Catalog::getDeletedColumnIfRowsDeleted(
@@ -2680,12 +2585,12 @@ const ColumnDescriptor* Catalog::getDeletedColumnIfRowsDeleted(
       int32_t physical_tb_id = physicalTables[i];
       const TableDescriptor* phys_td = getMetadataForTable(physical_tb_id);
       CHECK(phys_td);
-      if (checkMetadataForDeletedRecs(currentDB_.dbId, phys_td->tableId, cd->columnId)) {
+      if (checkMetadataForDeletedRecs(phys_td, cd->columnId)) {
         return cd;
       }
     }
   } else {
-    if (checkMetadataForDeletedRecs(currentDB_.dbId, td->tableId, cd->columnId)) {
+    if (checkMetadataForDeletedRecs(td, cd->columnId)) {
       return cd;
     }
   }
@@ -2881,7 +2786,9 @@ void Catalog::createShardedTable(
         logicalToPhysicalTableMapById_.emplace(logical_tb_id, physicalTables);
     CHECK(it_ok.second);
     /* update sqlite mapd_logical_to_physical in sqlite database */
-    updateLogicalToPhysicalTableMap(logical_tb_id);
+    if (!table_is_temporary(&td)) {
+      updateLogicalToPhysicalTableMap(logical_tb_id);
+    }
   }
 }
 
@@ -3609,4 +3516,135 @@ void Catalog::setForReload(const int32_t tableId) {
     setTableEpoch(currentDB_.dbId, shard->tableId, tableEpoch);
   }
 }
+
+// get a table's data dirs
+std::vector<std::string> Catalog::getTableDataDirectories(
+    const TableDescriptor* td) const {
+  const auto global_file_mgr = getDataMgr().getGlobalFileMgr();
+  std::vector<std::string> file_paths;
+  for (auto shard : getPhysicalTablesDescriptors(td)) {
+    const auto file_mgr = dynamic_cast<File_Namespace::FileMgr*>(
+        global_file_mgr->getFileMgr(currentDB_.dbId, shard->tableId));
+    boost::filesystem::path file_path(file_mgr->getFileMgrBasePath());
+    file_paths.push_back(file_path.filename().string());
+  }
+  return file_paths;
+}
+
+// get a column's dict dir basename
+std::string Catalog::getColumnDictDirectory(const ColumnDescriptor* cd) const {
+  if ((cd->columnType.is_string() || cd->columnType.is_string_array()) &&
+      cd->columnType.get_compression() == kENCODING_DICT &&
+      cd->columnType.get_comp_param() > 0) {
+    const auto dictId = cd->columnType.get_comp_param();
+    const DictRef dictRef(currentDB_.dbId, dictId);
+    const auto dit = dictDescriptorMapByRef_.find(dictRef);
+    CHECK(dit != dictDescriptorMapByRef_.end());
+    CHECK(dit->second);
+    boost::filesystem::path file_path(dit->second->dictFolderPath);
+    return file_path.filename().string();
+  }
+  return std::string();
+}
+
+// get a table's dict dirs
+std::vector<std::string> Catalog::getTableDictDirectories(
+    const TableDescriptor* td) const {
+  std::vector<std::string> file_paths;
+  for (auto cd : getAllColumnMetadataForTable(td->tableId, false, false, true)) {
+    auto file_base = getColumnDictDirectory(cd);
+    if (!file_base.empty() &&
+        file_paths.end() == std::find(file_paths.begin(), file_paths.end(), file_base)) {
+      file_paths.push_back(file_base);
+    }
+  }
+  return file_paths;
+}
+
+// returns table schema in a string
+std::string Catalog::dumpSchema(const TableDescriptor* td) const {
+  cat_read_lock read_lock(this);
+
+  std::ostringstream os;
+  os << "CREATE TABLE @T (";
+  // gather column defines
+  const auto cds = getAllColumnMetadataForTable(td->tableId, false, false, false);
+  std::string comma;
+  std::vector<std::string> shared_dicts;
+  std::map<const std::string, const ColumnDescriptor*> dict_root_cds;
+  for (const auto cd : cds) {
+    if (!(cd->isSystemCol || cd->isVirtualCol)) {
+      const auto& ti = cd->columnType;
+      os << comma << cd->columnName;
+      // CHAR is perculiar... better dump it as TEXT(32) like \d does
+      if (ti.get_type() == SQLTypes::kCHAR) {
+        os << " "
+           << "TEXT";
+      } else if (ti.get_subtype() == SQLTypes::kCHAR) {
+        os << " "
+           << "TEXT[]";
+      } else {
+        os << " " << ti.get_type_name();
+      }
+      os << (ti.get_notnull() ? " NOT NULL" : "");
+      if (ti.is_string()) {
+        if (ti.get_compression() == kENCODING_DICT) {
+          // if foreign reference, get referenced tab.col
+          const auto dict_id = ti.get_comp_param();
+          const DictRef dict_ref(currentDB_.dbId, dict_id);
+          const auto dict_it = dictDescriptorMapByRef_.find(dict_ref);
+          CHECK(dict_it != dictDescriptorMapByRef_.end());
+          const auto dict_name = dict_it->second->dictName;
+          // when migrating a table, any foreign dict ref will be dropped
+          // and the first cd of a dict will become root of the dict
+          if (dict_root_cds.end() == dict_root_cds.find(dict_name)) {
+            dict_root_cds[dict_name] = cd;
+            os << " ENCODING " << ti.get_compression_name() << "(" << (ti.get_size() * 8)
+               << ")";
+          } else {
+            const auto dict_root_cd = dict_root_cds[dict_name];
+            shared_dicts.push_back("SHARED DICTIONARY (" + cd->columnName +
+                                   ") REFERENCES @T(" + dict_root_cd->columnName + ")");
+            // "... shouldn't specify an encoding, it borrows from the referenced column"
+          }
+        } else {
+          os << " ENCODING NONE";
+        }
+      } else if (ti.get_size() > 0 && ti.get_size() != ti.get_logical_size()) {
+        const auto comp_param = ti.get_comp_param() ? ti.get_comp_param() : 32;
+        os << " ENCODING " << ti.get_compression_name() << "(" << comp_param << ")";
+      }
+      comma = ", ";
+    }
+  }
+  // gather SHARED DICTIONARYs
+  if (shared_dicts.size()) {
+    os << ", " << boost::algorithm::join(shared_dicts, ", ");
+  }
+  // gather WITH options ...
+  std::vector<std::string> with_options;
+  with_options.push_back("FRAGMENT_SIZE=" + std::to_string(td->maxFragRows));
+  with_options.push_back("MAX_CHUNK_SIZE=" + std::to_string(td->maxChunkSize));
+  with_options.push_back("PAGE_SIZE=" + std::to_string(td->fragPageSize));
+  with_options.push_back("MAX_ROWS=" + std::to_string(td->maxRows));
+  with_options.emplace_back(td->hasDeletedCol ? "VACUUM='DELAYED'"
+                                              : "VACUUM='IMMEDIATE'");
+  if (!td->partitions.empty()) {
+    with_options.push_back("PARTITIONS='" + td->partitions + "'");
+  }
+  if (td->nShards > 0) {
+    const auto shard_cd = getMetadataForColumn(td->tableId, td->shardedColumnId);
+    CHECK(shard_cd);
+    os << ", SHARD KEY(" << shard_cd->columnName << ")";
+    with_options.push_back("SHARD_COUNT=" + std::to_string(td->nShards));
+  }
+  if (td->sortedColumnId > 0) {
+    const auto sort_cd = getMetadataForColumn(td->tableId, td->sortedColumnId);
+    CHECK(sort_cd);
+    with_options.push_back("SORT_COLUMN='" + sort_cd->columnName + "'");
+  }
+  os << ") WITH (" + boost::algorithm::join(with_options, ", ") + ");";
+  return os.str();
+}
+
 }  // namespace Catalog_Namespace

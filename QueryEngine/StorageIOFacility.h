@@ -1,18 +1,33 @@
-#ifndef STORAGEIOFACILITY_H
-#define STORAGEIOFACILITY_H
+/*
+ * Copyright 2020 OmniSci, Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 
-#include "ExternalCacheInvalidators.h"
+#pragma once
+
+#include <future>
+
 #include "Fragmenter/InsertOrderFragmenter.h"
-#include "TargetMetaInfo.h"
-
-#include <boost/variant.hpp>
+#include "QueryEngine/CodeGenerator.h"
+#include "QueryEngine/ExternalCacheInvalidators.h"
+#include "QueryEngine/InputMetadata.h"
+#include "QueryEngine/TargetMetaInfo.h"
 #include "Shared/ConfigResolve.h"
 #include "Shared/ExperimentalTypeUtilities.h"
 #include "Shared/UpdelRoll.h"
 #include "Shared/likely.h"
 #include "Shared/thread_count.h"
-
-#include <future>
 
 template <typename FRAGMENTER_TYPE = Fragmenter_Namespace::InsertOrderFragmenter>
 class DefaultIOFacet {
@@ -88,13 +103,6 @@ class DefaultIOFacet {
       LOG(INFO) << "Delete metadata column unavailable; skipping delete operation.";
     }
   }
-
-  template <typename CATALOG_TYPE, typename TABLE_DESCRIPTOR_TYPE>
-  static std::function<bool(std::string const&)> yieldColumnValidator(
-      CATALOG_TYPE const& cat,
-      TABLE_DESCRIPTOR_TYPE const* table_descriptor) {
-    return [](std::string const& column_name) -> bool { return true; };
-  };
 };
 
 template <typename EXECUTOR_TRAITS,
@@ -140,12 +148,17 @@ class StorageIOFacility {
 
   struct DeleteTransactionParameters : public TransactionParameters {
    public:
-    DeleteTransactionParameters() {}
+    DeleteTransactionParameters(const bool table_is_temporary)
+        : table_is_temporary_(table_is_temporary) {}
+
+    auto tableIsTemporary() const { return table_is_temporary_; }
 
    private:
     DeleteTransactionParameters(DeleteTransactionParameters const& other) = delete;
     DeleteTransactionParameters& operator=(DeleteTransactionParameters const& other) =
         delete;
+
+    bool table_is_temporary_;
   };
 
   class UpdateTransactionParameters : public TransactionParameters {
@@ -157,11 +170,8 @@ class StorageIOFacility {
         : table_descriptor_(table_desc)
         , update_column_names_(update_column_names)
         , targets_meta_(target_types)
-        , varlen_update_required_(varlen_update_required) {
-      if (table_is_temporary(table_descriptor_)) {
-        throw std::runtime_error("UPDATE not yet supported on temporary tables.");
-      }
-    };
+        , varlen_update_required_(varlen_update_required)
+        , table_is_temporary_(table_is_temporary(table_descriptor_)) {}
 
     auto getUpdateColumnCount() const { return update_column_names_.size(); }
     auto const* getTableDescriptor() const { return table_descriptor_; }
@@ -169,6 +179,7 @@ class StorageIOFacility {
     auto getTargetsMetaInfoSize() const { return targets_meta_.size(); }
     auto const& getUpdateColumnNames() const { return update_column_names_; }
     auto isVarlenUpdateRequired() const { return varlen_update_required_; }
+    auto tableIsTemporary() const { return table_is_temporary_; }
 
    private:
     UpdateTransactionParameters(UpdateTransactionParameters const& other) = delete;
@@ -179,15 +190,11 @@ class StorageIOFacility {
     UpdateTargetColumnNamesList update_column_names_;
     UpdateTargetTypeList const& targets_meta_;
     bool varlen_update_required_ = false;
+    bool table_is_temporary_;
   };
 
   StorageIOFacility(ExecutorType* executor, CatalogType const& catalog)
       : executor_(executor), catalog_(catalog) {}
-
-  ColumnValidationFunction yieldColumnValidator(
-      TableDescriptorType const* table_descriptor) {
-    return IOFacility::yieldColumnValidator(catalog_, table_descriptor);
-  }
 
   UpdateCallback yieldUpdateCallback(UpdateTransactionParameters& update_parameters);
   UpdateCallback yieldDeleteCallback(DeleteTransactionParameters& delete_parameters);
@@ -237,7 +244,109 @@ StorageIOFacility<EXECUTOR_TRAITS, IO_FACET, FRAGMENT_UPDATER>::yieldUpdateCallb
           update_parameters.getTransactionTracker());
     };
     return callback;
+  } else if (update_parameters.tableIsTemporary()) {
+    auto callback = [this,
+                     &update_parameters](FragmentUpdaterType const& update_log) -> void {
+      auto rs = update_log.getResultSet();
+      CHECK(rs->didOutputColumnar());
+      CHECK(rs->isDirectColumnarConversionPossible());
+      CHECK_EQ(update_parameters.getUpdateColumnCount(), size_t(1));
+      CHECK_EQ(rs->colCount(), size_t(1));
 
+      // Temporary table updates require the full projected column
+      CHECK_EQ(rs->rowCount(), update_log.getRowCount());
+
+      auto& fragment_info = update_log.getFragmentInfo();
+      const auto td = catalog_.getMetadataForTable(update_log.getPhysicalTableId());
+      CHECK(td);
+      const auto cd = catalog_.getMetadataForColumn(
+          td->tableId, update_parameters.getUpdateColumnNames().front());
+      ;
+      CHECK(cd);
+      auto chunk_metadata =
+          fragment_info.getChunkMetadataMapPhysical().find(cd->columnId);
+      CHECK(chunk_metadata != fragment_info.getChunkMetadataMapPhysical().end());
+      ChunkKey chunk_key{catalog_.getCurrentDB().dbId,
+                         td->tableId,
+                         cd->columnId,
+                         fragment_info.fragmentId};
+      auto chunk = Chunk_NS::Chunk::getChunk(cd,
+                                             &catalog_.getDataMgr(),
+                                             chunk_key,
+                                             Data_Namespace::MemoryLevel::CPU_LEVEL,
+                                             0,
+                                             chunk_metadata->second.numBytes,
+                                             chunk_metadata->second.numElements);
+      CHECK(chunk);
+      auto chunk_buffer = chunk->get_buffer();
+      CHECK(chunk_buffer && chunk_buffer->has_encoder);
+
+      auto encoder = chunk_buffer->encoder.get();
+      CHECK(encoder);
+
+      const auto bytes_width = rs->getPaddedSlotWidthBytes(0);
+
+      ChunkMetadata new_chunk_metadata;
+      if (cd->columnType.is_dict_encoded_string() &&
+          cd->columnType.get_size() < bytes_width) {
+        // dictionary encoded strings currently use the none-encoder for all types. Scale
+        // the column values appropriately
+
+        const auto col_bytes_width = cd->columnType.get_size();
+        const size_t buffer_size = col_bytes_width * update_log.getRowCount();
+        auto updates_buffer_owned = std::make_unique<char[]>(buffer_size);
+        auto updates_buffer = reinterpret_cast<int8_t*>(updates_buffer_owned.get());
+
+        auto rs_buffer_size = bytes_width * update_log.getRowCount();
+        auto rs_buffer_owned = std::make_unique<char[]>(rs_buffer_size);
+        auto rs_buffer = reinterpret_cast<int8_t*>(rs_buffer_owned.get());
+        rs->copyColumnIntoBuffer(0, rs_buffer, rs_buffer_size);
+
+        // Iterate the result set and copy into the updates buffer
+        auto updates_ptr = updates_buffer;
+        auto rs_ptr = rs_buffer;
+        for (size_t i = 0; i < rs->rowCount(); i++) {
+          std::memcpy(updates_ptr, rs_ptr, col_bytes_width);
+          updates_ptr += col_bytes_width;
+          rs_ptr += bytes_width;
+        }
+
+        new_chunk_metadata =
+            encoder->appendData(updates_buffer, rs->rowCount(), cd->columnType, false, 0);
+      } else {
+        // leverage the encoder to scale column values if the type is encoded (e.g.
+        // DateInDays)
+        const size_t buffer_size = bytes_width * update_log.getRowCount();
+        auto updates_buffer_owned = std::make_unique<char[]>(buffer_size);
+        auto updates_buffer = reinterpret_cast<int8_t*>(updates_buffer_owned.get());
+        rs->copyColumnIntoBuffer(0, updates_buffer, buffer_size);
+
+        new_chunk_metadata =
+            encoder->appendData(updates_buffer, rs->rowCount(), cd->columnType, false, 0);
+      }
+
+      auto fragmenter = td->fragmenter;
+      CHECK(fragmenter);
+
+      // The fragmenter copy of the fragment info differs from the copy used by the query
+      // engine. Update metadata in the fragmenter directly.
+      auto fragment = fragmenter->getFragmentInfo(fragment_info.fragmentId);
+      // TODO: we may want to put this directly in the fragmenter so we are under the
+      // fragmenter lock. But, concurrent queries on the same fragmenter should not be
+      // allowed in this path.
+
+      fragment->setChunkMetadata(cd->columnId, new_chunk_metadata);
+      fragment->shadowChunkMetadataMap =
+          fragment->getChunkMetadataMap();  // TODO(adb): needed?
+
+      auto& data_mgr = catalog_.getDataMgr();
+      if (data_mgr.gpusPresent()) {
+        // flush any GPU copies of the updated chunk
+        data_mgr.deleteChunksWithPrefix(chunk_key,
+                                        Data_Namespace::MemoryLevel::GPU_LEVEL);
+      }
+    };
+    return callback;
   } else {
     auto callback = [this,
                      &update_parameters](FragmentUpdaterType const& update_log) -> void {
@@ -366,89 +475,160 @@ StorageIOFacility<EXECUTOR_TRAITS, IO_FACET, FRAGMENT_UPDATER>::yieldDeleteCallb
     DeleteTransactionParameters& delete_parameters) {
   using RowProcessingFuturesVector = std::vector<std::future<uint64_t>>;
 
-  auto callback = [this,
-                   &delete_parameters](FragmentUpdaterType const& update_log) -> void {
-    auto entries_per_column = update_log.getEntryCount();
-    auto rows_per_column = update_log.getRowCount();
-    if (rows_per_column == 0) {
-      return;
-    }
-    DeleteVictimOffsetList victim_offsets(rows_per_column);
+  if (delete_parameters.tableIsTemporary()) {
+    auto callback = [this](FragmentUpdaterType const& update_log) -> void {
+      auto rs = update_log.getResultSet();
+      CHECK(rs->didOutputColumnar());
+      CHECK(rs->isDirectColumnarConversionPossible());
+      CHECK_EQ(rs->colCount(), size_t(1));
 
-    auto complete_row_block_size = entries_per_column / normalized_cpu_threads();
-    auto partial_row_block_size = entries_per_column % normalized_cpu_threads();
-    auto usable_threads = normalized_cpu_threads();
+      // Temporary table updates require the full projected column
+      CHECK_EQ(rs->rowCount(), update_log.getRowCount());
 
-    if (UNLIKELY(rows_per_column < (unsigned)normalized_cpu_threads())) {
-      complete_row_block_size = rows_per_column;
-      partial_row_block_size = 0;
-      usable_threads = 1;
-    }
+      auto& fragment_info = update_log.getFragmentInfo();
+      const auto td = catalog_.getMetadataForTable(update_log.getPhysicalTableId());
+      CHECK(td);
+      const auto cd = catalog_.getDeletedColumn(td);
+      CHECK(cd);
+      auto chunk_metadata =
+          fragment_info.getChunkMetadataMapPhysical().find(cd->columnId);
+      CHECK(chunk_metadata != fragment_info.getChunkMetadataMapPhysical().end());
+      ChunkKey chunk_key{catalog_.getCurrentDB().dbId,
+                         td->tableId,
+                         cd->columnId,
+                         fragment_info.fragmentId};
+      auto chunk = Chunk_NS::Chunk::getChunk(cd,
+                                             &catalog_.getDataMgr(),
+                                             chunk_key,
+                                             Data_Namespace::MemoryLevel::CPU_LEVEL,
+                                             0,
+                                             chunk_metadata->second.numBytes,
+                                             chunk_metadata->second.numElements);
+      CHECK(chunk);
+      auto chunk_buffer = chunk->get_buffer();
+      CHECK(chunk_buffer && chunk_buffer->has_encoder);
 
-    std::atomic<size_t> row_idx{0};
+      auto encoder = chunk_buffer->encoder.get();
+      CHECK(encoder);
 
-    auto process_rows = [&update_log, &victim_offsets, &row_idx](
-                            uint64_t entry_start, uint64_t entry_count) -> uint64_t {
-      uint64_t entries_processed = 0;
+      const auto bytes_width = rs->getPaddedSlotWidthBytes(0);
 
-      for (uint64_t entry_index = entry_start; entry_index < (entry_start + entry_count);
-           entry_index++) {
-        auto const row(update_log.getEntryAt(entry_index));
+      // leverage the encoder to scale column values if the type is encoded (e.g.
+      // DateInDays)
+      const size_t buffer_size = bytes_width * update_log.getRowCount();
+      auto updates_buffer_owned = std::make_unique<char[]>(buffer_size);
+      auto updates_buffer = reinterpret_cast<int8_t*>(updates_buffer_owned.get());
+      rs->copyColumnIntoBuffer(0, updates_buffer, buffer_size);
 
-        if (row.empty()) {
-          continue;
-        }
+      const auto new_chunk_metadata =
+          encoder->appendData(updates_buffer, rs->rowCount(), cd->columnType, false, 0);
 
-        entries_processed++;
-        size_t row_index = row_idx.fetch_add(1);
+      auto fragmenter = td->fragmenter;
+      CHECK(fragmenter);
 
-        auto terminal_column_iter = std::prev(row.end());
-        const auto scalar_tv = boost::get<ScalarTargetValue>(&*terminal_column_iter);
-        CHECK(scalar_tv);
+      // The fragmenter copy of the fragment info differs from the copy used by the query
+      // engine. Update metadata in the fragmenter directly.
+      auto fragment = fragmenter->getFragmentInfo(fragment_info.fragmentId);
+      // TODO: we may want to put this directly in the fragmenter so we are under the
+      // fragmenter lock. But, concurrent queries on the same fragmenter should not be
+      // allowed in this path.
 
-        uint64_t fragment_offset =
-            static_cast<uint64_t>(*(boost::get<int64_t>(scalar_tv)));
-        victim_offsets[row_index] = fragment_offset;
+      fragment->setChunkMetadata(cd->columnId, new_chunk_metadata);
+      fragment->shadowChunkMetadataMap =
+          fragment->getChunkMetadataMap();  // TODO(adb): needed?
+
+      auto& data_mgr = catalog_.getDataMgr();
+      if (data_mgr.gpusPresent()) {
+        // flush any GPU copies of the updated chunk
+        data_mgr.deleteChunksWithPrefix(chunk_key,
+                                        Data_Namespace::MemoryLevel::GPU_LEVEL);
       }
-      return entries_processed;
     };
+    return callback;
+  } else {
+    auto callback = [this,
+                     &delete_parameters](FragmentUpdaterType const& update_log) -> void {
+      auto entries_per_column = update_log.getEntryCount();
+      auto rows_per_column = update_log.getRowCount();
+      if (rows_per_column == 0) {
+        return;
+      }
+      DeleteVictimOffsetList victim_offsets(rows_per_column);
 
-    auto get_row_index = [complete_row_block_size](uint64_t thread_index) -> uint64_t {
-      return thread_index * complete_row_block_size;
+      auto complete_row_block_size = entries_per_column / normalized_cpu_threads();
+      auto partial_row_block_size = entries_per_column % normalized_cpu_threads();
+      auto usable_threads = normalized_cpu_threads();
+
+      if (UNLIKELY(rows_per_column < (unsigned)normalized_cpu_threads())) {
+        complete_row_block_size = rows_per_column;
+        partial_row_block_size = 0;
+        usable_threads = 1;
+      }
+
+      std::atomic<size_t> row_idx{0};
+
+      auto process_rows = [&update_log, &victim_offsets, &row_idx](
+                              uint64_t entry_start, uint64_t entry_count) -> uint64_t {
+        uint64_t entries_processed = 0;
+
+        for (uint64_t entry_index = entry_start;
+             entry_index < (entry_start + entry_count);
+             entry_index++) {
+          auto const row(update_log.getEntryAt(entry_index));
+
+          if (row.empty()) {
+            continue;
+          }
+
+          entries_processed++;
+          size_t row_index = row_idx.fetch_add(1);
+
+          auto terminal_column_iter = std::prev(row.end());
+          const auto scalar_tv = boost::get<ScalarTargetValue>(&*terminal_column_iter);
+          CHECK(scalar_tv);
+
+          uint64_t fragment_offset =
+              static_cast<uint64_t>(*(boost::get<int64_t>(scalar_tv)));
+          victim_offsets[row_index] = fragment_offset;
+        }
+        return entries_processed;
+      };
+
+      auto get_row_index = [complete_row_block_size](uint64_t thread_index) -> uint64_t {
+        return thread_index * complete_row_block_size;
+      };
+
+      RowProcessingFuturesVector row_processing_futures;
+      row_processing_futures.reserve(usable_threads);
+
+      for (unsigned i = 0; i < (unsigned)usable_threads; i++) {
+        row_processing_futures.emplace_back(
+            std::async(std::launch::async,
+                       std::forward<decltype(process_rows)>(process_rows),
+                       get_row_index(i),
+                       complete_row_block_size));
+      }
+      if (partial_row_block_size) {
+        row_processing_futures.emplace_back(
+            std::async(std::launch::async,
+                       std::forward<decltype(process_rows)>(process_rows),
+                       get_row_index(usable_threads),
+                       partial_row_block_size));
+      }
+
+      uint64_t rows_processed(0);
+      for (auto& t : row_processing_futures) {
+        t.wait();
+        rows_processed += t.get();
+      }
+
+      IOFacility::deleteColumns(catalog_,
+                                update_log.getPhysicalTableId(),
+                                update_log.getFragmentId(),
+                                victim_offsets,
+                                update_log.getColumnType(0),
+                                delete_parameters.getTransactionTracker());
     };
-
-    RowProcessingFuturesVector row_processing_futures;
-    row_processing_futures.reserve(usable_threads);
-
-    for (unsigned i = 0; i < (unsigned)usable_threads; i++) {
-      row_processing_futures.emplace_back(
-          std::async(std::launch::async,
-                     std::forward<decltype(process_rows)>(process_rows),
-                     get_row_index(i),
-                     complete_row_block_size));
-    }
-    if (partial_row_block_size) {
-      row_processing_futures.emplace_back(
-          std::async(std::launch::async,
-                     std::forward<decltype(process_rows)>(process_rows),
-                     get_row_index(usable_threads),
-                     partial_row_block_size));
-    }
-
-    uint64_t rows_processed(0);
-    for (auto& t : row_processing_futures) {
-      t.wait();
-      rows_processed += t.get();
-    }
-
-    IOFacility::deleteColumns(catalog_,
-                              update_log.getPhysicalTableId(),
-                              update_log.getFragmentId(),
-                              victim_offsets,
-                              update_log.getColumnType(0),
-                              delete_parameters.getTransactionTracker());
-  };
-  return callback;
+    return callback;
+  }
 }
-
-#endif

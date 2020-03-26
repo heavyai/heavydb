@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include "../Shared/geo_compression.h"
+#include "../Shared/geo_compression_runtime.h"
 #include "CompareKeysInl.h"
 #include "MurmurHash.h"
 

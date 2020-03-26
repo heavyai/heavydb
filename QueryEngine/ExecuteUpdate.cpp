@@ -66,7 +66,7 @@ void Executor::executeUpdate(const RelAlgExecutionUnit& ra_exe_unit_in,
                              const UpdateLogForFragment::Callback& cb,
                              const bool is_agg) {
   CHECK(cb);
-  const auto ra_exe_unit = addDeletedColumn(ra_exe_unit_in);
+  const auto ra_exe_unit = addDeletedColumn(ra_exe_unit_in, co);
   ColumnCacheMap column_cache;
 
   ColumnFetcher column_fetcher(this, column_cache);
@@ -109,7 +109,7 @@ void Executor::executeUpdate(const RelAlgExecutionUnit& ra_exe_unit_in,
     fragments[0] = {table_id, {fragment_index}};
 
     current_fragment_execution_dispatch.run(
-        co.device_type_,
+        co.device_type,
         0,
         eo,
         column_fetcher,

@@ -11,7 +11,6 @@ set(query_engine_source_files
     ArrayOps.cpp
     ArrowResultSetConverter.cpp
     ArrowResultSet.cpp
-    ArrowUtil.cpp
     BaselineJoinHashTable.cpp
     CalciteAdapter.cpp
     CalciteDeserializerUtils.cpp
@@ -28,6 +27,7 @@ set(query_engine_source_files
     DateTimeIR.cpp
     DateTimePlusRewrite.cpp
     DateTimeTranslator.cpp
+    DateTruncate.cpp
     Descriptors/ColSlotContext.cpp
     Descriptors/QueryCompilationDescriptor.cpp
     Descriptors/QueryFragmentDescriptor.cpp
@@ -44,6 +44,7 @@ set(query_engine_source_files
     ExtensionFunctions.ast
     ExtensionsIR.cpp
     ExternalExecutor.cpp
+    ExtractFromTime.cpp
     FromTableReordering.cpp
     GeoIR.cpp
     GpuInterrupt.cpp
@@ -55,7 +56,6 @@ set(query_engine_source_files
     InValuesBitmap.cpp
     InputMetadata.cpp
     JoinFilterPushDown.cpp
-    LegacyExecute.cpp
     LogicalIR.cpp
     LLVMFunctionAttributesUtil.cpp
     LLVMGlobalContext.cpp
@@ -227,9 +227,11 @@ endif()
 
 target_link_libraries(
   QueryEngine
-  Planner
+  Chunk
+  Analyzer
   StringDictionary
   Utils
+  Shared
   sqlite3
   ${ARROW_LIBS}
   clangFrontend

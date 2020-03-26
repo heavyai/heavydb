@@ -29,7 +29,6 @@ extern size_t g_leaf_count;
 namespace {
 std::shared_ptr<Calcite> g_calcite;
 bool g_aggregator{false};
-size_t g_num_leafs{1};
 
 Catalog_Namespace::UserMetadata user;
 std::vector<DBObject> privObjects;

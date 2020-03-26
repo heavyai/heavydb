@@ -927,4 +927,40 @@ constexpr inline int64_t max_valid_int_value() {
 using StringOffsetT = int32_t;
 using ArrayOffsetT = int32_t;
 
+inline int8_t* appendDatum(int8_t* buf, Datum d, const SQLTypeInfo& ti) {
+  switch (ti.get_type()) {
+    case kBOOLEAN:
+      *(bool*)buf = d.boolval;
+      return buf + sizeof(bool);
+    case kNUMERIC:
+    case kDECIMAL:
+    case kBIGINT:
+      *(int64_t*)buf = d.bigintval;
+      return buf + sizeof(int64_t);
+    case kINT:
+      *(int32_t*)buf = d.intval;
+      return buf + sizeof(int32_t);
+    case kSMALLINT:
+      *(int16_t*)buf = d.smallintval;
+      return buf + sizeof(int16_t);
+    case kTINYINT:
+      *(int8_t*)buf = d.tinyintval;
+      return buf + sizeof(int8_t);
+    case kFLOAT:
+      *(float*)buf = d.floatval;
+      return buf + sizeof(float);
+    case kDOUBLE:
+      *(double*)buf = d.doubleval;
+      return buf + sizeof(double);
+    case kTIME:
+    case kTIMESTAMP:
+    case kDATE:
+      *reinterpret_cast<int64_t*>(buf) = d.bigintval;
+      return buf + sizeof(int64_t);
+    default:
+      return NULL;
+  }
+  return NULL;
+}
+
 #endif  // SQLTYPES_H

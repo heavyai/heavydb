@@ -87,24 +87,19 @@ std::vector<ssize_t> target_expr_proj_indices(const RelAlgExecutionUnit& ra_exe_
     const auto target_expr = ra_exe_unit.target_exprs[target_idx];
     CHECK(target_expr);
     const auto& ti = target_expr->get_type_info();
-    const bool is_real_str_or_array =
-        (ti.is_string() && ti.get_compression() == kENCODING_NONE) || ti.is_array();
-    if (is_real_str_or_array) {
+    // TODO: add proper lazy fetch for varlen types in result set
+    if (ti.is_varlen()) {
       continue;
-    }
-    if (ti.is_geometry()) {
-      // TODO(adb): Ideally we could determine which physical columns are required for a
-      // given query and fetch only those. For now, we bail on the memory optimization,
-      // since it is possible that adding the physical columns could have unintended
-      // consequences further down the execution path.
-      return {};
     }
     const auto col_var = dynamic_cast<const Analyzer::ColumnVar*>(target_expr);
     if (!col_var) {
       continue;
     }
-    if (!is_real_str_or_array &&
+    if (!ti.is_varlen() &&
         used_columns.find(col_var->get_column_id()) == used_columns.end()) {
+      // setting target index to be zero so that later it can be decoded properly (in lazy
+      // fetch, the zeroth target index indicates the corresponding rowid column for the
+      // projected entry)
       target_indices[target_idx] = 0;
     }
   }

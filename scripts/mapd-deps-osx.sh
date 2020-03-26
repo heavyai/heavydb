@@ -3,74 +3,64 @@
 set -e
 set -x
 
-PREFIX=/usr/local
 SCRIPTS_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
-source $SCRIPTS_DIR/common-functions.sh
 
 # install homebrew
 if ! hash brew &> /dev/null; then
   ruby -e "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/master/install)"
 else
   brew update
-  brew upgrade
+  brew upgrade || true
 fi
 
-# install deps
+## install deps
 brew install cmake
-brew install folly
-brew install gflags
-brew install glog
 brew install wget
 brew install jq
 brew install c-blosc
-brew install librdkafka
-
-#brew install thrift
-# custom thrift formula pinned to specific supported version
-brew install -s $SCRIPTS_DIR/../ThirdParty/Thrift/thrift.rb
-brew switch thrift 0.11.0
-
-brew install cryptopp
-brew install llvm@7
-
-#install_arrow
-brew install snappy
-brew unlink apache-arrow || true
-brew install -s ../ThirdParty/Arrow/apache-arrow.rb
-brew switch apache-arrow 0.13.0
-
 brew install golang
 brew install libpng
 brew install libarchive
-brew install opensaml
-
-brew cask install java
-brew install gdal
 brew install maven
 brew install ninja
+brew install snappy
+brew install double-conversion
+brew install llvm
 
-# compile and install bison++ (default location under /usr/local is fine)
-curl -O https://storage.googleapis.com/google-code-archive-downloads/v2/code.google.com/flexpp-bisonpp/bisonpp-1.21-45.tar.gz
-tar xvf bisonpp-1.21-45.tar.gz
-pushd bison++-1.21
-./configure && make && sudo make install
-popd
+function build_pin_dep {
+  brew unpin $1 || true
+  brew unlink $1 || true
+  brew install -s --debug $SCRIPTS_DIR/macos/$1.rb
+  brew switch $1 $2
+  brew pin $1
+}
 
-# install AWS core and s3 sdk
-# remove -j $(proc) to avoid "clang: error: unable to execute command: posix_spawn failed: Resource temporarily unavailable""
-install_awscpp
+## # Disabled due to build issues on macOS
+## build_pin_dep aws-sdk-cpp 1.7.230
 
-# install CUDA
-brew tap caskroom/drivers
-brew cask install nvidia-cuda
-CUDA_ROOT=$(ls -d /Developer/NVIDIA/CUDA-* | tail -n 1)
-export PATH=$CUDA_ROOT/bin/:$PATH
+build_pin_dep boost 1.72.0
+build_pin_dep gflags 2.2.2
+build_pin_dep glog 0.4.0
+build_pin_dep thrift 0.11.0
+build_pin_dep aws-sdk-cpp 1.7.280
+build_pin_dep apache-arrow-omnisci 0.13.0
+build_pin_dep bisonpp 1.21-45
+build_pin_dep librdkafka 1.2.2
+build_pin_dep xerces-c 3.2.2
+build_pin_dep xml-tooling-c 3.0.4_1
+build_pin_dep opensaml 3.0.1_1
+build_pin_dep uriparser 0.9.3
+build_pin_dep expat 2.2.9
+build_pin_dep minizip 1.2.11
+build_pin_dep libkml-master libkml
+build_pin_dep proj5 5.2.0
+build_pin_dep gdal 2.4.4
 
 # Finally, add a few components of llvm to your path PATH.
 # Not adding full llvm/bin to PATH since brew's `clang` breaks CUDA
 mkdir -p ~/bin/
 for i in llvm-config; do
-  ln -sf "$(brew --prefix llvm@7)/bin/$i" ~/bin/$i
+  ln -sf "$(brew --prefix llvm)/bin/$i" ~/bin/$i
 done
 export PATH=~/bin:$PATH
 
@@ -93,4 +83,4 @@ EOF
 source ~/.zlogin
 
 #done!
-#git clone mapd2 && cd mapd2 && mkdir build && cd build && ccmake ..
+#git clone omniscidb && cd omniscidb && mkdir build && cd build && ccmake ..

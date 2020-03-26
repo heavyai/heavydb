@@ -22,8 +22,17 @@
 
 #include "Shared/likely.h"
 
-void arrow_status_throw(const ::arrow::Status& s);
-void arrow_status_thrift_throw(const ::arrow::Status& s);
+#include "DataMgr/BufferMgr/BufferMgr.h"
+
+inline void arrow_status_throw(const ::arrow::Status& s) {
+  std::string message = s.ToString();
+  switch (s.code()) {
+    case ::arrow::StatusCode::OutOfMemory:
+      throw OutOfMemory(message);
+    default:
+      throw std::runtime_error(message);
+  }
+}
 
 #define ARROW_THROW_NOT_OK(s) \
   do {                        \

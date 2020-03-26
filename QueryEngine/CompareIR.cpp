@@ -500,7 +500,7 @@ llvm::Value* CodeGenerator::codegenQualifierCmp(const SQLOps optype,
           "Comparison between a dictionary-encoded and a none-encoded string would be "
           "slow");
     }
-    if (co.device_type_ == ExecutorDeviceType::GPU) {
+    if (co.device_type == ExecutorDeviceType::GPU) {
       throw QueryMustRunOnCpu();
     }
     CHECK_EQ(kENCODING_NONE, target_ti.get_compression());

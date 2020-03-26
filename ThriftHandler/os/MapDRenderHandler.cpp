@@ -30,6 +30,7 @@ class MapDRenderHandler::Impl {};
 MapDRenderHandler::MapDRenderHandler(MapDHandler* mapd_handler,
                                      const size_t render_mem_bytes,
                                      const size_t render_poly_cache_bytes,
+                                     const size_t max_concurrent_render_sessions,
                                      const bool enable_auto_clear_render_mem,
                                      const int render_oom_retry_threshold,
                                      const MapDParameters mapd_parameters)

@@ -16,7 +16,8 @@
 
 #pragma once
 
-#include "../Analyzer/Analyzer.h"
+#include "Analyzer/Analyzer.h"
+#include "QueryEngine/ExtractFromTime.h"
 
 #include "DateTimeUtils.h"
 
@@ -24,12 +25,6 @@
 #include <string>
 
 using namespace DateTimeUtils;
-
-namespace Analyzer {
-
-class Expr;
-
-}  // namespace Analyzer
 
 class DateTimeTranslator {
  public:

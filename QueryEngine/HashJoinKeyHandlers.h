@@ -19,6 +19,7 @@
 
 #include "../Shared/SqlTypesLayout.h"
 #include "HashJoinRuntime.h"
+#include "JoinColumnIterator.h"
 
 #ifdef __CUDACC__
 #include "DecodersImpl.h"
@@ -32,33 +33,6 @@
 #include <cmath>
 
 #include "../Shared/funcannotations.h"
-
-DEVICE inline int64_t get_join_column_element_value(const JoinColumnTypeInfo& type_info,
-                                                    const JoinColumn& join_column,
-                                                    const size_t i) {
-  switch (type_info.column_type) {
-    case SmallDate:
-      return SUFFIX(fixed_width_small_date_decode_noinline)(
-          join_column.col_buff,
-          type_info.elem_sz,
-          type_info.elem_sz == 4 ? NULL_INT : NULL_SMALLINT,
-          type_info.elem_sz == 4 ? NULL_INT : NULL_SMALLINT,
-          i);
-    case Signed:
-      return SUFFIX(fixed_width_int_decode_noinline)(
-          join_column.col_buff, type_info.elem_sz, i);
-    case Unsigned:
-      return SUFFIX(fixed_width_unsigned_decode_noinline)(
-          join_column.col_buff, type_info.elem_sz, i);
-    default:
-#ifndef __CUDACC__
-      CHECK(false);
-#else
-      assert(0);
-#endif
-      return 0;
-  }
-}
 
 struct GenericKeyHandler {
   GenericKeyHandler(const size_t key_component_count,
@@ -89,14 +63,16 @@ struct GenericKeyHandler {
   }
 
   template <typename T, typename KEY_BUFF_HANDLER>
-  DEVICE int operator()(const size_t i, T* key_scratch_buff, KEY_BUFF_HANDLER f) const {
+  DEVICE int operator()(JoinColumnIterator* join_column_iterators,
+                        T* key_scratch_buff,
+                        KEY_BUFF_HANDLER f) const {
     bool skip_entry = false;
     for (size_t key_component_index = 0; key_component_index < key_component_count_;
          ++key_component_index) {
-      const auto& join_column = join_column_per_key_[key_component_index];
-      const auto& type_info = type_info_per_key_[key_component_index];
-      int64_t elem = get_join_column_element_value(type_info, join_column, i);
-      if (should_skip_entries_ && elem == type_info.null_val && !type_info.uses_bw_eq) {
+      const auto& join_column_iterator = join_column_iterators[key_component_index];
+      int64_t elem = (*join_column_iterator).element;
+      if (should_skip_entries_ && elem == join_column_iterator.type_info->null_val &&
+          !join_column_iterator.type_info->uses_bw_eq) {
         skip_entry = true;
         break;
       }
@@ -107,7 +83,7 @@ struct GenericKeyHandler {
       const auto sd_outer_proxy = sd_outer_proxy_per_key_
                                       ? sd_outer_proxy_per_key_[key_component_index]
                                       : nullptr;
-      if (sd_inner_proxy && elem != type_info.null_val) {
+      if (sd_inner_proxy && elem != join_column_iterator.type_info->null_val) {
         CHECK(sd_outer_proxy);
         const auto sd_inner_dict_proxy =
             static_cast<const StringDictionaryProxy*>(sd_inner_proxy);
@@ -126,10 +102,18 @@ struct GenericKeyHandler {
     }
 
     if (!skip_entry) {
-      return f(i, key_scratch_buff, key_component_count_);
+      return f(join_column_iterators[0].index, key_scratch_buff, key_component_count_);
     }
 
     return 0;
+  }
+
+  DEVICE size_t get_key_component_count() const { return key_component_count_; }
+
+  DEVICE const JoinColumn* get_join_columns() const { return join_column_per_key_; }
+
+  DEVICE const JoinColumnTypeInfo* get_join_column_type_infos() const {
+    return type_info_per_key_;
   }
 
   const size_t key_component_count_;
@@ -149,13 +133,15 @@ struct OverlapsKeyHandler {
       , bucket_sizes_for_dimension_(bucket_sizes_for_dimension) {}
 
   template <typename T, typename KEY_BUFF_HANDLER>
-  DEVICE int operator()(const size_t i, T* key_scratch_buff, KEY_BUFF_HANDLER f) const {
+  DEVICE int operator()(JoinColumnIterator* join_column_iterators,
+                        T* key_scratch_buff,
+                        KEY_BUFF_HANDLER f) const {
     // TODO(adb): hard-coding the 2D case w/ bounds for now. Should support n-dims with a
     // check to ensure we are not exceeding maximum number of dims for coalesced keys
     double bounds[4];
     for (size_t j = 0; j < 2 * key_dims_count_; j++) {
-      bounds[j] = SUFFIX(fixed_width_double_decode_noinline)(join_column_[0].col_buff,
-                                                             2 * key_dims_count_ * i + j);
+      bounds[j] =
+          SUFFIX(fixed_width_double_decode_noinline)(join_column_iterators->ptr(), j);
     }
 
     const auto x_bucket_sz = bucket_sizes_for_dimension_[0];
@@ -169,7 +155,8 @@ struct OverlapsKeyHandler {
         key_scratch_buff[0] = x;
         key_scratch_buff[1] = y;
 
-        const auto err = f(i, key_scratch_buff, key_dims_count_);
+        const auto err =
+            f(join_column_iterators[0].index, key_scratch_buff, key_dims_count_);
         if (err) {
           return err;
         }
@@ -177,6 +164,12 @@ struct OverlapsKeyHandler {
     }
     return 0;
   }
+
+  DEVICE size_t get_key_component_count() const { return 1; }
+
+  DEVICE const JoinColumn* get_join_columns() const { return join_column_; }
+
+  DEVICE const JoinColumnTypeInfo* get_join_column_type_infos() const { return nullptr; }
 
   const size_t key_dims_count_;
   const JoinColumn* join_column_;

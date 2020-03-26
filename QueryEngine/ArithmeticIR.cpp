@@ -225,7 +225,7 @@ llvm::Value* CodeGenerator::codegenAdd(const Analyzer::BinOper* bin_oper,
                              static_cast<llvm::ConstantInt*>(chosen_min)->getSExtValue(),
                              static_cast<llvm::ConstantInt*>(chosen_max)->getSExtValue());
 
-  if (need_overflow_check && co.device_type_ == ExecutorDeviceType::CPU) {
+  if (need_overflow_check && co.device_type == ExecutorDeviceType::CPU) {
     return codegenBinOpWithOverflowForCPU(
         bin_oper, lhs_lv, rhs_lv, null_check_suffix, ti);
   }
@@ -286,7 +286,7 @@ llvm::Value* CodeGenerator::codegenSub(const Analyzer::BinOper* bin_oper,
                              static_cast<llvm::ConstantInt*>(chosen_min)->getSExtValue(),
                              static_cast<llvm::ConstantInt*>(chosen_max)->getSExtValue());
 
-  if (need_overflow_check && co.device_type_ == ExecutorDeviceType::CPU) {
+  if (need_overflow_check && co.device_type == ExecutorDeviceType::CPU) {
     return codegenBinOpWithOverflowForCPU(
         bin_oper, lhs_lv, rhs_lv, null_check_suffix, ti);
   }
@@ -366,7 +366,7 @@ llvm::Value* CodeGenerator::codegenMul(const Analyzer::BinOper* bin_oper,
                              static_cast<llvm::ConstantInt*>(chosen_min)->getSExtValue(),
                              static_cast<llvm::ConstantInt*>(chosen_max)->getSExtValue());
 
-  if (need_overflow_check && co.device_type_ == ExecutorDeviceType::CPU) {
+  if (need_overflow_check && co.device_type == ExecutorDeviceType::CPU) {
     return codegenBinOpWithOverflowForCPU(
         bin_oper, lhs_lv, rhs_lv, null_check_suffix, ti);
   }

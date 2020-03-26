@@ -89,6 +89,8 @@ class RelAlgExecutor : private StorageIOFacility<RelAlgExecutorTraits> {
       , now_(0)
       , queue_time_ms_(0) {}
 
+  size_t getOuterFragmentCount(const CompilationOptions& co, const ExecutionOptions& eo);
+
   ExecutionResult executeRelAlgQuery(const CompilationOptions& co,
                                      const ExecutionOptions& eo,
                                      RenderInfo* render_info);
@@ -138,6 +140,8 @@ class RelAlgExecutor : private StorageIOFacility<RelAlgExecutorTraits> {
     return query_dag_->getSubqueries();
   };
 
+  ExecutionResult executeSimpleInsert(const Analyzer::Query& insert_query);
+
   AggregatedColRange computeColRangesCache();
   StringDictionaryGenerations computeStringDictionaryGenerations();
   TableGenerations computeTableGenerations();
@@ -160,27 +164,15 @@ class RelAlgExecutor : private StorageIOFacility<RelAlgExecutorTraits> {
                          RenderInfo*,
                          const int64_t queue_time_ms);
 
-  void executeUpdateViaCompound(const RelCompound* compound,
-                                const CompilationOptions& co,
-                                const ExecutionOptions& eo,
-                                RenderInfo* render_info,
-                                const int64_t queue_time_ms);
-  void executeUpdateViaProject(const RelProject*,
-                               const CompilationOptions&,
-                               const ExecutionOptions&,
-                               RenderInfo*,
-                               const int64_t queue_time_ms);
+  void executeUpdate(const RelAlgNode* node,
+                     const CompilationOptions& co,
+                     const ExecutionOptions& eo,
+                     const int64_t queue_time_ms);
 
-  void executeDeleteViaCompound(const RelCompound* compound,
-                                const CompilationOptions& co,
-                                const ExecutionOptions& eo,
-                                RenderInfo* render_info,
-                                const int64_t queue_time_ms);
-  void executeDeleteViaProject(const RelProject*,
-                               const CompilationOptions&,
-                               const ExecutionOptions&,
-                               RenderInfo*,
-                               const int64_t queue_time_ms);
+  void executeDelete(const RelAlgNode* node,
+                     const CompilationOptions& co,
+                     const ExecutionOptions& eo_in,
+                     const int64_t queue_time_ms);
 
   ExecutionResult executeCompound(const RelCompound*,
                                   const CompilationOptions&,
@@ -235,6 +227,7 @@ class RelAlgExecutor : private StorageIOFacility<RelAlgExecutorTraits> {
                               const int64_t queue_time_ms);
 
   ExecutionResult executeLogicalValues(const RelLogicalValues*, const ExecutionOptions&);
+
   ExecutionResult executeModify(const RelModify* modify, const ExecutionOptions& eo);
 
   // TODO(alex): just move max_groups_buffer_entry_guess to RelAlgExecutionUnit once

@@ -40,7 +40,6 @@
 #include "Parser/ParserWrapper.h"
 #include "Parser/ReservedKeywords.h"
 #include "Parser/parser.h"
-#include "Planner/Planner.h"
 #include "QueryEngine/CalciteAdapter.h"
 #include "QueryEngine/Descriptors/RelAlgExecutionDescriptor.h"
 #include "QueryEngine/Execute.h"
@@ -175,6 +174,7 @@ class MapDHandler : public MapDIf {
               const bool enable_auto_clear_render_mem,
               const int render_oom_retry_threshold,
               const size_t render_mem_bytes,
+              const size_t max_concurrent_render_sessions,
               const int num_gpus,
               const int start_gpu,
               const size_t reserved_gpu_mem,
@@ -538,7 +538,8 @@ class MapDHandler : public MapDIf {
                     const Catalog_Namespace::UserMetadata& user_meta,
                     std::shared_ptr<Catalog_Namespace::Catalog> cat,
                     query_state::StdLog& stdlog);
-  void disconnect_impl(const SessionMap::iterator& session_it);
+  void disconnect_impl(const SessionMap::iterator& session_it,
+                       mapd_unique_lock<mapd_shared_mutex>& write_lock);
   void check_table_load_privileges(const TSessionId& session,
                                    const std::string& table_name);
   void check_table_load_privileges(const Catalog_Namespace::SessionInfo& session_info,
@@ -675,14 +676,6 @@ class MapDHandler : public MapDIf {
                             const bool column_format,
                             const std::string label) const;
 
-  void execute_root_plan(TQueryResult& _return,
-                         QueryStateProxy query_state_proxy,
-                         const Planner::RootPlan* root_plan,
-                         const bool column_format,
-                         const Catalog_Namespace::SessionInfo& session_info,
-                         const ExecutorDeviceType executor_device_type,
-                         const int32_t first_n) const;
-
   std::vector<TargetMetaInfo> getTargetMetaInfo(
       const std::vector<std::shared_ptr<Analyzer::TargetEntry>>& targets) const;
 
@@ -708,10 +701,6 @@ class MapDHandler : public MapDIf {
                                    std::vector<std::string>& visible_tables,
                                    const std::string& sql,
                                    const int cursor);
-  Planner::RootPlan* parse_to_plan_legacy(
-      const std::string& query_str,
-      const Catalog_Namespace::SessionInfo& session_info,
-      const std::string& action /* render or validate */);
 
   std::unordered_map<std::string, std::unordered_set<std::string>>
   fill_column_names_by_table(std::vector<std::string>& table_names,

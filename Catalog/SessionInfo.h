@@ -29,31 +29,17 @@
 #include <utility>
 #include <vector>
 
-#include "../QueryEngine/CompilationOptions.h"
-#include "../SqliteConnector/SqliteConnector.h"
-#include "LeafHostInfo.h"
-#include "SysCatalog.h"
+#include "Catalog/SysCatalog.h"
+#include "QueryEngine/CompilationOptions.h"
+#include "SqliteConnector/SqliteConnector.h"
 
-namespace Importer_NS {
-class Loader;
-class TypedImportBuffer;
-}  // namespace Importer_NS
+#include "LeafHostInfo.h"
+
+class MapDHandler;
 
 namespace Catalog_Namespace {
 
 class Catalog;
-
-// this class is defined to accommodate both Thrift and non-Thrift builds.
-class MapDHandler {
- public:
-  virtual void prepare_columnar_loader(
-      const std::string& session,
-      const std::string& table_name,
-      size_t num_cols,
-      std::unique_ptr<Importer_NS::Loader>* loader,
-      std::vector<std::unique_ptr<Importer_NS::TypedImportBuffer>>* import_buffers);
-  virtual ~MapDHandler() {}
-};
 
 /*
  * @type SessionInfo
@@ -78,7 +64,7 @@ class SessionInfo {
               const UserMetadata& user,
               const ExecutorDeviceType t,
               const std::string& sid)
-      : SessionInfo(std::make_shared<MapDHandler>(), cat, user, t, sid) {}
+      : SessionInfo(nullptr, cat, user, t, sid) {}
   SessionInfo(const SessionInfo& s)
       : mapdHandler_(s.mapdHandler_)
       , catalog_(s.catalog_)

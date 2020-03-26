@@ -90,6 +90,8 @@ std::shared_ptr<JoinHashTableInterface> buildPerfect(std::string_view table1,
   CHECK(catalog);
 
   auto executor = Executor::getExecutor(catalog->getCurrentDB().dbId);
+  CHECK(executor);
+  executor->setCatalog(catalog.get());
 
   auto memory_level =
       (g_device_type == ExecutorDeviceType::CPU ? Data_Namespace::CPU_LEVEL
@@ -117,6 +119,8 @@ std::shared_ptr<JoinHashTableInterface> buildKeyed(
   CHECK(catalog);
 
   auto executor = Executor::getExecutor(catalog->getCurrentDB().dbId);
+  CHECK(executor);
+  executor->setCatalog(catalog.get());
 
   auto memory_level =
       (g_device_type == ExecutorDeviceType::CPU ? Data_Namespace::CPU_LEVEL
@@ -340,6 +344,8 @@ TEST(Build, KeyedOneToOne) {
   CHECK(catalog);
 
   auto executor = Executor::getExecutor(catalog->getCurrentDB().dbId);
+  CHECK(executor);
+  executor->setCatalog(catalog.get());
 
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
@@ -397,6 +403,8 @@ TEST(Build, KeyedOneToMany) {
   CHECK(catalog);
 
   auto executor = Executor::getExecutor(catalog->getCurrentDB().dbId);
+  CHECK(executor);
+  executor->setCatalog(catalog.get());
 
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
@@ -456,6 +464,8 @@ TEST(Build, GeoOneToMany1) {
   CHECK(catalog);
 
   auto executor = Executor::getExecutor(catalog->getCurrentDB().dbId);
+  CHECK(executor);
+  executor->setCatalog(catalog.get());
 
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
@@ -532,6 +542,8 @@ TEST(Build, GeoOneToMany2) {
   CHECK(catalog);
 
   auto executor = Executor::getExecutor(catalog->getCurrentDB().dbId);
+  CHECK(executor);
+  executor->setCatalog(catalog.get());
 
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
@@ -744,6 +756,8 @@ TEST(MultiFragment, KeyedOneToOne) {
   CHECK(catalog);
 
   auto executor = Executor::getExecutor(catalog->getCurrentDB().dbId);
+  CHECK(executor);
+  executor->setCatalog(catalog.get());
 
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
@@ -830,6 +844,8 @@ TEST(MultiFragment, KeyedOneToMany) {
   CHECK(catalog);
 
   auto executor = Executor::getExecutor(catalog->getCurrentDB().dbId);
+  CHECK(executor);
+  executor->setCatalog(catalog.get());
 
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();

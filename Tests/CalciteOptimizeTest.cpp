@@ -25,7 +25,16 @@ inline void run_ddl_statement(const std::string& query) {
 }  // namespace
 
 struct ViewObject : testing::Test {
-  void setup_objects() {
+ protected:
+  void SetUp() override {
+    run_ddl_statement("DROP VIEW IF EXISTS view_view_table1;");
+    run_ddl_statement("DROP VIEW IF EXISTS view_table1;");
+    run_ddl_statement("DROP TABLE IF EXISTS table1");
+    run_ddl_statement("DROP VIEW IF EXISTS attribute_view");
+    run_ddl_statement("DROP VIEW IF EXISTS shape_view");
+    run_ddl_statement("DROP TABLE IF EXISTS shape_table");
+    run_ddl_statement("DROP TABLE IF EXISTS attribute_table");
+
     run_ddl_statement("CREATE TABLE table1(i1 integer, i2 integer);");
     run_ddl_statement("CREATE VIEW view_table1 AS SELECT i1, i2 FROM table1;");
     run_ddl_statement("CREATE VIEW view_view_table1 AS SELECT i1, i2 FROM view_table1;");
@@ -40,7 +49,7 @@ struct ViewObject : testing::Test {
         "CREATE VIEW shape_view AS select rowid, block_group_id from shape_table");
   }
 
-  void remove_objects() {
+  void TearDown() override {
     run_ddl_statement("DROP VIEW view_view_table1;");
     run_ddl_statement("DROP VIEW view_table1;");
     run_ddl_statement("DROP TABLE table1");
@@ -49,9 +58,6 @@ struct ViewObject : testing::Test {
     run_ddl_statement("DROP TABLE shape_table");
     run_ddl_statement("DROP TABLE attribute_table");
   }
-
-  explicit ViewObject() { setup_objects(); }
-  ~ViewObject() override { remove_objects(); }
 };
 
 TEST_F(ViewObject, BasicTest) {

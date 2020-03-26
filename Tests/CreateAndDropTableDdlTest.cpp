@@ -1197,7 +1197,7 @@ TEST_P(DropTableTest, NonExistingTableWithIfExists) {
 
 TEST_P(DropTableTest, NonExistentTableWithoutIfExists) {
   std::string query = getDropTableQuery(GetParam(), "test_table_2");
-  queryAndAssertException(query, "Exception: Table test_table_2 does not exist.");
+  queryAndAssertException(query, "Exception: Table/View test_table_2 does not exist.");
 }
 
 TEST_P(DropTableTest, UnauthorizedUser) {

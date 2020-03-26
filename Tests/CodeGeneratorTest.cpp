@@ -34,7 +34,8 @@ TEST(CodeGeneratorTest, IntegerConstant) {
   auto& ctx = getGlobalLLVMContext();
   std::unique_ptr<llvm::Module> module(read_template_module(ctx));
   ScalarCodeGenerator code_generator(std::move(module));
-  CompilationOptions co{ExecutorDeviceType::CPU, false, ExecutorOptLevel::Default, false};
+  CompilationOptions co = CompilationOptions::defaults(ExecutorDeviceType::CPU);
+  co.hoist_literals = false;
 
   Datum d;
   d.intval = 42;
@@ -57,7 +58,8 @@ TEST(CodeGeneratorTest, IntegerAdd) {
   auto& ctx = getGlobalLLVMContext();
   std::unique_ptr<llvm::Module> module(read_template_module(ctx));
   ScalarCodeGenerator code_generator(std::move(module));
-  CompilationOptions co{ExecutorDeviceType::CPU, false, ExecutorOptLevel::Default, false};
+  CompilationOptions co = CompilationOptions::defaults(ExecutorDeviceType::CPU);
+  co.hoist_literals = false;
 
   Datum d;
   d.intval = 42;
@@ -82,7 +84,8 @@ TEST(CodeGeneratorTest, IntegerColumn) {
   auto& ctx = getGlobalLLVMContext();
   std::unique_ptr<llvm::Module> module(read_template_module(ctx));
   ScalarCodeGenerator code_generator(std::move(module));
-  CompilationOptions co{ExecutorDeviceType::CPU, false, ExecutorOptLevel::Default, false};
+  CompilationOptions co = CompilationOptions::defaults(ExecutorDeviceType::CPU);
+  co.hoist_literals = false;
 
   SQLTypeInfo ti(kINT, false);
   int table_id = 1;
@@ -108,7 +111,8 @@ TEST(CodeGeneratorTest, IntegerExpr) {
   auto& ctx = getGlobalLLVMContext();
   std::unique_ptr<llvm::Module> module(read_template_module(ctx));
   ScalarCodeGenerator code_generator(std::move(module));
-  CompilationOptions co{ExecutorDeviceType::CPU, false, ExecutorOptLevel::Default, false};
+  CompilationOptions co = CompilationOptions::defaults(ExecutorDeviceType::CPU);
+  co.hoist_literals = false;
 
   SQLTypeInfo ti(kINT, false);
   int table_id = 1;
@@ -148,7 +152,8 @@ TEST(CodeGeneratorTest, IntegerConstantGPU) {
   auto& ctx = getGlobalLLVMContext();
   std::unique_ptr<llvm::Module> module(read_template_module(ctx));
   ScalarCodeGenerator code_generator(std::move(module));
-  CompilationOptions co{ExecutorDeviceType::GPU, false, ExecutorOptLevel::Default, false};
+  CompilationOptions co = CompilationOptions::defaults(ExecutorDeviceType::GPU);
+  co.hoist_literals = false;
 
   Datum d;
   d.intval = 42;
@@ -193,7 +198,8 @@ TEST(CodeGeneratorTest, IntegerAddGPU) {
   auto& ctx = getGlobalLLVMContext();
   std::unique_ptr<llvm::Module> module(read_template_module(ctx));
   ScalarCodeGenerator code_generator(std::move(module));
-  CompilationOptions co{ExecutorDeviceType::GPU, false, ExecutorOptLevel::Default, false};
+  CompilationOptions co = CompilationOptions::defaults(ExecutorDeviceType::GPU);
+  co.hoist_literals = false;
 
   Datum d;
   d.intval = 42;
@@ -240,7 +246,8 @@ TEST(CodeGeneratorTest, IntegerColumnGPU) {
   auto& ctx = getGlobalLLVMContext();
   std::unique_ptr<llvm::Module> module(read_template_module(ctx));
   ScalarCodeGenerator code_generator(std::move(module));
-  CompilationOptions co{ExecutorDeviceType::GPU, false, ExecutorOptLevel::Default, false};
+  CompilationOptions co = CompilationOptions::defaults(ExecutorDeviceType::GPU);
+  co.hoist_literals = false;
 
   SQLTypeInfo ti(kINT, false);
   int table_id = 1;
@@ -297,7 +304,8 @@ TEST(CodeGeneratorTest, IntegerExprGPU) {
   auto& ctx = getGlobalLLVMContext();
   std::unique_ptr<llvm::Module> module(read_template_module(ctx));
   ScalarCodeGenerator code_generator(std::move(module));
-  CompilationOptions co{ExecutorDeviceType::GPU, false, ExecutorOptLevel::Default, false};
+  CompilationOptions co = CompilationOptions::defaults(ExecutorDeviceType::GPU);
+  co.hoist_literals = false;
 
   SQLTypeInfo ti(kINT, false);
   int table_id = 1;

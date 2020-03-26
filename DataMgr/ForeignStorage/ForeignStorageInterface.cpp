@@ -163,7 +163,7 @@ void ForeignStorageInterface::registerPersistentStorageInterface(
 
 std::pair<std::string, std::string> parseStorageType(const std::string& type) {
   size_t sep = type.find_first_of(':'), sep2 = sep != std::string::npos ? sep + 1 : sep;
-  auto res = std::make_pair(type.substr(0, sep), type.substr(sep2));
+  auto res = std::make_pair(to_upper(type.substr(0, sep)), type.substr(sep2));
   return res;
 }
 
@@ -174,7 +174,9 @@ void ForeignStorageInterface::prepareTable(const int db_id,
   std::unique_lock<std::mutex> persistent_storage_interfaces_lock(
       persistent_storage_interfaces_mutex_);
   const auto it = persistent_storage_interfaces_.find(type.first);
-  CHECK(it != persistent_storage_interfaces_.end());
+  if (it == persistent_storage_interfaces_.end()) {
+    throw std::runtime_error("storage type " + type.first + " not supported");
+  }
   auto& p = it->second;
   persistent_storage_interfaces_lock.unlock();
   p->prepareTable(db_id, type.second, td, cols);
@@ -189,7 +191,9 @@ void ForeignStorageInterface::registerTable(Catalog_Namespace::Catalog* catalog,
   std::unique_lock<std::mutex> persistent_storage_interfaces_lock(
       persistent_storage_interfaces_mutex_);
   const auto it = persistent_storage_interfaces_.find(type.first);
-  CHECK(it != persistent_storage_interfaces_.end());
+  if (it == persistent_storage_interfaces_.end()) {
+    throw std::runtime_error("storage type " + type.first + " not supported");
+  }
 
   auto db_id = catalog->getCurrentDB().dbId;
   const auto it_ok = table_persistent_storage_interface_map_.emplace(

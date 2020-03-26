@@ -3,6 +3,25 @@
 set -e
 set -x
 
+# Parse inputs
+TSAN=false
+COMPRESS=false
+
+while (( $# )); do
+  case "$1" in
+    --compress)
+      COMPRESS=true
+      ;;
+    --tsan)
+      TSAN=true
+      ;;
+    *)
+      break
+      ;;
+  esac
+  shift
+done
+
 SUFFIX=${SUFFIX:=$(date +%Y%m%d)}
 PREFIX=${MAPD_PATH:="/usr/local/mapd-deps/$SUFFIX"}
 if [ ! -w $(dirname $PREFIX) ] ; then
@@ -179,7 +198,14 @@ VERS=0.11.0
 download ${HTTP_DEPS}/thrift-$VERS.tar.gz
 extract thrift-$VERS.tar.gz
 pushd thrift-$VERS
-CFLAGS="-fPIC" CXXFLAGS="-fPIC" JAVA_PREFIX=$PREFIX/lib ./configure \
+if [ "$TSAN" = "false" ]; then
+  THRIFT_CFLAGS="-fPIC"
+  THRIFT_CXXFLAGS="-fPIC"
+elif [ "$TSAN" = "false" ]; then
+  THRIFT_CFLAGS="-fPIC -fsanitize=thread -fPIC -O1 -fno-omit-frame-pointer"
+  THRIFT_CXXFLAGS="-fPIC -fsanitize=thread -fPIC -O1 -fno-omit-frame-pointer"
+fi
+CFLAGS="$THRIFT_CFLAGS" CXXFLAGS="$THRIFT_CXXFLAGS" JAVA_PREFIX=$PREFIX/lib ./configure \
     --prefix=$PREFIX \
     --with-lua=no \
     --with-python=no \
@@ -323,6 +349,11 @@ sed -e "s|%MAPD_DEPS_ROOT%|$PREFIX|g" mapd-deps.sh.in > mapd-deps-$SUFFIX.sh
 
 cp mapd-deps-$SUFFIX.sh mapd-deps-$SUFFIX.modulefile $PREFIX
 
-if [ "$1" = "--compress" ] ; then
-    tar acvf mapd-deps-$SUFFIX.tar.xz -C $(dirname $PREFIX) $SUFFIX
+if [ "$COMPRESS" = "true" ] ; then
+    if [ "$TSAN" = "false" ]; then
+      TARBALL_TSAN=""
+    elif [ "$TSAN" = "false" ]; then
+      TARBALL_TSAN="tsan-"
+    fi
+    tar acvf mapd-deps-${TARBALL_TSAN}${SUFFIX}.tar.xz -C $(dirname $PREFIX) $SUFFIX
 fi

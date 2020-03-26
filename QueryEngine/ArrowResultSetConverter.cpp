@@ -31,7 +31,7 @@
 #include "arrow/io/memory.h"
 #include "arrow/ipc/api.h"
 
-#include "ArrowUtil.h"
+#include "Shared/ArrowUtil.h"
 
 #ifdef HAVE_CUDA
 #include <arrow/gpu/cuda_api.h>
@@ -1090,33 +1090,3 @@ void ArrowResultSetConverter::append(
                                " is not supported in Arrow result sets.");
   }
 }
-
-// helpers for debugging
-
-#ifdef ENABLE_ARROW_DEBUG
-void print_serialized_schema(const uint8_t* data, const size_t length) {
-  io::BufferReader reader(std::make_shared<arrow::Buffer>(data, length));
-  std::shared_ptr<Schema> schema;
-  arrow::ipc::DictionaryMemo in_memo;
-  ARROW_THROW_NOT_OK(ipc::ReadSchema(&reader, &in_memo, &schema));
-
-  std::cout << "Arrow Schema: " << std::endl;
-  const PrettyPrintOptions options{0};
-  ARROW_THROW_NOT_OK(PrettyPrint(*(schema.get()), options, &std::cout));
-}
-
-void print_serialized_records(const uint8_t* data,
-                              const size_t length,
-                              const std::shared_ptr<Schema>& schema) {
-  if (data == nullptr || !length) {
-    std::cout << "No row found" << std::endl;
-    return;
-  }
-  std::shared_ptr<RecordBatch> batch;
-  arrow::ipc::DictionaryMemo dictionary_memo;
-
-  arrow::ipc::DictionaryMemo in_memo;
-  io::BufferReader buffer_reader(std::make_shared<arrow::Buffer>(data, length));
-  ARROW_THROW_NOT_OK(ipc::ReadRecordBatch(schema, &in_memo, &buffer_reader, &batch));
-}
-#endif

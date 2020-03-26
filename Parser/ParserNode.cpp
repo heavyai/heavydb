@@ -45,10 +45,10 @@
 #include "Catalog/Catalog.h"
 #include "Catalog/SharedDictionaryValidator.h"
 #include "Fragmenter/InsertOrderFragmenter.h"
+#include "Fragmenter/SortedOrderFragmenter.h"
 #include "Fragmenter/TargetValueConvertersFactories.h"
 #include "Import/Importer.h"
 #include "LockMgr/LockMgr.h"
-#include "Planner/Planner.h"
 #include "QueryEngine/CalciteAdapter.h"
 #include "QueryEngine/Execute.h"
 #include "QueryEngine/ExtensionFunctionsWhitelist.h"
@@ -56,15 +56,16 @@
 #include "ReservedKeywords.h"
 #include "Shared/StringTransform.h"
 #include "Shared/TimeGM.h"
+#include "Shared/geo_compression.h"
 #include "Shared/geo_types.h"
 #include "Shared/mapd_glob.h"
 #include "Shared/measure.h"
 #include "Shared/shard_key.h"
+#include "TableArchiver/TableArchiver.h"
 #include "gen-cpp/CalciteServer.h"
 #include "parser.h"
 
 size_t g_leaf_count{0};
-bool g_use_date_in_days_default_encoding{true};
 bool g_test_drop_column_rollback{false};
 extern bool g_enable_experimental_string_functions;
 
@@ -74,10 +75,6 @@ using namespace std::string_literals;
 using TableDefFuncPtr = boost::function<void(TableDescriptor&,
                                              const NameValueAssign*,
                                              const std::list<ColumnDescriptor>& columns)>;
-
-namespace Importer_NS {
-std::vector<uint8_t> compress_coords(std::vector<double>& coords, const SQLTypeInfo& ti);
-}  // namespace Importer_NS
 
 namespace Parser {
 std::shared_ptr<Analyzer::Expr> NullLiteral::analyze(
@@ -949,8 +946,11 @@ std::shared_ptr<Analyzer::Expr> CaseExpr::normalize(
         ti = Analyzer::BinOper::common_numeric_type(ti, else_e->get_type_info());
       } else if (ti.is_boolean() && else_e->get_type_info().is_boolean()) {
         ti = Analyzer::BinOper::common_numeric_type(ti, else_e->get_type_info());
-      } else {
+      } else if (get_logical_type_info(ti) !=
+                 get_logical_type_info(else_e->get_type_info())) {
         throw std::runtime_error(
+            // types differing by encoding will be resolved at decode
+
             "expressions in ELSE clause must be of the same or compatible types as those "
             "in the THEN clauses.");
       }
@@ -1712,7 +1712,7 @@ void InsertValuesStmt::analyze(const Catalog_Namespace::Catalog& catalog,
       CHECK_EQ(cd_coords->columnType.get_subtype(), kTINYINT);
       std::list<std::shared_ptr<Analyzer::Expr>> value_exprs;
       if (!is_null || cd->columnType.get_type() == kPOINT) {
-        auto compressed_coords = Importer_NS::compress_coords(coords, col_ti);
+        auto compressed_coords = geospatial::compress_coords(coords, col_ti);
         for (auto cc : compressed_coords) {
           Datum d;
           d.tinyintval = cc;
@@ -1822,10 +1822,39 @@ void InsertValuesStmt::analyze(const Catalog_Namespace::Catalog& catalog,
   }
 }
 
-void InsertQueryStmt::analyze(const Catalog_Namespace::Catalog& catalog,
-                              Analyzer::Query& insert_query) const {
-  InsertStmt::analyze(catalog, insert_query);
-  query->analyze(catalog, insert_query);
+void InsertValuesStmt::execute(const Catalog_Namespace::SessionInfo& session) {
+  auto& catalog = session.getCatalog();
+
+  if (!session.checkDBAccessPrivileges(
+          DBObjectType::TableDBObjectType, AccessPrivileges::INSERT_INTO_TABLE, *table)) {
+    throw std::runtime_error("User has no insert privileges on " + *table + ".");
+  }
+
+  auto execute_write_lock = mapd_unique_lock<mapd_shared_mutex>(
+      *legacylockmgr::LockMgr<mapd_shared_mutex, bool>::getMutex(
+          legacylockmgr::ExecutorOuterLock, true));
+
+  Analyzer::Query query;
+  analyze(catalog, query);
+
+  //  Acquire schema write lock -- leave data lock so the fragmenter can checkpoint. For
+  //  singleton inserts we just take a write lock on the schema, which prevents concurrent
+  //  inserts.
+  auto result_table_id = query.get_result_table_id();
+  const auto td_with_lock =
+      lockmgr::TableSchemaLockContainer<lockmgr::WriteLock>::acquireTableDescriptor(
+          catalog, result_table_id);
+  auto td = td_with_lock();
+  CHECK(td);
+
+  if (td->isView) {
+    throw std::runtime_error("Singleton inserts on views is not supported.");
+  }
+
+  auto executor = Executor::getExecutor(catalog.getCurrentDB().dbId);
+  RelAlgExecutor ra_executor(executor.get(), catalog);
+
+  ra_executor.executeSimpleInsert(query);
 }
 
 void UpdateStmt::analyze(const Catalog_Namespace::Catalog& catalog,
@@ -2041,9 +2070,25 @@ void get_table_definitions(TableDescriptor& td,
                            const std::list<ColumnDescriptor>& columns) {
   const auto it = tableDefFuncMap.find(boost::to_lower_copy<std::string>(*p->get_name()));
   if (it == tableDefFuncMap.end()) {
-    throw std::runtime_error("Invalid CREATE TABLE option " + *p->get_name() +
-                             ". Should be FRAGMENT_SIZE, PAGE_SIZE, MAX_ROWS, "
-                             "PARTITIONS, VACUUM, SORT_COLUMN or SHARD_COUNT.");
+    throw std::runtime_error(
+        "Invalid CREATE TABLE option " + *p->get_name() +
+        ". Should be FRAGMENT_SIZE, MAX_CHUNK_SIZE, PAGE_SIZE, MAX_ROWS, "
+        "PARTITIONS, SHARD_COUNT, VACUUM, SORT_COLUMN, or STORAGE_TYPE.");
+  }
+  return it->second(td, p.get(), columns);
+}
+
+static const std::map<const std::string, const TableDefFuncPtr> dataframeDefFuncMap = {
+    {"fragment_size"s, get_frag_size_def},
+    {"max_chunk_size"s, get_max_chunk_size_def}};
+
+void get_dataframe_definitions(TableDescriptor& td,
+                               const std::unique_ptr<NameValueAssign>& p,
+                               const std::list<ColumnDescriptor>& columns) {
+  const auto it = tableDefFuncMap.find(boost::to_lower_copy<std::string>(*p->get_name()));
+  if (it == tableDefFuncMap.end()) {
+    throw std::runtime_error("Invalid CREATE DATAFRAME option " + *p->get_name() +
+                             ". Should be FRAGMENT_SIZE or MAX_CHUNK_SIZE.");
   }
   return it->second(td, p.get(), columns);
 }
@@ -2140,10 +2185,83 @@ void CreateTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
       session.get_currentUser(), td.tableName, TableDBObjectType, catalog);
 }
 
+void CreateDataframeStmt::execute(const Catalog_Namespace::SessionInfo& session) {
+  auto& catalog = session.getCatalog();
+
+  const auto execute_write_lock = mapd_unique_lock<mapd_shared_mutex>(
+      *legacylockmgr::LockMgr<mapd_shared_mutex, bool>::getMutex(
+          legacylockmgr::ExecutorOuterLock, true));
+
+  // check access privileges
+  if (!session.checkDBAccessPrivileges(DBObjectType::TableDBObjectType,
+                                       AccessPrivileges::CREATE_TABLE)) {
+    throw std::runtime_error("Table " + *table_ +
+                             " will not be created. User has no create privileges.");
+  }
+
+  if (catalog.getMetadataForTable(*table_) != nullptr) {
+    throw std::runtime_error("Table " + *table_ + " already exists.");
+  }
+  TableDescriptor td;
+  std::list<ColumnDescriptor> columns;
+  std::vector<SharedDictionaryDef> shared_dict_defs;
+
+  std::unordered_set<std::string> uc_col_names;
+  for (auto& e : table_element_list_) {
+    if (dynamic_cast<SharedDictionaryDef*>(e.get())) {
+      auto shared_dict_def = static_cast<SharedDictionaryDef*>(e.get());
+      validate_shared_dictionary(
+          this, shared_dict_def, columns, shared_dict_defs, catalog);
+      shared_dict_defs.push_back(*shared_dict_def);
+      continue;
+    }
+    if (!dynamic_cast<ColumnDef*>(e.get())) {
+      throw std::runtime_error("Table constraints are not supported yet.");
+    }
+    ColumnDef* coldef = static_cast<ColumnDef*>(e.get());
+    ColumnDescriptor cd;
+    cd.columnName = *coldef->get_column_name();
+    const auto uc_col_name = boost::to_upper_copy<std::string>(cd.columnName);
+    const auto it_ok = uc_col_names.insert(uc_col_name);
+    if (!it_ok.second) {
+      throw std::runtime_error("Column '" + cd.columnName + "' defined more than once");
+    }
+
+    setColumnDescriptor(cd, coldef);
+    columns.push_back(cd);
+  }
+
+  td.tableName = *table_;
+  td.nColumns = columns.size();
+  td.isView = false;
+  td.fragmenter = nullptr;
+  td.fragType = Fragmenter_Namespace::FragmenterType::INSERT_ORDER;
+  td.maxFragRows = DEFAULT_FRAGMENT_ROWS;
+  td.maxChunkSize = DEFAULT_MAX_CHUNK_SIZE;
+  td.fragPageSize = DEFAULT_PAGE_SIZE;
+  td.maxRows = DEFAULT_MAX_ROWS;
+  td.persistenceLevel = Data_Namespace::MemoryLevel::CPU_LEVEL;
+  if (!storage_options_.empty()) {
+    for (auto& p : storage_options_) {
+      get_dataframe_definitions(td, p, columns);
+    }
+  }
+  td.keyMetainfo = serialize_key_metainfo(nullptr, shared_dict_defs);
+  td.userId = session.get_currentUser().userId;
+  td.storageType = *filename_;
+
+  catalog.createShardedTable(td, columns, shared_dict_defs);
+  // TODO (max): It's transactionally unsafe, should be fixed: we may create object w/o
+  // privileges
+  SysCatalog::instance().createDBObject(
+      session.get_currentUser(), td.tableName, TableDBObjectType, catalog);
+}
+
 std::shared_ptr<ResultSet> getResultSet(QueryStateProxy query_state_proxy,
                                         const std::string select_stmt,
                                         std::vector<TargetMetaInfo>& targets,
-                                        bool validate_only = false) {
+                                        bool validate_only = false,
+                                        std::vector<size_t> outer_fragment_indices = {}) {
   auto const session = query_state_proxy.getQueryState().getConstSessionInfo();
   auto& catalog = session->getCatalog();
 
@@ -2161,8 +2279,8 @@ std::shared_ptr<ResultSet> getResultSet(QueryStateProxy query_state_proxy,
       calcite_mgr
           ->process(query_state_proxy, pg_shim(select_stmt), {}, true, false, false, true)
           .plan_result;
-  CompilationOptions co = {
-      device_type, true, ExecutorOptLevel::LoopStrengthReduction, false};
+  CompilationOptions co = CompilationOptions::defaults(device_type);
+  co.opt_level = ExecutorOptLevel::LoopStrengthReduction;
   // TODO(adb): Need a better method of dropping constants into this ExecutionOptions
   // struct
   ExecutionOptions eo = {false,
@@ -2176,7 +2294,9 @@ std::shared_ptr<ResultSet> getResultSet(QueryStateProxy query_state_proxy,
                          10000,
                          false,
                          false,
-                         0.9};
+                         0.9,
+                         ExecutorType::Native,
+                         outer_fragment_indices};
   RelAlgExecutor ra_executor(executor.get(), catalog, query_ra);
   ExecutionResult result{std::make_shared<ResultSet>(std::vector<TargetInfo>{},
                                                      ExecutorDeviceType::CPU,
@@ -2190,31 +2310,65 @@ std::shared_ptr<ResultSet> getResultSet(QueryStateProxy query_state_proxy,
   return result.getRows();
 }
 
-AggregatedResult InsertIntoTableAsSelectStmt::LocalConnector::query(
-    QueryStateProxy query_state_proxy,
-    std::string& sql_query_string,
-    bool validate_only) {
+size_t LocalConnector::getOuterFragmentCount(QueryStateProxy query_state_proxy,
+                                             std::string& sql_query_string) {
+  auto const session = query_state_proxy.getQueryState().getConstSessionInfo();
+  auto& catalog = session->getCatalog();
+
+  auto executor = Executor::getExecutor(catalog.getCurrentDB().dbId);
+#ifdef HAVE_CUDA
+  const auto device_type = session->get_executor_device_type();
+#else
+  const auto device_type = ExecutorDeviceType::CPU;
+#endif  // HAVE_CUDA
+  auto calcite_mgr = catalog.getCalciteMgr();
+
+  // TODO MAT this should actually get the global or the session parameter for
+  // view optimization
+  const auto query_ra =
+      calcite_mgr
+          ->process(
+              query_state_proxy, pg_shim(sql_query_string), {}, true, false, false, true)
+          .plan_result;
+  CompilationOptions co = {
+      device_type, true, ExecutorOptLevel::LoopStrengthReduction, false};
+  // TODO(adb): Need a better method of dropping constants into this ExecutionOptions
+  // struct
+  ExecutionOptions eo = {
+      false, true, false, true, false, false, false, false, 10000, false, false, 0.9};
+  RelAlgExecutor ra_executor(executor.get(), catalog, query_ra);
+  return ra_executor.getOuterFragmentCount(co, eo);
+}
+
+AggregatedResult LocalConnector::query(QueryStateProxy query_state_proxy,
+                                       std::string& sql_query_string,
+                                       std::vector<size_t> outer_frag_indices,
+                                       bool validate_only) {
   auto const session = query_state_proxy.getQueryState().getConstSessionInfo();
   // TODO(PS): Should we be using the shimmed query in getResultSet?
   std::string pg_shimmed_select_query = pg_shim(sql_query_string);
 
   std::vector<TargetMetaInfo> target_metainfos;
-  auto result_rows =
-      getResultSet(query_state_proxy, sql_query_string, target_metainfos, validate_only);
+  auto result_rows = getResultSet(query_state_proxy,
+                                  sql_query_string,
+                                  target_metainfos,
+                                  validate_only,
+                                  outer_frag_indices);
   AggregatedResult res = {result_rows, target_metainfos};
   return res;
 }
 
-AggregatedResult InsertIntoTableAsSelectStmt::LocalConnector::query(
+std::vector<AggregatedResult> LocalConnector::query(
     QueryStateProxy query_state_proxy,
-    std::string& sql_query_string) {
-  return query(query_state_proxy, sql_query_string, false);
+    std::string& sql_query_string,
+    std::vector<size_t> outer_frag_indices) {
+  auto res = query(query_state_proxy, sql_query_string, outer_frag_indices, false);
+  return {res};
 }
 
-void InsertIntoTableAsSelectStmt::LocalConnector::insertDataToLeaf(
-    const Catalog_Namespace::SessionInfo& session,
-    const size_t leaf_idx,
-    Fragmenter_Namespace::InsertData& insert_data) {
+void LocalConnector::insertDataToLeaf(const Catalog_Namespace::SessionInfo& session,
+                                      const size_t leaf_idx,
+                                      Fragmenter_Namespace::InsertData& insert_data) {
   CHECK(leaf_idx == 0);
   auto& catalog = session.getCatalog();
   auto created_td = catalog.getMetadataForTable(insert_data.tableId);
@@ -2224,26 +2378,22 @@ void InsertIntoTableAsSelectStmt::LocalConnector::insertDataToLeaf(
   created_td->fragmenter->insertDataNoCheckpoint(insert_data);
 }
 
-void InsertIntoTableAsSelectStmt::LocalConnector::checkpoint(
-    const Catalog_Namespace::SessionInfo& session,
-    int tableId) {
+void LocalConnector::checkpoint(const Catalog_Namespace::SessionInfo& session,
+                                int tableId) {
   auto& catalog = session.getCatalog();
   auto dbId = catalog.getCurrentDB().dbId;
   catalog.getDataMgr().checkpoint(dbId, tableId);
 }
 
-void InsertIntoTableAsSelectStmt::LocalConnector::rollback(
-    const Catalog_Namespace::SessionInfo& session,
-    int tableId) {
+void LocalConnector::rollback(const Catalog_Namespace::SessionInfo& session,
+                              int tableId) {
   auto& catalog = session.getCatalog();
   auto dbId = catalog.getCurrentDB().dbId;
   catalog.getDataMgr().checkpoint(dbId, tableId);
 }
 
-std::list<ColumnDescriptor>
-InsertIntoTableAsSelectStmt::LocalConnector::getColumnDescriptors(
-    AggregatedResult& result,
-    bool for_create) {
+std::list<ColumnDescriptor> LocalConnector::getColumnDescriptors(AggregatedResult& result,
+                                                                 bool for_create) {
   std::list<ColumnDescriptor> column_descriptors;
   std::list<ColumnDescriptor> column_descriptors_for_create;
 
@@ -2280,7 +2430,6 @@ InsertIntoTableAsSelectStmt::LocalConnector::getColumnDescriptors(
 }
 
 void InsertIntoTableAsSelectStmt::populateData(QueryStateProxy query_state_proxy,
-                                               bool is_temporary,
                                                bool validate_table) {
   auto const session = query_state_proxy.getQueryState().getConstSessionInfo();
   LocalConnector local_connector;
@@ -2321,6 +2470,8 @@ void InsertIntoTableAsSelectStmt::populateData(QueryStateProxy query_state_proxy
           catalog, table_name_);
   const auto td = td_with_lock();
 
+  bool is_temporary = table_is_temporary(td);
+
   // Don't allow simultaneous inserts
   const auto insert_data_lock =
       lockmgr::InsertDataLockMgr::getWriteLockForTable(catalog, table_name_);
@@ -2342,7 +2493,7 @@ void InsertIntoTableAsSelectStmt::populateData(QueryStateProxy query_state_proxy
 
     // only validate the select query so we get the target types
     // correctly, but do not populate the result set
-    auto result = local_connector.query(query_state_proxy, select_query_, true);
+    auto result = local_connector.query(query_state_proxy, select_query_, {}, true);
     auto source_column_descriptors = local_connector.getColumnDescriptors(result, false);
 
     std::vector<const ColumnDescriptor*> target_column_descriptors =
@@ -2437,207 +2588,228 @@ void InsertIntoTableAsSelectStmt::populateData(QueryStateProxy query_state_proxy
   }
 
   Fragmenter_Namespace::InsertDataLoader insertDataLoader(*leafs_connector_);
-  AggregatedResult res = leafs_connector_->query(query_state_proxy, select_query_);
   auto target_column_descriptors = get_target_column_descriptors(td);
-  auto result_rows = res.rs;
-  result_rows->setGeoReturnType(ResultSet::GeoReturnType::GeoTargetValue);
-  const auto num_rows = result_rows->rowCount();
 
-  if (0 == num_rows) {
-    return;
-  }
+  auto outer_frag_count =
+      leafs_connector_->getOuterFragmentCount(query_state_proxy, select_query_);
 
-  size_t leaf_count = leafs_connector_->leafCount();
+  size_t outer_frag_end = outer_frag_count == 0 ? 1 : outer_frag_count;
 
-  size_t max_number_of_rows_per_package = std::min(num_rows / leaf_count, 64UL * 1024UL);
+  for (size_t outer_frag_idx = 0; outer_frag_idx < outer_frag_end; outer_frag_idx++) {
+    std::vector<size_t> allowed_outer_fragment_indices;
 
-  size_t start_row = 0;
-  size_t num_rows_to_process = std::min(num_rows, max_number_of_rows_per_package);
+    if (outer_frag_count) {
+      allowed_outer_fragment_indices.push_back(outer_frag_idx);
+    }
 
-  // ensure that at least one row is being processed
-  num_rows_to_process = std::max(num_rows_to_process, 1UL);
+    std::vector<AggregatedResult> query_results = leafs_connector_->query(
+        query_state_proxy, select_query_, allowed_outer_fragment_indices);
 
-  std::vector<std::unique_ptr<TargetValueConverter>> value_converters;
+    for (auto& res : query_results) {
+      auto result_rows = res.rs;
+      result_rows->setGeoReturnType(ResultSet::GeoReturnType::GeoTargetValue);
+      const auto num_rows = result_rows->rowCount();
 
-  TargetValueConverterFactory factory;
+      if (0 == num_rows) {
+        continue;
+      }
 
-  const int num_worker_threads = std::thread::hardware_concurrency();
+      size_t leaf_count = leafs_connector_->leafCount();
 
-  std::vector<size_t> thread_start_idx(num_worker_threads),
-      thread_end_idx(num_worker_threads);
-  bool can_go_parallel = !result_rows->isTruncated() && num_rows_to_process > 20000;
+      size_t max_number_of_rows_per_package =
+          std::min(num_rows / leaf_count, 64UL * 1024UL);
 
-  std::atomic<size_t> row_idx{0};
+      size_t start_row = 0;
+      size_t num_rows_to_process = std::min(num_rows, max_number_of_rows_per_package);
 
-  auto convert_function = [&result_rows,
-                           &value_converters,
-                           &row_idx,
-                           &num_rows_to_process,
-                           &thread_start_idx,
-                           &thread_end_idx](const int thread_id) {
-    const int num_cols = value_converters.size();
-    const size_t start = thread_start_idx[thread_id];
-    const size_t end = thread_end_idx[thread_id];
-    size_t idx = 0;
-    for (idx = start; idx < end; ++idx) {
-      const auto result_row = result_rows->getRowAtNoTranslations(idx);
-      if (!result_row.empty()) {
-        size_t target_row = row_idx.fetch_add(1);
+      // ensure that at least one row is being processed
+      num_rows_to_process = std::max(num_rows_to_process, 1UL);
 
-        if (target_row >= num_rows_to_process) {
-          break;
+      std::vector<std::unique_ptr<TargetValueConverter>> value_converters;
+
+      TargetValueConverterFactory factory;
+
+      const int num_worker_threads = std::thread::hardware_concurrency();
+
+      std::vector<size_t> thread_start_idx(num_worker_threads),
+          thread_end_idx(num_worker_threads);
+      bool can_go_parallel = !result_rows->isTruncated() && num_rows_to_process > 20000;
+
+      std::atomic<size_t> row_idx{0};
+
+      auto convert_function = [&result_rows,
+                               &value_converters,
+                               &row_idx,
+                               &num_rows_to_process,
+                               &thread_start_idx,
+                               &thread_end_idx](const int thread_id) {
+        const int num_cols = value_converters.size();
+        const size_t start = thread_start_idx[thread_id];
+        const size_t end = thread_end_idx[thread_id];
+        size_t idx = 0;
+        for (idx = start; idx < end; ++idx) {
+          const auto result_row = result_rows->getRowAtNoTranslations(idx);
+          if (!result_row.empty()) {
+            size_t target_row = row_idx.fetch_add(1);
+
+            if (target_row >= num_rows_to_process) {
+              break;
+            }
+
+            for (unsigned int col = 0; col < num_cols; col++) {
+              const auto& mapd_variant = result_row[col];
+              value_converters[col]->convertToColumnarFormat(target_row, &mapd_variant);
+            }
+          }
         }
 
-        for (unsigned int col = 0; col < num_cols; col++) {
-          const auto& mapd_variant = result_row[col];
-          value_converters[col]->convertToColumnarFormat(target_row, &mapd_variant);
+        thread_start_idx[thread_id] = idx;
+      };
+
+      auto single_threaded_convert_function = [&result_rows,
+                                               &value_converters,
+                                               &row_idx,
+                                               &num_rows_to_process,
+                                               &thread_start_idx,
+                                               &thread_end_idx](const int thread_id) {
+        const int num_cols = value_converters.size();
+        const size_t start = thread_start_idx[thread_id];
+        const size_t end = thread_end_idx[thread_id];
+        size_t idx = 0;
+        for (idx = start; idx < end; ++idx) {
+          size_t target_row = row_idx.fetch_add(1);
+
+          if (target_row >= num_rows_to_process) {
+            break;
+          }
+          const auto result_row = result_rows->getNextRow(false, false);
+          CHECK(!result_row.empty());
+          for (unsigned int col = 0; col < num_cols; col++) {
+            const auto& mapd_variant = result_row[col];
+            value_converters[col]->convertToColumnarFormat(target_row, &mapd_variant);
+          }
         }
-      }
-    }
 
-    thread_start_idx[thread_id] = idx;
-  };
-
-  auto single_threaded_convert_function = [&result_rows,
-                                           &value_converters,
-                                           &row_idx,
-                                           &num_rows_to_process,
-                                           &thread_start_idx,
-                                           &thread_end_idx](const int thread_id) {
-    const int num_cols = value_converters.size();
-    const size_t start = thread_start_idx[thread_id];
-    const size_t end = thread_end_idx[thread_id];
-    size_t idx = 0;
-    for (idx = start; idx < end; ++idx) {
-      size_t target_row = row_idx.fetch_add(1);
-
-      if (target_row >= num_rows_to_process) {
-        break;
-      }
-      const auto result_row = result_rows->getNextRow(false, false);
-      CHECK(!result_row.empty());
-      for (unsigned int col = 0; col < num_cols; col++) {
-        const auto& mapd_variant = result_row[col];
-        value_converters[col]->convertToColumnarFormat(target_row, &mapd_variant);
-      }
-    }
-
-    thread_start_idx[thread_id] = idx;
-  };
-
-  if (can_go_parallel) {
-    const size_t entryCount = result_rows->entryCount();
-    for (size_t i = 0,
-                start_entry = 0,
-                stride = (entryCount + num_worker_threads - 1) / num_worker_threads;
-         i < num_worker_threads && start_entry < entryCount;
-         ++i, start_entry += stride) {
-      const auto end_entry = std::min(start_entry + stride, entryCount);
-      thread_start_idx[i] = start_entry;
-      thread_end_idx[i] = end_entry;
-    }
-
-  } else {
-    thread_start_idx[0] = 0;
-    thread_end_idx[0] = result_rows->entryCount();
-  }
-
-  std::shared_ptr<Executor> executor;
-
-  if (g_enable_experimental_string_functions) {
-    executor = Executor::getExecutor(catalog.getCurrentDB().dbId);
-  }
-
-  while (start_row < num_rows) {
-    try {
-      value_converters.clear();
-      row_idx = 0;
-      int colNum = 0;
-      for (const auto targetDescriptor : target_column_descriptors) {
-        auto sourceDataMetaInfo = res.targets_meta[colNum++];
-
-        ConverterCreateParameter param{
-            num_rows_to_process,
-            catalog,
-            sourceDataMetaInfo,
-            targetDescriptor,
-            targetDescriptor->columnType,
-            !targetDescriptor->columnType.get_notnull(),
-            result_rows->getRowSetMemOwner()->getLiteralStringDictProxy(),
-            g_enable_experimental_string_functions
-                ? executor->getStringDictionaryProxy(
-                      sourceDataMetaInfo.get_type_info().get_comp_param(),
-                      result_rows->getRowSetMemOwner(),
-                      true)
-                : nullptr};
-        auto converter = factory.create(param);
-        value_converters.push_back(std::move(converter));
-      }
+        thread_start_idx[thread_id] = idx;
+      };
 
       if (can_go_parallel) {
-        std::vector<std::future<void>> worker_threads;
-        for (int i = 0; i < num_worker_threads; ++i) {
-          worker_threads.push_back(std::async(std::launch::async, convert_function, i));
-        }
-
-        for (auto& child : worker_threads) {
-          child.wait();
-        }
-        for (auto& child : worker_threads) {
-          child.get();
+        const size_t entryCount = result_rows->entryCount();
+        for (size_t i = 0,
+                    start_entry = 0,
+                    stride = (entryCount + num_worker_threads - 1) / num_worker_threads;
+             i < num_worker_threads && start_entry < entryCount;
+             ++i, start_entry += stride) {
+          const auto end_entry = std::min(start_entry + stride, entryCount);
+          thread_start_idx[i] = start_entry;
+          thread_end_idx[i] = end_entry;
         }
 
       } else {
-        single_threaded_convert_function(0);
+        thread_start_idx[0] = 0;
+        thread_end_idx[0] = result_rows->entryCount();
       }
 
-      // finalize the insert data
-      {
-        auto finalizer_func =
-            [](std::unique_ptr<TargetValueConverter>::pointer targetValueConverter) {
-              targetValueConverter->finalizeDataBlocksForInsertData();
-            };
-        std::vector<std::future<void>> worker_threads;
-        for (auto& converterPtr : value_converters) {
-          worker_threads.push_back(
-              std::async(std::launch::async, finalizer_func, converterPtr.get()));
-        }
+      std::shared_ptr<Executor> executor;
 
-        for (auto& child : worker_threads) {
-          child.wait();
-        }
-        for (auto& child : worker_threads) {
-          child.get();
-        }
+      if (g_enable_experimental_string_functions) {
+        executor = Executor::getExecutor(catalog.getCurrentDB().dbId);
       }
 
-      Fragmenter_Namespace::InsertData insert_data;
-      insert_data.databaseId = catalog.getCurrentDB().dbId;
-      CHECK(td);
-      insert_data.tableId = td->tableId;
-      insert_data.numRows = num_rows_to_process;
+      while (start_row < num_rows) {
+        try {
+          value_converters.clear();
+          row_idx = 0;
+          int colNum = 0;
+          for (const auto targetDescriptor : target_column_descriptors) {
+            auto sourceDataMetaInfo = res.targets_meta[colNum++];
 
-      for (int col_idx = 0; col_idx < target_column_descriptors.size(); col_idx++) {
-        value_converters[col_idx]->addDataBlocksToInsertData(insert_data);
-      }
-
-      insertDataLoader.insertData(*session, insert_data);
-    } catch (...) {
-      try {
-        if (td->nShards) {
-          const auto shard_tables = catalog.getPhysicalTablesDescriptors(td);
-          for (const auto ptd : shard_tables) {
-            leafs_connector_->rollback(*session, ptd->tableId);
+            ConverterCreateParameter param{
+                num_rows_to_process,
+                catalog,
+                sourceDataMetaInfo,
+                targetDescriptor,
+                targetDescriptor->columnType,
+                !targetDescriptor->columnType.get_notnull(),
+                result_rows->getRowSetMemOwner()->getLiteralStringDictProxy(),
+                g_enable_experimental_string_functions
+                    ? executor->getStringDictionaryProxy(
+                          sourceDataMetaInfo.get_type_info().get_comp_param(),
+                          result_rows->getRowSetMemOwner(),
+                          true)
+                    : nullptr};
+            auto converter = factory.create(param);
+            value_converters.push_back(std::move(converter));
           }
+
+          if (can_go_parallel) {
+            std::vector<std::future<void>> worker_threads;
+            for (int i = 0; i < num_worker_threads; ++i) {
+              worker_threads.push_back(
+                  std::async(std::launch::async, convert_function, i));
+            }
+
+            for (auto& child : worker_threads) {
+              child.wait();
+            }
+            for (auto& child : worker_threads) {
+              child.get();
+            }
+
+          } else {
+            single_threaded_convert_function(0);
+          }
+
+          // finalize the insert data
+          {
+            auto finalizer_func =
+                [](std::unique_ptr<TargetValueConverter>::pointer targetValueConverter) {
+                  targetValueConverter->finalizeDataBlocksForInsertData();
+                };
+            std::vector<std::future<void>> worker_threads;
+            for (auto& converterPtr : value_converters) {
+              worker_threads.push_back(
+                  std::async(std::launch::async, finalizer_func, converterPtr.get()));
+            }
+
+            for (auto& child : worker_threads) {
+              child.wait();
+            }
+            for (auto& child : worker_threads) {
+              child.get();
+            }
+          }
+
+          Fragmenter_Namespace::InsertData insert_data;
+          insert_data.databaseId = catalog.getCurrentDB().dbId;
+          CHECK(td);
+          insert_data.tableId = td->tableId;
+          insert_data.numRows = num_rows_to_process;
+
+          for (int col_idx = 0; col_idx < target_column_descriptors.size(); col_idx++) {
+            value_converters[col_idx]->addDataBlocksToInsertData(insert_data);
+          }
+
+          insertDataLoader.insertData(*session, insert_data);
+        } catch (...) {
+          try {
+            if (td->nShards) {
+              const auto shard_tables = catalog.getPhysicalTablesDescriptors(td);
+              for (const auto ptd : shard_tables) {
+                leafs_connector_->rollback(*session, ptd->tableId);
+              }
+            }
+            leafs_connector_->rollback(*session, td->tableId);
+          } catch (...) {
+            // eat it
+          }
+          throw;
         }
-        leafs_connector_->rollback(*session, td->tableId);
-      } catch (...) {
-        // eat it
+        start_row += num_rows_to_process;
+        num_rows_to_process =
+            std::min(num_rows - start_row, max_number_of_rows_per_package);
       }
-      throw;
     }
-    start_row += num_rows_to_process;
-    num_rows_to_process = std::min(num_rows - start_row, max_number_of_rows_per_package);
   }
 
   if (!is_temporary) {
@@ -2657,7 +2829,7 @@ void InsertIntoTableAsSelectStmt::execute(const Catalog_Namespace::SessionInfo& 
       &session_copy, boost::null_deleter());
   auto query_state = query_state::QueryState::create(session_ptr, select_query_);
   auto stdlog = STDLOG(query_state);
-  populateData(query_state->createQueryStateProxy(), false, true);
+  populateData(query_state->createQueryStateProxy(), true);
 }
 
 void CreateTableAsSelectStmt::execute(const Catalog_Namespace::SessionInfo& session) {
@@ -2689,8 +2861,8 @@ void CreateTableAsSelectStmt::execute(const Catalog_Namespace::SessionInfo& sess
 
     // only validate the select query so we get the target types
     // correctly, but do not populate the result set
-    auto result =
-        local_connector.query(query_state->createQueryStateProxy(), select_query_, true);
+    auto result = local_connector.query(
+        query_state->createQueryStateProxy(), select_query_, {}, true);
     const auto column_descriptors_for_create =
         local_connector.getColumnDescriptors(result, true);
 
@@ -2733,7 +2905,7 @@ void CreateTableAsSelectStmt::execute(const Catalog_Namespace::SessionInfo& sess
   }
 
   try {
-    populateData(query_state->createQueryStateProxy(), is_temporary_, false);
+    populateData(query_state->createQueryStateProxy(), false);
   } catch (...) {
     if (!g_cluster) {
       const TableDescriptor* created_td = catalog.getMetadataForTable(table_name_);
@@ -2919,6 +3091,10 @@ void AddColumnStmt::check_executable(const Catalog_Namespace::SessionInfo& sessi
     if (td->isView) {
       throw std::runtime_error("Adding columns to a view is not supported.");
     }
+    if (table_is_temporary(td)) {
+      throw std::runtime_error(
+          "Adding columns to temporary tables is not yet supported.");
+    }
   };
 
   check_alter_table_privilege(session, td);
@@ -2947,7 +3123,15 @@ void AddColumnStmt::execute(const Catalog_Namespace::SessionInfo& session) {
       lockmgr::TableSchemaLockContainer<lockmgr::WriteLock>::acquireTableDescriptor(
           catalog, *table, true);
   const auto td = td_with_lock();
+
   check_executable(session, td);
+
+  CHECK(td->fragmenter);
+  if (dynamic_cast<Fragmenter_Namespace::SortedOrderFragmenter*>(td->fragmenter)) {
+    throw std::runtime_error(
+        "Adding columns to a table is not supported when using the \"sort_column\" "
+        "option.");
+  }
 
   // Do not take a data write lock, as the fragmenter may call `deleteFragments` during
   // a cap operation. Note that the schema write lock will prevent concurrent inserts
@@ -2977,14 +3161,7 @@ void AddColumnStmt::execute(const Catalog_Namespace::SessionInfo& session) {
     }
 
     std::unique_ptr<Importer_NS::Loader> loader(new Importer_NS::Loader(catalog, td));
-    std::vector<std::unique_ptr<Importer_NS::TypedImportBuffer>> import_buffers;
-
-    // a call of Catalog_Namespace::MapDHandler::prepare_columnar_loader
-    session.get_mapdHandler()->prepare_columnar_loader(session.get_session_id(),
-                                                       td->tableName,
-                                                       td->nColumns - 1,
-                                                       &loader,
-                                                       &import_buffers);
+    auto import_buffers = Importer_NS::setup_column_loaders(td, loader.get());
     loader->setReplicating(true);
 
     // set_geo_physical_import_buffer below needs a sorted import_buffers
@@ -3099,7 +3276,11 @@ void DropColumnStmt::execute(const Catalog_Namespace::SessionInfo& session) {
     throw std::runtime_error("Table " + *table + " does not exist.");
   }
   if (td->isView) {
-    throw std::runtime_error("Dropping column from a view is not supported.");
+    throw std::runtime_error("Dropping a column from a view is not supported.");
+  }
+  if (table_is_temporary(td)) {
+    throw std::runtime_error(
+        "Dropping a column from a temporary table is not yet supported.");
   }
 
   check_alter_table_privilege(session, td);
@@ -3914,11 +4095,16 @@ void ExportQueryStmt::execute(const Catalog_Namespace::SessionInfo& session) {
       &session_copy, boost::null_deleter());
   auto query_state = query_state::QueryState::create(session_ptr, *select_stmt);
   auto stdlog = STDLOG(query_state);
-  if (SysCatalog::instance().isAggregator()) {
-    // allow copy to statement for stand alone leafs
-    throw std::runtime_error("Distributed export not supported yet");
-  }
+  auto query_state_proxy = query_state->createQueryStateProxy();
+
   auto& catalog = session.getCatalog();
+
+  LocalConnector local_connector;
+
+  if (!leafs_connector_) {
+    leafs_connector_ = &local_connector;
+  }
+
   Importer_NS::CopyParams copy_params;
   if (!options.empty()) {
     for (auto& p : options) {
@@ -3986,10 +4172,6 @@ void ExportQueryStmt::execute(const Catalog_Namespace::SessionInfo& session) {
       }
     }
   }
-  std::vector<TargetMetaInfo> targets;
-  const auto results =
-      getResultSet(query_state->createQueryStateProxy(), *select_stmt, targets);
-  TargetMetaInfo* td = targets.data();
 
   std::ofstream outfile;
   if (file_path->empty() || !boost::filesystem::path(*file_path).is_absolute()) {
@@ -4012,9 +4194,11 @@ void ExportQueryStmt::execute(const Catalog_Namespace::SessionInfo& session) {
     throw std::runtime_error("Cannot open file: " + *file_path);
   }
   if (copy_params.has_header == Importer_NS::ImportHeaderRow::HAS_HEADER) {
+    auto result = local_connector.query(query_state_proxy, *select_stmt, {}, true);
+
     bool not_first = false;
     size_t i = 0;
-    for (const auto& target : targets) {
+    for (const auto& target : result.targets_meta) {
       std::string col_name = target.get_resname();
       if (col_name.empty()) {
         col_name = "result_" + std::to_string(i + 1);
@@ -4029,124 +4213,148 @@ void ExportQueryStmt::execute(const Catalog_Namespace::SessionInfo& session) {
     }
     outfile << copy_params.line_delim;
   }
-  while (true) {
-    const auto crt_row = results->getNextRow(true, true);
-    if (crt_row.empty()) {
-      break;
+
+  auto outer_frag_count =
+      leafs_connector_->getOuterFragmentCount(query_state_proxy, *select_stmt);
+
+  size_t outer_frag_end = outer_frag_count == 0 ? 1 : outer_frag_count;
+
+  for (size_t outer_frag_idx = 0; outer_frag_idx < outer_frag_end; outer_frag_idx++) {
+    std::vector<size_t> allowed_outer_fragment_indices;
+
+    if (outer_frag_count) {
+      allowed_outer_fragment_indices.push_back(outer_frag_idx);
     }
-    bool not_first = false;
-    for (size_t i = 0; i < results->colCount(); ++i) {
-      bool is_null;
-      const auto tv = crt_row[i];
-      const auto scalar_tv = boost::get<ScalarTargetValue>(&tv);
-      if (not_first) {
-        outfile << copy_params.delimiter;
-      } else {
-        not_first = true;
-      }
-      if (copy_params.quoted) {
-        outfile << copy_params.quote;
-      }
-      const auto& ti = td[i].get_type_info();
-      if (!scalar_tv) {
-        outfile << datum_to_string(crt_row[i], ti, " | ");
-        if (copy_params.quoted) {
-          outfile << copy_params.quote;
+
+    std::vector<AggregatedResult> query_results = leafs_connector_->query(
+        query_state_proxy, *select_stmt, allowed_outer_fragment_indices);
+
+    for (auto& res : query_results) {
+      auto results = res.rs;
+
+      const std::vector<TargetMetaInfo>& targets = res.targets_meta;
+      const TargetMetaInfo* td = targets.data();
+
+      while (true) {
+        const auto crt_row = results->getNextRow(true, true);
+        if (crt_row.empty()) {
+          break;
         }
-        continue;
-      }
-      if (boost::get<int64_t>(scalar_tv)) {
-        auto int_val = *(boost::get<int64_t>(scalar_tv));
-        switch (ti.get_type()) {
-          case kBOOLEAN:
-            is_null = (int_val == NULL_BOOLEAN);
-            break;
-          case kTINYINT:
-            is_null = (int_val == NULL_TINYINT);
-            break;
-          case kSMALLINT:
-            is_null = (int_val == NULL_SMALLINT);
-            break;
-          case kINT:
-            is_null = (int_val == NULL_INT);
-            break;
-          case kBIGINT:
-            is_null = (int_val == NULL_BIGINT);
-            break;
-          case kTIME:
-          case kTIMESTAMP:
-          case kDATE:
-            is_null = (int_val == NULL_BIGINT);
-            break;
-          default:
-            is_null = false;
-        }
-        if (is_null) {
-          outfile << copy_params.null_str;
-        } else if (ti.get_type() == kTIME) {
-          const auto t = static_cast<time_t>(int_val);
-          std::tm tm_struct;
-          gmtime_r(&t, &tm_struct);
-          char buf[9];
-          strftime(buf, 9, "%T", &tm_struct);
-          outfile << buf;
-        } else {
-          outfile << int_val;
-        }
-      } else if (boost::get<double>(scalar_tv)) {
-        auto real_val = *(boost::get<double>(scalar_tv));
-        if (ti.get_type() == kFLOAT) {
-          is_null = (real_val == NULL_FLOAT);
-        } else {
-          is_null = (real_val == NULL_DOUBLE);
-        }
-        if (is_null) {
-          outfile << copy_params.null_str;
-        } else if (ti.get_type() == kNUMERIC) {
-          outfile << std::setprecision(ti.get_precision()) << real_val;
-        } else {
-          outfile << std::setprecision(std::numeric_limits<double>::digits10 + 1)
-                  << real_val;
-        }
-      } else if (boost::get<float>(scalar_tv)) {
-        CHECK_EQ(kFLOAT, ti.get_type());
-        auto real_val = *(boost::get<float>(scalar_tv));
-        if (real_val == NULL_FLOAT) {
-          outfile << copy_params.null_str;
-        } else {
-          outfile << std::setprecision(std::numeric_limits<float>::digits10 + 1)
-                  << real_val;
-        }
-      } else {
-        auto s = boost::get<NullableString>(scalar_tv);
-        is_null = !s || boost::get<void*>(s);
-        if (is_null) {
-          outfile << copy_params.null_str;
-        } else {
-          auto s_notnull = boost::get<std::string>(s);
-          CHECK(s_notnull);
-          if (!copy_params.quoted) {
-            outfile << *s_notnull;
+        bool not_first = false;
+        for (size_t i = 0; i < results->colCount(); ++i) {
+          bool is_null;
+          const auto tv = crt_row[i];
+          const auto scalar_tv = boost::get<ScalarTargetValue>(&tv);
+          if (not_first) {
+            outfile << copy_params.delimiter;
           } else {
-            size_t q = s_notnull->find(copy_params.quote);
-            if (q == std::string::npos) {
-              outfile << *s_notnull;
+            not_first = true;
+          }
+          if (copy_params.quoted) {
+            outfile << copy_params.quote;
+          }
+          const auto& ti = td[i].get_type_info();
+          if (!scalar_tv) {
+            outfile << datum_to_string(crt_row[i], ti, " | ");
+            if (copy_params.quoted) {
+              outfile << copy_params.quote;
+            }
+            continue;
+          }
+          if (boost::get<int64_t>(scalar_tv)) {
+            auto int_val = *(boost::get<int64_t>(scalar_tv));
+            switch (ti.get_type()) {
+              case kBOOLEAN:
+                is_null = (int_val == NULL_BOOLEAN);
+                break;
+              case kTINYINT:
+                is_null = (int_val == NULL_TINYINT);
+                break;
+              case kSMALLINT:
+                is_null = (int_val == NULL_SMALLINT);
+                break;
+              case kINT:
+                is_null = (int_val == NULL_INT);
+                break;
+              case kBIGINT:
+                is_null = (int_val == NULL_BIGINT);
+                break;
+              case kTIME:
+              case kTIMESTAMP:
+              case kDATE:
+                is_null = (int_val == NULL_BIGINT);
+                break;
+              default:
+                is_null = false;
+            }
+            if (is_null) {
+              outfile << copy_params.null_str;
+            } else if (ti.get_type() == kTIME) {
+              const auto t = static_cast<time_t>(int_val);
+              std::tm tm_struct;
+              gmtime_r(&t, &tm_struct);
+              char buf[9];
+              strftime(buf, 9, "%T", &tm_struct);
+              outfile << buf;
             } else {
-              std::string str(*s_notnull);
-              while (q != std::string::npos) {
-                str.insert(q, 1, copy_params.escape);
-                q = str.find(copy_params.quote, q + 2);
+              outfile << int_val;
+            }
+          } else if (boost::get<double>(scalar_tv)) {
+            auto real_val = *(boost::get<double>(scalar_tv));
+            if (ti.get_type() == kFLOAT) {
+              is_null = (real_val == NULL_FLOAT);
+            } else {
+              is_null = (real_val == NULL_DOUBLE);
+            }
+            if (is_null) {
+              outfile << copy_params.null_str;
+            } else if (ti.get_type() == kNUMERIC) {
+              outfile << std::setprecision(ti.get_precision()) << real_val;
+            } else {
+              outfile << std::setprecision(std::numeric_limits<double>::digits10 + 1)
+                      << real_val;
+            }
+          } else if (boost::get<float>(scalar_tv)) {
+            CHECK_EQ(kFLOAT, ti.get_type());
+            auto real_val = *(boost::get<float>(scalar_tv));
+            if (real_val == NULL_FLOAT) {
+              outfile << copy_params.null_str;
+            } else {
+              outfile << std::setprecision(std::numeric_limits<float>::digits10 + 1)
+                      << real_val;
+            }
+          } else {
+            auto s = boost::get<NullableString>(scalar_tv);
+            is_null = !s || boost::get<void*>(s);
+            if (is_null) {
+              outfile << copy_params.null_str;
+            } else {
+              auto s_notnull = boost::get<std::string>(s);
+              CHECK(s_notnull);
+              if (!copy_params.quoted) {
+                outfile << *s_notnull;
+              } else {
+                size_t q = s_notnull->find(copy_params.quote);
+                if (q == std::string::npos) {
+                  outfile << *s_notnull;
+                } else {
+                  std::string str(*s_notnull);
+                  while (q != std::string::npos) {
+                    str.insert(q, 1, copy_params.escape);
+                    q = str.find(copy_params.quote, q + 2);
+                  }
+                  outfile << str;
+                }
               }
-              outfile << str;
             }
           }
+          if (copy_params.quoted) {
+            outfile << copy_params.quote;
+          }
         }
-      }
-      if (copy_params.quoted) {
-        outfile << copy_params.quote;
+        outfile << copy_params.line_delim;
       }
     }
-    outfile << copy_params.line_delim;
   }
   outfile.close();
 }
@@ -4429,7 +4637,8 @@ void DumpTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   }
   auto& catalog = session.getCatalog();
   const TableDescriptor* td = catalog.getMetadataForTable(*table);
-  catalog.dumpTable(td, *path, compression);
+  TableArchiver table_archiver(&catalog);
+  table_archiver.dumpTable(td, *path, compression);
 }
 
 void RestoreTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
@@ -4447,23 +4656,9 @@ void RestoreTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
       throw std::runtime_error("Table " + *table +
                                " will not be restored. User has no create privileges.");
     }
-    catalog.restoreTable(session, *table, *path, compression);
+    TableArchiver table_archiver(&catalog);
+    table_archiver.restoreTable(session, *table, *path, compression);
   }
 }
 
 }  // namespace Parser
-
-// this is a non-clustered version of MapDHandler::prepare_columnar_loader,
-// exists for non-thrift builds, specifically for test cases and bin/initdb.
-void Catalog_Namespace::MapDHandler::prepare_columnar_loader(
-    const std::string& session,
-    const std::string& table_name,
-    size_t num_cols,
-    std::unique_ptr<Importer_NS::Loader>* loader,
-    std::vector<std::unique_ptr<Importer_NS::TypedImportBuffer>>* import_buffers) {
-  auto col_descs = (*loader)->get_column_descs();
-  for (auto cd : col_descs) {
-    import_buffers->push_back(std::unique_ptr<Importer_NS::TypedImportBuffer>(
-        new Importer_NS::TypedImportBuffer(cd, (*loader)->getStringDict(cd))));
-  }
-}

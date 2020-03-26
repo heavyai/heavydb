@@ -124,6 +124,17 @@ class JoinHashTableInterface {
 
   virtual size_t payloadBufferOff() const noexcept = 0;
 
+  JoinColumn fetchJoinColumn(
+      const Analyzer::ColumnVar* hash_col,
+      const std::deque<Fragmenter_Namespace::FragmentInfo>& fragment_info,
+      const Data_Namespace::MemoryLevel effective_memory_level,
+      const int device_id,
+      std::vector<std::shared_ptr<Chunk_NS::Chunk>>& chunks_owner,
+      ThrustAllocator& dev_buff_owner,
+      std::vector<std::shared_ptr<void>>& malloc_owner,
+      Executor* executor,
+      ColumnCacheMap* column_cache);
+
  protected:
   using LinearizedColumn = std::pair<const int8_t*, size_t>;
   using LinearizedColumnCacheKey = std::pair<int, int>;

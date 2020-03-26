@@ -37,7 +37,6 @@
 #include "WindowContext.h"
 
 #include "../Chunk/Chunk.h"
-#include "../Planner/Planner.h"
 #include "../Shared/Logger.h"
 #include "../Shared/MapDParameters.h"
 #include "../Shared/measure.h"
@@ -316,6 +315,8 @@ class UpdateLogForFragment : public RowDataProvider {
 
   using Callback = std::function<void(const UpdateLogForFragment&)>;
 
+  auto getResultSet() const { return rs_; }
+
  private:
   FragmentInfoType const& fragment_info_;
   size_t fragment_index_;
@@ -359,17 +360,6 @@ class Executor {
   }
 
   static void clearMemory(const Data_Namespace::MemoryLevel memory_level);
-
-  using AggInfo = std::tuple<std::string, const Analyzer::Expr*, int64_t, const size_t>;
-
-  std::shared_ptr<ResultSet> execute(const Planner::RootPlan* root_plan,
-                                     const Catalog_Namespace::SessionInfo& session,
-                                     const bool hoist_literals,
-                                     const ExecutorDeviceType device_type,
-                                     const ExecutorOptLevel,
-                                     const bool allow_multifrag,
-                                     const bool allow_loop_joins,
-                                     RenderInfo* render_query_data = nullptr);
 
   StringDictionaryProxy* getStringDictionaryProxy(
       const int dictId,
@@ -561,7 +551,7 @@ class Executor {
                      const Catalog_Namespace::Catalog& cat,
                      std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
                      const UpdateLogForFragment::Callback& cb,
-                     const bool is_agg = false);
+                     const bool is_agg);
 
   using PerFragmentCallBack =
       std::function<void(ResultSetPtr, const Fragmenter_Namespace::FragmentInfo&)>;
@@ -739,7 +729,6 @@ class Executor {
       std::vector<std::pair<ResultSetPtr, std::vector<size_t>>>& all_fragment_results,
       std::shared_ptr<RowSetMemoryOwner>,
       const QueryMemoryDescriptor&) const;
-  void executeSimpleInsert(const Planner::RootPlan* root_plan);
 
   TemporaryTable executeWorkUnitImpl(size_t& max_groups_buffer_entry_guess,
                                      const bool is_agg,
@@ -864,7 +853,8 @@ class Executor {
   llvm::Value* castToFP(llvm::Value* val);
   llvm::Value* castToIntPtrTyIn(llvm::Value* val, const size_t bit_width);
 
-  RelAlgExecutionUnit addDeletedColumn(const RelAlgExecutionUnit& ra_exe_unit);
+  RelAlgExecutionUnit addDeletedColumn(const RelAlgExecutionUnit& ra_exe_unit,
+                                       const CompilationOptions& co);
 
   std::pair<bool, int64_t> skipFragment(
       const InputDescriptor& table_desc,

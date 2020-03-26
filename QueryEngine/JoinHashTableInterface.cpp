@@ -23,6 +23,51 @@
 #include "RuntimeFunctions.h"
 #include "ScalarExprVisitor.h"
 
+//! fetchJoinColumn() calls ColumnFetcher::makeJoinColumn(), then copies the
+//! JoinColumn's col_chunks_buff memory onto the GPU if required by the
+//! effective_memory_level parameter. The dev_buff_owner parameter will
+//! manage the GPU memory.
+JoinColumn JoinHashTableInterface::fetchJoinColumn(
+    const Analyzer::ColumnVar* hash_col,
+    const std::deque<Fragmenter_Namespace::FragmentInfo>& fragment_info,
+    const Data_Namespace::MemoryLevel effective_memory_level,
+    const int device_id,
+    std::vector<std::shared_ptr<Chunk_NS::Chunk>>& chunks_owner,
+    ThrustAllocator& dev_buff_owner,
+    std::vector<std::shared_ptr<void>>& malloc_owner,
+    Executor* executor,
+    ColumnCacheMap* column_cache) {
+  static std::mutex fragment_fetch_mutex;
+  const auto& catalog = *executor->getCatalog();
+  auto& data_mgr = catalog.getDataMgr();
+  {
+    std::lock_guard<std::mutex> fragment_fetch_lock(fragment_fetch_mutex);
+    try {
+      JoinColumn join_column = ColumnFetcher::makeJoinColumn(executor,
+                                                             *hash_col,
+                                                             fragment_info,
+                                                             effective_memory_level,
+                                                             device_id,
+                                                             chunks_owner,
+                                                             malloc_owner,
+                                                             *column_cache);
+      if (effective_memory_level == Data_Namespace::GPU_LEVEL) {
+        const int8_t* device_col_chunks_buff =
+            dev_buff_owner.allocate(join_column.col_chunks_buff_sz);
+        copy_to_gpu(&data_mgr,
+                    reinterpret_cast<CUdeviceptr>(device_col_chunks_buff),
+                    join_column.col_chunks_buff,
+                    join_column.col_chunks_buff_sz,
+                    device_id);
+        join_column.col_chunks_buff = device_col_chunks_buff;
+      }
+      return join_column;
+    } catch (...) {
+      throw FailedToFetchColumn();
+    }
+  }
+}
+
 namespace {
 
 template <typename T>
@@ -481,7 +526,8 @@ std::shared_ptr<JoinHashTableInterface> JoinHashTableInterface::getInstance(
   CHECK(join_hash_table);
   if (VLOGGING(2)) {
     if (join_hash_table->getMemoryLevel() == Data_Namespace::MemoryLevel::GPU_LEVEL) {
-      for (int device_id = 0; device_id < device_count; ++device_id) {
+      for (int device_id = 0; device_id < join_hash_table->getDeviceCount();
+           ++device_id) {
         if (join_hash_table->getJoinHashBufferSize(ExecutorDeviceType::GPU, device_id) <=
             1000) {
           VLOG(2) << "Built GPU hash table: "
@@ -490,7 +536,7 @@ std::shared_ptr<JoinHashTableInterface> JoinHashTableInterface::getInstance(
       }
     } else {
       if (join_hash_table->getJoinHashBufferSize(ExecutorDeviceType::CPU) <= 1000) {
-        VLOG(2) << "Build CPU hash table: "
+        VLOG(2) << "Built CPU hash table: "
                 << join_hash_table->toString(ExecutorDeviceType::CPU);
       }
     }

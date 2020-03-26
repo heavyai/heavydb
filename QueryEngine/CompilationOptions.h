@@ -17,6 +17,8 @@
 #ifndef QUERYENGINE_COMPILATIONOPTIONS_H
 #define QUERYENGINE_COMPILATIONOPTIONS_H
 
+#include <vector>
+
 enum class ExecutorDeviceType { CPU, GPU };
 
 enum class ExecutorOptLevel { Default, LoopStrengthReduction, ReductionJIT };
@@ -26,18 +28,44 @@ enum class ExecutorExplainType { Default, Optimized };
 enum class ExecutorDispatchMode { KernelPerFragment, MultifragmentKernel };
 
 struct CompilationOptions {
-  ExecutorDeviceType device_type_;
-  const bool hoist_literals_;
-  const ExecutorOptLevel opt_level_;
-  const bool with_dynamic_watchdog_;
-  const ExecutorExplainType explain_type_{ExecutorExplainType::Default};
-  const bool register_intel_jit_listener_{false};
+  ExecutorDeviceType device_type;
+  bool hoist_literals;
+  ExecutorOptLevel opt_level;
+  bool with_dynamic_watchdog;
+  bool allow_lazy_fetch;
+  bool add_delete_column{true};  // if false, ignore the delete column during table
+                                 // scans. Primarily disabled for delete queries.
+  ExecutorExplainType explain_type{ExecutorExplainType::Default};
+  bool register_intel_jit_listener{false};
+
+  static CompilationOptions makeCpuOnly(const CompilationOptions& in) {
+    return CompilationOptions{ExecutorDeviceType::CPU,
+                              in.hoist_literals,
+                              in.opt_level,
+                              in.with_dynamic_watchdog,
+                              in.allow_lazy_fetch,
+                              in.add_delete_column,
+                              in.explain_type,
+                              in.register_intel_jit_listener};
+  }
+
+  static CompilationOptions defaults(
+      const ExecutorDeviceType device_type = ExecutorDeviceType::GPU) {
+    return CompilationOptions{device_type,
+                              true,
+                              ExecutorOptLevel::Default,
+                              false,
+                              true,
+                              true,
+                              ExecutorExplainType::Default,
+                              false};
+  }
 };
 
 enum class ExecutorType { Native, Extern };
 
 struct ExecutionOptions {
-  const bool output_columnar_hint;
+  bool output_columnar_hint;
   const bool allow_multifrag;
   const bool just_explain;  // return the generated IR for the first step
   const bool allow_loop_joins;
@@ -51,6 +79,7 @@ struct ExecutionOptions {
   const bool just_calcite_explain;
   const double gpu_input_mem_limit_percent;  // punt to CPU if input memory exceeds this
   ExecutorType executor_type = ExecutorType::Native;
+  const std::vector<size_t> outer_fragment_indices{};
   bool multifrag_result = false;
 
   ExecutionOptions with_multifrag_result(bool enable = true) const {

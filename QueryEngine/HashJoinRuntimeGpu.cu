@@ -555,9 +555,14 @@ void approximate_distinct_tuples_on_device(uint8_t* hll_buffer,
 
 void compute_bucket_sizes_on_device(double* bucket_sizes_buffer,
                                     const JoinColumn* join_column,
+                                    const JoinColumnTypeInfo* type_info,
                                     const double bucket_sz_threshold,
                                     const size_t block_size_x,
                                     const size_t grid_size_x) {
-  compute_bucket_sizes_impl_gpu<2><<<grid_size_x, block_size_x>>>(
-      bucket_sizes_buffer, join_column, bucket_sz_threshold, block_size_x, grid_size_x);
+  compute_bucket_sizes_impl_gpu<2><<<grid_size_x, block_size_x>>>(bucket_sizes_buffer,
+                                                                  join_column,
+                                                                  type_info,
+                                                                  bucket_sz_threshold,
+                                                                  block_size_x,
+                                                                  grid_size_x);
 }

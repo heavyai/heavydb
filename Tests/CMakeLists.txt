@@ -12,7 +12,6 @@ add_executable(RunQueryLoop RunQueryLoop.cpp)
 add_executable(StringDictionaryTest StringDictionaryTest.cpp)
 add_executable(StringTransformTest StringTransformTest.cpp)
 add_executable(StringFunctionsTest StringFunctionsTest.cpp)
-add_executable(PlanTest PlanTest.cpp)
 add_executable(ProfileTest ProfileTest.cpp)
 add_executable(ExperimentalTest ExperimentalTest.cpp)
 add_executable(ForeignServerDdlTest ForeignServerDdlTest.cpp)
@@ -61,6 +60,7 @@ add_executable(BumpAllocatorTest BumpAllocatorTest.cpp)
 add_executable(SpecialCharsTest SpecialCharsTest.cpp)
 add_executable(TableFunctionsTest TableFunctionsTest.cpp)
 add_executable(ArrayTest ArrayTest.cpp)
+add_executable(MigrationMgrTest MigrationMgrTest.cpp)
 add_executable(TopKTest TopKTest.cpp)
 add_executable(TokenCompletionHintsTest TokenCompletionHintsTest.cpp)
 add_executable(OmniSQLCommandTest OmniSQLCommandTest.cpp)
@@ -80,38 +80,39 @@ if(NOT ${CMAKE_SYSTEM_NAME} STREQUAL "Darwin")
   add_executable(UdfTest UdfTest.cpp)
 endif()
 
-target_link_libraries(ProfileTest gtest Shared Calcite QueryEngine ${MAPD_RENDERING_LIBRARIES} CsvImport QueryRunner QueryState Parser ${Boost_LIBRARIES} ${CMAKE_DL_LIBS} ${CUDA_LIBRARIES} ${PROF_LIBRARIES} ${LLVM_LINKER_FLAGS} ${CURSES_LIBRARIES})
-target_link_libraries(ResultSetTest gtest QueryEngine ${MAPD_RENDERING_LIBRARIES} CsvImport QueryRunner QueryState Parser DataMgr Chunk Shared ${Boost_LIBRARIES} ${CMAKE_DL_LIBS} ${CUDA_LIBRARIES} ${LLVM_LINKER_FLAGS} ${CURSES_LIBRARIES})
-target_link_libraries(ColumnarResultsTest gtest QueryEngine ${MAPD_RENDERING_LIBRARIES} CsvImport QueryRunner QueryState Parser DataMgr Chunk Shared ${Boost_LIBRARIES} ${CMAKE_DL_LIBS} ${CUDA_LIBRARIES} ${LLVM_LINKER_FLAGS} ${CURSES_LIBRARIES})
-target_link_libraries(FromTableReorderingTest gtest QueryEngine ${MAPD_RENDERING_LIBRARIES} CsvImport QueryRunner QueryState Parser DataMgr Chunk ${Boost_LIBRARIES} ${CMAKE_DL_LIBS} ${CUDA_LIBRARIES} ${LLVM_LINKER_FLAGS} ${CURSES_LIBRARIES})
-target_link_libraries(ResultSetBaselineRadixSortTest gtest QueryEngine ${MAPD_RENDERING_LIBRARIES} CsvImport QueryRunner QueryState Parser DataMgr Chunk Shared ${Boost_LIBRARIES} ${CMAKE_DL_LIBS} ${CUDA_LIBRARIES} ${LLVM_LINKER_FLAGS} ${CURSES_LIBRARIES})
+set(EXECUTE_TEST_LIBS gtest mapd_thrift QueryRunner ${MAPD_LIBRARIES} ${CMAKE_DL_LIBS} ${CUDA_LIBRARIES} ${LLVM_LINKER_FLAGS} ${CURSES_LIBRARIES} ${Boost_LIBRARIES} ${PROFILER_LIBS})
+set(MAPD_HANDLER_TEST_LIBRARIES thrift_handler ${EXECUTE_TEST_LIBS})
+
+# Replace Licensing library with TestLicensing library
+if("${MAPD_EDITION_LOWER}" STREQUAL "ee")
+  list(FIND MAPD_HANDLER_TEST_LIBRARIES Licensing LICENSING_INDEX)
+  list(INSERT MAPD_HANDLER_TEST_LIBRARIES ${LICENSING_INDEX} TestLicensing)
+  list(REMOVE_ITEM MAPD_HANDLER_TEST_LIBRARIES Licensing)
+endif()
+
+target_link_libraries(ProfileTest ${EXECUTE_TEST_LIBS})
+target_link_libraries(ResultSetTest ${EXECUTE_TEST_LIBS})
+target_link_libraries(ColumnarResultsTest ${EXECUTE_TEST_LIBS})
+target_link_libraries(FromTableReorderingTest ${EXECUTE_TEST_LIBS})
+target_link_libraries(ResultSetBaselineRadixSortTest ${EXECUTE_TEST_LIBS})
 target_link_libraries(UtilTest Utils gtest Shared ${Boost_LIBRARIES})
 target_link_libraries(StringDictionaryTest StringDictionary gtest Shared ${Boost_LIBRARIES})
 target_link_libraries(StringTransformTest Shared gtest ${Boost_LIBRARIES})
-target_link_libraries(StringFunctionsTest gtest QueryRunner ${MAPD_LIBRARIES} ${Boost_LIBRARIES} ${LLVM_LINKER_FLAGS}
-    ${CURSES_LIBRARIES} ${LOCALE_LINK_FLAG})
+target_link_libraries(StringFunctionsTest ${EXECUTE_TEST_LIBS})
 target_link_libraries(TokenCompletionHintsTest token_completion_hints gtest mapd_thrift Shared ${Boost_LIBRARIES})
-if(NOT "${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang")  # work around linker on centos
-  set(EXECUTE_TEST_LIBS gtest QueryRunner ${MAPD_LIBRARIES} ${CMAKE_DL_LIBS} ${CUDA_LIBRARIES} ${LLVM_LINKER_FLAGS} ${CURSES_LIBRARIES} ${Boost_LIBRARIES} ${MAPD_LIBRARIES})
-else()
-  set(EXECUTE_TEST_LIBS gtest QueryRunner ${MAPD_LIBRARIES} ${CMAKE_DL_LIBS} ${CUDA_LIBRARIES} ${LLVM_LINKER_FLAGS} ${CURSES_LIBRARIES} ${Boost_LIBRARIES})
-endif()
-list(APPEND EXECUTE_TEST_LIBS Calcite)
-list(APPEND EXECUTE_TEST_LIBS Calcite mapd_thrift ${PROFILER_LIBS})
-
-target_link_libraries(DumpRestoreTest gtest ${EXECUTE_TEST_LIBS})
-target_link_libraries(CodeGeneratorTest ${EXECUTE_TEST_LIBS} CsvImport QueryRunner QueryState)
+target_link_libraries(DumpRestoreTest ${EXECUTE_TEST_LIBS})
+target_link_libraries(CodeGeneratorTest ${EXECUTE_TEST_LIBS})
 target_link_libraries(ExecuteTest ${EXECUTE_TEST_LIBS})
 target_link_libraries(RunQueryLoop ${EXECUTE_TEST_LIBS} bcrypt)
 target_link_libraries(ImportTest gtest ${EXECUTE_TEST_LIBS})
 target_link_libraries(ArrowCsvForeignStorageTest gtest ${EXECUTE_TEST_LIBS})
 target_link_libraries(AlterColumnTest gtest ${EXECUTE_TEST_LIBS})
-target_link_libraries(PlanTest gtest ${EXECUTE_TEST_LIBS})
 target_link_libraries(UpdelStorageTest gtest ${EXECUTE_TEST_LIBS})
 target_link_libraries(StorageTest gtest ${EXECUTE_TEST_LIBS})
 target_link_libraries(ComputeMetadataTest ${EXECUTE_TEST_LIBS})
 target_link_libraries(TableFunctionsTest ${EXECUTE_TEST_LIBS})
 target_link_libraries(ArrayTest ${EXECUTE_TEST_LIBS})
+target_link_libraries(MigrationMgrTest ${EXECUTE_TEST_LIBS})
 target_link_libraries(BumpAllocatorTest ${EXECUTE_TEST_LIBS})
 target_link_libraries(SpecialCharsTest ${EXECUTE_TEST_LIBS})
 target_link_libraries(UpdateMetadataTest ${EXECUTE_TEST_LIBS})
@@ -123,29 +124,26 @@ if(ENABLE_KRB5)
 endif()
 target_link_libraries(OmniSQLUtilitiesTest gtest ${Boost_LIBRARIES})
 target_link_libraries(ExperimentalTest gtest Shared)
-target_link_libraries(DBObjectPrivilegesTest gtest ${EXECUTE_TEST_LIBS})
-target_link_libraries(GeoTypesTest gtest Shared ${GDAL_LIBRARIES} ${GDALExtra_LIBRARIES} ${LibAwsS3_SUPPORT_LIBRARIES} ${CMAKE_DL_LIBS})
-target_link_libraries(CtasUpdateTest gtest ${EXECUTE_TEST_LIBS})
-target_link_libraries(CorrelatedSubqueryTest gtest ${EXECUTE_TEST_LIBS})
+target_link_libraries(DBObjectPrivilegesTest ${EXECUTE_TEST_LIBS})
+target_link_libraries(GeoTypesTest gtest Shared ${GDAL_LIBRARIES} ${CURL_LIBRARIES} ${GDALExtra_LIBRARIES} ${CMAKE_DL_LIBS})
+target_link_libraries(CtasUpdateTest ${EXECUTE_TEST_LIBS})
+target_link_libraries(CorrelatedSubqueryTest ${EXECUTE_TEST_LIBS})
 target_link_libraries(CtasIntegrationTest gtest Shared mapd_thrift ThriftClient ${LLVM_LINKER_FLAGS})
 target_link_libraries(DateTimeUtilsTest gtest Shared ${LLVM_LINKER_FLAGS})
-target_link_libraries(CalciteOptimizeTest gtest ${EXECUTE_TEST_LIBS} ${Boost_LIBRARIES})
-target_link_libraries(JoinHashTableTest gtest ${EXECUTE_TEST_LIBS} CsvImport QueryRunner)
+target_link_libraries(CalciteOptimizeTest ${EXECUTE_TEST_LIBS})
+target_link_libraries(JoinHashTableTest ${EXECUTE_TEST_LIBS})
 target_link_libraries(CommandLineTest gtest Shared ${Boost_LIBRARIES})
-target_link_libraries(ForeignServerDdlTest gtest thrift_handler ${MAPD_LIBRARIES} ${LLVM_LINKER_FLAGS}
-    ${CURSES_LIBRARIES})
-target_link_libraries(CatalogMigrationTest gtest thrift_handler ${MAPD_LIBRARIES} ${RdKafka_LIBRARIES} ${MAPD_LIBRARIES}
-    ${LLVM_LINKER_FLAGS} ${CURSES_LIBRARIES})
-target_link_libraries(CreateAndDropTableDdlTest gtest thrift_handler ${MAPD_LIBRARIES} ${LLVM_LINKER_FLAGS}
-    ${CURSES_LIBRARIES})
+# Requires thrift_handler for MapDHandler test fixture
+target_link_libraries(ForeignServerDdlTest ${MAPD_HANDLER_TEST_LIBRARIES})
+target_link_libraries(CatalogMigrationTest ${MAPD_HANDLER_TEST_LIBRARIES})
+target_link_libraries(CreateAndDropTableDdlTest ${MAPD_HANDLER_TEST_LIBRARIES})
 
 if(NOT ${CMAKE_SYSTEM_NAME} STREQUAL "Darwin")
-  target_link_libraries(UdfTest gtest ${EXECUTE_TEST_LIBS} CsvImport QueryRunner)
+  target_link_libraries(UdfTest gtest ${EXECUTE_TEST_LIBS})
 endif()
 
 set(TEST_ARGS "--gtest_output=xml:../")
 add_test(DumpRestoreTest DumpRestoreTest ${TEST_ARGS})
-add_test(PlanTest PlanTest ${TEST_ARGS})
 add_test(UpdelStorageTest UpdelStorageTest ${TEST_ARGS})
 add_test(ImportTest ImportTest ${TEST_ARGS})
 add_test(ArrowCsvForeignStorageTest ArrowCsvForeignStorageTest ${TEST_ARGS})
@@ -169,6 +167,7 @@ add_test(BumpAllocatorTest BumpAllocatorTest ${TEST_ARGS})
 add_test(SpecialCharsTest SpecialCharsTest ${TEST_ARGS})
 add_test(TableFunctionsTest TableFunctionsTest ${TEST_ARGS})
 add_test(ArrayTest ArrayTest ${TEST_ARGS})
+add_test(MigrationMgrTest MigrationMgrTest ${TEST_ARGS})
 add_test(StoragePerfTest StoragePerfTest ${TEST_ARGS})
 add_test(TopKTest TopKTest ${TEST_ARGS})
 add_test(TokenCompletionHintsTest TokenCompletionHintsTest ${TEST_ARGS})
@@ -191,12 +190,9 @@ if(NOT ${CMAKE_SYSTEM_NAME} STREQUAL "Darwin")
   add_test(UdfTest UdfTest ${TEST_ARGS})
 endif()
 
-option(ENABLE_ARROW_IPC_TEST "Enable Arrow IPC Test" OFF)
-if(ENABLE_ARROW_IPC_TEST)
-  add_executable(ArrowIpcIntegrationTest ArrowIpcIntegrationTest.cpp)
-  target_link_libraries(ArrowIpcIntegrationTest gtest QueryEngine Shared mapd_thrift ${Arrow_LIBRARIES})
-  add_test(ArrowIpcIntegrationTest ArrowIpcIntegrationTest ${TEST_ARGS})
-endif()
+add_executable(ArrowIpcIntegrationTest ArrowIpcIntegrationTest.cpp)
+target_link_libraries(ArrowIpcIntegrationTest gtest ThriftClient mapd_thrift Shared ${CUDA_LIBRARIES} ${Arrow_LIBRARIES})
+add_test(ArrowIpcIntegrationTest ArrowIpcIntegrationTest ${TEST_ARGS})
 
 # parse s3 credentials
 file(READ aws/s3client.conf S3CLIENT_CONF)
@@ -212,7 +208,6 @@ endif()
 
 set(TEST_PROGRAMS 
   DumpRestoreTest
-  PlanTest
   ExecuteTest
   CodeGeneratorTest
   ResultSetTest
@@ -229,6 +224,7 @@ set(TEST_PROGRAMS
   SpecialCharsTest
   TableFunctionsTest
   ArrayTest
+  MigrationMgrTest
   TopKTest
   TokenCompletionHintsTest
   OmniSQLCommandTest

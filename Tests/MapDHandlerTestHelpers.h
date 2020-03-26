@@ -39,6 +39,7 @@ class MapDHandlerTestFixture : public testing::Test {
       const bool enable_auto_clear_render_mem{false};
       const int render_oom_retry_threshold{0};
       const size_t render_mem_bytes{500000000};
+      const size_t max_concurrent_render_sessions{500};
       const int num_gpus{-1};
       const int start_gpu{0};
       const size_t reserved_gpu_mem{134217728};
@@ -63,6 +64,7 @@ class MapDHandlerTestFixture : public testing::Test {
                                                    enable_auto_clear_render_mem,
                                                    render_oom_retry_threshold,
                                                    render_mem_bytes,
+                                                   max_concurrent_render_sessions,
                                                    num_gpus,
                                                    start_gpu,
                                                    reserved_gpu_mem,

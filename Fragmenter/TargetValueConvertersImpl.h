@@ -17,16 +17,13 @@
 #ifndef TARGET_VALUE_CONVERTERS_IMPL_H_
 #define TARGET_VALUE_CONVERTERS_IMPL_H_
 
-#include "../StringDictionary/StringDictionary.h"
-#include "TargetValueConverters.h"
+#include "Fragmenter/TargetValueConverters.h"
+#include "Shared/geo_compression.h"
+#include "StringDictionary/StringDictionary.h"
 
 #include <atomic>
 #include <future>
 #include <thread>
-
-namespace Importer_NS {
-std::vector<uint8_t> compress_coords(std::vector<double>& coords, const SQLTypeInfo& ti);
-}  // namespace Importer_NS
 
 template <typename T>
 T get_fixed_array_null_value() {
@@ -615,7 +612,7 @@ struct GeoPointValueConverter : public TargetValueConverter {
   inline ArrayDatum toCompressedCoords(
       const std::shared_ptr<std::vector<double>>& coords) {
     const auto compressed_coords_vector =
-        Importer_NS::compress_coords(*coords, column_descriptor_->columnType);
+        geospatial::compress_coords(*coords, column_descriptor_->columnType);
 
     uint8_t* compressed_coords_array = reinterpret_cast<uint8_t*>(
         checked_malloc(sizeof(uint8_t) * compressed_coords_vector.size()));

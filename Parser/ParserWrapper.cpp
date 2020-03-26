@@ -54,7 +54,7 @@ const std::string ParserWrapper::optimized_explain_str = {"explain optimized"};
 const std::string ParserWrapper::optimize_str = {"optimize"};
 const std::string ParserWrapper::validate_str = {"validate"};
 
-bool g_enable_fsi{false};
+extern bool g_enable_fsi;
 
 ParserWrapper::ParserWrapper(std::string query_string) {
   if (boost::istarts_with(query_string, calcite_explain_str)) {

@@ -22,9 +22,6 @@
 #ifndef _IMPORTER_H_
 #define _IMPORTER_H_
 
-#include "Shared/Logger.h"
-#include "Shared/fixautotools.h"
-
 #include <gdal.h>
 #include <ogrsf_frmts.h>
 
@@ -44,15 +41,15 @@
 #include <string>
 #include <utility>
 
-#include "../Catalog/Catalog.h"
-#include "../Catalog/TableDescriptor.h"
-#include "../Chunk/Chunk.h"
-#include "../Fragmenter/Fragmenter.h"
-#include "../Shared/ThreadController.h"
-#include "../Shared/checked_alloc.h"
-#include "CopyParams.h"
-
-#include "QueryRunner/QueryRunner.h"
+#include "Catalog/Catalog.h"
+#include "Catalog/TableDescriptor.h"
+#include "Chunk/Chunk.h"
+#include "Fragmenter/Fragmenter.h"
+#include "Import/CopyParams.h"
+#include "Shared/Logger.h"
+#include "Shared/ThreadController.h"
+#include "Shared/checked_alloc.h"
+#include "Shared/fixautotools.h"
 
 // Some builds of boost::geometry require iostream, but don't explicitly include it.
 // Placing in own section to ensure it's included after iostream.
@@ -251,30 +248,7 @@ class TypedImportBuffer : boost::noncopyable {
     string_array_buffer_->push_back(arr);
   }
 
-  void addDictEncodedString(const std::vector<std::string>& string_vec) {
-    CHECK(string_dict_);
-    for (const auto& str : string_vec) {
-      if (str.size() > StringDictionary::MAX_STRLEN) {
-        throw std::runtime_error("String too long for dictionary encoding.");
-      }
-    }
-    switch (column_desc_->columnType.get_size()) {
-      case 1:
-        string_dict_i8_buffer_->resize(string_vec.size());
-        string_dict_->getOrAddBulk(string_vec, string_dict_i8_buffer_->data());
-        break;
-      case 2:
-        string_dict_i16_buffer_->resize(string_vec.size());
-        string_dict_->getOrAddBulk(string_vec, string_dict_i16_buffer_->data());
-        break;
-      case 4:
-        string_dict_i32_buffer_->resize(string_vec.size());
-        string_dict_->getOrAddBulk(string_vec, string_dict_i32_buffer_->data());
-        break;
-      default:
-        CHECK(false);
-    }
-  }
+  void addDictEncodedString(const std::vector<std::string>& string_vec);
 
   void addDictEncodedStringArray(
       const std::vector<std::vector<std::string>>& string_array_vec) {
@@ -836,18 +810,9 @@ class Importer : public DataStreamSink {
   static std::mutex init_gdal_mutex;
 };
 
-class ImportDriver : public QueryRunner::QueryRunner {
- public:
-  ImportDriver(std::shared_ptr<Catalog_Namespace::Catalog> cat,
-               const Catalog_Namespace::UserMetadata& user,
-               const ExecutorDeviceType dt = ExecutorDeviceType::GPU);
-
-  void importGeoTable(const std::string& file_path,
-                      const std::string& table_name,
-                      const bool compression,
-                      const bool create_table,
-                      const bool explode_collections);
-};
+std::vector<std::unique_ptr<TypedImportBuffer>> setup_column_loaders(
+    const TableDescriptor* td,
+    Loader* loader);
 
 }  // namespace Importer_NS
 

@@ -119,14 +119,10 @@ std::string build_create_table_statement(
 
   if (delete_support) {
     with_statement_assembly << ", vacuum='delayed'";
+  } else {
+    with_statement_assembly << ", vacuum='immediate'";
   }
 
-  // const std::string fragment_size_def{shard_info.shard_col.empty() ? "fragment_size=" +
-  // std::to_string(fragment_size)
-  //                                                                 : ""};
-  // const std::string shard_count_def{shard_info.shard_col.empty() ? "" : "shard_count="
-  // +
-  //                                                                          std::to_string(shard_info.shard_count)};
   const std::string replicated_def{
       (!replicated || !shard_info.shard_col.empty()) ? "" : ", PARTITIONS='REPLICATED' "};
 
@@ -5303,6 +5299,24 @@ void import_random_test() {
   }
 }
 
+void import_varlen_lazy_fetch() {
+  const std::string table_name("varlen_table");
+  const std::string drop_varlen_table("DROP TABLE IF EXISTS " + table_name + ";");
+  run_ddl_statement(drop_varlen_table);
+  std::string create_query("CREATE TABLE " + table_name +
+                           " (t tinyint, p POINT, real_str TEXT ENCODING NONE, "
+                           "array_i16 smallint[]) with (FRAGMENT_SIZE = 256);");
+  run_ddl_statement(create_query);
+  std::string insert_query("INSERT INTO " + table_name + " VALUES(");
+  for (int i = 0; i < 255; i++) {
+    run_multiple_agg(
+        insert_query + std::to_string(i - 127) + ", \'POINT(" + std::to_string(i) + " " +
+            std::to_string(i) + ")\', " + "\'number" + std::to_string(i) + "\', " + "{" +
+            std::to_string(2 * i) + ", " + std::to_string(2 * i + 1) + "}" + ");",
+        ExecutorDeviceType::CPU);
+  }
+}
+
 void import_query_rewrite_test() {
   const std::string drop_old_query_rewrite_test{
       "DROP TABLE IF EXISTS query_rewrite_test;"};
@@ -6451,10 +6465,22 @@ TEST(Select, DecimalCompression) {
 }
 
 TEST(Update, DecimalOverflow) {
+  // TODO: Move decimal validator into temp table update codegen
+  SKIP_WITH_TEMP_TABLES();
+
   auto test = [](int precision, int scale) -> void {
     run_ddl_statement("DROP TABLE IF EXISTS decimal_overflow_test;");
-    run_ddl_statement("CREATE TABLE decimal_overflow_test (d DECIMAL(" +
-                      std::to_string(precision) + ", " + std::to_string(scale) + "));");
+    const auto create = build_create_table_statement(
+        "d DECIMAL(" + std::to_string(precision) + ", " + std::to_string(scale) + ")",
+        "decimal_overflow_test",
+        {"", 0},
+        {},
+        10,
+        g_use_temporary_tables,
+        true,
+        false);
+    LOG(ERROR) << create;
+    run_ddl_statement(create);
     run_multiple_agg("INSERT INTO decimal_overflow_test VALUES(null);",
                      ExecutorDeviceType::CPU);
     int64_t val = (int64_t)std::pow((double)10, precision - scale);
@@ -11086,7 +11112,14 @@ TEST(Update, VarlenSmartSwitch) {
     SKIP_NO_GPU();
 
     run_ddl_statement("drop table if exists smartswitch;");
-    run_ddl_statement("create table smartswitch (x int, y int[], z text );");
+    run_ddl_statement(build_create_table_statement("x int, y int[], z text encoding none",
+                                                   "smartswitch",
+                                                   {"", 0},
+                                                   {},
+                                                   10,
+                                                   g_use_temporary_tables,
+                                                   true,
+                                                   false));
 
     run_multiple_agg("insert into smartswitch values (0, ARRAY[1,2,3,4], 'Flake');", dt);
     run_multiple_agg("insert into smartswitch values (1, ARRAY[5,6,7,8], 'Goofy');", dt);
@@ -11151,6 +11184,13 @@ TEST(Update, VarlenSmartSwitch) {
     ASSERT_EQ(x_pre_rowid_2, x_post_rowid_3);
     ASSERT_EQ(x_pre_rowid_3, x_post_rowid_4);
 
+    if (g_use_temporary_tables) {
+      // TODO: Support varlen updates on temp tables
+      EXPECT_ANY_THROW(
+          run_simple_agg("UPDATE smartswitch SET y=ARRAY[9,10,11,12] WHERE y[1]=1;", dt));
+      continue;
+    }
+
     // Test RelCompound-driven update
 
     auto y_pre_rowid_1 =
@@ -11204,18 +11244,67 @@ TEST(Update, VarlenSmartSwitch) {
   }
 }
 
+TEST(Update, SimpleFilter) {
+  if (!std::is_same<CalciteUpdatePathSelector, PreprocessorTrue>::value) {
+    return;
+  }
+
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+
+    run_ddl_statement("DROP TABLE IF EXISTS simple_filter;");
+    run_ddl_statement(build_create_table_statement("x int, y double, z decimal(18,2)",
+                                                   "simple_filter",
+                                                   {"", 0},
+                                                   {},
+                                                   2,
+                                                   g_use_temporary_tables,
+                                                   true,
+                                                   false));
+    g_sqlite_comparator.query("DROP TABLE IF EXISTS simple_filter;");
+    g_sqlite_comparator.query(
+        "CREATE TABLE simple_filter (x int, y double, z decimal(18,2))");
+    ScopeGuard reset = [] {
+      run_ddl_statement("DROP TABLE IF EXISTS simple_filter;");
+      g_sqlite_comparator.query("DROP TABLE IF EXISTS simple_filter;");
+    };
+
+    for (size_t i = 1; i <= 5; i++) {
+      std::string insert_stmt{"INSERT INTO simple_filter VALUES (" + std::to_string(i) +
+                              ", " + std::to_string(static_cast<double>(i) * 1.1) + ", " +
+                              std::to_string(static_cast<double>(i) * 1.01) + ");"};
+      run_multiple_agg(insert_stmt, dt);
+      g_sqlite_comparator.query(insert_stmt);
+    }
+
+    c("UPDATE simple_filter SET x = 6 WHERE y > 3;", dt);
+    c("SELECT * FROM simple_filter ORDER BY x, y, z;", dt);
+    c("UPDATE simple_filter SET y = 2*x WHERE y > 4;", dt);
+    c("SELECT * FROM simple_filter ORDER BY x, y, z;", dt);
+    c("UPDATE simple_filter SET y = 2*x WHERE z > 1.02;", dt);
+    c("SELECT * FROM simple_filter ORDER BY x, y, z;", dt);
+    c("UPDATE simple_filter SET z = 2*z WHERE x < 6;", dt);
+    c("SELECT * FROM simple_filter ORDER BY x, y, z;", dt);
+    c("SELECT sum(x) FROM simple_filter WHERE x < 6;", dt);  // check metadata
+  }
+}
+
 TEST(Update, Text) {
   if (!std::is_same<CalciteUpdatePathSelector, PreprocessorTrue>::value) {
     return;
   }
-  auto save_watchdog = g_enable_watchdog;
+  const auto save_watchdog = g_enable_watchdog;
+  ScopeGuard reset_watchdog_state = [&save_watchdog] {
+    g_enable_watchdog = save_watchdog;
+  };
   g_enable_watchdog = false;
 
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
 
     run_ddl_statement("drop table if exists text_default;");
-    run_ddl_statement("create table text_default (t text) with (vacuum='delayed');");
+    run_ddl_statement(build_create_table_statement(
+        "t text", "text_default", {"", 0}, {}, 2, g_use_temporary_tables, true, false));
 
     run_multiple_agg("insert into text_default values ('do');", dt);
     run_multiple_agg("insert into text_default values ('you');", dt);
@@ -11253,7 +11342,8 @@ TEST(Update, TextINVariant) {
     SKIP_NO_GPU();
 
     run_ddl_statement("drop table if exists text_default;");
-    run_ddl_statement("create table text_default (t text) with (vacuum='delayed');");
+    run_ddl_statement(build_create_table_statement(
+        "t text", "text_default", {"", 0}, {}, 2, g_use_temporary_tables, true, false));
 
     run_multiple_agg("insert into text_default values ('do');", dt);
     run_multiple_agg("insert into text_default values ('you');", dt);
@@ -11284,9 +11374,14 @@ TEST(Update, TextEncodingDict16) {
     SKIP_NO_GPU();
 
     run_ddl_statement("drop table if exists textenc16_default;");
-    run_ddl_statement(
-        "create table textenc16_default (t text encoding dict(16)) with "
-        "(vacuum='delayed');");
+    run_ddl_statement(build_create_table_statement("t text encoding dict(16)",
+                                                   "textenc16_default",
+                                                   {"", 0},
+                                                   {},
+                                                   2,
+                                                   g_use_temporary_tables,
+                                                   true,
+                                                   false));
 
     run_multiple_agg("insert into textenc16_default values ('do');", dt);
     run_multiple_agg("insert into textenc16_default values ('you');", dt);
@@ -11325,9 +11420,15 @@ TEST(Update, TextEncodingDict8) {
     SKIP_NO_GPU();
 
     run_ddl_statement("drop table if exists textenc8_default;");
-    run_ddl_statement(
-        "create table textenc8_default (t text encoding dict(8)) with "
-        "(vacuum='delayed');");
+    run_ddl_statement(build_create_table_statement("t text encoding dict(8)",
+                                                   "textenc8_default",
+                                                   {"", 0},
+                                                   {},
+                                                   2,
+                                                   g_use_temporary_tables,
+                                                   true,
+                                                   false));
+
     run_multiple_agg("insert into textenc8_default values ('do');", dt);
     run_multiple_agg("insert into textenc8_default values ('you');", dt);
     run_multiple_agg("insert into textenc8_default values ('know');", dt);
@@ -11360,15 +11461,29 @@ TEST(Update, MultiColumnInteger) {
     SKIP_NO_GPU();
 
     run_ddl_statement("drop table if exists multicoltable;");
-    run_ddl_statement(
-        "create table multicoltable (x integer, y integer, z integer) with "
-        "(vacuum='delayed');");
+    run_ddl_statement(build_create_table_statement("x integer, y integer, z integer",
+                                                   "multicoltable",
+                                                   {"", 0},
+                                                   {},
+                                                   2,
+                                                   g_use_temporary_tables,
+                                                   true,
+                                                   false));
+
     run_multiple_agg("insert into multicoltable values (2,3,4);", dt);
     run_multiple_agg("insert into multicoltable values (4,9,16);", dt);
 
+    if (g_use_temporary_tables) {
+      EXPECT_ANY_THROW(run_multiple_agg(
+          "update multicoltable set x=-power(x,2),y=-power(y,2),z=-power(z,2) where x < "
+          "10 and y < 10 and z < 10;",
+          dt));
+      continue;
+    }
+
     run_multiple_agg(
-        "update multicoltable set x=-power(x,2),y=-power(y,2),z=-power(z,2) where x < 10 "
-        "and y < 10 and z < 10;",
+        "update multicoltable set x=-power(x,2),y=-power(y,2),z=-power(z,2) where x "
+        "< 10 and y < 10 and z < 10;",
         dt);
     ASSERT_EQ(int64_t(0),
               v<int64_t>(run_simple_agg("select sum(x) from multicoltable;", dt)));
@@ -11390,24 +11505,30 @@ TEST(Update, TimestampUpdate) {
     SKIP_NO_GPU();
 
     run_ddl_statement("drop table if exists timestamp_default;");
-    run_ddl_statement(
-        "create table timestamp_default (t timestamp) with (vacuum='delayed');");
+    run_ddl_statement(build_create_table_statement("t timestamp",
+                                                   "timestamp_default",
+                                                   {"", 0},
+                                                   {},
+                                                   2,
+                                                   g_use_temporary_tables,
+                                                   true,
+                                                   false));
 
     run_multiple_agg("insert into timestamp_default values ('12/01/2013:000001');", dt);
     run_multiple_agg("insert into timestamp_default values ('12/01/2013:000002');", dt);
     run_multiple_agg("insert into timestamp_default values ('12/01/2013:000003');", dt);
     run_multiple_agg("insert into timestamp_default values ('12/01/2013:000004');", dt);
     run_multiple_agg(
-        "update timestamp_default set t=timestampadd( second, 59, date_trunc( minute, t "
+        "update timestamp_default set t=timestampadd( second, 59, date_trunc( "
+        "minute, t "
         ") ) where mod( extract( second "
         "from t ), 2 )=1;",
         dt);
 
-    ASSERT_EQ(
-        int64_t(2),
-        v<int64_t>(run_simple_agg(
-            "select count(t) from timestamp_default where extract( second from t )=59;",
-            dt)));
+    ASSERT_EQ(int64_t(2),
+              v<int64_t>(run_simple_agg("select count(t) from timestamp_default "
+                                        "where extract( second from t )=59;",
+                                        dt)));
 
     run_ddl_statement("drop table timestamp_default;");
   }
@@ -11422,7 +11543,8 @@ TEST(Update, TimeUpdate) {
     SKIP_NO_GPU();
 
     run_ddl_statement("drop table if exists time_default;");
-    run_ddl_statement("create table time_default (t time) with (vacuum='delayed');");
+    run_ddl_statement(build_create_table_statement(
+        "t time", "time_default", {"", 0}, {}, 2, g_use_temporary_tables, true, false));
 
     run_multiple_agg("insert into time_default values('00:00:01');", dt);
     run_multiple_agg("insert into time_default values('00:01:00');", dt);
@@ -11458,7 +11580,8 @@ TEST(Update, DateUpdate) {
     SKIP_NO_GPU();
 
     run_ddl_statement("drop table if exists date_default;");
-    run_ddl_statement("create table date_default (d date) with (vacuum='delayed');");
+    run_ddl_statement(build_create_table_statement(
+        "d date", "date_default", {"", 0}, {}, 2, g_use_temporary_tables, true, false));
 
     run_multiple_agg("insert into date_default values('01/01/1901');", dt);
     run_multiple_agg("insert into date_default values('02/02/1902');", dt);
@@ -11476,11 +11599,21 @@ TEST(Update, DateUpdate) {
 }
 
 TEST(Update, DateUpdateNull) {
+  SKIP_WITH_TEMP_TABLES();  // Alter on temp tables not yet supported
+
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
 
     run_ddl_statement("Drop table IF EXISTS date_update;");
-    run_ddl_statement("create table date_update(a text, b date);");
+    run_ddl_statement(build_create_table_statement("a text, b date",
+                                                   "date_update",
+                                                   {"", 0},
+                                                   {},
+                                                   2,
+                                                   g_use_temporary_tables,
+                                                   true,
+                                                   false));
+
     run_multiple_agg("insert into date_update values('1', '2018-01-04');", dt);
     run_multiple_agg("insert into date_update values('2', '2018-01-05');", dt);
     run_multiple_agg("insert into date_update values(null, null);", dt);
@@ -11507,7 +11640,8 @@ TEST(Update, FloatUpdate) {
     SKIP_NO_GPU();
 
     run_ddl_statement("drop table if exists float_default;");
-    run_ddl_statement("create table float_default (f float) with (vacuum='delayed');");
+    run_ddl_statement(build_create_table_statement(
+        "f float", "float_default", {"", 0}, {}, 2, g_use_temporary_tables, true, false));
 
     run_multiple_agg("insert into float_default values(-0.01);", dt);
     run_multiple_agg("insert into float_default values( 0.02);", dt);
@@ -11535,8 +11669,14 @@ TEST(Update, IntegerUpdate) {
     SKIP_NO_GPU();
 
     run_ddl_statement("drop table if exists integer_default;");
-    run_ddl_statement(
-        "create table integer_default (i integer) with (vacuum='delayed');");
+    run_ddl_statement(build_create_table_statement("i integer",
+                                                   "integer_default",
+                                                   {"", 0},
+                                                   {},
+                                                   2,
+                                                   g_use_temporary_tables,
+                                                   true,
+                                                   false));
 
     run_multiple_agg("insert into integer_default values(-1);", dt);
     run_multiple_agg("insert into integer_default values( 2);", dt);
@@ -11563,7 +11703,14 @@ TEST(Update, DoubleUpdate) {
     SKIP_NO_GPU();
 
     run_ddl_statement("drop table if exists double_default;");
-    run_ddl_statement("create table double_default (d double) with (vacuum='delayed');");
+    run_ddl_statement(build_create_table_statement("d double",
+                                                   "double_default",
+                                                   {"", 0},
+                                                   {},
+                                                   2,
+                                                   g_use_temporary_tables,
+                                                   true,
+                                                   false));
 
     run_multiple_agg("insert into double_default values(-0.01);", dt);
     run_multiple_agg("insert into double_default values( 0.02);", dt);
@@ -11592,8 +11739,14 @@ TEST(Update, SmallIntUpdate) {
     SKIP_NO_GPU();
 
     run_ddl_statement("drop table if exists smallint_default;");
-    run_ddl_statement(
-        "create table smallint_default (s smallint) with (vacuum='delayed');");
+    run_ddl_statement(build_create_table_statement("s smallint",
+                                                   "smallint_default",
+                                                   {"", 0},
+                                                   {},
+                                                   2,
+                                                   g_use_temporary_tables,
+                                                   true,
+                                                   false));
 
     run_multiple_agg("insert into smallint_default values(-1);", dt);
     run_multiple_agg("insert into smallint_default values( 2);", dt);
@@ -11619,7 +11772,15 @@ TEST(Update, BigIntUpdate) {
     SKIP_NO_GPU();
 
     run_ddl_statement("drop table if exists bigint_default;");
-    run_ddl_statement("create table bigint_default (b bigint) with (vacuum='delayed');");
+    run_ddl_statement(build_create_table_statement("b bigint",
+                                                   "bigint_default",
+                                                   {"", 0},
+                                                   {},
+                                                   2,
+                                                   g_use_temporary_tables,
+                                                   true,
+                                                   false));
+
     run_multiple_agg("insert into bigint_default values(-1);", dt);
     run_multiple_agg("insert into bigint_default values( 2);", dt);
     run_multiple_agg("insert into bigint_default values(-3);", dt);
@@ -11642,8 +11803,15 @@ TEST(Update, DecimalUpdate) {
     SKIP_NO_GPU();
 
     run_ddl_statement("drop table if exists decimal_default;");
-    run_ddl_statement(
-        "create table decimal_default (d decimal(5)) with (vacuum='delayed');");
+    run_ddl_statement(build_create_table_statement("d decimal(5)",
+                                                   "decimal_default",
+                                                   {"", 0},
+                                                   {},
+                                                   2,
+                                                   g_use_temporary_tables,
+                                                   true,
+                                                   false));
+
     run_multiple_agg("insert into decimal_default values(-1);", dt);
     run_multiple_agg("insert into decimal_default values( 2);", dt);
     run_multiple_agg("insert into decimal_default values(-3);", dt);
@@ -11668,10 +11836,11 @@ TEST(Update, JoinCacheInvalidationTest) {
 
     run_ddl_statement("drop table if exists string_join1");
     run_ddl_statement("drop table if exists string_join2");
-    run_ddl_statement("create table string_join1 ( t text ) with (vacuum='delayed')");
-    run_ddl_statement(
-        "create table string_join2 ( t text ) with (vacuum='delayed', "
-        "partitions='REPLICATED')");
+    run_ddl_statement(build_create_table_statement(
+        "t text", "string_join1", {"", 0}, {}, 2, g_use_temporary_tables, true, false));
+    // replicate the second table for distributed mode testing
+    run_ddl_statement(build_create_table_statement(
+        "t text", "string_join2", {"", 0}, {}, 2, g_use_temporary_tables, true, true));
 
     run_multiple_agg("insert into string_join1 values ('muffin')", dt);
     run_multiple_agg("insert into string_join1 values ('pizza')", dt);
@@ -11712,13 +11881,20 @@ TEST(Delete, WithoutVacuumAttribute) {
     SKIP_NO_GPU();
 
     run_ddl_statement("drop table if exists no_deletes;");
-    run_ddl_statement("create table no_deletes (x integer) with (vacuum='immediate');");
+    run_ddl_statement(build_create_table_statement("x integer",
+                                                   "no_deletes",
+                                                   {"", 0},
+                                                   {},
+                                                   10,
+                                                   g_use_temporary_tables,
+                                                   false,
+                                                   false));
+    ScopeGuard drop_table = [] { run_ddl_statement("DROP TABLE IF EXISTS no_deletes;"); };
     run_multiple_agg("insert into no_deletes values (10);", dt);
     run_multiple_agg("insert into no_deletes values (11);", dt);
     EXPECT_THROW(run_multiple_agg("delete from no_deletes where x > 10;", dt),
                  std::runtime_error);
     EXPECT_THROW(run_multiple_agg("delete from no_deletes;", dt), std::runtime_error);
-    run_ddl_statement("drop table no_deletes;");
   }
 }
 
@@ -11731,7 +11907,9 @@ TEST(Update, ImplicitCastToDate4) {
     SKIP_NO_GPU();
 
     run_ddl_statement("drop table if exists datetab;");
-    run_ddl_statement("create table datetab ( d1 date ) with ( vacuum='delayed' );");
+    run_ddl_statement(build_create_table_statement(
+        "d1 date", "datetab", {"", 0}, {}, 2, g_use_temporary_tables, true, false));
+
     run_multiple_agg("insert into datetab values ('2001-04-05');", dt);
 
     EXPECT_THROW(run_multiple_agg("update datetab set d1='nonsense';", dt),
@@ -11789,8 +11967,14 @@ TEST(Update, ImplicitCastToDate2) {
     SKIP_NO_GPU();
 
     run_ddl_statement("drop table if exists datetab4;");
-    run_ddl_statement(
-        "create table datetab4 ( d1 date encoding fixed(16)) with ( vacuum='delayed' );");
+    run_ddl_statement(build_create_table_statement("d1 date encoding fixed(16)",
+                                                   "datetab4",
+                                                   {"", 0},
+                                                   {},
+                                                   2,
+                                                   g_use_temporary_tables,
+                                                   true,
+                                                   false));
     run_multiple_agg("insert into datetab4 values ('2001-04-05');", dt);
 
     EXPECT_THROW(run_multiple_agg("update datetab4 set d1='nonsense';", dt),
@@ -11844,14 +12028,22 @@ TEST(Update, ImplicitCastToEncodedString) {
     return;
   }
 
+  SKIP_WITH_TEMP_TABLES();  // requires dict translation for updates
+
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
 
     run_ddl_statement("drop table if exists textenc;");
-    run_ddl_statement(
-        "create table textenc ( s1 text encoding dict(32), s2 text encoding dict(16), s3 "
-        "text encoding dict(8) ) with "
-        "(vacuum='delayed');");
+    run_ddl_statement(build_create_table_statement(
+        "s1 text encoding dict(32), s2 text encoding dict(16), s3 "
+        "text encoding dict(8)",
+        "textenc",
+        {"", 0},
+        {},
+        2,
+        g_use_temporary_tables,
+        true,
+        false));
     run_multiple_agg("insert into textenc values ( 'kanye', 'omari', 'west' );", dt);
 
     run_multiple_agg("update textenc set s1 = 'the';", dt);
@@ -12020,6 +12212,8 @@ TEST(Update, ImplicitCastToNoneEncodedString) {
     return;
   }
 
+  SKIP_WITH_TEMP_TABLES();
+
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
 
@@ -12070,19 +12264,32 @@ TEST(Update, ImplicitCastToNumericTypes) {
     SKIP_NO_GPU();
 
     run_ddl_statement("drop table if exists floattest;");
-    run_ddl_statement("create table floattest ( f float ) with (vacuum='delayed');");
+    run_ddl_statement(build_create_table_statement(
+        "f float", "floattest", {"", 0}, {}, 2, g_use_temporary_tables, true, false));
+
     run_ddl_statement("drop table if exists doubletest;");
-    run_ddl_statement("create table doubletest ( d double ) with (vacuum='delayed');");
+    run_ddl_statement(build_create_table_statement(
+        "d double", "doubletest", {"", 0}, {}, 2, g_use_temporary_tables, true, false));
+
     run_ddl_statement("drop table if exists inttest;");
-    run_ddl_statement("create table inttest ( i integer ) with (vacuum='delayed');");
+    run_ddl_statement(build_create_table_statement(
+        "i integer", "inttest", {"", 0}, {}, 2, g_use_temporary_tables, true, false));
+
     run_ddl_statement("drop table if exists sinttest;");
-    run_ddl_statement("create table sinttest ( i integer ) with (vacuum='delayed');");
+    run_ddl_statement(build_create_table_statement(
+        "i integer", "sinttest", {"", 0}, {}, 2, g_use_temporary_tables, true, false));
+
     run_ddl_statement("drop table if exists binttest;");
-    run_ddl_statement("create table binttest ( i integer ) with (vacuum='delayed');");
+    run_ddl_statement(build_create_table_statement(
+        "i integer", "binttest", {"", 0}, {}, 2, g_use_temporary_tables, true, false));
+
     run_ddl_statement("drop table if exists booltest;");
-    run_ddl_statement("create table booltest ( b boolean ) with (vacuum='delayed');");
+    run_ddl_statement(build_create_table_statement(
+        "b boolean", "booltest", {"", 0}, {}, 2, g_use_temporary_tables, true, false));
+
     run_ddl_statement("drop table if exists dectest;");
-    run_ddl_statement("create table dectest ( d decimal(10) ) with (vacuum='delayed');");
+    run_ddl_statement(build_create_table_statement(
+        "d decimal(10)", "dectest", {"", 0}, {}, 2, g_use_temporary_tables, true, false));
 
     run_multiple_agg("insert into floattest values ( 0.1234 );", dt);
     run_multiple_agg("insert into doubletest values ( 0.1234 );", dt);
@@ -12409,8 +12616,14 @@ TEST(Update, ImplicitCastToTime4) {
     SKIP_NO_GPU();
 
     run_ddl_statement("drop table if exists time4;");
-    run_ddl_statement(
-        "create table time4 ( t1 time encoding fixed(32) ) with ( vacuum='delayed' );");
+    run_ddl_statement(build_create_table_statement("t1 time encoding fixed(32)",
+                                                   "time4",
+                                                   {"", 0},
+                                                   {},
+                                                   10,
+                                                   g_use_temporary_tables,
+                                                   true,
+                                                   false));
     run_multiple_agg("insert into time4 values ('01:23:45');", dt);
 
     EXPECT_THROW(run_multiple_agg("update time4 set t1='nonsense';", dt), std::exception);
@@ -12458,7 +12671,9 @@ TEST(Update, ImplicitCastToTime8) {
     SKIP_NO_GPU();
 
     run_ddl_statement("drop table if exists timetab;");
-    run_ddl_statement("create table timetab ( t1 time ) with ( vacuum='delayed' );");
+    run_ddl_statement(build_create_table_statement(
+        "t1 time", "timetab", {"", 0}, {}, 10, g_use_temporary_tables, true, false));
+
     run_multiple_agg("insert into timetab values ('01:23:45');", dt);
 
     EXPECT_THROW(run_multiple_agg("update timetab set t1='nonsense';", dt),
@@ -12503,7 +12718,9 @@ TEST(Update, ImplicitCastToTimestamp8) {
     SKIP_NO_GPU();
 
     run_ddl_statement("drop table if exists tstamp;");
-    run_ddl_statement("create table tstamp ( t1 timestamp ) with ( vacuum='delayed' );");
+    run_ddl_statement(build_create_table_statement(
+        "t1 timestamp", "tstamp", {"", 0}, {}, 10, g_use_temporary_tables, true, false));
+
     run_multiple_agg("insert into tstamp values ('2000-01-01 00:00:00');", dt);
 
     EXPECT_THROW(run_multiple_agg("update tstamp set t1='nonsense';", dt),
@@ -12552,9 +12769,15 @@ TEST(Update, ImplicitCastToTimestamp4) {
     SKIP_NO_GPU();
 
     run_ddl_statement("drop table if exists tstamp4;");
-    run_ddl_statement(
-        "create table tstamp4 ( t1 timestamp encoding fixed(32) ) with ( "
-        "vacuum='delayed' );");
+    run_ddl_statement(build_create_table_statement("t1 timestamp encoding fixed(32)",
+                                                   "tstamp4",
+                                                   {"", 0},
+                                                   {},
+                                                   10,
+                                                   g_use_temporary_tables,
+                                                   true,
+                                                   false));
+
     run_multiple_agg("insert into tstamp4 values ('2000-01-01 00:00:00');", dt);
 
     EXPECT_THROW(run_multiple_agg("update tstamp4 set t1='nonsense';", dt),
@@ -12603,6 +12826,8 @@ TEST(Update, ShardedTableShardKeyTest) {
     return;
   }
 
+  SKIP_WITH_TEMP_TABLES();
+
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
 
@@ -12646,10 +12871,18 @@ TEST(Update, UsingDateColumns) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
     run_ddl_statement("drop table if exists chelsea_updates;");
-    run_ddl_statement(
-        "create table chelsea_updates (col_src date, col_dst_16 date encoding fixed(16), "
+    run_ddl_statement(build_create_table_statement(
+        "col_src date, col_dst_16 date encoding fixed(16), "
         "col_dst date, col_dst_ts timestamp(0), col_dst_ts_32 timestamp encoding "
-        "fixed(32)) with ( vacuum='delayed' );");
+        "fixed(32)",
+        "chelsea_updates",
+        {"", 0},
+        {},
+        2,
+        g_use_temporary_tables,
+        true,
+        false));
+
     run_multiple_agg(
         "insert into chelsea_updates values('1911-01-01', null, null, null, null);", dt);
     run_multiple_agg(
@@ -12692,10 +12925,16 @@ TEST(Delete, ShardedTableDeleteTest) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
 
-    run_ddl_statement("drop table if exists shardkey;");
-    run_ddl_statement(
-        "create table shardkey ( x integer, y integer, shard key (x) ) with "
-        "(vacuum='delayed', shard_count=4);");
+    run_ddl_statement("DROP TABLE IF EXISTS shardkey;");
+    run_ddl_statement(build_create_table_statement("x integer, y integer",
+                                                   "shardkey",
+                                                   {"x", 4},
+                                                   {},
+                                                   20,
+                                                   g_use_temporary_tables,
+                                                   true,
+                                                   false));
+    ScopeGuard drop_table = [] { run_ddl_statement("DROP TABLE IF EXISTS shard_key;"); };
 
     run_multiple_agg("insert into shardkey values (1,2);", dt);
     run_multiple_agg("insert into shardkey values (3,4);", dt);
@@ -12713,8 +12952,6 @@ TEST(Delete, ShardedTableDeleteTest) {
 
     ASSERT_EQ(int64_t(11 + 13 + 15 + 17),
               v<int64_t>(run_simple_agg("select sum(x) from shardkey;", dt)));
-
-    run_ddl_statement("drop table shardkey;");
   }
 }
 
@@ -12770,10 +13007,11 @@ TEST(Delete, ScanLimitOptimization) {
     SKIP_NO_GPU();
 
     run_ddl_statement("DROP TABLE IF EXISTS test_scan_limit;");
-    run_ddl_statement(
-        "CREATE TABLE test_scan_limit ( i int ) WITH (vacuum='delayed', "
-        "fragment_size=2)");
-    ScopeGuard drop_table = [] { run_ddl_statement("DROP TABLE test_scan_limit;"); };
+    run_ddl_statement(build_create_table_statement(
+        "i int", "test_scan_limit", {"", 0}, {}, 2, g_use_temporary_tables, true, false));
+    ScopeGuard drop_table = [] {
+      run_ddl_statement("DROP TABLE IF EXISTS test_scan_limit;");
+    };
 
     run_multiple_agg("INSERT INTO test_scan_limit VALUES (0);", ExecutorDeviceType::CPU);
     run_multiple_agg("INSERT INTO test_scan_limit VALUES (1);", ExecutorDeviceType::CPU);
@@ -12811,8 +13049,18 @@ TEST(Delete, IntraFragment) {
     SKIP_NO_GPU();
 
     run_ddl_statement("drop table if exists vacuum_test;");
-    run_ddl_statement(
-        "create table vacuum_test (i1 integer, t1 text) with (vacuum='delayed');");
+    run_ddl_statement(build_create_table_statement("i1 integer, t1 text",
+                                                   "vacuum_test",
+                                                   {"", 0},
+                                                   {},
+                                                   10,
+                                                   g_use_temporary_tables,
+                                                   true,
+                                                   false));
+    ScopeGuard drop_table = [] {
+      run_ddl_statement("DROP TABLE IF EXISTS vacuum_test;");
+    };
+
     run_multiple_agg("insert into vacuum_test values(1, '1');", dt);
     run_multiple_agg("insert into vacuum_test values(2, '2');", dt);
     run_multiple_agg("insert into vacuum_test values(3, '3');", dt);
@@ -12821,8 +13069,6 @@ TEST(Delete, IntraFragment) {
 
     ASSERT_EQ(int64_t(0),
               v<int64_t>(run_simple_agg("SELECT COUNT(i1) FROM vacuum_test;", dt)));
-
-    run_ddl_statement("drop table vacuum_test;");
   }
 }
 
@@ -13393,10 +13639,19 @@ TEST(Delete, ExtraFragment) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
 
-    run_ddl_statement("drop table if exists vacuum_test;");
-    run_ddl_statement(
-        "create table vacuum_test (i1 integer, t1 text) with (vacuum='delayed', "
-        "fragment_size=10);");
+    run_ddl_statement("DROP TABLE IF EXISTS vacuum_test;");
+    run_ddl_statement(build_create_table_statement("i1 integer, t1 text",
+                                                   "vacuum_test",
+                                                   {"", 0},
+                                                   {},
+                                                   10,
+                                                   g_use_temporary_tables,
+                                                   true,
+                                                   false));
+    ScopeGuard drop_table = [] {
+      run_ddl_statement("DROP TABLE IF EXISTS vacuum_test;");
+    };
+
     for (int i = 1; i <= 100; i++) {
       run_multiple_agg(insert_op(i), dt);
     }
@@ -13407,9 +13662,56 @@ TEST(Delete, ExtraFragment) {
   }
 }
 
-TEST(Delete, Joins_ImplicitJoins) {
-  SKIP_WITH_TEMP_TABLES();
+TEST(Delete, MultiDelete) {
+  if (std::is_same<CalciteDeletePathSelector, PreprocessorFalse>::value) {
+    return;
+  }
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
 
+    run_ddl_statement("DROP TABLE IF EXISTS multi_delete;");
+    run_ddl_statement(build_create_table_statement("x int, str text",
+                                                   "multi_delete",
+                                                   {"", 0},
+                                                   {},
+                                                   2,
+                                                   g_use_temporary_tables,
+                                                   true,
+                                                   false));
+    ScopeGuard drop_table = [] {
+      run_ddl_statement("DROP TABLE IF EXISTS multi_delete;");
+    };
+
+    run_multiple_agg("INSERT INTO multi_delete VALUES (1, 'foo');",
+                     ExecutorDeviceType::CPU);
+    run_multiple_agg("INSERT INTO multi_delete VALUES (2, 'bar');",
+                     ExecutorDeviceType::CPU);
+    run_multiple_agg("INSERT INTO multi_delete VALUES (3, 'baz');",
+                     ExecutorDeviceType::CPU);
+    run_multiple_agg("INSERT INTO multi_delete VALUES (4, 'hello');",
+                     ExecutorDeviceType::CPU);
+    run_multiple_agg("INSERT INTO multi_delete VALUES (5, 'world');",
+                     ExecutorDeviceType::CPU);
+
+    EXPECT_EQ(15, v<int64_t>(run_simple_agg("SELECT SUM(x) FROM multi_delete", dt)));
+
+    run_multiple_agg("DELETE FROM multi_delete WHERE x <= 3;", dt);
+
+    EXPECT_EQ(9, v<int64_t>(run_simple_agg("SELECT SUM(x) FROM multi_delete", dt)));
+
+    run_multiple_agg("INSERT INTO multi_delete VALUES (1, 'test');", dt);
+
+    EXPECT_EQ("test",
+              boost::get<std::string>(v<NullableString>(
+                  run_simple_agg("SELECT str FROM multi_delete WHERE x = 1;", dt))));
+
+    run_multiple_agg("DELETE FROM multi_delete WHERE x = 1;", dt);
+
+    EXPECT_EQ(9, v<int64_t>(run_simple_agg("SELECT SUM(x) FROM multi_delete", dt)));
+  }
+}
+
+TEST(Delete, Joins_ImplicitJoins) {
   if (std::is_same<CalciteDeletePathSelector, PreprocessorFalse>::value) {
     return;
   }
@@ -13567,7 +13869,7 @@ TEST(Select, Correlated_In) {
   }
 }
 
-TEST(Create, QuotedIdentifier) {
+TEST(Create, QuotedColumnIdentifier) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
 
@@ -13594,6 +13896,38 @@ TEST(Create, QuotedIdentifier) {
                   "SELECT \"count\" FROM identifier_test where id = 2;", dt)));
 
     run_ddl_statement("alter table identifier_test drop column \"count\";");
+  }
+}
+
+TEST(Create, QuotedTableIdentifier) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+
+    run_ddl_statement("drop table if exists \"sum\";");
+    EXPECT_ANY_THROW(run_ddl_statement("create table sum (id integer, val integer);"));
+
+    run_ddl_statement("create table \"sum\" (id integer, val integer);");
+
+    EXPECT_ANY_THROW(run_multiple_agg("insert into sum values(1, 1);", dt));
+    run_multiple_agg("insert into \"sum\" values(1, 1);", dt);
+
+    EXPECT_ANY_THROW(run_simple_agg("SELECT val FROM sum;", dt));
+
+    ASSERT_EQ(static_cast<int64_t>(1),
+              v<int64_t>(run_simple_agg("SELECT val FROM \"sum\";", dt)));
+
+    EXPECT_ANY_THROW(run_ddl_statement("alter table sum rename to count;"));
+
+    run_ddl_statement("alter table \"sum\" rename to \"count\";");
+
+    ASSERT_EQ(static_cast<int64_t>(1),
+              v<int64_t>(run_simple_agg("SELECT val FROM \"count\";", dt)));
+
+    EXPECT_ANY_THROW(run_ddl_statement("alter table count drop column val;"));
+    run_ddl_statement("alter table \"count\" drop column val;");
+
+    EXPECT_ANY_THROW(run_ddl_statement("drop table count;"));
+    run_ddl_statement("drop table \"count\";");
   }
 }
 
@@ -13710,6 +14044,8 @@ TEST(Select, GeoSpatial_Basics) {
 }
 
 TEST(Select, GeoSpatial_Null) {
+  SKIP_WITH_TEMP_TABLES();
+
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
     ASSERT_EQ(static_cast<int64_t>(g_num_rows / 2),
@@ -16505,22 +16841,13 @@ TEST(TemporaryTables, Unsupported) {
     return;
   }
 
-  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
-    SKIP_NO_GPU();
-
-    EXPECT_ANY_THROW(run_simple_agg("DELETE FROM test WHERE x = 7;", dt));
-    EXPECT_ANY_THROW(run_simple_agg("UPDATE test SET x = 8 WHERE x = 7;", dt));
-  }
-
-  {
-    // ensure a newly created table cannot share a dictionary with a temporary table
-    ScopeGuard reset = [] {
-      run_ddl_statement("DROP TABLE IF EXISTS sharing_temp_table_dict;");
-    };
-    EXPECT_ANY_THROW(
-        run_ddl_statement("CREATE TABLE sharing_temp_table_dict (x INT, str TEXT, SHARED "
-                          "DICTIONARY(str) REFERENCES test(null_str));"));
-  }
+  // ensure a newly created table cannot share a dictionary with a temporary table
+  ScopeGuard reset = [] {
+    run_ddl_statement("DROP TABLE IF EXISTS sharing_temp_table_dict;");
+  };
+  EXPECT_ANY_THROW(
+      run_ddl_statement("CREATE TABLE sharing_temp_table_dict (x INT, str TEXT, SHARED "
+                        "DICTIONARY(str) REFERENCES test(null_str));"));
 }
 
 TEST(Select, Interop) {
@@ -16563,6 +16890,26 @@ TEST(Select, Interop) {
       dt);
   }
   g_enable_interop = false;
+}
+
+TEST(Select, VarlenLazyFetch) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    {
+      // rowid not meaningful in dstributed mode
+      SKIP_ALL_ON_AGGREGATOR();
+      const auto query(
+          "SELECT t, p, real_str, array_i16 FROM varlen_table where rowid = 222;");
+      auto result = run_multiple_agg(query, dt);
+      const auto first_row = result->getNextRow(true, true);
+      ASSERT_EQ(size_t(4), first_row.size());
+      ASSERT_EQ(int64_t(95), v<int64_t>(first_row[0]));
+      ASSERT_EQ(boost::get<std::string>(v<NullableString>(first_row[1])),
+                "POINT (222 222)");
+      ASSERT_EQ(boost::get<std::string>(v<NullableString>(first_row[2])), "number222");
+      compare_array(first_row[3], std::vector<int64_t>({444, 445}));
+    }
+  }
 }
 
 namespace {
@@ -17419,6 +17766,12 @@ int create_and_populate_tables(const bool use_temporary_tables,
     return -EEXIST;
   }
   try {
+    import_varlen_lazy_fetch();
+  } catch (...) {
+    LOG(ERROR) << "Failed to (re-)create table 'varlen_table'";
+    return -EEXIST;
+  }
+  try {
     import_query_rewrite_test();
   } catch (...) {
     LOG(ERROR) << "Failed to (re-)create table 'query_rewrite_test'";
@@ -17717,6 +18070,8 @@ void drop_tables() {
   run_ddl_statement(drop_gpu_sort_test);
   const std::string drop_random_test{"DROP TABLE random_test;"};
   run_ddl_statement(drop_random_test);
+  const std::string drop_varlen_lazy_fetch_test{"DROP TABLE varlen_table;"};
+  run_ddl_statement(drop_varlen_lazy_fetch_test);
   g_sqlite_comparator.query(drop_gpu_sort_test);
   const std::string drop_query_rewrite_test{"DROP TABLE query_rewrite_test;"};
   run_ddl_statement(drop_query_rewrite_test);

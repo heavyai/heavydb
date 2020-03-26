@@ -177,6 +177,8 @@ class InsertOrderFragmenter : public AbstractFragmenter {
 
   void dropColumns(const std::vector<int>& columnIds) override;
 
+  bool hasDeletedRows(const int delete_column_id) override;
+
  protected:
   std::vector<int> chunkKeyPrefix_;
   std::map<int, Chunk_NS::Chunk>

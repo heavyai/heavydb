@@ -288,6 +288,7 @@ class MapDProgramOptions {
   int render_oom_retry_threshold = 0;  // in milliseconds
   size_t render_mem_bytes = 500000000;
   size_t render_poly_cache_bytes = 300000000;
+  size_t max_concurrent_render_sessions = 500;
 
   bool enable_runtime_udf = false;
 
@@ -603,7 +604,12 @@ void MapDProgramOptions::fillOptions() {
           ->default_value(mapd_parameters.calcite_timeout),
       "Calcite server timeout (milliseconds). Increase this on systems with frequent "
       "schema changes or when running large numbers of parallel queries.");
-
+  help_desc.add_options()(
+      "stringdict-parallelizm",
+      po::value<bool>(&g_enable_stringdict_parallel)
+          ->default_value(g_enable_stringdict_parallel)
+          ->implicit_value(false),
+      "Allow StringDictionary to parallelize loads using multiple threads");
   help_desc.add(log_options_.get_options());
 }
 
@@ -1143,6 +1149,7 @@ int startMapdServer(MapDProgramOptions& prog_config_opts, bool start_http_server
                                        prog_config_opts.enable_auto_clear_render_mem,
                                        prog_config_opts.render_oom_retry_threshold,
                                        prog_config_opts.render_mem_bytes,
+                                       prog_config_opts.max_concurrent_render_sessions,
                                        prog_config_opts.num_gpus,
                                        prog_config_opts.start_gpu,
                                        prog_config_opts.reserved_gpu_mem,

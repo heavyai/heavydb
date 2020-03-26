@@ -35,35 +35,47 @@ class DateDaysEncoder : public Encoder {
       , dataMax(std::numeric_limits<T>::min())
       , has_nulls(false) {}
 
-  ChunkMetadata appendData(int8_t*& srcData,
-                           const size_t numAppendElems,
+  ChunkMetadata appendData(int8_t*& src_data,
+                           const size_t num_elems_to_append,
                            const SQLTypeInfo& ti,
-                           const bool replicating = false) override {
+                           const bool replicating = false,
+                           const int64_t offset = -1) override {
     CHECK(ti.is_date_in_days());
-    T* unencodedData = reinterpret_cast<T*>(srcData);
-    auto encodedData = std::make_unique<V[]>(numAppendElems);
-    for (size_t i = 0; i < numAppendElems; ++i) {
+    T* unencoded_data = reinterpret_cast<T*>(src_data);
+    auto encoded_data = std::make_unique<V[]>(num_elems_to_append);
+    for (size_t i = 0; i < num_elems_to_append; ++i) {
       size_t ri = replicating ? 0 : i;
-      if (unencodedData[ri] == std::numeric_limits<V>::min()) {
+      if (unencoded_data[ri] == std::numeric_limits<V>::min()) {
         has_nulls = true;
-        encodedData.get()[i] = static_cast<V>(unencodedData[ri]);
+        encoded_data.get()[i] = static_cast<V>(unencoded_data[ri]);
       } else {
-        date_days_overflow_validator_.validate(unencodedData[ri]);
-        encodedData.get()[i] =
-            DateConverters::get_epoch_days_from_seconds(unencodedData[ri]);
-        const T data = DateConverters::get_epoch_seconds_from_days(encodedData.get()[i]);
+        date_days_overflow_validator_.validate(unencoded_data[ri]);
+        encoded_data.get()[i] =
+            DateConverters::get_epoch_days_from_seconds(unencoded_data[ri]);
+        const T data = DateConverters::get_epoch_seconds_from_days(encoded_data.get()[i]);
         dataMax = std::max(dataMax, data);
         dataMin = std::min(dataMin, data);
       }
     }
-    num_elems_ += numAppendElems;
 
-    buffer_->append((int8_t*)(encodedData.get()), numAppendElems * sizeof(V));
+    if (offset == -1) {
+      num_elems_ += num_elems_to_append;
+      buffer_->append(reinterpret_cast<int8_t*>(encoded_data.get()),
+                      num_elems_to_append * sizeof(V));
+      if (!replicating) {
+        src_data += num_elems_to_append * sizeof(T);
+      }
+    } else {
+      num_elems_ = offset + num_elems_to_append;
+      CHECK(!replicating);
+      CHECK_GE(offset, 0);
+      buffer_->write(reinterpret_cast<int8_t*>(encoded_data.get()),
+                     num_elems_to_append * sizeof(V),
+                     static_cast<size_t>(offset));
+    }
+
     ChunkMetadata chunkMetadata;
     getMetadata(chunkMetadata);
-    if (!replicating) {
-      srcData += numAppendElems * sizeof(T);
-    }
     return chunkMetadata;
   }
 

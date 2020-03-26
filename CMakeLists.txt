@@ -144,11 +144,6 @@ if(XCODE)
   add_definitions("-DXCODE")
 endif()
 
-option(ENABLE_ARROW_DEBUG "Enable Arrow Debug Helpers" ON)
-if (ENABLE_ARROW_DEBUG)
-  add_definitions("-DENABLE_ARROW_DEBUG")
-endif()
-
 # fixme: hack works for Homebrew, might not work for Conda
 if(${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
   set(OPENSSL_ROOT_DIR "/usr/local/opt/openssl/")
@@ -362,6 +357,11 @@ if(ENABLE_AWS_S3)
   endif()
 endif()
 
+find_package(CURL REQUIRED QUIET)
+if(CURL_FOUND)
+  set(CURL_LIBRARIES ${LibAwsS3_SUPPORT_LIBRARIES})
+endif()
+
 # bcrypt
 include_directories(ThirdParty/bcrypt)
 add_subdirectory(ThirdParty/bcrypt)
@@ -480,18 +480,19 @@ include_directories(${CalciteThrift_BINARY_DIR})
 add_subdirectory(Catalog)
 add_subdirectory(Parser)
 add_subdirectory(Analyzer)
-add_subdirectory(Planner)
 add_subdirectory(Import)
 add_subdirectory(QueryEngine)
 add_subdirectory(DataMgr)
 add_subdirectory(CudaMgr)
 add_subdirectory(LockMgr)
+add_subdirectory(MigrationMgr)
 add_subdirectory(Fragmenter)
 add_subdirectory(Chunk)
 add_subdirectory(Shared)
 add_subdirectory(Utils)
 add_subdirectory(QueryRunner)
 add_subdirectory(SQLFrontend)
+add_subdirectory(TableArchiver)
 add_subdirectory(ThriftHandler)
 
 add_subdirectory(Distributed)
@@ -501,7 +502,7 @@ if(ENABLE_ODBC)
   add_subdirectory(ODBC)
 endif()
 
-set(MAPD_LIBRARIES Shared Catalog SqliteConnector Parser Analyzer Planner CsvImport QueryRunner QueryEngine QueryState LockMgr DataMgr Fragmenter Chunk)
+set(MAPD_LIBRARIES Shared Catalog SqliteConnector MigrationMgr TableArchiver Parser Analyzer CsvImport QueryRunner QueryEngine QueryState LockMgr DataMgr Fragmenter Chunk)
 
 if("${MAPD_EDITION_LOWER}" STREQUAL "ee")
   list(APPEND MAPD_LIBRARIES Distributed)
@@ -701,21 +702,9 @@ if(MAPD_IMMERSE_DOWNLOAD)
 endif()
 
 ## Go web server
-find_program(GO_EXECUTABLE NAMES go)
-if(NOT GO_EXECUTABLE)
-  message(FATAL_ERROR "go not found. Install Go(lang).")
+if("${MAPD_EDITION_LOWER}" STREQUAL "ee" AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/Immerse")
+  add_subdirectory(Immerse)
 endif()
-file(GLOB_RECURSE GOLANG_SOURCES RELATIVE ${CMAKE_SOURCE_DIR} ThirdParty/go/src/mapd/vendor/**/*.go)
-add_custom_command(
-  OUTPUT ${CMAKE_BINARY_DIR}/bin/omnisci_web_server
-  COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_SOURCE_DIR}/ThirdParty/go/src/mapd/vendor/ ${CMAKE_BINARY_DIR}/go/src/
-  COMMAND GOPATH=${CMAKE_BINARY_DIR}/go ${GO_EXECUTABLE} build -ldflags "-X main.version=${CPACK_PACKAGE_VERSION}" -o ${CMAKE_BINARY_DIR}/bin/omnisci_web_server ${CMAKE_SOURCE_DIR}/OmniSciWebServer.go
-  DEPENDS OmniSciWebServer.go ${GOLANG_SOURCES}
-  )
-add_custom_target(omnisci_web_server ALL DEPENDS ${CMAKE_BINARY_DIR}/bin/omnisci_web_server)
-install(PROGRAMS ${CMAKE_BINARY_DIR}/bin/omnisci_web_server DESTINATION bin)
-list(APPEND ADDITIONAL_MAKE_CLEAN_FILES ${CMAKE_BINARY_DIR}/bin/omnisci_web_server)
-list(APPEND ADDITIONAL_MAKE_CLEAN_FILES ${CMAKE_BINARY_DIR}/go)
 
 add_subdirectory(ThirdParty/generate_cert)
 
@@ -747,7 +736,6 @@ if(${CMAKE_SYSTEM_NAME} STREQUAL "Linux")
     install(FILES systemd/omnisci-sds.conf.in DESTINATION systemd)
   endif()
   install(FILES systemd/omnisci_server.service.in systemd/omnisci_server@.service.in DESTINATION systemd)
-  install(FILES systemd/omnisci_web_server.service.in systemd/omnisci_web_server@.service.in DESTINATION systemd)
   install(FILES systemd/omnisci.conf.in DESTINATION systemd)
   install(PROGRAMS systemd/install_omnisci_systemd.sh DESTINATION systemd)
 endif()
@@ -839,13 +827,11 @@ install(FILES docker/Dockerfile docker/Dockerfile.mapd docker/README.md DESTINAT
 execute_process(
   COMMAND ln -sf omnisql mapdql
   COMMAND ln -sf omnisci_server mapd_server
-  COMMAND ln -sf omnisci_web_server mapd_web_server
   WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/bin
   )
 install(FILES
   ${CMAKE_BINARY_DIR}/bin/mapdql
   ${CMAKE_BINARY_DIR}/bin/mapd_server
-  ${CMAKE_BINARY_DIR}/bin/mapd_web_server
   DESTINATION "bin"
   )
 execute_process(

@@ -105,7 +105,7 @@ ScalarCodeGenerator::CompiledExpression ScalarCodeGenerator::compile(
   cgen_state_->ir_builder_.CreateStore(expr_lvs.front(),
                                        cgen_state_->row_func_->arg_begin());
   cgen_state_->ir_builder_.CreateRet(ll_int<int32_t>(0, ctx));
-  if (co.device_type_ == ExecutorDeviceType::GPU) {
+  if (co.device_type == ExecutorDeviceType::GPU) {
     std::vector<llvm::Type*> wrapper_arg_types(arg_types.size() + 1);
     wrapper_arg_types[0] = llvm::PointerType::get(get_int_type(32, ctx), 0);
     wrapper_arg_types[1] = arg_types[0];
@@ -140,7 +140,7 @@ std::vector<void*> ScalarCodeGenerator::generateNativeCode(
     const CompilationOptions& co) {
   CHECK(module_ && !execution_engine_.get()) << "Invalid code generator state";
   module_.release();
-  switch (co.device_type_) {
+  switch (co.device_type) {
     case ExecutorDeviceType::CPU: {
       execution_engine_ =
           generateNativeCPUCode(compiled_expression.func, {compiled_expression.func}, co);

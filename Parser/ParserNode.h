@@ -934,10 +934,20 @@ class NameValueAssign : public Node {
 };
 
 /*
+ * @type CreateTableBaseStmt
+ */
+class CreateTableBaseStmt : public DDLStmt {
+ public:
+  virtual const std::string* get_table() const = 0;
+  virtual const std::list<std::unique_ptr<TableElement>>& get_table_element_list()
+      const = 0;
+};
+
+/*
  * @type CreateTableStmt
  * @brief CREATE TABLE statement
  */
-class CreateTableStmt : public DDLStmt {
+class CreateTableStmt : public CreateTableBaseStmt {
  public:
   CreateTableStmt(std::string* tab,
                   const std::string* storage,
@@ -945,10 +955,7 @@ class CreateTableStmt : public DDLStmt {
                   bool is_temporary,
                   bool if_not_exists,
                   std::list<NameValueAssign*>* s)
-      : table_(tab)
-      , storage_type_(storage)
-      , is_temporary_(is_temporary)
-      , if_not_exists_(if_not_exists) {
+      : table_(tab), is_temporary_(is_temporary), if_not_exists_(if_not_exists) {
     CHECK(table_elems);
     for (const auto e : *table_elems) {
       table_element_list_.emplace_back(e);
@@ -975,9 +982,82 @@ class CreateTableStmt : public DDLStmt {
  private:
   std::unique_ptr<std::string> table_;
   std::list<std::unique_ptr<TableElement>> table_element_list_;
-  std::unique_ptr<const std::string> storage_type_;
   bool is_temporary_;
   bool if_not_exists_;
+  std::list<std::unique_ptr<NameValueAssign>> storage_options_;
+};
+
+struct DistributedConnector
+    : public Fragmenter_Namespace::InsertDataLoader::DistributedConnector {
+  virtual ~DistributedConnector() {}
+
+  virtual size_t getOuterFragmentCount(QueryStateProxy,
+                                       std::string& sql_query_string) = 0;
+  virtual std::vector<AggregatedResult> query(QueryStateProxy,
+                                              std::string& sql_query_string,
+                                              std::vector<size_t> outer_frag_indices) = 0;
+  virtual void checkpoint(const Catalog_Namespace::SessionInfo& parent_session_info,
+                          int tableId) = 0;
+  virtual void rollback(const Catalog_Namespace::SessionInfo& parent_session_info,
+                        int tableId) = 0;
+};
+
+struct LocalConnector : public DistributedConnector {
+  virtual ~LocalConnector() {}
+
+  size_t getOuterFragmentCount(QueryStateProxy, std::string& sql_query_string) override;
+
+  AggregatedResult query(QueryStateProxy,
+                         std::string& sql_query_string,
+                         std::vector<size_t> outer_frag_indices,
+                         bool validate_only);
+  std::vector<AggregatedResult> query(QueryStateProxy,
+                                      std::string& sql_query_string,
+                                      std::vector<size_t> outer_frag_indices) override;
+  size_t leafCount() override { return 1; };
+  void insertDataToLeaf(const Catalog_Namespace::SessionInfo& session,
+                        const size_t leaf_idx,
+                        Fragmenter_Namespace::InsertData& insert_data) override;
+  void checkpoint(const Catalog_Namespace::SessionInfo& session, int tableId) override;
+  void rollback(const Catalog_Namespace::SessionInfo& session, int tableId) override;
+  std::list<ColumnDescriptor> getColumnDescriptors(AggregatedResult& result,
+                                                   bool for_create);
+};
+
+/*
+ * @type CreateDataframeStmt
+ * @brief CREATE DATAFRAME statement
+ */
+class CreateDataframeStmt : public CreateTableBaseStmt {
+ public:
+  CreateDataframeStmt(std::string* tab,
+                      std::list<TableElement*>* table_elems,
+                      std::string* filename,
+                      std::list<NameValueAssign*>* s)
+      : table_(tab), filename_(filename) {
+    CHECK(table_elems);
+    for (const auto e : *table_elems) {
+      table_element_list_.emplace_back(e);
+    }
+    delete table_elems;
+    if (s) {
+      for (const auto e : *s) {
+        storage_options_.emplace_back(e);
+      }
+      delete s;
+    }
+  }
+  const std::string* get_table() const { return table_.get(); }
+  const std::list<std::unique_ptr<TableElement>>& get_table_element_list() const {
+    return table_element_list_;
+  }
+
+  void execute(const Catalog_Namespace::SessionInfo& session) override;
+
+ private:
+  std::unique_ptr<std::string> table_;
+  std::list<std::unique_ptr<TableElement>> table_element_list_;
+  std::unique_ptr<std::string> filename_;
   std::list<std::unique_ptr<NameValueAssign>> storage_options_;
 };
 
@@ -1003,37 +1083,12 @@ class InsertIntoTableAsSelectStmt : public DDLStmt {
     delete select_query;
   }
 
-  void populateData(QueryStateProxy, bool is_temporary, bool validate_table);
+  void populateData(QueryStateProxy, bool validate_table);
   void execute(const Catalog_Namespace::SessionInfo& session) override;
 
   std::string& get_table() { return table_name_; }
 
   std::string& get_select_query() { return select_query_; }
-
-  struct DistributedConnector
-      : public Fragmenter_Namespace::InsertDataLoader::DistributedConnector {
-    virtual AggregatedResult query(QueryStateProxy, std::string& sql_query_string) = 0;
-    virtual void checkpoint(const Catalog_Namespace::SessionInfo& parent_session_info,
-                            int tableId) = 0;
-    virtual void rollback(const Catalog_Namespace::SessionInfo& parent_session_info,
-                          int tableId) = 0;
-  };
-
-  struct LocalConnector : public DistributedConnector {
-    virtual ~LocalConnector() {}
-    AggregatedResult query(QueryStateProxy,
-                           std::string& sql_query_string,
-                           bool validate_only);
-    AggregatedResult query(QueryStateProxy, std::string& sql_query_string) override;
-    size_t leafCount() override { return 1; };
-    void insertDataToLeaf(const Catalog_Namespace::SessionInfo& session,
-                          const size_t leaf_idx,
-                          Fragmenter_Namespace::InsertData& insert_data) override;
-    void checkpoint(const Catalog_Namespace::SessionInfo& session, int tableId) override;
-    void rollback(const Catalog_Namespace::SessionInfo& session, int tableId) override;
-    std::list<ColumnDescriptor> getColumnDescriptors(AggregatedResult& result,
-                                                     bool for_create);
-  };
 
   DistributedConnector* leafs_connector_ = nullptr;
 
@@ -1754,6 +1809,8 @@ class ExportQueryStmt : public DDLStmt {
   void execute(const Catalog_Namespace::SessionInfo& session) override;
   const std::string get_select_stmt() const { return *select_stmt; }
 
+  DistributedConnector* leafs_connector_ = nullptr;
+
  private:
   std::unique_ptr<std::string> select_stmt;
   std::unique_ptr<std::string> file_path;
@@ -1938,24 +1995,10 @@ class InsertValuesStmt : public InsertStmt {
 
   size_t determineLeafIndex(const Catalog_Namespace::Catalog& catalog, size_t num_leafs);
 
+  void execute(const Catalog_Namespace::SessionInfo& session);
+
  private:
   std::list<std::unique_ptr<Expr>> value_list;
-};
-
-/*
- * @type InsertQueryStmt
- * @brief INSERT INTO ... SELECT ...
- */
-class InsertQueryStmt : public InsertStmt {
- public:
-  InsertQueryStmt(std::string* t, std::list<std::string*>* c, QuerySpec* q)
-      : InsertStmt(t, c), query(q) {}
-  const QuerySpec* get_query() const { return query.get(); }
-  void analyze(const Catalog_Namespace::Catalog& catalog,
-               Analyzer::Query& query) const override;
-
- private:
-  std::unique_ptr<QuerySpec> query;
 };
 
 /*

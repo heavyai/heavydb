@@ -33,10 +33,12 @@ class SqliteConnector {
  public:
   SqliteConnector(const std::string& dbName, const std::string& dir = ".");
   SqliteConnector(sqlite3* db);
-  ~SqliteConnector();
-  void query(const std::string& queryString);
+  virtual ~SqliteConnector();
+  virtual void query(const std::string& queryString);
 
-  void query_with_text_params(std::string const& query_only) { query(query_only); }
+  virtual void query_with_text_params(std::string const& query_only) {
+    query(query_only);
+  }
   template <typename STRING_CONTAINER>
   void query_with_text_params(STRING_CONTAINER const& query_and_text_params) {
     query_with_text_params(
@@ -44,13 +46,13 @@ class SqliteConnector {
         std::vector<std::string>{std::next(query_and_text_params.begin()),
                                  query_and_text_params.end()});
   }
-  void query_with_text_params(const std::string& queryString,
-                              const std::vector<std::string>& text_param);
-  void query_with_text_param(const std::string& queryString,
-                             const std::string& text_param);
+  virtual void query_with_text_params(const std::string& queryString,
+                                      const std::vector<std::string>& text_param);
+  virtual void query_with_text_param(const std::string& queryString,
+                                     const std::string& text_param);
 
-  size_t getNumRows() const { return numRows_; }
-  size_t getNumCols() const { return numCols_; }
+  virtual size_t getNumRows() const { return numRows_; }
+  virtual size_t getNumCols() const { return numCols_; }
 
   template <typename T>
   T getData(const int row, const int col) {
@@ -67,6 +69,8 @@ class SqliteConnector {
 
   std::vector<std::string> columnNames;  // make this public for easy access
   std::vector<int> columnTypes;
+
+  auto getSqlitePtr() const { return db_; }
 
  private:
   struct NullableResult {

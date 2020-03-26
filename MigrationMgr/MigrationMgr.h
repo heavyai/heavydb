@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 MapD Technologies, Inc.
+ * Copyright 2020 OmniSci, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,19 +14,24 @@
  * limitations under the License.
  */
 
-#include "ArrowUtil.h"
-#include "DataMgr/BufferMgr/BufferMgr.h"  // for OutOfMemory
+#pragma once
 
-#include <string>
+#include "Catalog/Types.h"
+#include "SqliteConnector/SqliteConnector.h"
 
-#include "arrow/status.h"
-
-void arrow_status_throw(const ::arrow::Status& s) {
-  std::string message = s.ToString();
-  switch (s.code()) {
-    case ::arrow::StatusCode::OutOfMemory:
-      throw OutOfMemory(message);
-    default:
-      throw std::runtime_error(message);
-  }
+namespace Catalog_Namespace {
+class Catalog;
 }
+
+namespace migrations {
+
+class MigrationMgr {
+ public:
+  static void migrateDateInDaysMetadata(
+      const Catalog_Namespace::TableDescriptorMapById& table_descriptors_by_id,
+      const int database_id,
+      const Catalog_Namespace::Catalog* cat,
+      SqliteConnector& sqlite);
+};
+
+}  // namespace migrations

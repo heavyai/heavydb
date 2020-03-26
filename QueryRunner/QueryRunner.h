@@ -36,10 +36,6 @@ struct UserMetadata;
 class ResultSet;
 class ExecutionResult;
 
-namespace Planner {
-class RootPlan;
-}
-
 namespace Parser {
 class CopyTableStmt;
 }
@@ -179,16 +175,25 @@ class QueryRunner {
               const bool create_user,
               const bool create_db);
 
-  Planner::RootPlan* parsePlanLegacy(const std::string& query_str);
-  Planner::RootPlan* parsePlanCalcite(QueryStateProxy);
-  Planner::RootPlan* parsePlan(QueryStateProxy);
-
   static std::unique_ptr<QueryRunner> qr_instance_;
 
   std::shared_ptr<Catalog_Namespace::SessionInfo> session_info_;
 
  private:
   std::unique_ptr<IRFileWriter> ir_file_writer_;
+};
+
+class ImportDriver : public QueryRunner {
+ public:
+  ImportDriver(std::shared_ptr<Catalog_Namespace::Catalog> cat,
+               const Catalog_Namespace::UserMetadata& user,
+               const ExecutorDeviceType dt = ExecutorDeviceType::GPU);
+
+  void importGeoTable(const std::string& file_path,
+                      const std::string& table_name,
+                      const bool compression,
+                      const bool create_table,
+                      const bool explode_collections);
 };
 
 }  // namespace QueryRunner

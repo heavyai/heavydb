@@ -15,31 +15,32 @@
  */
 
 #include "RelAlgExecutor.h"
-#include "QueryEngine/RelAlgDagBuilder.h"
-#include "RelAlgTranslator.h"
-
-#include "CalciteDeserializerUtils.h"
-#include "CardinalityEstimator.h"
-#include "ColumnFetcher.h"
-#include "EquiJoinCondition.h"
-#include "ErrorHandling.h"
-#include "ExpressionRewrite.h"
-#include "ExternalExecutor.h"
-#include "FromTableReordering.h"
-#include "InputMetadata.h"
-#include "JoinFilterPushDown.h"
-#include "QueryPhysicalInputsCollector.h"
-#include "RangeTableIndexVisitor.h"
-#include "RexVisitor.h"
-#include "TableFunctions/TableFunctionsFactory.h"
-#include "UsedColumnsVisitor.h"
-#include "WindowContext.h"
-
-#include "../Parser/ParserNode.h"
-#include "../Shared/measure.h"
 
 #include <algorithm>
 #include <numeric>
+
+#include "Parser/ParserNode.h"
+#include "QueryEngine/CalciteDeserializerUtils.h"
+#include "QueryEngine/CardinalityEstimator.h"
+#include "QueryEngine/ColumnFetcher.h"
+#include "QueryEngine/EquiJoinCondition.h"
+#include "QueryEngine/ErrorHandling.h"
+#include "QueryEngine/ExpressionRewrite.h"
+#include "QueryEngine/ExternalExecutor.h"
+#include "QueryEngine/FromTableReordering.h"
+#include "QueryEngine/InputMetadata.h"
+#include "QueryEngine/JoinFilterPushDown.h"
+#include "QueryEngine/QueryPhysicalInputsCollector.h"
+#include "QueryEngine/RangeTableIndexVisitor.h"
+#include "QueryEngine/RelAlgDagBuilder.h"
+#include "QueryEngine/RelAlgTranslator.h"
+#include "QueryEngine/RexVisitor.h"
+#include "QueryEngine/TableFunctions/TableFunctionsFactory.h"
+#include "QueryEngine/UsedColumnsVisitor.h"
+#include "QueryEngine/WindowContext.h"
+#include "Shared/TypedDataAccessors.h"
+#include "Shared/measure.h"
+#include "Shared/shard_key.h"
 
 bool g_skip_intermediate_count{true};
 extern bool g_enable_bump_allocator;
@@ -67,6 +68,85 @@ std::unordered_set<PhysicalInput> get_physical_inputs(
 
 }  // namespace
 
+size_t RelAlgExecutor::getOuterFragmentCount(const CompilationOptions& co,
+                                             const ExecutionOptions& eo) {
+  if (eo.find_push_down_candidates) {
+    return 0;
+  }
+
+  if (eo.just_explain) {
+    return 0;
+  }
+
+  CHECK(query_dag_);
+
+  query_dag_->resetQueryExecutionState();
+  const auto& ra = query_dag_->getRootNode();
+
+  std::lock_guard<std::mutex> lock(executor_->execute_mutex_);
+  ScopeGuard row_set_holder = [this] { cleanupPostExecution(); };
+  const auto phys_inputs = get_physical_inputs(cat_, &ra);
+  const auto phys_table_ids = get_physical_table_inputs(&ra);
+  executor_->setCatalog(&cat_);
+  executor_->setupCaching(phys_inputs, phys_table_ids);
+
+  ScopeGuard restore_metainfo_cache = [this] { executor_->clearMetaInfoCache(); };
+  auto ed_seq = RaExecutionSequence(&ra);
+
+  if (!getSubqueries().empty()) {
+    return 0;
+  }
+
+  CHECK(!ed_seq.empty());
+  if (ed_seq.size() > 1) {
+    return 0;
+  }
+
+  decltype(temporary_tables_)().swap(temporary_tables_);
+  decltype(target_exprs_owned_)().swap(target_exprs_owned_);
+  executor_->catalog_ = &cat_;
+  executor_->temporary_tables_ = &temporary_tables_;
+
+  WindowProjectNodeContext::reset();
+  auto exec_desc_ptr = ed_seq.getDescriptor(0);
+  CHECK(exec_desc_ptr);
+  auto& exec_desc = *exec_desc_ptr;
+  const auto body = exec_desc.getBody();
+  if (body->isNop()) {
+    return 0;
+  }
+
+  const auto project = dynamic_cast<const RelProject*>(body);
+  if (project) {
+    auto work_unit =
+        createProjectWorkUnit(project, {{}, SortAlgorithm::Default, 0, 0}, eo);
+
+    return get_frag_count_of_table(work_unit.exe_unit.input_descs[0].getTableId(),
+                                   executor_);
+  }
+
+  const auto compound = dynamic_cast<const RelCompound*>(body);
+  if (compound) {
+    if (compound->isDeleteViaSelect()) {
+      return 0;
+    } else if (compound->isUpdateViaSelect()) {
+      return 0;
+    } else {
+      if (compound->isAggregate()) {
+        return 0;
+      }
+
+      const auto work_unit =
+          createCompoundWorkUnit(compound, {{}, SortAlgorithm::Default, 0, 0}, eo);
+
+      return get_frag_count_of_table(work_unit.exe_unit.input_descs[0].getTableId(),
+                                     executor_);
+    }
+  }
+
+  return 0;
+}
+
 ExecutionResult RelAlgExecutor::executeRelAlgQuery(const CompilationOptions& co,
                                                    const ExecutionOptions& eo,
                                                    RenderInfo* render_info) {
@@ -81,12 +161,8 @@ ExecutionResult RelAlgExecutor::executeRelAlgQuery(const CompilationOptions& co,
     }
   }
   LOG(INFO) << "Query unable to run in GPU mode, retrying on CPU";
-  CompilationOptions co_cpu{ExecutorDeviceType::CPU,
-                            co.hoist_literals_,
-                            co.opt_level_,
-                            co.with_dynamic_watchdog_,
-                            co.explain_type_,
-                            co.register_intel_jit_listener_};
+  auto co_cpu = CompilationOptions::makeCpuOnly(co);
+
   if (render_info) {
     render_info->setForceNonInSituData();
   }
@@ -364,14 +440,15 @@ void RelAlgExecutor::executeRelAlgStep(const RaExecutionSequence& seq,
       eo.find_push_down_candidates,
       eo.just_calcite_explain,
       eo.gpu_input_mem_limit_percent,
-      eo.executor_type};
+      eo.executor_type,
+      step_idx == 0 ? eo.outer_fragment_indices : std::vector<size_t>()};
 
   const auto compound = dynamic_cast<const RelCompound*>(body);
   if (compound) {
     if (compound->isDeleteViaSelect()) {
-      executeDeleteViaCompound(compound, co, eo_work_unit, render_info, queue_time_ms);
+      executeDelete(compound, co, eo_work_unit, queue_time_ms);
     } else if (compound->isUpdateViaSelect()) {
-      executeUpdateViaCompound(compound, co, eo_work_unit, render_info, queue_time_ms);
+      executeUpdate(compound, co, eo_work_unit, queue_time_ms);
     } else {
       exec_desc.setResult(
           executeCompound(compound, co, eo_work_unit, render_info, queue_time_ms));
@@ -385,9 +462,9 @@ void RelAlgExecutor::executeRelAlgStep(const RaExecutionSequence& seq,
   const auto project = dynamic_cast<const RelProject*>(body);
   if (project) {
     if (project->isDeleteViaSelect()) {
-      executeDeleteViaProject(project, co, eo_work_unit, render_info, queue_time_ms);
+      executeDelete(project, co, eo_work_unit, queue_time_ms);
     } else if (project->isUpdateViaSelect()) {
-      executeUpdateViaProject(project, co, eo_work_unit, render_info, queue_time_ms);
+      executeUpdate(project, co, eo_work_unit, queue_time_ms);
     } else {
       ssize_t prev_count = -1;
       // Disabling the intermediate count optimization in distributed, as the previous
@@ -1088,187 +1165,185 @@ std::vector<TargetMetaInfo> get_targets_meta(
 
 }  // namespace
 
-void RelAlgExecutor::executeUpdateViaCompound(const RelCompound* compound,
-                                              const CompilationOptions& co,
-                                              const ExecutionOptions& eo,
-                                              RenderInfo* render_info,
-                                              const int64_t queue_time_ms) {
+void RelAlgExecutor::executeUpdate(const RelAlgNode* node,
+                                   const CompilationOptions& co_in,
+                                   const ExecutionOptions& eo_in,
+                                   const int64_t queue_time_ms) {
+  CHECK(node);
   auto timer = DEBUG_TIMER(__func__);
-  if (!compound->validateTargetColumns(
-          yieldColumnValidator(compound->getModifiedTableDescriptor()))) {
-    throw std::runtime_error(
-        "Unsupported update operation encountered.  (None-encoded string column updates "
-        "are not supported.)");
-  }
 
-  const auto work_unit =
-      createCompoundWorkUnit(compound, {{}, SortAlgorithm::Default, 0, 0}, eo);
-  const auto table_infos = get_table_infos(work_unit.exe_unit, executor_);
-  CompilationOptions co_project = co;
-  co_project.device_type_ = ExecutorDeviceType::CPU;
+  UpdateTriggeredCacheInvalidator::invalidateCaches();
 
-  try {
-    UpdateTriggeredCacheInvalidator::invalidateCaches();
+  auto co = co_in;
+  co.hoist_literals = false;  // disable literal hoisting as it interferes with dict
+                              // encoded string updates
 
-    UpdateTransactionParameters update_params(compound->getModifiedTableDescriptor(),
-                                              compound->getTargetColumns(),
-                                              compound->getOutputMetainfo(),
-                                              compound->isVarlenUpdateRequired());
-    auto update_callback = yieldUpdateCallback(update_params);
-    executor_->executeUpdate(work_unit.exe_unit,
-                             table_infos,
-                             co_project,
-                             eo,
-                             cat_,
-                             executor_->row_set_mem_owner_,
-                             update_callback,
-                             compound->isAggregate());
-    update_params.finalizeTransaction();
-  } catch (...) {
-    LOG(INFO) << "Update operation failed.";
-    throw;
-  }
-}
+  auto execute_update_for_node =
+      [this, &co, &eo_in](const auto node, auto& work_unit, const bool is_aggregate) {
+        UpdateTransactionParameters update_params(node->getModifiedTableDescriptor(),
+                                                  node->getTargetColumns(),
+                                                  node->getOutputMetainfo(),
+                                                  node->isVarlenUpdateRequired());
 
-void RelAlgExecutor::executeUpdateViaProject(const RelProject* project,
-                                             const CompilationOptions& co,
-                                             const ExecutionOptions& eo,
-                                             RenderInfo* render_info,
-                                             const int64_t queue_time_ms) {
-  auto timer = DEBUG_TIMER(__func__);
-  if (!project->validateTargetColumns(
-          yieldColumnValidator(project->getModifiedTableDescriptor()))) {
-    throw std::runtime_error(
-        "Unsupported update operation encountered.  (None-encoded string column updates "
-        "are not supported.)");
-  }
+        const auto table_infos = get_table_infos(work_unit.exe_unit, executor_);
 
-  auto work_unit = createProjectWorkUnit(project, {{}, SortAlgorithm::Default, 0, 0}, eo);
-  const auto table_infos = get_table_infos(work_unit.exe_unit, executor_);
-  CompilationOptions co_project = co;
-  co_project.device_type_ = ExecutorDeviceType::CPU;
+        auto execute_update_ra_exe_unit =
+            [this, &co, &eo_in, &table_infos, &update_params](
+                const RelAlgExecutionUnit& ra_exe_unit, const bool is_aggregate) {
+              CompilationOptions co_project = CompilationOptions::makeCpuOnly(co);
 
-  if (project->isSimple()) {
-    CHECK_EQ(size_t(1), project->inputCount());
-    const auto input_ra = project->getInput(0);
-    if (dynamic_cast<const RelSort*>(input_ra)) {
-      const auto& input_table =
-          get_temporary_table(&temporary_tables_, -input_ra->getId());
-      work_unit.exe_unit.scan_limit = input_table.rowCount();
+              auto eo = eo_in;
+              if (update_params.tableIsTemporary()) {
+                eo.output_columnar_hint = true;
+                co_project.allow_lazy_fetch = false;
+              }
+
+              auto update_callback = yieldUpdateCallback(update_params);
+              executor_->executeUpdate(ra_exe_unit,
+                                       table_infos,
+                                       co_project,
+                                       eo,
+                                       cat_,
+                                       executor_->row_set_mem_owner_,
+                                       update_callback,
+                                       is_aggregate);
+              update_params.finalizeTransaction();
+            };
+
+        if (update_params.tableIsTemporary()) {
+          // hold owned target exprs during execution if rewriting
+          auto query_rewrite = std::make_unique<QueryRewriter>(table_infos, executor_);
+          // rewrite temp table updates to generate the full column by moving the where
+          // clause into a case if such a rewrite is not possible, bail on the update
+          // operation build an expr for the update target
+          const auto td = update_params.getTableDescriptor();
+          CHECK(td);
+          const auto update_column_names = update_params.getUpdateColumnNames();
+          if (update_column_names.size() > 1) {
+            throw std::runtime_error(
+                "Multi-column update is not yet supported for temporary tables.");
+          }
+
+          auto cd = cat_.getMetadataForColumn(td->tableId, update_column_names.front());
+          CHECK(cd);
+          auto projected_column_to_update =
+              makeExpr<Analyzer::ColumnVar>(cd->columnType, td->tableId, cd->columnId, 0);
+          const auto rewritten_exe_unit = query_rewrite->rewriteColumnarUpdate(
+              work_unit.exe_unit, projected_column_to_update);
+          if (rewritten_exe_unit.target_exprs.front()->get_type_info().is_varlen()) {
+            throw std::runtime_error(
+                "Variable length updates not yet supported on temporary tables.");
+          }
+          execute_update_ra_exe_unit(rewritten_exe_unit, is_aggregate);
+        } else {
+          execute_update_ra_exe_unit(work_unit.exe_unit, is_aggregate);
+        }
+      };
+
+  if (auto compound = dynamic_cast<const RelCompound*>(node)) {
+    auto work_unit =
+        createCompoundWorkUnit(compound, {{}, SortAlgorithm::Default, 0, 0}, eo_in);
+
+    execute_update_for_node(compound, work_unit, compound->isAggregate());
+  } else if (auto project = dynamic_cast<const RelProject*>(node)) {
+    auto work_unit =
+        createProjectWorkUnit(project, {{}, SortAlgorithm::Default, 0, 0}, eo_in);
+
+    if (project->isSimple()) {
+      CHECK_EQ(size_t(1), project->inputCount());
+      const auto input_ra = project->getInput(0);
+      if (dynamic_cast<const RelSort*>(input_ra)) {
+        const auto& input_table =
+            get_temporary_table(&temporary_tables_, -input_ra->getId());
+        work_unit.exe_unit.scan_limit = input_table.rowCount();
+      }
     }
-  }
 
-  try {
-    UpdateTriggeredCacheInvalidator::invalidateCaches();
-
-    UpdateTransactionParameters update_params(project->getModifiedTableDescriptor(),
-                                              project->getTargetColumns(),
-                                              project->getOutputMetainfo(),
-                                              project->isVarlenUpdateRequired());
-    auto update_callback = yieldUpdateCallback(update_params);
-    executor_->executeUpdate(work_unit.exe_unit,
-                             table_infos,
-                             co_project,
-                             eo,
-                             cat_,
-                             executor_->row_set_mem_owner_,
-                             update_callback);
-    update_params.finalizeTransaction();
-  } catch (...) {
-    LOG(INFO) << "Update operation failed.";
-    throw;
+    execute_update_for_node(project, work_unit, false);
+  } else {
+    throw std::runtime_error("Unsupported parent node for update: " + node->toString());
   }
 }
 
-void RelAlgExecutor::executeDeleteViaCompound(const RelCompound* compound,
-                                              const CompilationOptions& co,
-                                              const ExecutionOptions& eo,
-                                              RenderInfo* render_info,
-                                              const int64_t queue_time_ms) {
+void RelAlgExecutor::executeDelete(const RelAlgNode* node,
+                                   const CompilationOptions& co,
+                                   const ExecutionOptions& eo_in,
+                                   const int64_t queue_time_ms) {
+  CHECK(node);
   auto timer = DEBUG_TIMER(__func__);
-  auto* table_descriptor = compound->getModifiedTableDescriptor();
-  if (!table_descriptor->hasDeletedCol) {
-    throw std::runtime_error(
-        "DELETE only supported on tables with the vacuum attribute set to 'delayed'");
-  }
-  if (table_is_temporary(table_descriptor)) {
-    throw std::runtime_error("DELETE not yet supported on temporary tables.");
-  }
 
-  const auto work_unit =
-      createCompoundWorkUnit(compound, {{}, SortAlgorithm::Default, 0, 0}, eo);
-  const auto table_infos = get_table_infos(work_unit.exe_unit, executor_);
-  CompilationOptions co_project = co;
-  co_project.device_type_ = ExecutorDeviceType::CPU;
+  DeleteTriggeredCacheInvalidator::invalidateCaches();
 
-  try {
-    DeleteTriggeredCacheInvalidator::invalidateCaches();
-
-    DeleteTransactionParameters delete_params;
-    auto delete_callback = yieldDeleteCallback(delete_params);
-
-    executor_->executeUpdate(work_unit.exe_unit,
-                             table_infos,
-                             co_project,
-                             eo,
-                             cat_,
-                             executor_->row_set_mem_owner_,
-                             delete_callback,
-                             compound->isAggregate());
-    delete_params.finalizeTransaction();
-  } catch (...) {
-    LOG(INFO) << "Delete operation failed.";
-    throw;
-  }
-}
-
-void RelAlgExecutor::executeDeleteViaProject(const RelProject* project,
-                                             const CompilationOptions& co,
-                                             const ExecutionOptions& eo,
-                                             RenderInfo* render_info,
-                                             const int64_t queue_time_ms) {
-  auto timer = DEBUG_TIMER(__func__);
-  auto* table_descriptor = project->getModifiedTableDescriptor();
-  if (!table_descriptor->hasDeletedCol) {
-    throw std::runtime_error(
-        "DELETE only supported on tables with the vacuum attribute set to 'delayed'");
-  }
-  if (table_is_temporary(table_descriptor)) {
-    throw std::runtime_error("DELETE not yet supported on temporary tables.");
-  }
-
-  auto work_unit = createProjectWorkUnit(project, {{}, SortAlgorithm::Default, 0, 0}, eo);
-  const auto table_infos = get_table_infos(work_unit.exe_unit, executor_);
-  CompilationOptions co_project = co;
-  co_project.device_type_ = ExecutorDeviceType::CPU;
-
-  if (project->isSimple()) {
-    CHECK_EQ(size_t(1), project->inputCount());
-    const auto input_ra = project->getInput(0);
-    if (dynamic_cast<const RelSort*>(input_ra)) {
-      const auto& input_table =
-          get_temporary_table(&temporary_tables_, -input_ra->getId());
-      work_unit.exe_unit.scan_limit = input_table.rowCount();
+  auto execute_delete_for_node = [this, &co, &eo_in](const auto node,
+                                                     auto& work_unit,
+                                                     const bool is_aggregate) {
+    auto* table_descriptor = node->getModifiedTableDescriptor();
+    CHECK(table_descriptor);
+    if (!table_descriptor->hasDeletedCol) {
+      throw std::runtime_error(
+          "DELETE only supported on tables with the vacuum attribute set to 'delayed'");
     }
-  }
 
-  try {
-    DeleteTriggeredCacheInvalidator::invalidateCaches();
+    const auto table_infos = get_table_infos(work_unit.exe_unit, executor_);
 
-    DeleteTransactionParameters delete_params;
-    auto delete_callback = yieldDeleteCallback(delete_params);
+    auto execute_delete_ra_exe_unit =
+        [this, &table_infos, &table_descriptor, &eo_in, &co](const auto& exe_unit,
+                                                             const bool is_aggregate) {
+          DeleteTransactionParameters delete_params(table_is_temporary(table_descriptor));
+          auto delete_callback = yieldDeleteCallback(delete_params);
+          CompilationOptions co_delete = CompilationOptions::makeCpuOnly(co);
 
-    executor_->executeUpdate(work_unit.exe_unit,
-                             table_infos,
-                             co_project,
-                             eo,
-                             cat_,
-                             executor_->row_set_mem_owner_,
-                             delete_callback);
-    delete_params.finalizeTransaction();
-  } catch (...) {
-    LOG(INFO) << "Delete operation failed.";
-    throw;
+          auto eo = eo_in;
+          if (delete_params.tableIsTemporary()) {
+            eo.output_columnar_hint = true;
+            co_delete.add_delete_column =
+                false;  // project the entire delete column for columnar update
+          }
+
+          executor_->executeUpdate(exe_unit,
+                                   table_infos,
+                                   co_delete,
+                                   eo,
+                                   cat_,
+                                   executor_->row_set_mem_owner_,
+                                   delete_callback,
+                                   is_aggregate);
+          delete_params.finalizeTransaction();
+        };
+
+    if (table_is_temporary(table_descriptor)) {
+      auto query_rewrite = std::make_unique<QueryRewriter>(table_infos, executor_);
+      auto cd = cat_.getDeletedColumn(table_descriptor);
+      CHECK(cd);
+      auto delete_column_expr = makeExpr<Analyzer::ColumnVar>(
+          cd->columnType, table_descriptor->tableId, cd->columnId, 0);
+      const auto rewritten_exe_unit =
+          query_rewrite->rewriteColumnarDelete(work_unit.exe_unit, delete_column_expr);
+      execute_delete_ra_exe_unit(rewritten_exe_unit, is_aggregate);
+    } else {
+      execute_delete_ra_exe_unit(work_unit.exe_unit, is_aggregate);
+    }
+  };
+
+  if (auto compound = dynamic_cast<const RelCompound*>(node)) {
+    const auto work_unit =
+        createCompoundWorkUnit(compound, {{}, SortAlgorithm::Default, 0, 0}, eo_in);
+    execute_delete_for_node(compound, work_unit, compound->isAggregate());
+  } else if (auto project = dynamic_cast<const RelProject*>(node)) {
+    auto work_unit =
+        createProjectWorkUnit(project, {{}, SortAlgorithm::Default, 0, 0}, eo_in);
+    if (project->isSimple()) {
+      CHECK_EQ(size_t(1), project->inputCount());
+      const auto input_ra = project->getInput(0);
+      if (dynamic_cast<const RelSort*>(input_ra)) {
+        const auto& input_table =
+            get_temporary_table(&temporary_tables_, -input_ra->getId());
+        work_unit.exe_unit.scan_limit = input_table.rowCount();
+      }
+    }
+    execute_delete_for_node(project, work_unit, false);
+  } else {
+    throw std::runtime_error("Unsupported parent node for delete: " + node->toString());
   }
 }
 
@@ -1333,7 +1408,7 @@ ExecutionResult RelAlgExecutor::executeProject(const RelProject* project,
     CHECK_EQ(size_t(1), project->inputCount());
     const auto input_ra = project->getInput(0);
     if (dynamic_cast<const RelSort*>(input_ra)) {
-      co_project.device_type_ = ExecutorDeviceType::CPU;
+      co_project.device_type = ExecutorDeviceType::CPU;
       const auto& input_table =
           get_temporary_table(&temporary_tables_, -input_ra->getId());
       work_unit.exe_unit.scan_limit =
@@ -1374,7 +1449,7 @@ ExecutionResult RelAlgExecutor::executeTableFunction(const RelTableFunction* tab
       get_table_infos(table_func_work_unit.exe_unit.input_descs, executor_);
 
   ExecutionResult result{std::make_shared<ResultSet>(std::vector<TargetInfo>{},
-                                                     co.device_type_,
+                                                     co.device_type,
                                                      QueryMemoryDescriptor(),
                                                      nullptr,
                                                      executor_),
@@ -1476,7 +1551,7 @@ std::unique_ptr<WindowFunctionContext> RelAlgExecutor::createWindowFunctionConte
     const std::vector<InputTableInfo>& query_infos,
     const CompilationOptions& co,
     ColumnCacheMap& column_cache_map) {
-  const auto memory_level = co.device_type_ == ExecutorDeviceType::GPU
+  const auto memory_level = co.device_type == ExecutorDeviceType::GPU
                                 ? MemoryLevel::GPU_LEVEL
                                 : MemoryLevel::CPU_LEVEL;
   const auto join_table_or_err =
@@ -1494,7 +1569,7 @@ std::unique_ptr<WindowFunctionContext> RelAlgExecutor::createWindowFunctionConte
   std::vector<std::shared_ptr<Chunk_NS::Chunk>> chunks_owner;
   const size_t elem_count = query_infos.front().info.fragments.front().getNumTuples();
   auto context = std::make_unique<WindowFunctionContext>(
-      window_func, join_table_or_err.hash_table, elem_count, co.device_type_);
+      window_func, join_table_or_err.hash_table, elem_count, co.device_type);
   for (const auto& order_key : order_keys) {
     const auto order_col =
         std::dynamic_pointer_cast<const Analyzer::ColumnVar>(order_key);
@@ -1527,23 +1602,6 @@ ExecutionResult RelAlgExecutor::executeFilter(const RelFilter* filter,
       createFilterWorkUnit(filter, {{}, SortAlgorithm::Default, 0, 0}, eo.just_explain);
   return executeWorkUnit(
       work_unit, filter->getOutputMetainfo(), false, co, eo, render_info, queue_time_ms);
-}
-
-ExecutionResult RelAlgExecutor::executeModify(const RelModify* modify,
-                                              const ExecutionOptions& eo) {
-  auto timer = DEBUG_TIMER(__func__);
-  if (eo.just_explain) {
-    throw std::runtime_error("EXPLAIN not supported for ModifyTable");
-  }
-
-  auto rs = std::make_shared<ResultSet>(TargetInfoList{},
-                                        ExecutorDeviceType::CPU,
-                                        QueryMemoryDescriptor(),
-                                        executor_->getRowSetMemoryOwner(),
-                                        executor_);
-
-  std::vector<TargetMetaInfo> empty_targets;
-  return {rs, empty_targets};
 }
 
 ExecutionResult RelAlgExecutor::executeLogicalValues(
@@ -1628,6 +1686,359 @@ ExecutionResult RelAlgExecutor::executeLogicalValues(
     }
   }
   return {rs, tuple_type};
+}
+
+namespace {
+
+template <class T>
+int64_t insert_one_dict_str(T* col_data,
+                            const std::string& columnName,
+                            const SQLTypeInfo& columnType,
+                            const Analyzer::Constant* col_cv,
+                            const Catalog_Namespace::Catalog& catalog) {
+  if (col_cv->get_is_null()) {
+    *col_data = inline_fixed_encoding_null_val(columnType);
+  } else {
+    const int dict_id = columnType.get_comp_param();
+    const auto col_datum = col_cv->get_constval();
+    const auto& str = *col_datum.stringval;
+    const auto dd = catalog.getMetadataForDict(dict_id);
+    CHECK(dd && dd->stringDict);
+    int32_t str_id = dd->stringDict->getOrAdd(str);
+    if (!dd->dictIsTemp) {
+      const auto checkpoint_ok = dd->stringDict->checkpoint();
+      if (!checkpoint_ok) {
+        throw std::runtime_error("Failed to checkpoint dictionary for column " +
+                                 columnName);
+      }
+    }
+    const bool invalid = str_id > max_valid_int_value<T>();
+    if (invalid || str_id == inline_int_null_value<int32_t>()) {
+      if (invalid) {
+        LOG(ERROR) << "Could not encode string: " << str
+                   << ", the encoded value doesn't fit in " << sizeof(T) * 8
+                   << " bits. Will store NULL instead.";
+      }
+      str_id = inline_fixed_encoding_null_val(columnType);
+    }
+    *col_data = str_id;
+  }
+  return *col_data;
+}
+
+template <class T>
+int64_t insert_one_dict_str(T* col_data,
+                            const ColumnDescriptor* cd,
+                            const Analyzer::Constant* col_cv,
+                            const Catalog_Namespace::Catalog& catalog) {
+  return insert_one_dict_str(col_data, cd->columnName, cd->columnType, col_cv, catalog);
+}
+
+}  // namespace
+
+ExecutionResult RelAlgExecutor::executeModify(const RelModify* modify,
+                                              const ExecutionOptions& eo) {
+  auto timer = DEBUG_TIMER(__func__);
+  if (eo.just_explain) {
+    throw std::runtime_error("EXPLAIN not supported for ModifyTable");
+  }
+
+  auto rs = std::make_shared<ResultSet>(TargetInfoList{},
+                                        ExecutorDeviceType::CPU,
+                                        QueryMemoryDescriptor(),
+                                        executor_->getRowSetMemoryOwner(),
+                                        executor_);
+
+  std::vector<TargetMetaInfo> empty_targets;
+  return {rs, empty_targets};
+}
+
+ExecutionResult RelAlgExecutor::executeSimpleInsert(const Analyzer::Query& query) {
+  // Note: We currently obtain an executor for this method, but we do not need it.
+  // Therefore, we skip the executor state setup in the regular execution path. In the
+  // future, we will likely want to use the executor to evaluate expressions in the insert
+  // statement.
+
+  const auto& targets = query.get_targetlist();
+  const int table_id = query.get_result_table_id();
+  const auto& col_id_list = query.get_result_col_list();
+
+  std::vector<const ColumnDescriptor*> col_descriptors;
+  std::vector<int> col_ids;
+  std::unordered_map<int, std::unique_ptr<uint8_t[]>> col_buffers;
+  std::unordered_map<int, std::vector<std::string>> str_col_buffers;
+  std::unordered_map<int, std::vector<ArrayDatum>> arr_col_buffers;
+
+  const auto table_descriptor = cat_.getMetadataForTable(table_id);
+  CHECK(table_descriptor);
+  const auto shard_tables = cat_.getPhysicalTablesDescriptors(table_descriptor);
+  const TableDescriptor* shard{nullptr};
+
+  for (const int col_id : col_id_list) {
+    const auto cd = get_column_descriptor(col_id, table_id, cat_);
+    const auto col_enc = cd->columnType.get_compression();
+    if (cd->columnType.is_string()) {
+      switch (col_enc) {
+        case kENCODING_NONE: {
+          auto it_ok =
+              str_col_buffers.insert(std::make_pair(col_id, std::vector<std::string>{}));
+          CHECK(it_ok.second);
+          break;
+        }
+        case kENCODING_DICT: {
+          const auto dd = cat_.getMetadataForDict(cd->columnType.get_comp_param());
+          CHECK(dd);
+          const auto it_ok = col_buffers.emplace(
+              col_id, std::make_unique<uint8_t[]>(cd->columnType.get_size()));
+          CHECK(it_ok.second);
+          break;
+        }
+        default:
+          CHECK(false);
+      }
+    } else if (cd->columnType.is_geometry()) {
+      auto it_ok =
+          str_col_buffers.insert(std::make_pair(col_id, std::vector<std::string>{}));
+      CHECK(it_ok.second);
+    } else if (cd->columnType.is_array()) {
+      auto it_ok =
+          arr_col_buffers.insert(std::make_pair(col_id, std::vector<ArrayDatum>{}));
+      CHECK(it_ok.second);
+    } else {
+      const auto it_ok = col_buffers.emplace(
+          col_id,
+          std::unique_ptr<uint8_t[]>(
+              new uint8_t[cd->columnType.get_logical_size()]()));  // changed to zero-init
+                                                                   // the buffer
+      CHECK(it_ok.second);
+    }
+    col_descriptors.push_back(cd);
+    col_ids.push_back(col_id);
+  }
+  size_t col_idx = 0;
+  Fragmenter_Namespace::InsertData insert_data;
+  insert_data.databaseId = cat_.getCurrentDB().dbId;
+  insert_data.tableId = table_id;
+  int64_t int_col_val{0};
+  for (auto target_entry : targets) {
+    auto col_cv = dynamic_cast<const Analyzer::Constant*>(target_entry->get_expr());
+    if (!col_cv) {
+      auto col_cast = dynamic_cast<const Analyzer::UOper*>(target_entry->get_expr());
+      CHECK(col_cast);
+      CHECK_EQ(kCAST, col_cast->get_optype());
+      col_cv = dynamic_cast<const Analyzer::Constant*>(col_cast->get_operand());
+    }
+    CHECK(col_cv);
+    const auto cd = col_descriptors[col_idx];
+    auto col_datum = col_cv->get_constval();
+    auto col_type = cd->columnType.get_type();
+    uint8_t* col_data_bytes{nullptr};
+    if (!cd->columnType.is_array() && !cd->columnType.is_geometry() &&
+        (!cd->columnType.is_string() ||
+         cd->columnType.get_compression() == kENCODING_DICT)) {
+      const auto col_data_bytes_it = col_buffers.find(col_ids[col_idx]);
+      CHECK(col_data_bytes_it != col_buffers.end());
+      col_data_bytes = col_data_bytes_it->second.get();
+    }
+    switch (col_type) {
+      case kBOOLEAN: {
+        auto col_data = col_data_bytes;
+        *col_data = col_cv->get_is_null() ? inline_fixed_encoding_null_val(cd->columnType)
+                                          : (col_datum.boolval ? 1 : 0);
+        break;
+      }
+      case kTINYINT: {
+        auto col_data = reinterpret_cast<int8_t*>(col_data_bytes);
+        *col_data = col_cv->get_is_null() ? inline_fixed_encoding_null_val(cd->columnType)
+                                          : col_datum.tinyintval;
+        int_col_val = col_datum.tinyintval;
+        break;
+      }
+      case kSMALLINT: {
+        auto col_data = reinterpret_cast<int16_t*>(col_data_bytes);
+        *col_data = col_cv->get_is_null() ? inline_fixed_encoding_null_val(cd->columnType)
+                                          : col_datum.smallintval;
+        int_col_val = col_datum.smallintval;
+        break;
+      }
+      case kINT: {
+        auto col_data = reinterpret_cast<int32_t*>(col_data_bytes);
+        *col_data = col_cv->get_is_null() ? inline_fixed_encoding_null_val(cd->columnType)
+                                          : col_datum.intval;
+        int_col_val = col_datum.intval;
+        break;
+      }
+      case kBIGINT:
+      case kDECIMAL:
+      case kNUMERIC: {
+        auto col_data = reinterpret_cast<int64_t*>(col_data_bytes);
+        *col_data = col_cv->get_is_null() ? inline_fixed_encoding_null_val(cd->columnType)
+                                          : col_datum.bigintval;
+        int_col_val = col_datum.bigintval;
+        break;
+      }
+      case kFLOAT: {
+        auto col_data = reinterpret_cast<float*>(col_data_bytes);
+        *col_data = col_datum.floatval;
+        break;
+      }
+      case kDOUBLE: {
+        auto col_data = reinterpret_cast<double*>(col_data_bytes);
+        *col_data = col_datum.doubleval;
+        break;
+      }
+      case kTEXT:
+      case kVARCHAR:
+      case kCHAR: {
+        switch (cd->columnType.get_compression()) {
+          case kENCODING_NONE:
+            str_col_buffers[col_ids[col_idx]].push_back(
+                col_datum.stringval ? *col_datum.stringval : "");
+            break;
+          case kENCODING_DICT: {
+            switch (cd->columnType.get_size()) {
+              case 1:
+                int_col_val = insert_one_dict_str(
+                    reinterpret_cast<uint8_t*>(col_data_bytes), cd, col_cv, cat_);
+                break;
+              case 2:
+                int_col_val = insert_one_dict_str(
+                    reinterpret_cast<uint16_t*>(col_data_bytes), cd, col_cv, cat_);
+                break;
+              case 4:
+                int_col_val = insert_one_dict_str(
+                    reinterpret_cast<int32_t*>(col_data_bytes), cd, col_cv, cat_);
+                break;
+              default:
+                CHECK(false);
+            }
+            break;
+          }
+          default:
+            CHECK(false);
+        }
+        break;
+      }
+      case kTIME:
+      case kTIMESTAMP:
+      case kDATE: {
+        auto col_data = reinterpret_cast<int64_t*>(col_data_bytes);
+        *col_data = col_cv->get_is_null() ? inline_fixed_encoding_null_val(cd->columnType)
+                                          : col_datum.bigintval;
+        break;
+      }
+      case kARRAY: {
+        const auto is_null = col_cv->get_is_null();
+        const auto size = cd->columnType.get_size();
+        const SQLTypeInfo elem_ti = cd->columnType.get_elem_type();
+        // POINT coords: [un]compressed coords always need to be encoded, even if NULL
+        const auto is_point_coords = (cd->isGeoPhyCol && elem_ti.get_type() == kTINYINT);
+        if (is_null && !is_point_coords) {
+          if (size > 0) {
+            // NULL fixlen array: NULL_ARRAY sentinel followed by NULL sentinels
+            if (elem_ti.is_string() && elem_ti.get_compression() == kENCODING_DICT) {
+              throw std::runtime_error("Column " + cd->columnName +
+                                       " doesn't accept NULL values");
+            }
+            int8_t* buf = (int8_t*)checked_malloc(size);
+            put_null_array(static_cast<void*>(buf), elem_ti, "");
+            for (int8_t* p = buf + elem_ti.get_size(); (p - buf) < size;
+                 p += elem_ti.get_size()) {
+              put_null(static_cast<void*>(p), elem_ti, "");
+            }
+            arr_col_buffers[col_ids[col_idx]].emplace_back(size, buf, is_null);
+          } else {
+            arr_col_buffers[col_ids[col_idx]].emplace_back(0, nullptr, is_null);
+          }
+          break;
+        }
+        const auto l = col_cv->get_value_list();
+        size_t len = l.size() * elem_ti.get_size();
+        if (size > 0 && static_cast<size_t>(size) != len) {
+          throw std::runtime_error("Array column " + cd->columnName + " expects " +
+                                   std::to_string(size / elem_ti.get_size()) +
+                                   " values, " + "received " + std::to_string(l.size()));
+        }
+        if (elem_ti.is_string()) {
+          CHECK(kENCODING_DICT == elem_ti.get_compression());
+          CHECK(4 == elem_ti.get_size());
+
+          int8_t* buf = (int8_t*)checked_malloc(len);
+          int32_t* p = reinterpret_cast<int32_t*>(buf);
+
+          int elemIndex = 0;
+          for (auto& e : l) {
+            auto c = std::dynamic_pointer_cast<Analyzer::Constant>(e);
+            CHECK(c);
+
+            int_col_val = insert_one_dict_str(
+                &p[elemIndex], cd->columnName, elem_ti, c.get(), cat_);
+
+            elemIndex++;
+          }
+          arr_col_buffers[col_ids[col_idx]].push_back(ArrayDatum(len, buf, is_null));
+
+        } else {
+          int8_t* buf = (int8_t*)checked_malloc(len);
+          int8_t* p = buf;
+          for (auto& e : l) {
+            auto c = std::dynamic_pointer_cast<Analyzer::Constant>(e);
+            CHECK(c);
+            p = appendDatum(p, c->get_constval(), elem_ti);
+          }
+          arr_col_buffers[col_ids[col_idx]].push_back(ArrayDatum(len, buf, is_null));
+        }
+        break;
+      }
+      case kPOINT:
+      case kLINESTRING:
+      case kPOLYGON:
+      case kMULTIPOLYGON:
+        str_col_buffers[col_ids[col_idx]].push_back(
+            col_datum.stringval ? *col_datum.stringval : "");
+        break;
+      default:
+        CHECK(false);
+    }
+    ++col_idx;
+    if (col_idx == static_cast<size_t>(table_descriptor->shardedColumnId)) {
+      const auto shard_count = shard_tables.size();
+      const size_t shard_idx = SHARD_FOR_KEY(int_col_val, shard_count);
+      shard = shard_tables[shard_idx];
+    }
+  }
+  for (const auto& kv : col_buffers) {
+    insert_data.columnIds.push_back(kv.first);
+    DataBlockPtr p;
+    p.numbersPtr = reinterpret_cast<int8_t*>(kv.second.get());
+    insert_data.data.push_back(p);
+  }
+  for (auto& kv : str_col_buffers) {
+    insert_data.columnIds.push_back(kv.first);
+    DataBlockPtr p;
+    p.stringsPtr = &kv.second;
+    insert_data.data.push_back(p);
+  }
+  for (auto& kv : arr_col_buffers) {
+    insert_data.columnIds.push_back(kv.first);
+    DataBlockPtr p;
+    p.arraysPtr = &kv.second;
+    insert_data.data.push_back(p);
+  }
+  insert_data.numRows = 1;
+  if (shard) {
+    shard->fragmenter->insertData(insert_data);
+  } else {
+    table_descriptor->fragmenter->insertData(insert_data);
+  }
+
+  auto rs = std::make_shared<ResultSet>(TargetInfoList{},
+                                        ExecutorDeviceType::CPU,
+                                        QueryMemoryDescriptor(),
+                                        executor_->getRowSetMemoryOwner(),
+                                        executor_);
+  std::vector<TargetMetaInfo> empty_targets;
+  return {rs, empty_targets};
 }
 
 namespace {
@@ -1764,7 +2175,7 @@ ExecutionResult RelAlgExecutor::executeSort(const RelSort* sort,
   }
   CHECK(false);
   return {std::make_shared<ResultSet>(std::vector<TargetInfo>{},
-                                      co.device_type_,
+                                      co.device_type,
                                       QueryMemoryDescriptor(),
                                       nullptr,
                                       executor_),
@@ -1951,7 +2362,7 @@ void build_render_targets(RenderInfo& render_info,
 inline bool can_use_bump_allocator(const RelAlgExecutionUnit& ra_exe_unit,
                                    const CompilationOptions& co,
                                    const ExecutionOptions& eo) {
-  return g_enable_bump_allocator && (co.device_type_ == ExecutorDeviceType::GPU) &&
+  return g_enable_bump_allocator && (co.device_type == ExecutorDeviceType::GPU) &&
          !eo.output_columnar_hint && ra_exe_unit.sort_info.order_entries.empty();
 }
 
@@ -1979,7 +2390,7 @@ ExecutionResult RelAlgExecutor::executeWorkUnit(
     if (!g_enable_window_functions) {
       throw std::runtime_error("Window functions support is disabled");
     }
-    co.device_type_ = ExecutorDeviceType::CPU;
+    co.device_type = ExecutorDeviceType::CPU;
     computeWindow(work_unit.exe_unit, co, eo, column_cache, queue_time_ms);
   }
   if (!eo.just_explain && eo.find_push_down_candidates) {
@@ -1988,6 +2399,9 @@ ExecutionResult RelAlgExecutor::executeWorkUnit(
     if (!selected_filters.empty() || eo.just_calcite_explain) {
       return ExecutionResult(selected_filters, eo.find_push_down_candidates);
     }
+  }
+  if (render_info && render_info->isPotentialInSituRender()) {
+    co.allow_lazy_fetch = false;
   }
   const auto body = work_unit.body;
   CHECK(body);
@@ -2007,7 +2421,7 @@ ExecutionResult RelAlgExecutor::executeWorkUnit(
   const auto table_infos = get_table_infos(work_unit.exe_unit, executor_);
 
   auto ra_exe_unit = decide_approx_count_distinct_implementation(
-      work_unit.exe_unit, table_infos, executor_, co.device_type_, target_exprs_owned_);
+      work_unit.exe_unit, table_infos, executor_, co.device_type, target_exprs_owned_);
   auto max_groups_buffer_entry_guess = work_unit.max_groups_buffer_entry_guess;
   if (is_window_execution_unit(ra_exe_unit)) {
     CHECK_EQ(table_infos.size(), size_t(1));
@@ -2035,7 +2449,7 @@ ExecutionResult RelAlgExecutor::executeWorkUnit(
   }
 
   ExecutionResult result{std::make_shared<ResultSet>(std::vector<TargetInfo>{},
-                                                     co.device_type_,
+                                                     co.device_type,
                                                      QueryMemoryDescriptor(),
                                                      nullptr,
                                                      executor_),
@@ -2201,7 +2615,7 @@ ExecutionResult RelAlgExecutor::handleOutOfMemoryRetry(
   ra_exe_unit_in.use_bump_allocator = false;
 
   auto result = ExecutionResult{std::make_shared<ResultSet>(std::vector<TargetInfo>{},
-                                                            co.device_type_,
+                                                            co.device_type,
                                                             QueryMemoryDescriptor(),
                                                             nullptr,
                                                             executor_),
@@ -2229,7 +2643,7 @@ ExecutionResult RelAlgExecutor::handleOutOfMemoryRetry(
       LOG(WARNING) << "Multifrag query ran out of memory, retrying with multifragment "
                       "kernels disabled.";
       const auto ra_exe_unit = decide_approx_count_distinct_implementation(
-          ra_exe_unit_in, table_infos, executor_, co.device_type_, target_exprs_owned_);
+          ra_exe_unit_in, table_infos, executor_, co.device_type, target_exprs_owned_);
       ColumnCacheMap column_cache;
       result = {executor_->executeWorkUnit(max_groups_buffer_entry_guess,
                                            is_agg,
@@ -2254,11 +2668,7 @@ ExecutionResult RelAlgExecutor::handleOutOfMemoryRetry(
     render_info->setForceNonInSituData();
   }
 
-  CompilationOptions co_cpu{ExecutorDeviceType::CPU,
-                            co.hoist_literals_,
-                            co.opt_level_,
-                            co.with_dynamic_watchdog_};
-
+  const auto co_cpu = CompilationOptions::makeCpuOnly(co);
   // Only reset the group buffer entry guess if we ran out of slots, which
   // suggests a
   // highly pathological input which prevented a good estimation of distinct tuple
@@ -2271,7 +2681,7 @@ ExecutionResult RelAlgExecutor::handleOutOfMemoryRetry(
   while (true) {
     iteration_ctr++;
     auto ra_exe_unit = decide_approx_count_distinct_implementation(
-        ra_exe_unit_in, table_infos, executor_, co_cpu.device_type_, target_exprs_owned_);
+        ra_exe_unit_in, table_infos, executor_, co_cpu.device_type, target_exprs_owned_);
     ColumnCacheMap column_cache;
     try {
       result = {executor_->executeWorkUnit(max_groups_buffer_entry_guess,

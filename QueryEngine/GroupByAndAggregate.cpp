@@ -915,7 +915,7 @@ bool GroupByAndAggregate::codegen(llvm::Value* filter_result,
   {
     const bool is_group_by = !ra_exe_unit_.groupby_exprs.empty();
 
-    if (executor_->isArchMaxwell(co.device_type_)) {
+    if (executor_->isArchMaxwell(co.device_type)) {
       prependForceSync();
     }
     DiamondCodegen filter_cfg(filter_result,
@@ -933,7 +933,7 @@ bool GroupByAndAggregate::codegen(llvm::Value* filter_result,
         LL_BUILDER.CreateStore(LL_INT(int32_t(1)), crt_matched);
         auto total_matched_ptr = get_arg_by_name(ROW_FUNC, "total_matched");
         llvm::Value* old_total_matched_val{nullptr};
-        if (co.device_type_ == ExecutorDeviceType::GPU) {
+        if (co.device_type == ExecutorDeviceType::GPU) {
           old_total_matched_val =
               LL_BUILDER.CreateAtomicRMW(llvm::AtomicRMWInst::Add,
                                          total_matched_ptr,
@@ -1244,7 +1244,7 @@ GroupByAndAggregate::codegenSingleColumnPerfectHash(
   if (!query_mem_desc.didOutputColumnar() && query_mem_desc.hasKeylessHash()) {
     get_group_fn_name += "_keyless";
   }
-  if (query_mem_desc.interleavedBins(co.device_type_)) {
+  if (query_mem_desc.interleavedBins(co.device_type)) {
     CHECK(!query_mem_desc.didOutputColumnar());
     CHECK(query_mem_desc.hasKeylessHash());
     get_group_fn_name += "_semiprivate";
@@ -1266,7 +1266,7 @@ GroupByAndAggregate::codegenSingleColumnPerfectHash(
     if (!query_mem_desc.didOutputColumnar()) {
       get_group_fn_args.push_back(LL_INT(row_size_quad));
     }
-    if (query_mem_desc.interleavedBins(co.device_type_)) {
+    if (query_mem_desc.interleavedBins(co.device_type)) {
       auto warp_idx = emitCall("thread_warp_idx", {LL_INT(executor_->warpSize())});
       get_group_fn_args.push_back(warp_idx);
       get_group_fn_args.push_back(LL_INT(executor_->warpSize()));
@@ -1355,7 +1355,7 @@ GroupByAndAggregate::codegenMultiColumnBaselineHash(
     func_args.push_back(LL_INT(row_size_quad));
     func_args.push_back(&*arg_it);
   }
-  if (co.with_dynamic_watchdog_) {
+  if (co.with_dynamic_watchdog) {
     func_name += "_with_watchdog";
   }
   if (query_mem_desc.didOutputColumnar()) {
