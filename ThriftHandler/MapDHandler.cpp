@@ -4627,7 +4627,7 @@ std::vector<PushedDownFilterInfo> MapDHandler::execute_rel_alg(
                            /*hoist_literals=*/true,
                            ExecutorOptLevel::Default,
                            g_enable_dynamic_watchdog,
-                           /*allow_lazy_fetch=*/true,
+                           g_enable_lazy_fetch,
                            /*add_delete_column=*/true,
                            explain_optimized_ir ? ExecutorExplainType::Optimized
                                                 : ExecutorExplainType::Default,
@@ -4694,7 +4694,7 @@ void MapDHandler::execute_rel_alg_df(TDataFrame& _return,
                            /*hoist_literals=*/true,
                            ExecutorOptLevel::Default,
                            g_enable_dynamic_watchdog,
-                           /*allow_lazy_fetch=*/true,
+                           g_enable_lazy_fetch,
                            /*add_delete_column=*/true,
                            ExecutorExplainType::Default,
                            intel_jit_profile_};
