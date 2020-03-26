@@ -56,6 +56,7 @@ class ArrowCsvForeignStorage : public PersistentForeignStorageInterface {
   std::string getType() const override;
 
   struct ArrowFragment {
+    int64_t offset;
     int64_t sz;
     std::vector<std::shared_ptr<arrow::ArrayData>> chunks;
   };
@@ -82,10 +83,14 @@ void ArrowCsvForeignStorage::read(const ChunkKey& chunk_key,
 
   CHECK(!frag.chunks.empty() || !chunk_key[3]);
   int64_t sz = 0, copied = 0;
-  arrow::ArrayData* prev_data = nullptr;
   int varlen_offset = 0;
-
-  for (auto array_data : frag.chunks) {
+  size_t read_size = 0;
+  for (size_t i = 0; i < frag.chunks.size(); i++) {
+    auto& array_data = frag.chunks[i];
+    int offset = i == 0 ? frag.offset : 0;
+    size_t size =
+        i == frag.chunks.size() - 1 ? frag.sz - read_size : array_data->length - offset;
+    read_size += array_data->length - offset;
     arrow::Buffer* bp = nullptr;
     if (sql_type.is_dict_encoded_string()) {
       // array_data->buffers[1] stores dictionary indexes
@@ -100,21 +105,27 @@ void ArrowCsvForeignStorage::read(const ChunkKey& chunk_key,
       bp = array_data->buffers[1].get();
     }
     if (bp) {
-      // offset buffer for none encoded strings need to be merged as arrow chunkes sizes
-      // are less then omnisci fragments sizes
+      // offset buffer for none encoded strings need to be merged
       if (chunk_key.size() == 5 && chunk_key[4] == 2) {
-        auto data = reinterpret_cast<const uint32_t*>(bp->data());
+        auto data = reinterpret_cast<const uint32_t*>(bp->data()) + offset;
         auto dest_ui32 = reinterpret_cast<uint32_t*>(dest);
-        sz = bp->size();
-        // We merge arrow chunks with string offsets into a single contigous fragment.
-        // Each string is represented by a pair of offsets, thus size of offset table is
-        // num strings + 1. When merging two chunks, the last number in the first chunk
-        // duplicates the first number in the second chunk, so we skip it.
-        if (prev_data && sz > 0) {
-          data++;
-          sz -= sizeof(uint32_t);
-        }
+        // as size contains count of string in chunk slice it would always be one less
+        // then offsets array size
+        sz = (size + 1) * sizeof(uint32_t);
         if (sz > 0) {
+          if (i != 0) {
+            // We merge arrow chunks with string offsets into a single contigous fragment.
+            // Each string is represented by a pair of offsets, thus size of offset table
+            // is num strings + 1. When merging two chunks, the last number in the first
+            // chunk duplicates the first number in the second chunk, so we skip it.
+            data++;
+            sz -= sizeof(uint32_t);
+          } else {
+            // As we support cases when fragment starts with offset of arrow chunk we need
+            // to substract the first element of the first chunk from all elements in that
+            // fragment
+            varlen_offset -= data[0];
+          }
           // We also re-calculate offsets in the second chunk as it is a continuation of
           // the first one.
           std::transform(data,
@@ -124,19 +135,32 @@ void ArrowCsvForeignStorage::read(const ChunkKey& chunk_key,
           varlen_offset += data[(sz / sizeof(uint32_t)) - 1];
         }
       } else {
-        std::memcpy(dest, bp->data(), sz = bp->size());
+        auto fixed_type = dynamic_cast<arrow::FixedWidthType*>(array_data->type.get());
+        if (fixed_type) {
+          std::memcpy(
+              dest,
+              bp->data() + (array_data->offset + offset) * (fixed_type->bit_width() / 8),
+              sz = size * (fixed_type->bit_width() / 8));
+        } else {
+          // We assume that none encoded string is only supported varlen type
+          auto offsets_buffer =
+              reinterpret_cast<const uint32_t*>(array_data->buffers[1]->data());
+          auto string_buffer_offset = offsets_buffer[offset];
+          auto string_buffer_size = offsets_buffer[offset + size] - string_buffer_offset;
+          std::memcpy(dest, bp->data() + string_buffer_offset, sz = string_buffer_size);
+        }
       }
     } else {
       // TODO: nullify?
       auto fixed_type = dynamic_cast<arrow::FixedWidthType*>(array_data->type.get());
       if (fixed_type) {
         sz = array_data->length * fixed_type->bit_width() / 8;
-      } else
+      } else {
         CHECK(false);  // TODO: what's else???
+      }
     }
     dest += sz;
     copied += sz;
-    prev_data = array_data.get();
   }
   CHECK_EQ(numBytes, size_t(copied));
 }
@@ -225,8 +249,9 @@ void ArrowCsvForeignStorage::registerTable(Catalog_Namespace::Catalog* catalog,
 
   auto arrow_read_options = arrow::csv::ReadOptions::Defaults();
   arrow_read_options.use_threads = true;
-  arrow_read_options.block_size = 2 * 1024 * 1024;
 
+  const size_t default_block_size = 2 * 1024 * 1024;
+  arrow_read_options.block_size = default_block_size;
   auto arrow_convert_options = arrow::csv::ConvertOptions::Defaults();
   arrow_convert_options.check_utf8 = false;
 
@@ -267,19 +292,39 @@ void ArrowCsvForeignStorage::registerTable(Catalog_Namespace::Catalog* catalog,
   int arr_frags = table.column(0)->num_chunks();
   arrow::ChunkedArray* c0p = table.column(0).get();
 
-  std::vector<std::pair<int, int>> fragments;
-  int start = 0;
-  int64_t sz = c0p->chunk(0)->length();
-  // calculate size and boundaries of fragments
-  for (int i = 1; i < arr_frags; i++) {
-    if (sz > td.fragPageSize) {
-      fragments.emplace_back(start, i);
-      start = i;
+  // here we split arrow chunks between omnisci fragments
+  struct fragment {
+    int first_chunk;         // index of the first chunk assigned to the fragment
+    int first_chunk_offset;  // offset from the begining of the first chunk
+    int last_chunk;          // index of the last chunk
+    int last_chunk_size;     // number of elements in the last chunk
+  };
+
+  std::vector<fragment> fragments;
+  int64_t sz = 0;
+  int64_t offset = 0;
+  fragments.push_back({0, 0, 0, 0});
+
+  for (int i = 0; i < arr_frags;) {
+    auto& chunk = *c0p->chunk(i);
+    auto& frag = *fragments.rbegin();
+    if (td.maxFragRows - sz > chunk.length() - offset) {
+      sz += chunk.length() - offset;
+      if (i == arr_frags - 1) {
+        fragments.rbegin()->last_chunk = arr_frags - 1;
+        fragments.rbegin()->last_chunk_size =
+            c0p->chunk(arr_frags - 1)->length() - offset;
+      }
+      offset = 0;
+      i++;
+    } else {
+      frag.last_chunk = i;
+      frag.last_chunk_size = td.maxFragRows - sz;
+      offset += td.maxFragRows - sz;
       sz = 0;
+      fragments.push_back({i, static_cast<int>(offset), 0, 0});
     }
-    sz += c0p->chunk(i)->length();
   }
-  fragments.emplace_back(start, arr_frags);
 
   // data comes like this - database_id, table_id, column_id, fragment_id
   ChunkKey key{table_key.first, table_key.second, 0, 0};
@@ -319,14 +364,18 @@ void ArrowCsvForeignStorage::registerTable(Catalog_Namespace::Catalog* catalog,
       auto& frag = col[f];
       int64_t varlen = 0;
       // for each arrow chunk
-      for (int i = fragments[f].first, e = fragments[f].second; i < e; i++) {
+      for (int i = fragments[f].first_chunk, e = fragments[f].last_chunk; i <= e; i++) {
+        int offset = i == fragments[f].first_chunk ? fragments[f].first_chunk_offset : 0;
+        int size = i == fragments[f].last_chunk
+                       ? fragments[f].last_chunk_size
+                       : arr_col_chunked_array->chunk(i)->length();
         CHECK_LT(i, arr_col_chunked_array->length());
         if (c.columnType.is_dict_encoded_string()) {
           arrow::Int32Builder indexBuilder;
           auto stringArray = std::static_pointer_cast<arrow::StringArray>(
               arr_col_chunked_array->chunk(i));
-          indexBuilder.Reserve(stringArray->length());
-          for (int i = 0; i < stringArray->length(); i++) {
+          indexBuilder.Reserve(size);
+          for (int i = offset; i < offset + size; i++) {
             // TODO: use arrow dictionary encoding
             if (stringArray->IsNull(i) || empty ||
                 stringArray->null_count() == stringArray->length()) {
@@ -340,10 +389,13 @@ void ArrowCsvForeignStorage::registerTable(Catalog_Namespace::Catalog* catalog,
           std::shared_ptr<arrow::Array> indexArray;
           ARROW_THROW_NOT_OK(indexBuilder.Finish(&indexArray));
           frag.chunks.emplace_back(indexArray->data());
-          frag.sz += stringArray->length();
+          frag.sz += size;
+          frag.offset = 0;
         } else {
+          // this will work as we have only one non zero offset for column
+          frag.offset += offset;
+          frag.sz += size;
           frag.chunks.emplace_back(arr_col_chunked_array->chunk(i)->data());
-          frag.sz += arr_col_chunked_array->chunk(i)->length();
           auto& buffers = arr_col_chunked_array->chunk(i)->data()->buffers;
           if (!empty) {
             if (ctype == kTEXT) {
@@ -352,7 +404,8 @@ void ArrowCsvForeignStorage::registerTable(Catalog_Namespace::Catalog* catalog,
                            << " does not match between Arrow and description of "
                            << c.columnName;
               }
-              varlen += buffers[2]->size();
+              auto offsets_buffer = reinterpret_cast<const uint32_t*>(buffers[1]->data());
+              varlen += offsets_buffer[offset + size] - offsets_buffer[offset];
             } else if (buffers.size() != 2) {
               LOG(FATAL) << "Type of column #" << cln
                          << " does not match between Arrow and description of "
@@ -386,12 +439,24 @@ void ArrowCsvForeignStorage::registerTable(Catalog_Namespace::Catalog* catalog,
         b->encoder.reset(Encoder::Create(b, c.columnType));
         b->has_encoder = true;
         if (!empty) {
+          size_t type_size = 0;
+          auto fixed_type =
+              dynamic_cast<arrow::FixedWidthType*>(frag.chunks[0]->type.get());
+          if (fixed_type) {
+            type_size = fixed_type->bit_width() / 8;
+          } else {
+            CHECK(false);
+          }
           // asynchronously update stats for incoming data
-          tg->Append([b, fr = &frag]() {
-            for (auto chunk : fr->chunks) {
-              auto len = chunk->length;
+          tg->Append([b, fr = &frag, type_size]() {
+            size_t sz = 0;
+            for (size_t i = 0; i < fr->chunks.size(); i++) {
+              auto& chunk = fr->chunks[i];
+              int offset = i == 0 ? fr->offset : 0;
+              size_t size = i == fr->chunks.size() - 1 ? fr->sz - sz : chunk->length;
+              sz += chunk->length - offset;
               auto data = chunk->buffers[1]->data();
-              b->encoder->updateStats((const int8_t*)data, len);
+              b->encoder->updateStats((const int8_t*)data + offset * type_size, size);
             }
             return arrow::Status::OK();
           });

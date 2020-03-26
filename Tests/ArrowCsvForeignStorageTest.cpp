@@ -120,7 +120,7 @@ dropoff_boroct2010 BIGINT,
 dropoff_cdeligibil TEXT ENCODING NONE,
 dropoff_ntacode TEXT ENCODING NONE,
 dropoff_ntaname TEXT ENCODING NONE,
-dropoff_puma BIGINT) WITH (storage_type='CSV:../../Tests/Import/datafiles/trips_with_headers_top1000.csv');
+dropoff_puma BIGINT) WITH (storage_type='CSV:../../Tests/Import/datafiles/trips_with_headers_top1000.csv', fragment_size=100);
 )";
 
 class NycTaxiTest : public ::testing::Test {
@@ -155,53 +155,108 @@ TEST_F(NycTaxiTest, GroupByColumnWithNulls) {
 TEST_F(NycTaxiTest, CheckGroupBy) {
   check_query<NullableString>(
       "select pickup_ntaname from trips where pickup_ntaname IS NOT NULL group by "
-      "pickup_ntaname limit 5;",
-      {"Queensbridge-Ravenswood-Long Island City",
-       "Steinway",
-       "Claremont-Bathgate",
-       "Washington Heights South",
-       "Spuyten Duyvil-Kingsbridge"});
+      "pickup_ntaname order by pickup_ntaname limit 5;",
+      {"Astoria",
+       "Bedford Park-Fordham North",
+       "Belmont",
+       "Briarwood-Jamaica Hills",
+       "Central Harlem North-Polo Grounds"});
 
-  check_query<double>("select tip_amount from trips group by tip_amount limit 5;",
-                      {0.47, 0.05, 3.96, 5, 1.22});
+  check_query<double>(
+      "select tip_amount from trips group by tip_amount order by tip_amount limit 5;",
+      {0, 0.01, 0.02, 0.03, 0.05});
 
   check_query<NullableString>(
-      "select store_and_fwd_flag from trips group by store_and_fwd_flag limit 5;",
+      "select store_and_fwd_flag from trips group by store_and_fwd_flag order by "
+      "store_and_fwd_flag limit 5;",
       {"N", "Y"});
 }
 
 TEST_F(NycTaxiTest, RunSelects) {
-  check_query<int64_t>("select rate_code_id from trips limit 5;", {1, 1, 5, 1, 1});
+  check_query<int64_t>(
+      "select rate_code_id from trips group by rate_code_id order by rate_code_id limit "
+      "5;",
+      {1, 2, 3, 4, 5});
 }
 
 TEST_F(NycTaxiTest, RunSelectsEncodingNoneNotNull) {
   check_query<NullableString>(
-      "select dropoff_ntaname from trips where dropoff_ntaname is not NULL limit 10 "
-      "offset 100;",
-      {"Queensbridge-Ravenswood-Long Island City",
-       "Queensbridge-Ravenswood-Long Island City",
-       "West Village",
-       "Hunters Point-Sunnyside-West Maspeth",
-       "Hunters Point-Sunnyside-West Maspeth",
-       "Hunters Point-Sunnyside-West Maspeth",
-       "Hunters Point-Sunnyside-West Maspeth",
-       "Manhattanville",
-       "Central Harlem South",
-       "Washington Heights South"});
+      "select dropoff_ntaname from trips where dropoff_ntaname is not NULL order by "
+      "dropoff_ntaname limit 50;",
+      {"Airport",
+       "Airport",
+       "Airport",
+       "Airport",
+       "Airport",
+       "Airport",
+       "Airport",
+       "Airport",
+       "Airport",
+       "Airport",
+       "Allerton-Pelham Gardens",
+       "Astoria",
+       "Astoria",
+       "Astoria",
+       "Astoria",
+       "Astoria",
+       "Astoria",
+       "Astoria",
+       "Astoria",
+       "Astoria",
+       "Astoria",
+       "Astoria",
+       "Astoria",
+       "Astoria",
+       "Astoria",
+       "Astoria",
+       "Battery Park City-Lower Manhattan",
+       "Battery Park City-Lower Manhattan",
+       "Battery Park City-Lower Manhattan",
+       "Battery Park City-Lower Manhattan",
+       "Battery Park City-Lower Manhattan",
+       "Bedford Park-Fordham North",
+       "Bedford Park-Fordham North",
+       "Bellerose",
+       "Belmont",
+       "Belmont",
+       "Belmont",
+       "Belmont",
+       "Belmont",
+       "Borough Park",
+       "Briarwood-Jamaica Hills",
+       "Brooklyn Heights-Cobble Hill",
+       "Central Harlem North-Polo Grounds",
+       "Central Harlem North-Polo Grounds",
+       "Central Harlem North-Polo Grounds",
+       "Central Harlem North-Polo Grounds",
+       "Central Harlem North-Polo Grounds",
+       "Central Harlem North-Polo Grounds",
+       "Central Harlem North-Polo Grounds",
+       "Central Harlem North-Polo Grounds"});
 }
 
 TEST_F(NycTaxiTest, RunSelectsEncodingNoneWhereGreater) {
   check_query<NullableString>(
       "select dropoff_ntaname from trips where dropoff_ntaname > "
-      "'Queensbridge-Ravenswood-Long Island City' limit 3 offset 100;",
-      {"Woodside", "park-cemetery-etc-Manhattan", "West Concourse"});
+      "'Queensbridge-Ravenswood-Long Island City' order by dropoff_ntaname limit 10;",
+      {"Richmond Hill",
+       "Richmond Hill",
+       "Richmond Hill",
+       "Richmond Hill",
+       "Richmond Hill",
+       "Richmond Hill",
+       "Rosedale",
+       "SoHo-TriBeCa-Civic Center-Little Italy",
+       "SoHo-TriBeCa-Civic Center-Little Italy",
+       "Soundview-Bruckner"});
 }
 
 TEST_F(NycTaxiTest, RunSelectsEncodingDictWhereGreater) {
   check_query<NullableString>(
       "select pickup_ntaname from trips where pickup_ntaname is not NULL and "
-      "pickup_ntaname > 'Queensbridge-Ravenswood-Long Island City' limit 3 offset 100;",
-      {"West Farms-Bronx River", "Washington Heights South", "Steinway"});
+      "pickup_ntaname > 'Queensbridge-Ravenswood-Long Island City' order by "
+      "pickup_ntaname limit 3;",
+      {"Rego Park", "Richmond Hill", "Richmond Hill"});
 }
 
 TEST(Unsupported, Syntax) {
