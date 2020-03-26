@@ -65,7 +65,7 @@
             
             
               <div class="version">
-                5.2.0dev 256d6df
+                5.2.0dev 8339f67
               </div>
             
           
@@ -682,6 +682,7 @@
 <li class="toctree-l2"><a class="reference internal" href="class_storage_i_o_facility_1_1_transaction_parameters.html">Class StorageIOFacility::TransactionParameters</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_storage_i_o_facility_1_1_update_transaction_parameters.html">Class StorageIOFacility::UpdateTransactionParameters</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_streaming_top_n_not_supported_in_render_query.html">Class StreamingTopNNotSupportedInRenderQuery</a></li>
+<li class="toctree-l2"><a class="reference internal" href="class_streaming_top_n_o_o_m.html">Class StreamingTopNOOM</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_string_dictionary.html">Class StringDictionary</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_string_dictionary_client.html">Class StringDictionaryClient</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_string_dictionary_generations.html">Class StringDictionaryGenerations</a></li>
@@ -912,6 +913,10 @@
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1omnisci_1_1jdbc_1_1_omni_sci_database_meta_data_test.html">Class com::omnisci::jdbc::OmniSciDatabaseMetaDataTest</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1omnisci_1_1jdbc_1_1_omni_sci_database_meta_data_test_1_1_query_struct.html">Class com::omnisci::jdbc::OmniSciDatabaseMetaDataTest::QueryStruct</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1omnisci_1_1jdbc_1_1_omni_sci_driver.html">Class com::omnisci::jdbc::OmniSciDriver</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classcom_1_1omnisci_1_1jdbc_1_1_omni_sci_escape_functions.html">Class com::omnisci::jdbc::OmniSciEscapeFunctions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classcom_1_1omnisci_1_1jdbc_1_1_omni_sci_escape_parser.html">Class com::omnisci::jdbc::OmniSciEscapeParser</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classcom_1_1omnisci_1_1jdbc_1_1_omni_sci_escape_parser_1_1_pair.html">Class com::omnisci::jdbc::OmniSciEscapeParser::Pair</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classcom_1_1omnisci_1_1jdbc_1_1_omni_sci_escape_parser_1_1_parser__return.html">Class com::omnisci::jdbc::OmniSciEscapeParser::Parser_return</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1omnisci_1_1jdbc_1_1_omni_sci_geom_test.html">Class com::omnisci::jdbc::OmniSciGeomTest</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1omnisci_1_1jdbc_1_1_omni_sci_prepare_test.html">Class com::omnisci::jdbc::OmniSciPrepareTest</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1omnisci_1_1jdbc_1_1_omni_sci_prepared_statement.html">Class com::omnisci::jdbc::OmniSciPreparedStatement</a></li>
@@ -1056,6 +1061,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_experimental_1_1_meta_type_class_determinant_3_01_string_01_4.html">Struct Experimental::MetaTypeClassDeterminant&lt; String &gt;</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_experimental_1_1_uncaptured_meta_type.html">Struct Experimental::UncapturedMetaType</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_experimental_1_1_uncaptured_meta_type_class.html">Struct Experimental::UncapturedMetaTypeClass</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/struct_explain_info.html">Struct ExplainInfo</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_external_query_output_spec.html">Struct ExternalQueryOutputSpec</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_external_query_table.html">Struct ExternalQueryTable</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_fetch_result.html">Struct FetchResult</a></li>
@@ -1201,6 +1207,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_row_fetcher.html">Struct RowFetcher</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_row_set_memory_owner_1_1_count_distinct_bitmap_buffer.html">Struct RowSetMemoryOwner::CountDistinctBitmapBuffer</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_scalar_code_generator_1_1_compiled_expression.html">Struct ScalarCodeGenerator::CompiledExpression</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/struct_server_privileges.html">Struct ServerPrivileges</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_shard_info.html">Struct ShardInfo</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_slot_size.html">Struct SlotSize</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_sort_info.html">Struct SortInfo</a></li>
@@ -1460,6 +1467,11 @@
 <dd></dd></dl>
 
 <dl class="enumerator">
+<dt id="_CPPv4N13ParserWrapper13ExecutionPlanE">
+<span id="_CPPv3N13ParserWrapper13ExecutionPlanE"></span><span id="_CPPv2N13ParserWrapper13ExecutionPlanE"></span><span class="target" id="class_parser_wrapper_1ae73502a518b481b8a11206c520b53995a4422d5de40b9e32202f2ab5d5dbdb96e"></span><code class="sig-name descname">ExecutionPlan</code><a class="headerlink" href="#_CPPv4N13ParserWrapper13ExecutionPlanE" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="enumerator">
 <dt id="_CPPv4N13ParserWrapper5OtherE">
 <span id="_CPPv3N13ParserWrapper5OtherE"></span><span id="_CPPv2N13ParserWrapper5OtherE"></span><span class="target" id="class_parser_wrapper_1ae73502a518b481b8a11206c520b53995a6311ae17c1ee52b36e68aaf4ad066387"></span><code class="sig-name descname">Other</code><a class="headerlink" href="#_CPPv4N13ParserWrapper5OtherE" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
@@ -1487,6 +1499,11 @@
 <dl class="function">
 <dt id="_CPPv4NK13ParserWrapper10getDMLTypeEv">
 <span id="_CPPv3NK13ParserWrapper10getDMLTypeEv"></span><span id="_CPPv2NK13ParserWrapper10getDMLTypeEv"></span><span id="ParserWrapper::getDMLTypeC"></span><span class="target" id="class_parser_wrapper_1a330dd4054cad5f71b9fad60bf57dd2dd"></span><a class="reference internal" href="#_CPPv4N13ParserWrapper7DMLTypeE" title="ParserWrapper::DMLType">DMLType</a> <code class="sig-name descname">getDMLType</code><span class="sig-paren">(</span><span class="sig-paren">)</span> <em class="property">const</em><a class="headerlink" href="#_CPPv4NK13ParserWrapper10getDMLTypeEv" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="_CPPv4NK13ParserWrapper14getExplainInfoEv">
+<span id="_CPPv3NK13ParserWrapper14getExplainInfoEv"></span><span id="_CPPv2NK13ParserWrapper14getExplainInfoEv"></span><span id="ParserWrapper::getExplainInfoC"></span><span class="target" id="class_parser_wrapper_1aaa591f583e65c8be756d13a03a06d51a"></span><a class="reference internal" href="../struct/struct_explain_info.html#_CPPv411ExplainInfo" title="ExplainInfo">ExplainInfo</a> <code class="sig-name descname">getExplainInfo</code><span class="sig-paren">(</span><span class="sig-paren">)</span> <em class="property">const</em><a class="headerlink" href="#_CPPv4NK13ParserWrapper14getExplainInfoEv" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 <dl class="function">
@@ -1626,6 +1643,11 @@
 <dl class="member">
 <dt id="_CPPv4N13ParserWrapper21optimized_explain_strE">
 <span id="_CPPv3N13ParserWrapper21optimized_explain_strE"></span><span id="_CPPv2N13ParserWrapper21optimized_explain_strE"></span><span id="ParserWrapper::optimized_explain_str__ssC"></span><span class="target" id="class_parser_wrapper_1a578755546695b144e03ca3a5d3eae6a0"></span><em class="property">const</em> std::string <code class="sig-name descname">optimized_explain_str</code> = {&quot;explain optimized&quot;}<a class="headerlink" href="#_CPPv4N13ParserWrapper21optimized_explain_strE" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="member">
+<dt id="_CPPv4N13ParserWrapper16plan_explain_strE">
+<span id="_CPPv3N13ParserWrapper16plan_explain_strE"></span><span id="_CPPv2N13ParserWrapper16plan_explain_strE"></span><span id="ParserWrapper::plan_explain_str__ssC"></span><span class="target" id="class_parser_wrapper_1a0e83f82107a0e36ef72e50e166b0ebce"></span><em class="property">const</em> std::string <code class="sig-name descname">plan_explain_str</code> = {&quot;explain plan&quot;}<a class="headerlink" href="#_CPPv4N13ParserWrapper16plan_explain_strE" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 <dl class="member">

@@ -65,7 +65,7 @@
             
             
               <div class="version">
-                5.2.0dev 256d6df
+                5.2.0dev 8339f67
               </div>
             
           
@@ -682,6 +682,7 @@
 <li class="toctree-l2"><a class="reference internal" href="class_storage_i_o_facility_1_1_transaction_parameters.html">Class StorageIOFacility::TransactionParameters</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_storage_i_o_facility_1_1_update_transaction_parameters.html">Class StorageIOFacility::UpdateTransactionParameters</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_streaming_top_n_not_supported_in_render_query.html">Class StreamingTopNNotSupportedInRenderQuery</a></li>
+<li class="toctree-l2"><a class="reference internal" href="class_streaming_top_n_o_o_m.html">Class StreamingTopNOOM</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_string_dictionary.html">Class StringDictionary</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_string_dictionary_client.html">Class StringDictionaryClient</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_string_dictionary_generations.html">Class StringDictionaryGenerations</a></li>
@@ -912,6 +913,10 @@
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1omnisci_1_1jdbc_1_1_omni_sci_database_meta_data_test.html">Class com::omnisci::jdbc::OmniSciDatabaseMetaDataTest</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1omnisci_1_1jdbc_1_1_omni_sci_database_meta_data_test_1_1_query_struct.html">Class com::omnisci::jdbc::OmniSciDatabaseMetaDataTest::QueryStruct</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1omnisci_1_1jdbc_1_1_omni_sci_driver.html">Class com::omnisci::jdbc::OmniSciDriver</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classcom_1_1omnisci_1_1jdbc_1_1_omni_sci_escape_functions.html">Class com::omnisci::jdbc::OmniSciEscapeFunctions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classcom_1_1omnisci_1_1jdbc_1_1_omni_sci_escape_parser.html">Class com::omnisci::jdbc::OmniSciEscapeParser</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classcom_1_1omnisci_1_1jdbc_1_1_omni_sci_escape_parser_1_1_pair.html">Class com::omnisci::jdbc::OmniSciEscapeParser::Pair</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classcom_1_1omnisci_1_1jdbc_1_1_omni_sci_escape_parser_1_1_parser__return.html">Class com::omnisci::jdbc::OmniSciEscapeParser::Parser_return</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1omnisci_1_1jdbc_1_1_omni_sci_geom_test.html">Class com::omnisci::jdbc::OmniSciGeomTest</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1omnisci_1_1jdbc_1_1_omni_sci_prepare_test.html">Class com::omnisci::jdbc::OmniSciPrepareTest</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1omnisci_1_1jdbc_1_1_omni_sci_prepared_statement.html">Class com::omnisci::jdbc::OmniSciPreparedStatement</a></li>
@@ -1056,6 +1061,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_experimental_1_1_meta_type_class_determinant_3_01_string_01_4.html">Struct Experimental::MetaTypeClassDeterminant&lt; String &gt;</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_experimental_1_1_uncaptured_meta_type.html">Struct Experimental::UncapturedMetaType</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_experimental_1_1_uncaptured_meta_type_class.html">Struct Experimental::UncapturedMetaTypeClass</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/struct_explain_info.html">Struct ExplainInfo</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_external_query_output_spec.html">Struct ExternalQueryOutputSpec</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_external_query_table.html">Struct ExternalQueryTable</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_fetch_result.html">Struct FetchResult</a></li>
@@ -1201,6 +1207,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_row_fetcher.html">Struct RowFetcher</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_row_set_memory_owner_1_1_count_distinct_bitmap_buffer.html">Struct RowSetMemoryOwner::CountDistinctBitmapBuffer</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_scalar_code_generator_1_1_compiled_expression.html">Struct ScalarCodeGenerator::CompiledExpression</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/struct_server_privileges.html">Struct ServerPrivileges</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_shard_info.html">Struct ShardInfo</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_slot_size.html">Struct SlotSize</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_sort_info.html">Struct SortInfo</a></li>
@@ -1433,8 +1440,8 @@
 <dd></dd></dl>
 
 <dl class="function">
-<dt id="_CPPv4N14RelAlgExecutor18executeRelAlgQueryERK18CompilationOptionsRK16ExecutionOptionsP10RenderInfo">
-<span id="_CPPv3N14RelAlgExecutor18executeRelAlgQueryERK18CompilationOptionsRK16ExecutionOptionsP10RenderInfo"></span><span id="_CPPv2N14RelAlgExecutor18executeRelAlgQueryERK18CompilationOptionsRK16ExecutionOptionsP10RenderInfo"></span><span id="RelAlgExecutor::executeRelAlgQuery__CompilationOptionsCR.ExecutionOptionsCR.RenderInfoP"></span><span class="target" id="class_rel_alg_executor_1a53244095bc0211cd135cec9c413f33e0"></span><a class="reference internal" href="class_execution_result.html#_CPPv415ExecutionResult" title="ExecutionResult">ExecutionResult</a> <code class="sig-name descname">executeRelAlgQuery</code><span class="sig-paren">(</span><em class="property">const</em> <a class="reference internal" href="../struct/struct_compilation_options.html#_CPPv418CompilationOptions" title="CompilationOptions">CompilationOptions</a> &amp;<em>co</em>, <em class="property">const</em> <a class="reference internal" href="../struct/struct_execution_options.html#_CPPv416ExecutionOptions" title="ExecutionOptions">ExecutionOptions</a> &amp;<em>eo</em>, <a class="reference internal" href="class_render_info.html#_CPPv410RenderInfo" title="RenderInfo">RenderInfo</a> *<em>render_info</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N14RelAlgExecutor18executeRelAlgQueryERK18CompilationOptionsRK16ExecutionOptionsP10RenderInfo" title="Permalink to this definition">¶</a><br /></dt>
+<dt id="_CPPv4N14RelAlgExecutor18executeRelAlgQueryERK18CompilationOptionsRK16ExecutionOptionsKbP10RenderInfo">
+<span id="_CPPv3N14RelAlgExecutor18executeRelAlgQueryERK18CompilationOptionsRK16ExecutionOptionsKbP10RenderInfo"></span><span id="_CPPv2N14RelAlgExecutor18executeRelAlgQueryERK18CompilationOptionsRK16ExecutionOptionsKbP10RenderInfo"></span><span id="RelAlgExecutor::executeRelAlgQuery__CompilationOptionsCR.ExecutionOptionsCR.bC.RenderInfoP"></span><span class="target" id="class_rel_alg_executor_1a8059fc01a4d49ae1103efda8ef395252"></span><a class="reference internal" href="class_execution_result.html#_CPPv415ExecutionResult" title="ExecutionResult">ExecutionResult</a> <code class="sig-name descname">executeRelAlgQuery</code><span class="sig-paren">(</span><em class="property">const</em> <a class="reference internal" href="../struct/struct_compilation_options.html#_CPPv418CompilationOptions" title="CompilationOptions">CompilationOptions</a> &amp;<em>co</em>, <em class="property">const</em> <a class="reference internal" href="../struct/struct_execution_options.html#_CPPv416ExecutionOptions" title="ExecutionOptions">ExecutionOptions</a> &amp;<em>eo</em>, <em class="property">const</em> bool <em>just_explain_plan</em>, <a class="reference internal" href="class_render_info.html#_CPPv410RenderInfo" title="RenderInfo">RenderInfo</a> *<em>render_info</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N14RelAlgExecutor18executeRelAlgQueryERK18CompilationOptionsRK16ExecutionOptionsKbP10RenderInfo" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 <dl class="function">
@@ -1519,8 +1526,8 @@
 <div class="breathe-sectiondef docutils container">
 <p class="breathe-sectiondef-title rubric">Private Functions</p>
 <dl class="function">
-<dt id="_CPPv4N14RelAlgExecutor25executeRelAlgQueryNoRetryERK18CompilationOptionsRK16ExecutionOptionsP10RenderInfo">
-<span id="_CPPv3N14RelAlgExecutor25executeRelAlgQueryNoRetryERK18CompilationOptionsRK16ExecutionOptionsP10RenderInfo"></span><span id="_CPPv2N14RelAlgExecutor25executeRelAlgQueryNoRetryERK18CompilationOptionsRK16ExecutionOptionsP10RenderInfo"></span><span id="RelAlgExecutor::executeRelAlgQueryNoRetry__CompilationOptionsCR.ExecutionOptionsCR.RenderInfoP"></span><span class="target" id="class_rel_alg_executor_1a92ec8971862a23edea8c0e8a0ae4dcf6"></span><a class="reference internal" href="class_execution_result.html#_CPPv415ExecutionResult" title="ExecutionResult">ExecutionResult</a> <code class="sig-name descname">executeRelAlgQueryNoRetry</code><span class="sig-paren">(</span><em class="property">const</em> <a class="reference internal" href="../struct/struct_compilation_options.html#_CPPv418CompilationOptions" title="CompilationOptions">CompilationOptions</a> &amp;<em>co</em>, <em class="property">const</em> <a class="reference internal" href="../struct/struct_execution_options.html#_CPPv416ExecutionOptions" title="ExecutionOptions">ExecutionOptions</a> &amp;<em>eo</em>, <a class="reference internal" href="class_render_info.html#_CPPv410RenderInfo" title="RenderInfo">RenderInfo</a> *<em>render_info</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N14RelAlgExecutor25executeRelAlgQueryNoRetryERK18CompilationOptionsRK16ExecutionOptionsP10RenderInfo" title="Permalink to this definition">¶</a><br /></dt>
+<dt id="_CPPv4N14RelAlgExecutor25executeRelAlgQueryNoRetryERK18CompilationOptionsRK16ExecutionOptionsKbP10RenderInfo">
+<span id="_CPPv3N14RelAlgExecutor25executeRelAlgQueryNoRetryERK18CompilationOptionsRK16ExecutionOptionsKbP10RenderInfo"></span><span id="_CPPv2N14RelAlgExecutor25executeRelAlgQueryNoRetryERK18CompilationOptionsRK16ExecutionOptionsKbP10RenderInfo"></span><span id="RelAlgExecutor::executeRelAlgQueryNoRetry__CompilationOptionsCR.ExecutionOptionsCR.bC.RenderInfoP"></span><span class="target" id="class_rel_alg_executor_1af0be2626417192bcc5258c438a3ba0b9"></span><a class="reference internal" href="class_execution_result.html#_CPPv415ExecutionResult" title="ExecutionResult">ExecutionResult</a> <code class="sig-name descname">executeRelAlgQueryNoRetry</code><span class="sig-paren">(</span><em class="property">const</em> <a class="reference internal" href="../struct/struct_compilation_options.html#_CPPv418CompilationOptions" title="CompilationOptions">CompilationOptions</a> &amp;<em>co</em>, <em class="property">const</em> <a class="reference internal" href="../struct/struct_execution_options.html#_CPPv416ExecutionOptions" title="ExecutionOptions">ExecutionOptions</a> &amp;<em>eo</em>, <em class="property">const</em> bool <em>just_explain_plan</em>, <a class="reference internal" href="class_render_info.html#_CPPv410RenderInfo" title="RenderInfo">RenderInfo</a> *<em>render_info</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N14RelAlgExecutor25executeRelAlgQueryNoRetryERK18CompilationOptionsRK16ExecutionOptionsKbP10RenderInfo" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 <dl class="function">

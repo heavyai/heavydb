@@ -65,7 +65,7 @@
             
             
               <div class="version">
-                5.2.0dev 256d6df
+                5.2.0dev 8339f67
               </div>
             
           
@@ -682,6 +682,7 @@
 <li class="toctree-l2"><a class="reference internal" href="class_storage_i_o_facility_1_1_transaction_parameters.html">Class StorageIOFacility::TransactionParameters</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_storage_i_o_facility_1_1_update_transaction_parameters.html">Class StorageIOFacility::UpdateTransactionParameters</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_streaming_top_n_not_supported_in_render_query.html">Class StreamingTopNNotSupportedInRenderQuery</a></li>
+<li class="toctree-l2"><a class="reference internal" href="class_streaming_top_n_o_o_m.html">Class StreamingTopNOOM</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_string_dictionary.html">Class StringDictionary</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_string_dictionary_client.html">Class StringDictionaryClient</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_string_dictionary_generations.html">Class StringDictionaryGenerations</a></li>
@@ -912,6 +913,10 @@
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1omnisci_1_1jdbc_1_1_omni_sci_database_meta_data_test.html">Class com::omnisci::jdbc::OmniSciDatabaseMetaDataTest</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1omnisci_1_1jdbc_1_1_omni_sci_database_meta_data_test_1_1_query_struct.html">Class com::omnisci::jdbc::OmniSciDatabaseMetaDataTest::QueryStruct</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1omnisci_1_1jdbc_1_1_omni_sci_driver.html">Class com::omnisci::jdbc::OmniSciDriver</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classcom_1_1omnisci_1_1jdbc_1_1_omni_sci_escape_functions.html">Class com::omnisci::jdbc::OmniSciEscapeFunctions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classcom_1_1omnisci_1_1jdbc_1_1_omni_sci_escape_parser.html">Class com::omnisci::jdbc::OmniSciEscapeParser</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classcom_1_1omnisci_1_1jdbc_1_1_omni_sci_escape_parser_1_1_pair.html">Class com::omnisci::jdbc::OmniSciEscapeParser::Pair</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classcom_1_1omnisci_1_1jdbc_1_1_omni_sci_escape_parser_1_1_parser__return.html">Class com::omnisci::jdbc::OmniSciEscapeParser::Parser_return</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1omnisci_1_1jdbc_1_1_omni_sci_geom_test.html">Class com::omnisci::jdbc::OmniSciGeomTest</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1omnisci_1_1jdbc_1_1_omni_sci_prepare_test.html">Class com::omnisci::jdbc::OmniSciPrepareTest</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1omnisci_1_1jdbc_1_1_omni_sci_prepared_statement.html">Class com::omnisci::jdbc::OmniSciPreparedStatement</a></li>
@@ -1056,6 +1061,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_experimental_1_1_meta_type_class_determinant_3_01_string_01_4.html">Struct Experimental::MetaTypeClassDeterminant&lt; String &gt;</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_experimental_1_1_uncaptured_meta_type.html">Struct Experimental::UncapturedMetaType</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_experimental_1_1_uncaptured_meta_type_class.html">Struct Experimental::UncapturedMetaTypeClass</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/struct_explain_info.html">Struct ExplainInfo</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_external_query_output_spec.html">Struct ExternalQueryOutputSpec</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_external_query_table.html">Struct ExternalQueryTable</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_fetch_result.html">Struct FetchResult</a></li>
@@ -1201,6 +1207,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_row_fetcher.html">Struct RowFetcher</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_row_set_memory_owner_1_1_count_distinct_bitmap_buffer.html">Struct RowSetMemoryOwner::CountDistinctBitmapBuffer</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_scalar_code_generator_1_1_compiled_expression.html">Struct ScalarCodeGenerator::CompiledExpression</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/struct_server_privileges.html">Struct ServerPrivileges</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_shard_info.html">Struct ShardInfo</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_slot_size.html">Struct SlotSize</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_sort_info.html">Struct SortInfo</a></li>
@@ -1767,15 +1774,14 @@
 </dd></dl>
 
 <dl class="function">
-<dt id="_CPPv4N17Catalog_Namespace7Catalog16getForeignServerERKNSt6stringEKb">
-<span id="_CPPv3N17Catalog_Namespace7Catalog16getForeignServerERKNSt6stringEKb"></span><span id="_CPPv2N17Catalog_Namespace7Catalog16getForeignServerERKNSt6stringEKb"></span><span id="Catalog_Namespace::Catalog::getForeignServer__ssCR.bC"></span><span class="target" id="class_catalog___namespace_1_1_catalog_1a7106d52cb6b96d995a127cbbe348158d"></span>foreign_storage::<a class="reference internal" href="../struct/structforeign__storage_1_1_foreign_server.html#_CPPv4N15foreign_storage13ForeignServerE" title="foreign_storage::ForeignServer">ForeignServer</a> *<code class="sig-name descname">getForeignServer</code><span class="sig-paren">(</span><em class="property">const</em> std::string &amp;<em>server_name</em>, <em class="property">const</em> bool <em>skip_cache</em> = false<span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N17Catalog_Namespace7Catalog16getForeignServerERKNSt6stringEKb" title="Permalink to this definition">¶</a><br /></dt>
+<dt id="_CPPv4NK17Catalog_Namespace7Catalog16getForeignServerERKNSt6stringE">
+<span id="_CPPv3NK17Catalog_Namespace7Catalog16getForeignServerERKNSt6stringE"></span><span id="_CPPv2NK17Catalog_Namespace7Catalog16getForeignServerERKNSt6stringE"></span><span id="Catalog_Namespace::Catalog::getForeignServer__ssCRC"></span><span class="target" id="class_catalog___namespace_1_1_catalog_1a2b8eb004abd2cbf41aaab2e31e9a93b6"></span>foreign_storage::<a class="reference internal" href="../struct/structforeign__storage_1_1_foreign_server.html#_CPPv4N15foreign_storage13ForeignServerE" title="foreign_storage::ForeignServer">ForeignServer</a> *<code class="sig-name descname">getForeignServer</code><span class="sig-paren">(</span><em class="property">const</em> std::string &amp;<em>server_name</em><span class="sig-paren">)</span> <em class="property">const</em><a class="headerlink" href="#_CPPv4NK17Catalog_Namespace7Catalog16getForeignServerERKNSt6stringE" title="Permalink to this definition">¶</a><br /></dt>
 <dd><p>Gets a pointer to a struct containing foreign server details.</p>
 <p><dl class="simple">
 <dt><strong>Return</strong></dt><dd><p>pointer to a struct containing foreign server details. nullptr is returned if no foreign server exists with the given name </p>
 </dd>
 <dt><strong>Parameters</strong></dt><dd><ul class="breatheparameterlist simple">
 <li><p><code class="docutils literal notranslate"><span class="pre">server_name</span></code>: - Name of foreign server whose details will be fetched </p></li>
-<li><p><code class="docutils literal notranslate"><span class="pre">skip_cache</span></code>: - flag indicating whether or not to skip in-memory cache of foreign server struct when attempting to fetch foreign server details. This flag is mainly used for testing </p></li>
 </ul>
 </dd>
 </dl>
@@ -1783,13 +1789,27 @@
 </dd></dl>
 
 <dl class="function">
-<dt id="_CPPv4N17Catalog_Namespace7Catalog17dropForeignServerERKNSt6stringEb">
-<span id="_CPPv3N17Catalog_Namespace7Catalog17dropForeignServerERKNSt6stringEb"></span><span id="_CPPv2N17Catalog_Namespace7Catalog17dropForeignServerERKNSt6stringEb"></span><span id="Catalog_Namespace::Catalog::dropForeignServer__ssCR.b"></span><span class="target" id="class_catalog___namespace_1_1_catalog_1aefee0c40a23ada126497eca399eb001f"></span>void <code class="sig-name descname">dropForeignServer</code><span class="sig-paren">(</span><em class="property">const</em> std::string &amp;<em>server_name</em>, bool <em>if_exists</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N17Catalog_Namespace7Catalog17dropForeignServerERKNSt6stringEb" title="Permalink to this definition">¶</a><br /></dt>
+<dt id="_CPPv4N17Catalog_Namespace7Catalog25getForeignServerSkipCacheERKNSt6stringE">
+<span id="_CPPv3N17Catalog_Namespace7Catalog25getForeignServerSkipCacheERKNSt6stringE"></span><span id="_CPPv2N17Catalog_Namespace7Catalog25getForeignServerSkipCacheERKNSt6stringE"></span><span id="Catalog_Namespace::Catalog::getForeignServerSkipCache__ssCR"></span><span class="target" id="class_catalog___namespace_1_1_catalog_1abfba4196fc31e3a2c4251fc840229df3"></span>foreign_storage::<a class="reference internal" href="../struct/structforeign__storage_1_1_foreign_server.html#_CPPv4N15foreign_storage13ForeignServerE" title="foreign_storage::ForeignServer">ForeignServer</a> *<code class="sig-name descname">getForeignServerSkipCache</code><span class="sig-paren">(</span><em class="property">const</em> std::string &amp;<em>server_name</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N17Catalog_Namespace7Catalog25getForeignServerSkipCacheERKNSt6stringE" title="Permalink to this definition">¶</a><br /></dt>
+<dd><p>Gets a pointer to a struct containing foreign server details. Skip in-memory cache of foreign server struct when attempting to fetch foreign server details. This is mainly used for testing.</p>
+<p><dl class="simple">
+<dt><strong>Return</strong></dt><dd><p>pointer to a struct containing foreign server details. nullptr is returned if no foreign server exists with the given name </p>
+</dd>
+<dt><strong>Parameters</strong></dt><dd><ul class="breatheparameterlist simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">server_name</span></code>: - Name of foreign server whose details will be fetched </p></li>
+</ul>
+</dd>
+</dl>
+</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="_CPPv4N17Catalog_Namespace7Catalog17dropForeignServerERKNSt6stringE">
+<span id="_CPPv3N17Catalog_Namespace7Catalog17dropForeignServerERKNSt6stringE"></span><span id="_CPPv2N17Catalog_Namespace7Catalog17dropForeignServerERKNSt6stringE"></span><span id="Catalog_Namespace::Catalog::dropForeignServer__ssCR"></span><span class="target" id="class_catalog___namespace_1_1_catalog_1ac836502726cf527eadc006e7e83e955d"></span>void <code class="sig-name descname">dropForeignServer</code><span class="sig-paren">(</span><em class="property">const</em> std::string &amp;<em>server_name</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N17Catalog_Namespace7Catalog17dropForeignServerERKNSt6stringE" title="Permalink to this definition">¶</a><br /></dt>
 <dd><p>Drops/deletes a foreign server DB object.</p>
 <p><dl class="simple">
 <dt><strong>Parameters</strong></dt><dd><ul class="breatheparameterlist simple">
 <li><p><code class="docutils literal notranslate"><span class="pre">server_name</span></code>: - Name of foreign server that will be deleted </p></li>
-<li><p><code class="docutils literal notranslate"><span class="pre">if_exists</span></code>: - flag indicating whether or not an attempt to delete a foreign server should occur if a server with the same name does not exists. An exception is thrown if this flag is set to “false” and an attempt is made to delete a nonexistent foreign server </p></li>
 </ul>
 </dd>
 </dl>
