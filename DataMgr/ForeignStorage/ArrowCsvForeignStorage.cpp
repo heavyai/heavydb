@@ -70,7 +70,7 @@ void registerArrowCsvForeignStorage(void) {
 
 void ArrowCsvForeignStorage::append(
     const std::vector<ForeignStorageColumnBuffer>& column_buffers) {
-  CHECK(false);
+  LOG(FATAL) << "Method Append isn't implemented for FSI";
 }
 
 void ArrowCsvForeignStorage::read(const ChunkKey& chunk_key,
@@ -157,7 +157,8 @@ static std::shared_ptr<arrow::DataType> getArrowImportType(const SQLTypeInfo typ
       case 8:
         return int64();
       default:
-        CHECK(false);
+        throw std::runtime_error("Integer type of size " +
+                                 std::to_string(type.get_size()) + "isn't supported.");
     }
   }
   switch (ktype) {
@@ -332,7 +333,9 @@ void ArrowCsvForeignStorage::registerTable(Catalog_Namespace::Catalog* catalog,
                 stringArray->null_count() == stringArray->length()) {
               indexBuilder.Append(inline_int_null_value<int32_t>());
             } else {
-              CHECK(dict);
+              if (!dict) {
+                LOG(FATAL) << "Dictionary is null";
+              }
               auto curStr = stringArray->GetString(i);
               indexBuilder.Append(dict->getOrAdd(curStr));
             }
