@@ -4692,7 +4692,7 @@ void MapDHandler::execute_rel_alg_df(TDataFrame& _return,
                            /*add_delete_column=*/true,
                            ExecutorExplainType::Default,
                            intel_jit_profile_};
-  ExecutionOptions eo = {false,
+  ExecutionOptions eo = {g_enable_columnar_output,
                          allow_multifrag_,
                          false,
                          allow_loop_joins_,
