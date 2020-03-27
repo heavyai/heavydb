@@ -222,6 +222,7 @@ void ArrowCsvForeignStorage::registerTable(Catalog_Namespace::Catalog* catalog,
   arrow_parse_options.quoting = false;
   arrow_parse_options.escaping = false;
   arrow_parse_options.newlines_in_values = false;
+  arrow_parse_options.delimiter = *td.separator.c_str();
 
   auto arrow_read_options = arrow::csv::ReadOptions::Defaults();
   arrow_read_options.use_threads = true;

@@ -1989,6 +1989,17 @@ decltype(auto) get_max_chunk_size_def(TableDescriptor& td,
                                         [&td](const auto val) { td.maxChunkSize = val; });
 }
 
+decltype(auto) get_separator_def(TableDescriptor& td,
+                                 const NameValueAssign* p,
+                                 const std::list<ColumnDescriptor>& columns) {
+  return get_property_value<StringLiteral>(p, [&td](const auto val) {
+    if (val.size() != 1) {
+      throw std::runtime_error("Length of SEPARATOR must be equal to 1.");
+    }
+    td.separator = val;
+  });
+}
+
 decltype(auto) get_page_size_def(TableDescriptor& td,
                                  const NameValueAssign* p,
                                  const std::list<ColumnDescriptor>& columns) {
@@ -2081,15 +2092,17 @@ void get_table_definitions(TableDescriptor& td,
 
 static const std::map<const std::string, const TableDefFuncPtr> dataframeDefFuncMap = {
     {"fragment_size"s, get_frag_size_def},
-    {"max_chunk_size"s, get_max_chunk_size_def}};
+    {"max_chunk_size"s, get_max_chunk_size_def},
+    {"separator"s, get_separator_def}};
 
 void get_dataframe_definitions(TableDescriptor& td,
                                const std::unique_ptr<NameValueAssign>& p,
                                const std::list<ColumnDescriptor>& columns) {
-  const auto it = tableDefFuncMap.find(boost::to_lower_copy<std::string>(*p->get_name()));
-  if (it == tableDefFuncMap.end()) {
+  const auto it =
+      dataframeDefFuncMap.find(boost::to_lower_copy<std::string>(*p->get_name()));
+  if (it == dataframeDefFuncMap.end()) {
     throw std::runtime_error("Invalid CREATE DATAFRAME option " + *p->get_name() +
-                             ". Should be FRAGMENT_SIZE or MAX_CHUNK_SIZE.");
+                             ". Should be FRAGMENT_SIZE, MAX_CHUNK_SIZE or SEPARATOR.");
   }
   return it->second(td, p.get(), columns);
 }
