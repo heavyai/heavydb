@@ -94,7 +94,7 @@ FilterSelectivity RelAlgExecutor::getFilterSelectivity(
                                   {{}, SortAlgorithm::Default, 0, 0},
                                   0};
   size_t one{1};
-  ResultSetPtr filtered_result;
+  TemporaryTable filtered_result;
   const auto table_infos = get_table_infos(input_descs, executor_);
   CHECK_EQ(size_t(1), table_infos.size());
   const size_t total_rows_upper_bound = table_infos.front().info.getNumTuplesUpperBound();
@@ -114,7 +114,8 @@ FilterSelectivity RelAlgExecutor::getFilterSelectivity(
   } catch (...) {
     return {false, 1.0, 0};
   }
-  const auto count_row = filtered_result->getNextRow(false, false);
+  CHECK_EQ(filtered_result.getFragCount(), 1);
+  const auto count_row = filtered_result[0]->getNextRow(false, false);
   CHECK_EQ(size_t(1), count_row.size());
   const auto& count_tv = count_row.front();
   const auto count_scalar_tv = boost::get<ScalarTargetValue>(&count_tv);

@@ -80,6 +80,13 @@ struct ExecutionOptions {
   const double gpu_input_mem_limit_percent;  // punt to CPU if input memory exceeds this
   ExecutorType executor_type = ExecutorType::Native;
   const std::vector<size_t> outer_fragment_indices{};
+  bool multifrag_result = false;
+
+  ExecutionOptions with_multifrag_result(bool enable = true) const {
+    ExecutionOptions eo = *this;
+    eo.multifrag_result = enable;
+    return eo;
+  }
 };
 
 #endif  // QUERYENGINE_COMPILATIONOPTIONS_H

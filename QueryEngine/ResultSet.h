@@ -532,6 +532,9 @@ class ResultSet {
                         const size_t target_idx,
                         const size_t slot_idx) const;
 
+  void lock() { user_mutex_.lock(); }
+  void unlock() { user_mutex_.unlock(); }
+
  private:
   void advanceCursorToNextEntry(ResultSetRowIterator& iter) const;
 
@@ -852,6 +855,9 @@ class ResultSet {
   // the createComparator method)
   std::unique_ptr<ResultSetComparator<RowWiseTargetAccessor>> row_wise_comparator_;
   std::unique_ptr<ResultSetComparator<ColumnWiseTargetAccessor>> column_wise_comparator_;
+
+  // Used to lock a result set for exclusive use, e.g. for scan by fetcher
+  std::mutex user_mutex_;
 
   friend class ResultSetManager;
   friend class ResultSetRowIterator;
