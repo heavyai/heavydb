@@ -51,6 +51,7 @@ data: {
         "TEXT"
         "SESSIONS"
         "TABLES"
+        "DATABASES"
       ]
 
       # List of keywords from "keywords" section that are not reserved.
@@ -374,8 +375,9 @@ data: {
 
       # List of methods for parsing custom SQL statements.
       statementParserMethods: [
-          "SqlShowUserSessions(span())"
-          "SqlShowTables(span())"
+        "SqlShowUserSessions(span())"
+        "SqlShowTables(span())"
+        "SqlShowDatabases(span())"
       ]
 
       # List of methods for parsing custom literals.

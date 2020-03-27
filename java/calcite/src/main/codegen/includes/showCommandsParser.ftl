@@ -1,4 +1,3 @@
- 
 <#--
  Copyright 2020 OmniSci, Inc.
  Licensed under the Apache License, Version 2.0 (the "License");
@@ -43,3 +42,18 @@ SqlDdl SqlShowTables(Span s) :
     }
 }
 
+
+/*
+ * Show databases using the following syntax:
+ *
+ * SHOW DATABASES
+ */
+SqlDdl SqlShowDatabases(Span s) :
+{
+}
+{
+    <SHOW> <DATABASES>
+    {
+        return new SqlShowDatabases(s.end(this));
+    }
+}

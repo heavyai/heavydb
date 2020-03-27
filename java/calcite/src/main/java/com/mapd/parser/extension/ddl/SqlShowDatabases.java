@@ -5,11 +5,11 @@ import org.apache.calcite.sql.SqlOperator;
 import org.apache.calcite.sql.SqlSpecialOperator;
 import org.apache.calcite.sql.parser.SqlParserPos;
 
-public class SqlShowUserSessions extends SqlShowCommand {
+public class SqlShowDatabases extends SqlShowCommand {
   private static final SqlOperator OPERATOR =
-          new SqlSpecialOperator("SHOW_USER_SESSIONS", SqlKind.OTHER_DDL);
+          new SqlSpecialOperator("SHOW_DATABASES", SqlKind.OTHER_DDL);
 
-  public SqlShowUserSessions(final SqlParserPos pos) {
+  public SqlShowDatabases(final SqlParserPos pos) {
     super(OPERATOR, pos);
   }
 }

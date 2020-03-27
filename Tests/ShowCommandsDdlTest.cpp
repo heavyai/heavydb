@@ -542,6 +542,155 @@ TEST_F(ShowTableDdlTest, CreateTableCreateViewAndViewNotSeen) {
   sql("DROP VIEW test_view;");
 }
 
+class ShowDatabasesTest : public MapDHandlerTestFixture {
+ protected:
+  void SetUp() override {
+    MapDHandlerTestFixture::SetUp();
+    createTestUser("test_user_1", "test_pass_1");
+    createTestUser("test_user_2", "test_pass_2");
+    createTestUser("test_super_user", "test_pass", true);
+  }
+
+  void TearDown() override {
+    dropTestUser("test_user_1");
+    dropTestUser("test_user_2");
+    dropTestUser("test_super_user");
+    sql("DROP DATABASE IF EXISTS test_db_1;");
+    sql("DROP DATABASE IF EXISTS test_db_2;");
+    MapDHandlerTestFixture::TearDown();
+  }
+
+  void assertExpectedResult(const std::vector<std::string> headers,
+                            const std::vector<std::vector<std::string>> rows,
+                            const TQueryResult& result) {
+    const auto& row_set = result.row_set;
+    const auto& row_descriptor = result.row_set.row_desc;
+
+    ASSERT_TRUE(row_set.is_columnar);
+    ASSERT_EQ(headers.size(), row_descriptor.size());
+    ASSERT_FALSE(row_set.columns.empty());
+
+    for (size_t i = 0; i < headers.size(); i++) {
+      ASSERT_EQ(row_descriptor[i].col_name, headers[i]);
+      ASSERT_EQ(TDatumType::type::STR, row_descriptor[i].col_type.type);
+    }
+
+    for (const auto& column : row_set.columns) {
+      ASSERT_EQ(rows.size(), column.data.str_col.size());
+    }
+
+    for (size_t row = 0; row < rows.size(); row++) {
+      for (size_t column = 0; column < rows[row].size(); column++) {
+        ASSERT_EQ(rows[row][column], row_set.columns[column].data.str_col[row]);
+        ASSERT_FALSE(row_set.columns[column].nulls[row]);
+      }
+    }
+  }
+
+  void createTestUser(const std::string& user_name,
+                      const std::string& pass,
+                      const bool is_super_user = false) {
+    sql("CREATE USER " + user_name + " (password = '" + pass + "', is_super = '" +
+        (is_super_user ? "true" : "false") + "');");
+  }
+
+  void dropTestUser(const std::string& user_name) {
+    loginAdmin();
+    try {
+      sql("DROP USER " + user_name + ";");
+    } catch (const std::exception& e) {
+      // Swallow and log exceptions that may occur, since there is no "IF EXISTS" option.
+      LOG(WARNING) << e.what();
+    }
+  }
+};
+
+TEST_F(ShowDatabasesTest, DefaultDatabase) {
+  TQueryResult result;
+  sql(result, "SHOW DATABASES;");
+  // clang-format off
+  assertExpectedResult({"Database", "Owner"},
+                       {{"omnisci", "admin"}},
+                       result);
+  // clang-format on
+}
+
+TEST_F(ShowDatabasesTest, UserCreatedDatabase) {
+  sql("CREATE DATABASE test_db_1 (owner = 'test_user_1');");
+  login("test_user_1", "test_pass_1", "test_db_1");
+
+  TQueryResult result;
+  sql(result, "SHOW DATABASES;");
+  // clang-format off
+  assertExpectedResult({"Database", "Owner"},
+                       {{"test_db_1", "test_user_1"}},
+                       result);
+  // clang-format on
+}
+
+TEST_F(ShowDatabasesTest, OtherUserDatabaseWithNoAccessPrivilege) {
+  sql("CREATE DATABASE test_db_1 (owner = 'test_user_1');");
+  sql("CREATE DATABASE test_db_2 (owner = 'test_user_2');");
+  login("test_user_1", "test_pass_1", "test_db_1");
+
+  TQueryResult result;
+  sql(result, "SHOW DATABASES;");
+  // clang-format off
+  assertExpectedResult({"Database", "Owner"},
+                       {{"test_db_1", "test_user_1"}},
+                       result);
+  // clang-format on
+}
+
+TEST_F(ShowDatabasesTest, OtherUserDatabaseWithAccessPrivilege) {
+  sql("CREATE DATABASE test_db_1 (owner = 'test_user_1');");
+  sql("CREATE DATABASE test_db_2 (owner = 'test_user_2');");
+  sql("GRANT ACCESS ON DATABASE test_db_2 to test_user_1;");
+  login("test_user_1", "test_pass_1", "test_db_1");
+
+  TQueryResult result;
+  sql(result, "SHOW DATABASES;");
+  // clang-format off
+  assertExpectedResult({"Database", "Owner"},
+                       {{"test_db_1", "test_user_1"},
+                        {"test_db_2", "test_user_2"}},
+                       result);
+  // clang-format on
+}
+
+TEST_F(ShowDatabasesTest, AdminLoginAndOtherUserDatabases) {
+  sql("CREATE DATABASE test_db_1 (owner = 'test_user_1');");
+  sql("CREATE DATABASE test_db_2 (owner = 'test_user_2');");
+
+  TQueryResult result;
+  sql(result, "SHOW DATABASES;");
+  // clang-format off
+  assertExpectedResult(
+      {"Database", "Owner"},
+      {{"omnisci", "admin"},
+       {"test_db_1", "test_user_1"},
+       {"test_db_2", "test_user_2"}},
+      result);
+  // clang-format on
+}
+
+TEST_F(ShowDatabasesTest, SuperUserLoginAndOtherUserDatabases) {
+  sql("CREATE DATABASE test_db_1 (owner = 'test_user_1');");
+  sql("CREATE DATABASE test_db_2 (owner = 'test_user_2');");
+  login("test_super_user", "test_pass");
+
+  TQueryResult result;
+  sql(result, "SHOW DATABASES;");
+  // clang-format off
+  assertExpectedResult(
+      {"Database", "Owner"},
+      {{"omnisci", "admin"},
+       {"test_db_1", "test_user_1"},
+       {"test_db_2", "test_user_2"}},
+      result);
+  // clang-format on
+}
+
 int main(int argc, char** argv) {
   TestHelpers::init_logger_stderr_only(argc, argv);
   testing::InitGoogleTest(&argc, argv);

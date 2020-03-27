@@ -2535,6 +2535,14 @@ TEST(SysCatalog, AllUserMetaTest) {
     const std::vector<std::string> user_europa = {"Arsenal", "Juventus"};
   } expected;
 
+  // cleanup
+  struct CleanupGuard {
+    ~CleanupGuard() {
+      run_ddl_statement("DROP DATABASE IF EXISTS " + champions + ";");
+      run_ddl_statement("DROP DATABASE IF EXISTS " + europa + ";");
+    }
+  } cleanupGuard;
+
   run_ddl_statement("DROP DATABASE IF EXISTS " + champions + ";");
   run_ddl_statement("DROP DATABASE IF EXISTS " + europa + ";");
   run_ddl_statement("CREATE DATABASE " + champions + ";");
@@ -2611,6 +2619,8 @@ TEST(SysCatalog, RecursiveRolesUserMetaData) {
       run_ddl_statement("DROP ROLE " + north_london + ";");
       run_ddl_statement("DROP ROLE " + munich + ";");
       run_ddl_statement("DROP ROLE " + turin + ";");
+      run_ddl_statement("DROP DATABASE IF EXISTS " + champions + ";");
+      run_ddl_statement("DROP DATABASE IF EXISTS " + europa + ";");
     }
   } cleanupGuard;
 

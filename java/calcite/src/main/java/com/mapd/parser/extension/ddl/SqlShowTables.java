@@ -14,25 +14,11 @@ import java.util.List;
 /**
  * Class that encapsulates all information associated with a SHOW TABLES DDL command.
  */
-public class SqlShowTables extends SqlDdl implements JsonSerializableDdl {
+public class SqlShowTables extends SqlShowCommand {
   private static final SqlOperator OPERATOR =
           new SqlSpecialOperator("SHOW_TABLES", SqlKind.OTHER_DDL);
 
-  @Expose
-  private String command;
-
   public SqlShowTables(final SqlParserPos pos) {
     super(OPERATOR, pos);
-    this.command = OPERATOR.getName();
-  }
-
-  @Override
-  public List<SqlNode> getOperandList() {
-    return null;
-  }
-
-  @Override
-  public String toString() {
-    return toJsonString();
   }
 }

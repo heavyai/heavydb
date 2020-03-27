@@ -113,7 +113,7 @@ class MapDHandlerTestFixture : public testing::Test {
 
   void loginAdmin() {
     session_id = {};
-    mapd_handler->connect(session_id, default_user, default_pass, db_name);
+    mapd_handler->connect(session_id, default_user, default_pass, default_db_name);
     // Store admin session ID in seperate variable so we can always logout
     // the default admin on teardown
     admin_session_id = session_id;
@@ -123,7 +123,9 @@ class MapDHandlerTestFixture : public testing::Test {
 
   void logout(const TSessionId& id) { mapd_handler->disconnect(id); }
 
-  void login(const std::string& user, const std::string& pass) {
+  void login(const std::string& user,
+             const std::string& pass,
+             const std::string& db_name = default_db_name) {
     session_id = {};
     mapd_handler->connect(session_id, user, pass, db_name);
   }
@@ -158,7 +160,7 @@ class MapDHandlerTestFixture : public testing::Test {
   static std::string udf_compiler_path;
   static std::string default_user;
   static std::string default_pass;
-  static std::string db_name;
+  static std::string default_db_name;
   static std::vector<std::string> udf_compiler_options;
 };
 
@@ -172,6 +174,6 @@ std::string MapDHandlerTestFixture::udf_filename{};
 std::string MapDHandlerTestFixture::udf_compiler_path{};
 std::string MapDHandlerTestFixture::default_user{"admin"};
 std::string MapDHandlerTestFixture::default_pass{"HyperInteractive"};
-std::string MapDHandlerTestFixture::db_name{};
+std::string MapDHandlerTestFixture::default_db_name{};
 MapDParameters MapDHandlerTestFixture::mapd_parameters{};
 std::vector<std::string> MapDHandlerTestFixture::udf_compiler_options{};

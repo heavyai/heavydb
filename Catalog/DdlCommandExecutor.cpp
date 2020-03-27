@@ -74,6 +74,8 @@ void DdlCommandExecutor::execute(TQueryResult& _return) {
     DropForeignTableCommand{payload, session_ptr}.execute(_return);
   } else if (ddl_command == "SHOW_TABLES") {
     ShowTablesCommand{payload, session_ptr}.execute(_return);
+  } else if (ddl_command == "SHOW_DATABASES") {
+    ShowDatabasesCommand{payload, session_ptr}.execute(_return);
   } else {
     throw std::runtime_error("Unsupported DDL command");
   }
@@ -474,5 +476,20 @@ void ShowTablesCommand::execute(TQueryResult& _return) {
   // Place table names in query result
   for (auto& table_name : table_names) {
     add_row(_return, std::vector<std::string>{table_name});
+  }
+}
+
+ShowDatabasesCommand::ShowDatabasesCommand(
+    const rapidjson::Value& ddl_payload,
+    std::shared_ptr<Catalog_Namespace::SessionInfo const> session_ptr)
+    : DdlCommand(ddl_payload, session_ptr) {}
+
+void ShowDatabasesCommand::execute(TQueryResult& _return) {
+  const auto& user = session_ptr->get_currentUser();
+  const Catalog_Namespace::DBSummaryList db_summaries =
+      Catalog_Namespace::SysCatalog::instance().getDatabaseListForUser(user);
+  set_headers(_return, {"Database", "Owner"});
+  for (const auto& db_summary : db_summaries) {
+    add_row(_return, {db_summary.dbName, db_summary.dbOwnerName});
   }
 }

@@ -404,6 +404,7 @@ int main(int argc, char** argv) {
   } catch (const std::exception& e) {
     LOG(ERROR) << e.what();
   }
+  QR::get()->runDDLStatement("DROP DATABASE IF EXISTS migration_mgr_db;");
   QR::reset();
   return err;
 }
