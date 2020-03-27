@@ -22,7 +22,9 @@ import org.apache.calcite.config.CalciteConnectionConfig;
 import org.apache.calcite.config.CalciteConnectionConfigImpl;
 import org.apache.calcite.config.CalciteConnectionProperty;
 import org.apache.calcite.jdbc.CalciteSchema;
+import org.apache.calcite.linq4j.function.Functions;
 import org.apache.calcite.plan.Context;
+import org.apache.calcite.plan.RelOptCostImpl;
 import org.apache.calcite.plan.hep.HepPlanner;
 import org.apache.calcite.plan.hep.HepProgram;
 import org.apache.calcite.rel.RelNode;
@@ -30,6 +32,8 @@ import org.apache.calcite.rel.RelRoot;
 import org.apache.calcite.rel.core.RelFactories;
 import org.apache.calcite.rel.rules.DynamicFilterJoinRule;
 import org.apache.calcite.rel.rules.FilterJoinRule;
+import org.apache.calcite.rel.rules.OuterJoinOptViaNullRejectionRule;
+import org.apache.calcite.rel.rules.QueryOptimizationRules;
 import org.apache.calcite.schema.SchemaPlus;
 import org.apache.calcite.sql.SqlNode;
 import org.apache.calcite.sql.advise.SqlAdvisor;
@@ -136,6 +140,7 @@ public class MapDPlanner extends PlannerImpl {
   @Override
   public RelRoot rel(SqlNode sql) throws RelConversionException {
     RelRoot root = super.rel(sql);
+    root = applyQueryOptimizationRules(root);
     root = applyFilterPushdown(root);
     return root;
   }
@@ -154,6 +159,19 @@ public class MapDPlanner extends PlannerImpl {
     prePlanner.setRoot(root.rel);
     final RelNode rootRelNode = prePlanner.findBestExp();
     filterPushDownInfo.clear();
+    return root.withRel(rootRelNode);
+  }
+
+  private RelRoot applyQueryOptimizationRules(RelRoot root) {
+    QueryOptimizationRules outerJoinOptRule =
+            new OuterJoinOptViaNullRejectionRule(RelFactories.LOGICAL_BUILDER);
+
+    HepProgram opt_program =
+            HepProgram.builder().addRuleInstance(outerJoinOptRule).build();
+    HepPlanner prePlanner = new HepPlanner(
+            opt_program, null, true, Functions.ignore2(), RelOptCostImpl.FACTORY);
+    prePlanner.setRoot(root.rel);
+    final RelNode rootRelNode = prePlanner.findBestExp();
     return root.withRel(rootRelNode);
   }
 
