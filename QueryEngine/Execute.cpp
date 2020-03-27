@@ -50,6 +50,7 @@
 #include "Shared/measure.h"
 #include "Shared/scope.h"
 #include "Shared/shard_key.h"
+#include "Shared/threadpool.h"
 
 #include "AggregatedColRange.h"
 #include "StringDictionaryGenerations.h"
@@ -69,6 +70,7 @@
 
 bool g_enable_watchdog{false};
 bool g_enable_dynamic_watchdog{false};
+bool g_use_tbb_pool{false};
 unsigned g_dynamic_watchdog_time_limit{10000};
 bool g_allow_cpu_retry{true};
 bool g_null_div_by_zero{false};
@@ -1271,18 +1273,41 @@ ResultSetPtr Executor::executeWorkUnitImpl(
       const auto context_count =
           get_context_count(device_type, available_cpus, available_gpus.size());
       try {
-        dispatchFragments(dispatch,
-                          execution_dispatch,
-                          query_infos,
-                          eo,
-                          is_agg,
-                          allow_single_frag_table_opt,
-                          context_count,
-                          *query_comp_desc_owned,
-                          *query_mem_desc_owned,
-                          fragment_descriptor,
-                          available_gpus,
-                          available_cpus);
+        if (g_use_tbb_pool) {
+#ifdef HAVE_TBB
+          VLOG(1) << "Using TBB thread pool for kernel dispatch.";
+          dispatchFragments<threadpool::TbbThreadPool<void>>(dispatch,
+                                                             execution_dispatch,
+                                                             query_infos,
+                                                             eo,
+                                                             is_agg,
+                                                             allow_single_frag_table_opt,
+                                                             context_count,
+                                                             *query_comp_desc_owned,
+                                                             *query_mem_desc_owned,
+                                                             fragment_descriptor,
+                                                             available_gpus,
+                                                             available_cpus);
+#else
+          throw std::runtime_error(
+              "This build is not TBB enabled. Restart the server with "
+              "\"enable-modern-thread-pool\" disabled.");
+#endif
+        } else {
+          dispatchFragments<threadpool::FuturesThreadPool<void>>(
+              dispatch,
+              execution_dispatch,
+              query_infos,
+              eo,
+              is_agg,
+              allow_single_frag_table_opt,
+              context_count,
+              *query_comp_desc_owned,
+              *query_mem_desc_owned,
+              fragment_descriptor,
+              available_gpus,
+              available_cpus);
+        }
       } catch (QueryExecutionError& e) {
         if (eo.with_dynamic_watchdog && interrupted_ &&
             e.getErrorCode() == ERR_OUT_OF_TIME) {
@@ -1719,6 +1744,7 @@ bool has_lazy_fetched_columns(const std::vector<ColumnLazyFetchInfo>& fetched_co
 
 }  // namespace
 
+template <typename THREAD_POOL>
 void Executor::dispatchFragments(
     const std::function<void(const ExecutorDeviceType chosen_device_type,
                              int chosen_device_id,
@@ -1738,7 +1764,7 @@ void Executor::dispatchFragments(
     QueryFragmentDescriptor& fragment_descriptor,
     std::unordered_set<int>& available_gpus,
     int& available_cpus) {
-  std::vector<std::future<void>> query_threads;
+  THREAD_POOL query_threads;
   const auto& ra_exe_unit = execution_dispatch.getExecutionUnit();
   CHECK(!ra_exe_unit.input_descs.empty());
 
@@ -1777,15 +1803,14 @@ void Executor::dispatchFragments(
             const int device_id,
             const FragmentsList& frag_list,
             const int64_t rowid_lookup_key) {
-          query_threads.push_back(std::async(std::launch::async,
-                                             dispatch,
-                                             ExecutorDeviceType::GPU,
-                                             device_id,
-                                             query_comp_desc,
-                                             query_mem_desc,
-                                             frag_list,
-                                             ExecutorDispatchMode::MultifragmentKernel,
-                                             rowid_lookup_key));
+          query_threads.append(dispatch,
+                               ExecutorDeviceType::GPU,
+                               device_id,
+                               query_comp_desc,
+                               query_mem_desc,
+                               frag_list,
+                               ExecutorDispatchMode::MultifragmentKernel,
+                               rowid_lookup_key);
         };
     fragment_descriptor.assignFragsToMultiDispatch(multifrag_kernel_dispatch);
   } else {
@@ -1819,15 +1844,14 @@ void Executor::dispatchFragments(
       }
       CHECK_GE(device_id, 0);
 
-      query_threads.push_back(std::async(std::launch::async,
-                                         dispatch,
-                                         device_type,
-                                         device_id,
-                                         query_comp_desc,
-                                         query_mem_desc,
-                                         frag_list,
-                                         ExecutorDispatchMode::KernelPerFragment,
-                                         rowid_lookup_key));
+      query_threads.append(dispatch,
+                           device_type,
+                           device_id,
+                           query_comp_desc,
+                           query_mem_desc,
+                           frag_list,
+                           ExecutorDispatchMode::KernelPerFragment,
+                           rowid_lookup_key);
 
       ++frag_list_idx;
     };
@@ -1835,12 +1859,7 @@ void Executor::dispatchFragments(
     fragment_descriptor.assignFragsToKernelDispatch(fragment_per_kernel_dispatch,
                                                     ra_exe_unit);
   }
-  for (auto& child : query_threads) {
-    child.wait();
-  }
-  for (auto& child : query_threads) {
-    child.get();
-  }
+  query_threads.join();
 }
 
 std::vector<size_t> Executor::getTableFragmentIndices(

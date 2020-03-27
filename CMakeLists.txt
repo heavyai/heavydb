@@ -387,6 +387,15 @@ if("${MAPD_EDITION_LOWER}" STREQUAL "ee")
   endif()
 endif()
 
+# TBB
+set(TBB_LIBS "") 
+find_package(TBB)
+if(TBB_FOUND) 
+  message(STATUS "Building with TBB support")
+  add_definitions("-DHAVE_TBB")
+  list(APPEND TBB_LIBS ${TBB_LIBRARIES})
+endif()
+
 add_custom_command(
     DEPENDS ${CMAKE_SOURCE_DIR}/mapd.thrift
     DEPENDS ${CMAKE_SOURCE_DIR}/QueryEngine/serialized_result_set.thrift
@@ -532,6 +541,8 @@ endif()
 if(ENABLE_LICENSING_AWS)
   list(APPEND MAPD_LIBRARIES AWSMarketplace)
 endif()
+
+list(APPEND MAPD_LIBRARIES ${TBB_LIBS})
 
 option(ENABLE_TESTS "Build unit tests" ON)
 if (ENABLE_TESTS)

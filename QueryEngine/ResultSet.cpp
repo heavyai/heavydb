@@ -35,11 +35,14 @@
 #include "Shared/checked_alloc.h"
 #include "Shared/likely.h"
 #include "Shared/thread_count.h"
+#include "Shared/threadpool.h"
 
 #include <algorithm>
 #include <bitset>
 #include <future>
 #include <numeric>
+
+extern bool g_use_tbb_pool;
 
 ResultSetStorage::ResultSetStorage(const std::vector<TargetInfo>& targets,
                                    const QueryMemoryDescriptor& query_mem_desc,
@@ -345,35 +348,36 @@ void ResultSet::setCachedRowCount(const size_t row_count) const {
 }
 
 size_t ResultSet::parallelRowCount() const {
-  size_t row_count{0};
-  const size_t worker_count = cpu_threads();
-  std::vector<std::future<size_t>> counter_threads;
-  for (size_t i = 0,
-              start_entry = 0,
-              stride = (entryCount() + worker_count - 1) / worker_count;
-       i < worker_count && start_entry < entryCount();
-       ++i, start_entry += stride) {
-    const auto end_entry = std::min(start_entry + stride, entryCount());
-    counter_threads.push_back(std::async(
-        std::launch::async,
-        [this](const size_t start, const size_t end) {
-          size_t row_count{0};
-          for (size_t i = start; i < end; ++i) {
-            if (!isRowAtEmpty(i)) {
-              ++row_count;
+  auto execute_parallel_row_count = [this](auto counter_threads) -> size_t {
+    const size_t worker_count = cpu_threads();
+    for (size_t i = 0,
+                start_entry = 0,
+                stride = (entryCount() + worker_count - 1) / worker_count;
+         i < worker_count && start_entry < entryCount();
+         ++i, start_entry += stride) {
+      const auto end_entry = std::min(start_entry + stride, entryCount());
+      counter_threads.append(
+          [this](const size_t start, const size_t end) {
+            size_t row_count{0};
+            for (size_t i = start; i < end; ++i) {
+              if (!isRowAtEmpty(i)) {
+                ++row_count;
+              }
             }
-          }
-          return row_count;
-        },
-        start_entry,
-        end_entry));
-  }
-  for (auto& child : counter_threads) {
-    child.wait();
-  }
-  for (auto& child : counter_threads) {
-    row_count += child.get();
-  }
+            return row_count;
+          },
+          start_entry,
+          end_entry);
+    }
+    const auto row_counts = counter_threads.join();
+    const size_t row_count = std::accumulate(row_counts.begin(), row_counts.end(), 0);
+    return row_count;
+  };
+  // will fall back to futures threadpool if TBB is not enabled
+  const auto row_count =
+      g_use_tbb_pool
+          ? execute_parallel_row_count(threadpool::ThreadPool<size_t>())
+          : execute_parallel_row_count(threadpool::FuturesThreadPool<size_t>());
   if (keep_first_ + drop_first_) {
     const auto limited_row_count = std::min(keep_first_ + drop_first_, row_count);
     return limited_row_count < drop_first_ ? 0 : limited_row_count - drop_first_;

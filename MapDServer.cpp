@@ -83,6 +83,7 @@ extern bool g_enable_experimental_string_functions;
 extern bool g_enable_table_functions;
 extern bool g_enable_fsi;
 extern bool g_enable_interop;
+extern bool g_use_tbb_pool;
 
 bool g_enable_thrift_logs{false};
 
@@ -674,6 +675,12 @@ void MapDProgramOptions::fillAdvancedOptions() {
           ->default_value(intel_jit_profile)
           ->implicit_value(true),
       "Enable runtime support for the JIT code profiling using Intel VTune.");
+  developer_desc.add_options()(
+      "enable-modern-thread-pool",
+      po::value<bool>(&g_use_tbb_pool)
+          ->default_value(g_use_tbb_pool)
+          ->implicit_value(true),
+      "Enable a new thread pool implementation for queuing kernels for execution.");
   developer_desc.add_options()(
       "skip-intermediate-count",
       po::value<bool>(&g_skip_intermediate_count)

@@ -600,6 +600,7 @@ class Executor {
 
   std::unordered_map<int, const Analyzer::BinOper*> getInnerTabIdToJoinCond() const;
 
+  template <typename THREAD_POOL>
   void dispatchFragments(
       const std::function<void(const ExecutorDeviceType chosen_device_type,
                                int chosen_device_id,
