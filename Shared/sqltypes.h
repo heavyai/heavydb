@@ -196,22 +196,6 @@ constexpr auto is_datetime(T sql_type) {
 }
 
 template <typename CORE_TYPE>
-class ExecutorTypePackaging {
- public:
-  enum PackagingType { Chunk, StandardBuffer };
-
-  ExecutorTypePackaging() : packaging_type_(Chunk) {}
-
-  bool isStandardBufferPackaging() const { return packaging_type_ == StandardBuffer; }
-  bool isChunkIteratorPackaging() const { return packaging_type_ == Chunk; }
-  void setStandardBufferPackaging() { packaging_type_ = StandardBuffer; }
-  void setChunkIteratorPackaging() { packaging_type_ = Chunk; }
-
- private:
-  PackagingType packaging_type_;
-};
-
-template <typename CORE_TYPE>
 class ArrayContextTypeSizer {
  public:
   inline int get_array_context_logical_size() const {
@@ -861,8 +845,7 @@ std::string SQLTypeInfoCore<TYPE_FACET_PACK...>::comp_name[kENCODING_LAST] =
     {"NONE", "FIXED", "RL", "DIFF", "DICT", "SPARSE", "COMPRESSED", "DAYS"};
 #endif
 
-using SQLTypeInfo =
-    SQLTypeInfoCore<ArrayContextTypeSizer, ExecutorTypePackaging, DateTimeFacilities>;
+using SQLTypeInfo = SQLTypeInfoCore<ArrayContextTypeSizer, DateTimeFacilities>;
 
 SQLTypes decimal_to_int_type(const SQLTypeInfo&);
 

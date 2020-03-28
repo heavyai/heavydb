@@ -1772,6 +1772,7 @@ std::vector<llvm::Value*> GroupByAndAggregate::codegenAggArg(
     const CompilationOptions& co) {
   const auto agg_expr = dynamic_cast<const Analyzer::AggExpr*>(target_expr);
   const auto func_expr = dynamic_cast<const Analyzer::FunctionOper*>(target_expr);
+  const auto arr_expr = dynamic_cast<const Analyzer::ArrayExpr*>(target_expr);
 
   // TODO(alex): handle arrays uniformly?
   CodeGenerator code_generator(executor_);
@@ -1782,7 +1783,7 @@ std::vector<llvm::Value*> GroupByAndAggregate::codegenAggArg(
           agg_expr ? code_generator.codegen(agg_expr->get_arg(), true, co)
                    : code_generator.codegen(
                          target_expr, !executor_->plan_state_->allow_lazy_fetch_, co);
-      if (!func_expr && target_ti.isChunkIteratorPackaging()) {
+      if (!func_expr && !arr_expr) {
         // Something with the chunk transport is code that was generated from a source
         // other than an ARRAY[] expression
         CHECK_EQ(size_t(1), target_lvs.size());
@@ -1808,7 +1809,7 @@ std::vector<llvm::Value*> GroupByAndAggregate::codegenAggArg(
               "Using array[] operator as argument to an aggregate operator is not "
               "supported");
         }
-        CHECK(func_expr || target_ti.isStandardBufferPackaging());
+        CHECK(func_expr || arr_expr);
         if (dynamic_cast<const Analyzer::FunctionOper*>(target_expr)) {
           CHECK_EQ(size_t(1), target_lvs.size());
 
