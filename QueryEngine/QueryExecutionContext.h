@@ -138,10 +138,6 @@ class QueryExecutionContext : boost::noncopyable {
   mutable std::unique_ptr<ResultSet> estimator_result_set_;
 
   friend class Executor;
-
-  // Temporary; Reduction egress needs to become part of executor
-  template <typename META_CLASS_TYPE>
-  friend class AggregateReductionEgress;
 };
 
 #endif  // QUERYENGINE_QUERYEXECUTIONCONTEXT_H

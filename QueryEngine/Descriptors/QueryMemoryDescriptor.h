@@ -377,9 +377,6 @@ class QueryMemoryDescriptor {
 
   friend class ResultSet;
   friend class QueryExecutionContext;
-
-  template <typename META_CLASS_TYPE>
-  friend class AggregateReductionEgress;
 };
 
 inline void set_notnull(TargetInfo& target, const bool not_null) {

@@ -995,9 +995,6 @@ class Executor {
   friend class TableFunctionExecutionContext;
   friend struct TargetExprCodegenBuilder;
   friend struct TargetExprCodegen;
-
-  template <typename META_TYPE_CLASS>
-  friend class AggregateReductionEgress;
 };
 
 inline std::string get_null_check_suffix(const SQLTypeInfo& lhs_ti,
