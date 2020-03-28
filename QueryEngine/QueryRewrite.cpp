@@ -377,7 +377,7 @@ RelAlgExecutionUnit QueryRewriter::rewriteColumnarUpdate(
 RelAlgExecutionUnit QueryRewriter::rewriteColumnarDelete(
     const RelAlgExecutionUnit& ra_exe_unit_in,
     std::shared_ptr<Analyzer::ColumnVar> delete_column) const {
-  CHECK_EQ(ra_exe_unit_in.target_exprs.size(), size_t(2));
+  CHECK_EQ(ra_exe_unit_in.target_exprs.size(), size_t(1));
   CHECK(ra_exe_unit_in.groupby_exprs.size() == 1 &&
         !ra_exe_unit_in.groupby_exprs.front());
 

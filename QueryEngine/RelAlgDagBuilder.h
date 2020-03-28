@@ -1362,7 +1362,6 @@ class RelModify : public RelAlgNode {
         dynamic_cast<RelProject const*>(inputs_[0].get());
     CHECK(previous_project_node != nullptr);
     previous_project_node->setDeleteViaSelectFlag();
-    previous_project_node->injectOffsetInFragmentExpr();
     previous_project_node->setModifiedTableDescriptor(table_descriptor_);
   }
 

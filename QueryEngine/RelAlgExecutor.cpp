@@ -1366,6 +1366,8 @@ void RelAlgExecutor::executeDelete(const RelAlgNode* node,
             eo.output_columnar_hint = true;
             co_delete.add_delete_column =
                 false;  // project the entire delete column for columnar update
+          } else {
+            CHECK_EQ(exe_unit.target_exprs.size(), size_t(1));
           }
 
           executor_->executeUpdate(exe_unit,
