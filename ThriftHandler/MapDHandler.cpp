@@ -60,7 +60,6 @@
 #include "QueryEngine/TableFunctions/TableFunctionsFactory.h"
 #include "QueryEngine/TableOptimizer.h"
 #include "QueryEngine/ThriftSerializers.h"
-#include "Shared/SQLTypeUtilities.h"
 #include "Shared/StringTransform.h"
 #include "Shared/SysInfo.h"
 #include "Shared/geo_types.h"
@@ -764,7 +763,7 @@ void MapDHandler::value_to_thrift_column(const TargetValue& tv,
     if (boost::get<int64_t>(scalar_tv)) {
       int64_t data = *(boost::get<int64_t>(scalar_tv));
 
-      if (is_member_of_typeset<kNUMERIC, kDECIMAL>(ti)) {
+      if (ti.is_decimal()) {
         double val = static_cast<double>(data);
         if (ti.get_scale() > 0) {
           val /= pow(10.0, std::abs(ti.get_scale()));
@@ -855,7 +854,7 @@ TDatum MapDHandler::value_to_thrift(const TargetValue& tv, const SQLTypeInfo& ti
   if (boost::get<int64_t>(scalar_tv)) {
     int64_t data = *(boost::get<int64_t>(scalar_tv));
 
-    if (is_member_of_typeset<kNUMERIC, kDECIMAL>(ti)) {
+    if (ti.is_decimal()) {
       double val = static_cast<double>(data);
       if (ti.get_scale() > 0) {
         val /= pow(10.0, std::abs(ti.get_scale()));

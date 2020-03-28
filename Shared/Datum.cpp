@@ -34,6 +34,37 @@
 #include "TimeGM.h"
 #include "sqltypes.h"
 
+std::string SQLTypeInfo::type_name[kSQLTYPE_LAST] = {"NULL",
+                                                     "BOOLEAN",
+                                                     "CHAR",
+                                                     "VARCHAR",
+                                                     "NUMERIC",
+                                                     "DECIMAL",
+                                                     "INTEGER",
+                                                     "SMALLINT",
+                                                     "FLOAT",
+                                                     "DOUBLE",
+                                                     "TIME",
+                                                     "TIMESTAMP",
+                                                     "BIGINT",
+                                                     "TEXT",
+                                                     "DATE",
+                                                     "ARRAY",
+                                                     "INTERVAL_DAY_TIME",
+                                                     "INTERVAL_YEAR_MONTH",
+                                                     "POINT",
+                                                     "LINESTRING",
+                                                     "POLYGON",
+                                                     "MULTIPOLYGON",
+                                                     "TINYINT",
+                                                     "GEOMETRY",
+                                                     "GEOGRAPHY",
+                                                     "EVAL_CONTEXT_TYPE",
+                                                     "VOID",
+                                                     "CURSOR"};
+std::string SQLTypeInfo::comp_name[kENCODING_LAST] =
+    {"NONE", "FIXED", "RL", "DIFF", "DICT", "SPARSE", "COMPRESSED", "DAYS"};
+
 int64_t parse_numeric(const std::string& s, SQLTypeInfo& ti) {
   assert(s.length() <= 20);
   size_t dot = s.find_first_of('.', 0);

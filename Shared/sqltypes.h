@@ -154,8 +154,6 @@ enum EncodingType {
   kENCODING_LAST = 8
 };
 
-#include "SQLTypeUtilities.h"
-
 #define IS_INTEGER(T) \
   (((T) == kINT) || ((T) == kSMALLINT) || ((T) == kBIGINT) || ((T) == kTINYINT))
 #define IS_NUMBER(T)                                                             \
@@ -190,60 +188,16 @@ enum EncodingType {
 #define TRANSIENT_DICT(ID) (-(ID))
 #define REGULAR_DICT(TRANSIENTID) (-(TRANSIENTID))
 
-template <typename T>
-constexpr auto is_datetime(T sql_type) {
-  return sql_type == kTIME || sql_type == kTIMESTAMP || sql_type == kDATE;
+constexpr auto is_datetime(SQLTypes type) {
+  return type == kTIME || type == kTIMESTAMP || type == kDATE;
 }
-
-template <typename CORE_TYPE>
-class DateTimeFacilities {
- public:
-  constexpr auto is_date_in_days() const {
-    CORE_TYPE const* derived(static_cast<CORE_TYPE const*>(this));
-    if (is_member_of_typeset<kDATE>(*derived)) {
-      auto comp_type(derived->get_compression());
-      if (comp_type == kENCODING_DATE_IN_DAYS) {
-        return true;
-      }
-    }
-    return false;
-  }
-
-  constexpr auto is_date() const {
-    CORE_TYPE const* derived(static_cast<CORE_TYPE const*>(this));
-    if (is_member_of_typeset<kDATE>(*derived)) {
-      return true;
-    }
-    return false;
-  }
-
-  constexpr auto is_high_precision_timestamp() const {
-    CORE_TYPE const* derived(static_cast<CORE_TYPE const*>(this));
-    if (is_member_of_typeset<kTIMESTAMP>(*derived)) {
-      auto dimension(derived->get_dimension());
-      if (dimension > 0) {
-        return true;
-      }
-    }
-    return false;
-  }
-
-  constexpr auto is_timestamp() const {
-    CORE_TYPE const* derived(static_cast<CORE_TYPE const*>(this));
-    if (is_member_of_typeset<kTIMESTAMP>(*derived)) {
-      return true;
-    }
-    return false;
-  }
-};
 
 // @type SQLTypeInfo
 // @brief a structure to capture all type information including
 // length, precision, scale, etc.
-template <template <class> class... TYPE_FACET_PACK>
-class SQLTypeInfoCore : public TYPE_FACET_PACK<SQLTypeInfoCore<TYPE_FACET_PACK...> >... {
+class SQLTypeInfo {
  public:
-  SQLTypeInfoCore(SQLTypes t, int d, int s, bool n, EncodingType c, int p, SQLTypes st)
+  SQLTypeInfo(SQLTypes t, int d, int s, bool n, EncodingType c, int p, SQLTypes st)
       : type(t)
       , subtype(st)
       , dimension(d)
@@ -252,7 +206,7 @@ class SQLTypeInfoCore : public TYPE_FACET_PACK<SQLTypeInfoCore<TYPE_FACET_PACK..
       , compression(c)
       , comp_param(p)
       , size(get_storage_size()) {}
-  SQLTypeInfoCore(SQLTypes t, int d, int s, bool n)
+  SQLTypeInfo(SQLTypes t, int d, int s, bool n)
       : type(t)
       , subtype(kNULLT)
       , dimension(d)
@@ -261,8 +215,8 @@ class SQLTypeInfoCore : public TYPE_FACET_PACK<SQLTypeInfoCore<TYPE_FACET_PACK..
       , compression(kENCODING_NONE)
       , comp_param(0)
       , size(get_storage_size()) {}
-  SQLTypeInfoCore(SQLTypes t, int d, int s) : SQLTypeInfoCore(t, d, s, false) {}
-  SQLTypeInfoCore(SQLTypes t, bool n)
+  SQLTypeInfo(SQLTypes t, int d, int s) : SQLTypeInfo(t, d, s, false) {}
+  SQLTypeInfo(SQLTypes t, bool n)
       : type(t)
       , subtype(kNULLT)
       , dimension(0)
@@ -271,8 +225,8 @@ class SQLTypeInfoCore : public TYPE_FACET_PACK<SQLTypeInfoCore<TYPE_FACET_PACK..
       , compression(kENCODING_NONE)
       , comp_param(0)
       , size(get_storage_size()) {}
-  SQLTypeInfoCore(SQLTypes t) : SQLTypeInfoCore(t, false) {}
-  SQLTypeInfoCore(SQLTypes t, bool n, EncodingType c)
+  SQLTypeInfo(SQLTypes t) : SQLTypeInfo(t, false) {}
+  SQLTypeInfo(SQLTypes t, bool n, EncodingType c)
       : type(t)
       , subtype(kNULLT)
       , dimension(0)
@@ -281,7 +235,7 @@ class SQLTypeInfoCore : public TYPE_FACET_PACK<SQLTypeInfoCore<TYPE_FACET_PACK..
       , compression(c)
       , comp_param(0)
       , size(get_storage_size()) {}
-  SQLTypeInfoCore()
+  SQLTypeInfo()
       : type(kNULLT)
       , subtype(kNULLT)
       , dimension(0)
@@ -304,7 +258,7 @@ class SQLTypeInfoCore : public TYPE_FACET_PACK<SQLTypeInfoCore<TYPE_FACET_PACK..
   HOST DEVICE inline int get_size() const { return size; }
   inline int get_logical_size() const {
     if (compression == kENCODING_FIXED || compression == kENCODING_DATE_IN_DAYS) {
-      SQLTypeInfoCore ti(type, dimension, scale, notnull, kENCODING_NONE, 0, subtype);
+      SQLTypeInfo ti(type, dimension, scale, notnull, kENCODING_NONE, 0, subtype);
       return ti.get_size();
     }
     if (compression == kENCODING_DICT) {
@@ -472,7 +426,7 @@ class SQLTypeInfoCore : public TYPE_FACET_PACK<SQLTypeInfoCore<TYPE_FACET_PACK..
     return is_string() && compression == kENCODING_DICT;
   }
 
-  HOST DEVICE inline bool operator!=(const SQLTypeInfoCore& rhs) const {
+  HOST DEVICE inline bool operator!=(const SQLTypeInfo& rhs) const {
     return type != rhs.get_type() || subtype != rhs.get_subtype() ||
            dimension != rhs.get_dimension() || scale != rhs.get_scale() ||
            compression != rhs.get_compression() ||
@@ -480,7 +434,7 @@ class SQLTypeInfoCore : public TYPE_FACET_PACK<SQLTypeInfoCore<TYPE_FACET_PACK..
             comp_param != TRANSIENT_DICT(rhs.get_comp_param())) ||
            notnull != rhs.get_notnull();
   }
-  HOST DEVICE inline bool operator==(const SQLTypeInfoCore& rhs) const {
+  HOST DEVICE inline bool operator==(const SQLTypeInfo& rhs) const {
     return type == rhs.get_type() && subtype == rhs.get_subtype() &&
            dimension == rhs.get_dimension() && scale == rhs.get_scale() &&
            compression == rhs.get_compression() &&
@@ -500,8 +454,7 @@ class SQLTypeInfoCore : public TYPE_FACET_PACK<SQLTypeInfoCore<TYPE_FACET_PACK..
     return get_logical_size();
   }
 
-  // FIX-ME:  Work through variadic base classes
-  HOST DEVICE inline SQLTypeInfoCore& operator=(const SQLTypeInfoCore& rhs) {
+  HOST DEVICE inline void operator=(const SQLTypeInfo& rhs) {
     type = rhs.get_type();
     subtype = rhs.get_subtype();
     dimension = rhs.get_dimension();
@@ -510,10 +463,9 @@ class SQLTypeInfoCore : public TYPE_FACET_PACK<SQLTypeInfoCore<TYPE_FACET_PACK..
     compression = rhs.get_compression();
     comp_param = rhs.get_comp_param();
     size = rhs.get_size();
-    return (*this);
   }
 
-  inline bool is_castable(const SQLTypeInfoCore& new_type_info) const {
+  inline bool is_castable(const SQLTypeInfo& new_type_info) const {
     // can always cast between the same type but different precision/scale/encodings
     if (type == new_type_info.get_type()) {
       return true;
@@ -648,14 +600,37 @@ class SQLTypeInfoCore : public TYPE_FACET_PACK<SQLTypeInfoCore<TYPE_FACET_PACK..
     }
     return false;
   }
-  inline SQLTypeInfoCore get_elem_type() const {
-    return SQLTypeInfoCore(
+  inline SQLTypeInfo get_elem_type() const {
+    return SQLTypeInfo(
         subtype, dimension, scale, notnull, compression, comp_param, kNULLT);
   }
-  inline SQLTypeInfoCore get_array_type() const {
-    return SQLTypeInfoCore(
-        kARRAY, dimension, scale, notnull, compression, comp_param, type);
+  inline SQLTypeInfo get_array_type() const {
+    return SQLTypeInfo(kARRAY, dimension, scale, notnull, compression, comp_param, type);
   }
+
+  inline bool is_date_in_days() const {
+    if (type == kDATE) {
+      const auto comp_type = get_compression();
+      if (comp_type == kENCODING_DATE_IN_DAYS) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  inline bool is_date() const { return type == kDATE; }
+
+  inline bool is_high_precision_timestamp() const {
+    if (type == kTIMESTAMP) {
+      const auto dimension = get_dimension();
+      if (dimension > 0) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  inline bool is_timestamp() const { return type == kTIMESTAMP; }
 
  private:
   SQLTypes type;             // type id
@@ -802,45 +777,6 @@ class SQLTypeInfoCore : public TYPE_FACET_PACK<SQLTypeInfoCore<TYPE_FACET_PACK..
     return -1;
   }
 };
-
-#ifndef __CUDACC__
-// todo:  Get rid of preprocessor definition and move into Cuda Type Concept
-template <template <class> class... TYPE_FACET_PACK>
-std::string SQLTypeInfoCore<TYPE_FACET_PACK...>::type_name[kSQLTYPE_LAST] = {
-    "NULL",
-    "BOOLEAN",
-    "CHAR",
-    "VARCHAR",
-    "NUMERIC",
-    "DECIMAL",
-    "INTEGER",
-    "SMALLINT",
-    "FLOAT",
-    "DOUBLE",
-    "TIME",
-    "TIMESTAMP",
-    "BIGINT",
-    "TEXT",
-    "DATE",
-    "ARRAY",
-    "INTERVAL_DAY_TIME",
-    "INTERVAL_YEAR_MONTH",
-    "POINT",
-    "LINESTRING",
-    "POLYGON",
-    "MULTIPOLYGON",
-    "TINYINT",
-    "GEOMETRY",
-    "GEOGRAPHY",
-    "EVAL_CONTEXT_TYPE",
-    "VOID",
-    "CURSOR"};
-template <template <class> class... TYPE_FACET_PACK>
-std::string SQLTypeInfoCore<TYPE_FACET_PACK...>::comp_name[kENCODING_LAST] =
-    {"NONE", "FIXED", "RL", "DIFF", "DICT", "SPARSE", "COMPRESSED", "DAYS"};
-#endif
-
-using SQLTypeInfo = SQLTypeInfoCore<DateTimeFacilities>;
 
 SQLTypes decimal_to_int_type(const SQLTypeInfo&);
 
