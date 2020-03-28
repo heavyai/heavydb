@@ -196,22 +196,6 @@ constexpr auto is_datetime(T sql_type) {
 }
 
 template <typename CORE_TYPE>
-class ArrayContextTypeSizer {
- public:
-  inline int get_array_context_logical_size() const {
-    CORE_TYPE const* derived(static_cast<CORE_TYPE const*>(this));
-    if (is_member_of_typeset<kCHAR, kTEXT, kVARCHAR>(*derived)) {
-      auto comp_type(derived->get_compression());
-      if (comp_type == kENCODING_DICT || comp_type == kENCODING_FIXED ||
-          comp_type == kENCODING_NONE) {
-        return sizeof(int32_t);
-      }
-    }
-    return derived->get_logical_size();
-  }
-};
-
-template <typename CORE_TYPE>
 class DateTimeFacilities {
  public:
   constexpr auto is_date_in_days() const {
@@ -503,6 +487,17 @@ class SQLTypeInfoCore : public TYPE_FACET_PACK<SQLTypeInfoCore<TYPE_FACET_PACK..
            (compression == kENCODING_NONE || comp_param == rhs.get_comp_param() ||
             comp_param == TRANSIENT_DICT(rhs.get_comp_param())) &&
            notnull == rhs.get_notnull();
+  }
+
+  inline int get_array_context_logical_size() const {
+    if (is_string()) {
+      auto comp_type(get_compression());
+      if (comp_type == kENCODING_DICT || comp_type == kENCODING_FIXED ||
+          comp_type == kENCODING_NONE) {
+        return sizeof(int32_t);
+      }
+    }
+    return get_logical_size();
   }
 
   // FIX-ME:  Work through variadic base classes
@@ -845,7 +840,7 @@ std::string SQLTypeInfoCore<TYPE_FACET_PACK...>::comp_name[kENCODING_LAST] =
     {"NONE", "FIXED", "RL", "DIFF", "DICT", "SPARSE", "COMPRESSED", "DAYS"};
 #endif
 
-using SQLTypeInfo = SQLTypeInfoCore<ArrayContextTypeSizer, DateTimeFacilities>;
+using SQLTypeInfo = SQLTypeInfoCore<DateTimeFacilities>;
 
 SQLTypes decimal_to_int_type(const SQLTypeInfo&);
 
