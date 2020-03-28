@@ -64,13 +64,8 @@ namespace {
 
 class RexRebindInputsVisitor : public RexVisitor<void*> {
  public:
-  RexRebindInputsVisitor(const RelAlgNode* old_input,
-                         const RelAlgNode* new_input,
-                         std::optional<std::unordered_map<unsigned, unsigned>>
-                             old_to_new_index_map = std::nullopt)
-      : old_input_(old_input)
-      , new_input_(new_input)
-      , old_to_new_index_map_(old_to_new_index_map) {}
+  RexRebindInputsVisitor(const RelAlgNode* old_input, const RelAlgNode* new_input)
+      : old_input_(old_input), new_input_(new_input) {}
 
   void* visitInput(const RexInput* rex_input) const override {
     const auto old_source = rex_input->getSourceNode();
@@ -81,12 +76,6 @@ class RexRebindInputsVisitor : public RexVisitor<void*> {
         return nullptr;
       }
       rex_input->setSourceNode(new_input_);
-      if (old_to_new_index_map_) {
-        auto mapping = *old_to_new_index_map_;
-        auto mapping_itr = mapping.find(rex_input->getIndex());
-        CHECK(mapping_itr != mapping.end());
-        rex_input->setIndex(mapping_itr->second);
-      }
     }
     return nullptr;
   };
@@ -94,7 +83,6 @@ class RexRebindInputsVisitor : public RexVisitor<void*> {
  private:
   const RelAlgNode* old_input_;
   const RelAlgNode* new_input_;
-  const std::optional<std::unordered_map<unsigned, unsigned>> old_to_new_index_map_;
 };
 
 // Creates an output with n columns.
@@ -106,6 +94,26 @@ std::vector<RexInput> n_outputs(const RelAlgNode* node, const size_t n) {
   return outputs;
 }
 
+class RexRebindReindexInputsVisitor : public RexRebindInputsVisitor {
+ public:
+  RexRebindReindexInputsVisitor(
+      const RelAlgNode* old_input,
+      const RelAlgNode* new_input,
+      std::unordered_map<unsigned, unsigned> old_to_new_index_map)
+      : RexRebindInputsVisitor(old_input, new_input), mapping_(old_to_new_index_map) {}
+
+  void* visitInput(const RexInput* rex_input) const override {
+    RexRebindInputsVisitor::visitInput(rex_input);
+    auto mapping_itr = mapping_.find(rex_input->getIndex());
+    CHECK(mapping_itr != mapping_.end());
+    rex_input->setIndex(mapping_itr->second);
+    return nullptr;
+  }
+
+ private:
+  const std::unordered_map<unsigned, unsigned> mapping_;
+};
+
 }  // namespace
 
 void RelProject::replaceInput(
@@ -113,10 +121,17 @@ void RelProject::replaceInput(
     std::shared_ptr<const RelAlgNode> input,
     std::optional<std::unordered_map<unsigned, unsigned>> old_to_new_index_map) {
   RelAlgNode::replaceInput(old_input, input);
-  RexRebindInputsVisitor rebind_inputs(
-      old_input.get(), input.get(), old_to_new_index_map);
+  std::unique_ptr<RexRebindInputsVisitor> rebind_inputs;
+  if (old_to_new_index_map) {
+    rebind_inputs = std::make_unique<RexRebindReindexInputsVisitor>(
+        old_input.get(), input.get(), *old_to_new_index_map);
+  } else {
+    rebind_inputs =
+        std::make_unique<RexRebindInputsVisitor>(old_input.get(), input.get());
+  }
+  CHECK(rebind_inputs);
   for (const auto& scalar_expr : scalar_exprs_) {
-    rebind_inputs.visit(scalar_expr.get());
+    rebind_inputs->visit(scalar_expr.get());
   }
 }
 
