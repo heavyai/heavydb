@@ -29,99 +29,24 @@
 #include "Shared/likely.h"
 #include "Shared/thread_count.h"
 
-template <typename FRAGMENTER_TYPE = Fragmenter_Namespace::InsertOrderFragmenter>
-class DefaultIOFacet {
- public:
-  using FragmenterType = FRAGMENTER_TYPE;
-  using DeleteVictimOffsetList = std::vector<uint64_t>;
-  using UpdateTargetOffsetList = std::vector<uint64_t>;
-  using UpdateTargetTypeList = std::vector<TargetMetaInfo>;
-  using UpdateTargetColumnNamesList = std::vector<std::string>;
-  using TransactionLog = typename FragmenterType::ModifyTransactionTracker;
-  using TransactionLogPtr = std::unique_ptr<TransactionLog>;
-  using ColumnValidationFunction = std::function<bool(std::string const&)>;
-
-  template <typename CATALOG_TYPE,
-            typename TABLE_ID_TYPE,
-            typename COLUMN_NAME_TYPE,
-            typename FRAGMENT_ID_TYPE,
-            typename FRAGMENT_OFFSET_LIST_TYPE,
-            typename UPDATE_VALUES_LIST_TYPE,
-            typename COLUMN_TYPE_INFO>
-  static void updateColumn(CATALOG_TYPE const& cat,
-                           TABLE_ID_TYPE const&& table_id,
-                           COLUMN_NAME_TYPE const& column_name,
-                           FRAGMENT_ID_TYPE const frag_id,
-                           FRAGMENT_OFFSET_LIST_TYPE const& frag_offsets,
-                           UPDATE_VALUES_LIST_TYPE const& update_values,
-                           COLUMN_TYPE_INFO const& col_type_info,
-                           TransactionLog& transaction_tracker) {
-    auto const* table_descriptor = cat.getMetadataForTable(table_id);
-    auto* fragmenter = table_descriptor->fragmenter;
-    CHECK(fragmenter);
-    auto const* target_column = cat.getMetadataForColumn(table_id, column_name);
-
-    fragmenter->updateColumn(&cat,
-                             table_descriptor,
-                             target_column,
-                             frag_id,
-                             frag_offsets,
-                             update_values,
-                             col_type_info,
-                             Data_Namespace::MemoryLevel::CPU_LEVEL,
-                             transaction_tracker);
-  }
-
-  template <typename CATALOG_TYPE,
-            typename TABLE_ID_TYPE,
-            typename FRAGMENT_ID_TYPE,
-            typename VICTIM_OFFSET_LIST,
-            typename COLUMN_TYPE_INFO>
-  static void deleteColumns(CATALOG_TYPE const& cat,
-                            TABLE_ID_TYPE const&& table_id,
-                            FRAGMENT_ID_TYPE const frag_id,
-                            VICTIM_OFFSET_LIST& victims,
-                            COLUMN_TYPE_INFO const& col_type_info,
-                            TransactionLog& transaction_tracker) {
-    auto const* table_descriptor = cat.getMetadataForTable(table_id);
-    CHECK(!table_is_temporary(table_descriptor));
-    auto* fragmenter = table_descriptor->fragmenter;
-    CHECK(fragmenter);
-
-    auto const* deleted_column_desc = cat.getDeletedColumn(table_descriptor);
-    if (deleted_column_desc != nullptr) {
-      fragmenter->updateColumn(&cat,
-                               table_descriptor,
-                               deleted_column_desc,
-                               frag_id,
-                               victims,
-                               ScalarTargetValue(int64_t(1L)),
-                               col_type_info,
-                               Data_Namespace::MemoryLevel::CPU_LEVEL,
-                               transaction_tracker);
-    } else {
-      LOG(INFO) << "Delete metadata column unavailable; skipping delete operation.";
-    }
-  }
-};
-
-template <typename EXECUTOR_TRAITS,
-          typename IO_FACET = DefaultIOFacet<>,
-          typename FRAGMENT_UPDATER = UpdateLogForFragment>
+template <typename EXECUTOR_TRAITS, typename FRAGMENT_UPDATER = UpdateLogForFragment>
 class StorageIOFacility {
  public:
   using ExecutorType = typename EXECUTOR_TRAITS::ExecutorType;
   using CatalogType = typename EXECUTOR_TRAITS::CatalogType;
   using FragmentUpdaterType = FRAGMENT_UPDATER;
   using UpdateCallback = typename FragmentUpdaterType::Callback;
-  using IOFacility = IO_FACET;
+
   using TableDescriptorType = typename EXECUTOR_TRAITS::TableDescriptorType;
-  using DeleteVictimOffsetList = typename IOFacility::DeleteVictimOffsetList;
-  using UpdateTargetOffsetList = typename IOFacility::UpdateTargetOffsetList;
-  using UpdateTargetTypeList = typename IOFacility::UpdateTargetTypeList;
-  using UpdateTargetColumnNamesList = typename IOFacility::UpdateTargetColumnNamesList;
-  using UpdateTargetColumnNameType = typename UpdateTargetColumnNamesList::value_type;
-  using ColumnValidationFunction = typename IOFacility::ColumnValidationFunction;
+  using DeleteVictimOffsetList = std::vector<uint64_t>;
+  using UpdateTargetOffsetList = std::vector<uint64_t>;
+  using UpdateTargetTypeList = std::vector<TargetMetaInfo>;
+  using UpdateTargetColumnNamesList = std::vector<std::string>;
+
+  using FragmenterType = Fragmenter_Namespace::InsertOrderFragmenter;
+  using TransactionLog = typename FragmenterType::ModifyTransactionTracker;
+  using TransactionLogPtr = std::unique_ptr<TransactionLog>;
+  using ColumnValidationFunction = std::function<bool(std::string const&)>;
 
   using StringSelector = Experimental::MetaTypeClass<Experimental::String>;
   using NonStringSelector = Experimental::UncapturedMetaTypeClass;
@@ -137,13 +62,13 @@ class StorageIOFacility {
 
   class TransactionParameters {
    public:
-    typename IOFacility::TransactionLog& getTransactionTracker() {
+    typename StorageIOFacility::TransactionLog& getTransactionTracker() {
       return transaction_tracker_;
     }
     void finalizeTransaction() { transaction_tracker_.commitUpdate(); }
 
    private:
-    typename IOFacility::TransactionLog transaction_tracker_;
+    typename StorageIOFacility::TransactionLog transaction_tracker_;
   };
 
   struct DeleteTransactionParameters : public TransactionParameters {
@@ -206,9 +131,9 @@ class StorageIOFacility {
   CatalogType const& catalog_;
 };
 
-template <typename EXECUTOR_TRAITS, typename IO_FACET, typename FRAGMENT_UPDATER>
-typename StorageIOFacility<EXECUTOR_TRAITS, IO_FACET, FRAGMENT_UPDATER>::UpdateCallback
-StorageIOFacility<EXECUTOR_TRAITS, IO_FACET, FRAGMENT_UPDATER>::yieldUpdateCallback(
+template <typename EXECUTOR_TRAITS, typename FRAGMENT_UPDATER>
+typename StorageIOFacility<EXECUTOR_TRAITS, FRAGMENT_UPDATER>::UpdateCallback
+StorageIOFacility<EXECUTOR_TRAITS, FRAGMENT_UPDATER>::yieldUpdateCallback(
     UpdateTransactionParameters& update_parameters) {
   using OffsetVector = std::vector<uint64_t>;
   using ScalarTargetValueVector = std::vector<ScalarTargetValue>;
@@ -455,13 +380,23 @@ StorageIOFacility<EXECUTOR_TRAITS, IO_FACET, FRAGMENT_UPDATER>::yieldUpdateCallb
 
         CHECK(row_idx == rows_per_column);
 
-        IOFacility::updateColumn(catalog_,
-                                 update_log.getPhysicalTableId(),
-                                 update_parameters.getUpdateColumnNames()[column_index],
+        const auto table_id = update_log.getPhysicalTableId();
+        auto const* table_descriptor =
+            catalog_.getMetadataForTable(update_log.getPhysicalTableId());
+        CHECK(table_descriptor);
+        const auto fragmenter = table_descriptor->fragmenter;
+        CHECK(fragmenter);
+        auto const* target_column = catalog_.getMetadataForColumn(
+            table_id, update_parameters.getUpdateColumnNames()[column_index]);
+
+        fragmenter->updateColumn(&catalog_,
+                                 table_descriptor,
+                                 target_column,
                                  update_log.getFragmentId(),
                                  column_offsets,
                                  scalar_target_values,
                                  update_log.getColumnType(column_index),
+                                 Data_Namespace::MemoryLevel::CPU_LEVEL,
                                  update_parameters.getTransactionTracker());
       }
     };
@@ -469,9 +404,9 @@ StorageIOFacility<EXECUTOR_TRAITS, IO_FACET, FRAGMENT_UPDATER>::yieldUpdateCallb
   }
 }
 
-template <typename EXECUTOR_TRAITS, typename IO_FACET, typename FRAGMENT_UPDATER>
-typename StorageIOFacility<EXECUTOR_TRAITS, IO_FACET, FRAGMENT_UPDATER>::UpdateCallback
-StorageIOFacility<EXECUTOR_TRAITS, IO_FACET, FRAGMENT_UPDATER>::yieldDeleteCallback(
+template <typename EXECUTOR_TRAITS, typename FRAGMENT_UPDATER>
+typename StorageIOFacility<EXECUTOR_TRAITS, FRAGMENT_UPDATER>::UpdateCallback
+StorageIOFacility<EXECUTOR_TRAITS, FRAGMENT_UPDATER>::yieldDeleteCallback(
     DeleteTransactionParameters& delete_parameters) {
   using RowProcessingFuturesVector = std::vector<std::future<uint64_t>>;
 
@@ -622,12 +557,23 @@ StorageIOFacility<EXECUTOR_TRAITS, IO_FACET, FRAGMENT_UPDATER>::yieldDeleteCallb
         rows_processed += t.get();
       }
 
-      IOFacility::deleteColumns(catalog_,
-                                update_log.getPhysicalTableId(),
-                                update_log.getFragmentId(),
-                                victim_offsets,
-                                update_log.getColumnType(0),
-                                delete_parameters.getTransactionTracker());
+      auto const* table_descriptor =
+          catalog_.getMetadataForTable(update_log.getPhysicalTableId());
+      CHECK(!table_is_temporary(table_descriptor));
+      auto* fragmenter = table_descriptor->fragmenter;
+      CHECK(fragmenter);
+
+      auto const* deleted_column_desc = catalog_.getDeletedColumn(table_descriptor);
+      CHECK(deleted_column_desc);
+      fragmenter->updateColumn(&catalog_,
+                               table_descriptor,
+                               deleted_column_desc,
+                               update_log.getFragmentId(),
+                               victim_offsets,
+                               ScalarTargetValue(int64_t(1L)),
+                               update_log.getColumnType(0),
+                               Data_Namespace::MemoryLevel::CPU_LEVEL,
+                               delete_parameters.getTransactionTracker());
     };
     return callback;
   }
