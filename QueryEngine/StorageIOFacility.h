@@ -24,7 +24,6 @@
 #include "QueryEngine/InputMetadata.h"
 #include "QueryEngine/TargetMetaInfo.h"
 #include "Shared/ConfigResolve.h"
-#include "Shared/ExperimentalTypeUtilities.h"
 #include "Shared/UpdelRoll.h"
 #include "Shared/likely.h"
 #include "Shared/thread_count.h"
@@ -47,18 +46,6 @@ class StorageIOFacility {
   using TransactionLog = typename FragmenterType::ModifyTransactionTracker;
   using TransactionLogPtr = std::unique_ptr<TransactionLog>;
   using ColumnValidationFunction = std::function<bool(std::string const&)>;
-
-  using StringSelector = Experimental::MetaTypeClass<Experimental::String>;
-  using NonStringSelector = Experimental::UncapturedMetaTypeClass;
-
-  struct MethodSelector {
-    static constexpr auto getEntryAt(StringSelector) {
-      return &FragmentUpdaterType::getTranslatedEntryAt;
-    }
-    static constexpr auto getEntryAt(NonStringSelector) {
-      return &FragmentUpdaterType::getEntryAt;
-    }
-  };
 
   class TransactionParameters {
    public:
@@ -299,7 +286,7 @@ StorageIOFacility<EXECUTOR_TRAITS, FRAGMENT_UPDATER>::yieldUpdateCallback(
                            &update_parameters,
                            &column_offsets,
                            &scalar_target_values,
-                           &row_idx](auto type_tag,
+                           &row_idx](auto get_entry_at_func,
                                      uint64_t column_index,
                                      uint64_t entry_start,
                                      uint64_t entry_count) -> uint64_t {
@@ -307,9 +294,7 @@ StorageIOFacility<EXECUTOR_TRAITS, FRAGMENT_UPDATER>::yieldUpdateCallback(
         for (uint64_t entry_index = entry_start;
              entry_index < (entry_start + entry_count);
              entry_index++) {
-          constexpr auto get_entry_method_sel(MethodSelector::getEntryAt(type_tag));
-          auto const row((update_log.*get_entry_method_sel)(entry_index));
-
+          const auto& row = get_entry_at_func(entry_index);
           if (row.empty()) {
             continue;
           }
@@ -345,31 +330,31 @@ StorageIOFacility<EXECUTOR_TRAITS, FRAGMENT_UPDATER>::yieldUpdateCallback(
         RowProcessingFuturesVector entry_processing_futures;
         entry_processing_futures.reserve(usable_threads);
 
-        auto thread_launcher = [&](auto const& type_tag) {
-          for (unsigned i = 0; i < static_cast<unsigned>(usable_threads); i++) {
-            entry_processing_futures.emplace_back(
-                std::async(std::launch::async,
-                           std::forward<decltype(process_rows)>(process_rows),
-                           type_tag,
-                           column_index,
-                           get_row_index(i),
-                           complete_entry_block_size));
-          }
-          if (partial_row_block_size) {
-            entry_processing_futures.emplace_back(
-                std::async(std::launch::async,
-                           std::forward<decltype(process_rows)>(process_rows),
-                           type_tag,
-                           column_index,
-                           get_row_index(usable_threads),
-                           partial_row_block_size));
+        auto get_entry_at_func = [&update_log, &column_index](const size_t entry_index) {
+          if (UNLIKELY(update_log.getColumnType(column_index).is_string())) {
+            return update_log.getTranslatedEntryAt(entry_index);
+          } else {
+            return update_log.getEntryAt(entry_index);
           }
         };
 
-        if (!update_log.getColumnType(column_index).is_string()) {
-          thread_launcher(NonStringSelector());
-        } else {
-          thread_launcher(StringSelector());
+        for (unsigned i = 0; i < static_cast<unsigned>(usable_threads); i++) {
+          entry_processing_futures.emplace_back(
+              std::async(std::launch::async,
+                         std::forward<decltype(process_rows)>(process_rows),
+                         get_entry_at_func,
+                         column_index,
+                         get_row_index(i),
+                         complete_entry_block_size));
+        }
+        if (partial_row_block_size) {
+          entry_processing_futures.emplace_back(
+              std::async(std::launch::async,
+                         std::forward<decltype(process_rows)>(process_rows),
+                         get_entry_at_func,
+                         column_index,
+                         get_row_index(usable_threads),
+                         partial_row_block_size));
         }
 
         uint64_t entries_processed(0);
