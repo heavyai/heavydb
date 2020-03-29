@@ -257,3 +257,23 @@ function install_ninja() {
   mkdir -p $PREFIX/bin/
   mv ninja $PREFIX/bin/
 }
+
+TBB_VERSION=2020.2
+
+function install_tbb() {
+  download https://github.com/oneapi-src/oneTBB/archive/v${TBB_VERSION}.tar.gz
+  extract v${TBB_VERSION}.tar.gz
+  pushd oneTBB-${TBB_VERSION}
+  if [ "$1" == "static" ]; then
+    make extra_inc=big_iron.inc
+    install -d $PREFIX/lib
+    install -m755 build/linux_*/*.a* $PREFIX/lib
+  else
+    make
+    install -d $PREFIX/lib
+    install -m755 build/linux_*/*.so* $PREFIX/lib
+  fi
+  install -d $PREFIX/include
+  cp -R include/tbb $PREFIX/include
+  popd
+}

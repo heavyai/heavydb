@@ -22,6 +22,7 @@ yay -S \
     glbinding \
     go \
     google-glog \
+    intel-tbb \
     jdk-openjdk \
     librdkafka \
     llvm \

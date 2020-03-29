@@ -151,6 +151,9 @@ popd
 
 download_make_install ${HTTP_DEPS}/bisonpp-1.21-45.tar.gz bison++-1.21
 
+# TBB
+install_tbb
+
 # Apache Arrow (see common-functions.sh)
 ARROW_BOOST_USE_SHARED="ON"
 install_arrow

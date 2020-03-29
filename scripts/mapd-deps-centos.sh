@@ -265,6 +265,9 @@ popd
 # Geo Support
 install_gdal
 
+# TBB
+install_tbb static
+
 # Apache Arrow (see common-functions.sh)
 install_arrow
 
