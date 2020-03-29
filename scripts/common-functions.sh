@@ -145,12 +145,12 @@ function install_awscpp() {
     popd
 }
 
-LLVM_VERSION=8.0.0
+LLVM_VERSION=9.0.1
 
 function install_llvm() {
     VERS=${LLVM_VERSION}
     download ${HTTP_DEPS}/llvm/$VERS/llvm-$VERS.src.tar.xz
-    download ${HTTP_DEPS}/llvm/$VERS/cfe-$VERS.src.tar.xz
+    download ${HTTP_DEPS}/llvm/$VERS/clang-$VERS.src.tar.xz
     download ${HTTP_DEPS}/llvm/$VERS/compiler-rt-$VERS.src.tar.xz
     download ${HTTP_DEPS}/llvm/$VERS/lldb-$VERS.src.tar.xz
     download ${HTTP_DEPS}/llvm/$VERS/lld-$VERS.src.tar.xz
@@ -159,14 +159,14 @@ function install_llvm() {
     download ${HTTP_DEPS}/llvm/$VERS/clang-tools-extra-$VERS.src.tar.xz
     rm -rf llvm-$VERS.src
     extract llvm-$VERS.src.tar.xz
-    extract cfe-$VERS.src.tar.xz
+    extract clang-$VERS.src.tar.xz
     extract compiler-rt-$VERS.src.tar.xz
     extract lld-$VERS.src.tar.xz
     extract lldb-$VERS.src.tar.xz
     extract libcxx-$VERS.src.tar.xz
     extract libcxxabi-$VERS.src.tar.xz
     extract clang-tools-extra-$VERS.src.tar.xz
-    mv cfe-$VERS.src llvm-$VERS.src/tools/clang
+    mv clang-$VERS.src llvm-$VERS.src/tools/clang
     mv compiler-rt-$VERS.src llvm-$VERS.src/projects/compiler-rt
     mv lld-$VERS.src llvm-$VERS.src/tools/lld
     mv lldb-$VERS.src llvm-$VERS.src/tools/lldb
@@ -179,9 +179,6 @@ function install_llvm() {
     pushd build.llvm-$VERS
     cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=$PREFIX -DLLVM_ENABLE_RTTI=on -DLLVM_USE_INTEL_JITEVENTS=on ../llvm-$VERS.src
     makej
-    if [ ! -d "lib/python2.7" ]; then
-        cp -R lib64/python2.7 lib/python2.7
-    fi
     make install
     popd
 }
