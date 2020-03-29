@@ -6298,6 +6298,21 @@ TEST(Select, GpuSort) {
   }
 }
 
+TEST(Select, SpeculativeTopNSort) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    c("SELECT x, COUNT(*) AS val FROM gpu_sort_test GROUP BY x ORDER BY val DESC LIMIT "
+      "2;",
+      dt);
+    c("SELECT x from (SELECT COUNT(*) AS val, x FROM gpu_sort_test GROUP BY x ORDER BY "
+      "val ASC LIMIT 3);",
+      dt);
+    c("SELECT val from (SELECT y, COUNT(*) AS val FROM gpu_sort_test GROUP BY y ORDER BY "
+      "val DESC LIMIT 3);",
+      dt);
+  }
+}
+
 TEST(Select, GroupByPerfectHash) {
   // TODO(Saman): add more systematic tests for single-column perfect hash
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
