@@ -29,18 +29,17 @@ DdlCommandExecutor::DdlCommandExecutor(
     std::shared_ptr<Catalog_Namespace::SessionInfo const> session_ptr)
     : ddl_statement(ddl_statement), session_ptr(session_ptr) {
   CHECK(!ddl_statement.empty());
-}
-
-void DdlCommandExecutor::execute(TQueryResult& _return) {
-  rapidjson::Document ddl_query;
   ddl_query.Parse(ddl_statement);
   CHECK(ddl_query.IsObject());
   CHECK(ddl_query.HasMember("payload"));
   CHECK(ddl_query["payload"].IsObject());
   const auto& payload = ddl_query["payload"].GetObject();
-
   CHECK(payload.HasMember("command"));
   CHECK(payload["command"].IsString());
+}
+
+void DdlCommandExecutor::execute(TQueryResult& _return) {
+  const auto& payload = ddl_query["payload"].GetObject();
   const auto& ddl_command = std::string_view(payload["command"].GetString());
   if (ddl_command == "CREATE_SERVER") {
     CreateForeignServerCommand{payload, session_ptr}.execute(_return);
@@ -53,6 +52,12 @@ void DdlCommandExecutor::execute(TQueryResult& _return) {
   } else {
     throw std::runtime_error("Unsupported DDL command");
   }
+}
+
+bool DdlCommandExecutor::isShowActiveUsers() {
+  const auto& payload = ddl_query["payload"].GetObject();
+  const auto& ddl_command = std::string_view(payload["command"].GetString());
+  return (ddl_command == "SHOW_ACTIVE_USERS");
 }
 
 CreateForeignServerCommand::CreateForeignServerCommand(

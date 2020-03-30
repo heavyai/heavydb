@@ -790,6 +790,9 @@ class MapDHandler : public MapDIf {
       const std::shared_ptr<Catalog_Namespace::Catalog>& catalog_ptr);
   bool isInMemoryCalciteSession(const Catalog_Namespace::UserMetadata user_meta);
   void removeInMemoryCalciteSession(const std::string& session_id);
+
+  void get_active_users(const Catalog_Namespace::SessionInfo& session_info,
+                        TQueryResult& _return);
 };
 
 #endif /* MAPDHANDLER_H */

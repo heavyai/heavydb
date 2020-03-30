@@ -15,6 +15,7 @@ add_executable(StringFunctionsTest StringFunctionsTest.cpp)
 add_executable(ProfileTest ProfileTest.cpp)
 add_executable(ExperimentalTest ExperimentalTest.cpp)
 add_executable(ForeignServerDdlTest ForeignServerDdlTest.cpp)
+add_executable(ShowCommandsDdlTest ShowCommandsDdlTest.cpp)
 add_executable(CatalogMigrationTest CatalogMigrationTest.cpp)
 add_executable(CreateAndDropTableDdlTest CreateAndDropTableDdlTest.cpp)
 
@@ -137,6 +138,7 @@ target_link_libraries(CommandLineTest gtest Shared ${Boost_LIBRARIES})
 target_link_libraries(ForeignServerDdlTest ${MAPD_HANDLER_TEST_LIBRARIES})
 target_link_libraries(CatalogMigrationTest ${MAPD_HANDLER_TEST_LIBRARIES})
 target_link_libraries(CreateAndDropTableDdlTest ${MAPD_HANDLER_TEST_LIBRARIES})
+target_link_libraries(ShowCommandsDdlTest ${MAPD_HANDLER_TEST_LIBRARIES})
 
 if(NOT ${CMAKE_SYSTEM_NAME} STREQUAL "Darwin")
   target_link_libraries(UdfTest gtest ${EXECUTE_TEST_LIBS})
@@ -183,6 +185,7 @@ add_test(CalciteOptimizeTest CalciteOptimizeTest ${TEST_ARGS})
 add_test(JoinHashTableTest JoinHashTableTest ${TEST_ARGS})
 add_test(CommandLineTest CommandLineTest ${TEST_ARGS})
 add_test(ForeignServerDdlTest ForeignServerDdlTest ${TEST_ARGS})
+add_test(ShowCommandsDdlTest ShowCommandsDdlTest ${TEST_ARGS})
 add_test(CatalogMigrationTest CatalogMigrationTest ${TEST_ARGS})
 add_test(CreateAndDropTableDdlTest CreateAndDropTableDdlTest ${TEST_ARGS})
 
@@ -240,6 +243,7 @@ set(TEST_PROGRAMS
   StringFunctionsTest
   CommandLineTest
   ForeignServerDdlTest
+  ShowCommandsDdlTest
   CatalogMigrationTest
   CreateAndDropTableDdlTest
 )

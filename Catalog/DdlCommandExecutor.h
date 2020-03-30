@@ -130,7 +130,13 @@ class DdlCommandExecutor {
    */
   void execute(TQueryResult& _return);
 
+  /**
+   * Returns true if this command is SHOW ACTIVE USERS
+   */
+  bool isShowActiveUsers();
+
  private:
   const std::string& ddl_statement;
+  rapidjson::Document ddl_query;
   std::shared_ptr<Catalog_Namespace::SessionInfo const> session_ptr;
 };

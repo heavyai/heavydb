@@ -115,7 +115,6 @@ ParserWrapper::ParserWrapper(std::string query_string) {
     is_validate = true;
     return;
   }
-
   for (std::string ddl : ddl_cmd) {
     is_ddl = boost::istarts_with(query_string, ddl);
     if (is_ddl) {
@@ -142,6 +141,10 @@ ParserWrapper::ParserWrapper(std::string query_string) {
         if (boost::regex_match(query_string, copy_to)) {
           is_copy_to = true;
         }
+      } else if (ddl == "SHOW") {
+        is_calcite_ddl_ = true;
+        is_legacy_ddl_ = false;
+        return;
       }
 
       is_legacy_ddl_ = !is_calcite_ddl_;

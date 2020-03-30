@@ -513,6 +513,8 @@ void MapDHandler::connect_impl(TSessionId& session,
                          ? std::vector<std::string>{{"super"}}
                          : SysCatalog::instance().getRoles(
                                false, false, session_ptr->get_currentUser().userName);
+
+  session_ptr->set_connection_info(getConnectionInfo().toString());
   stdlog.appendNameValuePairs("roles", boost::algorithm::join(roles, ","));
 }
 
@@ -5040,7 +5042,12 @@ void MapDHandler::sql_execute_impl(TQueryResult& _return,
             parse_to_ra(query_state_proxy, temp_query_str, {}, false, mapd_parameters_)
                 .first.plan_result;
       } else if (pw.isCalciteDdl()) {
-        DdlCommandExecutor{query_ra, session_ptr}.execute(_return);
+        DdlCommandExecutor executor = DdlCommandExecutor(query_ra, session_ptr);
+        if (executor.isShowActiveUsers()) {
+          get_active_users(*session_ptr, _return);
+        } else {
+          executor.execute(_return);
+        }
         return;
       }
       const auto explain_info = pw.getExplainInfo();
@@ -5921,4 +5928,48 @@ void MapDHandler::register_runtime_extension_functions(
           << whitelist;
   ExtensionFunctionsWhitelist::clearRTUdfs();
   ExtensionFunctionsWhitelist::addRTUdfs(whitelist);
+}
+
+void MapDHandler::get_active_users(const Catalog_Namespace::SessionInfo& session_info,
+                                   TQueryResult& _return) {
+  if (!session_info.get_currentUser().isSuper) {
+    throw std::runtime_error(
+        "SHOW ACTIVE USERS failed, because it can only be executed by super user.");
+  } else {
+    mapd_lock_guard<mapd_shared_mutex> read_lock(sessions_mutex_);
+    const std::vector<std::string> col_names{
+        "session_id", "login_name", "client_address", "db_name"};
+
+    // Make columns for TQueryResult
+    TRowDescriptor row_desc;
+    for (const auto& col : col_names) {
+      TColumnType columnType;
+      columnType.col_name = col;
+      columnType.col_type.type = TDatumType::STR;
+      row_desc.push_back(columnType);
+      _return.row_set.columns.emplace_back(TColumn());
+    }
+    _return.row_set.row_desc = row_desc;
+    _return.row_set.is_columnar = true;
+
+    if (!sessions_.empty()) {
+      for (auto sessions = sessions_.begin(); sessions_.end() != sessions; sessions++) {
+        const auto id = sessions->first;
+        const auto show_session_ptr = sessions->second;
+        int col_num = 0;
+        _return.row_set.columns[col_num++].data.str_col.emplace_back(
+            show_session_ptr->get_public_session_id());
+        _return.row_set.columns[col_num++].data.str_col.emplace_back(
+            show_session_ptr->get_currentUser().userName);
+        _return.row_set.columns[col_num++].data.str_col.emplace_back(
+            show_session_ptr->get_connection_info());
+        _return.row_set.columns[col_num++].data.str_col.emplace_back(
+            show_session_ptr->getCatalog().getCurrentDB().dbName);
+
+        for (auto& col : _return.row_set.columns) {
+          col.nulls.push_back(false);
+        }
+      }
+    }
+  }
 }

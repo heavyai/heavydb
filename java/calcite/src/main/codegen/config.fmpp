@@ -29,6 +29,7 @@ data: {
         "com.mapd.parser.extension.ddl.SqlDropServer"
         "com.mapd.parser.extension.ddl.SqlCreateForeignTable"
         "com.mapd.parser.extension.ddl.SqlDropForeignTable"
+        "com.mapd.parser.extension.ddl.SqlShowActiveUsers"
         "com.mapd.parser.extension.ddl.omnisql.*"
         "java.util.Map"
         "java.util.HashMap"
@@ -47,6 +48,8 @@ data: {
         "LINESTRING"
         "MULTIPOLYGON"
         "TEXT"
+        "ACTIVE"
+        "USERS"
       ]
 
       # List of keywords from "keywords" section that are not reserved.
@@ -370,6 +373,7 @@ data: {
 
       # List of methods for parsing custom SQL statements.
       statementParserMethods: [
+          "SqlShowActiveUsers(span())"
       ]
 
       # List of methods for parsing custom literals.
@@ -423,6 +427,7 @@ data: {
       implementationFiles: [
         "foreignServerParser.ftl"
         "foreignTableParser.ftl"
+        "showCommandsParser.ftl"
       ]
 
       includePosixOperators: false

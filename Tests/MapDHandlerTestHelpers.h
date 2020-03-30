@@ -78,10 +78,11 @@ class MapDHandlerTestFixture : public testing::Test {
                                                    udf_filename,
                                                    udf_compiler_path,
                                                    udf_compiler_options);
-      mapd_handler->connect(session_id, default_user, default_pass, db_name);
     }
     loginAdmin();
   }
+
+  virtual void TearDown() override { logoutAdmin(); }
 
   void sql(const std::string& query) {
     TQueryResult result;
@@ -90,6 +91,11 @@ class MapDHandlerTestFixture : public testing::Test {
 
   void sql(TQueryResult& result, const std::string& query) {
     mapd_handler->sql_execute(result, session_id, query, true, "", -1, -1);
+  }
+
+  // Execute SQL with session_id
+  void sql(TQueryResult& result, const std::string& query, TSessionId& sess_id) {
+    mapd_handler->sql_execute(result, sess_id, query, true, "", -1, -1);
   }
 
   Catalog_Namespace::UserMetadata getCurrentUser() {
@@ -108,11 +114,26 @@ class MapDHandlerTestFixture : public testing::Test {
   void loginAdmin() {
     session_id = {};
     mapd_handler->connect(session_id, default_user, default_pass, db_name);
+    // Store admin session ID in seperate variable so we can always logout
+    // the default admin on teardown
+    admin_session_id = session_id;
   }
+
+  void logoutAdmin() { mapd_handler->disconnect(admin_session_id); }
+
+  void logout(const TSessionId& id) { mapd_handler->disconnect(id); }
 
   void login(const std::string& user, const std::string& pass) {
     session_id = {};
     mapd_handler->connect(session_id, user, pass, db_name);
+  }
+
+  // Login and return the session id to logout later
+  void login(const std::string& user,
+             const std::string& pass,
+             const std::string& db,
+             TSessionId& result_id) {
+    mapd_handler->connect(result_id, user, pass, db);
   }
 
   void queryAndAssertException(const std::string& sql_statement,
@@ -128,6 +149,7 @@ class MapDHandlerTestFixture : public testing::Test {
  private:
   static std::unique_ptr<MapDHandler> mapd_handler;
   static TSessionId session_id;
+  static TSessionId admin_session_id;
   static std::vector<LeafHostInfo> db_leaves;
   static std::vector<LeafHostInfo> string_leaves;
   static AuthMetadata auth_metadata;
@@ -141,6 +163,7 @@ class MapDHandlerTestFixture : public testing::Test {
 };
 
 TSessionId MapDHandlerTestFixture::session_id{};
+TSessionId MapDHandlerTestFixture::admin_session_id{};
 std::unique_ptr<MapDHandler> MapDHandlerTestFixture::mapd_handler = nullptr;
 std::vector<LeafHostInfo> MapDHandlerTestFixture::db_leaves{};
 std::vector<LeafHostInfo> MapDHandlerTestFixture::string_leaves{};
