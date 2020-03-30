@@ -130,13 +130,9 @@ void create_or_append_validity(const ScalarTargetValue& value,
   null_bitmap->push_back(is_valid);
 }
 
-}  // namespace
-
-namespace arrow {
-
-key_t get_and_copy_to_shm(const std::shared_ptr<Buffer>& data) {
-  if (!data->size()) {
-    return IPC_PRIVATE;
+std::pair<key_t, void*> get_shm(size_t shmsz) {
+  if (!shmsz) {
+    return std::make_pair(IPC_PRIVATE, nullptr);
   }
   // Generate a new key for a shared memory segment. Keys to shared memory segments
   // are OS global, so we need to try a new key if we encounter a collision. It seems
@@ -145,7 +141,6 @@ key_t get_and_copy_to_shm(const std::shared_ptr<Buffer>& data) {
   // the same nonce, so using rand() in lieu of a better approach
   // TODO(ptaylor): Is this common? Are these assumptions true?
   auto key = static_cast<key_t>(rand());
-  const auto shmsz = data->size();
   int shmid = -1;
   // IPC_CREAT - indicates we want to create a new segment for this key if it doesn't
   // exist IPC_EXCL - ensures failure if a segment already exists for this key
@@ -169,6 +164,22 @@ key_t get_and_copy_to_shm(const std::shared_ptr<Buffer>& data) {
     throw std::runtime_error("failed to attach a shared memory");
   }
 
+  return std::make_pair(key, ipc_ptr);
+}
+
+std::pair<key_t, std::shared_ptr<Buffer>> get_shm_buffer(size_t size) {
+  auto [key, ipc_ptr] = get_shm(size);
+  std::shared_ptr<Buffer> buffer(new MutableBuffer(static_cast<uint8_t*>(ipc_ptr), size));
+  return std::make_pair<key_t, std::shared_ptr<Buffer>>(std::move(key),
+                                                        std::move(buffer));
+}
+
+}  // namespace
+
+namespace arrow {
+
+key_t get_and_copy_to_shm(const std::shared_ptr<Buffer>& data) {
+  auto [key, ipc_ptr] = get_shm(data->size());
   // copy the arrow records buffer to shared memory
   // TODO(ptaylor): I'm sure it's possible to tell Arrow's RecordBatchStreamWriter to
   // write directly to the shared memory segment as a sink
@@ -184,26 +195,37 @@ key_t get_and_copy_to_shm(const std::shared_ptr<Buffer>& data) {
 //! buffers using deallocateArrowResultBuffer. GPU buffers will become owned by the caller
 //! upon deserialization, and will be automatically freed when they go out of scope.
 ArrowResult ArrowResultSetConverter::getArrowResult() const {
+  auto timer = DEBUG_TIMER(__func__);
   std::shared_ptr<arrow::RecordBatch> record_batch = convertToArrow();
 
   if (device_type_ == ExecutorDeviceType::CPU) {
-    auto out_stream_result = arrow::io::BufferOutputStream::Create(1024);
-    ARROW_THROW_NOT_OK(out_stream_result.status());
-    auto out_stream = std::move(out_stream_result).ValueOrDie();
-
-    ARROW_THROW_NOT_OK(arrow::ipc::WriteRecordBatchStream(
-        {record_batch}, ipc::IpcOptions::Defaults(), out_stream.get()));
-
-    auto complete_ipc_stream = out_stream->Finish();
-    ARROW_THROW_NOT_OK(complete_ipc_stream.status());
-    auto serialized_records = std::move(complete_ipc_stream).ValueOrDie();
-
+    auto timer = DEBUG_TIMER("serialize batch to shared memory");
+    std::shared_ptr<Buffer> serialized_records;
+    std::shared_ptr<Buffer> serialized_schema;
     std::vector<char> schema_handle_buffer;
-
-    const auto record_key = arrow::get_and_copy_to_shm(serialized_records);
     std::vector<char> record_handle_buffer(sizeof(key_t), 0);
+    int64_t total_size = 0;
+    int64_t records_size = 0;
+    int64_t schema_size = 0;
+    key_t records_shm_key = IPC_PRIVATE;
+
+    ARROW_THROW_NOT_OK(ipc::SerializeSchema(
+        *record_batch->schema(), nullptr, default_memory_pool(), &serialized_schema));
+    schema_size = serialized_schema->size();
+
+    ARROW_THROW_NOT_OK(ipc::GetRecordBatchSize(*record_batch, &records_size));
+    total_size = schema_size + records_size;
+    std::tie(records_shm_key, serialized_records) = get_shm_buffer(total_size);
+
+    memcpy(serialized_records->mutable_data(),
+           serialized_schema->data(),
+           (size_t)schema_size);
+
+    io::FixedSizeBufferWriter stream(SliceMutableBuffer(serialized_records, schema_size));
+    ARROW_THROW_NOT_OK(
+        ipc::SerializeRecordBatch(*record_batch, arrow::default_memory_pool(), &stream));
     memcpy(&record_handle_buffer[0],
-           reinterpret_cast<const unsigned char*>(&record_key),
+           reinterpret_cast<const unsigned char*>(&records_shm_key),
            sizeof(key_t));
 
     return {schema_handle_buffer,
@@ -311,6 +333,7 @@ ArrowResult ArrowResultSetConverter::getArrowResult() const {
 ArrowResultSetConverter::SerializedArrowOutput
 ArrowResultSetConverter::getSerializedArrowOutput(
     arrow::ipc::DictionaryMemo* memo) const {
+  auto timer = DEBUG_TIMER(__func__);
   std::shared_ptr<arrow::RecordBatch> arrow_copy = convertToArrow();
   std::shared_ptr<arrow::Buffer> serialized_records, serialized_schema;
 
@@ -320,6 +343,7 @@ ArrowResultSetConverter::getSerializedArrowOutput(
   ARROW_THROW_NOT_OK(CollectDictionaries(*arrow_copy, memo));
 
   if (arrow_copy->num_rows()) {
+    auto timer = DEBUG_TIMER("serialize records");
     ARROW_THROW_NOT_OK(arrow_copy->Validate());
     ARROW_THROW_NOT_OK(arrow::ipc::SerializeRecordBatch(
         *arrow_copy, arrow::default_memory_pool(), &serialized_records));
