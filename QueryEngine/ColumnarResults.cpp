@@ -64,9 +64,12 @@ ColumnarResults::ColumnarResults(
     if (is_varlen) {
       throw ColumnarConversionNotSupported();
     }
-    column_buffers_[i] =
-        reinterpret_cast<int8_t*>(checked_malloc(num_rows_ * target_types[i].get_size()));
-    row_set_mem_owner->addColBuffer(column_buffers_[i]);
+    if (!isDirectColumnarConversionPossible() ||
+        !rows.isZeroCopyColumnarConversionPossible(i)) {
+      column_buffers_[i] = reinterpret_cast<int8_t*>(
+          checked_malloc(num_rows_ * target_types[i].get_size()));
+      row_set_mem_owner->addColBuffer(column_buffers_[i]);
+    }
   }
 
   if (isDirectColumnarConversionPossible() && rows.entryCount() > 0) {
@@ -363,7 +366,10 @@ void ColumnarResults::copyAllNonLazyColumns(
   // parallelized by assigning each column to a thread
   std::vector<std::future<void>> direct_copy_threads;
   for (size_t col_idx = 0; col_idx < num_columns; col_idx++) {
-    if (is_column_non_lazily_fetched(col_idx)) {
+    if (rows.isZeroCopyColumnarConversionPossible(col_idx)) {
+      CHECK(!column_buffers_[col_idx]);
+      column_buffers_[col_idx] = const_cast<int8_t*>(rows.getColumnarBuffer(col_idx));
+    } else if (is_column_non_lazily_fetched(col_idx)) {
       direct_copy_threads.push_back(std::async(
           std::launch::async,
           [&rows, this](const size_t column_index) {
