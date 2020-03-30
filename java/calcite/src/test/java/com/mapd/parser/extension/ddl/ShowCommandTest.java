@@ -18,9 +18,9 @@ public class ShowCommandTest extends DDLTest {
   }
 
   @Test
-  public void showActiveUsers() throws Exception {
-    final JsonObject expectedJsonObject = getJsonFromFile("show_active_users.json");
-    final TPlanResult result = processDdlCommand("SHOW ACTIVE USERS;");
+  public void showUserSessions() throws Exception {
+    final JsonObject expectedJsonObject = getJsonFromFile("show_user_sessions.json");
+    final TPlanResult result = processDdlCommand("SHOW USER SESSIONS;");
     final JsonObject actualJsonObject =
             gson.fromJson(result.plan_result, JsonObject.class);
     assertEquals(expectedJsonObject, actualJsonObject);

@@ -1,6 +1,6 @@
 {
   "statementType": "DDL",
   "payload": {
-    "command": "SHOW_ACTIVE_USERS"
+    "command": "SHOW_USER_SESSIONS"
   }
 }

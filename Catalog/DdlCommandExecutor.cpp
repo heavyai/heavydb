@@ -54,10 +54,10 @@ void DdlCommandExecutor::execute(TQueryResult& _return) {
   }
 }
 
-bool DdlCommandExecutor::isShowActiveUsers() {
+bool DdlCommandExecutor::isShowUserSessions() {
   const auto& payload = ddl_query["payload"].GetObject();
   const auto& ddl_command = std::string_view(payload["command"].GetString());
-  return (ddl_command == "SHOW_ACTIVE_USERS");
+  return (ddl_command == "SHOW_USER_SESSIONS");
 }
 
 CreateForeignServerCommand::CreateForeignServerCommand(

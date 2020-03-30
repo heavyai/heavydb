@@ -15,16 +15,16 @@ import org.apache.calcite.sql.parser.SqlParserPos;
 
 import java.util.List;
 
-public class SqlShowActiveUsers extends SqlDdl implements JsonSerializableDdl {
+public class SqlShowUserSessions extends SqlDdl implements JsonSerializableDdl {
   private static final SqlOperator OPERATOR =
-          new SqlSpecialOperator("SHOW_ACTIVE_USERS", SqlKind.OTHER_DDL);
+          new SqlSpecialOperator("SHOW_USER_SESSIONS", SqlKind.OTHER_DDL);
 
   // The following are the fields we want to expose to the JSON object.
   // Some may replicate fields declared in the base class.
   @Expose
   private String command;
 
-  public SqlShowActiveUsers(final SqlParserPos pos) {
+  public SqlShowUserSessions(final SqlParserPos pos) {
     super(OPERATOR, pos);
     this.command = OPERATOR.getName();
   }

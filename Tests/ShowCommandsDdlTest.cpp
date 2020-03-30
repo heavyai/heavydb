@@ -28,7 +28,7 @@
 #define BASE_PATH "./tmp"
 #endif
 
-class ShowActiveUsersTest : public MapDHandlerTestFixture {
+class ShowUserSessionsTest : public MapDHandlerTestFixture {
  public:
   void SetUp() override {
     MapDHandlerTestFixture::SetUp();
@@ -42,7 +42,7 @@ class ShowActiveUsersTest : public MapDHandlerTestFixture {
     createSuperUsers();
     // Check that default only user session exists
     TQueryResult result;
-    sql(result, "SHOW ACTIVE USERS;");
+    sql(result, "SHOW USER SESSIONS;");
     assertExpectedFormat(result);
     assertNumSessions(result, 1);
     assertSessionResultFound(result, "admin", "omnisci", 1);
@@ -56,7 +56,7 @@ class ShowActiveUsersTest : public MapDHandlerTestFixture {
 
     // Check that default only user session still exists
     TQueryResult result;
-    sql(result, "SHOW ACTIVE USERS;");
+    sql(result, "SHOW USER SESSIONS;");
     assertExpectedFormat(result);
     assertNumSessions(result, 1);
     assertSessionResultFound(result, "admin", "omnisci", admin_id);
@@ -129,7 +129,7 @@ class ShowActiveUsersTest : public MapDHandlerTestFixture {
 
   void assertExpectedFormat(const TQueryResult& result) {
     ASSERT_EQ(result.row_set.is_columnar, true);
-    ASSERT_EQ(result.row_set.columns.size(), (size_t)4);
+    ASSERT_EQ(result.row_set.columns.size(), size_t(4));
     ASSERT_EQ(result.row_set.row_desc[ID].col_type.type, TDatumType::STR);
     ASSERT_EQ(result.row_set.row_desc[ID].col_name, "session_id");
     ASSERT_EQ(result.row_set.row_desc[USERNAME].col_type.type, TDatumType::STR);
@@ -182,15 +182,15 @@ class ShowActiveUsersTest : public MapDHandlerTestFixture {
           result.row_set.columns[DB_NAME].data.str_col[i] == db &&
           result.row_set.columns[CONNECTION_INFO].data.str_col[i] == connection_string) {
         // Only one match should be found
-        ASSERT_EQ(retval.length(), 0);
+        ASSERT_EQ(retval.length(), size_t(0));
         retval = result.row_set.columns[ID].data.str_col[i];
-        ASSERT_GT(retval.length(), 0);
+        ASSERT_GT(retval.length(), size_t(0));
       }
     }
-    ASSERT_GT(retval.length(), 0);
+    ASSERT_GT(retval.length(), size_t(0));
   }
 
-  void assertNumSessions(const TQueryResult& result, int num_session) {
+  void assertNumSessions(const TQueryResult& result, size_t num_session) {
     ASSERT_EQ(num_session, result.row_set.columns[ID].data.str_col.size());
   }
   std::vector<std::string> get_users() { return users; }
@@ -206,20 +206,20 @@ class ShowActiveUsersTest : public MapDHandlerTestFixture {
   std::string connection_string;
 };
 
-TEST_F(ShowActiveUsersTest, SHOW) {
+TEST_F(ShowUserSessionsTest, SHOW) {
   // check default admin session is created
   TQueryResult result;
-  sql(result, "SHOW ACTIVE USERS;");
+  sql(result, "SHOW USER SESSIONS;");
   assertExpectedFormat(result);
   assertNumSessions(result, 1);
   assertSessionResultFound(result, "admin", "omnisci", 1);
 }
 
-TEST_F(ShowActiveUsersTest, SHOW_ADMIN_MULTIDB) {
+TEST_F(ShowUserSessionsTest, SHOW_ADMIN_MULTIDB) {
   TSessionId new_session;
   login("admin", "HyperInteractive", "db1", new_session);
   TQueryResult result;
-  sql(result, "SHOW ACTIVE USERS;");
+  sql(result, "SHOW USER SESSIONS;");
   assertExpectedFormat(result);
   assertNumSessions(result, 2);
   assertSessionResultFound(result, "admin", "db1", 1);
@@ -227,11 +227,11 @@ TEST_F(ShowActiveUsersTest, SHOW_ADMIN_MULTIDB) {
   logout(new_session);
 }
 
-TEST_F(ShowActiveUsersTest, SHOW_ADMIN_MULTISESSION_SINGLEDB) {
+TEST_F(ShowUserSessionsTest, SHOW_ADMIN_MULTISESSION_SINGLEDB) {
   TSessionId new_session;
   login("admin", "HyperInteractive", "omnisci", new_session);
   TQueryResult result;
-  std::string query{"SHOW ACTIVE USERS;"};
+  std::string query{"SHOW USER SESSIONS;"};
   sql(result, query);
   assertExpectedFormat(result);
   assertNumSessions(result, 2);
@@ -239,13 +239,13 @@ TEST_F(ShowActiveUsersTest, SHOW_ADMIN_MULTISESSION_SINGLEDB) {
   logout(new_session);
 }
 
-TEST_F(ShowActiveUsersTest, SHOW_USERS_MULTISESSION) {
+TEST_F(ShowUserSessionsTest, SHOW_USERS_MULTISESSION) {
   TSessionId session1;
   login("user1", "HyperInteractive", "db1", session1);
   TSessionId session2;
   login("user2", "HyperInteractive", "db1", session2);
   TQueryResult result;
-  std::string query{"SHOW ACTIVE USERS;"};
+  std::string query{"SHOW USER SESSIONS;"};
   sql(result, query);
   assertExpectedFormat(result);
   assertNumSessions(result, 3);
@@ -256,13 +256,13 @@ TEST_F(ShowActiveUsersTest, SHOW_USERS_MULTISESSION) {
   logout(session2);
 }
 
-TEST_F(ShowActiveUsersTest, SHOW_USERS_MULTIDBS) {
+TEST_F(ShowUserSessionsTest, SHOW_USERS_MULTIDBS) {
   TSessionId session1;
   login("user1", "HyperInteractive", "db1", session1);
   TSessionId session2;
   login("user2", "HyperInteractive", "db2", session2);
   TQueryResult result;
-  std::string query{"SHOW ACTIVE USERS;"};
+  std::string query{"SHOW USER SESSIONS;"};
   sql(result, query);
   assertExpectedFormat(result);
   assertNumSessions(result, 3);
@@ -273,7 +273,7 @@ TEST_F(ShowActiveUsersTest, SHOW_USERS_MULTIDBS) {
   logout(session2);
 }
 
-TEST_F(ShowActiveUsersTest, SHOW_USERS_ALL) {
+TEST_F(ShowUserSessionsTest, SHOW_USERS_ALL) {
   std::vector<TSessionId> session_ids;
 
   for (int copies = 1; copies < 5; copies++) {
@@ -286,7 +286,7 @@ TEST_F(ShowActiveUsersTest, SHOW_USERS_ALL) {
     }
 
     TQueryResult result;
-    sql(result, "SHOW ACTIVE USERS;");
+    sql(result, "SHOW USER SESSIONS;");
     assertExpectedFormat(result);
     assertNumSessions(result, 1 + (copies * get_users().size() * get_dbs().size()));
     for (auto const& user : get_users()) {
@@ -301,7 +301,7 @@ TEST_F(ShowActiveUsersTest, SHOW_USERS_ALL) {
   }
 }
 
-TEST_F(ShowActiveUsersTest, SHOW_USERS_MULTIDB_LOGOUT) {
+TEST_F(ShowUserSessionsTest, SHOW_USERS_MULTIDB_LOGOUT) {
   TSessionId session1;
   login("user1", "HyperInteractive", "db1", session1);
   TSessionId session2;
@@ -309,7 +309,7 @@ TEST_F(ShowActiveUsersTest, SHOW_USERS_MULTIDB_LOGOUT) {
   std::string session2_id;
   {
     TQueryResult result;
-    sql(result, "SHOW ACTIVE USERS;");
+    sql(result, "SHOW USER SESSIONS;");
     assertExpectedFormat(result);
     assertNumSessions(result, 3);
     assertSessionResultFound(result, "admin", "omnisci", 1);
@@ -321,7 +321,7 @@ TEST_F(ShowActiveUsersTest, SHOW_USERS_MULTIDB_LOGOUT) {
   logout(session1);
   {
     TQueryResult result;
-    sql(result, "SHOW ACTIVE USERS;");
+    sql(result, "SHOW USER SESSIONS;");
     assertExpectedFormat(result);
     assertNumSessions(result, 2);
     assertSessionResultFound(result, "admin", "omnisci", 1);
@@ -331,19 +331,19 @@ TEST_F(ShowActiveUsersTest, SHOW_USERS_MULTIDB_LOGOUT) {
   logout(session2);
   {
     TQueryResult result;
-    sql(result, "SHOW ACTIVE USERS;");
+    sql(result, "SHOW USER SESSIONS;");
     assertExpectedFormat(result);
     assertNumSessions(result, 1);
     assertSessionResultFound(result, "admin", "omnisci", 1);
   }
 }
 
-TEST_F(ShowActiveUsersTest, PRIVILEGES_SUPERUSER) {
+TEST_F(ShowUserSessionsTest, PRIVILEGES_SUPERUSER) {
   TSessionId supersession;
   login("super1", "HyperInteractive", "db2", supersession);
   {
     TQueryResult result;
-    std::string query{"SHOW ACTIVE USERS;"};
+    std::string query{"SHOW USER SESSIONS;"};
     sql(result, query, supersession);
     assertExpectedFormat(result);
     assertNumSessions(result, 2);
@@ -353,18 +353,18 @@ TEST_F(ShowActiveUsersTest, PRIVILEGES_SUPERUSER) {
   logout(supersession);
 }
 
-TEST_F(ShowActiveUsersTest, PRIVILEGES_NONSUPERUSER) {
+TEST_F(ShowUserSessionsTest, PRIVILEGES_NONSUPERUSER) {
   TSessionId usersession;
   login("user1", "HyperInteractive", "db1", usersession);
 
   try {
     TQueryResult result;
-    std::string query{"SHOW ACTIVE USERS;"};
+    std::string query{"SHOW USER SESSIONS;"};
     sql(result, query, usersession);
     FAIL() << "An exception should have been thrown for this test case.";
   } catch (const TMapDException& e) {
     ASSERT_EQ(
-        "Exception: SHOW ACTIVE USERS failed, because it can only be executed by super "
+        "Exception: SHOW USER SESSIONS failed, because it can only be executed by super "
         "user.",
         e.error_msg);
   }

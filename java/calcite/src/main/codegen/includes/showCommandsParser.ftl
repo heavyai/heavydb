@@ -14,16 +14,16 @@
 
 /*
  *
- * <SHOW> <ACTIVE> <USERS> 
+ * <SHOW> <USER> <SESSIONS> 
  *   
  */
 
-SqlDdl SqlShowActiveUsers(Span s) :
+SqlDdl SqlShowUserSessions(Span s) :
 {
 }
 {
-    <SHOW> <ACTIVE> <USERS> 
+    <SHOW> <USER> <SESSIONS> 
     {
-        return new SqlShowActiveUsers(s.end(this));
+        return new SqlShowUserSessions(s.end(this));
     }
 }

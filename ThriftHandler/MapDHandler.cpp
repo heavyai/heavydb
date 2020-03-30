@@ -5043,8 +5043,8 @@ void MapDHandler::sql_execute_impl(TQueryResult& _return,
                 .first.plan_result;
       } else if (pw.isCalciteDdl()) {
         DdlCommandExecutor executor = DdlCommandExecutor(query_ra, session_ptr);
-        if (executor.isShowActiveUsers()) {
-          get_active_users(*session_ptr, _return);
+        if (executor.isShowUserSessions()) {
+          getUserSessions(*session_ptr, _return);
         } else {
           executor.execute(_return);
         }
@@ -5930,11 +5930,11 @@ void MapDHandler::register_runtime_extension_functions(
   ExtensionFunctionsWhitelist::addRTUdfs(whitelist);
 }
 
-void MapDHandler::get_active_users(const Catalog_Namespace::SessionInfo& session_info,
-                                   TQueryResult& _return) {
+void MapDHandler::getUserSessions(const Catalog_Namespace::SessionInfo& session_info,
+                                  TQueryResult& _return) {
   if (!session_info.get_currentUser().isSuper) {
     throw std::runtime_error(
-        "SHOW ACTIVE USERS failed, because it can only be executed by super user.");
+        "SHOW USER SESSIONS failed, because it can only be executed by super user.");
   } else {
     mapd_lock_guard<mapd_shared_mutex> read_lock(sessions_mutex_);
     const std::vector<std::string> col_names{

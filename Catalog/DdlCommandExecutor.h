@@ -131,9 +131,9 @@ class DdlCommandExecutor {
   void execute(TQueryResult& _return);
 
   /**
-   * Returns true if this command is SHOW ACTIVE USERS
+   * Returns true if this command is SHOW USER SESSIONS
    */
-  bool isShowActiveUsers();
+  bool isShowUserSessions();
 
  private:
   const std::string& ddl_statement;
