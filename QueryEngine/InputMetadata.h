@@ -64,7 +64,6 @@ class TemporaryTable {
   std::vector<ResultSetPtr> results_;
 };
 
-// using TemporaryTables = std::unordered_map<int, const ResultSetPtr&>;
 using TemporaryTables = std::unordered_map<int, TemporaryTable>;
 
 struct InputTableInfo {
