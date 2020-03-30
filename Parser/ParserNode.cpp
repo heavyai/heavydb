@@ -1991,6 +1991,31 @@ decltype(auto) get_max_chunk_size_def(TableDescriptor& td,
                                         [&td](const auto val) { td.maxChunkSize = val; });
 }
 
+decltype(auto) get_delimiter_def(TableDescriptor& td,
+                                 const NameValueAssign* p,
+                                 const std::list<ColumnDescriptor>& columns) {
+  return get_property_value<StringLiteral>(p, [&td](const auto val) {
+    if (val.size() != 1) {
+      throw std::runtime_error("Length of DELIMITER must be equal to 1.");
+    }
+    td.delimiter = val;
+  });
+}
+
+decltype(auto) get_header_def(TableDescriptor& td,
+                              const NameValueAssign* p,
+                              const std::list<ColumnDescriptor>& columns) {
+  return get_property_value<StringLiteral>(p, [&td](const auto val) {
+    if (val == "FALSE") {
+      td.hasHeader = false;
+    } else if (val == "TRUE") {
+      td.hasHeader = true;
+    } else {
+      throw std::runtime_error("Option HEADER support only 'true' or 'false' values.");
+    }
+  });
+}
+
 decltype(auto) get_page_size_def(TableDescriptor& td,
                                  const NameValueAssign* p,
                                  const std::list<ColumnDescriptor>& columns) {
@@ -2002,6 +2027,13 @@ decltype(auto) get_max_rows_def(TableDescriptor& td,
                                 const std::list<ColumnDescriptor>& columns) {
   return get_property_value<IntLiteral>(p, [&td](const auto val) { td.maxRows = val; });
 }
+
+decltype(auto) get_skip_rows_def(TableDescriptor& td,
+                                 const NameValueAssign* p,
+                                 const std::list<ColumnDescriptor>& columns) {
+  return get_property_value<IntLiteral>(p, [&td](const auto val) { td.skipRows = val; });
+}
+
 decltype(auto) get_partions_def(TableDescriptor& td,
                                 const NameValueAssign* p,
                                 const std::list<ColumnDescriptor>& columns) {
@@ -2083,15 +2115,20 @@ void get_table_definitions(TableDescriptor& td,
 
 static const std::map<const std::string, const TableDefFuncPtr> dataframeDefFuncMap = {
     {"fragment_size"s, get_frag_size_def},
-    {"max_chunk_size"s, get_max_chunk_size_def}};
+    {"max_chunk_size"s, get_max_chunk_size_def},
+    {"skip_rows"s, get_skip_rows_def},
+    {"delimiter"s, get_delimiter_def},
+    {"header"s, get_header_def}};
 
 void get_dataframe_definitions(TableDescriptor& td,
                                const std::unique_ptr<NameValueAssign>& p,
                                const std::list<ColumnDescriptor>& columns) {
-  const auto it = tableDefFuncMap.find(boost::to_lower_copy<std::string>(*p->get_name()));
-  if (it == tableDefFuncMap.end()) {
-    throw std::runtime_error("Invalid CREATE DATAFRAME option " + *p->get_name() +
-                             ". Should be FRAGMENT_SIZE or MAX_CHUNK_SIZE.");
+  const auto it =
+      dataframeDefFuncMap.find(boost::to_lower_copy<std::string>(*p->get_name()));
+  if (it == dataframeDefFuncMap.end()) {
+    throw std::runtime_error(
+        "Invalid CREATE DATAFRAME option " + *p->get_name() +
+        ". Should be FRAGMENT_SIZE, MAX_CHUNK_SIZE, SKIP_ROWS, DELIMITER or HEADER.");
   }
   return it->second(td, p.get(), columns);
 }
