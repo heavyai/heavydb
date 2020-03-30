@@ -903,6 +903,18 @@ bool ResultSet::isDirectColumnarConversionPossible() const {
   }
 }
 
+bool ResultSet::isZeroCopyColumnarConversionPossible(size_t column_idx) const {
+  return query_mem_desc_.didOutputColumnar() &&
+         query_mem_desc_.getQueryDescriptionType() == QueryDescriptionType::Projection &&
+         appended_storage_.empty() && storage_ &&
+         (lazy_fetch_info_.empty() || !lazy_fetch_info_[column_idx].is_lazily_fetched);
+}
+
+const int8_t* ResultSet::getColumnarBuffer(size_t column_idx) const {
+  CHECK(isZeroCopyColumnarConversionPossible(column_idx));
+  return storage_->getUnderlyingBuffer() + query_mem_desc_.getColOffInBytes(column_idx);
+}
+
 // returns a bitmap (and total number) of all single slot targets
 std::tuple<std::vector<bool>, size_t> ResultSet::getSingleSlotTargetBitmap() const {
   std::vector<bool> target_bitmap(targets_.size(), true);
