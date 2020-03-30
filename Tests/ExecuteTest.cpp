@@ -6496,7 +6496,6 @@ TEST(Update, DecimalOverflow) {
         g_use_temporary_tables,
         true,
         false);
-    LOG(ERROR) << create;
     run_ddl_statement(create);
     run_multiple_agg("INSERT INTO decimal_overflow_test VALUES(null);",
                      ExecutorDeviceType::CPU);

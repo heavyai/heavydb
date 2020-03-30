@@ -306,6 +306,10 @@ endif()
 include_directories(ThirdParty/googletest)
 add_subdirectory(ThirdParty/googletest)
 
+# Google Benchmark
+set(BENCHMARK_ENABLE_TESTING OFF CACHE BOOL "Suppressing benchmark's tests" FORCE)
+add_subdirectory(ThirdParty/googlebenchmark)
+
 # Arrow
 find_package(Arrow REQUIRED)
 add_definitions("-DARROW_NO_DEPRECATED_API")

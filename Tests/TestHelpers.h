@@ -198,6 +198,12 @@ void init_logger_stderr_only(int argc, char const* const* argv) {
   logger::init(log_options);
 }
 
+void init_logger_stderr_only() {
+  logger::LogOptions log_options(nullptr);
+  log_options.max_files_ = 0;  // stderr only by default
+  logger::init(log_options);
+}
+
 }  // namespace TestHelpers
 
 #endif  // TEST_HELPERS_H_
