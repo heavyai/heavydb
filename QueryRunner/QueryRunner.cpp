@@ -378,7 +378,9 @@ ExecutionResult run_select_query_with_filter_push_down(
                          10000,
                          with_filter_push_down,
                          false,
-                         g_gpu_mem_limit_percent};
+                         g_gpu_mem_limit_percent,
+                         false,
+                         1000};
   auto calcite_mgr = cat.getCalciteMgr();
   const auto query_ra = calcite_mgr
                             ->process(query_state_proxy,
@@ -421,7 +423,8 @@ ExecutionResult run_select_query_with_filter_push_down(
                                        eo.dynamic_watchdog_time_limit,
                                        /*find_push_down_candidates=*/false,
                                        /*just_calcite_explain=*/false,
-                                       eo.gpu_input_mem_limit_percent};
+                                       eo.gpu_input_mem_limit_percent,
+                                       eo.allow_runtime_query_interrupt};
     return RelAlgExecutor(executor.get(), cat, new_query_ra)
         .executeRelAlgQuery(co, eo_modified, false, nullptr);
   } else {
@@ -465,7 +468,9 @@ ExecutionResult QueryRunner::runSelectQuery(const std::string& query_str,
                          10000,
                          false,
                          false,
-                         g_gpu_mem_limit_percent};
+                         g_gpu_mem_limit_percent,
+                         false,
+                         1000};
   auto calcite_mgr = cat.getCalciteMgr();
   const auto query_ra = calcite_mgr
                             ->process(query_state->createQueryStateProxy(),

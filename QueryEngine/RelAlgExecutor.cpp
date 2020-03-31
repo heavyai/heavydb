@@ -184,11 +184,63 @@ ExecutionResult RelAlgExecutor::executeRelAlgQueryNoRetry(const CompilationOptio
 
   // capture the lock acquistion time
   auto clock_begin = timer_start();
-  std::lock_guard<std::mutex> lock(executor_->execute_mutex_);
-  int64_t queue_time_ms = timer_stop(clock_begin);
   if (g_enable_dynamic_watchdog) {
     executor_->resetInterrupt();
   }
+
+  std::string query_session = "";
+  if (g_enable_runtime_query_interrupt) {
+    // a request of query execution without session id can happen, i.e., test query
+    // if so, we turn back to the original way: a runtime query interrupt
+    // without per-session management (as similar to dynamic watchdog)
+    if (query_state_ != nullptr && query_state_->getConstSessionInfo() != nullptr) {
+      query_session = query_state_->getConstSessionInfo()->get_session_id();
+    } else if (executor_->getCurrentQuerySession() != query_session) {
+      query_session = executor_->getCurrentQuerySession();
+    }
+    if (query_session != "") {
+      // if session is valid, then we allow per-session runtime query interrupt
+      executor_->addToQuerySessionList(query_session);
+      // hybrid spinlock.  if it fails to acquire a lock, then
+      // it sleeps {g_runtime_query_interrupt_frequency} millisecond.
+      while (executor_->execute_spin_lock_.test_and_set(std::memory_order_acquire)) {
+        // failed to get the spinlock: check whether query is interrupted
+        if (executor_->checkIsQuerySessionInterrupted(query_session)) {
+          executor_->removeFromQuerySessionList(query_session);
+          VLOG(1) << "Kill the Interrupted pending query.";
+          throw std::runtime_error(
+              "Query execution has been interrupted (pending query).");
+        }
+        // here it fails to acquire the lock
+        std::this_thread::sleep_for(
+            std::chrono::milliseconds(g_runtime_query_interrupt_frequency));
+      };
+    }
+    // currently, atomic_flag does not provide a way to get its current status,
+    // i.e., spinlock.is_locked(), so we additionally lock the execute_mutex_
+    // right after acquiring spinlock to let other part of the code can know
+    // whether there exists a running query on the executor
+  }
+  std::lock_guard<std::mutex> lock(executor_->execute_mutex_);
+
+  ScopeGuard clearRuntimeInterruptStatus = [this] {
+    // reset the runtime query interrupt status
+    if (g_enable_runtime_query_interrupt) {
+      executor_->removeFromQuerySessionList(executor_->getCurrentQuerySession());
+      executor_->invalidateQuerySession();
+      executor_->resetInterrupt();
+      executor_->execute_spin_lock_.clear(std::memory_order_acquire);
+      VLOG(1) << "RESET runtime query interrupt status of Executor " << this;
+    }
+  };
+
+  if (g_enable_runtime_query_interrupt) {
+    // make sure to set the running session ID
+    executor_->invalidateQuerySession();
+    executor_->setCurrentQuerySession(query_session);
+  }
+
+  int64_t queue_time_ms = timer_stop(clock_begin);
   ScopeGuard row_set_holder = [this] { cleanupPostExecution(); };
   const auto phys_inputs = get_physical_inputs(cat_, &ra);
   const auto phys_table_ids = get_physical_table_inputs(&ra);
@@ -464,6 +516,8 @@ void RelAlgExecutor::executeRelAlgStep(const RaExecutionSequence& seq,
       eo.find_push_down_candidates,
       eo.just_calcite_explain,
       eo.gpu_input_mem_limit_percent,
+      eo.allow_runtime_query_interrupt,
+      eo.runtime_query_interrupt_frequency,
       eo.executor_type,
       step_idx == 0 ? eo.outer_fragment_indices : std::vector<size_t>()};
 
@@ -2140,6 +2194,8 @@ ExecutionResult RelAlgExecutor::executeSort(const RelSort* sort,
           eo.find_push_down_candidates,
           eo.just_calcite_explain,
           eo.gpu_input_mem_limit_percent,
+          eo.allow_runtime_query_interrupt,
+          eo.runtime_query_interrupt_frequency,
           eo.executor_type,
       };
 
@@ -2645,7 +2701,8 @@ ExecutionResult RelAlgExecutor::handleOutOfMemoryRetry(
                                    eo.dynamic_watchdog_time_limit,
                                    false,
                                    false,
-                                   eo.gpu_input_mem_limit_percent};
+                                   eo.gpu_input_mem_limit_percent,
+                                   false};
 
   if (was_multifrag_kernel_launch) {
     try {

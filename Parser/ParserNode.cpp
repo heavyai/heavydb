@@ -2296,6 +2296,8 @@ std::shared_ptr<ResultSet> getResultSet(QueryStateProxy query_state_proxy,
                          false,
                          false,
                          0.9,
+                         false,
+                         1000,
                          ExecutorType::Native,
                          outer_fragment_indices};
   RelAlgExecutor ra_executor(executor.get(), catalog, query_ra);

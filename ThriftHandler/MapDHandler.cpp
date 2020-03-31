@@ -486,8 +486,7 @@ std::shared_ptr<Catalog_Namespace::SessionInfo> MapDHandler::create_new_session(
                             cat, user_meta, executor_device_type_, session));
   CHECK(emplace_retval.second);
   auto& session_ptr = emplace_retval.first->second;
-  LOG(INFO) << "User " << user_meta.userName << " connected to database " << dbname
-            << " with public_session_id " << session_ptr->get_public_session_id();
+  LOG(INFO) << "User " << user_meta.userName << " connected to database " << dbname;
   return session_ptr;
 }
 
@@ -526,8 +525,10 @@ void MapDHandler::disconnect(const TSessionId& session) {
   auto session_it = get_session_it_unsafe(session, write_lock);
   stdlog.setSessionInfo(session_it->second);
   const auto dbname = session_it->second->getCatalog().getCurrentDB().dbName;
+
   LOG(INFO) << "User " << session_it->second->get_currentUser().userName
-            << " disconnected from database " << dbname << std::endl;
+            << " disconnected from database " << dbname
+            << " with public_session_id: " << session_it->second->get_public_session_id();
   disconnect_impl(session_it, write_lock);
 }
 
@@ -584,17 +585,19 @@ void MapDHandler::clone_session(TSessionId& session2, const TSessionId& session1
   }
 }
 
-void MapDHandler::interrupt(const TSessionId& session) {
-  auto stdlog = STDLOG(get_session_ptr(session));
+void MapDHandler::interrupt(const TSessionId& query_session,
+                            const TSessionId& interrupt_session) {
+  // if this is for distributed setting, query_session becomes a parent session (agg)
+  // and the interrupt session is one of existing session in the leaf node (leaf)
+  // so we can think there exists a logical mapping
+  // between query_session (agg) and interrupt_session (leaf)
+  auto stdlog = STDLOG(get_session_ptr(interrupt_session));
   stdlog.appendNameValuePairs("client", getConnectionInfo().toString());
-  if (g_enable_dynamic_watchdog) {
+  if (g_enable_dynamic_watchdog || g_enable_runtime_query_interrupt) {
     // Shared lock to allow simultaneous interrupts of multiple sessions
     mapd_shared_lock<mapd_shared_mutex> read_lock(sessions_mutex_);
-    if (leaf_aggregator_.leafCount() > 0) {
-      leaf_aggregator_.interrupt(session);
-    }
 
-    auto session_it = get_session_it_unsafe(session, read_lock);
+    auto session_it = get_session_it_unsafe(interrupt_session, read_lock);
     auto& cat = session_it->second.get()->getCatalog();
     const auto dbname = cat.getCurrentDB().dbName;
     auto executor = Executor::getExecutor(cat.getCurrentDB().dbId,
@@ -609,7 +612,10 @@ void MapDHandler::interrupt(const TSessionId& session) {
             << session_it->second->get_currentUser().userName << ", Database " << dbname
             << std::endl;
 
-    executor->interrupt();
+    if (leaf_aggregator_.leafCount() > 0) {
+      leaf_aggregator_.interrupt(query_session, interrupt_session);
+    }
+    executor->interrupt(query_session, interrupt_session);
 
     LOG(INFO) << "User " << session_it->second->get_currentUser().userName
               << " interrupted session with database " << dbname << std::endl;
@@ -4637,7 +4643,9 @@ std::vector<PushedDownFilterInfo> MapDHandler::execute_rel_alg(
                          g_dynamic_watchdog_time_limit,
                          find_push_down_candidates,
                          explain_info.justCalciteExplain(),
-                         mapd_parameters_.gpu_input_mem_limit};
+                         mapd_parameters_.gpu_input_mem_limit,
+                         g_enable_runtime_query_interrupt,
+                         g_runtime_query_interrupt_frequency};
   auto executor = Executor::getExecutor(cat.getCurrentDB().dbId,
                                         jit_debug_ ? "/tmp" : "",
                                         jit_debug_ ? "mapdquery" : "",
@@ -4704,7 +4712,9 @@ void MapDHandler::execute_rel_alg_df(TDataFrame& _return,
                          g_dynamic_watchdog_time_limit,
                          false,
                          false,
-                         mapd_parameters_.gpu_input_mem_limit};
+                         mapd_parameters_.gpu_input_mem_limit,
+                         g_enable_runtime_query_interrupt,
+                         g_runtime_query_interrupt_frequency};
   auto executor = Executor::getExecutor(cat.getCurrentDB().dbId,
                                         jit_debug_ ? "/tmp" : "",
                                         jit_debug_ ? "mapdquery" : "",
@@ -5249,7 +5259,6 @@ void MapDHandler::sql_execute_impl(TQueryResult& _return,
       std::tie(result, locks) =
           parse_to_ra(query_state_proxy, query_string, {}, true, mapd_parameters_);
     }
-
     _return.execution_time_ms += measure<>::execution([&]() {
       ddl->execute(*session_ptr);
       check_and_invalidate_sessions(ddl);
@@ -5465,10 +5474,11 @@ void MapDHandler::check_table_consistency(TTableMeta& _return,
 }
 
 void MapDHandler::start_query(TPendingQuery& _return,
-                              const TSessionId& session,
+                              const TSessionId& leaf_session,
+                              const TSessionId& parent_session,
                               const std::string& query_ra,
                               const bool just_explain) {
-  auto stdlog = STDLOG(get_session_ptr(session));
+  auto stdlog = STDLOG(get_session_ptr(leaf_session));
   auto session_ptr = stdlog.getConstSessionInfo();
   if (!leaf_handler_) {
     THROW_MAPD_EXCEPTION("Distributed support is disabled.");
@@ -5476,7 +5486,8 @@ void MapDHandler::start_query(TPendingQuery& _return,
   LOG(INFO) << "start_query :" << *session_ptr << " :" << just_explain;
   auto time_ms = measure<>::execution([&]() {
     try {
-      leaf_handler_->start_query(_return, session, query_ra, just_explain);
+      leaf_handler_->start_query(
+          _return, leaf_session, parent_session, query_ra, just_explain);
     } catch (std::exception& e) {
       THROW_MAPD_EXCEPTION(std::string("Exception: ") + e.what());
     }

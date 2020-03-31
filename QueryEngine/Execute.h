@@ -52,6 +52,7 @@
 #include <rapidjson/document.h>
 
 #include <algorithm>
+#include <atomic>
 #include <condition_variable>
 #include <cstddef>
 #include <cstdlib>
@@ -88,6 +89,8 @@ extern bool g_enable_table_functions;
 extern size_t g_max_memory_allocation_size;
 extern double g_bump_allocator_step_reduction;
 extern bool g_enable_direct_columnarization;
+extern bool g_enable_runtime_query_interrupt;
+extern unsigned g_runtime_query_interrupt_frequency;
 
 class QueryCompilationDescriptor;
 using QueryCompilationDescriptorOwned = std::unique_ptr<QueryCompilationDescriptor>;
@@ -398,7 +401,7 @@ class Executor {
 
   void registerActiveModule(void* module, const int device_id) const;
   void unregisterActiveModule(void* module, const int device_id) const;
-  void interrupt();
+  void interrupt(std::string query_session = "", std::string interrupt_session = "");
   void resetInterrupt();
 
   static const size_t high_scan_limit{32000000};
@@ -798,6 +801,7 @@ class Executor {
 
   void createErrorCheckControlFlow(llvm::Function* query_func,
                                    bool run_with_dynamic_watchdog,
+                                   bool run_with_allowing_runtime_interrupt,
                                    ExecutorDeviceType device_type);
 
   void preloadFragOffsets(const std::vector<InputDescriptor>& input_descs,
@@ -879,6 +883,15 @@ class Executor {
   void setupCaching(const std::unordered_set<PhysicalInput>& phys_inputs,
                     const std::unordered_set<int>& phys_table_ids);
 
+  void setCurrentQuerySession(const std::string& query_session);
+  std::string& getCurrentQuerySession();
+  bool checkCurrentQuerySession(const std::string& candidate_query_session);
+  void invalidateQuerySession();
+  bool addToQuerySessionList(const std::string& query_session);
+  bool removeFromQuerySessionList(const std::string& query_session);
+  void setQuerySessionAsInterrupted(const std::string& query_session);
+  bool checkIsQuerySessionInterrupted(const std::string& query_session);
+
  private:
   std::vector<std::pair<void*, void*>> getCodeFromCache(const CodeCacheKey&,
                                                         const CodeCache&);
@@ -951,8 +964,13 @@ class Executor {
   AggregatedColRange agg_col_range_cache_;
   StringDictionaryGenerations string_dictionary_generations_;
   TableGenerations table_generations_;
+  static std::mutex executor_session_mutex_;
+  static std::string current_query_session_;
+  // a pair of <query_session, interrupted_flag>
+  static std::map<std::string, bool> queries_interrupt_flag_;
 
   static std::map<int, std::shared_ptr<Executor>> executors_;
+  static std::atomic_flag execute_spin_lock_;
   static std::mutex execute_mutex_;
   static mapd_shared_mutex executors_cache_mutex_;
 

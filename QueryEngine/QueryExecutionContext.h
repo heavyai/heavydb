@@ -107,6 +107,8 @@ class QueryExecutionContext : boost::noncopyable {
 
   void initializeDynamicWatchdog(void* native_module, const int device_id) const;
 
+  void initializeRuntimeInterrupter(void* native_module, const int device_id) const;
+
   std::vector<CUdeviceptr> prepareKernelParams(
       const std::vector<std::vector<const int8_t*>>& col_buffers,
       const std::vector<int8_t>& literal_buff,

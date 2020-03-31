@@ -221,12 +221,16 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(
   cuEventCreate(&start2, 0);
   cuEventCreate(&stop2, 0);
 
-  if (g_enable_dynamic_watchdog) {
+  if (g_enable_dynamic_watchdog || g_enable_runtime_query_interrupt) {
     cuEventRecord(start0, 0);
   }
 
   if (g_enable_dynamic_watchdog) {
     initializeDynamicWatchdog(cu_functions[device_id].second, device_id);
+  }
+
+  if (g_enable_runtime_query_interrupt) {
+    initializeRuntimeInterrupter(cu_functions[device_id].second, device_id);
   }
 
   auto kernel_params = prepareKernelParams(col_buffers,
@@ -283,7 +287,7 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(
       param_ptrs.push_back(&param);
     }
 
-    if (g_enable_dynamic_watchdog) {
+    if (g_enable_dynamic_watchdog || g_enable_runtime_query_interrupt) {
       cuEventRecord(stop0, 0);
       cuEventSynchronize(stop0);
       float milliseconds0 = 0;
@@ -322,7 +326,7 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(
                          &param_ptrs[0],
                          nullptr));
     }
-    if (g_enable_dynamic_watchdog) {
+    if (g_enable_dynamic_watchdog || g_enable_runtime_query_interrupt) {
       executor_->registerActiveModule(cu_functions[device_id].second, device_id);
       cuEventRecord(stop1, 0);
       cuEventSynchronize(stop1);
@@ -440,7 +444,7 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(
       param_ptrs.push_back(&param);
     }
 
-    if (g_enable_dynamic_watchdog) {
+    if (g_enable_dynamic_watchdog || g_enable_runtime_query_interrupt) {
       cuEventRecord(stop0, 0);
       cuEventSynchronize(stop0);
       float milliseconds0 = 0;
@@ -477,7 +481,7 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(
                                      nullptr));
     }
 
-    if (g_enable_dynamic_watchdog) {
+    if (g_enable_dynamic_watchdog || g_enable_runtime_query_interrupt) {
       executor_->registerActiveModule(cu_functions[device_id].second, device_id);
       cuEventRecord(stop1, 0);
       cuEventSynchronize(stop1);
@@ -524,7 +528,7 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(
                   device_id);
   }
 
-  if (g_enable_dynamic_watchdog) {
+  if (g_enable_dynamic_watchdog || g_enable_runtime_query_interrupt) {
     cuEventRecord(stop2, 0);
     cuEventSynchronize(stop2);
     float milliseconds2 = 0;
@@ -760,6 +764,37 @@ void QueryExecutionContext::initializeDynamicWatchdog(void* native_module,
   VLOG(1) << "Device " << std::to_string(device_id)
           << ": launchGpuCode: dynamic watchdog init: " << std::to_string(milliseconds)
           << " ms\n";
+}
+
+void QueryExecutionContext::initializeRuntimeInterrupter(void* native_module,
+                                                         const int device_id) const {
+  if (!executor_->interrupted_) {
+    // Executor is not marked as interrupted, make sure dynamic watchdog doesn't block
+    // execution
+    auto cu_module = static_cast<CUmodule>(native_module);
+    CHECK(cu_module);
+    CUevent start, stop;
+    cuEventCreate(&start, 0);
+    cuEventCreate(&stop, 0);
+    cuEventRecord(start, 0);
+
+    CUdeviceptr runtime_interrupt_flag;
+    size_t runtime_interrupt_flag_size;
+    checkCudaErrors(cuModuleGetGlobal(&runtime_interrupt_flag,
+                                      &runtime_interrupt_flag_size,
+                                      cu_module,
+                                      "runtime_interrupt_flag"));
+    CHECK_EQ(runtime_interrupt_flag_size, sizeof(uint32_t));
+    checkCudaErrors(cuMemsetD32(runtime_interrupt_flag, 0, 1));
+
+    cuEventRecord(stop, 0);
+    cuEventSynchronize(stop);
+    float milliseconds = 0;
+    cuEventElapsedTime(&milliseconds, start, stop);
+    VLOG(1) << "Device " << std::to_string(device_id)
+            << ": launchGpuCode: runtime query interrupter init: "
+            << std::to_string(milliseconds) << " ms\n";
+  }
 }
 
 std::vector<CUdeviceptr> QueryExecutionContext::prepareKernelParams(

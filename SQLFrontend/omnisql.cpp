@@ -75,6 +75,10 @@ const std::string OmniSQLRelease(MAPD_RELEASE);
 namespace {
 
 ClientContext* g_client_context_ptr{nullptr};
+// global session is used to classify a session to deal with user's request on
+// query execution and other services that thrift creates a new session ID
+// i.e., global_session is a parent session of {service_session_1, ..., service_session_N}
+static std::string global_session{""};
 
 void completion(const char* buf, linenoiseCompletions* lc) {
   CHECK(g_client_context_ptr);
@@ -621,7 +625,7 @@ bool backchannel(int action, ClientContext* cc, const std::string& ccn = "") {
     (void)thrift_with_retry(kCONNECT, context2, nullptr);
 
     std::cout << "Asking server to interrupt query.\n" << std::flush;
-    (void)thrift_with_retry(kINTERRUPT, context2, nullptr);
+    (void)thrift_with_retry(kINTERRUPT, context2, nullptr, 1, global_session);
 
     if (context2.session != INVALID_SESSION_ID) {
       (void)thrift_with_retry(kDISCONNECT, context2, nullptr);
@@ -1240,6 +1244,7 @@ int main(int argc, char** argv) {
     return 1;
   }
   if (thrift_with_retry(kCONNECT, context, nullptr)) {
+    global_session = context.session;
     if (print_connection) {
       std::cout << "User " << context.user_name << " connected to database "
                 << context.db_name << std::endl;

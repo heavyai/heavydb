@@ -282,7 +282,8 @@ class MapDHandler : public MapDIf {
                      const TDataFrame& df,
                      const TDeviceType::type device_type,
                      const int32_t device_id) override;
-  void interrupt(const TSessionId& session) override;
+  void interrupt(const TSessionId& query_session,
+                 const TSessionId& interrupt_session) override;
   void sql_validate(TTableDescriptor& _return,
                     const TSessionId& session,
                     const std::string& query) override;
@@ -407,7 +408,8 @@ class MapDHandler : public MapDIf {
                                const TSessionId& session,
                                const int32_t table_id) override;
   void start_query(TPendingQuery& _return,
-                   const TSessionId& session,
+                   const TSessionId& leaf_session,
+                   const TSessionId& parent_session,
                    const std::string& query_ra,
                    const bool just_explain) override;
   void execute_query_step(TStepResult& _return,

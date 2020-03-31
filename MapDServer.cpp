@@ -293,6 +293,8 @@ class MapDProgramOptions {
 
   bool enable_watchdog = true;
   bool enable_dynamic_watchdog = false;
+  bool enable_runtime_query_interrupt = false;
+  unsigned runtime_query_interrupt_frequency = 1000;  // in milliseconds
   unsigned dynamic_watchdog_time_limit = 10000;
 
   /**
@@ -446,6 +448,17 @@ void MapDProgramOptions::fillOptions() {
                               ->implicit_value(true),
                           "Enable the overlaps hash join framework allowing for range "
                           "join (e.g. spatial overlaps) computation using a hash table.");
+  help_desc.add_options()("enable-runtime-query-interrupt",
+                          po::value<bool>(&enable_runtime_query_interrupt)
+                              ->default_value(enable_runtime_query_interrupt)
+                              ->implicit_value(true),
+                          "Enable runtime query interrupt.");
+  help_desc.add_options()("runtime-query-interrupt-frequency",
+                          po::value<unsigned>(&runtime_query_interrupt_frequency)
+                              ->default_value(runtime_query_interrupt_frequency)
+                              ->implicit_value(1000),
+                          "A frequency of checking the request of runtime query "
+                          "interrupt from user (in millisecond).");
   if (!dist_v5_) {
     help_desc.add_options()(
         "enable-string-dict-hash-cache",
@@ -886,6 +899,11 @@ void MapDProgramOptions::validate() {
   if (enable_dynamic_watchdog) {
     LOG(INFO) << " Dynamic Watchdog timeout is set to " << dynamic_watchdog_time_limit;
   }
+  LOG(INFO) << " Runtime query interrupt is set to " << enable_runtime_query_interrupt;
+  if (enable_runtime_query_interrupt) {
+    LOG(INFO) << " A frequency of checking runtime query interrupt request is set to "
+              << runtime_query_interrupt_frequency << " (in ms.)";
+  }
 
   LOG(INFO) << " Debug Timer is set to " << g_enable_debug_timer;
 
@@ -960,6 +978,8 @@ boost::optional<int> MapDProgramOptions::parse_command_line(int argc,
     g_enable_watchdog = enable_watchdog;
     g_enable_dynamic_watchdog = enable_dynamic_watchdog;
     g_dynamic_watchdog_time_limit = dynamic_watchdog_time_limit;
+    g_enable_runtime_query_interrupt = enable_runtime_query_interrupt;
+    g_runtime_query_interrupt_frequency = runtime_query_interrupt_frequency;
   } catch (po::error& e) {
     std::cerr << "Usage Error: " << e.what() << std::endl;
     return 1;
