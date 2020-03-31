@@ -460,12 +460,33 @@ public class OmniSciStatement implements java.sql.Statement {
   private static final Pattern WEEK = Pattern.compile(
           "\\sWEEK\\(([^\\{]*?)", Pattern.DOTALL | Pattern.CASE_INSENSITIVE);
 
+  /*
+   * CURRENTDATE should match CURRENT_DATE
+   * and CURRENT_DATE() where the two strings are 'joined' to either white space,
+   * punctuation or some kind of brackets. if they are joined to
+   * any alpha numeric For example 'CURRENT_TIME)' is okay while a string
+   * like CURRENT_DATE_NOW isn't
+   *
+   * Note we've include the non standard version with parenthesis to align with third
+   * party software.
+   *
+   * Breaking down the components of the pattern
+   * (?<![\\w.]) The pattern can not be preceded by any word character or a '.'
+   * (?:\\(\\))? pattern can end in zero or one '()' - note non capture group
+   * (?![\\w.]) the pattern can not be followed by a word character or a '.'
+   * Note - word characters include '_'
+   */
+  ;
+  private static final Pattern CURRENTDATE =
+          Pattern.compile("(?<![\\w.])CURRENT_DATE(?:\\(\\))?(?![\\w.])",
+                  Pattern.DOTALL | Pattern.CASE_INSENSITIVE);
   public static String simplisticDateTransform(String sql) {
     // need to iterate as each reduction of string opens up a anew match
     String start;
     do {
       // Example transform - select quarter(val) from table;
       // will become select extract(quarter from val) from table;
+      // will also replace all CURRENT_TIME and CURRENT_DATE with a call to now().
       start = sql;
       sql = QUARTER.matcher(sql).replaceAll(" EXTRACT(QUARTER FROM $1");
     } while (!sql.equals(start));
@@ -484,6 +505,12 @@ public class OmniSciStatement implements java.sql.Statement {
       start = sql;
       sql = WEEK.matcher(sql).replaceAll(" EXTRACT(WEEK FROM $1");
     } while (!sql.equals(start));
+
+    do {
+      start = sql;
+      sql = CURRENTDATE.matcher(sql).replaceAll(" cast(now() as date) ");
+    } while (!sql.equals(start));
+
     return sql;
   }
 }

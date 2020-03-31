@@ -312,19 +312,26 @@ public class OmniSciStatementTest {
     }
 
     // ln
-    String d_ln = "select {fn log(1.45)} as m_ln";
+    String d_ln = "select {fn log(10)} as m_ln";
     rs = statement.executeQuery(d_ln);
     for (int i = 0; rs.next(); ++i) {
       double r_ln = rs.getDouble("m_ln");
-      assertEquals(Double.compare(r_ln, Math.log(1.45)), 0);
+      assertEquals(Double.compare(r_ln, 2.302585092994046), 0);
+    }
+    // ln
+    d_ln = "select {fn ln(10)} as m_ln";
+    rs = statement.executeQuery(d_ln);
+    for (int i = 0; rs.next(); ++i) {
+      double r_ln = rs.getDouble("m_ln");
+      assertEquals(Double.compare(r_ln, 2.302585092994046), 0);
     }
 
     // log10
-    String d_log10 = "select {fn log10(1.45)} as m_log10";
+    String d_log10 = "select {fn log10(10)} as m_log10";
     rs = statement.executeQuery(d_log10);
     for (int i = 0; rs.next(); ++i) {
       double r_log10 = rs.getDouble("m_log10");
-      assertEquals(Double.compare(r_log10, Math.log10(1.45)), 0);
+      assertEquals(Double.compare(r_log10, 1), 0);
     }
 
     // abs
@@ -394,6 +401,32 @@ public class OmniSciStatementTest {
     for (int i = 0; rs.next(); ++i) {
       int r_hour = rs.getInt("m_hour");
       assertEquals(10, r_hour);
+    }
+
+    // current date
+    String d_c =
+            "select {fn TIMESTAMPADD(SQL_TSI_DAY, 1, CURRENT_DATE())} m, TIMESTAMPADD(SQL_TSI_WEEK, 1, CURRENT_DATE) y";
+    ResultSet rx = statement.executeQuery(d_c);
+    for (int i = 0; rx.next(); ++i) {
+      Date r_m = rx.getDate("m");
+      Date r_y = rx.getDate("y");
+    }
+
+    // current date
+    d_c = "select TIMESTAMPADD(SQL_TSI_DAY, 1, CURRENT_DATE) as m_zzz";
+    rs = statement.executeQuery(d_c);
+    for (int i = 0; rs.next(); ++i) {
+      Timestamp r_zzz = rs.getTimestamp("m_zzz");
+    }
+    // current date
+    d_c = "select TIMESTAMPADD(SQL_TSI_DAY, 1, CURRENT_DATE_TIME) as m_zzz";
+    try {
+      rs = statement.executeQuery(d_c);
+      assertTrue(false);
+    } catch (SQLException sE) {
+      assertTrue(sE.toString().contains("CURRENT_DATE_TIME' not found in any table"));
+    } catch (Exception ex) {
+      assertTrue(false);
     }
   }
 

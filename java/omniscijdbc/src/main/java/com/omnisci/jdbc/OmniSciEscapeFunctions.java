@@ -70,18 +70,6 @@ public final class OmniSciEscapeFunctions {
   }
 
   /**
-   * log to ln translation
-   *
-   * @param buf The buffer to append into
-   * @param parsedArgs arguments
-   * @throws SQLException if something wrong happens
-   */
-  public static void sqllog(StringBuilder buf, List<? extends CharSequence> parsedArgs)
-          throws SQLException {
-    singleArgumentFunctionCall(buf, "ln(", "log", parsedArgs);
-  }
-
-  /**
    * dayofmonth translation
    *
    * @param buf The buffer to append into
