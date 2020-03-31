@@ -29,6 +29,36 @@ public class OmniSciEscapeParser {
     private final Pattern argPattern;
     private final String replacementKeyword;
 
+    private String call_escape_fn(String all_arguments, Method method) {
+      try {
+        StringBuilder sb = new StringBuilder();
+        List<CharSequence> parseArgs = new ArrayList<CharSequence>(3);
+        int bracket_cnt = 0;
+        StringBuilder args_sb = new StringBuilder();
+        for (int index = 0; index < all_arguments.length(); ++index) {
+          if (all_arguments.charAt(index) == ',' && bracket_cnt == 0) {
+            parseArgs.add(args_sb.toString());
+            args_sb.delete(0, args_sb.length());
+            continue;
+          }
+          if (all_arguments.charAt(index) == '(') {
+            bracket_cnt++;
+          } else if (all_arguments.charAt(index) == ')') {
+            bracket_cnt--;
+          }
+          args_sb.append(all_arguments.charAt(index));
+        }
+        // add the last argument.
+        parseArgs.add(args_sb.toString());
+        method.invoke(null, sb, parseArgs);
+        return sb.toString();
+      } catch (InvocationTargetException e) {
+        throw new RuntimeException("Invocation fn argument parse error" + e.getMessage());
+      } catch (IllegalAccessException ilE) {
+        throw new RuntimeException("Access  fn argument error" + ilE.getMessage());
+      }
+    }
+
     private String makeMatch(String sql) {
       Matcher matcher = escapePattern.matcher(sql);
       if (matcher.find()) {
@@ -48,18 +78,7 @@ public class OmniSciEscapeParser {
               String new_sql = fn_name + '(' + matcher.group(1) + ')';
               return new_sql;
             } else {
-              try {
-                StringBuilder sb = new StringBuilder();
-                List<CharSequence> parseArgs = new ArrayList<CharSequence>(3);
-                String[] args = matcher.group(1).split(",");
-                for (String s : args) {
-                  parseArgs.add(s);
-                }
-                method.invoke(null, sb, parseArgs);
-                return sb.toString();
-              } catch (InvocationTargetException e) {
-              } catch (IllegalAccessException ilE) {
-              }
+              return call_escape_fn(matcher.group(1), method);
             }
           }
         }

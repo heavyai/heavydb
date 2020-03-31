@@ -186,6 +186,7 @@ public class OmniSciStatementTest {
     Statement statement = m_conn.createStatement();
     TimeZone.setDefault(TimeZone.getTimeZone("GMT"));
 
+    // Test multiple nested fn {}
     String d_select =
             "select {fn cos(1)} as m_cos, {d '1999-01-09'} as m_date, {t '20:00:03'} as m_time, {ts '1990-01-09 20:00:03'} as m_timestamp, {fn week({d '2005-01-24'})} as m_week";
     ResultSet rs = statement.executeQuery(d_select);
@@ -201,6 +202,7 @@ public class OmniSciStatementTest {
       int m_week = rs.getInt("m_week");
       assertEquals(m_week, 5);
     }
+
     d_select = "select  {fn FLOOR(-1 * {fn dayofmonth({d '1990-01-31'})})} as WWW";
     rs = statement.executeQuery(d_select);
     for (int i = 0; rs.next(); ++i) {
@@ -215,12 +217,6 @@ public class OmniSciStatementTest {
       assertEquals(-31, xxx);
     }
 
-    d_select = "select  {fn floor(1.005)} as YYY";
-    rs = statement.executeQuery(d_select);
-    for (int i = 0; rs.next(); ++i) {
-      float yyy = rs.getFloat("YYY");
-      assertEquals(Float.compare(1.0F, yyy), 0);
-    }
     d_select = "select  {fn floor(1.005)} as YYY limit 1000 {";
     try {
       statement.executeQuery(d_select);
@@ -241,29 +237,39 @@ public class OmniSciStatementTest {
       assertTrue(false);
     } catch (RuntimeException rE) {
     }
+  }
+  @Test
+  public void escape_function2() throws Exception {
+    Statement statement = m_conn.createStatement();
+    TimeZone.setDefault(TimeZone.getTimeZone("GMT"));
 
     String sql_drop_tester = "drop table if exists tester";
+
     statement.executeUpdate(sql_drop_tester);
-    String sql_create_tester = "CREATE table tester(Connection_start TIMESTAMP)";
+    String sql_create_tester =
+            "CREATE table tester(Connection_start TIMESTAMP, d_start DATE)";
     statement.executeUpdate(sql_create_tester);
 
-    String sql_insert_tester1 = "insert into tester values ('2018-11-08 12:19:59')";
+    String sql_insert_tester1 =
+            "insert into tester values ('2018-11-08 12:19:59', '2018-11-08')";
     statement.executeUpdate(sql_insert_tester1);
 
-    String sql_insert_tester2 = "insert into tester values ('2018-11-08 12:29:59')";
-    statement.executeUpdate(sql_insert_tester2);
-    String sql_insert_tester3 = "insert into tester values ('2018-11-08 12:39:59')";
-    statement.executeUpdate(sql_insert_tester3);
-    String sql_insert_tester4 = "insert into tester values ('2018-11-09 23:59:59')";
-    statement.executeUpdate(sql_insert_tester4);
-
+    // test multiple embedded {} with TIMESTAMPSIDD.
+    String e_statement =
+            "select COUNT( {fn TIMESTAMPDIFF(SQL_TSI_DAY, {fn TIMESTAMPADD(SQL_TSI_DAY,CAST((-1 * (EXTRACT(DAY FROM tester.d_start) - 1)) AS INTEGER),CAST( tester.d_start AS DATE))}, {fn TIMESTAMPADD(SQL_TSI_DAY,CAST((-1 * (EXTRACT(DAY FROM {fn TIMESTAMPADD(SQL_TSI_MONTH,1, tester.d_start)}) - 1)) AS INTEGER),CAST( {fn TIMESTAMPADD(SQL_TSI_MONTH,1, tester.d_start)} AS DATE)) }) }) AS TEMP from  tester";
+    ResultSet rs = statement.executeQuery(e_statement);
+    rs = statement.executeQuery(e_statement);
+    for (int i = 0; rs.next(); ++i) {
+      int r_count = rs.getInt("TEMP");
+      assertEquals(r_count, 1);
+    }
+    // test TOP filter.
     String x_select =
             "SELECT TOP 1000 sum(1) AS sum_Number_of_Records_ok, {fn TIMESTAMPADD(SQL_TSI_HOUR, EXTRACT(HOUR FROM tester.Connection_Start), CAST(tester.Connection_Start as DATE))} AS thr_Connection_Start_ok FROM tester Where ((tester.Connection_Start >= {ts '2018-11-01 00:00:00'}) AND (tester.Connection_Start <= {ts '2018-11-08 23:59:59'})) GROUP BY 2";
     rs = statement.executeQuery(x_select);
-
     for (int i = 0; rs.next(); ++i) {
       int r_count = rs.getInt("sum_Number_of_Records_ok");
-      assertEquals(r_count, 3);
+      assertEquals(r_count, 1);
       Timestamp ts_time = rs.getTimestamp("thr_Connection_Start_ok");
       assertEquals(ts_time.toString(), "2018-11-08 12:00:00.0");
     }
@@ -285,45 +291,109 @@ public class OmniSciStatementTest {
   }
 
   @Test
-  public void escape_function2() throws Exception {
+  public void escape_function3() throws Exception {
     Statement statement = m_conn.createStatement();
     TimeZone.setDefault(TimeZone.getTimeZone("GMT"));
 
-    String d_quarter = "select {fn quarter({d '2005-01-24'})} as m_quarter";
+    // ceil
+    String d_ceiling = "select  {fn ceiling(1.005)} as YYY";
+    ResultSet rs = statement.executeQuery(d_ceiling);
+    for (int i = 0; rs.next(); ++i) {
+      float yyy = rs.getFloat("YYY");
+      assertEquals(Float.compare(2.0F, yyy), 0);
+    }
 
-    ResultSet rs = statement.executeQuery(d_quarter);
+    // floor
+    String d_floor = "select  {fn floor(1.005)} as YYY";
+    rs = statement.executeQuery(d_floor);
+    for (int i = 0; rs.next(); ++i) {
+      float yyy = rs.getFloat("YYY");
+      assertEquals(Float.compare(1.0F, yyy), 0);
+    }
+
+    // ln
+    String d_ln = "select {fn log(1.45)} as m_ln";
+    rs = statement.executeQuery(d_ln);
+    for (int i = 0; rs.next(); ++i) {
+      double r_ln = rs.getDouble("m_ln");
+      assertEquals(Double.compare(r_ln, Math.log(1.45)), 0);
+    }
+
+    // log10
+    String d_log10 = "select {fn log10(1.45)} as m_log10";
+    rs = statement.executeQuery(d_log10);
+    for (int i = 0; rs.next(); ++i) {
+      double r_log10 = rs.getDouble("m_log10");
+      assertEquals(Double.compare(r_log10, Math.log10(1.45)), 0);
+    }
+
+    // abs
+    String d_abs = "select {fn abs(-1.45)} as m_abs";
+    rs = statement.executeQuery(d_abs);
+    for (int i = 0; rs.next(); ++i) {
+      float r_abs = rs.getFloat("m_abs");
+      assertEquals(Float.compare(r_abs, (float) Math.abs(-1.45)), 0);
+    }
+
+    // power
+    String d_power = "select  {fn power(2,10)} as YYY";
+    rs = statement.executeQuery(d_power);
+    for (int i = 0; rs.next(); ++i) {
+      float yyy = rs.getFloat("YYY");
+      assertEquals(Float.compare((float) Math.pow(2, 10), yyy), 0);
+    }
+    // truncate
+    String d_truncate = "select  {fn truncate(2.01,1)} as YYY";
+    rs = statement.executeQuery(d_truncate);
+    for (int i = 0; rs.next(); ++i) {
+      float yyy = rs.getFloat("YYY");
+      assertEquals(Float.compare(2.0F, yyy), 0);
+    }
+
+    // length
+    String d_length = "select  {fn length('12345')} as YYY";
+    rs = statement.executeQuery(d_length);
+    for (int i = 0; rs.next(); ++i) {
+      int yyy = rs.getInt("YYY");
+      assertEquals(5, yyy);
+    }
+
+    // quarter
+    String d_quarter = "select {fn quarter({d '2005-01-24'})} as m_quarter";
+    rs = statement.executeQuery(d_quarter);
     for (int i = 0; rs.next(); ++i) {
       int r_quarter = rs.getInt("m_quarter");
       assertEquals(1, r_quarter);
     }
 
+    // day of year
     String d_dayofyear = "select {fn DAYOFYEAR({d '2005-01-24'})} as m_dayofyear";
-
     rs = statement.executeQuery(d_dayofyear);
     for (int i = 0; rs.next(); ++i) {
       int r_dayofyear = rs.getInt("m_dayofyear");
       assertEquals(24, r_dayofyear);
     }
 
+    // day of week
     String d_dayofweek = "select {fn dayofweek({d '2005-01-24'})} as m_dayofweek";
-
     rs = statement.executeQuery(d_dayofweek);
     for (int i = 0; rs.next(); ++i) {
       int r_dayofweek = rs.getInt("m_dayofweek");
       assertEquals(2, r_dayofweek);
     }
-
-    String d_trunc = "select {fn truncate(2.55555, 2)} as m_trunc";
-    rs = statement.executeQuery(d_trunc);
+    // day of month
+    String d_dayofmonth = "select {fn dayofmonth({d '2005-01-24'})} as m_dayofmonth";
+    rs = statement.executeQuery(d_dayofmonth);
     for (int i = 0; rs.next(); ++i) {
-      float r_trunc = rs.getFloat("m_trunc");
-      assertEquals(Float.compare(2.55F, r_trunc), 0);
+      int r_dayofmonth = rs.getInt("m_dayofmonth");
+      assertEquals(24, r_dayofmonth);
     }
-    String d_length = "select {fn length('fff')} as m_length";
-    rs = statement.executeQuery(d_length);
+    // hour
+    String d_hour = "select {fn hour({ts '2005-01-24 10:11:12'})} as m_hour";
+    rs = statement.executeQuery(d_hour);
     for (int i = 0; rs.next(); ++i) {
-      int r_length = rs.getInt("m_length");
-      assertEquals(3, r_length);
+      int r_hour = rs.getInt("m_hour");
+      assertEquals(10, r_hour);
     }
   }
 
