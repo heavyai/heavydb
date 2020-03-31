@@ -501,6 +501,9 @@ class ResultSet {
 
   bool didOutputColumnar() const { return this->query_mem_desc_.didOutputColumnar(); }
 
+  bool isZeroCopyColumnarConversionPossible(size_t column_idx) const;
+  const int8_t* getColumnarBuffer(size_t column_idx) const;
+
   QueryDescriptionType getQueryDescriptionType() const {
     return query_mem_desc_.getQueryDescriptionType();
   }
