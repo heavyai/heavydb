@@ -11,6 +11,7 @@ set(shared_source_files
     base64.cpp
     Logger.cpp
     thread_count.cpp
+    Asio.cpp
 )
 
 file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/funcannotations.h DESTINATION ${CMAKE_BINARY_DIR}/Shared/)

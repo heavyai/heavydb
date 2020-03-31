@@ -56,6 +56,7 @@
 #include <thread>
 #include <vector>
 #include "MapDRelease.h"
+#include "Shared/Asio.h"
 #include "Shared/Compressor.h"
 #include "Shared/MapDParameters.h"
 #include "Shared/file_delete.h"
@@ -85,8 +86,8 @@ extern bool g_enable_interop;
 
 bool g_enable_thrift_logs{false};
 
-std::atomic<bool> g_running{true};
 std::atomic<int> g_saw_signal{-1};
+std::atomic<const char*> g_simple_error_message{nullptr};
 
 mapd_shared_mutex g_thrift_mutex;
 TThreadedServer* g_thrift_http_server{nullptr};
@@ -104,24 +105,26 @@ void shutdown_handler() {
   }
 }
 
-void register_signal_handler(int signum, void (*handler)(int)) {
-  struct sigaction act;
-  memset(&act, 0, sizeof(act));
-  if (handler != SIG_DFL && handler != SIG_IGN) {
-    // block all signal deliveries while inside the signal handler
-    sigfillset(&act.sa_mask);
-  }
-  act.sa_handler = handler;
-  sigaction(signum, &act, NULL);
-}
-
 // Signal handler to set a global flag telling the server to exit.
 // Do not call other functions inside this (or any) signal handler
 // unless you really know what you are doing. See also:
 //   man 7 signal-safety
 //   man 7 signal
 //   https://en.wikipedia.org/wiki/Reentrancy_(computing)
-void omnisci_signal_handler(int signum) {
+void omnisci_signal_handler(const boost::system::error_code& error, int signum) {
+  if (error) {  // NOTE: the docs don't say if Boost will ever do this
+    g_simple_error_message = "omnisci_signal_handler: boost error, ignored";
+    return;
+  }
+
+  // For some reason Boost needs us to register a SIGCHLD handler
+  // to make boost::process::system and/or boost::process::child work
+  // correctly when a child gets SIGKILLed. Rather than spend too much
+  // time figuring out why, simply don't do anything here.
+  if (signum == SIGCHLD) {
+    return;
+  }
+
   // Record the signal number for logging during shutdown.
   // Only records the first signal if called more than once.
   int expected_signal{-1};
@@ -131,10 +134,10 @@ void omnisci_signal_handler(int signum) {
 
   // This point should never be reached more than once.
 
-  // Tell heartbeat() to shutdown by unsetting the 'g_running' flag.
-  // If 'g_running' is already false, this has no effect and the
+  // Tell heartbeat() to shutdown by unsetting the 'Asio::running' flag.
+  // If 'Asio::running' is already false, this has no effect and the
   // shutdown is already in progress.
-  g_running = false;
+  Asio::running = false;
 
   // Handle core dumps specially by pausing inside this signal handler
   // because on some systems, some signals will execute their default
@@ -143,26 +146,10 @@ void omnisci_signal_handler(int signum) {
   if (signum == SIGQUIT || signum == SIGABRT || signum == SIGSEGV || signum == SIGFPE) {
     // Wait briefly to give heartbeat() a chance to flush the logs and
     // do any other emergency shutdown tasks.
-    sleep(2);
+    sleep(1);
 
-    // Explicitly trigger whatever default action this signal would
-    // have done, such as terminate the process or dump core.
-    // Signals are currently blocked so this new signal will be queued
-    // until this signal handler returns.
-    register_signal_handler(signum, SIG_DFL);
     kill(getpid(), signum);
   }
-}
-
-void register_signal_handlers() {
-  register_signal_handler(SIGINT, omnisci_signal_handler);
-  register_signal_handler(SIGQUIT, omnisci_signal_handler);
-  register_signal_handler(SIGHUP, omnisci_signal_handler);
-  register_signal_handler(SIGTERM, omnisci_signal_handler);
-  register_signal_handler(SIGSEGV, omnisci_signal_handler);
-  register_signal_handler(SIGABRT, omnisci_signal_handler);
-  // Thrift secure socket can cause problems with SIGPIPE
-  register_signal_handler(SIGPIPE, SIG_IGN);
 }
 
 void start_server(TThreadedServer& server, const int port) {
@@ -1082,11 +1069,14 @@ void heartbeat() {
     throw std::runtime_error("heartbeat() thread startup failed");
   }
 
-  // Sleep until omnisci_signal_handler or anything clears the g_running flag.
+  // Sleep until omnisci_signal_handler or anything clears the Asio::running flag.
   VLOG(1) << "heartbeat thread starting";
-  while (::g_running) {
+  while (Asio::running) {
     using namespace std::chrono;
-    std::this_thread::sleep_for(1s);
+    std::this_thread::sleep_for(500ms);
+    if (const char* simple_error_message = g_simple_error_message.exchange(nullptr)) {
+      LOG(ERROR) << simple_error_message;
+    }
   }
   VLOG(1) << "heartbeat thread exiting";
 
@@ -1124,7 +1114,14 @@ void heartbeat() {
 
 int startMapdServer(MapDProgramOptions& prog_config_opts, bool start_http_server = true) {
   // try to enforce an orderly shutdown even after a signal
-  register_signal_handlers();
+  Asio::register_signal_handler(SIGINT, omnisci_signal_handler);
+  Asio::register_signal_handler(SIGQUIT, omnisci_signal_handler);
+  Asio::register_signal_handler(SIGHUP, omnisci_signal_handler);
+  Asio::register_signal_handler(SIGTERM, omnisci_signal_handler);
+  Asio::register_signal_handler(SIGSEGV, omnisci_signal_handler);
+  Asio::register_signal_handler(SIGABRT, omnisci_signal_handler);
+  Asio::register_signal_handler(SIGCHLD, omnisci_signal_handler);
+  Asio::start();
 
   // register shutdown procedures for when a normal shutdown happens
   // be aware that atexit() functions run in reverse order
@@ -1141,7 +1138,7 @@ int startMapdServer(MapDProgramOptions& prog_config_opts, bool start_http_server
   const unsigned int wait_interval =
       3;  // wait time in secs after looking for deleted file before looking again
   std::thread file_delete_thread(file_delete,
-                                 std::ref(g_running),
+                                 std::ref(Asio::running),
                                  wait_interval,
                                  prog_config_opts.base_path + "/mapd_data");
   std::thread heartbeat_thread(heartbeat);
@@ -1251,7 +1248,7 @@ int startMapdServer(MapDProgramOptions& prog_config_opts, bool start_http_server
       run_warmup_queries(
           g_mapd_handler, prog_config_opts.base_path, prog_config_opts.db_query_file);
       if (prog_config_opts.exit_after_warmup) {
-        g_running = false;
+        Asio::running = false;
       }
     };
 
@@ -1281,7 +1278,7 @@ int startMapdServer(MapDProgramOptions& prog_config_opts, bool start_http_server
     LOG(FATAL) << "No High Availability module available, please contact OmniSci support";
   }
 
-  g_running = false;
+  Asio::running = false;
   file_delete_thread.join();
   heartbeat_thread.join();
   ForeignStorageInterface::destroy();
