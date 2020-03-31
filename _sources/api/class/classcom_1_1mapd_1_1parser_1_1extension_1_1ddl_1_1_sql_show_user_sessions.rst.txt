@@ -1,0 +1,9 @@
+Class com::mapd::parser::extension::ddl::SqlShowUserSessions
+============================================================
+
+.. doxygenclass:: com::mapd::parser::extension::ddl::SqlShowUserSessions
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

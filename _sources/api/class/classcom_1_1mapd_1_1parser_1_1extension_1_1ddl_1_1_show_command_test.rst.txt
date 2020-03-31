@@ -1,0 +1,9 @@
+Class com::mapd::parser::extension::ddl::ShowCommandTest
+========================================================
+
+.. doxygenclass:: com::mapd::parser::extension::ddl::ShowCommandTest
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

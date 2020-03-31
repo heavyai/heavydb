@@ -1,0 +1,9 @@
+Class org::apache::calcite::rel::rules::QueryOptimizationRules
+==============================================================
+
+.. doxygenclass:: org::apache::calcite::rel::rules::QueryOptimizationRules
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:
