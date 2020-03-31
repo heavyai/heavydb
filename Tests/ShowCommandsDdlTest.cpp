@@ -372,6 +372,176 @@ TEST_F(ShowUserSessionsTest, PRIVILEGES_NONSUPERUSER) {
   logout(usersession);
 }
 
+class ShowTableDdlTest : public MapDHandlerTestFixture {
+ protected:
+  void SetUp() override {
+    MapDHandlerTestFixture::SetUp();
+    loginAdmin();
+    createTestUser();
+  }
+
+  void TearDown() override {
+    loginAdmin();
+    dropTestTable();
+    dropTestUser();
+  }
+
+  void createTestUser() {
+    sql("CREATE USER test_user (password = 'test_pass');");
+    sql("GRANT ACCESS ON DATABASE omnisci TO test_user;");
+  }
+
+  void dropTestUser() {
+    try {
+      sql("DROP USER test_user;");
+    } catch (const std::exception& e) {
+      // Swallow and log exceptions that may occur, since there is no "IF EXISTS" option.
+      LOG(WARNING) << e.what();
+    }
+  }
+
+  void assertExpectedQueryFormat(const TQueryResult& result) const {
+    ASSERT_EQ(result.row_set.is_columnar, true);
+    ASSERT_EQ(result.row_set.columns.size(), 1UL);
+    ASSERT_EQ(result.row_set.row_desc[0].col_type.type, TDatumType::STR);
+    ASSERT_EQ(result.row_set.row_desc[0].col_name, "table_name");
+  }
+
+  void assertExpectedQuery(
+      const TQueryResult& result,
+      const std::vector<std::string>& expected_values,
+      const std::vector<std::string>& expected_missing_values) const {
+    assertExpectedQueryFormat(result);
+    auto& result_values = result.row_set.columns[0].data.str_col;
+    // TODO: at the moment, this checks that expected_values are a subset of
+    // result_values; once other tests ensure they do not leave behind undropped tables,
+    // this can be changed to be a check for equality of expected and result values
+    std::unordered_set<std::string> result_values_set(result_values.begin(),
+                                                      result_values.end());
+    for (auto& value : expected_values) {
+      ASSERT_NE(result_values_set.find(value), result_values_set.end());
+    }
+    for (auto& value : expected_missing_values) {
+      ASSERT_EQ(result_values_set.find(value), result_values_set.end());
+    }
+  }
+
+  void assertExpectedQuery(const TQueryResult& result,
+                           const std::vector<std::string>& expected_values) const {
+    std::vector<std::string> expected_missing_values;
+    assertExpectedQuery(result, expected_values, expected_missing_values);
+  }
+
+  void createTestTable() { sql("CREATE TABLE test_table ( test_val int );"); }
+
+  void dropTestTable() { sql("DROP TABLE IF EXISTS test_table;"); }
+};
+
+TEST_F(ShowTableDdlTest, DefaultTables) {
+  std::string query{"SHOW TABLES;"};
+  TQueryResult result;
+  std::vector<std::string> expected_result{
+      "omnisci_states", "omnisci_counties", "omnisci_countries"};
+  sql(result, query);
+  assertExpectedQuery(result, expected_result);
+}
+
+TEST_F(ShowTableDdlTest, CreateTestTable) {
+  createTestTable();
+  TQueryResult result;
+  std::vector<std::string> expected_result{
+      "omnisci_states", "omnisci_counties", "omnisci_countries", "test_table"};
+  sql(result, "SHOW TABLES;");
+  assertExpectedQuery(result, expected_result);
+}
+
+TEST_F(ShowTableDdlTest, CreateTwoTestTablesDropOne) {
+  createTestTable();
+  sql("CREATE TABLE test_table2 ( test_val int );");
+  {
+    TQueryResult result;
+    std::vector<std::string> expected_result{"omnisci_states",
+                                             "omnisci_counties",
+                                             "omnisci_countries",
+                                             "test_table",
+                                             "test_table2"};
+    sql(result, "SHOW TABLES;");
+    assertExpectedQuery(result, expected_result);
+  }
+  dropTestTable();
+  {
+    TQueryResult result;
+    std::vector<std::string> expected_result{
+        "omnisci_states", "omnisci_counties", "omnisci_countries", "test_table2"};
+    std::vector<std::string> expected_missing_result{"test_table"};
+    sql(result, "SHOW TABLES;");
+    assertExpectedQuery(result, expected_result, expected_missing_result);
+  }
+  sql("DROP TABLE test_table2;");
+}
+
+TEST_F(ShowTableDdlTest, TestUserSeesNoTables) {
+  login("test_user", "test_pass");
+  TQueryResult result;
+  std::vector<std::string> expected_result{};
+  sql(result, "SHOW TABLES;");
+  assertExpectedQuery(result, expected_result);
+}
+
+TEST_F(ShowTableDdlTest, CreateTestTableDropTestTable) {
+  createTestTable();
+  dropTestTable();
+  TQueryResult result;
+  std::vector<std::string> expected_result{
+      "omnisci_states", "omnisci_counties", "omnisci_countries"};
+  sql(result, "SHOW TABLES;");
+  assertExpectedQuery(result, expected_result);
+}
+
+TEST_F(ShowTableDdlTest, TestUserSeesTestTableAfterGrantSelect) {
+  createTestTable();
+  sql("GRANT SELECT ON TABLE test_table TO test_user;");
+  login("test_user", "test_pass");
+  TQueryResult result;
+  std::vector<std::string> expected_result{"test_table"};
+  sql(result, "SHOW TABLES;");
+  assertExpectedQuery(result, expected_result);
+}
+
+TEST_F(ShowTableDdlTest, TestUserSeesTestTableAfterGrantDrop) {
+  createTestTable();
+  sql("GRANT DROP ON TABLE test_table TO test_user;");
+  login("test_user", "test_pass");
+  TQueryResult result;
+  std::vector<std::string> expected_result{"test_table"};
+  sql(result, "SHOW TABLES;");
+  assertExpectedQuery(result, expected_result);
+}
+
+TEST_F(ShowTableDdlTest, SuperUserSeesTestTableAfterTestUserCreates) {
+  sql("GRANT CREATE TABLE ON DATABASE omnisci TO test_user;");
+  login("test_user", "test_pass");
+  createTestTable();
+  loginAdmin();
+  TQueryResult result;
+  std::vector<std::string> expected_result{
+      "omnisci_states", "omnisci_counties", "omnisci_countries", "test_table"};
+  sql(result, "SHOW TABLES;");
+  assertExpectedQuery(result, expected_result);
+}
+
+TEST_F(ShowTableDdlTest, CreateTableCreateViewAndViewNotSeen) {
+  createTestTable();
+  sql("CREATE VIEW test_view AS SELECT * from test_table;");
+  TQueryResult result;
+  std::vector<std::string> expected_result{
+      "omnisci_states", "omnisci_counties", "omnisci_countries", "test_table"};
+  std::vector<std::string> expected_missing_result{"test_view"};
+  sql(result, "SHOW TABLES;");
+  assertExpectedQuery(result, expected_result, expected_missing_result);
+  sql("DROP VIEW test_view;");
+}
+
 int main(int argc, char** argv) {
   TestHelpers::init_logger_stderr_only(argc, argv);
   testing::InitGoogleTest(&argc, argv);

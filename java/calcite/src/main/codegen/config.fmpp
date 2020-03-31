@@ -27,6 +27,7 @@ data: {
         "org.apache.calcite.sql.SqlDrop"
         "com.mapd.parser.extension.ddl.SqlCreateServer"
         "com.mapd.parser.extension.ddl.SqlDropServer"
+        "com.mapd.parser.extension.ddl.SqlShowTables"
         "com.mapd.parser.extension.ddl.SqlCreateForeignTable"
         "com.mapd.parser.extension.ddl.SqlDropForeignTable"
         "com.mapd.parser.extension.ddl.SqlShowUserSessions"
@@ -49,6 +50,7 @@ data: {
         "MULTIPOLYGON"
         "TEXT"
         "SESSIONS"
+        "TABLES"
       ]
 
       # List of keywords from "keywords" section that are not reserved.
@@ -373,6 +375,7 @@ data: {
       # List of methods for parsing custom SQL statements.
       statementParserMethods: [
           "SqlShowUserSessions(span())"
+          "SqlShowTables(span())"
       ]
 
       # List of methods for parsing custom literals.

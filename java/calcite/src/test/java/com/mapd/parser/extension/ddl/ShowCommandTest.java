@@ -25,4 +25,14 @@ public class ShowCommandTest extends DDLTest {
             gson.fromJson(result.plan_result, JsonObject.class);
     assertEquals(expectedJsonObject, actualJsonObject);
   }
+
+  @Test
+  public void process_givenShowTablesDdlCommand_returnsExpectedJsonResponse()
+          throws Exception {
+    final JsonObject expectedJsonObject = getJsonFromFile("show_tables.json");
+    final TPlanResult result = processDdlCommand("SHOW TABLES;");
+    final JsonObject actualJsonObject =
+            gson.fromJson(result.plan_result, JsonObject.class);
+    assertEquals(expectedJsonObject, actualJsonObject);
+  }
 }

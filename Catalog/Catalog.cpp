@@ -3303,6 +3303,43 @@ std::vector<const TableDescriptor*> Catalog::getPhysicalTablesDescriptors(
   return physicalTables;
 }
 
+std::vector<std::string> Catalog::getTableNamesForUser(
+    const UserMetadata& user_metadata,
+    const GetTablesType get_tables_type) const {
+  std::vector<std::string> table_names;
+  const auto tables = getAllTableMetadata();
+  for (const auto td : tables) {
+    if (td->shard >= 0) {
+      // skip shards, they're not standalone tables
+      continue;
+    }
+    switch (get_tables_type) {
+      case GET_PHYSICAL_TABLES: {
+        if (td->isView) {
+          continue;
+        }
+        break;
+      }
+      case GET_VIEWS: {
+        if (!td->isView) {
+          continue;
+        }
+      }
+      default:
+        break;
+    }
+    DBObject dbObject(td->tableName, td->isView ? ViewDBObjectType : TableDBObjectType);
+    dbObject.loadKey(*this);
+    std::vector<DBObject> privObjects = {dbObject};
+    if (!SysCatalog::instance().hasAnyPrivileges(user_metadata, privObjects)) {
+      // skip table, as there are no privileges to access it
+      continue;
+    }
+    table_names.push_back(td->tableName);
+  }
+  return table_names;
+}
+
 int Catalog::getLogicalTableId(const int physicalTableId) const {
   cat_read_lock read_lock(this);
   for (const auto& l : logicalToPhysicalTableMapById_) {

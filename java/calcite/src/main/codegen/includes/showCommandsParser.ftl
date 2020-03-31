@@ -27,3 +27,19 @@ SqlDdl SqlShowUserSessions(Span s) :
         return new SqlShowUserSessions(s.end(this));
     }
 }
+
+/*
+ * Show existing tables using the following syntax:
+ *
+ * SHOW TABLES
+ */
+SqlDdl SqlShowTables(Span s) :
+{
+}
+{
+    <SHOW> <TABLES>
+    {
+        return new SqlShowTables(s.end(this));
+    }
+}
+

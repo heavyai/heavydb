@@ -2013,34 +2013,8 @@ bool MapDHandler::hasTableAccessPrivileges(
 void MapDHandler::get_tables_impl(std::vector<std::string>& table_names,
                                   const Catalog_Namespace::SessionInfo& session_info,
                                   const GetTablesType get_tables_type) {
-  auto const& cat = session_info.getCatalog();
-  const auto tables = cat.getAllTableMetadata();
-  for (const auto td : tables) {
-    if (td->shard >= 0) {
-      // skip shards, they're not standalone tables
-      continue;
-    }
-    switch (get_tables_type) {
-      case GET_PHYSICAL_TABLES: {
-        if (td->isView) {
-          continue;
-        }
-        break;
-      }
-      case GET_VIEWS: {
-        if (!td->isView) {
-          continue;
-        }
-      }
-      default:
-        break;
-    }
-    if (!hasTableAccessPrivileges(td, session_info)) {
-      // skip table, as there are no privileges to access it
-      continue;
-    }
-    table_names.push_back(td->tableName);
-  }
+  table_names = session_info.getCatalog().getTableNamesForUser(
+      session_info.get_currentUser(), get_tables_type);
 }
 
 void MapDHandler::get_tables(std::vector<std::string>& table_names,

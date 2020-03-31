@@ -105,8 +105,6 @@ using namespace std::string_literals;
 class MapDAggHandler;
 class MapDLeafHandler;
 
-enum GetTablesType { GET_PHYSICAL_TABLES_AND_VIEWS, GET_PHYSICAL_TABLES, GET_VIEWS };
-
 // Multiple concurrent requests for the same session can occur.  For that reason, each
 // request briefly takes a lock to make a copy of the appropriate SessionInfo object. Then
 // it releases the lock and uses the copy for the remainder of the request.

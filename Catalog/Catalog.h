@@ -58,6 +58,8 @@
 
 #include "LeafHostInfo.h"
 
+enum GetTablesType { GET_PHYSICAL_TABLES_AND_VIEWS, GET_PHYSICAL_TABLES, GET_VIEWS };
+
 namespace Parser {
 
 class SharedDictionaryDef;
@@ -191,10 +193,21 @@ class Catalog final {
   std::vector<const TableDescriptor*> getPhysicalTablesDescriptors(
       const TableDescriptor* logicalTableDesc) const;
 
+  /**
+   * Get names of all tables accessible to user.
+   *
+   * @param user - user to retrieve table names for
+   * @param get_tables_type - enum indicating if tables, views or tables & views
+   * should be returned
+   * @return table_names - vector of table names accessible by user
+   */
+  std::vector<std::string> getTableNamesForUser(
+      const UserMetadata& user,
+      const GetTablesType get_tables_type) const;
+
   int32_t getTableEpoch(const int32_t db_id, const int32_t table_id) const;
   void setTableEpoch(const int db_id, const int table_id, const int new_epoch);
   int getDatabaseId() const { return currentDB_.dbId; }
-
   SqliteConnector& getSqliteConnector() { return sqliteConnector_; }
   void roll(const bool forward);
   DictRef addDictionary(ColumnDescriptor& cd);
