@@ -201,7 +201,7 @@ pushd thrift-$VERS
 if [ "$TSAN" = "false" ]; then
   THRIFT_CFLAGS="-fPIC"
   THRIFT_CXXFLAGS="-fPIC"
-elif [ "$TSAN" = "false" ]; then
+elif [ "$TSAN" = "true" ]; then
   THRIFT_CFLAGS="-fPIC -fsanitize=thread -fPIC -O1 -fno-omit-frame-pointer"
   THRIFT_CXXFLAGS="-fPIC -fsanitize=thread -fPIC -O1 -fno-omit-frame-pointer"
 fi
@@ -355,7 +355,7 @@ cp mapd-deps-$SUFFIX.sh mapd-deps-$SUFFIX.modulefile $PREFIX
 if [ "$COMPRESS" = "true" ] ; then
     if [ "$TSAN" = "false" ]; then
       TARBALL_TSAN=""
-    elif [ "$TSAN" = "false" ]; then
+    elif [ "$TSAN" = "true" ]; then
       TARBALL_TSAN="tsan-"
     fi
     tar --use-compress-program=pxz -acvf mapd-deps-${TARBALL_TSAN}${SUFFIX}.tar.xz -C $(dirname $PREFIX) $SUFFIX

@@ -287,7 +287,7 @@ echo "    source $PREFIX/mapd-deps.sh"
 if [ "$COMPRESS" = "true" ] ; then
     if [ "$TSAN" = "false" ]; then
       TARBALL_TSAN=""
-    elif [ "$TSAN" = "false" ]; then
+    elif [ "$TSAN" = "true" ]; then
       TARBALL_TSAN="tsan-"
     fi
     tar acvf mapd-deps-ubuntu-${VERSION_ID}-${TARBALL_TSAN}${SUFFIX}.tar.xz -C ${PREFIX} .
