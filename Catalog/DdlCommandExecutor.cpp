@@ -50,7 +50,7 @@ void add_row(TQueryResult& _return, const std::vector<std::string>& row) {
 DdlCommandExecutor::DdlCommandExecutor(
     const std::string& ddl_statement,
     std::shared_ptr<Catalog_Namespace::SessionInfo const> session_ptr)
-    : ddl_statement(ddl_statement), session_ptr(session_ptr) {
+    : session_ptr(session_ptr) {
   CHECK(!ddl_statement.empty());
   ddl_query.Parse(ddl_statement);
   CHECK(ddl_query.IsObject());

@@ -67,6 +67,7 @@ class Encoding {
    * @param encoding_param - Encoding size.
    */
   Encoding(std::string* encoding_name, int encoding_param);
+  virtual ~Encoding() {}
 
   virtual const std::string* get_encoding_name() const;
   virtual int get_encoding_param() const;

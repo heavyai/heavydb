@@ -152,7 +152,6 @@ class DdlCommandExecutor {
   bool isShowUserSessions();
 
  private:
-  const std::string& ddl_statement;
   rapidjson::Document ddl_query;
   std::shared_ptr<Catalog_Namespace::SessionInfo const> session_ptr;
 };
