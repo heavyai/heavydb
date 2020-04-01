@@ -53,6 +53,8 @@ struct TableDescriptor {
   int64_t maxChunkSize;    // max number of rows per fragment
   int32_t fragPageSize;    // page size
   int64_t maxRows;         // max number of rows in the table
+  int64_t skipRows;        // number of skipped rows in CSV file
+  std::string separator;   // separator of values in the CSV file
   std::string partitions;  // distributed partition scheme
   std::string
       keyMetainfo;  // meta-information about shard keys and shared dictionary, as JSON
@@ -78,6 +80,8 @@ struct TableDescriptor {
   TableDescriptor()
       : tableId(-1)
       , shard(-1)
+      , skipRows(1)
+      , separator(",")
       , nShards(0)
       , shardedColumnId(0)
       , sortedColumnId(0)
