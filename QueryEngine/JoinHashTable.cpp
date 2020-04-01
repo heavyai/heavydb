@@ -49,9 +49,15 @@ InnerOuter normalize_column_pair(const Analyzer::Expr* lhs,
       throw HashJoinFail("Equijoin types must be identical, found: " +
                          lhs_ti.get_type_name() + ", " + rhs_ti.get_type_name());
     }
-    if (!lhs_ti.is_integer() && !lhs_ti.is_time() && !lhs_ti.is_string()) {
+    if (!lhs_ti.is_integer() && !lhs_ti.is_time() && !lhs_ti.is_string() &&
+        !lhs_ti.is_decimal()) {
       throw HashJoinFail("Cannot apply hash join to inner column type " +
                          lhs_ti.get_type_name());
+    }
+    // Decimal types should be identical.
+    if (lhs_ti.is_decimal() && (lhs_ti.get_scale() != rhs_ti.get_scale() ||
+                                lhs_ti.get_precision() != rhs_ti.get_precision())) {
+      throw HashJoinFail("Equijoin with different decimal types");
     }
   }
 
@@ -60,6 +66,10 @@ InnerOuter normalize_column_pair(const Analyzer::Expr* lhs,
   if (lhs_ti.is_string() && (static_cast<bool>(lhs_cast) != static_cast<bool>(rhs_cast) ||
                              (lhs_cast && lhs_cast->get_optype() != kCAST) ||
                              (rhs_cast && rhs_cast->get_optype() != kCAST))) {
+    throw HashJoinFail("Cannot use hash join for given expression");
+  }
+  // Casts to decimal are not suported.
+  if (lhs_ti.is_decimal() && (lhs_cast || rhs_cast)) {
     throw HashJoinFail("Cannot use hash join for given expression");
   }
   const auto lhs_col =
@@ -113,6 +123,11 @@ InnerOuter normalize_column_pair(const Analyzer::Expr* lhs,
       !(dynamic_cast<const Analyzer::FunctionOper*>(lhs)) && outer_col
           ? outer_col->get_type_info()
           : outer_ti;
+  // Casts from decimal are not supported.
+  if ((inner_col_real_ti.is_decimal() || outer_col_ti.is_decimal()) &&
+      (lhs_cast || rhs_cast)) {
+    throw HashJoinFail("Cannot use hash join for given expression");
+  }
   if (is_overlaps_join) {
     if (!inner_col_real_ti.is_array()) {
       throw HashJoinFail(
@@ -132,6 +147,7 @@ InnerOuter normalize_column_pair(const Analyzer::Expr* lhs,
     }
   } else {
     if (!(inner_col_real_ti.is_integer() || inner_col_real_ti.is_time() ||
+          inner_col_real_ti.is_decimal() ||
           (inner_col_real_ti.is_string() &&
            inner_col_real_ti.get_compression() == kENCODING_DICT))) {
       throw HashJoinFail(

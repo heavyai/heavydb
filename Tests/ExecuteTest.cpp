@@ -5570,6 +5570,52 @@ void import_hash_join_test() {
   }
 }
 
+void import_hash_join_decimal_test() {
+  const std::string drop_old_test{"DROP TABLE IF EXISTS hash_join_decimal_test;"};
+  run_ddl_statement(drop_old_test);
+  g_sqlite_comparator.query(drop_old_test);
+
+  std::string replicated_dec{!g_aggregator ? "" : ", PARTITIONS='REPLICATED'"};
+
+  const std::string create_test{
+      "CREATE TABLE hash_join_decimal_test(x DECIMAL(18,2), y DECIMAL(18,3)) "
+      "WITH (fragment_size=2" +
+      replicated_dec + ");"};
+  run_ddl_statement(create_test);
+  g_sqlite_comparator.query(
+      "CREATE TABLE hash_join_decimal_test(x DECIMAL(18,2), y DECIMAL(18,3));");
+  {
+    const std::string insert_query{
+        "INSERT INTO hash_join_decimal_test VALUES(1.00, 1.000);"};
+    run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
+    g_sqlite_comparator.query(insert_query);
+  }
+  {
+    const std::string insert_query{
+        "INSERT INTO hash_join_decimal_test VALUES(2.00, 2.000);"};
+    run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
+    g_sqlite_comparator.query(insert_query);
+  }
+  {
+    const std::string insert_query{
+        "INSERT INTO hash_join_decimal_test VALUES(3.00, 3.000);"};
+    run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
+    g_sqlite_comparator.query(insert_query);
+  }
+  {
+    const std::string insert_query{
+        "INSERT INTO hash_join_decimal_test VALUES(4.00, 4.001);"};
+    run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
+    g_sqlite_comparator.query(insert_query);
+  }
+  {
+    const std::string insert_query{
+        "INSERT INTO hash_join_decimal_test VALUES(10.00, 10.000);"};
+    run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
+    g_sqlite_comparator.query(insert_query);
+  }
+}
+
 void import_coalesce_cols_join_test(const int id, bool with_delete_support) {
   const std::string table_name = "coalesce_cols_test_" + std::to_string(id);
   const std::string drop_old_test{"DROP TABLE IF EXISTS " + table_name + ";"};
@@ -8646,6 +8692,24 @@ TEST(Select, Joins_MultipleOuterExpressions) {
           "b.x;",
           "SELECT COUNT(*) FROM test a, test b WHERE a.o = b.o AND a.x = b.x;",
           dt));
+  }
+}
+
+TEST(Select, Joins_Decimal) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    c("SELECT COUNT(*) FROM hash_join_decimal_test as t1, hash_join_decimal_test as t2 "
+      "WHERE t1.x = t2.x;",
+      dt);
+    c("SELECT COUNT(*) FROM hash_join_decimal_test as t1, hash_join_decimal_test as t2 "
+      "WHERE t1.y = t2.y;",
+      dt);
+    c("SELECT COUNT(*) FROM hash_join_decimal_test as t1, hash_join_decimal_test as t2 "
+      "WHERE t1.x = t2.y;",
+      dt);
+    c("SELECT COUNT(*) FROM hash_join_decimal_test as t1, hash_join_decimal_test as t2 "
+      "WHERE CAST(t1.x as INT) = CAST(t2.y as INT);",
+      dt);
   }
 }
 
@@ -18624,6 +18688,12 @@ int create_and_populate_tables(const bool use_temporary_tables,
     return -EEXIST;
   }
   try {
+    import_hash_join_decimal_test();
+  } catch (...) {
+    LOG(ERROR) << "Failed to (re-)create table 'hash_join_decimal_test'";
+    return -EEXIST;
+  }
+  try {
     import_coalesce_cols_join_test(0, with_delete_support);
     import_coalesce_cols_join_test(1, with_delete_support);
     import_coalesce_cols_join_test(2, with_delete_support);
@@ -18919,6 +18989,9 @@ void drop_tables() {
   const std::string drop_hash_join_test{"DROP TABLE hash_join_test;"};
   run_ddl_statement(drop_hash_join_test);
   g_sqlite_comparator.query(drop_hash_join_test);
+  const std::string drop_hash_join_decimal_test{"DROP TABLE hash_join_decimal_test;"};
+  run_ddl_statement(drop_hash_join_decimal_test);
+  g_sqlite_comparator.query(drop_hash_join_decimal_test);
   const std::string drop_coalesce_join_test_0{"DROP TABLE coalesce_cols_test_0"};
   run_ddl_statement(drop_coalesce_join_test_0);
   g_sqlite_comparator.query(drop_coalesce_join_test_0);
