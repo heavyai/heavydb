@@ -1,0 +1,9 @@
+Class threadpool::FuturesThreadPool< T, std::enable_if_t< std::is_object< T >::value > >
+========================================================================================
+
+.. doxygenclass:: threadpool::FuturesThreadPool< T, std::enable_if_t< std::is_object< T >::value > >
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:
