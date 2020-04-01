@@ -56,6 +56,7 @@ struct ForeignServer : public OptionsContainer {
   int id;
   std::string name;
   DataWrapper data_wrapper;
+  int32_t user_id;
 
   ForeignServer(const DataWrapper& data_wrapper) : data_wrapper(data_wrapper) {}
 

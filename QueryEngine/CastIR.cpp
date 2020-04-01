@@ -67,6 +67,7 @@ llvm::Value* CodeGenerator::codegenCast(llvm::Value* operand_lv,
     CHECK(operand_ti.is_integer() || operand_ti.is_decimal() || operand_ti.is_time() ||
           operand_ti.is_boolean());
     if (operand_ti.is_boolean()) {
+      // cast boolean to int8
       CHECK(operand_lv->getType()->isIntegerTy(1) ||
             operand_lv->getType()->isIntegerTy(8));
       if (operand_lv->getType()->isIntegerTy(1)) {
@@ -75,6 +76,11 @@ llvm::Value* CodeGenerator::codegenCast(llvm::Value* operand_lv,
       if (ti.is_boolean()) {
         return operand_lv;
       }
+    }
+    if (operand_ti.is_integer() && operand_lv->getType()->isIntegerTy(8) &&
+        ti.is_boolean()) {
+      // cast int8 to boolean
+      return codegenCastBetweenIntTypes(operand_lv, operand_ti, ti);
     }
     if (operand_ti.get_type() == kTIMESTAMP && ti.get_type() == kDATE) {
       // Maybe we should instead generate DatetruncExpr directly from RelAlgTranslator

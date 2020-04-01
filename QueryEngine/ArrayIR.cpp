@@ -153,33 +153,34 @@ std::vector<llvm::Value*> CodeGenerator::codegenArrayExpr(
         casted_allocated_target_buffer,
         std::vector<llvm::Value*>{cgen_state_->llInt(0), cgen_state_->llInt(i)});
 
-    if (is_member_of_typeset<kTINYINT,
-                             kSMALLINT,
-                             kINT,
-                             kBIGINT,
-                             kTIMESTAMP,
-                             kDATE,
-                             kTIME,
-                             kNUMERIC,
-                             kDECIMAL,
-                             kINTERVAL_DAY_TIME,
-                             kINTERVAL_YEAR_MONTH,
-                             kVARCHAR,
-                             kTEXT,
-                             kCHAR>(return_type.get_elem_type())) {
-      auto sign_extended_element = ir_builder.CreateSExt(element, array_index_type);
-      ir_builder.CreateStore(sign_extended_element, element_ptr);
-    } else if (is_member_of_typeset<kBOOLEAN>(return_type.get_elem_type())) {
-      auto byte_casted_bit = ir_builder.CreateIntCast(element, array_index_type, true);
+    const auto& elem_ti = return_type.get_elem_type();
+    if (elem_ti.is_boolean()) {
+      const auto byte_casted_bit =
+          ir_builder.CreateIntCast(element, array_index_type, true);
       ir_builder.CreateStore(byte_casted_bit, element_ptr);
-    } else if (is_member_of_typeset<kFLOAT>(return_type.get_elem_type())) {
-      auto float_element_ptr = ir_builder.CreatePointerCast(
-          element_ptr, llvm::Type::getFloatPtrTy(cgen_state_->context_));
-      ir_builder.CreateStore(element, float_element_ptr);
-    } else if (is_member_of_typeset<kDOUBLE>(return_type.get_elem_type())) {
-      auto double_element_ptr = ir_builder.CreatePointerCast(
-          element_ptr, llvm::Type::getDoublePtrTy(cgen_state_->context_));
-      ir_builder.CreateStore(element, double_element_ptr);
+    } else if (elem_ti.is_fp()) {
+      switch (elem_ti.get_size()) {
+        case sizeof(double): {
+          const auto double_element_ptr = ir_builder.CreatePointerCast(
+              element_ptr, llvm::Type::getDoublePtrTy(cgen_state_->context_));
+          ir_builder.CreateStore(element, double_element_ptr);
+          break;
+        }
+        case sizeof(float): {
+          const auto float_element_ptr = ir_builder.CreatePointerCast(
+              element_ptr, llvm::Type::getFloatPtrTy(cgen_state_->context_));
+          ir_builder.CreateStore(element, float_element_ptr);
+          break;
+        }
+        default:
+          UNREACHABLE();
+      }
+    } else if (elem_ti.is_integer() || elem_ti.is_decimal() || elem_ti.is_date() ||
+               elem_ti.is_timestamp() || elem_ti.is_time() || elem_ti.is_timeinterval() ||
+               elem_ti.is_dict_encoded_string()) {
+      // TODO(adb): this validation and handling should be done elsewhere
+      const auto sign_extended_element = ir_builder.CreateSExt(element, array_index_type);
+      ir_builder.CreateStore(sign_extended_element, element_ptr);
     } else {
       throw std::runtime_error("Unsupported type used in ARRAY construction.");
     }

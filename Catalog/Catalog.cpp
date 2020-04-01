@@ -614,6 +614,7 @@ void Catalog::createFsiSchemasAndDefaultServers() {
         "id integer primary key, "
         "name text unique, "
         "data_wrapper_type text, "
+        "owner_user_id integer, "
         "options text)");
     createDefaultServersIfNotExists();
     sqliteConnector_.query(
@@ -721,7 +722,8 @@ void Catalog::recordOwnershipOfObjectsInObjectPermissions() {
             {DatabaseDBObjectType, AccessPrivileges::ALL_DATABASE},
             {TableDBObjectType, AccessPrivileges::ALL_TABLE},
             {DashboardDBObjectType, AccessPrivileges::ALL_DASHBOARD},
-            {ViewDBObjectType, AccessPrivileges::ALL_VIEW}};
+            {ViewDBObjectType, AccessPrivileges::ALL_VIEW},
+            {ServerDBObjectType, AccessPrivileges::ALL_SERVER}};
 
     // grant owner all permissions on DB
     DBObjectKey key;
@@ -2396,10 +2398,12 @@ void Catalog::createForeignServerNoLocks(
 
   if (sqliteConnector_.getNumRows() == 0) {
     sqliteConnector_.query_with_text_params(
-        "INSERT INTO omnisci_foreign_servers (name, data_wrapper_type, options) "
-        "VALUES (?, ?, ?)",
+        "INSERT INTO omnisci_foreign_servers (name, data_wrapper_type, owner_user_id, "
+        "options) "
+        "VALUES (?, ?, ?, ?)",
         std::vector<std::string>{foreign_server->name,
                                  foreign_server->data_wrapper.name,
+                                 std::to_string(foreign_server->user_id),
                                  foreign_server->getOptionsAsJsonString()});
     sqliteConnector_.query_with_text_params(
         "SELECT id from omnisci_foreign_servers where name = ?",
@@ -2417,37 +2421,40 @@ void Catalog::createForeignServerNoLocks(
   foreignServerMapById_[foreign_server_shared->id] = foreign_server_shared;
 }
 
-foreign_storage::ForeignServer* Catalog::getForeignServer(const std::string& server_name,
-                                                          const bool skip_cache) {
+foreign_storage::ForeignServer* Catalog::getForeignServer(
+    const std::string& server_name) const {
   foreign_storage::ForeignServer* foreign_server = nullptr;
-  if (!skip_cache) {
-    cat_read_lock read_lock(this);
-    if (foreignServerMap_.find(server_name) != foreignServerMap_.end()) {
-      foreign_server = foreignServerMap_.find(server_name)->second.get();
-    }
-  } else {
-    cat_write_lock write_lock(this);
-    cat_sqlite_lock sqlite_lock(this);
-
-    sqliteConnector_.query_with_text_params(
-        "SELECT id, name, data_wrapper_type, options "
-        "FROM omnisci_foreign_servers WHERE name = ?",
-        std::vector<std::string>{server_name});
-    if (sqliteConnector_.getNumRows() > 0) {
-      auto server = std::make_shared<foreign_storage::ForeignServer>(
-          foreign_storage::DataWrapper{sqliteConnector_.getData<std::string>(0, 2)});
-      server->id = sqliteConnector_.getData<int>(0, 0);
-      server->name = sqliteConnector_.getData<std::string>(0, 1);
-      server->populateOptionsMap(sqliteConnector_.getData<std::string>(0, 3));
-      foreign_server = server.get();
-      foreignServerMap_[server->name] = server;
-      foreignServerMapById_[server->id] = server;
-    }
+  cat_read_lock read_lock(this);
+  if (foreignServerMap_.find(server_name) != foreignServerMap_.end()) {
+    foreign_server = foreignServerMap_.find(server_name)->second.get();
   }
   return foreign_server;
 }
 
-void Catalog::dropForeignServer(const std::string& server_name, bool if_exists) {
+foreign_storage::ForeignServer* Catalog::getForeignServerSkipCache(
+    const std::string& server_name) {
+  foreign_storage::ForeignServer* foreign_server = nullptr;
+  cat_write_lock write_lock(this);
+  cat_sqlite_lock sqlite_lock(this);
+  sqliteConnector_.query_with_text_params(
+      "SELECT id, name, data_wrapper_type, options, owner_user_id "
+      "FROM omnisci_foreign_servers WHERE name = ?",
+      std::vector<std::string>{server_name});
+  if (sqliteConnector_.getNumRows() > 0) {
+    auto server = std::make_shared<foreign_storage::ForeignServer>(
+        foreign_storage::DataWrapper{sqliteConnector_.getData<std::string>(0, 2)});
+    server->id = sqliteConnector_.getData<int>(0, 0);
+    server->name = sqliteConnector_.getData<std::string>(0, 1);
+    server->user_id = sqliteConnector_.getData<std::int32_t>(0, 4);
+    server->populateOptionsMap(sqliteConnector_.getData<std::string>(0, 3));
+    foreign_server = server.get();
+    foreignServerMap_[server->name] = server;
+    foreignServerMapById_[server->id] = server;
+  }
+  return foreign_server;
+}
+
+void Catalog::dropForeignServer(const std::string& server_name) {
   cat_write_lock write_lock(this);
   cat_sqlite_lock sqlite_lock(this);
 
@@ -2471,9 +2478,6 @@ void Catalog::dropForeignServer(const std::string& server_name, bool if_exists) 
         std::vector<std::string>{server_name});
     foreignServerMap_.erase(server_name);
     foreignServerMapById_.erase(server_id);
-  } else if (!if_exists) {
-    throw std::runtime_error{"Foreign server with name \"" + server_name +
-                             "\" does not exist."};
   }
 }
 
@@ -3451,7 +3455,8 @@ void Catalog::vacuumDeletedRows(const TableDescriptor* td) const {
 
 void Catalog::buildForeignServerMap() {
   sqliteConnector_.query(
-      "SELECT id, name, data_wrapper_type, options FROM omnisci_foreign_servers");
+      "SELECT id, name, data_wrapper_type, options, owner_user_id FROM "
+      "omnisci_foreign_servers");
   auto num_rows = sqliteConnector_.getNumRows();
   for (size_t row = 0; row < num_rows; row++) {
     auto foreign_server = std::make_shared<foreign_storage::ForeignServer>(
@@ -3459,6 +3464,7 @@ void Catalog::buildForeignServerMap() {
     foreign_server->id = sqliteConnector_.getData<int>(row, 0);
     foreign_server->name = sqliteConnector_.getData<std::string>(row, 1);
     foreign_server->populateOptionsMap(sqliteConnector_.getData<std::string>(row, 3));
+    foreign_server->user_id = sqliteConnector_.getData<std::int32_t>(row, 4);
     foreignServerMap_[foreign_server->name] = foreign_server;
     foreignServerMapById_[foreign_server->id] = foreign_server;
   }
@@ -3490,6 +3496,7 @@ void Catalog::createDefaultServersIfNotExists() {
   local_csv_server
       ->options[std::string{foreign_storage::ForeignServer::STORAGE_TYPE_KEY}] =
       foreign_storage::ForeignServer::LOCAL_FILE_STORAGE_TYPE;
+  local_csv_server->user_id = OMNISCI_ROOT_USER_ID;
   local_csv_server->options[std::string{foreign_storage::ForeignServer::BASE_PATH_KEY}] =
       "/";
   local_csv_server->validate();
@@ -3501,6 +3508,7 @@ void Catalog::createDefaultServersIfNotExists() {
   local_parquet_server
       ->options[std::string{foreign_storage::ForeignServer::STORAGE_TYPE_KEY}] =
       foreign_storage::ForeignServer::LOCAL_FILE_STORAGE_TYPE;
+  local_parquet_server->user_id = OMNISCI_ROOT_USER_ID;
   local_parquet_server
       ->options[std::string{foreign_storage::ForeignServer::BASE_PATH_KEY}] = "/";
   local_parquet_server->validate();

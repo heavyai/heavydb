@@ -1123,7 +1123,7 @@ void Constant::do_cast(const SQLTypeInfo& new_type_info) {
     }
     type_info = new_type_info;
   } else if (get_is_null() && (new_type_info.is_number() || new_type_info.is_time() ||
-                               new_type_info.is_string())) {
+                               new_type_info.is_string() || new_type_info.is_boolean())) {
     type_info = new_type_info;
     set_null_value();
   } else {
@@ -1200,8 +1200,9 @@ std::shared_ptr<Analyzer::Expr> Constant::add_cast(const SQLTypeInfo& new_type_i
     }
     return Expr::add_cast(new_type_info);
   }
-  if (is_member_of_typeset<kINT, kDECIMAL, kFLOAT, kDOUBLE>(new_type_info) &&
-      is_member_of_typeset<kTIME, kDATE>(type_info)) {
+  const auto is_integral_type =
+      new_type_info.is_integer() || new_type_info.is_decimal() || new_type_info.is_fp();
+  if (is_integral_type && (type_info.is_time() || type_info.is_date())) {
     // Let the codegen phase deal with casts from date/time to a number.
     return makeExpr<UOper>(new_type_info, contains_agg, kCAST, shared_from_this());
   }

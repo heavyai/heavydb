@@ -1326,47 +1326,39 @@ Analyzer::ExpressionPtr RelAlgTranslator::translateArrayFunction(
     // FIX-ME:  Deal with NULL arrays
     auto translated_function_args(translateFunctionArgs(rex_function));
     if (translated_function_args.size() > 0) {
-      auto const& first_element_logical_type(
-          get_nullable_logical_type_info(translated_function_args[0]->get_type_info()));
+      const auto first_element_logical_type =
+          get_nullable_logical_type_info(translated_function_args[0]->get_type_info());
 
-      on_member_of_typeset<kCHAR, kVARCHAR, kTEXT>(
-          first_element_logical_type,
-          [&] {
-            bool same_type_status = true;
-            for (auto const& expr_ptr : translated_function_args) {
-              same_type_status =
-                  same_type_status && (expr_ptr->get_type_info().is_string());
-            }
+      auto diff_elem_itr =
+          std::find_if(translated_function_args.begin(),
+                       translated_function_args.end(),
+                       [first_element_logical_type](const auto expr) {
+                         return first_element_logical_type !=
+                                get_nullable_logical_type_info(expr->get_type_info());
+                       });
+      if (diff_elem_itr != translated_function_args.end()) {
+        throw std::runtime_error(
+            "Element " +
+            std::to_string(diff_elem_itr - translated_function_args.begin()) +
+            " is not of the same type as other elements of the array. Consider casting "
+            "to force this condition.\nElement Type: " +
+            get_nullable_logical_type_info((*diff_elem_itr)->get_type_info())
+                .to_string() +
+            "\nArray type: " + first_element_logical_type.to_string());
+      }
 
-            if (same_type_status == false) {
-              throw std::runtime_error(
-                  "All elements of the array are not of the same logical subtype; "
-                  "consider casting to force this condition.");
-            }
-
-            sql_type.set_subtype(first_element_logical_type.get_type());
-            sql_type.set_compression(kENCODING_FIXED);
-            sql_type.set_comp_param(TRANSIENT_DICT_ID);
-          },
-          [&] {
-            // Non string types
-            bool same_type_status = true;
-            for (auto const& expr_ptr : translated_function_args) {
-              same_type_status =
-                  same_type_status &&
-                  (first_element_logical_type ==
-                   get_nullable_logical_type_info(expr_ptr->get_type_info()));
-            }
-
-            if (same_type_status == false) {
-              throw std::runtime_error(
-                  "All elements of the array are not of the same logical subtype; "
-                  "consider casting to force this condition.");
-            }
-            sql_type.set_subtype(first_element_logical_type.get_type());
-            sql_type.set_scale(first_element_logical_type.get_scale());
-            sql_type.set_precision(first_element_logical_type.get_precision());
-          });
+      if (first_element_logical_type.is_string() &&
+          !first_element_logical_type.is_dict_encoded_string()) {
+        sql_type.set_subtype(first_element_logical_type.get_type());
+        sql_type.set_compression(kENCODING_FIXED);
+      } else if (first_element_logical_type.is_dict_encoded_string()) {
+        sql_type.set_subtype(first_element_logical_type.get_type());
+        sql_type.set_comp_param(TRANSIENT_DICT_ID);
+      } else {
+        sql_type.set_subtype(first_element_logical_type.get_type());
+        sql_type.set_scale(first_element_logical_type.get_scale());
+        sql_type.set_precision(first_element_logical_type.get_precision());
+      }
 
       feature_stash_.setCPUOnlyExecutionRequired();
       return makeExpr<Analyzer::ArrayExpr>(
