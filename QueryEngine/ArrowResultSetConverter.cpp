@@ -232,8 +232,9 @@ void convert_column(ResultSetPtr result,
     is_valid[unroll_count >> 3] = valid_byte;
   }
 
-  if (!null_count)
+  if (!null_count) {
     is_valid.reset();
+}
 
   // TODO: support date/time + scaling
   // TODO: support booleans
