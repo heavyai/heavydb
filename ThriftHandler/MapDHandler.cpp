@@ -60,7 +60,6 @@
 #include "QueryEngine/TableFunctions/TableFunctionsFactory.h"
 #include "QueryEngine/TableOptimizer.h"
 #include "QueryEngine/ThriftSerializers.h"
-#include "Shared/SQLTypeUtilities.h"
 #include "Shared/StringTransform.h"
 #include "Shared/SysInfo.h"
 #include "Shared/geo_types.h"
@@ -193,7 +192,8 @@ MapDHandler::MapDHandler(const std::vector<LeafHostInfo>& db_leaves,
                          const int max_session_duration,
                          const bool enable_runtime_udf_registration,
                          const std::string& udf_filename,
-                         const std::string& clang_path)
+                         const std::string& clang_path,
+                         const std::vector<std::string>& clang_options)
     : leaf_aggregator_(db_leaves)
     , string_leaves_(string_leaves)
     , base_data_path_(base_data_path)
@@ -261,7 +261,7 @@ MapDHandler::MapDHandler(const std::vector<LeafHostInfo>& db_leaves,
 
   try {
     if (!udf_filename.empty()) {
-      UdfCompiler compiler(udf_filename, clang_path);
+      UdfCompiler compiler(udf_filename, clang_path, clang_options);
       int compile_result = compiler.compileUdf();
 
       if (compile_result == 0) {
@@ -486,8 +486,7 @@ std::shared_ptr<Catalog_Namespace::SessionInfo> MapDHandler::create_new_session(
                             cat, user_meta, executor_device_type_, session));
   CHECK(emplace_retval.second);
   auto& session_ptr = emplace_retval.first->second;
-  LOG(INFO) << "User " << user_meta.userName << " connected to database " << dbname
-            << " with public_session_id " << session_ptr->get_public_session_id();
+  LOG(INFO) << "User " << user_meta.userName << " connected to database " << dbname;
   return session_ptr;
 }
 
@@ -513,6 +512,8 @@ void MapDHandler::connect_impl(TSessionId& session,
                          ? std::vector<std::string>{{"super"}}
                          : SysCatalog::instance().getRoles(
                                false, false, session_ptr->get_currentUser().userName);
+
+  session_ptr->set_connection_info(getConnectionInfo().toString());
   stdlog.appendNameValuePairs("roles", boost::algorithm::join(roles, ","));
 }
 
@@ -524,8 +525,10 @@ void MapDHandler::disconnect(const TSessionId& session) {
   auto session_it = get_session_it_unsafe(session, write_lock);
   stdlog.setSessionInfo(session_it->second);
   const auto dbname = session_it->second->getCatalog().getCurrentDB().dbName;
+
   LOG(INFO) << "User " << session_it->second->get_currentUser().userName
-            << " disconnected from database " << dbname << std::endl;
+            << " disconnected from database " << dbname
+            << " with public_session_id: " << session_it->second->get_public_session_id();
   disconnect_impl(session_it, write_lock);
 }
 
@@ -582,17 +585,19 @@ void MapDHandler::clone_session(TSessionId& session2, const TSessionId& session1
   }
 }
 
-void MapDHandler::interrupt(const TSessionId& session) {
-  auto stdlog = STDLOG(get_session_ptr(session));
+void MapDHandler::interrupt(const TSessionId& query_session,
+                            const TSessionId& interrupt_session) {
+  // if this is for distributed setting, query_session becomes a parent session (agg)
+  // and the interrupt session is one of existing session in the leaf node (leaf)
+  // so we can think there exists a logical mapping
+  // between query_session (agg) and interrupt_session (leaf)
+  auto stdlog = STDLOG(get_session_ptr(interrupt_session));
   stdlog.appendNameValuePairs("client", getConnectionInfo().toString());
-  if (g_enable_dynamic_watchdog) {
+  if (g_enable_dynamic_watchdog || g_enable_runtime_query_interrupt) {
     // Shared lock to allow simultaneous interrupts of multiple sessions
     mapd_shared_lock<mapd_shared_mutex> read_lock(sessions_mutex_);
-    if (leaf_aggregator_.leafCount() > 0) {
-      leaf_aggregator_.interrupt(session);
-    }
 
-    auto session_it = get_session_it_unsafe(session, read_lock);
+    auto session_it = get_session_it_unsafe(interrupt_session, read_lock);
     auto& cat = session_it->second.get()->getCatalog();
     const auto dbname = cat.getCurrentDB().dbName;
     auto executor = Executor::getExecutor(cat.getCurrentDB().dbId,
@@ -607,7 +612,10 @@ void MapDHandler::interrupt(const TSessionId& session) {
             << session_it->second->get_currentUser().userName << ", Database " << dbname
             << std::endl;
 
-    executor->interrupt();
+    if (leaf_aggregator_.leafCount() > 0) {
+      leaf_aggregator_.interrupt(query_session, interrupt_session);
+    }
+    executor->interrupt(query_session, interrupt_session);
 
     LOG(INFO) << "User " << session_it->second->get_currentUser().userName
               << " interrupted session with database " << dbname << std::endl;
@@ -763,7 +771,7 @@ void MapDHandler::value_to_thrift_column(const TargetValue& tv,
     if (boost::get<int64_t>(scalar_tv)) {
       int64_t data = *(boost::get<int64_t>(scalar_tv));
 
-      if (is_member_of_typeset<kNUMERIC, kDECIMAL>(ti)) {
+      if (ti.is_decimal()) {
         double val = static_cast<double>(data);
         if (ti.get_scale() > 0) {
           val /= pow(10.0, std::abs(ti.get_scale()));
@@ -854,7 +862,7 @@ TDatum MapDHandler::value_to_thrift(const TargetValue& tv, const SQLTypeInfo& ti
   if (boost::get<int64_t>(scalar_tv)) {
     int64_t data = *(boost::get<int64_t>(scalar_tv));
 
-    if (is_member_of_typeset<kNUMERIC, kDECIMAL>(ti)) {
+    if (ti.is_decimal()) {
       double val = static_cast<double>(data);
       if (ti.get_scale() > 0) {
         val /= pow(10.0, std::abs(ti.get_scale()));
@@ -1363,11 +1371,9 @@ void MapDHandler::validate_rel_alg(TTableDescriptor& _return,
                                  ExecutorDeviceType::CPU,
                                  -1,
                                  -1,
-                                 false,
-                                 true,
-                                 false,
-                                 false,
-                                 false);
+                                 /*just_validate=*/true,
+                                 /*find_filter_push_down_candidates=*/false,
+                                 ExplainInfo::defaults());
     const auto& row_desc = fixup_row_descriptor(
         result.row_set.row_desc,
         query_state_proxy.getQueryState().getConstSessionInfo()->getCatalog());
@@ -1913,11 +1919,9 @@ void MapDHandler::get_table_details_impl(TTableDetails& _return,
                           ExecutorDeviceType::CPU,
                           -1,
                           -1,
-                          false,
-                          true,
-                          false,
-                          false,
-                          false);
+                          /*just_validate=*/true,
+                          /*find_filter_push_down_candidates=*/false,
+                          ExplainInfo::defaults());
           _return.row_desc = fixup_row_descriptor(result.row_set.row_desc, cat);
         } else {
           throw std::runtime_error(
@@ -2110,11 +2114,9 @@ void MapDHandler::get_tables_meta(std::vector<TTableMeta>& _return,
                         ExecutorDeviceType::CPU,
                         -1,
                         -1,
-                        false,
-                        true,
-                        false,
-                        false,
-                        false);
+                        /*just_validate=*/true,
+                        /*find_push_down_candidates=*/false,
+                        ExplainInfo::defaults());
         num_cols = result.row_set.row_desc.size();
         for (const auto col : result.row_set.row_desc) {
           if (col.is_physical) {
@@ -4616,11 +4618,9 @@ std::vector<PushedDownFilterInfo> MapDHandler::execute_rel_alg(
     const ExecutorDeviceType executor_device_type,
     const int32_t first_n,
     const int32_t at_most_n,
-    const bool just_explain,
     const bool just_validate,
     const bool find_push_down_candidates,
-    const bool just_calcite_explain,
-    const bool explain_optimized_ir) const {
+    const ExplainInfo& explain_info) const {
   query_state::Timer timer = query_state_proxy.createTimer(__func__);
   const auto& cat = query_state_proxy.getQueryState().getConstSessionInfo()->getCatalog();
   CompilationOptions co = {executor_device_type,
@@ -4629,12 +4629,12 @@ std::vector<PushedDownFilterInfo> MapDHandler::execute_rel_alg(
                            g_enable_dynamic_watchdog,
                            g_enable_lazy_fetch,
                            /*add_delete_column=*/true,
-                           explain_optimized_ir ? ExecutorExplainType::Optimized
-                                                : ExecutorExplainType::Default,
+                           explain_info.explain_optimized ? ExecutorExplainType::Optimized
+                                                          : ExecutorExplainType::Default,
                            intel_jit_profile_};
   ExecutionOptions eo = {g_enable_columnar_output,
                          allow_multifrag_,
-                         just_explain,
+                         explain_info.justExplain(),
                          allow_loop_joins_ || just_validate,
                          g_enable_watchdog,
                          jit_debug_,
@@ -4642,8 +4642,10 @@ std::vector<PushedDownFilterInfo> MapDHandler::execute_rel_alg(
                          g_enable_dynamic_watchdog,
                          g_dynamic_watchdog_time_limit,
                          find_push_down_candidates,
-                         just_calcite_explain,
-                         mapd_parameters_.gpu_input_mem_limit};
+                         explain_info.justCalciteExplain(),
+                         mapd_parameters_.gpu_input_mem_limit,
+                         g_enable_runtime_query_interrupt,
+                         g_runtime_query_interrupt_frequency};
   auto executor = Executor::getExecutor(cat.getCurrentDB().dbId,
                                         jit_debug_ ? "/tmp" : "",
                                         jit_debug_ ? "mapdquery" : "",
@@ -4658,17 +4660,18 @@ std::vector<PushedDownFilterInfo> MapDHandler::execute_rel_alg(
                                                      nullptr,
                                                      nullptr),
                          {}};
-  _return.execution_time_ms += measure<>::execution(
-      [&]() { result = ra_executor.executeRelAlgQuery(co, eo, nullptr); });
+  _return.execution_time_ms += measure<>::execution([&]() {
+    result = ra_executor.executeRelAlgQuery(co, eo, explain_info.explain_plan, nullptr);
+  });
   // reduce execution time by the time spent during queue waiting
   _return.execution_time_ms -= result.getRows()->getQueueTime();
   const auto& filter_push_down_info = result.getPushedDownFilterInfo();
   if (!filter_push_down_info.empty()) {
     return filter_push_down_info;
   }
-  if (just_explain) {
+  if (explain_info.justExplain()) {
     convert_explain(_return, *result.getRows(), column_format);
-  } else if (!just_calcite_explain) {
+  } else if (!explain_info.justCalciteExplain()) {
     convert_rows(_return,
                  timer.createQueryStateProxy(),
                  result.getTargetsMeta(),
@@ -4698,7 +4701,7 @@ void MapDHandler::execute_rel_alg_df(TDataFrame& _return,
                            /*add_delete_column=*/true,
                            ExecutorExplainType::Default,
                            intel_jit_profile_};
-  ExecutionOptions eo = {false,
+  ExecutionOptions eo = {g_enable_columnar_output,
                          allow_multifrag_,
                          false,
                          allow_loop_joins_,
@@ -4709,7 +4712,9 @@ void MapDHandler::execute_rel_alg_df(TDataFrame& _return,
                          g_dynamic_watchdog_time_limit,
                          false,
                          false,
-                         mapd_parameters_.gpu_input_mem_limit};
+                         mapd_parameters_.gpu_input_mem_limit,
+                         g_enable_runtime_query_interrupt,
+                         g_runtime_query_interrupt_frequency};
   auto executor = Executor::getExecutor(cat.getCurrentDB().dbId,
                                         jit_debug_ ? "/tmp" : "",
                                         jit_debug_ ? "mapdquery" : "",
@@ -4725,7 +4730,7 @@ void MapDHandler::execute_rel_alg_df(TDataFrame& _return,
                                                      nullptr),
                          {}};
   _return.execution_time_ms += measure<>::execution(
-      [&]() { result = ra_executor.executeRelAlgQuery(co, eo, nullptr); });
+      [&]() { result = ra_executor.executeRelAlgQuery(co, eo, false, nullptr); });
   _return.execution_time_ms -= result.getRows()->getQueueTime();
   const auto rs = result.getRows();
   const auto converter =
@@ -5047,24 +5052,27 @@ void MapDHandler::sql_execute_impl(TQueryResult& _return,
             parse_to_ra(query_state_proxy, temp_query_str, {}, false, mapd_parameters_)
                 .first.plan_result;
       } else if (pw.isCalciteDdl()) {
-        DdlCommandExecutor{query_ra, session_ptr}.execute(_return);
+        DdlCommandExecutor executor = DdlCommandExecutor(query_ra, session_ptr);
+        if (executor.isShowUserSessions()) {
+          getUserSessions(*session_ptr, _return);
+        } else {
+          executor.execute(_return);
+        }
         return;
       }
-
-      const auto filter_push_down_requests =
-          execute_rel_alg(_return,
-                          query_state_proxy,
-                          pw.isCalciteExplain() ? query_ra_calcite_explain : query_ra,
-                          column_format,
-                          executor_device_type,
-                          first_n,
-                          at_most_n,
-                          pw.isIRExplain(),
-                          false,
-                          g_enable_filter_push_down && !g_cluster,
-                          pw.isCalciteExplain(),
-                          pw.getExplainType() == ParserWrapper::ExplainType::OptimizedIR);
-      if (pw.isCalciteExplain() && filter_push_down_requests.empty()) {
+      const auto explain_info = pw.getExplainInfo();
+      const auto filter_push_down_requests = execute_rel_alg(
+          _return,
+          query_state_proxy,
+          explain_info.justCalciteExplain() ? query_ra_calcite_explain : query_ra,
+          column_format,
+          executor_device_type,
+          first_n,
+          at_most_n,
+          /*just_validate=*/false,
+          g_enable_filter_push_down && !g_cluster,
+          explain_info);
+      if (explain_info.justCalciteExplain() && filter_push_down_requests.empty()) {
         // we only reach here if filter push down was enabled, but no filter
         // push down candidate was found
         convert_explain(_return, ResultSet(query_ra), true);
@@ -5078,10 +5086,10 @@ void MapDHandler::sql_execute_impl(TQueryResult& _return,
                                               executor_device_type,
                                               first_n,
                                               at_most_n,
-                                              pw.isIRExplain(),
-                                              pw.isCalciteExplain(),
+                                              explain_info.justExplain(),
+                                              explain_info.justCalciteExplain(),
                                               filter_push_down_requests);
-      } else if (pw.isCalciteExplain() && filter_push_down_requests.empty()) {
+      } else if (explain_info.justCalciteExplain() && filter_push_down_requests.empty()) {
         // return the ra as the result:
         // If we reach here, the 'filter_push_down_request' turned out to be empty, i.e.,
         // no filter push down so we continue with the initial (unchanged) query's calcite
@@ -5091,12 +5099,12 @@ void MapDHandler::sql_execute_impl(TQueryResult& _return,
         convert_explain(_return, ResultSet(query_ra), true);
         return;
       }
-      if (pw.isCalciteExplain()) {
+      if (explain_info.justCalciteExplain()) {
         // If we reach here, the filter push down candidates has been selected and
         // proper output result has been already created.
         return;
       }
-      if (pw.isCalciteExplain()) {
+      if (explain_info.justCalciteExplain()) {
         // return the ra as the result:
         // If we reach here, the 'filter_push_down_request' turned out to be empty, i.e.,
         // no filter push down so we continue with the initial (unchanged) query's calcite
@@ -5251,7 +5259,6 @@ void MapDHandler::sql_execute_impl(TQueryResult& _return,
       std::tie(result, locks) =
           parse_to_ra(query_state_proxy, query_string, {}, true, mapd_parameters_);
     }
-
     _return.execution_time_ms += measure<>::execution([&]() {
       ddl->execute(*session_ptr);
       check_and_invalidate_sessions(ddl);
@@ -5326,6 +5333,8 @@ void MapDHandler::execute_rel_alg_with_filter_push_down(
   }
 
   // execute the new relational algebra plan:
+  auto explain_info = ExplainInfo::defaults();
+  explain_info.explain = just_explain;
   execute_rel_alg(_return,
                   query_state_proxy,
                   query_ra,
@@ -5333,11 +5342,9 @@ void MapDHandler::execute_rel_alg_with_filter_push_down(
                   executor_device_type,
                   first_n,
                   at_most_n,
-                  just_explain,
-                  /*just_validate = */ false,
-                  /*find_push_down_candidates = */ false,
-                  /*just_calcite_explain = */ false,
-                  /*TODO: explain optimized*/ false);
+                  /*just_validate=*/false,
+                  /*find_push_down_candidates=*/false,
+                  explain_info);
 }
 
 void MapDHandler::execute_distributed_copy_statement(
@@ -5467,10 +5474,11 @@ void MapDHandler::check_table_consistency(TTableMeta& _return,
 }
 
 void MapDHandler::start_query(TPendingQuery& _return,
-                              const TSessionId& session,
+                              const TSessionId& leaf_session,
+                              const TSessionId& parent_session,
                               const std::string& query_ra,
                               const bool just_explain) {
-  auto stdlog = STDLOG(get_session_ptr(session));
+  auto stdlog = STDLOG(get_session_ptr(leaf_session));
   auto session_ptr = stdlog.getConstSessionInfo();
   if (!leaf_handler_) {
     THROW_MAPD_EXCEPTION("Distributed support is disabled.");
@@ -5478,7 +5486,8 @@ void MapDHandler::start_query(TPendingQuery& _return,
   LOG(INFO) << "start_query :" << *session_ptr << " :" << just_explain;
   auto time_ms = measure<>::execution([&]() {
     try {
-      leaf_handler_->start_query(_return, session, query_ra, just_explain);
+      leaf_handler_->start_query(
+          _return, leaf_session, parent_session, query_ra, just_explain);
     } catch (std::exception& e) {
       THROW_MAPD_EXCEPTION(std::string("Exception: ") + e.what());
     }
@@ -5766,6 +5775,17 @@ void MapDHandler::emergency_shutdown() {
 
 extern std::map<std::string, std::string> get_device_parameters();
 
+#define EXPOSE_THRIFT_MAP(TYPENAME)                                             \
+  {                                                                             \
+    std::map<int, const char*>::const_iterator it =                             \
+        _##TYPENAME##_VALUES_TO_NAMES.begin();                                  \
+    while (it != _##TYPENAME##_VALUES_TO_NAMES.end()) {                         \
+      _return.insert(std::pair<std::string, std::string>(                       \
+          #TYPENAME "." + std::string(it->second), std::to_string(it->first))); \
+      it++;                                                                     \
+    }                                                                           \
+  }
+
 void MapDHandler::get_device_parameters(std::map<std::string, std::string>& _return,
                                         const TSessionId& session) {
   const auto session_info = get_session_copy(session);
@@ -5773,6 +5793,11 @@ void MapDHandler::get_device_parameters(std::map<std::string, std::string>& _ret
   for (auto item : params) {
     _return.insert(item);
   }
+  EXPOSE_THRIFT_MAP(TDeviceType);
+  EXPOSE_THRIFT_MAP(TDatumType);
+  EXPOSE_THRIFT_MAP(TEncodingType);
+  EXPOSE_THRIFT_MAP(TExtArgumentType);
+  EXPOSE_THRIFT_MAP(TOutputBufferSizeType);
 }
 
 ExtArgumentType mapfrom(const TExtArgumentType::type& t) {
@@ -5803,6 +5828,8 @@ ExtArgumentType mapfrom(const TExtArgumentType::type& t) {
       return ExtArgumentType::PFloat;
     case TExtArgumentType::PDouble:
       return ExtArgumentType::PDouble;
+    case TExtArgumentType::PBool:
+      return ExtArgumentType::PBool;
     case TExtArgumentType::Bool:
       return ExtArgumentType::Bool;
     case TExtArgumentType::ArrayInt8:
@@ -5817,10 +5844,18 @@ ExtArgumentType mapfrom(const TExtArgumentType::type& t) {
       return ExtArgumentType::ArrayFloat;
     case TExtArgumentType::ArrayDouble:
       return ExtArgumentType::ArrayDouble;
+    case TExtArgumentType::ArrayBool:
+      return ExtArgumentType::ArrayBool;
     case TExtArgumentType::GeoPoint:
       return ExtArgumentType::GeoPoint;
+    case TExtArgumentType::GeoLineString:
+      return ExtArgumentType::GeoLineString;
     case TExtArgumentType::Cursor:
       return ExtArgumentType::Cursor;
+    case TExtArgumentType::GeoPolygon:
+      return ExtArgumentType::GeoPolygon;
+    case TExtArgumentType::GeoMultiPolygon:
+      return ExtArgumentType::GeoMultiPolygon;
   }
   UNREACHABLE();
   return ExtArgumentType{};
@@ -5904,4 +5939,48 @@ void MapDHandler::register_runtime_extension_functions(
           << whitelist;
   ExtensionFunctionsWhitelist::clearRTUdfs();
   ExtensionFunctionsWhitelist::addRTUdfs(whitelist);
+}
+
+void MapDHandler::getUserSessions(const Catalog_Namespace::SessionInfo& session_info,
+                                  TQueryResult& _return) {
+  if (!session_info.get_currentUser().isSuper) {
+    throw std::runtime_error(
+        "SHOW USER SESSIONS failed, because it can only be executed by super user.");
+  } else {
+    mapd_lock_guard<mapd_shared_mutex> read_lock(sessions_mutex_);
+    const std::vector<std::string> col_names{
+        "session_id", "login_name", "client_address", "db_name"};
+
+    // Make columns for TQueryResult
+    TRowDescriptor row_desc;
+    for (const auto& col : col_names) {
+      TColumnType columnType;
+      columnType.col_name = col;
+      columnType.col_type.type = TDatumType::STR;
+      row_desc.push_back(columnType);
+      _return.row_set.columns.emplace_back(TColumn());
+    }
+    _return.row_set.row_desc = row_desc;
+    _return.row_set.is_columnar = true;
+
+    if (!sessions_.empty()) {
+      for (auto sessions = sessions_.begin(); sessions_.end() != sessions; sessions++) {
+        const auto id = sessions->first;
+        const auto show_session_ptr = sessions->second;
+        int col_num = 0;
+        _return.row_set.columns[col_num++].data.str_col.emplace_back(
+            show_session_ptr->get_public_session_id());
+        _return.row_set.columns[col_num++].data.str_col.emplace_back(
+            show_session_ptr->get_currentUser().userName);
+        _return.row_set.columns[col_num++].data.str_col.emplace_back(
+            show_session_ptr->get_connection_info());
+        _return.row_set.columns[col_num++].data.str_col.emplace_back(
+            show_session_ptr->getCatalog().getCurrentDB().dbName);
+
+        for (auto& col : _return.row_set.columns) {
+          col.nulls.push_back(false);
+        }
+      }
+    }
+  }
 }

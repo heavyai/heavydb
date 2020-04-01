@@ -115,11 +115,11 @@ class RaExecutionSequence {
   RaExecutionDesc* next();
 
   /**
-   * Returns the index of the next execution descriptor in the graph. If after_reduction
+   * Returns the index of the next execution descriptor in the graph. If after_broadcast
    * is true, returns the index of the first execution descriptor after the next global
-   * reduction. Returns -1 if no execution descriptors remain in the graph.
+   * broadcast. Returns -1 if no execution descriptors remain in the graph.
    */
-  ssize_t nextStepId(const bool after_reduction) const;
+  ssize_t nextStepId(const bool after_broadcast) const;
 
   bool executionFinished() const;
 
@@ -143,13 +143,13 @@ class RaExecutionSequence {
 
   /**
    * Starting from the current vertex, iterate the graph counting the number of execution
-   * descriptors remaining before the next required reduction step. The current vertex is
-   * counted as the first step before a reduction is required; i.e. a return value of 0
+   * descriptors remaining before the next required broadcast step. The current vertex is
+   * counted as the first step before a broadcast is required; i.e. a return value of 0
    * indicates no additional steps in the graph can be executed without a global
-   * reduction, and a return value of 2 indicates the current vertex and both subsequent
-   * vertices can be executed before a global reduction is needed.
+   * broadcast, and a return value of 2 indicates the current vertex and both subsequent
+   * vertices can be executed before a global broacast is needed.
    */
-  size_t stepsToNextReduction() const;
+  size_t stepsToNextBroadcast() const;
 
   // The execution descriptors hold the pointers to their results. We need to push them
   // back into this vector as they are created, so we don't lose the intermediate results

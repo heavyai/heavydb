@@ -125,7 +125,7 @@ using namespace Parser;
 %token GEOGRAPHY GEOMETRY GRANT GROUP HAVING IF ILIKE IN INSERT INTEGER INTO
 %token IS LANGUAGE LAST LENGTH LIKE LIMIT LINESTRING MOD MULTIPOLYGON NOW NULLX NUMERIC OF OFFSET ON OPEN OPTIMIZE
 %token OPTIMIZED OPTION ORDER PARAMETER POINT POLYGON PRECISION PRIMARY PRIVILEGES PROCEDURE
-%token SMALLINT SOME TABLE TEMPORARY TEXT THEN TIME TIMESTAMP TINYINT TO TRUNCATE UNION
+%token SERVER SMALLINT SOME TABLE TEMPORARY TEXT THEN TIME TIMESTAMP TINYINT TO TRUNCATE UNION
 %token PUBLIC REAL REFERENCES RENAME RESTORE REVOKE ROLE ROLLBACK SCHEMA SELECT SET SHARD SHARED SHOW
 %token UNIQUE UPDATE USER VALIDATE VALUES VIEW WHEN WHENEVER WHERE WITH WORK EDIT ACCESS DASHBOARD SQL EDITOR
 
@@ -1210,10 +1210,12 @@ privilege:
 	|	VIEW { $<stringval>$ = new std::string("VIEW"); }
 	|	EDIT { $<stringval>$ = new std::string("EDIT"); }
 	|	ACCESS { $<stringval>$ = new std::string("ACCESS"); }
+	|	CREATE SERVER { $<stringval>$ = new std::string("CREATE SERVER"); }
 	|	CREATE TABLE { $<stringval>$ = new std::string("CREATE TABLE"); }
 	|	CREATE VIEW { $<stringval>$ = new std::string("CREATE VIEW"); }
 	|	SELECT VIEW { $<stringval>$ = new std::string("SELECT VIEW"); }
 	|	DROP VIEW { $<stringval>$ = new std::string("DROP VIEW"); }
+	|	DROP SERVER { $<stringval>$ = new std::string("DROP SERVER"); }
 	|	CREATE DASHBOARD { $<stringval>$ = new std::string("CREATE DASHBOARD"); }
 	|	EDIT DASHBOARD { $<stringval>$ = new std::string("EDIT DASHBOARD"); }
 	|	VIEW DASHBOARD { $<stringval>$ = new std::string("VIEW DASHBOARD"); }
@@ -1226,6 +1228,7 @@ privileges_target_type:
 	|	TABLE { $<stringval>$ = new std::string("TABLE"); }
 	|	DASHBOARD { $<stringval>$ = new std::string("DASHBOARD"); }
 	|	VIEW { $<stringval>$ = new std::string("VIEW"); }
+	|	SERVER { $<stringval>$ = new std::string("SERVER"); }
 	;
 
 privileges_target:

@@ -495,9 +495,11 @@ void Executor::codegenJoinLoops(const std::vector<JoinLoop>& join_loops,
         const bool can_return_error =
             compileBody(ra_exe_unit, group_by_and_aggregate, query_mem_desc, co);
         if (can_return_error || cgen_state_->needs_error_check_ ||
-            eo.with_dynamic_watchdog) {
-          createErrorCheckControlFlow(
-              query_func, eo.with_dynamic_watchdog, co.device_type);
+            eo.with_dynamic_watchdog || eo.allow_runtime_query_interrupt) {
+          createErrorCheckControlFlow(query_func,
+                                      eo.with_dynamic_watchdog,
+                                      eo.allow_runtime_query_interrupt,
+                                      co.device_type);
         }
         return loop_body_bb;
       },

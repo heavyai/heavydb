@@ -26,6 +26,7 @@
 #include "TypePunning.h"
 
 #include <algorithm>
+#include <atomic>
 #include <chrono>
 #include <cmath>
 #include <cstring>
@@ -1381,4 +1382,31 @@ extern "C" void multifrag_query(const int8_t*** col_buffers,
                total_matched,
                error_code);
   }
+}
+
+extern "C" ALWAYS_INLINE DEVICE bool check_interrupt() {
+  if (check_interrupt_init(static_cast<unsigned>(INT_CHECK))) {
+    return true;
+  }
+  return false;
+}
+
+extern "C" bool check_interrupt_init(unsigned command) {
+  static std::atomic_bool runtime_interrupt_flag{false};
+
+  if (command == static_cast<unsigned>(INT_CHECK)) {
+    if (runtime_interrupt_flag.load()) {
+      return true;
+    }
+    return false;
+  }
+  if (command == static_cast<unsigned>(INT_ABORT)) {
+    runtime_interrupt_flag = true;
+    return false;
+  }
+  if (command == static_cast<unsigned>(INT_RESET)) {
+    runtime_interrupt_flag = false;
+    return false;
+  }
+  return false;
 }

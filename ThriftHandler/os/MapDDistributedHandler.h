@@ -60,7 +60,8 @@ class MapDLeafHandler {
   };
 
   void start_query(TPendingQuery& _return,
-                   const TSessionId& session,
+                   const TSessionId& leaf_session,
+                   const TSessionId& parent_session,
                    const std::string& query_ra,
                    const bool just_explain) {
     CHECK(false);

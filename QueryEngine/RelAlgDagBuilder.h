@@ -831,7 +831,14 @@ class RelProject : public RelAlgNode, public ModifyManipulationTarget {
   const std::string getFieldName(const size_t i) const { return fields_[i]; }
 
   void replaceInput(std::shared_ptr<const RelAlgNode> old_input,
-                    std::shared_ptr<const RelAlgNode> input) override;
+                    std::shared_ptr<const RelAlgNode> input) override {
+    replaceInput(old_input, input, std::nullopt);
+  }
+
+  void replaceInput(
+      std::shared_ptr<const RelAlgNode> old_input,
+      std::shared_ptr<const RelAlgNode> input,
+      std::optional<std::unordered_map<unsigned, unsigned>> old_to_new_index_map);
 
   void appendInput(std::string new_field_name,
                    std::unique_ptr<const RexScalar> new_input);
@@ -846,6 +853,8 @@ class RelProject : public RelAlgNode, public ModifyManipulationTarget {
   }
 
   std::shared_ptr<RelAlgNode> deepCopy() const override;
+
+  bool hasWindowFunctionExpr() const;
 
  private:
   template <typename EXPR_VISITOR_FUNCTOR>

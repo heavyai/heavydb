@@ -42,6 +42,7 @@ public class ExtensionFunction {
     PInt64,
     PFloat,
     PDouble,
+    PBool,
     Bool,
     ArrayInt8,
     ArrayInt16,
@@ -49,6 +50,7 @@ public class ExtensionFunction {
     ArrayInt64,
     ArrayFloat,
     ArrayDouble,
+    ArrayBool,
     GeoPoint,
     GeoLineString,
     Cursor,
@@ -135,6 +137,8 @@ public class ExtensionFunction {
         return "float*";
       case PDouble:
         return "double*";
+      case PBool:
+        return "i1*";
       case ArrayInt8:
         return "{i8*, i64, i8}*";
       case ArrayInt16:
@@ -147,6 +151,8 @@ public class ExtensionFunction {
         return "{float*, i64, i8}*";
       case ArrayDouble:
         return "{double*, i64, i8}*";
+      case ArrayBool:
+        return "{i1*, i64, i8}*";
       case GeoPoint:
         return "geo_point";
       case Cursor:

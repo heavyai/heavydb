@@ -71,12 +71,14 @@ class FsiSchemaTest : public testing::Test {
 
   void assertExpectedDefaultServer(Catalog_Namespace::Catalog* catalog,
                                    const std::string& server_name,
-                                   const std::string& data_wrapper) {
-    auto foreign_server = catalog->getForeignServer(server_name, true);
+                                   const std::string& data_wrapper,
+                                   const int32_t user_id) {
+    auto foreign_server = catalog->getForeignServerSkipCache(server_name);
 
     ASSERT_GT(foreign_server->id, 0);
     ASSERT_EQ(server_name, foreign_server->name);
     ASSERT_EQ(data_wrapper, foreign_server->data_wrapper.name);
+    ASSERT_EQ(user_id, foreign_server->user_id);
 
     ASSERT_TRUE(
         foreign_server->options.find(foreign_storage::ForeignServer::STORAGE_TYPE_KEY) !=
@@ -209,11 +211,14 @@ TEST_F(DefaultForeignServersTest, DefaultServersAreCreatedWhenFsiIsEnabled) {
   auto catalog = initCatalog();
   g_enable_fsi = false;
 
-  assertExpectedDefaultServer(
-      catalog.get(), "omnisci_local_csv", foreign_storage::DataWrapper::CSV_WRAPPER_NAME);
+  assertExpectedDefaultServer(catalog.get(),
+                              "omnisci_local_csv",
+                              foreign_storage::DataWrapper::CSV_WRAPPER_NAME,
+                              OMNISCI_ROOT_USER_ID);
   assertExpectedDefaultServer(catalog.get(),
                               "omnisci_local_parquet",
-                              foreign_storage::DataWrapper::PARQUET_WRAPPER_NAME);
+                              foreign_storage::DataWrapper::PARQUET_WRAPPER_NAME,
+                              OMNISCI_ROOT_USER_ID);
 }
 
 int main(int argc, char** argv) {

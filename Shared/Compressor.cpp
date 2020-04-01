@@ -56,6 +56,17 @@ int64_t BloscCompressor::compress(
     uint8_t* compressed_buffer,
     const size_t compressed_buffer_size,
     const size_t min_compressor_bytes = g_compression_limit_bytes) {
+  if (compressed_buffer_size < BLOSC_MIN_HEADER_LENGTH) {
+    // Blosc compressor checks this condition during the initialization
+    // and throw "Output buffer size should be larger than 16 bytes" error
+    // if compressed_buffer_size < 16 (BLOSC_MIN_HEADER_LENGTH)
+    // but after sending interrupt signal, blosc compress function hangs until
+    // thrift timed out error and could not check this code.
+    // here, we can early return by explicitly checking this condition
+    // so as to avoid hangs in query runtime
+    return 0;
+  }
+
   if (buffer_size < min_compressor_bytes && min_compressor_bytes != 0) {
     return 0;
   }
@@ -71,7 +82,6 @@ int64_t BloscCompressor::compress(
   if (compressed_len <= 0) {
     // something went wrong. blosc retrun codes simply don't provide enough information
     // for us to decide what.
-
     throw CompressionFailedError(std::string("failed to compress result set of length ") +
                                  std::to_string(buffer_size));
   }
@@ -100,7 +110,6 @@ std::string BloscCompressor::compress(const std::string& buffer) {
     }
   } catch (const CompressionFailedError& e) {
   }
-
   return buffer;
 }
 
@@ -200,7 +209,6 @@ BloscCompressor* BloscCompressor::instance = NULL;
 BloscCompressor* BloscCompressor::getCompressor() {
   static std::mutex compressor_singleton_lock;
   std::lock_guard<std::mutex> singleton_lock(compressor_singleton_lock);
-
   if (instance == NULL) {
     instance = new BloscCompressor();
   }

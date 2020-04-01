@@ -21,6 +21,7 @@
 #include "OutputBufferInitialization.h"
 #include "QueryTemplateGenerator.h"
 
+#include "Shared/MathUtils.h"
 #include "Shared/mapdpath.h"
 
 #if LLVM_VERSION_MAJOR < 4
@@ -539,6 +540,7 @@ declare void @agg_count_distinct_bitmap_skip_val_gpu(i64*, i64, i64, i64, i64, i
 declare void @agg_approximate_count_distinct_gpu(i64*, i64, i32, i64, i64);
 declare i32 @record_error_code(i32, i32*);
 declare i1 @dynamic_watchdog();
+declare i1 @check_interrupt();
 declare void @force_sync();
 declare void @sync_warp();
 declare void @sync_warp_protected(i64, i64);
@@ -1333,12 +1335,20 @@ llvm::Value* find_variable_in_basic_block(llvm::Function* func,
 
 void Executor::createErrorCheckControlFlow(llvm::Function* query_func,
                                            bool run_with_dynamic_watchdog,
+                                           bool run_with_allowing_runtime_interrupt,
                                            ExecutorDeviceType device_type) {
   // check whether the row processing was successful; currently, it can
   // fail by running out of group by buffer slots
 
+  if (run_with_dynamic_watchdog && run_with_allowing_runtime_interrupt) {
+    // when both dynamic watchdog and runtime interrupt turns on
+    // we use dynamic watchdog
+    run_with_allowing_runtime_interrupt = false;
+  }
+
   llvm::Value* row_count = nullptr;
-  if (run_with_dynamic_watchdog && device_type == ExecutorDeviceType::GPU) {
+  if ((run_with_dynamic_watchdog || run_with_allowing_runtime_interrupt) &&
+      device_type == ExecutorDeviceType::GPU) {
     row_count =
         find_variable_in_basic_block<llvm::LoadInst>(query_func, ".entry", "row_count");
   }
@@ -1348,7 +1358,8 @@ void Executor::createErrorCheckControlFlow(llvm::Function* query_func,
        ++bb_it) {
     llvm::Value* pos = nullptr;
     for (auto inst_it = bb_it->begin(); inst_it != bb_it->end(); ++inst_it) {
-      if (run_with_dynamic_watchdog && llvm::isa<llvm::PHINode>(*inst_it)) {
+      if ((run_with_dynamic_watchdog || run_with_allowing_runtime_interrupt) &&
+          llvm::isa<llvm::PHINode>(*inst_it)) {
         if (inst_it->getName() == "pos") {
           pos = &*inst_it;
         }
@@ -1369,7 +1380,7 @@ void Executor::createErrorCheckControlFlow(llvm::Function* query_func,
           CHECK(pos);
           llvm::Value* call_watchdog_lv = nullptr;
           if (device_type == ExecutorDeviceType::GPU) {
-            // In order to make sure all threads wihtin a block see the same barrier,
+            // In order to make sure all threads within a block see the same barrier,
             // only those blocks whose none of their threads have experienced the critical
             // edge will go through the dynamic watchdog computation
             CHECK(row_count);
@@ -1418,6 +1429,62 @@ void Executor::createErrorCheckControlFlow(llvm::Function* query_func,
           unified_err_lv->addIncoming(timeout_err_lv, watchdog_check_bb);
           unified_err_lv->addIncoming(err_lv, &*bb_it);
           err_lv = unified_err_lv;
+        } else if (run_with_allowing_runtime_interrupt) {
+          CHECK(pos);
+          llvm::Value* call_check_interrupt_lv = nullptr;
+          if (device_type == ExecutorDeviceType::GPU) {
+            // approximate how many times the %pos variable
+            // is increased --> the number of iteration
+            int32_t num_shift_by_gridDim = getExpOfTwo(gridSize());
+            int32_t num_shift_by_blockDim = getExpOfTwo(blockSize());
+            if (!isPowOfTwo(gridSize())) {
+              num_shift_by_gridDim++;
+            }
+            if (!isPowOfTwo(blockSize())) {
+              num_shift_by_blockDim++;
+            }
+            int total_num_shift = num_shift_by_gridDim + num_shift_by_blockDim;
+            // check the interrupt flag for every 64th iteration
+            llvm::Value* pos_shifted_per_iteration =
+                ir_builder.CreateLShr(pos, cgen_state_->llInt(total_num_shift));
+            auto interrupt_predicate =
+                ir_builder.CreateAnd(pos_shifted_per_iteration, uint64_t(0x3f));
+            call_check_interrupt_lv =
+                ir_builder.CreateICmp(llvm::ICmpInst::ICMP_EQ,
+                                      interrupt_predicate,
+                                      cgen_state_->llInt(int64_t(0LL)));
+          } else {
+            // CPU path: run interrupt checker for every 64th row
+            auto interrupt_predicate = ir_builder.CreateAnd(pos, uint64_t(0x3f));
+            call_check_interrupt_lv =
+                ir_builder.CreateICmp(llvm::ICmpInst::ICMP_EQ,
+                                      interrupt_predicate,
+                                      cgen_state_->llInt(int64_t(0LL)));
+          }
+          CHECK(call_check_interrupt_lv);
+          auto error_check_bb = bb_it->splitBasicBlock(
+              llvm::BasicBlock::iterator(br_instr), ".error_check");
+          auto& check_interrupt_br_instr = bb_it->back();
+
+          auto interrupt_check_bb = llvm::BasicBlock::Create(
+              cgen_state_->context_, ".interrupt_check", query_func, error_check_bb);
+          llvm::IRBuilder<> interrupt_checker_ir_builder(interrupt_check_bb);
+          auto detected_interrupt = interrupt_checker_ir_builder.CreateCall(
+              cgen_state_->module_->getFunction("check_interrupt"), {});
+          auto interrupt_err_lv = interrupt_checker_ir_builder.CreateSelect(
+              detected_interrupt, cgen_state_->llInt(Executor::ERR_INTERRUPTED), err_lv);
+          interrupt_checker_ir_builder.CreateBr(error_check_bb);
+
+          llvm::ReplaceInstWithInst(
+              &check_interrupt_br_instr,
+              llvm::BranchInst::Create(
+                  interrupt_check_bb, error_check_bb, call_check_interrupt_lv));
+          ir_builder.SetInsertPoint(&br_instr);
+          auto unified_err_lv = ir_builder.CreatePHI(err_lv->getType(), 2);
+
+          unified_err_lv->addIncoming(interrupt_err_lv, interrupt_check_bb);
+          unified_err_lv->addIncoming(err_lv, &*bb_it);
+          err_lv = unified_err_lv;
         }
         const auto error_code_arg = get_arg_by_name(query_func, "error_code");
         err_lv =
@@ -1427,9 +1494,16 @@ void Executor::createErrorCheckControlFlow(llvm::Function* query_func,
           // let kernel execution finish as expected, regardless of the observed error,
           // unless it is from the dynamic watchdog where all threads within that block
           // return together.
-          err_lv = ir_builder.CreateICmp(llvm::ICmpInst::ICMP_EQ,
-                                         err_lv,
-                                         cgen_state_->llInt(Executor::ERR_OUT_OF_TIME));
+          if (run_with_allowing_runtime_interrupt) {
+            err_lv = ir_builder.CreateICmp(llvm::ICmpInst::ICMP_EQ,
+                                           err_lv,
+                                           cgen_state_->llInt(Executor::ERR_INTERRUPTED));
+          } else {
+            err_lv = ir_builder.CreateICmp(llvm::ICmpInst::ICMP_EQ,
+                                           err_lv,
+                                           cgen_state_->llInt(Executor::ERR_OUT_OF_TIME));
+          }
+
         } else {
           err_lv = ir_builder.CreateICmp(llvm::ICmpInst::ICMP_NE,
                                          err_lv,
@@ -1710,8 +1784,12 @@ Executor::compileWorkUnit(const std::vector<InputTableInfo>& query_infos,
   } else {
     const bool can_return_error =
         compileBody(ra_exe_unit, group_by_and_aggregate, *query_mem_desc, co);
-    if (can_return_error || cgen_state_->needs_error_check_ || eo.with_dynamic_watchdog) {
-      createErrorCheckControlFlow(query_func, eo.with_dynamic_watchdog, co.device_type);
+    if (can_return_error || cgen_state_->needs_error_check_ || eo.with_dynamic_watchdog ||
+        eo.allow_runtime_query_interrupt) {
+      createErrorCheckControlFlow(query_func,
+                                  eo.with_dynamic_watchdog,
+                                  eo.allow_runtime_query_interrupt,
+                                  co.device_type);
     }
   }
   std::vector<llvm::Value*> hoisted_literals;

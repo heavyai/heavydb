@@ -90,6 +90,10 @@ class SessionInfo {
   time_t get_start_time() const { return start_time_; }
   std::string const& get_public_session_id() const { return public_session_id_; }
   operator std::string() const { return public_session_id_; }
+  std::string const& get_connection_info() const { return connection_info_; }
+  void set_connection_info(const std::string& connection) {
+    connection_info_ = connection;
+  }
 
  private:
   std::shared_ptr<MapDHandler> mapdHandler_;
@@ -100,6 +104,8 @@ class SessionInfo {
   std::atomic<time_t> last_used_time_;  // for tracking active session duration
   std::atomic<time_t> start_time_;      // for invalidating session after tolerance period
   const std::string public_session_id_;
+  std::string
+      connection_info_;  // String containing connection protocol (tcp/http) and address
   std::string public_session_id() const;
 };
 

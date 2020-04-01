@@ -1,6 +1,6 @@
 package com.omnisci.jdbc;
 
-import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.*;
 
 import org.junit.After;
 import org.junit.Before;
@@ -85,5 +85,60 @@ public class OmniSciPrepareTest {
       }
       statement.executeUpdate(PROPERTIES.getProperty("drop_base_t2"));
     }
+  }
+
+  @Test
+  public void get_metadata() throws Exception {
+    Statement statement = m_conn.createStatement();
+    statement.executeUpdate(PROPERTIES.getProperty("drop_base_t3"));
+    statement.executeUpdate(PROPERTIES.getProperty("create_base_t3"));
+    statement.executeQuery("insert into test_prepare_table3 values(1, 1.1, 'one')");
+    ResultSetMetaData md = null;
+
+    PreparedStatement pr_select_no_params =
+            m_conn.prepareStatement("select aa, bb, cc from test_prepare_table3");
+    md = pr_select_no_params.getMetaData();
+    assertNotNull(md);
+    assertEquals(md.getColumnCount(), 3);
+    assertEquals(md.getColumnName(1), "aa");
+    assertEquals(md.getColumnType(1), Types.INTEGER);
+    assertEquals(md.getColumnType(2), Types.DOUBLE);
+
+    PreparedStatement pr_select_with_params = m_conn.prepareStatement(
+            "select bb, aa from test_prepare_table3 where cc <> ? and aa > ?");
+    md = pr_select_with_params.getMetaData();
+    assertNotNull(md);
+    assertEquals(md.getColumnCount(), 2);
+    assertEquals(md.getColumnName(1), "bb");
+    assertEquals(md.getColumnType(1), Types.DOUBLE);
+    assertEquals(md.getColumnType(2), Types.INTEGER);
+
+    String commented_sql_statement = "     \n  \n"
+            + "-- comment\n"
+            + "\n\n"
+            + "/*some\n"
+            + "multiline\n"
+            + "comment\n"
+            + "-- comment inside comment\n"
+            + "*/     \n"
+            + "-- another /*tricky edge case/*\n"
+            + "      select bb, aa from test_prepare_table3 where cc <> ? and aa > ?";
+    PreparedStatement pr_select_with_params_and_comments =
+            m_conn.prepareStatement(commented_sql_statement);
+    md = pr_select_with_params_and_comments.getMetaData();
+    assertNotNull(md);
+    assertEquals(md.getColumnCount(), 2);
+
+    PreparedStatement pr_insert = m_conn.prepareStatement(
+            "insert into test_prepare_table3(aa, bb, cc) values (?, ?, ?)");
+    md = pr_insert.getMetaData();
+    assertNull(md);
+
+    PreparedStatement pr_insert_from_select = m_conn.prepareStatement(
+            "insert into test_prepare_table3(aa, bb, cc) select aa, bb, cc from test_prepare_table3 where cc <> ?");
+    md = pr_insert_from_select.getMetaData();
+    assertNull(md);
+
+    statement.executeUpdate(PROPERTIES.getProperty("drop_base_t3"));
   }
 }

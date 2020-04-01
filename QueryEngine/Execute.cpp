@@ -44,7 +44,6 @@
 #include "CudaMgr/CudaMgr.h"
 #include "DataMgr/BufferMgr/BufferMgr.h"
 #include "Parser/ParserNode.h"
-#include "Shared/ExperimentalTypeUtilities.h"
 #include "Shared/MapDParameters.h"
 #include "Shared/TypedDataAccessors.h"
 #include "Shared/checked_alloc.h"
@@ -101,6 +100,8 @@ double g_bump_allocator_step_reduction{0.75};
 bool g_enable_direct_columnarization{true};
 extern bool g_enable_experimental_string_functions;
 bool g_enable_lazy_fetch{true};
+bool g_enable_runtime_query_interrupt{false};
+unsigned g_runtime_query_interrupt_frequency{1000};
 
 int const Executor::max_gpu_count;
 
@@ -1112,7 +1113,8 @@ RelAlgExecutionUnit replace_scan_limit(const RelAlgExecutionUnit& ra_exe_unit_in
           ra_exe_unit_in.sort_info,
           new_scan_limit,
           ra_exe_unit_in.query_features,
-          ra_exe_unit_in.use_bump_allocator};
+          ra_exe_unit_in.use_bump_allocator,
+          ra_exe_unit_in.query_state};
 }
 
 }  // namespace
@@ -1285,6 +1287,11 @@ ResultSetPtr Executor::executeWorkUnitImpl(
       } catch (QueryExecutionError& e) {
         if (eo.with_dynamic_watchdog && interrupted_ &&
             e.getErrorCode() == ERR_OUT_OF_TIME) {
+          resetInterrupt();
+          throw QueryExecutionError(ERR_INTERRUPTED);
+        }
+        if (eo.allow_runtime_query_interrupt && interrupted_) {
+          resetInterrupt();
           throw QueryExecutionError(ERR_INTERRUPTED);
         }
         cat.getDataMgr().freeAllBuffers();
@@ -2067,6 +2074,12 @@ FetchResult Executor::fetchChunks(
     std::vector<const int8_t*> frag_col_buffers(
         plan_state_->global_to_local_col_ids_.size());
     for (const auto& col_id : col_global_ids) {
+      // check whether the interrupt flag turns on (non kernel-time query interrupt)
+      if ((g_enable_dynamic_watchdog || g_enable_runtime_query_interrupt) &&
+          interrupted_) {
+        resetInterrupt();
+        throw QueryExecutionError(ERR_INTERRUPTED);
+      }
       CHECK(col_id);
       const int table_id = col_id->getScanDesc().getTableId();
       const auto cd = try_get_column_descriptor(col_id.get(), cat);
@@ -2184,102 +2197,6 @@ class OutVecOwner {
 };
 }  // namespace
 
-template <typename META_TYPE_CLASS>
-class AggregateReductionEgress {
- public:
-  using ReturnType = void;
-
-  // TODO:  Avoid parameter struct indirection and forward directly
-  ReturnType operator()(int const entry_count,
-                        int& error_code,
-                        TargetInfo const& agg_info,
-                        size_t& out_vec_idx,
-                        std::vector<int64_t*>& out_vec,
-                        std::vector<int64_t>& reduced_outs,
-                        QueryExecutionContext* query_exe_context) {
-    int64_t val1;
-    const bool float_argument_input = takes_float_argument(agg_info);
-    if (is_distinct_target(agg_info)) {
-      CHECK(agg_info.agg_kind == kCOUNT || agg_info.agg_kind == kAPPROX_COUNT_DISTINCT);
-      val1 = out_vec[out_vec_idx][0];
-      error_code = 0;
-    } else {
-      const auto chosen_bytes = static_cast<size_t>(
-          query_exe_context->query_mem_desc_.getPaddedSlotWidthBytes(out_vec_idx));
-      std::tie(val1, error_code) =
-          Executor::reduceResults(agg_info.agg_kind,
-                                  agg_info.sql_type,
-                                  query_exe_context->getAggInitValForIndex(out_vec_idx),
-                                  float_argument_input ? sizeof(int32_t) : chosen_bytes,
-                                  out_vec[out_vec_idx],
-                                  entry_count,
-                                  false,
-                                  float_argument_input);
-    }
-    if (error_code) {
-      return;
-    }
-    reduced_outs.push_back(val1);
-    if (agg_info.agg_kind == kAVG ||
-        (agg_info.agg_kind == kSAMPLE &&
-         (agg_info.sql_type.is_varlen() || agg_info.sql_type.is_geometry()))) {
-      const auto chosen_bytes = static_cast<size_t>(
-          query_exe_context->query_mem_desc_.getPaddedSlotWidthBytes(out_vec_idx + 1));
-      int64_t val2;
-      std::tie(val2, error_code) = Executor::reduceResults(
-          agg_info.agg_kind == kAVG ? kCOUNT : agg_info.agg_kind,
-          agg_info.sql_type,
-          query_exe_context->getAggInitValForIndex(out_vec_idx + 1),
-          float_argument_input ? sizeof(int32_t) : chosen_bytes,
-          out_vec[out_vec_idx + 1],
-          entry_count,
-          false,
-          false);
-      if (error_code) {
-        return;
-      }
-      reduced_outs.push_back(val2);
-      ++out_vec_idx;
-    }
-    ++out_vec_idx;
-  }
-};
-
-// Handles reduction for geo-types
-template <>
-class AggregateReductionEgress<Experimental::MetaTypeClass<Experimental::Geometry>> {
- public:
-  using ReturnType = void;
-
-  ReturnType operator()(int const entry_count,
-                        int& error_code,
-                        TargetInfo const& agg_info,
-                        size_t& out_vec_idx,
-                        std::vector<int64_t*>& out_vec,
-                        std::vector<int64_t>& reduced_outs,
-                        QueryExecutionContext* query_exe_context) {
-    for (int i = 0; i < agg_info.sql_type.get_physical_coord_cols() * 2; i++) {
-      int64_t val1;
-      const auto chosen_bytes = static_cast<size_t>(
-          query_exe_context->query_mem_desc_.getPaddedSlotWidthBytes(out_vec_idx));
-      std::tie(val1, error_code) =
-          Executor::reduceResults(agg_info.agg_kind,
-                                  agg_info.sql_type,
-                                  query_exe_context->getAggInitValForIndex(out_vec_idx),
-                                  chosen_bytes,
-                                  out_vec[out_vec_idx],
-                                  entry_count,
-                                  false,
-                                  false);
-      if (error_code) {
-        return;
-      }
-      reduced_outs.push_back(val1);
-      out_vec_idx++;
-    }
-  }
-};
-
 int32_t Executor::executePlanWithoutGroupBy(
     const RelAlgExecutionUnit& ra_exe_unit,
     const CompilationResult& compilation_result,
@@ -2318,8 +2235,9 @@ int32_t Executor::executePlanWithoutGroupBy(
   const auto hoist_buf = serializeLiterals(compilation_result.literal_values, device_id);
   const auto join_hash_table_ptrs = getJoinHashTablePtrs(device_type, device_id);
   std::unique_ptr<OutVecOwner> output_memory_scope;
-  if (g_enable_dynamic_watchdog && interrupted_) {
-    return ERR_INTERRUPTED;
+  if ((g_enable_dynamic_watchdog || g_enable_runtime_query_interrupt) && interrupted_) {
+    resetInterrupt();
+    throw QueryExecutionError(ERR_INTERRUPTED);
   }
   if (device_type == ExecutorDeviceType::CPU) {
     out_vec = query_exe_context->launchCpuCode(ra_exe_unit,
@@ -2389,20 +2307,58 @@ int32_t Executor::executePlanWithoutGroupBy(
       const auto agg_info = get_target_info(target_expr, g_bigint_count);
       CHECK(agg_info.is_agg);
 
-      auto meta_class(
-          Experimental::GeoMetaTypeClassFactory::getMetaTypeClass(agg_info.sql_type));
-      auto agg_reduction_impl =
-          Experimental::GeoVsNonGeoClassHandler<AggregateReductionEgress>();
-      agg_reduction_impl(meta_class,
-                         entry_count,
-                         error_code,
-                         agg_info,
-                         out_vec_idx,
-                         out_vec,
-                         reduced_outs,
-                         query_exe_context);
-      if (error_code) {
-        break;
+      const int num_iterations = agg_info.sql_type.is_geometry()
+                                     ? agg_info.sql_type.get_physical_coord_cols()
+                                     : 1;
+
+      for (int i = 0; i < num_iterations; i++) {
+        int64_t val1;
+        const bool float_argument_input = takes_float_argument(agg_info);
+        if (is_distinct_target(agg_info)) {
+          CHECK(agg_info.agg_kind == kCOUNT ||
+                agg_info.agg_kind == kAPPROX_COUNT_DISTINCT);
+          val1 = out_vec[out_vec_idx][0];
+          error_code = 0;
+        } else {
+          const auto chosen_bytes = static_cast<size_t>(
+              query_exe_context->query_mem_desc_.getPaddedSlotWidthBytes(out_vec_idx));
+          std::tie(val1, error_code) = Executor::reduceResults(
+              agg_info.agg_kind,
+              agg_info.sql_type,
+              query_exe_context->getAggInitValForIndex(out_vec_idx),
+              float_argument_input ? sizeof(int32_t) : chosen_bytes,
+              out_vec[out_vec_idx],
+              entry_count,
+              false,
+              float_argument_input);
+        }
+        if (error_code) {
+          break;
+        }
+        reduced_outs.push_back(val1);
+        if (agg_info.agg_kind == kAVG ||
+            (agg_info.agg_kind == kSAMPLE &&
+             (agg_info.sql_type.is_varlen() || agg_info.sql_type.is_geometry()))) {
+          const auto chosen_bytes = static_cast<size_t>(
+              query_exe_context->query_mem_desc_.getPaddedSlotWidthBytes(out_vec_idx +
+                                                                         1));
+          int64_t val2;
+          std::tie(val2, error_code) = Executor::reduceResults(
+              agg_info.agg_kind == kAVG ? kCOUNT : agg_info.agg_kind,
+              agg_info.sql_type,
+              query_exe_context->getAggInitValForIndex(out_vec_idx + 1),
+              float_argument_input ? sizeof(int32_t) : chosen_bytes,
+              out_vec[out_vec_idx + 1],
+              entry_count,
+              false,
+              false);
+          if (error_code) {
+            break;
+          }
+          reduced_outs.push_back(val2);
+          ++out_vec_idx;
+        }
+        ++out_vec_idx;
       }
     }
   }
@@ -2459,7 +2415,7 @@ int32_t Executor::executePlanWithGroupBy(
   auto hoist_buf = serializeLiterals(compilation_result.literal_values, device_id);
   int32_t error_code = device_type == ExecutorDeviceType::GPU ? 0 : start_rowid;
   const auto join_hash_table_ptrs = getJoinHashTablePtrs(device_type, device_id);
-  if (g_enable_dynamic_watchdog && interrupted_) {
+  if ((g_enable_dynamic_watchdog || g_enable_runtime_query_interrupt) && interrupted_) {
     return ERR_INTERRUPTED;
   }
 
@@ -2467,7 +2423,6 @@ int32_t Executor::executePlanWithGroupBy(
   if (render_info && render_info->useCudaBuffers()) {
     render_allocator_map_ptr = render_info->render_allocator_map_ptr.get();
   }
-
   if (device_type == ExecutorDeviceType::CPU) {
     query_exe_context->launchCpuCode(ra_exe_unit,
                                      compilation_result.native_functions,
@@ -2599,6 +2554,11 @@ Executor::JoinHashTableOrError Executor::buildHashTableForQualifier(
     ColumnCacheMap& column_cache) {
   if (!g_enable_overlaps_hashjoin && qual_bin_oper->is_overlaps_oper()) {
     return {nullptr, "Overlaps hash join disabled, attempting to fall back to loop join"};
+  }
+  // check whether the interrupt flag turns on (non kernel-time query interrupt)
+  if ((g_enable_dynamic_watchdog || g_enable_runtime_query_interrupt) && interrupted_) {
+    resetInterrupt();
+    throw QueryExecutionError(ERR_INTERRUPTED);
   }
   try {
     auto tbl =
@@ -2979,6 +2939,75 @@ void Executor::setupCaching(const std::unordered_set<PhysicalInput>& phys_inputs
   table_generations_ = computeTableGenerations(phys_table_ids);
 }
 
+void Executor::setCurrentQuerySession(const std::string& query_session) {
+  std::lock_guard<std::mutex> session_access_lock(executor_session_mutex_);
+  if (current_query_session_ == "") {
+    // only set the query session if it currently has an invalid session
+    current_query_session_ = query_session;
+  }
+}
+
+std::string& Executor::getCurrentQuerySession() {
+  return current_query_session_;
+}
+
+bool Executor::checkCurrentQuerySession(const std::string& candidate_query_session) {
+  // if current_query_session is equal to the candidate_query_session,
+  // or it is empty session we consider
+  return (current_query_session_ == candidate_query_session);
+}
+
+void Executor::invalidateQuerySession() {
+  current_query_session_ = "";
+}
+
+bool Executor::addToQuerySessionList(const std::string& query_session) {
+  std::lock_guard<std::mutex> session_access_lock(executor_session_mutex_);
+  auto emplace_query = queries_interrupt_flag_.emplace(query_session, false);
+  if (!emplace_query.second) {
+    // initialize the existing session's interrupt flag
+    auto it = queries_interrupt_flag_.find(query_session);
+    CHECK(it != queries_interrupt_flag_.end());
+    it->second = false;
+  }
+  return emplace_query.second;
+}
+
+bool Executor::removeFromQuerySessionList(const std::string& query_session) {
+  std::lock_guard<std::mutex> session_access_lock(executor_session_mutex_);
+  auto it = queries_interrupt_flag_.find(query_session);
+  if (it != queries_interrupt_flag_.end()) {
+    // invalidate the existing session's interrupt flag
+    queries_interrupt_flag_.erase(query_session);
+    return true;
+  }
+  return false;
+}
+
+void Executor::setQuerySessionAsInterrupted(const std::string& query_session) {
+  std::lock_guard<std::mutex> session_access_lock(executor_session_mutex_);
+  auto it = queries_interrupt_flag_.find(query_session);
+  if (it != queries_interrupt_flag_.end()) {
+    it->second = true;
+  } else {
+    auto emplace_query = queries_interrupt_flag_.emplace(query_session, true);
+    CHECK(emplace_query.second);
+  }
+}
+
+bool Executor::checkIsQuerySessionInterrupted(const std::string& query_session) {
+  std::lock_guard<std::mutex> session_access_lock(executor_session_mutex_);
+  auto it = queries_interrupt_flag_.find(query_session);
+  if (it != queries_interrupt_flag_.end()) {
+    return it->second;
+  }
+  return false;
+}
+
 std::map<int, std::shared_ptr<Executor>> Executor::executors_;
 std::mutex Executor::execute_mutex_;
 mapd_shared_mutex Executor::executors_cache_mutex_;
+std::atomic_flag Executor::execute_spin_lock_ = ATOMIC_FLAG_INIT;
+std::string Executor::current_query_session_{""};
+std::map<std::string, bool> Executor::queries_interrupt_flag_;
+std::mutex Executor::executor_session_mutex_;

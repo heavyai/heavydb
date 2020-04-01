@@ -63,6 +63,14 @@ class GroupByAndAggregate;
 struct ColRangeInfo;
 struct KeylessInfo;
 
+class StreamingTopNOOM : public std::runtime_error {
+ public:
+  StreamingTopNOOM(const size_t heap_size_bytes)
+      : std::runtime_error("Unable to use streaming top N due to required heap size of " +
+                           std::to_string(heap_size_bytes) +
+                           " bytes exceeding maximum slab size.") {}
+};
+
 class QueryMemoryDescriptor {
  public:
   QueryMemoryDescriptor();
@@ -87,7 +95,8 @@ class QueryMemoryDescriptor {
                         const bool sort_on_gpu_hint,
                         const bool output_columnar,
                         const bool render_output,
-                        const bool must_use_baseline_sort);
+                        const bool must_use_baseline_sort,
+                        const bool use_streaming_top_n);
 
   QueryMemoryDescriptor(const Executor* executor,
                         const size_t entry_count,
@@ -121,7 +130,8 @@ class QueryMemoryDescriptor {
       RenderInfo* render_info,
       const CountDistinctDescriptors count_distinct_descriptors,
       const bool must_use_baseline_sort,
-      const bool output_columnar_hint);
+      const bool output_columnar_hint,
+      const bool streaming_top_n_hint);
 
   std::unique_ptr<QueryExecutionContext> getQueryExecutionContext(
       const RelAlgExecutionUnit&,
@@ -263,6 +273,8 @@ class QueryMemoryDescriptor {
   bool didOutputColumnar() const { return output_columnar_; }
   void setOutputColumnar(const bool val);
 
+  bool useStreamingTopN() const { return use_streaming_top_n_; }
+
   bool isLogicalSizedColumnsAllowed() const;
 
   bool mustUseBaselineSort() const { return must_use_baseline_sort_; }
@@ -353,6 +365,7 @@ class QueryMemoryDescriptor {
   bool render_output_;
   bool must_use_baseline_sort_;
   bool is_table_function_;
+  bool use_streaming_top_n_;
 
   bool force_4byte_float_;
 
@@ -364,9 +377,6 @@ class QueryMemoryDescriptor {
 
   friend class ResultSet;
   friend class QueryExecutionContext;
-
-  template <typename META_CLASS_TYPE>
-  friend class AggregateReductionEgress;
 };
 
 inline void set_notnull(TargetInfo& target, const bool not_null) {

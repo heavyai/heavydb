@@ -2,6 +2,7 @@ class LibkmlMaster < Formula
   desc "Library to parse, generate and operate on KML"
   homepage "https://github.com/libkml/libkml"
   url "https://dependencies.mapd.com/thirdparty/libkml-libkml-master.zip"
+  version "1.4.0"
 
   depends_on "cmake" => :build
   depends_on "expat"
