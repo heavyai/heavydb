@@ -50,19 +50,6 @@ class Calcite;
 
 namespace QueryRunner {
 
-struct IRFileWriter {
-  IRFileWriter(const std::string& filename) : filename(filename) {
-    ofs.open(filename, std::ios::trunc);
-  }
-  ~IRFileWriter() { ofs.close(); }
-  std::string filename;
-  std::ofstream ofs;
-
-  void operator()(const std::string& query_str, const std::string& ir_str) {
-    ofs << query_str << "\n\n" << ir_str << "\n\n";
-  }
-};
-
 class QueryRunner {
  public:
   static QueryRunner* init(const char* db_path,
@@ -146,10 +133,6 @@ class QueryRunner {
   virtual void runImport(Parser::CopyTableStmt* import_stmt);
   virtual std::unique_ptr<Importer_NS::Loader> getLoader(const TableDescriptor* td) const;
 
-  virtual void setIRFilename(const std::string& filename) {
-    ir_file_writer_ = std::make_unique<IRFileWriter>(filename);
-  }
-
   virtual ~QueryRunner() {}
 
   QueryRunner(std::unique_ptr<Catalog_Namespace::SessionInfo> session);
@@ -178,9 +161,6 @@ class QueryRunner {
   static std::unique_ptr<QueryRunner> qr_instance_;
 
   std::shared_ptr<Catalog_Namespace::SessionInfo> session_info_;
-
- private:
-  std::unique_ptr<IRFileWriter> ir_file_writer_;
 };
 
 class ImportDriver : public QueryRunner {

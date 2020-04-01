@@ -270,24 +270,6 @@ std::shared_ptr<ResultSet> QueryRunner::runSQL(const std::string& query_str,
 
   ParserWrapper pw{query_str};
   if (pw.isCalcitePathPermissable()) {
-    if (ir_file_writer_ && (pw.getDMLType() == ParserWrapper::DMLType::NotDML)) {
-      try {
-        const auto result = runSelectQuery(
-            query_str, device_type, hoist_literals, allow_loop_joins, true);
-        const auto crt_row = result.getRows()->getNextRow(true, true);
-        CHECK_EQ(size_t(1), crt_row.size());
-        const auto scalar_ir = boost::get<ScalarTargetValue>(&crt_row[0]);
-        CHECK(scalar_ir);
-        const auto ir_ns = boost::get<NullableString>(scalar_ir);
-        CHECK(ir_ns);
-        const auto ir_str = boost::get<std::string>(ir_ns);
-        CHECK(ir_str);
-        (*ir_file_writer_)(query_str, *ir_str);
-      } catch (const std::exception& e) {
-        LOG(WARNING) << "Failed to run EXPLAIN on SELECT query: " << query_str << " ("
-                     << e.what() << "). Proceeding with query execution.";
-      }
-    }
     const auto execution_result =
         runSelectQuery(query_str, device_type, hoist_literals, allow_loop_joins);
 
