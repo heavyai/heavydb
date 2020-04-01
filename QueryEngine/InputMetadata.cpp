@@ -55,8 +55,9 @@ Fragmenter_Namespace::TableInfo build_table_info(
 size_t TemporaryTable::getLimit() const {
   size_t res = 0;
   for (auto& rs : results_) {
-    if (rs)
+    if (rs) {
       res += rs->getLimit();
+    }
   }
   return res;
 }
@@ -64,8 +65,9 @@ size_t TemporaryTable::getLimit() const {
 size_t TemporaryTable::rowCount() const {
   size_t res = 0;
   for (auto& rs : results_) {
-    if (rs)
+    if (rs) {
       res += rs->rowCount();
+    }
   }
   return res;
 }
@@ -122,8 +124,9 @@ Fragmenter_Namespace::TableInfo synthesize_table_info(const TemporaryTable& tabl
     non_empty |= (fragment.resultSet != nullptr);
   }
   Fragmenter_Namespace::TableInfo table_info;
-  if (non_empty)
+  if (non_empty) {
     table_info.fragments = std::move(result);
+  }
   return table_info;
 }
 
