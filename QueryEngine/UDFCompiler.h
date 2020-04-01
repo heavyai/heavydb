@@ -48,10 +48,14 @@ class UdfClangDriver {
 class UdfCompiler {
  public:
   UdfCompiler(const std::string& udf_file_name, const std::string& clang_path = "");
+  UdfCompiler(const std::string& udf_file_name,
+              const std::string& clang_path,
+              const std::vector<std::string> clang_options);
   int compileUdf();
   const std::string& getAstFileName() const;
 
  private:
+  void init(const std::string& clang_path);
   std::string removeFileExtension(const std::string& path);
   std::string getFileExt(std::string& s);
   int parseToAst(const char* file_name);
@@ -70,5 +74,6 @@ class UdfCompiler {
   std::string udf_file_name_;
   std::string udf_ast_file_name_;
   std::string clang_path_;
+  std::vector<std::string> clang_options_;
 };
 #endif

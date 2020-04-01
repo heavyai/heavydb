@@ -102,7 +102,9 @@ class LeafAggregator {
     CHECK(false);
   };
 
-  void interrupt(const TSessionId session) { CHECK(false); }
+  void interrupt(const TSessionId query_session, const TSessionId interrupt_session) {
+    CHECK(false);
+  }
 
   void set_execution_mode(const TSessionId session, const TExecuteMode::type mode) {
     CHECK(false);

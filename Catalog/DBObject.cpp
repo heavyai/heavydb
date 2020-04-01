@@ -69,6 +69,13 @@ const AccessPrivileges AccessPrivileges::DELETE_FROM_VIEW =
 const AccessPrivileges AccessPrivileges::TRUNCATE_VIEW =
     AccessPrivileges(ViewPrivileges::TRUNCATE_VIEW);
 
+const AccessPrivileges AccessPrivileges::ALL_SERVER =
+    AccessPrivileges(ServerPrivileges::ALL);
+const AccessPrivileges AccessPrivileges::CREATE_SERVER =
+    AccessPrivileges(ServerPrivileges::CREATE_SERVER);
+const AccessPrivileges AccessPrivileges::DROP_SERVER =
+    AccessPrivileges(ServerPrivileges::DROP_SERVER);
+
 std::string ObjectPermissionTypeToString(DBObjectType type) {
   switch (type) {
     case DatabaseDBObjectType:
@@ -79,6 +86,8 @@ std::string ObjectPermissionTypeToString(DBObjectType type) {
       return "DASHBOARD";
     case ViewDBObjectType:
       return "VIEW";
+    case ServerDBObjectType:
+      return "SERVER";
     default:
       CHECK(false);
   }
@@ -94,6 +103,8 @@ DBObjectType DBObjectTypeFromString(const std::string& type) {
     return DashboardDBObjectType;
   } else if (type.compare("VIEW") == 0) {
     return ViewDBObjectType;
+  } else if (type.compare("SERVER") == 0) {
+    return ServerDBObjectType;
   } else {
     throw std::runtime_error("DB object type " + type + " is not supported.");
   }
@@ -151,6 +162,7 @@ std::vector<std::string> DBObject::toString() const {
     case TableDBObjectType:
     case DashboardDBObjectType:
     case ViewDBObjectType:
+    case ServerDBObjectType:
       objectKey.push_back(std::to_string(objectKey_.permissionType));
       objectKey.push_back(std::to_string(objectKey_.dbId));
       objectKey.push_back(std::to_string(objectKey_.objectId));
@@ -181,6 +193,23 @@ void DBObject::loadKey(const Catalog_Namespace::Catalog& catalog) {
   switch (objectType_) {
     case DatabaseDBObjectType: {
       loadKey();
+      break;
+    }
+    case ServerDBObjectType: {
+      objectKey_.dbId = catalog.getCurrentDB().dbId;
+
+      if (!getName().empty()) {
+        auto server = catalog.getForeignServer(getName());
+        if (!server) {
+          throw std::runtime_error("Failure generating DB object key. Server " +
+                                   getName() + " does not exist.");
+        }
+        objectKey_.objectId = server->id;
+        ownerId_ = server->user_id;
+      } else {
+        ownerId_ = catalog.getCurrentDB().dbOwner;
+      }
+
       break;
     }
     case ViewDBObjectType:
@@ -233,6 +262,7 @@ DBObjectKey DBObjectKey::fromString(const std::vector<std::string>& key,
       objectKey.permissionType = std::stoi(key[0]);
       objectKey.dbId = std::stoi(key[1]);
       break;
+    case ServerDBObjectType:
     case TableDBObjectType:
     case ViewDBObjectType:
     case DashboardDBObjectType:

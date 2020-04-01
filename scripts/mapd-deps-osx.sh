@@ -52,7 +52,7 @@ build_pin_dep opensaml 3.0.1_1
 build_pin_dep uriparser 0.9.3
 build_pin_dep expat 2.2.9
 build_pin_dep minizip 1.2.11
-build_pin_dep libkml-master libkml
+build_pin_dep libkml-master 1.4.0
 build_pin_dep proj5 5.2.0
 build_pin_dep gdal 2.4.4
 

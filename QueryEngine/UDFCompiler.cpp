@@ -29,6 +29,7 @@
 #include <llvm/Support/Program.h>
 #include <llvm/Support/raw_ostream.h>
 #include <boost/process/search_path.hpp>
+#include <iterator>
 #include <memory>
 #include "Execute.h"
 #include "Shared/Logger.h"
@@ -140,6 +141,9 @@ class ToolFactory : public FrontendActionFactory {
   llvm::raw_fd_ostream& ast_file_;
 };
 
+const char* convert(const std::string& s) {
+  return s.c_str();
+}
 }  // namespace
 
 UdfClangDriver::UdfClangDriver(const std::string& clang_path)
@@ -195,6 +199,15 @@ std::string UdfCompiler::genCpuIrFilename(const char* udf_fileName) {
 int UdfCompiler::compileFromCommandLine(std::vector<const char*>& command_line) {
   UdfClangDriver compiler_driver(clang_path_);
   auto the_driver(compiler_driver.getClangDriver());
+
+  // If there were options passed on the command line, append them here
+
+  if (clang_options_.size() > 0) {
+    std::transform(std::begin(clang_options_),
+                   std::end(clang_options_),
+                   std::back_inserter(command_line),
+                   [&](const std::string& str) { return str.c_str(); });
+  }
 
   the_driver->CCPrintOptions = 0;
   std::unique_ptr<driver::Compilation> compilation(
@@ -264,14 +277,23 @@ int UdfCompiler::parseToAst(const char* file_name) {
   std::string include_option =
       std::string("-I") + resource_path + std::string("/include");
 
-  const char arg0[] = "astparser";
-  const char* arg1 = file_name;
-  const char arg2[] = "--";
-  const char* arg3 = include_option.c_str();
-  const char* arg_vector[] = {arg0, arg1, arg2, arg3};
+  std::vector<std::string> arg_vector;
+  arg_vector.emplace_back("astparser");
+  arg_vector.emplace_back(file_name);
+  arg_vector.emplace_back("--");
+  arg_vector.emplace_back(include_option);
 
-  int num_args = sizeof(arg_vector) / sizeof(arg_vector[0]);
-  CommonOptionsParser op(num_args, arg_vector, ToolingSampleCategory);
+  if (clang_options_.size() > 0) {
+    std::copy(
+        clang_options_.begin(), clang_options_.end(), std::back_inserter(arg_vector));
+  }
+
+  std::vector<const char*> arg_vec2;
+  std::transform(
+      arg_vector.begin(), arg_vector.end(), std::back_inserter(arg_vec2), convert);
+
+  int num_args = arg_vec2.size();
+  CommonOptionsParser op(num_args, &arg_vec2[0], ToolingSampleCategory);
   ClangTool tool(op.getCompilations(), op.getSourcePathList());
 
   std::string out_name(file_name);
@@ -290,8 +312,7 @@ const std::string& UdfCompiler::getAstFileName() const {
   return udf_ast_file_name_;
 }
 
-UdfCompiler::UdfCompiler(const std::string& file_name, const std::string& clang_path)
-    : udf_file_name_(file_name), udf_ast_file_name_(file_name) {
+void UdfCompiler::init(const std::string& clang_path) {
   replaceExtn(udf_ast_file_name_, "ast");
 
   if (clang_path.empty()) {
@@ -313,6 +334,20 @@ UdfCompiler::UdfCompiler(const std::string& file_name, const std::string& clang_
                                " is not to the clang++ executable.");
     }
   }
+}
+
+UdfCompiler::UdfCompiler(const std::string& file_name, const std::string& clang_path)
+    : udf_file_name_(file_name), udf_ast_file_name_(file_name) {
+  init(clang_path);
+}
+
+UdfCompiler::UdfCompiler(const std::string& file_name,
+                         const std::string& clang_path,
+                         const std::vector<std::string> clang_options)
+    : udf_file_name_(file_name)
+    , udf_ast_file_name_(file_name)
+    , clang_options_(clang_options) {
+  init(clang_path);
 }
 
 void UdfCompiler::readCpuCompiledModule() {

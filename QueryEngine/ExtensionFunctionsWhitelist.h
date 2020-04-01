@@ -46,6 +46,7 @@ enum class ExtArgumentType {
   PInt64,
   PFloat,
   PDouble,
+  PBool,
   Bool,
   ArrayInt8,
   ArrayInt16,
@@ -53,6 +54,7 @@ enum class ExtArgumentType {
   ArrayInt64,
   ArrayFloat,
   ArrayDouble,
+  ArrayBool,
   GeoPoint,
   GeoLineString,
   Cursor,
@@ -108,6 +110,7 @@ class ExtensionFunctionsWhitelist {
                               std::string tab = "");
   static std::string toString(const std::vector<SQLTypeInfo>& arg_types);
   static std::string toString(const std::vector<ExtArgumentType>& sig_types);
+  static std::string toString(const ExtArgumentType& sig_type);
 
   static std::vector<std::string> getLLVMDeclarations(
       const std::unordered_set<std::string>& udf_decls);

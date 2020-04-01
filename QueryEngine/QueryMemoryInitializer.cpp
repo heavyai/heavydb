@@ -232,7 +232,7 @@ QueryMemoryInitializer::QueryMemoryInitializer(
       auto actual_entry_count = query_mem_desc.getEntryCount();
       auto warp_size =
           query_mem_desc.interleavedBins(device_type) ? executor->warpSize() : 1;
-      if (use_streaming_top_n(ra_exe_unit, query_mem_desc.didOutputColumnar())) {
+      if (query_mem_desc.useStreamingTopN()) {
         const auto node_count_size = thread_count * sizeof(int64_t);
         memset(rows_ptr, 0, node_count_size);
         const auto n = ra_exe_unit.sort_info.offset + ra_exe_unit.sort_info.limit;
@@ -709,7 +709,7 @@ GpuGroupByBuffers QueryMemoryInitializer::createAndInitializeGroupByBufferGpu(
     const bool can_sort_on_gpu,
     const bool output_columnar,
     RenderAllocator* render_allocator) {
-  if (use_streaming_top_n(ra_exe_unit, query_mem_desc.didOutputColumnar())) {
+  if (query_mem_desc.useStreamingTopN()) {
     if (render_allocator) {
       throw StreamingTopNNotSupportedInRenderQuery();
     }
@@ -907,8 +907,7 @@ void QueryMemoryInitializer::copyGroupByBuffersFromGpu(
   const auto thread_count = block_size_x * grid_size_x;
 
   size_t total_buff_size{0};
-  if (ra_exe_unit &&
-      use_streaming_top_n(*ra_exe_unit, query_mem_desc.didOutputColumnar())) {
+  if (ra_exe_unit && query_mem_desc.useStreamingTopN()) {
     const size_t n = ra_exe_unit->sort_info.offset + ra_exe_unit->sort_info.limit;
     total_buff_size =
         streaming_top_n::get_heap_size(query_mem_desc.getRowSize(), n, thread_count);
