@@ -418,6 +418,8 @@ public class CalciteServerHandler implements CalciteServer.Iface {
         return ExtensionFunction.ExtArgumentType.PFloat;
       case PDouble:
         return ExtensionFunction.ExtArgumentType.PDouble;
+      case PBool:
+        return ExtensionFunction.ExtArgumentType.PBool;
       case Bool:
         return ExtensionFunction.ExtArgumentType.Bool;
       case ArrayInt8:
@@ -432,10 +434,18 @@ public class CalciteServerHandler implements CalciteServer.Iface {
         return ExtensionFunction.ExtArgumentType.ArrayFloat;
       case ArrayDouble:
         return ExtensionFunction.ExtArgumentType.ArrayDouble;
+      case ArrayBool:
+        return ExtensionFunction.ExtArgumentType.ArrayBool;
       case GeoPoint:
         return ExtensionFunction.ExtArgumentType.GeoPoint;
+      case GeoLineString:
+        return ExtensionFunction.ExtArgumentType.GeoLineString;
       case Cursor:
         return ExtensionFunction.ExtArgumentType.Cursor;
+      case GeoPolygon:
+        return ExtensionFunction.ExtArgumentType.GeoPolygon;
+      case GeoMultiPolygon:
+        return ExtensionFunction.ExtArgumentType.GeoMultiPolygon;
       default:
         MAPDLOGGER.error("toExtArgumentType: unknown type " + type);
         return null;

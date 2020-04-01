@@ -1083,6 +1083,7 @@ void SysCatalog::createDatabase(const string& name, int owner) {
           "id integer primary key, "
           "name text unique, "
           "data_wrapper_type text, "
+          "owner_user_id integer, "
           "options text)");
       dbConn->query(
           "CREATE TABLE omnisci_foreign_tables("
@@ -1405,6 +1406,9 @@ void SysCatalog::createDBObject(const UserMetadata& user,
     case DashboardDBObjectType:
       object.setPrivileges(AccessPrivileges::ALL_DASHBOARD);
       break;
+    case ServerDBObjectType:
+      object.setPrivileges(AccessPrivileges::ALL_SERVER);
+      break;
     default:
       object.setPrivileges(AccessPrivileges::ALL_DATABASE);
       break;
@@ -1494,6 +1498,9 @@ void SysCatalog::grantAllOnDatabase_unsafe(const std::string& roleName,
   grantDBObjectPrivileges_unsafe(roleName, tmp_object, catalog);
   tmp_object.setPrivileges(AccessPrivileges::ALL_VIEW);
   tmp_object.setPermissionType(ViewDBObjectType);
+  grantDBObjectPrivileges_unsafe(roleName, tmp_object, catalog);
+  tmp_object.setPrivileges(AccessPrivileges::ALL_SERVER);
+  tmp_object.setPermissionType(ServerDBObjectType);
   grantDBObjectPrivileges_unsafe(roleName, tmp_object, catalog);
   tmp_object.setPrivileges(AccessPrivileges::ALL_DASHBOARD);
   tmp_object.setPermissionType(DashboardDBObjectType);

@@ -112,7 +112,8 @@ class SQLTestEnv : public ::testing::Environment {
       throw std::runtime_error("udf file: " + udf_file.string() + " does not exist");
     }
 
-    UdfCompiler compiler(udf_file.string());
+    std::vector<std::string> udf_compiler_options{std::string("-D UDF_COMPILER_OPTION")};
+    UdfCompiler compiler(udf_file.string(), std::string(""), udf_compiler_options);
     auto compile_result = compiler.compileUdf();
     EXPECT_EQ(compile_result, 0);
 
@@ -177,13 +178,26 @@ TEST_F(UDFCompilerTest, CompileTest) {
   // LOG(FATAL) which stops the process and does not return
 }
 
+TEST_F(UDFCompilerTest, CompilerOptionTest) {
+  UdfCompiler compiler(getUdfFileName());
+  auto compile_result = compiler.compileUdf();
+
+  EXPECT_EQ(compile_result, 0);
+
+  // This function signature is only visible via the -DUDF_COMPILER_OPTION
+  // definition. This definition was passed to the UdfCompiler is Setup.
+  // We had to do it there because Calcite only reads the ast definitions once
+  // at startup
+
+  auto signature = ExtensionFunctionsWhitelist::get_udf("udf_range_int2");
+  ASSERT_NE(signature, nullptr);
+}
+
 TEST_F(UDFCompilerTest, CompilerPathTest) {
   UdfCompiler compiler(getUdfFileName(), llvm::sys::findProgramByName("clang++").get());
   auto compile_result = compiler.compileUdf();
 
   EXPECT_EQ(compile_result, 0);
-  // TODO cannot test invalid file path because the compileUdf function uses
-  // LOG(FATAL) which stops the process and does not return
 }
 
 TEST_F(UDFCompilerTest, CalciteRegistration) {

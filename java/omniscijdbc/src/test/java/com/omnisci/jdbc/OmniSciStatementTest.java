@@ -182,10 +182,155 @@ public class OmniSciStatementTest {
   static String sql_select_all = "select * from test_jdbc_types_tble";
 
   @Test
+  public void escape_function1() throws Exception {
+    Statement statement = m_conn.createStatement();
+    TimeZone.setDefault(TimeZone.getTimeZone("GMT"));
+
+    String d_select =
+            "select {fn cos(1)} as m_cos, {d '1999-01-09'} as m_date, {t '20:00:03'} as m_time, {ts '1990-01-09 20:00:03'} as m_timestamp, {fn week({d '2005-01-24'})} as m_week";
+    ResultSet rs = statement.executeQuery(d_select);
+    for (int i = 0; rs.next(); ++i) {
+      Date r_date = rs.getDate("m_date");
+      assertEquals("1999-01-09", r_date.toString());
+      Time r_time = rs.getTime("m_time");
+      assertEquals("20:00:03", r_time.toString());
+      Timestamp ts_time = rs.getTimestamp("m_timestamp");
+      assertEquals("1990-01-09 20:00:03.0", ts_time.toString());
+      double m_cos = rs.getDouble("m_cos");
+      assertEquals(Double.compare(m_cos, 0.5403023058681398), 0);
+      int m_week = rs.getInt("m_week");
+      assertEquals(m_week, 5);
+    }
+    d_select = "select  {fn FLOOR(-1 * {fn dayofmonth({d '1990-01-31'})})} as WWW";
+    rs = statement.executeQuery(d_select);
+    for (int i = 0; rs.next(); ++i) {
+      int www = rs.getInt("WWW");
+      assertEquals(-31, www);
+    }
+    d_select =
+            "select  {fn FLOOR(-1 * {fn dayofmonth(cast('1990-01-31' as date))})} as XXX";
+    rs = statement.executeQuery(d_select);
+    for (int i = 0; rs.next(); ++i) {
+      int xxx = rs.getInt("XXX");
+      assertEquals(-31, xxx);
+    }
+
+    d_select = "select  {fn floor(1.005)} as YYY";
+    rs = statement.executeQuery(d_select);
+    for (int i = 0; rs.next(); ++i) {
+      float yyy = rs.getFloat("YYY");
+      assertEquals(Float.compare(1.0F, yyy), 0);
+    }
+    d_select = "select  {fn floor(1.005)} as YYY limit 1000 {";
+    try {
+      statement.executeQuery(d_select);
+      assertTrue(false);
+    } catch (RuntimeException rE) {
+    }
+
+    d_select = "select ' {fn floor(1.005)} as YYY limit 1000 {";
+    try {
+      statement.executeQuery(d_select);
+      assertTrue(false);
+    } catch (RuntimeException rE) {
+    }
+
+    d_select = "select ' {fn floor(1.005)} as YYY limit 1000 }";
+    try {
+      statement.executeQuery(d_select);
+      assertTrue(false);
+    } catch (RuntimeException rE) {
+    }
+
+    String sql_drop_tester = "drop table if exists tester";
+    statement.executeUpdate(sql_drop_tester);
+    String sql_create_tester = "CREATE table tester(Connection_start TIMESTAMP)";
+    statement.executeUpdate(sql_create_tester);
+
+    String sql_insert_tester1 = "insert into tester values ('2018-11-08 12:19:59')";
+    statement.executeUpdate(sql_insert_tester1);
+
+    String sql_insert_tester2 = "insert into tester values ('2018-11-08 12:29:59')";
+    statement.executeUpdate(sql_insert_tester2);
+    String sql_insert_tester3 = "insert into tester values ('2018-11-08 12:39:59')";
+    statement.executeUpdate(sql_insert_tester3);
+    String sql_insert_tester4 = "insert into tester values ('2018-11-09 23:59:59')";
+    statement.executeUpdate(sql_insert_tester4);
+
+    String x_select =
+            "SELECT TOP 1000 sum(1) AS sum_Number_of_Records_ok, {fn TIMESTAMPADD(SQL_TSI_HOUR, EXTRACT(HOUR FROM tester.Connection_Start), CAST(tester.Connection_Start as DATE))} AS thr_Connection_Start_ok FROM tester Where ((tester.Connection_Start >= {ts '2018-11-01 00:00:00'}) AND (tester.Connection_Start <= {ts '2018-11-08 23:59:59'})) GROUP BY 2";
+    rs = statement.executeQuery(x_select);
+
+    for (int i = 0; rs.next(); ++i) {
+      int r_count = rs.getInt("sum_Number_of_Records_ok");
+      assertEquals(r_count, 3);
+      Timestamp ts_time = rs.getTimestamp("thr_Connection_Start_ok");
+      assertEquals(ts_time.toString(), "2018-11-08 12:00:00.0");
+    }
+
+    // Test the simple date transformation in OmniSciStatment.
+    String d_simple_quarter = "select quarter(Connection_start) as m_quarter from tester";
+    rs = statement.executeQuery(d_simple_quarter);
+    for (int i = 0; rs.next(); ++i) {
+      int r_quarter = rs.getInt("m_quarter");
+      assertEquals(4, r_quarter);
+    }
+    d_simple_quarter =
+            "select quarter(cast('2019-04-03' as date)) as m_quarter from tester";
+    rs = statement.executeQuery(d_simple_quarter);
+    for (int i = 0; rs.next(); ++i) {
+      int r_quarter = rs.getInt("m_quarter");
+      assertEquals(2, r_quarter);
+    }
+  }
+
+  @Test
+  public void escape_function2() throws Exception {
+    Statement statement = m_conn.createStatement();
+    TimeZone.setDefault(TimeZone.getTimeZone("GMT"));
+
+    String d_quarter = "select {fn quarter({d '2005-01-24'})} as m_quarter";
+
+    ResultSet rs = statement.executeQuery(d_quarter);
+    for (int i = 0; rs.next(); ++i) {
+      int r_quarter = rs.getInt("m_quarter");
+      assertEquals(1, r_quarter);
+    }
+
+    String d_dayofyear = "select {fn DAYOFYEAR({d '2005-01-24'})} as m_dayofyear";
+
+    rs = statement.executeQuery(d_dayofyear);
+    for (int i = 0; rs.next(); ++i) {
+      int r_dayofyear = rs.getInt("m_dayofyear");
+      assertEquals(24, r_dayofyear);
+    }
+
+    String d_dayofweek = "select {fn dayofweek({d '2005-01-24'})} as m_dayofweek";
+
+    rs = statement.executeQuery(d_dayofweek);
+    for (int i = 0; rs.next(); ++i) {
+      int r_dayofweek = rs.getInt("m_dayofweek");
+      assertEquals(2, r_dayofweek);
+    }
+
+    String d_trunc = "select {fn truncate(2.55555, 2)} as m_trunc";
+    rs = statement.executeQuery(d_trunc);
+    for (int i = 0; rs.next(); ++i) {
+      float r_trunc = rs.getFloat("m_trunc");
+      assertEquals(Float.compare(2.55F, r_trunc), 0);
+    }
+    String d_length = "select {fn length('fff')} as m_length";
+    rs = statement.executeQuery(d_length);
+    for (int i = 0; rs.next(); ++i) {
+      int r_length = rs.getInt("m_length");
+      assertEquals(3, r_length);
+    }
+  }
+
+  @Test
   public void create_types() throws Exception {
     Statement statement = m_conn.createStatement();
-    statement.executeUpdate(sql_drop_tbl);
-
+    statement.executeQuery(sql_drop_tbl);
     statement.executeUpdate(sql_create_tbl);
     statement.executeUpdate(sql_insert);
     statement.executeUpdate(sql_insert);

@@ -161,7 +161,7 @@ class ExtensionFunctionSignatureParser {
     }
 
     if (type_name.equals("bool") || type_name.equals("_Bool")) {
-      return ExtensionFunction.ExtArgumentType.Int8; // bool is mapped to int8
+      return ExtensionFunction.ExtArgumentType.Bool;
     }
     if (type_name.equals("int8_t") || type_name.equals("char")
             || type_name.equals("int8")) {
@@ -195,7 +195,7 @@ class ExtensionFunctionSignatureParser {
       return pointerType(deserializeType(type_name.substring(0, type_name.length() - 1)));
     }
     if (type_name.equals("Array<bool>")) {
-      return ExtensionFunction.ExtArgumentType.ArrayInt8;
+      return ExtensionFunction.ExtArgumentType.ArrayBool;
     }
     if (type_name.equals("Array<int8_t>") || type_name.equals("Array<char>")) {
       return ExtensionFunction.ExtArgumentType.ArrayInt8;
@@ -244,6 +244,7 @@ class ExtensionFunctionSignatureParser {
           final ExtensionFunction.ExtArgumentType targetType) {
     switch (targetType) {
       case Bool:
+        return ExtensionFunction.ExtArgumentType.PBool;
       case Int8:
         return ExtensionFunction.ExtArgumentType.PInt8;
       case Int16:

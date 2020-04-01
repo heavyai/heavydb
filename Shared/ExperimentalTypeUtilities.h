@@ -26,8 +26,6 @@
 #include "ConstExprLib.h"
 #include "sqltypes.h"
 
-#include "SQLTypeUtilities.h"
-
 namespace Experimental {
 
 struct UncapturedMetaType {};
@@ -69,14 +67,6 @@ struct MetaTypeClassDeterminant<Array> {
   template <typename SQL_TYPE_INFO>
   static auto isTargetClass(SQL_TYPE_INFO const& s) {
     return s.is_array();
-  }
-};
-
-template <>
-struct MetaTypeClassDeterminant<Bucketizable> {
-  template <typename SQL_TYPE_INFO>
-  static auto isTargetClass(SQL_TYPE_INFO const& s) {
-    return is_member_of_typeset<kDATE>(s);
   }
 };
 

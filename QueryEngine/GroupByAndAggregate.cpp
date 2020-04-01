@@ -391,21 +391,42 @@ std::unique_ptr<QueryMemoryDescriptor> GroupByAndAggregate::initQueryMemoryDescr
             130000000))) {
     throw WatchdogException("Query would use too much memory");
   }
-  return QueryMemoryDescriptor::init(executor_,
-                                     ra_exe_unit_,
-                                     query_infos_,
-                                     col_range_info,
-                                     keyless_info,
-                                     allow_multifrag,
-                                     device_type_,
-                                     crt_min_byte_width,
-                                     sort_on_gpu_hint,
-                                     shard_count,
-                                     max_groups_buffer_entry_count,
-                                     render_info,
-                                     count_distinct_descriptors,
-                                     must_use_baseline_sort,
-                                     output_columnar_hint);
+  try {
+    return QueryMemoryDescriptor::init(executor_,
+                                       ra_exe_unit_,
+                                       query_infos_,
+                                       col_range_info,
+                                       keyless_info,
+                                       allow_multifrag,
+                                       device_type_,
+                                       crt_min_byte_width,
+                                       sort_on_gpu_hint,
+                                       shard_count,
+                                       max_groups_buffer_entry_count,
+                                       render_info,
+                                       count_distinct_descriptors,
+                                       must_use_baseline_sort,
+                                       output_columnar_hint,
+                                       /*streaming_top_n_hint=*/true);
+  } catch (const StreamingTopNOOM& e) {
+    LOG(WARNING) << e.what() << " Disabling Streaming Top N.";
+    return QueryMemoryDescriptor::init(executor_,
+                                       ra_exe_unit_,
+                                       query_infos_,
+                                       col_range_info,
+                                       keyless_info,
+                                       allow_multifrag,
+                                       device_type_,
+                                       crt_min_byte_width,
+                                       sort_on_gpu_hint,
+                                       shard_count,
+                                       max_groups_buffer_entry_count,
+                                       render_info,
+                                       count_distinct_descriptors,
+                                       must_use_baseline_sort,
+                                       output_columnar_hint,
+                                       /*streaming_top_n_hint=*/false);
+  }
 }
 
 void GroupByAndAggregate::addTransientStringLiterals() {
@@ -928,7 +949,7 @@ bool GroupByAndAggregate::codegen(llvm::Value* filter_result,
 
     if (is_group_by) {
       if (query_mem_desc.getQueryDescriptionType() == QueryDescriptionType::Projection &&
-          !use_streaming_top_n(ra_exe_unit_, query_mem_desc.didOutputColumnar())) {
+          !query_mem_desc.useStreamingTopN()) {
         const auto crt_matched = get_arg_by_name(ROW_FUNC, "crt_matched");
         LL_BUILDER.CreateStore(LL_INT(int32_t(1)), crt_matched);
         auto total_matched_ptr = get_arg_by_name(ROW_FUNC, "total_matched");
@@ -979,7 +1000,7 @@ bool GroupByAndAggregate::codegen(llvm::Value* filter_result,
         can_return_error = true;
         if (query_mem_desc.getQueryDescriptionType() ==
                 QueryDescriptionType::Projection &&
-            use_streaming_top_n(ra_exe_unit_, query_mem_desc.didOutputColumnar())) {
+            query_mem_desc.useStreamingTopN()) {
           // Ignore rejection on pushing current row to top-K heap.
           LL_BUILDER.CreateRet(LL_INT(int32_t(0)));
         } else {
@@ -1037,7 +1058,7 @@ llvm::Value* GroupByAndAggregate::codegenOutputSlot(
                                     ? 0
                                     : query_mem_desc.getRowSize() / sizeof(int64_t);
   CodeGenerator code_generator(executor_);
-  if (use_streaming_top_n(ra_exe_unit_, query_mem_desc.didOutputColumnar())) {
+  if (query_mem_desc.useStreamingTopN()) {
     const auto& only_order_entry = ra_exe_unit_.sort_info.order_entries.front();
     CHECK_GE(only_order_entry.tle_no, int(1));
     const size_t target_idx = only_order_entry.tle_no - 1;
@@ -1751,6 +1772,7 @@ std::vector<llvm::Value*> GroupByAndAggregate::codegenAggArg(
     const CompilationOptions& co) {
   const auto agg_expr = dynamic_cast<const Analyzer::AggExpr*>(target_expr);
   const auto func_expr = dynamic_cast<const Analyzer::FunctionOper*>(target_expr);
+  const auto arr_expr = dynamic_cast<const Analyzer::ArrayExpr*>(target_expr);
 
   // TODO(alex): handle arrays uniformly?
   CodeGenerator code_generator(executor_);
@@ -1761,7 +1783,7 @@ std::vector<llvm::Value*> GroupByAndAggregate::codegenAggArg(
           agg_expr ? code_generator.codegen(agg_expr->get_arg(), true, co)
                    : code_generator.codegen(
                          target_expr, !executor_->plan_state_->allow_lazy_fetch_, co);
-      if (!func_expr && target_ti.isChunkIteratorPackaging()) {
+      if (!func_expr && !arr_expr) {
         // Something with the chunk transport is code that was generated from a source
         // other than an ARRAY[] expression
         CHECK_EQ(size_t(1), target_lvs.size());
@@ -1787,7 +1809,7 @@ std::vector<llvm::Value*> GroupByAndAggregate::codegenAggArg(
               "Using array[] operator as argument to an aggregate operator is not "
               "supported");
         }
-        CHECK(func_expr || target_ti.isStandardBufferPackaging());
+        CHECK(func_expr || arr_expr);
         if (dynamic_cast<const Analyzer::FunctionOper*>(target_expr)) {
           CHECK_EQ(size_t(1), target_lvs.size());
 

@@ -773,10 +773,20 @@ public class OmniSciConnection implements java.sql.Connection {
 
   @Override
   public void setSchema(String schema) throws SQLException { // logger.debug("Entered");
-    throw new UnsupportedOperationException("Not supported yet,"
-            + " line:" + new Throwable().getStackTrace()[0].getLineNumber()
-            + " class:" + new Throwable().getStackTrace()[0].getClassName()
-            + " method:" + new Throwable().getStackTrace()[0].getMethodName());
+    // Setting setSchema to be a NOOP allows integration with third party products
+    // that require a successful call to setSchema to work.
+    Object db_name = this.cP.get(Connection_enums.db_name);
+    if (db_name == null) {
+      throw new RuntimeException("db name not set, "
+              + " line:" + new Throwable().getStackTrace()[0].getLineNumber()
+              + " class:" + new Throwable().getStackTrace()[0].getClassName()
+              + " method:" + new Throwable().getStackTrace()[0].getMethodName());
+    }
+    if (!schema.equals(db_name.toString())) {
+      logger.warn("Connected to schema [" + schema + "] differs from db name [" + db_name
+              + "].");
+    }
+    return;
   }
 
   @Override

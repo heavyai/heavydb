@@ -107,6 +107,8 @@ class QueryExecutionContext : boost::noncopyable {
 
   void initializeDynamicWatchdog(void* native_module, const int device_id) const;
 
+  void initializeRuntimeInterrupter(void* native_module, const int device_id) const;
+
   std::vector<CUdeviceptr> prepareKernelParams(
       const std::vector<std::vector<const int8_t*>>& col_buffers,
       const std::vector<int8_t>& literal_buff,
@@ -138,10 +140,6 @@ class QueryExecutionContext : boost::noncopyable {
   mutable std::unique_ptr<ResultSet> estimator_result_set_;
 
   friend class Executor;
-
-  // Temporary; Reduction egress needs to become part of executor
-  template <typename META_CLASS_TYPE>
-  friend class AggregateReductionEgress;
 };
 
 #endif  // QUERYENGINE_QUERYEXECUTIONCONTEXT_H

@@ -49,7 +49,7 @@ class MapDHandlerTestFixture : public testing::Test {
       const int max_session_duration{43200};
       const bool enable_runtime_udf_registration{false};
       mapd_parameters.omnisci_server_port = -1;
-      mapd_parameters.calcite_port = 3279;
+      mapd_parameters.calcite_port = 3280;
 
       mapd_handler = std::make_unique<MapDHandler>(db_leaves,
                                                    string_leaves,
@@ -76,10 +76,13 @@ class MapDHandlerTestFixture : public testing::Test {
                                                    max_session_duration,
                                                    enable_runtime_udf_registration,
                                                    udf_filename,
-                                                   udf_compiler_path);
+                                                   udf_compiler_path,
+                                                   udf_compiler_options);
     }
     loginAdmin();
   }
+
+  virtual void TearDown() override { logoutAdmin(); }
 
   void sql(const std::string& query) {
     TQueryResult result;
@@ -88,6 +91,15 @@ class MapDHandlerTestFixture : public testing::Test {
 
   void sql(TQueryResult& result, const std::string& query) {
     mapd_handler->sql_execute(result, session_id, query, true, "", -1, -1);
+  }
+
+  // Execute SQL with session_id
+  void sql(TQueryResult& result, const std::string& query, TSessionId& sess_id) {
+    mapd_handler->sql_execute(result, sess_id, query, true, "", -1, -1);
+  }
+
+  Catalog_Namespace::UserMetadata getCurrentUser() {
+    return mapd_handler->get_session_copy_ptr(session_id)->get_currentUser();
   }
 
   Catalog_Namespace::Catalog& getCatalog() {
@@ -102,11 +114,26 @@ class MapDHandlerTestFixture : public testing::Test {
   void loginAdmin() {
     session_id = {};
     mapd_handler->connect(session_id, default_user, default_pass, db_name);
+    // Store admin session ID in seperate variable so we can always logout
+    // the default admin on teardown
+    admin_session_id = session_id;
   }
+
+  void logoutAdmin() { mapd_handler->disconnect(admin_session_id); }
+
+  void logout(const TSessionId& id) { mapd_handler->disconnect(id); }
 
   void login(const std::string& user, const std::string& pass) {
     session_id = {};
     mapd_handler->connect(session_id, user, pass, db_name);
+  }
+
+  // Login and return the session id to logout later
+  void login(const std::string& user,
+             const std::string& pass,
+             const std::string& db,
+             TSessionId& result_id) {
+    mapd_handler->connect(result_id, user, pass, db);
   }
 
   void queryAndAssertException(const std::string& sql_statement,
@@ -122,6 +149,7 @@ class MapDHandlerTestFixture : public testing::Test {
  private:
   static std::unique_ptr<MapDHandler> mapd_handler;
   static TSessionId session_id;
+  static TSessionId admin_session_id;
   static std::vector<LeafHostInfo> db_leaves;
   static std::vector<LeafHostInfo> string_leaves;
   static AuthMetadata auth_metadata;
@@ -131,9 +159,11 @@ class MapDHandlerTestFixture : public testing::Test {
   static std::string default_user;
   static std::string default_pass;
   static std::string db_name;
+  static std::vector<std::string> udf_compiler_options;
 };
 
 TSessionId MapDHandlerTestFixture::session_id{};
+TSessionId MapDHandlerTestFixture::admin_session_id{};
 std::unique_ptr<MapDHandler> MapDHandlerTestFixture::mapd_handler = nullptr;
 std::vector<LeafHostInfo> MapDHandlerTestFixture::db_leaves{};
 std::vector<LeafHostInfo> MapDHandlerTestFixture::string_leaves{};
@@ -144,3 +174,4 @@ std::string MapDHandlerTestFixture::default_user{"admin"};
 std::string MapDHandlerTestFixture::default_pass{"HyperInteractive"};
 std::string MapDHandlerTestFixture::db_name{};
 MapDParameters MapDHandlerTestFixture::mapd_parameters{};
+std::vector<std::string> MapDHandlerTestFixture::udf_compiler_options{};

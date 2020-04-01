@@ -93,6 +93,7 @@ class RelAlgExecutor : private StorageIOFacility<RelAlgExecutorTraits> {
 
   ExecutionResult executeRelAlgQuery(const CompilationOptions& co,
                                      const ExecutionOptions& eo,
+                                     const bool just_explain_plan,
                                      RenderInfo* render_info);
 
   ExecutionResult executeRelAlgQueryWithFilterPushDown(const RaExecutionSequence& seq,
@@ -155,6 +156,7 @@ class RelAlgExecutor : private StorageIOFacility<RelAlgExecutorTraits> {
  private:
   ExecutionResult executeRelAlgQueryNoRetry(const CompilationOptions& co,
                                             const ExecutionOptions& eo,
+                                            const bool just_explain_plan,
                                             RenderInfo* render_info);
 
   void executeRelAlgStep(const RaExecutionSequence& seq,
