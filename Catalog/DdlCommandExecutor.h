@@ -33,7 +33,7 @@ class DdlCommand {
  public:
   DdlCommand(const rapidjson::Value& ddl_payload,
              std::shared_ptr<Catalog_Namespace::SessionInfo const> session_ptr)
-      : ddl_payload(ddl_payload), session_ptr(session_ptr) {}
+      : ddl_payload_(ddl_payload), session_ptr_(session_ptr) {}
 
   /**
    * Executes the DDL command corresponding to provided JSON payload.
@@ -43,8 +43,8 @@ class DdlCommand {
   virtual void execute(TQueryResult& _return) = 0;
 
  protected:
-  const rapidjson::Value& ddl_payload;
-  std::shared_ptr<Catalog_Namespace::SessionInfo const> session_ptr;
+  const rapidjson::Value& ddl_payload_;
+  std::shared_ptr<Catalog_Namespace::SessionInfo const> session_ptr_;
 };
 
 class CreateForeignServerCommand : public DdlCommand {
@@ -152,6 +152,6 @@ class DdlCommandExecutor {
   bool isShowUserSessions();
 
  private:
-  rapidjson::Document ddl_query;
-  std::shared_ptr<Catalog_Namespace::SessionInfo const> session_ptr;
+  rapidjson::Document ddl_query_;
+  std::shared_ptr<Catalog_Namespace::SessionInfo const> session_ptr_;
 };

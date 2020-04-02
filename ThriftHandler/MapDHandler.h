@@ -632,6 +632,11 @@ class MapDHandler : public MapDIf {
                           const ExecutorDeviceType device_type,
                           const size_t device_id,
                           const int32_t first_n) const;
+
+  void executeDdl(TQueryResult& _return,
+                  const std::string& query_ra,
+                  std::shared_ptr<Catalog_Namespace::SessionInfo const> session_ptr);
+
   TColumnType populateThriftColumnType(const Catalog_Namespace::Catalog* cat,
                                        const ColumnDescriptor* cd);
   TRowDescriptor fixup_row_descriptor(const TRowDescriptor& row_desc,

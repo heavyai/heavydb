@@ -500,6 +500,7 @@ void MapDHandler::connect_impl(TSessionId& session,
   // Should dbname and cat->name() ever differ?
   auto session_ptr = create_new_session(session, dbname, user_meta, cat);
   stdlog.setSessionInfo(session_ptr);
+  session_ptr->set_connection_info(getConnectionInfo().toString());
   if (!super_user_rights_) {  // no need to connect to leaf_aggregator_ at this time while
                               // doing warmup
     if (leaf_aggregator_.leafCount() > 0) {
@@ -511,8 +512,6 @@ void MapDHandler::connect_impl(TSessionId& session,
                          ? std::vector<std::string>{{"super"}}
                          : SysCatalog::instance().getRoles(
                                false, false, session_ptr->get_currentUser().userName);
-
-  session_ptr->set_connection_info(getConnectionInfo().toString());
   stdlog.appendNameValuePairs("roles", boost::algorithm::join(roles, ","));
 }
 
@@ -5028,12 +5027,7 @@ void MapDHandler::sql_execute_impl(TQueryResult& _return,
             parse_to_ra(query_state_proxy, temp_query_str, {}, false, mapd_parameters_)
                 .first.plan_result;
       } else if (pw.isCalciteDdl()) {
-        DdlCommandExecutor executor = DdlCommandExecutor(query_ra, session_ptr);
-        if (executor.isShowUserSessions()) {
-          getUserSessions(*session_ptr, _return);
-        } else {
-          executor.execute(_return);
-        }
+        executeDdl(_return, query_ra, session_ptr);
         return;
       }
       const auto explain_info = pw.getExplainInfo();
@@ -5963,5 +5957,17 @@ void MapDHandler::getUserSessions(const Catalog_Namespace::SessionInfo& session_
         }
       }
     }
+  }
+}
+
+void MapDHandler::executeDdl(
+    TQueryResult& _return,
+    const std::string& query_ra,
+    std::shared_ptr<Catalog_Namespace::SessionInfo const> session_ptr) {
+  DdlCommandExecutor executor = DdlCommandExecutor(query_ra, session_ptr);
+  if (executor.isShowUserSessions()) {
+    getUserSessions(*session_ptr, _return);
+  } else {
+    executor.execute(_return);
   }
 }
