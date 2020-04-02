@@ -27,8 +27,7 @@ ExecutionResult::ExecutionResult(const ResultSetPtr& rows,
 
 ExecutionResult::ExecutionResult(ResultSetPtr&& result,
                                  const std::vector<TargetMetaInfo>& targets_meta)
-    : results_(result), targets_meta_(targets_meta), filter_push_down_enabled_(false) {
-}
+    : results_(result), targets_meta_(targets_meta), filter_push_down_enabled_(false) {}
 
 ExecutionResult::ExecutionResult(const TemporaryTable& results,
                                  const std::vector<TargetMetaInfo>& targets_meta)
@@ -36,8 +35,7 @@ ExecutionResult::ExecutionResult(const TemporaryTable& results,
 
 ExecutionResult::ExecutionResult(TemporaryTable&& results,
                                  const std::vector<TargetMetaInfo>& targets_meta)
-    : results_(results), targets_meta_(targets_meta), filter_push_down_enabled_(false) {
-}
+    : results_(results), targets_meta_(targets_meta), filter_push_down_enabled_(false) {}
 
 ExecutionResult::ExecutionResult(const ExecutionResult& that)
     : targets_meta_(that.targets_meta_)
