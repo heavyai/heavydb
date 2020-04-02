@@ -57,9 +57,9 @@ function(should_enable_assembly_tests)
   find_program(LLVM_FILECHECK_EXE FileCheck)
   if (LLVM_FILECHECK_EXE)
     set(LLVM_FILECHECK_EXE "${LLVM_FILECHECK_EXE}" CACHE PATH "llvm filecheck" FORCE)
-    message(STATUS "LLVM FileCheck Found: ${LLVM_FILECHECK_EXE}")
+    # message(STATUS "LLVM FileCheck Found: ${LLVM_FILECHECK_EXE}")
   else()
-    message(STATUS "Failed to find LLVM FileCheck")
+    # message(STATUS "Failed to find LLVM FileCheck")
     return()
   endif()
   set(ENABLE_ASSEMBLY_TESTS_DEFAULT ON PARENT_SCOPE)
@@ -81,7 +81,7 @@ get_git_version(GIT_VERSION)
 
 # Tell the user what versions we are using
 string(REGEX MATCH "[0-9]+\\.[0-9]+\\.[0-9]+" VERSION ${GIT_VERSION})
-message(STATUS "Version: ${VERSION}")
+# message(STATUS "Version: ${VERSION}")
 
 # The version of the libraries
 set(GENERIC_LIB_VERSION ${VERSION})
