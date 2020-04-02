@@ -340,13 +340,13 @@ void ArrowCsvForeignStorage::registerTable(Catalog_Namespace::Catalog* catalog,
   arrow_parse_options.quoting = false;
   arrow_parse_options.escaping = false;
   arrow_parse_options.newlines_in_values = false;
-  arrow_parse_options.delimiter = *td.separator.c_str();
+  arrow_parse_options.delimiter = *td.delimiter.c_str();
 
   auto arrow_read_options = arrow::csv::ReadOptions::Defaults();
   arrow_read_options.use_threads = true;
   arrow_read_options.block_size = 2 * 1024 * 1024;
-  arrow_read_options.skip_rows = td.skipRows;
   arrow_read_options.autogenerate_column_names = false;
+  arrow_read_options.skip_rows = td.hasHeader ? (td.skipRows + 1) : td.skipRows;
 
   auto arrow_convert_options = arrow::csv::ConvertOptions::Defaults();
   arrow_convert_options.check_utf8 = false;
