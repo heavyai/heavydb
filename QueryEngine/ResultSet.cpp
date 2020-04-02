@@ -44,6 +44,35 @@
 
 extern bool g_use_tbb_pool;
 
+std::vector<int64_t> initialize_target_values_for_storage(
+    const std::vector<TargetInfo>& targets) {
+  std::vector<int64_t> target_init_vals;
+  for (const auto& target_info : targets) {
+    if (target_info.agg_kind == kCOUNT ||
+        target_info.agg_kind == kAPPROX_COUNT_DISTINCT) {
+      target_init_vals.push_back(0);
+      continue;
+    }
+    if (!target_info.sql_type.get_notnull()) {
+      int64_t init_val =
+          null_val_bit_pattern(target_info.sql_type, takes_float_argument(target_info));
+      target_init_vals.push_back(target_info.is_agg ? init_val : 0);
+    } else {
+      target_init_vals.push_back(target_info.is_agg ? 0xdeadbeef : 0);
+    }
+    if (target_info.agg_kind == kAVG) {
+      target_init_vals.push_back(0);
+    } else if (target_info.agg_kind == kSAMPLE && target_info.sql_type.is_geometry()) {
+      for (int i = 1; i < 2 * target_info.sql_type.get_physical_coord_cols(); i++) {
+        target_init_vals.push_back(0);
+      }
+    } else if (target_info.agg_kind == kSAMPLE && target_info.sql_type.is_varlen()) {
+      target_init_vals.push_back(0);
+    }
+  }
+  return target_init_vals;
+}
+
 ResultSetStorage::ResultSetStorage(const std::vector<TargetInfo>& targets,
                                    const QueryMemoryDescriptor& query_mem_desc,
                                    int8_t* buff,
@@ -51,31 +80,8 @@ ResultSetStorage::ResultSetStorage(const std::vector<TargetInfo>& targets,
     : targets_(targets)
     , query_mem_desc_(query_mem_desc)
     , buff_(buff)
-    , buff_is_provided_(buff_is_provided) {
-  for (const auto& target_info : targets_) {
-    if (target_info.agg_kind == kCOUNT ||
-        target_info.agg_kind == kAPPROX_COUNT_DISTINCT) {
-      target_init_vals_.push_back(0);
-      continue;
-    }
-    if (!target_info.sql_type.get_notnull()) {
-      int64_t init_val =
-          null_val_bit_pattern(target_info.sql_type, takes_float_argument(target_info));
-      target_init_vals_.push_back(target_info.is_agg ? init_val : 0);
-    } else {
-      target_init_vals_.push_back(target_info.is_agg ? 0xdeadbeef : 0);
-    }
-    if (target_info.agg_kind == kAVG) {
-      target_init_vals_.push_back(0);
-    } else if (target_info.agg_kind == kSAMPLE && target_info.sql_type.is_geometry()) {
-      for (int i = 1; i < 2 * target_info.sql_type.get_physical_coord_cols(); i++) {
-        target_init_vals_.push_back(0);
-      }
-    } else if (target_info.agg_kind == kSAMPLE && target_info.sql_type.is_varlen()) {
-      target_init_vals_.push_back(0);
-    }
-  }
-}
+    , buff_is_provided_(buff_is_provided)
+    , target_init_vals_(std::move(initialize_target_values_for_storage(targets))) {}
 
 int8_t* ResultSetStorage::getUnderlyingBuffer() const {
   return buff_;

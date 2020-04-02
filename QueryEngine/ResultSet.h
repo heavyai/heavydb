@@ -941,4 +941,6 @@ GroupValueInfo get_group_value_reduction(int64_t* groups_buffer,
                                          const size_t that_entry_count,
                                          const uint32_t row_size_quad);
 
+std::vector<int64_t> initialize_target_values_for_storage(
+    const std::vector<TargetInfo>& targets);
 #endif  // QUERYENGINE_RESULTSET_H
