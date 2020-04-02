@@ -5216,6 +5216,7 @@ void MapDHandler::sql_execute_impl(TQueryResult& _return,
 
       // Read response message
       convert_result(_return, ResultSet(*import_stmt->return_message.get()), true);
+      _return.success = import_stmt->get_success();
 
       // get geo_copy_from info
       if (import_stmt->was_geo_copy_from()) {

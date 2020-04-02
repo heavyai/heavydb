@@ -129,6 +129,7 @@ struct TQueryResult {
   3: i64 total_time_ms
   4: string nonce
   5: optional string debug
+  6: optional bool success=true
 }
 
 struct TDataFrame {

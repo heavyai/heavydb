@@ -1108,6 +1108,8 @@ void print_status(ClientContext& context) {
 }  // namespace
 
 int main(int argc, char** argv) {
+  bool success = true;
+
   std::string server_host{"localhost"};
   int port = 6274;
   std::string delimiter("|");
@@ -1313,6 +1315,7 @@ int main(int argc, char** argv) {
         (void)backchannel(TURN_ON, nullptr);
         if (thrift_with_retry(kSQL, context, query.c_str())) {
           (void)backchannel(TURN_OFF, nullptr);
+          success = context.query_return.success;
           if (context.query_return.row_set.row_desc.empty()) {
             continue;
           }
@@ -1369,6 +1372,7 @@ int main(int argc, char** argv) {
           }
         } else {
           (void)backchannel(TURN_OFF, nullptr);
+          success = false;
         }
       } else {
         // change the prommpt
@@ -1543,7 +1547,7 @@ int main(int argc, char** argv) {
   }
   transport->close();
 
-  return 0;
+  return (success ? 0 : 1);
 }
 
 void oom_trace_dump() {}

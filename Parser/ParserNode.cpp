@@ -3720,6 +3720,7 @@ void CopyTableStmt::execute(const Catalog_Namespace::SessionInfo& session,
                       "processing ";
         // if we have crossed the truncated load threshold
         load_truncated = true;
+        success = false;
       }
       if (!load_truncated) {
         tr = std::string("Loaded: " + std::to_string(rows_completed) +
