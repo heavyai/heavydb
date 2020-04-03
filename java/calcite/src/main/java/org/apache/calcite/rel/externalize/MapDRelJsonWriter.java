@@ -19,6 +19,7 @@ package org.apache.calcite.rel.externalize;
 import com.google.common.collect.ImmutableList;
 
 import org.apache.calcite.adapter.enumerable.EnumerableTableScan;
+import org.apache.calcite.avatica.util.Spaces;
 import org.apache.calcite.rel.RelNode;
 import org.apache.calcite.rel.RelWriter;
 import org.apache.calcite.rel.logical.LogicalAggregate;
@@ -28,11 +29,23 @@ import org.apache.calcite.rel.type.RelDataType;
 import org.apache.calcite.sql.SqlExplainLevel;
 import org.apache.calcite.util.JsonBuilder;
 import org.apache.calcite.util.Pair;
+import org.apache.commons.text.StringEscapeUtils;
 
 import java.util.ArrayList;
 import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
+
+final class EscapedStringJsonBuilder extends JsonBuilder {
+  @Override
+  public void append(StringBuilder buf, int indent, Object o) {
+    if (o instanceof String) {
+      buf.append('"').append(StringEscapeUtils.escapeJson((String) o)).append('"');
+    } else {
+      super.append(buf, indent, o);
+    }
+  }
+}
 
 /**
  * Callback for a relational expression to dump itself as JSON.
@@ -42,7 +55,7 @@ import java.util.Map;
 public class MapDRelJsonWriter implements RelWriter {
   //~ Instance fields ----------------------------------------------------------
 
-  private final JsonBuilder jsonBuilder;
+  private final EscapedStringJsonBuilder jsonBuilder;
   private final MapDRelJson relJson;
   private final Map<RelNode, String> relIdMap = new IdentityHashMap<RelNode, String>();
   private final List<Object> relList;
@@ -52,7 +65,7 @@ public class MapDRelJsonWriter implements RelWriter {
   //~ Constructors -------------------------------------------------------------
 
   public MapDRelJsonWriter() {
-    jsonBuilder = new JsonBuilder();
+    jsonBuilder = new EscapedStringJsonBuilder();
     relList = jsonBuilder.list();
     relJson = new MapDRelJson(jsonBuilder);
   }
