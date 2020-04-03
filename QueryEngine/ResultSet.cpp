@@ -325,6 +325,10 @@ size_t ResultSet::rowCount(const bool force_parallel) const {
   if (!storage_) {
     return 0;
   }
+  if (permutation_.empty() &&
+      query_mem_desc_.getQueryDescriptionType() == QueryDescriptionType::Projection) {
+    return binSearchRowCount();
+  }
   if (force_parallel || entryCount() > 20000) {
     return parallelRowCount();
   }
@@ -345,6 +349,24 @@ size_t ResultSet::rowCount(const bool force_parallel) const {
 void ResultSet::setCachedRowCount(const size_t row_count) const {
   CHECK(cached_row_count_ == -1 || cached_row_count_ == static_cast<ssize_t>(row_count));
   cached_row_count_ = row_count;
+}
+
+size_t ResultSet::binSearchRowCount() const {
+  if (!storage_) {
+    return 0;
+  }
+
+  size_t row_count = storage_->binSearchRowCount();
+  for (auto& s : appended_storage_) {
+    row_count += s->binSearchRowCount();
+  }
+
+  if (keep_first_ + drop_first_) {
+    const auto limited_row_count = std::min(keep_first_ + drop_first_, row_count);
+    return limited_row_count < drop_first_ ? 0 : limited_row_count - drop_first_;
+  }
+
+  return row_count;
 }
 
 size_t ResultSet::parallelRowCount() const {
