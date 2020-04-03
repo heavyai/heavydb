@@ -82,10 +82,17 @@ struct ExecutionOptions {
   const unsigned runtime_query_interrupt_frequency;
   ExecutorType executor_type = ExecutorType::Native;
   const std::vector<size_t> outer_fragment_indices{};
+  bool multifrag_result = false;
 
   static ExecutionOptions defaults() {
     return ExecutionOptions{
         false, true, false, false, true, false, false, false, 0, false, false, 1.0};
+  }
+
+  ExecutionOptions with_multifrag_result(bool enable = true) const {
+    ExecutionOptions eo = *this;
+    eo.multifrag_result = enable;
+    return eo;
   }
 };
 

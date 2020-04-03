@@ -53,10 +53,11 @@ size_t RelAlgExecutor::getNDVEstimation(const WorkUnit& work_unit,
                                    nullptr,
                                    false,
                                    column_cache);
-    if (!estimator_result) {
+    if (estimator_result.empty()) {
       return 1;
     }
-    return std::max(estimator_result->getNDVEstimator(), size_t(1));
+    CHECK_EQ(estimator_result.getFragCount(), 1);
+    return std::max(estimator_result[0]->getNDVEstimator(), size_t(1));
   } catch (const QueryExecutionError& e) {
     if (e.getErrorCode() == Executor::ERR_OUT_OF_TIME) {
       throw std::runtime_error("Cardinality estimation query ran out of time");
