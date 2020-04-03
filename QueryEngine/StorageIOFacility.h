@@ -141,7 +141,7 @@ StorageIOFacility<EXECUTOR_TRAITS, FRAGMENT_UPDATER>::yieldUpdateCallback(
       }
 
       auto td = catalog_.getMetadataForTable(update_log.getPhysicalTableId());
-      auto* fragmenter = td->fragmenter;
+      auto* fragmenter = td->fragmenter.get();
       CHECK(fragmenter);
 
       fragmenter->updateColumns(
@@ -237,7 +237,7 @@ StorageIOFacility<EXECUTOR_TRAITS, FRAGMENT_UPDATER>::yieldUpdateCallback(
             encoder->appendData(updates_buffer, rs->rowCount(), cd->columnType, false, 0);
       }
 
-      auto fragmenter = td->fragmenter;
+      auto fragmenter = td->fragmenter.get();
       CHECK(fragmenter);
 
       // The fragmenter copy of the fragment info differs from the copy used by the query
@@ -443,7 +443,7 @@ StorageIOFacility<EXECUTOR_TRAITS, FRAGMENT_UPDATER>::yieldDeleteCallback(
       const auto new_chunk_metadata =
           encoder->appendData(updates_buffer, rs->rowCount(), cd->columnType, false, 0);
 
-      auto fragmenter = td->fragmenter;
+      auto fragmenter = td->fragmenter.get();
       CHECK(fragmenter);
 
       // The fragmenter copy of the fragment info differs from the copy used by the query
@@ -545,7 +545,7 @@ StorageIOFacility<EXECUTOR_TRAITS, FRAGMENT_UPDATER>::yieldDeleteCallback(
       auto const* table_descriptor =
           catalog_.getMetadataForTable(update_log.getPhysicalTableId());
       CHECK(!table_is_temporary(table_descriptor));
-      auto* fragmenter = table_descriptor->fragmenter;
+      auto* fragmenter = table_descriptor->fragmenter.get();
       CHECK(fragmenter);
 
       auto const* deleted_column_desc = catalog_.getDeletedColumn(table_descriptor);

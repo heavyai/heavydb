@@ -3130,7 +3130,8 @@ void AddColumnStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   check_executable(session, td);
 
   CHECK(td->fragmenter);
-  if (dynamic_cast<Fragmenter_Namespace::SortedOrderFragmenter*>(td->fragmenter)) {
+  if (std::dynamic_pointer_cast<Fragmenter_Namespace::SortedOrderFragmenter>(
+          td->fragmenter)) {
     throw std::runtime_error(
         "Adding columns to a table is not supported when using the \"sort_column\" "
         "option.");

@@ -109,7 +109,7 @@ template <typename FUNC, typename... Args>
 void run_op_per_fragment(const TableDescriptor* td, FUNC f, Args&&... args) {
   const auto shards = QR::get()->getCatalog()->getPhysicalTablesDescriptors(td);
   for (const auto shard : shards) {
-    auto* fragmenter = shard->fragmenter;
+    auto* fragmenter = shard->fragmenter.get();
     CHECK(fragmenter);
     const auto table_info = fragmenter->getFragmentsForQuery();
     for (const auto& fragment : table_info.fragments) {
@@ -241,7 +241,7 @@ TEST_F(MultiFragMetadataUpdate, NoChanges) {
     const auto cat = QR::get()->getCatalog();
     const auto td = cat->getMetadataForTable(g_table_name, /*populateFragmenter=*/true);
 
-    auto* fragmenter = td->fragmenter;
+    auto* fragmenter = td->fragmenter.get();
     CHECK(fragmenter);
     const auto table_info = fragmenter->getFragmentsForQuery();
 

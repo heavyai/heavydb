@@ -191,9 +191,7 @@ Catalog::~Catalog() {
   for (TableDescriptorMap::iterator tableDescIt = tableDescriptorMap_.begin();
        tableDescIt != tableDescriptorMap_.end();
        ++tableDescIt) {
-    if (tableDescIt->second->fragmenter != nullptr) {
-      delete tableDescIt->second->fragmenter;
-    }
+    tableDescIt->second->fragmenter = nullptr;
     delete tableDescIt->second;
   }
 
@@ -1209,9 +1207,8 @@ void Catalog::removeTableFromMap(const string& tableName,
 
   tableDescriptorMapById_.erase(tableDescIt);
   tableDescriptorMap_.erase(to_upper(tableName));
-  if (td->fragmenter != nullptr) {
-    delete td->fragmenter;
-  }
+  td->fragmenter = nullptr;
+
   bool isTemp = td->persistenceLevel == Data_Namespace::MemoryLevel::CPU_LEVEL;
   delete td;
 
@@ -1374,30 +1371,30 @@ void Catalog::instantiateFragmenter(TableDescriptor* td) const {
     Chunk::translateColumnDescriptorsToChunkVec(columnDescs, chunkVec);
     ChunkKey chunkKeyPrefix = {currentDB_.dbId, td->tableId};
     if (td->sortedColumnId > 0) {
-      td->fragmenter = new SortedOrderFragmenter(chunkKeyPrefix,
-                                                 chunkVec,
-                                                 dataMgr_.get(),
-                                                 const_cast<Catalog*>(this),
-                                                 td->tableId,
-                                                 td->shard,
-                                                 td->maxFragRows,
-                                                 td->maxChunkSize,
-                                                 td->fragPageSize,
-                                                 td->maxRows,
-                                                 td->persistenceLevel);
+      td->fragmenter = std::make_shared<SortedOrderFragmenter>(chunkKeyPrefix,
+                                                               chunkVec,
+                                                               dataMgr_.get(),
+                                                               const_cast<Catalog*>(this),
+                                                               td->tableId,
+                                                               td->shard,
+                                                               td->maxFragRows,
+                                                               td->maxChunkSize,
+                                                               td->fragPageSize,
+                                                               td->maxRows,
+                                                               td->persistenceLevel);
     } else {
-      td->fragmenter = new InsertOrderFragmenter(chunkKeyPrefix,
-                                                 chunkVec,
-                                                 dataMgr_.get(),
-                                                 const_cast<Catalog*>(this),
-                                                 td->tableId,
-                                                 td->shard,
-                                                 td->maxFragRows,
-                                                 td->maxChunkSize,
-                                                 td->fragPageSize,
-                                                 td->maxRows,
-                                                 td->persistenceLevel,
-                                                 !td->storageType.empty());
+      td->fragmenter = std::make_shared<InsertOrderFragmenter>(chunkKeyPrefix,
+                                                               chunkVec,
+                                                               dataMgr_.get(),
+                                                               const_cast<Catalog*>(this),
+                                                               td->tableId,
+                                                               td->shard,
+                                                               td->maxFragRows,
+                                                               td->maxChunkSize,
+                                                               td->fragPageSize,
+                                                               td->maxRows,
+                                                               td->persistenceLevel,
+                                                               !td->storageType.empty());
     }
   });
   LOG(INFO) << "Instantiating Fragmenter for table " << td->tableName << " took "
@@ -2821,8 +2818,9 @@ void Catalog::doTruncateTable(const TableDescriptor* td) {
   // must destroy fragmenter before deleteChunks is called.
   if (td->fragmenter != nullptr) {
     auto tableDescIt = tableDescriptorMapById_.find(tableId);
-    delete td->fragmenter;
-    tableDescIt->second->fragmenter = nullptr;  // get around const-ness
+    CHECK(tableDescIt != tableDescriptorMapById_.end());
+    tableDescIt->second->fragmenter = nullptr;
+    CHECK(td->fragmenter == nullptr);
   }
   ChunkKey chunkKeyPrefix = {currentDB_.dbId, tableId};
   // assuming deleteChunksWithPrefix is atomic
@@ -2891,8 +2889,9 @@ void Catalog::removeChunks(const int table_id) {
     cat_sqlite_lock sqlite_lock(this);
     if (td->fragmenter != nullptr) {
       auto tableDescIt = tableDescriptorMapById_.find(table_id);
-      delete td->fragmenter;
-      tableDescIt->second->fragmenter = nullptr;  // get around const-ness
+      CHECK(tableDescIt != tableDescriptorMapById_.end());
+      tableDescIt->second->fragmenter = nullptr;
+      CHECK(td->fragmenter == nullptr);
     }
   }
 
@@ -3380,11 +3379,11 @@ void Catalog::eraseTablePhysicalData(const TableDescriptor* td) {
   // must destroy fragmenter before deleteChunks is called.
   if (td->fragmenter != nullptr) {
     auto tableDescIt = tableDescriptorMapById_.find(tableId);
+    CHECK(tableDescIt != tableDescriptorMapById_.end());
     {
       INJECT_TIMER(deleting_fragmenter);
-      delete td->fragmenter;
+      tableDescIt->second->fragmenter = nullptr;
     }
-    tableDescIt->second->fragmenter = nullptr;  // get around const-ness
   }
   ChunkKey chunkKeyPrefix = {currentDB_.dbId, tableId};
   {
