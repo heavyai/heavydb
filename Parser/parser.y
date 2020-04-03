@@ -20,14 +20,8 @@
     }                                                                                                                   \
     std::istringstream ss(inputStr);                                                                                    \
     lexer.switch_streams(&ss,0);                                                                                        \
-    try {                                                                                                               \
-      yyparse(parseTrees);                                                                                              \
-    } catch (...) {                                                                                                     \
-      lexer.in_error_state_ = true;                                                                                     \
-      throw;                                                                                                            \
-    }                                                                                                                   \
+    yyparse(parseTrees);                                                                                                \
     lastParsed = lexer.YYText();                                                                                        \
-    lexer.in_error_state_ = (yynerrs > 0);                                                                              \
     if (!errors_.empty()) {                                                                                             \
       throw std::runtime_error(errors_[0]);                                                                             \
     }                                                                                                                   \
@@ -78,23 +72,7 @@ using namespace Parser;
 	class SQLLexer : public yyFlexLexer {
 		public:
 			SQLLexer(YY_Parser_STYPE &lval) : yylval(lval) {};
-			~SQLLexer() {
-				/**
-				 * Free allocated heap memory for name tokens when a parse error occurs.
-				 * In the happy case, memory is expected to be freed by related DDLStmt class.
-				 */
-				if (in_error_state_) {
-					for (auto& token : parsed_name_tokens_) {
-						if (token) {
-							delete token;
-							token = nullptr;
-						}
-					}
-				}
-			}
 			YY_Parser_STYPE &yylval;
-			bool in_error_state_{false};
-			std::vector<std::string*> parsed_name_tokens_{};
 	};
 %}
 

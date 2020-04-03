@@ -1070,7 +1070,8 @@ class NegativePrecisionOrDimensionTest
       public testing::WithParamInterface<std::tuple<ddl_utils::TableType, std::string>> {
 };
 
-TEST_P(NegativePrecisionOrDimensionTest, NegativePrecisionOrDimension) {
+// TODO: Enable after addressing parser memory management issues
+TEST_P(NegativePrecisionOrDimensionTest, DISABLED_NegativePrecisionOrDimension) {
   const auto& [table_type, data_type] = GetParam();
   try {
     sql(getCreateTableQuery(table_type, "test_table", "(col1 " + data_type + "(-1))"));
@@ -1227,6 +1228,22 @@ TEST_P(DropTableTest, AuthorizedUser) {
   sql(getDropTableQuery(GetParam(), "test_table"));
 
   ASSERT_EQ(nullptr, getCatalog().getMetadataForTable("test_table", false));
+}
+
+// TODO: Enable after addressing parser memory management issues
+TEST_P(CreateTableTest, DISABLED_InvalidSyntax) {
+  std::string query = getCreateTableQuery(
+      GetParam(), "test_table", "(str TEXT ENCODING DICT(8), f FLOAT i INTEGER)");
+  try {
+    sql(query);
+    FAIL() << "An exception should have been thrown for this test case.";
+  } catch (const TMapDException& e) {
+    if (GetParam() == ddl_utils::TableType::FOREIGN_TABLE) {
+      ASSERT_TRUE(e.error_msg.find("Exception: Parse failed") != std::string::npos);
+    } else {
+      ASSERT_EQ("Syntax error at: INTEGER", e.error_msg);
+    }
+  }
 }
 
 INSTANTIATE_TEST_SUITE_P(CreateAndDropTableDdlTest,
