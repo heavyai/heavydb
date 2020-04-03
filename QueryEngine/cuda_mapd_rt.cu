@@ -159,6 +159,7 @@ __device__ int64_t dw_sm_cycle_start[128];  // Set from host before launching th
 // TODO(Saman): make this cycle budget something constant in codegen level
 __device__ int64_t dw_cycle_budget = 0;  // Set from host before launching the kernel
 __device__ int32_t dw_abort = 0;         // TBD: set from host (async)
+__device__ int32_t runtime_interrupt_flag = 0;
 
 __inline__ __device__ uint32_t get_smid(void) {
   uint32_t ret;
@@ -167,13 +168,13 @@ __inline__ __device__ uint32_t get_smid(void) {
 }
 
 /*
- * The main objective of this funciton is to return true, if any of the following two
- * scnearios happen:
+ * The main objective of this function is to return true, if any of the following two
+ * scenarios happen:
  * 1. receives a host request for aborting the kernel execution
  * 2. kernel execution takes longer clock cycles than it was initially allowed
  * The assumption is that all (or none) threads within a block return true for the
  * watchdog, and the first thread within each block compares the recorded clock cycles for
- * its occupying SM with the allowed budget. It also assumess that all threads entering
+ * its occupying SM with the allowed budget. It also assumes that all threads entering
  * this function are active (no critical edge exposure)
  * NOTE: dw_cycle_budget, dw_abort, and dw_sm_cycle_start[] are all variables in global
  * memory scope.
@@ -220,6 +221,10 @@ extern "C" __device__ bool dynamic_watchdog() {
   }
   __syncthreads();
   return dw_should_terminate;
+}
+
+extern "C" __device__ bool check_interrupt() {
+  return (runtime_interrupt_flag == 1) ? true : false;
 }
 
 template <typename T = unsigned long long>

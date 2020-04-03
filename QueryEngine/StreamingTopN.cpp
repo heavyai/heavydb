@@ -43,41 +43,6 @@ std::vector<int8_t> get_rows_copy_from_heaps(const int64_t* heaps,
 
 }  // namespace streaming_top_n
 
-bool use_streaming_top_n(const RelAlgExecutionUnit& ra_exe_unit,
-                         const bool output_columnar) {
-  if (g_cluster) {
-    return false;  // TODO(miyu)
-  }
-
-  for (const auto target_expr : ra_exe_unit.target_exprs) {
-    if (dynamic_cast<const Analyzer::AggExpr*>(target_expr)) {
-      return false;
-    }
-    if (dynamic_cast<const Analyzer::WindowFunction*>(target_expr)) {
-      return false;
-    }
-  }
-
-  // TODO: Allow streaming top n for columnar output
-  if (!output_columnar && ra_exe_unit.sort_info.order_entries.size() == 1 &&
-      ra_exe_unit.sort_info.limit &&
-      ra_exe_unit.sort_info.algorithm == SortAlgorithm::StreamingTopN) {
-    const auto only_order_entry = ra_exe_unit.sort_info.order_entries.front();
-    CHECK_GT(only_order_entry.tle_no, int(0));
-    CHECK_LE(static_cast<size_t>(only_order_entry.tle_no),
-             ra_exe_unit.target_exprs.size());
-    const auto order_entry_expr = ra_exe_unit.target_exprs[only_order_entry.tle_no - 1];
-    const auto n = ra_exe_unit.sort_info.offset + ra_exe_unit.sort_info.limit;
-    if ((order_entry_expr->get_type_info().is_number() ||
-         order_entry_expr->get_type_info().is_time()) &&
-        n <= 100000) {  // TODO(miyu): relax?
-      return true;
-    }
-  }
-
-  return false;
-}
-
 size_t get_heap_key_slot_index(const std::vector<Analyzer::Expr*>& target_exprs,
                                const size_t target_idx) {
   size_t slot_idx = 0;

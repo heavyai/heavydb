@@ -35,22 +35,23 @@ class CreateForeignServerTest : public MapDHandlerTestFixture {
   void SetUp() override {
     g_enable_fsi = true;
     MapDHandlerTestFixture::SetUp();
-    getCatalog().dropForeignServer("test_server", true);
+    getCatalog().dropForeignServer("test_server");
   }
 
   void TearDown() override {
-    getCatalog().dropForeignServer("test_server", true);
+    getCatalog().dropForeignServer("test_server");
     MapDHandlerTestFixture::TearDown();
   }
 
   void assertExpectedForeignServer() {
     auto& catalog = getCatalog();
-    auto foreign_server = catalog.getForeignServer("test_server", true);
+    auto foreign_server = catalog.getForeignServerSkipCache("test_server");
 
     ASSERT_GT(foreign_server->id, 0);
     ASSERT_EQ("test_server", foreign_server->name);
     ASSERT_EQ(foreign_storage::DataWrapper::CSV_WRAPPER_NAME,
               foreign_server->data_wrapper.name);
+    ASSERT_EQ(OMNISCI_ROOT_USER_ID, foreign_server->user_id);
 
     ASSERT_TRUE(
         foreign_server->options.find(foreign_storage::ForeignServer::STORAGE_TYPE_KEY) !=
@@ -147,7 +148,7 @@ TEST_F(CreateForeignServerTest, FsiDisabled) {
       "CREATE SERVER test_server FOREIGN DATA WRAPPER omnisci_csv WITH "
       "(storage_type = 'LOCAL_FILE', base_path = '/test_path/');"};
   g_enable_fsi = false;
-  queryAndAssertException(query, "Syntax error at: test_server");
+  queryAndAssertException(query, "Syntax error at: SERVER");
 }
 
 TEST_F(CreateForeignServerTest, InvalidDataWrapper) {
@@ -173,13 +174,13 @@ class DropForeignServerTest : public MapDHandlerTestFixture {
   void TearDown() override {
     g_enable_fsi = true;
     dropTestTable();
-    getCatalog().dropForeignServer("test_server", true);
+    getCatalog().dropForeignServer("test_server");
     MapDHandlerTestFixture::TearDown();
   }
 
   void assertNullForeignServer(const std::string& server_name) {
     auto& catalog = getCatalog();
-    auto foreign_server = catalog.getForeignServer(server_name, true);
+    auto foreign_server = catalog.getForeignServerSkipCache(server_name);
     ASSERT_EQ(nullptr, foreign_server);
   }
 
@@ -222,6 +223,239 @@ TEST_F(DropForeignServerTest, ForeignTableReferencingServer) {
 TEST_F(DropForeignServerTest, FsiDisabled) {
   g_enable_fsi = false;
   queryAndAssertException("DROP SERVER test_server;", "Syntax error at: SERVER");
+}
+
+class ForeignServerPrivilegesDdlTest : public MapDHandlerTestFixture {
+ protected:
+  void SetUp() override {
+    g_enable_fsi = true;
+    MapDHandlerTestFixture::SetUp();
+    loginAdmin();
+    dropServer();
+    createTestUser();
+  }
+
+  void TearDown() override {
+    g_enable_fsi = true;
+    loginAdmin();
+    dropServer();
+    dropTestUser();
+  }
+
+  void createTestUser() {
+    sql("CREATE USER test_user (password = 'test_pass');");
+    sql("GRANT ACCESS ON DATABASE omnisci TO test_user;");
+  }
+
+  void dropTestUser() {
+    try {
+      sql("DROP USER test_user;");
+    } catch (const std::exception& e) {
+      // Swallow and log exceptions that may occur, since there is no "IF EXISTS" option.
+      LOG(WARNING) << e.what();
+    }
+  }
+
+  void createTestServer() {
+    sql("CREATE SERVER test_server FOREIGN DATA WRAPPER omnisci_csv "
+        "WITH (storage_type = 'LOCAL_FILE', base_path = '/test_path/');");
+  }
+
+  void dropServer() { sql("DROP SERVER IF EXISTS test_server;"); }
+
+  void assertExpectedForeignServerCreatedByUser() {
+    auto& catalog = getCatalog();
+    auto foreign_server = catalog.getForeignServerSkipCache("test_server");
+    ASSERT_GT(foreign_server->id, 0);
+    ASSERT_EQ(foreign_server->user_id, getCurrentUser().userId);
+    ASSERT_EQ(getCurrentUser().userName, "test_user");
+    ASSERT_EQ(foreign_server->name, "test_server");
+  }
+
+  void assertNullForeignServer() {
+    auto& catalog = getCatalog();
+    auto foreign_server = catalog.getForeignServerSkipCache("test_server");
+    ASSERT_EQ(nullptr, foreign_server);
+  }
+};
+
+TEST_F(ForeignServerPrivilegesDdlTest, CreateServerWithoutPrivilege) {
+  login("test_user", "test_pass");
+  queryAndAssertException(
+      "CREATE SERVER test_server FOREIGN DATA WRAPPER omnisci_csv "
+      "WITH (storage_type = 'LOCAL_FILE', base_path = '/test_path/');",
+      "Exception: Server test_server will not be created. "
+      "User has no create privileges.");
+}
+
+TEST_F(ForeignServerPrivilegesDdlTest, CreateServerWithPrivilege) {
+  sql("GRANT CREATE SERVER ON DATABASE omnisci TO test_user;");
+  login("test_user", "test_pass");
+  createTestServer();
+  assertExpectedForeignServerCreatedByUser();
+}
+
+TEST_F(ForeignServerPrivilegesDdlTest,
+       CreateServerWithPrivilegeThenDropWithoutDropPrivilege) {
+  sql("GRANT CREATE SERVER ON DATABASE omnisci TO test_user;");
+  login("test_user", "test_pass");
+  createTestServer();
+  assertExpectedForeignServerCreatedByUser();
+  sql("DROP SERVER test_server;");
+  assertNullForeignServer();
+}
+
+TEST_F(ForeignServerPrivilegesDdlTest, DropServerWithoutPrivilege) {
+  createTestServer();
+  login("test_user", "test_pass");
+  queryAndAssertException("DROP SERVER test_server;",
+                          "Exception: Server test_server will not be dropped. "
+                          "User has no DROP SERVER privileges.");
+}
+
+TEST_F(ForeignServerPrivilegesDdlTest, DropServerWithPrivilege) {
+  createTestServer();
+  sql("GRANT DROP SERVER ON DATABASE omnisci TO test_user;");
+  login("test_user", "test_pass");
+  sql("DROP SERVER test_server;");
+  assertNullForeignServer();
+}
+
+TEST_F(ForeignServerPrivilegesDdlTest, DropServerWithSpecificPrivilege) {
+  createTestServer();
+  sql("GRANT DROP ON SERVER test_server TO test_user;");
+  login("test_user", "test_pass");
+  sql("DROP SERVER test_server;");
+  assertNullForeignServer();
+}
+
+TEST_F(ForeignServerPrivilegesDdlTest, CreateServerWithGrantThenRevokePrivilege) {
+  sql("GRANT CREATE SERVER ON DATABASE omnisci TO test_user;");
+  sql("REVOKE CREATE SERVER ON DATABASE omnisci FROM test_user;");
+  login("test_user", "test_pass");
+  queryAndAssertException(
+      "CREATE SERVER test_server FOREIGN DATA WRAPPER omnisci_csv "
+      "WITH (storage_type = 'LOCAL_FILE', base_path = '/test_path/');",
+      "Exception: Server test_server will not be created. "
+      "User has no create privileges.");
+}
+
+TEST_F(ForeignServerPrivilegesDdlTest, DropServerWithGrantThenRevokePrivilege) {
+  createTestServer();
+  sql("GRANT DROP SERVER ON DATABASE omnisci TO test_user;");
+  sql("REVOKE DROP SERVER ON DATABASE omnisci FROM test_user;");
+  login("test_user", "test_pass");
+  queryAndAssertException("DROP SERVER test_server;",
+                          "Exception: Server test_server will not be dropped. "
+                          "User has no DROP SERVER privileges.");
+}
+
+TEST_F(ForeignServerPrivilegesDdlTest, DropServerWithGrantThenRevokeSpecificPrivilege) {
+  createTestServer();
+  sql("GRANT DROP ON SERVER test_server TO test_user;");
+  sql("REVOKE DROP ON SERVER test_server FROM test_user;");
+  login("test_user", "test_pass");
+  queryAndAssertException("DROP SERVER test_server;",
+                          "Exception: Server test_server will not be dropped. "
+                          "User has no DROP SERVER privileges.");
+}
+
+TEST_F(ForeignServerPrivilegesDdlTest, RevokeNonExistentPrivilege) {
+  createTestServer();
+  queryAndAssertException("REVOKE DROP SERVER ON DATABASE omnisci FROM test_user;",
+                          "Exception: Can not revoke privileges because"
+                          " test_user has no privileges to omnisci");
+}
+
+TEST_F(ForeignServerPrivilegesDdlTest, RevokeNonExistentSpecificPrivilege) {
+  createTestServer();
+  queryAndAssertException("REVOKE DROP ON SERVER test_server FROM test_user;",
+                          "Exception: Can not revoke privileges because test_user"
+                          " has no privileges to test_server");
+}
+
+TEST_F(ForeignServerPrivilegesDdlTest, RevokeSpecificPrivilegeOnNonExistentServer) {
+  queryAndAssertException("REVOKE DROP ON SERVER test_server FROM test_user;",
+                          "Exception: Failure generating DB object key. "
+                          "Server test_server does not exist.");
+}
+
+TEST_F(ForeignServerPrivilegesDdlTest, GrantPrivilegeOnNonExistentDatabase) {
+  queryAndAssertException("GRANT CREATE SERVER ON DATABASE nonexistent_db TO test_user;",
+                          "Exception: Failure generating DB object key."
+                          " Database nonexistent_db does not exist.");
+}
+
+TEST_F(ForeignServerPrivilegesDdlTest, GrantPrivilegeFsiDisabled) {
+  g_enable_fsi = false;
+  queryAndAssertException("GRANT CREATE SERVER ON DATABASE omnisci TO test_user;",
+                          "Exception: GRANT failed. SERVER object unrecognized.");
+}
+
+TEST_F(ForeignServerPrivilegesDdlTest, RevokePrivilegeFsiDisabled) {
+  g_enable_fsi = false;
+  queryAndAssertException("REVOKE CREATE SERVER ON DATABASE omnisci FROM test_user;",
+                          "Exception: REVOKE failed. SERVER object unrecognized.");
+}
+
+TEST_F(ForeignServerPrivilegesDdlTest, GrantSpecificPrivilegeFsiDisabled) {
+  createTestServer();
+  g_enable_fsi = false;
+  queryAndAssertException("GRANT DROP ON SERVER test_server TO test_user;",
+                          "Exception: GRANT failed. SERVER object unrecognized.");
+}
+
+TEST_F(ForeignServerPrivilegesDdlTest, GrantAllCreateServerDropServer) {
+  sql("GRANT ALL ON DATABASE omnisci TO test_user;");
+  login("test_user", "test_pass");
+  createTestServer();
+  assertExpectedForeignServerCreatedByUser();
+  sql("DROP SERVER test_server;");
+  assertNullForeignServer();
+}
+
+TEST_F(ForeignServerPrivilegesDdlTest, GrantAllDropServer) {
+  createTestServer();
+  sql("GRANT ALL ON DATABASE omnisci TO test_user;");
+  login("test_user", "test_pass");
+  sql("DROP SERVER test_server;");
+  assertNullForeignServer();
+}
+
+TEST_F(ForeignServerPrivilegesDdlTest, GrantAllRevokeCreateServerCreateServer) {
+  sql("GRANT ALL ON DATABASE omnisci TO test_user;");
+  sql("REVOKE CREATE SERVER ON DATABASE omnisci FROM test_user;");
+  login("test_user", "test_pass");
+  queryAndAssertException(
+      "CREATE SERVER test_server FOREIGN DATA WRAPPER omnisci_csv "
+      "WITH (storage_type = 'LOCAL_FILE', base_path = '/test_path/');",
+      "Exception: Server test_server will not be created. "
+      "User has no create privileges.");
+}
+
+TEST_F(ForeignServerPrivilegesDdlTest, GrantCreateServerRevokeAllCreateServer) {
+  sql("GRANT CREATE SERVER ON DATABASE omnisci TO test_user;");
+  sql("REVOKE ALL ON DATABASE omnisci FROM test_user;");
+  // must still allow access for login:
+  sql("GRANT ACCESS ON DATABASE omnisci TO test_user;");
+  login("test_user", "test_pass");
+  queryAndAssertException(
+      "CREATE SERVER test_server FOREIGN DATA WRAPPER omnisci_csv "
+      "WITH (storage_type = 'LOCAL_FILE', base_path = '/test_path/');",
+      "Exception: Server test_server will not be created. "
+      "User has no create privileges.");
+}
+
+TEST_F(ForeignServerPrivilegesDdlTest, GrantDropServerRevokeAllDropServer) {
+  createTestServer();
+  sql("GRANT DROP SERVER ON DATABASE omnisci TO test_user;");
+  sql("REVOKE ALL ON DATABASE omnisci FROM test_user;");
+  // must still allow access for login:
+  sql("GRANT ACCESS ON DATABASE omnisci TO test_user;");
+  login("test_user", "test_pass");
+  queryAndAssertException("DROP SERVER test_server;",
+                          "Exception: Server test_server will not be dropped. "
+                          "User has no DROP SERVER privileges.");
 }
 
 int main(int argc, char** argv) {

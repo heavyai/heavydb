@@ -117,6 +117,22 @@ class DropForeignTableCommand : public DdlCommand {
   void execute(TQueryResult& _return) override;
 };
 
+class ShowTablesCommand : public DdlCommand {
+ public:
+  ShowTablesCommand(const rapidjson::Value& ddl_payload,
+                    std::shared_ptr<Catalog_Namespace::SessionInfo const> session_ptr);
+
+  void execute(TQueryResult& _return) override;
+};
+
+class ShowDatabasesCommand : public DdlCommand {
+ public:
+  ShowDatabasesCommand(const rapidjson::Value& ddl_payload,
+                       std::shared_ptr<Catalog_Namespace::SessionInfo const> session_ptr);
+
+  void execute(TQueryResult& _return) override;
+};
+
 class DdlCommandExecutor {
  public:
   DdlCommandExecutor(const std::string& ddl_statement,
@@ -130,7 +146,12 @@ class DdlCommandExecutor {
    */
   void execute(TQueryResult& _return);
 
+  /**
+   * Returns true if this command is SHOW USER SESSIONS
+   */
+  bool isShowUserSessions();
+
  private:
-  const std::string& ddl_statement;
+  rapidjson::Document ddl_query;
   std::shared_ptr<Catalog_Namespace::SessionInfo const> session_ptr;
 };

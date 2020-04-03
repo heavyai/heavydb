@@ -30,6 +30,7 @@
 #include <memory>
 #include <random>
 #include <sstream>
+#include <string_view>
 #include "Catalog.h"
 
 #include "Catalog/AuthMetadata.h"
@@ -55,6 +56,8 @@ using std::pair;
 using std::runtime_error;
 using std::string;
 using std::vector;
+
+using namespace std::string_literals;
 
 extern bool g_enable_fsi;
 
@@ -731,7 +734,7 @@ void SysCatalog::loginImpl(std::string& username,
                            const std::string& password,
                            UserMetadata& user_meta) {
   if (!checkPasswordForUser(password, username, user_meta)) {
-    throw std::runtime_error("Invalid credentials.");
+    throw std::runtime_error("Authentication failure");
   }
 }
 
@@ -1083,6 +1086,7 @@ void SysCatalog::createDatabase(const string& name, int owner) {
           "id integer primary key, "
           "name text unique, "
           "data_wrapper_type text, "
+          "owner_user_id integer, "
           "options text)");
       dbConn->query(
           "CREATE TABLE omnisci_foreign_tables("
@@ -1199,11 +1203,7 @@ bool SysCatalog::checkPasswordForUserImpl(const std::string& passwd,
   int pwd_check_result = bcrypt_checkpw(passwd.c_str(), user.passwd_hash.c_str());
   // if the check fails there is a good chance that data on disc is broken
   CHECK(pwd_check_result >= 0);
-  if (pwd_check_result != 0) {
-    LOG(WARNING) << "Local login failed";
-    return false;
-  }
-  return true;
+  return pwd_check_result == 0;
 }
 
 static bool parseUserMetadataFromSQLite(const std::unique_ptr<SqliteConnector>& conn,
@@ -1405,6 +1405,9 @@ void SysCatalog::createDBObject(const UserMetadata& user,
     case DashboardDBObjectType:
       object.setPrivileges(AccessPrivileges::ALL_DASHBOARD);
       break;
+    case ServerDBObjectType:
+      object.setPrivileges(AccessPrivileges::ALL_SERVER);
+      break;
     default:
       object.setPrivileges(AccessPrivileges::ALL_DATABASE);
       break;
@@ -1494,6 +1497,9 @@ void SysCatalog::grantAllOnDatabase_unsafe(const std::string& roleName,
   grantDBObjectPrivileges_unsafe(roleName, tmp_object, catalog);
   tmp_object.setPrivileges(AccessPrivileges::ALL_VIEW);
   tmp_object.setPermissionType(ViewDBObjectType);
+  grantDBObjectPrivileges_unsafe(roleName, tmp_object, catalog);
+  tmp_object.setPrivileges(AccessPrivileges::ALL_SERVER);
+  tmp_object.setPermissionType(ServerDBObjectType);
   grantDBObjectPrivileges_unsafe(roleName, tmp_object, catalog);
   tmp_object.setPrivileges(AccessPrivileges::ALL_DASHBOARD);
   tmp_object.setPermissionType(DashboardDBObjectType);

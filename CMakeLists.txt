@@ -308,6 +308,10 @@ endif()
 include_directories(ThirdParty/googletest)
 add_subdirectory(ThirdParty/googletest)
 
+# Google Benchmark
+set(BENCHMARK_ENABLE_TESTING OFF CACHE BOOL "Suppressing benchmark's tests" FORCE)
+add_subdirectory(ThirdParty/googlebenchmark)
+
 # Arrow
 find_package(Arrow REQUIRED)
 add_definitions("-DARROW_NO_DEPRECATED_API")
@@ -326,6 +330,11 @@ if(ENABLE_IMPORT_PARQUET AND NOT PREFER_STATIC_LIBS)
     # and deps scripts must have built parquet as well as snappy
     find_package(Snappy REQUIRED)
   endif()
+endif()
+
+list(APPEND Arrow_LIBRARIES ${Snappy_LIBRARIES})
+if (ENABLE_CUDA)
+  list(INSERT Arrow_LIBRARIES 0 ${Arrow_GPU_CUDA_LIBRARIES})
 endif()
 
 # RapidJSON
@@ -382,6 +391,15 @@ if("${MAPD_EDITION_LOWER}" STREQUAL "ee")
       add_definitions("-DHAVE_SAML")
     endif()
   endif()
+endif()
+
+# TBB
+set(TBB_LIBS "") 
+find_package(TBB)
+if(TBB_FOUND) 
+  message(STATUS "Building with TBB support")
+  add_definitions("-DHAVE_TBB")
+  list(APPEND TBB_LIBS ${TBB_LIBRARIES})
 endif()
 
 add_custom_command(
@@ -520,10 +538,6 @@ if(ENABLE_RENDERING)
   list(APPEND MAPD_LIBRARIES "${MAPD_RENDERING_LIBRARIES}")
 endif()
 
-list(APPEND Arrow_LIBRARIES ${Snappy_LIBRARIES})
-if (ENABLE_CUDA) 
-  list(APPEND Arrow_LIBRARIES ${Arrow_GPU_CUDA_LIBRARIES})
-endif()
 list(APPEND MAPD_LIBRARIES ${Arrow_LIBRARIES})
 
 if(ENABLE_FOLLY)
@@ -533,6 +547,8 @@ endif()
 if(ENABLE_LICENSING_AWS)
   list(APPEND MAPD_LIBRARIES AWSMarketplace)
 endif()
+
+list(APPEND MAPD_LIBRARIES ${TBB_LIBS})
 
 option(ENABLE_TESTS "Build unit tests" ON)
 if (ENABLE_TESTS)
@@ -583,7 +599,7 @@ add_custom_command(
     ARGS -gen java -r -out ${CMAKE_SOURCE_DIR}/java/thrift/src/gen/ ${CMAKE_SOURCE_DIR}/QueryEngine/serialized_result_set.thrift)
 
 add_custom_command(
-    DEPENDS ${CMAKE_SOURCE_DIR}/java/thrift/calciteserver.thrift ${CMAKE_SOURCE_DIR}/completion_hints.thrift
+    DEPENDS ${CMAKE_SOURCE_DIR}/java/thrift/calciteserver.thrift ${CMAKE_SOURCE_DIR}/completion_hints.thrift ${CMAKE_SOURCE_DIR}/QueryEngine/extension_functions.thrift
     OUTPUT ${CMAKE_SOURCE_DIR}/java/thrift/src/gen/com/mapd/thrift/calciteserver/CalciteServer.java
     COMMAND mkdir
     ARGS -p ${CMAKE_SOURCE_DIR}/java/thrift/src/gen

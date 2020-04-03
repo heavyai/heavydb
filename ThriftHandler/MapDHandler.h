@@ -105,8 +105,6 @@ using namespace std::string_literals;
 class MapDAggHandler;
 class MapDLeafHandler;
 
-enum GetTablesType { GET_PHYSICAL_TABLES_AND_VIEWS, GET_PHYSICAL_TABLES, GET_VIEWS };
-
 // Multiple concurrent requests for the same session can occur.  For that reason, each
 // request briefly takes a lock to make a copy of the appropriate SessionInfo object. Then
 // it releases the lock and uses the copy for the remainder of the request.
@@ -186,7 +184,8 @@ class MapDHandler : public MapDIf {
               const int max_session_duration,
               const bool enable_runtime_udf_registration,
               const std::string& udf_filename,
-              const std::string& clang_path);
+              const std::string& clang_path,
+              const std::vector<std::string>& clang_options);
 
   ~MapDHandler() override;
 
@@ -281,7 +280,8 @@ class MapDHandler : public MapDIf {
                      const TDataFrame& df,
                      const TDeviceType::type device_type,
                      const int32_t device_id) override;
-  void interrupt(const TSessionId& session) override;
+  void interrupt(const TSessionId& query_session,
+                 const TSessionId& interrupt_session) override;
   void sql_validate(TTableDescriptor& _return,
                     const TSessionId& session,
                     const std::string& query) override;
@@ -406,7 +406,8 @@ class MapDHandler : public MapDIf {
                                const TSessionId& session,
                                const int32_t table_id) override;
   void start_query(TPendingQuery& _return,
-                   const TSessionId& session,
+                   const TSessionId& leaf_session,
+                   const TSessionId& parent_session,
                    const std::string& query_ra,
                    const bool just_explain) override;
   void execute_query_step(TStepResult& _return,
@@ -608,11 +609,9 @@ class MapDHandler : public MapDIf {
       const ExecutorDeviceType executor_device_type,
       const int32_t first_n,
       const int32_t at_most_n,
-      const bool just_explain,
       const bool just_validate,
       const bool find_push_down_candidates,
-      const bool just_calcite_explain,
-      const bool explain_optimized_ir) const;
+      const ExplainInfo& explain_info) const;
 
   void execute_rel_alg_with_filter_push_down(
       TQueryResult& _return,
@@ -791,6 +790,9 @@ class MapDHandler : public MapDIf {
       const std::shared_ptr<Catalog_Namespace::Catalog>& catalog_ptr);
   bool isInMemoryCalciteSession(const Catalog_Namespace::UserMetadata user_meta);
   void removeInMemoryCalciteSession(const std::string& session_id);
+
+  void getUserSessions(const Catalog_Namespace::SessionInfo& session_info,
+                       TQueryResult& _return);
 };
 
 #endif /* MAPDHANDLER_H */

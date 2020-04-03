@@ -1427,7 +1427,7 @@ class ArrayExpr : public Expr {
             int expr_index,
             bool is_null = false,
             bool local_alloc = false)
-      : Expr(preInitTweakedTypeInfo(array_ti))
+      : Expr(array_ti)
       , contained_expressions_(array_exprs)
       , expr_index_(expr_index)
       , local_alloc_(local_alloc)
@@ -1447,13 +1447,6 @@ class ArrayExpr : public Expr {
   }
 
  private:
-  SQLTypeInfo& preInitTweakedTypeInfo(SQLTypeInfo const& array_ti) {
-    tweaked_type_info_ = array_ti;
-    tweaked_type_info_.setStandardBufferPackaging();
-    return tweaked_type_info_;
-  }
-
-  SQLTypeInfo tweaked_type_info_;
   ExpressionPtrVector contained_expressions_;
   int expr_index_;
   bool local_alloc_;

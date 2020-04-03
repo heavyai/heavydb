@@ -220,11 +220,6 @@ else()
   add_dependencies(QueryEngine QueryEngineFunctionsTargets)
 endif()
 
-set(ARROW_LIBS ${Arrow_LIBRARIES})
-if (ENABLE_CUDA)
-  list(APPEND ARROW_LIBS ${Arrow_GPU_CUDA_LIBRARIES})
-endif()
-
 target_link_libraries(
   QueryEngine
   Chunk
@@ -233,7 +228,7 @@ target_link_libraries(
   Utils
   Shared
   sqlite3
-  ${ARROW_LIBS}
+  ${Arrow_LIBRARIES}
   clangFrontend
   clangSerialization
   clangDriver

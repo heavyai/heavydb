@@ -1,6 +1,6 @@
 # Build libglvnd for libGL, libEGL, libOpenGL
 # Not currently pulled in by nvidia-docker2
-FROM nvidia/cudagl:10.0-devel-ubuntu18.04
+FROM nvidia/cudagl:10.1-devel-ubuntu18.04
 
 ENV NVIDIA_DRIVER_CAPABILITIES compute,utility,graphics
 

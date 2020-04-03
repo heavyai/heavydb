@@ -112,6 +112,11 @@ std::shared_ptr<ResultSet> SpeculativeTopNMap::asRows(
     }
   }
   CHECK_EQ(size_t(2), ra_exe_unit.target_exprs.size());
+
+  // Top N key-value pairs are stored into a new ResultSet with a new
+  // QueryMemoryDescriptor to be passed over. We use row-wise GroupByBaselineHash, as it
+  // is the most flexible layout for dealing with key-value pairs in the storage (for
+  // iterations and reduction).
   auto query_mem_desc_rs = query_mem_desc;
   query_mem_desc_rs.setQueryDescriptionType(QueryDescriptionType::GroupByBaselineHash);
   query_mem_desc_rs.setOutputColumnar(false);
@@ -119,6 +124,8 @@ std::shared_ptr<ResultSet> SpeculativeTopNMap::asRows(
   query_mem_desc_rs.clearSlotInfo();
   query_mem_desc_rs.addColSlotInfo({std::make_tuple(8, 8)});
   query_mem_desc_rs.addColSlotInfo({std::make_tuple(8, 8)});
+  query_mem_desc_rs.setAllTargetGroupbyIndices({-1, -1});
+
   auto rs = std::make_shared<ResultSet>(
       target_exprs_to_infos(ra_exe_unit.target_exprs, query_mem_desc_rs),
       ExecutorDeviceType::CPU,
@@ -129,6 +136,10 @@ std::shared_ptr<ResultSet> SpeculativeTopNMap::asRows(
   auto rs_buff = reinterpret_cast<int64_t*>(rs_storage->getUnderlyingBuffer());
   const bool count_first =
       dynamic_cast<const Analyzer::AggExpr*>(ra_exe_unit.target_exprs[0]);
+
+  // going throug the TopN results, and properly storing them into the GroupByBaselineHash
+  // layout (including the group column (key) and two agg columns (key and value)) to
+  // imitate the regular Group By query's result.
   for (size_t i = 0; i < num_rows; ++i) {
     rs_buff[0] = vec[i].key;
     int64_t col0 = vec[i].key;
@@ -161,6 +172,16 @@ bool SpeculativeTopNBlacklist::contains(const std::shared_ptr<Analyzer::Expr> ex
   return false;
 }
 
+/**
+ * SpeculativeTopN sort is used when there are multiple already sorted results
+ * (when GPU sort is used on multiple devices, refer to
+ * GroupByAndAggregate::gpuCanHandleOrderEntries), and we want to pick top n elements
+ * (LIMIT caluse exists), and we have already chosen this algorithm when creating the
+ * proper work unit (refer to RelAlgExecutor::createSortInputWorkUnit).
+ *
+ * Besides, we currently only support cases with 2 target expressions and only with COUNT
+ * aggregate (similar limitations exists in whether or not we support GPU sort).
+ */
 bool use_speculative_top_n(const RelAlgExecutionUnit& ra_exe_unit,
                            const QueryMemoryDescriptor& query_mem_desc) {
   if (g_cluster) {

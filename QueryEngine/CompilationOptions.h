@@ -78,9 +78,16 @@ struct ExecutionOptions {
   const bool find_push_down_candidates;
   const bool just_calcite_explain;
   const double gpu_input_mem_limit_percent;  // punt to CPU if input memory exceeds this
+  const bool allow_runtime_query_interrupt;
+  const unsigned runtime_query_interrupt_frequency;
   ExecutorType executor_type = ExecutorType::Native;
   const std::vector<size_t> outer_fragment_indices{};
   bool multifrag_result = false;
+
+  static ExecutionOptions defaults() {
+    return ExecutionOptions{
+        false, true, false, false, true, false, false, false, 0, false, false, 1.0};
+  }
 
   ExecutionOptions with_multifrag_result(bool enable = true) const {
     ExecutionOptions eo = *this;

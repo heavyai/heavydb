@@ -13,8 +13,8 @@ add_executable(StringDictionaryTest StringDictionaryTest.cpp)
 add_executable(StringTransformTest StringTransformTest.cpp)
 add_executable(StringFunctionsTest StringFunctionsTest.cpp)
 add_executable(ProfileTest ProfileTest.cpp)
-add_executable(ExperimentalTest ExperimentalTest.cpp)
 add_executable(ForeignServerDdlTest ForeignServerDdlTest.cpp)
+add_executable(ShowCommandsDdlTest ShowCommandsDdlTest.cpp)
 add_executable(CatalogMigrationTest CatalogMigrationTest.cpp)
 add_executable(CreateAndDropTableDdlTest CreateAndDropTableDdlTest.cpp)
 
@@ -80,6 +80,9 @@ if(NOT ${CMAKE_SYSTEM_NAME} STREQUAL "Darwin")
   add_executable(UdfTest UdfTest.cpp)
 endif()
 
+# Tests + Microbenchmarks
+add_executable(TableUpdateDeleteBenchmark TableUpdateDeleteBenchmark.cpp)
+
 set(EXECUTE_TEST_LIBS gtest mapd_thrift QueryRunner ${MAPD_LIBRARIES} ${CMAKE_DL_LIBS} ${CUDA_LIBRARIES} ${LLVM_LINKER_FLAGS} ${CURSES_LIBRARIES} ${Boost_LIBRARIES} ${PROFILER_LIBS})
 set(MAPD_HANDLER_TEST_LIBRARIES thrift_handler ${EXECUTE_TEST_LIBS})
 
@@ -123,8 +126,7 @@ if(ENABLE_KRB5)
 	target_link_libraries(OmniSQLCommandTest krb5_gss Shared)
 endif()
 target_link_libraries(OmniSQLUtilitiesTest gtest ${Boost_LIBRARIES})
-target_link_libraries(ExperimentalTest gtest Shared)
-target_link_libraries(DBObjectPrivilegesTest ${EXECUTE_TEST_LIBS})
+
 target_link_libraries(GeoTypesTest gtest Shared ${GDAL_LIBRARIES} ${CURL_LIBRARIES} ${GDALExtra_LIBRARIES} ${CMAKE_DL_LIBS})
 target_link_libraries(CtasUpdateTest ${EXECUTE_TEST_LIBS})
 target_link_libraries(CorrelatedSubqueryTest ${EXECUTE_TEST_LIBS})
@@ -134,13 +136,17 @@ target_link_libraries(CalciteOptimizeTest ${EXECUTE_TEST_LIBS})
 target_link_libraries(JoinHashTableTest ${EXECUTE_TEST_LIBS})
 target_link_libraries(CommandLineTest gtest Shared ${Boost_LIBRARIES})
 # Requires thrift_handler for MapDHandler test fixture
+target_link_libraries(DBObjectPrivilegesTest ${MAPD_HANDLER_TEST_LIBRARIES})
 target_link_libraries(ForeignServerDdlTest ${MAPD_HANDLER_TEST_LIBRARIES})
 target_link_libraries(CatalogMigrationTest ${MAPD_HANDLER_TEST_LIBRARIES})
 target_link_libraries(CreateAndDropTableDdlTest ${MAPD_HANDLER_TEST_LIBRARIES})
+target_link_libraries(ShowCommandsDdlTest ${MAPD_HANDLER_TEST_LIBRARIES})
 
 if(NOT ${CMAKE_SYSTEM_NAME} STREQUAL "Darwin")
   target_link_libraries(UdfTest gtest ${EXECUTE_TEST_LIBS})
 endif()
+
+target_link_libraries(TableUpdateDeleteBenchmark benchmark ${EXECUTE_TEST_LIBS})
 
 set(TEST_ARGS "--gtest_output=xml:../")
 add_test(DumpRestoreTest DumpRestoreTest ${TEST_ARGS})
@@ -183,6 +189,7 @@ add_test(CalciteOptimizeTest CalciteOptimizeTest ${TEST_ARGS})
 add_test(JoinHashTableTest JoinHashTableTest ${TEST_ARGS})
 add_test(CommandLineTest CommandLineTest ${TEST_ARGS})
 add_test(ForeignServerDdlTest ForeignServerDdlTest ${TEST_ARGS})
+add_test(ShowCommandsDdlTest ShowCommandsDdlTest ${TEST_ARGS})
 add_test(CatalogMigrationTest CatalogMigrationTest ${TEST_ARGS})
 add_test(CreateAndDropTableDdlTest CreateAndDropTableDdlTest ${TEST_ARGS})
 
@@ -240,6 +247,7 @@ set(TEST_PROGRAMS
   StringFunctionsTest
   CommandLineTest
   ForeignServerDdlTest
+  ShowCommandsDdlTest
   CatalogMigrationTest
   CreateAndDropTableDdlTest
 )

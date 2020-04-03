@@ -968,8 +968,9 @@ class CreateTableStmt : public CreateTableBaseStmt {
       delete s;
     }
   }
-  const std::string* get_table() const { return table_.get(); }
-  const std::list<std::unique_ptr<TableElement>>& get_table_element_list() const {
+  const std::string* get_table() const override { return table_.get(); }
+  const std::list<std::unique_ptr<TableElement>>& get_table_element_list()
+      const override {
     return table_element_list_;
   }
 
@@ -1047,8 +1048,9 @@ class CreateDataframeStmt : public CreateTableBaseStmt {
       delete s;
     }
   }
-  const std::string* get_table() const { return table_.get(); }
-  const std::list<std::unique_ptr<TableElement>>& get_table_element_list() const {
+  const std::string* get_table() const override { return table_.get(); }
+  const std::list<std::unique_ptr<TableElement>>& get_table_element_list()
+      const override {
     return table_element_list_;
   }
 

@@ -56,6 +56,7 @@
 #include <thread>
 #include <vector>
 #include "MapDRelease.h"
+#include "Shared/Asio.h"
 #include "Shared/Compressor.h"
 #include "Shared/MapDParameters.h"
 #include "Shared/file_delete.h"
@@ -83,11 +84,12 @@ extern bool g_enable_table_functions;
 extern bool g_enable_fsi;
 extern bool g_enable_lazy_fetch;
 extern bool g_enable_interop;
+extern bool g_use_tbb_pool;
 
 bool g_enable_thrift_logs{false};
 
-std::atomic<bool> g_running{true};
 std::atomic<int> g_saw_signal{-1};
+std::atomic<const char*> g_simple_error_message{nullptr};
 
 mapd_shared_mutex g_thrift_mutex;
 TThreadedServer* g_thrift_http_server{nullptr};
@@ -105,24 +107,26 @@ void shutdown_handler() {
   }
 }
 
-void register_signal_handler(int signum, void (*handler)(int)) {
-  struct sigaction act;
-  memset(&act, 0, sizeof(act));
-  if (handler != SIG_DFL && handler != SIG_IGN) {
-    // block all signal deliveries while inside the signal handler
-    sigfillset(&act.sa_mask);
-  }
-  act.sa_handler = handler;
-  sigaction(signum, &act, NULL);
-}
-
 // Signal handler to set a global flag telling the server to exit.
 // Do not call other functions inside this (or any) signal handler
 // unless you really know what you are doing. See also:
 //   man 7 signal-safety
 //   man 7 signal
 //   https://en.wikipedia.org/wiki/Reentrancy_(computing)
-void omnisci_signal_handler(int signum) {
+void omnisci_signal_handler(const boost::system::error_code& error, int signum) {
+  if (error) {  // NOTE: the docs don't say if Boost will ever do this
+    g_simple_error_message = "omnisci_signal_handler: boost error, ignored";
+    return;
+  }
+
+  // For some reason Boost needs us to register a SIGCHLD handler
+  // to make boost::process::system and/or boost::process::child work
+  // correctly when a child gets SIGKILLed. Rather than spend too much
+  // time figuring out why, simply don't do anything here.
+  if (signum == SIGCHLD) {
+    return;
+  }
+
   // Record the signal number for logging during shutdown.
   // Only records the first signal if called more than once.
   int expected_signal{-1};
@@ -132,10 +136,10 @@ void omnisci_signal_handler(int signum) {
 
   // This point should never be reached more than once.
 
-  // Tell heartbeat() to shutdown by unsetting the 'g_running' flag.
-  // If 'g_running' is already false, this has no effect and the
+  // Tell heartbeat() to shutdown by unsetting the 'Asio::running' flag.
+  // If 'Asio::running' is already false, this has no effect and the
   // shutdown is already in progress.
-  g_running = false;
+  Asio::running = false;
 
   // Handle core dumps specially by pausing inside this signal handler
   // because on some systems, some signals will execute their default
@@ -144,26 +148,10 @@ void omnisci_signal_handler(int signum) {
   if (signum == SIGQUIT || signum == SIGABRT || signum == SIGSEGV || signum == SIGFPE) {
     // Wait briefly to give heartbeat() a chance to flush the logs and
     // do any other emergency shutdown tasks.
-    sleep(2);
+    sleep(1);
 
-    // Explicitly trigger whatever default action this signal would
-    // have done, such as terminate the process or dump core.
-    // Signals are currently blocked so this new signal will be queued
-    // until this signal handler returns.
-    register_signal_handler(signum, SIG_DFL);
     kill(getpid(), signum);
   }
-}
-
-void register_signal_handlers() {
-  register_signal_handler(SIGINT, omnisci_signal_handler);
-  register_signal_handler(SIGQUIT, omnisci_signal_handler);
-  register_signal_handler(SIGHUP, omnisci_signal_handler);
-  register_signal_handler(SIGTERM, omnisci_signal_handler);
-  register_signal_handler(SIGSEGV, omnisci_signal_handler);
-  register_signal_handler(SIGABRT, omnisci_signal_handler);
-  // Thrift secure socket can cause problems with SIGPIPE
-  register_signal_handler(SIGPIPE, SIG_IGN);
 }
 
 void start_server(TThreadedServer& server, const int port) {
@@ -294,6 +282,8 @@ class MapDProgramOptions {
 
   bool enable_watchdog = true;
   bool enable_dynamic_watchdog = false;
+  bool enable_runtime_query_interrupt = false;
+  unsigned runtime_query_interrupt_frequency = 1000;  // in milliseconds
   unsigned dynamic_watchdog_time_limit = 10000;
 
   /**
@@ -325,6 +315,7 @@ class MapDProgramOptions {
   int max_session_duration = kMinsPerMonth;
   std::string udf_file_name = {""};
   std::string udf_compiler_path = {""};
+  std::vector<std::string> udf_compiler_options;
 
   void fillOptions();
   void fillAdvancedOptions();
@@ -446,6 +437,17 @@ void MapDProgramOptions::fillOptions() {
                               ->implicit_value(true),
                           "Enable the overlaps hash join framework allowing for range "
                           "join (e.g. spatial overlaps) computation using a hash table.");
+  help_desc.add_options()("enable-runtime-query-interrupt",
+                          po::value<bool>(&enable_runtime_query_interrupt)
+                              ->default_value(enable_runtime_query_interrupt)
+                              ->implicit_value(true),
+                          "Enable runtime query interrupt.");
+  help_desc.add_options()("runtime-query-interrupt-frequency",
+                          po::value<unsigned>(&runtime_query_interrupt_frequency)
+                              ->default_value(runtime_query_interrupt_frequency)
+                              ->implicit_value(1000),
+                          "A frequency of checking the request of runtime query "
+                          "interrupt from user (in millisecond).");
   if (!dist_v5_) {
     help_desc.add_options()(
         "enable-string-dict-hash-cache",
@@ -675,6 +677,12 @@ void MapDProgramOptions::fillAdvancedOptions() {
           ->implicit_value(true),
       "Enable runtime support for the JIT code profiling using Intel VTune.");
   developer_desc.add_options()(
+      "enable-modern-thread-pool",
+      po::value<bool>(&g_use_tbb_pool)
+          ->default_value(g_use_tbb_pool)
+          ->implicit_value(true),
+      "Enable a new thread pool implementation for queuing kernels for execution.");
+  developer_desc.add_options()(
       "skip-intermediate-count",
       po::value<bool>(&g_skip_intermediate_count)
           ->default_value(g_skip_intermediate_count)
@@ -784,10 +792,15 @@ void MapDProgramOptions::fillAdvancedOptions() {
                                    ->default_value(g_enable_lazy_fetch)
                                    ->implicit_value(true),
                                "Enable lazy fetch columns in ResultSets");
+
   developer_desc.add_options()(
       "udf-compiler-path",
       po::value<std::string>(&udf_compiler_path),
       "Provide absolute path to clang++ used in udf compilation.");
+  developer_desc.add_options()("udf-compiler-options",
+                               po::value<std::vector<std::string>>(&udf_compiler_options),
+                               "Specify compiler options to tailor udf compilation.");
+
   developer_desc.add_options()("enable-multifrag-rs",
                                po::value<bool>(&g_enable_multifrag_rs)
                                    ->default_value(g_enable_multifrag_rs)
@@ -891,6 +904,11 @@ void MapDProgramOptions::validate() {
   if (enable_dynamic_watchdog) {
     LOG(INFO) << " Dynamic Watchdog timeout is set to " << dynamic_watchdog_time_limit;
   }
+  LOG(INFO) << " Runtime query interrupt is set to " << enable_runtime_query_interrupt;
+  if (enable_runtime_query_interrupt) {
+    LOG(INFO) << " A frequency of checking runtime query interrupt request is set to "
+              << runtime_query_interrupt_frequency << " (in ms.)";
+  }
 
   LOG(INFO) << " Debug Timer is set to " << g_enable_debug_timer;
 
@@ -965,6 +983,8 @@ boost::optional<int> MapDProgramOptions::parse_command_line(int argc,
     g_enable_watchdog = enable_watchdog;
     g_enable_dynamic_watchdog = enable_dynamic_watchdog;
     g_dynamic_watchdog_time_limit = dynamic_watchdog_time_limit;
+    g_enable_runtime_query_interrupt = enable_runtime_query_interrupt;
+    g_runtime_query_interrupt_frequency = runtime_query_interrupt_frequency;
   } catch (po::error& e) {
     std::cerr << "Usage Error: " << e.what() << std::endl;
     return 1;
@@ -996,6 +1016,14 @@ boost::optional<int> MapDProgramOptions::parse_command_line(int argc,
 
   if (vm.count("udf-compiler-path")) {
     boost::algorithm::trim_if(udf_compiler_path, boost::is_any_of("\"'"));
+  }
+
+  auto trim_string = [](std::string& s) {
+    boost::algorithm::trim_if(s, boost::is_any_of("\"'"));
+  };
+
+  if (vm.count("udf-compiler-options")) {
+    std::for_each(udf_compiler_options.begin(), udf_compiler_options.end(), trim_string);
   }
 
   if (enable_runtime_udf) {
@@ -1059,11 +1087,14 @@ void heartbeat() {
     throw std::runtime_error("heartbeat() thread startup failed");
   }
 
-  // Sleep until omnisci_signal_handler or anything clears the g_running flag.
+  // Sleep until omnisci_signal_handler or anything clears the Asio::running flag.
   VLOG(1) << "heartbeat thread starting";
-  while (::g_running) {
+  while (Asio::running) {
     using namespace std::chrono;
-    std::this_thread::sleep_for(1s);
+    std::this_thread::sleep_for(500ms);
+    if (const char* simple_error_message = g_simple_error_message.exchange(nullptr)) {
+      LOG(ERROR) << simple_error_message;
+    }
   }
   VLOG(1) << "heartbeat thread exiting";
 
@@ -1101,7 +1132,14 @@ void heartbeat() {
 
 int startMapdServer(MapDProgramOptions& prog_config_opts, bool start_http_server = true) {
   // try to enforce an orderly shutdown even after a signal
-  register_signal_handlers();
+  Asio::register_signal_handler(SIGINT, omnisci_signal_handler);
+  Asio::register_signal_handler(SIGQUIT, omnisci_signal_handler);
+  Asio::register_signal_handler(SIGHUP, omnisci_signal_handler);
+  Asio::register_signal_handler(SIGTERM, omnisci_signal_handler);
+  Asio::register_signal_handler(SIGSEGV, omnisci_signal_handler);
+  Asio::register_signal_handler(SIGABRT, omnisci_signal_handler);
+  Asio::register_signal_handler(SIGCHLD, omnisci_signal_handler);
+  Asio::start();
 
   // register shutdown procedures for when a normal shutdown happens
   // be aware that atexit() functions run in reverse order
@@ -1118,7 +1156,7 @@ int startMapdServer(MapDProgramOptions& prog_config_opts, bool start_http_server
   const unsigned int wait_interval =
       3;  // wait time in secs after looking for deleted file before looking again
   std::thread file_delete_thread(file_delete,
-                                 std::ref(g_running),
+                                 std::ref(Asio::running),
                                  wait_interval,
                                  prog_config_opts.base_path + "/mapd_data");
   std::thread heartbeat_thread(heartbeat);
@@ -1161,7 +1199,8 @@ int startMapdServer(MapDProgramOptions& prog_config_opts, bool start_http_server
                                        prog_config_opts.max_session_duration,
                                        prog_config_opts.enable_runtime_udf,
                                        prog_config_opts.udf_file_name,
-                                       prog_config_opts.udf_compiler_path);
+                                       prog_config_opts.udf_compiler_path,
+                                       prog_config_opts.udf_compiler_options);
   } catch (const std::exception& e) {
     LOG(FATAL) << "Failed to initialize service handler: " << e.what();
   }
@@ -1227,7 +1266,7 @@ int startMapdServer(MapDProgramOptions& prog_config_opts, bool start_http_server
       run_warmup_queries(
           g_mapd_handler, prog_config_opts.base_path, prog_config_opts.db_query_file);
       if (prog_config_opts.exit_after_warmup) {
-        g_running = false;
+        Asio::running = false;
       }
     };
 
@@ -1257,7 +1296,7 @@ int startMapdServer(MapDProgramOptions& prog_config_opts, bool start_http_server
     LOG(FATAL) << "No High Availability module available, please contact OmniSci support";
   }
 
-  g_running = false;
+  Asio::running = false;
   file_delete_thread.join();
   heartbeat_thread.join();
   ForeignStorageInterface::destroy();

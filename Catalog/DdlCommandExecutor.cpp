@@ -19,27 +19,50 @@
 #include <boost/algorithm/string/predicate.hpp>
 
 #include "Catalog/Catalog.h"
+#include "Catalog/SysCatalog.h"
 #include "LockMgr/LockMgr.h"
 #include "Parser/ParserNode.h"
 #include "Shared/StringTransform.h"
 
+namespace {
+void set_headers(TQueryResult& _return, const std::vector<std::string>& headers) {
+  TRowDescriptor row_descriptor;
+  for (const auto& header : headers) {
+    TColumnType column_type{};
+    column_type.col_name = header;
+    column_type.col_type.type = TDatumType::type::STR;
+    row_descriptor.push_back(column_type);
+
+    _return.row_set.columns.emplace_back();
+  }
+  _return.row_set.row_desc = row_descriptor;
+  _return.row_set.is_columnar = true;
+}
+
+void add_row(TQueryResult& _return, const std::vector<std::string>& row) {
+  for (size_t i = 0; i < row.size(); i++) {
+    _return.row_set.columns[i].data.str_col.emplace_back(row[i]);
+    _return.row_set.columns[i].nulls.emplace_back(false);
+  }
+}
+}  // namespace
+
 DdlCommandExecutor::DdlCommandExecutor(
     const std::string& ddl_statement,
     std::shared_ptr<Catalog_Namespace::SessionInfo const> session_ptr)
-    : ddl_statement(ddl_statement), session_ptr(session_ptr) {
+    : session_ptr(session_ptr) {
   CHECK(!ddl_statement.empty());
-}
-
-void DdlCommandExecutor::execute(TQueryResult& _return) {
-  rapidjson::Document ddl_query;
   ddl_query.Parse(ddl_statement);
   CHECK(ddl_query.IsObject());
   CHECK(ddl_query.HasMember("payload"));
   CHECK(ddl_query["payload"].IsObject());
   const auto& payload = ddl_query["payload"].GetObject();
-
   CHECK(payload.HasMember("command"));
   CHECK(payload["command"].IsString());
+}
+
+void DdlCommandExecutor::execute(TQueryResult& _return) {
+  const auto& payload = ddl_query["payload"].GetObject();
   const auto& ddl_command = std::string_view(payload["command"].GetString());
   if (ddl_command == "CREATE_SERVER") {
     CreateForeignServerCommand{payload, session_ptr}.execute(_return);
@@ -49,9 +72,19 @@ void DdlCommandExecutor::execute(TQueryResult& _return) {
     CreateForeignTableCommand{payload, session_ptr}.execute(_return);
   } else if (ddl_command == "DROP_FOREIGN_TABLE") {
     DropForeignTableCommand{payload, session_ptr}.execute(_return);
+  } else if (ddl_command == "SHOW_TABLES") {
+    ShowTablesCommand{payload, session_ptr}.execute(_return);
+  } else if (ddl_command == "SHOW_DATABASES") {
+    ShowDatabasesCommand{payload, session_ptr}.execute(_return);
   } else {
     throw std::runtime_error("Unsupported DDL command");
   }
+}
+
+bool DdlCommandExecutor::isShowUserSessions() {
+  const auto& payload = ddl_query["payload"].GetObject();
+  const auto& ddl_command = std::string_view(payload["command"].GetString());
+  return (ddl_command == "SHOW_USER_SESSIONS");
 }
 
 CreateForeignServerCommand::CreateForeignServerCommand(
@@ -69,20 +102,39 @@ CreateForeignServerCommand::CreateForeignServerCommand(
 }
 
 void CreateForeignServerCommand::execute(TQueryResult& _return) {
-  std::string_view server_name = ddl_payload["serverName"].GetString();
+  std::string server_name = ddl_payload["serverName"].GetString();
   if (boost::iequals(server_name.substr(0, 7), "omnisci")) {
     throw std::runtime_error{"Server names cannot start with \"omnisci\"."};
   }
+  bool if_not_exists = ddl_payload["ifNotExists"].GetBool();
+  if (session_ptr->getCatalog().getForeignServer(server_name)) {
+    if (if_not_exists) {
+      return;
+    } else {
+      throw std::runtime_error{"A foreign server with name \"" + server_name +
+                               "\" already exists."};
+    }
+  }
+  // check access privileges
+  if (!session_ptr->checkDBAccessPrivileges(DBObjectType::ServerDBObjectType,
+                                            AccessPrivileges::CREATE_SERVER)) {
+    throw std::runtime_error("Server " + std::string(server_name) +
+                             " will not be created. User has no create privileges.");
+  }
 
-  // TODO: add permissions check and ownership
+  auto& current_user = session_ptr->get_currentUser();
   auto foreign_server = std::make_unique<foreign_storage::ForeignServer>(
       foreign_storage::DataWrapper{ddl_payload["dataWrapper"].GetString()});
   foreign_server->name = server_name;
+  foreign_server->user_id = current_user.userId;
   foreign_server->populateOptionsMap(ddl_payload["options"]);
   foreign_server->validate();
 
-  session_ptr->getCatalog().createForeignServer(std::move(foreign_server),
-                                                ddl_payload["ifNotExists"].GetBool());
+  auto& catalog = session_ptr->getCatalog();
+  catalog.createForeignServer(std::move(foreign_server),
+                              ddl_payload["ifNotExists"].GetBool());
+  Catalog_Namespace::SysCatalog::instance().createDBObject(
+      current_user, server_name, ServerDBObjectType, catalog);
 }
 
 DropForeignServerCommand::DropForeignServerCommand(
@@ -96,14 +148,27 @@ DropForeignServerCommand::DropForeignServerCommand(
 }
 
 void DropForeignServerCommand::execute(TQueryResult& _return) {
-  std::string_view server_name = ddl_payload["serverName"].GetString();
+  std::string server_name = ddl_payload["serverName"].GetString();
   if (boost::iequals(server_name.substr(0, 7), "omnisci")) {
     throw std::runtime_error{"OmniSci default servers cannot be dropped."};
   }
-
-  // TODO: add permissions check
-  session_ptr->getCatalog().dropForeignServer(ddl_payload["serverName"].GetString(),
-                                              ddl_payload["ifExists"].GetBool());
+  bool if_exists = ddl_payload["ifExists"].GetBool();
+  if (!session_ptr->getCatalog().getForeignServer(server_name)) {
+    if (if_exists) {
+      return;
+    } else {
+      throw std::runtime_error{"Foreign server with name \"" + server_name +
+                               "\" does not exist."};
+    }
+  }
+  // check access privileges
+  if (!session_ptr->checkDBAccessPrivileges(DBObjectType::ServerDBObjectType,
+                                            AccessPrivileges::DROP_SERVER,
+                                            server_name.data())) {
+    throw std::runtime_error("Server " + server_name +
+                             " will not be dropped. User has no DROP SERVER privileges.");
+  }
+  session_ptr->getCatalog().dropForeignServer(ddl_payload["serverName"].GetString());
 }
 
 SQLTypes JsonColumnSqlType::getSqlType(const rapidjson::Value& data_type) {
@@ -395,4 +460,36 @@ void DropForeignTableCommand::execute(TQueryResult& _return) {
   auto table_data_write_lock =
       lockmgr::TableDataLockMgr::getWriteLockForTable(catalog, table_name);
   catalog.dropTable(td);
+}
+
+ShowTablesCommand::ShowTablesCommand(
+    const rapidjson::Value& ddl_payload,
+    std::shared_ptr<Catalog_Namespace::SessionInfo const> session_ptr)
+    : DdlCommand(ddl_payload, session_ptr) {}
+
+void ShowTablesCommand::execute(TQueryResult& _return) {
+  // Get all table names in the same way as OmniSql \t command
+  auto cat_ptr = session_ptr->get_catalog_ptr();
+  auto table_names =
+      cat_ptr->getTableNamesForUser(session_ptr->get_currentUser(), GET_PHYSICAL_TABLES);
+  set_headers(_return, std::vector<std::string>{"table_name"});
+  // Place table names in query result
+  for (auto& table_name : table_names) {
+    add_row(_return, std::vector<std::string>{table_name});
+  }
+}
+
+ShowDatabasesCommand::ShowDatabasesCommand(
+    const rapidjson::Value& ddl_payload,
+    std::shared_ptr<Catalog_Namespace::SessionInfo const> session_ptr)
+    : DdlCommand(ddl_payload, session_ptr) {}
+
+void ShowDatabasesCommand::execute(TQueryResult& _return) {
+  const auto& user = session_ptr->get_currentUser();
+  const Catalog_Namespace::DBSummaryList db_summaries =
+      Catalog_Namespace::SysCatalog::instance().getDatabaseListForUser(user);
+  set_headers(_return, {"Database", "Owner"});
+  for (const auto& db_summary : db_summaries) {
+    add_row(_return, {db_summary.dbName, db_summary.dbOwnerName});
+  }
 }
