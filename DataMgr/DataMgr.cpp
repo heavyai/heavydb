@@ -56,7 +56,9 @@ DataMgr::DataMgr(const string& dataDir,
       cudaMgr_ = std::make_unique<CudaMgr_Namespace::CudaMgr>(numGpus, startGpu);
       reservedGpuMem_ = reservedGpuMem;
       hasGpus_ = true;
-    } catch (std::runtime_error& error) {
+    } catch (const std::exception& e) {
+      LOG(ERROR) << "Unable to instantiate CudaMgr, falling back to CPU-only mode. "
+                 << e.what();
       hasGpus_ = false;
     }
   } else {
