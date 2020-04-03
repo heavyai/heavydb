@@ -434,6 +434,7 @@ ExecutionResult RelAlgExecutor::executeRelAlgSeq(const RaExecutionSequence& seq,
   const auto exec_desc_count = eo.just_explain ? size_t(1) : seq.size();
 
   for (size_t i = 0; i < exec_desc_count; i++) {
+    VLOG(1) << "Executing query step " << i;
     // only render on the last step
     try {
       executeRelAlgStep(seq,
