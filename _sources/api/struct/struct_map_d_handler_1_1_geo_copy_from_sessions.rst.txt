@@ -1,0 +1,9 @@
+Struct MapDHandler::GeoCopyFromSessions
+=======================================
+
+.. doxygenstruct:: MapDHandler::GeoCopyFromSessions
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:
