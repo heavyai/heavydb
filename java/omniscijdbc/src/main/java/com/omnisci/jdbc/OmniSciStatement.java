@@ -20,6 +20,7 @@ import com.mapd.thrift.server.TMapDException;
 import com.mapd.thrift.server.TQueryResult;
 
 import org.apache.thrift.TException;
+import org.apache.thrift.transport.TTransportException;
 import org.slf4j.LoggerFactory;
 
 import java.sql.Connection;
@@ -39,10 +40,17 @@ public class OmniSciStatement implements java.sql.Statement {
 
   private String session;
   private MapD.Client client;
+  private OmniSciConnection connection;
   private ResultSet currentRS = null;
   private TQueryResult sqlResult = null;
   private int maxRows = 100000; // add limit to unlimited queries
   private boolean escapeProcessing = false;
+
+  OmniSciStatement(String tsession, OmniSciConnection tconnection) {
+    session = tsession;
+    connection = tconnection;
+    client = connection.client;
+  }
 
   OmniSciStatement(String tsession, MapD.Client tclient) {
     session = tsession;
@@ -88,13 +96,36 @@ public class OmniSciStatement implements java.sql.Statement {
     try {
       sqlResult = client.sql_execute(session, afterSimpleParse + ";", true, null, -1, -1);
     } catch (TMapDException ex) {
-      throw new SQLException("Query failed : " + ex.getError_msg());
+      throw new SQLException(
+              "Query failed : " + OmniSciExceptionText.getExceptionDetail(ex));
     } catch (TException ex) {
-      throw new SQLException("Query failed : " + ex.toString());
+      throw new SQLException(
+              "Query failed : " + OmniSciExceptionText.getExceptionDetail(ex));
     }
 
     currentRS = new OmniSciResultSet(sqlResult, sql);
     return currentRS;
+  }
+
+  @Override
+  public void cancel() throws SQLException { // logger.debug("Entered");
+    OmniSciConnection alternate_connection = null;
+    try {
+      alternate_connection = connection.getAlternateConnection();
+      // Note alternate_connection shares a session with original connection
+      alternate_connection.client.interrupt(session, session);
+    } catch (TMapDException ttE) {
+      throw new SQLException("Thrift transport connection failed - "
+                      + OmniSciExceptionText.getExceptionDetail(ttE),
+              ttE);
+    } catch (TException tE) {
+      throw new SQLException(
+              "Thrift failed - " + OmniSciExceptionText.getExceptionDetail(tE), tE);
+    } finally {
+      // Note closeConnection only closes the underlying thrft connection
+      // not the logical db session connection
+      alternate_connection.closeConnection();
+    }
   }
 
   @Override
@@ -106,10 +137,12 @@ public class OmniSciStatement implements java.sql.Statement {
       }
       sqlResult = client.sql_execute(session, sql + ";", true, null, -1, -1);
     } catch (TMapDException ex) {
-      throw new SQLException(
-              "Query failed : " + ex.getError_msg() + " sql was '" + sql + "'");
+      throw new SQLException("Query failed :  sql was '" + sql + "' "
+                      + OmniSciExceptionText.getExceptionDetail(ex),
+              ex);
     } catch (TException ex) {
-      throw new SQLException("Query failed : " + ex.toString());
+      throw new SQLException(
+              "Query failed : " + OmniSciExceptionText.getExceptionDetail(ex), ex);
     }
 
     return sqlResult.row_set.columns.size();
@@ -174,14 +207,6 @@ public class OmniSciStatement implements java.sql.Statement {
     } else {
       rootWarning.setNextWarning(warning);
     }
-  }
-
-  @Override
-  public void cancel() throws SQLException { // logger.debug("Entered");
-    throw new UnsupportedOperationException("Not supported yet,"
-            + " line:" + new Throwable().getStackTrace()[0].getLineNumber()
-            + " class:" + new Throwable().getStackTrace()[0].getClassName()
-            + " method:" + new Throwable().getStackTrace()[0].getMethodName());
   }
 
   @Override

@@ -14,6 +14,9 @@ import java.text.DateFormat;
 import java.text.SimpleDateFormat;
 import java.util.Properties;
 import java.util.TimeZone;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.Future;
+import java.util.function.Supplier;
 
 public class OmniSciStatementTest {
   static Properties PROPERTIES = new Property_loader("connection.properties");
@@ -61,7 +64,7 @@ public class OmniSciStatementTest {
           "insert into test_jdbc_tm_tble values ('2970-01-01 00:00:10', '2970-01-01 00:00:10.001', '2970-01-01 00:00:10.000001', '2262-04-11 23:47:16.850000001')";
   static String sql_select_tm = "select * from test_jdbc_tm_tble";
 
-  @Ignore
+  @Test
   public void insert_times() throws Exception {
     Statement statement = m_conn.createStatement();
     statement.executeUpdate(sql_drop_tbl_tm);
@@ -107,7 +110,7 @@ public class OmniSciStatementTest {
     statement.executeUpdate(sql_drop_tbl_tm);
   }
 
-  @Ignore
+  @Test
   public void create_times() throws Exception {
     Statement statement = m_conn.createStatement();
     statement.executeUpdate(sql_drop_tbl_tm);
@@ -488,6 +491,43 @@ public class OmniSciStatementTest {
 
     assertEquals(2, i);
 
+    statement.executeUpdate(sql_drop_tbl);
+  }
+
+  @Test
+  public void cancelTest1() throws Exception {
+    Statement statement = m_conn.createStatement();
+    statement.executeUpdate(sql_drop_tbl);
+    statement.executeUpdate(sql_create_tbl);
+    statement.executeUpdate(sql_insert);
+
+    Supplier<Boolean> B = () -> {
+      try {
+        Thread.sleep(1);
+        statement.cancel();
+      } catch (SQLException | InterruptedException e) {
+        e.printStackTrace();
+        return false;
+      }
+      return true;
+    };
+    Future<Boolean> result = CompletableFuture.supplyAsync(B);
+    ResultSet rs = statement.executeQuery(sql_select_all);
+    int size = 0;
+    while (rs.next()) {
+      size++;
+    }
+    assertEquals(size, 1);
+    // To verify the main connection is still functioning
+    // after the cancel command.
+    statement.executeUpdate(sql_insert);
+    rs = statement.executeQuery(sql_select_all);
+
+    size = 0;
+    while (rs.next()) {
+      size++;
+    }
+    assertEquals(size, 2);
     statement.executeUpdate(sql_drop_tbl);
   }
 }
