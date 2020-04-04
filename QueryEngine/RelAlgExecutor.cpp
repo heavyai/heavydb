@@ -268,6 +268,12 @@ ExecutionResult RelAlgExecutor::executeRelAlgQueryNoRetry(const CompilationOptio
       if (auto sort = dynamic_cast<const RelSort*>(body)) {
         ss << tabs << "  : " << sort->getInput(0)->toString() << "\n";
       }
+      if (dynamic_cast<const RelProject*>(body) ||
+          dynamic_cast<const RelCompound*>(body)) {
+        if (auto join = dynamic_cast<const RelLeftDeepInnerJoin*>(body->getInput(0))) {
+          ss << tabs << "  : " << join->toString() << "\n";
+        }
+      }
     }
     auto rs = std::make_shared<ResultSet>(ss.str());
     return {rs, {}};
