@@ -62,23 +62,6 @@ inline SQLTypes get_dict_index_type(const SQLTypeInfo& ti) {
   return ti.get_type();
 }
 
-inline SQLTypeInfo get_dict_index_type_info(const SQLTypeInfo& ti) {
-  CHECK(ti.is_dict_encoded_string());
-  switch (ti.get_size()) {
-    case 1:
-      return SQLTypeInfo(kTINYINT, ti.get_notnull());
-    case 2:
-      return SQLTypeInfo(kSMALLINT, ti.get_notnull());
-    case 4:
-      return SQLTypeInfo(kINT, ti.get_notnull());
-    case 8:
-      return SQLTypeInfo(kBIGINT, ti.get_notnull());
-    default:
-      CHECK(false);
-  }
-  return ti;
-}
-
 inline SQLTypes get_physical_type(const SQLTypeInfo& ti) {
   auto logical_type = ti.get_type();
   if (IS_INTEGER(logical_type)) {
@@ -648,7 +631,7 @@ void ArrowResultSetConverter::initializeColumnBuilder(
         dynamic_cast<arrow::StringDictionary32Builder*>(column_builder.builder.get());
     CHECK(dict_builder);
 
-    dict_builder->InsertMemoValues(*string_array);
+    ARROW_THROW_NOT_OK(dict_builder->InsertMemoValues(*string_array));
   } else {
     ARROW_THROW_NOT_OK(
         arrow::MakeBuilder(default_memory_pool(), value_type, &column_builder.builder));

@@ -282,14 +282,12 @@ StorageIOFacility<EXECUTOR_TRAITS, FRAGMENT_UPDATER>::yieldUpdateCallback(
 
       std::atomic<size_t> row_idx{0};
 
-      auto process_rows = [&update_log,
-                           &update_parameters,
-                           &column_offsets,
-                           &scalar_target_values,
-                           &row_idx](auto get_entry_at_func,
-                                     uint64_t column_index,
-                                     uint64_t entry_start,
-                                     uint64_t entry_count) -> uint64_t {
+      auto process_rows =
+          [&update_parameters, &column_offsets, &scalar_target_values, &row_idx](
+              auto get_entry_at_func,
+              uint64_t column_index,
+              uint64_t entry_start,
+              uint64_t entry_count) -> uint64_t {
         uint64_t entries_processed = 0;
         for (uint64_t entry_index = entry_start;
              entry_index < (entry_start + entry_count);

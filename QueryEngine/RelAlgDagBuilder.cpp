@@ -68,6 +68,8 @@ class RexRebindInputsVisitor : public RexVisitor<void*> {
   RexRebindInputsVisitor(const RelAlgNode* old_input, const RelAlgNode* new_input)
       : old_input_(old_input), new_input_(new_input) {}
 
+  virtual ~RexRebindInputsVisitor() = default;
+
   void* visitInput(const RexInput* rex_input) const override {
     const auto old_source = rex_input->getSourceNode();
     if (old_source == old_input_) {
@@ -1916,7 +1918,6 @@ class RexInputCollector : public RexVisitor<RexInputSet> {
 void add_window_function_pre_project(std::vector<std::shared_ptr<RelAlgNode>>& nodes) {
   std::list<std::shared_ptr<RelAlgNode>> node_list(nodes.begin(), nodes.end());
 
-  WindowFunctionDetectionVisitor visitor;
   for (auto node_itr = node_list.begin(); node_itr != node_list.end(); ++node_itr) {
     const auto node = *node_itr;
     auto window_func_project_node = std::dynamic_pointer_cast<RelProject>(node);
@@ -1936,8 +1937,7 @@ void add_window_function_pre_project(std::vector<std::shared_ptr<RelAlgNode>>& n
     RexInputSet inputs;
     RexInputCollector input_collector;
     for (size_t i = 0; i < window_func_project_node->size(); i++) {
-      auto new_inputs =
-          std::move(input_collector.visit(window_func_project_node->getProjectAt(i)));
+      auto new_inputs = input_collector.visit(window_func_project_node->getProjectAt(i));
       inputs.insert(new_inputs.begin(), new_inputs.end());
     }
 
