@@ -145,7 +145,7 @@ int vt_next(sqlite3_vtab_cursor* cur) {
 }
 
 struct DecodedString {
-  std::pair<char*, size_t> payload;
+  std::pair<const char*, size_t> payload;
   bool is_null;
 };
 

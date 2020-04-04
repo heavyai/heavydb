@@ -38,7 +38,7 @@ class StringDictionaryProxy {
   int32_t getIdOfStringNoGeneration(
       const std::string& str) const;  // disregard generation, only used by QueryRenderer
   std::string getString(int32_t string_id) const;
-  std::pair<char*, size_t> getStringBytes(int32_t string_id) const noexcept;
+  std::pair<const char*, size_t> getStringBytes(int32_t string_id) const noexcept;
   size_t storageEntryCount() const;
   void updateGeneration(const ssize_t generation) noexcept;
 

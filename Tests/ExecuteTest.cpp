@@ -7115,6 +7115,15 @@ TEST(Select, Joins_InnerJoin_TwoTables) {
       "BY 1, 2) t1 INNER JOIN (SELECT y, Sum(x) sum2 FROM test GROUP BY 1) t2 ON "
       "t1.y = t2.y GROUP BY 1, 2, 3, 4;",
       dt);
+
+    const auto watchdog_state = g_enable_watchdog;
+    ScopeGuard reset = [watchdog_state] { g_enable_watchdog = watchdog_state; };
+    g_enable_watchdog = false;
+    SKIP_ON_AGGREGATOR(
+        c("SELECT str FROM test JOIN (SELECT 'foo' AS val, 12345 AS cnt) subq ON "
+          "test.str = "
+          "subq.val;",
+          dt));
   }
 }
 
