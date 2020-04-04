@@ -1530,6 +1530,7 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateFunction(
                    "ST_Intersects"sv,
                    "ST_Disjoint"sv,
                    "ST_Contains"sv,
+                   "ST_Overlaps"sv,
                    "ST_Within"sv)) {
     CHECK_EQ(rex_function->size(), size_t(2));
     return translateBinaryGeoFunction(rex_function);

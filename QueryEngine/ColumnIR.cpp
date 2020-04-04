@@ -164,6 +164,10 @@ std::vector<llvm::Value*> CodeGenerator::codegenColVar(const Analyzer::ColumnVar
     }
   }
   const auto hash_join_lhs = hashJoinLhs(col_var);
+  // Note(jclay): This has been prone to cause failures in some overlaps joins.
+  // I believe most of the issues are worked out now, but a good place to check if
+  // failures are happening.
+
   // Use the already fetched left-hand side of an equi-join if the types are identical.
   // Currently, types can only be different because of different underlying dictionaries.
   if (hash_join_lhs && hash_join_lhs->get_type_info() == col_var->get_type_info()) {
@@ -574,6 +578,13 @@ std::shared_ptr<const Analyzer::Expr> CodeGenerator::hashJoinLhs(
         }
         if (rhs->get_type_info().is_string()) {
           return eq_left_op->deep_copy();
+        }
+        if (rhs->get_type_info().is_array()) {
+          // Note(jclay): Can this be restored from copy as above?
+          // If we fall through to the below return statement,
+          // a superfulous cast from DOUBLE[] to DOUBLE[] is made and
+          // this fails at a later stage in codegen.
+          return nullptr;
         }
         return makeExpr<Analyzer::UOper>(
             rhs->get_type_info(), false, kCAST, eq_left_op->deep_copy());

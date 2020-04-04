@@ -436,6 +436,12 @@ void MapDProgramOptions::fillOptions() {
                               ->implicit_value(true),
                           "Enable the overlaps hash join framework allowing for range "
                           "join (e.g. spatial overlaps) computation using a hash table.");
+  help_desc.add_options()("enable-hashjoin-many-to-many",
+                          po::value<bool>(&g_enable_hashjoin_many_to_many)
+                              ->default_value(g_enable_hashjoin_many_to_many)
+                              ->implicit_value(true),
+                          "Enable the overlaps hash join framework allowing for range "
+                          "join (e.g. spatial overlaps) computation using a hash table.");
   help_desc.add_options()("enable-runtime-query-interrupt",
                           po::value<bool>(&enable_runtime_query_interrupt)
                               ->default_value(enable_runtime_query_interrupt)

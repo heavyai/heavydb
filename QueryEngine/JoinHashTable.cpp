@@ -118,13 +118,17 @@ InnerOuter normalize_column_pair(const Analyzer::Expr* lhs,
       throw HashJoinFail(
           "Overlaps join only supported for inner columns with array type");
     }
-    if (!(inner_col_real_ti.is_fixlen_array() && inner_col_real_ti.get_size() == 32)) {
+    auto is_bounds_array = [](const auto ti) {
+      return ti.is_fixlen_array() && ti.get_size() == 32;
+    };
+    if (!is_bounds_array(inner_col_real_ti)) {
       throw HashJoinFail(
           "Overlaps join only supported for 4-element double fixed length arrays");
     }
-    if (!(outer_col_ti.get_type() == kPOINT)) {
+    if (!(outer_col_ti.get_type() == kPOINT || is_bounds_array(outer_col_ti))) {
       throw HashJoinFail(
-          "Overlaps join only supported for geometry outer columns of type point");
+          "Overlaps join only supported for geometry outer columns of type point or "
+          "geometry columns with bounds");
     }
   } else {
     if (!(inner_col_real_ti.is_integer() || inner_col_real_ti.is_time() ||
@@ -311,10 +315,7 @@ std::shared_ptr<JoinHashTable> JoinHashTable::getInstance(
     Executor* executor) {
   decltype(std::chrono::steady_clock::now()) ts1, ts2;
   if (VLOGGING(1)) {
-    VLOG(1) << "Building perfect hash table "
-            << (preferred_hash_type == JoinHashTableInterface::HashType::OneToOne
-                    ? "OneToOne"
-                    : "OneToMany")
+    VLOG(1) << "Building perfect hash table " << getHashTypeString(preferred_hash_type)
             << " for qual: " << qual_bin_oper->toString();
     ts1 = std::chrono::steady_clock::now();
   }
@@ -406,11 +407,7 @@ std::shared_ptr<JoinHashTable> JoinHashTable::getInstance(
   if (VLOGGING(1)) {
     ts2 = std::chrono::steady_clock::now();
     VLOG(1) << "Built perfect hash table "
-            << (join_hash_table->getHashType() ==
-                        JoinHashTableInterface::HashType::OneToOne
-                    ? "OneToOne"
-                    : "OneToMany")
-            << " in "
+            << getHashTypeString(join_hash_table->getHashType()) << " in "
             << std::chrono::duration_cast<std::chrono::milliseconds>(ts2 - ts1).count()
             << " ms";
   }
@@ -1413,8 +1410,17 @@ std::string JoinHashTable::toString(const ExecutorDeviceType device_type,
   auto ptr2 = ptr1 + offsetBufferOff();
   auto ptr3 = ptr1 + countBufferOff();
   auto ptr4 = ptr1 + payloadBufferOff();
-  return JoinHashTableInterface::toString(
-      "perfect", 0, 0, hash_entry_count_, ptr1, ptr2, ptr3, ptr4, buffer_size, raw);
+  return JoinHashTableInterface::toString("perfect",
+                                          getHashTypeString(hash_type_),
+                                          0,
+                                          0,
+                                          hash_entry_count_,
+                                          ptr1,
+                                          ptr2,
+                                          ptr3,
+                                          ptr4,
+                                          buffer_size,
+                                          raw);
 }
 
 std::set<DecodedJoinHashBufferEntry> JoinHashTable::toSet(

@@ -15852,9 +15852,20 @@ TEST(Select, GeoSpatial_Projection) {
 TEST(Select, GeoSpatial_GeoJoin) {
   SKIP_WITH_TEMP_TABLES();
 
+  const auto enable_overlaps_hashjoin_state = g_enable_overlaps_hashjoin;
+  g_enable_overlaps_hashjoin = false;
+  ScopeGuard reset_overlaps_state = [&enable_overlaps_hashjoin_state] {
+    g_enable_overlaps_hashjoin = enable_overlaps_hashjoin_state;
+  };
+
   // Test loop joins
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
+    ASSERT_EQ(static_cast<int64_t>(0),
+              v<int64_t>(run_simple_agg(
+                  "SELECT a.id FROM geospatial_test a JOIN geospatial_inner_join_test "
+                  "b ON ST_Intersects(b.poly, a.poly) ORDER BY a.id;",
+                  dt)));
 
     ASSERT_NO_THROW(run_simple_agg(
         "SELECT a.id FROM geospatial_test a INNER JOIN geospatial_inner_join_test "
@@ -15896,11 +15907,7 @@ TEST(Select, GeoSpatial_GeoJoin) {
         std::runtime_error));
   }
 
-  const auto enable_overlaps_hashjoin_state = g_enable_overlaps_hashjoin;
   g_enable_overlaps_hashjoin = true;
-  ScopeGuard reset_overlaps_state = [&enable_overlaps_hashjoin_state] {
-    g_enable_overlaps_hashjoin = enable_overlaps_hashjoin_state;
-  };
 
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
@@ -15910,6 +15917,12 @@ TEST(Select, GeoSpatial_GeoJoin) {
         "SELECT a.id FROM geospatial_test a INNER JOIN geospatial_inner_join_test "
         "b ON ST_Contains(b.poly, a.p);",
         dt));
+
+    ASSERT_EQ(static_cast<int64_t>(0),
+              v<int64_t>(run_simple_agg(
+                  "SELECT a.id FROM geospatial_test a JOIN geospatial_inner_join_test "
+                  "b ON ST_Intersects(b.poly, a.poly) ORDER BY a.id;",
+                  dt)));
 
     SKIP_ON_AGGREGATOR(ASSERT_EQ(
         static_cast<int64_t>(1),

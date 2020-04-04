@@ -24,6 +24,7 @@ class OverlapsJoinHashTable : public BaselineJoinHashTable {
   OverlapsJoinHashTable(const std::shared_ptr<Analyzer::BinOper> condition,
                         const std::vector<InputTableInfo>& query_infos,
                         const Data_Namespace::MemoryLevel memory_level,
+                        JoinHashTableInterface::HashType hash_layout_type,
                         const size_t entry_count,
                         ColumnCacheMap& column_cache,
                         Executor* executor,
@@ -32,7 +33,7 @@ class OverlapsJoinHashTable : public BaselineJoinHashTable {
       : BaselineJoinHashTable(condition,
                               query_infos,
                               memory_level,
-                              JoinHashTableInterface::HashType::OneToOne,
+                              hash_layout_type,
                               entry_count,
                               column_cache,
                               executor,
@@ -94,7 +95,8 @@ class OverlapsJoinHashTable : public BaselineJoinHashTable {
                          const size_t key_component_count,
                          const int device_id) override;
 
-  llvm::Value* codegenKey(const CompilationOptions&) override;
+  HashJoinMatchingSet codegenMatchingSet(const CompilationOptions&,
+                                         const size_t) override;
 
   static std::map<HashTableCacheKey, double> auto_tuner_cache_;
   static std::mutex auto_tuner_cache_mutex_;
@@ -104,6 +106,9 @@ class OverlapsJoinHashTable : public BaselineJoinHashTable {
                           const JoinColumn& join_column,
                           const JoinColumnTypeInfo& join_column_type,
                           const std::vector<InnerOuter>& inner_outer_pairs);
+
+  llvm::Value* codegenKey(const CompilationOptions&) override;
+  std::vector<llvm::Value*> codegenManyKey(const CompilationOptions&);
 
   std::vector<double> bucket_sizes_for_dimension_;
   double overlaps_hashjoin_bucket_threshold_;

@@ -80,6 +80,7 @@ extern float g_filter_push_down_high_frac;
 extern size_t g_filter_push_down_passing_row_ubound;
 extern bool g_enable_columnar_output;
 extern bool g_enable_overlaps_hashjoin;
+extern bool g_enable_hashjoin_many_to_many;
 extern size_t g_overlaps_max_table_size_bytes;
 extern bool g_strip_join_covered_quals;
 extern size_t g_constrained_by_in_threshold;

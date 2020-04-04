@@ -234,6 +234,12 @@ class BaselineJoinHashTable : public JoinHashTableInterface {
   void freeHashBufferGpuMemory();
   void freeHashBufferCpuMemory();
 
+  bool layoutRequiresAdditionalBuffers(JoinHashTableInterface::HashType layout) const
+      noexcept override {
+    return (layout == JoinHashTableInterface::HashType::ManyToMany ||
+            layout == JoinHashTableInterface::HashType::OneToMany);
+  };
+
   const std::shared_ptr<Analyzer::BinOper> condition_;
   const std::vector<InputTableInfo>& query_infos_;
   const Data_Namespace::MemoryLevel memory_level_;

@@ -110,9 +110,17 @@ class JoinHashTableInterface {
 
   virtual int getInnerTableRteIdx() const noexcept = 0;
 
-  enum class HashType { OneToOne, OneToMany };
+  enum class HashType : int { OneToOne, OneToMany, ManyToMany };
 
   virtual HashType getHashType() const noexcept = 0;
+
+  virtual bool layoutRequiresAdditionalBuffers(
+      JoinHashTableInterface::HashType layout) const noexcept = 0;
+
+  static std::string getHashTypeString(HashType ht) noexcept {
+    const char* HashTypeStrings[3] = {"OneToOne", "OneToMany", "ManyToMany"};
+    return HashTypeStrings[static_cast<int>(ht)];
+  };
 
   virtual Data_Namespace::MemoryLevel getMemoryLevel() const noexcept = 0;
 
@@ -155,16 +163,18 @@ class JoinHashTableInterface {
       size_t buffer_size);
 
   //! Decode hash table into a human-readable string.
-  static std::string toString(const std::string& type,     // perfect, keyed, or geo
-                              size_t key_component_count,  // number of key parts
-                              size_t key_component_width,  // width of a key part
-                              size_t entry_count,          // number of hashable entries
-                              const int8_t* ptr1,          // hash entries
-                              const int8_t* ptr2,          // offsets
-                              const int8_t* ptr3,          // counts
-                              const int8_t* ptr4,          // payloads (rowids)
-                              size_t buffer_size,
-                              bool raw = false);
+  static std::string toString(
+      const std::string& type,         // perfect, keyed, or geo
+      const std::string& layout_type,  // one-to-one, one-to-many, many-to-many
+      size_t key_component_count,      // number of key parts
+      size_t key_component_width,      // width of a key part
+      size_t entry_count,              // number of hashable entries
+      const int8_t* ptr1,              // hash entries
+      const int8_t* ptr2,              // offsets
+      const int8_t* ptr3,              // counts
+      const int8_t* ptr4,              // payloads (rowids)
+      size_t buffer_size,
+      bool raw = false);
 
   //! Make hash table from an in-flight SQL query's parse tree etc.
   static std::shared_ptr<JoinHashTableInterface> getInstance(
