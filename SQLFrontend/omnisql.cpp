@@ -999,7 +999,7 @@ void set_license_key(ClientContext& context, const std::string& token) {
       std::vector<std::string> jwt;
       boost::split(jwt, claims, boost::is_any_of("."));
       if (jwt.size() > 1) {
-        std::cout << mapd::decode_base64(jwt[1]) << std::endl;
+        std::cout << shared::decode_base64(jwt[1]) << std::endl;
       }
     }
   }
@@ -1011,7 +1011,7 @@ void get_license_claims(ClientContext& context) {
       std::vector<std::string> jwt;
       boost::split(jwt, claims, boost::is_any_of("."));
       if (jwt.size() > 1) {
-        std::cout << mapd::decode_base64(jwt[1]) << std::endl;
+        std::cout << shared::decode_base64(jwt[1]) << std::endl;
       }
     }
   }

@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 MapD Technologies, Inc.
+ * Copyright 2020 OmniSci, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,15 +14,6 @@
  * limitations under the License.
  */
 
-//
-//  Buffer.cpp
-//  mapd2
-//
-//  @author Steven Stewart <steve@map-d.com>
-//  @author Todd Mostak <todd@map-d.com>
-//
-//  Copyright (c) 2014 MapD Technologies, Inc. All rights reserved.
-//
 #include "DataMgr/BufferMgr/Buffer.h"
 
 #include <cassert>

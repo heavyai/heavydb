@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 MapD Technologies, Inc.
+ * Copyright 2020 OmniSci, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,18 +13,20 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 #include "S3Archive.h"
-#include <atomic>
-#include <boost/filesystem.hpp>
-#include "Shared/Logger.h"
 
 #include <aws/core/Aws.h>
 #include <aws/core/auth/AWSCredentialsProvider.h>
 #include <aws/s3/model/GetObjectRequest.h>
 #include <aws/s3/model/ListObjectsV2Request.h>
 #include <aws/s3/model/Object.h>
+#include <atomic>
+#include <boost/filesystem.hpp>
 #include <fstream>
 #include <memory>
+
+#include "Shared/Logger.h"
 
 int S3Archive::awsapi_count;
 std::mutex S3Archive::awsapi_mtx;
@@ -236,14 +238,14 @@ const std::string S3Archive::land(const std::string& objkey,
           // this static mutex protect the static google::last_tm_time_for_raw_log from
           // concurrent LOG(INFO)s that call RawLog__SetLastTime to write the variable!
           static std::mutex mutex_glog;
-#define MAPD_S3_LOG(x)                             \
-  {                                                \
-    std::unique_lock<std::mutex> lock(mutex_glog); \
-    x;                                             \
+#define S3_LOG_WITH_LOCK(x)                       \
+  {                                               \
+    std::lock_guard<std::mutex> lock(mutex_glog); \
+    x;                                            \
   }
-          MAPD_S3_LOG(LOG(INFO)
-                      << "downloading s3://" << bucket_name << "/" << objkey << " to "
-                      << (use_pipe ? "pipe " : "file ") << file_path << "...")
+          S3_LOG_WITH_LOCK(LOG(INFO) << "downloading s3://" << bucket_name << "/"
+                                     << objkey << " to " << (use_pipe ? "pipe " : "file ")
+                                     << file_path << "...")
           auto get_object_outcome_moved =
               decltype(get_object_outcome)(std::move(get_object_outcome));
           is_get_object_outcome_moved = true;
@@ -251,9 +253,9 @@ const std::string S3Archive::land(const std::string& objkey,
           local_file.open(file_path.c_str(),
                           std::ios::out | std::ios::binary | std::ios::trunc);
           local_file << get_object_outcome_moved.GetResult().GetBody().rdbuf();
-          MAPD_S3_LOG(LOG(INFO)
-                      << "downloaded s3://" << bucket_name << "/" << objkey << " to "
-                      << (use_pipe ? "pipe " : "file ") << file_path << ".")
+          S3_LOG_WITH_LOCK(LOG(INFO)
+                           << "downloaded s3://" << bucket_name << "/" << objkey << " to "
+                           << (use_pipe ? "pipe " : "file ") << file_path << ".")
         } catch (...) {
           // need this way to capture any exception occurring when
           // this thread runs as a disjoint asynchronous thread
