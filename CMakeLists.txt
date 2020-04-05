@@ -401,7 +401,7 @@ if(TBB_FOUND)
 endif()
 
 add_custom_command(
-    DEPENDS ${CMAKE_SOURCE_DIR}/mapd.thrift
+    DEPENDS ${CMAKE_SOURCE_DIR}/omnisci.thrift
     DEPENDS ${CMAKE_SOURCE_DIR}/QueryEngine/serialized_result_set.thrift
     DEPENDS ${CMAKE_SOURCE_DIR}/QueryEngine/extension_functions.thrift
     OUTPUT
@@ -417,7 +417,7 @@ add_custom_command(
         ${CMAKE_BINARY_DIR}/gen-cpp/common_types.cpp
         ${CMAKE_BINARY_DIR}/gen-cpp/extension_functions_types.cpp
     COMMAND ${Thrift_EXECUTABLE}
-    ARGS -gen cpp -r -o ${CMAKE_BINARY_DIR} ${CMAKE_SOURCE_DIR}/mapd.thrift)
+    ARGS -gen cpp -r -o ${CMAKE_BINARY_DIR} ${CMAKE_SOURCE_DIR}/omnisci.thrift)
 list(APPEND ADDITIONAL_MAKE_CLEAN_FILES ${CMAKE_BINARY_DIR}/gen-cpp/)
 
 add_library(mapd_thrift
@@ -569,14 +569,14 @@ add_executable(omnisci_server ${omnisci_server_source_files})
 set_target_properties(omnisci_server PROPERTIES COMPILE_DEFINITIONS "${TIME_LIMITED_DEFINITIONS}")
 
 add_custom_command(
-    DEPENDS ${CMAKE_SOURCE_DIR}/mapd.thrift
+    DEPENDS ${CMAKE_SOURCE_DIR}/omnisci.thrift
     OUTPUT
         ${CMAKE_SOURCE_DIR}/java/thrift/src/gen/com/mapd/thrift/server/MapD.java
         ${CMAKE_SOURCE_DIR}/java/thrift/src/gen/com/mapd/thrift/server/TRow.java
     COMMAND mkdir
     ARGS -p ${CMAKE_SOURCE_DIR}/java/thrift/src/gen
     COMMAND ${Thrift_EXECUTABLE}
-    ARGS -gen java -r -out ${CMAKE_SOURCE_DIR}/java/thrift/src/gen/ ${CMAKE_SOURCE_DIR}/mapd.thrift)
+    ARGS -gen java -r -out ${CMAKE_SOURCE_DIR}/java/thrift/src/gen/ ${CMAKE_SOURCE_DIR}/omnisci.thrift)
 
 add_custom_command(
     DEPENDS ${CMAKE_SOURCE_DIR}/common.thrift
@@ -785,7 +785,7 @@ add_custom_command(
     ${CMAKE_SOURCE_DIR}/java/thrift/src/gen/com/mapd/thrift/server/MapD.java
     ${CMAKE_SOURCE_DIR}/java/thrift/src/gen/com/mapd/thrift/calciteserver/CalciteServer.java
     ${CMAKE_SOURCE_DIR}/java/pom.xml
-    ${CMAKE_SOURCE_DIR}/mapd.thrift
+    ${CMAKE_SOURCE_DIR}/omnisci.thrift
     ${JAVA_POM}
     ${JAVA_SOURCES}
   )
@@ -810,7 +810,7 @@ if(ENABLE_CUDA)
   install(FILES ${CMAKE_BINARY_DIR}/QueryEngine/cuda_mapd_rt.a DESTINATION QueryEngine)
 endif()
 install(FILES completion_hints.thrift DESTINATION ".")
-install(FILES mapd.thrift DESTINATION ".")
+install(FILES omnisci.thrift DESTINATION ".")
 install(FILES common.thrift DESTINATION ".")
 install(FILES QueryEngine/serialized_result_set.thrift DESTINATION "QueryEngine/")
 

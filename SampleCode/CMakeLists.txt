@@ -20,7 +20,7 @@ add_executable(DataGen DataGen.cpp)
 add_executable(StreamInsert StreamInsert.cpp)
 
 add_custom_command(
-  DEPENDS ${CMAKE_SOURCE_DIR}/mapd.thrift ${CMAKE_SOURCE_DIR}/completion_hints.thrift
+  DEPENDS ${CMAKE_SOURCE_DIR}/omnisci.thrift ${CMAKE_SOURCE_DIR}/completion_hints.thrift
   DEPENDS ${CMAKE_SOURCE_DIR}/QueryEngine/extension_functions.thrift
     OUTPUT
         ${CMAKE_CURRENT_BINARY_DIR}/gen-cpp/MapD.cpp
@@ -34,7 +34,7 @@ add_custom_command(
         ${CMAKE_CURRENT_BINARY_DIR}/gen-cpp/common_types.cpp
         ${CMAKE_CURRENT_BINARY_DIR}/gen-cpp/extension_functions_types.cpp
     COMMAND ${Thrift_EXECUTABLE}
-    ARGS -gen cpp -r -I ${CMAKE_SOURCE_DIR} -o ${CMAKE_CURRENT_BINARY_DIR} ${CMAKE_SOURCE_DIR}/mapd.thrift)
+    ARGS -gen cpp -r -I ${CMAKE_SOURCE_DIR} -o ${CMAKE_CURRENT_BINARY_DIR} ${CMAKE_SOURCE_DIR}/omnisci.thrift)
 add_library(mapd_sample_thrift
     ${CMAKE_CURRENT_BINARY_DIR}/gen-cpp/MapD.cpp
     ${CMAKE_CURRENT_BINARY_DIR}/gen-cpp/mapd_constants.cpp
@@ -56,6 +56,6 @@ install(TARGETS StreamInsertSimple StreamInsert DataGen DESTINATION SampleCode)
 install(DIRECTORY . DESTINATION SampleCode)
 install(
     FILES
-        ${CMAKE_SOURCE_DIR}/mapd.thrift
+        ${CMAKE_SOURCE_DIR}/omnisci.thrift
         ${CMAKE_SOURCE_DIR}/cmake/Modules/FindThrift.cmake
     DESTINATION SampleCode)
