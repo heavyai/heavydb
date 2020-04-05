@@ -362,7 +362,7 @@ TEST_F(ShowUserSessionsTest, PRIVILEGES_NONSUPERUSER) {
     std::string query{"SHOW USER SESSIONS;"};
     sql(result, query, usersession);
     FAIL() << "An exception should have been thrown for this test case.";
-  } catch (const TMapDException& e) {
+  } catch (const TOmniSciException& e) {
     ASSERT_EQ(
         "Exception: SHOW USER SESSIONS failed, because it can only be executed by super "
         "user.",

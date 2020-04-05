@@ -17,7 +17,7 @@ package com.omnisci.jdbc;
 
 import com.mapd.common.SockTransportProperties;
 import com.mapd.thrift.server.OmniSci;
-import com.mapd.thrift.server.TMapDException;
+import com.mapd.thrift.server.TOmniSciException;
 import com.mapd.thrift.server.TServerStatus;
 
 import org.apache.thrift.TException;
@@ -400,7 +400,7 @@ public class OmniSciConnection implements java.sql.Connection, Cloneable {
       throw new SQLException("Thrift transport connection failed - "
                       + OmniSciExceptionText.getExceptionDetail(ex),
               ex);
-    } catch (TMapDException ex) {
+    } catch (TOmniSciException ex) {
       throw new SQLException("Omnisci connection failed - "
                       + OmniSciExceptionText.getExceptionDetail(ex),
               ex);
@@ -473,7 +473,7 @@ public class OmniSciConnection implements java.sql.Connection, Cloneable {
         client.disconnect(session);
       }
       closeConnection();
-    } catch (TMapDException ex) {
+    } catch (TOmniSciException ex) {
       throw new SQLException("disconnect failed." + ex.toString());
     } catch (TException ex) {
       throw new SQLException("disconnect failed." + ex.toString());
@@ -515,7 +515,7 @@ public class OmniSciConnection implements java.sql.Connection, Cloneable {
         TServerStatus server_status = client.get_server_status(session);
         return server_status.read_only;
       }
-    } catch (TMapDException ex) {
+    } catch (TOmniSciException ex) {
       throw new SQLException(
               "get_server_status failed during isReadOnly check." + ex.toString());
     } catch (TException ex) {
@@ -749,7 +749,7 @@ public class OmniSciConnection implements java.sql.Connection, Cloneable {
       client.get_server_status(session);
     } catch (TTransportException ex) {
       throw new SQLException("Connection failed - " + ex.toString());
-    } catch (TMapDException ex) {
+    } catch (TOmniSciException ex) {
       throw new SQLException("Connection failed - " + ex.toString());
     } catch (TException ex) {
       throw new SQLException("Connection failed - " + ex.toString());

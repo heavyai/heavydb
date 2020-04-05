@@ -29,7 +29,7 @@ import com.mapd.thrift.server.OmniSci;
 import com.mapd.thrift.server.TColumnType;
 import com.mapd.thrift.server.TDatumType;
 import com.mapd.thrift.server.TEncodingType;
-import com.mapd.thrift.server.TMapDException;
+import com.mapd.thrift.server.TOmniSciException;
 import com.mapd.thrift.server.TTableDetails;
 import com.mapd.thrift.server.TTypeInfo;
 
@@ -211,7 +211,7 @@ public class MetaConnect {
       MAPDLOGGER.error("TTransportException on port [" + mapdPort + "]");
       MAPDLOGGER.error(ex.toString());
       throw new RuntimeException(ex.toString());
-    } catch (TMapDException ex) {
+    } catch (TOmniSciException ex) {
       MAPDLOGGER.error(ex.toString());
       throw new RuntimeException(ex.toString());
     } catch (TException ex) {
@@ -311,7 +311,7 @@ public class MetaConnect {
     } catch (TTransportException ex) {
       MAPDLOGGER.error(ex.toString());
       throw new RuntimeException(ex.toString());
-    } catch (TMapDException ex) {
+    } catch (TOmniSciException ex) {
       MAPDLOGGER.error(ex.toString());
       throw new RuntimeException(ex.toString());
     } catch (TException ex) {
@@ -637,7 +637,7 @@ public class MetaConnect {
       } catch (TTransportException ex) {
         MAPDLOGGER.error(ex.toString());
         throw new RuntimeException(ex.toString());
-      } catch (TMapDException ex) {
+      } catch (TOmniSciException ex) {
         MAPDLOGGER.error(ex.toString());
         throw new RuntimeException(ex.toString());
       } catch (TException ex) {

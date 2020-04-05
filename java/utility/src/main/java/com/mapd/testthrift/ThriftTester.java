@@ -21,7 +21,7 @@ import com.mapd.thrift.server.TColumnData;
 import com.mapd.thrift.server.TColumnType;
 import com.mapd.thrift.server.TDBInfo;
 import com.mapd.thrift.server.TDatum;
-import com.mapd.thrift.server.TMapDException;
+import com.mapd.thrift.server.TOmniSciException;
 import com.mapd.thrift.server.TQueryResult;
 import com.mapd.thrift.server.TRow;
 import com.mapd.thrift.server.TRowSet;
@@ -173,7 +173,7 @@ public class ThriftTester {
       // Now disconnect
       logger.info("Trying to disconnect session " + session);
       client.disconnect(session);
-    } catch (TMapDException ex) {
+    } catch (TOmniSciException ex) {
       logger.error(ex.toString());
       ex.printStackTrace();
     } catch (TException ex) {

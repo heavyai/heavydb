@@ -157,7 +157,7 @@ class DBHandlerTestFixture : public testing::Test {
     try {
       sql(sql_statement);
       FAIL() << "An exception should have been thrown for this test case.";
-    } catch (const TMapDException& e) {
+    } catch (const TOmniSciException& e) {
       ASSERT_EQ(error_message, e.error_msg);
     }
   }

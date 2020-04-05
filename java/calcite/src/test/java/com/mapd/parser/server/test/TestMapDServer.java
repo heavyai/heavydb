@@ -20,7 +20,7 @@ import static org.junit.Assert.*;
 
 import com.mapd.parser.server.CalciteServerWrapper;
 import com.mapd.thrift.server.OmniSci;
-import com.mapd.thrift.server.TMapDException;
+import com.mapd.thrift.server.TOmniSciException;
 import com.mapd.thrift.server.TQueryResult;
 
 import org.apache.thrift.TException;
@@ -130,7 +130,7 @@ public class TestMapDServer {
         fail("result doesn't match " + resultCount
                 + " != " + res.row_set.columns.get(0).nulls.size());
       }
-    } catch (TMapDException x) {
+    } catch (TOmniSciException x) {
       fail("Exception on EXECUTE " + x.toString());
     } catch (TException x) {
       fail("Exception on EXECUTE " + x.toString());

@@ -224,7 +224,7 @@ int main(int argc, char** argv) {
     data_gen(table_details.row_desc, delimiter, num_rows);
     client.disconnect(session);  // disconnect from omnisci_server
     transport->close();          // close transport
-  } catch (TMapDException& e) {
+  } catch (TOmniSciException& e) {
     std::cerr << e.error_msg << std::endl;
     return 1;
   } catch (TException& te) {

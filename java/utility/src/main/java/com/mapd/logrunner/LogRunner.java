@@ -22,7 +22,7 @@ import com.mapd.thrift.server.TColumnType;
 import com.mapd.thrift.server.TDBInfo;
 import com.mapd.thrift.server.TDatum;
 import com.mapd.thrift.server.TExecuteMode;
-import com.mapd.thrift.server.TMapDException;
+import com.mapd.thrift.server.TOmniSciException;
 import com.mapd.thrift.server.TPixel;
 import com.mapd.thrift.server.TQueryResult;
 import com.mapd.thrift.server.TRenderResult;
@@ -142,14 +142,14 @@ public class LogRunner {
   }
 
   private String getSession(OmniSci.Client client)
-          throws TTransportException, TMapDException, TException {
+          throws TTransportException, TOmniSciException, TException {
     String session = client.connect("mapd", "HyperInteractive", "mapd");
     logger.info("Connected session is " + session);
     return session;
   }
 
   private void closeSession(OmniSci.Client client, String session)
-          throws TMapDException, TException {
+          throws TOmniSciException, TException {
     // Now disconnect
     logger.info("Trying to disconnect session " + session);
     client.disconnect(session);
@@ -270,7 +270,7 @@ public class LogRunner {
           logger.info("run query " + sl[1]);
           try {
             client.sql_execute(session, sl[1], true, null, -1, -1);
-          } catch (TMapDException ex1) {
+          } catch (TOmniSciException ex1) {
             logger.error("Failed to execute " + sl[1] + " exception " + ex1.toString());
           } catch (TException ex) {
             logger.error("Failed to execute " + sl[1] + " exception " + ex.toString());
@@ -306,7 +306,7 @@ public class LogRunner {
                     Boolean.TRUE,
                     Integer.parseInt(ss[11]),
                     null);
-          } catch (TMapDException ex1) {
+          } catch (TOmniSciException ex1) {
             logger.error("Failed to execute get_result_row_for_pixel exception "
                     + ex1.toString());
           } catch (TException ex) {

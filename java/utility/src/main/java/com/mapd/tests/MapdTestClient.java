@@ -23,7 +23,7 @@ import com.mapd.thrift.server.TCreateParams;
 import com.mapd.thrift.server.TDBObject;
 import com.mapd.thrift.server.TDBObjectType;
 import com.mapd.thrift.server.TDashboard;
-import com.mapd.thrift.server.TMapDException;
+import com.mapd.thrift.server.TOmniSciException;
 import com.mapd.thrift.server.TQueryResult;
 import com.mapd.thrift.server.TServerStatus;
 import com.mapd.thrift.server.TTableDetails;
@@ -41,15 +41,15 @@ public class MapdTestClient {
   OmniSci.Client client;
   String sessionId;
 
-  public TServerStatus get_server_status() throws TMapDException, TException {
+  public TServerStatus get_server_status() throws TOmniSciException, TException {
     return client.get_server_status(sessionId);
   }
 
-  public List<TServerStatus> get_status() throws TMapDException, TException {
+  public List<TServerStatus> get_status() throws TOmniSciException, TException {
     return client.get_status(sessionId);
   }
 
-  public TClusterHardwareInfo get_hardware_info() throws TMapDException, TException {
+  public TClusterHardwareInfo get_hardware_info() throws TOmniSciException, TException {
     return client.get_hardware_info(sessionId);
   }
 
