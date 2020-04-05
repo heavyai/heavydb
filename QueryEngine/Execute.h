@@ -38,7 +38,7 @@
 
 #include "../Chunk/Chunk.h"
 #include "../Shared/Logger.h"
-#include "../Shared/MapDParameters.h"
+#include "../Shared/SystemParameters.h"
 #include "../Shared/measure.h"
 #include "../Shared/thread_count.h"
 #include "../StringDictionary/LruCache.hpp"
@@ -355,7 +355,7 @@ class Executor {
       const int db_id,
       const std::string& debug_dir = "",
       const std::string& debug_file = "",
-      const MapDParameters mapd_parameters = MapDParameters());
+      const SystemParameters mapd_parameters = SystemParameters());
 
   static void nukeCacheOfExecutors() {
     std::lock_guard<std::mutex> flush_lock(

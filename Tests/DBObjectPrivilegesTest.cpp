@@ -12,7 +12,6 @@
 #include "../QueryEngine/Execute.h"
 #include "../QueryRunner/QueryRunner.h"
 #include "MapDHandlerTestHelpers.h"
-#include "Shared/MapDParameters.h"
 #include "Shared/scope.h"
 #include "TestHelpers.h"
 #include "ThriftHandler/QueryState.h"

@@ -23,7 +23,7 @@
 
 #pragma once
 
-#include "Shared/MapDParameters.h"
+#include "Shared/SystemParameters.h"
 #include "gen-cpp/MapD.h"
 
 class MapDHandler;
@@ -53,7 +53,7 @@ class MapDRenderHandler {
                              const size_t max_conncurrent_render_sessions,
                              const bool enable_auto_clear_render_mem,
                              const int render_oom_retry_threshold,
-                             const MapDParameters mapd_parameters);
+                             const SystemParameters mapd_parameters);
   ~MapDRenderHandler();
 
  private:

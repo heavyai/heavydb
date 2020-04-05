@@ -51,8 +51,8 @@
 #include "Shared/ConfigResolve.h"
 #include "Shared/GenericTypeUtilities.h"
 #include "Shared/Logger.h"
-#include "Shared/MapDParameters.h"
 #include "Shared/StringTransform.h"
+#include "Shared/SystemParameters.h"
 #include "Shared/geosupport.h"
 #include "Shared/mapd_shared_mutex.h"
 #include "Shared/mapd_shared_ptr.h"
@@ -178,7 +178,7 @@ class MapDHandler : public MapDIf {
               const size_t reserved_gpu_mem,
               const size_t num_reader_threads,
               const AuthMetadata& authMetadata,
-              const MapDParameters& mapd_parameters,
+              const SystemParameters& mapd_parameters,
               const bool legacy_syntax,
               const int idle_session_duration,
               const int max_session_duration,
@@ -510,7 +510,7 @@ class MapDHandler : public MapDIf {
   std::mutex render_mutex_;
   int64_t start_time_;
   const AuthMetadata& authMetadata_;
-  const MapDParameters& mapd_parameters_;
+  const SystemParameters& mapd_parameters_;
   std::unique_ptr<MapDRenderHandler> render_handler_;
   std::unique_ptr<MapDAggHandler> agg_handler_;
   std::unique_ptr<MapDLeafHandler> leaf_handler_;
@@ -579,7 +579,7 @@ class MapDHandler : public MapDIf {
       const std::string& query_str,
       const std::vector<TFilterPushDownInfo>& filter_push_down_info,
       const bool acquire_locks,
-      const MapDParameters mapd_parameters,
+      const SystemParameters mapd_parameters,
       RenderInfo* render_info = nullptr,
       bool check_privileges = true);
 

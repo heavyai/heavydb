@@ -38,7 +38,7 @@
 
 #include "Archive/S3Archive.h"
 #include "Shared/Logger.h"
-#include "Shared/MapDParameters.h"
+#include "Shared/SystemParameters.h"
 #include "Shared/file_delete.h"
 #include "Shared/mapd_shared_mutex.h"
 #include "Shared/mapd_shared_ptr.h"
@@ -58,7 +58,7 @@
 #include "MapDRelease.h"
 #include "Shared/Asio.h"
 #include "Shared/Compressor.h"
-#include "Shared/MapDParameters.h"
+#include "Shared/SystemParameters.h"
 #include "Shared/file_delete.h"
 #include "Shared/mapd_shared_ptr.h"
 #include "Shared/scope.h"
@@ -270,7 +270,7 @@ class MapDProgramOptions {
   bool enable_legacy_syntax = true;
   AuthMetadata authMetadata;
 
-  MapDParameters mapd_parameters;
+  SystemParameters mapd_parameters;
   bool enable_rendering = false;
   bool enable_auto_clear_render_mem = false;
   int render_oom_retry_threshold = 0;  // in milliseconds
@@ -804,9 +804,10 @@ void MapDProgramOptions::fillAdvancedOptions() {
       po::value<std::string>(&udf_compiler_path),
       "Provide absolute path to clang++ used in udf compilation.");
 
-  developer_desc.add_options()("udf-compiler-options",
-                               po::value<std::vector<std::string>>(&udf_compiler_options),
-                               "Specify compiler options to tailor udf compilation.");
+  developer_desc.add_options()(
+      "udf-compiler-options",
+      po::value<std::vector<std::string> >(&udf_compiler_options),
+      "Specify compiler options to tailor udf compilation.");
 }
 
 namespace {

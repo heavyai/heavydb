@@ -169,7 +169,7 @@ class MapDHandlerTestFixture : public testing::Test {
   static std::vector<LeafHostInfo> db_leaves_;
   static std::vector<LeafHostInfo> string_leaves_;
   static AuthMetadata auth_metadata_;
-  static MapDParameters mapd_parameters_;
+  static SystemParameters mapd_parameters_;
   static std::string udf_filename_;
   static std::string udf_compiler_path_;
   static std::string default_user_;
@@ -190,6 +190,6 @@ std::string MapDHandlerTestFixture::udf_compiler_path_{};
 std::string MapDHandlerTestFixture::default_user_{"admin"};
 std::string MapDHandlerTestFixture::default_pass_{"HyperInteractive"};
 std::string MapDHandlerTestFixture::default_db_name_{};
-MapDParameters MapDHandlerTestFixture::mapd_parameters_{};
+SystemParameters MapDHandlerTestFixture::mapd_parameters_{};
 std::vector<std::string> MapDHandlerTestFixture::udf_compiler_options_{};
 std::string MapDHandlerTestFixture::cluster_config_file_path_{};

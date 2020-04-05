@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 MapD Technologies, Inc.
+ * Copyright 2020 OmniSci, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -44,7 +44,7 @@ using namespace File_Namespace;
 namespace Data_Namespace {
 
 DataMgr::DataMgr(const string& dataDir,
-                 const MapDParameters& mapd_parameters,
+                 const SystemParameters& system_parameters,
                  const bool useGpus,
                  const int numGpus,
                  const int startGpu,
@@ -63,7 +63,7 @@ DataMgr::DataMgr(const string& dataDir,
     hasGpus_ = false;
   }
 
-  populateMgrs(mapd_parameters, numReaderThreads);
+  populateMgrs(system_parameters, numReaderThreads);
   createTopLevelMetadata();
 }
 
@@ -148,12 +148,12 @@ size_t DataMgr::getTotalSystemMemory() const {
 #endif
 }
 
-void DataMgr::populateMgrs(const MapDParameters& mapd_parameters,
+void DataMgr::populateMgrs(const SystemParameters& system_parameters,
                            const size_t userSpecifiedNumReaderThreads) {
   bufferMgrs_.resize(2);
   bufferMgrs_[0].push_back(new GlobalFileMgr(0, dataDir_, userSpecifiedNumReaderThreads));
   levelSizes_.push_back(1);
-  size_t cpuBufferSize = mapd_parameters.cpu_buffer_mem_bytes;
+  size_t cpuBufferSize = system_parameters.cpu_buffer_mem_bytes;
   if (cpuBufferSize == 0) {  // if size is not specified
     const auto total_system_memory = getTotalSystemMemory();
     VLOG(1) << "Detected " << (float)total_system_memory / (1024 * 1024)
@@ -176,8 +176,8 @@ void DataMgr::populateMgrs(const MapDParameters& mapd_parameters,
     int numGpus = cudaMgr_->getDeviceCount();
     for (int gpuNum = 0; gpuNum < numGpus; ++gpuNum) {
       size_t gpuMaxMemSize =
-          mapd_parameters.gpu_buffer_mem_bytes != 0
-              ? mapd_parameters.gpu_buffer_mem_bytes
+          system_parameters.gpu_buffer_mem_bytes != 0
+              ? system_parameters.gpu_buffer_mem_bytes
               : (cudaMgr_->getDeviceProperties(gpuNum)->globalMem) - (reservedGpuMem_);
       size_t gpuSlabSize = std::min(static_cast<size_t>(1L << 31), gpuMaxMemSize);
       gpuSlabSize -= gpuSlabSize % 512 == 0 ? 0 : 512 - (gpuSlabSize % 512);

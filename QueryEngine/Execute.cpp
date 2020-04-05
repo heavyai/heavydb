@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 MapD Technologies, Inc.
+ * Copyright 2020 OmniSci, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -44,7 +44,7 @@
 #include "CudaMgr/CudaMgr.h"
 #include "DataMgr/BufferMgr/BufferMgr.h"
 #include "Parser/ParserNode.h"
-#include "Shared/MapDParameters.h"
+#include "Shared/SystemParameters.h"
 #include "Shared/TypedDataAccessors.h"
 #include "Shared/checked_alloc.h"
 #include "Shared/measure.h"
@@ -129,10 +129,11 @@ Executor::Executor(const int db_id,
     , temporary_tables_(nullptr)
     , input_table_info_cache_(this) {}
 
-std::shared_ptr<Executor> Executor::getExecutor(const int db_id,
-                                                const std::string& debug_dir,
-                                                const std::string& debug_file,
-                                                const MapDParameters mapd_parameters) {
+std::shared_ptr<Executor> Executor::getExecutor(
+    const int db_id,
+    const std::string& debug_dir,
+    const std::string& debug_file,
+    const SystemParameters system_parameters) {
   INJECT_TIMER(getExecutor);
   const auto executor_key = db_id;
   {
@@ -149,8 +150,8 @@ std::shared_ptr<Executor> Executor::getExecutor(const int db_id,
       return it->second;
     }
     auto executor = std::make_shared<Executor>(db_id,
-                                               mapd_parameters.cuda_block_size,
-                                               mapd_parameters.cuda_grid_size,
+                                               system_parameters.cuda_block_size,
+                                               system_parameters.cuda_grid_size,
                                                debug_dir,
                                                debug_file);
     auto it_ok = executors_.insert(std::make_pair(executor_key, executor));

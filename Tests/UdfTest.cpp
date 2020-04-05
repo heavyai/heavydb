@@ -32,7 +32,6 @@
 #include "QueryEngine/UDFCompiler.h"
 #include "QueryRunner/QueryRunner.h"
 #include "Shared/Logger.h"
-#include "Shared/MapDParameters.h"
 #include "TestHelpers.h"
 
 #ifndef BASE_PATH

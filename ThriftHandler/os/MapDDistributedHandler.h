@@ -40,7 +40,7 @@ class MapDAggHandler {
                        const std::string& nonce,
                        const int32_t first_n,
                        const int32_t at_most_n,
-                       const MapDParameters& mapd_parameters) {
+                       const SystemParameters& mapd_parameters) {
     CHECK(false);
   }
   friend class MapDHandler;

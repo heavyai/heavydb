@@ -28,8 +28,8 @@
 #include "QueryEngine/TableFunctions/TableFunctionsFactory.h"
 #include "Shared/ConfigResolve.h"
 #include "Shared/Logger.h"
-#include "Shared/MapDParameters.h"
 #include "Shared/StringTransform.h"
+#include "Shared/SystemParameters.h"
 #include "Shared/geosupport.h"
 #include "Shared/import_helpers.h"
 #include "bcrypt.h"
@@ -152,7 +152,7 @@ QueryRunner::QueryRunner(const char* db_path,
   if (std::is_same<CudaBuildSelector, PreprocessorFalse>::value) {
     uses_gpus = false;
   }
-  MapDParameters mapd_params;
+  SystemParameters mapd_params;
   mapd_params.gpu_buffer_mem_bytes = max_gpu_mem;
   mapd_params.aggregator = !leaf_servers.empty();
 

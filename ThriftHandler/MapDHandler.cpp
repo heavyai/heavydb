@@ -186,7 +186,7 @@ MapDHandler::MapDHandler(const std::vector<LeafHostInfo>& db_leaves,
                          const size_t reserved_gpu_mem,
                          const size_t num_reader_threads,
                          const AuthMetadata& authMetadata,
-                         const MapDParameters& mapd_parameters,
+                         const SystemParameters& mapd_parameters,
                          const bool legacy_syntax,
                          const int idle_session_duration,
                          const int max_session_duration,
@@ -5343,7 +5343,7 @@ std::pair<TPlanResult, lockmgr::LockedTableDescriptors> MapDHandler::parse_to_ra
     const std::string& query_str,
     const std::vector<TFilterPushDownInfo>& filter_push_down_info,
     const bool acquire_locks,
-    const MapDParameters mapd_parameters,
+    const SystemParameters mapd_parameters,
     RenderInfo* render_info,
     bool check_privileges) {
   query_state::Timer timer = query_state_proxy.createTimer(__func__);

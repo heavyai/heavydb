@@ -132,7 +132,6 @@ class SQLiteComparator {
     }
     CHECK_EQ(connector_.getNumCols(), omnisci_results->colCount()) << errmsg;
     const int num_cols{static_cast<int>(connector_.getNumCols())};
-    auto row_iterator = omnisci_results->rowIterator(true, true);
     for (int row_idx = 0; row_idx < num_rows; ++row_idx) {
       const auto crt_row = omnisci_results->getNextRow(true, true);
       CHECK(!crt_row.empty()) << errmsg;

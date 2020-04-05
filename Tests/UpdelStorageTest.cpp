@@ -32,7 +32,6 @@
 #include "QueryEngine/ResultSet.h"
 #include "QueryEngine/TableOptimizer.h"
 #include "QueryRunner/QueryRunner.h"
-#include "Shared/MapDParameters.h"
 #include "Shared/UpdelRoll.h"
 #include "Shared/measure.h"
 #include "TestHelpers.h"

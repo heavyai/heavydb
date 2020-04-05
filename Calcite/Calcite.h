@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 MapD Technologies, Inc.
+ * Copyright 2020 OmniSci, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,8 +21,7 @@
  * Created on November 23, 2015, 9:33 AM
  */
 
-#ifndef CALCITE_H
-#define CALCITE_H
+#pragma once
 
 #include "Shared/mapd_shared_ptr.h"
 #include "gen-cpp/extension_functions_types.h"
@@ -50,7 +49,7 @@ namespace query_state {
 class QueryStateProxy;
 }
 
-struct MapDParameters;
+struct SystemParameters;
 
 class ThriftClientConnection;
 
@@ -61,13 +60,13 @@ class TCompletionHint;
 
 class Calcite final {
  public:
-  Calcite(const int mapd_port,
+  Calcite(const int db_port,
           const int port,
           const std::string& data_dir,
           const size_t calcite_max_mem,
           const size_t service_timeout,
           const std::string& udf_filename = "");
-  Calcite(const MapDParameters& mapd_parameter,
+  Calcite(const SystemParameters& db_parameters,
           const std::string& data_dir,
           const std::string& udf_filename = "");
   // sql_string may differ from what is in query_state due to legacy_syntax option.
@@ -98,12 +97,12 @@ class Calcite final {
   std::string const getInternalSessionProxyPassword() { return kCalciteUserPassword; }
 
  private:
-  void init(const int mapd_port,
+  void init(const int db_port,
             const int port,
             const std::string& data_dir,
             const size_t calcite_max_mem,
             const std::string& udf_filename);
-  void runServer(const int mapd_port,
+  void runServer(const int db_port,
                  const int port,
                  const std::string& data_dir,
                  const size_t calcite_max_mem,
@@ -132,8 +131,6 @@ class Calcite final {
   std::string ssl_keystore_;
   std::string ssl_keystore_password_;
   std::string ssl_ca_file_;
-  std::string mapd_config_file_;
+  std::string db_config_file_;
   std::once_flag shutdown_once_flag_;
 };
-
-#endif /* CALCITE_H */

@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 MapD Technologies, Inc.
+ * Copyright 2020 OmniSci, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -141,9 +141,9 @@ int main(int argc, char* argv[]) {
   logger::init(log_options);
 
   try {
-    MapDParameters mapd_parms;
+    SystemParameters sys_parms;
     auto dummy =
-        std::make_shared<Data_Namespace::DataMgr>(data_path, mapd_parms, false, 0);
+        std::make_shared<Data_Namespace::DataMgr>(data_path, sys_parms, false, 0);
     auto calcite = std::make_shared<Calcite>(-1, CALCITEPORT, base_path, 1024, 5000);
     auto& sys_cat = Catalog_Namespace::SysCatalog::instance();
     sys_cat.init(base_path, dummy, {}, calcite, true, false, {});
