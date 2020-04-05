@@ -795,7 +795,6 @@ boost::optional<OverlapsJoinConjunction> rewrite_overlaps_conjunction(
         auto lhs = func_oper->getOwnArg(3);
         auto rewritten_lhs = deep_copy_visitor.visit(lhs.get());
         CHECK(rewritten_lhs);
-        const auto& lhs_ti = rewritten_lhs->get_type_info();
         auto rhs = func_oper->getOwnArg(1);
         auto rewritten_rhs = deep_copy_visitor.visit(rhs.get());
         CHECK(rewritten_rhs);
