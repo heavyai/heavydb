@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 MapD Technologies, Inc.
+ * Copyright 2020 OmniSci, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -355,7 +355,7 @@ class Executor {
       const int db_id,
       const std::string& debug_dir = "",
       const std::string& debug_file = "",
-      const SystemParameters mapd_parameters = SystemParameters());
+      const SystemParameters system_parameters = SystemParameters());
 
   static void nukeCacheOfExecutors() {
     std::lock_guard<std::mutex> flush_lock(

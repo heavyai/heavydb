@@ -27,13 +27,13 @@
 
 class RenderHandler::Impl {};
 
-RenderHandler::RenderHandler(DBHandler* mapd_handler,
+RenderHandler::RenderHandler(DBHandler* db_handler,
                              const size_t render_mem_bytes,
                              const size_t render_poly_cache_bytes,
                              const size_t max_concurrent_render_sessions,
                              const bool enable_auto_clear_render_mem,
                              const int render_oom_retry_threshold,
-                             const SystemParameters mapd_parameters)
+                             const SystemParameters system_parameters)
     : impl_(nullptr) {
   throw std::runtime_error(
       "Rendering is only supported in the Enterprise and Community Editions");
