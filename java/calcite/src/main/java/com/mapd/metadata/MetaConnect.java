@@ -25,7 +25,7 @@ import com.mapd.calcite.parser.MapDTable;
 import com.mapd.calcite.parser.MapDUser;
 import com.mapd.calcite.parser.MapDView;
 import com.mapd.common.SockTransportProperties;
-import com.mapd.thrift.server.MapD;
+import com.mapd.thrift.server.OmniSci;
 import com.mapd.thrift.server.TColumnType;
 import com.mapd.thrift.server.TDatumType;
 import com.mapd.thrift.server.TEncodingType;
@@ -195,7 +195,7 @@ public class MetaConnect {
       if (!transport.isOpen()) transport.open();
       protocol = new TBinaryProtocol(transport);
 
-      MapD.Client client = new MapD.Client(protocol);
+      OmniSci.Client client = new OmniSci.Client(protocol);
 
       List<String> tablesList = client.get_tables(currentUser.getSession());
       Set<String> ts = new HashSet<String>(tablesList.size());
@@ -299,7 +299,7 @@ public class MetaConnect {
       if (!transport.isOpen()) transport.open();
       protocol = new TBinaryProtocol(transport);
 
-      MapD.Client client = new MapD.Client(protocol);
+      OmniSci.Client client = new OmniSci.Client(protocol);
 
       TTableDetails td =
               client.get_internal_table_details(currentUser.getSession(), tableName);
@@ -626,7 +626,7 @@ public class MetaConnect {
         if (!transport.isOpen()) transport.open();
         protocol = new TBinaryProtocol(transport);
 
-        MapD.Client client = new MapD.Client(protocol);
+        OmniSci.Client client = new OmniSci.Client(protocol);
 
         TTableDetails td = client.get_table_details(currentUser.getSession(), tableName);
 

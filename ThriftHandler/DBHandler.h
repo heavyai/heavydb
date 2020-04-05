@@ -96,7 +96,7 @@
 #include <typeinfo>
 #include <unordered_map>
 
-#include "gen-cpp/MapD.h"
+#include "gen-cpp/OmniSci.h"
 #include "gen-cpp/extension_functions_types.h"
 
 using namespace std::string_literals;
@@ -113,9 +113,9 @@ using TableMap = std::map<std::string, bool>;
 using OptionalTableMap = boost::optional<TableMap&>;
 using query_state::QueryStateProxy;
 
-class TrackingProcessor : public MapDProcessor {
+class TrackingProcessor : public OmniSciProcessor {
  public:
-  TrackingProcessor(mapd::shared_ptr<MapDIf> handler) : MapDProcessor(handler) {}
+  TrackingProcessor(mapd::shared_ptr<OmniSciIf> handler) : OmniSciProcessor(handler) {}
 
   bool process(mapd::shared_ptr<::apache::thrift::protocol::TProtocol> in,
                mapd::shared_ptr<::apache::thrift::protocol::TProtocol> out,
@@ -149,14 +149,14 @@ class TrackingProcessor : public MapDProcessor {
       TrackingProcessor::client_address = "";
     }
 
-    return MapDProcessor::process(in, out, connectionContext);
+    return OmniSciProcessor::process(in, out, connectionContext);
   }
 
   static thread_local std::string client_address;
   static thread_local ClientProtocol client_protocol;
 };
 
-class DBHandler : public MapDIf {
+class DBHandler : public OmniSciIf {
  public:
   DBHandler(const std::vector<LeafHostInfo>& db_leaves,
             const std::vector<LeafHostInfo>& string_leaves,

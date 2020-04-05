@@ -43,7 +43,7 @@
 #include <thrift/protocol/TBinaryProtocol.h>
 #include <thrift/transport/TBufferTransports.h>
 #include <thrift/transport/TSocket.h>
-#include "gen-cpp/MapD.h"
+#include "gen-cpp/OmniSci.h"
 
 using namespace ::apache::thrift;
 using namespace ::apache::thrift::protocol;
@@ -214,7 +214,7 @@ int main(int argc, char** argv) {
   mapd::shared_ptr<TTransport> socket(new TSocket(server_host, port));
   mapd::shared_ptr<TTransport> transport(new TBufferedTransport(socket));
   mapd::shared_ptr<TProtocol> protocol(new TBinaryProtocol(transport));
-  MapDClient client(protocol);
+  OmniSciClient client(protocol);
   TSessionId session;
   try {
     transport->open();                                    // open transport

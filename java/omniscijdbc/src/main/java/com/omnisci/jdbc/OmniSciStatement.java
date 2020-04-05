@@ -15,7 +15,7 @@
  */
 package com.omnisci.jdbc;
 
-import com.mapd.thrift.server.MapD;
+import com.mapd.thrift.server.OmniSci;
 import com.mapd.thrift.server.TMapDException;
 import com.mapd.thrift.server.TQueryResult;
 
@@ -39,7 +39,7 @@ public class OmniSciStatement implements java.sql.Statement {
   public SQLWarning rootWarning = null;
 
   private String session;
-  private MapD.Client client;
+  private OmniSci.Client client;
   private OmniSciConnection connection;
   private ResultSet currentRS = null;
   private TQueryResult sqlResult = null;
@@ -52,7 +52,7 @@ public class OmniSciStatement implements java.sql.Statement {
     client = connection.client;
   }
 
-  OmniSciStatement(String tsession, MapD.Client tclient) {
+  OmniSciStatement(String tsession, OmniSci.Client tclient) {
     session = tsession;
     client = tclient;
   }

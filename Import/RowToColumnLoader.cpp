@@ -365,7 +365,7 @@ RowToColumnLoader::~RowToColumnLoader() {
 }
 
 void RowToColumnLoader::createConnection(const ThriftClientConnection& con) {
-  client_.reset(new MapDClient(conn_details_.get_protocol()));
+  client_.reset(new OmniSciClient(conn_details_.get_protocol()));
 
   try {
     client_->connect(session_, user_name_, passwd_, db_name_);

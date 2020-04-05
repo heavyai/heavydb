@@ -43,10 +43,10 @@ using namespace ::apache::thrift::transport;
 #include "Shared/Logger.h"
 #include "Shared/ThriftClient.h"
 
-#include "gen-cpp/MapD.h"
+#include "gen-cpp/OmniSci.h"
 
 TSessionId g_session_id;
-std::shared_ptr<MapDClient> g_client;
+std::shared_ptr<OmniSciClient> g_client;
 
 bool g_cpu_only{false};
 
@@ -413,7 +413,7 @@ int main(int argc, char* argv[]) {
     auto transport = conn_mgr->open_buffered_client_transport(host, port, cert);
     transport->open();
     auto protocol = std::make_shared<TBinaryProtocol>(transport);
-    g_client = std::make_shared<MapDClient>(protocol);
+    g_client = std::make_shared<OmniSciClient>(protocol);
 
     g_client->connect(g_session_id, user, pwd, db);
 

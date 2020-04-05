@@ -21,13 +21,13 @@
 #include "rapidjson/document.h"
 
 #include "Catalog/SessionInfo.h"
-#include "gen-cpp/mapd_types.h"
+#include "gen-cpp/omnisci_types.h"
 
 #include "Catalog/ColumnDescriptor.h"
 #include "Catalog/SessionInfo.h"
 #include "Catalog/TableDescriptor.h"
 #include "Utils/DdlUtils.h"
-#include "gen-cpp/mapd_types.h"
+#include "gen-cpp/omnisci_types.h"
 
 class DdlCommand {
  public:

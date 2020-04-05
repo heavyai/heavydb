@@ -3,6 +3,6 @@
 
 #include "MetaClientContext.h"
 
-using ClientContext = MetaClientContext<MapDClient&, TTransport&>;
+using ClientContext = MetaClientContext<OmniSciClient&, TTransport&>;
 
 #endif

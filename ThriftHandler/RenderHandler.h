@@ -24,7 +24,7 @@
 #pragma once
 
 #include "Shared/SystemParameters.h"
-#include "gen-cpp/MapD.h"
+#include "gen-cpp/OmniSci.h"
 
 class DBHandler;
 

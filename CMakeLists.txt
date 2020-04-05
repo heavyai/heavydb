@@ -405,10 +405,10 @@ add_custom_command(
     DEPENDS ${CMAKE_SOURCE_DIR}/QueryEngine/serialized_result_set.thrift
     DEPENDS ${CMAKE_SOURCE_DIR}/QueryEngine/extension_functions.thrift
     OUTPUT
-        ${CMAKE_BINARY_DIR}/gen-cpp/MapD.cpp
-        ${CMAKE_BINARY_DIR}/gen-cpp/MapD.h
-        ${CMAKE_BINARY_DIR}/gen-cpp/mapd_constants.cpp
-        ${CMAKE_BINARY_DIR}/gen-cpp/mapd_types.cpp
+        ${CMAKE_BINARY_DIR}/gen-cpp/OmniSci.cpp
+        ${CMAKE_BINARY_DIR}/gen-cpp/OmniSci.h
+        ${CMAKE_BINARY_DIR}/gen-cpp/omnisci_constants.cpp
+        ${CMAKE_BINARY_DIR}/gen-cpp/omnisci_types.cpp
         ${CMAKE_BINARY_DIR}/gen-cpp/completion_hints_constants.cpp
         ${CMAKE_BINARY_DIR}/gen-cpp/completion_hints_types.cpp
         ${CMAKE_BINARY_DIR}/gen-cpp/serialized_result_set_constants.cpp
@@ -421,10 +421,10 @@ add_custom_command(
 list(APPEND ADDITIONAL_MAKE_CLEAN_FILES ${CMAKE_BINARY_DIR}/gen-cpp/)
 
 add_library(mapd_thrift
-    ${CMAKE_BINARY_DIR}/gen-cpp/MapD.cpp
-    ${CMAKE_BINARY_DIR}/gen-cpp/MapD.h
-    ${CMAKE_BINARY_DIR}/gen-cpp/mapd_constants.cpp
-    ${CMAKE_BINARY_DIR}/gen-cpp/mapd_types.cpp
+    ${CMAKE_BINARY_DIR}/gen-cpp/OmniSci.cpp
+    ${CMAKE_BINARY_DIR}/gen-cpp/OmniSci.h
+    ${CMAKE_BINARY_DIR}/gen-cpp/omnisci_constants.cpp
+    ${CMAKE_BINARY_DIR}/gen-cpp/omnisci_types.cpp
     ${CMAKE_BINARY_DIR}/gen-cpp/completion_hints_constants.cpp
     ${CMAKE_BINARY_DIR}/gen-cpp/completion_hints_types.cpp
     ${CMAKE_BINARY_DIR}/gen-cpp/serialized_result_set_constants.cpp

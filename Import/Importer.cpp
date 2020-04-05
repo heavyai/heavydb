@@ -70,7 +70,7 @@
 #include "Shared/thread_count.h"
 #include "Utils/ChunkAccessorTable.h"
 
-#include "gen-cpp/MapD.h"
+#include "gen-cpp/OmniSci.h"
 
 size_t g_archive_read_buf_size = 1 << 20;
 

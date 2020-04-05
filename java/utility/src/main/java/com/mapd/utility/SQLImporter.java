@@ -299,7 +299,7 @@ class SQLImporter_args {
 
 public class SQLImporter {
   protected String session = null;
-  protected MapD.Client client = null;
+  protected OmniSci.Client client = null;
   private CommandLine cmd = null;
   final static Logger LOGGER = LoggerFactory.getLogger(SQLImporter.class);
   private DateTimeUtils dateTimeUtils = (milliseconds) -> {
@@ -690,7 +690,7 @@ public class SQLImporter {
         protocol = new TBinaryProtocol(transport);
       }
 
-      client = new MapD.Client(protocol);
+      client = new OmniSci.Client(protocol);
       // This if will be useless until PKI signon
       if (cmd.hasOption("user")) {
         session = client.connect(cmd.getOptionValue("user", "admin"),

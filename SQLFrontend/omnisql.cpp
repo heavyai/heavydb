@@ -56,7 +56,7 @@
 #include "Shared/base64.h"
 #include "Shared/checked_alloc.h"
 #include "Shared/mapd_shared_ptr.h"
-#include "gen-cpp/MapD.h"
+#include "gen-cpp/OmniSci.h"
 
 #include "linenoise.h"
 
@@ -607,7 +607,7 @@ bool backchannel(int action, ClientContext* cc, const std::string& ccn = "") {
           context->server_host, context->port, ca_cert_name);
       protocol2 = mapd::shared_ptr<TProtocol>(new TBinaryProtocol(transport2));
     }
-    MapDClient c2(protocol2);
+    OmniSciClient c2(protocol2);
     ClientContext context2(*transport2, c2);
 
     context2.db_name = context->db_name;
@@ -1225,7 +1225,7 @@ int main(int argc, char** argv) {
     transport = connMgr->open_buffered_client_transport(server_host, port, ca_cert_name);
     protocol = mapd::shared_ptr<TProtocol>(new TBinaryProtocol(transport));
   }
-  MapDClient c(protocol);
+  OmniSciClient c(protocol);
   ClientContext context(*transport, c);
   g_client_context_ptr = &context;
 

@@ -38,7 +38,7 @@
 #include <thrift/protocol/TBinaryProtocol.h>
 #include <thrift/transport/TBufferTransports.h>
 #include <thrift/transport/TSocket.h>
-#include "gen-cpp/MapD.h"
+#include "gen-cpp/OmniSci.h"
 
 using namespace ::apache::thrift;
 using namespace ::apache::thrift::protocol;
@@ -95,7 +95,7 @@ struct ConnectionDetails {
 bool print_error_data = false;
 bool print_transformation = false;
 
-mapd::shared_ptr<MapDClient> client;
+mapd::shared_ptr<OmniSciClient> client;
 TSessionId session;
 mapd::shared_ptr<apache::thrift::transport::TTransport> mytransport;
 
@@ -108,7 +108,7 @@ void createConnection(ConnectionDetails con) {
   mapd::shared_ptr<TTransport> socket(new TSocket(con.server_host, con.port));
   mytransport.reset(new TBufferedTransport(socket));
   mapd::shared_ptr<TProtocol> protocol(new TBinaryProtocol(mytransport));
-  client.reset(new MapDClient(protocol));
+  client.reset(new OmniSciClient(protocol));
   try {
     mytransport->open();  // open transport
     client->connect(

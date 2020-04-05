@@ -15,7 +15,7 @@
  */
 package com.omnisci.jdbc;
 
-import com.mapd.thrift.server.MapD;
+import com.mapd.thrift.server.OmniSci;
 import com.mapd.thrift.server.TColumnType;
 import com.mapd.thrift.server.TMapDException;
 import com.mapd.thrift.server.TStringRow;
@@ -73,7 +73,7 @@ class OmniSciPreparedStatement implements PreparedStatement {
   private int fieldsOrder[];
   private int repCount;
   private String session;
-  private MapD.Client client;
+  private OmniSci.Client client;
   private OmniSciStatement stmt = null;
   private boolean isInsert = false;
   private boolean isNewBatch = true;
@@ -88,7 +88,7 @@ class OmniSciPreparedStatement implements PreparedStatement {
           Pattern.compile("^(?:\\s|--.*?\\R|/\\*[\\S\\s]*?\\*/|\\s*)*\\s*select[\\S\\s]*",
                   Pattern.CASE_INSENSITIVE | Pattern.MULTILINE);
 
-  OmniSciPreparedStatement(String sql, String session, MapD.Client client) {
+  OmniSciPreparedStatement(String sql, String session, OmniSci.Client client) {
     MAPDLOGGER.debug("Entered");
     currentSQL = sql;
     this.client = client;

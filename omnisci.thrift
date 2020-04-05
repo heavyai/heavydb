@@ -492,7 +492,7 @@ struct TGeoFileLayerInfo {
   2: TGeoFileLayerContents contents;
 }
 
-service MapD {
+service OmniSci {
   # connection, admin
   TSessionId connect(1: string user, 2: string passwd, 3: string dbname) throws (1: TMapDException e)
   TKrb5Session krb5_connect(1: string inputToken, 2: string dbname) throws (1: TMapDException e)

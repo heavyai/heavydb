@@ -1,7 +1,7 @@
 #ifndef METACLIENTCONTEXT_H
 #define METACLIENTCONTEXT_H
 
-#include "gen-cpp/mapd_types.h"
+#include "gen-cpp/omnisci_types.h"
 
 using namespace ::apache::thrift;
 using namespace ::apache::thrift::protocol;

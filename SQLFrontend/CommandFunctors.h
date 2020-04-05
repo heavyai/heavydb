@@ -20,7 +20,7 @@
 #include "CommandResolutionChain.h"
 #include "ThriftOps.h"
 
-#include "gen-cpp/MapD.h"
+#include "gen-cpp/OmniSci.h"
 
 #include "ClientContext.h"  // Provides us with default class
 #include "RegexSupport.h"
