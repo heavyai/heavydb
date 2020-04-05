@@ -113,9 +113,9 @@ using TableMap = std::map<std::string, bool>;
 using OptionalTableMap = boost::optional<TableMap&>;
 using query_state::QueryStateProxy;
 
-class MapDTrackingProcessor : public MapDProcessor {
+class TrackingProcessor : public MapDProcessor {
  public:
-  MapDTrackingProcessor(mapd::shared_ptr<MapDIf> handler) : MapDProcessor(handler) {}
+  TrackingProcessor(mapd::shared_ptr<MapDIf> handler) : MapDProcessor(handler) {}
 
   bool process(mapd::shared_ptr<::apache::thrift::protocol::TProtocol> in,
                mapd::shared_ptr<::apache::thrift::protocol::TProtocol> out,
@@ -130,23 +130,23 @@ class MapDTrackingProcessor : public MapDProcessor {
       std::vector<std::string> origins;
       boost::split(origins, origin_str, boost::is_any_of(","));
       if (origins.empty()) {
-        MapDTrackingProcessor::client_address = origin_str;
+        TrackingProcessor::client_address = origin_str;
       } else {
         // Take the first origin, which should be the client IP before any intermediate
         // servers (e.g. the web server)
         auto trimmed_origin = origins.front();
         boost::algorithm::trim(trimmed_origin);
-        MapDTrackingProcessor::client_address = trimmed_origin;
+        TrackingProcessor::client_address = trimmed_origin;
       }
       if (dynamic_cast<transport::THttpTransport*>(transport.get())) {
-        MapDTrackingProcessor::client_protocol = ClientProtocol::HTTP;
+        TrackingProcessor::client_protocol = ClientProtocol::HTTP;
       } else if (dynamic_cast<transport::TBufferedTransport*>(transport.get())) {
-        MapDTrackingProcessor::client_protocol = ClientProtocol::TCP;
+        TrackingProcessor::client_protocol = ClientProtocol::TCP;
       } else {
-        MapDTrackingProcessor::client_protocol = ClientProtocol::Other;
+        TrackingProcessor::client_protocol = ClientProtocol::Other;
       }
     } else {
-      MapDTrackingProcessor::client_address = "";
+      TrackingProcessor::client_address = "";
     }
 
     return MapDProcessor::process(in, out, connectionContext);

@@ -116,8 +116,8 @@ using Catalog_Namespace::SysCatalog;
     throw ex;                        \
   }
 
-thread_local std::string MapDTrackingProcessor::client_address;
-thread_local ClientProtocol MapDTrackingProcessor::client_protocol;
+thread_local std::string TrackingProcessor::client_address;
+thread_local ClientProtocol TrackingProcessor::client_protocol;
 
 namespace {
 
@@ -1316,8 +1316,8 @@ DBHandler::fill_column_names_by_table(std::vector<std::string>& table_names,
 }
 
 ConnectionInfo DBHandler::getConnectionInfo() const {
-  return ConnectionInfo{MapDTrackingProcessor::client_address,
-                        MapDTrackingProcessor::client_protocol};
+  return ConnectionInfo{TrackingProcessor::client_address,
+                        TrackingProcessor::client_protocol};
 }
 
 std::unordered_set<std::string> DBHandler::get_uc_compatible_table_names_by_column(
