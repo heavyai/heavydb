@@ -23,8 +23,8 @@
 
 #include "Catalog/ForeignTable.h"
 #include "Catalog/TableDescriptor.h"
+#include "DBHandlerTestHelpers.h"
 #include "Fragmenter/FragmentDefaultValues.h"
-#include "MapDHandlerTestHelpers.h"
 #include "TestHelpers.h"
 #include "Utils/DdlUtils.h"
 
@@ -48,11 +48,11 @@ struct ColumnAttributes {
 };
 }  // namespace
 
-class CreateAndDropTableDdlTest : public MapDHandlerTestFixture {
+class CreateAndDropTableDdlTest : public DBHandlerTestFixture {
  protected:
   void SetUp() override {
     g_enable_fsi = true;
-    MapDHandlerTestFixture::SetUp();
+    DBHandlerTestFixture::SetUp();
   }
 
   std::string getCreateTableQuery(const ddl_utils::TableType table_type,

@@ -16,7 +16,7 @@
 
 #include "MapDServer.h"
 #include "DataMgr/ForeignStorage/ForeignStorageInterface.h"
-#include "ThriftHandler/MapDHandler.h"
+#include "ThriftHandler/DBHandler.h"
 
 #ifdef HAVE_THRIFT_THREADFACTORY
 #include <thrift/concurrency/ThreadFactory.h>
@@ -95,10 +95,10 @@ mapd_shared_mutex g_thrift_mutex;
 TThreadedServer* g_thrift_http_server{nullptr};
 TThreadedServer* g_thrift_buf_server{nullptr};
 
-mapd::shared_ptr<MapDHandler> g_warmup_handler =
+mapd::shared_ptr<DBHandler> g_warmup_handler =
     0;  // global "g_warmup_handler" needed to avoid circular dependency
-        // between "MapDHandler" & function "run_warmup_queries"
-mapd::shared_ptr<MapDHandler> g_mapd_handler = 0;
+        // between "DBHandler" & function "run_warmup_queries"
+mapd::shared_ptr<DBHandler> g_mapd_handler = 0;
 std::once_flag g_shutdown_once_flag;
 
 void shutdown_handler() {
@@ -169,7 +169,7 @@ void releaseWarmupSession(TSessionId& sessionId, std::ifstream& query_file) {
   }
 }
 
-void run_warmup_queries(mapd::shared_ptr<MapDHandler> handler,
+void run_warmup_queries(mapd::shared_ptr<DBHandler> handler,
                         std::string base_path,
                         std::string query_file_path) {
   // run warmup queries to load cache if requested
@@ -1176,33 +1176,33 @@ int startMapdServer(MapDProgramOptions& prog_config_opts, bool start_http_server
 
   try {
     g_mapd_handler =
-        mapd::make_shared<MapDHandler>(prog_config_opts.db_leaves,
-                                       prog_config_opts.string_leaves,
-                                       prog_config_opts.base_path,
-                                       prog_config_opts.cpu_only,
-                                       prog_config_opts.allow_multifrag,
-                                       prog_config_opts.jit_debug,
-                                       prog_config_opts.intel_jit_profile,
-                                       prog_config_opts.read_only,
-                                       prog_config_opts.allow_loop_joins,
-                                       prog_config_opts.enable_rendering,
-                                       prog_config_opts.enable_auto_clear_render_mem,
-                                       prog_config_opts.render_oom_retry_threshold,
-                                       prog_config_opts.render_mem_bytes,
-                                       prog_config_opts.max_concurrent_render_sessions,
-                                       prog_config_opts.num_gpus,
-                                       prog_config_opts.start_gpu,
-                                       prog_config_opts.reserved_gpu_mem,
-                                       prog_config_opts.num_reader_threads,
-                                       prog_config_opts.authMetadata,
-                                       prog_config_opts.mapd_parameters,
-                                       prog_config_opts.enable_legacy_syntax,
-                                       prog_config_opts.idle_session_duration,
-                                       prog_config_opts.max_session_duration,
-                                       prog_config_opts.enable_runtime_udf,
-                                       prog_config_opts.udf_file_name,
-                                       prog_config_opts.udf_compiler_path,
-                                       prog_config_opts.udf_compiler_options);
+        mapd::make_shared<DBHandler>(prog_config_opts.db_leaves,
+                                     prog_config_opts.string_leaves,
+                                     prog_config_opts.base_path,
+                                     prog_config_opts.cpu_only,
+                                     prog_config_opts.allow_multifrag,
+                                     prog_config_opts.jit_debug,
+                                     prog_config_opts.intel_jit_profile,
+                                     prog_config_opts.read_only,
+                                     prog_config_opts.allow_loop_joins,
+                                     prog_config_opts.enable_rendering,
+                                     prog_config_opts.enable_auto_clear_render_mem,
+                                     prog_config_opts.render_oom_retry_threshold,
+                                     prog_config_opts.render_mem_bytes,
+                                     prog_config_opts.max_concurrent_render_sessions,
+                                     prog_config_opts.num_gpus,
+                                     prog_config_opts.start_gpu,
+                                     prog_config_opts.reserved_gpu_mem,
+                                     prog_config_opts.num_reader_threads,
+                                     prog_config_opts.authMetadata,
+                                     prog_config_opts.mapd_parameters,
+                                     prog_config_opts.enable_legacy_syntax,
+                                     prog_config_opts.idle_session_duration,
+                                     prog_config_opts.max_session_duration,
+                                     prog_config_opts.enable_runtime_udf,
+                                     prog_config_opts.udf_file_name,
+                                     prog_config_opts.udf_compiler_path,
+                                     prog_config_opts.udf_compiler_options);
   } catch (const std::exception& e) {
     LOG(FATAL) << "Failed to initialize service handler: " << e.what();
   }

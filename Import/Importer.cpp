@@ -763,7 +763,7 @@ size_t TypedImportBuffer::convert_arrow_val_to_import_buffer(
   std::function<void(const int64_t)> f_add_geo_phy_cols = [&](const int64_t row) {};
   if (bad_rows_tracker && cd->columnType.is_geometry()) {
     f_add_geo_phy_cols = [&](const int64_t row) {
-      // Populate physical columns (ref. MapDHandler::load_table)
+      // Populate physical columns (ref. DBHandler::load_table)
       std::vector<double> coords, bounds;
       std::vector<int> ring_sizes, poly_rings;
       int render_group = 0;

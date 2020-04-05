@@ -19,12 +19,12 @@
 #include <gtest/gtest.h>
 
 #include "Catalog/Catalog.h"
-#include "ThriftHandler/MapDHandler.h"
+#include "ThriftHandler/DBHandler.h"
 
 /**
- * Helper gtest fixture class for executing SQL queries through MapDHandler.
+ * Helper gtest fixture class for executing SQL queries through DBHandler.
  */
-class MapDHandlerTestFixture : public testing::Test {
+class DBHandlerTestFixture : public testing::Test {
  public:
   static void initTestArgs(int argc, char** argv) {
     namespace po = boost::program_options;
@@ -65,33 +65,33 @@ class MapDHandlerTestFixture : public testing::Test {
       mapd_parameters_.omnisci_server_port = -1;
       mapd_parameters_.calcite_port = 3280;
 
-      mapd_handler_ = std::make_unique<MapDHandler>(db_leaves_,
-                                                    string_leaves_,
-                                                    BASE_PATH,
-                                                    cpu_only,
-                                                    allow_multifrag,
-                                                    jit_debug,
-                                                    intel_jit_profile,
-                                                    read_only,
-                                                    allow_loop_joins,
-                                                    enable_rendering,
-                                                    enable_auto_clear_render_mem,
-                                                    render_oom_retry_threshold,
-                                                    render_mem_bytes,
-                                                    max_concurrent_render_sessions,
-                                                    num_gpus,
-                                                    start_gpu,
-                                                    reserved_gpu_mem,
-                                                    num_reader_threads,
-                                                    auth_metadata_,
-                                                    mapd_parameters_,
-                                                    legacy_syntax,
-                                                    idle_session_duration,
-                                                    max_session_duration,
-                                                    enable_runtime_udf_registration,
-                                                    udf_filename_,
-                                                    udf_compiler_path_,
-                                                    udf_compiler_options_);
+      mapd_handler_ = std::make_unique<DBHandler>(db_leaves_,
+                                                  string_leaves_,
+                                                  BASE_PATH,
+                                                  cpu_only,
+                                                  allow_multifrag,
+                                                  jit_debug,
+                                                  intel_jit_profile,
+                                                  read_only,
+                                                  allow_loop_joins,
+                                                  enable_rendering,
+                                                  enable_auto_clear_render_mem,
+                                                  render_oom_retry_threshold,
+                                                  render_mem_bytes,
+                                                  max_concurrent_render_sessions,
+                                                  num_gpus,
+                                                  start_gpu,
+                                                  reserved_gpu_mem,
+                                                  num_reader_threads,
+                                                  auth_metadata_,
+                                                  mapd_parameters_,
+                                                  legacy_syntax,
+                                                  idle_session_duration,
+                                                  max_session_duration,
+                                                  enable_runtime_udf_registration,
+                                                  udf_filename_,
+                                                  udf_compiler_path_,
+                                                  udf_compiler_options_);
     }
     loginAdmin();
   }
@@ -163,7 +163,7 @@ class MapDHandlerTestFixture : public testing::Test {
   }
 
  private:
-  static std::unique_ptr<MapDHandler> mapd_handler_;
+  static std::unique_ptr<DBHandler> mapd_handler_;
   static TSessionId session_id_;
   static TSessionId admin_session_id_;
   static std::vector<LeafHostInfo> db_leaves_;
@@ -179,17 +179,17 @@ class MapDHandlerTestFixture : public testing::Test {
   static std::string cluster_config_file_path_;
 };
 
-TSessionId MapDHandlerTestFixture::session_id_{};
-TSessionId MapDHandlerTestFixture::admin_session_id_{};
-std::unique_ptr<MapDHandler> MapDHandlerTestFixture::mapd_handler_ = nullptr;
-std::vector<LeafHostInfo> MapDHandlerTestFixture::db_leaves_{};
-std::vector<LeafHostInfo> MapDHandlerTestFixture::string_leaves_{};
-AuthMetadata MapDHandlerTestFixture::auth_metadata_{};
-std::string MapDHandlerTestFixture::udf_filename_{};
-std::string MapDHandlerTestFixture::udf_compiler_path_{};
-std::string MapDHandlerTestFixture::default_user_{"admin"};
-std::string MapDHandlerTestFixture::default_pass_{"HyperInteractive"};
-std::string MapDHandlerTestFixture::default_db_name_{};
-SystemParameters MapDHandlerTestFixture::mapd_parameters_{};
-std::vector<std::string> MapDHandlerTestFixture::udf_compiler_options_{};
-std::string MapDHandlerTestFixture::cluster_config_file_path_{};
+TSessionId DBHandlerTestFixture::session_id_{};
+TSessionId DBHandlerTestFixture::admin_session_id_{};
+std::unique_ptr<DBHandler> DBHandlerTestFixture::mapd_handler_ = nullptr;
+std::vector<LeafHostInfo> DBHandlerTestFixture::db_leaves_{};
+std::vector<LeafHostInfo> DBHandlerTestFixture::string_leaves_{};
+AuthMetadata DBHandlerTestFixture::auth_metadata_{};
+std::string DBHandlerTestFixture::udf_filename_{};
+std::string DBHandlerTestFixture::udf_compiler_path_{};
+std::string DBHandlerTestFixture::default_user_{"admin"};
+std::string DBHandlerTestFixture::default_pass_{"HyperInteractive"};
+std::string DBHandlerTestFixture::default_db_name_{};
+SystemParameters DBHandlerTestFixture::mapd_parameters_{};
+std::vector<std::string> DBHandlerTestFixture::udf_compiler_options_{};
+std::string DBHandlerTestFixture::cluster_config_file_path_{};

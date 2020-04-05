@@ -11,7 +11,7 @@
 #include "../QueryEngine/Descriptors/RelAlgExecutionDescriptor.h"
 #include "../QueryEngine/Execute.h"
 #include "../QueryRunner/QueryRunner.h"
-#include "MapDHandlerTestHelpers.h"
+#include "DBHandlerTestHelpers.h"
 #include "Shared/scope.h"
 #include "TestHelpers.h"
 #include "ThriftHandler/QueryState.h"
@@ -239,7 +239,7 @@ class DashboardObject : public ::testing::Test {
   void TearDown() override { drop_dashboards(); }
 };
 
-struct ServerObject : public MapDHandlerTestFixture {
+struct ServerObject : public DBHandlerTestFixture {
   Users user_;
   Roles role_;
 
@@ -249,7 +249,7 @@ struct ServerObject : public MapDHandlerTestFixture {
       LOG(INFO) << "Test fixture not supported in distributed mode.";
       return;
     }
-    MapDHandlerTestFixture::SetUp();
+    DBHandlerTestFixture::SetUp();
     sql("CREATE SERVER test_server FOREIGN DATA WRAPPER omnisci_csv "
         "WITH (storage_type = 'LOCAL_FILE', base_path = '/test_path/');");
   }
@@ -260,7 +260,7 @@ struct ServerObject : public MapDHandlerTestFixture {
       return;
     }
     sql("DROP SERVER IF EXISTS test_server;");
-    MapDHandlerTestFixture::TearDown();
+    DBHandlerTestFixture::TearDown();
   }
 };
 

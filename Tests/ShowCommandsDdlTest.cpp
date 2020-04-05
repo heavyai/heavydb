@@ -21,17 +21,17 @@
 
 #include <gtest/gtest.h>
 
-#include "MapDHandlerTestHelpers.h"
+#include "DBHandlerTestHelpers.h"
 #include "TestHelpers.h"
 
 #ifndef BASE_PATH
 #define BASE_PATH "./tmp"
 #endif
 
-class ShowUserSessionsTest : public MapDHandlerTestFixture {
+class ShowUserSessionsTest : public DBHandlerTestFixture {
  public:
   void SetUp() override {
-    MapDHandlerTestFixture::SetUp();
+    DBHandlerTestFixture::SetUp();
     users = {"user1", "user2", "user3"};
     superusers = {"super1", "super2", "super3"};
     dbs = {"db1", "db2", "db3"};
@@ -60,7 +60,7 @@ class ShowUserSessionsTest : public MapDHandlerTestFixture {
     assertExpectedFormat(result);
     assertNumSessions(result, 1);
     assertSessionResultFound(result, "admin", "omnisci", admin_id);
-    MapDHandlerTestFixture::TearDown();
+    DBHandlerTestFixture::TearDown();
   }
 
   void createUsers() {
@@ -372,10 +372,10 @@ TEST_F(ShowUserSessionsTest, PRIVILEGES_NONSUPERUSER) {
   logout(usersession);
 }
 
-class ShowTableDdlTest : public MapDHandlerTestFixture {
+class ShowTableDdlTest : public DBHandlerTestFixture {
  protected:
   void SetUp() override {
-    MapDHandlerTestFixture::SetUp();
+    DBHandlerTestFixture::SetUp();
     loginAdmin();
     createTestUser();
   }
@@ -524,10 +524,10 @@ TEST_F(ShowTableDdlTest, CreateTableCreateViewAndViewNotSeen) {
   sql("DROP VIEW test_view;");
 }
 
-class ShowDatabasesTest : public MapDHandlerTestFixture {
+class ShowDatabasesTest : public DBHandlerTestFixture {
  protected:
   void SetUp() override {
-    MapDHandlerTestFixture::SetUp();
+    DBHandlerTestFixture::SetUp();
     createTestUser("test_user_1", "test_pass_1");
     createTestUser("test_user_2", "test_pass_2");
     createTestUser("test_super_user", "test_pass", true);
@@ -539,7 +539,7 @@ class ShowDatabasesTest : public MapDHandlerTestFixture {
     dropTestUser("test_super_user");
     sql("DROP DATABASE IF EXISTS test_db_1;");
     sql("DROP DATABASE IF EXISTS test_db_2;");
-    MapDHandlerTestFixture::TearDown();
+    DBHandlerTestFixture::TearDown();
   }
 
   void assertExpectedResult(const std::vector<std::string> headers,
@@ -676,7 +676,7 @@ TEST_F(ShowDatabasesTest, SuperUserLoginAndOtherUserDatabases) {
 int main(int argc, char** argv) {
   TestHelpers::init_logger_stderr_only(argc, argv);
   testing::InitGoogleTest(&argc, argv);
-  MapDHandlerTestFixture::initTestArgs(argc, argv);
+  DBHandlerTestFixture::initTestArgs(argc, argv);
 
   int err{0};
   try {

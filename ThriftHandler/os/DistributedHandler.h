@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 MapD Technologies, Inc.
+ * Copyright 2020 OmniSci, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,17 +21,16 @@
  * Created on Nov 6, 2017, 10:00 AM
  */
 
-#ifndef MAPDDISTRIBUTEDHANDLER_H_
-#define MAPDDISTRIBUTEDHANDLER_H_
+#pragma once
 
-#include "../MapDHandler.h"
+#include "../DBHandler.h"
 
 class MapDAggHandler {
  public:
   ~MapDAggHandler() {}
 
  private:
-  MapDAggHandler(MapDHandler* mapd_handler) { CHECK(false); }
+  MapDAggHandler(DBHandler* mapd_handler) { CHECK(false); }
 
   void cluster_execute(TQueryResult& _return,
                        QueryStateProxy,
@@ -43,7 +42,7 @@ class MapDAggHandler {
                        const SystemParameters& mapd_parameters) {
     CHECK(false);
   }
-  friend class MapDHandler;
+  friend class DBHandler;
 };
 
 class MapDLeafHandler {
@@ -51,7 +50,7 @@ class MapDLeafHandler {
   ~MapDLeafHandler() {}
 
  private:
-  MapDLeafHandler(MapDHandler* mapd_handler) { CHECK(false); }
+  MapDLeafHandler(DBHandler* mapd_handler) { CHECK(false); }
 
   void check_table_consistency(TTableMeta& _return,
                                const TSessionId& session,
@@ -79,7 +78,5 @@ class MapDLeafHandler {
 
   void flush_queue() { CHECK(false); }
 
-  friend class MapDHandler;
+  friend class DBHandler;
 };
-
-#endif /* MAPDDISTRIBUTEDHANDLER_H_ */

@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 MapD Technologies, Inc.
+ * Copyright 2020 OmniSci, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,14 +15,13 @@
  */
 
 /*
- * File:   MapDHandler.h
+ * File:   DBHandler.h
  * Author: michael
  *
  * Created on Jan 1, 2017, 12:40 PM
  */
 
-#ifndef MAPDHANDLER_H
-#define MAPDHANDLER_H
+#pragma once
 
 #include "LeafAggregator.h"
 
@@ -61,8 +60,8 @@
 #include "StringDictionary/StringDictionaryClient.h"
 #include "ThriftHandler/ConnectionInfo.h"
 #include "ThriftHandler/DistributedValidate.h"
-#include "ThriftHandler/MapDRenderHandler.h"
 #include "ThriftHandler/QueryState.h"
+#include "ThriftHandler/RenderHandler.h"
 
 #include <sys/time.h>
 #include <sys/types.h>
@@ -157,37 +156,37 @@ class MapDTrackingProcessor : public MapDProcessor {
   static thread_local ClientProtocol client_protocol;
 };
 
-class MapDHandler : public MapDIf {
+class DBHandler : public MapDIf {
  public:
-  MapDHandler(const std::vector<LeafHostInfo>& db_leaves,
-              const std::vector<LeafHostInfo>& string_leaves,
-              const std::string& base_data_path,
-              const bool cpu_only,
-              const bool allow_multifrag,
-              const bool jit_debug,
-              const bool intel_jit_profile,
-              const bool read_only,
-              const bool allow_loop_joins,
-              const bool enable_rendering,
-              const bool enable_auto_clear_render_mem,
-              const int render_oom_retry_threshold,
-              const size_t render_mem_bytes,
-              const size_t max_concurrent_render_sessions,
-              const int num_gpus,
-              const int start_gpu,
-              const size_t reserved_gpu_mem,
-              const size_t num_reader_threads,
-              const AuthMetadata& authMetadata,
-              const SystemParameters& mapd_parameters,
-              const bool legacy_syntax,
-              const int idle_session_duration,
-              const int max_session_duration,
-              const bool enable_runtime_udf_registration,
-              const std::string& udf_filename,
-              const std::string& clang_path,
-              const std::vector<std::string>& clang_options);
+  DBHandler(const std::vector<LeafHostInfo>& db_leaves,
+            const std::vector<LeafHostInfo>& string_leaves,
+            const std::string& base_data_path,
+            const bool cpu_only,
+            const bool allow_multifrag,
+            const bool jit_debug,
+            const bool intel_jit_profile,
+            const bool read_only,
+            const bool allow_loop_joins,
+            const bool enable_rendering,
+            const bool enable_auto_clear_render_mem,
+            const int render_oom_retry_threshold,
+            const size_t render_mem_bytes,
+            const size_t max_concurrent_render_sessions,
+            const int num_gpus,
+            const int start_gpu,
+            const size_t reserved_gpu_mem,
+            const size_t num_reader_threads,
+            const AuthMetadata& authMetadata,
+            const SystemParameters& mapd_parameters,
+            const bool legacy_syntax,
+            const int idle_session_duration,
+            const int max_session_duration,
+            const bool enable_runtime_udf_registration,
+            const std::string& udf_filename,
+            const std::string& clang_path,
+            const std::vector<std::string>& clang_options);
 
-  ~MapDHandler() override;
+  ~DBHandler() override;
 
   static inline size_t max_bytes_for_thrift() { return 2 * 1000 * 1000 * 1000L; }
 
@@ -511,7 +510,7 @@ class MapDHandler : public MapDIf {
   int64_t start_time_;
   const AuthMetadata& authMetadata_;
   const SystemParameters& mapd_parameters_;
-  std::unique_ptr<MapDRenderHandler> render_handler_;
+  std::unique_ptr<RenderHandler> render_handler_;
   std::unique_ptr<MapDAggHandler> agg_handler_;
   std::unique_ptr<MapDLeafHandler> leaf_handler_;
   std::shared_ptr<Calcite> calcite_;
@@ -778,11 +777,11 @@ class MapDHandler : public MapDIf {
   mutable std::mutex handle_to_dev_ptr_mutex_;
   mutable std::unordered_map<std::string, std::string> ipc_handle_to_dev_ptr_;
 
-  friend void run_warmup_queries(mapd::shared_ptr<MapDHandler> handler,
+  friend void run_warmup_queries(mapd::shared_ptr<DBHandler> handler,
                                  std::string base_path,
                                  std::string query_file_path);
 
-  friend class MapDRenderHandler::Impl;
+  friend class RenderHandler::Impl;
   friend class MapDAggHandler;
   friend class MapDLeafHandler;
 
@@ -826,5 +825,3 @@ class MapDHandler : public MapDIf {
   void getUserSessions(const Catalog_Namespace::SessionInfo& session_info,
                        TQueryResult& _return);
 };
-
-#endif /* MAPDHANDLER_H */

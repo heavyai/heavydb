@@ -15,7 +15,7 @@
  */
 
 /*
- * File:   MapDRenderHandler.h
+ * File:   RenderHandler.h
  * Author: Chris Root
  *
  * Created on Dec 18, 2019, 10:00 AM
@@ -26,7 +26,7 @@
 #include "Shared/SystemParameters.h"
 #include "gen-cpp/MapD.h"
 
-class MapDHandler;
+class DBHandler;
 
 namespace Catalog_Namespace {
 class SessionInfo;
@@ -40,21 +40,21 @@ namespace Parser {
 class DDLStmt;
 }
 
-class MapDRenderHandler {
+class RenderHandler {
  public:
   // forward declaration of the implementation class to be defined later.
   // This is public as there can be certain functionality at lower levels that may want to
   // work directly with the implementation layer.
   class Impl;
 
-  explicit MapDRenderHandler(MapDHandler* mapd_handler,
-                             const size_t render_mem_bytes,
-                             const size_t render_poly_cache_bytes,
-                             const size_t max_conncurrent_render_sessions,
-                             const bool enable_auto_clear_render_mem,
-                             const int render_oom_retry_threshold,
-                             const SystemParameters mapd_parameters);
-  ~MapDRenderHandler();
+  explicit RenderHandler(DBHandler* mapd_handler,
+                         const size_t render_mem_bytes,
+                         const size_t render_poly_cache_bytes,
+                         const size_t max_conncurrent_render_sessions,
+                         const bool enable_auto_clear_render_mem,
+                         const int render_oom_retry_threshold,
+                         const SystemParameters mapd_parameters);
+  ~RenderHandler();
 
  private:
   void disconnect(const TSessionId& session);
@@ -95,5 +95,5 @@ class MapDRenderHandler {
 
   std::unique_ptr<Impl> impl_;
 
-  friend class MapDHandler;
+  friend class DBHandler;
 };

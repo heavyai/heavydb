@@ -33,7 +33,7 @@
 #include "QueryEngine/UDFCompiler.h"
 #include "QueryRunner/QueryRunner.h"
 #include "Shared/Logger.h"
-#include "Shared/MapDParameters.h"
+#include "Shared/SystemParameters.h"
 #include "TestHelpers.h"
 
 namespace po = boost::program_options;

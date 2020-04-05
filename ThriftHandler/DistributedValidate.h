@@ -23,7 +23,7 @@
 #include "LeafAggregator.h"
 #include "MapDServer.h"
 
-class MapDHandler;
+class DBHandler;
 
 /**
  * @brief Driver for running distributed validation on metadata across cluster.
@@ -37,7 +37,7 @@ class DistributedValidate {
                       Catalog_Namespace::Catalog& cat,
                       LeafAggregator& leaf_aggregator,
                       const Catalog_Namespace::SessionInfo session_info,
-                      MapDHandler& mapd_handler)
+                      DBHandler& mapd_handler)
       : cat_(cat)
       , type_(type)
       , is_repair_type_remove_(is_repair_type_remove)
@@ -55,5 +55,5 @@ class DistributedValidate {
   const bool is_repair_type_remove_;
   LeafAggregator& leaf_aggregator_;
   const Catalog_Namespace::SessionInfo session_info_;
-  MapDHandler& mapd_handler_;
+  DBHandler& mapd_handler_;
 };
