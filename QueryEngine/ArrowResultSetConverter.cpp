@@ -498,9 +498,9 @@ std::shared_ptr<arrow::RecordBatch> ArrowResultSetConverter::getArrowBatch(
 
 namespace {
 
-std::shared_ptr<arrow::DataType> get_arrow_type(const SQLTypeInfo& mapd_type,
+std::shared_ptr<arrow::DataType> get_arrow_type(const SQLTypeInfo& sql_type,
                                                 const ExecutorDeviceType device_type) {
-  switch (get_physical_type(mapd_type)) {
+  switch (get_physical_type(sql_type)) {
     case kBOOLEAN:
       return boolean();
     case kTINYINT:
@@ -518,14 +518,14 @@ std::shared_ptr<arrow::DataType> get_arrow_type(const SQLTypeInfo& mapd_type,
     case kCHAR:
     case kVARCHAR:
     case kTEXT:
-      if (mapd_type.is_dict_encoded_string()) {
+      if (sql_type.is_dict_encoded_string()) {
         auto value_type = std::make_shared<StringType>();
         return dictionary(int32(), value_type, false);
       }
       return utf8();
     case kDECIMAL:
     case kNUMERIC:
-      return decimal(mapd_type.get_precision(), mapd_type.get_scale());
+      return decimal(sql_type.get_precision(), sql_type.get_scale());
     case kTIME:
       return time32(TimeUnit::SECOND);
     case kDATE:
@@ -534,7 +534,7 @@ std::shared_ptr<arrow::DataType> get_arrow_type(const SQLTypeInfo& mapd_type,
       // date on GPU, return date64() for the time being, till support is added.
       return device_type == ExecutorDeviceType::GPU ? date64() : date32();
     case kTIMESTAMP:
-      switch (mapd_type.get_precision()) {
+      switch (sql_type.get_precision()) {
         case 0:
           return timestamp(TimeUnit::SECOND);
         case 3:
@@ -546,13 +546,13 @@ std::shared_ptr<arrow::DataType> get_arrow_type(const SQLTypeInfo& mapd_type,
         default:
           throw std::runtime_error(
               "Unsupported timestamp precision for Arrow result sets: " +
-              std::to_string(mapd_type.get_precision()));
+              std::to_string(sql_type.get_precision()));
       }
     case kARRAY:
     case kINTERVAL_DAY_TIME:
     case kINTERVAL_YEAR_MONTH:
     default:
-      throw std::runtime_error(mapd_type.get_type_name() +
+      throw std::runtime_error(sql_type.get_type_name() +
                                " is not supported in Arrow result sets.");
   }
   return nullptr;
