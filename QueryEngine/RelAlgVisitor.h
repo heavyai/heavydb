@@ -71,8 +71,12 @@ class RelAlgVisitor {
     if (table_func) {
       return aggregateResult(result, visitTableFunction(table_func));
     }
-    CHECK(false);
-    return defaultResult();
+    const auto logical_union = dynamic_cast<const RelLogicalUnion*>(rel_alg);
+    if (logical_union) {
+      return aggregateResult(result, visitLogicalUnion(logical_union));
+    }
+    LOG(FATAL) << "Unhandled rel_alg type: " << rel_alg->toString();
+    return {};
   }
 
   virtual T visitAggregate(const RelAggregate*) const { return defaultResult(); }
@@ -98,6 +102,8 @@ class RelAlgVisitor {
   virtual T visitModify(const RelModify*) const { return defaultResult(); }
 
   virtual T visitTableFunction(const RelTableFunction*) const { return defaultResult(); }
+
+  virtual T visitLogicalUnion(const RelLogicalUnion*) const { return defaultResult(); }
 
  protected:
   virtual T aggregateResult(const T& aggregate, const T& next_result) const {

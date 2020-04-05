@@ -24,6 +24,7 @@
 #include "../QueryEngine/ResultSetReductionJIT.h"
 #include "../QueryRunner/QueryRunner.h"
 #include "../Shared/ConfigResolve.h"
+#include "../Shared/StringTransform.h"
 #include "../Shared/TimeGM.h"
 #include "../Shared/scope.h"
 #include "../SqliteConnector/SqliteConnector.h"
@@ -59,6 +60,7 @@ extern double g_gpu_mem_limit_percent;
 extern bool g_enable_window_functions;
 extern bool g_enable_bump_allocator;
 extern bool g_enable_interop;
+extern bool g_enable_union;
 
 extern size_t g_leaf_count;
 extern bool g_cluster;
@@ -5929,6 +5931,54 @@ void import_test_table_with_lots_of_columns() {
   for (size_t i = 0; i < 10; i++) {
     run_multiple_agg(i % 2 ? insert_query2 : insert_query1, ExecutorDeviceType::CPU);
     g_sqlite_comparator.query(i % 2 ? insert_query2 : insert_query1);
+  }
+}
+
+void import_union_all_tests() {
+  std::string sql;
+  auto const dt = ExecutorDeviceType::CPU;
+
+  sql = "DROP TABLE IF EXISTS union_all_a;";
+  g_sqlite_comparator.query(sql);
+  EXPECT_NO_THROW(run_ddl_statement(sql));
+
+  sql = "DROP TABLE IF EXISTS union_all_b;";
+  g_sqlite_comparator.query(sql);
+  EXPECT_NO_THROW(run_ddl_statement(sql));
+
+  sql = "CREATE TABLE union_all_a (a0 SMALLINT, a1 INT, a2 BIGINT, a3 FLOAT);";
+  g_sqlite_comparator.query(sql);
+  sql.insert(sql.size() - 1, " WITH (fragment_size = 2)");
+  EXPECT_NO_THROW(run_ddl_statement(sql));
+
+  sql = "CREATE TABLE union_all_b (b0 SMALLINT, b1 INT, b2 BIGINT, b3 FLOAT);";
+  g_sqlite_comparator.query(sql);
+  sql.insert(sql.size() - 1, " WITH (fragment_size = 3)");
+  EXPECT_NO_THROW(run_ddl_statement(sql));
+  for (int i = 0; i < 10; i++) {
+    sql = cat("INSERT INTO union_all_a VALUES (",
+              110 + i,
+              ',',
+              120 + i,
+              ',',
+              130 + i,
+              ',',
+              140 + i,
+              ");");
+    g_sqlite_comparator.query(sql);
+    EXPECT_NO_THROW(run_multiple_agg(sql, dt));
+
+    sql = cat("INSERT INTO union_all_b VALUES (",
+              210 + i,
+              ',',
+              220 + i,
+              ',',
+              230 + i,
+              ',',
+              240 + i,
+              ");");
+    g_sqlite_comparator.query(sql);
+    EXPECT_NO_THROW(run_multiple_agg(sql, dt));
   }
 }
 
@@ -17164,6 +17214,165 @@ TEST(Select, GroupEmptyBlank) {
   }
 }
 
+// Uses tables from import_union_all_tests().
+TEST(Select, UnionAll) {
+  bool enable_union = true;
+  std::swap(g_enable_union, enable_union);
+  for (auto dt : {ExecutorDeviceType::CPU /*, ExecutorDeviceType::GPU*/}) {
+    SKIP_NO_GPU();
+    c("SELECT a0, a1, a2, a3 FROM union_all_a"
+      " WHERE a0 BETWEEN 111 AND 115"
+      " UNION ALL"
+      " SELECT b0, b1, b2, b3 FROM union_all_b"
+      " WHERE b0 BETWEEN 211 AND 217"
+      " ORDER BY a1;",
+      dt);
+    c("SELECT a0, a1, a2, a3 FROM union_all_a"
+      " UNION ALL"
+      " SELECT b0, b1, b2, b3 FROM union_all_b"
+      " ORDER BY a0;",
+      dt);
+    c("SELECT a0, a1, a2, a3 FROM union_all_a"
+      " WHERE a0 < 116"
+      " UNION ALL"
+      " SELECT b0, b1, b2, b3 FROM union_all_b"
+      " ORDER BY a0;",
+      dt);
+    c("SELECT a0, a1, a2, a3 FROM union_all_a"
+      " UNION ALL"
+      " SELECT b0, b1, b2, b3 FROM union_all_b"
+      " WHERE b0 < 216"
+      " ORDER BY a0;",
+      dt);
+    c("SELECT a0, a1, a2, a3 FROM union_all_a"
+      " WHERE a0 < 116"
+      " UNION ALL"
+      " SELECT b0, b1, b2, b3 FROM union_all_b"
+      " WHERE b0 < 216"
+      " ORDER BY a0;",
+      dt);
+    c("SELECT a0, a1, a2, a3 FROM union_all_a"
+      " WHERE a0 < 115"
+      " UNION ALL"
+      " SELECT b0, b1, b2, b3 FROM union_all_b"
+      " WHERE b0 < 216"
+      " ORDER BY a0;",
+      dt);
+    c("SELECT a0, a1, a2, a3 FROM union_all_a"
+      " WHERE a0 < 116"
+      " UNION ALL"
+      " SELECT b0, b1, b2, b3 FROM union_all_b"
+      " WHERE b0 < 215"
+      " ORDER BY a0;",
+      dt);
+    c("SELECT a0, a1, a2, a3 FROM union_all_a"
+      " WHERE a0 < 100"
+      " UNION ALL"
+      " SELECT b0, b1, b2, b3 FROM union_all_b"
+      " WHERE b0 < 216"
+      " ORDER BY a0;",
+      dt);
+    c("SELECT a0, a1, a2, a3 FROM union_all_a"
+      " WHERE a0 < 116"
+      " UNION ALL"
+      " SELECT b0, b1, b2, b3 FROM union_all_b"
+      " WHERE b0 < 200"
+      " ORDER BY a0;",
+      dt);
+    c("SELECT a0, a1, a2, a3 FROM union_all_a"
+      " WHERE a0 < 116"
+      " UNION ALL"
+      " SELECT MAX(b0), b1 % 2, MAX(b2), MAX(b3) FROM union_all_b"
+      " GROUP BY b1 % 2"
+      " ORDER BY a0;",
+      dt);
+    c("SELECT MAX(b0) max0, b1 % 2, MAX(b2), MAX(b3) FROM union_all_b"
+      " GROUP BY b1 % 2"
+      " UNION ALL"
+      " SELECT a0, a1, a2, a3 FROM union_all_a"
+      " WHERE a0 < 116"
+      " ORDER BY max0;",
+      dt);
+    c("SELECT MAX(a0) max0, a1 % 3, MAX(a2), MAX(a3) FROM union_all_a"
+      " GROUP BY a1 % 3"
+      " UNION ALL"
+      " SELECT MAX(b0), b1 % 2, MAX(b2), MAX(b3) FROM union_all_b"
+      " GROUP BY b1 % 2"
+      " ORDER BY max0;",
+      dt);
+    c("SELECT MAX(a0) max0, a1 % 2, MAX(a2), MAX(a3) FROM union_all_a"
+      " GROUP BY a1 % 2"
+      " UNION ALL"
+      " SELECT MAX(b0), b1 % 3, MAX(b2), MAX(b3) FROM union_all_b"
+      " GROUP BY b1 % 3"
+      " ORDER BY max0;",
+      dt);
+    c("SELECT MAX(a0) max0, a1 % 3, MAX(a2), MAX(a3) FROM union_all_a"
+      " GROUP BY a1 % 3"
+      " UNION ALL"
+      " SELECT MAX(b0), b1 % 2, MAX(b2), MAX(b3) FROM union_all_b"
+      " GROUP BY b1 % 2"
+      " UNION ALL"
+      " SELECT a0, a1, a2, a3 FROM union_all_a"
+      " WHERE a0 < 116"
+      " ORDER BY max0;",
+      dt);
+    c("SELECT MAX(a0) max0, a1 % 2, MAX(a2), MAX(a3) FROM union_all_a"
+      " GROUP BY a1 % 2"
+      " UNION ALL"
+      " SELECT a0, a1, a2, a3 FROM union_all_a"
+      " WHERE a0 < 116"
+      " UNION ALL"
+      " SELECT MAX(b0), b1 % 3, MAX(b2), MAX(b3) FROM union_all_b"
+      " GROUP BY b1 % 3"
+      " ORDER BY max0;",
+      dt);
+    c("SELECT a0, a1, a2, a3 FROM union_all_a"
+      " WHERE a0 < 116"
+      " UNION ALL"
+      " SELECT MAX(a0), a1 % 2, MAX(a2), MAX(a3) FROM union_all_a"
+      " GROUP BY a1 % 2"
+      " UNION ALL"
+      " SELECT MAX(b0), b1 % 3, MAX(b2), MAX(b3) FROM union_all_b"
+      " GROUP BY b1 % 3"
+      " ORDER BY a0;",
+      dt);
+    c("SELECT a0, a1, a2, a3 FROM union_all_a"
+      " WHERE a0 < 116"
+      " UNION ALL"
+      " SELECT b0, b1, b2, b3 FROM union_all_b"
+      " WHERE b0 < 215"
+      " UNION ALL"
+      " SELECT a0, a1, a2, a3 FROM union_all_a"
+      " WHERE a0 < 117"
+      " UNION ALL"
+      " SELECT MAX(a0), a1 % 2, MAX(a2), MAX(a3) FROM union_all_a"
+      " GROUP BY a1 % 2"
+      " UNION ALL"
+      " SELECT MAX(b0), b1 % 3, MAX(b2), MAX(b3) FROM union_all_b"
+      " GROUP BY b1 % 3"
+      " ORDER BY a0;",
+      dt);
+    c("SELECT MAX(b0) max0, b1 % 3, MAX(b2), MAX(b3) FROM union_all_b"
+      " GROUP BY b1 % 3"
+      " HAVING b1 % 3 = 1"
+      " UNION ALL"
+      " SELECT a0, a1, a2, a3 FROM union_all_a"
+      " WHERE a0 < 117"
+      " ORDER BY max0;",
+      dt);
+    c("SELECT a0, a1, a2, a3 FROM union_all_a"
+      " WHERE a0 < 117"
+      " UNION ALL"
+      " SELECT MAX(b0) max0, b1 % 3, MAX(b2), MAX(b3) FROM union_all_b"
+      " GROUP BY b1 % 3"
+      " HAVING b1 % 3 = 1"
+      " ORDER BY a0;",
+      dt);
+  }
+  g_enable_union = enable_union;
+}
+
 TEST(Select, VariableLengthAggs) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
@@ -18372,6 +18581,13 @@ int create_and_populate_tables(const bool use_temporary_tables,
     import_test_table_with_lots_of_columns();
   } catch (...) {
     LOG(ERROR) << "Failed to (re-)create table 'test_lots_cols'";
+  }
+  try {
+    import_union_all_tests();
+  } catch (std::exception const& e) {
+    LOG(ERROR) << "Exception thrown from import_union_all_tests(): " << e.what();
+  } catch (...) {
+    LOG(ERROR) << "Unknown error in import_union_all_tests().";
   }
   {
     std::string insert_query{"INSERT INTO test_in_bitmap VALUES('a');"};

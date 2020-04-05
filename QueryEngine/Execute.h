@@ -336,6 +336,8 @@ struct FetchResult {
   std::vector<std::vector<uint64_t>> frag_offsets;
 };
 
+std::ostream& operator<<(std::ostream&, FetchResult const&);
+
 class Executor {
   static_assert(sizeof(float) == 4 && sizeof(double) == 8,
                 "Host hardware not supported, unexpected size of float / double.");
@@ -649,6 +651,16 @@ class Executor {
                           std::list<ChunkIter>&,
                           std::list<std::shared_ptr<Chunk_NS::Chunk>>&);
 
+  FetchResult fetchUnionChunks(const ColumnFetcher&,
+                               const RelAlgExecutionUnit& ra_exe_unit,
+                               const int device_id,
+                               const Data_Namespace::MemoryLevel,
+                               const std::map<int, const TableFragments*>&,
+                               const FragmentsList& selected_fragments,
+                               const Catalog_Namespace::Catalog&,
+                               std::list<ChunkIter>&,
+                               std::list<std::shared_ptr<Chunk_NS::Chunk>>&);
+
   std::pair<std::vector<std::vector<int64_t>>, std::vector<std::vector<uint64_t>>>
   getRowCountAndOffsetForAllFrags(
       const RelAlgExecutionUnit& ra_exe_unit,
@@ -657,6 +669,13 @@ class Executor {
       const std::map<int, const TableFragments*>& all_tables_fragments);
 
   void buildSelectedFragsMapping(
+      std::vector<std::vector<size_t>>& selected_fragments_crossjoin,
+      std::vector<size_t>& local_col_to_frag_pos,
+      const std::list<std::shared_ptr<const InputColDescriptor>>& col_global_ids,
+      const FragmentsList& selected_fragments,
+      const RelAlgExecutionUnit& ra_exe_unit);
+
+  void buildSelectedFragsMappingForUnion(
       std::vector<std::vector<size_t>>& selected_fragments_crossjoin,
       std::vector<size_t>& local_col_to_frag_pos,
       const std::list<std::shared_ptr<const InputColDescriptor>>& col_global_ids,
@@ -679,6 +698,7 @@ class Executor {
                                  const std::vector<std::vector<uint64_t>>& frag_offsets,
                                  Data_Namespace::DataMgr*,
                                  const int device_id,
+                                 const int outer_table_id,
                                  const int64_t limit,
                                  const uint32_t start_rowid,
                                  const uint32_t num_tables,

@@ -84,6 +84,7 @@ RelAlgExecutionUnit create_ndv_execution_unit(const RelAlgExecutionUnit& ra_exe_
           0,
           {},
           {},
+          ra_exe_unit.union_all,
           ra_exe_unit.query_state};
 }
 
@@ -102,6 +103,7 @@ RelAlgExecutionUnit create_count_all_execution_unit(
           0,
           {},
           {},
+          ra_exe_unit.union_all,
           ra_exe_unit.query_state};
 }
 

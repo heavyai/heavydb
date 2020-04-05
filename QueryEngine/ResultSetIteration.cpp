@@ -1824,6 +1824,7 @@ TargetValue ResultSet::makeTargetValue(const int8_t* ptr,
       const auto storage_idx = getStorageIndex(entry_buff_idx);
       CHECK_LT(storage_idx.first, col_buffers_.size());
       auto& frag_col_buffers = getColumnFrag(storage_idx.first, target_logical_idx, ival);
+      CHECK_LT(size_t(col_lazy_fetch.local_col_id), frag_col_buffers.size());
       ival = lazy_decode(
           col_lazy_fetch, frag_col_buffers[col_lazy_fetch.local_col_id], ival);
       if (chosen_type.is_fp()) {

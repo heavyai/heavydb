@@ -83,6 +83,7 @@ extern bool g_enable_experimental_string_functions;
 extern bool g_enable_table_functions;
 extern bool g_enable_fsi;
 extern bool g_enable_interop;
+extern bool g_enable_union;
 extern bool g_use_tbb_pool;
 
 bool g_enable_thrift_logs{false};
@@ -605,6 +606,11 @@ void MapDProgramOptions::fillOptions() {
           ->default_value(g_enable_interop)
           ->implicit_value(true),
       "Enable offloading of query portions to an external execution engine.");
+  help_desc.add_options()("enable-union",
+                          po::value<bool>(&g_enable_union)
+                              ->default_value(g_enable_union)
+                              ->implicit_value(true),
+                          "Enable UNION ALL SQL clause.");
   help_desc.add_options()(
       "calcite-service-timeout",
       po::value<size_t>(&mapd_parameters.calcite_timeout)

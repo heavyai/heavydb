@@ -46,6 +46,11 @@ class InputDescriptor {
   int nest_level_;
 };
 
+inline std::ostream& operator<<(std::ostream& os, InputDescriptor const& id) {
+  return os << "InputDescriptor(table_id(" << id.getTableId() << "),nest_level("
+            << id.getNestLevel() << "))";
+}
+
 namespace std {
 template <>
 struct hash<InputDescriptor> {
@@ -74,6 +79,17 @@ class InputColDescriptor {
   const int col_id_;
   const InputDescriptor input_desc_;
 };
+
+inline std::ostream& operator<<(std::ostream& os, InputColDescriptor const& icd) {
+  return os << "InputColDescriptor(col_id(" << icd.getColId() << ")," << icd.getScanDesc()
+            << ')';
+}
+
+// For printing RelAlgExecutionUnit::input_col_descs
+inline std::ostream& operator<<(std::ostream& os,
+                                std::shared_ptr<const InputColDescriptor> const& icd) {
+  return os << *icd;
+}
 
 namespace std {
 template <>

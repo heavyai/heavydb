@@ -93,6 +93,8 @@ class ResultSetStorage {
 
   int8_t* getUnderlyingBuffer() const;
 
+  size_t getEntryCount() const { return query_mem_desc_.getEntryCount(); }
+
   template <class KeyType>
   void moveEntriesToBuffer(int8_t* new_buff, const size_t new_entry_count) const;
 
@@ -297,6 +299,8 @@ class ResultSetRowIterator {
 
 class TSerializedRows;
 
+using AppendedStorage = std::vector<std::unique_ptr<ResultSetStorage>>;
+
 class ResultSet {
  public:
   ResultSet(const std::vector<TargetInfo>& targets,
@@ -478,7 +482,7 @@ class ResultSet {
   static std::unique_ptr<ResultSet> unserialize(const TSerializedRows& serialized_rows,
                                                 const Executor*);
 
-  size_t getLimit();
+  size_t getLimit() const;
 
   /**
    * Geo return type options when accessing geo columns from a result set.
@@ -816,7 +820,7 @@ class ResultSet {
   const int device_id_;
   QueryMemoryDescriptor query_mem_desc_;
   mutable std::unique_ptr<ResultSetStorage> storage_;
-  std::vector<std::unique_ptr<ResultSetStorage>> appended_storage_;
+  AppendedStorage appended_storage_;
   mutable size_t crt_row_buff_idx_;
   mutable size_t fetched_so_far_;
   size_t drop_first_;

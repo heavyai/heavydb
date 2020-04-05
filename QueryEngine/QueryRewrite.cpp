@@ -380,6 +380,7 @@ RelAlgExecutionUnit QueryRewriter::rewriteColumnarUpdate(
                                          ra_exe_unit_in.scan_limit,
                                          ra_exe_unit_in.query_features,
                                          ra_exe_unit_in.use_bump_allocator,
+                                         ra_exe_unit_in.union_all,
                                          ra_exe_unit_in.query_state};
   return rewritten_exe_unit;
 }
@@ -479,6 +480,7 @@ RelAlgExecutionUnit QueryRewriter::rewriteColumnarDelete(
                                          ra_exe_unit_in.scan_limit,
                                          ra_exe_unit_in.query_features,
                                          ra_exe_unit_in.use_bump_allocator,
+                                         ra_exe_unit_in.union_all,
                                          ra_exe_unit_in.query_state};
   return rewritten_exe_unit;
 }
