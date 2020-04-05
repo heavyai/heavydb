@@ -6475,6 +6475,28 @@ TEST(Select, BigDecimalRange) {
   }
 }
 
+TEST(Select, ScalarSubquery) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    c("SELECT SUM(x) + SUM(y) FROM test GROUP BY z HAVING (SELECT x FROM test "
+      "GROUP BY x HAVING x > 7 LIMIT 1) > 7 ORDER BY z;",
+      dt);
+    c("SELECT SUM(x) + SUM(y) FROM test GROUP BY z HAVING (SELECT d FROM test "
+      "GROUP BY d HAVING d > 2.4 LIMIT 1) > 2.4 ORDER BY z;",
+      dt);
+    /* TODO(adb): triggers as assert when setting the result of the scalar subquery
+    descriptor const auto save_watchdog = g_enable_watchdog; g_enable_watchdog = false;
+    ScopeGuard reset_watchdog_state = [&save_watchdog] {
+      g_enable_watchdog = save_watchdog;
+    };
+    SKIP_ON_AGGREGATOR(
+        c("SELECT COUNT(*) FROM test GROUP BY x, y HAVING (SELECT str FROM test GROUP BY "
+          "str HAVING length(str) = 3 ORDER BY str LIMIT 1) = 'bar';",
+          dt));
+    */
+  }
+}
+
 TEST(Select, DecimalCompression) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
