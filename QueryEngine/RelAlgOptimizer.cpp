@@ -310,6 +310,7 @@ void redirect_inputs_of(
   if (std::dynamic_pointer_cast<RelSort>(node)) {
     auto const src_project_input = src_project->getInput(0);
     if (dynamic_cast<const RelScan*>(src_project_input) ||
+        dynamic_cast<const RelLogicalValues*>(src_project_input) ||
         dynamic_cast<const RelLogicalUnion*>(src_project_input)) {
       return;
     }

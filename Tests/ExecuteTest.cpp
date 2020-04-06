@@ -5052,6 +5052,7 @@ TEST(Select, LogicalValues) {
     c("SELECT * FROM (VALUES(1,2,3));", dt);
     c("SELECT * FROM (VALUES(1, NULL, 3));", dt);
     c("SELECT * FROM (VALUES(1, 2), (3, NULL));", dt);
+    c("SELECT * FROM (SELECT * FROM (VALUES (1,2) , (3,4)) t1) t0 LIMIT 5;", dt);
 
     {
       auto rows = run_multiple_agg("SELECT * FROM (VALUES(1, 2, 3)) as t(x, y, z);", dt);
