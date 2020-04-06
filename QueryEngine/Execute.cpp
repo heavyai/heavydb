@@ -1577,8 +1577,12 @@ ResultSetPtr Executor::collectAllDeviceResults(
   }
   const auto& ra_exe_unit = execution_dispatch.getExecutionUnit();
   if (use_speculative_top_n(ra_exe_unit, query_mem_desc)) {
-    return reduceSpeculativeTopN(
-        ra_exe_unit, result_per_device, row_set_mem_owner, query_mem_desc);
+    try {
+      return reduceSpeculativeTopN(
+          ra_exe_unit, result_per_device, row_set_mem_owner, query_mem_desc);
+    } catch (const std::bad_alloc&) {
+      throw SpeculativeTopNFailed("Failed during multi-device reduction.");
+    }
   }
   const auto shard_count =
       device_type == ExecutorDeviceType::GPU
@@ -2735,8 +2739,6 @@ int32_t Executor::executePlanWithGroupBy(
       return ERR_OUT_OF_RENDER_MEM;
     } catch (const StreamingTopNNotSupportedInRenderQuery&) {
       return ERR_STREAMING_TOP_N_NOT_SUPPORTED_IN_RENDER_QUERY;
-    } catch (const std::bad_alloc&) {
-      return ERR_SPECULATIVE_TOP_OOM;
     } catch (const std::exception& e) {
       LOG(FATAL) << "Error launching the GPU kernel: " << e.what();
     }

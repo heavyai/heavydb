@@ -2289,83 +2289,91 @@ ExecutionResult RelAlgExecutor::executeSort(const RelSort* sort,
     sort->setOutputMetainfo(aggregated_result.targets_meta);
     return result;
   }
-  while (true) {
-    std::list<std::shared_ptr<Analyzer::Expr>> groupby_exprs;
-    bool is_desc{false};
-    try {
-      const auto source_work_unit = createSortInputWorkUnit(sort, eo);
-      is_desc = first_oe_is_desc(source_work_unit.exe_unit.sort_info.order_entries);
-      ExecutionOptions eo_copy = {
-          eo.output_columnar_hint,
-          eo.allow_multifrag,
-          eo.just_explain,
-          eo.allow_loop_joins,
-          eo.with_watchdog,
-          eo.jit_debug,
-          eo.just_validate || sort->isEmptyResult(),
-          eo.with_dynamic_watchdog,
-          eo.dynamic_watchdog_time_limit,
-          eo.find_push_down_candidates,
-          eo.just_calcite_explain,
-          eo.gpu_input_mem_limit_percent,
-          eo.allow_runtime_query_interrupt,
-          eo.runtime_query_interrupt_frequency,
-          eo.executor_type,
-      };
 
-      groupby_exprs = source_work_unit.exe_unit.groupby_exprs;
-      auto source_result = executeWorkUnit(source_work_unit,
-                                           source->getOutputMetainfo(),
-                                           is_aggregate,
-                                           co,
-                                           eo_copy,
-                                           render_info,
-                                           queue_time_ms);
-      if (render_info && render_info->isPotentialInSituRender()) {
-        return source_result;
-      }
-      if (source_result.isFilterPushDownEnabled()) {
-        return source_result;
-      }
-      auto rows_to_sort = source_result.getRows();
-      if (eo.just_explain) {
-        return {rows_to_sort, {}};
-      }
-      const size_t limit = sort->getLimit();
-      const size_t offset = sort->getOffset();
-      if (sort->collationCount() != 0 && !rows_to_sort->definitelyHasNoRows() &&
-          !use_speculative_top_n(source_work_unit.exe_unit,
-                                 rows_to_sort->getQueryMemDesc())) {
-        rows_to_sort->sort(source_work_unit.exe_unit.sort_info.order_entries,
-                           limit + offset);
-      }
-      if (limit || offset) {
-        if (g_cluster && sort->collationCount() == 0) {
-          if (offset >= rows_to_sort->rowCount()) {
-            rows_to_sort->dropFirstN(offset);
-          } else {
-            rows_to_sort->keepFirstN(limit + offset);
-          }
-        } else {
+  std::list<std::shared_ptr<Analyzer::Expr>> groupby_exprs;
+  bool is_desc{false};
+
+  auto execute_sort_query = [this,
+                             sort,
+                             &source,
+                             &is_aggregate,
+                             &eo,
+                             &co,
+                             render_info,
+                             queue_time_ms,
+                             &groupby_exprs,
+                             &is_desc]() -> ExecutionResult {
+    const auto source_work_unit = createSortInputWorkUnit(sort, eo);
+    is_desc = first_oe_is_desc(source_work_unit.exe_unit.sort_info.order_entries);
+    ExecutionOptions eo_copy = {
+        eo.output_columnar_hint,
+        eo.allow_multifrag,
+        eo.just_explain,
+        eo.allow_loop_joins,
+        eo.with_watchdog,
+        eo.jit_debug,
+        eo.just_validate || sort->isEmptyResult(),
+        eo.with_dynamic_watchdog,
+        eo.dynamic_watchdog_time_limit,
+        eo.find_push_down_candidates,
+        eo.just_calcite_explain,
+        eo.gpu_input_mem_limit_percent,
+        eo.allow_runtime_query_interrupt,
+        eo.runtime_query_interrupt_frequency,
+        eo.executor_type,
+    };
+
+    groupby_exprs = source_work_unit.exe_unit.groupby_exprs;
+    auto source_result = executeWorkUnit(source_work_unit,
+                                         source->getOutputMetainfo(),
+                                         is_aggregate,
+                                         co,
+                                         eo_copy,
+                                         render_info,
+                                         queue_time_ms);
+    if (render_info && render_info->isPotentialInSituRender()) {
+      return source_result;
+    }
+    if (source_result.isFilterPushDownEnabled()) {
+      return source_result;
+    }
+    auto rows_to_sort = source_result.getRows();
+    if (eo.just_explain) {
+      return {rows_to_sort, {}};
+    }
+    const size_t limit = sort->getLimit();
+    const size_t offset = sort->getOffset();
+    if (sort->collationCount() != 0 && !rows_to_sort->definitelyHasNoRows() &&
+        !use_speculative_top_n(source_work_unit.exe_unit,
+                               rows_to_sort->getQueryMemDesc())) {
+      rows_to_sort->sort(source_work_unit.exe_unit.sort_info.order_entries,
+                         limit + offset);
+    }
+    if (limit || offset) {
+      if (g_cluster && sort->collationCount() == 0) {
+        if (offset >= rows_to_sort->rowCount()) {
           rows_to_sort->dropFirstN(offset);
-          if (limit) {
-            rows_to_sort->keepFirstN(limit);
-          }
+        } else {
+          rows_to_sort->keepFirstN(limit + offset);
+        }
+      } else {
+        rows_to_sort->dropFirstN(offset);
+        if (limit) {
+          rows_to_sort->keepFirstN(limit);
         }
       }
-      return {rows_to_sort, source_result.getTargetsMeta()};
-    } catch (const SpeculativeTopNFailed&) {
-      CHECK_EQ(size_t(1), groupby_exprs.size());
-      speculative_topn_blacklist_.add(groupby_exprs.front(), is_desc);
     }
+    return {rows_to_sort, source_result.getTargetsMeta()};
+  };
+
+  try {
+    return execute_sort_query();
+  } catch (const SpeculativeTopNFailed& e) {
+    CHECK_EQ(size_t(1), groupby_exprs.size());
+    CHECK(groupby_exprs.front());
+    speculative_topn_blacklist_.add(groupby_exprs.front(), is_desc);
+    return execute_sort_query();
   }
-  CHECK(false);
-  return {std::make_shared<ResultSet>(std::vector<TargetInfo>{},
-                                      co.device_type,
-                                      QueryMemoryDescriptor(),
-                                      nullptr,
-                                      executor_),
-          {}};
 }
 
 RelAlgExecutor::WorkUnit RelAlgExecutor::createSortInputWorkUnit(
@@ -2913,9 +2921,6 @@ ExecutionResult RelAlgExecutor::handleOutOfMemoryRetry(
 void RelAlgExecutor::handlePersistentError(const int32_t error_code) {
   LOG(ERROR) << "Query execution failed with error "
              << getErrorMessageFromCode(error_code);
-  if (error_code == Executor::ERR_SPECULATIVE_TOP_OOM) {
-    throw SpeculativeTopNFailed();
-  }
   if (error_code == Executor::ERR_OUT_OF_GPU_MEM) {
     // We ran out of GPU memory, this doesn't count as an error if the query is
     // allowed to continue on CPU because retry on CPU is explicitly allowed through
