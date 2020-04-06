@@ -1,5 +1,5 @@
 namespace java com.omnisci.thrift.server
-namespace py omnisci.mapd
+namespace py omnisci.thrift
 
 include "common.thrift"
 include "completion_hints.thrift"
