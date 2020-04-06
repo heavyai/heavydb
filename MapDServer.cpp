@@ -274,7 +274,7 @@ class MapDProgramOptions {
   bool enable_rendering = false;
   bool enable_auto_clear_render_mem = false;
   int render_oom_retry_threshold = 0;  // in milliseconds
-  size_t render_mem_bytes = 500000000;
+  size_t render_mem_bytes = 1000000000;
   size_t render_poly_cache_bytes = 300000000;
   size_t max_concurrent_render_sessions = 500;
 
