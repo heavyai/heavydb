@@ -19,9 +19,9 @@ package com.mapd.parser.server.test;
 import static org.junit.Assert.*;
 
 import com.mapd.parser.server.CalciteServerWrapper;
-import com.mapd.thrift.server.OmniSci;
-import com.mapd.thrift.server.TOmniSciException;
-import com.mapd.thrift.server.TQueryResult;
+import com.omnisci.thrift.server.OmniSci;
+import com.omnisci.thrift.server.TOmniSciException;
+import com.omnisci.thrift.server.TQueryResult;
 
 import org.apache.thrift.TException;
 import org.apache.thrift.protocol.TBinaryProtocol;

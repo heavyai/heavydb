@@ -15,20 +15,20 @@
  */
 package com.mapd.logrunner;
 
-import com.mapd.thrift.server.OmniSci;
-import com.mapd.thrift.server.TColumn;
-import com.mapd.thrift.server.TColumnData;
-import com.mapd.thrift.server.TColumnType;
-import com.mapd.thrift.server.TDBInfo;
-import com.mapd.thrift.server.TDatum;
-import com.mapd.thrift.server.TExecuteMode;
-import com.mapd.thrift.server.TOmniSciException;
-import com.mapd.thrift.server.TPixel;
-import com.mapd.thrift.server.TQueryResult;
-import com.mapd.thrift.server.TRenderResult;
-import com.mapd.thrift.server.TRow;
-import com.mapd.thrift.server.TRowSet;
-import com.mapd.thrift.server.TTableDetails;
+import com.omnisci.thrift.server.OmniSci;
+import com.omnisci.thrift.server.TColumn;
+import com.omnisci.thrift.server.TColumnData;
+import com.omnisci.thrift.server.TColumnType;
+import com.omnisci.thrift.server.TDBInfo;
+import com.omnisci.thrift.server.TDatum;
+import com.omnisci.thrift.server.TExecuteMode;
+import com.omnisci.thrift.server.TOmniSciException;
+import com.omnisci.thrift.server.TPixel;
+import com.omnisci.thrift.server.TQueryResult;
+import com.omnisci.thrift.server.TRenderResult;
+import com.omnisci.thrift.server.TRow;
+import com.omnisci.thrift.server.TRowSet;
+import com.omnisci.thrift.server.TTableDetails;
 
 import org.apache.thrift.TException;
 import org.apache.thrift.protocol.TJSONProtocol;

@@ -19,8 +19,8 @@ import static java.lang.Math.pow;
 import static java.lang.System.exit;
 
 import com.mapd.common.SockTransportProperties;
-import com.mapd.thrift.server.*;
 import com.mapd.utility.db_vendors.Db_vendor_types;
+import com.omnisci.thrift.server.*;
 
 import org.apache.commons.cli.*;
 import org.apache.thrift.TException;

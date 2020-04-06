@@ -8,10 +8,10 @@ package com.mapd.calcite.parser;
 import com.mapd.metadata.LinestringSqlType;
 import com.mapd.metadata.PointSqlType;
 import com.mapd.metadata.PolygonSqlType;
-import com.mapd.thrift.server.TColumnType;
-import com.mapd.thrift.server.TDatumType;
-import com.mapd.thrift.server.TTableDetails;
-import com.mapd.thrift.server.TTypeInfo;
+import com.omnisci.thrift.server.TColumnType;
+import com.omnisci.thrift.server.TDatumType;
+import com.omnisci.thrift.server.TTableDetails;
+import com.omnisci.thrift.server.TTypeInfo;
 
 import org.apache.calcite.config.CalciteConnectionConfig;
 import org.apache.calcite.rel.type.RelDataType;

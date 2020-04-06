@@ -15,7 +15,7 @@
  */
 package com.mapd.tests;
 
-import com.mapd.thrift.server.TOmniSciException;
+import com.omnisci.thrift.server.TOmniSciException;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;

@@ -16,9 +16,9 @@
 package com.omnisci.jdbc;
 
 import com.mapd.common.SockTransportProperties;
-import com.mapd.thrift.server.OmniSci;
-import com.mapd.thrift.server.TOmniSciException;
-import com.mapd.thrift.server.TServerStatus;
+import com.omnisci.thrift.server.OmniSci;
+import com.omnisci.thrift.server.TOmniSciException;
+import com.omnisci.thrift.server.TServerStatus;
 
 import org.apache.thrift.TException;
 import org.apache.thrift.protocol.TBinaryProtocol;

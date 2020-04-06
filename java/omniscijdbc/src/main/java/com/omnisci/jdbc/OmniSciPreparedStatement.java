@@ -15,12 +15,12 @@
  */
 package com.omnisci.jdbc;
 
-import com.mapd.thrift.server.OmniSci;
-import com.mapd.thrift.server.TColumnType;
-import com.mapd.thrift.server.TOmniSciException;
-import com.mapd.thrift.server.TStringRow;
-import com.mapd.thrift.server.TStringValue;
-import com.mapd.thrift.server.TTableDetails;
+import com.omnisci.thrift.server.OmniSci;
+import com.omnisci.thrift.server.TColumnType;
+import com.omnisci.thrift.server.TOmniSciException;
+import com.omnisci.thrift.server.TStringRow;
+import com.omnisci.thrift.server.TStringValue;
+import com.omnisci.thrift.server.TTableDetails;
 
 import org.apache.thrift.TException;
 import org.slf4j.Logger;

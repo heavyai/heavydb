@@ -15,18 +15,18 @@
  */
 package com.mapd.tests;
 
-import com.mapd.thrift.server.OmniSci;
-import com.mapd.thrift.server.TClusterHardwareInfo;
-import com.mapd.thrift.server.TColumnType;
-import com.mapd.thrift.server.TCopyParams;
-import com.mapd.thrift.server.TCreateParams;
-import com.mapd.thrift.server.TDBObject;
-import com.mapd.thrift.server.TDBObjectType;
-import com.mapd.thrift.server.TDashboard;
-import com.mapd.thrift.server.TOmniSciException;
-import com.mapd.thrift.server.TQueryResult;
-import com.mapd.thrift.server.TServerStatus;
-import com.mapd.thrift.server.TTableDetails;
+import com.omnisci.thrift.server.OmniSci;
+import com.omnisci.thrift.server.TClusterHardwareInfo;
+import com.omnisci.thrift.server.TColumnType;
+import com.omnisci.thrift.server.TCopyParams;
+import com.omnisci.thrift.server.TCreateParams;
+import com.omnisci.thrift.server.TDBObject;
+import com.omnisci.thrift.server.TDBObjectType;
+import com.omnisci.thrift.server.TDashboard;
+import com.omnisci.thrift.server.TOmniSciException;
+import com.omnisci.thrift.server.TQueryResult;
+import com.omnisci.thrift.server.TServerStatus;
+import com.omnisci.thrift.server.TTableDetails;
 
 import org.apache.thrift.TException;
 import org.apache.thrift.protocol.TBinaryProtocol;
