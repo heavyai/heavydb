@@ -94,10 +94,30 @@ class BaselineJoinHashTable : public JoinHashTableInterface {
   size_t payloadBufferOff() const noexcept override;
 
   static auto yieldCacheInvalidator() -> std::function<void()> {
+    VLOG(1) << "Invalidate " << hash_table_cache_.size() << " cached baseline hashtable.";
     return []() -> void {
       std::lock_guard<std::mutex> guard(hash_table_cache_mutex_);
       hash_table_cache_.clear();
     };
+  }
+
+  static const std::shared_ptr<std::vector<int8_t>>& getCachedHashTable(size_t idx) {
+    std::lock_guard<std::mutex> guard(hash_table_cache_mutex_);
+    CHECK(!hash_table_cache_.empty());
+    CHECK_LT(idx, hash_table_cache_.size());
+    return hash_table_cache_.at(idx).second.buffer;
+  }
+
+  static size_t getEntryCntCachedHashTable(size_t idx) {
+    std::lock_guard<std::mutex> guard(hash_table_cache_mutex_);
+    CHECK(!hash_table_cache_.empty());
+    CHECK_LT(idx, hash_table_cache_.size());
+    return hash_table_cache_.at(idx).second.entry_count;
+  }
+
+  static uint64_t getNumberOfCachedHashTables() {
+    std::lock_guard<std::mutex> guard(hash_table_cache_mutex_);
+    return hash_table_cache_.size();
   }
 
   virtual ~BaselineJoinHashTable() {}

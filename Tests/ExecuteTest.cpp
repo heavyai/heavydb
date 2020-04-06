@@ -12278,51 +12278,6 @@ TEST(Update, DecimalUpdate) {
   }
 }
 
-TEST(Update, JoinCacheInvalidationTest) {
-  if (!std::is_same<CalciteUpdatePathSelector, PreprocessorTrue>::value) {
-    return;
-  }
-  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
-    SKIP_NO_GPU();
-
-    run_ddl_statement("drop table if exists string_join1");
-    run_ddl_statement("drop table if exists string_join2");
-    run_ddl_statement(build_create_table_statement(
-        "t text", "string_join1", {"", 0}, {}, 2, g_use_temporary_tables, true, false));
-    // replicate the second table for distributed mode testing
-    run_ddl_statement(build_create_table_statement(
-        "t text", "string_join2", {"", 0}, {}, 2, g_use_temporary_tables, true, true));
-
-    run_multiple_agg("insert into string_join1 values ('muffin')", dt);
-    run_multiple_agg("insert into string_join1 values ('pizza')", dt);
-    run_multiple_agg("insert into string_join1 values ('ice cream')", dt);
-    run_multiple_agg("insert into string_join1 values ('poutine')", dt);
-    run_multiple_agg("insert into string_join1 values ('samosa')", dt);
-    run_multiple_agg("insert into string_join2 values ('tomato')", dt);
-    run_multiple_agg("insert into string_join2 values ('potato')", dt);
-    run_multiple_agg("insert into string_join2 values ('apple')", dt);
-    run_multiple_agg("insert into string_join2 values ('orange')", dt);
-    run_multiple_agg("insert into string_join2 values ('chutney')", dt);
-    run_multiple_agg("insert into string_join2 values ('poutine')", dt);
-
-    run_simple_agg(
-        "select count(string_join1.t) from string_join1 inner join string_join2 on "
-        "string_join1.t = string_join2.t;",
-        dt);
-    run_multiple_agg("update string_join1 set t='not poutine' where t='poutine';", dt);
-
-    ASSERT_EQ(
-        int64_t(0),
-        v<int64_t>(run_simple_agg(
-            "select count(string_join1.t) from string_join1 inner join string_join2 on "
-            "string_join1.t = string_join2.t;",
-            dt)));
-
-    run_ddl_statement("drop table string_join1;");
-    run_ddl_statement("drop table string_join2;");
-  }
-}
-
 TEST(Delete, WithoutVacuumAttribute) {
   if (std::is_same<CalciteDeletePathSelector, PreprocessorFalse>::value) {
     return;
@@ -13403,50 +13358,6 @@ TEST(Delete, ShardedTableDeleteTest) {
 
     ASSERT_EQ(int64_t(11 + 13 + 15 + 17),
               v<int64_t>(run_simple_agg("select sum(x) from shardkey;", dt)));
-  }
-}
-
-TEST(Delete, JoinCacheInvalidationTest) {
-  if (std::is_same<CalciteDeletePathSelector, PreprocessorFalse>::value) {
-    return;
-  }
-  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
-    SKIP_NO_GPU();
-
-    run_ddl_statement("drop table if exists string_join1;");
-    run_ddl_statement("drop table if exists string_join2;");
-    run_ddl_statement("create table string_join1 ( t text ) with (vacuum='delayed')");
-    run_ddl_statement(
-        "create table string_join2 ( t text ) with (vacuum='delayed', "
-        "partitions='REPLICATED')");
-
-    run_multiple_agg("insert into string_join1 values ('muffin')", dt);
-    run_multiple_agg("insert into string_join1 values ('pizza')", dt);
-    run_multiple_agg("insert into string_join1 values ('ice cream')", dt);
-    run_multiple_agg("insert into string_join1 values ('poutine')", dt);
-    run_multiple_agg("insert into string_join1 values ('samosa')", dt);
-    run_multiple_agg("insert into string_join2 values ('tomato')", dt);
-    run_multiple_agg("insert into string_join2 values ('potato')", dt);
-    run_multiple_agg("insert into string_join2 values ('apple')", dt);
-    run_multiple_agg("insert into string_join2 values ('orange')", dt);
-    run_multiple_agg("insert into string_join2 values ('chutney')", dt);
-    run_multiple_agg("insert into string_join2 values ('poutine')", dt);
-
-    run_simple_agg(
-        "select count(string_join1.t) from string_join1 inner join string_join2 on "
-        "string_join1.t = string_join2.t;",
-        dt);
-    run_multiple_agg("delete from string_join1 where t='poutine';", dt);
-
-    ASSERT_EQ(
-        int64_t(0),
-        v<int64_t>(run_simple_agg(
-            "select count(string_join1.t) from string_join1 inner join string_join2 on "
-            "string_join1.t = string_join2.t;",
-            dt)));
-
-    run_ddl_statement("drop table string_join1;");
-    run_ddl_statement("drop table string_join2;");
   }
 }
 

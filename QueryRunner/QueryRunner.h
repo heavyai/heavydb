@@ -25,7 +25,10 @@
 #include "Catalog/SysCatalog.h"
 #include "Catalog/TableDescriptor.h"
 #include "LeafAggregator.h"
+#include "QueryEngine/BaselineJoinHashTable.h"
 #include "QueryEngine/CompilationOptions.h"
+#include "QueryEngine/JoinHashTable.h"
+#include "QueryEngine/OverlapsJoinHashTable.h"
 #include "ThriftHandler/QueryState.h"
 
 namespace Catalog_Namespace {
@@ -132,6 +135,12 @@ class QueryRunner {
 
   virtual void runImport(Parser::CopyTableStmt* import_stmt);
   virtual std::unique_ptr<Importer_NS::Loader> getLoader(const TableDescriptor* td) const;
+
+  const std::shared_ptr<std::vector<int32_t>>& getCachedJoinHashTable(size_t idx);
+  const std::shared_ptr<std::vector<int8_t>>& getCachedBaselineHashTable(size_t idx);
+  size_t getEntryCntCachedBaselineHashTable(size_t idx);
+  uint64_t getNumberOfCachedJoinHashTables();
+  uint64_t getNumberOfCachedBaselineJoinHashTables();
 
   virtual ~QueryRunner() {}
 

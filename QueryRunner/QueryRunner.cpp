@@ -467,6 +467,28 @@ ExecutionResult QueryRunner::runSelectQuery(const std::string& query_str,
       .executeRelAlgQuery(co, eo, false, nullptr);
 }
 
+const std::shared_ptr<std::vector<int32_t>>& QueryRunner::getCachedJoinHashTable(
+    size_t idx) {
+  return JoinHashTable::getCachedHashTable(idx);
+};
+
+const std::shared_ptr<std::vector<int8_t>>& QueryRunner::getCachedBaselineHashTable(
+    size_t idx) {
+  return BaselineJoinHashTable::getCachedHashTable(idx);
+};
+
+size_t QueryRunner::getEntryCntCachedBaselineHashTable(size_t idx) {
+  return BaselineJoinHashTable::getEntryCntCachedHashTable(idx);
+}
+
+uint64_t QueryRunner::getNumberOfCachedJoinHashTables() {
+  return JoinHashTable::getNumberOfCachedHashTables();
+};
+
+uint64_t QueryRunner::getNumberOfCachedBaselineJoinHashTables() {
+  return BaselineJoinHashTable::getNumberOfCachedHashTables();
+};
+
 void QueryRunner::reset() {
   qr_instance_.reset(nullptr);
   calcite_shutdown_handler();

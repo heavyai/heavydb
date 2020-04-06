@@ -75,6 +75,7 @@ add_executable(DateTimeUtilsTest Shared/DateTimeUtilsTest.cpp)
 add_executable(UpdateMetadataTest UpdateMetadataTest.cpp)
 add_executable(CalciteOptimizeTest CalciteOptimizeTest.cpp)
 add_executable(JoinHashTableTest JoinHashTableTest.cpp)
+add_executable(CachedHashTableTest CachedHashTableTest.cpp)
 add_executable(ColumnarResultsTest ColumnarResultsTest.cpp ResultSetTestUtils.cpp)
 add_executable(CommandLineTest CommandLineTest.cpp)
 if(NOT ${CMAKE_SYSTEM_NAME} STREQUAL "Darwin")
@@ -136,6 +137,7 @@ target_link_libraries(CtasIntegrationTest gtest Shared mapd_thrift ThriftClient 
 target_link_libraries(DateTimeUtilsTest gtest Shared ${LLVM_LINKER_FLAGS})
 target_link_libraries(CalciteOptimizeTest ${EXECUTE_TEST_LIBS})
 target_link_libraries(JoinHashTableTest ${EXECUTE_TEST_LIBS})
+target_link_libraries(CachedHashTableTest ${EXECUTE_TEST_LIBS})
 target_link_libraries(CommandLineTest gtest Shared ${Boost_LIBRARIES})
 # Requires thrift_handler for MapDHandler test fixture
 target_link_libraries(DBObjectPrivilegesTest ${MAPD_HANDLER_TEST_LIBRARIES})
@@ -164,6 +166,7 @@ add_test(ResultSetTest ResultSetTest ${TEST_ARGS})
 add_test(ColumnarResultsTest ColumnarResultsTest ${TEST_ARGS})
 add_test(FromTableReorderingTest FromTableReorderingTest ${TEST_ARGS})
 add_test(JoinHashTableTest JoinHashTableTest ${TEST_ARGS})
+add_test(CachedHashTableTest CachedHashTableTest ${TEST_ARGS})
 add_test(ResultSetBaselineRadixSortTest ResultSetBaselineRadixSortTest ${TEST_ARGS})
 add_test(RunQueryLoop RunQueryLoop ${TEST_ARGS})
 add_test(StringDictionaryTest StringDictionaryTest ${TEST_ARGS})
@@ -189,7 +192,6 @@ add_test(CorrelatedSubqueryTest CorrelatedSubqueryTest ${TEST_ARGS})
 add_test(DateTimeUtilsTest DateTimeUtilsTest ${TEST_ARGS})
 add_test(UpdateMetadataTest UpdateMetadataTest ${TEST_ARGS})
 add_test(CalciteOptimizeTest CalciteOptimizeTest ${TEST_ARGS})
-add_test(JoinHashTableTest JoinHashTableTest ${TEST_ARGS})
 add_test(CommandLineTest CommandLineTest ${TEST_ARGS})
 add_test(ForeignServerDdlTest ForeignServerDdlTest ${TEST_ARGS})
 add_test(ShowCommandsDdlTest ShowCommandsDdlTest ${TEST_ARGS})
@@ -248,6 +250,7 @@ set(TEST_PROGRAMS
   UpdateMetadataTest
   CalciteOptimizeTest
   JoinHashTableTest
+  CachedHashTableTest
   StringFunctionsTest
   CommandLineTest
   ForeignServerDdlTest

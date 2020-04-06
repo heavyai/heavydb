@@ -2960,6 +2960,9 @@ void DropTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   auto table_data_write_lock =
       lockmgr::TableDataLockMgr::getWriteLockForTable(catalog, *table);
   catalog.dropTable(td);
+
+  // invalidate cached hashtable
+  DeleteTriggeredCacheInvalidator::invalidateCaches();
 }
 
 void TruncateTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
@@ -2997,6 +3000,9 @@ void TruncateTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   auto table_data_write_lock =
       lockmgr::TableDataLockMgr::getWriteLockForTable(catalog, *table);
   catalog.truncateTable(td);
+
+  // invalidate cached hashtable
+  DeleteTriggeredCacheInvalidator::invalidateCaches();
 }
 
 void check_alter_table_privilege(const Catalog_Namespace::SessionInfo& session,
@@ -3336,6 +3342,9 @@ void DropColumnStmt::execute(const Catalog_Namespace::SessionInfo& session) {
     catalog.getSqliteConnector().query("ROLLBACK TRANSACTION");
     throw;
   }
+
+  // invalidate cached hashtable
+  DeleteTriggeredCacheInvalidator::invalidateCaches();
 }
 
 void RenameColumnStmt::execute(const Catalog_Namespace::SessionInfo& session) {

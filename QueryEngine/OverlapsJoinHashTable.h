@@ -52,6 +52,7 @@ class OverlapsJoinHashTable : public BaselineJoinHashTable {
       Executor* executor);
 
   static auto yieldCacheInvalidator() -> std::function<void()> {
+    VLOG(1) << "Invalidate " << auto_tuner_cache_.size() << " cached overlaps hashtable.";
     return []() -> void {
       std::lock_guard<std::mutex> guard(auto_tuner_cache_mutex_);
       auto_tuner_cache_.clear();
