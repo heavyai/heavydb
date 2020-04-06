@@ -479,14 +479,9 @@ llvm::Function* query_group_by_template_impl(
   auto func_init_shared_mem = gpu_smem_context.isSharedMemoryUsed()
                                   ? mod->getFunction("init_shared_mem")
                                   : mod->getFunction("init_shared_mem_nop");
-  if (gpu_smem_context.isSharedMemoryUsed()) {
-    func_init_shared_mem = mod->getFunction("init_shared_mem_dynamic");
-  }
   CHECK(func_init_shared_mem);
 
-  auto func_write_back = gpu_smem_context.isSharedMemoryUsed()
-                             ? mod->getFunction("write_back_smem_nop")
-                             : mod->getFunction("write_back_nop");
+  auto func_write_back = mod->getFunction("write_back_nop");
   CHECK(func_write_back);
 
   auto i32_type = IntegerType::get(mod->getContext(), 32);
@@ -651,29 +646,14 @@ llvm::Function* query_group_by_template_impl(
   col_buffer->setName("col_buffer");
   col_buffer->setAlignment(8);
 
-  llvm::ConstantInt* shared_mem_num_elements_lv = nullptr;
-  llvm::ConstantInt* shared_mem_bytes_lv = nullptr;
-  llvm::CallInst* result_buffer = nullptr;
-  if (gpu_smem_context.isSharedMemoryUsed()) {
-    int32_t num_shared_mem_buckets = query_mem_desc.getEntryCount() + 1;
-    shared_mem_bytes_lv =
-        ConstantInt::get(i32_type, gpu_smem_context.getSharedMemorySize());
-    shared_mem_num_elements_lv = ConstantInt::get(i32_type, num_shared_mem_buckets);
-    result_buffer = CallInst::Create(
-        func_init_shared_mem,
-        std::vector<llvm::Value*>{col_buffer, shared_mem_num_elements_lv},
-        "",
-        bb_entry);
-  } else {
-    shared_mem_bytes_lv =
-        ConstantInt::get(i32_type, gpu_smem_context.getSharedMemorySize());
-    result_buffer =
-        CallInst::Create(func_init_shared_mem,
-                         std::vector<llvm::Value*>{col_buffer, shared_mem_bytes_lv},
-                         "",
-                         bb_entry);
-  }
-  result_buffer->setName("result_buffer");
+  llvm::ConstantInt* shared_mem_bytes_lv =
+      ConstantInt::get(i32_type, gpu_smem_context.getSharedMemorySize());
+  llvm::CallInst* result_buffer =
+      CallInst::Create(func_init_shared_mem,
+                       std::vector<llvm::Value*>{col_buffer, shared_mem_bytes_lv},
+                       "result_buffer",
+                       bb_entry);
+  // TODO(Saman): change this further, normal path should not go through this
 
   ICmpInst* enter_or_not =
       new ICmpInst(*bb_entry, ICmpInst::ICMP_SLT, pos_start_i64, row_count, "");
@@ -766,29 +746,11 @@ llvm::Function* query_group_by_template_impl(
   BranchInst::Create(bb_exit, bb_crit_edge);
 
   // Block .exit
-  if (gpu_smem_context.isSharedMemoryUsed()) {
-    result_buffer->setName("shared_mem_result");
-    col_buffer->setName("col_buffer_global");
-    CHECK_LT(query_mem_desc.getTargetIdxForKey(),
-             2);  // Saman: not expected for the shared memory design if more than 1
-    // Depending on the aggregate's target expression index, we choose different memory
-    // layout for the shared memory
-    auto func_agg_from_smem_to_gmem =
-        (query_mem_desc.getTargetIdxForKey() == 0)
-            ? mod->getFunction("agg_from_smem_to_gmem_count_binId")
-            : mod->getFunction("agg_from_smem_to_gmem_binId_count");
-    CHECK(func_agg_from_smem_to_gmem);
-    CallInst::Create(
-        func_agg_from_smem_to_gmem,
-        std::vector<Value*>{col_buffer, result_buffer, (shared_mem_num_elements_lv)},
-        "",
-        bb_exit);
-  }
-
   CallInst::Create(func_write_back,
                    std::vector<Value*>{col_buffer, result_buffer, shared_mem_bytes_lv},
                    "",
                    bb_exit);
+
   ReturnInst::Create(mod->getContext(), bb_exit);
 
   // Resolve Forward References

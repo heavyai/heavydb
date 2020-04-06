@@ -201,17 +201,25 @@ void TargetExprCodegen::codegen(
     if (chosen_bytes != sizeof(int32_t)) {
       CHECK_EQ(8, chosen_bytes);
       if (g_bigint_count) {
-        const auto acc_i64 = LL_BUILDER.CreateBitCast(
+        auto acc_i64 = LL_BUILDER.CreateBitCast(
             is_group_by ? agg_col_ptr : agg_out_vec[slot_index],
             llvm::PointerType::get(get_int_type(64, LL_CONTEXT), 0));
+        if (gpu_smem_context.isSharedMemoryUsed()) {
+          acc_i64 = LL_BUILDER.CreatePointerCast(
+              acc_i64, llvm::Type::getInt32PtrTy(LL_CONTEXT, 3));
+        }
         LL_BUILDER.CreateAtomicRMW(llvm::AtomicRMWInst::Add,
                                    acc_i64,
                                    LL_INT(int64_t(1)),
                                    llvm::AtomicOrdering::Monotonic);
       } else {
-        const auto acc_i32 = LL_BUILDER.CreateBitCast(
+        auto acc_i32 = LL_BUILDER.CreateBitCast(
             is_group_by ? agg_col_ptr : agg_out_vec[slot_index],
             llvm::PointerType::get(get_int_type(32, LL_CONTEXT), 0));
+        if (gpu_smem_context.isSharedMemoryUsed()) {
+          acc_i32 = LL_BUILDER.CreatePointerCast(
+              acc_i32, llvm::Type::getInt32PtrTy(LL_CONTEXT, 3));
+        }
         LL_BUILDER.CreateAtomicRMW(llvm::AtomicRMWInst::Add,
                                    acc_i32,
                                    LL_INT(1),

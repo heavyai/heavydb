@@ -49,6 +49,7 @@ set(query_engine_source_files
     GeoIR.cpp
     GpuInterrupt.cpp
     GpuMemUtils.cpp
+    GpuSharedMemoryUtils.cpp
     InPlaceSort.cpp
     InValuesIR.cpp
     IRCodegen.cpp

@@ -105,6 +105,9 @@ bool g_enable_direct_columnarization{true};
 extern bool g_enable_experimental_string_functions;
 bool g_enable_runtime_query_interrupt{false};
 unsigned g_runtime_query_interrupt_frequency{1000};
+size_t g_gpu_smem_threshold{
+    4096};  // GPU shared memory threshold (in bytes), if larger buffer sizes are required
+            // we do not use GPU shared memory optimizations
 
 int const Executor::max_gpu_count;
 
@@ -855,6 +858,7 @@ ResultSetPtr Executor::reduceMultiDeviceResults(
     std::vector<std::pair<ResultSetPtr, std::vector<size_t>>>& results_per_device,
     std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
     const QueryMemoryDescriptor& query_mem_desc) const {
+  auto timer = DEBUG_TIMER(__func__);
   if (ra_exe_unit.estimator) {
     return reduce_estimator_results(ra_exe_unit, results_per_device);
   }

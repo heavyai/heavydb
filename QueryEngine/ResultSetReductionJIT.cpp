@@ -1240,3 +1240,42 @@ std::string ResultSetReductionJIT::cacheKey() const {
   return query_mem_desc_.reductionKey() + "\n" + target_init_vals_key + "\n" +
          targets_key;
 }
+
+ReductionCode GpuReductionHelperJIT::codegen() const {
+  const auto hash_type = query_mem_desc_.getQueryDescriptionType();
+  auto reduction_code = setup_functions_ir(hash_type);
+  CHECK(hash_type == QueryDescriptionType::GroupByPerfectHash);
+  isEmpty(reduction_code);
+  reduceOneEntryNoCollisions(reduction_code);
+  reduceOneEntryNoCollisionsIdx(reduction_code);
+  reduceLoop(reduction_code);
+  reduction_code.cgen_state.reset(new CgenState({}, false));
+  auto cgen_state = reduction_code.cgen_state.get();
+  std::unique_ptr<llvm::Module> module(runtime_module_shallow_copy(cgen_state));
+
+  cgen_state->module_ = module.get();
+  auto ir_is_empty = create_llvm_function(reduction_code.ir_is_empty.get(), cgen_state);
+  auto ir_reduce_one_entry =
+      create_llvm_function(reduction_code.ir_reduce_one_entry.get(), cgen_state);
+  auto ir_reduce_one_entry_idx =
+      create_llvm_function(reduction_code.ir_reduce_one_entry_idx.get(), cgen_state);
+  auto ir_reduce_loop =
+      create_llvm_function(reduction_code.ir_reduce_loop.get(), cgen_state);
+  std::unordered_map<const Function*, llvm::Function*> f;
+  f.emplace(reduction_code.ir_is_empty.get(), ir_is_empty);
+  f.emplace(reduction_code.ir_reduce_one_entry.get(), ir_reduce_one_entry);
+  f.emplace(reduction_code.ir_reduce_one_entry_idx.get(), ir_reduce_one_entry_idx);
+  f.emplace(reduction_code.ir_reduce_loop.get(), ir_reduce_loop);
+  translate_function(reduction_code.ir_is_empty.get(), ir_is_empty, reduction_code, f);
+  translate_function(
+      reduction_code.ir_reduce_one_entry.get(), ir_reduce_one_entry, reduction_code, f);
+  translate_function(reduction_code.ir_reduce_one_entry_idx.get(),
+                     ir_reduce_one_entry_idx,
+                     reduction_code,
+                     f);
+  translate_function(
+      reduction_code.ir_reduce_loop.get(), ir_reduce_loop, reduction_code, f);
+  reduction_code.llvm_reduce_loop = ir_reduce_loop;
+  reduction_code.module = std::move(module);
+  return reduction_code;
+}

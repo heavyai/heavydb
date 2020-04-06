@@ -8,6 +8,14 @@
 #include "HyperLogLogRank.h"
 #include "TableFunctions/TableFunctions.hpp"
 
+extern "C" __device__ int64_t get_thread_index() {
+  return threadIdx.x;
+}
+
+extern "C" __device__ int64_t get_block_index() {
+  return blockIdx.x;
+}
+
 extern "C" __device__ int32_t pos_start_impl(const int32_t* row_index_resume) {
   return blockIdx.x * blockDim.x + threadIdx.x;
 }
@@ -33,110 +41,34 @@ extern "C" __device__ const int64_t* init_shared_mem_nop(
 extern "C" __device__ void write_back_nop(int64_t* dest, int64_t* src, const int32_t sz) {
 }
 
-extern "C" __device__ const int64_t* init_shared_mem(const int64_t* groups_buffer,
+/*
+ * Just declares and returns a dynamic shared memory pointer. Total size should be
+ * properly set during kernel launch
+ */
+extern "C" __device__ int64_t* declare_dynamic_shared_memory() {
+  extern __shared__ int64_t shared_mem_buffer[];
+  return shared_mem_buffer;
+}
+
+/**
+ * Initializes the shared memory buffer for perfect hash group by.
+ * In this function, we simply copy the global group by buffer (already initialized on the
+ * host and transferred) to all shared memory group by buffers.
+ */
+extern "C" __device__ const int64_t* init_shared_mem(const int64_t* global_groups_buffer,
                                                      const int32_t groups_buffer_size) {
-  extern __shared__ int64_t fast_bins[];
-  if (threadIdx.x == 0) {
-    memcpy(fast_bins, groups_buffer, groups_buffer_size);
+  // dynamic shared memory declaration
+  extern __shared__ int64_t shared_groups_buffer[];
+
+  // it is assumed that buffer size is aligned with 64-bit units
+  // so it is safe to assign 64-bit to each thread
+  const int32_t buffer_units = groups_buffer_size >> 3;
+
+  for (int32_t pos = threadIdx.x; pos < buffer_units; pos += blockDim.x) {
+    shared_groups_buffer[pos] = global_groups_buffer[pos];
   }
   __syncthreads();
-  return fast_bins;
-}
-
-/**
- * Dynamically allocates shared memory per block.
- * The amount of shared memory allocated is defined at kernel launch time.
- * Returns a pointer to the beginning of allocated shared memory
- */
-extern "C" __device__ int64_t* alloc_shared_mem_dynamic() {
-  extern __shared__ int64_t groups_buffer_smem[];
-  return groups_buffer_smem;
-}
-
-/**
- * Set the allocated shared memory elements to be equal to the 'identity_element'.
- * groups_buffer_size: number of 64-bit elements in shared memory per thread-block
- * NOTE: groups_buffer_size is in units of 64-bit elements.
- */
-extern "C" __device__ void set_shared_mem_to_identity(
-    int64_t* groups_buffer_smem,
-    const int32_t groups_buffer_size,
-    const int64_t identity_element = 0) {
-#pragma unroll
-  for (int i = threadIdx.x; i < groups_buffer_size; i += blockDim.x) {
-    groups_buffer_smem[i] = identity_element;
-  }
-  __syncthreads();
-}
-
-/**
- * Initialize dynamic shared memory:
- * 1. Allocates dynamic shared memory
- * 2. Set every allocated element to be equal to the 'identity element', by default zero.
- */
-extern "C" __device__ const int64_t* init_shared_mem_dynamic(
-    const int64_t* groups_buffer,
-    const int32_t groups_buffer_size) {
-  int64_t* groups_buffer_smem = alloc_shared_mem_dynamic();
-  set_shared_mem_to_identity(groups_buffer_smem, groups_buffer_size);
-  return groups_buffer_smem;
-}
-
-extern "C" __device__ void write_back_smem_nop(int64_t* dest,
-                                               int64_t* src,
-                                               const int32_t sz) {}
-
-extern "C" __device__ void agg_from_smem_to_gmem_nop(int64_t* gmem_dest,
-                                                     int64_t* smem_src,
-                                                     const int32_t num_elements) {}
-
-/**
- * Aggregate the result stored into shared memory back into global memory.
- * It also writes back the stored binId, if any, back into global memory.
- * Memory layout assumption: each 64-bit shared memory unit of data is as follows:
- * [0..31: the stored bin ID, to be written back][32..63: the count result, to be
- * aggregated]
- */
-extern "C" __device__ void agg_from_smem_to_gmem_binId_count(int64_t* gmem_dest,
-                                                             int64_t* smem_src,
-                                                             const int32_t num_elements) {
-  __syncthreads();
-#pragma unroll
-  for (int i = threadIdx.x; i < num_elements; i += blockDim.x) {
-    int32_t bin_id = *reinterpret_cast<int32_t*>(smem_src + i);
-    int32_t count_result = *(reinterpret_cast<int32_t*>(smem_src + i) + 1);
-    if (count_result) {  // non-zero count
-      atomicAdd(reinterpret_cast<unsigned int*>(gmem_dest + i) + 1,
-                static_cast<int32_t>(count_result));
-      // writing back the binId, only if count_result is non-zero
-      *reinterpret_cast<unsigned int*>(gmem_dest + i) = static_cast<int32_t>(bin_id);
-    }
-  }
-}
-
-/**
- * Aggregate the result stored into shared memory back into global memory.
- * It also writes back the stored binId, if any, back into global memory.
- * Memory layout assumption: each 64-bit shared memory unit of data is as follows:
- * [0..31: the count result, to be aggregated][32..63: the stored bin ID, to be written
- * back]
- */
-extern "C" __device__ void agg_from_smem_to_gmem_count_binId(int64_t* gmem_dest,
-                                                             int64_t* smem_src,
-                                                             const int32_t num_elements) {
-  __syncthreads();
-#pragma unroll
-  for (int i = threadIdx.x; i < num_elements; i += blockDim.x) {
-    int32_t count_result = *reinterpret_cast<int32_t*>(smem_src + i);
-    int32_t bin_id = *(reinterpret_cast<int32_t*>(smem_src + i) + 1);
-    if (count_result) {  // non-zero count
-      atomicAdd(reinterpret_cast<unsigned int*>(gmem_dest + i),
-                static_cast<int32_t>(count_result));
-      // writing back the binId, only if count_result is non-zero
-      *(reinterpret_cast<unsigned int*>(gmem_dest + i) + 1) =
-          static_cast<int32_t>(bin_id);
-    }
-  }
+  return shared_groups_buffer;
 }
 
 #define init_group_by_buffer_gpu_impl init_group_by_buffer_gpu
@@ -1347,4 +1279,8 @@ extern "C" __device__ void sync_warp_protected(int64_t thread_pos, int64_t row_c
     __syncwarp();
   }
 #endif
+}
+
+extern "C" __device__ void sync_threadblock() {
+  __syncthreads();
 }

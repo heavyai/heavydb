@@ -93,6 +93,7 @@ extern double g_bump_allocator_step_reduction;
 extern bool g_enable_direct_columnarization;
 extern bool g_enable_runtime_query_interrupt;
 extern unsigned g_runtime_query_interrupt_frequency;
+extern size_t g_gpu_smem_threshold;
 
 class QueryCompilationDescriptor;
 using QueryCompilationDescriptorOwned = std::unique_ptr<QueryCompilationDescriptor>;

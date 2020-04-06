@@ -934,7 +934,7 @@ bool GroupByAndAggregate::codegen(llvm::Value* filter_result,
         // Don't generate null checks if the group slot is guaranteed to be non-null,
         // as it's the case for get_group_value_fast* family.
         can_return_error = codegenAggCalls(
-            agg_out_ptr_w_idx, {}, query_mem_desc, co, filter_cfg, gpu_smem_context);
+            agg_out_ptr_w_idx, {}, query_mem_desc, co, gpu_smem_context, filter_cfg);
       } else {
         {
           llvm::Value* nullcheck_cond{nullptr};
@@ -950,7 +950,7 @@ bool GroupByAndAggregate::codegen(llvm::Value* filter_result,
           DiamondCodegen nullcheck_cfg(
               nullcheck_cond, executor_, false, "groupby_nullcheck", &filter_cfg, false);
           codegenAggCalls(
-              agg_out_ptr_w_idx, {}, query_mem_desc, co, filter_cfg, gpu_smem_context);
+              agg_out_ptr_w_idx, {}, query_mem_desc, co, gpu_smem_context, filter_cfg);
         }
         can_return_error = true;
         if (query_mem_desc.getQueryDescriptionType() ==
@@ -980,8 +980,8 @@ bool GroupByAndAggregate::codegen(llvm::Value* filter_result,
                                            agg_out_vec,
                                            query_mem_desc,
                                            co,
-                                           filter_cfg,
-                                           gpu_smem_context);
+                                           gpu_smem_context,
+                                           filter_cfg);
       }
     }
   }
@@ -1483,8 +1483,8 @@ bool GroupByAndAggregate::codegenAggCalls(
     const std::vector<llvm::Value*>& agg_out_vec,
     const QueryMemoryDescriptor& query_mem_desc,
     const CompilationOptions& co,
-    DiamondCodegen& diamond_codegen,
-    const GpuSharedMemoryContext& gpu_smem_context) {
+    const GpuSharedMemoryContext& gpu_smem_context,
+    DiamondCodegen& diamond_codegen) {
   auto agg_out_ptr_w_idx = agg_out_ptr_w_idx_in;
   // TODO(alex): unify the two cases, the output for non-group by queries
   //             should be a contiguous buffer

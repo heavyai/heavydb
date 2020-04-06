@@ -243,8 +243,8 @@ class GroupByAndAggregate {
                        const std::vector<llvm::Value*>& agg_out_vec,
                        const QueryMemoryDescriptor& query_mem_desc,
                        const CompilationOptions& co,
-                       DiamondCodegen& diamond_codegen,
-                       const GpuSharedMemoryContext& gpu_smem_context);
+                       const GpuSharedMemoryContext& gpu_smem_context,
+                       DiamondCodegen& diamond_codegen);
 
   llvm::Value* codegenWindowRowPointer(const Analyzer::WindowFunction* window_func,
                                        const QueryMemoryDescriptor& query_mem_desc,

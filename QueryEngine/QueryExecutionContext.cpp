@@ -131,6 +131,7 @@ int64_t QueryExecutionContext::getAggInitValForIndex(const size_t index) const {
 ResultSetPtr QueryExecutionContext::getRowSet(
     const RelAlgExecutionUnit& ra_exe_unit,
     const QueryMemoryDescriptor& query_mem_desc) const {
+  auto timer = DEBUG_TIMER(__func__);
   std::vector<std::pair<ResultSetPtr, std::vector<size_t>>> results_per_sm;
   CHECK(query_buffers_);
   const auto group_by_buffers_size = query_buffers_->getNumBuffers();

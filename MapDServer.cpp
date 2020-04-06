@@ -85,6 +85,7 @@ extern bool g_enable_fsi;
 extern bool g_enable_interop;
 extern bool g_enable_union;
 extern bool g_use_tbb_pool;
+extern size_t g_gpu_smem_threshold;
 
 bool g_enable_thrift_logs{false};
 
@@ -658,6 +659,11 @@ void MapDProgramOptions::fillAdvancedOptions() {
           ->default_value(g_enable_smem_group_by)
           ->implicit_value(true),
       "Enable using GPU shared memory for some GROUP BY queries.");
+  developer_desc.add_options()(
+      "gpu-shared-mem-threshold",
+      po::value<size_t>(&g_gpu_smem_threshold)->default_value(g_gpu_smem_threshold),
+      "GPU shared memory threshold (in bytes). If query requires larger buffers than "
+      "this threshold, we disable those optimizations.");
   developer_desc.add_options()("enable-direct-columnarization",
                                po::value<bool>(&g_enable_direct_columnarization)
                                    ->default_value(g_enable_direct_columnarization)

@@ -22,11 +22,9 @@
 #include "../Analyzer/Analyzer.h"
 
 extern bool g_bigint_count;
-namespace {
 
-inline std::vector<int64_t> init_agg_val_vec(
-    const std::vector<TargetInfo>& targets,
-    const QueryMemoryDescriptor& query_mem_desc) {
+std::vector<int64_t> init_agg_val_vec(const std::vector<TargetInfo>& targets,
+                                      const QueryMemoryDescriptor& query_mem_desc) {
   std::vector<int64_t> agg_init_vals;
   agg_init_vals.reserve(query_mem_desc.getSlotCount());
   const bool is_group_by{query_mem_desc.isGroupBy()};
@@ -82,8 +80,6 @@ inline std::vector<int64_t> init_agg_val_vec(
   }
   return agg_init_vals;
 }
-
-}  // namespace
 
 std::pair<int64_t, int64_t> inline_int_max_min(const size_t byte_width) {
   switch (byte_width) {

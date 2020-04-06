@@ -58,11 +58,10 @@ class ResultSetReductionJIT {
                         const std::vector<int64_t>& target_init_vals);
 
   // Generate the code for the result set reduction loop.
-  ReductionCode codegen() const;
-
+  virtual ReductionCode codegen() const;
   static void clearCache();
 
- private:
+ protected:
   // Generate a function which checks whether a row is empty.
   void isEmpty(const ReductionCode& reduction_code) const;
 
@@ -70,6 +69,14 @@ class ResultSetReductionJIT {
   // perfect hash layout.
   void reduceOneEntryNoCollisions(const ReductionCode& reduction_code) const;
 
+  // Generate a function which reduces two rows given by the start pointer of the result
+  // buffers they are part of and the indices inside those buffers.
+  void reduceOneEntryNoCollisionsIdx(const ReductionCode& reduction_code) const;
+
+  // Generate a function for the reduction of an entire result set chunk.
+  void reduceLoop(const ReductionCode& reduction_code) const;
+
+ private:
   // Used to implement 'reduceOneEntryNoCollisions'.
   void reduceOneEntryTargetsNoCollisions(Function* ir_reduce_one_entry,
                                          Value* this_targets_start_ptr,
@@ -78,15 +85,8 @@ class ResultSetReductionJIT {
   // Same as above, for the baseline layout.
   void reduceOneEntryBaseline(const ReductionCode& reduction_code) const;
 
-  // Generate a function which reduces two rows given by the start pointer of the result
-  // buffers they are part of and the indices inside those buffers.
-  void reduceOneEntryNoCollisionsIdx(const ReductionCode& reduction_code) const;
-
   // Same as above, for the baseline layout.
   void reduceOneEntryBaselineIdx(const ReductionCode& reduction_code) const;
-
-  // Generate a function for the reduction of an entire result set chunk.
-  void reduceLoop(const ReductionCode& reduction_code) const;
 
   // Generate reduction code for a single slot.
   void reduceOneSlot(Value* this_ptr1,
@@ -130,4 +130,33 @@ class ResultSetReductionJIT {
   const std::vector<TargetInfo> targets_;
   const std::vector<int64_t> target_init_vals_;
   static CodeCache s_code_cache;
+};
+
+/**
+ * This is a helper class for performing GPU reduction code.
+ * It uses the same functions that ResultSetReductionJIT generates so that
+ * it can be reused and help the reduction procedure within GPU.
+ */
+class GpuReductionHelperJIT : public ResultSetReductionJIT {
+ public:
+  GpuReductionHelperJIT(const QueryMemoryDescriptor& query_mem_desc,
+                        const std::vector<TargetInfo>& targets,
+                        const std::vector<int64_t>& target_init_vals)
+      : ResultSetReductionJIT(query_mem_desc, targets, target_init_vals)
+      , query_mem_desc_(query_mem_desc) {
+    CHECK(query_mem_desc_.getQueryDescriptionType() ==
+          QueryDescriptionType::GroupByPerfectHash);
+    CHECK(!query_mem_desc_.didOutputColumnar());
+    CHECK(query_mem_desc_.hasKeylessHash());
+  }
+  /**
+   * generates code for perfect hash group by reduction: the following functions are
+   * internally created: isEmpty, reduceOneEntryNoCollision (reduce for perfect hash),
+   * reduceOneEntryNoCollissionsIdx(reduce one slot for perfect hash), and reduceLoop (the
+   * outer loop).
+   */
+  virtual ReductionCode codegen() const;
+
+ private:
+  const QueryMemoryDescriptor& query_mem_desc_;
 };

@@ -82,6 +82,9 @@ add_executable(CommandLineTest CommandLineTest.cpp)
 if(NOT ${CMAKE_SYSTEM_NAME} STREQUAL "Darwin")
   add_executable(UdfTest UdfTest.cpp)
 endif()
+if(ENABLE_CUDA)
+  add_executable(GpuSharedMemoryTest GpuSharedMemoryTest.cpp ResultSetTestUtils.cpp)
+endif()
 
 # Tests + Microbenchmarks
 add_executable(TableUpdateDeleteBenchmark TableUpdateDeleteBenchmark.cpp)
@@ -153,6 +156,9 @@ if(NOT ${CMAKE_SYSTEM_NAME} STREQUAL "Darwin")
 endif()
 
 target_link_libraries(TableUpdateDeleteBenchmark benchmark ${EXECUTE_TEST_LIBS})
+if(ENABLE_CUDA)
+  target_link_libraries(GpuSharedMemoryTest ${EXECUTE_TEST_LIBS})
+endif()
 
 set(TEST_ARGS "--gtest_output=xml:../")
 add_test(DumpRestoreTest DumpRestoreTest ${TEST_ARGS})
@@ -201,6 +207,9 @@ add_test(ShowCommandsDdlTest ShowCommandsDdlTest ${TEST_ARGS})
 add_test(CatalogMigrationTest CatalogMigrationTest ${TEST_ARGS})
 add_test(CreateAndDropTableDdlTest CreateAndDropTableDdlTest ${TEST_ARGS})
 add_test(ForeignTableDmlTest ForeignTableDmlTest ${TEST_ARGS})
+if(ENABLE_CUDA)
+  add_test(GpuSharedMemoryTest GpuSharedMemoryTest ${TEST_ARGS})
+endif()
 
 if(NOT ${CMAKE_SYSTEM_NAME} STREQUAL "Darwin")
   add_test(UdfTest UdfTest ${TEST_ARGS})
@@ -264,6 +273,10 @@ set(TEST_PROGRAMS
   CreateAndDropTableDdlTest
   ForeignTableDmlTest
 )
+
+if(ENABLE_CUDA)
+  list(APPEND TEST_PROGRAMS GpuSharedMemoryTest)
+endif()
 
 if(NOT ${CMAKE_SYSTEM_NAME} STREQUAL "Darwin")
   list(APPEND TEST_PROGRAMS UdfTest)
