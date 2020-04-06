@@ -389,7 +389,7 @@ std::unique_ptr<QueryMemoryDescriptor> GroupByAndAggregate::initQueryMemoryDescr
   // Keyless hash is currently only supported with single-column perfect hash
   const auto keyless_info = !(is_group_by && col_range_info.hash_type_ ==
                                                  QueryDescriptionType::GroupByPerfectHash)
-                                ? KeylessInfo{false, -1, false}
+                                ? KeylessInfo{false, -1}
                                 : getKeylessInfo(ra_exe_unit_.target_exprs, is_group_by);
 
   if (g_enable_watchdog &&
@@ -629,27 +629,16 @@ CountDistinctDescriptors GroupByAndAggregate::initCountDistinctDescriptors() {
  *
  * NOTE: Keyless hash is only valid with single-column group by at the moment.
  *
- * TODO(Saman): remove the shared memory discussion out of this function.
  */
 KeylessInfo GroupByAndAggregate::getKeylessInfo(
     const std::vector<Analyzer::Expr*>& target_expr_list,
     const bool is_group_by) const {
-  bool keyless{true}, found{false}, shared_mem_support{false},
-      shared_mem_valid_data_type{true};
-  /* Currently support shared memory usage for a limited subset of possible aggregate
-   * operations. shared_mem_support and
-   * shared_mem_valid_data_type are declared to ensure such support. */
-  int32_t num_agg_expr{0};  // used for shared memory support on the GPU
+  bool keyless{true}, found{false};
+  int32_t num_agg_expr{0};
   int32_t index{0};
   for (const auto target_expr : target_expr_list) {
     const auto agg_info = get_target_info(target_expr, g_bigint_count);
     const auto chosen_type = get_compact_type(agg_info);
-    // TODO(Saman): should be eventually removed, once I make sure what data types can
-    // be used in this shared memory setting.
-
-    shared_mem_valid_data_type =
-        shared_mem_valid_data_type && supportedTypeForGpuSharedMemUsage(chosen_type);
-
     if (agg_info.is_agg) {
       num_agg_expr++;
     }
@@ -679,9 +668,6 @@ KeylessInfo GroupByAndAggregate::getKeylessInfo(
             }
           }
           found = true;
-          if (!agg_info.skip_null_val) {
-            shared_mem_support = true;  // currently just support 8 bytes per group
-          }
           break;
         case kSUM: {
           auto arg_ti = arg_expr->get_type_info();
@@ -798,55 +784,10 @@ KeylessInfo GroupByAndAggregate::getKeylessInfo(
   }
 
   // shouldn't use keyless for projection only
-  /**
-   * Currently just support shared memory usage when dealing with one keyless aggregate
-   * operation. Currently just support shared memory usage for up to two target
-   * expressions.
-   */
-  return {keyless && found,
-          index,
-          ((num_agg_expr == 1) && (target_expr_list.size() <= 2))
-              ? shared_mem_support && shared_mem_valid_data_type
-              : false};
-}
-
-/**
- * Supported data types for the current shared memory usage for keyless aggregates with
- * COUNT(*) Currently only for single-column group by queries.
- */
-bool GroupByAndAggregate::supportedTypeForGpuSharedMemUsage(
-    const SQLTypeInfo& target_type_info) const {
-  bool result = false;
-  switch (target_type_info.get_type()) {
-    case SQLTypes::kTINYINT:
-    case SQLTypes::kSMALLINT:
-    case SQLTypes::kINT:
-      result = true;
-      break;
-    case SQLTypes::kTEXT:
-      if (target_type_info.get_compression() == EncodingType::kENCODING_DICT) {
-        result = true;
-      }
-      break;
-    default:
-      break;
-  }
-  return result;
-}
-
-// TODO(Saman): this function is temporary and all these limitations should eventually
-// be removed.
-bool GroupByAndAggregate::supportedExprForGpuSharedMemUsage(Analyzer::Expr* expr) {
-  /*
-  UNNEST operations follow a slightly different internal memory layout compared to other
-  keyless aggregates Currently, we opt out of using shared memory if there is any UNNEST
-  operation involved.
-  */
-  if (dynamic_cast<Analyzer::UOper*>(expr) &&
-      static_cast<Analyzer::UOper*>(expr)->get_optype() == kUNNEST) {
-    return false;
-  }
-  return true;
+  return {
+      keyless && found,
+      index,
+  };
 }
 
 bool GroupByAndAggregate::gpuCanHandleOrderEntries(
@@ -939,7 +880,8 @@ GroupByAndAggregate::DiamondCodegen::~DiamondCodegen() {
 bool GroupByAndAggregate::codegen(llvm::Value* filter_result,
                                   llvm::BasicBlock* sc_false,
                                   const QueryMemoryDescriptor& query_mem_desc,
-                                  const CompilationOptions& co) {
+                                  const CompilationOptions& co,
+                                  const GpuSharedMemoryContext& gpu_smem_context) {
   CHECK(filter_result);
 
   bool can_return_error = false;
@@ -991,8 +933,8 @@ bool GroupByAndAggregate::codegen(llvm::Value* filter_result,
         }
         // Don't generate null checks if the group slot is guaranteed to be non-null,
         // as it's the case for get_group_value_fast* family.
-        can_return_error =
-            codegenAggCalls(agg_out_ptr_w_idx, {}, query_mem_desc, co, filter_cfg);
+        can_return_error = codegenAggCalls(
+            agg_out_ptr_w_idx, {}, query_mem_desc, co, filter_cfg, gpu_smem_context);
       } else {
         {
           llvm::Value* nullcheck_cond{nullptr};
@@ -1007,7 +949,8 @@ bool GroupByAndAggregate::codegen(llvm::Value* filter_result,
           }
           DiamondCodegen nullcheck_cfg(
               nullcheck_cond, executor_, false, "groupby_nullcheck", &filter_cfg, false);
-          codegenAggCalls(agg_out_ptr_w_idx, {}, query_mem_desc, co, filter_cfg);
+          codegenAggCalls(
+              agg_out_ptr_w_idx, {}, query_mem_desc, co, filter_cfg, gpu_smem_context);
         }
         can_return_error = true;
         if (query_mem_desc.getQueryDescriptionType() ==
@@ -1037,7 +980,8 @@ bool GroupByAndAggregate::codegen(llvm::Value* filter_result,
                                            agg_out_vec,
                                            query_mem_desc,
                                            co,
-                                           filter_cfg);
+                                           filter_cfg,
+                                           gpu_smem_context);
       }
     }
   }
@@ -1539,7 +1483,8 @@ bool GroupByAndAggregate::codegenAggCalls(
     const std::vector<llvm::Value*>& agg_out_vec,
     const QueryMemoryDescriptor& query_mem_desc,
     const CompilationOptions& co,
-    DiamondCodegen& diamond_codegen) {
+    DiamondCodegen& diamond_codegen,
+    const GpuSharedMemoryContext& gpu_smem_context) {
   auto agg_out_ptr_w_idx = agg_out_ptr_w_idx_in;
   // TODO(alex): unify the two cases, the output for non-group by queries
   //             should be a contiguous buffer
@@ -1580,6 +1525,7 @@ bool GroupByAndAggregate::codegenAggCalls(
                          executor_,
                          query_mem_desc,
                          co,
+                         gpu_smem_context,
                          agg_out_ptr_w_idx,
                          agg_out_vec,
                          output_buffer_byte_stream,

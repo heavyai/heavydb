@@ -2478,22 +2478,24 @@ int32_t Executor::executePlanWithoutGroupBy(
     output_memory_scope.reset(new OutVecOwner(out_vec));
   } else {
     try {
-      out_vec = query_exe_context->launchGpuCode(ra_exe_unit,
-                                                 compilation_result.native_functions,
-                                                 hoist_literals,
-                                                 hoist_buf,
-                                                 col_buffers,
-                                                 num_rows,
-                                                 frag_offsets,
-                                                 0,
-                                                 data_mgr,
-                                                 blockSize(),
-                                                 gridSize(),
-                                                 device_id,
-                                                 &error_code,
-                                                 num_tables,
-                                                 join_hash_table_ptrs,
-                                                 render_allocator_map_ptr);
+      out_vec = query_exe_context->launchGpuCode(
+          ra_exe_unit,
+          compilation_result.native_functions,
+          hoist_literals,
+          hoist_buf,
+          col_buffers,
+          num_rows,
+          frag_offsets,
+          0,
+          data_mgr,
+          blockSize(),
+          gridSize(),
+          device_id,
+          compilation_result.gpu_smem_context.getSharedMemorySize(),
+          &error_code,
+          num_tables,
+          join_hash_table_ptrs,
+          render_allocator_map_ptr);
       output_memory_scope.reset(new OutVecOwner(out_vec));
     } catch (const OutOfMemory&) {
       return ERR_OUT_OF_GPU_MEM;
@@ -2729,6 +2731,7 @@ int32_t Executor::executePlanWithGroupBy(
           blockSize(),
           gridSize(),
           device_id,
+          compilation_result.gpu_smem_context.getSharedMemorySize(),
           &error_code,
           num_tables,
           join_hash_table_ptrs,

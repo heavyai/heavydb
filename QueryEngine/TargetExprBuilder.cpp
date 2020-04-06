@@ -85,6 +85,7 @@ void TargetExprCodegen::codegen(
     Executor* executor,
     const QueryMemoryDescriptor& query_mem_desc,
     const CompilationOptions& co,
+    const GpuSharedMemoryContext& gpu_smem_context,
     const std::tuple<llvm::Value*, llvm::Value*>& agg_out_ptr_w_idx_in,
     const std::vector<llvm::Value*>& agg_out_vec,
     llvm::Value* output_buffer_byte_stream,
@@ -218,8 +219,7 @@ void TargetExprCodegen::codegen(
       }
     } else {
       const auto acc_i32 = (is_group_by ? agg_col_ptr : agg_out_vec[slot_index]);
-      if (query_mem_desc.getGpuMemSharing() ==
-          GroupByMemSharing::SharedForKeylessOneColumnKnownRange) {
+      if (gpu_smem_context.isSharedMemoryUsed()) {
         // Atomic operation on address space level 3 (Shared):
         const auto shared_acc_i32 = LL_BUILDER.CreatePointerCast(
             acc_i32, llvm::Type::getInt32PtrTy(LL_CONTEXT, 3));
@@ -522,6 +522,7 @@ void TargetExprCodegenBuilder::codegen(
     Executor* executor,
     const QueryMemoryDescriptor& query_mem_desc,
     const CompilationOptions& co,
+    const GpuSharedMemoryContext& gpu_smem_context,
     const std::tuple<llvm::Value*, llvm::Value*>& agg_out_ptr_w_idx,
     const std::vector<llvm::Value*>& agg_out_vec,
     llvm::Value* output_buffer_byte_stream,
@@ -535,6 +536,7 @@ void TargetExprCodegenBuilder::codegen(
                                 executor,
                                 query_mem_desc,
                                 co,
+                                gpu_smem_context,
                                 agg_out_ptr_w_idx,
                                 agg_out_vec,
                                 output_buffer_byte_stream,
@@ -608,6 +610,7 @@ void TargetExprCodegenBuilder::codegenSingleSlotSampleExpression(
                                           executor,
                                           query_mem_desc,
                                           co,
+                                          {},
                                           agg_out_ptr_w_idx,
                                           agg_out_vec,
                                           output_buffer_byte_stream,
@@ -665,6 +668,7 @@ void TargetExprCodegenBuilder::codegenMultiSlotSampleExpressions(
                                 executor,
                                 query_mem_desc,
                                 co,
+                                {},
                                 agg_out_ptr_w_idx,
                                 agg_out_vec,
                                 output_buffer_byte_stream,

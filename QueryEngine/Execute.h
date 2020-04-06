@@ -24,6 +24,7 @@
 #include "CodeCache.h"
 #include "DateTimeUtils.h"
 #include "Descriptors/QueryFragmentDescriptor.h"
+#include "GpuSharedMemoryContext.h"
 #include "GroupByAndAggregate.h"
 #include "JoinHashTable.h"
 #include "LoopControlFlow/JoinLoop.h"
@@ -454,6 +455,7 @@ class Executor {
     std::unordered_map<int, CgenState::LiteralValues> literal_values;
     bool output_columnar;
     std::string llvm_ir;
+    GpuSharedMemoryContext gpu_smem_context;
   };
 
   bool isArchPascalOrLater(const ExecutorDeviceType dt) const {
@@ -819,7 +821,8 @@ class Executor {
   bool compileBody(const RelAlgExecutionUnit& ra_exe_unit,
                    GroupByAndAggregate& group_by_and_aggregate,
                    const QueryMemoryDescriptor& query_mem_desc,
-                   const CompilationOptions& co);
+                   const CompilationOptions& co,
+                   const GpuSharedMemoryContext& gpu_smem_context = {});
 
   void createErrorCheckControlFlow(llvm::Function* query_func,
                                    bool run_with_dynamic_watchdog,

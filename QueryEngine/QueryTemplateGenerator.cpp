@@ -456,11 +456,16 @@ llvm::Function* query_template_impl(llvm::Module* mod,
 }
 
 template <class Attributes>
-llvm::Function* query_group_by_template_impl(llvm::Module* mod,
-                                             const bool hoist_literals,
-                                             const QueryMemoryDescriptor& query_mem_desc,
-                                             const ExecutorDeviceType device_type,
-                                             const bool check_scan_limit) {
+llvm::Function* query_group_by_template_impl(
+    llvm::Module* mod,
+    const bool hoist_literals,
+    const QueryMemoryDescriptor& query_mem_desc,
+    const ExecutorDeviceType device_type,
+    const bool check_scan_limit,
+    const GpuSharedMemoryContext& gpu_smem_context) {
+  if (gpu_smem_context.isSharedMemoryUsed()) {
+    CHECK(device_type == ExecutorDeviceType::GPU);
+  }
   using namespace llvm;
 
   auto func_pos_start = pos_start<Attributes>(mod);
@@ -471,20 +476,19 @@ llvm::Function* query_group_by_template_impl(llvm::Module* mod,
   CHECK(func_group_buff_idx);
   auto func_row_process = row_process<Attributes>(mod, 0, hoist_literals);
   CHECK(func_row_process);
-  auto func_init_shared_mem = query_mem_desc.sharedMemBytes(device_type)
+  auto func_init_shared_mem = gpu_smem_context.isSharedMemoryUsed()
                                   ? mod->getFunction("init_shared_mem")
                                   : mod->getFunction("init_shared_mem_nop");
-  if (query_mem_desc.getGpuMemSharing() ==
-      GroupByMemSharing::SharedForKeylessOneColumnKnownRange) {
+  if (gpu_smem_context.isSharedMemoryUsed()) {
     func_init_shared_mem = mod->getFunction("init_shared_mem_dynamic");
   }
   CHECK(func_init_shared_mem);
 
-  auto func_write_back = query_mem_desc.sharedMemBytes(device_type)
+  auto func_write_back = gpu_smem_context.isSharedMemoryUsed()
                              ? mod->getFunction("write_back")
                              : mod->getFunction("write_back_nop");
-  if (query_mem_desc.getGpuMemSharing() ==
-      GroupByMemSharing::SharedForKeylessOneColumnKnownRange) {
+
+  if (gpu_smem_context.isSharedMemoryUsed()) {
     func_write_back = mod->getFunction("write_back_smem_nop");
   }
   CHECK(func_write_back);
@@ -654,11 +658,10 @@ llvm::Function* query_group_by_template_impl(llvm::Module* mod,
   llvm::ConstantInt* shared_mem_num_elements_lv = nullptr;
   llvm::ConstantInt* shared_mem_bytes_lv = nullptr;
   llvm::CallInst* result_buffer = nullptr;
-  if (query_mem_desc.getGpuMemSharing() ==
-      GroupByMemSharing::SharedForKeylessOneColumnKnownRange) {
+  if (gpu_smem_context.isSharedMemoryUsed()) {
     int32_t num_shared_mem_buckets = query_mem_desc.getEntryCount() + 1;
     shared_mem_bytes_lv =
-        ConstantInt::get(i32_type, query_mem_desc.sharedMemBytes(device_type));
+        ConstantInt::get(i32_type, gpu_smem_context.getSharedMemorySize());
     shared_mem_num_elements_lv = ConstantInt::get(i32_type, num_shared_mem_buckets);
     result_buffer = CallInst::Create(
         func_init_shared_mem,
@@ -667,7 +670,7 @@ llvm::Function* query_group_by_template_impl(llvm::Module* mod,
         bb_entry);
   } else {
     shared_mem_bytes_lv =
-        ConstantInt::get(i32_type, query_mem_desc.sharedMemBytes(device_type));
+        ConstantInt::get(i32_type, gpu_smem_context.getSharedMemorySize());
     result_buffer =
         CallInst::Create(func_init_shared_mem,
                          std::vector<llvm::Value*>{col_buffer, shared_mem_bytes_lv},
@@ -767,8 +770,7 @@ llvm::Function* query_group_by_template_impl(llvm::Module* mod,
   BranchInst::Create(bb_exit, bb_crit_edge);
 
   // Block .exit
-  if (query_mem_desc.getGpuMemSharing() ==
-      GroupByMemSharing::SharedForKeylessOneColumnKnownRange) {
+  if (gpu_smem_context.isSharedMemoryUsed()) {
     result_buffer->setName("shared_mem_result");
     col_buffer->setName("col_buffer_global");
     CHECK_LT(query_mem_desc.getTargetIdxForKey(),
@@ -816,9 +818,14 @@ llvm::Function* query_group_by_template(llvm::Module* module,
                                         const bool hoist_literals,
                                         const QueryMemoryDescriptor& query_mem_desc,
                                         const ExecutorDeviceType device_type,
-                                        const bool check_scan_limit) {
-  return query_group_by_template_impl<llvm::AttributeList>(
-      module, hoist_literals, query_mem_desc, device_type, check_scan_limit);
+                                        const bool check_scan_limit,
+                                        const GpuSharedMemoryContext& gpu_smem_context) {
+  return query_group_by_template_impl<llvm::AttributeList>(module,
+                                                           hoist_literals,
+                                                           query_mem_desc,
+                                                           device_type,
+                                                           check_scan_limit,
+                                                           gpu_smem_context);
 }
 #else
 llvm::Function* query_template(llvm::Module* module,

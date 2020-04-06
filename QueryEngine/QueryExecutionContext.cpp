@@ -188,6 +188,7 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(
     const unsigned block_size_x,
     const unsigned grid_size_x,
     const int device_id,
+    const size_t shared_memory_size,
     int32_t* error_code,
     const uint32_t num_tables,
     const std::vector<int64_t>& join_hash_tables,
@@ -299,32 +300,30 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(
     }
 
     if (hoist_literals) {
-      checkCudaErrors(
-          cuLaunchKernel(cu_func,
-                         grid_size_x,
-                         grid_size_y,
-                         grid_size_z,
-                         block_size_x,
-                         block_size_y,
-                         block_size_z,
-                         query_mem_desc_.sharedMemBytes(ExecutorDeviceType::GPU),
-                         nullptr,
-                         &param_ptrs[0],
-                         nullptr));
+      checkCudaErrors(cuLaunchKernel(cu_func,
+                                     grid_size_x,
+                                     grid_size_y,
+                                     grid_size_z,
+                                     block_size_x,
+                                     block_size_y,
+                                     block_size_z,
+                                     shared_memory_size,
+                                     nullptr,
+                                     &param_ptrs[0],
+                                     nullptr));
     } else {
       param_ptrs.erase(param_ptrs.begin() + LITERALS);  // TODO(alex): remove
-      checkCudaErrors(
-          cuLaunchKernel(cu_func,
-                         grid_size_x,
-                         grid_size_y,
-                         grid_size_z,
-                         block_size_x,
-                         block_size_y,
-                         block_size_z,
-                         query_mem_desc_.sharedMemBytes(ExecutorDeviceType::GPU),
-                         nullptr,
-                         &param_ptrs[0],
-                         nullptr));
+      checkCudaErrors(cuLaunchKernel(cu_func,
+                                     grid_size_x,
+                                     grid_size_y,
+                                     grid_size_z,
+                                     block_size_x,
+                                     block_size_y,
+                                     block_size_z,
+                                     shared_memory_size,
+                                     nullptr,
+                                     &param_ptrs[0],
+                                     nullptr));
     }
     if (g_enable_dynamic_watchdog || g_enable_runtime_query_interrupt) {
       executor_->registerActiveModule(cu_functions[device_id].second, device_id);

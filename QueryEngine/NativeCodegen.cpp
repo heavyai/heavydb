@@ -1631,6 +1631,82 @@ std::vector<llvm::Value*> Executor::inlineHoistedLiterals() {
   return hoisted_literals;
 }
 
+namespace {
+// a temp function to cleanup and replace the shared memory related info from QMD
+bool is_gpu_shared_mem_opt_supported(const QueryMemoryDescriptor* query_mem_desc_ptr,
+                                     const RelAlgExecutionUnit& ra_exe_unit,
+                                     const CudaMgr_Namespace::CudaMgr* cuda_mgr,
+                                     const ExecutorDeviceType device_type) {
+  if (device_type == ExecutorDeviceType::CPU) {
+    return false;
+  }
+  CHECK(query_mem_desc_ptr);
+  CHECK(cuda_mgr);
+  size_t gpu_smem_max_threshold{0};
+  /*
+   *  We only use shared memory strategy if GPU hardware provides native shared
+   *memory atomics support. From CUDA Toolkit documentation:
+   *https://docs.nvidia.com/cuda/pascal-tuning-guide/index.html#atomic-ops "Like
+   *Maxwell, Pascal [and Volta] provides native shared memory atomic operations
+   *for 32-bit integer arithmetic, along with native 32 or 64-bit compare-and-swap
+   *(CAS)."
+   *
+   **/
+  if (cuda_mgr->isArchMaxwellOrLaterForAll()) {
+    gpu_smem_max_threshold =
+        std::min((cuda_mgr->isArchVoltaForAll()) ? 4095LU : 2047LU,
+                 (cuda_mgr->getMaxSharedMemoryForAll() / sizeof(int64_t) - 1));
+  }
+
+  if (g_enable_smem_group_by &&
+      query_mem_desc_ptr->getQueryDescriptionType() ==
+          QueryDescriptionType::GroupByPerfectHash &&
+      query_mem_desc_ptr->getGroupbyColCount() == 1 &&
+      query_mem_desc_ptr->getEntryCount() < gpu_smem_max_threshold &&
+      query_mem_desc_ptr->getColCount() <= 2 && query_mem_desc_ptr->hasKeylessHash() &&
+      query_mem_desc_ptr->countDistinctDescriptorsLogicallyEmpty() &&
+      !query_mem_desc_ptr->didOutputColumnar() &&
+      query_mem_desc_ptr->getRowSize() <= sizeof(int64_t) &&
+      ra_exe_unit.target_exprs.size() <= 2) {
+    // make sure there are at most two slots, 4 bytes each
+    for (size_t slot_idx = 0; slot_idx < query_mem_desc_ptr->getColCount(); slot_idx++) {
+      if (query_mem_desc_ptr->getPaddedSlotWidthBytes(slot_idx) != sizeof(int32_t)) {
+        return false;
+      }
+    }
+    // making sure there's only one COUNT(*) aggregate present
+    bool count_agg_found = false;
+    for (auto& target_expr : ra_exe_unit.target_exprs) {
+      const auto target_ti = get_target_info(target_expr, g_bigint_count);
+      if (target_ti.is_agg) {
+        if (target_ti.agg_kind != kCOUNT || count_agg_found) {
+          return false;
+        } else {
+          count_agg_found = true;
+          if (target_ti.skip_null_val) {
+            return false;
+          }
+        }
+      }
+      // verify if the target SQL type is supported:
+      if (!((target_ti.sql_type.is_integer() && target_ti.sql_type != kBIGINT) ||
+            target_ti.sql_type.is_dict_encoded_string())) {
+        return false;
+      }
+    }
+  } else {
+    return false;
+  }
+  return true;
+}
+
+size_t get_shared_memory_size(const bool shared_mem_used,
+                              const QueryMemoryDescriptor* query_mem_desc_ptr) {
+  return shared_mem_used ? ((query_mem_desc_ptr->getEntryCount() + 1) * sizeof(int64_t))
+                         : 0;
+}
+}  // namespace
+
 std::tuple<Executor::CompilationResult, std::unique_ptr<QueryMemoryDescriptor>>
 Executor::compileWorkUnit(const std::vector<InputTableInfo>& query_infos,
                           const RelAlgExecutionUnit& ra_exe_unit,
@@ -1664,6 +1740,15 @@ Executor::compileWorkUnit(const std::vector<InputTableInfo>& query_infos,
   }
 
   const bool output_columnar = query_mem_desc->didOutputColumnar();
+  const bool gpu_shared_mem_optimization = is_gpu_shared_mem_opt_supported(
+      query_mem_desc.get(), ra_exe_unit, cuda_mgr, co.device_type);
+
+  if (gpu_shared_mem_optimization) {
+    // disable interleaved bins optimization on the GPU
+    query_mem_desc->setHasInterleavedBinsOnGpu(false);
+  }
+  const GpuSharedMemoryContext gpu_smem_context(
+      get_shared_memory_size(gpu_shared_mem_optimization, query_mem_desc.get()));
 
   if (co.device_type == ExecutorDeviceType::GPU) {
     const size_t num_count_distinct_descs =
@@ -1738,7 +1823,8 @@ Executor::compileWorkUnit(const std::vector<InputTableInfo>& query_infos,
                                                           co.hoist_literals,
                                                           *query_mem_desc,
                                                           co.device_type,
-                                                          ra_exe_unit.scan_limit)
+                                                          ra_exe_unit.scan_limit,
+                                                          gpu_smem_context)
                                 : query_template(cgen_state_->module_,
                                                  agg_slot_count,
                                                  co.hoist_literals,
@@ -1784,8 +1870,8 @@ Executor::compileWorkUnit(const std::vector<InputTableInfo>& query_infos,
                      co,
                      eo);
   } else {
-    const bool can_return_error =
-        compileBody(ra_exe_unit, group_by_and_aggregate, *query_mem_desc, co);
+    const bool can_return_error = compileBody(
+        ra_exe_unit, group_by_and_aggregate, *query_mem_desc, co, gpu_smem_context);
     if (can_return_error || cgen_state_->needs_error_check_ || eo.with_dynamic_watchdog ||
         eo.allow_runtime_query_interrupt) {
       createErrorCheckControlFlow(query_func,
@@ -1878,7 +1964,8 @@ Executor::compileWorkUnit(const std::vector<InputTableInfo>& query_infos,
                                       co),
           cgen_state_->getLiterals(),
           output_columnar,
-          llvm_ir},
+          llvm_ir,
+          std::move(gpu_smem_context)},
       std::move(query_mem_desc));
 }
 
@@ -1922,7 +2009,8 @@ llvm::BasicBlock* Executor::codegenSkipDeletedOuterTableRow(
 bool Executor::compileBody(const RelAlgExecutionUnit& ra_exe_unit,
                            GroupByAndAggregate& group_by_and_aggregate,
                            const QueryMemoryDescriptor& query_mem_desc,
-                           const CompilationOptions& co) {
+                           const CompilationOptions& co,
+                           const GpuSharedMemoryContext& gpu_smem_context) {
   // generate the code for the filter
   std::vector<Analyzer::Expr*> primary_quals;
   std::vector<Analyzer::Expr*> deferred_quals;
@@ -1961,7 +2049,8 @@ bool Executor::compileBody(const RelAlgExecutionUnit& ra_exe_unit,
   }
 
   CHECK(filter_lv->getType()->isIntegerTy(1));
-  return group_by_and_aggregate.codegen(filter_lv, sc_false, query_mem_desc, co);
+  return group_by_and_aggregate.codegen(
+      filter_lv, sc_false, query_mem_desc, co, gpu_smem_context);
 }
 
 std::unique_ptr<llvm::Module> runtime_module_shallow_copy(CgenState* cgen_state) {

@@ -67,6 +67,7 @@ class QueryExecutionContext : boost::noncopyable {
       const unsigned block_size_x,
       const unsigned grid_size_x,
       const int device_id,
+      const size_t shared_memory_size,
       int32_t* error_code,
       const uint32_t num_tables,
       const std::vector<int64_t>& join_hash_tables,
