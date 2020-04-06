@@ -1,0 +1,9 @@
+Struct SystemParameters
+=======================
+
+.. doxygenstruct:: SystemParameters
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

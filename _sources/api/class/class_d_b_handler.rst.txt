@@ -1,0 +1,9 @@
+Class DBHandler
+===============
+
+.. doxygenclass:: DBHandler
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

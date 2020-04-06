@@ -41,7 +41,7 @@
     <link rel="index" title="Index" href="../../genindex.html" />
     <link rel="search" title="Search" href="../../search.html" />
     <link rel="next" title="Class UdfCompiler" href="class_udf_compiler.html" />
-    <link rel="prev" title="Class TooManyLiterals" href="class_too_many_literals.html" /> 
+    <link rel="prev" title="Class TrackingProcessor" href="class_tracking_processor.html" /> 
 </head>
 
 <body class="wy-body-for-nav">
@@ -65,7 +65,7 @@
             
             
               <div class="version">
-                5.2.0dev 9e6ab2f
+                5.2.0dev 352d2c9
               </div>
             
           
@@ -196,7 +196,7 @@
 </li>
 <li class="toctree-l1"><a class="reference internal" href="../../execution/index.html">7. Query Execution</a><ul>
 <li class="toctree-l2"><a class="reference internal" href="../../execution/overview.html">7.1. Overview</a><ul>
-<li class="toctree-l3"><a class="reference internal" href="../../execution/overview.html#request-handler-mapdhandler">7.1.1. Request Handler (MapDHandler)</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../execution/overview.html#request-handler-dbhandler">7.1.1. Request Handler (DBHandler)</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../../execution/overview.html#apache-calcite">7.1.2. Apache Calcite</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../../execution/overview.html#relational-algebra-executor">7.1.3. Relational Algebra Executor</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../../execution/overview.html#relational-algebra-dag-builder-and-optimizer">7.1.4. Relational Algebra Dag Builder and Optimizer</a></li>
@@ -363,6 +363,7 @@
 <li class="toctree-l2"><a class="reference internal" href="class_create_foreign_table_command.html">Class CreateForeignTableCommand</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_cuda_allocator.html">Class CudaAllocator</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_cuda_mgr___namespace_1_1_cuda_mgr.html">Class CudaMgr_Namespace::CudaMgr</a></li>
+<li class="toctree-l2"><a class="reference internal" href="class_d_b_handler.html">Class DBHandler</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_d_b_object.html">Class DBObject</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_data___namespace_1_1_abstract_buffer.html">Class Data_Namespace::AbstractBuffer</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_data___namespace_1_1_data_mgr.html">Class Data_Namespace::DataMgr</a></li>
@@ -470,12 +471,8 @@
 <li class="toctree-l2"><a class="reference internal" href="class_load.html">Class Load</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_lru_cache.html">Class LruCache</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_map_d_agg_handler.html">Class MapDAggHandler</a></li>
-<li class="toctree-l2"><a class="reference internal" href="class_map_d_handler.html">Class MapDHandler</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_map_d_leaf_handler.html">Class MapDLeafHandler</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_map_d_program_options.html">Class MapDProgramOptions</a></li>
-<li class="toctree-l2"><a class="reference internal" href="class_map_d_render_handler.html">Class MapDRenderHandler</a></li>
-<li class="toctree-l2"><a class="reference internal" href="class_map_d_render_handler_1_1_impl.html">Class MapDRenderHandler::Impl</a></li>
-<li class="toctree-l2"><a class="reference internal" href="class_map_d_tracking_processor.html">Class MapDTrackingProcessor</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_max_range_table_index_visitor.html">Class MaxRangeTableIndexVisitor</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_mem_cpy.html">Class MemCpy</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_modify_manipulation_target.html">Class ModifyManipulationTarget</a></li>
@@ -622,6 +619,8 @@
 <li class="toctree-l2"><a class="reference internal" href="class_rel_table_function.html">Class RelTableFunction</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_render_allocator.html">Class RenderAllocator</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_render_allocator_map.html">Class RenderAllocatorMap</a></li>
+<li class="toctree-l2"><a class="reference internal" href="class_render_handler.html">Class RenderHandler</a></li>
+<li class="toctree-l2"><a class="reference internal" href="class_render_handler_1_1_impl.html">Class RenderHandler::Impl</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_render_info.html">Class RenderInfo</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_rest_server.html">Class RestServer</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_result_set.html">Class ResultSet</a></li>
@@ -695,6 +694,7 @@
 <li class="toctree-l2"><a class="reference internal" href="class_too_big_for_slab.html">Class TooBigForSlab</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_too_many_hash_entries.html">Class TooManyHashEntries</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_too_many_literals.html">Class TooManyLiterals</a></li>
+<li class="toctree-l2"><a class="reference internal" href="class_tracking_processor.html">Class TrackingProcessor</a></li>
 <li class="toctree-l2 current"><a class="current reference internal" href="#">Class UdfClangDriver</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_udf_compiler.html">Class UdfCompiler</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_update_log_for_fragment.html">Class UpdateLogForFragment</a></li>
@@ -1035,6 +1035,8 @@
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_count_distinct_descriptor.html">Struct CountDistinctDescriptor</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_cubin_result.html">Struct CubinResult</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_cuda_mgr___namespace_1_1_device_properties.html">Struct CudaMgr_Namespace::DeviceProperties</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/struct_d_b_handler_1_1_geo_copy_from_sessions.html">Struct DBHandler::GeoCopyFromSessions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/struct_d_b_handler_1_1_geo_copy_from_state.html">Struct DBHandler::GeoCopyFromState</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_d_b_object_key.html">Struct DBObjectKey</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_dashboard_descriptor.html">Struct DashboardDescriptor</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_dashboard_privileges.html">Struct DashboardPrivileges</a></li>
@@ -1154,9 +1156,6 @@
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_key_reseter.html">Struct KeyReseter</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_keyless_info.html">Struct KeylessInfo</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_link_descriptor.html">Struct LinkDescriptor</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../struct/struct_map_d_handler_1_1_geo_copy_from_sessions.html">Struct MapDHandler::GeoCopyFromSessions</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../struct/struct_map_d_handler_1_1_geo_copy_from_state.html">Struct MapDHandler::GeoCopyFromState</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../struct/struct_map_d_parameters.html">Struct MapDParameters</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_numeric_converter_factory.html">Struct NumericConverterFactory</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_numeric_value_converter.html">Struct NumericValueConverter</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_object_role_descriptor.html">Struct ObjectRoleDescriptor</a></li>
@@ -1214,6 +1213,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_string_dictionary_1_1_string_idx_entry.html">Struct StringDictionary::StringIdxEntry</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_string_dictionary_1_1compare__cache__value__t.html">Struct StringDictionary::compare_cache_value_t</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_string_value_converter.html">Struct StringValueConverter</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/struct_system_parameters.html">Struct SystemParameters</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_table_descriptor.html">Struct TableDescriptor</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_table_function_execution_unit.html">Struct TableFunctionExecutionUnit</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_table_generation.html">Struct TableGeneration</a></li>
@@ -1241,6 +1241,8 @@
 <li class="toctree-l2"><a class="reference internal" href="../struct/structanonymous__namespace_02_arrow_importer_8h_03_1_1_arrow_value_base.html">Struct anonymous_namespace{ArrowImporter.h}::ArrowValueBase</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structanonymous__namespace_02_arrow_importer_8h_03_1_1_data_buffer.html">Struct anonymous_namespace{ArrowImporter.h}::DataBuffer</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structanonymous__namespace_02_arrow_importer_8h_03_1_1_data_buffer_base.html">Struct anonymous_namespace{ArrowImporter.h}::DataBufferBase</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/structanonymous__namespace_02_d_b_handler_8cpp_03_1_1_force_disconnect.html">Struct anonymous_namespace{DBHandler.cpp}::ForceDisconnect</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/structanonymous__namespace_02_d_b_handler_8cpp_03_1_1_projection_tokens_for_completion.html">Struct anonymous_namespace{DBHandler.cpp}::ProjectionTokensForCompletion</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structanonymous__namespace_02_external_executor_8cpp_03_1_1_decoded_string.html">Struct anonymous_namespace{ExternalExecutor.cpp}::DecodedString</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structanonymous__namespace_02_external_executor_8cpp_03_1_1_omni_sci_cursor.html">Struct anonymous_namespace{ExternalExecutor.cpp}::OmniSciCursor</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structanonymous__namespace_02_external_executor_8cpp_03_1_1_omni_sci_vtab.html">Struct anonymous_namespace{ExternalExecutor.cpp}::OmniSciVtab</a></li>
@@ -1248,8 +1250,6 @@
 <li class="toctree-l2"><a class="reference internal" href="../struct/structanonymous__namespace_02_importer_8cpp_03_1_1_o_g_r_data_source_deleter.html">Struct anonymous_namespace{Importer.cpp}::OGRDataSourceDeleter</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structanonymous__namespace_02_importer_8cpp_03_1_1_o_g_r_feature_deleter.html">Struct anonymous_namespace{Importer.cpp}::OGRFeatureDeleter</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structanonymous__namespace_02_importer_8cpp_03_1_1_o_g_r_spatial_reference_deleter.html">Struct anonymous_namespace{Importer.cpp}::OGRSpatialReferenceDeleter</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../struct/structanonymous__namespace_02_map_d_handler_8cpp_03_1_1_force_disconnect.html">Struct anonymous_namespace{MapDHandler.cpp}::ForceDisconnect</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../struct/structanonymous__namespace_02_map_d_handler_8cpp_03_1_1_projection_tokens_for_completion.html">Struct anonymous_namespace{MapDHandler.cpp}::ProjectionTokensForCompletion</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structanonymous__namespace_02_result_set_iteration_8cpp_03_1_1_geo_lazy_fetch_handler.html">Struct anonymous_namespace{ResultSetIteration.cpp}::GeoLazyFetchHandler</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structanonymous__namespace_02_result_set_iteration_8cpp_03_1_1_geo_query_output_fetch_handler.html">Struct anonymous_namespace{ResultSetIteration.cpp}::GeoQueryOutputFetchHandler</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structanonymous__namespace_02_result_set_iteration_8cpp_03_1_1_geo_target_value_builder.html">Struct anonymous_namespace{ResultSetIteration.cpp}::GeoTargetValueBuilder</a></li>
@@ -1468,7 +1468,7 @@
         <a href="class_udf_compiler.html" class="btn btn-neutral float-right" title="Class UdfCompiler" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right"></span></a>
       
       
-        <a href="class_too_many_literals.html" class="btn btn-neutral float-left" title="Class TooManyLiterals" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left"></span> Previous</a>
+        <a href="class_tracking_processor.html" class="btn btn-neutral float-left" title="Class TrackingProcessor" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left"></span> Previous</a>
       
     </div>
   

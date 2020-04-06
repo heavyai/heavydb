@@ -165,7 +165,7 @@ The general format of a log entry is::
 
 Example::
 
-    2019-09-18T16:25:25.659248 I 26481 MapDHandler.cpp:181 OmniSci Server 4.9.0dev-20190918-bd97353685
+    2019-09-18T16:25:25.659248 I 26481 DBHandler.cpp:181 OmniSci Server 4.9.0dev-20190918-bd97353685
 
 Field descriptions:
 
@@ -223,7 +223,7 @@ optionally catch the ``SIGABRT`` signal.
 STDLOG
 """"""
 
-``MapDHandler`` uses a logging helper class ``StdLog`` for logging query-specific information in
+``DBHandler`` uses a logging helper class ``StdLog`` for logging query-specific information in
 a standard format::
 
  (timestamp) (severity) (process_id) (filename:line_number) stdlog (function_name) (match_id)
@@ -238,8 +238,8 @@ Example usage is given in the `QueryState`_ documentation.
 
 Example entries::
 
- 2019-09-20T17:15:28.215590 1 13080 MapDHandler.cpp:846 stdlog_begin sql_execute 2 0 omnisci testuser 528-dyM2 {"query_str"} {"SELECT * FROM omnisci_counties LIMIT 1;"}
- 2019-09-20T17:15:28.924512 I 13080 MapDHandler.cpp:846 stdlog sql_execute 2 709 omnisci testuser 528-dyM2 {"query_str","execution_time_ms","total_time_ms"} {"SELECT * FROM omnisci_counties LIMIT 1;","708","709"}
+ 2019-09-20T17:15:28.215590 1 13080 DBHandler.cpp:846 stdlog_begin sql_execute 2 0 omnisci testuser 528-dyM2 {"query_str"} {"SELECT * FROM omnisci_counties LIMIT 1;"}
+ 2019-09-20T17:15:28.924512 I 13080 DBHandler.cpp:846 stdlog sql_execute 2 709 omnisci testuser 528-dyM2 {"query_str","execution_time_ms","total_time_ms"} {"SELECT * FROM omnisci_counties LIMIT 1;","708","709"}
 
 The first 4 fields are same as in the above `Format`_ section.  Additional field descriptions:
 
@@ -318,7 +318,7 @@ thread. The ``parent_thread_id`` must get its value from ``logger::thread_id()``
 This will not start a timer, but will record the child-parent relationship so that subsequent ``DEBUG_TIMER``
 calls are stored in the correct node of the parent tree. An example of a resulting report::
 
-    2020-01-30T16:58:19.926148 I 33266 MapDHandler.cpp:956 DEBUG_TIMER thread_id(4)
+    2020-01-30T16:58:19.926148 I 33266 DBHandler.cpp:956 DEBUG_TIMER thread_id(4)
     591ms total duration for sql_execute
       511ms start(41ms) executeRelAlgQuery RelAlgExecutor.cpp:71
         6ms start(41ms) executeWorkUnit RelAlgExecutor.cpp:1858
