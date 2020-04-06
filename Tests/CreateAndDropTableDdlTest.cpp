@@ -1237,7 +1237,7 @@ TEST_P(CreateTableTest, DISABLED_InvalidSyntax) {
   try {
     sql(query);
     FAIL() << "An exception should have been thrown for this test case.";
-  } catch (const TMapDException& e) {
+  } catch (const TOmniSciException& e) {
     if (GetParam() == ddl_utils::TableType::FOREIGN_TABLE) {
       ASSERT_TRUE(e.error_msg.find("Exception: Parse failed") != std::string::npos);
     } else {

@@ -571,8 +571,8 @@ set_target_properties(omnisci_server PROPERTIES COMPILE_DEFINITIONS "${TIME_LIMI
 add_custom_command(
     DEPENDS ${CMAKE_SOURCE_DIR}/omnisci.thrift
     OUTPUT
-        ${CMAKE_SOURCE_DIR}/java/thrift/src/gen/com/mapd/thrift/server/MapD.java
-        ${CMAKE_SOURCE_DIR}/java/thrift/src/gen/com/mapd/thrift/server/TRow.java
+        ${CMAKE_SOURCE_DIR}/java/thrift/src/gen/com/omnisci/thrift/server/OmniSci.java
+        ${CMAKE_SOURCE_DIR}/java/thrift/src/gen/com/omnisci/thrift/server/TRow.java
     COMMAND mkdir
     ARGS -p ${CMAKE_SOURCE_DIR}/java/thrift/src/gen
     COMMAND ${Thrift_EXECUTABLE}
@@ -581,7 +581,7 @@ add_custom_command(
 add_custom_command(
     DEPENDS ${CMAKE_SOURCE_DIR}/common.thrift
     OUTPUT
-        ${CMAKE_SOURCE_DIR}/java/thrift/src/gen/com/mapd/thrift/server/common.java
+        ${CMAKE_SOURCE_DIR}/java/thrift/src/gen/com/omnisci/thrift/server/common.java
     COMMAND mkdir
     ARGS -p ${CMAKE_SOURCE_DIR}/java/thrift/src/gen
     COMMAND ${Thrift_EXECUTABLE}
@@ -590,7 +590,7 @@ add_custom_command(
 add_custom_command(
     DEPENDS ${CMAKE_SOURCE_DIR}/QueryEngine/serialized_result_set.thrift
     OUTPUT
-        ${CMAKE_SOURCE_DIR}/java/thrift/src/gen/com/mapd/thrift/server/serialized_result_set.java
+        ${CMAKE_SOURCE_DIR}/java/thrift/src/gen/com/omnisci/thrift/server/serialized_result_set.java
     COMMAND mkdir
     ARGS -p ${CMAKE_SOURCE_DIR}/java/thrift/src/gen
     COMMAND ${Thrift_EXECUTABLE}
@@ -598,7 +598,7 @@ add_custom_command(
 
 add_custom_command(
     DEPENDS ${CMAKE_SOURCE_DIR}/java/thrift/calciteserver.thrift ${CMAKE_SOURCE_DIR}/completion_hints.thrift ${CMAKE_SOURCE_DIR}/QueryEngine/extension_functions.thrift
-    OUTPUT ${CMAKE_SOURCE_DIR}/java/thrift/src/gen/com/mapd/thrift/calciteserver/CalciteServer.java
+    OUTPUT ${CMAKE_SOURCE_DIR}/java/thrift/src/gen/com/omnisci/thrift/calciteserver/CalciteServer.java
     COMMAND mkdir
     ARGS -p ${CMAKE_SOURCE_DIR}/java/thrift/src/gen
     COMMAND ${Thrift_EXECUTABLE}
@@ -782,8 +782,8 @@ add_custom_command(
     COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_SOURCE_DIR}/java/calcite/target/calcite-1.0-SNAPSHOT-jar-with-dependencies.jar ${CMAKE_BINARY_DIR}/bin
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/java
   DEPENDS
-    ${CMAKE_SOURCE_DIR}/java/thrift/src/gen/com/mapd/thrift/server/MapD.java
-    ${CMAKE_SOURCE_DIR}/java/thrift/src/gen/com/mapd/thrift/calciteserver/CalciteServer.java
+    ${CMAKE_SOURCE_DIR}/java/thrift/src/gen/com/omnisci/thrift/server/OmniSci.java
+    ${CMAKE_SOURCE_DIR}/java/thrift/src/gen/com/omnisci/thrift/calciteserver/CalciteServer.java
     ${CMAKE_SOURCE_DIR}/java/pom.xml
     ${CMAKE_SOURCE_DIR}/omnisci.thrift
     ${JAVA_POM}
