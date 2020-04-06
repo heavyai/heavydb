@@ -1,0 +1,9 @@
+Struct Bounds
+=============
+
+.. doxygenstruct:: Bounds
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

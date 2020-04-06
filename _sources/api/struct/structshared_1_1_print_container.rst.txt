@@ -1,0 +1,9 @@
+Struct shared::PrintContainer
+=============================
+
+.. doxygenstruct:: shared::PrintContainer
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:
