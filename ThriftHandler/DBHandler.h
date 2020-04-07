@@ -579,7 +579,6 @@ class DBHandler : public MapDIf {
       const std::vector<TFilterPushDownInfo>& filter_push_down_info,
       const bool acquire_locks,
       const SystemParameters mapd_parameters,
-      RenderInfo* render_info = nullptr,
       bool check_privileges = true);
 
   void sql_execute_impl(TQueryResult& _return,

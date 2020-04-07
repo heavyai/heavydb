@@ -1903,7 +1903,6 @@ void DBHandler::get_table_details_impl(TTableDetails& _return,
                                             {},
                                             false,
                                             mapd_parameters_,
-                                            nullptr,
                                             false);
           try {
             calcite_->checkAccessedObjectsPrivileges(query_state->createQueryStateProxy(),
@@ -4982,16 +4981,6 @@ void DBHandler::sql_execute_impl(TQueryResult& _return,
   std::string last_parsed;
   int num_parse_errors = 0;
 
-  /*
-     Use this seq to simplify locking:
-                  INSERT_VALUES: CheckpointLock [ >> TableWriteLock ]
-                  INSERT_SELECT: CheckpointLock >> TableReadLock [ >>
-     TableWriteLock ] COPY_TO/SELECT: TableReadLock COPY_FROM:  CheckpointLock [
-     >> TableWriteLock ] DROP/TRUNC: CheckpointLock >> TableWriteLock
-                  DELETE/UPDATE: CheckpointLock >> TableWriteLock
-  */
-
-  mapd_unique_lock<mapd_shared_mutex> checkpoint_lock;
   mapd_unique_lock<mapd_shared_mutex> executeWriteLock;
   mapd_shared_lock<mapd_shared_mutex> executeReadLock;
 
@@ -5341,7 +5330,6 @@ std::pair<TPlanResult, lockmgr::LockedTableDescriptors> DBHandler::parse_to_ra(
     const std::vector<TFilterPushDownInfo>& filter_push_down_info,
     const bool acquire_locks,
     const SystemParameters mapd_parameters,
-    RenderInfo* render_info,
     bool check_privileges) {
   query_state::Timer timer = query_state_proxy.createTimer(__func__);
   ParserWrapper pw{query_str};
@@ -5416,15 +5404,6 @@ std::pair<TPlanResult, lockmgr::LockedTableDescriptors> DBHandler::parse_to_ra(
                       cat->getDatabaseId(), (*locks.back())())));
         }
       }
-    }
-    if (render_info) {
-      // grabs all the selected-from tables, even views. This is used by the renderer to
-      // resolve view hit-testing.
-      // NOTE: the same table name could exist in both the primary and resolved tables.
-      auto selected_tables = &result.primary_accessed_objects.tables_selected_from;
-      render_info->table_names.insert(selected_tables->begin(), selected_tables->end());
-      selected_tables = &result.resolved_accessed_objects.tables_selected_from;
-      render_info->table_names.insert(selected_tables->begin(), selected_tables->end());
     }
     return std::make_pair(result, std::move(locks));
   }
