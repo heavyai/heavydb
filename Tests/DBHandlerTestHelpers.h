@@ -39,6 +39,12 @@ class DBHandlerTestFixture : public testing::Test {
     po::notify(vm);
   }
 
+  static void initTestArgs(const std::vector<LeafHostInfo>& string_servers,
+                           const std::vector<LeafHostInfo>& leaf_servers) {
+    string_leaves_ = string_servers;
+    db_leaves_ = leaf_servers;
+  }
+
  protected:
   virtual void SetUp() override {
     if (!db_handler_) {
@@ -118,6 +124,10 @@ class DBHandlerTestFixture : public testing::Test {
 
   Catalog_Namespace::Catalog& getCatalog() {
     return db_handler_->get_session_copy_ptr(session_id_)->getCatalog();
+  }
+
+  std::pair<DBHandler*, TSessionId&> getDbHandlerAndSessionId() {
+    return {db_handler_.get(), admin_session_id_};
   }
 
   void resetCatalog() {
