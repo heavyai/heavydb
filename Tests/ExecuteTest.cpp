@@ -17290,6 +17290,28 @@ TEST(Select, UnionAll) {
       " HAVING b1 % 3 = 1"
       " ORDER BY a0;",
       dt);
+    // sqlite sorts NULLs differently, and doesn't recognize NULLS FIRST/LAST.
+    c("SELECT str FROM test"
+      " UNION ALL"
+      " SELECT COALESCE(shared_dict,'NULL') FROM test"
+      " ORDER BY str;",
+      dt);
+    // The goal is that these should work.
+    // Exception: Subqueries of a UNION must have exact same data types.
+    EXPECT_THROW(run_multiple_agg("SELECT str FROM test UNION ALL "
+                                  "SELECT real_str FROM test ORDER BY str;",
+                                  dt),
+                 std::runtime_error);
+    // Exception: Columnar conversion not supported for variable length types
+    EXPECT_THROW(run_multiple_agg("SELECT real_str FROM test UNION ALL "
+                                  "SELECT real_str FROM test ORDER BY real_str;",
+                                  dt),
+                 std::runtime_error);
+    // Exception: Subqueries of a UNION must have exact same data types.
+    EXPECT_THROW(run_multiple_agg("SELECT str FROM test UNION ALL "
+                                  "SELECT fixed_str FROM test ORDER BY str;",
+                                  dt),
+                 std::runtime_error);
   }
   g_enable_union = enable_union;
 }

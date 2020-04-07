@@ -587,10 +587,17 @@ bool RelLogicalUnion::inputMetainfoTypesMatch() const {
   std::vector<TargetMetaInfo> const& tmis0 = inputs_[0]->getOutputMetainfo();
   std::vector<TargetMetaInfo> const& tmis1 = inputs_[1]->getOutputMetainfo();
   if (tmis0.size() != tmis1.size()) {
+    VLOG(2) << "tmis0.size() = " << tmis0.size() << " != " << tmis1.size()
+            << " = tmis1.size()";
     return false;
   }
   for (size_t i = 0; i < tmis0.size(); ++i) {
     if (tmis0[i].get_type_info() != tmis1[i].get_type_info()) {
+      VLOG(2) << "Types do not match for UNION:\n  tmis0[" << i
+              << "].get_type_info().to_string() = "
+              << tmis0[i].get_type_info().to_string() << "\n  tmis1[" << i
+              << "].get_type_info().to_string() = "
+              << tmis1[i].get_type_info().to_string();
       return false;
     }
   }
