@@ -27,6 +27,8 @@ namespace {
 
 SQLTypeInfo type_from_arrow_field(const arrow::Field& field) {
   switch (field.type()->id()) {
+    case arrow::Type::INT8:
+      return SQLTypeInfo(kTINYINT, !field.nullable());
     case arrow::Type::INT16:
       return SQLTypeInfo(kSMALLINT, !field.nullable());
     case arrow::Type::INT32:
@@ -102,6 +104,12 @@ std::vector<TargetValue> ArrowResultSet::getRowAt(const size_t index) const {
     const auto& column = *columns_[i];
     const auto& column_typeinfo = getColType(i);
     switch (column_typeinfo.get_type()) {
+      case kTINYINT: {
+        CHECK_EQ(arrow::Type::INT8, column.type_id());
+        appendValue<int64_t, arrow::Int8Array>(
+            row, column, inline_int_null_val(column_typeinfo), index);
+        break;
+      }
       case kSMALLINT: {
         CHECK_EQ(arrow::Type::INT16, column.type_id());
         appendValue<int64_t, arrow::Int16Array>(
