@@ -5174,10 +5174,11 @@ void DBHandler::sql_execute_impl(TQueryResult& _return,
     }
     const auto show_create_stmt = dynamic_cast<Parser::ShowCreateTableStmt*>(ddl);
     if (show_create_stmt) {
-      // ParserNode ShowCreateTableStmt is currently unimplemented
-      throw std::runtime_error(
-          "SHOW CREATE TABLE is currently unsupported. Use `\\d` from omnisql for table "
-          "DDL.");
+      _return.execution_time_ms +=
+          measure<>::execution([&]() { ddl->execute(*session_ptr); });
+      const auto create_string = show_create_stmt->getCreateStmt();
+      convert_result(_return, ResultSet(create_string), true);
+      return true;
     }
 
     const auto import_stmt = dynamic_cast<Parser::CopyTableStmt*>(ddl);
