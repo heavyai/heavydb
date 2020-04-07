@@ -58,6 +58,8 @@ SQLTypes get_sql_types(const TColumnType& ct) {
       return SQLTypes::kTIMESTAMP;
     case TDatumType::SMALLINT:
       return SQLTypes::kSMALLINT;
+    case TDatumType::TINYINT:
+      return SQLTypes::kTINYINT;
     case TDatumType::POINT:
       return SQLTypes::kPOINT;
     case TDatumType::LINESTRING:
@@ -141,6 +143,7 @@ void remove_partial_row(size_t failed_column,
         input_col_vec[idx].nulls.pop_back();
         input_col_vec[idx].data.str_col.pop_back();
         break;
+      case SQLTypes::kTINYINT:
       case SQLTypes::kINT:
       case SQLTypes::kBIGINT:
       case SQLTypes::kSMALLINT:
@@ -215,6 +218,7 @@ void populate_TColumn(TStringValue ts,
     case SQLTypes::kINT:
     case SQLTypes::kBIGINT:
     case SQLTypes::kSMALLINT:
+    case SQLTypes::kTINYINT:
     case SQLTypes::kDATE:
     case SQLTypes::kTIME:
     case SQLTypes::kTIMESTAMP:
@@ -239,6 +243,9 @@ void populate_TColumn(TStringValue ts,
             break;
           case SQLTypes::kSMALLINT:
             input_col.data.int_col.push_back(d.smallintval);
+            break;
+          case SQLTypes::kTINYINT:
+            input_col.data.int_col.push_back(d.tinyintval);
             break;
           case SQLTypes::kDATE:
           case SQLTypes::kTIME:
