@@ -41,7 +41,7 @@ class DBHandlerTestFixture : public testing::Test {
 
  protected:
   virtual void SetUp() override {
-    if (!mapd_handler_) {
+    if (!db_handler_) {
       // Based on default values observed from starting up an OmniSci DB server.
       const bool cpu_only{false};
       const bool allow_multifrag{true};
@@ -62,36 +62,36 @@ class DBHandlerTestFixture : public testing::Test {
       const int idle_session_duration{60};
       const int max_session_duration{43200};
       const bool enable_runtime_udf_registration{false};
-      mapd_parameters_.omnisci_server_port = -1;
-      mapd_parameters_.calcite_port = 3280;
+      system_parameters_.omnisci_server_port = -1;
+      system_parameters_.calcite_port = 3280;
 
-      mapd_handler_ = std::make_unique<DBHandler>(db_leaves_,
-                                                  string_leaves_,
-                                                  BASE_PATH,
-                                                  cpu_only,
-                                                  allow_multifrag,
-                                                  jit_debug,
-                                                  intel_jit_profile,
-                                                  read_only,
-                                                  allow_loop_joins,
-                                                  enable_rendering,
-                                                  enable_auto_clear_render_mem,
-                                                  render_oom_retry_threshold,
-                                                  render_mem_bytes,
-                                                  max_concurrent_render_sessions,
-                                                  num_gpus,
-                                                  start_gpu,
-                                                  reserved_gpu_mem,
-                                                  num_reader_threads,
-                                                  auth_metadata_,
-                                                  mapd_parameters_,
-                                                  legacy_syntax,
-                                                  idle_session_duration,
-                                                  max_session_duration,
-                                                  enable_runtime_udf_registration,
-                                                  udf_filename_,
-                                                  udf_compiler_path_,
-                                                  udf_compiler_options_);
+      db_handler_ = std::make_unique<DBHandler>(db_leaves_,
+                                                string_leaves_,
+                                                BASE_PATH,
+                                                cpu_only,
+                                                allow_multifrag,
+                                                jit_debug,
+                                                intel_jit_profile,
+                                                read_only,
+                                                allow_loop_joins,
+                                                enable_rendering,
+                                                enable_auto_clear_render_mem,
+                                                render_oom_retry_threshold,
+                                                render_mem_bytes,
+                                                max_concurrent_render_sessions,
+                                                num_gpus,
+                                                start_gpu,
+                                                reserved_gpu_mem,
+                                                num_reader_threads,
+                                                auth_metadata_,
+                                                system_parameters_,
+                                                legacy_syntax,
+                                                idle_session_duration,
+                                                max_session_duration,
+                                                enable_runtime_udf_registration,
+                                                udf_filename_,
+                                                udf_compiler_path_,
+                                                udf_compiler_options_);
     }
     loginAdmin();
   }
@@ -104,20 +104,20 @@ class DBHandlerTestFixture : public testing::Test {
   }
 
   void sql(TQueryResult& result, const std::string& query) {
-    mapd_handler_->sql_execute(result, session_id_, query, true, "", -1, -1);
+    db_handler_->sql_execute(result, session_id_, query, true, "", -1, -1);
   }
 
   // Execute SQL with session_id
   void sql(TQueryResult& result, const std::string& query, TSessionId& sess_id) {
-    mapd_handler_->sql_execute(result, sess_id, query, true, "", -1, -1);
+    db_handler_->sql_execute(result, sess_id, query, true, "", -1, -1);
   }
 
   Catalog_Namespace::UserMetadata getCurrentUser() {
-    return mapd_handler_->get_session_copy_ptr(session_id_)->get_currentUser();
+    return db_handler_->get_session_copy_ptr(session_id_)->get_currentUser();
   }
 
   Catalog_Namespace::Catalog& getCatalog() {
-    return mapd_handler_->get_session_copy_ptr(session_id_)->getCatalog();
+    return db_handler_->get_session_copy_ptr(session_id_)->getCatalog();
   }
 
   void resetCatalog() {
@@ -127,21 +127,21 @@ class DBHandlerTestFixture : public testing::Test {
 
   void loginAdmin() {
     session_id_ = {};
-    mapd_handler_->connect(session_id_, default_user_, default_pass_, default_db_name_);
+    db_handler_->connect(session_id_, default_user_, default_pass_, default_db_name_);
     // Store admin session ID in seperate variable so we can always logout
     // the default admin on teardown
     admin_session_id_ = session_id_;
   }
 
-  void logoutAdmin() { mapd_handler_->disconnect(admin_session_id_); }
+  void logoutAdmin() { db_handler_->disconnect(admin_session_id_); }
 
-  void logout(const TSessionId& id) { mapd_handler_->disconnect(id); }
+  void logout(const TSessionId& id) { db_handler_->disconnect(id); }
 
   void login(const std::string& user,
              const std::string& pass,
              const std::string& db_name = default_db_name_) {
     session_id_ = {};
-    mapd_handler_->connect(session_id_, user, pass, db_name);
+    db_handler_->connect(session_id_, user, pass, db_name);
   }
 
   // Login and return the session id to logout later
@@ -149,7 +149,7 @@ class DBHandlerTestFixture : public testing::Test {
              const std::string& pass,
              const std::string& db,
              TSessionId& result_id) {
-    mapd_handler_->connect(result_id, user, pass, db);
+    db_handler_->connect(result_id, user, pass, db);
   }
 
   void queryAndAssertException(const std::string& sql_statement,
@@ -163,13 +163,13 @@ class DBHandlerTestFixture : public testing::Test {
   }
 
  private:
-  static std::unique_ptr<DBHandler> mapd_handler_;
+  static std::unique_ptr<DBHandler> db_handler_;
   static TSessionId session_id_;
   static TSessionId admin_session_id_;
   static std::vector<LeafHostInfo> db_leaves_;
   static std::vector<LeafHostInfo> string_leaves_;
   static AuthMetadata auth_metadata_;
-  static SystemParameters mapd_parameters_;
+  static SystemParameters system_parameters_;
   static std::string udf_filename_;
   static std::string udf_compiler_path_;
   static std::string default_user_;
@@ -181,7 +181,7 @@ class DBHandlerTestFixture : public testing::Test {
 
 TSessionId DBHandlerTestFixture::session_id_{};
 TSessionId DBHandlerTestFixture::admin_session_id_{};
-std::unique_ptr<DBHandler> DBHandlerTestFixture::mapd_handler_ = nullptr;
+std::unique_ptr<DBHandler> DBHandlerTestFixture::db_handler_ = nullptr;
 std::vector<LeafHostInfo> DBHandlerTestFixture::db_leaves_{};
 std::vector<LeafHostInfo> DBHandlerTestFixture::string_leaves_{};
 AuthMetadata DBHandlerTestFixture::auth_metadata_{};
@@ -190,6 +190,6 @@ std::string DBHandlerTestFixture::udf_compiler_path_{};
 std::string DBHandlerTestFixture::default_user_{"admin"};
 std::string DBHandlerTestFixture::default_pass_{"HyperInteractive"};
 std::string DBHandlerTestFixture::default_db_name_{};
-SystemParameters DBHandlerTestFixture::mapd_parameters_{};
+SystemParameters DBHandlerTestFixture::system_parameters_{};
 std::vector<std::string> DBHandlerTestFixture::udf_compiler_options_{};
 std::string DBHandlerTestFixture::cluster_config_file_path_{};
