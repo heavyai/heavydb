@@ -3606,11 +3606,20 @@ std::vector<std::string> Catalog::getTableDictDirectories(
 }
 
 // returns table schema in a string
-std::string Catalog::dumpSchema(const TableDescriptor* td) const {
+std::string Catalog::dumpSchema(const TableDescriptor* td, bool dump_defaults) const {
   cat_read_lock read_lock(this);
 
   std::ostringstream os;
-  os << "CREATE TABLE @T (";
+  if (!td->isView) {
+    os << "CREATE ";
+    if (td->persistenceLevel == Data_Namespace::MemoryLevel::CPU_LEVEL) {
+      os << "TEMPORARY ";
+    }
+    os << "TABLE @T (";
+  } else {
+    os << "CREATE VIEW @T AS " << td->viewSQL;
+    return os.str();
+  }
   // gather column defines
   const auto cds = getAllColumnMetadataForTable(td->tableId, false, false, false);
   std::string comma;
@@ -3667,12 +3676,21 @@ std::string Catalog::dumpSchema(const TableDescriptor* td) const {
   }
   // gather WITH options ...
   std::vector<std::string> with_options;
-  with_options.push_back("FRAGMENT_SIZE=" + std::to_string(td->maxFragRows));
-  with_options.push_back("MAX_CHUNK_SIZE=" + std::to_string(td->maxChunkSize));
-  with_options.push_back("PAGE_SIZE=" + std::to_string(td->fragPageSize));
-  with_options.push_back("MAX_ROWS=" + std::to_string(td->maxRows));
-  with_options.emplace_back(td->hasDeletedCol ? "VACUUM='DELAYED'"
-                                              : "VACUUM='IMMEDIATE'");
+  if (dump_defaults || td->maxFragRows != DEFAULT_FRAGMENT_ROWS) {
+    with_options.push_back("FRAGMENT_SIZE=" + std::to_string(td->maxFragRows));
+  }
+  if (dump_defaults || td->maxChunkSize != DEFAULT_MAX_CHUNK_SIZE) {
+    with_options.push_back("MAX_CHUNK_SIZE=" + std::to_string(td->maxChunkSize));
+  }
+  if (dump_defaults || td->fragPageSize != DEFAULT_PAGE_SIZE) {
+    with_options.push_back("PAGE_SIZE=" + std::to_string(td->fragPageSize));
+  }
+  if (dump_defaults || td->maxRows != DEFAULT_MAX_ROWS) {
+    with_options.push_back("MAX_ROWS=" + std::to_string(td->maxRows));
+  }
+  if (dump_defaults || !td->hasDeletedCol) {
+    with_options.push_back(td->hasDeletedCol ? "VACUUM='DELAYED'" : "VACUUM='IMMEDIATE'");
+  }
   if (!td->partitions.empty()) {
     with_options.push_back("PARTITIONS='" + td->partitions + "'");
   }
@@ -3687,7 +3705,11 @@ std::string Catalog::dumpSchema(const TableDescriptor* td) const {
     CHECK(sort_cd);
     with_options.push_back("SORT_COLUMN='" + sort_cd->columnName + "'");
   }
-  os << ") WITH (" + boost::algorithm::join(with_options, ", ") + ");";
+  os << ")";
+  if (!with_options.empty()) {
+    os << " WITH (" + boost::algorithm::join(with_options, ", ") + ")";
+  }
+  os << ";";
   return os.str();
 }
 

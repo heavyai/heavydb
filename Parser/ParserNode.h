@@ -1788,12 +1788,13 @@ class SelectStmt : public DMLStmt {
  */
 class ShowCreateTableStmt : public DDLStmt {
  public:
-  ShowCreateTableStmt(std::string* tab) : table(tab) {}
-  std::string get_create_stmt();
-  void execute(const Catalog_Namespace::SessionInfo& session) override { CHECK(false); }
+  ShowCreateTableStmt(std::string* tab) : table_(tab) {}
+  std::string getCreateStmt() { return create_stmt_; }
+  void execute(const Catalog_Namespace::SessionInfo& session) override;
 
  private:
-  std::unique_ptr<std::string> table;
+  std::unique_ptr<std::string> table_;
+  std::string create_stmt_;
 };
 
 /*

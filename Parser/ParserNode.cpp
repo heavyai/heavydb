@@ -4122,7 +4122,16 @@ void RevokeRoleStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   SysCatalog::instance().revokeRoleBatch(get_roles(), get_grantees());
 }
 
-using dbl = std::numeric_limits<double>;
+void ShowCreateTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
+  auto& catalog = session.getCatalog();
+  const TableDescriptor* td = catalog.getMetadataForTable(*table_);
+  if (!td) {
+    throw std::runtime_error("table not found: " + *table_);
+  }
+  create_stmt_ = catalog.dumpSchema(td, false);
+  std::regex regex("@T");
+  create_stmt_ = std::regex_replace(create_stmt_, regex, *table_);
+}
 
 void ExportQueryStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   auto session_copy = session;

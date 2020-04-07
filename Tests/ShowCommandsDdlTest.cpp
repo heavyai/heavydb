@@ -673,6 +673,85 @@ TEST_F(ShowDatabasesTest, SuperUserLoginAndOtherUserDatabases) {
   // clang-format on
 }
 
+class ShowCreateTableTest : public DBHandlerTestFixture {
+ public:
+  void SetUp() override {
+    DBHandlerTestFixture::SetUp();
+    sql("DROP TABLE IF EXISTS showcreatetabletest;");
+    sql("DROP VIEW IF EXISTS showcreateviewtest;");
+  }
+
+  void TearDown() override {
+    sql("DROP TABLE IF EXISTS showcreatetabletest;");
+    sql("DROP VIEW IF EXISTS showcreateviewtest;");
+    DBHandlerTestFixture::TearDown();
+  }
+};
+
+TEST_F(ShowCreateTableTest, Identity) {
+  // clang-format off
+  std::vector<std::string> creates = {
+    R"(CREATE TABLE showcreatetabletest (i INTEGER) WITH (FRAGMENT_SIZE=123);)",
+    R"(CREATE TABLE showcreatetabletest (i INTEGER) WITH (MAX_CHUNK_SIZE=123);)",
+    R"(CREATE TABLE showcreatetabletest (i INTEGER) WITH (PAGE_SIZE=123);)",
+    R"(CREATE TABLE showcreatetabletest (i INTEGER) WITH (MAX_ROWS=123);)",
+    R"(CREATE TABLE showcreatetabletest (i INTEGER) WITH (VACUUM='IMMEDIATE');)",
+    R"(CREATE TABLE showcreatetabletest (i INTEGER) WITH (PARTITIONS='SHARDED');)",
+    R"(CREATE TABLE showcreatetabletest (i INTEGER) WITH (PARTITIONS='REPLICATED');)",
+    R"(CREATE TABLE showcreatetabletest (i INTEGER, SHARD KEY(i)) WITH (SHARD_COUNT=4);)",
+    R"(CREATE TABLE showcreatetabletest (i INTEGER) WITH (SORT_COLUMN='i');)",
+    R"(CREATE TABLE showcreatetabletest (i1 INTEGER, i2 INTEGER) WITH (MAX_ROWS=123, VACUUM='IMMEDIATE');)",
+    R"(CREATE TABLE showcreatetabletest (id TEXT ENCODING DICT(32), abbr TEXT ENCODING DICT(32), name TEXT ENCODING DICT(32), omnisci_geo GEOMETRY(MULTIPOLYGON, 4326) NOT NULL);)",
+    R"(CREATE TABLE showcreatetabletest (flight_year SMALLINT, flight_month SMALLINT, flight_dayofmonth SMALLINT, flight_dayofweek SMALLINT, deptime SMALLINT, crsdeptime SMALLINT, arrtime SMALLINT, crsarrtime SMALLINT, uniquecarrier TEXT ENCODING DICT(32), flightnum SMALLINT, tailnum TEXT ENCODING DICT(32), actualelapsedtime SMALLINT, crselapsedtime SMALLINT, airtime SMALLINT, arrdelay SMALLINT, depdelay SMALLINT, origin TEXT ENCODING DICT(32), dest TEXT ENCODING DICT(32), distance SMALLINT, taxiin SMALLINT, taxiout SMALLINT, cancelled SMALLINT, cancellationcode TEXT ENCODING DICT(32), diverted SMALLINT, carrierdelay SMALLINT, weatherdelay SMALLINT, nasdelay SMALLINT, securitydelay SMALLINT, lateaircraftdelay SMALLINT, dep_timestamp TIMESTAMP(0), arr_timestamp TIMESTAMP(0), carrier_name TEXT ENCODING DICT(32), plane_type TEXT ENCODING DICT(32), plane_manufacturer TEXT ENCODING DICT(32), plane_issue_date DATE ENCODING DAYS(32), plane_model TEXT ENCODING DICT(32), plane_status TEXT ENCODING DICT(32), plane_aircraft_type TEXT ENCODING DICT(32), plane_engine_type TEXT ENCODING DICT(32), plane_year SMALLINT, origin_name TEXT ENCODING DICT(32), origin_city TEXT ENCODING DICT(32), origin_state TEXT ENCODING DICT(32), origin_country TEXT ENCODING DICT(32), origin_lat FLOAT, origin_lon FLOAT, dest_name TEXT ENCODING DICT(32), dest_city TEXT ENCODING DICT(32), dest_state TEXT ENCODING DICT(32), dest_country TEXT ENCODING DICT(32), dest_lat FLOAT, dest_lon FLOAT, origin_merc_x FLOAT, origin_merc_y FLOAT, dest_merc_x FLOAT, dest_merc_y FLOAT) WITH (FRAGMENT_SIZE=2000000);)",
+    R"(CREATE TEMPORARY TABLE showcreatetabletest (i INTEGER);)"
+  };
+  // clang-format on
+
+  for (size_t i = 0; i < creates.size(); ++i) {
+    TQueryResult result;
+    sql(creates[i]);
+    sql(result, "SHOW CREATE TABLE showcreatetabletest;");
+    ASSERT_EQ(creates[i], result.row_set.columns[0].data.str_col[0]);
+    sql("DROP TABLE IF EXISTS showcreatetabletest;");
+  }
+}
+
+TEST_F(ShowCreateTableTest, Defaults) {
+  std::vector<std::string> creates = {
+      "CREATE TABLE showcreatetabletest (i INTEGER) WITH (FRAGMENT_SIZE=" +
+          std::to_string(DEFAULT_FRAGMENT_ROWS) + ");",
+      "CREATE TABLE showcreatetabletest (i INTEGER) WITH (MAX_CHUNK_SIZE=" +
+          std::to_string(DEFAULT_MAX_CHUNK_SIZE) + ");",
+      "CREATE TABLE showcreatetabletest (i INTEGER) WITH (PAGE_SIZE=" +
+          std::to_string(DEFAULT_PAGE_SIZE) + ");",
+      "CREATE TABLE showcreatetabletest (i INTEGER) WITH (MAX_ROWS=" +
+          std::to_string(DEFAULT_MAX_ROWS) + ");",
+      "CREATE TABLE showcreatetabletest (i INTEGER) WITH (VACUUM='DELAYED');"};
+
+  for (size_t i = 0; i < creates.size(); ++i) {
+    sql(creates[i]);
+    TQueryResult result;
+    sql(result, "SHOW CREATE TABLE showcreatetabletest;");
+    ASSERT_EQ("CREATE TABLE showcreatetabletest (i INTEGER);",
+              result.row_set.columns[0].data.str_col[0]);
+    sql("DROP TABLE IF EXISTS showcreatetabletest;");
+  }
+}
+
+TEST_F(ShowCreateTableTest, Other) {
+  {
+    sql("CREATE TABLE showcreatetabletest (i INTEGER);");
+    std::string sqltext =
+        "CREATE VIEW showcreateviewtest AS SELECT * FROM showcreatetabletest;";
+    sql(sqltext);
+    TQueryResult result;
+    sql(result, "SHOW CREATE TABLE showcreateviewtest;");
+    ASSERT_EQ(sqltext, result.row_set.columns[0].data.str_col[0]);
+    sql("DROP VIEW IF EXISTS showcreateviewtest;");
+    sql("DROP TABLE IF EXISTS showcreatetabletest;");
+  }
+}
+
 int main(int argc, char** argv) {
   TestHelpers::init_logger_stderr_only(argc, argv);
   testing::InitGoogleTest(&argc, argv);
