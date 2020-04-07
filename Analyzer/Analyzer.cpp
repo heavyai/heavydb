@@ -609,6 +609,13 @@ SQLTypeInfo BinOper::common_numeric_type(const SQLTypeInfo& type1,
     case kNUMERIC:
     case kDECIMAL:
       switch (type2.get_type()) {
+        case kTINYINT:
+          common_type =
+              SQLTypeInfo(kDECIMAL,
+                          std::max(3 + type1.get_scale(), type1.get_dimension()),
+                          type1.get_scale(),
+                          notnull);
+          break;
         case kSMALLINT:
           common_type =
               SQLTypeInfo(kDECIMAL,
