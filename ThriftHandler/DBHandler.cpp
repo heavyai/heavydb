@@ -5099,6 +5099,9 @@ void DBHandler::sql_execute_impl(TQueryResult& _return,
             throw std::runtime_error("Table " + optimize_stmt->getTableName() +
                                      " does not exist.");
           }
+          if (td->isView) {
+            throw std::runtime_error("OPTIMIZE TABLE command is not supported on views.");
+          }
 
           // acquire write lock on table data
           auto data_lock =
