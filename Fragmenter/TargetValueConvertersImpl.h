@@ -297,7 +297,21 @@ struct DictionaryValueConverter : public NumericValueConverter<int64_t, TARGET_T
           if (id == buffer_null_sentinal_) {
             columnDataPtr[i] = this->null_value_;
           } else {
-            CHECK(std::numeric_limits<TARGET_TYPE>::max() >= id);
+            if (std::is_signed<TARGET_TYPE>::value) {
+              if (id < 0) {
+                throw std::runtime_error(
+                    "Maximum number of unique strings (" +
+                    std::to_string(std::numeric_limits<TARGET_TYPE>::max()) +
+                    ") reached in target dictionary");
+              }
+            } else {
+              if (id >= std::numeric_limits<TARGET_TYPE>::max()) {
+                throw std::runtime_error(
+                    "Maximum number of unique strings (" +
+                    std::to_string(std::numeric_limits<TARGET_TYPE>::max()) +
+                    ") reached in target column's dict encoding");
+              }
+            }
             columnDataPtr[i] = static_cast<TARGET_TYPE>(id);
           }
         }
