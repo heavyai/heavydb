@@ -15,7 +15,7 @@
  */
 package com.mapd.tests;
 
-import com.mapd.thrift.server.TDashboard;
+import com.omnisci.thrift.server.TDashboard;
 
 public class MapdAsserts {
   public static interface TestRun { void run() throws Exception; }

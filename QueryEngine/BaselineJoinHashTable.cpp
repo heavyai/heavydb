@@ -39,16 +39,15 @@ std::shared_ptr<BaselineJoinHashTable> BaselineJoinHashTable::getInstance(
     ColumnCacheMap& column_cache,
     Executor* executor) {
   decltype(std::chrono::steady_clock::now()) ts1, ts2;
+
   if (VLOGGING(1)) {
-    VLOG(1) << "Building keyed hash table "
-            << (preferred_hash_type == JoinHashTableInterface::HashType::OneToOne
-                    ? "OneToOne"
-                    : "OneToMany")
+    VLOG(1) << "Building keyed hash table " << getHashTypeString(preferred_hash_type)
             << " for qual: " << condition->toString();
     ts1 = std::chrono::steady_clock::now();
   }
   auto inner_outer_pairs = normalize_column_pairs(
       condition.get(), *executor->getCatalog(), executor->getTemporaryTables());
+
   const auto& query_info =
       get_inner_query_info(getInnerTableId(inner_outer_pairs), query_infos).info;
   const auto total_entries = 2 * query_info.getNumTuplesUpperBound();
@@ -100,11 +99,7 @@ std::shared_ptr<BaselineJoinHashTable> BaselineJoinHashTable::getInstance(
   if (VLOGGING(1)) {
     ts2 = std::chrono::steady_clock::now();
     VLOG(1) << "Built keyed hash table "
-            << (join_hash_table->getHashType() ==
-                        JoinHashTableInterface::HashType::OneToOne
-                    ? "OneToOne"
-                    : "OneToMany")
-            << " in "
+            << getHashTypeString(join_hash_table->getHashType()) << " in "
             << std::chrono::duration_cast<std::chrono::milliseconds>(ts2 - ts1).count()
             << " ms";
   }
@@ -228,6 +223,7 @@ std::string BaselineJoinHashTable::toString(const ExecutorDeviceType device_type
   auto ptr4 = ptr1 + payloadBufferOff();
   return JoinHashTableInterface::toString(
       !condition_->is_overlaps_oper() ? "keyed" : "geo",
+      getHashTypeString(layout_),
       getKeyComponentCount() +
           (layout_ == JoinHashTableInterface::HashType::OneToOne ? 1 : 0),
       getKeyComponentWidth(),
@@ -320,8 +316,16 @@ void BaselineJoinHashTable::reify() {
   const auto layout = type_and_found.second ? type_and_found.first : layout_;
 
   if (condition_->is_overlaps_oper()) {
+    CHECK_EQ(inner_outer_pairs_.size(), size_t(1));
+    JoinHashTableInterface::HashType layout;
+
+    if (inner_outer_pairs_[0].second->get_type_info().is_array()) {
+      layout = JoinHashTableInterface::HashType::ManyToMany;
+    } else {
+      layout = JoinHashTableInterface::HashType::OneToMany;
+    }
     try {
-      reifyWithLayout(JoinHashTableInterface::HashType::OneToMany);
+      reifyWithLayout(layout);
       return;
     } catch (const std::exception& e) {
       VLOG(1) << "Caught exception while building overlaps baseline hash table: "
@@ -962,10 +966,9 @@ int BaselineJoinHashTable::initHashTableForDevice(
          (layout == JoinHashTableInterface::HashType::OneToOne ? 1 : 0)) *
         key_component_width;
     const auto keys_for_all_rows = emitted_keys_count_;
-    const size_t one_to_many_hash_entries =
-        layout == JoinHashTableInterface::HashType::OneToMany
-            ? 2 * entry_count_ + keys_for_all_rows
-            : 0;
+    const size_t one_to_many_hash_entries = layoutRequiresAdditionalBuffers(layout)
+                                                ? 2 * entry_count_ + keys_for_all_rows
+                                                : 0;
     const size_t hash_table_size =
         entry_size * entry_count_ + one_to_many_hash_entries * sizeof(int32_t);
 
@@ -1082,7 +1085,7 @@ size_t BaselineJoinHashTable::offsetBufferOff() const noexcept {
 }
 
 size_t BaselineJoinHashTable::countBufferOff() const noexcept {
-  if (layout_ == JoinHashTableInterface::HashType::OneToMany) {
+  if (layoutRequiresAdditionalBuffers(layout_)) {
     return offsetBufferOff() + getComponentBufferSize();
   } else {
     return getKeyBufferSize();
@@ -1090,7 +1093,7 @@ size_t BaselineJoinHashTable::countBufferOff() const noexcept {
 }
 
 size_t BaselineJoinHashTable::payloadBufferOff() const noexcept {
-  if (layout_ == JoinHashTableInterface::HashType::OneToMany) {
+  if (layoutRequiresAdditionalBuffers(layout_)) {
     return countBufferOff() + getComponentBufferSize();
   } else {
     return getKeyBufferSize();
@@ -1101,7 +1104,7 @@ size_t BaselineJoinHashTable::getKeyBufferSize() const noexcept {
   const auto key_component_width = getKeyComponentWidth();
   CHECK(key_component_width == 4 || key_component_width == 8);
   const auto key_component_count = getKeyComponentCount();
-  if (layout_ == JoinHashTableInterface::HashType::OneToMany) {
+  if (layoutRequiresAdditionalBuffers(layout_)) {
     return entry_count_ * key_component_count * key_component_width;
   } else {
     return entry_count_ * (key_component_count + 1) * key_component_width;
@@ -1210,20 +1213,29 @@ BaselineJoinHashTable::findHashTableOnCpuInCache(const HashTableCacheKey& key) {
 
 void BaselineJoinHashTable::initHashTableOnCpuFromCache(const HashTableCacheKey& key) {
   auto timer = DEBUG_TIMER(__func__);
+  VLOG(1) << "Checking CPU hash table cache.";
   std::lock_guard<std::mutex> hash_table_cache_lock(hash_table_cache_mutex_);
+  if (hash_table_cache_.size() == 0) {
+    VLOG(1) << "CPU hash table cache was empty.";
+  }
   for (const auto& kv : hash_table_cache_) {
     if (kv.first == key) {
+      VLOG(1) << "Found a suitable hash table in the cache.";
       cpu_hash_table_buff_ = kv.second.buffer;
       layout_ = kv.second.type;
       entry_count_ = kv.second.entry_count;
       emitted_keys_count_ = kv.second.emitted_keys_count;
       break;
+    } else {
+      VLOG(1) << hash_table_cache_.size()
+              << " hash tables found in cache. None were suitable for this query.";
     }
   }
 }
 
 void BaselineJoinHashTable::putHashTableOnCpuToCache(const HashTableCacheKey& key) {
   std::lock_guard<std::mutex> hash_table_cache_lock(hash_table_cache_mutex_);
+  VLOG(1) << "Storing hash table in cache.";
   for (const auto& kv : hash_table_cache_) {
     if (std::get<0>(kv) == key) {
       return;

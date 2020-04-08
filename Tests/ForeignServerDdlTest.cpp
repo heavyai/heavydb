@@ -21,7 +21,7 @@
 
 #include <gtest/gtest.h>
 
-#include "MapDHandlerTestHelpers.h"
+#include "DBHandlerTestHelpers.h"
 #include "TestHelpers.h"
 
 #ifndef BASE_PATH
@@ -30,17 +30,17 @@
 
 extern bool g_enable_fsi;
 
-class CreateForeignServerTest : public MapDHandlerTestFixture {
+class CreateForeignServerTest : public DBHandlerTestFixture {
  protected:
   void SetUp() override {
     g_enable_fsi = true;
-    MapDHandlerTestFixture::SetUp();
+    DBHandlerTestFixture::SetUp();
     getCatalog().dropForeignServer("test_server");
   }
 
   void TearDown() override {
     getCatalog().dropForeignServer("test_server");
-    MapDHandlerTestFixture::TearDown();
+    DBHandlerTestFixture::TearDown();
   }
 
   void assertExpectedForeignServer() {
@@ -161,11 +161,11 @@ TEST_F(CreateForeignServerTest, InvalidDataWrapper) {
   queryAndAssertException(query, error_message);
 }
 
-class DropForeignServerTest : public MapDHandlerTestFixture {
+class DropForeignServerTest : public DBHandlerTestFixture {
  protected:
   void SetUp() override {
     g_enable_fsi = true;
-    MapDHandlerTestFixture::SetUp();
+    DBHandlerTestFixture::SetUp();
     dropTestTable();
     sql("CREATE SERVER IF NOT EXISTS test_server FOREIGN DATA WRAPPER omnisci_csv "
         "WITH (storage_type = 'LOCAL_FILE', base_path = '/test_path/');");
@@ -175,7 +175,7 @@ class DropForeignServerTest : public MapDHandlerTestFixture {
     g_enable_fsi = true;
     dropTestTable();
     getCatalog().dropForeignServer("test_server");
-    MapDHandlerTestFixture::TearDown();
+    DBHandlerTestFixture::TearDown();
   }
 
   void assertNullForeignServer(const std::string& server_name) {
@@ -225,11 +225,11 @@ TEST_F(DropForeignServerTest, FsiDisabled) {
   queryAndAssertException("DROP SERVER test_server;", "Syntax error at: SERVER");
 }
 
-class ForeignServerPrivilegesDdlTest : public MapDHandlerTestFixture {
+class ForeignServerPrivilegesDdlTest : public DBHandlerTestFixture {
  protected:
   void SetUp() override {
     g_enable_fsi = true;
-    MapDHandlerTestFixture::SetUp();
+    DBHandlerTestFixture::SetUp();
     loginAdmin();
     dropServer();
     createTestUser();

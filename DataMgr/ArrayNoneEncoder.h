@@ -126,8 +126,8 @@ class ArrayNoneEncoder : public Encoder {
 
     size_t inbuf_size =
         std::min(std::max(index_size, data_size), (size_t)MAX_INPUT_BUF_SIZE);
-    auto inbuf = new int8_t[inbuf_size];
-    std::unique_ptr<int8_t[]> gc_inbuf(inbuf);
+    auto gc_inbuf = std::make_unique<int8_t[]>(inbuf_size);
+    auto inbuf = gc_inbuf.get();
     for (size_t num_appended = 0; num_appended < numAppendElems;) {
       ArrayOffsetT* p = (ArrayOffsetT*)inbuf;
       size_t i;

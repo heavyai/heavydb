@@ -16,7 +16,7 @@ Classes
    :align: center
    :alt: QueryState Classes
 
-:QueryStates: Manages and aggregates ``QueryState`` objects. E.g. ``MapDHandler`` has one ``QueryStates`` member
+:QueryStates: Manages and aggregates ``QueryState`` objects. E.g. ``DBHandler`` has one ``QueryStates`` member
    variable.
 :QueryState: Manages the lifetime of a single query. Attributes/methods (e.g. ``bool just_explain``) may be
    moved/added directly to this class as needed to model the state of SQL queries. As such, the development
@@ -33,7 +33,7 @@ Classes
 Example Usage
 -------------
 
-In ``MapDHandler::sql_execute()``::
+In ``DBHandler::sql_execute()``::
 
     // session_ptr and query_str are already set or passed into the function.
 
@@ -55,7 +55,7 @@ In ``bar(QueryStateProxy query_state_proxy)``::
 
 :Line A: ``auto query_state = create_query_state(session_ptr, query_str); // Line A``
 
-  Create a new ``QueryState`` in the ``MapDHandler::query_states_`` member variable for the current query.
+  Create a new ``QueryState`` in the ``DBHandler::query_states_`` member variable for the current query.
 
 :Line B: ``auto stdlog = STDLOG(query_state);                             // Line B``
 

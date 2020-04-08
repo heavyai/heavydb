@@ -211,7 +211,7 @@ void InsertOrderFragmenter::deleteFragments(const vector<int>& dropFragIds) {
   // tableId while it's its physical tables that can come here when fragments overflow
   // during COPY. Locks on a logical table and its physical tables never intersect, which
   // means potential races. It'll be an overkill to resolve a logical table to physical
-  // tables in MapDHandler, ParseNode or other higher layers where the logical table is
+  // tables in DBHandler, ParseNode or other higher layers where the logical table is
   // locked with Table Read/Write locks; it's easier to lock the logical table of its
   // physical tables. A downside of this approach may be loss of parallel execution of
   // deleteFragments across physical tables. Because deleteFragments is a short in-memory

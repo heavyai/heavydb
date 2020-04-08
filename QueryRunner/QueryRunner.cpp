@@ -28,8 +28,8 @@
 #include "QueryEngine/TableFunctions/TableFunctionsFactory.h"
 #include "Shared/ConfigResolve.h"
 #include "Shared/Logger.h"
-#include "Shared/MapDParameters.h"
 #include "Shared/StringTransform.h"
+#include "Shared/SystemParameters.h"
 #include "Shared/geosupport.h"
 #include "Shared/import_helpers.h"
 #include "bcrypt.h"
@@ -152,7 +152,7 @@ QueryRunner::QueryRunner(const char* db_path,
   if (std::is_same<CudaBuildSelector, PreprocessorFalse>::value) {
     uses_gpus = false;
   }
-  MapDParameters mapd_params;
+  SystemParameters mapd_params;
   mapd_params.gpu_buffer_mem_bytes = max_gpu_mem;
   mapd_params.aggregator = !leaf_servers.empty();
 
@@ -466,6 +466,28 @@ ExecutionResult QueryRunner::runSelectQuery(const std::string& query_str,
   return RelAlgExecutor(executor.get(), cat, query_ra)
       .executeRelAlgQuery(co, eo, false, nullptr);
 }
+
+const std::shared_ptr<std::vector<int32_t>>& QueryRunner::getCachedJoinHashTable(
+    size_t idx) {
+  return JoinHashTable::getCachedHashTable(idx);
+};
+
+const std::shared_ptr<std::vector<int8_t>>& QueryRunner::getCachedBaselineHashTable(
+    size_t idx) {
+  return BaselineJoinHashTable::getCachedHashTable(idx);
+};
+
+size_t QueryRunner::getEntryCntCachedBaselineHashTable(size_t idx) {
+  return BaselineJoinHashTable::getEntryCntCachedHashTable(idx);
+}
+
+uint64_t QueryRunner::getNumberOfCachedJoinHashTables() {
+  return JoinHashTable::getNumberOfCachedHashTables();
+};
+
+uint64_t QueryRunner::getNumberOfCachedBaselineJoinHashTables() {
+  return BaselineJoinHashTable::getNumberOfCachedHashTables();
+};
 
 void QueryRunner::reset() {
   qr_instance_.reset(nullptr);

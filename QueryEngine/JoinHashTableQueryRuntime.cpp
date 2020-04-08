@@ -14,6 +14,9 @@
  * limitations under the License.
  */
 
+#include <math.h>
+#include <stdio.h>
+#include <stdlib.h>
 #include "../Shared/geo_compression_runtime.h"
 #include "CompareKeysInl.h"
 #include "MurmurHash.h"
@@ -172,4 +175,182 @@ get_composite_key_index_64(const int64_t* key,
                            const size_t entry_count) {
   return get_composite_key_index_impl(
       key, key_component_count, composite_key_dict, entry_count);
+}
+
+extern "C" NEVER_INLINE DEVICE int32_t insert_sorted(int32_t* arr,
+                                                     size_t elem_count,
+                                                     int32_t elem) {
+  for (size_t i = 0; i < elem_count; i++) {
+    if (elem == arr[i])
+      return 0;
+
+    if (elem > arr[i])
+      continue;
+
+    for (size_t j = elem_count; i < j; j--) {
+      arr[j] = arr[j - 1];
+    }
+    arr[i] = elem;
+    return 1;
+  }
+
+  arr[elem_count] = elem;
+  return 1;
+}
+
+extern "C" ALWAYS_INLINE DEVICE int64_t overlaps_hash_join_idx(int64_t hash_buff,
+                                                               const int64_t key,
+                                                               const int64_t min_key,
+                                                               const int64_t max_key) {
+  if (key >= min_key && key <= max_key) {
+    return *(reinterpret_cast<int32_t*>(hash_buff) + (key - min_key));
+  }
+  return -1;
+}
+
+struct BufferRange {
+  const int32_t* buffer = nullptr;
+  const int64_t element_count = 0;
+};
+
+ALWAYS_INLINE DEVICE BufferRange get_row_id_buffer_ptr(int64_t* hash_table_ptr,
+                                                       const int64_t* key,
+                                                       const int64_t key_component_count,
+                                                       const int64_t entry_count,
+                                                       const int64_t offset_buffer_off,
+                                                       const int64_t sub_buff_size) {
+  const int64_t min_key = 0;
+  const int64_t max_key = entry_count - 1;
+
+  auto key_idx =
+      get_composite_key_index_64(key, key_component_count, hash_table_ptr, entry_count);
+
+  if (key_idx < -1) {
+    return BufferRange{.buffer = nullptr, .element_count = 0};
+  }
+
+  int8_t* one_to_many_ptr = reinterpret_cast<int8_t*>(hash_table_ptr);
+  one_to_many_ptr += offset_buffer_off;
+
+  // Returns an index used to fetch row count and row ids.
+  const auto slot = overlaps_hash_join_idx(
+      reinterpret_cast<int64_t>(one_to_many_ptr), key_idx, min_key, max_key);
+  if (slot < 0) {
+    return BufferRange{.buffer = nullptr, .element_count = 0};
+  }
+
+  // Offset into the row count section of buffer
+  int8_t* count_ptr = one_to_many_ptr + sub_buff_size;
+
+  const int64_t matched_row_count = overlaps_hash_join_idx(
+      reinterpret_cast<int64_t>(count_ptr), key_idx, min_key, max_key);
+
+  // Offset into payload section, containing an array of row ids
+  int32_t* rowid_buffer = (int32_t*)(one_to_many_ptr + 2 * sub_buff_size);
+  const auto rowidoff_ptr = &rowid_buffer[slot];
+
+  return BufferRange{.buffer = rowidoff_ptr, .element_count = matched_row_count};
+}
+
+struct Bounds {
+  const double min_X;
+  const double min_Y;
+  const double max_X;
+  const double max_Y;
+};
+
+/// Getting overlapping candidates for the overlaps join algorithm
+/// works as follows:
+///
+/// 1. Take the bounds of the Polygon and use the bucket sizes
+/// to split the bounding box into the hash keys it falls into.
+///
+/// 2. Iterate over the keys and look them up in the hash
+/// table.
+///
+/// 3. When looking up the values of each key, we use a
+/// series of offsets to get to the array of row ids.
+///
+/// 4. Since it is possible (likely) we encounter the same
+/// row id in several buckets, we need to ensure we remove
+/// the duplicates we encounter. A simple ordered insertion
+/// is used which ignores duplicate values. Since the N elements
+/// we insert can be considered relatively small (N < 200) this
+/// exhibits a good tradeoff to conserve space since we are constrained
+/// by the stack size on the GPU.
+///
+/// RETURNS:
+/// Unique Row IDs are placed on the fixed size stack array that is passed
+/// in as out_arr.
+/// The number of row ids in this array is returned.
+extern "C" NEVER_INLINE DEVICE int64_t
+get_candidate_rows(int32_t* out_arr,
+                   const uint32_t max_arr_size,
+                   const int8_t* range_bytes,
+                   const int32_t range_component_index,
+                   const double bucket_size_x,
+                   const double bucket_size_y,
+                   const int32_t keys_count,
+                   const int64_t key_component_count,
+                   int64_t* hash_table_ptr,
+                   const int64_t entry_count,
+                   const int64_t offset_buffer_off,
+                   const int64_t sub_buff_size) {
+  const auto range = reinterpret_cast<const double*>(range_bytes);
+
+  size_t elem_count = 0;
+
+  const auto bounds =
+      Bounds{.min_X = range[0], .min_Y = range[1], .max_X = range[2], .max_Y = range[3]};
+
+  for (int64_t x = floor(bounds.min_X * bucket_size_x);
+       x <= floor(bounds.max_X * bucket_size_x);
+       x++) {
+    for (int64_t y = floor(bounds.min_Y * bucket_size_y);
+         y <= floor(bounds.max_Y * bucket_size_y);
+         y++) {
+      int64_t cur_key[2];
+      cur_key[0] = static_cast<int64_t>(x);
+      cur_key[1] = static_cast<int64_t>(y);
+
+      const auto buffer_range = get_row_id_buffer_ptr(hash_table_ptr,
+                                                      cur_key,
+                                                      key_component_count,
+                                                      entry_count,
+                                                      offset_buffer_off,
+                                                      sub_buff_size);
+
+      for (int64_t j = 0; j < buffer_range.element_count; j++) {
+        const auto rowid = buffer_range.buffer[j];
+        elem_count += insert_sorted(out_arr, elem_count, rowid);
+        assert(max_arr_size >= elem_count);
+      }
+    }
+  }
+
+  return elem_count;
+}
+
+// /// Given the bounding box and the bucket size,
+// /// return the number of buckets the bounding box
+// /// will be split into.
+extern "C" NEVER_INLINE DEVICE int32_t
+get_num_buckets_for_bounds(const int8_t* range_bytes,
+                           const int32_t range_component_index,
+                           const double bucket_size_x,
+                           const double bucket_size_y) {
+  const auto range = reinterpret_cast<const double*>(range_bytes);
+
+  const auto bounds_min_x = range[0];
+  const auto bounds_min_y = range[1];
+  const auto bounds_max_x = range[2];
+  const auto bounds_max_y = range[3];
+
+  const auto num_x =
+      floor(bounds_max_x * bucket_size_x) - floor(bounds_min_x * bucket_size_x);
+  const auto num_y =
+      floor(bounds_max_y * bucket_size_y) - floor(bounds_min_y * bucket_size_y);
+  const auto num_buckets = (num_x + 1) * (num_y + 1);
+
+  return num_buckets;
 }

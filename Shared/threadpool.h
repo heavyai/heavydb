@@ -86,7 +86,7 @@ class TbbThreadPool : public TbbThreadPoolBase {
 
   template <class Function, class... Args>
   void append(Function&& f, Args&&... args) {
-    tasks_.run([this, f, args...] { f(args...); });
+    tasks_.run([f, args...] { f(args...); });
   }
 
   void join() { tasks_.wait(); }

@@ -1,6 +1,6 @@
 package com.mapd.utility.db_vendors;
 
-import com.mapd.thrift.server.TDatumType;
+import com.omnisci.thrift.server.TDatumType;
 
 import org.postgis.PGgeometry;
 import org.postgresql.geometric.PGlseg;

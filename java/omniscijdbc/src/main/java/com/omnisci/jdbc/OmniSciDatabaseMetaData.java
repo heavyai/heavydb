@@ -15,19 +15,19 @@
  */
 package com.omnisci.jdbc;
 
-import com.mapd.thrift.server.TColumn;
-import com.mapd.thrift.server.TColumnData;
-import com.mapd.thrift.server.TColumnType;
-import com.mapd.thrift.server.TDBInfo;
-import com.mapd.thrift.server.TDBObject;
-import com.mapd.thrift.server.TDBObjectType;
-import com.mapd.thrift.server.TDatumType;
-import com.mapd.thrift.server.TEncodingType;
-import com.mapd.thrift.server.TQueryResult;
-import com.mapd.thrift.server.TRowSet;
-import com.mapd.thrift.server.TTableDetails;
-import com.mapd.thrift.server.TTablePermissions;
-import com.mapd.thrift.server.TTypeInfo;
+import com.omnisci.thrift.server.TColumn;
+import com.omnisci.thrift.server.TColumnData;
+import com.omnisci.thrift.server.TColumnType;
+import com.omnisci.thrift.server.TDBInfo;
+import com.omnisci.thrift.server.TDBObject;
+import com.omnisci.thrift.server.TDBObjectType;
+import com.omnisci.thrift.server.TDatumType;
+import com.omnisci.thrift.server.TEncodingType;
+import com.omnisci.thrift.server.TQueryResult;
+import com.omnisci.thrift.server.TRowSet;
+import com.omnisci.thrift.server.TTableDetails;
+import com.omnisci.thrift.server.TTablePermissions;
+import com.omnisci.thrift.server.TTypeInfo;
 
 import org.apache.thrift.TException;
 import org.slf4j.Logger;

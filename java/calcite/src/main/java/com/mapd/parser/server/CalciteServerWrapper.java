@@ -16,7 +16,7 @@
 package com.mapd.parser.server;
 
 import com.mapd.common.SockTransportProperties;
-import com.mapd.thrift.calciteserver.CalciteServer.Processor;
+import com.omnisci.thrift.calciteserver.CalciteServer.Processor;
 
 import org.apache.thrift.server.TServer;
 import org.apache.thrift.server.TThreadPoolServer;
@@ -45,7 +45,7 @@ public class CalciteServerWrapper implements Runnable {
 
   public CalciteServerWrapper() {
     handler = new CalciteServerHandler(mapDPort, dataDir, null, null, "");
-    processor = new com.mapd.thrift.calciteserver.CalciteServer.Processor(handler);
+    processor = new com.omnisci.thrift.calciteserver.CalciteServer.Processor(handler);
   }
 
   public CalciteServerWrapper(int calcitePort,
@@ -56,7 +56,7 @@ public class CalciteServerWrapper implements Runnable {
           SockTransportProperties server_skT) {
     handler = new CalciteServerHandler(
             mapDPort, dataDir, extensionFunctionsAstFile, client_skT, "");
-    processor = new com.mapd.thrift.calciteserver.CalciteServer.Processor(handler);
+    processor = new com.omnisci.thrift.calciteserver.CalciteServer.Processor(handler);
     this.calcitePort = calcitePort;
     this.mapDPort = mapDPort;
     this.server_skT_ = server_skT;
@@ -74,7 +74,7 @@ public class CalciteServerWrapper implements Runnable {
             extensionFunctionsAstFile,
             client_skT,
             userDefinedFunctionsFile);
-    processor = new com.mapd.thrift.calciteserver.CalciteServer.Processor(handler);
+    processor = new com.omnisci.thrift.calciteserver.CalciteServer.Processor(handler);
     this.calcitePort = calcitePort;
     this.mapDPort = mapDPort;
     this.server_skT_ = server_skT;
@@ -85,7 +85,7 @@ public class CalciteServerWrapper implements Runnable {
   }
 
   private void startServer(
-          com.mapd.thrift.calciteserver.CalciteServer.Processor processor) {
+          com.omnisci.thrift.calciteserver.CalciteServer.Processor processor) {
     try {
       TServerTransport serverTransport = server_skT_.openServerTransport(calcitePort);
       server = new TThreadPoolServer(

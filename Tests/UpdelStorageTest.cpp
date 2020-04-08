@@ -32,7 +32,6 @@
 #include "QueryEngine/ResultSet.h"
 #include "QueryEngine/TableOptimizer.h"
 #include "QueryRunner/QueryRunner.h"
-#include "Shared/MapDParameters.h"
 #include "Shared/UpdelRoll.h"
 #include "Shared/measure.h"
 #include "TestHelpers.h"
@@ -779,32 +778,6 @@ TEST_F(RowVacuumTest, Vacuum_Interleaved_4) {
                                                  0,
                                                  4));
 }
-
-// It is currently not possible to do select query on temp table w/o
-// MapDHandler. Perhaps in the future a thrift rpc like `push_table_details`
-// can be added to enable such queries here...
-#if 0
-const char* create_temp_table = "CREATE TEMPORARY TABLE temp(i int) WITH (vacuum='delayed');";
-
-class UpdateStorageTest_Temp : public ::testing::Test {
- protected:
-  virtual void SetUp() {
-    ASSERT_NO_THROW(init_table_data("temp", create_temp_table, ""););
-    EXPECT_NO_THROW(run_query("insert into temp values(1)"););
-    EXPECT_NO_THROW(run_query("insert into temp values(1)"););
-  }
-
-  virtual void TearDown() { ASSERT_NO_THROW(run_ddl_statement("drop table temp;");); }
-};
-
-TEST_F(UpdateStorageTest_Temp, Update_temp) {
-  EXPECT_TRUE(update_a_numeric_column("temp", "i", 2, 1, 99, 99));
-}
-
-TEST_F(UpdateStorageTest_Temp, Update_temp_rollback) {
-  EXPECT_TRUE(update_a_numeric_column("temp", "i", 2, 1, 99, 1, true));
-}
-#endif
 
 class UpdateStorageTest : public ::testing::Test {
  protected:

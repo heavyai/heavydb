@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 MapD Technologies, Inc.
+ * Copyright 2020 OmniSci, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,7 +21,7 @@
 #ifndef DATAMGR_H
 #define DATAMGR_H
 
-#include "../Shared/MapDParameters.h"
+#include "../Shared/SystemParameters.h"
 #include "../Shared/mapd_shared_mutex.h"
 #include "AbstractBuffer.h"
 #include "AbstractBufferMgr.h"
@@ -100,7 +100,7 @@ class DataMgr {
 
  public:
   DataMgr(const std::string& dataDir,
-          const MapDParameters& mapd_parameters,
+          const SystemParameters& system_parameters,
           const bool useGpus,
           const int numGpus,
           const int startGpu = 0,
@@ -165,7 +165,7 @@ class DataMgr {
 
  private:
   size_t getTotalSystemMemory() const;
-  void populateMgrs(const MapDParameters& mapd_parameters,
+  void populateMgrs(const SystemParameters& system_parameters,
                     const size_t userSpecifiedNumReaderThreads);
   void convertDB(const std::string basePath);
   void checkpoint();  // checkpoint for whole DB, called from convertDB proc only

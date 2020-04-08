@@ -38,7 +38,7 @@
 #include <thrift/protocol/TBinaryProtocol.h>
 #include <thrift/transport/TBufferTransports.h>
 #include <thrift/transport/TSocket.h>
-#include "gen-cpp/MapD.h"
+#include "gen-cpp/OmniSci.h"
 
 using namespace ::apache::thrift;
 using namespace ::apache::thrift::protocol;
@@ -95,7 +95,7 @@ struct ConnectionDetails {
 bool print_error_data = false;
 bool print_transformation = false;
 
-mapd::shared_ptr<MapDClient> client;
+mapd::shared_ptr<OmniSciClient> client;
 TSessionId session;
 mapd::shared_ptr<apache::thrift::transport::TTransport> mytransport;
 
@@ -108,12 +108,12 @@ void createConnection(ConnectionDetails con) {
   mapd::shared_ptr<TTransport> socket(new TSocket(con.server_host, con.port));
   mytransport.reset(new TBufferedTransport(socket));
   mapd::shared_ptr<TProtocol> protocol(new TBinaryProtocol(mytransport));
-  client.reset(new MapDClient(protocol));
+  client.reset(new OmniSciClient(protocol));
   try {
     mytransport->open();  // open transport
     client->connect(
         session, con.user_name, con.passwd, con.db_name);  // connect to omnisci_server
-  } catch (TMapDException& e) {
+  } catch (TOmniSciException& e) {
     std::cerr << e.error_msg << std::endl;
   } catch (TException& te) {
     std::cerr << "Thrift error: " << te.what() << std::endl;
@@ -124,7 +124,7 @@ void closeConnection() {
   try {
     client->disconnect(session);  // disconnect from omnisci_server
     mytransport->close();         // close transport
-  } catch (TMapDException& e) {
+  } catch (TOmniSciException& e) {
     std::cerr << e.error_msg << std::endl;
   } catch (TException& te) {
     std::cerr << "Thrift error: " << te.what() << std::endl;
@@ -158,7 +158,7 @@ void do_load(int& nrows,
                 << std::endl;
       // we successfully loaded the data, lets move on
       return;
-    } catch (TMapDException& e) {
+    } catch (TOmniSciException& e) {
       std::cerr << "Exception trying to insert data " << e.error_msg << std::endl;
       wait_disconnet_reconnnect_retry(tries, copy_params, conn_details);
     } catch (TException& te) {

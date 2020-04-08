@@ -1,5 +1,5 @@
 /*
- * Copyright 2019 MapD Technologies, Inc.
+ * Copyright 2019 OmniSci, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -67,7 +67,7 @@ namespace Catalog_Namespace {
 
 /*
  * @type UserMetadata
- * @brief metadata for a mapd user
+ * @brief metadata for a db user
  */
 struct UserMetadata {
   UserMetadata(int32_t u,
@@ -100,7 +100,7 @@ struct UserMetadata {
 
 /*
  * @type DBMetadata
- * @brief metadata for a mapd database
+ * @brief metadata for a database
  */
 struct DBMetadata {
   DBMetadata() : dbId(0), dbOwner(0) {}
@@ -111,7 +111,7 @@ struct DBMetadata {
 
 /*
  * @type DBSummary
- * @brief summary info for a mapd database
+ * @brief summary info for a database
  */
 struct DBSummary {
   std::string dbName;

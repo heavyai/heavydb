@@ -77,6 +77,8 @@ class ParserWrapper {
   virtual ~ParserWrapper();
 
   bool is_ddl = false;
+  // is_update_dml does not imply UPDATE,
+  // but rather any of the statement types: INSERT DELETE UPDATE UPSERT
   bool is_update_dml = false;
   bool is_ctas = false;
   bool is_itas = false;

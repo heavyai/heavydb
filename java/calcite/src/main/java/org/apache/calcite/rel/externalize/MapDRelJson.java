@@ -56,7 +56,6 @@ import org.apache.calcite.sql.type.SqlTypeName;
 import org.apache.calcite.util.ImmutableBitSet;
 import org.apache.calcite.util.JsonBuilder;
 import org.apache.calcite.util.Util;
-import org.apache.commons.text.StringEscapeUtils;
 
 import java.lang.reflect.Constructor;
 import java.lang.reflect.InvocationTargetException;
@@ -332,11 +331,7 @@ public class MapDRelJson {
         if (value2 instanceof TimeUnitRange) {
           map.put("literal", value2.toString());
         } else {
-          if (value2 instanceof String) {
-            map.put("literal", StringEscapeUtils.escapeJson((String) value2));
-          } else {
-            map.put("literal", value2);
-          }
+          map.put("literal", value2);
         }
         map.put("type", literal.getTypeName().name());
         map.put("target_type", literal.getType().getSqlTypeName().toString());

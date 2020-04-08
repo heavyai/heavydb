@@ -224,12 +224,16 @@ llvm::Value* CodeGenerator::codegenCastFromString(llvm::Value* operand_lv,
     if (co.device_type == ExecutorDeviceType::GPU) {
       throw QueryMustRunOnCpu();
     }
+    const int64_t string_dictionary_ptr =
+        operand_ti.get_comp_param() == 0
+            ? reinterpret_cast<int64_t>(
+                  executor()->getRowSetMemoryOwner()->getLiteralStringDictProxy())
+            : reinterpret_cast<int64_t>(executor()->getStringDictionaryProxy(
+                  operand_ti.get_comp_param(), executor()->getRowSetMemoryOwner(), true));
     return cgen_state_->emitExternalCall(
         "string_decompress",
         get_int_type(64, cgen_state_->context_),
-        {operand_lv,
-         cgen_state_->llInt(int64_t(executor()->getStringDictionaryProxy(
-             operand_ti.get_comp_param(), executor()->getRowSetMemoryOwner(), true)))});
+        {operand_lv, cgen_state_->llInt(string_dictionary_ptr)});
   }
   CHECK(operand_is_const);
   CHECK_EQ(kENCODING_DICT, ti.get_compression());

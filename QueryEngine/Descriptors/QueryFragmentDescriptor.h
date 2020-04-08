@@ -27,6 +27,7 @@
 #include <map>
 #include <memory>
 #include <optional>
+#include <ostream>
 #include <set>
 #include <unordered_map>
 #include <vector>
@@ -127,7 +128,6 @@ class QueryFragmentDescriptor {
           dispatch_finished = false;
           const auto& execution_kernel = device_itr.second[kernel_idx++];
           f(device_itr.first, execution_kernel.fragments, rowid_lookup_key_);
-
           if (terminateDispatchMaybe(tuple_count, ra_exe_unit, execution_kernel)) {
             return;
           }
@@ -153,6 +153,12 @@ class QueryFragmentDescriptor {
   std::map<size_t, size_t> tuple_count_per_device_;
   std::map<size_t, size_t> available_gpu_mem_bytes_;
 
+  void buildFragmentPerKernelMapForUnion(const RelAlgExecutionUnit& ra_exe_unit,
+                                         const std::vector<uint64_t>& frag_offsets,
+                                         const int device_count,
+                                         const ExecutorDeviceType& device_type,
+                                         Executor* executor);
+
   void buildFragmentPerKernelMap(const RelAlgExecutionUnit& ra_exe_unit,
                                  const std::vector<uint64_t>& frag_offsets,
                                  const int device_count,
@@ -174,5 +180,7 @@ class QueryFragmentDescriptor {
                               const int device_id,
                               const size_t num_cols);
 };
+
+std::ostream& operator<<(std::ostream&, FragmentsPerTable const&);
 
 #endif  // QUERYENGINE_QUERYFRAGMENTDESCRIPTOR_H

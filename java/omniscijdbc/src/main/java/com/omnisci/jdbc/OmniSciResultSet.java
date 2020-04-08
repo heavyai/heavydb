@@ -15,10 +15,10 @@
  */
 package com.omnisci.jdbc;
 
-import com.mapd.thrift.server.TColumnType;
-import com.mapd.thrift.server.TDatumType;
-import com.mapd.thrift.server.TQueryResult;
-import com.mapd.thrift.server.TRowSet;
+import com.omnisci.thrift.server.TColumnType;
+import com.omnisci.thrift.server.TDatumType;
+import com.omnisci.thrift.server.TQueryResult;
+import com.omnisci.thrift.server.TRowSet;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;

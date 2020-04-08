@@ -103,15 +103,16 @@ void innerToString(const int8_t* ptr1,
 
 //! Decode hash table into a human-readable string.
 std::string JoinHashTableInterface::toString(
-    const std::string& type,     // perfect, keyed, or geo
-    size_t key_component_count,  // number of key parts
-    size_t key_component_width,  // width of a key part
-    size_t entry_count,          // number of hashable entries
-    const int8_t* ptr1,          // keys
-    const int8_t* ptr2,          // offsets
-    const int8_t* ptr3,          // counts
-    const int8_t* ptr4,          // payloads (rowids)
-    size_t buffer_size,          // total memory size
+    const std::string& type,         // perfect, keyed, or geo
+    const std::string& layout_type,  // one-to-one, one-to-many, many-to-many
+    size_t key_component_count,      // number of key parts
+    size_t key_component_width,      // width of a key part
+    size_t entry_count,              // number of hashable entries
+    const int8_t* ptr1,              // keys
+    const int8_t* ptr2,              // offsets
+    const int8_t* ptr3,              // counts
+    const int8_t* ptr4,              // payloads (rowids)
+    size_t buffer_size,              // total memory size
     bool raw) {
   std::string txt;
 
@@ -128,9 +129,9 @@ std::string JoinHashTableInterface::toString(
   // table heading
   txt += "| " + type;
   if (!have_offsets && !have_counts) {
-    txt += " one-to-one";
+    txt += layout_type;
   } else if (have_offsets && have_counts) {
-    txt += " one-to-many";
+    txt += layout_type;
   } else {
     CHECK(false);
   }

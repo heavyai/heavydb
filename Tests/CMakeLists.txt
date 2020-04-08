@@ -67,6 +67,7 @@ add_executable(OmniSQLCommandTest OmniSQLCommandTest.cpp)
 add_executable(OmniSQLUtilitiesTest OmniSQLUtilitiesTest.cpp)
 add_executable(DBObjectPrivilegesTest DBObjectPrivilegesTest.cpp)
 add_executable(GeoTypesTest Shared/GeoTypesTest.cpp)
+add_executable(OverlapsJoinTest OverlapsJoinTest.cpp)
 add_executable(CtasUpdateTest CtasUpdateTest.cpp)
 add_executable(CorrelatedSubqueryTest CorrelatedSubqueryTest.cpp)
 add_executable(CtasIntegrationTest CtasIntegrationTest.cpp)
@@ -74,6 +75,7 @@ add_executable(DateTimeUtilsTest Shared/DateTimeUtilsTest.cpp)
 add_executable(UpdateMetadataTest UpdateMetadataTest.cpp)
 add_executable(CalciteOptimizeTest CalciteOptimizeTest.cpp)
 add_executable(JoinHashTableTest JoinHashTableTest.cpp)
+add_executable(CachedHashTableTest CachedHashTableTest.cpp)
 add_executable(ColumnarResultsTest ColumnarResultsTest.cpp ResultSetTestUtils.cpp)
 add_executable(CommandLineTest CommandLineTest.cpp)
 if(NOT ${CMAKE_SYSTEM_NAME} STREQUAL "Darwin")
@@ -84,13 +86,13 @@ endif()
 add_executable(TableUpdateDeleteBenchmark TableUpdateDeleteBenchmark.cpp)
 
 set(EXECUTE_TEST_LIBS gtest mapd_thrift QueryRunner ${MAPD_LIBRARIES} ${CMAKE_DL_LIBS} ${CUDA_LIBRARIES} ${LLVM_LINKER_FLAGS} ${CURSES_LIBRARIES} ${Boost_LIBRARIES} ${PROFILER_LIBS})
-set(MAPD_HANDLER_TEST_LIBRARIES thrift_handler ${EXECUTE_TEST_LIBS})
+set(THRIFT_HANDLER_TEST_LIBRARIES thrift_handler ${EXECUTE_TEST_LIBS})
 
 # Replace Licensing library with TestLicensing library
 if("${MAPD_EDITION_LOWER}" STREQUAL "ee")
-  list(FIND MAPD_HANDLER_TEST_LIBRARIES Licensing LICENSING_INDEX)
-  list(INSERT MAPD_HANDLER_TEST_LIBRARIES ${LICENSING_INDEX} TestLicensing)
-  list(REMOVE_ITEM MAPD_HANDLER_TEST_LIBRARIES Licensing)
+  list(FIND THRIFT_HANDLER_TEST_LIBRARIES Licensing LICENSING_INDEX)
+  list(INSERT THRIFT_HANDLER_TEST_LIBRARIES ${LICENSING_INDEX} TestLicensing)
+  list(REMOVE_ITEM THRIFT_HANDLER_TEST_LIBRARIES Licensing)
 endif()
 
 target_link_libraries(ProfileTest ${EXECUTE_TEST_LIBS})
@@ -128,19 +130,21 @@ endif()
 target_link_libraries(OmniSQLUtilitiesTest gtest ${Boost_LIBRARIES})
 
 target_link_libraries(GeoTypesTest gtest Shared ${GDAL_LIBRARIES} ${CURL_LIBRARIES} ${GDALExtra_LIBRARIES} ${CMAKE_DL_LIBS})
+target_link_libraries(OverlapsJoinTest ${EXECUTE_TEST_LIBS})
 target_link_libraries(CtasUpdateTest ${EXECUTE_TEST_LIBS})
 target_link_libraries(CorrelatedSubqueryTest ${EXECUTE_TEST_LIBS})
 target_link_libraries(CtasIntegrationTest gtest Shared mapd_thrift ThriftClient ${LLVM_LINKER_FLAGS})
 target_link_libraries(DateTimeUtilsTest gtest Shared ${LLVM_LINKER_FLAGS})
 target_link_libraries(CalciteOptimizeTest ${EXECUTE_TEST_LIBS})
 target_link_libraries(JoinHashTableTest ${EXECUTE_TEST_LIBS})
+target_link_libraries(CachedHashTableTest ${EXECUTE_TEST_LIBS})
 target_link_libraries(CommandLineTest gtest Shared ${Boost_LIBRARIES})
-# Requires thrift_handler for MapDHandler test fixture
-target_link_libraries(DBObjectPrivilegesTest ${MAPD_HANDLER_TEST_LIBRARIES})
-target_link_libraries(ForeignServerDdlTest ${MAPD_HANDLER_TEST_LIBRARIES})
-target_link_libraries(CatalogMigrationTest ${MAPD_HANDLER_TEST_LIBRARIES})
-target_link_libraries(CreateAndDropTableDdlTest ${MAPD_HANDLER_TEST_LIBRARIES})
-target_link_libraries(ShowCommandsDdlTest ${MAPD_HANDLER_TEST_LIBRARIES})
+# Requires thrift_handler for DBHandler test fixture
+target_link_libraries(DBObjectPrivilegesTest ${THRIFT_HANDLER_TEST_LIBRARIES})
+target_link_libraries(ForeignServerDdlTest ${THRIFT_HANDLER_TEST_LIBRARIES})
+target_link_libraries(CatalogMigrationTest ${THRIFT_HANDLER_TEST_LIBRARIES})
+target_link_libraries(CreateAndDropTableDdlTest ${THRIFT_HANDLER_TEST_LIBRARIES})
+target_link_libraries(ShowCommandsDdlTest ${THRIFT_HANDLER_TEST_LIBRARIES})
 
 if(NOT ${CMAKE_SYSTEM_NAME} STREQUAL "Darwin")
   target_link_libraries(UdfTest gtest ${EXECUTE_TEST_LIBS})
@@ -162,6 +166,7 @@ add_test(ResultSetTest ResultSetTest ${TEST_ARGS})
 add_test(ColumnarResultsTest ColumnarResultsTest ${TEST_ARGS})
 add_test(FromTableReorderingTest FromTableReorderingTest ${TEST_ARGS})
 add_test(JoinHashTableTest JoinHashTableTest ${TEST_ARGS})
+add_test(CachedHashTableTest CachedHashTableTest ${TEST_ARGS})
 add_test(ResultSetBaselineRadixSortTest ResultSetBaselineRadixSortTest ${TEST_ARGS})
 add_test(RunQueryLoop RunQueryLoop ${TEST_ARGS})
 add_test(StringDictionaryTest StringDictionaryTest ${TEST_ARGS})
@@ -181,12 +186,12 @@ add_test(OmniSQLCommandTest OmniSQLCommandTest ${TEST_ARGS})
 add_test(OmniSQLUtilitiesTest OmniSQLUtilitiesTest ${TEST_ARGS})
 add_test(DBObjectPrivilegesTest DBObjectPrivilegesTest ${TEST_ARGS})
 add_test(GeoTypesTest GeoTypesTest ${TEST_ARGS})
+add_test(OverlapsJoinTest OverlapsJoinTest ${TEST_ARGS})
 add_test(CtasUpdateTest CtasUpdateTest ${TEST_ARGS})
 add_test(CorrelatedSubqueryTest CorrelatedSubqueryTest ${TEST_ARGS})
 add_test(DateTimeUtilsTest DateTimeUtilsTest ${TEST_ARGS})
 add_test(UpdateMetadataTest UpdateMetadataTest ${TEST_ARGS})
 add_test(CalciteOptimizeTest CalciteOptimizeTest ${TEST_ARGS})
-add_test(JoinHashTableTest JoinHashTableTest ${TEST_ARGS})
 add_test(CommandLineTest CommandLineTest ${TEST_ARGS})
 add_test(ForeignServerDdlTest ForeignServerDdlTest ${TEST_ARGS})
 add_test(ShowCommandsDdlTest ShowCommandsDdlTest ${TEST_ARGS})
@@ -238,12 +243,14 @@ set(TEST_PROGRAMS
   OmniSQLUtilitiesTest
   DBObjectPrivilegesTest
   GeoTypesTest
+  OverlapsJoinTest
   CtasUpdateTest
   CorrelatedSubqueryTest
   DateTimeUtilsTest
   UpdateMetadataTest
   CalciteOptimizeTest
   JoinHashTableTest
+  CachedHashTableTest
   StringFunctionsTest
   CommandLineTest
   ForeignServerDdlTest

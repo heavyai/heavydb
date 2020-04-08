@@ -1,5 +1,5 @@
 /*
- * Copyright 2019 MapD Technologies, Inc.
+ * Copyright 2020 OmniSci, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -35,8 +35,6 @@
 
 #include "LeafHostInfo.h"
 
-class MapDHandler;
-
 namespace Catalog_Namespace {
 
 class Catalog;
@@ -47,32 +45,23 @@ class Catalog;
  */
 class SessionInfo {
  public:
-  SessionInfo(std::shared_ptr<MapDHandler> mapdHandler,
-              std::shared_ptr<Catalog> cat,
+  SessionInfo(std::shared_ptr<Catalog> cat,
               const UserMetadata& user,
               const ExecutorDeviceType t,
               const std::string& sid)
-      : mapdHandler_(mapdHandler)
-      , catalog_(cat)
+      : catalog_(cat)
       , currentUser_(user)
       , executor_device_type_(t)
       , session_id_(sid)
       , last_used_time_(time(0))
       , start_time_(time(0))
       , public_session_id_(public_session_id()) {}
-  SessionInfo(std::shared_ptr<Catalog> cat,
-              const UserMetadata& user,
-              const ExecutorDeviceType t,
-              const std::string& sid)
-      : SessionInfo(nullptr, cat, user, t, sid) {}
   SessionInfo(const SessionInfo& s)
-      : mapdHandler_(s.mapdHandler_)
-      , catalog_(s.catalog_)
+      : catalog_(s.catalog_)
       , currentUser_(s.currentUser_)
       , executor_device_type_(static_cast<ExecutorDeviceType>(s.executor_device_type_))
       , session_id_(s.session_id_)
       , public_session_id_(s.public_session_id_) {}
-  MapDHandler* get_mapdHandler() const { return mapdHandler_.get(); }
   Catalog& getCatalog() const { return *catalog_; }
   std::shared_ptr<Catalog> get_catalog_ptr() const { return catalog_; }
   void set_catalog_ptr(std::shared_ptr<Catalog> c) { catalog_ = c; }
@@ -96,7 +85,6 @@ class SessionInfo {
   }
 
  private:
-  std::shared_ptr<MapDHandler> mapdHandler_;
   std::shared_ptr<Catalog> catalog_;
   UserMetadata currentUser_;
   std::atomic<ExecutorDeviceType> executor_device_type_;

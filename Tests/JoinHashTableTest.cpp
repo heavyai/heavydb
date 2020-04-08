@@ -35,7 +35,6 @@
 #include "QueryEngine/UDFCompiler.h"
 #include "QueryRunner/QueryRunner.h"
 #include "Shared/Logger.h"
-#include "Shared/MapDParameters.h"
 #include "Shared/thread_count.h"
 #include "TestHelpers.h"
 

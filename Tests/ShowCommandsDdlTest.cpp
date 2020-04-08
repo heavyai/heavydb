@@ -21,17 +21,17 @@
 
 #include <gtest/gtest.h>
 
-#include "MapDHandlerTestHelpers.h"
+#include "DBHandlerTestHelpers.h"
 #include "TestHelpers.h"
 
 #ifndef BASE_PATH
 #define BASE_PATH "./tmp"
 #endif
 
-class ShowUserSessionsTest : public MapDHandlerTestFixture {
+class ShowUserSessionsTest : public DBHandlerTestFixture {
  public:
   void SetUp() override {
-    MapDHandlerTestFixture::SetUp();
+    DBHandlerTestFixture::SetUp();
     users = {"user1", "user2", "user3"};
     superusers = {"super1", "super2", "super3"};
     dbs = {"db1", "db2", "db3"};
@@ -60,7 +60,7 @@ class ShowUserSessionsTest : public MapDHandlerTestFixture {
     assertExpectedFormat(result);
     assertNumSessions(result, 1);
     assertSessionResultFound(result, "admin", "omnisci", admin_id);
-    MapDHandlerTestFixture::TearDown();
+    DBHandlerTestFixture::TearDown();
   }
 
   void createUsers() {
@@ -362,7 +362,7 @@ TEST_F(ShowUserSessionsTest, PRIVILEGES_NONSUPERUSER) {
     std::string query{"SHOW USER SESSIONS;"};
     sql(result, query, usersession);
     FAIL() << "An exception should have been thrown for this test case.";
-  } catch (const TMapDException& e) {
+  } catch (const TOmniSciException& e) {
     ASSERT_EQ(
         "Exception: SHOW USER SESSIONS failed, because it can only be executed by super "
         "user.",
@@ -372,10 +372,10 @@ TEST_F(ShowUserSessionsTest, PRIVILEGES_NONSUPERUSER) {
   logout(usersession);
 }
 
-class ShowTableDdlTest : public MapDHandlerTestFixture {
+class ShowTableDdlTest : public DBHandlerTestFixture {
  protected:
   void SetUp() override {
-    MapDHandlerTestFixture::SetUp();
+    DBHandlerTestFixture::SetUp();
     loginAdmin();
     createTestUser();
   }
@@ -419,10 +419,10 @@ class ShowTableDdlTest : public MapDHandlerTestFixture {
     std::unordered_set<std::string> result_values_set(result_values.begin(),
                                                       result_values.end());
     for (auto& value : expected_values) {
-      ASSERT_NE(result_values_set.find(value), result_values_set.end());
+      ASSERT_FALSE(result_values_set.find(value) == result_values_set.end());
     }
     for (auto& value : expected_missing_values) {
-      ASSERT_EQ(result_values_set.find(value), result_values_set.end());
+      ASSERT_TRUE(result_values_set.find(value) == result_values_set.end());
     }
   }
 
@@ -437,20 +437,10 @@ class ShowTableDdlTest : public MapDHandlerTestFixture {
   void dropTestTable() { sql("DROP TABLE IF EXISTS test_table;"); }
 };
 
-TEST_F(ShowTableDdlTest, DefaultTables) {
-  std::string query{"SHOW TABLES;"};
-  TQueryResult result;
-  std::vector<std::string> expected_result{
-      "omnisci_states", "omnisci_counties", "omnisci_countries"};
-  sql(result, query);
-  assertExpectedQuery(result, expected_result);
-}
-
 TEST_F(ShowTableDdlTest, CreateTestTable) {
   createTestTable();
   TQueryResult result;
-  std::vector<std::string> expected_result{
-      "omnisci_states", "omnisci_counties", "omnisci_countries", "test_table"};
+  std::vector<std::string> expected_result{"test_table"};
   sql(result, "SHOW TABLES;");
   assertExpectedQuery(result, expected_result);
 }
@@ -460,19 +450,14 @@ TEST_F(ShowTableDdlTest, CreateTwoTestTablesDropOne) {
   sql("CREATE TABLE test_table2 ( test_val int );");
   {
     TQueryResult result;
-    std::vector<std::string> expected_result{"omnisci_states",
-                                             "omnisci_counties",
-                                             "omnisci_countries",
-                                             "test_table",
-                                             "test_table2"};
+    std::vector<std::string> expected_result{"test_table", "test_table2"};
     sql(result, "SHOW TABLES;");
     assertExpectedQuery(result, expected_result);
   }
   dropTestTable();
   {
     TQueryResult result;
-    std::vector<std::string> expected_result{
-        "omnisci_states", "omnisci_counties", "omnisci_countries", "test_table2"};
+    std::vector<std::string> expected_result{"test_table2"};
     std::vector<std::string> expected_missing_result{"test_table"};
     sql(result, "SHOW TABLES;");
     assertExpectedQuery(result, expected_result, expected_missing_result);
@@ -492,10 +477,9 @@ TEST_F(ShowTableDdlTest, CreateTestTableDropTestTable) {
   createTestTable();
   dropTestTable();
   TQueryResult result;
-  std::vector<std::string> expected_result{
-      "omnisci_states", "omnisci_counties", "omnisci_countries"};
+  std::vector<std::string> expected_missing_result{"test_table"};
   sql(result, "SHOW TABLES;");
-  assertExpectedQuery(result, expected_result);
+  assertExpectedQuery(result, {}, expected_missing_result);
 }
 
 TEST_F(ShowTableDdlTest, TestUserSeesTestTableAfterGrantSelect) {
@@ -524,8 +508,7 @@ TEST_F(ShowTableDdlTest, SuperUserSeesTestTableAfterTestUserCreates) {
   createTestTable();
   loginAdmin();
   TQueryResult result;
-  std::vector<std::string> expected_result{
-      "omnisci_states", "omnisci_counties", "omnisci_countries", "test_table"};
+  std::vector<std::string> expected_result{"test_table"};
   sql(result, "SHOW TABLES;");
   assertExpectedQuery(result, expected_result);
 }
@@ -534,18 +517,17 @@ TEST_F(ShowTableDdlTest, CreateTableCreateViewAndViewNotSeen) {
   createTestTable();
   sql("CREATE VIEW test_view AS SELECT * from test_table;");
   TQueryResult result;
-  std::vector<std::string> expected_result{
-      "omnisci_states", "omnisci_counties", "omnisci_countries", "test_table"};
+  std::vector<std::string> expected_result{"test_table"};
   std::vector<std::string> expected_missing_result{"test_view"};
   sql(result, "SHOW TABLES;");
   assertExpectedQuery(result, expected_result, expected_missing_result);
   sql("DROP VIEW test_view;");
 }
 
-class ShowDatabasesTest : public MapDHandlerTestFixture {
+class ShowDatabasesTest : public DBHandlerTestFixture {
  protected:
   void SetUp() override {
-    MapDHandlerTestFixture::SetUp();
+    DBHandlerTestFixture::SetUp();
     createTestUser("test_user_1", "test_pass_1");
     createTestUser("test_user_2", "test_pass_2");
     createTestUser("test_super_user", "test_pass", true);
@@ -557,7 +539,7 @@ class ShowDatabasesTest : public MapDHandlerTestFixture {
     dropTestUser("test_super_user");
     sql("DROP DATABASE IF EXISTS test_db_1;");
     sql("DROP DATABASE IF EXISTS test_db_2;");
-    MapDHandlerTestFixture::TearDown();
+    DBHandlerTestFixture::TearDown();
   }
 
   void assertExpectedResult(const std::vector<std::string> headers,
@@ -694,6 +676,7 @@ TEST_F(ShowDatabasesTest, SuperUserLoginAndOtherUserDatabases) {
 int main(int argc, char** argv) {
   TestHelpers::init_logger_stderr_only(argc, argv);
   testing::InitGoogleTest(&argc, argv);
+  DBHandlerTestFixture::initTestArgs(argc, argv);
 
   int err{0};
   try {

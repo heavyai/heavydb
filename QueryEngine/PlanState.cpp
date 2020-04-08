@@ -67,7 +67,7 @@ int PlanState::getLocalColumnId(const Analyzer::ColumnVar* col_var,
   const int scan_idx = col_var->get_rte_idx();
   InputColDescriptor scan_col_desc(global_col_id, table_id, scan_idx);
   const auto it = global_to_local_col_ids_.find(scan_col_desc);
-  CHECK(it != global_to_local_col_ids_.end());
+  CHECK(it != global_to_local_col_ids_.end()) << "Expected to find " << scan_col_desc;
   if (fetch_column) {
     columns_to_fetch_.insert(std::make_pair(table_id, global_col_id));
   }

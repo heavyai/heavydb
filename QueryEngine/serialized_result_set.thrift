@@ -1,4 +1,4 @@
-namespace java com.mapd.thrift.server
+namespace java com.omnisci.thrift.server
 namespace py omnisci.serialized_result_set
 
 include "../common.thrift"

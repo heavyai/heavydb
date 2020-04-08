@@ -20,8 +20,8 @@ import static org.junit.Assert.*;
 
 import com.mapd.common.SockTransportProperties;
 import com.mapd.parser.server.CalciteServerWrapper;
-import com.mapd.thrift.calciteserver.CalciteServer;
-import com.mapd.thrift.calciteserver.TPlanResult;
+import com.omnisci.thrift.calciteserver.CalciteServer;
+import com.omnisci.thrift.calciteserver.TPlanResult;
 
 import org.apache.thrift.TException;
 import org.apache.thrift.protocol.TBinaryProtocol;

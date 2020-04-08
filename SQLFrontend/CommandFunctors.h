@@ -1,10 +1,26 @@
+/*
+ * Copyright 2020 OmniSci, Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 #ifndef COMMANDFUNCTORS_H
 #define COMMANDFUNCTORS_H
 
 #include "CommandResolutionChain.h"
 #include "ThriftOps.h"
 
-#include "gen-cpp/MapD.h"
+#include "gen-cpp/OmniSci.h"
 
 #include "ClientContext.h"  // Provides us with default class
 #include "RegexSupport.h"
@@ -499,7 +515,7 @@ StandardCommand(ExportDashboard, {
           if (dashfile.is_open()) {
             dashfile << lambda_context.dash_return.dashboard_name << std::endl;
             dashfile << lambda_context.dash_return.dashboard_metadata << std::endl;
-            dashfile << mapd::decode_base64(lambda_context.dash_return.dashboard_state);
+            dashfile << shared::decode_base64(lambda_context.dash_return.dashboard_state);
             dashfile.close();
           } else {
             output_stream << "Could not open file `" << filename << "`" << std::endl;
@@ -540,7 +556,7 @@ StandardCommand(ImportDashboard, {
     return;
   }
 
-  cmdContext().view_state = mapd::encode_base64(state);
+  cmdContext().view_state = shared::encode_base64(state);
 
   output_stream << "Importing dashboard " << cmdContext().view_name << " from file "
                 << filename << std::endl;

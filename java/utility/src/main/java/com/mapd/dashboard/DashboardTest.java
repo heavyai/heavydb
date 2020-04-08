@@ -19,8 +19,8 @@ import static com.mapd.tests.MapdAsserts.shouldThrowException;
 
 import com.mapd.tests.MapdAsserts;
 import com.mapd.tests.MapdTestClient;
-import com.mapd.thrift.server.TDBObject;
-import com.mapd.thrift.server.TDBObjectType;
+import com.omnisci.thrift.server.TDBObject;
+import com.omnisci.thrift.server.TDBObjectType;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;

@@ -18,7 +18,7 @@ package com.mapd.calcite.parser;
 import static com.mapd.calcite.parser.MapDParser.CURRENT_PARSER;
 
 import com.mapd.calcite.parser.MapDParserOptions;
-import com.mapd.thrift.server.TTableDetails;
+import com.omnisci.thrift.server.TTableDetails;
 
 import org.apache.calcite.plan.RelOptTable;
 import org.apache.calcite.prepare.SqlIdentifierCapturer;

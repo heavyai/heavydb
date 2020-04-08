@@ -16,7 +16,7 @@
 
 #include "MapDServer.h"
 #include "DataMgr/ForeignStorage/ForeignStorageInterface.h"
-#include "ThriftHandler/MapDHandler.h"
+#include "ThriftHandler/DBHandler.h"
 
 #ifdef HAVE_THRIFT_THREADFACTORY
 #include <thrift/concurrency/ThreadFactory.h>
@@ -38,7 +38,7 @@
 
 #include "Archive/S3Archive.h"
 #include "Shared/Logger.h"
-#include "Shared/MapDParameters.h"
+#include "Shared/SystemParameters.h"
 #include "Shared/file_delete.h"
 #include "Shared/mapd_shared_mutex.h"
 #include "Shared/mapd_shared_ptr.h"
@@ -58,7 +58,7 @@
 #include "MapDRelease.h"
 #include "Shared/Asio.h"
 #include "Shared/Compressor.h"
-#include "Shared/MapDParameters.h"
+#include "Shared/SystemParameters.h"
 #include "Shared/file_delete.h"
 #include "Shared/mapd_shared_ptr.h"
 #include "Shared/scope.h"
@@ -84,6 +84,7 @@ extern bool g_enable_table_functions;
 extern bool g_enable_fsi;
 extern bool g_enable_lazy_fetch;
 extern bool g_enable_interop;
+extern bool g_enable_union;
 extern bool g_use_tbb_pool;
 
 bool g_enable_thrift_logs{false};
@@ -95,10 +96,10 @@ mapd_shared_mutex g_thrift_mutex;
 TThreadedServer* g_thrift_http_server{nullptr};
 TThreadedServer* g_thrift_buf_server{nullptr};
 
-mapd::shared_ptr<MapDHandler> g_warmup_handler =
+mapd::shared_ptr<DBHandler> g_warmup_handler =
     0;  // global "g_warmup_handler" needed to avoid circular dependency
-        // between "MapDHandler" & function "run_warmup_queries"
-mapd::shared_ptr<MapDHandler> g_mapd_handler = 0;
+        // between "DBHandler" & function "run_warmup_queries"
+mapd::shared_ptr<DBHandler> g_mapd_handler = 0;
 std::once_flag g_shutdown_once_flag;
 
 void shutdown_handler() {
@@ -169,7 +170,7 @@ void releaseWarmupSession(TSessionId& sessionId, std::ifstream& query_file) {
   }
 }
 
-void run_warmup_queries(mapd::shared_ptr<MapDHandler> handler,
+void run_warmup_queries(mapd::shared_ptr<DBHandler> handler,
                         std::string base_path,
                         std::string query_file_path) {
   // run warmup queries to load cache if requested
@@ -270,11 +271,11 @@ class MapDProgramOptions {
   bool enable_legacy_syntax = true;
   AuthMetadata authMetadata;
 
-  MapDParameters mapd_parameters;
+  SystemParameters mapd_parameters;
   bool enable_rendering = false;
   bool enable_auto_clear_render_mem = false;
   int render_oom_retry_threshold = 0;  // in milliseconds
-  size_t render_mem_bytes = 500000000;
+  size_t render_mem_bytes = 1000000000;
   size_t render_poly_cache_bytes = 300000000;
   size_t max_concurrent_render_sessions = 500;
 
@@ -434,6 +435,12 @@ void MapDProgramOptions::fillOptions() {
   help_desc.add_options()("enable-overlaps-hashjoin",
                           po::value<bool>(&g_enable_overlaps_hashjoin)
                               ->default_value(g_enable_overlaps_hashjoin)
+                              ->implicit_value(true),
+                          "Enable the overlaps hash join framework allowing for range "
+                          "join (e.g. spatial overlaps) computation using a hash table.");
+  help_desc.add_options()("enable-hashjoin-many-to-many",
+                          po::value<bool>(&g_enable_hashjoin_many_to_many)
+                              ->default_value(g_enable_hashjoin_many_to_many)
                               ->implicit_value(true),
                           "Enable the overlaps hash join framework allowing for range "
                           "join (e.g. spatial overlaps) computation using a hash table.");
@@ -600,6 +607,11 @@ void MapDProgramOptions::fillOptions() {
           ->default_value(g_enable_interop)
           ->implicit_value(true),
       "Enable offloading of query portions to an external execution engine.");
+  help_desc.add_options()("enable-union",
+                          po::value<bool>(&g_enable_union)
+                              ->default_value(g_enable_union)
+                              ->implicit_value(true),
+                          "Enable UNION ALL SQL clause.");
   help_desc.add_options()(
       "calcite-service-timeout",
       po::value<size_t>(&mapd_parameters.calcite_timeout)
@@ -797,15 +809,17 @@ void MapDProgramOptions::fillAdvancedOptions() {
       "udf-compiler-path",
       po::value<std::string>(&udf_compiler_path),
       "Provide absolute path to clang++ used in udf compilation.");
-  developer_desc.add_options()("udf-compiler-options",
-                               po::value<std::vector<std::string>>(&udf_compiler_options),
-                               "Specify compiler options to tailor udf compilation.");
 
   developer_desc.add_options()("enable-multifrag-rs",
                                po::value<bool>(&g_enable_multifrag_rs)
                                    ->default_value(g_enable_multifrag_rs)
                                    ->implicit_value(true),
                                "Enable multifragment intermediate result sets");
+
+  developer_desc.add_options()(
+      "udf-compiler-options",
+      po::value<std::vector<std::string> >(&udf_compiler_options),
+      "Specify compiler options to tailor udf compilation.");
 }
 
 namespace {
@@ -1174,33 +1188,33 @@ int startMapdServer(MapDProgramOptions& prog_config_opts, bool start_http_server
 
   try {
     g_mapd_handler =
-        mapd::make_shared<MapDHandler>(prog_config_opts.db_leaves,
-                                       prog_config_opts.string_leaves,
-                                       prog_config_opts.base_path,
-                                       prog_config_opts.cpu_only,
-                                       prog_config_opts.allow_multifrag,
-                                       prog_config_opts.jit_debug,
-                                       prog_config_opts.intel_jit_profile,
-                                       prog_config_opts.read_only,
-                                       prog_config_opts.allow_loop_joins,
-                                       prog_config_opts.enable_rendering,
-                                       prog_config_opts.enable_auto_clear_render_mem,
-                                       prog_config_opts.render_oom_retry_threshold,
-                                       prog_config_opts.render_mem_bytes,
-                                       prog_config_opts.max_concurrent_render_sessions,
-                                       prog_config_opts.num_gpus,
-                                       prog_config_opts.start_gpu,
-                                       prog_config_opts.reserved_gpu_mem,
-                                       prog_config_opts.num_reader_threads,
-                                       prog_config_opts.authMetadata,
-                                       prog_config_opts.mapd_parameters,
-                                       prog_config_opts.enable_legacy_syntax,
-                                       prog_config_opts.idle_session_duration,
-                                       prog_config_opts.max_session_duration,
-                                       prog_config_opts.enable_runtime_udf,
-                                       prog_config_opts.udf_file_name,
-                                       prog_config_opts.udf_compiler_path,
-                                       prog_config_opts.udf_compiler_options);
+        mapd::make_shared<DBHandler>(prog_config_opts.db_leaves,
+                                     prog_config_opts.string_leaves,
+                                     prog_config_opts.base_path,
+                                     prog_config_opts.cpu_only,
+                                     prog_config_opts.allow_multifrag,
+                                     prog_config_opts.jit_debug,
+                                     prog_config_opts.intel_jit_profile,
+                                     prog_config_opts.read_only,
+                                     prog_config_opts.allow_loop_joins,
+                                     prog_config_opts.enable_rendering,
+                                     prog_config_opts.enable_auto_clear_render_mem,
+                                     prog_config_opts.render_oom_retry_threshold,
+                                     prog_config_opts.render_mem_bytes,
+                                     prog_config_opts.max_concurrent_render_sessions,
+                                     prog_config_opts.num_gpus,
+                                     prog_config_opts.start_gpu,
+                                     prog_config_opts.reserved_gpu_mem,
+                                     prog_config_opts.num_reader_threads,
+                                     prog_config_opts.authMetadata,
+                                     prog_config_opts.mapd_parameters,
+                                     prog_config_opts.enable_legacy_syntax,
+                                     prog_config_opts.idle_session_duration,
+                                     prog_config_opts.max_session_duration,
+                                     prog_config_opts.enable_runtime_udf,
+                                     prog_config_opts.udf_file_name,
+                                     prog_config_opts.udf_compiler_path,
+                                     prog_config_opts.udf_compiler_options);
   } catch (const std::exception& e) {
     LOG(FATAL) << "Failed to initialize service handler: " << e.what();
   }
@@ -1243,7 +1257,7 @@ int startMapdServer(MapDProgramOptions& prog_config_opts, bool start_http_server
   };
 
   if (prog_config_opts.mapd_parameters.ha_group_id.empty()) {
-    mapd::shared_ptr<TProcessor> processor(new MapDTrackingProcessor(g_mapd_handler));
+    mapd::shared_ptr<TProcessor> processor(new TrackingProcessor(g_mapd_handler));
     mapd::shared_ptr<TTransportFactory> bufTransportFactory(
         new TBufferedTransportFactory());
     mapd::shared_ptr<TProtocolFactory> bufProtocolFactory(new TBinaryProtocolFactory());

@@ -1,4 +1,4 @@
-namespace java com.mapd.thrift.server
+namespace java com.omnisci.thrift.server
 namespace py omnisci.common
 
 enum TDeviceType {

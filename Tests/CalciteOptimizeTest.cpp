@@ -8,7 +8,6 @@
 #include "../DataMgr/DataMgr.h"
 #include "../Parser/parser.h"
 #include "../QueryRunner/QueryRunner.h"
-#include "Shared/MapDParameters.h"
 #include "TestHelpers.h"
 #include "ThriftHandler/QueryState.h"
 #include "gen-cpp/CalciteServer.h"

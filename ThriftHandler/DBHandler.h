@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 MapD Technologies, Inc.
+ * Copyright 2020 OmniSci, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,14 +15,13 @@
  */
 
 /*
- * File:   MapDHandler.h
+ * File:   DBHandler.h
  * Author: michael
  *
  * Created on Jan 1, 2017, 12:40 PM
  */
 
-#ifndef MAPDHANDLER_H
-#define MAPDHANDLER_H
+#pragma once
 
 #include "LeafAggregator.h"
 
@@ -51,8 +50,8 @@
 #include "Shared/ConfigResolve.h"
 #include "Shared/GenericTypeUtilities.h"
 #include "Shared/Logger.h"
-#include "Shared/MapDParameters.h"
 #include "Shared/StringTransform.h"
+#include "Shared/SystemParameters.h"
 #include "Shared/geosupport.h"
 #include "Shared/mapd_shared_mutex.h"
 #include "Shared/mapd_shared_ptr.h"
@@ -61,8 +60,8 @@
 #include "StringDictionary/StringDictionaryClient.h"
 #include "ThriftHandler/ConnectionInfo.h"
 #include "ThriftHandler/DistributedValidate.h"
-#include "ThriftHandler/MapDRenderHandler.h"
 #include "ThriftHandler/QueryState.h"
+#include "ThriftHandler/RenderHandler.h"
 
 #include <sys/time.h>
 #include <sys/types.h>
@@ -97,7 +96,7 @@
 #include <typeinfo>
 #include <unordered_map>
 
-#include "gen-cpp/MapD.h"
+#include "gen-cpp/OmniSci.h"
 #include "gen-cpp/extension_functions_types.h"
 
 using namespace std::string_literals;
@@ -114,9 +113,9 @@ using TableMap = std::map<std::string, bool>;
 using OptionalTableMap = boost::optional<TableMap&>;
 using query_state::QueryStateProxy;
 
-class MapDTrackingProcessor : public MapDProcessor {
+class TrackingProcessor : public OmniSciProcessor {
  public:
-  MapDTrackingProcessor(mapd::shared_ptr<MapDIf> handler) : MapDProcessor(handler) {}
+  TrackingProcessor(mapd::shared_ptr<OmniSciIf> handler) : OmniSciProcessor(handler) {}
 
   bool process(mapd::shared_ptr<::apache::thrift::protocol::TProtocol> in,
                mapd::shared_ptr<::apache::thrift::protocol::TProtocol> out,
@@ -131,63 +130,63 @@ class MapDTrackingProcessor : public MapDProcessor {
       std::vector<std::string> origins;
       boost::split(origins, origin_str, boost::is_any_of(","));
       if (origins.empty()) {
-        MapDTrackingProcessor::client_address = origin_str;
+        TrackingProcessor::client_address = origin_str;
       } else {
         // Take the first origin, which should be the client IP before any intermediate
         // servers (e.g. the web server)
         auto trimmed_origin = origins.front();
         boost::algorithm::trim(trimmed_origin);
-        MapDTrackingProcessor::client_address = trimmed_origin;
+        TrackingProcessor::client_address = trimmed_origin;
       }
       if (dynamic_cast<transport::THttpTransport*>(transport.get())) {
-        MapDTrackingProcessor::client_protocol = ClientProtocol::HTTP;
+        TrackingProcessor::client_protocol = ClientProtocol::HTTP;
       } else if (dynamic_cast<transport::TBufferedTransport*>(transport.get())) {
-        MapDTrackingProcessor::client_protocol = ClientProtocol::TCP;
+        TrackingProcessor::client_protocol = ClientProtocol::TCP;
       } else {
-        MapDTrackingProcessor::client_protocol = ClientProtocol::Other;
+        TrackingProcessor::client_protocol = ClientProtocol::Other;
       }
     } else {
-      MapDTrackingProcessor::client_address = "";
+      TrackingProcessor::client_address = "";
     }
 
-    return MapDProcessor::process(in, out, connectionContext);
+    return OmniSciProcessor::process(in, out, connectionContext);
   }
 
   static thread_local std::string client_address;
   static thread_local ClientProtocol client_protocol;
 };
 
-class MapDHandler : public MapDIf {
+class DBHandler : public OmniSciIf {
  public:
-  MapDHandler(const std::vector<LeafHostInfo>& db_leaves,
-              const std::vector<LeafHostInfo>& string_leaves,
-              const std::string& base_data_path,
-              const bool cpu_only,
-              const bool allow_multifrag,
-              const bool jit_debug,
-              const bool intel_jit_profile,
-              const bool read_only,
-              const bool allow_loop_joins,
-              const bool enable_rendering,
-              const bool enable_auto_clear_render_mem,
-              const int render_oom_retry_threshold,
-              const size_t render_mem_bytes,
-              const size_t max_concurrent_render_sessions,
-              const int num_gpus,
-              const int start_gpu,
-              const size_t reserved_gpu_mem,
-              const size_t num_reader_threads,
-              const AuthMetadata& authMetadata,
-              const MapDParameters& mapd_parameters,
-              const bool legacy_syntax,
-              const int idle_session_duration,
-              const int max_session_duration,
-              const bool enable_runtime_udf_registration,
-              const std::string& udf_filename,
-              const std::string& clang_path,
-              const std::vector<std::string>& clang_options);
+  DBHandler(const std::vector<LeafHostInfo>& db_leaves,
+            const std::vector<LeafHostInfo>& string_leaves,
+            const std::string& base_data_path,
+            const bool cpu_only,
+            const bool allow_multifrag,
+            const bool jit_debug,
+            const bool intel_jit_profile,
+            const bool read_only,
+            const bool allow_loop_joins,
+            const bool enable_rendering,
+            const bool enable_auto_clear_render_mem,
+            const int render_oom_retry_threshold,
+            const size_t render_mem_bytes,
+            const size_t max_concurrent_render_sessions,
+            const int num_gpus,
+            const int start_gpu,
+            const size_t reserved_gpu_mem,
+            const size_t num_reader_threads,
+            const AuthMetadata& authMetadata,
+            const SystemParameters& mapd_parameters,
+            const bool legacy_syntax,
+            const int idle_session_duration,
+            const int max_session_duration,
+            const bool enable_runtime_udf_registration,
+            const std::string& udf_filename,
+            const std::string& clang_path,
+            const std::vector<std::string>& clang_options);
 
-  ~MapDHandler() override;
+  ~DBHandler() override;
 
   static inline size_t max_bytes_for_thrift() { return 2 * 1000 * 1000 * 1000L; }
 
@@ -510,8 +509,8 @@ class MapDHandler : public MapDIf {
   std::mutex render_mutex_;
   int64_t start_time_;
   const AuthMetadata& authMetadata_;
-  const MapDParameters& mapd_parameters_;
-  std::unique_ptr<MapDRenderHandler> render_handler_;
+  const SystemParameters& mapd_parameters_;
+  std::unique_ptr<RenderHandler> render_handler_;
   std::unique_ptr<MapDAggHandler> agg_handler_;
   std::unique_ptr<MapDLeafHandler> leaf_handler_;
   std::shared_ptr<Calcite> calcite_;
@@ -579,8 +578,7 @@ class MapDHandler : public MapDIf {
       const std::string& query_str,
       const std::vector<TFilterPushDownInfo>& filter_push_down_info,
       const bool acquire_locks,
-      const MapDParameters mapd_parameters,
-      RenderInfo* render_info = nullptr,
+      const SystemParameters mapd_parameters,
       bool check_privileges = true);
 
   void sql_execute_impl(TQueryResult& _return,
@@ -632,6 +630,11 @@ class MapDHandler : public MapDIf {
                           const ExecutorDeviceType device_type,
                           const size_t device_id,
                           const int32_t first_n) const;
+
+  void executeDdl(TQueryResult& _return,
+                  const std::string& query_ra,
+                  std::shared_ptr<Catalog_Namespace::SessionInfo const> session_ptr);
+
   TColumnType populateThriftColumnType(const Catalog_Namespace::Catalog* cat,
                                        const ColumnDescriptor* cd);
   TRowDescriptor fixup_row_descriptor(const TRowDescriptor& row_desc,
@@ -736,21 +739,48 @@ class MapDHandler : public MapDIf {
 
   const bool runtime_udf_registration_enabled_;
 
-  bool _was_geo_copy_from;
-  std::string _geo_copy_from_table;
-  std::string _geo_copy_from_file_name;
-  Importer_NS::CopyParams _geo_copy_from_copy_params;
-  std::string _geo_copy_from_partitions;
+  struct GeoCopyFromState {
+    std::string geo_copy_from_table;
+    std::string geo_copy_from_file_name;
+    Importer_NS::CopyParams geo_copy_from_copy_params;
+    std::string geo_copy_from_partitions;
+  };
+
+  struct GeoCopyFromSessions {
+    std::unordered_map<std::string, GeoCopyFromState> was_geo_copy_from;
+    std::mutex geo_copy_from_mutex;
+
+    std::optional<GeoCopyFromState> operator()(const std::string& session_id) {
+      std::lock_guard<std::mutex> map_lock(geo_copy_from_mutex);
+      auto itr = was_geo_copy_from.find(session_id);
+      if (itr == was_geo_copy_from.end()) {
+        return std::nullopt;
+      }
+      return itr->second;
+    }
+
+    void add(const std::string& session_id, const GeoCopyFromState& state) {
+      std::lock_guard<std::mutex> map_lock(geo_copy_from_mutex);
+      const auto ret = was_geo_copy_from.insert(std::make_pair(session_id, state));
+      CHECK(ret.second);
+    }
+
+    void remove(const std::string& session_id) {
+      std::lock_guard<std::mutex> map_lock(geo_copy_from_mutex);
+      was_geo_copy_from.erase(session_id);
+    }
+  };
+  GeoCopyFromSessions geo_copy_from_sessions;
 
   // Only for IPC device memory deallocation
   mutable std::mutex handle_to_dev_ptr_mutex_;
   mutable std::unordered_map<std::string, std::string> ipc_handle_to_dev_ptr_;
 
-  friend void run_warmup_queries(mapd::shared_ptr<MapDHandler> handler,
+  friend void run_warmup_queries(mapd::shared_ptr<DBHandler> handler,
                                  std::string base_path,
                                  std::string query_file_path);
 
-  friend class MapDRenderHandler::Impl;
+  friend class RenderHandler::Impl;
   friend class MapDAggHandler;
   friend class MapDLeafHandler;
 
@@ -794,5 +824,3 @@ class MapDHandler : public MapDIf {
   void getUserSessions(const Catalog_Namespace::SessionInfo& session_info,
                        TQueryResult& _return);
 };
-
-#endif /* MAPDHANDLER_H */
