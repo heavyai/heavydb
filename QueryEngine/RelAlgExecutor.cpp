@@ -480,8 +480,6 @@ ExecutionResult RelAlgExecutor::executeRelAlgSubSeq(
   executor_->temporary_tables_ = &temporary_tables_;
 
   time(&now_);
-  CHECK(!eo.just_explain);
-
   for (size_t i = interval.first; i < interval.second; i++) {
     // only render on the last step
     executeRelAlgStep(seq,
