@@ -3606,20 +3606,13 @@ std::vector<std::string> Catalog::getTableDictDirectories(
 }
 
 // returns table schema in a string
-std::string Catalog::dumpSchema(const TableDescriptor* td, bool dump_defaults) const {
+// NOTE(sy): Might be able to replace dumpSchema() later with
+//           dumpCreateTable() after a deeper review of the TableArchiver code.
+std::string Catalog::dumpSchema(const TableDescriptor* td) const {
   cat_read_lock read_lock(this);
 
   std::ostringstream os;
-  if (!td->isView) {
-    os << "CREATE ";
-    if (td->persistenceLevel == Data_Namespace::MemoryLevel::CPU_LEVEL) {
-      os << "TEMPORARY ";
-    }
-    os << "TABLE @T (";
-  } else {
-    os << "CREATE VIEW @T AS " << td->viewSQL;
-    return os.str();
-  }
+  os << "CREATE TABLE @T (";
   // gather column defines
   const auto cds = getAllColumnMetadataForTable(td->tableId, false, false, false);
   std::string comma;
@@ -3676,6 +3669,143 @@ std::string Catalog::dumpSchema(const TableDescriptor* td, bool dump_defaults) c
   }
   // gather WITH options ...
   std::vector<std::string> with_options;
+  with_options.push_back("FRAGMENT_SIZE=" + std::to_string(td->maxFragRows));
+  with_options.push_back("MAX_CHUNK_SIZE=" + std::to_string(td->maxChunkSize));
+  with_options.push_back("PAGE_SIZE=" + std::to_string(td->fragPageSize));
+  with_options.push_back("MAX_ROWS=" + std::to_string(td->maxRows));
+  with_options.emplace_back(td->hasDeletedCol ? "VACUUM='DELAYED'"
+                                              : "VACUUM='IMMEDIATE'");
+  if (!td->partitions.empty()) {
+    with_options.push_back("PARTITIONS='" + td->partitions + "'");
+  }
+  if (td->nShards > 0) {
+    const auto shard_cd = getMetadataForColumn(td->tableId, td->shardedColumnId);
+    CHECK(shard_cd);
+    os << ", SHARD KEY(" << shard_cd->columnName << ")";
+    with_options.push_back("SHARD_COUNT=" + std::to_string(td->nShards));
+  }
+  if (td->sortedColumnId > 0) {
+    const auto sort_cd = getMetadataForColumn(td->tableId, td->sortedColumnId);
+    CHECK(sort_cd);
+    with_options.push_back("SORT_COLUMN='" + sort_cd->columnName + "'");
+  }
+  os << ") WITH (" + boost::algorithm::join(with_options, ", ") + ");";
+  return os.str();
+}
+
+namespace {
+
+void unserialize_key_metainfo(std::vector<std::string>& shared_dicts,
+                              std::set<std::string>& shared_dict_column_names,
+                              const std::string keyMetainfo) {
+  rapidjson::Document document;
+  document.Parse(keyMetainfo.c_str());
+  CHECK(!document.HasParseError());
+  CHECK(document.IsArray());
+  for (auto it = document.Begin(); it != document.End(); ++it) {
+    const auto& key_with_spec_json = *it;
+    CHECK(key_with_spec_json.IsObject());
+    const std::string type = key_with_spec_json["type"].GetString();
+    const std::string name = key_with_spec_json["name"].GetString();
+    auto key_with_spec = type + " (" + name + ")";
+    if (type == "SHARED DICTIONARY") {
+      shared_dict_column_names.insert(name);
+      key_with_spec += " REFERENCES ";
+      const std::string foreign_table = key_with_spec_json["foreign_table"].GetString();
+      const std::string foreign_column = key_with_spec_json["foreign_column"].GetString();
+      key_with_spec += foreign_table + "(" + foreign_column + ")";
+    } else {
+      CHECK(type == "SHARD KEY");
+    }
+    shared_dicts.push_back(key_with_spec);
+  }
+}
+
+}  // namespace
+
+// returns a "CREATE TABLE" statement in a string
+std::string Catalog::dumpCreateTable(const TableDescriptor* td,
+                                     bool multiline_formatting,
+                                     bool dump_defaults) const {
+  cat_read_lock read_lock(this);
+
+  std::ostringstream os;
+
+  if (!td->isView) {
+    os << "CREATE ";
+    if (td->persistenceLevel == Data_Namespace::MemoryLevel::CPU_LEVEL) {
+      os << "TEMPORARY ";
+    }
+    os << "TABLE " + td->tableName + " (";
+  } else {
+    os << "CREATE VIEW " + td->tableName + " AS " << td->viewSQL;
+    return os.str();
+  }
+  // scan column defines
+  std::vector<std::string> shared_dicts;
+  std::set<std::string> shared_dict_column_names;
+  unserialize_key_metainfo(shared_dicts, shared_dict_column_names, td->keyMetainfo);
+  // gather column defines
+  const auto cds = getAllColumnMetadataForTable(td->tableId, false, false, false);
+  std::map<const std::string, const ColumnDescriptor*> dict_root_cds;
+  bool first = true;
+  for (const auto cd : cds) {
+    if (!(cd->isSystemCol || cd->isVirtualCol)) {
+      const auto& ti = cd->columnType;
+      if (!first) {
+        os << ",";
+        if (!multiline_formatting) {
+          os << " ";
+        }
+      } else {
+        first = false;
+      }
+      if (multiline_formatting) {
+        os << "\n  ";
+      }
+      os << cd->columnName;
+      // CHAR is perculiar... better dump it as TEXT(32) like \d does
+      if (ti.get_type() == SQLTypes::kCHAR) {
+        os << " "
+           << "TEXT";
+      } else if (ti.get_subtype() == SQLTypes::kCHAR) {
+        os << " "
+           << "TEXT[]";
+      } else {
+        os << " " << ti.get_type_name();
+      }
+      os << (ti.get_notnull() ? " NOT NULL" : "");
+      if (shared_dict_column_names.find(cd->columnName) ==
+          shared_dict_column_names.end()) {
+        // avoids "Exception: Column ... shouldn't specify an encoding, it borrows it from
+        // the referenced column"
+        if (ti.is_string()) {
+          if (ti.get_compression() == kENCODING_DICT) {
+            os << " ENCODING " << ti.get_compression_name() << "(" << (ti.get_size() * 8)
+               << ")";
+          } else {
+            os << " ENCODING NONE";
+          }
+        } else if (ti.get_size() > 0 && ti.get_size() != ti.get_logical_size()) {
+          const auto comp_param = ti.get_comp_param() ? ti.get_comp_param() : 32;
+          os << " ENCODING " << ti.get_compression_name() << "(" << comp_param << ")";
+        }
+      }
+    }
+  }
+  // gather SHARED DICTIONARYs
+  if (shared_dicts.size()) {
+    std::string comma;
+    if (!multiline_formatting) {
+      comma = ", ";
+    } else {
+      comma = ",\n  ";
+    }
+    os << comma;
+    os << boost::algorithm::join(shared_dicts, comma);
+  }
+  // gather WITH options ...
+  std::vector<std::string> with_options;
   if (dump_defaults || td->maxFragRows != DEFAULT_FRAGMENT_ROWS) {
     with_options.push_back("FRAGMENT_SIZE=" + std::to_string(td->maxFragRows));
   }
@@ -3697,7 +3827,6 @@ std::string Catalog::dumpSchema(const TableDescriptor* td, bool dump_defaults) c
   if (td->nShards > 0) {
     const auto shard_cd = getMetadataForColumn(td->tableId, td->shardedColumnId);
     CHECK(shard_cd);
-    os << ", SHARD KEY(" << shard_cd->columnName << ")";
     with_options.push_back("SHARD_COUNT=" + std::to_string(td->nShards));
   }
   if (td->sortedColumnId > 0) {
@@ -3707,7 +3836,12 @@ std::string Catalog::dumpSchema(const TableDescriptor* td, bool dump_defaults) c
   }
   os << ")";
   if (!with_options.empty()) {
-    os << " WITH (" + boost::algorithm::join(with_options, ", ") + ")";
+    if (!multiline_formatting) {
+      os << " ";
+    } else {
+      os << "\n";
+    }
+    os << "WITH (" + boost::algorithm::join(with_options, ", ") + ")";
   }
   os << ";";
   return os.str();
