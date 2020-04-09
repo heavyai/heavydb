@@ -22,6 +22,10 @@
 
 #include <Shared/DatumFetchers.h>
 
+#include <tbb/parallel_for.h>
+#include <tbb/spin_mutex.h>
+#include <mutex>
+
 template <typename T>
 T none_encoded_null_value() {
   return std::is_integral<T>::value ? inline_int_null_value<T>()
@@ -118,16 +122,29 @@ class NoneEncoder : public Encoder {
 
   void updateStats(const int8_t* const dst, const size_t numElements) override {
     const T* unencodedData = reinterpret_cast<const T*>(dst);
-    for (size_t i = 0; i < numElements; ++i) {
-      T data = unencodedData[i];
-      if (data != none_encoded_null_value<T>()) {
-        decimal_overflow_validator_.validate(data);
-        dataMin = std::min(dataMin, data);
-        dataMax = std::max(dataMax, data);
-      } else {
-        has_nulls = true;
+    tbb::spin_mutex sync;
+    tbb::parallel_for(tbb::blocked_range(0UL, numElements), [&](const auto& range) {
+      for (size_t i = range.begin(); i < range.end(); ++i) {
+        T data = unencodedData[i];
+        if (data != none_encoded_null_value<T>()) {
+          decimal_overflow_validator_.validate(data);
+          if (data < dataMin) {
+            std::lock_guard lock(sync);
+            if (data < dataMin) {
+              dataMin = data;
+            }
+          }
+          if (data > dataMax) {
+            std::lock_guard lock(sync);
+            if (data > dataMax) {
+              dataMax = data;
+            }
+          }
+        } else {
+          has_nulls = true;
+        }
       }
-    }
+    });
   }
 
   // Only called from the executor for synthesized meta-information.
