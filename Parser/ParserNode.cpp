@@ -4128,7 +4128,7 @@ void ShowCreateTableStmt::execute(const Catalog_Namespace::SessionInfo& session)
   if (!td) {
     throw std::runtime_error("table not found: " + *table_);
   }
-  create_stmt_ = catalog.dumpSchema(td, false);
+  create_stmt_ = catalog.dumpCreateTable(td);
   std::regex regex("@T");
   create_stmt_ = std::regex_replace(create_stmt_, regex, *table_);
 }

@@ -678,11 +678,15 @@ class ShowCreateTableTest : public DBHandlerTestFixture {
   void SetUp() override {
     DBHandlerTestFixture::SetUp();
     sql("DROP TABLE IF EXISTS showcreatetabletest;");
+    sql("DROP TABLE IF EXISTS showcreatetabletest1;");
+    sql("DROP TABLE IF EXISTS showcreatetabletest2;");
     sql("DROP VIEW IF EXISTS showcreateviewtest;");
   }
 
   void TearDown() override {
     sql("DROP TABLE IF EXISTS showcreatetabletest;");
+    sql("DROP TABLE IF EXISTS showcreatetabletest1;");
+    sql("DROP TABLE IF EXISTS showcreatetabletest2;");
     sql("DROP VIEW IF EXISTS showcreateviewtest;");
     DBHandlerTestFixture::TearDown();
   }
@@ -691,19 +695,19 @@ class ShowCreateTableTest : public DBHandlerTestFixture {
 TEST_F(ShowCreateTableTest, Identity) {
   // clang-format off
   std::vector<std::string> creates = {
-    R"(CREATE TABLE showcreatetabletest (i INTEGER) WITH (FRAGMENT_SIZE=123);)",
-    R"(CREATE TABLE showcreatetabletest (i INTEGER) WITH (MAX_CHUNK_SIZE=123);)",
-    R"(CREATE TABLE showcreatetabletest (i INTEGER) WITH (PAGE_SIZE=123);)",
-    R"(CREATE TABLE showcreatetabletest (i INTEGER) WITH (MAX_ROWS=123);)",
-    R"(CREATE TABLE showcreatetabletest (i INTEGER) WITH (VACUUM='IMMEDIATE');)",
-    R"(CREATE TABLE showcreatetabletest (i INTEGER) WITH (PARTITIONS='SHARDED');)",
-    R"(CREATE TABLE showcreatetabletest (i INTEGER) WITH (PARTITIONS='REPLICATED');)",
-    R"(CREATE TABLE showcreatetabletest (i INTEGER, SHARD KEY(i)) WITH (SHARD_COUNT=4);)",
-    R"(CREATE TABLE showcreatetabletest (i INTEGER) WITH (SORT_COLUMN='i');)",
-    R"(CREATE TABLE showcreatetabletest (i1 INTEGER, i2 INTEGER) WITH (MAX_ROWS=123, VACUUM='IMMEDIATE');)",
-    R"(CREATE TABLE showcreatetabletest (id TEXT ENCODING DICT(32), abbr TEXT ENCODING DICT(32), name TEXT ENCODING DICT(32), omnisci_geo GEOMETRY(MULTIPOLYGON, 4326) NOT NULL);)",
-    R"(CREATE TABLE showcreatetabletest (flight_year SMALLINT, flight_month SMALLINT, flight_dayofmonth SMALLINT, flight_dayofweek SMALLINT, deptime SMALLINT, crsdeptime SMALLINT, arrtime SMALLINT, crsarrtime SMALLINT, uniquecarrier TEXT ENCODING DICT(32), flightnum SMALLINT, tailnum TEXT ENCODING DICT(32), actualelapsedtime SMALLINT, crselapsedtime SMALLINT, airtime SMALLINT, arrdelay SMALLINT, depdelay SMALLINT, origin TEXT ENCODING DICT(32), dest TEXT ENCODING DICT(32), distance SMALLINT, taxiin SMALLINT, taxiout SMALLINT, cancelled SMALLINT, cancellationcode TEXT ENCODING DICT(32), diverted SMALLINT, carrierdelay SMALLINT, weatherdelay SMALLINT, nasdelay SMALLINT, securitydelay SMALLINT, lateaircraftdelay SMALLINT, dep_timestamp TIMESTAMP(0), arr_timestamp TIMESTAMP(0), carrier_name TEXT ENCODING DICT(32), plane_type TEXT ENCODING DICT(32), plane_manufacturer TEXT ENCODING DICT(32), plane_issue_date DATE ENCODING DAYS(32), plane_model TEXT ENCODING DICT(32), plane_status TEXT ENCODING DICT(32), plane_aircraft_type TEXT ENCODING DICT(32), plane_engine_type TEXT ENCODING DICT(32), plane_year SMALLINT, origin_name TEXT ENCODING DICT(32), origin_city TEXT ENCODING DICT(32), origin_state TEXT ENCODING DICT(32), origin_country TEXT ENCODING DICT(32), origin_lat FLOAT, origin_lon FLOAT, dest_name TEXT ENCODING DICT(32), dest_city TEXT ENCODING DICT(32), dest_state TEXT ENCODING DICT(32), dest_country TEXT ENCODING DICT(32), dest_lat FLOAT, dest_lon FLOAT, origin_merc_x FLOAT, origin_merc_y FLOAT, dest_merc_x FLOAT, dest_merc_y FLOAT) WITH (FRAGMENT_SIZE=2000000);)",
-    R"(CREATE TEMPORARY TABLE showcreatetabletest (i INTEGER);)"
+    "CREATE TABLE showcreatetabletest (\n  i INTEGER)\nWITH (FRAGMENT_SIZE=123);",
+    "CREATE TABLE showcreatetabletest (\n  i INTEGER)\nWITH (MAX_CHUNK_SIZE=123);",
+    "CREATE TABLE showcreatetabletest (\n  i INTEGER)\nWITH (PAGE_SIZE=123);",
+    "CREATE TABLE showcreatetabletest (\n  i INTEGER)\nWITH (MAX_ROWS=123);",
+    "CREATE TABLE showcreatetabletest (\n  i INTEGER)\nWITH (VACUUM='IMMEDIATE');",
+    "CREATE TABLE showcreatetabletest (\n  i INTEGER)\nWITH (PARTITIONS='SHARDED');",
+    "CREATE TABLE showcreatetabletest (\n  i INTEGER)\nWITH (PARTITIONS='REPLICATED');",
+    "CREATE TABLE showcreatetabletest (\n  i INTEGER,\n  SHARD KEY (i))\nWITH (SHARD_COUNT=4);",
+    "CREATE TABLE showcreatetabletest (\n  i INTEGER)\nWITH (SORT_COLUMN='i');",
+    "CREATE TABLE showcreatetabletest (\n  i1 INTEGER,\n  i2 INTEGER)\nWITH (MAX_ROWS=123, VACUUM='IMMEDIATE');",
+    "CREATE TABLE showcreatetabletest (\n  id TEXT ENCODING DICT(32),\n  abbr TEXT ENCODING DICT(32),\n  name TEXT ENCODING DICT(32),\n  omnisci_geo GEOMETRY(MULTIPOLYGON, 4326) NOT NULL);",
+    "CREATE TABLE showcreatetabletest (\n  flight_year SMALLINT,\n  flight_month SMALLINT,\n  flight_dayofmonth SMALLINT,\n  flight_dayofweek SMALLINT,\n  deptime SMALLINT,\n  crsdeptime SMALLINT,\n  arrtime SMALLINT,\n  crsarrtime SMALLINT,\n  uniquecarrier TEXT ENCODING DICT(32),\n  flightnum SMALLINT,\n  tailnum TEXT ENCODING DICT(32),\n  actualelapsedtime SMALLINT,\n  crselapsedtime SMALLINT,\n  airtime SMALLINT,\n  arrdelay SMALLINT,\n  depdelay SMALLINT,\n  origin TEXT ENCODING DICT(32),\n  dest TEXT ENCODING DICT(32),\n  distance SMALLINT,\n  taxiin SMALLINT,\n  taxiout SMALLINT,\n  cancelled SMALLINT,\n  cancellationcode TEXT ENCODING DICT(32),\n  diverted SMALLINT,\n  carrierdelay SMALLINT,\n  weatherdelay SMALLINT,\n  nasdelay SMALLINT,\n  securitydelay SMALLINT,\n  lateaircraftdelay SMALLINT,\n  dep_timestamp TIMESTAMP(0),\n  arr_timestamp TIMESTAMP(0),\n  carrier_name TEXT ENCODING DICT(32),\n  plane_type TEXT ENCODING DICT(32),\n  plane_manufacturer TEXT ENCODING DICT(32),\n  plane_issue_date DATE ENCODING DAYS(32),\n  plane_model TEXT ENCODING DICT(32),\n  plane_status TEXT ENCODING DICT(32),\n  plane_aircraft_type TEXT ENCODING DICT(32),\n  plane_engine_type TEXT ENCODING DICT(32),\n  plane_year SMALLINT,\n  origin_name TEXT ENCODING DICT(32),\n  origin_city TEXT ENCODING DICT(32),\n  origin_state TEXT ENCODING DICT(32),\n  origin_country TEXT ENCODING DICT(32),\n  origin_lat FLOAT,\n  origin_lon FLOAT,\n  dest_name TEXT ENCODING DICT(32),\n  dest_city TEXT ENCODING DICT(32),\n  dest_state TEXT ENCODING DICT(32),\n  dest_country TEXT ENCODING DICT(32),\n  dest_lat FLOAT,\n  dest_lon FLOAT,\n  origin_merc_x FLOAT,\n  origin_merc_y FLOAT,\n  dest_merc_x FLOAT,\n  dest_merc_y FLOAT)\nWITH (FRAGMENT_SIZE=2000000);",
+    "CREATE TEMPORARY TABLE showcreatetabletest (\n  i INTEGER);"
   };
   // clang-format on
 
@@ -711,7 +715,7 @@ TEST_F(ShowCreateTableTest, Identity) {
     TQueryResult result;
     sql(creates[i]);
     sql(result, "SHOW CREATE TABLE showcreatetabletest;");
-    ASSERT_EQ(creates[i], result.row_set.columns[0].data.str_col[0]);
+    EXPECT_EQ(creates[i], result.row_set.columns[0].data.str_col[0]);
     sql("DROP TABLE IF EXISTS showcreatetabletest;");
   }
 }
@@ -732,7 +736,7 @@ TEST_F(ShowCreateTableTest, Defaults) {
     sql(creates[i]);
     TQueryResult result;
     sql(result, "SHOW CREATE TABLE showcreatetabletest;");
-    ASSERT_EQ("CREATE TABLE showcreatetabletest (i INTEGER);",
+    EXPECT_EQ("CREATE TABLE showcreatetabletest (\n  i INTEGER);",
               result.row_set.columns[0].data.str_col[0]);
     sql("DROP TABLE IF EXISTS showcreatetabletest;");
   }
@@ -746,9 +750,22 @@ TEST_F(ShowCreateTableTest, Other) {
     sql(sqltext);
     TQueryResult result;
     sql(result, "SHOW CREATE TABLE showcreateviewtest;");
-    ASSERT_EQ(sqltext, result.row_set.columns[0].data.str_col[0]);
+    EXPECT_EQ(sqltext, result.row_set.columns[0].data.str_col[0]);
     sql("DROP VIEW IF EXISTS showcreateviewtest;");
     sql("DROP TABLE IF EXISTS showcreatetabletest;");
+  }
+
+  {
+    sql("CREATE TABLE showcreatetabletest1 (\n  t TEXT ENCODING DICT(32));");
+    std::string sqltext =
+        "CREATE TABLE showcreatetabletest2 (\n  t TEXT,\n  SHARED DICTIONARY (t) "
+        "REFERENCES showcreatetabletest1(t))\nWITH (SORT_COLUMN='t');";
+    sql(sqltext);
+    TQueryResult result;
+    sql(result, "SHOW CREATE TABLE showcreatetabletest2;");
+    EXPECT_EQ(sqltext, result.row_set.columns[0].data.str_col[0]);
+    sql("DROP TABLE IF EXISTS showcreatetabletest1;");
+    sql("DROP TABLE IF EXISTS showcreatetabletest2;");
   }
 }
 

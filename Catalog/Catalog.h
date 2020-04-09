@@ -243,7 +243,10 @@ class Catalog final {
   std::vector<std::string> getTableDataDirectories(const TableDescriptor* td) const;
   std::vector<std::string> getTableDictDirectories(const TableDescriptor* td) const;
   std::string getColumnDictDirectory(const ColumnDescriptor* cd) const;
-  std::string dumpSchema(const TableDescriptor* td, bool dump_defaults = true) const;
+  std::string dumpSchema(const TableDescriptor* td) const;
+  std::string dumpCreateTable(const TableDescriptor* td,
+                              bool multiline_formatting = true,
+                              bool dump_defaults = false) const;
 
   /**
    * Creates a new foreign server DB object.
