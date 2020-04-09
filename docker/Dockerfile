@@ -41,12 +41,17 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         bsdmainutils \
         wget \
         curl \
+        clang-9 \
         default-jre-headless && \
     apt-get remove --purge -y && \
     rm -rf /var/lib/apt/lists/*
 
 COPY --from=extract /omnisci /omnisci
 COPY --from=glvnd /usr/local /usr/local/
+
+# UDF support
+RUN update-alternatives --install /usr/bin/clang++ clang++ /usr/bin/clang++-9 100
+ENV CPLUS_INCLUDE_PATH=/usr/lib/llvm-9/lib/clang/9.0.0/include
 
 RUN ln -sf /omnisci /mapd
 RUN mkdir -p /usr/share/glvnd/egl_vendor.d && \
