@@ -28,15 +28,40 @@ public class EagainConcurrencyTest {
     test.testCatalogConcurrency();
   }
 
-  private void run_test(MapdTestClient dba, MapdTestClient user, String prefix, int max)
-          throws Exception {
+  private void run_test(MapdTestClient dba,
+          String db,
+          String dbUser,
+          String dbPassword,
+          String prefix,
+          int max) throws Exception {
     String tableName = "table_" + prefix + "_";
+    String viewName = "view_" + prefix + "_";
     long tid = Thread.currentThread().getId();
+
+    logger.info("[" + tid + "]"
+            + "FIRST USER CONNECT");
+    MapdTestClient first_user =
+            MapdTestClient.getClient("localhost", 6274, db, dbUser, dbPassword);
+
     logger.info("[" + tid + "]"
             + "CREATE " + tableName);
-    user.runSql("CREATE TABLE " + tableName + " (id integer);");
+    first_user.runSql("CREATE TABLE " + tableName + " (id integer);");
+
+    logger.info("[" + tid + "]"
+            + "CREATE VIEW " + viewName);
+    first_user.runSql(
+            "CREATE VIEW " + viewName + " AS (SELECT id * 2 FROM " + tableName + ");");
+
+    logger.info("[" + tid + "]"
+            + "FIRST USER DISCONNECT");
+    first_user.disconnect();
 
     for (int i = 0; i < max; i++) {
+      logger.info("[" + tid + "]"
+              + "USER CONNECT");
+      MapdTestClient user =
+              MapdTestClient.getClient("localhost", 6274, db, dbUser, dbPassword);
+
       logger.info("[" + tid + "]"
               + "INSERT INTO " + tableName);
       user.runSql("INSERT INTO " + tableName + " VALUES (" + i + ");");
@@ -48,7 +73,19 @@ public class EagainConcurrencyTest {
       logger.info("[" + tid + "]"
               + "SELECT FROM " + tableName);
       user.runSql("SELECT * FROM " + tableName + ";");
+
+      user.get_memory("cpu");
+      user.get_dashboards();
+      user.get_tables_meta();
+
+      logger.info("[" + tid + "]"
+              + "USER DISCONNECT");
+      user.disconnect();
     }
+
+    logger.info("[" + tid + "]"
+            + "DROP " + viewName);
+    dba.runSql("DROP VIEW " + viewName + ";");
 
     logger.info("[" + tid + "]"
             + "DROP " + tableName);
@@ -73,9 +110,7 @@ public class EagainConcurrencyTest {
           try {
             MapdTestClient dba =
                     MapdTestClient.getClient("localhost", 6274, db, dbaUser, dbaPassword);
-            MapdTestClient user =
-                    MapdTestClient.getClient("localhost", 6274, db, dbUser, dbPassword);
-            run_test(dba, user, prefix, runs);
+            run_test(dba, db, dbUser, dbPassword, prefix, runs);
           } catch (Exception e) {
             logger.error("[" + Thread.currentThread().getId() + "]"
                             + "Caught Exception: " + e.getMessage(),

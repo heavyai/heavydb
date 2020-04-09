@@ -23,10 +23,12 @@ import com.omnisci.thrift.server.TCreateParams;
 import com.omnisci.thrift.server.TDBObject;
 import com.omnisci.thrift.server.TDBObjectType;
 import com.omnisci.thrift.server.TDashboard;
+import com.omnisci.thrift.server.TNodeMemoryInfo;
 import com.omnisci.thrift.server.TOmniSciException;
 import com.omnisci.thrift.server.TQueryResult;
 import com.omnisci.thrift.server.TServerStatus;
 import com.omnisci.thrift.server.TTableDetails;
+import com.omnisci.thrift.server.TTableMeta;
 
 import org.apache.thrift.TException;
 import org.apache.thrift.protocol.TBinaryProtocol;
@@ -53,8 +55,17 @@ public class MapdTestClient {
     return client.get_hardware_info(sessionId);
   }
 
+  public List<TNodeMemoryInfo> get_memory(String memory_level)
+          throws TOmniSciException, TException {
+    return client.get_memory(sessionId, memory_level);
+  }
+
   public TTableDetails get_table_details(String table_name) throws Exception {
     return client.get_table_details(sessionId, table_name);
+  }
+
+  public List<TTableMeta> get_tables_meta() throws TOmniSciException, Exception {
+    return client.get_tables_meta(sessionId);
   }
 
   public TQueryResult runSql(String sql) throws Exception {
