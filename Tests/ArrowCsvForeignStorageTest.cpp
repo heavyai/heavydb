@@ -68,6 +68,25 @@ void check_query(const std::string& query, const std::vector<T>& expects) {
   }
 }
 
+template <typename T>
+void check_table(const std::string& query, const std::vector<std::vector<T>>& expects) {
+  auto rows = QR::get()->runSQL(query, ExecutorDeviceType::CPU, false);
+  CHECK_EQ(expects.size(), rows->rowCount());
+  CHECK_EQ(expects[0].size(), rows->colCount());
+  for (auto exp_row : expects) {
+    auto crt_row = rows->getNextRow(true, true);
+    for (size_t val_idx = 0; val_idx < exp_row.size(); ++val_idx) {
+      if (typeid(T) == typeid(double)) {
+        EXPECT_DOUBLE_EQ(exp_row[val_idx], v<T>(crt_row[val_idx]));
+      } else if (typeid(T) == typeid(float)) {
+        EXPECT_FLOAT_EQ(exp_row[val_idx], v<T>(crt_row[val_idx]));
+      } else {
+        CHECK_EQ(exp_row[val_idx], v<T>(crt_row[val_idx]));
+      }
+    }
+  }
+}
+
 const char* trips_table_ddl = R"( 
 CREATE TEMPORARY TABLE trips (
 trip_id BIGINT,
@@ -265,6 +284,17 @@ TEST(Unsupported, Syntax) {
       run_ddl_statement("CREATE TABLE fsi_unsupported (x INT, y DOUBLE) WITH "
                         "(storage_type='CSV:../../Tests/Import/datafiles/"
                         "trips_with_headers_top1000.csv');"));
+}
+
+TEST(DecimalDataTest, DifferentSizesOfDecimal) {
+  run_ddl_statement(
+      "CREATE DATAFRAME fsi_decimal (decimal2 DECIMAL(4,1), decimal4 NUMERIC(9,2), "
+      "decimal8 DECIMAL(18,5)) from "
+      "'CSV:../../Tests/Import/datafiles/decimal_data.csv';");
+  check_table<double>("SELECT * FROM fsi_decimal",
+                      {{4, 0, 1.1},
+                       {213.4, 2389341.23, 4857364039384.75638},
+                       {999.9, 9384612.78, 2947583746581.92748}});
 }
 
 }  // namespace

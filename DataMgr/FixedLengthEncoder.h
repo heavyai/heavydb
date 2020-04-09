@@ -23,6 +23,7 @@
 #include <stdexcept>
 #include "AbstractBuffer.h"
 #include "Encoder.h"
+#include "NoneEncoder.h"
 
 #include <Shared/DatumFetchers.h>
 
@@ -117,8 +118,31 @@ class FixedLengthEncoder : public Encoder {
     }
   }
 
-  void updateStats(const int8_t* const dst, const size_t numBytes) override {
-    CHECK(false);
+  void updateStats(const int8_t* const dst, const size_t numElements) override {
+    const V* unencodedData = reinterpret_cast<const V*>(dst);
+    tbb::spin_mutex sync;
+    tbb::parallel_for(tbb::blocked_range(0UL, numElements), [&](const auto& range) {
+      for (size_t i = range.begin(); i < range.end(); ++i) {
+        T data = unencodedData[i];
+        if (data != none_encoded_null_value<V>()) {
+          decimal_overflow_validator_.validate(data);
+          if (data < dataMin) {
+            std::lock_guard lock(sync);
+            if (data < dataMin) {
+              dataMin = data;
+            }
+          }
+          if (data > dataMax) {
+            std::lock_guard lock(sync);
+            if (data > dataMax) {
+              dataMax = data;
+            }
+          }
+        } else {
+          has_nulls = true;
+        }
+      }
+    });
   }
 
   // Only called from the executor for synthesized meta-information.
