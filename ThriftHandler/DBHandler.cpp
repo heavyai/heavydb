@@ -2051,6 +2051,10 @@ void DBHandler::get_tables_meta(std::vector<TTableMeta>& _return,
   const auto tables = cat.getAllTableMetadata();
   _return.reserve(tables.size());
 
+  auto execute_read_lock = mapd_shared_lock<mapd_shared_mutex>(
+      *legacylockmgr::LockMgr<mapd_shared_mutex, bool>::getMutex(
+          legacylockmgr::ExecutorOuterLock, true));
+
   for (const auto td : tables) {
     if (td->shard >= 0) {
       // skip shards, they're not standalone tables
@@ -2074,12 +2078,15 @@ void DBHandler::get_tables_meta(std::vector<TTableMeta>& _return,
     size_t num_cols = 0;
     if (td->isView) {
       try {
-        const auto query_ra = parse_to_ra(query_state->createQueryStateProxy(),
-                                          td->viewSQL,
-                                          {},
-                                          false,
-                                          mapd_parameters_)
-                                  .first.plan_result;
+        TPlanResult parse_result;
+        lockmgr::LockedTableDescriptors locks;
+        std::tie(parse_result, locks) = parse_to_ra(query_state->createQueryStateProxy(),
+                                                    td->viewSQL,
+                                                    {},
+                                                    true,
+                                                    mapd_parameters_);
+        const auto query_ra = parse_result.plan_result;
+
         TQueryResult result;
         execute_rel_alg(result,
                         query_state->createQueryStateProxy(),
@@ -5009,6 +5016,8 @@ void DBHandler::sql_execute_impl(TQueryResult& _return,
         // removing the "explain calcite " from the beginning of the "query_str":
         std::string temp_query_str =
             query_str.substr(std::string("explain calcite ").length());
+
+        CHECK(!locks.empty());
         query_ra_calcite_explain =
             parse_to_ra(query_state_proxy, temp_query_str, {}, false, mapd_parameters_)
                 .first.plan_result;
@@ -5035,6 +5044,7 @@ void DBHandler::sql_execute_impl(TQueryResult& _return,
         return;
       }
       if (!filter_push_down_requests.empty()) {
+        CHECK(!locks.empty());
         execute_rel_alg_with_filter_push_down(_return,
                                               query_state_proxy,
                                               query_ra,
@@ -5050,6 +5060,7 @@ void DBHandler::sql_execute_impl(TQueryResult& _return,
         // If we reach here, the 'filter_push_down_request' turned out to be empty, i.e.,
         // no filter push down so we continue with the initial (unchanged) query's calcite
         // explanation.
+        CHECK(!locks.empty());
         query_ra = parse_to_ra(query_state_proxy, query_str, {}, false, mapd_parameters_)
                        .first.plan_result;
         convert_explain(_return, ResultSet(query_ra), true);
@@ -5065,6 +5076,7 @@ void DBHandler::sql_execute_impl(TQueryResult& _return,
         // If we reach here, the 'filter_push_down_request' turned out to be empty, i.e.,
         // no filter push down so we continue with the initial (unchanged) query's calcite
         // explanation.
+        CHECK(!locks.empty());
         query_ra = parse_to_ra(query_state_proxy, query_str, {}, false, mapd_parameters_)
                        .first.plan_result;
         convert_explain(_return, ResultSet(query_ra), true);
