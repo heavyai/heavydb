@@ -365,11 +365,11 @@ RowToColumnLoader::~RowToColumnLoader() {
 }
 
 void RowToColumnLoader::createConnection(const ThriftClientConnection& con) {
-  client_.reset(new MapDClient(conn_details_.get_protocol()));
+  client_.reset(new OmniSciClient(conn_details_.get_protocol()));
 
   try {
     client_->connect(session_, user_name_, passwd_, db_name_);
-  } catch (TMapDException& e) {
+  } catch (TOmniSciException& e) {
     std::cerr << e.error_msg << std::endl;
   } catch (TException& te) {
     std::cerr << "Thrift error on connect: " << te.what() << std::endl;
@@ -379,7 +379,7 @@ void RowToColumnLoader::createConnection(const ThriftClientConnection& con) {
 void RowToColumnLoader::closeConnection() {
   try {
     client_->disconnect(session_);  // disconnect from omnisci_server
-  } catch (TMapDException& e) {
+  } catch (TOmniSciException& e) {
     std::cerr << e.error_msg << std::endl;
   } catch (TException& te) {
     std::cerr << "Thrift error on close: " << te.what() << std::endl;
@@ -417,7 +417,7 @@ void RowToColumnLoader::do_load(int& nrows,
         input_columns_.push_back(t);
       }
       return;
-    } catch (TMapDException& e) {
+    } catch (TOmniSciException& e) {
       std::cerr << "Exception trying to insert data " << e.error_msg << std::endl;
       wait_disconnet_reconnnect_retry(tries, copy_params);
     } catch (TException& te) {

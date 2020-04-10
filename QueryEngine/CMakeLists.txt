@@ -186,7 +186,7 @@ else()
 endif()
 
 add_custom_command(
-    DEPENDS RuntimeFunctions.cpp RuntimeFunctions.h ${CMAKE_SOURCE_DIR}/Utils/StringLike.cpp GroupByRuntime.cpp TopKRuntime.cpp
+    DEPENDS RuntimeFunctions.cpp JoinHashTableQueryRuntime.cpp RuntimeFunctions.h ${CMAKE_SOURCE_DIR}/Utils/StringLike.cpp GroupByRuntime.cpp TopKRuntime.cpp
     OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/RuntimeFunctions.bc
     COMMAND ${llvm_clangpp_cmd}
     ARGS -std=c++14 ${RT_OPT_FLAGS} -c -emit-llvm
@@ -263,7 +263,7 @@ add_custom_command(
     )
 
 add_custom_command(
-    DEPENDS cuda_mapd_rt.cu GpuInitGroups.cu GroupByRuntime.cpp TopKRuntime.cpp DateTruncate.cpp DateAdd.cpp ExtractFromTime.cpp ArrayOps.cpp StringFunctions.cpp RegexpFunctions.cpp ${CMAKE_SOURCE_DIR}/Utils/ChunkIter.cpp ${CMAKE_SOURCE_DIR}/Utils/StringLike.cpp ${CMAKE_SOURCE_DIR}/Utils/Regexp.cpp ${CMAKE_CURRENT_SOURCE_DIR}/ExtensionFunctions.hpp ${CMAKE_CURRENT_SOURCE_DIR}/ExtensionFunctionsGeo.hpp ${CMAKE_CURRENT_SOURCE_DIR}/TableFunctions/TableFunctions.hpp
+    DEPENDS cuda_mapd_rt.cu JoinHashTableQueryRuntime.cpp GpuInitGroups.cu GroupByRuntime.cpp TopKRuntime.cpp DateTruncate.cpp DateAdd.cpp ExtractFromTime.cpp ArrayOps.cpp StringFunctions.cpp RegexpFunctions.cpp ${CMAKE_SOURCE_DIR}/Utils/ChunkIter.cpp ${CMAKE_SOURCE_DIR}/Utils/StringLike.cpp ${CMAKE_SOURCE_DIR}/Utils/Regexp.cpp ${CMAKE_CURRENT_SOURCE_DIR}/ExtensionFunctions.hpp ${CMAKE_CURRENT_SOURCE_DIR}/ExtensionFunctionsGeo.hpp ${CMAKE_CURRENT_SOURCE_DIR}/TableFunctions/TableFunctions.hpp
     OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/cuda_mapd_rt.o
     COMMAND nvcc
     ARGS

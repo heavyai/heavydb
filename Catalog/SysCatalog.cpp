@@ -1217,7 +1217,13 @@ static bool parseUserMetadataFromSQLite(const std::unique_ptr<SqliteConnector>& 
   user.passwd_hash = conn->getData<string>(0, 2);
   user.isSuper = conn->getData<bool>(0, 3);
   user.defaultDbId = conn->isNull(0, 4) ? -1 : conn->getData<int>(0, 4);
-  user.can_login = conn->getData<bool>(0, 5);
+  if (conn->isNull(0, 5)) {
+    LOG(WARNING)
+        << "User property 'can_login' not set for user " << user.userName
+        << ". Disabling login ability. Set the users login ability with \"ALTER USER "
+        << user.userName << " (can_login='true');\".";
+  }
+  user.can_login = conn->isNull(0, 5) ? false : conn->getData<bool>(0, 5);
   return true;
 }
 

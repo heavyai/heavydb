@@ -32,7 +32,7 @@ using namespace ::apache::thrift::transport;
 #include "Shared/ThriftClient.h"
 #include "Shared/sqltypes.h"
 #include "TestHelpers.h"
-#include "gen-cpp/MapD.h"
+#include "gen-cpp/OmniSci.h"
 
 #include <algorithm>
 #include <ctime>
@@ -44,7 +44,7 @@ using namespace ::apache::thrift::transport;
 // #define RUN_ALL_TEST
 
 TSessionId g_session_id;
-std::shared_ptr<MapDClient> g_client;
+std::shared_ptr<OmniSciClient> g_client;
 
 template <typename RETURN_TYPE, typename SOURCE_TYPE>
 bool checked_get(size_t row,
@@ -1246,7 +1246,7 @@ int main(int argc, char* argv[]) {
     auto transport = connMgr->open_buffered_client_transport(host, port, cert);
     transport->open();
     auto protocol = std::make_shared<TBinaryProtocol>(transport);
-    g_client = std::make_shared<MapDClient>(protocol);
+    g_client = std::make_shared<OmniSciClient>(protocol);
 
     g_client->connect(g_session_id, user, pwd, db);
 

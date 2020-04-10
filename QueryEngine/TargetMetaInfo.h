@@ -43,4 +43,10 @@ class TargetMetaInfo {
   SQLTypeInfo physical_ti_;
 };
 
+inline std::ostream& operator<<(std::ostream& os, TargetMetaInfo const& tmi) {
+  return os << "TargetMetaInfo(resname_(" << tmi.get_resname() << ") ti_("
+            << tmi.get_type_info().to_string() << ") physical_ti_("
+            << tmi.get_physical_type_info().to_string() << "))";
+}
+
 #endif  // QUERYENGINE_TARGETMETAINFO_H

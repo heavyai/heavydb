@@ -15,12 +15,12 @@
  */
 package com.omnisci.jdbc;
 
-import com.mapd.thrift.server.MapD;
-import com.mapd.thrift.server.TColumnType;
-import com.mapd.thrift.server.TMapDException;
-import com.mapd.thrift.server.TStringRow;
-import com.mapd.thrift.server.TStringValue;
-import com.mapd.thrift.server.TTableDetails;
+import com.omnisci.thrift.server.OmniSci;
+import com.omnisci.thrift.server.TColumnType;
+import com.omnisci.thrift.server.TOmniSciException;
+import com.omnisci.thrift.server.TStringRow;
+import com.omnisci.thrift.server.TStringValue;
+import com.omnisci.thrift.server.TTableDetails;
 
 import org.apache.thrift.TException;
 import org.slf4j.Logger;
@@ -73,7 +73,7 @@ class OmniSciPreparedStatement implements PreparedStatement {
   private int fieldsOrder[];
   private int repCount;
   private String session;
-  private MapD.Client client;
+  private OmniSci.Client client;
   private OmniSciStatement stmt = null;
   private boolean isInsert = false;
   private boolean isNewBatch = true;
@@ -88,7 +88,7 @@ class OmniSciPreparedStatement implements PreparedStatement {
           Pattern.compile("^(?:\\s|--.*?\\R|/\\*[\\S\\s]*?\\*/|\\s*)*\\s*select[\\S\\s]*",
                   Pattern.CASE_INSENSITIVE | Pattern.MULTILINE);
 
-  OmniSciPreparedStatement(String sql, String session, MapD.Client client) {
+  OmniSciPreparedStatement(String sql, String session, OmniSci.Client client) {
     MAPDLOGGER.debug("Entered");
     currentSQL = sql;
     this.client = client;
@@ -951,7 +951,7 @@ class OmniSciPreparedStatement implements PreparedStatement {
       try {
         // send the batch
         client.load_table(session, insertTableName, rows);
-      } catch (TMapDException ex) {
+      } catch (TOmniSciException ex) {
         throw new SQLException("executeBatch failed: " + ex.getError_msg());
       } catch (TException ex) {
         throw new SQLException("executeBatch failed: " + ex.toString());

@@ -1824,6 +1824,7 @@ TargetValue ResultSet::makeTargetValue(const int8_t* ptr,
       const auto storage_idx = getStorageIndex(entry_buff_idx);
       CHECK_LT(storage_idx.first, col_buffers_.size());
       auto& frag_col_buffers = getColumnFrag(storage_idx.first, target_logical_idx, ival);
+      CHECK_LT(size_t(col_lazy_fetch.local_col_id), frag_col_buffers.size());
       ival = lazy_decode(
           col_lazy_fetch, frag_col_buffers[col_lazy_fetch.local_col_id], ival);
       if (chosen_type.is_fp()) {
@@ -2176,7 +2177,7 @@ bool ResultSetStorage::isEmptyEntryColumnar(const size_t entry_idx,
 namespace {
 
 template <typename T>
-inline size_t makeBinSearch(size_t l, size_t r, T&& is_empty_fn) {
+inline size_t make_bin_search(size_t l, size_t r, T&& is_empty_fn) {
   // Avoid search if there are no empty keys.
   if (!is_empty_fn(r - 1)) {
     return r;
@@ -2199,18 +2200,18 @@ inline size_t makeBinSearch(size_t l, size_t r, T&& is_empty_fn) {
 
 size_t ResultSetStorage::binSearchRowCount() const {
   CHECK(query_mem_desc_.getQueryDescriptionType() == QueryDescriptionType::Projection);
-  CHECK_EQ(query_mem_desc_.getEffectiveKeyWidth(), 8);
+  CHECK_EQ(query_mem_desc_.getEffectiveKeyWidth(), size_t(8));
 
   if (!query_mem_desc_.getEntryCount()) {
     return 0;
   }
 
   if (query_mem_desc_.didOutputColumnar()) {
-    return makeBinSearch(0, query_mem_desc_.getEntryCount(), [this](size_t idx) {
+    return make_bin_search(0, query_mem_desc_.getEntryCount(), [this](size_t idx) {
       return reinterpret_cast<const int64_t*>(buff_)[idx] == EMPTY_KEY_64;
     });
   } else {
-    return makeBinSearch(0, query_mem_desc_.getEntryCount(), [this](size_t idx) {
+    return make_bin_search(0, query_mem_desc_.getEntryCount(), [this](size_t idx) {
       const auto keys_ptr = row_ptr_rowwise(buff_, query_mem_desc_, idx);
       return *reinterpret_cast<const int64_t*>(keys_ptr) == EMPTY_KEY_64;
     });

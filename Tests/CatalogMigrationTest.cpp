@@ -23,7 +23,7 @@
 #include <boost/filesystem.hpp>
 
 #include "Catalog/Catalog.h"
-#include "MapDHandlerTestHelpers.h"
+#include "DBHandlerTestHelpers.h"
 #include "SqliteConnector/SqliteConnector.h"
 #include "TestHelpers.h"
 
@@ -163,17 +163,17 @@ TEST_F(FsiSchemaTest, FsiTablesAreDroppedWhenFsiIsDisabled) {
               tables.end());
 }
 
-class ForeignTablesTest : public MapDHandlerTestFixture {
+class ForeignTablesTest : public DBHandlerTestFixture {
  protected:
   void SetUp() override {
     g_enable_fsi = true;
-    MapDHandlerTestFixture::SetUp();
+    DBHandlerTestFixture::SetUp();
     dropTestTables();
   }
 
   void TearDown() override {
     dropTestTables();
-    MapDHandlerTestFixture::TearDown();
+    DBHandlerTestFixture::TearDown();
   }
 
  private:

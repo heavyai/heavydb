@@ -17,18 +17,14 @@
 /**
  * @file    file_delete.h
  * @author  michael@omnisci.com>
- * @brief   shared utility for mapd_server and string dictionary server to remove old
+ * @brief   shared utility for the db server and string dictionary server to remove old
  * files
  *
  */
 
-#ifndef FILE_DELETE_H
-#define FILE_DELETE_H
+#pragma once
 
 // this is to clean up the deleted files
-// this should be moved into the new stuff that kursat is working on when it is in place
 void file_delete(std::atomic<bool>& program_is_running,
                  const unsigned int wait_interval_seconds,
                  const std::string base_path);
-
-#endif  // FILE_DELETE_H

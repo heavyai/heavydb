@@ -52,8 +52,8 @@
 #include <thrift/transport/THttpClient.h>
 #include <thrift/transport/TSocket.h>
 #include "CopyParams.h"
-#include "gen-cpp/MapD.h"
-#include "gen-cpp/mapd_types.h"
+#include "gen-cpp/OmniSci.h"
+#include "gen-cpp/omnisci_types.h"
 
 using namespace ::apache::thrift;
 using namespace ::apache::thrift::protocol;
@@ -87,7 +87,7 @@ class RowToColumnLoader {
 
   TRowDescriptor row_desc_;
 
-  mapd::shared_ptr<MapDClient> client_;
+  mapd::shared_ptr<OmniSciClient> client_;
   TSessionId session_;
 
   void createConnection(const ThriftClientConnection& con);

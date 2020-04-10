@@ -250,6 +250,7 @@ class RexOperator : public RexScalar {
 };
 
 class RelAlgNode;
+using RelAlgInputs = std::vector<std::shared_ptr<const RelAlgNode>>;
 
 class ExecutionResult;
 
@@ -604,7 +605,11 @@ class RexAgg : public Rex {
 
 class RelAlgNode {
  public:
-  RelAlgNode() : id_(crt_id_++), context_data_(nullptr), is_nop_(false) {}
+  RelAlgNode(RelAlgInputs inputs = {})
+      : inputs_(std::move(inputs))
+      , id_(crt_id_++)
+      , context_data_(nullptr)
+      , is_nop_(false) {}
 
   virtual ~RelAlgNode() {}
 
@@ -638,12 +643,12 @@ class RelAlgNode {
   const size_t inputCount() const { return inputs_.size(); }
 
   const RelAlgNode* getInput(const size_t idx) const {
-    CHECK(idx < inputs_.size());
+    CHECK_LT(idx, inputs_.size());
     return inputs_[idx].get();
   }
 
   std::shared_ptr<const RelAlgNode> getAndOwnInput(const size_t idx) const {
-    CHECK(idx < inputs_.size());
+    CHECK_LT(idx, inputs_.size());
     return inputs_[idx];
   }
 
@@ -683,7 +688,7 @@ class RelAlgNode {
   static void resetRelAlgFirstId() noexcept;
 
  protected:
-  std::vector<std::shared_ptr<const RelAlgNode>> inputs_;
+  RelAlgInputs inputs_;
   const unsigned id_;
 
  private:
@@ -929,7 +934,7 @@ class RelAggregate : public RelAlgNode {
     for (const auto& agg_expr : agg_exprs_) {
       result += " " + agg_expr->toString();
     }
-    return result + " ])";
+    return result + " ]))";
   }
 
   std::shared_ptr<RelAlgNode> deepCopy() const override;
@@ -970,7 +975,7 @@ class RelJoin : public RelAlgNode {
         "(RelJoin<" + std::to_string(reinterpret_cast<uint64_t>(this)) + ">(";
     result += condition_ ? condition_->toString() : "null";
     result += " " + std::to_string(static_cast<int>(join_type_));
-    return result + ")";
+    return result + "))";
   }
 
   size_t size() const override { return inputs_[0]->size() + inputs_[1]->size(); }
@@ -1009,7 +1014,7 @@ class RelFilter : public RelAlgNode {
     std::string result =
         "(RelFilter<" + std::to_string(reinterpret_cast<uint64_t>(this)) + ">(";
     result += filter_ ? filter_->toString() : "null";
-    return result + ")";
+    return result + "))";
   }
 
   std::shared_ptr<RelAlgNode> deepCopy() const override;
@@ -1022,7 +1027,7 @@ class RelFilter : public RelAlgNode {
 class RelLeftDeepInnerJoin : public RelAlgNode {
  public:
   RelLeftDeepInnerJoin(const std::shared_ptr<RelFilter>& filter,
-                       std::vector<std::shared_ptr<const RelAlgNode>> inputs,
+                       RelAlgInputs inputs,
                        std::vector<std::shared_ptr<const RelJoin>>& original_joins);
 
   const RexScalar* getInnerCondition() const;
@@ -1129,7 +1134,7 @@ class RelCompound : public RelAlgNode, public ModifyManipulationTarget {
     for (const auto& scalar_source : scalar_sources_) {
       result += " " + scalar_source->toString();
     }
-    return result + " ])";
+    return result + " ]))";
   }
 
   std::shared_ptr<RelAlgNode> deepCopy() const override;
@@ -1191,7 +1196,7 @@ class RelSort : public RelAlgNode {
       result += sort_field.toString() + " ";
     }
     result += "]";
-    return result + ")";
+    return result + "))";
   }
 
   size_t size() const override { return inputs_[0]->size(); }
@@ -1434,7 +1439,7 @@ class RelTableFunction : public RelAlgNode {
         result += ", ";
       }
     }
-    result += "]";
+    result += "])";
 
     return result;
   }
@@ -1500,6 +1505,26 @@ class RelLogicalValues : public RelAlgNode {
  private:
   const std::vector<TargetMetaInfo> tuple_type_;
   const std::vector<RowValues> values_;
+};
+
+class RelLogicalUnion : public RelAlgNode {
+ public:
+  RelLogicalUnion(RelAlgInputs, bool is_all);
+  std::shared_ptr<RelAlgNode> deepCopy() const override;
+  size_t size() const override;
+  std::string toString() const override;
+
+  std::string getFieldName(const size_t i) const;
+
+  inline bool isAll() const { return is_all_; }
+  bool inputMetainfoTypesMatch() const;
+  RexScalar const* copyAndRedirectSource(RexScalar const*, size_t input_idx) const;
+
+  // Not unique_ptr to allow for an easy deepCopy() implementation.
+  mutable std::vector<std::shared_ptr<const RexScalar>> scalar_exprs_;
+
+ private:
+  bool const is_all_;
 };
 
 class QueryNotSupported : public std::runtime_error {
@@ -1588,8 +1613,8 @@ class RelAlgDagBuilder : public boost::noncopyable {
   const RenderInfo* render_info_;
 };
 
-std::string tree_string(const RelAlgNode*, const size_t indent = 0);
-
 using RANodeOutput = std::vector<RexInput>;
 
 RANodeOutput get_node_output(const RelAlgNode* ra_node);
+
+std::string tree_string(const RelAlgNode*, const size_t depth = 0);

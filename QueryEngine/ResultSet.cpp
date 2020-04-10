@@ -264,6 +264,7 @@ size_t ResultSet::getCurrentRowBufferIndex() const {
   return crt_row_buff_idx_ - 1;
 }
 
+// Note: that.appended_storage_ does not get appended to this.
 void ResultSet::append(ResultSet& that) {
   CHECK_EQ(-1, cached_row_count_);
   if (!that.storage_) {
@@ -880,7 +881,7 @@ int64_t ResultSetStorage::mappedPtr(const int64_t remote_ptr) const {
   return it->second;
 }
 
-size_t ResultSet::getLimit() {
+size_t ResultSet::getLimit() const {
   return keep_first_;
 }
 

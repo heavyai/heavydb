@@ -61,4 +61,4 @@ struct OptionsContainer {
     return buffer.GetString();
   }
 };
-}
+}  // namespace foreign_storage

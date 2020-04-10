@@ -201,7 +201,7 @@ void renameForDelete(const std::string directoryName) {
         }
       });
       // let it run free so we can return
-      // if it fails the file_delete_thread in MapDHandler will clean up
+      // if it fails the file_delete_thread in DBHandler will clean up
       th.detach();
 
       return;

@@ -1426,7 +1426,7 @@ class RestoreTableStmt : public DumpRestoreTableStmtBase {
 class CopyTableStmt : public DDLStmt {
  public:
   CopyTableStmt(std::string* t, std::string* f, std::list<NameValueAssign*>* o)
-      : table(t), file_pattern(f) {
+      : table(t), file_pattern(f), success(true) {
     if (o) {
       for (const auto e : *o) {
         options.emplace_back(e);
@@ -1448,6 +1448,8 @@ class CopyTableStmt : public DDLStmt {
     return *table;
   }
 
+  bool get_success() const { return success; }
+
   bool was_geo_copy_from() const { return _was_geo_copy_from; }
 
   void get_geo_copy_from_payload(std::string& geo_copy_from_table,
@@ -1464,6 +1466,7 @@ class CopyTableStmt : public DDLStmt {
  private:
   std::unique_ptr<std::string> table;
   std::unique_ptr<std::string> file_pattern;
+  bool success;
   std::list<std::unique_ptr<NameValueAssign>> options;
 
   bool _was_geo_copy_from = false;

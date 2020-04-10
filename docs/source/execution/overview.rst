@@ -7,13 +7,13 @@ The OmniSciDB *Query Engine* refers to the system components which manage query 
     :align: center
 
     @startuml
-    Client -> MapDHandler: Send SQL String
+    Client -> DBHandler: Send SQL String
 
-    MapDHandler -> Calcite: Parse SQL String
+    DBHandler -> Calcite: Parse SQL String
 
-    Calcite -> MapDHandler: Return Optimized RA
+    Calcite -> DBHandler: Return Optimized RA
 
-    MapDHandler -> RelAlgExecutor: Execute RA Query
+    DBHandler -> RelAlgExecutor: Execute RA Query
 
     group RelAlgExecutor
         loop until all query steps are processed
@@ -21,16 +21,16 @@ The OmniSciDB *Query Engine* refers to the system components which manage query 
             Executor -> RelAlgExecutor: Return Result Set
     end
 
-    RelAlgExecutor -> MapDHandler: Return Result Set
+    RelAlgExecutor -> DBHandler: Return Result Set
 
-    MapDHandler -> Client: Return Serialized Results
+    DBHandler -> Client: Return Serialized Results
     
     @enduml
 
-Request Handler (MapDHandler)
+Request Handler (DBHandler)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-The ``MapDHandler`` class manages client interactions with the server. Clients initiate a SQL query by passing the query string and various parameters to the ``sql_execute`` endpoint. The handler manages the ``RelAlgExecutor`` for the duration of the query, passes the SQL string to Calcite for parsing and optimization, and handles serializing and returning results to the client.
+The ``DBHandler`` class manages client interactions with the server. Clients initiate a SQL query by passing the query string and various parameters to the ``sql_execute`` endpoint. The handler manages the ``RelAlgExecutor`` for the duration of the query, passes the SQL string to Calcite for parsing and optimization, and handles serializing and returning results to the client.
 
 Apache Calcite 
 ~~~~~~~~~~~~~~~

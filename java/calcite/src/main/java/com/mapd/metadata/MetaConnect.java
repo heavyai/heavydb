@@ -25,13 +25,13 @@ import com.mapd.calcite.parser.MapDTable;
 import com.mapd.calcite.parser.MapDUser;
 import com.mapd.calcite.parser.MapDView;
 import com.mapd.common.SockTransportProperties;
-import com.mapd.thrift.server.MapD;
-import com.mapd.thrift.server.TColumnType;
-import com.mapd.thrift.server.TDatumType;
-import com.mapd.thrift.server.TEncodingType;
-import com.mapd.thrift.server.TMapDException;
-import com.mapd.thrift.server.TTableDetails;
-import com.mapd.thrift.server.TTypeInfo;
+import com.omnisci.thrift.server.OmniSci;
+import com.omnisci.thrift.server.TColumnType;
+import com.omnisci.thrift.server.TDatumType;
+import com.omnisci.thrift.server.TEncodingType;
+import com.omnisci.thrift.server.TOmniSciException;
+import com.omnisci.thrift.server.TTableDetails;
+import com.omnisci.thrift.server.TTypeInfo;
 
 import org.apache.calcite.schema.Table;
 import org.apache.thrift.TException;
@@ -195,7 +195,7 @@ public class MetaConnect {
       if (!transport.isOpen()) transport.open();
       protocol = new TBinaryProtocol(transport);
 
-      MapD.Client client = new MapD.Client(protocol);
+      OmniSci.Client client = new OmniSci.Client(protocol);
 
       List<String> tablesList = client.get_tables(currentUser.getSession());
       Set<String> ts = new HashSet<String>(tablesList.size());
@@ -211,7 +211,7 @@ public class MetaConnect {
       MAPDLOGGER.error("TTransportException on port [" + mapdPort + "]");
       MAPDLOGGER.error(ex.toString());
       throw new RuntimeException(ex.toString());
-    } catch (TMapDException ex) {
+    } catch (TOmniSciException ex) {
       MAPDLOGGER.error(ex.toString());
       throw new RuntimeException(ex.toString());
     } catch (TException ex) {
@@ -299,7 +299,7 @@ public class MetaConnect {
       if (!transport.isOpen()) transport.open();
       protocol = new TBinaryProtocol(transport);
 
-      MapD.Client client = new MapD.Client(protocol);
+      OmniSci.Client client = new OmniSci.Client(protocol);
 
       TTableDetails td =
               client.get_internal_table_details(currentUser.getSession(), tableName);
@@ -311,7 +311,7 @@ public class MetaConnect {
     } catch (TTransportException ex) {
       MAPDLOGGER.error(ex.toString());
       throw new RuntimeException(ex.toString());
-    } catch (TMapDException ex) {
+    } catch (TOmniSciException ex) {
       MAPDLOGGER.error(ex.toString());
       throw new RuntimeException(ex.toString());
     } catch (TException ex) {
@@ -626,7 +626,7 @@ public class MetaConnect {
         if (!transport.isOpen()) transport.open();
         protocol = new TBinaryProtocol(transport);
 
-        MapD.Client client = new MapD.Client(protocol);
+        OmniSci.Client client = new OmniSci.Client(protocol);
 
         TTableDetails td = client.get_table_details(currentUser.getSession(), tableName);
 
@@ -637,7 +637,7 @@ public class MetaConnect {
       } catch (TTransportException ex) {
         MAPDLOGGER.error(ex.toString());
         throw new RuntimeException(ex.toString());
-      } catch (TMapDException ex) {
+      } catch (TOmniSciException ex) {
         MAPDLOGGER.error(ex.toString());
         throw new RuntimeException(ex.toString());
       } catch (TException ex) {

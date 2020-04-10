@@ -22,7 +22,7 @@
 #include "LeafHostInfo.h"
 #include "QueryEngine/CompilationOptions.h"
 #include "QueryEngine/TargetMetaInfo.h"
-#include "gen-cpp/MapD.h"
+#include "gen-cpp/OmniSci.h"
 
 #include "Shared/Logger.h"
 

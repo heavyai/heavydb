@@ -15,7 +15,7 @@
  */
 package com.omnisci.jdbc;
 
-import com.mapd.thrift.server.TDatumType;
+import com.omnisci.thrift.server.TDatumType;
 
 import java.sql.DatabaseMetaData;
 

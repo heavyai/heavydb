@@ -15,18 +15,18 @@
  */
 package com.mapd.tests;
 
-import com.mapd.thrift.server.MapD;
-import com.mapd.thrift.server.TClusterHardwareInfo;
-import com.mapd.thrift.server.TColumnType;
-import com.mapd.thrift.server.TCopyParams;
-import com.mapd.thrift.server.TCreateParams;
-import com.mapd.thrift.server.TDBObject;
-import com.mapd.thrift.server.TDBObjectType;
-import com.mapd.thrift.server.TDashboard;
-import com.mapd.thrift.server.TMapDException;
-import com.mapd.thrift.server.TQueryResult;
-import com.mapd.thrift.server.TServerStatus;
-import com.mapd.thrift.server.TTableDetails;
+import com.omnisci.thrift.server.OmniSci;
+import com.omnisci.thrift.server.TClusterHardwareInfo;
+import com.omnisci.thrift.server.TColumnType;
+import com.omnisci.thrift.server.TCopyParams;
+import com.omnisci.thrift.server.TCreateParams;
+import com.omnisci.thrift.server.TDBObject;
+import com.omnisci.thrift.server.TDBObjectType;
+import com.omnisci.thrift.server.TDashboard;
+import com.omnisci.thrift.server.TOmniSciException;
+import com.omnisci.thrift.server.TQueryResult;
+import com.omnisci.thrift.server.TServerStatus;
+import com.omnisci.thrift.server.TTableDetails;
 
 import org.apache.thrift.TException;
 import org.apache.thrift.protocol.TBinaryProtocol;
@@ -38,18 +38,18 @@ import java.util.HashSet;
 import java.util.List;
 
 public class MapdTestClient {
-  MapD.Client client;
+  OmniSci.Client client;
   String sessionId;
 
-  public TServerStatus get_server_status() throws TMapDException, TException {
+  public TServerStatus get_server_status() throws TOmniSciException, TException {
     return client.get_server_status(sessionId);
   }
 
-  public List<TServerStatus> get_status() throws TMapDException, TException {
+  public List<TServerStatus> get_status() throws TOmniSciException, TException {
     return client.get_status(sessionId);
   }
 
-  public TClusterHardwareInfo get_hardware_info() throws TMapDException, TException {
+  public TClusterHardwareInfo get_hardware_info() throws TOmniSciException, TException {
     return client.get_hardware_info(sessionId);
   }
 
@@ -138,7 +138,7 @@ public class MapdTestClient {
     TSocket transport = new TSocket(host, port);
     transport.open();
     TProtocol protocol = new TBinaryProtocol(transport);
-    MapD.Client client = new MapD.Client(protocol);
+    OmniSci.Client client = new OmniSci.Client(protocol);
     MapdTestClient session = new MapdTestClient();
     session.client = client;
     session.sessionId = client.connect(user, password, db);

@@ -2997,6 +2997,9 @@ void DropTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   auto table_data_write_lock =
       lockmgr::TableDataLockMgr::getWriteLockForTable(catalog, *table);
   catalog.dropTable(td);
+
+  // invalidate cached hashtable
+  DeleteTriggeredCacheInvalidator::invalidateCaches();
 }
 
 void TruncateTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
@@ -3034,6 +3037,9 @@ void TruncateTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   auto table_data_write_lock =
       lockmgr::TableDataLockMgr::getWriteLockForTable(catalog, *table);
   catalog.truncateTable(td);
+
+  // invalidate cached hashtable
+  DeleteTriggeredCacheInvalidator::invalidateCaches();
 }
 
 void check_alter_table_privilege(const Catalog_Namespace::SessionInfo& session,
@@ -3167,7 +3173,8 @@ void AddColumnStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   check_executable(session, td);
 
   CHECK(td->fragmenter);
-  if (dynamic_cast<Fragmenter_Namespace::SortedOrderFragmenter*>(td->fragmenter)) {
+  if (std::dynamic_pointer_cast<Fragmenter_Namespace::SortedOrderFragmenter>(
+          td->fragmenter)) {
     throw std::runtime_error(
         "Adding columns to a table is not supported when using the \"sort_column\" "
         "option.");
@@ -3372,6 +3379,9 @@ void DropColumnStmt::execute(const Catalog_Namespace::SessionInfo& session) {
     catalog.getSqliteConnector().query("ROLLBACK TRANSACTION");
     throw;
   }
+
+  // invalidate cached hashtable
+  DeleteTriggeredCacheInvalidator::invalidateCaches();
 }
 
 void RenameColumnStmt::execute(const Catalog_Namespace::SessionInfo& session) {
@@ -3757,6 +3767,7 @@ void CopyTableStmt::execute(const Catalog_Namespace::SessionInfo& session,
                       "processing ";
         // if we have crossed the truncated load threshold
         load_truncated = true;
+        success = false;
       }
       if (!load_truncated) {
         tr = std::string("Loaded: " + std::to_string(rows_completed) +

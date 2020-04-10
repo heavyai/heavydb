@@ -16,9 +16,9 @@
 
 import static java.lang.System.out;
 
-import com.mapd.thrift.server.MapD;
-import com.mapd.thrift.server.TDatumType;
-import com.mapd.thrift.server.TQueryResult;
+import com.omnisci.thrift.server.MapD;
+import com.omnisci.thrift.server.TDatumType;
+import com.omnisci.thrift.server.TQueryResult;
 
 import org.apache.thrift.TException;
 import org.apache.thrift.protocol.TBinaryProtocol;

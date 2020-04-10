@@ -169,4 +169,5 @@ class RowSetMemoryOwner : boost::noncopyable {
   mutable std::mutex state_mutex_;
 
   friend class ResultSet;
+  friend class QueryExecutionContext;
 };

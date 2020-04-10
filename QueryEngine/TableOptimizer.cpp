@@ -235,7 +235,7 @@ void TableOptimizer::recomputeMetadata() const {
       executor_->executeWorkUnitPerFragment(
           ra_exe_unit, table_infos[0], co, eo, cat_, compute_deleted_callback);
 
-      auto* fragmenter = td->fragmenter;
+      auto* fragmenter = td->fragmenter.get();
       CHECK(fragmenter);
       fragmenter->updateChunkStats(cd, stats_map);
       fragmenter->setNumRows(total_num_tuples);
@@ -327,7 +327,7 @@ void TableOptimizer::recomputeMetadata() const {
       executor_->executeWorkUnitPerFragment(
           ra_exe_unit, table_infos[0], co, eo, cat_, compute_metadata_callback);
 
-      auto* fragmenter = td->fragmenter;
+      auto* fragmenter = td->fragmenter.get();
       CHECK(fragmenter);
       fragmenter->updateChunkStats(cd, stats_map);
     }

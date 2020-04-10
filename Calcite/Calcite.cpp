@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 MapD Technologies, Inc.
+ * Copyright 2020 OmniSci, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,7 +26,7 @@
 #include "Shared/Asio.h"
 #include "Shared/ConfigResolve.h"
 #include "Shared/Logger.h"
-#include "Shared/MapDParameters.h"
+#include "Shared/SystemParameters.h"
 #include "Shared/ThriftClient.h"
 #include "Shared/fixautotools.h"
 #include "Shared/mapd_shared_ptr.h"
@@ -71,7 +71,7 @@ boost::process::child launch_calcite(JAVA_PATHNAME&& path,
                                std::forward<REMAINING_ARGS>(standard_args)...);
 }
 
-void start_calcite_server_as_daemon(const int mapd_port,
+void start_calcite_server_as_daemon(const int db_port,
                                     const int port,
                                     const std::string& data_dir,
                                     const size_t calcite_max_mem,
@@ -80,7 +80,7 @@ void start_calcite_server_as_daemon(const int mapd_port,
                                     const std::string& ssl_keystore,
                                     const std::string& ssl_keystore_password_X,
                                     const std::string& ssl_key_file,
-                                    const std::string& mapd_config_file,
+                                    const std::string& db_config_file,
                                     const std::string& udf_filename) {
   // TSan detects a data race inside std::locale during initdb if this
   // call to boost::process::search_path() is inside the Calcite thread.
@@ -115,14 +115,14 @@ void start_calcite_server_as_daemon(const int mapd_port,
   std::string dataD = data_dir;
   std::string localPortP = "-p";
   std::string localPortD = std::to_string(port);
-  std::string mapdPortP = "-m";
-  std::string mapdPortD = std::to_string(mapd_port);
-  std::string mapdTrustStoreP = "-T";
-  std::string mapdTrustPasswdP = "-P";
-  std::string mapdConfigFileP = "-c";
-  std::string mapdKeyStoreP = "-Y";
-  std::string mapdKeyStorePasswdP = "-Z";
-  std::string mapdLogDirectory = "-DMAPD_LOG_DIR=" + data_dir;
+  std::string dbPortP = "-m";
+  std::string dbPortD = std::to_string(db_port);
+  std::string dbTrustStoreP = "-T";
+  std::string dbTrustPasswdP = "-P";
+  std::string dbConfigFileP = "-c";
+  std::string dbKeyStoreP = "-Y";
+  std::string dbKeyStorePasswdP = "-Z";
+  std::string dbLogDirectory = "-DMAPD_LOG_DIR=" + data_dir;
   std::string userDefinedFunctions = "";
 
   if (!udf_filename.empty()) {
@@ -131,9 +131,8 @@ void start_calcite_server_as_daemon(const int mapd_port,
 
   // If a config file hasn't been supplied then put the password in the params
   // otherwise send an empty string and Calcite should get it from the config file.
-  std::string key_store_password =
-      (mapd_config_file == "") ? ssl_keystore_password_X : "";
-  std::string trust_store_password = (mapd_config_file == "") ? ssl_trust_password_X : "";
+  std::string key_store_password = (db_config_file == "") ? ssl_keystore_password_X : "";
+  std::string trust_store_password = (db_config_file == "") ? ssl_trust_password_X : "";
 
   std::thread t([=] {
     boost::process::child calcite_thread;
@@ -143,7 +142,7 @@ void start_calcite_server_as_daemon(const int mapd_port,
                                       xDebug,
                                       remoteDebug,
                                       xmxP,
-                                      mapdLogDirectory,
+                                      dbLogDirectory,
                                       jarP,
                                       jarD,
                                       extensionsP,
@@ -152,18 +151,18 @@ void start_calcite_server_as_daemon(const int mapd_port,
                                       dataD,
                                       localPortP,
                                       localPortD,
-                                      mapdPortP,
-                                      mapdPortD,
-                                      mapdTrustStoreP,
+                                      dbPortP,
+                                      dbPortD,
+                                      dbTrustStoreP,
                                       ssl_trust_store,
-                                      mapdTrustPasswdP,
+                                      dbTrustPasswdP,
                                       trust_store_password,
-                                      mapdKeyStoreP,
+                                      dbKeyStoreP,
                                       ssl_keystore,
-                                      mapdKeyStorePasswdP,
+                                      dbKeyStorePasswdP,
                                       key_store_password,
-                                      mapdConfigFileP,
-                                      mapd_config_file,
+                                      dbConfigFileP,
+                                      db_config_file,
                                       userDefinedFunctions);
     } catch (const std::exception& e) {
       LOG(ERROR) << "Calcite failed to start: " << e.what();
@@ -206,7 +205,7 @@ Calcite::getClient(int port) {
   return std::make_pair(client, transport);
 }
 
-void Calcite::runServer(const int mapd_port,
+void Calcite::runServer(const int db_port,
                         const int port,
                         const std::string& data_dir,
                         const size_t calcite_max_mem,
@@ -233,7 +232,7 @@ void Calcite::runServer(const int mapd_port,
   }
 
   // start the calcite server as a seperate process
-  start_calcite_server_as_daemon(mapd_port,
+  start_calcite_server_as_daemon(db_port,
                                  port,
                                  data_dir,
                                  calcite_max_mem,
@@ -242,7 +241,7 @@ void Calcite::runServer(const int mapd_port,
                                  ssl_keystore_,
                                  ssl_keystore_password_,
                                  ssl_key_file_,
-                                 mapd_config_file_,
+                                 db_config_file_,
                                  udf_filename);
 
   // check for new server for 15 seconds max
@@ -286,17 +285,17 @@ int Calcite::ping(int retry_num, int max_retry) {
   }
 }
 
-Calcite::Calcite(const int mapd_port,
+Calcite::Calcite(const int db_port,
                  const int calcite_port,
                  const std::string& data_dir,
                  const size_t calcite_max_mem,
                  const size_t service_timeout,
                  const std::string& udf_filename)
     : server_available_(false), service_timeout_(service_timeout) {
-  init(mapd_port, calcite_port, data_dir, calcite_max_mem, udf_filename);
+  init(db_port, calcite_port, data_dir, calcite_max_mem, udf_filename);
 }
 
-void Calcite::init(const int mapd_port,
+void Calcite::init(const int db_port,
                    const int calcite_port,
                    const std::string& data_dir,
                    const size_t calcite_max_mem,
@@ -313,26 +312,26 @@ void Calcite::init(const int mapd_port,
     server_available_ = false;
   } else {
     remote_calcite_port_ = calcite_port;
-    runServer(mapd_port, calcite_port, data_dir, calcite_max_mem, udf_filename);
+    runServer(db_port, calcite_port, data_dir, calcite_max_mem, udf_filename);
     server_available_ = true;
   }
 }
 
-Calcite::Calcite(const MapDParameters& mapd_parameter,
+Calcite::Calcite(const SystemParameters& system_parameters,
                  const std::string& data_dir,
                  const std::string& udf_filename)
-    : service_timeout_(mapd_parameter.calcite_timeout)
-    , ssl_trust_store_(mapd_parameter.ssl_trust_store)
-    , ssl_trust_password_(mapd_parameter.ssl_trust_password)
-    , ssl_key_file_(mapd_parameter.ssl_key_file)
-    , ssl_keystore_(mapd_parameter.ssl_keystore)
-    , ssl_keystore_password_(mapd_parameter.ssl_keystore_password)
-    , ssl_ca_file_(mapd_parameter.ssl_trust_ca_file)
-    , mapd_config_file_(mapd_parameter.config_file) {
-  init(mapd_parameter.omnisci_server_port,
-       mapd_parameter.calcite_port,
+    : service_timeout_(system_parameters.calcite_timeout)
+    , ssl_trust_store_(system_parameters.ssl_trust_store)
+    , ssl_trust_password_(system_parameters.ssl_trust_password)
+    , ssl_key_file_(system_parameters.ssl_key_file)
+    , ssl_keystore_(system_parameters.ssl_keystore)
+    , ssl_keystore_password_(system_parameters.ssl_keystore_password)
+    , ssl_ca_file_(system_parameters.ssl_trust_ca_file)
+    , db_config_file_(system_parameters.config_file) {
+  init(system_parameters.omnisci_server_port,
+       system_parameters.calcite_port,
        data_dir,
-       mapd_parameter.calcite_max_mem,
+       system_parameters.calcite_max_mem,
        udf_filename);
 }
 

@@ -72,7 +72,7 @@ void reset() {
       nshard > 1 ? ", SHARD_COUNT = " + std::to_string(nshard) : "";
   // create table s which has a encoded text column to be referenced by table t
   EXPECT_NO_THROW(run_ddl_statement("CREATE TABLE s(i int, j int, s text" +
-                                    phrase_shard_key + ") WITH (FRAGMENT_SIZE=10" +
+                                    phrase_shard_key + ") WITH (FRAGMENT_SIZE=2" +
                                     phrase_shard_count + ");"));
   // create table t which has 3 encoded text columns:
   //	 column s: to be domestically referenced by column t.t
@@ -82,7 +82,7 @@ void reset() {
       "CREATE TABLE t(i int, j int, s text, d text, f text" + phrase_shard_key +
       ", SHARED DICTIONARY (d) REFERENCES t(s)"    // domestic ref
       + ", SHARED DICTIONARY (f) REFERENCES s(s)"  // foreign ref
-      + ") WITH (FRAGMENT_SIZE=10" + phrase_shard_count + ");"));
+      + ") WITH (FRAGMENT_SIZE=2" + phrase_shard_count + ");"));
   // insert nrow rows to tables s and t
   TestHelpers::ValuesGenerator gen_s("s");
   TestHelpers::ValuesGenerator gen_t("t");
@@ -98,7 +98,7 @@ void reset() {
 }
 }  // namespace
 
-#define NROWS 100
+#define NROWS 20
 template <int NSHARDS, int NR = NROWS>
 class DumpRestoreTest : public ::testing::Test {
   void SetUp() override {

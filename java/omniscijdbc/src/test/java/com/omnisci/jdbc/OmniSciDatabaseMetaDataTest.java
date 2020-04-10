@@ -483,9 +483,16 @@ public class OmniSciDatabaseMetaDataTest {
    * @Test public void getDatabaseProductName() { }
    *
    * @Test public void getDriverName() { }
-   *
-   * @Test public void getDriverVersion() { }
-   *
+   */
+  @Test
+  public void getDriverVersion() throws SQLException {
+    int max = m_super_conn.getMetaData().getDatabaseMajorVersion();
+    assertNotEquals(0, max);
+    int min = m_super_conn.getMetaData().getDatabaseMinorVersion();
+    assertNotEquals(0, max);
+  }
+
+  /*
    * @Test public void getDriverMajorVersion() { }
    *
    * @Test public void getDriverMinorVersion() { }

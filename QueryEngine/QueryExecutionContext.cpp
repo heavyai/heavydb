@@ -357,11 +357,15 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(
                                                     device_id);
       } else {
         if (use_speculative_top_n(ra_exe_unit, query_mem_desc_)) {
-          inplace_sort_gpu(ra_exe_unit.sort_info.order_entries,
-                           query_mem_desc_,
-                           gpu_group_by_buffers,
-                           data_mgr,
-                           device_id);
+          try {
+            inplace_sort_gpu(ra_exe_unit.sort_info.order_entries,
+                             query_mem_desc_,
+                             gpu_group_by_buffers,
+                             data_mgr,
+                             device_id);
+          } catch (const std::bad_alloc&) {
+            throw SpeculativeTopNFailed("Failed during in-place GPU sort.");
+          }
         }
         if (query_mem_desc_.getQueryDescriptionType() ==
             QueryDescriptionType::Projection) {

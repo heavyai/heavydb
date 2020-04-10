@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 MapD Technologies, Inc.
+ * Copyright 2020 OmniSci, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,15 +14,14 @@
  * limitations under the License.
  */
 
-#ifndef PARSER_RESERVEDKEYWORDS_H
-#define PARSER_RESERVEDKEYWORDS_H
+#pragma once
 
 #include <set>
 #include <string>
 
 static std::set<std::string> reserved_keywords{
 
-    // MapD reserved keywords
+    // OmniSci reserved keywords
 
     "ACCESS",
     "ADD",  // legacy
@@ -429,5 +428,3 @@ static std::set<std::string> reserved_keywords{
     "WITHOUT",
     "YEAR",
 };
-
-#endif  // PARSER_RESERVEDKEYWORDS_H

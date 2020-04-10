@@ -130,7 +130,7 @@ class QueryExecutionContext : boost::noncopyable {
   std::unique_ptr<CudaAllocator> gpu_allocator_;
 
   // TODO(adb): convert to shared_ptr
-  const QueryMemoryDescriptor query_mem_desc_;
+  QueryMemoryDescriptor query_mem_desc_;
   const Executor* executor_;
   const ExecutorDeviceType device_type_;
   const ExecutorDispatchMode dispatch_mode_;

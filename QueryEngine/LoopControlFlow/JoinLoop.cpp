@@ -102,7 +102,8 @@ llvm::BasicBlock* JoinLoop::codegen(
         const auto have_more_inner_rows = builder.CreateICmpSLT(
             iteration_counter,
             join_loop.kind_ == JoinLoopKind::UpperBound ? iteration_domain.upper_bound
-                                                        : iteration_domain.element_count);
+                                                        : iteration_domain.element_count,
+            "have_more_inner_rows");
         const auto iter_advance_bb = llvm::BasicBlock::Create(
             context, "ub_iter_advance_" + join_loop.name_, parent_func);
         llvm::BasicBlock* row_not_deleted_bb{nullptr};
@@ -136,7 +137,8 @@ llvm::BasicBlock* JoinLoop::codegen(
               builder.CreateICmpSGT(iteration_counter_next_val,
                                     join_loop.kind_ == JoinLoopKind::UpperBound
                                         ? iteration_domain.upper_bound
-                                        : iteration_domain.element_count);
+                                        : iteration_domain.element_count,
+                                    "no_more_inner_rows");
           builder.CreateCondBr(no_more_inner_rows, prev_exit_bb, head_bb);
         } else {
           builder.CreateBr(head_bb);

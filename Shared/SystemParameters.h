@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 MapD Technologies, Inc.
+ * Copyright 2020 OmniSci, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,12 +21,11 @@
  * Created on January 19, 2017, 4:31 PM
  */
 
-#ifndef MAPDPARAMETERS_H
-#define MAPDPARAMETERS_H
+#pragma once
 
 #include <string>
 
-struct MapDParameters {
+struct SystemParameters {
   size_t cuda_block_size = 0;       // block size for the kernel execution
   size_t cuda_grid_size = 0;        // grid size for the kernel execution
   size_t calcite_max_mem = 1024;    // max memory for calcite jvm in MB
@@ -54,7 +53,5 @@ struct MapDParameters {
       true;  // allow calcite to optimize the relalgebra for a view query
   size_t calcite_timeout =
       5000;  // calcite send/receive timeout (connect timeout hard coded to 2s)
-  MapDParameters() : cuda_block_size(0), cuda_grid_size(0), calcite_max_mem(1024) {}
+  SystemParameters() : cuda_block_size(0), cuda_grid_size(0), calcite_max_mem(1024) {}
 };
-
-#endif /* MAPDPARAMETERS_H */

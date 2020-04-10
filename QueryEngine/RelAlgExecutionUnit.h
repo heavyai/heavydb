@@ -33,6 +33,7 @@
 
 #include <list>
 #include <memory>
+#include <optional>
 #include <vector>
 
 enum class SortAlgorithm { Default, SpeculativeTopN, StreamingTopN };
@@ -60,7 +61,7 @@ struct JoinCondition {
 using JoinQualsPerNestingLevel = std::vector<JoinCondition>;
 
 struct RelAlgExecutionUnit {
-  const std::vector<InputDescriptor> input_descs;
+  std::vector<InputDescriptor> input_descs;
   std::list<std::shared_ptr<const InputColDescriptor>> input_col_descs;
   std::list<std::shared_ptr<Analyzer::Expr>> simple_quals;
   std::list<std::shared_ptr<Analyzer::Expr>> quals;
@@ -72,6 +73,8 @@ struct RelAlgExecutionUnit {
   size_t scan_limit;
   QueryFeatureDescriptor query_features;
   bool use_bump_allocator{false};
+  // empty if not a UNION, true if UNION ALL, false if regular UNION
+  const std::optional<bool> union_all;
   std::shared_ptr<const query_state::QueryState> query_state;
 };
 

@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 MapD Technologies, Inc.
+ * Copyright 2020 OmniSci, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,6 +24,7 @@
 #include "../QueryEngine/ResultSetReductionJIT.h"
 #include "../QueryRunner/QueryRunner.h"
 #include "../Shared/ConfigResolve.h"
+#include "../Shared/StringTransform.h"
 #include "../Shared/TimeGM.h"
 #include "../Shared/scope.h"
 #include "../SqliteConnector/SqliteConnector.h"
@@ -59,6 +60,7 @@ extern double g_gpu_mem_limit_percent;
 extern bool g_enable_window_functions;
 extern bool g_enable_bump_allocator;
 extern bool g_enable_interop;
+extern bool g_enable_union;
 
 extern size_t g_leaf_count;
 extern bool g_cluster;
@@ -201,8 +203,8 @@ class SQLiteComparator {
   void query(const std::string& query_string) { connector_.query(query_string); }
 
   void compare(const std::string& query_string, const ExecutorDeviceType device_type) {
-    const auto mapd_results = run_multiple_agg(query_string, device_type);
-    compare_impl(mapd_results.get(), query_string, device_type, false);
+    const auto omnisci_results = run_multiple_agg(query_string, device_type);
+    compare_impl(omnisci_results.get(), query_string, device_type, false);
   }
 
   void compare_arrow_output(const std::string& query_string,
@@ -210,27 +212,28 @@ class SQLiteComparator {
                             const ExecutorDeviceType device_type) {
     const auto results =
         QR::get()->runSQL(query_string, device_type, g_hoist_literals, true);
-    const auto arrow_mapd_results = result_set_arrow_loopback(nullptr, results);
-    compare_impl(arrow_mapd_results.get(), sqlite_query_string, device_type, false, true);
+    const auto arrow_omnisci_results = result_set_arrow_loopback(nullptr, results);
+    compare_impl(
+        arrow_omnisci_results.get(), sqlite_query_string, device_type, false, true);
   }
 
   void compare(const std::string& query_string,
                const std::string& sqlite_query_string,
                const ExecutorDeviceType device_type) {
-    const auto mapd_results = run_multiple_agg(query_string, device_type);
-    compare_impl(mapd_results.get(), sqlite_query_string, device_type, false);
+    const auto omnisci_results = run_multiple_agg(query_string, device_type);
+    compare_impl(omnisci_results.get(), sqlite_query_string, device_type, false);
   }
 
   // added to deal with time shift for now testing
   void compare_timstamp_approx(const std::string& query_string,
                                const ExecutorDeviceType device_type) {
-    const auto mapd_results = run_multiple_agg(query_string, device_type);
-    compare_impl(mapd_results.get(), query_string, device_type, true);
+    const auto omnisci_results = run_multiple_agg(query_string, device_type);
+    compare_impl(omnisci_results.get(), query_string, device_type, true);
   }
 
  private:
-  template <class MapDResults>
-  void compare_impl(const MapDResults* mapd_results,
+  template <class RESULT_SET>
+  void compare_impl(const RESULT_SET* omnisci_results,
                     const std::string& sqlite_query_string,
                     const ExecutorDeviceType device_type,
                     const bool timestamp_approx,
@@ -239,106 +242,104 @@ class SQLiteComparator {
                             ? "CPU: " + sqlite_query_string
                             : "GPU: " + sqlite_query_string;
     connector_.query(sqlite_query_string);
-    ASSERT_EQ(connector_.getNumRows(), mapd_results->rowCount()) << errmsg;
+    ASSERT_EQ(connector_.getNumRows(), omnisci_results->rowCount()) << errmsg;
     const int num_rows{static_cast<int>(connector_.getNumRows())};
-    if (mapd_results->definitelyHasNoRows()) {
+    if (omnisci_results->definitelyHasNoRows()) {
       ASSERT_EQ(0, num_rows) << errmsg;
       return;
     }
     if (!num_rows) {
       return;
     }
-    CHECK_EQ(connector_.getNumCols(), mapd_results->colCount()) << errmsg;
+    CHECK_EQ(connector_.getNumCols(), omnisci_results->colCount()) << errmsg;
     const int num_cols{static_cast<int>(connector_.getNumCols())};
-    auto row_iterator = mapd_results->rowIterator(true, true);
+    auto row_iterator = omnisci_results->rowIterator(true, true);
     for (int row_idx = 0; row_idx < num_rows; ++row_idx) {
       const auto crt_row =
-          g_use_row_iterator ? *row_iterator++ : mapd_results->getNextRow(true, true);
+          g_use_row_iterator ? *row_iterator++ : omnisci_results->getNextRow(true, true);
       CHECK(!crt_row.empty()) << errmsg;
       CHECK_EQ(static_cast<size_t>(num_cols), crt_row.size()) << errmsg;
       for (int col_idx = 0; col_idx < num_cols; ++col_idx) {
         const auto ref_col_type = connector_.columnTypes[col_idx];
-        const auto mapd_variant = crt_row[col_idx];
-        const auto scalar_mapd_variant = boost::get<ScalarTargetValue>(&mapd_variant);
-        CHECK(scalar_mapd_variant) << errmsg;
-        auto mapd_ti = mapd_results->getColType(col_idx);
-        const auto mapd_type = mapd_ti.get_type();
-        checkTypeConsistency(ref_col_type, mapd_ti);
+        const auto omnisci_variant = crt_row[col_idx];
+        const auto scalar_omnisci_variant =
+            boost::get<ScalarTargetValue>(&omnisci_variant);
+        CHECK(scalar_omnisci_variant) << errmsg;
+        auto omnisci_ti = omnisci_results->getColType(col_idx);
+        const auto omnisci_type = omnisci_ti.get_type();
+        checkTypeConsistency(ref_col_type, omnisci_ti);
         const bool ref_is_null = connector_.isNull(row_idx, col_idx);
-        switch (mapd_type) {
+        switch (omnisci_type) {
           case kTINYINT:
           case kSMALLINT:
           case kINT:
           case kBIGINT: {
-            const auto mapd_as_int_p = boost::get<int64_t>(scalar_mapd_variant);
-            ASSERT_NE(nullptr, mapd_as_int_p);
-            const auto mapd_val = *mapd_as_int_p;
+            const auto omnisci_as_int_p = boost::get<int64_t>(scalar_omnisci_variant);
+            ASSERT_NE(nullptr, omnisci_as_int_p);
+            const auto omnisci_val = *omnisci_as_int_p;
             if (ref_is_null) {
-              ASSERT_EQ(inline_int_null_val(mapd_ti), mapd_val) << errmsg;
+              ASSERT_EQ(inline_int_null_val(omnisci_ti), omnisci_val) << errmsg;
             } else {
               const auto ref_val = connector_.getData<int64_t>(row_idx, col_idx);
-              ASSERT_EQ(ref_val, mapd_val) << errmsg;
+              ASSERT_EQ(ref_val, omnisci_val) << errmsg;
             }
             break;
           }
           case kTEXT:
           case kCHAR:
           case kVARCHAR: {
-            const auto mapd_as_str_p = boost::get<NullableString>(scalar_mapd_variant);
-            ASSERT_NE(nullptr, mapd_as_str_p) << errmsg;
-            const auto mapd_str_notnull = boost::get<std::string>(mapd_as_str_p);
-            if (ref_is_null) {
-              // CHECK(!mapd_str_notnull); // JUST TO DEBUG SOMETHING TO BE UNCOMENTED
+            const auto omnisci_as_str_p =
+                boost::get<NullableString>(scalar_omnisci_variant);
+            ASSERT_NE(nullptr, omnisci_as_str_p) << errmsg;
+            const auto omnisci_str_notnull = boost::get<std::string>(omnisci_as_str_p);
+            const auto ref_val = connector_.getData<std::string>(row_idx, col_idx);
+            if (omnisci_str_notnull) {
+              const auto omnisci_val = *omnisci_str_notnull;
+              ASSERT_EQ(ref_val, omnisci_val) << errmsg;
             } else {
-              const auto ref_val = connector_.getData<std::string>(row_idx, col_idx);
-              if (mapd_str_notnull) {
-                const auto mapd_val = *mapd_str_notnull;
-                ASSERT_EQ(ref_val, mapd_val) << errmsg;
-              } else {
-                // not null but no data, so val is empty string
-                const auto mapd_val = "";
-                ASSERT_EQ(ref_val, mapd_val) << errmsg;
-              }
+              // not null but no data, so val is empty string
+              const auto omnisci_val = "";
+              ASSERT_EQ(ref_val, omnisci_val) << errmsg;
             }
             break;
           }
           case kNUMERIC:
           case kDECIMAL:
           case kDOUBLE: {
-            const auto mapd_as_double_p = boost::get<double>(scalar_mapd_variant);
-            ASSERT_NE(nullptr, mapd_as_double_p) << errmsg;
-            const auto mapd_val = *mapd_as_double_p;
+            const auto omnisci_as_double_p = boost::get<double>(scalar_omnisci_variant);
+            ASSERT_NE(nullptr, omnisci_as_double_p) << errmsg;
+            const auto omnisci_val = *omnisci_as_double_p;
             if (ref_is_null) {
-              ASSERT_EQ(inline_fp_null_val(SQLTypeInfo(kDOUBLE, false)), mapd_val)
+              ASSERT_EQ(inline_fp_null_val(SQLTypeInfo(kDOUBLE, false)), omnisci_val)
                   << errmsg;
             } else {
               const auto ref_val = connector_.getData<double>(row_idx, col_idx);
-              ASSERT_TRUE(approx_eq(ref_val, mapd_val)) << errmsg;
+              ASSERT_TRUE(approx_eq(ref_val, omnisci_val)) << errmsg;
             }
             break;
           }
           case kFLOAT: {
-            const auto mapd_as_float_p = boost::get<float>(scalar_mapd_variant);
-            ASSERT_NE(nullptr, mapd_as_float_p) << errmsg;
-            const auto mapd_val = *mapd_as_float_p;
+            const auto omnisci_as_float_p = boost::get<float>(scalar_omnisci_variant);
+            ASSERT_NE(nullptr, omnisci_as_float_p) << errmsg;
+            const auto omnisci_val = *omnisci_as_float_p;
             if (ref_is_null) {
-              ASSERT_EQ(inline_fp_null_val(SQLTypeInfo(kFLOAT, false)), mapd_val)
+              ASSERT_EQ(inline_fp_null_val(SQLTypeInfo(kFLOAT, false)), omnisci_val)
                   << errmsg;
             } else {
               const auto ref_val = connector_.getData<float>(row_idx, col_idx);
-              ASSERT_TRUE(approx_eq(ref_val, mapd_val)) << errmsg;
+              ASSERT_TRUE(approx_eq(ref_val, omnisci_val)) << errmsg;
             }
             break;
           }
           case kTIMESTAMP:
           case kDATE: {
-            const auto mapd_as_int_p = boost::get<int64_t>(scalar_mapd_variant);
-            CHECK(mapd_as_int_p);
-            const auto mapd_val = *mapd_as_int_p;
+            const auto omnisci_as_int_p = boost::get<int64_t>(scalar_omnisci_variant);
+            CHECK(omnisci_as_int_p);
+            const auto omnisci_val = *omnisci_as_int_p;
             time_t nsec = 0;
-            const int dimen = mapd_ti.get_dimension();
+            const int dimen = omnisci_ti.get_dimension();
             if (ref_is_null) {
-              CHECK_EQ(inline_int_null_val(mapd_ti), mapd_val) << errmsg;
+              CHECK_EQ(inline_int_null_val(omnisci_ti), omnisci_val) << errmsg;
             } else {
               struct tm tm_struct {
                 0
@@ -346,7 +347,7 @@ class SQLiteComparator {
               const auto ref_val = connector_.getData<std::string>(row_idx, col_idx);
               auto end_str =
                   strptime(ref_val.c_str(),
-                           mapd_type == kTIMESTAMP ? "%Y-%m-%d %H:%M:%S" : "%Y-%m-%d",
+                           omnisci_type == kTIMESTAMP ? "%Y-%m-%d %H:%M:%S" : "%Y-%m-%d",
                            &tm_struct);
               // handle fractional seconds
               if (end_str != nullptr && *end_str != '.') {
@@ -356,14 +357,14 @@ class SQLiteComparator {
                 ASSERT_EQ(ref_val.size(), static_cast<size_t>(end_str - ref_val.c_str()))
                     << errmsg;
               }
-              if (dimen > 0 && mapd_type == kTIMESTAMP) {
+              if (dimen > 0 && omnisci_type == kTIMESTAMP) {
                 int fs = 0;
                 if (*end_str == '.') {
                   end_str++;
                   uint frac_num;
                   int ntotal;
                   sscanf(end_str, "%d%n", &frac_num, &ntotal);
-                  fs = parse_fractional_seconds(frac_num, ntotal, mapd_ti);
+                  fs = parse_fractional_seconds(frac_num, ntotal, omnisci_ti);
                   nsec = timegm(&tm_struct) * pow(10, dimen);
                   nsec += fs;
                 } else if (*end_str == '\0') {
@@ -374,16 +375,16 @@ class SQLiteComparator {
               }
               if (timestamp_approx) {
                 // approximate result give 10 second lee way
-                ASSERT_NEAR(*mapd_as_int_p,
+                ASSERT_NEAR(*omnisci_as_int_p,
                             dimen > 0 ? nsec : timegm(&tm_struct),
                             dimen > 0 ? 10 * pow(10, dimen) : 10)
                     << errmsg;
               } else {
-                if (is_arrow && mapd_type == kDATE) {
-                  ASSERT_EQ(*mapd_as_int_p, timegm(&tm_struct) * kMilliSecsPerSec)
+                if (is_arrow && omnisci_type == kDATE) {
+                  ASSERT_EQ(*omnisci_as_int_p, timegm(&tm_struct) * kMilliSecsPerSec)
                       << errmsg;
                 } else {
-                  ASSERT_EQ(*mapd_as_int_p, dimen > 0 ? nsec : timegm(&tm_struct))
+                  ASSERT_EQ(*omnisci_as_int_p, dimen > 0 ? nsec : timegm(&tm_struct))
                       << errmsg;
                 }
               }
@@ -391,28 +392,28 @@ class SQLiteComparator {
             break;
           }
           case kBOOLEAN: {
-            const auto mapd_as_int_p = boost::get<int64_t>(scalar_mapd_variant);
-            CHECK(mapd_as_int_p) << errmsg;
-            const auto mapd_val = *mapd_as_int_p;
+            const auto omnisci_as_int_p = boost::get<int64_t>(scalar_omnisci_variant);
+            CHECK(omnisci_as_int_p) << errmsg;
+            const auto omnisci_val = *omnisci_as_int_p;
             if (ref_is_null) {
-              CHECK_EQ(inline_int_null_val(mapd_ti), mapd_val) << errmsg;
+              CHECK_EQ(inline_int_null_val(omnisci_ti), omnisci_val) << errmsg;
             } else {
               const auto ref_val = connector_.getData<std::string>(row_idx, col_idx);
               if (ref_val == "t") {
-                ASSERT_EQ(1, *mapd_as_int_p) << errmsg;
+                ASSERT_EQ(1, *omnisci_as_int_p) << errmsg;
               } else {
                 CHECK_EQ("f", ref_val) << errmsg;
-                ASSERT_EQ(0, *mapd_as_int_p) << errmsg;
+                ASSERT_EQ(0, *omnisci_as_int_p) << errmsg;
               }
             }
             break;
           }
           case kTIME: {
-            const auto mapd_as_int_p = boost::get<int64_t>(scalar_mapd_variant);
-            CHECK(mapd_as_int_p) << errmsg;
-            const auto mapd_val = *mapd_as_int_p;
+            const auto omnisci_as_int_p = boost::get<int64_t>(scalar_omnisci_variant);
+            CHECK(omnisci_as_int_p) << errmsg;
+            const auto omnisci_val = *omnisci_as_int_p;
             if (ref_is_null) {
-              CHECK_EQ(inline_int_null_val(mapd_ti), mapd_val) << errmsg;
+              CHECK_EQ(inline_int_null_val(omnisci_ti), omnisci_val) << errmsg;
             } else {
               const auto ref_val = connector_.getData<std::string>(row_idx, col_idx);
               std::vector<std::string> time_tokens;
@@ -421,7 +422,7 @@ class SQLiteComparator {
               ASSERT_EQ(boost::lexical_cast<int64_t>(time_tokens[0]) * 3600 +
                             boost::lexical_cast<int64_t>(time_tokens[1]) * 60 +
                             boost::lexical_cast<int64_t>(time_tokens[2]),
-                        *mapd_as_int_p)
+                        *omnisci_as_int_p)
                   << errmsg;
             }
             break;
@@ -434,15 +435,16 @@ class SQLiteComparator {
   }
 
  private:
-  static void checkTypeConsistency(const int ref_col_type, const SQLTypeInfo& mapd_ti) {
+  static void checkTypeConsistency(const int ref_col_type,
+                                   const SQLTypeInfo& omnisci_ti) {
     if (ref_col_type == SQLITE_NULL) {
-      // TODO(alex): re-enable the check that mapd_ti is nullable,
+      // TODO(alex): re-enable the check that omnisci_ti is nullable,
       //             got invalidated because of outer joins
       return;
     }
-    if (mapd_ti.is_integer()) {
+    if (omnisci_ti.is_integer()) {
       CHECK_EQ(SQLITE_INTEGER, ref_col_type);
-    } else if (mapd_ti.is_fp() || mapd_ti.is_decimal()) {
+    } else if (omnisci_ti.is_fp() || omnisci_ti.is_decimal()) {
       CHECK(ref_col_type == SQLITE_FLOAT || ref_col_type == SQLITE_INTEGER);
     } else {
       CHECK_EQ(SQLITE_TEXT, ref_col_type);
@@ -2445,6 +2447,8 @@ TEST(Select, Strings) {
     c("SELECT * FROM test WHERE str LIKE 'f%\%' ORDER BY x ASC, y ASC;", dt);
     c("SELECT * FROM test WHERE ss LIKE 'f%\%' ORDER BY x ASC, y ASC;", dt);
     c("SELECT * FROM test WHERE str LIKE '@f%%' ESCAPE '@' ORDER BY x ASC, y ASC;", dt);
+    c(R"(SELECT COUNT(*) FROM test WHERE real_str LIKE '%foo' OR real_str LIKE '%"bar"';)",
+      dt);
     c("SELECT COUNT(*) FROM test WHERE str LIKE 'ba_' or str LIKE 'fo_';", dt);
     c("SELECT COUNT(*) FROM test WHERE str IS NULL;", dt);
     c("SELECT COUNT(*) FROM test WHERE str IS NOT NULL;", dt);
@@ -5039,7 +5043,7 @@ TEST(Select, LogicalValues) {
     // empty logical values
     c("SELECT 1 + 2;", dt);
     c("SELECT 1 * 2.1;", dt);
-    c("SELECT 'alex', 'mapd';", dt);
+    c("SELECT 'alex', 'omnisci';", dt);
     c("SELECT COALESCE(5, NULL, 4);", dt);
     c("SELECT abs(-5) AS tmp;", dt);
 
@@ -5050,6 +5054,7 @@ TEST(Select, LogicalValues) {
     c("SELECT * FROM (VALUES(1,2,3));", dt);
     c("SELECT * FROM (VALUES(1, NULL, 3));", dt);
     c("SELECT * FROM (VALUES(1, 2), (3, NULL));", dt);
+    c("SELECT * FROM (SELECT * FROM (VALUES (1,2) , (3,4)) t1) t0 LIMIT 5;", dt);
 
     {
       auto rows = run_multiple_agg("SELECT * FROM (VALUES(1, 2, 3)) as t(x, y, z);", dt);
@@ -5932,6 +5937,54 @@ void import_test_table_with_lots_of_columns() {
   }
 }
 
+void import_union_all_tests() {
+  std::string sql;
+  auto const dt = ExecutorDeviceType::CPU;
+
+  sql = "DROP TABLE IF EXISTS union_all_a;";
+  g_sqlite_comparator.query(sql);
+  EXPECT_NO_THROW(run_ddl_statement(sql));
+
+  sql = "DROP TABLE IF EXISTS union_all_b;";
+  g_sqlite_comparator.query(sql);
+  EXPECT_NO_THROW(run_ddl_statement(sql));
+
+  sql = "CREATE TABLE union_all_a (a0 SMALLINT, a1 INT, a2 BIGINT, a3 FLOAT);";
+  g_sqlite_comparator.query(sql);
+  sql.insert(sql.size() - 1, " WITH (fragment_size = 2)");
+  EXPECT_NO_THROW(run_ddl_statement(sql));
+
+  sql = "CREATE TABLE union_all_b (b0 SMALLINT, b1 INT, b2 BIGINT, b3 FLOAT);";
+  g_sqlite_comparator.query(sql);
+  sql.insert(sql.size() - 1, " WITH (fragment_size = 3)");
+  EXPECT_NO_THROW(run_ddl_statement(sql));
+  for (int i = 0; i < 10; i++) {
+    sql = cat("INSERT INTO union_all_a VALUES (",
+              110 + i,
+              ',',
+              120 + i,
+              ',',
+              130 + i,
+              ',',
+              140 + i,
+              ");");
+    g_sqlite_comparator.query(sql);
+    EXPECT_NO_THROW(run_multiple_agg(sql, dt));
+
+    sql = cat("INSERT INTO union_all_b VALUES (",
+              210 + i,
+              ',',
+              220 + i,
+              ',',
+              230 + i,
+              ',',
+              240 + i,
+              ");");
+    g_sqlite_comparator.query(sql);
+    EXPECT_NO_THROW(run_multiple_agg(sql, dt));
+  }
+}
+
 }  // namespace
 
 TEST(Select, ArrayUnnest) {
@@ -6422,49 +6475,71 @@ TEST(Select, BigDecimalRange) {
   }
 }
 
+TEST(Select, ScalarSubquery) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    c("SELECT SUM(x) + SUM(y) FROM test GROUP BY z HAVING (SELECT x FROM test "
+      "GROUP BY x HAVING x > 7 LIMIT 1) > 7 ORDER BY z;",
+      dt);
+    c("SELECT SUM(x) + SUM(y) FROM test GROUP BY z HAVING (SELECT d FROM test "
+      "GROUP BY d HAVING d > 2.4 LIMIT 1) > 2.4 ORDER BY z;",
+      dt);
+    /* TODO(adb): triggers as assert when setting the result of the scalar subquery
+    descriptor const auto save_watchdog = g_enable_watchdog; g_enable_watchdog = false;
+    ScopeGuard reset_watchdog_state = [&save_watchdog] {
+      g_enable_watchdog = save_watchdog;
+    };
+    SKIP_ON_AGGREGATOR(
+        c("SELECT COUNT(*) FROM test GROUP BY x, y HAVING (SELECT str FROM test GROUP BY "
+          "str HAVING length(str) = 3 ORDER BY str LIMIT 1) = 'bar';",
+          dt));
+    */
+  }
+}
+
 TEST(Select, DecimalCompression) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
-    std::string mapd_sql = "";
+    std::string omnisci_sql = "";
     std::string sqlite_sql = "";
 
-    mapd_sql =
+    omnisci_sql =
         "SELECT AVG(big_dec), AVG(med_dec), AVG(small_dec) FROM "
         "decimal_compression_test;";
     sqlite_sql =
         "SELECT 1.0*AVG(big_dec), 1.0*AVG(med_dec), 1.0*AVG(small_dec) FROM "
         "decimal_compression_test;";
-    c(mapd_sql, sqlite_sql, dt);
+    c(omnisci_sql, sqlite_sql, dt);
     c(sqlite_sql, sqlite_sql, dt);
 
-    mapd_sql =
+    omnisci_sql =
         "SELECT SUM(big_dec), SUM(med_dec), SUM(small_dec) FROM "
         "decimal_compression_test;";
     sqlite_sql =
         "SELECT 1.0*SUM(big_dec), 1.0*SUM(med_dec), 1.0*SUM(small_dec) FROM "
         "decimal_compression_test;";
-    c(mapd_sql, sqlite_sql, dt);
+    c(omnisci_sql, sqlite_sql, dt);
     c(sqlite_sql, sqlite_sql, dt);
 
-    mapd_sql =
+    omnisci_sql =
         "SELECT MIN(big_dec), MIN(med_dec), MIN(small_dec) FROM "
         "decimal_compression_test;";
     sqlite_sql =
         "SELECT 1.0*MIN(big_dec), 1.0*MIN(med_dec), 1.0*MIN(small_dec) FROM "
         "decimal_compression_test;";
-    c(mapd_sql, sqlite_sql, dt);
+    c(omnisci_sql, sqlite_sql, dt);
     c(sqlite_sql, sqlite_sql, dt);
 
-    mapd_sql =
+    omnisci_sql =
         "SELECT MAX(big_dec), MAX(med_dec), MAX(small_dec) FROM "
         "decimal_compression_test;";
     sqlite_sql =
         "SELECT 1.0*MAX(big_dec), 1.0*MAX(med_dec), 1.0*MAX(small_dec) FROM "
         "decimal_compression_test;";
-    c(mapd_sql, sqlite_sql, dt);
+    c(omnisci_sql, sqlite_sql, dt);
     c(sqlite_sql, sqlite_sql, dt);
 
-    mapd_sql =
+    omnisci_sql =
         "SELECT big_dec, COUNT(*) as n, AVG(med_dec) as med_dec_avg, SUM(small_dec) as "
         "small_dec_sum FROM decimal_compression_test GROUP BY big_dec ORDER BY "
         "small_dec_sum;";
@@ -6472,7 +6547,7 @@ TEST(Select, DecimalCompression) {
         "SELECT 1.0*big_dec, COUNT(*) as n, 1.0*AVG(med_dec) as med_dec_avg, "
         "1.0*SUM(small_dec) as small_dec_sum FROM decimal_compression_test GROUP BY "
         "big_dec ORDER BY small_dec_sum;";
-    c(mapd_sql, sqlite_sql, dt);
+    c(omnisci_sql, sqlite_sql, dt);
     c(sqlite_sql, sqlite_sql, dt);
 
     c("SELECT CASE WHEN big_dec > 0 THEN med_dec ELSE NULL END FROM "
@@ -7065,6 +7140,15 @@ TEST(Select, Joins_InnerJoin_TwoTables) {
       "BY 1, 2) t1 INNER JOIN (SELECT y, Sum(x) sum2 FROM test GROUP BY 1) t2 ON "
       "t1.y = t2.y GROUP BY 1, 2, 3, 4;",
       dt);
+
+    const auto watchdog_state = g_enable_watchdog;
+    ScopeGuard reset = [watchdog_state] { g_enable_watchdog = watchdog_state; };
+    g_enable_watchdog = false;
+    SKIP_ON_AGGREGATOR(
+        c("SELECT str FROM test JOIN (SELECT 'foo' AS val, 12345 AS cnt) subq ON "
+          "test.str = "
+          "subq.val;",
+          dt));
   }
 }
 
@@ -12228,51 +12312,6 @@ TEST(Update, DecimalUpdate) {
   }
 }
 
-TEST(Update, JoinCacheInvalidationTest) {
-  if (!std::is_same<CalciteUpdatePathSelector, PreprocessorTrue>::value) {
-    return;
-  }
-  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
-    SKIP_NO_GPU();
-
-    run_ddl_statement("drop table if exists string_join1");
-    run_ddl_statement("drop table if exists string_join2");
-    run_ddl_statement(build_create_table_statement(
-        "t text", "string_join1", {"", 0}, {}, 2, g_use_temporary_tables, true, false));
-    // replicate the second table for distributed mode testing
-    run_ddl_statement(build_create_table_statement(
-        "t text", "string_join2", {"", 0}, {}, 2, g_use_temporary_tables, true, true));
-
-    run_multiple_agg("insert into string_join1 values ('muffin')", dt);
-    run_multiple_agg("insert into string_join1 values ('pizza')", dt);
-    run_multiple_agg("insert into string_join1 values ('ice cream')", dt);
-    run_multiple_agg("insert into string_join1 values ('poutine')", dt);
-    run_multiple_agg("insert into string_join1 values ('samosa')", dt);
-    run_multiple_agg("insert into string_join2 values ('tomato')", dt);
-    run_multiple_agg("insert into string_join2 values ('potato')", dt);
-    run_multiple_agg("insert into string_join2 values ('apple')", dt);
-    run_multiple_agg("insert into string_join2 values ('orange')", dt);
-    run_multiple_agg("insert into string_join2 values ('chutney')", dt);
-    run_multiple_agg("insert into string_join2 values ('poutine')", dt);
-
-    run_simple_agg(
-        "select count(string_join1.t) from string_join1 inner join string_join2 on "
-        "string_join1.t = string_join2.t;",
-        dt);
-    run_multiple_agg("update string_join1 set t='not poutine' where t='poutine';", dt);
-
-    ASSERT_EQ(
-        int64_t(0),
-        v<int64_t>(run_simple_agg(
-            "select count(string_join1.t) from string_join1 inner join string_join2 on "
-            "string_join1.t = string_join2.t;",
-            dt)));
-
-    run_ddl_statement("drop table string_join1;");
-    run_ddl_statement("drop table string_join2;");
-  }
-}
-
 TEST(Delete, WithoutVacuumAttribute) {
   if (std::is_same<CalciteDeletePathSelector, PreprocessorFalse>::value) {
     return;
@@ -13353,50 +13392,6 @@ TEST(Delete, ShardedTableDeleteTest) {
 
     ASSERT_EQ(int64_t(11 + 13 + 15 + 17),
               v<int64_t>(run_simple_agg("select sum(x) from shardkey;", dt)));
-  }
-}
-
-TEST(Delete, JoinCacheInvalidationTest) {
-  if (std::is_same<CalciteDeletePathSelector, PreprocessorFalse>::value) {
-    return;
-  }
-  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
-    SKIP_NO_GPU();
-
-    run_ddl_statement("drop table if exists string_join1;");
-    run_ddl_statement("drop table if exists string_join2;");
-    run_ddl_statement("create table string_join1 ( t text ) with (vacuum='delayed')");
-    run_ddl_statement(
-        "create table string_join2 ( t text ) with (vacuum='delayed', "
-        "partitions='REPLICATED')");
-
-    run_multiple_agg("insert into string_join1 values ('muffin')", dt);
-    run_multiple_agg("insert into string_join1 values ('pizza')", dt);
-    run_multiple_agg("insert into string_join1 values ('ice cream')", dt);
-    run_multiple_agg("insert into string_join1 values ('poutine')", dt);
-    run_multiple_agg("insert into string_join1 values ('samosa')", dt);
-    run_multiple_agg("insert into string_join2 values ('tomato')", dt);
-    run_multiple_agg("insert into string_join2 values ('potato')", dt);
-    run_multiple_agg("insert into string_join2 values ('apple')", dt);
-    run_multiple_agg("insert into string_join2 values ('orange')", dt);
-    run_multiple_agg("insert into string_join2 values ('chutney')", dt);
-    run_multiple_agg("insert into string_join2 values ('poutine')", dt);
-
-    run_simple_agg(
-        "select count(string_join1.t) from string_join1 inner join string_join2 on "
-        "string_join1.t = string_join2.t;",
-        dt);
-    run_multiple_agg("delete from string_join1 where t='poutine';", dt);
-
-    ASSERT_EQ(
-        int64_t(0),
-        v<int64_t>(run_simple_agg(
-            "select count(string_join1.t) from string_join1 inner join string_join2 on "
-            "string_join1.t = string_join2.t;",
-            dt)));
-
-    run_ddl_statement("drop table string_join1;");
-    run_ddl_statement("drop table string_join2;");
   }
 }
 
@@ -15852,9 +15847,20 @@ TEST(Select, GeoSpatial_Projection) {
 TEST(Select, GeoSpatial_GeoJoin) {
   SKIP_WITH_TEMP_TABLES();
 
+  const auto enable_overlaps_hashjoin_state = g_enable_overlaps_hashjoin;
+  g_enable_overlaps_hashjoin = false;
+  ScopeGuard reset_overlaps_state = [&enable_overlaps_hashjoin_state] {
+    g_enable_overlaps_hashjoin = enable_overlaps_hashjoin_state;
+  };
+
   // Test loop joins
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
+    ASSERT_EQ(static_cast<int64_t>(0),
+              v<int64_t>(run_simple_agg(
+                  "SELECT a.id FROM geospatial_test a JOIN geospatial_inner_join_test "
+                  "b ON ST_Intersects(b.poly, a.poly) ORDER BY a.id;",
+                  dt)));
 
     ASSERT_NO_THROW(run_simple_agg(
         "SELECT a.id FROM geospatial_test a INNER JOIN geospatial_inner_join_test "
@@ -15896,11 +15902,7 @@ TEST(Select, GeoSpatial_GeoJoin) {
         std::runtime_error));
   }
 
-  const auto enable_overlaps_hashjoin_state = g_enable_overlaps_hashjoin;
   g_enable_overlaps_hashjoin = true;
-  ScopeGuard reset_overlaps_state = [&enable_overlaps_hashjoin_state] {
-    g_enable_overlaps_hashjoin = enable_overlaps_hashjoin_state;
-  };
 
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
@@ -15910,6 +15912,12 @@ TEST(Select, GeoSpatial_GeoJoin) {
         "SELECT a.id FROM geospatial_test a INNER JOIN geospatial_inner_join_test "
         "b ON ST_Contains(b.poly, a.p);",
         dt));
+
+    ASSERT_EQ(static_cast<int64_t>(0),
+              v<int64_t>(run_simple_agg(
+                  "SELECT a.id FROM geospatial_test a JOIN geospatial_inner_join_test "
+                  "b ON ST_Intersects(b.poly, a.poly) ORDER BY a.id;",
+                  dt)));
 
     SKIP_ON_AGGREGATOR(ASSERT_EQ(
         static_cast<int64_t>(1),
@@ -17151,6 +17159,187 @@ TEST(Select, GroupEmptyBlank) {
   }
 }
 
+// Uses tables from import_union_all_tests().
+TEST(Select, UnionAll) {
+  bool enable_union = true;
+  std::swap(g_enable_union, enable_union);
+  for (auto dt : {ExecutorDeviceType::CPU /*, ExecutorDeviceType::GPU*/}) {
+    SKIP_NO_GPU();
+    c("SELECT a0, a1, a2, a3 FROM union_all_a"
+      " WHERE a0 BETWEEN 111 AND 115"
+      " UNION ALL"
+      " SELECT b0, b1, b2, b3 FROM union_all_b"
+      " WHERE b0 BETWEEN 211 AND 217"
+      " ORDER BY a1;",
+      dt);
+    c("SELECT a0, a1, a2, a3 FROM union_all_a"
+      " UNION ALL"
+      " SELECT b0, b1, b2, b3 FROM union_all_b"
+      " ORDER BY a0;",
+      dt);
+    c("SELECT a0, a1, a2, a3 FROM union_all_a"
+      " WHERE a0 < 116"
+      " UNION ALL"
+      " SELECT b0, b1, b2, b3 FROM union_all_b"
+      " ORDER BY a0;",
+      dt);
+    c("SELECT a0, a1, a2, a3 FROM union_all_a"
+      " UNION ALL"
+      " SELECT b0, b1, b2, b3 FROM union_all_b"
+      " WHERE b0 < 216"
+      " ORDER BY a0;",
+      dt);
+    c("SELECT a0, a1, a2, a3 FROM union_all_a"
+      " WHERE a0 < 116"
+      " UNION ALL"
+      " SELECT b0, b1, b2, b3 FROM union_all_b"
+      " WHERE b0 < 216"
+      " ORDER BY a0;",
+      dt);
+    c("SELECT a0, a1, a2, a3 FROM union_all_a"
+      " WHERE a0 < 115"
+      " UNION ALL"
+      " SELECT b0, b1, b2, b3 FROM union_all_b"
+      " WHERE b0 < 216"
+      " ORDER BY a0;",
+      dt);
+    c("SELECT a0, a1, a2, a3 FROM union_all_a"
+      " WHERE a0 < 116"
+      " UNION ALL"
+      " SELECT b0, b1, b2, b3 FROM union_all_b"
+      " WHERE b0 < 215"
+      " ORDER BY a0;",
+      dt);
+    c("SELECT a0, a1, a2, a3 FROM union_all_a"
+      " WHERE a0 < 100"
+      " UNION ALL"
+      " SELECT b0, b1, b2, b3 FROM union_all_b"
+      " WHERE b0 < 216"
+      " ORDER BY a0;",
+      dt);
+    c("SELECT a0, a1, a2, a3 FROM union_all_a"
+      " WHERE a0 < 116"
+      " UNION ALL"
+      " SELECT b0, b1, b2, b3 FROM union_all_b"
+      " WHERE b0 < 200"
+      " ORDER BY a0;",
+      dt);
+    c("SELECT a0, a1, a2, a3 FROM union_all_a"
+      " WHERE a0 < 116"
+      " UNION ALL"
+      " SELECT MAX(b0), b1 % 2, MAX(b2), MAX(b3) FROM union_all_b"
+      " GROUP BY b1 % 2"
+      " ORDER BY a0;",
+      dt);
+    c("SELECT MAX(b0) max0, b1 % 2, MAX(b2), MAX(b3) FROM union_all_b"
+      " GROUP BY b1 % 2"
+      " UNION ALL"
+      " SELECT a0, a1, a2, a3 FROM union_all_a"
+      " WHERE a0 < 116"
+      " ORDER BY max0;",
+      dt);
+    c("SELECT MAX(a0) max0, a1 % 3, MAX(a2), MAX(a3) FROM union_all_a"
+      " GROUP BY a1 % 3"
+      " UNION ALL"
+      " SELECT MAX(b0), b1 % 2, MAX(b2), MAX(b3) FROM union_all_b"
+      " GROUP BY b1 % 2"
+      " ORDER BY max0;",
+      dt);
+    c("SELECT MAX(a0) max0, a1 % 2, MAX(a2), MAX(a3) FROM union_all_a"
+      " GROUP BY a1 % 2"
+      " UNION ALL"
+      " SELECT MAX(b0), b1 % 3, MAX(b2), MAX(b3) FROM union_all_b"
+      " GROUP BY b1 % 3"
+      " ORDER BY max0;",
+      dt);
+    c("SELECT MAX(a0) max0, a1 % 3, MAX(a2), MAX(a3) FROM union_all_a"
+      " GROUP BY a1 % 3"
+      " UNION ALL"
+      " SELECT MAX(b0), b1 % 2, MAX(b2), MAX(b3) FROM union_all_b"
+      " GROUP BY b1 % 2"
+      " UNION ALL"
+      " SELECT a0, a1, a2, a3 FROM union_all_a"
+      " WHERE a0 < 116"
+      " ORDER BY max0;",
+      dt);
+    c("SELECT MAX(a0) max0, a1 % 2, MAX(a2), MAX(a3) FROM union_all_a"
+      " GROUP BY a1 % 2"
+      " UNION ALL"
+      " SELECT a0, a1, a2, a3 FROM union_all_a"
+      " WHERE a0 < 116"
+      " UNION ALL"
+      " SELECT MAX(b0), b1 % 3, MAX(b2), MAX(b3) FROM union_all_b"
+      " GROUP BY b1 % 3"
+      " ORDER BY max0;",
+      dt);
+    c("SELECT a0, a1, a2, a3 FROM union_all_a"
+      " WHERE a0 < 116"
+      " UNION ALL"
+      " SELECT MAX(a0), a1 % 2, MAX(a2), MAX(a3) FROM union_all_a"
+      " GROUP BY a1 % 2"
+      " UNION ALL"
+      " SELECT MAX(b0), b1 % 3, MAX(b2), MAX(b3) FROM union_all_b"
+      " GROUP BY b1 % 3"
+      " ORDER BY a0;",
+      dt);
+    c("SELECT a0, a1, a2, a3 FROM union_all_a"
+      " WHERE a0 < 116"
+      " UNION ALL"
+      " SELECT b0, b1, b2, b3 FROM union_all_b"
+      " WHERE b0 < 215"
+      " UNION ALL"
+      " SELECT a0, a1, a2, a3 FROM union_all_a"
+      " WHERE a0 < 117"
+      " UNION ALL"
+      " SELECT MAX(a0), a1 % 2, MAX(a2), MAX(a3) FROM union_all_a"
+      " GROUP BY a1 % 2"
+      " UNION ALL"
+      " SELECT MAX(b0), b1 % 3, MAX(b2), MAX(b3) FROM union_all_b"
+      " GROUP BY b1 % 3"
+      " ORDER BY a0;",
+      dt);
+    c("SELECT MAX(b0) max0, b1 % 3, MAX(b2), MAX(b3) FROM union_all_b"
+      " GROUP BY b1 % 3"
+      " HAVING b1 % 3 = 1"
+      " UNION ALL"
+      " SELECT a0, a1, a2, a3 FROM union_all_a"
+      " WHERE a0 < 117"
+      " ORDER BY max0;",
+      dt);
+    c("SELECT a0, a1, a2, a3 FROM union_all_a"
+      " WHERE a0 < 117"
+      " UNION ALL"
+      " SELECT MAX(b0) max0, b1 % 3, MAX(b2), MAX(b3) FROM union_all_b"
+      " GROUP BY b1 % 3"
+      " HAVING b1 % 3 = 1"
+      " ORDER BY a0;",
+      dt);
+    // sqlite sorts NULLs differently, and doesn't recognize NULLS FIRST/LAST.
+    c("SELECT str FROM test"
+      " UNION ALL"
+      " SELECT COALESCE(shared_dict,'NULL') FROM test"
+      " ORDER BY str;",
+      dt);
+    // The goal is that these should work.
+    // Exception: Subqueries of a UNION must have exact same data types.
+    EXPECT_THROW(run_multiple_agg("SELECT str FROM test UNION ALL "
+                                  "SELECT real_str FROM test ORDER BY str;",
+                                  dt),
+                 std::runtime_error);
+    // Exception: Columnar conversion not supported for variable length types
+    EXPECT_THROW(run_multiple_agg("SELECT real_str FROM test UNION ALL "
+                                  "SELECT real_str FROM test ORDER BY real_str;",
+                                  dt),
+                 std::runtime_error);
+    // Exception: Subqueries of a UNION must have exact same data types.
+    EXPECT_THROW(run_multiple_agg("SELECT str FROM test UNION ALL "
+                                  "SELECT fixed_str FROM test ORDER BY str;",
+                                  dt),
+                 std::runtime_error);
+  }
+  g_enable_union = enable_union;
+}
+
 TEST(Select, VariableLengthAggs) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
@@ -18359,6 +18548,13 @@ int create_and_populate_tables(const bool use_temporary_tables,
     import_test_table_with_lots_of_columns();
   } catch (...) {
     LOG(ERROR) << "Failed to (re-)create table 'test_lots_cols'";
+  }
+  try {
+    import_union_all_tests();
+  } catch (std::exception const& e) {
+    LOG(ERROR) << "Exception thrown from import_union_all_tests(): " << e.what();
+  } catch (...) {
+    LOG(ERROR) << "Unknown error in import_union_all_tests().";
   }
   {
     std::string insert_query{"INSERT INTO test_in_bitmap VALUES('a');"};

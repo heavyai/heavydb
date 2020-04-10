@@ -15,20 +15,20 @@
  */
 package com.mapd.logrunner;
 
-import com.mapd.thrift.server.MapD;
-import com.mapd.thrift.server.TColumn;
-import com.mapd.thrift.server.TColumnData;
-import com.mapd.thrift.server.TColumnType;
-import com.mapd.thrift.server.TDBInfo;
-import com.mapd.thrift.server.TDatum;
-import com.mapd.thrift.server.TExecuteMode;
-import com.mapd.thrift.server.TMapDException;
-import com.mapd.thrift.server.TPixel;
-import com.mapd.thrift.server.TQueryResult;
-import com.mapd.thrift.server.TRenderResult;
-import com.mapd.thrift.server.TRow;
-import com.mapd.thrift.server.TRowSet;
-import com.mapd.thrift.server.TTableDetails;
+import com.omnisci.thrift.server.OmniSci;
+import com.omnisci.thrift.server.TColumn;
+import com.omnisci.thrift.server.TColumnData;
+import com.omnisci.thrift.server.TColumnType;
+import com.omnisci.thrift.server.TDBInfo;
+import com.omnisci.thrift.server.TDatum;
+import com.omnisci.thrift.server.TExecuteMode;
+import com.omnisci.thrift.server.TOmniSciException;
+import com.omnisci.thrift.server.TPixel;
+import com.omnisci.thrift.server.TQueryResult;
+import com.omnisci.thrift.server.TRenderResult;
+import com.omnisci.thrift.server.TRow;
+import com.omnisci.thrift.server.TRowSet;
+import com.omnisci.thrift.server.TTableDetails;
 
 import org.apache.thrift.TException;
 import org.apache.thrift.protocol.TJSONProtocol;
@@ -93,7 +93,7 @@ public class LogRunner {
     //
     //    for (int i = 0; i < numberThreads; i++){
     //
-    MapD.Client client = getClient(args[0], Integer.valueOf(args[1]));
+    OmniSci.Client client = getClient(args[0], Integer.valueOf(args[1]));
     String session = getSession(client);
     //      worker[i] = new myThread(client, session);
     //    }
@@ -126,7 +126,7 @@ public class LogRunner {
     }
   }
 
-  private MapD.Client getClient(String hostname, int port) throws TTransportException {
+  private OmniSci.Client getClient(String hostname, int port) throws TTransportException {
     TTransport transport = null;
 
     // transport = new TSocket("localhost", 6274);
@@ -138,24 +138,24 @@ public class LogRunner {
     TProtocol protocol = new TJSONProtocol(transport);
     // TProtocol protocol = new TProtocol(transport);
 
-    return new MapD.Client(protocol);
+    return new OmniSci.Client(protocol);
   }
 
-  private String getSession(MapD.Client client)
-          throws TTransportException, TMapDException, TException {
+  private String getSession(OmniSci.Client client)
+          throws TTransportException, TOmniSciException, TException {
     String session = client.connect("mapd", "HyperInteractive", "mapd");
     logger.info("Connected session is " + session);
     return session;
   }
 
-  private void closeSession(MapD.Client client, String session)
-          throws TMapDException, TException {
+  private void closeSession(OmniSci.Client client, String session)
+          throws TOmniSciException, TException {
     // Now disconnect
     logger.info("Trying to disconnect session " + session);
     client.disconnect(session);
   }
 
-  private void theRest(MapD.Client client, String session) throws TException {
+  private void theRest(OmniSci.Client client, String session) throws TException {
     // lets fetch databases from mapd
     List<TDBInfo> dbs = client.get_databases(session);
 
@@ -240,10 +240,10 @@ public class LogRunner {
 
   public class myThread implements Runnable {
     private String str;
-    private MapD.Client client;
+    private OmniSci.Client client;
     private String session;
 
-    myThread(String str1, MapD.Client client1, String session1) {
+    myThread(String str1, OmniSci.Client client1, String session1) {
       str = str1;
       client = client1;
       session = session1;
@@ -270,7 +270,7 @@ public class LogRunner {
           logger.info("run query " + sl[1]);
           try {
             client.sql_execute(session, sl[1], true, null, -1, -1);
-          } catch (TMapDException ex1) {
+          } catch (TOmniSciException ex1) {
             logger.error("Failed to execute " + sl[1] + " exception " + ex1.toString());
           } catch (TException ex) {
             logger.error("Failed to execute " + sl[1] + " exception " + ex.toString());
@@ -306,7 +306,7 @@ public class LogRunner {
                     Boolean.TRUE,
                     Integer.parseInt(ss[11]),
                     null);
-          } catch (TMapDException ex1) {
+          } catch (TOmniSciException ex1) {
             logger.error("Failed to execute get_result_row_for_pixel exception "
                     + ex1.toString());
           } catch (TException ex) {

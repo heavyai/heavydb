@@ -150,10 +150,12 @@ bool is_identical_copy(
       if (dynamic_cast<const RelAggregate*>(only_usr) ||
           dynamic_cast<const RelSort*>(only_usr) ||
           dynamic_cast<const RelJoin*>(only_usr) ||
-          dynamic_cast<const RelTableFunction*>(only_usr)) {
+          dynamic_cast<const RelTableFunction*>(only_usr) ||
+          dynamic_cast<const RelLogicalUnion*>(only_usr)) {
         return false;
       }
-      CHECK(dynamic_cast<const RelFilter*>(only_usr));
+      CHECK(dynamic_cast<const RelFilter*>(only_usr))
+          << "only_usr: " << only_usr->toString();
       usrs_it = du_web.find(only_usr);
       CHECK(usrs_it != du_web.end());
     }
@@ -234,12 +236,16 @@ void propagate_rex_input_renumber(
   }
 }
 
+// This function appears to redirect/remove redundant Projection input nodes(?)
 void redirect_inputs_of(
     std::shared_ptr<RelAlgNode> node,
     const std::unordered_set<const RelProject*>& projects,
     const std::unordered_set<const RelProject*>& permutating_projects,
     const std::unordered_map<const RelAlgNode*, std::unordered_set<const RelAlgNode*>>&
         du_web) {
+  if (dynamic_cast<RelLogicalUnion*>(node.get())) {
+    return;  // UNION keeps all Projection inputs.
+  }
   std::shared_ptr<const RelProject> src_project = nullptr;
   for (size_t i = 0; i < node->inputCount(); ++i) {
     if (auto project =
@@ -301,9 +307,13 @@ void redirect_inputs_of(
     }
     return;
   }
-  if (std::dynamic_pointer_cast<RelSort>(node) &&
-      dynamic_cast<const RelScan*>(src_project->getInput(0))) {
-    return;
+  if (std::dynamic_pointer_cast<RelSort>(node)) {
+    auto const src_project_input = src_project->getInput(0);
+    if (dynamic_cast<const RelScan*>(src_project_input) ||
+        dynamic_cast<const RelLogicalValues*>(src_project_input) ||
+        dynamic_cast<const RelLogicalUnion*>(src_project_input)) {
+      return;
+    }
   }
   if (std::dynamic_pointer_cast<RelModify>(node)) {
     return;  // NOTE:  Review this.  Not sure about this.
@@ -350,7 +360,17 @@ std::unordered_set<const RelProject*> get_visible_projects(const RelAlgNode* roo
     return lhs_projs;
   }
 
-  CHECK(dynamic_cast<const RelFilter*>(root) || dynamic_cast<const RelSort*>(root));
+  if (auto logical_union = dynamic_cast<const RelLogicalUnion*>(root)) {
+    auto projections = get_visible_projects(logical_union->getInput(0));
+    for (size_t i = 1; i < logical_union->inputCount(); ++i) {
+      auto next = get_visible_projects(logical_union->getInput(i));
+      projections.insert(next.begin(), next.end());
+    }
+    return projections;
+  }
+
+  CHECK(dynamic_cast<const RelFilter*>(root) || dynamic_cast<const RelSort*>(root))
+      << "root = " << root->toString();
   return get_visible_projects(root->getInput(0));
 }
 
@@ -406,16 +426,15 @@ std::unordered_map<const RelAlgNode*, std::unordered_set<const RelAlgNode*>> bui
           web.insert(std::make_pair(walker, std::unordered_set<const RelAlgNode*>{}));
       CHECK(it_ok.second);
       visited.insert(walker);
-      const auto join = dynamic_cast<const RelJoin*>(walker);
-      const auto project = dynamic_cast<const RelProject*>(walker);
-      const auto aggregate = dynamic_cast<const RelAggregate*>(walker);
-      const auto filter = dynamic_cast<const RelFilter*>(walker);
-      const auto sort = dynamic_cast<const RelSort*>(walker);
-      const auto left_deep_join = dynamic_cast<const RelLeftDeepInnerJoin*>(walker);
-      const auto logical_values = dynamic_cast<const RelLogicalValues*>(walker);
-      const auto table_func = dynamic_cast<const RelTableFunction*>(walker);
-      CHECK(join || project || aggregate || filter || sort || left_deep_join ||
-            logical_values || table_func);
+      CHECK(dynamic_cast<const RelJoin*>(walker) ||
+            dynamic_cast<const RelProject*>(walker) ||
+            dynamic_cast<const RelAggregate*>(walker) ||
+            dynamic_cast<const RelFilter*>(walker) ||
+            dynamic_cast<const RelSort*>(walker) ||
+            dynamic_cast<const RelLeftDeepInnerJoin*>(walker) ||
+            dynamic_cast<const RelLogicalValues*>(walker) ||
+            dynamic_cast<const RelTableFunction*>(walker) ||
+            dynamic_cast<const RelLogicalUnion*>(walker));
       for (size_t i = 0; i < walker->inputCount(); ++i) {
         auto src = walker->getInput(i);
         if (dynamic_cast<const RelScan*>(src) || dynamic_cast<const RelModify*>(src)) {
@@ -484,7 +503,7 @@ void eliminate_identical_copy(std::vector<std::shared_ptr<RelAlgNode>>& nodes) n
 
   std::unordered_set<const RelProject*> projects;
   std::unordered_set<const RelProject*> permutating_projects;
-  auto visible_projs = get_visible_projects(nodes.back().get());
+  auto const visible_projs = get_visible_projects(nodes.back().get());
   for (auto node : nodes) {
     auto project = std::dynamic_pointer_cast<RelProject>(node);
     if (project && project->isSimple() &&
@@ -678,6 +697,9 @@ std::vector<std::unordered_set<size_t>> get_live_ins(
       live_in.insert(i);
     }
     return {live_in};
+  }
+  if (auto logical_union = dynamic_cast<const RelLogicalUnion*>(node)) {
+    return std::vector<std::unordered_set<size_t>>(logical_union->inputCount(), live_out);
   }
   return {};
 }
@@ -1085,7 +1107,7 @@ void propagate_input_renumbering(
       }
       sort->setCollation(std::move(new_collations));
     } else {
-      CHECK(false);
+      LOG(FATAL) << "Unhandled node type: " << node->toString();
     }
 
     // Ignore empty live_out due to some invalid node

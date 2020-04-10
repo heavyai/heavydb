@@ -93,12 +93,13 @@ std::string pg_shim_impl(const std::string& query) {
         });
   }
   {
-    boost::regex quant_expr{R"(\s(any|all)\s+([^(\s|;)]+))",
+    // Comparison operator needed to distinguish from other uses of ALL (e.g. UNION ALL)
+    boost::regex quant_expr{R"(([<=>]\s*)(any|all)\s+([^(\s|;)]+))",
                             boost::regex::extended | boost::regex::icase};
     apply_shim(result, quant_expr, [](std::string& result, const boost::smatch& what) {
-      std::string qual_name = what[1];
-      std::string quant_fname{boost::iequals(qual_name, "any") ? "PG_ANY" : "PG_ALL"};
-      result.replace(what.position(), what.length(), quant_fname + "(" + what[2] + ")");
+      auto const quant_fname = boost::iequals(what[2], "any") ? "PG_ANY(" : "PG_ALL(";
+      result.replace(
+          what.position(), what.length(), what[1] + quant_fname + what[3] + ')');
     });
   }
   {
