@@ -208,20 +208,41 @@ ArrowResult ArrowResultSetConverter::getArrowResult() const {
     int64_t records_size = 0;
     int64_t schema_size = 0;
     key_t records_shm_key = IPC_PRIVATE;
+    ipc::DictionaryMemo memo;
+    auto options = ipc::IpcOptions::Defaults();
+    auto dict_stream = arrow::io::BufferOutputStream::Create(1024).ValueOrDie();
+
+    ARROW_THROW_NOT_OK(CollectDictionaries(*record_batch, &memo));
+    for (auto& pair : memo.id_to_dictionary()) {
+      ipc::internal::IpcPayload payload;
+      int64_t dictionary_id = pair.first;
+      const auto& dictionary = pair.second;
+
+      ARROW_THROW_NOT_OK(GetDictionaryPayload(
+          dictionary_id, dictionary, options, default_memory_pool(), &payload));
+      int32_t metadata_length = 0;
+      WriteIpcPayload(payload, options, dict_stream.get(), &metadata_length);
+    }
+    auto serialized_dict = dict_stream->Finish().ValueOrDie();
+    auto dict_size = serialized_dict->size();
 
     ARROW_THROW_NOT_OK(ipc::SerializeSchema(
         *record_batch->schema(), nullptr, default_memory_pool(), &serialized_schema));
     schema_size = serialized_schema->size();
 
     ARROW_THROW_NOT_OK(ipc::GetRecordBatchSize(*record_batch, &records_size));
-    total_size = schema_size + records_size;
+    total_size = schema_size + dict_size + records_size;
     std::tie(records_shm_key, serialized_records) = get_shm_buffer(total_size);
 
     memcpy(serialized_records->mutable_data(),
            serialized_schema->data(),
            (size_t)schema_size);
+    memcpy(serialized_records->mutable_data() + schema_size,
+           serialized_dict->data(),
+           (size_t)dict_size);
 
-    io::FixedSizeBufferWriter stream(SliceMutableBuffer(serialized_records, schema_size));
+    io::FixedSizeBufferWriter stream(
+        SliceMutableBuffer(serialized_records, schema_size + dict_size));
     ARROW_THROW_NOT_OK(
         ipc::SerializeRecordBatch(*record_batch, arrow::default_memory_pool(), &stream));
     memcpy(&record_handle_buffer[0],
