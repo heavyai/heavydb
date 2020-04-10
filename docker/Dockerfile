@@ -42,6 +42,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         wget \
         curl \
         clang-9 \
+        liblz4-tool \
         default-jre-headless && \
     apt-get remove --purge -y && \
     rm -rf /var/lib/apt/lists/*
