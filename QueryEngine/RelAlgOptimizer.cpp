@@ -451,6 +451,34 @@ std::unordered_map<const RelAlgNode*, std::unordered_set<const RelAlgNode*>> bui
   return web;
 }
 
+/**
+ * Return true if the input project separates two sort nodes, i.e. Sort -> Project ->
+ * Sort. This pattern often occurs in machine generated SQL, e.g. SELECT * FROM (SELECT *
+ * FROM t LIMIT 10) t0 LIMIT 1;
+ * Use this function to prevent optimizing out the intermediate project, as the project is
+ * required to ensure the first sort runs to completion prior to the second sort. Back to
+ * back sort nodes are not executable and will throw an error.
+ */
+bool project_separates_sort(const RelProject* project, const RelAlgNode* next_node) {
+  CHECK(project);
+  if (!next_node) {
+    return false;
+  }
+
+  auto sort = dynamic_cast<const RelSort*>(next_node);
+  if (!sort) {
+    return false;
+  }
+  if (!(project->inputCount() == 1)) {
+    return false;
+  }
+
+  if (dynamic_cast<const RelSort*>(project->getInput(0))) {
+    return true;
+  }
+  return false;
+}
+
 // For now, the only target to eliminate is restricted to project-aggregate pair between
 // scan/sort and join
 // TODO(miyu): allow more chance if proved safe
@@ -504,11 +532,15 @@ void eliminate_identical_copy(std::vector<std::shared_ptr<RelAlgNode>>& nodes) n
   std::unordered_set<const RelProject*> projects;
   std::unordered_set<const RelProject*> permutating_projects;
   auto const visible_projs = get_visible_projects(nodes.back().get());
-  for (auto node : nodes) {
+  for (auto node_it = nodes.begin(); node_it != nodes.end(); node_it++) {
+    auto node = *node_it;
     auto project = std::dynamic_pointer_cast<RelProject>(node);
+    auto next_node_it = std::next(node_it);
     if (project && project->isSimple() &&
         (!visible_projs.count(project.get()) || !project->isRenaming()) &&
-        is_identical_copy(project.get(), web, projects, permutating_projects)) {
+        is_identical_copy(project.get(), web, projects, permutating_projects) &&
+        !project_separates_sort(
+            project.get(), next_node_it == nodes.end() ? nullptr : next_node_it->get())) {
       projects.insert(project.get());
     }
   }
