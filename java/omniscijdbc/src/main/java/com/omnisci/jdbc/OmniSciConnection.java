@@ -307,7 +307,16 @@ public class OmniSciConnection implements java.sql.Connection, Cloneable {
   private TProtocol manageConnection() throws java.lang.Exception {
     SockTransportProperties skT = null;
     String trust_store = null;
+    if (cP.get(Connection_enums.server_trust_store) != null
+            && !cP.get(Connection_enums.server_trust_store).toString().isEmpty()) {
+      trust_store = cP.get(Connection_enums.server_trust_store).toString();
+    }
     String trust_store_pwd = null;
+    if (cP.get(Connection_enums.server_trust_store_pwd) != null
+            && !cP.get(Connection_enums.server_trust_store_pwd).toString().isEmpty()) {
+      trust_store_pwd = cP.get(Connection_enums.server_trust_store_pwd).toString();
+    }
+
     TProtocol protocol = null;
     if (this.cP.isHttpProtocol()) {
       // HTTP
