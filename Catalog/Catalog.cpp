@@ -106,6 +106,7 @@ std::map<std::string, std::shared_ptr<Catalog>> Catalog::mapd_cat_map_;
 
 thread_local bool Catalog::thread_holds_read_lock = false;
 
+using sys_read_lock = read_lock<SysCatalog>;
 using cat_read_lock = read_lock<Catalog>;
 using cat_write_lock = write_lock<Catalog>;
 using cat_sqlite_lock = sqlite_lock<Catalog>;
@@ -3307,6 +3308,9 @@ std::vector<const TableDescriptor*> Catalog::getPhysicalTablesDescriptors(
 std::vector<std::string> Catalog::getTableNamesForUser(
     const UserMetadata& user_metadata,
     const GetTablesType get_tables_type) const {
+  sys_read_lock syscat_read_lock(&SysCatalog::instance());
+  cat_read_lock read_lock(this);
+
   std::vector<std::string> table_names;
   const auto tables = getAllTableMetadata();
   for (const auto td : tables) {
