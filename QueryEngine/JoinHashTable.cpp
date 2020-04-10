@@ -139,7 +139,20 @@ InnerOuter normalize_column_pair(const Analyzer::Expr* lhs,
           "strings");
     }
   }
-  return {inner_col, outer_col ? outer_col : outer_expr};
+
+  auto normalized_inner_col = inner_col;
+  auto normalized_outer_col = outer_col ? outer_col : outer_expr;
+
+  const auto& normalized_inner_ti = normalized_inner_col->get_type_info();
+  const auto& normalized_outer_ti = normalized_outer_col->get_type_info();
+
+  if (normalized_inner_ti.is_string() != normalized_outer_ti.is_string()) {
+    throw HashJoinFail(std::string("Could not build hash tables for incompatible types " +
+                                   normalized_inner_ti.get_type_name() + " and " +
+                                   normalized_outer_ti.get_type_name()));
+  }
+
+  return {normalized_inner_col, normalized_outer_col};
 }
 
 std::vector<InnerOuter> normalize_column_pairs(const Analyzer::BinOper* condition,

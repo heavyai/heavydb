@@ -929,6 +929,38 @@ TEST(MultiFragment, KeyedOneToMany) {
   }
 }
 
+TEST(Other, Regression) {
+  sql(R"(
+      drop table if exists table_a;
+      drop table if exists table_b;
+
+      CREATE TABLE table_a (
+        Small_int SMALLINT,
+        dest_state TEXT ENCODING DICT,
+        omnisci_geo_linestring geometry(linestring, 4326)
+      );
+      CREATE TABLE table_b (
+        Small_int SMALLINT,
+        dest_state TEXT ENCODING DICT,
+        omnisci_geo_linestring geometry(linestring, 4326)
+      );
+      INSERT INTO table_a VALUES (1, 'testa_1', 'LINESTRING (30 10, 10 30, 40 40)');
+      INSERT INTO table_a VALUES (1, 'testa_2', 'LINESTRING (30 10, 10 30, 40 40)');
+      INSERT INTO table_b VALUES (1, 'testb_1', 'LINESTRING (30 10, 10 30, 40 40)');
+      INSERT INTO table_b VALUES (2, 'testb_2', 'LINESTRING (30 10, 10 30, 40 40)');
+    )");
+
+  EXPECT_THROW(sql(R"(
+        SELECT table_a.dest_state AS key0 FROM table_a, table_b WHERE (table_b.dest_state = table_a.Small_int) GROUP BY key0 LIMIT 1000000;
+      )"),
+               std::runtime_error);
+
+  sql(R"(
+      drop table if exists table_a;
+      drop table if exists table_b;
+    )");
+}
+
 int main(int argc, char** argv) {
   ::g_enable_overlaps_hashjoin = true;
   testing::InitGoogleTest(&argc, argv);
