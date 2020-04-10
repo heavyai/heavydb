@@ -1411,6 +1411,7 @@ TEST(Select, LimitAndOffset) {
           run_multiple_agg("SELECT * FROM test WHERE x <> 8 LIMIT 3 OFFSET 1;", dt);
       ASSERT_EQ(size_t(3), rows->rowCount());
     }
+
     c("SELECT str FROM (SELECT str, SUM(y) as total_y FROM test GROUP BY str ORDER BY "
       "total_y DESC, "
       "str LIMIT 1);",
@@ -1419,6 +1420,11 @@ TEST(Select, LimitAndOffset) {
     {
       const auto rows = run_multiple_agg("SELECT * FROM test LIMIT 0;", dt);
       ASSERT_EQ(size_t(0), rows->rowCount());
+    }
+    {
+      const auto rows = run_multiple_agg(
+          "SELECT * FROM ( SELECT * FROM test_inner LIMIT 3 ) t0 LIMIT 2", dt);
+      ASSERT_EQ(size_t(2), rows->rowCount());
     }
   }
 }
@@ -2135,6 +2141,10 @@ TEST(Select, OrderBy) {
       dt);
     c("SELECT o AS k FROM test ORDER BY k ASC NULLS FIRST LIMIT 20;",
       "SELECT o AS k FROM test ORDER BY k ASC LIMIT 20;",
+      dt);
+    c("SELECT * FROM ( SELECT x, y FROM test ORDER BY x, y ASC NULLS FIRST LIMIT 10 ) t0 "
+      "LIMIT 5;",
+      "SELECT * FROM ( SELECT x, y FROM test ORDER BY x, y ASC LIMIT 10 ) t0 LIMIT 5;",
       dt);
   }
 }
@@ -8278,10 +8288,9 @@ TEST(Select, Joins_ComplexQueries) {
       "SELECT COUNT(*) FROM test a JOIN (SELECT str FROM test) b ON a.str = b.str OR "
       "0;",
       dt);
-    EXPECT_ANY_THROW(
-        c("SELECT * FROM (SELECT test.x, test.y, d, f FROM test JOIN test_inner ON "
-          "test.x = test_inner.x ORDER BY f ASC LIMIT 4) ORDER BY d DESC;",
-          dt));
+    c("SELECT * FROM (SELECT test.x, test.y, d, f FROM test JOIN test_inner ON "
+      "test.x = test_inner.x ORDER BY f ASC LIMIT 4) ORDER BY d DESC;",
+      dt);
   }
 }
 
