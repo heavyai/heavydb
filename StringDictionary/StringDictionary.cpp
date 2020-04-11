@@ -1090,13 +1090,14 @@ uint32_t StringDictionary::computeBucket(const uint32_t hash,
         INVALID_STR_ID) {  // In this case it means the slot is available for use
       break;
     }
-    if (materialize_hashes_ && hash != rk_hashes_[candidate_string_id]) {
-      continue;
-    }
-    const auto old_str = getStringFromStorageFast(candidate_string_id);
-    if (str.size() == old_str.size() && !memcmp(str.data(), old_str.data(), str.size())) {
-      // found the string
-      break;
+    if (!materialize_hashes_ ||
+        (materialize_hashes_ && hash == rk_hashes_[candidate_string_id])) {
+      const auto old_str = getStringFromStorageFast(candidate_string_id);
+      if (str.size() == old_str.size() &&
+          !memcmp(str.data(), old_str.data(), str.size())) {
+        // found the string
+        break;
+      }
     }
     // wrap around
     if (++bucket == data.size()) {
