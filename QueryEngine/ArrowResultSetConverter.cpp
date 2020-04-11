@@ -260,8 +260,11 @@ ArrowResult ArrowResultSetConverter::getArrowResult() const {
           arrow::RecordBatch::Make(dummy_schema, dict->length(), {dict}));
     }
   }
-  ARROW_THROW_NOT_OK(arrow::ipc::WriteRecordBatchStream(
-      dict_batches, ipc::IpcOptions::Defaults(), out_stream.get()));
+
+  if (!dict_batches.empty()) {
+    ARROW_THROW_NOT_OK(arrow::ipc::WriteRecordBatchStream(
+        dict_batches, ipc::IpcOptions::Defaults(), out_stream.get()));
+  }
 
   auto complete_ipc_stream = out_stream->Finish();
   ARROW_THROW_NOT_OK(complete_ipc_stream.status());
