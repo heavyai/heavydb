@@ -337,9 +337,10 @@ DEVICE void SUFFIX(init_baseline_hash_join_buff)(int8_t* hash_buff,
   int32_t start = cpu_thread_idx;
   int32_t step = cpu_thread_count;
 #endif
+  auto hash_entry_size = (key_component_count + (with_val_slot ? 1 : 0)) * sizeof(T);
   const T empty_key = SUFFIX(get_invalid_key)<T>();
   for (uint32_t h = start; h < entry_count; h += step) {
-    uint32_t off = h * (key_component_count + (with_val_slot ? 1 : 0)) * sizeof(T);
+    uint32_t off = h * hash_entry_size;
     auto row_ptr = reinterpret_cast<T*>(hash_buff + off);
     for (size_t i = 0; i < key_component_count; ++i) {
       row_ptr[i] = empty_key;
@@ -356,8 +357,8 @@ __device__ T* get_matching_baseline_hash_slot_at(int8_t* hash_buff,
                                                  const uint32_t h,
                                                  const T* key,
                                                  const size_t key_component_count,
-                                                 const bool with_val_slot) {
-  uint32_t off = h * (key_component_count + (with_val_slot ? 1 : 0)) * sizeof(T);
+                                                 const size_t hash_entry_size) {
+  uint32_t off = h * hash_entry_size;
   auto row_ptr = reinterpret_cast<T*>(hash_buff + off);
   const T empty_key = SUFFIX(get_invalid_key)<T>();
   {
@@ -400,8 +401,8 @@ T* get_matching_baseline_hash_slot_at(int8_t* hash_buff,
                                       const uint32_t h,
                                       const T* key,
                                       const size_t key_component_count,
-                                      const bool with_val_slot) {
-  uint32_t off = h * (key_component_count + (with_val_slot ? 1 : 0)) * sizeof(T);
+                                      const size_t hash_entry_size) {
+  uint32_t off = h * hash_entry_size;
   auto row_ptr = reinterpret_cast<T*>(hash_buff + off);
   T empty_key = SUFFIX(get_invalid_key)<T>();
   T write_pending = SUFFIX(get_invalid_key)<T>() - 1;
@@ -442,16 +443,17 @@ DEVICE int write_baseline_hash_slot(const int32_t val,
                                     const T* key,
                                     const size_t key_component_count,
                                     const bool with_val_slot,
-                                    const int32_t invalid_slot_val) {
-  const uint32_t h =
-      MurmurHash1Impl(key, key_component_count * sizeof(T), 0) % entry_count;
+                                    const int32_t invalid_slot_val,
+                                    const size_t key_size_in_bytes,
+                                    const size_t hash_entry_size) {
+  const uint32_t h = MurmurHash1Impl(key, key_size_in_bytes, 0) % entry_count;
   T* matching_group = get_matching_baseline_hash_slot_at(
-      hash_buff, h, key, key_component_count, with_val_slot);
+      hash_buff, h, key, key_component_count, hash_entry_size);
   if (!matching_group) {
     uint32_t h_probe = (h + 1) % entry_count;
     while (h_probe != h) {
       matching_group = get_matching_baseline_hash_slot_at(
-          hash_buff, h_probe, key, key_component_count, with_val_slot);
+          hash_buff, h_probe, key, key_component_count, hash_entry_size);
       if (matching_group) {
         break;
       }
@@ -489,18 +491,26 @@ DEVICE int SUFFIX(fill_baseline_hash_join_buff)(int8_t* hash_buff,
 #endif
 
   T key_scratch_buff[g_maximum_conditions_to_coalesce];
-
-  auto key_buff_handler = [hash_buff, entry_count, with_val_slot, invalid_slot_val](
-                              const size_t entry_idx,
-                              const T* key_scratch_buffer,
-                              const size_t key_component_count) {
+  const size_t key_size_in_bytes = key_component_count * sizeof(T);
+  const size_t hash_entry_size =
+      (key_component_count + (with_val_slot ? 1 : 0)) * sizeof(T);
+  auto key_buff_handler = [hash_buff,
+                           entry_count,
+                           with_val_slot,
+                           invalid_slot_val,
+                           key_size_in_bytes,
+                           hash_entry_size](const size_t entry_idx,
+                                            const T* key_scratch_buffer,
+                                            const size_t key_component_count) {
     return write_baseline_hash_slot<T>(entry_idx,
                                        hash_buff,
                                        entry_count,
                                        key_scratch_buffer,
                                        key_component_count,
                                        with_val_slot,
-                                       invalid_slot_val);
+                                       invalid_slot_val,
+                                       key_size_in_bytes,
+                                       hash_entry_size);
   };
 
   JoinColumnTuple cols(f->get_key_component_count(),
@@ -692,9 +702,9 @@ DEVICE NEVER_INLINE const T* SUFFIX(get_matching_baseline_hash_slot_readonly)(
     const T* key,
     const size_t key_component_count,
     const T* composite_key_dict,
-    const size_t entry_count) {
-  const uint32_t h =
-      MurmurHash1Impl(key, key_component_count * sizeof(T), 0) % entry_count;
+    const size_t entry_count,
+    const size_t key_size_in_bytes) {
+  const uint32_t h = MurmurHash1Impl(key, key_size_in_bytes, 0) % entry_count;
   uint32_t off = h * key_component_count;
   if (keys_are_equal(&composite_key_dict[off], key, key_component_count)) {
     return &composite_key_dict[off];
@@ -738,13 +748,19 @@ GLOBAL void SUFFIX(count_matches_baseline)(int32_t* count_buff,
   assert(composite_key_dict);
 #endif
   T key_scratch_buff[g_maximum_conditions_to_coalesce];
-
-  auto key_buff_handler = [composite_key_dict, entry_count, count_buff](
-                              const size_t row_entry_idx,
-                              const T* key_scratch_buff,
-                              const size_t key_component_count) {
-    const auto matching_group = SUFFIX(get_matching_baseline_hash_slot_readonly)(
-        key_scratch_buff, key_component_count, composite_key_dict, entry_count);
+  const size_t key_size_in_bytes = f->get_key_component_count() * sizeof(T);
+  auto key_buff_handler = [composite_key_dict,
+                           entry_count,
+                           count_buff,
+                           key_size_in_bytes](const size_t row_entry_idx,
+                                              const T* key_scratch_buff,
+                                              const size_t key_component_count) {
+    const auto matching_group =
+        SUFFIX(get_matching_baseline_hash_slot_readonly)(key_scratch_buff,
+                                                         key_component_count,
+                                                         composite_key_dict,
+                                                         entry_count,
+                                                         key_size_in_bytes);
     const auto entry_idx = (matching_group - composite_key_dict) / key_component_count;
     mapd_add(&count_buff[entry_idx], int32_t(1));
     return 0;
@@ -1056,17 +1072,22 @@ GLOBAL void SUFFIX(fill_row_ids_baseline)(int32_t* buff,
 #ifdef __CUDACC__
   assert(composite_key_dict);
 #endif
-
+  const size_t key_size_in_bytes = f->get_key_component_count() * sizeof(T);
   auto key_buff_handler = [composite_key_dict,
                            hash_entry_count,
                            pos_buff,
                            invalid_slot_val,
                            count_buff,
-                           id_buff](const size_t row_index,
-                                    const T* key_scratch_buff,
-                                    const size_t key_component_count) {
-    const T* matching_group = SUFFIX(get_matching_baseline_hash_slot_readonly)(
-        key_scratch_buff, key_component_count, composite_key_dict, hash_entry_count);
+                           id_buff,
+                           key_size_in_bytes](const size_t row_index,
+                                              const T* key_scratch_buff,
+                                              const size_t key_component_count) {
+    const T* matching_group =
+        SUFFIX(get_matching_baseline_hash_slot_readonly)(key_scratch_buff,
+                                                         key_component_count,
+                                                         composite_key_dict,
+                                                         hash_entry_count,
+                                                         key_size_in_bytes);
     const auto entry_idx = (matching_group - composite_key_dict) / key_component_count;
     int32_t* pos_ptr = pos_buff + entry_idx;
 #ifndef __CUDACC__
