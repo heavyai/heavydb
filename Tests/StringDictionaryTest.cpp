@@ -17,6 +17,7 @@
 #include "../StringDictionary/StringDictionary.h"
 #include "TestHelpers.h"
 
+#include <cstdlib>
 #include <limits>
 
 #include <gtest/gtest.h>
@@ -25,8 +26,10 @@
 #define BASE_PATH "./tmp"
 #endif
 
+bool g_cache_string_hash{false};
+
 TEST(StringDictionary, AddAndGet) {
-  StringDictionary string_dict(BASE_PATH, false, false);
+  StringDictionary string_dict(BASE_PATH, false, false, g_cache_string_hash);
   auto id1 = string_dict.getOrAdd("foo bar");
   auto id2 = string_dict.getOrAdd("foo bar");
   ASSERT_EQ(id1, id2);
@@ -39,7 +42,7 @@ TEST(StringDictionary, AddAndGet) {
 }
 
 TEST(StringDictionary, Recover) {
-  StringDictionary string_dict(BASE_PATH, false, true);
+  StringDictionary string_dict(BASE_PATH, false, true, g_cache_string_hash);
   auto id1 = string_dict.getOrAdd("baz");
   ASSERT_EQ(1, id1);
   auto id2 = string_dict.getOrAdd("baz");
@@ -54,7 +57,7 @@ TEST(StringDictionary, Recover) {
 }
 
 TEST(StringDictionary, HandleEmpty) {
-  StringDictionary string_dict(BASE_PATH, false, false);
+  StringDictionary string_dict(BASE_PATH, false, false, g_cache_string_hash);
   auto id1 = string_dict.getOrAdd("");
   auto id2 = string_dict.getOrAdd("");
   ASSERT_EQ(id1, id2);
@@ -64,7 +67,7 @@ TEST(StringDictionary, HandleEmpty) {
 const int g_op_count{250000};
 
 TEST(StringDictionary, ManyAddsAndGets) {
-  StringDictionary string_dict(BASE_PATH, false, false);
+  StringDictionary string_dict(BASE_PATH, false, false, g_cache_string_hash);
   for (int i = 0; i < g_op_count; ++i) {
     CHECK_EQ(i, string_dict.getOrAdd(std::to_string(i)));
   }
@@ -77,7 +80,7 @@ TEST(StringDictionary, ManyAddsAndGets) {
 }
 
 TEST(StringDictionary, RecoverMany) {
-  StringDictionary string_dict(BASE_PATH, false, true);
+  StringDictionary string_dict(BASE_PATH, false, true, g_cache_string_hash);
   for (int i = 0; i < g_op_count; ++i) {
     CHECK_EQ(i, string_dict.getOrAdd(std::to_string(i)));
   }
@@ -87,8 +90,30 @@ TEST(StringDictionary, RecoverMany) {
 }
 
 int main(int argc, char** argv) {
-  TestHelpers::init_logger_stderr_only(argc, argv);
   testing::InitGoogleTest(&argc, argv);
+
+  namespace po = boost::program_options;
+  po::options_description desc("Options");
+
+  // these two are here to allow passing correctly google testing parameters
+  desc.add_options()("gtest_list_tests", "list all test");
+  desc.add_options()("gtest_filter", "filters tests, use --help for details");
+
+  desc.add_options()(
+      "enable-string-dict-hash-cache",
+      po::value<bool>(&g_cache_string_hash)
+          ->default_value(g_cache_string_hash)
+          ->implicit_value(true),
+      "Cache string hash values in the string dictionary server during import.");
+
+  logger::LogOptions log_options(argv[0]);
+  log_options.severity_ = logger::Severity::FATAL;
+  log_options.set_options();  // update default values
+  desc.add(log_options.get_options());
+
+  po::variables_map vm;
+  po::store(po::command_line_parser(argc, argv).options(desc).run(), vm);
+  po::notify(vm);
 
   int err{0};
   try {
