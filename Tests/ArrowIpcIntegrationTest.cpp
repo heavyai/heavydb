@@ -93,21 +93,52 @@ void run_ddl_statement(const std::string& ddl) {
   run_multiple_agg(ddl);
 }
 
+void test_scalar_values(const std::shared_ptr<arrow::RecordBatch>& read_batch) {
+  ASSERT_EQ(read_batch->schema()->num_fields(), 5);
+
+  // smallint column
+  auto sm_int_array = read_batch->column(0);
+  ASSERT_EQ(sm_int_array->type()->id(), arrow::Type::type::INT16);
+
+  // int column
+  auto int_array = read_batch->column(1);
+  ASSERT_EQ(int_array->type()->id(), arrow::Type::type::INT32);
+
+  // bigint column
+  auto big_int_array = read_batch->column(2);
+  ASSERT_EQ(big_int_array->type()->id(), arrow::Type::type::INT64);
+
+  // float column
+  auto float_array = read_batch->column(3);
+  ASSERT_EQ(float_array->type()->id(), arrow::Type::type::FLOAT);
+
+  // double column
+  auto double_array = read_batch->column(4);
+  ASSERT_EQ(double_array->type()->id(), arrow::Type::type::DOUBLE);
+}
+
 }  // namespace
 
 class ArrowIpcBasic : public ::testing::Test {
  protected:
   void SetUp() override {
     run_ddl_statement("DROP TABLE IF EXISTS arrow_ipc_test;");
+    run_ddl_statement("DROP TABLE IF EXISTS test_data_scalars;");
     run_ddl_statement(
         "CREATE TABLE arrow_ipc_test(x INT, y DOUBLE, t TEXT ENCODING DICT(32)) WITH "
         "(FRAGMENT_SIZE=2);");
+    run_ddl_statement(
+        "CREATE TABLE test_data_scalars(smallint_ SMALLINT, int_ INT, bigint_ BIGINT, "
+        "float_ FLOAT, double_ DOUBLE); ");
 
     run_ddl_statement("INSERT INTO arrow_ipc_test VALUES (1, 1.1, 'foo');");
     run_ddl_statement("INSERT INTO arrow_ipc_test VALUES (2, 2.1, NULL);");
     run_ddl_statement("INSERT INTO arrow_ipc_test VALUES (NULL, 3.1, 'bar');");
     run_ddl_statement("INSERT INTO arrow_ipc_test VALUES (4, NULL, 'hello');");
     run_ddl_statement("INSERT INTO arrow_ipc_test VALUES (5, 5.1, 'world');");
+
+    run_ddl_statement("INSERT INTO test_data_scalars VALUES (1, 2, 3, 0.1, 0.001);");
+    run_ddl_statement("INSERT INTO test_data_scalars VALUES (1, 2, 3, 0.1, 0.001);");
   }
 
   void TearDown() override { run_ddl_statement("DROP TABLE IF EXISTS arrow_ipc_test;"); }
@@ -193,6 +224,118 @@ TEST_F(ArrowIpcBasic, IpcCpu) {
   }
 
   deallocate_df(data_frame, ExecutorDeviceType::CPU);
+}
+
+TEST_F(ArrowIpcBasic, IpcCpuScalarValues) {
+  auto data_frame =
+      execute_arrow_ipc("SELECT * FROM test_data_scalars;", ExecutorDeviceType::CPU);
+  auto ipc_handle = data_frame.df_handle;
+  auto ipc_handle_size = data_frame.df_size;
+
+  ASSERT_TRUE(ipc_handle_size > 0);
+
+  key_t shmem_key = -1;
+  std::memcpy(&shmem_key, ipc_handle.data(), sizeof(key_t));
+  int shmem_id = shmget(shmem_key, ipc_handle_size, 0666);
+  if (shmem_id < 0) {
+    throw std::runtime_error("Failed to get IPC memory segment.");
+  }
+
+  auto ipc_ptr = shmat(shmem_id, NULL, 0);
+  if (reinterpret_cast<int64_t>(ipc_ptr) == -1) {
+    throw std::runtime_error("Failed to attach to IPC memory segment.");
+  }
+
+  arrow::io::BufferReader reader(reinterpret_cast<const uint8_t*>(ipc_ptr),
+                                 ipc_handle_size);
+  std::shared_ptr<arrow::RecordBatchReader> batch_reader;
+  ARROW_THROW_NOT_OK(arrow::ipc::RecordBatchStreamReader::Open(&reader, &batch_reader));
+  std::shared_ptr<arrow::RecordBatch> read_batch;
+  ARROW_THROW_NOT_OK(batch_reader->ReadNext(&read_batch));
+
+  test_scalar_values(read_batch);
+
+  deallocate_df(data_frame, ExecutorDeviceType::CPU);
+}
+
+TEST_F(ArrowIpcBasic, IpcGpuScalarValues) {
+  const size_t device_id = 0;
+  if (g_cpu_only) {
+    LOG(ERROR) << "Test not valid in CPU mode.";
+    return;
+  }
+  auto data_frame = execute_arrow_ipc(
+      "SELECT * FROM test_data_scalars;", ExecutorDeviceType::GPU, device_id);
+  auto ipc_handle = data_frame.sm_handle;
+  auto ipc_handle_size = data_frame.sm_size;
+
+  ASSERT_TRUE(ipc_handle_size > 0);
+
+  // Read schema from IPC memory
+  key_t shmem_key = -1;
+  std::memcpy(&shmem_key, ipc_handle.data(), sizeof(key_t));
+  int shmem_id = shmget(shmem_key, ipc_handle_size, 0666);
+  if (shmem_id < 0) {
+    throw std::runtime_error("Failed to get IPC memory segment.");
+  }
+
+  auto ipc_ptr = shmat(shmem_id, NULL, 0);
+  if (reinterpret_cast<int64_t>(ipc_ptr) == -1) {
+    throw std::runtime_error("Failed to attach to IPC memory segment.");
+  }
+
+  arrow::io::BufferReader reader(reinterpret_cast<const uint8_t*>(ipc_ptr),
+                                 ipc_handle_size);
+  auto message_reader = arrow::ipc::MessageReader::Open(&reader);
+
+  // read schema
+  std::shared_ptr<arrow::Schema> schema;
+  arrow::ipc::DictionaryMemo memo;
+  std::unique_ptr<arrow::ipc::Message> schema_message;
+  ARROW_THROW_NOT_OK(message_reader->ReadNextMessage(&schema_message));
+  ARROW_THROW_NOT_OK(arrow::ipc::ReadSchema(*schema_message, &memo, &schema));
+
+  // read data
+  std::shared_ptr<arrow::RecordBatch> read_batch;
+#ifdef HAVE_CUDA
+  arrow::cuda::CudaDeviceManager* manager;
+  ARROW_THROW_NOT_OK(arrow::cuda::CudaDeviceManager::GetInstance(&manager));
+  std::shared_ptr<arrow::cuda::CudaContext> context;
+  ARROW_THROW_NOT_OK(manager->GetContext(device_id, &context));
+
+  std::shared_ptr<arrow::cuda::CudaIpcMemHandle> cuda_handle;
+  ARROW_THROW_NOT_OK(arrow::cuda::CudaIpcMemHandle::FromBuffer(
+      reinterpret_cast<void*>(data_frame.df_handle.data()), &cuda_handle));
+
+  std::shared_ptr<arrow::cuda::CudaBuffer> cuda_buffer;
+  ARROW_THROW_NOT_OK(context->OpenIpcBuffer(*cuda_handle, &cuda_buffer));
+
+  arrow::cuda::CudaBufferReader cuda_reader(cuda_buffer);
+
+  std::unique_ptr<arrow::ipc::Message> message;
+  ARROW_THROW_NOT_OK(
+      arrow::cuda::ReadMessage(&cuda_reader, arrow::default_memory_pool(), &message));
+
+  ASSERT_TRUE(message);
+
+  ARROW_THROW_NOT_OK(arrow::ipc::ReadRecordBatch(*message, schema, &memo, &read_batch));
+
+  // Copy data to host for checking
+  std::shared_ptr<arrow::Buffer> host_buffer;
+  const int64_t size = cuda_buffer->size();
+  ARROW_THROW_NOT_OK(AllocateBuffer(arrow::default_memory_pool(), size, &host_buffer));
+  ARROW_THROW_NOT_OK(cuda_buffer->CopyToHost(0, size, host_buffer->mutable_data()));
+
+  std::shared_ptr<arrow::RecordBatch> cpu_batch;
+  arrow::io::BufferReader cpu_reader(host_buffer);
+  ARROW_THROW_NOT_OK(
+      arrow::ipc::ReadRecordBatch(read_batch->schema(), &memo, &cpu_reader, &cpu_batch));
+
+  test_scalar_values(read_batch);
+#else
+  ASSERT_TRUE(false) << "Test should be skipped in CPU-only mode!";
+#endif
+  deallocate_df(data_frame, ExecutorDeviceType::GPU);
 }
 
 TEST_F(ArrowIpcBasic, IpcGpu) {
