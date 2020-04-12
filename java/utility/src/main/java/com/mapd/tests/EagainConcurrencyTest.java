@@ -76,7 +76,8 @@ public class EagainConcurrencyTest {
 
       user.get_memory("cpu");
       user.get_dashboards();
-      user.get_tables_meta();
+      //       user.get_tables_meta(); // TODO(adb): re-enable after fixing up catalog/db
+      //       locking
 
       logger.info("[" + tid + "]"
               + "USER DISCONNECT");
