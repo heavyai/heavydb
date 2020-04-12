@@ -2039,28 +2039,20 @@ void DBHandler::get_views(std::vector<std::string>& table_names,
   get_tables_impl(table_names, *stdlog.getConstSessionInfo(), GET_VIEWS);
 }
 
-void DBHandler::get_tables_meta(std::vector<TTableMeta>& _return,
-                                const TSessionId& session) {
-  auto stdlog = STDLOG(get_session_ptr(session));
-  stdlog.appendNameValuePairs("client", getConnectionInfo().toString());
-  auto session_ptr = stdlog.getConstSessionInfo();
-  auto query_state = create_query_state(session_ptr, "");
-  stdlog.setQueryState(query_state);
-
-  const auto& cat = session_ptr->getCatalog();
+void DBHandler::get_tables_meta_impl(std::vector<TTableMeta>& _return,
+                                     QueryStateProxy query_state_proxy,
+                                     const Catalog_Namespace::SessionInfo& session_info,
+                                     const bool with_table_locks) {
+  const auto& cat = session_info.getCatalog();
   const auto tables = cat.getAllTableMetadata();
   _return.reserve(tables.size());
-
-  auto execute_read_lock = mapd_shared_lock<mapd_shared_mutex>(
-      *legacylockmgr::LockMgr<mapd_shared_mutex, bool>::getMutex(
-          legacylockmgr::ExecutorOuterLock, true));
 
   for (const auto td : tables) {
     if (td->shard >= 0) {
       // skip shards, they're not standalone tables
       continue;
     }
-    if (!hasTableAccessPrivileges(td, *session_ptr)) {
+    if (!hasTableAccessPrivileges(td, session_info)) {
       // skip table, as there are no privileges to access it
       continue;
     }
@@ -2080,16 +2072,13 @@ void DBHandler::get_tables_meta(std::vector<TTableMeta>& _return,
       try {
         TPlanResult parse_result;
         lockmgr::LockedTableDescriptors locks;
-        std::tie(parse_result, locks) = parse_to_ra(query_state->createQueryStateProxy(),
-                                                    td->viewSQL,
-                                                    {},
-                                                    true,
-                                                    mapd_parameters_);
+        std::tie(parse_result, locks) = parse_to_ra(
+            query_state_proxy, td->viewSQL, {}, with_table_locks, mapd_parameters_);
         const auto query_ra = parse_result.plan_result;
 
         TQueryResult result;
         execute_rel_alg(result,
-                        query_state->createQueryStateProxy(),
+                        query_state_proxy,
                         query_ra,
                         true,
                         ExecutorDeviceType::CPU,
@@ -2112,7 +2101,7 @@ void DBHandler::get_tables_meta(std::vector<TTableMeta>& _return,
       }
     } else {
       try {
-        if (hasTableAccessPrivileges(td, *session_ptr)) {
+        if (hasTableAccessPrivileges(td, session_info)) {
           const auto col_descriptors =
               cat.getAllColumnMetadataForTable(td->tableId, false, true, false);
           const auto deleted_cd = cat.getDeletedColumn(td);
@@ -2137,6 +2126,25 @@ void DBHandler::get_tables_meta(std::vector<TTableMeta>& _return,
     std::copy(col_names.begin(), col_names.end(), std::back_inserter(ret.col_names));
 
     _return.push_back(ret);
+  }
+}
+
+void DBHandler::get_tables_meta(std::vector<TTableMeta>& _return,
+                                const TSessionId& session) {
+  auto stdlog = STDLOG(get_session_ptr(session));
+  stdlog.appendNameValuePairs("client", getConnectionInfo().toString());
+  auto session_ptr = stdlog.getConstSessionInfo();
+  auto query_state = create_query_state(session_ptr, "");
+  stdlog.setQueryState(query_state);
+
+  auto execute_read_lock = mapd_shared_lock<mapd_shared_mutex>(
+      *legacylockmgr::LockMgr<mapd_shared_mutex, bool>::getMutex(
+          legacylockmgr::ExecutorOuterLock, true));
+
+  try {
+    get_tables_meta_impl(_return, query_state->createQueryStateProxy(), *session_ptr);
+  } catch (const std::exception& e) {
+    THROW_MAPD_EXCEPTION(e.what());
   }
 }
 
@@ -5153,7 +5161,7 @@ void DBHandler::sql_execute_impl(TQueryResult& _return,
                                                 leaf_aggregator_,
                                                 *session_ptr,
                                                 *this);
-            output = validator.validate();
+            output = validator.validate(query_state_proxy);
           });
         } else {
           output = "Not running on a cluster nothing to validate";

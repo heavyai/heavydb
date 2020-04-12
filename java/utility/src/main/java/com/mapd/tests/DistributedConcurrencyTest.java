@@ -21,9 +21,8 @@ import org.slf4j.LoggerFactory;
 import java.util.ArrayList;
 import java.util.Random;
 
-public class SelectUpdateDeleteDifferentTables {
-  final static Logger logger =
-          LoggerFactory.getLogger(SelectUpdateDeleteDifferentTables.class);
+public class DistributedConcurrencyTest {
+  final static Logger logger = LoggerFactory.getLogger(DistributedConcurrencyTest.class);
 
   final static String[] text_values = {"foo",
           "bar",
@@ -47,7 +46,7 @@ public class SelectUpdateDeleteDifferentTables {
           "p"};
 
   public static void main(String[] args) throws Exception {
-    SelectUpdateDeleteDifferentTables test = new SelectUpdateDeleteDifferentTables();
+    DistributedConcurrencyTest test = new DistributedConcurrencyTest();
     test.testConcurrency();
   }
 
@@ -114,6 +113,14 @@ public class SelectUpdateDeleteDifferentTables {
               logger.info(logPrefix + " " + sql);
               user.runSql(sql);
 
+              sql = "VALIDATE CLUSTER;";
+              logger.info(logPrefix + " " + sql);
+              user.runSql(sql);
+
+              user.get_status();
+              user.get_hardware_info();
+              user.get_memory("cpu");
+
               sql = "DELETE FROM " + tableName + " WHERE y = " + rand.nextInt(num_rows)
                       + ";";
               logger.info(logPrefix + " " + sql);
@@ -132,22 +139,11 @@ public class SelectUpdateDeleteDifferentTables {
               logger.info(logPrefix + " VALIDATE " + sql);
               user.sqlValidate(sql);
 
-              final String tableRename = tableName + "_rename";
-              sql = "ALTER TABLE " + tableName + " RENAME TO " + tableRename;
-              user.runSql(sql);
-
-              sql = "TRUNCATE TABLE " + tableRename + ";";
+              sql = "TRUNCATE TABLE " + tableName + ";";
               logger.info(logPrefix + " " + sql);
               user.runSql(sql);
 
-              sql = "INSERT INTO " + tableRename + " VALUES "
-                      + "(" + tid + "," + tid + "," + tid + "," + tid + "," + tid + ","
-                      + tid + "," + tid + "," + (tid % 2 == 0 ? "'mapd'" : "'omnisci'")
-                      + ");";
-              logger.info(logPrefix + " " + sql);
-              user.runSql(sql);
-
-              sql = "DROP TABLE " + tableRename + ";";
+              sql = "DROP TABLE " + tableName + ";";
               logger.info(logPrefix + " " + sql);
               user.runSql(sql);
 
@@ -175,7 +171,7 @@ public class SelectUpdateDeleteDifferentTables {
   }
 
   public void testConcurrency() throws Exception {
-    logger.info("SelectUpdateDeleteDifferentTables()");
+    logger.info("DistributedConcurrencyTest()");
 
     MapdTestClient su = MapdTestClient.getClient(
             "localhost", 6274, "omnisci", "admin", "HyperInteractive");
@@ -197,6 +193,6 @@ public class SelectUpdateDeleteDifferentTables {
     su.runSql("DROP USER bob;");
     su.runSql("DROP USER dba;");
 
-    logger.info("SelectUpdateDeleteDifferentTables() done");
+    logger.info("DistributedConcurrencyTest() done");
   }
 }

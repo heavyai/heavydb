@@ -22,6 +22,7 @@
 
 #include "LeafAggregator.h"
 #include "MapDServer.h"
+#include "QueryState.h"
 
 class DBHandler;
 
@@ -47,7 +48,9 @@ class DistributedValidate {
   /**
    * @brief Compares Aggregators and Leaves metatdata reporting what is different.
    */
-  std::string validate() const { return nullptr; };
+  std::string validate(query_state::QueryStateProxy query_state_proxy) const {
+    return nullptr;
+  };
 
  private:
   Catalog_Namespace::Catalog& cat_;

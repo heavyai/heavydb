@@ -526,6 +526,11 @@ class DBHandler : public OmniSciIf {
   std::shared_ptr<Catalog_Namespace::SessionInfo> get_session_copy_ptr(
       const TSessionId& session);
 
+  void get_tables_meta_impl(std::vector<TTableMeta>& _return,
+                            QueryStateProxy query_state_proxy,
+                            const Catalog_Namespace::SessionInfo& session_info,
+                            const bool with_table_locks = true);
+
  private:
   std::shared_ptr<Catalog_Namespace::SessionInfo> create_new_session(
       TSessionId& session,
