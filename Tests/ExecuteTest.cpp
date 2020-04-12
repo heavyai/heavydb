@@ -16549,6 +16549,22 @@ TEST(Select, WindowFunctionCumeDist) {
 
 TEST(Select, WindowFunctionLag) {
   const ExecutorDeviceType dt = ExecutorDeviceType::CPU;
+  // First test default lag (1)
+  {
+    std::string part1 =
+        "SELECT x, y, LAG(x + 5) OVER (PARTITION BY y ORDER BY x ASC) l FROM "
+        "test_window_func ORDER BY x ASC";
+    std::string part2 = ", y ASC, l ASC";
+    c(part1 + " NULLS FIRST" + part2 + " NULLS FIRST;", part1 + part2 + ";", dt);
+  }
+  {
+    std::string part1 =
+        "SELECT x, LAG(y) OVER (PARTITION BY y ORDER BY x ASC) l FROM test_window_func "
+        "ORDER BY x ASC";
+    std::string part2 = ", l ASC";
+    c(part1 + " NULLS FIRST" + part2 + " NULLS FIRST;", part1 + part2 + ";", dt);
+  }
+
   for (int lag = -5; lag <= 5; ++lag) {
     {
       std::string part1 =
@@ -16587,6 +16603,22 @@ TEST(Select, WindowFunctionFirst) {
 
 TEST(Select, WindowFunctionLead) {
   const ExecutorDeviceType dt = ExecutorDeviceType::CPU;
+  // First test default lead (1)
+  {
+    std::string part1 =
+        "SELECT x, y, LEAD(x) OVER (PARTITION BY y ORDER BY x DESC) l FROM "
+        "test_window_func ORDER BY x ASC";
+    std::string part2 = ", y ASC, l ASC";
+    c(part1 + " NULLS FIRST" + part2 + " NULLS FIRST;", part1 + part2 + ";", dt);
+  }
+  {
+    std::string part1 =
+        "SELECT x, LEAD(y) OVER (PARTITION BY y ORDER BY x DESC) l FROM "
+        "test_window_func ORDER BY x ASC";
+    std::string part2 = ", l ASC";
+    c(part1 + " NULLS FIRST" + part2 + " NULLS FIRST;", part1 + part2 + ";", dt);
+  }
+
   for (int lead = -5; lead <= 5; ++lead) {
     {
       std::string part1 = "SELECT x, y, LEAD(x, " + std::to_string(lead) +
