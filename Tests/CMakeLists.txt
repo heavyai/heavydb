@@ -172,6 +172,7 @@ add_test(CachedHashTableTest CachedHashTableTest ${TEST_ARGS})
 add_test(ResultSetBaselineRadixSortTest ResultSetBaselineRadixSortTest ${TEST_ARGS})
 add_test(RunQueryLoop RunQueryLoop ${TEST_ARGS})
 add_test(StringDictionaryTest StringDictionaryTest ${TEST_ARGS})
+add_test(NAME StringDictionaryRkHashTest COMMAND StringDictionaryTest ${TEST_ARGS} "--enable-string-dict-hash-cache")
 add_test(StringTransformTest StringTransformTest ${TEST_ARGS})
 add_test(StringFunctionsTest StringFunctionsTest ${TEST_ARGS})
 add_test(StorageTest StorageTest ${TEST_ARGS})
@@ -255,6 +256,7 @@ set(TEST_PROGRAMS
   JoinHashTableTest
   CachedHashTableTest
   StringFunctionsTest
+  StringDictionaryTest
   CommandLineTest
   ForeignServerDdlTest
   ShowCommandsDdlTest
@@ -269,6 +271,7 @@ endif()
 
 set(SANITY_TESTS ${TEST_PROGRAMS})
 list(APPEND SANITY_TESTS ExecuteTestTemporaryTables)
+list(APPEND SANITY_TESTS StringDictionaryRkHashTest)
 
 set_tests_properties(${SANITY_TESTS} PROPERTIES LABELS "sanity")
 
