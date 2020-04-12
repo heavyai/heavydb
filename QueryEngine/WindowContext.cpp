@@ -203,7 +203,7 @@ ssize_t get_lag_or_lead_argument(const Analyzer::WindowFunction* window_func) {
                                                                 : -lag_or_lead;
   }
   CHECK_EQ(args.size(), size_t(1));
-  return 1;
+  return window_func->getKind() == SqlWindowFunctionKind::LAG ? 1 : -1;
 }
 
 // Redistributes the original_indices according to the permutation given by
