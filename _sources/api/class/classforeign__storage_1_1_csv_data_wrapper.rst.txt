@@ -1,0 +1,9 @@
+Class foreign_storage::CsvDataWrapper
+=====================================
+
+.. doxygenclass:: foreign_storage::CsvDataWrapper
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

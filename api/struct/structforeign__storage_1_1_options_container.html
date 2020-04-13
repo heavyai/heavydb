@@ -65,7 +65,7 @@
             
             
               <div class="version">
-                5.3.0dev f4c9b57
+                5.3.0dev 4ab6622
               </div>
             
           
@@ -579,6 +579,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../class/class_parser_1_1_validate_stmt.html">Class Parser::ValidateStmt</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/class_parser_wrapper.html">Class ParserWrapper</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/class_persistent_foreign_storage_interface.html">Class PersistentForeignStorageInterface</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../class/class_persistent_storage_mgr.html">Class PersistentStorageMgr</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/class_pki_server.html">Class PkiServer</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/class_posix_file_archive.html">Class PosixFileArchive</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/class_proxy_t_http_client.html">Class ProxyTHttpClient</a></li>
@@ -882,6 +883,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../class/classcom_1_1mapd_1_1tests_1_1_calcite_views_concurrency_test.html">Class com::mapd::tests::CalciteViewsConcurrencyTest</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/classcom_1_1mapd_1_1tests_1_1_catalog_concurrency_test.html">Class com::mapd::tests::CatalogConcurrencyTest</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/classcom_1_1mapd_1_1tests_1_1_ctas_itas_select_updel_concurrency_test.html">Class com::mapd::tests::CtasItasSelectUpdelConcurrencyTest</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../class/classcom_1_1mapd_1_1tests_1_1_distributed_concurrency_test.html">Class com::mapd::tests::DistributedConcurrencyTest</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/classcom_1_1mapd_1_1tests_1_1_eagain_concurrency_test.html">Class com::mapd::tests::EagainConcurrencyTest</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/classcom_1_1mapd_1_1tests_1_1_import_alter_validate_select_concurrency_test.html">Class com::mapd::tests::ImportAlterValidateSelectConcurrencyTest</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/classcom_1_1mapd_1_1tests_1_1_mapd_asserts.html">Class com::mapd::tests::MapdAsserts</a></li>
@@ -931,6 +933,10 @@
 <li class="toctree-l2"><a class="reference internal" href="../class/classddl__utils_1_1_encoding.html">Class ddl_utils::Encoding</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/classddl__utils_1_1_sql_type.html">Class ddl_utils::SqlType</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/classdetails_1_1_rel_alg_dispatcher.html">Class details::RelAlgDispatcher</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../class/classforeign__storage_1_1_csv_data_wrapper.html">Class foreign_storage::CsvDataWrapper</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../class/classforeign__storage_1_1_foreign_data_wrapper.html">Class foreign_storage::ForeignDataWrapper</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../class/classforeign__storage_1_1_foreign_storage_buffer.html">Class foreign_storage::ForeignStorageBuffer</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../class/classforeign__storage_1_1_foreign_storage_mgr.html">Class foreign_storage::ForeignStorageMgr</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/classlegacylockmgr_1_1_lock_mgr.html">Class legacylockmgr::LockMgr</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/classlockmgr_1_1_abstract_lock_container.html">Class lockmgr::AbstractLockContainer</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/classlockmgr_1_1_insert_data_lock_mgr.html">Class lockmgr::InsertDataLockMgr</a></li>
@@ -1259,7 +1265,7 @@
 <li class="toctree-l2"><a class="reference internal" href="structanonymous__namespace_02geo__types_8cpp_03_1_1_bounding_box.html">Struct anonymous_namespace{geo_types.cpp}::BoundingBox</a></li>
 <li class="toctree-l2"><a class="reference internal" href="structanonymous__namespace_02geo__types_8cpp_03_1_1_coords.html">Struct anonymous_namespace{geo_types.cpp}::Coords</a></li>
 <li class="toctree-l2"><a class="reference internal" href="structdict__ref__t.html">Struct dict_ref_t</a></li>
-<li class="toctree-l2"><a class="reference internal" href="structforeign__storage_1_1_data_wrapper.html">Struct foreign_storage::DataWrapper</a></li>
+<li class="toctree-l2"><a class="reference internal" href="structforeign__storage_1_1_data_wrapper_type.html">Struct foreign_storage::DataWrapperType</a></li>
 <li class="toctree-l2"><a class="reference internal" href="structforeign__storage_1_1_foreign_server.html">Struct foreign_storage::ForeignServer</a></li>
 <li class="toctree-l2"><a class="reference internal" href="structforeign__storage_1_1_foreign_table.html">Struct foreign_storage::ForeignTable</a></li>
 <li class="toctree-l2 current"><a class="current reference internal" href="#">Struct foreign_storage::OptionsContainer</a></li>
@@ -1411,6 +1417,21 @@
 <dd><p>Subclassed by <a class="reference internal" href="structforeign__storage_1_1_foreign_server.html#structforeign__storage_1_1_foreign_server"><span class="std std-ref">foreign_storage::ForeignServer</span></a>, <a class="reference internal" href="structforeign__storage_1_1_foreign_table.html#structforeign__storage_1_1_foreign_table"><span class="std std-ref">foreign_storage::ForeignTable</span></a></p>
 <div class="breathe-sectiondef docutils container">
 <p class="breathe-sectiondef-title rubric">Public Functions</p>
+<dl class="function">
+<dt id="_CPPv4N15foreign_storage16OptionsContainer16OptionsContainerEv">
+<span id="_CPPv3N15foreign_storage16OptionsContainer16OptionsContainerEv"></span><span id="_CPPv2N15foreign_storage16OptionsContainer16OptionsContainerEv"></span><span id="foreign_storage::OptionsContainer::OptionsContainer"></span><span class="target" id="structforeign__storage_1_1_options_container_1aae8bd3a9b6792c15bfdc78c4b63df88f"></span><code class="sig-name descname">OptionsContainer</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N15foreign_storage16OptionsContainer16OptionsContainerEv" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="_CPPv4N15foreign_storage16OptionsContainer16OptionsContainerERKNSt3mapINSt6stringENSt6stringENSt4lessIEEEE">
+<span id="_CPPv3N15foreign_storage16OptionsContainer16OptionsContainerERKNSt3mapINSt6stringENSt6stringENSt4lessIEEEE"></span><span id="_CPPv2N15foreign_storage16OptionsContainer16OptionsContainerERKNSt3mapINSt6stringENSt6stringENSt4lessIEEEE"></span><span id="foreign_storage::OptionsContainer::OptionsContainer__std::map:ss.ss.std::less:::CR"></span><span class="target" id="structforeign__storage_1_1_options_container_1a5a2ce5aa1872aab06277df7815552533"></span><code class="sig-name descname">OptionsContainer</code><span class="sig-paren">(</span><em class="property">const</em> std::map&lt;std::string, std::string, std::less&lt;&gt;&gt; &amp;<em>options</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N15foreign_storage16OptionsContainer16OptionsContainerERKNSt3mapINSt6stringENSt6stringENSt4lessIEEEE" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="_CPPv4N15foreign_storage16OptionsContainer16OptionsContainerERKNSt6stringE">
+<span id="_CPPv3N15foreign_storage16OptionsContainer16OptionsContainerERKNSt6stringE"></span><span id="_CPPv2N15foreign_storage16OptionsContainer16OptionsContainerERKNSt6stringE"></span><span id="foreign_storage::OptionsContainer::OptionsContainer__ssCR"></span><span class="target" id="structforeign__storage_1_1_options_container_1acaafcd397f9fc4d92e0323cd56e58fe9"></span><code class="sig-name descname">OptionsContainer</code><span class="sig-paren">(</span><em class="property">const</em> std::string &amp;<em>options_str</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N15foreign_storage16OptionsContainer16OptionsContainerERKNSt6stringE" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
 <dl class="function">
 <dt id="_CPPv4N15foreign_storage16OptionsContainer18populateOptionsMapERKN9rapidjson5ValueE">
 <span id="_CPPv3N15foreign_storage16OptionsContainer18populateOptionsMapERKN9rapidjson5ValueE"></span><span id="_CPPv2N15foreign_storage16OptionsContainer18populateOptionsMapERKN9rapidjson5ValueE"></span><span id="foreign_storage::OptionsContainer::populateOptionsMap__rapidjson::ValueCR"></span><span class="target" id="structforeign__storage_1_1_options_container_1a367e224dbcf5a60b439887a277c4637b"></span>void <code class="sig-name descname">populateOptionsMap</code><span class="sig-paren">(</span><em class="property">const</em> rapidjson::Value &amp;<em>ddl_options</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N15foreign_storage16OptionsContainer18populateOptionsMapERKN9rapidjson5ValueE" title="Permalink to this definition">¶</a><br /></dt>

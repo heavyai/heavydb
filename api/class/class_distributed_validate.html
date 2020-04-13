@@ -65,7 +65,7 @@
             
             
               <div class="version">
-                5.3.0dev f4c9b57
+                5.3.0dev 4ab6622
               </div>
             
           
@@ -579,6 +579,7 @@
 <li class="toctree-l2"><a class="reference internal" href="class_parser_1_1_validate_stmt.html">Class Parser::ValidateStmt</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_parser_wrapper.html">Class ParserWrapper</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_persistent_foreign_storage_interface.html">Class PersistentForeignStorageInterface</a></li>
+<li class="toctree-l2"><a class="reference internal" href="class_persistent_storage_mgr.html">Class PersistentStorageMgr</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_pki_server.html">Class PkiServer</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_posix_file_archive.html">Class PosixFileArchive</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_proxy_t_http_client.html">Class ProxyTHttpClient</a></li>
@@ -882,6 +883,7 @@
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1tests_1_1_calcite_views_concurrency_test.html">Class com::mapd::tests::CalciteViewsConcurrencyTest</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1tests_1_1_catalog_concurrency_test.html">Class com::mapd::tests::CatalogConcurrencyTest</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1tests_1_1_ctas_itas_select_updel_concurrency_test.html">Class com::mapd::tests::CtasItasSelectUpdelConcurrencyTest</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1tests_1_1_distributed_concurrency_test.html">Class com::mapd::tests::DistributedConcurrencyTest</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1tests_1_1_eagain_concurrency_test.html">Class com::mapd::tests::EagainConcurrencyTest</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1tests_1_1_import_alter_validate_select_concurrency_test.html">Class com::mapd::tests::ImportAlterValidateSelectConcurrencyTest</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1tests_1_1_mapd_asserts.html">Class com::mapd::tests::MapdAsserts</a></li>
@@ -931,6 +933,10 @@
 <li class="toctree-l2"><a class="reference internal" href="classddl__utils_1_1_encoding.html">Class ddl_utils::Encoding</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classddl__utils_1_1_sql_type.html">Class ddl_utils::SqlType</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classdetails_1_1_rel_alg_dispatcher.html">Class details::RelAlgDispatcher</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_csv_data_wrapper.html">Class foreign_storage::CsvDataWrapper</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_foreign_data_wrapper.html">Class foreign_storage::ForeignDataWrapper</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_foreign_storage_buffer.html">Class foreign_storage::ForeignStorageBuffer</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_foreign_storage_mgr.html">Class foreign_storage::ForeignStorageMgr</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classlegacylockmgr_1_1_lock_mgr.html">Class legacylockmgr::LockMgr</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classlockmgr_1_1_abstract_lock_container.html">Class lockmgr::AbstractLockContainer</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classlockmgr_1_1_insert_data_lock_mgr.html">Class lockmgr::InsertDataLockMgr</a></li>
@@ -1259,7 +1265,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../struct/structanonymous__namespace_02geo__types_8cpp_03_1_1_bounding_box.html">Struct anonymous_namespace{geo_types.cpp}::BoundingBox</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structanonymous__namespace_02geo__types_8cpp_03_1_1_coords.html">Struct anonymous_namespace{geo_types.cpp}::Coords</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structdict__ref__t.html">Struct dict_ref_t</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../struct/structforeign__storage_1_1_data_wrapper.html">Struct foreign_storage::DataWrapper</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/structforeign__storage_1_1_data_wrapper_type.html">Struct foreign_storage::DataWrapperType</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structforeign__storage_1_1_foreign_server.html">Struct foreign_storage::ForeignServer</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structforeign__storage_1_1_foreign_table.html">Struct foreign_storage::ForeignTable</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structforeign__storage_1_1_options_container.html">Struct foreign_storage::OptionsContainer</a></li>
@@ -1417,8 +1423,8 @@
 <dd></dd></dl>
 
 <dl class="function">
-<dt id="_CPPv4NK19DistributedValidate8validateEv">
-<span id="_CPPv3NK19DistributedValidate8validateEv"></span><span id="_CPPv2NK19DistributedValidate8validateEv"></span><span id="DistributedValidate::validateC"></span><span class="target" id="class_distributed_validate_1ac9d8007c26792942a8d8cb491b325f7c"></span>std::string <code class="sig-name descname">validate</code><span class="sig-paren">(</span><span class="sig-paren">)</span> <em class="property">const</em><a class="headerlink" href="#_CPPv4NK19DistributedValidate8validateEv" title="Permalink to this definition">¶</a><br /></dt>
+<dt id="_CPPv4NK19DistributedValidate8validateEN11query_state15QueryStateProxyE">
+<span id="_CPPv3NK19DistributedValidate8validateEN11query_state15QueryStateProxyE"></span><span id="_CPPv2NK19DistributedValidate8validateEN11query_state15QueryStateProxyE"></span><span id="DistributedValidate::validate__query_state::QueryStateProxyC"></span><span class="target" id="class_distributed_validate_1a747aa2b5fc0bddf961d98b8bef1afcf9"></span>std::string <code class="sig-name descname">validate</code><span class="sig-paren">(</span>query_state::<a class="reference internal" href="classquery__state_1_1_query_state_proxy.html#_CPPv4N11query_state15QueryStateProxyE" title="query_state::QueryStateProxy">QueryStateProxy</a> <em>query_state_proxy</em><span class="sig-paren">)</span> <em class="property">const</em><a class="headerlink" href="#_CPPv4NK19DistributedValidate8validateEN11query_state15QueryStateProxyE" title="Permalink to this definition">¶</a><br /></dt>
 <dd><p>Compares Aggregators and Leaves metatdata reporting what is different. </p>
 </dd></dl>
 

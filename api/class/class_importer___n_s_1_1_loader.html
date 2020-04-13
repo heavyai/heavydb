@@ -65,7 +65,7 @@
             
             
               <div class="version">
-                5.3.0dev f4c9b57
+                5.3.0dev 4ab6622
               </div>
             
           
@@ -579,6 +579,7 @@
 <li class="toctree-l2"><a class="reference internal" href="class_parser_1_1_validate_stmt.html">Class Parser::ValidateStmt</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_parser_wrapper.html">Class ParserWrapper</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_persistent_foreign_storage_interface.html">Class PersistentForeignStorageInterface</a></li>
+<li class="toctree-l2"><a class="reference internal" href="class_persistent_storage_mgr.html">Class PersistentStorageMgr</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_pki_server.html">Class PkiServer</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_posix_file_archive.html">Class PosixFileArchive</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_proxy_t_http_client.html">Class ProxyTHttpClient</a></li>
@@ -882,6 +883,7 @@
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1tests_1_1_calcite_views_concurrency_test.html">Class com::mapd::tests::CalciteViewsConcurrencyTest</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1tests_1_1_catalog_concurrency_test.html">Class com::mapd::tests::CatalogConcurrencyTest</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1tests_1_1_ctas_itas_select_updel_concurrency_test.html">Class com::mapd::tests::CtasItasSelectUpdelConcurrencyTest</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1tests_1_1_distributed_concurrency_test.html">Class com::mapd::tests::DistributedConcurrencyTest</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1tests_1_1_eagain_concurrency_test.html">Class com::mapd::tests::EagainConcurrencyTest</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1tests_1_1_import_alter_validate_select_concurrency_test.html">Class com::mapd::tests::ImportAlterValidateSelectConcurrencyTest</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1tests_1_1_mapd_asserts.html">Class com::mapd::tests::MapdAsserts</a></li>
@@ -931,6 +933,10 @@
 <li class="toctree-l2"><a class="reference internal" href="classddl__utils_1_1_encoding.html">Class ddl_utils::Encoding</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classddl__utils_1_1_sql_type.html">Class ddl_utils::SqlType</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classdetails_1_1_rel_alg_dispatcher.html">Class details::RelAlgDispatcher</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_csv_data_wrapper.html">Class foreign_storage::CsvDataWrapper</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_foreign_data_wrapper.html">Class foreign_storage::ForeignDataWrapper</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_foreign_storage_buffer.html">Class foreign_storage::ForeignStorageBuffer</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_foreign_storage_mgr.html">Class foreign_storage::ForeignStorageMgr</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classlegacylockmgr_1_1_lock_mgr.html">Class legacylockmgr::LockMgr</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classlockmgr_1_1_abstract_lock_container.html">Class lockmgr::AbstractLockContainer</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classlockmgr_1_1_insert_data_lock_mgr.html">Class lockmgr::InsertDataLockMgr</a></li>
@@ -1259,7 +1265,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../struct/structanonymous__namespace_02geo__types_8cpp_03_1_1_bounding_box.html">Struct anonymous_namespace{geo_types.cpp}::BoundingBox</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structanonymous__namespace_02geo__types_8cpp_03_1_1_coords.html">Struct anonymous_namespace{geo_types.cpp}::Coords</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structdict__ref__t.html">Struct dict_ref_t</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../struct/structforeign__storage_1_1_data_wrapper.html">Struct foreign_storage::DataWrapper</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/structforeign__storage_1_1_data_wrapper_type.html">Struct foreign_storage::DataWrapperType</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structforeign__storage_1_1_foreign_server.html">Struct foreign_storage::ForeignServer</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structforeign__storage_1_1_foreign_table.html">Struct foreign_storage::ForeignTable</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structforeign__storage_1_1_options_container.html">Struct foreign_storage::OptionsContainer</a></li>
@@ -1412,8 +1418,8 @@
 <div class="breathe-sectiondef docutils container">
 <p class="breathe-sectiondef-title rubric">Public Functions</p>
 <dl class="function">
-<dt id="_CPPv4N11Importer_NS6Loader6LoaderERN17Catalog_Namespace7CatalogEPK15TableDescriptor">
-<span id="_CPPv3N11Importer_NS6Loader6LoaderERN17Catalog_Namespace7CatalogEPK15TableDescriptor"></span><span id="_CPPv2N11Importer_NS6Loader6LoaderERN17Catalog_Namespace7CatalogEPK15TableDescriptor"></span><span id="Importer_NS::Loader::Loader__Catalog_Namespace::CatalogR.TableDescriptorCP"></span><span class="target" id="class_importer___n_s_1_1_loader_1a76283c7a202e125ce420ea92e2c80708"></span><code class="sig-name descname">Loader</code><span class="sig-paren">(</span>Catalog_Namespace::<a class="reference internal" href="class_catalog___namespace_1_1_catalog.html#_CPPv4N17Catalog_Namespace7CatalogE" title="Catalog_Namespace::Catalog">Catalog</a> &amp;<em>c</em>, <em class="property">const</em> <a class="reference internal" href="../struct/struct_table_descriptor.html#_CPPv415TableDescriptor" title="TableDescriptor">TableDescriptor</a> *<em>t</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N11Importer_NS6Loader6LoaderERN17Catalog_Namespace7CatalogEPK15TableDescriptor" title="Permalink to this definition">¶</a><br /></dt>
+<dt id="_CPPv4N11Importer_NS6Loader6LoaderERN17Catalog_Namespace7CatalogEPK15TableDescriptor16LoadCallbackType">
+<span id="_CPPv3N11Importer_NS6Loader6LoaderERN17Catalog_Namespace7CatalogEPK15TableDescriptor16LoadCallbackType"></span><span id="_CPPv2N11Importer_NS6Loader6LoaderERN17Catalog_Namespace7CatalogEPK15TableDescriptor16LoadCallbackType"></span><span id="Importer_NS::Loader::Loader__Catalog_Namespace::CatalogR.TableDescriptorCP.LoadCallbackType"></span><span class="target" id="class_importer___n_s_1_1_loader_1adea78c0868b622b25dd7fa616f90ba41"></span><code class="sig-name descname">Loader</code><span class="sig-paren">(</span>Catalog_Namespace::<a class="reference internal" href="class_catalog___namespace_1_1_catalog.html#_CPPv4N17Catalog_Namespace7CatalogE" title="Catalog_Namespace::Catalog">Catalog</a> &amp;<em>c</em>, <em class="property">const</em> <a class="reference internal" href="../struct/struct_table_descriptor.html#_CPPv415TableDescriptor" title="TableDescriptor">TableDescriptor</a> *<em>t</em>, <a class="reference internal" href="#_CPPv4N11Importer_NS6Loader16LoadCallbackTypeE" title="Importer_NS::Loader::LoadCallbackType">LoadCallbackType</a> <em>load_callback</em> = nullptr<span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N11Importer_NS6Loader6LoaderERN17Catalog_Namespace7CatalogEPK15TableDescriptor16LoadCallbackType" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 <dl class="function">
@@ -1526,6 +1532,11 @@
 <dd></dd></dl>
 
 <dl class="member">
+<dt id="_CPPv4N11Importer_NS6Loader14load_callback_E">
+<span id="_CPPv3N11Importer_NS6Loader14load_callback_E"></span><span id="_CPPv2N11Importer_NS6Loader14load_callback_E"></span><span id="Importer_NS::Loader::load_callback___LoadCallbackType"></span><span class="target" id="class_importer___n_s_1_1_loader_1a658b3551ce13403ce734a6b75f5bbe94"></span><a class="reference internal" href="#_CPPv4N11Importer_NS6Loader16LoadCallbackTypeE" title="Importer_NS::Loader::LoadCallbackType">LoadCallbackType</a> <code class="sig-name descname">load_callback_</code><a class="headerlink" href="#_CPPv4N11Importer_NS6Loader14load_callback_E" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="member">
 <dt id="_CPPv4N11Importer_NS6Loader12insert_data_E">
 <span id="_CPPv3N11Importer_NS6Loader12insert_data_E"></span><span id="_CPPv2N11Importer_NS6Loader12insert_data_E"></span><span id="Importer_NS::Loader::insert_data___Fragmenter_Namespace::InsertData"></span><span class="target" id="class_importer___n_s_1_1_loader_1a5984cea4c37c3be6c767677477079652"></span>Fragmenter_Namespace::<a class="reference internal" href="../struct/struct_fragmenter___namespace_1_1_insert_data.html#_CPPv4N20Fragmenter_Namespace10InsertDataE" title="Fragmenter_Namespace::InsertData">InsertData</a> <code class="sig-name descname">insert_data_</code><a class="headerlink" href="#_CPPv4N11Importer_NS6Loader12insert_data_E" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
@@ -1533,6 +1544,14 @@
 <dl class="member">
 <dt id="_CPPv4N11Importer_NS6Loader9dict_map_E">
 <span id="_CPPv3N11Importer_NS6Loader9dict_map_E"></span><span id="_CPPv2N11Importer_NS6Loader9dict_map_E"></span><span id="Importer_NS::Loader::dict_map___std::map:i.StringDictionaryP:"></span><span class="target" id="class_importer___n_s_1_1_loader_1a9b883af81395e759713c96b18475334e"></span>std::map&lt;int, <a class="reference internal" href="class_string_dictionary.html#_CPPv416StringDictionary" title="StringDictionary">StringDictionary</a> *&gt; <code class="sig-name descname">dict_map_</code><a class="headerlink" href="#_CPPv4N11Importer_NS6Loader9dict_map_E" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+</div>
+<div class="breathe-sectiondef docutils container">
+<p class="breathe-sectiondef-title rubric">Private Types</p>
+<dl class="type">
+<dt id="_CPPv4N11Importer_NS6Loader16LoadCallbackTypeE">
+<span id="_CPPv3N11Importer_NS6Loader16LoadCallbackTypeE"></span><span id="_CPPv2N11Importer_NS6Loader16LoadCallbackTypeE"></span><span class="target" id="class_importer___n_s_1_1_loader_1a6a6a270e52b0a3f58e5807756b524e3a"></span><em class="property">using </em><code class="sig-name descname">LoadCallbackType</code> = std::function&lt;bool<span class="sig-paren">(</span><em class="property">const</em> std::vector&lt;std::unique_ptr&lt;<a class="reference internal" href="class_importer___n_s_1_1_typed_import_buffer.html#_CPPv4N11Importer_NS17TypedImportBufferE" title="Importer_NS::TypedImportBuffer">TypedImportBuffer</a>&gt;&gt;&amp;, std::vector&lt;<a class="reference internal" href="../union/union_data_block_ptr.html#_CPPv412DataBlockPtr" title="DataBlockPtr">DataBlockPtr</a>&gt;&amp;, size_t<span class="sig-paren">)</span>&gt;<a class="headerlink" href="#_CPPv4N11Importer_NS6Loader16LoadCallbackTypeE" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 </div>
