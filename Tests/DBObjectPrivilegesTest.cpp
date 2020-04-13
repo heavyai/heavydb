@@ -41,6 +41,11 @@ inline void run_ddl_statement(const std::string& query) {
   QR::get()->runDDLStatement(query);
 }
 
+inline auto sql(std::string_view sql_stmts) {
+  return QR::get()->runMultipleStatements(std::string(sql_stmts),
+                                          ExecutorDeviceType::CPU);
+}
+
 }  // namespace
 
 struct Users {
@@ -2477,27 +2482,68 @@ TEST(SysCatalog, SwitchDatabase) {
   static std::string dbname3{dbname + "3"};
 
   // cleanup
-  struct CleanupGuard {
-    ~CleanupGuard() {
-      run_ddl_statement("DROP DATABASE IF EXISTS " + dbname3 + ";");
-      run_ddl_statement("DROP DATABASE IF EXISTS " + dbname2 + ";");
-      run_ddl_statement("DROP DATABASE IF EXISTS " + dbname + ";");
-      run_ddl_statement("DROP USER " + username + ";");
-    }
-  } cleanupGuard;
+  try {
+    sql("DROP DATABASE IF EXISTS " + dbname + ";");
+  } catch (...) {
+  }
+  try {
+    sql("DROP DATABASE IF EXISTS " + dbname2 + ";");
+  } catch (...) {
+  }
+  try {
+    sql("DROP DATABASE IF EXISTS " + dbname3 + ";");
+  } catch (...) {
+  }
+  try {
+    sql("DROP USER " + username + ";");
+  } catch (...) {
+  }
 
   // setup
-  run_ddl_statement("CREATE USER " + username + " (password = 'password');");
-  run_ddl_statement("CREATE DATABASE " + dbname + "(owner='" + username + "');");
-  run_ddl_statement("CREATE DATABASE " + dbname2 + "(owner='" + username + "');");
-  run_ddl_statement("CREATE DATABASE " + dbname3 + "(owner='" + username + "');");
-  run_ddl_statement("REVOKE ACCESS ON DATABASE " + dbname3 + " FROM " + username + ";");
+  sql("CREATE USER " + username + " (password = 'password');");
+  sql("CREATE DATABASE " + dbname + "(owner='" + username + "');");
+  sql("CREATE DATABASE " + dbname2 + "(owner='" + username + "');");
+  sql("CREATE DATABASE " + dbname3 + "(owner='" + username + "');");
+  sql("REVOKE ACCESS ON DATABASE " + dbname3 + " FROM " + username + ";");
 
   // test some attempts to switch database
   ASSERT_NO_THROW(sys_cat.switchDatabase(dbname, username));
   ASSERT_NO_THROW(sys_cat.switchDatabase(dbname, username));
   ASSERT_NO_THROW(sys_cat.switchDatabase(dbname2, username));
   ASSERT_THROW(sys_cat.switchDatabase(dbname3, username), std::runtime_error);
+
+  // // distributed test
+  // // NOTE(sy): disabling for now due to consistency errors
+  // if (DQR* dqr = dynamic_cast<DQR*>(QR::get()); g_aggregator && dqr) {
+  //   static const std::string tname{"swdb_test_table"};
+  //   LeafAggregator* agg = dqr->getLeafAggregator();
+  //   agg->switch_database(dqr->getSession()->get_session_id(), dbname);
+  //   sql("CREATE TABLE " + tname + "(i INTEGER);");
+  //   ASSERT_NO_THROW(sql("SELECT i FROM " + tname + ";"));
+  //   agg->switch_database(dqr->getSession()->get_session_id(), dbname2);
+  //   ASSERT_ANY_THROW(agg->leafCatalogConsistencyCheck(*dqr->getSession()));
+  //   agg->switch_database(dqr->getSession()->get_session_id(), dbname);
+  //   ASSERT_NO_THROW(sql("DROP TABLE " + tname + ";"));
+  //   agg->switch_database(dqr->getSession()->get_session_id(), OMNISCI_DEFAULT_DB);
+  // }
+
+  // cleanup
+  try {
+    sql("DROP DATABASE IF EXISTS " + dbname + ";");
+  } catch (...) {
+  }
+  try {
+    sql("DROP DATABASE IF EXISTS " + dbname2 + ";");
+  } catch (...) {
+  }
+  try {
+    sql("DROP DATABASE IF EXISTS " + dbname3 + ";");
+  } catch (...) {
+  }
+  try {
+    sql("DROP USER " + username + ";");
+  } catch (...) {
+  }
 }
 
 namespace {

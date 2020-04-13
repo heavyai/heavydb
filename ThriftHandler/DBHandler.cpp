@@ -558,6 +558,10 @@ void DBHandler::switch_database(const TSessionId& session, const std::string& db
     std::shared_ptr<Catalog> cat = SysCatalog::instance().switchDatabase(
         dbname2, session_it->second->get_currentUser().userName);
     session_it->second->set_catalog_ptr(cat);
+    if (leaf_aggregator_.leafCount() > 0) {
+      leaf_aggregator_.switch_database(session, dbname);
+      return;
+    }
   } catch (std::exception& e) {
     THROW_MAPD_EXCEPTION(e.what());
   }
