@@ -154,7 +154,7 @@ std::vector<llvm::Value*> CodeGenerator::codegenColVar(const Analyzer::ColumnVar
   }
   const int local_col_id = plan_state_->getLocalColumnId(col_var, fetch_column);
   const auto window_func_context =
-      WindowProjectNodeContext::getActiveWindowFunctionContext();
+      WindowProjectNodeContext::getActiveWindowFunctionContext(executor());
   // only generate the decoding code once; if a column has been previously
   // fetched in the generated IR, we'll reuse it
   if (!window_func_context) {

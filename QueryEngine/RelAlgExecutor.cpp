@@ -85,7 +85,7 @@ size_t RelAlgExecutor::getOuterFragmentCount(const CompilationOptions& co,
   query_dag_->resetQueryExecutionState();
   const auto& ra = query_dag_->getRootNode();
 
-  std::lock_guard<std::mutex> lock(executor_->execute_mutex_);
+  mapd_shared_lock<mapd_shared_mutex> lock(executor_->execute_mutex_);
   ScopeGuard row_set_holder = [this] { cleanupPostExecution(); };
   const auto phys_inputs = get_physical_inputs(cat_, &ra);
   const auto phys_table_ids = get_physical_table_inputs(&ra);
@@ -109,7 +109,7 @@ size_t RelAlgExecutor::getOuterFragmentCount(const CompilationOptions& co,
   executor_->catalog_ = &cat_;
   executor_->temporary_tables_ = &temporary_tables_;
 
-  WindowProjectNodeContext::reset();
+  WindowProjectNodeContext::reset(executor_);
   auto exec_desc_ptr = ed_seq.getDescriptor(0);
   CHECK(exec_desc_ptr);
   auto& exec_desc = *exec_desc_ptr;
@@ -237,7 +237,7 @@ ExecutionResult RelAlgExecutor::executeRelAlgQueryNoRetry(const CompilationOptio
     // right after acquiring spinlock to let other part of the code can know
     // whether there exists a running query on the executor
   }
-  std::lock_guard<std::mutex> lock(executor_->execute_mutex_);
+  mapd_shared_lock<mapd_shared_mutex> lock(executor_->execute_mutex_);
   ScopeGuard clearRuntimeInterruptStatus = [this] {
     // reset the runtime query interrupt status
     if (g_enable_runtime_query_interrupt) {
@@ -525,7 +525,7 @@ void RelAlgExecutor::executeRelAlgStep(const RaExecutionSequence& seq,
                                        const int64_t queue_time_ms) {
   INJECT_TIMER(executeRelAlgStep);
   auto timer = DEBUG_TIMER(__func__);
-  WindowProjectNodeContext::reset();
+  WindowProjectNodeContext::reset(executor_);
   auto exec_desc_ptr = seq.getDescriptor(step_idx);
   CHECK(exec_desc_ptr);
   auto& exec_desc = *exec_desc_ptr;
@@ -1669,7 +1669,7 @@ void RelAlgExecutor::computeWindow(const RelAlgExecutionUnit& ra_exe_unit,
     return;
   }
   query_infos.push_back(query_infos.front());
-  auto window_project_node_context = WindowProjectNodeContext::create();
+  auto window_project_node_context = WindowProjectNodeContext::create(executor_);
   for (size_t target_index = 0; target_index < ra_exe_unit.target_exprs.size();
        ++target_index) {
     const auto& target_expr = ra_exe_unit.target_exprs[target_index];

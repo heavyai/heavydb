@@ -45,8 +45,8 @@
 #include "QueryEngine/ExtensionFunctionsWhitelist.h"
 #include "QueryEngine/GpuMemUtils.h"
 #include "QueryEngine/JsonAccessors.h"
+#include "QueryEngine/QueryDispatchQueue.h"
 #include "QueryEngine/TableGenerations.h"
-#include "QueryState.h"
 #include "Shared/GenericTypeUtilities.h"
 #include "Shared/Logger.h"
 #include "Shared/StringTransform.h"
@@ -523,6 +523,8 @@ class DBHandler : public OmniSciIf {
   std::shared_ptr<Calcite> calcite_;
   const bool legacy_syntax_;
 
+  std::unique_ptr<QueryDispatchQueue> dispatch_queue_;
+
   template <typename... ARGS>
   std::shared_ptr<query_state::QueryState> create_query_state(ARGS&&... args) {
     return query_states_.create(std::forward<ARGS>(args)...);
@@ -599,7 +601,8 @@ class DBHandler : public OmniSciIf {
                         const std::string& nonce,
                         const ExecutorDeviceType executor_device_type,
                         const int32_t first_n,
-                        const int32_t at_most_n);
+                        const int32_t at_most_n,
+                        const std::optional<size_t> executor_index = std::nullopt);
 
   bool user_can_access_table(const Catalog_Namespace::SessionInfo&,
                              const TableDescriptor* td,
@@ -620,7 +623,8 @@ class DBHandler : public OmniSciIf {
       const int32_t at_most_n,
       const bool just_validate,
       const bool find_push_down_candidates,
-      const ExplainInfo& explain_info) const;
+      const ExplainInfo& explain_info,
+      const std::optional<size_t> executor_index = std::nullopt) const;
 
   void execute_rel_alg_with_filter_push_down(
       TQueryResult& _return,

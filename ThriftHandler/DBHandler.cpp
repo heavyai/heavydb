@@ -57,6 +57,7 @@
 #include "QueryEngine/GpuMemUtils.h"
 #include "QueryEngine/JoinFilterPushDown.h"
 #include "QueryEngine/JsonAccessors.h"
+#include "QueryEngine/QueryDispatchQueue.h"
 #include "QueryEngine/TableFunctions/TableFunctionsFactory.h"
 #include "QueryEngine/TableOptimizer.h"
 #include "QueryEngine/ThriftSerializers.h"
@@ -207,6 +208,7 @@ DBHandler::DBHandler(const std::vector<LeafHostInfo>& db_leaves,
     , authMetadata_(authMetadata)
     , mapd_parameters_(mapd_parameters)
     , legacy_syntax_(legacy_syntax)
+    , dispatch_queue_(std::make_unique<QueryDispatchQueue>(mapd_parameters.num_executors))
     , super_user_rights_(false)
     , idle_session_duration_(idle_session_duration * 60)
     , max_session_duration_(max_session_duration * 60)
@@ -999,13 +1001,29 @@ void DBHandler::sql_execute(TQueryResult& _return,
     });
   } else {
     _return.total_time_ms = measure<>::execution([&]() {
-      DBHandler::sql_execute_impl(_return,
-                                  query_state->createQueryStateProxy(),
-                                  column_format,
-                                  nonce,
-                                  session_ptr->get_executor_device_type(),
-                                  first_n,
-                                  at_most_n);
+      auto query_state_proxy = query_state->createQueryStateProxy();
+      const auto executor_device_type = session_ptr->get_executor_device_type();
+      std::packaged_task<void(size_t)> query_launch_task(
+          [this,
+           &_return,
+           query_state_proxy,
+           column_format,
+           &nonce,
+           executor_device_type,
+           first_n,
+           at_most_n](const size_t executor_index) {
+            sql_execute_impl(_return,
+                             query_state_proxy,
+                             column_format,
+                             nonce,
+                             executor_device_type,
+                             first_n,
+                             at_most_n,
+                             executor_index);
+          });
+      CHECK(dispatch_queue_);
+      auto task_future = dispatch_queue_->submit(std::move(query_launch_task));
+      task_future.get();
     });
   }
 
@@ -4641,7 +4659,8 @@ std::vector<PushedDownFilterInfo> DBHandler::execute_rel_alg(
     const int32_t at_most_n,
     const bool just_validate,
     const bool find_push_down_candidates,
-    const ExplainInfo& explain_info) const {
+    const ExplainInfo& explain_info,
+    const std::optional<size_t> executor_index) const {
   query_state::Timer timer = query_state_proxy.createTimer(__func__);
 
   VLOG(1) << "Table Schema Locks:\n" << lockmgr::TableSchemaLockMgr::instance();
@@ -4671,10 +4690,11 @@ std::vector<PushedDownFilterInfo> DBHandler::execute_rel_alg(
                          mapd_parameters_.gpu_input_mem_limit,
                          g_enable_runtime_query_interrupt,
                          g_runtime_query_interrupt_frequency};
-  auto executor = Executor::getExecutor(cat.getCurrentDB().dbId,
-                                        jit_debug_ ? "/tmp" : "",
-                                        jit_debug_ ? "mapdquery" : "",
-                                        mapd_parameters_);
+  auto executor =
+      Executor::getExecutor(executor_index ? *executor_index : cat.getCurrentDB().dbId,
+                            jit_debug_ ? "/tmp" : "",
+                            jit_debug_ ? "mapdquery" : "",
+                            mapd_parameters_);
   RelAlgExecutor ra_executor(executor.get(),
                              cat,
                              query_ra,
@@ -5031,7 +5051,8 @@ void DBHandler::sql_execute_impl(TQueryResult& _return,
                                  const std::string& nonce,
                                  const ExecutorDeviceType executor_device_type,
                                  const int32_t first_n,
-                                 const int32_t at_most_n) {
+                                 const int32_t at_most_n,
+                                 const std::optional<size_t> executor_index) {
   if (leaf_handler_) {
     leaf_handler_->flush_queue();
   }
@@ -5120,7 +5141,8 @@ void DBHandler::sql_execute_impl(TQueryResult& _return,
           at_most_n,
           /*just_validate=*/false,
           g_enable_filter_push_down && !g_cluster,
-          explain_info);
+          explain_info,
+          executor_index);
       if (explain_info.justCalciteExplain() && filter_push_down_requests.empty()) {
         // we only reach here if filter push down was enabled, but no filter
         // push down candidate was found

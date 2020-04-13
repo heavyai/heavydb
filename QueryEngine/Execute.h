@@ -321,20 +321,22 @@ class Executor {
                 "Host hardware not supported, 64-bit time support is required.");
 
  public:
-  Executor(const int db_id,
+  using ExecutorId = size_t;
+
+  Executor(const ExecutorId id,
            const size_t block_size_x,
            const size_t grid_size_x,
            const std::string& debug_dir,
            const std::string& debug_file);
 
   static std::shared_ptr<Executor> getExecutor(
-      const int db_id,
+      const ExecutorId id,
       const std::string& debug_dir = "",
       const std::string& debug_file = "",
       const SystemParameters system_parameters = SystemParameters());
 
   static void nukeCacheOfExecutors() {
-    std::lock_guard<std::mutex> flush_lock(
+    mapd_unique_lock<mapd_shared_mutex> flush_lock(
         execute_mutex_);  // don't want native code to vanish while executing
     mapd_unique_lock<mapd_shared_mutex> lock(executors_cache_mutex_);
     (decltype(executors_){}).swap(executors_);
@@ -978,9 +980,15 @@ class Executor {
   const std::string debug_dir_;
   const std::string debug_file_;
 
-  const int db_id_;
+  const ExecutorId executor_id_;
   const Catalog_Namespace::Catalog* catalog_;
   const TemporaryTables* temporary_tables_;
+
+  // Singleton instance used for an execution unit which is a project with window
+  // functions.
+  std::unique_ptr<WindowProjectNodeContext> window_project_node_context_owned_;
+  // The active window function.
+  WindowFunctionContext* active_window_function_{nullptr};
 
   mutable InputTableInfoCache input_table_info_cache_;
   AggregatedColRange agg_col_range_cache_;
@@ -993,7 +1001,10 @@ class Executor {
 
   static std::map<int, std::shared_ptr<Executor>> executors_;
   static std::atomic_flag execute_spin_lock_;
-  static std::mutex execute_mutex_;
+
+  // SQL queries take a shared lock, exclusive options (cache clear, memory clear) take a
+  // write lock
+  static mapd_shared_mutex execute_mutex_;
   static mapd_shared_mutex executors_cache_mutex_;
 
  public:
@@ -1011,6 +1022,9 @@ class Executor {
   static const int32_t ERR_STRING_CONST_IN_RESULTSET{13};
   static const int32_t ERR_STREAMING_TOP_N_NOT_SUPPORTED_IN_RENDER_QUERY{14};
   static const int32_t ERR_SINGLE_VALUE_FOUND_MULTIPLE_VALUES{15};
+
+  static std::mutex compilation_mutex_;
+  static std::mutex kernel_mutex_;
 
   friend class BaselineJoinHashTable;
   friend class CodeGenerator;
@@ -1034,6 +1048,7 @@ class Executor {
   friend class TableFunctionExecutionContext;
   friend struct TargetExprCodegenBuilder;
   friend struct TargetExprCodegen;
+  friend class WindowProjectNodeContext;
 };
 
 inline std::string get_null_check_suffix(const SQLTypeInfo& lhs_ti,

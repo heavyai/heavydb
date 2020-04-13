@@ -152,6 +152,9 @@ void run_reduction_code(const ReductionCode& reduction_code,
                                   that_qmd,
                                   serialized_varlen_buffer);
   } else {
+    // Calls LLVM methods that are not thread safe, ensure nothing else compiles while we
+    // run this reduction
+    std::lock_guard<std::mutex> compilation_lock(Executor::compilation_mutex_);
     auto ret = ReductionInterpreter::run(
         reduction_code.ir_reduce_loop.get(),
         {ReductionInterpreter::EvalValue{.ptr = this_buff},

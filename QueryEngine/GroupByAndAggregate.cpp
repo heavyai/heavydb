@@ -1444,7 +1444,7 @@ llvm::Value* GroupByAndAggregate::codegenWindowRowPointer(
     const CompilationOptions& co,
     DiamondCodegen& diamond_codegen) {
   const auto window_func_context =
-      WindowProjectNodeContext::getActiveWindowFunctionContext();
+      WindowProjectNodeContext::getActiveWindowFunctionContext(executor_);
   if (window_func_context && window_function_is_aggregate(window_func->getKind())) {
     const int32_t row_size_quad = query_mem_desc.didOutputColumnar()
                                       ? 0

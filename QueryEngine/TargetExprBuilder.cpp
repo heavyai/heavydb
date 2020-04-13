@@ -109,7 +109,7 @@ void TargetExprCodegen::codegen(
 
   const auto agg_fn_names = agg_fn_base_names(target_info);
   const auto window_func = dynamic_cast<const Analyzer::WindowFunction*>(target_expr);
-  WindowProjectNodeContext::resetWindowFunctionContext();
+  WindowProjectNodeContext::resetWindowFunctionContext(executor);
   auto target_lvs =
       window_func
           ? std::vector<llvm::Value*>{executor->codegenWindowFunction(target_idx, co)}
@@ -447,7 +447,7 @@ void TargetExprCodegen::codegenAggregate(
     const auto window_func = dynamic_cast<const Analyzer::WindowFunction*>(target_expr);
     if (window_func && window_function_requires_peer_handling(window_func)) {
       const auto window_func_context =
-          WindowProjectNodeContext::getActiveWindowFunctionContext();
+          WindowProjectNodeContext::getActiveWindowFunctionContext(executor);
       const auto pending_outputs =
           LL_INT(window_func_context->aggregateStatePendingOutputs());
       executor->cgen_state_->emitExternalCall("add_window_pending_output",

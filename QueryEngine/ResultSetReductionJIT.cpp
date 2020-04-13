@@ -572,7 +572,7 @@ ReductionCode ResultSetReductionJIT::codegen() const {
   }
   reduction_code.cgen_state.reset(new CgenState({}, false));
   auto cgen_state = reduction_code.cgen_state.get();
-  std::unique_ptr<llvm::Module> module(runtime_module_shallow_copy(cgen_state));
+  std::unique_ptr<llvm::Module> module = runtime_module_shallow_copy(cgen_state);
   cgen_state->module_ = module.get();
   auto ir_is_empty = create_llvm_function(reduction_code.ir_is_empty.get(), cgen_state);
   auto ir_reduce_one_entry =

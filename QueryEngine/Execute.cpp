@@ -32,6 +32,7 @@
 #include "JsonAccessors.h"
 #include "OutputBufferInitialization.h"
 #include "OverlapsJoinHashTable.h"
+#include "QueryEngine/QueryDispatchQueue.h"
 #include "QueryRewrite.h"
 #include "QueryTemplateGenerator.h"
 #include "ResultSetReductionJIT.h"
@@ -124,7 +125,7 @@ int const Executor::max_gpu_count;
 
 const int32_t Executor::ERR_SINGLE_VALUE_FOUND_MULTIPLE_VALUES;
 
-Executor::Executor(const int db_id,
+Executor::Executor(const ExecutorId executor_id,
                    const size_t block_size_x,
                    const size_t grid_size_x,
                    const std::string& debug_dir,
@@ -138,47 +139,37 @@ Executor::Executor(const int db_id,
     , grid_size_x_(grid_size_x)
     , debug_dir_(debug_dir)
     , debug_file_(debug_file)
-    , db_id_(db_id)
+    , executor_id_(executor_id)
     , catalog_(nullptr)
     , temporary_tables_(nullptr)
     , input_table_info_cache_(this) {}
 
 std::shared_ptr<Executor> Executor::getExecutor(
-    const int db_id,
+    const ExecutorId executor_id,
     const std::string& debug_dir,
     const std::string& debug_file,
     const SystemParameters system_parameters) {
   INJECT_TIMER(getExecutor);
-  const auto executor_key = db_id;
-  {
-    mapd_shared_lock<mapd_shared_mutex> read_lock(executors_cache_mutex_);
-    auto it = executors_.find(executor_key);
-    if (it != executors_.end()) {
-      return it->second;
-    }
+
+  mapd_unique_lock<mapd_shared_mutex> write_lock(executors_cache_mutex_);
+  auto it = executors_.find(executor_id);
+  if (it != executors_.end()) {
+    return it->second;
   }
-  {
-    mapd_unique_lock<mapd_shared_mutex> write_lock(executors_cache_mutex_);
-    auto it = executors_.find(executor_key);
-    if (it != executors_.end()) {
-      return it->second;
-    }
-    auto executor = std::make_shared<Executor>(db_id,
-                                               system_parameters.cuda_block_size,
-                                               system_parameters.cuda_grid_size,
-                                               debug_dir,
-                                               debug_file);
-    auto it_ok = executors_.insert(std::make_pair(executor_key, executor));
-    CHECK(it_ok.second);
-    return executor;
-  }
+  auto executor = std::make_shared<Executor>(executor_id,
+                                             system_parameters.cuda_block_size,
+                                             system_parameters.cuda_grid_size,
+                                             debug_dir,
+                                             debug_file);
+  CHECK(executors_.insert(std::make_pair(executor_id, executor)).second);
+  return executor;
 }
 
 void Executor::clearMemory(const Data_Namespace::MemoryLevel memory_level) {
   switch (memory_level) {
     case Data_Namespace::MemoryLevel::CPU_LEVEL:
     case Data_Namespace::MemoryLevel::GPU_LEVEL: {
-      std::lock_guard<std::mutex> flush_lock(
+      mapd_unique_lock<mapd_shared_mutex> flush_lock(
           execute_mutex_);  // Don't flush memory while queries are running
 
       Catalog_Namespace::SysCatalog::instance().getDataMgr().clearMemory(memory_level);
@@ -939,11 +930,16 @@ ResultSetPtr Executor::reduceMultiDeviceResultSets(
     reduced_results = first;
   }
 
-  const auto& this_result_set = results_per_device[0].first;
-  ResultSetReductionJIT reduction_jit(this_result_set->getQueryMemDesc(),
-                                      this_result_set->getTargetInfos(),
-                                      this_result_set->getTargetInitVals());
-  const auto reduction_code = reduction_jit.codegen();
+  auto get_reduction_code = [&results_per_device]() {
+    std::lock_guard<std::mutex> compilation_lock(compilation_mutex_);
+    const auto& this_result_set = results_per_device[0].first;
+    ResultSetReductionJIT reduction_jit(this_result_set->getQueryMemDesc(),
+                                        this_result_set->getTargetInfos(),
+                                        this_result_set->getTargetInitVals());
+    return reduction_jit.codegen();
+  };
+  const auto reduction_code = get_reduction_code();
+
   for (size_t i = 1; i < results_per_device.size(); ++i) {
     reduced_results->getStorage()->reduce(
         *(results_per_device[i].first->getStorage()), {}, reduction_code);
@@ -1255,7 +1251,7 @@ ResultSetPtr Executor::executeWorkUnit(
     RenderInfo* render_info,
     const bool has_cardinality_estimation,
     ColumnCacheMap& column_cache) {
-  VLOG(1) << "Executing work unit:" << ra_exe_unit_in;
+  VLOG(1) << "Executor " << executor_id_ << " is executing work unit:" << ra_exe_unit_in;
 
   try {
     return executeWorkUnitImpl(max_groups_buffer_entry_guess,
@@ -1321,6 +1317,7 @@ ResultSetPtr Executor::executeWorkUnitImpl(
     if (eo.executor_type == ExecutorType::Native) {
       try {
         INJECT_TIMER(execution_dispatch_comp);
+        std::lock_guard<std::mutex> compilation_lock(compilation_mutex_);
         std::tie(query_comp_desc_owned, query_mem_desc_owned) =
             execution_dispatch.compile(max_groups_buffer_entry_guess,
                                        crt_min_byte_width,
@@ -1891,6 +1888,8 @@ void Executor::dispatchFragments(
     QueryFragmentDescriptor& fragment_descriptor,
     std::unordered_set<int>& available_gpus,
     int& available_cpus) {
+  std::lock_guard<std::mutex> kernel_lock(kernel_mutex_);
+
   THREAD_POOL query_threads;
   const auto& ra_exe_unit = execution_dispatch.getExecutionUnit();
   CHECK(!ra_exe_unit.input_descs.empty());
@@ -3443,9 +3442,14 @@ void Executor::enableRuntimeQueryInterrupt(const unsigned interrupt_freq) const 
 }
 
 std::map<int, std::shared_ptr<Executor>> Executor::executors_;
-std::mutex Executor::execute_mutex_;
-mapd_shared_mutex Executor::executors_cache_mutex_;
+
 std::atomic_flag Executor::execute_spin_lock_ = ATOMIC_FLAG_INIT;
 std::string Executor::current_query_session_{""};
 InterruptFlagMap Executor::queries_interrupt_flag_;
 mapd_shared_mutex Executor::executor_session_mutex_;
+
+mapd_shared_mutex Executor::execute_mutex_;
+mapd_shared_mutex Executor::executors_cache_mutex_;
+
+std::mutex Executor::compilation_mutex_;
+std::mutex Executor::kernel_mutex_;

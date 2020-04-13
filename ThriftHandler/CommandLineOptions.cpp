@@ -354,6 +354,10 @@ void CommandLineOptions::fillAdvancedOptions() {
           ->default_value(g_enable_smem_group_by)
           ->implicit_value(true),
       "Enable using GPU shared memory for some GROUP BY queries.");
+  developer_desc.add_options()("num-executors",
+                               po::value<int>(&mapd_parameters.num_executors)
+                                   ->default_value(mapd_parameters.num_executors),
+                               "Number of executors to run in parallel.");
   developer_desc.add_options()(
       "gpu-shared-mem-threshold",
       po::value<size_t>(&g_gpu_smem_threshold)->default_value(g_gpu_smem_threshold),

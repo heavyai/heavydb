@@ -296,7 +296,8 @@ void InsertOrderFragmenter::updateColumns(
     const RowDataProvider& sourceDataProvider,
     const size_t indexOffFragmentOffsetColumn,
     const Data_Namespace::MemoryLevel memoryLevel,
-    UpdelRoll& updelRoll) {
+    UpdelRoll& updelRoll,
+    Executor* executor) {
   updelRoll.is_varlen_update = true;
   updelRoll.catalog = catalog;
   updelRoll.logicalTableId = catalog->getLogicalTableId(td->tableId);
@@ -319,11 +320,6 @@ void InsertOrderFragmenter::updateColumns(
   std::vector<std::unique_ptr<TargetValueConverter>> sourceDataConverters(
       columnDescriptors.size());
   std::vector<std::unique_ptr<ChunkToInsertDataConverter>> chunkConverters;
-  std::shared_ptr<Executor> executor;
-
-  if (g_enable_experimental_string_functions) {
-    executor = Executor::getExecutor(catalog->getCurrentDB().dbId);
-  }
 
   std::shared_ptr<Chunk_NS::Chunk> deletedChunk;
   for (size_t indexOfChunk = 0; indexOfChunk < chunks.size(); indexOfChunk++) {
