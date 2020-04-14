@@ -341,6 +341,20 @@ TEST_F(GrantSyntax, MultiRoleGrantRevoke) {
   check_revoke();
 }
 
+class InvalidGrantSyntax : public DBHandlerTestFixture {};
+
+TEST_F(InvalidGrantSyntax, InvalidGrantSyntax) {
+  std::string error_message;
+  if (g_aggregator) {
+    error_message = "Exception: Syntax error at: ON";
+  } else {
+    error_message = "Syntax error at: ON";
+  }
+
+  queryAndAssertException("GRANT SELECT, INSERT, ON TABLE tbl TO Arsenal, Juventus;",
+                          error_message);
+}
+
 TEST(UserRoles, InvalidGrantsRevokesTest) {
   run_ddl_statement("CREATE USER Antazin(password = 'password', is_super = 'false');");
   run_ddl_statement("CREATE USER Max(password = 'password', is_super = 'false');");

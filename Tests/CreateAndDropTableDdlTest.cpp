@@ -1108,8 +1108,7 @@ class NegativePrecisionOrDimensionTest
       public testing::WithParamInterface<std::tuple<ddl_utils::TableType, std::string>> {
 };
 
-// TODO: Enable after addressing parser memory management issues
-TEST_P(NegativePrecisionOrDimensionTest, DISABLED_NegativePrecisionOrDimension) {
+TEST_P(NegativePrecisionOrDimensionTest, NegativePrecisionOrDimension) {
   const auto& [table_type, data_type] = GetParam();
   try {
     sql(getCreateTableQuery(table_type, "test_table", "(col1 " + data_type + "(-1))"));
@@ -1296,8 +1295,7 @@ TEST_P(DropTableTest, AuthorizedUser) {
   ASSERT_EQ(nullptr, getCatalog().getMetadataForTable("test_table", false));
 }
 
-// TODO: Enable after addressing parser memory management issues
-TEST_P(CreateTableTest, DISABLED_InvalidSyntax) {
+TEST_P(CreateTableTest, InvalidSyntax) {
   std::string query = getCreateTableQuery(
       GetParam(), "test_table", "(str TEXT ENCODING DICT(8), f FLOAT i INTEGER)");
   try {
