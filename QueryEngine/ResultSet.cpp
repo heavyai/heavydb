@@ -317,7 +317,9 @@ size_t ResultSet::rowCount(const bool force_parallel) const {
     return 1;
   }
   if (!permutation_.empty()) {
-    return permutation_.size();
+    const auto limited_row_count = keep_first_ + drop_first_;
+    return limited_row_count ? std::min(limited_row_count, permutation_.size())
+                             : permutation_.size();
   }
   if (cached_row_count_ != -1) {
     CHECK_GE(cached_row_count_, 0);
