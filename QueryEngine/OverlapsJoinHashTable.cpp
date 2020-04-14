@@ -137,6 +137,16 @@ void OverlapsJoinHashTable::reifyWithLayout(
   columns_per_device.clear();
   bucket_sizes_for_dimension_.clear();
 
+  auto cache_key_contains_intermediate_table = [](const auto cache_key) {
+    for (auto key : cache_key.chunk_keys) {
+      CHECK_GE(key.size(), size_t(2));
+      if (key[1] < 0) {
+        return true;
+      }
+    }
+    return false;
+  };
+
   // Auto-tuner: Pre-calculate some possible hash table sizes.
   std::lock_guard<std::mutex> guard(auto_tuner_cache_mutex_);
   auto atc = auto_tuner_cache_.find(cache_key);
@@ -174,7 +184,9 @@ void OverlapsJoinHashTable::reifyWithLayout(
       }
     }
     overlaps_hashjoin_bucket_threshold_ = good_threshold;
-    auto_tuner_cache_[cache_key] = overlaps_hashjoin_bucket_threshold_;
+    if (!cache_key_contains_intermediate_table(cache_key)) {
+      auto_tuner_cache_[cache_key] = overlaps_hashjoin_bucket_threshold_;
+    }
   }
 
   // Calculate the final size of the hash table.

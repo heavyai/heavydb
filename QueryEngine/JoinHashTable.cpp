@@ -1144,6 +1144,11 @@ void JoinHashTable::initHashTableOnCpuFromCache(
     const size_t num_elements,
     const std::pair<const Analyzer::ColumnVar*, const Analyzer::Expr*>& cols) {
   auto timer = DEBUG_TIMER(__func__);
+  CHECK_GE(chunk_key.size(), size_t(2));
+  if (chunk_key[1] < 0) {
+    // Do not cache hash tables over intermediate results
+    return;
+  }
   const auto outer_col = dynamic_cast<const Analyzer::ColumnVar*>(cols.second);
   JoinHashTableCacheKey cache_key{col_range_,
                                   *cols.first,
@@ -1165,6 +1170,11 @@ void JoinHashTable::putHashTableOnCpuToCache(
     const ChunkKey& chunk_key,
     const size_t num_elements,
     const std::pair<const Analyzer::ColumnVar*, const Analyzer::Expr*>& cols) {
+  CHECK_GE(chunk_key.size(), size_t(2));
+  if (chunk_key[1] < 0) {
+    // Do not cache hash tables over intermediate results
+    return;
+  }
   const auto outer_col = dynamic_cast<const Analyzer::ColumnVar*>(cols.second);
   JoinHashTableCacheKey cache_key{col_range_,
                                   *cols.first,
