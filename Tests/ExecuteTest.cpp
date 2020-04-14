@@ -11267,6 +11267,20 @@ TEST(Select, TimestampPrecision) {
                   "= pg_extract('millisecond', TIMESTAMP(6) '2014-12-13 "
                   "22:23:15.874533') from test limit 1;",
                   dt)));
+    // empty filters
+    {
+      auto rows = run_multiple_agg(
+          "SELECT PG_DATE_TRUNC('day', m), COUNT(*) FROM test WHERE m >= "
+          "CAST('2014-12-14 22:23:15.000' AS TIMESTAMP(3)) AND m < CAST('2014-12-14 "
+          "22:23:15.001' AS TIMESTAMP(3)) AND (CAST(m AS TIMESTAMP(3)) BETWEEN "
+          "CAST('2014-12-14 22:23:15.000' AS TIMESTAMP(3)) AND CAST('2014-12-14 "
+          "22:23:15.000' AS TIMESTAMP(3))) GROUP BY 1 ORDER BY 1;",
+          dt);
+      ASSERT_EQ(rows->rowCount(), size_t(1));
+      auto count_row = rows->getNextRow(false, false);
+      ASSERT_EQ(count_row.size(), size_t(2));
+      ASSERT_EQ(5, v<int64_t>(count_row[1]));
+    }
   }
 }
 

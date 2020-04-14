@@ -197,16 +197,27 @@ ColRangeInfo GroupByAndAggregate::getExprRangeInfo(const Analyzer::Expr* expr) c
   const auto expr_range = getExpressionRange(
       expr, query_infos_, executor_, boost::make_optional(ra_exe_unit_.simple_quals));
   switch (expr_range.getType()) {
-    case ExpressionRangeType::Integer:
+    case ExpressionRangeType::Integer: {
+      if (expr_range.getIntMin() > expr_range.getIntMax()) {
+        return {
+            QueryDescriptionType::GroupByBaselineHash, 0, -1, 0, expr_range.hasNulls()};
+      }
       return {QueryDescriptionType::GroupByPerfectHash,
               expr_range.getIntMin(),
               expr_range.getIntMax(),
               expr_range.getBucket(),
               expr_range.hasNulls()};
+    }
     case ExpressionRangeType::Float:
-    case ExpressionRangeType::Double:
+    case ExpressionRangeType::Double: {
+      if (expr_range.getFpMin() > expr_range.getFpMax()) {
+        return {
+            QueryDescriptionType::GroupByBaselineHash, 0, -1, 0, expr_range.hasNulls()};
+      }
+      return {QueryDescriptionType::GroupByBaselineHash, 0, 0, 0, false};
+    }
     case ExpressionRangeType::Invalid:
-      return ColRangeInfo{QueryDescriptionType::GroupByBaselineHash, 0, 0, 0, false};
+      return {QueryDescriptionType::GroupByBaselineHash, 0, 0, 0, false};
     default:
       CHECK(false);
   }
@@ -561,19 +572,19 @@ CountDistinctDescriptors GroupByAndAggregate::initCountDistinctDescriptors() {
           bitmap_sz_bits = g_hll_precision_bits;
         }
       }
+      if (arg_range_info.isEmpty()) {
+        count_distinct_descriptors.emplace_back(
+            CountDistinctDescriptor{CountDistinctImplType::Bitmap,
+                                    0,
+                                    64,
+                                    agg_info.agg_kind == kAPPROX_COUNT_DISTINCT,
+                                    device_type_,
+                                    1});
+        continue;
+      }
       if (arg_range_info.hash_type_ == QueryDescriptionType::GroupByPerfectHash &&
           !(arg_ti.is_array() || arg_ti.is_geometry())) {  // TODO(alex): allow bitmap
                                                            // implementation for arrays
-        if (arg_range_info.isEmpty()) {
-          count_distinct_descriptors.emplace_back(
-              CountDistinctDescriptor{CountDistinctImplType::Bitmap,
-                                      0,
-                                      64,
-                                      agg_info.agg_kind == kAPPROX_COUNT_DISTINCT,
-                                      device_type_,
-                                      1});
-          continue;
-        }
         count_distinct_impl_type = CountDistinctImplType::Bitmap;
         if (agg_info.agg_kind == kCOUNT) {
           bitmap_sz_bits = arg_range_info.max - arg_range_info.min + 1;
@@ -588,7 +599,8 @@ CountDistinctDescriptors GroupByAndAggregate::initCountDistinctDescriptors() {
           !(arg_ti.is_array() || arg_ti.is_geometry())) {
         count_distinct_impl_type = CountDistinctImplType::Bitmap;
       }
-      if (g_enable_watchdog &&
+
+      if (g_enable_watchdog && !(arg_range_info.isEmpty()) &&
           count_distinct_impl_type == CountDistinctImplType::StdSet) {
         throw WatchdogException("Cannot use a fast path for COUNT distinct");
       }
