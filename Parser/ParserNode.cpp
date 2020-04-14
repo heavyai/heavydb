@@ -4125,14 +4125,33 @@ void RevokeRoleStmt::execute(const Catalog_Namespace::SessionInfo& session) {
 }
 
 void ShowCreateTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
+  using namespace Catalog_Namespace;
+
+  const auto execute_read_lock = mapd_shared_lock<mapd_shared_mutex>(
+      *legacylockmgr::LockMgr<mapd_shared_mutex, bool>::getMutex(
+          legacylockmgr::ExecutorOuterLock, true));
+
   auto& catalog = session.getCatalog();
   const TableDescriptor* td = catalog.getMetadataForTable(*table_);
   if (!td) {
-    throw std::runtime_error("table not found: " + *table_);
+    throw std::runtime_error("Table/View " + *table_ + " does not exist.");
   }
+
+  DBObject dbObject(td->tableName, td->isView ? ViewDBObjectType : TableDBObjectType);
+  dbObject.loadKey(catalog);
+  std::vector<DBObject> privObjects = {dbObject};
+
+  if (!SysCatalog::instance().hasAnyPrivileges(session.get_currentUser(), privObjects)) {
+    throw std::runtime_error("Table/View " + *table_ + " does not exist.");
+  }
+  if (td->isView && !session.get_currentUser().isSuper) {
+    // TODO: we need to run a validate query to ensure the user has access to the
+    // underlying table, but we do not have any of the machinery in here. Disable for now,
+    // unless the current user is a super user.
+    throw std::runtime_error("SHOW CREATE TABLE not yet supported for views");
+  }
+
   create_stmt_ = catalog.dumpCreateTable(td);
-  std::regex regex("@T");
-  create_stmt_ = std::regex_replace(create_stmt_, regex, *table_);
 }
 
 void ExportQueryStmt::execute(const Catalog_Namespace::SessionInfo& session) {
