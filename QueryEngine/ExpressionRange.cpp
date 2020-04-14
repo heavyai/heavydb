@@ -200,11 +200,6 @@ ExpressionRange apply_simple_quals(
                      qual_range);
     }
   }
-  if (qual_range.getType() == ExpressionRangeType::Integer) {
-    if (qual_range.getIntMin() > qual_range.getIntMax()) {
-      return ExpressionRange::makeIntRange(0, -1, 0, qual_range.hasNulls());
-    }
-  }
   return qual_range;
 }
 
