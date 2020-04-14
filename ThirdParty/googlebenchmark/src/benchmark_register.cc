@@ -34,8 +34,7 @@
 #include <sstream>
 #include <thread>
 
-#define __STDC_FORMAT_MACROS
-#include <inttypes.h>
+#include <cinttypes>
 
 #include "benchmark/benchmark.h"
 #include "benchmark_api_internal.h"
