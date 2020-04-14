@@ -938,7 +938,7 @@ void DBHandler::sql_execute(TQueryResult& _return,
                             const int32_t at_most_n) {
   auto session_ptr = get_session_ptr(session);
   auto query_state = create_query_state(session_ptr, query_str);
-  auto stdlog = STDLOG(query_state);
+  auto stdlog = STDLOG(session_ptr, query_state);
   stdlog.appendNameValuePairs("client", getConnectionInfo().toString());
   auto timer = DEBUG_TIMER(__func__);
 
@@ -4511,9 +4511,20 @@ void DBHandler::check_session_exp_unsafe(const SessionMap::iterator& session_it)
   }
   time_t last_used_time = session_it->second->get_last_used_time();
   time_t start_time = session_it->second->get_start_time();
-  if ((time(0) - last_used_time) > idle_session_duration_) {
+  const auto current_session_duration = time(0) - last_used_time;
+  if (current_session_duration > idle_session_duration_) {
+    LOG(INFO) << "Session " << session_it->second->get_public_session_id()
+              << " idle duration " << current_session_duration
+              << " seconds exceeds maximum idle duration " << idle_session_duration_
+              << " seconds. Invalidating session.";
     throw ForceDisconnect("Idle Session Timeout. User should re-authenticate.");
-  } else if ((time(0) - start_time) > max_session_duration_) {
+  }
+  const auto total_session_duration = time(0) - start_time;
+  if (total_session_duration > max_session_duration_) {
+    LOG(INFO) << "Session " << session_it->second->get_public_session_id()
+              << " total duration " << total_session_duration
+              << " seconds exceeds maximum total session duration "
+              << max_session_duration_ << " seconds. Invalidating session.";
     throw ForceDisconnect("Maximum active Session Timeout. User should re-authenticate.");
   }
 }
@@ -4530,12 +4541,12 @@ Catalog_Namespace::SessionInfo DBHandler::get_session_copy(const TSessionId& ses
 
 std::shared_ptr<Catalog_Namespace::SessionInfo> DBHandler::get_session_copy_ptr(
     const TSessionId& session) {
-  // Note(Wamsi): We have `get_const_session_ptr` which would return as const SessionInfo
-  // stored in the map. You can use `get_const_session_ptr` instead of the copy of
-  // SessionInfo but beware that it can be changed in teh map. So if you do not care about
-  // the changes then use `get_const_session_ptr` if you do then use this function to get
-  // a copy. We should eventually aim to merge both `get_const_session_ptr` and
-  // `get_session_copy_ptr`.
+  // Note(Wamsi): We have `get_const_session_ptr` which would return as const
+  // SessionInfo stored in the map. You can use `get_const_session_ptr` instead of the
+  // copy of SessionInfo but beware that it can be changed in teh map. So if you do not
+  // care about the changes then use `get_const_session_ptr` if you do then use this
+  // function to get a copy. We should eventually aim to merge both
+  // `get_const_session_ptr` and `get_session_copy_ptr`.
   mapd_shared_lock<mapd_shared_mutex> read_lock(sessions_mutex_);
   auto& session_info_ref = *get_session_it_unsafe(session, read_lock)->second;
   return std::make_shared<Catalog_Namespace::SessionInfo>(session_info_ref);
@@ -4547,10 +4558,10 @@ std::shared_ptr<Catalog_Namespace::SessionInfo> DBHandler::get_session_ptr(
   // Should be used only when you need to make updates to original SessionInfo object.
   // Currently used by `update_session_last_used_duration`
 
-  // 1) `session_id` will be empty during intial connect. 2)`sessionmapd iterator` will be
-  // invalid during disconnect. SessionInfo will be erased from map by the time it reaches
-  // here. In both the above cases, we would return `nullptr` and can skip SessionInfo
-  // updates.
+  // 1) `session_id` will be empty during intial connect. 2)`sessionmapd iterator` will
+  // be invalid during disconnect. SessionInfo will be erased from map by the time it
+  // reaches here. In both the above cases, we would return `nullptr` and can skip
+  // SessionInfo updates.
   if (session_id.empty()) {
     return {};
   }
@@ -5069,9 +5080,9 @@ void DBHandler::sql_execute_impl(TQueryResult& _return,
                                               filter_push_down_requests);
       } else if (explain_info.justCalciteExplain() && filter_push_down_requests.empty()) {
         // return the ra as the result:
-        // If we reach here, the 'filter_push_down_request' turned out to be empty, i.e.,
-        // no filter push down so we continue with the initial (unchanged) query's calcite
-        // explanation.
+        // If we reach here, the 'filter_push_down_request' turned out to be empty,
+        // i.e., no filter push down so we continue with the initial (unchanged) query's
+        // calcite explanation.
         CHECK(!locks.empty());
         query_ra = parse_to_ra(query_state_proxy, query_str, {}, false, mapd_parameters_)
                        .first.plan_result;
@@ -5085,9 +5096,9 @@ void DBHandler::sql_execute_impl(TQueryResult& _return,
       }
       if (explain_info.justCalciteExplain()) {
         // return the ra as the result:
-        // If we reach here, the 'filter_push_down_request' turned out to be empty, i.e.,
-        // no filter push down so we continue with the initial (unchanged) query's calcite
-        // explanation.
+        // If we reach here, the 'filter_push_down_request' turned out to be empty,
+        // i.e., no filter push down so we continue with the initial (unchanged) query's
+        // calcite explanation.
         CHECK(!locks.empty());
         query_ra = parse_to_ra(query_state_proxy, query_str, {}, false, mapd_parameters_)
                        .first.plan_result;
@@ -5424,8 +5435,8 @@ std::pair<TPlanResult, lockmgr::LockedTableDescriptors> DBHandler::parse_to_ra(
               std::make_unique<lockmgr::TableSchemaLockContainer<lockmgr::WriteLock>>(
                   lockmgr::TableSchemaLockContainer<
                       lockmgr::WriteLock>::acquireTableDescriptor(*cat.get(), table)));
-          // TODO(adb): Should we be taking this lock for inserts? Are inserts even going
-          // down this path?
+          // TODO(adb): Should we be taking this lock for inserts? Are inserts even
+          // going down this path?
           locks.emplace_back(
               std::make_unique<lockmgr::TableDataLockContainer<lockmgr::WriteLock>>(
                   lockmgr::TableDataLockContainer<lockmgr::WriteLock>::acquire(
