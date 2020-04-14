@@ -236,7 +236,7 @@ if(ENABLE_DBE)
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fPIC")
   set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fPIC")
   set(ENABLE_STANDALONE_CALCITE ON)
-  add_definitions("-D__EMBEDDED_DATABASE__")
+  add_definitions("-DENABLE_EMBEDDED_DATABASE")
 endif()
 
 # Code coverage
@@ -507,7 +507,7 @@ add_subdirectory(ThriftHandler)
 add_subdirectory(Distributed)
 
 if(ENABLE_DBE)
-  add_subdirectory(Wrapper)
+  add_subdirectory(Embedded)
 endif()
 
 option(ENABLE_ODBC "Build ODBC driver" OFF)

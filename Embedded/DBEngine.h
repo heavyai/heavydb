@@ -34,7 +34,7 @@ class Row {
   std::string getStr(size_t col_num);
 
  private:
-  std::vector<TargetValue> m_row;
+  std::vector<TargetValue> row_;
 };
 
 class Cursor {

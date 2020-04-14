@@ -37,14 +37,14 @@ class CursorImpl : public Cursor {
  public:
   CursorImpl(std::shared_ptr<ResultSet> result_set,
              std::shared_ptr<Data_Namespace::DataMgr> data_mgr)
-      : m_result_set(result_set), m_data_mgr(data_mgr) {}
+      : result_set_(result_set), data_mgr_(data_mgr) {}
 
-  size_t getColCount() { return m_result_set->colCount(); }
+  size_t getColCount() { return result_set_->colCount(); }
 
-  size_t getRowCount() { return m_result_set->rowCount(); }
+  size_t getRowCount() { return result_set_->rowCount(); }
 
   Row getNextRow() {
-    auto row = m_result_set->getNextRow(true, false);
+    auto row = result_set_->getNextRow(true, false);
     if (row.empty()) {
       return Row();
     }
@@ -53,13 +53,14 @@ class CursorImpl : public Cursor {
 
   ColumnType getColType(uint32_t col_num) {
     if (col_num < getColCount()) {
-      SQLTypeInfo type_info = m_result_set->getColType(col_num);
+      SQLTypeInfo type_info = result_set_->getColType(col_num);
       switch (type_info.get_type()) {
         case kNUMERIC:
         case kDECIMAL:
         case kINT:
         case kSMALLINT:
         case kBIGINT:
+        case kTINYINT:
           return ColumnType::Integer;
 
         case kDOUBLE:
@@ -81,8 +82,8 @@ class CursorImpl : public Cursor {
   }
 
  private:
-  std::shared_ptr<ResultSet> m_result_set;
-  std::weak_ptr<Data_Namespace::DataMgr> m_data_mgr;
+  std::shared_ptr<ResultSet> result_set_;
+  std::weak_ptr<Data_Namespace::DataMgr> data_mgr_;
 };
 
 /**
@@ -97,65 +98,65 @@ class DBEngineImpl : public DBEngine {
   const std::string OMNISCI_DATA_PATH = "//mapd_data";
 
   void reset() {
-    // TODO: Destroy all cursors in the m_Cursors
-    if (m_query_runner != nullptr) {
-      m_query_runner->reset();
+    // TODO: Destroy all cursors in the cursors_
+    if (query_runner_ != nullptr) {
+      query_runner_->reset();
     }
   }
 
   void executeDDL(const std::string& query) {
-    if (m_query_runner != nullptr) {
-      m_query_runner->runDDLStatement(query);
+    if (query_runner_ != nullptr) {
+      query_runner_->runDDLStatement(query);
     }
   }
 
   Cursor* executeDML(const std::string& query) {
-    if (m_query_runner != nullptr) {
-      auto rs = m_query_runner->runSQL(query, ExecutorDeviceType::CPU);
-      m_cursors.emplace_back(new CursorImpl(rs, m_data_mgr));
-      return m_cursors.back();
+    if (query_runner_ != nullptr) {
+      auto rs = query_runner_->runSQL(query, ExecutorDeviceType::CPU);
+      cursors_.emplace_back(new CursorImpl(rs, data_mgr_));
+      return cursors_.back();
     }
     return nullptr;
   }
 
   DBEngineImpl(const std::string& base_path)
-      : m_base_path(base_path), m_query_runner(nullptr) {
-    if (!boost::filesystem::exists(m_base_path)) {
-      std::cerr << "Catalog basepath " + m_base_path + " does not exist.\n";
+      : base_path_(base_path), query_runner_(nullptr) {
+    if (!boost::filesystem::exists(base_path_)) {
+      std::cerr << "Catalog basepath " + base_path_ + " does not exist.\n";
       // TODO: Create database if it does not exist
     } else {
       MapDParameters mapd_parms;
-      std::string data_path = m_base_path + OMNISCI_DATA_PATH;
-      m_data_mgr =
+      std::string data_path = base_path_ + OMNISCI_DATA_PATH;
+      data_mgr_ =
           std::make_shared<Data_Namespace::DataMgr>(data_path, mapd_parms, false, 0);
-      auto calcite = std::make_shared<Calcite>(-1, CALCITEPORT, m_base_path, 1024, 5000);
+      auto calcite = std::make_shared<Calcite>(-1, CALCITEPORT, base_path_, 1024, 5000);
       auto& sys_cat = Catalog_Namespace::SysCatalog::instance();
-      sys_cat.init(m_base_path, m_data_mgr, {}, calcite, false, false, {});
+      sys_cat.init(base_path_, data_mgr_, {}, calcite, false, false, {});
       if (!sys_cat.getSqliteConnector()) {
         std::cerr << "SqliteConnector is null " << std::endl;
       } else {
-        sys_cat.getMetadataForDB(OMNISCI_DEFAULT_DB, m_database);  // TODO: Check
-        auto catalog = Catalog_Namespace::Catalog::get(m_base_path,
-                                                       m_database,
-                                                       m_data_mgr,
+        sys_cat.getMetadataForDB(OMNISCI_DEFAULT_DB, database_);  // TODO: Check
+        auto catalog = Catalog_Namespace::Catalog::get(base_path_,
+                                                       database_,
+                                                       data_mgr_,
                                                        std::vector<LeafHostInfo>(),
                                                        calcite,
                                                        false);
-        sys_cat.getMetadataForUser(OMNISCI_ROOT_USER, m_user);
+        sys_cat.getMetadataForUser(OMNISCI_ROOT_USER, user_);
         auto session = std::make_unique<Catalog_Namespace::SessionInfo>(
-            catalog, m_user, ExecutorDeviceType::CPU, "");
-        m_query_runner = QueryRunner::QueryRunner::init(session);
+            catalog, user_, ExecutorDeviceType::CPU, "");
+        query_runner_ = QueryRunner::QueryRunner::init(session);
       }
     }
   }
 
  private:
-  std::string m_base_path;
-  std::shared_ptr<Data_Namespace::DataMgr> m_data_mgr;
-  Catalog_Namespace::DBMetadata m_database;
-  Catalog_Namespace::UserMetadata m_user;
-  QueryRunner::QueryRunner* m_query_runner;
-  std::vector<CursorImpl*> m_cursors;
+  std::string base_path_;
+  std::shared_ptr<Data_Namespace::DataMgr> data_mgr_;
+  Catalog_Namespace::DBMetadata database_;
+  Catalog_Namespace::UserMetadata user_;
+  QueryRunner::QueryRunner* query_runner_;
+  std::vector<CursorImpl*> cursors_;
 };
 
 /********************************************* DBEngine external methods*/
@@ -197,11 +198,11 @@ Cursor* DBEngine::executeDML(std::string query) {
 
 Row::Row() {}
 
-Row::Row(std::vector<TargetValue>& row) : m_row(std::move(row)) {}
+Row::Row(std::vector<TargetValue>& row) : row_(std::move(row)) {}
 
 int64_t Row::getInt(size_t col_num) {
-  if (col_num < m_row.size()) {
-    const auto scalar_value = boost::get<ScalarTargetValue>(&m_row[col_num]);
+  if (col_num < row_.size()) {
+    const auto scalar_value = boost::get<ScalarTargetValue>(&row_[col_num]);
     const auto value = boost::get<int64_t>(scalar_value);
     return *value;
   }
@@ -209,8 +210,8 @@ int64_t Row::getInt(size_t col_num) {
 }
 
 double Row::getDouble(size_t col_num) {
-  if (col_num < m_row.size()) {
-    const auto scalar_value = boost::get<ScalarTargetValue>(&m_row[col_num]);
+  if (col_num < row_.size()) {
+    const auto scalar_value = boost::get<ScalarTargetValue>(&row_[col_num]);
     const auto value = boost::get<double>(scalar_value);
     return *value;
   }
@@ -218,8 +219,8 @@ double Row::getDouble(size_t col_num) {
 }
 
 std::string Row::getStr(size_t col_num) {
-  if (col_num < m_row.size()) {
-    const auto scalar_value = boost::get<ScalarTargetValue>(&m_row[col_num]);
+  if (col_num < row_.size()) {
+    const auto scalar_value = boost::get<ScalarTargetValue>(&row_[col_num]);
     auto value = boost::get<NullableString>(scalar_value);
     bool is_null = !value || boost::get<void*>(value);
     if (is_null) {
