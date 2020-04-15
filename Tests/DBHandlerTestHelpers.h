@@ -164,6 +164,11 @@ class DBHandlerTestFixture : public testing::Test {
 
  protected:
   virtual void SetUp() override {
+    createDBHandler();
+    switchToAdmin();
+  }
+
+  static void createDBHandler() {
     if (!db_handler_) {
       // Based on default values observed from starting up an OmniSci DB server.
       const bool cpu_only{false};
@@ -215,23 +220,23 @@ class DBHandlerTestFixture : public testing::Test {
                                                 udf_filename_,
                                                 udf_compiler_path_,
                                                 udf_compiler_options_);
+
+      loginAdmin();
     }
-    loginAdmin();
   }
+  virtual void TearDown() override {}
 
-  virtual void TearDown() override { logoutAdmin(); }
-
-  void sql(const std::string& query) {
+  static void sql(const std::string& query) {
     TQueryResult result;
     sql(result, query);
   }
 
-  void sql(TQueryResult& result, const std::string& query) {
+  static void sql(TQueryResult& result, const std::string& query) {
     db_handler_->sql_execute(result, session_id_, query, true, "", -1, -1);
   }
 
   // Execute SQL with session_id
-  void sql(TQueryResult& result, const std::string& query, TSessionId& sess_id) {
+  static void sql(TQueryResult& result, const std::string& query, TSessionId& sess_id) {
     db_handler_->sql_execute(result, sess_id, query, true, "", -1, -1);
   }
 
@@ -252,31 +257,35 @@ class DBHandlerTestFixture : public testing::Test {
     catalog.remove(catalog.getCurrentDB().dbName);
   }
 
-  void loginAdmin() {
+  static void loginAdmin() {
     session_id_ = {};
-    db_handler_->connect(session_id_, default_user_, default_pass_, default_db_name_);
-    // Store admin session ID in seperate variable so we can always logout
-    // the default admin on teardown
+    login(default_user_, "HyperInteractive", default_db_name_, session_id_);
     admin_session_id_ = session_id_;
   }
+  static bool isDistributedMode() { return system_parameters_.aggregator; }
+  static void switchToAdmin() { session_id_ = admin_session_id_; }
 
-  void logoutAdmin() { db_handler_->disconnect(admin_session_id_); }
+  static void logout(const TSessionId& id) { db_handler_->disconnect(id); }
 
-  void logout(const TSessionId& id) { db_handler_->disconnect(id); }
-
-  void login(const std::string& user,
-             const std::string& pass,
-             const std::string& db_name = default_db_name_) {
+  static void login(const std::string& user,
+                    const std::string& pass,
+                    const std::string& db_name = default_db_name_) {
     session_id_ = {};
-    db_handler_->connect(session_id_, user, pass, db_name);
+    login(user, pass, db_name, session_id_);
   }
 
   // Login and return the session id to logout later
-  void login(const std::string& user,
-             const std::string& pass,
-             const std::string& db,
-             TSessionId& result_id) {
-    db_handler_->connect(result_id, user, pass, db);
+  static void login(const std::string& user,
+
+                    const std::string& pass,
+                    const std::string& db,
+                    TSessionId& result_id) {
+    if (isDistributedMode()) {
+      // Need to do full login here for distributed tests
+      db_handler_->connect(result_id, user, pass, db);
+    } else {
+      db_handler_->internal_connect(result_id, user, db);
+    }
   }
 
   void queryAndAssertException(const std::string& sql_statement,

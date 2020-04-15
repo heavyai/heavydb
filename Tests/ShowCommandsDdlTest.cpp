@@ -32,14 +32,8 @@ class ShowUserSessionsTest : public DBHandlerTestFixture {
  public:
   void SetUp() override {
     DBHandlerTestFixture::SetUp();
-    users = {"user1", "user2", "user3"};
-    superusers = {"super1", "super2", "super3"};
-    dbs = {"db1", "db2", "db3"};
     // Default connection string outside of thrift
     connection_string = "tcp:";
-    createDBs();
-    createUsers();
-    createSuperUsers();
     // Check that default only user session exists
     TQueryResult result;
     sql(result, "SHOW USER SESSIONS;");
@@ -49,11 +43,23 @@ class ShowUserSessionsTest : public DBHandlerTestFixture {
     getID(result, "admin", "omnisci", admin_id);
   }
 
-  void TearDown() override {
+  static void SetUpTestSuite() {
+    createDBHandler();
+    users_ = {"user1", "user2"};
+    superusers_ = {"super1", "super2"};
+    dbs_ = {"db1", "db2"};
+    createDBs();
+    createUsers();
+    createSuperUsers();
+  }
+
+  static void TearDownTestSuite() {
     dropUsers();
     dropSuperUsers();
     dropDBs();
+  }
 
+  void TearDown() override {
     // Check that default only user session still exists
     TQueryResult result;
     sql(result, "SHOW USER SESSIONS;");
@@ -63,14 +69,14 @@ class ShowUserSessionsTest : public DBHandlerTestFixture {
     DBHandlerTestFixture::TearDown();
   }
 
-  void createUsers() {
-    for (const auto& user : users) {
+  static void createUsers() {
+    for (const auto& user : users_) {
       std::stringstream create;
       create << "CREATE USER " << user
              << " (password = 'HyperInteractive', is_super = 'false', "
                 "default_db='omnisci');";
       sql(create.str());
-      for (const auto& db : dbs) {
+      for (const auto& db : dbs_) {
         std::stringstream grant;
         grant << "GRANT ALL ON DATABASE  " << db << " to " << user << ";";
         sql(grant.str());
@@ -78,14 +84,14 @@ class ShowUserSessionsTest : public DBHandlerTestFixture {
     }
   }
 
-  void createSuperUsers() {
-    for (const auto& user : superusers) {
+  static void createSuperUsers() {
+    for (const auto& user : superusers_) {
       std::stringstream create;
       create
           << "CREATE USER " << user
           << " (password = 'HyperInteractive', is_super = 'true', default_db='omnisci');";
       sql(create.str());
-      for (const auto& db : dbs) {
+      for (const auto& db : dbs_) {
         std::stringstream grant;
         grant << "GRANT ALL ON DATABASE  " << db << " to " << user << ";";
         sql(grant.str());
@@ -93,32 +99,32 @@ class ShowUserSessionsTest : public DBHandlerTestFixture {
     }
   }
 
-  void dropUsers() {
-    for (const auto& user : users) {
+  static void dropUsers() {
+    for (const auto& user : users_) {
       std::stringstream drop;
       drop << "DROP USER " << user << ";";
       sql(drop.str());
     }
   }
 
-  void dropSuperUsers() {
-    for (const auto& user : superusers) {
+  static void dropSuperUsers() {
+    for (const auto& user : superusers_) {
       std::stringstream drop;
       drop << "DROP USER " << user << ";";
       sql(drop.str());
     }
   }
 
-  void createDBs() {
-    for (const auto& db : dbs) {
+  static void createDBs() {
+    for (const auto& db : dbs_) {
       std::stringstream create;
       create << "CREATE DATABASE " << db << " (owner = 'admin');";
       sql(create.str());
     }
   }
 
-  void dropDBs() {
-    for (const auto& db : dbs) {
+  static void dropDBs() {
+    for (const auto& db : dbs_) {
       std::stringstream drop;
       drop << "DROP DATABASE " << db << ";";
       sql(drop.str());
@@ -193,18 +199,22 @@ class ShowUserSessionsTest : public DBHandlerTestFixture {
   void assertNumSessions(const TQueryResult& result, size_t num_session) {
     ASSERT_EQ(num_session, result.row_set.columns[ID].data.str_col.size());
   }
-  std::vector<std::string> get_users() { return users; }
-  std::vector<std::string> get_superusers() { return superusers; }
-  std::vector<std::string> get_dbs() { return dbs; }
+  std::vector<std::string> get_users() { return users_; }
+  std::vector<std::string> get_superusers() { return superusers_; }
+  std::vector<std::string> get_dbs() { return dbs_; }
 
  private:
-  std::vector<std::string> users;
-  std::vector<std::string> superusers;
-  std::vector<std::string> dbs;
+  static std::vector<std::string> users_;
+  static std::vector<std::string> superusers_;
+  static std::vector<std::string> dbs_;
 
   std::string admin_id;
   std::string connection_string;
 };
+
+std::vector<std::string> ShowUserSessionsTest::users_;
+std::vector<std::string> ShowUserSessionsTest::superusers_;
+std::vector<std::string> ShowUserSessionsTest::dbs_;
 
 TEST_F(ShowUserSessionsTest, SHOW) {
   // check default admin session is created
@@ -275,8 +285,7 @@ TEST_F(ShowUserSessionsTest, SHOW_USERS_MULTIDBS) {
 
 TEST_F(ShowUserSessionsTest, SHOW_USERS_ALL) {
   std::vector<TSessionId> session_ids;
-
-  for (int copies = 1; copies < 5; copies++) {
+  for (int copies = 1; copies < 4; copies++) {
     for (auto const& user : get_users()) {
       for (auto const& db : get_dbs()) {
         TSessionId session;
@@ -376,22 +385,28 @@ class ShowTableDdlTest : public DBHandlerTestFixture {
  protected:
   void SetUp() override {
     DBHandlerTestFixture::SetUp();
-    loginAdmin();
-    createTestUser();
+    switchToAdmin();
   }
 
   void TearDown() override {
-    loginAdmin();
+    switchToAdmin();
     dropTestTable();
-    dropTestUser();
+    DBHandlerTestFixture::TearDown();
   }
 
-  void createTestUser() {
+  static void SetUpTestSuite() {
+    createDBHandler();
+    createTestUser();
+  }
+
+  static void TearDownTestSuite() { dropTestUser(); }
+
+  static void createTestUser() {
     sql("CREATE USER test_user (password = 'test_pass');");
     sql("GRANT ACCESS ON DATABASE omnisci TO test_user;");
   }
 
-  void dropTestUser() {
+  static void dropTestUser() {
     try {
       sql("DROP USER test_user;");
     } catch (const std::exception& e) {
@@ -432,9 +447,9 @@ class ShowTableDdlTest : public DBHandlerTestFixture {
     assertExpectedQuery(result, expected_values, expected_missing_values);
   }
 
-  void createTestTable() { sql("CREATE TABLE test_table ( test_val int );"); }
+  static void createTestTable() { sql("CREATE TABLE test_table ( test_val int );"); }
 
-  void dropTestTable() { sql("DROP TABLE IF EXISTS test_table;"); }
+  static void dropTestTable() { sql("DROP TABLE IF EXISTS test_table;"); }
 };
 
 TEST_F(ShowTableDdlTest, CreateTestTable) {
@@ -506,7 +521,7 @@ TEST_F(ShowTableDdlTest, SuperUserSeesTestTableAfterTestUserCreates) {
   sql("GRANT CREATE TABLE ON DATABASE omnisci TO test_user;");
   login("test_user", "test_pass");
   createTestTable();
-  loginAdmin();
+  switchToAdmin();
   TQueryResult result;
   std::vector<std::string> expected_result{"test_table"};
   sql(result, "SHOW TABLES;");
@@ -526,20 +541,26 @@ TEST_F(ShowTableDdlTest, CreateTableCreateViewAndViewNotSeen) {
 
 class ShowDatabasesTest : public DBHandlerTestFixture {
  protected:
-  void SetUp() override {
-    DBHandlerTestFixture::SetUp();
+  void SetUp() override { DBHandlerTestFixture::SetUp(); }
+
+  void TearDown() override {
+    switchToAdmin();
+    sql("DROP DATABASE IF EXISTS test_db_1;");
+    sql("DROP DATABASE IF EXISTS test_db_2;");
+    DBHandlerTestFixture::TearDown();
+  }
+
+  static void SetUpTestSuite() {
+    createDBHandler();
     createTestUser("test_user_1", "test_pass_1");
     createTestUser("test_user_2", "test_pass_2");
     createTestUser("test_super_user", "test_pass", true);
   }
 
-  void TearDown() override {
+  static void TearDownTestSuite() {
     dropTestUser("test_user_1");
     dropTestUser("test_user_2");
     dropTestUser("test_super_user");
-    sql("DROP DATABASE IF EXISTS test_db_1;");
-    sql("DROP DATABASE IF EXISTS test_db_2;");
-    DBHandlerTestFixture::TearDown();
   }
 
   void assertExpectedResult(const std::vector<std::string> headers,
@@ -569,15 +590,15 @@ class ShowDatabasesTest : public DBHandlerTestFixture {
     }
   }
 
-  void createTestUser(const std::string& user_name,
-                      const std::string& pass,
-                      const bool is_super_user = false) {
+  static void createTestUser(const std::string& user_name,
+                             const std::string& pass,
+                             const bool is_super_user = false) {
     sql("CREATE USER " + user_name + " (password = '" + pass + "', is_super = '" +
         (is_super_user ? "true" : "false") + "');");
   }
 
-  void dropTestUser(const std::string& user_name) {
-    loginAdmin();
+  static void dropTestUser(const std::string& user_name) {
+    switchToAdmin();
     try {
       sql("DROP USER " + user_name + ";");
     } catch (const std::exception& e) {
