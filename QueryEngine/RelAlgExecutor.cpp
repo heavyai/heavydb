@@ -2399,6 +2399,18 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createSortInputWorkUnit(
   SortInfo sort_info{order_entries, sort_algorithm, limit, offset};
   auto source_work_unit = createWorkUnit(source, sort_info, eo);
   const auto& source_exe_unit = source_work_unit.exe_unit;
+
+  // we do not allow sorting geometry or array types
+  for (auto order_entry : order_entries) {
+    CHECK_GT(order_entry.tle_no, 0);  // tle_no is a 1-base index
+    const auto& te = source_exe_unit.target_exprs[order_entry.tle_no - 1];
+    const auto& ti = get_target_info(te, false);
+    if (ti.sql_type.is_geometry() || ti.sql_type.is_array()) {
+      throw std::runtime_error(
+          "Columns with geometry or array types cannot be used in an ORDER BY clause.");
+    }
+  }
+
   if (source_exe_unit.groupby_exprs.size() == 1) {
     if (!source_exe_unit.groupby_exprs.front()) {
       sort_algorithm = SortAlgorithm::StreamingTopN;

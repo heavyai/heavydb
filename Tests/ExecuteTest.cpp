@@ -2138,6 +2138,25 @@ TEST(Select, OrderBy) {
   }
 }
 
+TEST(Select, VariableLengthOrderBy) {
+  SKIP_WITH_TEMP_TABLES()  // because of geospatial_test
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    c("SELECT real_str FROM test ORDER BY real_str;", dt);
+    EXPECT_THROW(
+        run_multiple_agg("SELECT arr_float FROM array_test ORDER BY arr_float;", dt),
+        std::runtime_error);
+    EXPECT_THROW(
+        run_multiple_agg("SELECT arr3_i16 FROM array_test ORDER BY arr3_i16 DESC;", dt),
+        std::runtime_error);
+    EXPECT_THROW(run_multiple_agg("SELECT p FROM geospatial_test ORDER BY p;", dt),
+                 std::runtime_error);
+    EXPECT_THROW(run_multiple_agg(
+                     "SELECT poly, l, id FROM geospatial_test ORDER BY id, poly;", dt),
+                 std::runtime_error);
+  }
+}
+
 TEST(Select, TopKHeap) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
