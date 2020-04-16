@@ -392,46 +392,52 @@ if("${MAPD_EDITION_LOWER}" STREQUAL "ee")
 endif()
 
 # TBB
-set(TBB_LIBS "") 
+set(TBB_LIBS "")
 find_package(TBB)
-if(TBB_FOUND) 
+if(TBB_FOUND)
   message(STATUS "Building with TBB support")
   add_definitions("-DHAVE_TBB")
   list(APPEND TBB_LIBS ${TBB_LIBRARIES})
 endif()
 
 add_custom_command(
-    DEPENDS ${CMAKE_SOURCE_DIR}/omnisci.thrift
-    DEPENDS ${CMAKE_SOURCE_DIR}/QueryEngine/serialized_result_set.thrift
-    DEPENDS ${CMAKE_SOURCE_DIR}/QueryEngine/extension_functions.thrift
-    OUTPUT
-        ${CMAKE_BINARY_DIR}/gen-cpp/OmniSci.cpp
-        ${CMAKE_BINARY_DIR}/gen-cpp/OmniSci.h
-        ${CMAKE_BINARY_DIR}/gen-cpp/omnisci_constants.cpp
-        ${CMAKE_BINARY_DIR}/gen-cpp/omnisci_types.cpp
-        ${CMAKE_BINARY_DIR}/gen-cpp/completion_hints_constants.cpp
-        ${CMAKE_BINARY_DIR}/gen-cpp/completion_hints_types.cpp
-        ${CMAKE_BINARY_DIR}/gen-cpp/serialized_result_set_constants.cpp
-        ${CMAKE_BINARY_DIR}/gen-cpp/serialized_result_set_types.cpp
-        ${CMAKE_BINARY_DIR}/gen-cpp/common_constants.cpp
-        ${CMAKE_BINARY_DIR}/gen-cpp/common_types.cpp
-        ${CMAKE_BINARY_DIR}/gen-cpp/extension_functions_types.cpp
-    COMMAND ${Thrift_EXECUTABLE}
-    ARGS -gen cpp -r -o ${CMAKE_BINARY_DIR} ${CMAKE_SOURCE_DIR}/omnisci.thrift)
-list(APPEND ADDITIONAL_MAKE_CLEAN_FILES ${CMAKE_BINARY_DIR}/gen-cpp/)
-
-add_library(mapd_thrift
+  DEPENDS
+    ${CMAKE_SOURCE_DIR}/omnisci.thrift
+    ${CMAKE_SOURCE_DIR}/common.thrift
+    ${CMAKE_SOURCE_DIR}/completion_hints.thrift
+    ${CMAKE_SOURCE_DIR}/QueryEngine/serialized_result_set.thrift
+    ${CMAKE_SOURCE_DIR}/QueryEngine/extension_functions.thrift
+  OUTPUT
     ${CMAKE_BINARY_DIR}/gen-cpp/OmniSci.cpp
     ${CMAKE_BINARY_DIR}/gen-cpp/OmniSci.h
     ${CMAKE_BINARY_DIR}/gen-cpp/omnisci_constants.cpp
     ${CMAKE_BINARY_DIR}/gen-cpp/omnisci_types.cpp
+    ${CMAKE_BINARY_DIR}/gen-cpp/common_constants.cpp
+    ${CMAKE_BINARY_DIR}/gen-cpp/common_types.cpp
     ${CMAKE_BINARY_DIR}/gen-cpp/completion_hints_constants.cpp
     ${CMAKE_BINARY_DIR}/gen-cpp/completion_hints_types.cpp
     ${CMAKE_BINARY_DIR}/gen-cpp/serialized_result_set_constants.cpp
     ${CMAKE_BINARY_DIR}/gen-cpp/serialized_result_set_types.cpp
-    ${CMAKE_BINARY_DIR}/gen-cpp/common_constants.cpp
-    ${CMAKE_BINARY_DIR}/gen-cpp/common_types.cpp
-    ${CMAKE_BINARY_DIR}/gen-cpp/extension_functions_types.cpp)
+    ${CMAKE_BINARY_DIR}/gen-cpp/extension_functions_constants.cpp
+    ${CMAKE_BINARY_DIR}/gen-cpp/extension_functions_types.cpp
+  COMMAND ${Thrift_EXECUTABLE}
+  ARGS -gen cpp -r -o ${CMAKE_BINARY_DIR} ${CMAKE_SOURCE_DIR}/omnisci.thrift)
+list(APPEND ADDITIONAL_MAKE_CLEAN_FILES ${CMAKE_BINARY_DIR}/gen-cpp/)
+
+add_library(mapd_thrift
+  ${CMAKE_BINARY_DIR}/gen-cpp/OmniSci.cpp
+  ${CMAKE_BINARY_DIR}/gen-cpp/OmniSci.h
+  ${CMAKE_BINARY_DIR}/gen-cpp/omnisci_constants.cpp
+  ${CMAKE_BINARY_DIR}/gen-cpp/omnisci_types.cpp
+  ${CMAKE_BINARY_DIR}/gen-cpp/common_constants.cpp
+  ${CMAKE_BINARY_DIR}/gen-cpp/common_types.cpp
+  ${CMAKE_BINARY_DIR}/gen-cpp/completion_hints_constants.cpp
+  ${CMAKE_BINARY_DIR}/gen-cpp/completion_hints_types.cpp
+  ${CMAKE_BINARY_DIR}/gen-cpp/serialized_result_set_constants.cpp
+  ${CMAKE_BINARY_DIR}/gen-cpp/serialized_result_set_types.cpp
+  ${CMAKE_BINARY_DIR}/gen-cpp/extension_functions_constants.cpp
+  ${CMAKE_BINARY_DIR}/gen-cpp/extension_functions_types.cpp
+)
 
 target_compile_options(mapd_thrift PRIVATE -fPIC)
 target_link_libraries(mapd_thrift ${Thrift_LIBRARIES})
