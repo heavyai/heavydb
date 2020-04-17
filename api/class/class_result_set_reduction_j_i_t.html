@@ -65,7 +65,7 @@
             
             
               <div class="version">
-                5.3.0dev c97a66e
+                5.3.0dev 48662e8
               </div>
             
           
@@ -437,6 +437,9 @@
 <li class="toctree-l2"><a class="reference internal" href="class_geo_expr_feature.html">Class GeoExprFeature</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_get_element_ptr.html">Class GetElementPtr</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_gpu_compilation_context.html">Class GpuCompilationContext</a></li>
+<li class="toctree-l2"><a class="reference internal" href="class_gpu_reduction_helper_j_i_t.html">Class GpuReductionHelperJIT</a></li>
+<li class="toctree-l2"><a class="reference internal" href="class_gpu_shared_mem_code_builder.html">Class GpuSharedMemCodeBuilder</a></li>
+<li class="toctree-l2"><a class="reference internal" href="class_gpu_shared_memory_context.html">Class GpuSharedMemoryContext</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_grantee.html">Class Grantee</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_group_by_and_aggregate.html">Class GroupByAndAggregate</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_hash_join_fail.html">Class HashJoinFail</a></li>
@@ -1414,7 +1417,8 @@
 <dl class="class">
 <dt id="_CPPv421ResultSetReductionJIT">
 <span id="_CPPv321ResultSetReductionJIT"></span><span id="_CPPv221ResultSetReductionJIT"></span><span id="ResultSetReductionJIT"></span><span class="target" id="class_result_set_reduction_j_i_t"></span><em class="property">class </em><code class="sig-name descname">ResultSetReductionJIT</code><a class="headerlink" href="#_CPPv421ResultSetReductionJIT" title="Permalink to this definition">¶</a><br /></dt>
-<dd><div class="breathe-sectiondef docutils container">
+<dd><p>Subclassed by <a class="reference internal" href="class_gpu_reduction_helper_j_i_t.html#class_gpu_reduction_helper_j_i_t"><span class="std std-ref">GpuReductionHelperJIT</span></a></p>
+<div class="breathe-sectiondef docutils container">
 <p class="breathe-sectiondef-title rubric">Public Functions</p>
 <dl class="function">
 <dt id="_CPPv4N21ResultSetReductionJIT21ResultSetReductionJITERK21QueryMemoryDescriptorRKNSt6vectorI10TargetInfoEERKNSt6vectorI7int64_tEE">
@@ -1436,7 +1440,7 @@
 
 </div>
 <div class="breathe-sectiondef docutils container">
-<p class="breathe-sectiondef-title rubric">Private Functions</p>
+<p class="breathe-sectiondef-title rubric">Protected Functions</p>
 <dl class="function">
 <dt id="_CPPv4NK21ResultSetReductionJIT7isEmptyERK13ReductionCode">
 <span id="_CPPv3NK21ResultSetReductionJIT7isEmptyERK13ReductionCode"></span><span id="_CPPv2NK21ResultSetReductionJIT7isEmptyERK13ReductionCode"></span><span id="ResultSetReductionJIT::isEmpty__ReductionCodeCRC"></span><span class="target" id="class_result_set_reduction_j_i_t_1ad5131535d6961b1484ce11961e030931"></span>void <code class="sig-name descname">isEmpty</code><span class="sig-paren">(</span><em class="property">const</em> <a class="reference internal" href="../struct/struct_reduction_code.html#_CPPv413ReductionCode" title="ReductionCode">ReductionCode</a> &amp;<em>reduction_code</em><span class="sig-paren">)</span> <em class="property">const</em><a class="headerlink" href="#_CPPv4NK21ResultSetReductionJIT7isEmptyERK13ReductionCode" title="Permalink to this definition">¶</a><br /></dt>
@@ -1448,6 +1452,19 @@
 <dd></dd></dl>
 
 <dl class="function">
+<dt id="_CPPv4NK21ResultSetReductionJIT29reduceOneEntryNoCollisionsIdxERK13ReductionCode">
+<span id="_CPPv3NK21ResultSetReductionJIT29reduceOneEntryNoCollisionsIdxERK13ReductionCode"></span><span id="_CPPv2NK21ResultSetReductionJIT29reduceOneEntryNoCollisionsIdxERK13ReductionCode"></span><span id="ResultSetReductionJIT::reduceOneEntryNoCollisionsIdx__ReductionCodeCRC"></span><span class="target" id="class_result_set_reduction_j_i_t_1ae18d0aee55094458876efa3d7682d858"></span>void <code class="sig-name descname">reduceOneEntryNoCollisionsIdx</code><span class="sig-paren">(</span><em class="property">const</em> <a class="reference internal" href="../struct/struct_reduction_code.html#_CPPv413ReductionCode" title="ReductionCode">ReductionCode</a> &amp;<em>reduction_code</em><span class="sig-paren">)</span> <em class="property">const</em><a class="headerlink" href="#_CPPv4NK21ResultSetReductionJIT29reduceOneEntryNoCollisionsIdxERK13ReductionCode" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="_CPPv4NK21ResultSetReductionJIT10reduceLoopERK13ReductionCode">
+<span id="_CPPv3NK21ResultSetReductionJIT10reduceLoopERK13ReductionCode"></span><span id="_CPPv2NK21ResultSetReductionJIT10reduceLoopERK13ReductionCode"></span><span id="ResultSetReductionJIT::reduceLoop__ReductionCodeCRC"></span><span class="target" id="class_result_set_reduction_j_i_t_1aeb77b1b5b5d62019e2b5efcb261fdb92"></span>void <code class="sig-name descname">reduceLoop</code><span class="sig-paren">(</span><em class="property">const</em> <a class="reference internal" href="../struct/struct_reduction_code.html#_CPPv413ReductionCode" title="ReductionCode">ReductionCode</a> &amp;<em>reduction_code</em><span class="sig-paren">)</span> <em class="property">const</em><a class="headerlink" href="#_CPPv4NK21ResultSetReductionJIT10reduceLoopERK13ReductionCode" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+</div>
+<div class="breathe-sectiondef docutils container">
+<p class="breathe-sectiondef-title rubric">Private Functions</p>
+<dl class="function">
 <dt id="_CPPv4NK21ResultSetReductionJIT33reduceOneEntryTargetsNoCollisionsEP8FunctionP5ValueP5Value">
 <span id="_CPPv3NK21ResultSetReductionJIT33reduceOneEntryTargetsNoCollisionsEP8FunctionP5ValueP5Value"></span><span id="_CPPv2NK21ResultSetReductionJIT33reduceOneEntryTargetsNoCollisionsEP8FunctionP5ValueP5Value"></span><span id="ResultSetReductionJIT::reduceOneEntryTargetsNoCollisions__FunctionP.ValueP.ValuePC"></span><span class="target" id="class_result_set_reduction_j_i_t_1ad52f1fe9d7f6651b2de084f4cbade418"></span>void <code class="sig-name descname">reduceOneEntryTargetsNoCollisions</code><span class="sig-paren">(</span><a class="reference internal" href="class_function.html#_CPPv48Function" title="Function">Function</a> *<em>ir_reduce_one_entry</em>, <a class="reference internal" href="class_value.html#_CPPv45Value" title="Value">Value</a> *<em>this_targets_start_ptr</em>, <a class="reference internal" href="class_value.html#_CPPv45Value" title="Value">Value</a> *<em>that_targets_start_ptr</em><span class="sig-paren">)</span> <em class="property">const</em><a class="headerlink" href="#_CPPv4NK21ResultSetReductionJIT33reduceOneEntryTargetsNoCollisionsEP8FunctionP5ValueP5Value" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
@@ -1458,18 +1475,8 @@
 <dd></dd></dl>
 
 <dl class="function">
-<dt id="_CPPv4NK21ResultSetReductionJIT29reduceOneEntryNoCollisionsIdxERK13ReductionCode">
-<span id="_CPPv3NK21ResultSetReductionJIT29reduceOneEntryNoCollisionsIdxERK13ReductionCode"></span><span id="_CPPv2NK21ResultSetReductionJIT29reduceOneEntryNoCollisionsIdxERK13ReductionCode"></span><span id="ResultSetReductionJIT::reduceOneEntryNoCollisionsIdx__ReductionCodeCRC"></span><span class="target" id="class_result_set_reduction_j_i_t_1ae18d0aee55094458876efa3d7682d858"></span>void <code class="sig-name descname">reduceOneEntryNoCollisionsIdx</code><span class="sig-paren">(</span><em class="property">const</em> <a class="reference internal" href="../struct/struct_reduction_code.html#_CPPv413ReductionCode" title="ReductionCode">ReductionCode</a> &amp;<em>reduction_code</em><span class="sig-paren">)</span> <em class="property">const</em><a class="headerlink" href="#_CPPv4NK21ResultSetReductionJIT29reduceOneEntryNoCollisionsIdxERK13ReductionCode" title="Permalink to this definition">¶</a><br /></dt>
-<dd></dd></dl>
-
-<dl class="function">
 <dt id="_CPPv4NK21ResultSetReductionJIT25reduceOneEntryBaselineIdxERK13ReductionCode">
 <span id="_CPPv3NK21ResultSetReductionJIT25reduceOneEntryBaselineIdxERK13ReductionCode"></span><span id="_CPPv2NK21ResultSetReductionJIT25reduceOneEntryBaselineIdxERK13ReductionCode"></span><span id="ResultSetReductionJIT::reduceOneEntryBaselineIdx__ReductionCodeCRC"></span><span class="target" id="class_result_set_reduction_j_i_t_1ae7a8ed6f99b19c3bda8e737b92417ec4"></span>void <code class="sig-name descname">reduceOneEntryBaselineIdx</code><span class="sig-paren">(</span><em class="property">const</em> <a class="reference internal" href="../struct/struct_reduction_code.html#_CPPv413ReductionCode" title="ReductionCode">ReductionCode</a> &amp;<em>reduction_code</em><span class="sig-paren">)</span> <em class="property">const</em><a class="headerlink" href="#_CPPv4NK21ResultSetReductionJIT25reduceOneEntryBaselineIdxERK13ReductionCode" title="Permalink to this definition">¶</a><br /></dt>
-<dd></dd></dl>
-
-<dl class="function">
-<dt id="_CPPv4NK21ResultSetReductionJIT10reduceLoopERK13ReductionCode">
-<span id="_CPPv3NK21ResultSetReductionJIT10reduceLoopERK13ReductionCode"></span><span id="_CPPv2NK21ResultSetReductionJIT10reduceLoopERK13ReductionCode"></span><span id="ResultSetReductionJIT::reduceLoop__ReductionCodeCRC"></span><span class="target" id="class_result_set_reduction_j_i_t_1aeb77b1b5b5d62019e2b5efcb261fdb92"></span>void <code class="sig-name descname">reduceLoop</code><span class="sig-paren">(</span><em class="property">const</em> <a class="reference internal" href="../struct/struct_reduction_code.html#_CPPv413ReductionCode" title="ReductionCode">ReductionCode</a> &amp;<em>reduction_code</em><span class="sig-paren">)</span> <em class="property">const</em><a class="headerlink" href="#_CPPv4NK21ResultSetReductionJIT10reduceLoopERK13ReductionCode" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 <dl class="function">

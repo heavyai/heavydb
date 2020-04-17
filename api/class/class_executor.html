@@ -65,7 +65,7 @@
             
             
               <div class="version">
-                5.3.0dev c97a66e
+                5.3.0dev 48662e8
               </div>
             
           
@@ -437,6 +437,9 @@
 <li class="toctree-l2"><a class="reference internal" href="class_geo_expr_feature.html">Class GeoExprFeature</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_get_element_ptr.html">Class GetElementPtr</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_gpu_compilation_context.html">Class GpuCompilationContext</a></li>
+<li class="toctree-l2"><a class="reference internal" href="class_gpu_reduction_helper_j_i_t.html">Class GpuReductionHelperJIT</a></li>
+<li class="toctree-l2"><a class="reference internal" href="class_gpu_shared_mem_code_builder.html">Class GpuSharedMemCodeBuilder</a></li>
+<li class="toctree-l2"><a class="reference internal" href="class_gpu_shared_memory_context.html">Class GpuSharedMemoryContext</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_grantee.html">Class Grantee</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_group_by_and_aggregate.html">Class GroupByAndAggregate</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_hash_join_fail.html">Class HashJoinFail</a></li>
@@ -1936,8 +1939,8 @@
 <dd></dd></dl>
 
 <dl class="function">
-<dt id="_CPPv4N8Executor11compileBodyERK19RelAlgExecutionUnitR19GroupByAndAggregateRK21QueryMemoryDescriptorRK18CompilationOptions">
-<span id="_CPPv3N8Executor11compileBodyERK19RelAlgExecutionUnitR19GroupByAndAggregateRK21QueryMemoryDescriptorRK18CompilationOptions"></span><span id="_CPPv2N8Executor11compileBodyERK19RelAlgExecutionUnitR19GroupByAndAggregateRK21QueryMemoryDescriptorRK18CompilationOptions"></span><span id="Executor::compileBody__RelAlgExecutionUnitCR.GroupByAndAggregateR.QueryMemoryDescriptorCR.CompilationOptionsCR"></span><span class="target" id="class_executor_1a7af55b6c1889b6432de8639f2b53daaf"></span>bool <code class="sig-name descname">compileBody</code><span class="sig-paren">(</span><em class="property">const</em> <a class="reference internal" href="../struct/struct_rel_alg_execution_unit.html#_CPPv419RelAlgExecutionUnit" title="RelAlgExecutionUnit">RelAlgExecutionUnit</a> &amp;<em>ra_exe_unit</em>, <a class="reference internal" href="class_group_by_and_aggregate.html#_CPPv419GroupByAndAggregate" title="GroupByAndAggregate">GroupByAndAggregate</a> &amp;<em>group_by_and_aggregate</em>, <em class="property">const</em> <a class="reference internal" href="class_query_memory_descriptor.html#_CPPv421QueryMemoryDescriptor" title="QueryMemoryDescriptor">QueryMemoryDescriptor</a> &amp;<em>query_mem_desc</em>, <em class="property">const</em> <a class="reference internal" href="../struct/struct_compilation_options.html#_CPPv418CompilationOptions" title="CompilationOptions">CompilationOptions</a> &amp;<em>co</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N8Executor11compileBodyERK19RelAlgExecutionUnitR19GroupByAndAggregateRK21QueryMemoryDescriptorRK18CompilationOptions" title="Permalink to this definition">¶</a><br /></dt>
+<dt id="_CPPv4N8Executor11compileBodyERK19RelAlgExecutionUnitR19GroupByAndAggregateRK21QueryMemoryDescriptorRK18CompilationOptionsRK22GpuSharedMemoryContext">
+<span id="_CPPv3N8Executor11compileBodyERK19RelAlgExecutionUnitR19GroupByAndAggregateRK21QueryMemoryDescriptorRK18CompilationOptionsRK22GpuSharedMemoryContext"></span><span id="_CPPv2N8Executor11compileBodyERK19RelAlgExecutionUnitR19GroupByAndAggregateRK21QueryMemoryDescriptorRK18CompilationOptionsRK22GpuSharedMemoryContext"></span><span id="Executor::compileBody__RelAlgExecutionUnitCR.GroupByAndAggregateR.QueryMemoryDescriptorCR.CompilationOptionsCR.GpuSharedMemoryContextCR"></span><span class="target" id="class_executor_1a3af3ed4e22be606acda6f6e71430ccd0"></span>bool <code class="sig-name descname">compileBody</code><span class="sig-paren">(</span><em class="property">const</em> <a class="reference internal" href="../struct/struct_rel_alg_execution_unit.html#_CPPv419RelAlgExecutionUnit" title="RelAlgExecutionUnit">RelAlgExecutionUnit</a> &amp;<em>ra_exe_unit</em>, <a class="reference internal" href="class_group_by_and_aggregate.html#_CPPv419GroupByAndAggregate" title="GroupByAndAggregate">GroupByAndAggregate</a> &amp;<em>group_by_and_aggregate</em>, <em class="property">const</em> <a class="reference internal" href="class_query_memory_descriptor.html#_CPPv421QueryMemoryDescriptor" title="QueryMemoryDescriptor">QueryMemoryDescriptor</a> &amp;<em>query_mem_desc</em>, <em class="property">const</em> <a class="reference internal" href="../struct/struct_compilation_options.html#_CPPv418CompilationOptions" title="CompilationOptions">CompilationOptions</a> &amp;<em>co</em>, <em class="property">const</em> <a class="reference internal" href="class_gpu_shared_memory_context.html#_CPPv422GpuSharedMemoryContext" title="GpuSharedMemoryContext">GpuSharedMemoryContext</a> &amp;<em>gpu_smem_context</em> = {}<span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N8Executor11compileBodyERK19RelAlgExecutionUnitR19GroupByAndAggregateRK21QueryMemoryDescriptorRK18CompilationOptionsRK22GpuSharedMemoryContext" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 <dl class="function">
@@ -2371,6 +2374,11 @@
 <dl class="member">
 <dt id="_CPPv4N8Executor17CompilationResult7llvm_irE">
 <span id="_CPPv3N8Executor17CompilationResult7llvm_irE"></span><span id="_CPPv2N8Executor17CompilationResult7llvm_irE"></span><span id="Executor::CompilationResult::llvm_ir__ss"></span><span class="target" id="struct_executor_1_1_compilation_result_1a704ccf7bd9cd4a4772bf8cb078c9df8d"></span>std::string <code class="sig-name descname">llvm_ir</code><a class="headerlink" href="#_CPPv4N8Executor17CompilationResult7llvm_irE" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="member">
+<dt id="_CPPv4N8Executor17CompilationResult16gpu_smem_contextE">
+<span id="_CPPv3N8Executor17CompilationResult16gpu_smem_contextE"></span><span id="_CPPv2N8Executor17CompilationResult16gpu_smem_contextE"></span><span id="Executor::CompilationResult::gpu_smem_context__GpuSharedMemoryContext"></span><span class="target" id="struct_executor_1_1_compilation_result_1a87735752ef892b76883887d02605a839"></span><a class="reference internal" href="class_gpu_shared_memory_context.html#_CPPv422GpuSharedMemoryContext" title="GpuSharedMemoryContext">GpuSharedMemoryContext</a> <code class="sig-name descname">gpu_smem_context</code><a class="headerlink" href="#_CPPv4N8Executor17CompilationResult16gpu_smem_contextE" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 </div>

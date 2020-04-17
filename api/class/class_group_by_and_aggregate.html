@@ -65,7 +65,7 @@
             
             
               <div class="version">
-                5.3.0dev c97a66e
+                5.3.0dev 48662e8
               </div>
             
           
@@ -437,6 +437,9 @@
 <li class="toctree-l2"><a class="reference internal" href="class_geo_expr_feature.html">Class GeoExprFeature</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_get_element_ptr.html">Class GetElementPtr</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_gpu_compilation_context.html">Class GpuCompilationContext</a></li>
+<li class="toctree-l2"><a class="reference internal" href="class_gpu_reduction_helper_j_i_t.html">Class GpuReductionHelperJIT</a></li>
+<li class="toctree-l2"><a class="reference internal" href="class_gpu_shared_mem_code_builder.html">Class GpuSharedMemCodeBuilder</a></li>
+<li class="toctree-l2"><a class="reference internal" href="class_gpu_shared_memory_context.html">Class GpuSharedMemoryContext</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_grantee.html">Class Grantee</a></li>
 <li class="toctree-l2 current"><a class="current reference internal" href="#">Class GroupByAndAggregate</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_hash_join_fail.html">Class HashJoinFail</a></li>
@@ -1422,8 +1425,8 @@
 <dd></dd></dl>
 
 <dl class="function">
-<dt id="_CPPv4N19GroupByAndAggregate7codegenEPN4llvm5ValueEPN4llvm10BasicBlockERK21QueryMemoryDescriptorRK18CompilationOptions">
-<span id="_CPPv3N19GroupByAndAggregate7codegenEPN4llvm5ValueEPN4llvm10BasicBlockERK21QueryMemoryDescriptorRK18CompilationOptions"></span><span id="_CPPv2N19GroupByAndAggregate7codegenEPN4llvm5ValueEPN4llvm10BasicBlockERK21QueryMemoryDescriptorRK18CompilationOptions"></span><span id="GroupByAndAggregate::codegen__llvm::ValueP.llvm::BasicBlockP.QueryMemoryDescriptorCR.CompilationOptionsCR"></span><span class="target" id="class_group_by_and_aggregate_1a2a232a162f69056f52ee6430c94eb56e"></span>bool <code class="sig-name descname">codegen</code><span class="sig-paren">(</span>llvm::Value *<em>filter_result</em>, llvm::BasicBlock *<em>sc_false</em>, <em class="property">const</em> <a class="reference internal" href="class_query_memory_descriptor.html#_CPPv421QueryMemoryDescriptor" title="QueryMemoryDescriptor">QueryMemoryDescriptor</a> &amp;<em>query_mem_desc</em>, <em class="property">const</em> <a class="reference internal" href="../struct/struct_compilation_options.html#_CPPv418CompilationOptions" title="CompilationOptions">CompilationOptions</a> &amp;<em>co</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N19GroupByAndAggregate7codegenEPN4llvm5ValueEPN4llvm10BasicBlockERK21QueryMemoryDescriptorRK18CompilationOptions" title="Permalink to this definition">¶</a><br /></dt>
+<dt id="_CPPv4N19GroupByAndAggregate7codegenEPN4llvm5ValueEPN4llvm10BasicBlockERK21QueryMemoryDescriptorRK18CompilationOptionsRK22GpuSharedMemoryContext">
+<span id="_CPPv3N19GroupByAndAggregate7codegenEPN4llvm5ValueEPN4llvm10BasicBlockERK21QueryMemoryDescriptorRK18CompilationOptionsRK22GpuSharedMemoryContext"></span><span id="_CPPv2N19GroupByAndAggregate7codegenEPN4llvm5ValueEPN4llvm10BasicBlockERK21QueryMemoryDescriptorRK18CompilationOptionsRK22GpuSharedMemoryContext"></span><span id="GroupByAndAggregate::codegen__llvm::ValueP.llvm::BasicBlockP.QueryMemoryDescriptorCR.CompilationOptionsCR.GpuSharedMemoryContextCR"></span><span class="target" id="class_group_by_and_aggregate_1a70a2cba1c29c8c0c5e9272135aed4dd7"></span>bool <code class="sig-name descname">codegen</code><span class="sig-paren">(</span>llvm::Value *<em>filter_result</em>, llvm::BasicBlock *<em>sc_false</em>, <em class="property">const</em> <a class="reference internal" href="class_query_memory_descriptor.html#_CPPv421QueryMemoryDescriptor" title="QueryMemoryDescriptor">QueryMemoryDescriptor</a> &amp;<em>query_mem_desc</em>, <em class="property">const</em> <a class="reference internal" href="../struct/struct_compilation_options.html#_CPPv418CompilationOptions" title="CompilationOptions">CompilationOptions</a> &amp;<em>co</em>, <em class="property">const</em> <a class="reference internal" href="class_gpu_shared_memory_context.html#_CPPv422GpuSharedMemoryContext" title="GpuSharedMemoryContext">GpuSharedMemoryContext</a> &amp;<em>gpu_smem_context</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N19GroupByAndAggregate7codegenEPN4llvm5ValueEPN4llvm10BasicBlockERK21QueryMemoryDescriptorRK18CompilationOptionsRK22GpuSharedMemoryContext" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 </div>
@@ -1442,12 +1445,6 @@
 </div>
 <div class="breathe-sectiondef docutils container">
 <p class="breathe-sectiondef-title rubric">Private Functions</p>
-<dl class="function">
-<dt id="_CPPv4NK19GroupByAndAggregate33supportedTypeForGpuSharedMemUsageERK11SQLTypeInfo">
-<span id="_CPPv3NK19GroupByAndAggregate33supportedTypeForGpuSharedMemUsageERK11SQLTypeInfo"></span><span id="_CPPv2NK19GroupByAndAggregate33supportedTypeForGpuSharedMemUsageERK11SQLTypeInfo"></span><span id="GroupByAndAggregate::supportedTypeForGpuSharedMemUsage__SQLTypeInfoCRC"></span><span class="target" id="class_group_by_and_aggregate_1a4560b5a93792853a769e501298bcd65a"></span>bool <code class="sig-name descname">supportedTypeForGpuSharedMemUsage</code><span class="sig-paren">(</span><em class="property">const</em> <a class="reference internal" href="class_s_q_l_type_info.html#_CPPv411SQLTypeInfo" title="SQLTypeInfo">SQLTypeInfo</a> &amp;<em>target_type_info</em><span class="sig-paren">)</span> <em class="property">const</em><a class="headerlink" href="#_CPPv4NK19GroupByAndAggregate33supportedTypeForGpuSharedMemUsageERK11SQLTypeInfo" title="Permalink to this definition">¶</a><br /></dt>
-<dd><p>Supported data types for the current shared memory usage for keyless aggregates with COUNT(*) Currently only for single-column group by queries. </p>
-</dd></dl>
-
 <dl class="function">
 <dt id="_CPPv4N19GroupByAndAggregate24gpuCanHandleOrderEntriesERKNSt4listIN8Analyzer10OrderEntryEEE">
 <span id="_CPPv3N19GroupByAndAggregate24gpuCanHandleOrderEntriesERKNSt4listIN8Analyzer10OrderEntryEEE"></span><span id="_CPPv2N19GroupByAndAggregate24gpuCanHandleOrderEntriesERKNSt4listIN8Analyzer10OrderEntryEEE"></span><span id="GroupByAndAggregate::gpuCanHandleOrderEntries__std::list:Analyzer::OrderEntry:CR"></span><span class="target" id="class_group_by_and_aggregate_1ae0a25a220c1114158f9a8e72ab59610d"></span>bool <code class="sig-name descname">gpuCanHandleOrderEntries</code><span class="sig-paren">(</span><em class="property">const</em> std::list&lt;Analyzer::<a class="reference internal" href="../struct/struct_analyzer_1_1_order_entry.html#_CPPv4N8Analyzer10OrderEntryE" title="Analyzer::OrderEntry">OrderEntry</a>&gt; &amp;<em>order_entries</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N19GroupByAndAggregate24gpuCanHandleOrderEntriesERKNSt4listIN8Analyzer10OrderEntryEEE" title="Permalink to this definition">¶</a><br /></dt>
@@ -1526,8 +1523,7 @@
 <li><p>If yes to 1, then what aggregate expression should be considered to represent the key’s presence, if needed (e.g., in detecting empty entries in the result set).</p></li>
 </ol>
 </p>
-<p>NOTE: Keyless hash is only valid with single-column group by at the moment.</p>
-<p>TODO(Saman): remove the shared memory discussion out of this function. </p>
+<p>NOTE: Keyless hash is only valid with single-column group by at the moment. </p>
 </dd></dl>
 
 <dl class="function">
@@ -1536,8 +1532,8 @@
 <dd></dd></dl>
 
 <dl class="function">
-<dt id="_CPPv4N19GroupByAndAggregate15codegenAggCallsERKNSt5tupleIPN4llvm5ValueEPN4llvm5ValueEEERKNSt6vectorIPN4llvm5ValueEEERK21QueryMemoryDescriptorRK18CompilationOptionsR14DiamondCodegen">
-<span id="_CPPv3N19GroupByAndAggregate15codegenAggCallsERKNSt5tupleIPN4llvm5ValueEPN4llvm5ValueEEERKNSt6vectorIPN4llvm5ValueEEERK21QueryMemoryDescriptorRK18CompilationOptionsR14DiamondCodegen"></span><span id="_CPPv2N19GroupByAndAggregate15codegenAggCallsERKNSt5tupleIPN4llvm5ValueEPN4llvm5ValueEEERKNSt6vectorIPN4llvm5ValueEEERK21QueryMemoryDescriptorRK18CompilationOptionsR14DiamondCodegen"></span><span id="GroupByAndAggregate::codegenAggCalls__std::tuple:llvm::ValueP.llvm::ValueP:CR.std::vector:llvm::ValueP:CR.QueryMemoryDescriptorCR.CompilationOptionsCR.DiamondCodegenR"></span><span class="target" id="class_group_by_and_aggregate_1a7d6859a67c91c0c313718e9855af08e2"></span>bool <code class="sig-name descname">codegenAggCalls</code><span class="sig-paren">(</span><em class="property">const</em> std::tuple&lt;llvm::Value *, llvm::Value *&gt; &amp;<em>agg_out_ptr_w_idx</em>, <em class="property">const</em> std::vector&lt;llvm::Value *&gt; &amp;<em>agg_out_vec</em>, <em class="property">const</em> <a class="reference internal" href="class_query_memory_descriptor.html#_CPPv421QueryMemoryDescriptor" title="QueryMemoryDescriptor">QueryMemoryDescriptor</a> &amp;<em>query_mem_desc</em>, <em class="property">const</em> <a class="reference internal" href="../struct/struct_compilation_options.html#_CPPv418CompilationOptions" title="CompilationOptions">CompilationOptions</a> &amp;<em>co</em>, <a class="reference internal" href="#_CPPv4N19GroupByAndAggregate14DiamondCodegenE" title="GroupByAndAggregate::DiamondCodegen">DiamondCodegen</a> &amp;<em>diamond_codegen</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N19GroupByAndAggregate15codegenAggCallsERKNSt5tupleIPN4llvm5ValueEPN4llvm5ValueEEERKNSt6vectorIPN4llvm5ValueEEERK21QueryMemoryDescriptorRK18CompilationOptionsR14DiamondCodegen" title="Permalink to this definition">¶</a><br /></dt>
+<dt id="_CPPv4N19GroupByAndAggregate15codegenAggCallsERKNSt5tupleIPN4llvm5ValueEPN4llvm5ValueEEERKNSt6vectorIPN4llvm5ValueEEERK21QueryMemoryDescriptorRK18CompilationOptionsRK22GpuSharedMemoryContextR14DiamondCodegen">
+<span id="_CPPv3N19GroupByAndAggregate15codegenAggCallsERKNSt5tupleIPN4llvm5ValueEPN4llvm5ValueEEERKNSt6vectorIPN4llvm5ValueEEERK21QueryMemoryDescriptorRK18CompilationOptionsRK22GpuSharedMemoryContextR14DiamondCodegen"></span><span id="_CPPv2N19GroupByAndAggregate15codegenAggCallsERKNSt5tupleIPN4llvm5ValueEPN4llvm5ValueEEERKNSt6vectorIPN4llvm5ValueEEERK21QueryMemoryDescriptorRK18CompilationOptionsRK22GpuSharedMemoryContextR14DiamondCodegen"></span><span id="GroupByAndAggregate::codegenAggCalls__std::tuple:llvm::ValueP.llvm::ValueP:CR.std::vector:llvm::ValueP:CR.QueryMemoryDescriptorCR.CompilationOptionsCR.GpuSharedMemoryContextCR.DiamondCodegenR"></span><span class="target" id="class_group_by_and_aggregate_1a5b19db3e6f114ddff2a3e2541717b8ab"></span>bool <code class="sig-name descname">codegenAggCalls</code><span class="sig-paren">(</span><em class="property">const</em> std::tuple&lt;llvm::Value *, llvm::Value *&gt; &amp;<em>agg_out_ptr_w_idx</em>, <em class="property">const</em> std::vector&lt;llvm::Value *&gt; &amp;<em>agg_out_vec</em>, <em class="property">const</em> <a class="reference internal" href="class_query_memory_descriptor.html#_CPPv421QueryMemoryDescriptor" title="QueryMemoryDescriptor">QueryMemoryDescriptor</a> &amp;<em>query_mem_desc</em>, <em class="property">const</em> <a class="reference internal" href="../struct/struct_compilation_options.html#_CPPv418CompilationOptions" title="CompilationOptions">CompilationOptions</a> &amp;<em>co</em>, <em class="property">const</em> <a class="reference internal" href="class_gpu_shared_memory_context.html#_CPPv422GpuSharedMemoryContext" title="GpuSharedMemoryContext">GpuSharedMemoryContext</a> &amp;<em>gpu_smem_context</em>, <a class="reference internal" href="#_CPPv4N19GroupByAndAggregate14DiamondCodegenE" title="GroupByAndAggregate::DiamondCodegen">DiamondCodegen</a> &amp;<em>diamond_codegen</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N19GroupByAndAggregate15codegenAggCallsERKNSt5tupleIPN4llvm5ValueEPN4llvm5ValueEEERKNSt6vectorIPN4llvm5ValueEEERK21QueryMemoryDescriptorRK18CompilationOptionsRK22GpuSharedMemoryContextR14DiamondCodegen" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 <dl class="function">
@@ -1627,11 +1623,6 @@
 </div>
 <div class="breathe-sectiondef docutils container">
 <p class="breathe-sectiondef-title rubric">Private Static Functions</p>
-<dl class="function">
-<dt id="_CPPv4N19GroupByAndAggregate33supportedExprForGpuSharedMemUsageEPN8Analyzer4ExprE">
-<span id="_CPPv3N19GroupByAndAggregate33supportedExprForGpuSharedMemUsageEPN8Analyzer4ExprE"></span><span id="_CPPv2N19GroupByAndAggregate33supportedExprForGpuSharedMemUsageEPN8Analyzer4ExprE"></span><span id="GroupByAndAggregate::supportedExprForGpuSharedMemUsage__Analyzer::ExprP"></span><span class="target" id="class_group_by_and_aggregate_1af3c1a4b019859d5cd7b7e68c16853ea7"></span>bool <code class="sig-name descname">supportedExprForGpuSharedMemUsage</code><span class="sig-paren">(</span>Analyzer::<a class="reference internal" href="class_analyzer_1_1_expr.html#_CPPv4N8Analyzer4ExprE" title="Analyzer::Expr">Expr</a> *<em>expr</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N19GroupByAndAggregate33supportedExprForGpuSharedMemUsageEPN8Analyzer4ExprE" title="Permalink to this definition">¶</a><br /></dt>
-<dd></dd></dl>
-
 <dl class="function">
 <dt id="_CPPv4N19GroupByAndAggregate22getBucketedCardinalityERK12ColRangeInfo">
 <span id="_CPPv3N19GroupByAndAggregate22getBucketedCardinalityERK12ColRangeInfo"></span><span id="_CPPv2N19GroupByAndAggregate22getBucketedCardinalityERK12ColRangeInfo"></span><span id="GroupByAndAggregate::getBucketedCardinality__ColRangeInfoCR"></span><span class="target" id="class_group_by_and_aggregate_1aad9a53b0ad9ab16aaf37ab45cc816ac6"></span>int64_t <code class="sig-name descname">getBucketedCardinality</code><span class="sig-paren">(</span><em class="property">const</em> <a class="reference internal" href="../struct/struct_col_range_info.html#_CPPv412ColRangeInfo" title="ColRangeInfo">ColRangeInfo</a> &amp;<em>col_range_info</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N19GroupByAndAggregate22getBucketedCardinalityERK12ColRangeInfo" title="Permalink to this definition">¶</a><br /></dt>

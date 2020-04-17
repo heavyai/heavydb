@@ -1,0 +1,9 @@
+Class GpuSharedMemoryContext
+============================
+
+.. doxygenclass:: GpuSharedMemoryContext
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

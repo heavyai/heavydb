@@ -64,7 +64,7 @@
             
             
               <div class="version">
-                5.3.0dev c97a66e
+                5.3.0dev 48662e8
               </div>
             
           
@@ -436,6 +436,9 @@
 <li class="toctree-l2"><a class="reference internal" href="api/class/class_geo_expr_feature.html">Class GeoExprFeature</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/class_get_element_ptr.html">Class GetElementPtr</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/class_gpu_compilation_context.html">Class GpuCompilationContext</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/class/class_gpu_reduction_helper_j_i_t.html">Class GpuReductionHelperJIT</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/class/class_gpu_shared_mem_code_builder.html">Class GpuSharedMemCodeBuilder</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/class/class_gpu_shared_memory_context.html">Class GpuSharedMemoryContext</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/class_grantee.html">Class Grantee</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/class_group_by_and_aggregate.html">Class GroupByAndAggregate</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/class_hash_join_fail.html">Class HashJoinFail</a></li>
@@ -4742,7 +4745,7 @@
 </li>
       <li><a href="api/class/class_code_generator.html#_CPPv4N13CodeGenerator21generateNativeGPUCodeEPN4llvm8FunctionEPN4llvm8FunctionERKNSt13unordered_setIPN4llvm8FunctionEEERK18CompilationOptionsRK9GPUTarget">CodeGenerator::generateNativeGPUCode (C++ function)</a>
 </li>
-      <li><a href="api/class/class_code_generator.html#_CPPv4N13CodeGenerator11generatePTXERKNSt6stringEPN4llvm13TargetMachineEP9CgenState">CodeGenerator::generatePTX (C++ function)</a>
+      <li><a href="api/class/class_code_generator.html#_CPPv4N13CodeGenerator11generatePTXERKNSt6stringEPN4llvm13TargetMachineERN4llvm11LLVMContextE">CodeGenerator::generatePTX (C++ function)</a>
 </li>
       <li><a href="api/class/class_code_generator.html#_CPPv4N13CodeGenerator29getArithWithOverflowIntrinsicEPKN8Analyzer7BinOperEPN4llvm4TypeE">CodeGenerator::getArithWithOverflowIntrinsic (C++ function)</a>
 </li>
@@ -7028,6 +7031,8 @@
 </li>
       <li><a href="api/class/class_executor.html#_CPPv4N8Executor17CompilationResultE">Executor::CompilationResult (C++ class)</a>, <a href="api/struct/struct_executor_1_1_compilation_result.html#_CPPv4N8Executor17CompilationResultE">[1]</a>
 </li>
+      <li><a href="api/class/class_executor.html#_CPPv4N8Executor17CompilationResult16gpu_smem_contextE">Executor::CompilationResult::gpu_smem_context (C++ member)</a>, <a href="api/struct/struct_executor_1_1_compilation_result.html#_CPPv4N8Executor17CompilationResult16gpu_smem_contextE">[1]</a>
+</li>
       <li><a href="api/class/class_executor.html#_CPPv4N8Executor17CompilationResult14literal_valuesE">Executor::CompilationResult::literal_values (C++ member)</a>, <a href="api/struct/struct_executor_1_1_compilation_result.html#_CPPv4N8Executor17CompilationResult14literal_valuesE">[1]</a>
 </li>
       <li><a href="api/class/class_executor.html#_CPPv4N8Executor17CompilationResult7llvm_irE">Executor::CompilationResult::llvm_ir (C++ member)</a>, <a href="api/struct/struct_executor_1_1_compilation_result.html#_CPPv4N8Executor17CompilationResult7llvm_irE">[1]</a>
@@ -7036,7 +7041,7 @@
 </li>
       <li><a href="api/class/class_executor.html#_CPPv4N8Executor17CompilationResult15output_columnarE">Executor::CompilationResult::output_columnar (C++ member)</a>, <a href="api/struct/struct_executor_1_1_compilation_result.html#_CPPv4N8Executor17CompilationResult15output_columnarE">[1]</a>
 </li>
-      <li><a href="api/class/class_executor.html#_CPPv4N8Executor11compileBodyERK19RelAlgExecutionUnitR19GroupByAndAggregateRK21QueryMemoryDescriptorRK18CompilationOptions">Executor::compileBody (C++ function)</a>
+      <li><a href="api/class/class_executor.html#_CPPv4N8Executor11compileBodyERK19RelAlgExecutionUnitR19GroupByAndAggregateRK21QueryMemoryDescriptorRK18CompilationOptionsRK22GpuSharedMemoryContext">Executor::compileBody (C++ function)</a>
 </li>
       <li><a href="api/class/class_executor.html#_CPPv4N8Executor15compileWorkUnitERKNSt6vectorI14InputTableInfoEERK19RelAlgExecutionUnitRK18CompilationOptionsRK16ExecutionOptionsPKN17CudaMgr_Namespace7CudaMgrEKbNSt10shared_ptrI17RowSetMemoryOwnerEEK6size_tK6int8_tKbR14ColumnCacheMapP10RenderInfo">Executor::compileWorkUnit (C++ function)</a>
 </li>
@@ -7178,10 +7183,10 @@
 </li>
       <li><a href="api/class/class_executor.html#_CPPv4N8Executor16fetchUnionChunksERK13ColumnFetcherRK19RelAlgExecutionUnitKiKN14Data_Namespace11MemoryLevelERKNSt3mapIiPK14TableFragmentsEERK13FragmentsListRKN17Catalog_Namespace7CatalogERNSt4listI9ChunkIterEERNSt4listINSt10shared_ptrIN8Chunk_NS5ChunkEEEEE">Executor::fetchUnionChunks (C++ function)</a>
 </li>
-      <li><a href="api/class/class_executor.html#_CPPv4NK8Executor11generatePTXERKNSt6stringE">Executor::generatePTX (C++ function)</a>
-</li>
   </ul></td>
   <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="api/class/class_executor.html#_CPPv4NK8Executor11generatePTXERKNSt6stringE">Executor::generatePTX (C++ function)</a>
+</li>
       <li><a href="api/class/class_executor.html#_CPPv4NK8Executor10getCatalogEv">Executor::getCatalog (C++ function)</a>
 </li>
       <li><a href="api/class/class_executor.html#_CPPv4N8Executor16getCodeFromCacheERK12CodeCacheKeyRK9CodeCache">Executor::getCodeFromCache (C++ function)</a>
@@ -9170,8 +9175,6 @@
 </li>
       <li><a href="api/struct/struct_geo_polygon_value_converter.html#_CPPv4N24GeoPolygonValueConverter20allocateColumnarDataE6size_t">GeoPolygonValueConverter::allocateColumnarData (C++ function)</a>
 </li>
-  </ul></td>
-  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="api/struct/struct_geo_polygon_value_converter.html#_CPPv4N24GeoPolygonValueConverter25bounds_column_descriptor_E">GeoPolygonValueConverter::bounds_column_descriptor_ (C++ member)</a>
 </li>
       <li><a href="api/struct/struct_geo_polygon_value_converter.html#_CPPv4N24GeoPolygonValueConverter12bounds_data_E">GeoPolygonValueConverter::bounds_data_ (C++ member)</a>
@@ -9198,6 +9201,8 @@
 </li>
       <li><a href="api/struct/struct_geo_poly_target_value.html#_CPPv4N18GeoPolyTargetValue6coordsE">GeoPolyTargetValue::coords (C++ member)</a>
 </li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="api/struct/struct_geo_poly_target_value.html#_CPPv4N18GeoPolyTargetValue18GeoPolyTargetValueERKNSt6vectorIdEERKNSt6vectorI7int32_tEE">GeoPolyTargetValue::GeoPolyTargetValue (C++ function)</a>
 </li>
       <li><a href="api/struct/struct_geo_poly_target_value.html#_CPPv4N18GeoPolyTargetValue10ring_sizesE">GeoPolyTargetValue::ring_sizes (C++ member)</a>
@@ -9294,6 +9299,62 @@
 </li>
       <li><a href="api/struct/struct_gpu_group_by_buffers.html#_CPPv4N17GpuGroupByBuffers6secondE">GpuGroupByBuffers::second (C++ member)</a>
 </li>
+      <li><a href="api/class/class_gpu_reduction_helper_j_i_t.html#_CPPv421GpuReductionHelperJIT">GpuReductionHelperJIT (C++ class)</a>
+</li>
+      <li><a href="api/class/class_gpu_reduction_helper_j_i_t.html#_CPPv4NK21GpuReductionHelperJIT7codegenEv">GpuReductionHelperJIT::codegen (C++ function)</a>
+</li>
+      <li><a href="api/class/class_gpu_reduction_helper_j_i_t.html#_CPPv4N21GpuReductionHelperJIT21GpuReductionHelperJITERK21QueryMemoryDescriptorRKNSt6vectorI10TargetInfoEERKNSt6vectorI7int64_tEE">GpuReductionHelperJIT::GpuReductionHelperJIT (C++ function)</a>
+</li>
+      <li><a href="api/class/class_gpu_reduction_helper_j_i_t.html#_CPPv4N21GpuReductionHelperJIT15query_mem_desc_E">GpuReductionHelperJIT::query_mem_desc_ (C++ member)</a>
+</li>
+      <li><a href="api/class/class_gpu_shared_mem_code_builder.html#_CPPv423GpuSharedMemCodeBuilder">GpuSharedMemCodeBuilder (C++ class)</a>
+</li>
+      <li><a href="api/class/class_gpu_shared_mem_code_builder.html#_CPPv4N23GpuSharedMemCodeBuilder7codegenEv">GpuSharedMemCodeBuilder::codegen (C++ function)</a>
+</li>
+      <li><a href="api/class/class_gpu_shared_mem_code_builder.html#_CPPv4N23GpuSharedMemCodeBuilder21codegenInitializationEv">GpuSharedMemCodeBuilder::codegenInitialization (C++ function)</a>
+</li>
+      <li><a href="api/class/class_gpu_shared_mem_code_builder.html#_CPPv4N23GpuSharedMemCodeBuilder16codegenReductionEv">GpuSharedMemCodeBuilder::codegenReduction (C++ function)</a>
+</li>
+      <li><a href="api/class/class_gpu_shared_mem_code_builder.html#_CPPv4N23GpuSharedMemCodeBuilder8context_E">GpuSharedMemCodeBuilder::context_ (C++ member)</a>
+</li>
+      <li><a href="api/class/class_gpu_shared_mem_code_builder.html#_CPPv4NK23GpuSharedMemCodeBuilder18createInitFunctionEv">GpuSharedMemCodeBuilder::createInitFunction (C++ function)</a>
+</li>
+      <li><a href="api/class/class_gpu_shared_mem_code_builder.html#_CPPv4NK23GpuSharedMemCodeBuilder23createReductionFunctionEv">GpuSharedMemCodeBuilder::createReductionFunction (C++ function)</a>
+</li>
+      <li><a href="api/class/class_gpu_shared_mem_code_builder.html#_CPPv4NK23GpuSharedMemCodeBuilder11getFunctionERKNSt6stringE">GpuSharedMemCodeBuilder::getFunction (C++ function)</a>
+</li>
+      <li><a href="api/class/class_gpu_shared_mem_code_builder.html#_CPPv4NK23GpuSharedMemCodeBuilder15getInitFunctionEv">GpuSharedMemCodeBuilder::getInitFunction (C++ function)</a>
+</li>
+      <li><a href="api/class/class_gpu_shared_mem_code_builder.html#_CPPv4NK23GpuSharedMemCodeBuilder20getReductionFunctionEv">GpuSharedMemCodeBuilder::getReductionFunction (C++ function)</a>
+</li>
+      <li><a href="api/class/class_gpu_shared_mem_code_builder.html#_CPPv4N23GpuSharedMemCodeBuilder23GpuSharedMemCodeBuilderEPN4llvm6ModuleERN4llvm11LLVMContextERK21QueryMemoryDescriptorRKNSt6vectorI10TargetInfoEERKNSt6vectorI7int64_tEE">GpuSharedMemCodeBuilder::GpuSharedMemCodeBuilder (C++ function)</a>
+</li>
+      <li><a href="api/class/class_gpu_shared_mem_code_builder.html#_CPPv4N23GpuSharedMemCodeBuilder16init_agg_values_E">GpuSharedMemCodeBuilder::init_agg_values_ (C++ member)</a>
+</li>
+      <li><a href="api/class/class_gpu_shared_mem_code_builder.html#_CPPv4N23GpuSharedMemCodeBuilder10init_func_E">GpuSharedMemCodeBuilder::init_func_ (C++ member)</a>
+</li>
+      <li><a href="api/class/class_gpu_shared_mem_code_builder.html#_CPPv4N23GpuSharedMemCodeBuilder19injectFunctionsIntoEPN4llvm8FunctionE">GpuSharedMemCodeBuilder::injectFunctionsInto (C++ function)</a>
+</li>
+      <li><a href="api/class/class_gpu_shared_mem_code_builder.html#_CPPv4N23GpuSharedMemCodeBuilder7module_E">GpuSharedMemCodeBuilder::module_ (C++ member)</a>
+</li>
+      <li><a href="api/class/class_gpu_shared_mem_code_builder.html#_CPPv4N23GpuSharedMemCodeBuilder15query_mem_desc_E">GpuSharedMemCodeBuilder::query_mem_desc_ (C++ member)</a>
+</li>
+      <li><a href="api/class/class_gpu_shared_mem_code_builder.html#_CPPv4N23GpuSharedMemCodeBuilder15reduction_func_E">GpuSharedMemCodeBuilder::reduction_func_ (C++ member)</a>
+</li>
+      <li><a href="api/class/class_gpu_shared_mem_code_builder.html#_CPPv4N23GpuSharedMemCodeBuilder8targets_E">GpuSharedMemCodeBuilder::targets_ (C++ member)</a>
+</li>
+      <li><a href="api/class/class_gpu_shared_mem_code_builder.html#_CPPv4NK23GpuSharedMemCodeBuilder8toStringEv">GpuSharedMemCodeBuilder::toString (C++ function)</a>
+</li>
+      <li><a href="api/class/class_gpu_shared_memory_context.html#_CPPv422GpuSharedMemoryContext">GpuSharedMemoryContext (C++ class)</a>
+</li>
+      <li><a href="api/class/class_gpu_shared_memory_context.html#_CPPv4NK22GpuSharedMemoryContext19getSharedMemorySizeEv">GpuSharedMemoryContext::getSharedMemorySize (C++ function)</a>
+</li>
+      <li><a href="api/class/class_gpu_shared_memory_context.html#_CPPv4N22GpuSharedMemoryContext22GpuSharedMemoryContextEK6size_t">GpuSharedMemoryContext::GpuSharedMemoryContext (C++ function)</a>, <a href="api/class/class_gpu_shared_memory_context.html#_CPPv4N22GpuSharedMemoryContext22GpuSharedMemoryContextEv">[1]</a>
+</li>
+      <li><a href="api/class/class_gpu_shared_memory_context.html#_CPPv4NK22GpuSharedMemoryContext18isSharedMemoryUsedEv">GpuSharedMemoryContext::isSharedMemoryUsed (C++ function)</a>
+</li>
+      <li><a href="api/class/class_gpu_shared_memory_context.html#_CPPv4N22GpuSharedMemoryContext19shared_memory_size_E">GpuSharedMemoryContext::shared_memory_size_ (C++ member)</a>
+</li>
       <li><a href="api/class/class_grantee.html#_CPPv47Grantee">Grantee (C++ class)</a>
 </li>
       <li><a href="api/class/class_grantee.html#_CPPv4N7Grantee11checkCyclesEP4Role">Grantee::checkCycles (C++ function)</a>
@@ -9354,11 +9415,11 @@
 </li>
       <li><a href="api/class/class_group_by_and_aggregate.html#_CPPv4N19GroupByAndAggregate14checkErrorCodeEPN4llvm5ValueE">GroupByAndAggregate::checkErrorCode (C++ function)</a>
 </li>
-      <li><a href="api/class/class_group_by_and_aggregate.html#_CPPv4N19GroupByAndAggregate7codegenEPN4llvm5ValueEPN4llvm10BasicBlockERK21QueryMemoryDescriptorRK18CompilationOptions">GroupByAndAggregate::codegen (C++ function)</a>
+      <li><a href="api/class/class_group_by_and_aggregate.html#_CPPv4N19GroupByAndAggregate7codegenEPN4llvm5ValueEPN4llvm10BasicBlockERK21QueryMemoryDescriptorRK18CompilationOptionsRK22GpuSharedMemoryContext">GroupByAndAggregate::codegen (C++ function)</a>
 </li>
       <li><a href="api/class/class_group_by_and_aggregate.html#_CPPv4N19GroupByAndAggregate13codegenAggArgEPKN8Analyzer4ExprERK18CompilationOptions">GroupByAndAggregate::codegenAggArg (C++ function)</a>
 </li>
-      <li><a href="api/class/class_group_by_and_aggregate.html#_CPPv4N19GroupByAndAggregate15codegenAggCallsERKNSt5tupleIPN4llvm5ValueEPN4llvm5ValueEEERKNSt6vectorIPN4llvm5ValueEEERK21QueryMemoryDescriptorRK18CompilationOptionsR14DiamondCodegen">GroupByAndAggregate::codegenAggCalls (C++ function)</a>
+      <li><a href="api/class/class_group_by_and_aggregate.html#_CPPv4N19GroupByAndAggregate15codegenAggCallsERKNSt5tupleIPN4llvm5ValueEPN4llvm5ValueEEERKNSt6vectorIPN4llvm5ValueEEERK21QueryMemoryDescriptorRK18CompilationOptionsRK22GpuSharedMemoryContextR14DiamondCodegen">GroupByAndAggregate::codegenAggCalls (C++ function)</a>
 </li>
       <li><a href="api/class/class_group_by_and_aggregate.html#_CPPv4N19GroupByAndAggregate19codegenAggColumnPtrEPN4llvm5ValueEPN4llvm5ValueERKNSt5tupleIPN4llvm5ValueEPN4llvm5ValueEEERK21QueryMemoryDescriptorK6size_tK6size_tK6size_t">GroupByAndAggregate::codegenAggColumnPtr (C++ function)</a>
 </li>
@@ -9445,10 +9506,6 @@
       <li><a href="api/class/class_group_by_and_aggregate.html#_CPPv4N19GroupByAndAggregate18row_set_mem_owner_E">GroupByAndAggregate::row_set_mem_owner_ (C++ member)</a>
 </li>
       <li><a href="api/class/class_group_by_and_aggregate.html#_CPPv4N19GroupByAndAggregate26shard_count_for_top_groupsERK19RelAlgExecutionUnitRKN17Catalog_Namespace7CatalogE">GroupByAndAggregate::shard_count_for_top_groups (C++ function)</a>
-</li>
-      <li><a href="api/class/class_group_by_and_aggregate.html#_CPPv4N19GroupByAndAggregate33supportedExprForGpuSharedMemUsageEPN8Analyzer4ExprE">GroupByAndAggregate::supportedExprForGpuSharedMemUsage (C++ function)</a>
-</li>
-      <li><a href="api/class/class_group_by_and_aggregate.html#_CPPv4NK19GroupByAndAggregate33supportedTypeForGpuSharedMemUsageERK11SQLTypeInfo">GroupByAndAggregate::supportedTypeForGpuSharedMemUsage (C++ function)</a>
 </li>
       <li><a href="api/struct/struct_group_by_buffer_layout_info.html#_CPPv423GroupByBufferLayoutInfo">GroupByBufferLayoutInfo (C++ class)</a>
 </li>
@@ -10687,8 +10744,6 @@
       <li><a href="api/struct/struct_keyless_info.html#_CPPv411KeylessInfo">KeylessInfo (C++ class)</a>
 </li>
       <li><a href="api/struct/struct_keyless_info.html#_CPPv4N11KeylessInfo7keylessE">KeylessInfo::keyless (C++ member)</a>
-</li>
-      <li><a href="api/struct/struct_keyless_info.html#_CPPv4N11KeylessInfo18shared_mem_supportE">KeylessInfo::shared_mem_support (C++ member)</a>
 </li>
       <li><a href="api/struct/struct_keyless_info.html#_CPPv4N11KeylessInfo12target_indexE">KeylessInfo::target_index (C++ member)</a>
 </li>
@@ -13470,7 +13525,7 @@
 </li>
       <li><a href="api/class/class_query_execution_context.html#_CPPv4N21QueryExecutionContext13launchCpuCodeERK19RelAlgExecutionUnitRKNSt6vectorINSt4pairIPvPvEEEEKbRKNSt6vectorI6int8_tEENSt6vectorINSt6vectorIPK6int8_tEEEERKNSt6vectorINSt6vectorI7int64_tEEEERKNSt6vectorINSt6vectorI8uint64_tEEEEK7int32_tP7int32_tK8uint32_tRKNSt6vectorI7int64_tEE">QueryExecutionContext::launchCpuCode (C++ function)</a>
 </li>
-      <li><a href="api/class/class_query_execution_context.html#_CPPv4N21QueryExecutionContext13launchGpuCodeERK19RelAlgExecutionUnitRKNSt6vectorINSt4pairIPvPvEEEEKbRKNSt6vectorI6int8_tEENSt6vectorINSt6vectorIPK6int8_tEEEERKNSt6vectorINSt6vectorI7int64_tEEEERKNSt6vectorINSt6vectorI8uint64_tEEEEK7int32_tPN14Data_Namespace7DataMgrEKjKjKiP7int32_tK8uint32_tRKNSt6vectorI7int64_tEEP18RenderAllocatorMap">QueryExecutionContext::launchGpuCode (C++ function)</a>
+      <li><a href="api/class/class_query_execution_context.html#_CPPv4N21QueryExecutionContext13launchGpuCodeERK19RelAlgExecutionUnitRKNSt6vectorINSt4pairIPvPvEEEEKbRKNSt6vectorI6int8_tEENSt6vectorINSt6vectorIPK6int8_tEEEERKNSt6vectorINSt6vectorI7int64_tEEEERKNSt6vectorINSt6vectorI8uint64_tEEEEK7int32_tPN14Data_Namespace7DataMgrEKjKjKiK6size_tP7int32_tK8uint32_tRKNSt6vectorI7int64_tEEP18RenderAllocatorMap">QueryExecutionContext::launchGpuCode (C++ function)</a>
 </li>
       <li><a href="api/class/class_query_execution_context.html#_CPPv4N21QueryExecutionContext16output_columnar_E">QueryExecutionContext::output_columnar_ (C++ member)</a>
 </li>
@@ -13594,12 +13649,12 @@
 </li>
       <li><a href="api/class/class_query_memory_descriptor.html#_CPPv4NK21QueryMemoryDescriptor11getColCountEv">QueryMemoryDescriptor::getColCount (C++ function)</a>
 </li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="api/class/class_query_memory_descriptor.html#_CPPv4NK21QueryMemoryDescriptor16getColOffInBytesEK6size_t">QueryMemoryDescriptor::getColOffInBytes (C++ function)</a>
 </li>
       <li><a href="api/class/class_query_memory_descriptor.html#_CPPv4NK21QueryMemoryDescriptor25getColOffInBytesInNextBinEK6size_t">QueryMemoryDescriptor::getColOffInBytesInNextBin (C++ function)</a>
 </li>
-  </ul></td>
-  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="api/class/class_query_memory_descriptor.html#_CPPv4NK21QueryMemoryDescriptor20getColOnlyOffInBytesEK6size_t">QueryMemoryDescriptor::getColOnlyOffInBytes (C++ function)</a>
 </li>
       <li><a href="api/class/class_query_memory_descriptor.html#_CPPv4NK21QueryMemoryDescriptor17getColSlotContextEv">QueryMemoryDescriptor::getColSlotContext (C++ function)</a>
@@ -13617,8 +13672,6 @@
       <li><a href="api/class/class_query_memory_descriptor.html#_CPPv4NK21QueryMemoryDescriptor13getEntryCountEv">QueryMemoryDescriptor::getEntryCount (C++ function)</a>
 </li>
       <li><a href="api/class/class_query_memory_descriptor.html#_CPPv4NK21QueryMemoryDescriptor11getExecutorEv">QueryMemoryDescriptor::getExecutor (C++ function)</a>
-</li>
-      <li><a href="api/class/class_query_memory_descriptor.html#_CPPv4NK21QueryMemoryDescriptor16getGpuMemSharingEv">QueryMemoryDescriptor::getGpuMemSharing (C++ function)</a>
 </li>
       <li><a href="api/class/class_query_memory_descriptor.html#_CPPv4NK21QueryMemoryDescriptor18getGroupbyColCountEv">QueryMemoryDescriptor::getGroupbyColCount (C++ function)</a>
 </li>
@@ -13720,7 +13773,7 @@
 </li>
       <li><a href="api/class/class_query_memory_descriptor.html#_CPPv4N21QueryMemoryDescriptor16query_desc_type_E">QueryMemoryDescriptor::query_desc_type_ (C++ member)</a>
 </li>
-      <li><a href="api/class/class_query_memory_descriptor.html#_CPPv4N21QueryMemoryDescriptor21QueryMemoryDescriptorEK20QueryDescriptionTypeK7int64_tK7int64_tKbRKNSt6vectorI6int8_tEE">QueryMemoryDescriptor::QueryMemoryDescriptor (C++ function)</a>, <a href="api/class/class_query_memory_descriptor.html#_CPPv4N21QueryMemoryDescriptor21QueryMemoryDescriptorEPK8ExecutorK6size_tK20QueryDescriptionTypeKb">[1]</a>, <a href="api/class/class_query_memory_descriptor.html#_CPPv4N21QueryMemoryDescriptor21QueryMemoryDescriptorEPK8ExecutorRK19RelAlgExecutionUnitRKNSt6vectorI14InputTableInfoEEKbKbKbK7int32_tRK12ColRangeInfoRK14ColSlotContextRKNSt6vectorI6int8_tEEK6int8_tRKNSt6vectorI7ssize_tEEK6size_tK17GroupByMemSharingKbK24CountDistinctDescriptorsKbKbKbKbKb">[2]</a>, <a href="api/class/class_query_memory_descriptor.html#_CPPv4N21QueryMemoryDescriptor21QueryMemoryDescriptorERK26TResultSetBufferDescriptor">[3]</a>, <a href="api/class/class_query_memory_descriptor.html#_CPPv4N21QueryMemoryDescriptor21QueryMemoryDescriptorEv">[4]</a>
+      <li><a href="api/class/class_query_memory_descriptor.html#_CPPv4N21QueryMemoryDescriptor21QueryMemoryDescriptorEK20QueryDescriptionTypeK7int64_tK7int64_tKbRKNSt6vectorI6int8_tEE">QueryMemoryDescriptor::QueryMemoryDescriptor (C++ function)</a>, <a href="api/class/class_query_memory_descriptor.html#_CPPv4N21QueryMemoryDescriptor21QueryMemoryDescriptorEPK8ExecutorK6size_tK20QueryDescriptionTypeKb">[1]</a>, <a href="api/class/class_query_memory_descriptor.html#_CPPv4N21QueryMemoryDescriptor21QueryMemoryDescriptorEPK8ExecutorRK19RelAlgExecutionUnitRKNSt6vectorI14InputTableInfoEEKbKbKbK7int32_tRK12ColRangeInfoRK14ColSlotContextRKNSt6vectorI6int8_tEEK6int8_tRKNSt6vectorI7ssize_tEEK6size_tK24CountDistinctDescriptorsKbKbKbKbKb">[2]</a>, <a href="api/class/class_query_memory_descriptor.html#_CPPv4N21QueryMemoryDescriptor21QueryMemoryDescriptorERK26TResultSetBufferDescriptor">[3]</a>, <a href="api/class/class_query_memory_descriptor.html#_CPPv4N21QueryMemoryDescriptor21QueryMemoryDescriptorEv">[4]</a>
 </li>
       <li><a href="api/class/class_query_memory_descriptor.html#_CPPv4NK21QueryMemoryDescriptor12reductionKeyEv">QueryMemoryDescriptor::reductionKey (C++ function)</a>
 </li>
@@ -13745,10 +13798,6 @@
       <li><a href="api/class/class_query_memory_descriptor.html#_CPPv4N21QueryMemoryDescriptor23setQueryDescriptionTypeEK20QueryDescriptionType">QueryMemoryDescriptor::setQueryDescriptionType (C++ function)</a>
 </li>
       <li><a href="api/class/class_query_memory_descriptor.html#_CPPv4N21QueryMemoryDescriptor18setTargetIdxForKeyEK7int32_t">QueryMemoryDescriptor::setTargetIdxForKey (C++ function)</a>
-</li>
-      <li><a href="api/class/class_query_memory_descriptor.html#_CPPv4NK21QueryMemoryDescriptor14sharedMemBytesEK18ExecutorDeviceType">QueryMemoryDescriptor::sharedMemBytes (C++ function)</a>
-</li>
-      <li><a href="api/class/class_query_memory_descriptor.html#_CPPv4N21QueryMemoryDescriptor8sharing_E">QueryMemoryDescriptor::sharing_ (C++ member)</a>
 </li>
       <li><a href="api/class/class_query_memory_descriptor.html#_CPPv4N21QueryMemoryDescriptor12sort_on_gpu_E">QueryMemoryDescriptor::sort_on_gpu_ (C++ member)</a>
 </li>
@@ -17352,7 +17401,7 @@
 </li>
       <li><a href="api/struct/struct_target_expr_codegen.html#_CPPv4N17TargetExprCodegen15base_slot_indexE">TargetExprCodegen::base_slot_index (C++ member)</a>
 </li>
-      <li><a href="api/struct/struct_target_expr_codegen.html#_CPPv4NK17TargetExprCodegen7codegenEP19GroupByAndAggregateP8ExecutorRK21QueryMemoryDescriptorRK18CompilationOptionsRKNSt5tupleIPN4llvm5ValueEPN4llvm5ValueEEERKNSt6vectorIPN4llvm5ValueEEEPN4llvm5ValueEPN4llvm5ValueERN19GroupByAndAggregate14DiamondCodegenEPN19GroupByAndAggregate14DiamondCodegenE">TargetExprCodegen::codegen (C++ function)</a>
+      <li><a href="api/struct/struct_target_expr_codegen.html#_CPPv4NK17TargetExprCodegen7codegenEP19GroupByAndAggregateP8ExecutorRK21QueryMemoryDescriptorRK18CompilationOptionsRK22GpuSharedMemoryContextRKNSt5tupleIPN4llvm5ValueEPN4llvm5ValueEEERKNSt6vectorIPN4llvm5ValueEEEPN4llvm5ValueEPN4llvm5ValueERN19GroupByAndAggregate14DiamondCodegenEPN19GroupByAndAggregate14DiamondCodegenE">TargetExprCodegen::codegen (C++ function)</a>
 </li>
       <li><a href="api/struct/struct_target_expr_codegen.html#_CPPv4N17TargetExprCodegen11is_group_byE">TargetExprCodegen::is_group_by (C++ member)</a>
 </li>
@@ -17366,7 +17415,7 @@
 </li>
       <li><a href="api/struct/struct_target_expr_codegen_builder.html#_CPPv424TargetExprCodegenBuilder">TargetExprCodegenBuilder (C++ class)</a>
 </li>
-      <li><a href="api/struct/struct_target_expr_codegen_builder.html#_CPPv4NK24TargetExprCodegenBuilder7codegenEP19GroupByAndAggregateP8ExecutorRK21QueryMemoryDescriptorRK18CompilationOptionsRKNSt5tupleIPN4llvm5ValueEPN4llvm5ValueEEERKNSt6vectorIPN4llvm5ValueEEEPN4llvm5ValueEPN4llvm5ValueERN19GroupByAndAggregate14DiamondCodegenE">TargetExprCodegenBuilder::codegen (C++ function)</a>
+      <li><a href="api/struct/struct_target_expr_codegen_builder.html#_CPPv4NK24TargetExprCodegenBuilder7codegenEP19GroupByAndAggregateP8ExecutorRK21QueryMemoryDescriptorRK18CompilationOptionsRK22GpuSharedMemoryContextRKNSt5tupleIPN4llvm5ValueEPN4llvm5ValueEEERKNSt6vectorIPN4llvm5ValueEEEPN4llvm5ValueEPN4llvm5ValueERN19GroupByAndAggregate14DiamondCodegenE">TargetExprCodegenBuilder::codegen (C++ function)</a>
 </li>
       <li><a href="api/struct/struct_target_expr_codegen_builder.html#_CPPv4NK24TargetExprCodegenBuilder33codegenMultiSlotSampleExpressionsEP19GroupByAndAggregateP8ExecutorRK21QueryMemoryDescriptorRK18CompilationOptionsRKNSt5tupleIPN4llvm5ValueEPN4llvm5ValueEEERKNSt6vectorIPN4llvm5ValueEEEPN4llvm5ValueEPN4llvm5ValueERN19GroupByAndAggregate14DiamondCodegenE">TargetExprCodegenBuilder::codegenMultiSlotSampleExpressions (C++ function)</a>
 </li>
