@@ -17434,6 +17434,22 @@ TEST(Select, UnionAll) {
                                   "SELECT fixed_str FROM test ORDER BY str;",
                                   dt),
                  std::runtime_error);
+    // Exception: UNION ALL not yet supported in this context.
+    EXPECT_THROW(run_multiple_agg("SELECT DISTINCT * FROM ("
+                                  " SELECT a0, a1, a2, a3 FROM union_all_a"
+                                  " UNION ALL"
+                                  " SELECT b0, b1, b2, b3 FROM union_all_b"
+                                  ");",
+                                  dt),
+                 std::runtime_error);
+    // Exception: UNION ALL not yet supported in this context.
+    EXPECT_THROW(run_multiple_agg("SELECT * FROM ("
+                                  " SELECT a0, a1, a2, a3 FROM union_all_a"
+                                  " UNION ALL"
+                                  " SELECT b0, b1, b2, b3 FROM union_all_b"
+                                  ") GROUP BY a0, a1, a2, a3;",
+                                  dt),
+                 std::runtime_error);
   }
   g_enable_union = enable_union;
 }

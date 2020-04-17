@@ -631,7 +631,7 @@ void RelAlgExecutor::executeRelAlgStep(const RaExecutionSequence& seq,
   const auto logical_union = dynamic_cast<const RelLogicalUnion*>(body);
   if (logical_union) {
     exec_desc.setResult(
-        executeUnion(logical_union, co, eo_work_unit, render_info, queue_time_ms));
+        executeUnion(logical_union, seq, co, eo_work_unit, render_info, queue_time_ms));
     addTemporaryTable(-logical_union->getId(), exec_desc.getResult().getDataPtr());
     return;
   }
@@ -1759,6 +1759,7 @@ bool isGeometry(TargetMetaInfo const& target_meta_info) {
 }
 
 ExecutionResult RelAlgExecutor::executeUnion(const RelLogicalUnion* logical_union,
+                                             const RaExecutionSequence& seq,
                                              const CompilationOptions& co,
                                              const ExecutionOptions& eo,
                                              RenderInfo* render_info,
@@ -1773,6 +1774,14 @@ ExecutionResult RelAlgExecutor::executeUnion(const RelLogicalUnion* logical_unio
   logical_union->setOutputMetainfo(logical_union->getInput(0)->getOutputMetainfo());
   if (boost::algorithm::any_of(logical_union->getOutputMetainfo(), isGeometry)) {
     throw std::runtime_error("UNION does not support subqueries with geo-columns.");
+  }
+  // Only Projections from a UNION are supported for now.
+  for (size_t i = 0; i < seq.size(); ++i) {
+    RelAlgNode const* node = seq.getDescriptor(i)->getBody();
+    if (node->hasInput(logical_union) && !(dynamic_cast<RelLogicalUnion const*>(node) ||
+                                           dynamic_cast<RelProject const*>(node))) {
+      throw std::runtime_error("UNION ALL not yet supported in this context.");
+    }
   }
 
   auto work_unit =

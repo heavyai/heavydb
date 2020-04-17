@@ -233,6 +233,7 @@ class RelAlgExecutor : private StorageIOFacility<RelAlgExecutorTraits> {
   ExecutionResult executeModify(const RelModify* modify, const ExecutionOptions& eo);
 
   ExecutionResult executeUnion(const RelLogicalUnion*,
+                               const RaExecutionSequence&,
                                const CompilationOptions&,
                                const ExecutionOptions&,
                                RenderInfo*,
