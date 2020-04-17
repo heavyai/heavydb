@@ -169,7 +169,24 @@ std::ostream& operator<<(std::ostream& os, SessionInfoFormatter const& formatter
 logger::Severity StdLog::stdlogBeginSeverity(char const* func) {
   logger::Severity const defaultSeverity = logger::Severity::DEBUG1;
   static std::unordered_map<std::string_view, logger::Severity> const map{
-      {"sql_execute", logger::Severity::INFO}};
+      {"connect", logger::Severity::INFO},
+      {"disconnect", logger::Severity::INFO},
+      {"switch_database", logger::Severity::INFO},
+      {"clone_session", logger::Severity::INFO},
+      {"get_tables_meta", logger::Severity::INFO},
+      {"get_table_details", logger::Severity::INFO},
+      {"sql_execute", logger::Severity::INFO},
+      {"sql_execute_df", logger::Severity::INFO},
+      {"sql_execute_gdf", logger::Severity::INFO},
+      {"sql_validate", logger::Severity::INFO},
+      {"render_vega", logger::Severity::INFO},
+      {"get_result_row_for_pixel", logger::Severity::INFO},
+      {"check_table_consistency", logger::Severity::INFO},
+      {"start_query", logger::Severity::INFO},
+      {"execute_query_step", logger::Severity::INFO},
+      {"broadcast_serialized_rows", logger::Severity::INFO},
+      {"start_render_query", logger::Severity::INFO},
+      {"execute_next_render_step", logger::Severity::INFO}};
   auto const itr = map.find(func);
   return itr == map.cend() ? defaultSeverity : itr->second;
 }
