@@ -4988,6 +4988,18 @@ void DBHandler::check_and_invalidate_sessions(Parser::DDLStmt* ddl) {
   }
 }
 
+namespace {
+
+void throw_multiple_sql_statements_exception() {
+  THROW_MAPD_EXCEPTION("multiple SQL statements not allowed");
+}
+
+void throw_empty_sql_statement_exception() {
+  THROW_MAPD_EXCEPTION("empty SQL statment not allowed");
+}
+
+}  // namespace
+
 void DBHandler::sql_execute_impl(TQueryResult& _return,
                                  QueryStateProxy query_state_proxy,
                                  const bool column_format,
@@ -5100,7 +5112,11 @@ void DBHandler::sql_execute_impl(TQueryResult& _return,
       if (num_parse_errors > 0) {
         throw std::runtime_error("Syntax error at: " + last_parsed);
       }
-      CHECK_EQ(parse_trees.size(), 1u);
+      if (parse_trees.size() > 1) {
+        throw_multiple_sql_statements_exception();
+      } else if (parse_trees.size() != 1) {
+        throw_empty_sql_statement_exception();
+      }
 
       if (pw.is_optimize) {
         const auto optimize_stmt =
@@ -5174,6 +5190,11 @@ void DBHandler::sql_execute_impl(TQueryResult& _return,
     if (strstr(e.what(), "java.lang.NullPointerException")) {
       THROW_MAPD_EXCEPTION(std::string("Exception: ") +
                            "query failed from broken view or other schema related issue");
+    } else if (strstr(e.what(), "Parse failed: Encountered \";\"")) {
+      throw_multiple_sql_statements_exception();
+    } else if (strstr(e.what(),
+                      "Parse failed: Encountered \"<EOF>\" at line 0, column 0")) {
+      throw_empty_sql_statement_exception();
     } else {
       THROW_MAPD_EXCEPTION(std::string("Exception: ") + e.what());
     }
@@ -5187,6 +5208,11 @@ void DBHandler::sql_execute_impl(TQueryResult& _return,
   }
   if (num_parse_errors > 0) {
     THROW_MAPD_EXCEPTION("Syntax error at: " + last_parsed);
+  }
+  if (parse_trees.size() > 1) {
+    throw_multiple_sql_statements_exception();
+  } else if (parse_trees.size() != 1) {
+    throw_empty_sql_statement_exception();
   }
 
   auto handle_ddl = [&query_state_proxy, &session_ptr, &_return, &locks, this](
