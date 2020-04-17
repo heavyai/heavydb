@@ -166,7 +166,6 @@ void Executor::ExecutionDispatch::runImpl(
             target_exprs_to_infos(ra_exe_unit_.target_exprs, *query_mem_desc),
             executor_});
     std::lock_guard<std::mutex> lock(reduce_mutex_);
-    VLOG(2) << "device_results->rowCount()=" << device_results->rowCount();
     all_fragment_results_.emplace_back(std::move(device_results), outer_tab_frag_ids);
     return;
   }
@@ -270,7 +269,6 @@ void Executor::ExecutionDispatch::runImpl(
                                             do_render ? render_info_ : nullptr);
   }
   if (device_results) {
-    VLOG(2) << "device_results->rowCount()=" << device_results->rowCount();
     std::list<std::shared_ptr<Chunk_NS::Chunk>> chunks_to_hold;
     for (const auto chunk : chunks) {
       if (need_to_hold_chunk(chunk.get(), ra_exe_unit_)) {

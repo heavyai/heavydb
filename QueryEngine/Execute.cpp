@@ -2272,10 +2272,6 @@ FetchResult Executor::fetchUnionChunks(
           memory_level_for_column = Data_Namespace::CPU_LEVEL;
         }
         if (col_id->getScanDesc().getSourceType() == InputSourceType::RESULT) {
-          VLOG(2) << "it->second="
-                  << it->second  // 1 1, 3 3, 5 5, 7 7, 0 0, 2 2, 4 4, 6 6
-                  << " col_id->getScanDesc().getTableId()="
-                  << col_id->getScanDesc().getTableId();
           frag_col_buffers[it->second] = column_fetcher.getResultSetColumn(
               col_id.get(), memory_level_for_column, device_id);
         } else {
@@ -2694,17 +2690,6 @@ int32_t Executor::executePlanWithGroupBy(
           return input_col_desc->getScanDesc().getTableId() != outer_table_id;
         });
     query_exe_context->query_mem_desc_.setEntryCount(ra_exe_unit_copy.scan_limit);
-    // Results in segfault later in fixed_width_int_decode
-    // query_exe_context->query_buffers_->result_sets_[0]->updateStorageEntryCount(ra_exe_unit_copy.scan_limit);
-    VLOG(2) << "ra_exe_unit_copy.input_descs="
-            << shared::printContainer(ra_exe_unit_copy.input_descs)
-            << " ra_exe_unit_copy.input_col_descs="
-            << shared::printContainer(ra_exe_unit_copy.input_col_descs)
-            << " ra_exe_unit_copy.scan_limit=" << ra_exe_unit_copy.scan_limit
-            << " query_exe_context->query_mem_desc_.getEntryCount()="
-            << query_exe_context->query_mem_desc_.getEntryCount()
-            << " query_exe_context->query_buffers_->result_sets_[0]->entryCount()="
-            << query_exe_context->query_buffers_->result_sets_[0]->entryCount();
   }
 
   if (device_type == ExecutorDeviceType::CPU) {
@@ -2750,14 +2735,6 @@ int32_t Executor::executePlanWithGroupBy(
       LOG(FATAL) << "Error launching the GPU kernel: " << e.what();
     }
   }
-  VLOG(2) << "nrows=" << nrows << " num_rows=" << shared::printContainer(num_rows)
-          << " frag_offsets=" << shared::printContainer(frag_offsets)
-          << " query_exe_context->query_buffers_->result_sets_.size()="
-          << query_exe_context->query_buffers_->result_sets_.size()
-          << " query_exe_context->query_buffers_->result_sets_[0]->rowCount()="
-          << query_exe_context->query_buffers_->result_sets_[0]->rowCount()
-          << " query_exe_context->query_mem_desc_.getEntryCount()="
-          << query_exe_context->query_mem_desc_.getEntryCount();
 
   if (error_code == Executor::ERR_OVERFLOW_OR_UNDERFLOW ||
       error_code == Executor::ERR_DIV_BY_ZERO ||
