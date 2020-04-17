@@ -400,11 +400,11 @@ bool prepare_table_for_delete(const std::string& table = "trips",
         updelRoll);
   });
   if (UpdelTestConfig::showMeasuredTime) {
-    VLOG(2) << "time on update " << cnt << " rows:" << ms << " ms";
+    VLOG(1) << "time on update " << cnt << " rows:" << ms << " ms";
   }
   ms = measure<>::execution([&]() { updelRoll.commitUpdate(); });
   if (UpdelTestConfig::showMeasuredTime) {
-    VLOG(2) << "time on commit:" << ms << " ms";
+    VLOG(1) << "time on commit:" << ms << " ms";
   }
   return compare_agg(table, column, cnt, (0 + cnt - 1) * cnt / 2. / cnt);
 }
@@ -467,12 +467,12 @@ bool delete_and_immediately_vacuum_rows(const std::string& table,
                                  updelRoll);
   });
   if (UpdelTestConfig::showMeasuredTime) {
-    VLOG(2) << "time on delete & vacuum " << dcnt << " of " << nall << " rows:" << ms
+    VLOG(1) << "time on delete & vacuum " << dcnt << " of " << nall << " rows:" << ms
             << " ms";
   }
   ms = measure<>::execution([&]() { updelRoll.commitUpdate(); });
   if (UpdelTestConfig::showMeasuredTime) {
-    VLOG(2) << "time on commit:" << ms << " ms";
+    VLOG(1) << "time on commit:" << ms << " ms";
   }
   cnt = nall - cnt;
   // check varlen column vacuumed
@@ -506,7 +506,7 @@ bool delete_and_vacuum_varlen_rows(const std::string& table,
     ASSERT_NO_THROW(run_query("delete from " + table + " where " + cond + ";"););
   });
   if (UpdelTestConfig::showMeasuredTime) {
-    VLOG(2) << "time on delete " << (manual_vacuum ? "" : "& vacuum ")
+    VLOG(1) << "time on delete " << (manual_vacuum ? "" : "& vacuum ")
             << fragOffsets.size() << " rows:" << ms << " ms";
   }
 
@@ -521,7 +521,7 @@ bool delete_and_vacuum_varlen_rows(const std::string& table,
       optimizer.recomputeMetadata();
     });
     if (UpdelTestConfig::showMeasuredTime) {
-      VLOG(2) << "time on vacuum:" << ms << " ms";
+      VLOG(1) << "time on vacuum:" << ms << " ms";
     }
   }
 
@@ -606,7 +606,7 @@ void init_table_data(const std::string& table = "trips",
   if (file.size()) {
     auto ms = measure<>::execution([&]() { import_table_file(table, file); });
     if (UpdelTestConfig::showMeasuredTime) {
-      VLOG(2) << "time on import: " << ms << " ms";
+      VLOG(1) << "time on import: " << ms << " ms";
     }
   }
 }

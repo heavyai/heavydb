@@ -537,7 +537,7 @@ void RelAlgExecutor::executeRelAlgStep(const RaExecutionSequence& seq,
     } else {
       exec_desc.setResult(
           executeCompound(compound, co, eo_work_unit, render_info, queue_time_ms));
-      VLOG(2) << "Returned from executeCompound(), addTemporaryTable("
+      VLOG(3) << "Returned from executeCompound(), addTemporaryTable("
               << static_cast<int>(-compound->getId()) << ", ...)"
               << " exec_desc.getResult().getDataPtr()->rowCount()="
               << exec_desc.getResult().getDataPtr()->rowCount();
@@ -576,14 +576,14 @@ void RelAlgExecutor::executeRelAlgStep(const RaExecutionSequence& seq,
           if (prev_result) {
             prev_count = static_cast<ssize_t>(prev_result->rowCount());
           }
-          VLOG(2) << "prev_exec_desc->getBody()->toString()="
+          VLOG(3) << "prev_exec_desc->getBody()->toString()="
                   << prev_exec_desc->getBody()->toString()
                   << " prev_count=" << prev_count;
         }
       }
       exec_desc.setResult(executeProject(
           project, co, eo_work_unit, render_info, queue_time_ms, prev_count));
-      VLOG(2) << "Returned from executeProject(), addTemporaryTable("
+      VLOG(3) << "Returned from executeProject(), addTemporaryTable("
               << static_cast<int>(-project->getId()) << ", ...)"
               << " exec_desc.getResult().getDataPtr()->rowCount()="
               << exec_desc.getResult().getDataPtr()->rowCount();
@@ -822,7 +822,7 @@ get_used_inputs(const RelLogicalUnion* logical_union, const Catalog_Namespace::C
   std::unordered_set<const RexInput*> used_inputs(logical_union->inputCount());
   std::vector<std::shared_ptr<RexInput>> used_inputs_owned;
   used_inputs_owned.reserve(logical_union->inputCount());
-  VLOG(2) << "logical_union->inputCount()=" << logical_union->inputCount();
+  VLOG(3) << "logical_union->inputCount()=" << logical_union->inputCount();
   auto const n_inputs = logical_union->inputCount();
   for (size_t nest_level = 0; nest_level < n_inputs; ++nest_level) {
     auto input = logical_union->getInput(nest_level);
@@ -912,7 +912,7 @@ void collect_used_input_desc(
     const RelAlgNode* ra_node,
     const std::unordered_set<const RexInput*>& source_used_inputs,
     const std::unordered_map<const RelAlgNode*, int>& input_to_nest_level) {
-  VLOG(2) << "ra_node=" << ra_node->toString()
+  VLOG(3) << "ra_node=" << ra_node->toString()
           << " input_col_descs_unique.size()=" << input_col_descs_unique.size()
           << " source_used_inputs.size()=" << source_used_inputs.size();
   for (const auto used_input : source_used_inputs) {
@@ -1003,7 +1003,7 @@ get_input_desc(const RA* ra_node,
   std::unordered_set<const RexInput*> used_inputs;
   std::vector<std::shared_ptr<RexInput>> used_inputs_owned;
   std::tie(used_inputs, used_inputs_owned) = get_used_inputs(ra_node, cat);
-  VLOG(2) << "used_inputs.size() = " << used_inputs.size();
+  VLOG(3) << "used_inputs.size() = " << used_inputs.size();
   auto input_desc_pair = get_input_desc_impl(
       ra_node, used_inputs, input_to_nest_level, input_permutation, cat);
   return std::make_tuple(
@@ -1073,7 +1073,7 @@ std::vector<std::shared_ptr<Analyzer::Expr>> translate_scalar_sources(
     const ::ExecutorType executor_type) {
   std::vector<std::shared_ptr<Analyzer::Expr>> scalar_sources;
   const size_t scalar_sources_size = get_scalar_sources_size(ra_node);
-  VLOG(2) << "get_scalar_sources_size(" << ra_node->toString()
+  VLOG(3) << "get_scalar_sources_size(" << ra_node->toString()
           << ") = " << scalar_sources_size;
   for (size_t i = 0; i < scalar_sources_size; ++i) {
     const auto scalar_rex = scalar_at(i, ra_node);
@@ -2595,7 +2595,7 @@ ExecutionResult RelAlgExecutor::executeWorkUnit(
   const auto body = work_unit.body;
   CHECK(body);
   auto it = leaf_results_.find(body->getId());
-  VLOG(2) << "body->getId()=" << body->getId() << " body->toString()=" << body->toString()
+  VLOG(3) << "body->getId()=" << body->getId() << " body->toString()=" << body->toString()
           << " it==leaf_results_.end()=" << (it == leaf_results_.end());
   if (it != leaf_results_.end()) {
     GroupByAndAggregate::addTransientStringLiterals(
@@ -2684,7 +2684,7 @@ ExecutionResult RelAlgExecutor::executeWorkUnit(
     result = execute_and_handle_errors(
         max_groups_buffer_entry_guess,
         groups_approx_upper_bound(table_infos) <= g_big_group_threshold);
-    VLOG(2) << "result.getRows()->entryCount()=" << result.getRows()->entryCount();
+    VLOG(3) << "result.getRows()->entryCount()=" << result.getRows()->entryCount();
   } catch (const CardinalityEstimationRequired&) {
     const auto estimated_groups_buffer_entry_guess =
         2 * std::min(groups_approx_upper_bound(table_infos),
@@ -3149,7 +3149,7 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createCompoundWorkUnit(
   auto input_to_nest_level = get_input_nest_levels(compound, {});
   std::tie(input_descs, input_col_descs, std::ignore) =
       get_input_desc(compound, input_to_nest_level, {}, cat_);
-  VLOG(2) << "input_descs=" << shared::printContainer(input_descs);
+  VLOG(3) << "input_descs=" << shared::printContainer(input_descs);
   const auto query_infos = get_table_infos(input_descs, executor_);
   CHECK_EQ(size_t(1), compound->inputCount());
   const auto left_deep_join =
@@ -3554,7 +3554,7 @@ namespace {
 std::vector<std::shared_ptr<Analyzer::Expr>> target_exprs_for_union(
     RelAlgNode const* input_node) {
   std::vector<TargetMetaInfo> const& tmis = input_node->getOutputMetainfo();
-  VLOG(2) << "input_node->getOutputMetainfo()=" << shared::printContainer(tmis);
+  VLOG(3) << "input_node->getOutputMetainfo()=" << shared::printContainer(tmis);
   const int negative_node_id = -input_node->getId();
   std::vector<std::shared_ptr<Analyzer::Expr>> target_exprs;
   target_exprs.reserve(tmis.size());
@@ -3586,9 +3586,9 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createUnionWorkUnit(
                         return std::max(max, query_info.info.getNumTuples());
                       });
 
-  VLOG(2) << "input_to_nest_level.size()=" << input_to_nest_level.size() << " Pairs are:";
+  VLOG(3) << "input_to_nest_level.size()=" << input_to_nest_level.size() << " Pairs are:";
   for (auto& pair : input_to_nest_level) {
-    VLOG(2) << "  (" << pair.first->toString() << ", " << pair.second << ')';
+    VLOG(3) << "  (" << pair.first->toString() << ", " << pair.second << ')';
   }
 
   QueryFeatureDescriptor query_features;
@@ -3598,15 +3598,15 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createUnionWorkUnit(
   auto const input_exprs_owned = target_exprs_for_union(logical_union->getInput(0));
   CHECK(!input_exprs_owned.empty())
       << "No metainfo found for input node " << logical_union->getInput(0)->toString();
-  VLOG(2) << "input_exprs_owned.size()=" << input_exprs_owned.size();
+  VLOG(3) << "input_exprs_owned.size()=" << input_exprs_owned.size();
   for (auto& input_expr : input_exprs_owned) {
-    VLOG(2) << "  " << input_expr->toString();
+    VLOG(3) << "  " << input_expr->toString();
   }
   target_exprs_owned_.insert(
       target_exprs_owned_.end(), input_exprs_owned.begin(), input_exprs_owned.end());
   const auto target_exprs = get_exprs_not_owned(input_exprs_owned);
 
-  VLOG(2) << "input_descs=" << shared::printContainer(input_descs)
+  VLOG(3) << "input_descs=" << shared::printContainer(input_descs)
           << " input_col_descs=" << shared::printContainer(input_col_descs)
           << " target_exprs.size()=" << target_exprs.size()
           << " max_num_tuples=" << max_num_tuples;
@@ -3652,7 +3652,7 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createUnionWorkUnit(
   } else {
     throw QueryNotSupported("Unsupported input type: " + input0->toString());
   }
-  VLOG(2) << "logical_union->getOutputMetainfo()="
+  VLOG(3) << "logical_union->getOutputMetainfo()="
           << shared::printContainer(logical_union->getOutputMetainfo())
           << " rewritten_exe_unit.input_col_descs.front()->getScanDesc().getTableId()="
           << rewritten_exe_unit.input_col_descs.front()->getScanDesc().getTableId();
