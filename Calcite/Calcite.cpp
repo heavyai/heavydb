@@ -513,8 +513,7 @@ TPlanResult Calcite::processImpl(
       return ret;  // satisfy return-type warning
     }
   } else {
-    LOG(INFO) << "Not routing to Calcite, server is not up";
-    ret.plan_result = "";
+    LOG(FATAL) << "Not routing to Calcite, server is not up";
   }
   return ret;
 }
