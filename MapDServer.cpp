@@ -115,7 +115,13 @@ void shutdown_handler() {
 //   man 7 signal
 //   https://en.wikipedia.org/wiki/Reentrancy_(computing)
 void omnisci_signal_handler(const boost::system::error_code& error, int signum) {
-  if (error) {  // NOTE: the docs don't say if Boost will ever do this
+  // NOTE: The docs don't say if Boost will ever do this.
+  if (error) {
+    // The signal set was cancelled, in which case the handler is passed the error code
+    // boost::asio::error::operation_aborted.
+    // Are other errors possible?
+    // wait for the next signal
+    Asio::signals.async_wait(omnisci_signal_handler);
     g_simple_error_message = "omnisci_signal_handler: boost error, ignored";
     return;
   }
@@ -125,7 +131,17 @@ void omnisci_signal_handler(const boost::system::error_code& error, int signum) 
   // correctly when a child gets SIGKILLed. Rather than spend too much
   // time figuring out why, simply don't do anything here.
   if (signum == SIGCHLD) {
+    // wait for the next signal
+    Asio::signals.async_wait(omnisci_signal_handler);
     return;
+  }
+
+  // Log the signal number.
+  if (signum != SIGTERM) {
+    static char text[] = "omnisci_signal_handler: received signal ??";
+    text[sizeof(text) - 3] = (signum >= 10) ? '0' + (signum / 10) : ' ';
+    text[sizeof(text) - 2] = '0' + (signum % 10);
+    g_simple_error_message = text;
   }
 
   // Record the signal number for logging during shutdown.
@@ -142,16 +158,11 @@ void omnisci_signal_handler(const boost::system::error_code& error, int signum) 
   // shutdown is already in progress.
   Asio::running = false;
 
-  // Handle core dumps specially by pausing inside this signal handler
-  // because on some systems, some signals will execute their default
-  // action immediately when and if the signal handler returns.
-  // We would like to do some emergency cleanup before core dump.
   if (signum == SIGQUIT || signum == SIGABRT || signum == SIGSEGV || signum == SIGFPE) {
     // Wait briefly to give heartbeat() a chance to flush the logs and
     // do any other emergency shutdown tasks.
-    sleep(1);
-
-    kill(getpid(), signum);
+    using namespace std::chrono_literals;
+    std::this_thread::sleep_for(1s);
   }
 }
 
@@ -1086,6 +1097,24 @@ boost::optional<int> MapDProgramOptions::parse_command_line(int argc,
   return boost::none;
 }
 
+void ripcord() {
+  // Block all signals for this ripcord thread, only.
+  sigset_t set;
+  sigfillset(&set);
+  int result = pthread_sigmask(SIG_BLOCK, &set, NULL);
+  if (result != 0) {
+    exit(1);
+  }
+
+  // Hard stop the server after 2 seconds.
+  for (size_t i = 0; i < 4; ++i) {
+    using namespace std::chrono;
+    std::this_thread::sleep_for(500ms);
+  }
+  kill(0, SIGKILL);
+  kill(getpid(), SIGKILL);
+}
+
 void heartbeat() {
   // Block all signals for this heartbeat thread, only.
   sigset_t set;
@@ -1099,18 +1128,24 @@ void heartbeat() {
   VLOG(1) << "heartbeat thread starting";
   while (Asio::running) {
     using namespace std::chrono;
-    std::this_thread::sleep_for(500ms);
+    std::this_thread::sleep_for(250ms);
     if (const char* simple_error_message = g_simple_error_message.exchange(nullptr)) {
       LOG(ERROR) << simple_error_message;
     }
   }
-  VLOG(1) << "heartbeat thread exiting";
 
   // Get the signal number if there was a signal.
   int signum = g_saw_signal;
-  if (signum >= 1 && signum != SIGTERM) {
-    LOG(INFO) << "Interrupt signal (" << signum << ") received.";
+  if (signum >= 1) {
+    VLOG(1) << "heartbeat thread exiting (" << signum << ")";
+  } else {
+    VLOG(1) << "heartbeat thread exiting";
   }
+
+  // As a last resort, kill -9 ourselves after a delay,
+  // no matter what, if the heartbeat thread ever exits.
+  std::thread ripcord_thread(ripcord);
+  ripcord_thread.detach();
 
   // if dumping core, try to do some quick stuff
   if (signum == SIGQUIT || signum == SIGABRT || signum == SIGSEGV || signum == SIGFPE) {
@@ -1119,8 +1154,11 @@ void heartbeat() {
                      []() { g_mapd_handler->emergency_shutdown(); });
     }
     logger::shutdown();
+    // re-send the signal using the default handler so the operating system generates a
+    // core file
+    signal(signum, SIG_DFL);
+    kill(getpid(), signum);
     return;
-    // core dump should begin soon after this, see omnisci_signal_handler()
   }
 
   // trigger an orderly shutdown by telling Thrift to stop serving
@@ -1140,13 +1178,15 @@ void heartbeat() {
 
 int startMapdServer(MapDProgramOptions& prog_config_opts, bool start_http_server = true) {
   // try to enforce an orderly shutdown even after a signal
-  Asio::register_signal_handler(SIGINT, omnisci_signal_handler);
-  Asio::register_signal_handler(SIGQUIT, omnisci_signal_handler);
-  Asio::register_signal_handler(SIGHUP, omnisci_signal_handler);
-  Asio::register_signal_handler(SIGTERM, omnisci_signal_handler);
-  Asio::register_signal_handler(SIGSEGV, omnisci_signal_handler);
-  Asio::register_signal_handler(SIGABRT, omnisci_signal_handler);
-  Asio::register_signal_handler(SIGCHLD, omnisci_signal_handler);
+  Asio::signals.clear();
+  Asio::signals.add(SIGINT);
+  Asio::signals.add(SIGQUIT);
+  Asio::signals.add(SIGHUP);
+  Asio::signals.add(SIGTERM);
+  Asio::signals.add(SIGSEGV);
+  Asio::signals.add(SIGABRT);
+  Asio::signals.add(SIGCHLD);
+  Asio::signals.async_wait(omnisci_signal_handler);
   Asio::start();
 
   // register shutdown procedures for when a normal shutdown happens
