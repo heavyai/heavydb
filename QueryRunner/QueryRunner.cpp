@@ -53,7 +53,7 @@ namespace {
 
 std::shared_ptr<Calcite> g_calcite = nullptr;
 
-void calcite_shutdown_handler() {
+void calcite_shutdown_handler() noexcept {
   if (g_calcite) {
     g_calcite->close_calcite_server();
     g_calcite.reset();
