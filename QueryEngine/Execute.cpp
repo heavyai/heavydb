@@ -2651,8 +2651,6 @@ int32_t Executor::executePlanWithGroupBy(
     render_allocator_map_ptr = render_info->render_allocator_map_ptr.get();
   }
 
-  size_t const nrows = !num_rows.empty() && !num_rows[0].empty() ? num_rows[0][0] : 0;
-
   VLOG(2) << "bool(ra_exe_unit.union_all)=" << bool(ra_exe_unit.union_all)
           << " ra_exe_unit.input_descs="
           << shared::printContainer(ra_exe_unit.input_descs)
