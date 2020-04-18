@@ -347,7 +347,9 @@ class MapDProgramOptions {
   std::vector<std::string> getNodeIdsArray();
   static const std::string nodeIds_token;
 
-  boost::optional<int> parse_command_line(int argc, char const* const* argv);
+  boost::optional<int> parse_command_line(int argc,
+                                          char const* const* argv,
+                                          const bool should_init_logging = false);
   void validate();
   void validate_base_path();
   void init_logging();
@@ -936,8 +938,10 @@ void MapDProgramOptions::validate() {
   LOG(INFO) << " Maximum active session duration " << max_session_duration;
 }
 
-boost::optional<int> MapDProgramOptions::parse_command_line(int argc,
-                                                            char const* const* argv) {
+boost::optional<int> MapDProgramOptions::parse_command_line(
+    int argc,
+    char const* const* argv,
+    const bool should_init_logging) {
   po::options_description all_desc("All options");
   all_desc.add(help_desc).add(developer_desc);
 
@@ -957,6 +961,10 @@ boost::optional<int> MapDProgramOptions::parse_command_line(int argc,
       po::store(po::parse_config_file(sanitized_settings, all_desc, false), vm);
       po::notify(vm);
       settings_file.close();
+    }
+
+    if (should_init_logging) {
+      init_logging();
     }
 
     if (!trim_and_check_file_exists(mapd_parameters.ssl_cert_file, "ssl cert file")) {
@@ -1365,13 +1373,13 @@ int main(int argc, char** argv) {
   MapDProgramOptions prog_config_opts(argv[0], has_clust_topo);
 
   try {
-    if (auto return_code = prog_config_opts.parse_command_line(argc, argv)) {
+    if (auto return_code =
+            prog_config_opts.parse_command_line(argc, argv, !has_clust_topo)) {
       return *return_code;
     }
 
     if (!has_clust_topo) {
       prog_config_opts.validate_base_path();
-      prog_config_opts.init_logging();
       prog_config_opts.validate();
       return (startMapdServer(prog_config_opts));
     }
