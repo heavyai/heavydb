@@ -23,6 +23,13 @@ std::atomic<bool> Asio::running{true};
 boost::asio::io_service Asio::io_context;
 boost::asio::signal_set Asio::signals{Asio::io_context};
 
+void Asio::register_signal_handler(int signum,
+                                   void (*handler)(const boost::system::error_code&,
+                                                   int)) {
+  signals.add(signum);
+  signals.async_wait(handler);
+}
+
 void Asio::start() {
   // start boost signal handler thread
   std::thread t([] { io_context.run(); });
