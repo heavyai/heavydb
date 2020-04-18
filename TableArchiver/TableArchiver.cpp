@@ -34,7 +34,6 @@
 #include "DataMgr/FileMgr/GlobalFileMgr.h"
 #include "LockMgr/LockMgr.h"
 #include "Parser/ParseDDL.h"
-#include "Shared/Asio.h"
 #include "Shared/File.h"
 #include "Shared/Logger.h"
 #include "Shared/ThreadController.h"
@@ -76,14 +75,9 @@ inline std::string run(const std::string& cmd, const std::string& chdir = "") {
     using namespace boost::process;
     ipstream stdout, stderr;
     if (!chdir.empty()) {
-      rcode = system(cmd,
-                     std_out > stdout,
-                     std_err > stderr,
-                     ec,
-                     start_dir = chdir,
-                     Asio::io_context);
+      rcode = system(cmd, std_out > stdout, std_err > stderr, ec, start_dir = chdir);
     } else {
-      rcode = system(cmd, std_out > stdout, std_err > stderr, ec, Asio::io_context);
+      rcode = system(cmd, std_out > stdout, std_err > stderr, ec);
     }
     std::ostringstream ss_output, ss_errors;
     stdout >> ss_output.rdbuf();
