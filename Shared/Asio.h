@@ -24,6 +24,9 @@ extern std::atomic<bool> running;
 extern boost::asio::io_service io_context;
 extern boost::asio::signal_set signals;
 
+void register_signal_handler(int signum,
+                             void (*handler)(const boost::system::error_code&, int));
+
 void start();
 
 }  // namespace Asio
