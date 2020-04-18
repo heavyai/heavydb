@@ -52,6 +52,7 @@
 #include <boost/program_options.hpp>
 
 #include <csignal>
+#include <cstdlib>
 #include <sstream>
 #include <thread>
 #include <vector>
@@ -154,6 +155,14 @@ void omnisci_signal_handler(int signum) {
     // until this signal handler returns.
     register_signal_handler(signum, SIG_DFL);
     kill(getpid(), signum);
+    sleep(5);
+
+#ifndef __APPLE__
+    // as a last resort, abort
+    // primary used in Docker environments, where we can end up with PID 1 and fail to
+    // catch unix signals
+    quick_exit(signum);
+#endif
   }
 }
 
