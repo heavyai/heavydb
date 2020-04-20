@@ -690,6 +690,8 @@ std::shared_ptr<arrow::RecordBatch> ArrowResultSetConverter::getArrowBatch(
   std::vector<std::shared_ptr<std::vector<bool>>> null_bitmaps(col_count, nullptr);
   const bool multithreaded = entry_count > 10000 && !results_->isTruncated();
   bool use_columnar_converter = results_->isDirectColumnarConversionPossible() &&
+                                results_->getQueryMemDesc().getQueryDescriptionType() ==
+                                    QueryDescriptionType::Projection &&
                                 entry_count == results_->entryCount();
   std::vector<bool> non_lazy_cols;
   if (use_columnar_converter) {
