@@ -206,7 +206,7 @@ void TargetExprCodegen::codegen(
             llvm::PointerType::get(get_int_type(64, LL_CONTEXT), 0));
         if (gpu_smem_context.isSharedMemoryUsed()) {
           acc_i64 = LL_BUILDER.CreatePointerCast(
-              acc_i64, llvm::Type::getInt32PtrTy(LL_CONTEXT, 3));
+              acc_i64, llvm::Type::getInt64PtrTy(LL_CONTEXT, 3));
         }
         LL_BUILDER.CreateAtomicRMW(llvm::AtomicRMWInst::Add,
                                    acc_i64,
