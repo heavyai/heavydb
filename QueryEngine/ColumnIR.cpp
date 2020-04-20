@@ -542,7 +542,7 @@ const Analyzer::Expr* remove_cast_to_int(const Analyzer::Expr* expr) {
 
 std::shared_ptr<const Analyzer::Expr> CodeGenerator::hashJoinLhs(
     const Analyzer::ColumnVar* rhs) const {
-  for (const auto tautological_eq : plan_state_->join_info_.equi_join_tautologies_) {
+  for (const auto& tautological_eq : plan_state_->join_info_.equi_join_tautologies_) {
     CHECK(IS_EQUIVALENCE(tautological_eq->get_optype()));
     if (dynamic_cast<const Analyzer::ExpressionTuple*>(
             tautological_eq->get_left_operand())) {

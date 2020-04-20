@@ -2335,7 +2335,7 @@ class RelAlgDispatcher {
     if (node.HasMember("inputs")) {
       const auto str_input_ids = strings_from_json_array(field(node, "inputs"));
       RelAlgInputs ra_inputs;
-      for (const auto str_id : str_input_ids) {
+      for (const auto& str_id : str_input_ids) {
         ra_inputs.push_back(nodes_[std::stoi(str_id)]);
       }
       return ra_inputs;

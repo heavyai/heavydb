@@ -270,7 +270,7 @@ void Executor::ExecutionDispatch::runImpl(
   }
   if (device_results) {
     std::list<std::shared_ptr<Chunk_NS::Chunk>> chunks_to_hold;
-    for (const auto chunk : chunks) {
+    for (const auto& chunk : chunks) {
       if (need_to_hold_chunk(chunk.get(), ra_exe_unit_)) {
         chunks_to_hold.push_back(chunk);
       }

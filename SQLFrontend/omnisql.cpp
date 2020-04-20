@@ -172,16 +172,16 @@ void detect_table(char* file_name, TCopyParams& copy_params, ClientContext& cont
     context.client.detect_column_types(_return, context.session, file_name, copy_params);
     // print result only for verifying detect_column_types api
     // as this cmd seems never planned for public use
-    for (const auto tct : _return.row_set.row_desc) {
+    for (const auto& tct : _return.row_set.row_desc) {
       printf("%20.20s ", tct.col_name.c_str());
     }
     printf("\n");
-    for (const auto tct : _return.row_set.row_desc) {
+    for (const auto& tct : _return.row_set.row_desc) {
       printf("%20.20s ", type_info_from_thrift(tct.col_type).get_type_name().c_str());
     }
     printf("\n");
-    for (const auto row : _return.row_set.rows) {
-      for (const auto col : row.cols) {
+    for (const auto& row : _return.row_set.rows) {
+      for (const auto& col : row.cols) {
         printf("%20.20s ", col.val.str_val.c_str());
       }
       printf("\n");

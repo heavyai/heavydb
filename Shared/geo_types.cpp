@@ -530,7 +530,7 @@ bool GeoTypesFactory::getGeoColumns(const std::vector<std::string>* wkt_column,
                                     std::vector<std::vector<int>>& poly_rings_column,
                                     const bool promote_poly_to_mpoly) {
   try {
-    for (const auto wkt : *wkt_column) {
+    for (const auto& wkt : *wkt_column) {
       std::vector<double> coords;
       std::vector<double> bounds;
       std::vector<int> ring_sizes;

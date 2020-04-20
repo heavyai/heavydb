@@ -2785,7 +2785,7 @@ bool RelAlgExecutor::isRowidLookup(const WorkUnit& work_unit) {
     return false;
   }
   const int table_id = table_desc.getTableId();
-  for (const auto simple_qual : ra_exe_unit.simple_quals) {
+  for (const auto& simple_qual : ra_exe_unit.simple_quals) {
     const auto comp_expr =
         std::dynamic_pointer_cast<const Analyzer::BinOper>(simple_qual);
     if (!comp_expr || comp_expr->get_optype() != kEQ) {
@@ -3395,7 +3395,7 @@ JoinQualsPerNestingLevel RelAlgExecutor::translateLeftDeepJoinFilter(
       result[rte_idx - 1].type = JoinType::LEFT;
       continue;
     }
-    for (const auto qual : join_condition_quals) {
+    for (const auto& qual : join_condition_quals) {
       if (visited_quals.count(qual)) {
         continue;
       }

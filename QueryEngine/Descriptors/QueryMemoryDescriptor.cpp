@@ -131,7 +131,7 @@ int8_t pick_baseline_key_width(const RelAlgExecutionUnit& ra_exe_unit,
                                const std::vector<InputTableInfo>& query_infos,
                                const Executor* executor) {
   int8_t compact_width{4};
-  for (const auto groupby_expr : ra_exe_unit.groupby_exprs) {
+  for (const auto& groupby_expr : ra_exe_unit.groupby_exprs) {
     const auto expr_range = getExpressionRange(groupby_expr.get(), query_infos, executor);
     compact_width = std::max(compact_width,
                              pick_baseline_key_component_width(
@@ -645,7 +645,7 @@ int8_t QueryMemoryDescriptor::pick_target_compact_width(
   int8_t compact_width{0};
   auto col_it = ra_exe_unit.input_col_descs.begin();
   int unnest_array_col_id{std::numeric_limits<int>::min()};
-  for (const auto groupby_expr : ra_exe_unit.groupby_exprs) {
+  for (const auto& groupby_expr : ra_exe_unit.groupby_exprs) {
     const auto uoper = dynamic_cast<Analyzer::UOper*>(groupby_expr.get());
     if (uoper && uoper->get_optype() == kUNNEST) {
       const auto& arg_ti = uoper->get_operand()->get_type_info();

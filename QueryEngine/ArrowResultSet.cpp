@@ -238,7 +238,7 @@ void ArrowResultSet::resultSetArrowLoopback() {
 
   // add the dictionaries from the serialized output to the newly created memo
   const auto& serialized_id_to_dict = schema_memo.id_to_dictionary();
-  for (const auto itr : serialized_id_to_dict) {
+  for (const auto& itr : serialized_id_to_dict) {
     const auto& id = itr.first;
     const auto& dict = itr.second;
     CHECK(!dictionary_memo_.HasDictionary(id));

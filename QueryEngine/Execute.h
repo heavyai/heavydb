@@ -217,7 +217,7 @@ inline const ColumnarResults* rows_to_columnar_results(
 inline std::vector<Analyzer::Expr*> get_exprs_not_owned(
     const std::vector<std::shared_ptr<Analyzer::Expr>>& exprs) {
   std::vector<Analyzer::Expr*> exprs_not_owned;
-  for (const auto expr : exprs) {
+  for (const auto& expr : exprs) {
     exprs_not_owned.push_back(expr.get());
   }
   return exprs_not_owned;

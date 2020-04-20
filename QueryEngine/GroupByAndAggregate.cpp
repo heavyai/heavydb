@@ -130,7 +130,7 @@ ColRangeInfo GroupByAndAggregate::getColRangeInfo() {
     try {
       checked_int64_t cardinality{1};
       bool has_nulls{false};
-      for (const auto groupby_expr : ra_exe_unit_.groupby_exprs) {
+      for (const auto& groupby_expr : ra_exe_unit_.groupby_exprs) {
         auto col_range_info = getExprRangeInfo(groupby_expr.get());
         if (col_range_info.hash_type_ != QueryDescriptionType::GroupByPerfectHash) {
           // going through baseline hash if a non-integer type is encountered
@@ -253,7 +253,7 @@ GroupByAndAggregate::GroupByAndAggregate(
     , query_infos_(query_infos)
     , row_set_mem_owner_(row_set_mem_owner)
     , device_type_(device_type) {
-  for (const auto groupby_expr : ra_exe_unit_.groupby_exprs) {
+  for (const auto& groupby_expr : ra_exe_unit_.groupby_exprs) {
     if (!groupby_expr) {
       continue;
     }
@@ -510,7 +510,7 @@ void GroupByAndAggregate::addTransientStringLiterals(
     const RelAlgExecutionUnit& ra_exe_unit,
     Executor* executor,
     std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner) {
-  for (const auto group_expr : ra_exe_unit.groupby_exprs) {
+  for (const auto& group_expr : ra_exe_unit.groupby_exprs) {
     add_transient_string_literals_for_expression(
         group_expr.get(), executor, row_set_mem_owner);
   }
@@ -795,7 +795,7 @@ bool GroupByAndAggregate::gpuCanHandleOrderEntries(
   if (order_entries.size() > 1) {  // TODO(alex): lift this restriction
     return false;
   }
-  for (const auto order_entry : order_entries) {
+  for (const auto& order_entry : order_entries) {
     CHECK_GE(order_entry.tle_no, 1);
     CHECK_LE(static_cast<size_t>(order_entry.tle_no), ra_exe_unit_.target_exprs.size());
     const auto target_expr = ra_exe_unit_.target_exprs[order_entry.tle_no - 1];
@@ -1146,7 +1146,7 @@ std::tuple<llvm::Value*, llvm::Value*> GroupByAndAggregate::codegenGroupBy(
 
   int32_t subkey_idx = 0;
   CHECK(query_mem_desc.getGroupbyColCount() == ra_exe_unit_.groupby_exprs.size());
-  for (const auto group_expr : ra_exe_unit_.groupby_exprs) {
+  for (const auto& group_expr : ra_exe_unit_.groupby_exprs) {
     const auto col_range_info = getExprRangeInfo(group_expr.get());
     const auto translated_null_value = static_cast<int64_t>(
         query_mem_desc.isSingleColumnGroupByWithPerfectHash()
@@ -1360,13 +1360,13 @@ llvm::Function* GroupByAndAggregate::codegenPerfectHashFunction() {
   llvm::IRBuilder<> key_hash_func_builder(bb);
   llvm::Value* hash_lv{llvm::ConstantInt::get(get_int_type(64, LL_CONTEXT), 0)};
   std::vector<int64_t> cardinalities;
-  for (const auto groupby_expr : ra_exe_unit_.groupby_exprs) {
+  for (const auto& groupby_expr : ra_exe_unit_.groupby_exprs) {
     auto col_range_info = getExprRangeInfo(groupby_expr.get());
     CHECK(col_range_info.hash_type_ == QueryDescriptionType::GroupByPerfectHash);
     cardinalities.push_back(getBucketedCardinality(col_range_info));
   }
   size_t dim_idx = 0;
-  for (const auto groupby_expr : ra_exe_unit_.groupby_exprs) {
+  for (const auto& groupby_expr : ra_exe_unit_.groupby_exprs) {
     auto key_comp_lv = key_hash_func_builder.CreateLoad(
         key_hash_func_builder.CreateGEP(key_buff_lv, LL_INT(dim_idx)));
     auto col_range_info = getExprRangeInfo(groupby_expr.get());
@@ -1609,7 +1609,7 @@ void GroupByAndAggregate::codegenEstimator(
   auto estimator_key_lv = LL_BUILDER.CreateAlloca(llvm::Type::getInt64Ty(LL_CONTEXT),
                                                   estimator_comp_count_lv);
   int32_t subkey_idx = 0;
-  for (const auto estimator_arg_comp : estimator_arg) {
+  for (const auto& estimator_arg_comp : estimator_arg) {
     const auto estimator_arg_comp_lvs =
         executor_->groupByColumnCodegen(estimator_arg_comp.get(),
                                         query_mem_desc.getEffectiveKeyWidth(),

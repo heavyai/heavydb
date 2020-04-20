@@ -2552,7 +2552,7 @@ void compare_user_lists(const std::vector<std::string>& expected,
                         const std::list<Catalog_Namespace::UserMetadata>& actual) {
   ASSERT_EQ(expected.size(), actual.size());
   size_t i = 0;
-  for (const auto user : actual) {
+  for (const auto& user : actual) {
     ASSERT_EQ(expected[i++], user.userName);
   }
 }
