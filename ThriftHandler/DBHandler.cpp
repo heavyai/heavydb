@@ -5089,22 +5089,6 @@ void DBHandler::sql_execute_impl(TQueryResult& _return,
         convert_explain(_return, ResultSet(query_ra), true);
         return;
       }
-      if (explain_info.justCalciteExplain()) {
-        // If we reach here, the filter push down candidates has been selected and
-        // proper output result has been already created.
-        return;
-      }
-      if (explain_info.justCalciteExplain()) {
-        // return the ra as the result:
-        // If we reach here, the 'filter_push_down_request' turned out to be empty,
-        // i.e., no filter push down so we continue with the initial (unchanged) query's
-        // calcite explanation.
-        CHECK(!locks.empty());
-        query_ra = parse_to_ra(query_state_proxy, query_str, {}, false, mapd_parameters_)
-                       .first.plan_result;
-        convert_explain(_return, ResultSet(query_ra), true);
-        return;
-      }
       return;
     } else if (pw.is_optimize || pw.is_validate) {
       // Get the Stmt object
