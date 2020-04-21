@@ -65,7 +65,7 @@
             
             
               <div class="version">
-                5.3.0dev 48662e8
+                5.3.0dev 38e8bb6
               </div>
             
           
@@ -1433,7 +1433,6 @@ make -j <span class="m">4</span>
 <ul class="simple">
 <li><p><code class="docutils literal notranslate"><span class="pre">-DCMAKE_BUILD_TYPE=release</span></code> - Build type and compiler options to use.</p></li>
 <li><p>Options are <code class="docutils literal notranslate"><span class="pre">Debug</span></code>, <code class="docutils literal notranslate"><span class="pre">Release</span></code>, <code class="docutils literal notranslate"><span class="pre">RelWithDebInfo</span></code>, <code class="docutils literal notranslate"><span class="pre">MinSizeRel</span></code>, and unset.</p></li>
-<li><p><code class="docutils literal notranslate"><span class="pre">-DENABLE_ASAN=off</span></code> - Enable address sanitizer. Default is <code class="docutils literal notranslate"><span class="pre">off</span></code>.</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">-DENABLE_AWS_S3=on</span></code> - Enable AWS S3 support, if available. Default is <code class="docutils literal notranslate"><span class="pre">on</span></code>.</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">-DENABLE_CALCITE_DELETE_PATH=on</span></code> - Enable Calcite Delete Path. Default is <code class="docutils literal notranslate"><span class="pre">on</span></code>.</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">-DENABLE_CALCITE_UPDATE_PATH=on</span></code> - Enable Calcite Update Path. Default is <code class="docutils literal notranslate"><span class="pre">on</span></code>.</p></li>
@@ -1446,7 +1445,9 @@ make -j <span class="m">4</span>
 <li><p><code class="docutils literal notranslate"><span class="pre">-DENABLE_PROFILER=off</span></code> - Enable google perftools. Default is <code class="docutils literal notranslate"><span class="pre">off</span></code>.</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">-DENABLE_STANDALONE_CALCITE=off</span></code> - Require standalone Calcite server. Default is <code class="docutils literal notranslate"><span class="pre">off</span></code>.</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">-DENABLE_TESTS=on</span></code> - Build unit tests. Default is <code class="docutils literal notranslate"><span class="pre">on</span></code>.</p></li>
-<li><p><code class="docutils literal notranslate"><span class="pre">-DENABLE_TSAN=off</span></code> - Enable thread sanitizer. Default is <code class="docutils literal notranslate"><span class="pre">off</span></code>.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">-DENABLE_ASAN=off</span></code> - Enable AddressSanitizer. Default is <code class="docutils literal notranslate"><span class="pre">off</span></code>.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">-DENABLE_TSAN=off</span></code> - Enable ThreadSanitizer. Default is <code class="docutils literal notranslate"><span class="pre">off</span></code>.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">-DENABLE_UBSAN=off</span></code> - Enable UndefinedBehaviorSanitizer. Default is <code class="docutils literal notranslate"><span class="pre">off</span></code>.</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">-DENABLE_CODE_COVERAGE=off</span></code> - Enable code coverage symbols (clang only). Default is <code class="docutils literal notranslate"><span class="pre">off</span></code>.</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">-DENALBE_JAVA_REMOTE_DEBUG=on</span></code> - Enable Java Remote Debug. Default is <code class="docutils literal notranslate"><span class="pre">off</span></code>.</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">-DMAPD_DOCS_DOWNLOAD=on</span></code> - Download the latest master build of the documentation / <code class="docutils literal notranslate"><span class="pre">docs.mapd.com</span></code>. Default is <code class="docutils literal notranslate"><span class="pre">off</span></code>. <strong>Note:</strong> this is a &gt;50MB download.</p></li>
