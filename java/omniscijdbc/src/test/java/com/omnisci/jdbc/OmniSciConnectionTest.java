@@ -3,8 +3,12 @@ package com.omnisci.jdbc;
 import static org.junit.Assert.*;
 
 import org.apache.thrift.transport.TTransportException;
+import org.junit.BeforeClass;
 import org.junit.Test;
 
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.InputStream;
 import java.sql.*;
 import java.sql.SQLException;
 import java.util.Properties;
@@ -16,9 +20,19 @@ public class OmniSciConnectionTest {
   static Properties PROPERTIES = new Property_loader("connection_test.properties");
   static final String user = PROPERTIES.getProperty("default_super_user");
   static final String password = PROPERTIES.getProperty("default_user_password");
-
+  static Properties base_properties;
   /* Test the basic connection and methods functionality */
-
+  @BeforeClass
+  public static void setUpBeforeClass() throws Exception {
+    String fileName = System.getProperty("propertiesFileName");
+    base_properties = new Properties();
+    if (fileName == null || fileName.equals("")) {
+      return;
+    }
+    File initialFile = new File(fileName);
+    InputStream inputStream = new FileInputStream(initialFile);
+    base_properties.load(inputStream);
+  }
   @Test
   public void tst1_binary_unencrypted() {
     try {
@@ -34,22 +48,60 @@ public class OmniSciConnectionTest {
       fail(err);
     }
   }
-
   @Test
-  public void tst1a_binary_encrypted_supplied_truststore() {
+  public void tst2_http_unencrypted() {
     try {
-      String url = PROPERTIES.getProperty("binary_connection_url") + ":"
-              + PROPERTIES.getProperty("default_db") + ":binary_tls";
-      String trust_store = PROPERTIES.getProperty("server_trust_store");
-      ClassLoader cl = getClass().getClassLoader();
-      trust_store = cl.getResource(trust_store).getPath();
+      String url = PROPERTIES.getProperty("http_connection_url") + ":"
+              + PROPERTIES.getProperty("default_db") + ":http";
+      Connection conn = DriverManager.getConnection(url, user, password);
+      assertNotEquals(null, conn);
+      conn.close();
+      boolean closed = conn.isClosed();
+      assertEquals(true, closed);
+    } catch (SQLException sq) {
+      String err = "Connection test failed " + sq.toString();
+      fail(err);
+    }
+  }
+  @Test
+  public void tst3_connect_fail() {
+    try {
+      String url = PROPERTIES.getProperty("failed_connection_url") + ":"
+              + PROPERTIES.getProperty("default_db");
       Properties pt = new Properties();
       pt.setProperty("user", user);
       pt.setProperty("password", password);
-      pt.setProperty("server_trust_store", trust_store);
-      pt.setProperty("server_trust_store_pwd",
-              PROPERTIES.getProperty("server_trust_store_password"));
       Connection conn = DriverManager.getConnection(url, pt);
+    } catch (SQLException sq) {
+      assertEquals(sq.getMessage(),
+              "No suitable driver found for jdbc:NOT_omnisci:localhost:6274:omnisci");
+      return;
+    }
+    String err = "Connection should have thrown";
+    fail(err);
+  }
+
+  @Test
+  public void tst4_connect_url_override() {
+    try {
+      String url = PROPERTIES.getProperty("default_mapd_connection_url") + ":"
+              + PROPERTIES.getProperty("default_db");
+      Properties pt = new Properties();
+      pt.setProperty("user", user);
+      pt.setProperty("password", password);
+      pt.setProperty("db_name", "SomeOtherDB");
+      // Shouldn't fail (url over ride properties.
+      Connection conn = DriverManager.getConnection(url, pt);
+    } catch (SQLException sq) {
+      fail(sq.getMessage());
+    }
+  }
+
+  @Test
+  public void tst5_properties_connection() {
+    try {
+      String url = "jdbc:omnisci:" + base_properties.getProperty("host_name");
+      Connection conn = DriverManager.getConnection(url, base_properties);
       assertNotEquals(null, conn);
       conn.close();
       boolean closed = conn.isClosed();
@@ -154,21 +206,6 @@ public class OmniSciConnectionTest {
     } catch (SQLException sq) {
       String err = "Connection test failed " + sq.toString();
       assertTrue(err.contains("Invalid credentials"));
-    }
-  }
-  @Test
-  public void tst2_http_unencrypted() {
-    try {
-      String url = PROPERTIES.getProperty("http_connection_url") + ":"
-              + PROPERTIES.getProperty("default_db") + ":http";
-      Connection conn = DriverManager.getConnection(url, user, password);
-      assertNotEquals(null, conn);
-      conn.close();
-      boolean closed = conn.isClosed();
-      assertEquals(true, closed);
-    } catch (SQLException sq) {
-      String err = "Connection test failed " + sq.toString();
-      fail(err);
     }
   }
 
@@ -305,71 +342,6 @@ public class OmniSciConnectionTest {
     } catch (SQLException sq) {
       String err = "Connection test failed " + sq.toString();
       fail(err);
-    }
-  }
-
-  @Test
-  public void tst5_connect() {
-    try {
-      String url = PROPERTIES.getProperty("failed_connection_url") + ":"
-              + PROPERTIES.getProperty("default_db");
-      Properties pt = new Properties();
-      pt.setProperty("user", user);
-      pt.setProperty("password", password);
-      Connection conn = DriverManager.getConnection(url, pt);
-    } catch (SQLException sq) {
-      assertEquals(sq.getMessage(),
-              "No suitable driver found for jdbc:NOT_omnisci:localhost:6274:omnisci");
-      return;
-    }
-    String err = "Connection should have thrown";
-    fail(err);
-  }
-
-  @Test
-  public void tst6_connect() {
-    try {
-      String url = PROPERTIES.getProperty("binary_connection_url") + ":"
-              + PROPERTIES.getProperty("default_db");
-      Properties pt = new Properties();
-      pt.setProperty("user", user);
-      pt.setProperty("password", password);
-      pt.setProperty("db_name", "omnisci");
-      Connection conn = DriverManager.getConnection(url, pt);
-    } catch (SQLException sq) {
-      fail(sq.getMessage());
-    }
-  }
-
-  @Test
-  public void tst7_connect() {
-    try {
-      String url = PROPERTIES.getProperty("binary_connection_url") + ":"
-              + PROPERTIES.getProperty("default_db");
-      Properties pt = new Properties();
-      pt.setProperty("user", user);
-      pt.setProperty("password", password);
-      pt.setProperty("db_name", "SomeOtherDB");
-      // Shouldn't fail (url over ride properties.
-      Connection conn = DriverManager.getConnection(url, pt);
-    } catch (SQLException sq) {
-      fail(sq.getMessage());
-    }
-  }
-
-  @Test
-  public void tst8_connect() {
-    try {
-      String url = PROPERTIES.getProperty("default_mapd_connection_url") + ":"
-              + PROPERTIES.getProperty("default_db");
-      Properties pt = new Properties();
-      pt.setProperty("user", user);
-      pt.setProperty("password", password);
-      pt.setProperty("db_name", "SomeOtherDB");
-      // Shouldn't fail (url over ride properties.
-      Connection conn = DriverManager.getConnection(url, pt);
-    } catch (SQLException sq) {
-      fail(sq.getMessage());
     }
   }
 }
