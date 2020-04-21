@@ -23,8 +23,8 @@
 #include <Shared/DatumFetchers.h>
 
 #include <tbb/parallel_for.h>
-#include <tbb/spin_mutex.h>
-#include <mutex>
+#include <tbb/parallel_reduce.h>
+#include <tuple>
 
 template <typename T>
 T none_encoded_null_value() {
@@ -121,30 +121,31 @@ class NoneEncoder : public Encoder {
   }
 
   void updateStats(const int8_t* const dst, const size_t numElements) override {
-    const T* unencodedData = reinterpret_cast<const T*>(dst);
-    tbb::spin_mutex sync;
-    tbb::parallel_for(tbb::blocked_range(0UL, numElements), [&](const auto& range) {
-      for (size_t i = range.begin(); i < range.end(); ++i) {
-        T data = unencodedData[i];
-        if (data != none_encoded_null_value<T>()) {
-          decimal_overflow_validator_.validate(data);
-          if (data < dataMin) {
-            std::lock_guard lock(sync);
-            if (data < dataMin) {
-              dataMin = data;
+    const T* data = reinterpret_cast<const T*>(dst);
+
+    std::tie(dataMin, dataMax, has_nulls) = tbb::parallel_reduce(
+        tbb::blocked_range(0UL, numElements),
+        std::tuple(dataMin, dataMax, has_nulls),
+        [&](const auto& range, auto init) {
+          auto [min, max, nulls] = init;
+          for (size_t i = range.begin(); i < range.end(); i++) {
+            if (data[i] != none_encoded_null_value<T>()) {
+              decimal_overflow_validator_.validate(data[i]);
+              min = std::min(min, data[i]);
+              max = std::max(max, data[i]);
+            } else {
+              nulls = true;
             }
           }
-          if (data > dataMax) {
-            std::lock_guard lock(sync);
-            if (data > dataMax) {
-              dataMax = data;
-            }
-          }
-        } else {
-          has_nulls = true;
-        }
-      }
-    });
+          return std::tuple(min, max, nulls);
+        },
+        [&](auto lhs, auto rhs) {
+          const auto [lhs_min, lhs_max, lhs_nulls] = lhs;
+          const auto [rhs_min, rhs_max, rhs_nulls] = rhs;
+          return std::tuple(std::min(lhs_min, rhs_min),
+                            std::max(lhs_max, rhs_max),
+                            lhs_nulls || rhs_nulls);
+        });
   }
 
   // Only called from the executor for synthesized meta-information.

@@ -68,6 +68,15 @@ void check_query(const std::string& query, const std::vector<T>& expects) {
   }
 }
 
+#define FP_CHECK_EQ(val1, val2, type)               \
+  if (typeid(type) == typeid(double)) {             \
+    EXPECT_DOUBLE_EQ(v<type>(val1), v<type>(val1)); \
+  } else if (typeid(T) == typeid(float)) {          \
+    EXPECT_FLOAT_EQ(v<type>(val1), v<type>(val1));  \
+  } else {                                          \
+    CHECK_EQ(v<type>(val1), v<type>(val1));         \
+  }
+
 template <typename T>
 void check_table(const std::string& query, const std::vector<std::vector<T>>& expects) {
   auto rows = QR::get()->runSQL(query, ExecutorDeviceType::CPU, false);
@@ -76,13 +85,22 @@ void check_table(const std::string& query, const std::vector<std::vector<T>>& ex
   for (auto exp_row : expects) {
     auto crt_row = rows->getNextRow(true, true);
     for (size_t val_idx = 0; val_idx < exp_row.size(); ++val_idx) {
-      if (typeid(T) == typeid(double)) {
-        EXPECT_DOUBLE_EQ(exp_row[val_idx], v<T>(crt_row[val_idx]));
-      } else if (typeid(T) == typeid(float)) {
-        EXPECT_FLOAT_EQ(exp_row[val_idx], v<T>(crt_row[val_idx]));
-      } else {
-        CHECK_EQ(exp_row[val_idx], v<T>(crt_row[val_idx]));
-      }
+      FP_CHECK_EQ(exp_row[val_idx], crt_row[val_idx], T);
+    }
+  }
+}
+
+template <typename T>
+void check_tables(const std::string& query, const std::string& query_expects) {
+  auto rows = QR::get()->runSQL(query, ExecutorDeviceType::CPU, false);
+  auto rows_expects = QR::get()->runSQL(query_expects, ExecutorDeviceType::CPU, false);
+  CHECK_EQ(rows_expects->rowCount(), rows->rowCount());
+  CHECK_EQ(rows_expects->colCount(), rows->colCount());
+  for (size_t row_idx = 0; row_idx < rows_expects->rowCount(); ++row_idx) {
+    auto row = rows->getNextRow(true, true);
+    auto row_expect = rows_expects->getNextRow(true, true);
+    for (size_t col_idx = 0; col_idx < rows_expects->colCount(); ++col_idx) {
+      FP_CHECK_EQ(row_expect[col_idx], row[col_idx], T);
     }
   }
 }
@@ -286,15 +304,146 @@ TEST(Unsupported, Syntax) {
                         "trips_with_headers_top1000.csv');"));
 }
 
-TEST(DecimalDataTest, DifferentSizesOfDecimal) {
+const std::string decimal_table_format =
+    "(ID_code TEXT ENCODING NONE,target SMALLINT,var_0 "
+    "DECIMAL(8, 4),var_1 DECIMAL(8, 4),var_2 DECIMAL(8, 4),var_3 DECIMAL(8, 4),var_4 "
+    "DECIMAL(8, 4),var_5 DECIMAL(8, 4),var_6 DECIMAL(8, 4),var_7 DECIMAL(8, 4),var_8 "
+    "DECIMAL(8, 4),var_9 DECIMAL(8, 4),var_10 DECIMAL(8, 4),var_11 DECIMAL(8, "
+    "4),var_12 DECIMAL(8, 4),var_13 DECIMAL(8, 4),var_14 DECIMAL(8, 4),var_15 "
+    "DECIMAL(8, 4),var_16 DECIMAL(8, 4),var_17 DECIMAL(8, 4),var_18 DECIMAL(8, "
+    "4),var_19 DECIMAL(8, 4),var_20 DECIMAL(8, 4),var_21 DECIMAL(8, 4),var_22 "
+    "DECIMAL(8, 4),var_23 DECIMAL(8, 4),var_24 DECIMAL(8, 4),var_25 DECIMAL(8, "
+    "4),var_26 DECIMAL(8, 4),var_27 DECIMAL(8, 4),var_28 DECIMAL(8, 4),var_29 "
+    "DECIMAL(8, 4),var_30 DECIMAL(8, 4),var_31 DECIMAL(8, 4),var_32 DECIMAL(8, "
+    "4),var_33 DECIMAL(8, 4),var_34 DECIMAL(8, 4),var_35 DECIMAL(8, 4),var_36 "
+    "DECIMAL(8, 4),var_37 DECIMAL(8, 4),var_38 DECIMAL(8, 4),var_39 DECIMAL(8, "
+    "4),var_40 DECIMAL(8, 4),var_41 DECIMAL(8, 4),var_42 DECIMAL(8, 4),var_43 "
+    "DECIMAL(8, 4),var_44 DECIMAL(8, 4),var_45 DECIMAL(8, 4),var_46 DECIMAL(8, "
+    "4),var_47 DECIMAL(8, 4),var_48 DECIMAL(8, 4),var_49 DECIMAL(8, 4),var_50 "
+    "DECIMAL(8, 4),var_51 DECIMAL(8, 4),var_52 DECIMAL(8, 4),var_53 DECIMAL(8, "
+    "4),var_54 DECIMAL(8, 4),var_55 DECIMAL(8, 4),var_56 DECIMAL(8, 4),var_57 "
+    "DECIMAL(8, 4),var_58 DECIMAL(8, 4),var_59 DECIMAL(8, 4),var_60 DECIMAL(8, "
+    "4),var_61 DECIMAL(8, 4),var_62 DECIMAL(8, 4),var_63 DECIMAL(8, 4),var_64 "
+    "DECIMAL(8, 4),var_65 DECIMAL(8, 4),var_66 DECIMAL(8, 4),var_67 DECIMAL(8, "
+    "4),var_68 DECIMAL(8, 4),var_69 DECIMAL(8, 4),var_70 DECIMAL(8, 4),var_71 "
+    "DECIMAL(8, 4),var_72 DECIMAL(8, 4),var_73 DECIMAL(8, 4),var_74 DECIMAL(8, "
+    "4),var_75 DECIMAL(8, 4),var_76 DECIMAL(8, 4),var_77 DECIMAL(8, 4),var_78 "
+    "DECIMAL(8, 4),var_79 DECIMAL(8, 4),var_80 DECIMAL(8, 4),var_81 DECIMAL(8, "
+    "4),var_82 DECIMAL(8, 4),var_83 DECIMAL(8, 4),var_84 DECIMAL(8, 4),var_85 "
+    "DECIMAL(8, 4),var_86 DECIMAL(8, 4),var_87 DECIMAL(8, 4),var_88 DECIMAL(8, "
+    "4),var_89 DECIMAL(8, 4),var_90 DECIMAL(8, 4),var_91 DECIMAL(8, 4),var_92 "
+    "DECIMAL(8, 4),var_93 DECIMAL(8, 4),var_94 DECIMAL(8, 4),var_95 DECIMAL(8, "
+    "4),var_96 DECIMAL(8, 4),var_97 DECIMAL(8, 4),var_98 DECIMAL(8, 4),var_99 "
+    "DECIMAL(8, 4),var_100 DECIMAL(8, 4),var_101 DECIMAL(8, 4),var_102 DECIMAL(8, "
+    "4),var_103 DECIMAL(8, 4),var_104 DECIMAL(8, 4),var_105 DECIMAL(8, 4),var_106 "
+    "DECIMAL(8, 4),var_107 DECIMAL(8, 4),var_108 DECIMAL(8, 4),var_109 DECIMAL(8, "
+    "4),var_110 DECIMAL(8, 4),var_111 DECIMAL(8, 4),var_112 DECIMAL(8, 4),var_113 "
+    "DECIMAL(8, 4),var_114 DECIMAL(8, 4),var_115 DECIMAL(8, 4),var_116 DECIMAL(8, "
+    "4),var_117 DECIMAL(8, 4),var_118 DECIMAL(8, 4),var_119 DECIMAL(8, 4),var_120 "
+    "DECIMAL(8, 4),var_121 DECIMAL(8, 4),var_122 DECIMAL(8, 4),var_123 DECIMAL(8, "
+    "4),var_124 DECIMAL(8, 4),var_125 DECIMAL(8, 4),var_126 DECIMAL(8, 4),var_127 "
+    "DECIMAL(8, 4),var_128 DECIMAL(8, 4),var_129 DECIMAL(8, 4),var_130 DECIMAL(8, "
+    "4),var_131 DECIMAL(8, 4),var_132 DECIMAL(8, 4),var_133 DECIMAL(8, 4),var_134 "
+    "DECIMAL(8, 4),var_135 DECIMAL(8, 4),var_136 DECIMAL(8, 4),var_137 DECIMAL(8, "
+    "4),var_138 DECIMAL(8, 4),var_139 DECIMAL(8, 4),var_140 DECIMAL(8, 4),var_141 "
+    "DECIMAL(8, 4),var_142 DECIMAL(8, 4),var_143 DECIMAL(8, 4),var_144 DECIMAL(8, "
+    "4),var_145 DECIMAL(8, 4),var_146 DECIMAL(8, 4),var_147 DECIMAL(8, 4),var_148 "
+    "DECIMAL(8, 4),var_149 DECIMAL(8, 4),var_150 DECIMAL(8, 4),var_151 DECIMAL(8, "
+    "4),var_152 DECIMAL(8, 4),var_153 DECIMAL(8, 4),var_154 DECIMAL(8, 4),var_155 "
+    "DECIMAL(8, 4),var_156 DECIMAL(8, 4),var_157 DECIMAL(8, 4),var_158 DECIMAL(8, "
+    "4),var_159 DECIMAL(8, 4),var_160 DECIMAL(8, 4),var_161 DECIMAL(8, 4),var_162 "
+    "DECIMAL(8, 4),var_163 DECIMAL(8, 4),var_164 DECIMAL(8, 4),var_165 DECIMAL(8, "
+    "4),var_166 DECIMAL(8, 4),var_167 DECIMAL(8, 4),var_168 DECIMAL(8, 4),var_169 "
+    "DECIMAL(8, 4),var_170 DECIMAL(8, 4),var_171 DECIMAL(8, 4),var_172 DECIMAL(8, "
+    "4),var_173 DECIMAL(8, 4),var_174 DECIMAL(8, 4),var_175 DECIMAL(8, 4),var_176 "
+    "DECIMAL(8, 4),var_177 DECIMAL(8, 4),var_178 DECIMAL(8, 4),var_179 DECIMAL(8, "
+    "4),var_180 DECIMAL(8, 4),var_181 DECIMAL(8, 4),var_182 DECIMAL(8, 4),var_183 "
+    "DECIMAL(8, 4),var_184 DECIMAL(8, 4),var_185 DECIMAL(8, 4),var_186 DECIMAL(8, "
+    "4),var_187 DECIMAL(8, 4),var_188 DECIMAL(8, 4),var_189 DECIMAL(8, 4),var_190 "
+    "DECIMAL(8, 4),var_191 DECIMAL(8, 4),var_192 DECIMAL(8, 4),var_193 DECIMAL(8, "
+    "4),var_194 DECIMAL(8, 4),var_195 DECIMAL(8, 4),var_196 DECIMAL(8, 4),var_197 "
+    "DECIMAL(8, 4),var_198 DECIMAL(8, 4),var_199 DECIMAL(8, 4))";
+
+class DecimalTest : public ::testing::Test {
+ protected:
+  void SetUp() override {
+    ASSERT_NO_THROW(run_ddl_statement("drop table if exists decimal_table;"));
+     ASSERT_NO_THROW(run_ddl_statement("drop table if exists decimal_dataframe;"));
+    ASSERT_NO_THROW(
+        run_ddl_statement("CREATE TABLE decimal_table" + decimal_table_format + ";"));
+    ASSERT_NO_THROW(run_ddl_statement("TRUNCATE TABLE decimal_table;"));
+    ASSERT_NO_THROW(run_ddl_statement(
+        "COPY decimal_table FROM '../../Tests/Import/datafiles/santander_top1000.csv';"));
+
+    ASSERT_NO_THROW(run_ddl_statement(
+        "CREATE DATAFRAME decimal_dataframe" + decimal_table_format +
+        " FROM 'CSV:../../Tests/Import/datafiles/santander_top1000.csv'"));
+  }
+
+  void TearDown() override {
+    ASSERT_NO_THROW(run_ddl_statement("drop table if exists decimal_table;"));
+    ASSERT_NO_THROW(run_ddl_statement("drop table if exists decimal_dataframe;"));
+  }
+};
+
+TEST_F(DecimalTest, DifferentSizesOfDecimal) {
   run_ddl_statement(
       "CREATE DATAFRAME fsi_decimal (decimal2 DECIMAL(4,1), decimal4 NUMERIC(9,2), "
       "decimal8 DECIMAL(18,5)) from "
-      "'CSV:../../Tests/Import/datafiles/decimal_data.csv';");
-  check_table<double>("SELECT * FROM fsi_decimal",
+      "'CSV:../../Tests/Import/datafiles/decimal_data.csv' WITH(fragment_size=1);");
+  check_table<double>("SELECT decimal2, decimal4, decimal8 FROM fsi_decimal order by decimal2",
                       {{4, 0, 1.1},
                        {213.4, 2389341.23, 4857364039384.75638},
                        {999.9, 9384612.78, 2947583746581.92748}});
+}
+
+TEST_F(DecimalTest, GoupByDecimal) {
+  check_tables<double>(
+      "SELECT var_101 FROM decimal_dataframe WHERE var_190>=0 GROUP BY var_101 ORDER BY "
+      "var_101;",
+      "SELECT var_101 FROM decimal_table WHERE var_190>=0 GROUP BY var_101 ORDER BY "
+      "var_101;");
+  check_tables<double>(
+      "SELECT var_103, SUM(var_172) AS VAR_SUM FROM decimal_dataframe GROUP BY var_103 "
+      "ORDER BY var_103;",
+      "SELECT var_103, SUM(var_172) AS VAR_SUM FROM decimal_table GROUP BY var_103 ORDER "
+      "BY var_103;");
+
+  check_tables<double>(
+      "SELECT var_1, MAX(var_92) AS VAR_MAX FROM decimal_dataframe GROUP BY var_1 ORDER "
+      "BY var_1;",
+      "SELECT var_1, MAX(var_92) AS VAR_MAX FROM decimal_table GROUP BY var_1 ORDER BY "
+      "var_1;");
+}
+
+TEST_F(DecimalTest, FragmentsTableDecimal) {
+  ASSERT_NO_THROW(run_ddl_statement("CREATE DATAFRAME decimal_dataframe_frag100" +
+                                    decimal_table_format +
+                                    " FROM "
+                                    "'CSV:../../Tests/Import/datafiles/"
+                                    "santander_top1000.csv' WITH (fragment_size=100);"));
+  ASSERT_NO_THROW(run_ddl_statement("CREATE DATAFRAME decimal_dataframe_frag333" +
+                                    decimal_table_format +
+                                    " FROM "
+                                    "'CSV:../../Tests/Import/datafiles/"
+                                    "santander_top1000.csv' WITH (fragment_size=333);"));
+  std::string col_names = "";
+  const size_t n_decimal_cols = 200;
+
+  for (size_t i = 0; i < n_decimal_cols - 1; ++i) {
+    col_names += "var_" + std::to_string(i) + ", ";
+  }
+  col_names += "var_" + std::to_string(n_decimal_cols - 1);
+
+  check_tables<double>(
+      "SELECT " + col_names + " FROM decimal_dataframe ORDER BY var_1;",
+      "SELECT " + col_names + " FROM decimal_table ORDER BY var_1;");
+  check_tables<double>(
+      "SELECT " + col_names + " FROM decimal_dataframe_frag100 ORDER BY var_1;",
+      "SELECT " + col_names + " FROM decimal_table ORDER BY var_1;");
+  check_tables<double>(
+      "SELECT " + col_names + " FROM decimal_dataframe_frag333 ORDER BY var_1;",
+      "SELECT " + col_names + " FROM decimal_table ORDER BY var_1;");
 }
 
 }  // namespace
