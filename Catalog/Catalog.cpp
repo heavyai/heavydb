@@ -2931,18 +2931,18 @@ void Catalog::createShardedTable(
   cat_write_lock write_lock(this);
 
   /* create logical table */
-  TableDescriptor tdl(td);
-  createTable(tdl, cols, shared_dict_defs, true);  // create logical table
-  int32_t logical_tb_id = tdl.tableId;
+  TableDescriptor* tdl = &td;
+  createTable(*tdl, cols, shared_dict_defs, true);  // create logical table
+  int32_t logical_tb_id = tdl->tableId;
 
   /* create physical tables and link them to the logical table */
   std::vector<int32_t> physicalTables;
   for (int32_t i = 1; i <= td.nShards; i++) {
-    TableDescriptor tdp(td);
-    tdp.tableName = generatePhysicalTableName(tdp.tableName, i);
-    tdp.shard = i - 1;
-    createTable(tdp, cols, shared_dict_defs, false);  // create physical table
-    int32_t physical_tb_id = tdp.tableId;
+    TableDescriptor* tdp = &td;
+    tdp->tableName = generatePhysicalTableName(tdp->tableName, i);
+    tdp->shard = i - 1;
+    createTable(*tdp, cols, shared_dict_defs, false);  // create physical table
+    int32_t physical_tb_id = tdp->tableId;
 
     /* add physical table to the vector of physical tables */
     physicalTables.push_back(physical_tb_id);

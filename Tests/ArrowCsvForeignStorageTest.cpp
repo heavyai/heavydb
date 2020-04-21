@@ -368,7 +368,7 @@ class DecimalTest : public ::testing::Test {
  protected:
   void SetUp() override {
     ASSERT_NO_THROW(run_ddl_statement("drop table if exists decimal_table;"));
-     ASSERT_NO_THROW(run_ddl_statement("drop table if exists decimal_dataframe;"));
+    ASSERT_NO_THROW(run_ddl_statement("drop table if exists decimal_dataframe;"));
     ASSERT_NO_THROW(
         run_ddl_statement("CREATE TABLE decimal_table" + decimal_table_format + ";"));
     ASSERT_NO_THROW(run_ddl_statement("TRUNCATE TABLE decimal_table;"));
@@ -391,10 +391,11 @@ TEST_F(DecimalTest, DifferentSizesOfDecimal) {
       "CREATE DATAFRAME fsi_decimal (decimal2 DECIMAL(4,1), decimal4 NUMERIC(9,2), "
       "decimal8 DECIMAL(18,5)) from "
       "'CSV:../../Tests/Import/datafiles/decimal_data.csv' WITH(fragment_size=1);");
-  check_table<double>("SELECT decimal2, decimal4, decimal8 FROM fsi_decimal order by decimal2",
-                      {{4, 0, 1.1},
-                       {213.4, 2389341.23, 4857364039384.75638},
-                       {999.9, 9384612.78, 2947583746581.92748}});
+  check_table<double>(
+      "SELECT decimal2, decimal4, decimal8 FROM fsi_decimal order by decimal2",
+      {{4, 0, 1.1},
+       {213.4, 2389341.23, 4857364039384.75638},
+       {999.9, 9384612.78, 2947583746581.92748}});
 }
 
 TEST_F(DecimalTest, GoupByDecimal) {
@@ -435,15 +436,30 @@ TEST_F(DecimalTest, FragmentsTableDecimal) {
   }
   col_names += "var_" + std::to_string(n_decimal_cols - 1);
 
-  check_tables<double>(
-      "SELECT " + col_names + " FROM decimal_dataframe ORDER BY var_1;",
-      "SELECT " + col_names + " FROM decimal_table ORDER BY var_1;");
+  check_tables<double>("SELECT " + col_names + " FROM decimal_dataframe ORDER BY var_1;",
+                       "SELECT " + col_names + " FROM decimal_table ORDER BY var_1;");
   check_tables<double>(
       "SELECT " + col_names + " FROM decimal_dataframe_frag100 ORDER BY var_1;",
       "SELECT " + col_names + " FROM decimal_table ORDER BY var_1;");
   check_tables<double>(
       "SELECT " + col_names + " FROM decimal_dataframe_frag333 ORDER BY var_1;",
       "SELECT " + col_names + " FROM decimal_table ORDER BY var_1;");
+}
+
+TEST(DataframeOptionsTest, SkipRowsTest) {
+  ASSERT_NO_THROW(
+      run_ddl_statement("CREATE DATAFRAME opt_dataframe (int4 INTEGER, int8 BIGINT) FROM "
+                        "'CSV:../../Tests/Import/datafiles/dataframe_options.csv' with "
+                        "(DELIMITER='|', SKIP_ROWS=2);"));
+  ASSERT_EQ(4, v<int64_t>(run_simple_agg("SELECT sum(int4) FROM opt_dataframe;")));
+}
+
+TEST(DataframeOptionsTest, HeaderlessTest) {
+  ASSERT_NO_THROW(run_ddl_statement(
+      "CREATE DATAFRAME opt_dataframe2 (int4 INTEGER, int8 BIGINT) FROM "
+      "'CSV:../../Tests/Import/datafiles/dataframe_options.csv' with (DELIMITER='|', "
+      "SKIP_ROWS=3, HEADER='false');"));
+  ASSERT_EQ(8, v<int64_t>(run_simple_agg("SELECT sum(int8) FROM opt_dataframe2;")));
 }
 
 }  // namespace
