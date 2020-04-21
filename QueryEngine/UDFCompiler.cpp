@@ -15,6 +15,7 @@
  */
 
 #include "UDFCompiler.h"
+
 #include <clang/AST/AST.h>
 #include <clang/AST/ASTConsumer.h>
 #include <clang/AST/RecursiveASTVisitor.h>
@@ -31,6 +32,7 @@
 #include <boost/process/search_path.hpp>
 #include <iterator>
 #include <memory>
+
 #include "Execute.h"
 #include "Shared/Logger.h"
 
@@ -50,7 +52,7 @@ class FunctionDeclVisitor : public RecursiveASTVisitor<FunctionDeclVisitor> {
                       SourceManager& s_manager,
                       ASTContext& context)
       : ast_file_(ast_file), source_manager_(s_manager), context_(context) {
-    source_manager_.getDiagnostics().setShowColors();
+    source_manager_.getDiagnostics().setShowColors(false);
   }
 
   bool VisitFunctionDecl(FunctionDecl* f) {
@@ -123,7 +125,7 @@ class HandleDeclAction : public ASTFrontendAction {
 
   std::unique_ptr<ASTConsumer> CreateASTConsumer(CompilerInstance& instance,
                                                  StringRef file) override {
-    return llvm::make_unique<DeclASTConsumer>(
+    return std::make_unique<DeclASTConsumer>(
         ast_file_, instance.getSourceManager(), instance.getASTContext());
   }
 
@@ -133,9 +135,17 @@ class HandleDeclAction : public ASTFrontendAction {
 
 class ToolFactory : public FrontendActionFactory {
  public:
+#if LLVM_VERSION_MAJOR >= 10
+  using FrontendActionPtr = std::unique_ptr<clang::FrontendAction>;
+#define CREATE_FRONTEND_ACTION(ast_file_) std::make_unique<HandleDeclAction>(ast_file_)
+#else
+  using FrontendActionPtr = clang::FrontendAction*;
+#define CREATE_FRONTEND_ACTION(ast_file_) new HandleDeclAction(ast_file_)
+#endif
+
   ToolFactory(llvm::raw_fd_ostream& ast_file) : ast_file_(ast_file) {}
 
-  clang::FrontendAction* create() override { return new HandleDeclAction(ast_file_); }
+  FrontendActionPtr create() override { return CREATE_FRONTEND_ACTION(ast_file_); }
 
  private:
   llvm::raw_fd_ostream& ast_file_;
@@ -304,7 +314,7 @@ int UdfCompiler::parseToAst(const char* file_name) {
   llvm::raw_fd_ostream out_file(
       llvm::StringRef(out_name), out_error_info, llvm::sys::fs::F_None);
 
-  auto factory = llvm::make_unique<ToolFactory>(out_file);
+  auto factory = std::make_unique<ToolFactory>(out_file);
   return tool.run(factory.get());
 }
 
