@@ -221,8 +221,7 @@ else()
   add_dependencies(QueryEngine QueryEngineFunctionsTargets)
 endif()
 
-target_link_libraries(
-  QueryEngine
+set(QUERY_ENGINE_LIBS
   Chunk
   Analyzer
   StringDictionary
@@ -230,21 +229,31 @@ target_link_libraries(
   Shared
   sqlite3
   ${Arrow_LIBRARIES}
-  clangFrontend
-  clangSerialization
-  clangDriver
-  clangTooling
-  clangParse
-  clangSema
-  clangAnalysis
-  clangEdit
-  clangAST
-  clangLex
-  clangBasic
-  clangRewrite
-  clangRewriteFrontend
   ${LLVM_LINKER_FLAGS}
 )
+
+if(${LLVM_VERSION_MAJOR} EQUAL 10 AND NOT ${PREFER_STATIC_LIBS})
+  # Arch no longer building Clang with static libs
+  list(APPEND QUERY_ENGINE_LIBS clang-cpp)
+else()
+  list(APPEND QUERY_ENGINE_LIBS 
+    clangFrontend
+    clangSerialization
+    clangDriver
+    clangTooling
+    clangParse
+    clangSema
+    clangAnalysis
+    clangEdit
+    clangAST
+    clangLex
+    clangBasic
+    clangRewrite
+    clangRewriteFrontend
+  )
+endif()
+
+target_link_libraries(QueryEngine ${QUERY_ENGINE_LIBS})
 
 add_custom_command(
     DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/cuda_mapd_rt.o

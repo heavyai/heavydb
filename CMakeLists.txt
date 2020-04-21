@@ -271,12 +271,16 @@ endif()
 set(llvm_config_inc_arg "--includedir")
 set(llvm_config_ld_arg "--ldflags")
 set(llvm_config_lib_arg "--libs")
+set(llvm_config_version_arg "--version")
 execute_process(COMMAND ${llvm_config_cmd} ${llvm_config_inc_arg}
     OUTPUT_VARIABLE LLVM_INC_FLAGS)
 execute_process(COMMAND ${llvm_config_cmd} ${llvm_config_lib_arg}
     OUTPUT_VARIABLE LLVM_LIB_FLAGS)
 execute_process(COMMAND ${llvm_config_cmd} ${llvm_config_ld_arg}
     OUTPUT_VARIABLE LLVM_LD_FLAGS)
+execute_process(COMMAND ${llvm_config_cmd} ${llvm_config_version_arg} 
+    OUTPUT_VARIABLE LLVM_VERSION_STR)
+string(REGEX MATCH "^([0-9]+)" LLVM_VERSION_MAJOR ${LLVM_VERSION_STR})
 if(ENABLE_LLVM_DBG)
   set(llvm_config_obj_arg "--obj-root")
   execute_process(COMMAND ${llvm_config_cmd} ${llvm_config_obj_arg}

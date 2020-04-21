@@ -105,7 +105,7 @@ llvm::Function* create_loop_test_function(llvm::LLVMContext& context,
 }
 
 std::unique_ptr<llvm::Module> create_loop_test_module() {
-  return llvm::make_unique<llvm::Module>("Nested loops JIT", g_global_context);
+  return std::make_unique<llvm::Module>("Nested loops JIT", g_global_context);
 }
 
 std::pair<void*, std::unique_ptr<llvm::ExecutionEngine>> native_codegen(

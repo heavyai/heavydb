@@ -865,7 +865,10 @@ std::string CodeGenerator::generatePTX(const std::string& cuda_llir,
     llvm::legacy::PassManager ptxgen_pm;
     module->setDataLayout(nvptx_target_machine->createDataLayout());
 
-#if LLVM_VERSION_MAJOR >= 7
+#if LLVM_VERSION_MAJOR >= 10
+    nvptx_target_machine->addPassesToEmitFile(
+        ptxgen_pm, formatted_os, nullptr, llvm::CGFT_AssemblyFile);
+#elif LLVM_VERSION_MAJOR >= 7
     nvptx_target_machine->addPassesToEmitFile(
         ptxgen_pm, formatted_os, nullptr, llvm::TargetMachine::CGFT_AssemblyFile);
 #else
