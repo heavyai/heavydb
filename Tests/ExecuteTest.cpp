@@ -2131,6 +2131,26 @@ TEST(Select, OrderBy) {
     c("SELECT o AS k FROM test ORDER BY k ASC NULLS FIRST LIMIT 20;",
       "SELECT o AS k FROM test ORDER BY k ASC LIMIT 20;",
       dt);
+    for (std::string order : {"ASC", "DESC"}) {
+      c("SELECT d, MAX(f) FROM test WHERE f IS NOT NULL GROUP BY d ORDER BY 2 " + order +
+            " LIMIT "
+            "1;",
+        dt);
+      c("SELECT d, AVG(f) FROM test WHERE f IS NOT NULL GROUP BY d ORDER BY 2 " + order +
+            " LIMIT "
+            "1;",
+        dt);
+      c("SELECT d, SUM(f) FROM test WHERE f IS NOT NULL GROUP BY d ORDER BY 2 " + order +
+            " LIMIT "
+            "1;",
+        dt);
+      c("SELECT d, MAX(f) FROM test GROUP BY d ORDER BY 2 " + order + " LIMIT 1;", dt);
+      c("SELECT x, y, MAX(f) FROM test GROUP BY x, y ORDER BY 3 " + order + " LIMIT 1;",
+        dt);
+      c("SELECT x, y, SUM(f) FROM test WHERE f IS NOT NULL GROUP BY x, y ORDER BY 3 " +
+            order + " LIMIT 1;",
+        dt);
+    }
     c("SELECT * FROM ( SELECT x, y FROM test ORDER BY x, y ASC NULLS FIRST LIMIT 10 ) t0 "
       "LIMIT 5;",
       "SELECT * FROM ( SELECT x, y FROM test ORDER BY x, y ASC LIMIT 10 ) t0 LIMIT 5;",
