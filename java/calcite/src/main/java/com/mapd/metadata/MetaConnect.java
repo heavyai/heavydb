@@ -406,6 +406,7 @@ public class MetaConnect {
 
         tct.col_name = colName;
         tct.col_type = tti;
+        tct.is_system = isSystemCol;
 
         if (skip_physical_cols <= 0) skip_physical_cols = get_physical_cols(colType);
         if (is_geometry(colType) || skip_physical_cols-- <= 0) td.addToRow_desc(tct);
@@ -533,6 +534,7 @@ public class MetaConnect {
 
       tct.col_name = colName;
       tct.col_type = tti;
+      tct.is_system = isSystemCol;
 
       if (skip_physical_cols <= 0) skip_physical_cols = get_physical_cols(colType);
       if (is_geometry(colType) || skip_physical_cols-- <= 0) td.addToRow_desc(tct);

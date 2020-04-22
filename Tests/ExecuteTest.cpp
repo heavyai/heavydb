@@ -6980,6 +6980,8 @@ TEST(Select, Subqueries) {
     c("SELECT test.z, SUM(test.y) s FROM test JOIN (SELECT x FROM test_inner) b ON "
       "test.x = b.x GROUP BY test.z ORDER BY s;",
       dt);
+    c("select * from (select distinct * from subquery_test) order by x;", dt);
+    c("select sum(x) from (select distinct * from subquery_test);", dt);
   }
 }
 
@@ -7244,6 +7246,9 @@ TEST(Select, Joins_InnerJoin_TwoTables) {
       "Sum(Cast(t2.sum2 AS FLOAT)) calc FROM (SELECT x, y, Sum(t) sum1 FROM test GROUP "
       "BY 1, 2) t1 INNER JOIN (SELECT y, Sum(x) sum2 FROM test GROUP BY 1) t2 ON "
       "t1.y = t2.y GROUP BY 1, 2, 3, 4;",
+      dt);
+    c("SELECT test.*, test_inner.* from test join test_inner on test.x = test_inner.x "
+      "order by test.z;",
       dt);
 
     const auto watchdog_state = g_enable_watchdog;

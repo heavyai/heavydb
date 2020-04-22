@@ -26,7 +26,9 @@ import org.apache.calcite.sql.type.SqlTypeName;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.HashSet;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.stream.Collectors;
 
 /**
  *
@@ -38,6 +40,7 @@ public class MapDTable implements Table {
   final static Logger MAPDLOGGER = LoggerFactory.getLogger(MapDTable.class);
   private final TTableDetails rowInfo;
   private final long version = VERSION_PROVIDER.incrementAndGet();
+  private final HashSet<String> systemColumnNames;
 
   public long getVersion() {
     return version;
@@ -45,6 +48,10 @@ public class MapDTable implements Table {
 
   public MapDTable(TTableDetails ri) {
     rowInfo = ri;
+    systemColumnNames = rowInfo.row_desc.stream()
+                                .filter(row_desc -> row_desc.is_system)
+                                .map(row_desc -> row_desc.col_name)
+                                .collect(Collectors.toCollection(HashSet::new));
   }
 
   @Override
@@ -150,5 +157,9 @@ public class MapDTable implements Table {
           String string, SqlCall sc, SqlNode sn, CalciteConnectionConfig ccc) {
     throw new UnsupportedOperationException(
             "rolledUpColumnValidInsideAgg Not supported yet.");
+  }
+
+  public boolean isSystemColumn(final String columnName) {
+    return systemColumnNames.contains(columnName);
   }
 }
