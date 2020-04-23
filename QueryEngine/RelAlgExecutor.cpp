@@ -30,7 +30,6 @@
 #include "QueryEngine/RelAlgTranslator.h"
 #include "QueryEngine/RexVisitor.h"
 #include "QueryEngine/TableFunctions/TableFunctionsFactory.h"
-#include "QueryEngine/UsedColumnsVisitor.h"
 #include "QueryEngine/WindowContext.h"
 #include "Shared/TypedDataAccessors.h"
 #include "Shared/measure.h"
@@ -2601,6 +2600,7 @@ ExecutionResult RelAlgExecutor::executeWorkUnit(
       throw std::runtime_error("Window functions support is disabled");
     }
     co.device_type = ExecutorDeviceType::CPU;
+    co.allow_lazy_fetch = false;
     computeWindow(work_unit.exe_unit, co, eo, column_cache, queue_time_ms);
   }
   if (!eo.just_explain && eo.find_push_down_candidates) {

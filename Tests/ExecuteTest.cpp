@@ -16899,6 +16899,14 @@ TEST(Select, WindowFunctionAggregate) {
     "SELECT x, RANK() OVER (PARTITION BY y ORDER BY n ASC) r FROM (SELECT x, y, COUNT(*) "
     "n FROM test_window_func GROUP BY x, y) ORDER BY x ASC, y ASC;",
     dt);
+  c(R"(SELECT x, y, t, SUM(SUM(x)) OVER (PARTITION BY y, t) FROM test_window_func GROUP BY x, y, t ORDER BY x ASC NULLS FIRST, y ASC NULLS FIRST, t ASC NULLS FIRST)",
+    R"(SELECT x, y, t, SUM(SUM(x)) OVER (PARTITION BY y, t) FROM test_window_func GROUP BY x, y, t ORDER BY x ASC, y ASC, t ASC)",
+    dt);
+  c(R"(SELECT x, y, t, SUM(x) * SUM(SUM(x)) OVER (PARTITION BY y, t) FROM test_window_func
+GROUP BY x, y, t ORDER BY x ASC NULLS FIRST, y ASC NULLS FIRST, t ASC NULLS FIRST;)",
+    R"(SELECT x, y, t, SUM(x) * SUM(SUM(x)) OVER (PARTITION BY y, t) FROM test_window_func
+GROUP BY x, y, t ORDER BY x ASC, y ASC, t ASC;)",
+    dt);
 }
 
 TEST(Select, WindowFunctionAggregateNoOrder) {
