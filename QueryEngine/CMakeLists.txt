@@ -229,7 +229,6 @@ set(QUERY_ENGINE_LIBS
   Shared
   sqlite3
   ${Arrow_LIBRARIES}
-  ${LLVM_LINKER_FLAGS}
 )
 
 if(${LLVM_VERSION_MAJOR} EQUAL 10 AND NOT ${PREFER_STATIC_LIBS})
@@ -252,6 +251,8 @@ else()
     clangRewriteFrontend
   )
 endif()
+
+list(APPEND QUERY_ENGINE_LIBS ${LLVM_LINKER_FLAGS})
 
 target_link_libraries(QueryEngine ${QUERY_ENGINE_LIBS})
 
