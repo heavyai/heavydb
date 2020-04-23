@@ -207,6 +207,13 @@ function install_gdal() {
     download_make_install ${HTTP_DEPS}/gdal-${GDAL_VERSION}.tar.gz "" "--without-geos --with-libkml=$PREFIX --with-proj=$PREFIX"
 }
 
+GEOS_VERSION=3.8.1
+
+function install_geos() {
+    download_make_install ${HTTP_DEPS}/geos-${GEOS_VERSION}.tar.bz2 "" "--enable-shared --disable-static"
+
+}
+
 RDKAFKA_VERSION=1.1.0
 
 function install_rdkafka() {

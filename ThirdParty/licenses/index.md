@@ -141,3 +141,5 @@ go-yaml/yaml | [MIT](<https://github.com/go-yaml/yaml/blob/v2/LICENSE.libyaml>) 
 uber-go/atomic | [MIT](<https://github.com/uber-go/atomic/blob/master/LICENSE.txt>) | Distributed consensus |
 uber-go/multierr | [MIT](<https://github.com/uber-go/multierr/blob/master/LICENSE.txt>) | Distributed consensus |
 uber-go/zap | [MIT](<https://github.com/uber-go/zap/blob/master/LICENSE.txt>) | Distributed consensus |
+--- | --- | --- |
+geos | [LGPLv2.1](<https://github.com/libgeos/geos/blob/master/COPYING>) | Geo support, dynamic linked |

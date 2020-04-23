@@ -55,6 +55,7 @@ build_pin_dep minizip 1.2.11
 build_pin_dep libkml-master 1.4.0
 build_pin_dep proj5 5.2.0
 build_pin_dep gdal 2.4.4
+build_pin_dep geos 3.8.1
 
 # Finally, add a few components of llvm to your path PATH.
 # Not adding full llvm/bin to PATH since brew's `clang` breaks CUDA
