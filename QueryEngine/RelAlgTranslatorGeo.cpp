@@ -58,6 +58,10 @@ std::vector<std::shared_ptr<Analyzer::Expr>> RelAlgTranslator::translateGeoColum
     table_id = -source->getId();
 
     CHECK(!expand_geo_col);
+    if (with_bounds || with_render_group) {
+      throw QueryNotSupported(
+          "Geospatial columns not yet supported in intermediate results.");
+    }
 
     CHECK(!in_metainfo.empty());
     CHECK_GE(rte_idx, 0);
