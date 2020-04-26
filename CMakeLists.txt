@@ -728,11 +728,11 @@ if(MAPD_IMMERSE_DOWNLOAD)
   install(DIRECTORY ${source_dir}/ DESTINATION "frontend/" PATTERN .git EXCLUDE PATTERN node_modules EXCLUDE)
   add_custom_command(TARGET frontend COMMAND ${CMAKE_COMMAND} -E copy_directory ${source_dir} frontend)
   list(APPEND ADDITIONAL_MAKE_CLEAN_FILES ${CMAKE_BINARY_DIR}/frontend)
-endif()
 
-## Go web server
-if("${MAPD_EDITION_LOWER}" STREQUAL "ee" AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/Immerse")
-  add_subdirectory(Immerse)
+  ## Go web server
+  if("${MAPD_EDITION_LOWER}" STREQUAL "ee" AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/Immerse")
+    add_subdirectory(Immerse)
+  endif()
 endif()
 
 add_subdirectory(ThirdParty/generate_cert)
