@@ -5179,6 +5179,8 @@ TEST(Select, LogicalValues) {
       EXPECT_EQ(3, v<int64_t>(row[2]));
     }
     EXPECT_ANY_THROW(run_simple_agg("SELECT * FROM (VALUES(1, 'test'));", dt));
+
+    EXPECT_ANY_THROW(run_simple_agg("SELECT (1,2);", dt));
   }
 }
 
