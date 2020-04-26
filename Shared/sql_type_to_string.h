@@ -78,3 +78,7 @@ inline std::string sql_type_to_str(const SQLTypes& type) {
       return "INVALID";
   }
 }
+
+inline std::string bool_to_string(const bool val) {
+  return val ? "True" : "False";
+}

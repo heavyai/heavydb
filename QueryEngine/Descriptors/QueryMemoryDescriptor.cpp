@@ -23,6 +23,8 @@
 #include "../UsedColumnsVisitor.h"
 #include "ColSlotContext.h"
 
+#include "Shared/sql_type_to_string.h"
+
 bool g_enable_smem_group_by{true};
 extern bool g_enable_columnar_output;
 
@@ -1085,14 +1087,6 @@ bool QueryMemoryDescriptor::canOutputColumnar() const {
          countDescriptorsLogicallyEmpty(count_distinct_descriptors_);
 }
 
-namespace {
-
-inline std::string boolToString(const bool val) {
-  return val ? "True" : "False";
-}
-
-}  // namespace
-
 std::string QueryMemoryDescriptor::queryDescTypeToString() const {
   switch (query_desc_type_) {
     case QueryDescriptionType::GroupByPerfectHash:
@@ -1113,22 +1107,22 @@ std::string QueryMemoryDescriptor::queryDescTypeToString() const {
 
 std::string QueryMemoryDescriptor::toString() const {
   auto str = reductionKey();
-  str += "\tAllow Multifrag: " + boolToString(allow_multifrag_) + "\n";
-  str += "\tInterleaved Bins on GPU: " + boolToString(interleaved_bins_on_gpu_) + "\n";
-  str += "\tBlocks Share Memory: " + boolToString(blocksShareMemory()) + "\n";
-  str += "\tThreads Share Memory: " + boolToString(threadsShareMemory()) + "\n";
-  str += "\tUses Fast Group Values: " + boolToString(usesGetGroupValueFast()) + "\n";
+  str += "\tAllow Multifrag: " + bool_to_string(allow_multifrag_) + "\n";
+  str += "\tInterleaved Bins on GPU: " + bool_to_string(interleaved_bins_on_gpu_) + "\n";
+  str += "\tBlocks Share Memory: " + bool_to_string(blocksShareMemory()) + "\n";
+  str += "\tThreads Share Memory: " + bool_to_string(threadsShareMemory()) + "\n";
+  str += "\tUses Fast Group Values: " + bool_to_string(usesGetGroupValueFast()) + "\n";
   str += "\tLazy Init Groups (GPU): " +
-         boolToString(lazyInitGroups(ExecutorDeviceType::GPU)) + "\n";
+         bool_to_string(lazyInitGroups(ExecutorDeviceType::GPU)) + "\n";
   str += "\tEntry Count: " + std::to_string(entry_count_) + "\n";
   str += "\tMin Val (perfect hash only): " + std::to_string(min_val_) + "\n";
   str += "\tMax Val (perfect hash only): " + std::to_string(max_val_) + "\n";
   str += "\tBucket Val (perfect hash only): " + std::to_string(bucket_) + "\n";
-  str += "\tSort on GPU: " + boolToString(sort_on_gpu_) + "\n";
-  str += "\tUse Streaming Top N: " + boolToString(use_streaming_top_n_) + "\n";
-  str += "\tOutput Columnar: " + boolToString(output_columnar_) + "\n";
-  str += "\tRender Output: " + boolToString(render_output_) + "\n";
-  str += "\tUse Baseline Sort: " + boolToString(must_use_baseline_sort_) + "\n";
+  str += "\tSort on GPU: " + bool_to_string(sort_on_gpu_) + "\n";
+  str += "\tUse Streaming Top N: " + bool_to_string(use_streaming_top_n_) + "\n";
+  str += "\tOutput Columnar: " + bool_to_string(output_columnar_) + "\n";
+  str += "\tRender Output: " + bool_to_string(render_output_) + "\n";
+  str += "\tUse Baseline Sort: " + bool_to_string(must_use_baseline_sort_) + "\n";
   return str;
 }
 
@@ -1137,7 +1131,7 @@ std::string QueryMemoryDescriptor::reductionKey() const {
   str += "Query Memory Descriptor State\n";
   str += "\tQuery Type: " + queryDescTypeToString() + "\n";
   str +=
-      "\tKeyless Hash: " + boolToString(keyless_hash_) +
+      "\tKeyless Hash: " + bool_to_string(keyless_hash_) +
       (keyless_hash_ ? ", target index for key: " + std::to_string(getTargetIdxForKey())
                      : "") +
       "\n";

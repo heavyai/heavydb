@@ -51,6 +51,7 @@
 #include "Shared/misc.h"
 #include "Shared/scope.h"
 #include "Shared/shard_key.h"
+#include "Shared/sql_type_to_string.h"
 #include "Shared/threadpool.h"
 
 #include "AggregatedColRange.h"
@@ -1111,6 +1112,107 @@ bool is_trivial_loop_join(const std::vector<InputTableInfo>& query_infos,
 
 namespace {
 
+template <typename T>
+std::vector<std::string> expr_container_to_string(const T& expr_container) {
+  std::vector<std::string> expr_strs;
+  for (const auto& expr : expr_container) {
+    if (!expr) {
+      expr_strs.emplace_back("NULL");
+    } else {
+      expr_strs.emplace_back(expr->toString());
+    }
+  }
+  return expr_strs;
+}
+
+template <>
+std::vector<std::string> expr_container_to_string(
+    const std::list<Analyzer::OrderEntry>& expr_container) {
+  std::vector<std::string> expr_strs;
+  for (const auto& expr : expr_container) {
+    expr_strs.emplace_back(expr.toString());
+  }
+  return expr_strs;
+}
+
+std::string join_type_to_string(const JoinType type) {
+  switch (type) {
+    case JoinType::INNER:
+      return "INNER";
+    case JoinType::LEFT:
+      return "LEFT";
+    case JoinType::INVALID:
+      return "INVALID";
+  }
+  UNREACHABLE();
+  return "";
+}
+
+std::string sort_algorithm_to_string(const SortAlgorithm algorithm) {
+  switch (algorithm) {
+    case SortAlgorithm::Default:
+      return "ResultSet";
+    case SortAlgorithm::SpeculativeTopN:
+      return "Speculative Top N";
+    case SortAlgorithm::StreamingTopN:
+      return "Streaming Top N";
+  }
+  UNREACHABLE();
+  return "";
+}
+
+}  // namespace
+
+std::ostream& operator<<(std::ostream& os, const RelAlgExecutionUnit& ra_exe_unit) {
+  os << "\n\tTable/Col/Levels: ";
+  for (const auto& input_col_desc : ra_exe_unit.input_col_descs) {
+    const auto& scan_desc = input_col_desc->getScanDesc();
+    os << "(" << scan_desc.getTableId() << ", " << input_col_desc->getColId() << ", "
+       << scan_desc.getNestLevel() << ") ";
+  }
+  if (!ra_exe_unit.simple_quals.empty()) {
+    os << "\n\tSimple Quals: "
+       << boost::algorithm::join(expr_container_to_string(ra_exe_unit.simple_quals),
+                                 ", ");
+  }
+  if (!ra_exe_unit.quals.empty()) {
+    os << "\n\tQuals: "
+       << boost::algorithm::join(expr_container_to_string(ra_exe_unit.quals), ", ");
+  }
+  if (!ra_exe_unit.join_quals.empty()) {
+    os << "\n\tJoin Quals: ";
+    for (size_t i = 0; i < ra_exe_unit.join_quals.size(); i++) {
+      const auto& join_condition = ra_exe_unit.join_quals[i];
+      os << "\t\t" << std::to_string(i) << " "
+         << join_type_to_string(join_condition.type);
+      os << boost::algorithm::join(expr_container_to_string(join_condition.quals), ", ");
+    }
+  }
+  if (!ra_exe_unit.groupby_exprs.empty()) {
+    os << "\n\tGroup By: "
+       << boost::algorithm::join(expr_container_to_string(ra_exe_unit.groupby_exprs),
+                                 ", ");
+  }
+  os << "\n\tProjected targets: "
+     << boost::algorithm::join(expr_container_to_string(ra_exe_unit.target_exprs), ", ");
+  os << "\n\tHas Estimator: " << bool_to_string(ra_exe_unit.estimator == nullptr);
+  os << "\n\tSort Info: ";
+  const auto& sort_info = ra_exe_unit.sort_info;
+  os << "\n\t  Order Entries: "
+     << boost::algorithm::join(expr_container_to_string(sort_info.order_entries), ", ");
+  os << "\n\t  Algorithm: " << sort_algorithm_to_string(sort_info.algorithm);
+  os << "\n\t  Limit: " << std::to_string(sort_info.limit);
+  os << "\n\t  Offset: " << std::to_string(sort_info.offset);
+  os << "\n\tScan Limit: " << std::to_string(ra_exe_unit.scan_limit);
+  os << "\n\tBump Allocator: " << bool_to_string(ra_exe_unit.use_bump_allocator);
+  if (ra_exe_unit.union_all) {
+    os << "\n\tUnion: " << std::string(*ra_exe_unit.union_all ? "UNION ALL" : "UNION");
+  }
+  return os;
+}
+
+namespace {
+
 RelAlgExecutionUnit replace_scan_limit(const RelAlgExecutionUnit& ra_exe_unit_in,
                                        const size_t new_scan_limit) {
   return {ra_exe_unit_in.input_descs,
@@ -1143,6 +1245,8 @@ ResultSetPtr Executor::executeWorkUnit(
     RenderInfo* render_info,
     const bool has_cardinality_estimation,
     ColumnCacheMap& column_cache) {
+  VLOG(1) << "Executing work unit:" << ra_exe_unit_in;
+
   try {
     return executeWorkUnitImpl(max_groups_buffer_entry_guess,
                                is_agg,

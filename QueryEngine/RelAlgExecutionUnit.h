@@ -78,6 +78,8 @@ struct RelAlgExecutionUnit {
   std::shared_ptr<const query_state::QueryState> query_state;
 };
 
+std::ostream& operator<<(std::ostream& os, const RelAlgExecutionUnit& ra_exe_unit);
+
 struct TableFunctionExecutionUnit {
   const std::vector<InputDescriptor> input_descs;
   std::list<std::shared_ptr<const InputColDescriptor>> input_col_descs;
