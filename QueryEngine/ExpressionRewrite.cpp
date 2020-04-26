@@ -892,7 +892,7 @@ class JoinCoveredQualVisitor : public ScalarExprVisitor<bool> {
         overlaps_supported_functions.end()) {
       const auto lhs = func_oper->getArg(2);
       const auto rhs = func_oper->getArg(1);
-      for (const auto qual_pair : join_qual_pairs) {
+      for (const auto& qual_pair : join_qual_pairs) {
         if (*lhs == *qual_pair.first && *rhs == *qual_pair.second) {
           return true;
         }

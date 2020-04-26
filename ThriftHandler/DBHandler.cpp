@@ -2092,7 +2092,7 @@ void DBHandler::get_tables_meta_impl(std::vector<TTableMeta>& _return,
                         /*find_push_down_candidates=*/false,
                         ExplainInfo::defaults());
         num_cols = result.row_set.row_desc.size();
-        for (const auto col : result.row_set.row_desc) {
+        for (const auto& col : result.row_set.row_desc) {
           if (col.is_physical) {
             num_cols--;
             continue;
@@ -4762,7 +4762,7 @@ void DBHandler::execute_rel_alg_df(TDataFrame& _return,
 std::vector<TargetMetaInfo> DBHandler::getTargetMetaInfo(
     const std::vector<std::shared_ptr<Analyzer::TargetEntry>>& targets) const {
   std::vector<TargetMetaInfo> result;
-  for (const auto target : targets) {
+  for (const auto& target : targets) {
     CHECK(target);
     CHECK(target->get_expr());
     result.emplace_back(target->get_resname(), target->get_expr()->get_type_info());
@@ -4773,7 +4773,7 @@ std::vector<TargetMetaInfo> DBHandler::getTargetMetaInfo(
 std::vector<std::string> DBHandler::getTargetNames(
     const std::vector<std::shared_ptr<Analyzer::TargetEntry>>& targets) const {
   std::vector<std::string> names;
-  for (const auto target : targets) {
+  for (const auto& target : targets) {
     CHECK(target);
     CHECK(target->get_expr());
     names.push_back(target->get_resname());
@@ -4784,7 +4784,7 @@ std::vector<std::string> DBHandler::getTargetNames(
 std::vector<std::string> DBHandler::getTargetNames(
     const std::vector<TargetMetaInfo>& targets) const {
   std::vector<std::string> names;
-  for (const auto target : targets) {
+  for (const auto& target : targets) {
     names.push_back(target.get_resname());
   }
   return names;
@@ -4823,7 +4823,7 @@ TRowDescriptor DBHandler::convert_target_metainfo(
     const std::vector<TargetMetaInfo>& targets) const {
   TRowDescriptor row_desc;
   size_t i = 0;
-  for (const auto target : targets) {
+  for (const auto& target : targets) {
     row_desc.push_back(convert_target_metainfo(target, i));
     ++i;
   }

@@ -292,7 +292,7 @@ const Analyzer::Expr* agg_arg(const Analyzer::Expr* expr) {
 
 bool constrained_not_null(const Analyzer::Expr* expr,
                           const std::list<std::shared_ptr<Analyzer::Expr>>& quals) {
-  for (const auto qual : quals) {
+  for (const auto& qual : quals) {
     auto uoper = std::dynamic_pointer_cast<Analyzer::UOper>(qual);
     if (!uoper) {
       continue;

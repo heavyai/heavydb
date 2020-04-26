@@ -79,7 +79,7 @@ std::vector<TCompletionHint> just_whitelisted_keyword_hints(
     }
     auto filtered_hint = original_hint;
     filtered_hint.hints.clear();
-    for (const auto hint_token : original_hint.hints) {
+    for (const auto& hint_token : original_hint.hints) {
       if (whitelisted_keywords.find(to_upper(hint_token)) != whitelisted_keywords.end()) {
         filtered_hint.hints.push_back(hint_token);
       }
