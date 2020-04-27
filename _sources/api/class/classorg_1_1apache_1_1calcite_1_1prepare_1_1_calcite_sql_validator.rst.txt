@@ -1,0 +1,9 @@
+Class org::apache::calcite::prepare::CalciteSqlValidator
+========================================================
+
+.. doxygenclass:: org::apache::calcite::prepare::CalciteSqlValidator
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:
