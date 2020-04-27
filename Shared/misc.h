@@ -41,6 +41,11 @@ size_t appendMove(std::vector<T>& destination, std::vector<T>& source) {
   }
 }
 
+template <typename... Ts, typename T>
+bool dynamic_castable_to_any(T const* ptr) {
+  return (... || dynamic_cast<Ts const*>(ptr));
+}
+
 // Helper to print out contents of simple containers (e.g. vector, list, deque)
 // including nested containers, e.g. 2d vectors, list of vectors, etc.
 // Base value_type must be a std::is_scalar_v type, though you can add custom

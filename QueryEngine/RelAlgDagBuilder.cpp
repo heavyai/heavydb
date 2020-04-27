@@ -2439,6 +2439,15 @@ void RelAlgDagBuilder::build(const rapidjson::Value& query_ast,
   create_left_deep_join(nodes_);
 }
 
+void RelAlgDagBuilder::eachNode(
+    std::function<void(RelAlgNode const*)> const& callback) const {
+  for (auto const& node : nodes_) {
+    if (node) {
+      callback(node.get());
+    }
+  }
+}
+
 void RelAlgDagBuilder::resetQueryExecutionState() {
   for (auto& node : nodes_) {
     if (node) {

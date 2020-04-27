@@ -1573,6 +1573,8 @@ class RelAlgDagBuilder : public boost::noncopyable {
                    const Catalog_Namespace::Catalog& cat,
                    const RenderInfo* render_opts);
 
+  void eachNode(std::function<void(RelAlgNode const*)> const&) const;
+
   /**
    * Returns the root node of the DAG.
    */

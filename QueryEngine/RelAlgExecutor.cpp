@@ -1799,13 +1799,12 @@ ExecutionResult RelAlgExecutor::executeUnion(const RelLogicalUnion* logical_unio
     throw std::runtime_error("UNION does not support subqueries with geo-columns.");
   }
   // Only Projections from a UNION are supported for now.
-  for (size_t i = 0; i < seq.size(); ++i) {
-    RelAlgNode const* node = seq.getDescriptor(i)->getBody();
-    if (node->hasInput(logical_union) && !(dynamic_cast<RelLogicalUnion const*>(node) ||
-                                           dynamic_cast<RelProject const*>(node))) {
+  query_dag_->eachNode([logical_union](RelAlgNode const* node) {
+    if (node->hasInput(logical_union) &&
+        !shared::dynamic_castable_to_any<RelProject, RelLogicalUnion>(node)) {
       throw std::runtime_error("UNION ALL not yet supported in this context.");
     }
-  }
+  });
 
   auto work_unit =
       createUnionWorkUnit(logical_union, {{}, SortAlgorithm::Default, 0, 0}, eo);

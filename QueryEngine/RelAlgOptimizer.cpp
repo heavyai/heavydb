@@ -1138,7 +1138,7 @@ void propagate_input_renumbering(
             renumber_sort_field(sort->getCollation(i), src_it->second));
       }
       sort->setCollation(std::move(new_collations));
-    } else {
+    } else if (!dynamic_cast<RelLogicalUnion*>(node)) {
       LOG(FATAL) << "Unhandled node type: " << node->toString();
     }
 
