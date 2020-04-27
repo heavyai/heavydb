@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 MapD Technologies, Inc.
+ * Copyright 2020 OmniSci, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -44,12 +44,14 @@
 #include "CudaMgr/CudaMgr.h"
 #include "DataMgr/BufferMgr/BufferMgr.h"
 #include "Parser/ParserNode.h"
-#include "Shared/MapDParameters.h"
+#include "Shared/SystemParameters.h"
 #include "Shared/TypedDataAccessors.h"
 #include "Shared/checked_alloc.h"
 #include "Shared/measure.h"
+#include "Shared/misc.h"
 #include "Shared/scope.h"
 #include "Shared/shard_key.h"
+#include "Shared/threadpool.h"
 
 #include "AggregatedColRange.h"
 #include "StringDictionaryGenerations.h"
@@ -69,6 +71,7 @@
 
 bool g_enable_watchdog{false};
 bool g_enable_dynamic_watchdog{false};
+bool g_use_tbb_pool{false};
 unsigned g_dynamic_watchdog_time_limit{10000};
 bool g_allow_cpu_retry{true};
 bool g_null_div_by_zero{false};
@@ -84,6 +87,7 @@ float g_filter_push_down_high_frac{-1.0f};
 size_t g_filter_push_down_passing_row_ubound{0};
 bool g_enable_columnar_output{false};
 bool g_enable_overlaps_hashjoin{false};
+bool g_enable_hashjoin_many_to_many{false};
 bool g_cache_string_hash{false};
 size_t g_overlaps_max_table_size_bytes{1024 * 1024 * 1024};
 bool g_strip_join_covered_quals{false};
@@ -101,6 +105,9 @@ bool g_enable_direct_columnarization{true};
 extern bool g_enable_experimental_string_functions;
 bool g_enable_runtime_query_interrupt{false};
 unsigned g_runtime_query_interrupt_frequency{1000};
+size_t g_gpu_smem_threshold{
+    4096};  // GPU shared memory threshold (in bytes), if larger buffer sizes are required
+            // we do not use GPU shared memory optimizations
 
 int const Executor::max_gpu_count;
 
@@ -125,10 +132,11 @@ Executor::Executor(const int db_id,
     , temporary_tables_(nullptr)
     , input_table_info_cache_(this) {}
 
-std::shared_ptr<Executor> Executor::getExecutor(const int db_id,
-                                                const std::string& debug_dir,
-                                                const std::string& debug_file,
-                                                const MapDParameters mapd_parameters) {
+std::shared_ptr<Executor> Executor::getExecutor(
+    const int db_id,
+    const std::string& debug_dir,
+    const std::string& debug_file,
+    const SystemParameters system_parameters) {
   INJECT_TIMER(getExecutor);
   const auto executor_key = db_id;
   {
@@ -145,8 +153,8 @@ std::shared_ptr<Executor> Executor::getExecutor(const int db_id,
       return it->second;
     }
     auto executor = std::make_shared<Executor>(db_id,
-                                               mapd_parameters.cuda_block_size,
-                                               mapd_parameters.cuda_grid_size,
+                                               system_parameters.cuda_block_size,
+                                               system_parameters.cuda_grid_size,
                                                debug_dir,
                                                debug_file);
     auto it_ok = executors_.insert(std::make_pair(executor_key, executor));
@@ -850,6 +858,7 @@ ResultSetPtr Executor::reduceMultiDeviceResults(
     std::vector<std::pair<ResultSetPtr, std::vector<size_t>>>& results_per_device,
     std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
     const QueryMemoryDescriptor& query_mem_desc) const {
+  auto timer = DEBUG_TIMER(__func__);
   if (ra_exe_unit.estimator) {
     return reduce_estimator_results(ra_exe_unit, results_per_device);
   }
@@ -1113,6 +1122,7 @@ RelAlgExecutionUnit replace_scan_limit(const RelAlgExecutionUnit& ra_exe_unit_in
           new_scan_limit,
           ra_exe_unit_in.query_features,
           ra_exe_unit_in.use_bump_allocator,
+          ra_exe_unit_in.union_all,
           ra_exe_unit_in.query_state};
 }
 
@@ -1271,18 +1281,41 @@ ResultSetPtr Executor::executeWorkUnitImpl(
       const auto context_count =
           get_context_count(device_type, available_cpus, available_gpus.size());
       try {
-        dispatchFragments(dispatch,
-                          execution_dispatch,
-                          query_infos,
-                          eo,
-                          is_agg,
-                          allow_single_frag_table_opt,
-                          context_count,
-                          *query_comp_desc_owned,
-                          *query_mem_desc_owned,
-                          fragment_descriptor,
-                          available_gpus,
-                          available_cpus);
+        if (g_use_tbb_pool) {
+#ifdef HAVE_TBB
+          VLOG(1) << "Using TBB thread pool for kernel dispatch.";
+          dispatchFragments<threadpool::TbbThreadPool<void>>(dispatch,
+                                                             execution_dispatch,
+                                                             query_infos,
+                                                             eo,
+                                                             is_agg,
+                                                             allow_single_frag_table_opt,
+                                                             context_count,
+                                                             *query_comp_desc_owned,
+                                                             *query_mem_desc_owned,
+                                                             fragment_descriptor,
+                                                             available_gpus,
+                                                             available_cpus);
+#else
+          throw std::runtime_error(
+              "This build is not TBB enabled. Restart the server with "
+              "\"enable-modern-thread-pool\" disabled.");
+#endif
+        } else {
+          dispatchFragments<threadpool::FuturesThreadPool<void>>(
+              dispatch,
+              execution_dispatch,
+              query_infos,
+              eo,
+              is_agg,
+              allow_single_frag_table_opt,
+              context_count,
+              *query_comp_desc_owned,
+              *query_mem_desc_owned,
+              fragment_descriptor,
+              available_gpus,
+              available_cpus);
+        }
       } catch (QueryExecutionError& e) {
         if (eo.with_dynamic_watchdog && interrupted_ &&
             e.getErrorCode() == ERR_OUT_OF_TIME) {
@@ -1548,8 +1581,12 @@ ResultSetPtr Executor::collectAllDeviceResults(
   }
   const auto& ra_exe_unit = execution_dispatch.getExecutionUnit();
   if (use_speculative_top_n(ra_exe_unit, query_mem_desc)) {
-    return reduceSpeculativeTopN(
-        ra_exe_unit, result_per_device, row_set_mem_owner, query_mem_desc);
+    try {
+      return reduceSpeculativeTopN(
+          ra_exe_unit, result_per_device, row_set_mem_owner, query_mem_desc);
+    } catch (const std::bad_alloc&) {
+      throw SpeculativeTopNFailed("Failed during multi-device reduction.");
+    }
   }
   const auto shard_count =
       device_type == ExecutorDeviceType::GPU
@@ -1719,6 +1756,7 @@ bool has_lazy_fetched_columns(const std::vector<ColumnLazyFetchInfo>& fetched_co
 
 }  // namespace
 
+template <typename THREAD_POOL>
 void Executor::dispatchFragments(
     const std::function<void(const ExecutorDeviceType chosen_device_type,
                              int chosen_device_id,
@@ -1738,7 +1776,7 @@ void Executor::dispatchFragments(
     QueryFragmentDescriptor& fragment_descriptor,
     std::unordered_set<int>& available_gpus,
     int& available_cpus) {
-  std::vector<std::future<void>> query_threads;
+  THREAD_POOL query_threads;
   const auto& ra_exe_unit = execution_dispatch.getExecutionUnit();
   CHECK(!ra_exe_unit.input_descs.empty());
 
@@ -1777,15 +1815,14 @@ void Executor::dispatchFragments(
             const int device_id,
             const FragmentsList& frag_list,
             const int64_t rowid_lookup_key) {
-          query_threads.push_back(std::async(std::launch::async,
-                                             dispatch,
-                                             ExecutorDeviceType::GPU,
-                                             device_id,
-                                             query_comp_desc,
-                                             query_mem_desc,
-                                             frag_list,
-                                             ExecutorDispatchMode::MultifragmentKernel,
-                                             rowid_lookup_key));
+          query_threads.append(dispatch,
+                               ExecutorDeviceType::GPU,
+                               device_id,
+                               query_comp_desc,
+                               query_mem_desc,
+                               frag_list,
+                               ExecutorDispatchMode::MultifragmentKernel,
+                               rowid_lookup_key);
         };
     fragment_descriptor.assignFragsToMultiDispatch(multifrag_kernel_dispatch);
   } else {
@@ -1819,15 +1856,14 @@ void Executor::dispatchFragments(
       }
       CHECK_GE(device_id, 0);
 
-      query_threads.push_back(std::async(std::launch::async,
-                                         dispatch,
-                                         device_type,
-                                         device_id,
-                                         query_comp_desc,
-                                         query_mem_desc,
-                                         frag_list,
-                                         ExecutorDispatchMode::KernelPerFragment,
-                                         rowid_lookup_key));
+      query_threads.append(dispatch,
+                           device_type,
+                           device_id,
+                           query_comp_desc,
+                           query_mem_desc,
+                           frag_list,
+                           ExecutorDispatchMode::KernelPerFragment,
+                           rowid_lookup_key);
 
       ++frag_list_idx;
     };
@@ -1835,12 +1871,7 @@ void Executor::dispatchFragments(
     fragment_descriptor.assignFragsToKernelDispatch(fragment_per_kernel_dispatch,
                                                     ra_exe_unit);
   }
-  for (auto& child : query_threads) {
-    child.wait();
-  }
-  for (auto& child : query_threads) {
-    child.get();
-  }
+  query_threads.join();
 }
 
 std::vector<size_t> Executor::getTableFragmentIndices(
@@ -1988,9 +2019,11 @@ Executor::getRowCountAndOffsetForAllFrags(
   for (const auto& selected_frag_ids : frag_ids_crossjoin) {
     std::vector<int64_t> num_rows;
     std::vector<uint64_t> frag_offsets;
-    CHECK_EQ(selected_frag_ids.size(), input_descs.size());
+    if (!ra_exe_unit.union_all) {
+      CHECK_EQ(selected_frag_ids.size(), input_descs.size());
+    }
     for (size_t tab_idx = 0; tab_idx < input_descs.size(); ++tab_idx) {
-      const auto frag_id = selected_frag_ids[tab_idx];
+      const auto frag_id = ra_exe_unit.union_all ? 0 : selected_frag_ids[tab_idx];
       const auto fragments_it =
           all_tables_fragments.find(input_descs[tab_idx].getTableId());
       CHECK(fragments_it != all_tables_fragments.end());
@@ -2039,6 +2072,12 @@ bool Executor::needFetchAllFragments(const InputColDescriptor& inner_col_desc,
   CHECK_EQ(table_id, selected_fragments[nest_level].table_id);
   const auto& fragments = selected_fragments[nest_level].fragment_ids;
   return fragments.size() > 1;
+}
+
+std::ostream& operator<<(std::ostream& os, FetchResult const& fetch_result) {
+  return os << "col_buffers" << shared::printContainer(fetch_result.col_buffers)
+            << " num_rows" << shared::printContainer(fetch_result.num_rows)
+            << " frag_offsets" << shared::printContainer(fetch_result.frag_offsets);
 }
 
 FetchResult Executor::fetchChunks(
@@ -2135,6 +2174,155 @@ FetchResult Executor::fetchChunks(
   return {all_frag_col_buffers, all_num_rows, all_frag_offsets};
 }
 
+// fetchChunks() is written under the assumption that multiple inputs implies a JOIN.
+// This is written under the assumption that multiple inputs implies a UNION ALL.
+FetchResult Executor::fetchUnionChunks(
+    const ColumnFetcher& column_fetcher,
+    const RelAlgExecutionUnit& ra_exe_unit,
+    const int device_id,
+    const Data_Namespace::MemoryLevel memory_level,
+    const std::map<int, const TableFragments*>& all_tables_fragments,
+    const FragmentsList& selected_fragments,
+    const Catalog_Namespace::Catalog& cat,
+    std::list<ChunkIter>& chunk_iterators,
+    std::list<std::shared_ptr<Chunk_NS::Chunk>>& chunks) {
+  auto timer = DEBUG_TIMER(__func__);
+  INJECT_TIMER(fetchUnionChunks);
+
+  std::vector<std::vector<const int8_t*>> all_frag_col_buffers;
+  std::vector<std::vector<int64_t>> all_num_rows;
+  std::vector<std::vector<uint64_t>> all_frag_offsets;
+
+  CHECK(!selected_fragments.empty());
+  CHECK_LE(2u, ra_exe_unit.input_descs.size());
+  CHECK_LE(2u, ra_exe_unit.input_col_descs.size());
+  using TableId = int;
+  TableId const selected_table_id = selected_fragments.front().table_id;
+  bool const input_descs_index =
+      selected_table_id == ra_exe_unit.input_descs[1].getTableId();
+  if (!input_descs_index) {
+    CHECK_EQ(selected_table_id, ra_exe_unit.input_descs[0].getTableId());
+  }
+  bool const input_col_descs_index =
+      selected_table_id ==
+      (*std::next(ra_exe_unit.input_col_descs.begin()))->getScanDesc().getTableId();
+  if (!input_col_descs_index) {
+    CHECK_EQ(selected_table_id,
+             ra_exe_unit.input_col_descs.front()->getScanDesc().getTableId());
+  }
+  VLOG(2) << "selected_fragments.size()=" << selected_fragments.size()
+          << " selected_table_id=" << selected_table_id
+          << " input_descs_index=" << int(input_descs_index)
+          << " input_col_descs_index=" << int(input_col_descs_index)
+          << " ra_exe_unit.input_descs="
+          << shared::printContainer(ra_exe_unit.input_descs)
+          << " ra_exe_unit.input_col_descs="
+          << shared::printContainer(ra_exe_unit.input_col_descs);
+
+  // Partition col_global_ids by table_id
+  std::unordered_map<TableId, std::list<std::shared_ptr<const InputColDescriptor>>>
+      table_id_to_input_col_descs;
+  for (auto const& input_col_desc : ra_exe_unit.input_col_descs) {
+    TableId const table_id = input_col_desc->getScanDesc().getTableId();
+    table_id_to_input_col_descs[table_id].push_back(input_col_desc);
+  }
+  for (auto const& pair : table_id_to_input_col_descs) {
+    std::vector<std::vector<size_t>> selected_fragments_crossjoin;
+    std::vector<size_t> local_col_to_frag_pos;
+
+    buildSelectedFragsMappingForUnion(selected_fragments_crossjoin,
+                                      local_col_to_frag_pos,
+                                      pair.second,
+                                      selected_fragments,
+                                      ra_exe_unit);
+
+    CartesianProduct<std::vector<std::vector<size_t>>> frag_ids_crossjoin(
+        selected_fragments_crossjoin);
+
+    for (const auto& selected_frag_ids : frag_ids_crossjoin) {
+      std::vector<const int8_t*> frag_col_buffers(
+          plan_state_->global_to_local_col_ids_.size());
+      for (const auto& col_id : pair.second) {
+        CHECK(col_id);
+        const int table_id = col_id->getScanDesc().getTableId();
+        CHECK_EQ(table_id, pair.first);
+        const auto cd = try_get_column_descriptor(col_id.get(), cat);
+        if (cd && cd->isVirtualCol) {
+          CHECK_EQ("rowid", cd->columnName);
+          continue;
+        }
+        const auto fragments_it = all_tables_fragments.find(table_id);
+        CHECK(fragments_it != all_tables_fragments.end());
+        const auto fragments = fragments_it->second;
+        auto it = plan_state_->global_to_local_col_ids_.find(*col_id);
+        CHECK(it != plan_state_->global_to_local_col_ids_.end());
+        CHECK_LT(static_cast<size_t>(it->second),
+                 plan_state_->global_to_local_col_ids_.size());
+        const size_t frag_id = ra_exe_unit.union_all
+                                   ? 0
+                                   : selected_frag_ids[local_col_to_frag_pos[it->second]];
+        if (!fragments->size()) {
+          return {};
+        }
+        CHECK_LT(frag_id, fragments->size());
+        auto memory_level_for_column = memory_level;
+        if (plan_state_->columns_to_fetch_.find(
+                std::make_pair(col_id->getScanDesc().getTableId(), col_id->getColId())) ==
+            plan_state_->columns_to_fetch_.end()) {
+          memory_level_for_column = Data_Namespace::CPU_LEVEL;
+        }
+        if (col_id->getScanDesc().getSourceType() == InputSourceType::RESULT) {
+          frag_col_buffers[it->second] = column_fetcher.getResultSetColumn(
+              col_id.get(), memory_level_for_column, device_id);
+        } else {
+          if (needFetchAllFragments(*col_id, ra_exe_unit, selected_fragments)) {
+            frag_col_buffers[it->second] =
+                column_fetcher.getAllTableColumnFragments(table_id,
+                                                          col_id->getColId(),
+                                                          all_tables_fragments,
+                                                          memory_level_for_column,
+                                                          device_id);
+          } else {
+            frag_col_buffers[it->second] =
+                column_fetcher.getOneTableColumnFragment(table_id,
+                                                         frag_id,
+                                                         col_id->getColId(),
+                                                         all_tables_fragments,
+                                                         chunks,
+                                                         chunk_iterators,
+                                                         memory_level_for_column,
+                                                         device_id);
+          }
+        }
+      }
+      all_frag_col_buffers.push_back(frag_col_buffers);
+    }
+    std::vector<std::vector<int64_t>> num_rows;
+    std::vector<std::vector<uint64_t>> frag_offsets;
+    std::tie(num_rows, frag_offsets) = getRowCountAndOffsetForAllFrags(
+        ra_exe_unit, frag_ids_crossjoin, ra_exe_unit.input_descs, all_tables_fragments);
+    all_num_rows.insert(all_num_rows.end(), num_rows.begin(), num_rows.end());
+    all_frag_offsets.insert(
+        all_frag_offsets.end(), frag_offsets.begin(), frag_offsets.end());
+  }
+  // UNION ALL hacks.
+  VLOG(2) << "all_frag_col_buffers=" << shared::printContainer(all_frag_col_buffers);
+  for (size_t i = 0; i < all_frag_col_buffers.front().size(); ++i) {
+    all_frag_col_buffers[i & 1][i] = all_frag_col_buffers[i & 1][i ^ 1];
+  }
+  if (input_descs_index == input_col_descs_index) {
+    std::swap(all_frag_col_buffers[0], all_frag_col_buffers[1]);
+  }
+
+  VLOG(2) << "all_frag_col_buffers=" << shared::printContainer(all_frag_col_buffers)
+          << " all_num_rows=" << shared::printContainer(all_num_rows)
+          << " all_frag_offsets=" << shared::printContainer(all_frag_offsets)
+          << " input_col_descs_index=" << input_col_descs_index;
+  return {{all_frag_col_buffers[input_descs_index]},
+          {{all_num_rows[0][input_descs_index]}},
+          {{all_frag_offsets[0][input_descs_index]}}};
+}
+
 std::vector<size_t> Executor::getFragmentCount(const FragmentsList& selected_fragments,
                                                const size_t scan_idx,
                                                const RelAlgExecutionUnit& ra_exe_unit) {
@@ -2163,6 +2351,43 @@ void Executor::buildSelectedFragsMapping(
     CHECK_EQ(selected_fragments[scan_idx].table_id, table_id);
     selected_fragments_crossjoin.push_back(
         getFragmentCount(selected_fragments, scan_idx, ra_exe_unit));
+    for (const auto& col_id : col_global_ids) {
+      CHECK(col_id);
+      const auto& input_desc = col_id->getScanDesc();
+      if (input_desc.getTableId() != table_id ||
+          input_desc.getNestLevel() != static_cast<int>(scan_idx)) {
+        continue;
+      }
+      auto it = plan_state_->global_to_local_col_ids_.find(*col_id);
+      CHECK(it != plan_state_->global_to_local_col_ids_.end());
+      CHECK_LT(static_cast<size_t>(it->second),
+               plan_state_->global_to_local_col_ids_.size());
+      local_col_to_frag_pos[it->second] = frag_pos;
+    }
+    ++frag_pos;
+  }
+}
+
+void Executor::buildSelectedFragsMappingForUnion(
+    std::vector<std::vector<size_t>>& selected_fragments_crossjoin,
+    std::vector<size_t>& local_col_to_frag_pos,
+    const std::list<std::shared_ptr<const InputColDescriptor>>& col_global_ids,
+    const FragmentsList& selected_fragments,
+    const RelAlgExecutionUnit& ra_exe_unit) {
+  local_col_to_frag_pos.resize(plan_state_->global_to_local_col_ids_.size());
+  size_t frag_pos{0};
+  const auto& input_descs = ra_exe_unit.input_descs;
+  for (size_t scan_idx = 0; scan_idx < input_descs.size(); ++scan_idx) {
+    const int table_id = input_descs[scan_idx].getTableId();
+    // selected_fragments here is from assignFragsToKernelDispatch
+    // execution_kernel.fragments
+    if (selected_fragments[0].table_id != table_id) {  // TODO 0
+      continue;
+    }
+    // CHECK_EQ(selected_fragments[scan_idx].table_id, table_id);
+    selected_fragments_crossjoin.push_back(
+        // getFragmentCount(selected_fragments, scan_idx, ra_exe_unit));
+        {size_t(1)});  // TODO
     for (const auto& col_id : col_global_ids) {
       CHECK(col_id);
       const auto& input_desc = col_id->getScanDesc();
@@ -2253,22 +2478,24 @@ int32_t Executor::executePlanWithoutGroupBy(
     output_memory_scope.reset(new OutVecOwner(out_vec));
   } else {
     try {
-      out_vec = query_exe_context->launchGpuCode(ra_exe_unit,
-                                                 compilation_result.native_functions,
-                                                 hoist_literals,
-                                                 hoist_buf,
-                                                 col_buffers,
-                                                 num_rows,
-                                                 frag_offsets,
-                                                 0,
-                                                 data_mgr,
-                                                 blockSize(),
-                                                 gridSize(),
-                                                 device_id,
-                                                 &error_code,
-                                                 num_tables,
-                                                 join_hash_table_ptrs,
-                                                 render_allocator_map_ptr);
+      out_vec = query_exe_context->launchGpuCode(
+          ra_exe_unit,
+          compilation_result.native_functions,
+          hoist_literals,
+          hoist_buf,
+          col_buffers,
+          num_rows,
+          frag_offsets,
+          0,
+          data_mgr,
+          blockSize(),
+          gridSize(),
+          device_id,
+          compilation_result.gpu_smem_context.getSharedMemorySize(),
+          &error_code,
+          num_tables,
+          join_hash_table_ptrs,
+          render_allocator_map_ptr);
       output_memory_scope.reset(new OutVecOwner(out_vec));
     } catch (const OutOfMemory&) {
       return ERR_OUT_OF_GPU_MEM;
@@ -2396,6 +2623,7 @@ int32_t Executor::executePlanWithGroupBy(
     const std::vector<std::vector<uint64_t>>& frag_offsets,
     Data_Namespace::DataMgr* data_mgr,
     const int device_id,
+    const int outer_table_id,
     const int64_t scan_limit,
     const uint32_t start_rowid,
     const uint32_t num_tables,
@@ -2422,44 +2650,85 @@ int32_t Executor::executePlanWithGroupBy(
   if (render_info && render_info->useCudaBuffers()) {
     render_allocator_map_ptr = render_info->render_allocator_map_ptr.get();
   }
+
+  VLOG(2) << "bool(ra_exe_unit.union_all)=" << bool(ra_exe_unit.union_all)
+          << " ra_exe_unit.input_descs="
+          << shared::printContainer(ra_exe_unit.input_descs)
+          << " ra_exe_unit.input_col_descs="
+          << shared::printContainer(ra_exe_unit.input_col_descs)
+          << " ra_exe_unit.scan_limit=" << ra_exe_unit.scan_limit
+          << " num_rows=" << shared::printContainer(num_rows)
+          << " frag_offsets=" << shared::printContainer(frag_offsets)
+          << " query_exe_context->query_buffers_->num_rows_="
+          << query_exe_context->query_buffers_->num_rows_
+          << " query_exe_context->query_mem_desc_.getEntryCount()="
+          << query_exe_context->query_mem_desc_.getEntryCount()
+          << " device_id=" << device_id << " outer_table_id=" << outer_table_id
+          << " scan_limit=" << scan_limit << " start_rowid=" << start_rowid
+          << " num_tables=" << num_tables;
+
+  RelAlgExecutionUnit ra_exe_unit_copy = ra_exe_unit;
+  // For UNION ALL, filter out input_descs and input_col_descs that are not associated
+  // with outer_table_id.
+  if (ra_exe_unit_copy.union_all) {
+    // Sort outer_table_id first, then pop the rest off of ra_exe_unit_copy.input_descs.
+    std::stable_sort(ra_exe_unit_copy.input_descs.begin(),
+                     ra_exe_unit_copy.input_descs.end(),
+                     [outer_table_id](auto const& a, auto const& b) {
+                       return a.getTableId() == outer_table_id &&
+                              b.getTableId() != outer_table_id;
+                     });
+    while (!ra_exe_unit_copy.input_descs.empty() &&
+           ra_exe_unit_copy.input_descs.back().getTableId() != outer_table_id) {
+      ra_exe_unit_copy.input_descs.pop_back();
+    }
+    // Filter ra_exe_unit_copy.input_col_descs.
+    ra_exe_unit_copy.input_col_descs.remove_if(
+        [outer_table_id](auto const& input_col_desc) {
+          return input_col_desc->getScanDesc().getTableId() != outer_table_id;
+        });
+    query_exe_context->query_mem_desc_.setEntryCount(ra_exe_unit_copy.scan_limit);
+  }
+
   if (device_type == ExecutorDeviceType::CPU) {
-    query_exe_context->launchCpuCode(ra_exe_unit,
-                                     compilation_result.native_functions,
-                                     hoist_literals,
-                                     hoist_buf,
-                                     col_buffers,
-                                     num_rows,
-                                     frag_offsets,
-                                     scan_limit,
-                                     &error_code,
-                                     num_tables,
-                                     join_hash_table_ptrs);
+    query_exe_context->launchCpuCode(
+        ra_exe_unit_copy,
+        compilation_result.native_functions,
+        hoist_literals,
+        hoist_buf,
+        col_buffers,
+        num_rows,
+        frag_offsets,
+        ra_exe_unit_copy.union_all ? ra_exe_unit_copy.scan_limit : scan_limit,
+        &error_code,
+        num_tables,
+        join_hash_table_ptrs);
   } else {
     try {
-      query_exe_context->launchGpuCode(ra_exe_unit,
-                                       compilation_result.native_functions,
-                                       hoist_literals,
-                                       hoist_buf,
-                                       col_buffers,
-                                       num_rows,
-                                       frag_offsets,
-                                       scan_limit,
-                                       data_mgr,
-                                       blockSize(),
-                                       gridSize(),
-                                       device_id,
-                                       &error_code,
-                                       num_tables,
-                                       join_hash_table_ptrs,
-                                       render_allocator_map_ptr);
+      auto out_vec = query_exe_context->launchGpuCode(
+          ra_exe_unit_copy,
+          compilation_result.native_functions,
+          hoist_literals,
+          hoist_buf,
+          col_buffers,
+          num_rows,
+          frag_offsets,
+          ra_exe_unit_copy.union_all ? ra_exe_unit_copy.scan_limit : scan_limit,
+          data_mgr,
+          blockSize(),
+          gridSize(),
+          device_id,
+          compilation_result.gpu_smem_context.getSharedMemorySize(),
+          &error_code,
+          num_tables,
+          join_hash_table_ptrs,
+          render_allocator_map_ptr);
     } catch (const OutOfMemory&) {
       return ERR_OUT_OF_GPU_MEM;
     } catch (const OutOfRenderMemory&) {
       return ERR_OUT_OF_RENDER_MEM;
     } catch (const StreamingTopNNotSupportedInRenderQuery&) {
       return ERR_STREAMING_TOP_N_NOT_SUPPORTED_IN_RENDER_QUERY;
-    } catch (const std::bad_alloc&) {
-      return ERR_SPECULATIVE_TOP_OOM;
     } catch (const std::exception& e) {
       LOG(FATAL) << "Error launching the GPU kernel: " << e.what();
     }
@@ -2475,15 +2744,18 @@ int32_t Executor::executePlanWithGroupBy(
 
   if (error_code != Executor::ERR_OVERFLOW_OR_UNDERFLOW &&
       error_code != Executor::ERR_DIV_BY_ZERO && !render_allocator_map_ptr) {
-    results =
-        query_exe_context->getRowSet(ra_exe_unit, query_exe_context->query_mem_desc_);
+    results = query_exe_context->getRowSet(ra_exe_unit_copy,
+                                           query_exe_context->query_mem_desc_);
     CHECK(results);
+    VLOG(2) << "results->rowCount()=" << results->rowCount();
     results->holdLiterals(hoist_buf);
   }
   if (error_code < 0 && render_allocator_map_ptr) {
+    auto const adjusted_scan_limit =
+        ra_exe_unit_copy.union_all ? ra_exe_unit_copy.scan_limit : scan_limit;
     // More rows passed the filter than available slots. We don't have a count to check,
     // so assume we met the limit if a scan limit is set
-    if (scan_limit != 0) {
+    if (adjusted_scan_limit != 0) {
       return 0;
     } else {
       return error_code;
@@ -2711,7 +2983,7 @@ std::pair<bool, int64_t> Executor::skipFragment(
     const std::vector<uint64_t>& frag_offsets,
     const size_t frag_idx) {
   const int table_id = table_desc.getTableId();
-  for (const auto simple_qual : simple_quals) {
+  for (const auto& simple_qual : simple_quals) {
     const auto comp_expr =
         std::dynamic_pointer_cast<const Analyzer::BinOper>(simple_qual);
     if (!comp_expr) {

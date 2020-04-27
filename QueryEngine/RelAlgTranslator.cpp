@@ -326,14 +326,17 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateScalarSubquery(
   CHECK(rex_subquery);
   auto result = rex_subquery->getExecutionResult();
   auto row_set = result->getRows();
-  if (row_set->rowCount() > size_t(1)) {
+  const size_t row_count = row_set->rowCount();
+  if (row_count > size_t(1)) {
     throw std::runtime_error("Scalar sub-query returned multiple rows");
   }
-  if (row_set->rowCount() < size_t(1)) {
-    CHECK_EQ(row_set->rowCount(), size_t(0));
+  if (row_count == size_t(0)) {
     throw std::runtime_error("Scalar sub-query returned no results");
   }
+  CHECK_EQ(row_count, size_t(1));
+  row_set->moveToBegin();
   auto first_row = row_set->getNextRow(false, false);
+  CHECK_EQ(first_row.size(), size_t(1));
   auto scalar_tv = boost::get<ScalarTargetValue>(&first_row[0]);
   auto ti = rex_subquery->getType();
   if (ti.is_string()) {
@@ -349,7 +352,8 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateInput(
     const RexInput* rex_input) const {
   const auto source = rex_input->getSourceNode();
   const auto it_rte_idx = input_to_nest_level_.find(source);
-  CHECK(it_rte_idx != input_to_nest_level_.end());
+  CHECK(it_rte_idx != input_to_nest_level_.end())
+      << "Not found in input_to_nest_level_, source=" << source->toString();
   const int rte_idx = it_rte_idx->second;
   const auto scan_source = dynamic_cast<const RelScan*>(source);
   const auto& in_metainfo = source->getOutputMetainfo();
@@ -378,7 +382,7 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateInput(
     return std::make_shared<Analyzer::ColumnVar>(
         col_ti, table_desc->tableId, cd->columnId, rte_idx);
   }
-  CHECK(!in_metainfo.empty());
+  CHECK(!in_metainfo.empty()) << "for " << source->toString();
   CHECK_GE(rte_idx, 0);
   const size_t col_id = rex_input->getIndex();
   CHECK_LT(col_id, in_metainfo.size());
@@ -1530,6 +1534,7 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateFunction(
                    "ST_Intersects"sv,
                    "ST_Disjoint"sv,
                    "ST_Contains"sv,
+                   "ST_Overlaps"sv,
                    "ST_Within"sv)) {
     CHECK_EQ(rex_function->size(), size_t(2));
     return translateBinaryGeoFunction(rex_function);

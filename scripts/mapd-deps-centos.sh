@@ -59,7 +59,8 @@ sudo yum install -y \
     curl \
     openldap-devel
 sudo yum install -y \
-    jq
+    jq \
+    pxz
 
 # gmp, mpc, mpfr, autoconf, automake
 # note: if gmp fails on POWER8:
@@ -74,7 +75,7 @@ download_make_install ftp://ftp.gnu.org/gnu/autoconf/autoconf-2.69.tar.xz # "" "
 download_make_install ftp://ftp.gnu.org/gnu/automake/automake-1.16.1.tar.xz
 
 # gcc
-VERS=7.4.0
+VERS=8.4.0
 download ftp://ftp.gnu.org/gnu/gcc/gcc-$VERS/gcc-$VERS.tar.xz
 extract gcc-$VERS.tar.xz
 pushd gcc-$VERS
@@ -103,6 +104,8 @@ export CC=$PREFIX/bin/gcc
 export CXX=$PREFIX/bin/g++
 
 install_ninja
+
+install_cmake
 
 download_make_install ftp://ftp.gnu.org/gnu/libtool/libtool-2.4.6.tar.gz
 
@@ -134,7 +137,7 @@ download_make_install ${HTTP_DEPS}/bisonpp-1.21-45.tar.gz bison++-1.21
 
 CFLAGS="-fPIC" download_make_install ftp://ftp.gnu.org/gnu/readline/readline-7.0.tar.gz
 
-VERS=1_67_0
+VERS=1_72_0
 # http://downloads.sourceforge.net/project/boost/boost/${VERS//_/.}/boost_$VERS.tar.bz2
 download ${HTTP_DEPS}/boost_$VERS.tar.bz2
 extract boost_$VERS.tar.bz2
@@ -142,9 +145,6 @@ pushd boost_$VERS
 ./bootstrap.sh --prefix=$PREFIX
 ./b2 cxxflags=-fPIC install --prefix=$PREFIX || true
 popd
-
-# https://github.com/Kitware/CMake/releases/download/v3.14.5/cmake-3.14.5.tar.gz
-CXXFLAGS="-pthread" CFLAGS="-pthread" download_make_install ${HTTP_DEPS}/cmake-3.14.5.tar.gz
 
 VERS=3.1.5
 download https://github.com/google/double-conversion/archive/v$VERS.tar.gz
@@ -193,7 +193,7 @@ VERS=7.69.0
 download_make_install ${HTTP_DEPS}/curl-$VERS.tar.xz "" "--disable-ldap --disable-ldaps"
 
 # thrift
-VERS=0.11.0
+VERS=0.13.0
 # http://apache.claz.org/thrift/$VERS/thrift-$VERS.tar.gz
 download ${HTTP_DEPS}/thrift-$VERS.tar.gz
 extract thrift-$VERS.tar.gz
@@ -201,7 +201,7 @@ pushd thrift-$VERS
 if [ "$TSAN" = "false" ]; then
   THRIFT_CFLAGS="-fPIC"
   THRIFT_CXXFLAGS="-fPIC"
-elif [ "$TSAN" = "false" ]; then
+elif [ "$TSAN" = "true" ]; then
   THRIFT_CFLAGS="-fPIC -fsanitize=thread -fPIC -O1 -fno-omit-frame-pointer"
   THRIFT_CXXFLAGS="-fPIC -fsanitize=thread -fPIC -O1 -fno-omit-frame-pointer"
 fi
@@ -264,6 +264,10 @@ popd
 
 # Geo Support
 install_gdal
+install_geos
+
+# TBB
+install_tbb static
 
 # Apache Arrow (see common-functions.sh)
 install_arrow
@@ -352,8 +356,8 @@ cp mapd-deps-$SUFFIX.sh mapd-deps-$SUFFIX.modulefile $PREFIX
 if [ "$COMPRESS" = "true" ] ; then
     if [ "$TSAN" = "false" ]; then
       TARBALL_TSAN=""
-    elif [ "$TSAN" = "false" ]; then
+    elif [ "$TSAN" = "true" ]; then
       TARBALL_TSAN="tsan-"
     fi
-    tar acvf mapd-deps-${TARBALL_TSAN}${SUFFIX}.tar.xz -C $(dirname $PREFIX) $SUFFIX
+    tar --use-compress-program=pxz -acvf mapd-deps-${TARBALL_TSAN}${SUFFIX}.tar.xz -C $(dirname $PREFIX) $SUFFIX
 fi

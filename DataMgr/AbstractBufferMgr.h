@@ -42,7 +42,8 @@
   }
 
 DEFINE_ENUM_WITH_STRING_CONVERSIONS(MgrType,
-                                    (FILE_MGR)(CPU_MGR)(GPU_MGR)(GLOBAL_FILE_MGR))
+                                    (FILE_MGR)(CPU_MGR)(GPU_MGR)(GLOBAL_FILE_MGR)(
+                                        PERSISTENT_STORAGE_MGR)(FOREIGN_STORAGE_MGR))
 
 namespace Data_Namespace {
 
@@ -95,6 +96,7 @@ class AbstractBufferMgr {
 
   virtual void checkpoint() = 0;
   virtual void checkpoint(const int db_id, const int tb_id) = 0;
+  virtual void removeTableRelatedDS(const int db_id, const int table_id) = 0;
 
   // Buffer API
   virtual AbstractBuffer* alloc(const size_t numBytes = 0) = 0;

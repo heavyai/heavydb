@@ -163,7 +163,7 @@ class ScalarExprVisitor {
   virtual T visitInValues(const Analyzer::InValues* in_values) const {
     T result = visit(in_values->get_arg());
     const auto& value_list = in_values->get_value_list();
-    for (const auto in_value : value_list) {
+    for (const auto& in_value : value_list) {
       result = aggregateResult(result, visit(in_value.get()));
     }
     return result;

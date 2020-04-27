@@ -1,4 +1,4 @@
-namespace java com.mapd.thrift.calciteserver
+namespace java com.omnisci.thrift.calciteserver
 namespace py omnisci.completion_hints
 
 enum TCompletionHintType {

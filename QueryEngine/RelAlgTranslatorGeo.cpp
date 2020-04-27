@@ -758,6 +758,35 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateBinaryGeoFunction(
     const RexFunctionOperator* rex_function) const {
   auto function_name = rex_function->getName();
   auto return_type = rex_function->getType();
+
+  if (function_name == "ST_Overlaps"sv) {
+    // Overlaps join is the only implementation supported for now, only translate bounds
+    CHECK_EQ(size_t(2), rex_function->size());
+    auto extract_geo_bounds_from_input =
+        [this, &rex_function](const size_t index) -> std::shared_ptr<Analyzer::Expr> {
+      const auto rex_input =
+          dynamic_cast<const RexInput*>(rex_function->getOperand(index));
+      if (rex_input) {
+        SQLTypeInfo ti;
+        const auto exprs = translateGeoColumn(rex_input, ti, true, false, false);
+        CHECK_GT(exprs.size(), size_t(0));
+        if (ti.get_type() == kPOINT) {
+          throw std::runtime_error("ST_Overlaps is not supported for point arguments.");
+        } else {
+          return exprs.back();
+        }
+      } else {
+        throw std::runtime_error(
+            "Only inputs are supported as arguments to ST_Overlaps for now.");
+      }
+    };
+    std::vector<std::shared_ptr<Analyzer::Expr>> geo_args;
+    geo_args.push_back(extract_geo_bounds_from_input(0));
+    geo_args.push_back(extract_geo_bounds_from_input(1));
+
+    return makeExpr<Analyzer::FunctionOper>(return_type, function_name, geo_args);
+  }
+
   bool swap_args = false;
   bool with_bounds = false;
   bool negate_result = false;

@@ -49,6 +49,7 @@ set(query_engine_source_files
     GeoIR.cpp
     GpuInterrupt.cpp
     GpuMemUtils.cpp
+    GpuSharedMemoryUtils.cpp
     InPlaceSort.cpp
     InValuesIR.cpp
     IRCodegen.cpp
@@ -186,7 +187,7 @@ else()
 endif()
 
 add_custom_command(
-    DEPENDS RuntimeFunctions.cpp RuntimeFunctions.h ${CMAKE_SOURCE_DIR}/Utils/StringLike.cpp GroupByRuntime.cpp TopKRuntime.cpp
+    DEPENDS RuntimeFunctions.cpp JoinHashTableQueryRuntime.cpp RuntimeFunctions.h ${CMAKE_SOURCE_DIR}/Utils/StringLike.cpp GroupByRuntime.cpp TopKRuntime.cpp
     OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/RuntimeFunctions.bc
     COMMAND ${llvm_clangpp_cmd}
     ARGS -std=c++14 ${RT_OPT_FLAGS} -c -emit-llvm
@@ -220,8 +221,7 @@ else()
   add_dependencies(QueryEngine QueryEngineFunctionsTargets)
 endif()
 
-target_link_libraries(
-  QueryEngine
+set(QUERY_ENGINE_LIBS
   Chunk
   Analyzer
   StringDictionary
@@ -229,21 +229,32 @@ target_link_libraries(
   Shared
   sqlite3
   ${Arrow_LIBRARIES}
-  clangFrontend
-  clangSerialization
-  clangDriver
-  clangTooling
-  clangParse
-  clangSema
-  clangAnalysis
-  clangEdit
-  clangAST
-  clangLex
-  clangBasic
-  clangRewrite
-  clangRewriteFrontend
-  ${LLVM_LINKER_FLAGS}
 )
+
+if(${LLVM_VERSION_MAJOR} EQUAL 10 AND NOT ${PREFER_STATIC_LIBS})
+  # Arch no longer building Clang with static libs
+  list(APPEND QUERY_ENGINE_LIBS clang-cpp)
+else()
+  list(APPEND QUERY_ENGINE_LIBS 
+    clangFrontend
+    clangSerialization
+    clangDriver
+    clangTooling
+    clangParse
+    clangSema
+    clangAnalysis
+    clangEdit
+    clangAST
+    clangLex
+    clangBasic
+    clangRewrite
+    clangRewriteFrontend
+  )
+endif()
+
+list(APPEND QUERY_ENGINE_LIBS ${LLVM_LINKER_FLAGS})
+
+target_link_libraries(QueryEngine ${QUERY_ENGINE_LIBS})
 
 add_custom_command(
     DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/cuda_mapd_rt.o
@@ -263,7 +274,7 @@ add_custom_command(
     )
 
 add_custom_command(
-    DEPENDS cuda_mapd_rt.cu GpuInitGroups.cu GroupByRuntime.cpp TopKRuntime.cpp DateTruncate.cpp DateAdd.cpp ExtractFromTime.cpp ArrayOps.cpp StringFunctions.cpp RegexpFunctions.cpp ${CMAKE_SOURCE_DIR}/Utils/ChunkIter.cpp ${CMAKE_SOURCE_DIR}/Utils/StringLike.cpp ${CMAKE_SOURCE_DIR}/Utils/Regexp.cpp ${CMAKE_CURRENT_SOURCE_DIR}/ExtensionFunctions.hpp ${CMAKE_CURRENT_SOURCE_DIR}/ExtensionFunctionsGeo.hpp ${CMAKE_CURRENT_SOURCE_DIR}/TableFunctions/TableFunctions.hpp
+    DEPENDS cuda_mapd_rt.cu JoinHashTableQueryRuntime.cpp GpuInitGroups.cu GroupByRuntime.cpp TopKRuntime.cpp DateTruncate.cpp DateAdd.cpp ExtractFromTime.cpp ArrayOps.cpp StringFunctions.cpp RegexpFunctions.cpp ${CMAKE_SOURCE_DIR}/Utils/ChunkIter.cpp ${CMAKE_SOURCE_DIR}/Utils/StringLike.cpp ${CMAKE_SOURCE_DIR}/Utils/Regexp.cpp ${CMAKE_CURRENT_SOURCE_DIR}/ExtensionFunctions.hpp ${CMAKE_CURRENT_SOURCE_DIR}/ExtensionFunctionsGeo.hpp ${CMAKE_CURRENT_SOURCE_DIR}/TableFunctions/TableFunctions.hpp
     OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/cuda_mapd_rt.o
     COMMAND nvcc
     ARGS

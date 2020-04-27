@@ -20,6 +20,7 @@
 #include "Logger.h"
 
 #ifndef __CUDACC__
+#include <boost/config.hpp>
 #include <boost/regex.hpp>
 #include <optional>
 #include <string_view>
@@ -35,6 +36,18 @@
 void apply_shim(std::string& result,
                 const boost::regex& reg_expr,
                 const std::function<void(std::string&, const boost::smatch&)>& shim_fn);
+
+// cat - Concatenate values of arbitrary types into a string.
+template <typename... Ts>
+std::string cat(Ts&&... args) {
+  std::ostringstream oss;
+#ifdef BOOST_NO_CXX17_FOLD_EXPRESSIONS
+  (void)(int[]){0, ((void)(oss << std::forward<Ts>(args)), 0)...};
+#else
+  (oss << ... << std::forward<Ts>(args));
+#endif
+  return oss.str();
+}
 #endif
 
 std::vector<std::pair<size_t, size_t>> find_string_literals(const std::string& query);

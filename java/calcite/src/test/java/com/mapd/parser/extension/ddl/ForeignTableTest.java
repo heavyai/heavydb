@@ -6,8 +6,8 @@ import static org.junit.Assert.fail;
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
 import com.mapd.common.SockTransportProperties;
-import com.mapd.thrift.calciteserver.InvalidParseRequest;
-import com.mapd.thrift.calciteserver.TPlanResult;
+import com.omnisci.thrift.calciteserver.InvalidParseRequest;
+import com.omnisci.thrift.calciteserver.TPlanResult;
 
 import org.junit.Test;
 
@@ -196,6 +196,17 @@ public class ForeignTableTest extends DDLTest {
     final TPlanResult result =
             processDdlCommand("CREATE FOREIGN TABLE test_table (test_column_1 INTEGER) "
                     + "SERVER test_server WITH ( option_1 = 'value_1', option_2 = 2);");
+    final JsonObject actualJsonObject =
+            gson.fromJson(result.plan_result, JsonObject.class);
+    assertEquals(expectedJsonObject, actualJsonObject);
+  }
+
+  @Test
+  public void createForeignTableEscapeOption() throws Exception {
+    final JsonObject expectedJsonObject = getJsonFromFile("cft_EscapeOption.json");
+    final TPlanResult result =
+            processDdlCommand("CREATE FOREIGN TABLE test_table (test_column_1 INTEGER) "
+                    + "SERVER test_server WITH ( escape = '\\');");
     final JsonObject actualJsonObject =
             gson.fromJson(result.plan_result, JsonObject.class);
     assertEquals(expectedJsonObject, actualJsonObject);

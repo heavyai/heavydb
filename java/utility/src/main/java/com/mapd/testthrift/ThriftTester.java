@@ -15,18 +15,18 @@
  */
 package com.mapd.testthrift;
 
-import com.mapd.thrift.server.MapD;
-import com.mapd.thrift.server.TColumn;
-import com.mapd.thrift.server.TColumnData;
-import com.mapd.thrift.server.TColumnType;
-import com.mapd.thrift.server.TDBInfo;
-import com.mapd.thrift.server.TDatum;
-import com.mapd.thrift.server.TMapDException;
-import com.mapd.thrift.server.TQueryResult;
-import com.mapd.thrift.server.TRow;
-import com.mapd.thrift.server.TRowSet;
-import com.mapd.thrift.server.TTableDetails;
-import com.mapd.thrift.server.TTypeInfo;
+import com.omnisci.thrift.server.OmniSci;
+import com.omnisci.thrift.server.TColumn;
+import com.omnisci.thrift.server.TColumnData;
+import com.omnisci.thrift.server.TColumnType;
+import com.omnisci.thrift.server.TDBInfo;
+import com.omnisci.thrift.server.TDatum;
+import com.omnisci.thrift.server.TOmniSciException;
+import com.omnisci.thrift.server.TQueryResult;
+import com.omnisci.thrift.server.TRow;
+import com.omnisci.thrift.server.TRowSet;
+import com.omnisci.thrift.server.TTableDetails;
+import com.omnisci.thrift.server.TTypeInfo;
 
 import org.apache.thrift.TException;
 import org.apache.thrift.protocol.TBinaryProtocol;
@@ -68,7 +68,7 @@ public class ThriftTester {
       // TProtocol protocol = new TJSONProtocol(transport);
       // TProtocol protocol = new TProtocol(transport);
 
-      MapD.Client client = new MapD.Client(protocol);
+      OmniSci.Client client = new OmniSci.Client(protocol);
 
       String session = null;
 
@@ -173,7 +173,7 @@ public class ThriftTester {
       // Now disconnect
       logger.info("Trying to disconnect session " + session);
       client.disconnect(session);
-    } catch (TMapDException ex) {
+    } catch (TOmniSciException ex) {
       logger.error(ex.toString());
       ex.printStackTrace();
     } catch (TException ex) {

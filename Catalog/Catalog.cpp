@@ -106,6 +106,7 @@ std::map<std::string, std::shared_ptr<Catalog>> Catalog::mapd_cat_map_;
 
 thread_local bool Catalog::thread_holds_read_lock = false;
 
+using sys_read_lock = read_lock<SysCatalog>;
 using cat_read_lock = read_lock<Catalog>;
 using cat_write_lock = write_lock<Catalog>;
 using cat_sqlite_lock = sqlite_lock<Catalog>;
@@ -191,9 +192,7 @@ Catalog::~Catalog() {
   for (TableDescriptorMap::iterator tableDescIt = tableDescriptorMap_.begin();
        tableDescIt != tableDescriptorMap_.end();
        ++tableDescIt) {
-    if (tableDescIt->second->fragmenter != nullptr) {
-      delete tableDescIt->second->fragmenter;
-    }
+    tableDescIt->second->fragmenter = nullptr;
     delete tableDescIt->second;
   }
 
@@ -1209,9 +1208,8 @@ void Catalog::removeTableFromMap(const string& tableName,
 
   tableDescriptorMapById_.erase(tableDescIt);
   tableDescriptorMap_.erase(to_upper(tableName));
-  if (td->fragmenter != nullptr) {
-    delete td->fragmenter;
-  }
+  td->fragmenter = nullptr;
+
   bool isTemp = td->persistenceLevel == Data_Namespace::MemoryLevel::CPU_LEVEL;
   delete td;
 
@@ -1374,30 +1372,30 @@ void Catalog::instantiateFragmenter(TableDescriptor* td) const {
     Chunk::translateColumnDescriptorsToChunkVec(columnDescs, chunkVec);
     ChunkKey chunkKeyPrefix = {currentDB_.dbId, td->tableId};
     if (td->sortedColumnId > 0) {
-      td->fragmenter = new SortedOrderFragmenter(chunkKeyPrefix,
-                                                 chunkVec,
-                                                 dataMgr_.get(),
-                                                 const_cast<Catalog*>(this),
-                                                 td->tableId,
-                                                 td->shard,
-                                                 td->maxFragRows,
-                                                 td->maxChunkSize,
-                                                 td->fragPageSize,
-                                                 td->maxRows,
-                                                 td->persistenceLevel);
+      td->fragmenter = std::make_shared<SortedOrderFragmenter>(chunkKeyPrefix,
+                                                               chunkVec,
+                                                               dataMgr_.get(),
+                                                               const_cast<Catalog*>(this),
+                                                               td->tableId,
+                                                               td->shard,
+                                                               td->maxFragRows,
+                                                               td->maxChunkSize,
+                                                               td->fragPageSize,
+                                                               td->maxRows,
+                                                               td->persistenceLevel);
     } else {
-      td->fragmenter = new InsertOrderFragmenter(chunkKeyPrefix,
-                                                 chunkVec,
-                                                 dataMgr_.get(),
-                                                 const_cast<Catalog*>(this),
-                                                 td->tableId,
-                                                 td->shard,
-                                                 td->maxFragRows,
-                                                 td->maxChunkSize,
-                                                 td->fragPageSize,
-                                                 td->maxRows,
-                                                 td->persistenceLevel,
-                                                 !td->storageType.empty());
+      td->fragmenter = std::make_shared<InsertOrderFragmenter>(chunkKeyPrefix,
+                                                               chunkVec,
+                                                               dataMgr_.get(),
+                                                               const_cast<Catalog*>(this),
+                                                               td->tableId,
+                                                               td->shard,
+                                                               td->maxFragRows,
+                                                               td->maxChunkSize,
+                                                               td->fragPageSize,
+                                                               td->maxRows,
+                                                               td->persistenceLevel,
+                                                               !td->storageType.empty());
     }
   });
   LOG(INFO) << "Instantiating Fragmenter for table " << td->tableName << " took "
@@ -1430,9 +1428,11 @@ const TableDescriptor* Catalog::getMetadataForTableImpl(
     return nullptr;
   }
   TableDescriptor* td = tableDescIt->second;
-  std::unique_lock<std::mutex> td_lock(*td->mutex_.get());
-  if (populateFragmenter && td->fragmenter == nullptr && !td->isView) {
-    instantiateFragmenter(td);
+  if (populateFragmenter) {
+    std::unique_lock<std::mutex> td_lock(*td->mutex_.get());
+    if (td->fragmenter == nullptr && !td->isView) {
+      instantiateFragmenter(td);
+    }
   }
   return td;  // returns pointer to table descriptor
 }
@@ -1453,7 +1453,7 @@ const DictDescriptor* Catalog::getMetadataForDict(const int dictId,
   auto& dd = dictDescIt->second;
 
   if (loadDict) {
-    cat_sqlite_lock sqlite_lock(this);
+    std::lock_guard string_dict_lock(*dd->string_dict_mutex);
     if (!dd->stringDict) {
       auto time_ms = measure<>::execution([&]() {
         if (string_dict_hosts_.empty()) {
@@ -2402,7 +2402,7 @@ void Catalog::createForeignServerNoLocks(
         "options) "
         "VALUES (?, ?, ?, ?)",
         std::vector<std::string>{foreign_server->name,
-                                 foreign_server->data_wrapper.name,
+                                 foreign_server->data_wrapper_type,
                                  std::to_string(foreign_server->user_id),
                                  foreign_server->getOptionsAsJsonString()});
     sqliteConnector_.query_with_text_params(
@@ -2442,11 +2442,11 @@ foreign_storage::ForeignServer* Catalog::getForeignServerSkipCache(
       std::vector<std::string>{server_name});
   if (sqliteConnector_.getNumRows() > 0) {
     auto server = std::make_shared<foreign_storage::ForeignServer>(
-        foreign_storage::DataWrapper{sqliteConnector_.getData<std::string>(0, 2)});
-    server->id = sqliteConnector_.getData<int>(0, 0);
-    server->name = sqliteConnector_.getData<std::string>(0, 1);
-    server->user_id = sqliteConnector_.getData<std::int32_t>(0, 4);
-    server->populateOptionsMap(sqliteConnector_.getData<std::string>(0, 3));
+        sqliteConnector_.getData<int>(0, 0),
+        sqliteConnector_.getData<std::string>(0, 1),
+        sqliteConnector_.getData<std::string>(0, 2),
+        sqliteConnector_.getData<std::string>(0, 3),
+        sqliteConnector_.getData<std::int32_t>(0, 4));
     foreign_server = server.get();
     foreignServerMap_[server->name] = server;
     foreignServerMapById_[server->id] = server;
@@ -2821,8 +2821,9 @@ void Catalog::doTruncateTable(const TableDescriptor* td) {
   // must destroy fragmenter before deleteChunks is called.
   if (td->fragmenter != nullptr) {
     auto tableDescIt = tableDescriptorMapById_.find(tableId);
-    delete td->fragmenter;
-    tableDescIt->second->fragmenter = nullptr;  // get around const-ness
+    CHECK(tableDescIt != tableDescriptorMapById_.end());
+    tableDescIt->second->fragmenter = nullptr;
+    CHECK(td->fragmenter == nullptr);
   }
   ChunkKey chunkKeyPrefix = {currentDB_.dbId, tableId};
   // assuming deleteChunksWithPrefix is atomic
@@ -2891,8 +2892,9 @@ void Catalog::removeChunks(const int table_id) {
     cat_sqlite_lock sqlite_lock(this);
     if (td->fragmenter != nullptr) {
       auto tableDescIt = tableDescriptorMapById_.find(table_id);
-      delete td->fragmenter;
-      tableDescIt->second->fragmenter = nullptr;  // get around const-ness
+      CHECK(tableDescIt != tableDescriptorMapById_.end());
+      tableDescIt->second->fragmenter = nullptr;
+      CHECK(td->fragmenter == nullptr);
     }
   }
 
@@ -3303,6 +3305,46 @@ std::vector<const TableDescriptor*> Catalog::getPhysicalTablesDescriptors(
   return physicalTables;
 }
 
+std::vector<std::string> Catalog::getTableNamesForUser(
+    const UserMetadata& user_metadata,
+    const GetTablesType get_tables_type) const {
+  sys_read_lock syscat_read_lock(&SysCatalog::instance());
+  cat_read_lock read_lock(this);
+
+  std::vector<std::string> table_names;
+  const auto tables = getAllTableMetadata();
+  for (const auto td : tables) {
+    if (td->shard >= 0) {
+      // skip shards, they're not standalone tables
+      continue;
+    }
+    switch (get_tables_type) {
+      case GET_PHYSICAL_TABLES: {
+        if (td->isView) {
+          continue;
+        }
+        break;
+      }
+      case GET_VIEWS: {
+        if (!td->isView) {
+          continue;
+        }
+      }
+      default:
+        break;
+    }
+    DBObject dbObject(td->tableName, td->isView ? ViewDBObjectType : TableDBObjectType);
+    dbObject.loadKey(*this);
+    std::vector<DBObject> privObjects = {dbObject};
+    if (!SysCatalog::instance().hasAnyPrivileges(user_metadata, privObjects)) {
+      // skip table, as there are no privileges to access it
+      continue;
+    }
+    table_names.push_back(td->tableName);
+  }
+  return table_names;
+}
+
 int Catalog::getLogicalTableId(const int physicalTableId) const {
   cat_read_lock read_lock(this);
   for (const auto& l : logicalToPhysicalTableMapById_) {
@@ -3343,11 +3385,11 @@ void Catalog::eraseTablePhysicalData(const TableDescriptor* td) {
   // must destroy fragmenter before deleteChunks is called.
   if (td->fragmenter != nullptr) {
     auto tableDescIt = tableDescriptorMapById_.find(tableId);
+    CHECK(tableDescIt != tableDescriptorMapById_.end());
     {
       INJECT_TIMER(deleting_fragmenter);
-      delete td->fragmenter;
+      tableDescIt->second->fragmenter = nullptr;
     }
-    tableDescIt->second->fragmenter = nullptr;  // get around const-ness
   }
   ChunkKey chunkKeyPrefix = {currentDB_.dbId, tableId};
   {
@@ -3382,6 +3424,15 @@ std::shared_ptr<Catalog> Catalog::get(const std::string& dbName) {
   auto cat_it = mapd_cat_map_.find(dbName);
   if (cat_it != mapd_cat_map_.end()) {
     return cat_it->second;
+  }
+  return nullptr;
+}
+
+std::shared_ptr<Catalog> Catalog::get(const int32_t db_id) {
+  for (const auto& entry : mapd_cat_map_) {
+    if (entry.second->currentDB_.dbId == db_id) {
+      return entry.second;
+    }
   }
   return nullptr;
 }
@@ -3460,11 +3511,11 @@ void Catalog::buildForeignServerMap() {
   auto num_rows = sqliteConnector_.getNumRows();
   for (size_t row = 0; row < num_rows; row++) {
     auto foreign_server = std::make_shared<foreign_storage::ForeignServer>(
-        foreign_storage::DataWrapper{sqliteConnector_.getData<std::string>(row, 2)});
-    foreign_server->id = sqliteConnector_.getData<int>(row, 0);
-    foreign_server->name = sqliteConnector_.getData<std::string>(row, 1);
-    foreign_server->populateOptionsMap(sqliteConnector_.getData<std::string>(row, 3));
-    foreign_server->user_id = sqliteConnector_.getData<std::int32_t>(row, 4);
+        sqliteConnector_.getData<int>(row, 0),
+        sqliteConnector_.getData<std::string>(row, 1),
+        sqliteConnector_.getData<std::string>(row, 2),
+        sqliteConnector_.getData<std::string>(row, 3),
+        sqliteConnector_.getData<std::int32_t>(row, 4));
     foreignServerMap_[foreign_server->name] = foreign_server;
     foreignServerMapById_[foreign_server->id] = foreign_server;
   }
@@ -3490,27 +3541,26 @@ void Catalog::addForeignTableDetails() {
 }
 
 void Catalog::createDefaultServersIfNotExists() {
-  auto local_csv_server = std::make_unique<foreign_storage::ForeignServer>(
-      foreign_storage::DataWrapper{foreign_storage::DataWrapper::CSV_WRAPPER_NAME});
-  local_csv_server->name = "omnisci_local_csv";
-  local_csv_server
-      ->options[std::string{foreign_storage::ForeignServer::STORAGE_TYPE_KEY}] =
-      foreign_storage::ForeignServer::LOCAL_FILE_STORAGE_TYPE;
-  local_csv_server->user_id = OMNISCI_ROOT_USER_ID;
-  local_csv_server->options[std::string{foreign_storage::ForeignServer::BASE_PATH_KEY}] =
-      "/";
+  using foreign_storage::ForeignServer;
+  std::map<std::string, std::string, std::less<>> options;
+  options[std::string{ForeignServer::STORAGE_TYPE_KEY}] =
+      ForeignServer::LOCAL_FILE_STORAGE_TYPE;
+  options[std::string{ForeignServer::BASE_PATH_KEY}] =
+      boost::filesystem::path::preferred_separator;
+
+  auto local_csv_server =
+      std::make_unique<ForeignServer>("omnisci_local_csv",
+                                      foreign_storage::DataWrapperType::CSV,
+                                      options,
+                                      OMNISCI_ROOT_USER_ID);
   local_csv_server->validate();
   createForeignServerNoLocks(std::move(local_csv_server), true);
 
-  auto local_parquet_server = std::make_unique<foreign_storage::ForeignServer>(
-      foreign_storage::DataWrapper{foreign_storage::DataWrapper::PARQUET_WRAPPER_NAME});
-  local_parquet_server->name = "omnisci_local_parquet";
-  local_parquet_server
-      ->options[std::string{foreign_storage::ForeignServer::STORAGE_TYPE_KEY}] =
-      foreign_storage::ForeignServer::LOCAL_FILE_STORAGE_TYPE;
-  local_parquet_server->user_id = OMNISCI_ROOT_USER_ID;
-  local_parquet_server
-      ->options[std::string{foreign_storage::ForeignServer::BASE_PATH_KEY}] = "/";
+  auto local_parquet_server =
+      std::make_unique<ForeignServer>("omnisci_local_parquet",
+                                      foreign_storage::DataWrapperType::PARQUET,
+                                      options,
+                                      OMNISCI_ROOT_USER_ID);
   local_parquet_server->validate();
   createForeignServerNoLocks(std::move(local_parquet_server), true);
 }
@@ -3570,6 +3620,8 @@ std::vector<std::string> Catalog::getTableDictDirectories(
 }
 
 // returns table schema in a string
+// NOTE(sy): Might be able to replace dumpSchema() later with
+//           dumpCreateTable() after a deeper review of the TableArchiver code.
 std::string Catalog::dumpSchema(const TableDescriptor* td) const {
   cat_read_lock read_lock(this);
 
@@ -3652,6 +3704,160 @@ std::string Catalog::dumpSchema(const TableDescriptor* td) const {
     with_options.push_back("SORT_COLUMN='" + sort_cd->columnName + "'");
   }
   os << ") WITH (" + boost::algorithm::join(with_options, ", ") + ");";
+  return os.str();
+}
+
+namespace {
+
+void unserialize_key_metainfo(std::vector<std::string>& shared_dicts,
+                              std::set<std::string>& shared_dict_column_names,
+                              const std::string keyMetainfo) {
+  rapidjson::Document document;
+  document.Parse(keyMetainfo.c_str());
+  CHECK(!document.HasParseError());
+  CHECK(document.IsArray());
+  for (auto it = document.Begin(); it != document.End(); ++it) {
+    const auto& key_with_spec_json = *it;
+    CHECK(key_with_spec_json.IsObject());
+    const std::string type = key_with_spec_json["type"].GetString();
+    const std::string name = key_with_spec_json["name"].GetString();
+    auto key_with_spec = type + " (" + name + ")";
+    if (type == "SHARED DICTIONARY") {
+      shared_dict_column_names.insert(name);
+      key_with_spec += " REFERENCES ";
+      const std::string foreign_table = key_with_spec_json["foreign_table"].GetString();
+      const std::string foreign_column = key_with_spec_json["foreign_column"].GetString();
+      key_with_spec += foreign_table + "(" + foreign_column + ")";
+    } else {
+      CHECK(type == "SHARD KEY");
+    }
+    shared_dicts.push_back(key_with_spec);
+  }
+}
+
+}  // namespace
+
+// returns a "CREATE TABLE" statement in a string
+std::string Catalog::dumpCreateTable(const TableDescriptor* td,
+                                     bool multiline_formatting,
+                                     bool dump_defaults) const {
+  cat_read_lock read_lock(this);
+
+  std::ostringstream os;
+
+  if (!td->isView) {
+    os << "CREATE ";
+    if (td->persistenceLevel == Data_Namespace::MemoryLevel::CPU_LEVEL) {
+      os << "TEMPORARY ";
+    }
+    os << "TABLE " + td->tableName + " (";
+  } else {
+    os << "CREATE VIEW " + td->tableName + " AS " << td->viewSQL;
+    return os.str();
+  }
+  // scan column defines
+  std::vector<std::string> shared_dicts;
+  std::set<std::string> shared_dict_column_names;
+  unserialize_key_metainfo(shared_dicts, shared_dict_column_names, td->keyMetainfo);
+  // gather column defines
+  const auto cds = getAllColumnMetadataForTable(td->tableId, false, false, false);
+  std::map<const std::string, const ColumnDescriptor*> dict_root_cds;
+  bool first = true;
+  for (const auto cd : cds) {
+    if (!(cd->isSystemCol || cd->isVirtualCol)) {
+      const auto& ti = cd->columnType;
+      if (!first) {
+        os << ",";
+        if (!multiline_formatting) {
+          os << " ";
+        }
+      } else {
+        first = false;
+      }
+      if (multiline_formatting) {
+        os << "\n  ";
+      }
+      os << cd->columnName;
+      // CHAR is perculiar... better dump it as TEXT(32) like \d does
+      if (ti.get_type() == SQLTypes::kCHAR) {
+        os << " "
+           << "TEXT";
+      } else if (ti.get_subtype() == SQLTypes::kCHAR) {
+        os << " "
+           << "TEXT[]";
+      } else {
+        os << " " << ti.get_type_name();
+      }
+      os << (ti.get_notnull() ? " NOT NULL" : "");
+      if (shared_dict_column_names.find(cd->columnName) ==
+          shared_dict_column_names.end()) {
+        // avoids "Exception: Column ... shouldn't specify an encoding, it borrows it from
+        // the referenced column"
+        if (ti.is_string()) {
+          if (ti.get_compression() == kENCODING_DICT) {
+            os << " ENCODING " << ti.get_compression_name() << "(" << (ti.get_size() * 8)
+               << ")";
+          } else {
+            os << " ENCODING NONE";
+          }
+        } else if (ti.get_size() > 0 && ti.get_size() != ti.get_logical_size()) {
+          const auto comp_param = ti.get_comp_param() ? ti.get_comp_param() : 32;
+          os << " ENCODING " << ti.get_compression_name() << "(" << comp_param << ")";
+        }
+      }
+    }
+  }
+  // gather SHARED DICTIONARYs
+  if (shared_dicts.size()) {
+    std::string comma;
+    if (!multiline_formatting) {
+      comma = ", ";
+    } else {
+      comma = ",\n  ";
+    }
+    os << comma;
+    os << boost::algorithm::join(shared_dicts, comma);
+  }
+  // gather WITH options ...
+  std::vector<std::string> with_options;
+  if (dump_defaults || td->maxFragRows != DEFAULT_FRAGMENT_ROWS) {
+    with_options.push_back("FRAGMENT_SIZE=" + std::to_string(td->maxFragRows));
+  }
+  if (dump_defaults || td->maxChunkSize != DEFAULT_MAX_CHUNK_SIZE) {
+    with_options.push_back("MAX_CHUNK_SIZE=" + std::to_string(td->maxChunkSize));
+  }
+  if (dump_defaults || td->fragPageSize != DEFAULT_PAGE_SIZE) {
+    with_options.push_back("PAGE_SIZE=" + std::to_string(td->fragPageSize));
+  }
+  if (dump_defaults || td->maxRows != DEFAULT_MAX_ROWS) {
+    with_options.push_back("MAX_ROWS=" + std::to_string(td->maxRows));
+  }
+  if (dump_defaults || !td->hasDeletedCol) {
+    with_options.push_back(td->hasDeletedCol ? "VACUUM='DELAYED'" : "VACUUM='IMMEDIATE'");
+  }
+  if (!td->partitions.empty()) {
+    with_options.push_back("PARTITIONS='" + td->partitions + "'");
+  }
+  if (td->nShards > 0) {
+    const auto shard_cd = getMetadataForColumn(td->tableId, td->shardedColumnId);
+    CHECK(shard_cd);
+    with_options.push_back("SHARD_COUNT=" + std::to_string(td->nShards));
+  }
+  if (td->sortedColumnId > 0) {
+    const auto sort_cd = getMetadataForColumn(td->tableId, td->sortedColumnId);
+    CHECK(sort_cd);
+    with_options.push_back("SORT_COLUMN='" + sort_cd->columnName + "'");
+  }
+  os << ")";
+  if (!with_options.empty()) {
+    if (!multiline_formatting) {
+      os << " ";
+    } else {
+      os << "\n";
+    }
+    os << "WITH (" + boost::algorithm::join(with_options, ", ") + ")";
+  }
+  os << ";";
   return os.str();
 }
 

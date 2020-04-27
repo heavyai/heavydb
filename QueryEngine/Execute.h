@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 MapD Technologies, Inc.
+ * Copyright 2020 OmniSci, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,6 +24,7 @@
 #include "CodeCache.h"
 #include "DateTimeUtils.h"
 #include "Descriptors/QueryFragmentDescriptor.h"
+#include "GpuSharedMemoryContext.h"
 #include "GroupByAndAggregate.h"
 #include "JoinHashTable.h"
 #include "LoopControlFlow/JoinLoop.h"
@@ -38,7 +39,7 @@
 
 #include "../Chunk/Chunk.h"
 #include "../Shared/Logger.h"
-#include "../Shared/MapDParameters.h"
+#include "../Shared/SystemParameters.h"
 #include "../Shared/measure.h"
 #include "../Shared/thread_count.h"
 #include "../StringDictionary/LruCache.hpp"
@@ -80,6 +81,7 @@ extern float g_filter_push_down_high_frac;
 extern size_t g_filter_push_down_passing_row_ubound;
 extern bool g_enable_columnar_output;
 extern bool g_enable_overlaps_hashjoin;
+extern bool g_enable_hashjoin_many_to_many;
 extern size_t g_overlaps_max_table_size_bytes;
 extern bool g_strip_join_covered_quals;
 extern size_t g_constrained_by_in_threshold;
@@ -91,6 +93,7 @@ extern double g_bump_allocator_step_reduction;
 extern bool g_enable_direct_columnarization;
 extern bool g_enable_runtime_query_interrupt;
 extern unsigned g_runtime_query_interrupt_frequency;
+extern size_t g_gpu_smem_threshold;
 
 class QueryCompilationDescriptor;
 using QueryCompilationDescriptorOwned = std::unique_ptr<QueryCompilationDescriptor>;
@@ -214,7 +217,7 @@ inline const ColumnarResults* rows_to_columnar_results(
 inline std::vector<Analyzer::Expr*> get_exprs_not_owned(
     const std::vector<std::shared_ptr<Analyzer::Expr>>& exprs) {
   std::vector<Analyzer::Expr*> exprs_not_owned;
-  for (const auto expr : exprs) {
+  for (const auto& expr : exprs) {
     exprs_not_owned.push_back(expr.get());
   }
   return exprs_not_owned;
@@ -335,6 +338,8 @@ struct FetchResult {
   std::vector<std::vector<uint64_t>> frag_offsets;
 };
 
+std::ostream& operator<<(std::ostream&, FetchResult const&);
+
 class Executor {
   static_assert(sizeof(float) == 4 && sizeof(double) == 8,
                 "Host hardware not supported, unexpected size of float / double.");
@@ -352,7 +357,7 @@ class Executor {
       const int db_id,
       const std::string& debug_dir = "",
       const std::string& debug_file = "",
-      const MapDParameters mapd_parameters = MapDParameters());
+      const SystemParameters system_parameters = SystemParameters());
 
   static void nukeCacheOfExecutors() {
     std::lock_guard<std::mutex> flush_lock(
@@ -451,6 +456,7 @@ class Executor {
     std::unordered_map<int, CgenState::LiteralValues> literal_values;
     bool output_columnar;
     std::string llvm_ir;
+    GpuSharedMemoryContext gpu_smem_context;
   };
 
   bool isArchPascalOrLater(const ExecutorDeviceType dt) const {
@@ -600,6 +606,7 @@ class Executor {
 
   std::unordered_map<int, const Analyzer::BinOper*> getInnerTabIdToJoinCond() const;
 
+  template <typename THREAD_POOL>
   void dispatchFragments(
       const std::function<void(const ExecutorDeviceType chosen_device_type,
                                int chosen_device_id,
@@ -647,6 +654,16 @@ class Executor {
                           std::list<ChunkIter>&,
                           std::list<std::shared_ptr<Chunk_NS::Chunk>>&);
 
+  FetchResult fetchUnionChunks(const ColumnFetcher&,
+                               const RelAlgExecutionUnit& ra_exe_unit,
+                               const int device_id,
+                               const Data_Namespace::MemoryLevel,
+                               const std::map<int, const TableFragments*>&,
+                               const FragmentsList& selected_fragments,
+                               const Catalog_Namespace::Catalog&,
+                               std::list<ChunkIter>&,
+                               std::list<std::shared_ptr<Chunk_NS::Chunk>>&);
+
   std::pair<std::vector<std::vector<int64_t>>, std::vector<std::vector<uint64_t>>>
   getRowCountAndOffsetForAllFrags(
       const RelAlgExecutionUnit& ra_exe_unit,
@@ -655,6 +672,13 @@ class Executor {
       const std::map<int, const TableFragments*>& all_tables_fragments);
 
   void buildSelectedFragsMapping(
+      std::vector<std::vector<size_t>>& selected_fragments_crossjoin,
+      std::vector<size_t>& local_col_to_frag_pos,
+      const std::list<std::shared_ptr<const InputColDescriptor>>& col_global_ids,
+      const FragmentsList& selected_fragments,
+      const RelAlgExecutionUnit& ra_exe_unit);
+
+  void buildSelectedFragsMappingForUnion(
       std::vector<std::vector<size_t>>& selected_fragments_crossjoin,
       std::vector<size_t>& local_col_to_frag_pos,
       const std::list<std::shared_ptr<const InputColDescriptor>>& col_global_ids,
@@ -677,6 +701,7 @@ class Executor {
                                  const std::vector<std::vector<uint64_t>>& frag_offsets,
                                  Data_Namespace::DataMgr*,
                                  const int device_id,
+                                 const int outer_table_id,
                                  const int64_t limit,
                                  const uint32_t start_rowid,
                                  const uint32_t num_tables,
@@ -797,7 +822,8 @@ class Executor {
   bool compileBody(const RelAlgExecutionUnit& ra_exe_unit,
                    GroupByAndAggregate& group_by_and_aggregate,
                    const QueryMemoryDescriptor& query_mem_desc,
-                   const CompilationOptions& co);
+                   const CompilationOptions& co,
+                   const GpuSharedMemoryContext& gpu_smem_context = {});
 
   void createErrorCheckControlFlow(llvm::Function* query_func,
                                    bool run_with_dynamic_watchdog,
@@ -982,7 +1008,6 @@ class Executor {
   static const int32_t ERR_OUT_OF_RENDER_MEM{5};
   static const int32_t ERR_OUT_OF_CPU_MEM{6};
   static const int32_t ERR_OVERFLOW_OR_UNDERFLOW{7};
-  static const int32_t ERR_SPECULATIVE_TOP_OOM{8};
   static const int32_t ERR_OUT_OF_TIME{9};
   static const int32_t ERR_INTERRUPTED{10};
   static const int32_t ERR_COLUMNAR_CONVERSION_NOT_SUPPORTED{11};

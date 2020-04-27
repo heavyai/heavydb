@@ -206,9 +206,15 @@ int32_t StringDictionaryProxy::getOrAdd(const std::string& str) noexcept {
   return string_dict_->getOrAdd(str);
 }
 
-std::pair<char*, size_t> StringDictionaryProxy::getStringBytes(int32_t string_id) const
-    noexcept {
-  return string_dict_.get()->getStringBytes(string_id);
+std::pair<const char*, size_t> StringDictionaryProxy::getStringBytes(
+    int32_t string_id) const noexcept {
+  if (string_id >= 0) {
+    return string_dict_.get()->getStringBytes(string_id);
+  }
+  CHECK_NE(StringDictionary::INVALID_STR_ID, string_id);
+  auto it = transient_int_to_str_.find(string_id);
+  CHECK(it != transient_int_to_str_.end());
+  return std::make_pair(it->second.c_str(), it->second.size());
 }
 
 size_t StringDictionaryProxy::storageEntryCount() const {

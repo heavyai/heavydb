@@ -1002,4 +1002,7 @@ void FileMgr::free_page(std::pair<FileInfo*, int>&& page) {
   free_pages.push_back(page);
 }
 
+void FileMgr::removeTableRelatedDS(const int db_id, const int table_id) {
+  UNREACHABLE();
+}
 }  // namespace File_Namespace

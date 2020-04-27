@@ -62,23 +62,6 @@ inline SQLTypes get_dict_index_type(const SQLTypeInfo& ti) {
   return ti.get_type();
 }
 
-inline SQLTypeInfo get_dict_index_type_info(const SQLTypeInfo& ti) {
-  CHECK(ti.is_dict_encoded_string());
-  switch (ti.get_size()) {
-    case 1:
-      return SQLTypeInfo(kTINYINT, ti.get_notnull());
-    case 2:
-      return SQLTypeInfo(kSMALLINT, ti.get_notnull());
-    case 4:
-      return SQLTypeInfo(kINT, ti.get_notnull());
-    case 8:
-      return SQLTypeInfo(kBIGINT, ti.get_notnull());
-    default:
-      CHECK(false);
-  }
-  return ti;
-}
-
 inline SQLTypes get_physical_type(const SQLTypeInfo& ti) {
   auto logical_type = ti.get_type();
   if (IS_INTEGER(logical_type)) {
@@ -249,13 +232,9 @@ void convert_column(ResultSetPtr result,
   }
 }
 
-}  // namespace
-
-namespace arrow {
-
-key_t get_and_copy_to_shm(const std::shared_ptr<Buffer>& data) {
-  if (!data->size()) {
-    return IPC_PRIVATE;
+std::pair<key_t, void*> get_shm(size_t shmsz) {
+  if (!shmsz) {
+    return std::make_pair(IPC_PRIVATE, nullptr);
   }
   // Generate a new key for a shared memory segment. Keys to shared memory segments
   // are OS global, so we need to try a new key if we encounter a collision. It seems
@@ -264,7 +243,6 @@ key_t get_and_copy_to_shm(const std::shared_ptr<Buffer>& data) {
   // the same nonce, so using rand() in lieu of a better approach
   // TODO(ptaylor): Is this common? Are these assumptions true?
   auto key = static_cast<key_t>(rand());
-  const auto shmsz = data->size();
   int shmid = -1;
   // IPC_CREAT - indicates we want to create a new segment for this key if it doesn't
   // exist IPC_EXCL - ensures failure if a segment already exists for this key
@@ -288,6 +266,22 @@ key_t get_and_copy_to_shm(const std::shared_ptr<Buffer>& data) {
     throw std::runtime_error("failed to attach a shared memory");
   }
 
+  return std::make_pair(key, ipc_ptr);
+}
+
+std::pair<key_t, std::shared_ptr<Buffer>> get_shm_buffer(size_t size) {
+  auto [key, ipc_ptr] = get_shm(size);
+  std::shared_ptr<Buffer> buffer(new MutableBuffer(static_cast<uint8_t*>(ipc_ptr), size));
+  return std::make_pair<key_t, std::shared_ptr<Buffer>>(std::move(key),
+                                                        std::move(buffer));
+}
+
+}  // namespace
+
+namespace arrow {
+
+key_t get_and_copy_to_shm(const std::shared_ptr<Buffer>& data) {
+  auto [key, ipc_ptr] = get_shm(data->size());
   // copy the arrow records buffer to shared memory
   // TODO(ptaylor): I'm sure it's possible to tell Arrow's RecordBatchStreamWriter to
   // write directly to the shared memory segment as a sink
@@ -303,26 +297,58 @@ key_t get_and_copy_to_shm(const std::shared_ptr<Buffer>& data) {
 //! buffers using deallocateArrowResultBuffer. GPU buffers will become owned by the caller
 //! upon deserialization, and will be automatically freed when they go out of scope.
 ArrowResult ArrowResultSetConverter::getArrowResult() const {
+  auto timer = DEBUG_TIMER(__func__);
   std::shared_ptr<arrow::RecordBatch> record_batch = convertToArrow();
 
   if (device_type_ == ExecutorDeviceType::CPU) {
-    auto out_stream_result = arrow::io::BufferOutputStream::Create(1024);
-    ARROW_THROW_NOT_OK(out_stream_result.status());
-    auto out_stream = std::move(out_stream_result).ValueOrDie();
-
-    ARROW_THROW_NOT_OK(arrow::ipc::WriteRecordBatchStream(
-        {record_batch}, ipc::IpcOptions::Defaults(), out_stream.get()));
-
-    auto complete_ipc_stream = out_stream->Finish();
-    ARROW_THROW_NOT_OK(complete_ipc_stream.status());
-    auto serialized_records = std::move(complete_ipc_stream).ValueOrDie();
-
+    auto timer = DEBUG_TIMER("serialize batch to shared memory");
+    std::shared_ptr<Buffer> serialized_records;
+    std::shared_ptr<Buffer> serialized_schema;
     std::vector<char> schema_handle_buffer;
-
-    const auto record_key = arrow::get_and_copy_to_shm(serialized_records);
     std::vector<char> record_handle_buffer(sizeof(key_t), 0);
+    int64_t total_size = 0;
+    int64_t records_size = 0;
+    int64_t schema_size = 0;
+    key_t records_shm_key = IPC_PRIVATE;
+    ipc::DictionaryMemo memo;
+    auto options = ipc::IpcOptions::Defaults();
+    auto dict_stream = arrow::io::BufferOutputStream::Create(1024).ValueOrDie();
+
+    ARROW_THROW_NOT_OK(CollectDictionaries(*record_batch, &memo));
+    for (auto& pair : memo.id_to_dictionary()) {
+      ipc::internal::IpcPayload payload;
+      int64_t dictionary_id = pair.first;
+      const auto& dictionary = pair.second;
+
+      ARROW_THROW_NOT_OK(GetDictionaryPayload(
+          dictionary_id, dictionary, options, default_memory_pool(), &payload));
+      int32_t metadata_length = 0;
+      WriteIpcPayload(payload, options, dict_stream.get(), &metadata_length);
+    }
+    auto serialized_dict = dict_stream->Finish().ValueOrDie();
+    auto dict_size = serialized_dict->size();
+
+    ARROW_THROW_NOT_OK(ipc::SerializeSchema(
+        *record_batch->schema(), nullptr, default_memory_pool(), &serialized_schema));
+    schema_size = serialized_schema->size();
+
+    ARROW_THROW_NOT_OK(ipc::GetRecordBatchSize(*record_batch, &records_size));
+    total_size = schema_size + dict_size + records_size;
+    std::tie(records_shm_key, serialized_records) = get_shm_buffer(total_size);
+
+    memcpy(serialized_records->mutable_data(),
+           serialized_schema->data(),
+           (size_t)schema_size);
+    memcpy(serialized_records->mutable_data() + schema_size,
+           serialized_dict->data(),
+           (size_t)dict_size);
+
+    io::FixedSizeBufferWriter stream(
+        SliceMutableBuffer(serialized_records, schema_size + dict_size));
+    ARROW_THROW_NOT_OK(
+        ipc::SerializeRecordBatch(*record_batch, arrow::default_memory_pool(), &stream));
     memcpy(&record_handle_buffer[0],
-           reinterpret_cast<const unsigned char*>(&record_key),
+           reinterpret_cast<const unsigned char*>(&records_shm_key),
            sizeof(key_t));
 
     return {schema_handle_buffer,
@@ -379,8 +405,11 @@ ArrowResult ArrowResultSetConverter::getArrowResult() const {
           arrow::RecordBatch::Make(dummy_schema, dict->length(), {dict}));
     }
   }
-  ARROW_THROW_NOT_OK(arrow::ipc::WriteRecordBatchStream(
-      dict_batches, ipc::IpcOptions::Defaults(), out_stream.get()));
+
+  if (!dict_batches.empty()) {
+    ARROW_THROW_NOT_OK(arrow::ipc::WriteRecordBatchStream(
+        dict_batches, ipc::IpcOptions::Defaults(), out_stream.get()));
+  }
 
   auto complete_ipc_stream = out_stream->Finish();
   ARROW_THROW_NOT_OK(complete_ipc_stream.status());
@@ -427,6 +456,7 @@ ArrowResult ArrowResultSetConverter::getArrowResult() const {
 ArrowResultSetConverter::SerializedArrowOutput
 ArrowResultSetConverter::getSerializedArrowOutput(
     arrow::ipc::DictionaryMemo* memo) const {
+  auto timer = DEBUG_TIMER(__func__);
   std::shared_ptr<arrow::RecordBatch> arrow_copy = convertToArrow();
   std::shared_ptr<arrow::Buffer> serialized_records, serialized_schema;
 
@@ -436,6 +466,7 @@ ArrowResultSetConverter::getSerializedArrowOutput(
   ARROW_THROW_NOT_OK(CollectDictionaries(*arrow_copy, memo));
 
   if (arrow_copy->num_rows()) {
+    auto timer = DEBUG_TIMER("serialize records");
     ARROW_THROW_NOT_OK(arrow_copy->Validate());
     ARROW_THROW_NOT_OK(arrow::ipc::SerializeRecordBatch(
         *arrow_copy, arrow::default_memory_pool(), &serialized_records));
@@ -770,9 +801,9 @@ std::shared_ptr<arrow::RecordBatch> ArrowResultSetConverter::getArrowBatch(
 
 namespace {
 
-std::shared_ptr<arrow::DataType> get_arrow_type(const SQLTypeInfo& mapd_type,
+std::shared_ptr<arrow::DataType> get_arrow_type(const SQLTypeInfo& sql_type,
                                                 const ExecutorDeviceType device_type) {
-  switch (get_physical_type(mapd_type)) {
+  switch (get_physical_type(sql_type)) {
     case kBOOLEAN:
       return boolean();
     case kTINYINT:
@@ -790,14 +821,14 @@ std::shared_ptr<arrow::DataType> get_arrow_type(const SQLTypeInfo& mapd_type,
     case kCHAR:
     case kVARCHAR:
     case kTEXT:
-      if (mapd_type.is_dict_encoded_string()) {
+      if (sql_type.is_dict_encoded_string()) {
         auto value_type = std::make_shared<StringType>();
         return dictionary(int32(), value_type, false);
       }
       return utf8();
     case kDECIMAL:
     case kNUMERIC:
-      return decimal(mapd_type.get_precision(), mapd_type.get_scale());
+      return decimal(sql_type.get_precision(), sql_type.get_scale());
     case kTIME:
       return time32(TimeUnit::SECOND);
     case kDATE:
@@ -806,7 +837,7 @@ std::shared_ptr<arrow::DataType> get_arrow_type(const SQLTypeInfo& mapd_type,
       // date on GPU, return date64() for the time being, till support is added.
       return device_type == ExecutorDeviceType::GPU ? date64() : date32();
     case kTIMESTAMP:
-      switch (mapd_type.get_precision()) {
+      switch (sql_type.get_precision()) {
         case 0:
           return timestamp(TimeUnit::SECOND);
         case 3:
@@ -818,13 +849,13 @@ std::shared_ptr<arrow::DataType> get_arrow_type(const SQLTypeInfo& mapd_type,
         default:
           throw std::runtime_error(
               "Unsupported timestamp precision for Arrow result sets: " +
-              std::to_string(mapd_type.get_precision()));
+              std::to_string(sql_type.get_precision()));
       }
     case kARRAY:
     case kINTERVAL_DAY_TIME:
     case kINTERVAL_YEAR_MONTH:
     default:
-      throw std::runtime_error(mapd_type.get_type_name() +
+      throw std::runtime_error(sql_type.get_type_name() +
                                " is not supported in Arrow result sets.");
   }
   return nullptr;
@@ -903,7 +934,7 @@ void ArrowResultSetConverter::initializeColumnBuilder(
         dynamic_cast<arrow::StringDictionary32Builder*>(column_builder.builder.get());
     CHECK(dict_builder);
 
-    dict_builder->InsertMemoValues(*string_array);
+    ARROW_THROW_NOT_OK(dict_builder->InsertMemoValues(*string_array));
   } else {
     ARROW_THROW_NOT_OK(
         arrow::MakeBuilder(default_memory_pool(), value_type, &column_builder.builder));

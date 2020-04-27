@@ -722,7 +722,27 @@ namespace {
 
 static const std::unordered_set<std::string> overlaps_supported_functions = {
     "ST_Contains_MultiPolygon_Point",
-    "ST_Contains_Polygon_Point"};
+    "ST_Contains_Polygon_Point",
+    "ST_Contains_Polygon_Polygon",
+    "ST_Contains_Polygon_MultiPolygon",
+    "ST_Contains_MultiPolygon_MultiPolygon",
+    "ST_Contains_MultiPolygon_Polygon",
+    "ST_Intersects_Polygon_Point",
+    "ST_Intersects_Polygon_Polygon",
+    "ST_Intersects_Polygon_MultiPolygon",
+    "ST_Intersects_MultiPolygon_MultiPolygon",
+    "ST_Intersects_MultiPolygon_Polygon",
+    "ST_Overlaps"};
+
+static const std::unordered_set<std::string> requires_many_to_many = {
+    "ST_Contains_Polygon_Polygon",
+    "ST_Contains_Polygon_MultiPolygon",
+    "ST_Contains_MultiPolygon_MultiPolygon",
+    "ST_Contains_MultiPolygon_Polygon",
+    "ST_Intersects_Polygon_Polygon",
+    "ST_Intersects_Polygon_MultiPolygon",
+    "ST_Intersects_MultiPolygon_MultiPolygon",
+    "ST_Intersects_MultiPolygon_Polygon"};
 
 }  // namespace
 
@@ -730,17 +750,66 @@ boost::optional<OverlapsJoinConjunction> rewrite_overlaps_conjunction(
     const std::shared_ptr<Analyzer::Expr> expr) {
   auto func_oper = dynamic_cast<Analyzer::FunctionOper*>(expr.get());
   if (func_oper) {
+    const auto needs_many_many = [func_oper]() {
+      return requires_many_to_many.find(func_oper->getName()) !=
+             requires_many_to_many.end();
+    };
     // TODO(adb): consider converting unordered set to an unordered map, potentially
     // storing the rewrite function we want to apply in the map
     if (overlaps_supported_functions.find(func_oper->getName()) !=
         overlaps_supported_functions.end()) {
-      CHECK_GE(func_oper->getArity(), size_t(3));
+      if (!g_enable_hashjoin_many_to_many && needs_many_many()) {
+        LOG(WARNING) << "Many-to-many hashjoin support is disabled, unable to rewrite "
+                     << func_oper->toString() << " to use accelerated geo join.";
+        return boost::none;
+      }
 
       DeepCopyVisitor deep_copy_visitor;
+      if (func_oper->getName() == "ST_Overlaps") {
+        CHECK_GE(func_oper->getArity(), size_t(2));
+        // return empty quals, overlaps join quals
+        // TODO(adb): we will likely want to actually check for true overlaps, but this
+        // works for now
+
+        auto lhs = func_oper->getOwnArg(0);
+        auto rewritten_lhs = deep_copy_visitor.visit(lhs.get());
+        CHECK(rewritten_lhs);
+
+        auto rhs = func_oper->getOwnArg(1);
+        auto rewritten_rhs = deep_copy_visitor.visit(rhs.get());
+        CHECK(rewritten_rhs);
+
+        auto overlaps_oper = makeExpr<Analyzer::BinOper>(
+            kBOOLEAN, kOVERLAPS, kONE, rewritten_lhs, rewritten_rhs);
+        return OverlapsJoinConjunction{{}, {overlaps_oper}};
+      }
+
+      // TODO(jclay): This will work for Poly_Poly,but needs to change for others.
+      CHECK_GE(func_oper->getArity(), size_t(4));
+      if (func_oper->getName() == "ST_Contains_Polygon_Polygon" ||
+          func_oper->getName() == "ST_Intersects_Polygon_Polygon" ||
+          func_oper->getName() == "ST_Intersects_MultiPolygon_MultiPolygon" ||
+          func_oper->getName() == "ST_Intersects_MultiPolygon_Polygon" ||
+          func_oper->getName() == "ST_Intersects_Polygon_MultiPolygon") {
+        auto lhs = func_oper->getOwnArg(3);
+        auto rewritten_lhs = deep_copy_visitor.visit(lhs.get());
+        CHECK(rewritten_lhs);
+        auto rhs = func_oper->getOwnArg(1);
+        auto rewritten_rhs = deep_copy_visitor.visit(rhs.get());
+        CHECK(rewritten_rhs);
+
+        auto overlaps_oper = makeExpr<Analyzer::BinOper>(
+            kBOOLEAN, kOVERLAPS, kONE, rewritten_lhs, rewritten_rhs);
+
+        VLOG(1) << "Successfully converted to overlaps join";
+        return OverlapsJoinConjunction{{expr}, {overlaps_oper}};
+      }
+
       auto lhs = func_oper->getOwnArg(2);
       auto rewritten_lhs = deep_copy_visitor.visit(lhs.get());
       CHECK(rewritten_lhs);
       const auto& lhs_ti = rewritten_lhs->get_type_info();
+
       if (!lhs_ti.is_geometry()) {
         // TODO(adb): If ST_Contains is passed geospatial literals instead of columns, the
         // function will be expanded during translation rather than during code
@@ -749,9 +818,12 @@ boost::optional<OverlapsJoinConjunction> rewrite_overlaps_conjunction(
         // dervied class to the Analyzer may prove to be a better way to handle geo
         // literals, but for now we ensure the LHS type is a geospatial type, which would
         // mean the function has not been expanded to the physical types, yet.
-        LOG(WARNING) << "Failed to rewrite " << func_oper->getName()
-                     << " to overlaps conjunction. LHS input type is not a geospatial "
-                        "type. Are both inputs geospatial columns?";
+
+        LOG(INFO) << "Unable to rewrite " << func_oper->getName()
+                  << " to overlaps conjunction. LHS input type is not a geospatial "
+                     "type. Are both inputs geospatial columns?\n"
+                  << func_oper->toString();
+
         return boost::none;
       }
 
@@ -761,10 +833,33 @@ boost::optional<OverlapsJoinConjunction> rewrite_overlaps_conjunction(
       auto rewritten_rhs = deep_copy_visitor.visit(rhs.get());
       CHECK(rewritten_rhs);
 
+      // Check for compatible join ordering. If the join ordering does not match expected
+      // ordering for overlaps, the join builder will fail.
+      std::set<int> lhs_rte_idx;
+      lhs->collect_rte_idx(lhs_rte_idx);
+      CHECK(!lhs_rte_idx.empty());
+      std::set<int> rhs_rte_idx;
+      rhs->collect_rte_idx(rhs_rte_idx);
+      CHECK(!rhs_rte_idx.empty());
+
+      if (lhs_rte_idx.size() > 1 || rhs_rte_idx.size() > 1 || lhs_rte_idx > rhs_rte_idx) {
+        LOG(INFO) << "Unable to rewrite " << func_oper->getName()
+                  << " to overlaps conjunction. Cannot build hash table over LHS type. "
+                     "Check join order.\n"
+                  << func_oper->toString();
+        return boost::none;
+      }
+
+      VLOG(1) << "Rewritten to use overlaps join with lhs as "
+              << rewritten_lhs->toString() << " and rhs as " << rewritten_rhs->toString();
+
       auto overlaps_oper = makeExpr<Analyzer::BinOper>(
           kBOOLEAN, kOVERLAPS, kONE, rewritten_lhs, rewritten_rhs);
 
+      VLOG(1) << "Successfully converted to overlaps join";
       return OverlapsJoinConjunction{{expr}, {overlaps_oper}};
+    } else {
+      VLOG(1) << "Overlaps join not enabled for " << func_oper->getName();
     }
   }
   return boost::none;
@@ -797,7 +892,7 @@ class JoinCoveredQualVisitor : public ScalarExprVisitor<bool> {
         overlaps_supported_functions.end()) {
       const auto lhs = func_oper->getArg(2);
       const auto rhs = func_oper->getArg(1);
-      for (const auto qual_pair : join_qual_pairs) {
+      for (const auto& qual_pair : join_qual_pairs) {
         if (*lhs == *qual_pair.first && *rhs == *qual_pair.second) {
           return true;
         }

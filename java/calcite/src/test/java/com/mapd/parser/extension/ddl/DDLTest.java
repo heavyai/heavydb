@@ -7,7 +7,7 @@ import com.google.gson.Gson;
 import com.google.gson.JsonObject;
 import com.mapd.common.SockTransportProperties;
 import com.mapd.parser.server.CalciteServerHandler;
-import com.mapd.thrift.calciteserver.TPlanResult;
+import com.omnisci.thrift.calciteserver.TPlanResult;
 
 import org.junit.Before;
 

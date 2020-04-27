@@ -20,7 +20,6 @@ import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.Random;
-import java.util.concurrent.CyclicBarrier;
 
 public class SelectUpdateDeleteDifferentTables {
   final static Logger logger =

@@ -15,11 +15,12 @@
  */
 package com.omnisci.jdbc;
 
-import com.mapd.thrift.server.MapD;
-import com.mapd.thrift.server.TMapDException;
-import com.mapd.thrift.server.TQueryResult;
+import com.omnisci.thrift.server.OmniSci;
+import com.omnisci.thrift.server.TOmniSciException;
+import com.omnisci.thrift.server.TQueryResult;
 
 import org.apache.thrift.TException;
+import org.apache.thrift.transport.TTransportException;
 import org.slf4j.LoggerFactory;
 
 import java.sql.Connection;
@@ -38,13 +39,20 @@ public class OmniSciStatement implements java.sql.Statement {
   public SQLWarning rootWarning = null;
 
   private String session;
-  private MapD.Client client;
+  private OmniSci.Client client;
+  private OmniSciConnection connection;
   private ResultSet currentRS = null;
   private TQueryResult sqlResult = null;
   private int maxRows = 100000; // add limit to unlimited queries
   private boolean escapeProcessing = false;
 
-  OmniSciStatement(String tsession, MapD.Client tclient) {
+  OmniSciStatement(String tsession, OmniSciConnection tconnection) {
+    session = tsession;
+    connection = tconnection;
+    client = connection.client;
+  }
+
+  OmniSciStatement(String tsession, OmniSci.Client tclient) {
     session = tsession;
     client = tclient;
   }
@@ -87,14 +95,37 @@ public class OmniSciStatement implements java.sql.Statement {
     logger.debug("After OmniSciEscapeParser [" + afterSimpleParse + "]");
     try {
       sqlResult = client.sql_execute(session, afterSimpleParse + ";", true, null, -1, -1);
-    } catch (TMapDException ex) {
-      throw new SQLException("Query failed : " + ex.getError_msg());
+    } catch (TOmniSciException ex) {
+      throw new SQLException(
+              "Query failed : " + OmniSciExceptionText.getExceptionDetail(ex));
     } catch (TException ex) {
-      throw new SQLException("Query failed : " + ex.toString());
+      throw new SQLException(
+              "Query failed : " + OmniSciExceptionText.getExceptionDetail(ex));
     }
 
     currentRS = new OmniSciResultSet(sqlResult, sql);
     return currentRS;
+  }
+
+  @Override
+  public void cancel() throws SQLException { // logger.debug("Entered");
+    OmniSciConnection alternate_connection = null;
+    try {
+      alternate_connection = connection.getAlternateConnection();
+      // Note alternate_connection shares a session with original connection
+      alternate_connection.client.interrupt(session, session);
+    } catch (TOmniSciException ttE) {
+      throw new SQLException("Thrift transport connection failed - "
+                      + OmniSciExceptionText.getExceptionDetail(ttE),
+              ttE);
+    } catch (TException tE) {
+      throw new SQLException(
+              "Thrift failed - " + OmniSciExceptionText.getExceptionDetail(tE), tE);
+    } finally {
+      // Note closeConnection only closes the underlying thrft connection
+      // not the logical db session connection
+      alternate_connection.closeConnection();
+    }
   }
 
   @Override
@@ -105,11 +136,13 @@ public class OmniSciStatement implements java.sql.Statement {
         sql = sql.replace('"', ' ');
       }
       sqlResult = client.sql_execute(session, sql + ";", true, null, -1, -1);
-    } catch (TMapDException ex) {
-      throw new SQLException(
-              "Query failed : " + ex.getError_msg() + " sql was '" + sql + "'");
+    } catch (TOmniSciException ex) {
+      throw new SQLException("Query failed :  sql was '" + sql + "' "
+                      + OmniSciExceptionText.getExceptionDetail(ex),
+              ex);
     } catch (TException ex) {
-      throw new SQLException("Query failed : " + ex.toString());
+      throw new SQLException(
+              "Query failed : " + OmniSciExceptionText.getExceptionDetail(ex), ex);
     }
 
     return sqlResult.row_set.columns.size();
@@ -174,14 +207,6 @@ public class OmniSciStatement implements java.sql.Statement {
     } else {
       rootWarning.setNextWarning(warning);
     }
-  }
-
-  @Override
-  public void cancel() throws SQLException { // logger.debug("Entered");
-    throw new UnsupportedOperationException("Not supported yet,"
-            + " line:" + new Throwable().getStackTrace()[0].getLineNumber()
-            + " class:" + new Throwable().getStackTrace()[0].getClassName()
-            + " method:" + new Throwable().getStackTrace()[0].getMethodName());
   }
 
   @Override
@@ -460,12 +485,33 @@ public class OmniSciStatement implements java.sql.Statement {
   private static final Pattern WEEK = Pattern.compile(
           "\\sWEEK\\(([^\\{]*?)", Pattern.DOTALL | Pattern.CASE_INSENSITIVE);
 
+  /*
+   * CURRENTDATE should match CURRENT_DATE
+   * and CURRENT_DATE() where the two strings are 'joined' to either white space,
+   * punctuation or some kind of brackets. if they are joined to
+   * any alpha numeric For example 'CURRENT_TIME)' is okay while a string
+   * like CURRENT_DATE_NOW isn't
+   *
+   * Note we've include the non standard version with parenthesis to align with third
+   * party software.
+   *
+   * Breaking down the components of the pattern
+   * (?<![\\w.]) The pattern can not be preceded by any word character or a '.'
+   * (?:\\(\\))? pattern can end in zero or one '()' - note non capture group
+   * (?![\\w.]) the pattern can not be followed by a word character or a '.'
+   * Note - word characters include '_'
+   */
+  ;
+  private static final Pattern CURRENTDATE =
+          Pattern.compile("(?<![\\w.])CURRENT_DATE(?:\\(\\))?(?![\\w.])",
+                  Pattern.DOTALL | Pattern.CASE_INSENSITIVE);
   public static String simplisticDateTransform(String sql) {
     // need to iterate as each reduction of string opens up a anew match
     String start;
     do {
       // Example transform - select quarter(val) from table;
       // will become select extract(quarter from val) from table;
+      // will also replace all CURRENT_TIME and CURRENT_DATE with a call to now().
       start = sql;
       sql = QUARTER.matcher(sql).replaceAll(" EXTRACT(QUARTER FROM $1");
     } while (!sql.equals(start));
@@ -484,6 +530,12 @@ public class OmniSciStatement implements java.sql.Statement {
       start = sql;
       sql = WEEK.matcher(sql).replaceAll(" EXTRACT(WEEK FROM $1");
     } while (!sql.equals(start));
+
+    do {
+      start = sql;
+      sql = CURRENTDATE.matcher(sql).replaceAll(" cast(now() as date) ");
+    } while (!sql.equals(start));
+
     return sql;
   }
 }

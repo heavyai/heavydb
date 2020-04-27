@@ -27,6 +27,8 @@ namespace {
 
 SQLTypeInfo type_from_arrow_field(const arrow::Field& field) {
   switch (field.type()->id()) {
+    case arrow::Type::INT8:
+      return SQLTypeInfo(kTINYINT, !field.nullable());
     case arrow::Type::INT16:
       return SQLTypeInfo(kSMALLINT, !field.nullable());
     case arrow::Type::INT32:
@@ -102,6 +104,12 @@ std::vector<TargetValue> ArrowResultSet::getRowAt(const size_t index) const {
     const auto& column = *columns_[i];
     const auto& column_typeinfo = getColType(i);
     switch (column_typeinfo.get_type()) {
+      case kTINYINT: {
+        CHECK_EQ(arrow::Type::INT8, column.type_id());
+        appendValue<int64_t, arrow::Int8Array>(
+            row, column, inline_int_null_val(column_typeinfo), index);
+        break;
+      }
       case kSMALLINT: {
         CHECK_EQ(arrow::Type::INT16, column.type_id());
         appendValue<int64_t, arrow::Int16Array>(
@@ -230,7 +238,7 @@ void ArrowResultSet::resultSetArrowLoopback() {
 
   // add the dictionaries from the serialized output to the newly created memo
   const auto& serialized_id_to_dict = schema_memo.id_to_dictionary();
-  for (const auto itr : serialized_id_to_dict) {
+  for (const auto& itr : serialized_id_to_dict) {
     const auto& id = itr.first;
     const auto& dict = itr.second;
     CHECK(!dictionary_memo_.HasDictionary(id));

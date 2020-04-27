@@ -19,9 +19,10 @@
 
 #include <cstdint>
 #include <string>
-#include "../DataMgr/MemoryLevel.h"
-#include "../Fragmenter/AbstractFragmenter.h"
-#include "../Shared/sqldefs.h"
+
+#include "DataMgr/MemoryLevel.h"
+#include "Fragmenter/AbstractFragmenter.h"
+#include "Shared/sqldefs.h"
 
 /**
  * @type StorageType
@@ -57,7 +58,7 @@ struct TableDescriptor {
   std::string
       keyMetainfo;  // meta-information about shard keys and shared dictionary, as JSON
 
-  Fragmenter_Namespace::AbstractFragmenter*
+  std::shared_ptr<Fragmenter_Namespace::AbstractFragmenter>
       fragmenter;  // point to fragmenter object for the table.  it's instantiated upon
                    // first use.
   int32_t

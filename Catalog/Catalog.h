@@ -58,6 +58,8 @@
 
 #include "LeafHostInfo.h"
 
+enum GetTablesType { GET_PHYSICAL_TABLES_AND_VIEWS, GET_PHYSICAL_TABLES, GET_VIEWS };
+
 namespace Parser {
 
 class SharedDictionaryDef;
@@ -191,10 +193,21 @@ class Catalog final {
   std::vector<const TableDescriptor*> getPhysicalTablesDescriptors(
       const TableDescriptor* logicalTableDesc) const;
 
+  /**
+   * Get names of all tables accessible to user.
+   *
+   * @param user - user to retrieve table names for
+   * @param get_tables_type - enum indicating if tables, views or tables & views
+   * should be returned
+   * @return table_names - vector of table names accessible by user
+   */
+  std::vector<std::string> getTableNamesForUser(
+      const UserMetadata& user,
+      const GetTablesType get_tables_type) const;
+
   int32_t getTableEpoch(const int32_t db_id, const int32_t table_id) const;
   void setTableEpoch(const int db_id, const int table_id, const int new_epoch);
   int getDatabaseId() const { return currentDB_.dbId; }
-
   SqliteConnector& getSqliteConnector() { return sqliteConnector_; }
   void roll(const bool forward);
   DictRef addDictionary(ColumnDescriptor& cd);
@@ -204,6 +217,7 @@ class Catalog final {
 
   static void set(const std::string& dbName, std::shared_ptr<Catalog> cat);
   static std::shared_ptr<Catalog> get(const std::string& dbName);
+  static std::shared_ptr<Catalog> get(const int32_t db_id);
   static std::shared_ptr<Catalog> get(const std::string& basePath,
                                       const DBMetadata& curDB,
                                       std::shared_ptr<Data_Namespace::DataMgr> dataMgr,
@@ -231,6 +245,9 @@ class Catalog final {
   std::vector<std::string> getTableDictDirectories(const TableDescriptor* td) const;
   std::string getColumnDictDirectory(const ColumnDescriptor* cd) const;
   std::string dumpSchema(const TableDescriptor* td) const;
+  std::string dumpCreateTable(const TableDescriptor* td,
+                              bool multiline_formatting = true,
+                              bool dump_defaults = false) const;
 
   /**
    * Creates a new foreign server DB object.

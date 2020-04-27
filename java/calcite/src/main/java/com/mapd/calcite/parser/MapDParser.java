@@ -733,37 +733,7 @@ public final class MapDParser {
       node = parseSql(node.toSqlString(SqlDialect.CALCITE).toString(), false, planner);
     }
 
-    boolean is_select_star = isSelectStar(node);
-
     SqlNode validateR = planner.validate(node);
-    SqlSelect validate_select = getSelectChild(validateR);
-
-    // Hide rowid from select * queries
-    if (parserOptions.isLegacySyntax() && is_select_star && validate_select != null) {
-      SqlNodeList proj_exprs = ((SqlSelect) validateR).getSelectList();
-      SqlNodeList new_proj_exprs = new SqlNodeList(proj_exprs.getParserPosition());
-      for (SqlNode proj_expr : proj_exprs) {
-        final SqlNode unaliased_proj_expr = getUnaliasedExpression(proj_expr);
-
-        if (unaliased_proj_expr instanceof SqlIdentifier) {
-          if ((((SqlIdentifier) unaliased_proj_expr).toString().toLowerCase())
-                          .endsWith(".rowid")) {
-            continue;
-          }
-        }
-        new_proj_exprs.add(proj_expr);
-      }
-      validate_select.setSelectList(new_proj_exprs);
-
-      // trick planner back into correct state for validate
-      planner.close();
-      // create a new one
-      planner = getPlanner(allowCorrelatedSubQueryExpansion, allowPushdownJoinCondition);
-      parseSql(validateR.toSqlString(SqlDialect.CALCITE).toString(), false, planner);
-      // now validate the new modified SqlNode;
-      validateR = planner.validate(validateR);
-    }
-
     planner.setFilterPushDownInfo(parserOptions.getFilterPushDownInfo());
     RelRoot relR = planner.rel(validateR);
     relR = replaceIsTrue(planner.getTypeFactory(), relR);
@@ -866,48 +836,6 @@ public final class MapDParser {
 
     return new RelRoot(
             node, root.validatedRowType, root.kind, root.fields, root.collation);
-  }
-
-  private static SqlNode getUnaliasedExpression(final SqlNode node) {
-    if (node instanceof SqlBasicCall
-            && ((SqlBasicCall) node).getOperator() instanceof SqlAsOperator) {
-      SqlNode[] operands = ((SqlBasicCall) node).getOperands();
-      return operands[0];
-    }
-    return node;
-  }
-
-  private static boolean isSelectStar(SqlNode node) {
-    SqlSelect select_node = getSelectChild(node);
-    if (select_node == null) {
-      return false;
-    }
-    SqlNode from = getUnaliasedExpression(select_node.getFrom());
-    if (from instanceof SqlCall) {
-      return false;
-    }
-    SqlNodeList proj_exprs = select_node.getSelectList();
-    if (proj_exprs.size() != 1) {
-      return false;
-    }
-    SqlNode proj_expr = proj_exprs.get(0);
-    if (!(proj_expr instanceof SqlIdentifier)) {
-      return false;
-    }
-    return ((SqlIdentifier) proj_expr).isStar();
-  }
-
-  private static SqlSelect getSelectChild(SqlNode node) {
-    if (node instanceof SqlSelect) {
-      return (SqlSelect) node;
-    }
-    if (node instanceof SqlOrderBy) {
-      SqlOrderBy order_by_node = (SqlOrderBy) node;
-      if (order_by_node.query instanceof SqlSelect) {
-        return (SqlSelect) order_by_node.query;
-      }
-    }
-    return null;
   }
 
   private SqlNode parseSql(String sql, final boolean legacy_syntax, Planner planner)

@@ -518,7 +518,7 @@ void set_default_table_attributes(const std::string& table_name,
 bool validate_nonexistent_table(const std::string& table_name,
                                 const Catalog_Namespace::Catalog& catalog,
                                 const bool if_not_exists) {
-  if (catalog.getMetadataForTable(table_name)) {
+  if (catalog.getMetadataForTable(table_name, false)) {
     if (if_not_exists) {
       return false;
     }

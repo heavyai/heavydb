@@ -1,4 +1,4 @@
-namespace java com.mapd.thrift.calciteserver
+namespace java com.omnisci.thrift.calciteserver
 
 include "completion_hints.thrift"
 include "QueryEngine/extension_functions.thrift"

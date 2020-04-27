@@ -30,6 +30,7 @@
 #include <memory>
 #include <random>
 #include <sstream>
+#include <string_view>
 #include "Catalog.h"
 
 #include "Catalog/AuthMetadata.h"
@@ -55,6 +56,8 @@ using std::pair;
 using std::runtime_error;
 using std::string;
 using std::vector;
+
+using namespace std::string_literals;
 
 extern bool g_enable_fsi;
 
@@ -731,7 +734,7 @@ void SysCatalog::loginImpl(std::string& username,
                            const std::string& password,
                            UserMetadata& user_meta) {
   if (!checkPasswordForUser(password, username, user_meta)) {
-    throw std::runtime_error("Invalid credentials.");
+    throw std::runtime_error("Authentication failure");
   }
 }
 
@@ -1200,11 +1203,7 @@ bool SysCatalog::checkPasswordForUserImpl(const std::string& passwd,
   int pwd_check_result = bcrypt_checkpw(passwd.c_str(), user.passwd_hash.c_str());
   // if the check fails there is a good chance that data on disc is broken
   CHECK(pwd_check_result >= 0);
-  if (pwd_check_result != 0) {
-    LOG(WARNING) << "Local login failed";
-    return false;
-  }
-  return true;
+  return pwd_check_result == 0;
 }
 
 static bool parseUserMetadataFromSQLite(const std::unique_ptr<SqliteConnector>& conn,
@@ -1218,7 +1217,13 @@ static bool parseUserMetadataFromSQLite(const std::unique_ptr<SqliteConnector>& 
   user.passwd_hash = conn->getData<string>(0, 2);
   user.isSuper = conn->getData<bool>(0, 3);
   user.defaultDbId = conn->isNull(0, 4) ? -1 : conn->getData<int>(0, 4);
-  user.can_login = conn->getData<bool>(0, 5);
+  if (conn->isNull(0, 5)) {
+    LOG(WARNING)
+        << "User property 'can_login' not set for user " << user.userName
+        << ". Disabling login ability. Set the users login ability with \"ALTER USER "
+        << user.userName << " (can_login='true');\".";
+  }
+  user.can_login = conn->isNull(0, 5) ? false : conn->getData<bool>(0, 5);
   return true;
 }
 
@@ -1499,9 +1504,13 @@ void SysCatalog::grantAllOnDatabase_unsafe(const std::string& roleName,
   tmp_object.setPrivileges(AccessPrivileges::ALL_VIEW);
   tmp_object.setPermissionType(ViewDBObjectType);
   grantDBObjectPrivileges_unsafe(roleName, tmp_object, catalog);
-  tmp_object.setPrivileges(AccessPrivileges::ALL_SERVER);
-  tmp_object.setPermissionType(ServerDBObjectType);
-  grantDBObjectPrivileges_unsafe(roleName, tmp_object, catalog);
+
+  if (g_enable_fsi) {
+    tmp_object.setPrivileges(AccessPrivileges::ALL_SERVER);
+    tmp_object.setPermissionType(ServerDBObjectType);
+    grantDBObjectPrivileges_unsafe(roleName, tmp_object, catalog);
+  }
+
   tmp_object.setPrivileges(AccessPrivileges::ALL_DASHBOARD);
   tmp_object.setPermissionType(DashboardDBObjectType);
   grantDBObjectPrivileges_unsafe(roleName, tmp_object, catalog);

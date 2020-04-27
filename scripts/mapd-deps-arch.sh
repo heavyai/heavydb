@@ -18,10 +18,12 @@ yay -S \
     doxygen \
     gcc \
     gdal \
+    geos \
     git \
     glbinding \
     go \
     google-glog \
+    intel-tbb \
     jdk-openjdk \
     librdkafka \
     llvm \

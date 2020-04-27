@@ -32,6 +32,7 @@ llvm::Function* query_group_by_template(llvm::Module*,
                                         const bool hoist_literals,
                                         const QueryMemoryDescriptor& query_mem_desc,
                                         const ExecutorDeviceType,
-                                        const bool check_scan_limit);
+                                        const bool check_scan_limit,
+                                        const GpuSharedMemoryContext& gpu_smem_context);
 
 #endif  // QUERYENGINE_QUERYTEMPLATEGENERATOR_H

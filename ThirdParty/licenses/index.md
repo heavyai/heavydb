@@ -25,6 +25,7 @@ ncurses | [X11](<http://invisible-island.net/ncurses/ncurses.faq.html#who_owns_i
 PicoSHA2 | [MIT](<https://github.com/okdshin/PicoSHA2/blob/master/LICENSE>) | SHA256 Library |
 rapidjson | [MIT](<https://github.com/miloyip/rapidjson/blob/master/license.txt>) | JSON parsing |
 SQLite | [Public Domain](<https://www.sqlite.org/copyright.html>) | Catalog management |
+TBB | [Apache-2.0](https://raw.githubusercontent.com/oneapi-src/oneTBB/tbb_2020/LICENSE) | Threadpool support |
 TimeGM | [BSD](<https://cdn.netbsd.org/pub/pkgsrc/current/pkgsrc/pkgtools/libnbcompat/files/timegm.c>) | Date/time support |
 Xorg | [MIT](<https://www.x.org/releases/X11R7.7/doc/xorg-docs/License.html>) | OpenGL rendering |
 zlib | [zlib](<http://zlib.net/zlib_license.html>) | PNG support |
@@ -140,3 +141,5 @@ go-yaml/yaml | [MIT](<https://github.com/go-yaml/yaml/blob/v2/LICENSE.libyaml>) 
 uber-go/atomic | [MIT](<https://github.com/uber-go/atomic/blob/master/LICENSE.txt>) | Distributed consensus |
 uber-go/multierr | [MIT](<https://github.com/uber-go/multierr/blob/master/LICENSE.txt>) | Distributed consensus |
 uber-go/zap | [MIT](<https://github.com/uber-go/zap/blob/master/LICENSE.txt>) | Distributed consensus |
+--- | --- | --- |
+geos | [LGPLv2.1](<https://github.com/libgeos/geos/blob/master/COPYING>) | Geo support, dynamic linked |

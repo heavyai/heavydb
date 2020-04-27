@@ -206,6 +206,10 @@ class ForeignStorageBufferMgr : public Data_Namespace::AbstractBufferMgr {
     return FILE_MGR;
   }
 
+  void removeTableRelatedDS(const int db_id, const int table_id) override {
+    UNREACHABLE();
+  }
+
  private:
   PersistentForeignStorageInterface* persistent_foreign_storage_;
   std::map<ChunkKey, std::unique_ptr<ForeignStorageBuffer>> chunk_index_;

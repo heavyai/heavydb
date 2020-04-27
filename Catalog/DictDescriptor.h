@@ -39,6 +39,7 @@ struct DictDescriptor {
   int refcount;
   bool dictIsTemp;
   std::shared_ptr<StringDictionary> stringDict;
+  std::shared_ptr<std::mutex> string_dict_mutex;
   DictDescriptor(DictRef dict_ref,
                  const std::string& name,
                  int nbits,
@@ -53,7 +54,8 @@ struct DictDescriptor {
       , dictFolderPath(fname)
       , refcount(rc)
       , dictIsTemp(temp)
-      , stringDict(nullptr) {}
+      , stringDict(nullptr)
+      , string_dict_mutex(std::make_shared<std::mutex>()) {}
 
   DictDescriptor(int db_id,
                  int dict_id,
@@ -69,7 +71,8 @@ struct DictDescriptor {
       , dictFolderPath(fname)
       , refcount(rc)
       , dictIsTemp(temp)
-      , stringDict(nullptr) {
+      , stringDict(nullptr)
+      , string_dict_mutex(std::make_shared<std::mutex>()) {
     dictRef.dbId = db_id;
     dictRef.dictId = dict_id;
   }

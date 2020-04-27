@@ -17,7 +17,7 @@
 #ifndef THRIFT_TYPE_CONVERT_H
 #define THRIFT_TYPE_CONVERT_H
 
-#include "gen-cpp/mapd_types.h"
+#include "gen-cpp/omnisci_types.h"
 
 #include "Logger.h"
 

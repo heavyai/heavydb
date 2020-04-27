@@ -16,7 +16,8 @@
 
 #include "Shared/base64.h"
 
-namespace mapd {
+namespace shared {
+
 std::string decode_base64_uri(const std::string& data, bool trim_nulls) {
   // Allocate a string large enough to hold exta '=' as padding
   std::string uri_dec;
@@ -44,6 +45,7 @@ std::string decode_base64_uri(const std::string& data, bool trim_nulls) {
     uri_dec.replace(uri_dec.begin() + data_len, uri_dec.end(), padding, '=');
   }
   // in the case of a signature from a JWT trim_nulls should be false
-  return mapd::decode_base64(uri_dec, trim_nulls);
+  return decode_base64(uri_dec, trim_nulls);
 }
-}  // namespace mapd
+
+}  // namespace shared

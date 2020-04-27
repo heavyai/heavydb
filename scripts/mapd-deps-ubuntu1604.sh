@@ -19,8 +19,6 @@ sudo apt install -y \
     build-essential \
     libtool \
     ccache \
-    cmake \
-    cmake-curses-gui \
     git \
     wget \
     curl \
@@ -66,12 +64,12 @@ sudo apt install -y \
     pkg-config \
     swig
 
-# Install gcc 7
+# Install gcc 8
 sudo add-apt-repository ppa:ubuntu-toolchain-r/test -y
 sudo apt update
-sudo apt install -y g++-7
-sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-7 70 \
-                         --slave /usr/bin/g++ g++ /usr/bin/g++-7
+sudo apt install -y g++-8
+sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-8 80 \
+                         --slave /usr/bin/g++ g++ /usr/bin/g++-8
 sudo update-alternatives --config gcc
 
 # Needed to find sqlite3, xmltooling, and xml_security_c
@@ -80,10 +78,12 @@ export PATH=$PREFIX/bin:$PATH
 
 install_ninja
 
+install_cmake
+
 # Geo Support
 install_gdal
 
-VERS=1_67_0
+VERS=1_72_0
 # http://downloads.sourceforge.net/project/boost/boost/${VERS//_/.}/boost_$VERS.tar.bz2
 download ${HTTP_DEPS}/boost_$VERS.tar.bz2
 extract boost_$VERS.tar.bz2
@@ -101,7 +101,7 @@ install_llvm
 # install AWS core and s3 sdk
 install_awscpp -j $(nproc)
 
-VERS=0.11.0
+VERS=0.13.0
 wget --continue http://apache.claz.org/thrift/$VERS/thrift-$VERS.tar.gz
 tar xvf thrift-$VERS.tar.gz
 pushd thrift-$VERS
@@ -150,6 +150,9 @@ make install
 popd
 
 download_make_install ${HTTP_DEPS}/bisonpp-1.21-45.tar.gz bison++-1.21
+
+# TBB
+install_tbb
 
 # Apache Arrow (see common-functions.sh)
 ARROW_BOOST_USE_SHARED="ON"

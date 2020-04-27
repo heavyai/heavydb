@@ -49,6 +49,9 @@ std::vector<int64_t> init_agg_val_vec(
     const std::list<std::shared_ptr<Analyzer::Expr>>& quals,
     const QueryMemoryDescriptor& query_mem_desc);
 
+std::vector<int64_t> init_agg_val_vec(const std::vector<TargetInfo>& targets,
+                                      const QueryMemoryDescriptor& query_mem_desc);
+
 const Analyzer::Expr* agg_arg(const Analyzer::Expr* expr);
 
 bool constrained_not_null(const Analyzer::Expr* expr,

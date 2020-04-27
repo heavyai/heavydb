@@ -34,6 +34,7 @@
 #include <unordered_set>
 
 extern bool g_cluster;
+extern bool g_enable_union;
 
 namespace {
 
@@ -67,6 +68,8 @@ class RexRebindInputsVisitor : public RexVisitor<void*> {
   RexRebindInputsVisitor(const RelAlgNode* old_input, const RelAlgNode* new_input)
       : old_input_(old_input), new_input_(new_input) {}
 
+  virtual ~RexRebindInputsVisitor() = default;
+
   void* visitInput(const RexInput* rex_input) const override {
     const auto old_source = rex_input->getSourceNode();
     if (old_source == old_input_) {
@@ -88,6 +91,7 @@ class RexRebindInputsVisitor : public RexVisitor<void*> {
 // Creates an output with n columns.
 std::vector<RexInput> n_outputs(const RelAlgNode* node, const size_t n) {
   std::vector<RexInput> outputs;
+  outputs.reserve(n);
   for (size_t i = 0; i < n; ++i) {
     outputs.emplace_back(node, i);
   }
@@ -142,7 +146,6 @@ void RelProject::appendInput(std::string new_field_name,
 }
 
 RANodeOutput get_node_output(const RelAlgNode* ra_node) {
-  RANodeOutput outputs;
   const auto scan_node = dynamic_cast<const RelScan*>(ra_node);
   if (scan_node) {
     // Scan node has no inputs, output contains all columns in the table.
@@ -204,8 +207,12 @@ RANodeOutput get_node_output(const RelAlgNode* ra_node) {
     CHECK_EQ(size_t(0), logical_values_node->inputCount());
     return n_outputs(logical_values_node, logical_values_node->size());
   }
-  CHECK(false);
-  return outputs;
+  const auto logical_union_node = dynamic_cast<const RelLogicalUnion*>(ra_node);
+  if (logical_union_node) {
+    return n_outputs(logical_union_node, logical_union_node->size());
+  }
+  LOG(FATAL) << "Unhandled ra_node type: " << ra_node->toString();
+  return {};
 }
 
 bool RelProject::isIdentity() const {
@@ -274,7 +281,8 @@ bool isRenamedInput(const RelAlgNode* node,
     return new_name != tuple_type[index].get_resname();
   }
 
-  CHECK(dynamic_cast<const RelSort*>(node) || dynamic_cast<const RelFilter*>(node));
+  CHECK(dynamic_cast<const RelSort*>(node) || dynamic_cast<const RelFilter*>(node) ||
+        dynamic_cast<const RelLogicalUnion*>(node));
   return isRenamedInput(node->getInput(0), index, new_name);
 }
 
@@ -529,11 +537,97 @@ bool RelSort::hasEquivCollationOf(const RelSort& that) const {
   return true;
 }
 
+// class RelLogicalUnion methods
+
+RelLogicalUnion::RelLogicalUnion(RelAlgInputs inputs, bool is_all)
+    : RelAlgNode(std::move(inputs)), is_all_(is_all) {
+  if (!g_enable_union) {
+    throw QueryNotSupported(
+        "UNION is not supported yet. There is an experimental enable-union option "
+        "available to enable UNION ALL queries.");
+  }
+  CHECK_LE(2u, inputs_.size());
+  if (!is_all_) {
+    throw QueryNotSupported("UNION without ALL is not supported yet.");
+  }
+}
+
+std::shared_ptr<RelAlgNode> RelLogicalUnion::deepCopy() const {
+  return std::make_shared<RelLogicalUnion>(*this);
+}
+
+size_t RelLogicalUnion::size() const {
+  return inputs_.at(0)->size();
+}
+
+std::string RelLogicalUnion::toString() const {
+  return cat("(RelLogicalUnion<", this, ">(is_all(", is_all_, ")))");
+}
+
+std::string RelLogicalUnion::getFieldName(const size_t i) const {
+  if (auto const* input = dynamic_cast<RelCompound const*>(inputs_[0].get())) {
+    return input->getFieldName(i);
+  } else if (auto const* input = dynamic_cast<RelProject const*>(inputs_[0].get())) {
+    return input->getFieldName(i);
+  } else if (auto const* input = dynamic_cast<RelLogicalUnion const*>(inputs_[0].get())) {
+    return input->getFieldName(i);
+  } else if (auto const* input = dynamic_cast<RelAggregate const*>(inputs_[0].get())) {
+    return input->getFieldName(i);
+  } else if (auto const* input = dynamic_cast<RelScan const*>(inputs_[0].get())) {
+    return input->getFieldName(i);
+  } else if (auto const* input =
+                 dynamic_cast<RelTableFunction const*>(inputs_[0].get())) {
+    return input->getFieldName(i);
+  }
+  UNREACHABLE() << "Unhandled input type: " << inputs_.front()->toString();
+  return {};
+}
+
+bool RelLogicalUnion::inputMetainfoTypesMatch() const {
+  std::vector<TargetMetaInfo> const& tmis0 = inputs_[0]->getOutputMetainfo();
+  std::vector<TargetMetaInfo> const& tmis1 = inputs_[1]->getOutputMetainfo();
+  if (tmis0.size() != tmis1.size()) {
+    VLOG(2) << "tmis0.size() = " << tmis0.size() << " != " << tmis1.size()
+            << " = tmis1.size()";
+    return false;
+  }
+  for (size_t i = 0; i < tmis0.size(); ++i) {
+    if (tmis0[i].get_type_info() != tmis1[i].get_type_info()) {
+      VLOG(2) << "Types do not match for UNION:\n  tmis0[" << i
+              << "].get_type_info().to_string() = "
+              << tmis0[i].get_type_info().to_string() << "\n  tmis1[" << i
+              << "].get_type_info().to_string() = "
+              << tmis1[i].get_type_info().to_string();
+      return false;
+    }
+  }
+  return true;
+}
+
+// Rest of code requires a raw pointer, but RexInput object needs to live somewhere.
+RexScalar const* RelLogicalUnion::copyAndRedirectSource(RexScalar const* rex_scalar,
+                                                        size_t input_idx) const {
+  if (auto const* rex_input_ptr = dynamic_cast<RexInput const*>(rex_scalar)) {
+    RexInput rex_input(*rex_input_ptr);
+    rex_input.setSourceNode(getInput(input_idx));
+    scalar_exprs_.emplace_back(std::make_shared<RexInput const>(std::move(rex_input)));
+    return scalar_exprs_.back().get();
+  }
+  return rex_scalar;
+}
+
 namespace {
 
 unsigned node_id(const rapidjson::Value& ra_node) noexcept {
   const auto& id = field(ra_node, "id");
   return std::stoi(json_str(id));
+}
+
+std::string json_node_to_string(const rapidjson::Value& node) noexcept {
+  rapidjson::StringBuffer buffer;
+  rapidjson::Writer<rapidjson::StringBuffer> writer(buffer);
+  node.Accept(writer);
+  return buffer.GetString();
 }
 
 // The parse_* functions below de-serialize expressions as they come from Calcite.
@@ -622,7 +716,11 @@ std::unique_ptr<const RexScalar> parse_scalar_expr(const rapidjson::Value& expr,
                                                    RelAlgDagBuilder& root_dag_builder);
 
 SQLTypeInfo parse_type(const rapidjson::Value& type_obj) {
-  CHECK(type_obj.IsObject() && type_obj.MemberCount() >= 2);
+  if (type_obj.IsArray()) {
+    throw QueryNotSupported("Composite types are not currently supported.");
+  }
+  CHECK(type_obj.IsObject() && type_obj.MemberCount() >= 2)
+      << json_node_to_string(type_obj);
   const auto type = to_sql_type(json_str(field(type_obj, "type")));
   const auto nullable = json_bool(field(type_obj, "nullable"));
   const auto precision_it = type_obj.FindMember("precision");
@@ -860,13 +958,6 @@ std::vector<size_t> indices_from_json_array(
     indices.emplace_back(json_idx_arr_it->GetInt());
   }
   return indices;
-}
-
-std::string json_node_to_string(const rapidjson::Value& node) noexcept {
-  rapidjson::StringBuffer buffer;
-  rapidjson::Writer<rapidjson::StringBuffer> writer(buffer);
-  node.Accept(writer);
-  return buffer.GetString();
 }
 
 std::unique_ptr<const RexAgg> parse_aggregate_expr(const rapidjson::Value& expr) {
@@ -1838,7 +1929,6 @@ class RexInputCollector : public RexVisitor<RexInputSet> {
 void add_window_function_pre_project(std::vector<std::shared_ptr<RelAlgNode>>& nodes) {
   std::list<std::shared_ptr<RelAlgNode>> node_list(nodes.begin(), nodes.end());
 
-  WindowFunctionDetectionVisitor visitor;
   for (auto node_itr = node_list.begin(); node_itr != node_list.end(); ++node_itr) {
     const auto node = *node_itr;
     auto window_func_project_node = std::dynamic_pointer_cast<RelProject>(node);
@@ -1858,8 +1948,7 @@ void add_window_function_pre_project(std::vector<std::shared_ptr<RelAlgNode>>& n
     RexInputSet inputs;
     RexInputCollector input_collector;
     for (size_t i = 0; i < window_func_project_node->size(); i++) {
-      auto new_inputs =
-          std::move(input_collector.visit(window_func_project_node->getProjectAt(i)));
+      auto new_inputs = input_collector.visit(window_func_project_node->getProjectAt(i));
       inputs.insert(new_inputs.begin(), new_inputs.end());
     }
 
@@ -1970,6 +2059,8 @@ class RelAlgDispatcher {
         ra_node = dispatchModify(crt_node);
       } else if (rel_op == std::string("LogicalTableFunctionScan")) {
         ra_node = dispatchTableFunction(crt_node, root_dag_builder);
+      } else if (rel_op == std::string("LogicalUnion")) {
+        ra_node = dispatchUnion(crt_node);
       } else {
         throw QueryNotSupported(std::string("Node ") + rel_op + " not supported yet");
       }
@@ -2236,12 +2327,19 @@ class RelAlgDispatcher {
     return std::make_shared<RelLogicalValues>(tuple_type, values);
   }
 
-  std::vector<std::shared_ptr<const RelAlgNode>> getRelAlgInputs(
-      const rapidjson::Value& node) {
+  std::shared_ptr<RelLogicalUnion> dispatchUnion(
+      const rapidjson::Value& logical_union_ra) {
+    auto inputs = getRelAlgInputs(logical_union_ra);
+    auto const& all_type_bool = field(logical_union_ra, "all");
+    CHECK(all_type_bool.IsBool());
+    return std::make_shared<RelLogicalUnion>(std::move(inputs), all_type_bool.GetBool());
+  }
+
+  RelAlgInputs getRelAlgInputs(const rapidjson::Value& node) {
     if (node.HasMember("inputs")) {
       const auto str_input_ids = strings_from_json_array(field(node, "inputs"));
-      std::vector<std::shared_ptr<const RelAlgNode>> ra_inputs;
-      for (const auto str_id : str_input_ids) {
+      RelAlgInputs ra_inputs;
+      for (const auto& str_id : str_input_ids) {
         ra_inputs.push_back(nodes_[std::stoi(str_id)]);
       }
       return ra_inputs;
@@ -2348,11 +2446,11 @@ void RelAlgDagBuilder::resetQueryExecutionState() {
   }
 }
 
-// Prints the relational algebra as a tree; useful for debugging.
-std::string tree_string(const RelAlgNode* ra, const size_t indent) {
-  std::string result = std::string(indent, ' ') + ra->toString() + "\n";
+// Return tree with depth represented by indentations.
+std::string tree_string(const RelAlgNode* ra, const size_t depth) {
+  std::string result = std::string(2 * depth, ' ') + ra->toString() + '\n';
   for (size_t i = 0; i < ra->inputCount(); ++i) {
-    result += tree_string(ra->getInput(i), indent + 2);
+    result += tree_string(ra->getInput(i), depth + 1);
   }
   return result;
 }

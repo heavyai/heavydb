@@ -51,12 +51,6 @@ class QueryExecutionContext;
 class RenderInfo;
 class RowSetMemoryOwner;
 struct InputTableInfo;
-
-// Shared: threads in the same block share memory, atomic operations required
-// SharedForKeylessOneColumnKnownRange: special case of "Shared", but for keyless
-// aggregates with single column group by
-enum class GroupByMemSharing { Shared, SharedForKeylessOneColumnKnownRange };
-
 struct RelAlgExecutionUnit;
 class TResultSetBufferDescriptor;
 class GroupByAndAggregate;
@@ -89,8 +83,6 @@ class QueryMemoryDescriptor {
                         const int8_t group_col_compact_width,
                         const std::vector<ssize_t>& target_groupby_indices,
                         const size_t entry_count,
-                        const GroupByMemSharing sharing,
-                        const bool shared_mem_for_group_by,
                         const CountDistinctDescriptors count_distinct_descriptors,
                         const bool sort_on_gpu_hint,
                         const bool output_columnar,
@@ -257,7 +249,6 @@ class QueryMemoryDescriptor {
   int64_t getBucket() const { return bucket_; }
 
   bool hasNulls() const { return has_nulls_; }
-  GroupByMemSharing getGpuMemSharing() const { return sharing_; }
 
   const CountDistinctDescriptor& getCountDistinctDescriptor(const size_t idx) const {
     CHECK_LT(idx, count_distinct_descriptors_.size());
@@ -308,8 +299,6 @@ class QueryMemoryDescriptor {
 
   bool interleavedBins(const ExecutorDeviceType) const;
 
-  size_t sharedMemBytes(const ExecutorDeviceType) const;
-
   size_t getColOffInBytes(const size_t col_idx) const;
   size_t getColOffInBytesInNextBin(const size_t col_idx) const;
   size_t getNextColOffInBytes(const int8_t* col_ptr,
@@ -358,7 +347,6 @@ class QueryMemoryDescriptor {
   int64_t max_val_;
   int64_t bucket_;
   bool has_nulls_;
-  GroupByMemSharing sharing_;  // meaningful for GPU only
   CountDistinctDescriptors count_distinct_descriptors_;
   bool sort_on_gpu_;
   bool output_columnar_;

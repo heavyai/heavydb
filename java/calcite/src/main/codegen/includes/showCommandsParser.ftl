@@ -1,4 +1,3 @@
- 
 <#--
  Copyright 2020 OmniSci, Inc.
  Licensed under the Apache License, Version 2.0 (the "License");
@@ -25,5 +24,36 @@ SqlDdl SqlShowUserSessions(Span s) :
     <SHOW> <USER> <SESSIONS> 
     {
         return new SqlShowUserSessions(s.end(this));
+    }
+}
+
+/*
+ * Show existing tables using the following syntax:
+ *
+ * SHOW TABLES
+ */
+SqlDdl SqlShowTables(Span s) :
+{
+}
+{
+    <SHOW> <TABLES>
+    {
+        return new SqlShowTables(s.end(this));
+    }
+}
+
+
+/*
+ * Show databases using the following syntax:
+ *
+ * SHOW DATABASES
+ */
+SqlDdl SqlShowDatabases(Span s) :
+{
+}
+{
+    <SHOW> <DATABASES>
+    {
+        return new SqlShowDatabases(s.end(this));
     }
 }

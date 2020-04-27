@@ -314,9 +314,9 @@ thrust::host_vector<int64_t> collect_order_entry_column(
   const auto entry_ti = get_compact_type(layout.oe_target_info);
   const bool float_argument_input = takes_float_argument(layout.oe_target_info);
   const auto step_bytes = layout.row_bytes * step;
+  const auto col_bytes = float_argument_input ? entry_ti.get_size() : layout.col_bytes;
   for (size_t i = start; i < layout.entry_count; i += step) {
-    auto val1 = read_int_from_buff(crt_group_ptr1,
-                                   layout.col_bytes > 0 ? layout.col_bytes : sizeof(K));
+    auto val1 = read_int_from_buff(crt_group_ptr1, col_bytes > 0 ? col_bytes : sizeof(K));
     if (crt_group_ptr2) {
       const auto val2 = read_int_from_buff(crt_group_ptr2, 8);
       const auto avg_val = pair_to_double({val1, val2}, entry_ti, float_argument_input);

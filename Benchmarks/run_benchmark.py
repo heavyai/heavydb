@@ -1574,7 +1574,7 @@ def benchmark(input_arguments):
     # Hard-coded vars
     trim = 0.15
     jenkins_thresholds_name = "average"
-    jenkins_thresholds_field = "query_exec_avg"
+    jenkins_thresholds_field = "query_exec_trimmed_avg"
 
     # Set logging output level
     if verbose:

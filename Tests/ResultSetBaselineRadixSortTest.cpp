@@ -116,7 +116,8 @@ void fill_storage_buffer_baseline_sort_int(int8_t* buff,
 void fill_storage_buffer_baseline_sort_fp(int8_t* buff,
                                           const std::vector<TargetInfo>& target_infos,
                                           const QueryMemoryDescriptor& query_mem_desc,
-                                          const int64_t upper_bound) {
+                                          const int64_t upper_bound,
+                                          const bool with_nulls) {
   const auto key_component_count = query_mem_desc.getKeyCount();
   const auto i64_buff = reinterpret_cast<int64_t*>(buff);
   const auto target_slot_count = get_slot_count(target_infos);
@@ -139,7 +140,9 @@ void fill_storage_buffer_baseline_sort_fp(int8_t* buff,
   std::vector<int64_t> values(upper_bound);
   std::iota(values.begin(), values.end(), 1);
   const auto null_pattern = null_val_bit_pattern(target_infos.back().sql_type, false);
-  values.push_back(null_pattern);
+  if (with_nulls) {
+    values.push_back(null_pattern);
+  }
   std::random_device rd;
   std::mt19937 g(rd());
   std::shuffle(values.begin(), values.end(), g);
@@ -187,6 +190,16 @@ std::vector<TargetInfo> get_sort_fp_target_infos() {
   target_infos.push_back(TargetInfo{false, kMIN, fp_ti, null_ti, false, false});
   target_infos.push_back(TargetInfo{false, kMIN, fp_ti, null_ti, false, false});
   target_infos.push_back(TargetInfo{true, kSUM, fp_ti, fp_ti, true, false});
+  return target_infos;
+}
+
+std::vector<TargetInfo> get_sort_notnull_fp_target_infos() {
+  std::vector<TargetInfo> target_infos;
+  SQLTypeInfo null_ti(kNULLT, false);
+  SQLTypeInfo fp_ti(kFLOAT, true);
+  target_infos.push_back(TargetInfo{false, kMIN, fp_ti, null_ti, false, false});
+  target_infos.push_back(TargetInfo{false, kMIN, fp_ti, null_ti, true, false});
+  target_infos.push_back(TargetInfo{true, kMAX, fp_ti, fp_ti, true, false});
   return target_infos;
 }
 
@@ -252,8 +265,38 @@ TEST(SortBaseline, Floats) {
                                                   row_set_mem_owner,
                                                   nullptr));
       auto storage = rs->allocateStorage();
-      fill_storage_buffer_baseline_sort_fp(
-          storage->getUnderlyingBuffer(), target_infos, query_mem_desc, upper_bound);
+      fill_storage_buffer_baseline_sort_fp(storage->getUnderlyingBuffer(),
+                                           target_infos,
+                                           query_mem_desc,
+                                           upper_bound,
+                                           true);
+      std::list<Analyzer::OrderEntry> order_entries;
+      order_entries.emplace_back(tle_no, desc, false);
+      const size_t top_n = 5;
+      rs->sort(order_entries, top_n);
+      check_sorted<float>(*rs, desc ? upper_bound : 1, top_n, desc);
+    }
+  }
+}
+
+TEST(SortBaseline, FloatsNotNull) {
+  for (const bool desc : {true, false}) {
+    for (int tle_no = 1; tle_no <= 3; ++tle_no) {
+      const auto target_infos = get_sort_notnull_fp_target_infos();
+      const auto query_mem_desc = baseline_sort_desc(target_infos, 400, 8);
+      const auto row_set_mem_owner = std::make_shared<RowSetMemoryOwner>();
+      const int64_t upper_bound = 200;
+      std::unique_ptr<ResultSet> rs(new ResultSet(target_infos,
+                                                  ExecutorDeviceType::CPU,
+                                                  query_mem_desc,
+                                                  row_set_mem_owner,
+                                                  nullptr));
+      auto storage = rs->allocateStorage();
+      fill_storage_buffer_baseline_sort_fp(storage->getUnderlyingBuffer(),
+                                           target_infos,
+                                           query_mem_desc,
+                                           upper_bound,
+                                           false);
       std::list<Analyzer::OrderEntry> order_entries;
       order_entries.emplace_back(tle_no, desc, false);
       const size_t top_n = 5;

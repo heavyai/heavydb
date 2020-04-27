@@ -174,7 +174,7 @@ llvm::Function* mapped_function(
     const Function* function,
     const std::unordered_map<const Function*, llvm::Function*>& f) {
   const auto it = f.find(function);
-  CHECK(it != f.end());
+  CHECK(it != f.end()) << function->name() << " not found.";
   return it->second;
 }
 

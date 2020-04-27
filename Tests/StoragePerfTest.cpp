@@ -33,7 +33,6 @@
 #include "../QueryRunner/QueryRunner.h"
 #include "PopulateTableRandom.h"
 #include "ScanTable.h"
-#include "Shared/MapDParameters.h"
 #include "TestHelpers.h"
 #include "boost/filesystem.hpp"
 #include "boost/program_options.hpp"

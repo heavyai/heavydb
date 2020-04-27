@@ -56,7 +56,7 @@
 #include "Shared/base64.h"
 #include "Shared/checked_alloc.h"
 #include "Shared/mapd_shared_ptr.h"
-#include "gen-cpp/MapD.h"
+#include "gen-cpp/OmniSci.h"
 
 #include "linenoise.h"
 
@@ -144,7 +144,7 @@ void copy_table(char const* filepath, char const* table, ClientContext& context)
       if (input_rows.size() >= LOAD_PATCH_SIZE) {
         try {
           context.client.load_table(context.session, table, input_rows);
-        } catch (TMapDException& e) {
+        } catch (TOmniSciException& e) {
           std::cerr << e.error_msg << std::endl;
         }
         input_rows.clear();
@@ -153,7 +153,7 @@ void copy_table(char const* filepath, char const* table, ClientContext& context)
     if (input_rows.size() > 0) {
       context.client.load_table(context.session, table, input_rows);
     }
-  } catch (TMapDException& e) {
+  } catch (TOmniSciException& e) {
     std::cerr << e.error_msg << std::endl;
   } catch (TException& te) {
     std::cerr << "Thrift error: " << te.what() << std::endl;
@@ -172,16 +172,16 @@ void detect_table(char* file_name, TCopyParams& copy_params, ClientContext& cont
     context.client.detect_column_types(_return, context.session, file_name, copy_params);
     // print result only for verifying detect_column_types api
     // as this cmd seems never planned for public use
-    for (const auto tct : _return.row_set.row_desc) {
+    for (const auto& tct : _return.row_set.row_desc) {
       printf("%20.20s ", tct.col_name.c_str());
     }
     printf("\n");
-    for (const auto tct : _return.row_set.row_desc) {
+    for (const auto& tct : _return.row_set.row_desc) {
       printf("%20.20s ", type_info_from_thrift(tct.col_type).get_type_name().c_str());
     }
     printf("\n");
-    for (const auto row : _return.row_set.rows) {
-      for (const auto col : row.cols) {
+    for (const auto& row : _return.row_set.rows) {
+      for (const auto& col : row.cols) {
         printf("%20.20s ", col.val.str_val.c_str());
       }
       printf("\n");
@@ -206,7 +206,7 @@ void detect_table(char* file_name, TCopyParams& copy_params, ClientContext& cont
     }
     oss << ");";
     printf("\n%s\n", oss.str().c_str());
-  } catch (TMapDException& e) {
+  } catch (TOmniSciException& e) {
     std::cerr << e.error_msg << std::endl;
   } catch (TException& te) {
     std::cerr << "Thrift error in detect_table: " << te.what() << std::endl;
@@ -607,7 +607,7 @@ bool backchannel(int action, ClientContext* cc, const std::string& ccn = "") {
           context->server_host, context->port, ca_cert_name);
       protocol2 = mapd::shared_ptr<TProtocol>(new TBinaryProtocol(transport2));
     }
-    MapDClient c2(protocol2);
+    OmniSciClient c2(protocol2);
     ClientContext context2(*transport2, c2);
 
     context2.db_name = context->db_name;
@@ -999,7 +999,7 @@ void set_license_key(ClientContext& context, const std::string& token) {
       std::vector<std::string> jwt;
       boost::split(jwt, claims, boost::is_any_of("."));
       if (jwt.size() > 1) {
-        std::cout << mapd::decode_base64(jwt[1]) << std::endl;
+        std::cout << shared::decode_base64(jwt[1]) << std::endl;
       }
     }
   }
@@ -1011,7 +1011,7 @@ void get_license_claims(ClientContext& context) {
       std::vector<std::string> jwt;
       boost::split(jwt, claims, boost::is_any_of("."));
       if (jwt.size() > 1) {
-        std::cout << mapd::decode_base64(jwt[1]) << std::endl;
+        std::cout << shared::decode_base64(jwt[1]) << std::endl;
       }
     }
   }
@@ -1108,6 +1108,8 @@ void print_status(ClientContext& context) {
 }  // namespace
 
 int main(int argc, char** argv) {
+  bool success = true;
+
   std::string server_host{"localhost"};
   int port = 6274;
   std::string delimiter("|");
@@ -1223,7 +1225,7 @@ int main(int argc, char** argv) {
     transport = connMgr->open_buffered_client_transport(server_host, port, ca_cert_name);
     protocol = mapd::shared_ptr<TProtocol>(new TBinaryProtocol(transport));
   }
-  MapDClient c(protocol);
+  OmniSciClient c(protocol);
   ClientContext context(*transport, c);
   g_client_context_ptr = &context;
 
@@ -1313,6 +1315,7 @@ int main(int argc, char** argv) {
         (void)backchannel(TURN_ON, nullptr);
         if (thrift_with_retry(kSQL, context, query.c_str())) {
           (void)backchannel(TURN_OFF, nullptr);
+          success = context.query_return.success;
           if (context.query_return.row_set.row_desc.empty()) {
             continue;
           }
@@ -1369,6 +1372,7 @@ int main(int argc, char** argv) {
           }
         } else {
           (void)backchannel(TURN_OFF, nullptr);
+          success = false;
         }
       } else {
         // change the prommpt
@@ -1543,7 +1547,7 @@ int main(int argc, char** argv) {
   }
   transport->close();
 
-  return 0;
+  return (success ? 0 : 1);
 }
 
 void oom_trace_dump() {}

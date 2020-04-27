@@ -142,9 +142,14 @@ ParserWrapper::ParserWrapper(std::string query_string) {
           is_copy_to = true;
         }
       } else if (ddl == "SHOW") {
-        is_calcite_ddl_ = true;
-        is_legacy_ddl_ = false;
-        return;
+        boost::regex show_create_table_regex{
+            R"(SHOW\s+CREATE\s+TABLE\s+.*)",
+            boost::regex::extended | boost::regex::icase};
+        if (!boost::regex_match(query_string, show_create_table_regex)) {
+          is_calcite_ddl_ = true;
+          is_legacy_ddl_ = false;
+          return;
+        }
       }
 
       is_legacy_ddl_ = !is_calcite_ddl_;

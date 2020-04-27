@@ -88,8 +88,8 @@ struct NumericValueConverter : public TargetValueConverter {
       size_t row,
       typename ElementsBufferColumnPtr::pointer columnData,
       const ScalarTargetValue* scalarValue) {
-    auto mapd_p = checked_get<SOURCE_TYPE>(row, scalarValue, SOURCE_TYPE_ACCESSOR);
-    auto val = *mapd_p;
+    auto db_p = checked_get<SOURCE_TYPE>(row, scalarValue, SOURCE_TYPE_ACCESSOR);
+    auto val = *db_p;
 
     if (do_null_check_ && null_check_value_ == val) {
       columnData[row] = null_value_;
@@ -209,8 +209,8 @@ struct DictionaryValueConverter : public NumericValueConverter<int64_t, TARGET_T
       size_t row,
       typename ElementsBufferColumnPtr::pointer columnBuffer,
       const ScalarTargetValue* scalarValue) {
-    auto mapd_p = checked_get<int64_t>(row, scalarValue, this->SOURCE_TYPE_ACCESSOR);
-    auto val = *mapd_p;
+    auto db_p = checked_get<int64_t>(row, scalarValue, this->SOURCE_TYPE_ACCESSOR);
+    auto val = *db_p;
 
     if (this->do_null_check_ && this->null_check_value_ == val) {
       (*columnBuffer)[row] = this->buffer_null_sentinal_;
@@ -297,7 +297,21 @@ struct DictionaryValueConverter : public NumericValueConverter<int64_t, TARGET_T
           if (id == buffer_null_sentinal_) {
             columnDataPtr[i] = this->null_value_;
           } else {
-            CHECK(std::numeric_limits<TARGET_TYPE>::max() >= id);
+            if (std::is_signed<TARGET_TYPE>::value) {
+              if (id < 0) {
+                throw std::runtime_error(
+                    "Maximum number of unique strings (" +
+                    std::to_string(std::numeric_limits<TARGET_TYPE>::max()) +
+                    ") reached in target dictionary");
+              }
+            } else {
+              if (id >= std::numeric_limits<TARGET_TYPE>::max()) {
+                throw std::runtime_error(
+                    "Maximum number of unique strings (" +
+                    std::to_string(std::numeric_limits<TARGET_TYPE>::max()) +
+                    ") reached in target column's dict encoding");
+              }
+            }
             columnDataPtr[i] = static_cast<TARGET_TYPE>(id);
           }
         }
@@ -414,8 +428,8 @@ struct StringValueConverter : public TargetValueConverter {
   void convertToColumnarFormatFromDict(size_t row, const TargetValue* value) {
     auto scalarValue =
         checked_get<ScalarTargetValue>(row, value, SCALAR_TARGET_VALUE_ACCESSOR);
-    auto mapd_p = checked_get<int64_t>(row, scalarValue, this->SOURCE_TYPE_ACCESSOR);
-    auto val = *mapd_p;
+    auto db_p = checked_get<int64_t>(row, scalarValue, this->SOURCE_TYPE_ACCESSOR);
+    auto val = *db_p;
 
     if (std::numeric_limits<int32_t>::min() == val) {
       (*column_data_)[row] = std::string("");
@@ -437,12 +451,11 @@ struct StringValueConverter : public TargetValueConverter {
   void convertToColumnarFormatFromString(size_t row, const TargetValue* value) {
     auto scalarValue =
         checked_get<ScalarTargetValue>(row, value, SCALAR_TARGET_VALUE_ACCESSOR);
-    auto mapd_p = checked_get<NullableString>(row, scalarValue, NULLABLE_STRING_ACCESSOR);
+    auto db_p = checked_get<NullableString>(row, scalarValue, NULLABLE_STRING_ACCESSOR);
+    const auto db_str_p = checked_get<std::string>(row, db_p, STRING_ACCESSOR);
 
-    const auto mapd_str_p = checked_get<std::string>(row, mapd_p, STRING_ACCESSOR);
-
-    if (nullptr != mapd_str_p) {
-      (*column_data_)[row] = *mapd_str_p;
+    if (nullptr != db_str_p) {
+      (*column_data_)[row] = *db_str_p;
     } else {
       (*column_data_)[row] = std::string("");
     }

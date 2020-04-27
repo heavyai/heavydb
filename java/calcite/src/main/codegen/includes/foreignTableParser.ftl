@@ -272,13 +272,25 @@ OmniSqlOptionsMap WithOptions() :
 OmniSqlOptionPair WithOption() :
 {
     final SqlIdentifier withOption;
+    final String withOptionString;
     final SqlNode withValue;
 }
 {
-    withOption = CompoundIdentifier()
+    (
+      // Special rule required to handle "escape" option, since ESCAPE is a keyword
+      <ESCAPE>
+      {
+        withOptionString = "escape";
+      }
+    |
+      withOption = CompoundIdentifier()
+      {
+        withOptionString = withOption.toString();
+      }
+    )
     <EQ>
     withValue = Literal()
-    { return new OmniSqlOptionPair(withOption.toString(),
+    { return new OmniSqlOptionPair(withOptionString,
                                    new OmniSqlSanitizedString(withValue)); }
 }
 

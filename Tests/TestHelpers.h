@@ -42,7 +42,7 @@ void compare_array(const TargetValue& r,
   const auto& scalar_tv_vector = array_tv->get();
   ASSERT_EQ(scalar_tv_vector.size(), arr.size());
   size_t ctr = 0;
-  for (const ScalarTargetValue scalar_tv : scalar_tv_vector) {
+  for (const ScalarTargetValue& scalar_tv : scalar_tv_vector) {
     auto p = boost::get<T>(&scalar_tv);
     CHECK(p);
     if (tol < 0.) {
@@ -66,7 +66,7 @@ void compare_array(const TargetValue& r,
   const auto& scalar_tv_vector = array_tv->get();
   ASSERT_EQ(scalar_tv_vector.size(), arr.size());
   size_t ctr = 0;
-  for (const ScalarTargetValue scalar_tv : scalar_tv_vector) {
+  for (const ScalarTargetValue& scalar_tv : scalar_tv_vector) {
     auto ns = boost::get<NullableString>(&scalar_tv);
     CHECK(ns);
     auto str = boost::get<std::string>(ns);
@@ -195,6 +195,12 @@ void init_logger_stderr_only(int argc, char const* const* argv) {
   logger::LogOptions log_options(argv[0]);
   log_options.max_files_ = 0;  // stderr only by default
   log_options.parse_command_line(argc, argv);
+  logger::init(log_options);
+}
+
+void init_logger_stderr_only() {
+  logger::LogOptions log_options(nullptr);
+  log_options.max_files_ = 0;  // stderr only by default
   logger::init(log_options);
 }
 

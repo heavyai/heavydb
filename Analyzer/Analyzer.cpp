@@ -61,7 +61,7 @@ std::shared_ptr<Analyzer::Expr> ColumnVar::deep_copy() const {
 }
 
 void ExpressionTuple::collect_rte_idx(std::set<int>& rte_idx_set) const {
-  for (const auto column : tuple_) {
+  for (const auto& column : tuple_) {
     column->collect_rte_idx(rte_idx_set);
   }
 }
@@ -609,6 +609,13 @@ SQLTypeInfo BinOper::common_numeric_type(const SQLTypeInfo& type1,
     case kNUMERIC:
     case kDECIMAL:
       switch (type2.get_type()) {
+        case kTINYINT:
+          common_type =
+              SQLTypeInfo(kDECIMAL,
+                          std::max(3 + type1.get_scale(), type1.get_dimension()),
+                          type1.get_scale(),
+                          notnull);
+          break;
         case kSMALLINT:
           common_type =
               SQLTypeInfo(kDECIMAL,
@@ -3008,7 +3015,7 @@ bool FunctionOper::operator==(const Expr& rhs) const {
 
 std::string FunctionOper::toString() const {
   std::string str{"(" + name_ + " "};
-  for (const auto arg : args_) {
+  for (const auto& arg : args_) {
     str += arg->toString();
   }
   str += ")";

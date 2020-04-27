@@ -21,19 +21,19 @@
 #include "rapidjson/document.h"
 
 #include "Catalog/SessionInfo.h"
-#include "gen-cpp/mapd_types.h"
+#include "gen-cpp/omnisci_types.h"
 
 #include "Catalog/ColumnDescriptor.h"
 #include "Catalog/SessionInfo.h"
 #include "Catalog/TableDescriptor.h"
 #include "Utils/DdlUtils.h"
-#include "gen-cpp/mapd_types.h"
+#include "gen-cpp/omnisci_types.h"
 
 class DdlCommand {
  public:
   DdlCommand(const rapidjson::Value& ddl_payload,
              std::shared_ptr<Catalog_Namespace::SessionInfo const> session_ptr)
-      : ddl_payload(ddl_payload), session_ptr(session_ptr) {}
+      : ddl_payload_(ddl_payload), session_ptr_(session_ptr) {}
 
   /**
    * Executes the DDL command corresponding to provided JSON payload.
@@ -43,8 +43,8 @@ class DdlCommand {
   virtual void execute(TQueryResult& _return) = 0;
 
  protected:
-  const rapidjson::Value& ddl_payload;
-  std::shared_ptr<Catalog_Namespace::SessionInfo const> session_ptr;
+  const rapidjson::Value& ddl_payload_;
+  std::shared_ptr<Catalog_Namespace::SessionInfo const> session_ptr_;
 };
 
 class CreateForeignServerCommand : public DdlCommand {
@@ -117,6 +117,22 @@ class DropForeignTableCommand : public DdlCommand {
   void execute(TQueryResult& _return) override;
 };
 
+class ShowTablesCommand : public DdlCommand {
+ public:
+  ShowTablesCommand(const rapidjson::Value& ddl_payload,
+                    std::shared_ptr<Catalog_Namespace::SessionInfo const> session_ptr);
+
+  void execute(TQueryResult& _return) override;
+};
+
+class ShowDatabasesCommand : public DdlCommand {
+ public:
+  ShowDatabasesCommand(const rapidjson::Value& ddl_payload,
+                       std::shared_ptr<Catalog_Namespace::SessionInfo const> session_ptr);
+
+  void execute(TQueryResult& _return) override;
+};
+
 class DdlCommandExecutor {
  public:
   DdlCommandExecutor(const std::string& ddl_statement,
@@ -136,7 +152,6 @@ class DdlCommandExecutor {
   bool isShowUserSessions();
 
  private:
-  const std::string& ddl_statement;
-  rapidjson::Document ddl_query;
-  std::shared_ptr<Catalog_Namespace::SessionInfo const> session_ptr;
+  rapidjson::Document ddl_query_;
+  std::shared_ptr<Catalog_Namespace::SessionInfo const> session_ptr_;
 };

@@ -15,10 +15,10 @@
  */
 package com.mapd.tests;
 
-import com.mapd.thrift.server.TColumnType;
-import com.mapd.thrift.server.TCopyParams;
-import com.mapd.thrift.server.TCreateParams;
-import com.mapd.thrift.server.TImportHeaderRow;
+import com.omnisci.thrift.server.TColumnType;
+import com.omnisci.thrift.server.TCopyParams;
+import com.omnisci.thrift.server.TCreateParams;
+import com.omnisci.thrift.server.TImportHeaderRow;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;

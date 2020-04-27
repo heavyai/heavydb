@@ -22,7 +22,7 @@ std::vector<llvm::Value*> CodeGenerator::codegenGeoExpr(Analyzer::GeoExpr const*
   using ValueVector = std::vector<llvm::Value*>;
   ValueVector argument_list;
 
-  for (const auto arg : geo_expr->getArgs()) {
+  for (const auto& arg : geo_expr->getArgs()) {
     const auto arg_lvs = codegen(arg.get(), true, co);
     argument_list.insert(argument_list.end(), arg_lvs.begin(), arg_lvs.end());
     const auto arg_ti = arg->get_type_info();

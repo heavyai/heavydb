@@ -21,7 +21,7 @@
 
 #include <gtest/gtest.h>
 
-#include "MapDHandlerTestHelpers.h"
+#include "DBHandlerTestHelpers.h"
 #include "TestHelpers.h"
 
 #ifndef BASE_PATH
@@ -30,17 +30,17 @@
 
 extern bool g_enable_fsi;
 
-class CreateForeignServerTest : public MapDHandlerTestFixture {
+class CreateForeignServerTest : public DBHandlerTestFixture {
  protected:
   void SetUp() override {
     g_enable_fsi = true;
-    MapDHandlerTestFixture::SetUp();
+    DBHandlerTestFixture::SetUp();
     getCatalog().dropForeignServer("test_server");
   }
 
   void TearDown() override {
     getCatalog().dropForeignServer("test_server");
-    MapDHandlerTestFixture::TearDown();
+    DBHandlerTestFixture::TearDown();
   }
 
   void assertExpectedForeignServer() {
@@ -49,8 +49,7 @@ class CreateForeignServerTest : public MapDHandlerTestFixture {
 
     ASSERT_GT(foreign_server->id, 0);
     ASSERT_EQ("test_server", foreign_server->name);
-    ASSERT_EQ(foreign_storage::DataWrapper::CSV_WRAPPER_NAME,
-              foreign_server->data_wrapper.name);
+    ASSERT_EQ(foreign_storage::DataWrapperType::CSV, foreign_server->data_wrapper_type);
     ASSERT_EQ(OMNISCI_ROOT_USER_ID, foreign_server->user_id);
 
     ASSERT_TRUE(
@@ -156,16 +155,16 @@ TEST_F(CreateForeignServerTest, InvalidDataWrapper) {
       "CREATE SERVER test_server FOREIGN DATA WRAPPER invalid_wrapper WITH "
       "(storage_type = 'LOCAL_FILE', base_path = '/test_path/');"};
   std::string error_message{
-      "Exception: Invalid data wrapper type \"invalid_wrapper\". "
+      "Exception: Invalid data wrapper type \"INVALID_WRAPPER\". "
       "Data wrapper type must be one of the following: OMNISCI_CSV, OMNISCI_PARQUET."};
   queryAndAssertException(query, error_message);
 }
 
-class DropForeignServerTest : public MapDHandlerTestFixture {
+class DropForeignServerTest : public DBHandlerTestFixture {
  protected:
   void SetUp() override {
     g_enable_fsi = true;
-    MapDHandlerTestFixture::SetUp();
+    DBHandlerTestFixture::SetUp();
     dropTestTable();
     sql("CREATE SERVER IF NOT EXISTS test_server FOREIGN DATA WRAPPER omnisci_csv "
         "WITH (storage_type = 'LOCAL_FILE', base_path = '/test_path/');");
@@ -175,7 +174,7 @@ class DropForeignServerTest : public MapDHandlerTestFixture {
     g_enable_fsi = true;
     dropTestTable();
     getCatalog().dropForeignServer("test_server");
-    MapDHandlerTestFixture::TearDown();
+    DBHandlerTestFixture::TearDown();
   }
 
   void assertNullForeignServer(const std::string& server_name) {
@@ -225,11 +224,11 @@ TEST_F(DropForeignServerTest, FsiDisabled) {
   queryAndAssertException("DROP SERVER test_server;", "Syntax error at: SERVER");
 }
 
-class ForeignServerPrivilegesDdlTest : public MapDHandlerTestFixture {
+class ForeignServerPrivilegesDdlTest : public DBHandlerTestFixture {
  protected:
   void SetUp() override {
     g_enable_fsi = true;
-    MapDHandlerTestFixture::SetUp();
+    DBHandlerTestFixture::SetUp();
     loginAdmin();
     dropServer();
     createTestUser();

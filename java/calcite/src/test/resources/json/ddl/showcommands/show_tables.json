@@ -1,0 +1,6 @@
+{
+  "statementType": "DDL",
+  "payload": {
+    "command": "SHOW_TABLES"
+  }
+}

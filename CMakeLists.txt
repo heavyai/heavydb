@@ -37,7 +37,7 @@ add_definitions("-DMAPD_EDITION_${MAPD_EDITION}")
 string(TOLOWER "${MAPD_EDITION}" MAPD_EDITION_LOWER)
 
 set(MAPD_VERSION_MAJOR "5")
-set(MAPD_VERSION_MINOR "2")
+set(MAPD_VERSION_MINOR "3")
 set(MAPD_VERSION_PATCH "0")
 set(MAPD_VERSION_EXTRA "dev")
 set(MAPD_VERSION_RAW "${MAPD_VERSION_MAJOR}.${MAPD_VERSION_MINOR}.${MAPD_VERSION_PATCH}${MAPD_VERSION_EXTRA}")
@@ -229,6 +229,7 @@ endif()
 option(ENABLE_STANDALONE_CALCITE "Require standalone Calcite server" OFF)
 option(ENABLE_ASAN "Enable address sanitizer" OFF)
 option(ENABLE_TSAN "Enable thread sanitizer" OFF)
+option(ENABLE_UBSAN "Enable undefined behavior sanitizer" OFF)
 if(ENABLE_ASAN)
   set(SAN_FLAGS "-fsanitize=address -O1 -fno-omit-frame-pointer")
   add_definitions("-DWITH_DECODERS_BOUNDS_CHECKING")
@@ -239,8 +240,10 @@ elseif(ENABLE_TSAN)
   set(SAN_FLAGS "-fsanitize=thread -fPIC -O1 -fno-omit-frame-pointer")
   # required for older GCC, see https://gcc.gnu.org/bugzilla/show_bug.cgi?id=64354
   add_definitions("-D__SANITIZE_THREAD__")
+elseif(ENABLE_UBSAN)
+  set(SAN_FLAGS "-fsanitize=undefined -fPIC -O1 -fno-omit-frame-pointer")
 endif()
-if(ENABLE_ASAN OR ENABLE_TSAN)
+if(ENABLE_ASAN OR ENABLE_TSAN OR ENABLE_UBSAN)
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${SAN_FLAGS}")
   set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${SAN_FLAGS}")
   set(ENABLE_STANDALONE_CALCITE ON)
@@ -268,12 +271,16 @@ endif()
 set(llvm_config_inc_arg "--includedir")
 set(llvm_config_ld_arg "--ldflags")
 set(llvm_config_lib_arg "--libs")
+set(llvm_config_version_arg "--version")
 execute_process(COMMAND ${llvm_config_cmd} ${llvm_config_inc_arg}
     OUTPUT_VARIABLE LLVM_INC_FLAGS)
 execute_process(COMMAND ${llvm_config_cmd} ${llvm_config_lib_arg}
     OUTPUT_VARIABLE LLVM_LIB_FLAGS)
 execute_process(COMMAND ${llvm_config_cmd} ${llvm_config_ld_arg}
     OUTPUT_VARIABLE LLVM_LD_FLAGS)
+execute_process(COMMAND ${llvm_config_cmd} ${llvm_config_version_arg} 
+    OUTPUT_VARIABLE LLVM_VERSION_STR)
+string(REGEX MATCH "^([0-9]+)" LLVM_VERSION_MAJOR ${LLVM_VERSION_STR})
 if(ENABLE_LLVM_DBG)
   set(llvm_config_obj_arg "--obj-root")
   execute_process(COMMAND ${llvm_config_cmd} ${llvm_config_obj_arg}
@@ -305,6 +312,10 @@ if(NOT ${CMAKE_SYSTEM_NAME} STREQUAL "Darwin")
 endif()
 include_directories(ThirdParty/googletest)
 add_subdirectory(ThirdParty/googletest)
+
+# Google Benchmark
+set(BENCHMARK_ENABLE_TESTING OFF CACHE BOOL "Suppressing benchmark's tests" FORCE)
+add_subdirectory(ThirdParty/googlebenchmark)
 
 # Arrow
 find_package(Arrow REQUIRED)
@@ -387,38 +398,53 @@ if("${MAPD_EDITION_LOWER}" STREQUAL "ee")
   endif()
 endif()
 
-add_custom_command(
-    DEPENDS ${CMAKE_SOURCE_DIR}/mapd.thrift
-    DEPENDS ${CMAKE_SOURCE_DIR}/QueryEngine/serialized_result_set.thrift
-    DEPENDS ${CMAKE_SOURCE_DIR}/QueryEngine/extension_functions.thrift
-    OUTPUT
-        ${CMAKE_BINARY_DIR}/gen-cpp/MapD.cpp
-        ${CMAKE_BINARY_DIR}/gen-cpp/MapD.h
-        ${CMAKE_BINARY_DIR}/gen-cpp/mapd_constants.cpp
-        ${CMAKE_BINARY_DIR}/gen-cpp/mapd_types.cpp
-        ${CMAKE_BINARY_DIR}/gen-cpp/completion_hints_constants.cpp
-        ${CMAKE_BINARY_DIR}/gen-cpp/completion_hints_types.cpp
-        ${CMAKE_BINARY_DIR}/gen-cpp/serialized_result_set_constants.cpp
-        ${CMAKE_BINARY_DIR}/gen-cpp/serialized_result_set_types.cpp
-        ${CMAKE_BINARY_DIR}/gen-cpp/common_constants.cpp
-        ${CMAKE_BINARY_DIR}/gen-cpp/common_types.cpp
-        ${CMAKE_BINARY_DIR}/gen-cpp/extension_functions_types.cpp
-    COMMAND ${Thrift_EXECUTABLE}
-    ARGS -gen cpp -r -o ${CMAKE_BINARY_DIR} ${CMAKE_SOURCE_DIR}/mapd.thrift)
-list(APPEND ADDITIONAL_MAKE_CLEAN_FILES ${CMAKE_BINARY_DIR}/gen-cpp/)
+# TBB
+set(TBB_LIBS "")
+find_package(TBB)
+if(TBB_FOUND)
+  message(STATUS "Building with TBB support")
+  add_definitions("-DHAVE_TBB")
+  list(APPEND TBB_LIBS ${TBB_LIBRARIES})
+endif()
 
-add_library(mapd_thrift
-    ${CMAKE_BINARY_DIR}/gen-cpp/MapD.cpp
-    ${CMAKE_BINARY_DIR}/gen-cpp/MapD.h
-    ${CMAKE_BINARY_DIR}/gen-cpp/mapd_constants.cpp
-    ${CMAKE_BINARY_DIR}/gen-cpp/mapd_types.cpp
+add_custom_command(
+  DEPENDS
+    ${CMAKE_SOURCE_DIR}/omnisci.thrift
+    ${CMAKE_SOURCE_DIR}/common.thrift
+    ${CMAKE_SOURCE_DIR}/completion_hints.thrift
+    ${CMAKE_SOURCE_DIR}/QueryEngine/serialized_result_set.thrift
+    ${CMAKE_SOURCE_DIR}/QueryEngine/extension_functions.thrift
+  OUTPUT
+    ${CMAKE_BINARY_DIR}/gen-cpp/OmniSci.cpp
+    ${CMAKE_BINARY_DIR}/gen-cpp/OmniSci.h
+    ${CMAKE_BINARY_DIR}/gen-cpp/omnisci_constants.cpp
+    ${CMAKE_BINARY_DIR}/gen-cpp/omnisci_types.cpp
+    ${CMAKE_BINARY_DIR}/gen-cpp/common_constants.cpp
+    ${CMAKE_BINARY_DIR}/gen-cpp/common_types.cpp
     ${CMAKE_BINARY_DIR}/gen-cpp/completion_hints_constants.cpp
     ${CMAKE_BINARY_DIR}/gen-cpp/completion_hints_types.cpp
     ${CMAKE_BINARY_DIR}/gen-cpp/serialized_result_set_constants.cpp
     ${CMAKE_BINARY_DIR}/gen-cpp/serialized_result_set_types.cpp
-    ${CMAKE_BINARY_DIR}/gen-cpp/common_constants.cpp
-    ${CMAKE_BINARY_DIR}/gen-cpp/common_types.cpp
-    ${CMAKE_BINARY_DIR}/gen-cpp/extension_functions_types.cpp)
+    ${CMAKE_BINARY_DIR}/gen-cpp/extension_functions_constants.cpp
+    ${CMAKE_BINARY_DIR}/gen-cpp/extension_functions_types.cpp
+  COMMAND ${Thrift_EXECUTABLE}
+  ARGS -gen cpp -r -o ${CMAKE_BINARY_DIR} ${CMAKE_SOURCE_DIR}/omnisci.thrift)
+list(APPEND ADDITIONAL_MAKE_CLEAN_FILES ${CMAKE_BINARY_DIR}/gen-cpp/)
+
+add_library(mapd_thrift
+  ${CMAKE_BINARY_DIR}/gen-cpp/OmniSci.cpp
+  ${CMAKE_BINARY_DIR}/gen-cpp/OmniSci.h
+  ${CMAKE_BINARY_DIR}/gen-cpp/omnisci_constants.cpp
+  ${CMAKE_BINARY_DIR}/gen-cpp/omnisci_types.cpp
+  ${CMAKE_BINARY_DIR}/gen-cpp/common_constants.cpp
+  ${CMAKE_BINARY_DIR}/gen-cpp/common_types.cpp
+  ${CMAKE_BINARY_DIR}/gen-cpp/completion_hints_constants.cpp
+  ${CMAKE_BINARY_DIR}/gen-cpp/completion_hints_types.cpp
+  ${CMAKE_BINARY_DIR}/gen-cpp/serialized_result_set_constants.cpp
+  ${CMAKE_BINARY_DIR}/gen-cpp/serialized_result_set_types.cpp
+  ${CMAKE_BINARY_DIR}/gen-cpp/extension_functions_constants.cpp
+  ${CMAKE_BINARY_DIR}/gen-cpp/extension_functions_types.cpp
+)
 
 target_compile_options(mapd_thrift PRIVATE -fPIC)
 target_link_libraries(mapd_thrift ${Thrift_LIBRARIES})
@@ -533,6 +559,8 @@ if(ENABLE_LICENSING_AWS)
   list(APPEND MAPD_LIBRARIES AWSMarketplace)
 endif()
 
+list(APPEND MAPD_LIBRARIES ${TBB_LIBS})
+
 option(ENABLE_TESTS "Build unit tests" ON)
 if (ENABLE_TESTS)
   enable_testing()
@@ -554,19 +582,19 @@ add_executable(omnisci_server ${omnisci_server_source_files})
 set_target_properties(omnisci_server PROPERTIES COMPILE_DEFINITIONS "${TIME_LIMITED_DEFINITIONS}")
 
 add_custom_command(
-    DEPENDS ${CMAKE_SOURCE_DIR}/mapd.thrift
+    DEPENDS ${CMAKE_SOURCE_DIR}/omnisci.thrift
     OUTPUT
-        ${CMAKE_SOURCE_DIR}/java/thrift/src/gen/com/mapd/thrift/server/MapD.java
-        ${CMAKE_SOURCE_DIR}/java/thrift/src/gen/com/mapd/thrift/server/TRow.java
+        ${CMAKE_SOURCE_DIR}/java/thrift/src/gen/com/omnisci/thrift/server/OmniSci.java
+        ${CMAKE_SOURCE_DIR}/java/thrift/src/gen/com/omnisci/thrift/server/TRow.java
     COMMAND mkdir
     ARGS -p ${CMAKE_SOURCE_DIR}/java/thrift/src/gen
     COMMAND ${Thrift_EXECUTABLE}
-    ARGS -gen java -r -out ${CMAKE_SOURCE_DIR}/java/thrift/src/gen/ ${CMAKE_SOURCE_DIR}/mapd.thrift)
+    ARGS -gen java -r -out ${CMAKE_SOURCE_DIR}/java/thrift/src/gen/ ${CMAKE_SOURCE_DIR}/omnisci.thrift)
 
 add_custom_command(
     DEPENDS ${CMAKE_SOURCE_DIR}/common.thrift
     OUTPUT
-        ${CMAKE_SOURCE_DIR}/java/thrift/src/gen/com/mapd/thrift/server/common.java
+        ${CMAKE_SOURCE_DIR}/java/thrift/src/gen/com/omnisci/thrift/server/common.java
     COMMAND mkdir
     ARGS -p ${CMAKE_SOURCE_DIR}/java/thrift/src/gen
     COMMAND ${Thrift_EXECUTABLE}
@@ -575,7 +603,7 @@ add_custom_command(
 add_custom_command(
     DEPENDS ${CMAKE_SOURCE_DIR}/QueryEngine/serialized_result_set.thrift
     OUTPUT
-        ${CMAKE_SOURCE_DIR}/java/thrift/src/gen/com/mapd/thrift/server/serialized_result_set.java
+        ${CMAKE_SOURCE_DIR}/java/thrift/src/gen/com/omnisci/thrift/server/serialized_result_set.java
     COMMAND mkdir
     ARGS -p ${CMAKE_SOURCE_DIR}/java/thrift/src/gen
     COMMAND ${Thrift_EXECUTABLE}
@@ -583,7 +611,7 @@ add_custom_command(
 
 add_custom_command(
     DEPENDS ${CMAKE_SOURCE_DIR}/java/thrift/calciteserver.thrift ${CMAKE_SOURCE_DIR}/completion_hints.thrift ${CMAKE_SOURCE_DIR}/QueryEngine/extension_functions.thrift
-    OUTPUT ${CMAKE_SOURCE_DIR}/java/thrift/src/gen/com/mapd/thrift/calciteserver/CalciteServer.java
+    OUTPUT ${CMAKE_SOURCE_DIR}/java/thrift/src/gen/com/omnisci/thrift/calciteserver/CalciteServer.java
     COMMAND mkdir
     ARGS -p ${CMAKE_SOURCE_DIR}/java/thrift/src/gen
     COMMAND ${Thrift_EXECUTABLE}
@@ -700,11 +728,11 @@ if(MAPD_IMMERSE_DOWNLOAD)
   install(DIRECTORY ${source_dir}/ DESTINATION "frontend/" PATTERN .git EXCLUDE PATTERN node_modules EXCLUDE)
   add_custom_command(TARGET frontend COMMAND ${CMAKE_COMMAND} -E copy_directory ${source_dir} frontend)
   list(APPEND ADDITIONAL_MAKE_CLEAN_FILES ${CMAKE_BINARY_DIR}/frontend)
-endif()
 
-## Go web server
-if("${MAPD_EDITION_LOWER}" STREQUAL "ee" AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/Immerse")
-  add_subdirectory(Immerse)
+  ## Go web server
+  if("${MAPD_EDITION_LOWER}" STREQUAL "ee" AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/Immerse")
+    add_subdirectory(Immerse)
+  endif()
 endif()
 
 add_subdirectory(ThirdParty/generate_cert)
@@ -767,10 +795,10 @@ add_custom_command(
     COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_SOURCE_DIR}/java/calcite/target/calcite-1.0-SNAPSHOT-jar-with-dependencies.jar ${CMAKE_BINARY_DIR}/bin
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/java
   DEPENDS
-    ${CMAKE_SOURCE_DIR}/java/thrift/src/gen/com/mapd/thrift/server/MapD.java
-    ${CMAKE_SOURCE_DIR}/java/thrift/src/gen/com/mapd/thrift/calciteserver/CalciteServer.java
+    ${CMAKE_SOURCE_DIR}/java/thrift/src/gen/com/omnisci/thrift/server/OmniSci.java
+    ${CMAKE_SOURCE_DIR}/java/thrift/src/gen/com/omnisci/thrift/calciteserver/CalciteServer.java
     ${CMAKE_SOURCE_DIR}/java/pom.xml
-    ${CMAKE_SOURCE_DIR}/mapd.thrift
+    ${CMAKE_SOURCE_DIR}/omnisci.thrift
     ${JAVA_POM}
     ${JAVA_SOURCES}
   )
@@ -795,7 +823,7 @@ if(ENABLE_CUDA)
   install(FILES ${CMAKE_BINARY_DIR}/QueryEngine/cuda_mapd_rt.a DESTINATION QueryEngine)
 endif()
 install(FILES completion_hints.thrift DESTINATION ".")
-install(FILES mapd.thrift DESTINATION ".")
+install(FILES omnisci.thrift DESTINATION ".")
 install(FILES common.thrift DESTINATION ".")
 install(FILES QueryEngine/serialized_result_set.thrift DESTINATION "QueryEngine/")
 

@@ -32,7 +32,6 @@
 #include "QueryEngine/ResultSet.h"
 #include "QueryEngine/TableOptimizer.h"
 #include "QueryRunner/QueryRunner.h"
-#include "Shared/MapDParameters.h"
 #include "Shared/UpdelRoll.h"
 #include "Shared/measure.h"
 #include "TestHelpers.h"
@@ -401,11 +400,11 @@ bool prepare_table_for_delete(const std::string& table = "trips",
         updelRoll);
   });
   if (UpdelTestConfig::showMeasuredTime) {
-    VLOG(2) << "time on update " << cnt << " rows:" << ms << " ms";
+    VLOG(1) << "time on update " << cnt << " rows:" << ms << " ms";
   }
   ms = measure<>::execution([&]() { updelRoll.commitUpdate(); });
   if (UpdelTestConfig::showMeasuredTime) {
-    VLOG(2) << "time on commit:" << ms << " ms";
+    VLOG(1) << "time on commit:" << ms << " ms";
   }
   return compare_agg(table, column, cnt, (0 + cnt - 1) * cnt / 2. / cnt);
 }
@@ -468,12 +467,12 @@ bool delete_and_immediately_vacuum_rows(const std::string& table,
                                  updelRoll);
   });
   if (UpdelTestConfig::showMeasuredTime) {
-    VLOG(2) << "time on delete & vacuum " << dcnt << " of " << nall << " rows:" << ms
+    VLOG(1) << "time on delete & vacuum " << dcnt << " of " << nall << " rows:" << ms
             << " ms";
   }
   ms = measure<>::execution([&]() { updelRoll.commitUpdate(); });
   if (UpdelTestConfig::showMeasuredTime) {
-    VLOG(2) << "time on commit:" << ms << " ms";
+    VLOG(1) << "time on commit:" << ms << " ms";
   }
   cnt = nall - cnt;
   // check varlen column vacuumed
@@ -507,7 +506,7 @@ bool delete_and_vacuum_varlen_rows(const std::string& table,
     ASSERT_NO_THROW(run_query("delete from " + table + " where " + cond + ";"););
   });
   if (UpdelTestConfig::showMeasuredTime) {
-    VLOG(2) << "time on delete " << (manual_vacuum ? "" : "& vacuum ")
+    VLOG(1) << "time on delete " << (manual_vacuum ? "" : "& vacuum ")
             << fragOffsets.size() << " rows:" << ms << " ms";
   }
 
@@ -522,7 +521,7 @@ bool delete_and_vacuum_varlen_rows(const std::string& table,
       optimizer.recomputeMetadata();
     });
     if (UpdelTestConfig::showMeasuredTime) {
-      VLOG(2) << "time on vacuum:" << ms << " ms";
+      VLOG(1) << "time on vacuum:" << ms << " ms";
     }
   }
 
@@ -607,7 +606,7 @@ void init_table_data(const std::string& table = "trips",
   if (file.size()) {
     auto ms = measure<>::execution([&]() { import_table_file(table, file); });
     if (UpdelTestConfig::showMeasuredTime) {
-      VLOG(2) << "time on import: " << ms << " ms";
+      VLOG(1) << "time on import: " << ms << " ms";
     }
   }
 }
@@ -779,32 +778,6 @@ TEST_F(RowVacuumTest, Vacuum_Interleaved_4) {
                                                  0,
                                                  4));
 }
-
-// It is currently not possible to do select query on temp table w/o
-// MapDHandler. Perhaps in the future a thrift rpc like `push_table_details`
-// can be added to enable such queries here...
-#if 0
-const char* create_temp_table = "CREATE TEMPORARY TABLE temp(i int) WITH (vacuum='delayed');";
-
-class UpdateStorageTest_Temp : public ::testing::Test {
- protected:
-  virtual void SetUp() {
-    ASSERT_NO_THROW(init_table_data("temp", create_temp_table, ""););
-    EXPECT_NO_THROW(run_query("insert into temp values(1)"););
-    EXPECT_NO_THROW(run_query("insert into temp values(1)"););
-  }
-
-  virtual void TearDown() { ASSERT_NO_THROW(run_ddl_statement("drop table temp;");); }
-};
-
-TEST_F(UpdateStorageTest_Temp, Update_temp) {
-  EXPECT_TRUE(update_a_numeric_column("temp", "i", 2, 1, 99, 99));
-}
-
-TEST_F(UpdateStorageTest_Temp, Update_temp_rollback) {
-  EXPECT_TRUE(update_a_numeric_column("temp", "i", 2, 1, 99, 1, true));
-}
-#endif
 
 class UpdateStorageTest : public ::testing::Test {
  protected:

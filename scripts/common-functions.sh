@@ -57,6 +57,12 @@ function download_make_install() {
     popd
 }
 
+CMAKE_VERSION=3.16.5
+
+function install_cmake() {
+  CXXFLAGS="-pthread" CFLAGS="-pthread" download_make_install ${HTTP_DEPS}/cmake-${CMAKE_VERSION}.tar.gz
+}
+
 ARROW_VERSION=apache-arrow-0.16.0
 
 function install_arrow() {
@@ -109,7 +115,7 @@ function install_snappy() {
   popd
 }
 
-AWSCPP_VERSION=1.7.123
+AWSCPP_VERSION=1.7.301
 
 function install_awscpp() {
     # default c++ standard support
@@ -139,12 +145,12 @@ function install_awscpp() {
     popd
 }
 
-LLVM_VERSION=8.0.0
+LLVM_VERSION=9.0.1
 
 function install_llvm() {
     VERS=${LLVM_VERSION}
     download ${HTTP_DEPS}/llvm/$VERS/llvm-$VERS.src.tar.xz
-    download ${HTTP_DEPS}/llvm/$VERS/cfe-$VERS.src.tar.xz
+    download ${HTTP_DEPS}/llvm/$VERS/clang-$VERS.src.tar.xz
     download ${HTTP_DEPS}/llvm/$VERS/compiler-rt-$VERS.src.tar.xz
     download ${HTTP_DEPS}/llvm/$VERS/lldb-$VERS.src.tar.xz
     download ${HTTP_DEPS}/llvm/$VERS/lld-$VERS.src.tar.xz
@@ -153,14 +159,14 @@ function install_llvm() {
     download ${HTTP_DEPS}/llvm/$VERS/clang-tools-extra-$VERS.src.tar.xz
     rm -rf llvm-$VERS.src
     extract llvm-$VERS.src.tar.xz
-    extract cfe-$VERS.src.tar.xz
+    extract clang-$VERS.src.tar.xz
     extract compiler-rt-$VERS.src.tar.xz
     extract lld-$VERS.src.tar.xz
     extract lldb-$VERS.src.tar.xz
     extract libcxx-$VERS.src.tar.xz
     extract libcxxabi-$VERS.src.tar.xz
     extract clang-tools-extra-$VERS.src.tar.xz
-    mv cfe-$VERS.src llvm-$VERS.src/tools/clang
+    mv clang-$VERS.src llvm-$VERS.src/tools/clang
     mv compiler-rt-$VERS.src llvm-$VERS.src/projects/compiler-rt
     mv lld-$VERS.src llvm-$VERS.src/tools/lld
     mv lldb-$VERS.src llvm-$VERS.src/tools/lldb
@@ -173,9 +179,6 @@ function install_llvm() {
     pushd build.llvm-$VERS
     cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=$PREFIX -DLLVM_ENABLE_RTTI=on -DLLVM_USE_INTEL_JITEVENTS=on ../llvm-$VERS.src
     makej
-    if [ ! -d "lib/python2.7" ]; then
-        cp -R lib64/python2.7 lib/python2.7
-    fi
     make install
     popd
 }
@@ -202,6 +205,13 @@ function install_gdal() {
 
     # gdal
     download_make_install ${HTTP_DEPS}/gdal-${GDAL_VERSION}.tar.gz "" "--without-geos --with-libkml=$PREFIX --with-proj=$PREFIX"
+}
+
+GEOS_VERSION=3.8.1
+
+function install_geos() {
+    download_make_install ${HTTP_DEPS}/geos-${GEOS_VERSION}.tar.bz2 "" "--enable-shared --disable-static"
+
 }
 
 RDKAFKA_VERSION=1.1.0
@@ -253,4 +263,24 @@ function install_ninja() {
   unzip -u ninja-linux.zip
   mkdir -p $PREFIX/bin/
   mv ninja $PREFIX/bin/
+}
+
+TBB_VERSION=2020.2
+
+function install_tbb() {
+  download https://github.com/oneapi-src/oneTBB/archive/v${TBB_VERSION}.tar.gz
+  extract v${TBB_VERSION}.tar.gz
+  pushd oneTBB-${TBB_VERSION}
+  if [ "$1" == "static" ]; then
+    make extra_inc=big_iron.inc
+    install -d $PREFIX/lib
+    install -m755 build/linux_*/*.a* $PREFIX/lib
+  else
+    make
+    install -d $PREFIX/lib
+    install -m755 build/linux_*/*.so* $PREFIX/lib
+  fi
+  install -d $PREFIX/include
+  cp -R include/tbb $PREFIX/include
+  popd
 }

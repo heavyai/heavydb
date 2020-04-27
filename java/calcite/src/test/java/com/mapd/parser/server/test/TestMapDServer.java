@@ -19,9 +19,9 @@ package com.mapd.parser.server.test;
 import static org.junit.Assert.*;
 
 import com.mapd.parser.server.CalciteServerWrapper;
-import com.mapd.thrift.server.MapD;
-import com.mapd.thrift.server.TMapDException;
-import com.mapd.thrift.server.TQueryResult;
+import com.omnisci.thrift.server.OmniSci;
+import com.omnisci.thrift.server.TOmniSciException;
+import com.omnisci.thrift.server.TQueryResult;
 
 import org.apache.thrift.TException;
 import org.apache.thrift.protocol.TBinaryProtocol;
@@ -110,12 +110,12 @@ public class TestMapDServer {
   private ConnInfo createMapDConnection() {
     String session = null;
     TTransport transport = null;
-    MapD.Client client = null;
+    OmniSci.Client client = null;
     try {
       transport = new TSocket("localhost", 6274);
       transport.open();
       TProtocol protocol = new TBinaryProtocol(transport);
-      client = new MapD.Client(protocol);
+      client = new OmniSci.Client(protocol);
       session = client.connect("admin", "HyperInteractive", "omnisci");
     } catch (TException x) {
       fail("Exception on create occurred " + x.toString());
@@ -130,7 +130,7 @@ public class TestMapDServer {
         fail("result doesn't match " + resultCount
                 + " != " + res.row_set.columns.get(0).nulls.size());
       }
-    } catch (TMapDException x) {
+    } catch (TOmniSciException x) {
       fail("Exception on EXECUTE " + x.toString());
     } catch (TException x) {
       fail("Exception on EXECUTE " + x.toString());
@@ -149,9 +149,9 @@ public class TestMapDServer {
   private static class ConnInfo {
     public String session;
     public TTransport transport;
-    public MapD.Client client;
+    public OmniSci.Client client;
 
-    private ConnInfo(String session, TTransport transport, MapD.Client client) {
+    private ConnInfo(String session, TTransport transport, OmniSci.Client client) {
       this.session = session;
       this.transport = transport;
       this.client = client;

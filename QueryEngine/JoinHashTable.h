@@ -112,10 +112,24 @@ class JoinHashTable : public JoinHashTableInterface {
   static llvm::Value* codegenHashTableLoad(const size_t table_idx, Executor* executor);
 
   static auto yieldCacheInvalidator() -> std::function<void()> {
+    VLOG(1) << "Invalidate " << join_hash_table_cache_.size()
+            << " cached baseline hashtable.";
     return []() -> void {
       std::lock_guard<std::mutex> guard(join_hash_table_cache_mutex_);
       join_hash_table_cache_.clear();
     };
+  }
+
+  static const std::shared_ptr<std::vector<int32_t>>& getCachedHashTable(size_t idx) {
+    std::lock_guard<std::mutex> guard(join_hash_table_cache_mutex_);
+    CHECK(!join_hash_table_cache_.empty());
+    CHECK_LT(idx, join_hash_table_cache_.size());
+    return join_hash_table_cache_.at(idx).second;
+  }
+
+  static uint64_t getNumberOfCachedHashTables() {
+    std::lock_guard<std::mutex> guard(join_hash_table_cache_mutex_);
+    return join_hash_table_cache_.size();
   }
 
   virtual ~JoinHashTable() {}
@@ -208,6 +222,12 @@ class JoinHashTable : public JoinHashTableInterface {
   void freeHashBufferCpuMemory();
 
   size_t getComponentBufferSize() const noexcept;
+
+  bool layoutRequiresAdditionalBuffers(JoinHashTableInterface::HashType layout) const
+      noexcept override {
+    return (layout == JoinHashTableInterface::HashType::ManyToMany ||
+            layout == JoinHashTableInterface::HashType::OneToMany);
+  };
 
   std::shared_ptr<Analyzer::BinOper> qual_bin_oper_;
   std::shared_ptr<Analyzer::ColumnVar> col_var_;

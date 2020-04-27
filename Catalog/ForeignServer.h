@@ -27,40 +27,61 @@
 #include "Shared/StringTransform.h"
 
 namespace foreign_storage {
-struct DataWrapper {
-  static constexpr char const* CSV_WRAPPER_NAME = "OMNISCI_CSV";
-  static constexpr char const* PARQUET_WRAPPER_NAME = "OMNISCI_PARQUET";
+/**
+ * @type DataWrapperType
+ * @brief Encapsulates an enumeration of foreign data wrapper type strings
+ */
+struct DataWrapperType {
+  static constexpr char const* CSV = "OMNISCI_CSV";
+  static constexpr char const* PARQUET = "OMNISCI_PARQUET";
 
-  std::string name;
-
-  DataWrapper(const std::string& data_wrapper_name) {
-    const auto& upper_wrapper_name = to_upper(data_wrapper_name);
-    if (upper_wrapper_name == CSV_WRAPPER_NAME ||
-        upper_wrapper_name == PARQUET_WRAPPER_NAME) {
-      name = upper_wrapper_name;
-    } else {
-      throw std::runtime_error{"Invalid data wrapper type \"" + data_wrapper_name +
-                               "\". Data wrapper type must be one of the following: " +
-                               CSV_WRAPPER_NAME + ", " + PARQUET_WRAPPER_NAME + "."};
-    }
-  }
+  static constexpr std::array<std::string_view, 2> supported_data_wrapper_types{CSV,
+                                                                                PARQUET};
 };
 
 struct ForeignServer : public OptionsContainer {
   static constexpr std::string_view STORAGE_TYPE_KEY = "STORAGE_TYPE";
   static constexpr std::string_view BASE_PATH_KEY = "BASE_PATH";
   static constexpr std::string_view LOCAL_FILE_STORAGE_TYPE = "LOCAL_FILE";
-  static constexpr std::array<std::string_view, 1> SUPPORTED_STORAGE_TYPES{
+  static constexpr std::array<std::string_view, 1> supported_storage_types{
       LOCAL_FILE_STORAGE_TYPE};
 
   int id;
   std::string name;
-  DataWrapper data_wrapper;
+  std::string data_wrapper_type;
   int32_t user_id;
 
-  ForeignServer(const DataWrapper& data_wrapper) : data_wrapper(data_wrapper) {}
+  ForeignServer() {}
+
+  ForeignServer(const int server_id,
+                const std::string& server_name,
+                const std::string& data_wrapper_type,
+                const std::string& options_str,
+                const int32_t user_id)
+      : OptionsContainer(options_str)
+      , id(server_id)
+      , name(server_name)
+      , data_wrapper_type(data_wrapper_type)
+      , user_id(user_id) {}
+
+  ForeignServer(const std::string& server_name,
+                const std::string& data_wrapper_type,
+                const std::map<std::string, std::string, std::less<>>& options,
+                const int32_t user_id)
+      : OptionsContainer(options)
+      , name(server_name)
+      , data_wrapper_type(data_wrapper_type)
+      , user_id(user_id) {}
 
   void validate() {
+    const auto& supported_wrapper_types = DataWrapperType::supported_data_wrapper_types;
+    if (std::find(supported_wrapper_types.begin(),
+                  supported_wrapper_types.end(),
+                  data_wrapper_type) == supported_wrapper_types.end()) {
+      throw std::runtime_error{"Invalid data wrapper type \"" + data_wrapper_type +
+                               "\". Data wrapper type must be one of the following: " +
+                               join(supported_wrapper_types, ", ") + "."};
+    }
     if (options.find(STORAGE_TYPE_KEY) == options.end()) {
       throw std::runtime_error{"Foreign server options must contain \"STORAGE_TYPE\"."};
     }
@@ -75,13 +96,13 @@ struct ForeignServer : public OptionsContainer {
             "Option must be one of the following: STORAGE_TYPE, BASE_PATH."};
       }
     }
-    if (std::find(SUPPORTED_STORAGE_TYPES.begin(),
-                  SUPPORTED_STORAGE_TYPES.end(),
+    if (std::find(supported_storage_types.begin(),
+                  supported_storage_types.end(),
                   options.find(STORAGE_TYPE_KEY)->second) ==
-        SUPPORTED_STORAGE_TYPES.end()) {
+        supported_storage_types.end()) {
       std::string error_message{
           "Invalid storage type value. Value must be one of the following: "};
-      error_message += join(SUPPORTED_STORAGE_TYPES, ", ");
+      error_message += join(supported_storage_types, ", ");
       error_message += ".";
       throw std::runtime_error{error_message};
     }

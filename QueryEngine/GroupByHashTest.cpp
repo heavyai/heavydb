@@ -183,7 +183,7 @@ TEST(SetGetTest, MultiKeyRandom) {
     *gv = std::accumulate(
         key.begin(), key.end(), 100, [](int64_t x, int64_t y) { return x + y; });
   }
-  for (const auto key : keys) {
+  for (const auto& key : keys) {
     auto gv = get_group_value(gb,
                               groups_buffer_entry_count,
                               &key[0],

@@ -28,8 +28,8 @@
 #include "QueryEngine/TableFunctions/TableFunctionsFactory.h"
 #include "Shared/ConfigResolve.h"
 #include "Shared/Logger.h"
-#include "Shared/MapDParameters.h"
 #include "Shared/StringTransform.h"
+#include "Shared/SystemParameters.h"
 #include "Shared/geosupport.h"
 #include "Shared/import_helpers.h"
 #include "bcrypt.h"
@@ -53,7 +53,7 @@ namespace {
 
 std::shared_ptr<Calcite> g_calcite = nullptr;
 
-void calcite_shutdown_handler() {
+void calcite_shutdown_handler() noexcept {
   if (g_calcite) {
     g_calcite->close_calcite_server();
     g_calcite.reset();
@@ -152,7 +152,7 @@ QueryRunner::QueryRunner(const char* db_path,
   if (std::is_same<CudaBuildSelector, PreprocessorFalse>::value) {
     uses_gpus = false;
   }
-  MapDParameters mapd_params;
+  SystemParameters mapd_params;
   mapd_params.gpu_buffer_mem_bytes = max_gpu_mem;
   mapd_params.aggregator = !leaf_servers.empty();
 
@@ -270,24 +270,6 @@ std::shared_ptr<ResultSet> QueryRunner::runSQL(const std::string& query_str,
 
   ParserWrapper pw{query_str};
   if (pw.isCalcitePathPermissable()) {
-    if (ir_file_writer_ && (pw.getDMLType() == ParserWrapper::DMLType::NotDML)) {
-      try {
-        const auto result = runSelectQuery(
-            query_str, device_type, hoist_literals, allow_loop_joins, true);
-        const auto crt_row = result.getRows()->getNextRow(true, true);
-        CHECK_EQ(size_t(1), crt_row.size());
-        const auto scalar_ir = boost::get<ScalarTargetValue>(&crt_row[0]);
-        CHECK(scalar_ir);
-        const auto ir_ns = boost::get<NullableString>(scalar_ir);
-        CHECK(ir_ns);
-        const auto ir_str = boost::get<std::string>(ir_ns);
-        CHECK(ir_str);
-        (*ir_file_writer_)(query_str, *ir_str);
-      } catch (const std::exception& e) {
-        LOG(WARNING) << "Failed to run EXPLAIN on SELECT query: " << query_str << " ("
-                     << e.what() << "). Proceeding with query execution.";
-      }
-    }
     const auto execution_result =
         runSelectQuery(query_str, device_type, hoist_literals, allow_loop_joins);
 
@@ -484,6 +466,28 @@ ExecutionResult QueryRunner::runSelectQuery(const std::string& query_str,
   return RelAlgExecutor(executor.get(), cat, query_ra)
       .executeRelAlgQuery(co, eo, false, nullptr);
 }
+
+const std::shared_ptr<std::vector<int32_t>>& QueryRunner::getCachedJoinHashTable(
+    size_t idx) {
+  return JoinHashTable::getCachedHashTable(idx);
+};
+
+const std::shared_ptr<std::vector<int8_t>>& QueryRunner::getCachedBaselineHashTable(
+    size_t idx) {
+  return BaselineJoinHashTable::getCachedHashTable(idx);
+};
+
+size_t QueryRunner::getEntryCntCachedBaselineHashTable(size_t idx) {
+  return BaselineJoinHashTable::getEntryCntCachedHashTable(idx);
+}
+
+uint64_t QueryRunner::getNumberOfCachedJoinHashTables() {
+  return JoinHashTable::getNumberOfCachedHashTables();
+};
+
+uint64_t QueryRunner::getNumberOfCachedBaselineJoinHashTables() {
+  return BaselineJoinHashTable::getNumberOfCachedHashTables();
+};
 
 void QueryRunner::reset() {
   qr_instance_.reset(nullptr);

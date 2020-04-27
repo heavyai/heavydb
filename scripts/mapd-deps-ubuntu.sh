@@ -51,8 +51,6 @@ sudo apt install -y \
     software-properties-common \
     build-essential \
     ccache \
-    cmake \
-    cmake-curses-gui \
     git \
     wget \
     curl \
@@ -109,17 +107,20 @@ export PATH=$PREFIX/bin:$PATH
 
 install_ninja
 
+install_cmake
+
 # llvm
 # (see common-functions.sh)
 install_llvm
 
 # Geo Support
 install_gdal
+install_geos
 
 # install AWS core and s3 sdk
 install_awscpp -j $(nproc)
 
-VERS=0.11.0
+VERS=0.13.0
 wget --continue http://apache.claz.org/thrift/$VERS/thrift-$VERS.tar.gz
 tar xvf thrift-$VERS.tar.gz
 pushd thrift-$VERS
@@ -167,6 +168,9 @@ make install
 popd
 
 download_make_install ${HTTP_DEPS}/bisonpp-1.21-45.tar.gz bison++-1.21
+
+# TBB
+install_tbb
 
 # Apache Arrow (see common-functions.sh)
 ARROW_BOOST_USE_SHARED="ON"
@@ -284,8 +288,8 @@ echo "    source $PREFIX/mapd-deps.sh"
 if [ "$COMPRESS" = "true" ] ; then
     if [ "$TSAN" = "false" ]; then
       TARBALL_TSAN=""
-    elif [ "$TSAN" = "false" ]; then
+    elif [ "$TSAN" = "true" ]; then
       TARBALL_TSAN="tsan-"
     fi
-    tar acvf mapd-deps-ubuntu-${VERSION_ID}-${TARBALL_TSAN}${SUFFIX}.tar.xz -C $(dirname $PREFIX) $SUFFIX
+    tar acvf mapd-deps-ubuntu-${VERSION_ID}-${TARBALL_TSAN}${SUFFIX}.tar.xz -C ${PREFIX} .
 fi

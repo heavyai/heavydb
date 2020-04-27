@@ -19,8 +19,8 @@ import static java.lang.Math.pow;
 import static java.lang.System.exit;
 
 import com.mapd.common.SockTransportProperties;
-import com.mapd.thrift.server.*;
 import com.mapd.utility.db_vendors.Db_vendor_types;
+import com.omnisci.thrift.server.*;
 
 import org.apache.commons.cli.*;
 import org.apache.thrift.TException;
@@ -299,7 +299,7 @@ class SQLImporter_args {
 
 public class SQLImporter {
   protected String session = null;
-  protected MapD.Client client = null;
+  protected OmniSci.Client client = null;
   private CommandLine cmd = null;
   final static Logger LOGGER = LoggerFactory.getLogger(SQLImporter.class);
   private DateTimeUtils dateTimeUtils = (milliseconds) -> {
@@ -430,8 +430,8 @@ public class SQLImporter {
     } catch (SQLException se) {
       LOGGER.error("SQLException - " + se.toString());
       se.printStackTrace();
-    } catch (TMapDException ex) {
-      LOGGER.error("TMapDException - " + ex.toString());
+    } catch (TOmniSciException ex) {
+      LOGGER.error("TOmniSciException - " + ex.toString());
       ex.printStackTrace();
     } catch (TException ex) {
       LOGGER.error("TException failed - " + ex.toString());
@@ -690,7 +690,7 @@ public class SQLImporter {
         protocol = new TBinaryProtocol(transport);
       }
 
-      client = new MapD.Client(protocol);
+      client = new OmniSci.Client(protocol);
       // This if will be useless until PKI signon
       if (cmd.hasOption("user")) {
         session = client.connect(cmd.getOptionValue("user", "admin"),
@@ -702,7 +702,7 @@ public class SQLImporter {
     } catch (TTransportException ex) {
       LOGGER.error("Connection failed - " + ex.toString());
       exit(1);
-    } catch (TMapDException ex) {
+    } catch (TOmniSciException ex) {
       LOGGER.error("Connection failed - " + ex.toString());
       exit(2);
     } catch (TException ex) {
@@ -720,7 +720,7 @@ public class SQLImporter {
     try {
       TTableDetails table_details = client.get_table_details(session, tName);
       row_descriptor = table_details.row_desc;
-    } catch (TMapDException ex) {
+    } catch (TOmniSciException ex) {
       LOGGER.error("column check failed - " + ex.toString());
       exit(3);
     } catch (TException ex) {
@@ -739,7 +739,7 @@ public class SQLImporter {
           return true;
         }
       }
-    } catch (TMapDException ex) {
+    } catch (TOmniSciException ex) {
       LOGGER.error("Table check failed - " + ex.toString());
       exit(3);
     } catch (TException ex) {
@@ -754,7 +754,7 @@ public class SQLImporter {
 
     try {
       TQueryResult sqlResult = client.sql_execute(session, sql + ";", true, null, -1, -1);
-    } catch (TMapDException ex) {
+    } catch (TOmniSciException ex) {
       LOGGER.error("SQL Execute failed - " + ex.toString());
       exit(1);
     } catch (TException ex) {

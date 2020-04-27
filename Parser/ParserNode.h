@@ -968,8 +968,9 @@ class CreateTableStmt : public CreateTableBaseStmt {
       delete s;
     }
   }
-  const std::string* get_table() const { return table_.get(); }
-  const std::list<std::unique_ptr<TableElement>>& get_table_element_list() const {
+  const std::string* get_table() const override { return table_.get(); }
+  const std::list<std::unique_ptr<TableElement>>& get_table_element_list()
+      const override {
     return table_element_list_;
   }
 
@@ -1047,8 +1048,9 @@ class CreateDataframeStmt : public CreateTableBaseStmt {
       delete s;
     }
   }
-  const std::string* get_table() const { return table_.get(); }
-  const std::list<std::unique_ptr<TableElement>>& get_table_element_list() const {
+  const std::string* get_table() const override { return table_.get(); }
+  const std::list<std::unique_ptr<TableElement>>& get_table_element_list()
+      const override {
     return table_element_list_;
   }
 
@@ -1424,7 +1426,7 @@ class RestoreTableStmt : public DumpRestoreTableStmtBase {
 class CopyTableStmt : public DDLStmt {
  public:
   CopyTableStmt(std::string* t, std::string* f, std::list<NameValueAssign*>* o)
-      : table(t), file_pattern(f) {
+      : table(t), file_pattern(f), success(true) {
     if (o) {
       for (const auto e : *o) {
         options.emplace_back(e);
@@ -1446,6 +1448,8 @@ class CopyTableStmt : public DDLStmt {
     return *table;
   }
 
+  bool get_success() const { return success; }
+
   bool was_geo_copy_from() const { return _was_geo_copy_from; }
 
   void get_geo_copy_from_payload(std::string& geo_copy_from_table,
@@ -1462,6 +1466,7 @@ class CopyTableStmt : public DDLStmt {
  private:
   std::unique_ptr<std::string> table;
   std::unique_ptr<std::string> file_pattern;
+  bool success;
   std::list<std::unique_ptr<NameValueAssign>> options;
 
   bool _was_geo_copy_from = false;
@@ -1783,12 +1788,13 @@ class SelectStmt : public DMLStmt {
  */
 class ShowCreateTableStmt : public DDLStmt {
  public:
-  ShowCreateTableStmt(std::string* tab) : table(tab) {}
-  std::string get_create_stmt();
-  void execute(const Catalog_Namespace::SessionInfo& session) override { CHECK(false); }
+  ShowCreateTableStmt(std::string* tab) : table_(tab) {}
+  std::string getCreateStmt() { return create_stmt_; }
+  void execute(const Catalog_Namespace::SessionInfo& session) override;
 
  private:
-  std::unique_ptr<std::string> table;
+  std::unique_ptr<std::string> table_;
+  std::string create_stmt_;
 };
 
 /*
