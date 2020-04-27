@@ -234,7 +234,7 @@ void convert_column(ResultSetPtr result,
 
   if (!null_count) {
     is_valid.reset();
-}
+  }
 
   // TODO: support date/time + scaling
   // TODO: support booleans
