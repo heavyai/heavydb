@@ -111,7 +111,7 @@ set(query_engine_source_files
     WindowContext.cpp
     WindowExpressionRewrite.cpp
     WindowFunctionIR.cpp
-    
+
     Codec.h
     Execute.h
     NvidiaKernel.h
@@ -136,16 +136,13 @@ set(group_by_hash_test_files
     RuntimeFunctions.cpp
 )
 
-execute_process(COMMAND ${llvm_config_cmd} "--includedir"
-                OUTPUT_VARIABLE LLVM_INC_FLAGS)
-
 if(ENABLE_CUDA)
   set(MAPD_DEFINITIONS "-DHAVE_CUDA")
   set(NVCC_BUILD_TYPE_ARGS)
   string(TOUPPER "${CMAKE_BUILD_TYPE}" CMAKE_BUILD_TYPE_UPPERCASE)
   if(CMAKE_BUILD_TYPE_UPPERCASE MATCHES DEBUG)
     list(APPEND NVCC_BUILD_TYPE_ARGS -DTHRUST_DEBUG --debug)
-    if (ENABLE_CUDA_KERNEL_DEBUG) 
+    if (ENABLE_CUDA_KERNEL_DEBUG)
         list(APPEND NVCC_BUILD_TYPE_ARGS --device-debug)
     endif()
   else()
@@ -165,16 +162,7 @@ if (SUPPRESS_NULL_LOGGER_DEPRECATION_WARNINGS)
   list(APPEND MAPD_DEFINITIONS "-DSUPPRESS_NULL_LOGGER_DEPRECATION_WARNINGS")
 endif()
 
-if(ENABLE_LLVM_DBG)
-set(CLANG_SDK_INC "-I/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX10.11.sdk/usr/include/")
-set(CLANG_CRT_INC "-I/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/include/c++/v1/")
-endif()
-
-if(ENABLE_LLVM_DBG)
-  set(llvm_clangpp_cmd "${LLVM_BIN_DIR}/clang++")
-else()
-  set(llvm_clangpp_cmd clang++)
-endif()
+set(llvm_clangpp_cmd clang++)
 
 list(APPEND ADDITIONAL_MAKE_CLEAN_FILES ${CMAKE_CURRENT_BINARY_DIR}/gen-cpp/)
 include_directories(${CMAKE_CURRENT_BINARY_DIR})

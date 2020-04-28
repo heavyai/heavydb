@@ -192,14 +192,8 @@ if (CURSES_HAVE_NCURSES_CURSES_H AND NOT CURSES_HAVE_CURSES_H)
 endif()
 
 set(EXECUTABLE_OUTPUT_PATH ${CMAKE_BINARY_DIR}/bin)
-if(APPLE OR ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang"
-    AND (CMAKE_CXX_COMPILER_VERSION VERSION_GREATER 3.6 OR CMAKE_CXX_COMPILER_VERSION VERSION_EQUAL 3.6))
-    OR ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU" AND CMAKE_CXX_COMPILER_VERSION VERSION_GREATER 4.9))
-  find_package( Boost COMPONENTS log log_setup filesystem program_options regex system thread timer locale REQUIRED )
-else()
-  message(FATAL_ERROR, "GCC v4.9 or clang v3.6 (or newer) is required")
-endif()
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wno-unused-local-typedefs -fdiagnostics-color=auto -D__GCC_HAVE_SYNC_COMPARE_AND_SWAP_1=1 -D__GCC_HAVE_SYNC_COMPARE_AND_SWAP_2=1 -D__GCC_HAVE_SYNC_COMPARE_AND_SWAP_4=1 -D__GCC_HAVE_SYNC_COMPARE_AND_SWAP_8=1 -D__STDC_LIMIT_MACROS -D__STDC_CONSTANT_MACROS")
+
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wno-unused-local-typedefs -fdiagnostics-color=auto -D__STDC_LIMIT_MACROS -D__STDC_CONSTANT_MACROS")
 if (CMAKE_CXX_COMPILER_ID MATCHES "Clang")
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-deprecated-register")
 endif()
@@ -210,19 +204,6 @@ endif()
 if(${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
   set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wno-deprecated-declarations")
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-deprecated-declarations")
-endif()
-
-option(ENABLE_LLVM_DBG "switch to local debug version of llvm" OFF)
-if(ENABLE_LLVM_DBG)
-  # NOTE: specify LLVM_BIN_DIR to use your local llvm
-  if(XCODE)
-    set(LLVM_BIN_DIR ${CMAKE_SOURCE_DIR}/../llvm/build/xcode/Release/bin)
-  elseif(APPLE)
-    set(LLVM_BIN_DIR ${CMAKE_SOURCE_DIR}/../llvm/build/unix/bin)
-  endif()
-  set(llvm_config_cmd "${LLVM_BIN_DIR}/llvm-config")
-else()
-  set(llvm_config_cmd llvm-config)
 endif()
 
 # address and thread sanitizer
@@ -268,40 +249,29 @@ if(ENABLE_STANDALONE_CALCITE)
   add_definitions("-DSTANDALONE_CALCITE")
 endif()
 
-set(llvm_config_inc_arg "--includedir")
-set(llvm_config_ld_arg "--ldflags")
-set(llvm_config_lib_arg "--libs")
-set(llvm_config_version_arg "--version")
-execute_process(COMMAND ${llvm_config_cmd} ${llvm_config_inc_arg}
-    OUTPUT_VARIABLE LLVM_INC_FLAGS)
-execute_process(COMMAND ${llvm_config_cmd} ${llvm_config_lib_arg}
-    OUTPUT_VARIABLE LLVM_LIB_FLAGS)
-execute_process(COMMAND ${llvm_config_cmd} ${llvm_config_ld_arg}
-    OUTPUT_VARIABLE LLVM_LD_FLAGS)
-execute_process(COMMAND ${llvm_config_cmd} ${llvm_config_version_arg} 
-    OUTPUT_VARIABLE LLVM_VERSION_STR)
-string(REGEX MATCH "^([0-9]+)" LLVM_VERSION_MAJOR ${LLVM_VERSION_STR})
-if(ENABLE_LLVM_DBG)
-  set(llvm_config_obj_arg "--obj-root")
-  execute_process(COMMAND ${llvm_config_cmd} ${llvm_config_obj_arg}
-    OUTPUT_VARIABLE LLVM_BUILD_DIR)
-  string(REPLACE "\n" "" LLVM_BUILD_DIR "${LLVM_BUILD_DIR}")
-  list(APPEND LLVM_INC_FLAGS "${LLVM_BUILD_DIR}/include")
-endif()
-
-if(NOT "${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang")  # work around linker on centos
-  string(REPLACE "\n" " " LLVM_LINKER_FLAGS "${LLVM_LIB_FLAGS} ${LLVM_LD_FLAGS} ${CURSES_LIBRARIES}")
-else()
-  string(REPLACE "\n" " " LLVM_LINKER_FLAGS "${LLVM_LIB_FLAGS} ${LLVM_LD_FLAGS}")
-endif()
-string(STRIP "${LLVM_LINKER_FLAGS}" LLVM_LINKER_FLAGS)
-include_directories(${Boost_INCLUDE_DIR}
-                    "/usr/local/include"
-                    ${CMAKE_SOURCE_DIR}
+include_directories(${CMAKE_SOURCE_DIR}
                     ${CMAKE_SOURCE_DIR}/Parser
-                    ${CMAKE_CURRENT_BINARY_DIR}
-                    ${LLVM_INC_FLAGS}
-                    "/usr/local/cuda/include/")
+                    ${CMAKE_CURRENT_BINARY_DIR})
+
+## Dependencies
+
+# LLVM
+set(llvm_config_cmd llvm-config)
+
+execute_process(COMMAND ${llvm_config_cmd} "--includedir" OUTPUT_VARIABLE LLVM_INC_FLAGS)
+execute_process(COMMAND ${llvm_config_cmd} "--libs" OUTPUT_VARIABLE LLVM_LIB_FLAGS)
+execute_process(COMMAND ${llvm_config_cmd} "--ldflags" OUTPUT_VARIABLE LLVM_LD_FLAGS)
+execute_process(COMMAND ${llvm_config_cmd} "--version" OUTPUT_VARIABLE LLVM_VERSION_STR)
+string(REGEX MATCH "^([0-9]+)" LLVM_VERSION_MAJOR ${LLVM_VERSION_STR})
+
+string(REPLACE "\n" " " LLVM_LINKER_FLAGS "${LLVM_LIB_FLAGS} ${LLVM_LD_FLAGS} ${CURSES_LIBRARIES}")
+string(STRIP "${LLVM_LINKER_FLAGS}" LLVM_LINKER_FLAGS)
+
+include_directories(${LLVM_INC_FLAGS})
+
+# Boost
+find_package(Boost COMPONENTS log log_setup filesystem program_options regex system thread timer locale REQUIRED)
+include_directories(${Boost_INCLUDE_DIR})
 
 # EGL
 include_directories(ThirdParty/egl)
@@ -347,7 +317,6 @@ include_directories(ThirdParty/rapidjson)
 add_definitions(-DRAPIDJSON_HAS_STDSTRING)
 
 # Linenoise
-include_directories(ThirdParty/linenoise)
 add_subdirectory(ThirdParty/linenoise)
 
 # SQLite
@@ -643,9 +612,9 @@ add_custom_target(rerun_cmake ALL
   )
 add_dependencies(omnisci_server rerun_cmake)
 
-target_link_libraries(omnisci_server mapd_thrift thrift_handler ${MAPD_LIBRARIES} ${Boost_LIBRARIES} ${CMAKE_DL_LIBS} ${CUDA_LIBRARIES} ${LLVM_LINKER_FLAGS} ${PROFILER_LIBS} ${CURSES_LIBRARIES} ${ZLIB_LIBRARIES} ${LOCALE_LINK_FLAG})
+target_link_libraries(omnisci_server mapd_thrift thrift_handler ${MAPD_LIBRARIES} ${Boost_LIBRARIES} ${CMAKE_DL_LIBS} ${CUDA_LIBRARIES} ${PROFILER_LIBS} ${ZLIB_LIBRARIES} ${LOCALE_LINK_FLAG})
 
-target_link_libraries(initdb mapd_thrift DataMgr ${MAPD_LIBRARIES} ${Boost_LIBRARIES} ${CMAKE_DL_LIBS} ${CUDA_LIBRARIES} ${LLVM_LINKER_FLAGS} ${CURSES_LIBRARIES} ${ZLIB_LIBRARIES})
+target_link_libraries(initdb mapd_thrift DataMgr ${MAPD_LIBRARIES} ${Boost_LIBRARIES} ${CMAKE_DL_LIBS} ${CUDA_LIBRARIES} ${ZLIB_LIBRARIES})
 
 macro(set_dpkg_arch arch_in arch_out)
   if("${arch_in}" STREQUAL "x86_64")
