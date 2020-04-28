@@ -317,6 +317,7 @@ class QueryMemoryDescriptor {
 
   bool isWarpSyncRequired(const ExecutorDeviceType) const;
 
+  std::string queryDescTypeToString() const;
   std::string toString() const;
 
   std::string reductionKey() const;

@@ -1,6 +1,7 @@
 #include <cuda.h>
 #include <float.h>
 #include <stdint.h>
+#include <stdio.h>
 #include <limits>
 #include "BufferCompaction.h"
 #include "ExtensionFunctions.hpp"
@@ -1111,7 +1112,7 @@ extern "C" __device__ bool slotEmptyKeyCAS_int32(int32_t* slot,
   const unsigned int old_value = atomicCAS(slot_address, compare_value, swap_value);
   return old_value == compare_value;
 }
-#include <stdio.h>
+
 extern "C" __device__ bool slotEmptyKeyCAS_int16(int16_t* slot,
                                                  int16_t new_val,
                                                  int16_t init_val) {
@@ -1283,4 +1284,20 @@ extern "C" __device__ void sync_warp_protected(int64_t thread_pos, int64_t row_c
 
 extern "C" __device__ void sync_threadblock() {
   __syncthreads();
+}
+
+/*
+ * Currently, we just use this function for handling non-grouped aggregates
+ * with COUNT queries (with GPU shared memory used). Later, we should generate code for
+ * this depending on the type of aggregate functions.
+ * TODO: we should use one contiguous global memory buffer, rather than current default
+ * behaviour of multiple buffers, each for one aggregate. Once that's resolved, we can do
+ * much cleaner than this function
+ */
+extern "C" __device__ void write_back_non_grouped_agg(int64_t* input_buffer,
+                                                      int64_t* output_buffer,
+                                                      const int32_t agg_idx) {
+  if (threadIdx.x == agg_idx) {
+    agg_sum_shared(output_buffer, input_buffer[agg_idx]);
+  }
 }

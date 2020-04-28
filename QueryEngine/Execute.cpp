@@ -108,6 +108,9 @@ unsigned g_runtime_query_interrupt_frequency{1000};
 size_t g_gpu_smem_threshold{
     4096};  // GPU shared memory threshold (in bytes), if larger buffer sizes are required
             // we do not use GPU shared memory optimizations
+bool g_enable_smem_non_grouped_agg{
+    true};  // enable optimizations for using GPU shared memory in implementation of
+            // non-grouped aggregates
 
 int const Executor::max_gpu_count;
 
@@ -2518,9 +2521,12 @@ int32_t Executor::executePlanWithoutGroupBy(
   }
   std::vector<int64_t> reduced_outs;
   const auto num_frags = col_buffers.size();
-  const size_t entry_count = device_type == ExecutorDeviceType::GPU
-                                 ? num_frags * blockSize() * gridSize()
-                                 : num_frags;
+  const size_t entry_count =
+      device_type == ExecutorDeviceType::GPU
+          ? (compilation_result.gpu_smem_context.isSharedMemoryUsed()
+                 ? 1
+                 : blockSize() * gridSize() * num_frags)
+          : num_frags;
   if (size_t(1) == entry_count) {
     for (auto out : out_vec) {
       CHECK(out);

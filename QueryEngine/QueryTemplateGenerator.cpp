@@ -15,9 +15,11 @@
  */
 
 #include "QueryTemplateGenerator.h"
+#include "IRCodegenUtils.h"
 #include "Shared/Logger.h"
 
 #include <llvm/IR/Constants.h>
+#include <llvm/IR/IRBuilder.h>
 #include <llvm/IR/Instructions.h>
 #include <llvm/IR/Verifier.h>
 
@@ -190,7 +192,8 @@ template <class Attributes>
 llvm::Function* query_template_impl(llvm::Module* mod,
                                     const size_t aggr_col_count,
                                     const bool hoist_literals,
-                                    const bool is_estimate_query) {
+                                    const bool is_estimate_query,
+                                    const GpuSharedMemoryContext& gpu_smem_context) {
   using namespace llvm;
 
   auto func_pos_start = pos_start<Attributes>(mod);
@@ -318,11 +321,25 @@ llvm::Function* query_template_impl(llvm::Module* mod,
 
   // Block  (.entry)
   std::vector<Value*> result_ptr_vec;
+  llvm::CallInst* smem_output_buffer{nullptr};
   if (!is_estimate_query) {
     for (size_t i = 0; i < aggr_col_count; ++i) {
       auto result_ptr = new AllocaInst(i64_type, 0, "result", bb_entry);
       result_ptr->setAlignment(LLVM_ALIGN(8));
       result_ptr_vec.push_back(result_ptr);
+    }
+    if (gpu_smem_context.isSharedMemoryUsed()) {
+      auto init_smem_func = mod->getFunction("init_shared_mem");
+      CHECK(init_smem_func);
+      // only one slot per aggregate column is needed, and so we can initialize shared
+      // memory buffer for intermediate results to be exactly like the agg_init_val array
+      smem_output_buffer = CallInst::Create(
+          init_smem_func,
+          std::vector<llvm::Value*>{
+              agg_init_val,
+              llvm::ConstantInt::get(i32_type, aggr_col_count * sizeof(int64_t))},
+          "smem_buffer",
+          bb_entry);
     }
   }
 
@@ -419,8 +436,19 @@ llvm::Function* query_template_impl(llvm::Module* mod,
   BranchInst::Create(bb_exit, bb_crit_edge);
 
   // Block  .exit
-  std::vector<PHINode*> result_vec;
+  /**
+   * If GPU shared memory optimization is disabled, for each aggregate target, threads
+   * copy back their aggregate results (stored in registers) back into memory. This
+   * process is performed per processed fragment. In the host the final results are
+   * reduced (per target, for all threads and all fragments).
+   *
+   * If GPU Shared memory optimization is enabled, we properly (atomically) aggregate all
+   * thread's results into memory, which makes the final reduction on host much cheaper.
+   * Here, we call a noop dummy write back function which will be properly replaced at
+   * runtime depending on the target expressions.
+   */
   if (!is_estimate_query) {
+    std::vector<PHINode*> result_vec;
     for (int64_t i = aggr_col_count - 1; i >= 0; --i) {
       auto result =
           PHINode::Create(IntegerType::get(mod->getContext(), 64), 2, "", bb_exit);
@@ -428,23 +456,55 @@ llvm::Function* query_template_impl(llvm::Module* mod,
       result->addIncoming(agg_init_val_vec[i], bb_entry);
       result_vec.insert(result_vec.begin(), result);
     }
-  }
 
-  if (!is_estimate_query) {
     for (size_t i = 0; i < aggr_col_count; ++i) {
       auto col_idx = ConstantInt::get(i32_type, i);
-      auto out_gep = GetElementPtrInst::CreateInBounds(out, col_idx, "", bb_exit);
-      auto col_buffer = new LoadInst(out_gep, "", false, bb_exit);
-      col_buffer->setAlignment(LLVM_ALIGN(8));
-      auto slot_idx = BinaryOperator::CreateAdd(
-          group_buff_idx,
-          BinaryOperator::CreateMul(frag_idx, pos_step, "", bb_exit),
-          "",
-          bb_exit);
-      auto target_addr =
-          GetElementPtrInst::CreateInBounds(col_buffer, slot_idx, "", bb_exit);
-      StoreInst* result_st = new StoreInst(result_vec[i], target_addr, false, bb_exit);
-      result_st->setAlignment(LLVM_ALIGN(8));
+      if (gpu_smem_context.isSharedMemoryUsed()) {
+        auto target_addr =
+            GetElementPtrInst::CreateInBounds(smem_output_buffer, col_idx, "", bb_exit);
+        // TODO: generalize this once we want to support other types of aggregate
+        // functions besides COUNT.
+        auto agg_func = mod->getFunction("agg_sum_shared");
+        CHECK(agg_func);
+        CallInst::Create(
+            agg_func, std::vector<llvm::Value*>{target_addr, result_vec[i]}, "", bb_exit);
+      } else {
+        auto out_gep = GetElementPtrInst::CreateInBounds(out, col_idx, "", bb_exit);
+        auto col_buffer = new LoadInst(out_gep, "", false, bb_exit);
+        col_buffer->setAlignment(LLVM_ALIGN(8));
+        auto slot_idx = BinaryOperator::CreateAdd(
+            group_buff_idx,
+            BinaryOperator::CreateMul(frag_idx, pos_step, "", bb_exit),
+            "",
+            bb_exit);
+        auto target_addr =
+            GetElementPtrInst::CreateInBounds(col_buffer, slot_idx, "", bb_exit);
+        StoreInst* result_st = new StoreInst(result_vec[i], target_addr, false, bb_exit);
+        result_st->setAlignment(LLVM_ALIGN(8));
+      }
+    }
+    if (gpu_smem_context.isSharedMemoryUsed()) {
+      // final reduction of results from shared memory buffer back into global memory.
+      auto sync_thread_func = mod->getFunction("sync_threadblock");
+      CHECK(sync_thread_func);
+      CallInst::Create(sync_thread_func, std::vector<llvm::Value*>{}, "", bb_exit);
+      auto reduce_smem_to_gmem_func = mod->getFunction("write_back_non_grouped_agg");
+      CHECK(reduce_smem_to_gmem_func);
+      // each thread reduce the aggregate target corresponding to its own thread ID.
+      // If there are more targets than threads we do not currently use shared memory
+      // optimization. This can be relaxed if necessary
+      for (size_t i = 0; i < aggr_col_count; i++) {
+        auto out_gep = GetElementPtrInst::CreateInBounds(
+            out, ConstantInt::get(i32_type, i), "", bb_exit);
+        auto gmem_output_buffer = new LoadInst(
+            out_gep, "gmem_output_buffer_" + std::to_string(i), false, bb_exit);
+        CallInst::Create(
+            reduce_smem_to_gmem_func,
+            std::vector<llvm::Value*>{
+                smem_output_buffer, gmem_output_buffer, ConstantInt::get(i32_type, i)},
+            "",
+            bb_exit);
+      }
     }
   }
 
@@ -774,9 +834,10 @@ llvm::Function* query_group_by_template_impl(
 llvm::Function* query_template(llvm::Module* module,
                                const size_t aggr_col_count,
                                const bool hoist_literals,
-                               const bool is_estimate_query) {
+                               const bool is_estimate_query,
+                               const GpuSharedMemoryContext& gpu_smem_context) {
   return query_template_impl<llvm::AttributeList>(
-      module, aggr_col_count, hoist_literals, is_estimate_query);
+      module, aggr_col_count, hoist_literals, is_estimate_query, gpu_smem_context);
 }
 llvm::Function* query_group_by_template(llvm::Module* module,
                                         const bool hoist_literals,
@@ -795,16 +856,22 @@ llvm::Function* query_group_by_template(llvm::Module* module,
 llvm::Function* query_template(llvm::Module* module,
                                const size_t aggr_col_count,
                                const bool hoist_literals,
-                               const bool is_estimate_query) {
+                               const bool is_estimate_query,
+                               const GpuSharedMemoryContext& gpu_smem_context) {
   return query_template_impl<llvm::AttributeSet>(
-      module, aggr_col_count, hoist_literals, is_estimate_query);
+      module, aggr_col_count, hoist_literals, is_estimate_query, gpu_smem_context);
 }
 llvm::Function* query_group_by_template(llvm::Module* module,
                                         const bool hoist_literals,
                                         const QueryMemoryDescriptor& query_mem_desc,
                                         const ExecutorDeviceType device_type,
-                                        const bool check_scan_limit) {
-  return query_group_by_template_impl<llvm::AttributeSet>(
-      module, hoist_literals, query_mem_desc, device_type, check_scan_limit);
+                                        const bool check_scan_limit,
+                                        const GpuSharedMemoryContext& gpu_smem_context) {
+  return query_group_by_template_impl<llvm::AttributeSet>(module,
+                                                          hoist_literals,
+                                                          query_mem_desc,
+                                                          device_type,
+                                                          check_scan_limit,
+                                                          gpu_smem_context);
 }
 #endif

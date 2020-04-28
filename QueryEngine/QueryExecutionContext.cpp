@@ -423,6 +423,13 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(
   } else {
     std::vector<CUdeviceptr> out_vec_dev_buffers;
     const size_t agg_col_count{ra_exe_unit.estimator ? size_t(1) : init_agg_vals.size()};
+    // by default, non-grouped aggregate queries generate one result per available thread
+    // in the lifetime of (potentially multi-fragment) kernel execution.
+    // We can reduce these intermediate results internally in the device and hence have
+    // only one result per device, if GPU shared memory optimizations are enabled.
+    const auto num_results_per_agg_col =
+        shared_memory_size ? 1 : block_size_x * grid_size_x * num_fragments;
+    const auto output_buffer_size_per_agg = num_results_per_agg_col * sizeof(int64_t);
     if (ra_exe_unit.estimator) {
       estimator_result_set_.reset(new ResultSet(
           ra_exe_unit.estimator, ExecutorDeviceType::GPU, device_id, data_mgr));
@@ -431,11 +438,16 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(
     } else {
       for (size_t i = 0; i < agg_col_count; ++i) {
         CUdeviceptr out_vec_dev_buffer =
-            num_fragments
-                ? reinterpret_cast<CUdeviceptr>(gpu_allocator_->alloc(
-                      block_size_x * grid_size_x * sizeof(int64_t) * num_fragments))
-                : 0;
+            num_fragments ? reinterpret_cast<CUdeviceptr>(
+                                gpu_allocator_->alloc(output_buffer_size_per_agg))
+                          : 0;
         out_vec_dev_buffers.push_back(out_vec_dev_buffer);
+        if (shared_memory_size) {
+          CHECK_EQ(output_buffer_size_per_agg, size_t(8));
+          gpu_allocator_->copyToDevice(reinterpret_cast<int8_t*>(out_vec_dev_buffer),
+                                       reinterpret_cast<const int8_t*>(&init_agg_vals[i]),
+                                       output_buffer_size_per_agg);
+        }
       }
     }
     auto out_vec_dev_ptr = gpu_allocator_->alloc(agg_col_count * sizeof(CUdeviceptr));
@@ -466,7 +478,7 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(
                                      block_size_x,
                                      block_size_y,
                                      block_size_z,
-                                     0,
+                                     shared_memory_size,
                                      nullptr,
                                      &param_ptrs[0],
                                      nullptr));
@@ -479,7 +491,7 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(
                                      block_size_x,
                                      block_size_y,
                                      block_size_z,
-                                     0,
+                                     shared_memory_size,
                                      nullptr,
                                      &param_ptrs[0],
                                      nullptr));
@@ -513,12 +525,11 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(
       return {};
     }
     for (size_t i = 0; i < agg_col_count; ++i) {
-      int64_t* host_out_vec =
-          new int64_t[block_size_x * grid_size_x * sizeof(int64_t) * num_fragments];
+      int64_t* host_out_vec = new int64_t[output_buffer_size_per_agg];
       copy_from_gpu(data_mgr,
                     host_out_vec,
                     out_vec_dev_buffers[i],
-                    block_size_x * grid_size_x * sizeof(int64_t) * num_fragments,
+                    output_buffer_size_per_agg,
                     device_id);
       out_vec.push_back(host_out_vec);
     }

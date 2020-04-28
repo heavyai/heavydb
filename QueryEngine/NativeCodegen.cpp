@@ -389,6 +389,7 @@ declare i64* @init_shared_mem(i64*, i32);
 declare i64* @init_shared_mem_nop(i64*, i32);
 declare i64* @declare_dynamic_shared_memory();
 declare void @write_back_nop(i64*, i64*, i32);
+declare void @write_back_non_grouped_agg(i64*, i64*, i32);
 declare void @init_group_by_buffer_gpu(i64*, i64*, i32, i32, i32, i1, i8);
 declare i64* @get_group_value(i64*, i32, i64*, i32, i32, i32, i64*);
 declare i64* @get_group_value_with_watchdog(i64*, i32, i64*, i32, i32, i32, i64*);
@@ -1647,13 +1648,12 @@ size_t get_shared_memory_size(const bool shared_mem_used,
              : 0;
 }
 
-bool is_gpu_shared_mem_for_group_by_supported(
-    const QueryMemoryDescriptor* query_mem_desc_ptr,
-    const RelAlgExecutionUnit& ra_exe_unit,
-    const CudaMgr_Namespace::CudaMgr* cuda_mgr,
-    const ExecutorDeviceType device_type,
-    const unsigned gpu_blocksize) {
-  if (!g_enable_smem_group_by || device_type == ExecutorDeviceType::CPU) {
+bool is_gpu_shared_mem_supported(const QueryMemoryDescriptor* query_mem_desc_ptr,
+                                 const RelAlgExecutionUnit& ra_exe_unit,
+                                 const CudaMgr_Namespace::CudaMgr* cuda_mgr,
+                                 const ExecutorDeviceType device_type,
+                                 const unsigned gpu_blocksize) {
+  if (device_type == ExecutorDeviceType::CPU) {
     return false;
   }
   CHECK(query_mem_desc_ptr);
@@ -1671,43 +1671,19 @@ bool is_gpu_shared_mem_for_group_by_supported(
     return false;
   }
 
-  /**
-   * To simplify the implementation for practical purposes, we
-   * initially provide shared memory support for cases where there are at most as many
-   * entries in the output buffer as there are threads within each GPU device. In order to
-   * relax this assumption later, we need to add a for loop in generated codes such that
-   * each thread loops over multiple entries.
-   * TODO: relax this if necessary
-   */
-  if (gpu_blocksize < query_mem_desc_ptr->getEntryCount()) {
-    return false;
-  }
-
-  // Fundamentally, we should use shared memory whenever the output buffer
-  // is small enough so that we can fit it in the shared memory and yet expect
-  // good occupancy.
-  // For now, we allow keyless, row-wise layout, and only for perfect hash
-  // group by operations.
   if (query_mem_desc_ptr->getQueryDescriptionType() ==
-          QueryDescriptionType::GroupByPerfectHash &&
-      query_mem_desc_ptr->getGroupbyColCount() == 1 &&
-      !query_mem_desc_ptr->didOutputColumnar() && query_mem_desc_ptr->hasKeylessHash() &&
-      query_mem_desc_ptr->countDistinctDescriptorsLogicallyEmpty() &&
-      !query_mem_desc_ptr->useStreamingTopN()) {
-    const size_t shared_memory_threshold_bytes =
-        std::min(g_gpu_smem_threshold, cuda_mgr->getMaxSharedMemoryForAll());
-    const auto output_buffer_size =
-        query_mem_desc_ptr->getRowSize() * query_mem_desc_ptr->getEntryCount();
-    if (output_buffer_size > shared_memory_threshold_bytes) {
+          QueryDescriptionType::NonGroupedAggregate &&
+      g_enable_smem_non_grouped_agg &&
+      query_mem_desc_ptr->countDistinctDescriptorsLogicallyEmpty()) {
+    // TODO: relax this, if necessary
+    if (gpu_blocksize < query_mem_desc_ptr->getEntryCount()) {
       return false;
     }
-
     // skip shared memory usage when dealing with 1) variable length targets, 2)
-    // basic aggregates (COUNT, SUM, MIN, MAX, AVG)
-    // TODO: relax this if necessary
+    // not a COUNT aggregate
     const auto target_infos =
         target_exprs_to_infos(ra_exe_unit.target_exprs, *query_mem_desc_ptr);
-    std::unordered_set<SQLAgg> supported_aggs{kCOUNT, kMIN, kMAX, kSUM, kAVG};
+    std::unordered_set<SQLAgg> supported_aggs{kCOUNT};
     if (std::find_if(target_infos.begin(),
                      target_infos.end(),
                      [&supported_aggs](const TargetInfo& ti) {
@@ -1719,6 +1695,59 @@ bool is_gpu_shared_mem_for_group_by_supported(
                        }
                      }) == target_infos.end()) {
       return true;
+    }
+  }
+  if (query_mem_desc_ptr->getQueryDescriptionType() ==
+          QueryDescriptionType::GroupByPerfectHash &&
+      g_enable_smem_group_by) {
+    /**
+     * To simplify the implementation for practical purposes, we
+     * initially provide shared memory support for cases where there are at most as many
+     * entries in the output buffer as there are threads within each GPU device. In
+     * order to relax this assumption later, we need to add a for loop in generated
+     * codes such that each thread loops over multiple entries.
+     * TODO: relax this if necessary
+     */
+    if (gpu_blocksize < query_mem_desc_ptr->getEntryCount()) {
+      return false;
+    }
+
+    // Fundamentally, we should use shared memory whenever the output buffer
+    // is small enough so that we can fit it in the shared memory and yet expect
+    // good occupancy.
+    // For now, we allow keyless, row-wise layout, and only for perfect hash
+    // group by operations.
+    if (query_mem_desc_ptr->getGroupbyColCount() == 1 &&
+        !query_mem_desc_ptr->didOutputColumnar() &&
+        query_mem_desc_ptr->hasKeylessHash() &&
+        query_mem_desc_ptr->countDistinctDescriptorsLogicallyEmpty() &&
+        !query_mem_desc_ptr->useStreamingTopN()) {
+      const size_t shared_memory_threshold_bytes =
+          std::min(g_gpu_smem_threshold, cuda_mgr->getMaxSharedMemoryForAll());
+      const auto output_buffer_size =
+          query_mem_desc_ptr->getRowSize() * query_mem_desc_ptr->getEntryCount();
+      if (output_buffer_size > shared_memory_threshold_bytes) {
+        return false;
+      }
+
+      // skip shared memory usage when dealing with 1) variable length targets, 2)
+      // non-basic aggregates (COUNT, SUM, MIN, MAX, AVG)
+      // TODO: relax this if necessary
+      const auto target_infos =
+          target_exprs_to_infos(ra_exe_unit.target_exprs, *query_mem_desc_ptr);
+      std::unordered_set<SQLAgg> supported_aggs{kCOUNT, kMIN, kMAX, kSUM, kAVG};
+      if (std::find_if(target_infos.begin(),
+                       target_infos.end(),
+                       [&supported_aggs](const TargetInfo& ti) {
+                         if (ti.sql_type.is_varlen() ||
+                             !supported_aggs.count(ti.agg_kind)) {
+                           return true;
+                         } else {
+                           return false;
+                         }
+                       }) == target_infos.end()) {
+        return true;
+      }
     }
   }
   return false;
@@ -1760,16 +1789,17 @@ Executor::compileWorkUnit(const std::vector<InputTableInfo>& query_infos,
 
   const bool output_columnar = query_mem_desc->didOutputColumnar();
   const bool gpu_shared_mem_optimization =
-      is_gpu_shared_mem_for_group_by_supported(query_mem_desc.get(),
-                                               ra_exe_unit,
-                                               cuda_mgr,
-                                               co.device_type,
-                                               cuda_mgr ? this->blockSize() : 1);
+      is_gpu_shared_mem_supported(query_mem_desc.get(),
+                                  ra_exe_unit,
+                                  cuda_mgr,
+                                  co.device_type,
+                                  cuda_mgr ? this->blockSize() : 1);
 
   if (gpu_shared_mem_optimization) {
     // disable interleaved bins optimization on the GPU
     query_mem_desc->setHasInterleavedBinsOnGpu(false);
-    LOG(DEBUG1) << "GPU shared memory is used for the group by query(" +
+    LOG(DEBUG1) << "GPU shared memory is used for the " +
+                       query_mem_desc->queryDescTypeToString() + " query(" +
                        std::to_string(get_shared_memory_size(gpu_shared_mem_optimization,
                                                              query_mem_desc.get())) +
                        " out of " + std::to_string(g_gpu_smem_threshold) + " bytes).";
@@ -1855,7 +1885,8 @@ Executor::compileWorkUnit(const std::vector<InputTableInfo>& query_infos,
                                 : query_template(cgen_state_->module_,
                                                  agg_slot_count,
                                                  co.hoist_literals,
-                                                 !!ra_exe_unit.estimator);
+                                                 !!ra_exe_unit.estimator,
+                                                 gpu_smem_context);
   bind_pos_placeholders("pos_start", true, query_func, cgen_state_->module_);
   bind_pos_placeholders("group_buff_idx", false, query_func, cgen_state_->module_);
   bind_pos_placeholders("pos_step", false, query_func, cgen_state_->module_);
@@ -1955,19 +1986,22 @@ Executor::compileWorkUnit(const std::vector<InputTableInfo>& query_infos,
    * init_smem_nop). The rest of the code should be as before (row_func, etc.).
    */
   if (gpu_smem_context.isSharedMemoryUsed()) {
-    GpuSharedMemCodeBuilder gpu_smem_code(
-        cgen_state_->module_,
-        cgen_state_->context_,
-        *query_mem_desc,
-        target_exprs_to_infos(ra_exe_unit.target_exprs, *query_mem_desc),
-        plan_state_->init_agg_vals_);
-    gpu_smem_code.codegen();
-    gpu_smem_code.injectFunctionsInto(query_func);
+    if (query_mem_desc->getQueryDescriptionType() ==
+        QueryDescriptionType::GroupByPerfectHash) {
+      GpuSharedMemCodeBuilder gpu_smem_code(
+          cgen_state_->module_,
+          cgen_state_->context_,
+          *query_mem_desc,
+          target_exprs_to_infos(ra_exe_unit.target_exprs, *query_mem_desc),
+          plan_state_->init_agg_vals_);
+      gpu_smem_code.codegen();
+      gpu_smem_code.injectFunctionsInto(query_func);
 
-    // helper functions are used for caching purposes later
-    cgen_state_->helper_functions_.push_back(gpu_smem_code.getReductionFunction());
-    cgen_state_->helper_functions_.push_back(gpu_smem_code.getInitFunction());
-    LOG(IR) << gpu_smem_code.toString();
+      // helper functions are used for caching purposes later
+      cgen_state_->helper_functions_.push_back(gpu_smem_code.getReductionFunction());
+      cgen_state_->helper_functions_.push_back(gpu_smem_code.getInitFunction());
+      LOG(IR) << gpu_smem_code.toString();
+    }
   }
 
   auto multifrag_query_func = cgen_state_->module_->getFunction(

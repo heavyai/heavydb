@@ -980,6 +980,7 @@ TEST(Select, FilterAndSimpleAggregation) {
     SKIP_NO_GPU();
     c("SELECT COUNT(*) FROM test;", dt);
     c("SELECT COUNT(f) FROM test;", dt);
+    c("SELECT COUNT(smallint_nulls), COUNT(*), COUNT(fn) FROM test;", dt);
     c("SELECT MIN(x) FROM test;", dt);
     c("SELECT MAX(x) FROM test;", dt);
     c("SELECT MIN(z) FROM test;", dt);

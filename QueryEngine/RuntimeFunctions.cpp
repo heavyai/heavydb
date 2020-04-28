@@ -875,6 +875,9 @@ extern "C" GPU_RT_STUB void sync_warp() {}
 extern "C" GPU_RT_STUB void sync_warp_protected(int64_t thread_pos, int64_t row_count) {}
 extern "C" GPU_RT_STUB void sync_threadblock() {}
 
+extern "C" GPU_RT_STUB void write_back_non_grouped_agg(int64_t* input_buffer,
+                                                       int64_t* output_buffer,
+                                                       const int32_t num_agg_cols){};
 // x64 stride functions
 
 extern "C" __attribute__((noinline)) int32_t pos_start_impl(int32_t* error_code) {

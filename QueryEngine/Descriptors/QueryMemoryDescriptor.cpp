@@ -1091,8 +1091,10 @@ inline std::string boolToString(const bool val) {
   return val ? "True" : "False";
 }
 
-inline std::string queryDescTypeToString(const QueryDescriptionType val) {
-  switch (val) {
+}  // namespace
+
+std::string QueryMemoryDescriptor::queryDescTypeToString() const {
+  switch (query_desc_type_) {
     case QueryDescriptionType::GroupByPerfectHash:
       return "Perfect Hash";
     case QueryDescriptionType::GroupByBaselineHash:
@@ -1108,8 +1110,6 @@ inline std::string queryDescTypeToString(const QueryDescriptionType val) {
   }
   return "";
 }
-
-}  // namespace
 
 std::string QueryMemoryDescriptor::toString() const {
   auto str = reductionKey();
@@ -1135,7 +1135,7 @@ std::string QueryMemoryDescriptor::toString() const {
 std::string QueryMemoryDescriptor::reductionKey() const {
   std::string str;
   str += "Query Memory Descriptor State\n";
-  str += "\tQuery Type: " + queryDescTypeToString(query_desc_type_) + "\n";
+  str += "\tQuery Type: " + queryDescTypeToString() + "\n";
   str +=
       "\tKeyless Hash: " + boolToString(keyless_hash_) +
       (keyless_hash_ ? ", target index for key: " + std::to_string(getTargetIdxForKey())
