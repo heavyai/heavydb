@@ -20,6 +20,7 @@
 #include <arrow/csv/reader.h>
 #include <arrow/io/file.h>
 #include <arrow/util/decimal.h>
+#include <arrow/util/bit_util.h>
 #include <tbb/parallel_for.h>
 #include <tbb/task_group.h>
 #include <array>
@@ -98,6 +99,43 @@ void registerArrowCsvForeignStorage(void) {
 void ArrowCsvForeignStorage::append(
     const std::vector<ForeignStorageColumnBuffer>& column_buffers) {
   CHECK(false);
+}
+
+template <typename T>
+void setNulls(int8_t* data, int count) {
+  T* dataT = reinterpret_cast<T*>(data);
+  const T null_value = std::is_signed<T>::value ? std::numeric_limits<T>::min()
+                                                : std::numeric_limits<T>::max();
+  std::fill(dataT, dataT + count, null_value);
+}
+
+void generateSentinelValues(int8_t* data, const SQLTypeInfo& columnType, size_t count) {
+  const size_t type_size = columnType.get_size();
+  if (columnType.is_integer()) {
+    switch (type_size) {
+      case 1:
+        setNulls<int8_t>(data, count);
+        break;
+      case 2:
+        setNulls<int16_t>(data, count);
+        break;
+      case 4:
+        setNulls<int32_t>(data, count);
+        break;
+      case 8:
+        setNulls<int64_t>(data, count);
+        break;
+      default:
+        // TODO: throw unsupported integer type exception
+        CHECK(false);
+    }
+  } else {
+    if (type_size == 4) {
+      setNulls<float>(data, count);
+    } else {
+      setNulls<double>(data, count);
+    }
+  }
 }
 
 void ArrowCsvForeignStorage::read(const ChunkKey& chunk_key,
@@ -181,6 +219,7 @@ void ArrowCsvForeignStorage::read(const ChunkKey& chunk_key,
       auto fixed_type = dynamic_cast<arrow::FixedWidthType*>(array_data->type.get());
       if (fixed_type) {
         sz = size * (fixed_type->bit_width() / 8);
+        generateSentinelValues(dest, sql_type, size);
       } else {
         CHECK(false);  // TODO: what's else???
       }
@@ -269,6 +308,10 @@ void getSizeAndOffset(const Frag& frag,
   offset = (i == frag.first_chunk) ? frag.first_chunk_offset : 0;
   size = (i == frag.last_chunk) ? frag.last_chunk_size : (chunk->length() - offset);
 }
+
+void generateNullValues(const std::vector<Frag>& fragments,
+                        arrow::ChunkedArray* arr_col_chunked_array,
+                        const SQLTypeInfo& columnType);
 
 void ArrowCsvForeignStorage::createDictionaryEncodedColumn(
     StringDictionary* dict,
@@ -485,7 +528,6 @@ void ArrowCsvForeignStorage::registerTable(Catalog_Namespace::Catalog* catalog,
                                            const TableDescriptor& td,
                                            const std::list<ColumnDescriptor>& cols,
                                            Data_Namespace::AbstractBufferMgr* mgr) {
-  // tbb::task_scheduler_init init(1);
   auto memory_pool = arrow::default_memory_pool();
   auto arrow_parse_options = arrow::csv::ParseOptions::Defaults();
   arrow_parse_options.quoting = false;
@@ -502,6 +544,7 @@ void ArrowCsvForeignStorage::registerTable(Catalog_Namespace::Catalog* catalog,
   auto arrow_convert_options = arrow::csv::ConvertOptions::Defaults();
   arrow_convert_options.check_utf8 = false;
   arrow_convert_options.include_columns = arrow_read_options.column_names;
+  arrow_convert_options.strings_can_be_null = true;
 
   for (auto& c : cols) {
     if (c.isSystemCol) {
@@ -692,6 +735,9 @@ void ArrowCsvForeignStorage::registerTable(Catalog_Namespace::Catalog* catalog,
           b->encoder->setNumElems(frag.sz);
         }
       }
+      if (ctype != kDECIMAL && ctype != kNUMERIC && !c.columnType.is_string()) {
+        generateNullValues(fragments, arr_col_chunked_array, c.columnType);
+      }
     }
   }  // each col and fragment
 
@@ -700,6 +746,82 @@ void ArrowCsvForeignStorage::registerTable(Catalog_Namespace::Catalog* catalog,
 
   VLOG(1) << "Created CSV backed temporary table with " << num_cols << " columns, "
           << arr_frags << " chunks, and " << fragments.size() << " fragments.";
+}
+
+template <typename T>
+void setNullValues(const std::vector<Frag>& fragments,
+                   arrow::ChunkedArray* arr_col_chunked_array) {
+  const T null_value = std::is_signed<T>::value ? std::numeric_limits<T>::min()
+                                                : std::numeric_limits<T>::max();
+
+  tbb::parallel_for(
+      tbb::blocked_range<size_t>(0, fragments.size()),
+      [&](const tbb::blocked_range<size_t>& r0) {
+        for (size_t f = r0.begin(); f != r0.end(); ++f) {
+          tbb::parallel_for(
+              tbb::blocked_range<size_t>(fragments[f].first_chunk,
+                                         fragments[f].last_chunk + 1),
+              [&](const tbb::blocked_range<size_t>& r1) {
+                for (auto chunk_index = r1.begin(); chunk_index != r1.end();
+                     ++chunk_index) {
+                  auto chunk = arr_col_chunked_array->chunk(chunk_index).get();
+                  auto data = chunk->data()->buffers[1]->mutable_data();
+                  T* dataT = reinterpret_cast<T*>(data);
+                  const uint8_t* bitmap_data =
+                      arr_col_chunked_array->chunk(chunk_index)->null_bitmap_data();
+
+                  const int64_t length =
+                      arr_col_chunked_array->chunk(chunk_index)->length();
+                  const int64_t bitmap_length =
+                      arr_col_chunked_array->chunk(chunk_index)->null_bitmap()->size() -
+                      1;
+                  for (int64_t bitmap_idx = 0; bitmap_idx < bitmap_length; ++bitmap_idx) {
+                    T* res = dataT + bitmap_idx * 8;
+                    for (int8_t bitmap_offset = 0; bitmap_offset < 8; ++bitmap_offset) {
+                      res[bitmap_offset] +=
+                          null_value * ((~bitmap_data[bitmap_idx] >> bitmap_offset) & 1);
+                    }
+                  }
+
+                  for (int64_t j = bitmap_length * 8; j < length; ++j) {
+                    dataT[j] +=
+                        null_value * ((~bitmap_data[bitmap_length] >> (j % 8)) & 1);
+                  }
+                }
+              });
+        }
+      });
+}
+
+void generateNullValues(const std::vector<Frag>& fragments,
+                        arrow::ChunkedArray* arr_col_chunked_array,
+                        const SQLTypeInfo& columnType) {
+  const size_t typeSize = columnType.get_size();
+  if (columnType.is_integer()) {
+    switch (typeSize) {
+      case 1:
+        setNullValues<int8_t>(fragments, arr_col_chunked_array);
+        break;
+      case 2:
+        setNullValues<int16_t>(fragments, arr_col_chunked_array);
+        break;
+      case 4:
+        setNullValues<int32_t>(fragments, arr_col_chunked_array);
+        break;
+      case 8:
+        setNullValues<int64_t>(fragments, arr_col_chunked_array);
+        break;
+      default:
+        // TODO: throw unsupported integer type exception
+        CHECK(false);
+    }
+  } else {
+    if (typeSize == 4) {
+      setNullValues<float>(fragments, arr_col_chunked_array);
+    } else {
+      setNullValues<double>(fragments, arr_col_chunked_array);
+    }
+  }
 }
 
 std::string ArrowCsvForeignStorage::getType() const {
