@@ -85,8 +85,6 @@ void Executor::ExecutionDispatch::runImpl(
                                  : ra_exe_unit_.input_descs[0].getTableId();
   CHECK_EQ(frag_list[0].table_id, outer_table_id);
   const auto& outer_tab_frag_ids = frag_list[0].fragment_ids;
-  VLOG(1) << "outer_table_id=" << outer_table_id
-          << " frag_list=" << shared::printContainer(frag_list);
 
   CHECK_GE(chosen_device_id, 0);
   CHECK_LT(chosen_device_id, max_gpu_count);
@@ -123,7 +121,6 @@ void Executor::ExecutionDispatch::runImpl(
                                                 cat_,
                                                 *chunk_iterators_ptr,
                                                 chunks);
-    VLOG(1) << "fetch_result=" << fetch_result;
     if (fetch_result.num_rows.empty()) {
       return;
     }
