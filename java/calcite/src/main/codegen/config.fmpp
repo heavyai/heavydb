@@ -32,6 +32,8 @@ data: {
         "com.mapd.parser.extension.ddl.SqlCreateForeignTable"
         "com.mapd.parser.extension.ddl.SqlDropForeignTable"
         "com.mapd.parser.extension.ddl.SqlRefreshForeignTables"
+        "com.mapd.parser.extension.ddl.SqlCreateUserMapping"
+        "com.mapd.parser.extension.ddl.SqlDropUserMapping"
         "com.mapd.parser.extension.ddl.SqlShowUserSessions"
         "com.mapd.parser.extension.ddl.SqlShowForeignServers"
         "com.mapd.parser.extension.ddl.omnisql.*"
@@ -56,6 +58,7 @@ data: {
         "TABLES"
         "DATABASES"
         "SERVERS"
+        "MAPPING"
         "OWNER"
         "RENAME"
       ]
@@ -433,6 +436,7 @@ data: {
       createStatementParserMethods: [
         "SqlCreateServer"
         "SqlCreateForeignTable"
+        "SqlCreateUserMapping"
       ]
 
       # List of methods for parsing extensions to "DROP" calls.
@@ -440,6 +444,7 @@ data: {
       dropStatementParserMethods: [
         "SqlDropServer"
         "SqlDropForeignTable"
+        "SqlDropUserMapping"
       ]
 
 
@@ -459,6 +464,7 @@ data: {
         "foreignServerParser.ftl"
         "foreignTableParser.ftl"
         "showCommandsParser.ftl"
+        "userMappingParser.ftl"
       ]
 
       includePosixOperators: false

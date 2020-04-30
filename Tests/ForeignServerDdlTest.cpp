@@ -45,7 +45,7 @@ class CreateForeignServerTest : public DBHandlerTestFixture {
 
   void assertExpectedForeignServer() {
     auto& catalog = getCatalog();
-    auto foreign_server = catalog.getForeignServerSkipCache("test_server");
+    auto foreign_server = catalog.getForeignServerFromStorage("test_server");
 
     ASSERT_GT(foreign_server->id, 0);
     ASSERT_EQ("test_server", foreign_server->name);
@@ -188,7 +188,7 @@ class DropForeignServerTest : public DBHandlerTestFixture {
 
   void assertNullForeignServer(const std::string& server_name) {
     auto& catalog = getCatalog();
-    auto foreign_server = catalog.getForeignServerSkipCache(server_name);
+    auto foreign_server = catalog.getForeignServerFromStorage(server_name);
     ASSERT_EQ(nullptr, foreign_server);
   }
 
@@ -286,7 +286,7 @@ class ForeignServerPrivilegesDdlTest : public DBHandlerTestFixture {
 
   void assertExpectedForeignServerCreatedByUser() {
     auto& catalog = getCatalog();
-    auto foreign_server = catalog.getForeignServerSkipCache("test_server");
+    auto foreign_server = catalog.getForeignServerFromStorage("test_server");
     ASSERT_GT(foreign_server->id, 0);
     ASSERT_EQ(foreign_server->user_id, getCurrentUser().userId);
     ASSERT_EQ(getCurrentUser().userName, "test_user");
@@ -295,7 +295,7 @@ class ForeignServerPrivilegesDdlTest : public DBHandlerTestFixture {
 
   void assertNullForeignServer() {
     auto& catalog = getCatalog();
-    auto foreign_server = catalog.getForeignServerSkipCache("test_server");
+    auto foreign_server = catalog.getForeignServerFromStorage("test_server");
     ASSERT_EQ(nullptr, foreign_server);
   }
 };
@@ -881,7 +881,7 @@ class AlterForeignServerTest : public DBHandlerTestFixture {
     assertForeignServersEqual(catalog.getForeignServer(expected_foreign_server.name),
                               expected_foreign_server);
     assertForeignServersEqual(
-        catalog.getForeignServerSkipCache(expected_foreign_server.name),
+        catalog.getForeignServerFromStorage(expected_foreign_server.name).get(),
         expected_foreign_server);
   }
 
@@ -889,7 +889,7 @@ class AlterForeignServerTest : public DBHandlerTestFixture {
     auto& catalog = getCatalog();
     const auto inmemory_foreign_server = catalog.getForeignServer(server_name);
     ASSERT_EQ(nullptr, inmemory_foreign_server);
-    const auto foreign_server = catalog.getForeignServerSkipCache(server_name);
+    const auto foreign_server = catalog.getForeignServerFromStorage(server_name);
     ASSERT_EQ(nullptr, foreign_server);
   }
 

@@ -1081,21 +1081,8 @@ void SysCatalog::createDatabase(const string& name, int owner) {
         std::vector<std::string>{std::to_string(owner)});
 
     if (g_enable_fsi) {
-      dbConn->query(
-          "CREATE TABLE omnisci_foreign_servers("
-          "id integer primary key, "
-          "name text unique, "
-          "data_wrapper_type text, "
-          "owner_user_id integer, "
-          "creation_time integer, "
-          "options text)");
-      dbConn->query(
-          "CREATE TABLE omnisci_foreign_tables("
-          "table_id integer unique, "
-          "server_id integer, "
-          "options text, "
-          "FOREIGN KEY(table_id) REFERENCES mapd_tables(tableid), "
-          "FOREIGN KEY(server_id) REFERENCES omnisci_foreign_servers(id))");
+      dbConn->query(Catalog::getForeignServerSchema());
+      dbConn->query(Catalog::getForeignTableSchema());
     }
   } catch (const std::exception&) {
     dbConn->query("ROLLBACK TRANSACTION");

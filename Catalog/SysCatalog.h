@@ -324,7 +324,6 @@ class SysCatalog : private CommonFileOperations {
   void updateBlankPasswordsToRandom();
   void updateSupportUserDeactivation();
   void migrateDBAccessPrivileges();
-
   void loginImpl(std::string& username,
                  const std::string& password,
                  UserMetadata& user_meta);

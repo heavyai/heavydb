@@ -46,7 +46,7 @@ struct ForeignServer : public OptionsContainer {
   static constexpr std::array<std::string_view, 1> supported_storage_types{
       LOCAL_FILE_STORAGE_TYPE};
 
-  int id;
+  int32_t id;
   std::string name;
   std::string data_wrapper_type;
   int32_t user_id;
@@ -54,7 +54,7 @@ struct ForeignServer : public OptionsContainer {
 
   ForeignServer() {}
 
-  ForeignServer(const int server_id,
+  ForeignServer(const int32_t server_id,
                 const std::string& server_name,
                 const std::string& data_wrapper_type,
                 const std::string& options_str,

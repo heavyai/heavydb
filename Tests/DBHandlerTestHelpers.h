@@ -249,7 +249,7 @@ class DBHandlerTestFixture : public testing::Test {
     return db_handler_->get_session_copy_ptr(session_id_)->get_currentUser();
   }
 
-  Catalog_Namespace::Catalog& getCatalog() {
+  static Catalog_Namespace::Catalog& getCatalog() {
     return db_handler_->get_session_copy_ptr(session_id_)->getCatalog();
   }
 

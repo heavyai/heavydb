@@ -1,0 +1,9 @@
+{
+  "statementType": "DDL",
+  "payload": {
+    "command": "DROP_USER_MAPPING",
+    "ifExists": false,
+    "serverName": "test_server",
+    "user": "test_user"
+  }
+}

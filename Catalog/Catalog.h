@@ -250,6 +250,24 @@ class Catalog final {
                               bool dump_defaults = false) const;
 
   /**
+   * Gets the DDL statement used to create a foreign table schema.
+   *
+   * @param if_not_exists - flag that indicates whether or not to include
+   * the "IF NOT EXISTS" phrase in the DDL statement
+   * @return string containing DDL statement
+   */
+  static const std::string getForeignTableSchema(bool if_not_exists = false);
+
+  /**
+   * Gets the DDL statement used to create a foreign server schema.
+   *
+   * @param if_not_exists - flag that indicates whether or not to include
+   * the "IF NOT EXISTS" phrase in the DDL statement
+   * @return string containing DDL statement
+   */
+  static const std::string getForeignServerSchema(bool if_not_exists = false);
+
+  /**
    * Creates a new foreign server DB object.
    *
    * @param foreign_server - unique pointer to struct containing foreign server details
@@ -272,15 +290,15 @@ class Catalog final {
       const std::string& server_name) const;
 
   /**
-   * Gets a pointer to a struct containing foreign server details.
-   * Skip in-memory cache of foreign server struct when attempting to fetch foreign server
-   * details. This is mainly used for testing.
+   * Gets a pointer to a struct containing foreign server details fetched from storage.
+   * This is mainly used for testing when asserting that expected catalog data is
+   * persisted.
    *
    * @param server_name - Name of foreign server whose details will be fetched
    * @return pointer to a struct containing foreign server details. nullptr is returned if
    * no foreign server exists with the given name
    */
-  const foreign_storage::ForeignServer* getForeignServerSkipCache(
+  const std::unique_ptr<const foreign_storage::ForeignServer> getForeignServerFromStorage(
       const std::string& server_name);
 
   /**
