@@ -23,6 +23,7 @@ set(datamgr_source_files
     ForeignStorage/ForeignStorageBuffer.cpp
     ForeignStorage/ForeignStorageMgr.cpp
     ForeignStorage/CsvDataWrapper.cpp
+    ForeignStorage/LazyLoader.cpp
     PersistentStorageMgr/PersistentStorageMgr.cpp
 )
 

@@ -67,6 +67,18 @@ class Array;
 
 namespace import_export {
 
+using FileOffsets = std::vector<size_t>;
+
+struct FileRegion {
+  std::string filename;
+  // Offset into file
+  size_t first_row_file_offset;
+  // Size of region in bytes
+  size_t region_size;
+};
+
+using FileRegions = std::vector<FileRegion>;
+
 class Importer;
 
 using ArraySliceRange = std::pair<size_t, size_t>;
@@ -515,7 +527,8 @@ class Loader {
   using LoadCallbackType =
       std::function<bool(const std::vector<std::unique_ptr<TypedImportBuffer>>&,
                          std::vector<DataBlockPtr>&,
-                         size_t)>;
+                         size_t,
+                         const std::vector<size_t>&)>;
 
  public:
   Loader(Catalog_Namespace::Catalog& c,
@@ -550,7 +563,9 @@ class Loader {
                     const size_t row_count);
   virtual bool loadNoCheckpoint(
       const std::vector<std::unique_ptr<TypedImportBuffer>>& import_buffers,
-      const size_t row_count);
+      const size_t row_count,
+      const std::vector<size_t>& row_offsets = {});
+
   virtual void checkpoint();
   virtual int32_t getTableEpoch();
   virtual void setTableEpoch(const int32_t new_epoch);
@@ -565,7 +580,8 @@ class Loader {
   virtual bool loadImpl(
       const std::vector<std::unique_ptr<TypedImportBuffer>>& import_buffers,
       size_t row_count,
-      bool checkpoint);
+      bool checkpoint,
+      const std::vector<size_t>& row_offsets = {});
 
   using OneShardBuffers = std::vector<std::unique_ptr<TypedImportBuffer>>;
   void distributeToShards(std::vector<OneShardBuffers>& all_shard_import_buffers,
@@ -729,8 +745,17 @@ class Importer : public DataStreamSink {
   Importer(Loader* providedLoader, const std::string& f, const CopyParams& p);
   ~Importer() override;
   ImportStatus import();
+
   ImportStatus importDelimited(const std::string& file_path,
-                               const bool decompressed) override;
+                               const bool decompressed) override {
+    return loadDelimited(file_path, decompressed, false, false, {});
+  };
+
+  ImportStatus loadDelimited(const std::string& file_path,
+                             const bool decompressed,
+                             const bool record_offsets,
+                             const bool partial_import,
+                             const FileRegions& file_regions);
   ImportStatus importGDAL(std::map<std::string, std::string> colname_to_src);
   static bool hasGDALLibKML();
   const CopyParams& get_copy_params() const { return copy_params; }
@@ -738,7 +763,8 @@ class Importer : public DataStreamSink {
     return loader->get_column_descs();
   }
   void load(const std::vector<std::unique_ptr<TypedImportBuffer>>& import_buffers,
-            size_t row_count);
+            size_t row_count,
+            const std::vector<size_t>& row_offsets);
   std::vector<std::vector<std::unique_ptr<TypedImportBuffer>>>& get_import_buffers_vec() {
     return import_buffers_vec;
   }

@@ -1808,7 +1808,10 @@ static ImportStatus import_thread_delimited(
     size_t end_pos,
     size_t total_size,
     const ColumnIdToRenderGroupAnalyzerMapType& columnIdToRenderGroupAnalyzerMap,
-    size_t first_row_index_this_buffer) {
+    size_t first_row_index_this_buffer,
+    bool record_row_offsets,
+    size_t current_position,
+    bool skip_first_row) {
   ImportStatus import_status;
   int64_t total_get_row_time_us = 0;
   int64_t total_str_to_val_time_us = 0;
@@ -1829,6 +1832,8 @@ static ImportStatus import_thread_delimited(
     auto us = measure<std::chrono::microseconds>::execution([&]() {});
     int phys_cols = 0;
     int point_cols = 0;
+    std::vector<size_t> row_offsets;
+
     for (const auto cd : col_descs) {
       const auto& col_ti = cd->columnType;
       phys_cols += col_ti.get_physical_cols();
@@ -1846,6 +1851,10 @@ static ImportStatus import_thread_delimited(
       row.clear();
       std::vector<std::unique_ptr<char[]>>
           tmp_buffers;  // holds string w/ removed escape chars, etc
+      if (record_row_offsets && !skip_first_row) {
+        // Record byte offset of each row for FSI
+        row_offsets.push_back(current_position + (p - buffer));
+      }
       if (DEBUG_TIMING) {
         us = measure<std::chrono::microseconds>::execution([&]() {
           p = import_export::delimited_parser::get_row(p,
@@ -1867,6 +1876,10 @@ static ImportStatus import_thread_delimited(
                                                      row,
                                                      tmp_buffers,
                                                      try_single_thread);
+      }
+      if (skip_first_row) {
+        skip_first_row = false;
+        continue;
       }
       row_index_plus_one++;
       // Each POINT could consume two separate coords instead of a single WKT
@@ -2108,9 +2121,14 @@ static ImportStatus import_thread_delimited(
       }
       total_str_to_val_time_us += us;
     }  // end thread
+    if (record_row_offsets) {
+      // Store final row end
+      row_offsets.push_back(current_position + end_pos);
+    }
     if (import_status.rows_completed > 0) {
-      load_ms = measure<>::execution(
-          [&]() { importer->load(import_buffers, import_status.rows_completed); });
+      load_ms = measure<>::execution([&]() {
+        importer->load(import_buffers, import_status.rows_completed, row_offsets);
+      });
     }
   });
   if (DEBUG_TIMING && import_status.rows_completed > 0) {
@@ -2405,7 +2423,7 @@ static ImportStatus import_thread_shapefile(
   float load_ms = 0.0f;
   if (import_status.rows_completed > 0) {
     auto load_timer = timer_start();
-    importer->load(import_buffers, import_status.rows_completed);
+    importer->load(import_buffers, import_status.rows_completed, {});
     load_ms =
         float(
             timer_stop<std::chrono::steady_clock::time_point, std::chrono::microseconds>(
@@ -2433,8 +2451,9 @@ static ImportStatus import_thread_shapefile(
 
 bool Loader::loadNoCheckpoint(
     const std::vector<std::unique_ptr<TypedImportBuffer>>& import_buffers,
-    size_t row_count) {
-  return loadImpl(import_buffers, row_count, false);
+    size_t row_count,
+    const std::vector<size_t>& row_offsets) {
+  return loadImpl(import_buffers, row_count, false, row_offsets);
 }
 
 bool Loader::load(const std::vector<std::unique_ptr<TypedImportBuffer>>& import_buffers,
@@ -2642,10 +2661,11 @@ void Loader::distributeToShards(std::vector<OneShardBuffers>& all_shard_import_b
 bool Loader::loadImpl(
     const std::vector<std::unique_ptr<TypedImportBuffer>>& import_buffers,
     size_t row_count,
-    bool checkpoint) {
+    bool checkpoint,
+    const std::vector<size_t>& row_offsets) {
   if (load_callback_) {
     auto data_blocks = get_data_block_pointers(import_buffers);
-    return load_callback_(import_buffers, data_blocks, row_count);
+    return load_callback_(import_buffers, data_blocks, row_count, row_offsets);
   }
   if (table_desc_->nShards) {
     std::vector<OneShardBuffers> all_shard_import_buffers;
@@ -3186,8 +3206,9 @@ std::vector<std::string> Detector::get_headers() {
 }
 
 void Importer::load(const std::vector<std::unique_ptr<TypedImportBuffer>>& import_buffers,
-                    size_t row_count) {
-  if (!loader->loadNoCheckpoint(import_buffers, row_count)) {
+                    size_t row_count,
+                    const std::vector<size_t>& row_offsets) {
+  if (!loader->loadNoCheckpoint(import_buffers, row_count, row_offsets)) {
     load_failed = true;
   }
 }
@@ -3505,7 +3526,7 @@ void Importer::import_local_parquet(const std::string& file_path) {
       }
       // flush slices of this row group to chunks
       for (int slice = 0; slice < num_slices; ++slice) {
-        load(import_buffers_vec[slice], nrow_in_slice_successfully_loaded[slice]);
+        load(import_buffers_vec[slice], nrow_in_slice_successfully_loaded[slice], {});
       }
       // update import stats
       const auto nrow_original =
@@ -3871,13 +3892,19 @@ ImportStatus Importer::import() {
   return DataStreamSink::archivePlumber();
 }
 
-ImportStatus Importer::importDelimited(const std::string& file_path,
-                                       const bool decompressed) {
+ImportStatus Importer::loadDelimited(const std::string& file_path,
+                                     const bool decompressed,
+                                     const bool record_offsets,
+                                     const bool partial_import,
+                                     const FileRegions& file_regions) {
   bool load_truncated = false;
   set_import_status(import_id, import_status);
 
+  // Is file opened internally
+  bool internal_file = false;
   if (!p_file) {
     p_file = fopen(file_path.c_str(), "rb");
+    internal_file = true;
   }
   if (!p_file) {
     throw std::runtime_error("failed to open file '" + file_path +
@@ -3915,9 +3942,17 @@ ImportStatus Importer::importDelimited(const std::string& file_path,
   size_t begin_pos = 0;
 
   (void)fseek(p_file, current_pos, SEEK_SET);
-  size_t size =
-      fread(reinterpret_cast<void*>(scratch_buffer.get()), 1, alloc_size, p_file);
-
+  size_t size = 0;
+  size_t file_region_index = 0;
+  if (!partial_import) {
+    size = fread(reinterpret_cast<void*>(scratch_buffer.get()), 1, alloc_size, p_file);
+  } else {
+    fseek(p_file, file_regions[0].first_row_file_offset, SEEK_SET);
+    size = fread(reinterpret_cast<void*>(scratch_buffer.get()), 1, alloc_size, p_file);
+    if (size < file_regions[0].region_size) {
+      throw std::runtime_error("Unexpected changes to file " + file_path);
+    }
+  }
   // make render group analyzers for each poly column
   ColumnIdToRenderGroupAnalyzerMapType columnIdToRenderGroupAnalyzerMap;
   if (copy_params.geo_assign_render_groups) {
@@ -3932,7 +3967,13 @@ ImportStatus Importer::importDelimited(const std::string& file_path,
       }
     }
   }
+  bool skip_first_row = false;
 
+  if (internal_file) {
+    // Need to skip first row if we opened the file directly and are doing a full scan
+    skip_first_row = !partial_import &&
+                     (copy_params.has_header != Importer_NS::ImportHeaderRow::NO_HEADER);
+  }
   ChunkKey chunkKey = {loader->getCatalog().getCurrentDB().dbId,
                        loader->getTableDesc()->tableId};
   auto start_epoch = loader->getTableEpoch();
@@ -3951,15 +3992,28 @@ ImportStatus Importer::importDelimited(const std::string& file_path,
     while (size > 0) {
       unsigned int num_rows_this_buffer = 0;
       CHECK(scratch_buffer);
-      end_pos = delimited_parser::find_end(
-          scratch_buffer.get(), size, copy_params, num_rows_this_buffer);
-
-      // unput residual
-      int nresidual = size - end_pos;
+      int nresidual = 0;
       std::unique_ptr<char[]> unbuf;
-      if (nresidual > 0) {
-        unbuf = std::make_unique<char[]>(nresidual);
-        memcpy(unbuf.get(), scratch_buffer.get() + end_pos, nresidual);
+
+      if (!partial_import) {
+        if (internal_file && size < copy_params.buffer_size &&
+            scratch_buffer.get()[size - 1] != copy_params.line_delim) {
+          // Need to append a delimiter in case the file doesnt end on one
+          scratch_buffer.get()[size] = copy_params.line_delim;
+          size = size + 1;
+        }
+        end_pos = delimited_parser::find_end(
+            scratch_buffer.get(), size, copy_params, num_rows_this_buffer);
+        // unput residual
+        nresidual = size - end_pos;
+        if (nresidual > 0) {
+          unbuf = std::make_unique<char[]>(nresidual);
+          memcpy(unbuf.get(), scratch_buffer.get() + end_pos, nresidual);
+        }
+      } else {
+        end_pos = file_regions[file_region_index].region_size;
+        current_pos = file_regions[file_region_index].first_row_file_offset;
+        file_region_index++;
       }
 
       // get a thread_id not in use
@@ -3976,18 +4030,36 @@ ImportStatus Importer::importDelimited(const std::string& file_path,
                                    end_pos,
                                    end_pos,
                                    columnIdToRenderGroupAnalyzerMap,
-                                   first_row_index_this_buffer));
+                                   first_row_index_this_buffer,
+                                   record_offsets,
+                                   current_pos,
+                                   skip_first_row));
+      skip_first_row = false;
 
       first_row_index_this_buffer += num_rows_this_buffer;
 
       current_pos += end_pos;
       scratch_buffer = std::make_unique<char[]>(alloc_size);
       CHECK(scratch_buffer);
-      memcpy(scratch_buffer.get(), unbuf.get(), nresidual);
-      size = nresidual + fread(scratch_buffer.get() + nresidual,
-                               1,
-                               copy_params.buffer_size - nresidual,
-                               p_file);
+      if (!partial_import) {
+        memcpy(scratch_buffer.get(), unbuf.get(), nresidual);
+        size = nresidual + fread(scratch_buffer.get() + nresidual,
+                                 1,
+                                 copy_params.buffer_size - nresidual,
+                                 p_file);
+      } else {
+        if (file_region_index < file_regions.size()) {
+          fseek(p_file, file_regions[file_region_index].first_row_file_offset, SEEK_SET);
+          size =
+              fread(reinterpret_cast<void*>(scratch_buffer.get()), 1, alloc_size, p_file);
+          // This region should exist
+          if (size < file_regions[file_region_index].region_size) {
+            throw std::runtime_error("Unexpected changes to file " + file_path);
+          }
+        } else {
+          size = 0;
+        }
+      }
 
       begin_pos = 0;
 

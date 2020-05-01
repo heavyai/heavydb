@@ -21,6 +21,7 @@
 using namespace Data_Namespace;
 
 namespace foreign_storage {
+
 class ForeignStorageBuffer : public AbstractBuffer {
  public:
   ForeignStorageBuffer();
@@ -43,6 +44,15 @@ class ForeignStorageBuffer : public AbstractBuffer {
               const size_t num_bytes,
               const MemoryLevel source_buffer_type = CPU_LEVEL,
               const int device_id = -1) override;
+
+  void discardBuffer() {
+    reserved_byte_count = 0;
+    buffer = nullptr;
+  };
+
+  void reallocBuffer() { reserve(byte_count); };
+
+  bool bufferExists() { return buffer != nullptr; };
 
   int8_t* getMemoryPtr() override;
   size_t pageCount() const override;
