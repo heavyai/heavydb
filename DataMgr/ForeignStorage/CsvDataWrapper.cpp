@@ -54,7 +54,16 @@ void CsvDataWrapper::initializeChunkBuffers(const int fragment_index) {
 
   const auto& columns =
       catalog->getAllColumnMetadataForTable(foreign_table_->tableId, false, false, true);
+
+  // Create an empty vector of file regions used in this fragment
+  fragment_fileregion_map_[fragment_index] = {};
+
   for (const auto column : columns) {
+    // Create an empty vector of subchunks corresponding to the file regions in
+    // fragment_fileregion_map_
+    ChunkKey data_chunk_key{
+        db_id_, foreign_table_->tableId, column->columnId, fragment_index};
+
     Chunk_NS::Chunk chunk{column};
     if (column->columnType.is_varlen() && !column->columnType.is_fixlen_array()) {
       ChunkKey data_chunk_key{
@@ -74,8 +83,38 @@ void CsvDataWrapper::initializeChunkBuffers(const int fragment_index) {
       CHECK(chunk_buffer_map_.find(data_chunk_key) == chunk_buffer_map_.end());
       chunk_buffer_map_[data_chunk_key] = std::make_unique<ForeignStorageBuffer>();
       chunk.setBuffer(chunk_buffer_map_[data_chunk_key].get());
+      // Reserve data so we dont need to keep re-allocating and moving
+      chunk_buffer_map_[data_chunk_key].get()->reserve(
+          column->columnType.get_logical_size() * foreign_table_->maxFragRows);
     }
     chunk.initEncoder();
+  }
+}
+
+void CsvDataWrapper::discardFragmentBuffers(const int fragment_index) {
+  // Discard data buffers in the chunk buffer map
+  const auto catalog = Catalog_Namespace::Catalog::get(db_id_);
+  CHECK(catalog);
+
+  const auto& columns =
+      catalog->getAllColumnMetadataForTable(foreign_table_->tableId, false, false, true);
+  for (const auto column : columns) {
+    if (column->columnType.is_varlen() && !column->columnType.is_fixlen_array()) {
+      ChunkKey index_chunk_key{
+          db_id_, foreign_table_->tableId, column->columnId, fragment_index, 2};
+      CHECK(chunk_buffer_map_.find(index_chunk_key) != chunk_buffer_map_.end());
+      chunk_buffer_map_[index_chunk_key].get()->discardBuffer();
+      ChunkKey data_chunk_key{
+          db_id_, foreign_table_->tableId, column->columnId, fragment_index, 1};
+      CHECK(chunk_buffer_map_.find(data_chunk_key) != chunk_buffer_map_.end());
+      chunk_buffer_map_[data_chunk_key].get()->discardBuffer();
+    } else {
+      ChunkKey data_chunk_key{
+          db_id_, foreign_table_->tableId, column->columnId, fragment_index};
+
+      CHECK(chunk_buffer_map_.find(data_chunk_key) != chunk_buffer_map_.end());
+      chunk_buffer_map_[data_chunk_key].get()->discardBuffer();
+    }
   }
 }
 
@@ -84,9 +123,8 @@ void CsvDataWrapper::fetchChunkBuffers() {
   auto catalog = Catalog_Namespace::Catalog::get(db_id_);
   CHECK(catalog);
 
-  import_export::Importer importer(
-      getLoader(*catalog), file_path, validateAndGetCopyParams());
-  importer.import();
+  LazyLoader loader(getMetadataLoader(*catalog), file_path, validateAndGetCopyParams());
+  loader.scanMetadata();
 
   if (chunk_buffer_map_.empty()) {
     throw std::runtime_error{
@@ -196,58 +234,201 @@ std::optional<bool> CsvDataWrapper::validateAndGetBoolValue(
   return std::nullopt;
 }
 
-import_export::Loader* CsvDataWrapper::getLoader(Catalog_Namespace::Catalog& catalog) {
-  auto callback =
-      [this](const std::vector<std::unique_ptr<import_export::TypedImportBuffer>>&
-                 import_buffers,
-             std::vector<DataBlockPtr>& data_blocks,
-             size_t import_row_count) {
-        std::lock_guard loader_lock(loader_mutex_);
-        size_t processed_import_row_count = 0;
-        while (processed_import_row_count < import_row_count) {
-          int fragment_index = row_count_ / foreign_table_->maxFragRows;
-          size_t row_count_for_fragment;
+import_export::Loader* CsvDataWrapper::getMetadataLoader(
+    Catalog_Namespace::Catalog& catalog) {
+  auto callback = [this](const std::vector<std::unique_ptr<
+                             import_export::TypedImportBuffer>>& import_buffers,
+                         std::vector<DataBlockPtr>& data_blocks,
+                         size_t import_row_count,
+                         const std::vector<size_t>& row_offsets) {
+    std::lock_guard loader_lock(loader_mutex_);
+    size_t processed_import_row_count = 0;
+    while (processed_import_row_count < import_row_count) {
+      int fragment_index = row_count_ / foreign_table_->maxFragRows;
+      size_t row_count_for_fragment;
 
-          if (fragmentIsFull()) {
-            row_count_for_fragment =
-                std::min<size_t>(foreign_table_->maxFragRows,
-                                 import_row_count - processed_import_row_count);
-            initializeChunkBuffers(fragment_index);
-          } else {
-            row_count_for_fragment = std::min<size_t>(
-                foreign_table_->maxFragRows - (row_count_ % foreign_table_->maxFragRows),
-                import_row_count - processed_import_row_count);
-          }
-          for (size_t i = 0; i < import_buffers.size(); i++) {
-            Chunk_NS::Chunk chunk{import_buffers[i]->getColumnDesc()};
-            auto column_id = import_buffers[i]->getColumnDesc()->columnId;
-            auto& type_info = import_buffers[i]->getTypeInfo();
-            if (type_info.is_varlen() && !type_info.is_fixlen_array()) {
-              ChunkKey data_chunk_key{
-                  db_id_, foreign_table_->tableId, column_id, fragment_index, 1};
-              CHECK(chunk_buffer_map_.find(data_chunk_key) != chunk_buffer_map_.end());
-              chunk.setBuffer(chunk_buffer_map_[data_chunk_key].get());
+      if (fragmentIsFull()) {
+        row_count_for_fragment = std::min<size_t>(
+            foreign_table_->maxFragRows, import_row_count - processed_import_row_count);
+        // Discard data. When cache is integrated, try to push into cache instead
+        discardFragmentBuffers(fragment_index - 1);
+        initializeChunkBuffers(fragment_index);
+      } else {
+        row_count_for_fragment = std::min<size_t>(
+            foreign_table_->maxFragRows - (row_count_ % foreign_table_->maxFragRows),
+            import_row_count - processed_import_row_count);
+      }
 
-              ChunkKey index_chunk_key{
-                  db_id_, foreign_table_->tableId, column_id, fragment_index, 2};
-              CHECK(chunk_buffer_map_.find(index_chunk_key) != chunk_buffer_map_.end());
-              chunk.setIndexBuffer(chunk_buffer_map_[index_chunk_key].get());
-            } else {
-              ChunkKey data_chunk_key{
-                  db_id_, foreign_table_->tableId, column_id, fragment_index};
-              CHECK(chunk_buffer_map_.find(data_chunk_key) != chunk_buffer_map_.end());
-              chunk.setBuffer(chunk_buffer_map_[data_chunk_key].get());
-            }
-            chunk.appendData(
-                data_blocks[i], row_count_for_fragment, processed_import_row_count);
-            chunk.setBuffer(nullptr);
-            chunk.setIndexBuffer(nullptr);
-          }
-          row_count_ += row_count_for_fragment;
-          processed_import_row_count += row_count_for_fragment;
+      // Store the file region in the map
+      import_export::FileRegion file_region;
+      file_region.filename = "";
+      file_region.first_row_file_offset = row_offsets[processed_import_row_count];
+      file_region.region_size =
+          row_offsets[processed_import_row_count + row_count_for_fragment] -
+          row_offsets[processed_import_row_count];
+
+      fragment_fileregion_map_[fragment_index].push_back(file_region);
+
+      for (size_t i = 0; i < import_buffers.size(); i++) {
+        Chunk_NS::Chunk chunk{import_buffers[i]->getColumnDesc()};
+        auto column_id = import_buffers[i]->getColumnDesc()->columnId;
+        auto& type_info = import_buffers[i]->getTypeInfo();
+        ChunkKey data_chunk_key;
+        ChunkKey index_chunk_key;
+        size_t index_offset;
+        if (type_info.is_varlen() && !type_info.is_fixlen_array()) {
+          data_chunk_key = {
+              db_id_, foreign_table_->tableId, column_id, fragment_index, 1};
+          CHECK(chunk_buffer_map_.find(data_chunk_key) != chunk_buffer_map_.end());
+          chunk.setBuffer(chunk_buffer_map_[data_chunk_key].get());
+
+          index_chunk_key = {
+              db_id_, foreign_table_->tableId, column_id, fragment_index, 2};
+          CHECK(chunk_buffer_map_.find(index_chunk_key) != chunk_buffer_map_.end());
+          chunk.setIndexBuffer(chunk_buffer_map_[index_chunk_key].get());
+
+          index_offset = chunk_buffer_map_[index_chunk_key].get()->size();
+        } else {
+          data_chunk_key = {db_id_, foreign_table_->tableId, column_id, fragment_index};
+          CHECK(chunk_buffer_map_.find(data_chunk_key) != chunk_buffer_map_.end());
+          chunk.setBuffer(chunk_buffer_map_[data_chunk_key].get());
         }
-        return true;
-      };
+
+        size_t init_offset = chunk_buffer_map_[data_chunk_key].get()->size();
+        chunk.appendData(
+            data_blocks[i], row_count_for_fragment, processed_import_row_count);
+        chunk.setBuffer(nullptr);
+        chunk.setIndexBuffer(nullptr);
+
+        size_t final_offset = chunk_buffer_map_[data_chunk_key].get()->size();
+        size_t size = final_offset - init_offset;
+
+        SubChunkRegion data_chunk_desc;
+        data_chunk_desc.buffer_offset = init_offset;
+        data_chunk_desc.buffer_size = size;
+
+        // Store this so we can find this subchunk by the chunk key and file offset
+        chunk_file_offset_subchunk_map_[{
+            data_chunk_key, file_region.first_row_file_offset}] = data_chunk_desc;
+
+        if (type_info.is_varlen() && !type_info.is_fixlen_array()) {
+          // Also store info for index chunk
+          SubChunkRegion index_chunk_desc;
+          index_chunk_desc.buffer_offset = index_offset;
+          index_chunk_desc.buffer_size =
+              chunk_buffer_map_[data_chunk_key].get()->size() - index_offset;
+          chunk_file_offset_subchunk_map_[{
+              index_chunk_key, file_region.first_row_file_offset}] = index_chunk_desc;
+        }
+      }
+      row_count_ += row_count_for_fragment;
+      processed_import_row_count += row_count_for_fragment;
+    }
+    return true;
+  };
+
+  return new import_export::Loader(catalog, foreign_table_, callback);
+}
+
+import_export::Loader* CsvDataWrapper::getLazyLoader(
+    Catalog_Namespace::Catalog& catalog,
+    const ChunkKey data_chunk_key,
+    std::map<ChunkKey, std::unique_ptr<ForeignStorageBuffer>>* temp_buffer_map_ptr) {
+  auto callback = [this, data_chunk_key, temp_buffer_map_ptr](
+                      const std::vector<std::unique_ptr<
+                          import_export::TypedImportBuffer>>& import_buffers,
+                      std::vector<DataBlockPtr>& data_blocks,
+                      size_t import_row_count,
+                      const std::vector<size_t>& row_offsets) {
+    std::lock_guard loader_lock(loader_mutex_);
+
+    // Importer passed us the offset for each row
+    // Make sure this data starts at an existing subchunk for this chunk key
+    CHECK(row_offsets.size() > 0);
+    CHECK(chunk_file_offset_subchunk_map_.find({data_chunk_key, row_offsets[0]}) !=
+          chunk_file_offset_subchunk_map_.end());
+
+    SubChunkRegion data_chunk_desc =
+        chunk_file_offset_subchunk_map_[{data_chunk_key, row_offsets[0]}];
+
+    // Find import_buffer that contains this requested chunk
+    int col_index = -1;
+    for (size_t i = 0; i < import_buffers.size(); i++) {
+      if (import_buffers[i]->getColumnDesc()->columnId == data_chunk_key[2])
+        col_index = i;
+    }
+    CHECK(col_index > -1);
+
+    Chunk_NS::Chunk chunk{import_buffers[col_index]->getColumnDesc()};
+
+    auto& type_info = import_buffers[col_index]->getTypeInfo();
+    if (type_info.is_varlen() && !type_info.is_fixlen_array()) {
+      ChunkKey index_chunk_key = {
+          data_chunk_key[0], data_chunk_key[1], data_chunk_key[2], data_chunk_key[3], 2};
+      chunk.set_buffer((*temp_buffer_map_ptr)[data_chunk_key].get());
+      chunk.set_index_buf((*temp_buffer_map_ptr)[index_chunk_key].get());
+
+      size_t data_start = (*temp_buffer_map_ptr)[data_chunk_key].get()->size();
+      size_t index_start = (*temp_buffer_map_ptr)[index_chunk_key].get()->size();
+      // Append full data_block starting at index 0 into the chunk
+      chunk.appendData(data_blocks[col_index], import_row_count, 0);
+      chunk.set_buffer(nullptr);
+      chunk.set_index_buf(nullptr);
+      size_t data_end = (*temp_buffer_map_ptr)[data_chunk_key].get()->size();
+      size_t index_end = (*temp_buffer_map_ptr)[index_chunk_key].get()->size();
+      CHECK(data_chunk_desc.buffer_size == (data_end - data_start));
+      (*temp_buffer_map_ptr)[data_chunk_key].get()->read(
+          chunk_buffer_map_[data_chunk_key].get()->getMemoryPtr() +
+              data_chunk_desc.buffer_offset,
+          data_chunk_desc.buffer_size,
+          data_start);
+
+      // Now we need to offset the index buffer entries to account for the copy
+      // Make sure this logic is the same for String and Array offsets
+      static_assert(sizeof(StringOffsetT) == sizeof(ArrayOffsetT));
+
+      SubChunkRegion index_chunk_desc =
+          chunk_file_offset_subchunk_map_[{index_chunk_key, row_offsets[0]}];
+
+      StringOffsetT* tmp_indexes =
+          (StringOffsetT*)((*temp_buffer_map_ptr)[index_chunk_key].get()->getMemoryPtr() +
+                           index_start);
+      StringOffsetT* dst_indexes =
+          (StringOffsetT*)(chunk_buffer_map_[index_chunk_key].get()->getMemoryPtr() +
+                           index_chunk_desc.buffer_offset);
+
+      size_t num_indexes = (index_end - index_start) / sizeof(StringOffsetT);
+      if (index_start == 0) {
+        // This is the first subchunk loaded into the temporary buffer
+        // Skip the first index to account for extra first row index
+        tmp_indexes++;
+        num_indexes--;
+      }
+
+      if (index_chunk_desc.buffer_offset == 0) {
+        // This is the first subchunk in the real chunk
+        // Always set first index to 0, and copy the new indexes after it
+        dst_indexes[0] = 0;
+        dst_indexes++;
+      }
+      for (size_t i = 0; i < num_indexes; i++) {
+        dst_indexes[i] = tmp_indexes[i] + data_chunk_desc.buffer_offset - data_start;
+      }
+
+    } else {
+      chunk.set_buffer((*temp_buffer_map_ptr)[data_chunk_key].get());
+      size_t start = (*temp_buffer_map_ptr)[data_chunk_key].get()->size();
+      // Append full data_block starting at data_chunk_keyt index 0 into the chunk
+      chunk.appendData(data_blocks[col_index], import_row_count, 0);
+      chunk.set_buffer(nullptr);
+      (*temp_buffer_map_ptr)[data_chunk_key].get()->read(
+          chunk_buffer_map_[data_chunk_key].get()->getMemoryPtr() +
+              data_chunk_desc.buffer_offset,
+          data_chunk_desc.buffer_size,
+          start);
+    }
+    return true;
+  };
 
   return new import_export::Loader(catalog, foreign_table_, callback);
 }
@@ -257,6 +438,78 @@ bool CsvDataWrapper::fragmentIsFull() {
 }
 
 ForeignStorageBuffer* CsvDataWrapper::getChunkBuffer(const ChunkKey& chunk_key) {
+  // Need to populate data before returning it
+
+  if (!chunk_buffer_map_[chunk_key].get()->bufferExists()) {
+    auto catalog = Catalog_Namespace::Catalog::get(db_id_);
+    CHECK(catalog);
+    const auto& column =
+        catalog.get()->getMetadataForColumn(foreign_table_->tableId, chunk_key[2]);
+    Chunk_NS::Chunk chunk{column};
+    ChunkKey load_key = chunk_key;
+    std::map<ChunkKey, std::unique_ptr<ForeignStorageBuffer>> temp_buffer_map;
+    if (chunk_key.size() > 4) {
+      // This is either the data or index buffer of variable length chunk
+      ChunkKey data_chunk_key = {
+          chunk_key[0], chunk_key[1], chunk_key[2], chunk_key[3], 1};
+      // Pass the data chunk key into the loader
+      load_key = data_chunk_key;
+
+      temp_buffer_map[data_chunk_key] = std::make_unique<ForeignStorageBuffer>();
+      temp_buffer_map[data_chunk_key].get()->reserve(
+          chunk_buffer_map_[chunk_key].get()->size());
+
+      ChunkKey index_chunk_key = {
+          chunk_key[0], chunk_key[1], chunk_key[2], chunk_key[3], 2};
+
+      CHECK(chunk_buffer_map_.find(index_chunk_key) != chunk_buffer_map_.end());
+
+      temp_buffer_map[index_chunk_key] = std::make_unique<ForeignStorageBuffer>();
+      chunk.set_buffer(temp_buffer_map[data_chunk_key].get());
+      chunk.set_index_buf(temp_buffer_map[index_chunk_key].get());
+
+      getBufferFromMap(data_chunk_key)->reallocBuffer();
+      getBufferFromMap(index_chunk_key)->reallocBuffer();
+    } else {
+      getBufferFromMap(chunk_key)->reallocBuffer();
+      temp_buffer_map[chunk_key] = std::make_unique<ForeignStorageBuffer>();
+      temp_buffer_map[chunk_key].get()->reserve(
+          chunk_buffer_map_[chunk_key].get()->size());
+      chunk.set_buffer(temp_buffer_map[chunk_key].get());
+    }
+    chunk.init_encoder();
+    LazyLoader loader(getLazyLoader(*catalog, load_key, &temp_buffer_map),
+                      getFilePath(),
+                      validateAndGetCopyParams());
+
+    int fragment_index = chunk_key[3];
+
+    // Make sure the fragment exists and has file regions to load
+    CHECK(fragment_fileregion_map_.find(fragment_index) !=
+          fragment_fileregion_map_.end());
+    CHECK(fragment_fileregion_map_[fragment_index].size() > 0);
+
+    loader.fetchRegions(fragment_fileregion_map_[fragment_index]);
+
+    // Delete temporary buffers
+    if (chunk_key.size() > 4) {
+      chunk.set_buffer(nullptr);
+      chunk.set_index_buf(nullptr);
+      ChunkKey data_chunk_key = {
+          chunk_key[0], chunk_key[1], chunk_key[2], chunk_key[3], 1};
+      temp_buffer_map[data_chunk_key] = nullptr;
+      ChunkKey index_chunk_key = {
+          chunk_key[0], chunk_key[1], chunk_key[2], chunk_key[3], 2};
+      temp_buffer_map[index_chunk_key] = nullptr;
+    } else {
+      chunk.set_buffer(nullptr);
+      temp_buffer_map[chunk_key] = nullptr;
+    }
+
+    // At this point, buffer is loaded into memory
+    // Once cache is ready, should but put back into cache and returned
+    // For now just keep the buffer and return it (won't be deleted again)
+  }
   return getBufferFromMap(chunk_key);
 }
 

@@ -140,91 +140,48 @@ TEST_F(SelectQueryTest, DefaultLocalParquetServer) {
                           "Exception: Unsupported data wrapper");
 }
 
-TEST_F(SelectQueryTest, ScalarTypes) {
-  const auto& query = getCreateForeignTableQuery(
-      "(b BOOLEAN, t TINYINT, s SMALLINT, i INTEGER, bi BIGINT, f FLOAT, "
-      "dc DECIMAL(10, 5), tm TIME, tp TIMESTAMP, d DATE, txt TEXT, "
-      "txt_2 TEXT ENCODING NONE)",
-      "scalar_types.csv");
+TEST_F(SelectQueryTest, MultipleDataBlocksPerFragment) {
+  // Create table with multiple fragments with file buffers less than size of a fragment
+  // Includes both fixed and variable length data
+  const auto& query =
+      getCreateForeignTableQuery("(i INTEGER,  txt TEXT, txt_2 TEXT ENCODING NONE)",
+                                 {{"buffer_size", "25"}, {"fragment_size", "64"}},
+                                 "0_255.csv");
   sql(query);
 
-  TQueryResult result;
-  sql(result, "SELECT * FROM test_foreign_table;");
-  // clang-format off
-  assertResultSetEqual({
-    {
-      True, i(100), i(30000), i(2000000000), i(9000000000000000000), 10.1f, 100.1234, "00:00:10",
-      "1/1/2000 00:00:59", "1/1/2000", "text_1", "quoted text"
-    },
-    {
-      False, i(110), i(30500), i(2000500000), i(9000000050000000000), 100.12f, 2.1234, "00:10:00",
-      "6/15/2020 00:59:59", "6/15/2020", "text_2", "quoted text 2"
-    },
-    {
-      True, i(120), i(31000), i(2100000000), i(9100000000000000000), 1000.123f, 100.1, "10:00:00",
-      "12/31/2500 23:59:59", "12/31/2500", "text_3", "quoted text 3"
-    }},
-    result);
-  // clang-format on
-}
+  // Check that data is correct
+  {
+    std::vector<std::vector<TargetValue>> expected_result_set;
+    for (int number = 0; number < 256; number++) {
+      expected_result_set.push_back(
+          {i(number), std::to_string(number), std::to_string(number)});
+    }
+    TQueryResult result;
+    sql(result, "SELECT * FROM test_foreign_table ORDER BY i;");
+    assertResultSetEqual(expected_result_set, result);
+  }
 
-TEST_F(SelectQueryTest, ArrayTypes) {
-  const auto& query = getCreateForeignTableQuery(
-      "(b BOOLEAN[], t TINYINT[], s SMALLINT[], i INTEGER[], bi BIGINT[], f FLOAT[], tm "
-      "TIME[], tp TIMESTAMP[], "
-      "d DATE[], txt TEXT[], txt_2 TEXT[])",
-      "array_types.csv");
-  sql(query);
-
-  TQueryResult result;
-  sql(result, "SELECT * FROM test_foreign_table;");
-  // clang-format off
-  assertResultSetEqual({
-    {
-      array({True}), array({i(50), i(100)}), array({i(30000), i(20000)}), array({i(2000000000)}),
-      array({i(9000000000000000000)}), array({10.1f, 11.1f}), array({"00:00:10"}),
-      array({"1/1/2000 00:00:59", "1/1/2010 00:00:59"}), array({"1/1/2000", "2/2/2000"}),
-      array({"text_1"}), array({"quoted text"})
-    },
-    {
-      array({False, True}), array({i(110)}), array({i(30500)}), array({i(2000500000)}),
-      array({i(9000000050000000000)}), array({100.12f}), array({"00:10:00", "00:20:00"}),
-      array({"6/15/2020 00:59:59"}), array({"6/15/2020"}),
-      array({"text_2", "text_3"}), array({"quoted text 2"})
-    },
-    {
-      array({True}), array({i(120)}), array({i(31000)}), array({i(2100000000), i(200000000)}),
-      array({i(9100000000000000000), i(9200000000000000000)}), array({1000.123f}), array({"10:00:00"}),
-      array({"12/31/2500 23:59:59"}), array({"12/31/2500"}),
-      array({"text_4"}), array({"quoted text 3", "quoted text 4"})
-    }},
-    result);
-  // clang-format on
-}
-
-TEST_F(SelectQueryTest, GeoTypes) {
-  const auto& query = getCreateForeignTableQuery(
-      "(p POINT, l LINESTRING, poly POLYGON, multipoly MULTIPOLYGON)", "geo_types.csv");
-  sql(query);
-
-  TQueryResult result;
-  sql(result, "SELECT * FROM test_foreign_table;");
-  // clang-format off
-  assertResultSetEqual({
-    {
-      "POINT (0 0)", "LINESTRING (0 0,0 0)", "POLYGON ((0 0,1 0,0 1,1 1,0 0))",
-      "MULTIPOLYGON (((0 0,1 0,0 1,0 0)))"
-    },
-    {
-      "POINT (1 1)", "LINESTRING (1 1,2 2,3 3)", "POLYGON ((5 4,7 4,6 5,5 4))",
-      "MULTIPOLYGON (((0 0,1 0,0 1,0 0)),((0 0,2 0,0 2,0 0)))"
-    },
-    {
-      "POINT (2 2)", "LINESTRING (2 2,3 3)", "POLYGON ((1 1,3 1,2 3,1 1))",
-      "MULTIPOLYGON (((0 0,3 0,0 3,0 0)),((0 0,1 0,0 1,0 0)),((0 0,2 0,0 2,0 0)))"
-    }},
-    result);
-  // clang-format on
+  // Check that WHERE statements filter numerical data correctly
+  {
+    std::vector<std::vector<TargetValue>> expected_result_set;
+    for (int number = 128; number < 256; number++) {
+      expected_result_set.push_back(
+          {i(number), std::to_string(number), std::to_string(number)});
+    }
+    TQueryResult result;
+    sql(result, "SELECT * FROM test_foreign_table  WHERE i >= 128 ORDER BY i;");
+    assertResultSetEqual(expected_result_set, result);
+  }
+  {
+    std::vector<std::vector<TargetValue>> expected_result_set;
+    for (int number = 0; number < 128; number++) {
+      expected_result_set.push_back(
+          {i(number), std::to_string(number), std::to_string(number)});
+    }
+    TQueryResult result;
+    sql(result, "SELECT * FROM test_foreign_table  WHERE i < 128 ORDER BY i;");
+    assertResultSetEqual(expected_result_set, result);
+  }
 }
 
 TEST_F(SelectQueryTest, AggregateAndGroupBy) {
@@ -440,22 +397,6 @@ TEST_F(SelectQueryTest, WithBufferSizeOption) {
                        result);
 }
 
-TEST_F(SelectQueryTest, WithFragmentSizeOption) {
-  const auto& query = getCreateForeignTableQuery(
-      "(t TEXT, i INTEGER, d DOUBLE)", {{"fragment_size", "2"}}, "example_2.csv");
-  sql(query);
-
-  TQueryResult result;
-  sql(result, "SELECT * FROM test_foreign_table;");
-  assertResultSetEqual({{"a", i(1), 1.1},
-                        {"aa", i(1), 1.1},
-                        {"aa", i(2), 2.2},
-                        {"aaa", i(1), 1.1},
-                        {"aaa", i(2), 2.2},
-                        {"aaa", i(3), 3.3}},
-                       result);
-}
-
 TEST_F(SelectQueryTest, ReverseLongitudeAndLatitude) {
   const auto& query = getCreateForeignTableQuery(
       "(p POINT)", {{"lonlat", "false"}}, "reversed_long_lat.csv");
@@ -468,6 +409,38 @@ TEST_F(SelectQueryTest, ReverseLongitudeAndLatitude) {
                         {"POINT (2 1)"},
                         {"POINT (3 2)"}},
                        result);
+  // clang-format on
+}
+
+class DataTypeFragmentSizeTest : public SelectQueryTest,
+                                 public testing::WithParamInterface<int> {};
+
+TEST_P(DataTypeFragmentSizeTest, ScalarTypes) {
+  const auto& query = getCreateForeignTableQuery(
+      "(b BOOLEAN, t TINYINT, s SMALLINT, i INTEGER, bi BIGINT, f FLOAT, "
+      "dc DECIMAL(10, 5), tm TIME, tp TIMESTAMP, d DATE, txt TEXT, "
+      "txt_2 TEXT ENCODING NONE)",
+      {{"fragment_size", std::to_string(GetParam())}},
+      "scalar_types.csv");
+  sql(query);
+
+  TQueryResult result;
+  sql(result, "SELECT * FROM test_foreign_table;");
+  // clang-format off
+    assertResultSetEqual({
+      {
+        True, i(100), i(30000), i(2000000000), i(9000000000000000000), 10.1f, 100.1234, "00:00:10",
+        "1/1/2000 00:00:59", "1/1/2000", "text_1", "quoted text"
+      },
+      {
+        False, i(110), i(30500), i(2000500000), i(9000000050000000000), 100.12f, 2.1234, "00:10:00",
+      "6/15/2020 00:59:59", "6/15/2020", "text_2", "quoted text 2"
+      },
+      {
+        True, i(120), i(31000), i(2100000000), i(9100000000000000000), 1000.123f, 100.1, "10:00:00",
+        "12/31/2500 23:59:59", "12/31/2500", "text_3", "quoted text 3"
+      }},
+      result);
   // clang-format on
 }
 
@@ -533,6 +506,74 @@ TEST_F(RefreshForeignTableTest, RefreshEvictTrueCaps) {
   queryAndAssertException("REFRESH FOREIGN TABLES test_foreign_table WITH (EVICT='TRUE')",
                           "Exception: REFRESH FOREIGN TABLES is not yet implemented");
 }
+
+TEST_P(DataTypeFragmentSizeTest, ArrayTypes) {
+  const auto& query = getCreateForeignTableQuery(
+      "(b BOOLEAN[], t TINYINT[], s SMALLINT[], i INTEGER[], bi BIGINT[], f FLOAT[], "
+      "tm "
+      "TIME[], tp TIMESTAMP[], "
+      "d DATE[], txt TEXT[], txt_2 TEXT[])",
+      {{"fragment_size", std::to_string(GetParam())}},
+      "array_types.csv");
+  sql(query);
+
+  TQueryResult result;
+  sql(result, "SELECT * FROM test_foreign_table;");
+  // clang-format off
+    assertResultSetEqual({
+      {
+        array({True}), array({i(50), i(100)}), array({i(30000), i(20000)}), array({i(2000000000)}),
+        array({i(9000000000000000000)}), array({10.1f, 11.1f}), array({"00:00:10"}),
+        array({"1/1/2000 00:00:59", "1/1/2010 00:00:59"}), array({"1/1/2000", "2/2/2000"}),
+        array({"text_1"}), array({"quoted text"})
+      },
+      {
+        array({False, True}), array({i(110)}), array({i(30500)}), array({i(2000500000)}),
+        array({i(9000000050000000000)}), array({100.12f}), array({"00:10:00", "00:20:00"}),
+        array({"6/15/2020 00:59:59"}), array({"6/15/2020"}),
+        array({"text_2", "text_3"}), array({"quoted text 2"})
+      },
+      {
+        array({True}), array({i(120)}), array({i(31000)}), array({i(2100000000), i(200000000)}),
+        array({i(9100000000000000000), i(9200000000000000000)}), array({1000.123f}), array({"10:00:00"}),
+        array({"12/31/2500 23:59:59"}), array({"12/31/2500"}),
+        array({"text_4"}), array({"quoted text 3", "quoted text 4"})
+      }},
+      result);
+  // clang-format on
+}
+
+TEST_P(DataTypeFragmentSizeTest, GeoTypes) {
+  const auto& query = getCreateForeignTableQuery(
+      "(p POINT, l LINESTRING, poly POLYGON, multipoly MULTIPOLYGON)",
+      {{"fragment_size", "2"}},
+      "geo_types.csv");
+  sql(query);
+
+  TQueryResult result;
+  sql(result, "SELECT * FROM test_foreign_table;");
+  // clang-format off
+    assertResultSetEqual({
+      {
+        "POINT (0 0)", "LINESTRING (0 0,0 0)", "POLYGON ((0 0,1 0,0 1,1 1,0 0))",
+        "MULTIPOLYGON (((0 0,1 0,0 1,0 0)))"
+      },
+      {
+        "POINT (1 1)", "LINESTRING (1 1,2 2,3 3)", "POLYGON ((5 4,7 4,6 5,5 4))",
+        "MULTIPOLYGON (((0 0,1 0,0 1,0 0)),((0 0,2 0,0 2,0 0)))"
+      },
+      {
+        "POINT (2 2)", "LINESTRING (2 2,3 3)", "POLYGON ((1 1,3 1,2 3,1 1))",
+        "MULTIPOLYGON (((0 0,3 0,0 3,0 0)),((0 0,1 0,0 1,0 0)),((0 0,2 0,0 2,0 0)))"
+      }},
+      result);
+  // clang-format on
+}
+
+// Instantiate the tests
+INSTANTIATE_TEST_SUITE_P(FragmentSize_Small_Default,
+                         DataTypeFragmentSizeTest,
+                         ::testing::Values(1, 2, 32000000));
 
 int main(int argc, char** argv) {
   TestHelpers::init_logger_stderr_only(argc, argv);

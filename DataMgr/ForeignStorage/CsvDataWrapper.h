@@ -24,9 +24,17 @@
 #include "Catalog/ForeignTable.h"
 #include "DataMgr/Chunk/Chunk.h"
 #include "ForeignDataWrapper.h"
-#include "ImportExport/Importer.h"
+#include "LazyLoader.h"
 
 namespace foreign_storage {
+
+struct SubChunkRegion {
+  // Offset into data buffer of parent chunk
+  size_t buffer_offset;
+  // Size of the subchunk in data buffer
+  size_t buffer_size;
+};
+
 class CsvDataWrapper : public ForeignDataWrapper {
  public:
   CsvDataWrapper(const int db_id, const ForeignTable* foreign_table);
@@ -73,10 +81,27 @@ class CsvDataWrapper : public ForeignDataWrapper {
   std::optional<bool> validateAndGetBoolValue(const std::string& option_name);
 
   bool fragmentIsFull();
-  import_export::Loader* getLoader(Catalog_Namespace::Catalog& catalog);
+
+  void discardFragmentBuffers(const int fragment_index);
+  void reloadFragmentBuffers(const int fragment_index);
+
+  Importer_NS::Loader* getMetadataLoader(Catalog_Namespace::Catalog& catalog);
+
+  Importer_NS::Loader* getLazyLoader(
+      Catalog_Namespace::Catalog& catalog,
+      const ChunkKey chunk_key,
+      std::map<ChunkKey, std::unique_ptr<ForeignStorageBuffer>>* temp_buffer_map_ptr);
 
   std::mutex loader_mutex_;
   std::map<ChunkKey, std::unique_ptr<ForeignStorageBuffer>> chunk_buffer_map_;
+
+  // Map of fragment index to vector of fileregions
+  std::map<int, FileRegions> fragment_fileregion_map_;
+
+  // Map of chunkey and file offset to subchunks to identify which subchunk
+  // is being loaded in getLazyLoader callback
+  std::map<std::pair<ChunkKey, size_t>, SubChunkRegion> chunk_file_offset_subchunk_map_;
+
   const int db_id_;
   const ForeignTable* foreign_table_;
   size_t row_count_;
