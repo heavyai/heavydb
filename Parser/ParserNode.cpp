@@ -3397,7 +3397,7 @@ void CopyTableStmt::execute(const Catalog_Namespace::SessionInfo& session,
 
   const TableDescriptor* td{nullptr};
   std::unique_ptr<lockmgr::TableSchemaLockContainer<lockmgr::ReadLock>> td_with_lock;
-  lockmgr::WriteLock insert_data_lock;
+  std::unique_ptr<lockmgr::WriteLock> insert_data_lock;
 
   auto& catalog = session.getCatalog();
 
@@ -3406,7 +3406,8 @@ void CopyTableStmt::execute(const Catalog_Namespace::SessionInfo& session,
         lockmgr::TableSchemaLockContainer<lockmgr::ReadLock>::acquireTableDescriptor(
             catalog, *table));
     td = (*td_with_lock)();
-    insert_data_lock = lockmgr::InsertDataLockMgr::getWriteLockForTable(catalog, *table);
+    insert_data_lock = std::make_unique<lockmgr::WriteLock>(
+        lockmgr::InsertDataLockMgr::getWriteLockForTable(catalog, *table));
   } catch (const std::runtime_error& e) {
     // noop
     // TODO(adb): We're really only interested in whether the table exists or not.

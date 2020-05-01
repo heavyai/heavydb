@@ -16,6 +16,7 @@
 
 #pragma once
 
+#include <atomic>
 #include <map>
 #include <memory>
 #include <string>
@@ -24,17 +25,64 @@
 #include "Catalog/Catalog.h"
 #include "Shared/mapd_shared_mutex.h"
 #include "Shared/types.h"
+
 namespace lockmgr {
 
-using MutexType = mapd_shared_mutex;
+using MutexTypeBase = mapd_shared_mutex;
 
-using WriteLock = mapd_unique_lock<MutexType>;
-using ReadLock = mapd_shared_lock<MutexType>;
+using WriteLockBase = mapd_unique_lock<MutexTypeBase>;
+using ReadLockBase = mapd_shared_lock<MutexTypeBase>;
+class TrackedRefMutex {
+ public:
+  TrackedRefMutex() : ref_count_(0u) {}
 
-struct TableLock {
-  WriteLock write_lock;
-  ReadLock read_lock;
+  MutexTypeBase& lock() {
+    ref_count_.fetch_add(1u);
+    return mutex_;
+  }
+
+  void release() {
+    const auto stored_ref_count = ref_count_.fetch_sub(1u);
+    CHECK_GE(stored_ref_count, size_t(1));
+  }
+
+  bool isLocked() const { return ref_count_.load() > 0; }
+
+ private:
+  std::atomic<size_t> ref_count_;
+  MutexTypeBase mutex_;
 };
+
+template <typename LOCK>
+class TrackedRefLock {
+ public:
+  TrackedRefLock(TrackedRefMutex* m) : mutex_(m), lock_(mutex_->lock()) { CHECK(mutex_); }
+
+  ~TrackedRefLock() {
+    if (mutex_) {
+      // This call only decrements the ref count. The actual release is done once the
+      // mutex is destroyed.
+      mutex_->release();
+    }
+  }
+
+  TrackedRefLock(TrackedRefLock&& other)
+      : mutex_(other.mutex_), lock_(std::move(other.lock_)) {
+    other.mutex_ = nullptr;
+  }
+
+  TrackedRefLock(const TrackedRefLock&) = delete;
+  TrackedRefLock& operator=(const TrackedRefLock&) = delete;
+
+ private:
+  TrackedRefMutex* mutex_;
+  LOCK lock_;
+};  // namespace lockmgr
+
+using MutexType = TrackedRefMutex;
+
+using WriteLock = TrackedRefLock<WriteLockBase>;
+using ReadLock = TrackedRefLock<ReadLockBase>;
 
 template <typename T>
 class AbstractLockContainer {
@@ -80,9 +128,27 @@ LOCK_TYPE getLockForTableImpl(const Catalog_Namespace::Catalog& cat,
 template <class T>
 class TableLockMgrImpl {
  public:
-  MutexType& getTableMutex(const ChunkKey table_key) {
+  MutexType* getTableMutex(const ChunkKey table_key) {
     std::lock_guard<std::mutex> access_map_lock(map_mutex_);
-    return table_mutex_map_[table_key];
+    auto mutex_it = table_mutex_map_.find(table_key);
+    if (mutex_it == table_mutex_map_.end()) {
+      table_mutex_map_.insert(std::make_pair(table_key, std::make_unique<MutexType>()));
+    } else {
+      return mutex_it->second.get();
+    }
+    return table_mutex_map_[table_key].get();
+  }
+
+  std::set<ChunkKey> getLockedTables() const {
+    std::set<ChunkKey> ret;
+    std::lock_guard<std::mutex> access_map_lock(map_mutex_);
+    for (const auto& kv : table_mutex_map_) {
+      if (kv.second->isLocked()) {
+        ret.insert(kv.first);
+      }
+    }
+
+    return ret;
   }
 
   static WriteLock getWriteLockForTable(const Catalog_Namespace::Catalog& cat,
@@ -106,8 +172,19 @@ class TableLockMgrImpl {
  protected:
   TableLockMgrImpl() {}
 
-  std::mutex map_mutex_;
-  std::map<ChunkKey, MutexType> table_mutex_map_;
+  mutable std::mutex map_mutex_;
+  std::map<ChunkKey, std::unique_ptr<MutexType>> table_mutex_map_;
 };
+
+template <typename T>
+std::ostream& operator<<(std::ostream& os, const TableLockMgrImpl<T>& lock_mgr) {
+  for (const auto& table_key : lock_mgr.getLockedTables()) {
+    for (const auto& k : table_key) {
+      os << k << " ";
+    }
+    os << "\n";
+  }
+  return os;
+}
 
 }  // namespace lockmgr

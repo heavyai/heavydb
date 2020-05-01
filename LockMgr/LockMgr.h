@@ -110,6 +110,7 @@ class TableSchemaLockContainer<ReadLock>
   static auto acquireTableDescriptor(const Catalog_Namespace::Catalog& cat,
                                      const std::string& table_name,
                                      const bool populate_fragmenter = true) {
+    VLOG(1) << "Table Schema Read Lock acquired for table: " << table_name;
     return TableSchemaLockContainer<ReadLock>(
         cat.getMetadataForTable(table_name, populate_fragmenter),
         TableSchemaLockMgr::getReadLockForTable(cat, table_name));
@@ -122,6 +123,7 @@ class TableSchemaLockContainer<ReadLock>
       throw std::runtime_error("Table/View ID " + std::to_string(table_id) +
                                " does not exist.");
     }
+    VLOG(1) << "Table Schema Read Lock acquired for table: " << td->tableName;
     return TableSchemaLockContainer<ReadLock>(
         td, TableSchemaLockMgr::getReadLockForTable(cat, td->tableName));
   }
@@ -140,6 +142,7 @@ class TableSchemaLockContainer<WriteLock>
   static auto acquireTableDescriptor(const Catalog_Namespace::Catalog& cat,
                                      const std::string& table_name,
                                      const bool populate_fragmenter = true) {
+    VLOG(1) << "Table Schema Write Lock acquired for table: " << table_name;
     return TableSchemaLockContainer<WriteLock>(
         cat.getMetadataForTable(table_name, populate_fragmenter),
         TableSchemaLockMgr::getWriteLockForTable(cat, table_name));
@@ -152,6 +155,7 @@ class TableSchemaLockContainer<WriteLock>
       throw std::runtime_error("Table/View ID " + std::to_string(table_id) +
                                " does not exist.");
     }
+    VLOG(1) << "Table Schema Write Lock acquired for table: " << td->tableName;
     return TableSchemaLockContainer<WriteLock>(
         td, TableSchemaLockMgr::getWriteLockForTable(cat, td->tableName));
   }
@@ -172,6 +176,7 @@ class TableDataLockContainer
  public:
   TableDataLockContainer(const TableDataLockContainer&) = delete;  // non-copyable
 };
+
 template <>
 class TableDataLockContainer<WriteLock>
     : public LockContainerImpl<const TableDescriptor*, WriteLock>,
@@ -180,6 +185,7 @@ class TableDataLockContainer<WriteLock>
   static auto acquire(const int db_id, const TableDescriptor* td) {
     CHECK(td);
     ChunkKey chunk_key{db_id, td->tableId};
+    VLOG(1) << "Table Data Write Lock acquired for table: " << td->tableName;
     return TableDataLockContainer<WriteLock>(
         td, TableDataLockMgr::getWriteLockForTable(chunk_key));
   }
@@ -198,6 +204,7 @@ class TableDataLockContainer<ReadLock>
   static auto acquire(const int db_id, const TableDescriptor* td) {
     CHECK(td);
     ChunkKey chunk_key{db_id, td->tableId};
+    VLOG(1) << "Table Data Read Lock acquired for table: " << td->tableName;
     return TableDataLockContainer<ReadLock>(
         td, TableDataLockMgr::getReadLockForTable(chunk_key));
   }

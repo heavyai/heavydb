@@ -1021,6 +1021,8 @@ void DBHandler::sql_execute(TQueryResult& _return,
                               _return.execution_time_ms,
                               "total_time_ms",  // BE-3420 - Redundant with duration field
                               stdlog.duration<std::chrono::milliseconds>());
+  VLOG(1) << "Table Schema Locks:\n" << lockmgr::TableSchemaLockMgr::instance();
+  VLOG(1) << "Table Data Locks:\n" << lockmgr::TableDataLockMgr::instance();
 }
 
 void DBHandler::sql_execute_df(TDataFrame& _return,
@@ -4624,6 +4626,10 @@ std::vector<PushedDownFilterInfo> DBHandler::execute_rel_alg(
     const bool find_push_down_candidates,
     const ExplainInfo& explain_info) const {
   query_state::Timer timer = query_state_proxy.createTimer(__func__);
+
+  VLOG(1) << "Table Schema Locks:\n" << lockmgr::TableSchemaLockMgr::instance();
+  VLOG(1) << "Table Data Locks:\n" << lockmgr::TableDataLockMgr::instance();
+
   const auto& cat = query_state_proxy.getQueryState().getConstSessionInfo()->getCatalog();
   CompilationOptions co = {executor_device_type,
                            /*hoist_literals=*/true,
