@@ -272,7 +272,7 @@ std::shared_ptr<ResultSet> QueryRunner::runSQL(const std::string& query_str,
   if (pw.isCalcitePathPermissable()) {
     const auto execution_result =
         runSelectQuery(query_str, device_type, hoist_literals, allow_loop_joins);
-
+    VLOG(1) << session_info_->getCatalog().getDataMgr().getSystemMemoryUsage();
     return execution_result.getRows();
   }
 

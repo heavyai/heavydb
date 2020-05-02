@@ -179,6 +179,9 @@ class DataMgr {
   std::map<ChunkKey, std::shared_ptr<mapd_shared_mutex>> chunkMutexMap_;
   mapd_shared_mutex chunkMutexMapMutex_;
 };
+
+std::ostream& operator<<(std::ostream& os, const DataMgr::SystemMemoryUsage&);
+
 }  // namespace Data_Namespace
 
 #endif  // DATAMGR_H

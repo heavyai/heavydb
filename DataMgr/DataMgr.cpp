@@ -539,4 +539,15 @@ GlobalFileMgr* DataMgr::getGlobalFileMgr() const {
   return global_file_mgr;
 }
 
+std::ostream& operator<<(std::ostream& os, const DataMgr::SystemMemoryUsage& mem_info) {
+  os << "CPU Memory Info:";
+  os << "\n\tTotal: " << mem_info.total / (1024. * 1024.) << " MB";
+  os << "\n\tFree: " << mem_info.free / (1024. * 1024.) << " MB";
+  os << "\n\tProcess: " << mem_info.resident / (1024. * 1024.) << " MB";
+  os << "\n\tVirtual: " << mem_info.vtotal / (1024. * 1024.) << " MB";
+  os << "\n\tProcess + Swap: " << mem_info.regular / (1024. * 1024.) << " MB";
+  os << "\n\tProcess Shared: " << mem_info.shared / (1024. * 1024.) << " MB";
+  return os;
+}
+
 }  // namespace Data_Namespace
