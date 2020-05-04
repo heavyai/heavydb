@@ -2041,7 +2041,8 @@ class RelAlgDispatcher {
       CHECK(crt_node.IsObject());
       std::shared_ptr<RelAlgNode> ra_node = nullptr;
       const auto rel_op = json_str(field(crt_node, "relOp"));
-      if (rel_op == std::string("EnumerableTableScan")) {
+      if (rel_op == std::string("EnumerableTableScan") ||
+          rel_op == std::string("LogicalTableScan")) {
         ra_node = dispatchTableScan(crt_node);
       } else if (rel_op == std::string("LogicalProject")) {
         ra_node = dispatchProject(crt_node, root_dag_builder);

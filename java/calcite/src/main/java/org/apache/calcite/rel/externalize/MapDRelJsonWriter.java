@@ -22,6 +22,7 @@ import org.apache.calcite.adapter.enumerable.EnumerableTableScan;
 import org.apache.calcite.avatica.util.Spaces;
 import org.apache.calcite.rel.RelNode;
 import org.apache.calcite.rel.RelWriter;
+import org.apache.calcite.rel.core.TableScan;
 import org.apache.calcite.rel.logical.LogicalAggregate;
 import org.apache.calcite.rel.logical.LogicalTableModify;
 import org.apache.calcite.rel.logical.LogicalTableScan;
@@ -77,8 +78,8 @@ public class MapDRelJsonWriter implements RelWriter {
 
     map.put("id", null); // ensure that id is the first attribute
     map.put("relOp", relJson.classToTypeName(rel.getClass()));
-    if (rel instanceof EnumerableTableScan) {
-      RelDataType row_type = ((EnumerableTableScan) rel).getTable().getRowType();
+    if (rel instanceof TableScan) {
+      RelDataType row_type = ((TableScan) rel).getTable().getRowType();
       List<String> field_names = row_type.getFieldNames();
       map.put("fieldNames", field_names);
     }

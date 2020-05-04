@@ -27,6 +27,7 @@ import org.apache.calcite.sql.SqlOperatorTable;
 import org.apache.calcite.sql.validate.SelectScope;
 import org.apache.calcite.sql.validate.SqlConformance;
 import org.apache.calcite.sql.validate.SqlValidatorImpl;
+import org.apache.calcite.sql.validate.SqlValidatorScope;
 import org.apache.calcite.sql.validate.SqlValidatorTable;
 
 import java.util.List;
@@ -88,5 +89,14 @@ class CalciteSqlValidator extends SqlValidatorImpl {
       }
     }
     return false;
+  }
+
+  @Override
+  protected void checkTypeAssignment(SqlValidatorScope sourceScope,
+          SqlValidatorTable table,
+          RelDataType sourceRowType,
+          RelDataType targetRowType,
+          SqlNode query) {
+    // disabling assignment checking in calcite and instead letting omni-sci server handle
   }
 }

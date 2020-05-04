@@ -26,6 +26,7 @@ import com.mapd.parser.server.ExtensionFunction;
 import org.apache.calcite.avatica.util.Casing;
 import org.apache.calcite.config.CalciteConnectionConfig;
 import org.apache.calcite.config.CalciteConnectionConfigImpl;
+import org.apache.calcite.config.CalciteConnectionProperty;
 import org.apache.calcite.plan.Context;
 import org.apache.calcite.plan.RelOptLattice;
 import org.apache.calcite.plan.RelOptMaterialization;
@@ -60,7 +61,6 @@ import org.apache.calcite.runtime.CalciteException;
 import org.apache.calcite.schema.SchemaPlus;
 import org.apache.calcite.sql.JoinConditionType;
 import org.apache.calcite.sql.JoinType;
-import org.apache.calcite.sql.SqlAsOperator;
 import org.apache.calcite.sql.SqlBasicCall;
 import org.apache.calcite.sql.SqlBasicTypeNameSpec;
 import org.apache.calcite.sql.SqlCall;
@@ -103,7 +103,15 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.lang.reflect.Field;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.EnumSet;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Properties;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.BiPredicate;
 
@@ -160,8 +168,15 @@ public final class MapDParser {
   }
 
   private static final Context MAPD_CONNECTION_CONTEXT = new Context() {
-    MapDRelDataTypeSystemImpl myTypeSystem = new MapDRelDataTypeSystemImpl();
+    MapDTypeSystem myTypeSystem = new MapDTypeSystem();
     CalciteConnectionConfig config = new CalciteConnectionConfigImpl(new Properties()) {
+      {
+        properties.put(CalciteConnectionProperty.CASE_SENSITIVE.camelName(),
+                String.valueOf(false));
+        properties.put(CalciteConnectionProperty.CONFORMANCE.camelName(),
+                String.valueOf(SqlConformanceEnum.LENIENT));
+      }
+
       @SuppressWarnings("unchecked")
       public <T extends Object> T typeSystem(
               java.lang.Class<T> typeSystemClass, T defaultTypeSystem) {
@@ -490,8 +505,18 @@ public final class MapDParser {
     SqlNodeList groupBy = new SqlNodeList(ZERO);
     groupBy.add(new SqlIdentifier("EXPR$DELETE_OFFSET_IN_FRAGMENT", ZERO));
 
-    SqlSelect select = new SqlSelect(
-            ZERO, null, selectList, join, where, groupBy, null, null, null, null, null);
+    SqlSelect select = new SqlSelect(ZERO,
+            null,
+            selectList,
+            join,
+            where,
+            groupBy,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null);
     return select;
   }
 
@@ -607,6 +632,7 @@ public final class MapDParser {
               sourceExpression,
               update.getTargetTable(),
               update.getCondition(),
+              null,
               null,
               null,
               null,
@@ -834,8 +860,12 @@ public final class MapDParser {
       }
     });
 
-    return new RelRoot(
-            node, root.validatedRowType, root.kind, root.fields, root.collation);
+    return new RelRoot(node,
+            root.validatedRowType,
+            root.kind,
+            root.fields,
+            root.collation,
+            Collections.emptyList());
   }
 
   private SqlNode parseSql(String sql, final boolean legacy_syntax, Planner planner)

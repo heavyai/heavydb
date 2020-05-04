@@ -47,9 +47,14 @@
       <version>1.8</version>
     </dependency>
     <dependency>
+      <groupId>com.google.guava</groupId>
+      <artifactId>guava</artifactId>
+      <version>19.0</version>
+    </dependency>
+    <dependency>
       <groupId>org.apache.calcite</groupId>
       <artifactId>calcite-core</artifactId>
-      <version>1.21.0</version>
+      <version>1.22.0</version>
       <exclusions>
         <exclusion>
           <groupId>org.pentaho</groupId>
