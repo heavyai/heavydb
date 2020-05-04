@@ -64,6 +64,8 @@ extern bool g_enable_union;
 extern size_t g_leaf_count;
 extern bool g_cluster;
 
+extern bool g_is_test_env;
+
 using QR = QueryRunner::QueryRunner;
 
 namespace {
@@ -18915,6 +18917,8 @@ void drop_views() {
 }  // namespace
 
 int main(int argc, char** argv) {
+  g_is_test_env = true;
+
   std::cout << "Starting ExecuteTest" << std::endl;
 
   testing::InitGoogleTest(&argc, argv);

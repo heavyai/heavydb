@@ -19,10 +19,10 @@
  * @author Todd Mostak <todd@mapd.com>
  */
 
-#include "DataMgr.h"
-#include "../CudaMgr/CudaMgr.h"
+#include "DataMgr/DataMgr.h"
 #include "BufferMgr/CpuBufferMgr/CpuBufferMgr.h"
 #include "BufferMgr/GpuCudaBufferMgr/GpuCudaBufferMgr.h"
+#include "CudaMgr/CudaMgr.h"
 #include "FileMgr/GlobalFileMgr.h"
 #include "PersistentStorageMgr/PersistentStorageMgr.h"
 
@@ -134,7 +134,7 @@ DataMgr::SystemMemoryUsage DataMgr::getSystemMemoryUsage() const {
   return usage;
 }
 
-size_t DataMgr::getTotalSystemMemory() const {
+size_t DataMgr::getTotalSystemMemory() {
 #ifdef __APPLE__
   int mib[2];
   size_t physical_memory;

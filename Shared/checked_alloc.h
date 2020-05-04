@@ -27,14 +27,18 @@
 #include "../Shared/types.h"
 #include "Shared/Logger.h"
 
-class OutOfHostMemory : public std::runtime_error {
+class OutOfHostMemory : public std::bad_alloc {
  public:
   OutOfHostMemory(const size_t size)
-      : std::runtime_error("Failed to allocate " + std::to_string(size) +
-                           " bytes of memory") {
+      : what_str_("Not enough CPU memory available to allocate " + std::to_string(size)) {
     VLOG(1) << "Failed to allocate " << size << " bytes " << std::endl
             << boost::stacktrace::stacktrace();
   }
+
+  virtual const char* what() const noexcept final { return what_str_.c_str(); }
+
+ private:
+  const std::string what_str_;
 };
 
 inline void* checked_malloc(const size_t size) {

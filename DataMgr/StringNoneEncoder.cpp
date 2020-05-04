@@ -83,6 +83,7 @@ std::shared_ptr<ChunkMetadata> StringNoneEncoder::appendData(
 
   size_t inbuf_size =
       std::min(std::max(index_size, data_size), (size_t)MAX_INPUT_BUF_SIZE);
+  // TODO(adb): another good candidate for arena testing
   auto inbuf = new int8_t[inbuf_size];
   std::unique_ptr<int8_t[]> gc_inbuf(inbuf);
   for (size_t num_appended = 0; num_appended < numAppendElems;) {

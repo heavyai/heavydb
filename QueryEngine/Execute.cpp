@@ -112,6 +112,8 @@ size_t g_gpu_smem_threshold{
 bool g_enable_smem_non_grouped_agg{
     true};  // enable optimizations for using GPU shared memory in implementation of
             // non-grouped aggregates
+bool g_is_test_env{false};  // operating under a unit test environment. Currently only
+                            // limits the allocation for the output buffer arena
 
 int const Executor::max_gpu_count;
 
@@ -190,6 +192,10 @@ void Executor::clearMemory(const Data_Namespace::MemoryLevel memory_level) {
           "supported.");
     }
   }
+}
+
+size_t Executor::getArenaBlockSize() {
+  return g_is_test_env ? 100000000 : (1UL << 32) + kArenaBlockOverhead;
 }
 
 StringDictionaryProxy* Executor::getStringDictionaryProxy(
@@ -3316,7 +3322,7 @@ TableGenerations Executor::computeTableGenerations(
 void Executor::setupCaching(const std::unordered_set<PhysicalInput>& phys_inputs,
                             const std::unordered_set<int>& phys_table_ids) {
   CHECK(catalog_);
-  row_set_mem_owner_ = std::make_shared<RowSetMemoryOwner>();
+  row_set_mem_owner_ = std::make_shared<RowSetMemoryOwner>(Executor::getArenaBlockSize());
   agg_col_range_cache_ = computeColRangesCache(phys_inputs);
   string_dictionary_generations_ = computeStringDictionaryGenerations(phys_inputs);
   table_generations_ = computeTableGenerations(phys_table_ids);

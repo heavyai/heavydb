@@ -427,7 +427,7 @@ std::unique_ptr<ResultSet> SqliteMemDatabase::runSelect(
                                         nullptr);
   const auto storage = rs->allocateStorage();
   auto output_buffer = storage->getUnderlyingBuffer();
-  CHECK(output_buffer);
+  CHECK(!num_rows || output_buffer);
   for (size_t row_idx = 0; row_idx < num_rows; ++row_idx) {
     auto row = get_scan_output_slot(reinterpret_cast<int64_t*>(output_buffer),
                                     num_rows,

@@ -55,7 +55,6 @@
 #include "ArrowImporter.h"
 #include "Import/DelimitedParserUtils.h"
 #include "QueryEngine/TypePunning.h"
-#include "QueryRunner/QueryRunner.h"
 #include "Shared/Logger.h"
 #include "Shared/SqlTypesLayout.h"
 #include "Shared/geo_compression.h"

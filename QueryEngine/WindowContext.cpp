@@ -28,17 +28,18 @@ WindowFunctionContext::WindowFunctionContext(
     const Analyzer::WindowFunction* window_func,
     const std::shared_ptr<JoinHashTableInterface>& partitions,
     const size_t elem_count,
-    const ExecutorDeviceType device_type)
+    const ExecutorDeviceType device_type,
+    std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner)
     : window_func_(window_func)
     , partitions_(partitions)
     , elem_count_(elem_count)
     , output_(nullptr)
     , partition_start_(nullptr)
     , partition_end_(nullptr)
-    , device_type_(device_type) {}
+    , device_type_(device_type)
+    , row_set_mem_owner_(row_set_mem_owner) {}
 
 WindowFunctionContext::~WindowFunctionContext() {
-  free(output_);
   free(partition_start_);
   free(partition_end_);
 }
@@ -398,7 +399,7 @@ bool window_function_requires_peer_handling(const Analyzer::WindowFunction* wind
 
 void WindowFunctionContext::compute() {
   CHECK(!output_);
-  output_ = static_cast<int8_t*>(checked_malloc(
+  output_ = static_cast<int8_t*>(row_set_mem_owner_->allocate(
       elem_count_ * window_function_buffer_element_size(window_func_->getKind())));
   if (window_function_is_aggregate(window_func_->getKind())) {
     fillPartitionStart();

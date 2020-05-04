@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 MapD Technologies, Inc.
+ * Copyright 2020 OmniSci, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,20 +16,20 @@
 
 /**
  * @file    ResultSetBaselineRadixSortTest.cpp
- * @author  Alex Suhan <alex@mapd.com>
+ * @author  Alex Suhan <alex@omnisci.com>
  * @brief   Unit tests for the result set baseline layout sort.
  *
- * Copyright (c) 2016 MapD Technologies, Inc.  All rights reserved.
  */
-#include "../QueryEngine/Descriptors/RowSetMemoryOwner.h"
-#include "../QueryEngine/ResultSet.h"
-#include "../QueryEngine/RuntimeFunctions.h"
-#include "ResultSetTestUtils.h"
-#include "TestHelpers.h"
+
+#include "QueryEngine/Descriptors/RowSetMemoryOwner.h"
+#include "QueryEngine/Execute.h"
+#include "QueryEngine/ResultSet.h"
+#include "QueryEngine/RuntimeFunctions.h"
+#include "Tests/ResultSetTestUtils.h"
+#include "Tests/TestHelpers.h"
 
 #ifdef HAVE_CUDA
-#include "../CudaMgr/CudaMgr.h"
-
+#include "CudaMgr/CudaMgr.h"
 extern std::unique_ptr<CudaMgr_Namespace::CudaMgr> g_cuda_mgr;
 #endif  // HAVE_CUDA
 
@@ -38,6 +38,8 @@ extern std::unique_ptr<CudaMgr_Namespace::CudaMgr> g_cuda_mgr;
 #include <algorithm>
 #include <numeric>
 #include <random>
+
+extern bool g_is_test_env;
 
 namespace {
 
@@ -220,7 +222,8 @@ template <class K>
 void SortBaselineIntegersTestImpl(const bool desc) {
   const auto target_infos = get_sort_int_target_infos();
   const auto query_mem_desc = baseline_sort_desc(target_infos, 400, sizeof(K));
-  const auto row_set_mem_owner = std::make_shared<RowSetMemoryOwner>();
+  const auto row_set_mem_owner =
+      std::make_shared<RowSetMemoryOwner>(Executor::getArenaBlockSize());
   const int64_t upper_bound = 200;
   const int64_t lower_bound = 1;
   std::unique_ptr<ResultSet> rs(new ResultSet(
@@ -257,7 +260,8 @@ TEST(SortBaseline, Floats) {
     for (int tle_no = 1; tle_no <= 3; ++tle_no) {
       const auto target_infos = get_sort_fp_target_infos();
       const auto query_mem_desc = baseline_sort_desc(target_infos, 400, 8);
-      const auto row_set_mem_owner = std::make_shared<RowSetMemoryOwner>();
+      const auto row_set_mem_owner =
+          std::make_shared<RowSetMemoryOwner>(Executor::getArenaBlockSize());
       const int64_t upper_bound = 200;
       std::unique_ptr<ResultSet> rs(new ResultSet(target_infos,
                                                   ExecutorDeviceType::CPU,
@@ -284,7 +288,8 @@ TEST(SortBaseline, FloatsNotNull) {
     for (int tle_no = 1; tle_no <= 3; ++tle_no) {
       const auto target_infos = get_sort_notnull_fp_target_infos();
       const auto query_mem_desc = baseline_sort_desc(target_infos, 400, 8);
-      const auto row_set_mem_owner = std::make_shared<RowSetMemoryOwner>();
+      const auto row_set_mem_owner =
+          std::make_shared<RowSetMemoryOwner>(Executor::getArenaBlockSize());
       const int64_t upper_bound = 200;
       std::unique_ptr<ResultSet> rs(new ResultSet(target_infos,
                                                   ExecutorDeviceType::CPU,
@@ -307,6 +312,8 @@ TEST(SortBaseline, FloatsNotNull) {
 }
 
 int main(int argc, char** argv) {
+  g_is_test_env = true;
+
   TestHelpers::init_logger_stderr_only(argc, argv);
   testing::InitGoogleTest(&argc, argv);
 

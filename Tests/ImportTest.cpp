@@ -42,8 +42,8 @@ using namespace std;
 using namespace TestHelpers;
 
 extern bool g_use_date_in_days_default_encoding;
-
 extern size_t g_leaf_count;
+extern bool g_is_test_env;
 
 namespace {
 
@@ -1666,6 +1666,8 @@ TEST_F(ImportTest, S3_GCS_One_geo_file) {
 }  // namespace
 
 int main(int argc, char** argv) {
+  g_is_test_env = true;
+
   testing::InitGoogleTest(&argc, argv);
 
   namespace po = boost::program_options;

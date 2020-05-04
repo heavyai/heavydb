@@ -431,7 +431,8 @@ void RelAlgExecutor::prepareLeafExecution(
     executor_->resetInterrupt();
   }
   queue_time_ms_ = timer_stop(clock_begin);
-  executor_->row_set_mem_owner_ = std::make_shared<RowSetMemoryOwner>();
+  executor_->row_set_mem_owner_ =
+      std::make_shared<RowSetMemoryOwner>(Executor::getArenaBlockSize());
   executor_->table_generations_ = table_generations;
   executor_->agg_col_range_cache_ = agg_col_range;
   executor_->string_dictionary_generations_ = string_dictionary_generations;
@@ -1696,8 +1697,13 @@ void RelAlgExecutor::computeWindow(const RelAlgExecutionUnit& ra_exe_unit,
                                     kONE,
                                     partition_key_tuple,
                                     transform_to_inner(partition_key_tuple.get()));
-    auto context = createWindowFunctionContext(
-        window_func, partition_key_cond, ra_exe_unit, query_infos, co, column_cache_map);
+    auto context = createWindowFunctionContext(window_func,
+                                               partition_key_cond,
+                                               ra_exe_unit,
+                                               query_infos,
+                                               co,
+                                               column_cache_map,
+                                               executor_->getRowSetMemoryOwner());
     context->compute();
     window_project_node_context->addWindowFunctionContext(std::move(context),
                                                           target_index);
@@ -1710,7 +1716,8 @@ std::unique_ptr<WindowFunctionContext> RelAlgExecutor::createWindowFunctionConte
     const RelAlgExecutionUnit& ra_exe_unit,
     const std::vector<InputTableInfo>& query_infos,
     const CompilationOptions& co,
-    ColumnCacheMap& column_cache_map) {
+    ColumnCacheMap& column_cache_map,
+    std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner) {
   const auto memory_level = co.device_type == ExecutorDeviceType::GPU
                                 ? MemoryLevel::GPU_LEVEL
                                 : MemoryLevel::CPU_LEVEL;
@@ -1728,8 +1735,11 @@ std::unique_ptr<WindowFunctionContext> RelAlgExecutor::createWindowFunctionConte
   const auto& order_keys = window_func->getOrderKeys();
   std::vector<std::shared_ptr<Chunk_NS::Chunk>> chunks_owner;
   const size_t elem_count = query_infos.front().info.fragments.front().getNumTuples();
-  auto context = std::make_unique<WindowFunctionContext>(
-      window_func, join_table_or_err.hash_table, elem_count, co.device_type);
+  auto context = std::make_unique<WindowFunctionContext>(window_func,
+                                                         join_table_or_err.hash_table,
+                                                         elem_count,
+                                                         co.device_type,
+                                                         row_set_mem_owner);
   for (const auto& order_key : order_keys) {
     const auto order_col =
         std::dynamic_pointer_cast<const Analyzer::ColumnVar>(order_key);

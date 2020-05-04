@@ -371,6 +371,8 @@ class Executor {
 
   static void clearMemory(const Data_Namespace::MemoryLevel memory_level);
 
+  static size_t getArenaBlockSize();
+
   StringDictionaryProxy* getStringDictionaryProxy(
       const int dictId,
       const std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,

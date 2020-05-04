@@ -37,6 +37,7 @@
 
 #include "DataMgr/FileMgr/GlobalFileMgr.h"
 #include "Shared/File.h"
+#include "Shared/checked_alloc.h"
 #include "Shared/measure.h"
 
 #define EPOCH_FILENAME "epoch"
@@ -474,7 +475,7 @@ void FileMgr::copyPage(Page& srcPage,
   CHECK(offset + numBytes <= defaultPageSize_);
   FileInfo* srcFileInfo = getFileInfoForFileId(srcPage.fileId);
   FileInfo* destFileInfo = destFileMgr->getFileInfoForFileId(destPage.fileId);
-  int8_t* buffer = new int8_t[numBytes];
+  int8_t* buffer = reinterpret_cast<int8_t*>(checked_malloc(numBytes));
 
   size_t bytesRead = srcFileInfo->read(
       srcPage.pageNum * defaultPageSize_ + offset + reservedHeaderSize, numBytes, buffer);
@@ -484,7 +485,7 @@ void FileMgr::copyPage(Page& srcPage,
       numBytes,
       buffer);
   CHECK(bytesWritten == numBytes);
-  delete[] buffer;
+  ::free(buffer);
 }
 
 void FileMgr::createEpochFile(const std::string& epochFileName) {

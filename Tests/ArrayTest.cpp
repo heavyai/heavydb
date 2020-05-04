@@ -35,6 +35,8 @@
 
 bool g_keep_data{false};
 
+extern bool g_is_test_env;
+
 using QR = QueryRunner::QueryRunner;
 using namespace TestHelpers;
 
@@ -300,6 +302,8 @@ TEST_F(ArrayExtOpsEnv, ArrayAppend) {
 }
 
 int main(int argc, char** argv) {
+  g_is_test_env = true;
+
   TestHelpers::init_logger_stderr_only(argc, argv);
   testing::InitGoogleTest(&argc, argv);
   namespace po = boost::program_options;

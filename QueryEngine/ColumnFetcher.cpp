@@ -115,6 +115,7 @@ JoinColumn ColumnFetcher::makeJoinColumn(
   CHECK(!fragments.empty());
 
   size_t col_chunks_buff_sz = sizeof(struct JoinChunk) * fragments.size();
+  // TODO: needs an allocator owner
   auto col_chunks_buff = reinterpret_cast<int8_t*>(
       malloc_owner.emplace_back(checked_malloc(col_chunks_buff_sz), free).get());
   auto join_chunk_array = reinterpret_cast<struct JoinChunk*>(col_chunks_buff);

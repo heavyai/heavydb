@@ -825,7 +825,7 @@ class ResultSet {
   mutable size_t fetched_so_far_;
   size_t drop_first_;
   size_t keep_first_;
-  const std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner_;
+  std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner_;
   std::vector<uint32_t> permutation_;
   int64_t queue_time_ms_;
   int64_t render_time_ms_;

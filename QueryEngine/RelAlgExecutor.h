@@ -214,7 +214,8 @@ class RelAlgExecutor : private StorageIOFacility<RelAlgExecutorTraits> {
       const RelAlgExecutionUnit& ra_exe_unit,
       const std::vector<InputTableInfo>& query_infos,
       const CompilationOptions& co,
-      ColumnCacheMap& column_cache_map);
+      ColumnCacheMap& column_cache_map,
+      std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner);
 
   ExecutionResult executeFilter(const RelFilter*,
                                 const CompilationOptions&,

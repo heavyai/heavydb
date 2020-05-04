@@ -66,7 +66,8 @@ class WindowFunctionContext {
   WindowFunctionContext(const Analyzer::WindowFunction* window_func,
                         const std::shared_ptr<JoinHashTableInterface>& partitions,
                         const size_t elem_count,
-                        const ExecutorDeviceType device_type);
+                        const ExecutorDeviceType device_type,
+                        std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner);
 
   WindowFunctionContext(const WindowFunctionContext&) = delete;
 
@@ -167,6 +168,7 @@ class WindowFunctionContext {
   // State for aggregate function over a window.
   AggregateState aggregate_state_;
   const ExecutorDeviceType device_type_;
+  std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner_;
 };
 
 // Keeps track of the multiple window functions in a window query.

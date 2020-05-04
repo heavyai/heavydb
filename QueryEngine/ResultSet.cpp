@@ -215,8 +215,8 @@ ResultSet::ResultSet(int64_t queue_time_ms,
 
 ResultSet::~ResultSet() {
   if (storage_) {
-    CHECK(storage_->getUnderlyingBuffer());
     if (!storage_->buff_is_provided_) {
+      CHECK(storage_->getUnderlyingBuffer());
       free(storage_->getUnderlyingBuffer());
     }
   }
@@ -237,9 +237,11 @@ ExecutorDeviceType ResultSet::getDeviceType() const {
 
 const ResultSetStorage* ResultSet::allocateStorage() const {
   CHECK(!storage_);
-  auto buff = static_cast<int8_t*>(
-      checked_malloc(query_mem_desc_.getBufferSizeBytes(device_type_)));
-  storage_.reset(new ResultSetStorage(targets_, query_mem_desc_, buff, false));
+  CHECK(row_set_mem_owner_);
+  auto buff =
+      row_set_mem_owner_->allocate(query_mem_desc_.getBufferSizeBytes(device_type_));
+  storage_.reset(
+      new ResultSetStorage(targets_, query_mem_desc_, buff, /*buff_is_provided=*/true));
   return storage_.get();
 }
 
@@ -256,9 +258,11 @@ const ResultSetStorage* ResultSet::allocateStorage(
 const ResultSetStorage* ResultSet::allocateStorage(
     const std::vector<int64_t>& target_init_vals) const {
   CHECK(!storage_);
-  auto buff = static_cast<int8_t*>(
-      checked_malloc(query_mem_desc_.getBufferSizeBytes(device_type_)));
-  storage_.reset(new ResultSetStorage(targets_, query_mem_desc_, buff, false));
+  CHECK(row_set_mem_owner_);
+  auto buff =
+      row_set_mem_owner_->allocate(query_mem_desc_.getBufferSizeBytes(device_type_));
+  storage_.reset(
+      new ResultSetStorage(targets_, query_mem_desc_, buff, /*buff_is_provided=*/true));
   storage_->target_init_vals_ = target_init_vals;
   return storage_.get();
 }

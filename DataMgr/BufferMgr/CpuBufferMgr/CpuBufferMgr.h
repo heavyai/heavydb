@@ -18,6 +18,8 @@
 
 #include "DataMgr/BufferMgr/BufferMgr.h"
 
+#include "Shared/ArenaAllocator.h"
+
 namespace CudaMgr_Namespace {
 class CudaMgr;
 }
@@ -29,12 +31,20 @@ class CpuBufferMgr : public BufferMgr {
   CpuBufferMgr(const int device_id,
                const size_t max_buffer_size,
                CudaMgr_Namespace::CudaMgr* cuda_mgr,
-               const size_t buffer_alloc_increment = 2147483648,
+               const size_t max_slab_size = 2147483648,
                const size_t page_size = 512,
-               AbstractBufferMgr* parent_mgr = 0);
+               AbstractBufferMgr* parent_mgr = nullptr)
+      : BufferMgr(device_id, max_buffer_size, max_slab_size, page_size, parent_mgr)
+      , cuda_mgr_(cuda_mgr)
+      , allocator_(std::make_unique<Arena>(/*min_block_size=*/max_slab_size +
+                                           kArenaBlockOverhead)) {}
+
+  ~CpuBufferMgr() {
+    /* the destruction of the allocator automatically frees all memory */
+  }
+
   inline MgrType getMgrType() override { return CPU_MGR; }
   inline std::string getStringMgrType() override { return ToString(CPU_MGR); }
-  ~CpuBufferMgr() override;
 
  private:
   void addSlab(const size_t slab_size) override;
@@ -44,6 +54,7 @@ class CpuBufferMgr : public BufferMgr {
                       const size_t initial_size) override;
 
   CudaMgr_Namespace::CudaMgr* cuda_mgr_;
+  std::unique_ptr<Arena> allocator_;
 };
 
 }  // namespace Buffer_Namespace

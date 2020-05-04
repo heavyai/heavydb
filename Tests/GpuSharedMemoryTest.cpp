@@ -19,6 +19,8 @@
 #include "QueryEngine/OutputBufferInitialization.h"
 #include "QueryEngine/ResultSetReductionJIT.h"
 
+extern bool g_is_test_env;
+
 namespace {
 
 void init_storage_buffer(int8_t* buffer,
@@ -313,8 +315,9 @@ void perform_test_and_verify_results(TestInputData input) {
       "f32:32:32-f64:64:64-v16:16:16-"
       "v32:32:32-v64:64:64-v128:128:128-n16:32:64");
   module->setTargetTriple("nvptx64-nvidia-cuda");
-  std::unique_ptr cuda_mgr = std::make_unique<CudaMgr_Namespace::CudaMgr>(1);
-  const auto row_set_mem_owner = std::make_shared<RowSetMemoryOwner>();
+  auto cuda_mgr = std::make_unique<CudaMgr_Namespace::CudaMgr>(1);
+  const auto row_set_mem_owner =
+      std::make_shared<RowSetMemoryOwner>(Executor::getArenaBlockSize());
   auto query_mem_desc = perfect_hash_one_col_desc(
       input.target_infos, input.suggested_agg_widths, input.min_entry, input.max_entry);
   if (input.keyless_hash) {
@@ -597,6 +600,8 @@ TEST(SingleColumn, VariableNumBuffers) {
 }
 
 int main(int argc, char** argv) {
+  g_is_test_env = true;
+
   TestHelpers::init_logger_stderr_only(argc, argv);
   testing::InitGoogleTest(&argc, argv);
 

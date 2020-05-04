@@ -28,6 +28,7 @@
 
 #include "DataMgr/FileMgr/FileMgr.h"
 #include "Shared/File.h"
+#include "Shared/checked_alloc.h"
 
 #define METADATA_PAGE_SIZE 4096
 
@@ -348,14 +349,14 @@ void FileBuffer::copyPage(Page& srcPage,
   FileInfo* srcFileInfo = fm_->getFileInfoForFileId(srcPage.fileId);
   FileInfo* destFileInfo = fm_->getFileInfoForFileId(destPage.fileId);
 
-  int8_t* buffer = new int8_t[numBytes];
+  int8_t* buffer = reinterpret_cast<int8_t*>(checked_malloc(numBytes));
   size_t bytesRead = srcFileInfo->read(
       srcPage.pageNum * pageSize_ + offset + reservedHeaderSize_, numBytes, buffer);
   CHECK(bytesRead == numBytes);
   size_t bytesWritten = destFileInfo->write(
       destPage.pageNum * pageSize_ + offset + reservedHeaderSize_, numBytes, buffer);
   CHECK(bytesWritten == numBytes);
-  delete[] buffer;
+  free(buffer);
 }
 
 Page FileBuffer::addNewMultiPage(const int epoch) {

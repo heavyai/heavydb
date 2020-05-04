@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 MapD Technologies, Inc.
+ * Copyright 2020 MapD Technologies, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,31 +19,32 @@
  * @author  Minggang Yu <miyu@mapd.com>
  * @brief   Unit tests for microbenchmark.
  *
- * Copyright (c) 2016 MapD Technologies, Inc.  All rights reserved.
  */
-#include "ProfileTest.h"
-#include "../QueryEngine/Descriptors/RowSetMemoryOwner.h"
-#include "../QueryEngine/ResultSet.h"
-#include "Shared/measure.h"
-#include "Shared/thread_count.h"
-#include "TestHelpers.h"
 
-#if defined(HAVE_CUDA) && CUDA_VERSION >= 8000
-#include <thrust/system_error.h>
-#endif
+#include "Tests/ProfileTest.h"
 
 #include <gtest/gtest.h>
-#include <boost/make_unique.hpp>
-
 #include <algorithm>
 #include <future>
 #include <random>
 #include <unordered_map>
 #include <unordered_set>
 
+#include "QueryEngine/Descriptors/RowSetMemoryOwner.h"
+#include "QueryEngine/ResultSet.h"
+#include "Shared/ArenaAllocator.h"
+#include "Shared/measure.h"
+#include "Shared/thread_count.h"
+#include "Tests/TestHelpers.h"
+
+#if defined(HAVE_CUDA) && CUDA_VERSION >= 8000
+#include <thrust/system_error.h>
+#endif
+
 bool g_gpus_present = false;
 
 const float c_space_usage = 2.0f;
+constexpr size_t g_arena_block_size = (1UL << 32) + kArenaBlockOverhead;
 
 namespace {
 #if defined(HAVE_CUDA) && CUDA_VERSION >= 8000
@@ -1309,10 +1310,10 @@ TEST(Reduction, Baseline) {
 #else
   const bool has_multi_gpus = false;
 #endif  // HAVE_CUDA
-  const auto row_set_mem_owner = std::make_shared<RowSetMemoryOwner>();
+  const auto row_set_mem_owner = std::make_shared<RowSetMemoryOwner>(g_arena_block_size);
   std::vector<std::unique_ptr<ResultSet>> results;
   for (size_t i = 0; i < result_count; ++i) {
-    auto rs = boost::make_unique<ResultSet>(
+    auto rs = std::make_unique<ResultSet>(
         target_infos, device_type, query_mem_desc, row_set_mem_owner, nullptr);
     rs->allocateStorage();
     results.push_back(std::move(rs));
@@ -1574,10 +1575,10 @@ TEST(Reduction, PerfectHash) {
 #else
   const bool has_multi_gpus = false;
 #endif  // HAVE_CUDA
-  const auto row_set_mem_owner = std::make_shared<RowSetMemoryOwner>();
+  const auto row_set_mem_owner = std::make_shared<RowSetMemoryOwner>(g_arena_block_size);
   std::vector<std::unique_ptr<ResultSet>> results;
   for (size_t i = 0; i < result_count; ++i) {
-    auto rs = boost::make_unique<ResultSet>(
+    auto rs = std::make_unique<ResultSet>(
         target_infos, device_type, query_mem_desc, row_set_mem_owner, nullptr);
     rs->allocateStorage();
     results.push_back(std::move(rs));

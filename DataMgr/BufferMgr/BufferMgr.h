@@ -176,6 +176,9 @@ class BufferMgr : public AbstractBufferMgr {  // implements
   std::vector<BufferList> slab_segments_;
   size_t page_size_;
 
+  size_t max_slab_size_;  /// size of the individual memory allocations that compose the
+                          /// buffer pool (up to maxBufferSize_)
+
  private:
   BufferMgr(const BufferMgr&);             // private copy constructor
   BufferMgr& operator=(const BufferMgr&);  // private assignment
@@ -200,8 +203,6 @@ class BufferMgr : public AbstractBufferMgr {  // implements
   size_t num_pages_allocated_;
   size_t max_num_pages_per_slab_;
   size_t current_max_slab_page_size_;
-  size_t max_slab_size_;  /// size of the individual memory allocations that compose the
-                          /// buffer pool (up to maxBufferSize_)
   bool allocations_capped_;
   AbstractBufferMgr* parent_mgr_;
   int max_buffer_id_;

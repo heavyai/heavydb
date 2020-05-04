@@ -160,9 +160,9 @@ class DataMgr {
   };
 
   SystemMemoryUsage getSystemMemoryUsage() const;
+  static size_t getTotalSystemMemory();
 
  private:
-  size_t getTotalSystemMemory() const;
   void populateMgrs(const SystemParameters& system_parameters,
                     const size_t userSpecifiedNumReaderThreads);
   void convertDB(const std::string basePath);
