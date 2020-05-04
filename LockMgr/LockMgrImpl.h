@@ -32,11 +32,12 @@ using MutexTypeBase = mapd_shared_mutex;
 
 using WriteLockBase = mapd_unique_lock<MutexTypeBase>;
 using ReadLockBase = mapd_shared_lock<MutexTypeBase>;
-class TrackedRefMutex {
- public:
-  TrackedRefMutex() : ref_count_(0u) {}
 
-  MutexTypeBase& lock() {
+class MutexTracker {
+ public:
+  MutexTracker() : ref_count_(0u) {}
+
+  MutexTypeBase& acquire() {
     ref_count_.fetch_add(1u);
     return mutex_;
   }
@@ -46,7 +47,7 @@ class TrackedRefMutex {
     CHECK_GE(stored_ref_count, size_t(1));
   }
 
-  bool isLocked() const { return ref_count_.load() > 0; }
+  bool isAcquired() const { return ref_count_.load() > 0; }
 
  private:
   std::atomic<size_t> ref_count_;
@@ -56,12 +57,12 @@ class TrackedRefMutex {
 template <typename LOCK>
 class TrackedRefLock {
  public:
-  TrackedRefLock(TrackedRefMutex* m) : mutex_(m), lock_(mutex_->lock()) { CHECK(mutex_); }
+  TrackedRefLock(MutexTracker* m) : mutex_(m), lock_(mutex_->acquire()) { CHECK(mutex_); }
 
   ~TrackedRefLock() {
     if (mutex_) {
-      // This call only decrements the ref count. The actual release is done once the
-      // mutex is destroyed.
+      // This call only decrements the ref count. The actual unlock is done once the
+      // lock is destroyed.
       mutex_->release();
     }
   }
@@ -75,11 +76,11 @@ class TrackedRefLock {
   TrackedRefLock& operator=(const TrackedRefLock&) = delete;
 
  private:
-  TrackedRefMutex* mutex_;
+  MutexTracker* mutex_;
   LOCK lock_;
 };  // namespace lockmgr
 
-using MutexType = TrackedRefMutex;
+using MutexType = MutexTracker;
 
 using WriteLock = TrackedRefLock<WriteLockBase>;
 using ReadLock = TrackedRefLock<ReadLockBase>;
@@ -143,7 +144,7 @@ class TableLockMgrImpl {
     std::set<ChunkKey> ret;
     std::lock_guard<std::mutex> access_map_lock(map_mutex_);
     for (const auto& kv : table_mutex_map_) {
-      if (kv.second->isLocked()) {
+      if (kv.second->isAcquired()) {
         ret.insert(kv.first);
       }
     }
