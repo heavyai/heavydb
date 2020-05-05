@@ -1583,6 +1583,16 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateFunction(
     }
   }
   ret_ti.set_notnull(arguments_not_null);
+
+  // set encoding of certain Extension Function return values
+  if (func_resolve(rex_function->getName(),
+                   "reg_hex_horiz_pixel_bin_packed"sv,
+                   "reg_hex_vert_pixel_bin_packed"sv,
+                   "rect_pixel_bin_packed"sv)) {
+    CHECK(ret_ti.get_type() == kINT);
+    ret_ti.set_compression(kENCODING_PACKED_PIXEL_COORD);
+  }
+
   return makeExpr<Analyzer::FunctionOper>(ret_ti, rex_function->getName(), arg_expr_list);
 }
 

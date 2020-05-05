@@ -143,15 +143,16 @@ union DataBlockPtr {
 
 // must not change because these values persist in catalogs.
 enum EncodingType {
-  kENCODING_NONE = 0,          // no encoding
-  kENCODING_FIXED = 1,         // Fixed-bit encoding
-  kENCODING_RL = 2,            // Run Length encoding
-  kENCODING_DIFF = 3,          // Differential encoding
-  kENCODING_DICT = 4,          // Dictionary encoding
-  kENCODING_SPARSE = 5,        // Null encoding for sparse columns
-  kENCODING_GEOINT = 6,        // Encoding coordinates as intergers
-  kENCODING_DATE_IN_DAYS = 7,  // Date encoding in days
-  kENCODING_LAST = 8
+  kENCODING_NONE = 0,                // no encoding
+  kENCODING_FIXED = 1,               // Fixed-bit encoding
+  kENCODING_RL = 2,                  // Run Length encoding
+  kENCODING_DIFF = 3,                // Differential encoding
+  kENCODING_DICT = 4,                // Dictionary encoding
+  kENCODING_SPARSE = 5,              // Null encoding for sparse columns
+  kENCODING_GEOINT = 6,              // Encoding coordinates as intergers
+  kENCODING_DATE_IN_DAYS = 7,        // Date encoding in days
+  kENCODING_PACKED_PIXEL_COORD = 8,  // Render Pixel Coordinate (packed 14.2+14.2)
+  kENCODING_LAST = 9
 };
 
 #define IS_INTEGER(T) \
@@ -426,6 +427,10 @@ class SQLTypeInfo {
     return is_string() && compression == kENCODING_DICT;
   }
 
+  inline bool is_packed_pixel_coord() const {
+    return type == kINT && compression == kENCODING_PACKED_PIXEL_COORD;
+  }
+
   HOST DEVICE inline bool operator!=(const SQLTypeInfo& rhs) const {
     return type != rhs.get_type() || subtype != rhs.get_subtype() ||
            dimension != rhs.get_dimension() || scale != rhs.get_scale() ||
@@ -668,6 +673,7 @@ class SQLTypeInfo {
       case kINT:
         switch (compression) {
           case kENCODING_NONE:
+          case kENCODING_PACKED_PIXEL_COORD:
             return sizeof(int32_t);
           case kENCODING_FIXED:
           case kENCODING_SPARSE:
