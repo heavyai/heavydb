@@ -112,6 +112,10 @@ class StorageIOFacility {
 
  private:
   int normalized_cpu_threads() const { return cpu_threads() / 2; }
+  static std::unique_ptr<int8_t[]> getRsBufferNoPadding(const ResultSet* rs,
+                                                        size_t col_idx,
+                                                        const SQLTypeInfo& column_type,
+                                                        size_t row_count);
 
   ExecutorType* executor_;
   CatalogType const& catalog_;
@@ -172,7 +176,6 @@ StorageIOFacility<EXECUTOR_TRAITS, FRAGMENT_UPDATER>::yieldUpdateCallback(
       CHECK(td);
       const auto cd = catalog_.getMetadataForColumn(
           td->tableId, update_parameters.getUpdateColumnNames().front());
-      ;
       CHECK(cd);
       auto chunk_metadata =
           fragment_info.getChunkMetadataMapPhysical().find(cd->columnId);
@@ -195,46 +198,12 @@ StorageIOFacility<EXECUTOR_TRAITS, FRAGMENT_UPDATER>::yieldUpdateCallback(
       auto encoder = chunk_buffer->encoder.get();
       CHECK(encoder);
 
-      const auto bytes_width = rs->getPaddedSlotWidthBytes(0);
-
-      std::shared_ptr<ChunkMetadata> new_chunk_metadata;
-      if (cd->columnType.is_dict_encoded_string() &&
-          cd->columnType.get_size() < bytes_width) {
-        // dictionary encoded strings currently use the none-encoder for all types. Scale
-        // the column values appropriately
-
-        const auto col_bytes_width = cd->columnType.get_size();
-        const size_t buffer_size = col_bytes_width * update_log.getRowCount();
-        auto updates_buffer_owned = std::make_unique<char[]>(buffer_size);
-        auto updates_buffer = reinterpret_cast<int8_t*>(updates_buffer_owned.get());
-
-        auto rs_buffer_size = bytes_width * update_log.getRowCount();
-        auto rs_buffer_owned = std::make_unique<char[]>(rs_buffer_size);
-        auto rs_buffer = reinterpret_cast<int8_t*>(rs_buffer_owned.get());
-        rs->copyColumnIntoBuffer(0, rs_buffer, rs_buffer_size);
-
-        // Iterate the result set and copy into the updates buffer
-        auto updates_ptr = updates_buffer;
-        auto rs_ptr = rs_buffer;
-        for (size_t i = 0; i < rs->rowCount(); i++) {
-          std::memcpy(updates_ptr, rs_ptr, col_bytes_width);
-          updates_ptr += col_bytes_width;
-          rs_ptr += bytes_width;
-        }
-
-        new_chunk_metadata =
-            encoder->appendData(updates_buffer, rs->rowCount(), cd->columnType, false, 0);
-      } else {
-        // leverage the encoder to scale column values if the type is encoded (e.g.
-        // DateInDays)
-        const size_t buffer_size = bytes_width * update_log.getRowCount();
-        auto updates_buffer_owned = std::make_unique<char[]>(buffer_size);
-        auto updates_buffer = reinterpret_cast<int8_t*>(updates_buffer_owned.get());
-        rs->copyColumnIntoBuffer(0, updates_buffer, buffer_size);
-
-        new_chunk_metadata =
-            encoder->appendData(updates_buffer, rs->rowCount(), cd->columnType, false, 0);
-      }
+      auto owned_buffer =
+          StorageIOFacility<EXECUTOR_TRAITS, FRAGMENT_UPDATER>::getRsBufferNoPadding(
+              rs.get(), 0, cd->columnType, rs->rowCount());
+      auto buffer = reinterpret_cast<int8_t*>(owned_buffer.get());
+      const auto new_chunk_metadata =
+          encoder->appendData(buffer, rs->rowCount(), cd->columnType, false, 0);
       CHECK(new_chunk_metadata);
 
       auto fragmenter = td->fragmenter.get();
@@ -408,6 +377,7 @@ StorageIOFacility<EXECUTOR_TRAITS, FRAGMENT_UPDATER>::yieldDeleteCallback(
       CHECK(td);
       const auto cd = catalog_.getDeletedColumn(td);
       CHECK(cd);
+      CHECK(cd->columnType.get_type() == kBOOLEAN);
       auto chunk_metadata =
           fragment_info.getChunkMetadataMapPhysical().find(cd->columnId);
       CHECK(chunk_metadata != fragment_info.getChunkMetadataMapPhysical().end());
@@ -429,17 +399,13 @@ StorageIOFacility<EXECUTOR_TRAITS, FRAGMENT_UPDATER>::yieldDeleteCallback(
       auto encoder = chunk_buffer->encoder.get();
       CHECK(encoder);
 
-      const auto bytes_width = rs->getPaddedSlotWidthBytes(0);
-
-      // leverage the encoder to scale column values if the type is encoded (e.g.
-      // DateInDays)
-      const size_t buffer_size = bytes_width * update_log.getRowCount();
-      auto updates_buffer_owned = std::make_unique<char[]>(buffer_size);
-      auto updates_buffer = reinterpret_cast<int8_t*>(updates_buffer_owned.get());
-      rs->copyColumnIntoBuffer(0, updates_buffer, buffer_size);
+      auto owned_buffer =
+          StorageIOFacility<EXECUTOR_TRAITS, FRAGMENT_UPDATER>::getRsBufferNoPadding(
+              rs.get(), 0, cd->columnType, rs->rowCount());
+      auto buffer = reinterpret_cast<int8_t*>(owned_buffer.get());
 
       const auto new_chunk_metadata =
-          encoder->appendData(updates_buffer, rs->rowCount(), cd->columnType, false, 0);
+          encoder->appendData(buffer, rs->rowCount(), cd->columnType, false, 0);
 
       auto fragmenter = td->fragmenter.get();
       CHECK(fragmenter);
@@ -560,4 +526,48 @@ StorageIOFacility<EXECUTOR_TRAITS, FRAGMENT_UPDATER>::yieldDeleteCallback(
     };
     return callback;
   }
+}
+
+template <typename EXECUTOR_TRAITS, typename FRAGMENT_UPDATER>
+std::unique_ptr<int8_t[]>
+StorageIOFacility<EXECUTOR_TRAITS, FRAGMENT_UPDATER>::getRsBufferNoPadding(
+    const ResultSet* rs,
+    size_t col_idx,
+    const SQLTypeInfo& column_type,
+    size_t row_count) {
+  const auto padded_size = rs->getPaddedSlotWidthBytes(col_idx);
+  const auto type_size = column_type.is_dict_encoded_string()
+                             ? column_type.get_size()
+                             : column_type.get_logical_size();
+
+  auto rs_buffer_size = padded_size * row_count;
+  auto rs_buffer = std::make_unique<int8_t[]>(rs_buffer_size);
+  rs->copyColumnIntoBuffer(col_idx, rs_buffer.get(), rs_buffer_size);
+
+  if (type_size < padded_size) {
+    // else we're going to remove padding and we do it inplace in the same buffer
+    // we can do updates inplace in the same buffer because type_size < padded_size
+    // for some types, like kFLOAT, simple memcpy is not enough
+    auto src_ptr = rs_buffer.get();
+    auto dst_ptr = rs_buffer.get();
+    if (column_type.is_fp()) {
+      CHECK(column_type.get_type() == kFLOAT);
+      CHECK(padded_size == sizeof(double));
+      for (size_t i = 0; i < row_count; i++) {
+        const auto old_val = *reinterpret_cast<double*>(may_alias_ptr(src_ptr));
+        auto new_val = static_cast<float>(old_val);
+        std::memcpy(dst_ptr, &new_val, type_size);
+        dst_ptr += type_size;
+        src_ptr += padded_size;
+      }
+    } else {
+      // otherwise just take first type_size bytes from the padded value
+      for (size_t i = 0; i < row_count; i++) {
+        std::memcpy(dst_ptr, src_ptr, type_size);
+        dst_ptr += type_size;
+        src_ptr += padded_size;
+      }
+    }
+  }
+  return rs_buffer;
 }
