@@ -46,7 +46,7 @@ Usage can be printed at any time by running: `./run-benchmark.py -h` or `--help`
 Currently, usage is:
 
 ```
-usage: run-benchmark.py [-h] [-v] [-q] [-u USER] [-p PASSWD] [-s SERVER]
+usage: run_benchmark.py [-h] [-v] [-q] [-u USER] [-p PASSWD] [-s SERVER]
                         [-o PORT] [-n NAME] -t TABLE -l LABEL [-d QUERIES_DIR]
                         -i ITERATIONS [-g GPU_COUNT] [-G GPU_NAME]
                         [--no-gather-conn-gpu-info]
@@ -56,6 +56,11 @@ usage: run-benchmark.py [-h] [-v] [-q] [-u USER] [-p PASSWD] [-s SERVER]
                         [-O DEST_PORT] [-N DEST_NAME] [-T DEST_TABLE]
                         [-C DEST_TABLE_SCHEMA_FILE] [-j OUTPUT_FILE_JSON]
                         [-J OUTPUT_FILE_JENKINS] [-E OUTPUT_TAG_JENKINS]
+                        [--setup-teardown-queries-dir SETUP_TEARDOWN_QUERIES_DIR]
+                        [--run-setup-teardown-per-query]
+                        [-F FOREIGN_TABLE_FILENAME]
+                        [--jenkins-thresholds-name JENKINS_THRESHOLDS_NAME]
+                        [--jenkins-thresholds-field JENKINS_THRESHOLDS_FIELD]
 
 required arguments:
   -u USER, --user USER  Source database user
@@ -136,6 +141,28 @@ optional arguments:
   -E OUTPUT_TAG_JENKINS, --output-tag-jenkins OUTPUT_TAG_JENKINS
                         Jenkins benchmark result tag. Optional, appended to
                         table name in "group" field
+  --setup-teardown-queries-dir SETUP_TEARDOWN_QUERIES_DIR
+                        Absolute path to dir with setup & teardown query
+                        files. Query files with "setup" in the filename will
+                        be executed in the setup stage, likewise query files
+                        with "teardown" in the filenname will be executed in
+                        the tear-down stage. Queries execute in lexical order.
+                        [Default: None, meaning this option is not used.]
+  --run-setup-teardown-per-query
+                        Run setup & teardown steps per query. If set, setup-
+                        teardown-queries-dir must be specified. If not set,
+                        but setup-teardown-queries-dir is specified setup &
+                        tear-down queries will run globally, that is, once per
+                        script invocation. [Default: False]
+  -F FOREIGN_TABLE_FILENAME, --foreign-table-filename FOREIGN_TABLE_FILENAME
+                        Path to file containing template for import query.
+                        Path must be relative to the FOREIGN SERVER.
+                        Occurances of "##FILE##" within setup/teardown queries
+                        will be replaced with this.
+  --jenkins-thresholds-name JENKINS_THRESHOLDS_NAME
+                        Name of Jenkins output field.
+  --jenkins-thresholds-field JENKINS_THRESHOLDS_FIELD
+                        Field to report as jenkins output value.
 ```
 
 Example 1:

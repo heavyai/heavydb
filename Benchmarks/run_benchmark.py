@@ -1531,6 +1531,18 @@ def process_arguments(input_arguments):
         "Occurances of \"##FILE##\" within setup/teardown queries will be"
         " replaced with this. "
     )
+    optional.add_argument(
+        "--jenkins-thresholds-name",
+        dest="jenkins_thresholds_name",
+        default="average",
+        help="Name of Jenkins output field.",
+    )
+    optional.add_argument(
+        "--jenkins-thresholds-field",
+        dest="jenkins_thresholds_field",
+        default="query_exec_trimmed_avg",
+        help="Field to report as jenkins output value.",
+    )
     args = parser.parse_args(args=input_arguments)
     return args
 
@@ -1570,11 +1582,11 @@ def benchmark(input_arguments):
     setup_teardown_queries_dir = args.setup_teardown_queries_dir
     run_setup_teardown_per_query = args.run_setup_teardown_per_query
     foreign_table_filename = args.foreign_table_filename
+    jenkins_thresholds_name = args.jenkins_thresholds_name
+    jenkins_thresholds_field = args.jenkins_thresholds_field
 
     # Hard-coded vars
     trim = 0.15
-    jenkins_thresholds_name = "average"
-    jenkins_thresholds_field = "query_exec_trimmed_avg"
 
     # Set logging output level
     if verbose:
