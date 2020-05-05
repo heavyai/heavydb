@@ -1424,12 +1424,12 @@ ResultSetPtr Executor::executeWorkUnitImpl(
               available_cpus);
         }
       } catch (QueryExecutionError& e) {
-        if (eo.with_dynamic_watchdog && interrupted_ &&
+        if (eo.with_dynamic_watchdog && interrupted_.load() &&
             e.getErrorCode() == ERR_OUT_OF_TIME) {
           resetInterrupt();
           throw QueryExecutionError(ERR_INTERRUPTED);
         }
-        if (eo.allow_runtime_query_interrupt && interrupted_) {
+        if (eo.allow_runtime_query_interrupt && interrupted_.load()) {
           resetInterrupt();
           throw QueryExecutionError(ERR_INTERRUPTED);
         }
@@ -2221,7 +2221,7 @@ FetchResult Executor::fetchChunks(
     for (const auto& col_id : col_global_ids) {
       // check whether the interrupt flag turns on (non kernel-time query interrupt)
       if ((g_enable_dynamic_watchdog || g_enable_runtime_query_interrupt) &&
-          interrupted_) {
+          interrupted_.load()) {
         resetInterrupt();
         throw QueryExecutionError(ERR_INTERRUPTED);
       }
@@ -2566,7 +2566,8 @@ int32_t Executor::executePlanWithoutGroupBy(
   const auto hoist_buf = serializeLiterals(compilation_result.literal_values, device_id);
   const auto join_hash_table_ptrs = getJoinHashTablePtrs(device_type, device_id);
   std::unique_ptr<OutVecOwner> output_memory_scope;
-  if ((g_enable_dynamic_watchdog || g_enable_runtime_query_interrupt) && interrupted_) {
+  if ((g_enable_dynamic_watchdog || g_enable_runtime_query_interrupt) &&
+      interrupted_.load()) {
     resetInterrupt();
     throw QueryExecutionError(ERR_INTERRUPTED);
   }
@@ -2752,7 +2753,8 @@ int32_t Executor::executePlanWithGroupBy(
   auto hoist_buf = serializeLiterals(compilation_result.literal_values, device_id);
   int32_t error_code = device_type == ExecutorDeviceType::GPU ? 0 : start_rowid;
   const auto join_hash_table_ptrs = getJoinHashTablePtrs(device_type, device_id);
-  if ((g_enable_dynamic_watchdog || g_enable_runtime_query_interrupt) && interrupted_) {
+  if ((g_enable_dynamic_watchdog || g_enable_runtime_query_interrupt) &&
+      interrupted_.load()) {
     return ERR_INTERRUPTED;
   }
 
@@ -2937,7 +2939,8 @@ Executor::JoinHashTableOrError Executor::buildHashTableForQualifier(
     return {nullptr, "Overlaps hash join disabled, attempting to fall back to loop join"};
   }
   // check whether the interrupt flag turns on (non kernel-time query interrupt)
-  if ((g_enable_dynamic_watchdog || g_enable_runtime_query_interrupt) && interrupted_) {
+  if ((g_enable_dynamic_watchdog || g_enable_runtime_query_interrupt) &&
+      interrupted_.load()) {
     resetInterrupt();
     throw QueryExecutionError(ERR_INTERRUPTED);
   }
@@ -3320,69 +3323,73 @@ void Executor::setupCaching(const std::unordered_set<PhysicalInput>& phys_inputs
   table_generations_ = computeTableGenerations(phys_table_ids);
 }
 
-void Executor::setCurrentQuerySession(const std::string& query_session) {
-  std::lock_guard<std::mutex> session_access_lock(executor_session_mutex_);
+mapd_shared_mutex& Executor::getSessionLock() {
+  return executor_session_mutex_;
+}
+
+template <>
+void Executor::setCurrentQuerySession(const std::string& query_session,
+                                      mapd_unique_lock<mapd_shared_mutex>& write_lock) {
   if (current_query_session_ == "") {
     // only set the query session if it currently has an invalid session
     current_query_session_ = query_session;
   }
 }
 
-std::string& Executor::getCurrentQuerySession() {
+template <>
+std::string& Executor::getCurrentQuerySession(
+    mapd_shared_lock<mapd_shared_mutex>& read_lock) {
   return current_query_session_;
 }
 
-bool Executor::checkCurrentQuerySession(const std::string& candidate_query_session) {
+template <>
+bool Executor::checkCurrentQuerySession(const std::string& candidate_query_session,
+                                        mapd_shared_lock<mapd_shared_mutex>& read_lock) {
   // if current_query_session is equal to the candidate_query_session,
   // or it is empty session we consider
   return (current_query_session_ == candidate_query_session);
 }
 
-void Executor::invalidateQuerySession() {
+template <>
+void Executor::invalidateQuerySession(mapd_unique_lock<mapd_shared_mutex>& write_lock) {
   current_query_session_ = "";
 }
 
-bool Executor::addToQuerySessionList(const std::string& query_session) {
-  std::lock_guard<std::mutex> session_access_lock(executor_session_mutex_);
-  auto emplace_query = queries_interrupt_flag_.emplace(query_session, false);
-  if (!emplace_query.second) {
-    // initialize the existing session's interrupt flag
-    auto it = queries_interrupt_flag_.find(query_session);
-    CHECK(it != queries_interrupt_flag_.end());
-    it->second = false;
-  }
-  return emplace_query.second;
+template <>
+bool Executor::addToQuerySessionList(const std::string& query_session,
+                                     mapd_unique_lock<mapd_shared_mutex>& write_lock) {
+  return queries_interrupt_flag_.emplace(query_session, false).second;
 }
 
-bool Executor::removeFromQuerySessionList(const std::string& query_session) {
-  std::lock_guard<std::mutex> session_access_lock(executor_session_mutex_);
-  auto it = queries_interrupt_flag_.find(query_session);
-  if (it != queries_interrupt_flag_.end()) {
-    // invalidate the existing session's interrupt flag
-    queries_interrupt_flag_.erase(query_session);
-    return true;
-  }
-  return false;
+template <>
+bool Executor::removeFromQuerySessionList(
+    const std::string& query_session,
+    mapd_unique_lock<mapd_shared_mutex>& write_lock) {
+  return queries_interrupt_flag_.erase(query_session);
 }
 
-void Executor::setQuerySessionAsInterrupted(const std::string& query_session) {
-  std::lock_guard<std::mutex> session_access_lock(executor_session_mutex_);
-  auto it = queries_interrupt_flag_.find(query_session);
-  if (it != queries_interrupt_flag_.end()) {
-    it->second = true;
-  } else {
-    auto emplace_query = queries_interrupt_flag_.emplace(query_session, true);
-    CHECK(emplace_query.second);
-  }
+template <>
+void Executor::setQuerySessionAsInterrupted(
+    const std::string& query_session,
+    mapd_unique_lock<mapd_shared_mutex>& write_lock) {
+  queries_interrupt_flag_[query_session] = true;
 }
 
-bool Executor::checkIsQuerySessionInterrupted(const std::string& query_session) {
-  std::lock_guard<std::mutex> session_access_lock(executor_session_mutex_);
-  auto it = queries_interrupt_flag_.find(query_session);
-  if (it != queries_interrupt_flag_.end()) {
-    return it->second;
-  }
-  return false;
+template <>
+bool Executor::checkIsQuerySessionInterrupted(
+    const std::string& query_session,
+    mapd_shared_lock<mapd_shared_mutex>& read_lock) {
+  auto flag_it = queries_interrupt_flag_.find(query_session);
+  return flag_it != queries_interrupt_flag_.end() && flag_it->second;
+}
+
+void Executor::enableRuntimeQueryInterrupt(const unsigned interrupt_freq) const {
+  // The only one scenario that we intentionally call this function is
+  // to allow runtime query interrupt in QueryRunner for test cases.
+  // Because test machine's default setting does not allow runtime query interrupt,
+  // so we have to turn it on within test code if necessary.
+  g_enable_runtime_query_interrupt = true;
+  g_runtime_query_interrupt_frequency = interrupt_freq;
 }
 
 std::map<int, std::shared_ptr<Executor>> Executor::executors_;
@@ -3390,5 +3397,5 @@ std::mutex Executor::execute_mutex_;
 mapd_shared_mutex Executor::executors_cache_mutex_;
 std::atomic_flag Executor::execute_spin_lock_ = ATOMIC_FLAG_INIT;
 std::string Executor::current_query_session_{""};
-std::map<std::string, bool> Executor::queries_interrupt_flag_;
-std::mutex Executor::executor_session_mutex_;
+InterruptFlagMap Executor::queries_interrupt_flag_;
+mapd_shared_mutex Executor::executor_session_mutex_;

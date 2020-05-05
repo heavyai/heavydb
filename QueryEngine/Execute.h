@@ -40,6 +40,7 @@
 #include "../Chunk/Chunk.h"
 #include "../Shared/Logger.h"
 #include "../Shared/SystemParameters.h"
+#include "../Shared/mapd_shared_mutex.h"
 #include "../Shared/measure.h"
 #include "../Shared/thread_count.h"
 #include "../StringDictionary/LruCache.hpp"
@@ -100,6 +101,7 @@ class QueryCompilationDescriptor;
 using QueryCompilationDescriptorOwned = std::unique_ptr<QueryCompilationDescriptor>;
 class QueryMemoryDescriptor;
 using QueryMemoryDescriptorOwned = std::unique_ptr<QueryMemoryDescriptor>;
+using InterruptFlagMap = std::map<std::string, bool>;
 
 extern void read_udf_gpu_module(const std::string& udf_ir_filename);
 extern void read_udf_cpu_module(const std::string& udf_ir_filename);
@@ -407,8 +409,12 @@ class Executor {
 
   void registerActiveModule(void* module, const int device_id) const;
   void unregisterActiveModule(void* module, const int device_id) const;
-  void interrupt(std::string query_session = "", std::string interrupt_session = "");
+  void interrupt(const std::string& query_session = "",
+                 const std::string& interrupt_session = "");
   void resetInterrupt();
+
+  // only for testing usage
+  void enableRuntimeQueryInterrupt(const unsigned interrupt_freq) const;
 
   static const size_t high_scan_limit{32000000};
 
@@ -910,14 +916,29 @@ class Executor {
   void setupCaching(const std::unordered_set<PhysicalInput>& phys_inputs,
                     const std::unordered_set<int>& phys_table_ids);
 
-  void setCurrentQuerySession(const std::string& query_session);
-  std::string& getCurrentQuerySession();
-  bool checkCurrentQuerySession(const std::string& candidate_query_session);
-  void invalidateQuerySession();
-  bool addToQuerySessionList(const std::string& query_session);
-  bool removeFromQuerySessionList(const std::string& query_session);
-  void setQuerySessionAsInterrupted(const std::string& query_session);
-  bool checkIsQuerySessionInterrupted(const std::string& query_session);
+  template <typename SESSION_MAP_LOCK>
+  void setCurrentQuerySession(const std::string& query_session,
+                              SESSION_MAP_LOCK& write_lock);
+  template <typename SESSION_MAP_LOCK>
+  std::string& getCurrentQuerySession(SESSION_MAP_LOCK& read_lock);
+  template <typename SESSION_MAP_LOCK>
+  bool checkCurrentQuerySession(const std::string& candidate_query_session,
+                                SESSION_MAP_LOCK& read_lock);
+  template <typename SESSION_MAP_LOCK>
+  void invalidateQuerySession(SESSION_MAP_LOCK& write_lock);
+  template <typename SESSION_MAP_LOCK>
+  bool addToQuerySessionList(const std::string& query_session,
+                             SESSION_MAP_LOCK& write_lock);
+  template <typename SESSION_MAP_LOCK>
+  bool removeFromQuerySessionList(const std::string& query_session,
+                                  SESSION_MAP_LOCK& write_lock);
+  template <typename SESSION_MAP_LOCK>
+  void setQuerySessionAsInterrupted(const std::string& query_session,
+                                    SESSION_MAP_LOCK& write_lock);
+  template <typename SESSION_MAP_LOCK>
+  bool checkIsQuerySessionInterrupted(const std::string& query_session,
+                                      SESSION_MAP_LOCK& read_lock);
+  mapd_shared_mutex& getSessionLock();
 
  private:
   std::vector<std::pair<void*, void*>> getCodeFromCache(const CodeCacheKey&,
@@ -964,7 +985,7 @@ class Executor {
   mutable std::mutex gpu_active_modules_mutex_;
   mutable uint32_t gpu_active_modules_device_mask_;
   mutable void* gpu_active_modules_[max_gpu_count];
-  bool interrupted_;
+  std::atomic<bool> interrupted_;
 
   mutable std::shared_ptr<StringDictionaryProxy> lit_str_dict_proxy_;
   mutable std::mutex str_dict_mutex_;
@@ -991,10 +1012,10 @@ class Executor {
   AggregatedColRange agg_col_range_cache_;
   StringDictionaryGenerations string_dictionary_generations_;
   TableGenerations table_generations_;
-  static std::mutex executor_session_mutex_;
+  static mapd_shared_mutex executor_session_mutex_;
   static std::string current_query_session_;
   // a pair of <query_session, interrupted_flag>
-  static std::map<std::string, bool> queries_interrupt_flag_;
+  static InterruptFlagMap queries_interrupt_flag_;
 
   static std::map<int, std::shared_ptr<Executor>> executors_;
   static std::atomic_flag execute_spin_lock_;

@@ -762,7 +762,7 @@ void QueryExecutionContext::initializeDynamicWatchdog(void* native_module,
   CHECK_EQ(dw_sm_cycle_start_size, 128 * sizeof(uint64_t));
   checkCudaErrors(cuMemsetD32(dw_sm_cycle_start, 0, 128 * 2));
 
-  if (!executor_->interrupted_) {
+  if (!executor_->interrupted_.load()) {
     // Executor is not marked as interrupted, make sure dynamic watchdog doesn't block
     // execution
     CUdeviceptr dw_abort;
@@ -783,8 +783,8 @@ void QueryExecutionContext::initializeDynamicWatchdog(void* native_module,
 
 void QueryExecutionContext::initializeRuntimeInterrupter(void* native_module,
                                                          const int device_id) const {
-  if (!executor_->interrupted_) {
-    // Executor is not marked as interrupted, make sure dynamic watchdog doesn't block
+  if (!executor_->interrupted_.load()) {
+    // Executor is not marked as interrupted, make sure interrupt flag doesn't block
     // execution
     auto cu_module = static_cast<CUmodule>(native_module);
     CHECK(cu_module);

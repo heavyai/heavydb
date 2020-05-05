@@ -47,6 +47,7 @@ extern bool g_enable_filter_push_down;
 double g_gpu_mem_limit_percent{0.9};
 
 extern bool g_serialize_temp_tables;
+std::mutex calcite_lock;
 
 using namespace Catalog_Namespace;
 namespace {
@@ -289,6 +290,71 @@ std::shared_ptr<ResultSet> QueryRunner::runSQL(const std::string& query_str,
   CHECK(insert_values_stmt);
   insert_values_stmt->execute(*session_info_);
   return nullptr;
+}
+
+std::shared_ptr<Executor> QueryRunner::getExecutor() const {
+  CHECK(session_info_);
+  CHECK(!Catalog_Namespace::SysCatalog::instance().isAggregator());
+  auto query_state = create_query_state(session_info_, "");
+  auto stdlog = STDLOG(query_state);
+  const auto& cat = query_state->getConstSessionInfo()->getCatalog();
+  auto executor = Executor::getExecutor(cat.getCurrentDB().dbId);
+  return executor;
+}
+
+std::shared_ptr<ResultSet> QueryRunner::runSQLWithAllowingInterrupt(
+    const std::string& query_str,
+    std::shared_ptr<Executor> executor,
+    const std::string& session_id,
+    const ExecutorDeviceType device_type,
+    const unsigned interrupt_check_freq) {
+  CHECK(session_info_);
+  CHECK(!Catalog_Namespace::SysCatalog::instance().isAggregator());
+  auto session_info =
+      std::make_shared<Catalog_Namespace::SessionInfo>(session_info_->get_catalog_ptr(),
+                                                       session_info_->get_currentUser(),
+                                                       ExecutorDeviceType::GPU,
+                                                       session_id);
+  auto query_state = create_query_state(session_info, query_str);
+  auto stdlog = STDLOG(query_state);
+  const auto& cat = query_state->getConstSessionInfo()->getCatalog();
+  CompilationOptions co = CompilationOptions::defaults(device_type);
+
+  ExecutionOptions eo = {g_enable_columnar_output,
+                         true,
+                         false,
+                         true,
+                         false,
+                         false,
+                         false,
+                         false,
+                         10000,
+                         false,
+                         false,
+                         g_gpu_mem_limit_percent,
+                         true,
+                         interrupt_check_freq};
+  std::string query_ra{""};
+  {
+    // async query initiation for interrupt test
+    // incurs data race warning in TSAN since
+    // calcite_mgr is shared across multiple query threads
+    // so here we lock the manager during query parsing
+    std::lock_guard<std::mutex> calcite_lock_guard(calcite_lock);
+    auto calcite_mgr = cat.getCalciteMgr();
+    query_ra = calcite_mgr
+                   ->process(query_state->createQueryStateProxy(),
+                             pg_shim(query_state->getQueryStr()),
+                             {},
+                             true,
+                             false,
+                             false,
+                             true)
+                   .plan_result;
+  }
+  auto result = RelAlgExecutor(executor.get(), cat, query_ra, query_state)
+                    .executeRelAlgQuery(co, eo, false, nullptr);
+  return result.getRows();
 }
 
 std::vector<std::shared_ptr<ResultSet>> QueryRunner::runMultipleStatements(

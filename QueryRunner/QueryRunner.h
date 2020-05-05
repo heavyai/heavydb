@@ -114,6 +114,7 @@ class QueryRunner {
   }
   std::shared_ptr<Catalog_Namespace::Catalog> getCatalog() const;
   std::shared_ptr<Calcite> getCalcite() const;
+  std::shared_ptr<Executor> getExecutor() const;
 
   bool gpusPresent() const;
   virtual void clearGpuMemory() const;
@@ -129,6 +130,12 @@ class QueryRunner {
                                          const bool hoist_literals,
                                          const bool allow_loop_joins,
                                          const bool just_explain = false);
+  virtual std::shared_ptr<ResultSet> runSQLWithAllowingInterrupt(
+      const std::string& query_str,
+      std::shared_ptr<Executor> executor,
+      const std::string& session_id,
+      const ExecutorDeviceType device_type,
+      const unsigned interrupt_check_freq = 1000);
   virtual std::vector<std::shared_ptr<ResultSet>> runMultipleStatements(
       const std::string&,
       const ExecutorDeviceType);

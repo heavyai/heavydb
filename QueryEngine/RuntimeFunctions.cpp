@@ -1382,11 +1382,11 @@ extern "C" bool check_interrupt_init(unsigned command) {
     return false;
   }
   if (command == static_cast<unsigned>(INT_ABORT)) {
-    runtime_interrupt_flag = true;
+    runtime_interrupt_flag.store(true);
     return false;
   }
   if (command == static_cast<unsigned>(INT_RESET)) {
-    runtime_interrupt_flag = false;
+    runtime_interrupt_flag.store(false);
     return false;
   }
   return false;
