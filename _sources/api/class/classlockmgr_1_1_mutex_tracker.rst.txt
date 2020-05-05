@@ -1,0 +1,9 @@
+Class lockmgr::MutexTracker
+===========================
+
+.. doxygenclass:: lockmgr::MutexTracker
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

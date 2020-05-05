@@ -1,0 +1,9 @@
+Class lockmgr::TrackedRefLock
+=============================
+
+.. doxygenclass:: lockmgr::TrackedRefLock
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

@@ -1,0 +1,9 @@
+Class Parser::TrackedPtr
+========================
+
+.. doxygenclass:: Parser::TrackedPtr
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

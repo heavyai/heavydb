@@ -65,7 +65,7 @@
             
             
               <div class="version">
-                5.3.0dev fb55533
+                5.3.0dev b385697
               </div>
             
           
@@ -574,6 +574,8 @@
 <li class="toctree-l2"><a class="reference internal" href="class_parser_1_1_table_element.html">Class Parser::TableElement</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_parser_1_1_table_ref.html">Class Parser::TableRef</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_parser_1_1_timestamp_literal.html">Class Parser::TimestampLiteral</a></li>
+<li class="toctree-l2"><a class="reference internal" href="class_parser_1_1_tracked_list_ptr.html">Class Parser::TrackedListPtr</a></li>
+<li class="toctree-l2"><a class="reference internal" href="class_parser_1_1_tracked_ptr.html">Class Parser::TrackedPtr</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_parser_1_1_truncate_table_stmt.html">Class Parser::TruncateTableStmt</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_parser_1_1_union_query.html">Class Parser::UnionQuery</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_parser_1_1_unique_def.html">Class Parser::UniqueDef</a></li>
@@ -756,7 +758,6 @@
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_parser.html">Class com::mapd::calcite::parser::MapDParser</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_parser_options.html">Class com::mapd::calcite::parser::MapDParserOptions</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_parser_options_1_1_filter_push_down_info.html">Class com::mapd::calcite::parser::MapDParserOptions::FilterPushDownInfo</a></li>
-<li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_rel_data_type_system_impl.html">Class com::mapd::calcite::parser::MapDRelDataTypeSystemImpl</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_schema.html">Class com::mapd::calcite::parser::MapDSchema</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_serializer.html">Class com::mapd::calcite::parser::MapDSerializer</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_sql_operator_table.html">Class com::mapd::calcite::parser::MapDSqlOperatorTable</a></li>
@@ -944,6 +945,7 @@
 <li class="toctree-l2"><a class="reference internal" href="classlockmgr_1_1_abstract_lock_container.html">Class lockmgr::AbstractLockContainer</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classlockmgr_1_1_insert_data_lock_mgr.html">Class lockmgr::InsertDataLockMgr</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classlockmgr_1_1_lock_container_impl.html">Class lockmgr::LockContainerImpl</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classlockmgr_1_1_mutex_tracker.html">Class lockmgr::MutexTracker</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classlockmgr_1_1_table_data_lock_container.html">Class lockmgr::TableDataLockContainer</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classlockmgr_1_1_table_data_lock_container_3_01_read_lock_01_4.html">Class lockmgr::TableDataLockContainer&lt; ReadLock &gt;</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classlockmgr_1_1_table_data_lock_container_3_01_write_lock_01_4.html">Class lockmgr::TableDataLockContainer&lt; WriteLock &gt;</a></li>
@@ -954,6 +956,7 @@
 <li class="toctree-l2"><a class="reference internal" href="classlockmgr_1_1_table_schema_lock_container_3_01_read_lock_01_4.html">Class lockmgr::TableSchemaLockContainer&lt; ReadLock &gt;</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classlockmgr_1_1_table_schema_lock_container_3_01_write_lock_01_4.html">Class lockmgr::TableSchemaLockContainer&lt; WriteLock &gt;</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classlockmgr_1_1_table_schema_lock_mgr.html">Class lockmgr::TableSchemaLockMgr</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classlockmgr_1_1_tracked_ref_lock.html">Class lockmgr::TrackedRefLock</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classlogger_1_1_debug_timer.html">Class logger::DebugTimer</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classlogger_1_1_duration.html">Class logger::Duration</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classlogger_1_1_duration_tree.html">Class logger::DurationTree</a></li>
@@ -975,19 +978,10 @@
 <li class="toctree-l2"><a class="reference internal" href="classorg_1_1apache_1_1calcite_1_1rel_1_1rules_1_1_outer_join_opt_via_null_rejection_rule.html">Class org::apache::calcite::rel::rules::OuterJoinOptViaNullRejectionRule</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classorg_1_1apache_1_1calcite_1_1rel_1_1rules_1_1_query_optimization_rules.html">Class org::apache::calcite::rel::rules::QueryOptimizationRules</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter.html">Class org::apache::calcite::sql2rel::SqlToRelConverter</a></li>
-<li class="toctree-l2"><a class="reference internal" href="classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1_1_agg_converter.html">Class org::apache::calcite::sql2rel::SqlToRelConverter::AggConverter</a></li>
-<li class="toctree-l2"><a class="reference internal" href="classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1_1_aggregate_finder.html">Class org::apache::calcite::sql2rel::SqlToRelConverter::AggregateFinder</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1_1_blackboard.html">Class org::apache::calcite::sql2rel::SqlToRelConverter::Blackboard</a></li>
-<li class="toctree-l2"><a class="reference internal" href="classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1_1_config_builder.html">Class org::apache::calcite::sql2rel::SqlToRelConverter::ConfigBuilder</a></li>
-<li class="toctree-l2"><a class="reference internal" href="classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1_1_config_impl.html">Class org::apache::calcite::sql2rel::SqlToRelConverter::ConfigImpl</a></li>
-<li class="toctree-l2"><a class="reference internal" href="classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1_1_config_impl_1_1_default_expand_predicate.html">Class org::apache::calcite::sql2rel::SqlToRelConverter::ConfigImpl::DefaultExpandPredicate</a></li>
-<li class="toctree-l2"><a class="reference internal" href="classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1_1_correlation_use.html">Class org::apache::calcite::sql2rel::SqlToRelConverter::CorrelationUse</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1_1_deferred_lookup.html">Class org::apache::calcite::sql2rel::SqlToRelConverter::DeferredLookup</a></li>
-<li class="toctree-l2"><a class="reference internal" href="classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1_1_histogram_shuttle.html">Class org::apache::calcite::sql2rel::SqlToRelConverter::HistogramShuttle</a></li>
-<li class="toctree-l2"><a class="reference internal" href="classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1_1_lookup_context.html">Class org::apache::calcite::sql2rel::SqlToRelConverter::LookupContext</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1_1_no_op_sub_query_converter.html">Class org::apache::calcite::sql2rel::SqlToRelConverter::NoOpSubQueryConverter</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1_1_rex_access_shuttle.html">Class org::apache::calcite::sql2rel::SqlToRelConverter::RexAccessShuttle</a></li>
-<li class="toctree-l2"><a class="reference internal" href="classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1_1_sub_query.html">Class org::apache::calcite::sql2rel::SqlToRelConverter::SubQuery</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classquery__state_1_1_query_state.html">Class query_state::QueryState</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classquery__state_1_1_query_state_proxy.html">Class query_state::QueryStateProxy</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classquery__state_1_1_query_states.html">Class query_state::QueryStates</a></li>
@@ -1275,7 +1269,6 @@
 <li class="toctree-l2"><a class="reference internal" href="../struct/structforeign__storage_1_1_options_container.html">Struct foreign_storage::OptionsContainer</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structis__null__order__entry.html">Struct is_null_order_entry</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structis__taken__entry.html">Struct is_taken_entry</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../struct/structlockmgr_1_1_table_lock.html">Struct lockmgr::TableLock</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structlogger_1_1_erase_duration_trees.html">Struct logger::EraseDurationTrees</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structlogger_1_1_get_depth.html">Struct logger::GetDepth</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structlogger_1_1_log_shutdown.html">Struct logger::LogShutdown</a></li>
@@ -1511,13 +1504,18 @@
 <dd></dd></dl>
 
 <dl class="function">
-<dt id="_CPPv4N8Executor9interruptENSt6stringENSt6stringE">
-<span id="_CPPv3N8Executor9interruptENSt6stringENSt6stringE"></span><span id="_CPPv2N8Executor9interruptENSt6stringENSt6stringE"></span><span id="Executor::interrupt__ss.ss"></span><span class="target" id="class_executor_1aa6b2e5d2131bbd4bd5144458deb057ac"></span>void <code class="sig-name descname">interrupt</code><span class="sig-paren">(</span>std::string <em>query_session</em> = &quot;&quot;, std::string <em>interrupt_session</em> = &quot;&quot;<span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N8Executor9interruptENSt6stringENSt6stringE" title="Permalink to this definition">¶</a><br /></dt>
+<dt id="_CPPv4N8Executor9interruptERKNSt6stringERKNSt6stringE">
+<span id="_CPPv3N8Executor9interruptERKNSt6stringERKNSt6stringE"></span><span id="_CPPv2N8Executor9interruptERKNSt6stringERKNSt6stringE"></span><span id="Executor::interrupt__ssCR.ssCR"></span><span class="target" id="class_executor_1ab62d4978b7eba9a0078d839ea01b444d"></span>void <code class="sig-name descname">interrupt</code><span class="sig-paren">(</span><em class="property">const</em> std::string &amp;<em>query_session</em> = &quot;&quot;, <em class="property">const</em> std::string &amp;<em>interrupt_session</em> = &quot;&quot;<span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N8Executor9interruptERKNSt6stringERKNSt6stringE" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 <dl class="function">
 <dt id="_CPPv4N8Executor14resetInterruptEv">
 <span id="_CPPv3N8Executor14resetInterruptEv"></span><span id="_CPPv2N8Executor14resetInterruptEv"></span><span id="Executor::resetInterrupt"></span><span class="target" id="class_executor_1a9281cbfc5c1f2d969a2437d37d80b86e"></span>void <code class="sig-name descname">resetInterrupt</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N8Executor14resetInterruptEv" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="_CPPv4NK8Executor27enableRuntimeQueryInterruptEKj">
+<span id="_CPPv3NK8Executor27enableRuntimeQueryInterruptEKj"></span><span id="_CPPv2NK8Executor27enableRuntimeQueryInterruptEKj"></span><span id="Executor::enableRuntimeQueryInterrupt__unsignedCC"></span><span class="target" id="class_executor_1a206d59e7e118321b06c43126918a6ab4"></span>void <code class="sig-name descname">enableRuntimeQueryInterrupt</code><span class="sig-paren">(</span><em class="property">const</em> unsigned <em>interrupt_freq</em><span class="sig-paren">)</span> <em class="property">const</em><a class="headerlink" href="#_CPPv4NK8Executor27enableRuntimeQueryInterruptEKj" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 <dl class="function">
@@ -1541,48 +1539,93 @@
 <dd></dd></dl>
 
 <dl class="function">
-<dt id="_CPPv4N8Executor22setCurrentQuerySessionERKNSt6stringE">
-<span id="_CPPv3N8Executor22setCurrentQuerySessionERKNSt6stringE"></span><span id="_CPPv2N8Executor22setCurrentQuerySessionERKNSt6stringE"></span><span id="Executor::setCurrentQuerySession__ssCR"></span><span class="target" id="class_executor_1aa173b3e85c39fb22b8578b1a65b308a1"></span>void <code class="sig-name descname">setCurrentQuerySession</code><span class="sig-paren">(</span><em class="property">const</em> std::string &amp;<em>query_session</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N8Executor22setCurrentQuerySessionERKNSt6stringE" title="Permalink to this definition">¶</a><br /></dt>
+<dt id="_CPPv4I0EN8Executor22setCurrentQuerySessionEvRKNSt6stringER16SESSION_MAP_LOCK">
+<span id="_CPPv3I0EN8Executor22setCurrentQuerySessionERKNSt6stringER16SESSION_MAP_LOCK"></span><span id="_CPPv2I0EN8Executor22setCurrentQuerySessionERKNSt6stringER16SESSION_MAP_LOCK"></span><span class="target" id="class_executor_1a4bc43abfc918a6671e525e25cdcdd94c"></span>template&lt;typename <code class="sig-name descname">SESSION_MAP_LOCK</code>&gt;<br />void <code class="sig-name descname">setCurrentQuerySession</code><span class="sig-paren">(</span><em class="property">const</em> std::string &amp;<em>query_session</em>, <a class="reference internal" href="#_CPPv4I0EN8Executor22setCurrentQuerySessionEvRKNSt6stringER16SESSION_MAP_LOCK" title="Executor::setCurrentQuerySession::SESSION_MAP_LOCK">SESSION_MAP_LOCK</a> &amp;<em>write_lock</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4I0EN8Executor22setCurrentQuerySessionEvRKNSt6stringER16SESSION_MAP_LOCK" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 <dl class="function">
-<dt id="_CPPv4N8Executor22getCurrentQuerySessionEv">
-<span id="_CPPv3N8Executor22getCurrentQuerySessionEv"></span><span id="_CPPv2N8Executor22getCurrentQuerySessionEv"></span><span id="Executor::getCurrentQuerySession"></span><span class="target" id="class_executor_1ad03c543ea5c5838b3293dff66fd5a7fe"></span>std::string &amp;<code class="sig-name descname">getCurrentQuerySession</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N8Executor22getCurrentQuerySessionEv" title="Permalink to this definition">¶</a><br /></dt>
+<dt id="_CPPv4I0EN8Executor22getCurrentQuerySessionERNSt6stringER16SESSION_MAP_LOCK">
+<span id="_CPPv3I0EN8Executor22getCurrentQuerySessionER16SESSION_MAP_LOCK"></span><span id="_CPPv2I0EN8Executor22getCurrentQuerySessionER16SESSION_MAP_LOCK"></span><span class="target" id="class_executor_1a584a0e8cf5e96c6a4eee8d16a07ec8d0"></span>template&lt;typename <code class="sig-name descname">SESSION_MAP_LOCK</code>&gt;<br />std::string &amp;<code class="sig-name descname">getCurrentQuerySession</code><span class="sig-paren">(</span><a class="reference internal" href="#_CPPv4I0EN8Executor22getCurrentQuerySessionERNSt6stringER16SESSION_MAP_LOCK" title="Executor::getCurrentQuerySession::SESSION_MAP_LOCK">SESSION_MAP_LOCK</a> &amp;<em>read_lock</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4I0EN8Executor22getCurrentQuerySessionERNSt6stringER16SESSION_MAP_LOCK" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 <dl class="function">
-<dt id="_CPPv4N8Executor24checkCurrentQuerySessionERKNSt6stringE">
-<span id="_CPPv3N8Executor24checkCurrentQuerySessionERKNSt6stringE"></span><span id="_CPPv2N8Executor24checkCurrentQuerySessionERKNSt6stringE"></span><span id="Executor::checkCurrentQuerySession__ssCR"></span><span class="target" id="class_executor_1a8941db69b69f4484f8a90f39d0d3cc2b"></span>bool <code class="sig-name descname">checkCurrentQuerySession</code><span class="sig-paren">(</span><em class="property">const</em> std::string &amp;<em>candidate_query_session</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N8Executor24checkCurrentQuerySessionERKNSt6stringE" title="Permalink to this definition">¶</a><br /></dt>
+<dt id="_CPPv4I0EN8Executor24checkCurrentQuerySessionEbRKNSt6stringER16SESSION_MAP_LOCK">
+<span id="_CPPv3I0EN8Executor24checkCurrentQuerySessionERKNSt6stringER16SESSION_MAP_LOCK"></span><span id="_CPPv2I0EN8Executor24checkCurrentQuerySessionERKNSt6stringER16SESSION_MAP_LOCK"></span><span class="target" id="class_executor_1a3b2e3d23c23fec07c7668bacc9eb4372"></span>template&lt;typename <code class="sig-name descname">SESSION_MAP_LOCK</code>&gt;<br />bool <code class="sig-name descname">checkCurrentQuerySession</code><span class="sig-paren">(</span><em class="property">const</em> std::string &amp;<em>candidate_query_session</em>, <a class="reference internal" href="#_CPPv4I0EN8Executor24checkCurrentQuerySessionEbRKNSt6stringER16SESSION_MAP_LOCK" title="Executor::checkCurrentQuerySession::SESSION_MAP_LOCK">SESSION_MAP_LOCK</a> &amp;<em>read_lock</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4I0EN8Executor24checkCurrentQuerySessionEbRKNSt6stringER16SESSION_MAP_LOCK" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 <dl class="function">
-<dt id="_CPPv4N8Executor22invalidateQuerySessionEv">
-<span id="_CPPv3N8Executor22invalidateQuerySessionEv"></span><span id="_CPPv2N8Executor22invalidateQuerySessionEv"></span><span id="Executor::invalidateQuerySession"></span><span class="target" id="class_executor_1a1450ed2fdd0fd59b815f1418f20833c0"></span>void <code class="sig-name descname">invalidateQuerySession</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N8Executor22invalidateQuerySessionEv" title="Permalink to this definition">¶</a><br /></dt>
+<dt id="_CPPv4I0EN8Executor22invalidateQuerySessionEvR16SESSION_MAP_LOCK">
+<span id="_CPPv3I0EN8Executor22invalidateQuerySessionER16SESSION_MAP_LOCK"></span><span id="_CPPv2I0EN8Executor22invalidateQuerySessionER16SESSION_MAP_LOCK"></span><span class="target" id="class_executor_1a3ad967e20b63130d252af4dc8cf54f11"></span>template&lt;typename <code class="sig-name descname">SESSION_MAP_LOCK</code>&gt;<br />void <code class="sig-name descname">invalidateQuerySession</code><span class="sig-paren">(</span><a class="reference internal" href="#_CPPv4I0EN8Executor22invalidateQuerySessionEvR16SESSION_MAP_LOCK" title="Executor::invalidateQuerySession::SESSION_MAP_LOCK">SESSION_MAP_LOCK</a> &amp;<em>write_lock</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4I0EN8Executor22invalidateQuerySessionEvR16SESSION_MAP_LOCK" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 <dl class="function">
-<dt id="_CPPv4N8Executor21addToQuerySessionListERKNSt6stringE">
-<span id="_CPPv3N8Executor21addToQuerySessionListERKNSt6stringE"></span><span id="_CPPv2N8Executor21addToQuerySessionListERKNSt6stringE"></span><span id="Executor::addToQuerySessionList__ssCR"></span><span class="target" id="class_executor_1a04450de5bf7c253a5967fff57a0ebe9e"></span>bool <code class="sig-name descname">addToQuerySessionList</code><span class="sig-paren">(</span><em class="property">const</em> std::string &amp;<em>query_session</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N8Executor21addToQuerySessionListERKNSt6stringE" title="Permalink to this definition">¶</a><br /></dt>
+<dt id="_CPPv4I0EN8Executor21addToQuerySessionListEbRKNSt6stringER16SESSION_MAP_LOCK">
+<span id="_CPPv3I0EN8Executor21addToQuerySessionListERKNSt6stringER16SESSION_MAP_LOCK"></span><span id="_CPPv2I0EN8Executor21addToQuerySessionListERKNSt6stringER16SESSION_MAP_LOCK"></span><span class="target" id="class_executor_1a9cfbaad6b044ff415c2bdaaa65e49bdc"></span>template&lt;typename <code class="sig-name descname">SESSION_MAP_LOCK</code>&gt;<br />bool <code class="sig-name descname">addToQuerySessionList</code><span class="sig-paren">(</span><em class="property">const</em> std::string &amp;<em>query_session</em>, <a class="reference internal" href="#_CPPv4I0EN8Executor21addToQuerySessionListEbRKNSt6stringER16SESSION_MAP_LOCK" title="Executor::addToQuerySessionList::SESSION_MAP_LOCK">SESSION_MAP_LOCK</a> &amp;<em>write_lock</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4I0EN8Executor21addToQuerySessionListEbRKNSt6stringER16SESSION_MAP_LOCK" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 <dl class="function">
-<dt id="_CPPv4N8Executor26removeFromQuerySessionListERKNSt6stringE">
-<span id="_CPPv3N8Executor26removeFromQuerySessionListERKNSt6stringE"></span><span id="_CPPv2N8Executor26removeFromQuerySessionListERKNSt6stringE"></span><span id="Executor::removeFromQuerySessionList__ssCR"></span><span class="target" id="class_executor_1a6b1eb5e413bbd8b18aa54919d76ae2da"></span>bool <code class="sig-name descname">removeFromQuerySessionList</code><span class="sig-paren">(</span><em class="property">const</em> std::string &amp;<em>query_session</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N8Executor26removeFromQuerySessionListERKNSt6stringE" title="Permalink to this definition">¶</a><br /></dt>
+<dt id="_CPPv4I0EN8Executor26removeFromQuerySessionListEbRKNSt6stringER16SESSION_MAP_LOCK">
+<span id="_CPPv3I0EN8Executor26removeFromQuerySessionListERKNSt6stringER16SESSION_MAP_LOCK"></span><span id="_CPPv2I0EN8Executor26removeFromQuerySessionListERKNSt6stringER16SESSION_MAP_LOCK"></span><span class="target" id="class_executor_1aac3b385b4ebef653e40f188dff24c734"></span>template&lt;typename <code class="sig-name descname">SESSION_MAP_LOCK</code>&gt;<br />bool <code class="sig-name descname">removeFromQuerySessionList</code><span class="sig-paren">(</span><em class="property">const</em> std::string &amp;<em>query_session</em>, <a class="reference internal" href="#_CPPv4I0EN8Executor26removeFromQuerySessionListEbRKNSt6stringER16SESSION_MAP_LOCK" title="Executor::removeFromQuerySessionList::SESSION_MAP_LOCK">SESSION_MAP_LOCK</a> &amp;<em>write_lock</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4I0EN8Executor26removeFromQuerySessionListEbRKNSt6stringER16SESSION_MAP_LOCK" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 <dl class="function">
-<dt id="_CPPv4N8Executor28setQuerySessionAsInterruptedERKNSt6stringE">
-<span id="_CPPv3N8Executor28setQuerySessionAsInterruptedERKNSt6stringE"></span><span id="_CPPv2N8Executor28setQuerySessionAsInterruptedERKNSt6stringE"></span><span id="Executor::setQuerySessionAsInterrupted__ssCR"></span><span class="target" id="class_executor_1ad5bcd6f343e94531edf7f02c1e4d23dc"></span>void <code class="sig-name descname">setQuerySessionAsInterrupted</code><span class="sig-paren">(</span><em class="property">const</em> std::string &amp;<em>query_session</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N8Executor28setQuerySessionAsInterruptedERKNSt6stringE" title="Permalink to this definition">¶</a><br /></dt>
+<dt id="_CPPv4I0EN8Executor28setQuerySessionAsInterruptedEvRKNSt6stringER16SESSION_MAP_LOCK">
+<span id="_CPPv3I0EN8Executor28setQuerySessionAsInterruptedERKNSt6stringER16SESSION_MAP_LOCK"></span><span id="_CPPv2I0EN8Executor28setQuerySessionAsInterruptedERKNSt6stringER16SESSION_MAP_LOCK"></span><span class="target" id="class_executor_1a8007fb05d28ef4e5c22ab1ca8e372165"></span>template&lt;typename <code class="sig-name descname">SESSION_MAP_LOCK</code>&gt;<br />void <code class="sig-name descname">setQuerySessionAsInterrupted</code><span class="sig-paren">(</span><em class="property">const</em> std::string &amp;<em>query_session</em>, <a class="reference internal" href="#_CPPv4I0EN8Executor28setQuerySessionAsInterruptedEvRKNSt6stringER16SESSION_MAP_LOCK" title="Executor::setQuerySessionAsInterrupted::SESSION_MAP_LOCK">SESSION_MAP_LOCK</a> &amp;<em>write_lock</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4I0EN8Executor28setQuerySessionAsInterruptedEvRKNSt6stringER16SESSION_MAP_LOCK" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 <dl class="function">
-<dt id="_CPPv4N8Executor30checkIsQuerySessionInterruptedERKNSt6stringE">
-<span id="_CPPv3N8Executor30checkIsQuerySessionInterruptedERKNSt6stringE"></span><span id="_CPPv2N8Executor30checkIsQuerySessionInterruptedERKNSt6stringE"></span><span id="Executor::checkIsQuerySessionInterrupted__ssCR"></span><span class="target" id="class_executor_1ad6173b1e4c0b44470440b6c23a7644a5"></span>bool <code class="sig-name descname">checkIsQuerySessionInterrupted</code><span class="sig-paren">(</span><em class="property">const</em> std::string &amp;<em>query_session</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N8Executor30checkIsQuerySessionInterruptedERKNSt6stringE" title="Permalink to this definition">¶</a><br /></dt>
+<dt id="_CPPv4I0EN8Executor30checkIsQuerySessionInterruptedEbRKNSt6stringER16SESSION_MAP_LOCK">
+<span id="_CPPv3I0EN8Executor30checkIsQuerySessionInterruptedERKNSt6stringER16SESSION_MAP_LOCK"></span><span id="_CPPv2I0EN8Executor30checkIsQuerySessionInterruptedERKNSt6stringER16SESSION_MAP_LOCK"></span><span class="target" id="class_executor_1a202ba4373f9daf19485bed2803436034"></span>template&lt;typename <code class="sig-name descname">SESSION_MAP_LOCK</code>&gt;<br />bool <code class="sig-name descname">checkIsQuerySessionInterrupted</code><span class="sig-paren">(</span><em class="property">const</em> std::string &amp;<em>query_session</em>, <a class="reference internal" href="#_CPPv4I0EN8Executor30checkIsQuerySessionInterruptedEbRKNSt6stringER16SESSION_MAP_LOCK" title="Executor::checkIsQuerySessionInterrupted::SESSION_MAP_LOCK">SESSION_MAP_LOCK</a> &amp;<em>read_lock</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4I0EN8Executor30checkIsQuerySessionInterruptedEbRKNSt6stringER16SESSION_MAP_LOCK" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="_CPPv4N8Executor14getSessionLockEv">
+<span id="_CPPv3N8Executor14getSessionLockEv"></span><span id="_CPPv2N8Executor14getSessionLockEv"></span><span id="Executor::getSessionLock"></span><span class="target" id="class_executor_1a0b65e7b87509d004a5b90eee272e0bed"></span>mapd_shared_mutex &amp;<code class="sig-name descname">getSessionLock</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N8Executor14getSessionLockEv" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 <dl class="function">
 <dt id="_CPPv4I0EN8Executor17dispatchFragmentsEvKNSt8functionIFvK18ExecutorDeviceTypeiRK26QueryCompilationDescriptorRK21QueryMemoryDescriptorRK13FragmentsListK20ExecutorDispatchModeK7int64_tEEERK17ExecutionDispatchRKNSt6vectorI14InputTableInfoEERK16ExecutionOptionsKbKbK6size_tRK26QueryCompilationDescriptorRK21QueryMemoryDescriptorR23QueryFragmentDescriptorRNSt13unordered_setIiEERi">
 <span id="_CPPv3I0EN8Executor17dispatchFragmentsEKNSt8functionIFvK18ExecutorDeviceTypeiRK26QueryCompilationDescriptorRK21QueryMemoryDescriptorRK13FragmentsListK20ExecutorDispatchModeK7int64_tEEERK17ExecutionDispatchRKNSt6vectorI14InputTableInfoEERK16ExecutionOptionsKbKbK6size_tRK26QueryCompilationDescriptorRK21QueryMemoryDescriptorR23QueryFragmentDescriptorRNSt13unordered_setIiEERi"></span><span id="_CPPv2I0EN8Executor17dispatchFragmentsEKNSt8functionIFvK18ExecutorDeviceTypeiRK26QueryCompilationDescriptorRK21QueryMemoryDescriptorRK13FragmentsListK20ExecutorDispatchModeK7int64_tEEERK17ExecutionDispatchRKNSt6vectorI14InputTableInfoEERK16ExecutionOptionsKbKbK6size_tRK26QueryCompilationDescriptorRK21QueryMemoryDescriptorR23QueryFragmentDescriptorRNSt13unordered_setIiEERi"></span><span class="target" id="class_executor_1aa73a4e1c015203e6b5ecb59a887c97a9"></span>template&lt;typename <code class="sig-name descname">THREAD_POOL</code>&gt;<br />void <code class="sig-name descname">dispatchFragments</code><span class="sig-paren">(</span><em class="property">const</em> std::function&lt;void<span class="sig-paren">(</span><em class="property">const</em> ExecutorDeviceType chosen_device_type, int chosen_device_id, <em class="property">const</em> <a class="reference internal" href="class_query_compilation_descriptor.html#_CPPv426QueryCompilationDescriptor" title="QueryCompilationDescriptor">QueryCompilationDescriptor</a> &amp;query_comp_desc, <em class="property">const</em> <a class="reference internal" href="class_query_memory_descriptor.html#_CPPv421QueryMemoryDescriptor" title="QueryMemoryDescriptor">QueryMemoryDescriptor</a> &amp;query_mem_desc, <em class="property">const</em> FragmentsList &amp;frag_list, <em class="property">const</em> ExecutorDispatchMode kernel_dispatch_mode, <em class="property">const</em> int64_t rowid_lookup_key<span class="sig-paren">)</span>&gt; <em>dispatch</em>, <em class="property">const</em> <a class="reference internal" href="#_CPPv4N8Executor17ExecutionDispatchE" title="Executor::ExecutionDispatch">ExecutionDispatch</a> &amp;<em>execution_dispatch</em>, <em class="property">const</em> std::vector&lt;<a class="reference internal" href="../struct/struct_input_table_info.html#_CPPv414InputTableInfo" title="InputTableInfo">InputTableInfo</a>&gt; &amp;<em>table_infos</em>, <em class="property">const</em> <a class="reference internal" href="../struct/struct_execution_options.html#_CPPv416ExecutionOptions" title="ExecutionOptions">ExecutionOptions</a> &amp;<em>eo</em>, <em class="property">const</em> bool <em>is_agg</em>, <em class="property">const</em> bool <em>allow_single_frag_table_opt</em>, <em class="property">const</em> size_t <em>context_count</em>, <em class="property">const</em> <a class="reference internal" href="class_query_compilation_descriptor.html#_CPPv426QueryCompilationDescriptor" title="QueryCompilationDescriptor">QueryCompilationDescriptor</a> &amp;<em>query_comp_desc</em>, <em class="property">const</em> <a class="reference internal" href="class_query_memory_descriptor.html#_CPPv421QueryMemoryDescriptor" title="QueryMemoryDescriptor">QueryMemoryDescriptor</a> &amp;<em>query_mem_desc</em>, <a class="reference internal" href="class_query_fragment_descriptor.html#_CPPv423QueryFragmentDescriptor" title="QueryFragmentDescriptor">QueryFragmentDescriptor</a> &amp;<em>fragment_descriptor</em>, std::unordered_set&lt;int&gt; &amp;<em>available_gpus</em>, int &amp;<em>available_cpus</em>, <span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4I0EN8Executor17dispatchFragmentsEvKNSt8functionIFvK18ExecutorDeviceTypeiRK26QueryCompilationDescriptorRK21QueryMemoryDescriptorRK13FragmentsListK20ExecutorDispatchModeK7int64_tEEERK17ExecutionDispatchRKNSt6vectorI14InputTableInfoEERK16ExecutionOptionsKbKbK6size_tRK26QueryCompilationDescriptorRK21QueryMemoryDescriptorR23QueryFragmentDescriptorRNSt13unordered_setIiEERi" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="_CPPv4IEN8Executor22setCurrentQuerySessionEvRKNSt6stringER16mapd_unique_lockI17mapd_shared_mutexE">
+<span id="_CPPv3IEN8Executor22setCurrentQuerySessionERKNSt6stringER16mapd_unique_lockI17mapd_shared_mutexE"></span><span id="_CPPv2IEN8Executor22setCurrentQuerySessionERKNSt6stringER16mapd_unique_lockI17mapd_shared_mutexE"></span><span class="target" id="class_executor_1a40c32893514ae398b4f48a4e3fcfc464"></span>template&lt;&gt;<br />void <code class="sig-name descname">setCurrentQuerySession</code><span class="sig-paren">(</span><em class="property">const</em> std::string &amp;<em>query_session</em>, mapd_unique_lock&lt;mapd_shared_mutex&gt; &amp;<em>write_lock</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4IEN8Executor22setCurrentQuerySessionEvRKNSt6stringER16mapd_unique_lockI17mapd_shared_mutexE" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="_CPPv4IEN8Executor22getCurrentQuerySessionERNSt6stringER16mapd_shared_lockI17mapd_shared_mutexE">
+<span id="_CPPv3IEN8Executor22getCurrentQuerySessionER16mapd_shared_lockI17mapd_shared_mutexE"></span><span id="_CPPv2IEN8Executor22getCurrentQuerySessionER16mapd_shared_lockI17mapd_shared_mutexE"></span><span class="target" id="class_executor_1a45d6f72fb46c0369341c40990d7e3adb"></span>template&lt;&gt;<br />std::string &amp;<code class="sig-name descname">getCurrentQuerySession</code><span class="sig-paren">(</span>mapd_shared_lock&lt;mapd_shared_mutex&gt; &amp;<em>read_lock</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4IEN8Executor22getCurrentQuerySessionERNSt6stringER16mapd_shared_lockI17mapd_shared_mutexE" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="_CPPv4IEN8Executor24checkCurrentQuerySessionEbRKNSt6stringER16mapd_shared_lockI17mapd_shared_mutexE">
+<span id="_CPPv3IEN8Executor24checkCurrentQuerySessionERKNSt6stringER16mapd_shared_lockI17mapd_shared_mutexE"></span><span id="_CPPv2IEN8Executor24checkCurrentQuerySessionERKNSt6stringER16mapd_shared_lockI17mapd_shared_mutexE"></span><span class="target" id="class_executor_1aede1785e374d6266e5513f4fdd704162"></span>template&lt;&gt;<br />bool <code class="sig-name descname">checkCurrentQuerySession</code><span class="sig-paren">(</span><em class="property">const</em> std::string &amp;<em>candidate_query_session</em>, mapd_shared_lock&lt;mapd_shared_mutex&gt; &amp;<em>read_lock</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4IEN8Executor24checkCurrentQuerySessionEbRKNSt6stringER16mapd_shared_lockI17mapd_shared_mutexE" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="_CPPv4IEN8Executor22invalidateQuerySessionEvR16mapd_unique_lockI17mapd_shared_mutexE">
+<span id="_CPPv3IEN8Executor22invalidateQuerySessionER16mapd_unique_lockI17mapd_shared_mutexE"></span><span id="_CPPv2IEN8Executor22invalidateQuerySessionER16mapd_unique_lockI17mapd_shared_mutexE"></span><span class="target" id="class_executor_1ab4e647bf0e35192a024e7136e57e6aa1"></span>template&lt;&gt;<br />void <code class="sig-name descname">invalidateQuerySession</code><span class="sig-paren">(</span>mapd_unique_lock&lt;mapd_shared_mutex&gt; &amp;<em>write_lock</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4IEN8Executor22invalidateQuerySessionEvR16mapd_unique_lockI17mapd_shared_mutexE" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="_CPPv4IEN8Executor21addToQuerySessionListEbRKNSt6stringER16mapd_unique_lockI17mapd_shared_mutexE">
+<span id="_CPPv3IEN8Executor21addToQuerySessionListERKNSt6stringER16mapd_unique_lockI17mapd_shared_mutexE"></span><span id="_CPPv2IEN8Executor21addToQuerySessionListERKNSt6stringER16mapd_unique_lockI17mapd_shared_mutexE"></span><span class="target" id="class_executor_1a7b710c12875d4ee48f6d22209f86eb3e"></span>template&lt;&gt;<br />bool <code class="sig-name descname">addToQuerySessionList</code><span class="sig-paren">(</span><em class="property">const</em> std::string &amp;<em>query_session</em>, mapd_unique_lock&lt;mapd_shared_mutex&gt; &amp;<em>write_lock</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4IEN8Executor21addToQuerySessionListEbRKNSt6stringER16mapd_unique_lockI17mapd_shared_mutexE" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="_CPPv4IEN8Executor26removeFromQuerySessionListEbRKNSt6stringER16mapd_unique_lockI17mapd_shared_mutexE">
+<span id="_CPPv3IEN8Executor26removeFromQuerySessionListERKNSt6stringER16mapd_unique_lockI17mapd_shared_mutexE"></span><span id="_CPPv2IEN8Executor26removeFromQuerySessionListERKNSt6stringER16mapd_unique_lockI17mapd_shared_mutexE"></span><span class="target" id="class_executor_1ad280b349a0bb1594969a5b016dbb71ef"></span>template&lt;&gt;<br />bool <code class="sig-name descname">removeFromQuerySessionList</code><span class="sig-paren">(</span><em class="property">const</em> std::string &amp;<em>query_session</em>, mapd_unique_lock&lt;mapd_shared_mutex&gt; &amp;<em>write_lock</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4IEN8Executor26removeFromQuerySessionListEbRKNSt6stringER16mapd_unique_lockI17mapd_shared_mutexE" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="_CPPv4IEN8Executor28setQuerySessionAsInterruptedEvRKNSt6stringER16mapd_unique_lockI17mapd_shared_mutexE">
+<span id="_CPPv3IEN8Executor28setQuerySessionAsInterruptedERKNSt6stringER16mapd_unique_lockI17mapd_shared_mutexE"></span><span id="_CPPv2IEN8Executor28setQuerySessionAsInterruptedERKNSt6stringER16mapd_unique_lockI17mapd_shared_mutexE"></span><span class="target" id="class_executor_1ae9a2e433ecd05239a4e088f53f1665a0"></span>template&lt;&gt;<br />void <code class="sig-name descname">setQuerySessionAsInterrupted</code><span class="sig-paren">(</span><em class="property">const</em> std::string &amp;<em>query_session</em>, mapd_unique_lock&lt;mapd_shared_mutex&gt; &amp;<em>write_lock</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4IEN8Executor28setQuerySessionAsInterruptedEvRKNSt6stringER16mapd_unique_lockI17mapd_shared_mutexE" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="_CPPv4IEN8Executor30checkIsQuerySessionInterruptedEbRKNSt6stringER16mapd_shared_lockI17mapd_shared_mutexE">
+<span id="_CPPv3IEN8Executor30checkIsQuerySessionInterruptedERKNSt6stringER16mapd_shared_lockI17mapd_shared_mutexE"></span><span id="_CPPv2IEN8Executor30checkIsQuerySessionInterruptedERKNSt6stringER16mapd_shared_lockI17mapd_shared_mutexE"></span><span class="target" id="class_executor_1a2e58644a788a632d0a630d8fd9367529"></span>template&lt;&gt;<br />bool <code class="sig-name descname">checkIsQuerySessionInterrupted</code><span class="sig-paren">(</span><em class="property">const</em> std::string &amp;<em>query_session</em>, mapd_shared_lock&lt;mapd_shared_mutex&gt; &amp;<em>read_lock</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4IEN8Executor30checkIsQuerySessionInterruptedEbRKNSt6stringER16mapd_shared_lockI17mapd_shared_mutexE" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 </div>
@@ -2094,7 +2137,7 @@
 
 <dl class="member">
 <dt id="_CPPv4N8Executor12interrupted_E">
-<span id="_CPPv3N8Executor12interrupted_E"></span><span id="_CPPv2N8Executor12interrupted_E"></span><span id="Executor::interrupted___b"></span><span class="target" id="class_executor_1a6a88a9b5f46ed63e00415bd9d45daca7"></span>bool <code class="sig-name descname">interrupted_</code><a class="headerlink" href="#_CPPv4N8Executor12interrupted_E" title="Permalink to this definition">¶</a><br /></dt>
+<span id="_CPPv3N8Executor12interrupted_E"></span><span id="_CPPv2N8Executor12interrupted_E"></span><span id="Executor::interrupted___std::atomic:b:"></span><span class="target" id="class_executor_1a7acc285e7c0bad201f7cc669cff0727d"></span>std::atomic&lt;bool&gt; <code class="sig-name descname">interrupted_</code><a class="headerlink" href="#_CPPv4N8Executor12interrupted_E" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 <dl class="member">
@@ -2205,7 +2248,7 @@
 
 <dl class="member">
 <dt id="_CPPv4N8Executor23executor_session_mutex_E">
-<span id="_CPPv3N8Executor23executor_session_mutex_E"></span><span id="_CPPv2N8Executor23executor_session_mutex_E"></span><span id="Executor::executor_session_mutex___std::mutex"></span><span class="target" id="class_executor_1af72d4ef2423002505210c9d616ebcff1"></span>std::mutex <code class="sig-name descname">executor_session_mutex_</code><a class="headerlink" href="#_CPPv4N8Executor23executor_session_mutex_E" title="Permalink to this definition">¶</a><br /></dt>
+<span id="_CPPv3N8Executor23executor_session_mutex_E"></span><span id="_CPPv2N8Executor23executor_session_mutex_E"></span><span id="Executor::executor_session_mutex___mapd_shared_mutex"></span><span class="target" id="class_executor_1afec2b38ca14f2a242dc88a882e31712f"></span>mapd_shared_mutex <code class="sig-name descname">executor_session_mutex_</code><a class="headerlink" href="#_CPPv4N8Executor23executor_session_mutex_E" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 <dl class="member">
@@ -2215,7 +2258,7 @@
 
 <dl class="member">
 <dt id="_CPPv4N8Executor23queries_interrupt_flag_E">
-<span id="_CPPv3N8Executor23queries_interrupt_flag_E"></span><span id="_CPPv2N8Executor23queries_interrupt_flag_E"></span><span id="Executor::queries_interrupt_flag___std::map:ss.b:"></span><span class="target" id="class_executor_1a55b3c5563896c40bba44a99d0cabb060"></span>std::map&lt;std::string, bool&gt; <code class="sig-name descname">queries_interrupt_flag_</code><a class="headerlink" href="#_CPPv4N8Executor23queries_interrupt_flag_E" title="Permalink to this definition">¶</a><br /></dt>
+<span id="_CPPv3N8Executor23queries_interrupt_flag_E"></span><span id="_CPPv2N8Executor23queries_interrupt_flag_E"></span><span id="Executor::queries_interrupt_flag___InterruptFlagMap"></span><span class="target" id="class_executor_1a195761904be4e3cdd77993a82821c4cf"></span>InterruptFlagMap <code class="sig-name descname">queries_interrupt_flag_</code><a class="headerlink" href="#_CPPv4N8Executor23queries_interrupt_flag_E" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 <dl class="member">

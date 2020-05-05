@@ -64,7 +64,7 @@
             
             
               <div class="version">
-                5.3.0dev fb55533
+                5.3.0dev b385697
               </div>
             
           
@@ -573,6 +573,8 @@
 <li class="toctree-l2"><a class="reference internal" href="api/class/class_parser_1_1_table_element.html">Class Parser::TableElement</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/class_parser_1_1_table_ref.html">Class Parser::TableRef</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/class_parser_1_1_timestamp_literal.html">Class Parser::TimestampLiteral</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/class/class_parser_1_1_tracked_list_ptr.html">Class Parser::TrackedListPtr</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/class/class_parser_1_1_tracked_ptr.html">Class Parser::TrackedPtr</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/class_parser_1_1_truncate_table_stmt.html">Class Parser::TruncateTableStmt</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/class_parser_1_1_union_query.html">Class Parser::UnionQuery</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/class_parser_1_1_unique_def.html">Class Parser::UniqueDef</a></li>
@@ -755,7 +757,6 @@
 <li class="toctree-l2"><a class="reference internal" href="api/class/classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_parser.html">Class com::mapd::calcite::parser::MapDParser</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_parser_options.html">Class com::mapd::calcite::parser::MapDParserOptions</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_parser_options_1_1_filter_push_down_info.html">Class com::mapd::calcite::parser::MapDParserOptions::FilterPushDownInfo</a></li>
-<li class="toctree-l2"><a class="reference internal" href="api/class/classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_rel_data_type_system_impl.html">Class com::mapd::calcite::parser::MapDRelDataTypeSystemImpl</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_schema.html">Class com::mapd::calcite::parser::MapDSchema</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_serializer.html">Class com::mapd::calcite::parser::MapDSerializer</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_sql_operator_table.html">Class com::mapd::calcite::parser::MapDSqlOperatorTable</a></li>
@@ -943,6 +944,7 @@
 <li class="toctree-l2"><a class="reference internal" href="api/class/classlockmgr_1_1_abstract_lock_container.html">Class lockmgr::AbstractLockContainer</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/classlockmgr_1_1_insert_data_lock_mgr.html">Class lockmgr::InsertDataLockMgr</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/classlockmgr_1_1_lock_container_impl.html">Class lockmgr::LockContainerImpl</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/class/classlockmgr_1_1_mutex_tracker.html">Class lockmgr::MutexTracker</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/classlockmgr_1_1_table_data_lock_container.html">Class lockmgr::TableDataLockContainer</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/classlockmgr_1_1_table_data_lock_container_3_01_read_lock_01_4.html">Class lockmgr::TableDataLockContainer&lt; ReadLock &gt;</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/classlockmgr_1_1_table_data_lock_container_3_01_write_lock_01_4.html">Class lockmgr::TableDataLockContainer&lt; WriteLock &gt;</a></li>
@@ -953,6 +955,7 @@
 <li class="toctree-l2"><a class="reference internal" href="api/class/classlockmgr_1_1_table_schema_lock_container_3_01_read_lock_01_4.html">Class lockmgr::TableSchemaLockContainer&lt; ReadLock &gt;</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/classlockmgr_1_1_table_schema_lock_container_3_01_write_lock_01_4.html">Class lockmgr::TableSchemaLockContainer&lt; WriteLock &gt;</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/classlockmgr_1_1_table_schema_lock_mgr.html">Class lockmgr::TableSchemaLockMgr</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/class/classlockmgr_1_1_tracked_ref_lock.html">Class lockmgr::TrackedRefLock</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/classlogger_1_1_debug_timer.html">Class logger::DebugTimer</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/classlogger_1_1_duration.html">Class logger::Duration</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/classlogger_1_1_duration_tree.html">Class logger::DurationTree</a></li>
@@ -974,19 +977,10 @@
 <li class="toctree-l2"><a class="reference internal" href="api/class/classorg_1_1apache_1_1calcite_1_1rel_1_1rules_1_1_outer_join_opt_via_null_rejection_rule.html">Class org::apache::calcite::rel::rules::OuterJoinOptViaNullRejectionRule</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/classorg_1_1apache_1_1calcite_1_1rel_1_1rules_1_1_query_optimization_rules.html">Class org::apache::calcite::rel::rules::QueryOptimizationRules</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter.html">Class org::apache::calcite::sql2rel::SqlToRelConverter</a></li>
-<li class="toctree-l2"><a class="reference internal" href="api/class/classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1_1_agg_converter.html">Class org::apache::calcite::sql2rel::SqlToRelConverter::AggConverter</a></li>
-<li class="toctree-l2"><a class="reference internal" href="api/class/classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1_1_aggregate_finder.html">Class org::apache::calcite::sql2rel::SqlToRelConverter::AggregateFinder</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1_1_blackboard.html">Class org::apache::calcite::sql2rel::SqlToRelConverter::Blackboard</a></li>
-<li class="toctree-l2"><a class="reference internal" href="api/class/classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1_1_config_builder.html">Class org::apache::calcite::sql2rel::SqlToRelConverter::ConfigBuilder</a></li>
-<li class="toctree-l2"><a class="reference internal" href="api/class/classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1_1_config_impl.html">Class org::apache::calcite::sql2rel::SqlToRelConverter::ConfigImpl</a></li>
-<li class="toctree-l2"><a class="reference internal" href="api/class/classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1_1_config_impl_1_1_default_expand_predicate.html">Class org::apache::calcite::sql2rel::SqlToRelConverter::ConfigImpl::DefaultExpandPredicate</a></li>
-<li class="toctree-l2"><a class="reference internal" href="api/class/classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1_1_correlation_use.html">Class org::apache::calcite::sql2rel::SqlToRelConverter::CorrelationUse</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1_1_deferred_lookup.html">Class org::apache::calcite::sql2rel::SqlToRelConverter::DeferredLookup</a></li>
-<li class="toctree-l2"><a class="reference internal" href="api/class/classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1_1_histogram_shuttle.html">Class org::apache::calcite::sql2rel::SqlToRelConverter::HistogramShuttle</a></li>
-<li class="toctree-l2"><a class="reference internal" href="api/class/classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1_1_lookup_context.html">Class org::apache::calcite::sql2rel::SqlToRelConverter::LookupContext</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1_1_no_op_sub_query_converter.html">Class org::apache::calcite::sql2rel::SqlToRelConverter::NoOpSubQueryConverter</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1_1_rex_access_shuttle.html">Class org::apache::calcite::sql2rel::SqlToRelConverter::RexAccessShuttle</a></li>
-<li class="toctree-l2"><a class="reference internal" href="api/class/classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1_1_sub_query.html">Class org::apache::calcite::sql2rel::SqlToRelConverter::SubQuery</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/classquery__state_1_1_query_state.html">Class query_state::QueryState</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/classquery__state_1_1_query_state_proxy.html">Class query_state::QueryStateProxy</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/classquery__state_1_1_query_states.html">Class query_state::QueryStates</a></li>
@@ -1274,7 +1268,6 @@
 <li class="toctree-l2"><a class="reference internal" href="api/struct/structforeign__storage_1_1_options_container.html">Struct foreign_storage::OptionsContainer</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/struct/structis__null__order__entry.html">Struct is_null_order_entry</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/struct/structis__taken__entry.html">Struct is_taken_entry</a></li>
-<li class="toctree-l2"><a class="reference internal" href="api/struct/structlockmgr_1_1_table_lock.html">Struct lockmgr::TableLock</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/struct/structlogger_1_1_erase_duration_trees.html">Struct logger::EraseDurationTrees</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/struct/structlogger_1_1_get_depth.html">Struct logger::GetDepth</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/struct/structlogger_1_1_log_shutdown.html">Struct logger::LogShutdown</a></li>
@@ -5006,8 +4999,6 @@
 </li>
       <li><a href="api/class/classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_parser_options.html#_CPPv4N3com4mapd7calcite6parser17MapDParserOptions18FilterPushDownInfoE">com::mapd::calcite::parser::MapDParserOptions::FilterPushDownInfo (C++ class)</a>, <a href="api/class/classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_parser_options_1_1_filter_push_down_info.html#_CPPv4N3com4mapd7calcite6parser17MapDParserOptions18FilterPushDownInfoE">[1]</a>
 </li>
-      <li><a href="api/class/classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_rel_data_type_system_impl.html#_CPPv4N3com4mapd7calcite6parser25MapDRelDataTypeSystemImplE">com::mapd::calcite::parser::MapDRelDataTypeSystemImpl (C++ class)</a>
-</li>
       <li><a href="api/class/classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_schema.html#_CPPv4N3com4mapd7calcite6parser10MapDSchemaE">com::mapd::calcite::parser::MapDSchema (C++ class)</a>
 </li>
       <li><a href="api/class/classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_serializer.html#_CPPv4N3com4mapd7calcite6parser14MapDSerializerE">com::mapd::calcite::parser::MapDSerializer (C++ class)</a>
@@ -6964,7 +6955,7 @@
 </li>
       <li><a href="api/class/class_executor.html#_CPPv4N8Executor19addJoinLoopIteratorERKNSt6vectorIPN4llvm5ValueEEEK6size_t">Executor::addJoinLoopIterator (C++ function)</a>
 </li>
-      <li><a href="api/class/class_executor.html#_CPPv4N8Executor21addToQuerySessionListERKNSt6stringE">Executor::addToQuerySessionList (C++ function)</a>
+      <li><a href="api/class/class_executor.html#_CPPv4I0EN8Executor21addToQuerySessionListEbRKNSt6stringER16SESSION_MAP_LOCK">Executor::addToQuerySessionList (C++ function)</a>, <a href="api/class/class_executor.html#_CPPv4IEN8Executor21addToQuerySessionListEbRKNSt6stringER16mapd_unique_lockI17mapd_shared_mutexE">[1]</a>
 </li>
       <li><a href="api/class/class_executor.html#_CPPv4N8Executor20agg_col_range_cache_E">Executor::agg_col_range_cache_ (C++ member)</a>
 </li>
@@ -6998,9 +6989,9 @@
 </li>
       <li><a href="api/class/class_executor.html#_CPPv4N8Executor11cgen_state_E">Executor::cgen_state_ (C++ member)</a>
 </li>
-      <li><a href="api/class/class_executor.html#_CPPv4N8Executor24checkCurrentQuerySessionERKNSt6stringE">Executor::checkCurrentQuerySession (C++ function)</a>
+      <li><a href="api/class/class_executor.html#_CPPv4I0EN8Executor24checkCurrentQuerySessionEbRKNSt6stringER16SESSION_MAP_LOCK">Executor::checkCurrentQuerySession (C++ function)</a>, <a href="api/class/class_executor.html#_CPPv4IEN8Executor24checkCurrentQuerySessionEbRKNSt6stringER16mapd_shared_lockI17mapd_shared_mutexE">[1]</a>
 </li>
-      <li><a href="api/class/class_executor.html#_CPPv4N8Executor30checkIsQuerySessionInterruptedERKNSt6stringE">Executor::checkIsQuerySessionInterrupted (C++ function)</a>
+      <li><a href="api/class/class_executor.html#_CPPv4I0EN8Executor30checkIsQuerySessionInterruptedEbRKNSt6stringER16SESSION_MAP_LOCK">Executor::checkIsQuerySessionInterrupted (C++ function)</a>, <a href="api/class/class_executor.html#_CPPv4IEN8Executor30checkIsQuerySessionInterruptedEbRKNSt6stringER16mapd_shared_lockI17mapd_shared_mutexE">[1]</a>
 </li>
       <li><a href="api/class/class_executor.html#_CPPv4N8Executor11clearMemoryEKN14Data_Namespace11MemoryLevelE">Executor::clearMemory (C++ function)</a>
 </li>
@@ -7073,6 +7064,8 @@
       <li><a href="api/class/class_executor.html#_CPPv4NK8Executor12deviceCyclesEi">Executor::deviceCycles (C++ function)</a>
 </li>
       <li><a href="api/class/class_executor.html#_CPPv4I0EN8Executor17dispatchFragmentsEvKNSt8functionIFvK18ExecutorDeviceTypeiRK26QueryCompilationDescriptorRK21QueryMemoryDescriptorRK13FragmentsListK20ExecutorDispatchModeK7int64_tEEERK17ExecutionDispatchRKNSt6vectorI14InputTableInfoEERK16ExecutionOptionsKbKbK6size_tRK26QueryCompilationDescriptorRK21QueryMemoryDescriptorR23QueryFragmentDescriptorRNSt13unordered_setIiEERi">Executor::dispatchFragments (C++ function)</a>, <a href="api/class/class_executor.html#_CPPv4I0EN8Executor17dispatchFragmentsEvKNSt8functionIFvK18ExecutorDeviceTypeiRK26QueryCompilationDescriptorRK21QueryMemoryDescriptorRK13FragmentsListK20ExecutorDispatchModeK7int64_tEEERK17ExecutionDispatchRKNSt6vectorI14InputTableInfoEERK16ExecutionOptionsKbKbK6size_tRK26QueryCompilationDescriptorRK21QueryMemoryDescriptorR23QueryFragmentDescriptorRNSt13unordered_setIiEERi">[1]</a>
+</li>
+      <li><a href="api/class/class_executor.html#_CPPv4NK8Executor27enableRuntimeQueryInterruptEKj">Executor::enableRuntimeQueryInterrupt (C++ function)</a>
 </li>
       <li><a href="api/class/class_executor.html#_CPPv4N8Executor37ERR_COLUMNAR_CONVERSION_NOT_SUPPORTEDE">Executor::ERR_COLUMNAR_CONVERSION_NOT_SUPPORTED (C++ member)</a>
 </li>
@@ -7198,7 +7191,7 @@
 </li>
       <li><a href="api/class/class_executor.html#_CPPv4NK8Executor19getColumnDescriptorEPKN8Analyzer9ColumnVarE">Executor::getColumnDescriptor (C++ function)</a>
 </li>
-      <li><a href="api/class/class_executor.html#_CPPv4N8Executor22getCurrentQuerySessionEv">Executor::getCurrentQuerySession (C++ function)</a>
+      <li><a href="api/class/class_executor.html#_CPPv4I0EN8Executor22getCurrentQuerySessionERNSt6stringER16SESSION_MAP_LOCK">Executor::getCurrentQuerySession (C++ function)</a>, <a href="api/class/class_executor.html#_CPPv4IEN8Executor22getCurrentQuerySessionERNSt6stringER16mapd_shared_lockI17mapd_shared_mutexE">[1]</a>
 </li>
       <li><a href="api/class/class_executor.html#_CPPv4N8Executor23getDeviceTypeForTargetsERK19RelAlgExecutionUnitK18ExecutorDeviceType">Executor::getDeviceTypeForTargets (C++ function)</a>
 </li>
@@ -7217,6 +7210,8 @@
       <li><a href="api/class/class_executor.html#_CPPv4N8Executor31getRowCountAndOffsetForAllFragsERK19RelAlgExecutionUnitRK16CartesianProductINSt6vectorINSt6vectorI6size_tEEEEERKNSt6vectorI15InputDescriptorEERKNSt3mapIiPK14TableFragmentsEE">Executor::getRowCountAndOffsetForAllFrags (C++ function)</a>
 </li>
       <li><a href="api/class/class_executor.html#_CPPv4NK8Executor20getRowSetMemoryOwnerEv">Executor::getRowSetMemoryOwner (C++ function)</a>
+</li>
+      <li><a href="api/class/class_executor.html#_CPPv4N8Executor14getSessionLockEv">Executor::getSessionLock (C++ function)</a>
 </li>
       <li><a href="api/class/class_executor.html#_CPPv4NK8Executor24getStringDictionaryProxyEKiKNSt10shared_ptrI17RowSetMemoryOwnerEEKb">Executor::getStringDictionaryProxy (C++ function)</a>
 </li>
@@ -7258,11 +7253,11 @@
 </li>
       <li><a href="api/class/class_executor.html#_CPPv4N8Executor23input_table_info_cache_E">Executor::input_table_info_cache_ (C++ member)</a>
 </li>
-      <li><a href="api/class/class_executor.html#_CPPv4N8Executor9interruptENSt6stringENSt6stringE">Executor::interrupt (C++ function)</a>
+      <li><a href="api/class/class_executor.html#_CPPv4N8Executor9interruptERKNSt6stringERKNSt6stringE">Executor::interrupt (C++ function)</a>
 </li>
       <li><a href="api/class/class_executor.html#_CPPv4N8Executor12interrupted_E">Executor::interrupted_ (C++ member)</a>
 </li>
-      <li><a href="api/class/class_executor.html#_CPPv4N8Executor22invalidateQuerySessionEv">Executor::invalidateQuerySession (C++ function)</a>
+      <li><a href="api/class/class_executor.html#_CPPv4I0EN8Executor22invalidateQuerySessionEvR16SESSION_MAP_LOCK">Executor::invalidateQuerySession (C++ function)</a>, <a href="api/class/class_executor.html#_CPPv4IEN8Executor22invalidateQuerySessionEvR16mapd_unique_lockI17mapd_shared_mutexE">[1]</a>
 </li>
       <li><a href="api/class/class_executor.html#_CPPv4NK8Executor13isArchMaxwellEK18ExecutorDeviceType">Executor::isArchMaxwell (C++ function)</a>
 </li>
@@ -7310,7 +7305,7 @@
 </li>
       <li><a href="api/class/class_executor.html#_CPPv4NK8Executor20registerActiveModuleEPvKi">Executor::registerActiveModule (C++ function)</a>
 </li>
-      <li><a href="api/class/class_executor.html#_CPPv4N8Executor26removeFromQuerySessionListERKNSt6stringE">Executor::removeFromQuerySessionList (C++ function)</a>
+      <li><a href="api/class/class_executor.html#_CPPv4I0EN8Executor26removeFromQuerySessionListEbRKNSt6stringER16SESSION_MAP_LOCK">Executor::removeFromQuerySessionList (C++ function)</a>, <a href="api/class/class_executor.html#_CPPv4IEN8Executor26removeFromQuerySessionListEbRKNSt6stringER16mapd_unique_lockI17mapd_shared_mutexE">[1]</a>
 </li>
       <li><a href="api/class/class_executor.html#_CPPv4N8Executor14resetInterruptEv">Executor::resetInterrupt (C++ function)</a>
 </li>
@@ -7322,9 +7317,9 @@
 </li>
       <li><a href="api/class/class_executor.html#_CPPv4N8Executor10setCatalogEPKN17Catalog_Namespace7CatalogE">Executor::setCatalog (C++ function)</a>
 </li>
-      <li><a href="api/class/class_executor.html#_CPPv4N8Executor22setCurrentQuerySessionERKNSt6stringE">Executor::setCurrentQuerySession (C++ function)</a>
+      <li><a href="api/class/class_executor.html#_CPPv4I0EN8Executor22setCurrentQuerySessionEvRKNSt6stringER16SESSION_MAP_LOCK">Executor::setCurrentQuerySession (C++ function)</a>, <a href="api/class/class_executor.html#_CPPv4IEN8Executor22setCurrentQuerySessionEvRKNSt6stringER16mapd_unique_lockI17mapd_shared_mutexE">[1]</a>
 </li>
-      <li><a href="api/class/class_executor.html#_CPPv4N8Executor28setQuerySessionAsInterruptedERKNSt6stringE">Executor::setQuerySessionAsInterrupted (C++ function)</a>
+      <li><a href="api/class/class_executor.html#_CPPv4I0EN8Executor28setQuerySessionAsInterruptedEvRKNSt6stringER16SESSION_MAP_LOCK">Executor::setQuerySessionAsInterrupted (C++ function)</a>, <a href="api/class/class_executor.html#_CPPv4IEN8Executor28setQuerySessionAsInterruptedEvRKNSt6stringER16mapd_unique_lockI17mapd_shared_mutexE">[1]</a>
 </li>
       <li><a href="api/class/class_executor.html#_CPPv4N8Executor12setupCachingERKNSt13unordered_setI13PhysicalInputEERKNSt13unordered_setIiEE">Executor::setupCaching (C++ function)</a>
 </li>
@@ -10896,6 +10891,20 @@
 </li>
       <li><a href="api/class/classlockmgr_1_1_lock_container_impl.html#_CPPv4NK7lockmgr17LockContainerImplclEv">lockmgr::LockContainerImpl::operator() (C++ function)</a>
 </li>
+      <li><a href="api/class/classlockmgr_1_1_mutex_tracker.html#_CPPv4N7lockmgr12MutexTrackerE">lockmgr::MutexTracker (C++ class)</a>
+</li>
+      <li><a href="api/class/classlockmgr_1_1_mutex_tracker.html#_CPPv4N7lockmgr12MutexTracker7acquireEv">lockmgr::MutexTracker::acquire (C++ function)</a>
+</li>
+      <li><a href="api/class/classlockmgr_1_1_mutex_tracker.html#_CPPv4NK7lockmgr12MutexTracker10isAcquiredEv">lockmgr::MutexTracker::isAcquired (C++ function)</a>
+</li>
+      <li><a href="api/class/classlockmgr_1_1_mutex_tracker.html#_CPPv4N7lockmgr12MutexTracker6mutex_E">lockmgr::MutexTracker::mutex_ (C++ member)</a>
+</li>
+      <li><a href="api/class/classlockmgr_1_1_mutex_tracker.html#_CPPv4N7lockmgr12MutexTracker12MutexTrackerEv">lockmgr::MutexTracker::MutexTracker (C++ function)</a>
+</li>
+      <li><a href="api/class/classlockmgr_1_1_mutex_tracker.html#_CPPv4N7lockmgr12MutexTracker10ref_count_E">lockmgr::MutexTracker::ref_count_ (C++ member)</a>
+</li>
+      <li><a href="api/class/classlockmgr_1_1_mutex_tracker.html#_CPPv4N7lockmgr12MutexTracker7releaseEv">lockmgr::MutexTracker::release (C++ function)</a>
+</li>
       <li><a href="api/class/classlockmgr_1_1_table_data_lock_container.html#_CPPv4I0EN7lockmgr22TableDataLockContainerE">lockmgr::TableDataLockContainer (C++ class)</a>
 </li>
       <li><a href="api/class/classlockmgr_1_1_table_data_lock_container_3_01_read_lock_01_4.html#_CPPv4N7lockmgr22TableDataLockContainer7acquireEKiPK15TableDescriptor">lockmgr::TableDataLockContainer::acquire (C++ function)</a>, <a href="api/class/classlockmgr_1_1_table_data_lock_container_3_01_write_lock_01_4.html#_CPPv4N7lockmgr22TableDataLockContainer7acquireEKiPK15TableDescriptor">[1]</a>
@@ -10912,12 +10921,6 @@
 </li>
       <li><a href="api/class/classlockmgr_1_1_table_data_lock_mgr.html#_CPPv4N7lockmgr16TableDataLockMgr16TableDataLockMgrEv">lockmgr::TableDataLockMgr::TableDataLockMgr (C++ function)</a>
 </li>
-      <li><a href="api/struct/structlockmgr_1_1_table_lock.html#_CPPv4N7lockmgr9TableLockE">lockmgr::TableLock (C++ class)</a>
-</li>
-      <li><a href="api/struct/structlockmgr_1_1_table_lock.html#_CPPv4N7lockmgr9TableLock9read_lockE">lockmgr::TableLock::read_lock (C++ member)</a>
-</li>
-      <li><a href="api/struct/structlockmgr_1_1_table_lock.html#_CPPv4N7lockmgr9TableLock10write_lockE">lockmgr::TableLock::write_lock (C++ member)</a>
-</li>
       <li><a href="api/class/classlockmgr_1_1_table_lock_container_impl.html#_CPPv4N7lockmgr22TableLockContainerImplE">lockmgr::TableLockContainerImpl (C++ class)</a>
 </li>
       <li><a href="api/class/classlockmgr_1_1_table_lock_container_impl.html#_CPPv4NK7lockmgr22TableLockContainerImpl12getTableNameEv">lockmgr::TableLockContainerImpl::getTableName (C++ function)</a>
@@ -10927,6 +10930,8 @@
       <li><a href="api/class/classlockmgr_1_1_table_lock_container_impl.html#_CPPv4N7lockmgr22TableLockContainerImpl22TableLockContainerImplERKNSt6stringE">lockmgr::TableLockContainerImpl::TableLockContainerImpl (C++ function)</a>
 </li>
       <li><a href="api/class/classlockmgr_1_1_table_lock_mgr_impl.html#_CPPv4I0EN7lockmgr16TableLockMgrImplE">lockmgr::TableLockMgrImpl (C++ class)</a>
+</li>
+      <li><a href="api/class/classlockmgr_1_1_table_lock_mgr_impl.html#_CPPv4NK7lockmgr16TableLockMgrImpl15getLockedTablesEv">lockmgr::TableLockMgrImpl::getLockedTables (C++ function)</a>
 </li>
       <li><a href="api/class/classlockmgr_1_1_table_lock_mgr_impl.html#_CPPv4N7lockmgr16TableLockMgrImpl19getReadLockForTableEK8ChunkKey">lockmgr::TableLockMgrImpl::getReadLockForTable (C++ function)</a>, <a href="api/class/classlockmgr_1_1_table_lock_mgr_impl.html#_CPPv4N7lockmgr16TableLockMgrImpl19getReadLockForTableERKN17Catalog_Namespace7CatalogERKNSt6stringE">[1]</a>
 </li>
@@ -10958,6 +10963,18 @@
 </li>
   </ul></td>
   <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="api/class/classlockmgr_1_1_tracked_ref_lock.html#_CPPv4I0EN7lockmgr14TrackedRefLockE">lockmgr::TrackedRefLock (C++ class)</a>
+</li>
+      <li><a href="api/class/classlockmgr_1_1_tracked_ref_lock.html#_CPPv4N7lockmgr14TrackedRefLock5lock_E">lockmgr::TrackedRefLock::lock_ (C++ member)</a>
+</li>
+      <li><a href="api/class/classlockmgr_1_1_tracked_ref_lock.html#_CPPv4N7lockmgr14TrackedRefLock6mutex_E">lockmgr::TrackedRefLock::mutex_ (C++ member)</a>
+</li>
+      <li><a href="api/class/classlockmgr_1_1_tracked_ref_lock.html#_CPPv4N7lockmgr14TrackedRefLockaSERK14TrackedRefLock">lockmgr::TrackedRefLock::operator= (C++ function)</a>
+</li>
+      <li><a href="api/class/classlockmgr_1_1_tracked_ref_lock.html#_CPPv4N7lockmgr14TrackedRefLock14TrackedRefLockEP12MutexTracker">lockmgr::TrackedRefLock::TrackedRefLock (C++ function)</a>, <a href="api/class/classlockmgr_1_1_tracked_ref_lock.html#_CPPv4N7lockmgr14TrackedRefLock14TrackedRefLockERK14TrackedRefLock">[1]</a>, <a href="api/class/classlockmgr_1_1_tracked_ref_lock.html#_CPPv4N7lockmgr14TrackedRefLock14TrackedRefLockERR14TrackedRefLock">[2]</a>
+</li>
+      <li><a href="api/class/classlockmgr_1_1_tracked_ref_lock.html#_CPPv4N7lockmgr14TrackedRefLockD0Ev">lockmgr::TrackedRefLock::~TrackedRefLock (C++ function)</a>
+</li>
       <li><a href="api/class/classlogger_1_1_debug_timer.html#_CPPv4N6logger10DebugTimerE">logger::DebugTimer (C++ class)</a>
 </li>
       <li><a href="api/class/classlogger_1_1_debug_timer.html#_CPPv4N6logger10DebugTimer10DebugTimerE8SeverityPKciPKc">logger::DebugTimer::DebugTimer (C++ function)</a>
@@ -11588,36 +11605,18 @@
 </li>
       <li><a href="api/class/classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter.html#_CPPv4N3org6apache7calcite7sql2rel17SqlToRelConverterE">org::apache::calcite::sql2rel::SqlToRelConverter (C++ class)</a>
 </li>
-      <li><a href="api/class/classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter.html#_CPPv4N3org6apache7calcite7sql2rel17SqlToRelConverter12AggConverterE">org::apache::calcite::sql2rel::SqlToRelConverter::AggConverter (C++ class)</a>, <a href="api/class/classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1_1_agg_converter.html#_CPPv4N3org6apache7calcite7sql2rel17SqlToRelConverter12AggConverterE">[1]</a>
-</li>
-      <li><a href="api/class/classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter.html#_CPPv4N3org6apache7calcite7sql2rel17SqlToRelConverter15AggregateFinderE">org::apache::calcite::sql2rel::SqlToRelConverter::AggregateFinder (C++ class)</a>, <a href="api/class/classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1_1_aggregate_finder.html#_CPPv4N3org6apache7calcite7sql2rel17SqlToRelConverter15AggregateFinderE">[1]</a>
-</li>
       <li><a href="api/class/classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter.html#_CPPv4N3org6apache7calcite7sql2rel17SqlToRelConverter10BlackboardE">org::apache::calcite::sql2rel::SqlToRelConverter::Blackboard (C++ class)</a>, <a href="api/class/classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1_1_blackboard.html#_CPPv4N3org6apache7calcite7sql2rel17SqlToRelConverter10BlackboardE">[1]</a>
 </li>
-      <li><a href="api/class/classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter.html#_CPPv4N3org6apache7calcite7sql2rel17SqlToRelConverter6ConfigE">org::apache::calcite::sql2rel::SqlToRelConverter::Config (C++ class)</a>
-</li>
-      <li><a href="api/class/classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter.html#_CPPv4N3org6apache7calcite7sql2rel17SqlToRelConverter13ConfigBuilderE">org::apache::calcite::sql2rel::SqlToRelConverter::ConfigBuilder (C++ class)</a>, <a href="api/class/classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1_1_config_builder.html#_CPPv4N3org6apache7calcite7sql2rel17SqlToRelConverter13ConfigBuilderE">[1]</a>
-</li>
-      <li><a href="api/class/classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter.html#_CPPv4N3org6apache7calcite7sql2rel17SqlToRelConverter10ConfigImpl22DefaultExpandPredicateE">org::apache::calcite::sql2rel::SqlToRelConverter::ConfigImpl::DefaultExpandPredicate (C++ class)</a>, <a href="api/class/classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1_1_config_impl.html#_CPPv4N3org6apache7calcite7sql2rel17SqlToRelConverter10ConfigImpl22DefaultExpandPredicateE">[1]</a>, <a href="api/class/classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1_1_config_impl_1_1_default_expand_predicate.html#_CPPv4N3org6apache7calcite7sql2rel17SqlToRelConverter10ConfigImpl22DefaultExpandPredicateE">[2]</a>
-</li>
-      <li><a href="api/class/classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter.html#_CPPv4N3org6apache7calcite7sql2rel17SqlToRelConverter14CorrelationUseE">org::apache::calcite::sql2rel::SqlToRelConverter::CorrelationUse (C++ class)</a>, <a href="api/class/classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1_1_correlation_use.html#_CPPv4N3org6apache7calcite7sql2rel17SqlToRelConverter14CorrelationUseE">[1]</a>
-</li>
       <li><a href="api/class/classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter.html#_CPPv4N3org6apache7calcite7sql2rel17SqlToRelConverter14DeferredLookupE">org::apache::calcite::sql2rel::SqlToRelConverter::DeferredLookup (C++ class)</a>, <a href="api/class/classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1_1_deferred_lookup.html#_CPPv4N3org6apache7calcite7sql2rel17SqlToRelConverter14DeferredLookupE">[1]</a>
-</li>
-      <li><a href="api/class/classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter.html#_CPPv4N3org6apache7calcite7sql2rel17SqlToRelConverter16HistogramShuttleE">org::apache::calcite::sql2rel::SqlToRelConverter::HistogramShuttle (C++ class)</a>, <a href="api/class/classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1_1_histogram_shuttle.html#_CPPv4N3org6apache7calcite7sql2rel17SqlToRelConverter16HistogramShuttleE">[1]</a>
-</li>
-  </ul></td>
-  <td style="width: 33%; vertical-align: top;"><ul>
-      <li><a href="api/class/classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter.html#_CPPv4N3org6apache7calcite7sql2rel17SqlToRelConverter13LookupContextE">org::apache::calcite::sql2rel::SqlToRelConverter::LookupContext (C++ class)</a>, <a href="api/class/classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1_1_lookup_context.html#_CPPv4N3org6apache7calcite7sql2rel17SqlToRelConverter13LookupContextE">[1]</a>
 </li>
       <li><a href="api/class/classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter.html#_CPPv4N3org6apache7calcite7sql2rel17SqlToRelConverter21NoOpSubQueryConverterE">org::apache::calcite::sql2rel::SqlToRelConverter::NoOpSubQueryConverter (C++ class)</a>, <a href="api/class/classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1_1_no_op_sub_query_converter.html#_CPPv4N3org6apache7calcite7sql2rel17SqlToRelConverter21NoOpSubQueryConverterE">[1]</a>
 </li>
       <li><a href="api/class/classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter.html#_CPPv4N3org6apache7calcite7sql2rel17SqlToRelConverter16RexAccessShuttleE">org::apache::calcite::sql2rel::SqlToRelConverter::RexAccessShuttle (C++ class)</a>, <a href="api/class/classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1_1_rex_access_shuttle.html#_CPPv4N3org6apache7calcite7sql2rel17SqlToRelConverter16RexAccessShuttleE">[1]</a>
 </li>
-      <li><a href="api/class/classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter.html#_CPPv4N3org6apache7calcite7sql2rel17SqlToRelConverter8SubQueryE">org::apache::calcite::sql2rel::SqlToRelConverter::SubQuery (C++ class)</a>, <a href="api/class/classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1_1_sub_query.html#_CPPv4N3org6apache7calcite7sql2rel17SqlToRelConverter8SubQueryE">[1]</a>
-</li>
       <li><a href="api/class/class_out_of_host_memory.html#_CPPv415OutOfHostMemory">OutOfHostMemory (C++ class)</a>
 </li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="api/class/class_out_of_host_memory.html#_CPPv4N15OutOfHostMemory15OutOfHostMemoryEK6size_t">OutOfHostMemory::OutOfHostMemory (C++ function)</a>
 </li>
       <li><a href="api/class/class_out_of_memory.html#_CPPv411OutOfMemory">OutOfMemory (C++ class)</a>
@@ -12502,8 +12501,6 @@
 </li>
       <li><a href="api/class/class_parser_1_1_likelihood_expr.html#_CPPv4NK6Parser14LikelihoodExpr7analyzeERKN17Catalog_Namespace7CatalogERN8Analyzer5QueryE12TlistRefType">Parser::LikelihoodExpr::analyze (C++ function)</a>
 </li>
-  </ul></td>
-  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="api/class/class_parser_1_1_likelihood_expr.html#_CPPv4N6Parser14LikelihoodExpr3argE">Parser::LikelihoodExpr::arg (C++ member)</a>
 </li>
       <li><a href="api/class/class_parser_1_1_likelihood_expr.html#_CPPv4N6Parser14LikelihoodExpr3getENSt10shared_ptrIN8Analyzer4ExprEEEfKb">Parser::LikelihoodExpr::get (C++ function)</a>
@@ -12526,6 +12523,8 @@
 </li>
       <li><a href="api/class/class_parser_1_1_literal.html#_CPPv4NK6Parser7Literal7analyzeERKN17Catalog_Namespace7CatalogERN8Analyzer5QueryE12TlistRefType">Parser::Literal::analyze (C++ function)</a>
 </li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="api/class/class_parser_1_1_literal.html#_CPPv4NK6Parser7Literal9to_stringEv">Parser::Literal::to_string (C++ function)</a>
 </li>
       <li><a href="api/struct/struct_parser_1_1_local_connector.html#_CPPv4N6Parser14LocalConnectorE">Parser::LocalConnector (C++ class)</a>
@@ -12959,6 +12958,48 @@
       <li><a href="api/class/class_parser_1_1_timestamp_literal.html#_CPPv4N6Parser16TimestampLiteral13timestampval_E">Parser::TimestampLiteral::timestampval_ (C++ member)</a>
 </li>
       <li><a href="api/class/class_parser_1_1_timestamp_literal.html#_CPPv4NK6Parser16TimestampLiteral9to_stringEv">Parser::TimestampLiteral::to_string (C++ function)</a>
+</li>
+      <li><a href="api/class/class_parser_1_1_tracked_list_ptr.html#_CPPv4I0EN6Parser14TrackedListPtrE">Parser::TrackedListPtr (C++ class)</a>
+</li>
+      <li><a href="api/class/class_parser_1_1_tracked_list_ptr.html#_CPPv4N6Parser14TrackedListPtr9is_empty_E">Parser::TrackedListPtr::is_empty_ (C++ member)</a>
+</li>
+      <li><a href="api/class/class_parser_1_1_tracked_list_ptr.html#_CPPv4N6Parser14TrackedListPtr12is_released_E">Parser::TrackedListPtr::is_released_ (C++ member)</a>
+</li>
+      <li><a href="api/class/class_parser_1_1_tracked_list_ptr.html#_CPPv4IDpEN6Parser14TrackedListPtr4makeEP14TrackedListPtrI1TERNSt6vectorINSt10unique_ptrI14TrackedListPtrI1TEEEEEDpRR4Args">Parser::TrackedListPtr::make (C++ function)</a>
+</li>
+      <li><a href="api/class/class_parser_1_1_tracked_list_ptr.html#_CPPv4N6Parser14TrackedListPtr9makeEmptyEv">Parser::TrackedListPtr::makeEmpty (C++ function)</a>
+</li>
+      <li><a href="api/class/class_parser_1_1_tracked_list_ptr.html#_CPPv4N6Parser14TrackedListPtraSERK14TrackedListPtr">Parser::TrackedListPtr::operator= (C++ function)</a>
+</li>
+      <li><a href="api/class/class_parser_1_1_tracked_list_ptr.html#_CPPv4N6Parser14TrackedListPtr11owned_ptrs_E">Parser::TrackedListPtr::owned_ptrs_ (C++ member)</a>
+</li>
+      <li><a href="api/class/class_parser_1_1_tracked_list_ptr.html#_CPPv4N6Parser14TrackedListPtr9push_backEP10TrackedPtrI1TE">Parser::TrackedListPtr::push_back (C++ function)</a>, <a href="api/class/class_parser_1_1_tracked_list_ptr.html#_CPPv4N6Parser14TrackedListPtr9push_backEP1T">[1]</a>
+</li>
+      <li><a href="api/class/class_parser_1_1_tracked_list_ptr.html#_CPPv4N6Parser14TrackedListPtr7releaseEv">Parser::TrackedListPtr::release (C++ function)</a>
+</li>
+      <li><a href="api/class/class_parser_1_1_tracked_list_ptr.html#_CPPv4N6Parser14TrackedListPtr14TrackedListPtrE6size_t">Parser::TrackedListPtr::TrackedListPtr (C++ function)</a>, <a href="api/class/class_parser_1_1_tracked_list_ptr.html#_CPPv4N6Parser14TrackedListPtr14TrackedListPtrE6size_tP10TrackedPtrI1TE">[1]</a>, <a href="api/class/class_parser_1_1_tracked_list_ptr.html#_CPPv4N6Parser14TrackedListPtr14TrackedListPtrE6size_tP1T">[2]</a>, <a href="api/class/class_parser_1_1_tracked_list_ptr.html#_CPPv4N6Parser14TrackedListPtr14TrackedListPtrERK14TrackedListPtr">[3]</a>, <a href="api/class/class_parser_1_1_tracked_list_ptr.html#_CPPv4N6Parser14TrackedListPtr14TrackedListPtrEv">[4]</a>
+</li>
+      <li><a href="api/class/class_parser_1_1_tracked_list_ptr.html#_CPPv4N6Parser14TrackedListPtr6value_E">Parser::TrackedListPtr::value_ (C++ member)</a>
+</li>
+      <li><a href="api/class/class_parser_1_1_tracked_ptr.html#_CPPv4I0EN6Parser10TrackedPtrE">Parser::TrackedPtr (C++ class)</a>
+</li>
+      <li><a href="api/class/class_parser_1_1_tracked_ptr.html#_CPPv4N6Parser10TrackedPtr3getEv">Parser::TrackedPtr::get (C++ function)</a>
+</li>
+      <li><a href="api/class/class_parser_1_1_tracked_ptr.html#_CPPv4N6Parser10TrackedPtr9is_empty_E">Parser::TrackedPtr::is_empty_ (C++ member)</a>
+</li>
+      <li><a href="api/class/class_parser_1_1_tracked_ptr.html#_CPPv4N6Parser10TrackedPtr12is_released_E">Parser::TrackedPtr::is_released_ (C++ member)</a>
+</li>
+      <li><a href="api/class/class_parser_1_1_tracked_ptr.html#_CPPv4IDpEN6Parser10TrackedPtr4makeEP10TrackedPtrI1TERNSt6vectorINSt10unique_ptrI10TrackedPtrI1TEEEEEDpRR4Args">Parser::TrackedPtr::make (C++ function)</a>
+</li>
+      <li><a href="api/class/class_parser_1_1_tracked_ptr.html#_CPPv4N6Parser10TrackedPtr9makeEmptyEv">Parser::TrackedPtr::makeEmpty (C++ function)</a>
+</li>
+      <li><a href="api/class/class_parser_1_1_tracked_ptr.html#_CPPv4N6Parser10TrackedPtraSERK10TrackedPtr">Parser::TrackedPtr::operator= (C++ function)</a>
+</li>
+      <li><a href="api/class/class_parser_1_1_tracked_ptr.html#_CPPv4N6Parser10TrackedPtr7releaseEv">Parser::TrackedPtr::release (C++ function)</a>
+</li>
+      <li><a href="api/class/class_parser_1_1_tracked_ptr.html#_CPPv4N6Parser10TrackedPtr10TrackedPtrEP4Node">Parser::TrackedPtr::TrackedPtr (C++ function)</a>, <a href="api/class/class_parser_1_1_tracked_ptr.html#_CPPv4N6Parser10TrackedPtr10TrackedPtrEPKc6size_t">[1]</a>, <a href="api/class/class_parser_1_1_tracked_ptr.html#_CPPv4N6Parser10TrackedPtr10TrackedPtrERK10TrackedPtr">[2]</a>, <a href="api/class/class_parser_1_1_tracked_ptr.html#_CPPv4N6Parser10TrackedPtr10TrackedPtrERKNSt6stringE">[3]</a>, <a href="api/class/class_parser_1_1_tracked_ptr.html#_CPPv4N6Parser10TrackedPtr10TrackedPtrEv">[4]</a>
+</li>
+      <li><a href="api/class/class_parser_1_1_tracked_ptr.html#_CPPv4N6Parser10TrackedPtr6value_E">Parser::TrackedPtr::value_ (C++ member)</a>
 </li>
       <li><a href="api/class/class_parser_1_1_truncate_table_stmt.html#_CPPv4N6Parser17TruncateTableStmtE">Parser::TruncateTableStmt (C++ class)</a>
 </li>
@@ -13654,10 +13695,10 @@
 </li>
       <li><a href="api/class/class_query_memory_descriptor.html#_CPPv4NK21QueryMemoryDescriptor16getColOffInBytesEK6size_t">QueryMemoryDescriptor::getColOffInBytes (C++ function)</a>
 </li>
-  </ul></td>
-  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="api/class/class_query_memory_descriptor.html#_CPPv4NK21QueryMemoryDescriptor25getColOffInBytesInNextBinEK6size_t">QueryMemoryDescriptor::getColOffInBytesInNextBin (C++ function)</a>
 </li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="api/class/class_query_memory_descriptor.html#_CPPv4NK21QueryMemoryDescriptor20getColOnlyOffInBytesEK6size_t">QueryMemoryDescriptor::getColOnlyOffInBytes (C++ function)</a>
 </li>
       <li><a href="api/class/class_query_memory_descriptor.html#_CPPv4NK21QueryMemoryDescriptor17getColSlotContextEv">QueryMemoryDescriptor::getColSlotContext (C++ function)</a>
@@ -13960,6 +14001,8 @@
 </li>
       <li><a href="api/class/class_query_runner_1_1_query_runner.html#_CPPv4N11QueryRunner11QueryRunner34getEntryCntCachedBaselineHashTableE6size_t">QueryRunner::QueryRunner::getEntryCntCachedBaselineHashTable (C++ function)</a>
 </li>
+      <li><a href="api/class/class_query_runner_1_1_query_runner.html#_CPPv4NK11QueryRunner11QueryRunner11getExecutorEv">QueryRunner::QueryRunner::getExecutor (C++ function)</a>
+</li>
       <li><a href="api/class/class_query_runner_1_1_query_runner.html#_CPPv4NK11QueryRunner11QueryRunner9getLoaderEPK15TableDescriptor">QueryRunner::QueryRunner::getLoader (C++ function)</a>
 </li>
       <li><a href="api/class/class_query_runner_1_1_query_runner.html#_CPPv4N11QueryRunner11QueryRunner39getNumberOfCachedBaselineJoinHashTablesEv">QueryRunner::QueryRunner::getNumberOfCachedBaselineJoinHashTables (C++ function)</a>
@@ -13989,6 +14032,8 @@
       <li><a href="api/class/class_query_runner_1_1_query_runner.html#_CPPv4N11QueryRunner11QueryRunner14runSelectQueryERKNSt6stringEK18ExecutorDeviceTypeKbKbKb">QueryRunner::QueryRunner::runSelectQuery (C++ function)</a>
 </li>
       <li><a href="api/class/class_query_runner_1_1_query_runner.html#_CPPv4N11QueryRunner11QueryRunner6runSQLERKNSt6stringEK18ExecutorDeviceTypeKbKb">QueryRunner::QueryRunner::runSQL (C++ function)</a>
+</li>
+      <li><a href="api/class/class_query_runner_1_1_query_runner.html#_CPPv4N11QueryRunner11QueryRunner27runSQLWithAllowingInterruptERKNSt6stringENSt10shared_ptrI8ExecutorEERKNSt6stringEK18ExecutorDeviceTypeKj">QueryRunner::QueryRunner::runSQLWithAllowingInterrupt (C++ function)</a>
 </li>
       <li><a href="api/class/class_query_runner_1_1_query_runner.html#_CPPv4N11QueryRunner11QueryRunner13session_info_E">QueryRunner::QueryRunner::session_info_ (C++ member)</a>
 </li>

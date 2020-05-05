@@ -40,7 +40,7 @@
   <link rel="stylesheet" href="../../_static/theme_overrides.css" type="text/css" />
     <link rel="index" title="Index" href="../../genindex.html" />
     <link rel="search" title="Search" href="../../search.html" />
-    <link rel="next" title="Class org::apache::calcite::sql2rel::SqlToRelConverter::AggConverter" href="classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1_1_agg_converter.html" />
+    <link rel="next" title="Class org::apache::calcite::sql2rel::SqlToRelConverter::Blackboard" href="classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1_1_blackboard.html" />
     <link rel="prev" title="Class org::apache::calcite::rel::rules::QueryOptimizationRules" href="classorg_1_1apache_1_1calcite_1_1rel_1_1rules_1_1_query_optimization_rules.html" /> 
 </head>
 
@@ -65,7 +65,7 @@
             
             
               <div class="version">
-                5.3.0dev fb55533
+                5.3.0dev b385697
               </div>
             
           
@@ -574,6 +574,8 @@
 <li class="toctree-l2"><a class="reference internal" href="class_parser_1_1_table_element.html">Class Parser::TableElement</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_parser_1_1_table_ref.html">Class Parser::TableRef</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_parser_1_1_timestamp_literal.html">Class Parser::TimestampLiteral</a></li>
+<li class="toctree-l2"><a class="reference internal" href="class_parser_1_1_tracked_list_ptr.html">Class Parser::TrackedListPtr</a></li>
+<li class="toctree-l2"><a class="reference internal" href="class_parser_1_1_tracked_ptr.html">Class Parser::TrackedPtr</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_parser_1_1_truncate_table_stmt.html">Class Parser::TruncateTableStmt</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_parser_1_1_union_query.html">Class Parser::UnionQuery</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_parser_1_1_unique_def.html">Class Parser::UniqueDef</a></li>
@@ -756,7 +758,6 @@
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_parser.html">Class com::mapd::calcite::parser::MapDParser</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_parser_options.html">Class com::mapd::calcite::parser::MapDParserOptions</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_parser_options_1_1_filter_push_down_info.html">Class com::mapd::calcite::parser::MapDParserOptions::FilterPushDownInfo</a></li>
-<li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_rel_data_type_system_impl.html">Class com::mapd::calcite::parser::MapDRelDataTypeSystemImpl</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_schema.html">Class com::mapd::calcite::parser::MapDSchema</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_serializer.html">Class com::mapd::calcite::parser::MapDSerializer</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_sql_operator_table.html">Class com::mapd::calcite::parser::MapDSqlOperatorTable</a></li>
@@ -944,6 +945,7 @@
 <li class="toctree-l2"><a class="reference internal" href="classlockmgr_1_1_abstract_lock_container.html">Class lockmgr::AbstractLockContainer</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classlockmgr_1_1_insert_data_lock_mgr.html">Class lockmgr::InsertDataLockMgr</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classlockmgr_1_1_lock_container_impl.html">Class lockmgr::LockContainerImpl</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classlockmgr_1_1_mutex_tracker.html">Class lockmgr::MutexTracker</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classlockmgr_1_1_table_data_lock_container.html">Class lockmgr::TableDataLockContainer</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classlockmgr_1_1_table_data_lock_container_3_01_read_lock_01_4.html">Class lockmgr::TableDataLockContainer&lt; ReadLock &gt;</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classlockmgr_1_1_table_data_lock_container_3_01_write_lock_01_4.html">Class lockmgr::TableDataLockContainer&lt; WriteLock &gt;</a></li>
@@ -954,6 +956,7 @@
 <li class="toctree-l2"><a class="reference internal" href="classlockmgr_1_1_table_schema_lock_container_3_01_read_lock_01_4.html">Class lockmgr::TableSchemaLockContainer&lt; ReadLock &gt;</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classlockmgr_1_1_table_schema_lock_container_3_01_write_lock_01_4.html">Class lockmgr::TableSchemaLockContainer&lt; WriteLock &gt;</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classlockmgr_1_1_table_schema_lock_mgr.html">Class lockmgr::TableSchemaLockMgr</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classlockmgr_1_1_tracked_ref_lock.html">Class lockmgr::TrackedRefLock</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classlogger_1_1_debug_timer.html">Class logger::DebugTimer</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classlogger_1_1_duration.html">Class logger::Duration</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classlogger_1_1_duration_tree.html">Class logger::DurationTree</a></li>
@@ -975,19 +978,10 @@
 <li class="toctree-l2"><a class="reference internal" href="classorg_1_1apache_1_1calcite_1_1rel_1_1rules_1_1_outer_join_opt_via_null_rejection_rule.html">Class org::apache::calcite::rel::rules::OuterJoinOptViaNullRejectionRule</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classorg_1_1apache_1_1calcite_1_1rel_1_1rules_1_1_query_optimization_rules.html">Class org::apache::calcite::rel::rules::QueryOptimizationRules</a></li>
 <li class="toctree-l2 current"><a class="current reference internal" href="#">Class org::apache::calcite::sql2rel::SqlToRelConverter</a></li>
-<li class="toctree-l2"><a class="reference internal" href="classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1_1_agg_converter.html">Class org::apache::calcite::sql2rel::SqlToRelConverter::AggConverter</a></li>
-<li class="toctree-l2"><a class="reference internal" href="classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1_1_aggregate_finder.html">Class org::apache::calcite::sql2rel::SqlToRelConverter::AggregateFinder</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1_1_blackboard.html">Class org::apache::calcite::sql2rel::SqlToRelConverter::Blackboard</a></li>
-<li class="toctree-l2"><a class="reference internal" href="classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1_1_config_builder.html">Class org::apache::calcite::sql2rel::SqlToRelConverter::ConfigBuilder</a></li>
-<li class="toctree-l2"><a class="reference internal" href="classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1_1_config_impl.html">Class org::apache::calcite::sql2rel::SqlToRelConverter::ConfigImpl</a></li>
-<li class="toctree-l2"><a class="reference internal" href="classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1_1_config_impl_1_1_default_expand_predicate.html">Class org::apache::calcite::sql2rel::SqlToRelConverter::ConfigImpl::DefaultExpandPredicate</a></li>
-<li class="toctree-l2"><a class="reference internal" href="classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1_1_correlation_use.html">Class org::apache::calcite::sql2rel::SqlToRelConverter::CorrelationUse</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1_1_deferred_lookup.html">Class org::apache::calcite::sql2rel::SqlToRelConverter::DeferredLookup</a></li>
-<li class="toctree-l2"><a class="reference internal" href="classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1_1_histogram_shuttle.html">Class org::apache::calcite::sql2rel::SqlToRelConverter::HistogramShuttle</a></li>
-<li class="toctree-l2"><a class="reference internal" href="classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1_1_lookup_context.html">Class org::apache::calcite::sql2rel::SqlToRelConverter::LookupContext</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1_1_no_op_sub_query_converter.html">Class org::apache::calcite::sql2rel::SqlToRelConverter::NoOpSubQueryConverter</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1_1_rex_access_shuttle.html">Class org::apache::calcite::sql2rel::SqlToRelConverter::RexAccessShuttle</a></li>
-<li class="toctree-l2"><a class="reference internal" href="classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1_1_sub_query.html">Class org::apache::calcite::sql2rel::SqlToRelConverter::SubQuery</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classquery__state_1_1_query_state.html">Class query_state::QueryState</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classquery__state_1_1_query_state_proxy.html">Class query_state::QueryStateProxy</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classquery__state_1_1_query_states.html">Class query_state::QueryStates</a></li>
@@ -1275,7 +1269,6 @@
 <li class="toctree-l2"><a class="reference internal" href="../struct/structforeign__storage_1_1_options_container.html">Struct foreign_storage::OptionsContainer</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structis__null__order__entry.html">Struct is_null_order_entry</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structis__taken__entry.html">Struct is_taken_entry</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../struct/structlockmgr_1_1_table_lock.html">Struct lockmgr::TableLock</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structlogger_1_1_erase_duration_trees.html">Struct logger::EraseDurationTrees</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structlogger_1_1_get_depth.html">Struct logger::GetDepth</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structlogger_1_1_log_shutdown.html">Struct logger::LogShutdown</a></li>
@@ -1681,7 +1674,7 @@
 
 <dl class="function">
 <dt>
-<span class="target" id="classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1a41e331318583409687b09ba8574bc3b2"></span><code class="sig-name descname">RelNode org.apache.calcite.sql2rel.SqlToRelConverter.toRel(final RelOptTable table)</code></dt>
+<span class="target" id="classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1abe98902aa14acfd4d31edff577eec226"></span><code class="sig-name descname">RelNode org.apache.calcite.sql2rel.SqlToRelConverter.toRel(final RelOptTable table, final List&lt; RelHint &gt; hints)</code></dt>
 <dd></dd></dl>
 
 <dl class="function">
@@ -1716,12 +1709,6 @@
 <dt>
 <span class="target" id="classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1a3de4bfba3eb9eab527483d419ddf30f4"></span><code class="sig-name descname">static boolean org.apache.calcite.sql2rel.SqlToRelConverter.isOrdered(SqlNode query)</code></dt>
 <dd></dd></dl>
-
-<dl class="function">
-<dt>
-<span class="target" id="classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1a513e562db3d01e599197d0af69d1b751"></span><code class="sig-name descname">static ConfigBuilder org.apache.calcite.sql2rel.SqlToRelConverter.configBuilder()</code></dt>
-<dd><p>Creates a builder for a <a class="reference internal" href="#interfaceorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1_1_config"><span class="std std-ref">Config</span></a>. </p>
-</dd></dl>
 
 </div>
 <div class="breathe-sectiondef docutils container">
@@ -1871,7 +1858,7 @@
 <dt>
 <span class="target" id="classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1ad5bf1278e8767fff205269b04795d0ee"></span><code class="sig-name descname">void org.apache.calcite.sql2rel.SqlToRelConverter.convertAgg(Blackboard bb, SqlSelect select, List&lt; SqlNode &gt; orderExprList)</code></dt>
 <dd><p>Converts the SELECT, GROUP BY and HAVING clauses of an aggregate query.</p>
-<p>This method extracts SELECT, GROUP BY and HAVING clauses, and creates an <a class="reference internal" href="classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1_1_agg_converter.html#classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1_1_agg_converter"><span class="std std-ref">AggConverter</span></a>, then delegates to <a class="reference internal" href="#classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1aeda91db7e2363a0d674890ae45809a15"><span class="std std-ref">createAggImpl</span></a>. Derived class may override this method to change any of those clauses or specify a different <a class="reference internal" href="classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1_1_agg_converter.html#classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1_1_agg_converter"><span class="std std-ref">AggConverter</span></a>.</p>
+<p>This method extracts SELECT, GROUP BY and HAVING clauses, and creates an AggConverter, then delegates to <a class="reference internal" href="#classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1aeda91db7e2363a0d674890ae45809a15"><span class="std std-ref">createAggImpl</span></a>. Derived class may override this method to change any of those clauses or specify a different AggConverter.</p>
 <p><dl class="simple">
 <dt><strong>Parameters</strong></dt><dd><ul class="breatheparameterlist simple">
 <li><p><code class="docutils literal notranslate"><span class="pre">bb</span></code>: Scope within which to resolve identifiers </p></li>
@@ -1885,7 +1872,7 @@
 
 <dl class="function">
 <dt>
-<span class="target" id="classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1aeda91db7e2363a0d674890ae45809a15"></span><code class="sig-name descname">final void org.apache.calcite.sql2rel.SqlToRelConverter.createAggImpl(Blackboard bb, final  AggConverter aggConverter, SqlNodeList selectList, SqlNodeList groupList, SqlNode having, List&lt; SqlNode &gt; orderExprList)</code></dt>
+<span class="target" id="classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1aeda91db7e2363a0d674890ae45809a15"></span><code class="sig-name descname">final void org.apache.calcite.sql2rel.SqlToRelConverter.createAggImpl(Blackboard bb, final AggConverter aggConverter, SqlNodeList selectList, SqlNodeList groupList, SqlNode having, List&lt; SqlNode &gt; orderExprList)</code></dt>
 <dd></dd></dl>
 
 <dl class="function">
@@ -2075,7 +2062,7 @@
 
 <dl class="member">
 <dt>
-<span class="target" id="classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1a41b538139deaa9fc4c1896d3d7d42292"></span><code class="sig-name descname">final List&lt;RelNode&gt; org.apache.calcite.sql2rel.SqlToRelConverter.leaves = new ArrayList&lt;&gt;()</code></dt>
+<span class="target" id="classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1aa6d92e27f958d63972aa6c57fa482a79"></span><code class="sig-name descname">final Map&lt;RelNode, Integer&gt; org.apache.calcite.sql2rel.SqlToRelConverter.leaves = new HashMap&lt;&gt;()</code></dt>
 <dd></dd></dl>
 
 <dl class="member">
@@ -2250,12 +2237,12 @@
 
 <dl class="function">
 <dt>
-<span class="target" id="classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1acb13fde25e0669be2d35cb2ad8fe2be9"></span><code class="sig-name descname">void org.apache.calcite.sql2rel.SqlToRelConverter.convertIdentifier(Blackboard bb, SqlIdentifier id, SqlNodeList extendedColumns)</code></dt>
+<span class="target" id="classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1a01965f8cb0acbe644ed1520bc4848247"></span><code class="sig-name descname">void org.apache.calcite.sql2rel.SqlToRelConverter.convertIdentifier(Blackboard bb, SqlIdentifier id, SqlNodeList extendedColumns, SqlNodeList tableHints)</code></dt>
 <dd></dd></dl>
 
 <dl class="function">
 <dt>
-<span class="target" id="classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1aabf5a01cf035586752c7957492a91c71"></span><code class="sig-name descname">void org.apache.calcite.sql2rel.SqlToRelConverter.snapshotTemporalTable(Blackboard bb, SqlCall call)</code></dt>
+<span class="target" id="classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1a4e5d1bd9e766b79a26b3a74760b9ec3f"></span><code class="sig-name descname">void org.apache.calcite.sql2rel.SqlToRelConverter.convertTemporalTable(Blackboard bb, SqlCall call)</code></dt>
 <dd></dd></dl>
 
 <dl class="function">
@@ -2308,6 +2295,20 @@
 
 <dl class="function">
 <dt>
+<span class="target" id="classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1ad9220f9ec937045d2bb453f88b9ad324"></span><code class="sig-name descname">RelNode org.apache.calcite.sql2rel.SqlToRelConverter.rewriteAggregateWithGroupId(Blackboard bb, AggregatingSelectScope.Resolved r, AggConverter converter)</code></dt>
+<dd><p>The<div class="highlight-cpp notranslate"><div class="highlight"><pre><span></span><span class="n">GROUP_ID</span><span class="p">()</span> 
+</pre></div>
+</div>
+ function is used to distinguish duplicate groups. However, as Aggregate normalizes group sets to canonical form (i.e., flatten, sorting, redundancy removal), this information is lost in RelNode. Therefore, it is impossible to implement the function in runtime.</p>
+<p>To fill this gap, an aggregation query that contains<div class="highlight-cpp notranslate"><div class="highlight"><pre><span></span><span class="n">GROUP_ID</span><span class="p">()</span> 
+</pre></div>
+</div>
+ function will generally be rewritten into UNION when converting to RelNode.</p>
+<p>Also see the discussion in JIRA <a class="reference external" href="https://issues.apache.org/jira/browse/CALCITE-1824">[CALCITE-1824] GROUP_ID returns wrong result</a>. </p>
+</dd></dl>
+
+<dl class="function">
+<dt>
 <span class="target" id="classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1a5e354bc23c1ddbb8a91ca46a94c56a45"></span><code class="sig-name descname">boolean org.apache.calcite.sql2rel.SqlToRelConverter.all(SqlCall call)</code></dt>
 <dd></dd></dl>
 
@@ -2327,7 +2328,7 @@
 
 <dl class="function">
 <dt>
-<span class="target" id="classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1a764f7ce4cbc4228f4118b26ba903c4a0"></span><code class="sig-name descname">RelOptTable.ToRelContext org.apache.calcite.sql2rel.SqlToRelConverter.createToRelContext()</code></dt>
+<span class="target" id="classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1a88d1bd81e2320edb52b65415f2676b68"></span><code class="sig-name descname">RelOptTable.ToRelContext org.apache.calcite.sql2rel.SqlToRelConverter.createToRelContext(List&lt; RelHint &gt; hints)</code></dt>
 <dd></dd></dl>
 
 <dl class="function">
@@ -2448,6 +2449,11 @@
 
 <dl class="member">
 <dt>
+<span class="target" id="classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1a05bc396b1b2887a4b0a5611520d519cb"></span><code class="sig-name descname">final HintStrategyTable org.apache.calcite.sql2rel.SqlToRelConverter.hintStrategies</code></dt>
+<dd></dd></dl>
+
+<dl class="member">
+<dt>
 <span class="target" id="classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1ad30aa7b42a400e5649305f889da391cb"></span><code class="sig-name descname">int org.apache.calcite.sql2rel.SqlToRelConverter.explainParamCount</code></dt>
 <dd></dd></dl>
 
@@ -2550,213 +2556,6 @@
 
 </div>
 <dl class="class">
-<dt id="_CPPv4N3org6apache7calcite7sql2rel17SqlToRelConverter12AggConverterE">
-<span id="_CPPv3N3org6apache7calcite7sql2rel17SqlToRelConverter12AggConverterE"></span><span id="_CPPv2N3org6apache7calcite7sql2rel17SqlToRelConverter12AggConverterE"></span><span id="org::apache::calcite::sql2rel::SqlToRelConverter::AggConverter"></span><span class="target" id="classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1_1_agg_converter"></span><em class="property">class </em><code class="sig-name descname">AggConverter</code> : <em class="property">public</em> org::apache::calcite::sql::util::SqlVisitor&lt;Void&gt;<a class="headerlink" href="#_CPPv4N3org6apache7calcite7sql2rel17SqlToRelConverter12AggConverterE" title="Permalink to this definition">¶</a><br /></dt>
-<dd><p>Converts expressions to aggregates.</p>
-<p>Consider the expression</p>
-<p></p>
-<p>Then:</p>
-<p><ul class="simple">
-<li><p>groupExprs = {SqlIdentifier(deptno)} </p></li>
-<li><p>convertedInputExprs = {RexInputRef(deptno), 2 * RefInputRef(sal)} </p></li>
-<li><p>inputRefs = {RefInputRef(#0), RexInputRef(#1)} </p></li>
-<li><p>aggCalls = {AggCall(SUM, {1})} </p></li>
-</ul>
-</p>
-<div class="breathe-sectiondef docutils container">
-<p class="breathe-sectiondef-title rubric">Public Functions</p>
-<dl class="function">
-<dt>
-<span class="target" id="classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1_1_agg_converter_1a6b8a1811e6b8815cdf73b384b0a481c4"></span><code class="sig-name descname">org.apache.calcite.sql2rel.SqlToRelConverter.AggConverter.AggConverter(Blackboard bb, SqlSelect select)</code></dt>
-<dd><p>Creates an <a class="reference internal" href="classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1_1_agg_converter.html#classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1_1_agg_converter"><span class="std std-ref">AggConverter</span></a>.</p>
-<p>The <code class="docutils literal notranslate"><span class="pre">select</span></code> parameter provides enough context to name aggregate calls which are top-level select list items.</p>
-<p><dl class="simple">
-<dt><strong>Parameters</strong></dt><dd><ul class="breatheparameterlist simple">
-<li><p><code class="docutils literal notranslate"><span class="pre">bb</span></code>: <a class="reference internal" href="classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1_1_blackboard.html#classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1_1_blackboard"><span class="std std-ref">Blackboard</span></a> </p></li>
-<li><p><code class="docutils literal notranslate"><span class="pre">select</span></code>: Query being translated; provides context to give </p></li>
-</ul>
-</dd>
-</dl>
-</p>
-</dd></dl>
-
-<dl class="function">
-<dt>
-<span class="target" id="classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1_1_agg_converter_1a80b8d1576d15f0d7880c9d80b191f7f8"></span><code class="sig-name descname">int org.apache.calcite.sql2rel.SqlToRelConverter.AggConverter.addGroupExpr(SqlNode expr)</code></dt>
-<dd></dd></dl>
-
-<dl class="function">
-<dt>
-<span class="target" id="classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1_1_agg_converter_1a2574c11a28f655728015391f79ab6352"></span><code class="sig-name descname">Void org.apache.calcite.sql2rel.SqlToRelConverter.AggConverter.visit(SqlIdentifier id)</code></dt>
-<dd></dd></dl>
-
-<dl class="function">
-<dt>
-<span class="target" id="classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1_1_agg_converter_1a0d1c625e33c4bc480b80f76f98b67c0a"></span><code class="sig-name descname">Void org.apache.calcite.sql2rel.SqlToRelConverter.AggConverter.visit(SqlNodeList nodeList)</code></dt>
-<dd></dd></dl>
-
-<dl class="function">
-<dt>
-<span class="target" id="classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1_1_agg_converter_1a9764dcfc6ca3258eed2dc60d14fbad73"></span><code class="sig-name descname">Void org.apache.calcite.sql2rel.SqlToRelConverter.AggConverter.visit(SqlLiteral lit)</code></dt>
-<dd></dd></dl>
-
-<dl class="function">
-<dt>
-<span class="target" id="classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1_1_agg_converter_1a39bfcc8883998561bc44ce18fc27ea77"></span><code class="sig-name descname">Void org.apache.calcite.sql2rel.SqlToRelConverter.AggConverter.visit(SqlDataTypeSpec type)</code></dt>
-<dd></dd></dl>
-
-<dl class="function">
-<dt>
-<span class="target" id="classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1_1_agg_converter_1a62add18e0d97ddd80b0f9f69855747f3"></span><code class="sig-name descname">Void org.apache.calcite.sql2rel.SqlToRelConverter.AggConverter.visit(SqlDynamicParam param)</code></dt>
-<dd></dd></dl>
-
-<dl class="function">
-<dt>
-<span class="target" id="classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1_1_agg_converter_1ad610a2acc8f76ddcbd0a7a0284736b5b"></span><code class="sig-name descname">Void org.apache.calcite.sql2rel.SqlToRelConverter.AggConverter.visit(SqlIntervalQualifier intervalQualifier)</code></dt>
-<dd></dd></dl>
-
-<dl class="function">
-<dt>
-<span class="target" id="classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1_1_agg_converter_1a19e460bf6901e46a269dd52727ea02b2"></span><code class="sig-name descname">Void org.apache.calcite.sql2rel.SqlToRelConverter.AggConverter.visit(SqlCall call)</code></dt>
-<dd></dd></dl>
-
-<dl class="function">
-<dt>
-<span class="target" id="classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1_1_agg_converter_1a8c483108a3f04f067ee53bf4a87ab950"></span><code class="sig-name descname">int org.apache.calcite.sql2rel.SqlToRelConverter.AggConverter.lookupGroupExpr(SqlNode expr)</code></dt>
-<dd><p>If an expression is structurally identical to one of the group-by expressions, returns a reference to the expression, otherwise returns null. </p>
-</dd></dl>
-
-<dl class="function">
-<dt>
-<span class="target" id="classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1_1_agg_converter_1a45bfc2a89cbaaf0b0414b0c915c05c27"></span><code class="sig-name descname">RexNode org.apache.calcite.sql2rel.SqlToRelConverter.AggConverter.lookupAggregates(SqlCall call)</code></dt>
-<dd></dd></dl>
-
-<dl class="function">
-<dt>
-<span class="target" id="classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1_1_agg_converter_1a51fb7c5e9ebc20cce72ee29eb3898626"></span><code class="sig-name descname">List&lt;Pair&lt;RexNode, String&gt; &gt; org.apache.calcite.sql2rel.SqlToRelConverter.AggConverter.getPreExprs()</code></dt>
-<dd></dd></dl>
-
-<dl class="function">
-<dt>
-<span class="target" id="classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1_1_agg_converter_1a81a056cf4f865220e44ec9a707b0cbbb"></span><code class="sig-name descname">List&lt;AggregateCall&gt; org.apache.calcite.sql2rel.SqlToRelConverter.AggConverter.getAggCalls()</code></dt>
-<dd></dd></dl>
-
-<dl class="function">
-<dt>
-<span class="target" id="classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1_1_agg_converter_1a381633eadd4cbbe0ed91de29a4391dc1"></span><code class="sig-name descname">RelDataTypeFactory org.apache.calcite.sql2rel.SqlToRelConverter.AggConverter.getTypeFactory()</code></dt>
-<dd></dd></dl>
-
-</div>
-<div class="breathe-sectiondef docutils container">
-<p class="breathe-sectiondef-title rubric">Public Members</p>
-<dl class="member">
-<dt>
-<span class="target" id="classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1_1_agg_converter_1aa4908c78cb871fb4bc5298fd5df57b6c"></span><code class="sig-name descname">final AggregatingSelectScope org.apache.calcite.sql2rel.SqlToRelConverter.AggConverter.aggregatingSelectScope</code></dt>
-<dd></dd></dl>
-
-</div>
-<div class="breathe-sectiondef docutils container">
-<p class="breathe-sectiondef-title rubric">Private Functions</p>
-<dl class="function">
-<dt>
-<span class="target" id="classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1_1_agg_converter_1a2d8ad18ba641c9c6a1b6c94e46636624"></span><code class="sig-name descname">void org.apache.calcite.sql2rel.SqlToRelConverter.AggConverter.addExpr(RexNode expr, String name)</code></dt>
-<dd><p>Adds an expression, deducing an appropriate name if possible.</p>
-<p><dl class="simple">
-<dt><strong>Parameters</strong></dt><dd><ul class="breatheparameterlist simple">
-<li><p><code class="docutils literal notranslate"><span class="pre">expr</span></code>: Expression </p></li>
-<li><p><code class="docutils literal notranslate"><span class="pre">name</span></code>: Suggested name </p></li>
-</ul>
-</dd>
-</dl>
-</p>
-</dd></dl>
-
-<dl class="function">
-<dt>
-<span class="target" id="classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1_1_agg_converter_1a9d046359bb48ac920be331454f1fd1aa"></span><code class="sig-name descname">void org.apache.calcite.sql2rel.SqlToRelConverter.AggConverter.translateAgg(SqlCall call)</code></dt>
-<dd></dd></dl>
-
-<dl class="function">
-<dt>
-<span class="target" id="classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1_1_agg_converter_1aa0005dfb85cf4cfce8d1f31b4a8aca6c"></span><code class="sig-name descname">void org.apache.calcite.sql2rel.SqlToRelConverter.AggConverter.translateAgg(SqlCall call, SqlNode filter, SqlNodeList orderList, boolean ignoreNulls, SqlCall outerCall)</code></dt>
-<dd></dd></dl>
-
-<dl class="function">
-<dt>
-<span class="target" id="classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1_1_agg_converter_1a6ec5e1ee1697fc52e0411e4db9d398c7"></span><code class="sig-name descname">int org.apache.calcite.sql2rel.SqlToRelConverter.AggConverter.lookupOrCreateGroupExpr(RexNode expr)</code></dt>
-<dd></dd></dl>
-
-</div>
-<div class="breathe-sectiondef docutils container">
-<p class="breathe-sectiondef-title rubric">Private Members</p>
-<dl class="member">
-<dt>
-<span class="target" id="classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1_1_agg_converter_1add5fd4c7cb942250ea3195492c7918ca"></span><code class="sig-name descname">final Blackboard org.apache.calcite.sql2rel.SqlToRelConverter.AggConverter.bb</code></dt>
-<dd></dd></dl>
-
-<dl class="member">
-<dt>
-<span class="target" id="classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1_1_agg_converter_1aeaff34e1bfbca9dbec16738b5f240b54"></span><code class="sig-name descname">final Map&lt;String, String&gt; org.apache.calcite.sql2rel.SqlToRelConverter.AggConverter.nameMap = new HashMap&lt;&gt;()</code></dt>
-<dd></dd></dl>
-
-<dl class="member">
-<dt>
-<span class="target" id="classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1_1_agg_converter_1ae91e74632aba3ff8895b76e32da2d9b5"></span><code class="sig-name descname">final SqlNodeList org.apache.calcite.sql2rel.SqlToRelConverter.AggConverter.groupExprs = new SqlNodeList(SqlParserPos.ZERO)</code></dt>
-<dd><p>The group-by expressions, in SqlNode format. </p>
-</dd></dl>
-
-<dl class="member">
-<dt>
-<span class="target" id="classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1_1_agg_converter_1ac31e52ce36d89e447cc41b6901a3c5da"></span><code class="sig-name descname">final Map&lt;SqlNode, Ord&lt;AuxiliaryConverter&gt; &gt; org.apache.calcite.sql2rel.SqlToRelConverter.AggConverter.auxiliaryGroupExprs=            new HashMap&lt;&gt;()</code></dt>
-<dd><p>The auxiliary group-by expressions. </p>
-</dd></dl>
-
-<dl class="member">
-<dt>
-<span class="target" id="classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1_1_agg_converter_1acacc53a642e170b73de6ea5fea48a3b9"></span><code class="sig-name descname">final List&lt;Pair&lt;RexNode, String&gt; &gt; org.apache.calcite.sql2rel.SqlToRelConverter.AggConverter.convertedInputExprs = new ArrayList&lt;&gt;()</code></dt>
-<dd><p>Input expressions for the group columns and aggregates, in RexNode format. The first elements of the list correspond to the elements in <a class="reference internal" href="classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1_1_agg_converter.html#classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1_1_agg_converter_1ae91e74632aba3ff8895b76e32da2d9b5"><span class="std std-ref">groupExprs</span></a>; the remaining elements are for aggregates. The right field of each pair is the name of the expression, where the expressions are simple mappings to input fields. </p>
-</dd></dl>
-
-<dl class="member">
-<dt>
-<span class="target" id="classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1_1_agg_converter_1a7bb34ac6f5d03c66bfc456c9a6cbf6d8"></span><code class="sig-name descname">final List&lt;AggregateCall&gt; org.apache.calcite.sql2rel.SqlToRelConverter.AggConverter.aggCalls = new ArrayList&lt;&gt;()</code></dt>
-<dd><p>Expressions to be evaluated as rows are being placed into the aggregate’s hash table. This is when group functions such as TUMBLE cause rows to be expanded. </p>
-</dd></dl>
-
-<dl class="member">
-<dt>
-<span class="target" id="classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1_1_agg_converter_1a05cdaeaec4cce9f9700b799a601e2a08"></span><code class="sig-name descname">final Map&lt;SqlNode, RexNode&gt; org.apache.calcite.sql2rel.SqlToRelConverter.AggConverter.aggMapping = new HashMap&lt;&gt;()</code></dt>
-<dd></dd></dl>
-
-<dl class="member">
-<dt>
-<span class="target" id="classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1_1_agg_converter_1a8757d6a0f8e0b4eb8e179047f7ed47fb"></span><code class="sig-name descname">final Map&lt;AggregateCall, RexNode&gt; org.apache.calcite.sql2rel.SqlToRelConverter.AggConverter.aggCallMapping = new HashMap&lt;&gt;()</code></dt>
-<dd></dd></dl>
-
-<dl class="member">
-<dt>
-<span class="target" id="classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1_1_agg_converter_1a6c733ada51fe6123f5a6bc69e1d6b45d"></span><code class="sig-name descname">boolean org.apache.calcite.sql2rel.SqlToRelConverter.AggConverter.inOver = false</code></dt>
-<dd><p>Are we directly inside a windowed aggregate? </p>
-</dd></dl>
-
-</div>
-</dd></dl>
-
-<dl class="class">
-<dt id="_CPPv4N3org6apache7calcite7sql2rel17SqlToRelConverter15AggregateFinderE">
-<span id="_CPPv3N3org6apache7calcite7sql2rel17SqlToRelConverter15AggregateFinderE"></span><span id="_CPPv2N3org6apache7calcite7sql2rel17SqlToRelConverter15AggregateFinderE"></span><span id="org::apache::calcite::sql2rel::SqlToRelConverter::AggregateFinder"></span><span class="target" id="classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1_1_aggregate_finder"></span><em class="property">class </em><code class="sig-name descname">AggregateFinder</code> : <em class="property">public</em> org::apache::calcite::sql::util::SqlBasicVisitor&lt;Void&gt;<a class="headerlink" href="#_CPPv4N3org6apache7calcite7sql2rel17SqlToRelConverter15AggregateFinderE" title="Permalink to this definition">¶</a><br /></dt>
-<dd><p>Visitor that collects all aggregate functions in a SqlNode tree. </p>
-<div class="breathe-sectiondef docutils container">
-<p class="breathe-sectiondef-title rubric">Public Functions</p>
-<dl class="function">
-<dt>
-<span class="target" id="classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1_1_aggregate_finder_1ab9a30ac3b1c5deb5fd2194467c91c759"></span><code class="sig-name descname">Void org.apache.calcite.sql2rel.SqlToRelConverter.AggregateFinder.visit(SqlCall call)</code></dt>
-<dd></dd></dl>
-
-</div>
-</dd></dl>
-
-<dl class="class">
 <dt id="_CPPv4N3org6apache7calcite7sql2rel17SqlToRelConverter10BlackboardE">
 <span id="_CPPv3N3org6apache7calcite7sql2rel17SqlToRelConverter10BlackboardE"></span><span id="_CPPv2N3org6apache7calcite7sql2rel17SqlToRelConverter10BlackboardE"></span><span id="org::apache::calcite::sql2rel::SqlToRelConverter::Blackboard"></span><span class="target" id="classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1_1_blackboard"></span><em class="property">class </em><code class="sig-name descname">Blackboard</code> : <em class="property">public</em> SqlRexContext, <em class="property">public</em> org::apache::calcite::sql::util::SqlVisitor&lt;RexNode&gt;, <em class="property">public</em> InitializerContext<a class="headerlink" href="#_CPPv4N3org6apache7calcite7sql2rel17SqlToRelConverter10BlackboardE" title="Permalink to this definition">¶</a><br /></dt>
 <dd><p>Workspace for translating an individual SELECT statement (or sub-SELECT). </p>
@@ -2822,102 +2621,6 @@
 </p>
 </dd></dl>
 
-<dl class="function">
-<dt>
-<span class="target" id="classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1_1_blackboard_1ac52a370dd22406054f814655299369e8"></span><code class="sig-name descname">void org.apache.calcite.sql2rel.SqlToRelConverter.Blackboard.flatten(List&lt; RelNode &gt; rels, int systemFieldCount, int[] start, List&lt; Pair&lt; RelNode, Integer &gt;&gt; relOffsetList)</code></dt>
-<dd></dd></dl>
-
-<dl class="function">
-<dt>
-<span class="target" id="classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1_1_blackboard_1a7a52cc1c5b81a10dd8ae27200d996bcb"></span><code class="sig-name descname">RexNode org.apache.calcite.sql2rel.SqlToRelConverter.Blackboard.convertExpression(SqlNode expr)</code></dt>
-<dd></dd></dl>
-
-<dl class="function">
-<dt>
-<span class="target" id="classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1_1_blackboard_1a80e742b71aa20ff97372c277826f6075"></span><code class="sig-name descname">RexFieldCollation org.apache.calcite.sql2rel.SqlToRelConverter.Blackboard.convertSortExpression(SqlNode expr, RelFieldCollation.Direction direction, RelFieldCollation.NullDirection nullDirection)</code></dt>
-<dd><p>Converts an item in an ORDER BY clause inside a window (OVER) clause, extracting DESC, NULLS LAST and NULLS FIRST flags first. </p>
-</dd></dl>
-
-<dl class="function">
-<dt>
-<span class="target" id="classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1_1_blackboard_1a435cf42b90d01a33f7237691b4416cf8"></span><code class="sig-name descname">int org.apache.calcite.sql2rel.SqlToRelConverter.Blackboard.getGroupCount()</code></dt>
-<dd></dd></dl>
-
-<dl class="function">
-<dt>
-<span class="target" id="classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1_1_blackboard_1afc5ee14d0c1a6ed653c50ac6e16a39b1"></span><code class="sig-name descname">RexBuilder org.apache.calcite.sql2rel.SqlToRelConverter.Blackboard.getRexBuilder()</code></dt>
-<dd></dd></dl>
-
-<dl class="function">
-<dt>
-<span class="target" id="classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1_1_blackboard_1ad3936ed4a79bf248f9f923d1389ebf10"></span><code class="sig-name descname">RexRangeRef org.apache.calcite.sql2rel.SqlToRelConverter.Blackboard.getSubQueryExpr(SqlCall call)</code></dt>
-<dd></dd></dl>
-
-<dl class="function">
-<dt>
-<span class="target" id="classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1_1_blackboard_1a005ff89979e0d16902e2fdfe4f84262b"></span><code class="sig-name descname">RelDataTypeFactory org.apache.calcite.sql2rel.SqlToRelConverter.Blackboard.getTypeFactory()</code></dt>
-<dd></dd></dl>
-
-<dl class="function">
-<dt>
-<span class="target" id="classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1_1_blackboard_1a0a2344647d8d35ac63663af326641dad"></span><code class="sig-name descname">InitializerExpressionFactory org.apache.calcite.sql2rel.SqlToRelConverter.Blackboard.getInitializerExpressionFactory()</code></dt>
-<dd></dd></dl>
-
-<dl class="function">
-<dt>
-<span class="target" id="classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1_1_blackboard_1a65a43b63ad0e21ecd3a03675b6b9d2a6"></span><code class="sig-name descname">SqlValidator org.apache.calcite.sql2rel.SqlToRelConverter.Blackboard.getValidator()</code></dt>
-<dd></dd></dl>
-
-<dl class="function">
-<dt>
-<span class="target" id="classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1_1_blackboard_1ae2ac093530d5ca1dd3aef77f452a933a"></span><code class="sig-name descname">RexNode org.apache.calcite.sql2rel.SqlToRelConverter.Blackboard.convertLiteral(SqlLiteral literal)</code></dt>
-<dd></dd></dl>
-
-<dl class="function">
-<dt>
-<span class="target" id="classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1_1_blackboard_1a7f798e90dcfdedaa5b9d8b0c46106f67"></span><code class="sig-name descname">RexNode org.apache.calcite.sql2rel.SqlToRelConverter.Blackboard.convertInterval(SqlIntervalQualifier intervalQualifier)</code></dt>
-<dd></dd></dl>
-
-<dl class="function">
-<dt>
-<span class="target" id="classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1_1_blackboard_1ada92fbc372bc74280b15404e7e2d6e7c"></span><code class="sig-name descname">RexNode org.apache.calcite.sql2rel.SqlToRelConverter.Blackboard.visit(SqlLiteral literal)</code></dt>
-<dd></dd></dl>
-
-<dl class="function">
-<dt>
-<span class="target" id="classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1_1_blackboard_1a25c9cfb6a16dc61fdc00727835dab640"></span><code class="sig-name descname">RexNode org.apache.calcite.sql2rel.SqlToRelConverter.Blackboard.visit(SqlCall call)</code></dt>
-<dd></dd></dl>
-
-<dl class="function">
-<dt>
-<span class="target" id="classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1_1_blackboard_1ad62b4d5bfd356866bd74170442dbf502"></span><code class="sig-name descname">RexNode org.apache.calcite.sql2rel.SqlToRelConverter.Blackboard.visit(SqlNodeList nodeList)</code></dt>
-<dd></dd></dl>
-
-<dl class="function">
-<dt>
-<span class="target" id="classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1_1_blackboard_1a52b607cb606b85da7d09278b5473d617"></span><code class="sig-name descname">RexNode org.apache.calcite.sql2rel.SqlToRelConverter.Blackboard.visit(SqlIdentifier id)</code></dt>
-<dd></dd></dl>
-
-<dl class="function">
-<dt>
-<span class="target" id="classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1_1_blackboard_1ae1b39a17f10694932e08006284a6ca11"></span><code class="sig-name descname">RexNode org.apache.calcite.sql2rel.SqlToRelConverter.Blackboard.visit(SqlDataTypeSpec type)</code></dt>
-<dd></dd></dl>
-
-<dl class="function">
-<dt>
-<span class="target" id="classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1_1_blackboard_1ab21b2c058ce23aadb9e0e78a11c741d6"></span><code class="sig-name descname">RexNode org.apache.calcite.sql2rel.SqlToRelConverter.Blackboard.visit(SqlDynamicParam param)</code></dt>
-<dd></dd></dl>
-
-<dl class="function">
-<dt>
-<span class="target" id="classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1_1_blackboard_1add79e5050076cc912945ca7aff3496c5"></span><code class="sig-name descname">RexNode org.apache.calcite.sql2rel.SqlToRelConverter.Blackboard.visit(SqlIntervalQualifier intervalQualifier)</code></dt>
-<dd></dd></dl>
-
-<dl class="function">
-<dt>
-<span class="target" id="classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1_1_blackboard_1a20d1e56286d5b93b8a7c863c763b2dcd"></span><code class="sig-name descname">List&lt;SqlMonotonicity&gt; org.apache.calcite.sql2rel.SqlToRelConverter.Blackboard.getColumnMonotonicities()</code></dt>
-<dd></dd></dl>
-
 </div>
 <div class="breathe-sectiondef docutils container">
 <p class="breathe-sectiondef-title rubric">Public Members</p>
@@ -2958,21 +2661,6 @@
 <span class="target" id="classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1_1_blackboard_1a704081369a9da9412a18f250ef7baf7d"></span><code class="sig-name descname">void org.apache.calcite.sql2rel.SqlToRelConverter.Blackboard.setRoot(List&lt; RelNode &gt; inputs, RelNode root, boolean hasSystemFields)</code></dt>
 <dd></dd></dl>
 
-<dl class="function">
-<dt>
-<span class="target" id="classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1_1_blackboard_1a7158eaad06f1eb38c941310ca69e0b4d"></span><code class="sig-name descname">boolean org.apache.calcite.sql2rel.SqlToRelConverter.Blackboard.isConvertedSubq(RexNode rex)</code></dt>
-<dd><p>Determines whether a RexNode corresponds to a sub-query that’s been converted to a constant.</p>
-<p><dl class="simple">
-<dt><strong>Return</strong></dt><dd><p>true if the expression is a dynamic parameter, a literal, or a literal that is being cast </p>
-</dd>
-<dt><strong>Parameters</strong></dt><dd><ul class="breatheparameterlist simple">
-<li><p><code class="docutils literal notranslate"><span class="pre">rex</span></code>: the expression to be examined </p></li>
-</ul>
-</dd>
-</dl>
-</p>
-</dd></dl>
-
 </div>
 <div class="breathe-sectiondef docutils container">
 <p class="breathe-sectiondef-title rubric">Private Members</p>
@@ -2998,7 +2686,7 @@
 
 <dl class="member">
 <dt>
-<span class="target" id="classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1_1_blackboard_1acb9b4c6581a763dd44f43dfcd9eff24e"></span><code class="sig-name descname">final Set&lt;SubQuery&gt; org.apache.calcite.sql2rel.SqlToRelConverter.Blackboard.subQueryList = new LinkedHashSet&lt;&gt;()</code></dt>
+<span class="target" id="classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1_1_blackboard_1a181bd1b1342cf11baba023864d26bbb2"></span><code class="sig-name descname">final List&lt;SubQuery&gt; org.apache.calcite.sql2rel.SqlToRelConverter.Blackboard.subQueryList = new ArrayList&lt;&gt;()</code></dt>
 <dd><p>List of <code class="docutils literal notranslate"><span class="pre">IN</span></code> and <code class="docutils literal notranslate"><span class="pre">EXISTS</span></code> nodes inside this <code class="docutils literal notranslate"><span class="pre">SELECT</span></code> statement (but not inside sub-queries). </p>
 </dd></dl>
 
@@ -3026,440 +2714,6 @@
 </div>
 </dd></dl>
 
-<dl class="interface">
-<dt id="_CPPv4N3org6apache7calcite7sql2rel17SqlToRelConverter6ConfigE">
-<span id="_CPPv3N3org6apache7calcite7sql2rel17SqlToRelConverter6ConfigE"></span><span id="_CPPv2N3org6apache7calcite7sql2rel17SqlToRelConverter6ConfigE"></span><span id="org::apache::calcite::sql2rel::SqlToRelConverter::Config"></span><span class="target" id="interfaceorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1_1_config"></span><em class="property">interface </em><code class="sig-name descname">Config</code><a class="headerlink" href="#_CPPv4N3org6apache7calcite7sql2rel17SqlToRelConverter6ConfigE" title="Permalink to this definition">¶</a><br /></dt>
-<dd><p>Interface to define the configuration for a <a class="reference internal" href="#classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter"><span class="std std-ref">SqlToRelConverter</span></a>. Provides methods to set each configuration option.</p>
-<p><dl>
-<dt><strong>See</strong></dt><dd><p><a class="reference internal" href="classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1_1_config_builder.html#classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1_1_config_builder"><span class="std std-ref">ConfigBuilder</span></a> </p>
-<p><a class="reference internal" href="#classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1a513e562db3d01e599197d0af69d1b751"><span class="std std-ref">SqlToRelConverter::configBuilder()</span></a> </p>
-</dd>
-</dl>
-</p>
-<p>Subclassed by <a class="reference internal" href="classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1_1_config_impl.html#classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1_1_config_impl"><span class="std std-ref">org.apache.calcite.sql2rel.SqlToRelConverter.ConfigImpl</span></a></p>
-<div class="breathe-sectiondef docutils container">
-<p class="breathe-sectiondef-title rubric">Public Functions</p>
-<dl class="function">
-<dt>
-<span class="target" id="interfaceorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1_1_config_1a8438e33b7864ba7b207adfbf08b2ce02"></span><code class="sig-name descname">boolean org.apache.calcite.sql2rel.SqlToRelConverter.Config.isConvertTableAccess()</code></dt>
-<dd><p>Returns the<div class="highlight-cpp notranslate"><div class="highlight"><pre><span></span><span class="n">convertTableAccess</span> 
-</pre></div>
-</div>
- option. Controls whether table access references are converted to physical rels immediately. The optimizer doesn’t like leaf rels to have Convention#NONE. However, if we are doing further conversion passes (e.g. RelStructuredTypeFlattener), then we may need to defer conversion. </p>
-</dd></dl>
-
-<dl class="function">
-<dt>
-<span class="target" id="interfaceorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1_1_config_1ae6a82fc1a2985972fb06b3362767773f"></span><code class="sig-name descname">BiPredicate&lt;SqlNode, Join&gt; org.apache.calcite.sql2rel.SqlToRelConverter.Config.getPushdownJoinCondition()</code></dt>
-<dd><p>Returns if join conditions should be pushed down to the projections, if possible. </p>
-</dd></dl>
-
-<dl class="function">
-<dt>
-<span class="target" id="interfaceorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1_1_config_1a12682591a5214ae09700ebea66da99be"></span><code class="sig-name descname">boolean org.apache.calcite.sql2rel.SqlToRelConverter.Config.isDecorrelationEnabled()</code></dt>
-<dd><p>Returns the<div class="highlight-cpp notranslate"><div class="highlight"><pre><span></span><span class="n">decorrelationEnabled</span> 
-</pre></div>
-</div>
- option. Controls whether to disable sub-query decorrelation when needed. e.g. if outer joins are not supported. </p>
-</dd></dl>
-
-<dl class="function">
-<dt>
-<span class="target" id="interfaceorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1_1_config_1a461899b7ac26429d4b8eff8b1a7ff3cd"></span><code class="sig-name descname">boolean org.apache.calcite.sql2rel.SqlToRelConverter.Config.isTrimUnusedFields()</code></dt>
-<dd><p>Returns the<div class="highlight-cpp notranslate"><div class="highlight"><pre><span></span><span class="n">trimUnusedFields</span> 
-</pre></div>
-</div>
- option. Controls whether to trim unused fields as part of the conversion process. </p>
-</dd></dl>
-
-<dl class="function">
-<dt>
-<span class="target" id="interfaceorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1_1_config_1a5b4f52f292c7e92a9266de924eff71cb"></span><code class="sig-name descname">boolean org.apache.calcite.sql2rel.SqlToRelConverter.Config.isCreateValuesRel()</code></dt>
-<dd><p>Returns the<div class="highlight-cpp notranslate"><div class="highlight"><pre><span></span><span class="n">createValuesRel</span> 
-</pre></div>
-</div>
- option. Controls whether instances of org.apache.calcite.rel.logical.LogicalValues are generated. These may not be supported by all physical implementations. </p>
-</dd></dl>
-
-<dl class="function">
-<dt>
-<span class="target" id="interfaceorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1_1_config_1ac348245196a4e9be181714705d5d9681"></span><code class="sig-name descname">boolean org.apache.calcite.sql2rel.SqlToRelConverter.Config.isExplain()</code></dt>
-<dd><p>Returns the<div class="highlight-cpp notranslate"><div class="highlight"><pre><span></span><span class="n">explain</span> 
-</pre></div>
-</div>
- option. Describes whether the current statement is part of an EXPLAIN PLAN statement. </p>
-</dd></dl>
-
-<dl class="function">
-<dt>
-<span class="target" id="interfaceorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1_1_config_1a6aa8a2b29a93c80d45b18e027a050dc4"></span><code class="sig-name descname">boolean org.apache.calcite.sql2rel.SqlToRelConverter.Config.isExpand()</code></dt>
-<dd><p>Returns the<div class="highlight-cpp notranslate"><div class="highlight"><pre><span></span><span class="n">expand</span> 
-</pre></div>
-</div>
- option. Controls whether to expand sub-queries. If false, each sub-query becomes a org.apache.calcite.rex.RexSubQuery. </p>
-</dd></dl>
-
-<dl class="function">
-<dt>
-<span class="target" id="interfaceorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1_1_config_1a779c6e319234e52ddce8e1d61fc9560c"></span><code class="sig-name descname">BiPredicate&lt;SqlNode, SqlNode&gt; org.apache.calcite.sql2rel.SqlToRelConverter.Config.getExpandPredicate()</code></dt>
-<dd><p>predicate used to determine if a sql node should be expanded. (assuming expansion is supported for that node) </p>
-<p>Per default returns the vaule of <a class="reference internal" href="#interfaceorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1_1_config_1a6aa8a2b29a93c80d45b18e027a050dc4"><span class="std std-ref">isExpand()</span></a> on all nodes </p>
-</dd></dl>
-
-<dl class="function">
-<dt>
-<span class="target" id="interfaceorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1_1_config_1a4ee1bbacf7cc72a65bf9ed45f08ba275"></span><code class="sig-name descname">int org.apache.calcite.sql2rel.SqlToRelConverter.Config.getInSubQueryThreshold()</code></dt>
-<dd><p>Returns the<div class="highlight-cpp notranslate"><div class="highlight"><pre><span></span><span class="n">inSubQueryThreshold</span> 
-</pre></div>
-</div>
- option, default <a class="reference internal" href="#classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1ac57dda534f79662ea72deffa32f83d2e"><span class="std std-ref">DEFAULT_IN_SUB_QUERY_THRESHOLD</span></a>. Controls the list size threshold under which <a class="reference internal" href="#classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1aec65d5899661e58ec7b362c0f3e86d06"><span class="std std-ref">convertInToOr</span></a> is used. Lists of this size or greater will instead be converted to use a join against an inline table (org.apache.calcite.rel.logical.LogicalValues) rather than a predicate. A threshold of 0 forces usage of an inline table in all cases; a threshold of Integer#MAX_VALUE forces usage of OR in all cases. </p>
-</dd></dl>
-
-<dl class="function">
-<dt>
-<span class="target" id="interfaceorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1_1_config_1aa99a909a715de0cd447f5e7f7c2b288a"></span><code class="sig-name descname">RelBuilderFactory org.apache.calcite.sql2rel.SqlToRelConverter.Config.getRelBuilderFactory()</code></dt>
-<dd><p>Returns the factory to create RelBuilder, never null. Default is RelFactories#LOGICAL_BUILDER. </p>
-</dd></dl>
-
-</div>
-<div class="breathe-sectiondef docutils container">
-<p class="breathe-sectiondef-title rubric">Public Members</p>
-<dl class="member">
-<dt>
-<span class="target" id="interfaceorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1_1_config_1a2fec5b55bb7086254a225732c12dace6"></span><code class="sig-name descname">Config org.apache.calcite.sql2rel.SqlToRelConverter.Config.DEFAULT = configBuilder().build()</code></dt>
-<dd><p>Default configuration. </p>
-</dd></dl>
-
-</div>
-</dd></dl>
-
-<dl class="class">
-<dt id="_CPPv4N3org6apache7calcite7sql2rel17SqlToRelConverter13ConfigBuilderE">
-<span id="_CPPv3N3org6apache7calcite7sql2rel17SqlToRelConverter13ConfigBuilderE"></span><span id="_CPPv2N3org6apache7calcite7sql2rel17SqlToRelConverter13ConfigBuilderE"></span><span id="org::apache::calcite::sql2rel::SqlToRelConverter::ConfigBuilder"></span><span class="target" id="classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1_1_config_builder"></span><em class="property">class </em><code class="sig-name descname">ConfigBuilder</code><a class="headerlink" href="#_CPPv4N3org6apache7calcite7sql2rel17SqlToRelConverter13ConfigBuilderE" title="Permalink to this definition">¶</a><br /></dt>
-<dd><p>Builder for a <a class="reference internal" href="#interfaceorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1_1_config"><span class="std std-ref">Config</span></a>. </p>
-<div class="breathe-sectiondef docutils container">
-<p class="breathe-sectiondef-title rubric">Public Functions</p>
-<dl class="function">
-<dt>
-<span class="target" id="classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1_1_config_builder_1ab0bffd19ed5b5703c029191baf51b093"></span><code class="sig-name descname">ConfigBuilder org.apache.calcite.sql2rel.SqlToRelConverter.ConfigBuilder.withConfig(Config config)</code></dt>
-<dd><p>Sets configuration identical to a given <a class="reference internal" href="#interfaceorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1_1_config"><span class="std std-ref">Config</span></a>. </p>
-</dd></dl>
-
-<dl class="function">
-<dt>
-<span class="target" id="classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1_1_config_builder_1a76a08af49c98b12aa1337cc61d743760"></span><code class="sig-name descname">ConfigBuilder org.apache.calcite.sql2rel.SqlToRelConverter.ConfigBuilder.withConvertTableAccess(boolean convertTableAccess)</code></dt>
-<dd></dd></dl>
-
-<dl class="function">
-<dt>
-<span class="target" id="classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1_1_config_builder_1a742db398391df0ca9cb365b00742dd81"></span><code class="sig-name descname">ConfigBuilder org.apache.calcite.sql2rel.SqlToRelConverter.ConfigBuilder.withDecorrelationEnabled(boolean enabled)</code></dt>
-<dd></dd></dl>
-
-<dl class="function">
-<dt>
-<span class="target" id="classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1_1_config_builder_1a3940b1ed1eceb81e4df10d9d1e39114a"></span><code class="sig-name descname">ConfigBuilder org.apache.calcite.sql2rel.SqlToRelConverter.ConfigBuilder.withTrimUnusedFields(boolean trimUnusedFields)</code></dt>
-<dd></dd></dl>
-
-<dl class="function">
-<dt>
-<span class="target" id="classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1_1_config_builder_1ad6ba60553b40e49c57ae06866cc95748"></span><code class="sig-name descname">ConfigBuilder org.apache.calcite.sql2rel.SqlToRelConverter.ConfigBuilder.withCreateValuesRel(boolean createValuesRel)</code></dt>
-<dd></dd></dl>
-
-<dl class="function">
-<dt>
-<span class="target" id="classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1_1_config_builder_1aea8a5302e0f0179f727e663dccc2b79b"></span><code class="sig-name descname">ConfigBuilder org.apache.calcite.sql2rel.SqlToRelConverter.ConfigBuilder.withExplain(boolean explain)</code></dt>
-<dd></dd></dl>
-
-<dl class="function">
-<dt>
-<span class="target" id="classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1_1_config_builder_1ab28a58c2fbcba22be62a8aeb5d420e44"></span><code class="sig-name descname">ConfigBuilder org.apache.calcite.sql2rel.SqlToRelConverter.ConfigBuilder.withExpand(boolean expand)</code></dt>
-<dd></dd></dl>
-
-<dl class="function">
-<dt>
-<span class="target" id="classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1_1_config_builder_1a285687ef5a2379efe142a42014286008"></span><code class="sig-name descname">ConfigBuilder org.apache.calcite.sql2rel.SqlToRelConverter.ConfigBuilder.withPushdownJoinCondition(BiPredicate&lt; SqlNode, Join &gt; pushdown)</code></dt>
-<dd></dd></dl>
-
-<dl class="function">
-<dt>
-<span class="target" id="classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1_1_config_builder_1a7248f5037a6239b97068ccd28658190d"></span><code class="sig-name descname">ConfigBuilder org.apache.calcite.sql2rel.SqlToRelConverter.ConfigBuilder.withExpandPredicate(BiPredicate&lt; SqlNode, SqlNode &gt; predicate)</code></dt>
-<dd></dd></dl>
-
-<dl class="function">
-<dt>
-<span class="target" id="classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1_1_config_builder_1addafb21971c480de1de29db464101bf8"></span><code class="sig-name descname">ConfigBuilder org.apache.calcite.sql2rel.SqlToRelConverter.ConfigBuilder.withInSubqueryThreshold(int inSubQueryThreshold)</code></dt>
-<dd></dd></dl>
-
-<dl class="function">
-<dt>
-<span class="target" id="classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1_1_config_builder_1a4bb26ac799d922e8e1944582f6f6c6b4"></span><code class="sig-name descname">ConfigBuilder org.apache.calcite.sql2rel.SqlToRelConverter.ConfigBuilder.withInSubQueryThreshold(int inSubQueryThreshold)</code></dt>
-<dd></dd></dl>
-
-<dl class="function">
-<dt>
-<span class="target" id="classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1_1_config_builder_1a28d8c0c5968f55f092e33da02edb6826"></span><code class="sig-name descname">ConfigBuilder org.apache.calcite.sql2rel.SqlToRelConverter.ConfigBuilder.withRelBuilderFactory(RelBuilderFactory relBuilderFactory)</code></dt>
-<dd></dd></dl>
-
-<dl class="function">
-<dt>
-<span class="target" id="classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1_1_config_builder_1a894f2d99773b208158c7802acf85caf9"></span><code class="sig-name descname">Config org.apache.calcite.sql2rel.SqlToRelConverter.ConfigBuilder.build()</code></dt>
-<dd><p>Builds a <a class="reference internal" href="#interfaceorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1_1_config"><span class="std std-ref">Config</span></a>. </p>
-</dd></dl>
-
-</div>
-<div class="breathe-sectiondef docutils container">
-<p class="breathe-sectiondef-title rubric">Private Functions</p>
-<dl class="function">
-<dt>
-<span class="target" id="classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1_1_config_builder_1a9eb687b0b721611574232747e6d7a5ff"></span><code class="sig-name descname">org.apache.calcite.sql2rel.SqlToRelConverter.ConfigBuilder.ConfigBuilder()</code></dt>
-<dd></dd></dl>
-
-</div>
-<div class="breathe-sectiondef docutils container">
-<p class="breathe-sectiondef-title rubric">Private Members</p>
-<dl class="member">
-<dt>
-<span class="target" id="classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1_1_config_builder_1aeae5f1dbcb508eff1f177133ba5a3088"></span><code class="sig-name descname">boolean org.apache.calcite.sql2rel.SqlToRelConverter.ConfigBuilder.convertTableAccess = true</code></dt>
-<dd></dd></dl>
-
-<dl class="member">
-<dt>
-<span class="target" id="classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1_1_config_builder_1a05b03a5d1c9c97b78922da530283cbc7"></span><code class="sig-name descname">boolean org.apache.calcite.sql2rel.SqlToRelConverter.ConfigBuilder.decorrelationEnabled = true</code></dt>
-<dd></dd></dl>
-
-<dl class="member">
-<dt>
-<span class="target" id="classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1_1_config_builder_1a7886947f3101c448b7f7e3fb92418969"></span><code class="sig-name descname">boolean org.apache.calcite.sql2rel.SqlToRelConverter.ConfigBuilder.trimUnusedFields = false</code></dt>
-<dd></dd></dl>
-
-<dl class="member">
-<dt>
-<span class="target" id="classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1_1_config_builder_1a1be50b1130d29448fde557e49046098d"></span><code class="sig-name descname">boolean org.apache.calcite.sql2rel.SqlToRelConverter.ConfigBuilder.createValuesRel = true</code></dt>
-<dd></dd></dl>
-
-<dl class="member">
-<dt>
-<span class="target" id="classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1_1_config_builder_1acdd21d58ce277e5bc168b7ffc833bbf4"></span><code class="sig-name descname">boolean org.apache.calcite.sql2rel.SqlToRelConverter.ConfigBuilder.explain</code></dt>
-<dd></dd></dl>
-
-<dl class="member">
-<dt>
-<span class="target" id="classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1_1_config_builder_1a4e9cc7ba37495dffb95a70d54c630a9c"></span><code class="sig-name descname">boolean org.apache.calcite.sql2rel.SqlToRelConverter.ConfigBuilder.expand = true</code></dt>
-<dd></dd></dl>
-
-<dl class="member">
-<dt>
-<span class="target" id="classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1_1_config_builder_1aa42b8b1e5e97bce921d2086e887b3343"></span><code class="sig-name descname">BiPredicate&lt;SqlNode, Join&gt; org.apache.calcite.sql2rel.SqlToRelConverter.ConfigBuilder.pushdownJoinCondition</code></dt>
-<dd></dd></dl>
-
-<dl class="member">
-<dt>
-<span class="target" id="classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1_1_config_builder_1a397749e3af7779de929767fcf7ea1a38"></span><code class="sig-name descname">int org.apache.calcite.sql2rel.SqlToRelConverter.ConfigBuilder.inSubQueryThreshold = DEFAULT_IN_SUB_QUERY_THRESHOLD</code></dt>
-<dd></dd></dl>
-
-<dl class="member">
-<dt>
-<span class="target" id="classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1_1_config_builder_1a3f6e7eff5ec916242370dcd1ffbf8acb"></span><code class="sig-name descname">RelBuilderFactory org.apache.calcite.sql2rel.SqlToRelConverter.ConfigBuilder.relBuilderFactory = RelFactories.LOGICAL_BUILDER</code></dt>
-<dd></dd></dl>
-
-<dl class="member">
-<dt>
-<span class="target" id="classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1_1_config_builder_1a7202c00f1da769cca8f47eba6efa2772"></span><code class="sig-name descname">BiPredicate&lt;SqlNode, SqlNode&gt; org.apache.calcite.sql2rel.SqlToRelConverter.ConfigBuilder.expandPredicate</code></dt>
-<dd></dd></dl>
-
-</div>
-</dd></dl>
-
-<dl class="class">
-<dt>
-<span class="target" id="classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1_1_config_impl"></span><em class="property">class </em></dt>
-<dd><p>Implementation of <a class="reference internal" href="#interfaceorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1_1_config"><span class="std std-ref">Config</span></a>. Called by builder; all values are in private final fields. </p>
-<div class="breathe-sectiondef docutils container">
-<p class="breathe-sectiondef-title rubric">Public Functions</p>
-<dl class="function">
-<dt>
-<span class="target" id="classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1_1_config_impl_1abb0dfe0bf72fb3e9c4ab062e9db66457"></span><code class="sig-name descname">boolean org.apache.calcite.sql2rel.SqlToRelConverter.ConfigImpl.isConvertTableAccess()</code></dt>
-<dd><p>Returns the<div class="highlight-cpp notranslate"><div class="highlight"><pre><span></span><span class="n">convertTableAccess</span> 
-</pre></div>
-</div>
- option. Controls whether table access references are converted to physical rels immediately. The optimizer doesn’t like leaf rels to have Convention#NONE. However, if we are doing further conversion passes (e.g. RelStructuredTypeFlattener), then we may need to defer conversion. </p>
-</dd></dl>
-
-<dl class="function">
-<dt>
-<span class="target" id="classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1_1_config_impl_1aeadc07e4f1ef468ab01a47189906fd09"></span><code class="sig-name descname">boolean org.apache.calcite.sql2rel.SqlToRelConverter.ConfigImpl.isDecorrelationEnabled()</code></dt>
-<dd><p>Returns the<div class="highlight-cpp notranslate"><div class="highlight"><pre><span></span><span class="n">decorrelationEnabled</span> 
-</pre></div>
-</div>
- option. Controls whether to disable sub-query decorrelation when needed. e.g. if outer joins are not supported. </p>
-</dd></dl>
-
-<dl class="function">
-<dt>
-<span class="target" id="classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1_1_config_impl_1afae38e080c527f2209f5482e420ec6e8"></span><code class="sig-name descname">boolean org.apache.calcite.sql2rel.SqlToRelConverter.ConfigImpl.isTrimUnusedFields()</code></dt>
-<dd><p>Returns the<div class="highlight-cpp notranslate"><div class="highlight"><pre><span></span><span class="n">trimUnusedFields</span> 
-</pre></div>
-</div>
- option. Controls whether to trim unused fields as part of the conversion process. </p>
-</dd></dl>
-
-<dl class="function">
-<dt>
-<span class="target" id="classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1_1_config_impl_1a36dead14e691283950c170ad305c8234"></span><code class="sig-name descname">boolean org.apache.calcite.sql2rel.SqlToRelConverter.ConfigImpl.isCreateValuesRel()</code></dt>
-<dd><p>Returns the<div class="highlight-cpp notranslate"><div class="highlight"><pre><span></span><span class="n">createValuesRel</span> 
-</pre></div>
-</div>
- option. Controls whether instances of org.apache.calcite.rel.logical.LogicalValues are generated. These may not be supported by all physical implementations. </p>
-</dd></dl>
-
-<dl class="function">
-<dt>
-<span class="target" id="classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1_1_config_impl_1a7c9a0be51ed0da609d86a69633256dc8"></span><code class="sig-name descname">boolean org.apache.calcite.sql2rel.SqlToRelConverter.ConfigImpl.isExplain()</code></dt>
-<dd><p>Returns the<div class="highlight-cpp notranslate"><div class="highlight"><pre><span></span><span class="n">explain</span> 
-</pre></div>
-</div>
- option. Describes whether the current statement is part of an EXPLAIN PLAN statement. </p>
-</dd></dl>
-
-<dl class="function">
-<dt>
-<span class="target" id="classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1_1_config_impl_1a3ed117d98f060952db61c3abea017914"></span><code class="sig-name descname">boolean org.apache.calcite.sql2rel.SqlToRelConverter.ConfigImpl.isExpand()</code></dt>
-<dd><p>Returns the<div class="highlight-cpp notranslate"><div class="highlight"><pre><span></span><span class="n">expand</span> 
-</pre></div>
-</div>
- option. Controls whether to expand sub-queries. If false, each sub-query becomes a org.apache.calcite.rex.RexSubQuery. </p>
-</dd></dl>
-
-<dl class="function">
-<dt>
-<span class="target" id="classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1_1_config_impl_1a532f8cad0870539fb6087eaf70cb1bfd"></span><code class="sig-name descname">BiPredicate&lt;SqlNode, Join&gt; org.apache.calcite.sql2rel.SqlToRelConverter.ConfigImpl.getPushdownJoinCondition()</code></dt>
-<dd><p>Returns if join conditions should be pushed down to the projections, if possible. </p>
-</dd></dl>
-
-<dl class="function">
-<dt>
-<span class="target" id="classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1_1_config_impl_1a3fe0bf81fe043d412c9186275410447c"></span><code class="sig-name descname">int org.apache.calcite.sql2rel.SqlToRelConverter.ConfigImpl.getInSubQueryThreshold()</code></dt>
-<dd><p>Returns the<div class="highlight-cpp notranslate"><div class="highlight"><pre><span></span><span class="n">inSubQueryThreshold</span> 
-</pre></div>
-</div>
- option, default <a class="reference internal" href="#classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1ac57dda534f79662ea72deffa32f83d2e"><span class="std std-ref">DEFAULT_IN_SUB_QUERY_THRESHOLD</span></a>. Controls the list size threshold under which <a class="reference internal" href="#classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1aec65d5899661e58ec7b362c0f3e86d06"><span class="std std-ref">convertInToOr</span></a> is used. Lists of this size or greater will instead be converted to use a join against an inline table (org.apache.calcite.rel.logical.LogicalValues) rather than a predicate. A threshold of 0 forces usage of an inline table in all cases; a threshold of Integer#MAX_VALUE forces usage of OR in all cases. </p>
-</dd></dl>
-
-<dl class="function">
-<dt>
-<span class="target" id="classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1_1_config_impl_1a3c68020e26088182d7646e2ad81be35b"></span><code class="sig-name descname">RelBuilderFactory org.apache.calcite.sql2rel.SqlToRelConverter.ConfigImpl.getRelBuilderFactory()</code></dt>
-<dd><p>Returns the factory to create RelBuilder, never null. Default is RelFactories#LOGICAL_BUILDER. </p>
-</dd></dl>
-
-<dl class="function">
-<dt>
-<span class="target" id="classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1_1_config_impl_1ac60f7af500e982fd6065bd74dc0e6c61"></span><code class="sig-name descname">BiPredicate&lt;SqlNode, SqlNode&gt; org.apache.calcite.sql2rel.SqlToRelConverter.ConfigImpl.getExpandPredicate()</code></dt>
-<dd><p>predicate used to determine if a sql node should be expanded. (assuming expansion is supported for that node) </p>
-<p>Per default returns the vaule of <a class="reference internal" href="classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1_1_config_impl.html#classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1_1_config_impl_1a3ed117d98f060952db61c3abea017914"><span class="std std-ref">isExpand()</span></a> on all nodes </p>
-</dd></dl>
-
-</div>
-<div class="breathe-sectiondef docutils container">
-<p class="breathe-sectiondef-title rubric">Private Functions</p>
-<dl class="function">
-<dt>
-<span class="target" id="classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1_1_config_impl_1a865d148cc70680f5ad8b9419aefe1709"></span><code class="sig-name descname">org.apache.calcite.sql2rel.SqlToRelConverter.ConfigImpl.ConfigImpl(boolean convertTableAccess, boolean decorrelationEnabled, boolean trimUnusedFields, boolean createValuesRel, boolean explain, boolean expand, BiPredicate&lt; SqlNode, Join &gt; pushdownJoinCondition, BiPredicate&lt; SqlNode, SqlNode &gt; expandPredicate, int inSubQueryThreshold, RelBuilderFactory relBuilderFactory)</code></dt>
-<dd></dd></dl>
-
-</div>
-<div class="breathe-sectiondef docutils container">
-<p class="breathe-sectiondef-title rubric">Private Members</p>
-<dl class="member">
-<dt>
-<span class="target" id="classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1_1_config_impl_1a1000ea0f6af980f632337246ebfcb502"></span><code class="sig-name descname">final boolean org.apache.calcite.sql2rel.SqlToRelConverter.ConfigImpl.convertTableAccess</code></dt>
-<dd></dd></dl>
-
-<dl class="member">
-<dt>
-<span class="target" id="classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1_1_config_impl_1af7cccc049e81d3af0660af392f1f8132"></span><code class="sig-name descname">final boolean org.apache.calcite.sql2rel.SqlToRelConverter.ConfigImpl.decorrelationEnabled</code></dt>
-<dd></dd></dl>
-
-<dl class="member">
-<dt>
-<span class="target" id="classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1_1_config_impl_1aa269d5a57c58b89e876606be8405af9e"></span><code class="sig-name descname">final boolean org.apache.calcite.sql2rel.SqlToRelConverter.ConfigImpl.trimUnusedFields</code></dt>
-<dd></dd></dl>
-
-<dl class="member">
-<dt>
-<span class="target" id="classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1_1_config_impl_1ae445dbe30d21f57a260fb6e937efe55e"></span><code class="sig-name descname">final boolean org.apache.calcite.sql2rel.SqlToRelConverter.ConfigImpl.createValuesRel</code></dt>
-<dd></dd></dl>
-
-<dl class="member">
-<dt>
-<span class="target" id="classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1_1_config_impl_1a00666973a1fc165b3304e9663c771a6b"></span><code class="sig-name descname">final boolean org.apache.calcite.sql2rel.SqlToRelConverter.ConfigImpl.explain</code></dt>
-<dd></dd></dl>
-
-<dl class="member">
-<dt>
-<span class="target" id="classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1_1_config_impl_1a1520f89f8697fdd573e5a0ada54b88a6"></span><code class="sig-name descname">final boolean org.apache.calcite.sql2rel.SqlToRelConverter.ConfigImpl.expand</code></dt>
-<dd></dd></dl>
-
-<dl class="member">
-<dt>
-<span class="target" id="classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1_1_config_impl_1a81d3d9182b3576ff343886b44f04c537"></span><code class="sig-name descname">final BiPredicate&lt;SqlNode, SqlNode&gt; org.apache.calcite.sql2rel.SqlToRelConverter.ConfigImpl.expandPredicate</code></dt>
-<dd></dd></dl>
-
-<dl class="member">
-<dt>
-<span class="target" id="classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1_1_config_impl_1ab84b5ceff1ae238a4fae34ddc143423b"></span><code class="sig-name descname">final int org.apache.calcite.sql2rel.SqlToRelConverter.ConfigImpl.inSubQueryThreshold</code></dt>
-<dd></dd></dl>
-
-<dl class="member">
-<dt>
-<span class="target" id="classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1_1_config_impl_1a28f8214b5f8f6e3b7388d33aba7015e7"></span><code class="sig-name descname">final RelBuilderFactory org.apache.calcite.sql2rel.SqlToRelConverter.ConfigImpl.relBuilderFactory</code></dt>
-<dd></dd></dl>
-
-<dl class="member">
-<dt>
-<span class="target" id="classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1_1_config_impl_1a8cc9a24432ef6230377c9a6320e9e8c2"></span><code class="sig-name descname">BiPredicate&lt;SqlNode, Join&gt; org.apache.calcite.sql2rel.SqlToRelConverter.ConfigImpl.pushdownJoinCondition=            new BiPredicate&lt;SqlNode, Join&gt;() {              public boolean test(SqlNode t, Join u) {                return true;              };            }</code></dt>
-<dd></dd></dl>
-
-</div>
-<dl class="class">
-<dt id="_CPPv4N3org6apache7calcite7sql2rel17SqlToRelConverter10ConfigImpl22DefaultExpandPredicateE">
-<span id="_CPPv3N3org6apache7calcite7sql2rel17SqlToRelConverter10ConfigImpl22DefaultExpandPredicateE"></span><span id="_CPPv2N3org6apache7calcite7sql2rel17SqlToRelConverter10ConfigImpl22DefaultExpandPredicateE"></span><span id="org::apache::calcite::sql2rel::SqlToRelConverter::ConfigImpl::DefaultExpandPredicate"></span><span class="target" id="classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1_1_config_impl_1_1_default_expand_predicate"></span><em class="property">class </em><code class="sig-name descname">DefaultExpandPredicate</code> : <em class="property">public</em> java::util::function::BiPredicate&lt;SqlNode, SqlNode&gt;<a class="headerlink" href="#_CPPv4N3org6apache7calcite7sql2rel17SqlToRelConverter10ConfigImpl22DefaultExpandPredicateE" title="Permalink to this definition">¶</a><br /></dt>
-<dd><div class="breathe-sectiondef docutils container">
-<p class="breathe-sectiondef-title rubric">Public Functions</p>
-<dl class="function">
-<dt>
-<span class="target" id="classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1_1_config_impl_1_1_default_expand_predicate_1aa80040b2ff7b2f27b4df72611d2bbbd8"></span><code class="sig-name descname">boolean org.apache.calcite.sql2rel.SqlToRelConverter.ConfigImpl.DefaultExpandPredicate.test(SqlNode t, SqlNode u)</code></dt>
-<dd></dd></dl>
-
-</div>
-</dd></dl>
-
-</dd></dl>
-
-<dl class="class">
-<dt id="_CPPv4N3org6apache7calcite7sql2rel17SqlToRelConverter14CorrelationUseE">
-<span id="_CPPv3N3org6apache7calcite7sql2rel17SqlToRelConverter14CorrelationUseE"></span><span id="_CPPv2N3org6apache7calcite7sql2rel17SqlToRelConverter14CorrelationUseE"></span><span id="org::apache::calcite::sql2rel::SqlToRelConverter::CorrelationUse"></span><span class="target" id="classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1_1_correlation_use"></span><em class="property">class </em><code class="sig-name descname">CorrelationUse</code><a class="headerlink" href="#_CPPv4N3org6apache7calcite7sql2rel17SqlToRelConverter14CorrelationUseE" title="Permalink to this definition">¶</a><br /></dt>
-<dd><p>Use of a row as a correlating variable by a given relational expression. </p>
-<div class="breathe-sectiondef docutils container">
-<p class="breathe-sectiondef-title rubric">Private Members</p>
-<dl class="member">
-<dt>
-<span class="target" id="classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1_1_correlation_use_1a098e94731aedb05f6ddadeb63fedd57e"></span><code class="sig-name descname">final CorrelationId org.apache.calcite.sql2rel.SqlToRelConverter.CorrelationUse.id</code></dt>
-<dd></dd></dl>
-
-<dl class="member">
-<dt>
-<span class="target" id="classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1_1_correlation_use_1a6640bc0cdecff2ea665b6c54c0759949"></span><code class="sig-name descname">final ImmutableBitSet org.apache.calcite.sql2rel.SqlToRelConverter.CorrelationUse.requiredColumns</code></dt>
-<dd></dd></dl>
-
-<dl class="member">
-<dt>
-<span class="target" id="classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1_1_correlation_use_1a9a2969539126880bb4f1f89ca4137e55"></span><code class="sig-name descname">final RelNode org.apache.calcite.sql2rel.SqlToRelConverter.CorrelationUse.r</code></dt>
-<dd><p>The relational expression that uses the variable. </p>
-</dd></dl>
-
-</div>
-</dd></dl>
-
 <dl class="class">
 <dt id="_CPPv4N3org6apache7calcite7sql2rel17SqlToRelConverter14DeferredLookupE">
 <span id="_CPPv3N3org6apache7calcite7sql2rel17SqlToRelConverter14DeferredLookupE"></span><span id="_CPPv2N3org6apache7calcite7sql2rel17SqlToRelConverter14DeferredLookupE"></span><span id="org::apache::calcite::sql2rel::SqlToRelConverter::DeferredLookup"></span><span class="target" id="classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1_1_deferred_lookup"></span><em class="property">class </em><code class="sig-name descname">DeferredLookup</code><a class="headerlink" href="#_CPPv4N3org6apache7calcite7sql2rel17SqlToRelConverter14DeferredLookupE" title="Permalink to this definition">¶</a><br /></dt>
@@ -3474,90 +2728,6 @@
 <dl class="function">
 <dt>
 <span class="target" id="classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1_1_deferred_lookup_1a6739dc27ee9616643b568d609c2c63e0"></span><code class="sig-name descname">String org.apache.calcite.sql2rel.SqlToRelConverter.DeferredLookup.getOriginalRelName()</code></dt>
-<dd></dd></dl>
-
-</div>
-</dd></dl>
-
-<dl class="class">
-<dt id="_CPPv4N3org6apache7calcite7sql2rel17SqlToRelConverter16HistogramShuttleE">
-<span id="_CPPv3N3org6apache7calcite7sql2rel17SqlToRelConverter16HistogramShuttleE"></span><span id="_CPPv2N3org6apache7calcite7sql2rel17SqlToRelConverter16HistogramShuttleE"></span><span id="org::apache::calcite::sql2rel::SqlToRelConverter::HistogramShuttle"></span><span class="target" id="classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1_1_histogram_shuttle"></span><em class="property">class </em><code class="sig-name descname">HistogramShuttle</code> : <em class="property">public</em> RexShuttle<a class="headerlink" href="#_CPPv4N3org6apache7calcite7sql2rel17SqlToRelConverter16HistogramShuttleE" title="Permalink to this definition">¶</a><br /></dt>
-<dd><p>Shuttle which walks over a tree of RexNodes and applies ‘over’ to all agg functions.</p>
-<p>This is necessary because the returned expression is not necessarily a call to an agg function. <a class="reference internal" href="class_for.html#class_for"><span class="std std-ref">For</span></a> example,</p>
-<p></p>
-<p>becomes</p>
-<p></p>
-<p>Any aggregate functions are converted to calls to the internal <code class="docutils literal notranslate"> <span class="pre">$Histogram</span></code> aggregation function and accessors such as <code class="docutils literal notranslate"> <span class="pre">$HistogramMin</span></code>; for example,</p>
-<p></p>
-<p>are converted to</p>
-<p></p>
-<p>Common sub-expression elimination will ensure that only one histogram is computed. </p>
-<div class="breathe-sectiondef docutils container">
-<p class="breathe-sectiondef-title rubric">Public Functions</p>
-<dl class="function">
-<dt>
-<span class="target" id="classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1_1_histogram_shuttle_1a4ec36ee3ebe27146124bcf01fc7b2298"></span><code class="sig-name descname">RexNode org.apache.calcite.sql2rel.SqlToRelConverter.HistogramShuttle.visitCall(RexCall call)</code></dt>
-<dd></dd></dl>
-
-</div>
-<div class="breathe-sectiondef docutils container">
-<p class="breathe-sectiondef-title rubric">Private Functions</p>
-<dl class="function">
-<dt>
-<span class="target" id="classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1_1_histogram_shuttle_1af16f0e99882985c9c9700a4451346df5"></span><code class="sig-name descname">RelDataType org.apache.calcite.sql2rel.SqlToRelConverter.HistogramShuttle.computeHistogramType(RelDataType type)</code></dt>
-<dd><p>Returns the type for a histogram function. It is either the actual type or an an approximation to it. </p>
-</dd></dl>
-
-</div>
-<div class="breathe-sectiondef docutils container">
-<p class="breathe-sectiondef-title rubric">Private Members</p>
-<dl class="member">
-<dt>
-<span class="target" id="classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1_1_histogram_shuttle_1a6af6da51f723dd33867669d75c015c22"></span><code class="sig-name descname">final List&lt;RexNode&gt; org.apache.calcite.sql2rel.SqlToRelConverter.HistogramShuttle.partitionKeys</code></dt>
-<dd></dd></dl>
-
-<dl class="member">
-<dt>
-<span class="target" id="classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1_1_histogram_shuttle_1a8e293460878b0e1980c2b541522b75b2"></span><code class="sig-name descname">final ImmutableList&lt;RexFieldCollation&gt; org.apache.calcite.sql2rel.SqlToRelConverter.HistogramShuttle.orderKeys</code></dt>
-<dd></dd></dl>
-
-<dl class="member">
-<dt>
-<span class="target" id="classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1_1_histogram_shuttle_1ae7b6d8aa2515a95cf5edd344f5fd33eb"></span><code class="sig-name descname">final RexWindowBound org.apache.calcite.sql2rel.SqlToRelConverter.HistogramShuttle.lowerBound</code></dt>
-<dd></dd></dl>
-
-<dl class="member">
-<dt>
-<span class="target" id="classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1_1_histogram_shuttle_1af65728c90c77394560728f0e7780b23a"></span><code class="sig-name descname">final RexWindowBound org.apache.calcite.sql2rel.SqlToRelConverter.HistogramShuttle.upperBound</code></dt>
-<dd></dd></dl>
-
-<dl class="member">
-<dt>
-<span class="target" id="classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1_1_histogram_shuttle_1a417b082b31677c9a182af210684cd721"></span><code class="sig-name descname">final SqlWindow org.apache.calcite.sql2rel.SqlToRelConverter.HistogramShuttle.window</code></dt>
-<dd></dd></dl>
-
-<dl class="member">
-<dt>
-<span class="target" id="classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1_1_histogram_shuttle_1ab61421791f2bde79d109ac6ff073096a"></span><code class="sig-name descname">final boolean org.apache.calcite.sql2rel.SqlToRelConverter.HistogramShuttle.distinct</code></dt>
-<dd></dd></dl>
-
-<dl class="member">
-<dt>
-<span class="target" id="classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1_1_histogram_shuttle_1a5f777dc3eaeb403218d89f9eadd44aed"></span><code class="sig-name descname">final boolean org.apache.calcite.sql2rel.SqlToRelConverter.HistogramShuttle.ignoreNulls</code></dt>
-<dd></dd></dl>
-
-</div>
-</dd></dl>
-
-<dl class="class">
-<dt id="_CPPv4N3org6apache7calcite7sql2rel17SqlToRelConverter13LookupContextE">
-<span id="_CPPv3N3org6apache7calcite7sql2rel17SqlToRelConverter13LookupContextE"></span><span id="_CPPv2N3org6apache7calcite7sql2rel17SqlToRelConverter13LookupContextE"></span><span id="org::apache::calcite::sql2rel::SqlToRelConverter::LookupContext"></span><span class="target" id="classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1_1_lookup_context"></span><em class="property">class </em><code class="sig-name descname">LookupContext</code><a class="headerlink" href="#_CPPv4N3org6apache7calcite7sql2rel17SqlToRelConverter13LookupContextE" title="Permalink to this definition">¶</a><br /></dt>
-<dd><p>Context to find a relational expression to a field offset. </p>
-<div class="breathe-sectiondef docutils container">
-<p class="breathe-sectiondef-title rubric">Private Members</p>
-<dl class="member">
-<dt>
-<span class="target" id="classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1_1_lookup_context_1ad4d50593aac7e88b45713ee4017434a4"></span><code class="sig-name descname">final List&lt;Pair&lt;RelNode, Integer&gt; &gt; org.apache.calcite.sql2rel.SqlToRelConverter.LookupContext.relOffsetList = new ArrayList&lt;&gt;()</code></dt>
 <dd></dd></dl>
 
 </div>
@@ -3617,20 +2787,6 @@
 </div>
 </dd></dl>
 
-<dl class="class">
-<dt id="_CPPv4N3org6apache7calcite7sql2rel17SqlToRelConverter8SubQueryE">
-<span id="_CPPv3N3org6apache7calcite7sql2rel17SqlToRelConverter8SubQueryE"></span><span id="_CPPv2N3org6apache7calcite7sql2rel17SqlToRelConverter8SubQueryE"></span><span id="org::apache::calcite::sql2rel::SqlToRelConverter::SubQuery"></span><span class="target" id="classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1_1_sub_query"></span><em class="property">class </em><code class="sig-name descname">SubQuery</code><a class="headerlink" href="#_CPPv4N3org6apache7calcite7sql2rel17SqlToRelConverter8SubQueryE" title="Permalink to this definition">¶</a><br /></dt>
-<dd><p>A sub-query, whether it needs to be translated using 2- or 3-valued logic. </p>
-<div class="breathe-sectiondef docutils container">
-<p class="breathe-sectiondef-title rubric">Private Functions</p>
-<dl class="function">
-<dt>
-<span class="target" id="classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1_1_sub_query_1a2239c212ae517a323b77e5436a9f54fb"></span><code class="sig-name descname">org.apache.calcite.sql2rel.SqlToRelConverter.SubQuery.SubQuery(SqlNode node, RelOptUtil.Logic logic)</code></dt>
-<dd></dd></dl>
-
-</div>
-</dd></dl>
-
 </dd></dl>
 
 </div>
@@ -3643,7 +2799,7 @@
   
     <div class="rst-footer-buttons" role="navigation" aria-label="footer navigation">
       
-        <a href="classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1_1_agg_converter.html" class="btn btn-neutral float-right" title="Class org::apache::calcite::sql2rel::SqlToRelConverter::AggConverter" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right"></span></a>
+        <a href="classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1_1_blackboard.html" class="btn btn-neutral float-right" title="Class org::apache::calcite::sql2rel::SqlToRelConverter::Blackboard" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right"></span></a>
       
       
         <a href="classorg_1_1apache_1_1calcite_1_1rel_1_1rules_1_1_query_optimization_rules.html" class="btn btn-neutral float-left" title="Class org::apache::calcite::rel::rules::QueryOptimizationRules" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left"></span> Previous</a>

@@ -65,7 +65,7 @@
             
             
               <div class="version">
-                5.3.0dev fb55533
+                5.3.0dev b385697
               </div>
             
           
@@ -574,6 +574,8 @@
 <li class="toctree-l2"><a class="reference internal" href="../class/class_parser_1_1_table_element.html">Class Parser::TableElement</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/class_parser_1_1_table_ref.html">Class Parser::TableRef</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/class_parser_1_1_timestamp_literal.html">Class Parser::TimestampLiteral</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../class/class_parser_1_1_tracked_list_ptr.html">Class Parser::TrackedListPtr</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../class/class_parser_1_1_tracked_ptr.html">Class Parser::TrackedPtr</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/class_parser_1_1_truncate_table_stmt.html">Class Parser::TruncateTableStmt</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/class_parser_1_1_union_query.html">Class Parser::UnionQuery</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/class_parser_1_1_unique_def.html">Class Parser::UniqueDef</a></li>
@@ -756,7 +758,6 @@
 <li class="toctree-l2"><a class="reference internal" href="../class/classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_parser.html">Class com::mapd::calcite::parser::MapDParser</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_parser_options.html">Class com::mapd::calcite::parser::MapDParserOptions</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_parser_options_1_1_filter_push_down_info.html">Class com::mapd::calcite::parser::MapDParserOptions::FilterPushDownInfo</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../class/classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_rel_data_type_system_impl.html">Class com::mapd::calcite::parser::MapDRelDataTypeSystemImpl</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_schema.html">Class com::mapd::calcite::parser::MapDSchema</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_serializer.html">Class com::mapd::calcite::parser::MapDSerializer</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_sql_operator_table.html">Class com::mapd::calcite::parser::MapDSqlOperatorTable</a></li>
@@ -944,6 +945,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../class/classlockmgr_1_1_abstract_lock_container.html">Class lockmgr::AbstractLockContainer</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/classlockmgr_1_1_insert_data_lock_mgr.html">Class lockmgr::InsertDataLockMgr</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/classlockmgr_1_1_lock_container_impl.html">Class lockmgr::LockContainerImpl</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../class/classlockmgr_1_1_mutex_tracker.html">Class lockmgr::MutexTracker</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/classlockmgr_1_1_table_data_lock_container.html">Class lockmgr::TableDataLockContainer</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/classlockmgr_1_1_table_data_lock_container_3_01_read_lock_01_4.html">Class lockmgr::TableDataLockContainer&lt; ReadLock &gt;</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/classlockmgr_1_1_table_data_lock_container_3_01_write_lock_01_4.html">Class lockmgr::TableDataLockContainer&lt; WriteLock &gt;</a></li>
@@ -954,6 +956,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../class/classlockmgr_1_1_table_schema_lock_container_3_01_read_lock_01_4.html">Class lockmgr::TableSchemaLockContainer&lt; ReadLock &gt;</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/classlockmgr_1_1_table_schema_lock_container_3_01_write_lock_01_4.html">Class lockmgr::TableSchemaLockContainer&lt; WriteLock &gt;</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/classlockmgr_1_1_table_schema_lock_mgr.html">Class lockmgr::TableSchemaLockMgr</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../class/classlockmgr_1_1_tracked_ref_lock.html">Class lockmgr::TrackedRefLock</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/classlogger_1_1_debug_timer.html">Class logger::DebugTimer</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/classlogger_1_1_duration.html">Class logger::Duration</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/classlogger_1_1_duration_tree.html">Class logger::DurationTree</a></li>
@@ -975,19 +978,10 @@
 <li class="toctree-l2"><a class="reference internal" href="../class/classorg_1_1apache_1_1calcite_1_1rel_1_1rules_1_1_outer_join_opt_via_null_rejection_rule.html">Class org::apache::calcite::rel::rules::OuterJoinOptViaNullRejectionRule</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/classorg_1_1apache_1_1calcite_1_1rel_1_1rules_1_1_query_optimization_rules.html">Class org::apache::calcite::rel::rules::QueryOptimizationRules</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter.html">Class org::apache::calcite::sql2rel::SqlToRelConverter</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../class/classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1_1_agg_converter.html">Class org::apache::calcite::sql2rel::SqlToRelConverter::AggConverter</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../class/classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1_1_aggregate_finder.html">Class org::apache::calcite::sql2rel::SqlToRelConverter::AggregateFinder</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1_1_blackboard.html">Class org::apache::calcite::sql2rel::SqlToRelConverter::Blackboard</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../class/classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1_1_config_builder.html">Class org::apache::calcite::sql2rel::SqlToRelConverter::ConfigBuilder</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../class/classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1_1_config_impl.html">Class org::apache::calcite::sql2rel::SqlToRelConverter::ConfigImpl</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../class/classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1_1_config_impl_1_1_default_expand_predicate.html">Class org::apache::calcite::sql2rel::SqlToRelConverter::ConfigImpl::DefaultExpandPredicate</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../class/classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1_1_correlation_use.html">Class org::apache::calcite::sql2rel::SqlToRelConverter::CorrelationUse</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1_1_deferred_lookup.html">Class org::apache::calcite::sql2rel::SqlToRelConverter::DeferredLookup</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../class/classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1_1_histogram_shuttle.html">Class org::apache::calcite::sql2rel::SqlToRelConverter::HistogramShuttle</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../class/classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1_1_lookup_context.html">Class org::apache::calcite::sql2rel::SqlToRelConverter::LookupContext</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1_1_no_op_sub_query_converter.html">Class org::apache::calcite::sql2rel::SqlToRelConverter::NoOpSubQueryConverter</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1_1_rex_access_shuttle.html">Class org::apache::calcite::sql2rel::SqlToRelConverter::RexAccessShuttle</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../class/classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1_1_sub_query.html">Class org::apache::calcite::sql2rel::SqlToRelConverter::SubQuery</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/classquery__state_1_1_query_state.html">Class query_state::QueryState</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/classquery__state_1_1_query_state_proxy.html">Class query_state::QueryStateProxy</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/classquery__state_1_1_query_states.html">Class query_state::QueryStates</a></li>
@@ -1275,7 +1269,6 @@
 <li class="toctree-l2"><a class="reference internal" href="structforeign__storage_1_1_options_container.html">Struct foreign_storage::OptionsContainer</a></li>
 <li class="toctree-l2"><a class="reference internal" href="structis__null__order__entry.html">Struct is_null_order_entry</a></li>
 <li class="toctree-l2"><a class="reference internal" href="structis__taken__entry.html">Struct is_taken_entry</a></li>
-<li class="toctree-l2"><a class="reference internal" href="structlockmgr_1_1_table_lock.html">Struct lockmgr::TableLock</a></li>
 <li class="toctree-l2"><a class="reference internal" href="structlogger_1_1_erase_duration_trees.html">Struct logger::EraseDurationTrees</a></li>
 <li class="toctree-l2"><a class="reference internal" href="structlogger_1_1_get_depth.html">Struct logger::GetDepth</a></li>
 <li class="toctree-l2"><a class="reference internal" href="structlogger_1_1_log_shutdown.html">Struct logger::LogShutdown</a></li>
