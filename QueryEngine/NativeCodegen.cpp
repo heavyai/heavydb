@@ -1656,6 +1656,9 @@ bool is_gpu_shared_mem_supported(const QueryMemoryDescriptor* query_mem_desc_ptr
   if (device_type == ExecutorDeviceType::CPU) {
     return false;
   }
+  if (query_mem_desc_ptr->didOutputColumnar()) {
+    return false;
+  }
   CHECK(query_mem_desc_ptr);
   CHECK(cuda_mgr);
   /*
@@ -1718,7 +1721,6 @@ bool is_gpu_shared_mem_supported(const QueryMemoryDescriptor* query_mem_desc_ptr
     // For now, we allow keyless, row-wise layout, and only for perfect hash
     // group by operations.
     if (query_mem_desc_ptr->getGroupbyColCount() == 1 &&
-        !query_mem_desc_ptr->didOutputColumnar() &&
         query_mem_desc_ptr->hasKeylessHash() &&
         query_mem_desc_ptr->countDistinctDescriptorsLogicallyEmpty() &&
         !query_mem_desc_ptr->useStreamingTopN()) {
