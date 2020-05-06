@@ -94,9 +94,6 @@ QueryRenderer::QueryRenderManager* RenderHandler::get_render_manager() {
   return nullptr;
 }
 
-void RenderHandler::handle_ddl(Parser::DDLStmt*) {
-  CHECK(impl_);
-}
 void RenderHandler::shutdown() {
   CHECK(impl_);
 }

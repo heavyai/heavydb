@@ -90,7 +90,6 @@ class RenderHandler {
 
   QueryRenderer::QueryRenderManager* get_render_manager();
 
-  void handle_ddl(Parser::DDLStmt*);
   void shutdown();
 
   std::unique_ptr<Impl> impl_;

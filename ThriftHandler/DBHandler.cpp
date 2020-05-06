@@ -5294,11 +5294,7 @@ void DBHandler::sql_execute_impl(TQueryResult& _return,
         check_read_only("Non-SELECT statements");
       }
       auto ddl = dynamic_cast<Parser::DDLStmt*>(stmt.get());
-      if (handle_ddl(ddl)) {
-        if (render_handler_) {
-          render_handler_->handle_ddl(ddl);
-        }
-      } else {
+      if (!handle_ddl(ddl)) {
         auto stmtp = dynamic_cast<Parser::InsertValuesStmt*>(stmt.get());
         CHECK(stmtp);  // no other statements supported
 
