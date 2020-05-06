@@ -34,7 +34,7 @@ if(ENABLE_CUDA)
         -O3
         -D_FORCE_INLINES
         ${MAPD_DEFINITIONS}
-        -arch sm_30
+        ${CUDA_COMPILATION_ARCH}
         -std=c++14
         -shared
         ${CMAKE_CURRENT_SOURCE_DIR}/ProfileUtils.cu

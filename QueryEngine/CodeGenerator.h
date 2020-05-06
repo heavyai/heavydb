@@ -78,7 +78,8 @@ class CodeGenerator {
                                  llvm::TargetMachine* nvptx_target_machine,
                                  llvm::LLVMContext& context);
 
-  static std::unique_ptr<llvm::TargetMachine> initializeNVPTXBackend();
+  static std::unique_ptr<llvm::TargetMachine> initializeNVPTXBackend(
+      const CudaMgr_Namespace::NvidiaDeviceArch arch);
 
   static bool alwaysCloneRuntimeFunction(const llvm::Function* func);
 

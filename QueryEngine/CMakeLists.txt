@@ -255,7 +255,7 @@ add_custom_command(
         -D__STDC_CONSTANT_MACROS
         -D_FORCE_INLINES
         ${MAPD_DEFINITIONS}
-        -arch sm_30
+        ${CUDA_PTX_GENERATIONS}
         -lib ${CMAKE_CURRENT_BINARY_DIR}/cuda_mapd_rt.o
         ${NVCC_BUILD_TYPE_ARGS}
         -o ${CMAKE_CURRENT_BINARY_DIR}/cuda_mapd_rt.a
@@ -274,7 +274,7 @@ add_custom_command(
         -Xcompiler -Wno-return-type-c-linkage --expt-relaxed-constexpr
         ${MAPD_DEFINITIONS}
         --device-link
-        -arch sm_30
+        ${CUDA_PTX_GENERATIONS}
         -std=c++14
         ${NVCC_BUILD_TYPE_ARGS}
         -c ${CMAKE_CURRENT_SOURCE_DIR}/cuda_mapd_rt.cu
@@ -290,7 +290,7 @@ add_custom_command(
         -std=c++14
         -D_FORCE_INLINES
         ${MAPD_DEFINITIONS}
-        -arch sm_30
+        ${CUDA_COMPILATION_ARCH}
         ${NVCC_BUILD_TYPE_ARGS}
         -c ${CMAKE_CURRENT_SOURCE_DIR}/TopKSort.cu
     )
@@ -304,7 +304,7 @@ add_custom_command(
         -Xcompiler -fPIC
         -D_FORCE_INLINES
         ${MAPD_DEFINITIONS}
-        -arch sm_30
+        ${CUDA_COMPILATION_ARCH}
         -std=c++14
         ${NVCC_BUILD_TYPE_ARGS}
         -c ${CMAKE_CURRENT_SOURCE_DIR}/InPlaceSortImpl.cu
@@ -320,7 +320,7 @@ add_custom_command(
         -std=c++14
         -D_FORCE_INLINES
         ${MAPD_DEFINITIONS}
-        -arch sm_30
+        ${CUDA_COMPILATION_ARCH}
         ${NVCC_BUILD_TYPE_ARGS}
         -c ${CMAKE_CURRENT_SOURCE_DIR}/ResultSetSortImpl.cu
     )
@@ -334,7 +334,7 @@ add_custom_command(
         -Xcompiler -fPIC
         -D_FORCE_INLINES
         ${MAPD_DEFINITIONS}
-        -arch sm_30
+        ${CUDA_COMPILATION_ARCH}
         -std=c++14
         ${NVCC_BUILD_TYPE_ARGS}
         -c ${CMAKE_CURRENT_SOURCE_DIR}/GpuInitGroups.cu
@@ -349,7 +349,7 @@ add_custom_command(
         -Xcompiler -fPIC
         -D_FORCE_INLINES
         ${MAPD_DEFINITIONS}
-        -arch sm_30
+        ${CUDA_COMPILATION_ARCH}
         -std=c++14
         ${NVCC_BUILD_TYPE_ARGS}
         -c ${CMAKE_CURRENT_SOURCE_DIR}/HashJoinRuntimeGpu.cu

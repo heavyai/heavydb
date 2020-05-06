@@ -172,7 +172,8 @@ std::vector<void*> ScalarCodeGenerator::generateNativeGPUCode(
     llvm::Function* wrapper_func,
     const CompilationOptions& co) {
   if (!nvptx_target_machine_) {
-    nvptx_target_machine_ = initializeNVPTXBackend();
+    nvptx_target_machine_ =
+        initializeNVPTXBackend(CudaMgr_Namespace::NvidiaDeviceArch::Kepler);
   }
   if (!cuda_mgr_) {
     cuda_mgr_ = std::make_unique<CudaMgr_Namespace::CudaMgr>(0);

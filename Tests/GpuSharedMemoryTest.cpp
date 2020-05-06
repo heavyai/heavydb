@@ -169,7 +169,7 @@ std::unique_ptr<GpuCompilationContext> compile_and_link_gpu_code(
   CHECK(cuda_mgr);
   auto& context = module->getContext();
   std::unique_ptr<llvm::TargetMachine> nvptx_target_machine =
-      CodeGenerator::initializeNVPTXBackend();
+      CodeGenerator::initializeNVPTXBackend(cuda_mgr->getDeviceArch());
   const auto ptx =
       CodeGenerator::generatePTX(cuda_llir, nvptx_target_machine.get(), context);
 

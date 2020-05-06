@@ -260,7 +260,11 @@ DBHandler::DBHandler(const std::vector<LeafHostInfo>& db_leaves,
 
   try {
     if (!udf_filename.empty()) {
-      UdfCompiler compiler(udf_filename, clang_path, clang_options);
+      const auto cuda_mgr = data_mgr_->getCudaMgr();
+      const CudaMgr_Namespace::NvidiaDeviceArch device_arch =
+          cuda_mgr ? cuda_mgr->getDeviceArch()
+                   : CudaMgr_Namespace::NvidiaDeviceArch::Kepler;
+      UdfCompiler compiler(udf_filename, device_arch, clang_path, clang_options);
       int compile_result = compiler.compileUdf();
 
       if (compile_result == 0) {

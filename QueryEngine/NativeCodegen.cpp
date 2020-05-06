@@ -882,7 +882,8 @@ std::string CodeGenerator::generatePTX(const std::string& cuda_llir,
   return code_str.str();
 }
 
-std::unique_ptr<llvm::TargetMachine> CodeGenerator::initializeNVPTXBackend() {
+std::unique_ptr<llvm::TargetMachine> CodeGenerator::initializeNVPTXBackend(
+    const CudaMgr_Namespace::NvidiaDeviceArch arch) {
   llvm::InitializeAllTargets();
   llvm::InitializeAllTargetMCs();
   llvm::InitializeAllAsmPrinters();
@@ -891,8 +892,12 @@ std::unique_ptr<llvm::TargetMachine> CodeGenerator::initializeNVPTXBackend() {
   if (!target) {
     LOG(FATAL) << err;
   }
-  return std::unique_ptr<llvm::TargetMachine>(target->createTargetMachine(
-      "nvptx64-nvidia-cuda", "sm_30", "", llvm::TargetOptions(), llvm::Reloc::Static));
+  return std::unique_ptr<llvm::TargetMachine>(
+      target->createTargetMachine("nvptx64-nvidia-cuda",
+                                  CudaMgr_Namespace::CudaMgr::deviceArchToSM(arch),
+                                  "",
+                                  llvm::TargetOptions(),
+                                  llvm::Reloc::Static));
 }
 
 std::string Executor::generatePTX(const std::string& cuda_llir) const {
@@ -904,7 +909,11 @@ void Executor::initializeNVPTXBackend() const {
   if (nvptx_target_machine_) {
     return;
   }
-  nvptx_target_machine_ = CodeGenerator::initializeNVPTXBackend();
+  const auto cuda_mgr = catalog_->getDataMgr().getCudaMgr();
+  LOG_IF(FATAL, cuda_mgr == nullptr) << "No CudaMgr instantiated, unable to check device "
+                                        "architecture or generate code for nvidia GPUs.";
+  const auto arch = cuda_mgr->getDeviceArch();
+  nvptx_target_machine_ = CodeGenerator::initializeNVPTXBackend(arch);
 }
 
 // A small number of runtime functions don't get through CgenState::emitCall. List them

@@ -273,6 +273,15 @@ include_directories(${LLVM_INC_FLAGS})
 find_package(Boost COMPONENTS log log_setup filesystem program_options regex system thread timer locale REQUIRED)
 include_directories(${Boost_INCLUDE_DIR})
 
+# CUDA architecture flags 
+set (CUDA_COMPILATION_ARCH
+  -gencode=arch=compute_30,code=compute_30
+  -gencode=arch=compute_50,code=compute_50
+  -gencode=arch=compute_60,code=compute_60
+  -gencode=arch=compute_70,code=compute_70
+  -gencode=arch=compute_75,code=compute_75
+)
+
 # EGL
 include_directories(ThirdParty/egl)
 

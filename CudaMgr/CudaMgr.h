@@ -20,6 +20,7 @@
 #include <string>
 #include <vector>
 
+#include "Shared/Logger.h"
 #include "Shared/uuid.h"
 
 #ifdef HAVE_CUDA
@@ -39,6 +40,14 @@ using DeviceGroup = std::vector<DeviceIdentifier>;
 }  // namespace omnisci
 
 namespace CudaMgr_Namespace {
+
+enum class NvidiaDeviceArch {
+  Kepler,   // compute major = 3
+  Maxwell,  // compute major = 5
+  Pascal,   // compute major = 6
+  Volta,    // compute major = 7, compute minor = 0
+  Turing    // compute major = 7, compute minor = 5
+};
 
 #ifdef HAVE_CUDA
 std::string errorMessage(CUresult const);
@@ -76,7 +85,6 @@ struct DeviceProperties {
   float memoryBandwidthGBs;
   int clockKhz;
   int numCore;
-  std::string arch;
 };
 
 class CudaMgr {
@@ -143,9 +151,57 @@ class CudaMgr {
   bool isArchMaxwellOrLaterForAll() const;
   bool isArchVoltaForAll() const;
 
+  static std::string deviceArchToSM(const NvidiaDeviceArch arch) {
+    // Must match ${CUDA_COMPILATION_ARCH} CMAKE flag
+    switch (arch) {
+      case NvidiaDeviceArch::Kepler:
+        return "sm_30";
+      case NvidiaDeviceArch::Maxwell:
+        return "sm_50";
+      case NvidiaDeviceArch::Pascal:
+        return "sm_60";
+      case NvidiaDeviceArch::Volta:
+        return "sm_70";
+      case NvidiaDeviceArch::Turing:
+        return "sm_75";
+      default:
+        LOG(WARNING) << "Unrecognized Nvidia device architecture, falling back to "
+                        "Kepler-compatibility.";
+        return "sm_30";
+    }
+    UNREACHABLE();
+    return "";
+  }
+
+  NvidiaDeviceArch getDeviceArch() const {
+    if (device_properties_.size() > 0) {
+      const auto& device_properties = device_properties_.front();
+      switch (device_properties.computeMajor) {
+        case 3:
+          return NvidiaDeviceArch::Kepler;
+        case 5:
+          return NvidiaDeviceArch::Maxwell;
+        case 6:
+          return NvidiaDeviceArch::Pascal;
+        case 7:
+          if (device_properties.computeMinor == 0) {
+            return NvidiaDeviceArch::Volta;
+          } else {
+            return NvidiaDeviceArch::Turing;
+          }
+        default:
+          return NvidiaDeviceArch::Kepler;
+      }
+    } else {
+      // always fallback to Kepler if an architecture cannot be detected
+      return NvidiaDeviceArch::Kepler;
+    }
+  }
+
   void setContext(const int device_num) const;
 
 #ifdef HAVE_CUDA
+
   void printDeviceProperties() const;
 
   const std::vector<CUcontext>& getDeviceContexts() const { return device_contexts_; }
