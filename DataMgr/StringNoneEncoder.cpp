@@ -83,11 +83,9 @@ std::shared_ptr<ChunkMetadata> StringNoneEncoder::appendData(
 
   size_t inbuf_size =
       std::min(std::max(index_size, data_size), (size_t)MAX_INPUT_BUF_SIZE);
-  // TODO(adb): another good candidate for arena testing
-  auto inbuf = new int8_t[inbuf_size];
-  std::unique_ptr<int8_t[]> gc_inbuf(inbuf);
+  auto inbuf = std::make_unique<int8_t[]>(inbuf_size);
   for (size_t num_appended = 0; num_appended < numAppendElems;) {
-    StringOffsetT* p = (StringOffsetT*)inbuf;
+    StringOffsetT* p = reinterpret_cast<StringOffsetT*>(inbuf.get());
     size_t i;
     for (i = 0; num_appended < numAppendElems && i < inbuf_size / sizeof(StringOffsetT);
          i++, num_appended++) {
@@ -95,7 +93,7 @@ std::shared_ptr<ChunkMetadata> StringNoneEncoder::appendData(
           last_offset + (*srcData)[replicating ? 0 : num_appended + start_idx].length();
       last_offset = p[i];
     }
-    index_buf->append(inbuf, i * sizeof(StringOffsetT));
+    index_buf->append(inbuf.get(), i * sizeof(StringOffsetT));
   }
 
   for (size_t num_appended = 0; num_appended < numAppendElems;) {
@@ -107,7 +105,7 @@ std::shared_ptr<ChunkMetadata> StringNoneEncoder::appendData(
       if (len > inbuf_size) {
         // for large strings, append on its own
         if (size > 0) {
-          buffer_->append(inbuf, size);
+          buffer_->append(inbuf.get(), size);
         }
         size = 0;
         buffer_->append((int8_t*)(*srcData)[replicating ? 0 : i].data(), len);
@@ -116,7 +114,7 @@ std::shared_ptr<ChunkMetadata> StringNoneEncoder::appendData(
       } else if (size + len > inbuf_size) {
         break;
       }
-      char* dest = (char*)inbuf + size;
+      char* dest = reinterpret_cast<char*>(inbuf.get()) + size;
       if (len > 0) {
         (*srcData)[replicating ? 0 : i].copy(dest, len);
         size += len;
@@ -125,7 +123,7 @@ std::shared_ptr<ChunkMetadata> StringNoneEncoder::appendData(
       }
     }
     if (size > 0) {
-      buffer_->append(inbuf, size);
+      buffer_->append(inbuf.get(), size);
     }
   }
   // make sure buffer_ is flushed even if no new data is appended to it
