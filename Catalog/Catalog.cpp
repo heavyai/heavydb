@@ -2233,11 +2233,6 @@ void Catalog::createTable(
     td.tableId = nextTempTableId_++;
     int colId = 1;
     for (auto cd : columns) {
-      auto col_ti = cd.columnType;
-      if (IS_GEO(col_ti.get_type())) {
-        throw runtime_error("Geometry types in temporary tables are not supported.");
-      }
-
       if (cd.columnType.get_compression() == kENCODING_DICT) {
         const bool is_foreign_col =
             setColumnSharedDictionary(cd, cds, dds, td, shared_dict_defs);
@@ -2262,9 +2257,17 @@ void Catalog::createTable(
           cd.columnType.set_comp_param(dict_ref.dictId);
         }
       }
+      if (toplevel_column_names.count(cd.columnName)) {
+        // make up colId gap for sanity test (begin with 1 bc much code depends on it!)
+        if (colId > 1) {
+          colId += g_test_against_columnId_gap;
+        }
+        if (!cd.isGeoPhyCol) {
+          td.columnIdBySpi_.push_back(colId);
+        }
+      }
       cd.tableId = td.tableId;
       cd.columnId = colId++;
-      td.columnIdBySpi_.push_back(cd.columnId);
       cds.push_back(cd);
     }
 
