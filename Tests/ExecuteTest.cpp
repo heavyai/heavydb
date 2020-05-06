@@ -8704,9 +8704,28 @@ TEST(Select, Joins_Decimal) {
     c("SELECT COUNT(*) FROM hash_join_decimal_test as t1, hash_join_decimal_test as t2 "
       "WHERE t1.y = t2.y;",
       dt);
-    c("SELECT COUNT(*) FROM hash_join_decimal_test as t1, hash_join_decimal_test as t2 "
-      "WHERE t1.x = t2.y;",
+    c("SELECT t1.y, t2.x FROM hash_join_decimal_test as t1, hash_join_decimal_test as t2 "
+      "WHERE t1.y = t2.y ORDER BY t1.y, t1.x;",
       dt);
+    if (g_aggregator) {
+      // fall back to loop joins since we can't modify trivial join loop threshold on the
+      // leaves
+      c("SELECT COUNT(*) FROM hash_join_decimal_test as t1, hash_join_decimal_test as t2 "
+        "WHERE t1.x = t2.y;",
+        dt);
+    } else {
+      // disable loop joins, expect throw
+      const auto trivial_join_loop_state = g_trivial_loop_join_threshold;
+      ScopeGuard reset = [&] { g_trivial_loop_join_threshold = trivial_join_loop_state; };
+      g_trivial_loop_join_threshold = 1;
+
+      EXPECT_ANY_THROW(
+          run_multiple_agg("SELECT COUNT(*) FROM hash_join_decimal_test as t1, "
+                           "hash_join_decimal_test as t2 "
+                           "WHERE t1.x = t2.y;",
+                           dt,
+                           false));
+    }
     c("SELECT COUNT(*) FROM hash_join_decimal_test as t1, hash_join_decimal_test as t2 "
       "WHERE CAST(t1.x as INT) = CAST(t2.y as INT);",
       dt);
