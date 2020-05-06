@@ -2160,7 +2160,6 @@ TEST(Select, OrderBy) {
 }
 
 TEST(Select, VariableLengthOrderBy) {
-  SKIP_WITH_TEMP_TABLES()  // because of geospatial_test
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
     c("SELECT real_str FROM test ORDER BY real_str;", dt);
@@ -14578,8 +14577,6 @@ TEST(Select, Deleted) {
 #endif
 
 TEST(Select, GeoSpatial_Basics) {
-  SKIP_WITH_TEMP_TABLES();
-
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
     ASSERT_EQ(static_cast<int64_t>(g_num_rows),
@@ -14649,8 +14646,6 @@ TEST(Select, GeoSpatial_Basics) {
 }
 
 TEST(Select, GeoSpatial_Null) {
-  SKIP_WITH_TEMP_TABLES();
-
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
     ASSERT_EQ(static_cast<int64_t>(g_num_rows / 2),
@@ -14731,8 +14726,6 @@ TEST(Select, GeoSpatial_Null) {
 }
 
 TEST(Select, GeoSpatial_Projection) {
-  SKIP_WITH_TEMP_TABLES();
-
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
     // Select *
@@ -16054,8 +16047,6 @@ TEST(Select, GeoSpatial_Projection) {
 }
 
 TEST(Select, GeoSpatial_GeoJoin) {
-  SKIP_WITH_TEMP_TABLES();
-
   const auto enable_overlaps_hashjoin_state = g_enable_overlaps_hashjoin;
   g_enable_overlaps_hashjoin = false;
   ScopeGuard reset_overlaps_state = [&enable_overlaps_hashjoin_state] {
