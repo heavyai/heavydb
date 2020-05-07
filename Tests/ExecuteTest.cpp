@@ -5809,20 +5809,18 @@ void import_corr_in_facts() {
 void import_geospatial_test() {
   const std::string geospatial_test("DROP TABLE IF EXISTS geospatial_test;");
   run_ddl_statement(geospatial_test);
-  constexpr char create_ddl[] = R"(CREATE TABLE geospatial_test (
-        id INT,
-        p POINT,
-        l LINESTRING,
-        poly POLYGON,
-        mpoly MULTIPOLYGON,
-        gp GEOMETRY(POINT),
-        gp4326 GEOMETRY(POINT,4326) ENCODING COMPRESSED(32),
-        gp4326none GEOMETRY(POINT,4326) ENCODING NONE,
-        gp900913 GEOMETRY(POINT,900913),
-        gl4326none GEOMETRY(LINESTRING,4326) ENCODING NONE,
-        gpoly4326 GEOMETRY(POLYGON,4326)
-      ) WITH (fragment_size=2);
-  )";
+  const auto create_ddl = build_create_table_statement(
+      "id INT, p POINT, l LINESTRING, poly POLYGON, mpoly MULTIPOLYGON, gp "
+      "GEOMETRY(POINT), gp4326 GEOMETRY(POINT,4326) ENCODING COMPRESSED(32), gp4326none "
+      "GEOMETRY(POINT,4326) ENCODING NONE, gp900913 GEOMETRY(POINT,900913), gl4326none "
+      "GEOMETRY(LINESTRING,4326) ENCODING NONE, gpoly4326 GEOMETRY(POLYGON,4326)",
+      "geospatial_test",
+      {"", 0},
+      {},
+      2,
+      /*use_temporary_tables=*/g_use_temporary_tables,
+      /*deleted_support=*/true,
+      /*is_replicated=*/false);
   run_ddl_statement(create_ddl);
   TestHelpers::ValuesGenerator gen("geospatial_test");
   for (ssize_t i = 0; i < g_num_rows; ++i) {
@@ -5861,14 +5859,15 @@ void import_geospatial_join_test(const bool replicate_inner_table = false) {
   run_ddl_statement(drop_geospatial_test);
   std::string column_definition =
       "id INT, p POINT, l LINESTRING, poly POLYGON, mpoly MULTIPOLYGON";
-  auto create_statement = build_create_table_statement(column_definition,
-                                                       "geospatial_inner_join_test",
-                                                       {"", 0},
-                                                       {},
-                                                       20,
-                                                       /*use_temporary_tables=*/false,
-                                                       /*deleted_support=*/true,
-                                                       g_aggregator);
+  auto create_statement =
+      build_create_table_statement(column_definition,
+                                   "geospatial_inner_join_test",
+                                   {"", 0},
+                                   {},
+                                   20,
+                                   /*use_temporary_tables=*/g_use_temporary_tables,
+                                   /*deleted_support=*/true,
+                                   g_aggregator);
   run_ddl_statement(create_statement);
   TestHelpers::ValuesGenerator gen("geospatial_inner_join_test");
   for (ssize_t i = 0; i < g_num_rows; i += 2) {
@@ -5891,20 +5890,19 @@ void import_geospatial_join_test(const bool replicate_inner_table = false) {
 void import_geospatial_null_test() {
   const std::string geospatial_null_test("DROP TABLE IF EXISTS geospatial_null_test;");
   run_ddl_statement(geospatial_null_test);
-  constexpr char create_ddl[] = R"(CREATE TABLE geospatial_null_test (
-        id INT,
-        p POINT,
-        l LINESTRING,
-        poly POLYGON,
-        mpoly MULTIPOLYGON,
-        gpnotnull GEOMETRY(POINT) NOT NULL,
-        gp4326 GEOMETRY(POINT,4326) ENCODING COMPRESSED(32),
-        gp4326none GEOMETRY(POINT,4326) ENCODING NONE,
-        gp900913 GEOMETRY(POINT,900913),
-        gl4326none GEOMETRY(LINESTRING,4326) ENCODING NONE,
-        gpoly4326 GEOMETRY(POLYGON,4326)
-      ) WITH (fragment_size=2);
-  )";
+  const auto create_ddl = build_create_table_statement(
+      "id INT, p POINT, l LINESTRING, poly POLYGON, mpoly MULTIPOLYGON, gpnotnull "
+      "GEOMETRY(POINT) NOT NULL, gp4326 GEOMETRY(POINT,4326) ENCODING COMPRESSED(32), "
+      "gp4326none GEOMETRY(POINT,4326) ENCODING NONE, gp900913 GEOMETRY(POINT,900913), "
+      "gl4326none GEOMETRY(LINESTRING,4326) ENCODING NONE, gpoly4326 "
+      "GEOMETRY(POLYGON,4326)",
+      "geospatial_null_test",
+      {"", 0},
+      {},
+      2,
+      /*use_temporary_tables=*/g_use_temporary_tables,
+      /*deleted_support=*/true,
+      /*is_replicated=*/false);
   run_ddl_statement(create_ddl);
   TestHelpers::ValuesGenerator gen("geospatial_null_test");
   for (ssize_t i = 0; i < g_num_rows; ++i) {
@@ -18737,25 +18735,22 @@ int create_and_populate_tables(const bool use_temporary_tables,
     LOG(ERROR) << "Failed to (re-)create table 'corr_in_facts'";
     return -EEXIST;
   }
-  if (!use_temporary_tables) {
-    // Geospatial not yet supported in temporary tables
-    try {
-      import_geospatial_null_test();
-    } catch (...) {
-      LOG(ERROR) << "Failed to (re-)create table 'geospatial_null_test'";
-      return -EEXIST;
-    }
-    try {
-      import_geospatial_test();
-    } catch (...) {
-      LOG(ERROR) << "Failed to (re-)create table 'geospatial_test'";
-      return -EEXIST;
-    }
-    try {
-      import_geospatial_join_test(g_aggregator);
-    } catch (...) {
-      LOG(ERROR) << "Failed to (re-)create table 'geospatial_inner_join_test'";
-    }
+  try {
+    import_geospatial_null_test();
+  } catch (...) {
+    LOG(ERROR) << "Failed to (re-)create table 'geospatial_null_test'";
+    return -EEXIST;
+  }
+  try {
+    import_geospatial_test();
+  } catch (...) {
+    LOG(ERROR) << "Failed to (re-)create table 'geospatial_test'";
+    return -EEXIST;
+  }
+  try {
+    import_geospatial_join_test(g_aggregator);
+  } catch (...) {
+    LOG(ERROR) << "Failed to (re-)create table 'geospatial_inner_join_test'";
   }
   try {
     const std::string drop_old_empty{"DROP TABLE IF EXISTS emptytab;"};
