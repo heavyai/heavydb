@@ -50,6 +50,7 @@ struct ForeignServer : public OptionsContainer {
   std::string name;
   std::string data_wrapper_type;
   int32_t user_id;
+  time_t creation_time;
 
   ForeignServer() {}
 
@@ -57,12 +58,14 @@ struct ForeignServer : public OptionsContainer {
                 const std::string& server_name,
                 const std::string& data_wrapper_type,
                 const std::string& options_str,
-                const int32_t user_id)
+                const int32_t user_id,
+                const time_t creation_time)
       : OptionsContainer(options_str)
       , id(server_id)
       , name(server_name)
       , data_wrapper_type(data_wrapper_type)
-      , user_id(user_id) {}
+      , user_id(user_id)
+      , creation_time(creation_time) {}
 
   ForeignServer(const std::string& server_name,
                 const std::string& data_wrapper_type,

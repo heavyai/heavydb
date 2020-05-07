@@ -25,6 +25,8 @@
 #include "Parser/ParserNode.h"
 #include "Shared/StringTransform.h"
 
+extern bool g_enable_fsi;
+
 namespace {
 void set_headers(TQueryResult& _return, const std::vector<std::string>& headers) {
   TRowDescriptor row_descriptor;
@@ -77,6 +79,8 @@ void DdlCommandExecutor::execute(TQueryResult& _return) {
     ShowTablesCommand{payload, session_ptr_}.execute(_return);
   } else if (ddl_command == "SHOW_DATABASES") {
     ShowDatabasesCommand{payload, session_ptr_}.execute(_return);
+  } else if (ddl_command == "SHOW_SERVERS") {
+    ShowForeignServersCommand{payload, session_ptr_}.execute(_return);
   } else {
     throw std::runtime_error("Unsupported DDL command");
   }
@@ -503,5 +507,67 @@ void ShowDatabasesCommand::execute(TQueryResult& _return) {
   set_headers(_return, {"Database", "Owner"});
   for (const auto& db_summary : db_summaries) {
     add_row(_return, {db_summary.dbName, db_summary.dbOwnerName});
+  }
+}
+
+ShowForeignServersCommand::ShowForeignServersCommand(
+    const rapidjson::Value& ddl_payload,
+    std::shared_ptr<Catalog_Namespace::SessionInfo const> session_ptr)
+    : DdlCommand(ddl_payload, session_ptr) {
+  if (!g_enable_fsi) {
+    throw std::runtime_error("Unsupported command: SHOW FOREIGN SERVERS");
+  }
+  // Verify that members are valid
+  CHECK(ddl_payload.HasMember("command"));
+  if (ddl_payload.HasMember("filters")) {
+    CHECK(ddl_payload["filters"].IsArray());
+    int num_filters = 0;
+    for (auto const& filter_def : ddl_payload["filters"].GetArray()) {
+      CHECK(filter_def.IsObject());
+      CHECK(filter_def.HasMember("attribute"));
+      CHECK(filter_def["attribute"].IsString());
+      CHECK(filter_def.HasMember("value"));
+      CHECK(filter_def["value"].IsString());
+      CHECK(filter_def.HasMember("operation"));
+      CHECK(filter_def["operation"].IsString());
+      if (num_filters > 0) {
+        CHECK(filter_def.HasMember("chain"));
+        CHECK(filter_def["chain"].IsString());
+      } else {
+        CHECK(!filter_def.HasMember("chain"));
+      }
+      num_filters++;
+    }
+  }
+}
+
+void ShowForeignServersCommand::execute(TQueryResult& _return) {
+  const std::vector<std::string> col_names{
+      "server_name", "data_wrapper", "created_at", "options"};
+
+  std::vector<foreign_storage::ForeignServer*> results;
+  const auto& user = session_ptr_->get_currentUser();
+  if (ddl_payload_.HasMember("filters")) {
+    session_ptr_->getCatalog().getForeignServersForUser(
+        &ddl_payload_["filters"], user, results);
+  } else {
+    session_ptr_->getCatalog().getForeignServersForUser(nullptr, user, results);
+  }
+  set_headers(_return, col_names);
+
+  _return.row_set.row_desc[2].col_type.type = TDatumType::type::TIMESTAMP;
+
+  for (auto const& server_ptr : results) {
+    _return.row_set.columns[0].data.str_col.emplace_back(server_ptr->name);
+
+    _return.row_set.columns[1].data.str_col.emplace_back(server_ptr->data_wrapper_type);
+
+    _return.row_set.columns[2].data.int_col.push_back(server_ptr->creation_time);
+
+    _return.row_set.columns[3].data.str_col.emplace_back(
+        server_ptr->getOptionsAsJsonString());
+
+    for (size_t i = 0; i < _return.row_set.columns.size(); i++)
+      _return.row_set.columns[i].nulls.emplace_back(false);
   }
 }

@@ -457,6 +457,319 @@ TEST_F(ForeignServerPrivilegesDdlTest, GrantDropServerRevokeAllDropServer) {
                           "User has no DROP SERVER privileges.");
 }
 
+class ShowForeignServerTest : public DBHandlerTestFixture {
+ protected:
+  void SetUp() override {
+    g_enable_fsi = true;
+    DBHandlerTestFixture::SetUp();
+    // Check defeault server exist
+    {
+      auto foreign_server = getCatalog().getForeignServer("omnisci_local_csv");
+      ASSERT_NE(foreign_server, nullptr);
+      ASSERT_GT(foreign_server->id, 0);
+    }
+    {
+      auto foreign_server = getCatalog().getForeignServer("omnisci_local_parquet");
+      ASSERT_NE(foreign_server, nullptr);
+      ASSERT_GT(foreign_server->id, 0);
+    }
+  }
+
+  enum ColumnIndex { SERVER_NAME, DATA_WRAPPER, CREATED_AT, OPTIONS, NUM_FIELDS };
+
+  void assertExpectedFormat(const TQueryResult& result) {
+    ASSERT_EQ(result.row_set.is_columnar, true);
+    ASSERT_EQ(result.row_set.columns.size(), size_t(NUM_FIELDS));
+    ASSERT_EQ(result.row_set.row_desc[SERVER_NAME].col_type.type, TDatumType::STR);
+    ASSERT_EQ(result.row_set.row_desc[SERVER_NAME].col_name, "server_name");
+    ASSERT_EQ(result.row_set.row_desc[DATA_WRAPPER].col_type.type, TDatumType::STR);
+    ASSERT_EQ(result.row_set.row_desc[DATA_WRAPPER].col_name, "data_wrapper");
+    ASSERT_EQ(result.row_set.row_desc[CREATED_AT].col_type.type, TDatumType::TIMESTAMP);
+    ASSERT_EQ(result.row_set.row_desc[CREATED_AT].col_name, "created_at");
+    ASSERT_EQ(result.row_set.row_desc[OPTIONS].col_type.type, TDatumType::STR);
+    ASSERT_EQ(result.row_set.row_desc[OPTIONS].col_name, "options");
+  }
+
+  // Allow times within a one second window for rounding
+  static const int TIME_EPSILON = 1.0;
+
+  bool isDateTimeAfterTimeStamp(std::time_t datetime, std::time_t reference) {
+    return std::difftime(datetime, reference) >= -TIME_EPSILON;
+  }
+
+  bool isDateTimeInPast(std::time_t datetime) {
+    std::time_t current_time = std::time(nullptr);
+    return std::difftime(datetime, current_time) <= TIME_EPSILON;
+  }
+
+  void assertServerResult(const TQueryResult& result,
+                          int index,
+                          const std::string& name,
+                          const std::string& wrapper,
+                          const std::string& options) {
+    ASSERT_EQ(result.row_set.columns[SERVER_NAME].data.str_col[index], name);
+    ASSERT_EQ(result.row_set.columns[DATA_WRAPPER].data.str_col[index], wrapper);
+    ASSERT_EQ(result.row_set.columns[OPTIONS].data.str_col[index], options);
+    ASSERT_GT(result.row_set.columns[CREATED_AT].data.int_col[index], 0);
+    ASSERT_TRUE(isDateTimeInPast(result.row_set.columns[CREATED_AT].data.int_col[index]));
+  }
+  void assertServerLocalCSV(const TQueryResult& result, int index) {
+    assertServerResult(result,
+                       index,
+                       "omnisci_local_csv",
+                       "OMNISCI_CSV",
+                       "{\"BASE_PATH\":\"/\",\"STORAGE_TYPE\":\"LOCAL_FILE\"}");
+  }
+  void assertServerLocalParquet(const TQueryResult& result, int index) {
+    assertServerResult(result,
+                       index,
+                       "omnisci_local_parquet",
+                       "OMNISCI_PARQUET",
+                       "{\"BASE_PATH\":\"/\",\"STORAGE_TYPE\":\"LOCAL_FILE\"}");
+  }
+
+  void assertNumResults(const TQueryResult& result, size_t num_results) {
+    ASSERT_EQ(result.row_set.columns[SERVER_NAME].data.str_col.size(), num_results);
+    ASSERT_EQ(result.row_set.columns[DATA_WRAPPER].data.str_col.size(), num_results);
+    ASSERT_EQ(result.row_set.columns[CREATED_AT].data.int_col.size(), num_results);
+    ASSERT_EQ(result.row_set.columns[OPTIONS].data.str_col.size(), num_results);
+  }
+};
+
+TEST_F(ShowForeignServerTest, SHOWALL_DEFAULT) {
+  TQueryResult result;
+  std::string query{"SHOW SERVERS;"};
+  sql(result, query);
+  assertExpectedFormat(result);
+  // Two default servers
+  assertNumResults(result, 2);
+  assertServerLocalCSV(result, 0);
+  assertServerLocalParquet(result, 1);
+}
+
+TEST_F(ShowForeignServerTest, SHOW_WHERE_EQ) {
+  TQueryResult result;
+  std::string query{"SHOW SERVERS WHERE server_name = 'omnisci_local_csv';"};
+  sql(result, query);
+  assertExpectedFormat(result);
+  assertNumResults(result, 1);
+  assertServerLocalCSV(result, 0);
+}
+
+TEST_F(ShowForeignServerTest, SHOW_WHERE_LIKE) {
+  TQueryResult result;
+  std::string query{"SHOW SERVERS WHERE server_name LIKE '%_parquet';"};
+  sql(result, query);
+  assertExpectedFormat(result);
+  assertNumResults(result, 1);
+  assertServerLocalParquet(result, 0);
+}
+
+TEST_F(ShowForeignServerTest, SHOW_WHERE_LIKE_OR_EQ) {
+  TQueryResult result;
+  std::string query{
+      "SHOW SERVERS WHERE server_name LIKE '%_csv' OR server_name = "
+      "'omnisci_local_parquet';"};
+  sql(result, query);
+  assertExpectedFormat(result);
+  assertNumResults(result, 2);
+  assertServerLocalCSV(result, 0);
+  assertServerLocalParquet(result, 1);
+}
+
+TEST_F(ShowForeignServerTest, SHOW_WHERE_LIKE_AND_EQ) {
+  TQueryResult result;
+  std::string query{
+      "SHOW SERVERS WHERE server_name LIKE '%_csv' AND data_wrapper = 'OMNISCI_CSV';"};
+  sql(result, query);
+  assertExpectedFormat(result);
+  assertNumResults(result, 1);
+  assertServerLocalCSV(result, 0);
+}
+
+TEST_F(ShowForeignServerTest, SHOW_WHERE_LIKE_OR_LIKE_AND_LIKE) {
+  TQueryResult result;
+  std::string query{
+      "SHOW SERVERS WHERE server_name LIKE '%_csv' OR data_wrapper = 'OMNISCI_PARQUET' "
+      "AND options LIKE '%STORAGE_TYPE%';"};
+  sql(result, query);
+  assertExpectedFormat(result);
+  assertNumResults(result, 2);
+  assertServerLocalCSV(result, 0);
+  assertServerLocalParquet(result, 1);
+}
+
+TEST_F(ShowForeignServerTest, SHOW_WHERE_LIKE_EMPTY) {
+  TQueryResult result;
+  std::string query{"SHOW SERVERS WHERE server_name LIKE 'unknown%';"};
+  sql(result, query);
+  assertNumResults(result, 0);
+}
+
+TEST_F(ShowForeignServerTest, SHOW_WHERE_EQ_EMPTY) {
+  TQueryResult result;
+  std::string query{"SHOW SERVERS WHERE data_wrapper = 'unknown';"};
+  sql(result, query);
+  assertNumResults(result, 0);
+}
+
+TEST_F(ShowForeignServerTest, SHOW_TIMESTAMP_LIKE) {
+  // check that like operator with timestamp will error out
+  queryAndAssertException("SHOW SERVERS WHERE created_at LIKE 'test';",
+                          "Exception: LIKE operator is incompatible with TIMESTAMP data");
+}
+
+TEST_F(ShowForeignServerTest, SHOW_TIMESTAMP_EQ) {
+  // check that = operator with timestamp works
+  // create new server as default ones may have the same date
+
+  std::time_t current_time = std::time(nullptr);
+  {
+    TQueryResult result;
+    std::string query{
+        "CREATE SERVER test_server FOREIGN DATA WRAPPER omnisci_csv WITH "
+        "(storage_type = 'LOCAL_FILE', base_path = '/test_path/');"};
+    sql(result, query);
+  }
+  std::string options_json =
+      "{\"BASE_PATH\":\"/test_path/\",\"STORAGE_TYPE\":\"LOCAL_FILE\"}";
+
+  time_t created_at;
+  {
+    TQueryResult result;
+    std::string query{"SHOW SERVERS;"};
+    sql(result, query);
+    assertNumResults(result, 3);
+    created_at = result.row_set.columns[CREATED_AT].data.int_col[2];
+  }
+  {
+    TQueryResult result;
+    std::tm* ptm = std::gmtime(&created_at);
+    char buffer[256];
+    std::strftime(
+        buffer, 256, "SHOW SERVERS WHERE created_at = '%Y-%m-%d %H:%M:%S';", ptm);
+    puts(buffer);
+    sql(result, buffer);
+    assertNumResults(result, 1);
+    assertServerResult(result, 0, "test_server", "OMNISCI_CSV", options_json);
+    ASSERT_TRUE(isDateTimeAfterTimeStamp(
+        result.row_set.columns[CREATED_AT].data.int_col[0], current_time));
+  }
+
+  {
+    TQueryResult result;
+    std::string query{"DROP SERVER test_server;"};
+    sql(result, query);
+  }
+}
+
+TEST_F(ShowForeignServerTest, SHOW_ADD_DROP) {
+  // check that server is added to resultset when created and removed when dropped
+  std::time_t current_time = std::time(nullptr);
+  {
+    TQueryResult result;
+    std::string query{
+        "CREATE SERVER test_server FOREIGN DATA WRAPPER omnisci_csv WITH "
+        "(storage_type = 'LOCAL_FILE', base_path = '/test_path/');"};
+    sql(result, query);
+  }
+  std::string options_json =
+      "{\"BASE_PATH\":\"/test_path/\",\"STORAGE_TYPE\":\"LOCAL_FILE\"}";
+  {
+    TQueryResult result;
+    std::string query{"SHOW SERVERS;"};
+    sql(result, query);
+    assertNumResults(result, 3);
+    assertServerLocalCSV(result, 0);
+    assertServerLocalParquet(result, 1);
+    assertServerResult(result, 2, "test_server", "OMNISCI_CSV", options_json);
+  }
+  {
+    TQueryResult result;
+    std::string query{"SHOW SERVERS WHERE server_name = 'test_server';"};
+    sql(result, query);
+    assertNumResults(result, 1);
+    assertServerResult(result, 0, "test_server", "OMNISCI_CSV", options_json);
+  }
+  {
+    TQueryResult result;
+    std::string query{"SHOW SERVERS WHERE options LIKE '%test_path%';"};
+    sql(result, query);
+    assertNumResults(result, 1);
+    assertServerResult(result, 0, "test_server", "OMNISCI_CSV", options_json);
+    ASSERT_TRUE(isDateTimeAfterTimeStamp(
+        result.row_set.columns[CREATED_AT].data.int_col[0], current_time));
+  }
+  {
+    TQueryResult result;
+    std::string query{"DROP SERVER test_server;"};
+    sql(result, query);
+  }
+  {
+    TQueryResult result;
+    std::string query{"SHOW SERVERS;"};
+    sql(result, query);
+    assertExpectedFormat(result);
+    // Two default servers
+    assertNumResults(result, 2);
+    assertServerLocalCSV(result, 0);
+    assertServerLocalParquet(result, 1);
+  }
+}
+
+TEST_F(ShowForeignServerTest, SHOW_PRIVILEGE) {
+  // check that servers are only shown to users with correct privilege
+
+  sql("CREATE USER test (password = 'HyperInterative', is_super = 'false', "
+      "default_db='omnisci');");
+  sql("GRANT ACCESS ON DATABASE omnisci TO test;");
+  TSessionId test_session_id;
+  login("test", "HyperInteractive", "omnisci", test_session_id);
+  {
+    TQueryResult result;
+    sql(result, "SHOW SERVERS;", test_session_id);
+    assertNumResults(result, 0);
+  }
+  sql("GRANT ALL ON DATABASE omnisci TO test;");
+  {
+    TQueryResult result;
+    sql(result, "SHOW SERVERS;", test_session_id);
+    // Two default servers
+    assertNumResults(result, 2);
+    assertServerLocalCSV(result, 0);
+    assertServerLocalParquet(result, 1);
+  }
+  logout(test_session_id);
+  sql("DROP USER test;");
+}
+
+TEST_F(ShowForeignServerTest, BadTimestamp) {
+  std::string query{"SHOW SERVERS WHERE created_at = 'test';"};
+  queryAndAssertException(query, "Exception: Invalid DATE/TIMESTAMP string test");
+}
+
+TEST_F(ShowForeignServerTest, BadQuery) {
+  std::string query{"SHOW SERVERS WHERE server_name 'x' ;"};
+  queryAndAssertException(
+      query,
+      "Exception: Parse failed: Encountered \"\\'x\\'\" at line 1, column 32.\nWas "
+      "expecting one of:\n"
+      "    \"LIKE\" ...\n    \"=\" ...\n    \".\" ...\n    ");
+}
+
+TEST_F(ShowForeignServerTest, BadAttribute) {
+  std::string query{"SHOW SERVERS WHERE invalid_param = 'x';"};
+  queryAndAssertException(
+      query, "Exception: Attribute with name \"invalid_param\" does not exist.");
+}
+
+TEST_F(ShowForeignServerTest, FsiDisabled) {
+  g_enable_fsi = false;
+  std::string query{"SHOW SERVERS;"};
+  queryAndAssertException(query, "Exception: Unsupported command: SHOW FOREIGN SERVERS");
+  g_enable_fsi = true;
+}
+
 int main(int argc, char** argv) {
   g_enable_fsi = true;
   TestHelpers::init_logger_stderr_only(argc, argv);

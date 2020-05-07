@@ -113,7 +113,14 @@ class DropForeignTableCommand : public DdlCommand {
   DropForeignTableCommand(
       const rapidjson::Value& ddl_payload,
       std::shared_ptr<Catalog_Namespace::SessionInfo const> session_ptr);
+  void execute(TQueryResult& _return) override;
+};
 
+class ShowForeignServersCommand : public DdlCommand {
+ public:
+  ShowForeignServersCommand(
+      const rapidjson::Value& ddl_payload,
+      std::shared_ptr<Catalog_Namespace::SessionInfo const> session_ptr);
   void execute(TQueryResult& _return) override;
 };
 

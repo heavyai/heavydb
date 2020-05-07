@@ -1087,6 +1087,7 @@ void SysCatalog::createDatabase(const string& name, int owner) {
           "name text unique, "
           "data_wrapper_type text, "
           "owner_user_id integer, "
+          "creation_time integer, "
           "options text)");
       dbConn->query(
           "CREATE TABLE omnisci_foreign_tables("

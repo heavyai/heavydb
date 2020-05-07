@@ -1,0 +1,19 @@
+{
+  "statementType": "DDL",
+  "payload": {
+    "command": "SHOW_SERVERS",
+    "filters": [
+      {
+        "attribute": "data_wrapper",
+        "value": "omnisci_%",
+        "operation": "LIKE"
+      },
+      {
+        "attribute": "data_wrapper",
+        "value": "%_csv",
+        "operation": "LIKE",
+        "chain": "AND"
+      }
+    ]
+  }
+}

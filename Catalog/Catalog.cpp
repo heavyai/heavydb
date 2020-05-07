@@ -68,6 +68,7 @@
 #include "QueryEngine/TableOptimizer.h"
 #include "Shared/File.h"
 #include "Shared/StringTransform.h"
+#include "Shared/TimeGM.h"
 #include "Shared/measure.h"
 #include "StringDictionary/StringDictionaryClient.h"
 
@@ -614,6 +615,7 @@ void Catalog::createFsiSchemasAndDefaultServers() {
         "name text unique, "
         "data_wrapper_type text, "
         "owner_user_id integer, "
+        "creation_time integer, "
         "options text)");
     createDefaultServersIfNotExists();
     sqliteConnector_.query(
@@ -2400,13 +2402,16 @@ void Catalog::createForeignServerNoLocks(
       std::vector<std::string>{foreign_server->name});
 
   if (sqliteConnector_.getNumRows() == 0) {
+    foreign_server->creation_time = std::time(nullptr);
     sqliteConnector_.query_with_text_params(
         "INSERT INTO omnisci_foreign_servers (name, data_wrapper_type, owner_user_id, "
+        "creation_time,  "
         "options) "
-        "VALUES (?, ?, ?, ?)",
+        "VALUES (?, ?, ?, ?, ?)",
         std::vector<std::string>{foreign_server->name,
                                  foreign_server->data_wrapper_type,
                                  std::to_string(foreign_server->user_id),
+                                 std::to_string(foreign_server->creation_time),
                                  foreign_server->getOptionsAsJsonString()});
     sqliteConnector_.query_with_text_params(
         "SELECT id from omnisci_foreign_servers where name = ?",
@@ -2440,7 +2445,7 @@ foreign_storage::ForeignServer* Catalog::getForeignServerSkipCache(
   cat_write_lock write_lock(this);
   cat_sqlite_lock sqlite_lock(this);
   sqliteConnector_.query_with_text_params(
-      "SELECT id, name, data_wrapper_type, options, owner_user_id "
+      "SELECT id, name, data_wrapper_type, options, owner_user_id, creation_time "
       "FROM omnisci_foreign_servers WHERE name = ?",
       std::vector<std::string>{server_name});
   if (sqliteConnector_.getNumRows() > 0) {
@@ -2449,7 +2454,8 @@ foreign_storage::ForeignServer* Catalog::getForeignServerSkipCache(
         sqliteConnector_.getData<std::string>(0, 1),
         sqliteConnector_.getData<std::string>(0, 2),
         sqliteConnector_.getData<std::string>(0, 3),
-        sqliteConnector_.getData<std::int32_t>(0, 4));
+        sqliteConnector_.getData<std::int32_t>(0, 4),
+        sqliteConnector_.getData<std::int32_t>(0, 5));
     foreign_server = server.get();
     foreignServerMap_[server->name] = server;
     foreignServerMapById_[server->id] = server;
@@ -2481,6 +2487,97 @@ void Catalog::dropForeignServer(const std::string& server_name) {
         std::vector<std::string>{server_name});
     foreignServerMap_.erase(server_name);
     foreignServerMapById_.erase(server_id);
+  }
+}
+
+void Catalog::getForeignServersForUser(
+    const rapidjson::Value* filters,
+    const UserMetadata& user,
+    std::vector<foreign_storage::ForeignServer*>& results) {
+  sys_read_lock syscat_read_lock(&SysCatalog::instance());
+  cat_read_lock read_lock(this);
+  cat_sqlite_lock sqlite_lock(this);
+  // Customer facing and internal SQlite names
+  std::map<std::string, std::string> col_names{{"server_name", "name"},
+                                               {"data_wrapper", "data_wrapper_type"},
+                                               {"created_at", "creation_time"},
+                                               {"options", "options"}};
+
+  // TODO add "owner" when FSI privilege is implemented
+  std::stringstream filter_string;
+  std::vector<std::string> arguments;
+
+  if (filters != nullptr) {
+    // Create SQL WHERE clause for SQLite query
+    int num_filters = 0;
+    filter_string << " WHERE";
+    for (auto& filter_def : filters->GetArray()) {
+      if (num_filters > 0) {
+        filter_string << " " << std::string(filter_def["chain"].GetString());
+        ;
+      }
+
+      if (col_names.find(std::string(filter_def["attribute"].GetString())) ==
+          col_names.end()) {
+        throw std::runtime_error{"Attribute with name \"" +
+                                 std::string(filter_def["attribute"].GetString()) +
+                                 "\" does not exist."};
+      }
+
+      filter_string << " " << col_names[std::string(filter_def["attribute"].GetString())];
+
+      bool equals_operator = false;
+      if (std::strcmp(filter_def["operation"].GetString(), "EQUALS") == 0) {
+        filter_string << " = ? ";
+        equals_operator = true;
+      } else {
+        filter_string << " LIKE ? ";
+      }
+
+      bool timestamp_column =
+          (std::strcmp(filter_def["attribute"].GetString(), "created_at") == 0);
+
+      if (timestamp_column && !equals_operator) {
+        throw std::runtime_error{"LIKE operator is incompatible with TIMESTAMP data"};
+      }
+
+      if (timestamp_column && equals_operator) {
+        arguments.push_back(std::to_string(
+            DateTimeStringValidate<kTIMESTAMP>()(filter_def["value"].GetString(), 0)));
+      } else {
+        arguments.push_back(filter_def["value"].GetString());
+      }
+
+      num_filters++;
+    }
+  }
+  // Create select query for the omnisci_foreign_servers table
+  std::string query = std::string("SELECT name from omnisci_foreign_servers ");
+  query += filter_string.str();
+
+  sqliteConnector_.query_with_text_params(query, arguments);
+  auto num_rows = sqliteConnector_.getNumRows();
+
+  if (sqliteConnector_.getNumRows() == 0)
+    return;
+
+  CHECK(sqliteConnector_.getNumCols() == 1);
+  // Return pointers to objects
+  results.reserve(num_rows);
+  for (size_t row = 0; row < num_rows; ++row) {
+    foreign_storage::ForeignServer* foreign_server =
+        getForeignServer(sqliteConnector_.getData<std::string>(row, 0));
+
+    CHECK(foreign_server != nullptr);
+
+    DBObject dbObject(foreign_server->name, ServerDBObjectType);
+    dbObject.loadKey(*this);
+    std::vector<DBObject> privObjects = {dbObject};
+    if (!SysCatalog::instance().hasAnyPrivileges(user, privObjects)) {
+      // skip server, as there are no privileges to access it
+      continue;
+    }
+    results.push_back(foreign_server);
   }
 }
 
@@ -3509,7 +3606,7 @@ void Catalog::vacuumDeletedRows(const TableDescriptor* td) const {
 
 void Catalog::buildForeignServerMap() {
   sqliteConnector_.query(
-      "SELECT id, name, data_wrapper_type, options, owner_user_id FROM "
+      "SELECT id, name, data_wrapper_type, options, owner_user_id, creation_time FROM "
       "omnisci_foreign_servers");
   auto num_rows = sqliteConnector_.getNumRows();
   for (size_t row = 0; row < num_rows; row++) {
@@ -3518,7 +3615,8 @@ void Catalog::buildForeignServerMap() {
         sqliteConnector_.getData<std::string>(row, 1),
         sqliteConnector_.getData<std::string>(row, 2),
         sqliteConnector_.getData<std::string>(row, 3),
-        sqliteConnector_.getData<std::int32_t>(row, 4));
+        sqliteConnector_.getData<std::int32_t>(row, 4),
+        sqliteConnector_.getData<std::int32_t>(row, 5));
     foreignServerMap_[foreign_server->name] = foreign_server;
     foreignServerMapById_[foreign_server->id] = foreign_server;
   }

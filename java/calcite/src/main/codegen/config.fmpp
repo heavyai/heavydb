@@ -31,6 +31,7 @@ data: {
         "com.mapd.parser.extension.ddl.SqlCreateForeignTable"
         "com.mapd.parser.extension.ddl.SqlDropForeignTable"
         "com.mapd.parser.extension.ddl.SqlShowUserSessions"
+        "com.mapd.parser.extension.ddl.SqlShowForeignServers"
         "com.mapd.parser.extension.ddl.omnisql.*"
         "java.util.Map"
         "java.util.HashMap"
@@ -51,6 +52,7 @@ data: {
         "SESSIONS"
         "TABLES"
         "DATABASES"
+        "SERVERS"
       ]
 
       # List of keywords from "keywords" section that are not reserved.
@@ -394,6 +396,8 @@ data: {
         "SqlShowUserSessions(span())"
         "SqlShowTables(span())"
         "SqlShowDatabases(span())"
+        "SqlShowForeignServers(span())"
+
       ]
 
       # List of methods for parsing custom literals.
@@ -431,6 +435,7 @@ data: {
         "SqlDropServer"
         "SqlDropForeignTable"
       ]
+
 
       # Binary operators tokens
       binaryOperatorsTokens: [

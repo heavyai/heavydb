@@ -68,6 +68,24 @@ SqlDrop SqlDropServer(Span s, boolean replace) :
     }
 }
 
+SqlDdl SqlShowForeignServers(Span s) :
+{
+    SqlShowForeignServers.Builder sqlShowForeignServersBuilder = new SqlShowForeignServers.Builder();
+}
+{
+    <SHOW> <SERVERS> 
+    
+    [
+        WhereClause(sqlShowForeignServersBuilder)
+    ]
+
+    {
+        sqlShowForeignServersBuilder.setPos(s.end(this));
+        return sqlShowForeignServersBuilder.build();
+    }
+}
+
+
 /*
  * Parse the IF NOT EXISTS keyphrase.
  *
@@ -130,5 +148,37 @@ void Option(SqlCreateServer.Builder sqlCreateServerBuilder) :
     value = Literal()
     {
         sqlCreateServerBuilder.addOption(attribute.toString(), value.toString());
+    }
+}
+
+void WhereClause(SqlShowForeignServers.Builder sqlShowForeignServersBuilder) :
+{
+    SqlFilter.Chain chain;
+}
+{
+    <WHERE>
+    Predicate(sqlShowForeignServersBuilder, null)
+    (
+        (
+        <AND> { chain = SqlFilter.Chain.AND; } | <OR> { chain = SqlFilter.Chain.OR; }
+        )
+        Predicate(sqlShowForeignServersBuilder, chain)
+    )*
+}
+
+void Predicate(SqlShowForeignServers.Builder sqlShowForeignServersBuilder, SqlFilter.Chain chain) :
+{
+    final SqlIdentifier attribute;
+    final SqlFilter.Operation operation;
+    final SqlNode value;    
+}
+{ 
+    attribute=CompoundIdentifier()
+    (
+        <EQ> { operation = SqlFilter.Operation.EQUALS; } | <LIKE> { operation = SqlFilter.Operation.LIKE; }
+    )
+    value = Literal()
+    {
+        sqlShowForeignServersBuilder.addFilter(attribute.toString(), value.toString(), operation, chain);
     }
 }

@@ -290,6 +290,22 @@ class Catalog final {
   void dropForeignServer(const std::string& server_name);
 
   /**
+   * Performs a query on all foreign servers accessible to user with optional filter,
+   * and returns pointers toresulting server objects
+   *
+   * @param filters - Json Value representing SQL WHERE clause to filter results, eg.:
+   * "WHERE attribute1 = value1 AND attribute2 LIKE value2", or Null Value
+   *  Array of Values with attribute, value, operator, and chain specifier after first
+   * entry
+   * @param user - user to retrieve server names
+   * @param results - results returned as a vector of pointers to
+   * foreign_storage::ForeignServer
+   */
+  void getForeignServersForUser(const rapidjson::Value* filters,
+                                const UserMetadata& user,
+                                std::vector<foreign_storage::ForeignServer*>& results);
+
+  /**
    * Creates default local file servers (if they don't already exist).
    */
   void createDefaultServersIfNotExists();

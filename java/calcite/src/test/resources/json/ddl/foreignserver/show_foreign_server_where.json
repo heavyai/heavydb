@@ -1,0 +1,13 @@
+{
+  "statementType": "DDL",
+  "payload": {
+    "command": "SHOW_SERVERS",
+    "filters": [
+      {
+        "attribute": "data_wrapper",
+        "value": "omnisci_csv",
+        "operation": "EQUALS"
+      }
+    ]
+  }
+}
