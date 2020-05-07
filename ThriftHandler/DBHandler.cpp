@@ -5040,6 +5040,33 @@ void DBHandler::sql_execute_impl(TQueryResult& _return,
   lockmgr::LockedTableDescriptors locks;
   try {
     ParserWrapper pw{query_str};
+    switch (pw.getQueryType()) {
+      case ParserWrapper::QueryType::Read: {
+        _return.query_type = TQueryType::READ;
+        VLOG(1) << "query type: READ";
+        break;
+      }
+      case ParserWrapper::QueryType::Write: {
+        _return.query_type = TQueryType::WRITE;
+        VLOG(1) << "query type: WRITE";
+        break;
+      }
+      case ParserWrapper::QueryType::SchemaRead: {
+        _return.query_type = TQueryType::SCHEMA_READ;
+        VLOG(1) << "query type: SCHEMA READ";
+        break;
+      }
+      case ParserWrapper::QueryType::SchemaWrite: {
+        _return.query_type = TQueryType::SCHEMA_WRITE;
+        VLOG(1) << "query type: SCHEMA WRITE";
+        break;
+      }
+      default: {
+        _return.query_type = TQueryType::UNKNOWN;
+        LOG(WARNING) << "query type: UNKNOWN";
+        break;
+      }
+    }
     if (pw.isCalcitePathPermissable(read_only_)) {
       executeReadLock = mapd_shared_lock<mapd_shared_mutex>(
           *legacylockmgr::LockMgr<mapd_shared_mutex, bool>::getMutex(

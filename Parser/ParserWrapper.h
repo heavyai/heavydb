@@ -68,6 +68,8 @@ class ParserWrapper {
 
   enum class ExplainType { None, IR, OptimizedIR, Calcite, ExecutionPlan, Other };
 
+  enum class QueryType { Unknown, Read, Write, SchemaRead, SchemaWrite };
+
   ParserWrapper(std::string query_string);
   std::string process(std::string user,
                       std::string passwd,
@@ -93,6 +95,8 @@ class ParserWrapper {
   ExplainInfo getExplainInfo() const;
 
   ExplainType getExplainType() const { return explain_type_; }
+
+  QueryType getQueryType() const { return query_type_; }
 
   bool isCalciteExplain() const { return explain_type_ == ExplainType::Calcite; }
 
@@ -141,6 +145,7 @@ class ParserWrapper {
  private:
   DMLType dml_type_ = DMLType::NotDML;
   ExplainType explain_type_ = ExplainType::None;
+  QueryType query_type_ = QueryType::Unknown;
 
   static const std::vector<std::string> ddl_cmd;
   static const std::vector<std::string> update_dml_cmd;

@@ -58,6 +58,7 @@ const std::string ParserWrapper::validate_str = {"validate"};
 extern bool g_enable_fsi;
 
 ParserWrapper::ParserWrapper(std::string query_string) {
+  query_type_ = QueryType::SchemaRead;
   if (boost::istarts_with(query_string, calcite_explain_str)) {
     actual_query = boost::trim_copy(query_string.substr(calcite_explain_str.size()));
     ParserWrapper inner{actual_query};
@@ -107,6 +108,7 @@ ParserWrapper::ParserWrapper(std::string query_string) {
   }
 
   if (boost::istarts_with(query_string, optimize_str)) {
+    query_type_ = QueryType::SchemaWrite;
     is_optimize = true;
     return;
   }
@@ -115,9 +117,11 @@ ParserWrapper::ParserWrapper(std::string query_string) {
     is_validate = true;
     return;
   }
+  query_type_ = QueryType::Read;
   for (std::string ddl : ddl_cmd) {
     is_ddl = boost::istarts_with(query_string, ddl);
     if (is_ddl) {
+      query_type_ = QueryType::SchemaWrite;
       if (g_enable_fsi) {
         boost::regex fsi_regex{R"(((CREATE|DROP)\s+(SERVER|FOREIGN\s+TABLE).*))",
                                boost::regex::extended | boost::regex::icase};
@@ -139,9 +143,13 @@ ParserWrapper::ParserWrapper(std::string query_string) {
         boost::regex copy_to{R"(COPY\s*\(([^#])(.+)\)\s+TO\s+.*)",
                              boost::regex::extended | boost::regex::icase};
         if (boost::regex_match(query_string, copy_to)) {
+          query_type_ = QueryType::Read;
           is_copy_to = true;
+        } else {
+          query_type_ = QueryType::Write;
         }
       } else if (ddl == "SHOW") {
+        query_type_ = QueryType::SchemaRead;
         boost::regex show_create_table_regex{
             R"(SHOW\s+CREATE\s+TABLE\s+.*)",
             boost::regex::extended | boost::regex::icase};
@@ -160,6 +168,7 @@ ParserWrapper::ParserWrapper(std::string query_string) {
   for (int i = 0; i < update_dml_cmd.size(); i++) {
     is_update_dml = boost::istarts_with(query_string, ParserWrapper::update_dml_cmd[i]);
     if (is_update_dml) {
+      query_type_ = QueryType::Write;
       dml_type_ = (DMLType)(i);
       break;
     }

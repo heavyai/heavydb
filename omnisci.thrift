@@ -123,13 +123,22 @@ struct TRowSet {
   4: bool is_columnar
 }
 
+enum TQueryType {
+  UNKNOWN,
+  READ,
+  WRITE,
+  SCHEMA_READ,
+  SCHEMA_WRITE
+}
+
 struct TQueryResult {
   1: TRowSet row_set
   2: i64 execution_time_ms
   3: i64 total_time_ms
   4: string nonce
-  5: optional string debug
-  6: optional bool success=true
+  5: string debug
+  6: bool success=true
+  7: TQueryType query_type=TQueryType.UNKNOWN
 }
 
 struct TDataFrame {
