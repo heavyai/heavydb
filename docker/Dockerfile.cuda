@@ -1,0 +1,42 @@
+# Copy and extract OmniSci tarball. In own stage so that the temporary tarball
+# isn't included in a layer.
+FROM ubuntu:18.04 AS extract
+
+WORKDIR /omnisci/
+COPY omnisci-latest-Linux-x86_64.tar.gz /omnisci/
+RUN tar xvf omnisci-latest-Linux-x86_64.tar.gz --strip-components=1 && \
+    rm -rf omnisci-latest-Linux-x86_64.tar.gz
+
+# Build final stage
+FROM nvidia/cudagl:10.1-runtime-ubuntu18.04
+LABEL maintainer "Andrew Seidl <andrew@omnisci.com>"
+
+ENV NVIDIA_DRIVER_CAPABILITIES compute,utility,graphics
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        libldap-2.4-2 \
+        bsdmainutils \
+        libopengl0 \
+        wget \
+        curl \
+        libvulkan1 \
+        clang-9 \
+        liblz4-tool \
+        default-jre-headless && \
+    apt-get remove --purge -y && \
+    rm -rf /var/lib/apt/lists/*
+
+COPY --from=extract /omnisci /omnisci
+
+# UDF support
+RUN update-alternatives --install /usr/bin/clang++ clang++ /usr/bin/clang++-9 100
+ENV CPLUS_INCLUDE_PATH=/usr/lib/llvm-9/lib/clang/9.0.0/include
+
+RUN mkdir -p /etc/vulkan/icd.d && \
+    echo '{ "file_format_version" : "1.0.0", "ICD" : { "library_path" : "libGLX_nvidia.so.0", "api_version" : "1.1.99" } }' > /etc/vulkan/icd.d/nvidia_icd.json
+
+WORKDIR /omnisci
+
+EXPOSE 6274 6273
+
+CMD /omnisci/startomnisci --non-interactive --data /omnisci-storage/data --config /omnisci-storage/omnisci.conf

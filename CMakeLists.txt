@@ -829,7 +829,12 @@ install(PROGRAMS insert_sample_data DESTINATION ".")
 if("${MAPD_EDITION_LOWER}" STREQUAL "ee")
   install(DIRECTORY docker/sds DESTINATION "docker")
 endif()
-install(FILES docker/Dockerfile docker/Dockerfile.mapd docker/README.md DESTINATION "docker")
+install(FILES docker/README.md DESTINATION "docker")
+if(ENABLE_CUDA)
+  install(FILES docker/Dockerfile.cuda RENAME Dockerfile DESTINATION "docker")
+else()
+  install(FILES docker/Dockerfile.cpu RENAME Dockerfile DESTINATION "docker")
+endif()
 
 execute_process(
   COMMAND ln -sf omnisql mapdql

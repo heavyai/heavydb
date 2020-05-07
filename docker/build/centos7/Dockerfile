@@ -1,6 +1,6 @@
 # Build libglvnd for libGL, libEGL, libOpenGL
 # Not currently pulled in by nvidia-docker2
-FROM nvidia/cuda:10.1-devel-centos7
+FROM nvidia/cudagl:10.1-devel-centos7
 
 ENV NVIDIA_DRIVER_CAPABILITIES compute,utility,graphics
 
@@ -42,20 +42,8 @@ RUN yum install -y \
         jq && \
     rm -rf /var/cache/yum/*
 
-WORKDIR /libglvnd/
-ADD https://github.com/NVIDIA/libglvnd/archive/v1.0.0.tar.gz .
-RUN tar xvf v1.0.0.tar.gz --strip-components=1 \
-    && ./autogen.sh \
-    && ./configure --disable-glx \
-    && make -j 4 \
-    && make install \
-    && rm -rf /libglvnd
-WORKDIR /
-
-RUN mkdir -p /usr/share/glvnd/egl_vendor.d && \
-    echo '{ "file_format_version" : "1.0.0", "ICD" : { "library_path" : "libEGL_nvidia.so.0" } }' > /usr/share/glvnd/egl_vendor.d/10_nvidia.json
-RUN mkdir -p /usr/local/share/glvnd/egl_vendor.d && \
-    echo '{ "file_format_version" : "1.0.0", "ICD" : { "library_path" : "libEGL_nvidia.so.0" } }' > /usr/local/share/glvnd/egl_vendor.d/10_nvidia.json
+RUN mkdir -p /etc/vulkan/icd.d && \
+    echo '{ "file_format_version" : "1.0.0", "ICD" : { "library_path" : "libGLX_nvidia.so.0", "api_version" : "1.1.99" } }' > /etc/vulkan/icd.d/nvidia_icd.json
 
 RUN echo > /etc/ld.so.preload
 
