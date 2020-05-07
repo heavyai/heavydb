@@ -65,33 +65,33 @@ void CommandLineOptions::fillOptions() {
                               ->implicit_value(true),
                           "Use 64-bit count.");
   help_desc.add_options()("calcite-max-mem",
-                          po::value<size_t>(&mapd_parameters.calcite_max_mem)
-                              ->default_value(mapd_parameters.calcite_max_mem),
+                          po::value<size_t>(&system_parameters.calcite_max_mem)
+                              ->default_value(system_parameters.calcite_max_mem),
                           "Max memory available to calcite JVM.");
   if (!dist_v5_) {
     help_desc.add_options()("calcite-port",
-                            po::value<int>(&mapd_parameters.calcite_port)
-                                ->default_value(mapd_parameters.calcite_port),
+                            po::value<int>(&system_parameters.calcite_port)
+                                ->default_value(system_parameters.calcite_port),
                             "Calcite port number.");
   }
   help_desc.add_options()("config",
-                          po::value<std::string>(&mapd_parameters.config_file),
+                          po::value<std::string>(&system_parameters.config_file),
                           "Path to server configuration file.");
   help_desc.add_options()("cpu-buffer-mem-bytes",
-                          po::value<size_t>(&mapd_parameters.cpu_buffer_mem_bytes)
-                              ->default_value(mapd_parameters.cpu_buffer_mem_bytes),
+                          po::value<size_t>(&system_parameters.cpu_buffer_mem_bytes)
+                              ->default_value(system_parameters.cpu_buffer_mem_bytes),
                           "Size of memory reserved for CPU buffers, in bytes.");
   help_desc.add_options()(
       "cpu-only",
       po::value<bool>(&cpu_only)->default_value(cpu_only)->implicit_value(true),
       "Run on CPU only, even if GPUs are available.");
   help_desc.add_options()("cuda-block-size",
-                          po::value<size_t>(&mapd_parameters.cuda_block_size)
-                              ->default_value(mapd_parameters.cuda_block_size),
+                          po::value<size_t>(&system_parameters.cuda_block_size)
+                              ->default_value(system_parameters.cuda_block_size),
                           "Size of block to use on GPU.");
   help_desc.add_options()("cuda-grid-size",
-                          po::value<size_t>(&mapd_parameters.cuda_grid_size)
-                              ->default_value(mapd_parameters.cuda_grid_size),
+                          po::value<size_t>(&system_parameters.cuda_grid_size)
+                              ->default_value(system_parameters.cuda_grid_size),
                           "Size of grid to use on GPU.");
   if (!dist_v5_) {
     help_desc.add_options()(
@@ -194,12 +194,12 @@ void CommandLineOptions::fillOptions() {
                               ->implicit_value(true),
                           "Enable automatic table reordering in FROM clause.");
   help_desc.add_options()("gpu-buffer-mem-bytes",
-                          po::value<size_t>(&mapd_parameters.gpu_buffer_mem_bytes)
-                              ->default_value(mapd_parameters.gpu_buffer_mem_bytes),
+                          po::value<size_t>(&system_parameters.gpu_buffer_mem_bytes)
+                              ->default_value(system_parameters.gpu_buffer_mem_bytes),
                           "Size of memory reserved for GPU buffers, in bytes, per GPU.");
   help_desc.add_options()("gpu-input-mem-limit",
-                          po::value<double>(&mapd_parameters.gpu_input_mem_limit)
-                              ->default_value(mapd_parameters.gpu_input_mem_limit),
+                          po::value<double>(&system_parameters.gpu_input_mem_limit)
+                              ->default_value(system_parameters.gpu_input_mem_limit),
                           "Force query to CPU when input data memory usage exceeds this "
                           "percentage of available GPU memory.");
   help_desc.add_options()(
@@ -245,8 +245,8 @@ void CommandLineOptions::fillOptions() {
       "The maximum size in bytes of the hash table for an overlaps hash join.");
   if (!dist_v5_) {
     help_desc.add_options()("port,p",
-                            po::value<int>(&mapd_parameters.omnisci_server_port)
-                                ->default_value(mapd_parameters.omnisci_server_port),
+                            po::value<int>(&system_parameters.omnisci_server_port)
+                                ->default_value(system_parameters.omnisci_server_port),
                             "TCP Port number.");
   }
   help_desc.add_options()("num-gpus",
@@ -309,8 +309,8 @@ void CommandLineOptions::fillOptions() {
                           "Enable UNION ALL SQL clause.");
   help_desc.add_options()(
       "calcite-service-timeout",
-      po::value<size_t>(&mapd_parameters.calcite_timeout)
-          ->default_value(mapd_parameters.calcite_timeout),
+      po::value<size_t>(&system_parameters.calcite_timeout)
+          ->default_value(system_parameters.calcite_timeout),
       "Calcite server timeout (milliseconds). Increase this on systems with frequent "
       "schema changes or when running large numbers of parallel queries.");
   help_desc.add_options()(
@@ -326,8 +326,8 @@ void CommandLineOptions::fillAdvancedOptions() {
   developer_desc.add_options()("dev-options", "Print internal developer options.");
   developer_desc.add_options()(
       "enable-calcite-view-optimize",
-      po::value<bool>(&mapd_parameters.enable_calcite_view_optimize)
-          ->default_value(mapd_parameters.enable_calcite_view_optimize)
+      po::value<bool>(&system_parameters.enable_calcite_view_optimize)
+          ->default_value(system_parameters.enable_calcite_view_optimize)
           ->implicit_value(true),
       "Enable additional calcite (query plan) optimizations when a view is part of the "
       "query.");
@@ -355,8 +355,8 @@ void CommandLineOptions::fillAdvancedOptions() {
           ->implicit_value(true),
       "Enable using GPU shared memory for some GROUP BY queries.");
   developer_desc.add_options()("num-executors",
-                               po::value<int>(&mapd_parameters.num_executors)
-                                   ->default_value(mapd_parameters.num_executors),
+                               po::value<int>(&system_parameters.num_executors)
+                                   ->default_value(system_parameters.num_executors),
                                "Number of executors to run in parallel.");
   developer_desc.add_options()(
       "gpu-shared-mem-threshold",
@@ -455,31 +455,31 @@ void CommandLineOptions::fillAdvancedOptions() {
                                "the output buffer for projection queries.");
 
   developer_desc.add_options()("ssl-cert",
-                               po::value<std::string>(&mapd_parameters.ssl_cert_file)
+                               po::value<std::string>(&system_parameters.ssl_cert_file)
                                    ->default_value(std::string("")),
                                "SSL Validated public certficate.");
 
   developer_desc.add_options()("ssl-private-key",
-                               po::value<std::string>(&mapd_parameters.ssl_key_file)
+                               po::value<std::string>(&system_parameters.ssl_key_file)
                                    ->default_value(std::string("")),
                                "SSL private key file.");
-  // Note ssl_trust_store is passed through to Calcite via mapd_parameters
+  // Note ssl_trust_store is passed through to Calcite via system_parameters
   // todo(jack): add ensure ssl-trust-store exists if cert and private key in use
   developer_desc.add_options()("ssl-trust-store",
-                               po::value<std::string>(&mapd_parameters.ssl_trust_store)
+                               po::value<std::string>(&system_parameters.ssl_trust_store)
                                    ->default_value(std::string("")),
                                "SSL public CA certifcates (java trust store) to validate "
                                "TLS connections (passed through to the Calcite server).");
 
   developer_desc.add_options()(
       "ssl-trust-password",
-      po::value<std::string>(&mapd_parameters.ssl_trust_password)
+      po::value<std::string>(&system_parameters.ssl_trust_password)
           ->default_value(std::string("")),
       "SSL password for java trust store provided via --ssl-trust-store parameter.");
 
   developer_desc.add_options()(
       "ssl-trust-ca",
-      po::value<std::string>(&mapd_parameters.ssl_trust_ca_file)
+      po::value<std::string>(&system_parameters.ssl_trust_ca_file)
           ->default_value(std::string("")),
       "SSL public CA certificates to validate TLS connection(as a client).");
 
@@ -489,14 +489,14 @@ void CommandLineOptions::fillAdvancedOptions() {
       "SSL public CA certificates to validate TLS connection(as a server).");
 
   developer_desc.add_options()("ssl-keystore",
-                               po::value<std::string>(&mapd_parameters.ssl_keystore)
+                               po::value<std::string>(&system_parameters.ssl_keystore)
                                    ->default_value(std::string("")),
                                "SSL server credentials as a java key store (passed "
                                "through to the Calcite server).");
 
   developer_desc.add_options()(
       "ssl-keystore-password",
-      po::value<std::string>(&mapd_parameters.ssl_keystore_password)
+      po::value<std::string>(&system_parameters.ssl_keystore_password)
           ->default_value(std::string("")),
       "SSL password for java keystore, provide by via --ssl-keystore.");
 
@@ -654,7 +654,7 @@ boost::optional<int> CommandLineOptions::parse_command_line(
     po::notify(vm);
 
     if (vm.count("config")) {
-      std::ifstream settings_file(mapd_parameters.config_file);
+      std::ifstream settings_file(system_parameters.config_file);
 
       auto sanitized_settings = sanitize_config_file(settings_file);
 
@@ -667,22 +667,22 @@ boost::optional<int> CommandLineOptions::parse_command_line(
       init_logging();
     }
 
-    if (!trim_and_check_file_exists(mapd_parameters.ssl_cert_file, "ssl cert file")) {
+    if (!trim_and_check_file_exists(system_parameters.ssl_cert_file, "ssl cert file")) {
       return 1;
     }
     if (!trim_and_check_file_exists(authMetadata.ca_file_name, "ca file name")) {
       return 1;
     }
-    if (!trim_and_check_file_exists(mapd_parameters.ssl_trust_store, "ssl trust store")) {
+    if (!trim_and_check_file_exists(system_parameters.ssl_trust_store, "ssl trust store")) {
       return 1;
     }
-    if (!trim_and_check_file_exists(mapd_parameters.ssl_keystore, "ssl key store")) {
+    if (!trim_and_check_file_exists(system_parameters.ssl_keystore, "ssl key store")) {
       return 1;
     }
-    if (!trim_and_check_file_exists(mapd_parameters.ssl_key_file, "ssl key file")) {
+    if (!trim_and_check_file_exists(system_parameters.ssl_key_file, "ssl key file")) {
       return 1;
     }
-    if (!trim_and_check_file_exists(mapd_parameters.ssl_trust_ca_file, "ssl ca file")) {
+    if (!trim_and_check_file_exists(system_parameters.ssl_trust_ca_file, "ssl ca file")) {
       return 1;
     }
 
@@ -757,39 +757,40 @@ boost::optional<int> CommandLineOptions::parse_command_line(
     LOG(INFO) << " Runtime user defined extension functions enabled globally.";
   }
 
-  boost::algorithm::trim_if(mapd_parameters.ha_brokers, boost::is_any_of("\"'"));
-  boost::algorithm::trim_if(mapd_parameters.ha_group_id, boost::is_any_of("\"'"));
-  boost::algorithm::trim_if(mapd_parameters.ha_shared_data, boost::is_any_of("\"'"));
-  boost::algorithm::trim_if(mapd_parameters.ha_unique_server_id, boost::is_any_of("\"'"));
+  boost::algorithm::trim_if(system_parameters.ha_brokers, boost::is_any_of("\"'"));
+  boost::algorithm::trim_if(system_parameters.ha_group_id, boost::is_any_of("\"'"));
+  boost::algorithm::trim_if(system_parameters.ha_shared_data, boost::is_any_of("\"'"));
+  boost::algorithm::trim_if(system_parameters.ha_unique_server_id,
+                            boost::is_any_of("\"'"));
 
-  if (!mapd_parameters.ha_group_id.empty()) {
-    LOG(INFO) << " HA group id " << mapd_parameters.ha_group_id;
-    if (mapd_parameters.ha_unique_server_id.empty()) {
+  if (!system_parameters.ha_group_id.empty()) {
+    LOG(INFO) << " HA group id " << system_parameters.ha_group_id;
+    if (system_parameters.ha_unique_server_id.empty()) {
       LOG(ERROR) << "Starting server in HA mode --ha-unique-server-id must be set ";
       return 5;
     } else {
-      LOG(INFO) << " HA unique server id " << mapd_parameters.ha_unique_server_id;
+      LOG(INFO) << " HA unique server id " << system_parameters.ha_unique_server_id;
     }
-    if (mapd_parameters.ha_brokers.empty()) {
+    if (system_parameters.ha_brokers.empty()) {
       LOG(ERROR) << "Starting server in HA mode --ha-brokers must be set ";
       return 6;
     } else {
-      LOG(INFO) << " HA brokers " << mapd_parameters.ha_brokers;
+      LOG(INFO) << " HA brokers " << system_parameters.ha_brokers;
     }
-    if (mapd_parameters.ha_shared_data.empty()) {
+    if (system_parameters.ha_shared_data.empty()) {
       LOG(ERROR) << "Starting server in HA mode --ha-shared-data must be set ";
       return 7;
     } else {
-      LOG(INFO) << " HA shared data is " << mapd_parameters.ha_shared_data;
+      LOG(INFO) << " HA shared data is " << system_parameters.ha_shared_data;
     }
   }
-  LOG(INFO) << " cuda block size " << mapd_parameters.cuda_block_size;
-  LOG(INFO) << " cuda grid size  " << mapd_parameters.cuda_grid_size;
-  LOG(INFO) << " calcite JVM max memory  " << mapd_parameters.calcite_max_mem;
-  LOG(INFO) << " OmniSci Server Port  " << mapd_parameters.omnisci_server_port;
-  LOG(INFO) << " OmniSci Calcite Port  " << mapd_parameters.calcite_port;
+  LOG(INFO) << " cuda block size " << system_parameters.cuda_block_size;
+  LOG(INFO) << " cuda grid size  " << system_parameters.cuda_grid_size;
+  LOG(INFO) << " calcite JVM max memory  " << system_parameters.calcite_max_mem;
+  LOG(INFO) << " OmniSci Server Port  " << system_parameters.omnisci_server_port;
+  LOG(INFO) << " OmniSci Calcite Port  " << system_parameters.calcite_port;
   LOG(INFO) << " Enable Calcite view optimize "
-            << mapd_parameters.enable_calcite_view_optimize;
+            << system_parameters.enable_calcite_view_optimize;
 
   LOG(INFO) << " Allow Local Auth Fallback: "
             << (authMetadata.allowLocalAuthFallback ? "enabled" : "disabled");

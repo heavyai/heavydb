@@ -58,7 +58,7 @@ class CommandLineOptions {
   bool enable_legacy_syntax = true;
   AuthMetadata authMetadata;
 
-  SystemParameters mapd_parameters;
+  SystemParameters system_parameters;
   bool enable_rendering = false;
   bool enable_auto_clear_render_mem = false;
   int render_oom_retry_threshold = 0;  // in milliseconds

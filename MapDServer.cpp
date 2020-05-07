@@ -359,7 +359,7 @@ int startMapdServer(CommandLineOptions& prog_config_opts, bool start_http_server
                                      prog_config_opts.reserved_gpu_mem,
                                      prog_config_opts.num_reader_threads,
                                      prog_config_opts.authMetadata,
-                                     prog_config_opts.mapd_parameters,
+                                     prog_config_opts.system_parameters,
                                      prog_config_opts.enable_legacy_syntax,
                                      prog_config_opts.idle_session_duration,
                                      prog_config_opts.max_session_duration,
@@ -378,32 +378,32 @@ int startMapdServer(CommandLineOptions& prog_config_opts, bool start_http_server
 
   mapd::shared_ptr<TServerSocket> serverSocket;
   mapd::shared_ptr<TServerSocket> httpServerSocket;
-  if (!prog_config_opts.mapd_parameters.ssl_cert_file.empty() &&
-      !prog_config_opts.mapd_parameters.ssl_key_file.empty()) {
+  if (!prog_config_opts.system_parameters.ssl_cert_file.empty() &&
+      !prog_config_opts.system_parameters.ssl_key_file.empty()) {
     mapd::shared_ptr<TSSLSocketFactory> sslSocketFactory;
     sslSocketFactory =
         mapd::shared_ptr<TSSLSocketFactory>(new TSSLSocketFactory(SSLProtocol::SSLTLS));
     sslSocketFactory->loadCertificate(
-        prog_config_opts.mapd_parameters.ssl_cert_file.c_str());
+        prog_config_opts.system_parameters.ssl_cert_file.c_str());
     sslSocketFactory->loadPrivateKey(
-        prog_config_opts.mapd_parameters.ssl_key_file.c_str());
-    if (prog_config_opts.mapd_parameters.ssl_transport_client_auth) {
+        prog_config_opts.system_parameters.ssl_key_file.c_str());
+    if (prog_config_opts.system_parameters.ssl_transport_client_auth) {
       sslSocketFactory->authenticate(true);
     } else {
       sslSocketFactory->authenticate(false);
     }
     sslSocketFactory->ciphers("ALL:!ADH:!LOW:!EXP:!MD5:@STRENGTH");
     serverSocket = mapd::shared_ptr<TServerSocket>(new TSSLServerSocket(
-        prog_config_opts.mapd_parameters.omnisci_server_port, sslSocketFactory));
+        prog_config_opts.system_parameters.omnisci_server_port, sslSocketFactory));
     httpServerSocket = mapd::shared_ptr<TServerSocket>(
         new TSSLServerSocket(prog_config_opts.http_port, sslSocketFactory));
     LOG(INFO) << " OmniSci server using encrypted connection. Cert file ["
-              << prog_config_opts.mapd_parameters.ssl_cert_file << "], key file ["
-              << prog_config_opts.mapd_parameters.ssl_key_file << "]";
+              << prog_config_opts.system_parameters.ssl_cert_file << "], key file ["
+              << prog_config_opts.system_parameters.ssl_key_file << "]";
   } else {
     LOG(INFO) << " OmniSci server using unencrypted connection";
     serverSocket = mapd::shared_ptr<TServerSocket>(
-        new TServerSocket(prog_config_opts.mapd_parameters.omnisci_server_port));
+        new TServerSocket(prog_config_opts.system_parameters.omnisci_server_port));
     httpServerSocket =
         mapd::shared_ptr<TServerSocket>(new TServerSocket(prog_config_opts.http_port));
   }
@@ -413,7 +413,7 @@ int startMapdServer(CommandLineOptions& prog_config_opts, bool start_http_server
     g_thrift_buf_server = g_thrift_http_server = nullptr;
   };
 
-  if (prog_config_opts.mapd_parameters.ha_group_id.empty()) {
+  if (prog_config_opts.system_parameters.ha_group_id.empty()) {
     mapd::shared_ptr<TProcessor> processor(new TrackingProcessor(g_mapd_handler));
     mapd::shared_ptr<TTransportFactory> bufTransportFactory(
         new TBufferedTransportFactory());
@@ -429,7 +429,7 @@ int startMapdServer(CommandLineOptions& prog_config_opts, bool start_http_server
 
     std::thread bufThread(start_server,
                           std::ref(bufServer),
-                          prog_config_opts.mapd_parameters.omnisci_server_port);
+                          prog_config_opts.system_parameters.omnisci_server_port);
 
     // TEMPORARY
     auto warmup_queries = [&prog_config_opts]() {

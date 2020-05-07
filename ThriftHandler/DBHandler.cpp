@@ -191,7 +191,7 @@ DBHandler::DBHandler(const std::vector<LeafHostInfo>& db_leaves,
                      const size_t reserved_gpu_mem,
                      const size_t num_reader_threads,
                      const AuthMetadata& authMetadata,
-                     const SystemParameters& mapd_parameters,
+                     const SystemParameters& system_parameters,
                      const bool legacy_syntax,
                      const int idle_session_duration,
                      const int max_session_duration,
@@ -215,9 +215,10 @@ DBHandler::DBHandler(const std::vector<LeafHostInfo>& db_leaves,
     , read_only_(read_only)
     , allow_loop_joins_(allow_loop_joins)
     , authMetadata_(authMetadata)
-    , mapd_parameters_(mapd_parameters)
+    , system_parameters_(system_parameters)
     , legacy_syntax_(legacy_syntax)
-    , dispatch_queue_(std::make_unique<QueryDispatchQueue>(mapd_parameters.num_executors))
+    , dispatch_queue_(
+          std::make_unique<QueryDispatchQueue>(system_parameters.num_executors))
     , super_user_rights_(false)
     , idle_session_duration_(idle_session_duration * 60)
     , max_session_duration_(max_session_duration * 60)
@@ -257,7 +258,7 @@ DBHandler::DBHandler(const std::vector<LeafHostInfo>& db_leaves,
 
   try {
     data_mgr_.reset(new Data_Namespace::DataMgr(data_path.string(),
-                                                mapd_parameters,
+                                                system_parameters,
                                                 !cpu_mode_only_,
                                                 num_gpus,
                                                 start_gpu,
@@ -288,7 +289,7 @@ DBHandler::DBHandler(const std::vector<LeafHostInfo>& db_leaves,
 
   try {
     calcite_ =
-        std::make_shared<Calcite>(mapd_parameters, base_data_path_, udf_ast_filename);
+        std::make_shared<Calcite>(system_parameters, base_data_path_, udf_ast_filename);
   } catch (const std::exception& e) {
     LOG(FATAL) << "Failed to initialize Calcite server: " << e.what();
   }
@@ -345,7 +346,7 @@ DBHandler::DBHandler(const std::vector<LeafHostInfo>& db_leaves,
                                               max_concurrent_render_sessions,
                                               false,
                                               0,
-                                              mapd_parameters_));
+                                              system_parameters_));
     } catch (const std::exception& e) {
       LOG(ERROR) << "Backend rendering disabled: " << e.what();
     }
@@ -646,7 +647,7 @@ void DBHandler::interrupt(const TSessionId& query_session,
     auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID,
                                           jit_debug_ ? "/tmp" : "",
                                           jit_debug_ ? "mapdquery" : "",
-                                          mapd_parameters_);
+                                          system_parameters_);
     CHECK(executor);
 
     VLOG(1) << "Received interrupt: "
@@ -1004,7 +1005,7 @@ void DBHandler::sql_execute(TQueryResult& _return,
                                       nonce,
                                       first_n,
                                       at_most_n,
-                                      mapd_parameters_);
+                                      system_parameters_);
       } catch (std::exception& e) {
         const auto mapd_exception = dynamic_cast<const TOmniSciException*>(&e);
         const auto thrift_exception = dynamic_cast<const apache::thrift::TException*>(&e);
@@ -1120,8 +1121,11 @@ void DBHandler::sql_execute_df(TDataFrame& _return,
       lockmgr::LockedTableDescriptors locks;
       _return.execution_time_ms += measure<>::execution([&]() {
         TPlanResult result;
-        std::tie(result, locks) = parse_to_ra(
-            query_state->createQueryStateProxy(), query_str, {}, true, mapd_parameters_);
+        std::tie(result, locks) = parse_to_ra(query_state->createQueryStateProxy(),
+                                              query_str,
+                                              {},
+                                              true,
+                                              system_parameters_);
         query_ra = result.plan_result;
       });
 
@@ -1421,7 +1425,7 @@ void DBHandler::validate_rel_alg(TRowDescriptor& _return,
                     query_state_proxy.getQueryState().getQueryStr(),
                     {},
                     true,
-                    mapd_parameters_);
+                    system_parameters_);
     const auto query_ra = parse_result.plan_result;
 
     TQueryResult result;
@@ -1959,7 +1963,7 @@ void DBHandler::get_table_details_impl(TTableDetails& _return,
                                             query_state->getQueryStr(),
                                             {},
                                             false,
-                                            mapd_parameters_,
+                                            system_parameters_,
                                             false);
           try {
             calcite_->checkAccessedObjectsPrivileges(query_state->createQueryStateProxy(),
@@ -2130,7 +2134,7 @@ void DBHandler::get_tables_meta_impl(std::vector<TTableMeta>& _return,
         TPlanResult parse_result;
         lockmgr::LockedTableDescriptors locks;
         std::tie(parse_result, locks) = parse_to_ra(
-            query_state_proxy, td->viewSQL, {}, with_table_locks, mapd_parameters_);
+            query_state_proxy, td->viewSQL, {}, with_table_locks, system_parameters_);
         const auto query_ra = parse_result.plan_result;
 
         TQueryResult result;
@@ -4703,14 +4707,14 @@ std::vector<PushedDownFilterInfo> DBHandler::execute_rel_alg(
                          g_dynamic_watchdog_time_limit,
                          find_push_down_candidates,
                          explain_info.justCalciteExplain(),
-                         mapd_parameters_.gpu_input_mem_limit,
+                         system_parameters_.gpu_input_mem_limit,
                          g_enable_runtime_query_interrupt,
                          g_runtime_query_interrupt_frequency};
   auto executor = Executor::getExecutor(
       executor_index ? *executor_index : Executor::UNITARY_EXECUTOR_ID,
       jit_debug_ ? "/tmp" : "",
       jit_debug_ ? "mapdquery" : "",
-      mapd_parameters_);
+      system_parameters_);
   RelAlgExecutor ra_executor(executor.get(),
                              cat,
                              query_ra,
@@ -4774,13 +4778,13 @@ void DBHandler::execute_rel_alg_df(TDataFrame& _return,
                          g_dynamic_watchdog_time_limit,
                          false,
                          false,
-                         mapd_parameters_.gpu_input_mem_limit,
+                         system_parameters_.gpu_input_mem_limit,
                          g_enable_runtime_query_interrupt,
                          g_runtime_query_interrupt_frequency};
   auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID,
                                         jit_debug_ ? "/tmp" : "",
                                         jit_debug_ ? "mapdquery" : "",
-                                        mapd_parameters_);
+                                        system_parameters_);
   RelAlgExecutor ra_executor(executor.get(),
                              cat,
                              query_ra,
@@ -5124,7 +5128,7 @@ void DBHandler::sql_execute_impl(TQueryResult& _return,
       _return.execution_time_ms += measure<>::execution([&]() {
         TPlanResult result;
         std::tie(result, locks) =
-            parse_to_ra(query_state_proxy, query_str, {}, true, mapd_parameters_);
+            parse_to_ra(query_state_proxy, query_str, {}, true, system_parameters_);
         query_ra = result.plan_result;
       });
 
@@ -5140,7 +5144,7 @@ void DBHandler::sql_execute_impl(TQueryResult& _return,
 
         CHECK(!locks.empty());
         query_ra_calcite_explain =
-            parse_to_ra(query_state_proxy, temp_query_str, {}, false, mapd_parameters_)
+            parse_to_ra(query_state_proxy, temp_query_str, {}, false, system_parameters_)
                 .first.plan_result;
       } else if (pw.isCalciteDdl()) {
         executeDdl(_return, query_ra, session_ptr);
@@ -5183,8 +5187,9 @@ void DBHandler::sql_execute_impl(TQueryResult& _return,
         // i.e., no filter push down so we continue with the initial (unchanged) query's
         // calcite explanation.
         CHECK(!locks.empty());
-        query_ra = parse_to_ra(query_state_proxy, query_str, {}, false, mapd_parameters_)
-                       .first.plan_result;
+        query_ra =
+            parse_to_ra(query_state_proxy, query_str, {}, false, system_parameters_)
+                .first.plan_result;
         convert_explain(_return, ResultSet(query_ra), true);
         return;
       }
@@ -5218,7 +5223,7 @@ void DBHandler::sql_execute_impl(TQueryResult& _return,
               lockmgr::TableDataLockMgr::getWriteLockForTable(cat, td->tableName);
 
           auto executor = Executor::getExecutor(
-              Executor::UNITARY_EXECUTOR_ID, "", "", mapd_parameters_);
+              Executor::UNITARY_EXECUTOR_ID, "", "", system_parameters_);
           const TableOptimizer optimizer(td, executor.get(), cat);
           if (optimize_stmt->shouldVacuumDeletedRows()) {
             optimizer.vacuumDeletedRows();
@@ -5329,7 +5334,7 @@ void DBHandler::sql_execute_impl(TQueryResult& _return,
       TPlanResult result;
       CHECK(locks.empty());
       std::tie(result, locks) =
-          parse_to_ra(query_state_proxy, query_string, {}, true, mapd_parameters_);
+          parse_to_ra(query_state_proxy, query_string, {}, true, system_parameters_);
     }
     _return.execution_time_ms += measure<>::execution([&]() {
       ddl->execute(*session_ptr);
@@ -5390,7 +5395,7 @@ void DBHandler::execute_rel_alg_with_filter_push_down(
                            query_state_proxy.getQueryState().getQueryStr(),
                            filter_push_down_info,
                            false,
-                           mapd_parameters_)
+                           system_parameters_)
                    .first.plan_result;
   });
 
@@ -5436,7 +5441,7 @@ std::pair<TPlanResult, lockmgr::LockedTableDescriptors> DBHandler::parse_to_ra(
     const std::string& query_str,
     const std::vector<TFilterPushDownInfo>& filter_push_down_info,
     const bool acquire_locks,
-    const SystemParameters mapd_parameters,
+    const SystemParameters system_parameters,
     bool check_privileges) {
   query_state::Timer timer = query_state_proxy.createTimer(__func__);
   ParserWrapper pw{query_str};
@@ -5455,7 +5460,7 @@ std::pair<TPlanResult, lockmgr::LockedTableDescriptors> DBHandler::parse_to_ra(
                                    filter_push_down_info,
                                    legacy_syntax_,
                                    pw.isCalciteExplain(),
-                                   mapd_parameters.enable_calcite_view_optimize,
+                                   system_parameters.enable_calcite_view_optimize,
                                    check_privileges,
                                    in_memory_session_id);
         session_cleanup_handler(in_memory_session_id);

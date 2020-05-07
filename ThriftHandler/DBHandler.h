@@ -176,7 +176,7 @@ class DBHandler : public OmniSciIf {
             const size_t reserved_gpu_mem,
             const size_t num_reader_threads,
             const AuthMetadata& authMetadata,
-            const SystemParameters& mapd_parameters,
+            const SystemParameters& system_parameters,
             const bool legacy_syntax,
             const int idle_session_duration,
             const int max_session_duration,
@@ -521,7 +521,7 @@ class DBHandler : public OmniSciIf {
   std::mutex render_mutex_;
   int64_t start_time_;
   const AuthMetadata& authMetadata_;
-  const SystemParameters& mapd_parameters_;
+  const SystemParameters& system_parameters_;
   std::unique_ptr<RenderHandler> render_handler_;
   std::unique_ptr<MapDAggHandler> agg_handler_;
   std::unique_ptr<MapDLeafHandler> leaf_handler_;
@@ -597,7 +597,7 @@ class DBHandler : public OmniSciIf {
       const std::string& query_str,
       const std::vector<TFilterPushDownInfo>& filter_push_down_info,
       const bool acquire_locks,
-      const SystemParameters mapd_parameters,
+      const SystemParameters system_parameters,
       bool check_privileges = true);
 
   void sql_execute_impl(TQueryResult& _return,
