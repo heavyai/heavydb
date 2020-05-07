@@ -47,7 +47,6 @@
 #include "QueryEngine/JsonAccessors.h"
 #include "QueryEngine/TableGenerations.h"
 #include "QueryState.h"
-#include "Shared/ConfigResolve.h"
 #include "Shared/GenericTypeUtilities.h"
 #include "Shared/Logger.h"
 #include "Shared/StringTransform.h"

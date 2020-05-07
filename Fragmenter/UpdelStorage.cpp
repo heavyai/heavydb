@@ -27,7 +27,6 @@
 #include "Fragmenter/InsertOrderFragmenter.h"
 #include "QueryEngine/Execute.h"
 #include "QueryEngine/TargetValue.h"
-#include "Shared/ConfigResolve.h"
 #include "Shared/DateConverters.h"
 #include "Shared/Logger.h"
 #include "Shared/TypedDataAccessors.h"
@@ -298,10 +297,6 @@ void InsertOrderFragmenter::updateColumns(
     const size_t indexOffFragmentOffsetColumn,
     const Data_Namespace::MemoryLevel memoryLevel,
     UpdelRoll& updelRoll) {
-  if (!is_feature_enabled<VarlenUpdates>()) {
-    throw std::runtime_error("varlen UPDATE path not enabled.");
-  }
-
   updelRoll.is_varlen_update = true;
   updelRoll.catalog = catalog;
   updelRoll.logicalTableId = catalog->getLogicalTableId(td->tableId);
@@ -954,7 +949,8 @@ void InsertOrderFragmenter::updateColumnMetadata(const ColumnDescriptor* cd,
   auto buffer = chunk->get_buffer();
   const auto& lhs_type = cd->columnType;
 
-  auto update_stats = [& encoder = buffer->encoder](auto min, auto max, auto has_null) {
+  auto encoder = buffer->encoder.get();
+  auto update_stats = [&encoder](auto min, auto max, auto has_null) {
     static_assert(std::is_same<decltype(min), decltype(max)>::value,
                   "Type mismatch on min/max");
     if (has_null) {

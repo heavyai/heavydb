@@ -26,7 +26,6 @@
 #include "QueryEngine/ExtensionFunctionsWhitelist.h"
 #include "QueryEngine/RelAlgExecutor.h"
 #include "QueryEngine/TableFunctions/TableFunctionsFactory.h"
-#include "Shared/ConfigResolve.h"
 #include "Shared/Logger.h"
 #include "Shared/StringTransform.h"
 #include "Shared/SystemParameters.h"
@@ -150,9 +149,9 @@ QueryRunner::QueryRunner(const char* db_path,
 
   table_functions::TableFunctionsFactory::init();
 
-  if (std::is_same<CudaBuildSelector, PreprocessorFalse>::value) {
-    uses_gpus = false;
-  }
+#ifndef HAVE_CUDA
+  uses_gpus = false;
+#endif
   SystemParameters mapd_params;
   mapd_params.gpu_buffer_mem_bytes = max_gpu_mem;
   mapd_params.aggregator = !leaf_servers.empty();

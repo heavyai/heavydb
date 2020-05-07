@@ -23,7 +23,6 @@
 #include "QueryEngine/ExternalCacheInvalidators.h"
 #include "QueryEngine/InputMetadata.h"
 #include "QueryEngine/TargetMetaInfo.h"
-#include "Shared/ConfigResolve.h"
 #include "Shared/UpdelRoll.h"
 #include "Shared/likely.h"
 #include "Shared/thread_count.h"

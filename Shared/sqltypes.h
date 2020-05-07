@@ -22,8 +22,8 @@
 
 #pragma once
 
-#include "ConfigResolve.h"
 #include "StringTransform.h"
+#include "funcannotations.h"
 
 #include <cassert>
 #include <cfloat>
@@ -117,7 +117,16 @@ struct DeviceArrayDatum : public VarlenDatum {
   DEVICE DeviceArrayDatum() : VarlenDatum() {}
 };
 
-using ArrayDatum = std::conditional_t<isCudaCC(), DeviceArrayDatum, HostArrayDatum>;
+inline DEVICE constexpr bool is_cuda_compiler() {
+#ifdef __CUDACC__
+  return true;
+#else
+  return false;
+#endif
+}
+
+using ArrayDatum =
+    std::conditional_t<is_cuda_compiler(), DeviceArrayDatum, HostArrayDatum>;
 
 union Datum {
   bool boolval;

@@ -126,10 +126,6 @@ auto get_metadata_vec =
 }  // namespace
 
 TEST_F(MetadataUpdate, MetadataTimestampNull) {
-  if (!is_feature_enabled<CalciteUpdatePathSelector>()) {
-    return;
-  }
-
   // For timestamp column x:
   // 1 - Check that the MIN metadata value is unperturbed
   // 2 - Check that the presence of null is properly signaled
@@ -191,10 +187,6 @@ TEST_F(MetadataUpdate, MetadataTimestampNull) {
 }
 
 TEST_F(MetadataUpdate, MetadataTimestampNotNull) {
-  if (!is_feature_enabled<CalciteUpdatePathSelector>()) {
-    return;
-  }
-
   make_table_cycler("timestamp_not_null_table", "timestamp not null")([&] {
     query("insert into timestamp_not_null_table values ('1946-06-14 10:54:00');");
     query("insert into timestamp_not_null_table values ('2017-01-20 12:00:00');");
@@ -261,10 +253,6 @@ TEST_F(MetadataUpdate, MetadataTimestampNotNull) {
 }
 
 TEST_F(MetadataUpdate, MetadataTimeNull) {
-  if (!is_feature_enabled<CalciteUpdatePathSelector>()) {
-    return;
-  }
-
   make_table_cycler("time_null_table", "time")([&] {
     query("insert into time_null_table values ('10:54:00');");
     query("insert into time_null_table values ('12:00:00');");
@@ -323,10 +311,6 @@ TEST_F(MetadataUpdate, MetadataTimeNull) {
 }
 
 TEST_F(MetadataUpdate, MetadataTimeNotNull) {
-  if (!is_feature_enabled<CalciteUpdatePathSelector>()) {
-    return;
-  }
-
   make_table_cycler("time_not_null_table", "time not null")([&] {
     query("insert into time_not_null_table values ('10:54:00');");
     query("insert into time_not_null_table values ('12:00:00');");
@@ -378,10 +362,6 @@ TEST_F(MetadataUpdate, MetadataTimeNotNull) {
 }
 
 TEST_F(MetadataUpdate, MetadataDateNull) {
-  if (!is_feature_enabled<CalciteUpdatePathSelector>()) {
-    return;
-  }
-
   make_table_cycler("date_null_table", "date")([&] {
     query("insert into date_null_table values ('1946-06-14');");
     query("insert into date_null_table values ('1974-02-11');");
@@ -431,10 +411,6 @@ TEST_F(MetadataUpdate, MetadataDateNull) {
 }
 
 TEST_F(MetadataUpdate, MetadataDecimalNull) {
-  if (!is_feature_enabled<CalciteUpdatePathSelector>()) {
-    return;
-  }
-
   make_table_cycler("decimal_null_table", "decimal(18,1)")([&] {
     query("insert into decimal_null_table values ( 10.1 );");
     query("insert into decimal_null_table values ( 20.1 );");
@@ -526,10 +502,6 @@ TEST_F(MetadataUpdate, MetadataDecimalNotNull) {
 }
 
 TEST_F(MetadataUpdate, MetadataIntegerNull) {
-  if (!is_feature_enabled<CalciteUpdatePathSelector>()) {
-    return;
-  }
-
   make_table_cycler("integer_null_table", "integer")([&] {
     query("insert into integer_null_table values (10);");
     query("insert into integer_null_table values (20);");
@@ -578,10 +550,6 @@ TEST_F(MetadataUpdate, MetadataIntegerNull) {
 }
 
 TEST_F(MetadataUpdate, IntegerNotNull) {
-  if (!is_feature_enabled<CalciteUpdatePathSelector>()) {
-    return;
-  }
-
   make_table_cycler("integer_not_null_table", "integer not null")([&] {
     query("insert into integer_not_null_table values (10);");
     query("insert into integer_not_null_table values (20);");
@@ -633,10 +601,6 @@ TEST_F(MetadataUpdate, IntegerNotNull) {
 }
 
 TEST_F(MetadataUpdate, MetadataTinyIntNull) {
-  if (!is_feature_enabled<CalciteUpdatePathSelector>()) {
-    return;
-  }
-
   make_table_cycler("tinyint_null_table", "tinyint")([&] {
     query("insert into tinyint_null_table values (10);");
     query("insert into tinyint_null_table values (20);");
@@ -685,10 +649,6 @@ TEST_F(MetadataUpdate, MetadataTinyIntNull) {
 }
 
 TEST_F(MetadataUpdate, MetadataTinyIntNotNull) {
-  if (!is_feature_enabled<CalciteUpdatePathSelector>()) {
-    return;
-  }
-
   make_table_cycler("tinyint_not_null_table", "tinyint not null")([&] {
     query("insert into tinyint_not_null_table values (10);");
     query("insert into tinyint_not_null_table values (20);");
@@ -745,10 +705,6 @@ TEST_F(MetadataUpdate, MetadataTinyIntNotNull) {
 }
 
 TEST_F(MetadataUpdate, MetadataAddColumnWithDeletes) {
-  if (!is_feature_enabled<CalciteUpdatePathSelector>()) {
-    return;
-  }
-
   make_table_cycler("numbers", "int")([&] {
     query("insert into numbers values (1);");
     query("insert into numbers values (2);");
@@ -796,10 +752,6 @@ TEST_F(MetadataUpdate, MetadataAddColumnWithDeletes) {
 }
 
 TEST_F(MetadataUpdate, MetadataSmallIntNull) {
-  if (!is_feature_enabled<CalciteUpdatePathSelector>()) {
-    return;
-  }
-
   make_table_cycler("smallint_null_table", "smallint")([&] {
     query("insert into smallint_null_table values (10);");
     query("insert into smallint_null_table values (20);");
@@ -848,10 +800,6 @@ TEST_F(MetadataUpdate, MetadataSmallIntNull) {
 }
 
 TEST_F(MetadataUpdate, MetadataSmallIntNotNull) {
-  if (!is_feature_enabled<CalciteUpdatePathSelector>()) {
-    return;
-  }
-
   make_table_cycler("smallint_not_null_table", "smallint not null")([&] {
     query("insert into smallint_not_null_table values (10);");
     query("insert into smallint_not_null_table values (20);");
@@ -908,10 +856,6 @@ TEST_F(MetadataUpdate, MetadataSmallIntNotNull) {
 }
 
 TEST_F(MetadataUpdate, MetadataBigIntNull) {
-  if (!is_feature_enabled<CalciteUpdatePathSelector>()) {
-    return;
-  }
-
   make_table_cycler("bigint_null_table", "bigint")([&] {
     query("insert into bigint_null_table values (10);");
     query("insert into bigint_null_table values (20);");
@@ -960,10 +904,6 @@ TEST_F(MetadataUpdate, MetadataBigIntNull) {
 }
 
 TEST_F(MetadataUpdate, MetadataBigIntNotNull) {
-  if (!is_feature_enabled<CalciteUpdatePathSelector>()) {
-    return;
-  }
-
   make_table_cycler("bigint_not_null_table", "bigint not null")([&] {
     query("insert into bigint_not_null_table values (10);");
     query("insert into bigint_not_null_table values (20);");
@@ -1022,10 +962,6 @@ TEST_F(MetadataUpdate, MetadataBigIntNotNull) {
 }
 
 TEST_F(MetadataUpdate, MetadataBooleanNull) {
-  if (!is_feature_enabled<CalciteUpdatePathSelector>()) {
-    return;
-  }
-
   make_table_cycler("boolean_null_table", "boolean")([&] {
     query("insert into boolean_null_table values ('f');");
 
@@ -1138,12 +1074,6 @@ TEST_F(MetadataUpdate, MetadataBooleanNull) {
 }
 
 TEST_F(MetadataUpdate, MetadataBooleanNotNull) {
-  return;
-
-  if (!is_feature_enabled<CalciteUpdatePathSelector>()) {
-    return;
-  }
-
   make_table_cycler("boolean_not_null_table", "boolean not null")([&] {
     query("insert into boolean_not_null_table values ('t');");
     query("insert into boolean_not_null_table values ('f');");
@@ -1167,10 +1097,6 @@ TEST_F(MetadataUpdate, MetadataBooleanNotNull) {
 }
 
 TEST_F(MetadataUpdate, MetadataFloatNull) {
-  if (!is_feature_enabled<CalciteUpdatePathSelector>()) {
-    return;
-  }
-
   make_table_cycler("float_null_table", "float")([&] {
     query("insert into float_null_table values (10.1234);");
     query("insert into float_null_table values (20.4321);");
@@ -1212,10 +1138,6 @@ TEST_F(MetadataUpdate, MetadataFloatNull) {
 }
 
 TEST_F(MetadataUpdate, MetadataFloatNotNull) {
-  if (!is_feature_enabled<CalciteUpdatePathSelector>()) {
-    return;
-  }
-
   make_table_cycler("float_not_null_table", "float not null")([&] {
     query("insert into float_not_null_table values (10.1234);");
     query("insert into float_not_null_table values (20.4321);");
@@ -1260,10 +1182,6 @@ TEST_F(MetadataUpdate, MetadataFloatNotNull) {
 }
 
 TEST_F(MetadataUpdate, MetadataDoubleNull) {
-  if (!is_feature_enabled<CalciteUpdatePathSelector>()) {
-    return;
-  }
-
   make_table_cycler("double_null_table", "double")([&] {
     query("insert into double_null_table values (10.1234);");
     query("insert into double_null_table values (20.4321);");
@@ -1307,10 +1225,6 @@ TEST_F(MetadataUpdate, MetadataDoubleNull) {
 }
 
 TEST_F(MetadataUpdate, MetadataDoubleNotNull) {
-  if (!is_feature_enabled<CalciteUpdatePathSelector>()) {
-    return;
-  }
-
   make_table_cycler("double_not_null_table", "double not null")([&] {
     query("insert into double_not_null_table values (10.1234);");
     query("insert into double_not_null_table values (20.4321);");
@@ -1356,10 +1270,6 @@ TEST_F(MetadataUpdate, MetadataDoubleNotNull) {
 }
 
 TEST_F(MetadataUpdate, MetadataStringDict8Null) {
-  if (!is_feature_enabled<CalciteUpdatePathSelector>()) {
-    return;
-  }
-
   make_table_cycler("presidents", "text encoding dict(8)")([&] {
     query("insert into presidents values ('Ronald Reagan');");
     query("insert into presidents values ('Donald Trump');");
@@ -1386,10 +1296,6 @@ TEST_F(MetadataUpdate, MetadataStringDict8Null) {
 }
 
 TEST_F(MetadataUpdate, MetadataStringDict16Null) {
-  if (!is_feature_enabled<CalciteUpdatePathSelector>()) {
-    return;
-  }
-
   make_table_cycler("safe_cities", "text encoding dict(16)")([&] {
     query("insert into safe_cities values ('El Paso');");
     query("insert into safe_cities values ('Pingyao');");
@@ -1415,10 +1321,6 @@ TEST_F(MetadataUpdate, MetadataStringDict16Null) {
 }
 
 TEST_F(MetadataUpdate, MetadataStringDict32Null) {
-  if (!is_feature_enabled<CalciteUpdatePathSelector>()) {
-    return;
-  }
-
   make_table_cycler("candidates", "text encoding dict(32)")([&] {
     query("insert into candidates values ('Lightfoot');");
     query("insert into candidates values ('Wilson');");
@@ -1446,10 +1348,6 @@ TEST_F(MetadataUpdate, MetadataStringDict32Null) {
 }
 
 TEST_F(MetadataUpdate, MetadataSmallIntEncodedNull) {
-  if (!is_feature_enabled<CalciteUpdatePathSelector>()) {
-    return;
-  }
-
   make_table_cycler("small_ints_null", "smallint encoding fixed(8)")([&] {
     query("insert into small_ints_null values (10);");
     query("insert into small_ints_null values (90);");
@@ -1495,10 +1393,6 @@ TEST_F(MetadataUpdate, MetadataSmallIntEncodedNull) {
 };
 
 TEST_F(MetadataUpdate, MetadataSmallIntEncodedNotNull) {
-  if (!is_feature_enabled<CalciteUpdatePathSelector>()) {
-    return;
-  }
-
   make_table_cycler("small_ints_not_null", "smallint not null encoding fixed(8)")([&] {
     query("insert into small_ints_not_null values (10);");
     query("insert into small_ints_not_null values (90);");

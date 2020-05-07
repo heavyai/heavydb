@@ -94,21 +94,6 @@ if(ENABLE_JAVA_REMOTE_DEBUG)
   add_definitions("-DENABLE_JAVA_REMOTE_DEBUG")
 endif()
 
-option(ENABLE_VARLEN_UPDATE "Enable varlen updates" ON )
-if( ENABLE_VARLEN_UPDATE )
-  add_definitions("-DENABLE_VARLEN_UPDATE")
-endif()
-
-option(ENABLE_CALCITE_UPDATE_PATH "Enable Calcite Update Path" ON)
-if( ENABLE_CALCITE_UPDATE_PATH )
-  add_definitions("-DCALCITE_UPDATE_ENABLED")
-endif()
-
-option(ENABLE_CALCITE_DELETE_PATH "Enable Calcite Delete Path" ON)
-if( ENABLE_CALCITE_DELETE_PATH )
-  add_definitions("-DCALCITE_DELETE_ENABLED")
-endif()
-
 option(ENABLE_CUDA "Enable CUDA support" ON)
 if(ENABLE_CUDA)
   find_package(CUDA REQUIRED)
@@ -554,7 +539,7 @@ endif()
 set(initdb_source_files initdb.cpp)
 add_executable(initdb ${initdb_source_files})
 
-set(omnisci_server_source_files MapDServer.cpp ${CMAKE_BINARY_DIR}/MapDRelease.h ${CMAKE_SOURCE_DIR}/Shared/ConfigResolve.h)
+set(omnisci_server_source_files MapDServer.cpp ${CMAKE_BINARY_DIR}/MapDRelease.h)
 
 add_executable(omnisci_server ${omnisci_server_source_files})
 set_target_properties(omnisci_server PROPERTIES COMPILE_DEFINITIONS "${TIME_LIMITED_DEFINITIONS}")

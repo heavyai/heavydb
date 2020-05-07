@@ -23,7 +23,6 @@
 #include "../QueryEngine/Execute.h"
 #include "../QueryEngine/ResultSetReductionJIT.h"
 #include "../QueryRunner/QueryRunner.h"
-#include "../Shared/ConfigResolve.h"
 #include "../Shared/StringTransform.h"
 #include "../Shared/TimeGM.h"
 #include "../Shared/scope.h"
@@ -11808,13 +11807,6 @@ TEST(Truncate, Count) {
 }
 
 TEST(Update, VarlenSmartSwitch) {
-  if (!is_feature_enabled<VarlenUpdates>()) {
-    return;
-  }
-  if (!is_feature_enabled<CalciteUpdatePathSelector>()) {
-    return;
-  }
-
   const auto save_watchdog = g_enable_watchdog;
   ScopeGuard reset_watchdog_state = [&save_watchdog] {
     g_enable_watchdog = save_watchdog;
@@ -11958,10 +11950,6 @@ TEST(Update, VarlenSmartSwitch) {
 }
 
 TEST(Update, SimpleFilter) {
-  if (!std::is_same<CalciteUpdatePathSelector, PreprocessorTrue>::value) {
-    return;
-  }
-
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
 
@@ -12003,9 +11991,6 @@ TEST(Update, SimpleFilter) {
 }
 
 TEST(Update, Text) {
-  if (!std::is_same<CalciteUpdatePathSelector, PreprocessorTrue>::value) {
-    return;
-  }
   const auto save_watchdog = g_enable_watchdog;
   ScopeGuard reset_watchdog_state = [&save_watchdog] {
     g_enable_watchdog = save_watchdog;
@@ -12042,9 +12027,6 @@ TEST(Update, Text) {
 }
 
 TEST(Update, TextINVariant) {
-  if (!std::is_same<CalciteUpdatePathSelector, PreprocessorTrue>::value) {
-    return;
-  }
   const auto save_watchdog = g_enable_watchdog;
   ScopeGuard reset_watchdog_state = [&save_watchdog] {
     g_enable_watchdog = save_watchdog;
@@ -12074,9 +12056,6 @@ TEST(Update, TextINVariant) {
 }
 
 TEST(Update, TextEncodingDict16) {
-  if (!std::is_same<CalciteUpdatePathSelector, PreprocessorTrue>::value) {
-    return;
-  }
   const auto save_watchdog = g_enable_watchdog;
   ScopeGuard reset_watchdog_state = [&save_watchdog] {
     g_enable_watchdog = save_watchdog;
@@ -12120,9 +12099,6 @@ TEST(Update, TextEncodingDict16) {
 }
 
 TEST(Update, TextEncodingDict8) {
-  if (!std::is_same<CalciteUpdatePathSelector, PreprocessorTrue>::value) {
-    return;
-  }
   const auto save_watchdog = g_enable_watchdog;
   ScopeGuard reset_watchdog_state = [&save_watchdog] {
     g_enable_watchdog = save_watchdog;
@@ -12166,10 +12142,6 @@ TEST(Update, TextEncodingDict8) {
 }
 
 TEST(Update, MultiColumnInteger) {
-  if (!std::is_same<CalciteUpdatePathSelector, PreprocessorTrue>::value) {
-    return;
-  }
-
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
 
@@ -12210,10 +12182,6 @@ TEST(Update, MultiColumnInteger) {
 }
 
 TEST(Update, TimestampUpdate) {
-  if (!std::is_same<CalciteUpdatePathSelector, PreprocessorTrue>::value) {
-    return;
-  }
-
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
 
@@ -12248,10 +12216,6 @@ TEST(Update, TimestampUpdate) {
 }
 
 TEST(Update, TimeUpdate) {
-  if (!std::is_same<CalciteUpdatePathSelector, PreprocessorTrue>::value) {
-    return;
-  }
-
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
 
@@ -12285,10 +12249,6 @@ TEST(Update, TimeUpdate) {
 }
 
 TEST(Update, DateUpdate) {
-  if (!std::is_same<CalciteUpdatePathSelector, PreprocessorTrue>::value) {
-    return;
-  }
-
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
 
@@ -12345,10 +12305,6 @@ TEST(Update, DateUpdateNull) {
 }
 
 TEST(Update, FloatUpdate) {
-  if (!std::is_same<CalciteUpdatePathSelector, PreprocessorTrue>::value) {
-    return;
-  }
-
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
 
@@ -12374,10 +12330,6 @@ TEST(Update, FloatUpdate) {
 }
 
 TEST(Update, IntegerUpdate) {
-  if (!std::is_same<CalciteUpdatePathSelector, PreprocessorTrue>::value) {
-    return;
-  }
-
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
 
@@ -12408,10 +12360,6 @@ TEST(Update, IntegerUpdate) {
 }
 
 TEST(Update, DoubleUpdate) {
-  if (!std::is_same<CalciteUpdatePathSelector, PreprocessorTrue>::value) {
-    return;
-  }
-
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
 
@@ -12444,10 +12392,6 @@ TEST(Update, DoubleUpdate) {
 }
 
 TEST(Update, SmallIntUpdate) {
-  if (!std::is_same<CalciteUpdatePathSelector, PreprocessorTrue>::value) {
-    return;
-  }
-
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
 
@@ -12477,10 +12421,6 @@ TEST(Update, SmallIntUpdate) {
 }
 
 TEST(Update, BigIntUpdate) {
-  if (!std::is_same<CalciteUpdatePathSelector, PreprocessorTrue>::value) {
-    return;
-  }
-
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
 
@@ -12508,10 +12448,6 @@ TEST(Update, BigIntUpdate) {
 }
 
 TEST(Update, DecimalUpdate) {
-  if (!std::is_same<CalciteUpdatePathSelector, PreprocessorTrue>::value) {
-    return;
-  }
-
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
 
@@ -12541,10 +12477,6 @@ TEST(Update, DecimalUpdate) {
 }
 
 TEST(Delete, WithoutVacuumAttribute) {
-  if (std::is_same<CalciteDeletePathSelector, PreprocessorFalse>::value) {
-    return;
-  }
-
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
 
@@ -12567,10 +12499,6 @@ TEST(Delete, WithoutVacuumAttribute) {
 }
 
 TEST(Update, ImplicitCastToDate4) {
-  if (std::is_same<CalciteDeletePathSelector, PreprocessorFalse>::value) {
-    return;
-  }
-
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
 
@@ -12627,10 +12555,6 @@ TEST(Update, ImplicitCastToDate4) {
 }
 
 TEST(Update, ImplicitCastToDate2) {
-  if (std::is_same<CalciteDeletePathSelector, PreprocessorFalse>::value) {
-    return;
-  }
-
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
 
@@ -12692,10 +12616,6 @@ TEST(Update, ImplicitCastToDate2) {
 }
 
 TEST(Update, ImplicitCastToEncodedString) {
-  if (std::is_same<CalciteDeletePathSelector, PreprocessorFalse>::value) {
-    return;
-  }
-
   SKIP_WITH_TEMP_TABLES();  // requires dict translation for updates
 
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
@@ -12872,14 +12792,6 @@ TEST(Update, ImplicitCastToEncodedString) {
 }
 
 TEST(Update, ImplicitCastToNoneEncodedString) {
-  if (std::is_same<CalciteDeletePathSelector, PreprocessorFalse>::value) {
-    return;
-  }
-
-  if (!is_feature_enabled<VarlenUpdates>()) {
-    return;
-  }
-
   SKIP_WITH_TEMP_TABLES();
 
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
@@ -12924,10 +12836,6 @@ TEST(Update, ImplicitCastToNoneEncodedString) {
 }
 
 TEST(Update, ImplicitCastToNumericTypes) {
-  if (std::is_same<CalciteDeletePathSelector, PreprocessorFalse>::value) {
-    return;
-  }
-
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
 
@@ -13276,10 +13184,6 @@ TEST(Update, ImplicitCastToNumericTypes) {
 }
 
 TEST(Update, ImplicitCastToTime4) {
-  if (std::is_same<CalciteDeletePathSelector, PreprocessorFalse>::value) {
-    return;
-  }
-
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
 
@@ -13331,10 +13235,6 @@ TEST(Update, ImplicitCastToTime4) {
 }
 
 TEST(Update, ImplicitCastToTime8) {
-  if (std::is_same<CalciteDeletePathSelector, PreprocessorFalse>::value) {
-    return;
-  }
-
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
 
@@ -13378,10 +13278,6 @@ TEST(Update, ImplicitCastToTime8) {
 }
 
 TEST(Update, ImplicitCastToTimestamp8) {
-  if (std::is_same<CalciteDeletePathSelector, PreprocessorFalse>::value) {
-    return;
-  }
-
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
 
@@ -13429,10 +13325,6 @@ TEST(Update, ImplicitCastToTimestamp8) {
 }
 
 TEST(Update, ImplicitCastToTimestamp4) {
-  if (std::is_same<CalciteDeletePathSelector, PreprocessorFalse>::value) {
-    return;
-  }
-
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
 
@@ -13490,10 +13382,6 @@ TEST(Update, ImplicitCastToTimestamp4) {
 }
 
 TEST(Update, ShardedTableShardKeyTest) {
-  if (std::is_same<CalciteUpdatePathSelector, PreprocessorFalse>::value) {
-    return;
-  }
-
   SKIP_WITH_TEMP_TABLES();
 
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
@@ -13532,10 +13420,6 @@ TEST(Update, ShardedTableShardKeyTest) {
 }
 
 TEST(Update, UsingDateColumns) {
-  if (std::is_same<CalciteDeletePathSelector, PreprocessorFalse>::value) {
-    return;
-  }
-
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
     run_ddl_statement("drop table if exists chelsea_updates;");
@@ -13586,10 +13470,6 @@ TEST(Update, UsingDateColumns) {
 }
 
 TEST(Delete, ShardedTableDeleteTest) {
-  if (std::is_same<CalciteDeletePathSelector, PreprocessorFalse>::value) {
-    return;
-  }
-
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
 
@@ -13624,9 +13504,6 @@ TEST(Delete, ShardedTableDeleteTest) {
 }
 
 TEST(Delete, ScanLimitOptimization) {
-  if (std::is_same<CalciteDeletePathSelector, PreprocessorFalse>::value) {
-    return;
-  }
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
 
@@ -13665,10 +13542,6 @@ TEST(Delete, ScanLimitOptimization) {
 }
 
 TEST(Delete, IntraFragment) {
-  if (std::is_same<CalciteDeletePathSelector, PreprocessorFalse>::value) {
-    return;
-  }
-
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
 
@@ -13696,34 +13569,8 @@ TEST(Delete, IntraFragment) {
   }
 }
 
-#if 0
-// FIX-ME:  Test failing on some systems with calcite exceptions, needs rewriting
-TEST(Join, EmptyTable) {
-  if (std::is_same<CalciteDeletePathSelector, PreprocessorFalse>::value)
-    return;
-
-  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
-    SKIP_NO_GPU();
-
-    c("SELECT vacuum_test_alt.x, emptytab.x FROM vacuum_test_alt, emptytab WHERE vacuum_test_alt.x = emptytab.x;", dt);
-    c("SELECT COUNT(*) FROM vacuum_test_alt, emptytab GROUP BY vacuum_test_alt.x;", dt);
-    c("SELECT COUNT(*) FROM vacuum_test_alt, emptytab, test_inner where vacuum_test_alt.x = emptytab.x;", dt);
-    c("SELECT vacuum_test_alt.x, emptytab.x FROM vacuum_test_alt LEFT JOIN emptytab ON vacuum_test_alt.y = emptytab.y "
-      "ORDER BY "
-      "vacuum_test_alt.x ASC;",
-      dt);
-
-    run_ddl_statement("drop table vacuum_test_alt;");
-  }
-}
-#endif
-
 TEST(Join, InnerJoin_TwoTables) {
   SKIP_ALL_ON_AGGREGATOR();
-
-  if (std::is_same<CalciteDeletePathSelector, PreprocessorFalse>::value) {
-    return;
-  }
 
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
@@ -13765,10 +13612,6 @@ TEST(Join, InnerJoin_TwoTables) {
 
 TEST(Join, InnerJoin_AtLeastThreeTables) {
   SKIP_ALL_ON_AGGREGATOR();
-
-  if (std::is_same<CalciteDeletePathSelector, PreprocessorFalse>::value) {
-    return;
-  }
 
   const auto save_watchdog = g_enable_watchdog;
   ScopeGuard reset_watchdog_state = [&save_watchdog] {
@@ -13844,10 +13687,6 @@ TEST(Join, InnerJoin_AtLeastThreeTables) {
 TEST(Join, InnerJoin_Filters) {
   SKIP_ALL_ON_AGGREGATOR();
 
-  if (std::is_same<CalciteDeletePathSelector, PreprocessorFalse>::value) {
-    return;
-  }
-
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
     c("SELECT count(*) FROM test AS a JOIN join_test AS b ON a.x = b.x JOIN test_inner "
@@ -13889,10 +13728,6 @@ TEST(Join, InnerJoin_Filters) {
 
 TEST(Join, LeftOuterJoin) {
   SKIP_ALL_ON_AGGREGATOR();
-
-  if (std::is_same<CalciteDeletePathSelector, PreprocessorFalse>::value) {
-    return;
-  }
 
   const auto save_watchdog = g_enable_watchdog;
   ScopeGuard reset_watchdog_state = [&save_watchdog] {
@@ -14049,10 +13884,6 @@ TEST(Join, LeftOuterJoin) {
 TEST(Join, LeftJoin_Filters) {
   SKIP_ALL_ON_AGGREGATOR();
 
-  if (std::is_same<CalciteDeletePathSelector, PreprocessorFalse>::value) {
-    return;
-  }
-
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
     c("SELECT test.x, test_inner.x FROM test LEFT OUTER JOIN test_inner ON test.x = "
@@ -14096,10 +13927,6 @@ TEST(Join, LeftJoin_Filters) {
 TEST(Join, MultiCompositeColumns) {
   SKIP_ALL_ON_AGGREGATOR();
 
-  if (std::is_same<CalciteDeletePathSelector, PreprocessorFalse>::value) {
-    return;
-  }
-
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
     c("SELECT a.x, b.str FROM test AS a JOIN join_test AS b ON a.str = b.str AND a.x = "
@@ -14137,10 +13964,6 @@ TEST(Join, MultiCompositeColumns) {
 TEST(Join, BuildHashTable) {
   SKIP_ALL_ON_AGGREGATOR();
 
-  if (std::is_same<CalciteDeletePathSelector, PreprocessorFalse>::value) {
-    return;
-  }
-
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
     c("SELECT COUNT(*) FROM test, join_test WHERE test.str = join_test.dup_str;", dt);
@@ -14151,10 +13974,6 @@ TEST(Join, BuildHashTable) {
 
 TEST(Join, ComplexQueries) {
   SKIP_ALL_ON_AGGREGATOR();
-
-  if (std::is_same<CalciteDeletePathSelector, PreprocessorFalse>::value) {
-    return;
-  }
 
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
@@ -14190,10 +14009,6 @@ TEST(Join, ComplexQueries) {
 TEST(Join, OneOuterExpression) {
   SKIP_ALL_ON_AGGREGATOR();
 
-  if (std::is_same<CalciteDeletePathSelector, PreprocessorFalse>::value) {
-    return;
-  }
-
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
     c("SELECT COUNT(*) FROM test, test_inner WHERE test.x - 1 = test_inner.x;", dt);
@@ -14213,10 +14028,6 @@ TEST(Join, OneOuterExpression) {
 
 TEST(Join, MultipleOuterExpressions) {
   SKIP_ALL_ON_AGGREGATOR();
-
-  if (std::is_same<CalciteDeletePathSelector, PreprocessorFalse>::value) {
-    return;
-  }
 
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
@@ -14249,10 +14060,6 @@ TEST(Join, MultipleOuterExpressions) {
 }
 
 TEST(Delete, ExtraFragment) {
-  if (std::is_same<CalciteDeletePathSelector, PreprocessorFalse>::value) {
-    return;
-  }
-
   auto insert_op = [](int random_val) -> std::string {
     std::ostringstream insert_string;
     insert_string << "insert into vacuum_test values (" << random_val << ", '"
@@ -14287,9 +14094,6 @@ TEST(Delete, ExtraFragment) {
 }
 
 TEST(Delete, MultiDelete) {
-  if (std::is_same<CalciteDeletePathSelector, PreprocessorFalse>::value) {
-    return;
-  }
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
 
@@ -14336,9 +14140,6 @@ TEST(Delete, MultiDelete) {
 }
 
 TEST(Delete, Joins_ImplicitJoins) {
-  if (std::is_same<CalciteDeletePathSelector, PreprocessorFalse>::value) {
-    return;
-  }
   const auto save_watchdog = g_enable_watchdog;
   ScopeGuard reset_watchdog_state = [&save_watchdog] {
     g_enable_watchdog = save_watchdog;

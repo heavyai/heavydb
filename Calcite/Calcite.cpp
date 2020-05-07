@@ -23,7 +23,6 @@
 
 #include "Calcite.h"
 #include "Catalog/Catalog.h"
-#include "Shared/ConfigResolve.h"
 #include "Shared/Logger.h"
 #include "Shared/SystemParameters.h"
 #include "Shared/ThriftClient.h"
@@ -57,11 +56,12 @@ int wrapped_execlp(char const* path,
                    XDEBUG_OPTION&& x_debug,
                    REMOTE_DEBUG_OPTION&& remote_debug,
                    REMAINING_ARGS&&... standard_args) {
-  if (std::is_same<JVMRemoteDebugSelector, PreprocessorTrue>::value) {
-    return execlp(
-        path, x_debug, remote_debug, std::forward<REMAINING_ARGS>(standard_args)...);
-  }
+#ifdef ENABLE_JAVA_REMOTE_DEBUG
+  return execlp(
+      path, x_debug, remote_debug, std::forward<REMAINING_ARGS>(standard_args)...);
+#else
   return execlp(path, std::forward<REMAINING_ARGS>(standard_args)...);
+#endif
 }
 }  // namespace
 

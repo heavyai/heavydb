@@ -26,8 +26,6 @@
 #include "../Shared/file_delete.h"
 #include "TestHelpers.h"
 
-#include "../Shared/ConfigResolve.h"
-
 #ifndef BASE_PATH
 #define BASE_PATH "./tmp"
 #endif

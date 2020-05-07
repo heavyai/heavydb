@@ -23,7 +23,6 @@
 
 #include "QueryEngine/ArrowResultSet.h"
 #include "QueryEngine/Execute.h"
-#include "Shared/ConfigResolve.h"
 #include "Shared/scope.h"
 #include "TestHelpers.h"
 

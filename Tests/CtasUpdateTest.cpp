@@ -26,8 +26,6 @@
 #include "../Shared/file_delete.h"
 #include "TestHelpers.h"
 
-#include "../Shared/ConfigResolve.h"
-
 // uncomment to run full test suite
 // #define RUN_ALL_TEST
 
@@ -1416,12 +1414,6 @@ TEST(Update, InvalidTextArrayAssignment) {
 }
 
 TEST_P(Update, UpdateColumnByColumn) {
-  // disable if varlen update is not enabled
-  if (!is_feature_enabled<VarlenUpdates>()) {
-    LOG(WARNING) << "skipping...";
-    return;
-  }
-
   run_ddl_statement("DROP TABLE IF EXISTS update_test;");
 
   std::string create_sql = "CREATE TABLE update_test(id int";
@@ -1506,12 +1498,6 @@ TEST_P(Update, UpdateColumnByColumn) {
 void updateColumnByLiteralTest(
     std::vector<std::shared_ptr<TestColumnDescriptor>>& columnDescriptors,
     size_t numColsToUpdate) {
-  // disable if varlen update is not enabled
-  if (!is_feature_enabled<VarlenUpdates>()) {
-    LOG(WARNING) << "skipping...";
-    return;
-  }
-
   run_ddl_statement("DROP TABLE IF EXISTS update_test;");
 
   std::string create_sql = "CREATE TABLE update_test(id int";

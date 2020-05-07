@@ -628,9 +628,6 @@ TEST(Truncate, JoinCacheInvalidationTest) {
 }
 
 TEST(Update, JoinCacheInvalidationTest) {
-  if (!std::is_same<CalciteUpdatePathSelector, PreprocessorTrue>::value) {
-    return;
-  }
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
 
@@ -677,9 +674,6 @@ TEST(Update, JoinCacheInvalidationTest) {
 }
 
 TEST(Delete, JoinCacheInvalidationTest) {
-  if (std::is_same<CalciteDeletePathSelector, PreprocessorFalse>::value) {
-    return;
-  }
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
 

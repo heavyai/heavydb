@@ -25,8 +25,6 @@
 #include <sys/types.h>
 #include <unistd.h>
 
-#include "Shared/ConfigResolve.h"
-
 inline constexpr char const* const getDefaultHistoryFilename() {
   return ".omnisql_history";
 }
