@@ -136,6 +136,13 @@ class LeafAggregator {
   void clear_leaf_cpu_memory(const TSessionId session) { CHECK(false); }
 
   void clear_leaf_gpu_memory(const TSessionId session) { CHECK(false); }
+
+  std::vector<size_t> query_get_outer_fragment_counts(
+      const Catalog_Namespace::SessionInfo& parent_session_info,
+      std::string& sql_query) {
+    CHECK(false);
+    return {};
+  }
 };
 
 #endif  // LEAFAGGREGATOR_H

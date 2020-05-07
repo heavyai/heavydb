@@ -401,6 +401,9 @@ class DBHandler : public OmniSciIf {
                               const std::string& file_name,
                               const TCopyParams& copy_params) override;
   // distributed
+  int64_t query_get_outer_fragment_count(const TSessionId& session,
+                                         const std::string& select_query) override;
+
   void check_table_consistency(TTableMeta& _return,
                                const TSessionId& session,
                                const int32_t table_id) override;
@@ -408,7 +411,8 @@ class DBHandler : public OmniSciIf {
                    const TSessionId& leaf_session,
                    const TSessionId& parent_session,
                    const std::string& query_ra,
-                   const bool just_explain) override;
+                   const bool just_explain,
+                   const std::vector<int64_t>& outer_fragment_indices) override;
   void execute_query_step(TStepResult& _return,
                           const TPendingQuery& pending_query) override;
   void broadcast_serialized_rows(const TSerializedRows& serialized_rows,

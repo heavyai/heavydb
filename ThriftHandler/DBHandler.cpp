@@ -5466,6 +5466,19 @@ std::pair<TPlanResult, lockmgr::LockedTableDescriptors> DBHandler::parse_to_ra(
   return std::make_pair(result, lockmgr::LockedTableDescriptors{});
 }
 
+int64_t DBHandler::query_get_outer_fragment_count(const TSessionId& session,
+                                                  const std::string& select_query) {
+  auto stdlog = STDLOG(get_session_ptr(session));
+  if (!leaf_handler_) {
+    THROW_MAPD_EXCEPTION("Distributed support is disabled.");
+  }
+  try {
+    return leaf_handler_->query_get_outer_fragment_count(session, select_query);
+  } catch (std::exception& e) {
+    THROW_MAPD_EXCEPTION(std::string("Exception: ") + e.what());
+  }
+}
+
 void DBHandler::check_table_consistency(TTableMeta& _return,
                                         const TSessionId& session,
                                         const int32_t table_id) {
@@ -5484,7 +5497,8 @@ void DBHandler::start_query(TPendingQuery& _return,
                             const TSessionId& leaf_session,
                             const TSessionId& parent_session,
                             const std::string& query_ra,
-                            const bool just_explain) {
+                            const bool just_explain,
+                            const std::vector<int64_t>& outer_fragment_indices) {
   auto stdlog = STDLOG(get_session_ptr(leaf_session));
   auto session_ptr = stdlog.getConstSessionInfo();
   if (!leaf_handler_) {
@@ -5493,8 +5507,12 @@ void DBHandler::start_query(TPendingQuery& _return,
   LOG(INFO) << "start_query :" << *session_ptr << " :" << just_explain;
   auto time_ms = measure<>::execution([&]() {
     try {
-      leaf_handler_->start_query(
-          _return, leaf_session, parent_session, query_ra, just_explain);
+      leaf_handler_->start_query(_return,
+                                 leaf_session,
+                                 parent_session,
+                                 query_ra,
+                                 just_explain,
+                                 outer_fragment_indices);
     } catch (std::exception& e) {
       THROW_MAPD_EXCEPTION(std::string("Exception: ") + e.what());
     }
