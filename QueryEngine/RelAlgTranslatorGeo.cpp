@@ -510,8 +510,7 @@ std::vector<std::shared_ptr<Analyzer::Expr>> RelAlgTranslator::translateGeoFunct
       da_ti.set_size(16);
       auto cast_coords = {cast_coord1, cast_coord2};
       auto is_local_alloca = !is_projection;
-      auto ae =
-          makeExpr<Analyzer::ArrayExpr>(da_ti, cast_coords, 0, false, is_local_alloca);
+      auto ae = makeExpr<Analyzer::ArrayExpr>(da_ti, cast_coords, false, is_local_alloca);
       // cast it to  tinyint[16]
       SQLTypeInfo tia_ti = SQLTypeInfo(kARRAY, true);
       tia_ti.set_subtype(kTINYINT);

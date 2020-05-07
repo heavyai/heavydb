@@ -202,7 +202,7 @@ std::shared_ptr<Analyzer::Expr> WindowFunction::deep_copy() const {
 
 ExpressionPtr ArrayExpr::deep_copy() const {
   return makeExpr<Analyzer::ArrayExpr>(
-      type_info, contained_expressions_, expr_index_, is_null_, local_alloc_);
+      type_info, contained_expressions_, is_null_, local_alloc_);
 }
 
 std::shared_ptr<Analyzer::Expr> GeoExpr::deep_copy() const {

@@ -28,7 +28,6 @@
 
 #include "../Shared/sqldefs.h"
 #include "Descriptors/InputDescriptors.h"
-#include "QueryFeatures.h"
 #include "ThriftHandler/QueryState.h"
 
 #include <list>
@@ -71,7 +70,6 @@ struct RelAlgExecutionUnit {
   const std::shared_ptr<Analyzer::Estimator> estimator;
   const SortInfo sort_info;
   size_t scan_limit;
-  QueryFeatureDescriptor query_features;
   bool use_bump_allocator{false};
   // empty if not a UNION, true if UNION ALL, false if regular UNION
   const std::optional<bool> union_all;

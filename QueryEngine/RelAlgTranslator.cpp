@@ -307,7 +307,7 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateLiteral(
         Analyzer::ExpressionPtrVector args;
         // defaulting to valid sub-type for convenience
         target_ti.set_subtype(kBOOLEAN);
-        return makeExpr<Analyzer::ArrayExpr>(target_ti, args, -1, true);
+        return makeExpr<Analyzer::ArrayExpr>(target_ti, args, true);
       }
       return makeExpr<Analyzer::Constant>(rex_literal->getTargetType(), true, Datum{0});
     }
@@ -1364,20 +1364,15 @@ Analyzer::ExpressionPtr RelAlgTranslator::translateArrayFunction(
         sql_type.set_precision(first_element_logical_type.get_precision());
       }
 
-      feature_stash_.setCPUOnlyExecutionRequired();
-      return makeExpr<Analyzer::ArrayExpr>(
-          sql_type, translated_function_args, feature_stash_.getAndBumpArrayExprCount());
+      return makeExpr<Analyzer::ArrayExpr>(sql_type, translated_function_args);
     } else {
       // defaulting to valid sub-type for convenience
       sql_type.set_subtype(kBOOLEAN);
-      return makeExpr<Analyzer::ArrayExpr>(
-          sql_type, translated_function_args, feature_stash_.getAndBumpArrayExprCount());
+      return makeExpr<Analyzer::ArrayExpr>(sql_type, translated_function_args);
     }
   } else {
-    feature_stash_.setCPUOnlyExecutionRequired();
     return makeExpr<Analyzer::ArrayExpr>(rex_function->getType(),
-                                         translateFunctionArgs(rex_function),
-                                         feature_stash_.getAndBumpArrayExprCount());
+                                         translateFunctionArgs(rex_function));
   }
 }
 

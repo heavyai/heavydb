@@ -1225,7 +1225,6 @@ RelAlgExecutionUnit replace_scan_limit(const RelAlgExecutionUnit& ra_exe_unit_in
           ra_exe_unit_in.estimator,
           ra_exe_unit_in.sort_info,
           new_scan_limit,
-          ra_exe_unit_in.query_features,
           ra_exe_unit_in.use_bump_allocator,
           ra_exe_unit_in.union_all,
           ra_exe_unit_in.query_state};

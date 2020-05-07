@@ -753,7 +753,6 @@ class ModifyManipulationTarget {
   auto const isDeleteViaSelect() const { return is_delete_via_select_; }
   auto const isVarlenUpdateRequired() const { return varlen_update_required_; }
 
-  int getTargetColumnCount() const { return target_columns_.size(); }
   void setTargetColumns(ColumnNameList const& target_columns) const {
     target_columns_ = target_columns;
   }

@@ -1424,12 +1424,10 @@ class ArrayExpr : public Expr {
  public:
   ArrayExpr(SQLTypeInfo const& array_ti,
             ExpressionPtrVector const& array_exprs,
-            int expr_index,
             bool is_null = false,
             bool local_alloc = false)
       : Expr(array_ti)
       , contained_expressions_(array_exprs)
-      , expr_index_(expr_index)
       , local_alloc_(local_alloc)
       , is_null_(is_null) {}
 
@@ -1437,7 +1435,6 @@ class ArrayExpr : public Expr {
   std::string toString() const override;
   bool operator==(Expr const& rhs) const override;
   size_t getElementCount() const { return contained_expressions_.size(); }
-  int32_t getExprIndex() const { return expr_index_; }
   bool isLocalAlloc() const { return local_alloc_; }
   bool isNull() const { return is_null_; }
 
@@ -1448,7 +1445,6 @@ class ArrayExpr : public Expr {
 
  private:
   ExpressionPtrVector contained_expressions_;
-  int expr_index_;
   bool local_alloc_;
   bool is_null_;  // constant is NULL
 };
