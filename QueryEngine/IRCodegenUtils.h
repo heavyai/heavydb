@@ -24,6 +24,14 @@
 
 #include "Shared/Logger.h"
 
+#if LLVM_VERSION_MAJOR >= 10
+#define LLVM_ALIGN(alignment) llvm::Align(alignment)
+#define LLVM_MAYBE_ALIGN(alignment) llvm::MaybeAlign(alignment)
+#else
+#define LLVM_ALIGN(alignment) alignment
+#define LLVM_MAYBE_ALIGN(alignment) alignment
+#endif
+
 inline llvm::ArrayType* get_int_array_type(int const width,
                                            int count,
                                            llvm::LLVMContext& context) {
