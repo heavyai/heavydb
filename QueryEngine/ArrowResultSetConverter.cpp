@@ -221,7 +221,8 @@ ArrowResult ArrowResultSetConverter::getArrowResult() const {
       ARROW_THROW_NOT_OK(GetDictionaryPayload(
           dictionary_id, dictionary, options, default_memory_pool(), &payload));
       int32_t metadata_length = 0;
-      WriteIpcPayload(payload, options, dict_stream.get(), &metadata_length);
+      ARROW_THROW_NOT_OK(
+          WriteIpcPayload(payload, options, dict_stream.get(), &metadata_length));
     }
     auto serialized_dict = dict_stream->Finish().ValueOrDie();
     auto dict_size = serialized_dict->size();
