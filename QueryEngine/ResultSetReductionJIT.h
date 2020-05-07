@@ -56,6 +56,7 @@ class ResultSetReductionJIT {
   ResultSetReductionJIT(const QueryMemoryDescriptor& query_mem_desc,
                         const std::vector<TargetInfo>& targets,
                         const std::vector<int64_t>& target_init_vals);
+  virtual ~ResultSetReductionJIT() = default;
 
   // Generate the code for the result set reduction loop.
   virtual ReductionCode codegen() const;

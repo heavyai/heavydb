@@ -136,7 +136,7 @@ void GpuSharedMemCodeBuilder::codegenReduction() {
   auto rs_reduction_jit = std::make_unique<GpuReductionHelperJIT>(
       ResultSet::fixupQueryMemoryDescriptor(query_mem_desc_),
       targets_,
-      std::move(initialize_target_values_for_storage(targets_)));
+      initialize_target_values_for_storage(targets_));
   auto reduction_code = rs_reduction_jit->codegen();
   reduction_code.module->setDataLayout(
       "e-p:64:64:64-i1:8:8-i8:8:8-"

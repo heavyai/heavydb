@@ -81,7 +81,7 @@ ResultSetStorage::ResultSetStorage(const std::vector<TargetInfo>& targets,
     , query_mem_desc_(query_mem_desc)
     , buff_(buff)
     , buff_is_provided_(buff_is_provided)
-    , target_init_vals_(std::move(initialize_target_values_for_storage(targets))) {}
+    , target_init_vals_(initialize_target_values_for_storage(targets)) {}
 
 int8_t* ResultSetStorage::getUnderlyingBuffer() const {
   return buff_;
