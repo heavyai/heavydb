@@ -163,7 +163,7 @@ class TableInfo {
   size_t getFragmentNumTuplesUpperBound() const;
 
   std::vector<int> chunkKeyPrefix;
-  std::deque<FragmentInfo> fragments;
+  std::vector<FragmentInfo> fragments;
 
  private:
   mutable size_t numTuples;

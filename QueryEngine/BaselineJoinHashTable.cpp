@@ -514,7 +514,7 @@ std::pair<size_t, size_t> BaselineJoinHashTable::approximateTupleCount(
 }
 
 BaselineJoinHashTable::ColumnsForDevice BaselineJoinHashTable::fetchColumnsForDevice(
-    const std::deque<Fragmenter_Namespace::FragmentInfo>& fragments,
+    const std::vector<Fragmenter_Namespace::FragmentInfo>& fragments,
     const int device_id,
     ThrustAllocator& dev_buff_owner) {
   const auto effective_memory_level = getEffectiveMemoryLevel(inner_outer_pairs_);

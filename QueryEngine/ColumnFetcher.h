@@ -36,7 +36,7 @@ class ColumnFetcher {
   static JoinColumn makeJoinColumn(
       Executor* executor,
       const Analyzer::ColumnVar& hash_col,
-      const std::deque<Fragmenter_Namespace::FragmentInfo>& fragments,
+      const std::vector<Fragmenter_Namespace::FragmentInfo>& fragments,
       const Data_Namespace::MemoryLevel effective_mem_lvl,
       const int device_id,
       std::vector<std::shared_ptr<Chunk_NS::Chunk>>& chunks_owner,

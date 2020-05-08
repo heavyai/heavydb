@@ -268,7 +268,7 @@ size_t OverlapsJoinHashTable::calculateHashTableSize(size_t number_of_dimensions
 }
 
 BaselineJoinHashTable::ColumnsForDevice OverlapsJoinHashTable::fetchColumnsForDevice(
-    const std::deque<Fragmenter_Namespace::FragmentInfo>& fragments,
+    const std::vector<Fragmenter_Namespace::FragmentInfo>& fragments,
     const int device_id,
     ThrustAllocator& dev_buff_owner) {
   const auto& catalog = *executor_->getCatalog();

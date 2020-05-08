@@ -53,7 +53,7 @@ struct FragmentsPerTable {
 };
 
 using FragmentsList = std::vector<FragmentsPerTable>;
-using TableFragments = std::deque<Fragmenter_Namespace::FragmentInfo>;
+using TableFragments = std::vector<Fragmenter_Namespace::FragmentInfo>;
 
 struct ExecutionKernel {
   int device_id;

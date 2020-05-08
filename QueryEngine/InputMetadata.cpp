@@ -42,6 +42,8 @@ Fragmenter_Namespace::TableInfo build_table_info(
     CHECK(shard_table->fragmenter);
     const auto& shard_metainfo = shard_table->fragmenter->getFragmentsForQuery();
     total_number_of_tuples += shard_metainfo.getPhysicalNumTuples();
+    table_info_all_shards.fragments.reserve(table_info_all_shards.fragments.size() +
+                                            shard_metainfo.fragments.size());
     table_info_all_shards.fragments.insert(table_info_all_shards.fragments.end(),
                                            shard_metainfo.fragments.begin(),
                                            shard_metainfo.fragments.end());
@@ -82,7 +84,7 @@ bool uses_int_meta(const SQLTypeInfo& col_ti) {
 }
 
 Fragmenter_Namespace::TableInfo synthesize_table_info(const ResultSetPtr& rows) {
-  std::deque<Fragmenter_Namespace::FragmentInfo> result;
+  std::vector<Fragmenter_Namespace::FragmentInfo> result;
   if (rows) {
     result.resize(1);
     auto& fragment = result.front();

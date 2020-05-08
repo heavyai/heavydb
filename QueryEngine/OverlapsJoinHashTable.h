@@ -72,7 +72,7 @@ class OverlapsJoinHashTable : public BaselineJoinHashTable {
                                 size_t entry_count) const;
 
   ColumnsForDevice fetchColumnsForDevice(
-      const std::deque<Fragmenter_Namespace::FragmentInfo>& fragments,
+      const std::vector<Fragmenter_Namespace::FragmentInfo>& fragments,
       const int device_id,
       ThrustAllocator& dev_buff_owner) override;
 

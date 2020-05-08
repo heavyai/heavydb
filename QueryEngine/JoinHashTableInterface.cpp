@@ -29,7 +29,7 @@
 //! manage the GPU memory.
 JoinColumn JoinHashTableInterface::fetchJoinColumn(
     const Analyzer::ColumnVar* hash_col,
-    const std::deque<Fragmenter_Namespace::FragmentInfo>& fragment_info,
+    const std::vector<Fragmenter_Namespace::FragmentInfo>& fragment_info,
     const Data_Namespace::MemoryLevel effective_memory_level,
     const int device_id,
     std::vector<std::shared_ptr<Chunk_NS::Chunk>>& chunks_owner,

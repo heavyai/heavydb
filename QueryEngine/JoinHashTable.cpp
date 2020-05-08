@@ -475,11 +475,11 @@ bool needs_dictionary_translation(const Analyzer::ColumnVar* inner_col,
   return outer_ti.get_comp_param() != inner_ti.get_comp_param();
 }
 
-std::deque<Fragmenter_Namespace::FragmentInfo> only_shards_for_device(
-    const std::deque<Fragmenter_Namespace::FragmentInfo>& fragments,
+std::vector<Fragmenter_Namespace::FragmentInfo> only_shards_for_device(
+    const std::vector<Fragmenter_Namespace::FragmentInfo>& fragments,
     const int device_id,
     const int device_count) {
-  std::deque<Fragmenter_Namespace::FragmentInfo> shards_for_device;
+  std::vector<Fragmenter_Namespace::FragmentInfo> shards_for_device;
   for (const auto& fragment : fragments) {
     CHECK_GE(fragment.shard, 0);
     if (fragment.shard % device_count == device_id) {
@@ -561,7 +561,7 @@ void JoinHashTable::reify() {
 }
 
 ChunkKey JoinHashTable::genHashTableKey(
-    const std::deque<Fragmenter_Namespace::FragmentInfo>& fragments,
+    const std::vector<Fragmenter_Namespace::FragmentInfo>& fragments,
     const Analyzer::Expr* outer_col_expr,
     const Analyzer::ColumnVar* inner_col) const {
   ChunkKey hash_table_key{executor_->getCatalog()->getCurrentDB().dbId,
@@ -586,7 +586,7 @@ ChunkKey JoinHashTable::genHashTableKey(
 }
 
 void JoinHashTable::reifyOneToOneForDevice(
-    const std::deque<Fragmenter_Namespace::FragmentInfo>& fragments,
+    const std::vector<Fragmenter_Namespace::FragmentInfo>& fragments,
     const int device_id,
     const logger::ThreadId parent_thread_id) {
   DEBUG_TIMER_NEW_THREAD(parent_thread_id);
@@ -641,7 +641,7 @@ void JoinHashTable::reifyOneToOneForDevice(
 }
 
 void JoinHashTable::reifyOneToManyForDevice(
-    const std::deque<Fragmenter_Namespace::FragmentInfo>& fragments,
+    const std::vector<Fragmenter_Namespace::FragmentInfo>& fragments,
     const int device_id,
     const logger::ThreadId parent_thread_id) {
   DEBUG_TIMER_NEW_THREAD(parent_thread_id);
