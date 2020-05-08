@@ -4047,4 +4047,15 @@ std::string Catalog::dumpCreateTable(const TableDescriptor* td,
   return os.str();
 }
 
+bool Catalog::validateNonExistentTableOrView(const std::string& name,
+                                             const bool if_not_exists) {
+  if (getMetadataForTable(name, false)) {
+    if (if_not_exists) {
+      return false;
+    }
+    throw std::runtime_error("Table or View with name \"" + name + "\" already exists.");
+  }
+  return true;
+}
+
 }  // namespace Catalog_Namespace

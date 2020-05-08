@@ -113,10 +113,6 @@ void set_default_table_attributes(const std::string& table_name,
                                   TableDescriptor& td,
                                   const int32_t column_count);
 
-bool validate_nonexistent_table(const std::string& table_name,
-                                const Catalog_Namespace::Catalog& catalog,
-                                const bool if_not_exists);
-
 void validate_non_duplicate_column(const std::string& column_name,
                                    std::unordered_set<std::string>& upper_column_names);
 

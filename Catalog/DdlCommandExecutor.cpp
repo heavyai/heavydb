@@ -498,7 +498,7 @@ void CreateForeignTableCommand::execute(TQueryResult& _return) {
   }
 
   bool if_not_exists = ddl_payload_["ifNotExists"].GetBool();
-  if (!ddl_utils::validate_nonexistent_table(table_name, catalog, if_not_exists)) {
+  if (!catalog.validateNonExistentTableOrView(table_name, if_not_exists)) {
     return;
   }
 

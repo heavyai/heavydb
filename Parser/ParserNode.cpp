@@ -2176,7 +2176,7 @@ void CreateTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
                              " will not be created. User has no create privileges.");
   }
 
-  if (!ddl_utils::validate_nonexistent_table(*table_, catalog, if_not_exists_)) {
+  if (!catalog.validateNonExistentTableOrView(*table_, if_not_exists_)) {
     return;
   }
 
@@ -4439,7 +4439,7 @@ void CreateViewStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   auto stdlog = STDLOG(query_state);
   auto& catalog = session.getCatalog();
 
-  if (!ddl_utils::validate_nonexistent_table(view_name_, catalog, if_not_exists_)) {
+  if (!catalog.validateNonExistentTableOrView(view_name_, if_not_exists_)) {
     return;
   }
   if (!session.checkDBAccessPrivileges(DBObjectType::ViewDBObjectType,

@@ -515,19 +515,6 @@ void set_default_table_attributes(const std::string& table_name,
   td.maxRows = DEFAULT_MAX_ROWS;
 }
 
-bool validate_nonexistent_table(const std::string& table_name,
-                                const Catalog_Namespace::Catalog& catalog,
-                                const bool if_not_exists) {
-  if (catalog.getMetadataForTable(table_name, false)) {
-    if (if_not_exists) {
-      return false;
-    }
-    throw std::runtime_error("Table or View with name \"" + table_name +
-                             "\" already exists.");
-  }
-  return true;
-}
-
 void validate_non_duplicate_column(const std::string& column_name,
                                    std::unordered_set<std::string>& upper_column_names) {
   const auto upper_column_name = boost::to_upper_copy<std::string>(column_name);

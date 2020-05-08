@@ -344,6 +344,18 @@ class Catalog final {
    */
   void createDefaultServersIfNotExists();
 
+  /**
+   * Validates that a table or view with given name does not already exist.
+   * An exception is thrown if a table or view with given name already exists and
+   * "if_not_exists" is false.
+   *
+   * @param name - Name of table or view whose existence is checked
+   * @param if_not_exists - flag indicating whether or not existence of a table or view
+   * with given name is an exception
+   * @return true if table or view with name does not exist. Otherwise, return false
+   */
+  bool validateNonExistentTableOrView(const std::string& name, const bool if_not_exists);
+
  protected:
   void CheckAndExecuteMigrations();
   void CheckAndExecuteMigrationsPostBuildMaps();
