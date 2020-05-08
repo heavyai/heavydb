@@ -19,9 +19,14 @@
 #include <unordered_set>
 
 #include <boost/algorithm/string.hpp>
+#include <boost/filesystem.hpp>
+#include <boost/program_options.hpp>
+
+#include "rapidjson/document.h"
 
 #include "Fragmenter/FragmentDefaultValues.h"
 #include "Parser/ReservedKeywords.h"
+#include "Shared/mapd_glob.h"
 
 bool g_use_date_in_days_default_encoding{true};
 
@@ -559,5 +564,99 @@ std::string table_type_enum_to_string(const TableType table_type) {
     return "View";
   }
   throw std::runtime_error{"Unexpected table type"};
+}
+
+std::string get_malformed_config_error_message(const std::string& config_key) {
+  return "Configuration value for \"" + config_key +
+         "\" is malformed. Value should be a list of paths with format: [ "
+         "\"root-path-1\", \"root-path-2\", ... ]";
+}
+
+void validate_expanded_file_path(const std::string& file_path,
+                                 const rapidjson::Value& whitelisted_root_paths,
+                                 const std::string& config_key) {
+  boost::filesystem::path canonical_file_path = boost::filesystem::canonical(file_path);
+  for (const auto& root_path : whitelisted_root_paths.GetArray()) {
+    if (!root_path.IsString()) {
+      LOG(ERROR) << get_malformed_config_error_message(config_key);
+      throw std::runtime_error{"Error reading server configuration file."};
+    }
+    if (!boost::filesystem::exists(root_path.GetString())) {
+      LOG(ERROR) << ("Whitelisted root path \"" + std::string{root_path.GetString()} +
+                     "\" does not exist.");
+      throw std::runtime_error{"Error reading server configuration file."};
+    }
+    const auto& canonical_root_path = boost::filesystem::canonical(root_path.GetString());
+    if (boost::istarts_with(canonical_file_path.string(), canonical_root_path.string())) {
+      return;
+    }
+  }
+  throw std::runtime_error{"File or directory path \"" + file_path +
+                           "\" is not whitelisted."};
+}
+
+void validate_whitelisted_file_path(const std::string& file_path,
+                                    const std::string& server_config_path,
+                                    const DataTransferType data_transfer_type) {
+  if (server_config_path.empty()) {
+    return;
+  }
+
+  if (!boost::filesystem::exists(server_config_path)) {
+    LOG(ERROR) << ("Configuration file at \"" + server_config_path +
+                   "\" does not exist.");
+    throw std::runtime_error{"Error reading server configuration file."};
+  }
+
+  std::string config_value;
+  std::string config_key;
+  if (data_transfer_type == DataTransferType::IMPORT) {
+    config_key = "allowed-import-paths";
+  } else if (data_transfer_type == DataTransferType::EXPORT) {
+    config_key = "allowed-export-paths";
+  } else {
+    UNREACHABLE();
+  }
+
+  namespace po = boost::program_options;
+  po::options_description desc{};
+  desc.add_options()(config_key.c_str(), po::value<std::string>(&config_value));
+  po::variables_map vm;
+  po::store(po::parse_config_file<char>(server_config_path.c_str(), desc, true), vm);
+  po::notify(vm);
+  if (!vm.count(config_key)) {
+    return;
+  }
+
+  rapidjson::Document whitelisted_root_paths;
+  whitelisted_root_paths.Parse(config_value);
+  if (!whitelisted_root_paths.IsArray()) {
+    LOG(ERROR) << get_malformed_config_error_message(config_key);
+    throw std::runtime_error{"Error reading server configuration file."};
+  }
+
+  if (data_transfer_type == DataTransferType::IMPORT) {
+    const auto& file_paths = mapd_glob(file_path);
+    if (file_paths.size() == 0) {
+      throw std::runtime_error{"File or directory \"" + file_path + "\" does not exist."};
+    }
+    for (const auto& path : file_paths) {
+      validate_expanded_file_path(path, whitelisted_root_paths, config_key);
+    }
+  } else {
+    std::string path;
+    if (!boost::filesystem::exists(file_path)) {
+      // For exports, it is possible to provide a path to a new (nonexistent) file. In
+      // this case, validate using the parent path.
+      path = boost::filesystem::path(file_path).parent_path().string();
+      if (!boost::filesystem::exists(path)) {
+        throw std::runtime_error{"File or directory \"" + file_path +
+                                 "\" does not exist."};
+      }
+    } else {
+      path = file_path;
+    }
+    validate_expanded_file_path(path, whitelisted_root_paths, config_key);
+  }
 }
 }  // namespace ddl_utils

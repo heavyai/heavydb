@@ -186,8 +186,11 @@ class ForeignTablesTest : public DBHandlerTestFixture {
 };
 
 TEST_F(ForeignTablesTest, ForeignTablesAreDroppedWhenFsiIsDisabled) {
+  const auto file_path =
+      boost::filesystem::canonical("../../Tests/FsiDataFiles/example_1.csv").string();
   sql("CREATE FOREIGN TABLE test_foreign_table (c1 int) SERVER omnisci_local_csv "
-      "WITH (file_path = 'test_file.csv');");
+      "WITH (file_path = '" +
+      file_path + "');");
   sql("CREATE TABLE test_table (c1 int);");
   sql("CREATE VIEW test_view AS SELECT * FROM test_table;");
 

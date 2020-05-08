@@ -5349,6 +5349,14 @@ void DBHandler::sql_execute_impl(TQueryResult& _return,
       if (!select_stmt) {
         check_read_only("Non-SELECT statements");
       }
+      auto copy_table_stmt = dynamic_cast<Parser::CopyTableStmt*>(stmt.get());
+      if (copy_table_stmt) {
+        copy_table_stmt->setServerConfigPath(system_parameters_.config_file);
+      }
+      auto export_query_stmt = dynamic_cast<Parser::ExportQueryStmt*>(stmt.get());
+      if (export_query_stmt) {
+        export_query_stmt->setServerConfigPath(system_parameters_.config_file);
+      }
       auto ddl = dynamic_cast<Parser::DDLStmt*>(stmt.get());
       if (!handle_ddl(ddl)) {
         auto stmtp = dynamic_cast<Parser::InsertValuesStmt*>(stmt.get());
@@ -6070,7 +6078,8 @@ void DBHandler::executeDdl(
     TQueryResult& _return,
     const std::string& query_ra,
     std::shared_ptr<Catalog_Namespace::SessionInfo const> session_ptr) {
-  DdlCommandExecutor executor = DdlCommandExecutor(query_ra, session_ptr);
+  DdlCommandExecutor executor =
+      DdlCommandExecutor(query_ra, session_ptr, system_parameters_.config_file);
   if (executor.isShowUserSessions()) {
     getUserSessions(*session_ptr, _return);
   } else {

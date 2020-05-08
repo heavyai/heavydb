@@ -79,6 +79,8 @@ class Encoding {
 
 enum class TableType { TABLE = 1, VIEW, FOREIGN_TABLE };
 
+enum class DataTransferType { IMPORT = 1, EXPORT };
+
 void set_default_encoding(ColumnDescriptor& cd);
 
 void validate_and_set_fixed_encoding(ColumnDescriptor& cd,
@@ -122,4 +124,18 @@ void validate_drop_table_type(const TableDescriptor* td,
                               const TableType expected_table_type);
 
 std::string table_type_enum_to_string(const TableType table_type);
+
+/**
+ * Validates that the given file path is whitelisted. Validation is done using
+ * provided import/export whitelisted root paths in the server config file.
+ * If no configuration is provided, validation is skipped.
+ *
+ * @param file_path - file path to validate
+ * @param server_config_path - path to server config file
+ * @param data_transfer_type - enum indicating whether validation is for an import or
+ * export use case
+ */
+void validate_whitelisted_file_path(const std::string& file_path,
+                                    const std::string& server_config_path,
+                                    const DataTransferType data_transfer_type);
 }  // namespace ddl_utils

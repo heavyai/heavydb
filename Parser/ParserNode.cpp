@@ -3391,6 +3391,13 @@ void CopyTableStmt::execute(const Catalog_Namespace::SessionInfo& session,
                                 const TableDescriptor*,
                                 const std::string&,
                                 const Importer_NS::CopyParams&)>& importer_factory) {
+  boost::regex non_local_file_regex{R"(^\s*(s3|http|https)://.+)",
+                                    boost::regex::extended | boost::regex::icase};
+  if (!boost::regex_match(*file_pattern, non_local_file_regex)) {
+    ddl_utils::validate_whitelisted_file_path(
+        *file_pattern, server_config_path_, ddl_utils::DataTransferType::IMPORT);
+  }
+
   size_t rows_completed = 0;
   size_t rows_rejected = 0;
   size_t total_time = 0;
@@ -4260,6 +4267,11 @@ void ExportQueryStmt::execute(const Catalog_Namespace::SessionInfo& session) {
       }
     }
     *file_path += file_name;
+  } else {
+    // Above branch will create a new file in the mapd_export directory. If that path is
+    // not exercised, go through applicable file path validations.
+    ddl_utils::validate_whitelisted_file_path(
+        *file_path, server_config_path_, ddl_utils::DataTransferType::EXPORT);
   }
   outfile.open(*file_path);
   if (!outfile) {

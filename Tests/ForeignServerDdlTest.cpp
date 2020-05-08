@@ -174,7 +174,16 @@ class DropForeignServerTest : public DBHandlerTestFixture {
     g_enable_fsi = true;
     dropTestTable();
     getCatalog().dropForeignServer("test_server");
+    getCatalog().dropForeignServer("test_server_1");
     DBHandlerTestFixture::TearDown();
+  }
+
+  void createTestServer1() {
+    const auto base_path =
+        boost::filesystem::canonical("../../Tests/FsiDataFiles/").string();
+    sql("CREATE SERVER test_server_1 FOREIGN DATA WRAPPER omnisci_csv "
+        "WITH (storage_type = 'LOCAL_FILE', base_path = '" +
+        base_path + "');");
   }
 
   void assertNullForeignServer(const std::string& server_name) {
@@ -211,12 +220,13 @@ TEST_F(DropForeignServerTest, DefaultServers) {
 }
 
 TEST_F(DropForeignServerTest, ForeignTableReferencingServer) {
-  sql("CREATE FOREIGN TABLE test_table (c1 int) SERVER test_server "
-      "WITH (file_path = 'test_file.csv');");
+  createTestServer1();
+  sql("CREATE FOREIGN TABLE test_table (c1 int) SERVER test_server_1 "
+      "WITH (file_path = 'example_1.csv');");
   std::string error_message{
-      "Exception: Foreign server \"test_server\" is referenced by existing "
+      "Exception: Foreign server \"test_server_1\" is referenced by existing "
       "foreign tables and cannot be dropped."};
-  queryAndAssertException("DROP SERVER test_server;", error_message);
+  queryAndAssertException("DROP SERVER test_server_1;", error_message);
 }
 
 TEST_F(DropForeignServerTest, FsiDisabled) {

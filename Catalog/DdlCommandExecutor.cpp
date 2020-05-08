@@ -56,8 +56,9 @@ void add_row(TQueryResult& _return, const std::vector<std::string>& row) {
 
 DdlCommandExecutor::DdlCommandExecutor(
     const std::string& ddl_statement,
-    std::shared_ptr<Catalog_Namespace::SessionInfo const> session_ptr)
-    : session_ptr_(session_ptr) {
+    std::shared_ptr<Catalog_Namespace::SessionInfo const> session_ptr,
+    const std::string& server_config_path)
+    : session_ptr_(session_ptr), server_config_path_(server_config_path) {
   CHECK(!ddl_statement.empty());
   ddl_query_.Parse(ddl_statement);
   CHECK(ddl_query_.IsObject());
@@ -76,7 +77,8 @@ void DdlCommandExecutor::execute(TQueryResult& _return) {
   } else if (ddl_command == "DROP_SERVER") {
     DropForeignServerCommand{payload, session_ptr_}.execute(_return);
   } else if (ddl_command == "CREATE_FOREIGN_TABLE") {
-    CreateForeignTableCommand{payload, session_ptr_}.execute(_return);
+    CreateForeignTableCommand{payload, session_ptr_, server_config_path_}.execute(
+        _return);
   } else if (ddl_command == "DROP_FOREIGN_TABLE") {
     DropForeignTableCommand{payload, session_ptr_}.execute(_return);
   } else if (ddl_command == "SHOW_TABLES") {
@@ -474,8 +476,9 @@ int JsonColumnEncoding::getEncodingParam(const rapidjson::Value& data_type) {
 
 CreateForeignTableCommand::CreateForeignTableCommand(
     const rapidjson::Value& ddl_payload,
-    std::shared_ptr<Catalog_Namespace::SessionInfo const> session_ptr)
-    : DdlCommand(ddl_payload, session_ptr) {
+    std::shared_ptr<Catalog_Namespace::SessionInfo const> session_ptr,
+    const std::string& server_config_path)
+    : DdlCommand(ddl_payload, session_ptr), server_config_path_(server_config_path) {
   CHECK(ddl_payload.HasMember("serverName"));
   CHECK(ddl_payload["serverName"].IsString());
   CHECK(ddl_payload.HasMember("tableName"));
@@ -542,7 +545,8 @@ void CreateForeignTableCommand::setTableDetails(const std::string& table_name,
 
     if (foreign_table.foreign_server->data_wrapper_type ==
         foreign_storage::DataWrapperType::CSV) {
-      foreign_storage::CsvDataWrapper::validateOptions(&foreign_table);
+      foreign_storage::CsvDataWrapper::validateOptions(&foreign_table,
+                                                       server_config_path_);
     }
   }
 

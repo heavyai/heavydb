@@ -19,6 +19,7 @@ add_executable(CatalogMigrationTest CatalogMigrationTest.cpp)
 add_executable(CreateAndDropTableDdlTest CreateAndDropTableDdlTest.cpp)
 add_executable(ForeignTableDmlTest ForeignTableDmlTest.cpp)
 add_executable(FileMgrTest FileMgrTest.cpp)
+add_executable(FilePathWhitelistTest FilePathWhitelistTest.cpp)
 
 if(ENABLE_CUDA)
   set(MAPD_DEFINITIONS -DHAVE_CUDA)
@@ -108,7 +109,7 @@ target_link_libraries(ColumnarResultsTest ${EXECUTE_TEST_LIBS})
 target_link_libraries(FromTableReorderingTest ${EXECUTE_TEST_LIBS})
 target_link_libraries(ResultSetBaselineRadixSortTest ${EXECUTE_TEST_LIBS})
 target_link_libraries(UtilTest Utils gtest Shared ${Boost_LIBRARIES})
-target_link_libraries(StringDictionaryTest StringDictionary gtest Shared ${Boost_LIBRARIES})
+target_link_libraries(StringDictionaryTest ${EXECUTE_TEST_LIBS})
 target_link_libraries(StringTransformTest Shared gtest ${Boost_LIBRARIES})
 target_link_libraries(StringFunctionsTest ${EXECUTE_TEST_LIBS})
 target_link_libraries(TokenCompletionHintsTest token_completion_hints gtest mapd_thrift Shared ${Boost_LIBRARIES})
@@ -156,6 +157,7 @@ target_link_libraries(CreateAndDropTableDdlTest ${THRIFT_HANDLER_TEST_LIBRARIES}
 target_link_libraries(ShowCommandsDdlTest ${THRIFT_HANDLER_TEST_LIBRARIES})
 target_link_libraries(ForeignTableDmlTest ${THRIFT_HANDLER_TEST_LIBRARIES})
 target_link_libraries(FileMgrTest ${THRIFT_HANDLER_TEST_LIBRARIES})
+target_link_libraries(FilePathWhitelistTest ${THRIFT_HANDLER_TEST_LIBRARIES})
 
 if(NOT ${CMAKE_SYSTEM_NAME} STREQUAL "Darwin")
   target_link_libraries(UdfTest gtest ${EXECUTE_TEST_LIBS})
@@ -217,6 +219,7 @@ add_test(CatalogMigrationTest CatalogMigrationTest ${TEST_ARGS})
 add_test(CreateAndDropTableDdlTest CreateAndDropTableDdlTest ${TEST_ARGS})
 add_test(ForeignTableDmlTest ForeignTableDmlTest ${TEST_ARGS})
 add_test(FileMgrTest FileMgrTest ${TEST_ARGS})
+add_test(FilePathWhitelistTest FilePathWhitelistTest ${TEST_ARGS})
 if(ENABLE_CUDA)
   add_test(GpuSharedMemoryTest GpuSharedMemoryTest ${TEST_ARGS})
 endif()
@@ -285,6 +288,7 @@ set(TEST_PROGRAMS
   CreateAndDropTableDdlTest
   ForeignTableDmlTest
   FileMgrTest
+  FilePathWhitelistTest
 )
 
 if(ENABLE_CUDA)

@@ -162,6 +162,10 @@ class DBHandlerTestFixture : public testing::Test {
     db_leaves_ = leaf_servers;
   }
 
+  static void initTestArgs(const SystemParameters& system_parameters) {
+    system_parameters_ = system_parameters;
+  }
+
  protected:
   virtual void SetUp() override {
     createDBHandler();
@@ -299,7 +303,13 @@ class DBHandlerTestFixture : public testing::Test {
       sql(sql_statement);
       FAIL() << "An exception should have been thrown for this test case.";
     } catch (const TOmniSciException& e) {
-      ASSERT_EQ(error_message, e.error_msg);
+      if (isDistributedMode()) {
+        // In distributed mode, exception messages may be wrapped within
+        // another thrift exception. In this case, do a substring check.
+        ASSERT_TRUE(e.error_msg.find(error_message) != std::string::npos);
+      } else {
+        ASSERT_EQ(error_message, e.error_msg);
+      }
     }
   }
 
