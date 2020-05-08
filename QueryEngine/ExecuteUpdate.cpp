@@ -66,6 +66,8 @@ void Executor::executeUpdate(const RelAlgExecutionUnit& ra_exe_unit_in,
                              const UpdateLogForFragment::Callback& cb,
                              const bool is_agg) {
   CHECK(cb);
+  VLOG(1) << "Executing update/delete work unit:" << ra_exe_unit_in;
+
   const auto ra_exe_unit = addDeletedColumn(ra_exe_unit_in, co);
   ColumnCacheMap column_cache;
 
