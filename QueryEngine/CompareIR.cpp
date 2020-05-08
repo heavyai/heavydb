@@ -444,6 +444,22 @@ llvm::Value* CodeGenerator::codegenCmp(const SQLOps optype,
         CHECK(optype == kEQ || optype == kNE);
       }
     }
+
+    if (lhs_ti.is_boolean() && rhs_ti.is_boolean()) {
+      auto& lhs_lv = lhs_lvs.front();
+      auto& rhs_lv = rhs_lvs.front();
+      CHECK(lhs_lv->getType()->isIntegerTy());
+      CHECK(rhs_lv->getType()->isIntegerTy());
+      if (lhs_lv->getType()->getIntegerBitWidth() <
+          rhs_lv->getType()->getIntegerBitWidth()) {
+        lhs_lv =
+            cgen_state_->castToTypeIn(lhs_lv, rhs_lv->getType()->getIntegerBitWidth());
+      } else {
+        rhs_lv =
+            cgen_state_->castToTypeIn(rhs_lv, lhs_lv->getType()->getIntegerBitWidth());
+      }
+    }
+
     return null_check_suffix.empty()
                ? cgen_state_->ir_builder_.CreateICmp(
                      llvm_icmp_pred(optype), lhs_lvs.front(), rhs_lvs.front())

@@ -1141,6 +1141,11 @@ TEST(Select, FilterAndSimpleAggregation) {
     c("SELECT COUNT(*) FROM test WHERE o2 <> '1999-09-08';", dt);
     c("SELECT COUNT(*) FROM test WHERE o1 = o2;", dt);
     c("SELECT COUNT(*) FROM test WHERE o1 <> o2;", dt);
+    c("SELECT COUNT(*) FROM test WHERE b = 'f';", dt);
+    c("SELECT COUNT(*) FROM test WHERE bn = 'f';", dt);
+    c("SELECT COUNT(*) FROM test WHERE b = null;", dt);
+    c("SELECT COUNT(*) FROM test WHERE bn = null;", dt);
+    c("SELECT COUNT(*) FROM test WHERE bn = b;", dt);
     ASSERT_EQ(19,
               v<int64_t>(run_simple_agg("SELECT rowid FROM test WHERE rowid = 19;", dt)));
     ASSERT_EQ(
@@ -4612,15 +4617,17 @@ TEST(Select, BooleanColumn) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
     ASSERT_EQ(g_num_rows + g_num_rows / 2,
+              v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test WHERE bn;", dt)));
+    ASSERT_EQ(g_num_rows,
               v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test WHERE b;", dt)));
     ASSERT_EQ(g_num_rows / 2,
-              v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test WHERE NOT b;", dt)));
+              v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test WHERE NOT bn;", dt)));
     ASSERT_EQ(
         g_num_rows + g_num_rows / 2,
-        v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test WHERE x < 8 AND b;", dt)));
+        v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test WHERE x < 8 AND bn;", dt)));
     ASSERT_EQ(0,
               v<int64_t>(run_simple_agg(
-                  "SELECT COUNT(*) FROM test WHERE x < 8 AND NOT b;", dt)));
+                  "SELECT COUNT(*) FROM test WHERE x < 8 AND NOT bn;", dt)));
     ASSERT_EQ(5,
               v<int64_t>(
                   run_simple_agg("SELECT COUNT(*) FROM test WHERE x > 7 OR false;", dt)));
@@ -18280,7 +18287,7 @@ int create_and_populate_tables(const bool use_temporary_tables,
         "encoding fixed(16), dd decimal(10, 2), dd_notnull decimal(10, 2) not null, ss "
         "text encoding dict, u int, ofd "
         "int, ufd int not null, ofq bigint, ufq bigint not null, smallint_nulls "
-        "smallint"};
+        "smallint, bn boolean not null"};
     const std::string create_test = build_create_table_statement(
         columns_definition,
         "test",
@@ -18302,7 +18309,7 @@ int create_and_populate_tables(const bool use_temporary_tables,
         "fx int, dd decimal(10, 2), dd_notnull decimal(10, 2) not "
         "null, ss "
         "text, u int, ofd int, ufd int not null, ofq bigint, ufq bigint not null, "
-        "smallint_nulls smallint);");
+        "smallint_nulls smallint, bn boolean not null);");
   } catch (...) {
     LOG(ERROR) << "Failed to (re-)create table 'test'";
     return -EEXIST;
@@ -18320,7 +18327,7 @@ int create_and_populate_tables(const bool use_temporary_tables,
         "'15:13:14', '1999-09-09', '1999-09-09', '1999-09-09', 9, 111.1, 111.1, "
         "'fish', "
         "null, "
-        "2147483647, -2147483648, null, -1, 32767);"};
+        "2147483647, -2147483648, null, -1, 32767, 't');"};
     run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
     g_sqlite_comparator.query(insert_query);
   }
@@ -18335,13 +18342,13 @@ int create_and_populate_tables(const bool use_temporary_tables,
         "222.2, "
         "null, null, null, "
         "-2147483647, "
-        "9223372036854775807, -9223372036854775808, null);"};
+        "9223372036854775807, -9223372036854775808, null, 'f');"};
     run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
     g_sqlite_comparator.query(insert_query);
   }
   for (ssize_t i = 0; i < g_num_rows / 2; ++i) {
     const std::string insert_query{
-        "INSERT INTO test VALUES(7, -7, 43, 102, 1002, 't', 1.3, 1000.3, -1000.3, 2.6, "
+        "INSERT INTO test VALUES(7, -7, 43, 102, 1002, null, 1.3, 1000.3, -1000.3, 2.6, "
         "-220.6, 'baz', null, null, null, "
         "'real_baz', 'baz', '2014-12-14 22:23:15', '2014-12-14 22:23:15.750', "
         "'2014-12-14 22:23:15.437321', "
@@ -18349,7 +18356,7 @@ int create_and_populate_tables(const bool use_temporary_tables,
         "'1999-09-09', 11, "
         "333.3, 333.3, "
         "'boat', null, 1, "
-        "-1, 1, -9223372036854775808, 1);"};
+        "-1, 1, -9223372036854775808, 1, 't');"};
     run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
     g_sqlite_comparator.query(insert_query);
   }
