@@ -1668,6 +1668,21 @@ TEST(Select, GroupByBoundariesAndNull) {
   }
 }
 
+TEST(Select, NestedGroupByWithFloat) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    char const* query =
+        "SELECT c, x, f FROM ("
+        "   SELECT x, COUNT(*) AS c, f"
+        "   FROM test"
+        "   GROUP BY x, f"
+        " )"
+        " GROUP BY c, x, f"
+        " ORDER BY c, x, f;";
+    c(query, dt);
+  }
+}
+
 TEST(Select, Arrays) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();

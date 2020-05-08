@@ -1238,7 +1238,7 @@ std::vector<Analyzer::Expr*> translate_targets(
     const RelAggregate* aggregate,
     const RelAlgTranslator& translator) {
   std::vector<Analyzer::Expr*> target_exprs;
-  size_t group_key_idx = 0;
+  size_t group_key_idx = 1;
   for (const auto& groupby_expr : groupby_exprs) {
     auto target_expr =
         var_ref(groupby_expr.get(), Analyzer::Var::kGROUPBY, group_key_idx++);
