@@ -194,6 +194,9 @@ class DBHandler : public OmniSciIf {
   //         This block must be keep in sync with mapd.thrift and HAHandler.h
   //         Please keep in same order for easy check and cut and paste
   // Important ****
+  static void parser_with_error_handler(
+      const std::string& query_str,
+      std::list<std::unique_ptr<Parser::Stmt>>& parse_trees);
 
   void krb5_connect(TKrb5Session& session,
                     const std::string& token,

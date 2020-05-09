@@ -358,6 +358,26 @@ DBHandler::DBHandler(const std::vector<LeafHostInfo>& db_leaves,
 
 DBHandler::~DBHandler() {}
 
+void DBHandler::parser_with_error_handler(
+    const std::string& query_str,
+    std::list<std::unique_ptr<Parser::Stmt>>& parse_trees) {
+  int num_parse_errors = 0;
+  std::string last_parsed;
+  try {
+    SQLParser parser;
+    num_parse_errors = parser.parse(query_str, parse_trees, last_parsed);
+  } catch (std::exception& e) {
+    THROW_MAPD_EXCEPTION(std::string("Exception: ") + e.what());
+  }
+  if (num_parse_errors > 0) {
+    THROW_MAPD_EXCEPTION("Syntax error at: " + last_parsed);
+  }
+  if (parse_trees.size() > 1) {
+    THROW_MAPD_EXCEPTION("multiple SQL statements not allowed");
+  } else if (parse_trees.size() != 1) {
+    THROW_MAPD_EXCEPTION("empty SQL statment not allowed");
+  }
+}
 void DBHandler::check_read_only(const std::string& str) {
   if (DBHandler::read_only_) {
     THROW_MAPD_EXCEPTION(str + " disabled: server running in read-only mode.");
@@ -1059,9 +1079,6 @@ void DBHandler::sql_execute_df(TDataFrame& _return,
       *legacylockmgr::LockMgr<mapd_shared_mutex, bool>::getMutex(
           legacylockmgr::ExecutorOuterLock, true));
 
-  SQLParser parser;
-  std::list<std::unique_ptr<Parser::Stmt>> parse_trees;
-  std::string last_parsed;
   try {
     ParserWrapper pw{query_str};
     if (!pw.is_ddl && !pw.is_update_dml &&
@@ -5029,10 +5046,7 @@ void DBHandler::sql_execute_impl(TQueryResult& _return,
   // Call to DistributedValidate() below may change cat.
   auto& cat = session_ptr->getCatalog();
 
-  SQLParser parser;
   std::list<std::unique_ptr<Parser::Stmt>> parse_trees;
-  std::string last_parsed;
-  int num_parse_errors = 0;
 
   mapd_unique_lock<mapd_shared_mutex> executeWriteLock;
   mapd_shared_lock<mapd_shared_mutex> executeReadLock;
@@ -5142,19 +5156,7 @@ void DBHandler::sql_execute_impl(TQueryResult& _return,
       return;
     } else if (pw.is_optimize || pw.is_validate) {
       // Get the Stmt object
-      try {
-        num_parse_errors = parser.parse(query_str, parse_trees, last_parsed);
-      } catch (std::exception& e) {
-        throw std::runtime_error(e.what());
-      }
-      if (num_parse_errors > 0) {
-        throw std::runtime_error("Syntax error at: " + last_parsed);
-      }
-      if (parse_trees.size() > 1) {
-        throw_multiple_sql_statements_exception();
-      } else if (parse_trees.size() != 1) {
-        throw_empty_sql_statement_exception();
-      }
+      DBHandler::parser_with_error_handler(query_str, parse_trees);
 
       if (pw.is_optimize) {
         const auto optimize_stmt =
@@ -5237,22 +5239,9 @@ void DBHandler::sql_execute_impl(TQueryResult& _return,
       THROW_MAPD_EXCEPTION(std::string("Exception: ") + e.what());
     }
   }
-  try {
-    // check for COPY TO stmt replace as required parser expects #~# markers
-    const auto result = apply_copy_to_shim(query_str);
-    num_parse_errors = parser.parse(result, parse_trees, last_parsed);
-  } catch (std::exception& e) {
-    THROW_MAPD_EXCEPTION(std::string("Exception: ") + e.what());
-  }
-  if (num_parse_errors > 0) {
-    THROW_MAPD_EXCEPTION("Syntax error at: " + last_parsed);
-  }
-  if (parse_trees.size() > 1) {
-    throw_multiple_sql_statements_exception();
-  } else if (parse_trees.size() != 1) {
-    throw_empty_sql_statement_exception();
-  }
 
+  const auto result = apply_copy_to_shim(query_str);
+  DBHandler::parser_with_error_handler(result, parse_trees);
   auto handle_ddl = [&query_state_proxy, &session_ptr, &_return, &locks, this](
                         Parser::DDLStmt* ddl) -> bool {
     if (!ddl) {
