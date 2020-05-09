@@ -44,8 +44,7 @@ void ForeignStorageMgr::fetchBuffer(const ChunkKey& chunk_key,
   destination_buffer->syncEncoder(chunk_buffer);
 }
 
-void ForeignStorageMgr::getChunkMetadataVec(
-    std::vector<std::pair<ChunkKey, ChunkMetadata>>& chunk_metadata) {
+void ForeignStorageMgr::getChunkMetadataVec(ChunkMetadataVector& chunk_metadata) {
   std::shared_lock data_wrapper_lock(data_wrapper_mutex_);
   for (auto& [table_chunk_key, data_wrapper] : data_wrapper_map_) {
     data_wrapper->populateMetadataForChunkKeyPrefix(table_chunk_key, chunk_metadata);
@@ -53,7 +52,7 @@ void ForeignStorageMgr::getChunkMetadataVec(
 }
 
 void ForeignStorageMgr::getChunkMetadataVecForKeyPrefix(
-    std::vector<std::pair<ChunkKey, ChunkMetadata>>& chunk_metadata,
+    ChunkMetadataVector& chunk_metadata,
     const ChunkKey& keyPrefix) {
   createDataWrapperIfNotExists(keyPrefix);
   getDataWrapper(keyPrefix)->populateMetadataForChunkKeyPrefix(keyPrefix, chunk_metadata);

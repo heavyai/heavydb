@@ -45,11 +45,9 @@ class PersistentStorageMgr : public AbstractBufferMgr {
   AbstractBuffer* putBuffer(const ChunkKey& chunk_key,
                             AbstractBuffer* source_buffer,
                             const size_t num_bytes) override;
-  void getChunkMetadataVec(
-      std::vector<std::pair<ChunkKey, ChunkMetadata>>& chunk_metadata) override;
-  void getChunkMetadataVecForKeyPrefix(
-      std::vector<std::pair<ChunkKey, ChunkMetadata>>& chunk_metadata,
-      const ChunkKey& chunk_key_prefix) override;
+  void getChunkMetadataVec(ChunkMetadataVector& chunk_metadata) override;
+  void getChunkMetadataVecForKeyPrefix(ChunkMetadataVector& chunk_metadata,
+                                       const ChunkKey& chunk_key_prefix) override;
   bool isBufferOnDevice(const ChunkKey& chunk_key) override;
   std::string printSlabs() override;
   void clearSlabs() override;

@@ -64,12 +64,12 @@ ChunkAccessorTable getChunkAccessorTable(const Catalog_Namespace::Catalog& cat,
                                     chunkKey,
                                     Data_Namespace::CPU_LEVEL,
                                     0,
-                                    chunkMetaIt->second.numBytes,
-                                    chunkMetaIt->second.numElements);
+                                    chunkMetaIt->second->numBytes,
+                                    chunkMetaIt->second->numElements);
       CHECK(chunk);
 
       // the size
-      size_t chunkSize = chunkMetaIt->second.numElements;
+      size_t chunkSize = chunkMetaIt->second->numElements;
 
       // and an iterator
       ChunkIter chunkIt = chunk->begin_iterator(chunkMetaIt->second);

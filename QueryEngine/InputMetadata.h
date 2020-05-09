@@ -17,8 +17,8 @@
 #ifndef QUERYENGINE_INPUTMETADATA_H
 #define QUERYENGINE_INPUTMETADATA_H
 
-#include "Descriptors/InputDescriptors.h"
-#include "RelAlgExecutionUnit.h"
+#include "QueryEngine/Descriptors/InputDescriptors.h"
+#include "QueryEngine/RelAlgExecutionUnit.h"
 
 #include <unordered_map>
 
@@ -48,7 +48,7 @@ class InputTableInfoCache {
   Executor* executor_;
 };
 
-std::map<int, ChunkMetadata> synthesize_metadata(const ResultSet* rows);
+ChunkMetadataMap synthesize_metadata(const ResultSet* rows);
 
 size_t get_frag_count_of_table(const int table_id, Executor* executor);
 

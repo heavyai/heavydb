@@ -109,8 +109,9 @@ TEST_F(DateInDaysMigrationTest, NoTables) {
       table_descriptors_map, cat->getCurrentDB().dbId, cat.get(), sqlite_mock));
 }
 
-auto get_chunk_metadata_vec = [](const std::string& table,
-                                 const std::string& column) -> ChunkMetadata {
+auto get_chunk_metadata_vec =
+    [](const std::string& table,
+       const std::string& column) -> std::shared_ptr<ChunkMetadata> {
   auto cat = QR::get()->getCatalog();
 
   auto td = cat->getMetadataForTable(table);
@@ -118,7 +119,7 @@ auto get_chunk_metadata_vec = [](const std::string& table,
   ChunkKey key{
       cat->getCurrentDB().dbId, td->tableId, cd->columnId, 1};  // second fragment
   auto& data_manager = cat->getDataMgr();
-  std::vector<std::pair<ChunkKey, ChunkMetadata>> chunk_metadata_vec;
+  ChunkMetadataVector chunk_metadata_vec;
   data_manager.getChunkMetadataVecForKeyPrefix(chunk_metadata_vec, key);
   CHECK_EQ(chunk_metadata_vec.size(), 1U);
 
@@ -135,7 +136,7 @@ TEST_F(DateInDaysMigrationTest, AlreadyMigrated) {
   run_multiple_agg("UPDATE fake_date_in_days_metadata SET d = '04/04/2004' WHERE x = 4;",
                    ExecutorDeviceType::CPU);
   auto before_metadata = get_chunk_metadata_vec("fake_date_in_days_metadata", "d");
-  ASSERT_EQ(before_metadata.chunkStats.has_nulls, true);
+  ASSERT_EQ(before_metadata->chunkStats.has_nulls, true);
 
   Catalog_Namespace::TableDescriptorMapById table_descriptors_map;
   NiceMock<MockSqliteConnector> sqlite_mock(nullptr);
@@ -145,11 +146,11 @@ TEST_F(DateInDaysMigrationTest, AlreadyMigrated) {
       table_descriptors_map, cat->getCurrentDB().dbId, cat.get(), sqlite_mock));
 
   auto after_metadata = get_chunk_metadata_vec("fake_date_in_days_metadata", "d");
-  ASSERT_EQ(before_metadata.chunkStats.min.bigintval,
-            after_metadata.chunkStats.min.bigintval);
-  ASSERT_EQ(before_metadata.chunkStats.max.bigintval,
-            after_metadata.chunkStats.max.bigintval);
-  ASSERT_EQ(after_metadata.chunkStats.has_nulls, true);
+  ASSERT_EQ(before_metadata->chunkStats.min.bigintval,
+            after_metadata->chunkStats.min.bigintval);
+  ASSERT_EQ(before_metadata->chunkStats.max.bigintval,
+            after_metadata->chunkStats.max.bigintval);
+  ASSERT_EQ(after_metadata->chunkStats.has_nulls, true);
 }
 
 TEST_F(DateInDaysMigrationTest, MigrateMetadata) {
@@ -158,7 +159,7 @@ TEST_F(DateInDaysMigrationTest, MigrateMetadata) {
 
   // get before update metadata
   auto before_metadata = get_chunk_metadata_vec("fake_date_in_days_metadata", "d");
-  ASSERT_EQ(before_metadata.chunkStats.has_nulls, false);
+  ASSERT_EQ(before_metadata->chunkStats.has_nulls, false);
 
   // widen the metadata with an update query and add nulls
   run_multiple_agg("UPDATE fake_date_in_days_metadata SET d = NULL WHERE x = 3;",
@@ -168,11 +169,11 @@ TEST_F(DateInDaysMigrationTest, MigrateMetadata) {
 
   // check metadata after update
   auto after_metadata = get_chunk_metadata_vec("fake_date_in_days_metadata", "d");
-  ASSERT_EQ(before_metadata.chunkStats.min.bigintval,
-            after_metadata.chunkStats.min.bigintval);
-  ASSERT_NE(before_metadata.chunkStats.max.bigintval,
-            after_metadata.chunkStats.max.bigintval);
-  ASSERT_EQ(after_metadata.chunkStats.has_nulls, true);
+  ASSERT_EQ(before_metadata->chunkStats.min.bigintval,
+            after_metadata->chunkStats.min.bigintval);
+  ASSERT_NE(before_metadata->chunkStats.max.bigintval,
+            after_metadata->chunkStats.max.bigintval);
+  ASSERT_EQ(after_metadata->chunkStats.has_nulls, true);
 
   // return metadata to normal
   run_multiple_agg("UPDATE fake_date_in_days_metadata SET d = '03/03/1993' WHERE x = 3;",
@@ -221,11 +222,11 @@ TEST_F(DateInDaysMigrationTest, MigrateMetadata) {
 
   // check metadata after optimize
   auto optimized_metadata = get_chunk_metadata_vec("fake_date_in_days_metadata", "d");
-  ASSERT_EQ(optimized_metadata.chunkStats.min.bigintval,
-            before_metadata.chunkStats.min.bigintval);
-  ASSERT_EQ(optimized_metadata.chunkStats.max.bigintval,
-            before_metadata.chunkStats.max.bigintval);
-  ASSERT_EQ(optimized_metadata.chunkStats.has_nulls, false);
+  ASSERT_EQ(optimized_metadata->chunkStats.min.bigintval,
+            before_metadata->chunkStats.min.bigintval);
+  ASSERT_EQ(optimized_metadata->chunkStats.max.bigintval,
+            before_metadata->chunkStats.max.bigintval);
+  ASSERT_EQ(optimized_metadata->chunkStats.has_nulls, false);
 }
 
 TEST_F(DateInDaysMigrationTest, RetryNotMigrated) {
@@ -293,11 +294,12 @@ TEST_F(DateInDaysMigrationTest, RetryNotMigrated) {
 
   // check metadata after optimize
   auto optimized_metadata = get_chunk_metadata_vec("fake_date_in_days_metadata", "d");
-  ASSERT_EQ(optimized_metadata.chunkStats.min.bigintval,
-            before_metadata.chunkStats.min.bigintval);
-  ASSERT_EQ(optimized_metadata.chunkStats.max.bigintval,
-            before_metadata.chunkStats.min.bigintval);  // all column values are identical
-  ASSERT_EQ(optimized_metadata.chunkStats.has_nulls, false);
+  ASSERT_EQ(optimized_metadata->chunkStats.min.bigintval,
+            before_metadata->chunkStats.min.bigintval);
+  ASSERT_EQ(
+      optimized_metadata->chunkStats.max.bigintval,
+      before_metadata->chunkStats.min.bigintval);  // all column values are identical
+  ASSERT_EQ(optimized_metadata->chunkStats.has_nulls, false);
 }
 
 TEST_F(DateInDaysMigrationTest, RetryAlreadyMigrated) {
@@ -374,11 +376,11 @@ TEST_F(DateInDaysMigrationTest, RetryAlreadyMigrated) {
   auto optimized_metadata = get_chunk_metadata_vec("fake_date_in_days_metadata", "d");
 
   // No metadata narrowing
-  ASSERT_EQ(optimized_metadata.chunkStats.min.bigintval,
-            before_metadata.chunkStats.min.bigintval);
-  ASSERT_EQ(optimized_metadata.chunkStats.max.bigintval,
-            before_metadata.chunkStats.max.bigintval);
-  ASSERT_EQ(optimized_metadata.chunkStats.has_nulls, false);
+  ASSERT_EQ(optimized_metadata->chunkStats.min.bigintval,
+            before_metadata->chunkStats.min.bigintval);
+  ASSERT_EQ(optimized_metadata->chunkStats.max.bigintval,
+            before_metadata->chunkStats.max.bigintval);
+  ASSERT_EQ(optimized_metadata->chunkStats.has_nulls, false);
 }
 
 int main(int argc, char** argv) {

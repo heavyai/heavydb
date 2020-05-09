@@ -56,8 +56,8 @@ std::pair<const int8_t*, size_t> ColumnFetcher::getOneColumnFragment(
         chunk_key,
         effective_mem_lvl,
         effective_mem_lvl == Data_Namespace::CPU_LEVEL ? 0 : device_id,
-        chunk_meta_it->second.numBytes,
-        chunk_meta_it->second.numElements);
+        chunk_meta_it->second->numBytes,
+        chunk_meta_it->second->numElements);
     chunks_owner.push_back(chunk);
     CHECK(chunk);
     auto ab = chunk->get_buffer();
@@ -194,8 +194,8 @@ const int8_t* ColumnFetcher::getOneTableColumnFragment(
         chunk_key,
         memory_level,
         memory_level == Data_Namespace::CPU_LEVEL ? 0 : device_id,
-        chunk_meta_it->second.numBytes,
-        chunk_meta_it->second.numElements);
+        chunk_meta_it->second->numBytes,
+        chunk_meta_it->second->numElements);
     std::lock_guard<std::mutex> chunk_list_lock(chunk_list_mutex);
     chunk_holder.push_back(chunk);
   }
@@ -267,7 +267,7 @@ const int8_t* ColumnFetcher::getAllTableColumnFragments(
             std::make_unique<ColumnarResults>(executor_->row_set_mem_owner_,
                                               col_buffer,
                                               fragment.getNumTuples(),
-                                              chunk_meta_it->second.sqlType));
+                                              chunk_meta_it->second->sqlType));
       }
       auto merged_results =
           ColumnarResults::mergeResults(executor_->row_set_mem_owner_, column_frags);

@@ -48,10 +48,11 @@ size_t StringNoneEncoder::getNumElemsForBytesInsertData(
   return n - start_idx;
 }
 
-ChunkMetadata StringNoneEncoder::appendData(const std::vector<std::string>* srcData,
-                                            const int start_idx,
-                                            const size_t numAppendElems,
-                                            const bool replicating) {
+std::shared_ptr<ChunkMetadata> StringNoneEncoder::appendData(
+    const std::vector<std::string>* srcData,
+    const int start_idx,
+    const size_t numAppendElems,
+    const bool replicating) {
   CHECK(index_buf);  // index_buf must be set before this.
   size_t index_size = numAppendElems * sizeof(StringOffsetT);
   if (num_elems_ == 0) {
@@ -133,7 +134,7 @@ ChunkMetadata StringNoneEncoder::appendData(const std::vector<std::string>* srcD
   }
 
   num_elems_ += numAppendElems;
-  ChunkMetadata chunkMetadata;
-  getMetadata(chunkMetadata);
-  return chunkMetadata;
+  auto chunk_metadata = std::make_shared<ChunkMetadata>();
+  getMetadata(chunk_metadata);
+  return chunk_metadata;
 }

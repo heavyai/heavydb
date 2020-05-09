@@ -186,8 +186,8 @@ StorageIOFacility<EXECUTOR_TRAITS, FRAGMENT_UPDATER>::yieldUpdateCallback(
                                              chunk_key,
                                              Data_Namespace::MemoryLevel::CPU_LEVEL,
                                              0,
-                                             chunk_metadata->second.numBytes,
-                                             chunk_metadata->second.numElements);
+                                             chunk_metadata->second->numBytes,
+                                             chunk_metadata->second->numElements);
       CHECK(chunk);
       auto chunk_buffer = chunk->get_buffer();
       CHECK(chunk_buffer && chunk_buffer->has_encoder);
@@ -197,7 +197,7 @@ StorageIOFacility<EXECUTOR_TRAITS, FRAGMENT_UPDATER>::yieldUpdateCallback(
 
       const auto bytes_width = rs->getPaddedSlotWidthBytes(0);
 
-      ChunkMetadata new_chunk_metadata;
+      std::shared_ptr<ChunkMetadata> new_chunk_metadata;
       if (cd->columnType.is_dict_encoded_string() &&
           cd->columnType.get_size() < bytes_width) {
         // dictionary encoded strings currently use the none-encoder for all types. Scale
@@ -235,6 +235,7 @@ StorageIOFacility<EXECUTOR_TRAITS, FRAGMENT_UPDATER>::yieldUpdateCallback(
         new_chunk_metadata =
             encoder->appendData(updates_buffer, rs->rowCount(), cd->columnType, false, 0);
       }
+      CHECK(new_chunk_metadata);
 
       auto fragmenter = td->fragmenter.get();
       CHECK(fragmenter);
@@ -419,8 +420,8 @@ StorageIOFacility<EXECUTOR_TRAITS, FRAGMENT_UPDATER>::yieldDeleteCallback(
                                              chunk_key,
                                              Data_Namespace::MemoryLevel::CPU_LEVEL,
                                              0,
-                                             chunk_metadata->second.numBytes,
-                                             chunk_metadata->second.numElements);
+                                             chunk_metadata->second->numBytes,
+                                             chunk_metadata->second->numElements);
       CHECK(chunk);
       auto chunk_buffer = chunk->get_buffer();
       CHECK(chunk_buffer && chunk_buffer->has_encoder);

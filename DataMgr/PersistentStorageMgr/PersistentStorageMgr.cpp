@@ -58,14 +58,13 @@ AbstractBuffer* PersistentStorageMgr::putBuffer(const ChunkKey& chunk_key,
   return global_file_mgr->putBuffer(chunk_key, source_buffer, num_bytes);
 }
 
-void PersistentStorageMgr::getChunkMetadataVec(
-    std::vector<std::pair<ChunkKey, ChunkMetadata>>& chunk_metadata) {
+void PersistentStorageMgr::getChunkMetadataVec(ChunkMetadataVector& chunk_metadata) {
   global_file_mgr->getChunkMetadataVec(chunk_metadata);
   foreign_storage_mgr->getChunkMetadataVec(chunk_metadata);
 }
 
 void PersistentStorageMgr::getChunkMetadataVecForKeyPrefix(
-    std::vector<std::pair<ChunkKey, ChunkMetadata>>& chunk_metadata,
+    ChunkMetadataVector& chunk_metadata,
     const ChunkKey& keyPrefix) {
   if (isForeignStorage(keyPrefix)) {
     foreign_storage_mgr->getChunkMetadataVecForKeyPrefix(chunk_metadata, keyPrefix);

@@ -253,12 +253,12 @@ ForeignStorageBuffer* CsvDataWrapper::getChunkBuffer(const ChunkKey& chunk_key) 
 
 void CsvDataWrapper::populateMetadataForChunkKeyPrefix(
     const ChunkKey& chunk_key_prefix,
-    std::vector<std::pair<ChunkKey, ChunkMetadata>>& chunk_metadata_vector) {
+    ChunkMetadataVector& chunk_metadata_vector) {
   for (auto& [buffer_chunk_key, buffer] : chunk_buffer_map_) {
     if (buffer->has_encoder && prefixMatch(chunk_key_prefix, buffer_chunk_key)) {
-      ChunkMetadata metadata{};
-      buffer->encoder->getMetadata(metadata);
-      chunk_metadata_vector.emplace_back(buffer_chunk_key, metadata);
+      auto chunk_metadata = std::make_shared<ChunkMetadata>();
+      buffer->encoder->getMetadata(chunk_metadata);
+      chunk_metadata_vector.emplace_back(buffer_chunk_key, chunk_metadata);
     }
   }
 }

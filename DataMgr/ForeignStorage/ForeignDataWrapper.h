@@ -45,6 +45,6 @@ class ForeignDataWrapper {
    */
   virtual void populateMetadataForChunkKeyPrefix(
       const ChunkKey& chunk_key_prefix,
-      std::vector<std::pair<ChunkKey, ChunkMetadata>>& chunk_metadata_vector) = 0;
+      ChunkMetadataVector& chunk_metadata_vector) = 0;
 };
 }  // namespace foreign_storage

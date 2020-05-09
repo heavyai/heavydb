@@ -107,10 +107,9 @@ void GlobalFileMgr::deleteBuffersWithPrefix(const ChunkKey& keyPrefix, const boo
   }
 }
 
-void GlobalFileMgr::getChunkMetadataVec(
-    std::vector<std::pair<ChunkKey, ChunkMetadata>>& chunkMetadataVec) {
+void GlobalFileMgr::getChunkMetadataVec(ChunkMetadataVector& chunkMetadataVec) {
   mapd_shared_lock<mapd_shared_mutex> read_lock(fileMgrs_mutex_);
-  std::vector<std::pair<ChunkKey, ChunkMetadata>> chunkMetadataVecForFileMgr;
+  ChunkMetadataVector chunkMetadataVecForFileMgr;
   for (auto fileMgrsIt = allFileMgrs_.begin(); fileMgrsIt != allFileMgrs_.end();
        ++fileMgrsIt) {
     fileMgrsIt->second->getChunkMetadataVec(chunkMetadataVecForFileMgr);

@@ -56,7 +56,7 @@ struct UpdelRoll {
   std::map<MetaDataKey, size_t> numTuples;
 
   // new FragmentInfo.ChunkMetadata;
-  std::map<MetaDataKey, std::map<int, ChunkMetadata>> chunkMetadata;
+  std::map<MetaDataKey, ChunkMetadataMap> chunkMetadata;
 
   // on aggregater it's possible that updateColumn is never called but
   // commitUpdate is still called, so this nullptr is a protection

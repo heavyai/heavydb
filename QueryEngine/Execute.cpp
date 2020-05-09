@@ -3145,8 +3145,8 @@ std::pair<bool, int64_t> Executor::skipFragment(
       }
     } else {
       const auto& chunk_type = lhs_col->get_type_info();
-      chunk_min = extract_min_stat(chunk_meta_it->second.chunkStats, chunk_type);
-      chunk_max = extract_max_stat(chunk_meta_it->second.chunkStats, chunk_type);
+      chunk_min = extract_min_stat(chunk_meta_it->second->chunkStats, chunk_type);
+      chunk_max = extract_max_stat(chunk_meta_it->second->chunkStats, chunk_type);
     }
     if (lhs->get_type_info().is_timestamp() &&
         (lhs_col->get_type_info().get_dimension() !=

@@ -35,11 +35,11 @@ class FixedLengthEncoder : public Encoder {
       , dataMax(std::numeric_limits<T>::min())
       , has_nulls(false) {}
 
-  ChunkMetadata appendData(int8_t*& src_data,
-                           const size_t num_elems_to_append,
-                           const SQLTypeInfo& ti,
-                           const bool replicating = false,
-                           const int64_t offset = -1) override {
+  std::shared_ptr<ChunkMetadata> appendData(int8_t*& src_data,
+                                            const size_t num_elems_to_append,
+                                            const SQLTypeInfo& ti,
+                                            const bool replicating = false,
+                                            const int64_t offset = -1) override {
     T* unencoded_data = reinterpret_cast<T*>(src_data);
     auto encoded_data = std::make_unique<V[]>(num_elems_to_append);
     for (size_t i = 0; i < num_elems_to_append; ++i) {
@@ -78,20 +78,20 @@ class FixedLengthEncoder : public Encoder {
                      num_elems_to_append * sizeof(V),
                      static_cast<size_t>(offset));
     }
-    ChunkMetadata chunkMetadata;
-    getMetadata(chunkMetadata);
-    return chunkMetadata;
+    auto chunk_metadata = std::make_shared<ChunkMetadata>();
+    getMetadata(chunk_metadata);
+    return chunk_metadata;
   }
 
-  void getMetadata(ChunkMetadata& chunkMetadata) override {
+  void getMetadata(const std::shared_ptr<ChunkMetadata>& chunkMetadata) override {
     Encoder::getMetadata(chunkMetadata);  // call on parent class
-    chunkMetadata.fillChunkStats(dataMin, dataMax, has_nulls);
+    chunkMetadata->fillChunkStats(dataMin, dataMax, has_nulls);
   }
 
   // Only called from the executor for synthesized meta-information.
-  ChunkMetadata getMetadata(const SQLTypeInfo& ti) override {
-    ChunkMetadata chunk_metadata{ti, 0, 0, ChunkStats{}};
-    chunk_metadata.fillChunkStats(dataMin, dataMax, has_nulls);
+  std::shared_ptr<ChunkMetadata> getMetadata(const SQLTypeInfo& ti) override {
+    auto chunk_metadata = std::make_shared<ChunkMetadata>(ti, 0, 0, ChunkStats{});
+    chunk_metadata->fillChunkStats(dataMin, dataMax, has_nulls);
     return chunk_metadata;
   }
 

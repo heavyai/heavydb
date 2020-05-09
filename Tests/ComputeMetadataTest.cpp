@@ -63,7 +63,7 @@ ASSERT_METADATA(float, float)
 ASSERT_METADATA(double, double)
 
 template <typename T, typename... Args>
-void check_column_metadata_impl(const std::map<int, ChunkMetadata>& metadata_map,
+void check_column_metadata_impl(const ChunkMetadataMap& metadata_map,
                                 const int column_idx,  // -1 is $deleted
                                 const T min,
                                 const T max,
@@ -74,11 +74,11 @@ void check_column_metadata_impl(const std::map<int, ChunkMetadata>& metadata_map
   }
   CHECK(chunk_metadata_itr != metadata_map.end());
   const auto& chunk_metadata = chunk_metadata_itr->second;
-  assert_metadata<T>(chunk_metadata.chunkStats, min, max, has_nulls);
+  assert_metadata<T>(chunk_metadata->chunkStats, min, max, has_nulls);
 }
 
 template <typename T, typename... Args>
-void check_column_metadata_impl(const std::map<int, ChunkMetadata>& metadata_map,
+void check_column_metadata_impl(const ChunkMetadataMap& metadata_map,
                                 const int column_idx,  // -1 is $deleted
                                 const T min,
                                 const T max,
@@ -221,7 +221,7 @@ class MultiFragMetadataUpdate : public ::testing::Test {
 };
 
 TEST_F(MultiFragMetadataUpdate, NoChanges) {
-  std::vector<std::map<int, ChunkMetadata>> metadata_for_fragments;
+  std::vector<ChunkMetadataMap> metadata_for_fragments;
   {
     const auto cat = QR::get()->getCatalog();
     const auto td = cat->getMetadataForTable(g_table_name, /*populateFragmenter=*/true);

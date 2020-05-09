@@ -452,35 +452,35 @@ ExpressionRange getExpressionRange(const Analyzer::Constant* constant_expr) {
   return ExpressionRange::makeInvalidRange();
 }
 
-#define FIND_STAT_FRAG(stat_name)                                                   \
-  const auto stat_name##_frag_index = std::stat_name##_element(                     \
-      nonempty_fragment_indices.begin(),                                            \
-      nonempty_fragment_indices.end(),                                              \
-      [&fragments, &has_nulls, col_id, col_ti](const size_t lhs_idx,                \
-                                               const size_t rhs_idx) {              \
-        const auto& lhs = fragments[lhs_idx];                                       \
-        const auto& rhs = fragments[rhs_idx];                                       \
-        auto lhs_meta_it = lhs.getChunkMetadataMap().find(col_id);                  \
-        if (lhs_meta_it == lhs.getChunkMetadataMap().end()) {                       \
-          return false;                                                             \
-        }                                                                           \
-        auto rhs_meta_it = rhs.getChunkMetadataMap().find(col_id);                  \
-        CHECK(rhs_meta_it != rhs.getChunkMetadataMap().end());                      \
-        if (lhs_meta_it->second.chunkStats.has_nulls ||                             \
-            rhs_meta_it->second.chunkStats.has_nulls) {                             \
-          has_nulls = true;                                                         \
-        }                                                                           \
-        if (col_ti.is_fp()) {                                                       \
-          return extract_##stat_name##_stat_double(lhs_meta_it->second.chunkStats,  \
-                                                   col_ti) <                        \
-                 extract_##stat_name##_stat_double(rhs_meta_it->second.chunkStats,  \
-                                                   col_ti);                         \
-        }                                                                           \
-        return extract_##stat_name##_stat(lhs_meta_it->second.chunkStats, col_ti) < \
-               extract_##stat_name##_stat(rhs_meta_it->second.chunkStats, col_ti);  \
-      });                                                                           \
-  if (stat_name##_frag_index == nonempty_fragment_indices.end()) {                  \
-    return ExpressionRange::makeInvalidRange();                                     \
+#define FIND_STAT_FRAG(stat_name)                                                    \
+  const auto stat_name##_frag_index = std::stat_name##_element(                      \
+      nonempty_fragment_indices.begin(),                                             \
+      nonempty_fragment_indices.end(),                                               \
+      [&fragments, &has_nulls, col_id, col_ti](const size_t lhs_idx,                 \
+                                               const size_t rhs_idx) {               \
+        const auto& lhs = fragments[lhs_idx];                                        \
+        const auto& rhs = fragments[rhs_idx];                                        \
+        auto lhs_meta_it = lhs.getChunkMetadataMap().find(col_id);                   \
+        if (lhs_meta_it == lhs.getChunkMetadataMap().end()) {                        \
+          return false;                                                              \
+        }                                                                            \
+        auto rhs_meta_it = rhs.getChunkMetadataMap().find(col_id);                   \
+        CHECK(rhs_meta_it != rhs.getChunkMetadataMap().end());                       \
+        if (lhs_meta_it->second->chunkStats.has_nulls ||                             \
+            rhs_meta_it->second->chunkStats.has_nulls) {                             \
+          has_nulls = true;                                                          \
+        }                                                                            \
+        if (col_ti.is_fp()) {                                                        \
+          return extract_##stat_name##_stat_double(lhs_meta_it->second->chunkStats,  \
+                                                   col_ti) <                         \
+                 extract_##stat_name##_stat_double(rhs_meta_it->second->chunkStats,  \
+                                                   col_ti);                          \
+        }                                                                            \
+        return extract_##stat_name##_stat(lhs_meta_it->second->chunkStats, col_ti) < \
+               extract_##stat_name##_stat(rhs_meta_it->second->chunkStats, col_ti);  \
+      });                                                                            \
+  if (stat_name##_frag_index == nonempty_fragment_indices.end()) {                   \
+    return ExpressionRange::makeInvalidRange();                                      \
   }
 
 namespace {
@@ -600,21 +600,21 @@ ExpressionRange getLeafColumnRange(const Analyzer::ColumnVar* col_expr,
       for (const auto& fragment : fragments) {
         const auto it = fragment.getChunkMetadataMap().find(col_id);
         if (it != fragment.getChunkMetadataMap().end()) {
-          if (it->second.chunkStats.has_nulls) {
+          if (it->second->chunkStats.has_nulls) {
             has_nulls = true;
             break;
           }
         }
       }
       if (col_ti.is_fp()) {
-        const auto min_val = extract_min_stat_double(min_it->second.chunkStats, col_ti);
-        const auto max_val = extract_max_stat_double(max_it->second.chunkStats, col_ti);
+        const auto min_val = extract_min_stat_double(min_it->second->chunkStats, col_ti);
+        const auto max_val = extract_max_stat_double(max_it->second->chunkStats, col_ti);
         return col_ti.get_type() == kFLOAT
                    ? ExpressionRange::makeFloatRange(min_val, max_val, has_nulls)
                    : ExpressionRange::makeDoubleRange(min_val, max_val, has_nulls);
       }
-      const auto min_val = extract_min_stat(min_it->second.chunkStats, col_ti);
-      const auto max_val = extract_max_stat(max_it->second.chunkStats, col_ti);
+      const auto min_val = extract_min_stat(min_it->second->chunkStats, col_ti);
+      const auto max_val = extract_max_stat(max_it->second->chunkStats, col_ti);
       if (max_val < min_val) {
         // The column doesn't contain any non-null values, synthesize an empty range.
         CHECK_GT(min_val, 0);

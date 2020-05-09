@@ -2653,12 +2653,12 @@ const bool Catalog::checkMetadataForDeletedRecs(const TableDescriptor* td,
     return fragmenter->hasDeletedRows(delete_column_id);
   } else {
     ChunkKey chunk_key_prefix = {currentDB_.dbId, td->tableId, delete_column_id};
-    std::vector<std::pair<ChunkKey, ChunkMetadata>> chunk_metadata_vec;
+    ChunkMetadataVector chunk_metadata_vec;
     dataMgr_->getChunkMetadataVecForKeyPrefix(chunk_metadata_vec, chunk_key_prefix);
     int64_t chunk_max{0};
 
     for (auto chunk_metadata : chunk_metadata_vec) {
-      chunk_max = chunk_metadata.second.chunkStats.max.tinyintval;
+      chunk_max = chunk_metadata.second->chunkStats.max.tinyintval;
       // delete has occured
       if (chunk_max == 1) {
         return true;
@@ -3576,11 +3576,11 @@ void Catalog::vacuumDeletedRows(const TableDescriptor* td) const {
   }
   // vacuum chunks which show sign of deleted rows in metadata
   ChunkKey chunkKeyPrefix = {currentDB_.dbId, td->tableId, cd->columnId};
-  std::vector<std::pair<ChunkKey, ChunkMetadata>> chunkMetadataVec;
+  ChunkMetadataVector chunkMetadataVec;
   dataMgr_->getChunkMetadataVecForKeyPrefix(chunkMetadataVec, chunkKeyPrefix);
   for (auto cm : chunkMetadataVec) {
     // "delete has occured"
-    if (cm.second.chunkStats.max.tinyintval == 1) {
+    if (cm.second->chunkStats.max.tinyintval == 1) {
       UpdelRoll updel_roll;
       updel_roll.catalog = this;
       updel_roll.logicalTableId = getLogicalTableId(td->tableId);
@@ -3591,8 +3591,8 @@ void Catalog::vacuumDeletedRows(const TableDescriptor* td) const {
                                                    cm.first,
                                                    updel_roll.memoryLevel,
                                                    0,
-                                                   cm.second.numBytes,
-                                                   cm.second.numElements);
+                                                   cm.second->numBytes,
+                                                   cm.second->numElements);
       td->fragmenter->compactRows(this,
                                   td,
                                   cm.first[3],

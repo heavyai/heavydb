@@ -80,11 +80,9 @@ class AbstractBufferMgr {
   virtual AbstractBuffer* putBuffer(const ChunkKey& key,
                                     AbstractBuffer* srcBuffer,
                                     const size_t numBytes = 0) = 0;
-  virtual void getChunkMetadataVec(
-      std::vector<std::pair<ChunkKey, ChunkMetadata>>& chunkMetadata) = 0;
-  virtual void getChunkMetadataVecForKeyPrefix(
-      std::vector<std::pair<ChunkKey, ChunkMetadata>>& chunkMetadataVec,
-      const ChunkKey& keyPrefix) = 0;
+  virtual void getChunkMetadataVec(ChunkMetadataVector& chunkMetadata) = 0;
+  virtual void getChunkMetadataVecForKeyPrefix(ChunkMetadataVector& chunkMetadataVec,
+                                               const ChunkKey& keyPrefix) = 0;
 
   virtual bool isBufferOnDevice(const ChunkKey& key) = 0;
   virtual std::string printSlabs() = 0;

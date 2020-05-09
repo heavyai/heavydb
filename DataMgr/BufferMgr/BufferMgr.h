@@ -166,11 +166,9 @@ class BufferMgr : public AbstractBufferMgr {  // implements
 
   BufferList::iterator reserveBuffer(BufferList::iterator& seg_it,
                                      const size_t num_bytes);
-  void getChunkMetadataVec(
-      std::vector<std::pair<ChunkKey, ChunkMetadata>>& chunk_metadata_vec) override;
-  void getChunkMetadataVecForKeyPrefix(
-      std::vector<std::pair<ChunkKey, ChunkMetadata>>& chunk_metadata_vec,
-      const ChunkKey& key_prefix) override;
+  void getChunkMetadataVec(ChunkMetadataVector& chunk_metadata_vec) override;
+  void getChunkMetadataVecForKeyPrefix(ChunkMetadataVector& chunk_metadata_vec,
+                                       const ChunkKey& key_prefix) override;
 
  protected:
   std::vector<int8_t*> slabs_;  /// vector of beginning memory addresses for each

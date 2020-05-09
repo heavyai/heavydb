@@ -45,35 +45,34 @@ class StringNoneEncoder : public Encoder {
                                        const size_t byteLimit,
                                        const bool replicating = false);
 
-  ChunkMetadata appendData(int8_t*& src_data,
-                           const size_t num_elems_to_append,
-                           const SQLTypeInfo& ti,
-                           const bool replicating = false,
-                           const int64_t offset = -1) override {
-    CHECK(false);  // should never be called for strings
-    return ChunkMetadata{};
+  std::shared_ptr<ChunkMetadata> appendData(int8_t*& src_data,
+                                            const size_t num_elems_to_append,
+                                            const SQLTypeInfo& ti,
+                                            const bool replicating = false,
+                                            const int64_t offset = -1) override {
+    UNREACHABLE();  // should never be called for strings
+    return nullptr;
   }
 
-  ChunkMetadata appendData(const std::vector<std::string>* srcData,
-                           const int start_idx,
-                           const size_t numAppendElems,
-                           const bool replicating = false);
+  std::shared_ptr<ChunkMetadata> appendData(const std::vector<std::string>* srcData,
+                                            const int start_idx,
+                                            const size_t numAppendElems,
+                                            const bool replicating = false);
 
-  void getMetadata(ChunkMetadata& chunkMetadata) override {
+  void getMetadata(const std::shared_ptr<ChunkMetadata>& chunkMetadata) override {
     Encoder::getMetadata(chunkMetadata);  // call on parent class
-    chunkMetadata.chunkStats.min.stringval = nullptr;
-    chunkMetadata.chunkStats.max.stringval = nullptr;
-    chunkMetadata.chunkStats.has_nulls = has_nulls;
+    chunkMetadata->chunkStats.min.stringval = nullptr;
+    chunkMetadata->chunkStats.max.stringval = nullptr;
+    chunkMetadata->chunkStats.has_nulls = has_nulls;
   }
 
   // Only called from the executor for synthesized meta-information.
-  ChunkMetadata getMetadata(const SQLTypeInfo& ti) override {
+  std::shared_ptr<ChunkMetadata> getMetadata(const SQLTypeInfo& ti) override {
     auto chunk_stats = ChunkStats{};
     chunk_stats.min.stringval = nullptr;
     chunk_stats.max.stringval = nullptr;
     chunk_stats.has_nulls = has_nulls;
-    ChunkMetadata chunk_metadata{ti, 0, 0, chunk_stats};
-    return chunk_metadata;
+    return std::make_shared<ChunkMetadata>(ti, 0, 0, chunk_stats);
   }
 
   void updateStats(const int64_t, const bool) override { CHECK(false); }

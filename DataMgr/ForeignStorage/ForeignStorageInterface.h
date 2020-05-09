@@ -128,9 +128,8 @@ class ForeignStorageBufferMgr : public Data_Namespace::AbstractBufferMgr {
                    Data_Namespace::AbstractBuffer* destBuffer,
                    const size_t numBytes = 0) override;
 
-  void getChunkMetadataVecForKeyPrefix(
-      std::vector<std::pair<ChunkKey, ChunkMetadata>>& chunkMetadataVec,
-      const ChunkKey& keyPrefix) override;
+  void getChunkMetadataVecForKeyPrefix(ChunkMetadataVector& chunkMetadataVec,
+                                       const ChunkKey& keyPrefix) override;
   std::string getStringMgrType() override { return ToString(FILE_MGR); }
 
   size_t getNumChunks() override {
@@ -154,10 +153,7 @@ class ForeignStorageBufferMgr : public Data_Namespace::AbstractBufferMgr {
     return nullptr;
   }
 
-  void getChunkMetadataVec(
-      std::vector<std::pair<ChunkKey, ChunkMetadata>>& chunkMetadata) override {
-    CHECK(false);
-  }
+  void getChunkMetadataVec(ChunkMetadataVector& chunkMetadata) override { CHECK(false); }
 
   bool isBufferOnDevice(const ChunkKey& key) override {
     CHECK(false);

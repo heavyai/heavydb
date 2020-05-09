@@ -82,25 +82,22 @@ class FragmentInfo {
       , shadowNumTuples(0)
       , physicalTableId(-1)
       , shard(-1)
-      , mutex_access_inmem_states(new std::mutex)
       , resultSet(nullptr)
       , numTuples(0)
       , synthesizedNumTuplesIsValid(false)
       , synthesizedMetadataIsValid(false) {}
 
-  void setChunkMetadataMap(const std::map<int, ChunkMetadata>& chunkMetadataMap) {
-    this->chunkMetadataMap = chunkMetadataMap;
+  void setChunkMetadataMap(const ChunkMetadataMap& chunk_metadata_map) {
+    this->chunkMetadataMap = chunk_metadata_map;
   }
 
-  void setChunkMetadata(const int col, const ChunkMetadata& chunkMetadata) {
+  void setChunkMetadata(const int col, std::shared_ptr<ChunkMetadata> chunkMetadata) {
     chunkMetadataMap[col] = chunkMetadata;
   }
 
-  const std::map<int, ChunkMetadata>& getChunkMetadataMap() const;
+  const ChunkMetadataMap& getChunkMetadataMap() const;
 
-  const std::map<int, ChunkMetadata>& getChunkMetadataMapPhysical() const {
-    return chunkMetadataMap;
-  }
+  const ChunkMetadataMap& getChunkMetadataMapPhysical() const { return chunkMetadataMap; }
 
   size_t getNumTuples() const;
 
@@ -123,19 +120,17 @@ class FragmentInfo {
   std::vector<int> deviceIds;
   int physicalTableId;
   int shard;
-  std::map<int, ChunkMetadata> shadowChunkMetadataMap;
-  mutable std::shared_ptr<std::mutex> mutex_access_inmem_states;
+  ChunkMetadataMap shadowChunkMetadataMap;
   mutable ResultSet* resultSet;
   mutable std::shared_ptr<std::mutex> resultSetMutex;
 
  private:
   mutable size_t numTuples;
-  mutable std::map<int, ChunkMetadata> chunkMetadataMap;
+  mutable ChunkMetadataMap chunkMetadataMap;
   mutable bool synthesizedNumTuplesIsValid;
   mutable bool synthesizedMetadataIsValid;
 
   friend class InsertOrderFragmenter;
-  mutable std::shared_ptr<std::mutex> updateMutex_{new std::mutex};
   static bool unconditionalVacuum_;
 };
 

@@ -402,16 +402,14 @@ bool DataMgr::isBufferOnDevice(const ChunkKey& key,
   return bufferMgrs_[memLevel][deviceId]->isBufferOnDevice(key);
 }
 
-void DataMgr::getChunkMetadataVec(
-    std::vector<std::pair<ChunkKey, ChunkMetadata>>& chunkMetadataVec) {
+void DataMgr::getChunkMetadataVec(ChunkMetadataVector& chunkMetadataVec) {
   // Can we always assume this will just be at the disklevel bc we just
   // started?
   bufferMgrs_[0][0]->getChunkMetadataVec(chunkMetadataVec);
 }
 
-void DataMgr::getChunkMetadataVecForKeyPrefix(
-    std::vector<std::pair<ChunkKey, ChunkMetadata>>& chunkMetadataVec,
-    const ChunkKey& keyPrefix) {
+void DataMgr::getChunkMetadataVecForKeyPrefix(ChunkMetadataVector& chunkMetadataVec,
+                                              const ChunkKey& keyPrefix) {
   bufferMgrs_[0][0]->getChunkMetadataVecForKeyPrefix(chunkMetadataVec, keyPrefix);
 }
 

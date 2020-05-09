@@ -136,11 +136,9 @@ class DataMgr {
   const std::map<ChunkKey, File_Namespace::FileBuffer*>& getChunkMap();
   void checkpoint(const int db_id,
                   const int tb_id);  // checkpoint for individual table of DB
-  void getChunkMetadataVec(
-      std::vector<std::pair<ChunkKey, ChunkMetadata>>& chunkMetadataVec);
-  void getChunkMetadataVecForKeyPrefix(
-      std::vector<std::pair<ChunkKey, ChunkMetadata>>& chunkMetadataVec,
-      const ChunkKey& keyPrefix);
+  void getChunkMetadataVec(ChunkMetadataVector& chunkMetadataVec);
+  void getChunkMetadataVecForKeyPrefix(ChunkMetadataVector& chunkMetadataVec,
+                                       const ChunkKey& keyPrefix);
   inline bool gpusPresent() { return hasGpus_; }
   void removeTableRelatedDS(const int db_id, const int tb_id);
   void setTableEpoch(const int db_id, const int tb_id, const int start_epoch);

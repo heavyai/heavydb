@@ -45,7 +45,7 @@ using namespace Fragmenter_Namespace;
 using namespace Chunk_NS;
 using namespace Data_Namespace;
 
-void scan_chunk(const ChunkMetadata& chunk_metadata,
+void scan_chunk(const std::shared_ptr<ChunkMetadata>& chunk_metadata,
                 const Chunk& chunk,
                 size_t& hash,
                 bool use_iter) {
@@ -119,7 +119,7 @@ vector<size_t> scan_table_return_hash(const string& table_name, const Catalog& c
       auto chunk_meta_it = frag.getChunkMetadataMapPhysical().find(cd->columnId);
       ChunkKey chunk_key{
           cat.getCurrentDB().dbId, td->tableId, cd->columnId, frag.fragmentId};
-      total_bytes += chunk_meta_it->second.numBytes;
+      total_bytes += chunk_meta_it->second->numBytes;
       auto ms = measure<>::execution([&]() {
         std::shared_ptr<Chunk> chunkp =
             Chunk::getChunk(cd,
@@ -127,8 +127,8 @@ vector<size_t> scan_table_return_hash(const string& table_name, const Catalog& c
                             chunk_key,
                             CPU_LEVEL,
                             frag.deviceIds[static_cast<int>(CPU_LEVEL)],
-                            chunk_meta_it->second.numBytes,
-                            chunk_meta_it->second.numElements);
+                            chunk_meta_it->second->numBytes,
+                            chunk_meta_it->second->numElements);
         scan_chunk(chunk_meta_it->second, *chunkp, col_hashs[i], true);
         // call Chunk destructor here
       });
@@ -157,7 +157,7 @@ vector<size_t> scan_table_return_hash_non_iter(const string& table_name,
       auto chunk_meta_it = frag.getChunkMetadataMapPhysical().find(cd->columnId);
       ChunkKey chunk_key{
           cat.getCurrentDB().dbId, td->tableId, cd->columnId, frag.fragmentId};
-      total_bytes += chunk_meta_it->second.numBytes;
+      total_bytes += chunk_meta_it->second->numBytes;
       auto ms = measure<>::execution([&]() {
         std::shared_ptr<Chunk> chunkp =
             Chunk::getChunk(cd,
@@ -165,8 +165,8 @@ vector<size_t> scan_table_return_hash_non_iter(const string& table_name,
                             chunk_key,
                             CPU_LEVEL,
                             frag.deviceIds[static_cast<int>(CPU_LEVEL)],
-                            chunk_meta_it->second.numBytes,
-                            chunk_meta_it->second.numElements);
+                            chunk_meta_it->second->numBytes,
+                            chunk_meta_it->second->numElements);
         scan_chunk(chunk_meta_it->second, *chunkp, col_hashs[i], false);
         // call Chunk destructor here
       });

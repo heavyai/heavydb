@@ -117,7 +117,7 @@ auto get_metadata_vec =
   ChunkKey timestamp_ck{
       cat->getCurrentDB().dbId, table_desc->tableId, column_desc->columnId};
 
-  std::vector<std::pair<ChunkKey, ChunkMetadata>> chunkMetadataVec;
+  ChunkMetadataVector chunkMetadataVec;
   data_manager.getChunkMetadataVecForKeyPrefix(chunkMetadataVec, timestamp_ck);
 
   return chunkMetadataVec;
@@ -137,8 +137,8 @@ TEST_F(MetadataUpdate, MetadataTimestampNull) {
     ASSERT_EQ(pre_metadata.size(), 1U);
     auto pre_metadata_chunk = pre_metadata[0].second;
 
-    ASSERT_EQ(pre_metadata_chunk.numElements, 2U);
-    ASSERT_EQ(pre_metadata_chunk.chunkStats.has_nulls, false);
+    ASSERT_EQ(pre_metadata_chunk->numElements, 2U);
+    ASSERT_EQ(pre_metadata_chunk->chunkStats.has_nulls, false);
 
     query("update timestamp_null_table set x = NULL where x < '2000-01-01 00:00:00';");
 
@@ -147,11 +147,11 @@ TEST_F(MetadataUpdate, MetadataTimestampNull) {
     auto post_metadata_chunk = post_metadata[0].second;
 
     // Check that a null update doesn't change the before and after min-max
-    ASSERT_EQ(pre_metadata_chunk.chunkStats.min.bigintval,
-              post_metadata_chunk.chunkStats.min.bigintval);
-    ASSERT_EQ(post_metadata_chunk.chunkStats.max.bigintval,
-              post_metadata_chunk.chunkStats.max.bigintval);
-    ASSERT_EQ(post_metadata_chunk.chunkStats.has_nulls, true);
+    ASSERT_EQ(pre_metadata_chunk->chunkStats.min.bigintval,
+              post_metadata_chunk->chunkStats.min.bigintval);
+    ASSERT_EQ(post_metadata_chunk->chunkStats.max.bigintval,
+              post_metadata_chunk->chunkStats.max.bigintval);
+    ASSERT_EQ(post_metadata_chunk->chunkStats.has_nulls, true);
 
     query("update timestamp_null_table set x='1000-01-01 00:00:00' where x is NULL;");
     post_metadata = get_metadata_vec("timestamp_null_table");
@@ -163,9 +163,9 @@ TEST_F(MetadataUpdate, MetadataTimestampNull) {
     // the integer value corresponding to the minimum timestamp
     //
     // Addendum:  There is no range checking on timestamps, however.
-    auto timestamp_minval = post_metadata_chunk.chunkStats.min.bigintval;
+    auto timestamp_minval = post_metadata_chunk->chunkStats.min.bigintval;
     ASSERT_EQ(timestamp_minval, -30610224000);
-    ASSERT_EQ(post_metadata_chunk.chunkStats.has_nulls, true);
+    ASSERT_EQ(post_metadata_chunk->chunkStats.has_nulls, true);
 
     // Set the max, then verify that the min/max are the max possible for timestamp ranges
     // and also verify that the has null is still true
@@ -176,13 +176,13 @@ TEST_F(MetadataUpdate, MetadataTimestampNull) {
     ASSERT_EQ(post_metadata.size(), 1U);
     post_metadata_chunk = post_metadata[0].second;
 
-    ASSERT_EQ(post_metadata_chunk.chunkStats.max.bigintval, 29379542399);
-    ASSERT_EQ(post_metadata_chunk.chunkStats.min.bigintval, -30610224000);
-    ASSERT_EQ(post_metadata_chunk.chunkStats.has_nulls, true);
-    ASSERT_GT(post_metadata_chunk.chunkStats.max.bigintval,
-              pre_metadata_chunk.chunkStats.max.bigintval);
-    ASSERT_LT(post_metadata_chunk.chunkStats.min.bigintval,
-              pre_metadata_chunk.chunkStats.min.bigintval);
+    ASSERT_EQ(post_metadata_chunk->chunkStats.max.bigintval, 29379542399);
+    ASSERT_EQ(post_metadata_chunk->chunkStats.min.bigintval, -30610224000);
+    ASSERT_EQ(post_metadata_chunk->chunkStats.has_nulls, true);
+    ASSERT_GT(post_metadata_chunk->chunkStats.max.bigintval,
+              pre_metadata_chunk->chunkStats.max.bigintval);
+    ASSERT_LT(post_metadata_chunk->chunkStats.min.bigintval,
+              pre_metadata_chunk->chunkStats.min.bigintval);
   });
 }
 
@@ -195,8 +195,8 @@ TEST_F(MetadataUpdate, MetadataTimestampNotNull) {
     ASSERT_EQ(pre_metadata.size(), 1U);
     auto pre_metadata_chunk = pre_metadata[0].second;
 
-    ASSERT_EQ(pre_metadata_chunk.numElements, 2U);
-    ASSERT_EQ(pre_metadata_chunk.chunkStats.has_nulls, false);
+    ASSERT_EQ(pre_metadata_chunk->numElements, 2U);
+    ASSERT_EQ(pre_metadata_chunk->chunkStats.has_nulls, false);
 
     // Should throw
     EXPECT_THROW(query("update timestamp_not_null_table set x = NULL where x < "
@@ -216,7 +216,7 @@ TEST_F(MetadataUpdate, MetadataTimestampNotNull) {
     auto post_metadata_chunk = post_metadata[0].second;
 
     // This should never flip to true if it's a not-null table
-    ASSERT_EQ(post_metadata_chunk.chunkStats.has_nulls, false);
+    ASSERT_EQ(post_metadata_chunk->chunkStats.has_nulls, false);
 
     query(
         "update timestamp_not_null_table set x=cast('-9223372036854775807' as timestamp) "
@@ -232,9 +232,9 @@ TEST_F(MetadataUpdate, MetadataTimestampNotNull) {
     // Because there is no range checking, we have to just check
     // that this unwieldy value ended up making it to the minval anyway
     int64_t post_timestamp_minval =
-        static_cast<int64_t>(post_metadata_chunk.chunkStats.min.bigintval);
+        static_cast<int64_t>(post_metadata_chunk->chunkStats.min.bigintval);
     int64_t post_timestamp_maxval =
-        static_cast<int64_t>(post_metadata_chunk.chunkStats.max.bigintval);
+        static_cast<int64_t>(post_metadata_chunk->chunkStats.max.bigintval);
     ASSERT_EQ(post_timestamp_minval, -9223372036854775807);
     ASSERT_EQ(post_timestamp_maxval, 29379542399);
 
@@ -246,7 +246,7 @@ TEST_F(MetadataUpdate, MetadataTimestampNotNull) {
     ASSERT_EQ(post_metadata.size(), 1U);
     post_metadata_chunk = post_metadata[0].second;
     post_timestamp_maxval =
-        static_cast<int64_t>(post_metadata_chunk.chunkStats.max.bigintval);
+        static_cast<int64_t>(post_metadata_chunk->chunkStats.max.bigintval);
 
     ASSERT_EQ(post_timestamp_maxval, 9223372036854775807);
   });
@@ -261,8 +261,8 @@ TEST_F(MetadataUpdate, MetadataTimeNull) {
     ASSERT_EQ(pre_metadata.size(), 1U);
     auto pre_metadata_chunk = pre_metadata[0].second;
 
-    ASSERT_EQ(pre_metadata_chunk.numElements, 2U);
-    ASSERT_EQ(pre_metadata_chunk.chunkStats.has_nulls, false);
+    ASSERT_EQ(pre_metadata_chunk->numElements, 2U);
+    ASSERT_EQ(pre_metadata_chunk->chunkStats.has_nulls, false);
 
     query("update time_null_table set x = NULL where x < '12:00:00';");
 
@@ -271,20 +271,20 @@ TEST_F(MetadataUpdate, MetadataTimeNull) {
     auto post_metadata_chunk = post_metadata[0].second;
 
     // Check that a null update doesn't change the before and after min-max
-    ASSERT_EQ(pre_metadata_chunk.chunkStats.min.bigintval,
-              post_metadata_chunk.chunkStats.min.bigintval);
-    ASSERT_EQ(post_metadata_chunk.chunkStats.max.bigintval,
-              post_metadata_chunk.chunkStats.max.bigintval);
-    ASSERT_EQ(post_metadata_chunk.chunkStats.has_nulls, true);
+    ASSERT_EQ(pre_metadata_chunk->chunkStats.min.bigintval,
+              post_metadata_chunk->chunkStats.min.bigintval);
+    ASSERT_EQ(post_metadata_chunk->chunkStats.max.bigintval,
+              post_metadata_chunk->chunkStats.max.bigintval);
+    ASSERT_EQ(post_metadata_chunk->chunkStats.has_nulls, true);
 
     query("update time_null_table set x='00:00:00' where x is NULL;");
     post_metadata = get_metadata_vec("time_null_table");
     ASSERT_EQ(post_metadata.size(), 1U);
     post_metadata_chunk = post_metadata[0].second;
 
-    auto time_minval = post_metadata_chunk.chunkStats.min.bigintval;
+    auto time_minval = post_metadata_chunk->chunkStats.min.bigintval;
     ASSERT_EQ(time_minval, 0);
-    ASSERT_EQ(post_metadata_chunk.chunkStats.has_nulls, true);
+    ASSERT_EQ(post_metadata_chunk->chunkStats.has_nulls, true);
 
     // Set the max, then verify that the min/max are the max possible for time ranges
     // and also verify that the has null is still true
@@ -293,13 +293,13 @@ TEST_F(MetadataUpdate, MetadataTimeNull) {
     ASSERT_EQ(post_metadata.size(), 1U);
     post_metadata_chunk = post_metadata[0].second;
 
-    ASSERT_EQ(post_metadata_chunk.chunkStats.max.bigintval, 86399);
-    ASSERT_EQ(post_metadata_chunk.chunkStats.min.bigintval, 0);
-    ASSERT_EQ(post_metadata_chunk.chunkStats.has_nulls, true);
-    ASSERT_GT(post_metadata_chunk.chunkStats.max.bigintval,
-              pre_metadata_chunk.chunkStats.max.bigintval);
-    ASSERT_LT(post_metadata_chunk.chunkStats.min.bigintval,
-              pre_metadata_chunk.chunkStats.min.bigintval);
+    ASSERT_EQ(post_metadata_chunk->chunkStats.max.bigintval, 86399);
+    ASSERT_EQ(post_metadata_chunk->chunkStats.min.bigintval, 0);
+    ASSERT_EQ(post_metadata_chunk->chunkStats.has_nulls, true);
+    ASSERT_GT(post_metadata_chunk->chunkStats.max.bigintval,
+              pre_metadata_chunk->chunkStats.max.bigintval);
+    ASSERT_LT(post_metadata_chunk->chunkStats.min.bigintval,
+              pre_metadata_chunk->chunkStats.min.bigintval);
 
     EXPECT_THROW(query("update time_null_table set x=cast('-9223372036854775807' as "
                        "time) where x = '00:00:00';"),
@@ -319,8 +319,8 @@ TEST_F(MetadataUpdate, MetadataTimeNotNull) {
     ASSERT_EQ(pre_metadata.size(), 1U);
     auto pre_metadata_chunk = pre_metadata[0].second;
 
-    ASSERT_EQ(pre_metadata_chunk.numElements, 2U);
-    ASSERT_EQ(pre_metadata_chunk.chunkStats.has_nulls, false);
+    ASSERT_EQ(pre_metadata_chunk->numElements, 2U);
+    ASSERT_EQ(pre_metadata_chunk->chunkStats.has_nulls, false);
 
     // Should throw
     EXPECT_THROW(query("update time_not_null_table set x = NULL where x < "
@@ -335,7 +335,7 @@ TEST_F(MetadataUpdate, MetadataTimeNotNull) {
     auto post_metadata_chunk = post_metadata[0].second;
 
     // This should never flip to true if it's a not-null table
-    ASSERT_EQ(post_metadata_chunk.chunkStats.has_nulls, false);
+    ASSERT_EQ(post_metadata_chunk->chunkStats.has_nulls, false);
 
     EXPECT_THROW(query("update time_not_null_table set x=cast('-9223372036854775807' as "
                        "time) where x < '12:00:00';"),
@@ -351,13 +351,13 @@ TEST_F(MetadataUpdate, MetadataTimeNotNull) {
     ASSERT_EQ(post_metadata.size(), 1U);
     post_metadata_chunk = post_metadata[0].second;
 
-    ASSERT_EQ(post_metadata_chunk.chunkStats.max.bigintval, 86399);
-    ASSERT_EQ(post_metadata_chunk.chunkStats.min.bigintval, 0);
-    ASSERT_EQ(post_metadata_chunk.chunkStats.has_nulls, false);
-    ASSERT_GT(post_metadata_chunk.chunkStats.max.bigintval,
-              pre_metadata_chunk.chunkStats.max.bigintval);
-    ASSERT_LT(post_metadata_chunk.chunkStats.min.bigintval,
-              pre_metadata_chunk.chunkStats.min.bigintval);
+    ASSERT_EQ(post_metadata_chunk->chunkStats.max.bigintval, 86399);
+    ASSERT_EQ(post_metadata_chunk->chunkStats.min.bigintval, 0);
+    ASSERT_EQ(post_metadata_chunk->chunkStats.has_nulls, false);
+    ASSERT_GT(post_metadata_chunk->chunkStats.max.bigintval,
+              pre_metadata_chunk->chunkStats.max.bigintval);
+    ASSERT_LT(post_metadata_chunk->chunkStats.min.bigintval,
+              pre_metadata_chunk->chunkStats.min.bigintval);
   });
 }
 
@@ -370,8 +370,8 @@ TEST_F(MetadataUpdate, MetadataDateNull) {
     ASSERT_EQ(pre_metadata.size(), 1U);
     auto pre_metadata_chunk = pre_metadata[0].second;
 
-    ASSERT_EQ(pre_metadata_chunk.numElements, 2U);
-    ASSERT_EQ(pre_metadata_chunk.chunkStats.has_nulls, false);
+    ASSERT_EQ(pre_metadata_chunk->numElements, 2U);
+    ASSERT_EQ(pre_metadata_chunk->chunkStats.has_nulls, false);
 
     query("update date_null_table set x = NULL where x < '1950-01-01'");
 
@@ -380,33 +380,33 @@ TEST_F(MetadataUpdate, MetadataDateNull) {
     auto post_metadata_chunk = post_metadata[0].second;
 
     // Check that a null update doesn't change the before and after min-max
-    ASSERT_EQ(pre_metadata_chunk.chunkStats.min.bigintval,
-              post_metadata_chunk.chunkStats.min.bigintval);
-    ASSERT_EQ(post_metadata_chunk.chunkStats.max.bigintval,
-              post_metadata_chunk.chunkStats.max.bigintval);
-    ASSERT_EQ(post_metadata_chunk.chunkStats.has_nulls, true);
+    ASSERT_EQ(pre_metadata_chunk->chunkStats.min.bigintval,
+              post_metadata_chunk->chunkStats.min.bigintval);
+    ASSERT_EQ(post_metadata_chunk->chunkStats.max.bigintval,
+              post_metadata_chunk->chunkStats.max.bigintval);
+    ASSERT_EQ(post_metadata_chunk->chunkStats.has_nulls, true);
 
     query("update date_null_table set x='-185542587187199' where x is NULL;");
     post_metadata = get_metadata_vec("date_null_table");
     ASSERT_EQ(post_metadata.size(), 1U);
     post_metadata_chunk = post_metadata[0].second;
 
-    auto date_minval = post_metadata_chunk.chunkStats.min.bigintval;
+    auto date_minval = post_metadata_chunk->chunkStats.min.bigintval;
     EXPECT_EQ(date_minval, -185542587187200);
-    ASSERT_EQ(post_metadata_chunk.chunkStats.has_nulls, true);
+    ASSERT_EQ(post_metadata_chunk->chunkStats.has_nulls, true);
 
     query("update date_null_table set x='185542587187199' where x>'1950-01-01';");
     post_metadata = get_metadata_vec("date_null_table");
     ASSERT_EQ(post_metadata.size(), 1U);
     post_metadata_chunk = post_metadata[0].second;
 
-    EXPECT_EQ(post_metadata_chunk.chunkStats.max.bigintval, 185542587100800);
-    EXPECT_EQ(post_metadata_chunk.chunkStats.min.bigintval, -185542587187200);
-    ASSERT_EQ(post_metadata_chunk.chunkStats.has_nulls, true);
-    ASSERT_GT(post_metadata_chunk.chunkStats.max.bigintval,
-              pre_metadata_chunk.chunkStats.max.bigintval);
-    ASSERT_LT(post_metadata_chunk.chunkStats.min.bigintval,
-              pre_metadata_chunk.chunkStats.min.bigintval);
+    EXPECT_EQ(post_metadata_chunk->chunkStats.max.bigintval, 185542587100800);
+    EXPECT_EQ(post_metadata_chunk->chunkStats.min.bigintval, -185542587187200);
+    ASSERT_EQ(post_metadata_chunk->chunkStats.has_nulls, true);
+    ASSERT_GT(post_metadata_chunk->chunkStats.max.bigintval,
+              pre_metadata_chunk->chunkStats.max.bigintval);
+    ASSERT_LT(post_metadata_chunk->chunkStats.min.bigintval,
+              pre_metadata_chunk->chunkStats.min.bigintval);
   });
 }
 
@@ -419,8 +419,8 @@ TEST_F(MetadataUpdate, MetadataDecimalNull) {
     ASSERT_EQ(pre_metadata.size(), 1U);
     auto pre_metadata_chunk = pre_metadata[0].second;
 
-    ASSERT_EQ(pre_metadata_chunk.numElements, 2U);
-    ASSERT_EQ(pre_metadata_chunk.chunkStats.has_nulls, false);
+    ASSERT_EQ(pre_metadata_chunk->numElements, 2U);
+    ASSERT_EQ(pre_metadata_chunk->chunkStats.has_nulls, false);
 
     query("update decimal_null_table set x = NULL where x < 15;");
 
@@ -428,22 +428,22 @@ TEST_F(MetadataUpdate, MetadataDecimalNull) {
     ASSERT_EQ(post_metadata.size(), 1U);
     auto post_metadata_chunk = post_metadata[0].second;
 
-    ASSERT_EQ(pre_metadata_chunk.chunkStats.min.bigintval,
-              post_metadata_chunk.chunkStats.min.bigintval);
-    ASSERT_EQ(post_metadata_chunk.chunkStats.max.bigintval,
-              post_metadata_chunk.chunkStats.max.bigintval);
-    ASSERT_EQ(post_metadata_chunk.chunkStats.has_nulls, true);
+    ASSERT_EQ(pre_metadata_chunk->chunkStats.min.bigintval,
+              post_metadata_chunk->chunkStats.min.bigintval);
+    ASSERT_EQ(post_metadata_chunk->chunkStats.max.bigintval,
+              post_metadata_chunk->chunkStats.max.bigintval);
+    ASSERT_EQ(post_metadata_chunk->chunkStats.has_nulls, true);
 
     EXPECT_THROW(query("update decimal_null_table set x = -922337203685477580.7;"),
                  std::runtime_error);
     EXPECT_THROW(query("update decimal_null_table set x = 922337203685477580.7;"),
                  std::runtime_error);
 
-    ASSERT_EQ(pre_metadata_chunk.chunkStats.min.bigintval,
-              post_metadata_chunk.chunkStats.min.bigintval);
-    ASSERT_EQ(post_metadata_chunk.chunkStats.max.bigintval,
-              post_metadata_chunk.chunkStats.max.bigintval);
-    ASSERT_EQ(post_metadata_chunk.chunkStats.has_nulls, true);
+    ASSERT_EQ(pre_metadata_chunk->chunkStats.min.bigintval,
+              post_metadata_chunk->chunkStats.min.bigintval);
+    ASSERT_EQ(post_metadata_chunk->chunkStats.max.bigintval,
+              post_metadata_chunk->chunkStats.max.bigintval);
+    ASSERT_EQ(post_metadata_chunk->chunkStats.has_nulls, true);
 
     query("update decimal_null_table set x = 10.0 where x is NULL;");
     query("update decimal_null_table set x = 20.2 where x > 15;");
@@ -452,9 +452,9 @@ TEST_F(MetadataUpdate, MetadataDecimalNull) {
     ASSERT_EQ(post_metadata.size(), 1U);
     post_metadata_chunk = post_metadata[0].second;
 
-    ASSERT_EQ(post_metadata_chunk.chunkStats.min.bigintval, 100);
-    ASSERT_EQ(post_metadata_chunk.chunkStats.max.bigintval, 202);
-    ASSERT_EQ(post_metadata_chunk.chunkStats.has_nulls, true);
+    ASSERT_EQ(post_metadata_chunk->chunkStats.min.bigintval, 100);
+    ASSERT_EQ(post_metadata_chunk->chunkStats.max.bigintval, 202);
+    ASSERT_EQ(post_metadata_chunk->chunkStats.has_nulls, true);
   });
 }
 
@@ -467,8 +467,8 @@ TEST_F(MetadataUpdate, MetadataDecimalNotNull) {
     ASSERT_EQ(pre_metadata.size(), 1U);
     auto pre_metadata_chunk = pre_metadata[0].second;
 
-    ASSERT_EQ(pre_metadata_chunk.numElements, 2U);
-    ASSERT_EQ(pre_metadata_chunk.chunkStats.has_nulls, false);
+    ASSERT_EQ(pre_metadata_chunk->numElements, 2U);
+    ASSERT_EQ(pre_metadata_chunk->chunkStats.has_nulls, false);
 
     EXPECT_THROW(query("update decimal_not_null_table set x = NULL where x < 15;"),
                  std::runtime_error);
@@ -477,11 +477,11 @@ TEST_F(MetadataUpdate, MetadataDecimalNotNull) {
     ASSERT_EQ(post_metadata.size(), 1U);
     auto post_metadata_chunk = post_metadata[0].second;
 
-    ASSERT_EQ(pre_metadata_chunk.chunkStats.min.bigintval,
-              post_metadata_chunk.chunkStats.min.bigintval);
-    ASSERT_EQ(post_metadata_chunk.chunkStats.max.bigintval,
-              post_metadata_chunk.chunkStats.max.bigintval);
-    ASSERT_EQ(post_metadata_chunk.chunkStats.has_nulls, false);
+    ASSERT_EQ(pre_metadata_chunk->chunkStats.min.bigintval,
+              post_metadata_chunk->chunkStats.min.bigintval);
+    ASSERT_EQ(post_metadata_chunk->chunkStats.max.bigintval,
+              post_metadata_chunk->chunkStats.max.bigintval);
+    ASSERT_EQ(post_metadata_chunk->chunkStats.has_nulls, false);
 
     EXPECT_THROW(query("update decimal_not_null_table set x = -922337203685477580.7;"),
                  std::runtime_error);
@@ -495,9 +495,9 @@ TEST_F(MetadataUpdate, MetadataDecimalNotNull) {
     ASSERT_EQ(post_metadata.size(), 1U);
     post_metadata_chunk = post_metadata[0].second;
 
-    ASSERT_EQ(post_metadata_chunk.chunkStats.min.bigintval, 100);
-    ASSERT_EQ(post_metadata_chunk.chunkStats.max.bigintval, 202);
-    ASSERT_EQ(post_metadata_chunk.chunkStats.has_nulls, false);
+    ASSERT_EQ(post_metadata_chunk->chunkStats.min.bigintval, 100);
+    ASSERT_EQ(post_metadata_chunk->chunkStats.max.bigintval, 202);
+    ASSERT_EQ(post_metadata_chunk->chunkStats.has_nulls, false);
   });
 }
 
@@ -510,8 +510,8 @@ TEST_F(MetadataUpdate, MetadataIntegerNull) {
     ASSERT_EQ(pre_metadata.size(), 1U);
     auto pre_metadata_chunk = pre_metadata[0].second;
 
-    ASSERT_EQ(pre_metadata_chunk.numElements, 2U);
-    ASSERT_EQ(pre_metadata_chunk.chunkStats.has_nulls, false);
+    ASSERT_EQ(pre_metadata_chunk->numElements, 2U);
+    ASSERT_EQ(pre_metadata_chunk->chunkStats.has_nulls, false);
 
     query("update integer_null_table set x = NULL where x < 15;");
 
@@ -519,33 +519,33 @@ TEST_F(MetadataUpdate, MetadataIntegerNull) {
     ASSERT_EQ(post_metadata.size(), 1U);
     auto post_metadata_chunk = post_metadata[0].second;
 
-    ASSERT_EQ(pre_metadata_chunk.chunkStats.min.intval,
-              post_metadata_chunk.chunkStats.min.intval);
-    ASSERT_EQ(post_metadata_chunk.chunkStats.max.intval,
-              post_metadata_chunk.chunkStats.max.intval);
-    ASSERT_EQ(post_metadata_chunk.chunkStats.has_nulls, true);
+    ASSERT_EQ(pre_metadata_chunk->chunkStats.min.intval,
+              post_metadata_chunk->chunkStats.min.intval);
+    ASSERT_EQ(post_metadata_chunk->chunkStats.max.intval,
+              post_metadata_chunk->chunkStats.max.intval);
+    ASSERT_EQ(post_metadata_chunk->chunkStats.has_nulls, true);
 
     query("update integer_null_table set x=-2147483647 where x is NULL;");
     post_metadata = get_metadata_vec("integer_null_table");
     ASSERT_EQ(post_metadata.size(), 1U);
     post_metadata_chunk = post_metadata[0].second;
 
-    auto int_minval = post_metadata_chunk.chunkStats.min.intval;
+    auto int_minval = post_metadata_chunk->chunkStats.min.intval;
     ASSERT_EQ(int_minval, -2147483647);
-    ASSERT_EQ(post_metadata_chunk.chunkStats.has_nulls, true);
+    ASSERT_EQ(post_metadata_chunk->chunkStats.has_nulls, true);
 
     query("update integer_null_table set x=2147483647 where x > 15;");
     post_metadata = get_metadata_vec("integer_null_table");
     ASSERT_EQ(post_metadata.size(), 1U);
     post_metadata_chunk = post_metadata[0].second;
 
-    ASSERT_EQ(post_metadata_chunk.chunkStats.max.intval, 2147483647);
-    ASSERT_EQ(post_metadata_chunk.chunkStats.min.intval, -2147483647);
-    ASSERT_EQ(post_metadata_chunk.chunkStats.has_nulls, true);
-    ASSERT_GT(post_metadata_chunk.chunkStats.max.intval,
-              pre_metadata_chunk.chunkStats.max.intval);
-    ASSERT_LT(post_metadata_chunk.chunkStats.min.intval,
-              pre_metadata_chunk.chunkStats.min.intval);
+    ASSERT_EQ(post_metadata_chunk->chunkStats.max.intval, 2147483647);
+    ASSERT_EQ(post_metadata_chunk->chunkStats.min.intval, -2147483647);
+    ASSERT_EQ(post_metadata_chunk->chunkStats.has_nulls, true);
+    ASSERT_GT(post_metadata_chunk->chunkStats.max.intval,
+              pre_metadata_chunk->chunkStats.max.intval);
+    ASSERT_LT(post_metadata_chunk->chunkStats.min.intval,
+              pre_metadata_chunk->chunkStats.min.intval);
   });
 }
 
@@ -558,8 +558,8 @@ TEST_F(MetadataUpdate, IntegerNotNull) {
     ASSERT_EQ(pre_metadata.size(), 1U);
     auto pre_metadata_chunk = pre_metadata[0].second;
 
-    ASSERT_EQ(pre_metadata_chunk.numElements, 2U);
-    ASSERT_EQ(pre_metadata_chunk.chunkStats.has_nulls, false);
+    ASSERT_EQ(pre_metadata_chunk->numElements, 2U);
+    ASSERT_EQ(pre_metadata_chunk->chunkStats.has_nulls, false);
 
     EXPECT_THROW(query("update integer_not_null_table set x = NULL where x < 15;"),
                  std::runtime_error);
@@ -569,7 +569,7 @@ TEST_F(MetadataUpdate, IntegerNotNull) {
     ASSERT_EQ(post_metadata.size(), 1U);
     auto post_metadata_chunk = post_metadata[0].second;
 
-    ASSERT_EQ(post_metadata_chunk.chunkStats.has_nulls, false);
+    ASSERT_EQ(post_metadata_chunk->chunkStats.has_nulls, false);
 
     query("update integer_not_null_table set x=-2147483647 where x < 15;");
     query("update integer_not_null_table set x=2147483647 where x > 15;");
@@ -581,9 +581,9 @@ TEST_F(MetadataUpdate, IntegerNotNull) {
     // Because there is no range checking, we have to just check
     // that this unwieldy value ended up making it to the minval anyway
     int64_t post_integer_minval =
-        static_cast<int64_t>(post_metadata_chunk.chunkStats.min.intval);
+        static_cast<int64_t>(post_metadata_chunk->chunkStats.min.intval);
     int64_t post_integer_maxval =
-        static_cast<int64_t>(post_metadata_chunk.chunkStats.max.intval);
+        static_cast<int64_t>(post_metadata_chunk->chunkStats.max.intval);
     ASSERT_EQ(post_integer_minval, -2147483647);
     ASSERT_EQ(post_integer_maxval, 2147483647);
 
@@ -594,7 +594,8 @@ TEST_F(MetadataUpdate, IntegerNotNull) {
     post_metadata = get_metadata_vec("integer_not_null_table");
     ASSERT_EQ(post_metadata.size(), 1U);
     post_metadata_chunk = post_metadata[0].second;
-    post_integer_maxval = static_cast<int64_t>(post_metadata_chunk.chunkStats.max.intval);
+    post_integer_maxval =
+        static_cast<int64_t>(post_metadata_chunk->chunkStats.max.intval);
 
     ASSERT_EQ(post_integer_maxval, 2147483647);
   });
@@ -609,8 +610,8 @@ TEST_F(MetadataUpdate, MetadataTinyIntNull) {
     ASSERT_EQ(pre_metadata.size(), 1U);
     auto pre_metadata_chunk = pre_metadata[0].second;
 
-    ASSERT_EQ(pre_metadata_chunk.numElements, 2U);
-    ASSERT_EQ(pre_metadata_chunk.chunkStats.has_nulls, false);
+    ASSERT_EQ(pre_metadata_chunk->numElements, 2U);
+    ASSERT_EQ(pre_metadata_chunk->chunkStats.has_nulls, false);
 
     query("update tinyint_null_table set x = NULL where x < 15;");
 
@@ -618,33 +619,33 @@ TEST_F(MetadataUpdate, MetadataTinyIntNull) {
     ASSERT_EQ(post_metadata.size(), 1U);
     auto post_metadata_chunk = post_metadata[0].second;
 
-    ASSERT_EQ(pre_metadata_chunk.chunkStats.min.tinyintval,
-              post_metadata_chunk.chunkStats.min.tinyintval);
-    ASSERT_EQ(post_metadata_chunk.chunkStats.max.tinyintval,
-              post_metadata_chunk.chunkStats.max.tinyintval);
-    ASSERT_EQ(post_metadata_chunk.chunkStats.has_nulls, true);
+    ASSERT_EQ(pre_metadata_chunk->chunkStats.min.tinyintval,
+              post_metadata_chunk->chunkStats.min.tinyintval);
+    ASSERT_EQ(post_metadata_chunk->chunkStats.max.tinyintval,
+              post_metadata_chunk->chunkStats.max.tinyintval);
+    ASSERT_EQ(post_metadata_chunk->chunkStats.has_nulls, true);
 
     query("update tinyint_null_table set x=-127 where x is NULL;");
     post_metadata = get_metadata_vec("tinyint_null_table");
     ASSERT_EQ(post_metadata.size(), 1U);
     post_metadata_chunk = post_metadata[0].second;
 
-    auto tinyint_minval = post_metadata_chunk.chunkStats.min.tinyintval;
+    auto tinyint_minval = post_metadata_chunk->chunkStats.min.tinyintval;
     ASSERT_EQ(tinyint_minval, -127);
-    ASSERT_EQ(post_metadata_chunk.chunkStats.has_nulls, true);
+    ASSERT_EQ(post_metadata_chunk->chunkStats.has_nulls, true);
 
     query("update tinyint_null_table set x=127 where x > 15;");
     post_metadata = get_metadata_vec("tinyint_null_table");
     ASSERT_EQ(post_metadata.size(), 1U);
     post_metadata_chunk = post_metadata[0].second;
 
-    ASSERT_EQ(post_metadata_chunk.chunkStats.max.tinyintval, 127);
-    ASSERT_EQ(post_metadata_chunk.chunkStats.min.tinyintval, -127);
-    ASSERT_EQ(post_metadata_chunk.chunkStats.has_nulls, true);
-    ASSERT_GT(post_metadata_chunk.chunkStats.max.tinyintval,
-              pre_metadata_chunk.chunkStats.max.tinyintval);
-    ASSERT_LT(post_metadata_chunk.chunkStats.min.tinyintval,
-              pre_metadata_chunk.chunkStats.min.tinyintval);
+    ASSERT_EQ(post_metadata_chunk->chunkStats.max.tinyintval, 127);
+    ASSERT_EQ(post_metadata_chunk->chunkStats.min.tinyintval, -127);
+    ASSERT_EQ(post_metadata_chunk->chunkStats.has_nulls, true);
+    ASSERT_GT(post_metadata_chunk->chunkStats.max.tinyintval,
+              pre_metadata_chunk->chunkStats.max.tinyintval);
+    ASSERT_LT(post_metadata_chunk->chunkStats.min.tinyintval,
+              pre_metadata_chunk->chunkStats.min.tinyintval);
   });
 }
 
@@ -657,8 +658,8 @@ TEST_F(MetadataUpdate, MetadataTinyIntNotNull) {
     ASSERT_EQ(pre_metadata.size(), 1U);
     auto pre_metadata_chunk = pre_metadata[0].second;
 
-    ASSERT_EQ(pre_metadata_chunk.numElements, 2U);
-    ASSERT_EQ(pre_metadata_chunk.chunkStats.has_nulls, false);
+    ASSERT_EQ(pre_metadata_chunk->numElements, 2U);
+    ASSERT_EQ(pre_metadata_chunk->chunkStats.has_nulls, false);
 
     EXPECT_THROW(query("update tinyint_not_null_table set x = NULL where x < 15;"),
                  std::runtime_error);
@@ -668,7 +669,7 @@ TEST_F(MetadataUpdate, MetadataTinyIntNotNull) {
     ASSERT_EQ(post_metadata.size(), 1U);
     auto post_metadata_chunk = post_metadata[0].second;
 
-    ASSERT_EQ(post_metadata_chunk.chunkStats.has_nulls, false);
+    ASSERT_EQ(post_metadata_chunk->chunkStats.has_nulls, false);
 
     query("update tinyint_not_null_table set x=-127 where x < 15;");
     query("update tinyint_not_null_table set x=127 where x > 15;");
@@ -680,9 +681,9 @@ TEST_F(MetadataUpdate, MetadataTinyIntNotNull) {
     // Because there is no range checking, we have to just check
     // that this unwieldy value ended up making it to the minval anyway
     int64_t post_tinyint_minval =
-        static_cast<int64_t>(post_metadata_chunk.chunkStats.min.tinyintval);
+        static_cast<int64_t>(post_metadata_chunk->chunkStats.min.tinyintval);
     int64_t post_tinyint_maxval =
-        static_cast<int64_t>(post_metadata_chunk.chunkStats.max.tinyintval);
+        static_cast<int64_t>(post_metadata_chunk->chunkStats.max.tinyintval);
     ASSERT_EQ(post_tinyint_minval, -127);
     ASSERT_EQ(post_tinyint_maxval, 127);
 
@@ -695,9 +696,9 @@ TEST_F(MetadataUpdate, MetadataTinyIntNotNull) {
     ASSERT_EQ(post_metadata.size(), 1U);
     post_metadata_chunk = post_metadata[0].second;
     post_tinyint_maxval =
-        static_cast<int64_t>(post_metadata_chunk.chunkStats.max.tinyintval);
+        static_cast<int64_t>(post_metadata_chunk->chunkStats.max.tinyintval);
     post_tinyint_minval =
-        static_cast<int64_t>(post_metadata_chunk.chunkStats.min.tinyintval);
+        static_cast<int64_t>(post_metadata_chunk->chunkStats.min.tinyintval);
 
     ASSERT_EQ(post_tinyint_maxval, 127);
     ASSERT_EQ(post_tinyint_minval, -127);
@@ -733,10 +734,10 @@ TEST_F(MetadataUpdate, MetadataAddColumnWithDeletes) {
     ASSERT_EQ(pre_metadata.size(), 1U);
     auto pre_metadata_chunk = pre_metadata[0].second;
 
-    ASSERT_EQ(pre_metadata_chunk.numElements, 4U);
-    ASSERT_EQ(pre_metadata_chunk.chunkStats.min.tinyintval, int8_t(0));
-    ASSERT_EQ(pre_metadata_chunk.chunkStats.max.tinyintval, int8_t(1));
-    ASSERT_EQ(pre_metadata_chunk.chunkStats.has_nulls, false);
+    ASSERT_EQ(pre_metadata_chunk->numElements, 4U);
+    ASSERT_EQ(pre_metadata_chunk->chunkStats.min.tinyintval, int8_t(0));
+    ASSERT_EQ(pre_metadata_chunk->chunkStats.max.tinyintval, int8_t(1));
+    ASSERT_EQ(pre_metadata_chunk->chunkStats.has_nulls, false);
 
     run_ddl_statement("alter table numbers add column zebra int;");
 
@@ -744,10 +745,10 @@ TEST_F(MetadataUpdate, MetadataAddColumnWithDeletes) {
     ASSERT_EQ(post_metadata.size(), 1U);
     auto post_metadata_chunk = post_metadata[0].second;
 
-    ASSERT_EQ(post_metadata_chunk.numElements, 4U);
-    ASSERT_EQ(post_metadata_chunk.chunkStats.min.tinyintval, int8_t(0));
-    ASSERT_EQ(post_metadata_chunk.chunkStats.max.tinyintval, int8_t(1));
-    ASSERT_EQ(post_metadata_chunk.chunkStats.has_nulls, false);
+    ASSERT_EQ(post_metadata_chunk->numElements, 4U);
+    ASSERT_EQ(post_metadata_chunk->chunkStats.min.tinyintval, int8_t(0));
+    ASSERT_EQ(post_metadata_chunk->chunkStats.max.tinyintval, int8_t(1));
+    ASSERT_EQ(post_metadata_chunk->chunkStats.has_nulls, false);
   });
 }
 
@@ -760,8 +761,8 @@ TEST_F(MetadataUpdate, MetadataSmallIntNull) {
     ASSERT_EQ(pre_metadata.size(), 1U);
     auto pre_metadata_chunk = pre_metadata[0].second;
 
-    ASSERT_EQ(pre_metadata_chunk.numElements, 2U);
-    ASSERT_EQ(pre_metadata_chunk.chunkStats.has_nulls, false);
+    ASSERT_EQ(pre_metadata_chunk->numElements, 2U);
+    ASSERT_EQ(pre_metadata_chunk->chunkStats.has_nulls, false);
 
     query("update smallint_null_table set x = NULL where x < 15;");
 
@@ -769,33 +770,33 @@ TEST_F(MetadataUpdate, MetadataSmallIntNull) {
     ASSERT_EQ(post_metadata.size(), 1U);
     auto post_metadata_chunk = post_metadata[0].second;
 
-    ASSERT_EQ(pre_metadata_chunk.chunkStats.min.smallintval,
-              post_metadata_chunk.chunkStats.min.smallintval);
-    ASSERT_EQ(post_metadata_chunk.chunkStats.max.smallintval,
-              post_metadata_chunk.chunkStats.max.smallintval);
-    ASSERT_EQ(post_metadata_chunk.chunkStats.has_nulls, true);
+    ASSERT_EQ(pre_metadata_chunk->chunkStats.min.smallintval,
+              post_metadata_chunk->chunkStats.min.smallintval);
+    ASSERT_EQ(post_metadata_chunk->chunkStats.max.smallintval,
+              post_metadata_chunk->chunkStats.max.smallintval);
+    ASSERT_EQ(post_metadata_chunk->chunkStats.has_nulls, true);
 
     query("update smallint_null_table set x=-32767 where x is NULL;");
     post_metadata = get_metadata_vec("smallint_null_table");
     ASSERT_EQ(post_metadata.size(), 1U);
     post_metadata_chunk = post_metadata[0].second;
 
-    auto smallint_minval = post_metadata_chunk.chunkStats.min.smallintval;
+    auto smallint_minval = post_metadata_chunk->chunkStats.min.smallintval;
     ASSERT_EQ(smallint_minval, -32767);
-    ASSERT_EQ(post_metadata_chunk.chunkStats.has_nulls, true);
+    ASSERT_EQ(post_metadata_chunk->chunkStats.has_nulls, true);
 
     query("update smallint_null_table set x=32767 where x > 15;");
     post_metadata = get_metadata_vec("smallint_null_table");
     ASSERT_EQ(post_metadata.size(), 1U);
     post_metadata_chunk = post_metadata[0].second;
 
-    ASSERT_EQ(post_metadata_chunk.chunkStats.max.smallintval, 32767);
-    ASSERT_EQ(post_metadata_chunk.chunkStats.min.smallintval, -32767);
-    ASSERT_EQ(post_metadata_chunk.chunkStats.has_nulls, true);
-    ASSERT_GT(post_metadata_chunk.chunkStats.max.smallintval,
-              pre_metadata_chunk.chunkStats.max.smallintval);
-    ASSERT_LT(post_metadata_chunk.chunkStats.min.smallintval,
-              pre_metadata_chunk.chunkStats.min.smallintval);
+    ASSERT_EQ(post_metadata_chunk->chunkStats.max.smallintval, 32767);
+    ASSERT_EQ(post_metadata_chunk->chunkStats.min.smallintval, -32767);
+    ASSERT_EQ(post_metadata_chunk->chunkStats.has_nulls, true);
+    ASSERT_GT(post_metadata_chunk->chunkStats.max.smallintval,
+              pre_metadata_chunk->chunkStats.max.smallintval);
+    ASSERT_LT(post_metadata_chunk->chunkStats.min.smallintval,
+              pre_metadata_chunk->chunkStats.min.smallintval);
   });
 }
 
@@ -808,8 +809,8 @@ TEST_F(MetadataUpdate, MetadataSmallIntNotNull) {
     ASSERT_EQ(pre_metadata.size(), 1U);
     auto pre_metadata_chunk = pre_metadata[0].second;
 
-    ASSERT_EQ(pre_metadata_chunk.numElements, 2U);
-    ASSERT_EQ(pre_metadata_chunk.chunkStats.has_nulls, false);
+    ASSERT_EQ(pre_metadata_chunk->numElements, 2U);
+    ASSERT_EQ(pre_metadata_chunk->chunkStats.has_nulls, false);
 
     EXPECT_THROW(query("update smallint_not_null_table set x = NULL where x < 15;"),
                  std::runtime_error);
@@ -819,7 +820,7 @@ TEST_F(MetadataUpdate, MetadataSmallIntNotNull) {
     ASSERT_EQ(post_metadata.size(), 1U);
     auto post_metadata_chunk = post_metadata[0].second;
 
-    ASSERT_EQ(post_metadata_chunk.chunkStats.has_nulls, false);
+    ASSERT_EQ(post_metadata_chunk->chunkStats.has_nulls, false);
 
     query("update smallint_not_null_table set x=-32767 where x < 15;");
     query("update smallint_not_null_table set x=32767 where x > 15;");
@@ -831,9 +832,9 @@ TEST_F(MetadataUpdate, MetadataSmallIntNotNull) {
     // Because there is no range checking, we have to just check
     // that this unwieldy value ended up making it to the minval anyway
     int64_t post_smallint_minval =
-        static_cast<int64_t>(post_metadata_chunk.chunkStats.min.smallintval);
+        static_cast<int64_t>(post_metadata_chunk->chunkStats.min.smallintval);
     int64_t post_smallint_maxval =
-        static_cast<int64_t>(post_metadata_chunk.chunkStats.max.smallintval);
+        static_cast<int64_t>(post_metadata_chunk->chunkStats.max.smallintval);
     ASSERT_EQ(post_smallint_minval, -32767);
     ASSERT_EQ(post_smallint_maxval, 32767);
 
@@ -846,9 +847,9 @@ TEST_F(MetadataUpdate, MetadataSmallIntNotNull) {
     ASSERT_EQ(post_metadata.size(), 1U);
     post_metadata_chunk = post_metadata[0].second;
     post_smallint_maxval =
-        static_cast<int64_t>(post_metadata_chunk.chunkStats.max.smallintval);
+        static_cast<int64_t>(post_metadata_chunk->chunkStats.max.smallintval);
     post_smallint_minval =
-        static_cast<int64_t>(post_metadata_chunk.chunkStats.min.smallintval);
+        static_cast<int64_t>(post_metadata_chunk->chunkStats.min.smallintval);
 
     ASSERT_EQ(post_smallint_maxval, 32767);
     ASSERT_EQ(post_smallint_minval, -32767);
@@ -864,8 +865,8 @@ TEST_F(MetadataUpdate, MetadataBigIntNull) {
     ASSERT_EQ(pre_metadata.size(), 1U);
     auto pre_metadata_chunk = pre_metadata[0].second;
 
-    ASSERT_EQ(pre_metadata_chunk.numElements, 2U);
-    ASSERT_EQ(pre_metadata_chunk.chunkStats.has_nulls, false);
+    ASSERT_EQ(pre_metadata_chunk->numElements, 2U);
+    ASSERT_EQ(pre_metadata_chunk->chunkStats.has_nulls, false);
 
     query("update bigint_null_table set x = NULL where x < 15;");
 
@@ -873,33 +874,33 @@ TEST_F(MetadataUpdate, MetadataBigIntNull) {
     ASSERT_EQ(post_metadata.size(), 1U);
     auto post_metadata_chunk = post_metadata[0].second;
 
-    ASSERT_EQ(pre_metadata_chunk.chunkStats.min.bigintval,
-              post_metadata_chunk.chunkStats.min.bigintval);
-    ASSERT_EQ(post_metadata_chunk.chunkStats.max.bigintval,
-              post_metadata_chunk.chunkStats.max.bigintval);
-    ASSERT_EQ(post_metadata_chunk.chunkStats.has_nulls, true);
+    ASSERT_EQ(pre_metadata_chunk->chunkStats.min.bigintval,
+              post_metadata_chunk->chunkStats.min.bigintval);
+    ASSERT_EQ(post_metadata_chunk->chunkStats.max.bigintval,
+              post_metadata_chunk->chunkStats.max.bigintval);
+    ASSERT_EQ(post_metadata_chunk->chunkStats.has_nulls, true);
 
     query("update bigint_null_table set x=-9223372036854775807 where x is NULL;");
     post_metadata = get_metadata_vec("bigint_null_table");
     ASSERT_EQ(post_metadata.size(), 1U);
     post_metadata_chunk = post_metadata[0].second;
 
-    auto bigint_minval = post_metadata_chunk.chunkStats.min.bigintval;
+    auto bigint_minval = post_metadata_chunk->chunkStats.min.bigintval;
     ASSERT_EQ(bigint_minval, -9223372036854775807);
-    ASSERT_EQ(post_metadata_chunk.chunkStats.has_nulls, true);
+    ASSERT_EQ(post_metadata_chunk->chunkStats.has_nulls, true);
 
     query("update bigint_null_table set x=9223372036854775807 where x > 15;");
     post_metadata = get_metadata_vec("bigint_null_table");
     ASSERT_EQ(post_metadata.size(), 1U);
     post_metadata_chunk = post_metadata[0].second;
 
-    ASSERT_EQ(post_metadata_chunk.chunkStats.max.bigintval, 9223372036854775807);
-    ASSERT_EQ(post_metadata_chunk.chunkStats.min.bigintval, -9223372036854775807);
-    ASSERT_EQ(post_metadata_chunk.chunkStats.has_nulls, true);
-    ASSERT_GT(post_metadata_chunk.chunkStats.max.bigintval,
-              pre_metadata_chunk.chunkStats.max.bigintval);
-    ASSERT_LT(post_metadata_chunk.chunkStats.min.bigintval,
-              pre_metadata_chunk.chunkStats.min.bigintval);
+    ASSERT_EQ(post_metadata_chunk->chunkStats.max.bigintval, 9223372036854775807);
+    ASSERT_EQ(post_metadata_chunk->chunkStats.min.bigintval, -9223372036854775807);
+    ASSERT_EQ(post_metadata_chunk->chunkStats.has_nulls, true);
+    ASSERT_GT(post_metadata_chunk->chunkStats.max.bigintval,
+              pre_metadata_chunk->chunkStats.max.bigintval);
+    ASSERT_LT(post_metadata_chunk->chunkStats.min.bigintval,
+              pre_metadata_chunk->chunkStats.min.bigintval);
   });
 }
 
@@ -912,8 +913,8 @@ TEST_F(MetadataUpdate, MetadataBigIntNotNull) {
     ASSERT_EQ(pre_metadata.size(), 1U);
     auto pre_metadata_chunk = pre_metadata[0].second;
 
-    ASSERT_EQ(pre_metadata_chunk.numElements, 2U);
-    ASSERT_EQ(pre_metadata_chunk.chunkStats.has_nulls, false);
+    ASSERT_EQ(pre_metadata_chunk->numElements, 2U);
+    ASSERT_EQ(pre_metadata_chunk->chunkStats.has_nulls, false);
 
     EXPECT_THROW(query("update bigint_not_null_table set x = NULL where x < 15;"),
                  std::runtime_error);
@@ -924,7 +925,7 @@ TEST_F(MetadataUpdate, MetadataBigIntNotNull) {
     ASSERT_EQ(post_metadata.size(), 1U);
     auto post_metadata_chunk = post_metadata[0].second;
 
-    ASSERT_EQ(post_metadata_chunk.chunkStats.has_nulls, false);
+    ASSERT_EQ(post_metadata_chunk->chunkStats.has_nulls, false);
 
     query("update bigint_not_null_table set x=-9223372036854775807 where x < 15;");
     query("update bigint_not_null_table set x=9223372036854775807 where x > 15;");
@@ -936,9 +937,9 @@ TEST_F(MetadataUpdate, MetadataBigIntNotNull) {
     // Because there is no range checking, we have to just check
     // that this unwieldy value ended up making it to the minval anyway
     int64_t post_bigint_minval =
-        static_cast<int64_t>(post_metadata_chunk.chunkStats.min.bigintval);
+        static_cast<int64_t>(post_metadata_chunk->chunkStats.min.bigintval);
     int64_t post_bigint_maxval =
-        static_cast<int64_t>(post_metadata_chunk.chunkStats.max.bigintval);
+        static_cast<int64_t>(post_metadata_chunk->chunkStats.max.bigintval);
     ASSERT_EQ(post_bigint_minval, -9223372036854775807);
     ASSERT_EQ(post_bigint_maxval, 9223372036854775807);
 
@@ -952,9 +953,9 @@ TEST_F(MetadataUpdate, MetadataBigIntNotNull) {
     ASSERT_EQ(post_metadata.size(), 1U);
     post_metadata_chunk = post_metadata[0].second;
     post_bigint_maxval =
-        static_cast<int64_t>(post_metadata_chunk.chunkStats.max.bigintval);
+        static_cast<int64_t>(post_metadata_chunk->chunkStats.max.bigintval);
     post_bigint_minval =
-        static_cast<int64_t>(post_metadata_chunk.chunkStats.min.bigintval);
+        static_cast<int64_t>(post_metadata_chunk->chunkStats.min.bigintval);
 
     ASSERT_EQ(post_bigint_maxval, 9223372036854775807);
     ASSERT_EQ(post_bigint_minval, -9223372036854775807);
@@ -973,10 +974,10 @@ TEST_F(MetadataUpdate, MetadataBooleanNull) {
     auto post_metadata = get_metadata_vec("boolean_null_table");
     auto post_metadata_chunk = post_metadata[0].second;
 
-    ASSERT_EQ(pre_metadata_chunk.chunkStats.min.tinyintval,
-              post_metadata_chunk.chunkStats.min.tinyintval);
-    ASSERT_LT(pre_metadata_chunk.chunkStats.max.tinyintval,
-              post_metadata_chunk.chunkStats.max.tinyintval);
+    ASSERT_EQ(pre_metadata_chunk->chunkStats.min.tinyintval,
+              post_metadata_chunk->chunkStats.min.tinyintval);
+    ASSERT_LT(pre_metadata_chunk->chunkStats.max.tinyintval,
+              post_metadata_chunk->chunkStats.max.tinyintval);
   });
 
   make_table_cycler("boolean_null_table", "boolean")([&] {
@@ -990,10 +991,10 @@ TEST_F(MetadataUpdate, MetadataBooleanNull) {
     auto post_metadata = get_metadata_vec("boolean_null_table");
     auto post_metadata_chunk = post_metadata[0].second;
 
-    ASSERT_GT(pre_metadata_chunk.chunkStats.min.tinyintval,
-              post_metadata_chunk.chunkStats.min.tinyintval);
-    ASSERT_EQ(pre_metadata_chunk.chunkStats.max.tinyintval,
-              post_metadata_chunk.chunkStats.max.tinyintval);
+    ASSERT_GT(pre_metadata_chunk->chunkStats.min.tinyintval,
+              post_metadata_chunk->chunkStats.min.tinyintval);
+    ASSERT_EQ(pre_metadata_chunk->chunkStats.max.tinyintval,
+              post_metadata_chunk->chunkStats.max.tinyintval);
   });
 
   make_table_cycler("boolean_null_table", "boolean")([&] {
@@ -1007,10 +1008,10 @@ TEST_F(MetadataUpdate, MetadataBooleanNull) {
     auto post_metadata = get_metadata_vec("boolean_null_table");
     auto post_metadata_chunk = post_metadata[0].second;
 
-    ASSERT_EQ(pre_metadata_chunk.chunkStats.min.tinyintval,
-              post_metadata_chunk.chunkStats.min.tinyintval);
-    ASSERT_EQ(pre_metadata_chunk.chunkStats.max.tinyintval,
-              post_metadata_chunk.chunkStats.max.tinyintval);
+    ASSERT_EQ(pre_metadata_chunk->chunkStats.min.tinyintval,
+              post_metadata_chunk->chunkStats.min.tinyintval);
+    ASSERT_EQ(pre_metadata_chunk->chunkStats.max.tinyintval,
+              post_metadata_chunk->chunkStats.max.tinyintval);
   });
 
   make_table_cycler("boolean_null_table", "boolean")([&] {
@@ -1024,10 +1025,10 @@ TEST_F(MetadataUpdate, MetadataBooleanNull) {
     auto post_metadata = get_metadata_vec("boolean_null_table");
     auto post_metadata_chunk = post_metadata[0].second;
 
-    ASSERT_EQ(pre_metadata_chunk.chunkStats.min.tinyintval,
-              post_metadata_chunk.chunkStats.min.tinyintval);
-    ASSERT_EQ(pre_metadata_chunk.chunkStats.max.tinyintval,
-              post_metadata_chunk.chunkStats.max.tinyintval);
+    ASSERT_EQ(pre_metadata_chunk->chunkStats.min.tinyintval,
+              post_metadata_chunk->chunkStats.min.tinyintval);
+    ASSERT_EQ(pre_metadata_chunk->chunkStats.max.tinyintval,
+              post_metadata_chunk->chunkStats.max.tinyintval);
   });
 
   make_table_cycler("boolean_null_table", "boolean")([&] {
@@ -1038,8 +1039,8 @@ TEST_F(MetadataUpdate, MetadataBooleanNull) {
     ASSERT_EQ(pre_metadata.size(), 1U);
     auto pre_metadata_chunk = pre_metadata[0].second;
 
-    ASSERT_EQ(pre_metadata_chunk.numElements, 2U);
-    ASSERT_EQ(pre_metadata_chunk.chunkStats.has_nulls, false);
+    ASSERT_EQ(pre_metadata_chunk->numElements, 2U);
+    ASSERT_EQ(pre_metadata_chunk->chunkStats.has_nulls, false);
 
     query("update boolean_null_table set x = NULL where x = true;");
 
@@ -1047,29 +1048,29 @@ TEST_F(MetadataUpdate, MetadataBooleanNull) {
     ASSERT_EQ(post_metadata.size(), 1U);
     auto post_metadata_chunk = post_metadata[0].second;
 
-    ASSERT_EQ(pre_metadata_chunk.chunkStats.min.tinyintval,
-              post_metadata_chunk.chunkStats.min.tinyintval);
-    ASSERT_EQ(post_metadata_chunk.chunkStats.max.tinyintval,
-              post_metadata_chunk.chunkStats.max.tinyintval);
-    ASSERT_EQ(post_metadata_chunk.chunkStats.has_nulls, true);
+    ASSERT_EQ(pre_metadata_chunk->chunkStats.min.tinyintval,
+              post_metadata_chunk->chunkStats.min.tinyintval);
+    ASSERT_EQ(post_metadata_chunk->chunkStats.max.tinyintval,
+              post_metadata_chunk->chunkStats.max.tinyintval);
+    ASSERT_EQ(post_metadata_chunk->chunkStats.has_nulls, true);
 
     query("update boolean_null_table set x='f' where x is NULL;");
     post_metadata = get_metadata_vec("boolean_null_table");
     ASSERT_EQ(post_metadata.size(), 1U);
     post_metadata_chunk = post_metadata[0].second;
 
-    auto tinyint_minval = post_metadata_chunk.chunkStats.min.tinyintval;
+    auto tinyint_minval = post_metadata_chunk->chunkStats.min.tinyintval;
     ASSERT_EQ(tinyint_minval, 0);
-    ASSERT_EQ(post_metadata_chunk.chunkStats.has_nulls, true);
+    ASSERT_EQ(post_metadata_chunk->chunkStats.has_nulls, true);
 
     query("update boolean_null_table set x=True where x = false;");
     post_metadata = get_metadata_vec("boolean_null_table");
     ASSERT_EQ(post_metadata.size(), 1U);
     post_metadata_chunk = post_metadata[0].second;
 
-    ASSERT_EQ(post_metadata_chunk.chunkStats.max.tinyintval, 1);
-    ASSERT_EQ(post_metadata_chunk.chunkStats.min.tinyintval, 0);
-    ASSERT_EQ(post_metadata_chunk.chunkStats.has_nulls, true);
+    ASSERT_EQ(post_metadata_chunk->chunkStats.max.tinyintval, 1);
+    ASSERT_EQ(post_metadata_chunk->chunkStats.min.tinyintval, 0);
+    ASSERT_EQ(post_metadata_chunk->chunkStats.has_nulls, true);
   });
 }
 
@@ -1082,8 +1083,8 @@ TEST_F(MetadataUpdate, MetadataBooleanNotNull) {
     ASSERT_EQ(pre_metadata.size(), 1U);
     auto pre_metadata_chunk = pre_metadata[0].second;
 
-    ASSERT_EQ(pre_metadata_chunk.numElements, 2U);
-    ASSERT_EQ(pre_metadata_chunk.chunkStats.has_nulls, false);
+    ASSERT_EQ(pre_metadata_chunk->numElements, 2U);
+    ASSERT_EQ(pre_metadata_chunk->chunkStats.has_nulls, false);
 
     EXPECT_THROW(query("update boolean_not_null_table set x = NULL where x = false"),
                  std::runtime_error);
@@ -1092,7 +1093,7 @@ TEST_F(MetadataUpdate, MetadataBooleanNotNull) {
     ASSERT_EQ(post_metadata.size(), 1U);
     auto post_metadata_chunk = post_metadata[0].second;
 
-    ASSERT_EQ(post_metadata_chunk.chunkStats.has_nulls, false);
+    ASSERT_EQ(post_metadata_chunk->chunkStats.has_nulls, false);
   });
 }
 
@@ -1105,8 +1106,8 @@ TEST_F(MetadataUpdate, MetadataFloatNull) {
     ASSERT_EQ(pre_metadata.size(), 1U);
     auto pre_metadata_chunk = pre_metadata[0].second;
 
-    ASSERT_EQ(pre_metadata_chunk.numElements, 2U);
-    ASSERT_EQ(pre_metadata_chunk.chunkStats.has_nulls, false);
+    ASSERT_EQ(pre_metadata_chunk->numElements, 2U);
+    ASSERT_EQ(pre_metadata_chunk->chunkStats.has_nulls, false);
 
     query("update float_null_table set x = NULL where x < 15;");
 
@@ -1114,11 +1115,11 @@ TEST_F(MetadataUpdate, MetadataFloatNull) {
     ASSERT_EQ(post_metadata.size(), 1U);
     auto post_metadata_chunk = post_metadata[0].second;
 
-    ASSERT_EQ(pre_metadata_chunk.chunkStats.min.floatval,
-              post_metadata_chunk.chunkStats.min.floatval);
-    ASSERT_EQ(post_metadata_chunk.chunkStats.max.floatval,
-              post_metadata_chunk.chunkStats.max.floatval);
-    ASSERT_EQ(post_metadata_chunk.chunkStats.has_nulls, true);
+    ASSERT_EQ(pre_metadata_chunk->chunkStats.min.floatval,
+              post_metadata_chunk->chunkStats.min.floatval);
+    ASSERT_EQ(post_metadata_chunk->chunkStats.max.floatval,
+              post_metadata_chunk->chunkStats.max.floatval);
+    ASSERT_EQ(post_metadata_chunk->chunkStats.has_nulls, true);
 
     query("update float_null_table set x=-3.40282E38 where x is NULL;");
     query("update float_null_table set x=3.40282E38 where x > 15;");
@@ -1127,13 +1128,13 @@ TEST_F(MetadataUpdate, MetadataFloatNull) {
     ASSERT_EQ(post_metadata.size(), 1U);
     post_metadata_chunk = post_metadata[0].second;
 
-    ASSERT_FLOAT_EQ(post_metadata_chunk.chunkStats.max.floatval, 3.40282E38);
-    ASSERT_FLOAT_EQ(post_metadata_chunk.chunkStats.min.floatval, -3.40282E38);
-    ASSERT_EQ(post_metadata_chunk.chunkStats.has_nulls, true);
-    ASSERT_GT(post_metadata_chunk.chunkStats.max.floatval,
-              pre_metadata_chunk.chunkStats.max.floatval);
-    ASSERT_LT(post_metadata_chunk.chunkStats.min.floatval,
-              pre_metadata_chunk.chunkStats.min.floatval);
+    ASSERT_FLOAT_EQ(post_metadata_chunk->chunkStats.max.floatval, 3.40282E38);
+    ASSERT_FLOAT_EQ(post_metadata_chunk->chunkStats.min.floatval, -3.40282E38);
+    ASSERT_EQ(post_metadata_chunk->chunkStats.has_nulls, true);
+    ASSERT_GT(post_metadata_chunk->chunkStats.max.floatval,
+              pre_metadata_chunk->chunkStats.max.floatval);
+    ASSERT_LT(post_metadata_chunk->chunkStats.min.floatval,
+              pre_metadata_chunk->chunkStats.min.floatval);
   });
 }
 
@@ -1146,8 +1147,8 @@ TEST_F(MetadataUpdate, MetadataFloatNotNull) {
     ASSERT_EQ(pre_metadata.size(), 1U);
     auto pre_metadata_chunk = pre_metadata[0].second;
 
-    ASSERT_EQ(pre_metadata_chunk.numElements, 2U);
-    ASSERT_EQ(pre_metadata_chunk.chunkStats.has_nulls, false);
+    ASSERT_EQ(pre_metadata_chunk->numElements, 2U);
+    ASSERT_EQ(pre_metadata_chunk->chunkStats.has_nulls, false);
 
     EXPECT_THROW(query("update float_not_null_table set x = NULL where x < 15;"),
                  std::runtime_error);
@@ -1156,11 +1157,11 @@ TEST_F(MetadataUpdate, MetadataFloatNotNull) {
     ASSERT_EQ(post_metadata.size(), 1U);
     auto post_metadata_chunk = post_metadata[0].second;
 
-    ASSERT_EQ(pre_metadata_chunk.chunkStats.min.floatval,
-              post_metadata_chunk.chunkStats.min.floatval);
-    ASSERT_EQ(post_metadata_chunk.chunkStats.max.floatval,
-              post_metadata_chunk.chunkStats.max.floatval);
-    ASSERT_EQ(post_metadata_chunk.chunkStats.has_nulls, false);
+    ASSERT_EQ(pre_metadata_chunk->chunkStats.min.floatval,
+              post_metadata_chunk->chunkStats.min.floatval);
+    ASSERT_EQ(post_metadata_chunk->chunkStats.max.floatval,
+              post_metadata_chunk->chunkStats.max.floatval);
+    ASSERT_EQ(post_metadata_chunk->chunkStats.has_nulls, false);
 
     // Doesn't work on not null columns; still seen as null.
     // query( "update float_not_null_table set x = 1.175494351E-38 where x < 15;" );
@@ -1170,14 +1171,14 @@ TEST_F(MetadataUpdate, MetadataFloatNotNull) {
     ASSERT_EQ(post_metadata.size(), 1U);
     post_metadata_chunk = post_metadata[0].second;
 
-    ASSERT_FLOAT_EQ(post_metadata_chunk.chunkStats.max.floatval, 3.40282E38);
+    ASSERT_FLOAT_EQ(post_metadata_chunk->chunkStats.max.floatval, 3.40282E38);
     // Removed; see comment just above.
-    // ASSERT_FLOAT_EQ(post_metadata_chunk.chunkStats.min.floatval, 1.175494351E-38);
-    ASSERT_EQ(post_metadata_chunk.chunkStats.has_nulls, false);
-    ASSERT_GT(post_metadata_chunk.chunkStats.max.floatval,
-              pre_metadata_chunk.chunkStats.max.floatval);
-    ASSERT_FLOAT_EQ(post_metadata_chunk.chunkStats.min.floatval,
-                    pre_metadata_chunk.chunkStats.min.floatval);
+    // ASSERT_FLOAT_EQ(post_metadata_chunk->chunkStats.min.floatval, 1.175494351E-38);
+    ASSERT_EQ(post_metadata_chunk->chunkStats.has_nulls, false);
+    ASSERT_GT(post_metadata_chunk->chunkStats.max.floatval,
+              pre_metadata_chunk->chunkStats.max.floatval);
+    ASSERT_FLOAT_EQ(post_metadata_chunk->chunkStats.min.floatval,
+                    pre_metadata_chunk->chunkStats.min.floatval);
   });
 }
 
@@ -1190,8 +1191,8 @@ TEST_F(MetadataUpdate, MetadataDoubleNull) {
     ASSERT_EQ(pre_metadata.size(), 1U);
     auto pre_metadata_chunk = pre_metadata[0].second;
 
-    ASSERT_EQ(pre_metadata_chunk.numElements, 2U);
-    ASSERT_EQ(pre_metadata_chunk.chunkStats.has_nulls, false);
+    ASSERT_EQ(pre_metadata_chunk->numElements, 2U);
+    ASSERT_EQ(pre_metadata_chunk->chunkStats.has_nulls, false);
 
     query("update double_null_table set x = NULL where x < 15;");
 
@@ -1199,11 +1200,11 @@ TEST_F(MetadataUpdate, MetadataDoubleNull) {
     ASSERT_EQ(post_metadata.size(), 1U);
     auto post_metadata_chunk = post_metadata[0].second;
 
-    ASSERT_EQ(pre_metadata_chunk.chunkStats.min.doubleval,
-              post_metadata_chunk.chunkStats.min.doubleval);
-    ASSERT_EQ(post_metadata_chunk.chunkStats.max.doubleval,
-              post_metadata_chunk.chunkStats.max.doubleval);
-    ASSERT_EQ(post_metadata_chunk.chunkStats.has_nulls, true);
+    ASSERT_EQ(pre_metadata_chunk->chunkStats.min.doubleval,
+              post_metadata_chunk->chunkStats.min.doubleval);
+    ASSERT_EQ(post_metadata_chunk->chunkStats.max.doubleval,
+              post_metadata_chunk->chunkStats.max.doubleval);
+    ASSERT_EQ(post_metadata_chunk->chunkStats.has_nulls, true);
 
     query("update double_null_table set x=-1.79769313486231571E308 where x is NULL;");
     query("update double_null_table set x=1.79769313486231571e+308 where x > 15;");
@@ -1212,15 +1213,15 @@ TEST_F(MetadataUpdate, MetadataDoubleNull) {
     ASSERT_EQ(post_metadata.size(), 1U);
     post_metadata_chunk = post_metadata[0].second;
 
-    ASSERT_DOUBLE_EQ(post_metadata_chunk.chunkStats.max.doubleval,
+    ASSERT_DOUBLE_EQ(post_metadata_chunk->chunkStats.max.doubleval,
                      1.79769313486231571e+308);
-    ASSERT_DOUBLE_EQ(post_metadata_chunk.chunkStats.min.doubleval,
+    ASSERT_DOUBLE_EQ(post_metadata_chunk->chunkStats.min.doubleval,
                      -1.79769313486231571e+308);
-    ASSERT_EQ(post_metadata_chunk.chunkStats.has_nulls, true);
-    ASSERT_GT(post_metadata_chunk.chunkStats.max.doubleval,
-              pre_metadata_chunk.chunkStats.max.doubleval);
-    ASSERT_LT(post_metadata_chunk.chunkStats.min.doubleval,
-              pre_metadata_chunk.chunkStats.min.doubleval);
+    ASSERT_EQ(post_metadata_chunk->chunkStats.has_nulls, true);
+    ASSERT_GT(post_metadata_chunk->chunkStats.max.doubleval,
+              pre_metadata_chunk->chunkStats.max.doubleval);
+    ASSERT_LT(post_metadata_chunk->chunkStats.min.doubleval,
+              pre_metadata_chunk->chunkStats.min.doubleval);
   });
 }
 
@@ -1233,8 +1234,8 @@ TEST_F(MetadataUpdate, MetadataDoubleNotNull) {
     ASSERT_EQ(pre_metadata.size(), 1U);
     auto pre_metadata_chunk = pre_metadata[0].second;
 
-    ASSERT_EQ(pre_metadata_chunk.numElements, 2U);
-    ASSERT_EQ(pre_metadata_chunk.chunkStats.has_nulls, false);
+    ASSERT_EQ(pre_metadata_chunk->numElements, 2U);
+    ASSERT_EQ(pre_metadata_chunk->chunkStats.has_nulls, false);
 
     EXPECT_THROW(query("update double_not_null_table set x = NULL where x < 15;"),
                  std::runtime_error);
@@ -1243,11 +1244,11 @@ TEST_F(MetadataUpdate, MetadataDoubleNotNull) {
     ASSERT_EQ(post_metadata.size(), 1U);
     auto post_metadata_chunk = post_metadata[0].second;
 
-    ASSERT_EQ(pre_metadata_chunk.chunkStats.min.doubleval,
-              post_metadata_chunk.chunkStats.min.doubleval);
-    ASSERT_EQ(post_metadata_chunk.chunkStats.max.doubleval,
-              post_metadata_chunk.chunkStats.max.doubleval);
-    ASSERT_EQ(post_metadata_chunk.chunkStats.has_nulls, false);
+    ASSERT_EQ(pre_metadata_chunk->chunkStats.min.doubleval,
+              post_metadata_chunk->chunkStats.min.doubleval);
+    ASSERT_EQ(post_metadata_chunk->chunkStats.max.doubleval,
+              post_metadata_chunk->chunkStats.max.doubleval);
+    ASSERT_EQ(post_metadata_chunk->chunkStats.has_nulls, false);
 
     // Doesn't work on not null columns; still seen as null.
     // query( "update double_not_null_table set x = 1.175494351E-38 where x < 15;" );
@@ -1257,15 +1258,15 @@ TEST_F(MetadataUpdate, MetadataDoubleNotNull) {
     ASSERT_EQ(post_metadata.size(), 1U);
     post_metadata_chunk = post_metadata[0].second;
 
-    ASSERT_DOUBLE_EQ(post_metadata_chunk.chunkStats.max.doubleval,
+    ASSERT_DOUBLE_EQ(post_metadata_chunk->chunkStats.max.doubleval,
                      1.79769313486231571e+308);
     // Removed; see comment just above.
-    // ASSERT_DOUBLE_EQ(post_metadata_chunk.chunkStats.min.doubleval, 1.175494351E-38);
-    ASSERT_EQ(post_metadata_chunk.chunkStats.has_nulls, false);
-    ASSERT_GT(post_metadata_chunk.chunkStats.max.doubleval,
-              pre_metadata_chunk.chunkStats.max.doubleval);
-    ASSERT_DOUBLE_EQ(post_metadata_chunk.chunkStats.min.doubleval,
-                     pre_metadata_chunk.chunkStats.min.doubleval);
+    // ASSERT_DOUBLE_EQ(post_metadata_chunk->chunkStats.min.doubleval, 1.175494351E-38);
+    ASSERT_EQ(post_metadata_chunk->chunkStats.has_nulls, false);
+    ASSERT_GT(post_metadata_chunk->chunkStats.max.doubleval,
+              pre_metadata_chunk->chunkStats.max.doubleval);
+    ASSERT_DOUBLE_EQ(post_metadata_chunk->chunkStats.min.doubleval,
+                     pre_metadata_chunk->chunkStats.min.doubleval);
   });
 }
 
@@ -1282,16 +1283,16 @@ TEST_F(MetadataUpdate, MetadataStringDict8Null) {
 
     auto pre_metadata = get_metadata_vec("presidents", "presidents_copy"s);
     auto pre_metadata_chunk = pre_metadata[0].second;
-    ASSERT_EQ(pre_metadata_chunk.chunkStats.has_nulls, true);
+    ASSERT_EQ(pre_metadata_chunk->chunkStats.has_nulls, true);
 
     query("update presidents set presidents_copy=x;");
     auto post_metadata = get_metadata_vec("presidents", "presidents_copy"s);
     ASSERT_EQ(post_metadata.size(), 1U);
     auto post_metadata_chunk = post_metadata[0].second;
 
-    ASSERT_EQ(post_metadata_chunk.chunkStats.has_nulls, true);
-    ASSERT_EQ(post_metadata_chunk.chunkStats.min.intval, 0);
-    ASSERT_EQ(post_metadata_chunk.chunkStats.max.intval, 3);
+    ASSERT_EQ(post_metadata_chunk->chunkStats.has_nulls, true);
+    ASSERT_EQ(post_metadata_chunk->chunkStats.min.intval, 0);
+    ASSERT_EQ(post_metadata_chunk->chunkStats.max.intval, 3);
   });
 }
 
@@ -1307,16 +1308,16 @@ TEST_F(MetadataUpdate, MetadataStringDict16Null) {
 
     auto pre_metadata = get_metadata_vec("safe_cities", "safe_cities_copy"s);
     auto pre_metadata_chunk = pre_metadata[0].second;
-    ASSERT_EQ(pre_metadata_chunk.chunkStats.has_nulls, true);
+    ASSERT_EQ(pre_metadata_chunk->chunkStats.has_nulls, true);
 
     query("update safe_cities set safe_cities_copy=x;");
     auto post_metadata = get_metadata_vec("safe_cities", "safe_cities_copy"s);
     ASSERT_EQ(post_metadata.size(), 1U);
     auto post_metadata_chunk = post_metadata[0].second;
 
-    ASSERT_EQ(post_metadata_chunk.chunkStats.has_nulls, true);
-    ASSERT_EQ(post_metadata_chunk.chunkStats.min.intval, 0);
-    ASSERT_EQ(post_metadata_chunk.chunkStats.max.intval, 2);
+    ASSERT_EQ(post_metadata_chunk->chunkStats.has_nulls, true);
+    ASSERT_EQ(post_metadata_chunk->chunkStats.min.intval, 0);
+    ASSERT_EQ(post_metadata_chunk->chunkStats.max.intval, 2);
   });
 }
 
@@ -1334,16 +1335,16 @@ TEST_F(MetadataUpdate, MetadataStringDict32Null) {
 
     auto pre_metadata = get_metadata_vec("candidates", "candidates_copy"s);
     auto pre_metadata_chunk = pre_metadata[0].second;
-    ASSERT_EQ(pre_metadata_chunk.chunkStats.has_nulls, true);
+    ASSERT_EQ(pre_metadata_chunk->chunkStats.has_nulls, true);
 
     query("update candidates set candidates_copy=x;");
     auto post_metadata = get_metadata_vec("candidates", "candidates_copy"s);
     ASSERT_EQ(post_metadata.size(), 1U);
     auto post_metadata_chunk = post_metadata[0].second;
 
-    ASSERT_EQ(post_metadata_chunk.chunkStats.has_nulls, true);
-    ASSERT_EQ(post_metadata_chunk.chunkStats.min.intval, 0);
-    ASSERT_EQ(post_metadata_chunk.chunkStats.max.intval, 4);
+    ASSERT_EQ(post_metadata_chunk->chunkStats.has_nulls, true);
+    ASSERT_EQ(post_metadata_chunk->chunkStats.min.intval, 0);
+    ASSERT_EQ(post_metadata_chunk->chunkStats.max.intval, 4);
   });
 }
 
@@ -1356,8 +1357,8 @@ TEST_F(MetadataUpdate, MetadataSmallIntEncodedNull) {
     ASSERT_EQ(pre_metadata.size(), 1U);
     auto pre_metadata_chunk = pre_metadata[0].second;
 
-    ASSERT_EQ(pre_metadata_chunk.numElements, 2U);
-    ASSERT_EQ(pre_metadata_chunk.chunkStats.has_nulls, false);
+    ASSERT_EQ(pre_metadata_chunk->numElements, 2U);
+    ASSERT_EQ(pre_metadata_chunk->chunkStats.has_nulls, false);
 
     query("update small_ints_null set x = NULL where x < 50;");
 
@@ -1365,15 +1366,15 @@ TEST_F(MetadataUpdate, MetadataSmallIntEncodedNull) {
     ASSERT_EQ(post_metadata.size(), 1U);
     auto post_metadata_chunk = post_metadata[0].second;
 
-    ASSERT_EQ(pre_metadata_chunk.chunkStats.min.smallintval,
-              post_metadata_chunk.chunkStats.min.smallintval);
-    ASSERT_EQ(post_metadata_chunk.chunkStats.max.smallintval,
-              post_metadata_chunk.chunkStats.max.smallintval);
-    ASSERT_EQ(post_metadata_chunk.chunkStats.has_nulls, true);
+    ASSERT_EQ(pre_metadata_chunk->chunkStats.min.smallintval,
+              post_metadata_chunk->chunkStats.min.smallintval);
+    ASSERT_EQ(post_metadata_chunk->chunkStats.max.smallintval,
+              post_metadata_chunk->chunkStats.max.smallintval);
+    ASSERT_EQ(post_metadata_chunk->chunkStats.has_nulls, true);
 
-    auto smallint_minval = post_metadata_chunk.chunkStats.min.smallintval;
+    auto smallint_minval = post_metadata_chunk->chunkStats.min.smallintval;
     ASSERT_EQ(smallint_minval, 10);
-    ASSERT_EQ(post_metadata_chunk.chunkStats.has_nulls, true);
+    ASSERT_EQ(post_metadata_chunk->chunkStats.has_nulls, true);
 
     query("update small_ints_null set x=-127 where x is NULL;");
     query("update small_ints_null set x=127;");
@@ -1382,13 +1383,13 @@ TEST_F(MetadataUpdate, MetadataSmallIntEncodedNull) {
     ASSERT_EQ(post_metadata.size(), 1U);
     post_metadata_chunk = post_metadata[0].second;
 
-    ASSERT_EQ(post_metadata_chunk.chunkStats.max.smallintval, 127);
-    ASSERT_EQ(post_metadata_chunk.chunkStats.min.smallintval, -127);
-    ASSERT_EQ(post_metadata_chunk.chunkStats.has_nulls, true);
-    ASSERT_GT(post_metadata_chunk.chunkStats.max.smallintval,
-              pre_metadata_chunk.chunkStats.max.smallintval);
-    ASSERT_LT(post_metadata_chunk.chunkStats.min.smallintval,
-              pre_metadata_chunk.chunkStats.min.smallintval);
+    ASSERT_EQ(post_metadata_chunk->chunkStats.max.smallintval, 127);
+    ASSERT_EQ(post_metadata_chunk->chunkStats.min.smallintval, -127);
+    ASSERT_EQ(post_metadata_chunk->chunkStats.has_nulls, true);
+    ASSERT_GT(post_metadata_chunk->chunkStats.max.smallintval,
+              pre_metadata_chunk->chunkStats.max.smallintval);
+    ASSERT_LT(post_metadata_chunk->chunkStats.min.smallintval,
+              pre_metadata_chunk->chunkStats.min.smallintval);
   });
 };
 
@@ -1401,8 +1402,8 @@ TEST_F(MetadataUpdate, MetadataSmallIntEncodedNotNull) {
     ASSERT_EQ(pre_metadata.size(), 1U);
     auto pre_metadata_chunk = pre_metadata[0].second;
 
-    ASSERT_EQ(pre_metadata_chunk.numElements, 2U);
-    ASSERT_EQ(pre_metadata_chunk.chunkStats.has_nulls, false);
+    ASSERT_EQ(pre_metadata_chunk->numElements, 2U);
+    ASSERT_EQ(pre_metadata_chunk->chunkStats.has_nulls, false);
 
     EXPECT_THROW(query("update small_ints_not_null set x = NULL where x < 50;"),
                  std::runtime_error);
@@ -1411,7 +1412,7 @@ TEST_F(MetadataUpdate, MetadataSmallIntEncodedNotNull) {
     auto post_metadata_chunk = post_metadata[0].second;
 
     // This should never flip to true if it's a not-null table
-    ASSERT_EQ(post_metadata_chunk.chunkStats.has_nulls, false);
+    ASSERT_EQ(post_metadata_chunk->chunkStats.has_nulls, false);
 
     query("update small_ints_not_null set x=-127 where x < 50;");
     query("update small_ints_not_null set x=127 where x > 50;");
@@ -1420,8 +1421,8 @@ TEST_F(MetadataUpdate, MetadataSmallIntEncodedNotNull) {
     ASSERT_EQ(post_metadata.size(), 1U);
     post_metadata_chunk = post_metadata[0].second;
 
-    auto post_smallint_minval = post_metadata_chunk.chunkStats.min.smallintval;
-    auto post_smallint_maxval = post_metadata_chunk.chunkStats.max.smallintval;
+    auto post_smallint_minval = post_metadata_chunk->chunkStats.min.smallintval;
+    auto post_smallint_maxval = post_metadata_chunk->chunkStats.max.smallintval;
     ASSERT_EQ(post_smallint_minval, -127);
     ASSERT_EQ(post_smallint_maxval, 127);
   });

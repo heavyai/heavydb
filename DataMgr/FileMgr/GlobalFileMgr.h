@@ -118,11 +118,9 @@ class GlobalFileMgr : public AbstractBufferMgr {  // implements
 
   void init();
 
-  void getChunkMetadataVec(
-      std::vector<std::pair<ChunkKey, ChunkMetadata>>& chunkMetadataVec) override;
-  void getChunkMetadataVecForKeyPrefix(
-      std::vector<std::pair<ChunkKey, ChunkMetadata>>& chunkMetadataVec,
-      const ChunkKey& keyPrefix) override {
+  void getChunkMetadataVec(ChunkMetadataVector& chunkMetadataVec) override;
+  void getChunkMetadataVecForKeyPrefix(ChunkMetadataVector& chunkMetadataVec,
+                                       const ChunkKey& keyPrefix) override {
     return getFileMgr(keyPrefix)->getChunkMetadataVecForKeyPrefix(chunkMetadataVec,
                                                                   keyPrefix);
   }

@@ -93,7 +93,7 @@ void InsertOrderFragmenter::getChunkMetadata() {
   if (uses_foreign_storage_ ||
       defaultInsertLevel_ == Data_Namespace::MemoryLevel::DISK_LEVEL) {
     // memory-resident tables won't have anything on disk
-    std::vector<std::pair<ChunkKey, ChunkMetadata>> chunk_metadata;
+    ChunkMetadataVector chunk_metadata;
     dataMgr_->getChunkMetadataVecForKeyPrefix(chunk_metadata, chunkKeyPrefix_);
 
     // data comes like this - database_id, table_id, column_id, fragment_id
@@ -102,8 +102,7 @@ void InsertOrderFragmenter::getChunkMetadata() {
     int fragment_subkey_index = 3;
     std::sort(chunk_metadata.begin(),
               chunk_metadata.end(),
-              [&](const std::pair<ChunkKey, ChunkMetadata>& pair1,
-                  const std::pair<ChunkKey, ChunkMetadata>& pair2) {
+              [&](const auto& pair1, const auto& pair2) {
                 return pair1.first[3] < pair2.first[3];
               });
 
@@ -118,7 +117,7 @@ void InsertOrderFragmenter::getChunkMetadata() {
         CHECK(new_fragment_info);
         maxFragmentId_ = cur_fragment_id;
         new_fragment_info->fragmentId = cur_fragment_id;
-        new_fragment_info->setPhysicalNumTuples(chunk_itr->second.numElements);
+        new_fragment_info->setPhysicalNumTuples(chunk_itr->second->numElements);
         numTuples_ += new_fragment_info->getPhysicalNumTuples();
         for (const auto level_size : dataMgr_->levelSizes_) {
           new_fragment_info->deviceIds.push_back(cur_fragment_id % level_size);
@@ -128,7 +127,7 @@ void InsertOrderFragmenter::getChunkMetadata() {
         new_fragment_info->shard = shard_;
         fragmentInfoVec_.emplace_back(std::move(new_fragment_info));
       } else {
-        if (chunk_itr->second.numElements !=
+        if (chunk_itr->second->numElements !=
             fragmentInfoVec_.back()->getPhysicalNumTuples()) {
           LOG(FATAL) << "Inconsistency in num tuples within fragment for table " +
                             std::to_string(physicalTableId_) + ", Column " +
@@ -136,7 +135,7 @@ void InsertOrderFragmenter::getChunkMetadata() {
                             std::to_string(
                                 fragmentInfoVec_.back()->getPhysicalNumTuples()) +
                             ", Chunk Tuples: " +
-                            std::to_string(chunk_itr->second.numElements);
+                            std::to_string(chunk_itr->second->numElements);
         }
       }
       CHECK(fragmentInfoVec_.back().get());
@@ -272,8 +271,8 @@ void InsertOrderFragmenter::updateChunkStats(
                                              chunk_key,
                                              defaultInsertLevel_,
                                              0,
-                                             chunk_meta_it->second.numBytes,
-                                             chunk_meta_it->second.numElements);
+                                             chunk_meta_it->second->numBytes,
+                                             chunk_meta_it->second->numElements);
       auto buf = chunk->get_buffer();
       CHECK(buf);
       auto encoder = buf->encoder.get();
@@ -283,9 +282,9 @@ void InsertOrderFragmenter::updateChunkStats(
 
       auto chunk_stats = stats_itr->second;
 
-      ChunkMetadata old_chunk_metadata;
+      auto old_chunk_metadata = std::make_shared<ChunkMetadata>();
       encoder->getMetadata(old_chunk_metadata);
-      auto& old_chunk_stats = old_chunk_metadata.chunkStats;
+      auto& old_chunk_stats = old_chunk_metadata->chunkStats;
 
       const bool didResetStats = encoder->resetChunkStats(chunk_stats);
       // Use the logical type to display data, since the encoding should be ignored
@@ -310,7 +309,7 @@ void InsertOrderFragmenter::updateChunkStats(
       VLOG(2) << "Nulls: " << (chunk_stats.has_nulls ? "True" : "False");
 
       // Reset fragment metadata map and set buffer to dirty
-      ChunkMetadata new_metadata;
+      auto new_metadata = std::make_shared<ChunkMetadata>();
       // Run through fillChunkStats to ensure any transformations to the raw metadata
       // values get applied (e.g. for date in days)
       encoder->getMetadata(new_metadata);
@@ -489,7 +488,7 @@ bool InsertOrderFragmenter::hasDeletedRows(const int delete_column_id) {
   for (auto const& fragment : fragmentInfoVec_) {
     auto chunk_meta_it = fragment->getChunkMetadataMapPhysical().find(delete_column_id);
     CHECK(chunk_meta_it != fragment->getChunkMetadataMapPhysical().end());
-    const auto& chunk_stats = chunk_meta_it->second.chunkStats;
+    const auto& chunk_stats = chunk_meta_it->second->chunkStats;
     if (chunk_stats.max.tinyintval == 1) {
       return true;
     }
@@ -623,16 +622,15 @@ void InsertOrderFragmenter::insertDataImpl(InsertData& insertDataStruct) {
     if (hasMaterializedRowId_) {
       size_t startId = maxFragmentRows_ * currentFragment->fragmentId +
                        currentFragment->shadowNumTuples;
-      int64_t* rowIdData = new int64_t[numRowsToInsert];
+      auto row_id_data = std::make_unique<int64_t[]>(numRowsToInsert);
       for (size_t i = 0; i < numRowsToInsert; ++i) {
-        rowIdData[i] = i + startId;
+        row_id_data[i] = i + startId;
       }
       DataBlockPtr rowIdBlock;
-      rowIdBlock.numbersPtr = reinterpret_cast<int8_t*>(rowIdData);
+      rowIdBlock.numbersPtr = reinterpret_cast<int8_t*>(row_id_data.get());
       auto colMapIt = columnMap_.find(rowIdColId_);
       currentFragment->shadowChunkMetadataMap[rowIdColId_] =
           colMapIt->second.appendData(rowIdBlock, numRowsToInsert, numRowsInserted);
-      delete[] rowIdData;
     }
 
     currentFragment->shadowNumTuples =

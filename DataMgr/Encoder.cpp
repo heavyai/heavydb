@@ -224,9 +224,8 @@ Encoder::Encoder(Data_Namespace::AbstractBuffer* buffer)
     , decimal_overflow_validator_(buffer ? buffer->sql_type : SQLTypeInfo())
     , date_days_overflow_validator_(buffer ? buffer->sql_type : SQLTypeInfo()){};
 
-void Encoder::getMetadata(ChunkMetadata& chunkMetadata) {
-  // chunkMetadata = metadataTemplate_; // invoke copy constructor
-  chunkMetadata.sqlType = buffer_->sql_type;
-  chunkMetadata.numBytes = buffer_->size();
-  chunkMetadata.numElements = num_elems_;
+void Encoder::getMetadata(const std::shared_ptr<ChunkMetadata>& chunkMetadata) {
+  chunkMetadata->sqlType = buffer_->sql_type;
+  chunkMetadata->numBytes = buffer_->size();
+  chunkMetadata->numElements = num_elems_;
 }

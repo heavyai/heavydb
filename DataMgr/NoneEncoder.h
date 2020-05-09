@@ -37,11 +37,11 @@ class NoneEncoder : public Encoder {
       , dataMax(std::numeric_limits<T>::lowest())
       , has_nulls(false) {}
 
-  ChunkMetadata appendData(int8_t*& src_data,
-                           const size_t num_elems_to_append,
-                           const SQLTypeInfo&,
-                           const bool replicating = false,
-                           const int64_t offset = -1) override {
+  std::shared_ptr<ChunkMetadata> appendData(int8_t*& src_data,
+                                            const size_t num_elems_to_append,
+                                            const SQLTypeInfo&,
+                                            const bool replicating = false,
+                                            const int64_t offset = -1) override {
     T* unencodedData = reinterpret_cast<T*>(src_data);
     std::vector<T> encoded_data;
     if (replicating) {
@@ -76,21 +76,20 @@ class NoneEncoder : public Encoder {
       buffer_->write(
           src_data, num_elems_to_append * sizeof(T), static_cast<size_t>(offset));
     }
-    ChunkMetadata chunkMetadata;
-    getMetadata(chunkMetadata);
-
-    return chunkMetadata;
+    auto chunk_metadata = std::make_shared<ChunkMetadata>();
+    getMetadata(chunk_metadata);
+    return chunk_metadata;
   }
 
-  void getMetadata(ChunkMetadata& chunkMetadata) override {
+  void getMetadata(const std::shared_ptr<ChunkMetadata>& chunkMetadata) override {
     Encoder::getMetadata(chunkMetadata);  // call on parent class
-    chunkMetadata.fillChunkStats(dataMin, dataMax, has_nulls);
+    chunkMetadata->fillChunkStats(dataMin, dataMax, has_nulls);
   }
 
   // Only called from the executor for synthesized meta-information.
-  ChunkMetadata getMetadata(const SQLTypeInfo& ti) override {
-    ChunkMetadata chunk_metadata{ti, 0, 0, ChunkStats{}};
-    chunk_metadata.fillChunkStats(dataMin, dataMax, has_nulls);
+  std::shared_ptr<ChunkMetadata> getMetadata(const SQLTypeInfo& ti) override {
+    auto chunk_metadata = std::make_shared<ChunkMetadata>(ti, 0, 0, ChunkStats{});
+    chunk_metadata->fillChunkStats(dataMin, dataMax, has_nulls);
     return chunk_metadata;
   }
 

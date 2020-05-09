@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 MapD Technologies, Inc.
+ * Copyright 2020 OmniSci, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,11 +14,11 @@
  * limitations under the License.
  */
 
-#ifndef CHUNKMETADATA_H
-#define CHUNKMETADATA_H
+#pragma once
 
 #include <cstddef>
 #include "../Shared/sqltypes.h"
+#include "Shared/types.h"
 
 #include "Shared/Logger.h"
 
@@ -33,6 +33,17 @@ struct ChunkMetadata {
   size_t numBytes;
   size_t numElements;
   ChunkStats chunkStats;
+
+  ChunkMetadata(const SQLTypeInfo& sql_type,
+                const size_t num_bytes,
+                const size_t num_elements,
+                const ChunkStats& chunk_stats)
+      : sqlType(sql_type)
+      , numBytes(num_bytes)
+      , numElements(num_elements)
+      , chunkStats(chunk_stats) {}
+
+  ChunkMetadata() {}
 
   template <typename T>
   void fillChunkStats(const T min, const T max, const bool has_nulls) {
@@ -111,4 +122,6 @@ struct ChunkMetadata {
   }
 };
 
-#endif  // CHUNKMETADATA_H
+using ChunkMetadataMap = std::map<int, std::shared_ptr<ChunkMetadata>>;
+using ChunkMetadataVector =
+    std::vector<std::pair<ChunkKey, std::shared_ptr<ChunkMetadata>>>;

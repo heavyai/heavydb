@@ -165,10 +165,10 @@ size_t Chunk::getNumElemsForBytesInsertData(const DataBlockPtr& src_data,
   }
 }
 
-ChunkMetadata Chunk::appendData(DataBlockPtr& src_data,
-                                const size_t num_elems,
-                                const size_t start_idx,
-                                const bool replicating) {
+std::shared_ptr<ChunkMetadata> Chunk::appendData(DataBlockPtr& src_data,
+                                                 const size_t num_elems,
+                                                 const size_t start_idx,
+                                                 const bool replicating) {
   const auto& ti = column_desc->columnType;
   if (ti.is_varlen()) {
     switch (ti.get_type()) {
@@ -252,7 +252,7 @@ void Chunk::init_encoder() {
   }
 }
 
-ChunkIter Chunk::begin_iterator(const ChunkMetadata& chunk_metadata,
+ChunkIter Chunk::begin_iterator(const std::shared_ptr<ChunkMetadata>& chunk_metadata,
                                 int start_idx,
                                 int skip) const {
   ChunkIter it;
@@ -269,7 +269,7 @@ ChunkIter Chunk::begin_iterator(const ChunkMetadata& chunk_metadata,
     it.end_pos = buffer->getMemoryPtr() + buffer->size();
     it.second_buf = nullptr;
   }
-  it.num_elems = chunk_metadata.numElements;
+  it.num_elems = chunk_metadata->numElements;
   return it;
 }
 }  // namespace Chunk_NS
