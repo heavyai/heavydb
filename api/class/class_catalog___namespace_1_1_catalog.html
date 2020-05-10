@@ -65,7 +65,7 @@
             
             
               <div class="version">
-                5.3.0dev b6f03c9
+                5.3.0dev 08dd85f
               </div>
             
           
@@ -665,6 +665,7 @@
 <li class="toctree-l2"><a class="reference internal" href="class_scalar_expr_visitor.html">Class ScalarExprVisitor</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_scope_guard.html">Class ScopeGuard</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_show_databases_command.html">Class ShowDatabasesCommand</a></li>
+<li class="toctree-l2"><a class="reference internal" href="class_show_foreign_servers_command.html">Class ShowForeignServersCommand</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_show_tables_command.html">Class ShowTablesCommand</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_sort_field.html">Class SortField</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_speculative_top_n_blacklist.html">Class SpeculativeTopNBlacklist</a></li>
@@ -859,8 +860,11 @@
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_create_server_1_1_builder.html">Class com::mapd::parser::extension::ddl::SqlCreateServer::Builder</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_drop_foreign_table.html">Class com::mapd::parser::extension::ddl::SqlDropForeignTable</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_drop_server.html">Class com::mapd::parser::extension::ddl::SqlDropServer</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_filter.html">Class com::mapd::parser::extension::ddl::SqlFilter</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_show_command.html">Class com::mapd::parser::extension::ddl::SqlShowCommand</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_show_databases.html">Class com::mapd::parser::extension::ddl::SqlShowDatabases</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_show_foreign_servers.html">Class com::mapd::parser::extension::ddl::SqlShowForeignServers</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_show_foreign_servers_1_1_builder.html">Class com::mapd::parser::extension::ddl::SqlShowForeignServers::Builder</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_show_tables.html">Class com::mapd::parser::extension::ddl::SqlShowTables</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_show_user_sessions.html">Class com::mapd::parser::extension::ddl::SqlShowUserSessions</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1omnisql_1_1_omni_sql_array.html">Class com::mapd::parser::extension::ddl::omnisql::OmniSqlArray</a></li>
@@ -1833,6 +1837,21 @@
 <p><dl class="simple">
 <dt><strong>Parameters</strong></dt><dd><ul class="breatheparameterlist simple">
 <li><p><code class="docutils literal notranslate"><span class="pre">server_name</span></code>: - Name of foreign server that will be deleted </p></li>
+</ul>
+</dd>
+</dl>
+</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="_CPPv4N17Catalog_Namespace7Catalog24getForeignServersForUserEPKN9rapidjson5ValueERK12UserMetadataRNSt6vectorIPN15foreign_storage13ForeignServerEEE">
+<span id="_CPPv3N17Catalog_Namespace7Catalog24getForeignServersForUserEPKN9rapidjson5ValueERK12UserMetadataRNSt6vectorIPN15foreign_storage13ForeignServerEEE"></span><span id="_CPPv2N17Catalog_Namespace7Catalog24getForeignServersForUserEPKN9rapidjson5ValueERK12UserMetadataRNSt6vectorIPN15foreign_storage13ForeignServerEEE"></span><span id="Catalog_Namespace::Catalog::getForeignServersForUser__rapidjson::ValueCP.UserMetadataCR.std::vector:foreign_storage::ForeignServerP:R"></span><span class="target" id="class_catalog___namespace_1_1_catalog_1a834f2c2d2f16fc194719b8ed4d822adc"></span>void <code class="sig-name descname">getForeignServersForUser</code><span class="sig-paren">(</span><em class="property">const</em> rapidjson::Value *<em>filters</em>, <em class="property">const</em> <a class="reference internal" href="../struct/struct_catalog___namespace_1_1_user_metadata.html#_CPPv4N17Catalog_Namespace12UserMetadataE" title="Catalog_Namespace::UserMetadata">UserMetadata</a> &amp;<em>user</em>, std::vector&lt;foreign_storage::<a class="reference internal" href="../struct/structforeign__storage_1_1_foreign_server.html#_CPPv4N15foreign_storage13ForeignServerE" title="foreign_storage::ForeignServer">ForeignServer</a> *&gt; &amp;<em>results</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N17Catalog_Namespace7Catalog24getForeignServersForUserEPKN9rapidjson5ValueERK12UserMetadataRNSt6vectorIPN15foreign_storage13ForeignServerEEE" title="Permalink to this definition">¶</a><br /></dt>
+<dd><p>Performs a query on all foreign servers accessible to user with optional filter, and returns pointers toresulting server objects</p>
+<p><dl class="simple">
+<dt><strong>Parameters</strong></dt><dd><ul class="breatheparameterlist simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">filters</span></code>: - Json <a class="reference internal" href="class_value.html#class_value"><span class="std std-ref">Value</span></a> representing SQL WHERE clause to filter results, eg.: “WHERE attribute1 = value1 AND attribute2 LIKE value2”, or Null <a class="reference internal" href="class_value.html#class_value"><span class="std std-ref">Value</span></a> <a class="reference internal" href="../struct/struct_array.html#struct_array"><span class="std std-ref">Array</span></a> of Values with attribute, value, operator, and chain specifier after first entry </p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">user</span></code>: - user to retrieve server names </p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">results</span></code>: - results returned as a vector of pointers to <a class="reference internal" href="../struct/structforeign__storage_1_1_foreign_server.html#structforeign__storage_1_1_foreign_server"><span class="std std-ref">foreign_storage::ForeignServer</span></a> </p></li>
 </ul>
 </dd>
 </dl>

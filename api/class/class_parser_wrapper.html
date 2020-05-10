@@ -65,7 +65,7 @@
             
             
               <div class="version">
-                5.3.0dev b6f03c9
+                5.3.0dev 08dd85f
               </div>
             
           
@@ -665,6 +665,7 @@
 <li class="toctree-l2"><a class="reference internal" href="class_scalar_expr_visitor.html">Class ScalarExprVisitor</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_scope_guard.html">Class ScopeGuard</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_show_databases_command.html">Class ShowDatabasesCommand</a></li>
+<li class="toctree-l2"><a class="reference internal" href="class_show_foreign_servers_command.html">Class ShowForeignServersCommand</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_show_tables_command.html">Class ShowTablesCommand</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_sort_field.html">Class SortField</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_speculative_top_n_blacklist.html">Class SpeculativeTopNBlacklist</a></li>
@@ -859,8 +860,11 @@
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_create_server_1_1_builder.html">Class com::mapd::parser::extension::ddl::SqlCreateServer::Builder</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_drop_foreign_table.html">Class com::mapd::parser::extension::ddl::SqlDropForeignTable</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_drop_server.html">Class com::mapd::parser::extension::ddl::SqlDropServer</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_filter.html">Class com::mapd::parser::extension::ddl::SqlFilter</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_show_command.html">Class com::mapd::parser::extension::ddl::SqlShowCommand</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_show_databases.html">Class com::mapd::parser::extension::ddl::SqlShowDatabases</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_show_foreign_servers.html">Class com::mapd::parser::extension::ddl::SqlShowForeignServers</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_show_foreign_servers_1_1_builder.html">Class com::mapd::parser::extension::ddl::SqlShowForeignServers::Builder</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_show_tables.html">Class com::mapd::parser::extension::ddl::SqlShowTables</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_show_user_sessions.html">Class com::mapd::parser::extension::ddl::SqlShowUserSessions</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1omnisql_1_1_omni_sql_array.html">Class com::mapd::parser::extension::ddl::omnisql::OmniSqlArray</a></li>
@@ -1480,6 +1484,37 @@
 
 </dd></dl>
 
+<dl class="enum">
+<dt id="_CPPv4N13ParserWrapper9QueryTypeE">
+<span id="_CPPv3N13ParserWrapper9QueryTypeE"></span><span id="_CPPv2N13ParserWrapper9QueryTypeE"></span><span class="target" id="class_parser_wrapper_1af07a3e51a8b626795a6baada0ea2cb0a"></span><em class="property">enum </em><code class="sig-name descname">QueryType</code><a class="headerlink" href="#_CPPv4N13ParserWrapper9QueryTypeE" title="Permalink to this definition">¶</a><br /></dt>
+<dd><p><em>Values:</em></p>
+<dl class="enumerator">
+<dt id="_CPPv4N13ParserWrapper7UnknownE">
+<span id="_CPPv3N13ParserWrapper7UnknownE"></span><span id="_CPPv2N13ParserWrapper7UnknownE"></span><span class="target" id="class_parser_wrapper_1af07a3e51a8b626795a6baada0ea2cb0aa88183b946cc5f0e8c96b2e66e1c74a7e"></span><code class="sig-name descname">Unknown</code><a class="headerlink" href="#_CPPv4N13ParserWrapper7UnknownE" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="enumerator">
+<dt id="_CPPv4N13ParserWrapper4ReadE">
+<span id="_CPPv3N13ParserWrapper4ReadE"></span><span id="_CPPv2N13ParserWrapper4ReadE"></span><span class="target" id="class_parser_wrapper_1af07a3e51a8b626795a6baada0ea2cb0aa7a1a5f3e79fdc91edf2f5ead9d66abb4"></span><code class="sig-name descname">Read</code><a class="headerlink" href="#_CPPv4N13ParserWrapper4ReadE" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="enumerator">
+<dt id="_CPPv4N13ParserWrapper5WriteE">
+<span id="_CPPv3N13ParserWrapper5WriteE"></span><span id="_CPPv2N13ParserWrapper5WriteE"></span><span class="target" id="class_parser_wrapper_1af07a3e51a8b626795a6baada0ea2cb0aa1129c0e4d43f2d121652a7302712cff6"></span><code class="sig-name descname">Write</code><a class="headerlink" href="#_CPPv4N13ParserWrapper5WriteE" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="enumerator">
+<dt id="_CPPv4N13ParserWrapper10SchemaReadE">
+<span id="_CPPv3N13ParserWrapper10SchemaReadE"></span><span id="_CPPv2N13ParserWrapper10SchemaReadE"></span><span class="target" id="class_parser_wrapper_1af07a3e51a8b626795a6baada0ea2cb0aadb35b0538aadf3d26f18e34a61fbe454"></span><code class="sig-name descname">SchemaRead</code><a class="headerlink" href="#_CPPv4N13ParserWrapper10SchemaReadE" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="enumerator">
+<dt id="_CPPv4N13ParserWrapper11SchemaWriteE">
+<span id="_CPPv3N13ParserWrapper11SchemaWriteE"></span><span id="_CPPv2N13ParserWrapper11SchemaWriteE"></span><span class="target" id="class_parser_wrapper_1af07a3e51a8b626795a6baada0ea2cb0aa81a50f88cdc0cfa62fa0f44f0c56f86c"></span><code class="sig-name descname">SchemaWrite</code><a class="headerlink" href="#_CPPv4N13ParserWrapper11SchemaWriteE" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
 </div>
 <div class="breathe-sectiondef docutils container">
 <p class="breathe-sectiondef-title rubric">Public Functions</p>
@@ -1511,6 +1546,11 @@
 <dl class="function">
 <dt id="_CPPv4NK13ParserWrapper14getExplainTypeEv">
 <span id="_CPPv3NK13ParserWrapper14getExplainTypeEv"></span><span id="_CPPv2NK13ParserWrapper14getExplainTypeEv"></span><span id="ParserWrapper::getExplainTypeC"></span><span class="target" id="class_parser_wrapper_1a296140f6840143e74c1a6ea392b839aa"></span><a class="reference internal" href="#_CPPv4N13ParserWrapper11ExplainTypeE" title="ParserWrapper::ExplainType">ExplainType</a> <code class="sig-name descname">getExplainType</code><span class="sig-paren">(</span><span class="sig-paren">)</span> <em class="property">const</em><a class="headerlink" href="#_CPPv4NK13ParserWrapper14getExplainTypeEv" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="_CPPv4NK13ParserWrapper12getQueryTypeEv">
+<span id="_CPPv3NK13ParserWrapper12getQueryTypeEv"></span><span id="_CPPv2NK13ParserWrapper12getQueryTypeEv"></span><span id="ParserWrapper::getQueryTypeC"></span><span class="target" id="class_parser_wrapper_1a089d46ba83ae3067e4315c383b85cd3b"></span><a class="reference internal" href="#_CPPv4N13ParserWrapper9QueryTypeE" title="ParserWrapper::QueryType">QueryType</a> <code class="sig-name descname">getQueryType</code><span class="sig-paren">(</span><span class="sig-paren">)</span> <em class="property">const</em><a class="headerlink" href="#_CPPv4NK13ParserWrapper12getQueryTypeEv" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 <dl class="function">
@@ -1612,6 +1652,11 @@
 <dl class="member">
 <dt id="_CPPv4N13ParserWrapper13explain_type_E">
 <span id="_CPPv3N13ParserWrapper13explain_type_E"></span><span id="_CPPv2N13ParserWrapper13explain_type_E"></span><span id="ParserWrapper::explain_type___ExplainType"></span><span class="target" id="class_parser_wrapper_1ad6a34e56b625aa00df0b9adc53812ed3"></span><a class="reference internal" href="#_CPPv4N13ParserWrapper11ExplainTypeE" title="ParserWrapper::ExplainType">ExplainType</a> <code class="sig-name descname">explain_type_</code> = <a class="reference internal" href="#_CPPv4N13ParserWrapper11ExplainTypeE" title="ParserWrapper::ExplainType">ExplainType</a>::None<a class="headerlink" href="#_CPPv4N13ParserWrapper13explain_type_E" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="member">
+<dt id="_CPPv4N13ParserWrapper11query_type_E">
+<span id="_CPPv3N13ParserWrapper11query_type_E"></span><span id="_CPPv2N13ParserWrapper11query_type_E"></span><span id="ParserWrapper::query_type___QueryType"></span><span class="target" id="class_parser_wrapper_1a9e21f6e11de51f6214370331e7acfc52"></span><a class="reference internal" href="#_CPPv4N13ParserWrapper9QueryTypeE" title="ParserWrapper::QueryType">QueryType</a> <code class="sig-name descname">query_type_</code> = <a class="reference internal" href="#_CPPv4N13ParserWrapper9QueryTypeE" title="ParserWrapper::QueryType">QueryType</a>::Unknown<a class="headerlink" href="#_CPPv4N13ParserWrapper11query_type_E" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 <dl class="member">

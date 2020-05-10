@@ -1,0 +1,9 @@
+Class com::mapd::parser::extension::ddl::SqlFilter
+==================================================
+
+.. doxygenclass:: com::mapd::parser::extension::ddl::SqlFilter
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

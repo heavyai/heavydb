@@ -41,7 +41,7 @@
     <link rel="index" title="Index" href="../../genindex.html" />
     <link rel="search" title="Search" href="../../search.html" />
     <link rel="next" title="Class com::mapd::parser::extension::ddl::SqlShowDatabases" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_show_databases.html" />
-    <link rel="prev" title="Class com::mapd::parser::extension::ddl::SqlDropServer" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_drop_server.html" /> 
+    <link rel="prev" title="Class com::mapd::parser::extension::ddl::SqlFilter" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_filter.html" /> 
 </head>
 
 <body class="wy-body-for-nav">
@@ -65,7 +65,7 @@
             
             
               <div class="version">
-                5.3.0dev b6f03c9
+                5.3.0dev 08dd85f
               </div>
             
           
@@ -665,6 +665,7 @@
 <li class="toctree-l2"><a class="reference internal" href="class_scalar_expr_visitor.html">Class ScalarExprVisitor</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_scope_guard.html">Class ScopeGuard</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_show_databases_command.html">Class ShowDatabasesCommand</a></li>
+<li class="toctree-l2"><a class="reference internal" href="class_show_foreign_servers_command.html">Class ShowForeignServersCommand</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_show_tables_command.html">Class ShowTablesCommand</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_sort_field.html">Class SortField</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_speculative_top_n_blacklist.html">Class SpeculativeTopNBlacklist</a></li>
@@ -859,8 +860,11 @@
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_create_server_1_1_builder.html">Class com::mapd::parser::extension::ddl::SqlCreateServer::Builder</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_drop_foreign_table.html">Class com::mapd::parser::extension::ddl::SqlDropForeignTable</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_drop_server.html">Class com::mapd::parser::extension::ddl::SqlDropServer</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_filter.html">Class com::mapd::parser::extension::ddl::SqlFilter</a></li>
 <li class="toctree-l2 current"><a class="current reference internal" href="#">Class com::mapd::parser::extension::ddl::SqlShowCommand</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_show_databases.html">Class com::mapd::parser::extension::ddl::SqlShowDatabases</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_show_foreign_servers.html">Class com::mapd::parser::extension::ddl::SqlShowForeignServers</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_show_foreign_servers_1_1_builder.html">Class com::mapd::parser::extension::ddl::SqlShowForeignServers::Builder</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_show_tables.html">Class com::mapd::parser::extension::ddl::SqlShowTables</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_show_user_sessions.html">Class com::mapd::parser::extension::ddl::SqlShowUserSessions</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1omnisql_1_1_omni_sql_array.html">Class com::mapd::parser::extension::ddl::omnisql::OmniSqlArray</a></li>
@@ -1411,7 +1415,7 @@
 <dl class="class">
 <dt>
 <span class="target" id="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_show_command"></span><em class="property">class </em></dt>
-<dd><p>Subclassed by <a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_show_databases.html#classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_show_databases"><span class="std std-ref">com.mapd.parser.extension.ddl.SqlShowDatabases</span></a>, <a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_show_tables.html#classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_show_tables"><span class="std std-ref">com.mapd.parser.extension.ddl.SqlShowTables</span></a>, <a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_show_user_sessions.html#classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_show_user_sessions"><span class="std std-ref">com.mapd.parser.extension.ddl.SqlShowUserSessions</span></a></p>
+<dd><p>Subclassed by <a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_show_databases.html#classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_show_databases"><span class="std std-ref">com.mapd.parser.extension.ddl.SqlShowDatabases</span></a>, <a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_show_foreign_servers.html#classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_show_foreign_servers"><span class="std std-ref">com.mapd.parser.extension.ddl.SqlShowForeignServers</span></a>, <a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_show_tables.html#classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_show_tables"><span class="std std-ref">com.mapd.parser.extension.ddl.SqlShowTables</span></a>, <a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_show_user_sessions.html#classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_show_user_sessions"><span class="std std-ref">com.mapd.parser.extension.ddl.SqlShowUserSessions</span></a></p>
 <div class="breathe-sectiondef docutils container">
 <p class="breathe-sectiondef-title rubric">Public Functions</p>
 <dl class="function">
@@ -1453,7 +1457,7 @@
         <a href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_show_databases.html" class="btn btn-neutral float-right" title="Class com::mapd::parser::extension::ddl::SqlShowDatabases" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right"></span></a>
       
       
-        <a href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_drop_server.html" class="btn btn-neutral float-left" title="Class com::mapd::parser::extension::ddl::SqlDropServer" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left"></span> Previous</a>
+        <a href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_filter.html" class="btn btn-neutral float-left" title="Class com::mapd::parser::extension::ddl::SqlFilter" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left"></span> Previous</a>
       
     </div>
   

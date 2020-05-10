@@ -65,7 +65,7 @@
             
             
               <div class="version">
-                5.3.0dev b6f03c9
+                5.3.0dev 08dd85f
               </div>
             
           
@@ -665,6 +665,7 @@
 <li class="toctree-l2"><a class="reference internal" href="class_scalar_expr_visitor.html">Class ScalarExprVisitor</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_scope_guard.html">Class ScopeGuard</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_show_databases_command.html">Class ShowDatabasesCommand</a></li>
+<li class="toctree-l2"><a class="reference internal" href="class_show_foreign_servers_command.html">Class ShowForeignServersCommand</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_show_tables_command.html">Class ShowTablesCommand</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_sort_field.html">Class SortField</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_speculative_top_n_blacklist.html">Class SpeculativeTopNBlacklist</a></li>
@@ -859,8 +860,11 @@
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_create_server_1_1_builder.html">Class com::mapd::parser::extension::ddl::SqlCreateServer::Builder</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_drop_foreign_table.html">Class com::mapd::parser::extension::ddl::SqlDropForeignTable</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_drop_server.html">Class com::mapd::parser::extension::ddl::SqlDropServer</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_filter.html">Class com::mapd::parser::extension::ddl::SqlFilter</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_show_command.html">Class com::mapd::parser::extension::ddl::SqlShowCommand</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_show_databases.html">Class com::mapd::parser::extension::ddl::SqlShowDatabases</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_show_foreign_servers.html">Class com::mapd::parser::extension::ddl::SqlShowForeignServers</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_show_foreign_servers_1_1_builder.html">Class com::mapd::parser::extension::ddl::SqlShowForeignServers::Builder</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_show_tables.html">Class com::mapd::parser::extension::ddl::SqlShowTables</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_show_user_sessions.html">Class com::mapd::parser::extension::ddl::SqlShowUserSessions</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1omnisql_1_1_omni_sql_array.html">Class com::mapd::parser::extension::ddl::omnisql::OmniSqlArray</a></li>
@@ -1420,22 +1424,52 @@
 
 <dl class="function">
 <dt>
-<span class="target" id="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_foreign_server_test_1ab27fb3e0b85d683c59ce01b1feabd698"></span><code class="sig-name descname">void com.mapd.parser.extension.ddl.ForeignServerTest.process_givenCreateServerDdlCommand_returnsExpectedJsonResponse()</code></dt>
+<span class="target" id="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_foreign_server_test_1a20d6e9a24a5ff5e473f4853109fe031e"></span><code class="sig-name descname">void com.mapd.parser.extension.ddl.ForeignServerTest.CreateServerDdlCommand()</code></dt>
 <dd></dd></dl>
 
 <dl class="function">
 <dt>
-<span class="target" id="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_foreign_server_test_1a4ccacfdb5b90aae1f7f37dd61d1c6511"></span><code class="sig-name descname">void com.mapd.parser.extension.ddl.ForeignServerTest.process_givenCreateServerDdlCommandWithIfNotExists_returnsExpectedJsonResponse()</code></dt>
+<span class="target" id="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_foreign_server_test_1a2daffe678eccd6b8350e73d6c93e752d"></span><code class="sig-name descname">void com.mapd.parser.extension.ddl.ForeignServerTest.CreateServerDdlCommandWithIfNotExists()</code></dt>
 <dd></dd></dl>
 
 <dl class="function">
 <dt>
-<span class="target" id="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_foreign_server_test_1abadfa8a9d29b59e5b2338fd83cf8c62d"></span><code class="sig-name descname">void com.mapd.parser.extension.ddl.ForeignServerTest.process_givenDropServerDdlCommand_returnsExpectedJsonResponse()</code></dt>
+<span class="target" id="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_foreign_server_test_1ac12a5cee4f8ca721c2096cb38835c0d9"></span><code class="sig-name descname">void com.mapd.parser.extension.ddl.ForeignServerTest.DropServerDdlCommand()</code></dt>
 <dd></dd></dl>
 
 <dl class="function">
 <dt>
-<span class="target" id="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_foreign_server_test_1adb96f9b669352a08c92aa0cdefbf109e"></span><code class="sig-name descname">void com.mapd.parser.extension.ddl.ForeignServerTest.process_givenDropServerDdlCommandWithIfExists_returnsExpectedJsonResponse()</code></dt>
+<span class="target" id="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_foreign_server_test_1af40f14d87ff45edf1791f7b29cc1035a"></span><code class="sig-name descname">void com.mapd.parser.extension.ddl.ForeignServerTest.DropServerDdlCommandWithIfExists()</code></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt>
+<span class="target" id="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_foreign_server_test_1aaee633c1bf80ea3ace68ac29add62865"></span><code class="sig-name descname">void com.mapd.parser.extension.ddl.ForeignServerTest.ShowForeignServers()</code></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt>
+<span class="target" id="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_foreign_server_test_1ab46eedb296b0a621018f9543bd6c00e0"></span><code class="sig-name descname">void com.mapd.parser.extension.ddl.ForeignServerTest.ShowForeignServersWhere()</code></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt>
+<span class="target" id="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_foreign_server_test_1a74b773070505ca5f1bb7d28fc17bc45e"></span><code class="sig-name descname">void com.mapd.parser.extension.ddl.ForeignServerTest.ShowForeignServersLike()</code></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt>
+<span class="target" id="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_foreign_server_test_1aa2bf30cda7633765d380c02b3d0d9a14"></span><code class="sig-name descname">void com.mapd.parser.extension.ddl.ForeignServerTest.ShowForeignServersLikeAnd()</code></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt>
+<span class="target" id="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_foreign_server_test_1a6c0dcf1523fe163af7f7f8d9764d69ac"></span><code class="sig-name descname">void com.mapd.parser.extension.ddl.ForeignServerTest.ShowForeignServersEqOr()</code></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt>
+<span class="target" id="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_foreign_server_test_1abd04cee403df90223569b73d15b0243b"></span><code class="sig-name descname">void com.mapd.parser.extension.ddl.ForeignServerTest.ShowForeignServersLikeAndLikeOrEq()</code></dt>
 <dd></dd></dl>
 
 </div>
