@@ -58,21 +58,21 @@ void CsvDataWrapper::initializeChunkBuffers(const int fragment_index) {
           db_id_, foreign_table_->tableId, column->columnId, fragment_index, 1};
       CHECK(chunk_buffer_map_.find(data_chunk_key) == chunk_buffer_map_.end());
       chunk_buffer_map_[data_chunk_key] = std::make_unique<ForeignStorageBuffer>();
-      chunk.set_buffer(chunk_buffer_map_[data_chunk_key].get());
+      chunk.setBuffer(chunk_buffer_map_[data_chunk_key].get());
 
       ChunkKey index_chunk_key{
           db_id_, foreign_table_->tableId, column->columnId, fragment_index, 2};
       CHECK(chunk_buffer_map_.find(index_chunk_key) == chunk_buffer_map_.end());
       chunk_buffer_map_[index_chunk_key] = std::make_unique<ForeignStorageBuffer>();
-      chunk.set_index_buf(chunk_buffer_map_[index_chunk_key].get());
+      chunk.setIndexBuffer(chunk_buffer_map_[index_chunk_key].get());
     } else {
       ChunkKey data_chunk_key{
           db_id_, foreign_table_->tableId, column->columnId, fragment_index};
       CHECK(chunk_buffer_map_.find(data_chunk_key) == chunk_buffer_map_.end());
       chunk_buffer_map_[data_chunk_key] = std::make_unique<ForeignStorageBuffer>();
-      chunk.set_buffer(chunk_buffer_map_[data_chunk_key].get());
+      chunk.setBuffer(chunk_buffer_map_[data_chunk_key].get());
     }
-    chunk.init_encoder();
+    chunk.initEncoder();
   }
 }
 
@@ -217,22 +217,22 @@ Importer_NS::Loader* CsvDataWrapper::getLoader(Catalog_Namespace::Catalog& catal
           ChunkKey data_chunk_key{
               db_id_, foreign_table_->tableId, column_id, fragment_index, 1};
           CHECK(chunk_buffer_map_.find(data_chunk_key) != chunk_buffer_map_.end());
-          chunk.set_buffer(chunk_buffer_map_[data_chunk_key].get());
+          chunk.setBuffer(chunk_buffer_map_[data_chunk_key].get());
 
           ChunkKey index_chunk_key{
               db_id_, foreign_table_->tableId, column_id, fragment_index, 2};
           CHECK(chunk_buffer_map_.find(index_chunk_key) != chunk_buffer_map_.end());
-          chunk.set_index_buf(chunk_buffer_map_[index_chunk_key].get());
+          chunk.setIndexBuffer(chunk_buffer_map_[index_chunk_key].get());
         } else {
           ChunkKey data_chunk_key{
               db_id_, foreign_table_->tableId, column_id, fragment_index};
           CHECK(chunk_buffer_map_.find(data_chunk_key) != chunk_buffer_map_.end());
-          chunk.set_buffer(chunk_buffer_map_[data_chunk_key].get());
+          chunk.setBuffer(chunk_buffer_map_[data_chunk_key].get());
         }
         chunk.appendData(
             data_blocks[i], row_count_for_fragment, processed_import_row_count);
-        chunk.set_buffer(nullptr);
-        chunk.set_index_buf(nullptr);
+        chunk.setBuffer(nullptr);
+        chunk.setIndexBuffer(nullptr);
       }
       row_count_ += row_count_for_fragment;
       processed_import_row_count += row_count_for_fragment;

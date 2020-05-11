@@ -22,8 +22,8 @@
 #ifndef _CHUNK_ACCESSOR_TABLE_H_
 #define _CHUNK_ACCESSOR_TABLE_H_
 
-#include <Catalog/Catalog.h>
-#include <Chunk/Chunk.h>
+#include "Catalog/Catalog.h"
+#include "DataMgr/Chunk/Chunk.h"
 
 #include <vector>
 

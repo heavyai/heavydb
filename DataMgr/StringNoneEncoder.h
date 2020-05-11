@@ -102,8 +102,8 @@ class StringNoneEncoder : public Encoder {
     has_nulls = static_cast<const StringNoneEncoder*>(copyFromEncoder)->has_nulls;
   }
 
-  AbstractBuffer* get_index_buf() const { return index_buf; }
-  void set_index_buf(AbstractBuffer* buf) { index_buf = buf; }
+  AbstractBuffer* getIndexBuf() const { return index_buf; }
+  void setIndexBuffer(AbstractBuffer* buf) { index_buf = buf; }
 
  private:
   AbstractBuffer* index_buf;

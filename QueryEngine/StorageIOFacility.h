@@ -189,7 +189,7 @@ StorageIOFacility<EXECUTOR_TRAITS, FRAGMENT_UPDATER>::yieldUpdateCallback(
                                              chunk_metadata->second->numBytes,
                                              chunk_metadata->second->numElements);
       CHECK(chunk);
-      auto chunk_buffer = chunk->get_buffer();
+      auto chunk_buffer = chunk->getBuffer();
       CHECK(chunk_buffer && chunk_buffer->has_encoder);
 
       auto encoder = chunk_buffer->encoder.get();
@@ -423,7 +423,7 @@ StorageIOFacility<EXECUTOR_TRAITS, FRAGMENT_UPDATER>::yieldDeleteCallback(
                                              chunk_metadata->second->numBytes,
                                              chunk_metadata->second->numElements);
       CHECK(chunk);
-      auto chunk_buffer = chunk->get_buffer();
+      auto chunk_buffer = chunk->getBuffer();
       CHECK(chunk_buffer && chunk_buffer->has_encoder);
 
       auto encoder = chunk_buffer->encoder.get();

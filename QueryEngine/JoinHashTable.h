@@ -24,11 +24,11 @@
 #ifndef QUERYENGINE_JOINHASHTABLE_H
 #define QUERYENGINE_JOINHASHTABLE_H
 
-#include "../Analyzer/Analyzer.h"
-#include "../Catalog/Catalog.h"
-#include "../Chunk/Chunk.h"
 #include "Allocators/ThrustAllocator.h"
+#include "Analyzer/Analyzer.h"
+#include "Catalog/Catalog.h"
 #include "ColumnarResults.h"
+#include "DataMgr/Chunk/Chunk.h"
 #include "Descriptors/InputDescriptors.h"
 #include "Descriptors/RowSetMemoryOwner.h"
 #include "ExpressionRange.h"

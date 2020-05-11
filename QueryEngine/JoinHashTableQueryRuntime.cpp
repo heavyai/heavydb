@@ -213,12 +213,13 @@ struct BufferRange {
   const int64_t element_count = 0;
 };
 
-ALWAYS_INLINE DEVICE BufferRange get_row_id_buffer_ptr(int64_t* hash_table_ptr,
-                                                       const int64_t* key,
-                                                       const int64_t key_component_count,
-                                                       const int64_t entry_count,
-                                                       const int64_t offset_buffer_off,
-                                                       const int64_t sub_buff_size) {
+ALWAYS_INLINE DEVICE BufferRange
+get_row_id_buffer_ptr(int64_t* hash_table_ptr,
+                      const int64_t* key,
+                      const int64_t key_component_count,
+                      const int64_t entry_count,
+                      const int64_t offset_buffer_ptr_offset,
+                      const int64_t sub_buff_size) {
   const int64_t min_key = 0;
   const int64_t max_key = entry_count - 1;
 
@@ -230,7 +231,7 @@ ALWAYS_INLINE DEVICE BufferRange get_row_id_buffer_ptr(int64_t* hash_table_ptr,
   }
 
   int8_t* one_to_many_ptr = reinterpret_cast<int8_t*>(hash_table_ptr);
-  one_to_many_ptr += offset_buffer_off;
+  one_to_many_ptr += offset_buffer_ptr_offset;
 
   // Returns an index used to fetch row count and row ids.
   const auto slot = overlaps_hash_join_idx(
@@ -294,7 +295,7 @@ get_candidate_rows(int32_t* out_arr,
                    const int64_t key_component_count,
                    int64_t* hash_table_ptr,
                    const int64_t entry_count,
-                   const int64_t offset_buffer_off,
+                   const int64_t offset_buffer_ptr_offset,
                    const int64_t sub_buff_size) {
   const auto range = reinterpret_cast<const double*>(range_bytes);
 
@@ -317,7 +318,7 @@ get_candidate_rows(int32_t* out_arr,
                                                       cur_key,
                                                       key_component_count,
                                                       entry_count,
-                                                      offset_buffer_off,
+                                                      offset_buffer_ptr_offset,
                                                       sub_buff_size);
 
       for (int64_t j = 0; j < buffer_range.element_count; j++) {

@@ -521,7 +521,7 @@ ResultSetReductionJIT::ResultSetReductionJIT(const QueryMemoryDescriptor& query_
 //   # Retrieval of 'this_ptr' is different between perfect hash and baseline.
 //   this_ptr = this_result_set[that_entry_index]
 //                or
-//              get_row(key(that_row_ptr), this_result_set_buffer)
+//              get_row(key(that_row_ptr), this_result_setBuffer)
 //   reduce_func_[baseline|perfect_hash](this_ptr, that_ptr)
 //
 // func reduce_loop(this_buff, that_buff, start_entry_index, end_entry_index):

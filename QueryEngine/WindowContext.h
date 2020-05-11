@@ -16,8 +16,8 @@
 
 #pragma once
 
-#include "../Analyzer/Analyzer.h"
-#include "../Chunk/Chunk.h"
+#include "Analyzer/Analyzer.h"
+#include "DataMgr/Chunk/Chunk.h"
 #include "JoinHashTableInterface.h"
 
 #include <functional>

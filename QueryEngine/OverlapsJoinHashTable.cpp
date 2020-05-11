@@ -949,7 +949,7 @@ HashJoinMatchingSet OverlapsJoinHashTable::codegenMatchingSet(
             LL_INT(key_component_count),            // key_component_count
             composite_key_dict,                     // ptr to hash table
             LL_INT(entry_count_),                   // entry_count
-            LL_INT(composite_key_dict_size),        // offset_buffer_off
+            LL_INT(composite_key_dict_size),        // offset_buffer_ptr_offset
             LL_INT(entry_count_ * sizeof(int32_t))  // sub_buff_size
         });
 

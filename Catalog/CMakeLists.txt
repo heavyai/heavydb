@@ -22,7 +22,7 @@ if("${MAPD_EDITION_LOWER}" STREQUAL "ee")
   add_subdirectory(ee)
 endif()
 
-target_link_libraries(Catalog SqliteConnector StringDictionary Fragmenter MigrationMgr Chunk ${AUTH_LIBRARIES} Calcite bcrypt)
+target_link_libraries(Catalog SqliteConnector StringDictionary Fragmenter MigrationMgr ${AUTH_LIBRARIES} Calcite bcrypt)
 if(ENABLE_KRB5)
   target_link_libraries(Catalog krb5_gss)
 endif()

@@ -32,12 +32,13 @@
 #include <memory>
 #include <random>
 #include <string>
-#include "../Catalog/Catalog.h"
-#include "../Chunk/Chunk.h"
-#include "../DataMgr/DataMgr.h"
-#include "../Fragmenter/Fragmenter.h"
-#include "../Shared/measure.h"
-#include "../Shared/sqltypes.h"
+
+#include "Catalog/Catalog.h"
+#include "DataMgr/Chunk/Chunk.h"
+#include "DataMgr/DataMgr.h"
+#include "Fragmenter/Fragmenter.h"
+#include "Shared/measure.h"
+#include "Shared/sqltypes.h"
 
 using namespace std;
 using namespace Catalog_Namespace;
@@ -52,7 +53,7 @@ void scan_chunk(const std::shared_ptr<ChunkMetadata>& chunk_metadata,
   ChunkIter cit = chunk.begin_iterator(chunk_metadata, 0, 1);
   VarlenDatum vd;
   bool is_end;
-  const ColumnDescriptor* cd = chunk.get_column_desc();
+  const ColumnDescriptor* cd = chunk.getColumnDesc();
   std::hash<std::string> string_hash;
   int nth = 0;
   while (true) {

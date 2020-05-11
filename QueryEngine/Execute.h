@@ -37,7 +37,6 @@
 #include "TargetMetaInfo.h"
 #include "WindowContext.h"
 
-#include "../Chunk/Chunk.h"
 #include "../Shared/Logger.h"
 #include "../Shared/SystemParameters.h"
 #include "../Shared/mapd_shared_mutex.h"
@@ -46,6 +45,7 @@
 #include "../StringDictionary/LruCache.hpp"
 #include "../StringDictionary/StringDictionary.h"
 #include "../StringDictionary/StringDictionaryProxy.h"
+#include "DataMgr/Chunk/Chunk.h"
 
 #include <llvm/IR/Function.h>
 #include <llvm/IR/Value.h>

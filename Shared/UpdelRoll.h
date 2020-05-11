@@ -21,9 +21,9 @@
 #include <set>
 #include <utility>
 
-#include "../Chunk/Chunk.h"
-#include "../DataMgr/ChunkMetadata.h"
-#include "../DataMgr/MemoryLevel.h"
+#include "DataMgr/Chunk/Chunk.h"
+#include "DataMgr/ChunkMetadata.h"
+#include "DataMgr/MemoryLevel.h"
 
 namespace Fragmenter_Namespace {
 class InsertOrderFragmenter;

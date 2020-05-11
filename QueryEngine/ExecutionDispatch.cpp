@@ -40,14 +40,14 @@ bool needs_skip_result(const ResultSetPtr& res) {
 // column is part of the target expressions, result set iteration needs it alive.
 bool need_to_hold_chunk(const Chunk_NS::Chunk* chunk,
                         const RelAlgExecutionUnit& ra_exe_unit) {
-  CHECK(chunk->get_column_desc());
-  const auto chunk_ti = chunk->get_column_desc()->columnType;
+  CHECK(chunk->getColumnDesc());
+  const auto chunk_ti = chunk->getColumnDesc()->columnType;
   if (chunk_ti.is_array() ||
       (chunk_ti.is_string() && chunk_ti.get_compression() == kENCODING_NONE)) {
     for (const auto target_expr : ra_exe_unit.target_exprs) {
       const auto col_var = dynamic_cast<const Analyzer::ColumnVar*>(target_expr);
-      if (col_var && col_var->get_column_id() == chunk->get_column_desc()->columnId &&
-          col_var->get_table_id() == chunk->get_column_desc()->tableId) {
+      if (col_var && col_var->get_column_id() == chunk->getColumnDesc()->columnId &&
+          col_var->get_table_id() == chunk->getColumnDesc()->tableId) {
         return true;
       }
     }

@@ -22,7 +22,7 @@
 
 #include "Catalog/Catalog.h"
 #include "Catalog/ForeignTable.h"
-#include "Chunk/Chunk.h"
+#include "DataMgr/Chunk/Chunk.h"
 #include "ForeignDataWrapper.h"
 #include "Import/Importer.h"
 

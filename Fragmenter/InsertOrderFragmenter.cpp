@@ -77,9 +77,9 @@ InsertOrderFragmenter::InsertOrderFragmenter(
   // find row id column if it is non virtual
 
   for (auto colIt = chunkVec.begin(); colIt != chunkVec.end(); ++colIt) {
-    int columnId = colIt->get_column_desc()->columnId;
+    int columnId = colIt->getColumnDesc()->columnId;
     columnMap_[columnId] = *colIt;
-    if (colIt->get_column_desc()->columnName == "rowid") {
+    if (colIt->getColumnDesc()->columnName == "rowid") {
       hasMaterializedRowId_ = true;
       rowIdColId_ = columnId;
     }
@@ -146,7 +146,7 @@ void InsertOrderFragmenter::getChunkMetadata() {
   ssize_t maxFixedColSize = 0;
 
   for (auto colIt = columnMap_.begin(); colIt != columnMap_.end(); ++colIt) {
-    ssize_t size = colIt->second.get_column_desc()->columnType.get_size();
+    ssize_t size = colIt->second.getColumnDesc()->columnType.get_size();
     if (size == -1) {  // variable length
       varLenColInfo_.insert(std::make_pair(colIt->first, 0));
       size = 8;  // b/c we use this for string and array indices - gross to have magic
@@ -172,7 +172,7 @@ void InsertOrderFragmenter::getChunkMetadata() {
       colIt->second.getChunkBuffer(dataMgr_, insertKey, defaultInsertLevel_, deviceId);
       auto varLenColInfoIt = varLenColInfo_.find(colIt->first);
       if (varLenColInfoIt != varLenColInfo_.end()) {
-        varLenColInfoIt->second = colIt->second.get_buffer()->size();
+        varLenColInfoIt->second = colIt->second.getBuffer()->size();
       }
     }
   }
@@ -273,7 +273,7 @@ void InsertOrderFragmenter::updateChunkStats(
                                              0,
                                              chunk_meta_it->second->numBytes,
                                              chunk_meta_it->second->numElements);
-      auto buf = chunk->get_buffer();
+      auto buf = chunk->getBuffer();
       CHECK(buf);
       auto encoder = buf->encoder.get();
       if (!encoder) {
@@ -409,7 +409,7 @@ void InsertOrderFragmenter::replicateData(const InsertData& insertDataStruct) {
           chunkKey,
           defaultInsertLevel_,
           fragmentInfo->deviceIds[static_cast<int>(defaultInsertLevel_)]);
-      chunk.init_encoder();
+      chunk.initEncoder();
 
       try {
         DataBlockPtr dataCopy = insertDataStruct.data[i];
@@ -435,7 +435,7 @@ void InsertOrderFragmenter::replicateData(const InsertData& insertDataStruct) {
         // update total size of var-len column in (actually the last) fragment
         if (0 > size) {
           std::unique_lock<std::mutex> lck(*mutex_access_inmem_states);
-          varLenColInfo_[columnId] = chunk.get_buffer()->size();
+          varLenColInfo_[columnId] = chunk.getBuffer()->size();
         }
       } catch (...) {
         dataMgr_->deleteChunksWithPrefix(chunkKey);
@@ -502,12 +502,12 @@ void InsertOrderFragmenter::insertDataImpl(InsertData& insertDataStruct) {
   // it is not needed and will cause issues
   std::unique_ptr<int8_t[]> data_for_deleted_column;
   for (const auto& cit : columnMap_) {
-    if (cit.second.get_column_desc()->isDeletedCol &&
+    if (cit.second.getColumnDesc()->isDeletedCol &&
         insertDataStruct.replicate_count == 0) {
       data_for_deleted_column.reset(new int8_t[insertDataStruct.numRows]);
       memset(data_for_deleted_column.get(), 0, insertDataStruct.numRows);
       insertDataStruct.data.emplace_back(DataBlockPtr{data_for_deleted_column.get()});
-      insertDataStruct.columnIds.push_back(cit.second.get_column_desc()->columnId);
+      insertDataStruct.columnIds.push_back(cit.second.getColumnDesc()->columnId);
       break;
     }
   }
@@ -616,7 +616,7 @@ void InsertOrderFragmenter::insertDataImpl(InsertData& insertDataStruct) {
           colMapIt->second.appendData(dataCopy[i], numRowsToInsert, numRowsInserted);
       auto varLenColInfoIt = varLenColInfo_.find(columnId);
       if (varLenColInfoIt != varLenColInfo_.end()) {
-        varLenColInfoIt->second = colMapIt->second.get_buffer()->size();
+        varLenColInfoIt->second = colMapIt->second.getBuffer()->size();
       }
     }
     if (hasMaterializedRowId_) {
@@ -674,9 +674,8 @@ FragmentInfo* InsertOrderFragmenter::createNewFragment(
   for (map<int, Chunk>::iterator colMapIt = columnMap_.begin();
        colMapIt != columnMap_.end();
        ++colMapIt) {
-    // colMapIt->second.unpin_buffer();
     ChunkKey chunkKey = chunkKeyPrefix_;
-    chunkKey.push_back(colMapIt->second.get_column_desc()->columnId);
+    chunkKey.push_back(colMapIt->second.getColumnDesc()->columnId);
     chunkKey.push_back(maxFragmentId_);
     colMapIt->second.createChunkBuffer(
         dataMgr_,
@@ -684,7 +683,7 @@ FragmentInfo* InsertOrderFragmenter::createNewFragment(
         memoryLevel,
         newFragmentInfo->deviceIds[static_cast<int>(memoryLevel)],
         pageSize_);
-    colMapIt->second.init_encoder();
+    colMapIt->second.initEncoder();
   }
 
   mapd_lock_guard<mapd_shared_mutex> writeLock(fragmentInfoMutex_);

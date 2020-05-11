@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 MapD Technologies, Inc.
+ * Copyright 2020 OmniSci, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,37 +19,39 @@
  * @author Wei Hong <wei@mapd.com>
  *
  */
-#ifndef _CHUNK_H_
-#define _CHUNK_H_
+
+#pragma once
 
 #include <list>
 #include <memory>
-#include "../Catalog/ColumnDescriptor.h"
-#include "../DataMgr/AbstractBuffer.h"
-#include "../DataMgr/ChunkMetadata.h"
-#include "../DataMgr/DataMgr.h"
-#include "../Shared/sqltypes.h"
-#include "../Utils/ChunkIter.h"
+
+#include "Catalog/ColumnDescriptor.h"
+#include "DataMgr/AbstractBuffer.h"
+#include "DataMgr/ChunkMetadata.h"
+#include "DataMgr/DataMgr.h"
+#include "Shared/sqltypes.h"
+#include "Utils/ChunkIter.h"
 
 using Data_Namespace::AbstractBuffer;
 using Data_Namespace::DataMgr;
 using Data_Namespace::MemoryLevel;
 
 namespace Chunk_NS {
-class Chunk;
-};
-
-namespace Chunk_NS {
 
 class Chunk {
  public:
-  Chunk() : buffer(nullptr), index_buf(nullptr), column_desc(nullptr) {}
+  Chunk() : buffer_(nullptr), index_buf_(nullptr), column_desc_(nullptr) {}
+
   explicit Chunk(const ColumnDescriptor* td)
-      : buffer(nullptr), index_buf(nullptr), column_desc(td) {}
+      : buffer_(nullptr), index_buf_(nullptr), column_desc_(td) {}
+
   Chunk(AbstractBuffer* b, AbstractBuffer* ib, const ColumnDescriptor* td)
-      : buffer(b), index_buf(ib), column_desc(td){};
-  ~Chunk() { unpin_buffer(); }
-  const ColumnDescriptor* get_column_desc() const { return column_desc; }
+      : buffer_(b), index_buf_(ib), column_desc_(td){};
+
+  ~Chunk() { unpinBuffer(); }
+
+  const ColumnDescriptor* getColumnDesc() const { return column_desc_; }
+
   static void translateColumnDescriptorsToChunkVec(
       const std::list<const ColumnDescriptor*>& colDescs,
       std::vector<Chunk>& chunkVec) {
@@ -57,29 +59,35 @@ class Chunk {
       chunkVec.emplace_back(cd);
     }
   }
+
   ChunkIter begin_iterator(const std::shared_ptr<ChunkMetadata>&,
                            int start_idx = 0,
                            int skip = 1) const;
+
   size_t getNumElemsForBytesInsertData(const DataBlockPtr& src_data,
                                        const size_t num_elems,
                                        const size_t start_idx,
                                        const size_t byte_limit,
                                        const bool replicating = false);
+
   std::shared_ptr<ChunkMetadata> appendData(DataBlockPtr& srcData,
                                             const size_t numAppendElems,
                                             const size_t startIdx,
                                             const bool replicating = false);
+
   void createChunkBuffer(DataMgr* data_mgr,
                          const ChunkKey& key,
                          const MemoryLevel mem_level,
                          const int deviceId = 0,
                          const size_t page_size = 0);
+
   void getChunkBuffer(DataMgr* data_mgr,
                       const ChunkKey& key,
                       const MemoryLevel mem_level,
                       const int deviceId = 0,
                       const size_t num_bytes = 0,
                       const size_t num_elems = 0);
+
   static std::shared_ptr<Chunk> getChunk(const ColumnDescriptor* cd,
                                          DataMgr* data_mgr,
                                          const ChunkKey& key,
@@ -87,25 +95,30 @@ class Chunk {
                                          const int deviceId,
                                          const size_t num_bytes,
                                          const size_t num_elems);
+
   bool isChunkOnDevice(DataMgr* data_mgr,
                        const ChunkKey& key,
                        const MemoryLevel mem_level,
                        const int device_id);
 
-  // protected:
-  AbstractBuffer* get_buffer() const { return buffer; }
-  AbstractBuffer* get_index_buf() const { return index_buf; }
-  void set_buffer(AbstractBuffer* b) { buffer = b; }
-  void set_index_buf(AbstractBuffer* ib) { index_buf = ib; }
-  void init_encoder();
+  AbstractBuffer* getBuffer() const { return buffer_; }
+
+  AbstractBuffer* getIndexBuf() const { return index_buf_; }
+
+  void setBuffer(AbstractBuffer* b) { buffer_ = b; }
+
+  void setIndexBuffer(AbstractBuffer* ib) { index_buf_ = ib; }
+
+  void initEncoder();
+
   void decompress(int8_t* compressed, VarlenDatum* result, Datum* datum) const;
 
  private:
-  AbstractBuffer* buffer;
-  AbstractBuffer* index_buf;
-  const ColumnDescriptor* column_desc;
-  void unpin_buffer();
-};
-}  // namespace Chunk_NS
+  AbstractBuffer* buffer_;
+  AbstractBuffer* index_buf_;
+  const ColumnDescriptor* column_desc_;
 
-#endif  // _CHUNK_H_
+  void unpinBuffer();
+};
+
+}  // namespace Chunk_NS

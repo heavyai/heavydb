@@ -60,7 +60,7 @@ std::pair<const int8_t*, size_t> ColumnFetcher::getOneColumnFragment(
         chunk_meta_it->second->numElements);
     chunks_owner.push_back(chunk);
     CHECK(chunk);
-    auto ab = chunk->get_buffer();
+    auto ab = chunk->getBuffer();
     CHECK(ab->getMemoryPtr());
     col_buff = reinterpret_cast<int8_t*>(ab->getMemoryPtr());
   } else {  // temporary table
@@ -208,7 +208,7 @@ const int8_t* ColumnFetcher::getOneTableColumnFragment(
     if (memory_level == Data_Namespace::CPU_LEVEL) {
       return reinterpret_cast<int8_t*>(&chunk_iter);
     } else {
-      auto ab = chunk->get_buffer();
+      auto ab = chunk->getBuffer();
       ab->pin();
       auto& row_set_mem_owner = executor_->getRowSetMemoryOwner();
       row_set_mem_owner->addVarlenInputBuffer(ab);
@@ -223,7 +223,7 @@ const int8_t* ColumnFetcher::getOneTableColumnFragment(
       return chunk_iter_gpu;
     }
   } else {
-    auto ab = chunk->get_buffer();
+    auto ab = chunk->getBuffer();
     CHECK(ab->getMemoryPtr());
     return ab->getMemoryPtr();  // @TODO(alex) change to use ChunkIter
   }

@@ -25,8 +25,8 @@
 #ifndef QUERYENGINE_RESULTSET_H
 #define QUERYENGINE_RESULTSET_H
 
-#include "../Chunk/Chunk.h"
 #include "CardinalityEstimator.h"
+#include "DataMgr/Chunk/Chunk.h"
 #include "ResultSetBufferAccessors.h"
 #include "TargetValue.h"
 

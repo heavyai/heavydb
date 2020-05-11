@@ -44,7 +44,7 @@
 
 #include "Catalog/Catalog.h"
 #include "Catalog/TableDescriptor.h"
-#include "Chunk/Chunk.h"
+#include "DataMgr/Chunk/Chunk.h"
 #include "Fragmenter/Fragmenter.h"
 #include "Import/CopyParams.h"
 #include "Shared/Logger.h"

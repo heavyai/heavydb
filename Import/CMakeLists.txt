@@ -10,7 +10,7 @@ endif()
 
 add_library(CsvImport Importer.cpp Importer.h DelimitedParserUtils.cpp DelimitedParserUtils.h ${S3Archive})
 
-target_link_libraries(CsvImport mapd_thrift Shared Catalog Chunk DataMgr StringDictionary ${GDAL_LIBRARIES} ${CMAKE_DL_LIBS}
+target_link_libraries(CsvImport mapd_thrift Shared Catalog DataMgr StringDictionary ${GDAL_LIBRARIES} ${CMAKE_DL_LIBS}
  ${LibArchive_LIBRARIES} ${IMPORT_LIBRARIES} ${Arrow_LIBRARIES})
 
 install(DIRECTORY ${CMAKE_SOURCE_DIR}/ThirdParty/gdal-data DESTINATION "ThirdParty")

@@ -244,13 +244,13 @@ class ArrayNoneEncoder : public Encoder {
     initialized = array_encoder->initialized;
   }
 
-  AbstractBuffer* get_index_buf() const { return index_buf; }
+  AbstractBuffer* getIndexBuf() const { return index_buf; }
 
   Datum elem_min;
   Datum elem_max;
   bool has_nulls;
   bool initialized;
-  void set_index_buf(AbstractBuffer* buf) {
+  void setIndexBuffer(AbstractBuffer* buf) {
     std::unique_lock<std::mutex> lock(EncoderMutex_);
     index_buf = buf;
   }

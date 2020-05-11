@@ -210,7 +210,6 @@ else()
 endif()
 
 set(QUERY_ENGINE_LIBS
-  Chunk
   Analyzer
   StringDictionary
   Utils
