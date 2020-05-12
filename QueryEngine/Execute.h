@@ -999,7 +999,7 @@ class Executor {
 
   static const size_t baseline_threshold{
       1000000};  // if a perfect hash needs more entries, use baseline
-  static const size_t code_cache_size{10000};
+  static const size_t code_cache_size{1000};
 
   const unsigned block_size_x_;
   const unsigned grid_size_x_;
