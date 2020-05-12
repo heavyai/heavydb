@@ -332,7 +332,6 @@ DBHandler::DBHandler(const std::vector<LeafHostInfo>& db_leaves,
       render_handler_.reset(new RenderHandler(this,
                                               render_mem_bytes,
                                               max_concurrent_render_sessions,
-                                              0u,
                                               false,
                                               0,
                                               mapd_parameters_));
