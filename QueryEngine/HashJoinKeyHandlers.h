@@ -108,6 +108,8 @@ struct GenericKeyHandler {
     return 0;
   }
 
+  DEVICE size_t get_number_of_columns() const { return key_component_count_; }
+
   DEVICE size_t get_key_component_count() const { return key_component_count_; }
 
   DEVICE const JoinColumn* get_join_columns() const { return join_column_per_key_; }
@@ -126,7 +128,7 @@ struct GenericKeyHandler {
 
 struct OverlapsKeyHandler {
   OverlapsKeyHandler(const size_t key_dims_count,
-                     const JoinColumn* join_column,
+                     const JoinColumn* join_column,  // always 1 column
                      const double* bucket_sizes_for_dimension)
       : key_dims_count_(key_dims_count)
       , join_column_(join_column)
@@ -165,7 +167,9 @@ struct OverlapsKeyHandler {
     return 0;
   }
 
-  DEVICE size_t get_key_component_count() const { return 1; }
+  DEVICE size_t get_number_of_columns() const { return 1; }
+
+  DEVICE size_t get_key_component_count() const { return key_dims_count_; }
 
   DEVICE const JoinColumn* get_join_columns() const { return join_column_; }
 

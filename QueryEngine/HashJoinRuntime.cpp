@@ -513,9 +513,8 @@ DEVICE int SUFFIX(fill_baseline_hash_join_buff)(int8_t* hash_buff,
                                        hash_entry_size);
   };
 
-  JoinColumnTuple cols(f->get_key_component_count(),
-                       f->get_join_columns(),
-                       f->get_join_column_type_infos());
+  JoinColumnTuple cols(
+      f->get_number_of_columns(), f->get_join_columns(), f->get_join_column_type_infos());
   for (auto& it : cols.slice(start, step)) {
     const auto err = (*f)(it.join_column_iterators, key_scratch_buff, key_buff_handler);
     if (err) {
@@ -766,9 +765,8 @@ GLOBAL void SUFFIX(count_matches_baseline)(int32_t* count_buff,
     return 0;
   };
 
-  JoinColumnTuple cols(f->get_key_component_count(),
-                       f->get_join_columns(),
-                       f->get_join_column_type_infos());
+  JoinColumnTuple cols(
+      f->get_number_of_columns(), f->get_join_columns(), f->get_join_column_type_infos());
   for (auto& it : cols.slice(start, step)) {
     (*f)(it.join_column_iterators, key_scratch_buff, key_buff_handler);
   }
@@ -1099,9 +1097,8 @@ GLOBAL void SUFFIX(fill_row_ids_baseline)(int32_t* buff,
     return 0;
   };
 
-  JoinColumnTuple cols(f->get_key_component_count(),
-                       f->get_join_columns(),
-                       f->get_join_column_type_infos());
+  JoinColumnTuple cols(
+      f->get_number_of_columns(), f->get_join_columns(), f->get_join_column_type_infos());
   for (auto& it : cols.slice(start, step)) {
     (*f)(it.join_column_iterators, key_scratch_buff, key_buff_handler);
   }
@@ -1153,9 +1150,8 @@ GLOBAL void SUFFIX(approximate_distinct_tuples_impl)(uint8_t* hll_buffer,
 
   int64_t key_scratch_buff[g_maximum_conditions_to_coalesce];
 
-  JoinColumnTuple cols(f->get_key_component_count(),
-                       f->get_join_columns(),
-                       f->get_join_column_type_infos());
+  JoinColumnTuple cols(
+      f->get_number_of_columns(), f->get_join_columns(), f->get_join_column_type_infos());
   for (auto& it : cols.slice(start, step)) {
     (*f)(it.join_column_iterators, key_scratch_buff, key_buff_handler);
   }
