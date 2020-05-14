@@ -202,7 +202,7 @@ file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/OmniSciTypes.h DESTINATION ${CMAKE_BINARY_
 install(FILES ${CMAKE_CURRENT_BINARY_DIR}/OmniSciTypes.h ${CMAKE_CURRENT_BINARY_DIR}/RuntimeFunctions.bc ${CMAKE_CURRENT_BINARY_DIR}/ExtensionFunctions.ast DESTINATION QueryEngine)
 
 if(ENABLE_CUDA)
-  add_library(QueryEngine ${query_engine_source_files} ${CMAKE_CURRENT_BINARY_DIR}/cuda_mapd_rt.a ${CMAKE_CURRENT_BINARY_DIR}/TopKSort.o ${CMAKE_CURRENT_BINARY_DIR}/InPlaceSortImpl.o ${CMAKE_CURRENT_BINARY_DIR}/ResultSetSortImpl.o ${CMAKE_CURRENT_BINARY_DIR}/GpuInitGroups.o ${CMAKE_CURRENT_BINARY_DIR}/HashJoinRuntimeGpu.o)
+  add_library(QueryEngine ${query_engine_source_files} ${CMAKE_CURRENT_BINARY_DIR}/TopKSort.o ${CMAKE_CURRENT_BINARY_DIR}/InPlaceSortImpl.o ${CMAKE_CURRENT_BINARY_DIR}/ResultSetSortImpl.o ${CMAKE_CURRENT_BINARY_DIR}/GpuInitGroups.o ${CMAKE_CURRENT_BINARY_DIR}/HashJoinRuntimeGpu.o)
   add_dependencies(QueryEngine QueryEngineFunctionsTargets QueryEngineCudaTargets)
 else()
   add_library(QueryEngine ${query_engine_source_files})
@@ -245,25 +245,8 @@ list(APPEND QUERY_ENGINE_LIBS ${LLVM_LINKER_FLAGS})
 target_link_libraries(QueryEngine ${QUERY_ENGINE_LIBS})
 
 add_custom_command(
-    DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/cuda_mapd_rt.o
-    OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/cuda_mapd_rt.a
-    COMMAND nvcc
-    ARGS
-        ${MAPD_HOST_COMPILER_FLAG}
-        -Xcompiler -fPIC
-        -D__STDC_LIMIT_MACROS
-        -D__STDC_CONSTANT_MACROS
-        -D_FORCE_INLINES
-        ${MAPD_DEFINITIONS}
-        ${CUDA_PTX_GENERATIONS}
-        -lib ${CMAKE_CURRENT_BINARY_DIR}/cuda_mapd_rt.o
-        ${NVCC_BUILD_TYPE_ARGS}
-        -o ${CMAKE_CURRENT_BINARY_DIR}/cuda_mapd_rt.a
-    )
-
-add_custom_command(
     DEPENDS cuda_mapd_rt.cu JoinHashTableQueryRuntime.cpp GpuInitGroups.cu GroupByRuntime.cpp TopKRuntime.cpp DateTruncate.cpp DateAdd.cpp ExtractFromTime.cpp ArrayOps.cpp StringFunctions.cpp RegexpFunctions.cpp ${CMAKE_SOURCE_DIR}/Utils/ChunkIter.cpp ${CMAKE_SOURCE_DIR}/Utils/StringLike.cpp ${CMAKE_SOURCE_DIR}/Utils/Regexp.cpp ${CMAKE_CURRENT_SOURCE_DIR}/ExtensionFunctions.hpp ${CMAKE_CURRENT_SOURCE_DIR}/ExtensionFunctionsGeo.hpp ${CMAKE_CURRENT_SOURCE_DIR}/TableFunctions/TableFunctions.hpp
-    OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/cuda_mapd_rt.o
+    OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/cuda_mapd_rt.fatbin
     COMMAND nvcc
     ARGS
         ${MAPD_HOST_COMPILER_FLAG}
@@ -273,8 +256,9 @@ add_custom_command(
         -D_FORCE_INLINES
         -Xcompiler -Wno-return-type-c-linkage --expt-relaxed-constexpr
         ${MAPD_DEFINITIONS}
-        --device-link
-        ${CUDA_PTX_GENERATIONS}
+        -fatbin
+        -rdc=true
+        ${CUDA_COMPILATION_ARCH}
         -std=c++14
         ${NVCC_BUILD_TYPE_ARGS}
         -c ${CMAKE_CURRENT_SOURCE_DIR}/cuda_mapd_rt.cu
@@ -357,7 +341,7 @@ add_custom_command(
 
 add_custom_target(QueryEngineCudaTargets
     DEPENDS
-        ${CMAKE_CURRENT_BINARY_DIR}/cuda_mapd_rt.a
+        ${CMAKE_CURRENT_BINARY_DIR}/cuda_mapd_rt.fatbin
         ${CMAKE_CURRENT_BINARY_DIR}/TopKSort.o
         ${CMAKE_CURRENT_BINARY_DIR}/InPlaceSortImpl.o
         ${CMAKE_CURRENT_BINARY_DIR}/ResultSetSortImpl.o

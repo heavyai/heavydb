@@ -9,6 +9,14 @@
 #include "HyperLogLogRank.h"
 #include "TableFunctions/TableFunctions.hpp"
 
+#if CUDA_VERSION < 10000
+static_assert(false, "CUDA v10.0 or later is required.");
+#endif
+
+#if (defined(__CUDA_ARCH__) && __CUDA_ARCH__ < 350)
+static_assert(false, "CUDA Compute Capability of 3.5 or greater is required.");
+#endif
+
 extern "C" __device__ int64_t get_thread_index() {
   return threadIdx.x;
 }
@@ -345,9 +353,7 @@ __device__ int64_t atomicMin64(int64_t* address, int64_t val) {
   return old;
 }
 
-// As of 20160418, CUDA 8.0EA only defines `atomicAdd(double*, double)` for compute
-// capability >= 6.0.
-#if CUDA_VERSION < 8000 || (defined(__CUDA_ARCH__) && __CUDA_ARCH__ < 600)
+#if (defined(__CUDA_ARCH__) && __CUDA_ARCH__ < 600)
 __device__ double atomicAdd(double* address, double val) {
   unsigned long long int* address_as_ull = (unsigned long long int*)address;
   unsigned long long int old = *address_as_ull, assumed;
@@ -479,8 +485,21 @@ extern "C" __device__ void agg_min_int32_shared(int32_t* agg, const int32_t val)
   atomicMin(agg, val);
 }
 
-// TODO(Saman): use 16-bit atomicCAS for Turing
-extern "C" __device__ void atomicMax16(int16_t* agg, const int16_t val) {
+#if defined(__CUDA_ARCH__) && __CUDA_ARCH__ >= 700
+__device__ void atomicMax16(int16_t* agg, const int16_t val) {
+  unsigned short int* address_as_us = reinterpret_cast<unsigned short int*>(agg);
+  unsigned short int old = *address_as_us, assumed;
+
+  do {
+    assumed = old;
+    old = atomicCAS(address_as_us,
+                    assumed,
+                    static_cast<unsigned short>(max(static_cast<short int>(val),
+                                                    static_cast<short int>(assumed))));
+  } while (assumed != old);
+}
+#else
+__device__ void atomicMax16(int16_t* agg, const int16_t val) {
   // properly align the input pointer:
   unsigned int* base_address_u32 =
       reinterpret_cast<unsigned int*>(reinterpret_cast<size_t>(agg) & ~0x3);
@@ -500,8 +519,9 @@ extern "C" __device__ void atomicMax16(int16_t* agg, const int16_t val) {
     old_value = atomicCAS(base_address_u32, compare_value, swap_value);
   } while (old_value != compare_value);
 }
+#endif
 
-extern "C" __device__ void atomicMax8(int8_t* agg, const int8_t val) {
+__device__ void atomicMax8(int8_t* agg, const int8_t val) {
   // properly align the input pointer:
   unsigned int* base_address_u32 =
       reinterpret_cast<unsigned int*>(reinterpret_cast<size_t>(agg) & ~0x3);
@@ -527,7 +547,21 @@ extern "C" __device__ void atomicMax8(int8_t* agg, const int8_t val) {
   } while (compare_value != old_value);
 }
 
-extern "C" __device__ void atomicMin16(int16_t* agg, const int16_t val) {
+#if defined(__CUDA_ARCH__) && __CUDA_ARCH__ >= 700
+__device__ void atomicMin16(int16_t* agg, const int16_t val) {
+  unsigned short int* address_as_us = reinterpret_cast<unsigned short int*>(agg);
+  unsigned short int old = *address_as_us, assumed;
+
+  do {
+    assumed = old;
+    old = atomicCAS(address_as_us,
+                    assumed,
+                    static_cast<unsigned short>(min(static_cast<short int>(val),
+                                                    static_cast<short int>(assumed))));
+  } while (assumed != old);
+}
+#else
+__device__ void atomicMin16(int16_t* agg, const int16_t val) {
   // properly align the input pointer:
   unsigned int* base_address_u32 =
       reinterpret_cast<unsigned int*>(reinterpret_cast<size_t>(agg) & ~0x3);
@@ -547,10 +581,11 @@ extern "C" __device__ void atomicMin16(int16_t* agg, const int16_t val) {
     old_value = atomicCAS(base_address_u32, compare_value, swap_value);
   } while (old_value != compare_value);
 }
+#endif
 
-extern "C" __device__ void atomicMin16SkipVal(int16_t* agg,
-                                              const int16_t val,
-                                              const int16_t skip_val) {
+__device__ void atomicMin16SkipVal(int16_t* agg,
+                                   const int16_t val,
+                                   const int16_t skip_val) {
   // properly align the input pointer:
   unsigned int* base_address_u32 =
       reinterpret_cast<unsigned int*>(reinterpret_cast<size_t>(agg) & ~0x3);
@@ -576,7 +611,7 @@ extern "C" __device__ void atomicMin16SkipVal(int16_t* agg,
   } while (old_value != compare_value);
 }
 
-extern "C" __device__ void atomicMin8(int8_t* agg, const int8_t val) {
+__device__ void atomicMin8(int8_t* agg, const int8_t val) {
   // properly align the input pointer:
   unsigned int* base_address_u32 =
       reinterpret_cast<unsigned int*>(reinterpret_cast<size_t>(agg) & ~0x3);
@@ -596,9 +631,7 @@ extern "C" __device__ void atomicMin8(int8_t* agg, const int8_t val) {
   } while (compare_value != old_value);
 }
 
-extern "C" __device__ void atomicMin8SkipVal(int8_t* agg,
-                                             const int8_t val,
-                                             const int8_t skip_val) {
+__device__ void atomicMin8SkipVal(int8_t* agg, const int8_t val, const int8_t skip_val) {
   // properly align the input pointer:
   unsigned int* base_address_u32 =
       reinterpret_cast<unsigned int*>(reinterpret_cast<size_t>(agg) & ~0x3);
@@ -1055,31 +1088,16 @@ extern "C" __device__ void agg_min_double_skip_val_shared(int64_t* agg,
   }
 }
 
-__device__ double atomicMaxDblSkipVal(double* address,
-                                      double val,
-                                      const double skip_val) {
-  unsigned long long int* address_as_ull = (unsigned long long int*)address;
-  unsigned long long int old = *address_as_ull;
-  unsigned long long int skip_val_as_ull = *((unsigned long long int*)&skip_val);
-  unsigned long long int assumed;
-
-  do {
-    assumed = old;
-    old = atomicCAS(address_as_ull,
-                    assumed,
-                    assumed == skip_val_as_ull
-                        ? *((unsigned long long int*)&val)
-                        : __double_as_longlong(max(val, __longlong_as_double(assumed))));
-  } while (assumed != old);
-
-  return __longlong_as_double(old);
-}
-
 extern "C" __device__ void agg_max_double_skip_val_shared(int64_t* agg,
                                                           const double val,
                                                           const double skip_val) {
-  if (val != skip_val) {
-    atomicMaxDblSkipVal(reinterpret_cast<double*>(agg), val, skip_val);
+  if (__double_as_longlong(val) != __double_as_longlong(skip_val)) {
+    double old = __longlong_as_double(atomicExch(
+        reinterpret_cast<unsigned long long int*>(agg), __double_as_longlong(-DBL_MAX)));
+    atomicMax(reinterpret_cast<double*>(agg),
+              __double_as_longlong(old) == __double_as_longlong(skip_val)
+                  ? val
+                  : fmax(old, val));
   }
 }
 
@@ -1260,26 +1278,22 @@ extern "C" __device__ void force_sync() {
 }
 
 extern "C" __device__ void sync_warp() {
-#if (CUDA_VERSION >= 9000)
   __syncwarp();
-#endif
 }
 
 /**
  * Protected warp synchornization to make sure all (or none) threads within a warp go
  * through a synchronization barrier. thread_pos: the current thread position to be used
  * for a memory access row_count: maximum number of rows to be processed The function
- * performs warp sync iff all 32 threads within that warp will process valid data NOTE: it
- * currently assumes that warp size is 32.
+ * performs warp sync iff all 32 threads within that warp will process valid data NOTE:
+ * it currently assumes that warp size is 32.
  */
 extern "C" __device__ void sync_warp_protected(int64_t thread_pos, int64_t row_count) {
-#if (CUDA_VERSION >= 9000)
   // only syncing if NOT within the same warp as those threads experiencing the critical
   // edge
   if ((((row_count - 1) | 0x1F) - thread_pos) >= 32) {
     __syncwarp();
   }
-#endif
 }
 
 extern "C" __device__ void sync_threadblock() {
@@ -1291,8 +1305,8 @@ extern "C" __device__ void sync_threadblock() {
  * with COUNT queries (with GPU shared memory used). Later, we should generate code for
  * this depending on the type of aggregate functions.
  * TODO: we should use one contiguous global memory buffer, rather than current default
- * behaviour of multiple buffers, each for one aggregate. Once that's resolved, we can do
- * much cleaner than this function
+ * behaviour of multiple buffers, each for one aggregate. Once that's resolved, we can
+ * do much cleaner than this function
  */
 extern "C" __device__ void write_back_non_grouped_agg(int64_t* input_buffer,
                                                       int64_t* output_buffer,

@@ -260,7 +260,7 @@ include_directories(${Boost_INCLUDE_DIR})
 
 # CUDA architecture flags 
 set (CUDA_COMPILATION_ARCH
-  -gencode=arch=compute_30,code=compute_30
+  -gencode=arch=compute_35,code=compute_35
   -gencode=arch=compute_50,code=compute_50
   -gencode=arch=compute_60,code=compute_60
   -gencode=arch=compute_70,code=compute_70
@@ -783,7 +783,7 @@ set_directory_properties(PROPERTIES ADDITIONAL_MAKE_CLEAN_FILES "${ADDITIONAL_MA
 install(TARGETS initdb omnisci_server DESTINATION bin)
 install(FILES ${CMAKE_BINARY_DIR}/MAPD_GIT_HASH.txt DESTINATION ".")
 if(ENABLE_CUDA)
-  install(FILES ${CMAKE_BINARY_DIR}/QueryEngine/cuda_mapd_rt.a DESTINATION QueryEngine)
+  install(FILES ${CMAKE_BINARY_DIR}/QueryEngine/cuda_mapd_rt.fatbin DESTINATION QueryEngine)
 endif()
 install(FILES completion_hints.thrift DESTINATION ".")
 install(FILES omnisci.thrift DESTINATION ".")

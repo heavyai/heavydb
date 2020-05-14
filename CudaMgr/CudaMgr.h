@@ -155,7 +155,7 @@ class CudaMgr {
     // Must match ${CUDA_COMPILATION_ARCH} CMAKE flag
     switch (arch) {
       case NvidiaDeviceArch::Kepler:
-        return "sm_30";
+        return "sm_35";
       case NvidiaDeviceArch::Maxwell:
         return "sm_50";
       case NvidiaDeviceArch::Pascal:
@@ -167,7 +167,7 @@ class CudaMgr {
       default:
         LOG(WARNING) << "Unrecognized Nvidia device architecture, falling back to "
                         "Kepler-compatibility.";
-        return "sm_30";
+        return "sm_35";
     }
     UNREACHABLE();
     return "";
