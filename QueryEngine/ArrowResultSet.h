@@ -197,7 +197,6 @@ class ArrowResultSetConverter {
     SQLTypes physical_type;
   };
 
- private:
   ArrowResultSetConverter(const std::shared_ptr<ResultSet>& results,
                           const std::vector<std::string>& col_names,
                           const int32_t first_n)
@@ -205,6 +204,7 @@ class ArrowResultSetConverter {
 
   std::shared_ptr<arrow::RecordBatch> convertToArrow() const;
 
+ private:
   std::shared_ptr<arrow::RecordBatch> getArrowBatch(
       const std::shared_ptr<arrow::Schema>& schema) const;
 
