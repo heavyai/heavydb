@@ -595,9 +595,45 @@ void validate_expanded_file_path(const std::string& file_path,
                            "\" is not whitelisted."};
 }
 
+std::vector<std::string> get_expanded_file_paths(
+    const std::string& file_path,
+    const DataTransferType data_transfer_type) {
+  std::vector<std::string> file_paths;
+  if (data_transfer_type == DataTransferType::IMPORT) {
+    file_paths = mapd_glob(file_path);
+    if (file_paths.size() == 0) {
+      throw std::runtime_error{"File or directory \"" + file_path + "\" does not exist."};
+    }
+  } else {
+    std::string path;
+    if (!boost::filesystem::exists(file_path)) {
+      // For exports, it is possible to provide a path to a new (nonexistent) file. In
+      // this case, validate using the parent path.
+      path = boost::filesystem::path(file_path).parent_path().string();
+      if (!boost::filesystem::exists(path)) {
+        throw std::runtime_error{"File or directory \"" + file_path +
+                                 "\" does not exist."};
+      }
+    } else {
+      path = file_path;
+    }
+    file_paths = {path};
+  }
+  return file_paths;
+}
+
 void validate_whitelisted_file_path(const std::string& file_path,
                                     const std::string& server_config_path,
                                     const DataTransferType data_transfer_type) {
+  const auto& expanded_file_paths =
+      get_expanded_file_paths(file_path, data_transfer_type);
+  for (const auto& path : expanded_file_paths) {
+    if (FilePathBlacklist::isBlacklistedPath(path)) {
+      throw std::runtime_error{"Access to file or directory path \"" + file_path +
+                               "\" is not allowed."};
+    }
+  }
+
   if (server_config_path.empty()) {
     return;
   }
@@ -635,28 +671,41 @@ void validate_whitelisted_file_path(const std::string& file_path,
     throw std::runtime_error{"Error reading server configuration file."};
   }
 
-  if (data_transfer_type == DataTransferType::IMPORT) {
-    const auto& file_paths = mapd_glob(file_path);
-    if (file_paths.size() == 0) {
-      throw std::runtime_error{"File or directory \"" + file_path + "\" does not exist."};
-    }
-    for (const auto& path : file_paths) {
-      validate_expanded_file_path(path, whitelisted_root_paths, config_key);
-    }
-  } else {
-    std::string path;
-    if (!boost::filesystem::exists(file_path)) {
-      // For exports, it is possible to provide a path to a new (nonexistent) file. In
-      // this case, validate using the parent path.
-      path = boost::filesystem::path(file_path).parent_path().string();
-      if (!boost::filesystem::exists(path)) {
-        throw std::runtime_error{"File or directory \"" + file_path +
-                                 "\" does not exist."};
-      }
-    } else {
-      path = file_path;
-    }
+  for (const auto& path : expanded_file_paths) {
     validate_expanded_file_path(path, whitelisted_root_paths, config_key);
   }
 }
+
+void FilePathBlacklist::addToBlacklist(const std::string& path) {
+  CHECK(!path.empty());
+  blacklisted_paths_.emplace_back(path);
+}
+
+bool FilePathBlacklist::isBlacklistedPath(const std::string& path) {
+  const auto canonical_path = boost::filesystem::canonical(path).string();
+  for (const auto& blacklisted_path : blacklisted_paths_) {
+    std::string full_path;
+    try {
+      full_path = boost::filesystem::canonical(blacklisted_path).string();
+    } catch (...) {
+      /**
+       * boost::filesystem::canonical throws an exception if provided path
+       * does not exist. This may happen for use cases like license path
+       * where the path may not necessarily contain a file. Fallback to
+       * boost::filesystem::absolute in this case.
+       */
+      full_path = boost::filesystem::absolute(blacklisted_path).string();
+    }
+    if (boost::istarts_with(canonical_path, full_path)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+void FilePathBlacklist::clear() {
+  blacklisted_paths_.clear();
+}
+
+std::vector<std::string> FilePathBlacklist::blacklisted_paths_{};
 }  // namespace ddl_utils

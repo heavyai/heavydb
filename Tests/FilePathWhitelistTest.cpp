@@ -25,6 +25,7 @@
 
 #include "Tests/DBHandlerTestHelpers.h"
 #include "Tests/TestHelpers.h"
+#include "Utils/DdlUtils.h"
 
 #ifndef BASE_PATH
 #define BASE_PATH "./tmp"
@@ -58,6 +59,7 @@ class FilePathWhitelistTest : public DBHandlerTestFixture,
     sql("DROP TABLE IF EXISTS test_table;");
     sql("DROP FOREIGN TABLE IF EXISTS test_foreign_table;");
     DBHandlerTestFixture::TearDown();
+    ddl_utils::FilePathBlacklist::clear();
   }
 
   void setServerConfig(const std::string& file_name) {
@@ -148,6 +150,15 @@ TEST_P(FilePathWhitelistTest, NonExistentConfigPath) {
   boost::filesystem::remove(CONFIG_FILE_PATH);
   queryAndAssertException(getQuery(getTestCsvFilePath()),
                           "Exception: Error reading server configuration file.");
+}
+
+TEST_P(FilePathWhitelistTest, BlacklistedPath) {
+  setServerConfig("test_config.conf");
+  const auto& file_path = getWhitelistedFilePath();
+  ddl_utils::FilePathBlacklist::addToBlacklist(file_path);
+  queryAndAssertException(getQuery(file_path),
+                          "Exception: Access to file or directory path \"" + file_path +
+                              "\" is not allowed.");
 }
 
 INSTANTIATE_TEST_SUITE_P(FilePathWhitelistTest,

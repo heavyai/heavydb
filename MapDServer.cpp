@@ -62,6 +62,7 @@
 #include "Shared/file_delete.h"
 #include "Shared/mapd_shared_ptr.h"
 #include "Shared/scope.h"
+#include "Utils/DdlUtils.h"
 
 using namespace ::apache::thrift;
 using namespace ::apache::thrift::concurrency;

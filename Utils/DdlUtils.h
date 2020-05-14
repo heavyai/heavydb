@@ -77,6 +77,16 @@ class Encoding {
   int encoding_param;
 };
 
+class FilePathBlacklist {
+ public:
+  static void addToBlacklist(const std::string& path);
+  static bool isBlacklistedPath(const std::string& path);
+  static void clear();
+
+ private:
+  static std::vector<std::string> blacklisted_paths_;
+};
+
 enum class TableType { TABLE = 1, VIEW, FOREIGN_TABLE };
 
 enum class DataTransferType { IMPORT = 1, EXPORT };
