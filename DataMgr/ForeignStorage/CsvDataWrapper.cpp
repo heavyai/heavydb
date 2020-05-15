@@ -49,6 +49,7 @@ void CsvDataWrapper::validateOptions(const ForeignTable* foreign_table) {
 }
 
 void CsvDataWrapper::initializeChunkBuffers(const int fragment_index) {
+  auto timer = DEBUG_TIMER(__func__);
   const auto catalog = Catalog_Namespace::Catalog::get(db_id_);
   CHECK(catalog);
 
@@ -92,6 +93,7 @@ void CsvDataWrapper::initializeChunkBuffers(const int fragment_index) {
 }
 
 void CsvDataWrapper::discardFragmentBuffers(const int fragment_index) {
+  auto timer = DEBUG_TIMER(__func__);
   // Discard data buffers in the chunk buffer map
   const auto catalog = Catalog_Namespace::Catalog::get(db_id_);
   CHECK(catalog);
@@ -119,11 +121,13 @@ void CsvDataWrapper::discardFragmentBuffers(const int fragment_index) {
 }
 
 void CsvDataWrapper::fetchChunkBuffers() {
+  auto timer = DEBUG_TIMER(__func__);
   auto file_path = getFilePath();
   auto catalog = Catalog_Namespace::Catalog::get(db_id_);
   CHECK(catalog);
 
-  LazyLoader loader(getMetadataLoader(*catalog), file_path, validateAndGetCopyParams());
+  CsvLazyLoader loader(
+      getMetadataLoader(*catalog), file_path, validateAndGetCopyParams());
   loader.scanMetadata();
 
   if (chunk_buffer_map_.empty()) {
@@ -156,6 +160,7 @@ void CsvDataWrapper::validateFilePath() {
 
 import_export::CopyParams CsvDataWrapper::validateAndGetCopyParams() {
   import_export::CopyParams copy_params{};
+  copy_params.plain_text = true;
   if (const auto& value = validateAndGetStringWithLength("ARRAY_DELIMITER", 1);
       !value.empty()) {
     copy_params.array_delim = value[0];
@@ -236,11 +241,18 @@ std::optional<bool> CsvDataWrapper::validateAndGetBoolValue(
 
 import_export::Loader* CsvDataWrapper::getMetadataLoader(
     Catalog_Namespace::Catalog& catalog) {
+  auto timer = DEBUG_TIMER(__func__);
   auto callback = [this](const std::vector<std::unique_ptr<
                              import_export::TypedImportBuffer>>& import_buffers,
                          std::vector<DataBlockPtr>& data_blocks,
                          size_t import_row_count,
-                         const std::vector<size_t>& row_offsets) {
+                         const Importer_NS::FileScanMetadata* file_scan_metadata) {
+    CHECK(file_scan_metadata);
+    auto csv_file_scan_metadata =
+        dynamic_cast<const Importer_NS::CsvFileScanMetadata*>(file_scan_metadata);
+    CHECK(csv_file_scan_metadata);
+    const auto& row_offsets = csv_file_scan_metadata->row_offsets;
+
     std::lock_guard loader_lock(loader_mutex_);
     size_t processed_import_row_count = 0;
     while (processed_import_row_count < import_row_count) {
@@ -260,7 +272,7 @@ import_export::Loader* CsvDataWrapper::getMetadataLoader(
       }
 
       // Store the file region in the map
-      import_export::FileRegion file_region;
+      foreign_storage::FileRegion file_region;
       file_region.filename = "";
       file_region.first_row_file_offset = row_offsets[processed_import_row_count];
       file_region.region_size =
@@ -334,12 +346,19 @@ import_export::Loader* CsvDataWrapper::getLazyLoader(
     Catalog_Namespace::Catalog& catalog,
     const ChunkKey data_chunk_key,
     std::map<ChunkKey, std::unique_ptr<ForeignStorageBuffer>>* temp_buffer_map_ptr) {
+  auto timer = DEBUG_TIMER(__func__);
   auto callback = [this, data_chunk_key, temp_buffer_map_ptr](
                       const std::vector<std::unique_ptr<
                           import_export::TypedImportBuffer>>& import_buffers,
                       std::vector<DataBlockPtr>& data_blocks,
                       size_t import_row_count,
-                      const std::vector<size_t>& row_offsets) {
+                      const Importer_NS::FileScanMetadata* file_scan_metadata) {
+    CHECK(file_scan_metadata);
+    auto csv_file_scan_metadata =
+        dynamic_cast<const Importer_NS::CsvFileScanMetadata*>(file_scan_metadata);
+    CHECK(csv_file_scan_metadata);
+    const auto& row_offsets = csv_file_scan_metadata->row_offsets;
+
     std::lock_guard loader_lock(loader_mutex_);
 
     // Importer passed us the offset for each row
@@ -438,6 +457,7 @@ bool CsvDataWrapper::fragmentIsFull() {
 }
 
 ForeignStorageBuffer* CsvDataWrapper::getChunkBuffer(const ChunkKey& chunk_key) {
+  auto timer = DEBUG_TIMER(__func__);
   // Need to populate data before returning it
 
   if (!chunk_buffer_map_[chunk_key].get()->bufferExists()) {
@@ -478,9 +498,9 @@ ForeignStorageBuffer* CsvDataWrapper::getChunkBuffer(const ChunkKey& chunk_key) 
       chunk.set_buffer(temp_buffer_map[chunk_key].get());
     }
     chunk.init_encoder();
-    LazyLoader loader(getLazyLoader(*catalog, load_key, &temp_buffer_map),
-                      getFilePath(),
-                      validateAndGetCopyParams());
+    CsvLazyLoader loader(getLazyLoader(*catalog, load_key, &temp_buffer_map),
+                         getFilePath(),
+                         validateAndGetCopyParams());
 
     int fragment_index = chunk_key[3];
 
@@ -516,6 +536,7 @@ ForeignStorageBuffer* CsvDataWrapper::getChunkBuffer(const ChunkKey& chunk_key) 
 void CsvDataWrapper::populateMetadataForChunkKeyPrefix(
     const ChunkKey& chunk_key_prefix,
     ChunkMetadataVector& chunk_metadata_vector) {
+  auto timer = DEBUG_TIMER(__func__);
   for (auto& [buffer_chunk_key, buffer] : chunk_buffer_map_) {
     if (buffer->has_encoder && prefixMatch(chunk_key_prefix, buffer_chunk_key)) {
       auto chunk_metadata = std::make_shared<ChunkMetadata>();

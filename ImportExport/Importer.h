@@ -67,18 +67,6 @@ class Array;
 
 namespace import_export {
 
-using FileOffsets = std::vector<size_t>;
-
-struct FileRegion {
-  std::string filename;
-  // Offset into file
-  size_t first_row_file_offset;
-  // Size of region in bytes
-  size_t region_size;
-};
-
-using FileRegions = std::vector<FileRegion>;
-
 class Importer;
 
 using ArraySliceRange = std::pair<size_t, size_t>;
@@ -523,12 +511,22 @@ class TypedImportBuffer : boost::noncopyable {
   size_t replicate_count_ = 0;
 };
 
+struct FileScanMetadata {
+  virtual ~FileScanMetadata() = default;
+};
+
+struct CsvFileScanMetadata : public FileScanMetadata {
+  std::vector<size_t> row_offsets;
+};
+
+// TODO: Add Parquet FileScanMatadata struct
+
 class Loader {
   using LoadCallbackType =
       std::function<bool(const std::vector<std::unique_ptr<TypedImportBuffer>>&,
                          std::vector<DataBlockPtr>&,
                          size_t,
-                         const std::vector<size_t>&)>;
+                         const FileScanMetadata*)>;
 
  public:
   Loader(Catalog_Namespace::Catalog& c,
@@ -564,7 +562,7 @@ class Loader {
   virtual bool loadNoCheckpoint(
       const std::vector<std::unique_ptr<TypedImportBuffer>>& import_buffers,
       const size_t row_count,
-      const std::vector<size_t>& row_offsets = {});
+      const FileScanMetadata* file_scan_metadata = nullptr);
 
   virtual void checkpoint();
   virtual int32_t getTableEpoch();
@@ -581,7 +579,7 @@ class Loader {
       const std::vector<std::unique_ptr<TypedImportBuffer>>& import_buffers,
       size_t row_count,
       bool checkpoint,
-      const std::vector<size_t>& row_offsets = {});
+      const FileScanMetadata* file_scan_metadata = nullptr);
 
   using OneShardBuffers = std::vector<std::unique_ptr<TypedImportBuffer>>;
   void distributeToShards(std::vector<OneShardBuffers>& all_shard_import_buffers,
@@ -736,6 +734,9 @@ class RenderGroupAnalyzer {
   int _numRenderGroups;
 };
 
+using ColumnIdToRenderGroupAnalyzerMapType =
+    std::map<int, std::shared_ptr<RenderGroupAnalyzer>>;
+
 class Importer : public DataStreamSink {
  public:
   Importer(Catalog_Namespace::Catalog& c,
@@ -748,14 +749,13 @@ class Importer : public DataStreamSink {
 
   ImportStatus importDelimited(const std::string& file_path,
                                const bool decompressed) override {
-    return loadDelimited(file_path, decompressed, false, false, {});
+    return loadDelimited(file_path, decompressed, false, 0);
   };
 
   ImportStatus loadDelimited(const std::string& file_path,
                              const bool decompressed,
                              const bool record_offsets,
-                             const bool partial_import,
-                             const FileRegions& file_regions);
+                             const size_t initial_file_offset);
   ImportStatus importGDAL(std::map<std::string, std::string> colname_to_src);
   static bool hasGDALLibKML();
   const CopyParams& get_copy_params() const { return copy_params; }
@@ -764,7 +764,7 @@ class Importer : public DataStreamSink {
   }
   void load(const std::vector<std::unique_ptr<TypedImportBuffer>>& import_buffers,
             size_t row_count,
-            const std::vector<size_t>& row_offsets);
+            const FileScanMetadata* file_scan_metadata);
   std::vector<std::vector<std::unique_ptr<TypedImportBuffer>>>& get_import_buffers_vec() {
     return import_buffers_vec;
   }
@@ -829,6 +829,20 @@ class Importer : public DataStreamSink {
       const int64_t replicate_count = 0);
   void checkpoint(const int32_t start_epoch);
   auto getLoader() const { return loader.get(); }
+
+ protected:
+  void initializeImportBuffers(const size_t num_buffers);
+  static ImportStatus importThreadDelimited(
+      int thread_id,
+      Importer* importer,
+      std::unique_ptr<char[]> scratch_buffer,
+      size_t begin_pos,
+      size_t end_pos,
+      size_t total_size,
+      const ColumnIdToRenderGroupAnalyzerMapType& columnIdToRenderGroupAnalyzerMap,
+      size_t first_row_index_this_buffer,
+      bool record_row_offsets,
+      size_t current_position);
 
  private:
   static void initGDAL();
