@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 MapD Technologies, Inc.
+ * Copyright 2020 OmniSci, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,8 +24,12 @@
 #ifdef HAVE_CUDA
 namespace {
 
+#define JIT_LOG_SIZE 8192
+
 void fill_options(std::vector<CUjit_option>& option_keys,
                   std::vector<void*>& option_values,
+                  char* info_log,
+                  char* error_log,
                   const unsigned block_size_x) {
   option_keys.push_back(CU_JIT_LOG_VERBOSE);
   option_values.push_back(reinterpret_cast<void*>(1));
@@ -33,6 +37,14 @@ void fill_options(std::vector<CUjit_option>& option_keys,
   option_values.push_back(reinterpret_cast<void*>(block_size_x));
   option_keys.push_back(CU_JIT_WALL_TIME);
   option_values.push_back(reinterpret_cast<void*>(0));
+  option_keys.push_back(CU_JIT_INFO_LOG_BUFFER);
+  option_values.push_back(reinterpret_cast<void*>(info_log));
+  option_keys.push_back(CU_JIT_INFO_LOG_BUFFER_SIZE_BYTES);
+  option_values.push_back(reinterpret_cast<void*>((long)JIT_LOG_SIZE));
+  option_keys.push_back(CU_JIT_ERROR_LOG_BUFFER);
+  option_values.push_back(reinterpret_cast<void*>(error_log));
+  option_keys.push_back(CU_JIT_ERROR_LOG_BUFFER_SIZE_BYTES);
+  option_values.push_back(reinterpret_cast<void*>((long)JIT_LOG_SIZE));
 }
 
 }  // namespace
@@ -45,7 +57,9 @@ CubinResult ptx_to_cubin(const std::string& ptx,
   static_cast<const CudaMgr_Namespace::CudaMgr*>(cuda_mgr)->setContext(0);
   std::vector<CUjit_option> option_keys;
   std::vector<void*> option_values;
-  fill_options(option_keys, option_values, block_size);
+  char info_log[JIT_LOG_SIZE];
+  char error_log[JIT_LOG_SIZE];
+  fill_options(option_keys, option_values, info_log, error_log, block_size);
   CHECK_EQ(option_values.size(), option_keys.size());
   unsigned num_options = option_keys.size();
   CUlinkState link_state;
@@ -85,6 +99,7 @@ CubinResult ptx_to_cubin(const std::string& ptx,
   void* cubin{nullptr};
   size_t cubinSize{0};
   checkCudaErrors(cuLinkComplete(link_state, &cubin, &cubinSize));
+  VLOG(1) << "CUDA Linker completed: " << info_log;
   CHECK(cubin);
   CHECK_GT(cubinSize, size_t(0));
   return {cubin, option_keys, option_values, link_state};
