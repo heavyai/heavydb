@@ -17,22 +17,35 @@
 #pragma once
 #include "Import/Importer.h"
 namespace foreign_storage {
+struct FileRegion {
+  std::string filename;
+  // Offset into file
+  size_t first_row_file_offset;
+  // Size of region in bytes
+  size_t region_size;
+};
 
-using Importer_NS::CopyParams;
-using Importer_NS::FileRegions;
-using Importer_NS::Loader;
+using FileRegions = std::vector<FileRegion>;
 
 // Reads
-class LazyLoader {
+class CsvLazyLoader : public Importer_NS::Importer {
  public:
-  LazyLoader(Loader* providedLoader, const std::string& file, const CopyParams& p);
+  CsvLazyLoader(Importer_NS::Loader* providedLoader,
+                const std::string& file,
+                const Importer_NS::CopyParams& p);
 
   void scanMetadata();
 
   void fetchRegions(const FileRegions& file_regions);
 
  private:
-  Importer_NS::Importer importer;
-  std::string file_path;
+  static void loadFileRegions(const FileRegions& file_regions,
+                              const size_t start_index,
+                              const size_t end_index,
+                              const size_t thread_id,
+                              FILE* file,
+                              std::mutex& file_access_mutex,
+                              Importer_NS::Importer* importer);
+  std::mutex file_access_mutex_;
 };
 }  // namespace foreign_storage
