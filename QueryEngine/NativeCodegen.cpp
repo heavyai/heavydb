@@ -49,6 +49,7 @@ static_assert(false, "LLVM Version >= 4 is required.");
 #include <llvm/Support/raw_os_ostream.h>
 #include <llvm/Transforms/IPO.h>
 #include <llvm/Transforms/IPO/AlwaysInliner.h>
+#include <llvm/Transforms/IPO/PassManagerBuilder.h>
 #include <llvm/Transforms/InstCombine/InstCombine.h>
 #include <llvm/Transforms/Instrumentation.h>
 #include <llvm/Transforms/Scalar.h>
@@ -102,10 +103,9 @@ void eliminate_dead_self_recursive_funcs(
 
 void optimize_ir(llvm::Function* query_func,
                  llvm::Module* module,
+                 llvm::legacy::PassManager& pass_manager,
                  const std::unordered_set<llvm::Function*>& live_funcs,
                  const CompilationOptions& co) {
-  llvm::legacy::PassManager pass_manager;
-
   pass_manager.add(llvm::createAlwaysInlinerLegacyPass());
   pass_manager.add(llvm::createPromoteMemoryToRegisterPass());
 #if LLVM_VERSION_MAJOR >= 7
@@ -220,7 +220,8 @@ ExecutionEngineWrapper CodeGenerator::generateNativeCPUCode(
   auto module = func->getParent();
   // run optimizations
 #ifndef WITH_JIT_DEBUG
-  optimize_ir(func, module, live_funcs, co);
+  llvm::legacy::PassManager pass_manager;
+  optimize_ir(func, module, pass_manager, live_funcs, co);
 #endif  // WITH_JIT_DEBUG
 
   auto init_err = llvm::InitializeNativeTarget();
@@ -664,8 +665,16 @@ CodeGenerator::GPUCode CodeGenerator::generateNativeGPUCode(
       "f32:32:32-f64:64:64-v16:16:16-"
       "v32:32:32-v64:64:64-v128:128:128-n16:32:64");
   module->setTargetTriple("nvptx64-nvidia-cuda");
+  CHECK(gpu_target.nvptx_target_machine);
+  auto pass_manager_builder = llvm::PassManagerBuilder();
+  // add nvvm reflect pass replacing any NVVM conditionals with constants
+  gpu_target.nvptx_target_machine->adjustPassManager(pass_manager_builder);
+  pass_manager_builder.OptLevel = 0;
+
+  llvm::legacy::PassManager pass_manager;
+  pass_manager_builder.populateModulePassManager(pass_manager);
   // run optimizations
-  optimize_ir(func, module, live_funcs, co);
+  optimize_ir(func, module, pass_manager, live_funcs, co);
   legalize_nvvm_ir(func);
 
   std::stringstream ss;
@@ -2036,7 +2045,10 @@ Executor::compileWorkUnit(const std::vector<InputTableInfo>& query_infos,
       throw std::runtime_error(
           "Explain optimized not available when JIT runtime debug symbols are enabled");
 #else
-      optimize_ir(query_func, cgen_state_->module_, live_funcs, co);
+      // Note that we don't run the NVVM reflect pass here. Use LOG(IR) to get the
+      // optimized IR after NVVM reflect
+      llvm::legacy::PassManager pass_manager;
+      optimize_ir(query_func, cgen_state_->module_, pass_manager, live_funcs, co);
 #endif  // WITH_JIT_DEBUG
     }
     llvm_ir =
