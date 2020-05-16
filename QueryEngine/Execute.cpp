@@ -2822,7 +2822,7 @@ int32_t Executor::executePlanWithGroupBy(
         join_hash_table_ptrs);
   } else {
     try {
-      auto out_vec = query_exe_context->launchGpuCode(
+      query_exe_context->launchGpuCode(
           ra_exe_unit_copy,
           compilation_result.native_functions,
           hoist_literals,
