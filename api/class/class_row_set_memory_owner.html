@@ -65,7 +65,7 @@
             
             
               <div class="version">
-                5.3.0dev 7416035
+                5.3.0dev eb2b419
               </div>
             
           
@@ -313,6 +313,7 @@
 <li class="toctree-l2"><a class="reference internal" href="class_analyzer_1_1_var.html">Class Analyzer::Var</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_analyzer_1_1_window_function.html">Class Analyzer::WindowFunction</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_archive.html">Class Archive</a></li>
+<li class="toctree-l2"><a class="reference internal" href="class_arena.html">Class Arena</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_argument.html">Class Argument</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_array_none_encoder.html">Class ArrayNoneEncoder</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_arrow_csv_foreign_storage.html">Class ArrowCsvForeignStorage</a></li>
@@ -682,6 +683,7 @@
 <li class="toctree-l2"><a class="reference internal" href="class_string_none_encoder.html">Class StringNoneEncoder</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_stub_generator.html">Class StubGenerator</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_sub_condition_remover.html">Class SubConditionRemover</a></li>
+<li class="toctree-l2"><a class="reference internal" href="class_sys_allocator.html">Class SysAllocator</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_table_archiver.html">Class TableArchiver</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_table_function_compilation_context.html">Class TableFunctionCompilationContext</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_table_function_execution_context.html">Class TableFunctionExecutionContext</a></li>
@@ -1409,8 +1411,19 @@
 <dl class="class">
 <dt id="_CPPv417RowSetMemoryOwner">
 <span id="_CPPv317RowSetMemoryOwner"></span><span id="_CPPv217RowSetMemoryOwner"></span><span id="RowSetMemoryOwner"></span><span class="target" id="class_row_set_memory_owner"></span><em class="property">class </em><code class="sig-name descname">RowSetMemoryOwner</code> : <em class="property">private</em> noncopyable<a class="headerlink" href="#_CPPv417RowSetMemoryOwner" title="Permalink to this definition">¶</a><br /></dt>
-<dd><div class="breathe-sectiondef docutils container">
+<dd><p>Handles allocations and outputs for all stages in a query, either explicitly or via a managed allocator object </p>
+<div class="breathe-sectiondef docutils container">
 <p class="breathe-sectiondef-title rubric">Public Functions</p>
+<dl class="function">
+<dt id="_CPPv4N17RowSetMemoryOwner17RowSetMemoryOwnerEK6size_t">
+<span id="_CPPv3N17RowSetMemoryOwner17RowSetMemoryOwnerEK6size_t"></span><span id="_CPPv2N17RowSetMemoryOwner17RowSetMemoryOwnerEK6size_t"></span><span id="RowSetMemoryOwner::RowSetMemoryOwner__sC"></span><span class="target" id="class_row_set_memory_owner_1aa125c300652de73ded0b61a8fd427a79"></span><code class="sig-name descname">RowSetMemoryOwner</code><span class="sig-paren">(</span><em class="property">const</em> size_t <em>arena_block_size</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N17RowSetMemoryOwner17RowSetMemoryOwnerEK6size_t" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="_CPPv4N17RowSetMemoryOwner8allocateEK6size_t">
+<span id="_CPPv3N17RowSetMemoryOwner8allocateEK6size_t"></span><span id="_CPPv2N17RowSetMemoryOwner8allocateEK6size_t"></span><span id="RowSetMemoryOwner::allocate__sC"></span><span class="target" id="class_row_set_memory_owner_1a7d6528b52f2fb30713d740b3a9b3d5a2"></span>int8_t *<code class="sig-name descname">allocate</code><span class="sig-paren">(</span><em class="property">const</em> size_t <em>num_bytes</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N17RowSetMemoryOwner8allocateEK6size_t" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
 <dl class="function">
 <dt id="_CPPv4N17RowSetMemoryOwner22addCountDistinctBufferEP6int8_tK6size_tKb">
 <span id="_CPPv3N17RowSetMemoryOwner22addCountDistinctBufferEP6int8_tK6size_tKb"></span><span id="_CPPv2N17RowSetMemoryOwner22addCountDistinctBufferEP6int8_tK6size_tKb"></span><span id="RowSetMemoryOwner::addCountDistinctBuffer__int8_tP.sC.bC"></span><span class="target" id="class_row_set_memory_owner_1ac124389d4e6c6cc24140cf37ffc3b709"></span>void <code class="sig-name descname">addCountDistinctBuffer</code><span class="sig-paren">(</span>int8_t *<em>count_distinct_buffer</em>, <em class="property">const</em> size_t <em>bytes</em>, <em class="property">const</em> bool <em>system_allocated</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N17RowSetMemoryOwner22addCountDistinctBufferEP6int8_tK6size_tKb" title="Permalink to this definition">¶</a><br /></dt>
@@ -1533,6 +1546,16 @@
 <dl class="member">
 <dt id="_CPPv4N17RowSetMemoryOwner21varlen_input_buffers_E">
 <span id="_CPPv3N17RowSetMemoryOwner21varlen_input_buffers_E"></span><span id="_CPPv2N17RowSetMemoryOwner21varlen_input_buffers_E"></span><span id="RowSetMemoryOwner::varlen_input_buffers___std::vector:Data_Namespace::AbstractBufferP:"></span><span class="target" id="class_row_set_memory_owner_1a2a94799d9e80809337c985f69397501a"></span>std::vector&lt;Data_Namespace::<a class="reference internal" href="class_data___namespace_1_1_abstract_buffer.html#_CPPv4N14Data_Namespace14AbstractBufferE" title="Data_Namespace::AbstractBuffer">AbstractBuffer</a> *&gt; <code class="sig-name descname">varlen_input_buffers_</code><a class="headerlink" href="#_CPPv4N17RowSetMemoryOwner21varlen_input_buffers_E" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="member">
+<dt id="_CPPv4N17RowSetMemoryOwner17arena_block_size_E">
+<span id="_CPPv3N17RowSetMemoryOwner17arena_block_size_E"></span><span id="_CPPv2N17RowSetMemoryOwner17arena_block_size_E"></span><span id="RowSetMemoryOwner::arena_block_size___s"></span><span class="target" id="class_row_set_memory_owner_1a2819e78cc1373f5b088079d83aadf288"></span>size_t <code class="sig-name descname">arena_block_size_</code><a class="headerlink" href="#_CPPv4N17RowSetMemoryOwner17arena_block_size_E" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="member">
+<dt id="_CPPv4N17RowSetMemoryOwner10allocator_E">
+<span id="_CPPv3N17RowSetMemoryOwner10allocator_E"></span><span id="_CPPv2N17RowSetMemoryOwner10allocator_E"></span><span id="RowSetMemoryOwner::allocator___std::unique_ptr:Arena:"></span><span class="target" id="class_row_set_memory_owner_1aaa5ff2a85d7677015d92da129c69569a"></span>std::unique_ptr&lt;<a class="reference internal" href="class_arena.html#_CPPv45Arena" title="Arena">Arena</a>&gt; <code class="sig-name descname">allocator_</code><a class="headerlink" href="#_CPPv4N17RowSetMemoryOwner10allocator_E" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 <dl class="member">

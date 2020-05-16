@@ -65,7 +65,7 @@
             
             
               <div class="version">
-                5.3.0dev 7416035
+                5.3.0dev eb2b419
               </div>
             
           
@@ -313,6 +313,7 @@
 <li class="toctree-l2"><a class="reference internal" href="class_analyzer_1_1_var.html">Class Analyzer::Var</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_analyzer_1_1_window_function.html">Class Analyzer::WindowFunction</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_archive.html">Class Archive</a></li>
+<li class="toctree-l2"><a class="reference internal" href="class_arena.html">Class Arena</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_argument.html">Class Argument</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_array_none_encoder.html">Class ArrayNoneEncoder</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_arrow_csv_foreign_storage.html">Class ArrowCsvForeignStorage</a></li>
@@ -682,6 +683,7 @@
 <li class="toctree-l2"><a class="reference internal" href="class_string_none_encoder.html">Class StringNoneEncoder</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_stub_generator.html">Class StubGenerator</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_sub_condition_remover.html">Class SubConditionRemover</a></li>
+<li class="toctree-l2"><a class="reference internal" href="class_sys_allocator.html">Class SysAllocator</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_table_archiver.html">Class TableArchiver</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_table_function_compilation_context.html">Class TableFunctionCompilationContext</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_table_function_execution_context.html">Class TableFunctionExecutionContext</a></li>
@@ -1408,12 +1410,25 @@
 <h1>Class OutOfHostMemory<a class="headerlink" href="#class-outofhostmemory" title="Permalink to this headline">¶</a></h1>
 <dl class="class">
 <dt id="_CPPv415OutOfHostMemory">
-<span id="_CPPv315OutOfHostMemory"></span><span id="_CPPv215OutOfHostMemory"></span><span id="OutOfHostMemory"></span><span class="target" id="class_out_of_host_memory"></span><em class="property">class </em><code class="sig-name descname">OutOfHostMemory</code> : <em class="property">public</em> runtime_error<a class="headerlink" href="#_CPPv415OutOfHostMemory" title="Permalink to this definition">¶</a><br /></dt>
+<span id="_CPPv315OutOfHostMemory"></span><span id="_CPPv215OutOfHostMemory"></span><span id="OutOfHostMemory"></span><span class="target" id="class_out_of_host_memory"></span><em class="property">class </em><code class="sig-name descname">OutOfHostMemory</code> : <em class="property">public</em> bad_alloc<a class="headerlink" href="#_CPPv415OutOfHostMemory" title="Permalink to this definition">¶</a><br /></dt>
 <dd><div class="breathe-sectiondef docutils container">
 <p class="breathe-sectiondef-title rubric">Public Functions</p>
 <dl class="function">
 <dt id="_CPPv4N15OutOfHostMemory15OutOfHostMemoryEK6size_t">
 <span id="_CPPv3N15OutOfHostMemory15OutOfHostMemoryEK6size_t"></span><span id="_CPPv2N15OutOfHostMemory15OutOfHostMemoryEK6size_t"></span><span id="OutOfHostMemory::OutOfHostMemory__sC"></span><span class="target" id="class_out_of_host_memory_1a8b9111be97821f53ef1ec75c7a73f18a"></span><code class="sig-name descname">OutOfHostMemory</code><span class="sig-paren">(</span><em class="property">const</em> size_t <em>size</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N15OutOfHostMemory15OutOfHostMemoryEK6size_t" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="_CPPv4NK15OutOfHostMemory4whatEv">
+<span id="_CPPv3NK15OutOfHostMemory4whatEv"></span><span id="_CPPv2NK15OutOfHostMemory4whatEv"></span><span id="OutOfHostMemory::whatC"></span><span class="target" id="class_out_of_host_memory_1aa92b1123a17aba17f712b4fd8eddb6c0"></span><em class="property">virtual</em> <em class="property">const</em> char *<code class="sig-name descname">what</code><span class="sig-paren">(</span><span class="sig-paren">)</span> <em class="property">const</em><a class="headerlink" href="#_CPPv4NK15OutOfHostMemory4whatEv" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+</div>
+<div class="breathe-sectiondef docutils container">
+<p class="breathe-sectiondef-title rubric">Private Members</p>
+<dl class="member">
+<dt id="_CPPv4N15OutOfHostMemory9what_str_E">
+<span id="_CPPv3N15OutOfHostMemory9what_str_E"></span><span id="_CPPv2N15OutOfHostMemory9what_str_E"></span><span id="OutOfHostMemory::what_str___ssC"></span><span class="target" id="class_out_of_host_memory_1ad9c3f1b6871985369d45b9bb2b65c4a9"></span><em class="property">const</em> std::string <code class="sig-name descname">what_str_</code><a class="headerlink" href="#_CPPv4N15OutOfHostMemory9what_str_E" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 </div>

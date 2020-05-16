@@ -65,7 +65,7 @@
             
             
               <div class="version">
-                5.3.0dev 7416035
+                5.3.0dev eb2b419
               </div>
             
           
@@ -313,6 +313,7 @@
 <li class="toctree-l2"><a class="reference internal" href="class_analyzer_1_1_var.html">Class Analyzer::Var</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_analyzer_1_1_window_function.html">Class Analyzer::WindowFunction</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_archive.html">Class Archive</a></li>
+<li class="toctree-l2"><a class="reference internal" href="class_arena.html">Class Arena</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_argument.html">Class Argument</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_array_none_encoder.html">Class ArrayNoneEncoder</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_arrow_csv_foreign_storage.html">Class ArrowCsvForeignStorage</a></li>
@@ -682,6 +683,7 @@
 <li class="toctree-l2"><a class="reference internal" href="class_string_none_encoder.html">Class StringNoneEncoder</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_stub_generator.html">Class StubGenerator</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_sub_condition_remover.html">Class SubConditionRemover</a></li>
+<li class="toctree-l2"><a class="reference internal" href="class_sys_allocator.html">Class SysAllocator</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_table_archiver.html">Class TableArchiver</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_table_function_compilation_context.html">Class TableFunctionCompilationContext</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_table_function_execution_context.html">Class TableFunctionExecutionContext</a></li>
@@ -1645,6 +1647,11 @@
 <dd></dd></dl>
 
 <dl class="function">
+<dt id="_CPPv4N8Executor17getArenaBlockSizeEv">
+<span id="_CPPv3N8Executor17getArenaBlockSizeEv"></span><span id="_CPPv2N8Executor17getArenaBlockSizeEv"></span><span id="Executor::getArenaBlockSize"></span><span class="target" id="class_executor_1a279a9a85006f758dde16d53ac6ed95b0"></span>size_t <code class="sig-name descname">getArenaBlockSize</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N8Executor17getArenaBlockSizeEv" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="function">
 <dt id="_CPPv4N8Executor13reduceResultsEK6SQLAggRK11SQLTypeInfoK7int64_tK6int8_tPK7int64_tK6size_tKbKb">
 <span id="_CPPv3N8Executor13reduceResultsEK6SQLAggRK11SQLTypeInfoK7int64_tK6int8_tPK7int64_tK6size_tKbKb"></span><span id="_CPPv2N8Executor13reduceResultsEK6SQLAggRK11SQLTypeInfoK7int64_tK6int8_tPK7int64_tK6size_tKbKb"></span><span id="Executor::reduceResults__SQLAggC.SQLTypeInfoCR.int64_tC.int8_tC.int64_tCP.sC.bC.bC"></span><span class="target" id="class_executor_1a3109fef7c77f15da91b0a6a3ea592b19"></span>std::pair&lt;int64_t, int32_t&gt; <code class="sig-name descname">reduceResults</code><span class="sig-paren">(</span><em class="property">const</em> SQLAgg <em>agg</em>, <em class="property">const</em> <a class="reference internal" href="class_s_q_l_type_info.html#_CPPv411SQLTypeInfo" title="SQLTypeInfo">SQLTypeInfo</a> &amp;<em>ti</em>, <em class="property">const</em> int64_t <em>agg_init_val</em>, <em class="property">const</em> int8_t <em>out_byte_width</em>, <em class="property">const</em> int64_t *<em>out_vec</em>, <em class="property">const</em> size_t <em>out_vec_sz</em>, <em class="property">const</em> bool <em>is_group_by</em>, <em class="property">const</em> bool <em>float_argument_input</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N8Executor13reduceResultsEK6SQLAggRK11SQLTypeInfoK7int64_tK6int8_tPK7int64_tK6size_tKbKb" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
@@ -2241,7 +2248,7 @@
 
 <dl class="member">
 <dt id="_CPPv4N8Executor15code_cache_sizeE">
-<span id="_CPPv3N8Executor15code_cache_sizeE"></span><span id="_CPPv2N8Executor15code_cache_sizeE"></span><span id="Executor::code_cache_size__sC"></span><span class="target" id="class_executor_1aed1a9e79debcfb57d866766a0b2a4ee7"></span><em class="property">const</em> size_t <code class="sig-name descname">code_cache_size</code> = {10000}<a class="headerlink" href="#_CPPv4N8Executor15code_cache_sizeE" title="Permalink to this definition">¶</a><br /></dt>
+<span id="_CPPv3N8Executor15code_cache_sizeE"></span><span id="_CPPv2N8Executor15code_cache_sizeE"></span><span id="Executor::code_cache_size__sC"></span><span class="target" id="class_executor_1aed1a9e79debcfb57d866766a0b2a4ee7"></span><em class="property">const</em> size_t <code class="sig-name descname">code_cache_size</code> = {1000}<a class="headerlink" href="#_CPPv4N8Executor15code_cache_sizeE" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 <dl class="member">

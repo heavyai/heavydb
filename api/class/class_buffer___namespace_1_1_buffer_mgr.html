@@ -65,7 +65,7 @@
             
             
               <div class="version">
-                5.3.0dev 7416035
+                5.3.0dev eb2b419
               </div>
             
           
@@ -313,6 +313,7 @@
 <li class="toctree-l2"><a class="reference internal" href="class_analyzer_1_1_var.html">Class Analyzer::Var</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_analyzer_1_1_window_function.html">Class Analyzer::WindowFunction</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_archive.html">Class Archive</a></li>
+<li class="toctree-l2"><a class="reference internal" href="class_arena.html">Class Arena</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_argument.html">Class Argument</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_array_none_encoder.html">Class ArrayNoneEncoder</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_arrow_csv_foreign_storage.html">Class ArrowCsvForeignStorage</a></li>
@@ -682,6 +683,7 @@
 <li class="toctree-l2"><a class="reference internal" href="class_string_none_encoder.html">Class StringNoneEncoder</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_stub_generator.html">Class StubGenerator</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_sub_condition_remover.html">Class SubConditionRemover</a></li>
+<li class="toctree-l2"><a class="reference internal" href="class_sys_allocator.html">Class SysAllocator</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_table_archiver.html">Class TableArchiver</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_table_function_compilation_context.html">Class TableFunctionCompilationContext</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_table_function_execution_context.html">Class TableFunctionExecutionContext</a></li>
@@ -1635,13 +1637,19 @@
 <span id="_CPPv3N16Buffer_Namespace9BufferMgr10page_size_E"></span><span id="_CPPv2N16Buffer_Namespace9BufferMgr10page_size_E"></span><span id="Buffer_Namespace::BufferMgr::page_size___s"></span><span class="target" id="class_buffer___namespace_1_1_buffer_mgr_1af21b6ea8f6ebbca7faaaf02bad2bc9db"></span>size_t <code class="sig-name descname">page_size_</code><a class="headerlink" href="#_CPPv4N16Buffer_Namespace9BufferMgr10page_size_E" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
+<dl class="member">
+<dt id="_CPPv4N16Buffer_Namespace9BufferMgr14max_slab_size_E">
+<span id="_CPPv3N16Buffer_Namespace9BufferMgr14max_slab_size_E"></span><span id="_CPPv2N16Buffer_Namespace9BufferMgr14max_slab_size_E"></span><span id="Buffer_Namespace::BufferMgr::max_slab_size___s"></span><span class="target" id="class_buffer___namespace_1_1_buffer_mgr_1aad80037e8716a215042b2bbdb5f5a413"></span>size_t <code class="sig-name descname">max_slab_size_</code><a class="headerlink" href="#_CPPv4N16Buffer_Namespace9BufferMgr14max_slab_size_E" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
 </div>
 <div class="breathe-sectiondef docutils container">
 <p class="breathe-sectiondef-title rubric">Private Functions</p>
 <dl class="function">
 <dt id="_CPPv4N16Buffer_Namespace9BufferMgr9BufferMgrERK9BufferMgr">
 <span id="_CPPv3N16Buffer_Namespace9BufferMgr9BufferMgrERK9BufferMgr"></span><span id="_CPPv2N16Buffer_Namespace9BufferMgr9BufferMgrERK9BufferMgr"></span><span id="Buffer_Namespace::BufferMgr::BufferMgr__BufferMgrCR"></span><span class="target" id="class_buffer___namespace_1_1_buffer_mgr_1ad5c7df6f707d2c3e2bf81c9e2e10698b"></span><code class="sig-name descname">BufferMgr</code><span class="sig-paren">(</span><em class="property">const</em> <a class="reference internal" href="#_CPPv4N16Buffer_Namespace9BufferMgr9BufferMgrEKiK6size_tK6size_tK6size_tP17AbstractBufferMgr" title="Buffer_Namespace::BufferMgr::BufferMgr">BufferMgr</a>&amp;<span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N16Buffer_Namespace9BufferMgr9BufferMgrERK9BufferMgr" title="Permalink to this definition">¶</a><br /></dt>
-<dd></dd></dl>
+<dd><p>size of the individual memory allocations that compose the buffer pool (up to maxBufferSize_) </p>
+</dd></dl>
 
 <dl class="function">
 <dt id="_CPPv4N16Buffer_Namespace9BufferMgraSERK9BufferMgr">
@@ -1755,15 +1763,9 @@
 <dd></dd></dl>
 
 <dl class="member">
-<dt id="_CPPv4N16Buffer_Namespace9BufferMgr14max_slab_size_E">
-<span id="_CPPv3N16Buffer_Namespace9BufferMgr14max_slab_size_E"></span><span id="_CPPv2N16Buffer_Namespace9BufferMgr14max_slab_size_E"></span><span id="Buffer_Namespace::BufferMgr::max_slab_size___s"></span><span class="target" id="class_buffer___namespace_1_1_buffer_mgr_1aad80037e8716a215042b2bbdb5f5a413"></span>size_t <code class="sig-name descname">max_slab_size_</code><a class="headerlink" href="#_CPPv4N16Buffer_Namespace9BufferMgr14max_slab_size_E" title="Permalink to this definition">¶</a><br /></dt>
-<dd></dd></dl>
-
-<dl class="member">
 <dt id="_CPPv4N16Buffer_Namespace9BufferMgr19allocations_capped_E">
 <span id="_CPPv3N16Buffer_Namespace9BufferMgr19allocations_capped_E"></span><span id="_CPPv2N16Buffer_Namespace9BufferMgr19allocations_capped_E"></span><span id="Buffer_Namespace::BufferMgr::allocations_capped___b"></span><span class="target" id="class_buffer___namespace_1_1_buffer_mgr_1a79e1e0da881c26cabb886ceee8aad70c"></span>bool <code class="sig-name descname">allocations_capped_</code><a class="headerlink" href="#_CPPv4N16Buffer_Namespace9BufferMgr19allocations_capped_E" title="Permalink to this definition">¶</a><br /></dt>
-<dd><p>size of the individual memory allocations that compose the buffer pool (up to maxBufferSize_) </p>
-</dd></dl>
+<dd></dd></dl>
 
 <dl class="member">
 <dt id="_CPPv4N16Buffer_Namespace9BufferMgr11parent_mgr_E">
