@@ -367,9 +367,9 @@ void Executor::ExecutionDispatch::run(const ExecutorDeviceType chosen_device_typ
             frag_list,
             kernel_dispatch_mode,
             rowid_lookup_key);
-  } catch (const std::bad_alloc& e) {
-    throw QueryExecutionError(ERR_OUT_OF_CPU_MEM, e.what());
   } catch (const OutOfHostMemory& e) {
+    throw QueryExecutionError(ERR_OUT_OF_CPU_MEM, e.what());
+  } catch (const std::bad_alloc& e) {
     throw QueryExecutionError(ERR_OUT_OF_CPU_MEM, e.what());
   } catch (const OutOfRenderMemory& e) {
     throw QueryExecutionError(ERR_OUT_OF_RENDER_MEM, e.what());
