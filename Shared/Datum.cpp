@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 MapD Technologies, Inc.
+ * Copyright 2020 OmniSci, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -27,6 +27,7 @@
 #include <cstdlib>
 #include <stdexcept>
 #include <string>
+
 #include "Logger.h"
 #include "StringTransform.h"
 
@@ -65,7 +66,7 @@ std::string SQLTypeInfo::type_name[kSQLTYPE_LAST] = {"NULL",
 std::string SQLTypeInfo::comp_name[kENCODING_LAST] =
     {"NONE", "FIXED", "RL", "DIFF", "DICT", "SPARSE", "COMPRESSED", "DAYS"};
 
-int64_t parse_numeric(const std::string& s, SQLTypeInfo& ti) {
+int64_t parse_numeric(const std::string_view s, SQLTypeInfo& ti) {
   assert(s.length() <= 20);
   size_t dot = s.find_first_of('.', 0);
   std::string before_dot;
@@ -94,7 +95,7 @@ int64_t parse_numeric(const std::string& s, SQLTypeInfo& ti) {
     ti.set_notnull(false);
   } else {
     if (before_dot_digits + ti.get_scale() > static_cast<size_t>(ti.get_dimension())) {
-      throw std::runtime_error("numeric value " + s +
+      throw std::runtime_error("numeric value " + std::string(s) +
                                " exceeds the maximum precision of " +
                                std::to_string(ti.get_dimension()));
     }
@@ -118,19 +119,20 @@ int64_t parse_numeric(const std::string& s, SQLTypeInfo& ti) {
 /*
  * @brief convert string to a datum
  */
-Datum StringToDatum(const std::string& s, SQLTypeInfo& ti) {
+Datum StringToDatum(std::string_view s, SQLTypeInfo& ti) {
   Datum d;
   try {
     switch (ti.get_type()) {
       case kARRAY:
         break;
       case kBOOLEAN:
-        if (s == "t" || s == "T" || s == "1" || to_upper(s) == "TRUE") {
+        if (s == "t" || s == "T" || s == "1" || to_upper(std::string(s)) == "TRUE") {
           d.boolval = true;
-        } else if (s == "f" || s == "F" || s == "0" || to_upper(s) == "FALSE") {
+        } else if (s == "f" || s == "F" || s == "0" ||
+                   to_upper(std::string(s)) == "FALSE") {
           d.boolval = false;
         } else {
-          throw std::runtime_error("Invalid string for boolean " + s);
+          throw std::runtime_error("Invalid string for boolean " + std::string(s));
         }
         break;
       case kNUMERIC:
@@ -138,31 +140,32 @@ Datum StringToDatum(const std::string& s, SQLTypeInfo& ti) {
         d.bigintval = parse_numeric(s, ti);
         break;
       case kBIGINT:
-        d.bigintval = std::stoll(s);
+        d.bigintval = std::stoll(std::string(s));
         break;
       case kINT:
-        d.intval = std::stoi(s);
+        d.intval = std::stoi(std::string(s));
         break;
       case kSMALLINT:
-        d.smallintval = std::stoi(s);
+        d.smallintval = std::stoi(std::string(s));
         break;
       case kTINYINT:
-        d.tinyintval = std::stoi(s);
+        d.tinyintval = std::stoi(std::string(s));
         break;
       case kFLOAT:
-        d.floatval = std::stof(s);
+        d.floatval = std::stof(std::string(s));
         break;
       case kDOUBLE:
-        d.doubleval = std::stod(s);
+        d.doubleval = std::stod(std::string(s));
         break;
       case kTIME:
-        d.bigintval = DateTimeStringValidate<kTIME>()(s, ti.get_dimension());
+        d.bigintval = DateTimeStringValidate<kTIME>()(std::string(s), ti.get_dimension());
         break;
       case kTIMESTAMP:
-        d.bigintval = DateTimeStringValidate<kTIMESTAMP>()(s, ti.get_dimension());
+        d.bigintval =
+            DateTimeStringValidate<kTIMESTAMP>()(std::string(s), ti.get_dimension());
         break;
       case kDATE:
-        d.bigintval = DateTimeStringValidate<kDATE>()(s, ti.get_dimension());
+        d.bigintval = DateTimeStringValidate<kDATE>()(std::string(s), ti.get_dimension());
         break;
       case kPOINT:
       case kLINESTRING:

@@ -299,7 +299,7 @@ bool RowToColumnLoader::convert_string_to_column(
       switch (column_type_info_[curr_col].get_type()) {
         case SQLTypes::kARRAY: {
           std::vector<std::string> arr_ele;
-          Importer_NS::DelimitedParserUtils::parseStringArray(
+          Importer_NS::delimited_parser::parse_string_array(
               ts.str_val, copy_params, arr_ele);
           TColumn array_tcol;
           for (std::string item : arr_ele) {
