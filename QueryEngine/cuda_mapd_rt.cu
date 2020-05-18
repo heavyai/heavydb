@@ -485,7 +485,7 @@ extern "C" __device__ void agg_min_int32_shared(int32_t* agg, const int32_t val)
   atomicMin(agg, val);
 }
 
-#if defined(__CUDA_ARCH__) && __CUDA_ARCH__ >= 700
+#if CUDA_VERSION > 10000 && defined(__CUDA_ARCH__) && __CUDA_ARCH__ >= 700
 __device__ void atomicMax16(int16_t* agg, const int16_t val) {
   unsigned short int* address_as_us = reinterpret_cast<unsigned short int*>(agg);
   unsigned short int old = *address_as_us, assumed;
@@ -547,7 +547,7 @@ __device__ void atomicMax8(int8_t* agg, const int8_t val) {
   } while (compare_value != old_value);
 }
 
-#if defined(__CUDA_ARCH__) && __CUDA_ARCH__ >= 700
+#if CUDA_VERSION > 10000 && defined(__CUDA_ARCH__) && __CUDA_ARCH__ >= 700
 __device__ void atomicMin16(int16_t* agg, const int16_t val) {
   unsigned short int* address_as_us = reinterpret_cast<unsigned short int*>(agg);
   unsigned short int old = *address_as_us, assumed;
