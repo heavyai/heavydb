@@ -2954,6 +2954,67 @@ void check_one_date_trunc_group_with_agg(const ResultSet& rows,
 
 }  // namespace
 
+TEST(Select, TimeSyntaxCheck) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+
+    ASSERT_EQ(2007,
+              v<int64_t>(run_simple_agg("SELECT DATEPART('year', CAST('2007-10-30 "
+                                        "12:15:32' AS TIMESTAMP)) FROM test;",
+                                        dt)));
+    ASSERT_EQ(2007,
+              v<int64_t>(run_simple_agg("SELECT DATEPART(YEAR, CAST('2007-10-30 "
+                                        "12:15:32' AS TIMESTAMP)) FROM test;",
+                                        dt)));
+    ASSERT_EQ(
+        3,
+        v<int64_t>(run_simple_agg("SELECT DATEDIFF('year', CAST('2006-01-07 00:00:00' as "
+                                  "TIMESTAMP), CAST('2009-01-07 00:00:00' AS "
+                                  "TIMESTAMP)) FROM TEST LIMIT 1;",
+                                  dt)));
+    ASSERT_EQ(
+        3,
+        v<int64_t>(run_simple_agg("SELECT DATEDIFF(YEAR, CAST('2006-01-07 00:00:00' as "
+                                  "TIMESTAMP), CAST('2009-01-07 00:00:00' AS "
+                                  "TIMESTAMP)) FROM TEST LIMIT 1;",
+                                  dt)));
+    ASSERT_EQ(
+        1,
+        v<int64_t>(run_simple_agg("SELECT DATEADD('day', 1, CAST('2017-05-31' AS DATE)) "
+                                  "= TIMESTAMP '2017-06-01 0:00:00' from test limit 1;",
+                                  dt)));
+    ASSERT_EQ(
+        1,
+        v<int64_t>(run_simple_agg("SELECT DATEADD(DAY, 1, CAST('2017-05-31' AS DATE)) "
+                                  "= TIMESTAMP '2017-06-01 0:00:00' from test limit 1;",
+                                  dt)));
+    ASSERT_EQ(
+        1,
+        v<int64_t>(run_simple_agg(
+            "SELECT TIMESTAMPADD('year', 1, TIMESTAMP '2008-02-29 1:11:11') = TIMESTAMP "
+            "'2009-02-28 1:11:11' from test limit 1;",
+            dt)));
+    ASSERT_EQ(
+        1,
+        v<int64_t>(run_simple_agg(
+            "SELECT TIMESTAMPADD(YEAR, 1, TIMESTAMP '2008-02-29 1:11:11') = TIMESTAMP "
+            "'2009-02-28 1:11:11' from test limit 1;",
+            dt)));
+    ASSERT_EQ(
+        128885,
+        v<int64_t>(run_simple_agg(
+            "SELECT TIMESTAMPDIFF('minute', TIMESTAMP '2003-02-01 0:00:00', TIMESTAMP "
+            "'2003-05-01 12:05:55') FROM TEST LIMIT 1;",
+            dt)));
+    ASSERT_EQ(
+        128885,
+        v<int64_t>(run_simple_agg(
+            "SELECT TIMESTAMPDIFF(minute, TIMESTAMP '2003-02-01 0:00:00', TIMESTAMP "
+            "'2003-05-01 12:05:55') FROM TEST LIMIT 1;",
+            dt)));
+  }
+}
+
 TEST(Select, Time) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
