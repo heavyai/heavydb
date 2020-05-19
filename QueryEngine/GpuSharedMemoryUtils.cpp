@@ -44,7 +44,6 @@ GpuSharedMemCodeBuilder::GpuSharedMemCodeBuilder(
   CHECK(!query_mem_desc_.didOutputColumnar());
   CHECK(query_mem_desc_.getQueryDescriptionType() ==
         QueryDescriptionType::GroupByPerfectHash);
-  CHECK(query_mem_desc_.getGroupbyColCount() == 1);
   CHECK(query_mem_desc_.hasKeylessHash());
 }
 
