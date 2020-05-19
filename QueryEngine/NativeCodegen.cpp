@@ -1738,8 +1738,7 @@ bool is_gpu_shared_mem_supported(const QueryMemoryDescriptor* query_mem_desc_ptr
     // good occupancy.
     // For now, we allow keyless, row-wise layout, and only for perfect hash
     // group by operations.
-    if (query_mem_desc_ptr->getGroupbyColCount() == 1 &&
-        query_mem_desc_ptr->hasKeylessHash() &&
+    if (query_mem_desc_ptr->hasKeylessHash() &&
         query_mem_desc_ptr->countDistinctDescriptorsLogicallyEmpty() &&
         !query_mem_desc_ptr->useStreamingTopN()) {
       const size_t shared_memory_threshold_bytes =
