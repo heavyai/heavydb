@@ -113,11 +113,30 @@ std::string pg_shim_impl(const std::string& query) {
         });
   }
   {
-    boost::regex timestampadd_expr{R"(TIMESTAMPADD\s*\(\s*(\w+)\s*,)",
+    boost::regex timestampadd_expr{R"(DATE(ADD|DIFF|PART)\s*\(\s*(\w+)\s*,)",
                                    boost::regex::extended | boost::regex::icase};
     apply_shim(
         result, timestampadd_expr, [](std::string& result, const boost::smatch& what) {
-          result.replace(what.position(), what.length(), "DATEADD('" + what[1] + "',");
+          result.replace(
+              what.position(), what.length(), "DATE" + what[1] + "('" + what[2] + "',");
+        });
+  }
+  {
+    boost::regex timestampadd_expr{R"(TIMESTAMP(ADD|DIFF)\s*\(\s*'(\w+)'\s*,)",
+                                   boost::regex::extended | boost::regex::icase};
+    apply_shim(
+        result, timestampadd_expr, [](std::string& result, const boost::smatch& what) {
+          result.replace(
+              what.position(), what.length(), "DATE" + what[1] + "('" + what[2] + "',");
+        });
+  }
+  {
+    boost::regex timestampadd_expr{R"(TIMESTAMP(ADD|DIFF)\s*\(\s*(\w+)\s*,)",
+                                   boost::regex::extended | boost::regex::icase};
+    apply_shim(
+        result, timestampadd_expr, [](std::string& result, const boost::smatch& what) {
+          result.replace(
+              what.position(), what.length(), "DATE" + what[1] + "('" + what[2] + "',");
         });
   }
   {
