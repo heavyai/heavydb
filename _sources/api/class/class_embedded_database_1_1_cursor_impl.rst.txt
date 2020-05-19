@@ -1,0 +1,9 @@
+Class EmbeddedDatabase::CursorImpl
+==================================
+
+.. doxygenclass:: EmbeddedDatabase::CursorImpl
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

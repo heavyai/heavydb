@@ -1,0 +1,9 @@
+Class EmbeddedDatabase::Row
+===========================
+
+.. doxygenclass:: EmbeddedDatabase::Row
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

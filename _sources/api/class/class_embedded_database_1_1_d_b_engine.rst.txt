@@ -1,0 +1,9 @@
+Class EmbeddedDatabase::DBEngine
+================================
+
+.. doxygenclass:: EmbeddedDatabase::DBEngine
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:
