@@ -1670,7 +1670,8 @@ bool is_gpu_shared_mem_supported(const QueryMemoryDescriptor* query_mem_desc_ptr
                                  const RelAlgExecutionUnit& ra_exe_unit,
                                  const CudaMgr_Namespace::CudaMgr* cuda_mgr,
                                  const ExecutorDeviceType device_type,
-                                 const unsigned gpu_blocksize) {
+                                 const unsigned gpu_blocksize,
+                                 const unsigned num_blocks_per_mp) {
   if (device_type == ExecutorDeviceType::CPU) {
     return false;
   }
@@ -1741,8 +1742,9 @@ bool is_gpu_shared_mem_supported(const QueryMemoryDescriptor* query_mem_desc_ptr
     if (query_mem_desc_ptr->hasKeylessHash() &&
         query_mem_desc_ptr->countDistinctDescriptorsLogicallyEmpty() &&
         !query_mem_desc_ptr->useStreamingTopN()) {
-      const size_t shared_memory_threshold_bytes =
-          std::min(g_gpu_smem_threshold, cuda_mgr->getMaxSharedMemoryForAll());
+      const size_t shared_memory_threshold_bytes = std::min(
+          g_gpu_smem_threshold == 0 ? SIZE_MAX : g_gpu_smem_threshold,
+          cuda_mgr->getMinSharedMemoryPerBlockForAllDevices() / num_blocks_per_mp);
       const auto output_buffer_size =
           query_mem_desc_ptr->getRowSize() * query_mem_desc_ptr->getEntryCount();
       if (output_buffer_size > shared_memory_threshold_bytes) {
@@ -1812,8 +1814,8 @@ Executor::compileWorkUnit(const std::vector<InputTableInfo>& query_infos,
                                   ra_exe_unit,
                                   cuda_mgr,
                                   co.device_type,
-                                  cuda_mgr ? this->blockSize() : 1);
-
+                                  cuda_mgr ? this->blockSize() : 1,
+                                  cuda_mgr ? this->numBlocksPerMP() : 1);
   if (gpu_shared_mem_optimization) {
     // disable interleaved bins optimization on the GPU
     query_mem_desc->setHasInterleavedBinsOnGpu(false);
@@ -1823,6 +1825,7 @@ Executor::compileWorkUnit(const std::vector<InputTableInfo>& query_infos,
                                                              query_mem_desc.get())) +
                        " out of " + std::to_string(g_gpu_smem_threshold) + " bytes).";
   }
+
   const GpuSharedMemoryContext gpu_smem_context(
       get_shared_memory_size(gpu_shared_mem_optimization, query_mem_desc.get()));
 

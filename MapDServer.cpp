@@ -687,7 +687,7 @@ void MapDProgramOptions::fillAdvancedOptions() {
       "gpu-shared-mem-threshold",
       po::value<size_t>(&g_gpu_smem_threshold)->default_value(g_gpu_smem_threshold),
       "GPU shared memory threshold (in bytes). If query requires larger buffers than "
-      "this threshold, we disable those optimizations.");
+      "this threshold, we disable those optimizations. 0 (default) means no static cap.");
   developer_desc.add_options()(
       "enable-shared-mem-non-grouped-agg",
       po::value<bool>(&g_enable_smem_non_grouped_agg)

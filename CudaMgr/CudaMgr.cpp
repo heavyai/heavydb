@@ -34,7 +34,9 @@ std::string errorMessage(CUresult const status) {
 }
 
 CudaMgr::CudaMgr(const int num_gpus, const int start_gpu)
-    : start_gpu_(start_gpu), max_shared_memory_for_all_(0) {
+    : start_gpu_(start_gpu)
+    , min_shared_memory_per_block_for_all_devices(0)
+    , min_num_mps_for_all_devices(0) {
   checkError(cuInit(0));
   checkError(cuDeviceGetCount(&device_count_));
 
@@ -218,7 +220,9 @@ void CudaMgr::fillDeviceProperties() {
         device_properties_[device_num].memoryClockKhz / 1000000.0 / 8.0 *
         device_properties_[device_num].memoryBusWidth;
   }
-  max_shared_memory_for_all_ = computeMaxSharedMemoryForAll();
+  min_shared_memory_per_block_for_all_devices =
+      computeMinSharedMemoryPerBlockForAllDevices();
+  min_num_mps_for_all_devices = computeMinNumMPsForAllDevices();
 }
 
 int8_t* CudaMgr::allocatePinnedHostMem(const size_t num_bytes) {
@@ -286,17 +290,28 @@ bool CudaMgr::isArchVoltaForAll() const {
 }
 
 /**
- * This function returns the maximum available dynamic shared memory that is available for
- * all GPU devices (i.e., minimum of all available dynamic shared memory per blocks, for
- * all GPU devices).
+ * This function returns the minimum available dynamic shared memory that is available per
+ * block for all GPU devices.
  */
-size_t CudaMgr::computeMaxSharedMemoryForAll() const {
+size_t CudaMgr::computeMinSharedMemoryPerBlockForAllDevices() const {
   int shared_mem_size =
       device_count_ > 0 ? device_properties_.front().sharedMemPerBlock : 0;
   for (int d = 1; d < device_count_; d++) {
     shared_mem_size = std::min(shared_mem_size, device_properties_[d].sharedMemPerBlock);
   }
   return shared_mem_size;
+}
+
+/**
+ * This function returns the minimum number of multiprocessors (MPs, also known as SMs)
+ * per device across all GPU devices
+ */
+size_t CudaMgr::computeMinNumMPsForAllDevices() const {
+  int num_mps = device_count_ > 0 ? device_properties_.front().numMPs : 0;
+  for (int d = 1; d < device_count_; d++) {
+    num_mps = std::min(num_mps, device_properties_[d].numMPs);
+  }
+  return num_mps;
 }
 
 void CudaMgr::createDeviceContexts() {

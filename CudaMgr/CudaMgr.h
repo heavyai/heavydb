@@ -121,7 +121,11 @@ class CudaMgr {
                     const size_t num_bytes,
                     const int device_num);
 
-  size_t getMaxSharedMemoryForAll() const { return max_shared_memory_for_all_; }
+  size_t getMinSharedMemoryPerBlockForAllDevices() const {
+    return min_shared_memory_per_block_for_all_devices;
+  }
+
+  size_t getMinNumMPsForAllDevices() const { return min_num_mps_for_all_devices; }
 
   const std::vector<DeviceProperties>& getAllDeviceProperties() const {
     return device_properties_;
@@ -228,7 +232,8 @@ class CudaMgr {
   void fillDeviceProperties();
   void initDeviceGroup();
   void createDeviceContexts();
-  size_t computeMaxSharedMemoryForAll() const;
+  size_t computeMinSharedMemoryPerBlockForAllDevices() const;
+  size_t computeMinNumMPsForAllDevices() const;
   void checkError(CUresult cu_result) const;
 
   int gpu_driver_version_;
@@ -236,7 +241,8 @@ class CudaMgr {
 
   int device_count_;
   int start_gpu_;
-  size_t max_shared_memory_for_all_;
+  size_t min_shared_memory_per_block_for_all_devices;
+  size_t min_num_mps_for_all_devices;
   std::vector<DeviceProperties> device_properties_;
   omnisci::DeviceGroup device_group_;
   std::vector<CUcontext> device_contexts_;

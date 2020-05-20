@@ -422,6 +422,7 @@ class Executor {
 
   int8_t warpSize() const;
   unsigned gridSize() const;
+  unsigned numBlocksPerMP() const;
   unsigned blockSize() const;
 
  private:

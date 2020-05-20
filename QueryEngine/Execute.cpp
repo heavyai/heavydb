@@ -107,8 +107,10 @@ extern bool g_enable_experimental_string_functions;
 bool g_enable_runtime_query_interrupt{false};
 unsigned g_runtime_query_interrupt_frequency{1000};
 size_t g_gpu_smem_threshold{
-    4096};  // GPU shared memory threshold (in bytes), if larger buffer sizes are required
-            // we do not use GPU shared memory optimizations
+    4096};  // GPU shared memory threshold (in bytes), if larger
+            // buffer sizes are required we do not use GPU shared
+            // memory optimizations Setting this to 0 means unlimited
+            // (subject to other dynamically calculated caps)
 bool g_enable_smem_non_grouped_agg{
     true};  // enable optimizations for using GPU shared memory in implementation of
             // non-grouped aggregates
@@ -2975,8 +2977,15 @@ unsigned Executor::gridSize() const {
   CHECK(catalog_);
   const auto cuda_mgr = catalog_->getDataMgr().getCudaMgr();
   CHECK(cuda_mgr);
-  const auto& dev_props = cuda_mgr->getAllDeviceProperties();
-  return grid_size_x_ ? grid_size_x_ : 2 * dev_props.front().numMPs;
+  return grid_size_x_ ? grid_size_x_ : 2 * cuda_mgr->getMinNumMPsForAllDevices();
+}
+
+unsigned Executor::numBlocksPerMP() const {
+  CHECK(catalog_);
+  const auto cuda_mgr = catalog_->getDataMgr().getCudaMgr();
+  CHECK(cuda_mgr);
+  return grid_size_x_ ? std::ceil(grid_size_x_ / cuda_mgr->getMinNumMPsForAllDevices())
+                      : 2;
 }
 
 unsigned Executor::blockSize() const {
