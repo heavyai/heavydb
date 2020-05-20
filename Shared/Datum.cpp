@@ -261,7 +261,7 @@ std::string DatumToString(Datum d, const SQLTypeInfo& ti) {
       std::tm tm_struct{0};
       if (ti.get_dimension() > 0) {
         std::string t = std::to_string(d.bigintval);
-        int cp = t.length() - ti.get_dimension();
+        int cp = std::max(static_cast<int>(t.length()) - ti.get_dimension(), 1);
         time_t sec = std::stoll(t.substr(0, cp));
         t = t.substr(cp);
         gmtime_r(&sec, &tm_struct);
