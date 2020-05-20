@@ -69,6 +69,10 @@ function install_arrow() {
   download https://github.com/apache/arrow/archive/$ARROW_VERSION.tar.gz
   extract $ARROW_VERSION.tar.gz
 
+  pushd arrow-$ARROW_VERSION
+  patch -p1 < ${SCRIPTS_DIR}/0001-PARQUET-1823-C-Invalid-RowGroup-returned-by-parquet-.patch
+  popd
+
   mkdir -p arrow-$ARROW_VERSION/cpp/build
   pushd arrow-$ARROW_VERSION/cpp/build
   cmake \

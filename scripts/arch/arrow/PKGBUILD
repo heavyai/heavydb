@@ -2,7 +2,7 @@
 
 pkgname='arrow'
 pkgver=0.16.0
-pkgrel=3
+pkgrel=9
 pkgdesc="A columnar in-memory analytics layer for big data."
 arch=('x86_64')
 url="https://arrow.apache.org"
@@ -13,11 +13,14 @@ optdepends=()
 provides=('parquet-cpp')
 conflicts=('parquet-cpp')
 makedepends=('cmake' 'boost')
-source=("https://github.com/apache/arrow/archive/apache-arrow-$pkgver.tar.gz")
-sha256sums=('d7b3838758a365c8c47d55ab0df1006a70db951c6964440ba354f81f518b8d8d')
+source=("https://github.com/apache/arrow/archive/apache-arrow-$pkgver.tar.gz"
+        '0001-PARQUET-1823-C-Invalid-RowGroup-returned-by-parquet-.patch')
+sha256sums=('d7b3838758a365c8c47d55ab0df1006a70db951c6964440ba354f81f518b8d8d'
+            '478dfbc91459ba1c3c9ecd3def8c9f42ce7c93eb07dbe27a38535a25709f1cf0')
 
 prepare(){
   cd "${srcdir}/$pkgname-apache-$pkgname-$pkgver"
+  patch -p1 -i ../0001-PARQUET-1823-C-Invalid-RowGroup-returned-by-parquet-.patch
 }
 
 build(){

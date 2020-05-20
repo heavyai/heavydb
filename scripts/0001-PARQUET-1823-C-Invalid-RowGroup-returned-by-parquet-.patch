@@ -1,0 +1,104 @@
+From d29066cd828020cb3a8744d2fd1e3d867e58c59b Mon Sep 17 00 : 00 : 00 2001 From
+    : =
+          ? UTF - 8
+      ? q
+      ? Fran = C3 = A7ois = 20Saint - Jacques ? = <fsaintjacques @gmail.com> Date : Fri,
+    20 Mar 2020 11
+    : 55
+    : 58 - 0500 Subject
+    : [PATCH] PARQUET -
+          1823 : [C++] Invalid RowGroup returned by parquet::arrow::FileReader MIME -
+                 Version : 1.0 Content -
+                 Type : text / plain;
+charset = UTF - 8 Content - Transfer -
+          Encoding : 8bit
+
+          As reported by Feng Tian,
+    the FileReader::RowGroup(i)::Column(j) method was not returning the correct row group
+        and
+        instead always returned the first row group of the file
+                        .The root cause was an ignored `factory_iterator` parameter in
+                    the `FileReaderImpl::GetColumn` method.
+
+                    Closes #6674 from fsaintjacques
+                    / PARQUET
+                - 1823 - fix - invalid - row -
+                group
+
+                Authored
+                - by : François Saint - Jacques<fsaintjacques @gmail.com> Signed - off -
+                       by : Wes McKinney<wesm + git @apache.org> ---... / parquet / arrow
+                            /
+                            arrow_reader_writer_test.cc
+            | 48 +++++++++++++++++++cpp / src / parquet / arrow / reader.cc |
+            2 + -2 files changed,
+    49 insertions(+),
+    1 deletion(-)
+
+                diff-- git a
+            / cpp / src / parquet / arrow / arrow_reader_writer_test.cc b / cpp / src
+            / parquet / arrow
+            / arrow_reader_writer_test.cc index b47d9334d..68db64469 100644 ---a / cpp
+            / src / parquet / arrow / arrow_reader_writer_test.cc++ +
+        b / cpp / src / parquet / arrow / arrow_reader_writer_test.cc @ @-1931,
+    6 + 1931, 54 @ @TEST(TestArrowReadWrite, ReadSingleRowGroup) {
+  AssertTablesEqual(*table, *concatenated, /*same_chunk_layout=*/false);
+}
+
++      //  Exercise reading table manually with nested RowGroup and Column loops, i.e.
+    +  //
+    +  //  for (int i = 0; i < n_row_groups; i++)
+    +  //    for (int j = 0; j < n_cols; j++)
+    +  //      reader->RowGroup(i)->Column(j)->Read(&chunked_array);
+    +::arrow::Result<std::shared_ptr<Table>> ReadTableManually(FileReader* reader) {
+  +std::vector<std::shared_ptr<Table>> tables;
+  ++std::shared_ptr<::arrow::Schema> schema;
+  +RETURN_NOT_OK(reader->GetSchema(&schema));
+  ++int n_row_groups = reader->num_row_groups();
+  +int n_columns = schema->num_fields();
+  +for (int i = 0; i < n_row_groups; i++) {
+    +std::vector<std::shared_ptr<ChunkedArray>> columns{static_cast<size_t>(n_columns)};
+    ++for (int j = 0; j < n_columns; j++) {
+      +RETURN_NOT_OK(reader->RowGroup(i)->Column(j)->Read(&columns[j]));
+      +
+    }
+    ++tables.push_back(Table::Make(schema, columns));
+    +
+  }
+  ++return ConcatenateTables(tables);
+  +
+}
++ + TEST(TestArrowReadWrite, ReadTableManually) {
+  +const int num_columns = 1;
+  +const int num_rows = 128;
+  ++std::shared_ptr<Table> expected;
+  +ASSERT_NO_FATAL_FAILURE(MakeDoubleTable(num_columns, num_rows, 1, &expected));
+  ++std::shared_ptr<Buffer> buffer;
+  +ASSERT_NO_FATAL_FAILURE(WriteTableToBuffer(
+      expected, num_rows / 2, +default_arrow_writer_properties(), &buffer));
+  ++std::unique_ptr<FileReader> reader;
+  +ASSERT_OK_NO_THROW(OpenFile(
+      std::make_shared<BufferReader>(buffer), +::arrow::default_memory_pool(), &reader));
+  ++ASSERT_EQ(2, reader->num_row_groups());
+  ++ASSERT_OK_AND_ASSIGN(auto actual, ReadTableManually(reader.get()));
+  ++AssertTablesEqual(*actual, *expected, /*same_chunk_layout=*/false);
+  +
+}
++ TEST(TestArrowReadWrite, GetRecordBatchReader) {
+  const int num_columns = 20;
+  const int num_rows = 1000;
+diff --git a/cpp/src/parquet/arrow/reader.cc b/cpp/src/parquet/arrow/reader.cc
+index f75aca895..b341c6206 100644
+--- a/cpp/src/parquet/arrow/reader.cc
++++ b/cpp/src/parquet/arrow/reader.cc
+@@ -783,7 +783,7 @@ Status FileReaderImpl::GetColumn(int i, FileColumnIteratorFactory iterator_facto
+   auto ctx = std::make_shared<ReaderContext>();
+   ctx->reader = reader_.get();
+   ctx->pool = pool_;
+-  ctx->iterator_factory = AllRowGroupsFactory();
++  ctx->iterator_factory = iterator_factory;
+   ctx->filter_leaves = false;
+   std::unique_ptr<ColumnReaderImpl> result;
+   RETURN_NOT_OK(GetReader(manifest_.schema_fields[i], ctx, &result));
+-- 
+2.26.2
