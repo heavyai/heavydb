@@ -27,30 +27,32 @@ namespace {
 std::string pg_shim_impl(const std::string& query) {
   auto result = query;
   {
-    boost::regex unnest_expr{R"((\s+|,)(unnest)\s*\()",
-                             boost::regex::extended | boost::regex::icase};
+    static const boost::regex unnest_expr{R"((\s+|,)(unnest)\s*\()",
+                                          boost::regex::extended | boost::regex::icase};
     apply_shim(result, unnest_expr, [](std::string& result, const boost::smatch& what) {
       result.replace(what.position(), what.length(), what[1] + "PG_UNNEST(");
     });
   }
   {
-    boost::regex cast_true_expr{R"(CAST\s*\(\s*'t'\s+AS\s+boolean\s*\))",
-                                boost::regex::extended | boost::regex::icase};
+    static const boost::regex cast_true_expr{
+        R"(CAST\s*\(\s*'t'\s+AS\s+boolean\s*\))",
+        boost::regex::extended | boost::regex::icase};
     apply_shim(
         result, cast_true_expr, [](std::string& result, const boost::smatch& what) {
           result.replace(what.position(), what.length(), "true");
         });
   }
   {
-    boost::regex cast_false_expr{R"(CAST\s*\(\s*'f'\s+AS\s+boolean\s*\))",
-                                 boost::regex::extended | boost::regex::icase};
+    static const boost::regex cast_false_expr{
+        R"(CAST\s*\(\s*'f'\s+AS\s+boolean\s*\))",
+        boost::regex::extended | boost::regex::icase};
     apply_shim(
         result, cast_false_expr, [](std::string& result, const boost::smatch& what) {
           result.replace(what.position(), what.length(), "false");
         });
   }
   {
-    boost::regex ilike_expr{
+    static const boost::regex ilike_expr{
         R"((\s+|\()((?!\()[^\s]+)\s+ilike\s+('(?:[^']+|'')+')(\s+escape(\s+('[^']+')))?)",
         boost::regex::perl | boost::regex::icase};
     apply_shim(result, ilike_expr, [](std::string& result, const boost::smatch& what) {
@@ -62,7 +64,7 @@ std::string pg_shim_impl(const std::string& query) {
     });
   }
   {
-    boost::regex regexp_expr{
+    static const boost::regex regexp_expr{
         R"((\s+)([^\s]+)\s+REGEXP\s+('(?:[^']+|'')+')(\s+escape(\s+('[^']+')))?)",
         boost::regex::perl | boost::regex::icase};
     apply_shim(result, regexp_expr, [](std::string& result, const boost::smatch& what) {
@@ -74,28 +76,9 @@ std::string pg_shim_impl(const std::string& query) {
     });
   }
   {
-    boost::regex extract_expr{R"(extract\s*\(\s*(\w+)\s+from\s+(.+)\))",
-                              boost::regex::extended | boost::regex::icase};
-    apply_shim(result, extract_expr, [](std::string& result, const boost::smatch& what) {
-      result.replace(what.position(),
-                     what.length(),
-                     "PG_EXTRACT('" + what[1] + "', " + what[2] + ")");
-    });
-  }
-  {
-    boost::regex date_trunc_expr{R"(date_trunc\s*\(\s*(\w+)\s*,(.*)\))",
-                                 boost::regex::extended | boost::regex::icase};
-    apply_shim(
-        result, date_trunc_expr, [](std::string& result, const boost::smatch& what) {
-          result.replace(what.position(),
-                         what.length(),
-                         "PG_DATE_TRUNC('" + what[1] + "', " + what[2] + ")");
-        });
-  }
-  {
     // Comparison operator needed to distinguish from other uses of ALL (e.g. UNION ALL)
-    boost::regex quant_expr{R"(([<=>]\s*)(any|all)\s+([^(\s|;)]+))",
-                            boost::regex::extended | boost::regex::icase};
+    static const boost::regex quant_expr{R"(([<=>]\s*)(any|all)\s+([^(\s|;)]+))",
+                                         boost::regex::extended | boost::regex::icase};
     apply_shim(result, quant_expr, [](std::string& result, const boost::smatch& what) {
       auto const quant_fname = boost::iequals(what[2], "any") ? "PG_ANY(" : "PG_ALL(";
       result.replace(
@@ -103,8 +86,9 @@ std::string pg_shim_impl(const std::string& query) {
     });
   }
   {
-    boost::regex immediate_cast_expr{R"(TIMESTAMP\(([0369])\)\s+('[^']+'))",
-                                     boost::regex::extended | boost::regex::icase};
+    static const boost::regex immediate_cast_expr{
+        R"(TIMESTAMP\(([0369])\)\s+('[^']+'))",
+        boost::regex::extended | boost::regex::icase};
     apply_shim(
         result, immediate_cast_expr, [](std::string& result, const boost::smatch& what) {
           result.replace(what.position(),
@@ -113,8 +97,65 @@ std::string pg_shim_impl(const std::string& query) {
         });
   }
   {
-    boost::regex timestampadd_expr{R"(DATE(ADD|DIFF|PART)\s*\(\s*(\w+)\s*,)",
-                                   boost::regex::extended | boost::regex::icase};
+    static const boost::regex timestampadd_expr{
+        R"(DATE(ADD|DIFF|PART|_TRUNC)\s*\(\s*(\w+)\s*,)",
+        boost::regex::extended | boost::regex::icase};
+    apply_shim(
+        result, timestampadd_expr, [](std::string& result, const boost::smatch& what) {
+          result.replace(
+              what.position(), what.length(), "DATE" + what[1] + "('" + what[2] + "',");
+        });
+  }
+
+  {
+    static const boost::regex pg_extract_expr{
+        R"(PG_EXTRACT\s*\(\s*(\w+)\s*,)", boost::regex::extended | boost::regex::icase};
+    apply_shim(
+        result, pg_extract_expr, [](std::string& result, const boost::smatch& what) {
+          result.replace(what.position(), what.length(), "PG_EXTRACT('" + what[1] + "',");
+        });
+
+    static const boost::regex extract_expr_quoted{
+        R"(extract\s*\(\s*'(\w+)'\s+from\s+(.+)\))",
+        boost::regex::extended | boost::regex::icase};
+    apply_shim(
+        result, extract_expr_quoted, [](std::string& result, const boost::smatch& what) {
+          result.replace(what.position(),
+                         what.length(),
+                         "PG_EXTRACT('" + what[1] + "', " + what[2] + ")");
+        });
+
+    static const boost::regex extract_expr{R"(extract\s*\(\s*(\w+)\s+from\s+(.+)\))",
+                                           boost::regex::extended | boost::regex::icase};
+    apply_shim(result, extract_expr, [](std::string& result, const boost::smatch& what) {
+      result.replace(what.position(),
+                     what.length(),
+                     "PG_EXTRACT('" + what[1] + "', " + what[2] + ")");
+    });
+  }
+
+  {
+    static const boost::regex date_trunc_expr{
+        R"(([^_])date_trunc\s*)", boost::regex::extended | boost::regex::icase};
+    apply_shim(
+        result, date_trunc_expr, [](std::string& result, const boost::smatch& what) {
+          result.replace(what.position(), what.length(), what[1] + "PG_DATE_TRUNC");
+        });
+  }
+  {
+    static const boost::regex timestampadd_expr_quoted{
+        R"(TIMESTAMP(ADD|DIFF)\s*\(\s*'(\w+)'\s*,)",
+        boost::regex::extended | boost::regex::icase};
+    apply_shim(result,
+               timestampadd_expr_quoted,
+               [](std::string& result, const boost::smatch& what) {
+                 result.replace(what.position(),
+                                what.length(),
+                                "DATE" + what[1] + "('" + what[2] + "',");
+               });
+    static const boost::regex timestampadd_expr{
+        R"(TIMESTAMP(ADD|DIFF)\s*\(\s*(\w+)\s*,)",
+        boost::regex::extended | boost::regex::icase};
     apply_shim(
         result, timestampadd_expr, [](std::string& result, const boost::smatch& what) {
           result.replace(
@@ -122,25 +163,7 @@ std::string pg_shim_impl(const std::string& query) {
         });
   }
   {
-    boost::regex timestampadd_expr{R"(TIMESTAMP(ADD|DIFF)\s*\(\s*'(\w+)'\s*,)",
-                                   boost::regex::extended | boost::regex::icase};
-    apply_shim(
-        result, timestampadd_expr, [](std::string& result, const boost::smatch& what) {
-          result.replace(
-              what.position(), what.length(), "DATE" + what[1] + "('" + what[2] + "',");
-        });
-  }
-  {
-    boost::regex timestampadd_expr{R"(TIMESTAMP(ADD|DIFF)\s*\(\s*(\w+)\s*,)",
-                                   boost::regex::extended | boost::regex::icase};
-    apply_shim(
-        result, timestampadd_expr, [](std::string& result, const boost::smatch& what) {
-          result.replace(
-              what.position(), what.length(), "DATE" + what[1] + "('" + what[2] + "',");
-        });
-  }
-  {
-    boost::regex us_timestamp_cast_expr{
+    static const boost::regex us_timestamp_cast_expr{
         R"(CAST\s*\(\s*('[^']+')\s*AS\s*TIMESTAMP\(6\)\s*\))",
         boost::regex::extended | boost::regex::icase};
     apply_shim(result,
@@ -151,7 +174,7 @@ std::string pg_shim_impl(const std::string& query) {
                });
   }
   {
-    boost::regex ns_timestamp_cast_expr{
+    static const boost::regex ns_timestamp_cast_expr{
         R"(CAST\s*\(\s*('[^']+')\s*AS\s*TIMESTAMP\(9\)\s*\))",
         boost::regex::extended | boost::regex::icase};
     apply_shim(result,
@@ -162,8 +185,8 @@ std::string pg_shim_impl(const std::string& query) {
                });
   }
   {
-    boost::regex corr_expr{R"((\s+|,|\()(corr)\s*\()",
-                           boost::regex::extended | boost::regex::icase};
+    static const boost::regex corr_expr{R"((\s+|,|\()(corr)\s*\()",
+                                        boost::regex::extended | boost::regex::icase};
     apply_shim(result, corr_expr, [](std::string& result, const boost::smatch& what) {
       result.replace(what.position(), what.length(), what[1] + "CORRELATION(");
     });
@@ -172,7 +195,7 @@ std::string pg_shim_impl(const std::string& query) {
     try {
       // the geography regex pattern is expensive and can sometimes run out of stack space
       // on long queries. Treat it separately from the other shims.
-      boost::regex cast_to_geography_expr{
+      static const boost::regex cast_to_geography_expr{
           R"(CAST\s*\(\s*(((?!geography).)+)\s+AS\s+geography\s*\))",
           boost::regex::perl | boost::regex::icase};
       apply_shim(result,
