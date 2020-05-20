@@ -2958,6 +2958,38 @@ TEST(Select, TimeSyntaxCheck) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
 
+    ASSERT_EQ(1325376000L,
+              v<int64_t>(run_simple_agg("SELECT DATE_TRUNC(year, CAST('2012-05-08 "
+                                        "20:15:12' AS TIMESTAMP)) FROM test limit 1;",
+                                        dt)));
+    ASSERT_EQ(1325376000L,
+              v<int64_t>(run_simple_agg("SELECT DATE_TRUNC('year', CAST('2012-05-08 "
+                                        "20:15:12' AS TIMESTAMP)) FROM test limit 1;",
+                                        dt)));
+    ASSERT_EQ(1325376000L,
+              v<int64_t>(run_simple_agg("SELECT PG_DATE_TRUNC(year, CAST('2012-05-08 "
+                                        "20:15:12' AS TIMESTAMP)) FROM test limit 1;",
+                                        dt)));
+    ASSERT_EQ(1325376000L,
+              v<int64_t>(run_simple_agg("SELECT PG_DATE_TRUNC('year', CAST('2012-05-08 "
+                                        "20:15:12' AS TIMESTAMP)) FROM test limit 1;",
+                                        dt)));
+    ASSERT_EQ(2007,
+              v<int64_t>(run_simple_agg("SELECT PG_EXTRACT('year', CAST('2007-10-30 "
+                                        "12:15:32' AS TIMESTAMP)) FROM test;",
+                                        dt)));
+    ASSERT_EQ(2007,
+              v<int64_t>(run_simple_agg("SELECT PG_EXTRACT(YEAR, CAST('2007-10-30 "
+                                        "12:15:32' AS TIMESTAMP)) FROM test;",
+                                        dt)));
+    ASSERT_EQ(2007,
+              v<int64_t>(run_simple_agg("SELECT extract('year' from CAST('2007-10-30 "
+                                        "12:15:32' AS TIMESTAMP)) FROM test;",
+                                        dt)));
+    ASSERT_EQ(2007,
+              v<int64_t>(run_simple_agg("SELECT extract(year from CAST('2007-10-30 "
+                                        "12:15:32' AS TIMESTAMP)) FROM test;",
+                                        dt)));
     ASSERT_EQ(2007,
               v<int64_t>(run_simple_agg("SELECT DATEPART('year', CAST('2007-10-30 "
                                         "12:15:32' AS TIMESTAMP)) FROM test;",
