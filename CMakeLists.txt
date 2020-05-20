@@ -496,12 +496,15 @@ if("${MAPD_EDITION_LOWER}" STREQUAL "ee")
 endif()
 
 # TBB
-set(TBB_LIBS "")
-find_package(TBB)
-if(TBB_FOUND)
-  message(STATUS "Building with TBB support")
-  add_definitions("-DHAVE_TBB")
-  list(APPEND TBB_LIBS ${TBB_LIBRARIES})
+find_package(TBB REQUIRED)
+set(TBB_LIBS ${TBB_LIBRARIES})
+message(STATUS "TBB found: ${TBB_LIBS}" )
+add_definitions("-DTBB_PREVIEW_ISOLATED_TASK_GROUP=1")
+option(ENABLE_TBB "Enable TBB backend" OFF)
+if(ENABLE_TBB)
+  message(STATUS "Building with TBB threading on" )
+  add_definitions("-DENABLE_TBB")
+  link_libraries(${TBB_LIBS})
 endif()
 
 set(gen_cpp_files
