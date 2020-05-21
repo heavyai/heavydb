@@ -24,6 +24,7 @@
 
 #include <boost/algorithm/string.hpp>
 #include <boost/program_options.hpp>
+#include <boost/range/combine.hpp>
 #include "../Archive/PosixFileArchive.h"
 #include "../Catalog/Catalog.h"
 #include "../Import/Importer.h"
@@ -968,6 +969,7 @@ class ImportTest : public ::testing::Test {
     ASSERT_NO_THROW(run_ddl_statement("drop table if exists geo;"););
     ASSERT_NO_THROW(
         run_ddl_statement("drop table if exists array_including_quoted_fields;"););
+    ASSERT_NO_THROW(run_ddl_statement("drop table if exists unique_rowgroups;"));
   }
 };
 
@@ -1017,6 +1019,35 @@ TEST_F(ImportTest, One_parquet_file_with_geo_point) {
       "part-00000-6dbefb0c-abbd-4c39-93e7-0026e36b7b7c-c000.snappy.parquet",
       100,
       1.0));
+}
+TEST_F(ImportTest, OneParquetFileWithUniqueRowGroups) {
+  ASSERT_NO_THROW(run_ddl_statement("DROP TABLE IF EXISTS unique_rowgroups;"));
+  ASSERT_NO_THROW(run_ddl_statement(
+      "CREATE TABLE unique_rowgroups (a float, b float, c float, d float);"));
+  ASSERT_NO_THROW(
+      run_ddl_statement("COPY unique_rowgroups FROM "
+                        "'../../Tests/Import/datafiles/unique_rowgroups.parquet' "
+                        "WITH (parquet='true');"));
+  std::string select_query_str = "SELECT * FROM unique_rowgroups ORDER BY a;";
+  std::vector<std::vector<float>> expected_values = {{1., 3., 6., 7.1},
+                                                     {2., 4., 7., 5.91e-4},
+                                                     {3., 5., 8., 1.1},
+                                                     {4., 6., 9., 2.2123e-2},
+                                                     {5., 7., 10., -1.},
+                                                     {6., 8., 1., -100.}};
+  auto row_set = run_query(select_query_str);
+  for (auto& expected_row : expected_values) {
+    auto row = row_set->getNextRow(true, false);
+    ASSERT_EQ(row.size(), expected_row.size());
+    for (auto tup : boost::combine(row, expected_row)) {
+      TargetValue result_entry;
+      float expected_entry;
+      boost::tie(result_entry, expected_entry) = tup;
+      float entry = v<float>(result_entry);
+      ASSERT_EQ(entry, expected_entry);
+    }
+  }
+  ASSERT_NO_THROW(run_ddl_statement("DROP TABLE unique_rowgroups;"));
 }
 #ifdef HAVE_AWS_S3
 // s3 parquet test cases
