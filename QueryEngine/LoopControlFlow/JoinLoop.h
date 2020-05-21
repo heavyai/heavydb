@@ -77,6 +77,7 @@ class JoinLoop {
       llvm::Value* iteration_counter,
       llvm::Value* have_more_inner_rows,
       llvm::Value* found_an_outer_match_ptr,
+      llvm::Value* current_condition_match_ptr,
       llvm::IRBuilder<>& builder);
 
   const JoinLoopKind kind_;

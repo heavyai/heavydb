@@ -79,10 +79,13 @@ llvm::BasicBlock* JoinLoop::codegen(
         const auto iteration_counter_ptr = builder.CreateAlloca(
             get_int_type(64, context), nullptr, "ub_iter_counter_ptr_" + join_loop.name_);
         llvm::Value* found_an_outer_match_ptr{nullptr};
+        llvm::Value* current_condition_match_ptr{nullptr};
         if (join_loop.type_ == JoinType::LEFT) {
           found_an_outer_match_ptr = builder.CreateAlloca(
               get_int_type(1, context), nullptr, "found_an_outer_match");
           builder.CreateStore(ll_bool(false, context), found_an_outer_match_ptr);
+          current_condition_match_ptr = builder.CreateAlloca(
+              get_int_type(1, context), nullptr, "outer_condition_current_match");
         }
         builder.CreateStore(ll_int(int64_t(0), context), iteration_counter_ptr);
         const auto iteration_domain = join_loop.iteration_domain_codegen_(iterators);
@@ -123,6 +126,7 @@ llvm::BasicBlock* JoinLoop::codegen(
                                          iteration_counter,
                                          have_more_inner_rows,
                                          found_an_outer_match_ptr,
+                                         current_condition_match_ptr,
                                          builder);
         } else {
           prev_comparison_result = have_more_inner_rows;
@@ -213,11 +217,10 @@ std::pair<llvm::BasicBlock*, llvm::Value*> JoinLoop::evaluateOuterJoinCondition(
     llvm::Value* iteration_counter,
     llvm::Value* have_more_inner_rows,
     llvm::Value* found_an_outer_match_ptr,
+    llvm::Value* current_condition_match_ptr,
     llvm::IRBuilder<>& builder) {
   auto& context = builder.getContext();
   const auto parent_func = builder.GetInsertBlock()->getParent();
-  const auto current_condition_match_ptr = builder.CreateAlloca(
-      get_int_type(1, context), nullptr, "outer_condition_current_match");
   builder.CreateStore(ll_bool(false, context), current_condition_match_ptr);
   const auto evaluate_outer_condition_bb = llvm::BasicBlock::Create(
       context, "eval_outer_cond_" + join_loop.name_, parent_func);
