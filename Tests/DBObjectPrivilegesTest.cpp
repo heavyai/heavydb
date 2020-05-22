@@ -2781,43 +2781,51 @@ class GetDbObjectsForGranteeTest : public DBHandlerTestFixture {
     sql("DROP USER test_user;");
     DBHandlerTestFixture::TearDown();
   }
+
+  void allOnDatabase(std::string privilege) {
+    g_enable_fsi = false;
+    sql("GRANT " + privilege + " ON DATABASE omnisci TO test_user;");
+
+    const auto& [db_handler, session_id] = getDbHandlerAndSessionId();
+    std::vector<TDBObject> db_objects{};
+    db_handler->get_db_objects_for_grantee(db_objects, session_id, "test_user");
+
+    std::unordered_set<TDBObjectType::type> privilege_types{};
+    for (const auto& db_object : db_objects) {
+      ASSERT_EQ("omnisci", db_object.objectName);
+      ASSERT_EQ(TDBObjectType::DatabaseDBObjectType, db_object.objectType);
+      ASSERT_EQ("test_user", db_object.grantee);
+
+      if (db_object.privilegeObjectType == TDBObjectType::DatabaseDBObjectType) {
+        // The first two items represent CREATE and DROP DATABASE privileges, which are
+        // not granted
+        std::vector<bool> expected_privileges{false, false, true, true};
+        ASSERT_EQ(expected_privileges, db_object.privs);
+      } else {
+        ASSERT_TRUE(std::all_of(db_object.privs.begin(),
+                                db_object.privs.end(),
+                                [](bool has_privilege) { return has_privilege; }));
+      }
+      privilege_types.emplace(db_object.privilegeObjectType);
+    }
+
+    ASSERT_FALSE(privilege_types.find(TDBObjectType::DatabaseDBObjectType) ==
+                 privilege_types.end());
+    ASSERT_FALSE(privilege_types.find(TDBObjectType::TableDBObjectType) ==
+                 privilege_types.end());
+    ASSERT_FALSE(privilege_types.find(TDBObjectType::DashboardDBObjectType) ==
+                 privilege_types.end());
+    ASSERT_FALSE(privilege_types.find(TDBObjectType::ViewDBObjectType) ==
+                 privilege_types.end());
+  }
 };
 
 TEST_F(GetDbObjectsForGranteeTest, UserWithGrantAllOnDatabase) {
-  g_enable_fsi = false;
-  sql("GRANT ALL ON DATABASE omnisci TO test_user;");
+  allOnDatabase("ALL");
+}
 
-  const auto& [db_handler, session_id] = getDbHandlerAndSessionId();
-  std::vector<TDBObject> db_objects{};
-  db_handler->get_db_objects_for_grantee(db_objects, session_id, "test_user");
-
-  std::unordered_set<TDBObjectType::type> privilege_types{};
-  for (const auto& db_object : db_objects) {
-    ASSERT_EQ("omnisci", db_object.objectName);
-    ASSERT_EQ(TDBObjectType::DatabaseDBObjectType, db_object.objectType);
-    ASSERT_EQ("test_user", db_object.grantee);
-
-    if (db_object.privilegeObjectType == TDBObjectType::DatabaseDBObjectType) {
-      // The first two items represent CREATE and DROP DATABASE privileges, which are not
-      // granted
-      std::vector<bool> expected_privileges{false, false, true, true};
-      ASSERT_EQ(expected_privileges, db_object.privs);
-    } else {
-      ASSERT_TRUE(std::all_of(db_object.privs.begin(),
-                              db_object.privs.end(),
-                              [](bool has_privilege) { return has_privilege; }));
-    }
-    privilege_types.emplace(db_object.privilegeObjectType);
-  }
-
-  ASSERT_FALSE(privilege_types.find(TDBObjectType::DatabaseDBObjectType) ==
-               privilege_types.end());
-  ASSERT_FALSE(privilege_types.find(TDBObjectType::TableDBObjectType) ==
-               privilege_types.end());
-  ASSERT_FALSE(privilege_types.find(TDBObjectType::DashboardDBObjectType) ==
-               privilege_types.end());
-  ASSERT_FALSE(privilege_types.find(TDBObjectType::ViewDBObjectType) ==
-               privilege_types.end());
+TEST_F(GetDbObjectsForGranteeTest, UserWithGrantAllPrivilegesOnDatabase) {
+  allOnDatabase("ALL PRIVILEGES");
 }
 
 int main(int argc, char* argv[]) {

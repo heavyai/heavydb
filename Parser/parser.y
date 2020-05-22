@@ -1184,6 +1184,7 @@ privileges:
 
 privilege:
 		ALL { $<stringval>$ = TrackedPtr<std::string>::make(lexer.parsed_str_tokens_ , "ALL"); }
+	|	ALL PRIVILEGES { $<stringval>$ = TrackedPtr<std::string>::make(lexer.parsed_str_tokens_ , "ALL"); }
 	|	CREATE { $<stringval>$ = TrackedPtr<std::string>::make(lexer.parsed_str_tokens_ , "CREATE"); }
 	|	SELECT { $<stringval>$ = TrackedPtr<std::string>::make(lexer.parsed_str_tokens_ , "SELECT"); }
 	|	INSERT { $<stringval>$ = TrackedPtr<std::string>::make(lexer.parsed_str_tokens_ , "INSERT"); }
@@ -1240,7 +1241,7 @@ non_neg_int: INTNUM
 
 data_type:
 		BIGINT { $<nodeval>$ = TrackedPtr<Node>::make(lexer.parsed_node_tokens_, new SQLType(kBIGINT)); }
-	| TEXT { $<nodeval>$ = TrackedPtr<Node>::make(lexer.parsed_node_tokens_, new SQLType(kTEXT)); }
+	|	TEXT { $<nodeval>$ = TrackedPtr<Node>::make(lexer.parsed_node_tokens_, new SQLType(kTEXT)); }
 	|	BOOLEAN { $<nodeval>$ = TrackedPtr<Node>::make(lexer.parsed_node_tokens_, new SQLType(kBOOLEAN)); }
 	|	CHARACTER { $<nodeval>$ = TrackedPtr<Node>::make(lexer.parsed_node_tokens_, new SQLType(kCHAR)); }
 	|	CHARACTER '(' non_neg_int ')' { $<nodeval>$ = TrackedPtr<Node>::make(lexer.parsed_node_tokens_, new SQLType(kCHAR, $<intval>3)); }
