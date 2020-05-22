@@ -78,6 +78,15 @@ inline bool is_columnar_projection(const QueryMemoryDescriptor& query_mem_desc) 
          query_mem_desc.didOutputColumnar();
 }
 
+bool is_simple_count(const TargetInfo& target_info) {
+  return target_info.is_agg && target_info.agg_kind == kCOUNT && !target_info.is_distinct;
+}
+
+bool target_has_geo(const TargetInfo& target_info) {
+  return target_info.is_agg ? target_info.agg_arg_type.is_geometry()
+                            : target_info.sql_type.is_geometry();
+}
+
 }  // namespace
 
 void TargetExprCodegen::codegen(
@@ -118,9 +127,7 @@ void TargetExprCodegen::codegen(
   }
 
   llvm::Value* str_target_lv{nullptr};
-  const bool target_has_geo = target_info.is_agg ? target_info.agg_arg_type.is_geometry()
-                                                 : target_info.sql_type.is_geometry();
-  if (target_lvs.size() == 3 && !target_has_geo) {
+  if (target_lvs.size() == 3 && !target_has_geo(target_info)) {
     // none encoding string, pop the packed pointer + length since
     // it's only useful for IS NULL checks and assumed to be only
     // two components (pointer and length) for the purpose of projection
@@ -149,7 +156,7 @@ void TargetExprCodegen::codegen(
       target_lvs.push_back(target_lvs.front());
     }
   } else {
-    if (target_has_geo) {
+    if (target_has_geo(target_info)) {
       if (!target_info.is_agg) {
         CHECK_EQ(static_cast<size_t>(2 * target_info.sql_type.get_physical_coord_cols()),
                  target_lvs.size());
@@ -166,10 +173,9 @@ void TargetExprCodegen::codegen(
   CHECK(is_group_by || static_cast<size_t>(slot_index) < agg_out_vec.size());
 
   uint32_t col_off{0};
-  const bool is_simple_count =
-      target_info.is_agg && target_info.agg_kind == kCOUNT && !target_info.is_distinct;
   if (co.device_type == ExecutorDeviceType::GPU && query_mem_desc.threadsShareMemory() &&
-      is_simple_count && (!arg_expr || arg_expr->get_type_info().get_notnull())) {
+      is_simple_count(target_info) &&
+      (!arg_expr || arg_expr->get_type_info().get_notnull())) {
     CHECK_EQ(size_t(1), agg_fn_names.size());
     const auto chosen_bytes = query_mem_desc.getPaddedSlotWidthBytes(slot_index);
     llvm::Value* agg_col_ptr{nullptr};
@@ -246,10 +252,37 @@ void TargetExprCodegen::codegen(
     return;
   }
 
+  codegenAggregate(group_by_and_agg,
+                   executor,
+                   query_mem_desc,
+                   co,
+                   target_lvs,
+                   agg_out_ptr_w_idx,
+                   agg_out_vec,
+                   output_buffer_byte_stream,
+                   out_row_idx,
+                   slot_index);
+}
+
+void TargetExprCodegen::codegenAggregate(
+    GroupByAndAggregate* group_by_and_agg,
+    Executor* executor,
+    const QueryMemoryDescriptor& query_mem_desc,
+    const CompilationOptions& co,
+    const std::vector<llvm::Value*>& target_lvs,
+    const std::tuple<llvm::Value*, llvm::Value*>& agg_out_ptr_w_idx,
+    const std::vector<llvm::Value*>& agg_out_vec,
+    llvm::Value* output_buffer_byte_stream,
+    llvm::Value* out_row_idx,
+    int32_t slot_index) const {
   size_t target_lv_idx = 0;
   const bool lazy_fetched{executor->plan_state_->isLazyFetchColumn(target_expr)};
 
   CodeGenerator code_generator(executor);
+
+  const auto agg_fn_names = agg_fn_base_names(target_info);
+  auto arg_expr = agg_arg(target_expr);
+
   for (const auto& agg_base_name : agg_fn_names) {
     if (target_info.is_distinct && arg_expr->get_type_info().is_array()) {
       CHECK_EQ(static_cast<size_t>(query_mem_desc.getLogicalSlotWidthBytes(slot_index)),
@@ -257,9 +290,10 @@ void TargetExprCodegen::codegen(
       // TODO(miyu): check if buffer may be columnar here
       CHECK(!query_mem_desc.didOutputColumnar());
       const auto& elem_ti = arg_expr->get_type_info().get_elem_type();
+      uint32_t col_off{0};
       if (is_group_by) {
-        col_off = query_mem_desc.getColOnlyOffInBytes(slot_index);
-        CHECK_EQ(size_t(0), col_off % sizeof(int64_t));
+        const auto col_off_in_bytes = query_mem_desc.getColOnlyOffInBytes(slot_index);
+        CHECK_EQ(size_t(0), col_off_in_bytes % sizeof(int64_t));
         col_off /= sizeof(int64_t);
       }
       executor->cgen_state_->emitExternalCall(
@@ -327,15 +361,22 @@ void TargetExprCodegen::codegen(
       }
     }
 
+    const bool is_simple_count_target = is_simple_count(target_info);
+    llvm::Value* str_target_lv{nullptr};
+    if (target_lvs.size() == 3 && !target_has_geo(target_info)) {
+      // none encoding string
+      str_target_lv = target_lvs.front();
+    }
     std::vector<llvm::Value*> agg_args{
         executor->castToIntPtrTyIn((is_group_by ? agg_col_ptr : agg_out_vec[slot_index]),
                                    (agg_chosen_bytes << 3)),
-        (is_simple_count && !arg_expr)
+        (is_simple_count_target && !arg_expr)
             ? (agg_chosen_bytes == sizeof(int32_t) ? LL_INT(int32_t(0))
                                                    : LL_INT(int64_t(0)))
-            : (is_simple_count && arg_expr && str_target_lv ? str_target_lv : target_lv)};
+            : (is_simple_count_target && arg_expr && str_target_lv ? str_target_lv
+                                                                   : target_lv)};
     if (query_mem_desc.isLogicalSizedColumnsAllowed()) {
-      if (is_simple_count && arg_expr && str_target_lv) {
+      if (is_simple_count_target && arg_expr && str_target_lv) {
         agg_args[1] =
             agg_chosen_bytes == sizeof(int32_t) ? LL_INT(int32_t(0)) : LL_INT(int64_t(0));
       }
@@ -403,6 +444,7 @@ void TargetExprCodegen::codegen(
         }
       }
     }
+    const auto window_func = dynamic_cast<const Analyzer::WindowFunction*>(target_expr);
     if (window_func && window_function_requires_peer_handling(window_func)) {
       const auto window_func_context =
           WindowProjectNodeContext::getActiveWindowFunctionContext();
