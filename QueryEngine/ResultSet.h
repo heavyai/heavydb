@@ -429,10 +429,19 @@ class ResultSet {
 
   size_t getNDVEstimator() const;
 
+  struct QueryExecutionTimings {
+    // all in ms
+    int64_t executor_queue_time{0};
+    int64_t render_time{0};
+    int64_t compilation_queue_time{0};
+    int64_t kernel_queue_time{0};
+  };
+
   void setQueueTime(const int64_t queue_time);
+  void setKernelQueueTime(const int64_t kernel_queue_time);
+  void addCompilationQueueTime(const int64_t compilation_queue_time);
 
   int64_t getQueueTime() const;
-
   int64_t getRenderTime() const;
 
   void moveToBegin() const;
@@ -827,8 +836,8 @@ class ResultSet {
   size_t keep_first_;
   std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner_;
   std::vector<uint32_t> permutation_;
-  int64_t queue_time_ms_;
-  int64_t render_time_ms_;
+
+  QueryExecutionTimings timings_;
   const Executor* executor_;  // TODO(alex): remove
 
   std::list<std::shared_ptr<Chunk_NS::Chunk>> chunks_;

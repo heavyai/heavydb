@@ -884,6 +884,23 @@ ResultSetPtr Executor::reduceMultiDeviceResults(
       ResultSet::fixupQueryMemoryDescriptor(query_mem_desc));
 }
 
+namespace {
+
+ReductionCode get_reduction_code(
+    std::vector<std::pair<ResultSetPtr, std::vector<size_t>>>& results_per_device,
+    int64_t* compilation_queue_time) {
+  auto clock_begin = timer_start();
+  std::lock_guard<std::mutex> compilation_lock(Executor::compilation_mutex_);
+  *compilation_queue_time = timer_stop(clock_begin);
+  const auto& this_result_set = results_per_device[0].first;
+  ResultSetReductionJIT reduction_jit(this_result_set->getQueryMemDesc(),
+                                      this_result_set->getTargetInfos(),
+                                      this_result_set->getTargetInitVals());
+  return reduction_jit.codegen();
+};
+
+}  // namespace
+
 ResultSetPtr Executor::reduceMultiDeviceResultSets(
     std::vector<std::pair<ResultSetPtr, std::vector<size_t>>>& results_per_device,
     std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
@@ -930,21 +947,15 @@ ResultSetPtr Executor::reduceMultiDeviceResultSets(
     reduced_results = first;
   }
 
-  auto get_reduction_code = [&results_per_device]() {
-    std::lock_guard<std::mutex> compilation_lock(compilation_mutex_);
-    const auto& this_result_set = results_per_device[0].first;
-    ResultSetReductionJIT reduction_jit(this_result_set->getQueryMemDesc(),
-                                        this_result_set->getTargetInfos(),
-                                        this_result_set->getTargetInitVals());
-    return reduction_jit.codegen();
-  };
-  const auto reduction_code = get_reduction_code();
+  int64_t compilation_queue_time = 0;
+  const auto reduction_code =
+      get_reduction_code(results_per_device, &compilation_queue_time);
 
   for (size_t i = 1; i < results_per_device.size(); ++i) {
     reduced_results->getStorage()->reduce(
         *(results_per_device[i].first->getStorage()), {}, reduction_code);
   }
-
+  reduced_results->addCompilationQueueTime(compilation_queue_time);
   return reduced_results;
 }
 
@@ -1254,31 +1265,40 @@ ResultSetPtr Executor::executeWorkUnit(
   VLOG(1) << "Executor " << executor_id_ << " is executing work unit:" << ra_exe_unit_in;
 
   try {
-    return executeWorkUnitImpl(max_groups_buffer_entry_guess,
-                               is_agg,
-                               true,
-                               query_infos,
-                               ra_exe_unit_in,
-                               co,
-                               eo,
-                               cat,
-                               row_set_mem_owner,
-                               render_info,
-                               has_cardinality_estimation,
-                               column_cache);
+    auto result = executeWorkUnitImpl(max_groups_buffer_entry_guess,
+                                      is_agg,
+                                      true,
+                                      query_infos,
+                                      ra_exe_unit_in,
+                                      co,
+                                      eo,
+                                      cat,
+                                      row_set_mem_owner,
+                                      render_info,
+                                      has_cardinality_estimation,
+                                      column_cache);
+    CHECK(result);
+    result->setKernelQueueTime(kernel_queue_time_ms_);
+    result->addCompilationQueueTime(compilation_queue_time_ms_);
+    return result;
   } catch (const CompilationRetryNewScanLimit& e) {
-    return executeWorkUnitImpl(max_groups_buffer_entry_guess,
-                               is_agg,
-                               false,
-                               query_infos,
-                               replace_scan_limit(ra_exe_unit_in, e.new_scan_limit_),
-                               co,
-                               eo,
-                               cat,
-                               row_set_mem_owner,
-                               render_info,
-                               has_cardinality_estimation,
-                               column_cache);
+    auto result =
+        executeWorkUnitImpl(max_groups_buffer_entry_guess,
+                            is_agg,
+                            false,
+                            query_infos,
+                            replace_scan_limit(ra_exe_unit_in, e.new_scan_limit_),
+                            co,
+                            eo,
+                            cat,
+                            row_set_mem_owner,
+                            render_info,
+                            has_cardinality_estimation,
+                            column_cache);
+    CHECK(result);
+    result->setKernelQueueTime(kernel_queue_time_ms_);
+    result->addCompilationQueueTime(compilation_queue_time_ms_);
+    return result;
   }
 }
 
@@ -1317,7 +1337,10 @@ ResultSetPtr Executor::executeWorkUnitImpl(
     if (eo.executor_type == ExecutorType::Native) {
       try {
         INJECT_TIMER(execution_dispatch_comp);
+        auto clock_begin = timer_start();
         std::lock_guard<std::mutex> compilation_lock(compilation_mutex_);
+        compilation_queue_time_ms_ += timer_stop(clock_begin);
+
         std::tie(query_comp_desc_owned, query_mem_desc_owned) =
             execution_dispatch.compile(max_groups_buffer_entry_guess,
                                        crt_min_byte_width,
@@ -1888,7 +1911,9 @@ void Executor::dispatchFragments(
     QueryFragmentDescriptor& fragment_descriptor,
     std::unordered_set<int>& available_gpus,
     int& available_cpus) {
+  auto clock_begin = timer_start();
   std::lock_guard<std::mutex> kernel_lock(kernel_mutex_);
+  kernel_queue_time_ms_ += timer_stop(clock_begin);
 
   THREAD_POOL query_threads;
   const auto& ra_exe_unit = execution_dispatch.getExecutionUnit();
@@ -2905,6 +2930,8 @@ std::vector<int64_t> Executor::getJoinHashTablePtrs(const ExecutorDeviceType dev
 void Executor::nukeOldState(const bool allow_lazy_fetch,
                             const std::vector<InputTableInfo>& query_infos,
                             const RelAlgExecutionUnit* ra_exe_unit) {
+  kernel_queue_time_ms_ = 0;
+  compilation_queue_time_ms_ = 0;
   const bool contains_left_deep_outer_join =
       ra_exe_unit && std::find_if(ra_exe_unit->join_quals.begin(),
                                   ra_exe_unit->join_quals.end(),

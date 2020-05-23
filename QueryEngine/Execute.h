@@ -984,6 +984,9 @@ class Executor {
   const Catalog_Namespace::Catalog* catalog_;
   const TemporaryTables* temporary_tables_;
 
+  int64_t kernel_queue_time_ms_ = 0;
+  int64_t compilation_queue_time_ms_ = 0;
+
   // Singleton instance used for an execution unit which is a project with window
   // functions.
   std::unique_ptr<WindowProjectNodeContext> window_project_node_context_owned_;

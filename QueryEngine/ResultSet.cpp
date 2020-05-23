@@ -111,8 +111,6 @@ ResultSet::ResultSet(const std::vector<TargetInfo>& targets,
     , drop_first_(0)
     , keep_first_(0)
     , row_set_mem_owner_(row_set_mem_owner)
-    , queue_time_ms_(0)
-    , render_time_ms_(0)
     , executor_(executor)
     , estimator_buffer_(nullptr)
     , host_estimator_buffer_(nullptr)
@@ -141,8 +139,6 @@ ResultSet::ResultSet(const std::vector<TargetInfo>& targets,
     , drop_first_(0)
     , keep_first_(0)
     , row_set_mem_owner_(row_set_mem_owner)
-    , queue_time_ms_(0)
-    , render_time_ms_(0)
     , executor_(executor)
     , lazy_fetch_info_(lazy_fetch_info)
     , col_buffers_{col_buffers}
@@ -187,8 +183,6 @@ ResultSet::ResultSet(const std::string& explanation)
     : device_type_(ExecutorDeviceType::CPU)
     , device_id_(-1)
     , fetched_so_far_(0)
-    , queue_time_ms_(0)
-    , render_time_ms_(0)
     , estimator_buffer_(nullptr)
     , host_estimator_buffer_(nullptr)
     , separate_varlen_storage_valid_(false)
@@ -204,8 +198,7 @@ ResultSet::ResultSet(int64_t queue_time_ms,
     , device_id_(-1)
     , fetched_so_far_(0)
     , row_set_mem_owner_(row_set_mem_owner)
-    , queue_time_ms_(queue_time_ms)
-    , render_time_ms_(render_time_ms)
+    , timings_(QueryExecutionTimings{queue_time_ms, render_time_ms, 0, 0})
     , estimator_buffer_(nullptr)
     , host_estimator_buffer_(nullptr)
     , separate_varlen_storage_valid_(false)
@@ -461,15 +454,24 @@ void ResultSet::syncEstimatorBuffer() const {
 }
 
 void ResultSet::setQueueTime(const int64_t queue_time) {
-  queue_time_ms_ = queue_time;
+  timings_.executor_queue_time = queue_time;
+}
+
+void ResultSet::setKernelQueueTime(const int64_t kernel_queue_time) {
+  timings_.kernel_queue_time = kernel_queue_time;
+}
+
+void ResultSet::addCompilationQueueTime(const int64_t compilation_queue_time) {
+  timings_.compilation_queue_time += compilation_queue_time;
 }
 
 int64_t ResultSet::getQueueTime() const {
-  return queue_time_ms_;
+  return timings_.executor_queue_time + timings_.kernel_queue_time +
+         timings_.compilation_queue_time;
 }
 
 int64_t ResultSet::getRenderTime() const {
-  return render_time_ms_;
+  return timings_.render_time;
 }
 
 void ResultSet::moveToBegin() const {
