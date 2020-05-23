@@ -752,7 +752,14 @@ class ResultSet {
         : order_entries_(order_entries)
         , use_heap_(use_heap)
         , result_set_(result_set)
-        , buffer_itr_(result_set) {}
+        , buffer_itr_(result_set) {
+      materializeCountDistinctColumns();
+    }
+
+    void materializeCountDistinctColumns();
+
+    std::vector<int64_t> materializeCountDistinctColumn(
+        const Analyzer::OrderEntry& order_entry) const;
 
     bool operator()(const uint32_t lhs, const uint32_t rhs) const;
 
@@ -761,11 +768,13 @@ class ResultSet {
     const bool use_heap_;
     const ResultSet* result_set_;
     const BufferIteratorType buffer_itr_;
+    std::vector<std::vector<int64_t>> count_distinct_materialized_buffers_;
   };
 
   std::function<bool(const uint32_t, const uint32_t)> createComparator(
       const std::list<Analyzer::OrderEntry>& order_entries,
       const bool use_heap) {
+    auto timer = DEBUG_TIMER(__func__);
     if (query_mem_desc_.didOutputColumnar()) {
       column_wise_comparator_ =
           std::make_unique<ResultSetComparator<ColumnWiseTargetAccessor>>(
