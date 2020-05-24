@@ -111,6 +111,9 @@ size_t g_gpu_smem_threshold{
             // buffer sizes are required we do not use GPU shared
             // memory optimizations Setting this to 0 means unlimited
             // (subject to other dynamically calculated caps)
+bool g_enable_smem_grouped_non_count_agg{
+    true};  // enable use of shared memory when performing group-by with select non-count
+            // aggregates
 bool g_enable_smem_non_grouped_agg{
     true};  // enable optimizations for using GPU shared memory in implementation of
             // non-grouped aggregates

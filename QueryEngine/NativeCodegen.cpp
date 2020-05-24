@@ -1756,7 +1756,10 @@ bool is_gpu_shared_mem_supported(const QueryMemoryDescriptor* query_mem_desc_ptr
       // TODO: relax this if necessary
       const auto target_infos =
           target_exprs_to_infos(ra_exe_unit.target_exprs, *query_mem_desc_ptr);
-      std::unordered_set<SQLAgg> supported_aggs{kCOUNT, kMIN, kMAX, kSUM, kAVG};
+      std::unordered_set<SQLAgg> supported_aggs{kCOUNT};
+      if (g_enable_smem_grouped_non_count_agg) {
+        supported_aggs = {kCOUNT, kMIN, kMAX, kSUM, kAVG};
+      }
       if (std::find_if(target_infos.begin(),
                        target_infos.end(),
                        [&supported_aggs](const TargetInfo& ti) {
