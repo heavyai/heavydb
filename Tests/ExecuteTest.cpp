@@ -4385,6 +4385,19 @@ TEST(Select, Time) {
   }
 }
 
+TEST(Select, TimeRedux) {
+  // The time tests need a general cleanup. Collect tests found from specific bugs here so
+  // we don't accidentally remove them
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    ASSERT_EQ(
+        15,
+        v<int64_t>(run_simple_agg(
+            R"(SELECT COUNT(*) FROM test WHERE o = (DATE '1999-09-01') OR CAST(o AS TIMESTAMP) = (TIMESTAMP '1999-09-09 00:00:00.000');)",
+            dt)));
+  }
+}
+
 TEST(Select, In) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();

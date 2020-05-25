@@ -138,13 +138,15 @@ class OrToInVisitor : public ScalarExprVisitor<std::shared_ptr<Analyzer::InValue
     if (!lhs || !rhs) {
       return nullptr;
     }
-    if (!(*lhs->get_arg() == *rhs->get_arg())) {
-      return nullptr;
+
+    if (lhs->get_arg()->get_type_info() == rhs->get_arg()->get_type_info() &&
+        (*lhs->get_arg() == *rhs->get_arg())) {
+      auto union_values = lhs->get_value_list();
+      const auto& rhs_values = rhs->get_value_list();
+      union_values.insert(union_values.end(), rhs_values.begin(), rhs_values.end());
+      return makeExpr<Analyzer::InValues>(lhs->get_own_arg(), union_values);
     }
-    auto union_values = lhs->get_value_list();
-    const auto& rhs_values = rhs->get_value_list();
-    union_values.insert(union_values.end(), rhs_values.begin(), rhs_values.end());
-    return makeExpr<Analyzer::InValues>(lhs->get_own_arg(), union_values);
+    return nullptr;
   }
 };
 
