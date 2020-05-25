@@ -299,8 +299,14 @@ std::shared_ptr<Analyzer::Expr> OperExpr::normalize(
       right_expr = right_expr->add_cast(new_right_type.get_array_type());
     }
   }
-  auto check_compression = IS_COMPARISON(optype);
-  if (check_compression) {
+
+  if (IS_COMPARISON(optype)) {
+    if (optype != kOVERLAPS && new_left_type.is_geometry() &&
+        new_right_type.is_geometry()) {
+      throw std::runtime_error(
+          "Comparison operators are not yet supported for geospatial types.");
+    }
+
     if (new_left_type.get_compression() == kENCODING_DICT &&
         new_right_type.get_compression() == kENCODING_DICT &&
         new_left_type.get_comp_param() == new_right_type.get_comp_param()) {
