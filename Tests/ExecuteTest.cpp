@@ -14534,14 +14534,13 @@ TEST(Select, GeoSpatial_Basics) {
                                 dt),
                  std::runtime_error);
     // Unsupported aggs
-    EXPECT_THROW(run_simple_agg("SELECT MIN(p) FROM geospatial_test;", dt),
-                 std::runtime_error);
-    EXPECT_THROW(run_simple_agg("SELECT MAX(p) FROM geospatial_test;", dt),
-                 std::runtime_error);
-    EXPECT_THROW(run_simple_agg("SELECT AVG(p) FROM geospatial_test;", dt),
-                 std::runtime_error);
-    EXPECT_THROW(run_simple_agg("SELECT SUM(p) FROM geospatial_test;", dt),
-                 std::runtime_error);
+    EXPECT_ANY_THROW(run_simple_agg("SELECT MIN(p) FROM geospatial_test;", dt));
+    EXPECT_ANY_THROW(run_simple_agg("SELECT MAX(p) FROM geospatial_test;", dt));
+    EXPECT_ANY_THROW(run_simple_agg("SELECT AVG(p) FROM geospatial_test;", dt));
+    EXPECT_ANY_THROW(run_simple_agg("SELECT SUM(p) FROM geospatial_test;", dt));
+    EXPECT_ANY_THROW(run_simple_agg(
+        "SELECT COUNT(*) FROM geospatial_test a, geospatial_test b WHERE a.p = b.p;",
+        dt));
   }
 }
 
