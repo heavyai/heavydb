@@ -385,12 +385,8 @@ TEST_F(ArrowIpcBasic, IpcGpu) {
       std::shared_ptr<arrow::RecordBatch> tmp_record_batch;
       ARROW_THROW_NOT_OK(dict_batch_reader->ReadNext(&tmp_record_batch));
       ASSERT_TRUE(tmp_record_batch);
-
-      // auto dict_schema = std::make_shared<arrow::Schema>(
-      // std::vector<std::shared_ptr<arrow::Field>>{field});
-      // ARROW_THROW_NOT_OK(arrow::ipc::ReadRecordBatch(
-      // *dict_message, dict_schema, &memo, &tmp_record_batch));
       ASSERT_EQ(tmp_record_batch->num_columns(), 1);
+
       int64_t dict_id = -1;
       ARROW_THROW_NOT_OK(memo.GetId(*field, &dict_id));
       CHECK_GE(dict_id, 0);
