@@ -391,7 +391,7 @@ void MapDProgramOptions::fillOptions() {
   help_desc.add_options()("bigint-count",
                           po::value<bool>(&g_bigint_count)
                               ->default_value(g_bigint_count)
-                              ->implicit_value(false),
+                              ->implicit_value(true),
                           "Use 64-bit count.");
   help_desc.add_options()("calcite-max-mem",
                           po::value<size_t>(&mapd_parameters.calcite_max_mem)
