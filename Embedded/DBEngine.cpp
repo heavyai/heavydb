@@ -195,14 +195,16 @@ class CursorImpl : public Cursor {
         auto row_count = getRowCount();;
         if (row_count > 0) {
             if (auto data_mgr = data_mgr_.lock()) {
-                const auto & converter = std::make_unique<ArrowResultSetConverter>(
+//                const auto & 
+                    converter_ = std::make_unique<ArrowResultSetConverter>(
                     result_set_,
                     data_mgr,
                     ExecutorDeviceType::CPU,
                     0,
                     col_names_,
                     row_count);
-                return converter->convertToArrow();
+                record_batch_ = converter_->convertToArrow();
+                return record_batch_;
             }
         }
     }
@@ -213,6 +215,8 @@ class CursorImpl : public Cursor {
   std::shared_ptr<ResultSet> result_set_;
   std::vector<std::string> col_names_;
   std::weak_ptr<Data_Namespace::DataMgr> data_mgr_;
+  std::shared_ptr<arrow::RecordBatch> record_batch_;
+  std::unique_ptr<ArrowResultSetConverter> converter_;
 };
 
 /**
@@ -248,24 +252,6 @@ class DBEngineImpl : public DBEngine {
       std::cout << "DBE:CPP:executeDDL: query_runner is NULL" << std::endl;
     }
   }
-/*
-  Cursor* executeDML(const std::string& query) {
-    std::cout << "DBE:CPP:executeDML: " << query << std::endl;
-    if (query_runner_ != nullptr) {
-      try {
-        auto rs = query_runner_->runSQL(query, ExecutorDeviceType::CPU);
-        cursors_.emplace_back(new CursorImpl(rs, data_mgr_));
-        return cursors_.back();
-      } catch(std::exception const& e) {
-        std::cout << "DBE:CPP:executeDML:Exception: " << e.what() << std::endl;
-      }
-      std::cout << "DBE:CPP:executeDML: OK" << std::endl;
-    } else {
-      std::cout << "DBE:CPP:executeDML: query_runner is NULL" << std::endl;
-    }
-    return nullptr;
-  }
-*/
 
   Cursor* executeDML(const std::string& query) {
     std::cout << "g_enable_columnar_output = " << g_enable_columnar_output << std::endl;
@@ -282,9 +268,6 @@ class DBEngineImpl : public DBEngine {
           col_names.push_back(target.get_resname());
         }
         auto rs = execution_result.getRows();
-//        auto rs = query_runner_->runSQL(query, ExecutorDeviceType::CPU);
-
-
         cursors_.emplace_back(new CursorImpl(rs, col_names, data_mgr_));
         return cursors_.back();
       } catch(std::exception const& e) {
