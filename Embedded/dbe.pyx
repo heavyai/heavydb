@@ -13,8 +13,6 @@ from collections import namedtuple
 
 import os
 import sys
-#import pyarrow
-import traceback
 
 from DBEngine cimport *
 from DBEngine cimport ColumnType as _ColumnType
@@ -125,10 +123,10 @@ cdef class PyCursor:
         obj = PyColumnType(<int>self.c_cursor.getColType(pos))
         return obj
 
-    def showRows(self, int max_rows):
+    def showRows(self, int max_rows=0):
         col_count = self.colCount();
         row_count = self.rowCount();
-        if row_count > max_rows:
+        if max_rows > 0 and row_count > max_rows:
             row_count = max_rows
         col_types = [];
         col_types_str = [];
@@ -145,7 +143,7 @@ cdef class PyCursor:
             for f in range(col_count):
                 fields.append(r.getField(f, col_types[f]))
 #            print(format_row.format("", *fields))
-            print(*fields)
+            print(*fields, flush=True)
 
     def getArrowRecordBatch(self):
         print('getArrowRecordBatch - BEGIN')
@@ -156,12 +154,7 @@ cdef class PyCursor:
             print('Record batch is NULL')
             return None
         else:
-            print("!!!pyarrow_wrap_batch...")
             prb = pyarrow_wrap_batch(self.c_batch)
-            print("wrapping ended")
-#            print(type(prb))
-#            print(dir(prb))
-#            print(prb)
             return prb
 
 ColumnDetailsTp = namedtuple("ColumnDetails", ["name", "type", "nullable",
@@ -184,9 +177,7 @@ cdef class PyDbEngine:
             print("Could not convert data to an integer.")
         except:
             print("Unexpected error:", sys.exc_info()[0], sys.exc_info()[1])
-#        self.closed = False
         print('_CINIT: ', path, '. port=', port)
-#        traceback.print_exc()
 
     def __init__(self, path, port):
 #        self.closed = False
@@ -222,16 +213,8 @@ cdef class PyDbEngine:
         obj = PyCursor();
         obj.c_cursor = self.c_dbe.executeDML(bytes(query, 'utf-8'));
         prb = obj.getArrowRecordBatch()
-        print("to table")
         tbl1=Table.from_batches([prb])
-        print(type(tbl1))
-        print(dir(tbl1))
-        print(tbl1)
-        print("to pandas df:")
         df = tbl1.to_pandas()
-        print("Data frame is ready: ")
-        print(type(df))
-        print(df)
         return df
 
 #    def get_tables(self):
@@ -247,4 +230,3 @@ cdef class PyDbEngine:
             for x in table_details
         ]
 
-# std::vector<ColumnDetails> getTableDetails( table_name)
