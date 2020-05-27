@@ -123,7 +123,7 @@ ParserWrapper::ParserWrapper(std::string query_string) {
     if (is_ddl) {
       query_type_ = QueryType::SchemaWrite;
       if (g_enable_fsi) {
-        boost::regex fsi_regex{R"(((CREATE|DROP)\s+(SERVER|FOREIGN\s+TABLE).*))",
+        boost::regex fsi_regex{R"((CREATE|DROP|ALTER)\s+(SERVER|FOREIGN\s+TABLE).*)",
                                boost::regex::extended | boost::regex::icase};
         if (boost::regex_match(query_string, fsi_regex)) {
           is_calcite_ddl_ = true;

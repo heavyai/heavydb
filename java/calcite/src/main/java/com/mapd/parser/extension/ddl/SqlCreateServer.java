@@ -9,7 +9,6 @@ import org.apache.calcite.sql.SqlOperator;
 import org.apache.calcite.sql.SqlSpecialOperator;
 import org.apache.calcite.sql.parser.SqlParserPos;
 
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -20,11 +19,10 @@ public class SqlCreateServer extends SqlCreate implements JsonSerializableDdl {
   private static final SqlOperator OPERATOR =
           new SqlSpecialOperator("CREATE_SERVER", SqlKind.OTHER_DDL);
 
-  public static class Builder {
+  public static class Builder extends SqlOptionsBuilder {
     private boolean ifNotExists;
     private String serverName;
     private String dataWrapper;
-    private Map<String, String> options;
     private SqlParserPos pos;
 
     public void setIfNotExists(final boolean ifNotExists) {
@@ -39,28 +37,13 @@ public class SqlCreateServer extends SqlCreate implements JsonSerializableDdl {
       this.dataWrapper = dataWrapper;
     }
 
-    public void addOption(final String attribute, final String value) {
-      if (options == null) {
-        options = new HashMap<>();
-      }
-
-      options.put(attribute, sanitizeOptionValue(value));
-    }
-
     public void setPos(final SqlParserPos pos) {
       this.pos = pos;
     }
 
     public SqlCreateServer build() {
-      return new SqlCreateServer(pos, ifNotExists, serverName, dataWrapper, options);
-    }
-
-    private String sanitizeOptionValue(final String value) {
-      String sanitizedValue = value;
-      if (value.startsWith("'") && value.endsWith("'")) {
-        sanitizedValue = value.substring(1, value.length() - 1);
-      }
-      return sanitizedValue;
+      return new SqlCreateServer(
+              pos, ifNotExists, serverName, dataWrapper, super.options);
     }
   }
 

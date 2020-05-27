@@ -45,6 +45,7 @@ class DdlCommand {
  protected:
   const rapidjson::Value& ddl_payload_;
   std::shared_ptr<Catalog_Namespace::SessionInfo const> session_ptr_;
+  bool isDefaultServer(const std::string& server_name);
 };
 
 class CreateForeignServerCommand : public DdlCommand {
@@ -54,6 +55,22 @@ class CreateForeignServerCommand : public DdlCommand {
       std::shared_ptr<Catalog_Namespace::SessionInfo const> session_ptr);
 
   void execute(TQueryResult& _return) override;
+};
+
+class AlterForeignServerCommand : public DdlCommand {
+ public:
+  AlterForeignServerCommand(
+      const rapidjson::Value& ddl_payload,
+      std::shared_ptr<Catalog_Namespace::SessionInfo const> session_ptr);
+
+  void execute(TQueryResult& _return) override;
+
+ private:
+  void changeForeignServerOwner();
+  void renameForeignServer();
+  void setForeignServerOptions();
+  void setForeignServerDataWrapper();
+  bool hasAlterServerPrivileges();
 };
 
 class DropForeignServerCommand : public DdlCommand {

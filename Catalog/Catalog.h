@@ -268,7 +268,8 @@ class Catalog final {
    * @return pointer to a struct containing foreign server details. nullptr is returned if
    * no foreign server exists with the given name
    */
-  foreign_storage::ForeignServer* getForeignServer(const std::string& server_name) const;
+  const foreign_storage::ForeignServer* getForeignServer(
+      const std::string& server_name) const;
 
   /**
    * Gets a pointer to a struct containing foreign server details.
@@ -279,8 +280,40 @@ class Catalog final {
    * @return pointer to a struct containing foreign server details. nullptr is returned if
    * no foreign server exists with the given name
    */
-  foreign_storage::ForeignServer* getForeignServerSkipCache(
+  const foreign_storage::ForeignServer* getForeignServerSkipCache(
       const std::string& server_name);
+
+  /**
+   * Change the owner of a Foreign Server to a new owner.
+   *
+   * @param server_name - Name of the foreign server whose owner to change
+   * @param new_owner_id - New owner's user id
+   */
+  void changeForeignServerOwner(const std::string& server_name, const int new_owner_id);
+
+  /**
+   * Set the data wrapper of a Foreign Server.
+   *
+   * @param server_name - Name of the foreign server whose data wrapper will be set
+   * @param data_wrapper - Data wrapper to use
+   */
+  void setForeignServerDataWrapper(const std::string& server_name,
+                                   const std::string& data_wrapper);
+  /**
+   * Set the options of a Foreign Server.
+   *
+   * @param server_name - Name of the foreign server whose options will be set
+   * @param options - Options to set
+   */
+  void setForeignServerOptions(const std::string& server_name,
+                               const std::string& options);
+  /**
+   * Rename a Foreign Server.
+   *
+   * @param server_name - Name of the foreign server whose name will be changed
+   * @param name - New name of server
+   */
+  void renameForeignServer(const std::string& server_name, const std::string& name);
 
   /**
    * Drops/deletes a foreign server DB object.
@@ -299,11 +332,12 @@ class Catalog final {
    * entry
    * @param user - user to retrieve server names
    * @param results - results returned as a vector of pointers to
-   * foreign_storage::ForeignServer
+   * const foreign_storage::ForeignServer
    */
-  void getForeignServersForUser(const rapidjson::Value* filters,
-                                const UserMetadata& user,
-                                std::vector<foreign_storage::ForeignServer*>& results);
+  void getForeignServersForUser(
+      const rapidjson::Value* filters,
+      const UserMetadata& user,
+      std::vector<const foreign_storage::ForeignServer*>& results);
 
   /**
    * Creates default local file servers (if they don't already exist).
@@ -423,6 +457,10 @@ class Catalog final {
                               const std::string& name_prefix) const;
   void buildForeignServerMap();
   void addForeignTableDetails();
+
+  void setForeignServerProperty(const std::string& server_name,
+                                const std::string& property,
+                                const std::string& value);
 
   /**
    * Same as createForeignServer() but without acquiring locks. This should only be called

@@ -1,0 +1,9 @@
+{
+  "statementType": "DDL",
+  "payload": {
+    "newServerName": "my_new_csv_server",
+    "command": "ALTER_SERVER",
+    "alterType": "RENAME_SERVER",
+    "serverName": "my_csv_server"
+  }
+}

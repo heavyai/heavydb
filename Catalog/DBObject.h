@@ -127,6 +127,7 @@ struct ServerPrivileges {
   static const int32_t ALL = -1;
   static const int32_t CREATE_SERVER = 1 << 0;
   static const int32_t DROP_SERVER = 1 << 1;
+  static const int32_t ALTER_SERVER = 1 << 2;
 };
 
 struct AccessPrivileges {
@@ -187,6 +188,7 @@ struct AccessPrivileges {
   static const AccessPrivileges ALL_SERVER;
   static const AccessPrivileges CREATE_SERVER;
   static const AccessPrivileges DROP_SERVER;
+  static const AccessPrivileges ALTER_SERVER;
 };
 
 class DBObject {

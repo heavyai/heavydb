@@ -226,27 +226,39 @@ TEST_F(DropForeignServerTest, FsiDisabled) {
 
 class ForeignServerPrivilegesDdlTest : public DBHandlerTestFixture {
  protected:
+  static void SetUpTestSuite() {
+    createDBHandler();
+    switchToAdmin();
+    createTestUser();
+  }
+
+  static void TearDownTestSuite() { dropTestUser(); }
+
   void SetUp() override {
     g_enable_fsi = true;
     DBHandlerTestFixture::SetUp();
     loginAdmin();
     dropServer();
-    createTestUser();
   }
 
   void TearDown() override {
     g_enable_fsi = true;
     loginAdmin();
     dropServer();
-    dropTestUser();
+    revokeTestUserServerPrivileges();
   }
 
-  void createTestUser() {
+  void revokeTestUserServerPrivileges() {
+    sql("REVOKE ALL ON DATABASE omnisci FROM test_user;");
+    sql("GRANT ACCESS ON DATABASE omnisci TO test_user;");
+  }
+
+  static void createTestUser() {
     sql("CREATE USER test_user (password = 'test_pass');");
     sql("GRANT ACCESS ON DATABASE omnisci TO test_user;");
   }
 
-  void dropTestUser() {
+  static void dropTestUser() {
     try {
       sql("DROP USER test_user;");
     } catch (const std::exception& e) {
@@ -326,6 +338,21 @@ TEST_F(ForeignServerPrivilegesDdlTest, DropServerWithSpecificPrivilege) {
   login("test_user", "test_pass");
   sql("DROP SERVER test_server;");
   assertNullForeignServer();
+}
+
+TEST_F(ForeignServerPrivilegesDdlTest,
+       DropServerWithSpecificPrivilegeRepeatedWithoutPrivilege) {
+  createTestServer();
+  sql("GRANT DROP ON SERVER test_server TO test_user;");
+  login("test_user", "test_pass");
+  sql("DROP SERVER test_server;");
+  assertNullForeignServer();
+  loginAdmin();
+  createTestServer();
+  login("test_user", "test_pass");
+  queryAndAssertException("DROP SERVER test_server;",
+                          "Exception: Server test_server will not be dropped. "
+                          "User has no DROP SERVER privileges.");
 }
 
 TEST_F(ForeignServerPrivilegesDdlTest, CreateServerWithGrantThenRevokePrivilege) {
@@ -768,6 +795,292 @@ TEST_F(ShowForeignServerTest, FsiDisabled) {
   std::string query{"SHOW SERVERS;"};
   queryAndAssertException(query, "Exception: Unsupported command: SHOW FOREIGN SERVERS");
   g_enable_fsi = true;
+}
+
+class AlterForeignServerTest : public DBHandlerTestFixture {
+ protected:
+  static void SetUpTestSuite() {
+    createDBHandler();
+    switchToAdmin();
+    createTestUser();
+    setTestUserId();
+  }
+
+  static void TearDownTestSuite() { dropTestUser(); }
+
+  static int32_t test_user_id;
+
+  void SetUp() override {
+    g_enable_fsi = true;
+    DBHandlerTestFixture::SetUp();
+    loginAdmin();
+    dropServers();
+  }
+
+  void TearDown() override {
+    g_enable_fsi = true;
+    loginAdmin();
+    dropServers();
+  }
+
+  static void createTestUser() {
+    sql("CREATE USER test_user (password = 'test_pass');");
+    sql("GRANT ACCESS ON DATABASE omnisci TO test_user;");
+    sql("GRANT CREATE SERVER ON DATABASE omnisci TO test_user;");
+  }
+
+  static void dropTestUser() {
+    try {
+      sql("DROP USER test_user;");
+    } catch (const std::exception& e) {
+      // Swallow and log exceptions that may occur, since there is no "IF EXISTS" option.
+      LOG(WARNING) << e.what();
+    }
+  }
+
+  void createTestServer() {
+    sql("CREATE SERVER test_server FOREIGN DATA WRAPPER omnisci_csv "
+        "WITH (storage_type = 'LOCAL_FILE', base_path = '/test_path/');");
+  }
+
+  void dropServers() {
+    sql("DROP SERVER IF EXISTS test_server;");
+    sql("DROP SERVER IF EXISTS renamed_server;");
+  }
+
+  const std::map<std::string, std::string, std::less<>> DEFAULT_OPTIONS{
+      {"base_path", "/test_path/"},
+      {"storage_type", "LOCAL_FILE"},
+  };
+
+  foreign_storage::ForeignServer createExpectedForeignServer(
+      const std::string& server_name,
+      const std::string& data_wrapper,
+      const std::map<std::string, std::string, std::less<>>& options,
+      const int owner_user_id = OMNISCI_ROOT_USER_ID) {
+    foreign_storage::OptionsContainer options_container(
+        foreign_storage::OptionsContainer(options).getOptionsAsJsonString());
+    foreign_storage::ForeignServer foreign_server{
+        server_name, to_upper(data_wrapper), options_container.options, owner_user_id};
+    return foreign_server;
+  }
+
+  void assertExpectedForeignServer(
+      const foreign_storage::ForeignServer& expected_foreign_server) {
+    auto& catalog = getCatalog();
+    assertForeignServersEqual(catalog.getForeignServer(expected_foreign_server.name),
+                              expected_foreign_server);
+    assertForeignServersEqual(
+        catalog.getForeignServerSkipCache(expected_foreign_server.name),
+        expected_foreign_server);
+  }
+
+  void assertNullForeignServer(const std::string& server_name) {
+    auto& catalog = getCatalog();
+    const auto inmemory_foreign_server = catalog.getForeignServer(server_name);
+    ASSERT_EQ(nullptr, inmemory_foreign_server);
+    const auto foreign_server = catalog.getForeignServerSkipCache(server_name);
+    ASSERT_EQ(nullptr, foreign_server);
+  }
+
+  void assertNullForeignServer() { assertNullForeignServer("test_server"); }
+
+ private:
+  static void setTestUserId() {
+    login("test_user", "test_pass");
+    Catalog_Namespace::UserMetadata test_user;
+    test_user_id = Catalog_Namespace::SysCatalog::instance().getMetadataForUser(
+        "test_user", test_user);
+    loginAdmin();
+  }
+
+  void assertForeignServersEqual(
+      const foreign_storage::ForeignServer* foreign_server,
+      const foreign_storage::ForeignServer& expected_foreign_server) {
+    ASSERT_GT(foreign_server->id, 0);
+    ASSERT_EQ(foreign_server->name, expected_foreign_server.name);
+    ASSERT_EQ(foreign_server->data_wrapper_type,
+              expected_foreign_server.data_wrapper_type);
+    ASSERT_EQ(foreign_server->user_id, expected_foreign_server.user_id);
+    ASSERT_EQ(foreign_server->getOptionsAsJsonString(),
+              expected_foreign_server.getOptionsAsJsonString());
+  }
+};
+
+int32_t AlterForeignServerTest::test_user_id;
+
+TEST_F(AlterForeignServerTest, SetDataWrapper) {
+  createTestServer();
+  sql("ALTER SERVER test_server SET FOREIGN DATA WRAPPER omnisci_parquet;");
+  assertExpectedForeignServer(
+      createExpectedForeignServer("test_server", "omnisci_parquet", DEFAULT_OPTIONS));
+}
+
+TEST_F(AlterForeignServerTest, ModifyOption) {
+  createTestServer();
+  sql("ALTER SERVER test_server WITH ( base_path = '/new_path/' );");
+  assertExpectedForeignServer(
+      createExpectedForeignServer("test_server",
+                                  "omnisci_csv",
+                                  std::map<std::string, std::string, std::less<>>{
+                                      {"base_path", "/new_path/"},
+                                      {"storage_type", "LOCAL_FILE"},
+                                  }));
+}
+
+TEST_F(AlterForeignServerTest, ChangeOwner) {
+  createTestServer();
+  sql("ALTER SERVER test_server OWNER TO test_user;");
+  assertExpectedForeignServer(createExpectedForeignServer(
+      "test_server", "omnisci_csv", DEFAULT_OPTIONS, test_user_id));
+}
+
+TEST_F(AlterForeignServerTest, RenameServerDropServer) {
+  createTestServer();
+  sql("ALTER SERVER test_server RENAME TO renamed_server;");
+  assertExpectedForeignServer(
+      createExpectedForeignServer("renamed_server", "omnisci_csv", DEFAULT_OPTIONS));
+  assertNullForeignServer();
+  sql("DROP SERVER renamed_server;");
+  assertNullForeignServer("renamed_server");
+}
+
+TEST_F(AlterForeignServerTest, UserCreateServerRenameServerDropServer) {
+  login("test_user", "test_pass");
+  createTestServer();
+  sql("ALTER SERVER test_server RENAME TO renamed_server;");
+  assertExpectedForeignServer(createExpectedForeignServer(
+      "renamed_server", "omnisci_csv", DEFAULT_OPTIONS, test_user_id));
+  assertNullForeignServer();
+  sql("DROP SERVER renamed_server;");
+  assertNullForeignServer("renamed_server");
+}
+
+TEST_F(AlterForeignServerTest, UserCreateServerAttemptChangeOwner) {
+  login("test_user", "test_pass");
+  createTestServer();
+  queryAndAssertException(
+      "ALTER SERVER test_server OWNER TO " + OMNISCI_ROOT_USER + ";",
+      "Exception: Only a super user can change a foreign server's owner."
+      " Current user is not a super-user. Foreign server with name"
+      " \"test_server\" will not have owner changed.");
+}
+
+TEST_F(AlterForeignServerTest, ChangeOwnerSwicthUserDropServer) {
+  createTestServer();
+  sql("ALTER SERVER test_server OWNER TO test_user;");
+  login("test_user", "test_pass");
+  sql("DROP SERVER test_server;");
+  assertNullForeignServer();
+}
+
+TEST_F(AlterForeignServerTest, UserCreateServerChangeOwnerDropServer) {
+  login("test_user", "test_pass");
+  createTestServer();
+  loginAdmin();
+  sql("ALTER SERVER test_server OWNER TO " + OMNISCI_ROOT_USER + ";");
+  login("test_user", "test_pass");
+  queryAndAssertException("DROP SERVER test_server;",
+                          "Exception: Server test_server will not be dropped. User has"
+                          " no DROP SERVER privileges.");
+}
+
+TEST_F(AlterForeignServerTest, UserCreateServerDropUserChangeOwner) {
+  login("test_user", "test_pass");
+  createTestServer();
+  loginAdmin();
+  dropTestUser();
+  sql("ALTER SERVER test_server OWNER TO " + OMNISCI_ROOT_USER + ";");
+  assertExpectedForeignServer(
+      createExpectedForeignServer("test_server", "omnisci_csv", DEFAULT_OPTIONS));
+  // test_user must be recreated for remaining tests
+  createTestUser();
+}
+
+TEST_F(AlterForeignServerTest, AlterNonExistentForeignServer) {
+  queryAndAssertException(
+      "ALTER SERVER test_server SET FOREIGN DATA WRAPPER omnisci_parquet;",
+      "Exception: Foreign server with name \"test_server\" does not exist "
+      "and can not be altered.");
+}
+
+TEST_F(AlterForeignServerTest, ChangeOwnerToNonExistentUser) {
+  createTestServer();
+  queryAndAssertException("ALTER SERVER test_server OWNER TO non_existent_user;",
+                          "Exception: User with username \"non_existent_user\" does not"
+                          " exist. Foreign server with name \"test_server\" can not "
+                          "have owner changed.");
+  assertExpectedForeignServer(
+      createExpectedForeignServer("test_server", "omnisci_csv", DEFAULT_OPTIONS));
+}
+
+TEST_F(AlterForeignServerTest, RenameToExistingServer) {
+  createTestServer();
+  sql("CREATE SERVER renamed_server FOREIGN DATA WRAPPER omnisci_csv "
+      "WITH (storage_type = 'LOCAL_FILE', base_path = "
+      "'/another_test_path/');");
+  queryAndAssertException("ALTER SERVER test_server RENAME TO renamed_server;",
+                          "Exception: Foreign server with name \"test_server"
+                          "\" can not be renamed to \"renamed_server\"."
+                          "Foreign server with name \"renamed_server\" exists.");
+  assertExpectedForeignServer(
+      createExpectedForeignServer("test_server", "omnisci_csv", DEFAULT_OPTIONS));
+}
+
+TEST_F(AlterForeignServerTest, FsiDisabled) {
+  createTestServer();
+  g_enable_fsi = false;
+  queryAndAssertException("ALTER SERVER test_server OWNER TO test_user;",
+                          "Syntax error at: SERVER");
+}
+
+TEST_F(AlterForeignServerTest, OmniSciPrefix) {
+  queryAndAssertException("ALTER SERVER omnisci_local_csv RENAME TO renamed_server;",
+                          "Exception: OmniSci default servers cannot be altered.");
+}
+
+TEST_F(AlterForeignServerTest, RenameServerToOmniSciPrefix) {
+  createTestServer();
+  queryAndAssertException("ALTER SERVER test_server RENAME TO omnisci_local_csv;",
+                          "Exception: OmniSci prefix can not be used for new"
+                          " name of server.");
+  assertExpectedForeignServer(
+      createExpectedForeignServer("test_server", "omnisci_csv", DEFAULT_OPTIONS));
+}
+
+TEST_F(AlterForeignServerTest, InvalidOption) {
+  createTestServer();
+  std::string query{"ALTER SERVER test_server WITH (invalid_key = 'value');"};
+  std::string error_message{
+      "Exception: Invalid option \"INVALID_KEY\". "
+      "Option must be one of the following: STORAGE_TYPE, BASE_PATH."};
+  queryAndAssertException(query, error_message);
+  assertExpectedForeignServer(
+      createExpectedForeignServer("test_server", "omnisci_csv", DEFAULT_OPTIONS));
+}
+
+TEST_F(AlterForeignServerTest, InvalidStorageType) {
+  createTestServer();
+  std::string query{
+      "ALTER SERVER test_server WITH "
+      "(storage_type = 'INVALID_TYPE', base_path = '/test_path/');"};
+  std::string error_message{
+      "Exception: Invalid storage type value. Value must be one of the following: "
+      "LOCAL_FILE."};
+  queryAndAssertException(query, error_message);
+  assertExpectedForeignServer(
+      createExpectedForeignServer("test_server", "omnisci_csv", DEFAULT_OPTIONS));
+}
+
+TEST_F(AlterForeignServerTest, InvalidDataWrapper) {
+  createTestServer();
+  std::string query{"ALTER SERVER test_server SET FOREIGN DATA WRAPPER invalid_wrapper;"};
+  std::string error_message{
+      "Exception: Invalid data wrapper type \"INVALID_WRAPPER\". "
+      "Data wrapper type must be one of the following: OMNISCI_CSV, OMNISCI_PARQUET."};
+  queryAndAssertException(query, error_message);
+  assertExpectedForeignServer(
+      createExpectedForeignServer("test_server", "omnisci_csv", DEFAULT_OPTIONS));
 }
 
 int main(int argc, char** argv) {

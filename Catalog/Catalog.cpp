@@ -2429,7 +2429,7 @@ void Catalog::createForeignServerNoLocks(
   foreignServerMapById_[foreign_server_shared->id] = foreign_server_shared;
 }
 
-foreign_storage::ForeignServer* Catalog::getForeignServer(
+const foreign_storage::ForeignServer* Catalog::getForeignServer(
     const std::string& server_name) const {
   foreign_storage::ForeignServer* foreign_server = nullptr;
   cat_read_lock read_lock(this);
@@ -2439,7 +2439,7 @@ foreign_storage::ForeignServer* Catalog::getForeignServer(
   return foreign_server;
 }
 
-foreign_storage::ForeignServer* Catalog::getForeignServerSkipCache(
+const foreign_storage::ForeignServer* Catalog::getForeignServerSkipCache(
     const std::string& server_name) {
   foreign_storage::ForeignServer* foreign_server = nullptr;
   cat_write_lock write_lock(this);
@@ -2461,6 +2461,70 @@ foreign_storage::ForeignServer* Catalog::getForeignServerSkipCache(
     foreignServerMapById_[server->id] = server;
   }
   return foreign_server;
+}
+
+void Catalog::changeForeignServerOwner(const std::string& server_name,
+                                       const int new_owner_id) {
+  cat_write_lock write_lock(this);
+  foreign_storage::ForeignServer* foreign_server =
+      foreignServerMap_.find(server_name)->second.get();
+  CHECK(foreign_server);
+  setForeignServerProperty(server_name, "owner_user_id", std::to_string(new_owner_id));
+  // update in-memory server
+  foreign_server->user_id = new_owner_id;
+}
+
+void Catalog::setForeignServerDataWrapper(const std::string& server_name,
+                                          const std::string& data_wrapper) {
+  cat_write_lock write_lock(this);
+  auto data_wrapper_type = to_upper(data_wrapper);
+  // update in-memory server
+  foreign_storage::ForeignServer* foreign_server =
+      foreignServerMap_.find(server_name)->second.get();
+  CHECK(foreign_server);
+  std::string saved_data_wrapper_type = foreign_server->data_wrapper_type;
+  foreign_server->data_wrapper_type = data_wrapper_type;
+  try {
+    foreign_server->validate();
+  } catch (const std::exception& e) {
+    // validation did not succeed:
+    // revert to saved data_wrapper_type & throw exception
+    foreign_server->data_wrapper_type = saved_data_wrapper_type;
+    throw;
+  }
+  setForeignServerProperty(server_name, "data_wrapper_type", data_wrapper_type);
+}
+
+void Catalog::setForeignServerOptions(const std::string& server_name,
+                                      const std::string& options) {
+  cat_write_lock write_lock(this);
+  // update in-memory server
+  foreign_storage::ForeignServer* foreign_server =
+      foreignServerMap_.find(server_name)->second.get();
+  CHECK(foreign_server);
+  std::string saved_options_string = foreign_server->getOptionsAsJsonString();
+  foreign_server->populateOptionsMap(options, true);
+  try {
+    foreign_server->validate();
+  } catch (const std::exception& e) {
+    // validation did not succeed:
+    // revert to saved options & throw exception
+    foreign_server->populateOptionsMap(saved_options_string, true);
+    throw;
+  }
+  setForeignServerProperty(server_name, "options", options);
+}
+
+void Catalog::renameForeignServer(const std::string& server_name,
+                                  const std::string& name) {
+  cat_write_lock write_lock(this);
+  auto foreign_server_it = foreignServerMap_.find(server_name);
+  CHECK(foreign_server_it != foreignServerMap_.end());
+  setForeignServerProperty(server_name, "name", name);
+  auto foreign_server_shared = foreign_server_it->second;
+  foreign_server_shared->name = name;
+  foreignServerMap_[name] = foreign_server_shared;
+  foreignServerMap_.erase(foreign_server_it);
 }
 
 void Catalog::dropForeignServer(const std::string& server_name) {
@@ -2493,7 +2557,7 @@ void Catalog::dropForeignServer(const std::string& server_name) {
 void Catalog::getForeignServersForUser(
     const rapidjson::Value* filters,
     const UserMetadata& user,
-    std::vector<foreign_storage::ForeignServer*>& results) {
+    std::vector<const foreign_storage::ForeignServer*>& results) {
   sys_read_lock syscat_read_lock(&SysCatalog::instance());
   cat_read_lock read_lock(this);
   cat_sqlite_lock sqlite_lock(this);
@@ -2565,7 +2629,7 @@ void Catalog::getForeignServersForUser(
   // Return pointers to objects
   results.reserve(num_rows);
   for (size_t row = 0; row < num_rows; ++row) {
-    foreign_storage::ForeignServer* foreign_server =
+    const foreign_storage::ForeignServer* foreign_server =
         getForeignServer(sqliteConnector_.getData<std::string>(row, 0));
 
     CHECK(foreign_server != nullptr);
@@ -3638,6 +3702,27 @@ void Catalog::addForeignTableDetails() {
     foreign_table->foreign_server = foreignServerMapById_[server_id].get();
     CHECK(foreign_table->foreign_server);
     foreign_table->populateOptionsMap(options);
+  }
+}
+
+void Catalog::setForeignServerProperty(const std::string& server_name,
+                                       const std::string& property,
+                                       const std::string& value) {
+  cat_sqlite_lock sqlite_lock(this);
+  sqliteConnector_.query_with_text_params(
+      "SELECT id from omnisci_foreign_servers where name = ?",
+      std::vector<std::string>{server_name});
+  auto num_rows = sqliteConnector_.getNumRows();
+  if (num_rows > 0) {
+    CHECK_EQ(size_t(1), num_rows);
+    auto server_id = sqliteConnector_.getData<int>(0, 0);
+    sqliteConnector_.query_with_text_params(
+        "UPDATE omnisci_foreign_servers SET " + property + " = ? WHERE id = ?",
+        std::vector<std::string>{value, std::to_string(server_id)});
+  } else {
+    throw std::runtime_error{"Can not change property \"" + property +
+                             "\" for foreign server." + " Foreign server \"" +
+                             server_name + "\" is not found."};
   }
 }
 

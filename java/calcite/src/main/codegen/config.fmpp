@@ -28,6 +28,7 @@ data: {
         "com.mapd.parser.extension.ddl.SqlCreateServer"
         "com.mapd.parser.extension.ddl.SqlDropServer"
         "com.mapd.parser.extension.ddl.SqlShowTables"
+        "com.mapd.parser.extension.ddl.SqlAlterServer"
         "com.mapd.parser.extension.ddl.SqlCreateForeignTable"
         "com.mapd.parser.extension.ddl.SqlDropForeignTable"
         "com.mapd.parser.extension.ddl.SqlShowUserSessions"
@@ -53,6 +54,8 @@ data: {
         "TABLES"
         "DATABASES"
         "SERVERS"
+        "OWNER"
+        "RENAME"
       ]
 
       # List of keywords from "keywords" section that are not reserved.
@@ -397,7 +400,7 @@ data: {
         "SqlShowTables(span())"
         "SqlShowDatabases(span())"
         "SqlShowForeignServers(span())"
-
+        "SqlAlterServer(span())"
       ]
 
       # List of methods for parsing custom literals.

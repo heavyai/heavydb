@@ -1,0 +1,9 @@
+{
+  "payload": {
+    "serverName": "my_csv_server",
+    "newOwner": "Joe",
+    "command": "ALTER_SERVER",
+    "alterType": "CHANGE_OWNER"
+  },
+  "statementType": "DDL"
+}

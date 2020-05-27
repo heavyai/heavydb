@@ -27,6 +27,10 @@
 
 extern bool g_enable_fsi;
 
+bool DdlCommand::isDefaultServer(const std::string& server_name) {
+  return boost::iequals(server_name.substr(0, 7), "omnisci");
+}
+
 namespace {
 void set_headers(TQueryResult& _return, const std::vector<std::string>& headers) {
   TRowDescriptor row_descriptor;
@@ -81,6 +85,8 @@ void DdlCommandExecutor::execute(TQueryResult& _return) {
     ShowDatabasesCommand{payload, session_ptr_}.execute(_return);
   } else if (ddl_command == "SHOW_SERVERS") {
     ShowForeignServersCommand{payload, session_ptr_}.execute(_return);
+  } else if (ddl_command == "ALTER_SERVER") {
+    AlterForeignServerCommand{payload, session_ptr_}.execute(_return);
   } else {
     throw std::runtime_error("Unsupported DDL command");
   }
@@ -108,7 +114,7 @@ CreateForeignServerCommand::CreateForeignServerCommand(
 
 void CreateForeignServerCommand::execute(TQueryResult& _return) {
   std::string server_name = ddl_payload_["serverName"].GetString();
-  if (boost::iequals(server_name.substr(0, 7), "omnisci")) {
+  if (isDefaultServer(server_name)) {
     throw std::runtime_error{"Server names cannot start with \"omnisci\"."};
   }
   bool if_not_exists = ddl_payload_["ifNotExists"].GetBool();
@@ -142,6 +148,148 @@ void CreateForeignServerCommand::execute(TQueryResult& _return) {
       current_user, server_name, ServerDBObjectType, catalog);
 }
 
+AlterForeignServerCommand::AlterForeignServerCommand(
+    const rapidjson::Value& ddl_payload,
+    std::shared_ptr<const Catalog_Namespace::SessionInfo> session_ptr)
+    : DdlCommand(ddl_payload, session_ptr) {
+  CHECK(ddl_payload.HasMember("serverName"));
+  CHECK(ddl_payload["serverName"].IsString());
+  CHECK(ddl_payload.HasMember("alterType"));
+  CHECK(ddl_payload["alterType"].IsString());
+  if (ddl_payload["alterType"] == "SET_OPTIONS") {
+    CHECK(ddl_payload.HasMember("options"));
+    CHECK(ddl_payload["options"].IsObject());
+  } else if (ddl_payload["alterType"] == "SET_DATA_WRAPPER") {
+    CHECK(ddl_payload.HasMember("dataWrapper"));
+    CHECK(ddl_payload["dataWrapper"].IsString());
+  } else if (ddl_payload["alterType"] == "RENAME_SERVER") {
+    CHECK(ddl_payload.HasMember("newServerName"));
+    CHECK(ddl_payload["newServerName"].IsString());
+  } else if (ddl_payload["alterType"] == "CHANGE_OWNER") {
+    CHECK(ddl_payload.HasMember("newOwner"));
+    CHECK(ddl_payload["newOwner"].IsString());
+  } else {
+    UNREACHABLE();  // not-implemented alterType
+  }
+}
+
+void AlterForeignServerCommand::execute(TQueryResult& _return) {
+  std::string server_name = ddl_payload_["serverName"].GetString();
+  if (isDefaultServer(server_name)) {
+    throw std::runtime_error{"OmniSci default servers cannot be altered."};
+  }
+  if (!session_ptr_->getCatalog().getForeignServer(server_name)) {
+    throw std::runtime_error{"Foreign server with name \"" + server_name +
+                             "\" does not exist and can not be altered."};
+  }
+  if (!hasAlterServerPrivileges()) {
+    throw std::runtime_error("Server " + server_name +
+                             " can not be altered. User has no ALTER SERVER privileges.");
+  }
+  std::string alter_type = ddl_payload_["alterType"].GetString();
+  if (alter_type == "CHANGE_OWNER") {
+    changeForeignServerOwner();
+  } else if (alter_type == "SET_DATA_WRAPPER") {
+    setForeignServerDataWrapper();
+  } else if (alter_type == "SET_OPTIONS") {
+    setForeignServerOptions();
+  } else if (alter_type == "RENAME_SERVER") {
+    renameForeignServer();
+  }
+}
+
+void AlterForeignServerCommand::changeForeignServerOwner() {
+  std::string server_name = ddl_payload_["serverName"].GetString();
+  std::string new_owner = ddl_payload_["newOwner"].GetString();
+  auto& sys_cat = Catalog_Namespace::SysCatalog::instance();
+  if (!session_ptr_->get_currentUser().isSuper) {
+    throw std::runtime_error(
+        "Only a super user can change a foreign server's owner. "
+        "Current user is not a super-user. "
+        "Foreign server with name \"" +
+        server_name + "\" will not have owner changed.");
+  }
+  Catalog_Namespace::UserMetadata user, original_owner;
+  if (!sys_cat.getMetadataForUser(new_owner, user)) {
+    throw std::runtime_error("User with username \"" + new_owner + "\" does not exist. " +
+                             "Foreign server with name \"" + server_name +
+                             "\" can not have owner changed.");
+  }
+  auto& cat = session_ptr_->getCatalog();
+  // get original owner metadata
+  bool original_owner_exists = sys_cat.getMetadataForUserById(
+      cat.getForeignServer(server_name)->user_id, original_owner);
+  // update catalog
+  cat.changeForeignServerOwner(server_name, user.userId);
+  try {
+    // update permissions
+    DBObject db_object(server_name, DBObjectType::ServerDBObjectType);
+    sys_cat.changeDBObjectOwnership(
+        user, original_owner, db_object, cat, original_owner_exists);
+  } catch (const std::runtime_error& e) {
+    // update permissions failed, revert catalog update
+    cat.changeForeignServerOwner(server_name, original_owner.userId);
+    throw;
+  }
+}
+
+void AlterForeignServerCommand::renameForeignServer() {
+  std::string server_name = ddl_payload_["serverName"].GetString();
+  std::string new_server_name = ddl_payload_["newServerName"].GetString();
+  if (isDefaultServer(new_server_name)) {
+    throw std::runtime_error{"OmniSci prefix can not be used for new name of server."};
+  }
+  auto& cat = session_ptr_->getCatalog();
+  // check for a conflicting server
+  if (cat.getForeignServer(new_server_name)) {
+    throw std::runtime_error("Foreign server with name \"" + server_name +
+                             "\" can not be renamed to \"" + new_server_name + "\"." +
+                             "Foreign server with name \"" + new_server_name +
+                             "\" exists.");
+  }
+  // update catalog
+  cat.renameForeignServer(server_name, new_server_name);
+  try {
+    // migrate object privileges
+    auto& sys_cat = Catalog_Namespace::SysCatalog::instance();
+    sys_cat.renameDBObject(server_name,
+                           new_server_name,
+                           DBObjectType::ServerDBObjectType,
+                           cat.getForeignServer(new_server_name)->id,
+                           cat);
+  } catch (const std::runtime_error& e) {
+    // permission migration failed, revert catalog update
+    cat.renameForeignServer(new_server_name, server_name);
+    throw;
+  }
+}
+
+void AlterForeignServerCommand::setForeignServerOptions() {
+  std::string server_name = ddl_payload_["serverName"].GetString();
+  auto& cat = session_ptr_->getCatalog();
+  // update catalog
+  const auto foreign_server = cat.getForeignServer(server_name);
+  foreign_storage::OptionsContainer opt;
+  opt.populateOptionsMap(foreign_server->getOptionsAsJsonString());
+  opt.populateOptionsMap(ddl_payload_["options"]);
+  cat.setForeignServerOptions(server_name, opt.getOptionsAsJsonString());
+}
+
+void AlterForeignServerCommand::setForeignServerDataWrapper() {
+  std::string server_name = ddl_payload_["serverName"].GetString();
+  std::string data_wrapper = ddl_payload_["dataWrapper"].GetString();
+  auto& cat = session_ptr_->getCatalog();
+  // update catalog
+  cat.setForeignServerDataWrapper(server_name, data_wrapper);
+}
+
+bool AlterForeignServerCommand::hasAlterServerPrivileges() {
+  // TODO: implement `GRANT/REVOKE ALTER_SERVER` DDL commands
+  std::string server_name = ddl_payload_["serverName"].GetString();
+  return session_ptr_->checkDBAccessPrivileges(
+      DBObjectType::ServerDBObjectType, AccessPrivileges::ALTER_SERVER, server_name);
+}
+
 DropForeignServerCommand::DropForeignServerCommand(
     const rapidjson::Value& ddl_payload,
     std::shared_ptr<Catalog_Namespace::SessionInfo const> session_ptr)
@@ -154,7 +302,7 @@ DropForeignServerCommand::DropForeignServerCommand(
 
 void DropForeignServerCommand::execute(TQueryResult& _return) {
   std::string server_name = ddl_payload_["serverName"].GetString();
-  if (boost::iequals(server_name.substr(0, 7), "omnisci")) {
+  if (isDefaultServer(server_name)) {
     throw std::runtime_error{"OmniSci default servers cannot be dropped."};
   }
   bool if_exists = ddl_payload_["ifExists"].GetBool();
@@ -167,12 +315,13 @@ void DropForeignServerCommand::execute(TQueryResult& _return) {
     }
   }
   // check access privileges
-  if (!session_ptr_->checkDBAccessPrivileges(DBObjectType::ServerDBObjectType,
-                                             AccessPrivileges::DROP_SERVER,
-                                             server_name.data())) {
+  if (!session_ptr_->checkDBAccessPrivileges(
+          DBObjectType::ServerDBObjectType, AccessPrivileges::DROP_SERVER, server_name)) {
     throw std::runtime_error("Server " + server_name +
                              " will not be dropped. User has no DROP SERVER privileges.");
   }
+  Catalog_Namespace::SysCatalog::instance().revokeDBObjectPrivilegesFromAll(
+      DBObject(server_name, ServerDBObjectType), session_ptr_->get_catalog_ptr().get());
   session_ptr_->getCatalog().dropForeignServer(ddl_payload_["serverName"].GetString());
 }
 
@@ -545,7 +694,7 @@ void ShowForeignServersCommand::execute(TQueryResult& _return) {
   const std::vector<std::string> col_names{
       "server_name", "data_wrapper", "created_at", "options"};
 
-  std::vector<foreign_storage::ForeignServer*> results;
+  std::vector<const foreign_storage::ForeignServer*> results;
   const auto& user = session_ptr_->get_currentUser();
   if (ddl_payload_.HasMember("filters")) {
     session_ptr_->getCatalog().getForeignServersForUser(

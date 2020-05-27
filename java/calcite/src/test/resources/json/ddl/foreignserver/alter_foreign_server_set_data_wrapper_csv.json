@@ -1,0 +1,9 @@
+{
+  "statementType": "DDL",
+  "payload": {
+    "serverName": "test_server",
+    "command": "ALTER_SERVER",
+    "alterType": "SET_DATA_WRAPPER",
+    "dataWrapper": "OMNISCI_CSV"
+  }
+}

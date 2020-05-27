@@ -1437,6 +1437,29 @@ void SysCatalog::createDBObject(const UserMetadata& user,
   sqliteConnector_->query("END TRANSACTION");
 }
 
+void SysCatalog::renameDBObject(const std::string& objectName,
+                                const std::string& newName,
+                                DBObjectType type,
+                                int32_t objectId,
+                                const Catalog_Namespace::Catalog& catalog) {
+  sys_write_lock write_lock(this);
+  DBObject new_object(newName, type);
+  DBObjectKey key;
+  key.dbId = catalog.getCurrentDB().dbId;
+  key.objectId = objectId;
+  key.permissionType = type;
+  new_object.setObjectKey(key);
+  auto objdescs =
+      getMetadataForObject(key.dbId, static_cast<int32_t>(type), key.objectId);
+  for (auto obj : objdescs) {
+    Grantee* grnt = getGrantee(obj->roleName);
+    if (grnt) {
+      grnt->renameDbObject(new_object);
+    }
+  }
+  renameObjectsInDescriptorMap(new_object, catalog);
+}
+
 void SysCatalog::grantDBObjectPrivilegesBatch_unsafe(
     const vector<string>& grantees,
     const vector<DBObject>& objects,
@@ -1617,6 +1640,50 @@ bool SysCatalog::verifyDBObjectOwnership(const UserMetadata& user,
     }
   }
   return false;
+}
+
+void SysCatalog::changeDBObjectOwnership(const UserMetadata& new_owner,
+                                         const UserMetadata& previous_owner,
+                                         DBObject object,
+                                         const Catalog_Namespace::Catalog& catalog,
+                                         bool revoke_privileges) {
+  sys_write_lock write_lock(this);
+  sys_sqlite_lock sqlite_lock(this);
+  object.loadKey(catalog);
+  switch (object.getType()) {
+    case TableDBObjectType:
+      object.setPrivileges(AccessPrivileges::ALL_TABLE);
+      break;
+    case DashboardDBObjectType:
+      object.setPrivileges(AccessPrivileges::ALL_DASHBOARD);
+      break;
+    case ServerDBObjectType:
+      object.setPrivileges(AccessPrivileges::ALL_SERVER);
+      break;
+    case DatabaseDBObjectType:
+      object.setPrivileges(AccessPrivileges::ALL_DATABASE);
+      break;
+    case ViewDBObjectType:
+      object.setPrivileges(AccessPrivileges::ALL_VIEW);
+      break;
+    default:
+      UNREACHABLE();  // unkown object type
+      break;
+  }
+  sqliteConnector_->query("BEGIN TRANSACTION");
+  try {
+    if (!new_owner.isSuper) {  // no need to grant to suser, has all privs by default
+      grantDBObjectPrivileges_unsafe(new_owner.userName, object, catalog);
+    }
+    if (!previous_owner.isSuper && revoke_privileges) {  // no need to revoke from suser
+      revokeDBObjectPrivileges_unsafe(previous_owner.userName, object, catalog);
+    }
+  } catch (std::exception& e) {
+    sqliteConnector_->query("ROLLBACK TRANSACTION");
+    throw;
+  }
+  sqliteConnector_->query("END TRANSACTION");
+  object.setOwner(new_owner.userId);  // change owner if no exceptions happen
 }
 
 void SysCatalog::getDBObjectPrivileges(const std::string& granteeName,

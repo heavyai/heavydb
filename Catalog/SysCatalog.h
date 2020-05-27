@@ -202,6 +202,20 @@ class SysCatalog : private CommonFileOperations {
                       DBObjectType type,
                       const Catalog_Namespace::Catalog& catalog,
                       int32_t objectId = -1);
+  /**
+   * Renames an DBObject
+   *
+   * @param objectName - original DBObject name
+   * @param newName - new name of DBObject
+   * @param type - type of DBObject
+   * @param objectId - original DBObject ID
+   * @param catalog - Catalog instance object exists in
+   */
+  void renameDBObject(const std::string& objectName,
+                      const std::string& newName,
+                      DBObjectType type,
+                      int32_t objectId,
+                      const Catalog_Namespace::Catalog& catalog);
   void grantDBObjectPrivileges(const std::string& grantee,
                                const DBObject& object,
                                const Catalog_Namespace::Catalog& catalog);
@@ -222,6 +236,20 @@ class SysCatalog : private CommonFileOperations {
   bool verifyDBObjectOwnership(const UserMetadata& user,
                                DBObject object,
                                const Catalog_Namespace::Catalog& catalog);
+  /**
+   * Change ownership of a DBObject
+   *
+   * @param new_owner - new owner of DBObject
+   * @param previous_owner - previous owner of DBObject
+   * @param object - DBObject to change ownership of
+   * @param catalog - Catalog instance object exists in
+   * @param revoke_privileges - if true, revoke previous_owner's privileges
+   */
+  void changeDBObjectOwnership(const UserMetadata& new_owner,
+                               const UserMetadata& previous_owner,
+                               DBObject object,
+                               const Catalog_Namespace::Catalog& catalog,
+                               bool revoke_privileges = true);
   void createRole(const std::string& roleName, const bool& userPrivateRole = false);
   void dropRole(const std::string& roleName);
   void grantRoleBatch(const std::vector<std::string>& roles,

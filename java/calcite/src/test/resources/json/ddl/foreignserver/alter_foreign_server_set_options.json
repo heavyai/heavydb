@@ -1,0 +1,11 @@
+{
+  "payload": {
+    "command": "ALTER_SERVER",
+    "options": {
+      "base_path": "/home/my_user/data/new-csv/"
+    },
+    "serverName": "my_csv_server",
+    "alterType": "SET_OPTIONS"
+  },
+  "statementType": "DDL"
+}

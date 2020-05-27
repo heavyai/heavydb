@@ -16,6 +16,54 @@ public class ForeignServerTest extends DDLTest {
   }
 
   @Test
+  public void AlterServerSetDataWrapper() throws Exception {
+    final JsonObject expectedJsonObject =
+            getJsonFromFile("alter_foreign_server_set_data_wrapper_csv.json");
+    final TPlanResult result = processDdlCommand(
+            "ALTER SERVER test_server SET FOREIGN DATA WRAPPER OMNISCI_CSV;");
+    final JsonObject actualJsonObject =
+            gson.fromJson(result.plan_result, JsonObject.class);
+
+    assertEquals(expectedJsonObject, actualJsonObject);
+  }
+
+  @Test
+  public void AlterServerSetOptions() throws Exception {
+    final JsonObject expectedJsonObject =
+            getJsonFromFile("alter_foreign_server_set_options.json");
+    final TPlanResult result = processDdlCommand(
+            "ALTER SERVER my_csv_server WITH (base_path = '/home/my_user/data/new-csv/');");
+    final JsonObject actualJsonObject =
+            gson.fromJson(result.plan_result, JsonObject.class);
+
+    assertEquals(expectedJsonObject, actualJsonObject);
+  }
+
+  @Test
+  public void AlterServerChangeOwner() throws Exception {
+    final JsonObject expectedJsonObject =
+            getJsonFromFile("alter_foreign_server_change_owner.json");
+    final TPlanResult result =
+            processDdlCommand("ALTER SERVER my_csv_server OWNER TO Joe;");
+    final JsonObject actualJsonObject =
+            gson.fromJson(result.plan_result, JsonObject.class);
+
+    assertEquals(expectedJsonObject, actualJsonObject);
+  }
+
+  @Test
+  public void AlterServerRenameServer() throws Exception {
+    final JsonObject expectedJsonObject =
+            getJsonFromFile("alter_foreign_server_rename_server.json");
+    final TPlanResult result =
+            processDdlCommand("ALTER SERVER my_csv_server RENAME TO my_new_csv_server;");
+    final JsonObject actualJsonObject =
+            gson.fromJson(result.plan_result, JsonObject.class);
+
+    assertEquals(expectedJsonObject, actualJsonObject);
+  }
+
+  @Test
   public void CreateServerDdlCommand() throws Exception {
     final JsonObject expectedJsonObject = getJsonFromFile("create_foreign_server.json");
     final TPlanResult result = processDdlCommand(
