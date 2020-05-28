@@ -800,7 +800,8 @@ int64_t lazy_decode(const ColumnLazyFetchInfo& col_lazy_fetch,
   if (type_info.get_compression() != kENCODING_NONE &&
       type_info.get_compression() != kENCODING_DATE_IN_DAYS) {
     CHECK(type_info.get_compression() == kENCODING_FIXED ||
-          type_info.get_compression() == kENCODING_DICT);
+          type_info.get_compression() == kENCODING_DICT ||
+          type_info.get_compression() == kENCODING_PACKED_PIXEL_COORD);
     auto encoding = type_info.get_compression();
     if (encoding == kENCODING_FIXED) {
       encoding = kENCODING_NONE;

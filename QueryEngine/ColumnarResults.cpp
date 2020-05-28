@@ -29,7 +29,8 @@ inline int64_t fixed_encoding_nullable_val(const int64_t val,
                                            const SQLTypeInfo& type_info) {
   if (type_info.get_compression() != kENCODING_NONE) {
     CHECK(type_info.get_compression() == kENCODING_FIXED ||
-          type_info.get_compression() == kENCODING_DICT);
+          type_info.get_compression() == kENCODING_DICT ||
+          type_info.get_compression() == kENCODING_PACKED_PIXEL_COORD);
     auto logical_ti = get_logical_type_info(type_info);
     if (val == inline_int_null_val(logical_ti)) {
       return inline_fixed_encoding_null_val(type_info);

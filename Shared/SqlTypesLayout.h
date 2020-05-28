@@ -101,7 +101,8 @@ inline int64_t inline_int_null_val(const SQLTypeInfo& ti) {
 }
 
 inline int64_t inline_fixed_encoding_null_val(const SQLTypeInfo& ti) {
-  if (ti.get_compression() == kENCODING_NONE) {
+  if (ti.get_compression() == kENCODING_NONE ||
+      ti.get_compression() == kENCODING_PACKED_PIXEL_COORD) {
     return inline_int_null_val(ti);
   }
   if (ti.get_compression() == kENCODING_DATE_IN_DAYS) {
