@@ -1603,11 +1603,9 @@ void fill_entries_for_empty_input(std::vector<TargetInfo>& target_infos,
       const auto& count_distinct_desc =
           query_mem_desc.getCountDistinctDescriptor(target_idx);
       if (count_distinct_desc.impl_type_ == CountDistinctImplType::Bitmap) {
-        auto count_distinct_buffer = static_cast<int8_t*>(
-            checked_calloc(count_distinct_desc.bitmapPaddedSizeBytes(), 1));
         CHECK(row_set_mem_owner);
-        row_set_mem_owner->addCountDistinctBuffer(
-            count_distinct_buffer, count_distinct_desc.bitmapPaddedSizeBytes(), true);
+        auto count_distinct_buffer = row_set_mem_owner->allocateCountDistinctBuffer(
+            count_distinct_desc.bitmapPaddedSizeBytes());
         entry.push_back(reinterpret_cast<int64_t>(count_distinct_buffer));
         continue;
       }
