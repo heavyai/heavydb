@@ -155,6 +155,7 @@ llvm::Value* CodeGenerator::codegenCastBetweenTimestamps(llvm::Value* ts_lv,
   const auto scale =
       DateTimeUtils::get_timestamp_precision_scale(abs(operand_dimen - target_dimen));
   if (operand_dimen < target_dimen) {
+    codegenCastBetweenIntTypesOverflowChecks(ts_lv, operand_ti, target_ti, scale);
     return nullable
                ? cgen_state_->emitCall("mul_int64_t_nullable_lhs",
                                        {ts_lv,

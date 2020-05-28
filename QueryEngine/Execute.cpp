@@ -3083,13 +3083,32 @@ RelAlgExecutionUnit Executor::addDeletedColumn(const RelAlgExecutionUnit& ra_exe
 }
 
 namespace {
-
-int64_t get_hpt_scaled_value(const int64_t& val,
-                             const int32_t& ldim,
-                             const int32_t& rdim) {
+// Note(Wamsi): `get_hpt_overflow_underflow_safe_scaled_value` will return `true` for safe
+// scaled epoch value and `false` for overflow/underflow values as the first argument of
+// return type.
+std::tuple<bool, int64_t, int64_t> get_hpt_overflow_underflow_safe_scaled_values(
+    const int64_t chunk_min,
+    const int64_t chunk_max,
+    const SQLTypeInfo& lhs_type,
+    const SQLTypeInfo& rhs_type) {
+  const int32_t ldim = lhs_type.get_dimension();
+  const int32_t rdim = rhs_type.get_dimension();
   CHECK(ldim != rdim);
-  return ldim > rdim ? val / DateTimeUtils::get_timestamp_precision_scale(ldim - rdim)
-                     : val * DateTimeUtils::get_timestamp_precision_scale(rdim - ldim);
+  const auto scale = DateTimeUtils::get_timestamp_precision_scale(abs(rdim - ldim));
+  if (ldim > rdim) {
+    // LHS type precision is more than RHS col type. No chance of overflow/underflow.
+    return {true, chunk_min / scale, chunk_max / scale};
+  }
+
+  int64_t upscaled_chunk_min;
+  int64_t upscaled_chunk_max;
+
+  if (__builtin_mul_overflow(chunk_min, scale, &upscaled_chunk_min) ||
+      __builtin_mul_overflow(chunk_max, scale, &upscaled_chunk_max)) {
+    return std::make_tuple(false, chunk_min, chunk_max);
+  }
+
+  return std::make_tuple(true, upscaled_chunk_min, upscaled_chunk_max);
 }
 
 }  // namespace
@@ -3161,14 +3180,30 @@ std::pair<bool, int64_t> Executor::skipFragment(
          rhs_const->get_type_info().is_high_precision_timestamp())) {
       // If original timestamp lhs col has different precision,
       // column metadata holds value in original precision
-      // therefore adjust value to match rhs precision
-      const auto lhs_dimen = lhs_col->get_type_info().get_dimension();
-      const auto rhs_dimen = rhs_const->get_type_info().get_dimension();
-      chunk_min = get_hpt_scaled_value(chunk_min, lhs_dimen, rhs_dimen);
-      chunk_max = get_hpt_scaled_value(chunk_max, lhs_dimen, rhs_dimen);
+      // therefore adjust rhs value to match lhs precision
+
+      // Note(Wamsi): We adjust rhs const value instead of lhs value to not
+      // artificially limit the lhs column range. RHS overflow/underflow is already
+      // been validated in `TimeGM::get_overflow_underflow_safe_epoch`.
+      bool is_valid;
+      std::tie(is_valid, chunk_min, chunk_max) =
+          get_hpt_overflow_underflow_safe_scaled_values(
+              chunk_min, chunk_max, lhs_col->get_type_info(), rhs_const->get_type_info());
+      if (!is_valid) {
+        VLOG(4) << "Overflow/Underflow detecting in fragments skipping logic.\nChunk min "
+                   "value: "
+                << std::to_string(chunk_min)
+                << "\nChunk max value: " << std::to_string(chunk_max)
+                << "\nLHS col precision is: "
+                << std::to_string(lhs_col->get_type_info().get_dimension())
+                << "\nRHS precision is: "
+                << std::to_string(rhs_const->get_type_info().get_dimension()) << ".";
+        return {false, -1};
+      }
     }
     CodeGenerator code_generator(this);
     const auto rhs_val = code_generator.codegenIntConst(rhs_const)->getSExtValue();
+
     switch (comp_expr->get_optype()) {
       case kGE:
         if (chunk_max < rhs_val) {

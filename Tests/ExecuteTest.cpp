@@ -11596,6 +11596,62 @@ TEST(Select, TimestampPrecisionFormat) {
   }
 }
 
+TEST(Select, TimestampPrecisionOverflowUnderflow) {
+  for (const auto& dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    ASSERT_EQ(1,
+              v<int64_t>(
+                  run_simple_agg("select count(*) from ts_overflow_underflow where (a >= "
+                                 "TIMESTAMP(0) '2272-10-25 19:21:56' and a "
+                                 "<= TIMESTAMP(0) '2274-10-25 19:21:56');",
+                                 dt)));
+    ASSERT_EQ(1,
+              v<int64_t>(
+                  run_simple_agg("select count(*) from ts_overflow_underflow where (a >= "
+                                 "TIMESTAMP(3) '2272-10-25 19:21:56.000000000' and a "
+                                 "<= TIMESTAMP(3) '2274-10-25 19:21:56.000000000');",
+                                 dt)));
+    ASSERT_EQ(1,
+              v<int64_t>(
+                  run_simple_agg("select count(*) from ts_overflow_underflow where (a >= "
+                                 "TIMESTAMP(6) '2272-10-25 19:21:56.000000000' and a "
+                                 "<= TIMESTAMP(6) '2274-10-25 19:21:56.000000000');",
+                                 dt)));
+    ASSERT_EQ(1,
+              v<int64_t>(
+                  run_simple_agg("select count(*) from ts_overflow_underflow where (b >= "
+                                 "TIMESTAMP(3) '2272-10-25 19:21:56.000000000' and b "
+                                 "<= TIMESTAMP(3) '2274-10-25 19:21:56.000000000');",
+                                 dt)));
+    ASSERT_EQ(2,
+              v<int64_t>(
+                  run_simple_agg("select count(*) from ts_overflow_underflow where (b >= "
+                                 "TIMESTAMP(6) '2262-10-25 19:21:56.000000000' and b "
+                                 "<= TIMESTAMP(6) '2274-10-25 19:21:56.000000000');",
+                                 dt)));
+    ASSERT_THROW(run_simple_agg("select count(*) from ts_overflow_underflow where (b >= "
+                                "TIMESTAMP(9) '2272-10-25 19:21:56.000000000' and b "
+                                "<= TIMESTAMP(9) '2274-10-25 19:21:56.000000000');",
+                                dt),
+                 std::runtime_error);
+    ASSERT_THROW(run_simple_agg("select count(*) from ts_overflow_underflow where (a >= "
+                                "TIMESTAMP(9) '2272-10-25 19:21:56.000000000' "
+                                "and a <= TIMESTAMP(9) '2274-10-25 19:21:56.000000000');",
+                                dt),
+                 std::runtime_error);
+    ASSERT_THROW(run_simple_agg("select count(*) from ts_overflow_underflow where (a >= "
+                                "TIMESTAMP(9) '2252-10-25 19:21:56.000000000' "
+                                "and a <= TIMESTAMP(9) '2261-10-25 19:21:56.000000000');",
+                                dt),
+                 std::runtime_error);
+    ASSERT_THROW(run_simple_agg("select count(*) from ts_overflow_underflow where (b >= "
+                                "TIMESTAMP(9) '2252-10-25 19:21:56.000000000' "
+                                "and b <= TIMESTAMP(9) '2261-10-25 19:21:56.000000000');",
+                                dt),
+                 std::runtime_error);
+  }
+}
+
 namespace {
 
 void validate_timestamp_agg(const ResultSet& row,
@@ -17780,6 +17836,45 @@ int create_and_populate_rounding_table() {
   return 0;
 }
 
+int create_and_populate_datetime_overflow_table() {
+  try {
+    const std::string drop_stmt{"DROP TABLE IF EXISTS ts_overflow_underflow;"};
+    run_ddl_statement(drop_stmt);
+    g_sqlite_comparator.query(drop_stmt);
+
+    const std::string create_stmt{
+        "CREATE TABLE ts_overflow_underflow (a TIMESTAMP(0), b DATE);"};
+    run_ddl_statement(create_stmt);
+    g_sqlite_comparator.query(create_stmt);
+
+    const std::string insert_valid_1{
+        "INSERT INTO ts_overflow_underflow VALUES('2273-01-01 23:12:12', '2273-01-01');"};
+    const std::string insert_valid_2{
+        "INSERT INTO ts_overflow_underflow VALUES('2263-01-01 00:00:00', '2263-01-01');"};
+    const std::string insert_valid_3{
+        "INSERT INTO ts_overflow_underflow VALUES('09/21/1676 00:12:43', '09/21/1676');"};
+    const std::string insert_valid_4{
+        "INSERT INTO ts_overflow_underflow VALUES('09/21/1677 00:00:43', '09/21/1677');"};
+    const std::string insert_null{
+        "INSERT INTO ts_overflow_underflow VALUES(null, null);"};
+
+    run_multiple_agg(insert_valid_1, ExecutorDeviceType::CPU);
+    run_multiple_agg(insert_valid_2, ExecutorDeviceType::CPU);
+    run_multiple_agg(insert_valid_3, ExecutorDeviceType::CPU);
+    run_multiple_agg(insert_valid_4, ExecutorDeviceType::CPU);
+    run_multiple_agg(insert_null, ExecutorDeviceType::CPU);
+    g_sqlite_comparator.query(insert_valid_1);
+    g_sqlite_comparator.query(insert_valid_2);
+    g_sqlite_comparator.query(insert_valid_3);
+    g_sqlite_comparator.query(insert_valid_4);
+    g_sqlite_comparator.query(insert_null);
+  } catch (...) {
+    LOG(ERROR) << "Failed to (re-)create table 'ts_overflow_underflow'";
+    return -EEXIST;
+  }
+  return 0;
+}
+
 int create_and_populate_tables(const bool use_temporary_tables,
                                const bool with_delete_support = true) {
   try {
@@ -18707,6 +18802,11 @@ int create_and_populate_tables(const bool use_temporary_tables,
   int err = create_and_populate_window_func_table();
   if (err) {
     return err;
+  }
+
+  int ts_overflow_result = create_and_populate_datetime_overflow_table();
+  if (ts_overflow_result) {
+    return ts_overflow_result;
   }
 
   return 0;
