@@ -57,6 +57,12 @@ class Arena : public folly::Arena<::SysAllocator<void>> {
                  size_t size_limit = kNoSizeLimit,
                  size_t max_align = kDefaultMaxAlign)
       : folly::Arena<SysAllocator<void>>({}, min_block_size, size_limit, max_align) {}
+
+  void* allocateAndZero(const size_t size) {
+    auto ret = allocate(size);
+    std::memset(ret, 0, size);
+    return ret;
+  }
 };
 
 template <>
@@ -88,6 +94,12 @@ class Arena {
   void* allocate(size_t num_bytes) {
     auto ret = allocator_.allocate(num_bytes);
     allocations_.push_back(ret);
+    return ret;
+  }
+
+  void* allocateAndZero(const size_t size) {
+    auto ret = allocate(size);
+    std::memset(ret, 0, size);
     return ret;
   }
 

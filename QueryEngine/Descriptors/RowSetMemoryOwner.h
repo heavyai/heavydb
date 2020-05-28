@@ -47,12 +47,21 @@ class RowSetMemoryOwner : boost::noncopyable {
     return reinterpret_cast<int8_t*>(allocator_->allocate(num_bytes));
   }
 
+  int8_t* allocateCountDistinctBuffer(const size_t num_bytes) {
+    CHECK(allocator_);
+    std::lock_guard<std::mutex> lock(state_mutex_);
+    auto ret = reinterpret_cast<int8_t*>(allocator_->allocateAndZero(num_bytes));
+    count_distinct_bitmaps_.emplace_back(
+        CountDistinctBitmapBuffer{ret, num_bytes, /*physical_buffer=*/true});
+    return ret;
+  }
+
   void addCountDistinctBuffer(int8_t* count_distinct_buffer,
                               const size_t bytes,
-                              const bool system_allocated) {
+                              const bool physical_buffer) {
     std::lock_guard<std::mutex> lock(state_mutex_);
     count_distinct_bitmaps_.emplace_back(
-        CountDistinctBitmapBuffer{count_distinct_buffer, bytes, system_allocated});
+        CountDistinctBitmapBuffer{count_distinct_buffer, bytes, physical_buffer});
   }
 
   void addCountDistinctSet(std::set<int64_t>* count_distinct_set) {
@@ -134,11 +143,6 @@ class RowSetMemoryOwner : boost::noncopyable {
   }
 
   ~RowSetMemoryOwner() {
-    for (const auto& count_distinct_buffer : count_distinct_bitmaps_) {
-      if (count_distinct_buffer.system_allocated) {
-        free(count_distinct_buffer.ptr);
-      }
-    }
     for (auto count_distinct_set : count_distinct_sets_) {
       delete count_distinct_set;
     }
@@ -168,7 +172,7 @@ class RowSetMemoryOwner : boost::noncopyable {
   struct CountDistinctBitmapBuffer {
     int8_t* ptr;
     const size_t size;
-    const bool system_allocated;
+    const bool physical_buffer;
   };
 
   std::vector<CountDistinctBitmapBuffer> count_distinct_bitmaps_;

@@ -2011,10 +2011,7 @@ TargetValue ResultSet::getTargetValueFromBufferRowwise(
                                           ? count_distinct_desc.bitmapSizeBytes()
                                           : count_distinct_desc.bitmapPaddedSizeBytes();
           auto count_distinct_buffer =
-              static_cast<int8_t*>(checked_malloc(bitmap_byte_sz));
-          memset(count_distinct_buffer, 0, bitmap_byte_sz);
-          row_set_mem_owner_->addCountDistinctBuffer(
-              count_distinct_buffer, bitmap_byte_sz, true);
+              row_set_mem_owner_->allocateCountDistinctBuffer(bitmap_byte_sz);
           *count_distinct_ptr_ptr = reinterpret_cast<int64_t>(count_distinct_buffer);
         }
       }

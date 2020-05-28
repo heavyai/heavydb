@@ -590,11 +590,8 @@ void QueryMemoryInitializer::allocateCountDistinctGpuMem(
   device_allocator_->zeroDeviceMem(reinterpret_cast<int8_t*>(count_distinct_bitmap_mem_),
                                    count_distinct_bitmap_mem_bytes_);
 
-  // TODO(adb): use allocator
   count_distinct_bitmap_crt_ptr_ = count_distinct_bitmap_host_mem_ =
-      static_cast<int8_t*>(checked_malloc(count_distinct_bitmap_mem_bytes_));
-  row_set_mem_owner_->addCountDistinctBuffer(
-      count_distinct_bitmap_host_mem_, count_distinct_bitmap_mem_bytes_, true);
+      row_set_mem_owner_->allocate(count_distinct_bitmap_mem_bytes_);
 }
 
 // deferred is true for group by queries; initGroups will allocate a bitmap
@@ -650,12 +647,12 @@ int64_t QueryMemoryInitializer::allocateCountDistinctBitmap(const size_t bitmap_
     CHECK(count_distinct_bitmap_crt_ptr_);
     auto ptr = count_distinct_bitmap_crt_ptr_;
     count_distinct_bitmap_crt_ptr_ += bitmap_byte_sz;
-    row_set_mem_owner_->addCountDistinctBuffer(ptr, bitmap_byte_sz, false);
+    row_set_mem_owner_->addCountDistinctBuffer(
+        ptr, bitmap_byte_sz, /*physial_buffer=*/false);
     return reinterpret_cast<int64_t>(ptr);
   }
-  auto count_distinct_buffer = static_cast<int8_t*>(checked_calloc(bitmap_byte_sz, 1));
-  row_set_mem_owner_->addCountDistinctBuffer(count_distinct_buffer, bitmap_byte_sz, true);
-  return reinterpret_cast<int64_t>(count_distinct_buffer);
+  return reinterpret_cast<int64_t>(
+      row_set_mem_owner_->allocateCountDistinctBuffer(bitmap_byte_sz));
 }
 
 int64_t QueryMemoryInitializer::allocateCountDistinctSet() {
