@@ -27,6 +27,7 @@
 #include "Fragmenter/FragmentDefaultValues.h"
 #include "Parser/ReservedKeywords.h"
 #include "Shared/mapd_glob.h"
+#include "Shared/misc.h"
 
 bool g_use_date_in_days_default_encoding{true};
 
@@ -573,21 +574,10 @@ std::string get_malformed_config_error_message(const std::string& config_key) {
 }
 
 void validate_expanded_file_path(const std::string& file_path,
-                                 const rapidjson::Value& whitelisted_root_paths,
-                                 const std::string& config_key) {
+                                 const std::vector<std::string>& whitelisted_root_paths) {
   boost::filesystem::path canonical_file_path = boost::filesystem::canonical(file_path);
-  for (const auto& root_path : whitelisted_root_paths.GetArray()) {
-    if (!root_path.IsString()) {
-      LOG(ERROR) << get_malformed_config_error_message(config_key);
-      throw std::runtime_error{"Error reading server configuration file."};
-    }
-    if (!boost::filesystem::exists(root_path.GetString())) {
-      LOG(ERROR) << ("Whitelisted root path \"" + std::string{root_path.GetString()} +
-                     "\" does not exist.");
-      throw std::runtime_error{"Error reading server configuration file."};
-    }
-    const auto& canonical_root_path = boost::filesystem::canonical(root_path.GetString());
-    if (boost::istarts_with(canonical_file_path.string(), canonical_root_path.string())) {
+  for (const auto& root_path : whitelisted_root_paths) {
+    if (boost::istarts_with(canonical_file_path.string(), root_path)) {
       return;
     }
   }
@@ -622,9 +612,8 @@ std::vector<std::string> get_expanded_file_paths(
   return file_paths;
 }
 
-void validate_whitelisted_file_path(const std::string& file_path,
-                                    const std::string& server_config_path,
-                                    const DataTransferType data_transfer_type) {
+void validate_allowed_file_path(const std::string& file_path,
+                                const DataTransferType data_transfer_type) {
   const auto& expanded_file_paths =
       get_expanded_file_paths(file_path, data_transfer_type);
   for (const auto& path : expanded_file_paths) {
@@ -633,48 +622,94 @@ void validate_whitelisted_file_path(const std::string& file_path,
                                "\" is not allowed."};
     }
   }
+  FilePathWhitelist::validateWhitelistedFilePath(expanded_file_paths, data_transfer_type);
+}
 
+void set_whitelisted_paths(const std::string& config_key,
+                           const std::string& config_value,
+                           std::vector<std::string>& whitelisted_paths) {
+  CHECK(whitelisted_paths.empty());
+  rapidjson::Document whitelisted_root_paths;
+  whitelisted_root_paths.Parse(config_value);
+  if (!whitelisted_root_paths.IsArray()) {
+    throw std::runtime_error{get_malformed_config_error_message(config_key)};
+  }
+  for (const auto& root_path : whitelisted_root_paths.GetArray()) {
+    if (!root_path.IsString()) {
+      throw std::runtime_error{get_malformed_config_error_message(config_key)};
+    }
+    if (!boost::filesystem::exists(root_path.GetString())) {
+      throw std::runtime_error{"Whitelisted root path \"" +
+                               std::string{root_path.GetString()} + "\" does not exist."};
+    }
+    whitelisted_paths.emplace_back(
+        boost::filesystem::canonical(root_path.GetString()).string());
+  }
+  LOG(INFO) << config_key << " " << shared::printContainer(whitelisted_paths);
+}
+
+void FilePathWhitelist::initializeFromConfigFile(const std::string& server_config_path) {
   if (server_config_path.empty()) {
     return;
   }
 
   if (!boost::filesystem::exists(server_config_path)) {
-    LOG(ERROR) << ("Configuration file at \"" + server_config_path +
-                   "\" does not exist.");
-    throw std::runtime_error{"Error reading server configuration file."};
+    throw std::runtime_error{"Configuration file at \"" + server_config_path +
+                             "\" does not exist."};
   }
 
-  std::string config_value;
-  std::string config_key;
-  if (data_transfer_type == DataTransferType::IMPORT) {
-    config_key = "allowed-import-paths";
-  } else if (data_transfer_type == DataTransferType::EXPORT) {
-    config_key = "allowed-export-paths";
-  } else {
-    UNREACHABLE();
-  }
+  std::string import_config_key{"allowed-import-paths"};
+  std::string export_config_key{"allowed-export-paths"};
+  std::string import_config_value, export_config_value;
 
   namespace po = boost::program_options;
   po::options_description desc{};
-  desc.add_options()(config_key.c_str(), po::value<std::string>(&config_value));
+  desc.add_options()(import_config_key.c_str(),
+                     po::value<std::string>(&import_config_value));
+  desc.add_options()(export_config_key.c_str(),
+                     po::value<std::string>(&export_config_value));
   po::variables_map vm;
   po::store(po::parse_config_file<char>(server_config_path.c_str(), desc, true), vm);
   po::notify(vm);
-  if (!vm.count(config_key)) {
+  if (vm.count(import_config_key)) {
+    set_whitelisted_paths(
+        import_config_key, import_config_value, whitelisted_import_paths_);
+  }
+  if (vm.count(export_config_key)) {
+    set_whitelisted_paths(
+        export_config_key, export_config_value, whitelisted_export_paths_);
+  }
+}
+
+void FilePathWhitelist::validateWhitelistedFilePath(
+    const std::vector<std::string>& expanded_file_paths,
+    const DataTransferType data_transfer_type) {
+  // Skip validation if no whitelist configuration is provided.
+  if ((data_transfer_type == DataTransferType::IMPORT &&
+       whitelisted_import_paths_.empty()) ||
+      (data_transfer_type == DataTransferType::EXPORT &&
+       whitelisted_export_paths_.empty())) {
     return;
   }
 
-  rapidjson::Document whitelisted_root_paths;
-  whitelisted_root_paths.Parse(config_value);
-  if (!whitelisted_root_paths.IsArray()) {
-    LOG(ERROR) << get_malformed_config_error_message(config_key);
-    throw std::runtime_error{"Error reading server configuration file."};
-  }
-
   for (const auto& path : expanded_file_paths) {
-    validate_expanded_file_path(path, whitelisted_root_paths, config_key);
+    if (data_transfer_type == DataTransferType::IMPORT) {
+      validate_expanded_file_path(path, whitelisted_import_paths_);
+    } else if (data_transfer_type == DataTransferType::EXPORT) {
+      validate_expanded_file_path(path, whitelisted_export_paths_);
+    } else {
+      UNREACHABLE();
+    }
   }
 }
+
+void FilePathWhitelist::clear() {
+  whitelisted_import_paths_.clear();
+  whitelisted_export_paths_.clear();
+}
+
+std::vector<std::string> FilePathWhitelist::whitelisted_import_paths_{};
+std::vector<std::string> FilePathWhitelist::whitelisted_export_paths_{};
 
 void FilePathBlacklist::addToBlacklist(const std::string& path) {
   CHECK(!path.empty());

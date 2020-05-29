@@ -114,8 +114,7 @@ class CreateForeignTableCommand : public DdlCommand {
  public:
   CreateForeignTableCommand(
       const rapidjson::Value& ddl_payload,
-      std::shared_ptr<Catalog_Namespace::SessionInfo const> session_ptr,
-      const std::string& server_config_path);
+      std::shared_ptr<Catalog_Namespace::SessionInfo const> session_ptr);
 
   void execute(TQueryResult& _return) override;
 
@@ -124,8 +123,6 @@ class CreateForeignTableCommand : public DdlCommand {
                        TableDescriptor& td,
                        const size_t column_count);
   void setColumnDetails(std::list<ColumnDescriptor>& columns);
-
-  std::string server_config_path_;
 };
 
 class DropForeignTableCommand : public DdlCommand {
@@ -172,8 +169,7 @@ class RefreshForeignTablesCommand : public DdlCommand {
 class DdlCommandExecutor {
  public:
   DdlCommandExecutor(const std::string& ddl_statement,
-                     std::shared_ptr<Catalog_Namespace::SessionInfo const> session_ptr,
-                     const std::string& server_config_path);
+                     std::shared_ptr<Catalog_Namespace::SessionInfo const> session_ptr);
 
   /**
    * Parses given JSON string and routes resulting payload to appropriate DDL command
@@ -191,5 +187,4 @@ class DdlCommandExecutor {
  private:
   rapidjson::Document ddl_query_;
   std::shared_ptr<Catalog_Namespace::SessionInfo const> session_ptr_;
-  std::string server_config_path_;
 };

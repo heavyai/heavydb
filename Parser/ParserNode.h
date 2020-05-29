@@ -1463,10 +1463,6 @@ class CopyTableStmt : public DDLStmt {
     _was_geo_copy_from = false;
   }
 
-  void setServerConfigPath(const std::string& server_config_path) {
-    server_config_path_ = server_config_path;
-  }
-
  private:
   std::unique_ptr<std::string> table;
   std::unique_ptr<std::string> file_pattern;
@@ -1477,7 +1473,6 @@ class CopyTableStmt : public DDLStmt {
   std::string _geo_copy_from_file_name;
   Importer_NS::CopyParams _geo_copy_from_copy_params;
   std::string _geo_copy_from_partitions;
-  std::string server_config_path_;
 };
 
 /*
@@ -1820,17 +1815,12 @@ class ExportQueryStmt : public DDLStmt {
   void execute(const Catalog_Namespace::SessionInfo& session) override;
   const std::string get_select_stmt() const { return *select_stmt; }
 
-  void setServerConfigPath(const std::string& server_config_path) {
-    server_config_path_ = server_config_path;
-  }
-
   DistributedConnector* leafs_connector_ = nullptr;
 
  private:
   std::unique_ptr<std::string> select_stmt;
   std::unique_ptr<std::string> file_path;
   std::list<std::unique_ptr<NameValueAssign>> options;
-  std::string server_config_path_;
 };
 
 /*

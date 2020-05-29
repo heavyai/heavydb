@@ -35,9 +35,6 @@ extern bool g_enable_fsi;
 
 class FilePathWhitelistTest : public DBHandlerTestFixture,
                               public testing::WithParamInterface<std::string> {
- public:
-  inline static const std::string CONFIG_FILE_PATH{"./file_path_whitelist_test.conf"};
-
  protected:
   static void SetUpTestSuite() {
     temp_file_path_ = "/tmp/" + boost::filesystem::unique_path().string();
@@ -59,6 +56,7 @@ class FilePathWhitelistTest : public DBHandlerTestFixture,
     sql("DROP TABLE IF EXISTS test_table;");
     sql("DROP FOREIGN TABLE IF EXISTS test_foreign_table;");
     DBHandlerTestFixture::TearDown();
+    ddl_utils::FilePathWhitelist::clear();
     ddl_utils::FilePathBlacklist::clear();
   }
 
@@ -101,17 +99,41 @@ class FilePathWhitelistTest : public DBHandlerTestFixture,
     return file_path;
   }
 
+  std::string getMalformedConfigErrorMessage() {
+    std::string config_key;
+    if (GetParam() == "CopyTo") {
+      config_key = "allowed-export-paths";
+    } else {
+      config_key = "allowed-import-paths";
+    }
+    return "Configuration value for \"" + config_key +
+           "\" is malformed. Value should be a list of paths with format: [ "
+           "\"root-path-1\", \"root-path-2\", ... ]";
+  }
+
+  void initializeWhitelistAndAssertException(const std::string& error_message) {
+    try {
+      ddl_utils::FilePathWhitelist::initializeFromConfigFile(CONFIG_FILE_PATH);
+      FAIL() << "An exception should have been thrown for this test case.";
+    } catch (const std::runtime_error& e) {
+      ASSERT_EQ(error_message, e.what());
+    }
+  }
+
+  inline static const std::string CONFIG_FILE_PATH{"./file_path_whitelist_test.conf"};
   inline static std::string temp_file_path_;
 };
 
 TEST_P(FilePathWhitelistTest, WhitelistedPath) {
   setServerConfig("test_config.conf");
+  ddl_utils::FilePathWhitelist::initializeFromConfigFile(CONFIG_FILE_PATH);
   std::string file_path = getWhitelistedFilePath();
   EXPECT_NO_THROW(sql(getQuery(file_path)));
 }
 
 TEST_P(FilePathWhitelistTest, NonWhitelistedPath) {
   setServerConfig("test_config.conf");
+  ddl_utils::FilePathWhitelist::initializeFromConfigFile(CONFIG_FILE_PATH);
   std::string file_path =
       boost::filesystem::canonical(
           "../../Tests/Import/datafiles/with_quoted_fields_doublequotes.csv")
@@ -122,15 +144,25 @@ TEST_P(FilePathWhitelistTest, NonWhitelistedPath) {
 }
 
 TEST_P(FilePathWhitelistTest, InvalidConfigValue) {
-  setServerConfig("malformed_config_1.conf");
-  queryAndAssertException(getQuery(getTestCsvFilePath()),
-                          "Exception: Error reading server configuration file.");
+  std::string config_path;
+  if (GetParam() == "CopyTo") {
+    config_path = "malformed_export_config_1.conf";
+  } else {
+    config_path = "malformed_import_config_1.conf";
+  }
+  setServerConfig(config_path);
+  initializeWhitelistAndAssertException(getMalformedConfigErrorMessage());
 }
 
 TEST_P(FilePathWhitelistTest, InvalidConfigListValue) {
-  setServerConfig("malformed_config_2.conf");
-  queryAndAssertException(getQuery(getTestCsvFilePath()),
-                          "Exception: Error reading server configuration file.");
+  std::string config_path;
+  if (GetParam() == "CopyTo") {
+    config_path = "malformed_export_config_2.conf";
+  } else {
+    config_path = "malformed_import_config_2.conf";
+  }
+  setServerConfig(config_path);
+  initializeWhitelistAndAssertException(getMalformedConfigErrorMessage());
 }
 
 TEST_P(FilePathWhitelistTest, NonExistentFilePath) {
@@ -142,14 +174,14 @@ TEST_P(FilePathWhitelistTest, NonExistentFilePath) {
 
 TEST_P(FilePathWhitelistTest, NonExistentWhitelistedRootPath) {
   setServerConfig("non_existent_root_path.conf");
-  queryAndAssertException(getQuery(getTestCsvFilePath()),
-                          "Exception: Error reading server configuration file.");
+  initializeWhitelistAndAssertException(
+      "Whitelisted root path \"./nonexistent_path\" does not exist.");
 }
 
 TEST_P(FilePathWhitelistTest, NonExistentConfigPath) {
   boost::filesystem::remove(CONFIG_FILE_PATH);
-  queryAndAssertException(getQuery(getTestCsvFilePath()),
-                          "Exception: Error reading server configuration file.");
+  initializeWhitelistAndAssertException("Configuration file at \"" + CONFIG_FILE_PATH +
+                                        "\" does not exist.");
 }
 
 TEST_P(FilePathWhitelistTest, BlacklistedPath) {
@@ -171,9 +203,6 @@ int main(int argc, char** argv) {
   TestHelpers::init_logger_stderr_only(argc, argv);
   testing::InitGoogleTest(&argc, argv);
   DBHandlerTestFixture::initTestArgs(argc, argv);
-  SystemParameters system_parameters{};
-  system_parameters.config_file = FilePathWhitelistTest::CONFIG_FILE_PATH;
-  DBHandlerTestFixture::initTestArgs(system_parameters);
 
   int err{0};
   try {

@@ -26,6 +26,7 @@
 #include "QueryEngine/GroupByAndAggregate.h"
 #include "Shared/Compressor.h"
 #include "StringDictionary/StringDictionary.h"
+#include "Utils/DdlUtils.h"
 
 const std::string CommandLineOptions::nodeIds_token = {"node_id"};
 
@@ -530,7 +531,11 @@ std::stringstream sanitize_config_file(std::ifstream& in) {
   std::stringstream ss;
   std::string line;
   while (std::getline(in, line)) {
-    ss << line << "\n";
+    // Skip config file only options
+    if (!boost::starts_with(line, "allowed-import-paths") &&
+        !boost::starts_with(line, "allowed-export-paths")) {
+      ss << line << "\n";
+    }
     if (line == "[web]") {
       break;
     }
@@ -636,6 +641,16 @@ void CommandLineOptions::validate() {
   LOG(INFO) << " Maximum Idle session duration " << idle_session_duration;
 
   LOG(INFO) << " Maximum active session duration " << max_session_duration;
+
+  ddl_utils::FilePathWhitelist::initializeFromConfigFile(system_parameters.config_file);
+
+  ddl_utils::FilePathBlacklist::addToBlacklist(base_path + "/mapd_catalogs");
+  ddl_utils::FilePathBlacklist::addToBlacklist(base_path + "/mapd_data");
+  ddl_utils::FilePathBlacklist::addToBlacklist(base_path + "/mapd_log");
+  if (!license_path.empty()) {
+    ddl_utils::FilePathBlacklist::addToBlacklist(license_path);
+  }
+  // TODO: add encryption cert path
 }
 
 boost::optional<int> CommandLineOptions::parse_command_line(

@@ -162,10 +162,6 @@ class DBHandlerTestFixture : public testing::Test {
     db_leaves_ = leaf_servers;
   }
 
-  static void initTestArgs(const SystemParameters& system_parameters) {
-    system_parameters_ = system_parameters;
-  }
-
  protected:
   virtual void SetUp() override {
     createDBHandler();

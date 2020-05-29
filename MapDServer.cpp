@@ -62,7 +62,6 @@
 #include "Shared/file_delete.h"
 #include "Shared/mapd_shared_ptr.h"
 #include "Shared/scope.h"
-#include "Utils/DdlUtils.h"
 
 using namespace ::apache::thrift;
 using namespace ::apache::thrift::concurrency;
@@ -81,7 +80,7 @@ TThreadedServer* g_thrift_buf_server{nullptr};
 
 mapd::shared_ptr<DBHandler> g_warmup_handler =
     0;  // global "g_warmup_handler" needed to avoid circular dependency
-        // between "DBHandler" & function "run_warmup_queries"
+// between "DBHandler" & function "run_warmup_queries"
 mapd::shared_ptr<DBHandler> g_mapd_handler = 0;
 std::once_flag g_shutdown_once_flag;
 

@@ -36,8 +36,7 @@ class CsvDataWrapper : public ForeignDataWrapper {
       const ChunkKey& chunk_key_prefix,
       ChunkMetadataVector& chunk_metadata_vector) override;
 
-  static void validateOptions(const ForeignTable* foreign_table,
-                              const std::string& server_config_path);
+  static void validateOptions(const ForeignTable* foreign_table);
 
  private:
   CsvDataWrapper(const ForeignTable* foreign_table);
@@ -48,7 +47,7 @@ class CsvDataWrapper : public ForeignDataWrapper {
   bool prefixMatch(const ChunkKey& prefix, const ChunkKey& checked);
   std::string getFilePath();
   Importer_NS::CopyParams validateAndGetCopyParams();
-  void validateFilePath(const std::string& server_config_path);
+  void validateFilePath();
 
   /**
    * Validates that the value of given table option has the expected number of characters.

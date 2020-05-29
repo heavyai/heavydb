@@ -33,8 +33,7 @@ CsvDataWrapper::CsvDataWrapper(const int db_id, const ForeignTable* foreign_tabl
 CsvDataWrapper::CsvDataWrapper(const ForeignTable* foreign_table)
     : db_id_(-1), foreign_table_(foreign_table) {}
 
-void CsvDataWrapper::validateOptions(const ForeignTable* foreign_table,
-                                     const std::string& server_config_path) {
+void CsvDataWrapper::validateOptions(const ForeignTable* foreign_table) {
   for (const auto& entry : foreign_table->options) {
     const auto& table_options = foreign_table->supported_options;
     if (std::find(table_options.begin(), table_options.end(), entry.first) ==
@@ -46,7 +45,7 @@ void CsvDataWrapper::validateOptions(const ForeignTable* foreign_table,
   }
   CsvDataWrapper data_wrapper{foreign_table};
   data_wrapper.validateAndGetCopyParams();
-  data_wrapper.validateFilePath(server_config_path);
+  data_wrapper.validateFilePath();
 }
 
 void CsvDataWrapper::initializeChunkBuffers(const int fragment_index) {
@@ -112,9 +111,9 @@ std::string CsvDataWrapper::getFilePath() {
                             separator);
 }
 
-void CsvDataWrapper::validateFilePath(const std::string& server_config_path) {
-  ddl_utils::validate_whitelisted_file_path(
-      getFilePath(), server_config_path, ddl_utils::DataTransferType::IMPORT);
+void CsvDataWrapper::validateFilePath() {
+  ddl_utils::validate_allowed_file_path(getFilePath(),
+                                        ddl_utils::DataTransferType::IMPORT);
 }
 
 Importer_NS::CopyParams CsvDataWrapper::validateAndGetCopyParams() {
