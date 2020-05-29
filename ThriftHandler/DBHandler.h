@@ -283,9 +283,10 @@ class DBHandler : public OmniSciIf {
                      const int32_t device_id) override;
   void interrupt(const TSessionId& query_session,
                  const TSessionId& interrupt_session) override;
-  void sql_validate(TTableDescriptor& _return,
+  void sql_validate(TRowDescriptor& _return,
                     const TSessionId& session,
                     const std::string& query) override;
+
   void set_execution_mode(const TSessionId& session,
                           const TExecuteMode::type mode) override;
   void render_vega(TRenderResult& _return,
@@ -607,8 +608,7 @@ class DBHandler : public OmniSciIf {
   void execute_distributed_copy_statement(
       Parser::CopyTableStmt*,
       const Catalog_Namespace::SessionInfo& session_info);
-
-  void validate_rel_alg(TTableDescriptor& _return, QueryStateProxy);
+  void validate_rel_alg(TRowDescriptor& _return, QueryStateProxy);
 
   std::vector<PushedDownFilterInfo> execute_rel_alg(
       TQueryResult& _return,
