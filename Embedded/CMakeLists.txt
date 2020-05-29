@@ -1,8 +1,8 @@
 add_library(DBEngine SHARED DBETypes.cpp DBEngine.cpp)
 
-target_link_libraries(DBEngine QueryRunner QueryEngine DataMgr ${Arrow_LIBRARIES} ${TBB_LIBS})
+target_link_libraries(DBEngine QueryRunner QueryEngine DataMgr ${Arrow_LIBRARIES} ${Boost_LIBRARIES} ${CMAKE_DL_LIBS} ${TBB_LIBS})
 
-set(INSTALL_PATH "${CMAKE_INSTALL_PREFIX}/lib")
+set(INSTALL_PATH "${CMAKE_INSTALL_PREFIX}")
 install(TARGETS DBEngine DESTINATION ${INSTALL_PATH})
 
 find_program(PYTHON "python3")
@@ -22,17 +22,14 @@ IF(PYTHON)
         COMMAND ${PYTHON} ${SETUP_PY} build_ext
         DEPENDS DBEngine ${SETUP_PY})
 
-    add_custom_target(Python DEPENDS ${OUTPUT})
-    add_custom_target(ALL DEPENDS Python)
+    add_custom_target(Python ALL DEPENDS ${OUTPUT})
 
-    install(CODE "execute_process(COMMAND cd ${CMAKE_CURRENT_BINARY_DIR} &&
-                pip install . \
-                --install-option --install-headers=${INSTALL_PATH} \
-                --install-option --install-base=${INSTALL_PATH} \
-                --install-option --install-platlib=${INSTALL_PATH} \
-                --install-option --install-scripts=${INSTALL_PATH} \
-                --install-option --install-data=${INSTALL_PATH} \
-                --install-option --install-purelib=${INSTALL_PATH})")
+    install(CODE execute_process("COMMAND cd ${CMAKE_CURRENT_BINARY_DIR} &&
+                pip install --install-option --install-base=${INSTALL_PATH} ."))
+                #--install-option --install-platlib=${INSTALL_PATH} \
+                #--install-option --install-scripts=${INSTALL_PATH} \
+                #--install-option --install-data=${INSTALL_PATH} \
+                #--install-option --install-purelib=${INSTALL_PATH}"))
 
 ENDIF(PYTHON)
 

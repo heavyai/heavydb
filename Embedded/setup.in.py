@@ -18,7 +18,7 @@ dbe = Extension("dbe",
                 ],
                 library_dirs=pa.get_library_dirs() + ['.'],
                 runtime_library_dirs=pa.get_library_dirs() + ['$ORIGIN/../../'], # lib/python3.*/site-packages/../../
-                libraries=pa.get_libraries() + ['DBEngine'],
+                libraries=pa.get_libraries() + ['DBEngine', 'boost_system'],
                 extra_compile_args=['-std=c++17'],
               )
 # Try uncommenting the following line on Linux
