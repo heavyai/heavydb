@@ -7,25 +7,32 @@ install(TARGETS DBEngine DESTINATION ${INSTALL_PATH})
 
 find_program(PYTHON "python3")
 IF(PYTHON)
-    set(SETUP_PY_IN  "${CMAKE_CURRENT_SOURCE_DIR}/setup.py")
-    set(SETUP_PY     "${CMAKE_BINARY_DIR}/setup.py")
-    set(OUTPUT       "${CMAKE_BINARY_DIR}/timestamp")
+    set(SETUP_PY    "${CMAKE_CURRENT_BINARY_DIR}/setup.py")
+    set(OUTPUT      "${CMAKE_CURRENT_BINARY_DIR}/dbe.cpp")
 
-    configure_file(${SETUP_PY_IN} ${SETUP_PY})
+    configure_file("${CMAKE_CURRENT_SOURCE_DIR}/setup.in.py" "${CMAKE_CURRENT_BINARY_DIR}/setup.py.in" @ONLY)
+    # cannot be done in one step, splitting in configure_file and file commands
+    file(GENERATE OUTPUT "${SETUP_PY}" INPUT "${CMAKE_CURRENT_BINARY_DIR}/setup.py.in")
+    configure_file(${CMAKE_CURRENT_SOURCE_DIR}/DBEngine.h ${CMAKE_CURRENT_BINARY_DIR}/ COPYONLY)
+    configure_file(${CMAKE_CURRENT_SOURCE_DIR}/DBEngine.pxd ${CMAKE_CURRENT_BINARY_DIR}/ COPYONLY)
+    configure_file(${CMAKE_CURRENT_SOURCE_DIR}/dbe.pyx ${CMAKE_CURRENT_BINARY_DIR}/ COPYONLY)
 
     add_custom_command(OUTPUT ${OUTPUT}
-                       COMMAND ${PYTHON} ${SETUP_PY} build_ext --inplace
-                       COMMAND ${CMAKE_COMMAND} -E touch ${OUTPUT}
-                       DEPENDS DBEngine)
+        COMMAND cd ${CMAKE_CURRENT_BINARY_DIR}
+        COMMAND ${PYTHON} ${SETUP_PY} build_ext
+        DEPENDS DBEngine ${SETUP_PY})
 
-    add_custom_target(target ALL DEPENDS ${OUTPUT})
+    add_custom_target(Python DEPENDS ${OUTPUT})
+    add_custom_target(ALL DEPENDS Python)
 
-    install(CODE "execute_process(COMMAND ${PYTHON} ${SETUP_PY} install -f \
-        --install-headers=${INSTALL_PATH} \
-        --install-base=${INSTALL_PATH} \
-        --install-platlib=${INSTALL_PATH} \
-        --install-scripts=${INSTALL_PATH} \
-        --install-data=${INSTALL_PATH} \
-        --install-purelib=${INSTALL_PATH})")
+    install(CODE "execute_process(COMMAND cd ${CMAKE_CURRENT_BINARY_DIR} &&
+                pip install . \
+                --install-option --install-headers=${INSTALL_PATH} \
+                --install-option --install-base=${INSTALL_PATH} \
+                --install-option --install-platlib=${INSTALL_PATH} \
+                --install-option --install-scripts=${INSTALL_PATH} \
+                --install-option --install-data=${INSTALL_PATH} \
+                --install-option --install-purelib=${INSTALL_PATH})")
+
 ENDIF(PYTHON)
 
