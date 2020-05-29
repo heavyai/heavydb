@@ -97,6 +97,10 @@ void Executor::executeUpdate(const RelAlgExecutionUnit& ra_exe_unit_in,
 
     const int64_t crt_fragment_tuple_count =
         outer_fragments[fragment_index].getNumTuples();
+    if (crt_fragment_tuple_count == 0) {
+      // nothing to update
+      continue;
+    }
     int64_t max_groups_buffer_entry_guess = crt_fragment_tuple_count;
     if (is_agg) {
       max_groups_buffer_entry_guess =
