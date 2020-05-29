@@ -1165,7 +1165,7 @@ std::string DBHandler::apply_copy_to_shim(const std::string& query_str) {
   return result;
 }
 
-void DBHandler::sql_validate(TTableDescriptor& _return,
+void DBHandler::sql_validate(TRowDescriptor& _return,
                              const TSessionId& session,
                              const std::string& query_str) {
   auto stdlog = STDLOG(get_session_ptr(session));
@@ -1371,7 +1371,7 @@ std::unordered_set<std::string> DBHandler::get_uc_compatible_table_names_by_colu
   return compatible_table_names_by_column;
 }
 
-void DBHandler::validate_rel_alg(TTableDescriptor& _return,
+void DBHandler::validate_rel_alg(TRowDescriptor& _return,
                                  QueryStateProxy query_state_proxy) {
   try {
     const auto execute_read_lock = mapd_shared_lock<mapd_shared_mutex>(
@@ -1401,13 +1401,10 @@ void DBHandler::validate_rel_alg(TTableDescriptor& _return,
                                /*just_validate=*/true,
                                /*find_filter_push_down_candidates=*/false,
                                ExplainInfo::defaults());
-    const auto& row_desc = fixup_row_descriptor(
+
+    _return = fixup_row_descriptor(
         result.row_set.row_desc,
         query_state_proxy.getQueryState().getConstSessionInfo()->getCatalog());
-    for (const auto& col_desc : row_desc) {
-      const auto it_ok = _return.insert(std::make_pair(col_desc.col_name, col_desc));
-      CHECK(it_ok.second);
-    }
   } catch (std::exception& e) {
     THROW_MAPD_EXCEPTION(std::string("Exception: ") + e.what());
   }
@@ -4924,6 +4921,7 @@ TRowDescriptor DBHandler::fixup_row_descriptor(const TRowDescriptor& row_desc,
     }
     fixedup_row_desc.push_back(fixedup_col_desc);
   }
+
   return fixedup_row_desc;
 }
 

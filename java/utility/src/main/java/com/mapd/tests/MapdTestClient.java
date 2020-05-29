@@ -72,8 +72,7 @@ public class MapdTestClient {
     return client.sql_execute(sessionId, sql, true, null, -1, -1);
   }
 
-  public java.util.Map<java.lang.String, TColumnType> sqlValidate(String sql)
-          throws Exception {
+  public List<TColumnType> sqlValidate(String sql) throws Exception {
     return client.sql_validate(sessionId, sql);
   }
 

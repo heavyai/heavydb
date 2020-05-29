@@ -92,7 +92,6 @@ struct TStringRow {
 }
 
 typedef list<TColumnType> TRowDescriptor
-typedef map<string, TColumnType> TTableDescriptor
 typedef string TSessionId
 typedef string TKrb5Token
 typedef i64 TQueryId
@@ -537,7 +536,7 @@ service OmniSci {
   TDataFrame sql_execute_gdf(1: TSessionId session, 2: string query 3: i32 device_id = 0, 4: i32 first_n = -1) throws (1: TOmniSciException e)
   void deallocate_df(1: TSessionId session, 2: TDataFrame df, 3: common.TDeviceType device_type, 4: i32 device_id = 0) throws (1: TOmniSciException e)
   void interrupt(1: TSessionId query_session, 2: TSessionId interrupt_session) throws (1: TOmniSciException e)
-  TTableDescriptor sql_validate(1: TSessionId session, 2: string query) throws (1: TOmniSciException e)
+  TRowDescriptor sql_validate(1: TSessionId session, 2: string query) throws (1: TOmniSciException e)
   list<completion_hints.TCompletionHint> get_completion_hints(1: TSessionId session, 2:string sql, 3:i32 cursor) throws (1: TOmniSciException e)
   void set_execution_mode(1: TSessionId session, 2: TExecuteMode mode) throws (1: TOmniSciException e)
   TRenderResult render_vega(1: TSessionId session, 2: i64 widget_id, 3: string vega_json, 4: i32 compression_level, 5: string nonce) throws (1: TOmniSciException e)
