@@ -107,23 +107,35 @@ void Executor::executeUpdate(const RelAlgExecutionUnit& ra_exe_unit_in,
           std::min(2 * max_groups_buffer_entry_guess, static_cast<int64_t>(100'000'000));
     }
 
-    const auto execution_descriptors = current_fragment_execution_dispatch.compile(
-        max_groups_buffer_entry_guess, 8, co, eo, column_fetcher, true);
+    std::tuple<QueryCompilationDescriptorOwned, QueryMemoryDescriptorOwned>
+        execution_descriptors;
+    {
+      auto clock_begin = timer_start();
+      std::lock_guard<std::mutex> compilation_lock(compilation_mutex_);
+      compilation_queue_time_ms_ += timer_stop(clock_begin);
+
+      execution_descriptors = current_fragment_execution_dispatch.compile(
+          max_groups_buffer_entry_guess, 8, co, eo, column_fetcher, true);
+    }
     // We may want to consider in the future allowing this to execute on devices other
     // than CPU
 
     fragments[0] = {table_id, {fragment_index}};
-
-    current_fragment_execution_dispatch.run(
-        co.device_type,
-        0,
-        eo,
-        column_fetcher,
-        *std::get<QueryCompilationDescriptorOwned>(execution_descriptors),
-        *std::get<QueryMemoryDescriptorOwned>(execution_descriptors),
-        fragments,
-        ExecutorDispatchMode::KernelPerFragment,
-        -1);
+    {
+      auto clock_begin = timer_start();
+      std::lock_guard<std::mutex> kernel_lock(kernel_mutex_);
+      kernel_queue_time_ms_ += timer_stop(clock_begin);
+      current_fragment_execution_dispatch.run(
+          co.device_type,
+          0,
+          eo,
+          column_fetcher,
+          *std::get<QueryCompilationDescriptorOwned>(execution_descriptors),
+          *std::get<QueryMemoryDescriptorOwned>(execution_descriptors),
+          fragments,
+          ExecutorDispatchMode::KernelPerFragment,
+          -1);
+    }
     const auto& proj_fragment_results =
         current_fragment_execution_dispatch.getFragmentResults();
     if (proj_fragment_results.empty()) {
