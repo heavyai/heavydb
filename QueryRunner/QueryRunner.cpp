@@ -303,8 +303,7 @@ std::shared_ptr<Executor> QueryRunner::getExecutor() const {
   CHECK(!Catalog_Namespace::SysCatalog::instance().isAggregator());
   auto query_state = create_query_state(session_info_, "");
   auto stdlog = STDLOG(query_state);
-  const auto& cat = query_state->getConstSessionInfo()->getCatalog();
-  auto executor = Executor::getExecutor(cat.getCurrentDB().dbId);
+  auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID);
   return executor;
 }
 
@@ -417,7 +416,7 @@ std::shared_ptr<ExecutionResult> run_select_query_with_filter_push_down(
     const bool with_filter_push_down) {
   auto const& query_state = query_state_proxy.getQueryState();
   const auto& cat = query_state.getConstSessionInfo()->getCatalog();
-  auto executor = Executor::getExecutor(cat.getCurrentDB().dbId);
+  auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID);
   CompilationOptions co = CompilationOptions::defaults(device_type);
   co.opt_level = ExecutorOptLevel::LoopStrengthReduction;
 

@@ -135,14 +135,14 @@ void run_op_per_fragment(const TableDescriptor* td,
 
 void recompute_metadata(const TableDescriptor* td,
                         const Catalog_Namespace::Catalog& cat) {
-  auto executor = Executor::getExecutor(cat.getCurrentDB().dbId);
+  auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID);
   TableOptimizer optimizer(td, executor.get(), cat);
   EXPECT_NO_THROW(optimizer.recomputeMetadata());
 }
 
 void vacuum_and_recompute_metadata(const TableDescriptor* td,
                                    const Catalog_Namespace::Catalog& cat) {
-  auto executor = Executor::getExecutor(cat.getCurrentDB().dbId);
+  auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID);
   TableOptimizer optimizer(td, executor.get(), cat);
   EXPECT_NO_THROW(optimizer.vacuumDeletedRows());
   EXPECT_NO_THROW(optimizer.recomputeMetadata());

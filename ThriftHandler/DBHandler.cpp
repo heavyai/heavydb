@@ -627,7 +627,7 @@ void DBHandler::interrupt(const TSessionId& query_session,
     auto session_it = get_session_it_unsafe(interrupt_session, read_lock);
     auto& cat = session_it->second.get()->getCatalog();
     const auto dbname = cat.getCurrentDB().dbName;
-    auto executor = Executor::getExecutor(cat.getCurrentDB().dbId,
+    auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID,
                                           jit_debug_ ? "/tmp" : "",
                                           jit_debug_ ? "mapdquery" : "",
                                           mapd_parameters_);
@@ -4690,11 +4690,11 @@ std::vector<PushedDownFilterInfo> DBHandler::execute_rel_alg(
                          mapd_parameters_.gpu_input_mem_limit,
                          g_enable_runtime_query_interrupt,
                          g_runtime_query_interrupt_frequency};
-  auto executor =
-      Executor::getExecutor(executor_index ? *executor_index : cat.getCurrentDB().dbId,
-                            jit_debug_ ? "/tmp" : "",
-                            jit_debug_ ? "mapdquery" : "",
-                            mapd_parameters_);
+  auto executor = Executor::getExecutor(
+      executor_index ? *executor_index : Executor::UNITARY_EXECUTOR_ID,
+      jit_debug_ ? "/tmp" : "",
+      jit_debug_ ? "mapdquery" : "",
+      mapd_parameters_);
   RelAlgExecutor ra_executor(executor.get(),
                              cat,
                              query_ra,
@@ -4761,7 +4761,7 @@ void DBHandler::execute_rel_alg_df(TDataFrame& _return,
                          mapd_parameters_.gpu_input_mem_limit,
                          g_enable_runtime_query_interrupt,
                          g_runtime_query_interrupt_frequency};
-  auto executor = Executor::getExecutor(cat.getCurrentDB().dbId,
+  auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID,
                                         jit_debug_ ? "/tmp" : "",
                                         jit_debug_ ? "mapdquery" : "",
                                         mapd_parameters_);
@@ -5201,8 +5201,8 @@ void DBHandler::sql_execute_impl(TQueryResult& _return,
           auto data_lock =
               lockmgr::TableDataLockMgr::getWriteLockForTable(cat, td->tableName);
 
-          auto executor =
-              Executor::getExecutor(cat.getCurrentDB().dbId, "", "", mapd_parameters_);
+          auto executor = Executor::getExecutor(
+              Executor::UNITARY_EXECUTOR_ID, "", "", mapd_parameters_);
           const TableOptimizer optimizer(td, executor.get(), cat);
           if (optimize_stmt->shouldVacuumDeletedRows()) {
             optimizer.vacuumDeletedRows();

@@ -322,6 +322,7 @@ class Executor {
 
  public:
   using ExecutorId = size_t;
+  static const ExecutorId UNITARY_EXECUTOR_ID = 0;
 
   Executor(const ExecutorId id,
            const size_t block_size_x,

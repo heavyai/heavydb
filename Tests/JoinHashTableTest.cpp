@@ -88,7 +88,7 @@ std::shared_ptr<JoinHashTableInterface> buildPerfect(std::string_view table1,
   auto catalog = QR::get()->getCatalog();
   CHECK(catalog);
 
-  auto executor = Executor::getExecutor(catalog->getCurrentDB().dbId);
+  auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID);
   CHECK(executor);
   executor->setCatalog(catalog.get());
 

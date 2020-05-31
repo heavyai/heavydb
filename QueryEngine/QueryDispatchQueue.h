@@ -31,7 +31,8 @@ class QueryDispatchQueue {
   QueryDispatchQueue(const size_t parallel_executors_max) {
     workers_.resize(parallel_executors_max);
     for (size_t i = 0; i < workers_.size(); i++) {
-      workers_[i] = std::thread(&QueryDispatchQueue::worker, this, i);
+      // worker IDs are 1-indexed, leaving Executor 0 for non-dispatch queue worker tasks
+      workers_[i] = std::thread(&QueryDispatchQueue::worker, this, i + 1);
     }
   }
 

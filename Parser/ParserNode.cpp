@@ -1860,7 +1860,7 @@ void InsertValuesStmt::execute(const Catalog_Namespace::SessionInfo& session) {
     throw std::runtime_error("Singleton inserts on views is not supported.");
   }
 
-  auto executor = Executor::getExecutor(catalog.getCurrentDB().dbId);
+  auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID);
   RelAlgExecutor ra_executor(executor.get(), catalog);
 
   ra_executor.executeSimpleInsert(query);
@@ -2274,7 +2274,7 @@ std::shared_ptr<ResultSet> getResultSet(QueryStateProxy query_state_proxy,
   auto const session = query_state_proxy.getQueryState().getConstSessionInfo();
   auto& catalog = session->getCatalog();
 
-  auto executor = Executor::getExecutor(catalog.getCurrentDB().dbId);
+  auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID);
 #ifdef HAVE_CUDA
   const auto device_type = session->get_executor_device_type();
 #else
@@ -2326,7 +2326,7 @@ size_t LocalConnector::getOuterFragmentCount(QueryStateProxy query_state_proxy,
   auto const session = query_state_proxy.getQueryState().getConstSessionInfo();
   auto& catalog = session->getCatalog();
 
-  auto executor = Executor::getExecutor(catalog.getCurrentDB().dbId);
+  auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID);
 #ifdef HAVE_CUDA
   const auto device_type = session->get_executor_device_type();
 #else
@@ -2724,7 +2724,7 @@ void InsertIntoTableAsSelectStmt::populateData(QueryStateProxy query_state_proxy
       std::shared_ptr<Executor> executor;
 
       if (g_enable_experimental_string_functions) {
-        executor = Executor::getExecutor(catalog.getCurrentDB().dbId);
+        executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID);
       }
 
       while (start_row < num_rows) {
