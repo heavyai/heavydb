@@ -2370,6 +2370,16 @@ TEST(Select, Case) {
     c("SELECT y AS key0, SUM(CASE WHEN x > 7 THEN x / (x - 7) ELSE 99 END) FROM test "
       "GROUP BY key0 ORDER BY key0;",
       dt);
+    ASSERT_NO_THROW(run_multiple_agg(
+        "SELECT y AS key0, CASE WHEN y > 7 THEN STDDEV(x) ELSE 99 END FROM test "
+        "GROUP BY y ORDER BY y;",
+        dt,
+        false));
+    ASSERT_NO_THROW(run_multiple_agg(
+        "SELECT y AS key0, CASE WHEN y > 7 THEN 1 ELSE STDDEV(x) END FROM test "
+        "GROUP BY y ORDER BY y;",
+        dt,
+        false));
     c("SELECT CASE WHEN str IN ('str1', 'str3', 'str8') THEN 'foo' WHEN str IN ('str2', "
       "'str4', 'str9') THEN 'bar' "
       "ELSE 'baz' END AS bucketed_str, COUNT(*) AS n FROM query_rewrite_test GROUP BY "
@@ -2446,6 +2456,26 @@ TEST(Select, Case) {
     c("WITH distinct_x AS (SELECT x FROM test GROUP BY x) SELECT SUM(CASE WHEN x = 7 "
       "THEN -32767 ELSE -1 END) FROM distinct_x",
       dt);
+    ASSERT_NO_THROW(run_multiple_agg(
+        "WITH distinct_x AS (SELECT x FROM test GROUP BY x) SELECT CASE WHEN x = 7 "
+        "THEN STDDEV(x) ELSE -1 END FROM distinct_x GROUP BY x;",
+        dt,
+        false));
+    ASSERT_NO_THROW(run_multiple_agg(
+        "WITH distinct_x AS (SELECT x FROM test GROUP BY x) SELECT CASE WHEN x = 7 "
+        "THEN -32767 ELSE STDDEV(x) END FROM distinct_x GROUP BY x;",
+        dt,
+        false));
+    ASSERT_NO_THROW(run_multiple_agg(
+        "WITH distinct_x AS (SELECT x FROM test GROUP BY x) SELECT CASE WHEN x = 7 "
+        "THEN -32767 ELSE STDDEV(x) END as V FROM distinct_x GROUP BY x ORDER BY V;",
+        dt,
+        false));
+    ASSERT_NO_THROW(run_multiple_agg(
+        "WITH distinct_x AS (SELECT x FROM test GROUP BY x) SELECT CASE WHEN x = 7 "
+        "THEN STDDEV(x) ELSE -1 END as V FROM distinct_x GROUP BY x ORDER BY V;",
+        dt,
+        false));
     c("WITH distinct_x AS (SELECT x FROM test GROUP BY x) SELECT AVG(CASE WHEN x = 7 "
       "THEN -32767 ELSE -1 END) FROM distinct_x",
       dt);

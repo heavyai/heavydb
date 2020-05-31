@@ -59,27 +59,8 @@ import org.apache.calcite.rex.RexNode;
 import org.apache.calcite.rex.RexShuttle;
 import org.apache.calcite.runtime.CalciteException;
 import org.apache.calcite.schema.SchemaPlus;
-import org.apache.calcite.sql.JoinConditionType;
-import org.apache.calcite.sql.JoinType;
-import org.apache.calcite.sql.SqlBasicCall;
-import org.apache.calcite.sql.SqlBasicTypeNameSpec;
-import org.apache.calcite.sql.SqlCall;
-import org.apache.calcite.sql.SqlDataTypeSpec;
-import org.apache.calcite.sql.SqlDelete;
-import org.apache.calcite.sql.SqlDialect;
-import org.apache.calcite.sql.SqlFunctionCategory;
-import org.apache.calcite.sql.SqlIdentifier;
-import org.apache.calcite.sql.SqlJoin;
-import org.apache.calcite.sql.SqlKind;
-import org.apache.calcite.sql.SqlLiteral;
-import org.apache.calcite.sql.SqlNode;
-import org.apache.calcite.sql.SqlNodeList;
-import org.apache.calcite.sql.SqlNumericLiteral;
-import org.apache.calcite.sql.SqlOperatorTable;
-import org.apache.calcite.sql.SqlOrderBy;
-import org.apache.calcite.sql.SqlSelect;
-import org.apache.calcite.sql.SqlUnresolvedFunction;
-import org.apache.calcite.sql.SqlUpdate;
+import org.apache.calcite.sql.*;
+import org.apache.calcite.sql.fun.SqlCase;
 import org.apache.calcite.sql.fun.SqlStdOperatorTable;
 import org.apache.calcite.sql.parser.SqlParseException;
 import org.apache.calcite.sql.parser.SqlParser;
@@ -882,6 +863,7 @@ public final class MapDParser {
     if (!legacy_syntax) {
       return parseR;
     }
+
     RelDataTypeFactory typeFactory = planner.getTypeFactory();
     SqlSelect select_node = null;
     if (parseR instanceof SqlSelect) {
@@ -895,6 +877,18 @@ public final class MapDParser {
         if (new_order_by_node != null) {
           return new_order_by_node;
         }
+      } else if (order_by_node.query instanceof SqlWith) {
+        SqlWith old_with_node = (SqlWith) order_by_node.query;
+        if (old_with_node.body instanceof SqlSelect) {
+          select_node = (SqlSelect) old_with_node.body;
+          desugar(select_node, typeFactory);
+        }
+      }
+    } else if (parseR instanceof SqlWith) {
+      SqlWith old_with_node = (SqlWith) parseR;
+      if (old_with_node.body instanceof SqlSelect) {
+        select_node = (SqlSelect) old_with_node.body;
+        desugar(select_node, typeFactory);
       }
     }
     return parseR;
@@ -902,6 +896,52 @@ public final class MapDParser {
 
   private void desugar(SqlSelect select_node, RelDataTypeFactory typeFactory) {
     desugar(select_node, null, typeFactory);
+  }
+
+  private SqlNode expandCase(SqlCase old_case_node, RelDataTypeFactory typeFactory) {
+    SqlNodeList newWhenList =
+            new SqlNodeList(old_case_node.getWhenOperands().getParserPosition());
+    SqlNodeList newThenList =
+            new SqlNodeList(old_case_node.getThenOperands().getParserPosition());
+    java.util.Map<String, SqlNode> id_to_expr = new java.util.HashMap<String, SqlNode>();
+    for (SqlNode node : old_case_node.getWhenOperands()) {
+      SqlNode newCall = expand(node, id_to_expr, typeFactory);
+      if (null != newCall) {
+        newWhenList.add(newCall);
+      } else {
+        newWhenList.add(node);
+      }
+    }
+    for (SqlNode node : old_case_node.getThenOperands()) {
+      SqlNode newCall = expand(node, id_to_expr, typeFactory);
+      if (null != newCall) {
+        newThenList.add(newCall);
+      } else {
+        newThenList.add(node);
+      }
+    }
+    SqlNode new_else_operand = old_case_node.getElseOperand();
+    if (null != new_else_operand) {
+      SqlNode candidate_else_operand =
+              expand(old_case_node.getElseOperand(), id_to_expr, typeFactory);
+      if (null != candidate_else_operand) {
+        new_else_operand = candidate_else_operand;
+      }
+    }
+    SqlNode new_value_operand = old_case_node.getValueOperand();
+    if (null != new_value_operand) {
+      SqlNode candidate_value_operand =
+              expand(old_case_node.getValueOperand(), id_to_expr, typeFactory);
+      if (null != candidate_value_operand) {
+        new_value_operand = candidate_value_operand;
+      }
+    }
+    SqlNode newCaseNode = SqlCase.createSwitched(old_case_node.getParserPosition(),
+            new_value_operand,
+            newWhenList,
+            newThenList,
+            new_else_operand);
+    return newCaseNode;
   }
 
   private SqlOrderBy desugar(SqlSelect select_node,
@@ -915,11 +955,24 @@ public final class MapDParser {
     java.util.Map<String, SqlNode> id_to_expr = new java.util.HashMap<String, SqlNode>();
     for (SqlNode proj : select_list) {
       if (!(proj instanceof SqlBasicCall)) {
-        new_select_list.add(proj);
-        continue;
+        if (proj instanceof SqlCase) {
+          new_select_list.add(expandCase((SqlCase) proj, typeFactory));
+        } else {
+          new_select_list.add(proj);
+        }
+      } else {
+        assert proj instanceof SqlBasicCall;
+        SqlBasicCall proj_call = (SqlBasicCall) proj;
+        if (proj_call.operands.length > 0) {
+          for (int i = 0; i < proj_call.operands.length; i++) {
+            if (proj_call.operand(i) instanceof SqlCase) {
+              SqlNode new_op = expandCase(proj_call.operand(i), typeFactory);
+              proj_call.setOperand(i, new_op);
+            }
+          }
+        }
+        new_select_list.add(expand(proj_call, id_to_expr, typeFactory));
       }
-      SqlBasicCall proj_call = (SqlBasicCall) proj;
-      new_select_list.add(expand(proj_call, id_to_expr, typeFactory));
     }
     select_node.setSelectList(new_select_list);
     SqlNodeList group_by_list = select_node.getGroup();
