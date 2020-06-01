@@ -16,33 +16,24 @@
 
 #pragma once
 
-#include <iostream>
-#include <memory>
-#include <string>
-#include <type_traits>
-#include <vector>
-#include "QueryEngine/TargetValue.h"
+#include <arrow/api.h>
+#include "DBETypes.h"
 
 namespace EmbeddedDatabase {
-
-class Row {
- public:
-  Row();
-  Row(std::vector<TargetValue>& row);
-  int64_t getInt(size_t col_num);
-  double getDouble(size_t col_num);
-  std::string getStr(size_t col_num);
-
- private:
-  std::vector<TargetValue> row_;
-};
 
 class Cursor {
  public:
   size_t getColCount();
   size_t getRowCount();
   Row getNextRow();
-  int getColType(uint32_t col_num);
+  ColumnType getColType(uint32_t col_num);
+  std::shared_ptr<arrow::RecordBatch> getArrowRecordBatch();
+
+ protected:
+  Cursor() {}
+  Cursor(const Cursor&) = delete;
+  Cursor& operator=(const Cursor&) = delete;
+
 };
 
 class DBEngine {
@@ -50,9 +41,13 @@ class DBEngine {
   void reset();
   void executeDDL(std::string query);
   Cursor* executeDML(std::string query);
-  static DBEngine* create(std::string path);
+  static DBEngine* create(std::string path, int calcite_port);
+  std::vector<std::string> getTables();
+  std::vector<ColumnDetails> getTableDetails(const std::string& table_name);
 
  protected:
   DBEngine() {}
+  DBEngine(const DBEngine&) = delete;
+  DBEngine& operator=(const DBEngine&) = delete;
 };
 }  // namespace EmbeddedDatabase
