@@ -19,7 +19,7 @@ IF(PYTHON)
 
     add_custom_command(OUTPUT ${OUTPUT}
         COMMAND cd ${CMAKE_CURRENT_BINARY_DIR}
-        COMMAND ${PYTHON} ${SETUP_PY} build_ext
+        COMMAND ${PYTHON} ${SETUP_PY} build_ext --inplace
         DEPENDS DBEngine ${SETUP_PY})
 
     add_custom_target(Python ALL DEPENDS ${OUTPUT})

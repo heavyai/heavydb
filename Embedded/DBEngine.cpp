@@ -19,7 +19,6 @@
 #include "QueryEngine/ArrowResultSet.h"
 #include "QueryRunner/QueryRunner.h"
 
-
 namespace EmbeddedDatabase {
 
 class DBEngineImpl;
@@ -40,18 +39,14 @@ class CursorImpl : public Cursor {
     result_set_.reset();
   }
 
-  size_t getColCount() {
-    return result_set_ ? result_set_->colCount() : 0;
-  }
+  size_t getColCount() { return result_set_ ? result_set_->colCount() : 0; }
 
-  size_t getRowCount() {
-    return result_set_ ? result_set_->rowCount() : 0;
-  }
+  size_t getRowCount() { return result_set_ ? result_set_->rowCount() : 0; }
 
   Row getNextRow() {
     if (result_set_) {
-        auto row = result_set_->getNextRow(true, false);
-        return row.empty() ? Row() : Row(row);
+      auto row = result_set_->getNextRow(true, false);
+      return row.empty() ? Row() : Row(row);
     }
     return Row();
   }
@@ -66,24 +61,19 @@ class CursorImpl : public Cursor {
 
   std::shared_ptr<arrow::RecordBatch> getArrowRecordBatch() {
     if (record_batch_) {
-        return record_batch_;
+      return record_batch_;
     }
     auto col_count = getColCount();
     if (col_count > 0) {
-        auto row_count = getRowCount();
-        if (row_count > 0) {
-            if (auto data_mgr = data_mgr_.lock()) {
-                const auto & converter = std::make_unique<ArrowResultSetConverter>(
-                    result_set_,
-                    data_mgr,
-                    ExecutorDeviceType::CPU,
-                    0,
-                    col_names_,
-                    row_count);
-                record_batch_ =  converter->convertToArrow();
-                return record_batch_;
-            }
+      auto row_count = getRowCount();
+      if (row_count > 0) {
+        if (auto data_mgr = data_mgr_.lock()) {
+          const auto& converter = std::make_unique<ArrowResultSetConverter>(
+              result_set_, data_mgr, ExecutorDeviceType::CPU, 0, col_names_, row_count);
+          record_batch_ = converter->convertToArrow();
+          return record_batch_;
         }
+      }
     }
     return nullptr;
   }
@@ -106,8 +96,7 @@ class DBEngineImpl : public DBEngine {
   const std::string OMNISCI_DATA_PATH = "//mapd_data";
 
  public:
-  DBEngineImpl(const std::string& base_path, int calcite_port)
-   : query_runner_(nullptr) {
+  DBEngineImpl(const std::string& base_path, int calcite_port) : query_runner_(nullptr) {
     if (init(base_path, calcite_port)) {
       std::cout << "DBEngine initialization succeed" << std::endl;
     } else {
@@ -118,10 +107,11 @@ class DBEngineImpl : public DBEngine {
   bool init(std::string base_path, int calcite_port) {
     std::cout << "DBE:init(" << base_path << ", " << calcite_port << ")" << std::endl;
     if (query_runner_) {
-      std::cout << "DBE:init: Alreary initialized at " << base_path_  << std::endl;
+      std::cout << "DBE:init: Alreary initialized at " << base_path_ << std::endl;
       return base_path == base_path_;
     } else if (!boost::filesystem::exists(base_path)) {
-      std::cerr << "DBE:init: Catalog basepath " + base_path_ + " does not exist.\n"  << std::endl;
+      std::cerr << "DBE:init: Catalog basepath " + base_path_ + " does not exist.\n"
+                << std::endl;
       // TODO: Create database if it does not exist
       return false;
     }
@@ -132,37 +122,33 @@ class DBEngineImpl : public DBEngine {
       log_options.set_base_path(base_path);
       logger::init(log_options);
       data_mgr_ =
-        std::make_shared<Data_Namespace::DataMgr>(data_path, mapd_parms, false, 0);
+          std::make_shared<Data_Namespace::DataMgr>(data_path, mapd_parms, false, 0);
       auto calcite = std::make_shared<Calcite>(-1, calcite_port, base_path, 1024, 5000);
       auto& sys_cat = Catalog_Namespace::SysCatalog::instance();
       sys_cat.init(base_path, data_mgr_, {}, calcite, false, false, {});
       if (!sys_cat.getSqliteConnector()) {
-        std::cerr << "DBE:init: SqliteConnector is null"  << std::endl;
+        std::cerr << "DBE:init: SqliteConnector is null" << std::endl;
         return false;
       }
       sys_cat.getMetadataForDB(OMNISCI_DEFAULT_DB, database_);  // TODO: Check
-      auto catalog = Catalog_Namespace::Catalog::get(base_path,
-                                                     database_,
-                                                     data_mgr_,
-                                                     std::vector<LeafHostInfo>(),
-                                                     calcite,
-                                                     false);
+      auto catalog = Catalog_Namespace::Catalog::get(
+          base_path, database_, data_mgr_, std::vector<LeafHostInfo>(), calcite, false);
       sys_cat.getMetadataForUser(OMNISCI_ROOT_USER, user_);
       auto session = std::make_unique<Catalog_Namespace::SessionInfo>(
-        catalog, user_, ExecutorDeviceType::CPU, "");
+          catalog, user_, ExecutorDeviceType::CPU, "");
       query_runner_ = QueryRunner::QueryRunner::init(session);
       base_path_ = base_path;
       return true;
-    } catch(std::exception const& e) {
-      std::cerr << "DBE:init: " << e.what()  << std::endl;
-    } catch(...) {
-      std::cerr << "DBE:init: Unknown exception"  << std::endl;
+    } catch (std::exception const& e) {
+      std::cerr << "DBE:init: " << e.what() << std::endl;
+    } catch (...) {
+      std::cerr << "DBE:init: Unknown exception" << std::endl;
     }
     return false;
   }
 
   void reset() {
-    std::cout << "DBE:reset"  << std::endl;
+    std::cout << "DBE:reset" << std::endl;
     cursors_.clear();
     if (query_runner_) {
       query_runner_->reset();
@@ -176,13 +162,13 @@ class DBEngineImpl : public DBEngine {
     if (query_runner_) {
       try {
         query_runner_->runDDLStatement(query);
-      } catch(std::exception const& e) {
-        std::cerr << "DBE:executeDDL: " << e.what()  << std::endl;
-      } catch(...) {
-        std::cerr << "DBE:executeDDL: Unknown exception"  << std::endl;
+      } catch (std::exception const& e) {
+        std::cerr << "DBE:executeDDL: " << e.what() << std::endl;
+      } catch (...) {
+        std::cerr << "DBE:executeDDL: Unknown exception" << std::endl;
       }
     } else {
-      std::cerr << "DBE:executeDDL: query_runner is NULL"  << std::endl;
+      std::cerr << "DBE:executeDDL: query_runner is NULL" << std::endl;
     }
   }
 
@@ -190,7 +176,7 @@ class DBEngineImpl : public DBEngine {
     if (query_runner_) {
       try {
         const auto execution_result =
-          query_runner_->runSelectQuery(query, ExecutorDeviceType::CPU, true, true);
+            query_runner_->runSelectQuery(query, ExecutorDeviceType::CPU, true, true);
         auto targets = execution_result.getTargetsMeta();
         std::vector<std::string> col_names;
         for (const auto target : targets) {
@@ -199,13 +185,13 @@ class DBEngineImpl : public DBEngine {
         auto rs = execution_result.getRows();
         cursors_.emplace_back(new CursorImpl(rs, col_names, data_mgr_));
         return cursors_.back();
-      } catch(std::exception const& e) {
-        std::cerr << "DBE:executeDML: " << e.what()  << std::endl;
-      } catch(...) {
-        std::cerr << "DBE:executeDML: Unknown exception"  << std::endl;
+      } catch (std::exception const& e) {
+        std::cerr << "DBE:executeDML: " << e.what() << std::endl;
+      } catch (...) {
+        std::cerr << "DBE:executeDML: Unknown exception" << std::endl;
       }
     } else {
-      std::cerr << "DBE:executeDML: query_runner is NULL"  << std::endl;
+      std::cerr << "DBE:executeDML: query_runner is NULL" << std::endl;
     }
     return nullptr;
   }
@@ -224,14 +210,14 @@ class DBEngineImpl : public DBEngine {
             }
             table_names.push_back(td->tableName);
           }
-        } catch(std::exception const& e) {
-          std::cerr << "DBE:getTables: " << e.what()  << std::endl;
+        } catch (std::exception const& e) {
+          std::cerr << "DBE:getTables: " << e.what() << std::endl;
         }
       } else {
-        std::cerr << "DBE:getTables: catalog is NULL"  << std::endl;
+        std::cerr << "DBE:getTables: catalog is NULL" << std::endl;
       }
     } else {
-      std::cerr << "DBE:getTables: query_runner is NULL"  << std::endl;
+      std::cerr << "DBE:getTables: query_runner is NULL" << std::endl;
     }
     return table_names;
   }
@@ -241,10 +227,10 @@ class DBEngineImpl : public DBEngine {
     if (query_runner_) {
       auto catalog = query_runner_->getCatalog();
       if (catalog) {
-         auto metadata = catalog->getMetadataForTable(table_name, false);
+        auto metadata = catalog->getMetadataForTable(table_name, false);
         if (metadata) {
-          const auto col_descriptors =
-            catalog->getAllColumnMetadataForTable(metadata->tableId, false, true, false);
+          const auto col_descriptors = catalog->getAllColumnMetadataForTable(
+              metadata->tableId, false, true, false);
           const auto deleted_cd = catalog->getDeletedColumn(metadata);
           for (const auto cd : col_descriptors) {
             if (cd == deleted_cd) {
@@ -267,7 +253,8 @@ class DBEngineImpl : public DBEngine {
               col_details.scale = ct.get_scale();
             }
             if (col_details.encoding == ColumnEncoding::DICT) {
-              // have to get the actual size of the encoding from the dictionary definition
+              // have to get the actual size of the encoding from the dictionary
+              // definition
               const int dict_id = ct.get_comp_param();
               auto dd = catalog->getMetadataForDict(dict_id, false);
               if (dd) {
@@ -297,7 +284,6 @@ class DBEngineImpl : public DBEngine {
   QueryRunner::QueryRunner* query_runner_;
   std::vector<CursorImpl*> cursors_;
 };
-
 
 /**
  * Creates DBEngine instance

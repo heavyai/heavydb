@@ -21,32 +21,30 @@ namespace EmbeddedDatabase {
 /** ColumnDetails methods */
 
 ColumnDetails::ColumnDetails()
-  : col_type(ColumnType::UNKNOWN)
-  , encoding(ColumnEncoding::NONE)
-  , nullable(false)
-  , is_array(false)
-  , precision(0)
-  , scale(0)
-  , comp_param(0)
-{}
+    : col_type(ColumnType::UNKNOWN)
+    , encoding(ColumnEncoding::NONE)
+    , nullable(false)
+    , is_array(false)
+    , precision(0)
+    , scale(0)
+    , comp_param(0) {}
 
 ColumnDetails::ColumnDetails(const std::string& _col_name,
-                ColumnType _col_type,
-                ColumnEncoding _encoding,
-                bool _nullable,
-                bool _is_array,
-                int _precision,
-                int _scale,
-                int _comp_param)
-  : col_name(_col_name)
-  , col_type(_col_type)
-  , encoding(_encoding)
-  , nullable(_nullable)
-  , is_array(_is_array)
-  , precision(_precision)
-  , scale(_scale)
-  , comp_param(_comp_param)
-{}
+                             ColumnType _col_type,
+                             ColumnEncoding _encoding,
+                             bool _nullable,
+                             bool _is_array,
+                             int _precision,
+                             int _scale,
+                             int _comp_param)
+    : col_name(_col_name)
+    , col_type(_col_type)
+    , encoding(_encoding)
+    , nullable(_nullable)
+    , is_array(_is_array)
+    , precision(_precision)
+    , scale(_scale)
+    , comp_param(_comp_param) {}
 
 /** Row methods */
 
@@ -161,4 +159,4 @@ ColumnEncoding sqlToColumnEncoding(const EncodingType& type) {
   }
   return ColumnEncoding::NONE;
 }
-} // namespace EmbeddedDatabase
+}  // namespace EmbeddedDatabase

@@ -33,7 +33,6 @@ class Cursor {
   Cursor() {}
   Cursor(const Cursor&) = delete;
   Cursor& operator=(const Cursor&) = delete;
-
 };
 
 class DBEngine {
