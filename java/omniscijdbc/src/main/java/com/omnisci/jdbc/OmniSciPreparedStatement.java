@@ -460,10 +460,9 @@ class OmniSciPreparedStatement implements PreparedStatement {
   @Override
   public void setArray(int parameterIndex, Array x) throws SQLException {
     MAPDLOGGER.debug("Entered");
-    throw new UnsupportedOperationException("Not supported yet,"
-            + " line:" + new Throwable().getStackTrace()[0].getLineNumber()
-            + " class:" + new Throwable().getStackTrace()[0].getClassName()
-            + " method:" + new Throwable().getStackTrace()[0].getMethodName());
+    parmRep[parameterIndex - 1] = x.toString();
+    parmIsNull[parameterIndex - 1] = false;
+    repCount++;
   }
 
   @Override

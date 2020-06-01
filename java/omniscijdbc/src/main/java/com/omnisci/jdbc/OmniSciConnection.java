@@ -17,6 +17,7 @@ package com.omnisci.jdbc;
 
 import com.mapd.common.SockTransportProperties;
 import com.omnisci.thrift.server.OmniSci;
+import com.omnisci.thrift.server.TDatumType;
 import com.omnisci.thrift.server.TOmniSciException;
 import com.omnisci.thrift.server.TServerStatus;
 
@@ -802,10 +803,13 @@ public class OmniSciConnection implements java.sql.Connection, Cloneable {
   @Override
   public Array createArrayOf(String typeName, Object[] elements)
           throws SQLException { // logger.debug("Entered");
-    throw new UnsupportedOperationException("Not supported yet,"
-            + " line:" + new Throwable().getStackTrace()[0].getLineNumber()
-            + " class:" + new Throwable().getStackTrace()[0].getClassName()
-            + " method:" + new Throwable().getStackTrace()[0].getMethodName());
+    TDatumType type;
+    try {
+      type = TDatumType.valueOf(typeName.toUpperCase());
+    } catch (IllegalArgumentException ex) {
+      throw new SQLException("No matching omnisci type for " + typeName);
+    }
+    return new OmniSciArray(type, elements);
   }
 
   @Override
