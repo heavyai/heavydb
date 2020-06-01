@@ -45,7 +45,6 @@ import java.util.Calendar;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.TimeZone;
 
 /**
  *
@@ -153,8 +152,11 @@ class OmniSciResultSet implements java.sql.ResultSet {
   }
 
   private String getStringInternal(int columnIndex) throws SQLException {
-    TDatumType type = sqlResult.row_set.row_desc.get(columnIndex - 1).col_type.type;
+    if (sqlResult.row_set.row_desc.get(columnIndex - 1).col_type.is_array) {
+      return getArray(columnIndex).toString();
+    }
 
+    TDatumType type = sqlResult.row_set.row_desc.get(columnIndex - 1).col_type.type;
     switch (type) {
       case TINYINT:
       case SMALLINT:
@@ -329,7 +331,7 @@ class OmniSciResultSet implements java.sql.ResultSet {
     } else {
       // assume column is str already for now
       wasNull = false;
-      return new BigDecimal(
+      return BigDecimal.valueOf(
               rowSet.columns.get(columnIndex - 1).data.real_col.get(offset));
     }
   }
@@ -375,6 +377,21 @@ class OmniSciResultSet implements java.sql.ResultSet {
     return tm;
   }
 
+  private Timestamp adjust_precision(long val, int precision) {
+    switch (precision) {
+      case 0:
+        return new Timestamp(val * 1000);
+      case 3:
+        return new Timestamp(val);
+      case 6:
+      case 9:
+        return extract_complex_time(val, precision);
+      default:
+        throw new RuntimeException("Invalid precision [" + Integer.toString(precision)
+                + "] returned. Valid values 0,3,6,9");
+    }
+  }
+
   @Override
   public InputStream getAsciiStream(int columnIndex)
           throws SQLException { // logger.debug("Entered "+ sql );
@@ -405,21 +422,13 @@ class OmniSciResultSet implements java.sql.ResultSet {
   @Override
   public String getString(String columnLabel)
           throws SQLException { // logger.debug("Entered "+ sql );
-    Integer colNum = columnMap.get(columnLabel);
-    if (colNum == null) {
-      throw new SQLException("Could not find column " + columnLabel);
-    }
-    return getString(colNum);
+    return getString(findColumnByName(columnLabel));
   }
 
   @Override
   public boolean getBoolean(String columnLabel)
           throws SQLException { // logger.debug("Entered "+ sql );
-    Integer colNum = columnMap.get(columnLabel);
-    if (colNum == null) {
-      throw new SQLException("Could not find column " + columnLabel);
-    }
-    return getBoolean(colNum);
+    return getBoolean(findColumnByName(columnLabel));
   }
 
   @Override
@@ -434,61 +443,37 @@ class OmniSciResultSet implements java.sql.ResultSet {
   @Override
   public short getShort(String columnLabel)
           throws SQLException { // logger.debug("Entered "+ sql );
-    Integer colNum = columnMap.get(columnLabel);
-    if (colNum == null) {
-      throw new SQLException("Could not find column " + columnLabel);
-    }
-    return getShort(colNum);
+    return getShort(findColumnByName(columnLabel));
   }
 
   @Override
   public int getInt(String columnLabel)
           throws SQLException { // logger.debug("Entered "+ sql );
-    Integer colNum = columnMap.get(columnLabel);
-    if (colNum == null) {
-      throw new SQLException("Could not find column " + columnLabel);
-    }
-    return getInt(colNum);
+    return getInt(findColumnByName(columnLabel));
   }
 
   @Override
   public long getLong(String columnLabel)
           throws SQLException { // logger.debug("Entered "+ sql );
-    Integer colNum = columnMap.get(columnLabel);
-    if (colNum == null) {
-      throw new SQLException("Could not find column " + columnLabel);
-    }
-    return getLong(colNum);
+    return getLong(findColumnByName(columnLabel));
   }
 
   @Override
   public float getFloat(String columnLabel)
           throws SQLException { // logger.debug("Entered "+ sql );
-    Integer colNum = columnMap.get(columnLabel);
-    if (colNum == null) {
-      throw new SQLException("Could not find column " + columnLabel);
-    }
-    return getFloat(colNum);
+    return getFloat(findColumnByName(columnLabel));
   }
 
   @Override
   public double getDouble(String columnLabel)
           throws SQLException { // logger.debug("Entered "+ sql );
-    Integer colNum = columnMap.get(columnLabel);
-    if (colNum == null) {
-      throw new SQLException("Could not find column " + columnLabel);
-    }
-    return getDouble(colNum);
+    return getDouble(findColumnByName(columnLabel));
   }
 
   @Override
   public BigDecimal getBigDecimal(String columnLabel, int scale)
           throws SQLException { // logger.debug("Entered "+ sql );
-    Integer colNum = columnMap.get(columnLabel);
-    if (colNum == null) {
-      throw new SQLException("Could not find column " + columnLabel);
-    }
-    return getBigDecimal(colNum);
+    return getBigDecimal(findColumnByName(columnLabel));
   }
 
   @Override
@@ -579,7 +564,10 @@ class OmniSciResultSet implements java.sql.ResultSet {
       return null;
     } else {
       wasNull = false;
-      // check type
+      if (rowDesc.get(columnIndex - 1).col_type.is_array) {
+        return getArray(columnIndex);
+      }
+
       switch (rowDesc.get(columnIndex - 1).col_type.type) {
         case TINYINT:
         case SMALLINT:
@@ -595,7 +583,6 @@ class OmniSciResultSet implements java.sql.ResultSet {
         case DOUBLE:
           return this.rowSet.columns.get(columnIndex - 1).data.real_col.get(offset);
         case STR:
-          return this.rowSet.columns.get(columnIndex - 1).data.str_col.get(offset);
         case POINT:
         case LINESTRING:
         case POLYGON:
@@ -649,7 +636,7 @@ class OmniSciResultSet implements java.sql.ResultSet {
     } else {
       // assume column is str already for now
       wasNull = false;
-      return new BigDecimal(
+      return BigDecimal.valueOf(
               rowSet.columns.get(columnIndex - 1).data.real_col.get(offset));
     }
   }
@@ -1274,10 +1261,142 @@ class OmniSciResultSet implements java.sql.ResultSet {
   @Override
   public Array getArray(int columnIndex)
           throws SQLException { // logger.debug("Entered "+ sql );
-    throw new UnsupportedOperationException("Not supported yet,"
-            + " line:" + new Throwable().getStackTrace()[0].getLineNumber()
-            + " class:" + new Throwable().getStackTrace()[0].getClassName()
-            + " method:" + new Throwable().getStackTrace()[0].getMethodName());
+    if (rowSet.columns.get(columnIndex - 1).nulls.get(offset)) {
+      wasNull = true;
+      return null;
+    } else {
+      wasNull = false;
+      if (!rowDesc.get(columnIndex - 1).col_type.is_array) {
+        throw new SQLException(
+                "Column " + rowDesc.get(columnIndex - 1).col_name + " is not an array");
+      }
+
+      Object[] elements;
+      int size =
+              rowSet.columns.get(columnIndex - 1).data.arr_col.get(offset).nulls.size();
+      switch (rowDesc.get(columnIndex - 1).col_type.type) {
+        case TINYINT:
+          elements = new Byte[size];
+          for (int i = 0; i < size; ++i) {
+            elements[i] = rowSet.columns.get(columnIndex - 1)
+                                  .data.arr_col.get(offset)
+                                  .data.int_col.get(i)
+                                  .byteValue();
+          }
+          break;
+        case SMALLINT:
+          elements = new Short[size];
+          for (int i = 0; i < size; ++i) {
+            elements[i] = rowSet.columns.get(columnIndex - 1)
+                                  .data.arr_col.get(offset)
+                                  .data.int_col.get(i)
+                                  .shortValue();
+          }
+          break;
+        case INT:
+          elements = new Integer[size];
+          for (int i = 0; i < size; ++i) {
+            elements[i] = rowSet.columns.get(columnIndex - 1)
+                                  .data.arr_col.get(offset)
+                                  .data.int_col.get(i)
+                                  .intValue();
+          }
+          break;
+        case BIGINT:
+          elements = new Long[size];
+          for (int i = 0; i < size; ++i) {
+            elements[i] = rowSet.columns.get(columnIndex - 1)
+                                  .data.arr_col.get(offset)
+                                  .data.int_col.get(i);
+          }
+          break;
+        case BOOL:
+          elements = new Boolean[size];
+          for (int i = 0; i < size; ++i) {
+            elements[i] = rowSet.columns.get(columnIndex - 1)
+                                  .data.arr_col.get(offset)
+                                  .data.int_col.get(i)
+                    == 0;
+          }
+          break;
+        case TIME:
+          elements = new Time[size];
+          for (int i = 0; i < size; ++i) {
+            elements[i] = new Time(rowSet.columns.get(columnIndex - 1)
+                                           .data.arr_col.get(offset)
+                                           .data.int_col.get(i)
+                    * 1000);
+          }
+          break;
+        case TIMESTAMP:
+          elements = new Timestamp[size];
+          for (int i = 0; i < size; ++i) {
+            elements[i] = adjust_precision(rowSet.columns.get(columnIndex - 1)
+                                                   .data.arr_col.get(offset)
+                                                   .data.int_col.get(i),
+                    rowSet.row_desc.get(columnIndex - 1).col_type.getPrecision());
+          }
+          break;
+        case DATE:
+          elements = new Date[size];
+          for (int i = 0; i < size; ++i) {
+            elements[i] = new Date(rowSet.columns.get(columnIndex - 1)
+                                           .data.arr_col.get(offset)
+                                           .data.int_col.get(i)
+                    * 1000);
+          }
+          break;
+        case FLOAT:
+          elements = new Float[size];
+          for (int i = 0; i < size; ++i) {
+            elements[i] = rowSet.columns.get(columnIndex - 1)
+                                  .data.arr_col.get(offset)
+                                  .data.real_col.get(i)
+                                  .floatValue();
+          }
+          break;
+        case DECIMAL:
+          elements = new BigDecimal[size];
+          for (int i = 0; i < size; ++i) {
+            elements[i] = BigDecimal.valueOf(rowSet.columns.get(columnIndex - 1)
+                                                     .data.arr_col.get(offset)
+                                                     .data.real_col.get(i));
+          }
+          break;
+        case DOUBLE:
+          elements = new Double[size];
+          for (int i = 0; i < size; ++i) {
+            elements[i] = rowSet.columns.get(columnIndex - 1)
+                                  .data.arr_col.get(offset)
+                                  .data.real_col.get(i);
+          }
+          break;
+        case STR:
+        case POINT:
+        case LINESTRING:
+        case POLYGON:
+        case MULTIPOLYGON:
+          elements = new String[size];
+          for (int i = 0; i < size; ++i) {
+            elements[i] = rowSet.columns.get(columnIndex - 1)
+                                  .data.arr_col.get(offset)
+                                  .data.str_col.get(i);
+          }
+          break;
+        default:
+          throw new AssertionError(rowDesc.get(columnIndex - 1).col_type.type.name());
+      }
+
+      for (int i = 0; i < size; ++i) {
+        if (this.rowSet.columns.get(columnIndex - 1)
+                        .data.arr_col.get(offset)
+                        .nulls.get(i)) {
+          elements[i] = null;
+        }
+      }
+
+      return new OmniSciArray(rowDesc.get(columnIndex - 1).col_type.type, elements);
+    }
   }
 
   @Override
@@ -1319,10 +1438,7 @@ class OmniSciResultSet implements java.sql.ResultSet {
   @Override
   public Array getArray(String columnLabel)
           throws SQLException { // logger.debug("Entered "+ sql );
-    throw new UnsupportedOperationException("Not supported yet,"
-            + " line:" + new Throwable().getStackTrace()[0].getLineNumber()
-            + " class:" + new Throwable().getStackTrace()[0].getClassName()
-            + " method:" + new Throwable().getStackTrace()[0].getMethodName());
+    return getArray(findColumnByName(columnLabel));
   }
 
   // this method is used to add a TZ from Calendar; is TimeZone in the calendar isn't
@@ -1368,11 +1484,7 @@ class OmniSciResultSet implements java.sql.ResultSet {
 
   @Override
   public Date getDate(String columnLabel, Calendar cal) throws SQLException {
-    Integer colNum = columnMap.get(columnLabel);
-    if (colNum == null) {
-      throw new SQLException("Could not find column " + columnLabel);
-    }
-    return getDate(colNum, cal);
+    return getDate(findColumnByName(columnLabel), cal);
   }
 
   @Override
@@ -1395,11 +1507,7 @@ class OmniSciResultSet implements java.sql.ResultSet {
   @Override
   public Time getTime(String columnLabel, Calendar cal)
           throws SQLException { // logger.debug("Entered "+ sql );
-    Integer colNum = columnMap.get(columnLabel);
-    if (colNum == null) {
-      throw new SQLException("Could not find column " + columnLabel);
-    }
-    return getTime(colNum, cal);
+    return getTime(findColumnByName(columnLabel), cal);
   }
 
   @Override
@@ -1412,37 +1520,18 @@ class OmniSciResultSet implements java.sql.ResultSet {
       // assume column is str already for now
       wasNull = false;
       long val = rowSet.columns.get(columnIndex - 1).data.int_col.get(offset);
-      Timestamp tm = null;
       int precision = rowSet.row_desc.get(columnIndex - 1).col_type.getPrecision();
       if (cal != null) {
         val += getOffsetFromTZ(val, cal, precision);
       }
-      boolean negative = (val < 0);
-      long scale;
-      switch (precision) {
-        case 0:
-          return new Timestamp(val * 1000);
-        case 3:
-          return new Timestamp(val);
-        case 6:
-          return extract_complex_time(val, precision);
-        case 9:
-          return extract_complex_time(val, precision);
-        default:
-          throw new RuntimeException("Invalid precision [" + Integer.toString(precision)
-                  + "] returned. Valid values 0,3,6,9");
-      }
+      return adjust_precision(val, precision);
     }
   }
 
   @Override
   public Timestamp getTimestamp(String columnLabel, Calendar cal)
           throws SQLException { // logger.debug("Entered "+ sql );
-    Integer colNum = columnMap.get(columnLabel);
-    if (colNum == null) {
-      throw new SQLException("Could not find column " + columnLabel);
-    }
-    return getTimestamp(colNum, cal);
+    return getTimestamp(findColumnByName(columnLabel), cal);
   }
 
   @Override
@@ -1999,5 +2088,13 @@ class OmniSciResultSet implements java.sql.ResultSet {
             + " line:" + new Throwable().getStackTrace()[0].getLineNumber()
             + " class:" + new Throwable().getStackTrace()[0].getClassName()
             + " method:" + new Throwable().getStackTrace()[0].getMethodName());
+  }
+
+  private Integer findColumnByName(String name) throws SQLException {
+    Integer colNum = columnMap.get(name);
+    if (colNum == null) {
+      throw new SQLException("Could not find  the column " + name);
+    }
+    return colNum;
   }
 }
