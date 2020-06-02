@@ -21,6 +21,7 @@
 #include <cstdlib>  // abort()
 #endif
 
+#include <cmath>
 #include <ctime>
 #include <iostream>
 
@@ -97,61 +98,42 @@ extern "C" NEVER_INLINE DEVICE int64_t DateTruncate(DatetruncField field,
       return timeval;
     case dtMINUTE: {
       int64_t ret = (timeval / kSecsPerMin) * kSecsPerMin;
-      // in the case of a negative time we still want to push down so need to push
-      // one
-      // more
-      if (ret < 0) {
-        {
-          ret -= kSecsPerMin;
-        }
+      if (timeval < 0 && timeval % kSecsPerMin) {
+        ret -= kSecsPerMin;
       }
       return ret;
     }
     case dtHOUR: {
       int64_t ret = (timeval / kSecPerHour) * kSecPerHour;
-      // in the case of a negative time we still want to push down so need to push
-      // one
-      // more
-      if (ret < 0) {
-        {
-          ret -= kSecPerHour;
-        }
+      if (timeval < 0 && timeval % kSecPerHour) {
+        ret -= kSecPerHour;
       }
       return ret;
     }
     case dtQUARTERDAY: {
       int64_t ret = (timeval / kSecsPerQuarterDay) * kSecsPerQuarterDay;
-      // in the case of a negative time we still want to push down so need to push
-      // one
-      // more
-      if (ret < 0) {
-        {
-          ret -= kSecsPerQuarterDay;
-        }
+      if (timeval < 0 && timeval % kSecsPerQuarterDay) {
+        ret -= kSecsPerQuarterDay;
       }
       return ret;
     }
     case dtDAY: {
       int64_t ret = (timeval / kSecsPerDay) * kSecsPerDay;
-      // in the case of a negative time we still want to push down so need to push
-      // one
-      // more
-      if (ret < 0) {
-        {
-          ret -= kSecsPerDay;
-        }
+      if (timeval < 0 && timeval % kSecsPerDay) {
+        ret -= kSecsPerDay;
       }
       return ret;
     }
     case dtWEEK: {
-      int64_t day = (timeval / kSecsPerDay) * kSecsPerDay;
-      if (day < 0) {
-        {
+      if (timeval >= 0L && timeval <= UINT32_MAX - (kEpochOffsetYear1900)) {
+        int64_t day = (timeval / kSecsPerDay) * kSecsPerDay;
+        if (timeval % kSecsPerDay) {
           day -= kSecsPerDay;
         }
+        int32_t dow = extract_dow(day);
+        return day - ((dow - 1) * kSecsPerDay);
       }
-      int32_t dow = extract_dow(day);
-      return day - (dow * kSecsPerDay);
+      break;
     }
     case dtMONTH: {
       if (timeval >= 0L && timeval <= UINT32_MAX - (kEpochOffsetYear1900)) {
@@ -225,13 +207,22 @@ extern "C" NEVER_INLINE DEVICE int64_t DateTruncate(DatetruncField field,
   tm tm_struct;
   gmtime_r_newlib(timeval, tm_struct);
   switch (field) {
+    case dtWEEK: {
+      // clear the time
+      int64_t day = (timeval / kSecsPerDay) * kSecsPerDay;
+      if (tm_struct.tm_hour >= 12) {
+        day -= kSecsPerDay;
+      }
+      // calculate the day of week
+      int32_t dow = tm_struct.tm_wday;
+      // offset to start of week
+      return day - (static_cast<int64_t>(dow - 1) * kSecsPerDay);
+    }
     case dtMONTH: {
       // clear the time
       int64_t day = (timeval / kSecsPerDay) * kSecsPerDay;
-      if (day < 0) {
-        {
-          day -= kSecsPerDay;
-        }
+      if (tm_struct.tm_hour >= 12) {
+        day -= kSecsPerDay;
       }
       // calculate the day of month offset
       int32_t dom = tm_struct.tm_mday;
@@ -240,10 +231,8 @@ extern "C" NEVER_INLINE DEVICE int64_t DateTruncate(DatetruncField field,
     case dtQUARTER: {
       // clear the time
       int64_t day = (timeval / kSecsPerDay) * kSecsPerDay;
-      if (day < 0) {
-        {
-          day -= kSecsPerDay;
-        }
+      if (tm_struct.tm_hour >= 12) {
+        day -= kSecsPerDay;
       }
       // calculate the day of month offset
       int32_t dom = tm_struct.tm_mday;
@@ -271,10 +260,8 @@ extern "C" NEVER_INLINE DEVICE int64_t DateTruncate(DatetruncField field,
     case dtYEAR: {
       // clear the time
       int64_t day = (timeval / kSecsPerDay) * kSecsPerDay;
-      if (day < 0) {
-        {
-          day -= kSecsPerDay;
-        }
+      if (tm_struct.tm_hour >= 12) {
+        day -= kSecsPerDay;
       }
       // calculate the day of year offset
       int32_t doy = tm_struct.tm_yday;
@@ -282,18 +269,33 @@ extern "C" NEVER_INLINE DEVICE int64_t DateTruncate(DatetruncField field,
     }
     case dtDECADE: {
       int32_t year = tm_struct.tm_year + kYearBase;
-      int32_t decade_start = ((year - 1) / 10) * 10 + 1;
-      return create_epoch(decade_start);
+      int32_t decade_start = (year / 10) * 10;
+      if (decade_start % 4 == 0) {
+        auto prior_year_epoch = create_epoch(decade_start - 1);
+        return prior_year_epoch + kSecsPerDay * 365;
+      } else {
+        return create_epoch(decade_start);
+      }
     }
     case dtCENTURY: {
       int32_t year = tm_struct.tm_year + kYearBase;
       int32_t century_start = ((year - 1) / 100) * 100 + 1;
-      return create_epoch(century_start);
+      if (century_start % 4 == 0) {
+        auto prior_year_epoch = create_epoch(century_start - 1);
+        return prior_year_epoch + kSecsPerDay * 365;
+      } else {
+        return create_epoch(century_start);
+      }
     }
     case dtMILLENNIUM: {
       int32_t year = tm_struct.tm_year + kYearBase;
       int32_t millennium_start = ((year - 1) / 1000) * 1000 + 1;
-      return create_epoch(millennium_start);
+      if (millennium_start % 4 == 0) {
+        auto prior_year_epoch = create_epoch(millennium_start - 1);
+        return prior_year_epoch + kSecsPerDay * 365;
+      } else {
+        return create_epoch(millennium_start);
+      }
     }
     default:
 #ifdef __CUDACC__

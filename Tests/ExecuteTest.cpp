@@ -3304,7 +3304,7 @@ TEST(Select, Time) {
               v<int64_t>(run_simple_agg("SELECT DATE_TRUNC(century, CAST('2012-05-08 "
                                         "20:15:12' AS TIMESTAMP)) FROM test limit 1;",
                                         dt)));
-    ASSERT_EQ(1293840000L,
+    ASSERT_EQ(1262304000L,
               v<int64_t>(run_simple_agg("SELECT DATE_TRUNC(decade, CAST('2012-05-08 "
                                         "20:15:12' AS TIMESTAMP)) FROM test limit 1;",
                                         dt)));
@@ -3316,7 +3316,7 @@ TEST(Select, Time) {
               v<int64_t>(run_simple_agg("SELECT DATE_TRUNC(microsecond, CAST('2012-05-08 "
                                         "20:15:12' AS TIMESTAMP)) FROM test limit 1;",
                                         dt)));
-    ASSERT_EQ(1336262400L,
+    ASSERT_EQ(1336348800L,
               v<int64_t>(run_simple_agg("SELECT DATE_TRUNC(week, CAST('2012-05-08 "
                                         "20:15:12' AS TIMESTAMP)) FROM test limit 1;",
                                         dt)));
@@ -3349,7 +3349,7 @@ TEST(Select, Time) {
               v<int64_t>(run_simple_agg("SELECT DATE_TRUNC(century, CAST('1903-05-08 "
                                         "20:15:12' AS TIMESTAMP)) FROM test limit 1;",
                                         dt)));
-    ASSERT_EQ(-2177452800L,
+    ASSERT_EQ(-2208988800L,
               v<int64_t>(run_simple_agg("SELECT DATE_TRUNC(decade, CAST('1903-05-08 "
                                         "20:15:12' AS TIMESTAMP)) FROM test limit 1;",
                                         dt)));
@@ -3361,16 +3361,16 @@ TEST(Select, Time) {
               v<int64_t>(run_simple_agg("SELECT DATE_TRUNC(microsecond, CAST('1903-05-08 "
                                         "20:15:12' AS TIMESTAMP)) FROM test limit 1;",
                                         dt)));
-    ASSERT_EQ(-2103840000L,
+    ASSERT_EQ(-2103753600L,
               v<int64_t>(run_simple_agg("SELECT DATE_TRUNC(week, CAST('1903-05-08 "
                                         "20:15:12' AS TIMESTAMP)) FROM test limit 1;",
                                         dt)));
 
-    ASSERT_EQ(31536000L,
+    ASSERT_EQ(0L,
               v<int64_t>(run_simple_agg("SELECT DATE_TRUNC(decade, CAST('1972-05-08 "
                                         "20:15:12' AS TIMESTAMP)) FROM test limit 1;",
                                         dt)));
-    ASSERT_EQ(662688000L,
+    ASSERT_EQ(946684800L,
               v<int64_t>(run_simple_agg("SELECT DATE_TRUNC(decade, CAST('2000-05-08 "
                                         "20:15:12' AS TIMESTAMP)) FROM test limit 1;",
                                         dt)));
@@ -4240,8 +4240,8 @@ TEST(Select, Time) {
         std::make_tuple("second, m", 1418509395L, 15),
         std::make_tuple("millennium, m", 978307200L, 20),
         std::make_tuple("century, m", 978307200L, 20),
-        std::make_tuple("decade, m", 1293840000L, 20),
-        std::make_tuple("week, m", 1417910400L, 15),
+        std::make_tuple("decade, m", 1262304000L, 20),
+        std::make_tuple("week, m", 1417996800L, 20),
         std::make_tuple("nanosecond, m", 1418509395L, 15),
         std::make_tuple("microsecond, m", 1418509395L, 15),
         std::make_tuple("millisecond, m", 1418509395L, 15),
@@ -4254,8 +4254,8 @@ TEST(Select, Time) {
         std::make_tuple("second, m_3", 1418509395000L, 15),
         std::make_tuple("millennium, m_3", 978307200000L, 20),
         std::make_tuple("century, m_3", 978307200000L, 20),
-        std::make_tuple("decade, m_3", 1293840000000L, 20),
-        std::make_tuple("week, m_3", 1417910400000L, 15),
+        std::make_tuple("decade, m_3", 1262304000000L, 20),
+        std::make_tuple("week, m_3", 1417996800000L, 20),
         std::make_tuple("nanosecond, m_3", 1418509395323L, 15),
         std::make_tuple("microsecond, m_3", 1418509395323L, 15),
         std::make_tuple("millisecond, m_3", 1418509395323L, 15),
@@ -4269,8 +4269,8 @@ TEST(Select, Time) {
         std::make_tuple("second, m_6", 931701773000000L, 10),
         std::make_tuple("millennium, m_6", -30578688000000000L, 10),
         std::make_tuple("century, m_6", -2177452800000000L, 10),
-        std::make_tuple("decade, m_6", 662688000000000L, 10),
-        std::make_tuple("week, m_6", 931651200000000L, 10),
+        std::make_tuple("decade, m_6", 631152000000000L, 10),
+        std::make_tuple("week, m_6", 931132800000000L, 10),
         std::make_tuple("nanosecond, m_6", 931701773874533L, 10),
         std::make_tuple("microsecond, m_6", 931701773874533L, 10),
         std::make_tuple("millisecond, m_6", 931701773874000L, 10),
@@ -4284,8 +4284,8 @@ TEST(Select, Time) {
         std::make_tuple("second, m_9", 1146023344000000000L, 10),
         std::make_tuple("millennium, m_9", 978307200000000000L, 20),
         std::make_tuple("century, m_9", 978307200000000000L, 20),
-        std::make_tuple("decade, m_9", 978307200000000000L, 10),
-        std::make_tuple("week, m_9", 1145750400000000000L, 10),
+        std::make_tuple("decade, m_9", 946684800000000000L, 10),
+        std::make_tuple("week, m_9", 1145836800000000000L, 10),
         std::make_tuple("nanosecond, m_9", 1146023344607435125L, 10),
         std::make_tuple("microsecond, m_9", 1146023344607435000L, 10),
         std::make_tuple("millisecond, m_9", 1146023344607000000L, 10)};
@@ -4513,11 +4513,88 @@ TEST(Select, TimeRedux) {
   // we don't accidentally remove them
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
-    ASSERT_EQ(
+
+    EXPECT_EQ(
         15,
         v<int64_t>(run_simple_agg(
             R"(SELECT COUNT(*) FROM test WHERE o = (DATE '1999-09-01') OR CAST(o AS TIMESTAMP) = (TIMESTAMP '1999-09-09 00:00:00.000');)",
             dt)));
+
+    // Correctness tests for pre-epoch, epoch, and post-epoch dates
+    auto check_epoch_result = [](const auto& result,
+                                 const std::vector<int64_t>& expected) {
+      EXPECT_EQ(result->rowCount(), expected.size());
+      for (size_t i = 0; i < expected.size(); i++) {
+        auto row = result->getNextRow(false, false);
+        EXPECT_EQ(row.size(), size_t(1));
+        EXPECT_EQ(expected[i], v<int64_t>(row[0]));
+      }
+    };
+
+    check_epoch_result(
+        run_multiple_agg(
+            R"(SELECT EXTRACT('epoch' FROM dt) FROM test_date_time ORDER BY dt;)", dt),
+        {-210038400, -53481600, 0, 344217600});
+    check_epoch_result(
+        run_multiple_agg(
+            R"(SELECT EXTRACT('epoch' FROM date_trunc('year', dt)) FROM test_date_time ORDER BY dt;)",
+            dt),
+        {-220924800, -63158400, 0, 315532800});
+    check_epoch_result(
+        run_multiple_agg(
+            R"(SELECT EXTRACT('epoch' FROM date_trunc('quarter', dt)) FROM test_date_time ORDER BY dt;)",
+            dt),
+        {-213148800, -55296000, 0, 339206400});
+    check_epoch_result(
+        run_multiple_agg(
+            R"(SELECT EXTRACT('epoch' FROM date_trunc('month', dt)) FROM test_date_time ORDER BY dt;)",
+            dt),
+        {-210556800, -55296000, 0, 341884800});
+    check_epoch_result(
+        run_multiple_agg(
+            R"(SELECT EXTRACT('epoch' FROM date_trunc('day', dt)) FROM test_date_time ORDER BY dt;)",
+            dt),
+        {-210038400, -53481600, 0, 344217600});
+    check_epoch_result(
+        run_multiple_agg(
+            R"(SELECT EXTRACT('epoch' FROM date_trunc('hour', dt)) FROM test_date_time ORDER BY dt;)",
+            dt),
+        {-210038400, -53481600, 0, 344217600});
+    check_epoch_result(
+        run_multiple_agg(
+            R"(SELECT EXTRACT('epoch' FROM date_trunc('minute', dt)) FROM test_date_time ORDER BY dt;)",
+            dt),
+        {-210038400, -53481600, 0, 344217600});
+    check_epoch_result(
+        run_multiple_agg(
+            R"(SELECT EXTRACT('epoch' FROM date_trunc('second', dt)) FROM test_date_time ORDER BY dt;)",
+            dt),
+        {-210038400, -53481600, 0, 344217600});
+    check_epoch_result(
+        run_multiple_agg(
+            R"(SELECT EXTRACT('epoch' FROM date_trunc('millennium', dt)) FROM test_date_time ORDER BY dt;)",
+            dt),
+        {-30578688000, -30578688000, -30578688000, -30578688000});
+    check_epoch_result(
+        run_multiple_agg(
+            R"(SELECT EXTRACT('epoch' FROM date_trunc('century', dt)) FROM test_date_time ORDER BY dt;)",
+            dt),
+        {-2177452800, -2177452800, -2177452800, -2177452800});
+    check_epoch_result(
+        run_multiple_agg(
+            R"(SELECT EXTRACT('epoch' FROM date_trunc('decade', dt)) FROM test_date_time ORDER BY dt;)",
+            dt),
+        {-315619200, -315619200, 0, 315532800});
+    check_epoch_result(
+        run_multiple_agg(
+            R"(SELECT EXTRACT('epoch' FROM date_trunc('week', dt)) FROM test_date_time ORDER BY dt;)",
+            dt),
+        {-210124800, -53481600, -259200, 343872000});
+    check_epoch_result(
+        run_multiple_agg(
+            R"(SELECT EXTRACT('epoch' FROM date_trunc('quarter', dt)) FROM test_date_time ORDER BY dt;)",
+            dt),
+        {-213148800, -55296000, 0, 339206400});
   }
 }
 
@@ -9490,7 +9567,7 @@ TEST(Select, TimestampPrecision) {
     ASSERT_EQ(978307200000L,
               v<int64_t>(run_simple_agg(
                   "SELECT DATE_TRUNC(century, m_3) FROM test limit 1;", dt)));
-    ASSERT_EQ(1293840000000L,
+    ASSERT_EQ(1262304000000L,
               v<int64_t>(run_simple_agg(
                   "SELECT DATE_TRUNC(decade, m_3) FROM test limit 1;", dt)));
     ASSERT_EQ(1388534400000L,
@@ -9499,7 +9576,7 @@ TEST(Select, TimestampPrecision) {
     ASSERT_EQ(1417392000000L,
               v<int64_t>(run_simple_agg(
                   "SELECT DATE_TRUNC(month, m_3) FROM test limit 1;", dt)));
-    ASSERT_EQ(1417910400000L,
+    ASSERT_EQ(1417996800000L,
               v<int64_t>(
                   run_simple_agg("SELECT DATE_TRUNC(week, m_3) FROM test limit 1;", dt)));
     ASSERT_EQ(
@@ -9529,7 +9606,7 @@ TEST(Select, TimestampPrecision) {
     ASSERT_EQ(-2177452800000000L,
               v<int64_t>(run_simple_agg(
                   "SELECT DATE_TRUNC(century, m_6) FROM test limit 1;", dt)));
-    ASSERT_EQ(662688000000000L,
+    ASSERT_EQ(631152000000000L,
               v<int64_t>(run_simple_agg(
                   "SELECT DATE_TRUNC(decade, m_6) FROM test limit 1;", dt)));
     ASSERT_EQ(915148800000000L,
@@ -9538,7 +9615,7 @@ TEST(Select, TimestampPrecision) {
     ASSERT_EQ(930787200000000L,
               v<int64_t>(run_simple_agg(
                   "SELECT DATE_TRUNC(month, m_6) FROM test limit 1;", dt)));
-    ASSERT_EQ(931651200000000L,
+    ASSERT_EQ(931132800000000L,
               v<int64_t>(
                   run_simple_agg("SELECT DATE_TRUNC(week, m_6) FROM test limit 1;", dt)));
     ASSERT_EQ(
@@ -9568,7 +9645,7 @@ TEST(Select, TimestampPrecision) {
     ASSERT_EQ(978307200000000000L,
               v<int64_t>(run_simple_agg(
                   "SELECT DATE_TRUNC(century, m_9) FROM test limit 1;", dt)));
-    ASSERT_EQ(978307200000000000L,
+    ASSERT_EQ(946684800000000000L,
               v<int64_t>(run_simple_agg(
                   "SELECT DATE_TRUNC(decade, m_9) FROM test limit 1;", dt)));
     ASSERT_EQ(1136073600000000000L,
@@ -9577,7 +9654,7 @@ TEST(Select, TimestampPrecision) {
     ASSERT_EQ(1143849600000000000L,
               v<int64_t>(run_simple_agg(
                   "SELECT DATE_TRUNC(month, m_9) FROM test limit 1;", dt)));
-    ASSERT_EQ(1145750400000000000L,
+    ASSERT_EQ(1145836800000000000L,
               v<int64_t>(
                   run_simple_agg("SELECT DATE_TRUNC(week, m_9) FROM test limit 1;", dt)));
     ASSERT_EQ(
@@ -18505,6 +18582,33 @@ int create_and_populate_tables(const bool use_temporary_tables,
         "9223372036854775807, -9223372036854775808);"};
     run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
     g_sqlite_comparator.query(insert_query);
+  }
+  try {
+    const std::string drop_old_test{"DROP TABLE IF EXISTS test_date_time;"};
+    run_ddl_statement(drop_old_test);
+    std::string columns_definition{"dt DATE"};
+    const std::string create_test = build_create_table_statement(columns_definition,
+                                                                 "test_date_time",
+                                                                 {"", 0},
+                                                                 {},
+                                                                 2,
+                                                                 use_temporary_tables,
+                                                                 with_delete_support);
+    run_ddl_statement(create_test);
+  } catch (...) {
+    LOG(ERROR) << "Failed to (re-)create table 'test_date_time'";
+    return -EEXIST;
+  }
+  {
+    // fill test_date_time
+    run_multiple_agg("INSERT INTO test_date_time VALUES('1963-05-07');",
+                     ExecutorDeviceType::CPU);
+    run_multiple_agg("INSERT INTO test_date_time VALUES('1968-04-22');",
+                     ExecutorDeviceType::CPU);
+    run_multiple_agg("INSERT INTO test_date_time VALUES('1970-01-01');",
+                     ExecutorDeviceType::CPU);
+    run_multiple_agg("INSERT INTO test_date_time VALUES('1980-11-28');",
+                     ExecutorDeviceType::CPU);
   }
   try {
     const std::string drop_old_test{"DROP TABLE IF EXISTS test_ranges;"};
