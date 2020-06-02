@@ -87,8 +87,6 @@ cdef class PyColumnDetails:
     cdef _ColumnDetails c_col
     def __cinit__(self, string col_name, int col_type, int col_enc, bool nullable, bool is_array, int precision, int scale, int comp_param):
         self.c_col = _ColumnDetails(col_name, <_ColumnType>col_type, <_ColumnEncoding>col_enc, nullable, is_array, precision, scale, comp_param)
-#    def __dealloc__(self):
-#        del self.c_col
 
 
 cdef class PyRow:
@@ -135,21 +133,17 @@ cdef class PyCursor:
             col_types.append(ct)
             col_types_str.append(ct.to_str())
         format_row = "{:>12}" * (len(col_types) + 1)
-        """print(format_row.format("", *col_types))"""
         print(*col_types_str)
         for j in range(row_count):
             r = self.nextRow()
             fields = []
             for f in range(col_count):
                 fields.append(r.getField(f, col_types[f]))
-#            print(format_row.format("", *fields))
             print(*fields, flush=True)
 
     def getArrowRecordBatch(self):
-        print('getArrowRecordBatch - BEGIN')
         with nogil:
             self.c_batch = self.c_cursor.getArrowRecordBatch()
-        print('getArrowRecordBatch - END')
         if self.c_batch.get() is NULL:
             print('Record batch is NULL')
             return None
@@ -163,13 +157,10 @@ ColumnDetailsTp = namedtuple("ColumnDetails", ["name", "type", "nullable",
                                              "is_array"])
 cdef class PyDbEngine:
     cdef DBEngine* c_dbe  #Hold a C++ instance which we're wrapping
-#    cdef bool closed
 
     def __cinit__(self, path, port):
-        print('CINIT START')
         try:
             bpath = bytes(path, 'utf-8')
-            print('DBEngine.create')
             self.c_dbe = DBEngine.create(bpath, port)
         except OSError as err:
             print("OS error: {0}".format(err))
@@ -177,11 +168,6 @@ cdef class PyDbEngine:
             print("Could not convert data to an integer.")
         except:
             print("Unexpected error:", sys.exc_info()[0], sys.exc_info()[1])
-        print('_CINIT: ', path, '. port=', port)
-
-    def __init__(self, path, port):
-#        self.closed = False
-        print('_INIT')
 
     def __dealloc__(self):
         self.c_dbe.reset()
@@ -196,11 +182,7 @@ cdef class PyDbEngine:
 
     def executeDDL(self, query):
         try:
-            t1=datetime.utcnow()
             self.c_dbe.executeDDL(bytes(query, 'utf-8'))
-            t2=datetime.utcnow()
-            d = t2-t1
-            print(d)
         except Exception, e:
             os.abort()
 
@@ -213,13 +195,7 @@ cdef class PyDbEngine:
         obj = PyCursor();
         obj.c_cursor = self.c_dbe.executeDML(bytes(query, 'utf-8'));
         prb = obj.getArrowRecordBatch()
-        tbl1=Table.from_batches([prb])
-        df = tbl1.to_pandas()
-        return df
-
-#    def get_tables(self):
-#        cdef vector[string] table_names = self.c_dbe.getTables()
-#        return table_names
+        df = prb.to_pandas()
 
     def get_table_details(self, table_name):
         cdef vector[ColumnDetails] table_details = self.c_dbe.getTableDetails(bytes(table_name, 'utf-8'))

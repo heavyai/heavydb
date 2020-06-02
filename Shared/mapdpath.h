@@ -25,6 +25,7 @@
 #else
 #include <linux/limits.h>
 #endif
+#include <dlfcn.h>
 #include <unistd.h>
 
 inline std::string mapd_root_abs_path() {
@@ -33,7 +34,41 @@ inline std::string mapd_root_abs_path() {
   auto path_len = proc_pidpath(getpid(), abs_exe_path, sizeof(abs_exe_path));
 #else
   char abs_exe_path[PATH_MAX] = {0};
-  auto path_len = readlink("/proc/self/exe", abs_exe_path, sizeof(abs_exe_path));
+  auto path_len = 0;
+#ifndef ENABLE_EMBEDDED_DATABASE
+  path_len = readlink("/proc/self/exe", abs_exe_path, sizeof(abs_exe_path));
+#else
+  // find library path
+  Dl_info dl_info;
+  auto rc = dladdr((void*)mapd_root_abs_path, &dl_info);
+  if (rc) {
+    // check that DBEngine loaded
+    if (strstr(dl_info.dli_fname, "libDBEngine") != NULL) {
+      // dl_info.dli_fname not always contain full path
+      if (strrchr(dl_info.dli_fname, '/') != NULL) {
+        strcpy(abs_exe_path, dl_info.dli_fname);
+      } else {
+        FILE* fp = fopen("/proc/self/maps", "r");
+        if (fp != NULL) {
+          const size_t BUFFER_SIZE = 256;
+          char buffer[BUFFER_SIZE] = "";
+          while (fgets(buffer, BUFFER_SIZE, fp)) {
+            if (sscanf(buffer, "%*x-%*x %*s %*s %*s %*s %s", abs_exe_path) == 1) {
+              char* bname = basename(abs_exe_path);
+              if (strcasecmp(bname, dl_info.dli_fname) == 0) {
+                break;
+              }
+            }
+          }
+          fclose(fp);
+        }
+      }
+      path_len = strlen(abs_exe_path);
+    } else {
+      path_len = readlink("/proc/self/exe", abs_exe_path, sizeof(abs_exe_path));
+    }
+  }
+#endif
 #endif
   CHECK_GT(path_len, 0);
   CHECK_LT(static_cast<size_t>(path_len), sizeof(abs_exe_path));

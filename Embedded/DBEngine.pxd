@@ -48,7 +48,7 @@ cdef extern from "QueryEngine/ResultSet.h":
         vector[TargetValue] getNextRow(const bool translate_strings, const bool decimal_to_double)
         TargetValue getRowAt(const size_t row_idx, const size_t col_idx, const bool translate_strings, const bool decimal_to_double)
 
-cdef extern from "DBEngine.h" namespace 'EmbeddedDatabase':
+cdef extern from "DBETypes.h" namespace 'EmbeddedDatabase':
     cdef cppclass ColumnType:
         pass
 
@@ -72,6 +72,7 @@ cdef extern from "DBEngine.h" namespace 'EmbeddedDatabase':
         double getDouble(size_t col)
         string getStr(size_t col)
 
+cdef extern from "DBEngine.h" namespace 'EmbeddedDatabase':
     cdef cppclass Cursor:
         size_t getColCount()
         size_t getRowCount()
@@ -89,7 +90,7 @@ cdef extern from "DBEngine.h" namespace 'EmbeddedDatabase':
         @staticmethod
         DBEngine* create(string, int)
 
-cdef extern from "DBEngine.h" namespace 'EmbeddedDatabase::ColumnType':
+cdef extern from "DBETypes.h" namespace 'EmbeddedDatabase::ColumnType':
     cdef ColumnType SMALLINT
     cdef ColumnType INT
     cdef ColumnType BIGINT
@@ -113,7 +114,7 @@ cdef extern from "DBEngine.h" namespace 'EmbeddedDatabase::ColumnType':
     cdef ColumnType UNKNOWN
 
 
-cdef extern from "DBEngine.h" namespace 'EmbeddedDatabase::ColumnEncoding':
+cdef extern from "DBETypes.h" namespace 'EmbeddedDatabase::ColumnEncoding':
     cdef ColumnEncoding NONE
     cdef ColumnEncoding FIXED
     cdef ColumnEncoding RL
