@@ -21,10 +21,9 @@
 #include <cstdlib>  // abort()
 #endif
 
-extern "C" NEVER_INLINE DEVICE int32_t extract_hour(const int64_t lcltime) {
-  int64_t days, rem;
-  days = lcltime / kSecsPerDay - kEpochAdjustedDays;
-  rem = lcltime % kSecsPerDay;
+extern "C" NEVER_INLINE DEVICE int64_t extract_hour(const int64_t lcltime) {
+  int64_t days = lcltime / kSecsPerDay - kEpochAdjustedDays;
+  int64_t rem = lcltime % kSecsPerDay;
   if (rem < 0) {
     rem += kSecsPerDay;
     --days;
@@ -32,54 +31,51 @@ extern "C" NEVER_INLINE DEVICE int32_t extract_hour(const int64_t lcltime) {
   return static_cast<int32_t>(rem / kSecPerHour);
 }
 
-DEVICE int32_t extract_minute(const int64_t lcltime) {
-  int64_t days, rem;
-  days = lcltime / kSecsPerDay - kEpochAdjustedDays;
-  rem = lcltime % kSecsPerDay;
+extern "C" NEVER_INLINE DEVICE int64_t extract_minute(const int64_t lcltime) {
+  int64_t days = lcltime / kSecsPerDay - kEpochAdjustedDays;
+  int64_t rem = lcltime % kSecsPerDay;
   if (rem < 0) {
     rem += kSecsPerDay;
     --days;
   }
   rem %= kSecPerHour;
-  return static_cast<int32_t>(rem / kSecsPerMin);
+  return rem / kSecsPerMin;
 }
 
-DEVICE int32_t extract_second(const int64_t lcltime) {
-  return static_cast<int32_t>(lcltime % kSecsPerMin);
+extern "C" NEVER_INLINE DEVICE int64_t extract_second(const int64_t lcltime) {
+  return lcltime % kSecsPerMin;
 }
 
-DEVICE int64_t extract_millisecond(const int64_t lcltime) {
+extern "C" NEVER_INLINE DEVICE int64_t extract_millisecond(const int64_t lcltime) {
   return lcltime % (kSecsPerMin * kMilliSecsPerSec);
 }
 
-DEVICE int64_t extract_microsecond(const int64_t lcltime) {
+extern "C" NEVER_INLINE DEVICE int64_t extract_microsecond(const int64_t lcltime) {
   return lcltime % (kSecsPerMin * kMicroSecsPerSec);
 }
 
-DEVICE int64_t extract_nanosecond(const int64_t lcltime) {
+extern "C" NEVER_INLINE DEVICE int64_t extract_nanosecond(const int64_t lcltime) {
   return lcltime % (kSecsPerMin * kNanoSecsPerSec);
 }
 
-DEVICE int32_t extract_dow(const int64_t lcltime) {
-  int64_t days, rem;
-  int32_t weekday;
-  days = lcltime / kSecsPerDay - kEpochAdjustedDays;
-  rem = lcltime % kSecsPerDay;
+extern "C" NEVER_INLINE DEVICE int64_t extract_dow(const int64_t lcltime) {
+  int64_t days = lcltime / kSecsPerDay - kEpochAdjustedDays;
+  int64_t rem = lcltime % kSecsPerDay;
   if (rem < 0) {
     rem += kSecsPerDay;
     --days;
   }
 
-  if ((weekday = ((kEpochAdjustedWDay + days) % kDaysPerWeek)) < 0) {
+  int64_t weekday = (kEpochAdjustedWDay + days) % kDaysPerWeek;
+  if (weekday < 0) {
     weekday += kDaysPerWeek;
   }
   return weekday;
 }
 
-DEVICE int32_t extract_quarterday(const int64_t lcltime) {
-  int64_t quarterdays;
-  quarterdays = lcltime / kSecsPerQuarterDay;
-  return static_cast<int32_t>(quarterdays % 4) + 1;
+extern "C" NEVER_INLINE DEVICE int64_t extract_quarterday(const int64_t lcltime) {
+  const int64_t quarterdays = lcltime / kSecsPerQuarterDay;
+  return (quarterdays % 4) + 1;
 }
 
 DEVICE int32_t extract_month_fast(const int64_t lcltime) {
@@ -241,19 +237,90 @@ DEVICE tm gmtime_r_newlib(const int64_t lcltime, tm& res) {
   return res;
 }
 
+extern "C" NEVER_INLINE DEVICE int64_t extract_epoch(const int64_t timeval) {
+  return timeval;
+}
+
+extern "C" NEVER_INLINE DEVICE int64_t extract_dateepoch(const int64_t timeval) {
+  return (timeval < 0 && kSecsPerDay != 0) ? ((timeval / kSecsPerDay) - 1) * kSecsPerDay
+                                           : (timeval / kSecsPerDay) * kSecsPerDay;
+}
+
+extern "C" NEVER_INLINE DEVICE int64_t extract_isodow(const int64_t timeval) {
+  int64_t dow = extract_dow(timeval);
+  return (dow == 0 ? 7 : dow);
+}
+
+extern "C" NEVER_INLINE DEVICE int64_t extract_day(const int64_t timeval) {
+  tm tm_struct;
+  gmtime_r_newlib(timeval, tm_struct);
+  return tm_struct.tm_mday;
+}
+
+extern "C" NEVER_INLINE DEVICE int64_t extract_day_of_week(const int64_t timeval) {
+  tm tm_struct;
+  gmtime_r_newlib(timeval, tm_struct);
+  return tm_struct.tm_yday + 1;
+}
+
+extern "C" NEVER_INLINE DEVICE int64_t extract_week(const int64_t timeval) {
+  tm tm_struct;
+  gmtime_r_newlib(timeval, tm_struct);
+  int32_t doy = tm_struct.tm_yday;         // numbered from 0
+  int32_t dow = extract_dow(timeval) + 1;  // use Sunday 1 - Saturday 7
+  int32_t week = (doy / 7) + 1;
+  // now adjust for offset at start of year
+  //      S M T W T F S
+  // doy      0 1 2 3 4
+  // doy  5 6
+  // mod  5 6 0 1 2 3 4
+  // dow  1 2 3 4 5 6 7
+  // week 2 2 1 1 1 1 1
+  if (dow > (doy % 7)) {
+    return week;
+  }
+  return week + 1;
+}
+
+extern "C" NEVER_INLINE DEVICE int64_t extract_month(const int64_t timeval) {
+  if (timeval >= 0L && timeval <= UINT32_MAX - kEpochOffsetYear1900) {
+    return extract_month_fast(timeval);
+  }
+
+  tm tm_struct;
+  gmtime_r_newlib(timeval, tm_struct);
+  return tm_struct.tm_mon + 1;
+}
+
+extern "C" NEVER_INLINE DEVICE int64_t extract_quarter(const int64_t timeval) {
+  if (timeval >= 0L && timeval <= UINT32_MAX - kEpochOffsetYear1900) {
+    return extract_quarter_fast(timeval);
+  }
+
+  tm tm_struct;
+  gmtime_r_newlib(timeval, tm_struct);
+  return (tm_struct.tm_mon) / 3 + 1;
+}
+
+extern "C" NEVER_INLINE DEVICE int64_t extract_year(const int64_t timeval) {
+  if (timeval >= 0L && timeval <= UINT32_MAX - kEpochOffsetYear1900) {
+    return extract_year_fast(timeval);
+  }
+
+  tm tm_struct;
+  gmtime_r_newlib(timeval, tm_struct);
+  return 1900 + tm_struct.tm_year;
+}
+
 /*
  * @brief support the SQL EXTRACT function
  */
-extern "C" NEVER_INLINE DEVICE int64_t ExtractFromTime(ExtractField field,
-                                                       const int64_t timeval) {
-  // We have fast paths for the 5 fields below - do not need to do full gmtime
+DEVICE int64_t ExtractFromTime(ExtractField field, const int64_t timeval) {
   switch (field) {
     case kEPOCH:
-      return timeval;
+      return extract_epoch(timeval);
     case kDATEEPOCH:
-      return (timeval < 0 && kSecsPerDay != 0)
-                 ? ((timeval / kSecsPerDay) - 1) * kSecsPerDay
-                 : (timeval / kSecsPerDay) * kSecsPerDay;
+      return extract_dateepoch(timeval);
     case kQUARTERDAY:
       return extract_quarterday(timeval);
     case kHOUR:
@@ -270,75 +337,25 @@ extern "C" NEVER_INLINE DEVICE int64_t ExtractFromTime(ExtractField field,
       return extract_nanosecond(timeval);
     case kDOW:
       return extract_dow(timeval);
-    case kISODOW: {
-      int64_t dow = extract_dow(timeval);
-      return (dow == 0 ? 7 : dow);
-    }
-    case kMONTH: {
-      if (timeval >= 0L && timeval <= UINT32_MAX - kEpochOffsetYear1900) {
-        return extract_month_fast(timeval);
-      }
-      break;
-    }
-    case kQUARTER: {
-      if (timeval >= 0L && timeval <= UINT32_MAX - kEpochOffsetYear1900) {
-        return extract_quarter_fast(timeval);
-      }
-      break;
-    }
-    case kYEAR: {
-      if (timeval >= 0L && timeval <= UINT32_MAX - kEpochOffsetYear1900) {
-        return extract_year_fast(timeval);
-      }
-      break;
-    }
-    default:
-      break;
-  }
-
-  tm tm_struct;
-  gmtime_r_newlib(timeval, tm_struct);
-  switch (field) {
-    case kYEAR:
-      return 1900 + tm_struct.tm_year;
-    case kQUARTER:
-      return (tm_struct.tm_mon) / 3 + 1;
-    case kMONTH:
-      return tm_struct.tm_mon + 1;
+    case kISODOW:
+      return extract_isodow(timeval);
     case kDAY:
-      return tm_struct.tm_mday;
+      return extract_day(timeval);
+    case kWEEK:
+      return extract_week(timeval);
     case kDOY:
-      return tm_struct.tm_yday + 1;
-    case kWEEK: {
-      int32_t doy = tm_struct.tm_yday;         // numbered from 0
-      int32_t dow = extract_dow(timeval) + 1;  // use Sunday 1 - Saturday 7
-      int32_t week = (doy / 7) + 1;
-      // now adjust for offset at start of year
-      //      S M T W T F S
-      // doy      0 1 2 3 4
-      // doy  5 6
-      // mod  5 6 0 1 2 3 4
-      // dow  1 2 3 4 5 6 7
-      // week 2 2 1 1 1 1 1
-      if (dow > (doy % 7)) {
-        return week;
-      }
-      return week + 1;
-    }
-    default:
-#ifdef __CUDACC__
-      return -1;
-#else
-      abort();
-#endif
+      return extract_day_of_week(timeval);
+    case kMONTH:
+      return extract_month(timeval);
+    case kQUARTER:
+      return extract_quarter(timeval);
+    case kYEAR:
+      return extract_year(timeval);
   }
-}
 
-extern "C" DEVICE int64_t ExtractFromTimeNullable(ExtractField field,
-                                                  const int64_t timeval,
-                                                  const int64_t null_val) {
-  if (timeval == null_val) {
-    return null_val;
-  }
-  return ExtractFromTime(field, timeval);
+#ifdef __CUDACC__
+  return -1;
+#else
+  abort();
+#endif
 }

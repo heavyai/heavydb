@@ -296,6 +296,7 @@ class GroupByAndAggregate {
 
   friend class Executor;
   friend class QueryMemoryDescriptor;
+  friend class CodeGenerator;
   friend struct TargetExprCodegen;
   friend struct TargetExprCodegenBuilder;
 };
