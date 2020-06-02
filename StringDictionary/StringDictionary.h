@@ -20,6 +20,7 @@
 #include "../Shared/mapd_shared_mutex.h"
 #include "DictRef.h"
 #include "DictionaryCache.hpp"
+#include "LeafHostInfo.h"
 
 #include <future>
 #include <map>
@@ -37,8 +38,6 @@ class DictPayloadUnavailable : public std::runtime_error {
 
   DictPayloadUnavailable(const std::string& err) : std::runtime_error(err) {}
 };
-
-class LeafHostInfo;
 
 class StringDictionary {
  public:
