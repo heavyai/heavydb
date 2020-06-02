@@ -287,6 +287,9 @@ class FileMgr : public AbstractBufferMgr {  // implements
   void setEpoch(int epoch);  // resets current value of epoch at startup
   void processFileFutures(std::vector<std::future<std::vector<HeaderInfo>>>& file_futures,
                           std::vector<HeaderInfo>& headerVec);
+  AbstractBuffer* createBufferUnlocked(const ChunkKey& key,
+                                       size_t pageSize = 0,
+                                       const size_t numBytes = 0);
 };
 
 }  // namespace File_Namespace
