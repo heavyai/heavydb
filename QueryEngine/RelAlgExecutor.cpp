@@ -940,9 +940,8 @@ void RelAlgExecutor::executeRelAlgStep(const RaExecutionSequence& seq,
   const auto logical_union = dynamic_cast<const RelLogicalUnion*>(body);
   if (logical_union) {
     exec_desc.setResult(executeUnion(logical_union,
-                                     seq,
-                                     hint_applied.first,
-                                     hint_applied.second,
+                                     co,
+                                     eo_work_unit.with_preserve_order(true),
                                      render_info,
                                      queue_time_ms));
     addTemporaryTable(-logical_union->getId(), exec_desc.getResult().getDataPtr());

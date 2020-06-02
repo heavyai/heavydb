@@ -81,7 +81,9 @@ struct ExecutionOptions {
   double running_query_interrupt_freq;
   unsigned pending_query_interrupt_freq;
   ExecutorType executor_type = ExecutorType::Native;
-  std::vector<size_t> outer_fragment_indices{};
+  const std::vector<size_t> outer_fragment_indices{};
+  bool multifrag_result = false;
+  bool preserve_order = false;
 
   static ExecutionOptions defaults() {
     return ExecutionOptions{false,
@@ -99,6 +101,18 @@ struct ExecutionOptions {
                             false,
                             0.5,
                             1000};
+  }
+
+  ExecutionOptions with_multifrag_result(bool enable = true) const {
+    ExecutionOptions eo = *this;
+    eo.multifrag_result = enable;
+    return eo;
+  }
+
+  ExecutionOptions with_preserve_order(bool enable = true) const {
+    ExecutionOptions eo = *this;
+    eo.preserve_order = enable;
+    return eo;
   }
 };
 

@@ -896,8 +896,11 @@ ResultSetPtr get_merged_result(
 
 }  // namespace
 
-ResultSetPtr Executor::resultsUnion(SharedKernelContext& shared_context,
-                                    const RelAlgExecutionUnit& ra_exe_unit) {
+TemporaryTable Executor::resultsUnion(SharedKernelContext& shared_context,
+                                      const RelAlgExecutionUnit& ra_exe_unit,
+                                      bool merge,
+                                      bool sort_by_table_id,
+                                      const std::map<int, size_t>& order_map) {
   auto& results_per_device = shared_context.getFragmentResults();
   if (results_per_device.empty()) {
     std::vector<TargetInfo> targets;
@@ -912,16 +915,28 @@ ResultSetPtr Executor::resultsUnion(SharedKernelContext& shared_context,
                                        blockSize(),
                                        gridSize());
   }
+
   using IndexedResultSet = std::pair<ResultSetPtr, std::vector<size_t>>;
   std::sort(results_per_device.begin(),
             results_per_device.end(),
-            [](const IndexedResultSet& lhs, const IndexedResultSet& rhs) {
+            [sort_by_table_id, &order_map](const IndexedResultSet& lhs,
+                                           const IndexedResultSet& rhs) {
               CHECK_GE(lhs.second.size(), size_t(1));
               CHECK_GE(rhs.second.size(), size_t(1));
+              if (sort_by_table_id) {
+                auto ltid = lhs.first->getOuterTableId();
+                auto rtid = rhs.first->getOuterTableId();
+                if (ltid != rtid) {
+                  return order_map.at(ltid) < order_map.at(rtid);
+                }
+              }
               return lhs.second.front() < rhs.second.front();
             });
 
-  return get_merged_result(results_per_device);
+  if (merge) {
+    return {get_merged_result(results_per_device)};
+  }
+  return get_separate_results(results_per_device);
 }
 
 ResultSetPtr Executor::reduceMultiDeviceResults(
@@ -1593,8 +1608,14 @@ ResultSetPtr Executor::executeWorkUnitImpl(
         throw QueryExecutionError(e.getErrorCode());
       }
     }
-    return resultsUnion(shared_context, ra_exe_unit);
-
+    std::map<int, size_t> order_map;
+    if (eo.preserve_order) {
+      for (size_t i = 0; i < ra_exe_unit.input_descs.size(); ++i) {
+        order_map[ra_exe_unit.input_descs[i].getTableId()] = i;
+      }
+    }
+    return resultsUnion(shared_context, ra_exe_unit,
+        !eo.multifrag_result, eo.preserve_order, order_map);
   } while (static_cast<size_t>(crt_min_byte_width) <= sizeof(int64_t));
 
   return std::make_shared<ResultSet>(std::vector<TargetInfo>{},

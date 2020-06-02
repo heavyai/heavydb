@@ -343,6 +343,9 @@ class ResultSet {
   bool isGeoColOnGpu(const size_t col_idx) const;
   int getDeviceId() const;
 
+  void setOuterTableId(int id) { outer_table_id_ = id; }
+  int getOuterTableId() const { return outer_table_id_; }
+
   // Called from the executor because in the new ResultSet we assume the 'padded' field
   // in SlotSize already contains the padding, whereas in the executor it's computed.
   // Once the buffer initialization moves to ResultSet we can remove this method.
@@ -752,6 +755,8 @@ class ResultSet {
   unsigned block_size_{0};
   unsigned grid_size_{0};
   QueryExecutionTimings timings_;
+
+  int outer_table_id_ = 0;
 
   std::list<std::shared_ptr<Chunk_NS::Chunk>> chunks_;
   std::vector<std::shared_ptr<std::list<ChunkIter>>> chunk_iters_;
