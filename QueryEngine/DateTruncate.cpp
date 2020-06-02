@@ -25,7 +25,7 @@
 #include <ctime>
 #include <iostream>
 
-extern "C" NEVER_INLINE DEVICE int64_t create_epoch(int32_t year) {
+ALWAYS_INLINE DEVICE int64_t create_epoch(int32_t year) {
   // Note this is not general purpose
   // it has a final assumption that the year being passed can never be a leap
   // year
@@ -171,7 +171,7 @@ extern "C" NEVER_INLINE DEVICE int64_t DateTruncate(DatetruncField field,
         uint32_t base_year_leap_years = (year - 1) / 4;
         uint32_t base_year_seconds =
             year * kSecondsPerNonLeapYear + base_year_leap_years * kUSecsPerDay;
-        bool is_leap_year = year % 4 == 0 && year != 0;
+        const bool is_leap_year = year % 4 == 0 && year != 0;
         const uint32_t* quarter_offsets = is_leap_year
                                               ? cumulative_quarter_epoch_starts_leap_year
                                               : cumulative_quarter_epoch_starts;
@@ -270,7 +270,7 @@ extern "C" NEVER_INLINE DEVICE int64_t DateTruncate(DatetruncField field,
     case dtDECADE: {
       int32_t year = tm_struct.tm_year + kYearBase;
       int32_t decade_start = (year / 10) * 10;
-      if (decade_start % 4 == 0) {
+      if (decade_start != 0 && decade_start % 4 == 0) {
         auto prior_year_epoch = create_epoch(decade_start - 1);
         return prior_year_epoch + kSecsPerDay * 365;
       } else {
@@ -280,7 +280,7 @@ extern "C" NEVER_INLINE DEVICE int64_t DateTruncate(DatetruncField field,
     case dtCENTURY: {
       int32_t year = tm_struct.tm_year + kYearBase;
       int32_t century_start = ((year - 1) / 100) * 100 + 1;
-      if (century_start % 4 == 0) {
+      if (century_start != 0 && century_start % 4 == 0) {
         auto prior_year_epoch = create_epoch(century_start - 1);
         return prior_year_epoch + kSecsPerDay * 365;
       } else {
@@ -290,7 +290,7 @@ extern "C" NEVER_INLINE DEVICE int64_t DateTruncate(DatetruncField field,
     case dtMILLENNIUM: {
       int32_t year = tm_struct.tm_year + kYearBase;
       int32_t millennium_start = ((year - 1) / 1000) * 1000 + 1;
-      if (millennium_start % 4 == 0) {
+      if (millennium_start != 0 && millennium_start % 4 == 0) {
         auto prior_year_epoch = create_epoch(millennium_start - 1);
         return prior_year_epoch + kSecsPerDay * 365;
       } else {
