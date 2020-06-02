@@ -46,6 +46,7 @@
 #include "../StringDictionary/StringDictionary.h"
 #include "../StringDictionary/StringDictionaryProxy.h"
 #include "DataMgr/Chunk/Chunk.h"
+#include "ThriftHandler/CommandLineOptions.h"
 
 #include <llvm/IR/Function.h>
 #include <llvm/IR/Value.h>
@@ -66,37 +67,6 @@
 #include <stack>
 #include <unordered_map>
 #include <unordered_set>
-
-extern bool g_enable_watchdog;
-extern bool g_enable_dynamic_watchdog;
-extern unsigned g_dynamic_watchdog_time_limit;
-extern unsigned g_trivial_loop_join_threshold;
-extern bool g_from_table_reordering;
-extern bool g_enable_filter_push_down;
-extern bool g_allow_cpu_retry;
-extern bool g_null_div_by_zero;
-extern bool g_bigint_count;
-extern bool g_inner_join_fragment_skipping;
-extern float g_filter_push_down_low_frac;
-extern float g_filter_push_down_high_frac;
-extern size_t g_filter_push_down_passing_row_ubound;
-extern bool g_enable_columnar_output;
-extern bool g_enable_overlaps_hashjoin;
-extern bool g_enable_hashjoin_many_to_many;
-extern size_t g_overlaps_max_table_size_bytes;
-extern bool g_strip_join_covered_quals;
-extern size_t g_constrained_by_in_threshold;
-extern size_t g_big_group_threshold;
-extern bool g_enable_window_functions;
-extern bool g_enable_table_functions;
-extern size_t g_max_memory_allocation_size;
-extern double g_bump_allocator_step_reduction;
-extern bool g_enable_direct_columnarization;
-extern bool g_enable_runtime_query_interrupt;
-extern unsigned g_runtime_query_interrupt_frequency;
-extern size_t g_gpu_smem_threshold;
-extern bool g_enable_smem_grouped_non_count_agg;
-extern bool g_enable_smem_non_grouped_agg;
 
 class QueryCompilationDescriptor;
 using QueryCompilationDescriptorOwned = std::unique_ptr<QueryCompilationDescriptor>;

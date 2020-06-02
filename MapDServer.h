@@ -30,6 +30,7 @@
 #include "QueryEngine/TableGenerations.h"
 #include "QueryEngine/TargetMetaInfo.h"
 #include "Shared/ThriftTypesConvert.h"
+#include "ThriftHandler/CommandLineOptions.h"
 
 inline std::vector<TargetMetaInfo> target_meta_infos_from_thrift(
     const TRowDescriptor& row_desc) {
