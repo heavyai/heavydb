@@ -88,7 +88,7 @@ cdef extern from "DBEngine.h" namespace 'EmbeddedDatabase':
         vector[ColumnDetails] getTableDetails(string)
         void reset()
         @staticmethod
-        DBEngine* create(string, int)
+        DBEngine* create(string, int, bool)
 
 cdef extern from "DBETypes.h" namespace 'EmbeddedDatabase::ColumnType':
     cdef ColumnType SMALLINT

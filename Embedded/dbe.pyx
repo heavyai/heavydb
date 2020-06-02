@@ -158,10 +158,10 @@ ColumnDetailsTp = namedtuple("ColumnDetails", ["name", "type", "nullable",
 cdef class PyDbEngine:
     cdef DBEngine* c_dbe  #Hold a C++ instance which we're wrapping
 
-    def __cinit__(self, path, port):
+    def __cinit__(self, path, port, enable_columnar_output=True):
         try:
             bpath = bytes(path, 'utf-8')
-            self.c_dbe = DBEngine.create(bpath, port)
+            self.c_dbe = DBEngine.create(bpath, port, enable_columnar_output)
         except OSError as err:
             print("OS error: {0}".format(err))
         except ValueError:

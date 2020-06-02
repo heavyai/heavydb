@@ -18,6 +18,7 @@
 #include <boost/filesystem.hpp>
 #include "QueryEngine/ArrowResultSet.h"
 #include "QueryRunner/QueryRunner.h"
+#include "QueryEngine/Execute.h"
 
 namespace EmbeddedDatabase {
 
@@ -37,6 +38,7 @@ class CursorImpl : public Cursor {
     col_names_.clear();
     record_batch_.reset();
     result_set_.reset();
+    converter_.reset();
   }
 
   size_t getColCount() { return result_set_ ? result_set_->colCount() : 0; }
@@ -68,9 +70,11 @@ class CursorImpl : public Cursor {
       auto row_count = getRowCount();
       if (row_count > 0) {
         if (auto data_mgr = data_mgr_.lock()) {
-          const auto& converter = std::make_unique<ArrowResultSetConverter>(
+          if (!converter_) {
+            converter_ = std::make_unique<ArrowResultSetConverter>(
               result_set_, data_mgr, ExecutorDeviceType::CPU, 0, col_names_, row_count);
-          record_batch_ = converter->convertToArrow();
+          }
+          record_batch_ = converter_->convertToArrow();
           return record_batch_;
         }
       }
@@ -83,6 +87,7 @@ class CursorImpl : public Cursor {
   std::vector<std::string> col_names_;
   std::weak_ptr<Data_Namespace::DataMgr> data_mgr_;
   std::shared_ptr<arrow::RecordBatch> record_batch_;
+  std::unique_ptr<ArrowResultSetConverter> converter_;
 };
 
 /**
@@ -99,6 +104,9 @@ class DBEngineImpl : public DBEngine {
   DBEngineImpl(const std::string& base_path, int calcite_port) : query_runner_(nullptr) {
     if (init(base_path, calcite_port)) {
       std::cout << "DBEngine initialization succeed" << std::endl;
+      if (g_enable_columnar_output) {
+        std::cout << "Columnar format enabled" << std::endl;
+      }
     } else {
       std::cerr << "DBEngine initialization failed" << std::endl;
     }
@@ -290,7 +298,8 @@ class DBEngineImpl : public DBEngine {
  *
  * @param sPath Path to the existing database
  */
-DBEngine* DBEngine::create(std::string path, int calcite_port) {
+DBEngine* DBEngine::create(std::string path, int calcite_port, bool enable_columnar_output) {
+  g_enable_columnar_output = enable_columnar_output;
   return new DBEngineImpl(path, calcite_port);
 }
 
