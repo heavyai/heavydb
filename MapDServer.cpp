@@ -162,6 +162,10 @@ void register_signal_handlers() {
 void start_server(TThreadedServer& server, const int port) {
   try {
     server.serve();
+    if (errno != 0) {
+      throw std::runtime_error(std::string("Thrift server exited: ") +
+                               std::strerror(errno));
+    }
   } catch (std::exception& e) {
     LOG(ERROR) << "Exception: " << e.what() << ": port " << port << std::endl;
   }
