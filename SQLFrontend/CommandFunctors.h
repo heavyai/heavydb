@@ -320,139 +320,25 @@ StandardCommand(SwitchDatabase, {
 StandardCommand(ListColumns, {
   decltype(p[1])& table_name(p[1]);
 
-  auto unserialize_key_metainfo =
-      [](const std::string key_metainfo) -> std::vector<std::string> {
-    std::vector<std::string> keys_with_spec;
-    rapidjson::Document document;
-    document.Parse(key_metainfo.c_str());
-    CHECK(!document.HasParseError());
-    CHECK(document.IsArray());
-    for (auto it = document.Begin(); it != document.End(); ++it) {
-      const auto& key_with_spec_json = *it;
-      CHECK(key_with_spec_json.IsObject());
-      const std::string type = key_with_spec_json["type"].GetString();
-      const std::string name = key_with_spec_json["name"].GetString();
-      auto key_with_spec = type + " (" + name + ")";
-      if (type == "SHARED DICTIONARY") {
-        key_with_spec += " REFERENCES ";
-        const std::string foreign_table = key_with_spec_json["foreign_table"].GetString();
-        const std::string foreign_column =
-            key_with_spec_json["foreign_column"].GetString();
-        key_with_spec += foreign_table + "(" + foreign_column + ")";
-      } else {
-        CHECK(type == "SHARD KEY");
-      }
-      keys_with_spec.push_back(key_with_spec);
+  const auto stmt = "show create table " + table_name;
+
+  auto valid_row_count = [](const TQueryResult& query_result) -> bool {
+    CHECK(!query_result.row_set.row_desc.empty());
+    if (query_result.row_set.columns.empty()) {
+      return false;
     }
-    return keys_with_spec;
+    CHECK_EQ(query_result.row_set.columns.size(), query_result.row_set.row_desc.size());
+    return (query_result.row_set.columns.front().nulls.size() == 1);
   };
 
   auto on_success_lambda = [&](ContextType& context) {
-    const auto table_details = context.table_details;
-    if (table_details.view_sql.empty()) {
-      std::string temp_holder(" ");
-      if (table_details.is_temporary) {
-        temp_holder = " TEMPORARY ";
-      }
-      output_stream << "CREATE" + temp_holder + "TABLE " + table_name + " (\n";
-    } else {
-      output_stream << "CREATE VIEW " + table_name + " AS " + table_details.view_sql
-                    << "\n";
-      output_stream << "\n"
-                    << "View columns:"
-                    << "\n\n";
-    }
-    std::string comma_or_blank("");
-    for (TColumnType p : table_details.row_desc) {
-      if (p.is_system) {
-        continue;
-      }
-      std::string encoding = "";
-      if (p.col_type.type == TDatumType::STR) {
-        encoding = (p.col_type.encoding == 0
-                        ? " ENCODING NONE"
-                        : " ENCODING " + thrift_to_encoding_name(p.col_type) + "(" +
-                              std::to_string(p.col_type.comp_param) + ")");
-      } else if (p.col_type.type == TDatumType::POINT ||
-                 p.col_type.type == TDatumType::LINESTRING ||
-                 p.col_type.type == TDatumType::POLYGON ||
-                 p.col_type.type == TDatumType::MULTIPOLYGON) {
-        if (p.col_type.scale == 4326) {
-          encoding = (p.col_type.encoding == 0
-                          ? " ENCODING NONE"
-                          : " ENCODING " + thrift_to_encoding_name(p.col_type) + "(" +
-                                std::to_string(p.col_type.comp_param) + ")");
-        }
-      } else {
-        encoding = (p.col_type.encoding == 0
-                        ? ""
-                        : " ENCODING " + thrift_to_encoding_name(p.col_type) + "(" +
-                              std::to_string(p.col_type.comp_param) + ")");
-      }
-      output_stream << comma_or_blank << p.col_name << " " << thrift_to_name(p.col_type)
-                    << (p.col_type.nullable ? "" : " NOT NULL") << encoding;
-      comma_or_blank = ",\n";
-    }
-    if (table_details.view_sql.empty()) {
-      const auto keys_with_spec = unserialize_key_metainfo(table_details.key_metainfo);
-      for (const auto& key_with_spec : keys_with_spec) {
-        output_stream << ",\n" << key_with_spec;
-      }
-      // push final ")\n";
-      output_stream << ")\n";
-      comma_or_blank = "";
-      std::string frag = "";
-      std::string page = "";
-      std::string row = "";
-      std::string partition_detail = "";
-      if (DEFAULT_FRAGMENT_ROWS != table_details.fragment_size) {
-        frag = "FRAGMENT_SIZE = " + std::to_string(table_details.fragment_size);
-        comma_or_blank = ", ";
-      }
-      if (table_details.shard_count) {
-        auto shard_count = table_details.shard_count;
-        if (context.cluster_status.size() > 1) {
-          size_t leaf_count = 0;
-          for (const auto& node : context.cluster_status) {
-            leaf_count += node.role == TRole::type::LEAF ? 1 : 0;
-          }
-          shard_count *= leaf_count;
-        }
-        frag += comma_or_blank + "SHARD_COUNT = " + std::to_string(shard_count);
-        comma_or_blank = ", ";
-      }
-      if (DEFAULT_PAGE_SIZE != table_details.page_size) {
-        page = comma_or_blank + "PAGE_SIZE = " + std::to_string(table_details.page_size);
-        comma_or_blank = ", ";
-      }
-      if (DEFAULT_MAX_ROWS != table_details.max_rows) {
-        row = comma_or_blank + "MAX_ROWS = " + std::to_string(table_details.max_rows);
-        comma_or_blank = ", ";
-      }
-      if (table_details.partition_detail != TPartitionDetail::DEFAULT) {
-        partition_detail = comma_or_blank + "PARTITIONS = ";
-        switch (table_details.partition_detail) {
-          case TPartitionDetail::REPLICATED:
-            partition_detail += "'REPLICATED'";
-            break;
-          case TPartitionDetail::SHARDED:
-            partition_detail += "'SHARDED'";
-            break;
-          default:
-            partition_detail += "'OTHER'";
-            break;
-        }
-      }
-      std::string with = frag + page + row + partition_detail;
-      if (with.length() > 0) {
-        output_stream << "WITH (" << with << ")\n";
-      }
-    } else {
-      output_stream << "\n";
-    }
+    CHECK(valid_row_count(context.query_return));
+    const auto create_table_str = context.query_return.row_set.columns[0].data.str_col[0];
+    output_stream << create_table_str;
+    output_stream << "\n";
   };
 
-  thrift_op<kGET_TABLE_DETAILS>(cmdContext(), table_name.c_str(), on_success_lambda);
+  thrift_op<kSQL>(cmdContext(), stmt.c_str(), on_success_lambda);
 });
 
 StandardCommand(ExportDashboard, {
