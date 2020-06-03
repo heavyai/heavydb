@@ -29,17 +29,21 @@ We welcome and encourage developer contributions to the project. Please see the 
 ## GIS
 
 #### Completed
-- Geo Types. Point, Line, Polygon (Completed 4.0)
+- Basic Geo Types constructed from column coordinates, WKT or geo files (Point, Line, Polygon) (Completed 4.0)
 - Basic Geo functions (ST_Contains, ST_Distance) (Completed 4.0)
+- Feature construction from columnar data ST_MakePoint (Completed 5.0)
+- Additional Geo functions (ST_Within, ST_Area, ST_Perimiter) (Completed 5.0)
+- Geodatabase import (Completed 5.0)
 
 #### Upcoming
-- Additional OGC geospatial types: Multi(Point|Line|Polygon)
-- Additional OGC geospatial operators (ST_Intersects, ST_Within, ST_Area, ST_Perimiter, etc)
-- Support for geometric constructors (ST_MakePoint, etc)
+- Additional OGC mulitpart geospatial types: Multi(Point|Line)
+- Additional geometric constructors (ST_Line, ST_Polygon, etc.)
+- OGC full "simple features" constructive geospatial operators (ST_Buffer, ST_Intersects, ST_Union, etc)
 - Accelerated geospatial joins (with dynamic spatial hashing, not relying purely on brute force loop joins)
 - Fixed length arrays for POINT datatype to conserve memory
-- Geodatabase/geopackage import
-- WMS support
+- OGC Geopackage import
+- Additional WMS support
+- Parallel scrolling maps
 
 ## Data Science/[GPU Data Frame (GDF)](http://gpuopenanalytics.com/#/)/[Apache Arrow](https://arrow.apache.org/)
 
