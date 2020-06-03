@@ -81,7 +81,7 @@ class DateTimeStringValidate {
       return static_cast<int64_t>(TimeGM::instance().my_timegm(&tm_));
     }
     detectFormatFromString(
-        str_.c_str(), tp, "%Y-%m-%d", "%m/%d/%Y", "%d-%b-%y", "%d/%b/%Y");
+        str_.c_str(), tp, "%Y-%m-%d", "%m/%d/%Y", "%Y/%m/%d", "%d-%b-%y", "%d/%b/%Y");
     if (!tp) {
       return getEpochValue();
     }

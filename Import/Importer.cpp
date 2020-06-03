@@ -2986,7 +2986,8 @@ SQLTypes Detector::detect_sqltype(const std::string& str) {
     // @TODO
     // make these tests more robust so they don't match stuff they should not
     char* buf;
-    buf = try_strptimes(str.c_str(), {"%Y-%m-%d", "%m/%d/%Y", "%d-%b-%y", "%d/%b/%Y"});
+    buf = try_strptimes(str.c_str(),
+                        {"%Y-%m-%d", "%m/%d/%Y", "%Y/%m/%d", "%d-%b-%y", "%d/%b/%Y"});
     if (buf) {
       type = kDATE;
       if (*buf == 'T' || *buf == ' ' || *buf == ':') {
