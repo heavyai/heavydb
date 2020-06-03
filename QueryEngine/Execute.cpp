@@ -1277,9 +1277,10 @@ ResultSetPtr Executor::executeWorkUnit(
                                       render_info,
                                       has_cardinality_estimation,
                                       column_cache);
-    CHECK(result);
-    result->setKernelQueueTime(kernel_queue_time_ms_);
-    result->addCompilationQueueTime(compilation_queue_time_ms_);
+    if (result) {
+      result->setKernelQueueTime(kernel_queue_time_ms_);
+      result->addCompilationQueueTime(compilation_queue_time_ms_);
+    }
     return result;
   } catch (const CompilationRetryNewScanLimit& e) {
     auto result =
@@ -1295,9 +1296,10 @@ ResultSetPtr Executor::executeWorkUnit(
                             render_info,
                             has_cardinality_estimation,
                             column_cache);
-    CHECK(result);
-    result->setKernelQueueTime(kernel_queue_time_ms_);
-    result->addCompilationQueueTime(compilation_queue_time_ms_);
+    if (result) {
+      result->setKernelQueueTime(kernel_queue_time_ms_);
+      result->addCompilationQueueTime(compilation_queue_time_ms_);
+    }
     return result;
   }
 }
