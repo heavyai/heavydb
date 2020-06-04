@@ -473,6 +473,11 @@ else()
   set(PROFILER_LIBS "")
 endif()
 
+option(ENABLE_FSI "Enable Foreign Storage Interface" OFF)
+if(ENABLE_FSI)
+  add_definitions("-DENABLE_FSI")
+endif()
+
 add_subdirectory(SqliteConnector)
 
 add_subdirectory(StringDictionary)
@@ -867,8 +872,3 @@ if(DOXYGEN_FOUND)
 
   add_dependencies(sphinx doxygen)
 endif(DOXYGEN_FOUND)
-
-option(ENABLE_FSI "Enable Foreign Storage Interface" OFF)
-if(ENABLE_FSI)
-  add_definitions("-DENABLE_FSI")
-endif()
