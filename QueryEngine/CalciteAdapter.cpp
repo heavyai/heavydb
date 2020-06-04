@@ -143,24 +143,34 @@ std::string pg_shim_impl(const std::string& query) {
         });
   }
   {
+    // timestamp add is rewritten to date add
     static const boost::regex timestampadd_expr_quoted{
-        R"(TIMESTAMP(ADD|DIFF)\s*\(\s*'(\w+)'\s*,)",
+        R"(TIMESTAMPADD\s*\(\s*'(\w+)'\s*,)",
         boost::regex::extended | boost::regex::icase};
     apply_shim(result,
                timestampadd_expr_quoted,
                [](std::string& result, const boost::smatch& what) {
-                 result.replace(what.position(),
-                                what.length(),
-                                "DATE" + what[1] + "('" + what[2] + "',");
+                 result.replace(
+                     what.position(), what.length(), "DATEADD('" + what[1] + "',");
                });
     static const boost::regex timestampadd_expr{
-        R"(TIMESTAMP(ADD|DIFF)\s*\(\s*(\w+)\s*,)",
-        boost::regex::extended | boost::regex::icase};
+        R"(TIMESTAMPADD\s*\(\s*(\w+)\s*,)", boost::regex::extended | boost::regex::icase};
     apply_shim(
         result, timestampadd_expr, [](std::string& result, const boost::smatch& what) {
-          result.replace(
-              what.position(), what.length(), "DATE" + what[1] + "('" + what[2] + "',");
+          result.replace(what.position(), what.length(), "DATEADD('" + what[1] + "',");
         });
+  }
+  {
+    // timestamp diff stays as timestamp diff
+    static const boost::regex timestampdiff_expr_quoted{
+        R"(TIMESTAMPDIFF\s*\(\s*'(\w+)'\s*,)",
+        boost::regex::extended | boost::regex::icase};
+    apply_shim(result,
+               timestampdiff_expr_quoted,
+               [](std::string& result, const boost::smatch& what) {
+                 result.replace(
+                     what.position(), what.length(), "TIMESTAMPDIFF(" + what[1] + ",");
+               });
   }
   {
     static const boost::regex us_timestamp_cast_expr{
