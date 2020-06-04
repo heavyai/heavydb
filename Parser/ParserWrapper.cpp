@@ -36,6 +36,7 @@ const std::vector<std::string> ParserWrapper::ddl_cmd = {"ARCHIVE",
                                                          "DROP",
                                                          "DUMP",
                                                          "OPTIMIZE",
+                                                         "REFRESH",
                                                          "RESTORE",
                                                          "REVOKE",
                                                          "SHOW",
@@ -125,7 +126,11 @@ ParserWrapper::ParserWrapper(std::string query_string) {
       if (g_enable_fsi) {
         boost::regex fsi_regex{R"((CREATE|DROP|ALTER)\s+(SERVER|FOREIGN\s+TABLE).*)",
                                boost::regex::extended | boost::regex::icase};
-        if (boost::regex_match(query_string, fsi_regex)) {
+        boost::regex refresh_regex{R"(REFRESH\s+FOREIGN\s+TABLES.*)",
+                                   boost::regex::extended | boost::regex::icase};
+
+        if (boost::regex_match(query_string, fsi_regex) ||
+            boost::regex_match(query_string, refresh_regex)) {
           is_calcite_ddl_ = true;
           is_legacy_ddl_ = false;
           return;

@@ -87,6 +87,8 @@ void DdlCommandExecutor::execute(TQueryResult& _return) {
     ShowForeignServersCommand{payload, session_ptr_}.execute(_return);
   } else if (ddl_command == "ALTER_SERVER") {
     AlterForeignServerCommand{payload, session_ptr_}.execute(_return);
+  } else if (ddl_command == "REFRESH_FOREIGN_TABLES") {
+    RefreshForeignTablesCommand{payload, session_ptr_}.execute(_return);
   } else {
     throw std::runtime_error("Unsupported DDL command");
   }
@@ -719,4 +721,26 @@ void ShowForeignServersCommand::execute(TQueryResult& _return) {
     for (size_t i = 0; i < _return.row_set.columns.size(); i++)
       _return.row_set.columns[i].nulls.emplace_back(false);
   }
+}
+
+RefreshForeignTablesCommand::RefreshForeignTablesCommand(
+    const rapidjson::Value& ddl_payload,
+    std::shared_ptr<Catalog_Namespace::SessionInfo const> session_ptr)
+    : DdlCommand(ddl_payload, session_ptr) {
+  CHECK(ddl_payload.HasMember("tableNames"));
+  CHECK(ddl_payload["tableNames"].IsArray());
+  for (auto const& tableName_def : ddl_payload["tableNames"].GetArray()) {
+    CHECK(tableName_def.IsString());
+  }
+}
+
+void RefreshForeignTablesCommand::execute(TQueryResult& _return) {
+  foreign_storage::OptionsContainer opt;
+  if (ddl_payload_.HasMember("options") && !ddl_payload_["options"].IsNull()) {
+    opt.populateOptionsMap(ddl_payload_["options"]);
+    CHECK(opt.options.find("EVICT") != opt.options.end());
+    CHECK(boost::iequals(opt.options["EVICT"], "true") ||
+          boost::iequals(opt.options["EVICT"], "false"));
+  }
+  throw std::runtime_error("REFRESH FOREIGN TABLES is not yet implemented");
 }

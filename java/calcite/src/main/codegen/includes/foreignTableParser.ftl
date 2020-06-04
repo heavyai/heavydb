@@ -312,3 +312,27 @@ SqlDrop SqlDropForeignTable(Span s, boolean replace) :
         return new SqlDropForeignTable(s.end(this), ifExists, tableName.toString());
     }
 }
+
+/*
+ * Refresh the cache for a foreign table using the following syntax.
+ * If the evict flag is set, then we perform a cache flush instead (no reload).
+ *
+ * REFRESH FOREIGN TABLES <table_name> [, ... ]* [ WITH (EVICT = 'true') ]
+ */
+SqlDdl SqlRefreshForeignTables(Span s) : {
+    List<String> tableNames = new ArrayList<String>();
+    SqlIdentifier tableName = null;
+    OmniSqlOptionsMap optionsMap = null;
+}
+{
+  <REFRESH> <FOREIGN> <TABLES>
+  tableName = CompoundIdentifier()
+  { tableNames.add(tableName.toString()); }
+  (
+   <COMMA>
+   tableName = CompoundIdentifier()
+   { tableNames.add(tableName.toString()); }
+  )*
+  [ optionsMap = WithOptions() ]
+  { return new SqlRefreshForeignTables(s.end(this), tableNames, optionsMap); }
+}

@@ -31,6 +31,7 @@ data: {
         "com.mapd.parser.extension.ddl.SqlAlterServer"
         "com.mapd.parser.extension.ddl.SqlCreateForeignTable"
         "com.mapd.parser.extension.ddl.SqlDropForeignTable"
+        "com.mapd.parser.extension.ddl.SqlRefreshForeignTables"
         "com.mapd.parser.extension.ddl.SqlShowUserSessions"
         "com.mapd.parser.extension.ddl.SqlShowForeignServers"
         "com.mapd.parser.extension.ddl.omnisql.*"
@@ -50,6 +51,7 @@ data: {
         "LINESTRING"
         "MULTIPOLYGON"
         "TEXT"
+        "REFRESH"
         "SESSIONS"
         "TABLES"
         "DATABASES"
@@ -401,6 +403,7 @@ data: {
         "SqlShowDatabases(span())"
         "SqlShowForeignServers(span())"
         "SqlAlterServer(span())"
+        "SqlRefreshForeignTables(span())"
       ]
 
       # List of methods for parsing custom literals.

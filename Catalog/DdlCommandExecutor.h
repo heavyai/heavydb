@@ -157,6 +157,15 @@ class ShowDatabasesCommand : public DdlCommand {
   void execute(TQueryResult& _return) override;
 };
 
+class RefreshForeignTablesCommand : public DdlCommand {
+ public:
+  RefreshForeignTablesCommand(
+      const rapidjson::Value& ddl_payload,
+      std::shared_ptr<Catalog_Namespace::SessionInfo const> session_ptr);
+
+  void execute(TQueryResult& _return) override;
+};
+
 class DdlCommandExecutor {
  public:
   DdlCommandExecutor(const std::string& ddl_statement,

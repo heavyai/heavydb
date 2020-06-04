@@ -32,21 +32,17 @@
 
 extern bool g_enable_fsi;
 
-class SelectQueryTest : public DBHandlerTestFixture {
- protected:
-  void SetUp() override {
-    DBHandlerTestFixture::SetUp();
-    sql("DROP FOREIGN TABLE IF EXISTS test_foreign_table;");
-    sql("DROP FOREIGN TABLE IF EXISTS test_foreign_table_2;");
-    sql("DROP SERVER IF EXISTS test_server;");
-  }
+namespace bp = boost::process;
+namespace bf = boost::filesystem;
+using path = bf::path;
 
-  void TearDown() override {
-    sql("DROP FOREIGN TABLE IF EXISTS test_foreign_table;");
-    sql("DROP FOREIGN TABLE IF EXISTS test_foreign_table_2;");
-    sql("DROP SERVER IF EXISTS test_server;");
-    DBHandlerTestFixture::TearDown();
-  }
+/**
+ * Helper class for creating foreign tables
+ */
+class ForeignTableTest : public DBHandlerTestFixture {
+ protected:
+  void SetUp() override { DBHandlerTestFixture::SetUp(); }
+  void TearDown() override { DBHandlerTestFixture::TearDown(); }
 
   std::string getCreateForeignTableQuery(const std::string& columns,
                                          const std::string& file_name,
@@ -58,8 +54,7 @@ class SelectQueryTest : public DBHandlerTestFixture {
                                          const std::map<std::string, std::string> options,
                                          const std::string& file_name,
                                          const int table_number = 0) {
-    boost::filesystem::path full_path =
-        boost::filesystem::canonical("../../Tests/FsiDataFiles/" + file_name);
+    path full_path = bf::canonical("../../Tests/FsiDataFiles/" + file_name);
     std::string query{"CREATE FOREIGN TABLE test_foreign_table"};
     if (table_number) {
       query += "_" + std::to_string(table_number);
@@ -74,7 +69,39 @@ class SelectQueryTest : public DBHandlerTestFixture {
   }
 
   std::string getDataFilesPath() {
-    return boost::filesystem::canonical("../../Tests/FsiDataFiles").string();
+    return bf::canonical("../../Tests/FsiDataFiles").string();
+  }
+
+  void sqlCreateForeignTable(const std::string& table_name,
+                             const std::string& file_path,
+                             const std::string& columns,
+                             const std::map<std::string, std::string>& options) {
+    sql("DROP FOREIGN TABLE IF EXISTS " + table_name + ";");
+    std::string query{"CREATE FOREIGN TABLE " + table_name};
+    query += columns + " SERVER omnisci_local_csv WITH (file_path = '" +
+             bf::canonical(file_path).string() + "'";
+    for (auto& [key, value] : options) {
+      query += ", " + key + " = '" + value + "'";
+    }
+    query += ");";
+    sql(query);
+  }
+};
+
+class SelectQueryTest : public ForeignTableTest {
+ protected:
+  void SetUp() override {
+    DBHandlerTestFixture::SetUp();
+    sql("DROP FOREIGN TABLE IF EXISTS test_foreign_table;");
+    sql("DROP FOREIGN TABLE IF EXISTS test_foreign_table_2;");
+    sql("DROP SERVER IF EXISTS test_server;");
+  }
+
+  void TearDown() override {
+    sql("DROP FOREIGN TABLE IF EXISTS test_foreign_table;");
+    sql("DROP FOREIGN TABLE IF EXISTS test_foreign_table_2;");
+    sql("DROP SERVER IF EXISTS test_server;");
+    DBHandlerTestFixture::TearDown();
   }
 };
 
@@ -442,6 +469,69 @@ TEST_F(SelectQueryTest, ReverseLongitudeAndLatitude) {
                         {"POINT (3 2)"}},
                        result);
   // clang-format on
+}
+
+class RefreshForeignTableTest : public ForeignTableTest {
+ protected:
+  std::string base_path = "../../Tests/FsiDataFiles/";
+  std::string table_1_filename = base_path + "example_1.csv";
+  std::string table_2_filename = base_path + "example_1.csv";
+  std::string table_1_name = "test_foreign_table_1";
+  std::string table_2_name = "test_foreign_table_2";
+
+  void SetUp() override { ForeignTableTest::SetUp(); }
+
+  void TearDown() override {
+    sql("DROP FOREIGN TABLE IF EXISTS " + table_1_name + ";");
+    sql("DROP FOREIGN TABLE IF EXISTS " + table_2_name + ";");
+    ForeignTableTest::TearDown();
+  }
+};
+
+// Refresh is not enabled yet, so currently we expect throws.
+TEST_F(RefreshForeignTableTest, RefreshSingleTable) {
+  sqlCreateForeignTable(table_1_name, table_1_filename, "(t TEXT, i INTEGER[])", {});
+  sqlCreateForeignTable(table_2_name, table_2_filename, "(t TEXT, i INTEGER[])", {});
+  queryAndAssertException("REFRESH FOREIGN TABLES test_foreign_table",
+                          "Exception: REFRESH FOREIGN TABLES is not yet implemented");
+}
+
+TEST_F(RefreshForeignTableTest, RefreshMultipleTables) {
+  sqlCreateForeignTable(table_1_name, table_1_filename, "(t TEXT, i INTEGER[])", {});
+  sqlCreateForeignTable(table_2_name, table_2_filename, "(t TEXT, i INTEGER[])", {});
+  queryAndAssertException(
+      "REFRESH FOREIGN TABLES test_foreign_table, test_foreign_table_2",
+      "Exception: REFRESH FOREIGN TABLES is not yet implemented");
+}
+
+TEST_F(RefreshForeignTableTest, RefreshEvictFalseCaps) {
+  sqlCreateForeignTable(table_1_name, table_1_filename, "(t TEXT, i INTEGER[])", {});
+  sqlCreateForeignTable(table_2_name, table_2_filename, "(t TEXT, i INTEGER[])", {});
+  queryAndAssertException(
+      "REFRESH FOREIGN TABLES test_foreign_table WITH (EVICT='false')",
+      "Exception: REFRESH FOREIGN TABLES is not yet implemented");
+}
+
+TEST_F(RefreshForeignTableTest, RefreshEvictFalse) {
+  sqlCreateForeignTable(table_1_name, table_1_filename, "(t TEXT, i INTEGER[])", {});
+  sqlCreateForeignTable(table_2_name, table_2_filename, "(t TEXT, i INTEGER[])", {});
+  queryAndAssertException(
+      "REFRESH FOREIGN TABLES test_foreign_table WITH (evict='false')",
+      "Exception: REFRESH FOREIGN TABLES is not yet implemented");
+}
+
+TEST_F(RefreshForeignTableTest, RefreshEvictTrue) {
+  sqlCreateForeignTable(table_1_name, table_1_filename, "(t TEXT, i INTEGER[])", {});
+  sqlCreateForeignTable(table_2_name, table_2_filename, "(t TEXT, i INTEGER[])", {});
+  queryAndAssertException("REFRESH FOREIGN TABLES test_foreign_table WITH (EVICT='true')",
+                          "Exception: REFRESH FOREIGN TABLES is not yet implemented");
+}
+
+TEST_F(RefreshForeignTableTest, RefreshEvictTrueCaps) {
+  sqlCreateForeignTable(table_1_name, table_1_filename, "(t TEXT, i INTEGER[])", {});
+  sqlCreateForeignTable(table_2_name, table_2_filename, "(t TEXT, i INTEGER[])", {});
+  queryAndAssertException("REFRESH FOREIGN TABLES test_foreign_table WITH (EVICT='TRUE')",
+                          "Exception: REFRESH FOREIGN TABLES is not yet implemented");
 }
 
 int main(int argc, char** argv) {
