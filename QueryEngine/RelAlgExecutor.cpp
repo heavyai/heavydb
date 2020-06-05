@@ -2899,7 +2899,10 @@ ExecutionResult RelAlgExecutor::handleOutOfMemoryRetry(
                                    false,
                                    false,
                                    eo.gpu_input_mem_limit_percent,
-                                   false};
+                                   false,
+                                   eo.runtime_query_interrupt_frequency,
+                                   eo.executor_type,
+                                   eo.outer_fragment_indices};
 
   if (was_multifrag_kernel_launch) {
     try {
