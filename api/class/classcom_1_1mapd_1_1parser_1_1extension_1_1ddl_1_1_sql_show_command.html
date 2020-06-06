@@ -41,7 +41,7 @@
     <link rel="index" title="Index" href="../../genindex.html" />
     <link rel="search" title="Search" href="../../search.html" />
     <link rel="next" title="Class com::mapd::parser::extension::ddl::SqlShowDatabases" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_show_databases.html" />
-    <link rel="prev" title="Class com::mapd::parser::extension::ddl::SqlFilter" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_filter.html" /> 
+    <link rel="prev" title="Class com::mapd::parser::extension::ddl::SqlOptionsBuilder" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_options_builder.html" /> 
 </head>
 
 <body class="wy-body-for-nav">
@@ -65,7 +65,7 @@
             
             
               <div class="version">
-                5.3.0dev 17c254d
+                5.4.0dev b052b27
               </div>
             
           
@@ -278,6 +278,7 @@
 <li class="toctree-l2"><a class="reference internal" href="class_all_range_table_index_visitor.html">Class AllRangeTableIndexVisitor</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_alloca.html">Class Alloca</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_allocator.html">Class Allocator</a></li>
+<li class="toctree-l2"><a class="reference internal" href="class_alter_foreign_server_command.html">Class AlterForeignServerCommand</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_analyzer_1_1_agg_expr.html">Class Analyzer::AggExpr</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_analyzer_1_1_array_expr.html">Class Analyzer::ArrayExpr</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_analyzer_1_1_bin_oper.html">Class Analyzer::BinOper</a></li>
@@ -857,12 +858,15 @@
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_foreign_server_test.html">Class com::mapd::parser::extension::ddl::ForeignServerTest</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_foreign_table_test.html">Class com::mapd::parser::extension::ddl::ForeignTableTest</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_show_command_test.html">Class com::mapd::parser::extension::ddl::ShowCommandTest</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_alter_server.html">Class com::mapd::parser::extension::ddl::SqlAlterServer</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_alter_server_1_1_builder.html">Class com::mapd::parser::extension::ddl::SqlAlterServer::Builder</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_create_foreign_table.html">Class com::mapd::parser::extension::ddl::SqlCreateForeignTable</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_create_server.html">Class com::mapd::parser::extension::ddl::SqlCreateServer</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_create_server_1_1_builder.html">Class com::mapd::parser::extension::ddl::SqlCreateServer::Builder</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_drop_foreign_table.html">Class com::mapd::parser::extension::ddl::SqlDropForeignTable</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_drop_server.html">Class com::mapd::parser::extension::ddl::SqlDropServer</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_filter.html">Class com::mapd::parser::extension::ddl::SqlFilter</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_options_builder.html">Class com::mapd::parser::extension::ddl::SqlOptionsBuilder</a></li>
 <li class="toctree-l2 current"><a class="current reference internal" href="#">Class com::mapd::parser::extension::ddl::SqlShowCommand</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_show_databases.html">Class com::mapd::parser::extension::ddl::SqlShowDatabases</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_show_foreign_servers.html">Class com::mapd::parser::extension::ddl::SqlShowForeignServers</a></li>
@@ -913,6 +917,8 @@
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1utility_1_1db__vendors_1_1_post_gis__types.html">Class com::mapd::utility::db_vendors::PostGis_types</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1omnisci_1_1jdbc_1_1_key_loader.html">Class com::omnisci::jdbc::KeyLoader</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1omnisci_1_1jdbc_1_1_key_loader_1_1_s__struct.html">Class com::omnisci::jdbc::KeyLoader::S_struct</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classcom_1_1omnisci_1_1jdbc_1_1_omni_sci_array.html">Class com::omnisci::jdbc::OmniSciArray</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classcom_1_1omnisci_1_1jdbc_1_1_omni_sci_array_test.html">Class com::omnisci::jdbc::OmniSciArrayTest</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1omnisci_1_1jdbc_1_1_omni_sci_column_type_test.html">Class com::omnisci::jdbc::OmniSciColumnTypeTest</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1omnisci_1_1jdbc_1_1_omni_sci_column_type_test_1_1_answer.html">Class com::omnisci::jdbc::OmniSciColumnTypeTest::Answer</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1omnisci_1_1jdbc_1_1_omni_sci_connection.html">Class com::omnisci::jdbc::OmniSciConnection</a></li>
@@ -1457,7 +1463,7 @@
         <a href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_show_databases.html" class="btn btn-neutral float-right" title="Class com::mapd::parser::extension::ddl::SqlShowDatabases" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right"></span></a>
       
       
-        <a href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_filter.html" class="btn btn-neutral float-left" title="Class com::mapd::parser::extension::ddl::SqlFilter" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left"></span> Previous</a>
+        <a href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_options_builder.html" class="btn btn-neutral float-left" title="Class com::mapd::parser::extension::ddl::SqlOptionsBuilder" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left"></span> Previous</a>
       
     </div>
   
