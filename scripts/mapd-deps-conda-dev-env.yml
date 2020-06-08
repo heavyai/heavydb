@@ -1,0 +1,39 @@
+#  conda env create -f scripts/mapd-deps-conda-dev-env.yml --force
+#  TODO: autogenerate this file from conda/meta.yaml
+name: omnisci-dev
+channels:
+    - default
+    - conda-forge
+
+dependencies:
+    - gxx_linux-64  >7  # [linux]
+    - gcc_linux-64  >7  # [linux]
+    - arrow-cpp  >=0.16
+    - thrift-cpp <0.13.0
+    - boost-cpp >=1.70
+    - openjdk 8.*
+    - cmake
+    - make
+    - go
+    - maven
+    - llvmdev
+    - clangxx
+    - clangdev
+    - double-conversion
+    - snappy
+    - gflags
+    - glog
+    - libarchive
+    - libkml
+    - libpng
+    - blosc
+    - libgdal
+    - ncurses
+    - flex
+    - bisonpp
+    - openssl
+    - librdkafka
+    - xz
+    - bzip2
+    - zlib
+

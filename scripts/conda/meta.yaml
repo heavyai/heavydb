@@ -1,0 +1,81 @@
+{% set name = "omniscidb-cpu" %}
+{% set version = "5.4.0_dev" %}
+# TODO version parser from CMakeLists.txt
+
+package:
+  name: {{ name|lower }}
+  version: {{ version }}
+
+source:
+  path: ../..
+
+build:
+  number: 1
+  skip: True  # [win]
+  script_env:
+    - http_proxy
+    - https_proxy
+
+requirements:
+  build:
+    # In OSX, we use clang++ from clangdev as a compiler
+    - cmake
+    - make
+    - go
+    - maven
+
+  host:
+    - {{ compiler('cxx') }}   # [not osx]
+    - {{ compiler('c') }}     # [not osx]
+    - bisonpp
+    - flex >2.6
+    - boost-cpp >=1.70,<1.72
+    - libgdal
+    - arrow-cpp >=0.16.0
+    - thrift-cpp >=0.11.0,<0.13.0
+    - llvmdev
+    - clangdev
+    - double-conversion
+    - snappy
+    - gflags
+    - glog
+    - libarchive
+    - libkml
+    - libpng
+    - blosc
+    - ncurses
+    - openssl
+    - librdkafka
+  run:
+    - boost-cpp >=1.70,<1.72
+    - arrow-cpp >=0.16.0
+    - openjdk 8.*
+    - snappy
+    - double-conversion
+    - libgdal
+    - glog
+    - gflags
+    - ncurses
+    - xz
+    - bzip2
+    - zlib
+    - librdkafka
+    # omnscidb UDF support calls clang++ in loadtime
+    - {{ compiler('cxx') }}   # [not osx]
+    - llvmdev
+    - clangdev
+
+
+about:
+  home: https://www.omnisci.com/
+  license: Apache-2.0
+  license_family: Apache
+  license_file: LICENSE.md
+  summary: 'The OmniSci database'
+
+  description: |
+    OmniSciDB is an in-memory, column store, SQL relational database 
+    that was designed from the ground up to run on GPUs.
+  doc_url: https://www.omnisci.com/docs/latest/
+  dev_url: https://github.com/omnisci/omniscidb
+

@@ -218,7 +218,7 @@ set(QUERY_ENGINE_LIBS
   ${Arrow_LIBRARIES}
 )
 
-if(${LLVM_VERSION_MAJOR} EQUAL 10 AND NOT ${PREFER_STATIC_LIBS})
+if((${LLVM_VERSION_MAJOR} EQUAL 10) AND (NOT ${PREFER_STATIC_LIBS}))
   # Arch no longer building Clang with static libs
   list(APPEND QUERY_ENGINE_LIBS clang-cpp)
 else()

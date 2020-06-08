@@ -1,6 +1,23 @@
 # fixme: this should be 3.3, but that breaks static ncurses
 cmake_minimum_required(VERSION 3.2)
 
+set(ENABLE_CONDA OFF)
+if(DEFINED ENV{CONDA_PREFIX})
+  set(ENABLE_CONDA ON)
+  # various fixes and workarounds
+  add_definitions("-Dsecure_getenv=getenv")
+  # fixes `undefined reference to `boost::system::detail::system_category_instance'`:
+  add_definitions("-DBOOST_ERROR_CODE_HEADER_ONLY")
+  # Adding formating macros
+  add_definitions("-D__STDC_FORMAT_MACROS=1")
+  # fixes always_inline attribute errors
+  add_compile_options("-fno-semantic-interposition")
+  # Adding `--sysroot=...` resolves `no member named 'signbit' in the global namespace` error:
+  set(CMAKE_SYSROOT "$ENV{CONDA_BUILD_SYSROOT}")
+  # Adding `-I$BUILD_SYSROOT_INLCUDE` resolves `cassert file not found` error:
+  include_directories(SYSTEM "$ENV{CONDA_BUILD_SYSROOT}/usr/include")
+endif(DEFINED ENV{CONDA_PREFIX})
+
 # force `Release` build type if left unspecified
 if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
   set(CMAKE_BUILD_TYPE "Release" CACHE STRING "Choose the type of build." FORCE)
@@ -130,13 +147,14 @@ if(XCODE)
 endif()
 
 # fixme: hack works for Homebrew, might not work for Conda
-if(${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
+if(${CMAKE_SYSTEM_NAME} MATCHES "Darwin" AND NOT ENABLE_CONDA)
   set(OPENSSL_ROOT_DIR "/usr/local/opt/openssl/")
 endif()
 find_package(OpenSSL REQUIRED)
 include_directories(${OPENSSL_INCLUDE_DIR})
 
 find_package(Thrift REQUIRED)
+message("Found Thrift version: ${Thrift_VERSION}")
 include_directories(${Thrift_INCLUDE_DIRS})
 if("${Thrift_VERSION}" VERSION_LESS "0.11.0")
   add_definitions("-DHAVE_THRIFT_BOOST_SHAREDPTR")
@@ -256,7 +274,7 @@ execute_process(COMMAND ${llvm_config_cmd} "--includedir" OUTPUT_VARIABLE LLVM_I
 execute_process(COMMAND ${llvm_config_cmd} "--libs" OUTPUT_VARIABLE LLVM_LIB_FLAGS)
 execute_process(COMMAND ${llvm_config_cmd} "--ldflags" OUTPUT_VARIABLE LLVM_LD_FLAGS)
 execute_process(COMMAND ${llvm_config_cmd} "--version" OUTPUT_VARIABLE LLVM_VERSION_STR)
-string(REGEX MATCH "^([0-9]+)" LLVM_VERSION_MAJOR ${LLVM_VERSION_STR})
+string(REGEX MATCH "^([0-9]+)" LLVM_VERSION_MAJOR "${LLVM_VERSION_STR}")
 
 string(REPLACE "\n" " " LLVM_LINKER_FLAGS "${LLVM_LIB_FLAGS} ${LLVM_LD_FLAGS} ${CURSES_LIBRARIES}")
 string(STRIP "${LLVM_LINKER_FLAGS}" LLVM_LINKER_FLAGS)
@@ -379,14 +397,7 @@ if(TBB_FOUND)
   list(APPEND TBB_LIBS ${TBB_LIBRARIES})
 endif()
 
-add_custom_command(
-  DEPENDS
-    ${CMAKE_SOURCE_DIR}/omnisci.thrift
-    ${CMAKE_SOURCE_DIR}/common.thrift
-    ${CMAKE_SOURCE_DIR}/completion_hints.thrift
-    ${CMAKE_SOURCE_DIR}/QueryEngine/serialized_result_set.thrift
-    ${CMAKE_SOURCE_DIR}/QueryEngine/extension_functions.thrift
-  OUTPUT
+set(gen_cpp_files
     ${CMAKE_BINARY_DIR}/gen-cpp/OmniSci.cpp
     ${CMAKE_BINARY_DIR}/gen-cpp/OmniSci.h
     ${CMAKE_BINARY_DIR}/gen-cpp/omnisci_constants.cpp
@@ -399,24 +410,23 @@ add_custom_command(
     ${CMAKE_BINARY_DIR}/gen-cpp/serialized_result_set_types.cpp
     ${CMAKE_BINARY_DIR}/gen-cpp/extension_functions_constants.cpp
     ${CMAKE_BINARY_DIR}/gen-cpp/extension_functions_types.cpp
+    ${CMAKE_BINARY_DIR}/gen-cpp/extension_functions_types.h
+)
+add_custom_command(
+  DEPENDS
+    ${CMAKE_SOURCE_DIR}/omnisci.thrift
+    ${CMAKE_SOURCE_DIR}/common.thrift
+    ${CMAKE_SOURCE_DIR}/completion_hints.thrift
+    ${CMAKE_SOURCE_DIR}/QueryEngine/serialized_result_set.thrift
+    ${CMAKE_SOURCE_DIR}/QueryEngine/extension_functions.thrift
+  OUTPUT ${gen_cpp_files}
   COMMAND ${Thrift_EXECUTABLE}
   ARGS -gen cpp -r -o ${CMAKE_BINARY_DIR} ${CMAKE_SOURCE_DIR}/omnisci.thrift)
 list(APPEND ADDITIONAL_MAKE_CLEAN_FILES ${CMAKE_BINARY_DIR}/gen-cpp/)
 
-add_library(mapd_thrift
-  ${CMAKE_BINARY_DIR}/gen-cpp/OmniSci.cpp
-  ${CMAKE_BINARY_DIR}/gen-cpp/OmniSci.h
-  ${CMAKE_BINARY_DIR}/gen-cpp/omnisci_constants.cpp
-  ${CMAKE_BINARY_DIR}/gen-cpp/omnisci_types.cpp
-  ${CMAKE_BINARY_DIR}/gen-cpp/common_constants.cpp
-  ${CMAKE_BINARY_DIR}/gen-cpp/common_types.cpp
-  ${CMAKE_BINARY_DIR}/gen-cpp/completion_hints_constants.cpp
-  ${CMAKE_BINARY_DIR}/gen-cpp/completion_hints_types.cpp
-  ${CMAKE_BINARY_DIR}/gen-cpp/serialized_result_set_constants.cpp
-  ${CMAKE_BINARY_DIR}/gen-cpp/serialized_result_set_types.cpp
-  ${CMAKE_BINARY_DIR}/gen-cpp/extension_functions_constants.cpp
-  ${CMAKE_BINARY_DIR}/gen-cpp/extension_functions_types.cpp
-)
+add_custom_target(thrift_gen DEPENDS ${gen_cpp_files})
+
+add_library(mapd_thrift ${gen_cpp_files})
 
 target_compile_options(mapd_thrift PRIVATE -fPIC)
 target_link_libraries(mapd_thrift ${Thrift_LIBRARIES})
@@ -680,7 +690,7 @@ endif()
 
 set_dpkg_arch(${CMAKE_SYSTEM_PROCESSOR} CPACK_DEBIAN_PACKAGE_ARCHITECTURE)
 
-install(DIRECTORY ThirdParty/licenses DESTINATION "ThirdParty/")
+install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/ThirdParty/licenses" DESTINATION "ThirdParty")
 
 # OmniSciTypes.h local includes (for UDF/UDTF)
 install(FILES Shared/funcannotations.h DESTINATION "Shared/")
@@ -700,6 +710,7 @@ if(MAPD_IMMERSE_DOWNLOAD)
     LOG_DOWNLOAD on
     )
   externalproject_get_property(frontend source_dir)
+
   install(DIRECTORY ${source_dir}/ DESTINATION "frontend/" PATTERN .git EXCLUDE PATTERN node_modules EXCLUDE)
   add_custom_command(TARGET frontend COMMAND ${CMAKE_COMMAND} -E copy_directory ${source_dir} frontend)
   list(APPEND ADDITIONAL_MAKE_CLEAN_FILES ${CMAKE_BINARY_DIR}/frontend)
@@ -802,7 +813,7 @@ install(FILES omnisci.thrift DESTINATION ".")
 install(FILES common.thrift DESTINATION ".")
 install(FILES QueryEngine/serialized_result_set.thrift DESTINATION "QueryEngine/")
 
-if(NOT PREFER_STATIC_LIBS)
+if(NOT PREFER_STATIC_LIBS AND NOT ENABLE_CONDA)
   install(FILES ${Boost_LIBRARIES} DESTINATION ThirdParty/lib)
 endif()
 
