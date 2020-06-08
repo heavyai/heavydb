@@ -366,7 +366,12 @@ int startMapdServer(CommandLineOptions& prog_config_opts, bool start_http_server
                                      prog_config_opts.enable_runtime_udf,
                                      prog_config_opts.udf_file_name,
                                      prog_config_opts.udf_compiler_path,
-                                     prog_config_opts.udf_compiler_options);
+                                     prog_config_opts.udf_compiler_options
+#ifdef ENABLE_GEOS
+                                     ,
+                                     prog_config_opts.libgeos_so_filename
+#endif
+        );
   } catch (const std::exception& e) {
     LOG(FATAL) << "Failed to initialize service handler: " << e.what();
   }

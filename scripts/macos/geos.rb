@@ -15,6 +15,7 @@ class Geos < Formula
       system "cmake", "..", "-DCMAKE_BUILD_TYPE=Release", *std_cmake_args
       system "make", "install"
     end
+  end
 
   test do
     system "#{bin}/geos-config", "--prefix"

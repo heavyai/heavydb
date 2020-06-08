@@ -185,6 +185,19 @@ add_custom_command(
     ${CMAKE_CURRENT_SOURCE_DIR}/RuntimeFunctions.cpp)
 
 add_custom_command(
+    DEPENDS GeosRuntime.cpp GeosRuntime.h
+    OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/GeosRuntime.bc
+    COMMAND ${llvm_clangpp_cmd}
+    ARGS -std=c++17 ${RT_OPT_FLAGS} -c -emit-llvm
+    ${CLANG_SDK_INC}
+    ${CLANG_CRT_INC}
+    -I ${Boost_INCLUDE_DIR}
+    ${MAPD_DEFINITIONS}
+    ${GEOS_RT_DEFINITIONS}
+    -I ${GEOS_INCLUDE_DIR} -Qy
+    ${CMAKE_CURRENT_SOURCE_DIR}/GeosRuntime.cpp)
+
+add_custom_command(
     DEPENDS ExtensionFunctions.hpp ExtensionFunctionsGeo.hpp ExtensionFunctionsArray.hpp
     OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/ExtensionFunctions.ast
     COMMAND ${llvm_clangpp_cmd}
@@ -196,10 +209,11 @@ add_custom_target(QueryEngineFunctionsTargets
     DEPENDS
         ${CMAKE_CURRENT_BINARY_DIR}/RuntimeFunctions.bc
         ${CMAKE_CURRENT_BINARY_DIR}/ExtensionFunctions.ast
+	${CMAKE_CURRENT_BINARY_DIR}/GeosRuntime.bc
     )
 
 file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/OmniSciTypes.h DESTINATION ${CMAKE_BINARY_DIR}/QueryEngine/)
-install(FILES ${CMAKE_CURRENT_BINARY_DIR}/OmniSciTypes.h ${CMAKE_CURRENT_BINARY_DIR}/RuntimeFunctions.bc ${CMAKE_CURRENT_BINARY_DIR}/ExtensionFunctions.ast DESTINATION QueryEngine)
+install(FILES ${CMAKE_CURRENT_BINARY_DIR}/OmniSciTypes.h ${CMAKE_CURRENT_BINARY_DIR}/RuntimeFunctions.bc ${CMAKE_CURRENT_BINARY_DIR}/GeosRuntime.bc ${CMAKE_CURRENT_BINARY_DIR}/ExtensionFunctions.ast DESTINATION QueryEngine)
 
 if(ENABLE_CUDA)
   add_library(QueryEngine ${query_engine_source_files} ${CMAKE_CURRENT_BINARY_DIR}/TopKSort.o ${CMAKE_CURRENT_BINARY_DIR}/InPlaceSortImpl.o ${CMAKE_CURRENT_BINARY_DIR}/ResultSetSortImpl.o ${CMAKE_CURRENT_BINARY_DIR}/GpuInitGroups.o ${CMAKE_CURRENT_BINARY_DIR}/HashJoinRuntimeGpu.o)

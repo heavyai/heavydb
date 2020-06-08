@@ -104,6 +104,10 @@ class CommandLineOptions {
   std::string udf_compiler_path = {""};
   std::vector<std::string> udf_compiler_options;
 
+#ifdef ENABLE_GEOS
+  std::string libgeos_so_filename = {"libgeos_c.so"};
+#endif
+
   void fillOptions();
   void fillAdvancedOptions();
 

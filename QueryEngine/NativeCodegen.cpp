@@ -73,6 +73,47 @@ std::unique_ptr<llvm::Module> rt_udf_gpu_module;
 std::unique_ptr<llvm::Module> rt_udf_cpu_module;
 
 extern std::unique_ptr<llvm::Module> g_rt_module;
+
+#ifdef ENABLE_GEOS
+extern std::unique_ptr<llvm::Module> g_rt_geos_module;
+
+#include <llvm/Support/DynamicLibrary.h>
+
+#ifndef GEOS_LIBRARY_FILENAME
+#error Configuration should include GEOS library file name
+#endif
+std::unique_ptr<std::string> g_libgeos_so_filename(
+    new std::string(GEOS_LIBRARY_FILENAME));
+static llvm::sys::DynamicLibrary geos_dynamic_library;
+static std::mutex geos_init_mutex;
+
+namespace {
+
+void load_geos_dynamic_library() {
+  std::lock_guard<std::mutex> guard(geos_init_mutex);
+
+  if (!geos_dynamic_library.isValid()) {
+    if (!g_libgeos_so_filename || g_libgeos_so_filename->empty()) {
+      LOG(WARNING) << "Misconfigured GEOS library file name, trying 'libgeos_c.so'";
+      g_libgeos_so_filename.reset(new std::string("libgeos_c.so"));
+    }
+    auto filename = *g_libgeos_so_filename;
+    std::string error_message;
+    geos_dynamic_library =
+        llvm::sys::DynamicLibrary::getPermanentLibrary(filename.c_str(), &error_message);
+    if (!geos_dynamic_library.isValid()) {
+      LOG(ERROR) << "Failed to load GEOS library '" + filename + "'";
+      std::string exception_message = "Failed to load GEOS library: " + error_message;
+      throw std::runtime_error(exception_message.c_str());
+    } else {
+      LOG(INFO) << "Loaded GEOS library '" + filename + "'";
+    }
+  }
+}
+
+}  // namespace
+#endif
+
 namespace {
 
 #if defined(HAVE_CUDA) || !defined(WITH_JIT_DEBUG)
@@ -265,6 +306,37 @@ std::vector<std::pair<void*, void*>> Executor::optimizeAndCodegenCPU(
   auto cached_code = getCodeFromCache(key, cpu_code_cache_);
   if (!cached_code.empty()) {
     return cached_code;
+  }
+
+  if (cgen_state_->needs_geos_) {
+#ifdef ENABLE_GEOS
+    load_geos_dynamic_library();
+
+    // Read geos runtime module and bind GEOS API function references to GEOS library
+    auto rt_geos_module_copy = llvm::CloneModule(
+#if LLVM_VERSION_MAJOR >= 7
+        *g_rt_geos_module.get(),
+#else
+        g_rt_geos_module.get(),
+#endif
+        cgen_state_->vmap_,
+        [](const llvm::GlobalValue* gv) {
+          auto func = llvm::dyn_cast<llvm::Function>(gv);
+          if (!func) {
+            return true;
+          }
+          return (func->getLinkage() == llvm::GlobalValue::LinkageTypes::PrivateLinkage ||
+                  func->getLinkage() ==
+                      llvm::GlobalValue::LinkageTypes::InternalLinkage ||
+                  func->getLinkage() == llvm::GlobalValue::LinkageTypes::ExternalLinkage);
+        });
+    CodeGenerator::link_udf_module(rt_geos_module_copy,
+                                   *module,
+                                   cgen_state_.get(),
+                                   llvm::Linker::Flags::LinkOnlyNeeded);
+#else
+    throw std::runtime_error("GEOS is disabled in this build");
+#endif
   }
 
   auto execution_engine =
@@ -956,6 +1028,24 @@ llvm::Module* read_template_module(llvm::LLVMContext& context) {
   return module;
 }
 
+#ifdef ENABLE_GEOS
+llvm::Module* read_geos_module(llvm::LLVMContext& context) {
+  llvm::SMDiagnostic err;
+
+  auto buffer_or_error =
+      llvm::MemoryBuffer::getFile(mapd_root_abs_path() + "/QueryEngine/GeosRuntime.bc");
+  CHECK(!buffer_or_error.getError());
+  llvm::MemoryBuffer* buffer = buffer_or_error.get().get();
+
+  auto owner = llvm::parseBitcodeFile(buffer->getMemBufferRef(), context);
+  CHECK(!owner.takeError());
+  auto module = owner.get().release();
+  CHECK(module);
+
+  return module;
+}
+#endif
+
 namespace {
 
 void bind_pos_placeholders(const std::string& pos_fn_name,
@@ -1235,6 +1325,10 @@ std::vector<std::string> get_agg_fnames(const std::vector<Analyzer::Expr*>& targ
 }  // namespace
 
 std::unique_ptr<llvm::Module> g_rt_module(read_template_module(getGlobalLLVMContext()));
+
+#ifdef ENABLE_GEOS
+std::unique_ptr<llvm::Module> g_rt_geos_module(read_geos_module(getGlobalLLVMContext()));
+#endif
 
 bool is_udf_module_present(bool cpu_only) {
   return (cpu_only || udf_gpu_module != nullptr) && (udf_cpu_module != nullptr);

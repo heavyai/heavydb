@@ -219,7 +219,12 @@ class DBHandlerTestFixture : public testing::Test {
                                                 enable_runtime_udf_registration,
                                                 udf_filename_,
                                                 udf_compiler_path_,
-                                                udf_compiler_options_);
+                                                udf_compiler_options_
+#ifdef ENABLE_GEOS
+                                                ,
+                                                libgeos_so_filename_
+#endif
+      );
 
       loginAdmin();
     }
@@ -434,6 +439,9 @@ class DBHandlerTestFixture : public testing::Test {
   static std::string default_db_name_;
   static std::vector<std::string> udf_compiler_options_;
   static std::string cluster_config_file_path_;
+#ifdef ENABLE_GEOS
+  static std::string libgeos_so_filename_;
+#endif
 };
 
 TSessionId DBHandlerTestFixture::session_id_{};
@@ -450,3 +458,6 @@ std::string DBHandlerTestFixture::default_db_name_{};
 SystemParameters DBHandlerTestFixture::system_parameters_{};
 std::vector<std::string> DBHandlerTestFixture::udf_compiler_options_{};
 std::string DBHandlerTestFixture::cluster_config_file_path_{};
+#ifdef ENABLE_GEOS
+std::string DBHandlerTestFixture::libgeos_so_filename_{};
+#endif

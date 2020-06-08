@@ -1551,7 +1551,20 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateFunction(
                    "ST_GeogFromText"sv,
                    "ST_Point"sv,
                    "ST_SetSRID"sv)) {
-    return translateGeoConstructor(rex_function);
+    SQLTypeInfo ti;
+    return translateGeoProjection(rex_function, ti, false);
+  }
+  if (func_resolve(rex_function->getName(),
+                   "ST_Intersection"sv,
+                   "ST_Difference"sv,
+                   "ST_Union"sv,
+                   "ST_Buffer"sv)) {
+    SQLTypeInfo ti;
+    return translateGeoBinaryConstructor(rex_function, ti, false);
+  }
+  if (func_resolve(rex_function->getName(), "ST_IsEmpty"sv, "ST_IsValid"sv)) {
+    SQLTypeInfo ti;
+    return translateGeoPredicate(rex_function, ti, false);
   }
 
   auto arg_expr_list = translateFunctionArgs(rex_function);

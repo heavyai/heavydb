@@ -101,6 +101,7 @@ sudo apt install -y \
     libxerces-c-dev \
     libxmlsec1-dev
 
+
 # Needed to find sqlite3, xmltooling, and xml_security_c
 export PKG_CONFIG_PATH=$PREFIX/lib/pkgconfig:$PREFIX/lib64/pkgconfig:$PKG_CONFIG_PATH
 export PATH=$PREFIX/bin:$PATH

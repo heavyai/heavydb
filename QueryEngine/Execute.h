@@ -1026,6 +1026,7 @@ class Executor {
   static const int32_t ERR_STRING_CONST_IN_RESULTSET{13};
   static const int32_t ERR_STREAMING_TOP_N_NOT_SUPPORTED_IN_RENDER_QUERY{14};
   static const int32_t ERR_SINGLE_VALUE_FOUND_MULTIPLE_VALUES{15};
+  static const int32_t ERR_GEOS{16};
 
   static std::mutex compilation_mutex_;
   static std::mutex kernel_mutex_;

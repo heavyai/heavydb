@@ -3040,6 +3040,8 @@ std::string RelAlgExecutor::getErrorMessageFromCode(const int32_t error_code) {
       return "Streaming-Top-N not supported in Render Query";
     case Executor::ERR_SINGLE_VALUE_FOUND_MULTIPLE_VALUES:
       return "Multiple distinct values encountered";
+    case Executor::ERR_GEOS:
+      return "Geos call failure";
   }
   return "Other error: code " + std::to_string(error_code);
 }

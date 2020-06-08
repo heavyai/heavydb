@@ -514,6 +514,13 @@ void CommandLineOptions::fillAdvancedOptions() {
   developer_desc.add_options()("udf-compiler-options",
                                po::value<std::vector<std::string>>(&udf_compiler_options),
                                "Specify compiler options to tailor udf compilation.");
+
+#ifdef ENABLE_GEOS
+  developer_desc.add_options()("libgeos-so-filename",
+                               po::value<std::string>(&libgeos_so_filename),
+                               "Specify libgeos shared object filename to be used for "
+                               "geos-backed geo opertations.");
+#endif
 }
 
 namespace {

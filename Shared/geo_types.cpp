@@ -163,13 +163,169 @@ std::string GeoBase::getWktString() const {
   return wkt_str;
 }
 
+OGRErr GeoBase::createFromWkb(const std::vector<uint8_t>& wkb, OGRGeometry** geom) {
+#if (GDAL_VERSION_MAJOR > 2) || (GDAL_VERSION_MAJOR == 2 && GDAL_VERSION_MINOR >= 3)
+  OGRErr ogr_status =
+      OGRGeometryFactory::createFromWkb(wkb.data(), nullptr, geom, wkb.size());
+  return ogr_status;
+#else
+  CHECK(false);
+#endif
+}
+
+// GeoBase could also generate GEOS geometries through geom_->exportToGEOS(),
+// conversion to WKB and subsequent load of WKB into GEOS could be eliminated.
+
+bool GeoBase::getWkb(std::vector<uint8_t>& wkb) const {
+  auto size = geom_->WkbSize();
+  if (size > 0) {
+    wkb.resize(size);
+    geom_->exportToWkb(wkbNDR, wkb.data());
+    return true;
+  }
+  return false;
+}
+
+bool GeoBase::isEmpty() const {
+  return geom_ && geom_->IsEmpty();
+}
+
 bool GeoBase::operator==(const GeoBase& other) const {
   if (!this->geom_ || !other.geom_) {
     return false;
   }
   return this->geom_->Equals(other.geom_);
-  // return const_cast<const OGRGeometry*>(this->geom_) == const_cast<const
-  // OGRGeometry*>(other.geom_);
+}
+
+// Run a specific geo operation on this and other geometries
+std::unique_ptr<GeoBase> GeoBase::run(GeoBase::GeoOp op, const GeoBase& other) const {
+  OGRGeometry* result = nullptr;
+  // Invalid geometries are derailing geo op performance,
+  // Checking validity before running an operation doesn't have lesser penalty.
+  // DOES NOT HELP: if (geom_->IsValid() && other.geom_->IsValid()) {
+  switch (op) {
+    case GeoBase::GeoOp::kINTERSECTION:
+      result = geom_->Intersection(other.geom_);
+      break;
+    case GeoBase::GeoOp::kDIFFERENCE:
+      result = geom_->Difference(other.geom_);
+      break;
+    case GeoBase::GeoOp::kUNION:
+      result = geom_->Union(other.geom_);
+      break;
+    default:
+      break;
+  }
+  // TODO: Need to handle empty/non-POLYGON result
+  if (!result || result->IsEmpty() ||
+      !(result->getGeometryType() == wkbPolygon ||
+        result->getGeometryType() == wkbMultiPolygon)) {
+    // throw GeoTypesError(std::string(OGRGeometryTypeToName(geom_->getGeometryType())),
+    //                    "Currenly don't support invalid or empty result");
+    // return GeoTypesFactory::createGeoType("POLYGON EMPTY");
+    // Not supporting EMPTY polygons, return a dot polygon
+    return GeoTypesFactory::createGeoType(
+        "MULTIPOLYGON(((0 0,0.0000001 0,0 0.0000001)))");
+  }
+  return GeoTypesFactory::createGeoType(result);
+}
+
+// Run a specific geo operation on this and other geometries
+std::unique_ptr<GeoBase> GeoBase::optimized_run(GeoBase::GeoOp op,
+                                                const GeoBase& other) const {
+  OGRGeometry* result = nullptr;
+  // Loop through polys combinations, check validity, do intersections
+  // where needed, return a union of all intersections
+  auto gc1 = geom_->toGeometryCollection();
+  auto gc2 = other.geom_->toGeometryCollection();
+  if (!gc1 || !gc2 || gc1->IsEmpty() || gc2->IsEmpty()) {
+    return nullptr;
+  }
+  for (int i1 = 0; i1 < gc1->getNumGeometries(); i1++) {
+    auto g1 = gc1->getGeometryRef(i1);
+    // Validity check is very slow
+    if (!g1 || g1->IsEmpty() /*|| !g1->IsValid()*/) {
+      continue;
+    }
+    OGREnvelope ge1;
+    g1->getEnvelope(&ge1);
+    for (int i2 = 0; i2 < gc2->getNumGeometries(); i2++) {
+      auto g2 = gc2->getGeometryRef(i2);
+      // Validity check is very slow
+      if (!g2 || g2->IsEmpty() /*|| !g2->IsValid()*/) {
+        continue;
+      }
+      // Check for bounding box overlap
+      OGREnvelope ge2;
+      g2->getEnvelope(&ge2);
+      if (!ge1.Intersects(ge2)) {
+        continue;
+      }
+      // Do intersection
+      auto intermediate_result = g1->Intersection(g2);
+      if (!intermediate_result || intermediate_result->IsEmpty()) {
+        continue;
+      }
+      if (!result) {
+        result = intermediate_result;
+      } else {
+        result = result->Union(intermediate_result);
+      }
+    }
+  }
+
+  // TODO: Need to handle empty/non-POLYGON result
+  if (!result || result->IsEmpty() ||
+      !(result->getGeometryType() == wkbPolygon ||
+        result->getGeometryType() == wkbMultiPolygon)) {
+    // throw GeoTypesError(std::string(OGRGeometryTypeToName(geom_->getGeometryType())),
+    //                    "Currenly don't support invalid or empty result");
+    // return GeoTypesFactory::createGeoType("POLYGON EMPTY");
+    // Not supporting EMPTY polygons, return a dot polygon
+    return GeoTypesFactory::createGeoType(
+        "MULTIPOLYGON(((0 0,0.0000001 0,0 0.0000001)))");
+  }
+  return GeoTypesFactory::createGeoType(result);
+}
+
+// Run a specific geo operation on this geometry and a double param
+std::unique_ptr<GeoBase> GeoBase::run(GeoBase::GeoOp op, double param) const {
+  OGRGeometry* result = nullptr;
+  switch (op) {
+    case GeoBase::GeoOp::kBUFFER:
+      result = geom_->Buffer(param);
+      break;
+    default:
+      break;
+  }
+  // TODO: Need to handle empty/non-POLYGON result
+  if (!result || result->IsEmpty() ||
+      !(result->getGeometryType() == wkbPolygon ||
+        result->getGeometryType() == wkbMultiPolygon)) {
+    // throw GeoTypesError(std::string(OGRGeometryTypeToName(geom_->getGeometryType())),
+    //                    "Currenly don't support invalid or empty result");
+    // return GeoTypesFactory::createGeoType("POLYGON EMPTY");
+    // Not supporting EMPTY polygons, return a dot polygon
+    return GeoTypesFactory::createGeoType(
+        "MULTIPOLYGON(((0 0,0.0000001 0,0 0.0000001)))");
+  }
+  return GeoTypesFactory::createGeoType(result);
+}
+
+// Run a specific predicate operation on this geometry
+bool GeoBase::run(GeoBase::GeoOp op) const {
+  auto result = false;
+  switch (op) {
+    case GeoBase::GeoOp::kISVALID:
+      result = geom_->IsValid();
+      break;
+    case GeoBase::GeoOp::kISEMPTY:
+      result = isEmpty();
+      break;
+    default:
+      break;
+  }
+  return result;
 }
 
 GeoPoint::GeoPoint(const std::vector<double>& coords) {
@@ -443,9 +599,31 @@ void GeoMultiPolygon::getColumns(std::vector<double>& coords,
   bounds.push_back(bbox.max.y);
 }
 
+GeoGeometryCollection::GeoGeometryCollection(const std::string& wkt) {
+  const auto err = GeoBase::createFromWktString(wkt, &geom_);
+  if (err != OGRERR_NONE) {
+    throw GeoTypesError("GeometryCollection", err);
+  }
+  CHECK(geom_);
+  if (wkbFlatten(geom_->getGeometryType()) != OGRwkbGeometryType::wkbGeometryCollection) {
+    throw GeoTypesError("GeometryCollection",
+                        "Unexpected geometry type from WKT string: " +
+                            std::string(OGRGeometryTypeToName(geom_->getGeometryType())));
+  }
+}
+
 std::unique_ptr<GeoBase> GeoTypesFactory::createGeoType(const std::string& wkt) {
   OGRGeometry* geom = nullptr;
   const auto err = GeoBase::createFromWktString(wkt, &geom);
+  if (err != OGRERR_NONE) {
+    throw GeoTypesError("GeoFactory", err);
+  }
+  return GeoTypesFactory::createGeoTypeImpl(geom);
+}
+
+std::unique_ptr<GeoBase> GeoTypesFactory::createGeoType(const std::vector<uint8_t>& wkb) {
+  OGRGeometry* geom = nullptr;
+  const auto err = GeoBase::createFromWkb(wkb, &geom);
   if (err != OGRERR_NONE) {
     throw GeoTypesError("GeoFactory", err);
   }
@@ -471,6 +649,36 @@ bool GeoTypesFactory::getGeoColumns(const std::string& wkt,
     }
 
     const auto geospatial_base = GeoTypesFactory::createGeoType(wkt);
+
+    int srid = 0;
+    ti.set_input_srid(srid);
+    ti.set_output_srid(srid);
+
+    getGeoColumnsImpl(geospatial_base,
+                      ti,
+                      coords,
+                      bounds,
+                      ring_sizes,
+                      poly_rings,
+                      promote_poly_to_mpoly);
+
+  } catch (const std::exception& e) {
+    LOG(ERROR) << "Geospatial Import Error: " << e.what();
+    return false;
+  }
+
+  return true;
+}
+
+bool GeoTypesFactory::getGeoColumns(const std::vector<uint8_t>& wkb,
+                                    SQLTypeInfo& ti,
+                                    std::vector<double>& coords,
+                                    std::vector<double>& bounds,
+                                    std::vector<int>& ring_sizes,
+                                    std::vector<int>& poly_rings,
+                                    const bool promote_poly_to_mpoly) {
+  try {
+    const auto geospatial_base = GeoTypesFactory::createGeoType(wkb);
 
     int srid = 0;
     ti.set_input_srid(srid);
@@ -568,6 +776,9 @@ std::unique_ptr<GeoBase> GeoTypesFactory::createGeoTypeImpl(OGRGeometry* geom,
       return std::unique_ptr<GeoPolygon>(new GeoPolygon(geom, owns_geom_obj));
     case wkbMultiPolygon:
       return std::unique_ptr<GeoMultiPolygon>(new GeoMultiPolygon(geom, owns_geom_obj));
+    case wkbGeometryCollection:
+      return std::unique_ptr<GeoGeometryCollection>(
+          new GeoGeometryCollection(geom, owns_geom_obj));
     default:
       throw GeoTypesError(
           "GeoTypesFactory",
@@ -618,6 +829,8 @@ void GeoTypesFactory::getGeoColumnsImpl(const std::unique_ptr<GeoBase>& geospati
       ti.set_type(kMULTIPOLYGON);
       break;
     }
+    case GeoBase::GeoType::kGEOMETRY:
+    case GeoBase::GeoType::kGEOMETRYCOLLECTION:
     default:
       throw std::runtime_error("Unrecognized geospatial type");
   }

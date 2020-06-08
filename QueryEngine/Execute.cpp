@@ -2649,7 +2649,8 @@ int32_t Executor::executePlanWithoutGroupBy(
       error_code == Executor::ERR_DIV_BY_ZERO ||
       error_code == Executor::ERR_OUT_OF_TIME ||
       error_code == Executor::ERR_INTERRUPTED ||
-      error_code == Executor::ERR_SINGLE_VALUE_FOUND_MULTIPLE_VALUES) {
+      error_code == Executor::ERR_SINGLE_VALUE_FOUND_MULTIPLE_VALUES ||
+      error_code == Executor::ERR_GEOS) {
     return error_code;
   }
   if (ra_exe_unit.estimator) {
@@ -2884,7 +2885,8 @@ int32_t Executor::executePlanWithGroupBy(
       error_code == Executor::ERR_DIV_BY_ZERO ||
       error_code == Executor::ERR_OUT_OF_TIME ||
       error_code == Executor::ERR_INTERRUPTED ||
-      error_code == Executor::ERR_SINGLE_VALUE_FOUND_MULTIPLE_VALUES) {
+      error_code == Executor::ERR_SINGLE_VALUE_FOUND_MULTIPLE_VALUES ||
+      error_code == Executor::ERR_GEOS) {
     return error_code;
   }
 

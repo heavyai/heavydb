@@ -235,8 +235,19 @@ llvm::Value* CodeGenerator::codegenFunctionOper(
         ret_ti.is_array() || (array_expr_arg && array_expr_arg->isLocalAlloc());
     const auto& arg_ti = arg->get_type_info();
     const auto arg_lvs = codegen(arg, true, co);
+    auto geo_uoper_arg = dynamic_cast<const Analyzer::GeoUOper*>(arg);
+    auto geo_binoper_arg = dynamic_cast<const Analyzer::GeoBinOper*>(arg);
     // TODO(adb / d): Assuming no const array cols for geo (for now)
-    if (arg_ti.is_geometry()) {
+    if ((geo_uoper_arg || geo_binoper_arg) && arg_ti.is_geometry()) {
+      // Extract arr sizes and put them in the map, forward arr pointers
+      CHECK_EQ(2 * static_cast<size_t>(arg_ti.get_physical_coord_cols()), arg_lvs.size());
+      for (size_t i = 0; i < arg_lvs.size(); i++) {
+        auto arr = arg_lvs[i++];
+        auto size = arg_lvs[i];
+        orig_arg_lvs.push_back(arr);
+        const_arr_size[arr] = size;
+      }
+    } else if (arg_ti.is_geometry()) {
       CHECK_EQ(static_cast<size_t>(arg_ti.get_physical_coord_cols()), arg_lvs.size());
       for (size_t j = 0; j < arg_lvs.size(); j++) {
         orig_arg_lvs.push_back(arg_lvs[j]);
@@ -499,6 +510,15 @@ llvm::Value* CodeGenerator::codegenFunctionOperNullArg(
     if (arg_ti.get_notnull()) {
       continue;
     }
+#ifdef ENABLE_GEOS
+    // If geo arg is coming from geos, skip the null check, assume it's a valid geo
+    if (arg_ti.is_geometry()) {
+      auto* coords_load = llvm::dyn_cast<llvm::LoadInst>(orig_arg_lvs[i]);
+      if (coords_load) {
+        continue;
+      }
+    }
+#endif
     if (arg_ti.is_array() || arg_ti.is_geometry()) {
       // POINT [un]compressed coord check requires custom checker and chunk iterator
       // Non-POINT NULL geographies will have a normally encoded null coord array
@@ -1049,14 +1069,16 @@ std::vector<llvm::Value*> CodeGenerator::codegenFunctionOperCastArgs(
                                   args);
             k++;
           } else {
+            k++;
             // Ring Sizes
-
+            auto const_arr = const_arr_size.count(orig_arg_lvs[k]) > 0;
             auto [ring_size_buff, ring_size] =
-                codegenArrayBuff(orig_arg_lvs[k + 1], posArg(arg), SQLTypes::kINT, true);
-
+                (const_arr)
+                    ? std::make_pair(orig_arg_lvs[k], const_arr_size.at(orig_arg_lvs[k]))
+                    : codegenArrayBuff(
+                          orig_arg_lvs[k], posArg(arg), SQLTypes::kINT, true);
             args.push_back(ring_size_buff);
             args.push_back(ring_size);
-            k++;
             j++;
           }
           break;
@@ -1095,8 +1117,12 @@ std::vector<llvm::Value*> CodeGenerator::codegenFunctionOperCastArgs(
             k++;
             // Ring Sizes
             {
+              auto const_arr = const_arr_size.count(orig_arg_lvs[k]) > 0;
               auto [ring_size_buff, ring_size] =
-                  codegenArrayBuff(orig_arg_lvs[k], posArg(arg), SQLTypes::kINT, true);
+                  (const_arr) ? std::make_pair(orig_arg_lvs[k],
+                                               const_arr_size.at(orig_arg_lvs[k]))
+                              : codegenArrayBuff(
+                                    orig_arg_lvs[k], posArg(arg), SQLTypes::kINT, true);
 
               args.push_back(ring_size_buff);
               args.push_back(ring_size);
@@ -1105,8 +1131,12 @@ std::vector<llvm::Value*> CodeGenerator::codegenFunctionOperCastArgs(
 
             // Poly Rings
             {
+              auto const_arr = const_arr_size.count(orig_arg_lvs[k]) > 0;
               auto [poly_bounds_buff, poly_bounds_size] =
-                  codegenArrayBuff(orig_arg_lvs[k], posArg(arg), SQLTypes::kINT, true);
+                  (const_arr) ? std::make_pair(orig_arg_lvs[k],
+                                               const_arr_size.at(orig_arg_lvs[k]))
+                              : codegenArrayBuff(
+                                    orig_arg_lvs[k], posArg(arg), SQLTypes::kINT, true);
 
               args.push_back(poly_bounds_buff);
               args.push_back(poly_bounds_size);

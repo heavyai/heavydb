@@ -168,6 +168,10 @@ SessionMap::iterator DBHandler::get_session_it_unsafe(
   return session_it;
 }
 
+#ifdef ENABLE_GEOS
+extern std::unique_ptr<std::string> g_libgeos_so_filename;
+#endif
+
 DBHandler::DBHandler(const std::vector<LeafHostInfo>& db_leaves,
                      const std::vector<LeafHostInfo>& string_leaves,
                      const std::string& base_data_path,
@@ -194,7 +198,12 @@ DBHandler::DBHandler(const std::vector<LeafHostInfo>& db_leaves,
                      const bool enable_runtime_udf_registration,
                      const std::string& udf_filename,
                      const std::string& clang_path,
-                     const std::vector<std::string>& clang_options)
+                     const std::vector<std::string>& clang_options
+#ifdef ENABLE_GEOS
+                     ,
+                     const std::string& libgeos_so_filename
+#endif
+                     )
     : leaf_aggregator_(db_leaves)
     , string_leaves_(string_leaves)
     , base_data_path_(base_data_path)
@@ -355,6 +364,13 @@ DBHandler::DBHandler(const std::vector<LeafHostInfo>& db_leaves,
       LOG(ERROR) << "Distributed leaf support disabled: " << e.what();
     }
   }
+
+#ifdef ENABLE_GEOS
+  if (!libgeos_so_filename.empty()) {
+    g_libgeos_so_filename.reset(new std::string(libgeos_so_filename));
+    LOG(INFO) << "Overriding default geos library with '" + *g_libgeos_so_filename + "'";
+  }
+#endif
 }
 
 DBHandler::~DBHandler() {}

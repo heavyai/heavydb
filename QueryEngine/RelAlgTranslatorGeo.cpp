@@ -516,6 +516,17 @@ std::vector<std::shared_ptr<Analyzer::Expr>> RelAlgTranslator::translateGeoFunct
       tia_ti.set_subtype(kTINYINT);
       tia_ti.set_size(16);
       return {makeExpr<Analyzer::UOper>(tia_ti, false, kCAST, ae)};
+    } else if (func_resolve(rex_function->getName(),
+                            "ST_Intersection"sv,
+                            "ST_Difference"sv,
+                            "ST_Union"sv,
+                            "ST_Buffer"sv)) {
+      CHECK_EQ(size_t(2), rex_function->size());
+      // What geo type will the constructor return? Could be anything.
+      return {translateGeoBinaryConstructor(rex_function, arg_ti, with_bounds)};
+    } else if (func_resolve(rex_function->getName(), "ST_IsEmpty"sv, "ST_IsValid"sv)) {
+      CHECK_EQ(size_t(1), rex_function->size());
+      return {translateGeoPredicate(rex_function, arg_ti, with_bounds)};
     } else {
       throw QueryNotSupported("Unsupported argument: " + rex_function->getName());
     }
@@ -547,21 +558,98 @@ std::string suffix(SQLTypes type) {
 
 }  // namespace
 
-std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateGeoConstructor(
-    const RexFunctionOperator* rex_function) const {
-  if (func_resolve(rex_function->getName(),
-                   "ST_GeomFromText"sv,
-                   "ST_GeogFromText"sv,
-                   "ST_Point"sv,
-                   "ST_SetSRID"sv)) {
-    SQLTypeInfo arg_ti;
-    int32_t lindex = 0;
-    auto geoargs =
-        translateGeoFunctionArg(rex_function, arg_ti, lindex, false, false, true, true);
-    return makeExpr<Analyzer::GeoExpr>(arg_ti, geoargs);
-  }
+std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateGeoProjection(
+    const RexFunctionOperator* rex_function,
+    SQLTypeInfo& ti,
+    const bool with_bounds) const {
+  int32_t lindex = 0;
+  auto geoargs =
+      translateGeoFunctionArg(rex_function, ti, lindex, false, false, true, true);
+  return makeExpr<Analyzer::GeoUOper>(
+      Geo_namespace::GeoBase::GeoOp::kPROJECTION, ti, ti, geoargs);
+}
+
+std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateGeoBinaryConstructor(
+    const RexFunctionOperator* rex_function,
+    SQLTypeInfo& ti,
+    const bool with_bounds) const {
+#ifndef ENABLE_GEOS
   throw QueryNotSupported(rex_function->getName() +
-                          " geo constructor is not supported in this context");
+                          " geo constructor requires enabled GEOS support");
+#endif
+  Geo_namespace::GeoBase::GeoOp op = Geo_namespace::GeoBase::GeoOp::kINTERSECTION;
+  if (rex_function->getName() == "ST_Difference"sv) {
+    op = Geo_namespace::GeoBase::GeoOp::kDIFFERENCE;
+  } else if (rex_function->getName() == "ST_Union"sv) {
+    op = Geo_namespace::GeoBase::GeoOp::kUNION;
+  } else if (rex_function->getName() == "ST_Buffer"sv) {
+    op = Geo_namespace::GeoBase::GeoOp::kBUFFER;
+  }
+
+  Analyzer::ExpressionPtrVector geoargs0{};
+  Analyzer::ExpressionPtrVector geoargs1{};
+  SQLTypeInfo arg0_ti;
+  SQLTypeInfo arg1_ti;
+  if (func_resolve(rex_function->getName(),
+                   "ST_Intersection"sv,
+                   "ST_Difference"sv,
+                   "ST_Union"sv,
+                   "ST_Buffer"sv)) {
+    // First arg: geometry
+    int32_t lindex0 = 0;
+    geoargs0 = translateGeoFunctionArg(
+        rex_function->getOperand(0), arg0_ti, lindex0, false, false, true, true);
+    if (arg0_ti.get_type() == kLINESTRING) {
+      Datum index;
+      index.intval = lindex0;
+      geoargs0.push_back(makeExpr<Analyzer::Constant>(kINT, false, index));
+    }
+  }
+  if (func_resolve(rex_function->getName(),
+                   "ST_Intersection"sv,
+                   "ST_Difference"sv,
+                   "ST_Union"sv)) {
+    // Second arg: geometry
+    int32_t lindex1 = 0;
+    geoargs1 = translateGeoFunctionArg(
+        rex_function->getOperand(1), arg1_ti, lindex1, false, false, true, true);
+    if (arg1_ti.get_type() == kLINESTRING) {
+      Datum index;
+      index.intval = lindex1;
+      geoargs1.push_back(makeExpr<Analyzer::Constant>(kINT, false, index));
+    }
+  } else if (func_resolve(rex_function->getName(), "ST_Buffer"sv)) {
+    // Second arg: double scalar
+    auto param_expr = translateScalarRex(rex_function->getOperand(1));
+    arg1_ti = SQLTypeInfo(kDOUBLE, false);
+    if (param_expr->get_type_info().get_type() != kDOUBLE) {
+      param_expr = param_expr->add_cast(arg1_ti);
+    }
+    geoargs1 = {param_expr};
+  }
+
+  ti = arg0_ti;
+  ti.set_type(kMULTIPOLYGON);
+  return makeExpr<Analyzer::GeoBinOper>(op, ti, arg0_ti, arg1_ti, geoargs0, geoargs1);
+}
+
+std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateGeoPredicate(
+    const RexFunctionOperator* rex_function,
+    SQLTypeInfo& ti,
+    const bool with_bounds) const {
+#ifndef ENABLE_GEOS
+  throw QueryNotSupported(rex_function->getName() +
+                          " geo predicate requires enabled GEOS support");
+#endif
+  int32_t lindex = 0;
+  SQLTypeInfo arg_ti;
+  auto geoargs = translateGeoFunctionArg(
+      rex_function->getOperand(0), arg_ti, lindex, false, false, true, true);
+  ti = SQLTypeInfo(kBOOLEAN, false);
+  auto op = (rex_function->getName() == "ST_IsEmpty"sv)
+                ? Geo_namespace::GeoBase::GeoOp::kISEMPTY
+                : Geo_namespace::GeoBase::GeoOp::kISVALID;
+  return makeExpr<Analyzer::GeoUOper>(op, ti, arg_ti, geoargs);
 }
 
 std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateUnaryGeoFunction(

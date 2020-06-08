@@ -48,10 +48,34 @@ class GeoBase {
   virtual ~GeoBase();
 
   std::string getWktString() const;
-  enum class GeoType { kPOINT, kLINESTRING, kPOLYGON, kMULTIPOLYGON };
+  bool getWkb(std::vector<uint8_t>&) const;
+  enum class GeoType {
+    kPOINT,
+    kLINESTRING,
+    kPOLYGON,
+    kMULTIPOLYGON,
+    kGEOMETRY,
+    kGEOMETRYCOLLECTION
+  };
+  enum class GeoOp {
+    kPROJECTION = 0,
+    kINTERSECTION = 1,
+    kDIFFERENCE = 2,
+    kUNION = 3,
+    kBUFFER = 4,
+    kISVALID = 5,
+    kISEMPTY = 6
+  };
   virtual GeoType getType() const = 0;
 
   virtual bool operator==(const GeoBase& other) const;
+
+  bool isEmpty() const;
+
+  std::unique_ptr<GeoBase> run(GeoOp op, const GeoBase& other) const;
+  std::unique_ptr<GeoBase> optimized_run(GeoOp op, const GeoBase& other) const;
+  std::unique_ptr<GeoBase> run(GeoOp op, double param) const;
+  bool run(GeoOp op) const;
 
  protected:
   GeoBase(OGRGeometry* geom, const bool owns_geom_obj)
@@ -60,6 +84,7 @@ class GeoBase {
   bool owns_geom_obj_;
 
   static int createFromWktString(const std::string& wkt, OGRGeometry** geom);
+  static int createFromWkb(const std::vector<uint8_t>& wkb, OGRGeometry** geom);
 
   friend class GeoTypesFactory;
 };
@@ -132,12 +157,73 @@ class GeoMultiPolygon : public GeoBase {
   friend class GeoTypesFactory;
 };
 
+class GeoGeometry : public GeoBase {
+ public:
+  GeoGeometry(const std::vector<double>& coords,
+              const std::vector<int32_t>& ring_sizes,
+              const std::vector<int32_t>& poly_rings,
+              const std::vector<int32_t>& geo_kinds){};
+  GeoGeometry(const std::string& wkt){};
+
+  void getColumns(std::vector<double>& coords,
+                  std::vector<int32_t>& ring_sizes,
+                  std::vector<int32_t>& poly_rings,
+                  std::vector<int32_t>& geo_kinds,
+                  std::vector<double>& bounds) const {};
+  GeoType getType() const final { return GeoType::kGEOMETRY; }
+
+ protected:
+  GeoGeometry(OGRGeometry* geom, const bool owns_geom_obj)
+      : GeoBase(geom, owns_geom_obj) {
+    if (!isEmpty()) {
+      throw GeoTypesError("GeoTypesFactory", "Non-empty GEOMETRY");
+    }
+  }
+
+  friend class GeoTypesFactory;
+};
+
+class GeoGeometryCollection : public GeoBase {
+ public:
+  GeoGeometryCollection(const std::vector<double>& coords,
+                        const std::vector<int32_t>& ring_sizes,
+                        const std::vector<int32_t>& poly_rings,
+                        const std::vector<int32_t>& geo_kinds){};
+  GeoGeometryCollection(const std::string& wkt);
+
+  void getColumns(std::vector<double>& coords,
+                  std::vector<int32_t>& ring_sizes,
+                  std::vector<int32_t>& poly_rings,
+                  std::vector<int32_t>& geo_kinds,
+                  std::vector<double>& bounds) const {};
+  GeoType getType() const final { return GeoType::kGEOMETRYCOLLECTION; }
+
+ protected:
+  GeoGeometryCollection(OGRGeometry* geom, const bool owns_geom_obj)
+      : GeoBase(geom, owns_geom_obj) {
+    if (!isEmpty()) {
+      throw GeoTypesError("GeoTypesFactory", "Non-empty GEOMETRYCOLLECTION");
+    }
+  }
+
+  friend class GeoTypesFactory;
+};
+
 class GeoTypesFactory {
  public:
   static std::unique_ptr<GeoBase> createGeoType(const std::string& wkt);
+  static std::unique_ptr<GeoBase> createGeoType(const std::vector<uint8_t>& wkb);
   static std::unique_ptr<GeoBase> createGeoType(OGRGeometry* geom);
 
   static bool getGeoColumns(const std::string& wkt,
+                            SQLTypeInfo& ti,
+                            std::vector<double>& coords,
+                            std::vector<double>& bounds,
+                            std::vector<int>& ring_sizes,
+                            std::vector<int>& poly_rings,
+                            const bool promote_poly_to_mpoly = false);
+
+  static bool getGeoColumns(const std::vector<uint8_t>& wkb,
                             SQLTypeInfo& ti,
                             std::vector<double>& coords,
                             std::vector<double>& bounds,

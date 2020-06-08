@@ -109,9 +109,13 @@ class ScalarExprVisitor {
     if (array) {
       return visitArrayOper(array);
     }
-    const auto geo_expr = dynamic_cast<const Analyzer::GeoExpr*>(expr);
-    if (geo_expr) {
-      return visitGeoExpr(geo_expr);
+    const auto geo_uop = dynamic_cast<const Analyzer::GeoUOper*>(expr);
+    if (geo_uop) {
+      return visitGeoUOper(geo_uop);
+    }
+    const auto geo_binop = dynamic_cast<const Analyzer::GeoBinOper*>(expr);
+    if (geo_binop) {
+      return visitGeoBinOper(geo_binop);
     }
     const auto datediff = dynamic_cast<const Analyzer::DatediffExpr*>(expr);
     if (datediff) {
@@ -251,9 +255,20 @@ class ScalarExprVisitor {
     return result;
   }
 
-  virtual T visitGeoExpr(const Analyzer::GeoExpr* geo_expr) const {
+  virtual T visitGeoUOper(const Analyzer::GeoUOper* geo_expr) const {
     T result = defaultResult();
-    for (const auto& arg : geo_expr->getArgs()) {
+    for (const auto& arg : geo_expr->getArgs0()) {
+      result = aggregateResult(result, visit(arg.get()));
+    }
+    return result;
+  }
+
+  virtual T visitGeoBinOper(const Analyzer::GeoBinOper* geo_expr) const {
+    T result = defaultResult();
+    for (const auto& arg : geo_expr->getArgs0()) {
+      result = aggregateResult(result, visit(arg.get()));
+    }
+    for (const auto& arg : geo_expr->getArgs1()) {
       result = aggregateResult(result, visit(arg.get()));
     }
     return result;

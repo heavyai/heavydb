@@ -205,8 +205,15 @@ ExpressionPtr ArrayExpr::deep_copy() const {
       type_info, contained_expressions_, is_null_, local_alloc_);
 }
 
-std::shared_ptr<Analyzer::Expr> GeoExpr::deep_copy() const {
-  return makeExpr<GeoExpr>(type_info, args_);
+std::shared_ptr<Analyzer::Expr> GeoUOper::deep_copy() const {
+  if (op_ == Geo_namespace::GeoBase::GeoOp::kPROJECTION) {
+    return makeExpr<GeoUOper>(op_, type_info, type_info, args0_);
+  }
+  return makeExpr<GeoUOper>(op_, type_info, ti0_, args0_);
+}
+
+std::shared_ptr<Analyzer::Expr> GeoBinOper::deep_copy() const {
+  return makeExpr<GeoBinOper>(op_, type_info, ti0_, ti1_, args0_, args1_);
 }
 
 SQLTypeInfo BinOper::analyze_type_info(SQLOps op,
@@ -2280,15 +2287,32 @@ bool ArrayExpr::operator==(Expr const& rhs) const {
   ;
 }
 
-bool GeoExpr::operator==(const Expr& rhs) const {
-  const auto rhs_geo = dynamic_cast<const GeoExpr*>(&rhs);
+bool GeoUOper::operator==(const Expr& rhs) const {
+  const auto rhs_geo = dynamic_cast<const GeoUOper*>(&rhs);
   if (!rhs_geo) {
     return false;
   }
-  if (args_.size() != rhs_geo->args_.size()) {
+  if (op_ != rhs_geo->getOp() || ti0_ != rhs_geo->getTypeInfo0() ||
+      args0_.size() != rhs_geo->getArgs0().size()) {
     return false;
   }
-  return expr_list_match(args_, rhs_geo->args_);
+  return expr_list_match(args0_, rhs_geo->getArgs0());
+}
+
+bool GeoBinOper::operator==(const Expr& rhs) const {
+  const auto rhs_geo = dynamic_cast<const GeoBinOper*>(&rhs);
+  if (!rhs_geo) {
+    return false;
+  }
+  if (op_ != rhs_geo->getOp() || ti0_ != rhs_geo->getTypeInfo0() ||
+      args0_.size() != rhs_geo->getArgs0().size()) {
+    return false;
+  }
+  if (ti1_ != rhs_geo->getTypeInfo1() || args1_.size() != rhs_geo->getArgs1().size()) {
+    return false;
+  }
+  return expr_list_match(args0_, rhs_geo->getArgs0()) ||
+         expr_list_match(args1_, rhs_geo->getArgs1());
 }
 
 std::string ColumnVar::toString() const {
@@ -2621,13 +2645,57 @@ std::string ArrayExpr::toString() const {
   return str;
 }
 
-std::string GeoExpr::toString() const {
-  // TODO: generate ST_GeomFromText(wkt)
-  std::string result = "Geo(";
-  for (const auto& arg : args_) {
+std::string GeoUOper::toString() const {
+  std::string fn;
+  switch (op_) {
+    case Geo_namespace::GeoBase::GeoOp::kPROJECTION:
+      fn = "Geo";
+      break;
+    case Geo_namespace::GeoBase::GeoOp::kISEMPTY:
+      fn = "ST_IsEmpty";
+      break;
+    case Geo_namespace::GeoBase::GeoOp::kISVALID:
+      fn = "ST_IsValid";
+      break;
+    default:
+      fn = "Geo_UNKNOWN";
+      break;
+  }
+  std::string result = fn + "(";
+  for (const auto& arg : args0_) {
     result += " " + arg->toString();
   }
-  return result + ") ";
+  return result + " ) ";
+}
+
+std::string GeoBinOper::toString() const {
+  std::string fn;
+  switch (op_) {
+    case Geo_namespace::GeoBase::GeoOp::kINTERSECTION:
+      fn = "ST_Intersection";
+      break;
+    case Geo_namespace::GeoBase::GeoOp::kDIFFERENCE:
+      fn = "ST_Difference";
+      break;
+    case Geo_namespace::GeoBase::GeoOp::kUNION:
+      fn = "ST_Union";
+      break;
+    case Geo_namespace::GeoBase::GeoOp::kBUFFER:
+      fn = "ST_Buffer";
+      break;
+    default:
+      fn = "Geo_UNKNOWN";
+      break;
+  }
+  std::string result = fn + "(";
+  // TODO: generate wkt
+  for (const auto& arg : args0_) {
+    result += " " + arg->toString();
+  }
+  for (const auto& arg : args1_) {
+    result += " " + arg->toString();
+  }
+  return result + " ) ";
 }
 
 std::string TargetEntry::toString() const {
