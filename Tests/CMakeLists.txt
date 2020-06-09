@@ -20,6 +20,7 @@ add_executable(CreateAndDropTableDdlTest CreateAndDropTableDdlTest.cpp)
 add_executable(ForeignTableDmlTest ForeignTableDmlTest.cpp)
 add_executable(FileMgrTest FileMgrTest.cpp)
 add_executable(FilePathWhitelistTest FilePathWhitelistTest.cpp)
+add_executable(EncoderTest EncoderTest.cpp)
 
 if(ENABLE_CUDA)
   set(MAPD_DEFINITIONS -DHAVE_CUDA)
@@ -151,6 +152,7 @@ target_link_libraries(CalciteOptimizeTest ${EXECUTE_TEST_LIBS})
 target_link_libraries(JoinHashTableTest ${EXECUTE_TEST_LIBS})
 target_link_libraries(CachedHashTableTest ${EXECUTE_TEST_LIBS})
 target_link_libraries(RuntimeInterruptTest ${EXECUTE_TEST_LIBS})
+target_link_libraries(EncoderTest gtest DataMgr)
 target_link_libraries(CommandLineTest gtest Shared ${Boost_LIBRARIES})
 # Requires thrift_handler for DBHandler test fixture
 target_link_libraries(DBObjectPrivilegesTest ${THRIFT_HANDLER_TEST_LIBRARIES})
@@ -227,6 +229,7 @@ add_test(CreateAndDropTableDdlTest CreateAndDropTableDdlTest ${TEST_ARGS})
 add_test(ForeignTableDmlTest ForeignTableDmlTest ${TEST_ARGS})
 add_test(FileMgrTest FileMgrTest ${TEST_ARGS})
 add_test(FilePathWhitelistTest FilePathWhitelistTest ${TEST_ARGS})
+add_test(EncoderTest EncoderTest ${TEST_ARGS})
 if(ENABLE_CUDA)
   add_test(GpuSharedMemoryTest GpuSharedMemoryTest ${TEST_ARGS})
 endif()
@@ -300,6 +303,7 @@ set(TEST_PROGRAMS
   ForeignTableDmlTest
   FileMgrTest
   FilePathWhitelistTest
+  EncoderTest
 )
 
 if(ENABLE_CUDA)

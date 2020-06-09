@@ -21,45 +21,45 @@
 namespace DatumFetcher {
 
 template <typename T>
-T getDatumVal(const Datum& d);
+inline T getDatumVal(const Datum& d);
 
 template <>
-int8_t getDatumVal(const Datum& d) {
+inline int8_t getDatumVal(const Datum& d) {
   return d.tinyintval;
 }
 
 template <>
-int16_t getDatumVal(const Datum& d) {
+inline int16_t getDatumVal(const Datum& d) {
   return d.smallintval;
 }
 
 template <>
-int32_t getDatumVal(const Datum& d) {
+inline int32_t getDatumVal(const Datum& d) {
   return d.intval;
 }
 
 template <>
-int64_t getDatumVal(const Datum& d) {
+inline int64_t getDatumVal(const Datum& d) {
   return d.bigintval;
 }
 
 template <>
-uint8_t getDatumVal(const Datum& d) {
+inline uint8_t getDatumVal(const Datum& d) {
   return d.tinyintval;
 }
 
 template <>
-uint16_t getDatumVal(const Datum& d) {
+inline uint16_t getDatumVal(const Datum& d) {
   return d.smallintval;
 }
 
 template <>
-float getDatumVal(const Datum& d) {
+inline float getDatumVal(const Datum& d) {
   return d.floatval;
 }
 
 template <>
-double getDatumVal(const Datum& d) {
+inline double getDatumVal(const Datum& d) {
   return d.doubleval;
 }
 

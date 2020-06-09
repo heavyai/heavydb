@@ -169,7 +169,29 @@ class Encoder {
   virtual void updateStats(const double val, const bool is_null) = 0;
 
   // Only called from ArrowStorageInterface to update stats on chunk of data
-  virtual void updateStats(const int8_t* const dst, const size_t numBytes) = 0;
+  virtual void updateStats(const int8_t* const src_data, const size_t num_elements) = 0;
+
+  /**
+   * Update statistics for string data without appending data.
+   *
+   * @param dataBlock - the data block with which to update statistics
+   * @param startIdx - the `start_idx` that would normally be passed to `appendData`
+   * @param numElements - the number of elements in the data block
+   */
+  virtual void updateStats(const std::vector<std::string>* const src_data,
+                           const size_t start_idx,
+                           const size_t num_elements) = 0;
+
+  /**
+   * Update statistics for array data without appending data.
+   *
+   * @param dataBlock - the data block with which to update statistics
+   * @param startIdx - the `start_idx` that would normally be passed to `appendData`
+   * @param numElements - the number of elements in the data block
+   */
+  virtual void updateStats(const std::vector<ArrayDatum>* const src_data,
+                           const size_t start_idx,
+                           const size_t num_elements) = 0;
 
   virtual void reduceStats(const Encoder&) = 0;
   virtual void copyMetadata(const Encoder* copyFromEncoder) = 0;

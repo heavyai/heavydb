@@ -44,22 +44,7 @@ class FixedLengthEncoder : public Encoder {
     auto encoded_data = std::make_unique<V[]>(num_elems_to_append);
     for (size_t i = 0; i < num_elems_to_append; ++i) {
       size_t ri = replicating ? 0 : i;
-      encoded_data.get()[i] = static_cast<V>(unencoded_data[ri]);
-      if (unencoded_data[ri] != encoded_data.get()[i]) {
-        decimal_overflow_validator_.validate(unencoded_data[ri]);
-        LOG(ERROR) << "Fixed encoding failed, Unencoded: " +
-                          std::to_string(unencoded_data[ri]) +
-                          " encoded: " + std::to_string(encoded_data.get()[i]);
-      } else {
-        T data = unencoded_data[ri];
-        if (data == std::numeric_limits<V>::min()) {
-          has_nulls = true;
-        } else {
-          decimal_overflow_validator_.validate(data);
-          dataMin = std::min(dataMin, data);
-          dataMax = std::max(dataMax, data);
-        }
-      }
+      encoded_data.get()[i] = encodeDataAndUpdateStats(unencoded_data[ri]);
     }
 
     // assume always CPU_BUFFER?
@@ -117,8 +102,23 @@ class FixedLengthEncoder : public Encoder {
     }
   }
 
-  void updateStats(const int8_t* const dst, const size_t numBytes) override {
-    CHECK(false);
+  void updateStats(const int8_t* const src_data, const size_t num_elements) override {
+    const T* unencoded_data = reinterpret_cast<const T*>(src_data);
+    for (size_t i = 0; i < num_elements; ++i) {
+      encodeDataAndUpdateStats(unencoded_data[i]);
+    }
+  }
+
+  void updateStats(const std::vector<std::string>* const src_data,
+                   const size_t start_idx,
+                   const size_t num_elements) override {
+    UNREACHABLE();
+  }
+
+  void updateStats(const std::vector<ArrayDatum>* const src_data,
+                   const size_t start_idx,
+                   const size_t num_elements) override {
+    UNREACHABLE();
   }
 
   // Only called from the executor for synthesized meta-information.
@@ -174,6 +174,26 @@ class FixedLengthEncoder : public Encoder {
   T dataMax;
   bool has_nulls;
 
+ private:
+  V encodeDataAndUpdateStats(const T& unencoded_data) {
+    V encoded_data = static_cast<V>(unencoded_data);
+    if (unencoded_data != encoded_data) {
+      decimal_overflow_validator_.validate(unencoded_data);
+      LOG(ERROR) << "Fixed encoding failed, Unencoded: " +
+                        std::to_string(unencoded_data) +
+                        " encoded: " + std::to_string(encoded_data);
+    } else {
+      T data = unencoded_data;
+      if (data == std::numeric_limits<V>::min()) {
+        has_nulls = true;
+      } else {
+        decimal_overflow_validator_.validate(data);
+        dataMin = std::min(dataMin, data);
+        dataMax = std::max(dataMax, data);
+      }
+    }
+    return encoded_data;
+  }
 };  // FixedLengthEncoder
 
 #endif  // FIXED_LENGTH_ENCODER_H
