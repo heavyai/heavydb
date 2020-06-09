@@ -488,23 +488,19 @@ void ArrowCsvForeignStorage::registerTable(Catalog_Namespace::Catalog* catalog,
                                            Data_Namespace::AbstractBufferMgr* mgr) {
   const DataframeTableDescriptor* df_td =
       dynamic_cast<const DataframeTableDescriptor*>(&td);
-  bool isDataframe = df_td ? true : false;
-  if (!isDataframe) {
-    df_td = new DataframeTableDescriptor(td);
-  }
   auto memory_pool = arrow::default_memory_pool();
   auto arrow_parse_options = arrow::csv::ParseOptions::Defaults();
   arrow_parse_options.quoting = false;
   arrow_parse_options.escaping = false;
   arrow_parse_options.newlines_in_values = false;
-  arrow_parse_options.delimiter = *df_td->delimiter.c_str();
+  arrow_parse_options.delimiter = df_td ? *df_td->delimiter.c_str() : ',';
   auto arrow_read_options = arrow::csv::ReadOptions::Defaults();
   arrow_read_options.use_threads = true;
 
   arrow_read_options.block_size = 20 * 1024 * 1024;
   arrow_read_options.autogenerate_column_names = false;
   arrow_read_options.skip_rows =
-      df_td->hasHeader ? (df_td->skipRows + 1) : df_td->skipRows;
+      df_td ? (df_td->hasHeader ? (df_td->skipRows + 1) : df_td->skipRows) : 1;
 
   auto arrow_convert_options = arrow::csv::ConvertOptions::Defaults();
   arrow_convert_options.check_utf8 = false;
@@ -553,7 +549,7 @@ void ArrowCsvForeignStorage::registerTable(Catalog_Namespace::Catalog* catalog,
   for (int i = 0; i < arr_frags;) {
     auto& chunk = *c0p->chunk(i);
     auto& frag = *fragments.rbegin();
-    if (df_td->maxFragRows - sz > chunk.length() - offset) {
+    if (td.maxFragRows - sz > chunk.length() - offset) {
       sz += chunk.length() - offset;
       if (i == arr_frags - 1) {
         fragments.rbegin()->last_chunk = arr_frags - 1;
@@ -564,8 +560,8 @@ void ArrowCsvForeignStorage::registerTable(Catalog_Namespace::Catalog* catalog,
       i++;
     } else {
       frag.last_chunk = i;
-      frag.last_chunk_size = df_td->maxFragRows - sz;
-      offset += df_td->maxFragRows - sz;
+      frag.last_chunk_size = td.maxFragRows - sz;
+      offset += td.maxFragRows - sz;
       sz = 0;
       fragments.push_back({i, static_cast<int>(offset), 0, 0});
     }
@@ -707,9 +703,6 @@ void ArrowCsvForeignStorage::registerTable(Catalog_Namespace::Catalog* catalog,
 
   VLOG(1) << "Created CSV backed temporary table with " << num_cols << " columns, "
           << arr_frags << " chunks, and " << fragments.size() << " fragments.";
-  if (!isDataframe) {
-    delete df_td;
-  }
 }
 
 std::string ArrowCsvForeignStorage::getType() const {
