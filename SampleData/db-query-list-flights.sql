@@ -2,9 +2,9 @@ USER admin omnisci {
 
 DROP TABLE IF EXISTS flights;
 
-CREATE DATAFRAME flights(
-    Year smallint,
-    Month smallint,
+CREATE TEMPORARY TABLE flights(
+    Year_flight smallint,
+    Month_flight smallint,
     DayofMonth smallint,
     DayOfWeek smallint,
     DepTime smallint,
@@ -32,7 +32,7 @@ CREATE DATAFRAME flights(
     NASDelay smallint,
     SecurityDelay smallint,
     LateAircraftDelay smallint)
-    FROM 'CSV:SampleData/100_flights.csv' WITH(header='true');
+    FROM "CSV:SampleData/100_flights.csv";
 
     select count(*) from flights where LateAircraftDelay >= 10;
 }

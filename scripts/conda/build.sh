@@ -75,6 +75,7 @@ make install || exit 1
 # copy initdb to mapd_initdb to avoid conflict with psql initdb
 mv $PREFIX/bin/initdb $PREFIX/bin/omnisci_initdb
 cd ..
+rm -rf data
 mkdir data
 # do lightweight testing here, make sanity_tests should go to under test env
 omnisci_initdb -f data

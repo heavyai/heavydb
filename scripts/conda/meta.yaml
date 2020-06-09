@@ -12,58 +12,54 @@ source:
 build:
   number: 1
   skip: True  # [win]
-  script_env:
-    - http_proxy
-    - https_proxy
 
 requirements:
   build:
-    # In OSX, we use clang++ from clangdev as a compiler
-    - cmake
-    - make
-    - go
-    - maven
-
-  host:
+    - go-cgo
     - {{ compiler('cxx') }}   # [not osx]
     - {{ compiler('c') }}     # [not osx]
+    # we use clang++ from clangdev as a compiler
+    - clangxx
+    - clangdev
+    - cmake
+    - make
+    - maven
+    - llvmdev 9.*
+
+  host:
+    - arrow-cpp 0.16.*
+    - llvmdev 9.*
+    # for some reason, librdkafka 1.4+ triggers dependency conflicts
+    - librdkafka <1.4
     - bisonpp
-    - flex >2.6
-    - boost-cpp >=1.70,<1.72
-    - libgdal
-    - arrow-cpp >=0.16.0
-    - thrift-cpp >=0.11.0,<0.13.0
-    - llvmdev
+    - blosc
+    - boost-cpp
     - clangdev
     - double-conversion
-    - snappy
+    - flex
     - gflags
     - glog
+    - llvm
     - libarchive
+    - libgdal
     - libkml
     - libpng
-    - blosc
     - ncurses
+    - openldap
     - openssl
-    - librdkafka
-  run:
-    - boost-cpp >=1.70,<1.72
-    - arrow-cpp >=0.16.0
-    - openjdk 8.*
     - snappy
-    - double-conversion
-    - libgdal
-    - glog
-    - gflags
+    - thrift-cpp
+  run:
+    # omnscidb Load-time UDF support calls clang++
+    - clangxx 9.*
+    - openjdk 8
+    - boost-cpp
+    - bzip2
     - ncurses
     - xz
-    - bzip2
     - zlib
-    - librdkafka
-    # omnscidb UDF support calls clang++ in loadtime
-    - {{ compiler('cxx') }}   # [not osx]
-    - llvmdev
-    - clangdev
+  run_constrained:
+    - arrow-cpp-proc
 
 
 about:
