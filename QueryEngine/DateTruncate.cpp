@@ -25,7 +25,7 @@
 #include <ctime>
 #include <iostream>
 
-ALWAYS_INLINE DEVICE int64_t create_epoch(int32_t year) {
+DEVICE int64_t create_epoch(int32_t year) {
   // Note this is not general purpose
   // it has a final assumption that the year being passed can never be a leap
   // year
