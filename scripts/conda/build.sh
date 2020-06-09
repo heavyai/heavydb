@@ -64,6 +64,9 @@ cmake -S . -B build -Wno-dev \
     -DENABLE_PROFILER=OFF\
     -DENABLE_TESTS=OFF\
     -DPREFER_STATIC_LIBS=OFF\
+    -DENABLE_FSI=ON\
+    -DENABLE_TBB=ON\
+    -DENABLE_DBE=ON\
     || exit 1
 
 pushd build
@@ -79,6 +82,6 @@ rm -rf data
 mkdir data
 # do lightweight testing here, make sanity_tests should go to under test env
 omnisci_initdb -f data
-omnisci_server --db-query-list SampleData/db-query-list-flights.sql --exit-after-warmup
+omnisci_server --enable-fsi --db-query-list SampleData/db-query-list-flights.sql --exit-after-warmup
 rm -rf data
 popd
