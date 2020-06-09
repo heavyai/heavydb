@@ -23,6 +23,7 @@
 
 #include "../Shared/checked_alloc.h"
 #include "../Shared/funcannotations.h"
+#include "../Shared/geo_compression.h"
 #include "../Shared/geo_types.h"
 #include "GeosRuntime.h"
 
@@ -94,24 +95,22 @@ bool toWkb(WKB& wkb,
            int32_t* meta1,      // e.g. ring_sizes
            int64_t meta1_size,  // e.g. num_rings
            int32_t* meta2,      // e.g. rings (number of rings in each poly)
-           int64_t meta2_size   // e.g. num_polys
+           int64_t meta2_size,  // e.g. num_polys
+           int32_t ic           // input compression
 ) {
-  // TODO: support compressed coords
-
-  auto pc = reinterpret_cast<double*>(coords);
-  auto ps = coords_size / sizeof(double);
-  const std::vector<double> cv(pc, pc + ps);
+  // decompressed double coords
+  auto cv = geospatial::decompress_coords<double, int32_t>(ic, coords, coords_size);
   if (static_cast<SQLTypes>(type) == kPOINT) {
-    GeoPoint point(cv);
+    GeoPoint point(*cv);
     return point.getWkb(wkb);
   }
   if (static_cast<SQLTypes>(type) == kLINESTRING) {
-    GeoLineString linestring(cv);
+    GeoLineString linestring(*cv);
     return linestring.getWkb(wkb);
   }
   std::vector<int32_t> meta1v(meta1, meta1 + meta1_size);
   if (static_cast<SQLTypes>(type) == kPOLYGON) {
-    GeoPolygon poly(cv, meta1v);
+    GeoPolygon poly(*cv, meta1v);
     return poly.getWkb(wkb);
   }
   std::vector<int32_t> meta2v(meta2, meta2 + meta2_size);
@@ -121,12 +120,12 @@ bool toWkb(WKB& wkb,
     // Used to pass along EMPTY from ST_Intersection to ST_IsEmpty for example
     if (meta1_size == 1 && meta2_size == 1) {
       const std::vector<double> ecv = {0.0, 0.0, 0.00000012345, 0.0, 0.0, 0.00000012345};
-      if (cv == ecv) {
+      if (*cv == ecv) {
         GeoGeometryCollection empty("GEOMETRYCOLLECTION EMPTY");
         return empty.getWkb(wkb);
       }
     }
-    GeoMultiPolygon mpoly(cv, meta1v, meta2v);
+    GeoMultiPolygon mpoly(*cv, meta1v, meta2v);
     return mpoly.getWkb(wkb);
   }
   return false;
@@ -222,6 +221,7 @@ extern "C" bool Geos_Wkb_Wkb(int op,
                              int32_t* arg1_meta2,
                              int64_t arg1_meta2_size,
                              // TODO: add meta3 args to support generic geometries
+                             int32_t arg1_ic,
                              int arg2_type,
                              int8_t* arg2_coords,
                              int64_t arg2_coords_size,
@@ -230,7 +230,8 @@ extern "C" bool Geos_Wkb_Wkb(int op,
                              int32_t* arg2_meta2,
                              int64_t arg2_meta2_size,
                              // TODO: add meta3 args to support generic geometries
-                             // TODO: add compression/transform args
+                             int32_t arg2_ic,
+                             // TODO: add transform args
                              int* result_type,
                              int8_t** result_coords,
                              int64_t* result_coords_size,
@@ -252,7 +253,8 @@ extern "C" bool Geos_Wkb_Wkb(int op,
              arg1_meta1,
              arg1_meta1_size,
              arg1_meta2,
-             arg1_meta2_size)) {
+             arg1_meta2_size,
+             arg1_ic)) {
     return false;
   }
   WKB wkb2{};
@@ -263,7 +265,8 @@ extern "C" bool Geos_Wkb_Wkb(int op,
              arg2_meta1,
              arg2_meta1_size,
              arg2_meta2,
-             arg2_meta2_size)) {
+             arg2_meta2_size,
+             arg2_ic)) {
     return false;
   }
   auto status = false;
@@ -320,8 +323,9 @@ extern "C" bool Geos_Wkb_double(int op,
                                 int32_t* arg1_meta2,
                                 int64_t arg1_meta2_size,
                                 // TODO: add meta3 args to support generic geometries
+                                int32_t arg1_ic,
                                 double arg2,
-                                // TODO: add compression/transform args
+                                // TODO: add transform args
                                 int* result_type,
                                 int8_t** result_coords,
                                 int64_t* result_coords_size,
@@ -338,7 +342,8 @@ extern "C" bool Geos_Wkb_double(int op,
              arg1_meta1,
              arg1_meta1_size,
              arg1_meta2,
-             arg1_meta2_size)) {
+             arg1_meta2_size,
+             arg1_ic)) {
     return false;
   }
 
@@ -389,7 +394,7 @@ extern "C" bool Geos_Wkb(int op,
                          int32_t* arg_meta2,
                          int64_t arg_meta2_size,
                          // TODO: add meta3 args to support generic geometries
-                         // TODO: add compression/transform args
+                         int32_t arg_ic,
                          bool* result) {
 #ifndef __CUDACC__
   WKB wkb1{};
@@ -400,7 +405,8 @@ extern "C" bool Geos_Wkb(int op,
                         arg_meta1,
                         arg_meta1_size,
                         arg_meta2,
-                        arg_meta2_size)) {
+                        arg_meta2_size,
+                        arg_ic)) {
     return false;
   }
 

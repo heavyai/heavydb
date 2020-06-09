@@ -26,11 +26,13 @@
 
 #include "QueryEngine/ResultSet.h"
 #include "QueryEngine/TargetValue.h"
-#include "Shared/geo_compression_runtime.h"
+#include "Shared/geo_compression.h"
 #include "Shared/geo_types.h"
 #include "Shared/sqltypes.h"
 
 using VarlenDatumPtr = std::unique_ptr<VarlenDatum>;
+
+using namespace geospatial;
 
 template <SQLTypes GEO_SOURCE_TYPE>
 struct GeoTargetValueSerializer {
@@ -71,78 +73,6 @@ struct GeoReturnTypeTraits<ResultSet::GeoReturnType::GeoTargetValuePtr, GEO_SOUR
   using GeoSerializerType = GeoTargetValuePtrSerializer<GEO_SOURCE_TYPE>;
 };
 
-namespace {
-
-template <typename T>
-void unpack_geo_vector(std::vector<T>& output, const int8_t* input_ptr, const size_t sz) {
-  if (sz == 0) {
-    return;
-  }
-  auto elems = reinterpret_cast<const T*>(input_ptr);
-  CHECK_EQ(size_t(0), sz % sizeof(T));
-  const size_t num_elems = sz / sizeof(T);
-  output.resize(num_elems);
-  for (size_t i = 0; i < num_elems; i++) {
-    output[i] = elems[i];
-  }
-}
-
-template <typename T>
-void decompress_geo_coords_geoint32(std::vector<T>& dec,
-                                    const int8_t* enc,
-                                    const size_t sz) {
-  if (sz == 0) {
-    return;
-  }
-  const auto compressed_coords = reinterpret_cast<const int32_t*>(enc);
-  const auto num_coords = sz / sizeof(int32_t);
-  dec.resize(num_coords);
-  for (size_t i = 0; i < num_coords; i += 2) {
-    dec[i] = Geo_namespace::decompress_longitude_coord_geoint32(compressed_coords[i]);
-    dec[i + 1] =
-        Geo_namespace::decompress_lattitude_coord_geoint32(compressed_coords[i + 1]);
-  }
-}
-
-template <typename T>
-std::shared_ptr<std::vector<T>> decompress_coords(const SQLTypeInfo& geo_ti,
-                                                  const int8_t* coords,
-                                                  const size_t coords_sz);
-
-template <>
-std::shared_ptr<std::vector<double>> decompress_coords<double>(const SQLTypeInfo& geo_ti,
-                                                               const int8_t* coords,
-                                                               const size_t coords_sz) {
-  auto decompressed_coords_ptr = std::make_shared<std::vector<double>>();
-  if (geo_ti.get_compression() == kENCODING_GEOINT) {
-    if (geo_ti.get_comp_param() == 32) {
-      decompress_geo_coords_geoint32(*decompressed_coords_ptr, coords, coords_sz);
-    }
-  } else {
-    CHECK_EQ(geo_ti.get_compression(), kENCODING_NONE);
-    unpack_geo_vector(*decompressed_coords_ptr, coords, coords_sz);
-  }
-  return decompressed_coords_ptr;
-}
-
-bool is_null_point(const SQLTypeInfo& geo_ti,
-                   const int8_t* coords,
-                   const size_t coords_sz) {
-  if (geo_ti.get_type() == kPOINT && !geo_ti.get_notnull()) {
-    if (geo_ti.get_compression() == kENCODING_GEOINT) {
-      if (geo_ti.get_comp_param() == 32) {
-        return Geo_namespace::is_null_point_longitude_geoint32(*((int32_t*)coords));
-      }
-    } else {
-      CHECK_EQ(geo_ti.get_compression(), kENCODING_NONE);
-      return *((double*)coords) == NULL_ARRAY_DOUBLE;
-    }
-  }
-  return false;
-}
-
-}  // namespace
-
 // Point
 template <>
 struct GeoTargetValueSerializer<kPOINT> {
@@ -152,8 +82,9 @@ struct GeoTargetValueSerializer<kPOINT> {
       // Alternatively, could decompress vals[0] and check for NULL array sentinel
       return GeoTargetValue(boost::optional<GeoPointTargetValue>{});
     }
-    return GeoTargetValue(boost::optional<GeoPointTargetValue>{
-        *decompress_coords<double>(geo_ti, vals[0]->pointer, vals[0]->length)});
+    return GeoTargetValue(
+        boost::optional<GeoPointTargetValue>{*decompress_coords<double, SQLTypeInfo>(
+            geo_ti, vals[0]->pointer, vals[0]->length)});
   }
 };
 
@@ -165,8 +96,8 @@ struct GeoWktSerializer<kPOINT> {
     if (!geo_ti.get_notnull() && vals[0]->is_null) {
       return NullableString("NULL");
     }
-    Geo_namespace::GeoPoint point(
-        *decompress_coords<double>(geo_ti, vals[0]->pointer, vals[0]->length));
+    Geo_namespace::GeoPoint point(*decompress_coords<double, SQLTypeInfo>(
+        geo_ti, vals[0]->pointer, vals[0]->length));
     return NullableString(point.getWktString());
   }
 };
@@ -192,8 +123,9 @@ struct GeoTargetValueSerializer<kLINESTRING> {
     if (!geo_ti.get_notnull() && vals[0]->is_null) {
       return GeoTargetValue(boost::optional<GeoLineStringTargetValue>{});
     }
-    return GeoTargetValue(boost::optional<GeoLineStringTargetValue>{
-        *decompress_coords<double>(geo_ti, vals[0]->pointer, vals[0]->length)});
+    return GeoTargetValue(
+        boost::optional<GeoLineStringTargetValue>{*decompress_coords<double, SQLTypeInfo>(
+            geo_ti, vals[0]->pointer, vals[0]->length)});
   }
 };
 
@@ -205,8 +137,8 @@ struct GeoWktSerializer<kLINESTRING> {
       // May need to generate "LINESTRING EMPTY" instead of NULL
       return NullableString("NULL");
     }
-    Geo_namespace::GeoLineString linestring(
-        *decompress_coords<double>(geo_ti, vals[0]->pointer, vals[0]->length));
+    Geo_namespace::GeoLineString linestring(*decompress_coords<double, SQLTypeInfo>(
+        geo_ti, vals[0]->pointer, vals[0]->length));
     return NullableString(linestring.getWktString());
   }
 };
@@ -234,9 +166,9 @@ struct GeoTargetValueSerializer<kPOLYGON> {
     }
     std::vector<int32_t> ring_sizes_vec;
     unpack_geo_vector(ring_sizes_vec, vals[1]->pointer, vals[1]->length);
-    auto gtv = GeoPolyTargetValue(
-        *decompress_coords<double>(geo_ti, vals[0]->pointer, vals[0]->length),
-        ring_sizes_vec);
+    auto gtv = GeoPolyTargetValue(*decompress_coords<double, SQLTypeInfo>(
+                                      geo_ti, vals[0]->pointer, vals[0]->length),
+                                  ring_sizes_vec);
     return GeoTargetValue(gtv);
   }
 };
@@ -251,9 +183,9 @@ struct GeoWktSerializer<kPOLYGON> {
     }
     std::vector<int32_t> ring_sizes_vec;
     unpack_geo_vector(ring_sizes_vec, vals[1]->pointer, vals[1]->length);
-    Geo_namespace::GeoPolygon poly(
-        *decompress_coords<double>(geo_ti, vals[0]->pointer, vals[0]->length),
-        ring_sizes_vec);
+    Geo_namespace::GeoPolygon poly(*decompress_coords<double, SQLTypeInfo>(
+                                       geo_ti, vals[0]->pointer, vals[0]->length),
+                                   ring_sizes_vec);
     return NullableString(poly.getWktString());
   };
 };
@@ -284,10 +216,10 @@ struct GeoTargetValueSerializer<kMULTIPOLYGON> {
     unpack_geo_vector(ring_sizes_vec, vals[1]->pointer, vals[1]->length);
     std::vector<int32_t> poly_rings_vec;
     unpack_geo_vector(poly_rings_vec, vals[2]->pointer, vals[2]->length);
-    auto gtv = GeoMultiPolyTargetValue(
-        *decompress_coords<double>(geo_ti, vals[0]->pointer, vals[0]->length),
-        ring_sizes_vec,
-        poly_rings_vec);
+    auto gtv = GeoMultiPolyTargetValue(*decompress_coords<double, SQLTypeInfo>(
+                                           geo_ti, vals[0]->pointer, vals[0]->length),
+                                       ring_sizes_vec,
+                                       poly_rings_vec);
     return GeoTargetValue(gtv);
   }
 };
@@ -305,10 +237,10 @@ struct GeoWktSerializer<kMULTIPOLYGON> {
     unpack_geo_vector(ring_sizes_vec, vals[1]->pointer, vals[1]->length);
     std::vector<int32_t> poly_rings_vec;
     unpack_geo_vector(poly_rings_vec, vals[2]->pointer, vals[2]->length);
-    Geo_namespace::GeoMultiPolygon mpoly(
-        *decompress_coords<double>(geo_ti, vals[0]->pointer, vals[0]->length),
-        ring_sizes_vec,
-        poly_rings_vec);
+    Geo_namespace::GeoMultiPolygon mpoly(*decompress_coords<double, SQLTypeInfo>(
+                                             geo_ti, vals[0]->pointer, vals[0]->length),
+                                         ring_sizes_vec,
+                                         poly_rings_vec);
     return NullableString(mpoly.getWktString());
   }
 };

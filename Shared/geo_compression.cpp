@@ -15,8 +15,20 @@
  */
 
 #include "Shared/geo_compression.h"
+#include "QueryEngine/TypePunning.h"
+#include "Shared/geo_types.h"
 
 namespace geospatial {
+
+int32_t get_compression_scheme(const SQLTypeInfo& ti) {
+  if (ti.get_compression() == kENCODING_GEOINT && ti.get_comp_param() == 32) {
+    return COMPRESSION_GEOINT32;
+  }
+  if (ti.get_compression() != kENCODING_NONE) {
+    throw std::runtime_error("Invalid compression");
+  }
+  return COMPRESSION_NONE;
+}
 
 uint64_t compress_coord(double coord, const SQLTypeInfo& ti, bool x) {
   if (ti.get_compression() == kENCODING_GEOINT && ti.get_comp_param() == 32) {
@@ -80,6 +92,101 @@ std::vector<uint8_t> compress_coords(std::vector<double>& coords, const SQLTypeI
     x = !x;
   }
   return compressed_coords;
+}
+
+template <typename T>
+void unpack_geo_vector(std::vector<T>& output, const int8_t* input_ptr, const size_t sz) {
+  if (sz == 0) {
+    return;
+  }
+  auto elems = reinterpret_cast<const T*>(input_ptr);
+  CHECK_EQ(size_t(0), sz % sizeof(T));
+  const size_t num_elems = sz / sizeof(T);
+  output.resize(num_elems);
+  for (size_t i = 0; i < num_elems; i++) {
+    output[i] = elems[i];
+  }
+}
+
+template <>
+void unpack_geo_vector<int32_t>(std::vector<int32_t>& output,
+                                const int8_t* input_ptr,
+                                const size_t sz) {
+  if (sz == 0) {
+    return;
+  }
+  auto elems = reinterpret_cast<const int32_t*>(input_ptr);
+  CHECK_EQ(size_t(0), sz % sizeof(int32_t));
+  const size_t num_elems = sz / sizeof(int32_t);
+  output.resize(num_elems);
+  for (size_t i = 0; i < num_elems; i++) {
+    output[i] = elems[i];
+  }
+}
+
+template <typename T>
+void decompress_geo_coords_geoint32(std::vector<T>& dec,
+                                    const int8_t* enc,
+                                    const size_t sz) {
+  if (sz == 0) {
+    return;
+  }
+  const auto compressed_coords = reinterpret_cast<const int32_t*>(enc);
+  const auto num_coords = sz / sizeof(int32_t);
+  dec.resize(num_coords);
+  for (size_t i = 0; i < num_coords; i += 2) {
+    dec[i] = Geo_namespace::decompress_longitude_coord_geoint32(compressed_coords[i]);
+    dec[i + 1] =
+        Geo_namespace::decompress_lattitude_coord_geoint32(compressed_coords[i + 1]);
+  }
+}
+
+template <>
+std::shared_ptr<std::vector<double>> decompress_coords<double, SQLTypeInfo>(
+    const SQLTypeInfo& geo_ti,
+    const int8_t* coords,
+    const size_t coords_sz) {
+  auto decompressed_coords_ptr = std::make_shared<std::vector<double>>();
+  if (geo_ti.get_compression() == kENCODING_GEOINT) {
+    if (geo_ti.get_comp_param() == 32) {
+      decompress_geo_coords_geoint32(*decompressed_coords_ptr, coords, coords_sz);
+    }
+  } else {
+    CHECK_EQ(geo_ti.get_compression(), kENCODING_NONE);
+    unpack_geo_vector(*decompressed_coords_ptr, coords, coords_sz);
+  }
+  return decompressed_coords_ptr;
+}
+
+template <>
+std::shared_ptr<std::vector<double>> decompress_coords<double, int32_t>(
+    const int32_t& ic,
+    const int8_t* coords,
+    const size_t coords_sz) {
+  auto decompressed_coords_ptr = std::make_shared<std::vector<double>>();
+  if (ic == COMPRESSION_GEOINT32) {
+    decompress_geo_coords_geoint32(*decompressed_coords_ptr, coords, coords_sz);
+  } else {
+    CHECK_EQ(ic, COMPRESSION_NONE);
+    unpack_geo_vector(*decompressed_coords_ptr, coords, coords_sz);
+  }
+  return decompressed_coords_ptr;
+}
+
+bool is_null_point(const SQLTypeInfo& geo_ti,
+                   const int8_t* coords,
+                   const size_t coords_sz) {
+  if (geo_ti.get_type() == kPOINT && !geo_ti.get_notnull()) {
+    if (geo_ti.get_compression() == kENCODING_GEOINT) {
+      if (geo_ti.get_comp_param() == 32) {
+        return Geo_namespace::is_null_point_longitude_geoint32(*((int32_t*)coords));
+      }
+    } else {
+      CHECK_EQ(geo_ti.get_compression(), kENCODING_NONE);
+      return *((double*)coords) == NULL_ARRAY_DOUBLE;
+    }
+  }
+  return false;
 }
 
 }  // namespace geospatial

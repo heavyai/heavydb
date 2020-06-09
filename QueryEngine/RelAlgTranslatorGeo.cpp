@@ -231,8 +231,6 @@ std::vector<std::shared_ptr<Analyzer::Expr>> RelAlgTranslator::translateGeoFunct
       if (!rex_scalar0) {
         throw QueryNotSupported(rex_function->getName() + ": unexpected first argument");
       }
-      auto arg0 = translateGeoFunctionArg(
-          rex_scalar0, arg_ti, lindex, with_bounds, with_render_group, expand_geo_col);
 
       const auto rex_literal =
           dynamic_cast<const RexLiteral*>(rex_function->getOperand(1));
@@ -259,6 +257,10 @@ std::vector<std::shared_ptr<Analyzer::Expr>> RelAlgTranslator::translateGeoFunct
         throw QueryNotSupported(rex_function->getName() + ": unsupported output SRID " +
                                 std::to_string(srid));
       }
+      arg_ti.set_output_srid(srid);  // Forward output srid down to argument translation
+      auto arg0 = translateGeoFunctionArg(
+          rex_scalar0, arg_ti, lindex, with_bounds, with_render_group, expand_geo_col);
+
       if (arg_ti.get_input_srid() > 0) {
         if (arg_ti.get_input_srid() != 4326) {
           throw QueryNotSupported(rex_function->getName() + ": unsupported input SRID " +
@@ -628,8 +630,14 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateGeoBinaryConstructor(
     geoargs1 = {param_expr};
   }
 
+  auto srid = ti.get_output_srid();
   ti = arg0_ti;
   ti.set_type(kMULTIPOLYGON);
+  ti.set_compression(kENCODING_NONE);  // Constructed geometries are not compressed
+  ti.set_comp_param(0);
+  if (srid > 0) {
+    ti.set_output_srid(srid);  // Requested SRID sent from above
+  }
   return makeExpr<Analyzer::GeoBinOper>(op, ti, arg0_ti, arg1_ti, geoargs0, geoargs1);
 }
 
@@ -687,10 +695,7 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateUnaryGeoFunction(
     geoargs.erase(geoargs.begin() + 1, geoargs.end());  // remove all but coords
     // Add compression information
     Datum input_compression;
-    input_compression.intval =
-        (arg_ti.get_compression() == kENCODING_GEOINT && arg_ti.get_comp_param() == 32)
-            ? 1
-            : 0;
+    input_compression.intval = geospatial::get_compression_scheme(arg_ti);
     geoargs.push_back(makeExpr<Analyzer::Constant>(kINT, false, input_compression));
     return makeExpr<Analyzer::FunctionOper>(
         rex_function->getType(), specialized_geofunc, geoargs);
@@ -708,10 +713,7 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateUnaryGeoFunction(
     }
     // Add compression information
     Datum input_compression;
-    input_compression.intval =
-        (arg_ti.get_compression() == kENCODING_GEOINT && arg_ti.get_comp_param() == 32)
-            ? 1
-            : 0;
+    input_compression.intval = geospatial::get_compression_scheme(arg_ti);
     geoargs.push_back(makeExpr<Analyzer::Constant>(kINT, false, input_compression));
     Datum input_srid;
     input_srid.intval = arg_ti.get_input_srid();
@@ -828,9 +830,7 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateUnaryGeoFunction(
   // Add input compression mode and SRID args to enable on-the-fly
   // decompression/transforms
   Datum input_compression;
-  input_compression.intval =
-      (arg_ti.get_compression() == kENCODING_GEOINT && arg_ti.get_comp_param() == 32) ? 1
-                                                                                      : 0;
+  input_compression.intval = geospatial::get_compression_scheme(arg_ti);
   geoargs.push_back(makeExpr<Analyzer::Constant>(kINT, false, input_compression));
   Datum input_srid;
   input_srid.intval = arg_ti.get_input_srid();
@@ -976,10 +976,7 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateBinaryGeoFunction(
   // Add first input's compression mode and SRID args to enable on-the-fly
   // decompression/transforms
   Datum input_compression0;
-  input_compression0.intval =
-      (arg0_ti.get_compression() == kENCODING_GEOINT && arg0_ti.get_comp_param() == 32)
-          ? 1
-          : 0;
+  input_compression0.intval = geospatial::get_compression_scheme(arg0_ti);
   geoargs.push_back(makeExpr<Analyzer::Constant>(kINT, false, input_compression0));
   Datum input_srid0;
   input_srid0.intval = arg0_ti.get_input_srid();
@@ -988,10 +985,7 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateBinaryGeoFunction(
   // Add second input's compression mode and SRID args to enable on-the-fly
   // decompression/transforms
   Datum input_compression1;
-  input_compression1.intval =
-      (arg1_ti.get_compression() == kENCODING_GEOINT && arg1_ti.get_comp_param() == 32)
-          ? 1
-          : 0;
+  input_compression1.intval = geospatial::get_compression_scheme(arg1_ti);
   geoargs.push_back(makeExpr<Analyzer::Constant>(kINT, false, input_compression1));
   Datum input_srid1;
   input_srid1.intval = arg1_ti.get_input_srid();
@@ -1098,10 +1092,7 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateFunctionWithGeoArg(
 
     // Add compression information
     Datum input_compression;
-    input_compression.intval =
-        (arg_ti.get_compression() == kENCODING_GEOINT && arg_ti.get_comp_param() == 32)
-            ? 1
-            : 0;
+    input_compression.intval = geospatial::get_compression_scheme(arg_ti);
     args.push_back(makeExpr<Analyzer::Constant>(kINT, false, input_compression));
     if (arg_ti.get_input_srid() != 4326) {
       throw QueryNotSupported(
@@ -1140,10 +1131,7 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateFunctionWithGeoArg(
 
     // Add compression information
     Datum input_compression;
-    input_compression.intval =
-        (arg_ti.get_compression() == kENCODING_GEOINT && arg_ti.get_comp_param() == 32)
-            ? 1
-            : 0;
+    input_compression.intval = geospatial::get_compression_scheme(arg_ti);
     args.push_back(makeExpr<Analyzer::Constant>(kINT, false, input_compression));
     if (arg_ti.get_input_srid() != 4326) {
       throw QueryNotSupported(
@@ -1172,10 +1160,7 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateFunctionWithGeoArg(
 
     // Add compression information
     Datum input_compression;
-    input_compression.intval =
-        (arg_ti.get_compression() == kENCODING_GEOINT && arg_ti.get_comp_param() == 32)
-            ? 1
-            : 0;
+    input_compression.intval = geospatial::get_compression_scheme(arg_ti);
     args.push_back(makeExpr<Analyzer::Constant>(kINT, false, input_compression));
     if (arg_ti.get_input_srid() != 4326) {
       throw QueryNotSupported(

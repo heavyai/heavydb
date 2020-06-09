@@ -16169,7 +16169,6 @@ TEST(Select, GeoSpatial_Projection) {
 }
 
 TEST(Select, GeoSpatial_Geos) {
-  SKIP_WITH_TEMP_TABLES();
   // SKIP_ALL_ON_AGGREGATOR();
 
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
@@ -16294,11 +16293,12 @@ TEST(Select, GeoSpatial_Geos) {
                   "'MULTIPOLYGON(((1 1,4 1,4 4,1 4,1 1)))')) FROM "
                   "geospatial_test WHERE id = 2;",
                   dt)));
-    // geos runtime doesn't support geometry decompression
-    EXPECT_THROW(run_simple_agg("SELECT ST_Area(ST_Buffer(gpoly4326, 0.0)) "
-                                "FROM geospatial_test WHERE id = 2;",
-                                dt),
-                 std::runtime_error);
+    // geos runtime support for geometry decompression
+    ASSERT_NEAR(static_cast<double>(4.5),
+                v<double>(run_simple_agg("SELECT ST_Area(ST_Buffer(gpoly4326, 0.0)) "
+                                         "FROM geospatial_test WHERE id = 2;",
+                                         dt)),
+                static_cast<double>(0.00001));
     // geos runtime doesn't support geometry transforms
     EXPECT_THROW(
         run_simple_agg("SELECT ST_Area(ST_Transform(ST_Buffer(gpoly4326, 0.1), 900913)) "

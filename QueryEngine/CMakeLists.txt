@@ -185,7 +185,7 @@ add_custom_command(
     ${CMAKE_CURRENT_SOURCE_DIR}/RuntimeFunctions.cpp)
 
 add_custom_command(
-    DEPENDS GeosRuntime.cpp GeosRuntime.h
+    DEPENDS GeosRuntime.cpp GeosRuntime.h ${CMAKE_SOURCE_DIR}/Shared/geo_compression.cpp
     OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/GeosRuntime.bc
     COMMAND ${llvm_clangpp_cmd}
     ARGS -std=c++17 ${RT_OPT_FLAGS} -c -emit-llvm
@@ -194,6 +194,7 @@ add_custom_command(
     -I ${Boost_INCLUDE_DIR}
     ${MAPD_DEFINITIONS}
     ${GEOS_RT_DEFINITIONS}
+    -I ${CMAKE_SOURCE_DIR}
     -I ${GEOS_INCLUDE_DIR} -Qy
     ${CMAKE_CURRENT_SOURCE_DIR}/GeosRuntime.cpp)
 

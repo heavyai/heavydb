@@ -27,6 +27,15 @@
 
 #include "funcannotations.h"
 
+#define COMPRESSION_NONE 0
+#define COMPRESSION_GEOINT32 1
+#define COMPRESSION_GEOBBINT32 2
+#define COMPRESSION_GEOBBINT16 3
+#define COMPRESSION_GEOBBINT8 4
+
+#define TOLERANCE_DEFAULT 0.000000001
+#define TOLERANCE_GEOINT32 0.0000001
+
 namespace Geo_namespace {
 
 DEVICE inline double decompress_longitude_coord_geoint32(const int32_t compressed) {

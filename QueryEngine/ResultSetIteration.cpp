@@ -31,6 +31,7 @@
 #include "ResultSetGeoSerialization.h"
 #include "RuntimeFunctions.h"
 #include "Shared/SqlTypesLayout.h"
+#include "Shared/geo_compression.h"
 #include "Shared/sqltypes.h"
 #include "TypePunning.h"
 

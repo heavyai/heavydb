@@ -16,6 +16,7 @@
 
 #include "CodeGenerator.h"
 #include "Execute.h"
+#include "Shared/geo_compression.h"
 
 std::vector<llvm::Value*> CodeGenerator::codegenGeoUOper(
     const Analyzer::GeoUOper* geo_expr,
@@ -47,10 +48,6 @@ std::vector<llvm::Value*> CodeGenerator::codegenGeoUOper(
   // Basic set of arguments is currently common to all Geos_* func invocations:
   // op kind, type of the first geo arg0, geo arg0 components
   std::string func = "Geos_Wkb"s;
-  // Geos runtime doesn't yet support geometry decompression
-  if (geo_expr->getTypeInfo0().get_compression() != kENCODING_NONE) {
-    throw std::runtime_error("GEOS runtime doesn't support geometry decompression.");
-  }
   if (geo_expr->getTypeInfo0().get_output_srid() !=
       geo_expr->get_type_info().get_output_srid()) {
     throw std::runtime_error("GEOS runtime doesn't support geometry transforms.");
@@ -68,6 +65,11 @@ std::vector<llvm::Value*> CodeGenerator::codegenGeoUOper(
     argument_list.insert(
         argument_list.end(), argument_list.end() - 2, argument_list.end());
   }
+  // Append geo expr compression
+  argument_list.insert(
+      argument_list.end(),
+      cgen_state_->llInt(static_cast<int>(
+          geospatial::get_compression_scheme(geo_expr->getTypeInfo0()))));
 
   // Deal with unary geo predicates
   if (geo_expr->getOp() == Geo_namespace::GeoBase::GeoOp::kISEMPTY ||
@@ -101,10 +103,6 @@ std::vector<llvm::Value*> CodeGenerator::codegenGeoBinOper(
   // Basic set of arguments is currently common to all Geos_* func invocations:
   // op kind, type of the first geo arg0, geo arg0 components
   std::string func = "Geos_Wkb"s;
-  // Geos runtime doesn't yet support geometry decompression
-  if (geo_expr->getTypeInfo0().get_compression() != kENCODING_NONE) {
-    throw std::runtime_error("GEOS runtime doesn't support geometry decompression.");
-  }
   if (geo_expr->getTypeInfo0().get_output_srid() !=
       geo_expr->get_type_info().get_output_srid()) {
     throw std::runtime_error("GEOS runtime doesn't support geometry transforms.");
@@ -122,6 +120,11 @@ std::vector<llvm::Value*> CodeGenerator::codegenGeoBinOper(
     argument_list.insert(
         argument_list.end(), argument_list.end() - 2, argument_list.end());
   }
+  // Append geo expr compression
+  argument_list.insert(
+      argument_list.end(),
+      cgen_state_->llInt(static_cast<int>(
+          geospatial::get_compression_scheme(geo_expr->getTypeInfo0()))));
 
   auto arg1_list = codegenGeoArgs(geo_expr->getArgs1(), co);
 
@@ -129,10 +132,6 @@ std::vector<llvm::Value*> CodeGenerator::codegenGeoBinOper(
       geo_expr->getOp() == Geo_namespace::GeoBase::GeoOp::kINTERSECTION ||
       geo_expr->getOp() == Geo_namespace::GeoBase::GeoOp::kUNION) {
     func += "_Wkb"s;
-    // Geos runtime doesn't yet support geometry decompression
-    if (geo_expr->getTypeInfo1().get_compression() != kENCODING_NONE) {
-      throw std::runtime_error("GEOS runtime doesn't support geometry decompression.");
-    }
     if (geo_expr->getTypeInfo1().get_output_srid() !=
         geo_expr->get_type_info().get_output_srid()) {
       throw std::runtime_error("GEOS runtime doesn't support geometry transforms.");
@@ -146,6 +145,10 @@ std::vector<llvm::Value*> CodeGenerator::codegenGeoBinOper(
       // TODO: similar meta upgrade will be required for other allowed geo
       arg1_list.insert(arg1_list.end(), arg1_list.end() - 2, arg1_list.end());
     }
+    // Append geo expr compression
+    arg1_list.insert(arg1_list.end(),
+                     cgen_state_->llInt(static_cast<int>(
+                         geospatial::get_compression_scheme(geo_expr->getTypeInfo1()))));
   } else if (geo_expr->getOp() == Geo_namespace::GeoBase::GeoOp::kBUFFER) {
     // Extra argument in this case is double
     func += "_double"s;

@@ -1,12 +1,3 @@
-#define COMPRESSION_NONE 0
-#define COMPRESSION_GEOINT32 1
-#define COMPRESSION_GEOBBINT32 2
-#define COMPRESSION_GEOBBINT16 3
-#define COMPRESSION_GEOBBINT8 4
-
-#define TOLERANCE_DEFAULT 0.000000001
-#define TOLERANCE_GEOINT32 0.0000001
-
 #include "../Shared/geo_compression_runtime.h"
 
 // Adjustable tolerance, determined by compression mode.
