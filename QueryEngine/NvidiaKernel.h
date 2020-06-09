@@ -34,6 +34,16 @@ struct CubinResult {
   CUlinkState link_state;
 };
 
+/**
+ * Loads the fatbin from disk which populates the nvcache. The fatbin load can take
+ * several seconds, so we warmup the GPU JIT at server startup.
+ */
+void nvidia_jit_warmup();
+
+/**
+ * Compile and link PTX from the LLVM NVPTX backend with the CUDA runtime module and
+ * device linker to create executable GPU device code.
+ */
 CubinResult ptx_to_cubin(const std::string& ptx,
                          const unsigned block_size,
                          const CudaMgr_Namespace::CudaMgr* cuda_mgr);

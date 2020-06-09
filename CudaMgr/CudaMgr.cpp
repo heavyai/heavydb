@@ -15,6 +15,7 @@
  */
 
 #include "CudaMgr/CudaMgr.h"
+#include "QueryEngine/NvidiaKernel.h"
 
 #include <algorithm>
 #include <cassert>
@@ -51,6 +52,12 @@ CudaMgr::CudaMgr(const int num_gpus, const int start_gpu)
   initDeviceGroup();
   createDeviceContexts();
   printDeviceProperties();
+
+  // warm up the GPU JIT
+  LOG(INFO) << "Warming up the GPU JIT Compiler... (this may take several seconds)";
+  setContext(0);
+  nvidia_jit_warmup();
+  LOG(INFO) << "GPU JIT Compiler initialized.";
 }
 
 void CudaMgr::initDeviceGroup() {
