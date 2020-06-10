@@ -40,7 +40,7 @@ using Chunk_NS::Chunk;
 using Data_Namespace::AbstractBuffer;
 using Data_Namespace::DataMgr;
 
-bool g_use_table_device_offset{true};
+bool g_use_table_device_offset{false};
 
 using namespace std;
 
