@@ -34,6 +34,8 @@ extern std::string cluster_command_line_arg;
 
 bool g_enable_thrift_logs{false};
 
+extern bool g_use_table_device_offset;
+
 unsigned connect_timeout{20000};
 unsigned recv_timeout{300000};
 unsigned send_timeout{300000};
@@ -382,6 +384,13 @@ void CommandLineOptions::fillAdvancedOptions() {
                                    ->implicit_value(true),
                                "Enables/disables a more optimized columnarization method "
                                "for intermediate steps in multi-step queries.");
+  developer_desc.add_options()(
+      "offset-device-by-table-id",
+      po::value<bool>(&g_use_table_device_offset)
+          ->default_value(g_use_table_device_offset)
+          ->implicit_value(true),
+      "Enables/disables offseting the chosen device ID by the table ID for a given "
+      "fragment. This improves balance of fragments across GPUs.");
   developer_desc.add_options()("enable-window-functions",
                                po::value<bool>(&g_enable_window_functions)
                                    ->default_value(g_enable_window_functions)

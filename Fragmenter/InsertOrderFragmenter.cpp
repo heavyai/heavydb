@@ -40,6 +40,8 @@ using Chunk_NS::Chunk;
 using Data_Namespace::AbstractBuffer;
 using Data_Namespace::DataMgr;
 
+bool g_use_table_device_offset{true};
+
 using namespace std;
 
 namespace Fragmenter_Namespace {
@@ -89,6 +91,24 @@ InsertOrderFragmenter::InsertOrderFragmenter(
 
 InsertOrderFragmenter::~InsertOrderFragmenter() {}
 
+namespace {
+
+/**
+ * Offset the fragment ID by the table ID, meaning single fragment tables end up balanced
+ * across multiple GPUs instead of all falling to GPU 0.
+ */
+int compute_device_for_fragment(const int table_id,
+                                const int fragment_id,
+                                const int num_devices) {
+  if (g_use_table_device_offset) {
+    return (table_id + fragment_id) % num_devices;
+  } else {
+    return fragment_id % num_devices;
+  }
+}
+
+}  // namespace
+
 void InsertOrderFragmenter::getChunkMetadata() {
   if (uses_foreign_storage_ ||
       defaultInsertLevel_ == Data_Namespace::MemoryLevel::DISK_LEVEL) {
@@ -120,7 +140,8 @@ void InsertOrderFragmenter::getChunkMetadata() {
         new_fragment_info->setPhysicalNumTuples(chunk_itr->second->numElements);
         numTuples_ += new_fragment_info->getPhysicalNumTuples();
         for (const auto level_size : dataMgr_->levelSizes_) {
-          new_fragment_info->deviceIds.push_back(cur_fragment_id % level_size);
+          new_fragment_info->deviceIds.push_back(
+              compute_device_for_fragment(physicalTableId_, cur_fragment_id, level_size));
         }
         new_fragment_info->shadowNumTuples = new_fragment_info->getPhysicalNumTuples();
         new_fragment_info->physicalTableId = physicalTableId_;
@@ -666,7 +687,8 @@ FragmentInfo* InsertOrderFragmenter::createNewFragment(
   newFragmentInfo->shadowNumTuples = 0;
   newFragmentInfo->setPhysicalNumTuples(0);
   for (const auto levelSize : dataMgr_->levelSizes_) {
-    newFragmentInfo->deviceIds.push_back(newFragmentInfo->fragmentId % levelSize);
+    newFragmentInfo->deviceIds.push_back(compute_device_for_fragment(
+        physicalTableId_, newFragmentInfo->fragmentId, levelSize));
   }
   newFragmentInfo->physicalTableId = physicalTableId_;
   newFragmentInfo->shard = shard_;
