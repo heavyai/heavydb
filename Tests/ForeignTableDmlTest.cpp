@@ -140,9 +140,9 @@ TEST_F(SelectQueryTest, DefaultLocalParquetServer) {
                           "Exception: Unsupported data wrapper");
 }
 
+// Create table with multiple fragments with file buffers less than size of a fragment
+// Includes both fixed and variable length data
 TEST_F(SelectQueryTest, MultipleDataBlocksPerFragment) {
-  // Create table with multiple fragments with file buffers less than size of a fragment
-  // Includes both fixed and variable length data
   const auto& query =
       getCreateForeignTableQuery("(i INTEGER,  txt TEXT, txt_2 TEXT ENCODING NONE)",
                                  {{"buffer_size", "25"}, {"fragment_size", "64"}},
@@ -427,20 +427,20 @@ TEST_P(DataTypeFragmentSizeTest, ScalarTypes) {
   TQueryResult result;
   sql(result, "SELECT * FROM test_foreign_table;");
   // clang-format off
-    assertResultSetEqual({
-      {
-        True, i(100), i(30000), i(2000000000), i(9000000000000000000), 10.1f, 100.1234, "00:00:10",
-        "1/1/2000 00:00:59", "1/1/2000", "text_1", "quoted text"
-      },
-      {
-        False, i(110), i(30500), i(2000500000), i(9000000050000000000), 100.12f, 2.1234, "00:10:00",
-      "6/15/2020 00:59:59", "6/15/2020", "text_2", "quoted text 2"
-      },
-      {
-        True, i(120), i(31000), i(2100000000), i(9100000000000000000), 1000.123f, 100.1, "10:00:00",
-        "12/31/2500 23:59:59", "12/31/2500", "text_3", "quoted text 3"
-      }},
-      result);
+  assertResultSetEqual({
+    {
+      True, i(100), i(30000), i(2000000000), i(9000000000000000000), 10.1f, 100.1234, "00:00:10",
+      "1/1/2000 00:00:59", "1/1/2000", "text_1", "quoted text"
+    },
+    {
+      False, i(110), i(30500), i(2000500000), i(9000000050000000000), 100.12f, 2.1234, "00:10:00",
+    "6/15/2020 00:59:59", "6/15/2020", "text_2", "quoted text 2"
+    },
+    {
+      True, i(120), i(31000), i(2100000000), i(9100000000000000000), 1000.123f, 100.1, "10:00:00",
+      "12/31/2500 23:59:59", "12/31/2500", "text_3", "quoted text 3"
+    }},
+    result);
   // clang-format on
 }
 
@@ -520,26 +520,26 @@ TEST_P(DataTypeFragmentSizeTest, ArrayTypes) {
   TQueryResult result;
   sql(result, "SELECT * FROM test_foreign_table;");
   // clang-format off
-    assertResultSetEqual({
-      {
-        array({True}), array({i(50), i(100)}), array({i(30000), i(20000)}), array({i(2000000000)}),
-        array({i(9000000000000000000)}), array({10.1f, 11.1f}), array({"00:00:10"}),
-        array({"1/1/2000 00:00:59", "1/1/2010 00:00:59"}), array({"1/1/2000", "2/2/2000"}),
-        array({"text_1"}), array({"quoted text"})
-      },
-      {
-        array({False, True}), array({i(110)}), array({i(30500)}), array({i(2000500000)}),
-        array({i(9000000050000000000)}), array({100.12f}), array({"00:10:00", "00:20:00"}),
-        array({"6/15/2020 00:59:59"}), array({"6/15/2020"}),
-        array({"text_2", "text_3"}), array({"quoted text 2"})
-      },
-      {
-        array({True}), array({i(120)}), array({i(31000)}), array({i(2100000000), i(200000000)}),
-        array({i(9100000000000000000), i(9200000000000000000)}), array({1000.123f}), array({"10:00:00"}),
-        array({"12/31/2500 23:59:59"}), array({"12/31/2500"}),
-        array({"text_4"}), array({"quoted text 3", "quoted text 4"})
-      }},
-      result);
+  assertResultSetEqual({
+    {
+      array({True}), array({i(50), i(100)}), array({i(30000), i(20000)}), array({i(2000000000)}),
+      array({i(9000000000000000000)}), array({10.1f, 11.1f}), array({"00:00:10"}),
+      array({"1/1/2000 00:00:59", "1/1/2010 00:00:59"}), array({"1/1/2000", "2/2/2000"}),
+      array({"text_1"}), array({"quoted text"})
+    },
+    {
+      array({False, True}), array({i(110)}), array({i(30500)}), array({i(2000500000)}),
+      array({i(9000000050000000000)}), array({100.12f}), array({"00:10:00", "00:20:00"}),
+      array({"6/15/2020 00:59:59"}), array({"6/15/2020"}),
+      array({"text_2", "text_3"}), array({"quoted text 2"})
+    },
+    {
+      array({True}), array({i(120)}), array({i(31000)}), array({i(2100000000), i(200000000)}),
+      array({i(9100000000000000000), i(9200000000000000000)}), array({1000.123f}), array({"10:00:00"}),
+      array({"12/31/2500 23:59:59"}), array({"12/31/2500"}),
+      array({"text_4"}), array({"quoted text 3", "quoted text 4"})
+    }},
+    result);
   // clang-format on
 }
 
@@ -553,20 +553,20 @@ TEST_P(DataTypeFragmentSizeTest, GeoTypes) {
   TQueryResult result;
   sql(result, "SELECT * FROM test_foreign_table;");
   // clang-format off
-    assertResultSetEqual({
-      {
-        "POINT (0 0)", "LINESTRING (0 0,0 0)", "POLYGON ((0 0,1 0,0 1,1 1,0 0))",
-        "MULTIPOLYGON (((0 0,1 0,0 1,0 0)))"
-      },
-      {
-        "POINT (1 1)", "LINESTRING (1 1,2 2,3 3)", "POLYGON ((5 4,7 4,6 5,5 4))",
-        "MULTIPOLYGON (((0 0,1 0,0 1,0 0)),((0 0,2 0,0 2,0 0)))"
-      },
-      {
-        "POINT (2 2)", "LINESTRING (2 2,3 3)", "POLYGON ((1 1,3 1,2 3,1 1))",
-        "MULTIPOLYGON (((0 0,3 0,0 3,0 0)),((0 0,1 0,0 1,0 0)),((0 0,2 0,0 2,0 0)))"
-      }},
-      result);
+  assertResultSetEqual({
+    {
+      "POINT (0 0)", "LINESTRING (0 0,0 0)", "POLYGON ((0 0,1 0,0 1,1 1,0 0))",
+      "MULTIPOLYGON (((0 0,1 0,0 1,0 0)))"
+    },
+    {
+      "POINT (1 1)", "LINESTRING (1 1,2 2,3 3)", "POLYGON ((5 4,7 4,6 5,5 4))",
+      "MULTIPOLYGON (((0 0,1 0,0 1,0 0)),((0 0,2 0,0 2,0 0)))"
+    },
+    {
+      "POINT (2 2)", "LINESTRING (2 2,3 3)", "POLYGON ((1 1,3 1,2 3,1 1))",
+      "MULTIPOLYGON (((0 0,3 0,0 3,0 0)),((0 0,1 0,0 1,0 0)),((0 0,2 0,0 2,0 0)))"
+    }},
+    result);
   // clang-format on
 }
 
