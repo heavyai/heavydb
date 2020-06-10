@@ -1188,7 +1188,7 @@ size_t TypedImportBuffer::add_values(const ColumnDescriptor* cd, const TColumn& 
                 int8_t* p = buf;
                 for (size_t j = 0; j < len; ++j) {
                   *(int64_t*)p =
-                      static_cast<int64_t>(col.data.arr_col[j].data.int_col[j]);
+                      static_cast<int64_t>(col.data.arr_col[i].data.int_col[j]);
                   p += sizeof(int64_t);
                 }
                 addArray(ArrayDatum(byteSize, buf, false));
