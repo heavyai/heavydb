@@ -769,11 +769,8 @@ TEST(Delete, JoinCacheInvalidationTest_DropTable) {
 }
 
 int main(int argc, char** argv) {
+  TestHelpers::init_logger_stderr_only(argc, argv);
   testing::InitGoogleTest(&argc, argv);
-
-  logger::LogOptions log_options(argv[0]);
-  log_options.severity_ = logger::Severity::DEBUG1;
-  logger::init(log_options);
 
   QR::init(BASE_PATH);
 
