@@ -54,8 +54,7 @@ std::string errorMessage(CUresult const);
 
 class CudaErrorException : public std::runtime_error {
  public:
-  CudaErrorException(CUresult status)
-      : std::runtime_error(errorMessage(status)), status_(status) {}
+  CudaErrorException(CUresult status);
 
   CUresult getStatus() const { return status_; }
 

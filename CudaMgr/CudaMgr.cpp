@@ -18,6 +18,7 @@
 #include "QueryEngine/NvidiaKernel.h"
 
 #include <algorithm>
+#include <boost/stacktrace.hpp>
 #include <cassert>
 #include <iostream>
 #include <stdexcept>
@@ -25,6 +26,12 @@
 #include "Shared/Logger.h"
 
 namespace CudaMgr_Namespace {
+
+CudaErrorException::CudaErrorException(CUresult status)
+    : std::runtime_error(errorMessage(status)), status_(status) {
+  VLOG(1) << errorMessage(status);
+  VLOG(1) << boost::stacktrace::stacktrace();
+}
 
 std::string errorMessage(CUresult const status) {
   const char* errorString{nullptr};
