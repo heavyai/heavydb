@@ -17,23 +17,39 @@
 #pragma once
 
 #include <map>
-#include <unordered_set>
 #include <vector>
 
 #include "Catalog/Catalog.h"
 #include "Catalog/ForeignTable.h"
 #include "DataMgr/Chunk/Chunk.h"
 #include "ForeignDataWrapper.h"
-#include "LazyLoader.h"
+#include "ImportExport/Importer.h"
 
 namespace foreign_storage {
 
-struct SubChunkRegion {
-  // Offset into data buffer of parent chunk
-  size_t buffer_offset;
-  // Size of the subchunk in data buffer
-  size_t buffer_size;
+/**
+ * Data structure containing details about a CSV file region (subset of rows within a CSV
+ * file).
+ */
+struct FileRegion {
+  // Name of file containing region
+  std::string filename;
+  // Byte offset (within file) for the beginning of file region
+  size_t first_row_file_offset;
+  // Index of first row in file region relative to the first row/non-header line in the
+  // file
+  size_t first_row_index;
+  // Number of rows in file region
+  size_t row_count;
+  // Size of file region in bytes
+  size_t region_size;
+
+  bool operator<(const FileRegion& other) const {
+    return first_row_file_offset < other.first_row_file_offset;
+  }
 };
+
+using FileRegions = std::vector<FileRegion>;
 
 class CsvDataWrapper : public ForeignDataWrapper {
  public:
@@ -43,16 +59,21 @@ class CsvDataWrapper : public ForeignDataWrapper {
   void populateMetadataForChunkKeyPrefix(
       const ChunkKey& chunk_key_prefix,
       ChunkMetadataVector& chunk_metadata_vector) override;
-
   static void validateOptions(const ForeignTable* foreign_table);
 
  private:
   CsvDataWrapper(const ForeignTable* foreign_table);
 
-  void initializeChunkBuffers(const int fragment_index);
-  void fetchChunkBuffers();
+  /**
+   * Populates provided chunk with appropriate data by parsing all file regions
+   * containing chunk data.
+   *
+   * @param chunk_key - chunk key for chunk to be populated
+   * @param chunk - object containing data and (optional) index buffers to be populated
+   */
+  void populateChunk(ChunkKey chunk_key, Chunk_NS::Chunk& chunk);
+
   ForeignStorageBuffer* getBufferFromMap(const ChunkKey& chunk_key);
-  bool prefixMatch(const ChunkKey& prefix, const ChunkKey& checked);
   std::string getFilePath();
   import_export::CopyParams validateAndGetCopyParams();
   void validateFilePath();
@@ -80,31 +101,15 @@ class CsvDataWrapper : public ForeignDataWrapper {
    */
   std::optional<bool> validateAndGetBoolValue(const std::string& option_name);
 
-  bool fragmentIsFull();
-
-  void discardFragmentBuffers(const int fragment_index);
-  void reloadFragmentBuffers(const int fragment_index);
-
-  Importer_NS::Loader* getMetadataLoader(Catalog_Namespace::Catalog& catalog);
-
-  Importer_NS::Loader* getLazyLoader(
-      Catalog_Namespace::Catalog& catalog,
-      const ChunkKey chunk_key,
-      std::map<ChunkKey, std::unique_ptr<ForeignStorageBuffer>>* temp_buffer_map_ptr);
-
-  std::mutex loader_mutex_;
   std::map<ChunkKey, std::unique_ptr<ForeignStorageBuffer>> chunk_buffer_map_;
-
-  // Map of fragment index to vector of fileregions
-  std::map<int, FileRegions> fragment_fileregion_map_;
-
-  // Map of chunkey and file offset to subchunks to identify which subchunk
-  // is being loaded in getLazyLoader callback
-  std::map<std::pair<ChunkKey, size_t>, SubChunkRegion> chunk_file_offset_subchunk_map_;
+  std::map<ChunkKey, std::shared_ptr<ChunkMetadata>> chunk_metadata_map_;
+  std::map<int, FileRegions> fragment_id_to_file_regions_map_;
 
   const int db_id_;
   const ForeignTable* foreign_table_;
   size_t row_count_;
+  std::mutex file_access_mutex_;
+  std::mutex file_regions_mutex_;
 
   static constexpr std::array<char const*, 13> supported_options_{"BASE_PATH",
                                                                   "FILE_PATH",

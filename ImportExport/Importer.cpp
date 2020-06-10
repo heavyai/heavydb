@@ -131,6 +131,8 @@ namespace import_export {
 
 using FieldNameToIndexMapType = std::map<std::string, size_t>;
 using ColumnNameToSourceNameMapType = std::map<std::string, std::string>;
+using ColumnIdToRenderGroupAnalyzerMapType =
+    std::map<int, std::shared_ptr<RenderGroupAnalyzer>>;
 using FeaturePtrVector = std::vector<OGRFeatureUqPtr>;
 
 #define DEBUG_TIMING false
@@ -1798,7 +1800,7 @@ int64_t explode_collections_step2(
 
 }  // namespace
 
-ImportStatus Importer::importThreadDelimited(
+static ImportStatus import_thread_delimited(
     int thread_id,
     Importer* importer,
     std::unique_ptr<char[]> scratch_buffer,
@@ -1806,9 +1808,7 @@ ImportStatus Importer::importThreadDelimited(
     size_t end_pos,
     size_t total_size,
     const ColumnIdToRenderGroupAnalyzerMapType& columnIdToRenderGroupAnalyzerMap,
-    size_t first_row_index_this_buffer,
-    bool record_row_offsets,
-    size_t current_position) {
+    size_t first_row_index_this_buffer) {
   ImportStatus import_status;
   int64_t total_get_row_time_us = 0;
   int64_t total_str_to_val_time_us = 0;
@@ -1829,7 +1829,6 @@ ImportStatus Importer::importThreadDelimited(
     auto us = measure<std::chrono::microseconds>::execution([&]() {});
     int phys_cols = 0;
     int point_cols = 0;
-    CsvFileScanMetadata file_scan_metadata{};
     for (const auto cd : col_descs) {
       const auto& col_ti = cd->columnType;
       phys_cols += col_ti.get_physical_cols();
@@ -1847,10 +1846,6 @@ ImportStatus Importer::importThreadDelimited(
       row.clear();
       std::vector<std::unique_ptr<char[]>>
           tmp_buffers;  // holds string w/ removed escape chars, etc
-      if (record_row_offsets) {
-        // Record byte offset of each row for FSI
-        file_scan_metadata.row_offsets.emplace_back(current_position + (p - buffer));
-      }
       if (DEBUG_TIMING) {
         us = measure<std::chrono::microseconds>::execution([&]() {
           p = import_export::delimited_parser::get_row(p,
@@ -2113,14 +2108,9 @@ ImportStatus Importer::importThreadDelimited(
       }
       total_str_to_val_time_us += us;
     }  // end thread
-    if (record_row_offsets) {
-      // Store final row end
-      file_scan_metadata.row_offsets.emplace_back(current_position + end_pos);
-    }
     if (import_status.rows_completed > 0) {
-      load_ms = measure<>::execution([&]() {
-        importer->load(import_buffers, import_status.rows_completed, &file_scan_metadata);
-      });
+      load_ms = measure<>::execution(
+          [&]() { importer->load(import_buffers, import_status.rows_completed); });
     }
   });
   if (DEBUG_TIMING && import_status.rows_completed > 0) {
@@ -2415,7 +2405,7 @@ static ImportStatus import_thread_shapefile(
   float load_ms = 0.0f;
   if (import_status.rows_completed > 0) {
     auto load_timer = timer_start();
-    importer->load(import_buffers, import_status.rows_completed, {});
+    importer->load(import_buffers, import_status.rows_completed);
     load_ms =
         float(
             timer_stop<std::chrono::steady_clock::time_point, std::chrono::microseconds>(
@@ -2443,9 +2433,8 @@ static ImportStatus import_thread_shapefile(
 
 bool Loader::loadNoCheckpoint(
     const std::vector<std::unique_ptr<TypedImportBuffer>>& import_buffers,
-    size_t row_count,
-    const FileScanMetadata* file_scan_metadata) {
-  return loadImpl(import_buffers, row_count, false, file_scan_metadata);
+    size_t row_count) {
+  return loadImpl(import_buffers, row_count, false);
 }
 
 bool Loader::load(const std::vector<std::unique_ptr<TypedImportBuffer>>& import_buffers,
@@ -2653,11 +2642,10 @@ void Loader::distributeToShards(std::vector<OneShardBuffers>& all_shard_import_b
 bool Loader::loadImpl(
     const std::vector<std::unique_ptr<TypedImportBuffer>>& import_buffers,
     size_t row_count,
-    bool checkpoint,
-    const FileScanMetadata* file_scan_metadata) {
+    bool checkpoint) {
   if (load_callback_) {
     auto data_blocks = get_data_block_pointers(import_buffers);
-    return load_callback_(import_buffers, data_blocks, row_count, file_scan_metadata);
+    return load_callback_(import_buffers, data_blocks, row_count);
   }
   if (table_desc_->nShards) {
     std::vector<OneShardBuffers> all_shard_import_buffers;
@@ -3198,9 +3186,8 @@ std::vector<std::string> Detector::get_headers() {
 }
 
 void Importer::load(const std::vector<std::unique_ptr<TypedImportBuffer>>& import_buffers,
-                    size_t row_count,
-                    const FileScanMetadata* file_scan_metadata) {
-  if (!loader->loadNoCheckpoint(import_buffers, row_count, file_scan_metadata)) {
+                    size_t row_count) {
+  if (!loader->loadNoCheckpoint(import_buffers, row_count)) {
     load_failed = true;
   }
 }
@@ -3518,7 +3505,7 @@ void Importer::import_local_parquet(const std::string& file_path) {
       }
       // flush slices of this row group to chunks
       for (int slice = 0; slice < num_slices; ++slice) {
-        load(import_buffers_vec[slice], nrow_in_slice_successfully_loaded[slice], {});
+        load(import_buffers_vec[slice], nrow_in_slice_successfully_loaded[slice]);
       }
       // update import stats
       const auto nrow_original =
@@ -3884,21 +3871,8 @@ ImportStatus Importer::import() {
   return DataStreamSink::archivePlumber();
 }
 
-void Importer::initializeImportBuffers(const size_t num_buffers) {
-  CHECK_EQ(import_buffers_vec.size(), 0u);
-  import_buffers_vec.resize(num_buffers);
-  for (size_t i = 0; i < num_buffers; i++) {
-    for (const auto cd : loader->get_column_descs()) {
-      import_buffers_vec[i].emplace_back(
-          new TypedImportBuffer(cd, loader->getStringDict(cd)));
-    }
-  }
-}
-
-ImportStatus Importer::loadDelimited(const std::string& file_path,
-                                     const bool decompressed,
-                                     const bool record_offsets,
-                                     const size_t initial_file_offset) {
+ImportStatus Importer::importDelimited(const std::string& file_path,
+                                       const bool decompressed) {
   bool load_truncated = false;
   set_import_status(import_id, import_status);
 
@@ -3927,10 +3901,16 @@ ImportStatus Importer::loadDelimited(const std::string& file_path,
     alloc_size = file_size;
   }
 
-  initializeImportBuffers(max_threads);
+  for (size_t i = 0; i < max_threads; i++) {
+    import_buffers_vec.emplace_back();
+    for (const auto cd : loader->get_column_descs()) {
+      import_buffers_vec[i].emplace_back(
+          std::make_unique<TypedImportBuffer>(cd, loader->getStringDict(cd)));
+    }
+  }
 
   auto scratch_buffer = std::make_unique<char[]>(alloc_size);
-  size_t current_pos = initial_file_offset;
+  size_t current_pos = 0;
   size_t end_pos;
   size_t begin_pos = 0;
 
@@ -3988,7 +3968,7 @@ ImportStatus Importer::loadDelimited(const std::string& file_path,
       // LOG(INFO) << " stack_thread_ids.pop " << thread_id << std::endl;
 
       threads.push_back(std::async(std::launch::async,
-                                   importThreadDelimited,
+                                   import_thread_delimited,
                                    thread_id,
                                    this,
                                    std::move(scratch_buffer),
@@ -3996,9 +3976,7 @@ ImportStatus Importer::loadDelimited(const std::string& file_path,
                                    end_pos,
                                    end_pos,
                                    columnIdToRenderGroupAnalyzerMap,
-                                   first_row_index_this_buffer,
-                                   record_offsets,
-                                   current_pos));
+                                   first_row_index_this_buffer));
 
       first_row_index_this_buffer += num_rows_this_buffer;
 
@@ -4010,13 +3988,6 @@ ImportStatus Importer::loadDelimited(const std::string& file_path,
                                1,
                                copy_params.buffer_size - nresidual,
                                p_file);
-
-      // Need to append a delimiter in case the file doesnt end on one
-      if (size > 0 && size < copy_params.buffer_size &&
-          scratch_buffer[size - 1] != copy_params.line_delim) {
-        scratch_buffer[size] = copy_params.line_delim;
-        size++;
-      }
 
       begin_pos = 0;
 
@@ -4796,7 +4767,13 @@ ImportStatus Importer::importGDAL(
 
   // make an import buffer for each thread
   CHECK_EQ(import_buffers_vec.size(), 0u);
-  initializeImportBuffers(max_threads);
+  import_buffers_vec.resize(max_threads);
+  for (size_t i = 0; i < max_threads; i++) {
+    for (const auto cd : loader->get_column_descs()) {
+      import_buffers_vec[i].emplace_back(
+          new TypedImportBuffer(cd, loader->getStringDict(cd)));
+    }
+  }
 
   // make render group analyzers for each poly column
   ColumnIdToRenderGroupAnalyzerMapType columnIdToRenderGroupAnalyzerMap;

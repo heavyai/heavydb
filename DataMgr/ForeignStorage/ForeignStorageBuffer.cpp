@@ -16,8 +16,6 @@
 
 #include "ForeignStorageBuffer.h"
 
-#include <iostream>
-
 namespace foreign_storage {
 ForeignStorageBuffer::ForeignStorageBuffer()
     : AbstractBuffer(0), buffer(nullptr), byte_count(0), reserved_byte_count(0) {}
@@ -31,11 +29,13 @@ void ForeignStorageBuffer::read(int8_t* const destination,
 }
 
 void ForeignStorageBuffer::reserve(size_t additional_num_bytes) {
-  auto old_buffer = std::move(buffer);
-  reserved_byte_count += additional_num_bytes;
-  buffer = std::make_unique<int8_t[]>(reserved_byte_count);
-  if (old_buffer) {
-    memcpy(buffer.get(), old_buffer.get(), byte_count);
+  if (byte_count + additional_num_bytes > reserved_byte_count) {
+    auto old_buffer = std::move(buffer);
+    reserved_byte_count += additional_num_bytes;
+    buffer = std::make_unique<int8_t[]>(reserved_byte_count);
+    if (old_buffer) {
+      memcpy(buffer.get(), old_buffer.get(), byte_count);
+    }
   }
 }
 
