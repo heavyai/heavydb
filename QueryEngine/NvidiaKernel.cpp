@@ -128,6 +128,7 @@ CubinResult ptx_to_cubin(const std::string& ptx,
   VLOG(1) << "CUDA Linker completed: " << info_log;
   CHECK(cubin);
   CHECK_GT(cubinSize, size_t(0));
+  VLOG(1) << "Generated GPU binary code size: " << cubinSize << " bytes";
   return {cubin, option_keys, option_values, link_state};
 }
 #endif
