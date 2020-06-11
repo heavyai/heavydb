@@ -20,6 +20,11 @@
 #include <random>
 #include <regex>
 
+#ifndef __CUDACC__
+#include <boost/filesystem.hpp>
+#include <iomanip>
+#endif
+
 void apply_shim(std::string& result,
                 const boost::regex& reg_expr,
                 const std::function<void(std::string&, const boost::smatch&)>& shim_fn) {
@@ -227,3 +232,45 @@ bool unquote(std::string& str) {
   }
   return false;
 }
+
+#ifndef __CUDACC__
+std::string get_quoted_string(const std::string& filename, char quote, char escape) {
+  std::stringstream ss;
+  ss << std::quoted(filename, quote, escape);  // TODO: prevents string_view Jun 2020
+  return ss.str();
+}
+
+void filename_security_check(const std::string& filename) {
+  // Canonicalize the filename, rejecting it if this simple step fails.
+  boost::system::error_code ec;
+  auto can = boost::filesystem::weakly_canonical(
+      filename, ec);  // TODO: prevents string_view Jun 2020
+  if (ec) {
+    throw std::runtime_error("invalid filename: " + filename);
+  }
+
+  // Reject any filenames containing spaces for now. May relax this rule later.
+  for (const auto& ch : filename) {
+    if (std::isspace(ch)) {
+      throw std::runtime_error("invalid filename (whitespace): " + filename);
+    }
+  }
+
+  // Reject any punctuation characters except for a few safe ones.
+  static const std::string safe_punctuation{"./_+-=:"};
+  for (const auto& ch : filename) {
+    if (std::ispunct(ch) && safe_punctuation.find(ch) == std::string::npos) {
+      throw std::runtime_error("invalid filename (punctuation): " + filename);
+    }
+  }
+
+  // Reject any blacklisted filenames.
+  static const std::vector<std::string> blacklisted_filenames = {
+      "/etc/passwd", "/etc/passwd-", "/etc/shadow", "/etc/shadow-"};
+  if (std::find(blacklisted_filenames.begin(),
+                blacklisted_filenames.end(),
+                can.string()) != blacklisted_filenames.end()) {
+    throw std::runtime_error("invalid filename (blacklist): " + filename);
+  }
+}
+#endif  // __CUDACC__
