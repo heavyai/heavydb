@@ -24,7 +24,7 @@
 #include <boost/regex.hpp>
 #include <optional>
 #include <string_view>
-#endif
+#endif  // __CUDACC__
 
 #include <algorithm>
 #include <iomanip>
@@ -48,7 +48,7 @@ std::string cat(Ts&&... args) {
 #endif
   return oss.str();
 }
-#endif
+#endif  // __CUDACC__
 
 std::vector<std::pair<size_t, size_t>> find_string_literals(const std::string& query);
 
@@ -123,6 +123,16 @@ bool remove_unquoted_newlines_linefeeds_and_tabs_from_sql_string(
 // Return true if string was changed, false if not.
 // Does not check for escaped quotes within string.
 bool unquote(std::string&);
+
+#ifndef __CUDACC__
+//! Quote a string while escaping any existing quotes in the string.
+std::string get_quoted_string(const std::string& filename,
+                              char quote = '"',
+                              char escape = '\\');
+
+//! Throws exception if security problems found. Returns quoted filename.
+void filename_security_check(const std::string& filename);
+#endif  // __CUDACC__
 
 #ifndef __CUDACC__
 namespace {

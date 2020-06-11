@@ -36,6 +36,7 @@
 #include "Parser/ParseDDL.h"
 #include "Shared/File.h"
 #include "Shared/Logger.h"
+#include "Shared/StringTransform.h"
 #include "Shared/ThreadController.h"
 #include "Shared/measure.h"
 #include "Shared/thread_count.h"
@@ -123,16 +124,17 @@ inline std::string run(const std::string& cmd, const std::string& chdir = "") {
 inline std::string simple_file_cat(const std::string& archive_path,
                                    const std::string& file_name,
                                    const std::string& compression) {
+  filename_security_check(archive_path);
 #if defined(__APPLE__)
-  constexpr static auto opt_occurrence = " --fast-read ";
+  constexpr static auto opt_occurrence = "--fast-read";
 #else
-  constexpr static auto opt_occurrence = " --occurrence=1 ";
+  constexpr static auto opt_occurrence = "--occurrence=1";
 #endif
   boost::filesystem::path temp_dir =
       boost::filesystem::temp_directory_path() / boost::filesystem::unique_path();
   boost::filesystem::create_directories(temp_dir);
-  run("tar " + compression + " -xvf \"" + archive_path + "\" " + opt_occurrence +
-          file_name,
+  run("tar " + compression + " -xvf " + get_quoted_string(archive_path) + " " +
+          opt_occurrence + " " + file_name,
       temp_dir.string());
   const auto output = run("cat " + (temp_dir / file_name).string());
   boost::filesystem::remove_all(temp_dir);
@@ -238,6 +240,7 @@ void rename_table_directories(const File_Namespace::GlobalFileMgr* global_file_m
 void TableArchiver::dumpTable(const TableDescriptor* td,
                               const std::string& archive_path,
                               const std::string& compression) {
+  filename_security_check(archive_path);
   if (g_cluster) {
     throw std::runtime_error("DUMP/RESTORE is not supported yet on distributed setup.");
   }
@@ -299,7 +302,7 @@ void TableArchiver::dumpTable(const TableDescriptor* td,
     // tar takes time. release cat lock to yield the cat to concurrent CREATE statements.
   }
   // run tar to archive the files ... this may take a while !!
-  run("tar " + compression + " -cvf \"" + archive_path + "\" " +
+  run("tar " + compression + " -cvf " + get_quoted_string(archive_path) + " " +
           boost::algorithm::join(file_paths, " "),
       abs_path(global_file_mgr));
 }
@@ -309,6 +312,7 @@ void TableArchiver::restoreTable(const Catalog_Namespace::SessionInfo& session,
                                  const TableDescriptor* td,
                                  const std::string& archive_path,
                                  const std::string& compression) {
+  filename_security_check(archive_path);
   if (g_cluster) {
     throw std::runtime_error("DUMP/RESTORE is not supported yet on distributed setup.");
   }
@@ -434,7 +438,7 @@ void TableArchiver::restoreTable(const Catalog_Namespace::SessionInfo& session,
   // otherwise will corrupt table in case any bad thing happens in the middle.
   run("rm -rf " + temp_data_dir);
   run("mkdir -p " + temp_data_dir);
-  run("tar " + compression + " -xvf \"" + archive_path + "\"", temp_data_dir);
+  run("tar " + compression + " -xvf " + get_quoted_string(archive_path), temp_data_dir);
   // if table was ever altered after it was created, update column ids in chunk headers.
   if (was_table_altered) {
     const auto time_ms = measure<>::execution(
