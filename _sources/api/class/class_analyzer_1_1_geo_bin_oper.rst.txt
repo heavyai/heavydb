@@ -1,0 +1,9 @@
+Class Analyzer::GeoBinOper
+==========================
+
+.. doxygenclass:: Analyzer::GeoBinOper
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

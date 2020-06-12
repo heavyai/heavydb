@@ -1,0 +1,9 @@
+Class Geo_namespace::GeoGeometryCollection
+==========================================
+
+.. doxygenclass:: Geo_namespace::GeoGeometryCollection
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

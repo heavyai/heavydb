@@ -1,0 +1,9 @@
+Class ddl_utils::FilePathBlacklist
+==================================
+
+.. doxygenclass:: ddl_utils::FilePathBlacklist
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

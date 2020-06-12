@@ -40,7 +40,7 @@
   <link rel="stylesheet" href="../../_static/theme_overrides.css" type="text/css" />
     <link rel="index" title="Index" href="../../genindex.html" />
     <link rel="search" title="Search" href="../../search.html" />
-    <link rel="next" title="Class Geo_namespace::GeoLineString" href="class_geo__namespace_1_1_geo_line_string.html" />
+    <link rel="next" title="Class Geo_namespace::GeoGeometry" href="class_geo__namespace_1_1_geo_geometry.html" />
     <link rel="prev" title="Class Function" href="class_function.html" /> 
 </head>
 
@@ -65,7 +65,7 @@
             
             
               <div class="version">
-                5.4.0dev b498684
+                5.4.0dev 50b50a6
               </div>
             
           
@@ -296,7 +296,8 @@
 <li class="toctree-l2"><a class="reference internal" href="class_analyzer_1_1_extract_expr.html">Class Analyzer::ExtractExpr</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_analyzer_1_1_function_oper.html">Class Analyzer::FunctionOper</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_analyzer_1_1_function_oper_with_custom_type_handling.html">Class Analyzer::FunctionOperWithCustomTypeHandling</a></li>
-<li class="toctree-l2"><a class="reference internal" href="class_analyzer_1_1_geo_expr.html">Class Analyzer::GeoExpr</a></li>
+<li class="toctree-l2"><a class="reference internal" href="class_analyzer_1_1_geo_bin_oper.html">Class Analyzer::GeoBinOper</a></li>
+<li class="toctree-l2"><a class="reference internal" href="class_analyzer_1_1_geo_u_oper.html">Class Analyzer::GeoUOper</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_analyzer_1_1_in_integer_set.html">Class Analyzer::InIntegerSet</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_analyzer_1_1_in_values.html">Class Analyzer::InValues</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_analyzer_1_1_key_for_string_expr.html">Class Analyzer::KeyForStringExpr</a></li>
@@ -434,6 +435,8 @@
 <li class="toctree-l2"><a class="reference internal" href="class_fragmenter___namespace_1_1_table_info.html">Class Fragmenter_Namespace::TableInfo</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_function.html">Class Function</a></li>
 <li class="toctree-l2 current"><a class="current reference internal" href="#">Class Geo_namespace::GeoBase</a></li>
+<li class="toctree-l2"><a class="reference internal" href="class_geo__namespace_1_1_geo_geometry.html">Class Geo_namespace::GeoGeometry</a></li>
+<li class="toctree-l2"><a class="reference internal" href="class_geo__namespace_1_1_geo_geometry_collection.html">Class Geo_namespace::GeoGeometryCollection</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_geo__namespace_1_1_geo_line_string.html">Class Geo_namespace::GeoLineString</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_geo__namespace_1_1_geo_multi_polygon.html">Class Geo_namespace::GeoMultiPolygon</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_geo__namespace_1_1_geo_point.html">Class Geo_namespace::GeoPoint</a></li>
@@ -593,6 +596,7 @@
 <li class="toctree-l2"><a class="reference internal" href="class_posix_file_archive.html">Class PosixFileArchive</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_proxy_t_http_client.html">Class ProxyTHttpClient</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_query_compilation_descriptor.html">Class QueryCompilationDescriptor</a></li>
+<li class="toctree-l2"><a class="reference internal" href="class_query_dispatch_queue.html">Class QueryDispatchQueue</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_query_execution_context.html">Class QueryExecutionContext</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_query_execution_error.html">Class QueryExecutionError</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_query_fragment_descriptor.html">Class QueryFragmentDescriptor</a></li>
@@ -609,6 +613,7 @@
 <li class="toctree-l2"><a class="reference internal" href="class_reduction_interpreter.html">Class ReductionInterpreter</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_reduction_interpreter_impl.html">Class ReductionInterpreterImpl</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_reduction_ran_out_of_slots.html">Class ReductionRanOutOfSlots</a></li>
+<li class="toctree-l2"><a class="reference internal" href="class_refresh_foreign_tables_command.html">Class RefreshForeignTablesCommand</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_rel_aggregate.html">Class RelAggregate</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_rel_alg_dag_builder.html">Class RelAlgDagBuilder</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_rel_alg_executor.html">Class RelAlgExecutor</a></li>
@@ -800,15 +805,20 @@
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_sql_operator_table_1_1_regexp_like_1_1_escape_optional.html">Class com::mapd::calcite::parser::MapDSqlOperatorTable::RegexpLike::EscapeOptional</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_sql_operator_table_1_1_row_copier.html">Class com::mapd::calcite::parser::MapDSqlOperatorTable::RowCopier</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_sql_operator_table_1_1_s_t___area.html">Class com::mapd::calcite::parser::MapDSqlOperatorTable::ST_Area</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_sql_operator_table_1_1_s_t___buffer.html">Class com::mapd::calcite::parser::MapDSqlOperatorTable::ST_Buffer</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_sql_operator_table_1_1_s_t___contains.html">Class com::mapd::calcite::parser::MapDSqlOperatorTable::ST_Contains</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_sql_operator_table_1_1_s_t___d_fully_within.html">Class com::mapd::calcite::parser::MapDSqlOperatorTable::ST_DFullyWithin</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_sql_operator_table_1_1_s_t___d_within.html">Class com::mapd::calcite::parser::MapDSqlOperatorTable::ST_DWithin</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_sql_operator_table_1_1_s_t___difference.html">Class com::mapd::calcite::parser::MapDSqlOperatorTable::ST_Difference</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_sql_operator_table_1_1_s_t___disjoint.html">Class com::mapd::calcite::parser::MapDSqlOperatorTable::ST_Disjoint</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_sql_operator_table_1_1_s_t___distance.html">Class com::mapd::calcite::parser::MapDSqlOperatorTable::ST_Distance</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_sql_operator_table_1_1_s_t___end_point.html">Class com::mapd::calcite::parser::MapDSqlOperatorTable::ST_EndPoint</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_sql_operator_table_1_1_s_t___geog_from_text.html">Class com::mapd::calcite::parser::MapDSqlOperatorTable::ST_GeogFromText</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_sql_operator_table_1_1_s_t___geom_from_text.html">Class com::mapd::calcite::parser::MapDSqlOperatorTable::ST_GeomFromText</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_sql_operator_table_1_1_s_t___intersection.html">Class com::mapd::calcite::parser::MapDSqlOperatorTable::ST_Intersection</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_sql_operator_table_1_1_s_t___intersects.html">Class com::mapd::calcite::parser::MapDSqlOperatorTable::ST_Intersects</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_sql_operator_table_1_1_s_t___is_empty.html">Class com::mapd::calcite::parser::MapDSqlOperatorTable::ST_IsEmpty</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_sql_operator_table_1_1_s_t___is_valid.html">Class com::mapd::calcite::parser::MapDSqlOperatorTable::ST_IsValid</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_sql_operator_table_1_1_s_t___length.html">Class com::mapd::calcite::parser::MapDSqlOperatorTable::ST_Length</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_sql_operator_table_1_1_s_t___max_distance.html">Class com::mapd::calcite::parser::MapDSqlOperatorTable::ST_MaxDistance</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_sql_operator_table_1_1_s_t___n_points.html">Class com::mapd::calcite::parser::MapDSqlOperatorTable::ST_NPoints</a></li>
@@ -821,6 +831,7 @@
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_sql_operator_table_1_1_s_t___set_s_r_i_d.html">Class com::mapd::calcite::parser::MapDSqlOperatorTable::ST_SetSRID</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_sql_operator_table_1_1_s_t___start_point.html">Class com::mapd::calcite::parser::MapDSqlOperatorTable::ST_StartPoint</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_sql_operator_table_1_1_s_t___transform.html">Class com::mapd::calcite::parser::MapDSqlOperatorTable::ST_Transform</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_sql_operator_table_1_1_s_t___union.html">Class com::mapd::calcite::parser::MapDSqlOperatorTable::ST_Union</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_sql_operator_table_1_1_s_t___within.html">Class com::mapd::calcite::parser::MapDSqlOperatorTable::ST_Within</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_sql_operator_table_1_1_s_t___x.html">Class com::mapd::calcite::parser::MapDSqlOperatorTable::ST_X</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_sql_operator_table_1_1_s_t___x_max.html">Class com::mapd::calcite::parser::MapDSqlOperatorTable::ST_XMax</a></li>
@@ -864,16 +875,21 @@
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_create_foreign_table.html">Class com::mapd::parser::extension::ddl::SqlCreateForeignTable</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_create_server.html">Class com::mapd::parser::extension::ddl::SqlCreateServer</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_create_server_1_1_builder.html">Class com::mapd::parser::extension::ddl::SqlCreateServer::Builder</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_create_user_mapping.html">Class com::mapd::parser::extension::ddl::SqlCreateUserMapping</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_create_user_mapping_1_1_builder.html">Class com::mapd::parser::extension::ddl::SqlCreateUserMapping::Builder</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_drop_foreign_table.html">Class com::mapd::parser::extension::ddl::SqlDropForeignTable</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_drop_server.html">Class com::mapd::parser::extension::ddl::SqlDropServer</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_drop_user_mapping.html">Class com::mapd::parser::extension::ddl::SqlDropUserMapping</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_filter.html">Class com::mapd::parser::extension::ddl::SqlFilter</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_options_builder.html">Class com::mapd::parser::extension::ddl::SqlOptionsBuilder</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_refresh_foreign_tables.html">Class com::mapd::parser::extension::ddl::SqlRefreshForeignTables</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_show_command.html">Class com::mapd::parser::extension::ddl::SqlShowCommand</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_show_databases.html">Class com::mapd::parser::extension::ddl::SqlShowDatabases</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_show_foreign_servers.html">Class com::mapd::parser::extension::ddl::SqlShowForeignServers</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_show_foreign_servers_1_1_builder.html">Class com::mapd::parser::extension::ddl::SqlShowForeignServers::Builder</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_show_tables.html">Class com::mapd::parser::extension::ddl::SqlShowTables</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_show_user_sessions.html">Class com::mapd::parser::extension::ddl::SqlShowUserSessions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_user_mapping_test.html">Class com::mapd::parser::extension::ddl::UserMappingTest</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1omnisql_1_1_omni_sql_array.html">Class com::mapd::parser::extension::ddl::omnisql::OmniSqlArray</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1omnisql_1_1_omni_sql_column.html">Class com::mapd::parser::extension::ddl::omnisql::OmniSqlColumn</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1omnisql_1_1_omni_sql_data_type.html">Class com::mapd::parser::extension::ddl::omnisql::OmniSqlDataType</a></li>
@@ -948,6 +964,8 @@
 <li class="toctree-l2"><a class="reference internal" href="classcreate__table_1_1_column.html">Class create_table::Column</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcreate__table_1_1_synthetic_table.html">Class create_table::SyntheticTable</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classddl__utils_1_1_encoding.html">Class ddl_utils::Encoding</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classddl__utils_1_1_file_path_blacklist.html">Class ddl_utils::FilePathBlacklist</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classddl__utils_1_1_file_path_whitelist.html">Class ddl_utils::FilePathWhitelist</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classddl__utils_1_1_sql_type.html">Class ddl_utils::SqlType</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classdetails_1_1_rel_alg_dispatcher.html">Class details::RelAlgDispatcher</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_csv_data_wrapper.html">Class foreign_storage::CsvDataWrapper</a></li>
@@ -1001,6 +1019,7 @@
 <li class="toctree-l2"><a class="reference internal" href="classquery__state_1_1_std_log.html">Class query_state::StdLog</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classquery__state_1_1_std_log_data.html">Class query_state::StdLogData</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classquery__state_1_1_timer.html">Class query_state::Timer</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classstring__view__unordered__map.html">Class string_view_unordered_map</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classtable__functions_1_1_table_function.html">Class table_functions::TableFunction</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classtable__functions_1_1_table_functions_factory.html">Class table_functions::TableFunctionsFactory</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classthreadpool_1_1_futures_thread_pool.html">Class threadpool::FuturesThreadPool</a></li>
@@ -1207,6 +1226,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_render_allocator_map_1_1_host_buffer_deleter.html">Struct RenderAllocatorMap::HostBufferDeleter</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_render_query_options.html">Struct RenderQueryOptions</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_result_set_1_1_column_wise_target_accessor.html">Struct ResultSet::ColumnWiseTargetAccessor</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/struct_result_set_1_1_query_execution_timings.html">Struct ResultSet::QueryExecutionTimings</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_result_set_1_1_result_set_comparator.html">Struct ResultSet::ResultSetComparator</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_result_set_1_1_row_wise_target_accessor.html">Struct ResultSet::RowWiseTargetAccessor</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_result_set_1_1_storage_lookup_result.html">Struct ResultSet::StorageLookupResult</a></li>
@@ -1266,6 +1286,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../struct/structanonymous__namespace_02_importer_8cpp_03_1_1_o_g_r_data_source_deleter.html">Struct anonymous_namespace{Importer.cpp}::OGRDataSourceDeleter</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structanonymous__namespace_02_importer_8cpp_03_1_1_o_g_r_feature_deleter.html">Struct anonymous_namespace{Importer.cpp}::OGRFeatureDeleter</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structanonymous__namespace_02_importer_8cpp_03_1_1_o_g_r_spatial_reference_deleter.html">Struct anonymous_namespace{Importer.cpp}::OGRSpatialReferenceDeleter</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/structanonymous__namespace_02_rel_alg_executor_8cpp_03_1_1_executor_mutex_holder.html">Struct anonymous_namespace{RelAlgExecutor.cpp}::ExecutorMutexHolder</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structanonymous__namespace_02_result_set_iteration_8cpp_03_1_1_geo_lazy_fetch_handler.html">Struct anonymous_namespace{ResultSetIteration.cpp}::GeoLazyFetchHandler</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structanonymous__namespace_02_result_set_iteration_8cpp_03_1_1_geo_query_output_fetch_handler.html">Struct anonymous_namespace{ResultSetIteration.cpp}::GeoQueryOutputFetchHandler</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structanonymous__namespace_02_result_set_iteration_8cpp_03_1_1_geo_target_value_builder.html">Struct anonymous_namespace{ResultSetIteration.cpp}::GeoTargetValueBuilder</a></li>
@@ -1422,7 +1443,7 @@
 <dl class="class">
 <dt id="_CPPv4N13Geo_namespace7GeoBaseE">
 <span id="_CPPv3N13Geo_namespace7GeoBaseE"></span><span id="_CPPv2N13Geo_namespace7GeoBaseE"></span><span id="Geo_namespace::GeoBase"></span><span class="target" id="class_geo__namespace_1_1_geo_base"></span><em class="property">class </em><code class="sig-name descname">GeoBase</code><a class="headerlink" href="#_CPPv4N13Geo_namespace7GeoBaseE" title="Permalink to this definition">¶</a><br /></dt>
-<dd><p>Subclassed by <a class="reference internal" href="class_geo__namespace_1_1_geo_line_string.html#class_geo__namespace_1_1_geo_line_string"><span class="std std-ref">Geo_namespace::GeoLineString</span></a>, <a class="reference internal" href="class_geo__namespace_1_1_geo_multi_polygon.html#class_geo__namespace_1_1_geo_multi_polygon"><span class="std std-ref">Geo_namespace::GeoMultiPolygon</span></a>, <a class="reference internal" href="class_geo__namespace_1_1_geo_point.html#class_geo__namespace_1_1_geo_point"><span class="std std-ref">Geo_namespace::GeoPoint</span></a>, <a class="reference internal" href="class_geo__namespace_1_1_geo_polygon.html#class_geo__namespace_1_1_geo_polygon"><span class="std std-ref">Geo_namespace::GeoPolygon</span></a></p>
+<dd><p>Subclassed by <a class="reference internal" href="class_geo__namespace_1_1_geo_geometry.html#class_geo__namespace_1_1_geo_geometry"><span class="std std-ref">Geo_namespace::GeoGeometry</span></a>, <a class="reference internal" href="class_geo__namespace_1_1_geo_geometry_collection.html#class_geo__namespace_1_1_geo_geometry_collection"><span class="std std-ref">Geo_namespace::GeoGeometryCollection</span></a>, <a class="reference internal" href="class_geo__namespace_1_1_geo_line_string.html#class_geo__namespace_1_1_geo_line_string"><span class="std std-ref">Geo_namespace::GeoLineString</span></a>, <a class="reference internal" href="class_geo__namespace_1_1_geo_multi_polygon.html#class_geo__namespace_1_1_geo_multi_polygon"><span class="std std-ref">Geo_namespace::GeoMultiPolygon</span></a>, <a class="reference internal" href="class_geo__namespace_1_1_geo_point.html#class_geo__namespace_1_1_geo_point"><span class="std std-ref">Geo_namespace::GeoPoint</span></a>, <a class="reference internal" href="class_geo__namespace_1_1_geo_polygon.html#class_geo__namespace_1_1_geo_polygon"><span class="std std-ref">Geo_namespace::GeoPolygon</span></a></p>
 <div class="breathe-sectiondef docutils container">
 <p class="breathe-sectiondef-title rubric">Public Types</p>
 <dl class="enum">
@@ -1449,6 +1470,57 @@
 <span id="_CPPv3N13Geo_namespace7GeoBase13kMULTIPOLYGONE"></span><span id="_CPPv2N13Geo_namespace7GeoBase13kMULTIPOLYGONE"></span><span class="target" id="class_geo__namespace_1_1_geo_base_1a863068d9e8012f19b0689d75bb0f6baea111bc4510d85805feb7eb31396360807"></span><code class="sig-name descname">kMULTIPOLYGON</code><a class="headerlink" href="#_CPPv4N13Geo_namespace7GeoBase13kMULTIPOLYGONE" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
+<dl class="enumerator">
+<dt id="_CPPv4N13Geo_namespace7GeoBase9kGEOMETRYE">
+<span id="_CPPv3N13Geo_namespace7GeoBase9kGEOMETRYE"></span><span id="_CPPv2N13Geo_namespace7GeoBase9kGEOMETRYE"></span><span class="target" id="class_geo__namespace_1_1_geo_base_1a863068d9e8012f19b0689d75bb0f6baea2940a8a41288cf88ed19d40fa6f5b55e"></span><code class="sig-name descname">kGEOMETRY</code><a class="headerlink" href="#_CPPv4N13Geo_namespace7GeoBase9kGEOMETRYE" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="enumerator">
+<dt id="_CPPv4N13Geo_namespace7GeoBase19kGEOMETRYCOLLECTIONE">
+<span id="_CPPv3N13Geo_namespace7GeoBase19kGEOMETRYCOLLECTIONE"></span><span id="_CPPv2N13Geo_namespace7GeoBase19kGEOMETRYCOLLECTIONE"></span><span class="target" id="class_geo__namespace_1_1_geo_base_1a863068d9e8012f19b0689d75bb0f6baea150eda6b20c82b365961da774ee996b1"></span><code class="sig-name descname">kGEOMETRYCOLLECTION</code><a class="headerlink" href="#_CPPv4N13Geo_namespace7GeoBase19kGEOMETRYCOLLECTIONE" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+<dl class="enum">
+<dt id="_CPPv4N13Geo_namespace7GeoBase5GeoOpE">
+<span id="_CPPv3N13Geo_namespace7GeoBase5GeoOpE"></span><span id="_CPPv2N13Geo_namespace7GeoBase5GeoOpE"></span><span class="target" id="class_geo__namespace_1_1_geo_base_1a6aa9af84205aba026fcef980e3eb1edd"></span><em class="property">enum </em><code class="sig-name descname">GeoOp</code><a class="headerlink" href="#_CPPv4N13Geo_namespace7GeoBase5GeoOpE" title="Permalink to this definition">¶</a><br /></dt>
+<dd><p><em>Values:</em></p>
+<dl class="enumerator">
+<dt id="_CPPv4N13Geo_namespace7GeoBase11kPROJECTIONE">
+<span id="_CPPv3N13Geo_namespace7GeoBase11kPROJECTIONE"></span><span id="_CPPv2N13Geo_namespace7GeoBase11kPROJECTIONE"></span><span class="target" id="class_geo__namespace_1_1_geo_base_1a6aa9af84205aba026fcef980e3eb1edda0bb764b459910cb2b5bbd85eb8a5653b"></span><code class="sig-name descname">kPROJECTION</code> = 0<a class="headerlink" href="#_CPPv4N13Geo_namespace7GeoBase11kPROJECTIONE" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="enumerator">
+<dt id="_CPPv4N13Geo_namespace7GeoBase13kINTERSECTIONE">
+<span id="_CPPv3N13Geo_namespace7GeoBase13kINTERSECTIONE"></span><span id="_CPPv2N13Geo_namespace7GeoBase13kINTERSECTIONE"></span><span class="target" id="class_geo__namespace_1_1_geo_base_1a6aa9af84205aba026fcef980e3eb1edda8b2440d6086f7ef00b439ea740bf6879"></span><code class="sig-name descname">kINTERSECTION</code> = 1<a class="headerlink" href="#_CPPv4N13Geo_namespace7GeoBase13kINTERSECTIONE" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="enumerator">
+<dt id="_CPPv4N13Geo_namespace7GeoBase11kDIFFERENCEE">
+<span id="_CPPv3N13Geo_namespace7GeoBase11kDIFFERENCEE"></span><span id="_CPPv2N13Geo_namespace7GeoBase11kDIFFERENCEE"></span><span class="target" id="class_geo__namespace_1_1_geo_base_1a6aa9af84205aba026fcef980e3eb1edda8be2fe32c6548ee4a2f74779025ea241"></span><code class="sig-name descname">kDIFFERENCE</code> = 2<a class="headerlink" href="#_CPPv4N13Geo_namespace7GeoBase11kDIFFERENCEE" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="enumerator">
+<dt id="_CPPv4N13Geo_namespace7GeoBase6kUNIONE">
+<span id="_CPPv3N13Geo_namespace7GeoBase6kUNIONE"></span><span id="_CPPv2N13Geo_namespace7GeoBase6kUNIONE"></span><span class="target" id="class_geo__namespace_1_1_geo_base_1a6aa9af84205aba026fcef980e3eb1edda1bbe9cfb2169ed27da29b46a1bceb256"></span><code class="sig-name descname">kUNION</code> = 3<a class="headerlink" href="#_CPPv4N13Geo_namespace7GeoBase6kUNIONE" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="enumerator">
+<dt id="_CPPv4N13Geo_namespace7GeoBase7kBUFFERE">
+<span id="_CPPv3N13Geo_namespace7GeoBase7kBUFFERE"></span><span id="_CPPv2N13Geo_namespace7GeoBase7kBUFFERE"></span><span class="target" id="class_geo__namespace_1_1_geo_base_1a6aa9af84205aba026fcef980e3eb1eddac607f6d24804a96ee6494f45bcac31c3"></span><code class="sig-name descname">kBUFFER</code> = 4<a class="headerlink" href="#_CPPv4N13Geo_namespace7GeoBase7kBUFFERE" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="enumerator">
+<dt id="_CPPv4N13Geo_namespace7GeoBase8kISVALIDE">
+<span id="_CPPv3N13Geo_namespace7GeoBase8kISVALIDE"></span><span id="_CPPv2N13Geo_namespace7GeoBase8kISVALIDE"></span><span class="target" id="class_geo__namespace_1_1_geo_base_1a6aa9af84205aba026fcef980e3eb1edda2be74f444bd4d2e1c54f27c448cb686a"></span><code class="sig-name descname">kISVALID</code> = 5<a class="headerlink" href="#_CPPv4N13Geo_namespace7GeoBase8kISVALIDE" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="enumerator">
+<dt id="_CPPv4N13Geo_namespace7GeoBase8kISEMPTYE">
+<span id="_CPPv3N13Geo_namespace7GeoBase8kISEMPTYE"></span><span id="_CPPv2N13Geo_namespace7GeoBase8kISEMPTYE"></span><span class="target" id="class_geo__namespace_1_1_geo_base_1a6aa9af84205aba026fcef980e3eb1edda149fd24de432ab535c162ffcbf5ac680"></span><code class="sig-name descname">kISEMPTY</code> = 6<a class="headerlink" href="#_CPPv4N13Geo_namespace7GeoBase8kISEMPTYE" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
 </dd></dl>
 
 </div>
@@ -1470,6 +1542,11 @@
 <dd></dd></dl>
 
 <dl class="function">
+<dt id="_CPPv4NK13Geo_namespace7GeoBase6getWkbERNSt6vectorI7uint8_tEE">
+<span id="_CPPv3NK13Geo_namespace7GeoBase6getWkbERNSt6vectorI7uint8_tEE"></span><span id="_CPPv2NK13Geo_namespace7GeoBase6getWkbERNSt6vectorI7uint8_tEE"></span><span id="Geo_namespace::GeoBase::getWkb__std::vector:uint8_t:RC"></span><span class="target" id="class_geo__namespace_1_1_geo_base_1aa112fe2d462d221862c11c908317128f"></span>bool <code class="sig-name descname">getWkb</code><span class="sig-paren">(</span>std::vector&lt;uint8_t&gt; &amp;<em>wkb</em><span class="sig-paren">)</span> <em class="property">const</em><a class="headerlink" href="#_CPPv4NK13Geo_namespace7GeoBase6getWkbERNSt6vectorI7uint8_tEE" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="function">
 <dt id="_CPPv4NK13Geo_namespace7GeoBase7getTypeEv">
 <span id="_CPPv3NK13Geo_namespace7GeoBase7getTypeEv"></span><span id="_CPPv2NK13Geo_namespace7GeoBase7getTypeEv"></span><span id="Geo_namespace::GeoBase::getTypeC"></span><span class="target" id="class_geo__namespace_1_1_geo_base_1af22b95fb442278734ac86cf79c51227d"></span><em class="property">virtual</em> <a class="reference internal" href="#_CPPv4N13Geo_namespace7GeoBase7GeoTypeE" title="Geo_namespace::GeoBase::GeoType">GeoType</a> <code class="sig-name descname">getType</code><span class="sig-paren">(</span><span class="sig-paren">)</span> <em class="property">const</em> = 0<a class="headerlink" href="#_CPPv4NK13Geo_namespace7GeoBase7getTypeEv" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
@@ -1477,6 +1554,31 @@
 <dl class="function">
 <dt id="_CPPv4NK13Geo_namespace7GeoBaseeqERK7GeoBase">
 <span id="_CPPv3NK13Geo_namespace7GeoBaseeqERK7GeoBase"></span><span id="_CPPv2NK13Geo_namespace7GeoBaseeqERK7GeoBase"></span><span id="Geo_namespace::GeoBase::eq-operator__GeoBaseCRC"></span><span class="target" id="class_geo__namespace_1_1_geo_base_1ac920d5e536ffd6c62141b71c39950899"></span>bool <code class="sig-name descname">operator==</code><span class="sig-paren">(</span><em class="property">const</em> <a class="reference internal" href="#_CPPv4N13Geo_namespace7GeoBaseE" title="Geo_namespace::GeoBase">GeoBase</a> &amp;<em>other</em><span class="sig-paren">)</span> <em class="property">const</em><a class="headerlink" href="#_CPPv4NK13Geo_namespace7GeoBaseeqERK7GeoBase" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="_CPPv4NK13Geo_namespace7GeoBase7isEmptyEv">
+<span id="_CPPv3NK13Geo_namespace7GeoBase7isEmptyEv"></span><span id="_CPPv2NK13Geo_namespace7GeoBase7isEmptyEv"></span><span id="Geo_namespace::GeoBase::isEmptyC"></span><span class="target" id="class_geo__namespace_1_1_geo_base_1a0adfe13f814b4899ef8f73e93c95e4dd"></span>bool <code class="sig-name descname">isEmpty</code><span class="sig-paren">(</span><span class="sig-paren">)</span> <em class="property">const</em><a class="headerlink" href="#_CPPv4NK13Geo_namespace7GeoBase7isEmptyEv" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="_CPPv4NK13Geo_namespace7GeoBase3runE5GeoOpRK7GeoBase">
+<span id="_CPPv3NK13Geo_namespace7GeoBase3runE5GeoOpRK7GeoBase"></span><span id="_CPPv2NK13Geo_namespace7GeoBase3runE5GeoOpRK7GeoBase"></span><span id="Geo_namespace::GeoBase::run__GeoOp.GeoBaseCRC"></span><span class="target" id="class_geo__namespace_1_1_geo_base_1acfdf8e583b40ee7ce4c525b0f778a305"></span>std::unique_ptr&lt;<a class="reference internal" href="#_CPPv4N13Geo_namespace7GeoBaseE" title="Geo_namespace::GeoBase">GeoBase</a>&gt; <code class="sig-name descname">run</code><span class="sig-paren">(</span><a class="reference internal" href="#_CPPv4N13Geo_namespace7GeoBase5GeoOpE" title="Geo_namespace::GeoBase::GeoOp">GeoOp</a> <em>op</em>, <em class="property">const</em> <a class="reference internal" href="#_CPPv4N13Geo_namespace7GeoBaseE" title="Geo_namespace::GeoBase">GeoBase</a> &amp;<em>other</em><span class="sig-paren">)</span> <em class="property">const</em><a class="headerlink" href="#_CPPv4NK13Geo_namespace7GeoBase3runE5GeoOpRK7GeoBase" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="_CPPv4NK13Geo_namespace7GeoBase13optimized_runE5GeoOpRK7GeoBase">
+<span id="_CPPv3NK13Geo_namespace7GeoBase13optimized_runE5GeoOpRK7GeoBase"></span><span id="_CPPv2NK13Geo_namespace7GeoBase13optimized_runE5GeoOpRK7GeoBase"></span><span id="Geo_namespace::GeoBase::optimized_run__GeoOp.GeoBaseCRC"></span><span class="target" id="class_geo__namespace_1_1_geo_base_1a14ca192fe4a879b96650bc399ed4552a"></span>std::unique_ptr&lt;<a class="reference internal" href="#_CPPv4N13Geo_namespace7GeoBaseE" title="Geo_namespace::GeoBase">GeoBase</a>&gt; <code class="sig-name descname">optimized_run</code><span class="sig-paren">(</span><a class="reference internal" href="#_CPPv4N13Geo_namespace7GeoBase5GeoOpE" title="Geo_namespace::GeoBase::GeoOp">GeoOp</a> <em>op</em>, <em class="property">const</em> <a class="reference internal" href="#_CPPv4N13Geo_namespace7GeoBaseE" title="Geo_namespace::GeoBase">GeoBase</a> &amp;<em>other</em><span class="sig-paren">)</span> <em class="property">const</em><a class="headerlink" href="#_CPPv4NK13Geo_namespace7GeoBase13optimized_runE5GeoOpRK7GeoBase" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="_CPPv4NK13Geo_namespace7GeoBase3runE5GeoOpd">
+<span id="_CPPv3NK13Geo_namespace7GeoBase3runE5GeoOpd"></span><span id="_CPPv2NK13Geo_namespace7GeoBase3runE5GeoOpd"></span><span id="Geo_namespace::GeoBase::run__GeoOp.doubleC"></span><span class="target" id="class_geo__namespace_1_1_geo_base_1a7b359dd5ff0e1d51b4a047470161b890"></span>std::unique_ptr&lt;<a class="reference internal" href="#_CPPv4N13Geo_namespace7GeoBaseE" title="Geo_namespace::GeoBase">GeoBase</a>&gt; <code class="sig-name descname">run</code><span class="sig-paren">(</span><a class="reference internal" href="#_CPPv4N13Geo_namespace7GeoBase5GeoOpE" title="Geo_namespace::GeoBase::GeoOp">GeoOp</a> <em>op</em>, double <em>param</em><span class="sig-paren">)</span> <em class="property">const</em><a class="headerlink" href="#_CPPv4NK13Geo_namespace7GeoBase3runE5GeoOpd" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="_CPPv4NK13Geo_namespace7GeoBase3runE5GeoOp">
+<span id="_CPPv3NK13Geo_namespace7GeoBase3runE5GeoOp"></span><span id="_CPPv2NK13Geo_namespace7GeoBase3runE5GeoOp"></span><span id="Geo_namespace::GeoBase::run__GeoOpC"></span><span class="target" id="class_geo__namespace_1_1_geo_base_1a3e5a88b774b3c7bd54dbad92e8701c6c"></span>bool <code class="sig-name descname">run</code><span class="sig-paren">(</span><a class="reference internal" href="#_CPPv4N13Geo_namespace7GeoBase5GeoOpE" title="Geo_namespace::GeoBase::GeoOp">GeoOp</a> <em>op</em><span class="sig-paren">)</span> <em class="property">const</em><a class="headerlink" href="#_CPPv4NK13Geo_namespace7GeoBase3runE5GeoOp" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 </div>
@@ -1508,6 +1610,11 @@
 <span id="_CPPv3N13Geo_namespace7GeoBase19createFromWktStringERKNSt6stringEPP11OGRGeometry"></span><span id="_CPPv2N13Geo_namespace7GeoBase19createFromWktStringERKNSt6stringEPP11OGRGeometry"></span><span id="Geo_namespace::GeoBase::createFromWktString__ssCR.OGRGeometryPP"></span><span class="target" id="class_geo__namespace_1_1_geo_base_1a0f33436805371c3fe30c0e7e763dfae4"></span>OGRErr <code class="sig-name descname">createFromWktString</code><span class="sig-paren">(</span><em class="property">const</em> std::string &amp;<em>wkt</em>, OGRGeometry **<em>geom</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N13Geo_namespace7GeoBase19createFromWktStringERKNSt6stringEPP11OGRGeometry" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
+<dl class="function">
+<dt id="_CPPv4N13Geo_namespace7GeoBase13createFromWkbERKNSt6vectorI7uint8_tEEPP11OGRGeometry">
+<span id="_CPPv3N13Geo_namespace7GeoBase13createFromWkbERKNSt6vectorI7uint8_tEEPP11OGRGeometry"></span><span id="_CPPv2N13Geo_namespace7GeoBase13createFromWkbERKNSt6vectorI7uint8_tEEPP11OGRGeometry"></span><span id="Geo_namespace::GeoBase::createFromWkb__std::vector:uint8_t:CR.OGRGeometryPP"></span><span class="target" id="class_geo__namespace_1_1_geo_base_1a880f3a06f3e71d2dd8e723907a34f0d7"></span>OGRErr <code class="sig-name descname">createFromWkb</code><span class="sig-paren">(</span><em class="property">const</em> std::vector&lt;uint8_t&gt; &amp;<em>wkb</em>, OGRGeometry **<em>geom</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N13Geo_namespace7GeoBase13createFromWkbERKNSt6vectorI7uint8_tEEPP11OGRGeometry" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
 </div>
 <div class="breathe-sectiondef docutils container">
 <p class="breathe-sectiondef-title rubric">Friends</p>
@@ -1529,7 +1636,7 @@
   
     <div class="rst-footer-buttons" role="navigation" aria-label="footer navigation">
       
-        <a href="class_geo__namespace_1_1_geo_line_string.html" class="btn btn-neutral float-right" title="Class Geo_namespace::GeoLineString" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right"></span></a>
+        <a href="class_geo__namespace_1_1_geo_geometry.html" class="btn btn-neutral float-right" title="Class Geo_namespace::GeoGeometry" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right"></span></a>
       
       
         <a href="class_function.html" class="btn btn-neutral float-left" title="Class Function" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left"></span> Previous</a>

@@ -1,0 +1,9 @@
+Struct anonymous_namespace{RelAlgExecutor.cpp}::ExecutorMutexHolder
+===================================================================
+
+.. doxygenstruct:: anonymous_namespace{RelAlgExecutor.cpp}::ExecutorMutexHolder
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

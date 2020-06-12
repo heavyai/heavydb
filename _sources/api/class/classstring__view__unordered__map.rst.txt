@@ -1,0 +1,9 @@
+Class string_view_unordered_map
+===============================
+
+.. doxygenclass:: string_view_unordered_map
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

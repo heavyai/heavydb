@@ -1,0 +1,9 @@
+Class Analyzer::GeoUOper
+========================
+
+.. doxygenclass:: Analyzer::GeoUOper
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:
