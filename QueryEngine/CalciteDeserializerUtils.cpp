@@ -54,33 +54,40 @@ SQLTypeInfo get_agg_type(const SQLAgg agg_kind, const Analyzer::Expr* arg_expr) 
 ExtractField to_datepart_field(const std::string& field) {
   ExtractField fieldno;
   if (boost::iequals(field, "year") || boost::iequals(field, "yy") ||
-      boost::iequals(field, "yyyy")) {
+      boost::iequals(field, "yyyy") || boost::iequals(field, "sql_tsi_year")) {
     fieldno = kYEAR;
   } else if (boost::iequals(field, "quarter") || boost::iequals(field, "qq") ||
-             boost::iequals(field, "q")) {
+             boost::iequals(field, "q") || boost::iequals(field, "sql_tsi_quarter")) {
     fieldno = kQUARTER;
   } else if (boost::iequals(field, "month") || boost::iequals(field, "mm") ||
-             boost::iequals(field, "m")) {
+             boost::iequals(field, "m") || boost::iequals(field, "sql_tsi_month")) {
     fieldno = kMONTH;
   } else if (boost::iequals(field, "dayofyear") || boost::iequals(field, "dy") ||
              boost::iequals(field, "y")) {
     fieldno = kDOY;
   } else if (boost::iequals(field, "day") || boost::iequals(field, "dd") ||
-             boost::iequals(field, "d")) {
+             boost::iequals(field, "d") || boost::iequals(field, "sql_tsi_day")) {
     fieldno = kDAY;
-  } else if (boost::iequals(field, "hour") || boost::iequals(field, "hh")) {
+  } else if (boost::iequals(field, "week") || boost::iequals(field, "ww") ||
+             boost::iequals(field, "w") || boost::iequals(field, "sql_tsi_week")) {
+    fieldno = kWEEK;
+  } else if (boost::iequals(field, "hour") || boost::iequals(field, "hh") ||
+             boost::iequals(field, "sql_tsi_hour")) {
     fieldno = kHOUR;
   } else if (boost::iequals(field, "minute") || boost::iequals(field, "mi") ||
-             boost::iequals(field, "n")) {
+             boost::iequals(field, "n") || boost::iequals(field, "sql_tsi_minute")) {
     fieldno = kMINUTE;
   } else if (boost::iequals(field, "second") || boost::iequals(field, "ss") ||
-             boost::iequals(field, "s")) {
+             boost::iequals(field, "s") || boost::iequals(field, "sql_tsi_second")) {
     fieldno = kSECOND;
   } else if (boost::iequals(field, "millisecond") || boost::iequals(field, "ms")) {
     fieldno = kMILLISECOND;
-  } else if (boost::iequals(field, "microsecond") || boost::iequals(field, "us")) {
+  } else if (boost::iequals(field, "microsecond") || boost::iequals(field, "us") ||
+             boost::iequals(field, "sql_tsi_microsecond") ||
+             boost::iequals(field, "frac_second")) {
     fieldno = kMICROSECOND;
-  } else if (boost::iequals(field, "nanosecond") || boost::iequals(field, "ns")) {
+  } else if (boost::iequals(field, "nanosecond") || boost::iequals(field, "ns") ||
+             boost::iequals(field, "sql_tsi_frac_second")) {
     fieldno = kNANOSECOND;
   } else if (boost::iequals(field, "weekday") || boost::iequals(field, "dw")) {
     fieldno = kISODOW;
@@ -140,33 +147,37 @@ DateaddField to_dateadd_field(const std::string& field) {
 DatetruncField to_datediff_field(const std::string& field) {
   DatetruncField fieldno;
   if (boost::iequals(field, "year") || boost::iequals(field, "yy") ||
-      boost::iequals(field, "yyyy")) {
+      boost::iequals(field, "yyyy") || boost::iequals(field, "sql_tsi_year")) {
     fieldno = dtYEAR;
   } else if (boost::iequals(field, "quarter") || boost::iequals(field, "qq") ||
-             boost::iequals(field, "q")) {
+             boost::iequals(field, "q") || boost::iequals(field, "sql_tsi_quarter")) {
     fieldno = dtQUARTER;
   } else if (boost::iequals(field, "month") || boost::iequals(field, "mm") ||
-             boost::iequals(field, "m")) {
+             boost::iequals(field, "m") || boost::iequals(field, "sql_tsi_month")) {
     fieldno = dtMONTH;
   } else if (boost::iequals(field, "week") || boost::iequals(field, "ww") ||
-             boost::iequals(field, "w")) {
+             boost::iequals(field, "w") || boost::iequals(field, "sql_tsi_week")) {
     fieldno = dtWEEK;
   } else if (boost::iequals(field, "day") || boost::iequals(field, "dd") ||
-             boost::iequals(field, "d")) {
+             boost::iequals(field, "d") || boost::iequals(field, "sql_tsi_day")) {
     fieldno = dtDAY;
-  } else if (boost::iequals(field, "hour") || boost::iequals(field, "hh")) {
+  } else if (boost::iequals(field, "hour") || boost::iequals(field, "hh") ||
+             boost::iequals(field, "sql_tsi_hour")) {
     fieldno = dtHOUR;
   } else if (boost::iequals(field, "minute") || boost::iequals(field, "mi") ||
-             boost::iequals(field, "n")) {
+             boost::iequals(field, "n") || boost::iequals(field, "sql_tsi_minute")) {
     fieldno = dtMINUTE;
   } else if (boost::iequals(field, "second") || boost::iequals(field, "ss") ||
-             boost::iequals(field, "s")) {
+             boost::iequals(field, "s") || boost::iequals(field, "sql_tsi_second")) {
     fieldno = dtSECOND;
   } else if (boost::iequals(field, "millisecond") || boost::iequals(field, "ms")) {
     fieldno = dtMILLISECOND;
-  } else if (boost::iequals(field, "microsecond") || boost::iequals(field, "us")) {
+  } else if (boost::iequals(field, "microsecond") || boost::iequals(field, "us") ||
+             boost::iequals(field, "sql_tsi_microsecond") ||
+             boost::iequals(field, "frac_second")) {
     fieldno = dtMICROSECOND;
-  } else if (boost::iequals(field, "nanosecond") || boost::iequals(field, "ns")) {
+  } else if (boost::iequals(field, "nanosecond") || boost::iequals(field, "ns") ||
+             boost::iequals(field, "sql_tsi_frac_second")) {
     fieldno = dtNANOSECOND;
   } else {
     throw std::runtime_error("Unsupported field in DATEDIFF function: " + field);
