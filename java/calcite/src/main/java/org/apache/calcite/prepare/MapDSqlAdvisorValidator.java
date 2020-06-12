@@ -25,7 +25,6 @@ import org.apache.calcite.sql.SqlNodeList;
 import org.apache.calcite.sql.SqlOperatorTable;
 import org.apache.calcite.sql.SqlSelect;
 import org.apache.calcite.sql.advise.SqlAdvisorValidator;
-import org.apache.calcite.sql.validate.SqlConformance;
 import org.apache.calcite.sql.validate.SqlValidatorCatalogReader;
 import org.apache.calcite.sql.validate.SqlValidatorScope;
 import org.apache.calcite.util.Util;
@@ -37,8 +36,8 @@ class MapDSqlAdvisorValidator extends SqlAdvisorValidator {
           SqlOperatorTable opTab,
           SqlValidatorCatalogReader catalogReader,
           RelDataTypeFactory typeFactory,
-          SqlConformance conformance) {
-    super(opTab, catalogReader, typeFactory, conformance);
+          Config config) {
+    super(opTab, catalogReader, typeFactory, config);
     this.visibleTables = visibleTables;
   }
 

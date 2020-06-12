@@ -26,6 +26,7 @@ import org.apache.calcite.sql.SqlNode;
 import org.apache.calcite.sql.SqlOperatorTable;
 import org.apache.calcite.sql.validate.SelectScope;
 import org.apache.calcite.sql.validate.SqlConformance;
+import org.apache.calcite.sql.validate.SqlValidator.Config;
 import org.apache.calcite.sql.validate.SqlValidatorImpl;
 import org.apache.calcite.sql.validate.SqlValidatorScope;
 import org.apache.calcite.sql.validate.SqlValidatorTable;
@@ -36,16 +37,16 @@ import java.util.Set;
 
 /**
  * Based on CalciteSqlValidator in calcite-core with the addition of an
- * addToSelectList() method override, which fixes the omission of system
- * column checks when adding columns from an expanded star selection
- * into the select list.
+ * addToSelectList() method override, which fixes the omission of system column
+ * checks when adding columns from an expanded star selection into the select
+ * list.
  */
 class CalciteSqlValidator extends SqlValidatorImpl {
   CalciteSqlValidator(SqlOperatorTable opTab,
           CalciteCatalogReader catalogReader,
           JavaTypeFactory typeFactory,
-          SqlConformance conformance) {
-    super(opTab, catalogReader, typeFactory, conformance);
+          Config config) {
+    super(opTab, catalogReader, typeFactory, config);
   }
 
   @Override
@@ -97,6 +98,7 @@ class CalciteSqlValidator extends SqlValidatorImpl {
           RelDataType sourceRowType,
           RelDataType targetRowType,
           SqlNode query) {
-    // disabling assignment checking in calcite and instead letting omni-sci server handle
+    // disabling assignment checking in calcite and instead letting omni-sci server
+    // handle
   }
 }
