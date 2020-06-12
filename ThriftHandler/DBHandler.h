@@ -174,6 +174,7 @@ class DBHandler : public OmniSciIf {
             const int num_gpus,
             const int start_gpu,
             const size_t reserved_gpu_mem,
+            const bool render_compositor_use_last_gpu,
             const size_t num_reader_threads,
             const AuthMetadata& authMetadata,
             const SystemParameters& system_parameters,

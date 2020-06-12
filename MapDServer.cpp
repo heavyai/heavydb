@@ -357,6 +357,7 @@ int startMapdServer(CommandLineOptions& prog_config_opts, bool start_http_server
                                      prog_config_opts.num_gpus,
                                      prog_config_opts.start_gpu,
                                      prog_config_opts.reserved_gpu_mem,
+                                     prog_config_opts.render_compositor_use_last_gpu,
                                      prog_config_opts.num_reader_threads,
                                      prog_config_opts.authMetadata,
                                      prog_config_opts.system_parameters,

@@ -182,6 +182,7 @@ class DBHandlerTestFixture : public testing::Test {
       const int render_oom_retry_threshold{0};
       const size_t render_mem_bytes{500000000};
       const size_t max_concurrent_render_sessions{500};
+      const bool render_compositor_use_last_gpu{false};
       const int num_gpus{-1};
       const int start_gpu{0};
       const size_t reserved_gpu_mem{134217728};
@@ -210,6 +211,7 @@ class DBHandlerTestFixture : public testing::Test {
                                                 num_gpus,
                                                 start_gpu,
                                                 reserved_gpu_mem,
+                                                render_compositor_use_last_gpu,
                                                 num_reader_threads,
                                                 auth_metadata_,
                                                 system_parameters_,
