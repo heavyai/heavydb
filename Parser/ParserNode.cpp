@@ -179,8 +179,14 @@ std::shared_ptr<Analyzer::Expr> UserLiteral::analyze(
     const Catalog_Namespace::Catalog& catalog,
     Analyzer::Query& query,
     TlistRefType allow_tlist_ref) const {
-  throw std::runtime_error("USER literal not supported yet.");
-  return nullptr;
+  Datum d;
+  return makeExpr<Analyzer::Constant>(kTEXT, false, d);
+}
+
+std::shared_ptr<Analyzer::Expr> UserLiteral::get(const std::string& user) {
+  Datum d;
+  d.stringval = new std::string(user);
+  return makeExpr<Analyzer::Constant>(kTEXT, false, d);
 }
 
 std::shared_ptr<Analyzer::Expr> ArrayLiteral::analyze(

@@ -255,6 +255,7 @@ class UserLiteral : public Literal {
       const Catalog_Namespace::Catalog& catalog,
       Analyzer::Query& query,
       TlistRefType allow_tlist_ref = TLIST_NONE) const override;
+  static std::shared_ptr<Analyzer::Expr> get(const std::string&);
   std::string to_string() const override { return "USER"; }
 };
 

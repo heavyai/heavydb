@@ -1208,6 +1208,15 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateKeyForString(
   return makeExpr<Analyzer::KeyForStringExpr>(args[0]);
 }
 
+std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateCurrentUser(
+    const RexFunctionOperator* rex_function) const {
+  std::string user{"SESSIONLESS_USER"};
+  if (query_state_) {
+    user = query_state_->getConstSessionInfo()->get_currentUser().userName;
+  }
+  return Parser::UserLiteral::get(user);
+}
+
 std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateLower(
     const RexFunctionOperator* rex_function) const {
   const auto& args = translateFunctionArgs(rex_function);
@@ -1407,6 +1416,9 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateFunction(
   }
   if (rex_function->getName() == "KEY_FOR_STRING"sv) {
     return translateKeyForString(rex_function);
+  }
+  if (rex_function->getName() == "CURRENT_USER"sv) {
+    return translateCurrentUser(rex_function);
   }
   if (g_enable_experimental_string_functions && rex_function->getName() == "LOWER"sv) {
     return translateLower(rex_function);

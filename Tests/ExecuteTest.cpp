@@ -11875,6 +11875,21 @@ TEST(Select, TimestampPrecisionOverflowUnderflow) {
   }
 }
 
+TEST(Select, CurrentUser) {
+  for (const auto& dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    ASSERT_EQ(1,
+              v<int64_t>(run_simple_agg(
+                  "SELECT COUNT(*) FROM test_current_user WHERE u = CURRENT_USER;", dt)));
+    ASSERT_EQ(
+        2,
+        v<int64_t>(run_simple_agg(
+            "SELECT COUNT(*) FROM test_current_user WHERE u <> CURRENT_USER;", dt)));
+    ASSERT_EQ("SESSIONLESS_USER",
+              boost::get<std::string>(
+                  v<NullableString>(run_simple_agg("SELECT CURRENT_USER;", dt))));
+  }
+}
 namespace {
 
 void validate_timestamp_agg(const ResultSet& row,
@@ -18259,6 +18274,38 @@ int create_and_populate_datetime_overflow_table() {
   return 0;
 }
 
+int create_and_populate_current_user_table() {
+  try {
+    const std::string drop_test_table{"DROP TABLE IF EXISTS test_current_user;"};
+    run_ddl_statement(drop_test_table);
+    g_sqlite_comparator.query(drop_test_table);
+
+    const std::string create_test_table{"CREATE TABLE test_current_user (u TEXT);"};
+    run_ddl_statement(create_test_table);
+    g_sqlite_comparator.query(create_test_table);
+
+    const std::string insert_positive_test_data{
+        "INSERT INTO test_current_user VALUES('SESSIONLESS_USER');"};
+    run_multiple_agg(insert_positive_test_data, ExecutorDeviceType::CPU);
+    g_sqlite_comparator.query(insert_positive_test_data);
+
+    const std::string insert_negative_test_data{
+        "INSERT INTO test_current_user VALUES('some_user');"};
+    run_multiple_agg(insert_negative_test_data, ExecutorDeviceType::CPU);
+    g_sqlite_comparator.query(insert_negative_test_data);
+
+    const std::string insert_negative_test_data2{
+        "INSERT INTO test_current_user VALUES('some_other_user');"};
+    run_multiple_agg(insert_negative_test_data2, ExecutorDeviceType::CPU);
+    g_sqlite_comparator.query(insert_negative_test_data2);
+
+  } catch (...) {
+    LOG(ERROR) << "Failed to (re-)create table 'test_current_user'";
+    return -EEXIST;
+  }
+  return 0;
+}
+
 int create_and_populate_tables(const bool use_temporary_tables,
                                const bool with_delete_support = true) {
   try {
@@ -19220,6 +19267,11 @@ int create_and_populate_tables(const bool use_temporary_tables,
     return ts_overflow_result;
   }
 
+  int ts_current_user = create_and_populate_current_user_table();
+  if (ts_current_user) {
+    return ts_current_user;
+  }
+
   return 0;
 }
 
@@ -19432,6 +19484,8 @@ void drop_tables() {
   const std::string drop_test_window_func{"DROP TABLE test_window_func;"};
   run_ddl_statement(drop_test_window_func);
   g_sqlite_comparator.query(drop_test_window_func);
+  const std::string drop_test_current_user{"DROP TABLE test_current_user;"};
+  run_ddl_statement(drop_test_current_user);
 }
 
 void drop_views() {
