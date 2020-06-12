@@ -241,7 +241,9 @@ std::string get_quoted_string(const std::string& filename, char quote, char esca
 }
 
 void filename_security_check(const std::string& filename) {
-  // Canonicalize the filename, rejecting it if this simple step fails.
+  // We can always relax some of these rules later.
+
+  // Canonicalize the filename, rejecting it if this basic step fails.
   boost::system::error_code ec;
   auto can = boost::filesystem::weakly_canonical(
       filename, ec);  // TODO: prevents string_view Jun 2020
@@ -249,7 +251,7 @@ void filename_security_check(const std::string& filename) {
     throw std::runtime_error("invalid filename: " + filename);
   }
 
-  // Reject any filenames containing spaces for now. May relax this rule later.
+  // Reject any filenames containing whitespace for now.
   for (const auto& ch : filename) {
     if (std::isspace(ch)) {
       throw std::runtime_error("invalid filename (whitespace): " + filename);
