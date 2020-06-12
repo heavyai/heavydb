@@ -3074,6 +3074,16 @@ TEST(Select, TimeSyntaxCheck) {
             "SELECT TIMESTAMPDIFF(minute, TIMESTAMP '2003-02-01 0:00:00', TIMESTAMP "
             "'2003-05-01 12:05:55') FROM TEST LIMIT 1;",
             dt)));
+    ASSERT_EQ(128885,
+              v<int64_t>(run_simple_agg("SELECT TIMESTAMPDIFF('sql_tsi_minute', "
+                                        "TIMESTAMP '2003-02-01 0:00:00', TIMESTAMP "
+                                        "'2003-05-01 12:05:55') FROM TEST LIMIT 1;",
+                                        dt)));
+    ASSERT_EQ(128885,
+              v<int64_t>(run_simple_agg("SELECT TIMESTAMPDIFF(sql_tsi_minute, TIMESTAMP "
+                                        "'2003-02-01 0:00:00', TIMESTAMP "
+                                        "'2003-05-01 12:05:55') FROM TEST LIMIT 1;",
+                                        dt)));
   }
 }
 
