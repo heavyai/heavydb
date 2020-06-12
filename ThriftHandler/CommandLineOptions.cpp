@@ -35,6 +35,7 @@ extern std::string cluster_command_line_arg;
 bool g_enable_thrift_logs{false};
 
 extern bool g_use_table_device_offset;
+extern float g_fraction_code_cache_to_evict;
 
 unsigned connect_timeout{20000};
 unsigned recv_timeout{300000};
@@ -463,6 +464,12 @@ void CommandLineOptions::fillAdvancedOptions() {
                                "to CPU after execution. When disabled, pre-flight "
                                "count queries are used to size "
                                "the output buffer for projection queries.");
+  developer_desc.add_options()(
+      "code-cache-eviction-percent",
+      po::value<float>(&g_fraction_code_cache_to_evict)
+          ->default_value(g_fraction_code_cache_to_evict),
+      "Percentage of the GPU code cache to evict if an out of memory error is "
+      "encountered while attempting to place generated code on the GPU.");
 
   developer_desc.add_options()("ssl-cert",
                                po::value<std::string>(&system_parameters.ssl_cert_file)

@@ -67,6 +67,8 @@ static_assert(false, "LLVM Version >= 4 is required.");
 #include <llvm/Support/SourceMgr.h>
 #include <llvm/Support/raw_ostream.h>
 
+float g_fraction_code_cache_to_evict = 0.2;
+
 std::unique_ptr<llvm::Module> udf_gpu_module;
 std::unique_ptr<llvm::Module> udf_cpu_module;
 std::unique_ptr<llvm::Module> rt_udf_gpu_module;
@@ -932,12 +934,28 @@ std::vector<std::pair<void*, void*>> Executor::optimizeAndCodegenGPU(
                                       blockSize(),
                                       cgen_state_.get(),
                                       row_func_not_inlined};
-  const auto gpu_code = CodeGenerator::generateNativeGPUCode(
-      query_func, multifrag_query_func, live_funcs, co, gpu_target);
+  try {
+    const auto gpu_code = CodeGenerator::generateNativeGPUCode(
+        query_func, multifrag_query_func, live_funcs, co, gpu_target);
+    addCodeToCache(key, gpu_code.cached_functions, module, gpu_code_cache_);
+    return gpu_code.native_functions;
+  } catch (CudaMgr_Namespace::CudaErrorException& cuda_error) {
+    if (cuda_error.getStatus() == CUDA_ERROR_OUT_OF_MEMORY) {
+      // Thrown if memory not able to be allocated on gpu
+      // Retry once after evicting portion of code cache
+      LOG(WARNING) << "Failed to allocate GPU memory for generated code. Evicting "
+                   << g_fraction_code_cache_to_evict * 100.
+                   << "% of GPU code cache and re-trying.";
+      gpu_code_cache_.evictFractionEntries(g_fraction_code_cache_to_evict);
+      const auto gpu_code = CodeGenerator::generateNativeGPUCode(
+          query_func, multifrag_query_func, live_funcs, co, gpu_target);
+      addCodeToCache(key, gpu_code.cached_functions, module, gpu_code_cache_);
+      return gpu_code.native_functions;
+    } else {
+      throw;
+    }
+  }
 
-  addCodeToCache(key, gpu_code.cached_functions, module, gpu_code_cache_);
-
-  return gpu_code.native_functions;
 #else
   return {};
 #endif
