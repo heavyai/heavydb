@@ -1020,7 +1020,7 @@ void DBHandler::sql_execute(TQueryResult& _return,
     _return.total_time_ms = measure<>::execution([&]() {
       auto query_state_proxy = query_state->createQueryStateProxy();
       const auto executor_device_type = session_ptr->get_executor_device_type();
-      std::packaged_task<void(size_t)> query_launch_task(
+      auto query_launch_task = std::make_shared<QueryDispatchQueue::Task>(
           [this,
            &_return,
            query_state_proxy,
@@ -1039,8 +1039,9 @@ void DBHandler::sql_execute(TQueryResult& _return,
                              executor_index);
           });
       CHECK(dispatch_queue_);
-      auto task_future = dispatch_queue_->submit(std::move(query_launch_task));
-      task_future.get();
+      dispatch_queue_->submit(query_launch_task);
+      auto result_future = query_launch_task->get_future();
+      result_future.get();
     });
   }
 

@@ -28,6 +28,8 @@
  */
 class QueryDispatchQueue {
  public:
+  using Task = std::packaged_task<void(size_t)>;
+
   QueryDispatchQueue(const size_t parallel_executors_max) {
     workers_.resize(parallel_executors_max);
     for (size_t i = 0; i < workers_.size(); i++) {
@@ -37,18 +39,17 @@ class QueryDispatchQueue {
   }
 
   /**
-   * Submit a new task to the queue. Blocks until the task begins execution, and returns a
-   * future to the executing task.
+   * Submit a new task to the queue. Blocks until the task begins execution. The caller is
+   * expected to maintain a copy of the shared_ptr which will be used to access results
+   * once the task runs.
    */
-  std::future<void> submit(std::packaged_task<void(size_t)>&& task) {
+  void submit(std::shared_ptr<Task> task) {
     std::unique_lock<decltype(queue_mutex_)> lock(queue_mutex_);
 
     LOG(INFO) << "Dispatching query with " << queue_.size() << " queries in the queue.";
-    queue_.push(std::move(task));
-    auto future = queue_.back().get_future();
+    queue_.push(task);
     lock.unlock();
     cv_.notify_all();
-    return future;
   }
 
   ~QueryDispatchQueue() {
@@ -80,7 +81,8 @@ class QueryDispatchQueue {
                   << queue_.size() << " queries in the queue.";
         // allow other threads to pick up tasks
         lock.unlock();
-        task(worker_idx);
+        CHECK(task);
+        (*task)(worker_idx);
 
         // wait for signal
         lock.lock();
@@ -92,6 +94,6 @@ class QueryDispatchQueue {
   std::condition_variable cv_;
 
   bool threads_should_exit_{false};
-  std::queue<std::packaged_task<void(size_t)>> queue_;
+  std::queue<std::shared_ptr<Task>> queue_;
   std::vector<std::thread> workers_;
 };

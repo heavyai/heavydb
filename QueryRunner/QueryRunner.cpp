@@ -511,48 +511,50 @@ std::shared_ptr<ExecutionResult> QueryRunner::runSelectQuery(
   const auto& cat = session_info_->getCatalog();
 
   std::shared_ptr<ExecutionResult> result;
-  std::packaged_task<void(size_t)> query_launch_task([&cat,
-                                                      &query_str,
-                                                      &device_type,
-                                                      &allow_loop_joins,
-                                                      &just_explain,
-                                                      &query_state,
-                                                      &result](const size_t worker_id) {
-    auto executor = Executor::getExecutor(worker_id);
-    CompilationOptions co = CompilationOptions::defaults(device_type);
-    co.opt_level = ExecutorOptLevel::LoopStrengthReduction;
+  auto query_launch_task =
+      std::make_shared<QueryDispatchQueue::Task>([&cat,
+                                                  &query_str,
+                                                  &device_type,
+                                                  &allow_loop_joins,
+                                                  &just_explain,
+                                                  &query_state,
+                                                  &result](const size_t worker_id) {
+        auto executor = Executor::getExecutor(worker_id);
+        CompilationOptions co = CompilationOptions::defaults(device_type);
+        co.opt_level = ExecutorOptLevel::LoopStrengthReduction;
 
-    ExecutionOptions eo = {g_enable_columnar_output,
-                           true,
-                           just_explain,
-                           allow_loop_joins,
-                           false,
-                           false,
-                           false,
-                           false,
-                           10000,
-                           false,
-                           false,
-                           g_gpu_mem_limit_percent,
-                           false,
-                           1000};
-    auto calcite_mgr = cat.getCalciteMgr();
-    const auto query_ra = calcite_mgr
-                              ->process(query_state->createQueryStateProxy(),
-                                        pg_shim(query_str),
-                                        {},
-                                        true,
-                                        false,
-                                        false,
-                                        true)
-                              .plan_result;
-    result = std::make_shared<ExecutionResult>(
-        RelAlgExecutor(executor.get(), cat, query_ra)
-            .executeRelAlgQuery(co, eo, false, nullptr));
-  });
+        ExecutionOptions eo = {g_enable_columnar_output,
+                               true,
+                               just_explain,
+                               allow_loop_joins,
+                               false,
+                               false,
+                               false,
+                               false,
+                               10000,
+                               false,
+                               false,
+                               g_gpu_mem_limit_percent,
+                               false,
+                               1000};
+        auto calcite_mgr = cat.getCalciteMgr();
+        const auto query_ra = calcite_mgr
+                                  ->process(query_state->createQueryStateProxy(),
+                                            pg_shim(query_str),
+                                            {},
+                                            true,
+                                            false,
+                                            false,
+                                            true)
+                                  .plan_result;
+        result = std::make_shared<ExecutionResult>(
+            RelAlgExecutor(executor.get(), cat, query_ra)
+                .executeRelAlgQuery(co, eo, false, nullptr));
+      });
   CHECK(dispatch_queue_);
-  auto task_future = dispatch_queue_->submit(std::move(query_launch_task));
-  task_future.get();
+  dispatch_queue_->submit(query_launch_task);
+  auto result_future = query_launch_task->get_future();
+  result_future.get();
   CHECK(result);
   return result;
 }
