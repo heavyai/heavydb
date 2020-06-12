@@ -130,7 +130,7 @@ std::string get_quoted_string(const std::string& filename,
                               char quote = '"',
                               char escape = '\\');
 
-//! Throws exception if security problems found. Returns quoted filename.
+//! Throw exception if security problems found in a filename.
 void filename_security_check(const std::string& filename);
 #endif  // __CUDACC__
 
