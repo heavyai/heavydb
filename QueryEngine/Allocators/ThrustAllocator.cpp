@@ -22,6 +22,8 @@
 #include "Shared/Logger.h"
 
 int8_t* ThrustAllocator::allocate(std::ptrdiff_t num_bytes) {
+  VLOG(1) << "Thrust allocation: Device #" << device_id_ << " Allocation #"
+          << ++num_allocations_ << ": " << num_bytes << " bytes";
 #ifdef HAVE_CUDA
   if (!data_mgr_) {  // only for unit tests
     CUdeviceptr ptr;
