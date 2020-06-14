@@ -140,8 +140,10 @@ void collect_order_entry_column(thrust::device_ptr<K>& d_oe_col_buffer,
                                 const thrust::device_ptr<I>& d_idx_first,
                                 const size_t idx_count,
                                 const size_t oe_offset,
-                                const size_t oe_stride) {
-  thrust::for_each(thrust::make_counting_iterator(size_t(0)),
+                                const size_t oe_stride,
+                                ThrustAllocator& allocator) {
+  thrust::for_each(thrust::device(allocator),
+                   thrust::make_counting_iterator(size_t(0)),
                    thrust::make_counting_iterator(idx_count),
                    KeyFetcher<K, I>(thrust::raw_pointer_cast(d_oe_col_buffer),
                                     d_src_buffer + oe_offset,
@@ -184,7 +186,8 @@ void do_radix_sort(thrust::device_ptr<I> d_idx_first,
                                    d_idx_first,
                                    idx_count,
                                    layout.col_off,
-                                   layout.row_bytes);
+                                   layout.row_bytes,
+                                   allocator);
         sort_indices_by_key(d_idx_first, idx_count, d_oe_buffer, oe.is_desc, allocator);
         break;
       }
@@ -195,7 +198,8 @@ void do_radix_sort(thrust::device_ptr<I> d_idx_first,
                                    d_idx_first,
                                    idx_count,
                                    layout.col_off,
-                                   layout.row_bytes);
+                                   layout.row_bytes,
+                                   allocator);
         sort_indices_by_key(d_idx_first, idx_count, d_oe_buffer, oe.is_desc, allocator);
         break;
       }
@@ -213,7 +217,8 @@ void do_radix_sort(thrust::device_ptr<I> d_idx_first,
                                  d_idx_first,
                                  idx_count,
                                  layout.col_off,
-                                 layout.row_bytes);
+                                 layout.row_bytes,
+                                 allocator);
       sort_indices_by_key(d_idx_first, idx_count, d_oe_buffer, oe.is_desc, allocator);
       break;
     }
@@ -224,7 +229,8 @@ void do_radix_sort(thrust::device_ptr<I> d_idx_first,
                                  d_idx_first,
                                  idx_count,
                                  layout.col_off,
-                                 layout.row_bytes);
+                                 layout.row_bytes,
+                                 allocator);
       sort_indices_by_key(d_idx_first, idx_count, d_oe_buffer, oe.is_desc, allocator);
       break;
     }
@@ -295,12 +301,15 @@ std::vector<int8_t> pop_n_rows_from_merged_heaps_gpu(
   const auto total_entry_count = n * thread_count;
   ThrustAllocator thrust_allocator(data_mgr, device_id);
   auto d_indices = get_device_ptr<int32_t>(total_entry_count, thrust_allocator);
-  thrust::sequence(d_indices, d_indices + total_entry_count);
+  thrust::sequence(
+      thrust::device(thrust_allocator), d_indices, d_indices + total_entry_count);
   auto separator = (group_key_bytes == 4)
-                       ? thrust::partition(d_indices,
+                       ? thrust::partition(thrust::device(thrust_allocator),
+                                           d_indices,
                                            d_indices + total_entry_count,
                                            is_taken_entry<int32_t>(rows_ptr, row_size))
-                       : thrust::partition(d_indices,
+                       : thrust::partition(thrust::device(thrust_allocator),
+                                           d_indices,
                                            d_indices + total_entry_count,
                                            is_taken_entry<int64_t>(rows_ptr, row_size));
   const size_t actual_entry_count = separator - d_indices;
@@ -341,7 +350,8 @@ std::vector<int8_t> pop_n_rows_from_merged_heaps_gpu(
 
   const auto final_entry_count = std::min(n, actual_entry_count);
   auto d_top_rows = get_device_ptr<int8_t>(row_size * n, thrust_allocator);
-  thrust::for_each(thrust::make_counting_iterator(size_t(0)),
+  thrust::for_each(thrust::device(thrust_allocator),
+                   thrust::make_counting_iterator(size_t(0)),
                    thrust::make_counting_iterator(final_entry_count),
                    RowFetcher<int32_t>(thrust::raw_pointer_cast(d_top_rows),
                                        rows_ptr,
@@ -349,7 +359,7 @@ std::vector<int8_t> pop_n_rows_from_merged_heaps_gpu(
                                        row_size));
 
   if (final_entry_count < n) {
-    reset_keys_in_row_buffer(thrust::device,
+    reset_keys_in_row_buffer(thrust::device(thrust_allocator),
                              thrust::raw_pointer_cast(d_top_rows),
                              layout.col_bytes,
                              row_size,
