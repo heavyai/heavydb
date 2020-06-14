@@ -29,8 +29,12 @@ namespace CudaMgr_Namespace {
 
 CudaErrorException::CudaErrorException(CUresult status)
     : std::runtime_error(errorMessage(status)), status_(status) {
-  VLOG(1) << errorMessage(status);
-  VLOG(1) << boost::stacktrace::stacktrace();
+  // cuda already de-initialized can occur during system shutdown. avoid making calls to
+  // the logger to prevent failing during a standard teardown.
+  if (status != CUDA_ERROR_DEINITIALIZED) {
+    VLOG(1) << errorMessage(status);
+    VLOG(1) << boost::stacktrace::stacktrace();
+  }
 }
 
 std::string errorMessage(CUresult const status) {
