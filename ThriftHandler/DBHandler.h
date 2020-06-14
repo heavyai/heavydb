@@ -607,8 +607,7 @@ class DBHandler : public OmniSciIf {
                         const std::string& nonce,
                         const ExecutorDeviceType executor_device_type,
                         const int32_t first_n,
-                        const int32_t at_most_n,
-                        const std::optional<size_t> executor_index = std::nullopt);
+                        const int32_t at_most_n);
 
   bool user_can_access_table(const Catalog_Namespace::SessionInfo&,
                              const TableDescriptor* td,
@@ -642,7 +641,7 @@ class DBHandler : public OmniSciIf {
       const int32_t at_most_n,
       const bool just_explain,
       const bool just_calcite_explain,
-      const std::vector<PushedDownFilterInfo> filter_push_down_requests);
+      const std::vector<PushedDownFilterInfo>& filter_push_down_requests);
 
   void execute_rel_alg_df(TDataFrame& _return,
                           const std::string& query_ra,

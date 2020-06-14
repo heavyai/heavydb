@@ -1020,30 +1020,13 @@ void DBHandler::sql_execute(TQueryResult& _return,
     });
   } else {
     _return.total_time_ms = measure<>::execution([&]() {
-      auto query_state_proxy = query_state->createQueryStateProxy();
-      const auto executor_device_type = session_ptr->get_executor_device_type();
-      auto query_launch_task = std::make_shared<QueryDispatchQueue::Task>(
-          [this,
-           &_return,
-           query_state_proxy,
-           column_format,
-           &nonce,
-           executor_device_type,
-           first_n,
-           at_most_n](const size_t executor_index) {
-            sql_execute_impl(_return,
-                             query_state_proxy,
-                             column_format,
-                             nonce,
-                             executor_device_type,
-                             first_n,
-                             at_most_n,
-                             executor_index);
-          });
-      CHECK(dispatch_queue_);
-      dispatch_queue_->submit(query_launch_task);
-      auto result_future = query_launch_task->get_future();
-      result_future.get();
+      DBHandler::sql_execute_impl(_return,
+                                  query_state->createQueryStateProxy(),
+                                  column_format,
+                                  nonce,
+                                  session_ptr->get_executor_device_type(),
+                                  first_n,
+                                  at_most_n);
     });
   }
 
@@ -5074,8 +5057,7 @@ void DBHandler::sql_execute_impl(TQueryResult& _return,
                                  const std::string& nonce,
                                  const ExecutorDeviceType executor_device_type,
                                  const int32_t first_n,
-                                 const int32_t at_most_n,
-                                 const std::optional<size_t> executor_index) {
+                                 const int32_t at_most_n) {
   if (leaf_handler_) {
     leaf_handler_->flush_queue();
   }
@@ -5154,48 +5136,66 @@ void DBHandler::sql_execute_impl(TQueryResult& _return,
         return;
       }
       const auto explain_info = pw.getExplainInfo();
-      const auto filter_push_down_requests = execute_rel_alg(
-          _return,
-          query_state_proxy,
-          explain_info.justCalciteExplain() ? query_ra_calcite_explain : query_ra,
-          column_format,
-          executor_device_type,
-          first_n,
-          at_most_n,
-          /*just_validate=*/false,
-          g_enable_filter_push_down && !g_cluster,
-          explain_info,
-          executor_index);
-      if (explain_info.justCalciteExplain() && filter_push_down_requests.empty()) {
-        // we only reach here if filter push down was enabled, but no filter
-        // push down candidate was found
-        convert_explain(_return, ResultSet(query_ra), true);
-        return;
-      }
-      if (!filter_push_down_requests.empty()) {
-        CHECK(!locks.empty());
-        execute_rel_alg_with_filter_push_down(_return,
-                                              query_state_proxy,
-                                              query_ra,
-                                              column_format,
-                                              executor_device_type,
-                                              first_n,
-                                              at_most_n,
-                                              explain_info.justExplain(),
-                                              explain_info.justCalciteExplain(),
-                                              filter_push_down_requests);
-      } else if (explain_info.justCalciteExplain() && filter_push_down_requests.empty()) {
-        // return the ra as the result:
-        // If we reach here, the 'filter_push_down_request' turned out to be empty,
-        // i.e., no filter push down so we continue with the initial (unchanged) query's
-        // calcite explanation.
-        CHECK(!locks.empty());
-        query_ra =
-            parse_to_ra(query_state_proxy, query_str, {}, false, system_parameters_)
-                .first.plan_result;
-        convert_explain(_return, ResultSet(query_ra), true);
-        return;
-      }
+      std::vector<PushedDownFilterInfo> filter_push_down_requests;
+      auto execute_rel_alg_task = std::make_shared<QueryDispatchQueue::Task>(
+          [this,
+           &filter_push_down_requests,
+           &_return,
+           &query_state_proxy,
+           &explain_info,
+           &query_ra_calcite_explain,
+           &query_ra,
+           &query_str,
+           &locks,
+           column_format,
+           executor_device_type,
+           first_n,
+           at_most_n](const size_t executor_index) {
+            filter_push_down_requests = execute_rel_alg(
+                _return,
+                query_state_proxy,
+                explain_info.justCalciteExplain() ? query_ra_calcite_explain : query_ra,
+                column_format,
+                executor_device_type,
+                first_n,
+                at_most_n,
+                /*just_validate=*/false,
+                g_enable_filter_push_down && !g_cluster,
+                explain_info,
+                executor_index);
+            if (explain_info.justCalciteExplain() && filter_push_down_requests.empty()) {
+              // we only reach here if filter push down was enabled, but no filter
+              // push down candidate was found
+              convert_explain(_return, ResultSet(query_ra), true);
+            } else if (!filter_push_down_requests.empty()) {
+              CHECK(!locks.empty());
+              execute_rel_alg_with_filter_push_down(_return,
+                                                    query_state_proxy,
+                                                    query_ra,
+                                                    column_format,
+                                                    executor_device_type,
+                                                    first_n,
+                                                    at_most_n,
+                                                    explain_info.justExplain(),
+                                                    explain_info.justCalciteExplain(),
+                                                    filter_push_down_requests);
+            } else if (explain_info.justCalciteExplain() &&
+                       filter_push_down_requests.empty()) {
+              // return the ra as the result:
+              // If we reach here, the 'filter_push_down_request' turned out to be empty,
+              // i.e., no filter push down so we continue with the initial (unchanged)
+              // query's calcite explanation.
+              CHECK(!locks.empty());
+              query_ra =
+                  parse_to_ra(query_state_proxy, query_str, {}, false, system_parameters_)
+                      .first.plan_result;
+              convert_explain(_return, ResultSet(query_ra), true);
+            }
+          });
+      CHECK(dispatch_queue_);
+      dispatch_queue_->submit(execute_rel_alg_task);
+      auto result_future = execute_rel_alg_task->get_future();
+      result_future.get();
       return;
     } else if (pw.is_optimize || pw.is_validate) {
       // Get the Stmt object
@@ -5382,7 +5382,7 @@ void DBHandler::execute_rel_alg_with_filter_push_down(
     const int32_t at_most_n,
     const bool just_explain,
     const bool just_calcite_explain,
-    const std::vector<PushedDownFilterInfo> filter_push_down_requests) {
+    const std::vector<PushedDownFilterInfo>& filter_push_down_requests) {
   // collecting the selected filters' info to be sent to Calcite:
   std::vector<TFilterPushDownInfo> filter_push_down_info;
   for (const auto& req : filter_push_down_requests) {
