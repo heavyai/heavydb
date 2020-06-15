@@ -105,17 +105,22 @@ public class OmniSciEscapeParser {
   private static String process_sql(String sql, Pair index) {
     String value = sql.substring(index.start, index.end);
 
+    boolean found_match = false;
     for (EscapeFunctions xx : EscapeFunctions.values()) {
       String newsql = xx.makeMatch(value);
       if (newsql != null) {
         sql = sql.substring(0, index.start) + newsql + " "
                 + sql.substring(index.end + 1, sql.length());
         int x = newsql.length();
-
         index.end = index.start + newsql.length();
-
+        found_match = true;
         break;
       }
+    }
+    if (!found_match) {
+      // it's an array. Prepend '{' here, because parser will remove the original brace.
+      sql = sql.substring(0, index.start) + "{" + sql.substring(index.start);
+      index.end += 1;
     }
     return sql;
   }
@@ -124,11 +129,12 @@ public class OmniSciEscapeParser {
     if (pR.bracket_cnt != 0) {
       throw new RuntimeException("Invalid java escape syntax - badly matched '}'");
     }
-    return parse(sql, 0).sql_value;
+    return pR.sql_value;
   }
   static class Parser_return {
     public String sql_value;
     public int bracket_cnt;
+    public int end_idx;
   }
   private static Parser_return parse(String sql, int bracket_cnt) {
     int index = 0;
@@ -147,12 +153,14 @@ public class OmniSciEscapeParser {
         bracket_cnt = pR.bracket_cnt;
         String sql_snippet = pR.sql_value;
         sql = sql.substring(0, index) + " " + sql_snippet;
+        index += pR.end_idx;
       } else if (sql.charAt(index) == '}' && !in_quote) {
         Pair ptr = new Pair(0);
         ptr.end = index;
         Parser_return pR = new Parser_return();
         pR.sql_value = process_sql(sql, ptr);
         pR.bracket_cnt = --bracket_cnt;
+        pR.end_idx = ptr.end + 1;
         return pR;
       }
       index++;
@@ -164,6 +172,7 @@ public class OmniSciEscapeParser {
     Parser_return pR = new Parser_return();
     pR.sql_value = sql;
     pR.bracket_cnt = bracket_cnt;
+    pR.end_idx = sql.length();
     return pR;
   }
 }

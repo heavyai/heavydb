@@ -141,4 +141,57 @@ public class OmniSciPrepareTest {
 
     statement.executeUpdate(PROPERTIES.getProperty("drop_base_t3"));
   }
+
+  private void formBatch(int start, int end, PreparedStatement ps, Integer[][] ia)
+          throws Exception {
+    for (int i = start; i < end; ++i) {
+      ps.setInt(1, i);
+      ps.setTimestamp(2, new Timestamp(System.currentTimeMillis()));
+      if (ia[i] != null) {
+        ps.setArray(3, m_conn.createArrayOf("INT", ia[i]));
+      } else {
+        ps.setNull(3, Types.ARRAY);
+      }
+      ps.addBatch();
+    }
+  }
+
+  @Test
+  public void batchTest() throws Exception {
+    Statement stmt = m_conn.createStatement();
+    stmt.executeUpdate("DROP TABLE IF EXISTS batch_tbl");
+    stmt.executeUpdate("CREATE TABLE batch_tbl ("
+            + "i INTEGER,"
+            + "t TIMESTAMP,"
+            + "ia INTEGER[])");
+    Integer[][] ia = {{1, 10, 100}, {null}, null, {543, null, null, 123, 543}, {17}};
+    Integer[][] ia2 = {{12345, 12, null, 1234, null}, {1, -1, -2, 2, 3, -3, -4, 4, -5}};
+    PreparedStatement ps =
+            m_conn.prepareStatement("INSERT INTO batch_tbl VALUES(?, ?, ?)");
+    formBatch(0, 4, ps, ia);
+    int[] result = ps.executeBatch();
+    for (int i : result) {
+      assertEquals(i, 1);
+    }
+    formBatch(0, 2, ps, ia2);
+    ps.clearBatch();
+    formBatch(4, 5, ps, ia);
+    result = ps.executeBatch();
+    assertEquals(result.length, 1);
+    assertEquals(result[0], 1);
+    ps.close();
+
+    ResultSet rs = stmt.executeQuery("SELECT i, ia FROM batch_tbl");
+    int i = 0;
+    while (rs.next()) {
+      assertEquals(rs.getInt("i"), i);
+      if (ia[i] == null) {
+        assertNull(rs.getArray("ia"));
+      } else {
+        assertArrayEquals((Integer[]) rs.getArray("ia").getArray(), ia[i]);
+      }
+      i++;
+    }
+    assertEquals(i, 5);
+  }
 }
