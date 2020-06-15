@@ -378,7 +378,7 @@ class Executor {
 
   ExpressionRange getColRange(const PhysicalInput&) const;
 
-  size_t getNumBytesForFetchedRow() const;
+  size_t getNumBytesForFetchedRow(const std::set<int>& table_ids_to_fetch) const;
 
   std::vector<ColumnLazyFetchInfo> getColLazyFetchInfo(
       const std::vector<Analyzer::Expr*>& target_exprs) const;

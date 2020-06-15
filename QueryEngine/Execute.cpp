@@ -270,12 +270,16 @@ ExpressionRange Executor::getColRange(const PhysicalInput& phys_input) const {
   return agg_col_range_cache_.getColRange(phys_input);
 }
 
-size_t Executor::getNumBytesForFetchedRow() const {
+size_t Executor::getNumBytesForFetchedRow(const std::set<int>& table_ids_to_fetch) const {
   size_t num_bytes = 0;
   if (!plan_state_) {
     return 0;
   }
   for (const auto& fetched_col_pair : plan_state_->columns_to_fetch_) {
+    if (table_ids_to_fetch.count(fetched_col_pair.first) == 0) {
+      continue;
+    }
+
     if (fetched_col_pair.first < 0) {
       num_bytes += 8;
     } else {
