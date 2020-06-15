@@ -48,6 +48,7 @@ class CommandLineOptions {
   std::string cluster_file = {"cluster.conf"};
   std::string cluster_topology_file = {"cluster_topology.conf"};
   std::string license_path = {""};
+  std::string encryption_key_store_path = {};
   bool cpu_only = false;
   bool verbose_logging = false;
   bool jit_debug = false;

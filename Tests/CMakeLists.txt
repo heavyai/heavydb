@@ -95,7 +95,8 @@ if(ENABLE_CUDA)
   add_executable(GpuSharedMemoryTest GpuSharedMemoryTest.cpp ResultSetTestUtils.cpp)
 endif()
 if("${MAPD_EDITION_LOWER}" STREQUAL "ee")
-  add_executable(UserMappingDdlTest UserMappingDdlTest.cpp)
+  add_executable(UserMappingDdlTest ee/UserMappingDdlTest.cpp)
+  add_executable(PkiEncryptorTest ee/PkiEncryptorTest.cpp)
 endif()
 
 # Tests + Microbenchmarks
@@ -182,6 +183,7 @@ endif()
 
 if("${MAPD_EDITION_LOWER}" STREQUAL "ee")
   target_link_libraries(UserMappingDdlTest ${THRIFT_HANDLER_TEST_LIBRARIES})
+  target_link_libraries(PkiEncryptorTest gtest Shared)
 endif()
 
 set(TEST_ARGS "--gtest_output=xml:../")
@@ -250,6 +252,7 @@ endif()
 
 if("${MAPD_EDITION_LOWER}" STREQUAL "ee")
   add_test(UserMappingDdlTest UserMappingDdlTest ${TEST_ARGS})
+  add_test(PkiEncryptorTest PkiEncryptorTest ${TEST_ARGS})
 endif()
 
 add_executable(ArrowIpcIntegrationTest ArrowIpcIntegrationTest.cpp)
@@ -329,6 +332,7 @@ endif()
 
 if("${MAPD_EDITION_LOWER}" STREQUAL "ee")
   list(APPEND TEST_PROGRAMS UserMappingDdlTest)
+  list(APPEND TEST_PROGRAMS PkiEncryptorTest)
 endif()
 
 set(SANITY_TESTS ${TEST_PROGRAMS})

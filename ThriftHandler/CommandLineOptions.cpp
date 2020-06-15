@@ -313,6 +313,10 @@ void CommandLineOptions::fillOptions() {
                               ->default_value(g_enable_fsi_cache)
                               ->implicit_value(true),
                           "Enable caching of foreign table data on disk.");
+  help_desc.add_options()("encryption-key-store",
+                          po::value<std::string>(&encryption_key_store_path),
+                          "Path to directory where encryption related keys will reside.");
+
 #endif  // ENABLE_FSI
   help_desc.add_options()(
       "enable-interoperability",
@@ -719,7 +723,6 @@ void CommandLineOptions::validate() {
   if (!license_path.empty()) {
     ddl_utils::FilePathBlacklist::addToBlacklist(license_path);
   }
-  // TODO: add encryption cert path
 }
 
 boost::optional<int> CommandLineOptions::parse_command_line(
