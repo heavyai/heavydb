@@ -156,18 +156,21 @@ class QueryFragmentDescriptor {
   void buildFragmentPerKernelMapForUnion(const RelAlgExecutionUnit& ra_exe_unit,
                                          const std::vector<uint64_t>& frag_offsets,
                                          const int device_count,
+                                         const size_t num_bytes_for_row,
                                          const ExecutorDeviceType& device_type,
                                          Executor* executor);
 
   void buildFragmentPerKernelMap(const RelAlgExecutionUnit& ra_exe_unit,
                                  const std::vector<uint64_t>& frag_offsets,
                                  const int device_count,
+                                 const size_t num_bytes_for_row,
                                  const ExecutorDeviceType& device_type,
                                  Executor* executor);
 
   void buildMultifragKernelMap(const RelAlgExecutionUnit& ra_exe_unit,
                                const std::vector<uint64_t>& frag_offsets,
                                const int device_count,
+                               const size_t num_bytes_for_row,
                                const ExecutorDeviceType& device_type,
                                const bool enable_inner_join_fragment_skipping,
                                Executor* executor);

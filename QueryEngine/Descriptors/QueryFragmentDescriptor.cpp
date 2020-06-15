@@ -67,19 +67,39 @@ void QueryFragmentDescriptor::buildFragmentKernelMap(
     const bool enable_multifrag_kernels,
     const bool enable_inner_join_fragment_skipping,
     Executor* executor) {
+  // For joins, only consider the cardinality of the LHS
+  // columns in the bytes per row count.
+  std::set<int> lhs_table_ids;
+  for (const auto& input_desc : ra_exe_unit.input_descs) {
+    if (input_desc.getNestLevel() == 0) {
+      lhs_table_ids.insert(input_desc.getTableId());
+    }
+  }
+
+  const auto num_bytes_for_row = executor->getNumBytesForFetchedRow(lhs_table_ids);
+
   if (ra_exe_unit.union_all) {
-    buildFragmentPerKernelMapForUnion(
-        ra_exe_unit, frag_offsets, device_count, device_type, executor);
+    buildFragmentPerKernelMapForUnion(ra_exe_unit,
+                                      frag_offsets,
+                                      device_count,
+                                      num_bytes_for_row,
+                                      device_type,
+                                      executor);
   } else if (enable_multifrag_kernels) {
     buildMultifragKernelMap(ra_exe_unit,
                             frag_offsets,
                             device_count,
+                            num_bytes_for_row,
                             device_type,
                             enable_inner_join_fragment_skipping,
                             executor);
   } else {
-    buildFragmentPerKernelMap(
-        ra_exe_unit, frag_offsets, device_count, device_type, executor);
+    buildFragmentPerKernelMap(ra_exe_unit,
+                              frag_offsets,
+                              device_count,
+                              num_bytes_for_row,
+                              device_type,
+                              executor);
   }
 }
 
@@ -100,14 +120,13 @@ void QueryFragmentDescriptor::buildFragmentPerKernelMapForUnion(
     const RelAlgExecutionUnit& ra_exe_unit,
     const std::vector<uint64_t>& frag_offsets,
     const int device_count,
+    const size_t num_bytes_for_row,
     const ExecutorDeviceType& device_type,
     Executor* executor) {
   for (size_t j = 0; j < ra_exe_unit.input_descs.size(); ++j) {
     auto const& table_desc = ra_exe_unit.input_descs[j];
     int const table_id = table_desc.getTableId();
     TableFragments const* fragments = selected_tables_fragments_.at(table_id);
-
-    const auto num_bytes_for_row = executor->getNumBytesForFetchedRow();
 
     const ColumnDescriptor* deleted_cd{nullptr};
     if (table_id > 0) {
@@ -198,6 +217,7 @@ void QueryFragmentDescriptor::buildFragmentPerKernelMap(
     const RelAlgExecutionUnit& ra_exe_unit,
     const std::vector<uint64_t>& frag_offsets,
     const int device_count,
+    const size_t num_bytes_for_row,
     const ExecutorDeviceType& device_type,
     Executor* executor) {
   const auto& outer_table_desc = ra_exe_unit.input_descs.front();
@@ -207,12 +227,10 @@ void QueryFragmentDescriptor::buildFragmentPerKernelMap(
   const auto outer_fragments = it->second;
   outer_fragments_size_ = outer_fragments->size();
 
-  const auto num_bytes_for_row = executor->getNumBytesForFetchedRow();
-
   const ColumnDescriptor* deleted_cd{nullptr};
   if (outer_table_id > 0) {
-    // Intermediate tables will not have a table descriptor and will also not have deleted
-    // rows.
+    // Intermediate tables will not have a table descriptor and will also not have
+    // deleted rows.
     const auto& catalog = executor->getCatalog();
     const auto td = catalog->getMetadataForTable(outer_table_id);
     CHECK(td);
@@ -282,6 +300,7 @@ void QueryFragmentDescriptor::buildMultifragKernelMap(
     const RelAlgExecutionUnit& ra_exe_unit,
     const std::vector<uint64_t>& frag_offsets,
     const int device_count,
+    const size_t num_bytes_for_row,
     const ExecutorDeviceType& device_type,
     const bool enable_inner_join_fragment_skipping,
     Executor* executor) {
@@ -297,7 +316,6 @@ void QueryFragmentDescriptor::buildMultifragKernelMap(
   outer_fragments_size_ = outer_fragments->size();
 
   const auto inner_table_id_to_join_condition = executor->getInnerTabIdToJoinCond();
-  const auto num_bytes_for_row = executor->getNumBytesForFetchedRow();
 
   for (size_t outer_frag_id = 0; outer_frag_id < outer_fragments->size();
        ++outer_frag_id) {
