@@ -1408,15 +1408,6 @@ ResultSetPtr Executor::executeWorkUnitImpl(
                              rowid_lookup_key);
     };
 
-    QueryFragmentDescriptor fragment_descriptor(
-        ra_exe_unit,
-        query_infos,
-        query_comp_desc_owned->getDeviceType() == ExecutorDeviceType::GPU
-            ? cat.getDataMgr().getMemoryInfo(Data_Namespace::MemoryLevel::GPU_LEVEL)
-            : std::vector<Data_Namespace::MemoryInfo>{},
-        eo.gpu_input_mem_limit_percent,
-        eo.outer_fragment_indices);
-
     if (!eo.just_validate) {
       int available_cpus = cpu_threads();
       auto available_gpus = get_available_gpus(cat);
@@ -1436,7 +1427,6 @@ ResultSetPtr Executor::executeWorkUnitImpl(
                                                              context_count,
                                                              *query_comp_desc_owned,
                                                              *query_mem_desc_owned,
-                                                             fragment_descriptor,
                                                              available_gpus,
                                                              available_cpus);
 #else
@@ -1455,7 +1445,6 @@ ResultSetPtr Executor::executeWorkUnitImpl(
               context_count,
               *query_comp_desc_owned,
               *query_mem_desc_owned,
-              fragment_descriptor,
               available_gpus,
               available_cpus);
         }
@@ -1914,12 +1903,20 @@ void Executor::dispatchFragments(
     const size_t context_count,
     const QueryCompilationDescriptor& query_comp_desc,
     const QueryMemoryDescriptor& query_mem_desc,
-    QueryFragmentDescriptor& fragment_descriptor,
     std::unordered_set<int>& available_gpus,
     int& available_cpus) {
   auto clock_begin = timer_start();
   std::lock_guard<std::mutex> kernel_lock(kernel_mutex_);
   kernel_queue_time_ms_ += timer_stop(clock_begin);
+
+  QueryFragmentDescriptor fragment_descriptor(
+      execution_dispatch.getExecutionUnit(),
+      table_infos,
+      query_comp_desc.getDeviceType() == ExecutorDeviceType::GPU
+          ? catalog_->getDataMgr().getMemoryInfo(Data_Namespace::MemoryLevel::GPU_LEVEL)
+          : std::vector<Data_Namespace::MemoryInfo>{},
+      eo.gpu_input_mem_limit_percent,
+      eo.outer_fragment_indices);
 
   THREAD_POOL query_threads;
   const auto& ra_exe_unit = execution_dispatch.getExecutionUnit();

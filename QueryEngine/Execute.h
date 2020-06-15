@@ -607,7 +607,6 @@ class Executor {
       const size_t context_count,
       const QueryCompilationDescriptor& query_comp_desc,
       const QueryMemoryDescriptor& query_mem_desc,
-      QueryFragmentDescriptor& fragment_descriptor,
       std::unordered_set<int>& available_gpus,
       int& available_cpus);
 
