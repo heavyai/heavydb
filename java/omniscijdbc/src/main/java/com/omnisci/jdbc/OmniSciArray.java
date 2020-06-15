@@ -219,7 +219,7 @@ public class OmniSciArray implements java.sql.Array {
         case TIME:
         case TIMESTAMP:
         case DATE: {
-          StringBuilder sb = new StringBuilder("ARRAY[");
+          StringBuilder sb = new StringBuilder("{");
           for (Object e : elements) {
             if (e != null) {
               sb.append("'").append(e.toString()).append("', ");
@@ -230,11 +230,13 @@ public class OmniSciArray implements java.sql.Array {
           if (elements.length > 0) {
             sb.delete(sb.length() - 2, sb.length());
           }
-          sb.append("]");
+          sb.append("}");
           return sb.toString();
         }
-        default:
-          return "ARRAY" + Arrays.toString(elements);
+        default: {
+          String arr_str = Arrays.toString(elements);
+          return "{" + arr_str.substring(1, arr_str.length() - 1) + "}";
+        }
       }
     }
   }
