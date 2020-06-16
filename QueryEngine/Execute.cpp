@@ -1458,7 +1458,6 @@ ResultSetPtr Executor::executeWorkUnitImpl(
           resetInterrupt();
           throw QueryExecutionError(ERR_INTERRUPTED);
         }
-        cat.getDataMgr().freeAllBuffers();
         if (e.getErrorCode() == ERR_OVERFLOW_OR_UNDERFLOW &&
             static_cast<size_t>(crt_min_byte_width << 1) <= sizeof(int64_t)) {
           crt_min_byte_width <<= 1;
@@ -1467,7 +1466,6 @@ ResultSetPtr Executor::executeWorkUnitImpl(
         throw;
       }
     }
-    cat.getDataMgr().freeAllBuffers();
     if (is_agg) {
       try {
         return collectAllDeviceResults(execution_dispatch,
@@ -1917,6 +1915,10 @@ void Executor::dispatchFragments(
           : std::vector<Data_Namespace::MemoryInfo>{},
       eo.gpu_input_mem_limit_percent,
       eo.outer_fragment_indices);
+
+  ScopeGuard cleanup_post_dispatch = [this]() {
+    catalog_->getDataMgr().freeAllBuffers();
+  };
 
   THREAD_POOL query_threads;
   const auto& ra_exe_unit = execution_dispatch.getExecutionUnit();
