@@ -54,8 +54,8 @@ sudo apt install -y \
     git \
     wget \
     curl \
-    gcc \
-    g++ \
+    gcc-8 \
+    g++-8 \
     libboost-all-dev \
     libgoogle-glog-dev \
     libssl-dev \
@@ -101,6 +101,10 @@ sudo apt install -y \
     libxerces-c-dev \
     libxmlsec1-dev
 
+# Set up gcc-8 as default gcc
+update-alternatives \
+  --install /usr/bin/gcc gcc /usr/bin/gcc-8 800 \
+  --slave /usr/bin/g++ g++ /usr/bin/g++-8
 
 # Needed to find sqlite3, xmltooling, and xml_security_c
 export PKG_CONFIG_PATH=$PREFIX/lib/pkgconfig:$PREFIX/lib64/pkgconfig:$PKG_CONFIG_PATH

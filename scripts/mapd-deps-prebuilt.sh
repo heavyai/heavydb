@@ -59,8 +59,8 @@ if [ "$ID" == "ubuntu" ] ; then
       git \
       wget \
       curl \
-      gcc \
-      g++ \
+      gcc-8 \
+      g++-8 \
       libboost-all-dev \
       libgoogle-glog-dev \
       golang \
@@ -103,6 +103,11 @@ if [ "$ID" == "ubuntu" ] ; then
       python-dev \
       python-yaml \
       swig
+
+# Set up gcc-8 as default gcc
+update-alternatives \
+  --install /usr/bin/gcc gcc /usr/bin/gcc-8 800 \
+  --slave /usr/bin/g++ g++ /usr/bin/g++-8
 
   if [ "$VERSION_ID" == "19.04" ] || [ "$VERSION_ID" == "18.04" ] ; then
     sudo $PACKAGER install \
