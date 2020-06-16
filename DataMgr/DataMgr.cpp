@@ -256,114 +256,65 @@ void DataMgr::createTopLevelMetadata()
 }
 
 std::vector<MemoryInfo> DataMgr::getMemoryInfo(const MemoryLevel memLevel) {
-  // TODO (vraj) : Reduce the duplicate code
-  std::vector<MemoryInfo> memInfo;
+  std::vector<MemoryInfo> mem_info;
   if (memLevel == MemoryLevel::CPU_LEVEL) {
-    CpuBufferMgr* cpuBuffer =
+    CpuBufferMgr* cpu_buffer =
         dynamic_cast<CpuBufferMgr*>(bufferMgrs_[MemoryLevel::CPU_LEVEL][0]);
+    CHECK(cpu_buffer);
     MemoryInfo mi;
 
-    mi.pageSize = cpuBuffer->getPageSize();
-    mi.maxNumPages = cpuBuffer->getMaxSize() / mi.pageSize;
-    mi.isAllocationCapped = cpuBuffer->isAllocationCapped();
-    mi.numPageAllocated = cpuBuffer->getAllocated() / mi.pageSize;
+    mi.pageSize = cpu_buffer->getPageSize();
+    mi.maxNumPages = cpu_buffer->getMaxSize() / mi.pageSize;
+    mi.isAllocationCapped = cpu_buffer->isAllocationCapped();
+    mi.numPageAllocated = cpu_buffer->getAllocated() / mi.pageSize;
 
-    const std::vector<BufferList> slab_segments = cpuBuffer->getSlabSegments();
-    size_t numSlabs = slab_segments.size();
-
-    for (size_t slabNum = 0; slabNum != numSlabs; ++slabNum) {
-      for (auto segIt : slab_segments[slabNum]) {
+    const auto& slab_segments = cpu_buffer->getSlabSegments();
+    for (size_t slab_num = 0; slab_num < slab_segments.size(); ++slab_num) {
+      for (auto segment : slab_segments[slab_num]) {
         MemoryData md;
-        md.slabNum = slabNum;
-        md.startPage = segIt.start_page;
-        md.numPages = segIt.num_pages;
-        md.touch = segIt.last_touched;
-        md.memStatus = segIt.mem_status;
+        md.slabNum = slab_num;
+        md.startPage = segment.start_page;
+        md.numPages = segment.num_pages;
+        md.touch = segment.last_touched;
+        md.memStatus = segment.mem_status;
         md.chunk_key.insert(
-            md.chunk_key.end(), segIt.chunk_key.begin(), segIt.chunk_key.end());
+            md.chunk_key.end(), segment.chunk_key.begin(), segment.chunk_key.end());
         mi.nodeMemoryData.push_back(md);
       }
     }
-    memInfo.push_back(mi);
+    mem_info.push_back(mi);
   } else if (hasGpus_) {
     int numGpus = cudaMgr_->getDeviceCount();
     for (int gpuNum = 0; gpuNum < numGpus; ++gpuNum) {
-      GpuCudaBufferMgr* gpuBuffer =
+      GpuCudaBufferMgr* gpu_buffer =
           dynamic_cast<GpuCudaBufferMgr*>(bufferMgrs_[MemoryLevel::GPU_LEVEL][gpuNum]);
+      CHECK(gpu_buffer);
       MemoryInfo mi;
 
-      mi.pageSize = gpuBuffer->getPageSize();
-      mi.maxNumPages = gpuBuffer->getMaxSize() / mi.pageSize;
-      mi.isAllocationCapped = gpuBuffer->isAllocationCapped();
-      mi.numPageAllocated = gpuBuffer->getAllocated() / mi.pageSize;
-      const std::vector<BufferList> slab_segments = gpuBuffer->getSlabSegments();
-      size_t numSlabs = slab_segments.size();
+      mi.pageSize = gpu_buffer->getPageSize();
+      mi.maxNumPages = gpu_buffer->getMaxSize() / mi.pageSize;
+      mi.isAllocationCapped = gpu_buffer->isAllocationCapped();
+      mi.numPageAllocated = gpu_buffer->getAllocated() / mi.pageSize;
 
-      for (size_t slabNum = 0; slabNum != numSlabs; ++slabNum) {
-        for (auto segIt : slab_segments[slabNum]) {
+      const auto& slab_segments = gpu_buffer->getSlabSegments();
+      for (size_t slab_num = 0; slab_num < slab_segments.size(); ++slab_num) {
+        for (auto segment : slab_segments[slab_num]) {
           MemoryData md;
-          md.slabNum = slabNum;
-          md.startPage = segIt.start_page;
-          md.numPages = segIt.num_pages;
-          md.touch = segIt.last_touched;
+          md.slabNum = slab_num;
+          md.startPage = segment.start_page;
+          md.numPages = segment.num_pages;
+          md.touch = segment.last_touched;
           md.chunk_key.insert(
-              md.chunk_key.end(), segIt.chunk_key.begin(), segIt.chunk_key.end());
-          md.memStatus = segIt.mem_status;
+              md.chunk_key.end(), segment.chunk_key.begin(), segment.chunk_key.end());
+          md.memStatus = segment.mem_status;
           mi.nodeMemoryData.push_back(md);
         }
       }
-      memInfo.push_back(mi);
+      mem_info.push_back(mi);
     }
   }
-  return memInfo;
+  return mem_info;
 }
-
-/*
-std::vector<MemoryData> DataMgr::getGpuMemory() {
-  std::vector<MemoryData> memInfo;
-  if (hasGpus_) {
-    int numGpus = cudaMgr_->getDeviceCount();
-    for (int gpuNum = 0; gpuNum < numGpus; ++gpuNum) {
-      gpuMemorySummary gms;
-      gms.max = bufferMgrs_[MemoryLevel::GPU_LEVEL][gpuNum]->getMaxSize();
-      gms.inUse = bufferMgrs_[MemoryLevel::GPU_LEVEL][gpuNum]->getInUseSize();
-      gms.allocated = bufferMgrs_[MemoryLevel::GPU_LEVEL][gpuNum]->getAllocated();
-      gms.isAllocationCapped =
-bufferMgrs_[MemoryLevel::GPU_LEVEL][gpuNum]->isAllocationCapped(); memInfo.push_back(gms);
-    }
-  }
-  return memInfo;
-}
-
-*/
-//  std::ostringstream tss;
-//  size_t mb = 1024 * 1024;
-//  tss << std::endl;
-//  // tss << "CPU RAM TOTAL AVAILABLE   : "  std::fixed << setw(9) << setprecision(2) <<
-//  // ((float)bufferMgrs_[MemoryLevel::CPU_LEVEL][0]->getMaxSize() / mb)
-//  //    << std::endl;
-//  tss << "CPU RAM IN BUFFER USE     : " << std::fixed << setw(9) << setprecision(2)
-//      << ((float)bufferMgrs_[MemoryLevel::CPU_LEVEL][0]->getInUseSize() / mb) << " MB"
-//      << std::endl;
-//  if (hasGpus_) {
-//    int numGpus = cudaMgr_->getDeviceCount();
-//    for (int gpuNum = 0; gpuNum < numGpus; ++gpuNum) {
-//      tss << "GPU" << setfill(' ') << setw(2) << gpuNum << " RAM TOTAL AVAILABLE : " <<
-//      std::fixed << setw(9)
-//          << setprecision(2) <<
-//          ((float)bufferMgrs_[MemoryLevel::GPU_LEVEL][gpuNum]->getMaxSize() / mb) << "
-//          MB"
-//          << std::endl;
-//      tss << "GPU" << setfill(' ') << setw(2) << gpuNum << " RAM IN BUFFER USE   : " <<
-//      std::fixed << setw(9)
-//          << setprecision(2) <<
-//          ((float)bufferMgrs_[MemoryLevel::GPU_LEVEL][gpuNum]->getInUseSize() / mb) << "
-//          MB"
-//          << std::endl;
-//    }
-//  }
-//  return tss.str();
-//}
 
 std::string DataMgr::dumpLevel(const MemoryLevel memLevel) {
   // if gpu we need to iterate through all the buffermanagers for each card
