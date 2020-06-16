@@ -79,6 +79,7 @@ import org.apache.calcite.tools.Programs;
 import org.apache.calcite.tools.RelConversionException;
 import org.apache.calcite.tools.ValidationException;
 import org.apache.calcite.util.ConversionUtil;
+import org.apache.calcite.util.Pair;
 import org.apache.calcite.util.Util;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -117,7 +118,7 @@ public final class MapDParser {
   // private MapDCatalogReader catalogReader;
   // private SqlValidatorImpl validator;
   // private SqlToRelConverter converter;
-  private final Map<String, ExtensionFunction> extSigs;
+  private final MapDSqlOperatorTable mapDSqlOperatorTable;
   private final String dataDir;
 
   private int callCount = 0;
@@ -129,17 +130,11 @@ public final class MapDParser {
   private static Map<String, Boolean> SubqueryCorrMemo = new ConcurrentHashMap<>();
 
   public MapDParser(String dataDir,
-          final Map<String, ExtensionFunction> extSigs,
+          final MapDSqlOperatorTable mapDSqlOperatorTable,
           int mapdPort,
           SockTransportProperties skT) {
-    System.setProperty(
-            "saffron.default.charset", ConversionUtil.NATIVE_UTF16_CHARSET_NAME);
-    System.setProperty(
-            "saffron.default.nationalcharset", ConversionUtil.NATIVE_UTF16_CHARSET_NAME);
-    System.setProperty("saffron.default.collation.name",
-            ConversionUtil.NATIVE_UTF16_CHARSET_NAME + "$en_US");
     this.dataDir = dataDir;
-    this.extSigs = extSigs;
+    this.mapDSqlOperatorTable = mapDSqlOperatorTable;
     this.mapdPort = mapdPort;
     this.sock_transport_properties = skT;
   }
@@ -194,11 +189,11 @@ public final class MapDParser {
     }
 
     try {
-      MapDParser parser =
-              new MapDParser(dataDir, extSigs, mapdPort, sock_transport_properties);
+      MapDParser parser = new MapDParser(
+              dataDir, mapDSqlOperatorTable, mapdPort, sock_transport_properties);
       MapDParserOptions options = new MapDParserOptions();
       parser.setUser(mapdUser);
-      parser.processSql(expression.toSqlString(SqlDialect.CALCITE).getSql(), options);
+      parser.processSql(expression, options);
     } catch (Exception e) {
       // if we are not able to parse, then assume correlated
       SubqueryCorrMemo.put(queryString, true);
@@ -315,7 +310,7 @@ public final class MapDParser {
     final FrameworkConfig config =
             Frameworks.newConfigBuilder()
                     .defaultSchema(rootSchema.add(mapdUser.getDB(), mapd))
-                    .operatorTable(createOperatorTable(extSigs))
+                    .operatorTable(mapDSqlOperatorTable)
                     .parserConfig(SqlParser.configBuilder()
                                           .setConformance(SqlConformanceEnum.LENIENT)
                                           .setUnquotedCasing(Casing.UNCHANGED)
@@ -343,6 +338,17 @@ public final class MapDParser {
     this.mapdUser = mapdUser;
   }
 
+  public Pair<String, SqlIdentifierCapturer> process(
+          String sql, final MapDParserOptions parserOptions)
+          throws SqlParseException, ValidationException, RelConversionException {
+    final MapDPlanner planner = getPlanner(true, true);
+    final SqlNode sqlNode = parseSql(sql, parserOptions.isLegacySyntax(), planner);
+    String res = processSql(sqlNode, parserOptions);
+    SqlIdentifierCapturer capture = captureIdentifiers(sqlNode);
+
+    return new Pair<String, SqlIdentifierCapturer>(res, capture);
+  }
+
   public String processSql(String sql, final MapDParserOptions parserOptions)
           throws SqlParseException, ValidationException, RelConversionException {
     callCount++;
@@ -350,11 +356,21 @@ public final class MapDParser {
     final MapDPlanner planner = getPlanner(true, true);
     final SqlNode sqlNode = parseSql(sql, parserOptions.isLegacySyntax(), planner);
 
+    return processSql(sqlNode, parserOptions);
+  }
+
+  public String processSql(final SqlNode sqlNode, final MapDParserOptions parserOptions)
+          throws SqlParseException, ValidationException, RelConversionException {
+    callCount++;
+
     if (sqlNode instanceof JsonSerializableDdl) {
       return ((JsonSerializableDdl) sqlNode).toJsonString();
     }
 
-    final RelRoot sqlRel = convertSqlToRelNode(sql, sqlNode, planner, parserOptions);
+    final MapDPlanner planner = getPlanner(true, true);
+    planner.advanceToValidate();
+
+    final RelRoot sqlRel = convertSqlToRelNode(sqlNode, planner, parserOptions);
     RelNode project = sqlRel.project();
 
     if (parserOptions.isExplain()) {
@@ -683,11 +699,10 @@ public final class MapDParser {
           throws SqlParseException, ValidationException, RelConversionException {
     final MapDPlanner planner = getPlanner(true, true);
     final SqlNode sqlNode = parseSql(sql, parserOptions.isLegacySyntax(), planner);
-    return convertSqlToRelNode(sql, sqlNode, planner, parserOptions);
+    return convertSqlToRelNode(sqlNode, planner, parserOptions);
   }
 
-  RelRoot convertSqlToRelNode(final String sql,
-          final SqlNode sqlNode,
+  RelRoot convertSqlToRelNode(final SqlNode sqlNode,
           final MapDPlanner mapDPlanner,
           final MapDParserOptions parserOptions)
           throws SqlParseException, ValidationException, RelConversionException {
@@ -753,8 +768,7 @@ public final class MapDParser {
       boolean foundView = false;
       MapDSchema schema = new MapDSchema(
               dataDir, this, mapdPort, mapdUser, sock_transport_properties);
-      SqlIdentifierCapturer capturer =
-              captureIdentifiers(sql, parserOptions.isLegacySyntax());
+      SqlIdentifierCapturer capturer = captureIdentifiers(sqlNode);
       for (String name : capturer.selects) {
         MapDTable table = (MapDTable) schema.getTable(name);
         if (null == table) {
@@ -1344,32 +1358,25 @@ public final class MapDParser {
     return expanded_proj_call;
   }
 
-  /**
-   * Creates an operator table.
-   *
-   * @param extSigs
-   * @return New operator table
-   */
-  protected SqlOperatorTable createOperatorTable(
-          final Map<String, ExtensionFunction> extSigs) {
-    final MapDSqlOperatorTable tempOpTab =
-            new MapDSqlOperatorTable(SqlStdOperatorTable.instance());
-    // MAT 11 Nov 2015
-    // Example of how to add custom function
-    MapDSqlOperatorTable.addUDF(tempOpTab, extSigs);
-    return tempOpTab;
-  }
-
   public SqlIdentifierCapturer captureIdentifiers(String sql, boolean legacy_syntax)
           throws SqlParseException {
     try {
       Planner planner = getPlanner();
       SqlNode node = parseSql(sql, legacy_syntax, planner);
+      return captureIdentifiers(node);
+    } catch (Exception | Error e) {
+      MAPDLOGGER.error("Error parsing sql: " + sql, e);
+      return new SqlIdentifierCapturer();
+    }
+  }
+
+  public SqlIdentifierCapturer captureIdentifiers(SqlNode node) throws SqlParseException {
+    try {
       SqlIdentifierCapturer capturer = new SqlIdentifierCapturer();
       capturer.scan(node);
       return capturer;
     } catch (Exception | Error e) {
-      MAPDLOGGER.error("Error parsing sql: " + sql, e);
+      MAPDLOGGER.error("Error parsing sql: " + node, e);
       return new SqlIdentifierCapturer();
     }
   }

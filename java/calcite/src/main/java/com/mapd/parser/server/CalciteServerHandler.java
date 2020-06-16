@@ -35,11 +35,13 @@ import com.omnisci.thrift.calciteserver.TUserDefinedTableFunction;
 import org.apache.calcite.prepare.MapDPlanner;
 import org.apache.calcite.prepare.SqlIdentifierCapturer;
 import org.apache.calcite.runtime.CalciteContextException;
+import org.apache.calcite.sql.SqlNode;
 import org.apache.calcite.sql.parser.SqlParseException;
 import org.apache.calcite.sql.validate.SqlMoniker;
 import org.apache.calcite.sql.validate.SqlMonikerType;
 import org.apache.calcite.tools.RelConversionException;
 import org.apache.calcite.tools.ValidationException;
+import org.apache.calcite.util.Pair;
 import org.apache.commons.pool.PoolableObjectFactory;
 import org.apache.commons.pool.impl.GenericObjectPool;
 import org.apache.thrift.TException;
@@ -168,10 +170,13 @@ public class CalciteServerHandler implements CalciteServer.Iface {
         filterPushDownInfo.add(new MapDParserOptions.FilterPushDownInfo(
                 req.input_prev, req.input_start, req.input_next));
       }
+      Pair<String, SqlIdentifierCapturer> res;
+      SqlNode node;
       try {
         MapDParserOptions parserOptions = new MapDParserOptions(
                 filterPushDownInfo, legacySyntax, isExplain, isViewOptimize);
-        jsonResult = parser.processSql(sqlText, parserOptions);
+        res = parser.process(sqlText, parserOptions);
+        jsonResult = res.left;
       } catch (ValidationException ex) {
         String msg = "Validation: " + ex.getMessage();
         MAPDLOGGER.error(msg, ex);
@@ -181,7 +186,7 @@ public class CalciteServerHandler implements CalciteServer.Iface {
         MAPDLOGGER.error(msg, ex);
         throw ex;
       }
-      capturer = parser.captureIdentifiers(sqlText, legacySyntax);
+      capturer = res.right;
 
       primaryAccessedObjects.tables_selected_from = new ArrayList<>(capturer.selects);
       primaryAccessedObjects.tables_inserted_into = new ArrayList<>(capturer.inserts);

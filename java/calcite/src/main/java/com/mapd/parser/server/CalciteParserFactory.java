@@ -16,8 +16,11 @@
 package com.mapd.parser.server;
 
 import com.mapd.calcite.parser.MapDParser;
+import com.mapd.calcite.parser.MapDSqlOperatorTable;
 import com.mapd.common.SockTransportProperties;
 
+import org.apache.calcite.sql.fun.SqlStdOperatorTable;
+import org.apache.calcite.util.ConversionUtil;
 import org.apache.commons.pool.PoolableObjectFactory;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -35,6 +38,16 @@ class CalciteParserFactory implements PoolableObjectFactory {
   private final Map<String, ExtensionFunction> extSigs;
   private final int mapdPort;
   private final SockTransportProperties socket_transport_properties;
+  private final MapDSqlOperatorTable tableOperator;
+
+  static {
+    System.setProperty(
+            "saffron.default.charset", ConversionUtil.NATIVE_UTF16_CHARSET_NAME);
+    System.setProperty(
+            "saffron.default.nationalcharset", ConversionUtil.NATIVE_UTF16_CHARSET_NAME);
+    System.setProperty("saffron.default.collation.name",
+            ConversionUtil.NATIVE_UTF16_CHARSET_NAME + "$en_US");
+  }
 
   public CalciteParserFactory(String dataDir,
           final Map<String, ExtensionFunction> extSigs,
@@ -44,12 +57,15 @@ class CalciteParserFactory implements PoolableObjectFactory {
     this.extSigs = extSigs;
     this.mapdPort = mapdPort;
     this.socket_transport_properties = skT;
+
+    tableOperator = new MapDSqlOperatorTable(SqlStdOperatorTable.instance());
+    MapDSqlOperatorTable.addUDF(tableOperator, extSigs);
   }
 
   @Override
   public Object makeObject() throws Exception {
     MapDParser obj =
-            new MapDParser(dataDir, extSigs, mapdPort, socket_transport_properties);
+            new MapDParser(dataDir, tableOperator, mapdPort, socket_transport_properties);
     return obj;
   }
 
