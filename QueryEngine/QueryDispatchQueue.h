@@ -74,7 +74,7 @@ class QueryDispatchQueue {
       }
 
       if (!queue_.empty()) {
-        auto task = std::move(queue_.front());
+        auto task = queue_.front();
         queue_.pop();
 
         LOG(INFO) << "Running query and returning control. There are now "
