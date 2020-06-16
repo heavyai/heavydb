@@ -32,7 +32,7 @@
 #endif
 
 bool g_keep_data{false};
-size_t g_max_num_executors{2};
+size_t g_max_num_executors{8};
 
 extern bool g_is_test_env;
 
@@ -72,7 +72,7 @@ TargetValue run_simple_agg(const std::string& query_str, const ExecutorDeviceTyp
 }
 
 const char* table_schema = R"(
-    CREATE TABLE test_parallel (
+    (
         i64 BIGINT,
         i32 INT,
         i16 SMALLINT,
@@ -85,7 +85,7 @@ const char* table_schema = R"(
     ) WITH (FRAGMENT_SIZE=2);
 )";
 
-void run_sql_execute_test(const ExecutorDeviceType dt) {
+void run_sql_execute_test(const std::string& table_name, const ExecutorDeviceType dt) {
   auto check_returned_rows = [](const auto& result_set, const size_t num_rows) {
     CHECK(result_set);
     EXPECT_EQ(result_set->rowCount(), num_rows);
@@ -94,20 +94,21 @@ void run_sql_execute_test(const ExecutorDeviceType dt) {
   // basic queries
   EXPECT_EQ(15,
             v<int64_t>(run_simple_agg(
-                R"(SELECT COUNT(*) FROM test_parallel WHERE i32 < 50;)", dt)));
-  EXPECT_DOUBLE_EQ(double(1.0001),
-                   v<double>(run_simple_agg(
-                       R"(SELECT MIN(d) FROM test_parallel WHERE i1 IS NOT NULL;)", dt)));
+                "SELECT COUNT(*) FROM " + table_name + " WHERE i32 < 50;", dt)));
+  EXPECT_DOUBLE_EQ(
+      double(1.0001),
+      v<double>(run_simple_agg(
+          "SELECT MIN(d) FROM " + table_name + " WHERE i1 IS NOT NULL;", dt)));
 
   // Simple query with a sort
   EXPECT_EQ(0,
             v<int64_t>(run_simple_agg(
-                R"(SELECT i64 FROM test_parallel ORDER BY i64 LIMIT 1;)", dt)));
+                "SELECT i64 FROM " + table_name + " ORDER BY i64 LIMIT 1;", dt)));
 
   // complex queries
   EXPECT_NO_THROW(check_returned_rows(
       QR::get()
-          ->runSelectQuery(R"(SELECT d, f, COUNT(*) FROM test_parallel GROUP BY d, f;)",
+          ->runSelectQuery("SELECT d, f, COUNT(*) FROM " + table_name + " GROUP BY d, f;",
                            dt,
                            /*hoist_literals=*/true,
                            /*allow_loop_joins=*/false,
@@ -117,7 +118,10 @@ void run_sql_execute_test(const ExecutorDeviceType dt) {
   EXPECT_NO_THROW(check_returned_rows(
       QR::get()
           ->runSelectQuery(
-              R"(SELECT approx_count_distinct(d), approx_count_distinct(str), i64, i32, i16 FROM test_parallel WHERE i32 < 50 GROUP BY i64, i32, i16 ORDER BY i64, i32, i16;)",
+              "SELECT approx_count_distinct(d), approx_count_distinct(str), i64, i32, "
+              "i16 FROM " +
+                  table_name +
+                  " WHERE i32 < 50 GROUP BY i64, i32, i16 ORDER BY i64, i32, i16;",
               dt,
               /*hoist_literals=*/true,
               /*allow_loop_joins=*/false,
@@ -129,7 +133,7 @@ void run_sql_execute_test(const ExecutorDeviceType dt) {
   EXPECT_NO_THROW(check_returned_rows(
       QR::get()
           ->runSelectQuery(
-              R"(SELECT d, f, COUNT(*) FROM test_parallel GROUP BY d, f HAVING d < f;)",
+              "SELECT d, f, COUNT(*) FROM " + table_name + " GROUP BY d, f HAVING d < f;",
               dt,
               /*hoist_literals=*/true,
               /*allow_loop_joins=*/false,
@@ -138,43 +142,46 @@ void run_sql_execute_test(const ExecutorDeviceType dt) {
       5));
 }
 
+void build_table(const std::string& table_name) {
+  run_ddl_statement("DROP TABLE IF EXISTS " + table_name + ";");
+
+  run_ddl_statement("CREATE TABLE " + table_name + " " + table_schema);
+  ValuesGenerator gen(table_name);
+  for (size_t i = 0; i < 10; i++) {
+    QR::get()->runSQL(gen(100, 10, 2, 1, 1.0001, 1.1, "'true'", "'hello'", "{100, 200}"),
+                      ExecutorDeviceType::CPU);
+  }
+  for (size_t i = 0; i < 5; i++) {
+    QR::get()->runSQL(gen(500,
+                          50,
+                          "NULL",
+                          5,
+                          5.0001,
+                          5.1,
+                          "'false'",
+                          "'world'",
+                          i % 2 == 0 ? "{NULL, 200}" : "{100, NULL}"),
+                      ExecutorDeviceType::CPU);
+  }
+  for (size_t i = 0; i < 5; i++) {
+    QR::get()->runSQL(
+        gen(100 * i,
+            10 * i,
+            2 * i,
+            1 * i,
+            1.0001 * static_cast<float>(i),
+            1.1 * static_cast<float>(i),
+            "NULL",
+            "NULL",
+            "{" + std::to_string(100 * i) + "," + std::to_string(200 * i) + "}"),
+        ExecutorDeviceType::CPU);
+  }
+}
+
 class SingleTableTestEnv : public ::testing::Test {
  protected:
   void SetUp() override {
-    run_ddl_statement("DROP TABLE IF EXISTS test_parallel;");
-
-    run_ddl_statement(table_schema);
-    ValuesGenerator gen("test_parallel");
-    for (size_t i = 0; i < 10; i++) {
-      QR::get()->runSQL(
-          gen(100, 10, 2, 1, 1.0001, 1.1, "'true'", "'hello'", "{100, 200}"),
-          ExecutorDeviceType::CPU);
-    }
-    for (size_t i = 0; i < 5; i++) {
-      QR::get()->runSQL(gen(500,
-                            50,
-                            "NULL",
-                            5,
-                            5.0001,
-                            5.1,
-                            "'false'",
-                            "'world'",
-                            i % 2 == 0 ? "{NULL, 200}" : "{100, NULL}"),
-                        ExecutorDeviceType::CPU);
-    }
-    for (size_t i = 0; i < 5; i++) {
-      QR::get()->runSQL(
-          gen(100 * i,
-              10 * i,
-              2 * i,
-              1 * i,
-              1.0001 * static_cast<float>(i),
-              1.1 * static_cast<float>(i),
-              "NULL",
-              "NULL",
-              "{" + std::to_string(100 * i) + "," + std::to_string(200 * i) + "}"),
-          ExecutorDeviceType::CPU);
-    }
+    build_table("test_parallel");
 
     if (!skip_tests(ExecutorDeviceType::GPU)) {
       // warm up the PTX JIT
@@ -189,7 +196,7 @@ class SingleTableTestEnv : public ::testing::Test {
   }
 };
 
-TEST_F(SingleTableTestEnv, OneExecutor) {
+TEST_F(SingleTableTestEnv, AllTables) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
 
@@ -199,7 +206,7 @@ TEST_F(SingleTableTestEnv, OneExecutor) {
       auto execution_time = measure<>::execution([&]() {
         for (size_t w = 0; w < i; w++) {
           worker_threads.push_back(
-              std::async(std::launch::async, run_sql_execute_test, dt));
+              std::async(std::launch::async, run_sql_execute_test, "test_parallel", dt));
         }
         for (auto& t : worker_threads) {
           t.get();
@@ -207,6 +214,57 @@ TEST_F(SingleTableTestEnv, OneExecutor) {
       });
       LOG(ERROR) << "Finished execution with " << i << " executors, " << execution_time
                  << " ms.";
+    }
+  }
+}
+
+size_t g_num_tables{50};
+
+class MultiTableTestEnv : public ::testing::Test {
+ protected:
+  void SetUp() override {
+    for (size_t i = 0; i < g_num_tables; i++) {
+      build_table("test_parallel_" + std::to_string(i));
+    }
+
+    if (!skip_tests(ExecutorDeviceType::GPU)) {
+      // warm up the PTX JIT
+      run_simple_agg("SELECT COUNT(*) FROM test_parallel_0;", ExecutorDeviceType::GPU);
+    }
+  }
+
+  void TearDown() override {
+    if (!g_keep_data) {
+      for (size_t i = 0; i < g_num_tables; i++) {
+        run_ddl_statement("DROP TABLE IF EXISTS test_parallel_" + std::to_string(i) +
+                          ";");
+      }
+    }
+  }
+};
+
+TEST_F(MultiTableTestEnv, AllTables) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    for (size_t i = 1; i <= g_max_num_executors; i *= 2) {
+      QR::get()->resizeDispatchQueue(i);
+      std::vector<std::future<void>> worker_threads;
+
+      // use fewer tables on CPU, as speedup isn't as large
+      auto num_tables = dt == ExecutorDeviceType::CPU ? 2 : g_num_tables;
+      auto execution_time = measure<>::execution([&]() {
+        for (size_t w = 0; w < num_tables; w++) {
+          worker_threads.push_back(std::async(std::launch::async,
+                                              run_sql_execute_test,
+                                              "test_parallel_" + std::to_string(w),
+                                              dt));
+        }
+        for (auto& t : worker_threads) {
+          t.get();
+        }
+      });
+      LOG(ERROR) << "Finished execution with " << g_num_tables << " tables, " << i
+                 << " executors, " << execution_time << " ms.";
     }
   }
 }
