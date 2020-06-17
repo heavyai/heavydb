@@ -65,7 +65,7 @@
             
             
               <div class="version">
-                5.4.0dev 50b50a6
+                5.4.0dev 6045813
               </div>
             
           
@@ -1832,23 +1832,29 @@
 <dl class="function">
 <dt>
 <span class="target" id="classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1ae25ed3bea36b3e7dcd95662306d81f3c"></span><code class="sig-name descname">void org.apache.calcite.sql2rel.SqlToRelConverter.convertFrom(Blackboard bb, SqlNode from)</code></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt>
+<span class="target" id="classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1a8276280ba140750296488cd1f4d6b690"></span><code class="sig-name descname">void org.apache.calcite.sql2rel.SqlToRelConverter.convertFrom(Blackboard bb, SqlNode from, List&lt; String &gt; fieldNames)</code></dt>
 <dd><p>Converts a FROM clause into a relational expression.</p>
 <p><dl class="simple">
 <dt><strong>Parameters</strong></dt><dd><ul class="breatheparameterlist simple">
 <li><p><code class="docutils literal notranslate"><span class="pre">bb</span></code>: Scope within which to resolve identifiers </p></li>
-<li><p><code class="docutils literal notranslate"><span class="pre">from</span></code>: FROM clause of a query. Examples include: <div class="highlight-cpp notranslate"><div class="highlight"><pre><span></span>        <span class="o">&lt;</span><span class="n">ul</span><span class="o">&gt;</span>
-        <span class="o">&lt;</span><span class="n">li</span><span class="o">&gt;</span><span class="n">a</span> <span class="n">single</span> <span class="n">table</span> <span class="p">(</span><span class="s">&quot;SALES.EMP&quot;</span><span class="p">),</span>
-        <span class="o">&lt;</span><span class="n">li</span><span class="o">&gt;</span><span class="n">an</span> <span class="n">aliased</span> <span class="n">table</span> <span class="p">(</span><span class="s">&quot;EMP AS E&quot;</span><span class="p">),</span>
-        <span class="o">&lt;</span><span class="n">li</span><span class="o">&gt;</span><span class="n">a</span> <span class="n">list</span> <span class="n">of</span> <span class="n">tables</span> <span class="p">(</span><span class="s">&quot;EMP, DEPT&quot;</span><span class="p">),</span>
-        <span class="o">&lt;</span><span class="n">li</span><span class="o">&gt;</span><span class="n">an</span> <span class="n">ANSI</span> <span class="n">Join</span> <span class="n">expression</span> <span class="p">(</span><span class="s">&quot;EMP JOIN DEPT ON EMP.DEPTNO =</span>
-        <span class="n">DEPT</span><span class="p">.</span><span class="n">DEPTNO</span><span class="s">&quot;),</span>
-        <span class="o">&lt;</span><span class="n">li</span><span class="o">&gt;</span><span class="n">a</span> <span class="n">VALUES</span> <span class="n">clause</span> <span class="p">(</span><span class="s">&quot;VALUES (&#39;Fred&#39;, 20)&quot;</span><span class="p">),</span>
-        <span class="o">&lt;</span><span class="n">li</span><span class="o">&gt;</span><span class="n">a</span> <span class="n">query</span> <span class="p">(</span><span class="s">&quot;(SELECT * FROM EMP WHERE GENDER = &#39;F&#39;)&quot;</span><span class="p">),</span>
-        <span class="o">&lt;</span><span class="n">li</span><span class="o">&gt;</span><span class="n">or</span> <span class="n">any</span> <span class="n">combination</span> <span class="n">of</span> <span class="n">the</span> <span class="n">above</span><span class="p">.</span>
-        <span class="o">&lt;/</span><span class="n">ul</span><span class="o">&gt;</span>
+<li><p><code class="docutils literal notranslate"><span class="pre">from</span></code>: FROM clause of a query. Examples include: <div class="highlight-cpp notranslate"><div class="highlight"><pre><span></span>              <span class="o">&lt;</span><span class="n">ul</span><span class="o">&gt;</span>
+              <span class="o">&lt;</span><span class="n">li</span><span class="o">&gt;</span><span class="n">a</span> <span class="n">single</span> <span class="n">table</span> <span class="p">(</span><span class="s">&quot;SALES.EMP&quot;</span><span class="p">),</span>
+              <span class="o">&lt;</span><span class="n">li</span><span class="o">&gt;</span><span class="n">an</span> <span class="n">aliased</span> <span class="n">table</span> <span class="p">(</span><span class="s">&quot;EMP AS E&quot;</span><span class="p">),</span>
+              <span class="o">&lt;</span><span class="n">li</span><span class="o">&gt;</span><span class="n">a</span> <span class="n">list</span> <span class="n">of</span> <span class="n">tables</span> <span class="p">(</span><span class="s">&quot;EMP, DEPT&quot;</span><span class="p">),</span>
+              <span class="o">&lt;</span><span class="n">li</span><span class="o">&gt;</span><span class="n">an</span> <span class="n">ANSI</span> <span class="n">Join</span> <span class="n">expression</span> <span class="p">(</span><span class="s">&quot;EMP JOIN DEPT ON EMP.DEPTNO =</span>
+              <span class="n">DEPT</span><span class="p">.</span><span class="n">DEPTNO</span><span class="s">&quot;),</span>
+              <span class="o">&lt;</span><span class="n">li</span><span class="o">&gt;</span><span class="n">a</span> <span class="n">VALUES</span> <span class="n">clause</span> <span class="p">(</span><span class="s">&quot;VALUES (&#39;Fred&#39;, 20)&quot;</span><span class="p">),</span>
+              <span class="o">&lt;</span><span class="n">li</span><span class="o">&gt;</span><span class="n">a</span> <span class="n">query</span> <span class="p">(</span><span class="s">&quot;(SELECT * FROM EMP WHERE GENDER = &#39;F&#39;)&quot;</span><span class="p">),</span>
+              <span class="o">&lt;</span><span class="n">li</span><span class="o">&gt;</span><span class="n">or</span> <span class="n">any</span> <span class="n">combination</span> <span class="n">of</span> <span class="n">the</span> <span class="n">above</span><span class="p">.</span>
+              <span class="o">&lt;/</span><span class="n">ul</span><span class="o">&gt;</span>
 </pre></div>
 </div>
  </p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">fieldNames</span></code>: Field aliases, usually come from AS clause </p></li>
 </ul>
 </dd>
 </dl>
@@ -2265,6 +2271,11 @@
 <dl class="function">
 <dt>
 <span class="target" id="classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1a85fe5aa3fdeeaebcc675dd2873114502"></span><code class="sig-name descname">RexNode org.apache.calcite.sql2rel.SqlToRelConverter.convertOver(Blackboard bb, SqlNode node)</code></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt>
+<span class="target" id="classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1a85d404030814abc7ab92e3f71d70ea46"></span><code class="sig-name descname">void org.apache.calcite.sql2rel.SqlToRelConverter.convertUnnest(Blackboard bb, SqlCall call, List&lt; String &gt; fieldNames)</code></dt>
 <dd></dd></dl>
 
 <dl class="function">

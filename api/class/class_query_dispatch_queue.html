@@ -65,7 +65,7 @@
             
             
               <div class="version">
-                5.4.0dev 50b50a6
+                5.4.0dev 6045813
               </div>
             
           
@@ -1445,6 +1445,14 @@
 <span id="_CPPv318QueryDispatchQueue"></span><span id="_CPPv218QueryDispatchQueue"></span><span id="QueryDispatchQueue"></span><span class="target" id="class_query_dispatch_queue"></span><em class="property">class </em><code class="sig-name descname">QueryDispatchQueue</code><a class="headerlink" href="#_CPPv418QueryDispatchQueue" title="Permalink to this definition">¶</a><br /></dt>
 <dd><p><a class="reference internal" href="#class_query_dispatch_queue"><span class="std std-ref">QueryDispatchQueue</span></a> maintains a list of pending queries and dispatches those queries as Executors become available </p>
 <div class="breathe-sectiondef docutils container">
+<p class="breathe-sectiondef-title rubric">Public Types</p>
+<dl class="type">
+<dt id="_CPPv4N18QueryDispatchQueue4TaskE">
+<span id="_CPPv3N18QueryDispatchQueue4TaskE"></span><span id="_CPPv2N18QueryDispatchQueue4TaskE"></span><span class="target" id="class_query_dispatch_queue_1a0647f514947072dc49781d27b2c93e3a"></span><em class="property">using </em><code class="sig-name descname">Task</code> = std::packaged_task&lt;void<span class="sig-paren">(</span>size_t<span class="sig-paren">)</span>&gt;<a class="headerlink" href="#_CPPv4N18QueryDispatchQueue4TaskE" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+</div>
+<div class="breathe-sectiondef docutils container">
 <p class="breathe-sectiondef-title rubric">Public Functions</p>
 <dl class="function">
 <dt id="_CPPv4N18QueryDispatchQueue18QueryDispatchQueueEK6size_t">
@@ -1452,9 +1460,9 @@
 <dd></dd></dl>
 
 <dl class="function">
-<dt id="_CPPv4N18QueryDispatchQueue6submitERRNSt13packaged_taskIFv6size_tEEE">
-<span id="_CPPv3N18QueryDispatchQueue6submitERRNSt13packaged_taskIFv6size_tEEE"></span><span id="_CPPv2N18QueryDispatchQueue6submitERRNSt13packaged_taskIFv6size_tEEE"></span><span class="target" id="class_query_dispatch_queue_1abcb7a1218e19951156cb05c20df5e25a"></span>std::future&lt;void&gt; <code class="sig-name descname">submit</code><span class="sig-paren">(</span>std::packaged_task&lt;void<span class="sig-paren">(</span>size_t<span class="sig-paren">)</span>&gt; &amp;&amp;<em>task</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N18QueryDispatchQueue6submitERRNSt13packaged_taskIFv6size_tEEE" title="Permalink to this definition">¶</a><br /></dt>
-<dd><p>Submit a new task to the queue. Blocks until the task begins execution, and returns a future to the executing task. </p>
+<dt id="_CPPv4N18QueryDispatchQueue6submitENSt10shared_ptrI4TaskEE">
+<span id="_CPPv3N18QueryDispatchQueue6submitENSt10shared_ptrI4TaskEE"></span><span id="_CPPv2N18QueryDispatchQueue6submitENSt10shared_ptrI4TaskEE"></span><span id="QueryDispatchQueue::submit__std::shared_ptr:Task:"></span><span class="target" id="class_query_dispatch_queue_1ae3eff86f6519ccb6bc30e2160825cd64"></span>void <code class="sig-name descname">submit</code><span class="sig-paren">(</span>std::shared_ptr&lt;<a class="reference internal" href="#_CPPv4N18QueryDispatchQueue4TaskE" title="QueryDispatchQueue::Task">Task</a>&gt; <em>task</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N18QueryDispatchQueue6submitENSt10shared_ptrI4TaskEE" title="Permalink to this definition">¶</a><br /></dt>
+<dd><p>Submit a new task to the queue. Blocks until the task begins execution. The caller is expected to maintain a copy of the shared_ptr which will be used to access results once the task runs. </p>
 </dd></dl>
 
 <dl class="function">
@@ -1490,7 +1498,7 @@
 
 <dl class="member">
 <dt id="_CPPv4N18QueryDispatchQueue6queue_E">
-<span id="_CPPv3N18QueryDispatchQueue6queue_E"></span><span id="_CPPv2N18QueryDispatchQueue6queue_E"></span><span class="target" id="class_query_dispatch_queue_1a7ecb95db30dd35a253469a2cca4e08c8"></span>std::queue&lt;std::packaged_task&lt;void<span class="sig-paren">(</span>size_t<span class="sig-paren">)</span>&gt;&gt; <code class="sig-name descname">queue_</code><a class="headerlink" href="#_CPPv4N18QueryDispatchQueue6queue_E" title="Permalink to this definition">¶</a><br /></dt>
+<span id="_CPPv3N18QueryDispatchQueue6queue_E"></span><span id="_CPPv2N18QueryDispatchQueue6queue_E"></span><span id="QueryDispatchQueue::queue___std::queue:std::shared_ptr:Task::"></span><span class="target" id="class_query_dispatch_queue_1ae48cf29a16c6c1b0474c10d95c9029c1"></span>std::queue&lt;std::shared_ptr&lt;<a class="reference internal" href="#_CPPv4N18QueryDispatchQueue4TaskE" title="QueryDispatchQueue::Task">Task</a>&gt;&gt; <code class="sig-name descname">queue_</code><a class="headerlink" href="#_CPPv4N18QueryDispatchQueue6queue_E" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 <dl class="member">

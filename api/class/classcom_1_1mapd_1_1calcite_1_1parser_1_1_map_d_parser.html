@@ -65,7 +65,7 @@
             
             
               <div class="version">
-                5.4.0dev 50b50a6
+                5.4.0dev 6045813
               </div>
             
           
@@ -1452,7 +1452,7 @@
 <p class="breathe-sectiondef-title rubric">Public Functions</p>
 <dl class="function">
 <dt>
-<span class="target" id="classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_parser_1a0787a3f200f6158b7077ea8e9af73c65"></span><code class="sig-name descname">com.mapd.calcite.parser.MapDParser.MapDParser(String dataDir, final Map&lt; String,  ExtensionFunction  &gt; extSigs, int mapdPort, SockTransportProperties skT)</code></dt>
+<span class="target" id="classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_parser_1a575df3cea3495b1f11316f5ac0da582f"></span><code class="sig-name descname">com.mapd.calcite.parser.MapDParser.MapDParser(String dataDir, final  MapDSqlOperatorTable mapDSqlOperatorTable, int mapdPort, SockTransportProperties skT)</code></dt>
 <dd></dd></dl>
 
 <dl class="function">
@@ -1467,7 +1467,17 @@
 
 <dl class="function">
 <dt>
+<span class="target" id="classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_parser_1af316bf7370a1299ab6e904c36eecb343"></span><code class="sig-name descname">Pair&lt;String, SqlIdentifierCapturer&gt; com.mapd.calcite.parser.MapDParser.process(String sql, final  MapDParserOptions parserOptions)</code></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt>
 <span class="target" id="classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_parser_1a87771b894cecd76d5aaa884fab9a18dd"></span><code class="sig-name descname">String com.mapd.calcite.parser.MapDParser.processSql(String sql, final  MapDParserOptions parserOptions)</code></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt>
+<span class="target" id="classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_parser_1abbf369cf9335547078014b971fc1ab64"></span><code class="sig-name descname">String com.mapd.calcite.parser.MapDParser.processSql(final SqlNode sqlNode, final  MapDParserOptions parserOptions)</code></dt>
 <dd></dd></dl>
 
 <dl class="function">
@@ -1483,6 +1493,11 @@
 <dl class="function">
 <dt>
 <span class="target" id="classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_parser_1a02efa0b5de1bd47db8ff30ecca4bb703"></span><code class="sig-name descname">SqlIdentifierCapturer com.mapd.calcite.parser.MapDParser.captureIdentifiers(String sql, boolean legacy_syntax)</code></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt>
+<span class="target" id="classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_parser_1af2f2e558150201324bbf1d0415f0c226"></span><code class="sig-name descname">SqlIdentifierCapturer com.mapd.calcite.parser.MapDParser.captureIdentifiers(SqlNode node)</code></dt>
 <dd></dd></dl>
 
 <dl class="function">
@@ -1506,21 +1521,6 @@
 </div>
 <div class="breathe-sectiondef docutils container">
 <p class="breathe-sectiondef-title rubric">Protected Functions</p>
-<dl class="function">
-<dt>
-<span class="target" id="classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_parser_1a4b9f9abd9f816eae212c737019287dd7"></span><code class="sig-name descname">SqlOperatorTable com.mapd.calcite.parser.MapDParser.createOperatorTable(final Map&lt; String,  ExtensionFunction  &gt; extSigs)</code></dt>
-<dd><p>Creates an operator table.</p>
-<p><dl class="simple">
-<dt><strong>Return</strong></dt><dd><p>New operator table </p>
-</dd>
-<dt><strong>Parameters</strong></dt><dd><ul class="breatheparameterlist simple">
-<li><p><code class="docutils literal notranslate"><span class="pre">extSigs</span></code>: </p></li>
-</ul>
-</dd>
-</dl>
-</p>
-</dd></dl>
-
 <dl class="function">
 <dt>
 <span class="target" id="classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_parser_1a28f252efe434740ab93dca543e366f0e"></span><code class="sig-name descname">RelDataTypeSystem com.mapd.calcite.parser.MapDParser.createTypeSystem()</code></dt>
@@ -1634,7 +1634,7 @@
 <p class="breathe-sectiondef-title rubric">Private Members</p>
 <dl class="member">
 <dt>
-<span class="target" id="classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_parser_1a4218480a6f73a565219950085734bc3b"></span><code class="sig-name descname">final Map&lt;String, ExtensionFunction&gt; com.mapd.calcite.parser.MapDParser.extSigs</code></dt>
+<span class="target" id="classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_parser_1a75799a4893068d52c167224c6b4f76a6"></span><code class="sig-name descname">final MapDSqlOperatorTable com.mapd.calcite.parser.MapDParser.mapDSqlOperatorTable</code></dt>
 <dd></dd></dl>
 
 <dl class="member">
