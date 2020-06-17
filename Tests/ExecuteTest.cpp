@@ -3204,7 +3204,8 @@ TEST(Select, Time) {
     ASSERT_EQ(936835200L,
               v<int64_t>(run_simple_agg(
                   "SELECT MAX(EXTRACT(DATEEPOCH FROM o)) FROM test;", dt)));
-    ASSERT_EQ(1L,
+    // PostgreSQL: SELECT EXTRACT(WEEK FROM TIMESTAMP '2012-01-01 20:15:12') -> 52
+    ASSERT_EQ(52L,
               v<int64_t>(run_simple_agg("SELECT MAX(EXTRACT(WEEK FROM CAST('2012-01-01 "
                                         "20:15:12' AS TIMESTAMP))) FROM test limit 1;",
                                         dt)));
@@ -9784,7 +9785,8 @@ TEST(Select, TimestampPrecision) {
     ASSERT_EQ(7L,
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(isodow from m_6) FROM test limit 1;", dt)));
-    ASSERT_EQ(29L,
+    // PostgreSQL: SELECT EXTRACT(week from TIMESTAMP '1999-07-11 14:02:53.874533') -> 27
+    ASSERT_EQ(27L,
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(week from m_6) FROM test limit 1;", dt)));
     ASSERT_EQ(11L,
@@ -12114,6 +12116,585 @@ TEST(Select, TimestampCastAggregates) {
           *row, std::get<1>(param), std::get<2>(param), std::get<3>(param));
     }
     run_ddl_statement("DROP table timestamp_agg;");
+  }
+}
+
+// Tests generated from scripts/pg_test/generate_extract_tests.rb
+TEST(Select, ExtractFromNegativeTimes) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    ASSERT_EQ(11L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT EXTRACT(DAY FROM TIMESTAMP '1913-12-11 10:09:08');", dt)));
+    ASSERT_EQ(4L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT EXTRACT(DOW FROM TIMESTAMP '1913-12-11 10:09:08');", dt)));
+    ASSERT_EQ(345L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT EXTRACT(DOY FROM TIMESTAMP '1913-12-11 10:09:08');", dt)));
+    ASSERT_EQ(-1769003452L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT EXTRACT(EPOCH FROM TIMESTAMP '1913-12-11 10:09:08');", dt)));
+    ASSERT_EQ(10L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT EXTRACT(HOUR FROM TIMESTAMP '1913-12-11 10:09:08');", dt)));
+    ASSERT_EQ(4L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT EXTRACT(ISODOW FROM TIMESTAMP '1913-12-11 10:09:08');", dt)));
+    ASSERT_EQ(
+        8000000L,
+        v<int64_t>(run_simple_agg(
+            "SELECT EXTRACT(MICROSECOND FROM TIMESTAMP '1913-12-11 10:09:08');", dt)));
+    ASSERT_EQ(
+        8000L,
+        v<int64_t>(run_simple_agg(
+            "SELECT EXTRACT(MILLISECOND FROM TIMESTAMP '1913-12-11 10:09:08');", dt)));
+    ASSERT_EQ(9L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT EXTRACT(MINUTE FROM TIMESTAMP '1913-12-11 10:09:08');", dt)));
+    ASSERT_EQ(12L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT EXTRACT(MONTH FROM TIMESTAMP '1913-12-11 10:09:08');", dt)));
+    ASSERT_EQ(4L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT EXTRACT(QUARTER FROM TIMESTAMP '1913-12-11 10:09:08');", dt)));
+    ASSERT_EQ(8L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT EXTRACT(SECOND FROM TIMESTAMP '1913-12-11 10:09:08');", dt)));
+    ASSERT_EQ(50L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT EXTRACT(WEEK FROM TIMESTAMP '1913-12-11 10:09:08');", dt)));
+    ASSERT_EQ(1913L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT EXTRACT(YEAR FROM TIMESTAMP '1913-12-11 10:09:08');", dt)));
+    ASSERT_EQ(11L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT EXTRACT(DAY FROM TIMESTAMP '1913-12-11 10:09:00');", dt)));
+    ASSERT_EQ(4L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT EXTRACT(DOW FROM TIMESTAMP '1913-12-11 10:09:00');", dt)));
+    ASSERT_EQ(345L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT EXTRACT(DOY FROM TIMESTAMP '1913-12-11 10:09:00');", dt)));
+    ASSERT_EQ(-1769003460L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT EXTRACT(EPOCH FROM TIMESTAMP '1913-12-11 10:09:00');", dt)));
+    ASSERT_EQ(10L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT EXTRACT(HOUR FROM TIMESTAMP '1913-12-11 10:09:00');", dt)));
+    ASSERT_EQ(4L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT EXTRACT(ISODOW FROM TIMESTAMP '1913-12-11 10:09:00');", dt)));
+    ASSERT_EQ(
+        0L,
+        v<int64_t>(run_simple_agg(
+            "SELECT EXTRACT(MICROSECOND FROM TIMESTAMP '1913-12-11 10:09:00');", dt)));
+    ASSERT_EQ(
+        0L,
+        v<int64_t>(run_simple_agg(
+            "SELECT EXTRACT(MILLISECOND FROM TIMESTAMP '1913-12-11 10:09:00');", dt)));
+    ASSERT_EQ(9L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT EXTRACT(MINUTE FROM TIMESTAMP '1913-12-11 10:09:00');", dt)));
+    ASSERT_EQ(12L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT EXTRACT(MONTH FROM TIMESTAMP '1913-12-11 10:09:00');", dt)));
+    ASSERT_EQ(4L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT EXTRACT(QUARTER FROM TIMESTAMP '1913-12-11 10:09:00');", dt)));
+    ASSERT_EQ(0L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT EXTRACT(SECOND FROM TIMESTAMP '1913-12-11 10:09:00');", dt)));
+    ASSERT_EQ(50L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT EXTRACT(WEEK FROM TIMESTAMP '1913-12-11 10:09:00');", dt)));
+    ASSERT_EQ(1913L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT EXTRACT(YEAR FROM TIMESTAMP '1913-12-11 10:09:00');", dt)));
+    ASSERT_EQ(11L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT EXTRACT(DAY FROM TIMESTAMP '1913-12-11 10:00:00');", dt)));
+    ASSERT_EQ(4L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT EXTRACT(DOW FROM TIMESTAMP '1913-12-11 10:00:00');", dt)));
+    ASSERT_EQ(345L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT EXTRACT(DOY FROM TIMESTAMP '1913-12-11 10:00:00');", dt)));
+    ASSERT_EQ(-1769004000L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT EXTRACT(EPOCH FROM TIMESTAMP '1913-12-11 10:00:00');", dt)));
+    ASSERT_EQ(10L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT EXTRACT(HOUR FROM TIMESTAMP '1913-12-11 10:00:00');", dt)));
+    ASSERT_EQ(4L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT EXTRACT(ISODOW FROM TIMESTAMP '1913-12-11 10:00:00');", dt)));
+    ASSERT_EQ(
+        0L,
+        v<int64_t>(run_simple_agg(
+            "SELECT EXTRACT(MICROSECOND FROM TIMESTAMP '1913-12-11 10:00:00');", dt)));
+    ASSERT_EQ(
+        0L,
+        v<int64_t>(run_simple_agg(
+            "SELECT EXTRACT(MILLISECOND FROM TIMESTAMP '1913-12-11 10:00:00');", dt)));
+    ASSERT_EQ(0L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT EXTRACT(MINUTE FROM TIMESTAMP '1913-12-11 10:00:00');", dt)));
+    ASSERT_EQ(12L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT EXTRACT(MONTH FROM TIMESTAMP '1913-12-11 10:00:00');", dt)));
+    ASSERT_EQ(4L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT EXTRACT(QUARTER FROM TIMESTAMP '1913-12-11 10:00:00');", dt)));
+    ASSERT_EQ(0L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT EXTRACT(SECOND FROM TIMESTAMP '1913-12-11 10:00:00');", dt)));
+    ASSERT_EQ(50L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT EXTRACT(WEEK FROM TIMESTAMP '1913-12-11 10:00:00');", dt)));
+    ASSERT_EQ(1913L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT EXTRACT(YEAR FROM TIMESTAMP '1913-12-11 10:00:00');", dt)));
+    ASSERT_EQ(11L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT EXTRACT(DAY FROM TIMESTAMP '1913-12-11 00:00:00');", dt)));
+    ASSERT_EQ(4L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT EXTRACT(DOW FROM TIMESTAMP '1913-12-11 00:00:00');", dt)));
+    ASSERT_EQ(345L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT EXTRACT(DOY FROM TIMESTAMP '1913-12-11 00:00:00');", dt)));
+    ASSERT_EQ(-1769040000L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT EXTRACT(EPOCH FROM TIMESTAMP '1913-12-11 00:00:00');", dt)));
+    ASSERT_EQ(0L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT EXTRACT(HOUR FROM TIMESTAMP '1913-12-11 00:00:00');", dt)));
+    ASSERT_EQ(4L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT EXTRACT(ISODOW FROM TIMESTAMP '1913-12-11 00:00:00');", dt)));
+    ASSERT_EQ(
+        0L,
+        v<int64_t>(run_simple_agg(
+            "SELECT EXTRACT(MICROSECOND FROM TIMESTAMP '1913-12-11 00:00:00');", dt)));
+    ASSERT_EQ(
+        0L,
+        v<int64_t>(run_simple_agg(
+            "SELECT EXTRACT(MILLISECOND FROM TIMESTAMP '1913-12-11 00:00:00');", dt)));
+    ASSERT_EQ(0L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT EXTRACT(MINUTE FROM TIMESTAMP '1913-12-11 00:00:00');", dt)));
+    ASSERT_EQ(12L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT EXTRACT(MONTH FROM TIMESTAMP '1913-12-11 00:00:00');", dt)));
+    ASSERT_EQ(4L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT EXTRACT(QUARTER FROM TIMESTAMP '1913-12-11 00:00:00');", dt)));
+    ASSERT_EQ(0L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT EXTRACT(SECOND FROM TIMESTAMP '1913-12-11 00:00:00');", dt)));
+    ASSERT_EQ(50L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT EXTRACT(WEEK FROM TIMESTAMP '1913-12-11 00:00:00');", dt)));
+    ASSERT_EQ(1913L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT EXTRACT(YEAR FROM TIMESTAMP '1913-12-11 00:00:00');", dt)));
+    ASSERT_EQ(1L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT EXTRACT(DAY FROM TIMESTAMP '1913-12-01 00:00:00');", dt)));
+    ASSERT_EQ(1L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT EXTRACT(DOW FROM TIMESTAMP '1913-12-01 00:00:00');", dt)));
+    ASSERT_EQ(335L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT EXTRACT(DOY FROM TIMESTAMP '1913-12-01 00:00:00');", dt)));
+    ASSERT_EQ(-1769904000L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT EXTRACT(EPOCH FROM TIMESTAMP '1913-12-01 00:00:00');", dt)));
+    ASSERT_EQ(0L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT EXTRACT(HOUR FROM TIMESTAMP '1913-12-01 00:00:00');", dt)));
+    ASSERT_EQ(1L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT EXTRACT(ISODOW FROM TIMESTAMP '1913-12-01 00:00:00');", dt)));
+    ASSERT_EQ(
+        0L,
+        v<int64_t>(run_simple_agg(
+            "SELECT EXTRACT(MICROSECOND FROM TIMESTAMP '1913-12-01 00:00:00');", dt)));
+    ASSERT_EQ(
+        0L,
+        v<int64_t>(run_simple_agg(
+            "SELECT EXTRACT(MILLISECOND FROM TIMESTAMP '1913-12-01 00:00:00');", dt)));
+    ASSERT_EQ(0L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT EXTRACT(MINUTE FROM TIMESTAMP '1913-12-01 00:00:00');", dt)));
+    ASSERT_EQ(12L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT EXTRACT(MONTH FROM TIMESTAMP '1913-12-01 00:00:00');", dt)));
+    ASSERT_EQ(4L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT EXTRACT(QUARTER FROM TIMESTAMP '1913-12-01 00:00:00');", dt)));
+    ASSERT_EQ(0L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT EXTRACT(SECOND FROM TIMESTAMP '1913-12-01 00:00:00');", dt)));
+    ASSERT_EQ(49L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT EXTRACT(WEEK FROM TIMESTAMP '1913-12-01 00:00:00');", dt)));
+    ASSERT_EQ(1913L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT EXTRACT(YEAR FROM TIMESTAMP '1913-12-01 00:00:00');", dt)));
+    ASSERT_EQ(1L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT EXTRACT(DAY FROM TIMESTAMP '1913-01-01 00:00:00');", dt)));
+    ASSERT_EQ(3L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT EXTRACT(DOW FROM TIMESTAMP '1913-01-01 00:00:00');", dt)));
+    ASSERT_EQ(1L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT EXTRACT(DOY FROM TIMESTAMP '1913-01-01 00:00:00');", dt)));
+    ASSERT_EQ(-1798761600L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT EXTRACT(EPOCH FROM TIMESTAMP '1913-01-01 00:00:00');", dt)));
+    ASSERT_EQ(0L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT EXTRACT(HOUR FROM TIMESTAMP '1913-01-01 00:00:00');", dt)));
+    ASSERT_EQ(3L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT EXTRACT(ISODOW FROM TIMESTAMP '1913-01-01 00:00:00');", dt)));
+    ASSERT_EQ(
+        0L,
+        v<int64_t>(run_simple_agg(
+            "SELECT EXTRACT(MICROSECOND FROM TIMESTAMP '1913-01-01 00:00:00');", dt)));
+    ASSERT_EQ(
+        0L,
+        v<int64_t>(run_simple_agg(
+            "SELECT EXTRACT(MILLISECOND FROM TIMESTAMP '1913-01-01 00:00:00');", dt)));
+    ASSERT_EQ(0L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT EXTRACT(MINUTE FROM TIMESTAMP '1913-01-01 00:00:00');", dt)));
+    ASSERT_EQ(1L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT EXTRACT(MONTH FROM TIMESTAMP '1913-01-01 00:00:00');", dt)));
+    ASSERT_EQ(1L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT EXTRACT(QUARTER FROM TIMESTAMP '1913-01-01 00:00:00');", dt)));
+    ASSERT_EQ(0L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT EXTRACT(SECOND FROM TIMESTAMP '1913-01-01 00:00:00');", dt)));
+    ASSERT_EQ(1L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT EXTRACT(WEEK FROM TIMESTAMP '1913-01-01 00:00:00');", dt)));
+    ASSERT_EQ(1913L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT EXTRACT(YEAR FROM TIMESTAMP '1913-01-01 00:00:00');", dt)));
+    ASSERT_EQ(1L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT EXTRACT(DAY FROM TIMESTAMP '1970-01-01 00:00:00');", dt)));
+    ASSERT_EQ(4L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT EXTRACT(DOW FROM TIMESTAMP '1970-01-01 00:00:00');", dt)));
+    ASSERT_EQ(1L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT EXTRACT(DOY FROM TIMESTAMP '1970-01-01 00:00:00');", dt)));
+    ASSERT_EQ(0L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT EXTRACT(EPOCH FROM TIMESTAMP '1970-01-01 00:00:00');", dt)));
+    ASSERT_EQ(0L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT EXTRACT(HOUR FROM TIMESTAMP '1970-01-01 00:00:00');", dt)));
+    ASSERT_EQ(4L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT EXTRACT(ISODOW FROM TIMESTAMP '1970-01-01 00:00:00');", dt)));
+    ASSERT_EQ(
+        0L,
+        v<int64_t>(run_simple_agg(
+            "SELECT EXTRACT(MICROSECOND FROM TIMESTAMP '1970-01-01 00:00:00');", dt)));
+    ASSERT_EQ(
+        0L,
+        v<int64_t>(run_simple_agg(
+            "SELECT EXTRACT(MILLISECOND FROM TIMESTAMP '1970-01-01 00:00:00');", dt)));
+    ASSERT_EQ(0L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT EXTRACT(MINUTE FROM TIMESTAMP '1970-01-01 00:00:00');", dt)));
+    ASSERT_EQ(1L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT EXTRACT(MONTH FROM TIMESTAMP '1970-01-01 00:00:00');", dt)));
+    ASSERT_EQ(1L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT EXTRACT(QUARTER FROM TIMESTAMP '1970-01-01 00:00:00');", dt)));
+    ASSERT_EQ(0L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT EXTRACT(SECOND FROM TIMESTAMP '1970-01-01 00:00:00');", dt)));
+    ASSERT_EQ(1L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT EXTRACT(WEEK FROM TIMESTAMP '1970-01-01 00:00:00');", dt)));
+    ASSERT_EQ(1970L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT EXTRACT(YEAR FROM TIMESTAMP '1970-01-01 00:00:00');", dt)));
+    ASSERT_EQ(11L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT EXTRACT(DAY FROM TIMESTAMP '2013-12-11 10:09:08');", dt)));
+    ASSERT_EQ(3L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT EXTRACT(DOW FROM TIMESTAMP '2013-12-11 10:09:08');", dt)));
+    ASSERT_EQ(345L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT EXTRACT(DOY FROM TIMESTAMP '2013-12-11 10:09:08');", dt)));
+    ASSERT_EQ(1386756548L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT EXTRACT(EPOCH FROM TIMESTAMP '2013-12-11 10:09:08');", dt)));
+    ASSERT_EQ(10L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT EXTRACT(HOUR FROM TIMESTAMP '2013-12-11 10:09:08');", dt)));
+    ASSERT_EQ(3L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT EXTRACT(ISODOW FROM TIMESTAMP '2013-12-11 10:09:08');", dt)));
+    ASSERT_EQ(
+        8000000L,
+        v<int64_t>(run_simple_agg(
+            "SELECT EXTRACT(MICROSECOND FROM TIMESTAMP '2013-12-11 10:09:08');", dt)));
+    ASSERT_EQ(
+        8000L,
+        v<int64_t>(run_simple_agg(
+            "SELECT EXTRACT(MILLISECOND FROM TIMESTAMP '2013-12-11 10:09:08');", dt)));
+    ASSERT_EQ(9L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT EXTRACT(MINUTE FROM TIMESTAMP '2013-12-11 10:09:08');", dt)));
+    ASSERT_EQ(12L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT EXTRACT(MONTH FROM TIMESTAMP '2013-12-11 10:09:08');", dt)));
+    ASSERT_EQ(4L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT EXTRACT(QUARTER FROM TIMESTAMP '2013-12-11 10:09:08');", dt)));
+    ASSERT_EQ(8L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT EXTRACT(SECOND FROM TIMESTAMP '2013-12-11 10:09:08');", dt)));
+    ASSERT_EQ(50L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT EXTRACT(WEEK FROM TIMESTAMP '2013-12-11 10:09:08');", dt)));
+    ASSERT_EQ(2013L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT EXTRACT(YEAR FROM TIMESTAMP '2013-12-11 10:09:08');", dt)));
+    ASSERT_EQ(11L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT EXTRACT(DAY FROM TIMESTAMP '2013-12-11 10:09:00');", dt)));
+    ASSERT_EQ(3L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT EXTRACT(DOW FROM TIMESTAMP '2013-12-11 10:09:00');", dt)));
+    ASSERT_EQ(345L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT EXTRACT(DOY FROM TIMESTAMP '2013-12-11 10:09:00');", dt)));
+    ASSERT_EQ(1386756540L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT EXTRACT(EPOCH FROM TIMESTAMP '2013-12-11 10:09:00');", dt)));
+    ASSERT_EQ(10L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT EXTRACT(HOUR FROM TIMESTAMP '2013-12-11 10:09:00');", dt)));
+    ASSERT_EQ(3L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT EXTRACT(ISODOW FROM TIMESTAMP '2013-12-11 10:09:00');", dt)));
+    ASSERT_EQ(
+        0L,
+        v<int64_t>(run_simple_agg(
+            "SELECT EXTRACT(MICROSECOND FROM TIMESTAMP '2013-12-11 10:09:00');", dt)));
+    ASSERT_EQ(
+        0L,
+        v<int64_t>(run_simple_agg(
+            "SELECT EXTRACT(MILLISECOND FROM TIMESTAMP '2013-12-11 10:09:00');", dt)));
+    ASSERT_EQ(9L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT EXTRACT(MINUTE FROM TIMESTAMP '2013-12-11 10:09:00');", dt)));
+    ASSERT_EQ(12L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT EXTRACT(MONTH FROM TIMESTAMP '2013-12-11 10:09:00');", dt)));
+    ASSERT_EQ(4L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT EXTRACT(QUARTER FROM TIMESTAMP '2013-12-11 10:09:00');", dt)));
+    ASSERT_EQ(0L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT EXTRACT(SECOND FROM TIMESTAMP '2013-12-11 10:09:00');", dt)));
+    ASSERT_EQ(50L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT EXTRACT(WEEK FROM TIMESTAMP '2013-12-11 10:09:00');", dt)));
+    ASSERT_EQ(2013L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT EXTRACT(YEAR FROM TIMESTAMP '2013-12-11 10:09:00');", dt)));
+    ASSERT_EQ(11L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT EXTRACT(DAY FROM TIMESTAMP '2013-12-11 10:00:00');", dt)));
+    ASSERT_EQ(3L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT EXTRACT(DOW FROM TIMESTAMP '2013-12-11 10:00:00');", dt)));
+    ASSERT_EQ(345L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT EXTRACT(DOY FROM TIMESTAMP '2013-12-11 10:00:00');", dt)));
+    ASSERT_EQ(1386756000L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT EXTRACT(EPOCH FROM TIMESTAMP '2013-12-11 10:00:00');", dt)));
+    ASSERT_EQ(10L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT EXTRACT(HOUR FROM TIMESTAMP '2013-12-11 10:00:00');", dt)));
+    ASSERT_EQ(3L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT EXTRACT(ISODOW FROM TIMESTAMP '2013-12-11 10:00:00');", dt)));
+    ASSERT_EQ(
+        0L,
+        v<int64_t>(run_simple_agg(
+            "SELECT EXTRACT(MICROSECOND FROM TIMESTAMP '2013-12-11 10:00:00');", dt)));
+    ASSERT_EQ(
+        0L,
+        v<int64_t>(run_simple_agg(
+            "SELECT EXTRACT(MILLISECOND FROM TIMESTAMP '2013-12-11 10:00:00');", dt)));
+    ASSERT_EQ(0L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT EXTRACT(MINUTE FROM TIMESTAMP '2013-12-11 10:00:00');", dt)));
+    ASSERT_EQ(12L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT EXTRACT(MONTH FROM TIMESTAMP '2013-12-11 10:00:00');", dt)));
+    ASSERT_EQ(4L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT EXTRACT(QUARTER FROM TIMESTAMP '2013-12-11 10:00:00');", dt)));
+    ASSERT_EQ(0L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT EXTRACT(SECOND FROM TIMESTAMP '2013-12-11 10:00:00');", dt)));
+    ASSERT_EQ(50L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT EXTRACT(WEEK FROM TIMESTAMP '2013-12-11 10:00:00');", dt)));
+    ASSERT_EQ(2013L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT EXTRACT(YEAR FROM TIMESTAMP '2013-12-11 10:00:00');", dt)));
+    ASSERT_EQ(11L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT EXTRACT(DAY FROM TIMESTAMP '2013-12-11 00:00:00');", dt)));
+    ASSERT_EQ(3L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT EXTRACT(DOW FROM TIMESTAMP '2013-12-11 00:00:00');", dt)));
+    ASSERT_EQ(345L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT EXTRACT(DOY FROM TIMESTAMP '2013-12-11 00:00:00');", dt)));
+    ASSERT_EQ(1386720000L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT EXTRACT(EPOCH FROM TIMESTAMP '2013-12-11 00:00:00');", dt)));
+    ASSERT_EQ(0L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT EXTRACT(HOUR FROM TIMESTAMP '2013-12-11 00:00:00');", dt)));
+    ASSERT_EQ(3L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT EXTRACT(ISODOW FROM TIMESTAMP '2013-12-11 00:00:00');", dt)));
+    ASSERT_EQ(
+        0L,
+        v<int64_t>(run_simple_agg(
+            "SELECT EXTRACT(MICROSECOND FROM TIMESTAMP '2013-12-11 00:00:00');", dt)));
+    ASSERT_EQ(
+        0L,
+        v<int64_t>(run_simple_agg(
+            "SELECT EXTRACT(MILLISECOND FROM TIMESTAMP '2013-12-11 00:00:00');", dt)));
+    ASSERT_EQ(0L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT EXTRACT(MINUTE FROM TIMESTAMP '2013-12-11 00:00:00');", dt)));
+    ASSERT_EQ(12L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT EXTRACT(MONTH FROM TIMESTAMP '2013-12-11 00:00:00');", dt)));
+    ASSERT_EQ(4L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT EXTRACT(QUARTER FROM TIMESTAMP '2013-12-11 00:00:00');", dt)));
+    ASSERT_EQ(0L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT EXTRACT(SECOND FROM TIMESTAMP '2013-12-11 00:00:00');", dt)));
+    ASSERT_EQ(50L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT EXTRACT(WEEK FROM TIMESTAMP '2013-12-11 00:00:00');", dt)));
+    ASSERT_EQ(2013L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT EXTRACT(YEAR FROM TIMESTAMP '2013-12-11 00:00:00');", dt)));
+    ASSERT_EQ(1L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT EXTRACT(DAY FROM TIMESTAMP '2013-12-01 00:00:00');", dt)));
+    ASSERT_EQ(0L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT EXTRACT(DOW FROM TIMESTAMP '2013-12-01 00:00:00');", dt)));
+    ASSERT_EQ(335L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT EXTRACT(DOY FROM TIMESTAMP '2013-12-01 00:00:00');", dt)));
+    ASSERT_EQ(1385856000L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT EXTRACT(EPOCH FROM TIMESTAMP '2013-12-01 00:00:00');", dt)));
+    ASSERT_EQ(0L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT EXTRACT(HOUR FROM TIMESTAMP '2013-12-01 00:00:00');", dt)));
+    ASSERT_EQ(7L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT EXTRACT(ISODOW FROM TIMESTAMP '2013-12-01 00:00:00');", dt)));
+    ASSERT_EQ(
+        0L,
+        v<int64_t>(run_simple_agg(
+            "SELECT EXTRACT(MICROSECOND FROM TIMESTAMP '2013-12-01 00:00:00');", dt)));
+    ASSERT_EQ(
+        0L,
+        v<int64_t>(run_simple_agg(
+            "SELECT EXTRACT(MILLISECOND FROM TIMESTAMP '2013-12-01 00:00:00');", dt)));
+    ASSERT_EQ(0L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT EXTRACT(MINUTE FROM TIMESTAMP '2013-12-01 00:00:00');", dt)));
+    ASSERT_EQ(12L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT EXTRACT(MONTH FROM TIMESTAMP '2013-12-01 00:00:00');", dt)));
+    ASSERT_EQ(4L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT EXTRACT(QUARTER FROM TIMESTAMP '2013-12-01 00:00:00');", dt)));
+    ASSERT_EQ(0L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT EXTRACT(SECOND FROM TIMESTAMP '2013-12-01 00:00:00');", dt)));
+    ASSERT_EQ(48L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT EXTRACT(WEEK FROM TIMESTAMP '2013-12-01 00:00:00');", dt)));
+    ASSERT_EQ(2013L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT EXTRACT(YEAR FROM TIMESTAMP '2013-12-01 00:00:00');", dt)));
+    ASSERT_EQ(1L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT EXTRACT(DAY FROM TIMESTAMP '2013-01-01 00:00:00');", dt)));
+    ASSERT_EQ(2L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT EXTRACT(DOW FROM TIMESTAMP '2013-01-01 00:00:00');", dt)));
+    ASSERT_EQ(1L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT EXTRACT(DOY FROM TIMESTAMP '2013-01-01 00:00:00');", dt)));
+    ASSERT_EQ(1356998400L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT EXTRACT(EPOCH FROM TIMESTAMP '2013-01-01 00:00:00');", dt)));
+    ASSERT_EQ(0L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT EXTRACT(HOUR FROM TIMESTAMP '2013-01-01 00:00:00');", dt)));
+    ASSERT_EQ(2L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT EXTRACT(ISODOW FROM TIMESTAMP '2013-01-01 00:00:00');", dt)));
+    ASSERT_EQ(
+        0L,
+        v<int64_t>(run_simple_agg(
+            "SELECT EXTRACT(MICROSECOND FROM TIMESTAMP '2013-01-01 00:00:00');", dt)));
+    ASSERT_EQ(
+        0L,
+        v<int64_t>(run_simple_agg(
+            "SELECT EXTRACT(MILLISECOND FROM TIMESTAMP '2013-01-01 00:00:00');", dt)));
+    ASSERT_EQ(0L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT EXTRACT(MINUTE FROM TIMESTAMP '2013-01-01 00:00:00');", dt)));
+    ASSERT_EQ(1L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT EXTRACT(MONTH FROM TIMESTAMP '2013-01-01 00:00:00');", dt)));
+    ASSERT_EQ(1L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT EXTRACT(QUARTER FROM TIMESTAMP '2013-01-01 00:00:00');", dt)));
+    ASSERT_EQ(0L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT EXTRACT(SECOND FROM TIMESTAMP '2013-01-01 00:00:00');", dt)));
+    ASSERT_EQ(1L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT EXTRACT(WEEK FROM TIMESTAMP '2013-01-01 00:00:00');", dt)));
+    ASSERT_EQ(2013L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT EXTRACT(YEAR FROM TIMESTAMP '2013-01-01 00:00:00');", dt)));
   }
 }
 

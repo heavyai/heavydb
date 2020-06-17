@@ -21,61 +21,64 @@
 #include <cstdlib>  // abort()
 #endif
 
-extern "C" NEVER_INLINE DEVICE int64_t extract_hour(const int64_t lcltime) {
-  int64_t days = lcltime / kSecsPerDay - kEpochAdjustedDays;
-  int64_t rem = lcltime % kSecsPerDay;
-  if (rem < 0) {
-    rem += kSecsPerDay;
-    --days;
+namespace {
+
+DEVICE int64_t floor_div(int64_t const dividend, int64_t const divisor) {
+  return (dividend < 0 ? dividend - (divisor - 1) : dividend) / divisor;
+}
+
+// Assumes 0 < divisor.
+DEVICE int64_t unsigned_mod(int64_t const dividend, int64_t const divisor) {
+  int64_t mod = dividend % divisor;
+  if (mod < 0) {
+    mod += divisor;
   }
-  return static_cast<int32_t>(rem / kSecPerHour);
+  return mod;
+}
+
+// Return day-of-era of the Monday of ISO 8601 week 1 in the given yoe.
+// Week 1 always contains Jan 4.
+DEVICE unsigned iso_week_start_from_yoe(unsigned const yoe) {
+  unsigned const march1 = yoe * 365 + yoe / 4 - yoe / 100;
+  unsigned const jan4 = march1 + (31 + 30 + 31 + 30 + 31 + 31 + 30 + 31 + 30 + 31 + 3);
+  unsigned const jan4dow = (jan4 + 2) % 7;  // 2000-03-01 is Wed so + 2 to get Mon = 0.
+  return jan4 - jan4dow;
+}
+
+}  // namespace
+
+extern "C" NEVER_INLINE DEVICE int64_t extract_hour(const int64_t lcltime) {
+  return unsigned_mod(lcltime, kSecsPerDay) / kSecPerHour;
 }
 
 extern "C" NEVER_INLINE DEVICE int64_t extract_minute(const int64_t lcltime) {
-  int64_t days = lcltime / kSecsPerDay - kEpochAdjustedDays;
-  int64_t rem = lcltime % kSecsPerDay;
-  if (rem < 0) {
-    rem += kSecsPerDay;
-    --days;
-  }
-  rem %= kSecPerHour;
-  return rem / kSecsPerMin;
+  return unsigned_mod(lcltime, kSecPerHour) / kSecsPerMin;
 }
 
 extern "C" NEVER_INLINE DEVICE int64_t extract_second(const int64_t lcltime) {
-  return lcltime % kSecsPerMin;
+  return unsigned_mod(lcltime, kSecsPerMin);
 }
 
 extern "C" NEVER_INLINE DEVICE int64_t extract_millisecond(const int64_t lcltime) {
-  return lcltime % (kSecsPerMin * kMilliSecsPerSec);
+  return unsigned_mod(lcltime, kSecsPerMin * kMilliSecsPerSec);
 }
 
 extern "C" NEVER_INLINE DEVICE int64_t extract_microsecond(const int64_t lcltime) {
-  return lcltime % (kSecsPerMin * kMicroSecsPerSec);
+  return unsigned_mod(lcltime, kSecsPerMin * kMicroSecsPerSec);
 }
 
 extern "C" NEVER_INLINE DEVICE int64_t extract_nanosecond(const int64_t lcltime) {
-  return lcltime % (kSecsPerMin * kNanoSecsPerSec);
+  return unsigned_mod(lcltime, kSecsPerMin * kNanoSecsPerSec);
 }
 
+// First day of epoch is Thursday, so + 4 to have Sunday=0.
 extern "C" NEVER_INLINE DEVICE int64_t extract_dow(const int64_t lcltime) {
-  int64_t days = lcltime / kSecsPerDay - kEpochAdjustedDays;
-  int64_t rem = lcltime % kSecsPerDay;
-  if (rem < 0) {
-    rem += kSecsPerDay;
-    --days;
-  }
-
-  int64_t weekday = (kEpochAdjustedWDay + days) % kDaysPerWeek;
-  if (weekday < 0) {
-    weekday += kDaysPerWeek;
-  }
-  return weekday;
+  int64_t const days_past_epoch = floor_div(lcltime, kSecsPerDay);
+  return unsigned_mod(days_past_epoch + 4, kDaysPerWeek);
 }
 
 extern "C" NEVER_INLINE DEVICE int64_t extract_quarterday(const int64_t lcltime) {
-  const int64_t quarterdays = lcltime / kSecsPerQuarterDay;
-  return (quarterdays % 4) + 1;
+  return unsigned_mod(lcltime, kSecsPerDay) / kSecsPerQuarterDay + 1;
 }
 
 DEVICE int32_t extract_month_fast(const int64_t lcltime) {
@@ -242,13 +245,13 @@ extern "C" NEVER_INLINE DEVICE int64_t extract_epoch(const int64_t timeval) {
 }
 
 extern "C" NEVER_INLINE DEVICE int64_t extract_dateepoch(const int64_t timeval) {
-  return (timeval < 0 && kSecsPerDay != 0) ? ((timeval / kSecsPerDay) - 1) * kSecsPerDay
-                                           : (timeval / kSecsPerDay) * kSecsPerDay;
+  return timeval - unsigned_mod(timeval, kSecsPerDay);
 }
 
+// First day of epoch is Thursday, so + 3 to have Monday=0, then + 1 at the end.
 extern "C" NEVER_INLINE DEVICE int64_t extract_isodow(const int64_t timeval) {
-  int64_t dow = extract_dow(timeval);
-  return (dow == 0 ? 7 : dow);
+  int64_t const days_past_epoch = floor_div(timeval, kSecsPerDay);
+  return unsigned_mod(days_past_epoch + 3, kDaysPerWeek) + 1;
 }
 
 extern "C" NEVER_INLINE DEVICE int64_t extract_day(const int64_t timeval) {
@@ -263,23 +266,22 @@ extern "C" NEVER_INLINE DEVICE int64_t extract_day_of_week(const int64_t timeval
   return tm_struct.tm_yday + 1;
 }
 
+// Credit: http://howardhinnant.github.io/date_algorithms.html#civil_from_days
+// "Consider these donated to the public domain."
 extern "C" NEVER_INLINE DEVICE int64_t extract_week(const int64_t timeval) {
-  tm tm_struct;
-  gmtime_r_newlib(timeval, tm_struct);
-  int32_t doy = tm_struct.tm_yday;         // numbered from 0
-  int32_t dow = extract_dow(timeval) + 1;  // use Sunday 1 - Saturday 7
-  int32_t week = (doy / 7) + 1;
-  // now adjust for offset at start of year
-  //      S M T W T F S
-  // doy      0 1 2 3 4
-  // doy  5 6
-  // mod  5 6 0 1 2 3 4
-  // dow  1 2 3 4 5 6 7
-  // week 2 2 1 1 1 1 1
-  if (dow > (doy % 7)) {
-    return week;
+  int64_t const day = floor_div(timeval, kSecsPerDay) - kEpochAdjustedDays;
+  int64_t const era = floor_div(day, kDaysPer400Years);
+  unsigned const doe = static_cast<unsigned>(day - era * kDaysPer400Years);
+  unsigned const yoe = (doe - doe / 1460 + doe / 36524 - unsigned(doe == 146096)) / 365;
+  unsigned iso_week_start = iso_week_start_from_yoe(yoe);
+  if (doe < iso_week_start) {
+    if (yoe == 0) {
+      return (doe + 2) / 7 + 9;  // 2000-03-01 is +2 days from Mon, week +9.
+    } else {
+      iso_week_start = iso_week_start_from_yoe(yoe - 1);
+    }
   }
-  return week + 1;
+  return (doe - iso_week_start) / 7 + 1;
 }
 
 extern "C" NEVER_INLINE DEVICE int64_t extract_month(const int64_t timeval) {
