@@ -37,8 +37,7 @@ enum TEncodingType {
   DICT,
   SPARSE,
   GEOINT,
-  DATE_IN_DAYS,
-  PACKED_PIXEL_COORD
+  DATE_IN_DAYS
 }
 
 struct TTypeInfo {
