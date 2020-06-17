@@ -210,7 +210,7 @@ add_custom_target(QueryEngineFunctionsTargets
     DEPENDS
         ${CMAKE_CURRENT_BINARY_DIR}/RuntimeFunctions.bc
         ${CMAKE_CURRENT_BINARY_DIR}/ExtensionFunctions.ast
-	${CMAKE_CURRENT_BINARY_DIR}/GeosRuntime.bc
+        ${CMAKE_CURRENT_BINARY_DIR}/GeosRuntime.bc
     )
 
 file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/OmniSciTypes.h DESTINATION ${CMAKE_BINARY_DIR}/QueryEngine/)
@@ -237,7 +237,7 @@ if(${LLVM_VERSION_MAJOR} EQUAL 10 AND NOT ${PREFER_STATIC_LIBS})
   # Arch no longer building Clang with static libs
   list(APPEND QUERY_ENGINE_LIBS clang-cpp)
 else()
-  list(APPEND QUERY_ENGINE_LIBS 
+  list(APPEND QUERY_ENGINE_LIBS
     clangFrontend
     clangSerialization
     clangDriver
