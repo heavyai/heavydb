@@ -42,7 +42,7 @@
 
 #include "../Fragmenter/InsertDataLoader.h"
 
-#include <Import/Importer.h>
+#include <ImportExport/Importer.h>
 
 #include <functional>
 
@@ -1437,11 +1437,11 @@ class CopyTableStmt : public DDLStmt {
   }
   void execute(const Catalog_Namespace::SessionInfo& session) override;
   void execute(const Catalog_Namespace::SessionInfo& session,
-               const std::function<std::unique_ptr<Importer_NS::Importer>(
+               const std::function<std::unique_ptr<import_export::Importer>(
                    Catalog_Namespace::Catalog&,
                    const TableDescriptor*,
                    const std::string&,
-                   const Importer_NS::CopyParams&)>& importer_factory);
+                   const import_export::CopyParams&)>& importer_factory);
   std::unique_ptr<std::string> return_message;
 
   std::string& get_table() const {
@@ -1455,7 +1455,7 @@ class CopyTableStmt : public DDLStmt {
 
   void get_geo_copy_from_payload(std::string& geo_copy_from_table,
                                  std::string& geo_copy_from_file_name,
-                                 Importer_NS::CopyParams& geo_copy_from_copy_params,
+                                 import_export::CopyParams& geo_copy_from_copy_params,
                                  std::string& geo_copy_from_partitions) {
     geo_copy_from_table = *table;
     geo_copy_from_file_name = _geo_copy_from_file_name;
@@ -1472,7 +1472,7 @@ class CopyTableStmt : public DDLStmt {
 
   bool _was_geo_copy_from = false;
   std::string _geo_copy_from_file_name;
-  Importer_NS::CopyParams _geo_copy_from_copy_params;
+  import_export::CopyParams _geo_copy_from_copy_params;
   std::string _geo_copy_from_partitions;
 };
 

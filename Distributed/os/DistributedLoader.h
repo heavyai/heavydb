@@ -17,10 +17,10 @@
 #ifndef DISTRIBUTEDLOADER_H
 #define DISTRIBUTEDLOADER_H
 
-#include "Import/Importer.h"
+#include "ImportExport/Importer.h"
 #include "LeafAggregator.h"
 
-class DistributedLoader : public Importer_NS::Loader {
+class DistributedLoader : public import_export::Loader {
  public:
   DistributedLoader(const Catalog_Namespace::SessionInfo& parent_session_info,
                     const TableDescriptor* t,
@@ -29,9 +29,9 @@ class DistributedLoader : public Importer_NS::Loader {
     CHECK(false);
   }
 
-  bool load(
-      const std::vector<std::unique_ptr<Importer_NS::TypedImportBuffer>>& import_buffers,
-      const size_t row_count) override {
+  bool load(const std::vector<std::unique_ptr<import_export::TypedImportBuffer>>&
+                import_buffers,
+            const size_t row_count) override {
     CHECK(false);
     return false;
   }

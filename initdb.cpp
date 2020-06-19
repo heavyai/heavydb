@@ -24,7 +24,7 @@
 #include <string>
 
 #include "Catalog/Catalog.h"
-#include "Import/Importer.h"
+#include "ImportExport/Importer.h"
 #include "QueryRunner/QueryRunner.h"
 #include "Shared/Logger.h"
 #include "Shared/mapdpath.h"

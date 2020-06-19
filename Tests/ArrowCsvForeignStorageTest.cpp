@@ -27,7 +27,7 @@
 #include "Archive/PosixFileArchive.h"
 #include "Catalog/Catalog.h"
 #include "DataMgr/ForeignStorage/ArrowCsvForeignStorage.h"
-#include "Import/Importer.h"
+#include "ImportExport/Importer.h"
 #include "Parser/parser.h"
 #include "QueryEngine/ResultSet.h"
 #include "QueryRunner/QueryRunner.h"

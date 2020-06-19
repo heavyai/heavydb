@@ -47,7 +47,7 @@
 #include "Fragmenter/InsertOrderFragmenter.h"
 #include "Fragmenter/SortedOrderFragmenter.h"
 #include "Fragmenter/TargetValueConvertersFactories.h"
-#include "Import/Importer.h"
+#include "ImportExport/Importer.h"
 #include "LockMgr/LockMgr.h"
 #include "QueryEngine/CalciteAdapter.h"
 #include "QueryEngine/Execute.h"
@@ -3184,8 +3184,8 @@ void AddColumnStmt::execute(const Catalog_Namespace::SessionInfo& session) {
       }
     }
 
-    std::unique_ptr<Importer_NS::Loader> loader(new Importer_NS::Loader(catalog, td));
-    auto import_buffers = Importer_NS::setup_column_loaders(td, loader.get());
+    std::unique_ptr<import_export::Loader> loader(new import_export::Loader(catalog, td));
+    auto import_buffers = import_export::setup_column_loaders(td, loader.get());
     loader->setReplicating(true);
 
     // set_geo_physical_import_buffer below needs a sorted import_buffers
@@ -3235,7 +3235,7 @@ void AddColumnStmt::execute(const Catalog_Namespace::SessionInfo& session) {
             if (coldef != nullptr ||
                 skip_physical_cols-- <= 0) {  // skip non-null phy col
               import_buffer->add_value(
-                  cd, defaultval, isnull, Importer_NS::CopyParams(), nrows);
+                  cd, defaultval, isnull, import_export::CopyParams(), nrows);
               if (cd->columnType.is_geometry()) {
                 std::vector<double> coords, bounds;
                 std::vector<int> ring_sizes, poly_rings;
@@ -3251,16 +3251,16 @@ void AddColumnStmt::execute(const Catalog_Namespace::SessionInfo& session) {
                   throw std::runtime_error("Bad geometry data: '" + defaultval + "'");
                 }
                 size_t col_idx = 1 + std::distance(import_buffers.begin(), it);
-                Importer_NS::Importer::set_geo_physical_import_buffer(catalog,
-                                                                      cd,
-                                                                      import_buffers,
-                                                                      col_idx,
-                                                                      coords,
-                                                                      bounds,
-                                                                      ring_sizes,
-                                                                      poly_rings,
-                                                                      render_group,
-                                                                      nrows);
+                import_export::Importer::set_geo_physical_import_buffer(catalog,
+                                                                        cd,
+                                                                        import_buffers,
+                                                                        col_idx,
+                                                                        coords,
+                                                                        bounds,
+                                                                        ring_sizes,
+                                                                        poly_rings,
+                                                                        render_group,
+                                                                        nrows);
                 // skip following phy cols
                 skip_physical_cols = cd->columnType.get_physical_cols();
               }
@@ -3385,18 +3385,18 @@ void CopyTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   auto importer_factory = [](Catalog_Namespace::Catalog& catalog,
                              const TableDescriptor* td,
                              const std::string& file_path,
-                             const Importer_NS::CopyParams& copy_params) {
-    return std::make_unique<Importer_NS::Importer>(catalog, td, file_path, copy_params);
+                             const import_export::CopyParams& copy_params) {
+    return std::make_unique<import_export::Importer>(catalog, td, file_path, copy_params);
   };
   return execute(session, importer_factory);
 }
 
 void CopyTableStmt::execute(const Catalog_Namespace::SessionInfo& session,
-                            const std::function<std::unique_ptr<Importer_NS::Importer>(
+                            const std::function<std::unique_ptr<import_export::Importer>(
                                 Catalog_Namespace::Catalog&,
                                 const TableDescriptor*,
                                 const std::string&,
-                                const Importer_NS::CopyParams&)>& importer_factory) {
+                                const import_export::CopyParams&)>& importer_factory) {
   boost::regex non_local_file_regex{R"(^\s*(s3|http|https)://.+)",
                                     boost::regex::extended | boost::regex::icase};
   if (!boost::regex_match(*file_pattern, non_local_file_regex)) {
@@ -3452,7 +3452,7 @@ void CopyTableStmt::execute(const Catalog_Namespace::SessionInfo& session,
   // from here on, file_path contains something which may be a url
   // or a wildcard of file names;
   std::string file_path = *file_pattern;
-  Importer_NS::CopyParams copy_params;
+  import_export::CopyParams copy_params;
   if (!options.empty()) {
     for (auto& p : options) {
       if (boost::iequals(*p->get_name(), "max_reject")) {
@@ -3496,8 +3496,8 @@ void CopyTableStmt::execute(const Catalog_Namespace::SessionInfo& session,
           throw std::runtime_error("Header option must be a boolean.");
         }
         copy_params.has_header = bool_from_string_literal(str_literal)
-                                     ? Importer_NS::ImportHeaderRow::HAS_HEADER
-                                     : Importer_NS::ImportHeaderRow::NO_HEADER;
+                                     ? import_export::ImportHeaderRow::HAS_HEADER
+                                     : import_export::ImportHeaderRow::NO_HEADER;
 #ifdef ENABLE_IMPORT_PARQUET
       } else if (boost::iequals(*p->get_name(), "parquet")) {
         const StringLiteral* str_literal =
@@ -3508,7 +3508,7 @@ void CopyTableStmt::execute(const Catalog_Namespace::SessionInfo& session,
         if (bool_from_string_literal(str_literal)) {
           // not sure a parquet "table" type is proper, but to make code
           // look consistent in some places, let's set "table" type too
-          copy_params.file_type = Importer_NS::FileType::PARQUET;
+          copy_params.file_type = import_export::FileType::PARQUET;
         }
 #endif  // ENABLE_IMPORT_PARQUET
       } else if (boost::iequals(*p->get_name(), "s3_access_key")) {
@@ -3614,8 +3614,8 @@ void CopyTableStmt::execute(const Catalog_Namespace::SessionInfo& session,
           throw std::runtime_error("Geo option must be a boolean.");
         }
         copy_params.file_type = bool_from_string_literal(str_literal)
-                                    ? Importer_NS::FileType::POLYGON
-                                    : Importer_NS::FileType::DELIMITED;
+                                    ? import_export::FileType::POLYGON
+                                    : import_export::FileType::DELIMITED;
       } else if (boost::iequals(*p->get_name(), "geo_coords_type")) {
         const StringLiteral* str_literal =
             dynamic_cast<const StringLiteral*>(p->get_value());
@@ -3681,7 +3681,7 @@ void CopyTableStmt::execute(const Catalog_Namespace::SessionInfo& session,
           throw std::runtime_error("Invalid value for 'geo_layer_name' option");
         }
       } else if (boost::iequals(*p->get_name(), "partitions")) {
-        if (copy_params.file_type == Importer_NS::FileType::POLYGON) {
+        if (copy_params.file_type == import_export::FileType::POLYGON) {
           const auto partitions =
               static_cast<const StringLiteral*>(p->get_value())->get_stringval();
           CHECK(partitions);
@@ -3715,7 +3715,7 @@ void CopyTableStmt::execute(const Catalog_Namespace::SessionInfo& session,
   }
 
   std::string tr;
-  if (copy_params.file_type == Importer_NS::FileType::POLYGON) {
+  if (copy_params.file_type == import_export::FileType::POLYGON) {
     // geo import
     // we do nothing here, except stash the parameters so we can
     // do the import when we unwind to the top of the handler
@@ -4190,7 +4190,7 @@ void ExportQueryStmt::execute(const Catalog_Namespace::SessionInfo& session) {
     leafs_connector_ = &local_connector;
   }
 
-  Importer_NS::CopyParams copy_params;
+  import_export::CopyParams copy_params;
   if (!options.empty()) {
     for (auto& p : options) {
       if (boost::iequals(*p->get_name(), "delimiter")) {
@@ -4216,8 +4216,8 @@ void ExportQueryStmt::execute(const Catalog_Namespace::SessionInfo& session) {
           throw std::runtime_error("Header option must be a boolean.");
         }
         copy_params.has_header = bool_from_string_literal(str_literal)
-                                     ? Importer_NS::ImportHeaderRow::HAS_HEADER
-                                     : Importer_NS::ImportHeaderRow::NO_HEADER;
+                                     ? import_export::ImportHeaderRow::HAS_HEADER
+                                     : import_export::ImportHeaderRow::NO_HEADER;
       } else if (boost::iequals(*p->get_name(), "quote")) {
         const StringLiteral* str_literal =
             dynamic_cast<const StringLiteral*>(p->get_value());
@@ -4283,7 +4283,7 @@ void ExportQueryStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   if (!outfile) {
     throw std::runtime_error("Cannot open file: " + *file_path);
   }
-  if (copy_params.has_header == Importer_NS::ImportHeaderRow::HAS_HEADER) {
+  if (copy_params.has_header == import_export::ImportHeaderRow::HAS_HEADER) {
     auto result = local_connector.query(query_state_proxy, *select_stmt, {}, true);
 
     bool not_first = false;

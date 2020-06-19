@@ -25,9 +25,9 @@
 #include <string>
 #include <vector>
 
-#include "Import/CopyParams.h"
+#include "ImportExport/CopyParams.h"
 
-namespace Importer_NS {
+namespace import_export {
 namespace delimited_parser {
 /**
  * @brief Finds the closest possible row beginning in the given buffer.
@@ -79,7 +79,7 @@ template <typename T>
 const char* get_row(const char* buf,
                     const char* buf_end,
                     const char* entire_buf_end,
-                    const Importer_NS::CopyParams& copy_params,
+                    const import_export::CopyParams& copy_params,
                     const bool* is_array,
                     std::vector<T>& row,
                     std::vector<std::unique_ptr<char[]>>& tmp_buffers,
@@ -93,8 +93,8 @@ const char* get_row(const char* buf,
  * @param string_vec           Given vector to be populated with parsed fields.
  */
 void parse_string_array(const std::string& s,
-                        const Importer_NS::CopyParams& copy_params,
+                        const import_export::CopyParams& copy_params,
                         std::vector<std::string>& string_vec);
 }  // namespace delimited_parser
 
-}  // namespace Importer_NS
+}  // namespace import_export

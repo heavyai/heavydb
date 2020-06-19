@@ -1,17 +1,17 @@
 if(ENABLE_AWS_S3)
   include_directories(${LibAwsS3_INCLUDE_DIRS})
-  list(APPEND IMPORT_LIBRARIES "${LibAwsS3_LIBRARIES}")
+  list(APPEND IMPORT_EXPORT_LIBRARIES "${LibAwsS3_LIBRARIES}")
   list(APPEND S3Archive ../Archive/S3Archive.cpp)
 endif()
 
 if(ENABLE_IMPORT_PARQUET)
-  list(APPEND IMPORT_LIBRARIES "${Parquet_LIBRARIES}")
+  list(APPEND IMPORT_EXPORT_LIBRARIES "${Parquet_LIBRARIES}")
 endif()
 
-add_library(CsvImport Importer.cpp Importer.h DelimitedParserUtils.cpp DelimitedParserUtils.h ${S3Archive})
+add_library(ImportExport Importer.cpp Importer.h DelimitedParserUtils.cpp DelimitedParserUtils.h ${S3Archive})
 
-target_link_libraries(CsvImport mapd_thrift Shared Catalog DataMgr StringDictionary ${GDAL_LIBRARIES} ${CMAKE_DL_LIBS}
- ${LibArchive_LIBRARIES} ${IMPORT_LIBRARIES} ${Arrow_LIBRARIES})
+target_link_libraries(ImportExport mapd_thrift Shared Catalog DataMgr StringDictionary ${GDAL_LIBRARIES} ${CMAKE_DL_LIBS}
+ ${LibArchive_LIBRARIES} ${IMPORT_EXPORT_LIBRARIES} ${Arrow_LIBRARIES})
 
 install(DIRECTORY ${CMAKE_SOURCE_DIR}/ThirdParty/gdal-data DESTINATION "ThirdParty")
 add_custom_target(gdal-data ALL COMMAND ${CMAKE_COMMAND} -E copy_directory "${CMAKE_SOURCE_DIR}/ThirdParty/gdal-data" "${CMAKE_BINARY_DIR}/ThirdParty/gdal-data")

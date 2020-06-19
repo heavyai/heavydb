@@ -779,7 +779,7 @@ struct GeoPolygonValueConverter : public GeoPointValueConverter {
   const ColumnDescriptor* ring_sizes_column_descriptor_;
   const ColumnDescriptor* bounds_column_descriptor_;
   const ColumnDescriptor* render_group_column_descriptor_;
-  Importer_NS::RenderGroupAnalyzer render_group_analyzer_;
+  import_export::RenderGroupAnalyzer render_group_analyzer_;
 
   std::unique_ptr<std::vector<ArrayDatum>> ring_sizes_data_;
   std::unique_ptr<std::vector<ArrayDatum>> bounds_data_;
@@ -870,7 +870,7 @@ struct GeoMultiPolygonValueConverter : public GeoPointValueConverter {
   const ColumnDescriptor* ring_sizes_solumn_descriptor_;
   const ColumnDescriptor* bounds_column_descriptor_;
   const ColumnDescriptor* render_group_column_descriptor_;
-  Importer_NS::RenderGroupAnalyzer render_group_analyzer_;
+  import_export::RenderGroupAnalyzer render_group_analyzer_;
 
   std::unique_ptr<std::vector<ArrayDatum>> ring_sizes_data_;
   std::unique_ptr<std::vector<ArrayDatum>> poly_rings_data_;

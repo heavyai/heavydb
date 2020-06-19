@@ -27,7 +27,7 @@
 #include <boost/range/combine.hpp>
 #include "../Archive/PosixFileArchive.h"
 #include "../Catalog/Catalog.h"
-#include "../Import/Importer.h"
+#include "../ImportExport/Importer.h"
 #include "../Parser/parser.h"
 #include "../QueryEngine/ResultSet.h"
 #include "../QueryRunner/QueryRunner.h"
@@ -125,7 +125,7 @@ bool import_test_common_geo(const string& query_str,
 
   // get the rest of the payload
   std::string geo_copy_from_table, geo_copy_from_file_name, geo_copy_from_partitions;
-  Importer_NS::CopyParams geo_copy_from_copy_params;
+  import_export::CopyParams geo_copy_from_copy_params;
   ddl->get_geo_copy_from_payload(geo_copy_from_table,
                                  geo_copy_from_file_name,
                                  geo_copy_from_copy_params,
@@ -319,7 +319,7 @@ std::string TypeToString(SQLTypes type) {
 }
 
 void d(const SQLTypes expected_type, const std::string& str) {
-  auto detected_type = Importer_NS::Detector::detect_sqltype(str);
+  auto detected_type = import_export::Detector::detect_sqltype(str);
   EXPECT_EQ(TypeToString(expected_type), TypeToString(detected_type))
       << "String: " << str;
 }
@@ -629,8 +629,9 @@ std::string convert_date_to_string(int64_t d) {
 }
 
 inline void run_mixed_dates_test() {
-  ASSERT_NO_THROW(run_ddl_statement(
-      "COPY import_test_date FROM '../../Tests/Import/datafiles/mixed_dates.txt';"));
+  ASSERT_NO_THROW(
+      run_ddl_statement("COPY import_test_date FROM "
+                        "'../../Tests/Import/datafiles/mixed_dates.txt';"));
 
   auto rows = run_query("SELECT * FROM import_test_date;");
   ASSERT_EQ(size_t(11), rows->entryCount());
@@ -1627,7 +1628,7 @@ TEST_F(GeoGDALImportTest, Geodatabase_Simple) {
 
 TEST_F(GeoGDALImportTest, KML_Simple) {
   SKIP_ALL_ON_AGGREGATOR();
-  if (!Importer_NS::Importer::hasGDALLibKML()) {
+  if (!import_export::Importer::hasGDALLibKML()) {
     LOG(ERROR) << "Test requires LibKML support in GDAL";
   } else {
     const auto file_path = boost::filesystem::path("KML/test.kml");

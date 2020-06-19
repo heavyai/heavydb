@@ -16,7 +16,7 @@
 
 #include "TestHelpers.h"
 
-#include "../Import/Importer.h"
+#include "../ImportExport/Importer.h"
 #include "../Parser/parser.h"
 #include "../QueryEngine/ArrowResultSet.h"
 #include "../QueryEngine/Descriptors/RelAlgExecutionDescriptor.h"
@@ -5471,13 +5471,13 @@ TEST(Select, UnsupportedMultipleArgAggregate) {
   }
 }
 
-namespace Importer_NS {
+namespace import_export {
 
 ArrayDatum StringToArray(const std::string& s,
                          const SQLTypeInfo& ti,
                          const CopyParams& copy_params);
 
-}  // namespace Importer_NS
+}  // namespace import_export
 
 namespace {
 
@@ -5489,17 +5489,17 @@ void import_array_test(const std::string& table_name) {
   const auto td = cat.getMetadataForTable(table_name);
   CHECK(td);
   auto loader = QR::get()->getLoader(td);
-  std::vector<std::unique_ptr<Importer_NS::TypedImportBuffer>> import_buffers;
+  std::vector<std::unique_ptr<import_export::TypedImportBuffer>> import_buffers;
   const auto col_descs =
       cat.getAllColumnMetadataForTable(td->tableId, false, false, false);
   for (const auto cd : col_descs) {
-    import_buffers.emplace_back(new Importer_NS::TypedImportBuffer(
+    import_buffers.emplace_back(new import_export::TypedImportBuffer(
         cd,
         cd->columnType.get_compression() == kENCODING_DICT
             ? cat.getMetadataForDict(cd->columnType.get_comp_param())->stringDict.get()
             : nullptr));
   }
-  Importer_NS::CopyParams copy_params;
+  import_export::CopyParams copy_params;
   copy_params.array_begin = '{';
   copy_params.array_end = '}';
   for (size_t row_idx = 0; row_idx < g_array_test_row_count; ++row_idx) {

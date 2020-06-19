@@ -46,7 +46,7 @@
 #include "Catalog/TableDescriptor.h"
 #include "DataMgr/Chunk/Chunk.h"
 #include "Fragmenter/Fragmenter.h"
-#include "Import/CopyParams.h"
+#include "ImportExport/CopyParams.h"
 #include "Shared/Logger.h"
 #include "Shared/ThreadController.h"
 #include "Shared/checked_alloc.h"
@@ -65,7 +65,7 @@ class Array;
 
 }  // namespace arrow
 
-namespace Importer_NS {
+namespace import_export {
 
 class Importer;
 
@@ -826,6 +826,6 @@ std::vector<std::unique_ptr<TypedImportBuffer>> setup_column_loaders(
     const TableDescriptor* td,
     Loader* loader);
 
-}  // namespace Importer_NS
+}  // namespace import_export
 
 #endif  // _IMPORTER_H_

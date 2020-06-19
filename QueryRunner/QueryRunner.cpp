@@ -19,7 +19,7 @@
 #include "Calcite/Calcite.h"
 #include "Catalog/Catalog.h"
 #include "DistributedLoader.h"
-#include "Import/CopyParams.h"
+#include "ImportExport/CopyParams.h"
 #include "Parser/ParserWrapper.h"
 #include "Parser/parser.h"
 #include "QueryEngine/CalciteAdapter.h"
@@ -399,10 +399,10 @@ void QueryRunner::runImport(Parser::CopyTableStmt* import_stmt) {
   import_stmt->execute(*session_info_);
 }
 
-std::unique_ptr<Importer_NS::Loader> QueryRunner::getLoader(
+std::unique_ptr<import_export::Loader> QueryRunner::getLoader(
     const TableDescriptor* td) const {
   auto cat = getCatalog();
-  return std::make_unique<Importer_NS::Loader>(*cat, td);
+  return std::make_unique<import_export::Loader>(*cat, td);
 }
 
 namespace {
@@ -596,7 +596,7 @@ void ImportDriver::importGeoTable(const std::string& file_path,
                                   const bool compression,
                                   const bool create_table,
                                   const bool explode_collections) {
-  using namespace Importer_NS;
+  using namespace import_export;
 
   CHECK(session_info_);
   const std::string geo_column_name(OMNISCI_GEO_PREFIX);
@@ -683,7 +683,7 @@ void ImportDriver::importGeoTable(const std::string& file_path,
     throw std::runtime_error("Error: Failed to create table " + table_name);
   }
 
-  Importer_NS::Importer importer(cat, td, file_path, copy_params);
+  import_export::Importer importer(cat, td, file_path, copy_params);
   auto ms = measure<>::execution([&]() { importer.importGDAL(colname_to_src); });
   LOG(INFO) << "Import Time for " << table_name << ": " << (double)ms / 1000.0 << " s";
 }

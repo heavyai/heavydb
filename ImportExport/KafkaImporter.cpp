@@ -84,7 +84,7 @@ class RebalanceCb : public RdKafka::RebalanceCb {
 
 bool msg_consume(RdKafka::Message* message,
                  RowToColumnLoader& row_loader,
-                 Importer_NS::CopyParams copy_params,
+                 import_export::CopyParams copy_params,
                  const std::map<std::string,
                                 std::pair<std::unique_ptr<boost::regex>,
                                           std::unique_ptr<std::string>>>& transformations,
@@ -293,7 +293,7 @@ void kafka_insert(
     const std::map<std::string,
                    std::pair<std::unique_ptr<boost::regex>,
                              std::unique_ptr<std::string>>>& transformations,
-    const Importer_NS::CopyParams& copy_params,
+    const import_export::CopyParams& copy_params,
     const bool remove_quotes,
     std::string group_id,
     std::string topic,
@@ -467,9 +467,9 @@ void kafka_insert(
 
 struct stuff {
   RowToColumnLoader row_loader;
-  Importer_NS::CopyParams copy_params;
+  import_export::CopyParams copy_params;
 
-  stuff(RowToColumnLoader& rl, Importer_NS::CopyParams& cp)
+  stuff(RowToColumnLoader& rl, import_export::CopyParams& cp)
       : row_loader(rl), copy_params(cp){};
 };
 
@@ -719,7 +719,7 @@ int main(int argc, char** argv) {
             std::unique_ptr<std::string>(new std::string(fmt_str)));
   }
 
-  Importer_NS::CopyParams copy_params(
+  import_export::CopyParams copy_params(
       delim, nulls, line_delim, batch_size, retry_count, retry_wait);
   RowToColumnLoader row_loader(
       ThriftClientConnection(

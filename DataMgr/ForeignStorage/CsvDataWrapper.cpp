@@ -20,7 +20,7 @@
 
 #include <boost/filesystem.hpp>
 
-#include "Import/Importer.h"
+#include "ImportExport/Importer.h"
 #include "Utils/DdlUtils.h"
 
 namespace foreign_storage {
@@ -84,7 +84,7 @@ void CsvDataWrapper::fetchChunkBuffers() {
   auto catalog = Catalog_Namespace::Catalog::get(db_id_);
   CHECK(catalog);
 
-  Importer_NS::Importer importer(
+  import_export::Importer importer(
       getLoader(*catalog), file_path, validateAndGetCopyParams());
   importer.import();
 
@@ -116,8 +116,8 @@ void CsvDataWrapper::validateFilePath() {
                                         ddl_utils::DataTransferType::IMPORT);
 }
 
-Importer_NS::CopyParams CsvDataWrapper::validateAndGetCopyParams() {
-  Importer_NS::CopyParams copy_params{};
+import_export::CopyParams CsvDataWrapper::validateAndGetCopyParams() {
+  import_export::CopyParams copy_params{};
   if (const auto& value = validateAndGetStringWithLength("ARRAY_DELIMITER", 1);
       !value.empty()) {
     copy_params.array_delim = value[0];
@@ -141,9 +141,9 @@ Importer_NS::CopyParams CsvDataWrapper::validateAndGetCopyParams() {
   auto has_header = validateAndGetBoolValue("HEADER");
   if (has_header.has_value()) {
     if (has_header.value()) {
-      copy_params.has_header = Importer_NS::ImportHeaderRow::HAS_HEADER;
+      copy_params.has_header = import_export::ImportHeaderRow::HAS_HEADER;
     } else {
-      copy_params.has_header = Importer_NS::ImportHeaderRow::NO_HEADER;
+      copy_params.has_header = import_export::ImportHeaderRow::NO_HEADER;
     }
   }
   if (const auto& value = validateAndGetStringWithLength("LINE_DELIMITER", 1);
@@ -196,59 +196,60 @@ std::optional<bool> CsvDataWrapper::validateAndGetBoolValue(
   return std::nullopt;
 }
 
-Importer_NS::Loader* CsvDataWrapper::getLoader(Catalog_Namespace::Catalog& catalog) {
-  auto callback = [this](
-                      const std::vector<std::unique_ptr<Importer_NS::TypedImportBuffer>>&
-                          import_buffers,
-                      std::vector<DataBlockPtr>& data_blocks,
-                      size_t import_row_count) {
-    std::lock_guard loader_lock(loader_mutex_);
-    size_t processed_import_row_count = 0;
-    while (processed_import_row_count < import_row_count) {
-      int fragment_index = row_count_ / foreign_table_->maxFragRows;
-      size_t row_count_for_fragment;
+import_export::Loader* CsvDataWrapper::getLoader(Catalog_Namespace::Catalog& catalog) {
+  auto callback =
+      [this](const std::vector<std::unique_ptr<import_export::TypedImportBuffer>>&
+                 import_buffers,
+             std::vector<DataBlockPtr>& data_blocks,
+             size_t import_row_count) {
+        std::lock_guard loader_lock(loader_mutex_);
+        size_t processed_import_row_count = 0;
+        while (processed_import_row_count < import_row_count) {
+          int fragment_index = row_count_ / foreign_table_->maxFragRows;
+          size_t row_count_for_fragment;
 
-      if (fragmentIsFull()) {
-        row_count_for_fragment = std::min<size_t>(
-            foreign_table_->maxFragRows, import_row_count - processed_import_row_count);
-        initializeChunkBuffers(fragment_index);
-      } else {
-        row_count_for_fragment = std::min<size_t>(
-            foreign_table_->maxFragRows - (row_count_ % foreign_table_->maxFragRows),
-            import_row_count - processed_import_row_count);
-      }
-      for (size_t i = 0; i < import_buffers.size(); i++) {
-        Chunk_NS::Chunk chunk{import_buffers[i]->getColumnDesc()};
-        auto column_id = import_buffers[i]->getColumnDesc()->columnId;
-        auto& type_info = import_buffers[i]->getTypeInfo();
-        if (type_info.is_varlen() && !type_info.is_fixlen_array()) {
-          ChunkKey data_chunk_key{
-              db_id_, foreign_table_->tableId, column_id, fragment_index, 1};
-          CHECK(chunk_buffer_map_.find(data_chunk_key) != chunk_buffer_map_.end());
-          chunk.setBuffer(chunk_buffer_map_[data_chunk_key].get());
+          if (fragmentIsFull()) {
+            row_count_for_fragment =
+                std::min<size_t>(foreign_table_->maxFragRows,
+                                 import_row_count - processed_import_row_count);
+            initializeChunkBuffers(fragment_index);
+          } else {
+            row_count_for_fragment = std::min<size_t>(
+                foreign_table_->maxFragRows - (row_count_ % foreign_table_->maxFragRows),
+                import_row_count - processed_import_row_count);
+          }
+          for (size_t i = 0; i < import_buffers.size(); i++) {
+            Chunk_NS::Chunk chunk{import_buffers[i]->getColumnDesc()};
+            auto column_id = import_buffers[i]->getColumnDesc()->columnId;
+            auto& type_info = import_buffers[i]->getTypeInfo();
+            if (type_info.is_varlen() && !type_info.is_fixlen_array()) {
+              ChunkKey data_chunk_key{
+                  db_id_, foreign_table_->tableId, column_id, fragment_index, 1};
+              CHECK(chunk_buffer_map_.find(data_chunk_key) != chunk_buffer_map_.end());
+              chunk.setBuffer(chunk_buffer_map_[data_chunk_key].get());
 
-          ChunkKey index_chunk_key{
-              db_id_, foreign_table_->tableId, column_id, fragment_index, 2};
-          CHECK(chunk_buffer_map_.find(index_chunk_key) != chunk_buffer_map_.end());
-          chunk.setIndexBuffer(chunk_buffer_map_[index_chunk_key].get());
-        } else {
-          ChunkKey data_chunk_key{
-              db_id_, foreign_table_->tableId, column_id, fragment_index};
-          CHECK(chunk_buffer_map_.find(data_chunk_key) != chunk_buffer_map_.end());
-          chunk.setBuffer(chunk_buffer_map_[data_chunk_key].get());
+              ChunkKey index_chunk_key{
+                  db_id_, foreign_table_->tableId, column_id, fragment_index, 2};
+              CHECK(chunk_buffer_map_.find(index_chunk_key) != chunk_buffer_map_.end());
+              chunk.setIndexBuffer(chunk_buffer_map_[index_chunk_key].get());
+            } else {
+              ChunkKey data_chunk_key{
+                  db_id_, foreign_table_->tableId, column_id, fragment_index};
+              CHECK(chunk_buffer_map_.find(data_chunk_key) != chunk_buffer_map_.end());
+              chunk.setBuffer(chunk_buffer_map_[data_chunk_key].get());
+            }
+            chunk.appendData(
+                data_blocks[i], row_count_for_fragment, processed_import_row_count);
+            chunk.setBuffer(nullptr);
+            chunk.setIndexBuffer(nullptr);
+          }
+          row_count_ += row_count_for_fragment;
+          processed_import_row_count += row_count_for_fragment;
         }
-        chunk.appendData(
-            data_blocks[i], row_count_for_fragment, processed_import_row_count);
-        chunk.setBuffer(nullptr);
-        chunk.setIndexBuffer(nullptr);
-      }
-      row_count_ += row_count_for_fragment;
-      processed_import_row_count += row_count_for_fragment;
-    }
-    return true;
-  };
+        return true;
+      };
 
-  return new Importer_NS::Loader(catalog, foreign_table_, callback);
+  return new import_export::Loader(catalog, foreign_table_, callback);
 }
 
 bool CsvDataWrapper::fragmentIsFull() {

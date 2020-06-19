@@ -47,7 +47,7 @@ class CopyTableStmt;
 
 using query_state::QueryStateProxy;
 
-namespace Importer_NS {
+namespace import_export {
 class Loader;
 }
 
@@ -144,7 +144,8 @@ class QueryRunner {
       const ExecutorDeviceType);
 
   virtual void runImport(Parser::CopyTableStmt* import_stmt);
-  virtual std::unique_ptr<Importer_NS::Loader> getLoader(const TableDescriptor* td) const;
+  virtual std::unique_ptr<import_export::Loader> getLoader(
+      const TableDescriptor* td) const;
 
   const std::shared_ptr<std::vector<int32_t>>& getCachedJoinHashTable(size_t idx);
   const std::shared_ptr<std::vector<int8_t>>& getCachedBaselineHashTable(size_t idx);

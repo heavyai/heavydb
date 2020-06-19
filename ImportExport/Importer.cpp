@@ -20,7 +20,7 @@
  * @brief Functions for Importer class
  */
 
-#include "Import/Importer.h"
+#include "ImportExport/Importer.h"
 
 #include <arrow/api.h>
 #include <arrow/io/api.h>
@@ -53,7 +53,7 @@
 #include "Archive/PosixFileArchive.h"
 #include "Archive/S3Archive.h"
 #include "ArrowImporter.h"
-#include "Import/DelimitedParserUtils.h"
+#include "ImportExport/DelimitedParserUtils.h"
 #include "QueryEngine/TypePunning.h"
 #include "Shared/Logger.h"
 #include "Shared/SqlTypesLayout.h"
@@ -127,7 +127,7 @@ formatting_ostream& operator<<(formatting_ostream& out, std::vector<std::string>
 }  // namespace log
 }  // namespace boost
 
-namespace Importer_NS {
+namespace import_export {
 
 using FieldNameToIndexMapType = std::map<std::string, size_t>;
 using ColumnNameToSourceNameMapType = std::map<std::string, std::string>;
@@ -645,7 +645,7 @@ void TypedImportBuffer::add_value(const ColumnDescriptor* cd,
       if (IS_STRING(ti.get_subtype())) {
         std::vector<std::string> string_vec;
         // Just parse string array, don't push it to buffer yet as we might throw
-        Importer_NS::delimited_parser::parse_string_array(
+        import_export::delimited_parser::parse_string_array(
             std::string(val), copy_params, string_vec);
         if (!is_null) {
           // TODO: add support for NULL string arrays
@@ -765,7 +765,7 @@ size_t TypedImportBuffer::convert_arrow_val_to_import_buffer(
     const Array& array,
     std::vector<DATA_TYPE>& buffer,
     const ArraySliceRange& slice_range,
-    Importer_NS::BadRowsTracker* const bad_rows_tracker) {
+    import_export::BadRowsTracker* const bad_rows_tracker) {
   auto data =
       std::make_unique<DataBuffer<DATA_TYPE>>(cd, array, buffer, bad_rows_tracker);
   auto f_value_getter = value_getter(array, cd, bad_rows_tracker);
@@ -800,7 +800,7 @@ size_t TypedImportBuffer::convert_arrow_val_to_import_buffer(
               error_context(cd, bad_rows_tracker) + "Geometry type mismatch");
         }
         auto col_idx_workpad = col_idx;  // what a pitfall!!
-        Importer_NS::Importer::set_geo_physical_import_buffer(
+        import_export::Importer::set_geo_physical_import_buffer(
             bad_rows_tracker->importer->getCatalog(),
             cd,
             *import_buffers,
@@ -1848,7 +1848,18 @@ static ImportStatus import_thread_delimited(
           tmp_buffers;  // holds string w/ removed escape chars, etc
       if (DEBUG_TIMING) {
         us = measure<std::chrono::microseconds>::execution([&]() {
-          p = Importer_NS::delimited_parser::get_row(p,
+          p = import_export::delimited_parser::get_row(p,
+                                                       thread_buf_end,
+                                                       buf_end,
+                                                       copy_params,
+                                                       importer->get_is_array(),
+                                                       row,
+                                                       tmp_buffers,
+                                                       try_single_thread);
+        });
+        total_get_row_time_us += us;
+      } else {
+        p = import_export::delimited_parser::get_row(p,
                                                      thread_buf_end,
                                                      buf_end,
                                                      copy_params,
@@ -1856,17 +1867,6 @@ static ImportStatus import_thread_delimited(
                                                      row,
                                                      tmp_buffers,
                                                      try_single_thread);
-        });
-        total_get_row_time_us += us;
-      } else {
-        p = Importer_NS::delimited_parser::get_row(p,
-                                                   thread_buf_end,
-                                                   buf_end,
-                                                   copy_params,
-                                                   importer->get_is_array(),
-                                                   row,
-                                                   tmp_buffers,
-                                                   try_single_thread);
       }
       row_index_plus_one++;
       // Each POINT could consume two separate coords instead of a single WKT
@@ -2888,7 +2888,7 @@ void Detector::split_raw_data() {
   for (const char* p = buf; p < buf_end; p++) {
     std::vector<std::string> row;
     std::vector<std::unique_ptr<char[]>> tmp_buffers;
-    p = Importer_NS::delimited_parser::get_row(
+    p = import_export::delimited_parser::get_row(
         p, buf_end, buf_end, copy_params, nullptr, row, tmp_buffers, try_single_thread);
     raw_rows.push_back(row);
     if (try_single_thread) {
@@ -2901,7 +2901,7 @@ void Detector::split_raw_data() {
     for (const char* p = buf; p < buf_end; p++) {
       std::vector<std::string> row;
       std::vector<std::unique_ptr<char[]>> tmp_buffers;
-      p = Importer_NS::delimited_parser::get_row(
+      p = import_export::delimited_parser::get_row(
           p, buf_end, buf_end, copy_params, nullptr, row, tmp_buffers, try_single_thread);
       raw_rows.push_back(row);
     }
@@ -3044,18 +3044,18 @@ void Detector::find_best_sqltypes_and_headers() {
       find_best_encodings(raw_rows.begin() + 1, raw_rows.end(), best_sqltypes);
   std::vector<SQLTypes> head_types = detect_column_types(raw_rows.at(0));
   switch (copy_params.has_header) {
-    case Importer_NS::ImportHeaderRow::AUTODETECT:
+    case import_export::ImportHeaderRow::AUTODETECT:
       has_headers = detect_headers(head_types, best_sqltypes);
       if (has_headers) {
-        copy_params.has_header = Importer_NS::ImportHeaderRow::HAS_HEADER;
+        copy_params.has_header = import_export::ImportHeaderRow::HAS_HEADER;
       } else {
-        copy_params.has_header = Importer_NS::ImportHeaderRow::NO_HEADER;
+        copy_params.has_header = import_export::ImportHeaderRow::NO_HEADER;
       }
       break;
-    case Importer_NS::ImportHeaderRow::NO_HEADER:
+    case import_export::ImportHeaderRow::NO_HEADER:
       has_headers = false;
       break;
-    case Importer_NS::ImportHeaderRow::HAS_HEADER:
+    case import_export::ImportHeaderRow::HAS_HEADER:
       has_headers = true;
       break;
   }
@@ -3346,8 +3346,9 @@ void Detector::import_local_parquet(const std::string& file_path) {
 }
 
 template <typename DATA_TYPE>
-auto TypedImportBuffer::del_values(std::vector<DATA_TYPE>& buffer,
-                                   Importer_NS::BadRowsTracker* const bad_rows_tracker) {
+auto TypedImportBuffer::del_values(
+    std::vector<DATA_TYPE>& buffer,
+    import_export::BadRowsTracker* const bad_rows_tracker) {
   const auto old_size = buffer.size();
   // erase backward to minimize memory movement overhead
   for (auto rit = bad_rows_tracker->rows.crbegin(); rit != bad_rows_tracker->rows.crend();
@@ -3751,7 +3752,7 @@ void DataStreamSink::import_compressed(std::vector<std::string>& file_paths) {
             // so we need to skip header lines here instead in importDelimited.
             const char* buf2 = (const char*)buf;
             int size2 = size;
-            if (copy_params.has_header != Importer_NS::ImportHeaderRow::NO_HEADER &&
+            if (copy_params.has_header != import_export::ImportHeaderRow::NO_HEADER &&
                 just_saw_archive_header && (first_text_header_skipped || !is_detecting)) {
               while (size2-- > 0) {
                 if (*buf2++ == copy_params.line_delim) {
@@ -5141,4 +5142,4 @@ std::vector<std::unique_ptr<TypedImportBuffer>> setup_column_loaders(
   return import_buffers;
 }
 
-}  // namespace Importer_NS
+}  // namespace import_export

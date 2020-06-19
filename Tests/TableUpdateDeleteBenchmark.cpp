@@ -21,7 +21,7 @@
 #include <mutex>
 #include <thread>
 
-#include "../Import/Importer.h"
+#include "../ImportExport/Importer.h"
 #include "../QueryEngine/ResultSet.h"
 #include "../QueryRunner/QueryRunner.h"
 #include "../Shared/Logger.h"
@@ -91,10 +91,10 @@ class UpdateFixture : public benchmark::Fixture {
     CHECK(loader);
 
     auto col_descs = loader->get_column_descs();
-    std::vector<std::unique_ptr<Importer_NS::TypedImportBuffer>> import_buffers;
+    std::vector<std::unique_ptr<import_export::TypedImportBuffer>> import_buffers;
     for (auto cd : col_descs) {
-      import_buffers.push_back(std::unique_ptr<Importer_NS::TypedImportBuffer>(
-          new Importer_NS::TypedImportBuffer(cd, loader->getStringDict(cd))));
+      import_buffers.push_back(std::unique_ptr<import_export::TypedImportBuffer>(
+          new import_export::TypedImportBuffer(cd, loader->getStringDict(cd))));
     }
 
     for (int64_t i = 0; i < state.range(0); i++) {
@@ -110,7 +110,7 @@ class UpdateFixture : public benchmark::Fixture {
         import_buffers[index]->add_value(cd,
                                          values[index],
                                          /*is_null=*/false,
-                                         Importer_NS::CopyParams());
+                                         import_export::CopyParams());
         index++;
       }
     }
@@ -213,10 +213,10 @@ class TempTableUpdateFixture : public benchmark::Fixture {
     CHECK(loader);
 
     auto col_descs = loader->get_column_descs();
-    std::vector<std::unique_ptr<Importer_NS::TypedImportBuffer>> import_buffers;
+    std::vector<std::unique_ptr<import_export::TypedImportBuffer>> import_buffers;
     for (auto cd : col_descs) {
-      import_buffers.push_back(std::unique_ptr<Importer_NS::TypedImportBuffer>(
-          new Importer_NS::TypedImportBuffer(cd, loader->getStringDict(cd))));
+      import_buffers.push_back(std::unique_ptr<import_export::TypedImportBuffer>(
+          new import_export::TypedImportBuffer(cd, loader->getStringDict(cd))));
     }
 
     for (int64_t i = 0; i < state.range(0); i++) {
@@ -232,7 +232,7 @@ class TempTableUpdateFixture : public benchmark::Fixture {
         import_buffers[index]->add_value(cd,
                                          values[index],
                                          /*is_null=*/false,
-                                         Importer_NS::CopyParams());
+                                         import_export::CopyParams());
         index++;
       }
     }

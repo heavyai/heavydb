@@ -67,12 +67,12 @@ class RowToColumnLoader {
                     const std::string& db_name,
                     const std::string& table_name);
   ~RowToColumnLoader();
-  void do_load(int& nrows, int& nskipped, Importer_NS::CopyParams copy_params);
+  void do_load(int& nrows, int& nskipped, import_export::CopyParams copy_params);
   bool convert_string_to_column(std::vector<TStringValue> row,
-                                const Importer_NS::CopyParams& copy_params);
+                                const import_export::CopyParams& copy_params);
   TRowDescriptor get_row_descriptor();
   std::string print_row_with_delim(std::vector<TStringValue> row,
-                                   const Importer_NS::CopyParams& copy_params);
+                                   const import_export::CopyParams& copy_params);
 
  private:
   std::string user_name_;
@@ -92,7 +92,8 @@ class RowToColumnLoader {
 
   void createConnection(const ThriftClientConnection& con);
   void closeConnection();
-  void wait_disconnet_reconnnect_retry(size_t tries, Importer_NS::CopyParams copy_params);
+  void wait_disconnet_reconnnect_retry(size_t tries,
+                                       import_export::CopyParams copy_params);
 };
 
 #endif  // _ROWTOCOLUMNLOADER_H_

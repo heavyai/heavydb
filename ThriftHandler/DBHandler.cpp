@@ -45,7 +45,7 @@
 #include "DataMgr/ForeignStorage/ForeignStorageInterface.h"
 #include "DistributedHandler.h"
 #include "Fragmenter/InsertOrderFragmenter.h"
-#include "Import/Importer.h"
+#include "ImportExport/Importer.h"
 #include "LockMgr/LockMgr.h"
 #include "Parser/ParserWrapper.h"
 #include "Parser/ReservedKeywords.h"
@@ -2373,11 +2373,11 @@ void DBHandler::load_table_binary(const TSessionId& session,
     if (rows.empty()) {
       return;
     }
-    std::unique_ptr<Importer_NS::Loader> loader;
+    std::unique_ptr<import_export::Loader> loader;
     if (leaf_aggregator_.leafCount() > 0) {
       loader.reset(new DistributedLoader(*session_ptr, td, &leaf_aggregator_));
     } else {
-      loader.reset(new Importer_NS::Loader(cat, td));
+      loader.reset(new import_export::Loader(cat, td));
     }
     // TODO(andrew): nColumns should be number of non-virtual/non-system columns.
     //               Subtracting 1 (rowid) until TableDescriptor is updated.
@@ -2386,10 +2386,10 @@ void DBHandler::load_table_binary(const TSessionId& session,
       THROW_MAPD_EXCEPTION("Wrong number of columns to load into Table " + table_name);
     }
     auto col_descs = loader->get_column_descs();
-    std::vector<std::unique_ptr<Importer_NS::TypedImportBuffer>> import_buffers;
+    std::vector<std::unique_ptr<import_export::TypedImportBuffer>> import_buffers;
     for (auto cd : col_descs) {
-      import_buffers.push_back(std::unique_ptr<Importer_NS::TypedImportBuffer>(
-          new Importer_NS::TypedImportBuffer(cd, loader->getStringDict(cd))));
+      import_buffers.push_back(std::unique_ptr<import_export::TypedImportBuffer>(
+          new import_export::TypedImportBuffer(cd, loader->getStringDict(cd))));
     }
     for (auto const& row : rows) {
       size_t col_idx = 0;
@@ -2421,8 +2421,8 @@ DBHandler::prepare_columnar_loader(
     const Catalog_Namespace::SessionInfo& session_info,
     const std::string& table_name,
     size_t num_cols,
-    std::unique_ptr<Importer_NS::Loader>* loader,
-    std::vector<std::unique_ptr<Importer_NS::TypedImportBuffer>>* import_buffers) {
+    std::unique_ptr<import_export::Loader>* loader,
+    std::vector<std::unique_ptr<import_export::TypedImportBuffer>>* import_buffers) {
   auto& cat = session_info.getCatalog();
   auto td_with_lock =
       std::make_unique<lockmgr::TableSchemaLockContainer<lockmgr::ReadLock>>(
@@ -2439,7 +2439,7 @@ DBHandler::prepare_columnar_loader(
   if (leaf_aggregator_.leafCount() > 0) {
     loader->reset(new DistributedLoader(session_info, td, &leaf_aggregator_));
   } else {
-    loader->reset(new Importer_NS::Loader(cat, td));
+    loader->reset(new import_export::Loader(cat, td));
   }
 
   // TODO(andrew): nColumns should be number of non-virtual/non-system columns.
@@ -2455,7 +2455,7 @@ DBHandler::prepare_columnar_loader(
                              td->tableName + " (" + std::to_string(num_table_cols) + ")");
   }
 
-  *import_buffers = Importer_NS::setup_column_loaders(td, loader->get());
+  *import_buffers = import_export::setup_column_loaders(td, loader->get());
   return std::move(td_with_lock);
 }
 
@@ -2468,8 +2468,8 @@ void DBHandler::load_table_binary_columnar(const TSessionId& session,
   check_read_only("load_table_binary_columnar");
   auto const& cat = session_ptr->getCatalog();
 
-  std::unique_ptr<Importer_NS::Loader> loader;
-  std::vector<std::unique_ptr<Importer_NS::TypedImportBuffer>> import_buffers;
+  std::unique_ptr<import_export::Loader> loader;
+  std::vector<std::unique_ptr<import_export::TypedImportBuffer>> import_buffers;
   auto read_lock = prepare_columnar_loader(
       *session_ptr, table_name, cols.size(), &loader, &import_buffers);
   auto insert_data_lock = lockmgr::InsertDataLockMgr::getWriteLockForTable(
@@ -2523,15 +2523,16 @@ void DBHandler::load_table_binary_columnar(const TSessionId& session,
           THROW_MAPD_EXCEPTION(oss.str());
         }
         // Populate physical columns, advance col_idx
-        Importer_NS::Importer::set_geo_physical_import_buffer_columnar(cat,
-                                                                       cd,
-                                                                       import_buffers,
-                                                                       col_idx,
-                                                                       coords_column,
-                                                                       bounds_column,
-                                                                       ring_sizes_column,
-                                                                       poly_rings_column,
-                                                                       render_group);
+        import_export::Importer::set_geo_physical_import_buffer_columnar(
+            cat,
+            cd,
+            import_buffers,
+            col_idx,
+            coords_column,
+            bounds_column,
+            ring_sizes_column,
+            poly_rings_column,
+            render_group);
         skip_physical_cols = cd->columnType.get_physical_cols();
       }
       // Advance to the next column of values being loaded
@@ -2607,8 +2608,8 @@ void DBHandler::load_table_binary_arrow(const TSessionId& session,
 
   std::shared_ptr<arrow::RecordBatch> batch = batches[0];
 
-  std::unique_ptr<Importer_NS::Loader> loader;
-  std::vector<std::unique_ptr<Importer_NS::TypedImportBuffer>> import_buffers;
+  std::unique_ptr<import_export::Loader> loader;
+  std::vector<std::unique_ptr<import_export::TypedImportBuffer>> import_buffers;
   auto read_lock = prepare_columnar_loader(*session_ptr,
                                            table_name,
                                            static_cast<size_t>(batch->num_columns()),
@@ -2622,7 +2623,7 @@ void DBHandler::load_table_binary_arrow(const TSessionId& session,
   try {
     for (auto cd : loader->get_column_descs()) {
       auto& array = *batch->column(col_idx);
-      Importer_NS::ArraySliceRange row_slice(0, array.length());
+      import_export::ArraySliceRange row_slice(0, array.length());
       numRows =
           import_buffers[col_idx]->add_arrow_values(cd, array, true, row_slice, nullptr);
       col_idx++;
@@ -2660,11 +2661,11 @@ void DBHandler::load_table(const TSessionId& session,
     if (rows.empty()) {
       return;
     }
-    std::unique_ptr<Importer_NS::Loader> loader;
+    std::unique_ptr<import_export::Loader> loader;
     if (leaf_aggregator_.leafCount() > 0) {
       loader.reset(new DistributedLoader(*session_ptr, td, &leaf_aggregator_));
     } else {
-      loader.reset(new Importer_NS::Loader(cat, td));
+      loader.reset(new import_export::Loader(cat, td));
     }
     auto col_descs = loader->get_column_descs();
     auto geo_physical_cols = std::count_if(
@@ -2677,12 +2678,12 @@ void DBHandler::load_table(const TSessionId& session,
                            " (" + std::to_string(rows.front().cols.size()) + " vs " +
                            std::to_string(td->nColumns - geo_physical_cols - 1) + ")");
     }
-    std::vector<std::unique_ptr<Importer_NS::TypedImportBuffer>> import_buffers;
+    std::vector<std::unique_ptr<import_export::TypedImportBuffer>> import_buffers;
     for (auto cd : col_descs) {
-      import_buffers.push_back(std::unique_ptr<Importer_NS::TypedImportBuffer>(
-          new Importer_NS::TypedImportBuffer(cd, loader->getStringDict(cd))));
+      import_buffers.push_back(std::unique_ptr<import_export::TypedImportBuffer>(
+          new import_export::TypedImportBuffer(cd, loader->getStringDict(cd))));
     }
-    Importer_NS::CopyParams copy_params;
+    import_export::CopyParams copy_params;
     size_t rows_completed = 0;
     for (auto const& row : rows) {
       size_t import_idx = 0;  // index into the TStringRow being loaded
@@ -2724,15 +2725,15 @@ void DBHandler::load_table(const TSessionId& session,
             if (cd->columnType.get_type() != ti.get_type()) {
               throw std::runtime_error("Geometry type mismatch");
             }
-            Importer_NS::Importer::set_geo_physical_import_buffer(cat,
-                                                                  cd,
-                                                                  import_buffers,
-                                                                  col_idx,
-                                                                  coords,
-                                                                  bounds,
-                                                                  ring_sizes,
-                                                                  poly_rings,
-                                                                  render_group);
+            import_export::Importer::set_geo_physical_import_buffer(cat,
+                                                                    cd,
+                                                                    import_buffers,
+                                                                    col_idx,
+                                                                    coords,
+                                                                    bounds,
+                                                                    ring_sizes,
+                                                                    poly_rings,
+                                                                    render_group);
             skip_physical_cols = cd->columnType.get_physical_cols();
           }
           // Advance to the next field within the row
@@ -2774,17 +2775,17 @@ char DBHandler::unescape_char(std::string str) {
   return out;
 }
 
-Importer_NS::CopyParams DBHandler::thrift_to_copyparams(const TCopyParams& cp) {
-  Importer_NS::CopyParams copy_params;
+import_export::CopyParams DBHandler::thrift_to_copyparams(const TCopyParams& cp) {
+  import_export::CopyParams copy_params;
   switch (cp.has_header) {
     case TImportHeaderRow::AUTODETECT:
-      copy_params.has_header = Importer_NS::ImportHeaderRow::AUTODETECT;
+      copy_params.has_header = import_export::ImportHeaderRow::AUTODETECT;
       break;
     case TImportHeaderRow::NO_HEADER:
-      copy_params.has_header = Importer_NS::ImportHeaderRow::NO_HEADER;
+      copy_params.has_header = import_export::ImportHeaderRow::NO_HEADER;
       break;
     case TImportHeaderRow::HAS_HEADER:
-      copy_params.has_header = Importer_NS::ImportHeaderRow::HAS_HEADER;
+      copy_params.has_header = import_export::ImportHeaderRow::HAS_HEADER;
       break;
     default:
       THROW_MAPD_EXCEPTION("Invalid has_header in TCopyParams: " +
@@ -2835,14 +2836,14 @@ Importer_NS::CopyParams DBHandler::thrift_to_copyparams(const TCopyParams& cp) {
   }
   switch (cp.file_type) {
     case TFileType::POLYGON:
-      copy_params.file_type = Importer_NS::FileType::POLYGON;
+      copy_params.file_type = import_export::FileType::POLYGON;
       break;
     case TFileType::DELIMITED:
-      copy_params.file_type = Importer_NS::FileType::DELIMITED;
+      copy_params.file_type = import_export::FileType::DELIMITED;
       break;
 #ifdef ENABLE_IMPORT_PARQUET
     case TFileType::PARQUET:
-      copy_params.file_type = Importer_NS::FileType::PARQUET;
+      copy_params.file_type = import_export::FileType::PARQUET;
       break;
 #endif
     default:
@@ -2893,18 +2894,18 @@ Importer_NS::CopyParams DBHandler::thrift_to_copyparams(const TCopyParams& cp) {
   return copy_params;
 }
 
-TCopyParams DBHandler::copyparams_to_thrift(const Importer_NS::CopyParams& cp) {
+TCopyParams DBHandler::copyparams_to_thrift(const import_export::CopyParams& cp) {
   TCopyParams copy_params;
   copy_params.delimiter = cp.delimiter;
   copy_params.null_str = cp.null_str;
   switch (cp.has_header) {
-    case Importer_NS::ImportHeaderRow::AUTODETECT:
+    case import_export::ImportHeaderRow::AUTODETECT:
       copy_params.has_header = TImportHeaderRow::AUTODETECT;
       break;
-    case Importer_NS::ImportHeaderRow::NO_HEADER:
+    case import_export::ImportHeaderRow::NO_HEADER:
       copy_params.has_header = TImportHeaderRow::NO_HEADER;
       break;
-    case Importer_NS::ImportHeaderRow::HAS_HEADER:
+    case import_export::ImportHeaderRow::HAS_HEADER:
       copy_params.has_header = TImportHeaderRow::HAS_HEADER;
       break;
     default:
@@ -2924,7 +2925,7 @@ TCopyParams DBHandler::copyparams_to_thrift(const Importer_NS::CopyParams& cp) {
   copy_params.s3_region = cp.s3_region;
   copy_params.s3_endpoint = cp.s3_endpoint;
   switch (cp.file_type) {
-    case Importer_NS::FileType::POLYGON:
+    case import_export::FileType::POLYGON:
       copy_params.file_type = TFileType::POLYGON;
       break;
     default:
@@ -2961,7 +2962,7 @@ TCopyParams DBHandler::copyparams_to_thrift(const Importer_NS::CopyParams& cp) {
 
 void add_vsi_network_prefix(std::string& path) {
   // do we support network file access?
-  bool gdal_network = Importer_NS::Importer::gdalSupportsNetworkFileAccess();
+  bool gdal_network = import_export::Importer::gdalSupportsNetworkFileAccess();
 
   // modify head of filename based on source location
   if (boost::istarts_with(path, "http://") || boost::istarts_with(path, "https://")) {
@@ -3070,10 +3071,10 @@ bool is_a_supported_archive_file(const std::string& path) {
 }
 
 std::string find_first_geo_file_in_archive(const std::string& archive_path,
-                                           const Importer_NS::CopyParams& copy_params) {
+                                           const import_export::CopyParams& copy_params) {
   // get the recursive list of all files in the archive
   std::vector<std::string> files =
-      Importer_NS::Importer::gdalGetAllFilesInArchive(archive_path, copy_params);
+      import_export::Importer::gdalGetAllFilesInArchive(archive_path, copy_params);
 
   // report the list
   LOG(INFO) << "Found " << files.size() << " files in Archive "
@@ -3112,7 +3113,7 @@ void DBHandler::detect_column_types(TDetectResult& _return,
   stdlog.appendNameValuePairs("client", getConnectionInfo().toString());
   check_read_only("detect_column_types");
 
-  Importer_NS::CopyParams copy_params = thrift_to_copyparams(cp);
+  import_export::CopyParams copy_params = thrift_to_copyparams(cp);
 
   std::string file_name{file_name_in};
 
@@ -3124,7 +3125,7 @@ void DBHandler::detect_column_types(TDetectResult& _return,
   }
 
   // if it's a geo table, handle alternative paths (S3, HTTP, archive etc.)
-  if (copy_params.file_type == Importer_NS::FileType::POLYGON) {
+  if (copy_params.file_type == import_export::FileType::POLYGON) {
     if (is_a_supported_geo_file(file_name, true)) {
       // prepare to detect geo file directly
       add_vsi_network_prefix(file_name);
@@ -3132,7 +3133,7 @@ void DBHandler::detect_column_types(TDetectResult& _return,
     } else if (is_a_supported_archive_file(file_name)) {
       // find the archive file
       add_vsi_network_prefix(file_name);
-      if (!Importer_NS::Importer::gdalFileExists(file_name, copy_params)) {
+      if (!import_export::Importer::gdalFileExists(file_name, copy_params)) {
         THROW_MAPD_EXCEPTION("Archive does not exist: " + file_name_in);
       }
       // find geo file in archive
@@ -3157,9 +3158,9 @@ void DBHandler::detect_column_types(TDetectResult& _return,
       file_name = file_path.string();
     }
 
-    if (copy_params.file_type == Importer_NS::FileType::POLYGON) {
+    if (copy_params.file_type == import_export::FileType::POLYGON) {
       // check for geo file
-      if (!Importer_NS::Importer::gdalFileOrDirectoryExists(file_name, copy_params)) {
+      if (!import_export::Importer::gdalFileOrDirectoryExists(file_name, copy_params)) {
         THROW_MAPD_EXCEPTION("File does not exist: " + file_path.string());
       }
     } else {
@@ -3170,12 +3171,12 @@ void DBHandler::detect_column_types(TDetectResult& _return,
     }
   }
   try {
-    if (copy_params.file_type == Importer_NS::FileType::DELIMITED
+    if (copy_params.file_type == import_export::FileType::DELIMITED
 #ifdef ENABLE_IMPORT_PARQUET
-        || (copy_params.file_type == Importer_NS::FileType::PARQUET)
+        || (copy_params.file_type == import_export::FileType::PARQUET)
 #endif
     ) {
-      Importer_NS::Detector detector(file_path, copy_params);
+      import_export::Detector detector(file_path, copy_params);
       std::vector<SQLTypes> best_types = detector.best_sqltypes;
       std::vector<EncodingType> best_encodings = detector.best_encodings;
       std::vector<std::string> headers = detector.get_headers();
@@ -3220,12 +3221,12 @@ void DBHandler::detect_column_types(TDetectResult& _return,
         }
         _return.row_set.rows.push_back(sample_row);
       }
-    } else if (copy_params.file_type == Importer_NS::FileType::POLYGON) {
+    } else if (copy_params.file_type == import_export::FileType::POLYGON) {
       // @TODO simon.eves get this from somewhere!
       const std::string geoColumnName(OMNISCI_GEO_PREFIX);
 
       check_geospatial_files(file_path, copy_params);
-      std::list<ColumnDescriptor> cds = Importer_NS::Importer::gdalToColumnDescriptors(
+      std::list<ColumnDescriptor> cds = import_export::Importer::gdalToColumnDescriptors(
           file_path.string(), geoColumnName, copy_params);
       for (auto cd : cds) {
         if (copy_params.sanitize_column_names) {
@@ -3234,7 +3235,7 @@ void DBHandler::detect_column_types(TDetectResult& _return,
         _return.row_set.row_desc.push_back(populateThriftColumnType(nullptr, &cd));
       }
       std::map<std::string, std::vector<std::string>> sample_data;
-      Importer_NS::Importer::readMetadataSampleGDAL(
+      import_export::Importer::readMetadataSampleGDAL(
           file_path.string(), geoColumnName, sample_data, 100, copy_params);
       if (sample_data.size() > 0) {
         for (size_t i = 0; i < sample_data.begin()->second.size(); i++) {
@@ -3684,7 +3685,7 @@ TColumnType DBHandler::create_geo_column(const TDatumType::type type,
 }
 
 void DBHandler::check_geospatial_files(const boost::filesystem::path file_path,
-                                       const Importer_NS::CopyParams& copy_params) {
+                                       const import_export::CopyParams& copy_params) {
   const std::list<std::string> shp_ext{".shp", ".shx", ".dbf"};
   if (std::find(shp_ext.begin(),
                 shp_ext.end(),
@@ -3692,11 +3693,11 @@ void DBHandler::check_geospatial_files(const boost::filesystem::path file_path,
       shp_ext.end()) {
     for (auto ext : shp_ext) {
       auto aux_file = file_path;
-      if (!Importer_NS::Importer::gdalFileExists(
+      if (!import_export::Importer::gdalFileExists(
               aux_file.replace_extension(boost::algorithm::to_upper_copy(ext)).string(),
               copy_params) &&
-          !Importer_NS::Importer::gdalFileExists(aux_file.replace_extension(ext).string(),
-                                                 copy_params)) {
+          !import_export::Importer::gdalFileExists(
+              aux_file.replace_extension(ext).string(), copy_params)) {
         throw std::runtime_error("required file for shapefile does not exist: " +
                                  aux_file.filename().string());
       }
@@ -3809,7 +3810,7 @@ void DBHandler::import_table(const TSessionId& session,
 
     std::string file_name{file_name_in};
     auto file_path = boost::filesystem::path(file_name);
-    Importer_NS::CopyParams copy_params = thrift_to_copyparams(cp);
+    import_export::CopyParams copy_params = thrift_to_copyparams(cp);
     if (!boost::istarts_with(file_name, "s3://")) {
       if (!boost::filesystem::path(file_name).is_absolute()) {
         file_path = import_path_ / picosha2::hash256_hex_string(session) /
@@ -3831,14 +3832,15 @@ void DBHandler::import_table(const TSessionId& session,
 
     const auto insert_data_lock = lockmgr::InsertDataLockMgr::getWriteLockForTable(
         session_ptr->getCatalog(), table_name);
-    std::unique_ptr<Importer_NS::Importer> importer;
+    std::unique_ptr<import_export::Importer> importer;
     if (leaf_aggregator_.leafCount() > 0) {
-      importer.reset(new Importer_NS::Importer(
+      importer.reset(new import_export::Importer(
           new DistributedLoader(*session_ptr, td, &leaf_aggregator_),
           file_path.string(),
           copy_params));
     } else {
-      importer.reset(new Importer_NS::Importer(cat, td, file_path.string(), copy_params));
+      importer.reset(
+          new import_export::Importer(cat, td, file_path.string(), copy_params));
     }
     auto ms = measure<>::execution([&]() { importer->import(); });
     std::cout << "Total Import Time: " << (double)ms / 1000.0 << " Seconds." << std::endl;
@@ -3910,7 +3912,7 @@ void DBHandler::import_geo_table(const TSessionId& session,
   check_read_only("import_table");
   auto& cat = session_ptr->getCatalog();
 
-  Importer_NS::CopyParams copy_params = thrift_to_copyparams(cp);
+  import_export::CopyParams copy_params = thrift_to_copyparams(cp);
 
   std::string file_name{file_name_in};
 
@@ -3928,7 +3930,7 @@ void DBHandler::import_geo_table(const TSessionId& session,
   } else if (is_a_supported_archive_file(file_name)) {
     // find the archive file
     add_vsi_network_prefix(file_name);
-    if (!Importer_NS::Importer::gdalFileExists(file_name, copy_params)) {
+    if (!import_export::Importer::gdalFileExists(file_name, copy_params)) {
       THROW_MAPD_EXCEPTION("Archive does not exist: " + file_name_in);
     }
     // find geo file in archive
@@ -3949,7 +3951,7 @@ void DBHandler::import_geo_table(const TSessionId& session,
 
   // use GDAL to check the primary file exists (even if on S3 and/or in archive)
   auto file_path = boost::filesystem::path(file_name);
-  if (!Importer_NS::Importer::gdalFileOrDirectoryExists(file_name, copy_params)) {
+  if (!import_export::Importer::gdalFileOrDirectoryExists(file_name, copy_params)) {
     THROW_MAPD_EXCEPTION("File does not exist: " + file_path.filename().string());
   }
 
@@ -3966,35 +3968,35 @@ void DBHandler::import_geo_table(const TSessionId& session,
   //   GEO: create a geo table from this
   //   NON_GEO: create a regular table from this
   //   UNSUPPORTED_GEO: report and skip
-  std::vector<Importer_NS::Importer::GeoFileLayerInfo> layer_info;
+  std::vector<import_export::Importer::GeoFileLayerInfo> layer_info;
   try {
-    layer_info = Importer_NS::Importer::gdalGetLayersInGeoFile(file_name, copy_params);
+    layer_info = import_export::Importer::gdalGetLayersInGeoFile(file_name, copy_params);
   } catch (const std::exception& e) {
     THROW_MAPD_EXCEPTION("import_geo_table error: " + std::string(e.what()));
   }
 
   // categorize the results
   using LayerNameToContentsMap =
-      std::map<std::string, Importer_NS::Importer::GeoFileLayerContents>;
+      std::map<std::string, import_export::Importer::GeoFileLayerContents>;
   LayerNameToContentsMap load_layers;
   LOG(INFO) << "import_geo_table: Found the following layers in the geo file:";
   for (const auto& layer : layer_info) {
     switch (layer.contents) {
-      case Importer_NS::Importer::GeoFileLayerContents::GEO:
+      case import_export::Importer::GeoFileLayerContents::GEO:
         LOG(INFO) << "import_geo_table:   '" << layer.name
                   << "' (will import as geo table)";
         load_layers[layer.name] = layer.contents;
         break;
-      case Importer_NS::Importer::GeoFileLayerContents::NON_GEO:
+      case import_export::Importer::GeoFileLayerContents::NON_GEO:
         LOG(INFO) << "import_geo_table:   '" << layer.name
                   << "' (will import as regular table)";
         load_layers[layer.name] = layer.contents;
         break;
-      case Importer_NS::Importer::GeoFileLayerContents::UNSUPPORTED_GEO:
+      case import_export::Importer::GeoFileLayerContents::UNSUPPORTED_GEO:
         LOG(WARNING) << "import_geo_table:   '" << layer.name
                      << "' (will not import, unsupported geo type)";
         break;
-      case Importer_NS::Importer::GeoFileLayerContents::EMPTY:
+      case import_export::Importer::GeoFileLayerContents::EMPTY:
         LOG(INFO) << "import_geo_table:   '" << layer.name << "' (ignoring, empty)";
         break;
       default:
@@ -4013,19 +4015,20 @@ void DBHandler::import_geo_table(const TSessionId& session,
     bool found = false;
     for (const auto& layer : layer_info) {
       if (copy_params.geo_layer_name == layer.name) {
-        if (layer.contents == Importer_NS::Importer::GeoFileLayerContents::GEO ||
-            layer.contents == Importer_NS::Importer::GeoFileLayerContents::NON_GEO) {
+        if (layer.contents == import_export::Importer::GeoFileLayerContents::GEO ||
+            layer.contents == import_export::Importer::GeoFileLayerContents::NON_GEO) {
           // forget all the other layers and just load this one
           load_layers.clear();
           load_layers[layer.name] = layer.contents;
           found = true;
           break;
         } else if (layer.contents ==
-                   Importer_NS::Importer::GeoFileLayerContents::UNSUPPORTED_GEO) {
+                   import_export::Importer::GeoFileLayerContents::UNSUPPORTED_GEO) {
           THROW_MAPD_EXCEPTION("import_geo_table: Explicit geo layer '" +
                                copy_params.geo_layer_name +
                                "' has unsupported geo type!");
-        } else if (layer.contents == Importer_NS::Importer::GeoFileLayerContents::EMPTY) {
+        } else if (layer.contents ==
+                   import_export::Importer::GeoFileLayerContents::EMPTY) {
           THROW_MAPD_EXCEPTION("import_geo_table: Explicit geo layer '" +
                                copy_params.geo_layer_name + "' is empty!");
         }
@@ -4086,7 +4089,7 @@ void DBHandler::import_geo_table(const TSessionId& session,
     const auto& layer_name = layer.first;
     const auto& layer_contents = layer.second;
     bool is_geo_layer =
-        (layer_contents == Importer_NS::Importer::GeoFileLayerContents::GEO);
+        (layer_contents == import_export::Importer::GeoFileLayerContents::GEO);
 
     // construct table name again
     auto this_table_name = construct_layer_table_name(table_name, layer_name);
@@ -4304,15 +4307,15 @@ void DBHandler::import_geo_table(const TSessionId& session,
       copy_params.geo_layer_name = layer_name;
 
       // create an importer
-      std::unique_ptr<Importer_NS::Importer> importer;
+      std::unique_ptr<import_export::Importer> importer;
       if (leaf_aggregator_.leafCount() > 0) {
-        importer.reset(new Importer_NS::Importer(
+        importer.reset(new import_export::Importer(
             new DistributedLoader(*session_ptr, td, &leaf_aggregator_),
             file_path.string(),
             copy_params));
       } else {
         importer.reset(
-            new Importer_NS::Importer(cat, td, file_path.string(), copy_params));
+            new import_export::Importer(cat, td, file_path.string(), copy_params));
       }
 
       // import
@@ -4350,7 +4353,7 @@ void DBHandler::import_table_status(TImportStatus& _return,
                                     const std::string& import_id) {
   auto stdlog = STDLOG(get_session_ptr(session), "import_table_status", import_id);
   stdlog.appendNameValuePairs("client", getConnectionInfo().toString());
-  auto is = Importer_NS::Importer::get_import_status(import_id);
+  auto is = import_export::Importer::get_import_status(import_id);
   _return.elapsed = is.elapsed.count();
   _return.rows_completed = is.rows_completed;
   _return.rows_estimated = is.rows_estimated;
@@ -4376,8 +4379,8 @@ void DBHandler::get_first_geo_file_in_archive(std::string& _return,
   if (is_a_supported_archive_file(archive_path)) {
     // find the archive file
     add_vsi_network_prefix(archive_path);
-    if (!Importer_NS::Importer::gdalFileExists(archive_path,
-                                               thrift_to_copyparams(copy_params))) {
+    if (!import_export::Importer::gdalFileExists(archive_path,
+                                                 thrift_to_copyparams(copy_params))) {
       THROW_MAPD_EXCEPTION("Archive does not exist: " + archive_path_in);
     }
     // find geo file in archive
@@ -4417,13 +4420,13 @@ void DBHandler::get_all_files_in_archive(std::vector<std::string>& _return,
   if (is_a_supported_archive_file(archive_path)) {
     // find the archive file
     add_vsi_network_prefix(archive_path);
-    if (!Importer_NS::Importer::gdalFileExists(archive_path,
-                                               thrift_to_copyparams(copy_params))) {
+    if (!import_export::Importer::gdalFileExists(archive_path,
+                                                 thrift_to_copyparams(copy_params))) {
       THROW_MAPD_EXCEPTION("Archive does not exist: " + archive_path_in);
     }
     // find all files in archive
     add_vsi_archive_prefix(archive_path);
-    _return = Importer_NS::Importer::gdalGetAllFilesInArchive(
+    _return = import_export::Importer::gdalGetAllFilesInArchive(
         archive_path, thrift_to_copyparams(copy_params));
     // prepend them all with original path
     for (auto& s : _return) {
@@ -4440,7 +4443,7 @@ void DBHandler::get_layers_in_geo_file(std::vector<TGeoFileLayerInfo>& _return,
   stdlog.appendNameValuePairs("client", getConnectionInfo().toString());
   std::string file_name(file_name_in);
 
-  Importer_NS::CopyParams copy_params = thrift_to_copyparams(cp);
+  import_export::CopyParams copy_params = thrift_to_copyparams(cp);
 
   // handle relative paths
   if (path_is_relative(file_name)) {
@@ -4458,7 +4461,7 @@ void DBHandler::get_layers_in_geo_file(std::vector<TGeoFileLayerInfo>& _return,
   } else if (is_a_supported_archive_file(file_name)) {
     // find the archive file
     add_vsi_network_prefix(file_name);
-    if (!Importer_NS::Importer::gdalFileExists(file_name, copy_params)) {
+    if (!import_export::Importer::gdalFileExists(file_name, copy_params)) {
       THROW_MAPD_EXCEPTION("Archive does not exist: " + file_name_in);
     }
     // find geo file in archive
@@ -4474,29 +4477,29 @@ void DBHandler::get_layers_in_geo_file(std::vector<TGeoFileLayerInfo>& _return,
   }
 
   // check the file actually exists
-  if (!Importer_NS::Importer::gdalFileOrDirectoryExists(file_name, copy_params)) {
+  if (!import_export::Importer::gdalFileOrDirectoryExists(file_name, copy_params)) {
     THROW_MAPD_EXCEPTION("Geo file/archive does not exist: " + file_name_in);
   }
 
   // find all layers
   auto internal_layer_info =
-      Importer_NS::Importer::gdalGetLayersInGeoFile(file_name, copy_params);
+      import_export::Importer::gdalGetLayersInGeoFile(file_name, copy_params);
 
   // convert to Thrift type
   for (const auto& internal_layer : internal_layer_info) {
     TGeoFileLayerInfo layer;
     layer.name = internal_layer.name;
     switch (internal_layer.contents) {
-      case Importer_NS::Importer::GeoFileLayerContents::EMPTY:
+      case import_export::Importer::GeoFileLayerContents::EMPTY:
         layer.contents = TGeoFileLayerContents::EMPTY;
         break;
-      case Importer_NS::Importer::GeoFileLayerContents::GEO:
+      case import_export::Importer::GeoFileLayerContents::GEO:
         layer.contents = TGeoFileLayerContents::GEO;
         break;
-      case Importer_NS::Importer::GeoFileLayerContents::NON_GEO:
+      case import_export::Importer::GeoFileLayerContents::NON_GEO:
         layer.contents = TGeoFileLayerContents::NON_GEO;
         break;
-      case Importer_NS::Importer::GeoFileLayerContents::UNSUPPORTED_GEO:
+      case import_export::Importer::GeoFileLayerContents::UNSUPPORTED_GEO:
         layer.contents = TGeoFileLayerContents::UNSUPPORTED_GEO;
         break;
       default:
@@ -5430,8 +5433,8 @@ void DBHandler::execute_distributed_copy_statement(
                               const Catalog& catalog,
                               const TableDescriptor* td,
                               const std::string& file_path,
-                              const Importer_NS::CopyParams& copy_params) {
-    return std::make_unique<Importer_NS::Importer>(
+                              const import_export::CopyParams& copy_params) {
+    return std::make_unique<import_export::Importer>(
         new DistributedLoader(session_info, td, &leaf_aggregator_),
         file_path,
         copy_params);
@@ -5666,7 +5669,7 @@ void DBHandler::insert_data(const TSessionId& session,
         for (const auto& t_arr_datum : thrift_insert_data.data[col_idx].var_len_data) {
           if (t_arr_datum.is_null) {
             if (ti.get_size() > 0 && !ti.get_elem_type().is_string()) {
-              array_column->push_back(Importer_NS::ImporterUtils::composeNullArray(ti));
+              array_column->push_back(import_export::ImporterUtils::composeNullArray(ti));
             } else {
               array_column->emplace_back(0, nullptr, true);
             }

@@ -122,13 +122,16 @@ int create_and_populate_table() {
     large_out.close();
 
     std::string import_small_table_str{
-        "COPY t_small FROM '../../Tests/Import/datafiles/interrupt_table_small.txt' WITH "
+        "COPY t_small FROM "
+        "'../../Tests/Import/datafiles/interrupt_table_small.txt' WITH "
         "(header='false')"};
     std::string import_medium_table_str{
-        "COPY t_medium FROM '../../Tests/Import/datafiles/interrupt_table_medium.txt' "
+        "COPY t_medium FROM "
+        "'../../Tests/Import/datafiles/interrupt_table_medium.txt' "
         "WITH (header='false')"};
     std::string import_large_table_str{
-        "COPY t_large FROM '../../Tests/Import/datafiles/interrupt_table_large.txt' WITH "
+        "COPY t_large FROM "
+        "'../../Tests/Import/datafiles/interrupt_table_large.txt' WITH "
         "(header='false')"};
     run_ddl_statement(import_small_table_str);
     run_ddl_statement(import_medium_table_str);

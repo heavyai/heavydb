@@ -73,7 +73,7 @@ using enable_if_floating = typename std::enable_if_t<std::is_floating_point<T>::
 #define exprtype(expr) std::decay_t<decltype(expr)>
 
 inline std::string error_context(const ColumnDescriptor* cd,
-                                 Importer_NS::BadRowsTracker* const bad_rows_tracker) {
+                                 import_export::BadRowsTracker* const bad_rows_tracker) {
   return bad_rows_tracker ? "File " + bad_rows_tracker->file_name + ", row-group " +
                                 std::to_string(bad_rows_tracker->row_group) +
                                 (cd ? ", column " + cd->columnName + ": " : "")
@@ -101,7 +101,7 @@ inline VarValue get_string_value(const Array& array, const int64_t idx) {
 
 inline auto value_getter(const Array& array,
                          const ColumnDescriptor* cd,
-                         Importer_NS::BadRowsTracker* const bad_rows_tracker) {
+                         import_export::BadRowsTracker* const bad_rows_tracker) {
   switch (array.type_id()) {
     NUMERIC_CASE(BOOL, BooleanType, bool)
     NUMERIC_CASE(UINT8, UInt8Type, int64_t)
@@ -132,7 +132,7 @@ inline auto value_getter(const Array& array,
 
 inline void type_conversion_error(const std::string pt,
                                   const ColumnDescriptor* cd,
-                                  Importer_NS::BadRowsTracker* const bad_rows_tracker) {
+                                  import_export::BadRowsTracker* const bad_rows_tracker) {
   arrow_throw_if(true,
                  error_context(cd, bad_rows_tracker) +
                      "Invalid type conversion from parquet " + pt + " type to " +
@@ -142,7 +142,7 @@ inline void type_conversion_error(const std::string pt,
 template <typename DATA_TYPE, typename VALUE_TYPE>
 inline void data_conversion_error(const VALUE_TYPE v,
                                   const ColumnDescriptor* cd,
-                                  Importer_NS::BadRowsTracker* const bad_rows_tracker) {
+                                  import_export::BadRowsTracker* const bad_rows_tracker) {
   arrow_throw_if(true,
                  error_context(cd, bad_rows_tracker) +
                      "Invalid data conversion from parquet value " + std::to_string(v) +
@@ -151,7 +151,7 @@ inline void data_conversion_error(const VALUE_TYPE v,
 
 inline void data_conversion_error(const std::string& v,
                                   const ColumnDescriptor* cd,
-                                  Importer_NS::BadRowsTracker* const bad_rows_tracker) {
+                                  import_export::BadRowsTracker* const bad_rows_tracker) {
   arrow_throw_if(true,
                  error_context(cd, bad_rows_tracker) +
                      "Invalid data conversion from parquet string '" + v + "' to " +
@@ -162,7 +162,7 @@ inline void data_conversion_error(const std::string& v,
 struct DataBufferBase {
   const ColumnDescriptor* cd;
   const Array& array;
-  Importer_NS::BadRowsTracker* const bad_rows_tracker;
+  import_export::BadRowsTracker* const bad_rows_tracker;
   // in case of arrow-decimal to omni-decimal conversion
   // dont get/set these info on every row of arrow array
   const DataType& arrow_type;
@@ -171,7 +171,7 @@ struct DataBufferBase {
   const SQLTypeInfo new_type;
   DataBufferBase(const ColumnDescriptor* cd,
                  const Array& array,
-                 Importer_NS::BadRowsTracker* const bad_rows_tracker)
+                 import_export::BadRowsTracker* const bad_rows_tracker)
       : cd(cd)
       , array(array)
       , bad_rows_tracker(bad_rows_tracker)
@@ -195,7 +195,7 @@ struct DataBuffer : DataBufferBase {
   DataBuffer(const ColumnDescriptor* cd,
              const Array& array,
              std::vector<DATA_TYPE>& buffer,
-             Importer_NS::BadRowsTracker* const bad_rows_tracker)
+             import_export::BadRowsTracker* const bad_rows_tracker)
       : DataBufferBase(cd, array, bad_rows_tracker), buffer(buffer) {}
 };
 

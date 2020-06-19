@@ -52,7 +52,7 @@ void stream_insert(
     const std::map<std::string,
                    std::pair<std::unique_ptr<boost::regex>,
                              std::unique_ptr<std::string>>>& transformations,
-    const Importer_NS::CopyParams& copy_params,
+    const import_export::CopyParams& copy_params,
     const bool remove_quotes) {
   std::ios_base::sync_with_stdio(false);
   std::istream_iterator<char> eos;
@@ -420,7 +420,7 @@ int main(int argc, char** argv) {
             std::unique_ptr<std::string>(new std::string(fmt_str)));
   }
 
-  Importer_NS::CopyParams copy_params(
+  import_export::CopyParams copy_params(
       delim, nulls, line_delim, batch_size, retry_count, retry_wait);
   RowToColumnLoader row_loader(
       ThriftClientConnection(

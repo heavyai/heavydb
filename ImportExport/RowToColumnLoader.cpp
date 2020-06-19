@@ -23,8 +23,8 @@
  * Copyright (c) 2017 MapD Technologies, Inc.  All rights reserved.
  **/
 
-#include "Import/RowToColumnLoader.h"
-#include "Import/DelimitedParserUtils.h"
+#include "ImportExport/RowToColumnLoader.h"
+#include "ImportExport/DelimitedParserUtils.h"
 #include "Shared/Logger.h"
 
 using namespace ::apache::thrift;
@@ -112,7 +112,7 @@ SQLTypeInfo create_array_sql_type_info_from_col_type(const TColumnType& ct) {
 
 std::string RowToColumnLoader::print_row_with_delim(
     std::vector<TStringValue> row,
-    const Importer_NS::CopyParams& copy_params) {
+    const import_export::CopyParams& copy_params) {
   std::ostringstream out;
   bool first = true;
   for (TStringValue ts : row) {
@@ -177,7 +177,7 @@ void remove_partial_row(size_t failed_column,
 void populate_TColumn(TStringValue ts,
                       SQLTypeInfo column_type_info,
                       TColumn& input_col,
-                      const Importer_NS::CopyParams& copy_params) {
+                      const import_export::CopyParams& copy_params) {
   // create datum and push data to column structure from row data
   switch (column_type_info.get_type()) {
     case SQLTypes::kARRAY:
@@ -291,7 +291,7 @@ TRowDescriptor RowToColumnLoader::get_row_descriptor() {
 
 bool RowToColumnLoader::convert_string_to_column(
     std::vector<TStringValue> row,
-    const Importer_NS::CopyParams& copy_params) {
+    const import_export::CopyParams& copy_params) {
   // create datum and push data to column structure from row data
   uint curr_col = 0;
   for (TStringValue ts : row) {
@@ -299,7 +299,7 @@ bool RowToColumnLoader::convert_string_to_column(
       switch (column_type_info_[curr_col].get_type()) {
         case SQLTypes::kARRAY: {
           std::vector<std::string> arr_ele;
-          Importer_NS::delimited_parser::parse_string_array(
+          import_export::delimited_parser::parse_string_array(
               ts.str_val, copy_params, arr_ele);
           TColumn array_tcol;
           for (std::string item : arr_ele) {
@@ -395,7 +395,7 @@ void RowToColumnLoader::closeConnection() {
 
 void RowToColumnLoader::wait_disconnet_reconnnect_retry(
     size_t tries,
-    Importer_NS::CopyParams copy_params) {
+    import_export::CopyParams copy_params) {
   std::cout << "  Waiting  " << copy_params.retry_wait
             << " secs to retry Inserts , will try " << (copy_params.retry_count - tries)
             << " times more " << std::endl;
@@ -407,7 +407,7 @@ void RowToColumnLoader::wait_disconnet_reconnnect_retry(
 
 void RowToColumnLoader::do_load(int& nrows,
                                 int& nskipped,
-                                Importer_NS::CopyParams copy_params) {
+                                import_export::CopyParams copy_params) {
   for (size_t tries = 0; tries < copy_params.retry_count;
        tries++) {  // allow for retries in case of insert failure
     try {

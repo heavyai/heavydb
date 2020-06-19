@@ -34,7 +34,7 @@
 #include "Calcite/Calcite.h"
 #include "Catalog/Catalog.h"
 #include "Fragmenter/InsertOrderFragmenter.h"
-#include "Import/Importer.h"
+#include "ImportExport/Importer.h"
 #include "LockMgr/LockMgr.h"
 #include "Parser/ParserWrapper.h"
 #include "Parser/ReservedKeywords.h"
@@ -362,8 +362,8 @@ class DBHandler : public OmniSciIf {
       const Catalog_Namespace::SessionInfo& session_info,
       const std::string& table_name,
       size_t num_cols,
-      std::unique_ptr<Importer_NS::Loader>* loader,
-      std::vector<std::unique_ptr<Importer_NS::TypedImportBuffer>>* import_buffers);
+      std::unique_ptr<import_export::Loader>* loader,
+      std::vector<std::unique_ptr<import_export::TypedImportBuffer>>* import_buffers);
 
   void load_table_binary_columnar(const TSessionId& session,
                                   const std::string& table_name,
@@ -662,10 +662,10 @@ class DBHandler : public OmniSciIf {
   void set_execution_mode_nolock(Catalog_Namespace::SessionInfo* session_ptr,
                                  const TExecuteMode::type mode);
   char unescape_char(std::string str);
-  Importer_NS::CopyParams thrift_to_copyparams(const TCopyParams& cp);
-  TCopyParams copyparams_to_thrift(const Importer_NS::CopyParams& cp);
+  import_export::CopyParams thrift_to_copyparams(const TCopyParams& cp);
+  TCopyParams copyparams_to_thrift(const import_export::CopyParams& cp);
   void check_geospatial_files(const boost::filesystem::path file_path,
-                              const Importer_NS::CopyParams& copy_params);
+                              const import_export::CopyParams& copy_params);
   void render_rel_alg(TRenderResult& _return,
                       const std::string& query_ra,
                       const std::string& query_str,
@@ -762,7 +762,7 @@ class DBHandler : public OmniSciIf {
   struct GeoCopyFromState {
     std::string geo_copy_from_table;
     std::string geo_copy_from_file_name;
-    Importer_NS::CopyParams geo_copy_from_copy_params;
+    import_export::CopyParams geo_copy_from_copy_params;
     std::string geo_copy_from_partitions;
   };
 

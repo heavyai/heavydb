@@ -24,7 +24,7 @@
 #include "Catalog/ForeignTable.h"
 #include "DataMgr/Chunk/Chunk.h"
 #include "ForeignDataWrapper.h"
-#include "Import/Importer.h"
+#include "ImportExport/Importer.h"
 
 namespace foreign_storage {
 class CsvDataWrapper : public ForeignDataWrapper {
@@ -46,7 +46,7 @@ class CsvDataWrapper : public ForeignDataWrapper {
   ForeignStorageBuffer* getBufferFromMap(const ChunkKey& chunk_key);
   bool prefixMatch(const ChunkKey& prefix, const ChunkKey& checked);
   std::string getFilePath();
-  Importer_NS::CopyParams validateAndGetCopyParams();
+  import_export::CopyParams validateAndGetCopyParams();
   void validateFilePath();
 
   /**
@@ -73,7 +73,7 @@ class CsvDataWrapper : public ForeignDataWrapper {
   std::optional<bool> validateAndGetBoolValue(const std::string& option_name);
 
   bool fragmentIsFull();
-  Importer_NS::Loader* getLoader(Catalog_Namespace::Catalog& catalog);
+  import_export::Loader* getLoader(Catalog_Namespace::Catalog& catalog);
 
   std::mutex loader_mutex_;
   std::map<ChunkKey, std::unique_ptr<ForeignStorageBuffer>> chunk_buffer_map_;

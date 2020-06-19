@@ -47,7 +47,7 @@ class AbstractBuffer;
 class AbstractDataMgr;
 };  // namespace Data_Namespace
 
-namespace Importer_NS {
+namespace import_export {
 class TypedImportBuffer;
 };
 

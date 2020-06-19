@@ -81,5 +81,5 @@ add_dependencies(PatchScanner ScannerFiles)
 
 add_dependencies(Parser PatchParser PatchScanner)
 
-target_link_libraries(Parser ParserGenerated QueryState CsvImport Shared Analyzer QueryEngine Catalog TableArchiver DataMgr LockMgr)
+target_link_libraries(Parser ParserGenerated QueryState ImportExport Shared Analyzer QueryEngine Catalog TableArchiver DataMgr LockMgr)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_BINARY_DIR})

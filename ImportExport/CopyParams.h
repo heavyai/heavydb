@@ -26,7 +26,7 @@
 
 #include "Shared/sqltypes.h"
 
-namespace Importer_NS {
+namespace import_export {
 
 // not too big (need much memory) but not too small (many thread forks)
 constexpr static size_t kImportFileBufferSize = (1 << 23);
@@ -133,4 +133,4 @@ struct CopyParams {
       , geo_assign_render_groups(true)
       , geo_explode_collections(false) {}
 };
-}  // namespace Importer_NS
+}  // namespace import_export
