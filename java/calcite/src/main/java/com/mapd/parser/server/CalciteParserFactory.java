@@ -26,6 +26,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.Map;
+import java.util.function.Supplier;
 
 /**
  *
@@ -38,7 +39,14 @@ class CalciteParserFactory implements PoolableObjectFactory {
   private final Map<String, ExtensionFunction> extSigs;
   private final int mapdPort;
   private final SockTransportProperties socket_transport_properties;
-  private final MapDSqlOperatorTable tableOperator;
+  private volatile MapDSqlOperatorTable tableOperator;
+  private final Supplier<MapDSqlOperatorTable> tableOperatorSupplier =
+          new Supplier<MapDSqlOperatorTable>() {
+            @Override
+            public MapDSqlOperatorTable get() {
+              return tableOperator;
+            }
+          };
 
   static {
     System.setProperty(
@@ -58,14 +66,20 @@ class CalciteParserFactory implements PoolableObjectFactory {
     this.mapdPort = mapdPort;
     this.socket_transport_properties = skT;
 
-    tableOperator = new MapDSqlOperatorTable(SqlStdOperatorTable.instance());
+    updateOperatorTable();
+  }
+
+  public void updateOperatorTable() {
+    MapDSqlOperatorTable tableOperator =
+            new MapDSqlOperatorTable(SqlStdOperatorTable.instance());
     MapDSqlOperatorTable.addUDF(tableOperator, extSigs);
+    this.tableOperator = tableOperator;
   }
 
   @Override
   public Object makeObject() throws Exception {
-    MapDParser obj =
-            new MapDParser(dataDir, tableOperator, mapdPort, socket_transport_properties);
+    MapDParser obj = new MapDParser(
+            dataDir, tableOperatorSupplier, mapdPort, socket_transport_properties);
     return obj;
   }
 

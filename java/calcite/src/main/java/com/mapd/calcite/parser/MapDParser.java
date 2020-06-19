@@ -21,7 +21,6 @@ import com.google.common.collect.ImmutableList;
 import com.mapd.common.SockTransportProperties;
 import com.mapd.parser.extension.ddl.ExtendedSqlParser;
 import com.mapd.parser.extension.ddl.JsonSerializableDdl;
-import com.mapd.parser.server.ExtensionFunction;
 
 import org.apache.calcite.avatica.util.Casing;
 import org.apache.calcite.config.CalciteConnectionConfig;
@@ -59,7 +58,27 @@ import org.apache.calcite.rex.RexNode;
 import org.apache.calcite.rex.RexShuttle;
 import org.apache.calcite.runtime.CalciteException;
 import org.apache.calcite.schema.SchemaPlus;
-import org.apache.calcite.sql.*;
+import org.apache.calcite.sql.JoinConditionType;
+import org.apache.calcite.sql.JoinType;
+import org.apache.calcite.sql.SqlBasicCall;
+import org.apache.calcite.sql.SqlBasicTypeNameSpec;
+import org.apache.calcite.sql.SqlCall;
+import org.apache.calcite.sql.SqlDataTypeSpec;
+import org.apache.calcite.sql.SqlDelete;
+import org.apache.calcite.sql.SqlDialect;
+import org.apache.calcite.sql.SqlFunctionCategory;
+import org.apache.calcite.sql.SqlIdentifier;
+import org.apache.calcite.sql.SqlJoin;
+import org.apache.calcite.sql.SqlKind;
+import org.apache.calcite.sql.SqlLiteral;
+import org.apache.calcite.sql.SqlNode;
+import org.apache.calcite.sql.SqlNodeList;
+import org.apache.calcite.sql.SqlNumericLiteral;
+import org.apache.calcite.sql.SqlOrderBy;
+import org.apache.calcite.sql.SqlSelect;
+import org.apache.calcite.sql.SqlUnresolvedFunction;
+import org.apache.calcite.sql.SqlUpdate;
+import org.apache.calcite.sql.SqlWith;
 import org.apache.calcite.sql.fun.SqlCase;
 import org.apache.calcite.sql.fun.SqlStdOperatorTable;
 import org.apache.calcite.sql.parser.SqlParseException;
@@ -78,7 +97,6 @@ import org.apache.calcite.tools.Program;
 import org.apache.calcite.tools.Programs;
 import org.apache.calcite.tools.RelConversionException;
 import org.apache.calcite.tools.ValidationException;
-import org.apache.calcite.util.ConversionUtil;
 import org.apache.calcite.util.Pair;
 import org.apache.calcite.util.Util;
 import org.slf4j.Logger;
@@ -96,6 +114,7 @@ import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.BiPredicate;
+import java.util.function.Supplier;
 
 /**
  *
@@ -118,7 +137,7 @@ public final class MapDParser {
   // private MapDCatalogReader catalogReader;
   // private SqlValidatorImpl validator;
   // private SqlToRelConverter converter;
-  private final MapDSqlOperatorTable mapDSqlOperatorTable;
+  private final Supplier<MapDSqlOperatorTable> mapDSqlOperatorTable;
   private final String dataDir;
 
   private int callCount = 0;
@@ -130,7 +149,7 @@ public final class MapDParser {
   private static Map<String, Boolean> SubqueryCorrMemo = new ConcurrentHashMap<>();
 
   public MapDParser(String dataDir,
-          final MapDSqlOperatorTable mapDSqlOperatorTable,
+          final Supplier<MapDSqlOperatorTable> mapDSqlOperatorTable,
           int mapdPort,
           SockTransportProperties skT) {
     this.dataDir = dataDir;
@@ -310,7 +329,7 @@ public final class MapDParser {
     final FrameworkConfig config =
             Frameworks.newConfigBuilder()
                     .defaultSchema(rootSchema.add(mapdUser.getDB(), mapd))
-                    .operatorTable(mapDSqlOperatorTable)
+                    .operatorTable(mapDSqlOperatorTable.get())
                     .parserConfig(SqlParser.configBuilder()
                                           .setConformance(SqlConformanceEnum.LENIENT)
                                           .setUnquotedCasing(Casing.UNCHANGED)

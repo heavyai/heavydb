@@ -69,6 +69,8 @@ public class CalciteServerHandler implements CalciteServer.Iface {
 
   private final GenericObjectPool parserPool;
 
+  private final CalciteParserFactory calciteParserFactory;
+
   private final String extSigsJson;
 
   private final String udfSigsJson;
@@ -115,10 +117,10 @@ public class CalciteServerHandler implements CalciteServer.Iface {
       extSigs.putAll(udfSigs);
     }
 
-    PoolableObjectFactory parserFactory =
-            new CalciteParserFactory(dataDir, extSigs, mapdPort, skT);
+    calciteParserFactory = new CalciteParserFactory(dataDir, extSigs, mapdPort, skT);
+
     // GenericObjectPool::setFactory is deprecated
-    this.parserPool = new GenericObjectPool(parserFactory);
+    this.parserPool = new GenericObjectPool(calciteParserFactory);
   }
 
   @Override
@@ -371,6 +373,8 @@ public class CalciteServerHandler implements CalciteServer.Iface {
     udfRTSigsJson = ExtensionFunctionSignatureParser.signaturesToJson(udfRTSigs);
     // Expose RT UDFs to Calcite server:
     extSigs.putAll(udfRTSigs);
+
+    calciteParserFactory.updateOperatorTable();
   }
 
   private static ExtensionFunction toExtensionFunction(TUserDefinedFunction udf) {
