@@ -232,7 +232,7 @@ TEST_F(CreateUserMappingTest, FsiDisabled) {
   g_enable_fsi = false;
   queryAndAssertException(
       "CREATE USER MAPPING FOR PUBLIC SERVER test_server WITH (test_key = 'test_value');",
-      "Syntax error at: FOR");
+      "Exception: Syntax error at: FOR");
 }
 
 class DropUserMappingTest : public UserMappingTest {
@@ -341,7 +341,7 @@ TEST_F(DropUserMappingTest, DropUser) {
 TEST_F(DropUserMappingTest, FsiDisabled) {
   g_enable_fsi = false;
   queryAndAssertException("DROP USER MAPPING FOR test_user_1 SERVER test_server;",
-                          "Syntax error at: FOR");
+                          "Exception: Syntax error at: FOR");
 }
 
 int main(int argc, char** argv) {

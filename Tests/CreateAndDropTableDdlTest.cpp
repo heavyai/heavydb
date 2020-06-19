@@ -1238,7 +1238,7 @@ TEST_F(CreateForeignTableTest, FsiDisabled) {
   g_enable_fsi = false;
   std::string query = getCreateTableQuery(
       ddl_utils::TableType::FOREIGN_TABLE, "test_foreign_table", "(col1 INTEGER)");
-  queryAndAssertException(query, "Syntax error at: FOREIGN");
+  queryAndAssertException(query, "Exception: Syntax error at: FOREIGN");
 }
 
 class DropTableTest : public CreateAndDropTableDdlTest,
@@ -1312,7 +1312,7 @@ TEST_P(CreateTableTest, InvalidSyntax) {
     if (GetParam() == ddl_utils::TableType::FOREIGN_TABLE) {
       ASSERT_TRUE(e.error_msg.find("Exception: Parse failed") != std::string::npos);
     } else {
-      ASSERT_EQ("Syntax error at: INTEGER", e.error_msg);
+      ASSERT_EQ("Exception: Syntax error at: INTEGER", e.error_msg);
     }
   }
 }

@@ -383,19 +383,15 @@ void DBHandler::parser_with_error_handler(
     std::list<std::unique_ptr<Parser::Stmt>>& parse_trees) {
   int num_parse_errors = 0;
   std::string last_parsed;
-  try {
-    SQLParser parser;
-    num_parse_errors = parser.parse(query_str, parse_trees, last_parsed);
-  } catch (std::exception& e) {
-    THROW_MAPD_EXCEPTION(std::string("Exception: ") + e.what());
-  }
+  SQLParser parser;
+  num_parse_errors = parser.parse(query_str, parse_trees, last_parsed);
   if (num_parse_errors > 0) {
-    THROW_MAPD_EXCEPTION("Syntax error at: " + last_parsed);
+    throw std::runtime_error("Syntax error at: " + last_parsed);
   }
   if (parse_trees.size() > 1) {
-    THROW_MAPD_EXCEPTION("multiple SQL statements not allowed");
+    throw std::runtime_error("multiple SQL statements not allowed");
   } else if (parse_trees.size() != 1) {
-    THROW_MAPD_EXCEPTION("empty SQL statment not allowed");
+    throw std::runtime_error("empty SQL statment not allowed");
   }
 }
 void DBHandler::check_read_only(const std::string& str) {
@@ -986,20 +982,21 @@ void DBHandler::sql_execute(TQueryResult& _return,
   stdlog.appendNameValuePairs("client", getConnectionInfo().toString());
   auto timer = DEBUG_TIMER(__func__);
 
-  ScopeGuard reset_was_geo_copy_from = [this, &session_ptr] {
-    geo_copy_from_sessions.remove(session_ptr->get_session_id());
-  };
+  try {
+    ScopeGuard reset_was_geo_copy_from = [this, &session_ptr] {
+      geo_copy_from_sessions.remove(session_ptr->get_session_id());
+    };
 
-  if (first_n >= 0 && at_most_n >= 0) {
-    THROW_MAPD_EXCEPTION(std::string("At most one of first_n and at_most_n can be set"));
-  }
-
-  if (leaf_aggregator_.leafCount() > 0) {
-    if (!agg_handler_) {
-      THROW_MAPD_EXCEPTION("Distributed support is disabled.");
+    if (first_n >= 0 && at_most_n >= 0) {
+      THROW_MAPD_EXCEPTION(
+          std::string("At most one of first_n and at_most_n can be set"));
     }
-    _return.total_time_ms = measure<>::execution([&]() {
-      try {
+
+    if (leaf_aggregator_.leafCount() > 0) {
+      if (!agg_handler_) {
+        THROW_MAPD_EXCEPTION("Distributed support is disabled.");
+      }
+      _return.total_time_ms = measure<>::execution([&]() {
         agg_handler_->cluster_execute(_return,
                                       query_state->createQueryStateProxy(),
                                       query_state->getQueryStr(),
@@ -1008,65 +1005,72 @@ void DBHandler::sql_execute(TQueryResult& _return,
                                       first_n,
                                       at_most_n,
                                       system_parameters_);
-      } catch (std::exception& e) {
-        const auto mapd_exception = dynamic_cast<const TOmniSciException*>(&e);
-        const auto thrift_exception = dynamic_cast<const apache::thrift::TException*>(&e);
-        THROW_MAPD_EXCEPTION(
-            thrift_exception ? std::string(thrift_exception->what())
-                             : mapd_exception ? mapd_exception->error_msg
-                                              : std::string("Exception: ") + e.what());
-      }
+      });
       _return.nonce = nonce;
-    });
-  } else {
-    _return.total_time_ms = measure<>::execution([&]() {
-      DBHandler::sql_execute_impl(_return,
-                                  query_state->createQueryStateProxy(),
-                                  column_format,
-                                  nonce,
-                                  session_ptr->get_executor_device_type(),
-                                  first_n,
-                                  at_most_n);
-    });
-  }
-
-  // if the SQL statement we just executed was a geo COPY FROM, the import
-  // parameters were captured, and this flag set, so we do the actual import here
-  if (auto geo_copy_from_state = geo_copy_from_sessions(session_ptr->get_session_id())) {
-    // import_geo_table() calls create_table() which calls this function to
-    // do the work, so reset the flag now to avoid executing this part a
-    // second time at the end of that, which would fail as the table was
-    // already created! Also reset the flag with a ScopeGuard on exiting
-    // this function any other way, such as an exception from the code above!
-    geo_copy_from_sessions.remove(session_ptr->get_session_id());
-
-    // create table as replicated?
-    TCreateParams create_params;
-    if (geo_copy_from_state->geo_copy_from_partitions == "REPLICATED") {
-      create_params.is_replicated = true;
+    } else {
+      _return.total_time_ms = measure<>::execution([&]() {
+        DBHandler::sql_execute_impl(_return,
+                                    query_state->createQueryStateProxy(),
+                                    column_format,
+                                    nonce,
+                                    session_ptr->get_executor_device_type(),
+                                    first_n,
+                                    at_most_n);
+      });
     }
 
-    // now do (and time) the import
-    _return.total_time_ms = measure<>::execution([&]() {
-      import_geo_table(
-          session,
-          geo_copy_from_state->geo_copy_from_table,
-          geo_copy_from_state->geo_copy_from_file_name,
-          copyparams_to_thrift(geo_copy_from_state->geo_copy_from_copy_params),
-          TRowDescriptor(),
-          create_params);
-    });
+    // if the SQL statement we just executed was a geo COPY FROM, the import
+    // parameters were captured, and this flag set, so we do the actual import here
+    if (auto geo_copy_from_state =
+            geo_copy_from_sessions(session_ptr->get_session_id())) {
+      // import_geo_table() calls create_table() which calls this function to
+      // do the work, so reset the flag now to avoid executing this part a
+      // second time at the end of that, which would fail as the table was
+      // already created! Also reset the flag with a ScopeGuard on exiting
+      // this function any other way, such as an exception from the code above!
+      geo_copy_from_sessions.remove(session_ptr->get_session_id());
+
+      // create table as replicated?
+      TCreateParams create_params;
+      if (geo_copy_from_state->geo_copy_from_partitions == "REPLICATED") {
+        create_params.is_replicated = true;
+      }
+
+      // now do (and time) the import
+      _return.total_time_ms = measure<>::execution([&]() {
+        import_geo_table(
+            session,
+            geo_copy_from_state->geo_copy_from_table,
+            geo_copy_from_state->geo_copy_from_file_name,
+            copyparams_to_thrift(geo_copy_from_state->geo_copy_from_copy_params),
+            TRowDescriptor(),
+            create_params);
+      });
+    }
+    std::string debug_json = timer.stopAndGetJson();
+    if (!debug_json.empty()) {
+      _return.__set_debug(std::move(debug_json));
+    }
+    stdlog.appendNameValuePairs(
+        "execution_time_ms",
+        _return.execution_time_ms,
+        "total_time_ms",  // BE-3420 - Redundant with duration field
+        stdlog.duration<std::chrono::milliseconds>());
+    VLOG(1) << "Table Schema Locks:\n" << lockmgr::TableSchemaLockMgr::instance();
+    VLOG(1) << "Table Data Locks:\n" << lockmgr::TableDataLockMgr::instance();
+  } catch (const std::exception& e) {
+    if (strstr(e.what(), "java.lang.NullPointerException")) {
+      THROW_MAPD_EXCEPTION(std::string("Exception: ") +
+                           "query failed from broken view or other schema related issue");
+    } else if (strstr(e.what(), "Parse failed: Encountered \";\"")) {
+      THROW_MAPD_EXCEPTION("multiple SQL statements not allowed");
+    } else if (strstr(e.what(),
+                      "Parse failed: Encountered \"<EOF>\" at line 0, column 0")) {
+      THROW_MAPD_EXCEPTION("empty SQL statment not allowed");
+    } else {
+      THROW_MAPD_EXCEPTION(std::string("Exception: ") + e.what());
+    }
   }
-  std::string debug_json = timer.stopAndGetJson();
-  if (!debug_json.empty()) {
-    _return.__set_debug(std::move(debug_json));
-  }
-  stdlog.appendNameValuePairs("execution_time_ms",
-                              _return.execution_time_ms,
-                              "total_time_ms",  // BE-3420 - Redundant with duration field
-                              stdlog.duration<std::chrono::milliseconds>());
-  VLOG(1) << "Table Schema Locks:\n" << lockmgr::TableSchemaLockMgr::instance();
-  VLOG(1) << "Table Data Locks:\n" << lockmgr::TableDataLockMgr::instance();
 }
 
 void DBHandler::sql_execute_df(TDataFrame& _return,
@@ -1156,7 +1160,8 @@ void DBHandler::deallocate_df(const TSessionId& session,
     if (ipc_handle_to_dev_ptr_.count(df.df_handle) != size_t(1)) {
       TOmniSciException ex;
       ex.error_msg = std::string(
-          "Exception: current data frame handle is not bookkept or been inserted twice");
+          "Exception: current data frame handle is not bookkept or been inserted "
+          "twice");
       LOG(ERROR) << ex.error_msg;
       throw ex;
     }
@@ -1259,8 +1264,8 @@ void DBHandler::get_completion_hints(std::vector<TCompletionHint>& hints,
       [&compatible_table_names](const TCompletionHint& lhs, const TCompletionHint& rhs) {
         if (lhs.type == TCompletionHintType::TABLE &&
             rhs.type == TCompletionHintType::TABLE) {
-          // Between two tables, one which is compatible with the specified projections
-          // and one which isn't, pick the one which is compatible.
+          // Between two tables, one which is compatible with the specified
+          // projections and one which isn't, pick the one which is compatible.
           if (compatible_table_names.find(to_upper(lhs.hints.back())) !=
                   compatible_table_names.end() &&
               compatible_table_names.find(to_upper(rhs.hints.back())) ==
@@ -1606,7 +1611,8 @@ bool DBHandler::has_object_privilege(const TSessionId& sessionId,
   if (!current_user.isSuper && !SysCatalog::instance().isRoleGrantedToGrantee(
                                    current_user.userName, granteeName, false)) {
     THROW_MAPD_EXCEPTION(
-        "Users except superusers can only check privileges for self or roles granted to "
+        "Users except superusers can only check privileges for self or roles granted "
+        "to "
         "them.")
   }
   Catalog_Namespace::UserMetadata user_meta;
@@ -1775,7 +1781,8 @@ void DBHandler::get_all_roles_for_user(std::vector<std::string>& roles,
         roles = grantee->getRoles();
       } else {
         THROW_MAPD_EXCEPTION(
-            "Only a superuser is authorized to request list of roles granted to another "
+            "Only a superuser is authorized to request list of roles granted to "
+            "another "
             "user.");
       }
     } else {
@@ -1943,8 +1950,8 @@ void DBHandler::get_table_details_impl(TTableDetails& _return,
       stdlog.setQueryState(query_state);
       try {
         if (hasTableAccessPrivileges(td, *session_info)) {
-          // TODO(adb): we should take schema read locks on all tables making up the view,
-          // at minimum
+          // TODO(adb): we should take schema read locks on all tables making up the
+          // view, at minimum
           const auto query_ra = parse_to_ra(query_state->createQueryStateProxy(),
                                             query_state->getQueryStr(),
                                             {},
@@ -4076,7 +4083,8 @@ void DBHandler::import_geo_table(const TSessionId& session,
     }
   }
 
-  // prepare to gather errors that would otherwise be exceptions, as we can only throw one
+  // prepare to gather errors that would otherwise be exceptions, as we can only throw
+  // one
   std::vector<std::string> caught_exception_messages;
 
   // prepare to time multi-layer import
@@ -5042,18 +5050,6 @@ void DBHandler::check_and_invalidate_sessions(Parser::DDLStmt* ddl) {
   }
 }
 
-namespace {
-
-void throw_multiple_sql_statements_exception() {
-  THROW_MAPD_EXCEPTION("multiple SQL statements not allowed");
-}
-
-void throw_empty_sql_statement_exception() {
-  THROW_MAPD_EXCEPTION("empty SQL statment not allowed");
-}
-
-}  // namespace
-
 void DBHandler::sql_execute_impl(TQueryResult& _return,
                                  QueryStateProxy query_state_proxy,
                                  const bool column_format,
@@ -5078,213 +5074,199 @@ void DBHandler::sql_execute_impl(TQueryResult& _return,
   mapd_shared_lock<mapd_shared_mutex> executeReadLock;
 
   lockmgr::LockedTableDescriptors locks;
-  try {
-    ParserWrapper pw{query_str};
-    switch (pw.getQueryType()) {
-      case ParserWrapper::QueryType::Read: {
-        _return.query_type = TQueryType::READ;
-        VLOG(1) << "query type: READ";
-        break;
-      }
-      case ParserWrapper::QueryType::Write: {
-        _return.query_type = TQueryType::WRITE;
-        VLOG(1) << "query type: WRITE";
-        break;
-      }
-      case ParserWrapper::QueryType::SchemaRead: {
-        _return.query_type = TQueryType::SCHEMA_READ;
-        VLOG(1) << "query type: SCHEMA READ";
-        break;
-      }
-      case ParserWrapper::QueryType::SchemaWrite: {
-        _return.query_type = TQueryType::SCHEMA_WRITE;
-        VLOG(1) << "query type: SCHEMA WRITE";
-        break;
-      }
-      default: {
-        _return.query_type = TQueryType::UNKNOWN;
-        LOG(WARNING) << "query type: UNKNOWN";
-        break;
-      }
+  ParserWrapper pw{query_str};
+  switch (pw.getQueryType()) {
+    case ParserWrapper::QueryType::Read: {
+      _return.query_type = TQueryType::READ;
+      VLOG(1) << "query type: READ";
+      break;
     }
-    if (pw.isCalcitePathPermissable(read_only_)) {
-      executeReadLock = mapd_shared_lock<mapd_shared_mutex>(
+    case ParserWrapper::QueryType::Write: {
+      _return.query_type = TQueryType::WRITE;
+      VLOG(1) << "query type: WRITE";
+      break;
+    }
+    case ParserWrapper::QueryType::SchemaRead: {
+      _return.query_type = TQueryType::SCHEMA_READ;
+      VLOG(1) << "query type: SCHEMA READ";
+      break;
+    }
+    case ParserWrapper::QueryType::SchemaWrite: {
+      _return.query_type = TQueryType::SCHEMA_WRITE;
+      VLOG(1) << "query type: SCHEMA WRITE";
+      break;
+    }
+    default: {
+      _return.query_type = TQueryType::UNKNOWN;
+      LOG(WARNING) << "query type: UNKNOWN";
+      break;
+    }
+  }
+  if (pw.isCalcitePathPermissable(read_only_)) {
+    executeReadLock = mapd_shared_lock<mapd_shared_mutex>(
+        *legacylockmgr::LockMgr<mapd_shared_mutex, bool>::getMutex(
+            legacylockmgr::ExecutorOuterLock, true));
+
+    std::string query_ra;
+    _return.execution_time_ms += measure<>::execution([&]() {
+      TPlanResult result;
+      std::tie(result, locks) =
+          parse_to_ra(query_state_proxy, query_str, {}, true, system_parameters_);
+      query_ra = result.plan_result;
+    });
+
+    std::string query_ra_calcite_explain;
+    if (pw.isCalciteExplain() && (!g_enable_filter_push_down || g_cluster)) {
+      // return the ra as the result
+      convert_explain(_return, ResultSet(query_ra), true);
+      return;
+    } else if (pw.isCalciteExplain()) {
+      // removing the "explain calcite " from the beginning of the "query_str":
+      std::string temp_query_str =
+          query_str.substr(std::string("explain calcite ").length());
+
+      CHECK(!locks.empty());
+      query_ra_calcite_explain =
+          parse_to_ra(query_state_proxy, temp_query_str, {}, false, system_parameters_)
+              .first.plan_result;
+    } else if (pw.isCalciteDdl()) {
+      executeDdl(_return, query_ra, session_ptr);
+      return;
+    }
+    const auto explain_info = pw.getExplainInfo();
+    std::vector<PushedDownFilterInfo> filter_push_down_requests;
+    auto execute_rel_alg_task = std::make_shared<QueryDispatchQueue::Task>(
+        [this,
+         &filter_push_down_requests,
+         &_return,
+         &query_state_proxy,
+         &explain_info,
+         &query_ra_calcite_explain,
+         &query_ra,
+         &query_str,
+         &locks,
+         column_format,
+         executor_device_type,
+         first_n,
+         at_most_n](const size_t executor_index) {
+          filter_push_down_requests = execute_rel_alg(
+              _return,
+              query_state_proxy,
+              explain_info.justCalciteExplain() ? query_ra_calcite_explain : query_ra,
+              column_format,
+              executor_device_type,
+              first_n,
+              at_most_n,
+              /*just_validate=*/false,
+              g_enable_filter_push_down && !g_cluster,
+              explain_info,
+              executor_index);
+          if (explain_info.justCalciteExplain() && filter_push_down_requests.empty()) {
+            // we only reach here if filter push down was enabled, but no filter
+            // push down candidate was found
+            convert_explain(_return, ResultSet(query_ra), true);
+          } else if (!filter_push_down_requests.empty()) {
+            CHECK(!locks.empty());
+            execute_rel_alg_with_filter_push_down(_return,
+                                                  query_state_proxy,
+                                                  query_ra,
+                                                  column_format,
+                                                  executor_device_type,
+                                                  first_n,
+                                                  at_most_n,
+                                                  explain_info.justExplain(),
+                                                  explain_info.justCalciteExplain(),
+                                                  filter_push_down_requests);
+          } else if (explain_info.justCalciteExplain() &&
+                     filter_push_down_requests.empty()) {
+            // return the ra as the result:
+            // If we reach here, the 'filter_push_down_request' turned out to be
+            // empty, i.e., no filter push down so we continue with the initial
+            // (unchanged) query's calcite explanation.
+            CHECK(!locks.empty());
+            query_ra =
+                parse_to_ra(query_state_proxy, query_str, {}, false, system_parameters_)
+                    .first.plan_result;
+            convert_explain(_return, ResultSet(query_ra), true);
+          }
+        });
+    CHECK(dispatch_queue_);
+    dispatch_queue_->submit(execute_rel_alg_task);
+    auto result_future = execute_rel_alg_task->get_future();
+    result_future.get();
+    return;
+  } else if (pw.is_optimize || pw.is_validate) {
+    // Get the Stmt object
+    DBHandler::parser_with_error_handler(query_str, parse_trees);
+
+    if (pw.is_optimize) {
+      const auto optimize_stmt =
+          dynamic_cast<Parser::OptimizeTableStmt*>(parse_trees.front().get());
+      CHECK(optimize_stmt);
+
+      _return.execution_time_ms += measure<>::execution([&]() {
+        const auto td_with_lock =
+            lockmgr::TableSchemaLockContainer<lockmgr::WriteLock>::acquireTableDescriptor(
+                cat, optimize_stmt->getTableName());
+        const auto td = td_with_lock();
+
+        if (!td || !user_can_access_table(
+                       *session_ptr, td, AccessPrivileges::DELETE_FROM_TABLE)) {
+          throw std::runtime_error("Table " + optimize_stmt->getTableName() +
+                                   " does not exist.");
+        }
+        if (td->isView) {
+          throw std::runtime_error("OPTIMIZE TABLE command is not supported on views.");
+        }
+
+        // acquire write lock on table data
+        auto data_lock =
+            lockmgr::TableDataLockMgr::getWriteLockForTable(cat, td->tableName);
+
+        auto executor = Executor::getExecutor(
+            Executor::UNITARY_EXECUTOR_ID, "", "", system_parameters_);
+        const TableOptimizer optimizer(td, executor.get(), cat);
+        if (optimize_stmt->shouldVacuumDeletedRows()) {
+          optimizer.vacuumDeletedRows();
+        }
+        optimizer.recomputeMetadata();
+      });
+
+      return;
+    }
+    if (pw.is_validate) {
+      // check user is superuser
+      if (!session_ptr->get_currentUser().isSuper) {
+        throw std::runtime_error("Superuser is required to run VALIDATE");
+      }
+      const auto validate_stmt =
+          dynamic_cast<Parser::ValidateStmt*>(parse_trees.front().get());
+      CHECK(validate_stmt);
+
+      // Prevent any other query from running while doing validate
+      executeWriteLock = mapd_unique_lock<mapd_shared_mutex>(
           *legacylockmgr::LockMgr<mapd_shared_mutex, bool>::getMutex(
               legacylockmgr::ExecutorOuterLock, true));
 
-      std::string query_ra;
-      _return.execution_time_ms += measure<>::execution([&]() {
-        TPlanResult result;
-        std::tie(result, locks) =
-            parse_to_ra(query_state_proxy, query_str, {}, true, system_parameters_);
-        query_ra = result.plan_result;
-      });
-
-      std::string query_ra_calcite_explain;
-      if (pw.isCalciteExplain() && (!g_enable_filter_push_down || g_cluster)) {
-        // return the ra as the result
-        convert_explain(_return, ResultSet(query_ra), true);
-        return;
-      } else if (pw.isCalciteExplain()) {
-        // removing the "explain calcite " from the beginning of the "query_str":
-        std::string temp_query_str =
-            query_str.substr(std::string("explain calcite ").length());
-
-        CHECK(!locks.empty());
-        query_ra_calcite_explain =
-            parse_to_ra(query_state_proxy, temp_query_str, {}, false, system_parameters_)
-                .first.plan_result;
-      } else if (pw.isCalciteDdl()) {
-        executeDdl(_return, query_ra, session_ptr);
-        return;
-      }
-      const auto explain_info = pw.getExplainInfo();
-      std::vector<PushedDownFilterInfo> filter_push_down_requests;
-      auto execute_rel_alg_task = std::make_shared<QueryDispatchQueue::Task>(
-          [this,
-           &filter_push_down_requests,
-           &_return,
-           &query_state_proxy,
-           &explain_info,
-           &query_ra_calcite_explain,
-           &query_ra,
-           &query_str,
-           &locks,
-           column_format,
-           executor_device_type,
-           first_n,
-           at_most_n](const size_t executor_index) {
-            filter_push_down_requests = execute_rel_alg(
-                _return,
-                query_state_proxy,
-                explain_info.justCalciteExplain() ? query_ra_calcite_explain : query_ra,
-                column_format,
-                executor_device_type,
-                first_n,
-                at_most_n,
-                /*just_validate=*/false,
-                g_enable_filter_push_down && !g_cluster,
-                explain_info,
-                executor_index);
-            if (explain_info.justCalciteExplain() && filter_push_down_requests.empty()) {
-              // we only reach here if filter push down was enabled, but no filter
-              // push down candidate was found
-              convert_explain(_return, ResultSet(query_ra), true);
-            } else if (!filter_push_down_requests.empty()) {
-              CHECK(!locks.empty());
-              execute_rel_alg_with_filter_push_down(_return,
-                                                    query_state_proxy,
-                                                    query_ra,
-                                                    column_format,
-                                                    executor_device_type,
-                                                    first_n,
-                                                    at_most_n,
-                                                    explain_info.justExplain(),
-                                                    explain_info.justCalciteExplain(),
-                                                    filter_push_down_requests);
-            } else if (explain_info.justCalciteExplain() &&
-                       filter_push_down_requests.empty()) {
-              // return the ra as the result:
-              // If we reach here, the 'filter_push_down_request' turned out to be empty,
-              // i.e., no filter push down so we continue with the initial (unchanged)
-              // query's calcite explanation.
-              CHECK(!locks.empty());
-              query_ra =
-                  parse_to_ra(query_state_proxy, query_str, {}, false, system_parameters_)
-                      .first.plan_result;
-              convert_explain(_return, ResultSet(query_ra), true);
-            }
-          });
-      CHECK(dispatch_queue_);
-      dispatch_queue_->submit(execute_rel_alg_task);
-      auto result_future = execute_rel_alg_task->get_future();
-      result_future.get();
-      return;
-    } else if (pw.is_optimize || pw.is_validate) {
-      // Get the Stmt object
-      DBHandler::parser_with_error_handler(query_str, parse_trees);
-
-      if (pw.is_optimize) {
-        const auto optimize_stmt =
-            dynamic_cast<Parser::OptimizeTableStmt*>(parse_trees.front().get());
-        CHECK(optimize_stmt);
-
+      std::string output{"Result for validate"};
+      if (g_cluster && leaf_aggregator_.leafCount()) {
         _return.execution_time_ms += measure<>::execution([&]() {
-          const auto td_with_lock = lockmgr::TableSchemaLockContainer<
-              lockmgr::WriteLock>::acquireTableDescriptor(cat,
-                                                          optimize_stmt->getTableName());
-          const auto td = td_with_lock();
-
-          if (!td || !user_can_access_table(
-                         *session_ptr, td, AccessPrivileges::DELETE_FROM_TABLE)) {
-            throw std::runtime_error("Table " + optimize_stmt->getTableName() +
-                                     " does not exist.");
-          }
-          if (td->isView) {
-            throw std::runtime_error("OPTIMIZE TABLE command is not supported on views.");
-          }
-
-          // acquire write lock on table data
-          auto data_lock =
-              lockmgr::TableDataLockMgr::getWriteLockForTable(cat, td->tableName);
-
-          auto executor = Executor::getExecutor(
-              Executor::UNITARY_EXECUTOR_ID, "", "", system_parameters_);
-          const TableOptimizer optimizer(td, executor.get(), cat);
-          if (optimize_stmt->shouldVacuumDeletedRows()) {
-            optimizer.vacuumDeletedRows();
-          }
-          optimizer.recomputeMetadata();
+          const DistributedValidate validator(validate_stmt->getType(),
+                                              validate_stmt->isRepairTypeRemove(),
+                                              cat,  // tables may be dropped here
+                                              leaf_aggregator_,
+                                              *session_ptr,
+                                              *this);
+          output = validator.validate(query_state_proxy);
         });
-
-        return;
+      } else {
+        output = "Not running on a cluster nothing to validate";
       }
-      if (pw.is_validate) {
-        // check user is superuser
-        if (!session_ptr->get_currentUser().isSuper) {
-          throw std::runtime_error("Superuser is required to run VALIDATE");
-        }
-        const auto validate_stmt =
-            dynamic_cast<Parser::ValidateStmt*>(parse_trees.front().get());
-        CHECK(validate_stmt);
-
-        // Prevent any other query from running while doing validate
-        executeWriteLock = mapd_unique_lock<mapd_shared_mutex>(
-            *legacylockmgr::LockMgr<mapd_shared_mutex, bool>::getMutex(
-                legacylockmgr::ExecutorOuterLock, true));
-
-        std::string output{"Result for validate"};
-        if (g_cluster && leaf_aggregator_.leafCount()) {
-          _return.execution_time_ms += measure<>::execution([&]() {
-            const DistributedValidate validator(validate_stmt->getType(),
-                                                validate_stmt->isRepairTypeRemove(),
-                                                cat,  // tables may be dropped here
-                                                leaf_aggregator_,
-                                                *session_ptr,
-                                                *this);
-            output = validator.validate(query_state_proxy);
-          });
-        } else {
-          output = "Not running on a cluster nothing to validate";
-        }
-        convert_result(_return, ResultSet(output), true);
-        return;
-      }
-    }
-    LOG(INFO) << "passing query to legacy processor";
-  } catch (std::exception& e) {
-    if (strstr(e.what(), "java.lang.NullPointerException")) {
-      THROW_MAPD_EXCEPTION(std::string("Exception: ") +
-                           "query failed from broken view or other schema related issue");
-    } else if (strstr(e.what(), "Parse failed: Encountered \";\"")) {
-      throw_multiple_sql_statements_exception();
-    } else if (strstr(e.what(),
-                      "Parse failed: Encountered \"<EOF>\" at line 0, column 0")) {
-      throw_empty_sql_statement_exception();
-    } else {
-      THROW_MAPD_EXCEPTION(std::string("Exception: ") + e.what());
+      convert_result(_return, ResultSet(output), true);
+      return;
     }
   }
+  LOG(INFO) << "passing query to legacy processor";
 
   const auto result = apply_copy_to_shim(query_str);
   DBHandler::parser_with_error_handler(result, parse_trees);
@@ -5350,27 +5332,21 @@ void DBHandler::sql_execute_impl(TQueryResult& _return,
   };
 
   for (const auto& stmt : parse_trees) {
-    try {
-      auto select_stmt = dynamic_cast<Parser::SelectStmt*>(stmt.get());
-      if (!select_stmt) {
-        check_read_only("Non-SELECT statements");
-      }
-      auto ddl = dynamic_cast<Parser::DDLStmt*>(stmt.get());
-      if (!handle_ddl(ddl)) {
-        auto stmtp = dynamic_cast<Parser::InsertValuesStmt*>(stmt.get());
-        CHECK(stmtp);  // no other statements supported
+    auto select_stmt = dynamic_cast<Parser::SelectStmt*>(stmt.get());
+    if (!select_stmt) {
+      check_read_only("Non-SELECT statements");
+    }
+    auto ddl = dynamic_cast<Parser::DDLStmt*>(stmt.get());
+    if (!handle_ddl(ddl)) {
+      auto stmtp = dynamic_cast<Parser::InsertValuesStmt*>(stmt.get());
+      CHECK(stmtp);  // no other statements supported
 
-        if (parse_trees.size() != 1) {
-          THROW_MAPD_EXCEPTION("Can only run one INSERT INTO query at a time.");
-        }
-
-        _return.execution_time_ms +=
-            measure<>::execution([&]() { stmtp->execute(*session_ptr); });
+      if (parse_trees.size() != 1) {
+        throw std::runtime_error("Can only run one INSERT INTO query at a time.");
       }
-    } catch (std::exception& e) {
-      const auto thrift_exception = dynamic_cast<const apache::thrift::TException*>(&e);
-      THROW_MAPD_EXCEPTION(thrift_exception ? std::string(thrift_exception->what())
-                                            : std::string("Exception: ") + e.what());
+
+      _return.execution_time_ms +=
+          measure<>::execution([&]() { stmtp->execute(*session_ptr); });
     }
   }
 }

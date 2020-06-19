@@ -147,7 +147,7 @@ TEST_F(CreateForeignServerTest, FsiDisabled) {
       "CREATE SERVER test_server FOREIGN DATA WRAPPER omnisci_csv WITH "
       "(storage_type = 'LOCAL_FILE', base_path = '/test_path/');"};
   g_enable_fsi = false;
-  queryAndAssertException(query, "Syntax error at: SERVER");
+  queryAndAssertException(query, "Exception: Syntax error at: SERVER");
 }
 
 TEST_F(CreateForeignServerTest, InvalidDataWrapper) {
@@ -231,7 +231,8 @@ TEST_F(DropForeignServerTest, ForeignTableReferencingServer) {
 
 TEST_F(DropForeignServerTest, FsiDisabled) {
   g_enable_fsi = false;
-  queryAndAssertException("DROP SERVER test_server;", "Syntax error at: SERVER");
+  queryAndAssertException("DROP SERVER test_server;",
+                          "Exception: Syntax error at: SERVER");
 }
 
 class ForeignServerPrivilegesDdlTest : public DBHandlerTestFixture {
@@ -1041,7 +1042,7 @@ TEST_F(AlterForeignServerTest, FsiDisabled) {
   createTestServer();
   g_enable_fsi = false;
   queryAndAssertException("ALTER SERVER test_server OWNER TO test_user;",
-                          "Syntax error at: SERVER");
+                          "Exception: Syntax error at: SERVER");
 }
 
 TEST_F(AlterForeignServerTest, OmniSciPrefix) {

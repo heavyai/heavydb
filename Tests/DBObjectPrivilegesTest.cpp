@@ -345,11 +345,7 @@ class InvalidGrantSyntax : public DBHandlerTestFixture {};
 
 TEST_F(InvalidGrantSyntax, InvalidGrantSyntax) {
   std::string error_message;
-  if (g_aggregator) {
-    error_message = "Exception: Syntax error at: ON";
-  } else {
-    error_message = "Syntax error at: ON";
-  }
+  error_message = "Exception: Syntax error at: ON";
 
   queryAndAssertException("GRANT SELECT, INSERT, ON TABLE tbl TO Arsenal, Juventus;",
                           error_message);
