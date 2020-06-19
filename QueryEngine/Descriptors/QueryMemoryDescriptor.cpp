@@ -457,12 +457,12 @@ QueryMemoryDescriptor::QueryMemoryDescriptor(
   }
 
 #ifdef HAVE_CUDA
-  // Check Streaming Top N heap usage, bail if > 2GB (max slab size, CUDA only)
+  // Check Streaming Top N heap usage, bail if > max slab size, CUDA ONLY
   if (use_streaming_top_n_ && executor->catalog_->getDataMgr().gpusPresent()) {
     const auto thread_count = executor->blockSize() * executor->gridSize();
     const auto total_buff_size =
         streaming_top_n::get_heap_size(getRowSize(), getEntryCount(), thread_count);
-    if (total_buff_size > static_cast<size_t>(1L << 31)) {
+    if (total_buff_size > executor_->maxGpuSlabSize()) {
       throw StreamingTopNOOM(total_buff_size);
     }
   }

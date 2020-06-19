@@ -327,6 +327,7 @@ class Executor {
   Executor(const ExecutorId id,
            const size_t block_size_x,
            const size_t grid_size_x,
+           const size_t max_gpu_slab_size,
            const std::string& debug_dir,
            const std::string& debug_file);
 
@@ -398,6 +399,7 @@ class Executor {
   unsigned gridSize() const;
   unsigned numBlocksPerMP() const;
   unsigned blockSize() const;
+  size_t maxGpuSlabSize() const;
 
  private:
   void clearMetaInfoCache();
@@ -982,6 +984,7 @@ class Executor {
 
   const unsigned block_size_x_;
   const unsigned grid_size_x_;
+  const size_t max_gpu_slab_size_;
   const std::string debug_dir_;
   const std::string debug_file_;
 

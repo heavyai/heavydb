@@ -129,6 +129,7 @@ const int32_t Executor::ERR_SINGLE_VALUE_FOUND_MULTIPLE_VALUES;
 Executor::Executor(const ExecutorId executor_id,
                    const size_t block_size_x,
                    const size_t grid_size_x,
+                   const size_t max_gpu_slab_size,
                    const std::string& debug_dir,
                    const std::string& debug_file)
     : cgen_state_(new CgenState({}, false))
@@ -138,6 +139,7 @@ Executor::Executor(const ExecutorId executor_id,
     , gpu_code_cache_(code_cache_size)
     , block_size_x_(block_size_x)
     , grid_size_x_(grid_size_x)
+    , max_gpu_slab_size_(max_gpu_slab_size)
     , debug_dir_(debug_dir)
     , debug_file_(debug_file)
     , executor_id_(executor_id)
@@ -160,6 +162,7 @@ std::shared_ptr<Executor> Executor::getExecutor(
   auto executor = std::make_shared<Executor>(executor_id,
                                              system_parameters.cuda_block_size,
                                              system_parameters.cuda_grid_size,
+                                             system_parameters.max_gpu_slab_size,
                                              debug_dir,
                                              debug_file);
   CHECK(executors_.insert(std::make_pair(executor_id, executor)).second);
@@ -3082,6 +3085,10 @@ unsigned Executor::blockSize() const {
   CHECK(cuda_mgr);
   const auto& dev_props = cuda_mgr->getAllDeviceProperties();
   return block_size_x_ ? block_size_x_ : dev_props.front().maxThreadsPerBlock;
+}
+
+size_t Executor::maxGpuSlabSize() const {
+  return max_gpu_slab_size_;
 }
 
 int64_t Executor::deviceCycles(int milliseconds) const {
