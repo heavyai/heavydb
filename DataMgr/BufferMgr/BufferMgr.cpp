@@ -45,23 +45,33 @@ std::string BufferMgr::keyToString(const ChunkKey& key) {
 
 /// Allocates memSize bytes for the buffer pool and initializes the free memory map.
 BufferMgr::BufferMgr(const int device_id,
-                     const size_t max_buffer_size,
+                     const size_t max_buffer_pool_size,
+                     const size_t min_slab_size,
                      const size_t max_slab_size,
                      const size_t page_size,
                      AbstractBufferMgr* parent_mgr)
     : AbstractBufferMgr(device_id)
-    , page_size_(page_size)
+    , max_buffer_pool_size_(max_buffer_pool_size)
+    , min_slab_size_(min_slab_size)
     , max_slab_size_(max_slab_size)
-    , max_buffer_size_(max_buffer_size)
+    , page_size_(page_size)
     , num_pages_allocated_(0)
     , allocations_capped_(false)
     , parent_mgr_(parent_mgr)
     , max_buffer_id_(0)
     , buffer_epoch_(0) {
-  CHECK(max_buffer_size_ > 0 && max_slab_size_ > 0 && page_size_ > 0 &&
-        max_slab_size_ % page_size_ == 0);
-  max_num_pages_ = max_buffer_size_ / page_size_;
+  CHECK(max_buffer_pool_size_ > 0);
+  CHECK(page_size_ > 0);
+  // TODO change checks on run-time configurable slab size variables to exceptions
+  CHECK(min_slab_size_ > 0);
+  CHECK(max_slab_size_ > 0);
+  CHECK(min_slab_size_ <= max_slab_size_);
+  CHECK(min_slab_size_ % page_size_ == 0);
+  CHECK(max_slab_size_ % page_size_ == 0);
+
+  max_buffer_pool_num_pages_ = max_buffer_pool_size_ / page_size_;
   max_num_pages_per_slab_ = max_slab_size_ / page_size_;
+  min_num_pages_per_slab_ = min_slab_size_ / page_size_;
   current_max_slab_page_size_ =
       max_num_pages_per_slab_;  // current_max_slab_page_size_ will drop as allocations
                                 // fail - this is the high water mark
@@ -279,9 +289,9 @@ BufferList::iterator BufferMgr::findFreeBuffer(size_t num_bytes) {
 
   // If we're here then we didn't find a free segment of sufficient size
   // First we see if we can add another slab
-  while (!allocations_capped_ && num_pages_allocated_ < max_num_pages_) {
+  while (!allocations_capped_ && num_pages_allocated_ < max_buffer_pool_num_pages_) {
     try {
-      size_t pagesLeft = max_num_pages_ - num_pages_allocated_;
+      size_t pagesLeft = max_buffer_pool_num_pages_ - num_pages_allocated_;
       if (pagesLeft < current_max_slab_page_size_) {
         current_max_slab_page_size_ = pagesLeft;
       }
@@ -317,11 +327,11 @@ BufferList::iterator BufferMgr::findFreeBuffer(size_t num_bytes) {
       } else {
         current_max_slab_page_size_ /= 2;
         if (current_max_slab_page_size_ <
-            (max_num_pages_per_slab_ / 8)) {  // should be a constant
+            (min_num_pages_per_slab_)) {  // should be a constant
           allocations_capped_ = true;
           // dump out the slabs and their sizes
           LOG(INFO) << "ALLOCATION Capped " << current_max_slab_page_size_
-                    << " Minimum size = " << (max_num_pages_per_slab_ / 8) << " "
+                    << " Minimum size = " << (min_num_pages_per_slab_) << " "
                     << getStringMgrType() << ":" << device_id_;
         }
       }
@@ -476,7 +486,7 @@ void BufferMgr::clearSlabs() {
 
 // return the maximum size this buffer can be in bytes
 size_t BufferMgr::getMaxSize() {
-  return page_size_ * max_num_pages_;
+  return page_size_ * max_buffer_pool_num_pages_;
 }
 
 // return how large the buffer are currently allocated
@@ -857,7 +867,7 @@ size_t BufferMgr::size() {
 }
 
 size_t BufferMgr::getMaxBufferSize() {
-  return max_buffer_size_;
+  return max_buffer_pool_size_;
 }
 
 size_t BufferMgr::getMaxSlabSize() {

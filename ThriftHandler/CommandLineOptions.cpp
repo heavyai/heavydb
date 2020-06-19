@@ -85,6 +85,7 @@ void CommandLineOptions::fillOptions() {
                           po::value<size_t>(&system_parameters.cpu_buffer_mem_bytes)
                               ->default_value(system_parameters.cpu_buffer_mem_bytes),
                           "Size of memory reserved for CPU buffers, in bytes.");
+
   help_desc.add_options()(
       "cpu-only",
       po::value<bool>(&cpu_only)->default_value(cpu_only)->implicit_value(true),
@@ -265,12 +266,14 @@ void CommandLineOptions::fillOptions() {
       "read-only",
       po::value<bool>(&read_only)->default_value(read_only)->implicit_value(true),
       "Enable read-only mode.");
+
   help_desc.add_options()(
       "res-gpu-mem",
       po::value<size_t>(&reserved_gpu_mem)->default_value(reserved_gpu_mem),
       "Reduces GPU memory available to the OmniSci allocator by this amount. Used for "
       "compiled code cache and ancillary GPU functions and other processes that may also "
       "be using the GPU concurrent with OmniSciDB.");
+
   help_desc.add_options()("start-gpu",
                           po::value<int>(&start_gpu)->default_value(start_gpu),
                           "First gpu to use.");
@@ -439,6 +442,34 @@ void CommandLineOptions::fillAdvancedOptions() {
           ->implicit_value(true),
       "Remove quals from the filtered count if they are covered by a "
       "join condition (currently only ST_Contains).");
+
+  developer_desc.add_options()(
+      "min-cpu-slab-size",
+      po::value<size_t>(&system_parameters.min_cpu_slab_size)
+          ->default_value(system_parameters.min_cpu_slab_size),
+      "Min slab size (size of memory allocations) for CPU buffer pool.");
+  developer_desc.add_options()(
+      "max-cpu-slab-size",
+      po::value<size_t>(&system_parameters.max_cpu_slab_size)
+          ->default_value(system_parameters.max_cpu_slab_size),
+      "Max CPU buffer pool slab size (size of memory allocations). Note if "
+      "there is not enough free memory to accomodate the target slab size, smaller "
+      "slabs will be allocated, down to the minimum size specified by "
+      "min-cpu-slab-size.");
+  developer_desc.add_options()(
+      "min-gpu-slab-size",
+      po::value<size_t>(&system_parameters.min_gpu_slab_size)
+          ->default_value(system_parameters.min_gpu_slab_size),
+      "Min slab size (size of memory allocations) for GPU buffer pools.");
+  developer_desc.add_options()(
+      "max-gpu-slab-size",
+      po::value<size_t>(&system_parameters.max_gpu_slab_size)
+          ->default_value(system_parameters.max_gpu_slab_size),
+      "Max GPU buffer pool slab size (size of memory allocations). Note if "
+      "there is not enough free memory to accomodate the target slab size, smaller "
+      "slabs will be allocated, down to the minimum size speified by "
+      "min-gpu-slab-size.");
+
   developer_desc.add_options()(
       "max-output-projection-allocation-bytes",
       po::value<size_t>(&g_max_memory_allocation_size)
@@ -823,6 +854,10 @@ boost::optional<int> CommandLineOptions::parse_command_line(
   }
   LOG(INFO) << " cuda block size " << system_parameters.cuda_block_size;
   LOG(INFO) << " cuda grid size  " << system_parameters.cuda_grid_size;
+  LOG(INFO) << " Min CPU buffer pool slab size " << system_parameters.min_cpu_slab_size;
+  LOG(INFO) << " Max CPU buffer pool slab size " << system_parameters.max_cpu_slab_size;
+  LOG(INFO) << " Min GPU buffer pool slab size " << system_parameters.min_gpu_slab_size;
+  LOG(INFO) << " Max GPU buffer pool slab size " << system_parameters.max_gpu_slab_size;
   LOG(INFO) << " calcite JVM max memory  " << system_parameters.calcite_max_mem;
   LOG(INFO) << " OmniSci Server Port  " << system_parameters.omnisci_server_port;
   LOG(INFO) << " OmniSci Calcite Port  " << system_parameters.calcite_port;

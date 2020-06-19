@@ -100,8 +100,9 @@ class BufferMgr : public AbstractBufferMgr {  // implements
   /// Constructs a BufferMgr object that allocates memSize bytes.
   BufferMgr(const int device_id,
             const size_t max_buffer_size,
-            const size_t max_slab_size = 2147483648,
-            const size_t page_size = 512,
+            const size_t min_slab_size,
+            const size_t max_slab_size,
+            const size_t page_size,
             AbstractBufferMgr* parent_mgr = 0);
 
   /// Destructor
@@ -171,13 +172,16 @@ class BufferMgr : public AbstractBufferMgr {  // implements
                                        const ChunkKey& key_prefix) override;
 
  protected:
+  const size_t
+      max_buffer_pool_size_;    /// max number of bytes allocated for the buffer pool
+  const size_t min_slab_size_;  /// minimum size of the individual memory allocations that
+                                /// compose the buffer pool (up to maxBufferSize_)
+  const size_t max_slab_size_;  /// size of the individual memory allocations that compose
+                                /// the buffer pool (up to maxBufferSize_)
+  const size_t page_size_;
   std::vector<int8_t*> slabs_;  /// vector of beginning memory addresses for each
                                 /// allocation of the buffer pool
   std::vector<BufferList> slab_segments_;
-  size_t page_size_;
-
-  size_t max_slab_size_;  /// size of the individual memory allocations that compose the
-                          /// buffer pool (up to maxBufferSize_)
 
  private:
   BufferMgr(const BufferMgr&);             // private copy constructor
@@ -198,9 +202,9 @@ class BufferMgr : public AbstractBufferMgr {  // implements
   std::mutex global_mutex_;
 
   std::map<ChunkKey, BufferList::iterator> chunk_index_;
-  size_t max_buffer_size_;  /// max number of bytes allocated for the buffer pool
-  size_t max_num_pages_;
+  size_t max_buffer_pool_num_pages_;  // max number of pages for buffer pool
   size_t num_pages_allocated_;
+  size_t min_num_pages_per_slab_;
   size_t max_num_pages_per_slab_;
   size_t current_max_slab_page_size_;
   bool allocations_capped_;
