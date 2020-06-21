@@ -2752,18 +2752,32 @@ ExecutionResult RelAlgExecutor::executeWorkUnit(
           queue_time_ms);
     }
   };
-
+  auto cache_key = ra_exec_unit_desc_for_caching(ra_exe_unit);
   try {
-    result = execute_and_handle_errors(
-        max_groups_buffer_entry_guess,
-        groups_approx_upper_bound(table_infos) <= g_big_group_threshold);
+    auto cached_cardinality = executor_->getCachedCardinality(cache_key);
+    auto card = cached_cardinality.second;
+    if (cached_cardinality.first && card >= 0) {
+      result = execute_and_handle_errors(card, true);
+    } else {
+      result = execute_and_handle_errors(
+          max_groups_buffer_entry_guess,
+          groups_approx_upper_bound(table_infos) <= g_big_group_threshold);
+    }
     VLOG(3) << "result.getRows()->entryCount()=" << result.getRows()->entryCount();
   } catch (const CardinalityEstimationRequired&) {
-    const auto estimated_groups_buffer_entry_guess =
-        2 * std::min(groups_approx_upper_bound(table_infos),
-                     getNDVEstimation(work_unit, is_agg, co, eo));
-    CHECK_GT(estimated_groups_buffer_entry_guess, size_t(0));
-    result = execute_and_handle_errors(estimated_groups_buffer_entry_guess, true);
+    // check the cardinality cache
+    auto cached_cardinality = executor_->getCachedCardinality(cache_key);
+    auto card = cached_cardinality.second;
+    if (cached_cardinality.first && card >= 0) {
+      result = execute_and_handle_errors(card, true);
+    } else {
+      const auto estimated_groups_buffer_entry_guess =
+          2 * std::min(groups_approx_upper_bound(table_infos),
+                       getNDVEstimation(work_unit, is_agg, co, eo));
+      CHECK_GT(estimated_groups_buffer_entry_guess, size_t(0));
+      result = execute_and_handle_errors(estimated_groups_buffer_entry_guess, true);
+      executor_->addToCardinalityCache(cache_key, estimated_groups_buffer_entry_guess);
+    }
   }
 
   result.setQueueTime(queue_time_ms);

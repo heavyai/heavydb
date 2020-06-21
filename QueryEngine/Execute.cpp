@@ -106,6 +106,7 @@ double g_bump_allocator_step_reduction{0.75};
 bool g_enable_direct_columnarization{true};
 extern bool g_enable_experimental_string_functions;
 bool g_enable_runtime_query_interrupt{false};
+bool g_use_estimator_result_cache{true};
 unsigned g_runtime_query_interrupt_frequency{1000};
 size_t g_gpu_smem_threshold{
     4096};  // GPU shared memory threshold (in bytes), if larger
@@ -1184,6 +1185,57 @@ std::string sort_algorithm_to_string(const SortAlgorithm algorithm) {
 }
 
 }  // namespace
+
+std::string ra_exec_unit_desc_for_caching(const RelAlgExecutionUnit& ra_exe_unit) {
+  // todo(yoonmin): replace a cache key as a DAG representation of a query plan
+  // instead of ra_exec_unit description if possible
+  std::ostringstream os;
+  for (const auto& input_col_desc : ra_exe_unit.input_col_descs) {
+    const auto& scan_desc = input_col_desc->getScanDesc();
+    os << scan_desc.getTableId() << "," << input_col_desc->getColId() << ","
+       << scan_desc.getNestLevel();
+  }
+  if (!ra_exe_unit.simple_quals.empty()) {
+    for (const auto& qual : ra_exe_unit.simple_quals) {
+      if (qual) {
+        os << qual->toString() << ",";
+      }
+    }
+  }
+  if (!ra_exe_unit.quals.empty()) {
+    for (const auto& qual : ra_exe_unit.quals) {
+      if (qual) {
+        os << qual->toString() << ",";
+      }
+    }
+  }
+  if (!ra_exe_unit.join_quals.empty()) {
+    for (size_t i = 0; i < ra_exe_unit.join_quals.size(); i++) {
+      const auto& join_condition = ra_exe_unit.join_quals[i];
+      os << std::to_string(i) << join_type_to_string(join_condition.type);
+      for (const auto& qual : join_condition.quals) {
+        if (qual) {
+          os << qual->toString() << ",";
+        }
+      }
+    }
+  }
+  if (!ra_exe_unit.groupby_exprs.empty()) {
+    for (const auto& qual : ra_exe_unit.groupby_exprs) {
+      if (qual) {
+        os << qual->toString() << ",";
+      }
+    }
+  }
+  for (const auto& expr : ra_exe_unit.target_exprs) {
+    if (expr) {
+      os << expr->toString() << ",";
+    }
+  }
+  os << bool_to_string(ra_exe_unit.estimator == nullptr);
+  os << std::to_string(ra_exe_unit.scan_limit);
+  return os.str();
+}
 
 std::ostream& operator<<(std::ostream& os, const RelAlgExecutionUnit& ra_exe_unit) {
   os << "\n\tTable/Col/Levels: ";
@@ -3475,6 +3527,25 @@ void Executor::enableRuntimeQueryInterrupt(const unsigned interrupt_freq) const 
   g_runtime_query_interrupt_frequency = interrupt_freq;
 }
 
+void Executor::addToCardinalityCache(const std::string& cache_key,
+                                     const size_t cache_value) {
+  if (g_use_estimator_result_cache) {
+    mapd_unique_lock<mapd_shared_mutex> lock(recycler_mutex_);
+    cardinality_cache_[cache_key] = cache_value;
+    VLOG(1) << "Put estimated cardinality to the cache";
+  }
+}
+
+Executor::CachedCardinality Executor::getCachedCardinality(const std::string& cache_key) {
+  mapd_shared_lock<mapd_shared_mutex> lock(recycler_mutex_);
+  if (g_use_estimator_result_cache &&
+      cardinality_cache_.find(cache_key) != cardinality_cache_.end()) {
+    VLOG(1) << "Reuse cached cardinality";
+    return {true, cardinality_cache_[cache_key]};
+  }
+  return {false, -1};
+}
+
 std::map<int, std::shared_ptr<Executor>> Executor::executors_;
 
 std::atomic_flag Executor::execute_spin_lock_ = ATOMIC_FLAG_INIT;
@@ -3487,3 +3558,6 @@ mapd_shared_mutex Executor::executors_cache_mutex_;
 
 std::mutex Executor::compilation_mutex_;
 std::mutex Executor::kernel_mutex_;
+
+mapd_shared_mutex Executor::recycler_mutex_;
+std::unordered_map<std::string, size_t> Executor::cardinality_cache_;

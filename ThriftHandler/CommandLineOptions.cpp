@@ -154,6 +154,11 @@ void CommandLineOptions::fillOptions() {
                               ->implicit_value(1000),
                           "A frequency of checking the request of runtime query "
                           "interrupt from user (in millisecond).");
+  help_desc.add_options()("use-estimator-result-cache",
+                          po::value<bool>(&use_estimator_result_cache)
+                              ->default_value(use_estimator_result_cache)
+                              ->implicit_value(true),
+                          "Use estimator result cache.");
   if (!dist_v5_) {
     help_desc.add_options()(
         "enable-string-dict-hash-cache",
@@ -743,6 +748,7 @@ boost::optional<int> CommandLineOptions::parse_command_line(
     g_dynamic_watchdog_time_limit = dynamic_watchdog_time_limit;
     g_enable_runtime_query_interrupt = enable_runtime_query_interrupt;
     g_runtime_query_interrupt_frequency = runtime_query_interrupt_frequency;
+    g_use_estimator_result_cache = use_estimator_result_cache;
   } catch (po::error& e) {
     std::cerr << "Usage Error: " << e.what() << std::endl;
     return 1;

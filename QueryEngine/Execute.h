@@ -916,6 +916,11 @@ class Executor {
                                       SESSION_MAP_LOCK& read_lock);
   mapd_shared_mutex& getSessionLock();
 
+  // true when we have matched cardinality, and false otherwise
+  using CachedCardinality = std::pair<bool, size_t>;
+  void addToCardinalityCache(const std::string& cache_key, const size_t cache_value);
+  CachedCardinality getCachedCardinality(const std::string& cache_key);
+
  private:
   std::vector<std::pair<void*, void*>> getCodeFromCache(const CodeCacheKey&,
                                                         const CodeCache&);
@@ -1009,6 +1014,11 @@ class Executor {
   // write lock
   static mapd_shared_mutex execute_mutex_;
   static mapd_shared_mutex executors_cache_mutex_;
+
+  // for now we use recycler_mutex only for cardinality_cache_
+  // and will expand its coverage for more interesting caches for query excution
+  static mapd_shared_mutex recycler_mutex_;
+  static std::unordered_map<std::string, size_t> cardinality_cache_;
 
  public:
   static const int32_t ERR_DIV_BY_ZERO{1};
