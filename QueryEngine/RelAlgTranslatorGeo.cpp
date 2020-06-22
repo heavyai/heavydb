@@ -567,6 +567,10 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateGeoProjection(
   int32_t lindex = 0;
   auto geoargs =
       translateGeoFunctionArg(rex_function, ti, lindex, false, false, true, true);
+  if (lindex != 0) {
+    throw QueryNotSupported(
+        "Indexed LINESTRING geometries not supported in this context");
+  }
   return makeExpr<Analyzer::GeoUOper>(
       Geo_namespace::GeoBase::GeoOp::kPROJECTION, ti, ti, geoargs);
 }
@@ -602,9 +606,10 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateGeoBinaryConstructor(
     geoargs0 = translateGeoFunctionArg(
         rex_function->getOperand(0), arg0_ti, lindex0, false, false, true, true);
     if (arg0_ti.get_type() == kLINESTRING) {
-      Datum index;
-      index.intval = lindex0;
-      geoargs0.push_back(makeExpr<Analyzer::Constant>(kINT, false, index));
+      if (lindex0 != 0) {
+        throw QueryNotSupported(
+            "Indexed LINESTRING geometries not supported in this context");
+      }
     }
   }
   if (func_resolve(rex_function->getName(),
@@ -616,9 +621,10 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateGeoBinaryConstructor(
     geoargs1 = translateGeoFunctionArg(
         rex_function->getOperand(1), arg1_ti, lindex1, false, false, true, true);
     if (arg1_ti.get_type() == kLINESTRING) {
-      Datum index;
-      index.intval = lindex1;
-      geoargs1.push_back(makeExpr<Analyzer::Constant>(kINT, false, index));
+      if (lindex1 != 0) {
+        throw QueryNotSupported(
+            "Indexed LINESTRING geometries not supported in this context");
+      }
     }
   } else if (func_resolve(rex_function->getName(), "ST_Buffer"sv)) {
     // Second arg: double scalar
@@ -653,6 +659,10 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateGeoPredicate(
   SQLTypeInfo arg_ti;
   auto geoargs = translateGeoFunctionArg(
       rex_function->getOperand(0), arg_ti, lindex, false, false, true, true);
+  if (lindex != 0) {
+    throw QueryNotSupported(
+        "Indexed LINESTRING geometries not supported in this context");
+  }
   ti = SQLTypeInfo(kBOOLEAN, false);
   auto op = (rex_function->getName() == "ST_IsEmpty"sv)
                 ? Geo_namespace::GeoBase::GeoOp::kISEMPTY

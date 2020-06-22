@@ -26,14 +26,6 @@ std::vector<llvm::Value*> CodeGenerator::codegenGeoUOper(
       throw QueryMustRunOnCpu();
     }
   }
-  if (geo_expr->getOp() != Geo_namespace::GeoBase::GeoOp::kPROJECTION) {
-    if (geo_expr->getTypeInfo0().get_type() != kPOLYGON &&
-        geo_expr->getTypeInfo0().get_type() != kMULTIPOLYGON) {
-      throw std::runtime_error(
-          "Currently only handle Geo construction consuming POLYGON/MULTIPOLYGON "
-          "geometries.");
-    }
-  }
 
   auto argument_list = codegenGeoArgs(geo_expr->getArgs0(), co);
 
@@ -59,11 +51,11 @@ std::vector<llvm::Value*> CodeGenerator::codegenGeoUOper(
   // Prepend geo expr op
   argument_list.insert(argument_list.begin(),
                        cgen_state_->llInt(static_cast<int>(geo_expr->getOp())));
-  if (geo_expr->getTypeInfo0().get_type() == kPOLYGON) {
-    // Replicate the last two values as dummys to get to the common meta level
-    // TODO: similar meta upgrade will be required for other allowed geo
-    argument_list.insert(
-        argument_list.end(), argument_list.end() - 2, argument_list.end());
+  for (auto i = 3; i > geo_expr->getTypeInfo0().get_physical_coord_cols(); i--) {
+    argument_list.insert(argument_list.end(), cgen_state_->llInt(int64_t(0)));
+    argument_list.insert(argument_list.end(),
+                         llvm::ConstantPointerNull::get(
+                             llvm::Type::getInt32PtrTy(cgen_state_->context_, 0)));
   }
   // Append geo expr compression
   argument_list.insert(
@@ -87,13 +79,6 @@ std::vector<llvm::Value*> CodeGenerator::codegenGeoBinOper(
   if (co.device_type == ExecutorDeviceType::GPU) {
     throw QueryMustRunOnCpu();
   }
-  if (geo_expr->getTypeInfo0().get_type() != kPOLYGON &&
-      geo_expr->getTypeInfo0().get_type() != kMULTIPOLYGON) {
-    throw std::runtime_error(
-        "Currently only handle Geo construction consuming POLYGON/MULTIPOLYGON "
-        "geometries.");
-  }
-
 #ifndef ENABLE_GEOS
   throw std::runtime_error("Geo operation requires GEOS support.");
 #endif
@@ -114,11 +99,11 @@ std::vector<llvm::Value*> CodeGenerator::codegenGeoBinOper(
   // Prepend geo expr op
   argument_list.insert(argument_list.begin(),
                        cgen_state_->llInt(static_cast<int>(geo_expr->getOp())));
-  if (geo_expr->getTypeInfo0().get_type() == kPOLYGON) {
-    // Replicate the last two values as dummys to get to the common meta level
-    // TODO: similar meta upgrade will be required for other allowed geo
-    argument_list.insert(
-        argument_list.end(), argument_list.end() - 2, argument_list.end());
+  for (auto i = 3; i > geo_expr->getTypeInfo0().get_physical_coord_cols(); i--) {
+    argument_list.insert(argument_list.end(), cgen_state_->llInt(int64_t(0)));
+    argument_list.insert(argument_list.end(),
+                         llvm::ConstantPointerNull::get(
+                             llvm::Type::getInt32PtrTy(cgen_state_->context_, 0)));
   }
   // Append geo expr compression
   argument_list.insert(
@@ -140,10 +125,11 @@ std::vector<llvm::Value*> CodeGenerator::codegenGeoBinOper(
     arg1_list.insert(
         arg1_list.begin(),
         cgen_state_->llInt(static_cast<int>(geo_expr->getTypeInfo1().get_type())));
-    if (geo_expr->getTypeInfo1().get_type() == kPOLYGON) {
-      // Replicate the last two values as dummys to get to the common meta level
-      // TODO: similar meta upgrade will be required for other allowed geo
-      arg1_list.insert(arg1_list.end(), arg1_list.end() - 2, arg1_list.end());
+    for (auto i = 3; i > geo_expr->getTypeInfo1().get_physical_coord_cols(); i--) {
+      arg1_list.insert(arg1_list.end(), cgen_state_->llInt(int64_t(0)));
+      arg1_list.insert(arg1_list.end(),
+                       llvm::ConstantPointerNull::get(
+                           llvm::Type::getInt32PtrTy(cgen_state_->context_, 0)));
     }
     // Append geo expr compression
     arg1_list.insert(arg1_list.end(),

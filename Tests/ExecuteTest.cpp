@@ -16826,6 +16826,21 @@ TEST(Select, GeoSpatial_Geos) {
                                          "FROM geospatial_test WHERE id = 2;",
                                          dt)),
                 static_cast<double>(0.05));
+    // ST_Buffer on a point, 1.0 width: almost a circle, with area close to Pi
+    ASSERT_NEAR(static_cast<double>(3.14159),
+                v<double>(run_simple_agg("SELECT ST_Area(ST_Buffer(p, 1.0)) "
+                                         "FROM geospatial_test WHERE id = 3;",
+                                         dt)),
+                static_cast<double>(0.03));
+    // ST_Buffer on a linestring, 1.0 width: two 10-unit segments
+    // each segment is buffered by ~2x10 wide stretch (2 * 2 * 10) plus circular areas
+    // around mid- and endpoints
+    ASSERT_NEAR(static_cast<double>(42.9018),
+                v<double>(run_simple_agg(
+                    "SELECT ST_Area(ST_Buffer('LINESTRING(0 0, 10 0, 10 10)', 1.0)) "
+                    "FROM geospatial_test WHERE id = 3;",
+                    dt)),
+                static_cast<double>(0.03));
     // ST_IsValid
     ASSERT_EQ(static_cast<int64_t>(1),
               v<int64_t>(run_simple_agg(
