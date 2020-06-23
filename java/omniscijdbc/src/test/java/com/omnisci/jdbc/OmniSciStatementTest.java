@@ -202,7 +202,7 @@ public class OmniSciStatementTest {
       double m_cos = rs.getDouble("m_cos");
       assertEquals(Double.compare(m_cos, 0.5403023058681398), 0);
       int m_week = rs.getInt("m_week");
-      assertEquals(m_week, 5);
+      assertEquals(m_week, 4);
     }
 
     d_select = "select  {fn FLOOR(-1 * {fn dayofmonth({d '1990-01-31'})})} as WWW";
