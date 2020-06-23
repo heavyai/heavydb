@@ -438,7 +438,7 @@ class Executor {
   llvm::Value* aggregateWindowStatePtr();
 
   struct CompilationResult {
-    std::vector<std::pair<void*, void*>> native_functions;
+    std::shared_ptr<CompilationContext> generated_code;
     std::unordered_map<int, CgenState::LiteralValues> literal_values;
     bool output_columnar;
     std::string llvm_ir;
@@ -719,7 +719,7 @@ class Executor {
                                                    const bool float_argument_input);
 
   static void addCodeToCache(const CodeCacheKey&,
-                             std::vector<std::tuple<void*, ExecutionEngineWrapper>>,
+                             std::shared_ptr<CompilationContext>,
                              llvm::Module*,
                              CodeCache&);
 
@@ -833,12 +833,12 @@ class Executor {
                     const std::vector<InputTableInfo>& query_infos,
                     const RelAlgExecutionUnit* ra_exe_unit);
 
-  std::vector<std::pair<void*, void*>> optimizeAndCodegenCPU(
+  std::shared_ptr<CompilationContext> optimizeAndCodegenCPU(
       llvm::Function*,
       llvm::Function*,
       const std::unordered_set<llvm::Function*>&,
       const CompilationOptions&);
-  std::vector<std::pair<void*, void*>> optimizeAndCodegenGPU(
+  std::shared_ptr<CompilationContext> optimizeAndCodegenGPU(
       llvm::Function*,
       llvm::Function*,
       std::unordered_set<llvm::Function*>&,
@@ -924,13 +924,8 @@ class Executor {
   CachedCardinality getCachedCardinality(const std::string& cache_key);
 
  private:
-  std::vector<std::pair<void*, void*>> getCodeFromCache(const CodeCacheKey&,
-                                                        const CodeCache&);
-
-  void addCodeToCache(const CodeCacheKey&,
-                      const std::vector<std::tuple<void*, GpuCompilationContext*>>&,
-                      llvm::Module*,
-                      CodeCache&);
+  std::shared_ptr<CompilationContext> getCodeFromCache(const CodeCacheKey&,
+                                                       const CodeCache&);
 
   std::vector<int8_t> serializeLiterals(
       const std::unordered_map<int, CgenState::LiteralValues>& literals,

@@ -16,51 +16,14 @@
 
 #pragma once
 
-#include "CompilationOptions.h"
-
-#include "../StringDictionary/LruCache.hpp"
-
-#include <llvm/ExecutionEngine/ExecutionEngine.h>
-#include <llvm/ExecutionEngine/JITEventListener.h>
-#include <llvm/IR/Module.h>
 #include <boost/functional/hash.hpp>
-
 #include <memory>
 
-class ExecutionEngineWrapper {
- public:
-  ExecutionEngineWrapper();
-  ExecutionEngineWrapper(llvm::ExecutionEngine* execution_engine);
-  ExecutionEngineWrapper(llvm::ExecutionEngine* execution_engine,
-                         const CompilationOptions& co);
-
-  ExecutionEngineWrapper(const ExecutionEngineWrapper& other) = delete;
-  ExecutionEngineWrapper(ExecutionEngineWrapper&& other) = default;
-
-  ExecutionEngineWrapper& operator=(const ExecutionEngineWrapper& other) = delete;
-  ExecutionEngineWrapper& operator=(ExecutionEngineWrapper&& other) = default;
-
-  ExecutionEngineWrapper& operator=(llvm::ExecutionEngine* execution_engine);
-
-  llvm::ExecutionEngine* get() { return execution_engine_.get(); }
-  const llvm::ExecutionEngine* get() const { return execution_engine_.get(); }
-
-  llvm::ExecutionEngine& operator*() { return *execution_engine_; }
-  const llvm::ExecutionEngine& operator*() const { return *execution_engine_; }
-
-  llvm::ExecutionEngine* operator->() { return execution_engine_.get(); }
-  const llvm::ExecutionEngine* operator->() const { return execution_engine_.get(); }
-
- private:
-  std::unique_ptr<llvm::ExecutionEngine> execution_engine_;
-  std::unique_ptr<llvm::JITEventListener> intel_jit_listener_;
-};
-
-class GpuCompilationContext;
+#include "QueryEngine/CompilationContext.h"
+#include "StringDictionary/LruCache.hpp"
 
 using CodeCacheKey = std::vector<std::string>;
-using CodeCacheVal = std::vector<
-    std::tuple<void*, ExecutionEngineWrapper, std::unique_ptr<GpuCompilationContext>>>;
+using CodeCacheVal = std::shared_ptr<CompilationContext>;
 using CodeCacheValWithModule = std::pair<CodeCacheVal, llvm::Module*>;
 using CodeCache =
     LruCache<CodeCacheKey, CodeCacheValWithModule, boost::hash<CodeCacheKey>>;

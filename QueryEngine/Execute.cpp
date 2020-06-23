@@ -2664,8 +2664,11 @@ int32_t Executor::executePlanWithoutGroupBy(
     throw QueryExecutionError(ERR_INTERRUPTED);
   }
   if (device_type == ExecutorDeviceType::CPU) {
+    auto cpu_generated_code = std::dynamic_pointer_cast<CpuCompilationContext>(
+        compilation_result.generated_code);
+    CHECK(cpu_generated_code);
     out_vec = query_exe_context->launchCpuCode(ra_exe_unit,
-                                               compilation_result.native_functions,
+                                               cpu_generated_code.get(),
                                                hoist_literals,
                                                hoist_buf,
                                                col_buffers,
@@ -2677,10 +2680,13 @@ int32_t Executor::executePlanWithoutGroupBy(
                                                join_hash_table_ptrs);
     output_memory_scope.reset(new OutVecOwner(out_vec));
   } else {
+    auto gpu_generated_code = std::dynamic_pointer_cast<GpuCompilationContext>(
+        compilation_result.generated_code);
+    CHECK(gpu_generated_code);
     try {
       out_vec = query_exe_context->launchGpuCode(
           ra_exe_unit,
-          compilation_result.native_functions,
+          gpu_generated_code.get(),
           hoist_literals,
           hoist_buf,
           col_buffers,
@@ -2896,9 +2902,12 @@ int32_t Executor::executePlanWithGroupBy(
   }
 
   if (device_type == ExecutorDeviceType::CPU) {
+    auto cpu_generated_code = std::dynamic_pointer_cast<CpuCompilationContext>(
+        compilation_result.generated_code);
+    CHECK(cpu_generated_code);
     query_exe_context->launchCpuCode(
         ra_exe_unit_copy,
-        compilation_result.native_functions,
+        cpu_generated_code.get(),
         hoist_literals,
         hoist_buf,
         col_buffers,
@@ -2910,9 +2919,12 @@ int32_t Executor::executePlanWithGroupBy(
         join_hash_table_ptrs);
   } else {
     try {
+      auto gpu_generated_code = std::dynamic_pointer_cast<GpuCompilationContext>(
+          compilation_result.generated_code);
+      CHECK(gpu_generated_code);
       query_exe_context->launchGpuCode(
           ra_exe_unit_copy,
-          compilation_result.native_functions,
+          gpu_generated_code.get(),
           hoist_literals,
           hoist_buf,
           col_buffers,

@@ -134,13 +134,13 @@ CubinResult ptx_to_cubin(const std::string& ptx,
 #endif
 
 #ifdef HAVE_CUDA
-GpuCompilationContext::GpuCompilationContext(const void* image,
-                                             const std::string& kernel_name,
-                                             const int device_id,
-                                             const void* cuda_mgr,
-                                             unsigned int num_options,
-                                             CUjit_option* options,
-                                             void** option_vals)
+GpuDeviceCompilationContext::GpuDeviceCompilationContext(const void* image,
+                                                         const std::string& kernel_name,
+                                                         const int device_id,
+                                                         const void* cuda_mgr,
+                                                         unsigned int num_options,
+                                                         CUjit_option* options,
+                                                         void** option_vals)
     : module_(nullptr)
     , kernel_(nullptr)
     , device_id_(device_id)
@@ -154,7 +154,7 @@ GpuCompilationContext::GpuCompilationContext(const void* image,
 }
 #endif  // HAVE_CUDA
 
-GpuCompilationContext::~GpuCompilationContext() {
+GpuDeviceCompilationContext::~GpuDeviceCompilationContext() {
 #ifdef HAVE_CUDA
   CHECK(cuda_mgr_);
   cuda_mgr_->unloadGpuModuleData(&module_, device_id_);

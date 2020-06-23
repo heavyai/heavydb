@@ -83,11 +83,6 @@ class CodeGenerator {
 
   static bool alwaysCloneRuntimeFunction(const llvm::Function* func);
 
-  struct GPUCode {
-    std::vector<std::pair<void*, void*>> native_functions;
-    std::vector<std::tuple<void*, GpuCompilationContext*>> cached_functions;
-  };
-
   struct GPUTarget {
     llvm::TargetMachine* nvptx_target_machine;
     const CudaMgr_Namespace::CudaMgr* cuda_mgr;
@@ -96,7 +91,7 @@ class CodeGenerator {
     bool row_func_not_inlined;
   };
 
-  static GPUCode generateNativeGPUCode(
+  static std::shared_ptr<GpuCompilationContext> generateNativeGPUCode(
       llvm::Function* func,
       llvm::Function* wrapper_func,
       const std::unordered_set<llvm::Function*>& live_funcs,
@@ -592,7 +587,7 @@ class ScalarCodeGenerator : public CodeGenerator {
   std::unique_ptr<CgenState> own_cgen_state_;
   std::unique_ptr<PlanState> own_plan_state_;
   std::unique_ptr<CudaMgr_Namespace::CudaMgr> cuda_mgr_;
-  std::vector<std::unique_ptr<GpuCompilationContext>> gpu_compilation_contexts_;
+  std::shared_ptr<GpuCompilationContext> gpu_compilation_context_;
   std::unique_ptr<llvm::TargetMachine> nvptx_target_machine_;
 };
 

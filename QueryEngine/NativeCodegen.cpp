@@ -205,55 +205,24 @@ void verify_function_ir(const llvm::Function* func) {
   }
 }
 
-std::vector<std::pair<void*, void*>> Executor::getCodeFromCache(const CodeCacheKey& key,
-                                                                const CodeCache& cache) {
+std::shared_ptr<CompilationContext> Executor::getCodeFromCache(const CodeCacheKey& key,
+                                                               const CodeCache& cache) {
   auto it = cache.find(key);
   if (it != cache.cend()) {
     delete cgen_state_->module_;
     cgen_state_->module_ = it->second.second;
-    std::vector<std::pair<void*, void*>> native_functions;
-    for (auto& native_code : it->second.first) {
-      GpuCompilationContext* gpu_context = std::get<2>(native_code).get();
-      native_functions.emplace_back(std::get<0>(native_code),
-                                    gpu_context ? gpu_context->module() : nullptr);
-    }
-    return native_functions;
+    return it->second.first;
   }
   return {};
 }
 
-void Executor::addCodeToCache(
-    const CodeCacheKey& key,
-    std::vector<std::tuple<void*, ExecutionEngineWrapper>> native_code,
-    llvm::Module* module,
-    CodeCache& cache) {
-  CHECK(!native_code.empty());
-  CodeCacheVal cache_val;
-  for (auto& native_func : native_code) {
-    cache_val.emplace_back(
-        std::get<0>(native_func), std::move(std::get<1>(native_func)), nullptr);
-  }
+void Executor::addCodeToCache(const CodeCacheKey& key,
+                              std::shared_ptr<CompilationContext> compilation_context,
+                              llvm::Module* module,
+                              CodeCache& cache) {
   cache.put(key,
-            std::make_pair<decltype(cache_val), decltype(module)>(std::move(cache_val),
-                                                                  std::move(module)));
-}
-
-void Executor::addCodeToCache(
-    const CodeCacheKey& key,
-    const std::vector<std::tuple<void*, GpuCompilationContext*>>& native_code,
-    llvm::Module* module,
-    CodeCache& cache) {
-  CHECK(!native_code.empty());
-  CodeCacheVal cache_val;
-  for (const auto& native_func : native_code) {
-    cache_val.emplace_back(
-        std::get<0>(native_func),
-        ExecutionEngineWrapper(),
-        std::unique_ptr<GpuCompilationContext>(std::get<1>(native_func)));
-  }
-  cache.put(key,
-            std::make_pair<decltype(cache_val), decltype(module)>(std::move(cache_val),
-                                                                  std::move(module)));
+            std::make_pair<std::shared_ptr<CompilationContext>, decltype(module)>(
+                std::move(compilation_context), std::move(module)));
 }
 
 ExecutionEngineWrapper CodeGenerator::generateNativeCPUCode(
@@ -294,7 +263,7 @@ ExecutionEngineWrapper CodeGenerator::generateNativeCPUCode(
   return execution_engine;
 }
 
-std::vector<std::pair<void*, void*>> Executor::optimizeAndCodegenCPU(
+std::shared_ptr<CompilationContext> Executor::optimizeAndCodegenCPU(
     llvm::Function* query_func,
     llvm::Function* multifrag_query_func,
     const std::unordered_set<llvm::Function*>& live_funcs,
@@ -306,7 +275,7 @@ std::vector<std::pair<void*, void*>> Executor::optimizeAndCodegenCPU(
     key.push_back(serialize_llvm_object(helper));
   }
   auto cached_code = getCodeFromCache(key, cpu_code_cache_);
-  if (!cached_code.empty()) {
+  if (cached_code) {
     return cached_code;
   }
 
@@ -343,14 +312,11 @@ std::vector<std::pair<void*, void*>> Executor::optimizeAndCodegenCPU(
 
   auto execution_engine =
       CodeGenerator::generateNativeCPUCode(query_func, live_funcs, co);
-  auto native_code = execution_engine->getPointerToFunction(multifrag_query_func);
-  CHECK(native_code);
-
-  std::vector<std::tuple<void*, ExecutionEngineWrapper>> cache;
-  cache.emplace_back(native_code, std::move(execution_engine));
-  addCodeToCache(key, std::move(cache), module, cpu_code_cache_);
-
-  return {std::make_pair(native_code, nullptr)};
+  auto cpu_compilation_context =
+      std::make_shared<CpuCompilationContext>(std::move(execution_engine));
+  cpu_compilation_context->setFunctionPointer(multifrag_query_func);
+  addCodeToCache(key, cpu_compilation_context, module, cpu_code_cache_);
+  return cpu_compilation_context;
 }
 
 void CodeGenerator::link_udf_module(const std::unique_ptr<llvm::Module>& udf_module,
@@ -740,7 +706,7 @@ std::map<std::string, std::string> get_device_parameters() {
   return result;
 }
 
-CodeGenerator::GPUCode CodeGenerator::generateNativeGPUCode(
+std::shared_ptr<GpuCompilationContext> CodeGenerator::generateNativeGPUCode(
     llvm::Function* func,
     llvm::Function* wrapper_func,
     const std::unordered_set<llvm::Function*>& live_funcs,
@@ -847,10 +813,6 @@ CodeGenerator::GPUCode CodeGenerator::generateNativeGPUCode(
   module->eraseNamedMetadata(md);
 
   auto cuda_llir = cuda_rt_decls + extension_function_decls(udf_declarations) + ss.str();
-
-  std::vector<std::pair<void*, void*>> native_functions;
-  std::vector<std::tuple<void*, GpuCompilationContext*>> cached_functions;
-
   const auto ptx = generatePTX(
       cuda_llir, gpu_target.nvptx_target_machine, gpu_target.cgen_state->context_);
 
@@ -864,32 +826,27 @@ CodeGenerator::GPUCode CodeGenerator::generateNativeGPUCode(
   const auto num_options = option_keys.size();
 
   auto func_name = wrapper_func->getName().str();
+  auto gpu_compilation_context = std::make_shared<GpuCompilationContext>();
   for (int device_id = 0; device_id < gpu_target.cuda_mgr->getDeviceCount();
        ++device_id) {
-    auto gpu_context = new GpuCompilationContext(cubin,
-                                                 func_name,
-                                                 device_id,
-                                                 gpu_target.cuda_mgr,
-                                                 num_options,
-                                                 &option_keys[0],
-                                                 &option_values[0]);
-    auto native_code = gpu_context->kernel();
-    auto native_module = gpu_context->module();
-    CHECK(native_code);
-    CHECK(native_module);
-    native_functions.emplace_back(native_code, native_module);
-    cached_functions.emplace_back(native_code, gpu_context);
+    gpu_compilation_context->addDeviceCode(
+        std::make_unique<GpuDeviceCompilationContext>(cubin,
+                                                      func_name,
+                                                      device_id,
+                                                      gpu_target.cuda_mgr,
+                                                      num_options,
+                                                      &option_keys[0],
+                                                      &option_values[0]));
   }
 
   checkCudaErrors(cuLinkDestroy(link_state));
-
-  return {native_functions, cached_functions};
+  return gpu_compilation_context;
 #else
   return {};
 #endif
 }
 
-std::vector<std::pair<void*, void*>> Executor::optimizeAndCodegenGPU(
+std::shared_ptr<CompilationContext> Executor::optimizeAndCodegenGPU(
     llvm::Function* query_func,
     llvm::Function* multifrag_query_func,
     std::unordered_set<llvm::Function*>& live_funcs,
@@ -906,7 +863,7 @@ std::vector<std::pair<void*, void*>> Executor::optimizeAndCodegenGPU(
     key.push_back(serialize_llvm_object(helper));
   }
   auto cached_code = getCodeFromCache(key, gpu_code_cache_);
-  if (!cached_code.empty()) {
+  if (cached_code) {
     return cached_code;
   }
 
@@ -934,11 +891,11 @@ std::vector<std::pair<void*, void*>> Executor::optimizeAndCodegenGPU(
                                       blockSize(),
                                       cgen_state_.get(),
                                       row_func_not_inlined};
+  std::shared_ptr<GpuCompilationContext> compilation_context;
   try {
-    const auto gpu_code = CodeGenerator::generateNativeGPUCode(
+    compilation_context = CodeGenerator::generateNativeGPUCode(
         query_func, multifrag_query_func, live_funcs, co, gpu_target);
-    addCodeToCache(key, gpu_code.cached_functions, module, gpu_code_cache_);
-    return gpu_code.native_functions;
+    addCodeToCache(key, compilation_context, module, gpu_code_cache_);
   } catch (CudaMgr_Namespace::CudaErrorException& cuda_error) {
     if (cuda_error.getStatus() == CUDA_ERROR_OUT_OF_MEMORY) {
       // Thrown if memory not able to be allocated on gpu
@@ -947,17 +904,17 @@ std::vector<std::pair<void*, void*>> Executor::optimizeAndCodegenGPU(
                    << g_fraction_code_cache_to_evict * 100.
                    << "% of GPU code cache and re-trying.";
       gpu_code_cache_.evictFractionEntries(g_fraction_code_cache_to_evict);
-      const auto gpu_code = CodeGenerator::generateNativeGPUCode(
+      compilation_context = CodeGenerator::generateNativeGPUCode(
           query_func, multifrag_query_func, live_funcs, co, gpu_target);
-      addCodeToCache(key, gpu_code.cached_functions, module, gpu_code_cache_);
-      return gpu_code.native_functions;
+      addCodeToCache(key, compilation_context, module, gpu_code_cache_);
     } else {
       throw;
     }
   }
-
+  CHECK(compilation_context);
+  return compilation_context;
 #else
-  return {};
+  return nullptr;
 #endif
 }
 

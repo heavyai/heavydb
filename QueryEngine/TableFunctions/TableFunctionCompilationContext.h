@@ -45,7 +45,7 @@ class TableFunctionCompilationContext {
                               int64_t* output_row_count);
   TableFunctionCompilationContext::FuncPtr getFuncPtr() const { return func_ptr; };
 
-  CodeGenerator::GPUCode* getGpuCode() const { return gpu_code_.get(); }
+  GpuCompilationContext* getGpuCode() const { return gpu_code_.get(); }
 
  private:
   void generateEntryPoint(const TableFunctionExecutionUnit& exe_unit);
@@ -55,7 +55,7 @@ class TableFunctionCompilationContext {
   std::unique_ptr<CgenState> cgen_state_;
   std::unique_ptr<llvm::Module> module_;
   ExecutionEngineWrapper own_execution_engine_;  // TODO: remove and replace with cache
-  std::unique_ptr<CodeGenerator::GPUCode> gpu_code_;
+  std::shared_ptr<GpuCompilationContext> gpu_code_;
   llvm::Function* entry_point_func_;
   llvm::Function* kernel_func_;
   FuncPtr func_ptr;

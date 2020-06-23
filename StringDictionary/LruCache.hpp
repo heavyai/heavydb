@@ -24,7 +24,7 @@ class LruCache {
  public:
   LruCache(const size_t max_size) : max_size_(max_size) {}
 
-  void put(key_t const& key, value_t&& value) {
+  void put(const key_t& key, value_t&& value) {
     auto it = cache_items_map_.find(key);
     cache_items_list_.emplace_front(key, std::forward<value_t&&>(value));
     putCommon(it, key);

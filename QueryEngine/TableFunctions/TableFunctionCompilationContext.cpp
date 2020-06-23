@@ -231,12 +231,11 @@ void TableFunctionCompilationContext::finalize(const CompilationOptions& co,
                                         executor->blockSize(),
                                         cgen_state_.get(),
                                         false};
-    gpu_code_ = std::make_unique<CodeGenerator::GPUCode>(
-        CodeGenerator::generateNativeGPUCode(entry_point_func_,
-                                             kernel_func_,
-                                             {entry_point_func_, kernel_func_},
-                                             co,
-                                             gpu_target));
+    gpu_code_ = CodeGenerator::generateNativeGPUCode(entry_point_func_,
+                                                     kernel_func_,
+                                                     {entry_point_func_, kernel_func_},
+                                                     co,
+                                                     gpu_target);
   } else {
     auto ee =
         CodeGenerator::generateNativeCPUCode(entry_point_func_, {entry_point_func_}, co);

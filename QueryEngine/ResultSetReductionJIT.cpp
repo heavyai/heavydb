@@ -559,9 +559,12 @@ ReductionCode ResultSetReductionJIT::codegen() const {
   }
   std::lock_guard<std::mutex> reduction_guard(ReductionCode::s_reduction_mutex);
   CodeCacheKey key{cacheKey()};
-  const auto val_ptr = s_code_cache.get(key);
-  if (val_ptr) {
-    return {reinterpret_cast<ReductionCode::FuncPtr>(std::get<0>(val_ptr->first.front())),
+  const auto compilation_context = s_code_cache.get(key);
+  if (compilation_context) {
+    auto cpu_context =
+        std::dynamic_pointer_cast<CpuCompilationContext>(compilation_context->first);
+    CHECK(cpu_context);
+    return {reinterpret_cast<ReductionCode::FuncPtr>(cpu_context->func()),
             nullptr,
             nullptr,
             nullptr,
@@ -1196,12 +1199,12 @@ ReductionCode ResultSetReductionJIT::finalizeReductionCode(
       reduction_code.llvm_reduce_loop, {reduction_code.llvm_reduce_loop}, co);
   reduction_code.func_ptr = reinterpret_cast<ReductionCode::FuncPtr>(
       ee->getPointerToFunction(reduction_code.llvm_reduce_loop));
-  auto cache_val =
-      std::make_tuple(reinterpret_cast<void*>(reduction_code.func_ptr), std::move(ee));
-  std::vector<std::tuple<void*, ExecutionEngineWrapper>> cache_vals;
-  cache_vals.emplace_back(std::move(cache_val));
-  Executor::addCodeToCache({key},
-                           std::move(cache_vals),
+
+  auto cpu_compilation_context = std::make_shared<CpuCompilationContext>(std::move(ee));
+  cpu_compilation_context->setFunctionPointer(reduction_code.llvm_reduce_loop);
+  reduction_code.compilation_context = cpu_compilation_context;
+  Executor::addCodeToCache(key,
+                           reduction_code.compilation_context,
                            reduction_code.llvm_reduce_loop->getParent(),
                            s_code_cache);
   return reduction_code;

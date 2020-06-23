@@ -28,6 +28,9 @@
 #include <boost/core/noncopyable.hpp>
 #include <vector>
 
+class GpuCompilationContext;
+class CpuCompilationContext;
+
 struct RelAlgExecutionUnit;
 class QueryMemoryDescriptor;
 class Executor;
@@ -56,7 +59,7 @@ class QueryExecutionContext : boost::noncopyable {
 
   std::vector<int64_t*> launchGpuCode(
       const RelAlgExecutionUnit& ra_exe_unit,
-      const std::vector<std::pair<void*, void*>>& cu_functions,
+      const GpuCompilationContext* cu_functions,
       const bool hoist_literals,
       const std::vector<int8_t>& literal_buff,
       std::vector<std::vector<const int8_t*>> col_buffers,
@@ -75,7 +78,7 @@ class QueryExecutionContext : boost::noncopyable {
 
   std::vector<int64_t*> launchCpuCode(
       const RelAlgExecutionUnit& ra_exe_unit,
-      const std::vector<std::pair<void*, void*>>& fn_ptrs,
+      const CpuCompilationContext* fn_ptrs,
       const bool hoist_literals,
       const std::vector<int8_t>& literal_buff,
       std::vector<std::vector<const int8_t*>> col_buffers,

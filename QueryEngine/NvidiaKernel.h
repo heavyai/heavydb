@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 MapD Technologies, Inc.
+ * Copyright 2020 OmniSci, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,10 +14,10 @@
  * limitations under the License.
  */
 
-#ifndef QUERYENGINE_NVIDIAKERNELLAUNCH_H
-#define QUERYENGINE_NVIDIAKERNELLAUNCH_H
+#pragma once
 
-#include "../CudaMgr/CudaMgr.h"
+#include "CudaMgr/CudaMgr.h"
+#include "QueryEngine/CompilationContext.h"
 
 #ifdef HAVE_CUDA
 #include <cuda.h>
@@ -48,16 +48,16 @@ CubinResult ptx_to_cubin(const std::string& ptx,
                          const unsigned block_size,
                          const CudaMgr_Namespace::CudaMgr* cuda_mgr);
 
-class GpuCompilationContext {
+class GpuDeviceCompilationContext {
  public:
-  GpuCompilationContext(const void* image,
-                        const std::string& kernel_name,
-                        const int device_id,
-                        const void* cuda_mgr,
-                        unsigned int num_options,
-                        CUjit_option* options,
-                        void** option_vals);
-  ~GpuCompilationContext();
+  GpuDeviceCompilationContext(const void* image,
+                              const std::string& kernel_name,
+                              const int device_id,
+                              const void* cuda_mgr,
+                              unsigned int num_options,
+                              CUjit_option* options,
+                              void** option_vals);
+  ~GpuDeviceCompilationContext();
   CUfunction kernel() { return kernel_; }
   CUmodule module() { return module_; }
 
@@ -70,6 +70,32 @@ class GpuCompilationContext {
 #endif  // HAVE_CUDA
 };
 
-#define checkCudaErrors(err) CHECK_EQ(err, CUDA_SUCCESS);
+class GpuCompilationContext : public CompilationContext {
+ public:
+  GpuCompilationContext() {}
 
-#endif  // QUERYENGINE_NVIDIAKERNELLAUNCH_H
+  void addDeviceCode(std::unique_ptr<GpuDeviceCompilationContext>&& device_context) {
+    contexts_per_device_.push_back(std::move(device_context));
+  }
+
+  std::pair<void*, void*> getNativeCode(const size_t device_id) const {
+    CHECK_LT(device_id, contexts_per_device_.size());
+    auto device_context = contexts_per_device_[device_id].get();
+    return std::make_pair<void*, void*>(device_context->kernel(),
+                                        device_context->module());
+  }
+
+  std::vector<void*> getNativeFunctionPointers() const {
+    std::vector<void*> fn_ptrs;
+    for (auto& device_context : contexts_per_device_) {
+      CHECK(device_context);
+      fn_ptrs.push_back(device_context->kernel());
+    }
+    return fn_ptrs;
+  }
+
+ private:
+  std::vector<std::unique_ptr<GpuDeviceCompilationContext>> contexts_per_device_;
+};
+
+#define checkCudaErrors(err) CHECK_EQ(err, CUDA_SUCCESS);
