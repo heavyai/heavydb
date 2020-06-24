@@ -6,7 +6,7 @@
 #include <thrust/sort.h>
 #endif
 
-#include "Allocators/ThrustAllocator.h"
+#include "DataMgr/Allocators/ThrustAllocator.h"
 #include "InPlaceSortImpl.h"
 
 #ifdef HAVE_CUDA

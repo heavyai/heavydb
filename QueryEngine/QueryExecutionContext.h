@@ -17,8 +17,8 @@
 #ifndef QUERYENGINE_QUERYEXECUTIONCONTEXT_H
 #define QUERYENGINE_QUERYEXECUTIONCONTEXT_H
 
-#include "Allocators/CudaAllocator.h"
 #include "CompilationOptions.h"
+#include "DataMgr/Allocators/CudaAllocator.h"
 #include "GpuMemUtils.h"
 #include "Rendering/RenderInfo.h"
 #include "ResultSet.h"

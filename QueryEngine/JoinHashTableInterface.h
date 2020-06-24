@@ -20,10 +20,10 @@
 #include <cstdint>
 #include <set>
 #include <string>
-#include "Allocators/ThrustAllocator.h"
 #include "Analyzer/Analyzer.h"
 #include "ColumnarResults.h"
 #include "CompilationOptions.h"
+#include "DataMgr/Allocators/ThrustAllocator.h"
 #include "Descriptors/RowSetMemoryOwner.h"
 #include "HashJoinRuntime.h"
 

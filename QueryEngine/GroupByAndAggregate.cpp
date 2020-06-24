@@ -16,7 +16,7 @@
 
 #include "GroupByAndAggregate.h"
 #include "AggregateUtils.h"
-#include "Allocators/CudaAllocator.h"
+#include "DataMgr/Allocators/CudaAllocator.h"
 
 #include "CardinalityEstimator.h"
 #include "CodeGenerator.h"

@@ -22,7 +22,8 @@
 
 #pragma once
 
-#include "DeviceAllocator.h"
+#include <cstdint>
+#include <cstdlib>
 
 #ifdef HAVE_CUDA
 #include <cuda.h>
@@ -30,8 +31,7 @@
 #include <Shared/nocuda.h>
 #endif
 
-#include <cstdint>
-#include <cstdlib>
+#include "DataMgr/Allocators/DeviceAllocator.h"
 
 namespace Data_Namespace {
 class AbstractBuffer;

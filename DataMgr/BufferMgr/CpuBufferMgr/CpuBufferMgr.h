@@ -18,7 +18,7 @@
 
 #include "DataMgr/BufferMgr/BufferMgr.h"
 
-#include "Shared/ArenaAllocator.h"
+#include "DataMgr/Allocators/ArenaAllocator.h"
 
 namespace CudaMgr_Namespace {
 class CudaMgr;

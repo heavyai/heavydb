@@ -16,7 +16,7 @@
 
 #pragma once
 
-#include "Allocators/DeviceAllocator.h"
+#include "DataMgr/Allocators/DeviceAllocator.h"
 
 #include "Descriptors/QueryMemoryDescriptor.h"
 #include "GpuMemUtils.h"

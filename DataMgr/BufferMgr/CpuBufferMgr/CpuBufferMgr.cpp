@@ -17,8 +17,8 @@
 #include "DataMgr/BufferMgr/CpuBufferMgr/CpuBufferMgr.h"
 
 #include "CudaMgr/CudaMgr.h"
+#include "DataMgr/Allocators/ArenaAllocator.h"
 #include "DataMgr/BufferMgr/CpuBufferMgr/CpuBuffer.h"
-#include "Shared/ArenaAllocator.h"
 
 namespace Buffer_Namespace {
 

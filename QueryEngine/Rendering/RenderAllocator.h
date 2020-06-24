@@ -29,7 +29,7 @@
 #include <stdexcept>
 #include <vector>
 
-#include "../Allocators/DeviceAllocator.h"
+#include "DataMgr/Allocators/DeviceAllocator.h"
 
 namespace QueryRenderer {
 class JSONLocation;

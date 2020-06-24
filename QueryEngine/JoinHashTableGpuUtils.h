@@ -17,7 +17,7 @@
 #ifndef QUERYENGINE_JOINHASHTABLE_GPUUTILS_H
 #define QUERYENGINE_JOINHASHTABLE_GPUUTILS_H
 
-#include "Allocators/ThrustAllocator.h"
+#include "DataMgr/Allocators/ThrustAllocator.h"
 #include "GpuMemUtils.h"
 
 template <class T>

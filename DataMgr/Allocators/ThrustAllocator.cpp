@@ -14,10 +14,12 @@
  * limitations under the License.
  */
 
-#include "ThrustAllocator.h"
+#include "DataMgr/Allocators/ThrustAllocator.h"
+
 #include <cstdint>
-#include "CudaAllocator.h"
+
 #include "CudaMgr/CudaMgr.h"
+#include "DataMgr/Allocators/CudaAllocator.h"
 #include "DataMgr/DataMgr.h"
 #include "Shared/Logger.h"
 

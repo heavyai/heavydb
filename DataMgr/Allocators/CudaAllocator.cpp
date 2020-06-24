@@ -14,13 +14,12 @@
  * limitations under the License.
  */
 
-#include "CudaAllocator.h"
+#include "DataMgr/Allocators/CudaAllocator.h"
 
 #include <CudaMgr/CudaMgr.h>
 #include <DataMgr/DataMgr.h>
+#include <Shared/Logger.h>
 #include <Shared/types.h>
-#include "../Rendering/RenderAllocator.h"
-#include "Shared/Logger.h"
 
 CudaAllocator::CudaAllocator(Data_Namespace::DataMgr* data_mgr, const int device_id)
     : data_mgr_(data_mgr), device_id_(device_id) {

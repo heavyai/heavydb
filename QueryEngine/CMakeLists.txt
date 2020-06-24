@@ -3,8 +3,6 @@ set(EXECUTABLE_OUTPUT_PATH ${CMAKE_CURRENT_BINARY_DIR})
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -D__STDC_LIMIT_MACROS -D__STDC_CONSTANT_MACROS -Wall -Wno-attributes")
 set_source_files_properties(RuntimeFunctionsCodegenWithIncludes.cpp PROPERTIES COMPILE_FLAGS -O0)
 set(query_engine_source_files
-    Allocators/CudaAllocator.cpp
-    Allocators/ThrustAllocator.cpp
     AggregatedColRange.cpp
     ArithmeticIR.cpp
     ArrayIR.cpp
@@ -283,6 +281,7 @@ add_custom_command(
     OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/TopKSort.o
     COMMAND nvcc
     ARGS
+        -I ${CMAKE_SOURCE_DIR}
         ${MAPD_HOST_COMPILER_FLAG}
         -Xcompiler -fPIC
         -std=c++14
@@ -298,6 +297,7 @@ add_custom_command(
     OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/InPlaceSortImpl.o
     COMMAND nvcc
     ARGS
+        -I ${CMAKE_SOURCE_DIR}
         ${MAPD_HOST_COMPILER_FLAG}
         -Xcompiler -fPIC
         -D_FORCE_INLINES
@@ -313,6 +313,7 @@ add_custom_command(
     OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/ResultSetSortImpl.o
     COMMAND nvcc
     ARGS
+        -I ${CMAKE_SOURCE_DIR}
         ${MAPD_HOST_COMPILER_FLAG}
         -Xcompiler -fPIC
         -std=c++14
