@@ -62,6 +62,10 @@ std::vector<llvm::Value*> CodeGenerator::codegenGeoUOper(
       argument_list.end(),
       cgen_state_->llInt(static_cast<int>(
           geospatial::get_compression_scheme(geo_expr->getTypeInfo0()))));
+  // Append geo expr SRID
+  argument_list.insert(
+      argument_list.end(),
+      cgen_state_->llInt(static_cast<int>(geo_expr->getTypeInfo0().get_output_srid())));
 
   // Deal with unary geo predicates
   if (geo_expr->getOp() == Geo_namespace::GeoBase::GeoOp::kISEMPTY ||
@@ -110,6 +114,10 @@ std::vector<llvm::Value*> CodeGenerator::codegenGeoBinOper(
       argument_list.end(),
       cgen_state_->llInt(static_cast<int>(
           geospatial::get_compression_scheme(geo_expr->getTypeInfo0()))));
+  // Append geo expr SRID
+  argument_list.insert(
+      argument_list.end(),
+      cgen_state_->llInt(static_cast<int>(geo_expr->getTypeInfo0().get_output_srid())));
 
   auto arg1_list = codegenGeoArgs(geo_expr->getArgs1(), co);
 
@@ -135,6 +143,9 @@ std::vector<llvm::Value*> CodeGenerator::codegenGeoBinOper(
     arg1_list.insert(arg1_list.end(),
                      cgen_state_->llInt(static_cast<int>(
                          geospatial::get_compression_scheme(geo_expr->getTypeInfo1()))));
+    // Append geo expr compression
+    arg1_list.insert(arg1_list.end(),
+                     cgen_state_->llInt(geo_expr->getTypeInfo1().get_output_srid()));
   } else if (geo_expr->getOp() == Geo_namespace::GeoBase::GeoOp::kBUFFER) {
     // Extra argument in this case is double
     func += "_double"s;

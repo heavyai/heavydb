@@ -222,6 +222,7 @@ extern "C" bool Geos_Wkb_Wkb(int op,
                              int64_t arg1_meta2_size,
                              // TODO: add meta3 args to support generic geometries
                              int32_t arg1_ic,
+                             int32_t arg1_srid,
                              int arg2_type,
                              int8_t* arg2_coords,
                              int64_t arg2_coords_size,
@@ -231,6 +232,7 @@ extern "C" bool Geos_Wkb_Wkb(int op,
                              int64_t arg2_meta2_size,
                              // TODO: add meta3 args to support generic geometries
                              int32_t arg2_ic,
+                             int32_t arg2_srid,
                              // TODO: add transform args
                              int* result_type,
                              int8_t** result_coords,
@@ -276,8 +278,10 @@ extern "C" bool Geos_Wkb_Wkb(int op,
   }
   auto* g1 = GEOSGeomFromWKB_buf_r(context, wkb1.data(), wkb1.size());
   if (g1) {
+    GEOSSetSRID_r(context, g1, arg1_srid);
     auto* g2 = GEOSGeomFromWKB_buf_r(context, wkb2.data(), wkb2.size());
     if (g2) {
+      GEOSSetSRID_r(context, g2, arg2_srid);
       GEOSGeometry* g = nullptr;
       if (static_cast<GeoBase::GeoOp>(op) == GeoBase::GeoOp::kINTERSECTION) {
         g = GEOSIntersection_r(context, g1, g2);
@@ -324,6 +328,7 @@ extern "C" bool Geos_Wkb_double(int op,
                                 int64_t arg1_meta2_size,
                                 // TODO: add meta3 args to support generic geometries
                                 int32_t arg1_ic,
+                                int32_t arg1_srid,
                                 double arg2,
                                 // TODO: add transform args
                                 int* result_type,
@@ -354,6 +359,7 @@ extern "C" bool Geos_Wkb_double(int op,
   }
   auto* g1 = GEOSGeomFromWKB_buf_r(context, wkb1.data(), wkb1.size());
   if (g1) {
+    GEOSSetSRID_r(context, g1, arg1_srid);
     GEOSGeometry* g = nullptr;
     if (static_cast<GeoBase::GeoOp>(op) == GeoBase::GeoOp::kBUFFER) {
       int quadsegs = 8;  // default
@@ -395,6 +401,7 @@ extern "C" bool Geos_Wkb(int op,
                          int64_t arg_meta2_size,
                          // TODO: add meta3 args to support generic geometries
                          int32_t arg_ic,
+                         int32_t arg_srid,
                          bool* result) {
 #ifndef __CUDACC__
   WKB wkb1{};
@@ -417,6 +424,7 @@ extern "C" bool Geos_Wkb(int op,
   }
   auto* g1 = GEOSGeomFromWKB_buf_r(context, wkb1.data(), wkb1.size());
   if (g1) {
+    GEOSSetSRID_r(context, g1, arg_srid);
     if (static_cast<GeoBase::GeoOp>(op) == GeoBase::GeoOp::kISEMPTY) {
       *result = GEOSisEmpty_r(context, g1);
       status = true;
