@@ -74,7 +74,12 @@ class OverlapsJoinHashTable : public BaselineJoinHashTable {
   ColumnsForDevice fetchColumnsForDevice(
       const std::vector<Fragmenter_Namespace::FragmentInfo>& fragments,
       const int device_id,
-      ThrustAllocator& dev_buff_owner) override;
+      DeviceAllocator* dev_buff_owner) override;
+
+  std::vector<JoinBucketInfo> computeBucketInfo(
+      const std::vector<JoinColumn>& join_columns,
+      const std::vector<JoinColumnTypeInfo>& join_column_types,
+      const int device_id);
 
   std::pair<size_t, size_t> approximateTupleCount(
       const std::vector<ColumnsForDevice>&) const override;
@@ -112,7 +117,7 @@ class OverlapsJoinHashTable : public BaselineJoinHashTable {
   std::vector<llvm::Value*> codegenManyKey(const CompilationOptions&);
 
   std::vector<double> bucket_sizes_for_dimension_;
-  double overlaps_hashjoin_bucket_threshold_;
+  double overlaps_hashjoin_bucket_threshold_{0.1};
 };
 
 #endif  // QUERYENGINE_OVERLAPSHASHTABLE_H

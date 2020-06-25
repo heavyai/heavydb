@@ -92,9 +92,12 @@ void Executor::ExecutionDispatch::runImpl(
   auto chunk_iterators_ptr = std::make_shared<std::list<ChunkIter>>();
   std::list<std::shared_ptr<Chunk_NS::Chunk>> chunks;
   std::unique_ptr<std::lock_guard<std::mutex>> gpu_lock;
+  std::unique_ptr<CudaAllocator> device_allocator;
   if (chosen_device_type == ExecutorDeviceType::GPU) {
     gpu_lock.reset(
         new std::lock_guard<std::mutex>(executor_->gpu_exec_mutex_[chosen_device_id]));
+    device_allocator =
+        std::make_unique<CudaAllocator>(&cat_.getDataMgr(), chosen_device_id);
   }
   FetchResult fetch_result;
   try {
@@ -111,7 +114,8 @@ void Executor::ExecutionDispatch::runImpl(
                                                      frag_list,
                                                      cat_,
                                                      *chunk_iterators_ptr,
-                                                     chunks)
+                                                     chunks,
+                                                     device_allocator.get())
                        : executor_->fetchChunks(column_fetcher,
                                                 ra_exe_unit_,
                                                 chosen_device_id,
@@ -120,7 +124,8 @@ void Executor::ExecutionDispatch::runImpl(
                                                 frag_list,
                                                 cat_,
                                                 *chunk_iterators_ptr,
-                                                chunks);
+                                                chunks,
+                                                device_allocator.get());
     if (fetch_result.num_rows.empty()) {
       return;
     }

@@ -31,6 +31,13 @@ CudaAllocator::CudaAllocator(Data_Namespace::DataMgr* data_mgr, const int device
 #endif  // HAVE_CUDA
 }
 
+CudaAllocator::~CudaAllocator() {
+  CHECK(data_mgr_);
+  for (auto& buffer_ptr : owned_buffers_) {
+    data_mgr_->free(buffer_ptr);
+  }
+}
+
 int8_t* CudaAllocator::alloc(Data_Namespace::DataMgr* data_mgr,
                              const size_t num_bytes,
                              const int device_id) {
@@ -56,7 +63,10 @@ void CudaAllocator::freeGpuAbstractBuffer(Data_Namespace::DataMgr* data_mgr,
 }
 
 int8_t* CudaAllocator::alloc(const size_t num_bytes) {
-  return CudaAllocator::alloc(data_mgr_, num_bytes, device_id_);
+  CHECK(data_mgr_);
+  owned_buffers_.emplace_back(
+      CudaAllocator::allocGpuAbstractBuffer(data_mgr_, num_bytes, device_id_));
+  return owned_buffers_.back()->getMemoryPtr();
 }
 
 void CudaAllocator::free(Data_Namespace::AbstractBuffer* ab) const {

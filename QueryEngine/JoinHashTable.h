@@ -132,7 +132,7 @@ class JoinHashTable : public JoinHashTableInterface {
     return join_hash_table_cache_.size();
   }
 
-  virtual ~JoinHashTable() {}
+  virtual ~JoinHashTable();
 
  private:
   JoinHashTable(const std::shared_ptr<Analyzer::BinOper> qual_bin_oper,

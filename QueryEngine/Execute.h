@@ -637,7 +637,8 @@ class Executor {
                           const FragmentsList& selected_fragments,
                           const Catalog_Namespace::Catalog&,
                           std::list<ChunkIter>&,
-                          std::list<std::shared_ptr<Chunk_NS::Chunk>>&);
+                          std::list<std::shared_ptr<Chunk_NS::Chunk>>&,
+                          DeviceAllocator* device_allocator);
 
   FetchResult fetchUnionChunks(const ColumnFetcher&,
                                const RelAlgExecutionUnit& ra_exe_unit,
@@ -647,7 +648,8 @@ class Executor {
                                const FragmentsList& selected_fragments,
                                const Catalog_Namespace::Catalog&,
                                std::list<ChunkIter>&,
-                               std::list<std::shared_ptr<Chunk_NS::Chunk>>&);
+                               std::list<std::shared_ptr<Chunk_NS::Chunk>>&,
+                               DeviceAllocator* device_allocator);
 
   std::pair<std::vector<std::vector<int64_t>>, std::vector<std::vector<uint64_t>>>
   getRowCountAndOffsetForAllFrags(

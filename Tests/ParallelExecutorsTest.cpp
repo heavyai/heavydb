@@ -117,6 +117,16 @@ void run_sql_execute_test(const std::string& table_name, const ExecutorDeviceTyp
       6));
   EXPECT_NO_THROW(check_returned_rows(
       QR::get()
+          ->runSelectQuery("SELECT d, f, COUNT(*) FROM " + table_name +
+                               " GROUP BY d, f ORDER BY f DESC NULLS LAST LIMIT 5;",
+                           dt,
+                           /*hoist_literals=*/true,
+                           /*allow_loop_joins=*/false,
+                           /*just_explain=*/false)
+          ->getRows(),
+      5));
+  EXPECT_NO_THROW(check_returned_rows(
+      QR::get()
           ->runSelectQuery(
               "SELECT approx_count_distinct(d), approx_count_distinct(str), i64, i32, "
               "i16 FROM " +
@@ -140,6 +150,13 @@ void run_sql_execute_test(const std::string& table_name, const ExecutorDeviceTyp
               /*just_explain=*/false)
           ->getRows(),
       5));
+
+  // joins
+  EXPECT_EQ(1,
+            v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM " + table_name +
+                                          " a INNER JOIN (SELECT i32 FROM " + table_name +
+                                          " GROUP BY i32) b on a.i64 = b.i32;",
+                                      dt)));
 }
 
 void build_table(const std::string& table_name) {

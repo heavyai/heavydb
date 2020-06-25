@@ -44,7 +44,7 @@ class CudaAllocator : public DeviceAllocator {
  public:
   CudaAllocator(Data_Namespace::DataMgr* data_mgr, const int device_id);
 
-  ~CudaAllocator() override {}
+  ~CudaAllocator() override;
 
   static int8_t* alloc(Data_Namespace::DataMgr* data_mgr,
                        const size_t num_bytes,
@@ -77,6 +77,8 @@ class CudaAllocator : public DeviceAllocator {
                     const size_t num_bytes) const override;
 
  private:
+  std::vector<Data_Namespace::AbstractBuffer*> owned_buffers_;
+
   Data_Namespace::DataMgr* data_mgr_;
   int device_id_;
 };

@@ -16,6 +16,9 @@
 
 #include "DataMgr/Allocators/ThrustAllocator.h"
 
+#define BOOST_STACKTRACE_GNU_SOURCE_NOT_REQUIRED 1
+#include <boost/stacktrace.hpp>
+
 #include <cstdint>
 
 #include "CudaMgr/CudaMgr.h"
@@ -82,4 +85,15 @@ ThrustAllocator::~ThrustAllocator() {
     CHECK_EQ(CUDA_SUCCESS, err);
   }
 #endif  // HAVE_CUDA
+  if (!raw_to_ab_ptr_.empty()) {
+    LOG(ERROR) << "Not all GPU buffers deallocated before destruction of Thrust "
+                  "allocator for device "
+               << device_id_ << ". Remaining buffers: ";
+    for (auto& kv : raw_to_ab_ptr_) {
+      auto& ab = kv.second;
+      CHECK(ab);
+      LOG(ERROR) << (ab->pageCount() * ab->pageSize()) / (1024. * 1024.) << " MB";
+    }
+    VLOG(1) << boost::stacktrace::stacktrace();
+  }
 }

@@ -16,7 +16,6 @@
 
 #include "GpuMemUtils.h"
 #include "DataMgr/Allocators/CudaAllocator.h"
-#include "DataMgr/Allocators/ThrustAllocator.h"
 #include "GpuInitGroups.h"
 #include "Shared/Logger.h"
 #include "StreamingTopN.h"

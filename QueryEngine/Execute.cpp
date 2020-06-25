@@ -1970,11 +1970,6 @@ void Executor::dispatchFragments(
           : std::vector<Data_Namespace::MemoryInfo>{},
       eo.gpu_input_mem_limit_percent,
       eo.outer_fragment_indices);
-
-  ScopeGuard cleanup_post_dispatch = [this]() {
-    catalog_->getDataMgr().freeAllBuffers();
-  };
-
   THREAD_POOL query_threads;
   const auto& ra_exe_unit = execution_dispatch.getExecutionUnit();
   CHECK(!ra_exe_unit.input_descs.empty());
@@ -2288,7 +2283,8 @@ FetchResult Executor::fetchChunks(
     const FragmentsList& selected_fragments,
     const Catalog_Namespace::Catalog& cat,
     std::list<ChunkIter>& chunk_iterators,
-    std::list<std::shared_ptr<Chunk_NS::Chunk>>& chunks) {
+    std::list<std::shared_ptr<Chunk_NS::Chunk>>& chunks,
+    DeviceAllocator* device_allocator) {
   auto timer = DEBUG_TIMER(__func__);
   INJECT_TIMER(fetchChunks);
   const auto& col_global_ids = ra_exe_unit.input_col_descs;
@@ -2344,7 +2340,7 @@ FetchResult Executor::fetchChunks(
       }
       if (col_id->getScanDesc().getSourceType() == InputSourceType::RESULT) {
         frag_col_buffers[it->second] = column_fetcher.getResultSetColumn(
-            col_id.get(), memory_level_for_column, device_id);
+            col_id.get(), memory_level_for_column, device_id, device_allocator);
       } else {
         if (needFetchAllFragments(*col_id, ra_exe_unit, selected_fragments)) {
           frag_col_buffers[it->second] =
@@ -2352,7 +2348,8 @@ FetchResult Executor::fetchChunks(
                                                         col_id->getColId(),
                                                         all_tables_fragments,
                                                         memory_level_for_column,
-                                                        device_id);
+                                                        device_id,
+                                                        device_allocator);
         } else {
           frag_col_buffers[it->second] =
               column_fetcher.getOneTableColumnFragment(table_id,
@@ -2362,7 +2359,8 @@ FetchResult Executor::fetchChunks(
                                                        chunks,
                                                        chunk_iterators,
                                                        memory_level_for_column,
-                                                       device_id);
+                                                       device_id,
+                                                       device_allocator);
         }
       }
     }
@@ -2384,7 +2382,8 @@ FetchResult Executor::fetchUnionChunks(
     const FragmentsList& selected_fragments,
     const Catalog_Namespace::Catalog& cat,
     std::list<ChunkIter>& chunk_iterators,
-    std::list<std::shared_ptr<Chunk_NS::Chunk>>& chunks) {
+    std::list<std::shared_ptr<Chunk_NS::Chunk>>& chunks,
+    DeviceAllocator* device_allocator) {
   auto timer = DEBUG_TIMER(__func__);
   INJECT_TIMER(fetchUnionChunks);
 
@@ -2472,7 +2471,7 @@ FetchResult Executor::fetchUnionChunks(
         }
         if (col_id->getScanDesc().getSourceType() == InputSourceType::RESULT) {
           frag_col_buffers[it->second] = column_fetcher.getResultSetColumn(
-              col_id.get(), memory_level_for_column, device_id);
+              col_id.get(), memory_level_for_column, device_id, device_allocator);
         } else {
           if (needFetchAllFragments(*col_id, ra_exe_unit, selected_fragments)) {
             frag_col_buffers[it->second] =
@@ -2480,7 +2479,8 @@ FetchResult Executor::fetchUnionChunks(
                                                           col_id->getColId(),
                                                           all_tables_fragments,
                                                           memory_level_for_column,
-                                                          device_id);
+                                                          device_id,
+                                                          device_allocator);
           } else {
             frag_col_buffers[it->second] =
                 column_fetcher.getOneTableColumnFragment(table_id,
@@ -2490,7 +2490,8 @@ FetchResult Executor::fetchUnionChunks(
                                                          chunks,
                                                          chunk_iterators,
                                                          memory_level_for_column,
-                                                         device_id);
+                                                         device_id,
+                                                         device_allocator);
           }
         }
       }

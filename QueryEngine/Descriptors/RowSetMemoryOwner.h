@@ -26,6 +26,7 @@
 
 #include "DataMgr/AbstractBuffer.h"
 #include "DataMgr/Allocators/ArenaAllocator.h"
+#include "DataMgr/DataMgr.h"
 #include "Shared/Logger.h"
 #include "StringDictionary/StringDictionaryProxy.h"
 
