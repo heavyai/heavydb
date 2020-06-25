@@ -120,7 +120,7 @@ class BaselineJoinHashTable : public JoinHashTableInterface {
     return hash_table_cache_.size();
   }
 
-  virtual ~BaselineJoinHashTable() {}
+  virtual ~BaselineJoinHashTable();
 
  private:
   size_t getKeyBufferSize() const noexcept;
@@ -145,14 +145,14 @@ class BaselineJoinHashTable : public JoinHashTableInterface {
     const std::vector<JoinColumn> join_columns;
     const std::vector<JoinColumnTypeInfo> join_column_types;
     const std::vector<std::shared_ptr<Chunk_NS::Chunk>> chunks_owner;
-    const std::vector<JoinBucketInfo> join_buckets;
+    std::vector<JoinBucketInfo> join_buckets;
     const std::vector<std::shared_ptr<void>> malloc_owner;
   };
 
   virtual ColumnsForDevice fetchColumnsForDevice(
       const std::vector<Fragmenter_Namespace::FragmentInfo>& fragments,
       const int device_id,
-      ThrustAllocator& dev_buff_owner);
+      DeviceAllocator* dev_buff_owner);
 
   virtual std::pair<size_t, size_t> approximateTupleCount(
       const std::vector<ColumnsForDevice>&) const;

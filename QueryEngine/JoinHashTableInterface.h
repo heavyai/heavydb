@@ -79,6 +79,8 @@ using DecodedJoinHashBufferSet = std::set<DecodedJoinHashBufferEntry>;
 
 using InnerOuter = std::pair<const Analyzer::ColumnVar*, const Analyzer::Expr*>;
 
+class DeviceAllocator;
+
 class JoinHashTableInterface {
  public:
   virtual int64_t getJoinHashBuffer(const ExecutorDeviceType device_type,
@@ -138,7 +140,7 @@ class JoinHashTableInterface {
       const Data_Namespace::MemoryLevel effective_memory_level,
       const int device_id,
       std::vector<std::shared_ptr<Chunk_NS::Chunk>>& chunks_owner,
-      ThrustAllocator& dev_buff_owner,
+      DeviceAllocator* dev_buff_owner,
       std::vector<std::shared_ptr<void>>& malloc_owner,
       Executor* executor,
       ColumnCacheMap* column_cache);

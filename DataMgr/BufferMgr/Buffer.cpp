@@ -30,7 +30,7 @@ Buffer::Buffer(BufferMgr* bm,
                const size_t page_size,
                const size_t num_bytes)
     : AbstractBuffer(device_id)
-    , mem_(0)
+    , mem_(nullptr)
     , bm_(bm)
     , seg_it_(seg_it)
     , page_size_(page_size)

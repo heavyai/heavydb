@@ -1773,6 +1773,7 @@ std::unique_ptr<WindowFunctionContext> RelAlgExecutor::createWindowFunctionConte
                                             query_infos.front().info.fragments.front(),
                                             memory_level,
                                             0,
+                                            nullptr,
                                             chunks_owner,
                                             column_cache_map);
     CHECK_EQ(join_col_elem_count, elem_count);

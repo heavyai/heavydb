@@ -560,6 +560,24 @@ void JoinHashTable::reify() {
   }
 }
 
+JoinHashTable::~JoinHashTable() {
+#ifdef HAVE_CUDA
+  CHECK(executor_);
+  CHECK(executor_->catalog_);
+  auto& data_mgr = executor_->catalog_->getDataMgr();
+  for (auto& gpu_buffer : gpu_hash_table_buff_) {
+    if (gpu_buffer) {
+      data_mgr.free(gpu_buffer);
+    }
+  }
+  for (auto& gpu_buffer : gpu_hash_table_err_buff_) {
+    if (gpu_buffer) {
+      data_mgr.free(gpu_buffer);
+    }
+  }
+#endif
+}
+
 ChunkKey JoinHashTable::genHashTableKey(
     const std::vector<Fragmenter_Namespace::FragmentInfo>& fragments,
     const Analyzer::Expr* outer_col_expr,
@@ -620,7 +638,7 @@ void JoinHashTable::reifyOneToOneForDevice(
   }
 
   std::vector<std::shared_ptr<Chunk_NS::Chunk>> chunks_owner;
-  ThrustAllocator dev_buff_owner(&data_mgr, device_id);
+  CudaAllocator dev_buff_owner(&data_mgr, device_id);
   std::vector<std::shared_ptr<void>> malloc_owner;
 
   JoinColumn join_column = fetchJoinColumn(inner_col,
@@ -628,7 +646,7 @@ void JoinHashTable::reifyOneToOneForDevice(
                                            effective_memory_level,
                                            device_id,
                                            chunks_owner,
-                                           dev_buff_owner,
+                                           &dev_buff_owner,
                                            malloc_owner,
                                            executor_,
                                            &column_cache_);
@@ -673,7 +691,7 @@ void JoinHashTable::reifyOneToManyForDevice(
   }
 
   std::vector<std::shared_ptr<Chunk_NS::Chunk>> chunks_owner;
-  ThrustAllocator dev_buff_owner(&data_mgr, device_id);
+  CudaAllocator dev_buff_owner(&data_mgr, device_id);
   std::vector<std::shared_ptr<void>> malloc_owner;
 
   JoinColumn join_column = fetchJoinColumn(inner_col,
@@ -681,7 +699,7 @@ void JoinHashTable::reifyOneToManyForDevice(
                                            effective_memory_level,
                                            device_id,
                                            chunks_owner,
-                                           dev_buff_owner,
+                                           &dev_buff_owner,
                                            malloc_owner,
                                            executor_,
                                            &column_cache_);

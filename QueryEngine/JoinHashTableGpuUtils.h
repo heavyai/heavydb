@@ -17,35 +17,27 @@
 #ifndef QUERYENGINE_JOINHASHTABLE_GPUUTILS_H
 #define QUERYENGINE_JOINHASHTABLE_GPUUTILS_H
 
-#include "DataMgr/Allocators/ThrustAllocator.h"
+#include "DataMgr/Allocators/CudaAllocator.h"
 #include "GpuMemUtils.h"
 
 template <class T>
 T* transfer_vector_of_flat_objects_to_gpu(const std::vector<T>& vec,
-                                          ThrustAllocator& allocator) {
+                                          CudaAllocator& allocator) {
   static_assert(std::is_trivially_copyable<T>::value && std::is_standard_layout<T>::value,
                 "Transferring a vector to GPU only works for flat object elements");
   const auto vec_bytes = vec.size() * sizeof(T);
-  auto gpu_vec = allocator.allocateScopedBuffer(vec_bytes);
-  copy_to_gpu(allocator.getDataMgr(),
-              reinterpret_cast<CUdeviceptr>(gpu_vec),
-              &vec[0],
-              vec_bytes,
-              allocator.getDeviceId());
+  auto gpu_vec = allocator.alloc(vec_bytes);
+  allocator.copyToDevice(gpu_vec, reinterpret_cast<const int8_t*>(vec.data()), vec_bytes);
   return reinterpret_cast<T*>(gpu_vec);
 }
 
 template <class T>
-T* transfer_flat_object_to_gpu(const T& object, ThrustAllocator& allocator) {
+T* transfer_flat_object_to_gpu(const T& object, CudaAllocator& allocator) {
   static_assert(std::is_standard_layout<T>::value,
                 "Transferring an object to GPU only works for standard layout elements");
   const auto bytes = sizeof(T);
-  auto gpu_ptr = allocator.allocateScopedBuffer(bytes);
-  copy_to_gpu(allocator.getDataMgr(),
-              reinterpret_cast<CUdeviceptr>(gpu_ptr),
-              &object,
-              bytes,
-              allocator.getDeviceId());
+  auto gpu_ptr = allocator.alloc(bytes);
+  allocator.copyToDevice(gpu_ptr, reinterpret_cast<const int8_t*>(&object), bytes);
   return reinterpret_cast<T*>(gpu_ptr);
 }
 

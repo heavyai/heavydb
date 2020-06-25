@@ -93,6 +93,7 @@ ResultSetPtr TableFunctionExecutionContext::execute(
           device_type == ExecutorDeviceType::CPU ? Data_Namespace::MemoryLevel::CPU_LEVEL
                                                  : Data_Namespace::MemoryLevel::GPU_LEVEL,
           device_id,
+          device_allocator.get(),
           chunks_owner,
           column_fetcher.columnarized_table_cache_);
       if (element_count < 0) {

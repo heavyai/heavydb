@@ -29,6 +29,7 @@ class ColumnFetcher {
       const Fragmenter_Namespace::FragmentInfo& fragment,
       const Data_Namespace::MemoryLevel effective_mem_lvl,
       const int device_id,
+      DeviceAllocator* device_allocator,
       std::vector<std::shared_ptr<Chunk_NS::Chunk>>& chunks_owner,
       ColumnCacheMap& column_cache);
 
@@ -39,6 +40,7 @@ class ColumnFetcher {
       const std::vector<Fragmenter_Namespace::FragmentInfo>& fragments,
       const Data_Namespace::MemoryLevel effective_mem_lvl,
       const int device_id,
+      DeviceAllocator* device_allocator,
       std::vector<std::shared_ptr<Chunk_NS::Chunk>>& chunks_owner,
       std::vector<std::shared_ptr<void>>& malloc_owner,
       ColumnCacheMap& column_cache);
@@ -51,18 +53,21 @@ class ColumnFetcher {
       std::list<std::shared_ptr<Chunk_NS::Chunk>>& chunk_holder,
       std::list<ChunkIter>& chunk_iter_holder,
       const Data_Namespace::MemoryLevel memory_level,
-      const int device_id) const;
+      const int device_id,
+      DeviceAllocator* device_allocator) const;
 
   const int8_t* getAllTableColumnFragments(
       const int table_id,
       const int col_id,
       const std::map<int, const TableFragments*>& all_tables_fragments,
       const Data_Namespace::MemoryLevel memory_level,
-      const int device_id) const;
+      const int device_id,
+      DeviceAllocator* device_allocator) const;
 
   const int8_t* getResultSetColumn(const InputColDescriptor* col_desc,
                                    const Data_Namespace::MemoryLevel memory_level,
-                                   const int device_id) const;
+                                   const int device_id,
+                                   DeviceAllocator* device_allocator) const;
 
  private:
   static const int8_t* transferColumnIfNeeded(
@@ -70,13 +75,15 @@ class ColumnFetcher {
       const int col_id,
       Data_Namespace::DataMgr* data_mgr,
       const Data_Namespace::MemoryLevel memory_level,
-      const int device_id);
+      const int device_id,
+      DeviceAllocator* device_allocator);
 
   const int8_t* getResultSetColumn(const ResultSetPtr& buffer,
                                    const int table_id,
                                    const int col_id,
                                    const Data_Namespace::MemoryLevel memory_level,
-                                   const int device_id) const;
+                                   const int device_id,
+                                   DeviceAllocator* device_allocator) const;
 
   Executor* executor_;
   using CacheKey = std::vector<int>;
