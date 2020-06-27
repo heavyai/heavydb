@@ -1372,7 +1372,7 @@ void Catalog::instantiateFragmenter(TableDescriptor* td) const {
     CHECK_EQ(td->fragType, Fragmenter_Namespace::FragmenterType::INSERT_ORDER);
     vector<Chunk> chunkVec;
     list<const ColumnDescriptor*> columnDescs;
-    getAllColumnMetadataForTable(td, columnDescs, true, false, true);
+    getAllColumnMetadataForTableImpl(td, columnDescs, true, false, true);
     Chunk::translateColumnDescriptorsToChunkVec(columnDescs, chunkVec);
     ChunkKey chunkKeyPrefix = {currentDB_.dbId, td->tableId};
     if (td->sortedColumnId > 0) {
@@ -1426,7 +1426,6 @@ const TableDescriptor* Catalog::getMetadataForTable(const string& tableName,
 const TableDescriptor* Catalog::getMetadataForTableImpl(
     int tableId,
     const bool populateFragmenter) const {
-  cat_read_lock read_lock(this);
   auto tableDescIt = tableDescriptorMapById_.find(tableId);
   if (tableDescIt == tableDescriptorMapById_.end()) {  // check to make sure table exists
     return nullptr;
@@ -1442,13 +1441,19 @@ const TableDescriptor* Catalog::getMetadataForTableImpl(
 }
 
 const TableDescriptor* Catalog::getMetadataForTable(int tableId) const {
+  cat_read_lock read_lock(this);
   return getMetadataForTableImpl(tableId, true);
 }
 
-const DictDescriptor* Catalog::getMetadataForDict(const int dictId,
-                                                  const bool loadDict) const {
-  const DictRef dictRef(currentDB_.dbId, dictId);
+const DictDescriptor* Catalog::getMetadataForDict(const int dict_id,
+                                                  const bool load_dict) const {
   cat_read_lock read_lock(this);
+  return getMetadataForDictUnlocked(dict_id, load_dict);
+}
+
+const DictDescriptor* Catalog::getMetadataForDictUnlocked(const int dictId,
+                                                          const bool loadDict) const {
+  const DictRef dictRef(currentDB_.dbId, dictId);
   auto dictDescIt = dictDescriptorMapByRef_.find(dictRef);
   if (dictDescIt ==
       dictDescriptorMapByRef_.end()) {  // check to make sure dictionary exists
@@ -1498,9 +1503,13 @@ const ColumnDescriptor* Catalog::getMetadataForColumn(int tableId,
   return colDescIt->second;
 }
 
-const ColumnDescriptor* Catalog::getMetadataForColumn(int tableId, int columnId) const {
+const ColumnDescriptor* Catalog::getMetadataForColumn(int table_id, int column_id) const {
   cat_read_lock read_lock(this);
+  return getMetadataForColumnUnlocked(table_id, column_id);
+}
 
+const ColumnDescriptor* Catalog::getMetadataForColumnUnlocked(int tableId,
+                                                              int columnId) const {
   ColumnIdKey columnIdKey(tableId, columnId);
   auto colDescIt = columnDescriptorMapById_.find(columnIdKey);
   if (colDescIt == columnDescriptorMapById_
@@ -1645,13 +1654,12 @@ const LinkDescriptor* Catalog::getMetadataForLink(int linkId) const {
   return linkDescIt->second;
 }
 
-void Catalog::getAllColumnMetadataForTable(
+void Catalog::getAllColumnMetadataForTableImpl(
     const TableDescriptor* td,
     list<const ColumnDescriptor*>& columnDescriptors,
     const bool fetchSystemColumns,
     const bool fetchVirtualColumns,
     const bool fetchPhysicalColumns) const {
-  cat_read_lock read_lock(this);
   int32_t skip_physical_cols = 0;
   for (const auto& columnDescriptor : columnDescriptorMapById_) {
     if (!fetchPhysicalColumns && skip_physical_cols > 0) {
@@ -1676,20 +1684,29 @@ void Catalog::getAllColumnMetadataForTable(
   }
 }
 
-list<const ColumnDescriptor*> Catalog::getAllColumnMetadataForTable(
+std::list<const ColumnDescriptor*> Catalog::getAllColumnMetadataForTable(
     const int tableId,
     const bool fetchSystemColumns,
     const bool fetchVirtualColumns,
     const bool fetchPhysicalColumns) const {
   cat_read_lock read_lock(this);
-  list<const ColumnDescriptor*> columnDescriptors;
+  return getAllColumnMetadataForTableUnlocked(
+      tableId, fetchSystemColumns, fetchVirtualColumns, fetchPhysicalColumns);
+}
+
+std::list<const ColumnDescriptor*> Catalog::getAllColumnMetadataForTableUnlocked(
+    const int tableId,
+    const bool fetchSystemColumns,
+    const bool fetchVirtualColumns,
+    const bool fetchPhysicalColumns) const {
+  std::list<const ColumnDescriptor*> columnDescriptors;
   const TableDescriptor* td =
       getMetadataForTableImpl(tableId, false);  // dont instantiate fragmenter
-  getAllColumnMetadataForTable(td,
-                               columnDescriptors,
-                               fetchSystemColumns,
-                               fetchVirtualColumns,
-                               fetchPhysicalColumns);
+  getAllColumnMetadataForTableImpl(td,
+                                   columnDescriptors,
+                                   fetchSystemColumns,
+                                   fetchVirtualColumns,
+                                   fetchPhysicalColumns);
   return columnDescriptors;
 }
 
@@ -3441,6 +3458,8 @@ std::string Catalog::createLink(LinkDescriptor& ld, size_t min_length) {
 
 const ColumnDescriptor* Catalog::getShardColumnMetadataForTable(
     const TableDescriptor* td) const {
+  cat_read_lock read_lock(this);
+
   const auto column_descriptors =
       getAllColumnMetadataForTable(td->tableId, false, true, true);
 
@@ -3549,7 +3568,6 @@ void Catalog::eraseDBData() {
 }
 
 void Catalog::eraseTablePhysicalData(const TableDescriptor* td) {
-  cat_write_lock write_lock(this);
   const int tableId = td->tableId;
   // must destroy fragmenter before deleteChunks is called.
   if (td->fragmenter != nullptr) {

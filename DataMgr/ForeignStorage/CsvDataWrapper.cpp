@@ -158,8 +158,8 @@ ForeignStorageBuffer* CsvDataWrapper::getChunkBuffer(const ChunkKey& chunk_key) 
   if (chunk_buffer_map_.find(chunk_key) == chunk_buffer_map_.end()) {
     auto catalog = Catalog_Namespace::Catalog::get(db_id_);
     CHECK(catalog);
-    const auto& column =
-        catalog.get()->getMetadataForColumn(foreign_table_->tableId, chunk_key[2]);
+    const auto& column = catalog.get()->getMetadataForColumnUnlocked(
+        foreign_table_->tableId, chunk_key[2]);
     ForeignStorageBuffer* data_buffer = nullptr;
     ForeignStorageBuffer* index_buffer = nullptr;
 
@@ -337,7 +337,7 @@ void initialize_import_buffers(
         (column->columnType.is_array() && IS_STRING(column->columnType.get_subtype()) &&
          column->columnType.get_compression() == kENCODING_DICT)) {
       auto dict_descriptor =
-          catalog->getMetadataForDict(column->columnType.get_comp_param());
+          catalog->getMetadataForDictUnlocked(column->columnType.get_comp_param(), true);
       string_dictionary = dict_descriptor->stringDict.get();
     }
     import_buffers.emplace_back(
@@ -358,8 +358,8 @@ void CsvDataWrapper::populateChunk(ChunkKey chunk_key, Chunk_NS::Chunk& chunk) {
 
   auto catalog = Catalog_Namespace::Catalog::get(db_id_);
   CHECK(catalog);
-  auto columns =
-      catalog->getAllColumnMetadataForTable(foreign_table_->tableId, false, false, true);
+  auto columns = catalog->getAllColumnMetadataForTableUnlocked(
+      foreign_table_->tableId, false, false, true);
 
   const auto& file_regions = fragment_id_to_file_regions_map_[chunk_key[3]];
   const int batch_size = (file_regions.size() + thread_count - 1) / thread_count;
@@ -789,8 +789,8 @@ void CsvDataWrapper::populateMetadataForChunkKeyPrefix(
 
   auto catalog = Catalog_Namespace::Catalog::get(db_id_);
   CHECK(catalog);
-  auto columns =
-      catalog->getAllColumnMetadataForTable(foreign_table_->tableId, false, false, true);
+  auto columns = catalog->getAllColumnMetadataForTableUnlocked(
+      foreign_table_->tableId, false, false, true);
   std::map<int32_t, const ColumnDescriptor*> column_by_id{};
   for (auto column : columns) {
     column_by_id[column->columnId] = column;

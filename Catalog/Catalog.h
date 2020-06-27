@@ -148,6 +148,7 @@ class Catalog final {
   const ColumnDescriptor* getMetadataForColumn(int tableId,
                                                const std::string& colName) const;
   const ColumnDescriptor* getMetadataForColumn(int tableId, int columnId) const;
+  const ColumnDescriptor* getMetadataForColumnUnlocked(int tableId, int columnId) const;
 
   const int getColumnIdBySpi(const int tableId, const size_t spi) const;
   const ColumnDescriptor* getMetadataForColumnBySpi(const int tableId,
@@ -176,6 +177,14 @@ class Catalog final {
       const bool fetchSystemColumns,
       const bool fetchVirtualColumns,
       const bool fetchPhysicalColumns) const;
+  /**
+   * Same as above, but without first taking a catalog read lock.
+   */
+  std::list<const ColumnDescriptor*> getAllColumnMetadataForTableUnlocked(
+      const int tableId,
+      const bool fetchSystemColumns,
+      const bool fetchVirtualColumns,
+      const bool fetchPhysicalColumns) const;
 
   std::list<const TableDescriptor*> getAllTableMetadata() const;
   std::list<const DashboardDescriptor*> getAllDashboardsMetadata() const;
@@ -185,6 +194,7 @@ class Catalog final {
   const std::string& getBasePath() const { return basePath_; }
 
   const DictDescriptor* getMetadataForDict(int dict_ref, bool loadDict = true) const;
+  const DictDescriptor* getMetadataForDictUnlocked(int dict_ref, bool loadDict) const;
 
   const std::vector<LeafHostInfo>& getStringDictionaryHosts() const;
 
@@ -423,11 +433,11 @@ class Catalog final {
   void doTruncateTable(const TableDescriptor* td);
   void renamePhysicalTable(const TableDescriptor* td, const std::string& newTableName);
   void instantiateFragmenter(TableDescriptor* td) const;
-  void getAllColumnMetadataForTable(const TableDescriptor* td,
-                                    std::list<const ColumnDescriptor*>& colDescs,
-                                    const bool fetchSystemColumns,
-                                    const bool fetchVirtualColumns,
-                                    const bool fetchPhysicalColumns) const;
+  void getAllColumnMetadataForTableImpl(const TableDescriptor* td,
+                                        std::list<const ColumnDescriptor*>& colDescs,
+                                        const bool fetchSystemColumns,
+                                        const bool fetchVirtualColumns,
+                                        const bool fetchPhysicalColumns) const;
   std::string calculateSHA1(const std::string& data);
   std::string generatePhysicalTableName(const std::string& logicalTableName,
                                         const int32_t& shardNumber);

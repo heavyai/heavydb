@@ -155,6 +155,7 @@ size_t DataMgr::getTotalSystemMemory() {
 
 void DataMgr::populateMgrs(const SystemParameters& system_parameters,
                            const size_t userSpecifiedNumReaderThreads) {
+  // no need for locking, as this is only called in the constructor
   bufferMgrs_.resize(2);
   if (g_enable_fsi) {
     bufferMgrs_[0].push_back(
@@ -233,6 +234,8 @@ void DataMgr::populateMgrs(const SystemParameters& system_parameters,
 }
 
 void DataMgr::convertDB(const std::string basePath) {
+  // no need for locking, as this is only called in the constructor
+
   /* check that "mapd_data" directory exists and it's empty */
   std::string mapdDataPath(basePath + "/../mapd_data/");
   boost::filesystem::path path(mapdDataPath);
@@ -282,6 +285,8 @@ void DataMgr::createTopLevelMetadata()
 }
 
 std::vector<MemoryInfo> DataMgr::getMemoryInfo(const MemoryLevel memLevel) {
+  std::lock_guard<std::mutex> buffer_lock(buffer_access_mutex_);
+
   std::vector<MemoryInfo> mem_info;
   if (memLevel == MemoryLevel::CPU_LEVEL) {
     CpuBufferMgr* cpu_buffer =
@@ -343,6 +348,8 @@ std::vector<MemoryInfo> DataMgr::getMemoryInfo(const MemoryLevel memLevel) {
 }
 
 std::string DataMgr::dumpLevel(const MemoryLevel memLevel) {
+  std::lock_guard<std::mutex> buffer_lock(buffer_access_mutex_);
+
   // if gpu we need to iterate through all the buffermanagers for each card
   if (memLevel == MemoryLevel::GPU_LEVEL) {
     int numGpus = cudaMgr_->getDeviceCount();
@@ -357,6 +364,8 @@ std::string DataMgr::dumpLevel(const MemoryLevel memLevel) {
 }
 
 void DataMgr::clearMemory(const MemoryLevel memLevel) {
+  std::lock_guard<std::mutex> buffer_lock(buffer_access_mutex_);
+
   // if gpu we need to iterate through all the buffermanagers for each card
   if (memLevel == MemoryLevel::GPU_LEVEL) {
     if (cudaMgr_) {
@@ -376,12 +385,14 @@ void DataMgr::clearMemory(const MemoryLevel memLevel) {
 bool DataMgr::isBufferOnDevice(const ChunkKey& key,
                                const MemoryLevel memLevel,
                                const int deviceId) {
+  std::lock_guard<std::mutex> buffer_lock(buffer_access_mutex_);
   return bufferMgrs_[memLevel][deviceId]->isBufferOnDevice(key);
 }
 
 void DataMgr::getChunkMetadataVec(ChunkMetadataVector& chunkMetadataVec) {
   // Can we always assume this will just be at the disklevel bc we just
   // started?
+  // access to this object is locked by the file mgr
   bufferMgrs_[0][0]->getChunkMetadataVec(chunkMetadataVec);
 }
 
@@ -394,6 +405,7 @@ AbstractBuffer* DataMgr::createChunkBuffer(const ChunkKey& key,
                                            const MemoryLevel memoryLevel,
                                            const int deviceId,
                                            const size_t page_size) {
+  std::lock_guard<std::mutex> buffer_lock(buffer_access_mutex_);
   int level = static_cast<int>(memoryLevel);
   return bufferMgrs_[level][deviceId]->createBuffer(key, page_size);
 }
@@ -402,6 +414,7 @@ AbstractBuffer* DataMgr::getChunkBuffer(const ChunkKey& key,
                                         const MemoryLevel memoryLevel,
                                         const int deviceId,
                                         const size_t numBytes) {
+  std::lock_guard<std::mutex> buffer_lock(buffer_access_mutex_);
   const auto level = static_cast<size_t>(memoryLevel);
   CHECK_LT(level, levelSizes_.size());     // make sure we have a legit buffermgr
   CHECK_LT(deviceId, levelSizes_[level]);  // make sure we have a legit buffermgr
@@ -409,6 +422,8 @@ AbstractBuffer* DataMgr::getChunkBuffer(const ChunkKey& key,
 }
 
 void DataMgr::deleteChunksWithPrefix(const ChunkKey& keyPrefix) {
+  std::lock_guard<std::mutex> buffer_lock(buffer_access_mutex_);
+
   int numLevels = bufferMgrs_.size();
   for (int level = numLevels - 1; level >= 0; --level) {
     for (int device = 0; device < levelSizes_[level]; ++device) {
@@ -420,6 +435,8 @@ void DataMgr::deleteChunksWithPrefix(const ChunkKey& keyPrefix) {
 // only deletes the chunks at the given memory level
 void DataMgr::deleteChunksWithPrefix(const ChunkKey& keyPrefix,
                                      const MemoryLevel memLevel) {
+  std::lock_guard<std::mutex> buffer_lock(buffer_access_mutex_);
+
   if (bufferMgrs_.size() <= memLevel) {
     return;
   }
@@ -431,19 +448,16 @@ void DataMgr::deleteChunksWithPrefix(const ChunkKey& keyPrefix,
 AbstractBuffer* DataMgr::alloc(const MemoryLevel memoryLevel,
                                const int deviceId,
                                const size_t numBytes) {
+  std::lock_guard<std::mutex> buffer_lock(buffer_access_mutex_);
   const auto level = static_cast<int>(memoryLevel);
   CHECK_LT(deviceId, levelSizes_[level]);
   return bufferMgrs_[level][deviceId]->alloc(numBytes);
 }
 
 void DataMgr::free(AbstractBuffer* buffer) {
+  std::lock_guard<std::mutex> buffer_lock(buffer_access_mutex_);
   int level = static_cast<int>(buffer->getType());
   bufferMgrs_[level][buffer->getDeviceId()]->free(buffer);
-}
-
-void DataMgr::freeAllBuffers() {
-  ChunkKey keyPrefix = {-1};
-  deleteChunksWithPrefix(keyPrefix);
 }
 
 void DataMgr::copy(AbstractBuffer* destBuffer, AbstractBuffer* srcBuffer) {
@@ -461,6 +475,7 @@ void DataMgr::copy(AbstractBuffer* destBuffer, AbstractBuffer* srcBuffer) {
 //} /
 
 void DataMgr::checkpoint(const int db_id, const int tb_id) {
+  // TODO(adb): do we need a buffer mgr lock here?
   for (auto levelIt = bufferMgrs_.rbegin(); levelIt != bufferMgrs_.rend(); ++levelIt) {
     // use reverse iterator so we start at GPU level, then CPU then DISK
     for (auto deviceIt = levelIt->begin(); deviceIt != levelIt->end(); ++deviceIt) {
@@ -470,6 +485,7 @@ void DataMgr::checkpoint(const int db_id, const int tb_id) {
 }
 
 void DataMgr::checkpoint() {
+  // TODO(adb): SAA
   for (auto levelIt = bufferMgrs_.rbegin(); levelIt != bufferMgrs_.rend(); ++levelIt) {
     // use reverse iterator so we start at GPU level, then CPU then DISK
     for (auto deviceIt = levelIt->begin(); deviceIt != levelIt->end(); ++deviceIt) {
@@ -479,6 +495,7 @@ void DataMgr::checkpoint() {
 }
 
 void DataMgr::removeTableRelatedDS(const int db_id, const int tb_id) {
+  std::lock_guard<std::mutex> buffer_lock(buffer_access_mutex_);
   bufferMgrs_[0][0]->removeTableRelatedDS(db_id, tb_id);
 }
 
