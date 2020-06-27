@@ -122,7 +122,6 @@ class DataMgr {
                         const int deviceId,
                         const size_t numBytes);
   void free(AbstractBuffer* buffer);
-  void freeAllBuffers();
   // copies one buffer to another
   void copy(AbstractBuffer* destBuffer, AbstractBuffer* srcBuffer);
   bool isBufferOnDevice(const ChunkKey& key,
@@ -132,7 +131,6 @@ class DataMgr {
   std::string dumpLevel(const MemoryLevel memLevel);
   void clearMemory(const MemoryLevel memLevel);
 
-  // const std::map<ChunkKey, File_Namespace::FileBuffer *> & getChunkMap();
   const std::map<ChunkKey, File_Namespace::FileBuffer*>& getChunkMap();
   void checkpoint(const int db_id,
                   const int tb_id);  // checkpoint for individual table of DB
@@ -174,8 +172,7 @@ class DataMgr {
   std::string dataDir_;
   bool hasGpus_;
   size_t reservedGpuMem_;
-  std::map<ChunkKey, std::shared_ptr<mapd_shared_mutex>> chunkMutexMap_;
-  mapd_shared_mutex chunkMutexMapMutex_;
+  std::mutex buffer_access_mutex_;
 };
 
 std::ostream& operator<<(std::ostream& os, const DataMgr::SystemMemoryUsage&);
