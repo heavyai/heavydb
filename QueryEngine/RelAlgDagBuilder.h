@@ -658,6 +658,12 @@ class HintExplained {
 
   const std::string& getHintName() const { return hint_name_; }
 
+  bool isQueryHint() const { return query_hint_; }
+
+  bool hasOptions() const { return is_marker_; }
+
+  bool hasKvOptions() const { return has_kv_type_options_; }
+
  private:
   std::string hint_name_;
   // Set true if this hint affects globally
@@ -777,7 +783,7 @@ class RelScan : public RelAlgNode {
       : td_(td)
       , field_names_(field_names)
       , hint_applied_(false)
-      , hints_(std::move(std::make_unique<Hints>())) {}
+      , hints_(std::make_unique<Hints>()) {}
 
   size_t size() const override { return field_names_.size(); }
 
@@ -890,7 +896,7 @@ class RelProject : public RelAlgNode, public ModifyManipulationTarget {
       , scalar_exprs_(std::move(scalar_exprs))
       , fields_(fields)
       , hint_applied_(false)
-      , hints_(std::move(std::make_unique<Hints>())) {
+      , hints_(std::make_unique<Hints>()) {
     inputs_.push_back(input);
   }
 
@@ -1014,7 +1020,7 @@ class RelAggregate : public RelAlgNode {
       , agg_exprs_(std::move(agg_exprs))
       , fields_(fields)
       , hint_applied_(false)
-      , hints_(std::move(std::make_unique<Hints>())) {
+      , hints_(std::make_unique<Hints>()) {
     inputs_.push_back(input);
   }
 
@@ -1104,7 +1110,7 @@ class RelJoin : public RelAlgNode {
       : condition_(std::move(condition))
       , join_type_(join_type)
       , hint_applied_(false)
-      , hints_(std::move(std::make_unique<Hints>())) {
+      , hints_(std::make_unique<Hints>()) {
     inputs_.push_back(lhs);
     inputs_.push_back(rhs);
   }
@@ -1258,7 +1264,7 @@ class RelCompound : public RelAlgNode, public ModifyManipulationTarget {
       , is_agg_(is_agg)
       , scalar_sources_(std::move(scalar_sources))
       , hint_applied_(false)
-      , hints_(std::move(std::make_unique<Hints>())) {
+      , hints_(std::make_unique<Hints>()) {
     CHECK_EQ(fields.size(), target_exprs.size());
     for (auto agg_expr : agg_exprs) {
       agg_exprs_.emplace_back(agg_expr);
