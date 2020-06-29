@@ -4684,15 +4684,27 @@ std::vector<PushedDownFilterInfo> DBHandler::execute_rel_alg(
   VLOG(1) << "Table Data Locks:\n" << lockmgr::TableDataLockMgr::instance();
 
   const auto& cat = query_state_proxy.getQueryState().getConstSessionInfo()->getCatalog();
-  CompilationOptions co = {executor_device_type,
-                           /*hoist_literals=*/true,
-                           ExecutorOptLevel::Default,
-                           g_enable_dynamic_watchdog,
-                           /*allow_lazy_fetch=*/true,
-                           /*add_delete_column=*/true,
-                           explain_info.explain_optimized ? ExecutorExplainType::Optimized
-                                                          : ExecutorExplainType::Default,
-                           intel_jit_profile_};
+  auto executor = Executor::getExecutor(
+      executor_index ? *executor_index : Executor::UNITARY_EXECUTOR_ID,
+      jit_debug_ ? "/tmp" : "",
+      jit_debug_ ? "mapdquery" : "",
+      system_parameters_);
+  RelAlgExecutor ra_executor(executor.get(),
+                             cat,
+                             query_ra,
+                             query_state_proxy.getQueryState().shared_from_this());
+  // handle hints
+  const auto& query_hints = ra_executor.getParsedQueryHints();
+  CompilationOptions co = {
+      query_hints.cpu_mode ? ExecutorDeviceType::CPU : executor_device_type,
+      /*hoist_literals=*/true,
+      ExecutorOptLevel::Default,
+      g_enable_dynamic_watchdog,
+      /*allow_lazy_fetch=*/true,
+      /*add_delete_column=*/true,
+      explain_info.explain_optimized ? ExecutorExplainType::Optimized
+                                     : ExecutorExplainType::Default,
+      intel_jit_profile_};
   ExecutionOptions eo = {g_enable_columnar_output,
                          allow_multifrag_,
                          explain_info.justExplain(),
@@ -4707,15 +4719,6 @@ std::vector<PushedDownFilterInfo> DBHandler::execute_rel_alg(
                          system_parameters_.gpu_input_mem_limit,
                          g_enable_runtime_query_interrupt,
                          g_runtime_query_interrupt_frequency};
-  auto executor = Executor::getExecutor(
-      executor_index ? *executor_index : Executor::UNITARY_EXECUTOR_ID,
-      jit_debug_ ? "/tmp" : "",
-      jit_debug_ ? "mapdquery" : "",
-      system_parameters_);
-  RelAlgExecutor ra_executor(executor.get(),
-                             cat,
-                             query_ra,
-                             query_state_proxy.getQueryState().shared_from_this());
   ExecutionResult result{std::make_shared<ResultSet>(std::vector<TargetInfo>{},
                                                      ExecutorDeviceType::CPU,
                                                      QueryMemoryDescriptor(),
@@ -4756,7 +4759,16 @@ void DBHandler::execute_rel_alg_df(TDataFrame& _return,
   const auto& cat = session_info.getCatalog();
   CHECK(device_type == ExecutorDeviceType::CPU ||
         session_info.get_executor_device_type() == ExecutorDeviceType::GPU);
-  CompilationOptions co = {session_info.get_executor_device_type(),
+  auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID,
+                                        jit_debug_ ? "/tmp" : "",
+                                        jit_debug_ ? "mapdquery" : "",
+                                        system_parameters_);
+  RelAlgExecutor ra_executor(executor.get(),
+                             cat,
+                             query_ra,
+                             query_state_proxy.getQueryState().shared_from_this());
+  const auto& query_hints = ra_executor.getParsedQueryHints();
+  CompilationOptions co = {query_hints.cpu_mode ? ExecutorDeviceType::CPU : device_type,
                            /*hoist_literals=*/true,
                            ExecutorOptLevel::Default,
                            g_enable_dynamic_watchdog,
@@ -4778,14 +4790,6 @@ void DBHandler::execute_rel_alg_df(TDataFrame& _return,
                          system_parameters_.gpu_input_mem_limit,
                          g_enable_runtime_query_interrupt,
                          g_runtime_query_interrupt_frequency};
-  auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID,
-                                        jit_debug_ ? "/tmp" : "",
-                                        jit_debug_ ? "mapdquery" : "",
-                                        system_parameters_);
-  RelAlgExecutor ra_executor(executor.get(),
-                             cat,
-                             query_ra,
-                             query_state_proxy.getQueryState().shared_from_this());
   ExecutionResult result{std::make_shared<ResultSet>(std::vector<TargetInfo>{},
                                                      ExecutorDeviceType::CPU,
                                                      QueryMemoryDescriptor(),

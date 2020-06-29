@@ -239,6 +239,27 @@ std::string apply_copy_to_shim(const std::string& query_str) {
   return result;
 }
 
+QueryHint QueryRunner::getParsedQueryHintofQuery(const std::string& query_str) {
+  CHECK(session_info_);
+  CHECK(!Catalog_Namespace::SysCatalog::instance().isAggregator());
+  auto query_state = create_query_state(session_info_, query_str);
+  const auto& cat = session_info_->getCatalog();
+  auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID);
+  auto calcite_mgr = cat.getCalciteMgr();
+  const auto query_ra = calcite_mgr
+                            ->process(query_state->createQueryStateProxy(),
+                                      pg_shim(query_str),
+                                      {},
+                                      true,
+                                      false,
+                                      false,
+                                      true)
+                            .plan_result;
+  auto ra_executor = RelAlgExecutor(executor.get(), cat, query_ra);
+  const auto& query_hints = ra_executor.getParsedQueryHints();
+  return query_hints;
+}
+
 void QueryRunner::runDDLStatement(const std::string& stmt_str_in) {
   CHECK(session_info_);
   CHECK(!Catalog_Namespace::SysCatalog::instance().isAggregator());
@@ -444,9 +465,13 @@ std::shared_ptr<ExecutionResult> run_select_query_with_filter_push_down(
                                       false,
                                       true)
                             .plan_result;
-  auto result =
-      std::make_shared<ExecutionResult>(RelAlgExecutor(executor.get(), cat, query_ra)
-                                            .executeRelAlgQuery(co, eo, false, nullptr));
+  auto ra_executor = RelAlgExecutor(executor.get(), cat, query_ra);
+  const auto& query_hints = ra_executor.getParsedQueryHints();
+  if (query_hints.cpu_mode) {
+    co.device_type = ExecutorDeviceType::CPU;
+  }
+  auto result = std::make_shared<ExecutionResult>(
+      ra_executor.executeRelAlgQuery(co, eo, false, nullptr));
   const auto& filter_push_down_requests = result->getPushedDownFilterInfo();
   if (!filter_push_down_requests.empty()) {
     std::vector<TFilterPushDownInfo> filter_push_down_info;
@@ -479,9 +504,9 @@ std::shared_ptr<ExecutionResult> run_select_query_with_filter_push_down(
                                        /*just_calcite_explain=*/false,
                                        eo.gpu_input_mem_limit_percent,
                                        eo.allow_runtime_query_interrupt};
+    auto new_ra_executor = RelAlgExecutor(executor.get(), cat, new_query_ra);
     return std::make_shared<ExecutionResult>(
-        RelAlgExecutor(executor.get(), cat, new_query_ra)
-            .executeRelAlgQuery(co, eo_modified, false, nullptr));
+        new_ra_executor.executeRelAlgQuery(co, eo_modified, false, nullptr));
   } else {
     return result;
   }
@@ -547,9 +572,13 @@ std::shared_ptr<ExecutionResult> QueryRunner::runSelectQuery(
                                             false,
                                             true)
                                   .plan_result;
+        auto ra_executor = RelAlgExecutor(executor.get(), cat, query_ra);
+        const auto& query_hints = ra_executor.getParsedQueryHints();
+        if (query_hints.cpu_mode) {
+          co.device_type = ExecutorDeviceType::CPU;
+        }
         result = std::make_shared<ExecutionResult>(
-            RelAlgExecutor(executor.get(), cat, query_ra)
-                .executeRelAlgQuery(co, eo, false, nullptr));
+            ra_executor.executeRelAlgQuery(co, eo, false, nullptr));
       });
   CHECK(dispatch_queue_);
   dispatch_queue_->submit(query_launch_task);

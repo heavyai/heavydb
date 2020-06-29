@@ -24,6 +24,7 @@
 #include <boost/core/noncopyable.hpp>
 
 #include "Catalog/Catalog.h"
+#include "QueryEngine/QueryHint.h"
 #include "QueryEngine/Rendering/RenderInfo.h"
 #include "QueryEngine/TargetMetaInfo.h"
 #include "QueryEngine/TypePunning.h"
@@ -602,6 +603,79 @@ class RexAgg : public Rex {
   const std::vector<size_t> operands_;
 };
 
+class HintExplained {
+ public:
+  HintExplained(std::string hint_name,
+                bool query_hint,
+                bool is_marker,
+                bool has_kv_type_options)
+      : hint_name_(hint_name)
+      , query_hint_(query_hint)
+      , is_marker_(is_marker)
+      , has_kv_type_options_(has_kv_type_options) {}
+
+  HintExplained(std::string hint_name,
+                bool query_hint,
+                bool is_marker,
+                bool has_kv_type_options,
+                std::vector<std::string>& list_options)
+      : hint_name_(hint_name)
+      , query_hint_(query_hint)
+      , is_marker_(is_marker)
+      , has_kv_type_options_(has_kv_type_options)
+      , list_options_(std::move(list_options)) {}
+
+  HintExplained(std::string hint_name,
+                bool query_hint,
+                bool is_marker,
+                bool has_kv_type_options,
+                std::unordered_map<std::string, std::string>& kv_options)
+      : hint_name_(hint_name)
+      , query_hint_(query_hint)
+      , is_marker_(is_marker)
+      , has_kv_type_options_(has_kv_type_options)
+      , kv_options_(std::move(kv_options)) {}
+
+  void setListOptions(std::vector<std::string>& list_options) {
+    list_options_ = list_options;
+  }
+
+  void setKVOptions(std::unordered_map<std::string, std::string>& kv_options) {
+    kv_options_ = kv_options;
+  }
+
+  void setInheritPaths(std::vector<int>& interit_paths) {
+    inherit_paths_ = interit_paths;
+  }
+
+  const std::vector<std::string>& getListOptions() { return list_options_; }
+
+  const std::vector<int>& getInteritPath() { return inherit_paths_; }
+
+  const std::unordered_map<std::string, std::string>& getKVOptions() {
+    return kv_options_;
+  }
+
+  const std::string& getHintName() const { return hint_name_; }
+
+ private:
+  std::string hint_name_;
+  // Set true if this hint affects globally
+  // Otherwise it just affects the node which this hint is included (aka table hint)
+  bool query_hint_;
+  // set true if this has no extra options (neither list_options nor kv_options)
+  bool is_marker_;
+  // Set true if it is not a marker and has key-value type options
+  // Otherwise (it is not a marker but has list type options), we set this be false
+  bool has_kv_type_options_;
+  std::vector<int> inherit_paths_;  // currently not used
+  std::vector<std::string> list_options_;
+  std::unordered_map<std::string, std::string> kv_options_;
+};
+
+// a map from hint_name to its detailed info
+using Hints = std::unordered_map<std::string, HintExplained>;
+
 class RelAlgNode {
  public:
   RelAlgNode(RelAlgInputs inputs = {})
@@ -700,7 +774,10 @@ class RelAlgNode {
 class RelScan : public RelAlgNode {
  public:
   RelScan(const TableDescriptor* td, const std::vector<std::string>& field_names)
-      : td_(td), field_names_(field_names) {}
+      : td_(td)
+      , field_names_(field_names)
+      , hint_applied_(false)
+      , hints_(std::move(std::make_unique<Hints>())) {}
 
   size_t size() const override { return field_names_.size(); }
 
@@ -720,9 +797,32 @@ class RelScan : public RelAlgNode {
     return nullptr;
   };
 
+  void addHint(const HintExplained& hint_explained) {
+    if (!hint_applied_) {
+      hint_applied_ = true;
+    }
+    hints_->emplace(hint_explained.getHintName(), hint_explained);
+  }
+
+  const bool hasHintEnabled(const std::string& candidate_hint_name) const {
+    if (hint_applied_ && !hints_->empty()) {
+      return hints_->find(candidate_hint_name) != hints_->end();
+    }
+    return false;
+  }
+
+  const HintExplained& getHintInfo(const std::string& hint_name) const {
+    CHECK(hint_applied_);
+    CHECK(!hints_->empty());
+    CHECK(hasHintEnabled(hint_name));
+    return hints_->at(hint_name);
+  }
+
  private:
   const TableDescriptor* td_;
   const std::vector<std::string> field_names_;
+  bool hint_applied_;
+  std::unique_ptr<Hints> hints_;
 };
 
 class ModifyManipulationTarget {
@@ -788,7 +888,9 @@ class RelProject : public RelAlgNode, public ModifyManipulationTarget {
              std::shared_ptr<const RelAlgNode> input)
       : ModifyManipulationTarget(false, false, false, nullptr)
       , scalar_exprs_(std::move(scalar_exprs))
-      , fields_(fields) {
+      , fields_(fields)
+      , hint_applied_(false)
+      , hints_(std::move(std::make_unique<Hints>())) {
     inputs_.push_back(input);
   }
 
@@ -859,6 +961,27 @@ class RelProject : public RelAlgNode, public ModifyManipulationTarget {
 
   bool hasWindowFunctionExpr() const;
 
+  void addHint(const HintExplained& hint_explained) {
+    if (!hint_applied_) {
+      hint_applied_ = true;
+    }
+    hints_->emplace(hint_explained.getHintName(), hint_explained);
+  }
+
+  const bool hasHintEnabled(const std::string& candidate_hint_name) const {
+    if (hint_applied_ && !hints_->empty()) {
+      return hints_->find(candidate_hint_name) != hints_->end();
+    }
+    return false;
+  }
+
+  const HintExplained& getHintInfo(const std::string& hint_name) const {
+    CHECK(hint_applied_);
+    CHECK(!hints_->empty());
+    CHECK(hasHintEnabled(hint_name));
+    return hints_->at(hint_name);
+  }
+
  private:
   template <typename EXPR_VISITOR_FUNCTOR>
   void visitScalarExprs(EXPR_VISITOR_FUNCTOR visitor_functor) const {
@@ -876,6 +999,8 @@ class RelProject : public RelAlgNode, public ModifyManipulationTarget {
 
   mutable std::vector<std::unique_ptr<const RexScalar>> scalar_exprs_;
   mutable std::vector<std::string> fields_;
+  bool hint_applied_;
+  std::unique_ptr<Hints> hints_;
 };
 
 class RelAggregate : public RelAlgNode {
@@ -885,7 +1010,11 @@ class RelAggregate : public RelAlgNode {
                std::vector<std::unique_ptr<const RexAgg>>& agg_exprs,
                const std::vector<std::string>& fields,
                std::shared_ptr<const RelAlgNode> input)
-      : groupby_count_(groupby_count), agg_exprs_(std::move(agg_exprs)), fields_(fields) {
+      : groupby_count_(groupby_count)
+      , agg_exprs_(std::move(agg_exprs))
+      , fields_(fields)
+      , hint_applied_(false)
+      , hints_(std::move(std::make_unique<Hints>())) {
     inputs_.push_back(input);
   }
 
@@ -937,10 +1066,33 @@ class RelAggregate : public RelAlgNode {
 
   std::shared_ptr<RelAlgNode> deepCopy() const override;
 
+  void addHint(const HintExplained& hint_explained) {
+    if (!hint_applied_) {
+      hint_applied_ = true;
+    }
+    hints_->emplace(hint_explained.getHintName(), hint_explained);
+  }
+
+  const bool hasHintEnabled(const std::string& candidate_hint_name) const {
+    if (hint_applied_ && !hints_->empty()) {
+      return hints_->find(candidate_hint_name) != hints_->end();
+    }
+    return false;
+  }
+
+  const HintExplained& getHintInfo(const std::string& hint_name) const {
+    CHECK(hint_applied_);
+    CHECK(!hints_->empty());
+    CHECK(hasHintEnabled(hint_name));
+    return hints_->at(hint_name);
+  }
+
  private:
   const size_t groupby_count_;
   std::vector<std::unique_ptr<const RexAgg>> agg_exprs_;
   std::vector<std::string> fields_;
+  bool hint_applied_;
+  std::unique_ptr<Hints> hints_;
 };
 
 class RelJoin : public RelAlgNode {
@@ -949,7 +1101,10 @@ class RelJoin : public RelAlgNode {
           std::shared_ptr<const RelAlgNode> rhs,
           std::unique_ptr<const RexScalar>& condition,
           const JoinType join_type)
-      : condition_(std::move(condition)), join_type_(join_type) {
+      : condition_(std::move(condition))
+      , join_type_(join_type)
+      , hint_applied_(false)
+      , hints_(std::move(std::make_unique<Hints>())) {
     inputs_.push_back(lhs);
     inputs_.push_back(rhs);
   }
@@ -980,9 +1135,32 @@ class RelJoin : public RelAlgNode {
 
   std::shared_ptr<RelAlgNode> deepCopy() const override;
 
+  void addHint(const HintExplained& hint_explained) {
+    if (!hint_applied_) {
+      hint_applied_ = true;
+    }
+    hints_->emplace(hint_explained.getHintName(), hint_explained);
+  }
+
+  const bool hasHintEnabled(const std::string& candidate_hint_name) const {
+    if (hint_applied_ && !hints_->empty()) {
+      return hints_->find(candidate_hint_name) != hints_->end();
+    }
+    return false;
+  }
+
+  const HintExplained& getHintInfo(const std::string& hint_name) const {
+    CHECK(hint_applied_);
+    CHECK(!hints_->empty());
+    CHECK(hasHintEnabled(hint_name));
+    return hints_->at(hint_name);
+  }
+
  private:
   mutable std::unique_ptr<const RexScalar> condition_;
   const JoinType join_type_;
+  bool hint_applied_;
+  std::unique_ptr<Hints> hints_;
 };
 
 class RelFilter : public RelAlgNode {
@@ -1078,7 +1256,9 @@ class RelCompound : public RelAlgNode, public ModifyManipulationTarget {
       , groupby_count_(groupby_count)
       , fields_(fields)
       , is_agg_(is_agg)
-      , scalar_sources_(std::move(scalar_sources)) {
+      , scalar_sources_(std::move(scalar_sources))
+      , hint_applied_(false)
+      , hints_(std::move(std::make_unique<Hints>())) {
     CHECK_EQ(fields.size(), target_exprs.size());
     for (auto agg_expr : agg_exprs) {
       agg_exprs_.emplace_back(agg_expr);
@@ -1137,6 +1317,27 @@ class RelCompound : public RelAlgNode, public ModifyManipulationTarget {
 
   std::shared_ptr<RelAlgNode> deepCopy() const override;
 
+  void addHint(const HintExplained& hint_explained) {
+    if (!hint_applied_) {
+      hint_applied_ = true;
+    }
+    hints_->emplace(hint_explained.getHintName(), hint_explained);
+  }
+
+  const bool hasHintEnabled(const std::string& candidate_hint_name) const {
+    if (hint_applied_ && !hints_->empty()) {
+      return hints_->find(candidate_hint_name) != hints_->end();
+    }
+    return false;
+  }
+
+  const HintExplained& getHintInfo(const std::string& hint_name) const {
+    CHECK(hint_applied_);
+    CHECK(!hints_->empty());
+    CHECK(hasHintEnabled(hint_name));
+    return hints_->at(hint_name);
+  }
+
  private:
   std::unique_ptr<const RexScalar> filter_expr_;
   const std::vector<const Rex*> target_exprs_;
@@ -1147,6 +1348,8 @@ class RelCompound : public RelAlgNode, public ModifyManipulationTarget {
   std::vector<std::unique_ptr<const RexScalar>>
       scalar_sources_;  // building blocks for group_indices_ and agg_exprs_; not actually
                         // projected, just owned
+  bool hint_applied_;
+  std::unique_ptr<Hints> hints_;
 };
 
 class RelSort : public RelAlgNode {
@@ -1593,6 +1796,10 @@ class RelAlgDagBuilder : public boost::noncopyable {
     return subqueries_;
   }
 
+  void registerQueryHints(QueryHint& query_hint) { query_hint_ = query_hint; }
+
+  const QueryHint getQueryHints() const { return query_hint_; }
+
   /**
    * Gets all registered subqueries. Only the root DAG can contain subqueries.
    */
@@ -1605,6 +1812,7 @@ class RelAlgDagBuilder : public boost::noncopyable {
   std::vector<std::shared_ptr<RelAlgNode>> nodes_;
   std::vector<std::shared_ptr<RexSubQuery>> subqueries_;
   const RenderInfo* render_info_;
+  QueryHint query_hint_;
 };
 
 using RANodeOutput = std::vector<RexInput>;

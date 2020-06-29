@@ -2294,7 +2294,12 @@ std::shared_ptr<ResultSet> getResultSet(QueryStateProxy query_state_proxy,
       calcite_mgr
           ->process(query_state_proxy, pg_shim(select_stmt), {}, true, false, false, true)
           .plan_result;
+  RelAlgExecutor ra_executor(executor.get(), catalog, query_ra);
   CompilationOptions co = CompilationOptions::defaults(device_type);
+  const auto& query_hints = ra_executor.getParsedQueryHints();
+  if (query_hints.cpu_mode) {
+    co.device_type = ExecutorDeviceType::CPU;
+  }
   co.opt_level = ExecutorOptLevel::LoopStrengthReduction;
   // TODO(adb): Need a better method of dropping constants into this ExecutionOptions
   // struct
@@ -2314,7 +2319,6 @@ std::shared_ptr<ResultSet> getResultSet(QueryStateProxy query_state_proxy,
                          1000,
                          ExecutorType::Native,
                          outer_fragment_indices};
-  RelAlgExecutor ra_executor(executor.get(), catalog, query_ra);
   ExecutionResult result{std::make_shared<ResultSet>(std::vector<TargetInfo>{},
                                                      ExecutorDeviceType::CPU,
                                                      QueryMemoryDescriptor(),
@@ -2347,13 +2351,16 @@ size_t LocalConnector::getOuterFragmentCount(QueryStateProxy query_state_proxy,
           ->process(
               query_state_proxy, pg_shim(sql_query_string), {}, true, false, false, true)
           .plan_result;
-  CompilationOptions co = {
-      device_type, true, ExecutorOptLevel::LoopStrengthReduction, false};
+  RelAlgExecutor ra_executor(executor.get(), catalog, query_ra);
+  const auto& query_hints = ra_executor.getParsedQueryHints();
+  CompilationOptions co = {query_hints.cpu_mode ? ExecutorDeviceType::CPU : device_type,
+                           true,
+                           ExecutorOptLevel::LoopStrengthReduction,
+                           false};
   // TODO(adb): Need a better method of dropping constants into this ExecutionOptions
   // struct
   ExecutionOptions eo = {
       false, true, false, true, false, false, false, false, 10000, false, false, 0.9};
-  RelAlgExecutor ra_executor(executor.get(), catalog, query_ra);
   return ra_executor.getOuterFragmentCount(co, eo);
 }
 

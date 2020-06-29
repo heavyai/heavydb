@@ -31,6 +31,7 @@
 #include "QueryEngine/JoinHashTable.h"
 #include "QueryEngine/OverlapsJoinHashTable.h"
 #include "QueryEngine/QueryDispatchQueue.h"
+#include "QueryEngine/QueryHint.h"
 #include "ThriftHandler/QueryState.h"
 
 namespace Catalog_Namespace {
@@ -142,6 +143,7 @@ class QueryRunner {
   virtual std::vector<std::shared_ptr<ResultSet>> runMultipleStatements(
       const std::string&,
       const ExecutorDeviceType);
+  virtual QueryHint getParsedQueryHintofQuery(const std::string&);
 
   virtual void runImport(Parser::CopyTableStmt* import_stmt);
   virtual std::unique_ptr<import_export::Loader> getLoader(

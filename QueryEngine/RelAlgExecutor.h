@@ -140,6 +140,10 @@ class RelAlgExecutor : private StorageIOFacility<RelAlgExecutorTraits> {
     CHECK(query_dag_);
     return query_dag_->getSubqueries();
   };
+  const QueryHint getParsedQueryHints() const {
+    CHECK(query_dag_);
+    return query_dag_->getQueryHints();
+  }
 
   ExecutionResult executeSimpleInsert(const Analyzer::Query& insert_query);
 
