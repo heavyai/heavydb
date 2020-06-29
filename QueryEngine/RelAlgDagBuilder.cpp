@@ -337,6 +337,13 @@ std::shared_ptr<RelAlgNode> RelProject::deepCopy() const {
   for (auto& expr : scalar_exprs_) {
     exprs_copy.push_back(copier.visit(expr.get()));
   }
+  if (hint_applied_) {
+    auto copied = std::make_shared<RelProject>(exprs_copy, fields_, inputs_[0]);
+    for (auto& kv : *hints_) {
+      copied->addHint(kv.second);
+    }
+    return copied;
+  }
   return std::make_shared<RelProject>(exprs_copy, fields_, inputs_[0]);
 }
 
@@ -364,12 +371,28 @@ std::shared_ptr<RelAlgNode> RelAggregate::deepCopy() const {
     auto copy = agg->deepCopy();
     aggs_copy.push_back(std::move(copy));
   }
+  if (hint_applied_) {
+    auto copied =
+        std::make_shared<RelAggregate>(groupby_count_, aggs_copy, fields_, inputs_[0]);
+    for (auto& kv : *hints_) {
+      copied->addHint(kv.second);
+    }
+    return copied;
+  }
   return std::make_shared<RelAggregate>(groupby_count_, aggs_copy, fields_, inputs_[0]);
 }
 
 std::shared_ptr<RelAlgNode> RelJoin::deepCopy() const {
   RexDeepCopyVisitor copier;
   auto condition_copy = copier.visit(condition_.get());
+  if (hint_applied_) {
+    auto copied =
+        std::make_shared<RelJoin>(inputs_[0], inputs_[1], condition_copy, join_type_);
+    for (auto& kv : *hints_) {
+      copied->addHint(kv.second);
+    }
+    return copied;
+  }
   return std::make_shared<RelJoin>(inputs_[0], inputs_[1], condition_copy, join_type_);
 }
 
@@ -403,6 +426,11 @@ std::shared_ptr<RelAlgNode> RelCompound::deepCopy() const {
                                                     sources_copy,
                                                     is_agg_);
   new_compound->addManagedInput(inputs_[0]);
+  if (hint_applied_) {
+    for (auto& kv : *hints_) {
+      new_compound->addHint(kv.second);
+    }
+  }
   return new_compound;
 }
 
@@ -1144,6 +1172,47 @@ void bind_inputs(const std::vector<std::shared_ptr<RelAlgNode>>& nodes) noexcept
                                get_node_output(table_func_node->getInput(0)));
     }
   }
+}
+
+void handleQueryHint(const std::vector<std::shared_ptr<RelAlgNode>>& nodes,
+                     RelAlgDagBuilder* dag_builder) noexcept {
+  QueryHint query_hints;
+  for (auto node : nodes) {
+    const auto agg_node = std::dynamic_pointer_cast<RelAggregate>(node);
+    if (agg_node) {
+      if (agg_node->hasHintEnabled("cpu_mode")) {
+        query_hints.cpu_mode = true;
+      }
+    }
+    const auto project_node = std::dynamic_pointer_cast<RelProject>(node);
+    if (project_node) {
+      if (project_node->hasHintEnabled("cpu_mode")) {
+        query_hints.cpu_mode = true;
+      }
+    }
+    const auto scan_node = std::dynamic_pointer_cast<RelScan>(node);
+    if (scan_node) {
+      if (scan_node->hasHintEnabled("cpu_mode")) {
+        query_hints.cpu_mode = true;
+      }
+    }
+    const auto join_node = std::dynamic_pointer_cast<RelJoin>(node);
+    if (join_node) {
+      if (join_node->hasHintEnabled("cpu_mode")) {
+        query_hints.cpu_mode = true;
+      }
+    }
+    const auto compound_node = std::dynamic_pointer_cast<RelCompound>(node);
+    if (compound_node) {
+      if (compound_node->hasHintEnabled("cpu_mode")) {
+        query_hints.cpu_mode = true;
+      }
+    }
+  }
+  if (query_hints.cpu_mode) {
+    VLOG(1) << "A user forces to run the query on the CPU execution mode";
+  }
+  dag_builder->registerQueryHints(query_hints);
 }
 
 void mark_nops(const std::vector<std::shared_ptr<RelAlgNode>>& nodes) noexcept {
@@ -2077,6 +2146,11 @@ class RelAlgDispatcher {
     CHECK(scan_ra.IsObject());
     const auto td = getTableFromScanNode(cat_, scan_ra);
     const auto field_names = getFieldNamesFromScanNode(scan_ra);
+    if (scan_ra.HasMember("hints")) {
+      auto scan_node = std::make_shared<RelScan>(td, field_names);
+      getRelAlgHints(scan_ra, scan_node);
+      return scan_node;
+    }
     return std::make_shared<RelScan>(td, field_names);
   }
 
@@ -2092,6 +2166,12 @@ class RelAlgDispatcher {
       exprs.emplace_back(parse_scalar_expr(*exprs_json_it, cat_, root_dag_builder));
     }
     const auto& fields = field(proj_ra, "fields");
+    if (proj_ra.HasMember("hints")) {
+      auto project_node = std::make_shared<RelProject>(
+          exprs, strings_from_json_array(fields), inputs.front());
+      getRelAlgHints(proj_ra, project_node);
+      return project_node;
+    }
     return std::make_shared<RelProject>(
         exprs, strings_from_json_array(fields), inputs.front());
   }
@@ -2126,6 +2206,12 @@ class RelAlgDispatcher {
          ++aggs_json_arr_it) {
       aggs.emplace_back(parse_aggregate_expr(*aggs_json_arr_it));
     }
+    if (agg_ra.HasMember("hints")) {
+      auto agg_node =
+          std::make_shared<RelAggregate>(group.size(), aggs, fields, inputs.front());
+      getRelAlgHints(agg_ra, agg_node);
+      return agg_node;
+    }
     return std::make_shared<RelAggregate>(group.size(), aggs, fields, inputs.front());
   }
 
@@ -2136,6 +2222,12 @@ class RelAlgDispatcher {
     const auto join_type = to_join_type(json_str(field(join_ra, "joinType")));
     auto filter_rex =
         parse_scalar_expr(field(join_ra, "condition"), cat_, root_dag_builder);
+    if (join_ra.HasMember("hints")) {
+      auto join_node =
+          std::make_shared<RelJoin>(inputs[0], inputs[1], filter_rex, join_type);
+      getRelAlgHints(join_ra, join_node);
+      return join_node;
+    }
     return std::make_shared<RelJoin>(inputs[0], inputs[1], filter_rex, join_type);
   }
 
@@ -2348,6 +2440,114 @@ class RelAlgDispatcher {
     return {prev(node)};
   }
 
+  std::pair<std::string, std::string> getKVOptionPair(std::string& str, size_t& pos) {
+    auto option = str.substr(0, pos);
+    std::string delim = "=";
+    size_t delim_pos = option.find(delim);
+    auto key = option.substr(0, delim_pos);
+    auto val = option.substr(delim_pos + 1, option.length());
+    str.erase(0, pos + delim.length() + 1);
+    return {key, val};
+  }
+
+  HintExplained parseHintString(std::string& hint_string) {
+    std::string white_space_delim = " ";
+    int l = hint_string.length();
+    hint_string = hint_string.erase(0, 1).substr(0, l - 2);
+    size_t pos = 0;
+    if ((pos = hint_string.find("options:")) != std::string::npos) {
+      // need to parse hint options
+      std::vector<std::string> tokens;
+      std::string hint_name = hint_string.substr(0, hint_string.find(white_space_delim));
+      bool kv_list_op = false;
+      std::string raw_options = hint_string.substr(pos + 8, hint_string.length() - 2);
+      if (raw_options.find('{') != std::string::npos) {
+        kv_list_op = true;
+      } else {
+        CHECK(raw_options.find('[') != std::string::npos);
+      }
+      auto t1 = raw_options.erase(0, 1);
+      raw_options = t1.substr(0, t1.length() - 1);
+      std::string op_delim = ", ";
+      if (kv_list_op) {
+        // kv options
+        std::unordered_map<std::string, std::string> kv_options;
+        while ((pos = raw_options.find(op_delim)) != std::string::npos) {
+          auto kv_pair = getKVOptionPair(raw_options, pos);
+          kv_options.emplace(kv_pair.first, kv_pair.second);
+        }
+        // handle the last kv pair
+        auto kv_pair = getKVOptionPair(raw_options, pos);
+        kv_options.emplace(kv_pair.first, kv_pair.second);
+        return {hint_name, true, false, true, kv_options};
+      } else {
+        std::vector<std::string> list_options;
+        while ((pos = raw_options.find(op_delim)) != std::string::npos) {
+          list_options.emplace_back(raw_options.substr(0, pos));
+          raw_options.erase(0, pos + white_space_delim.length() + 1);
+        }
+        // handle the last option
+        list_options.emplace_back(raw_options.substr(0, pos));
+        return {hint_name, true, false, false, list_options};
+      }
+    } else {
+      // marker hint: no extra option for this hint
+      std::string hint_name = hint_string.substr(0, hint_string.find(white_space_delim));
+      return {hint_name, true, true, false};
+    }
+  }
+
+  void getRelAlgHints(const rapidjson::Value& json_node,
+                      std::shared_ptr<RelAlgNode> node) {
+    std::string hint_explained = json_str(field(json_node, "hints"));
+    size_t pos = 0;
+    std::string delim = "|";
+    std::vector<std::string> hint_list;
+    while ((pos = hint_explained.find(delim)) != std::string::npos) {
+      hint_list.emplace_back(hint_explained.substr(0, pos));
+      hint_explained.erase(0, pos + delim.length());
+    }
+    // handling the last one
+    hint_list.emplace_back(hint_explained.substr(0, pos));
+
+    const auto agg_node = std::dynamic_pointer_cast<RelAggregate>(node);
+    if (agg_node) {
+      for (std::string& hint : hint_list) {
+        auto parsed_hint = parseHintString(hint);
+        agg_node->addHint(parsed_hint);
+      }
+    }
+    const auto project_node = std::dynamic_pointer_cast<RelProject>(node);
+    if (project_node) {
+      for (std::string& hint : hint_list) {
+        auto parsed_hint = parseHintString(hint);
+        project_node->addHint(parsed_hint);
+      }
+    }
+    const auto scan_node = std::dynamic_pointer_cast<RelScan>(node);
+    if (scan_node) {
+      for (std::string& hint : hint_list) {
+        auto parsed_hint = parseHintString(hint);
+        scan_node->addHint(parsed_hint);
+      }
+    }
+    const auto join_node = std::dynamic_pointer_cast<RelJoin>(node);
+    if (join_node) {
+      for (std::string& hint : hint_list) {
+        auto parsed_hint = parseHintString(hint);
+        join_node->addHint(parsed_hint);
+      }
+    }
+
+    const auto compound_node = std::dynamic_pointer_cast<RelCompound>(node);
+    if (compound_node) {
+      for (std::string& hint : hint_list) {
+        auto parsed_hint = parseHintString(hint);
+        compound_node->addHint(parsed_hint);
+      }
+    }
+  }
+
   std::shared_ptr<const RelAlgNode> prev(const rapidjson::Value& crt_node) {
     const auto id = node_id(crt_node);
     CHECK(id);
@@ -2408,6 +2608,7 @@ void RelAlgDagBuilder::build(const rapidjson::Value& query_ast,
     alterRAForRender(nodes_, *render_info_);
   }
 
+  handleQueryHint(nodes_, this);
   mark_nops(nodes_);
   simplify_sort(nodes_);
   sink_projected_boolean_expr_to_join(nodes_);

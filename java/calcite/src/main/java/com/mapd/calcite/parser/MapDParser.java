@@ -21,6 +21,8 @@ import com.google.common.collect.ImmutableList;
 import com.mapd.common.SockTransportProperties;
 import com.mapd.parser.extension.ddl.ExtendedSqlParser;
 import com.mapd.parser.extension.ddl.JsonSerializableDdl;
+import com.mapd.parser.hint.OmniSciHintStrategyTable;
+import com.mapd.parser.server.ExtensionFunction;
 
 import org.apache.calcite.avatica.util.Casing;
 import org.apache.calcite.config.CalciteConnectionConfig;
@@ -40,6 +42,7 @@ import org.apache.calcite.rel.core.Join;
 import org.apache.calcite.rel.core.RelFactories;
 import org.apache.calcite.rel.core.TableModify;
 import org.apache.calcite.rel.core.TableModify.Operation;
+import org.apache.calcite.rel.hint.HintStrategyTable;
 import org.apache.calcite.rel.logical.LogicalProject;
 import org.apache.calcite.rel.logical.LogicalTableModify;
 import org.apache.calcite.rel.metadata.DefaultRelMetadataProvider;
@@ -346,6 +349,8 @@ public final class MapDParser {
                                     // allow as many as possible IN operator values
                                     .withInSubQueryThreshold(Integer.MAX_VALUE)
                                     .withPushdownJoinCondition(pushdownJoinPredicate)
+                                    .withHintStrategyTable(
+                                            OmniSciHintStrategyTable.HINT_STRATEGY_TABLE)
                                     .build())
                     .typeSystem(createTypeSystem())
                     .context(MAPD_CONNECTION_CONTEXT)
