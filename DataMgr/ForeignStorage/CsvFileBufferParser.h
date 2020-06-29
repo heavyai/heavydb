@@ -208,11 +208,10 @@ std::map<int, DataBlockPtr> convert_import_buffers_to_data_blocks(
         auto column_id = import_buffer->getColumnDesc()->columnId;
         encoded_data_block_ptrs_futures.emplace_back(std::make_pair(
             column_id,
-            std::async(std::launch::async,
-                       [column_id, &import_buffer, string_payload_ptr] {
-                         import_buffer->addDictEncodedString(*string_payload_ptr);
-                         return import_buffer->getStringDictBuffer();
-                       })));
+            std::async(std::launch::async, [&import_buffer, string_payload_ptr] {
+              import_buffer->addDictEncodedString(*string_payload_ptr);
+              return import_buffer->getStringDictBuffer();
+            })));
       }
     } else if (import_buffer->getTypeInfo().is_geometry()) {
       auto geo_payload_ptr = import_buffer->getGeoStringBuffer();

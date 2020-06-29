@@ -174,7 +174,7 @@ ForeignStorageBuffer* CsvDataWrapper::getChunkBuffer(const ChunkKey& chunk_key) 
       chunk_buffer_map_[index_chunk_key] = std::make_unique<ForeignStorageBuffer>();
       index_buffer = chunk_buffer_map_[index_chunk_key].get();
 
-      size_t index_offset_size;
+      size_t index_offset_size{0};
       if (column->columnType.is_string()) {
         index_offset_size = sizeof(StringOffsetT);
       } else if (column->columnType.is_array()) {
