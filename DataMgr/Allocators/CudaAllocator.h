@@ -46,10 +46,6 @@ class CudaAllocator : public DeviceAllocator {
 
   ~CudaAllocator() override;
 
-  static int8_t* alloc(Data_Namespace::DataMgr* data_mgr,
-                       const size_t num_bytes,
-                       const int device_id);
-
   static Data_Namespace::AbstractBuffer* allocGpuAbstractBuffer(
       Data_Namespace::DataMgr* data_mgr,
       const size_t num_bytes,

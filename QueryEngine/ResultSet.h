@@ -860,8 +860,8 @@ class ResultSet {
   std::vector<std::vector<int64_t>> consistent_frag_sizes_;
 
   const std::shared_ptr<const Analyzer::Estimator> estimator_;
-  int8_t* estimator_buffer_;
-  mutable int8_t* host_estimator_buffer_;
+  Data_Namespace::AbstractBuffer* device_estimator_buffer_{nullptr};
+  mutable int8_t* host_estimator_buffer_{nullptr};
   Data_Namespace::DataMgr* data_mgr_;
 
   // only used by serialization
