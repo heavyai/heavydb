@@ -38,14 +38,6 @@ CudaAllocator::~CudaAllocator() {
   }
 }
 
-int8_t* CudaAllocator::alloc(Data_Namespace::DataMgr* data_mgr,
-                             const size_t num_bytes,
-                             const int device_id) {
-  CHECK(data_mgr);
-  auto ab = CudaAllocator::allocGpuAbstractBuffer(data_mgr, num_bytes, device_id);
-  return ab->getMemoryPtr();
-}
-
 Data_Namespace::AbstractBuffer* CudaAllocator::allocGpuAbstractBuffer(
     Data_Namespace::DataMgr* data_mgr,
     const size_t num_bytes,

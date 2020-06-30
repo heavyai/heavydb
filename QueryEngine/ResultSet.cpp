@@ -112,8 +112,6 @@ ResultSet::ResultSet(const std::vector<TargetInfo>& targets,
     , keep_first_(0)
     , row_set_mem_owner_(row_set_mem_owner)
     , executor_(executor)
-    , estimator_buffer_(nullptr)
-    , host_estimator_buffer_(nullptr)
     , data_mgr_(nullptr)
     , separate_varlen_storage_valid_(false)
     , just_explain_(false)
@@ -144,8 +142,6 @@ ResultSet::ResultSet(const std::vector<TargetInfo>& targets,
     , col_buffers_{col_buffers}
     , frag_offsets_{frag_offsets}
     , consistent_frag_sizes_{consistent_frag_sizes}
-    , estimator_buffer_(nullptr)
-    , host_estimator_buffer_(nullptr)
     , data_mgr_(nullptr)
     , separate_varlen_storage_valid_(false)
     , just_explain_(false)
@@ -161,18 +157,17 @@ ResultSet::ResultSet(const std::shared_ptr<const Analyzer::Estimator> estimator,
     , query_mem_desc_{}
     , crt_row_buff_idx_(0)
     , estimator_(estimator)
-    , estimator_buffer_(nullptr)
-    , host_estimator_buffer_(nullptr)
     , data_mgr_(data_mgr)
     , separate_varlen_storage_valid_(false)
     , just_explain_(false)
     , cached_row_count_(-1)
     , geo_return_type_(GeoReturnType::WktString) {
   if (device_type == ExecutorDeviceType::GPU) {
-    estimator_buffer_ =
-        CudaAllocator::alloc(data_mgr_, estimator_->getBufferSize(), device_id_);
-    data_mgr->getCudaMgr()->zeroDeviceMem(
-        estimator_buffer_, estimator_->getBufferSize(), device_id_);
+    device_estimator_buffer_ = CudaAllocator::allocGpuAbstractBuffer(
+        data_mgr_, estimator_->getBufferSize(), device_id_);
+    data_mgr->getCudaMgr()->zeroDeviceMem(device_estimator_buffer_->getMemoryPtr(),
+                                          estimator_->getBufferSize(),
+                                          device_id_);
   } else {
     host_estimator_buffer_ =
         static_cast<int8_t*>(checked_calloc(estimator_->getBufferSize(), 1));
@@ -183,8 +178,6 @@ ResultSet::ResultSet(const std::string& explanation)
     : device_type_(ExecutorDeviceType::CPU)
     , device_id_(-1)
     , fetched_so_far_(0)
-    , estimator_buffer_(nullptr)
-    , host_estimator_buffer_(nullptr)
     , separate_varlen_storage_valid_(false)
     , explanation_(explanation)
     , just_explain_(true)
@@ -199,8 +192,6 @@ ResultSet::ResultSet(int64_t queue_time_ms,
     , fetched_so_far_(0)
     , row_set_mem_owner_(row_set_mem_owner)
     , timings_(QueryExecutionTimings{queue_time_ms, render_time_ms, 0, 0})
-    , estimator_buffer_(nullptr)
-    , host_estimator_buffer_(nullptr)
     , separate_varlen_storage_valid_(false)
     , just_explain_(true)
     , cached_row_count_(-1)
@@ -219,8 +210,12 @@ ResultSet::~ResultSet() {
     }
   }
   if (host_estimator_buffer_) {
-    CHECK(device_type_ == ExecutorDeviceType::CPU || estimator_buffer_);
+    CHECK(device_type_ == ExecutorDeviceType::CPU || device_estimator_buffer_);
     free(host_estimator_buffer_);
+  }
+  if (device_estimator_buffer_) {
+    CHECK(data_mgr_);
+    data_mgr_->free(device_estimator_buffer_);
   }
 }
 
@@ -433,7 +428,8 @@ const std::vector<int64_t>& ResultSet::getTargetInitVals() const {
 
 int8_t* ResultSet::getDeviceEstimatorBuffer() const {
   CHECK(device_type_ == ExecutorDeviceType::GPU);
-  return estimator_buffer_;
+  CHECK(device_estimator_buffer_);
+  return device_estimator_buffer_->getMemoryPtr();
 }
 
 int8_t* ResultSet::getHostEstimatorBuffer() const {
@@ -446,9 +442,11 @@ void ResultSet::syncEstimatorBuffer() const {
   CHECK_EQ(size_t(0), estimator_->getBufferSize() % sizeof(int64_t));
   host_estimator_buffer_ =
       static_cast<int8_t*>(checked_calloc(estimator_->getBufferSize(), 1));
+  CHECK(device_estimator_buffer_);
+  auto device_buffer_ptr = device_estimator_buffer_->getMemoryPtr();
   copy_from_gpu(data_mgr_,
                 host_estimator_buffer_,
-                reinterpret_cast<CUdeviceptr>(estimator_buffer_),
+                reinterpret_cast<CUdeviceptr>(device_buffer_ptr),
                 estimator_->getBufferSize(),
                 device_id_);
 }
