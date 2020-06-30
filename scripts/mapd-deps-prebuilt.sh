@@ -105,7 +105,7 @@ if [ "$ID" == "ubuntu" ] ; then
       swig
 
 # Set up gcc-8 as default gcc
-update-alternatives \
+sudo update-alternatives \
   --install /usr/bin/gcc gcc /usr/bin/gcc-8 800 \
   --slave /usr/bin/g++ g++ /usr/bin/g++-8
 
