@@ -1323,6 +1323,15 @@ ResultSetPtr Executor::executeWorkUnit(
     ColumnCacheMap& column_cache) {
   VLOG(1) << "Executor " << executor_id_ << " is executing work unit:" << ra_exe_unit_in;
 
+  ScopeGuard cleanup_post_execution = [this] {
+    // cleanup/unpin GPU buffer allocations
+    // TODO: separate out this state into a single object
+    plan_state_.reset(nullptr);
+    if (cgen_state_) {
+      cgen_state_->in_values_bitmaps_.clear();
+    }
+  };
+
   try {
     auto result = executeWorkUnitImpl(max_groups_buffer_entry_guess,
                                       is_agg,
