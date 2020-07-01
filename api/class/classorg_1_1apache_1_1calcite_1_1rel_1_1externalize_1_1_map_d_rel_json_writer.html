@@ -65,7 +65,7 @@
             
             
               <div class="version">
-                5.4.0dev 38c7dec
+                5.4.0dev 2c44a39
               </div>
             
           
@@ -458,6 +458,7 @@
 <li class="toctree-l2"><a class="reference internal" href="class_group_by_and_aggregate.html">Class GroupByAndAggregate</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_hash_join_fail.html">Class HashJoinFail</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_hash_type_cache.html">Class HashTypeCache</a></li>
+<li class="toctree-l2"><a class="reference internal" href="class_hint_explained.html">Class HintExplained</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_i_cmp.html">Class ICmp</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_in_values_bitmap.html">Class InValuesBitmap</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_input_col_descriptor.html">Class InputColDescriptor</a></li>
@@ -898,6 +899,7 @@
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1omnisql_1_1_omni_sql_options_map.html">Class com::mapd::parser::extension::ddl::omnisql::OmniSqlOptionsMap</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1omnisql_1_1_omni_sql_sanitized_string.html">Class com::mapd::parser::extension::ddl::omnisql::OmniSqlSanitizedString</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1omnisql_1_1_omni_sql_type_name_spec.html">Class com::mapd::parser::extension::ddl::omnisql::OmniSqlTypeNameSpec</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1hint_1_1_omni_sci_hint_strategy_table.html">Class com::mapd::parser::hint::OmniSciHintStrategyTable</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1server_1_1_calcite_parser_factory.html">Class com::mapd::parser::server::CalciteParserFactory</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1server_1_1_calcite_server_caller.html">Class com::mapd::parser::server::CalciteServerCaller</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1server_1_1_calcite_server_handler.html">Class com::mapd::parser::server::CalciteServerHandler</a></li>
@@ -1218,6 +1220,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_pushed_down_filter_info.html">Struct PushedDownFilterInfo</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_quals_conjunctive_form.html">Struct QualsConjunctiveForm</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_query_execution_properties.html">Struct QueryExecutionProperties</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/struct_query_hint.html">Struct QueryHint</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_query_info.html">Struct QueryInfo</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_reduction_code.html">Struct ReductionCode</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_rel_alg_execution_unit.html">Struct RelAlgExecutionUnit</a></li>
@@ -1532,6 +1535,16 @@
 <dl class="function">
 <dt>
 <span class="target" id="classorg_1_1apache_1_1calcite_1_1rel_1_1externalize_1_1_map_d_rel_json_writer_1a79e14eec29edb40deb8ee00c2b46c7ee"></span><code class="sig-name descname">List&lt;Object&gt; org.apache.calcite.rel.externalize.MapDRelJsonWriter.explainInputs(List&lt; RelNode &gt; inputs)</code></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt>
+<span class="target" id="classorg_1_1apache_1_1calcite_1_1rel_1_1externalize_1_1_map_d_rel_json_writer_1a804b04af341f619846d44bade442282a"></span><code class="sig-name descname">boolean org.apache.calcite.rel.externalize.MapDRelJsonWriter.deliverHints(RelNode rel)</code></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt>
+<span class="target" id="classorg_1_1apache_1_1calcite_1_1rel_1_1externalize_1_1_map_d_rel_json_writer_1a0d84b928940a047f5a26325863752808"></span><code class="sig-name descname">String org.apache.calcite.rel.externalize.MapDRelJsonWriter.explainHints(RelNode rel)</code></dt>
 <dd></dd></dl>
 
 <dl class="function">

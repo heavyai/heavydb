@@ -1,0 +1,9 @@
+Class com::mapd::parser::hint::OmniSciHintStrategyTable
+=======================================================
+
+.. doxygenclass:: com::mapd::parser::hint::OmniSciHintStrategyTable
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

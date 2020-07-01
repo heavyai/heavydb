@@ -65,7 +65,7 @@
             
             
               <div class="version">
-                5.4.0dev 38c7dec
+                5.4.0dev 2c44a39
               </div>
             
           
@@ -458,6 +458,7 @@
 <li class="toctree-l2"><a class="reference internal" href="class_group_by_and_aggregate.html">Class GroupByAndAggregate</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_hash_join_fail.html">Class HashJoinFail</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_hash_type_cache.html">Class HashTypeCache</a></li>
+<li class="toctree-l2"><a class="reference internal" href="class_hint_explained.html">Class HintExplained</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_i_cmp.html">Class ICmp</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_in_values_bitmap.html">Class InValuesBitmap</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_input_col_descriptor.html">Class InputColDescriptor</a></li>
@@ -898,6 +899,7 @@
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1omnisql_1_1_omni_sql_options_map.html">Class com::mapd::parser::extension::ddl::omnisql::OmniSqlOptionsMap</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1omnisql_1_1_omni_sql_sanitized_string.html">Class com::mapd::parser::extension::ddl::omnisql::OmniSqlSanitizedString</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1omnisql_1_1_omni_sql_type_name_spec.html">Class com::mapd::parser::extension::ddl::omnisql::OmniSqlTypeNameSpec</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1hint_1_1_omni_sci_hint_strategy_table.html">Class com::mapd::parser::hint::OmniSciHintStrategyTable</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1server_1_1_calcite_parser_factory.html">Class com::mapd::parser::server::CalciteParserFactory</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1server_1_1_calcite_server_caller.html">Class com::mapd::parser::server::CalciteServerCaller</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1server_1_1_calcite_server_handler.html">Class com::mapd::parser::server::CalciteServerHandler</a></li>
@@ -1218,6 +1220,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_pushed_down_filter_info.html">Struct PushedDownFilterInfo</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_quals_conjunctive_form.html">Struct QualsConjunctiveForm</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_query_execution_properties.html">Struct QueryExecutionProperties</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/struct_query_hint.html">Struct QueryHint</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_query_info.html">Struct QueryInfo</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_reduction_code.html">Struct ReductionCode</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_rel_alg_execution_unit.html">Struct RelAlgExecutionUnit</a></li>
@@ -1522,6 +1525,21 @@
 <dl class="function">
 <dt id="_CPPv4N7details16RelAlgDispatcher15getRelAlgInputsERKN9rapidjson5ValueE">
 <span id="_CPPv3N7details16RelAlgDispatcher15getRelAlgInputsERKN9rapidjson5ValueE"></span><span id="_CPPv2N7details16RelAlgDispatcher15getRelAlgInputsERKN9rapidjson5ValueE"></span><span id="details::RelAlgDispatcher::getRelAlgInputs__rapidjson::ValueCR"></span><span class="target" id="classdetails_1_1_rel_alg_dispatcher_1aa8299c6fc20b391d2076ee21640a763a"></span>RelAlgInputs <code class="sig-name descname">getRelAlgInputs</code><span class="sig-paren">(</span><em class="property">const</em> rapidjson::Value &amp;<em>node</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N7details16RelAlgDispatcher15getRelAlgInputsERKN9rapidjson5ValueE" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="_CPPv4N7details16RelAlgDispatcher15getKVOptionPairERNSt6stringER6size_t">
+<span id="_CPPv3N7details16RelAlgDispatcher15getKVOptionPairERNSt6stringER6size_t"></span><span id="_CPPv2N7details16RelAlgDispatcher15getKVOptionPairERNSt6stringER6size_t"></span><span id="details::RelAlgDispatcher::getKVOptionPair__ssR.sR"></span><span class="target" id="classdetails_1_1_rel_alg_dispatcher_1a98e26d4d6b8f8623bddd19b303d9c1ce"></span>std::pair&lt;std::string, std::string&gt; <code class="sig-name descname">getKVOptionPair</code><span class="sig-paren">(</span>std::string &amp;<em>str</em>, size_t &amp;<em>pos</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N7details16RelAlgDispatcher15getKVOptionPairERNSt6stringER6size_t" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="_CPPv4N7details16RelAlgDispatcher15parseHintStringERNSt6stringE">
+<span id="_CPPv3N7details16RelAlgDispatcher15parseHintStringERNSt6stringE"></span><span id="_CPPv2N7details16RelAlgDispatcher15parseHintStringERNSt6stringE"></span><span id="details::RelAlgDispatcher::parseHintString__ssR"></span><span class="target" id="classdetails_1_1_rel_alg_dispatcher_1aca5443eca680ec793e7517f02b7dd243"></span><a class="reference internal" href="class_hint_explained.html#_CPPv413HintExplained" title="HintExplained">HintExplained</a> <code class="sig-name descname">parseHintString</code><span class="sig-paren">(</span>std::string &amp;<em>hint_string</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N7details16RelAlgDispatcher15parseHintStringERNSt6stringE" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="_CPPv4N7details16RelAlgDispatcher14getRelAlgHintsERKN9rapidjson5ValueENSt10shared_ptrI10RelAlgNodeEE">
+<span id="_CPPv3N7details16RelAlgDispatcher14getRelAlgHintsERKN9rapidjson5ValueENSt10shared_ptrI10RelAlgNodeEE"></span><span id="_CPPv2N7details16RelAlgDispatcher14getRelAlgHintsERKN9rapidjson5ValueENSt10shared_ptrI10RelAlgNodeEE"></span><span id="details::RelAlgDispatcher::getRelAlgHints__rapidjson::ValueCR.std::shared_ptr:RelAlgNode:"></span><span class="target" id="classdetails_1_1_rel_alg_dispatcher_1a703772a3ee619a76bdb18d4a90198c2a"></span>void <code class="sig-name descname">getRelAlgHints</code><span class="sig-paren">(</span><em class="property">const</em> rapidjson::Value &amp;<em>json_node</em>, std::shared_ptr&lt;<a class="reference internal" href="class_rel_alg_node.html#_CPPv410RelAlgNode" title="RelAlgNode">RelAlgNode</a>&gt; <em>node</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N7details16RelAlgDispatcher14getRelAlgHintsERKN9rapidjson5ValueENSt10shared_ptrI10RelAlgNodeEE" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 <dl class="function">

@@ -65,7 +65,7 @@
             
             
               <div class="version">
-                5.4.0dev 38c7dec
+                5.4.0dev 2c44a39
               </div>
             
           
@@ -458,6 +458,7 @@
 <li class="toctree-l2"><a class="reference internal" href="class_group_by_and_aggregate.html">Class GroupByAndAggregate</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_hash_join_fail.html">Class HashJoinFail</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_hash_type_cache.html">Class HashTypeCache</a></li>
+<li class="toctree-l2"><a class="reference internal" href="class_hint_explained.html">Class HintExplained</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_i_cmp.html">Class ICmp</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_in_values_bitmap.html">Class InValuesBitmap</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_input_col_descriptor.html">Class InputColDescriptor</a></li>
@@ -898,6 +899,7 @@
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1omnisql_1_1_omni_sql_options_map.html">Class com::mapd::parser::extension::ddl::omnisql::OmniSqlOptionsMap</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1omnisql_1_1_omni_sql_sanitized_string.html">Class com::mapd::parser::extension::ddl::omnisql::OmniSqlSanitizedString</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1omnisql_1_1_omni_sql_type_name_spec.html">Class com::mapd::parser::extension::ddl::omnisql::OmniSqlTypeNameSpec</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1hint_1_1_omni_sci_hint_strategy_table.html">Class com::mapd::parser::hint::OmniSciHintStrategyTable</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1server_1_1_calcite_parser_factory.html">Class com::mapd::parser::server::CalciteParserFactory</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1server_1_1_calcite_server_caller.html">Class com::mapd::parser::server::CalciteServerCaller</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1server_1_1_calcite_server_handler.html">Class com::mapd::parser::server::CalciteServerHandler</a></li>
@@ -1218,6 +1220,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_pushed_down_filter_info.html">Struct PushedDownFilterInfo</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_quals_conjunctive_form.html">Struct QualsConjunctiveForm</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_query_execution_properties.html">Struct QueryExecutionProperties</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/struct_query_hint.html">Struct QueryHint</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_query_info.html">Struct QueryInfo</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_reduction_code.html">Struct ReductionCode</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_rel_alg_execution_unit.html">Struct RelAlgExecutionUnit</a></li>
@@ -1515,6 +1518,11 @@
 <dl class="function">
 <dt id="_CPPv4N11QueryRunner11QueryRunner21runMultipleStatementsERKNSt6stringEK18ExecutorDeviceType">
 <span id="_CPPv3N11QueryRunner11QueryRunner21runMultipleStatementsERKNSt6stringEK18ExecutorDeviceType"></span><span id="_CPPv2N11QueryRunner11QueryRunner21runMultipleStatementsERKNSt6stringEK18ExecutorDeviceType"></span><span id="QueryRunner::QueryRunner::runMultipleStatements__ssCR.ExecutorDeviceTypeC"></span><span class="target" id="class_query_runner_1_1_query_runner_1a49c32b152e8de2f94c8feaa7c66e1e4e"></span>std::vector&lt;std::shared_ptr&lt;<a class="reference internal" href="class_result_set.html#_CPPv49ResultSet" title="ResultSet">ResultSet</a>&gt;&gt; <code class="sig-name descname">runMultipleStatements</code><span class="sig-paren">(</span><em class="property">const</em> std::string &amp;<em>sql</em>, <em class="property">const</em> ExecutorDeviceType <em>dt</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N11QueryRunner11QueryRunner21runMultipleStatementsERKNSt6stringEK18ExecutorDeviceType" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="_CPPv4N11QueryRunner11QueryRunner25getParsedQueryHintofQueryERKNSt6stringE">
+<span id="_CPPv3N11QueryRunner11QueryRunner25getParsedQueryHintofQueryERKNSt6stringE"></span><span id="_CPPv2N11QueryRunner11QueryRunner25getParsedQueryHintofQueryERKNSt6stringE"></span><span id="QueryRunner::QueryRunner::getParsedQueryHintofQuery__ssCR"></span><span class="target" id="class_query_runner_1_1_query_runner_1a1168e7ccee945449300db309d278a904"></span><a class="reference internal" href="../struct/struct_query_hint.html#_CPPv49QueryHint" title="QueryHint">QueryHint</a> <code class="sig-name descname">getParsedQueryHintofQuery</code><span class="sig-paren">(</span><em class="property">const</em> std::string &amp;<em>query_str</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N11QueryRunner11QueryRunner25getParsedQueryHintofQueryERKNSt6stringE" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 <dl class="function">
