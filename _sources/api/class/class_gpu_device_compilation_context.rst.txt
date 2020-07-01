@@ -1,0 +1,9 @@
+Class GpuDeviceCompilationContext
+=================================
+
+.. doxygenclass:: GpuDeviceCompilationContext
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

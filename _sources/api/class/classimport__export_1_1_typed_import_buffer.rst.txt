@@ -1,0 +1,9 @@
+Class import_export::TypedImportBuffer
+======================================
+
+.. doxygenclass:: import_export::TypedImportBuffer
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

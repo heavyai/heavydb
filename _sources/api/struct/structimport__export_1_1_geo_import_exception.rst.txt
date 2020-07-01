@@ -1,0 +1,9 @@
+Struct import_export::GeoImportException
+========================================
+
+.. doxygenstruct:: import_export::GeoImportException
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

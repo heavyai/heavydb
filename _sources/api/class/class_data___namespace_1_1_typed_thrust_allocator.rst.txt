@@ -1,0 +1,9 @@
+Class Data_Namespace::TypedThrustAllocator
+==========================================
+
+.. doxygenclass:: Data_Namespace::TypedThrustAllocator
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

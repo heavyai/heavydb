@@ -1,0 +1,9 @@
+Class CpuCompilationContext
+===========================
+
+.. doxygenclass:: CpuCompilationContext
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

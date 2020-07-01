@@ -1,0 +1,9 @@
+Struct foreign_storage::csv_file_buffer_parser::ParseBufferRequest
+==================================================================
+
+.. doxygenstruct:: foreign_storage::csv_file_buffer_parser::ParseBufferRequest
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

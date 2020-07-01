@@ -1,0 +1,9 @@
+Class import_export::RenderGroupAnalyzer
+========================================
+
+.. doxygenclass:: import_export::RenderGroupAnalyzer
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

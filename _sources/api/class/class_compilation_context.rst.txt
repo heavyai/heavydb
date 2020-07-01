@@ -1,0 +1,9 @@
+Class CompilationContext
+========================
+
+.. doxygenclass:: CompilationContext
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

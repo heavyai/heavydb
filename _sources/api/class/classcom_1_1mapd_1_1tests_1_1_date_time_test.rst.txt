@@ -1,0 +1,9 @@
+Class com::mapd::tests::DateTimeTest
+====================================
+
+.. doxygenclass:: com::mapd::tests::DateTimeTest
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

@@ -1,0 +1,9 @@
+Struct import_export::ImportStatus
+==================================
+
+.. doxygenstruct:: import_export::ImportStatus
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:
