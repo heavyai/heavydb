@@ -1075,11 +1075,61 @@ void Constant::cast_to_string(const SQLTypeInfo& str_type_info) {
   type_info = str_type_info;
 }
 
+namespace {
+
+// TODO(adb): we should revisit this, as one could argue a Datum should never contain
+// a null sentinel. In fact, if we bundle Datum with a null boolean ("NullableDatum"),
+// the logic becomes more explicit. There are likely other bugs associated with the
+// current logic -- for example, boolean is set to -128 which is likely UB
+inline bool is_null_value(const SQLTypeInfo& ti, const Datum& constval) {
+  switch (ti.get_type()) {
+    case kBOOLEAN:
+      return constval.tinyintval == NULL_BOOLEAN;
+    case kTINYINT:
+      return constval.tinyintval == NULL_TINYINT;
+    case kINT:
+      return constval.intval == NULL_INT;
+    case kSMALLINT:
+      return constval.smallintval == NULL_SMALLINT;
+    case kBIGINT:
+    case kNUMERIC:
+    case kDECIMAL:
+      return constval.bigintval == NULL_BIGINT;
+    case kTIME:
+    case kTIMESTAMP:
+    case kDATE:
+      return constval.bigintval == NULL_BIGINT;
+    case kVARCHAR:
+    case kCHAR:
+    case kTEXT:
+      return constval.stringval == nullptr;
+    case kPOINT:
+    case kLINESTRING:
+    case kPOLYGON:
+    case kMULTIPOLYGON:
+      return constval.stringval == nullptr;
+    case kFLOAT:
+      return constval.floatval == NULL_FLOAT;
+    case kDOUBLE:
+      return constval.doubleval == NULL_DOUBLE;
+    case kNULLT:
+      return constval.bigintval == 0;
+    case kARRAY:
+      return constval.arrayval == nullptr;
+    default:
+      UNREACHABLE();
+  }
+  UNREACHABLE();
+  return false;
+}
+
+}  // namespace
+
 void Constant::do_cast(const SQLTypeInfo& new_type_info) {
   if (type_info == new_type_info) {
     return;
   }
-  if (is_null) {
+  if (is_null && !new_type_info.get_notnull()) {
     type_info = new_type_info;
     set_null_value();
     return;
@@ -1140,6 +1190,12 @@ void Constant::do_cast(const SQLTypeInfo& new_type_info) {
                                new_type_info.is_string() || new_type_info.is_boolean())) {
     type_info = new_type_info;
     set_null_value();
+  } else if (!is_null_value(type_info, constval) &&
+             get_nullable_type_info(type_info) == new_type_info) {
+    CHECK(!is_null);
+    // relax nullability
+    type_info = new_type_info;
+    return;
   } else {
     throw std::runtime_error("Cast from " + type_info.get_type_name() + " to " +
                              new_type_info.get_type_name() + " not supported");
