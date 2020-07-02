@@ -1549,6 +1549,20 @@ TEST(Select, FilterShortCircuit) {
   }
 }
 
+TEST(Select, InValues) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+
+    c(R"(SELECT x FROM test WHERE x IN (8, 9, 10, 11, 12, 13, 14) GROUP BY x ORDER BY x;)",
+      dt);
+    c(R"(SELECT y FROM test WHERE y IN (43, 44, 45, 46, 47, 48, 49) GROUP BY y ORDER BY y;)",
+      dt);
+    c(R"(SELECT t FROM test WHERE t NOT IN (NULL) GROUP BY t ORDER BY t;)", dt);
+    c(R"(SELECT t FROM test WHERE t NOT IN (1001, 1003, 1005, 1007, 1009, -10) GROUP BY t ORDER BY t;)",
+      dt);
+  }
+}
+
 TEST(Select, FilterAndMultipleAggregation) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
