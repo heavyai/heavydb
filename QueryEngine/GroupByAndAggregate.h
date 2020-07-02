@@ -77,7 +77,7 @@ inline std::string datum_to_string(const TargetValue& tv,
     return "NULL";
   }
   const auto scalar_tv = boost::get<ScalarTargetValue>(&tv);
-  if (ti.is_time()) {
+  if (ti.is_time() || ti.is_decimal()) {
     Datum datum;
     datum.bigintval = *boost::get<int64_t>(scalar_tv);
     if (datum.bigintval == NULL_BIGINT) {

@@ -54,6 +54,7 @@
 #include "Archive/S3Archive.h"
 #include "ArrowImporter.h"
 #include "ImportExport/DelimitedParserUtils.h"
+#include "ImportExport/GDAL.h"
 #include "QueryEngine/TypePunning.h"
 #include "Shared/Logger.h"
 #include "Shared/SqlTypesLayout.h"
@@ -4096,75 +4097,6 @@ void Loader::setTableEpoch(const int32_t start_epoch) {
       getCatalog().getCurrentDB().dbId, getTableDesc()->tableId, start_epoch);
 }
 
-void GDALErrorHandler(CPLErr eErrClass, int err_no, const char* msg) {
-  CHECK(eErrClass >= CE_None && eErrClass <= CE_Fatal);
-  static const char* errClassStrings[5] = {
-      "Info",
-      "Debug",
-      "Warning",
-      "Failure",
-      "Fatal",
-  };
-  std::string log_msg = std::string("GDAL ") + errClassStrings[eErrClass] +
-                        std::string(": ") + msg + std::string(" (") +
-                        std::to_string(err_no) + std::string(")");
-  if (eErrClass >= CE_Failure) {
-    throw std::runtime_error(log_msg);
-  } else {
-    LOG(INFO) << log_msg;
-  }
-}
-
-/* static */
-std::mutex Importer::init_gdal_mutex;
-
-/* static */
-void Importer::initGDAL() {
-  // this should not be called from multiple threads, but...
-  std::lock_guard<std::mutex> guard(Importer::init_gdal_mutex);
-  // init under mutex
-  static bool gdal_initialized = false;
-  if (!gdal_initialized) {
-    // FIXME(andrewseidl): investigate if CPLPushFinderLocation can be public
-    setenv("GDAL_DATA",
-           std::string(mapd_root_abs_path() + "/ThirdParty/gdal-data").c_str(),
-           true);
-
-    // configure SSL certificate path (per S3Archive::init_for_read)
-    // in a production build, GDAL and Curl will have been built on
-    // CentOS, so the baked-in system path will be wrong for Ubuntu
-    // and other Linux distros. Unless the user is deliberately
-    // overriding it by setting SSL_CERT_FILE explicitly in the server
-    // environment, we set it to whichever CA bundle directory exists
-    // on the machine we're running on
-    std::list<std::string> v_known_ca_paths({
-        "/etc/ssl/certs/ca-certificates.crt",
-        "/etc/pki/tls/certs/ca-bundle.crt",
-        "/usr/share/ssl/certs/ca-bundle.crt",
-        "/usr/local/share/certs/ca-root.crt",
-        "/etc/ssl/cert.pem",
-        "/etc/ssl/ca-bundle.pem",
-    });
-    for (const auto& known_ca_path : v_known_ca_paths) {
-      if (boost::filesystem::exists(known_ca_path)) {
-        LOG(INFO) << "GDAL SSL Certificate path: " << known_ca_path;
-        setenv("SSL_CERT_FILE", known_ca_path.c_str(), false);  // no overwrite
-        break;
-      }
-    }
-
-    GDALAllRegister();
-    OGRRegisterAll();
-    CPLSetErrorHandler(*GDALErrorHandler);
-    LOG(INFO) << "GDAL Initialized: " << GDALVersionInfo("--version");
-    gdal_initialized = true;
-  }
-}
-
-bool Importer::hasGDALLibKML() {
-  return GetGDALDriverManager()->GetDriverByName("libkml") != nullptr;
-}
-
 /* static */
 void Importer::setGDALAuthorizationTokens(const CopyParams& copy_params) {
   // for now we only support S3
@@ -4239,7 +4171,7 @@ void Importer::setGDALAuthorizationTokens(const CopyParams& copy_params) {
 OGRDataSource* Importer::openGDALDataset(const std::string& file_name,
                                          const CopyParams& copy_params) {
   // lazy init GDAL
-  initGDAL();
+  GDAL::init();
 
   // set authorization tokens
   setGDALAuthorizationTokens(copy_params);
@@ -4512,7 +4444,7 @@ bool Importer::gdalStatInternal(const std::string& path,
                                 const CopyParams& copy_params,
                                 bool also_dir) {
   // lazy init GDAL
-  initGDAL();
+  GDAL::init();
 
   // set authorization tokens
   setGDALAuthorizationTokens(copy_params);
@@ -4622,7 +4554,7 @@ std::vector<std::string> Importer::gdalGetAllFilesInArchive(
     const std::string& archive_path,
     const CopyParams& copy_params) {
   // lazy init GDAL
-  initGDAL();
+  GDAL::init();
 
   // set authorization tokens
   setGDALAuthorizationTokens(copy_params);
@@ -4647,7 +4579,7 @@ std::vector<Importer::GeoFileLayerInfo> Importer::gdalGetLayersInGeoFile(
     const std::string& file_name,
     const CopyParams& copy_params) {
   // lazy init GDAL
-  initGDAL();
+  GDAL::init();
 
   // set authorization tokens
   setGDALAuthorizationTokens(copy_params);
@@ -4701,15 +4633,6 @@ std::vector<Importer::GeoFileLayerInfo> Importer::gdalGetLayersInGeoFile(
 
   // done
   return layer_info;
-}
-
-/* static */
-bool Importer::gdalSupportsNetworkFileAccess() {
-#if (GDAL_VERSION_MAJOR > 2) || (GDAL_VERSION_MAJOR == 2 && GDAL_VERSION_MINOR >= 2)
-  return true;
-#else
-  return false;
-#endif
 }
 
 ImportStatus Importer::importGDAL(

@@ -67,6 +67,7 @@ class GeoBase {
     kISEMPTY = 6
   };
   virtual GeoType getType() const = 0;
+  const OGRGeometry* getOGRGeometry() const { return geom_; }
 
   virtual bool operator==(const GeoBase& other) const;
 

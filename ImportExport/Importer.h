@@ -732,7 +732,6 @@ class Importer : public DataStreamSink {
   ImportStatus importDelimited(const std::string& file_path,
                                const bool decompressed) override;
   ImportStatus importGDAL(std::map<std::string, std::string> colname_to_src);
-  static bool hasGDALLibKML();
   const CopyParams& get_copy_params() const { return copy_params; }
   const std::list<const ColumnDescriptor*>& get_column_descs() const {
     return loader->get_column_descs();
@@ -777,7 +776,6 @@ class Importer : public DataStreamSink {
   static std::vector<GeoFileLayerInfo> gdalGetLayersInGeoFile(
       const std::string& file_name,
       const CopyParams& copy_params);
-  static bool gdalSupportsNetworkFileAccess();
   Catalog_Namespace::Catalog& getCatalog() { return loader->getCatalog(); }
   static void set_geo_physical_import_buffer(
       const Catalog_Namespace::Catalog& catalog,
@@ -805,7 +803,6 @@ class Importer : public DataStreamSink {
   auto getLoader() const { return loader.get(); }
 
  private:
-  static void initGDAL();
   static bool gdalStatInternal(const std::string& path,
                                const CopyParams& copy_params,
                                bool also_dir);
@@ -819,7 +816,6 @@ class Importer : public DataStreamSink {
   std::vector<std::vector<std::unique_ptr<TypedImportBuffer>>> import_buffers_vec;
   std::unique_ptr<Loader> loader;
   std::unique_ptr<bool[]> is_array_a;
-  static std::mutex init_gdal_mutex;
 };
 
 std::vector<std::unique_ptr<TypedImportBuffer>> setup_column_loaders(

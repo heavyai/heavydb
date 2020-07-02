@@ -45,6 +45,7 @@
 #include "DataMgr/ForeignStorage/ForeignStorageInterface.h"
 #include "DistributedHandler.h"
 #include "Fragmenter/InsertOrderFragmenter.h"
+#include "ImportExport/GDAL.h"
 #include "ImportExport/Importer.h"
 #include "LockMgr/LockMgr.h"
 #include "Parser/ParserWrapper.h"
@@ -2969,7 +2970,7 @@ TCopyParams DBHandler::copyparams_to_thrift(const import_export::CopyParams& cp)
 
 void add_vsi_network_prefix(std::string& path) {
   // do we support network file access?
-  bool gdal_network = import_export::Importer::gdalSupportsNetworkFileAccess();
+  bool gdal_network = import_export::GDAL::supportsNetworkFileAccess();
 
   // modify head of filename based on source location
   if (boost::istarts_with(path, "http://") || boost::istarts_with(path, "https://")) {

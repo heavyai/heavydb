@@ -8,7 +8,18 @@ if(ENABLE_IMPORT_PARQUET)
   list(APPEND IMPORT_EXPORT_LIBRARIES "${Parquet_LIBRARIES}")
 endif()
 
-add_library(ImportExport Importer.cpp Importer.h DelimitedParserUtils.cpp DelimitedParserUtils.h ${S3Archive})
+set(GDAL_SOURCES GDAL.cpp)
+
+set(IMPORT_SOURCES
+  Importer.cpp
+  DelimitedParserUtils.cpp)
+
+set(EXPORT_SOURCES
+  QueryExporter.cpp
+  QueryExporterCSV.cpp
+  QueryExporterGDAL.cpp)
+
+add_library(ImportExport ${GDAL_SOURCES} ${IMPORT_SOURCES} ${EXPORT_SOURCES} ${S3Archive})
 
 target_link_libraries(ImportExport mapd_thrift Shared Catalog DataMgr StringDictionary ${GDAL_LIBRARIES} ${CMAKE_DL_LIBS}
  ${LibArchive_LIBRARIES} ${IMPORT_EXPORT_LIBRARIES} ${Arrow_LIBRARIES})

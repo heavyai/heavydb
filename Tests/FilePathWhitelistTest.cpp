@@ -37,7 +37,7 @@ class FilePathWhitelistTest : public DBHandlerTestFixture,
                               public testing::WithParamInterface<std::string> {
  protected:
   static void SetUpTestSuite() {
-    temp_file_path_ = "/tmp/" + boost::filesystem::unique_path().string();
+    temp_file_path_ = "/tmp/" + boost::filesystem::unique_path().string() + ".csv";
     std::ofstream file{temp_file_path_};
     file.close();
   }

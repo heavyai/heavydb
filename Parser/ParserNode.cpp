@@ -4198,6 +4198,94 @@ void ExportQueryStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   }
 
   import_export::CopyParams copy_params;
+  // @TODO(se) move rest to CopyParams when we have a Thrift endpoint
+  import_export::QueryExporter::FileType file_type =
+      import_export::QueryExporter::FileType::kCSV;
+  std::string layer_name;
+  import_export::QueryExporter::FileCompression file_compression =
+      import_export::QueryExporter::FileCompression::kNone;
+  import_export::QueryExporter::ArrayNullHandling array_null_handling =
+      import_export::QueryExporter::ArrayNullHandling::kAbortWithWarning;
+
+  parseOptions(copy_params, file_type, layer_name, file_compression, array_null_handling);
+
+  if (file_path->empty() || !boost::filesystem::path(*file_path).is_absolute()) {
+    std::string file_name;
+    if (file_path->empty()) {
+      file_name = session.get_session_id() + ".txt";
+    } else {
+      file_name = boost::filesystem::path(*file_path).filename().string();
+    }
+    *file_path = catalog.getBasePath() + "/mapd_export/" + session.get_session_id() + "/";
+    if (!boost::filesystem::exists(*file_path)) {
+      if (!boost::filesystem::create_directories(*file_path)) {
+        throw std::runtime_error("Directory " + *file_path + " cannot be created.");
+      }
+    }
+    *file_path += file_name;
+  } else {
+    // Above branch will create a new file in the mapd_export directory. If that path is
+    // not exercised, go through applicable file path validations.
+    ddl_utils::validate_allowed_file_path(*file_path,
+                                          ddl_utils::DataTransferType::EXPORT);
+  }
+
+  // get column info
+  auto column_info_result =
+      local_connector.query(query_state_proxy, *select_stmt, {}, true);
+
+  // create exporter for requested file type
+  auto query_exporter = import_export::QueryExporter::create(file_type);
+
+  // default layer name to file path stem if it wasn't specified
+  if (layer_name.size() == 0) {
+    layer_name = boost::filesystem::path(*file_path).stem().string();
+  }
+
+  // begin export
+  query_exporter->beginExport(*file_path,
+                              layer_name,
+                              copy_params,
+                              column_info_result.targets_meta,
+                              file_compression,
+                              array_null_handling);
+
+  // how many fragments?
+  size_t outer_frag_count =
+      leafs_connector_->getOuterFragmentCount(query_state_proxy, *select_stmt);
+  size_t outer_frag_end = outer_frag_count == 0 ? 1 : outer_frag_count;
+
+  // loop fragments
+  for (size_t outer_frag_idx = 0; outer_frag_idx < outer_frag_end; outer_frag_idx++) {
+    // limit the query to just this fragment
+    std::vector<size_t> allowed_outer_fragment_indices;
+    if (outer_frag_count) {
+      allowed_outer_fragment_indices.push_back(outer_frag_idx);
+    }
+
+    // run the query
+    std::vector<AggregatedResult> query_results = leafs_connector_->query(
+        query_state_proxy, *select_stmt, allowed_outer_fragment_indices);
+
+    // export the results
+    query_exporter->exportResults(query_results);
+  }
+
+  // end export
+  query_exporter->endExport();
+}
+
+void ExportQueryStmt::parseOptions(
+    import_export::CopyParams& copy_params,
+    import_export::QueryExporter::FileType& file_type,
+    std::string& layer_name,
+    import_export::QueryExporter::FileCompression& file_compression,
+    import_export::QueryExporter::ArrayNullHandling& array_null_handling) {
+  // defaults for non-CopyParams values
+  file_type = import_export::QueryExporter::FileType::kCSV;
+  layer_name.clear();
+  file_compression = import_export::QueryExporter::FileCompression::kNone;
+
   if (!options.empty()) {
     for (auto& p : options) {
       if (boost::iequals(*p->get_name(), "delimiter")) {
@@ -4259,201 +4347,81 @@ void ExportQueryStmt::execute(const Catalog_Namespace::SessionInfo& session) {
           throw std::runtime_error("Quoted option must be a boolean.");
         }
         copy_params.quoted = bool_from_string_literal(str_literal);
+      } else if (boost::iequals(*p->get_name(), "file_type")) {
+        const StringLiteral* str_literal =
+            dynamic_cast<const StringLiteral*>(p->get_value());
+        if (str_literal == nullptr) {
+          throw std::runtime_error("File Type option must be a string.");
+        }
+        auto file_type_str =
+            boost::algorithm::to_lower_copy(*str_literal->get_stringval());
+        if (file_type_str == "csv") {
+          file_type = import_export::QueryExporter::FileType::kCSV;
+        } else if (file_type_str == "geojson") {
+          file_type = import_export::QueryExporter::FileType::kGeoJSON;
+        } else if (file_type_str == "geojsonl") {
+          file_type = import_export::QueryExporter::FileType::kGeoJSONL;
+        } else if (file_type_str == "shapefile") {
+          file_type = import_export::QueryExporter::FileType::kShapefile;
+        } else {
+          throw std::runtime_error(
+              "File Type option must be 'CSV', 'GeoJSON', 'GeoJSONL' or 'Shapefile'");
+        }
+      } else if (boost::iequals(*p->get_name(), "layer_name")) {
+        const StringLiteral* str_literal =
+            dynamic_cast<const StringLiteral*>(p->get_value());
+        if (str_literal == nullptr) {
+          throw std::runtime_error("Layer Name option must be a string.");
+        }
+        layer_name = *str_literal->get_stringval();
+      } else if (boost::iequals(*p->get_name(), "file_compression")) {
+        const StringLiteral* str_literal =
+            dynamic_cast<const StringLiteral*>(p->get_value());
+        if (str_literal == nullptr) {
+          throw std::runtime_error("File Compression option must be a string.");
+        }
+        auto file_compression_str =
+            boost::algorithm::to_lower_copy(*str_literal->get_stringval());
+        if (file_compression_str == "none") {
+          file_compression = import_export::QueryExporter::FileCompression::kNone;
+        } else if (file_compression_str == "gzip") {
+          file_compression = import_export::QueryExporter::FileCompression::kGZip;
+        } else if (file_compression_str == "zip") {
+          file_compression = import_export::QueryExporter::FileCompression::kZip;
+        } else {
+          throw std::runtime_error(
+              "File Compression option must be 'None', 'GZip', or 'Zip'");
+        }
+      } else if (boost::iequals(*p->get_name(), "array_null_handling")) {
+        const StringLiteral* str_literal =
+            dynamic_cast<const StringLiteral*>(p->get_value());
+        if (str_literal == nullptr) {
+          throw std::runtime_error("Array Null Handling option must be a string.");
+        }
+        auto array_null_handling_str =
+            boost::algorithm::to_lower_copy(*str_literal->get_stringval());
+        if (array_null_handling_str == "abort") {
+          array_null_handling =
+              import_export::QueryExporter::ArrayNullHandling::kAbortWithWarning;
+        } else if (array_null_handling_str == "raw") {
+          array_null_handling =
+              import_export::QueryExporter::ArrayNullHandling::kExportSentinels;
+        } else if (array_null_handling_str == "zero") {
+          array_null_handling =
+              import_export::QueryExporter::ArrayNullHandling::kExportZeros;
+        } else if (array_null_handling_str == "nullfield") {
+          array_null_handling =
+              import_export::QueryExporter::ArrayNullHandling::kNullEntireField;
+        } else {
+          throw std::runtime_error(
+              "Array Null Handling option must be 'Abort', 'Raw', 'Zero', or "
+              "'NullField'");
+        }
       } else {
         throw std::runtime_error("Invalid option for COPY: " + *p->get_name());
       }
     }
   }
-
-  std::ofstream outfile;
-  if (file_path->empty() || !boost::filesystem::path(*file_path).is_absolute()) {
-    std::string file_name;
-    if (file_path->empty()) {
-      file_name = session.get_session_id() + ".txt";
-    } else {
-      file_name = boost::filesystem::path(*file_path).filename().string();
-    }
-    *file_path = catalog.getBasePath() + "/mapd_export/" + session.get_session_id() + "/";
-    if (!boost::filesystem::exists(*file_path)) {
-      if (!boost::filesystem::create_directories(*file_path)) {
-        throw std::runtime_error("Directory " + *file_path + " cannot be created.");
-      }
-    }
-    *file_path += file_name;
-  } else {
-    // Above branch will create a new file in the mapd_export directory. If that path is
-    // not exercised, go through applicable file path validations.
-    ddl_utils::validate_allowed_file_path(*file_path,
-                                          ddl_utils::DataTransferType::EXPORT);
-  }
-  outfile.open(*file_path);
-  if (!outfile) {
-    throw std::runtime_error("Cannot open file: " + *file_path);
-  }
-  if (copy_params.has_header == import_export::ImportHeaderRow::HAS_HEADER) {
-    auto result = local_connector.query(query_state_proxy, *select_stmt, {}, true);
-
-    bool not_first = false;
-    size_t i = 0;
-    for (const auto& target : result.targets_meta) {
-      std::string col_name = target.get_resname();
-      if (col_name.empty()) {
-        col_name = "result_" + std::to_string(i + 1);
-      }
-      if (not_first) {
-        outfile << copy_params.delimiter;
-      } else {
-        not_first = true;
-      }
-      outfile << col_name;
-      ++i;
-    }
-    outfile << copy_params.line_delim;
-  }
-
-  auto outer_frag_count =
-      leafs_connector_->getOuterFragmentCount(query_state_proxy, *select_stmt);
-
-  size_t outer_frag_end = outer_frag_count == 0 ? 1 : outer_frag_count;
-
-  for (size_t outer_frag_idx = 0; outer_frag_idx < outer_frag_end; outer_frag_idx++) {
-    std::vector<size_t> allowed_outer_fragment_indices;
-
-    if (outer_frag_count) {
-      allowed_outer_fragment_indices.push_back(outer_frag_idx);
-    }
-
-    std::vector<AggregatedResult> query_results = leafs_connector_->query(
-        query_state_proxy, *select_stmt, allowed_outer_fragment_indices);
-
-    for (auto& res : query_results) {
-      auto results = res.rs;
-
-      const std::vector<TargetMetaInfo>& targets = res.targets_meta;
-      const TargetMetaInfo* td = targets.data();
-
-      while (true) {
-        const auto crt_row = results->getNextRow(true, true);
-        if (crt_row.empty()) {
-          break;
-        }
-        bool not_first = false;
-        for (size_t i = 0; i < results->colCount(); ++i) {
-          bool is_null;
-          const auto tv = crt_row[i];
-          const auto scalar_tv = boost::get<ScalarTargetValue>(&tv);
-          if (not_first) {
-            outfile << copy_params.delimiter;
-          } else {
-            not_first = true;
-          }
-          if (copy_params.quoted) {
-            outfile << copy_params.quote;
-          }
-          const auto& ti = td[i].get_type_info();
-          if (!scalar_tv) {
-            outfile << datum_to_string(crt_row[i], ti, " | ");
-            if (copy_params.quoted) {
-              outfile << copy_params.quote;
-            }
-            continue;
-          }
-          if (boost::get<int64_t>(scalar_tv)) {
-            auto int_val = *(boost::get<int64_t>(scalar_tv));
-            switch (ti.get_type()) {
-              case kBOOLEAN:
-                is_null = (int_val == NULL_BOOLEAN);
-                break;
-              case kTINYINT:
-                is_null = (int_val == NULL_TINYINT);
-                break;
-              case kSMALLINT:
-                is_null = (int_val == NULL_SMALLINT);
-                break;
-              case kINT:
-                is_null = (int_val == NULL_INT);
-                break;
-              case kBIGINT:
-                is_null = (int_val == NULL_BIGINT);
-                break;
-              case kTIME:
-              case kTIMESTAMP:
-              case kDATE:
-                is_null = (int_val == NULL_BIGINT);
-                break;
-              default:
-                is_null = false;
-            }
-            if (is_null) {
-              outfile << copy_params.null_str;
-            } else if (ti.get_type() == kTIME) {
-              const auto t = static_cast<time_t>(int_val);
-              std::tm tm_struct;
-              gmtime_r(&t, &tm_struct);
-              char buf[9];
-              strftime(buf, 9, "%T", &tm_struct);
-              outfile << buf;
-            } else {
-              outfile << int_val;
-            }
-          } else if (boost::get<double>(scalar_tv)) {
-            auto real_val = *(boost::get<double>(scalar_tv));
-            if (ti.get_type() == kFLOAT) {
-              is_null = (real_val == NULL_FLOAT);
-            } else {
-              is_null = (real_val == NULL_DOUBLE);
-            }
-            if (is_null) {
-              outfile << copy_params.null_str;
-            } else if (ti.get_type() == kNUMERIC) {
-              outfile << std::setprecision(ti.get_precision()) << real_val;
-            } else {
-              outfile << std::setprecision(std::numeric_limits<double>::digits10 + 1)
-                      << real_val;
-            }
-          } else if (boost::get<float>(scalar_tv)) {
-            CHECK_EQ(kFLOAT, ti.get_type());
-            auto real_val = *(boost::get<float>(scalar_tv));
-            if (real_val == NULL_FLOAT) {
-              outfile << copy_params.null_str;
-            } else {
-              outfile << std::setprecision(std::numeric_limits<float>::digits10 + 1)
-                      << real_val;
-            }
-          } else {
-            auto s = boost::get<NullableString>(scalar_tv);
-            is_null = !s || boost::get<void*>(s);
-            if (is_null) {
-              outfile << copy_params.null_str;
-            } else {
-              auto s_notnull = boost::get<std::string>(s);
-              CHECK(s_notnull);
-              if (!copy_params.quoted) {
-                outfile << *s_notnull;
-              } else {
-                size_t q = s_notnull->find(copy_params.quote);
-                if (q == std::string::npos) {
-                  outfile << *s_notnull;
-                } else {
-                  std::string str(*s_notnull);
-                  while (q != std::string::npos) {
-                    str.insert(q, 1, copy_params.escape);
-                    q = str.find(copy_params.quote, q + 2);
-                  }
-                  outfile << str;
-                }
-              }
-            }
-          }
-          if (copy_params.quoted) {
-            outfile << copy_params.quote;
-          }
-        }
-        outfile << copy_params.line_delim;
-      }
-    }
-  }
-  outfile.close();
 }
 
 void CreateViewStmt::execute(const Catalog_Namespace::SessionInfo& session) {

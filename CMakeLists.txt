@@ -282,7 +282,7 @@ string(STRIP "${LLVM_LINKER_FLAGS}" LLVM_LINKER_FLAGS)
 include_directories(${LLVM_INC_FLAGS})
 
 # Boost
-find_package(Boost COMPONENTS log log_setup filesystem program_options regex system thread timer locale REQUIRED)
+find_package(Boost COMPONENTS log log_setup filesystem program_options regex system thread timer locale iostreams REQUIRED)
 include_directories(${Boost_INCLUDE_DIR})
 
 # CUDA architecture flags 

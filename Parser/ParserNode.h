@@ -43,6 +43,7 @@
 #include "../Fragmenter/InsertDataLoader.h"
 
 #include <ImportExport/Importer.h>
+#include <ImportExport/QueryExporter.h>
 
 #include <functional>
 
@@ -1822,6 +1823,13 @@ class ExportQueryStmt : public DDLStmt {
   std::unique_ptr<std::string> select_stmt;
   std::unique_ptr<std::string> file_path;
   std::list<std::unique_ptr<NameValueAssign>> options;
+
+  void parseOptions(import_export::CopyParams& copy_params,
+                    // @TODO(se) move rest to CopyParams when we have a Thrift endpoint
+                    import_export::QueryExporter::FileType& file_type,
+                    std::string& layer_name,
+                    import_export::QueryExporter::FileCompression& file_compression,
+                    import_export::QueryExporter::ArrayNullHandling& array_null_handling);
 };
 
 /*
