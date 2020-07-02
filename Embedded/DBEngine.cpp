@@ -18,6 +18,10 @@
 #include <boost/filesystem.hpp>
 #include "QueryEngine/ArrowResultSet.h"
 #include "QueryRunner/QueryRunner.h"
+#include "Parser/ParserWrapper.h"
+#include "Parser/parser.h"
+
+using QR = QueryRunner::QueryRunner;
 
 namespace EmbeddedDatabase {
 
@@ -175,16 +179,34 @@ class DBEngineImpl : public DBEngine {
   Cursor* executeDML(const std::string& query) {
     if (query_runner_) {
       try {
-        const auto execution_result =
-            query_runner_->runSelectQuery(query, ExecutorDeviceType::CPU, true, true);
-        auto targets = execution_result.getTargetsMeta();
-        std::vector<std::string> col_names;
-        for (const auto target : targets) {
-          col_names.push_back(target.get_resname());
+        ParserWrapper pw{query};
+        if (pw.isCalcitePathPermissable()) {
+          const auto execution_result =
+              query_runner_->runSelectQuery(query, ExecutorDeviceType::CPU, true, true);
+          auto targets = execution_result.getTargetsMeta();
+          std::vector<std::string> col_names;
+          for (const auto target : targets) {
+            col_names.push_back(target.get_resname());
+          }
+          auto rs = execution_result.getRows();
+          cursors_.emplace_back(new CursorImpl(rs, col_names, data_mgr_));
+          return cursors_.back();
         }
-        auto rs = execution_result.getRows();
-        cursors_.emplace_back(new CursorImpl(rs, col_names, data_mgr_));
-        return cursors_.back();
+
+        auto session_info = query_runner_->getSession();
+        auto query_state = QR::create_query_state(session_info, query);
+        auto stdlog = STDLOG(query_state);
+
+        SQLParser parser;
+        std::list<std::unique_ptr<Parser::Stmt>> parse_trees;
+        std::string last_parsed;
+        CHECK_EQ(parser.parse(query, parse_trees, last_parsed), 0) << query;
+        CHECK_EQ(parse_trees.size(), size_t(1));
+        auto stmt = parse_trees.front().get();
+        auto insert_values_stmt = dynamic_cast<InsertValuesStmt*>(stmt);
+        CHECK(insert_values_stmt);
+        insert_values_stmt->execute(*session_info);
+        return nullptr;
       } catch (std::exception const& e) {
         std::cerr << "DBE:executeDML: " << e.what() << std::endl;
       } catch (...) {
