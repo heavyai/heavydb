@@ -819,10 +819,15 @@ inline SQLTypeInfo get_logical_type_info(const SQLTypeInfo& type_info) {
                      type_info.get_subtype());
 }
 
-inline SQLTypeInfo get_nullable_logical_type_info(const SQLTypeInfo& type_info) {
-  SQLTypeInfo nullable_type_info = get_logical_type_info(type_info);
+inline SQLTypeInfo get_nullable_type_info(const SQLTypeInfo& type_info) {
+  SQLTypeInfo nullable_type_info = type_info;
   nullable_type_info.set_notnull(false);
   return nullable_type_info;
+}
+
+inline SQLTypeInfo get_nullable_logical_type_info(const SQLTypeInfo& type_info) {
+  SQLTypeInfo nullable_type_info = get_logical_type_info(type_info);
+  return get_nullable_type_info(nullable_type_info);
 }
 
 template <class T>
