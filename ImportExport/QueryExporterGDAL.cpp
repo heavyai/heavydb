@@ -246,7 +246,7 @@ void QueryExporterGDAL::beginExport(const std::string& file_path,
                                std::to_string(geo_column_srid) + "");
     }
 #if GDAL_VERSION_MAJOR >= 3
-    ogr_spatial_reference->SetAxisMappingStrategy(OAMS_TRADITIONAL_GIS_ORDER);
+    ogr_spatial_reference.SetAxisMappingStrategy(OAMS_TRADITIONAL_GIS_ORDER);
 #endif
 
     // create layer

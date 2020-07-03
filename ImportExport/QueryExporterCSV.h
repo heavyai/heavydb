@@ -25,7 +25,7 @@ namespace import_export {
 class QueryExporterCSV : public QueryExporter {
  public:
   QueryExporterCSV();
-  ~QueryExporterCSV() final;
+  ~QueryExporterCSV();
 
   void beginExport(const std::string& file_path,
                    const std::string& layer_name,
