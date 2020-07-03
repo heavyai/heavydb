@@ -145,7 +145,7 @@ std::unique_ptr<InValuesBitmap> CodeGenerator::createInValuesBitmap(
             return false;
           }
           const auto& in_val_ti = in_val->get_type_info();
-          CHECK(in_val_ti == ti);
+          CHECK(in_val_ti == ti || get_nullable_type_info(in_val_ti) == ti);
           if (ti.is_string()) {
             CHECK(sdp);
             const auto string_id =
