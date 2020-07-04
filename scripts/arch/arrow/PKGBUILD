@@ -16,7 +16,7 @@ makedepends=('cmake' 'boost')
 source=("https://github.com/apache/arrow/archive/apache-arrow-$pkgver.tar.gz"
         '0001-PARQUET-1823-C-Invalid-RowGroup-returned-by-parquet-.patch')
 sha256sums=('d7b3838758a365c8c47d55ab0df1006a70db951c6964440ba354f81f518b8d8d'
-            '478dfbc91459ba1c3c9ecd3def8c9f42ce7c93eb07dbe27a38535a25709f1cf0')
+            'da2f4d3c071c9b18948d73e08febf7f64425c7886daa3914ff220c2e10301be5')
 
 prepare(){
   cd "${srcdir}/$pkgname-apache-$pkgname-$pkgver"
