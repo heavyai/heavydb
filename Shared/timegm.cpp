@@ -36,6 +36,9 @@
 #include <cmath>
 #include <ctime>
 
+#include <regex>
+#include <string>
+
 /* Number of days per month (except for February in leap years). */
 // static const int monoff[] = {0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334};
 
@@ -68,25 +71,24 @@ time_t TimeGM::parse_meridians(const time_t& timeval,
                                const char* p,
                                const uint32_t hour,
                                const int32_t dimen) {
-  char meridies[20];
-  if (sscanf(p, "%*d %s", meridies) != 1) {
-    if (sscanf(p, "%s", meridies) != 1) {
-      return timeval;
-    };
-  }
-  if (boost::iequals(std::string(meridies), "pm") ||
-      boost::iequals(std::string(meridies), "p.m.") ||
-      boost::iequals(std::string(meridies), "p.m")) {
+  std::string time_str(p);
+  std::transform(time_str.begin(), time_str.end(), time_str.begin(), ::tolower);
+
+  static std::regex pm_regex("(p[.]?m[.]?)");
+  std::smatch pm_match;
+  if (std::regex_search(time_str, pm_match, pm_regex)) {
     return hour == 12 ? timeval
                       : timeval + kSecsPerHalfDay * static_cast<int64_t>(pow(10, dimen));
-  } else if (boost::iequals(std::string(meridies), "am") ||
-             boost::iequals(std::string(meridies), "a.m.") ||
-             boost::iequals(std::string(meridies), "a.m")) {
+  }
+
+  static std::regex am_regex("(a[.]?m[.]?)");
+  std::smatch am_match;
+  if (std::regex_search(time_str, am_match, am_regex)) {
     return hour == 12 ? timeval - kSecsPerHalfDay * static_cast<int64_t>(pow(10, dimen))
                       : timeval;
-  } else {
-    return timeval;
   }
+
+  return timeval;
 }
 
 /*
