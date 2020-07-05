@@ -103,10 +103,6 @@ llvm::Value* CodeGenerator::codegen(const Analyzer::ExtractExpr* extract_expr,
                    cgen_state_->inlineIntNull(extract_expr_ti)});
   }
   const auto extract_fname = get_extract_function_name(extract_expr->get_field());
-  auto extract_call =
-      cgen_state_->emitExternalCall(extract_fname,
-                                    get_int_type(64, cgen_state_->context_),
-                                    std::vector<llvm::Value*>{from_expr});
   if (!extract_expr_ti.get_notnull()) {
     llvm::BasicBlock* extract_nullcheck_bb{nullptr};
     llvm::PHINode* extract_nullcheck_value{nullptr};
@@ -130,6 +126,10 @@ llvm::Value* CodeGenerator::codegen(const Analyzer::ExtractExpr* extract_expr,
       cgen_state_->ir_builder_.SetInsertPoint(null_check.cond_true_);
       cgen_state_->ir_builder_.CreateBr(extract_nullcheck_bb);
       cgen_state_->ir_builder_.SetInsertPoint(null_check.cond_false_);
+      auto extract_call =
+          cgen_state_->emitExternalCall(extract_fname,
+                                        get_int_type(64, cgen_state_->context_),
+                                        std::vector<llvm::Value*>{from_expr});
       cgen_state_->ir_builder_.CreateBr(extract_nullcheck_bb);
 
       cgen_state_->ir_builder_.SetInsertPoint(extract_nullcheck_bb);
@@ -146,8 +146,11 @@ llvm::Value* CodeGenerator::codegen(const Analyzer::ExtractExpr* extract_expr,
     cgen_state_->ir_builder_.SetInsertPoint(extract_nullcheck_bb);
     CHECK(extract_nullcheck_value);
     return extract_nullcheck_value;
+  } else {
+    return cgen_state_->emitExternalCall(extract_fname,
+                                         get_int_type(64, cgen_state_->context_),
+                                         std::vector<llvm::Value*>{from_expr});
   }
-  return extract_call;
 }
 
 llvm::Value* CodeGenerator::codegen(const Analyzer::DateaddExpr* dateadd_expr,
