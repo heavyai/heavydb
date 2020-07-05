@@ -636,7 +636,7 @@ TEST_P(CreateTableTest, GeoTypes) {
   expected_attributes.precision = 4326;
   expected_attributes.scale = 4326;
   expected_attributes.encoding_type = kENCODING_NONE;
-  expected_attributes.encoding_size = 64;
+  expected_attributes.encoding_size = 0;
   assertColumnDetails(expected_attributes, column);
 
   std::advance(it, 2);
@@ -672,7 +672,7 @@ TEST_P(CreateTableTest, GeoTypes) {
   expected_attributes.precision = 4326;
   expected_attributes.scale = 4326;
   expected_attributes.encoding_type = kENCODING_NONE;
-  expected_attributes.encoding_size = 64;
+  expected_attributes.encoding_size = 0;
   assertColumnDetails(expected_attributes, column);
 
   std::advance(it, 3);

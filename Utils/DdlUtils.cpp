@@ -347,18 +347,14 @@ void validate_and_set_dictionary_encoding(ColumnDescriptor& cd, int encoding_siz
 }
 
 void validate_and_set_none_encoding(ColumnDescriptor& cd) {
-  if (cd.columnType.is_geometry()) {
-    cd.columnType.set_compression(kENCODING_NONE);
-    cd.columnType.set_comp_param(64);
-  } else {
-    if (!cd.columnType.is_string() && !cd.columnType.is_string_array()) {
-      throw std::runtime_error(
-          cd.columnName +
-          ": None encoding is only supported on string or string array columns.");
-    }
-    cd.columnType.set_compression(kENCODING_NONE);
-    cd.columnType.set_comp_param(0);
+  if (!cd.columnType.is_string() && !cd.columnType.is_string_array() &&
+      !cd.columnType.is_geometry()) {
+    throw std::runtime_error(
+        cd.columnName +
+        ": None encoding is only supported on string, string array, or geo columns.");
   }
+  cd.columnType.set_compression(kENCODING_NONE);
+  cd.columnType.set_comp_param(0);
 }
 
 void validate_and_set_sparse_encoding(ColumnDescriptor& cd, int encoding_size) {
