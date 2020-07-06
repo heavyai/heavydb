@@ -54,6 +54,7 @@ class TableFunction {
     return args;
   }
 
+  SQLTypeInfo getInputSQLType(const size_t idx) const;
   SQLTypeInfo getOutputSQLType(const size_t idx) const;
 
   auto getOutputsSize() const { return output_args_.size(); }
@@ -67,6 +68,16 @@ class TableFunction {
   size_t getOutputRowParameter() const { return output_sizer_.val; }
 
   bool isRuntime() const { return is_runtime_; }
+
+  std::string toString() const {
+    auto result = "TableFunction(" + name_ + ", [";
+    result += ExtensionFunctionsWhitelist::toString(input_args_);
+    result += "], [";
+    result += ExtensionFunctionsWhitelist::toString(output_args_);
+    result += "], is_runtime=" + std::string((is_runtime_ ? "true" : "false"));
+    result += ")";
+    return result;
+  }
 
  private:
   const std::string name_;

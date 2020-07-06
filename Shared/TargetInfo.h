@@ -43,6 +43,18 @@ struct TargetInfo {
   SQLTypeInfo agg_arg_type;
   bool skip_null_val;
   bool is_distinct;
+#ifndef __CUDACC__
+ public:
+  inline std::string toString() const {
+    auto result = std::string("TargetInfo(");
+    result += "is_agg=" + std::string(is_agg ? "true" : "false") + ", ";
+    result += "sql_type=" + sql_type.to_string() + ", ";
+    result += "agg_arg_type=" + agg_arg_type.to_string() + ", ";
+    result += "skip_null_val=" + std::string(skip_null_val ? "true" : "false") + ", ";
+    result += "is_distinct=" + std::string(is_distinct ? "true" : "false") + ")";
+    return result;
+  }
+#endif
 };
 
 /**

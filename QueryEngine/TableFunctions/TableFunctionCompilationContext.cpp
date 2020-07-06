@@ -55,6 +55,88 @@ llvm::Function* generate_entry_point(const CgenState* cgen_state) {
   return func;
 }
 
+inline llvm::Type* get_llvm_type_from_sql_column_type(const SQLTypeInfo ti,
+                                                      llvm::LLVMContext& ctx) {
+  CHECK(ti.is_column());
+  const auto& elem_ti = ti.get_elem_type();
+  if (elem_ti.is_fp()) {
+    switch (elem_ti.get_size()) {
+      case 4:
+        return llvm::Type::getFloatPtrTy(ctx);
+      case 8:
+        return llvm::Type::getDoublePtrTy(ctx);
+    }
+  }
+  CHECK(elem_ti.is_integer());
+  switch (elem_ti.get_size()) {
+    case 1:
+      return llvm::Type::getInt8PtrTy(ctx);
+    case 2:
+      return llvm::Type::getInt16PtrTy(ctx);
+    case 4:
+      return llvm::Type::getInt32PtrTy(ctx);
+    case 8:
+      return llvm::Type::getInt64PtrTy(ctx);
+  }
+
+  UNREACHABLE();
+  return nullptr;
+}
+
+llvm::Value* alloc_column(std::string col_name,
+                          const SQLTypeInfo& data_target_info,
+                          llvm::Value* data_ptr,
+                          llvm::Value* data_size,
+                          llvm::LLVMContext& ctx,
+                          llvm::IRBuilder<>& ir_builder) {
+  /*
+    Creates a new Column instance of given element type and initialize
+    its data ptr and sz members. If data ptr or sz are unspecified
+    (have nullptr values) then the corresponding members are
+    initialized with NULL and -1, respectively.
+   */
+  llvm::Type* data_ptr_llvm_type =
+      get_llvm_type_from_sql_column_type(data_target_info, ctx);
+  llvm::StructType* col_struct_type =
+      llvm::StructType::get(ctx,
+                            {
+                                data_ptr_llvm_type,         /* T* ptr */
+                                llvm::Type::getInt64Ty(ctx) /* int64_t sz */
+                            });
+  auto col = ir_builder.CreateAlloca(col_struct_type);
+  col->setName(col_name);
+  auto col_ptr_ptr = ir_builder.CreateStructGEP(col_struct_type, col, 0);
+  auto col_sz_ptr = ir_builder.CreateStructGEP(col_struct_type, col, 1);
+  col_ptr_ptr->setName(col_name + ".ptr");
+  col_sz_ptr->setName(col_name + ".sz");
+
+  if (data_ptr != nullptr) {
+    if (data_ptr->getType() == data_ptr_llvm_type->getPointerElementType()) {
+      ir_builder.CreateStore(data_ptr, col_ptr_ptr);
+    } else {
+      auto tmp = ir_builder.CreateBitCast(data_ptr, data_ptr_llvm_type);
+      ir_builder.CreateStore(tmp, col_ptr_ptr);
+    }
+  } else {
+    ir_builder.CreateStore(llvm::Constant::getNullValue(data_ptr_llvm_type), col_ptr_ptr);
+  }
+  if (data_size != nullptr) {
+    auto data_size_type = data_size->getType();
+    if (data_size_type->isPointerTy()) {
+      CHECK(data_size_type->getPointerElementType()->isIntegerTy(64));
+      auto val = ir_builder.CreateLoad(data_size);
+      ir_builder.CreateStore(val, col_sz_ptr);
+    } else {
+      CHECK(data_size_type->isIntegerTy(64));
+      ir_builder.CreateStore(data_size, col_sz_ptr);
+    }
+  } else {
+    auto const_minus1 = llvm::ConstantInt::get(llvm::Type::getInt64Ty(ctx), -1, true);
+    ir_builder.CreateStore(const_minus1, col_sz_ptr);
+  }
+  return col;
+}
+
 }  // namespace
 
 TableFunctionCompilationContext::TableFunctionCompilationContext()
@@ -110,31 +192,52 @@ void TableFunctionCompilationContext::generateEntryPoint(
     const auto& expr = exe_unit.input_exprs[i];
     const auto& ti = expr->get_type_info();
     if (ti.is_fp()) {
-      func_args.push_back(cgen_state->ir_builder_.CreateBitCast(
-          col_heads[i], llvm::PointerType::get(get_fp_type(get_bit_width(ti), ctx), 0)));
+      auto r = cgen_state->ir_builder_.CreateBitCast(
+          col_heads[i], llvm::PointerType::get(get_fp_type(get_bit_width(ti), ctx), 0));
+      func_args.push_back(cgen_state->ir_builder_.CreateLoad(r));
     } else if (ti.is_integer()) {
-      func_args.push_back(cgen_state->ir_builder_.CreateBitCast(
-          col_heads[i], llvm::PointerType::get(get_int_type(get_bit_width(ti), ctx), 0)));
+      auto r = cgen_state->ir_builder_.CreateBitCast(
+          col_heads[i], llvm::PointerType::get(get_int_type(get_bit_width(ti), ctx), 0));
+      func_args.push_back(cgen_state->ir_builder_.CreateLoad(r));
+    } else if (ti.is_column()) {
+      auto col = alloc_column(std::string("input_col.") + std::to_string(i),
+                              ti,
+                              col_heads[i],
+                              input_row_count,
+                              ctx,
+                              cgen_state_->ir_builder_);
+      func_args.push_back(cgen_state->ir_builder_.CreateLoad(col));
     } else {
       throw std::runtime_error(
-          "Only integer and floating point columns are supported as inputs to table "
+          "Only integer and floating point columns or scalars are supported as inputs to "
+          "table "
           "functions.");
     }
   }
 
-  func_args.push_back(input_row_count);
-  func_args.push_back(output_row_count_ptr);
-
+  std::vector<llvm::Value*> output_col_args;
   for (size_t i = 0; i < exe_unit.target_exprs.size(); i++) {
     auto output_load = cgen_state->ir_builder_.CreateLoad(
         cgen_state->ir_builder_.CreateGEP(output_buffers_arg, cgen_state_->llInt(i)));
-    const auto& ti = exe_unit.target_exprs[i]->get_type_info();
+    const auto& expr = exe_unit.target_exprs[i];
+    const auto& ti = expr->get_type_info();
+    /*
+      How to specify output scalars in C++ code?
+     */
     if (ti.is_fp()) {
       func_args.push_back(cgen_state->ir_builder_.CreateBitCast(
           output_load, llvm::PointerType::get(get_fp_type(get_bit_width(ti), ctx), 0)));
     } else if (ti.is_integer()) {
       func_args.push_back(cgen_state->ir_builder_.CreateBitCast(
           output_load, llvm::PointerType::get(get_int_type(get_bit_width(ti), ctx), 0)));
+    } else if (ti.is_column()) {
+      auto col = alloc_column(std::string("output_col.") + std::to_string(i),
+                              ti,
+                              output_load,
+                              output_row_count_ptr,
+                              ctx,
+                              cgen_state_->ir_builder_);
+      func_args.push_back(cgen_state->ir_builder_.CreateLoad(col));
     } else {
       throw std::runtime_error(
           "Only integer and floating point columns are supported as outputs to table "
@@ -147,14 +250,33 @@ void TableFunctionCompilationContext::generateEntryPoint(
   const auto table_func_return =
       cgen_state->emitExternalCall(func_name, get_int_type(32, ctx), func_args);
   table_func_return->setName("table_func_ret");
+
+  // If table_func_return is non-negative then store the value in
+  // output_row_count and return zero. Otherwise, return
+  // table_func_return that negative value contains the error code.
+  const auto bb_exit_0 = llvm::BasicBlock::Create(ctx, ".exit0", entry_point_func_);
+
+  auto const_zero = llvm::ConstantInt::get(table_func_return->getType(), 0, true);
+  auto is_ok = cgen_state_->ir_builder_.CreateICmpSGE(table_func_return, const_zero);
+  cgen_state_->ir_builder_.CreateCondBr(is_ok, bb_exit_0, bb_exit);
+
+  cgen_state_->ir_builder_.SetInsertPoint(bb_exit_0);
+  auto r = cgen_state->ir_builder_.CreateIntCast(
+      table_func_return, get_int_type(64, ctx), true);
+  cgen_state->ir_builder_.CreateStore(r, output_row_count_ptr);
+  cgen_state->ir_builder_.CreateRet(const_zero);
+
   cgen_state->ir_builder_.SetInsertPoint(bb_exit);
   cgen_state->ir_builder_.CreateRet(table_func_return);
 
-  cgen_state->ir_builder_.SetInsertPoint(func_body_bb);
-  cgen_state->ir_builder_.CreateBr(bb_exit);
-
   cgen_state->ir_builder_.SetInsertPoint(bb_entry);
   cgen_state->ir_builder_.CreateBr(func_body_bb);
+
+  /*
+  std::cout << "=================================" << std::endl;
+  entry_point_func_->print(llvm::outs());
+  std::cout << "=================================" << std::endl;
+  */
 
   verify_function_ir(entry_point_func_);
 }

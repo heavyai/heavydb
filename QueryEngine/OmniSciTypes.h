@@ -142,3 +142,9 @@ struct GeoMultiPolygon {
 
   DEVICE int32_t getOutputSrid() const { return output_srid; }
 };
+
+template <typename T>
+struct Column {
+  T* ptr;      // row data
+  int64_t sz;  // row count
+};

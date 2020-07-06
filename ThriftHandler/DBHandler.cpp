@@ -5933,6 +5933,20 @@ ExtArgumentType mapfrom(const TExtArgumentType::type& t) {
       return ExtArgumentType::GeoPolygon;
     case TExtArgumentType::GeoMultiPolygon:
       return ExtArgumentType::GeoMultiPolygon;
+    case TExtArgumentType::ColumnInt8:
+      return ExtArgumentType::ColumnInt8;
+    case TExtArgumentType::ColumnInt16:
+      return ExtArgumentType::ColumnInt16;
+    case TExtArgumentType::ColumnInt32:
+      return ExtArgumentType::ColumnInt32;
+    case TExtArgumentType::ColumnInt64:
+      return ExtArgumentType::ColumnInt64;
+    case TExtArgumentType::ColumnFloat:
+      return ExtArgumentType::ColumnFloat;
+    case TExtArgumentType::ColumnDouble:
+      return ExtArgumentType::ColumnDouble;
+    case TExtArgumentType::ColumnBool:
+      return ExtArgumentType::ColumnBool;
   }
   UNREACHABLE();
   return ExtArgumentType{};

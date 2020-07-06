@@ -35,7 +35,8 @@ class OverflowOrUnderflow : public std::runtime_error {
 
 inline const SQLTypeInfo get_compact_type(const TargetInfo& target) {
   if (!target.is_agg) {
-    return target.sql_type;
+    return (target.sql_type.is_column() ? target.sql_type.get_elem_type()
+                                        : target.sql_type);
   }
   const auto agg_type = target.agg_kind;
   const auto& agg_arg = target.agg_arg_type;
@@ -204,6 +205,8 @@ inline size_t get_bit_width(const SQLTypeInfo& ti) {
     case kPOLYGON:
     case kMULTIPOLYGON:
       return 32;
+    case kCOLUMN:
+      return ti.get_elem_type().get_size() * 8;
     default:
       LOG(FATAL) << "Unhandled int_type: " << int_type;
       return {};

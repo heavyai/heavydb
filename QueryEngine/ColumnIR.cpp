@@ -27,7 +27,8 @@ namespace {
 // variable length data. The decoder encapsulates the code generation logic.
 std::shared_ptr<Decoder> get_col_decoder(const Analyzer::ColumnVar* col_var) {
   const auto enc_type = col_var->get_compression();
-  const auto& ti = col_var->get_type_info();
+  const auto& ti_ = col_var->get_type_info();
+  const auto& ti = (ti_.is_column() ? ti_.get_elem_type() : ti_);
   switch (enc_type) {
     case kENCODING_NONE: {
       const auto int_type = ti.is_decimal() ? decimal_to_int_type(ti) : ti.get_type();
@@ -243,7 +244,8 @@ llvm::Value* CodeGenerator::codegenFixedLengthColVar(const Analyzer::ColumnVar* 
   cgen_state_->ir_builder_.Insert(dec_val);
   auto dec_type = dec_val->getType();
   llvm::Value* dec_val_cast{nullptr};
-  const auto& col_ti = col_var->get_type_info();
+  const auto& col_ti_ = col_var->get_type_info();
+  const auto& col_ti = (col_ti_.is_column() ? col_ti_.get_elem_type() : col_ti_);
   if (dec_type->isIntegerTy()) {
     auto dec_width = static_cast<llvm::IntegerType*>(dec_type)->getBitWidth();
     auto col_width = get_col_bit_width(col_var);

@@ -171,6 +171,20 @@ std::string serialize_type(const ExtArgumentType type) {
       return "geo_multi_polygon";
     case ExtArgumentType::Cursor:
       return "cursor";
+    case ExtArgumentType::ColumnInt8:
+      return "{i8*, i64}";
+    case ExtArgumentType::ColumnInt16:
+      return "{i16*, i64}";
+    case ExtArgumentType::ColumnInt32:
+      return "{i32*, i64}";
+    case ExtArgumentType::ColumnInt64:
+      return "{i64*, i64}";
+    case ExtArgumentType::ColumnFloat:
+      return "{float*, i64}";
+    case ExtArgumentType::ColumnDouble:
+      return "{double*, i64}";
+    case ExtArgumentType::ColumnBool:
+      return "{i1*, i64}";
     default:
       CHECK(false);
   }
@@ -187,6 +201,12 @@ SQLTypeInfo ext_arg_type_to_type_info(const ExtArgumentType ext_arg_type) {
 
   auto generate_array_type = [](const auto subtype) {
     auto ti = SQLTypeInfo(kARRAY, false);
+    ti.set_subtype(subtype);
+    return ti;
+  };
+
+  auto generate_column_type = [](const auto subtype) {
+    auto ti = SQLTypeInfo(kCOLUMN, false);
     ti.set_subtype(subtype);
     return ti;
   };
@@ -220,6 +240,20 @@ SQLTypeInfo ext_arg_type_to_type_info(const ExtArgumentType ext_arg_type) {
       return generate_array_type(kDOUBLE);
     case ExtArgumentType::ArrayBool:
       return generate_array_type(kBOOLEAN);
+    case ExtArgumentType::ColumnInt8:
+      return generate_column_type(kTINYINT);
+    case ExtArgumentType::ColumnInt16:
+      return generate_column_type(kSMALLINT);
+    case ExtArgumentType::ColumnInt32:
+      return generate_column_type(kINT);
+    case ExtArgumentType::ColumnInt64:
+      return generate_column_type(kBIGINT);
+    case ExtArgumentType::ColumnFloat:
+      return generate_column_type(kFLOAT);
+    case ExtArgumentType::ColumnDouble:
+      return generate_column_type(kDOUBLE);
+    case ExtArgumentType::ColumnBool:
+      return generate_column_type(kBOOLEAN);
     default:
       LOG(WARNING) << "ExtArgumentType `" << serialize_type(ext_arg_type)
                    << "` cannot be converted to SQLTypeInfo. Returning nulltype.";
@@ -405,7 +439,27 @@ ExtArgumentType deserialize_type(const std::string& type_name) {
   if (type_name == "cursor") {
     return ExtArgumentType::Cursor;
   }
-
+  if (type_name == "{i8*, i64}") {
+    return ExtArgumentType::ColumnInt8;
+  }
+  if (type_name == "{i16*, i64}") {
+    return ExtArgumentType::ColumnInt16;
+  }
+  if (type_name == "{i32*, i64}") {
+    return ExtArgumentType::ColumnInt32;
+  }
+  if (type_name == "{i64*, i64}") {
+    return ExtArgumentType::ColumnInt64;
+  }
+  if (type_name == "{float*, i64}") {
+    return ExtArgumentType::ColumnFloat;
+  }
+  if (type_name == "{double*, i64}") {
+    return ExtArgumentType::ColumnDouble;
+  }
+  if (type_name == "{i1*, i64}" || type_name == "{bool*, i64}") {
+    return ExtArgumentType::ColumnBool;
+  }
   CHECK(false);
   return ExtArgumentType::Int16;
 }

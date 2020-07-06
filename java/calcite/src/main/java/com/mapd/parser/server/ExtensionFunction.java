@@ -51,6 +51,13 @@ public class ExtensionFunction {
     ArrayFloat,
     ArrayDouble,
     ArrayBool,
+    ColumnInt8,
+    ColumnInt16,
+    ColumnInt32,
+    ColumnInt64,
+    ColumnFloat,
+    ColumnDouble,
+    ColumnBool,
     GeoPoint,
     GeoLineString,
     Cursor,
@@ -153,6 +160,20 @@ public class ExtensionFunction {
         return "{double*, i64, i8}*";
       case ArrayBool:
         return "{i1*, i64, i8}*";
+      case ColumnInt8:
+        return "{i8*, i64}";
+      case ColumnInt16:
+        return "{i16*, i64}";
+      case ColumnInt32:
+        return "{i32*, i64}";
+      case ColumnInt64:
+        return "{i64*, i64}";
+      case ColumnFloat:
+        return "{float*, i64}";
+      case ColumnDouble:
+        return "{double*, i64}";
+      case ColumnBool:
+        return "{i1*, i64}";
       case GeoPoint:
         return "geo_point";
       case Cursor:

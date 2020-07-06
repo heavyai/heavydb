@@ -62,7 +62,8 @@ std::string SQLTypeInfo::type_name[kSQLTYPE_LAST] = {"NULL",
                                                      "GEOGRAPHY",
                                                      "EVAL_CONTEXT_TYPE",
                                                      "VOID",
-                                                     "CURSOR"};
+                                                     "CURSOR",
+                                                     "COLUMN"};
 std::string SQLTypeInfo::comp_name[kENCODING_LAST] =
     {"NONE", "FIXED", "RL", "DIFF", "DICT", "SPARSE", "COMPRESSED", "DAYS"};
 
@@ -124,6 +125,7 @@ Datum StringToDatum(std::string_view s, SQLTypeInfo& ti) {
   try {
     switch (ti.get_type()) {
       case kARRAY:
+      case kCOLUMN:
         break;
       case kBOOLEAN:
         if (s == "t" || s == "T" || s == "1" || to_upper(std::string(s)) == "TRUE") {

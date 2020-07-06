@@ -53,7 +53,11 @@ std::vector<int64_t> initialize_target_values_for_storage(
       target_init_vals.push_back(0);
       continue;
     }
-    if (!target_info.sql_type.get_notnull()) {
+    if (target_info.sql_type.is_column()) {
+      int64_t init_val = null_val_bit_pattern(target_info.sql_type.get_subtype(),
+                                              takes_float_argument(target_info));
+      target_init_vals.push_back(target_info.is_agg ? init_val : 0);
+    } else if (!target_info.sql_type.get_notnull()) {
       int64_t init_val =
           null_val_bit_pattern(target_info.sql_type, takes_float_argument(target_info));
       target_init_vals.push_back(target_info.is_agg ? init_val : 0);

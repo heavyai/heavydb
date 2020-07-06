@@ -3780,23 +3780,8 @@ RelAlgExecutor::TableFunctionWorkUnit RelAlgExecutor::createTableFunctionWorkUni
       target_exprs_owned_.end(), input_exprs_owned.begin(), input_exprs_owned.end());
   const auto input_exprs = get_exprs_not_owned(input_exprs_owned);
 
-  std::vector<Analyzer::ColumnVar*> input_col_exprs;
-  for (auto input_expr : input_exprs) {
-    if (auto col_var = dynamic_cast<Analyzer::ColumnVar*>(input_expr)) {
-      input_col_exprs.push_back(col_var);
-    }
-  }
-  CHECK_EQ(input_col_exprs.size(), table_func->getColInputsSize());
-
   const auto& table_function_impl =
       table_functions::TableFunctionsFactory::get(table_func->getFunctionName());
-
-  std::vector<Analyzer::Expr*> table_func_outputs;
-  for (size_t i = 0; i < table_function_impl.getOutputsSize(); i++) {
-    const auto ti = table_function_impl.getOutputSQLType(i);
-    target_exprs_owned_.push_back(std::make_shared<Analyzer::ColumnVar>(ti, 0, i, -1));
-    table_func_outputs.push_back(target_exprs_owned_.back().get());
-  }
 
   std::optional<size_t> output_row_multiplier;
   if (table_function_impl.hasUserSpecifiedOutputMultiplier()) {
@@ -3817,6 +3802,23 @@ RelAlgExecutor::TableFunctionWorkUnit RelAlgExecutor::createTableFunctionWorkUni
                                " is not valid for table functions.");
     }
     output_row_multiplier = static_cast<size_t>(literal_val);
+  }
+
+  std::vector<Analyzer::ColumnVar*> input_col_exprs;
+  for (auto input_expr : input_exprs) {
+    if (auto col_var = dynamic_cast<Analyzer::ColumnVar*>(input_expr)) {
+      size_t i = input_col_exprs.size();
+      input_expr->set_type_info(table_function_impl.getInputSQLType(i));
+      input_col_exprs.push_back(col_var);
+    }
+  }
+  CHECK_EQ(input_col_exprs.size(), table_func->getColInputsSize());
+
+  std::vector<Analyzer::Expr*> table_func_outputs;
+  for (size_t i = 0; i < table_function_impl.getOutputsSize(); i++) {
+    const auto ti = table_function_impl.getOutputSQLType(i);
+    target_exprs_owned_.push_back(std::make_shared<Analyzer::ColumnVar>(ti, 0, i, -1));
+    table_func_outputs.push_back(target_exprs_owned_.back().get());
   }
 
   const TableFunctionExecutionUnit exe_unit = {

@@ -162,7 +162,7 @@ public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
     // using reflection when we are deserializing from JSON.
     // opTab.addOperator(new RampFunction());
     // opTab.addOperator(new DedupFunction());
-    opTab.addOperator(new RowCopier()); // Table UDF prototype
+    opTab.addOperator(new RowCopier()); // UDTF prototype
     opTab.addOperator(new MyUDFFunction());
     opTab.addOperator(new PgUnnest());
     opTab.addOperator(new Any());

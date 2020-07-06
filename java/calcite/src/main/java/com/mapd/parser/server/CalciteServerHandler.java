@@ -445,6 +445,20 @@ public class CalciteServerHandler implements CalciteServer.Iface {
         return ExtensionFunction.ExtArgumentType.ArrayDouble;
       case ArrayBool:
         return ExtensionFunction.ExtArgumentType.ArrayBool;
+      case ColumnInt8:
+        return ExtensionFunction.ExtArgumentType.ColumnInt8;
+      case ColumnInt16:
+        return ExtensionFunction.ExtArgumentType.ColumnInt16;
+      case ColumnInt32:
+        return ExtensionFunction.ExtArgumentType.ColumnInt32;
+      case ColumnInt64:
+        return ExtensionFunction.ExtArgumentType.ColumnInt64;
+      case ColumnFloat:
+        return ExtensionFunction.ExtArgumentType.ColumnFloat;
+      case ColumnDouble:
+        return ExtensionFunction.ExtArgumentType.ColumnDouble;
+      case ColumnBool:
+        return ExtensionFunction.ExtArgumentType.ColumnBool;
       case GeoPoint:
         return ExtensionFunction.ExtArgumentType.GeoPoint;
       case GeoLineString:

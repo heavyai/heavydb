@@ -26,6 +26,11 @@ namespace table_functions {
 namespace {
 
 SQLTypeInfo ext_arg_pointer_type_to_type_info(const ExtArgumentType ext_arg_type) {
+  auto generate_column_type = [](const auto subtype) {
+    auto ti = SQLTypeInfo(kCOLUMN, false);
+    ti.set_subtype(subtype);
+    return ti;
+  };
   switch (ext_arg_type) {
     case ExtArgumentType::PInt8:
       return SQLTypeInfo(kTINYINT, false);
@@ -39,6 +44,20 @@ SQLTypeInfo ext_arg_pointer_type_to_type_info(const ExtArgumentType ext_arg_type
       return SQLTypeInfo(kFLOAT, false);
     case ExtArgumentType::PDouble:
       return SQLTypeInfo(kDOUBLE, false);
+    case ExtArgumentType::ColumnInt8:
+      return generate_column_type(kTINYINT);
+    case ExtArgumentType::ColumnInt16:
+      return generate_column_type(kSMALLINT);
+    case ExtArgumentType::ColumnInt32:
+      return generate_column_type(kINT);
+    case ExtArgumentType::ColumnInt64:
+      return generate_column_type(kBIGINT);
+    case ExtArgumentType::ColumnFloat:
+      return generate_column_type(kFLOAT);
+    case ExtArgumentType::ColumnDouble:
+      return generate_column_type(kDOUBLE);
+    case ExtArgumentType::ColumnBool:
+      return generate_column_type(kBOOLEAN);
     default:
       UNREACHABLE();
   }
@@ -47,6 +66,11 @@ SQLTypeInfo ext_arg_pointer_type_to_type_info(const ExtArgumentType ext_arg_type
 }
 
 }  // namespace
+
+SQLTypeInfo TableFunction::getInputSQLType(const size_t idx) const {
+  CHECK_LT(idx, input_args_.size());
+  return ext_arg_pointer_type_to_type_info(input_args_[idx]);
+}
 
 SQLTypeInfo TableFunction::getOutputSQLType(const size_t idx) const {
   CHECK_LT(idx, output_args_.size());
@@ -71,13 +95,19 @@ void TableFunctionsFactory::init() {
   }
   std::call_once(init_flag, []() {
     TableFunctionsFactory::add(
-        "row_copier",
+        "row_copierOLDAPI",
         TableFunctionOutputRowSizer{OutputBufferSizeType::kUserSpecifiedRowMultiplier, 2},
         std::vector<ExtArgumentType>{ExtArgumentType::PDouble,
                                      ExtArgumentType::PInt32,
                                      ExtArgumentType::PInt64,
                                      ExtArgumentType::PInt64},
         std::vector<ExtArgumentType>{ExtArgumentType::PDouble});
+    TableFunctionsFactory::add(
+        "row_copier",
+        TableFunctionOutputRowSizer{OutputBufferSizeType::kUserSpecifiedRowMultiplier, 2},
+        std::vector<ExtArgumentType>{ExtArgumentType::ColumnDouble,
+                                     ExtArgumentType::Int32},
+        std::vector<ExtArgumentType>{ExtArgumentType::ColumnDouble});
   });
 }
 

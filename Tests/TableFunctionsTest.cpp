@@ -189,6 +189,20 @@ TEST_F(RowCopierTableFunction, Unsupported) {
   }
 }
 
+TEST_F(RowCopierTableFunction, CallFailure) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+
+    EXPECT_THROW(run_multiple_agg("SELECT d FROM TABLE(row_copier(cursor("
+                                  "SELECT d FROM tf_test),101));",
+                                  dt),
+                 std::runtime_error);
+
+    // Skip this test for GPU. TODO: row_copier return value is ignored.
+    break;
+  }
+}
+
 int main(int argc, char** argv) {
   TestHelpers::init_logger_stderr_only(argc, argv);
   testing::InitGoogleTest(&argc, argv);
