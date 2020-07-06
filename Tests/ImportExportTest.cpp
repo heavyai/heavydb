@@ -1393,7 +1393,7 @@ void check_geo_gdal_mpoly_tv_import() {
 
 }  // namespace
 
-class GeoImportTest : public ::testing::Test {
+class ImportTestGeo : public ::testing::Test {
  protected:
   void SetUp() override {
     ASSERT_NO_THROW(run_ddl_statement("drop table if exists geospatial;"););
@@ -1406,7 +1406,7 @@ class GeoImportTest : public ::testing::Test {
   }
 };
 
-TEST_F(GeoImportTest, CSV_Import) {
+TEST_F(ImportTestGeo, CSV_Import) {
   const auto file_path =
       boost::filesystem::path("../../Tests/Import/datafiles/geospatial.csv");
   run_ddl_statement("COPY geospatial FROM '" + file_path.string() + "';");
@@ -1414,7 +1414,7 @@ TEST_F(GeoImportTest, CSV_Import) {
   check_geo_num_rows("p1, l, poly, mpoly, p2, p3, p4, trip_distance", 10);
 }
 
-TEST_F(GeoImportTest, CSV_Import_Empties) {
+TEST_F(ImportTestGeo, CSV_Import_Empties) {
   const auto file_path =
       boost::filesystem::path("../../Tests/Import/datafiles/geospatial_empties.csv");
   run_ddl_statement("COPY geospatial FROM '" + file_path.string() + "';");
@@ -1423,7 +1423,7 @@ TEST_F(GeoImportTest, CSV_Import_Empties) {
                      6);  // we expect it to drop the 4 rows containing 'EMPTY'
 }
 
-TEST_F(GeoImportTest, CSV_Import_Nulls) {
+TEST_F(ImportTestGeo, CSV_Import_Nulls) {
   const auto file_path =
       boost::filesystem::path("../../Tests/Import/datafiles/geospatial_nulls.csv");
   run_ddl_statement("COPY geospatial FROM '" + file_path.string() + "';");
@@ -1432,7 +1432,7 @@ TEST_F(GeoImportTest, CSV_Import_Nulls) {
                      7);  // drop 3 rows containing NULL geo for NOT NULL columns
 }
 
-TEST_F(GeoImportTest, CSV_Import_Degenerate) {
+TEST_F(ImportTestGeo, CSV_Import_Degenerate) {
   const auto file_path =
       boost::filesystem::path("../../Tests/Import/datafiles/geospatial_degenerate.csv");
   run_ddl_statement("COPY geospatial FROM '" + file_path.string() + "';");
@@ -1443,55 +1443,55 @@ TEST_F(GeoImportTest, CSV_Import_Degenerate) {
 
 // the remaining tests in this group are incomplete but leave them as placeholders
 
-TEST_F(GeoImportTest, Geo_CSV_Local_Type_Geometry) {
+TEST_F(ImportTestGeo, Geo_CSV_Local_Type_Geometry) {
   EXPECT_TRUE(
       import_test_local_geo("geospatial.csv", ", geo_coords_type='geometry'", 10, 4.5));
 }
 
-TEST_F(GeoImportTest, Geo_CSV_Local_Type_Geography) {
+TEST_F(ImportTestGeo, Geo_CSV_Local_Type_Geography) {
   EXPECT_THROW(
       import_test_local_geo("geospatial.csv", ", geo_coords_type='geography'", 10, 4.5),
       std::runtime_error);
 }
 
-TEST_F(GeoImportTest, Geo_CSV_Local_Type_Other) {
+TEST_F(ImportTestGeo, Geo_CSV_Local_Type_Other) {
   EXPECT_THROW(
       import_test_local_geo("geospatial.csv", ", geo_coords_type='other'", 10, 4.5),
       std::runtime_error);
 }
 
-TEST_F(GeoImportTest, Geo_CSV_Local_Encoding_NONE) {
+TEST_F(ImportTestGeo, Geo_CSV_Local_Encoding_NONE) {
   EXPECT_TRUE(
       import_test_local_geo("geospatial.csv", ", geo_coords_encoding='none'", 10, 4.5));
 }
 
-TEST_F(GeoImportTest, Geo_CSV_Local_Encoding_GEOINT32) {
+TEST_F(ImportTestGeo, Geo_CSV_Local_Encoding_GEOINT32) {
   EXPECT_TRUE(import_test_local_geo(
       "geospatial.csv", ", geo_coords_encoding='compressed(32)'", 10, 4.5));
 }
 
-TEST_F(GeoImportTest, Geo_CSV_Local_Encoding_Other) {
+TEST_F(ImportTestGeo, Geo_CSV_Local_Encoding_Other) {
   EXPECT_THROW(
       import_test_local_geo("geospatial.csv", ", geo_coords_encoding='other'", 10, 4.5),
       std::runtime_error);
 }
 
-TEST_F(GeoImportTest, Geo_CSV_Local_SRID_LonLat) {
+TEST_F(ImportTestGeo, Geo_CSV_Local_SRID_LonLat) {
   EXPECT_TRUE(import_test_local_geo("geospatial.csv", ", geo_coords_srid=4326", 10, 4.5));
 }
 
-TEST_F(GeoImportTest, Geo_CSV_Local_SRID_Mercator) {
+TEST_F(ImportTestGeo, Geo_CSV_Local_SRID_Mercator) {
   EXPECT_TRUE(
       import_test_local_geo("geospatial.csv", ", geo_coords_srid=900913", 10, 4.5));
 }
 
-TEST_F(GeoImportTest, Geo_CSV_Local_SRID_Other) {
+TEST_F(ImportTestGeo, Geo_CSV_Local_SRID_Other) {
   EXPECT_THROW(
       import_test_local_geo("geospatial.csv", ", geo_coords_srid=12345", 10, 4.5),
       std::runtime_error);
 }
 
-class GeoGDALImportTest : public ::testing::Test {
+class ImportTestGDAL : public ::testing::Test {
  protected:
   void SetUp() override {
     ASSERT_NO_THROW(run_ddl_statement("drop table if exists geospatial;"););
@@ -1502,7 +1502,7 @@ class GeoGDALImportTest : public ::testing::Test {
   }
 };
 
-TEST_F(GeoGDALImportTest, Geojson_Point_Import) {
+TEST_F(ImportTestGDAL, Geojson_Point_Import) {
   SKIP_ALL_ON_AGGREGATOR();
   const auto file_path =
       boost::filesystem::path("geospatial_point/geospatial_point.geojson");
@@ -1511,7 +1511,7 @@ TEST_F(GeoGDALImportTest, Geojson_Point_Import) {
   check_geo_num_rows("omnisci_geo, trip", 10);
 }
 
-TEST_F(GeoGDALImportTest, Geojson_Poly_Import) {
+TEST_F(ImportTestGDAL, Geojson_Poly_Import) {
   SKIP_ALL_ON_AGGREGATOR();
   const auto file_path =
       boost::filesystem::path("geospatial_mpoly/geospatial_poly.geojson");
@@ -1520,7 +1520,7 @@ TEST_F(GeoGDALImportTest, Geojson_Poly_Import) {
   check_geo_num_rows("omnisci_geo, trip", 10);
 }
 
-TEST_F(GeoGDALImportTest, Geojson_MultiPolygon_Import) {
+TEST_F(ImportTestGDAL, Geojson_MultiPolygon_Import) {
   SKIP_ALL_ON_AGGREGATOR();
   const auto file_path =
       boost::filesystem::path("geospatial_mpoly/geospatial_mpoly.geojson");
@@ -1529,7 +1529,7 @@ TEST_F(GeoGDALImportTest, Geojson_MultiPolygon_Import) {
   check_geo_num_rows("omnisci_geo, trip", 10);
 }
 
-TEST_F(GeoGDALImportTest, Geojson_MultiPolygon_Explode_MPoly_Import) {
+TEST_F(ImportTestGDAL, Geojson_MultiPolygon_Explode_MPoly_Import) {
   SKIP_ALL_ON_AGGREGATOR();
   const auto file_path =
       boost::filesystem::path("geospatial_mpoly/geospatial_mpoly.geojson");
@@ -1538,7 +1538,7 @@ TEST_F(GeoGDALImportTest, Geojson_MultiPolygon_Explode_MPoly_Import) {
   check_geo_num_rows("omnisci_geo, trip", 20);      // 10M -> 20P
 }
 
-TEST_F(GeoGDALImportTest, Geojson_MultiPolygon_Explode_Mixed_Import) {
+TEST_F(ImportTestGDAL, Geojson_MultiPolygon_Explode_Mixed_Import) {
   SKIP_ALL_ON_AGGREGATOR();
   const auto file_path =
       boost::filesystem::path("geospatial_mpoly/geospatial_mixed.geojson");
@@ -1547,7 +1547,7 @@ TEST_F(GeoGDALImportTest, Geojson_MultiPolygon_Explode_Mixed_Import) {
   check_geo_num_rows("omnisci_geo, trip", 15);      // 5M + 5P -> 15P
 }
 
-TEST_F(GeoGDALImportTest, Geojson_MultiPolygon_Import_Empties) {
+TEST_F(ImportTestGDAL, Geojson_MultiPolygon_Import_Empties) {
   SKIP_ALL_ON_AGGREGATOR();
   const auto file_path =
       boost::filesystem::path("geospatial_mpoly/geospatial_mpoly_empties.geojson");
@@ -1556,7 +1556,7 @@ TEST_F(GeoGDALImportTest, Geojson_MultiPolygon_Import_Empties) {
   check_geo_num_rows("omnisci_geo, trip", 8);  // we expect it to drop 2 of the 10 rows
 }
 
-TEST_F(GeoGDALImportTest, Geojson_MultiPolygon_Import_Degenerate) {
+TEST_F(ImportTestGDAL, Geojson_MultiPolygon_Import_Degenerate) {
   SKIP_ALL_ON_AGGREGATOR();
   const auto file_path =
       boost::filesystem::path("geospatial_mpoly/geospatial_mpoly_degenerate.geojson");
@@ -1565,7 +1565,7 @@ TEST_F(GeoGDALImportTest, Geojson_MultiPolygon_Import_Degenerate) {
   check_geo_num_rows("omnisci_geo, trip", 8);  // we expect it to drop 2 of the 10 rows
 }
 
-TEST_F(GeoGDALImportTest, Shapefile_Point_Import) {
+TEST_F(ImportTestGDAL, Shapefile_Point_Import) {
   SKIP_ALL_ON_AGGREGATOR();
   const auto file_path = boost::filesystem::path("geospatial_point/geospatial_point.shp");
   import_test_geofile_importer(file_path.string(), "geospatial", false, true, false);
@@ -1573,7 +1573,7 @@ TEST_F(GeoGDALImportTest, Shapefile_Point_Import) {
   check_geo_num_rows("omnisci_geo, trip", 10);
 }
 
-TEST_F(GeoGDALImportTest, Shapefile_MultiPolygon_Import) {
+TEST_F(ImportTestGDAL, Shapefile_MultiPolygon_Import) {
   SKIP_ALL_ON_AGGREGATOR();
   const auto file_path = boost::filesystem::path("geospatial_mpoly/geospatial_mpoly.shp");
   import_test_geofile_importer(file_path.string(), "geospatial", false, true, false);
@@ -1581,7 +1581,7 @@ TEST_F(GeoGDALImportTest, Shapefile_MultiPolygon_Import) {
   check_geo_num_rows("omnisci_geo, trip", 10);
 }
 
-TEST_F(GeoGDALImportTest, Shapefile_Point_Import_Compressed) {
+TEST_F(ImportTestGDAL, Shapefile_Point_Import_Compressed) {
   SKIP_ALL_ON_AGGREGATOR();
   const auto file_path = boost::filesystem::path("geospatial_point/geospatial_point.shp");
   import_test_geofile_importer(file_path.string(), "geospatial", true, true, false);
@@ -1589,7 +1589,7 @@ TEST_F(GeoGDALImportTest, Shapefile_Point_Import_Compressed) {
   check_geo_num_rows("omnisci_geo, trip", 10);
 }
 
-TEST_F(GeoGDALImportTest, Shapefile_MultiPolygon_Import_Compressed) {
+TEST_F(ImportTestGDAL, Shapefile_MultiPolygon_Import_Compressed) {
   SKIP_ALL_ON_AGGREGATOR();
   const auto file_path = boost::filesystem::path("geospatial_mpoly/geospatial_mpoly.shp");
   import_test_geofile_importer(file_path.string(), "geospatial", true, true, false);
@@ -1597,7 +1597,7 @@ TEST_F(GeoGDALImportTest, Shapefile_MultiPolygon_Import_Compressed) {
   check_geo_num_rows("omnisci_geo, trip", 10);
 }
 
-TEST_F(GeoGDALImportTest, Shapefile_Point_Import_3857) {
+TEST_F(ImportTestGDAL, Shapefile_Point_Import_3857) {
   SKIP_ALL_ON_AGGREGATOR();
   const auto file_path =
       boost::filesystem::path("geospatial_point/geospatial_point_3857.shp");
@@ -1606,7 +1606,7 @@ TEST_F(GeoGDALImportTest, Shapefile_Point_Import_3857) {
   check_geo_num_rows("omnisci_geo, trip", 10);
 }
 
-TEST_F(GeoGDALImportTest, Shapefile_MultiPolygon_Import_3857) {
+TEST_F(ImportTestGDAL, Shapefile_MultiPolygon_Import_3857) {
   SKIP_ALL_ON_AGGREGATOR();
   const auto file_path =
       boost::filesystem::path("geospatial_mpoly/geospatial_mpoly_3857.shp");
@@ -1615,7 +1615,7 @@ TEST_F(GeoGDALImportTest, Shapefile_MultiPolygon_Import_3857) {
   check_geo_num_rows("omnisci_geo, trip", 10);
 }
 
-TEST_F(GeoGDALImportTest, Geojson_MultiPolygon_Append) {
+TEST_F(ImportTestGDAL, Geojson_MultiPolygon_Append) {
   SKIP_ALL_ON_AGGREGATOR();
   const auto file_path =
       boost::filesystem::path("geospatial_mpoly/geospatial_mpoly.geojson");
@@ -1626,7 +1626,7 @@ TEST_F(GeoGDALImportTest, Geojson_MultiPolygon_Append) {
   check_geo_num_rows("omnisci_geo, trip", 20);
 }
 
-TEST_F(GeoGDALImportTest, Geodatabase_Simple) {
+TEST_F(ImportTestGDAL, Geodatabase_Simple) {
   SKIP_ALL_ON_AGGREGATOR();
   const auto file_path =
       boost::filesystem::path("geodatabase/S_USA.Experimental_Area_Locations.gdb.zip");
@@ -1634,7 +1634,7 @@ TEST_F(GeoGDALImportTest, Geodatabase_Simple) {
   check_geo_num_rows("omnisci_geo, ESTABLISHED", 87);
 }
 
-TEST_F(GeoGDALImportTest, KML_Simple) {
+TEST_F(ImportTestGDAL, KML_Simple) {
   SKIP_ALL_ON_AGGREGATOR();
   if (!import_export::GDAL::supportsDriver("libkml")) {
     LOG(ERROR) << "Test requires LibKML support in GDAL";
@@ -1703,10 +1703,6 @@ TEST_F(ImportTest, S3_GCS_One_geo_file) {
                              1.0));
 }
 #endif  // HAVE_AWS_S3
-
-//
-// Exports
-//
 
 class ExportTest : public ::testing::Test {
  protected:
@@ -2396,7 +2392,7 @@ int main(int argc, char** argv) {
 
   desc.add_options()(
       "test-help",
-      "Print all ImportTest specific options (for gtest options use `--help`).");
+      "Print all ImportExportTest specific options (for gtest options use `--help`).");
 
   desc.add_options()(
       "regenerate-export-test-reference-files",
@@ -2414,7 +2410,7 @@ int main(int argc, char** argv) {
   po::notify(vm);
 
   if (vm.count("test-help")) {
-    std::cout << "Usage: ImportTest" << std::endl << std::endl;
+    std::cout << "Usage: ImportExportTest" << std::endl << std::endl;
     std::cout << desc << std::endl;
     return 0;
   }
@@ -2425,7 +2421,8 @@ int main(int argc, char** argv) {
         boost::filesystem::canonical("../../Tests/Export/QueryExport/datafiles");
     if (!boost::filesystem::is_directory(write_path)) {
       std::cerr << "Failed to locate Export Test Reference Files directory!" << std::endl;
-      std::cerr << "Ensure you are running ImportTest from $BUILD/Tests!" << std::endl;
+      std::cerr << "Ensure you are running ImportExportTest from $BUILD/Tests!"
+                << std::endl;
       return 1;
     }
 

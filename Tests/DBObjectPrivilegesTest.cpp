@@ -2836,9 +2836,9 @@ int main(int argc, char* argv[]) {
   desc.add_options()("gtest_list_tests", "list all tests");
   desc.add_options()("gtest_filter", "filters tests, use --help for details");
 
-  desc.add_options()(
-      "test-help",
-      "Print all ImportTest specific options (for gtest options use `--help`).");
+  desc.add_options()("test-help",
+                     "Print all DBObjectPrivilegesTest specific options (for gtest "
+                     "options use `--help`).");
 
   logger::LogOptions log_options(argv[0]);
   log_options.max_files_ = 0;  // stderr only by default
@@ -2849,7 +2849,7 @@ int main(int argc, char* argv[]) {
   po::notify(vm);
 
   if (vm.count("test-help")) {
-    std::cout << "Usage: ImportTest" << std::endl << std::endl;
+    std::cout << "Usage: DBObjectPrivilegesTest" << std::endl << std::endl;
     std::cout << desc << std::endl;
     return 0;
   }
