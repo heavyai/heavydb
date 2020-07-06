@@ -2093,6 +2093,20 @@ void get_table_definitions(TableDescriptor& td,
   return it->second(td, p.get(), columns);
 }
 
+void get_table_definitions_for_ctas(TableDescriptor& td,
+                                    const std::unique_ptr<NameValueAssign>& p,
+                                    const std::list<ColumnDescriptor>& columns) {
+  const auto it = tableDefFuncMap.find(boost::to_lower_copy<std::string>(*p->get_name()));
+  if (it == tableDefFuncMap.end()) {
+    throw std::runtime_error(
+        "Invalid CREATE TABLE AS option " + *p->get_name() +
+        ". Should be FRAGMENT_SIZE, MAX_CHUNK_SIZE, PAGE_SIZE, MAX_ROWS, "
+        "PARTITIONS, SHARD_COUNT, VACUUM, SORT_COLUMN, STORAGE_TYPE or "
+        "USE_SHARED_DICTIONARIES.");
+  }
+  return it->second(td, p.get(), columns);
+}
+
 static const std::map<const std::string, const TableDefFuncPtr> dataframeDefFuncMap = {
     {"fragment_size"s, get_frag_size_def},
     {"max_chunk_size"s, get_max_chunk_size_def}};
@@ -2908,20 +2922,67 @@ void CreateTableAsSelectStmt::execute(const Catalog_Namespace::SessionInfo& sess
     td.maxChunkSize = DEFAULT_MAX_CHUNK_SIZE;
     td.fragPageSize = DEFAULT_PAGE_SIZE;
     td.maxRows = DEFAULT_MAX_ROWS;
-    td.keyMetainfo = "[]";
     if (is_temporary_) {
       td.persistenceLevel = Data_Namespace::MemoryLevel::CPU_LEVEL;
     } else {
       td.persistenceLevel = Data_Namespace::MemoryLevel::DISK_LEVEL;
     }
 
+    bool use_shared_dictionaries = true;
+
     if (!storage_options_.empty()) {
       for (auto& p : storage_options_) {
-        get_table_definitions(td, p, column_descriptors_for_create);
+        if (boost::to_lower_copy<std::string>(*p->get_name()) ==
+            "use_shared_dictionaries") {
+          const StringLiteral* literal =
+              dynamic_cast<const StringLiteral*>(p->get_value());
+          if (nullptr == literal) {
+            throw std::runtime_error(
+                "USE_SHARED_DICTIONARIES must be a string parameter");
+          }
+          std::string val = boost::to_lower_copy<std::string>(*literal->get_stringval());
+          use_shared_dictionaries = val == "true" || val == "1" || val == "t";
+        } else {
+          get_table_definitions_for_ctas(td, p, column_descriptors_for_create);
+        }
       }
     }
 
-    catalog.createTable(td, column_descriptors_for_create, {}, true);
+    std::vector<SharedDictionaryDef> sharedDictionaryRefs;
+
+    if (use_shared_dictionaries) {
+      const auto source_column_descriptors =
+          local_connector.getColumnDescriptors(result, false);
+      const auto mapping = catalog.getDictionaryToColumnMapping();
+
+      for (auto& source_cd : source_column_descriptors) {
+        const auto& ti = source_cd.columnType;
+        if (ti.is_string()) {
+          if (ti.get_compression() == kENCODING_DICT) {
+            int dict_id = ti.get_comp_param();
+            auto it = mapping.find(dict_id);
+            if (mapping.end() != it) {
+              const auto targetColumn = it->second;
+              auto targetTable =
+                  catalog.getMetadataForTable(targetColumn->tableId, false);
+              CHECK(targetTable);
+              LOG(INFO) << "CTAS: sharing text dictionary on column "
+                        << source_cd.columnName << " with " << targetTable->tableName
+                        << "." << targetColumn->columnName;
+              sharedDictionaryRefs.push_back(
+                  SharedDictionaryDef(source_cd.columnName,
+                                      targetTable->tableName,
+                                      targetColumn->columnName));
+            }
+          }
+        }
+      }
+    }
+
+    // currently no means of defining sharding in CTAS
+    td.keyMetainfo = serialize_key_metainfo(nullptr, sharedDictionaryRefs);
+
+    catalog.createTable(td, column_descriptors_for_create, sharedDictionaryRefs, true);
     // TODO (max): It's transactionally unsafe, should be fixed: we may create object
     // w/o privileges
     SysCatalog::instance().createDBObject(

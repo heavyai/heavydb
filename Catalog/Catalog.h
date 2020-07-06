@@ -131,6 +131,8 @@ class Catalog final {
   void dropColumn(const TableDescriptor& td, const ColumnDescriptor& cd);
   void removeChunks(const int table_id);
 
+  const std::map<int, const ColumnDescriptor*> getDictionaryToColumnMapping();
+
   /**
    * @brief Returns a pointer to a const TableDescriptor struct matching
    * the provided tableName
@@ -143,7 +145,8 @@ class Catalog final {
                                              const bool populateFragmenter = true) const;
   const TableDescriptor* getMetadataForTableImpl(int tableId,
                                                  const bool populateFragmenter) const;
-  const TableDescriptor* getMetadataForTable(int tableId) const;
+  const TableDescriptor* getMetadataForTable(int tableId,
+                                             bool populateFragmenter = true) const;
 
   const ColumnDescriptor* getMetadataForColumn(int tableId,
                                                const std::string& colName) const;
