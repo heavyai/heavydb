@@ -310,30 +310,30 @@ std::vector<TargetValue> ResultSet::getNextRowUnlocked(
     fetched_so_far_ = 1;
     return {explanation_};
   }
-  while (fetched_so_far_ < drop_first_) {
-    const auto row = getNextRowImpl(translate_strings, decimal_to_double);
-    if (row.empty()) {
-      return row;
-    }
-  }
   return getNextRowImpl(translate_strings, decimal_to_double);
 }
 
 std::vector<TargetValue> ResultSet::getNextRowImpl(const bool translate_strings,
                                                    const bool decimal_to_double) const {
-  auto entry_buff_idx = advanceCursorToNextEntry();
-  if (keep_first_ && fetched_so_far_ >= drop_first_ + keep_first_) {
-    return {};
-  }
+  size_t entry_buff_idx = 0;
+  do {
+    if (keep_first_ && fetched_so_far_ >= drop_first_ + keep_first_) {
+      return {};
+    }
 
-  if (crt_row_buff_idx_ >= entryCount()) {
-    CHECK_EQ(entryCount(), crt_row_buff_idx_);
-    return {};
-  }
+    entry_buff_idx = advanceCursorToNextEntry();
+
+    if (crt_row_buff_idx_ >= entryCount()) {
+      CHECK_EQ(entryCount(), crt_row_buff_idx_);
+      return {};
+    }
+    ++crt_row_buff_idx_;
+    ++fetched_so_far_;
+
+  } while (drop_first_ && fetched_so_far_ <= drop_first_);
+
   auto row = getRowAt(entry_buff_idx, translate_strings, decimal_to_double, false);
   CHECK(!row.empty());
-  ++crt_row_buff_idx_;
-  ++fetched_so_far_;
 
   return row;
 }
