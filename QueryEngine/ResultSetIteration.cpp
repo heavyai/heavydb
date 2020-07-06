@@ -145,8 +145,8 @@ std::vector<TargetValue> ResultSet::getRowAt(
         align_to_int64(get_key_bytes_rowwise(query_mem_desc_));
     rowwise_target_ptr = keys_ptr + key_bytes_with_padding;
   }
-  for (size_t target_idx = 0; target_idx < storage_->targets_.size(); ++target_idx) {
-    const auto& agg_info = storage_->targets_[target_idx];
+  for (size_t target_idx = 0; target_idx < storage->targets_.size(); ++target_idx) {
+    const auto& agg_info = storage->targets_[target_idx];
     if (query_mem_desc_.didOutputColumnar()) {
       if (UNLIKELY(!targets_to_skip.empty())) {
         row.push_back(!targets_to_skip[target_idx]
