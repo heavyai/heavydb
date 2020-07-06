@@ -4270,20 +4270,18 @@ void ExportQueryStmt::execute(const Catalog_Namespace::SessionInfo& session) {
 
   parseOptions(copy_params, file_type, layer_name, file_compression, array_null_handling);
 
-  if (file_path->empty() || !boost::filesystem::path(*file_path).is_absolute()) {
-    std::string file_name;
-    if (file_path->empty()) {
-      file_name = session.get_session_id() + ".txt";
-    } else {
-      file_name = boost::filesystem::path(*file_path).filename().string();
-    }
-    *file_path = catalog.getBasePath() + "/mapd_export/" + session.get_session_id() + "/";
-    if (!boost::filesystem::exists(*file_path)) {
-      if (!boost::filesystem::create_directories(*file_path)) {
-        throw std::runtime_error("Directory " + *file_path + " cannot be created.");
+  if (file_path->empty()) {
+    throw std::runtime_error("Invalid file path for COPY TO");
+  } else if (!boost::filesystem::path(*file_path).is_absolute()) {
+    std::string file_name = boost::filesystem::path(*file_path).filename().string();
+    std::string file_dir =
+        catalog.getBasePath() + "/mapd_export/" + session.get_session_id() + "/";
+    if (!boost::filesystem::exists(file_dir)) {
+      if (!boost::filesystem::create_directories(file_dir)) {
+        throw std::runtime_error("Directory " + file_dir + " cannot be created.");
       }
     }
-    *file_path += file_name;
+    *file_path = file_dir + file_name;
   } else {
     // Above branch will create a new file in the mapd_export directory. If that path is
     // not exercised, go through applicable file path validations.
