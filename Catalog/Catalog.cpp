@@ -1440,9 +1440,10 @@ const TableDescriptor* Catalog::getMetadataForTableImpl(
   return td;  // returns pointer to table descriptor
 }
 
-const TableDescriptor* Catalog::getMetadataForTable(int tableId) const {
+const TableDescriptor* Catalog::getMetadataForTable(int tableId,
+                                                    bool populateFragmenter) const {
   cat_read_lock read_lock(this);
-  return getMetadataForTableImpl(tableId, true);
+  return getMetadataForTableImpl(tableId, populateFragmenter);
 }
 
 const DictDescriptor* Catalog::getMetadataForDict(const int dict_id,
@@ -3491,6 +3492,37 @@ std::vector<const TableDescriptor*> Catalog::getPhysicalTablesDescriptors(
   }
 
   return physicalTables;
+}
+
+const std::map<int, const ColumnDescriptor*> Catalog::getDictionaryToColumnMapping() {
+  cat_read_lock read_lock(this);
+
+  std::map<int, const ColumnDescriptor*> mapping;
+
+  const auto tables = getAllTableMetadata();
+  for (const auto td : tables) {
+    if (td->shard >= 0) {
+      // skip shards, they're not standalone tables
+      continue;
+    }
+
+    for (auto& cd : getAllColumnMetadataForTable(td->tableId, false, false, true)) {
+      const auto& ti = cd->columnType;
+      if (ti.is_string()) {
+        if (ti.get_compression() == kENCODING_DICT) {
+          // if foreign reference, get referenced tab.col
+          const auto dict_id = ti.get_comp_param();
+
+          // ignore temp (negative) dictionaries
+          if (dict_id > 0 && mapping.end() == mapping.find(dict_id)) {
+            mapping[dict_id] = cd;
+          }
+        }
+      }
+    }
+  }
+
+  return mapping;
 }
 
 std::vector<std::string> Catalog::getTableNamesForUser(

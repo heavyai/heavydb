@@ -680,6 +680,7 @@ std::shared_ptr<ResultSet> run_multiple_agg(const std::string& sql,
 TEST(Ctas, SyntaxCheck) {
   run_ddl_statement("DROP TABLE IF EXISTS CTAS_SOURCE;");
   run_ddl_statement("DROP TABLE IF EXISTS CTAS_SOURCE_WITH;");
+  run_ddl_statement("DROP TABLE IF EXISTS CTAS_SOURCE_TEXT;");
   run_ddl_statement("DROP TABLE IF EXISTS CTAS_TARGET;");
 
   run_ddl_statement("CREATE TABLE CTAS_SOURCE (id int);");
@@ -724,6 +725,60 @@ TEST(Ctas, SyntaxCheck) {
   EXPECT_THROW(run_ddl_statement(ddl), std::runtime_error);
   ddl = "DROP TABLE CTAS_TARGET;";
   run_ddl_statement(ddl);
+
+  run_ddl_statement("CREATE TABLE CTAS_SOURCE_TEXT (id text);");
+  ddl =
+      "CREATE TABLE CTAS_TARGET AS SELECT * FROM CTAS_SOURCE_TEXT WITH( "
+      "USE_SHARED_DICTIONARIES='FALSE' );";
+  run_ddl_statement(ddl);
+
+  {
+    auto& cat = QR::get()->getSession()->getCatalog();
+    auto td_source = cat.getMetadataForTable("CTAS_SOURCE_TEXT");
+    auto cd_source = cat.getMetadataForColumn(td_source->tableId, "id");
+
+    auto td_target = cat.getMetadataForTable("CTAS_TARGET");
+    auto cd_target = cat.getMetadataForColumn(td_target->tableId, "id");
+
+    ASSERT_TRUE(cd_source->columnType.get_comp_param() !=
+                cd_target->columnType.get_comp_param());
+  }
+
+  ddl = "DROP TABLE CTAS_TARGET;";
+  run_ddl_statement(ddl);
+  ddl = "CREATE TABLE CTAS_TARGET AS SELECT * FROM CTAS_SOURCE_TEXT;";
+  run_ddl_statement(ddl);
+
+  {
+    auto& cat = QR::get()->getSession()->getCatalog();
+    auto td_source = cat.getMetadataForTable("CTAS_SOURCE_TEXT");
+    auto cd_source = cat.getMetadataForColumn(td_source->tableId, "id");
+
+    auto td_target = cat.getMetadataForTable("CTAS_TARGET");
+    auto cd_target = cat.getMetadataForColumn(td_target->tableId, "id");
+
+    ASSERT_EQ(cd_source->columnType.get_comp_param(),
+              cd_target->columnType.get_comp_param());
+  }
+
+  ddl = "DROP TABLE CTAS_TARGET;";
+  run_ddl_statement(ddl);
+  ddl =
+      "CREATE TABLE CTAS_TARGET AS SELECT * FROM CTAS_SOURCE_TEXT WITH( "
+      "USE_SHARED_DICTIONARIES='TRUE' );";
+  run_ddl_statement(ddl);
+
+  {
+    auto& cat = QR::get()->getSession()->getCatalog();
+    auto td_source = cat.getMetadataForTable("CTAS_SOURCE_TEXT");
+    auto cd_source = cat.getMetadataForColumn(td_source->tableId, "id");
+
+    auto td_target = cat.getMetadataForTable("CTAS_TARGET");
+    auto cd_target = cat.getMetadataForColumn(td_target->tableId, "id");
+
+    ASSERT_EQ(cd_source->columnType.get_comp_param(),
+              cd_target->columnType.get_comp_param());
+  }
 }
 
 TEST(Ctas, LiteralStringTest) {
