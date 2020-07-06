@@ -34,8 +34,6 @@
 #include <thrift/transport/TSSLSocket.h>
 #include <thrift/transport/TServerSocket.h>
 
-#include "MapDRelease.h"
-
 #include "Archive/S3Archive.h"
 #include "Shared/Logger.h"
 #include "Shared/SystemParameters.h"

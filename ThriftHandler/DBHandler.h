@@ -29,8 +29,6 @@
 #include <gperftools/heap-profiler.h>
 #endif  // HAVE_PROFILER
 
-#include "MapDRelease.h"
-
 #include "Calcite/Calcite.h"
 #include "Catalog/Catalog.h"
 #include "Fragmenter/InsertOrderFragmenter.h"
