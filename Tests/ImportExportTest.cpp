@@ -1890,7 +1890,6 @@ class ExportTest : public ::testing::Test {
                                         actual_file + "' WITH (" + import_options +
                                         ");"));
     } else {
-#if GEO_ARRAY_COLUMN_INPUT_FIXED
       // use ImportDriver for blocking geo import
       QueryRunner::ImportDriver import_driver(QR::get()->getCatalog(),
                                               QR::get()->getSession()->get_currentUser(),
@@ -1900,9 +1899,6 @@ class ExportTest : public ::testing::Test {
       }
       ASSERT_NO_THROW(import_driver.importGeoTable(
           actual_file, "query_export_test_reimport", false, true, false));
-#else
-      return;
-#endif
     }
 
     // select a comparable value from the first row

@@ -2359,15 +2359,82 @@ static ImportStatus import_thread_shapefile(
           } else {
             // regular column
             // pull from GDAL metadata
-            const auto cit = columnNameToSourceNameMap.find(cd->columnName);
+            auto const cit = columnNameToSourceNameMap.find(cd->columnName);
             CHECK(cit != columnNameToSourceNameMap.end());
-            const std::string& fieldName = cit->second;
-            const auto fit = fieldNameToIndexMap.find(fieldName);
+            auto const& field_name = cit->second;
+
+            auto const fit = fieldNameToIndexMap.find(field_name);
             CHECK(fit != fieldNameToIndexMap.end());
-            size_t iField = fit->second;
-            CHECK(iField < fieldNameToIndexMap.size());
-            std::string fieldContents = features[iFeature]->GetFieldAsString(iField);
-            import_buffers[col_idx]->add_value(cd, fieldContents, false, copy_params);
+            auto const& field_index = fit->second;
+            CHECK(field_index < fieldNameToIndexMap.size());
+
+            auto const& feature = features[iFeature];
+
+            auto field_defn = feature->GetFieldDefnRef(field_index);
+            CHECK(field_defn);
+
+            // OGRFeature::GetFieldAsString() can only return 80 characters
+            // so for array columns, we are obliged to fetch the actual values
+            // and construct the concatenated string ourselves
+
+            std::string value_string;
+            int array_index = 0, array_size = 0;
+
+            auto stringify_numeric_list = [&](auto* values) {
+              value_string = "{";
+              while (array_index < array_size) {
+                auto separator = (array_index > 0) ? "," : "";
+                value_string += separator + std::to_string(values[array_index]);
+                array_index++;
+              }
+              value_string += "}";
+            };
+
+            auto field_type = field_defn->GetType();
+            switch (field_type) {
+              case OFTInteger:
+              case OFTInteger64:
+              case OFTReal:
+              case OFTString:
+              case OFTBinary:
+              case OFTDate:
+              case OFTTime:
+              case OFTDateTime: {
+                value_string = feature->GetFieldAsString(field_index);
+              } break;
+              case OFTIntegerList: {
+                auto* values = feature->GetFieldAsIntegerList(field_index, &array_size);
+                stringify_numeric_list(values);
+              } break;
+              case OFTInteger64List: {
+                auto* values = feature->GetFieldAsInteger64List(field_index, &array_size);
+                stringify_numeric_list(values);
+              } break;
+              case OFTRealList: {
+                auto* values = feature->GetFieldAsDoubleList(field_index, &array_size);
+                stringify_numeric_list(values);
+              } break;
+              case OFTStringList: {
+                auto** array_of_strings = feature->GetFieldAsStringList(field_index);
+                value_string = "{";
+                if (array_of_strings) {
+                  while (auto* this_string = array_of_strings[array_index]) {
+                    auto separator = (array_index > 0) ? "," : "";
+                    value_string += separator + std::string(this_string);
+                    array_index++;
+                  }
+                }
+                value_string += "}";
+              } break;
+              default:
+                throw std::runtime_error("Unsupported geo file field type (" +
+                                         std::to_string(static_cast<int>(field_type)) +
+                                         ")");
+            }
+
+            static CopyParams default_copy_params;
+            import_buffers[col_idx]->add_value(
+                cd, value_string, false, default_copy_params);
             ++col_idx;
           }
         }
