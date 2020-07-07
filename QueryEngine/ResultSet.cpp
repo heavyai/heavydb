@@ -657,6 +657,9 @@ std::pair<size_t, size_t> ResultSet::getStorageIndex(const size_t entry_idx) con
   return {};
 }
 
+template struct ResultSet::ResultSetComparator<ResultSet::RowWiseTargetAccessor>;
+template struct ResultSet::ResultSetComparator<ResultSet::ColumnWiseTargetAccessor>;
+
 ResultSet::StorageLookupResult ResultSet::findStorage(const size_t entry_idx) const {
   auto [stg_idx, fixedup_entry_idx] = getStorageIndex(entry_idx);
   return {stg_idx ? appended_storage_[stg_idx - 1].get() : storage_.get(),
