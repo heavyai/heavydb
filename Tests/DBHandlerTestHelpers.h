@@ -420,10 +420,9 @@ class DBHandlerTestFixture : public testing::Test {
       std::vector<TDatum> row{};
       for (auto& column : row_set.columns) {
         TDatum datum{};
+        setDatum(datum, column.data, index);
         if (column.nulls[index]) {
           datum.is_null = true;
-        } else {
-          setDatum(datum, column.data, index);
         }
         row.emplace_back(datum);
       }

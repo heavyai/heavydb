@@ -518,14 +518,20 @@ class Loader {
                          size_t)>;
 
  public:
+  // TODO: Remove the `use_catalog_locks` parameter once Loader is refactored out of
+  // ParquetDataWrapper
   Loader(Catalog_Namespace::Catalog& c,
          const TableDescriptor* t,
-         LoadCallbackType load_callback = nullptr)
+         LoadCallbackType load_callback = nullptr,
+         bool use_catalog_locks = true)
       : catalog_(c)
       , table_desc_(t)
-      , column_descs_(c.getAllColumnMetadataForTable(t->tableId, false, false, true))
+      , column_descs_(
+            use_catalog_locks
+                ? c.getAllColumnMetadataForTable(t->tableId, false, false, true)
+                : c.getAllColumnMetadataForTableUnlocked(t->tableId, false, false, true))
       , load_callback_(load_callback) {
-    init();
+    init(use_catalog_locks);
   }
 
   virtual ~Loader() {}
@@ -560,7 +566,7 @@ class Loader {
   void dropColumns(const std::vector<int>& columns);
 
  protected:
-  void init();
+  void init(const bool use_catalog_locks);
 
   virtual bool loadImpl(
       const std::vector<std::unique_ptr<TypedImportBuffer>>& import_buffers,

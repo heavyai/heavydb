@@ -21,6 +21,7 @@
 #include "Catalog/Catalog.h"
 #include "Catalog/SysCatalog.h"
 #include "DataMgr/ForeignStorage/CsvDataWrapper.h"
+#include "DataMgr/ForeignStorage/ParquetDataWrapper.h"
 #include "LockMgr/LockMgr.h"
 #include "Parser/ParserNode.h"
 #include "Shared/StringTransform.h"
@@ -543,6 +544,9 @@ void CreateForeignTableCommand::setTableDetails(const std::string& table_name,
     if (foreign_table.foreign_server->data_wrapper_type ==
         foreign_storage::DataWrapperType::CSV) {
       foreign_storage::CsvDataWrapper::validateOptions(&foreign_table);
+    } else if (foreign_table.foreign_server->data_wrapper_type ==
+               foreign_storage::DataWrapperType::PARQUET) {
+      foreign_storage::ParquetDataWrapper::validateOptions(&foreign_table);
     }
   }
 

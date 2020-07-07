@@ -23,7 +23,9 @@ set(datamgr_source_files
     ForeignStorage/ForeignStorageBuffer.cpp
     ForeignStorage/ForeignStorageMgr.cpp
     ForeignStorage/CsvDataWrapper.cpp
+    ForeignStorage/ParquetDataWrapper.cpp
     PersistentStorageMgr/PersistentStorageMgr.cpp
+    ForeignStorage/LazyParquetImporter.cpp
 )
 
 add_library(DataMgr ${datamgr_source_files})
