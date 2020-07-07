@@ -204,6 +204,7 @@ std::map<int, DataBlockPtr> convert_import_buffers_to_data_blocks(
         p.stringsPtr = string_payload_ptr;
       } else {
         CHECK_EQ(kENCODING_DICT, import_buffer->getTypeInfo().get_compression());
+        p.numbersPtr = nullptr;
 
         auto column_id = import_buffer->getColumnDesc()->columnId;
         encoded_data_block_ptrs_futures.emplace_back(std::make_pair(

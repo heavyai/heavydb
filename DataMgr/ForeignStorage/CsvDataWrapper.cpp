@@ -30,7 +30,7 @@
 
 namespace foreign_storage {
 CsvDataWrapper::CsvDataWrapper(const int db_id, const ForeignTable* foreign_table)
-    : db_id_(db_id), foreign_table_(foreign_table), row_count_(0) {}
+    : db_id_(db_id), foreign_table_(foreign_table) {}
 
 CsvDataWrapper::CsvDataWrapper(const ForeignTable* foreign_table)
     : db_id_(-1), foreign_table_(foreign_table) {}
@@ -276,6 +276,7 @@ ParseFileRegionResult parse_file_regions(
     CHECK_EQ(file_regions[i].row_count, result.row_count);
     load_file_region_result.row_count += result.row_count;
   }
+  CHECK(result.data_blocks.find(chunk_key[2]) != result.data_blocks.end());
   load_file_region_result.data_blocks = result.data_blocks.find(chunk_key[2])->second;
   return load_file_region_result;
 }

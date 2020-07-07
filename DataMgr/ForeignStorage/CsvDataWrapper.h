@@ -107,7 +107,6 @@ class CsvDataWrapper : public ForeignDataWrapper {
 
   const int db_id_;
   const ForeignTable* foreign_table_;
-  size_t row_count_;
   std::mutex file_access_mutex_;
   std::mutex file_regions_mutex_;
 
