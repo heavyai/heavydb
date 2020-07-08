@@ -1,0 +1,9 @@
+Struct foreign_storage::anonymous_namespace{LazyParquetImporter.cpp}::ForeignTableSchema
+========================================================================================
+
+.. doxygenstruct:: foreign_storage::anonymous_namespace{LazyParquetImporter.cpp}::ForeignTableSchema
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

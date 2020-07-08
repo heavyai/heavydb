@@ -1,0 +1,9 @@
+Struct foreign_storage::Interval
+================================
+
+.. doxygenstruct:: foreign_storage::Interval
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

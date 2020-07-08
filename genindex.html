@@ -64,7 +64,7 @@
             
             
               <div class="version">
-                5.4.0dev 79e776f
+                5.4.0dev 4efabf1
               </div>
             
           
@@ -973,6 +973,9 @@
 <li class="toctree-l2"><a class="reference internal" href="api/class/classforeign__storage_1_1_foreign_data_wrapper.html">Class foreign_storage::ForeignDataWrapper</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/classforeign__storage_1_1_foreign_storage_buffer.html">Class foreign_storage::ForeignStorageBuffer</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/classforeign__storage_1_1_foreign_storage_mgr.html">Class foreign_storage::ForeignStorageMgr</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/class/classforeign__storage_1_1_foreign_table_column_map.html">Class foreign_storage::ForeignTableColumnMap</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/class/classforeign__storage_1_1_lazy_parquet_importer.html">Class foreign_storage::LazyParquetImporter</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/class/classforeign__storage_1_1_parquet_data_wrapper.html">Class foreign_storage::ParquetDataWrapper</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/classimport__export_1_1_data_stream_sink.html">Class import_export::DataStreamSink</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/classimport__export_1_1_detector.html">Class import_export::Detector</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/classimport__export_1_1_g_d_a_l.html">Class import_export::GDAL</a></li>
@@ -1302,13 +1305,22 @@
 <li class="toctree-l2"><a class="reference internal" href="api/struct/structanonymous__namespace_02geo__types_8cpp_03_1_1_bounding_box.html">Struct anonymous_namespace{geo_types.cpp}::BoundingBox</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/struct/structanonymous__namespace_02geo__types_8cpp_03_1_1_coords.html">Struct anonymous_namespace{geo_types.cpp}::Coords</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/struct/structdict__ref__t.html">Struct dict_ref_t</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/struct/structforeign__storage_1_1_allowed_parquet_metadata_type_mappings.html">Struct foreign_storage::AllowedParquetMetadataTypeMappings</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/struct/structforeign__storage_1_1_column_type.html">Struct foreign_storage::ColumnType</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/struct/structforeign__storage_1_1_data_wrapper_type.html">Struct foreign_storage::DataWrapperType</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/struct/structforeign__storage_1_1_file_region.html">Struct foreign_storage::FileRegion</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/struct/structforeign__storage_1_1_foreign_server.html">Struct foreign_storage::ForeignServer</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/struct/structforeign__storage_1_1_foreign_table.html">Struct foreign_storage::ForeignTable</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/struct/structforeign__storage_1_1_fragment_type.html">Struct foreign_storage::FragmentType</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/struct/structforeign__storage_1_1_interval.html">Struct foreign_storage::Interval</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/struct/structforeign__storage_1_1_metadata_scan_multi_threading_params.html">Struct foreign_storage::MetadataScanMultiThreadingParams</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/struct/structforeign__storage_1_1_options_container.html">Struct foreign_storage::OptionsContainer</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/struct/structforeign__storage_1_1_parquet_data_wrapper_1_1_fragment_to_row_group_interval.html">Struct foreign_storage::ParquetDataWrapper::FragmentToRowGroupInterval</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/struct/structforeign__storage_1_1_parquet_data_wrapper_1_1_intervals_to_load.html">Struct foreign_storage::ParquetDataWrapper::IntervalsToLoad</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/struct/structforeign__storage_1_1_parse_file_region_result.html">Struct foreign_storage::ParseFileRegionResult</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/struct/structforeign__storage_1_1_row_group_metadata.html">Struct foreign_storage::RowGroupMetadata</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/struct/structforeign__storage_1_1_row_group_type.html">Struct foreign_storage::RowGroupType</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/struct/structforeign__storage_1_1anonymous__namespace_02_lazy_parquet_importer_8cpp_03_1_1_foreign_table_schema.html">Struct foreign_storage::anonymous_namespace{LazyParquetImporter.cpp}::ForeignTableSchema</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/struct/structforeign__storage_1_1csv__file__buffer__parser_1_1_parse_buffer_request.html">Struct foreign_storage::csv_file_buffer_parser::ParseBufferRequest</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/struct/structforeign__storage_1_1csv__file__buffer__parser_1_1_parse_buffer_result.html">Struct foreign_storage::csv_file_buffer_parser::ParseBufferResult</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/struct/structimport__export_1_1_bad_rows_tracker.html">Struct import_export::BadRowsTracker</a></li>
@@ -8637,6 +8649,16 @@
 </li>
       <li><a href="api/class/class_for.html#_CPPv4N3For6start_E">For::start_ (C++ member)</a>
 </li>
+      <li><a href="api/struct/structforeign__storage_1_1_allowed_parquet_metadata_type_mappings.html#_CPPv4N15foreign_storage34AllowedParquetMetadataTypeMappingsE">foreign_storage::AllowedParquetMetadataTypeMappings (C++ class)</a>
+</li>
+      <li><a href="api/struct/structforeign__storage_1_1_allowed_parquet_metadata_type_mappings.html#_CPPv4N15foreign_storage34AllowedParquetMetadataTypeMappings24isColumnMappingSupportedEPK16ColumnDescriptorPKN7parquet16ColumnDescriptorE">foreign_storage::AllowedParquetMetadataTypeMappings::isColumnMappingSupported (C++ function)</a>
+</li>
+      <li><a href="api/struct/structforeign__storage_1_1_allowed_parquet_metadata_type_mappings.html#_CPPv4N15foreign_storage34AllowedParquetMetadataTypeMappings22validateDecimalMappingERK11SQLTypeInfoRKNSt10shared_ptrIKN7parquet11LogicalTypeEEE">foreign_storage::AllowedParquetMetadataTypeMappings::validateDecimalMapping (C++ function)</a>
+</li>
+      <li><a href="api/struct/structforeign__storage_1_1_allowed_parquet_metadata_type_mappings.html#_CPPv4N15foreign_storage34AllowedParquetMetadataTypeMappings23validateIntegralMappingERK11SQLTypeInfoRKNSt10shared_ptrIKN7parquet11LogicalTypeEEE">foreign_storage::AllowedParquetMetadataTypeMappings::validateIntegralMapping (C++ function)</a>
+</li>
+      <li><a href="api/struct/structforeign__storage_1_1_column_type.html#_CPPv4N15foreign_storage10ColumnTypeE">foreign_storage::ColumnType (C++ class)</a>
+</li>
       <li><a href="api/struct/structforeign__storage_1_1csv__file__buffer__parser_1_1_parse_buffer_request.html#_CPPv4N15foreign_storage22csv_file_buffer_parser18ParseBufferRequestE">foreign_storage::csv_file_buffer_parser::ParseBufferRequest (C++ class)</a>
 </li>
       <li><a href="api/struct/structforeign__storage_1_1csv__file__buffer__parser_1_1_parse_buffer_request.html#_CPPv4N15foreign_storage22csv_file_buffer_parser18ParseBufferRequest9begin_posE">foreign_storage::csv_file_buffer_parser::ParseBufferRequest::begin_pos (C++ member)</a>
@@ -8755,8 +8777,6 @@
 </li>
       <li><a href="api/struct/structforeign__storage_1_1_foreign_server.html#_CPPv4N15foreign_storage13ForeignServerE">foreign_storage::ForeignServer (C++ class)</a>
 </li>
-  </ul></td>
-  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="api/struct/structforeign__storage_1_1_foreign_server.html#_CPPv4N15foreign_storage13ForeignServer13BASE_PATH_KEYE">foreign_storage::ForeignServer::BASE_PATH_KEY (C++ member)</a>
 </li>
       <li><a href="api/struct/structforeign__storage_1_1_foreign_server.html#_CPPv4N15foreign_storage13ForeignServer13creation_timeE">foreign_storage::ForeignServer::creation_time (C++ member)</a>
@@ -8831,6 +8851,8 @@
 </li>
       <li><a href="api/class/classforeign__storage_1_1_foreign_storage_mgr.html#_CPPv4N15foreign_storage17ForeignStorageMgr12getNumChunksEv">foreign_storage::ForeignStorageMgr::getNumChunks (C++ function)</a>
 </li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="api/class/classforeign__storage_1_1_foreign_storage_mgr.html#_CPPv4N15foreign_storage17ForeignStorageMgr16getStringMgrTypeEv">foreign_storage::ForeignStorageMgr::getStringMgrType (C++ function)</a>
 </li>
       <li><a href="api/class/classforeign__storage_1_1_foreign_storage_mgr.html#_CPPv4N15foreign_storage17ForeignStorageMgr18isAllocationCappedEv">foreign_storage::ForeignStorageMgr::isAllocationCapped (C++ function)</a>
@@ -8848,6 +8870,52 @@
       <li><a href="api/struct/structforeign__storage_1_1_foreign_table.html#_CPPv4N15foreign_storage12ForeignTable14foreign_serverE">foreign_storage::ForeignTable::foreign_server (C++ member)</a>
 </li>
       <li><a href="api/struct/structforeign__storage_1_1_foreign_table.html#_CPPv4N15foreign_storage12ForeignTable17supported_optionsE">foreign_storage::ForeignTable::supported_options (C++ member)</a>
+</li>
+      <li><a href="api/class/classforeign__storage_1_1_foreign_table_column_map.html#_CPPv4N15foreign_storage21ForeignTableColumnMapE">foreign_storage::ForeignTableColumnMap (C++ class)</a>
+</li>
+      <li><a href="api/class/classforeign__storage_1_1_foreign_table_column_map.html#_CPPv4N15foreign_storage21ForeignTableColumnMap8catalog_E">foreign_storage::ForeignTableColumnMap::catalog_ (C++ member)</a>
+</li>
+      <li><a href="api/class/classforeign__storage_1_1_foreign_table_column_map.html#_CPPv4N15foreign_storage21ForeignTableColumnMap12ensureMappedEv">foreign_storage::ForeignTableColumnMap::ensureMapped (C++ function)</a>
+</li>
+      <li><a href="api/class/classforeign__storage_1_1_foreign_table_column_map.html#_CPPv4N15foreign_storage21ForeignTableColumnMap14foreign_table_E">foreign_storage::ForeignTableColumnMap::foreign_table_ (C++ member)</a>
+</li>
+      <li><a href="api/class/classforeign__storage_1_1_foreign_table_column_map.html#_CPPv4N15foreign_storage21ForeignTableColumnMap21ForeignTableColumnMapEKiPK12ForeignTable">foreign_storage::ForeignTableColumnMap::ForeignTableColumnMap (C++ function)</a>, <a href="api/class/classforeign__storage_1_1_foreign_table_column_map.html#_CPPv4N15foreign_storage21ForeignTableColumnMap21ForeignTableColumnMapEPKN17Catalog_Namespace7CatalogEPK12ForeignTable">[1]</a>
+</li>
+      <li><a href="api/class/classforeign__storage_1_1_foreign_table_column_map.html#_CPPv4N15foreign_storage21ForeignTableColumnMap15getLogicalIndexEi">foreign_storage::ForeignTableColumnMap::getLogicalIndex (C++ function)</a>
+</li>
+      <li><a href="api/class/classforeign__storage_1_1_foreign_table_column_map.html#_CPPv4N15foreign_storage21ForeignTableColumnMap21getPhysicalColumnSpanEi">foreign_storage::ForeignTableColumnMap::getPhysicalColumnSpan (C++ function)</a>
+</li>
+      <li><a href="api/class/classforeign__storage_1_1_foreign_table_column_map.html#_CPPv4N15foreign_storage21ForeignTableColumnMap16getPhysicalIndexEi">foreign_storage::ForeignTableColumnMap::getPhysicalIndex (C++ function)</a>
+</li>
+      <li><a href="api/class/classforeign__storage_1_1_foreign_table_column_map.html#_CPPv4N15foreign_storage21ForeignTableColumnMap10is_mapped_E">foreign_storage::ForeignTableColumnMap::is_mapped_ (C++ member)</a>
+</li>
+      <li><a href="api/class/classforeign__storage_1_1_foreign_table_column_map.html#_CPPv4N15foreign_storage21ForeignTableColumnMap31logical_columns_physical_index_E">foreign_storage::ForeignTableColumnMap::logical_columns_physical_index_ (C++ member)</a>
+</li>
+      <li><a href="api/class/classforeign__storage_1_1_foreign_table_column_map.html#_CPPv4N15foreign_storage21ForeignTableColumnMap25logical_to_physical_indexE">foreign_storage::ForeignTableColumnMap::logical_to_physical_index (C++ member)</a>
+</li>
+      <li><a href="api/class/classforeign__storage_1_1_foreign_table_column_map.html#_CPPv4N15foreign_storage21ForeignTableColumnMap10mapColumnsEv">foreign_storage::ForeignTableColumnMap::mapColumns (C++ function)</a>
+</li>
+      <li><a href="api/struct/structforeign__storage_1_1_fragment_type.html#_CPPv4N15foreign_storage12FragmentTypeE">foreign_storage::FragmentType (C++ class)</a>
+</li>
+      <li><a href="api/struct/structforeign__storage_1_1_interval.html#_CPPv4I0EN15foreign_storage8IntervalE">foreign_storage::Interval (C++ class)</a>
+</li>
+      <li><a href="api/struct/structforeign__storage_1_1_interval.html#_CPPv4N15foreign_storage8Interval3endE">foreign_storage::Interval::end (C++ member)</a>
+</li>
+      <li><a href="api/struct/structforeign__storage_1_1_interval.html#_CPPv4N15foreign_storage8Interval5startE">foreign_storage::Interval::start (C++ member)</a>
+</li>
+      <li><a href="api/class/classforeign__storage_1_1_lazy_parquet_importer.html#_CPPv4N15foreign_storage19LazyParquetImporterE">foreign_storage::LazyParquetImporter (C++ class)</a>
+</li>
+      <li><a href="api/class/classforeign__storage_1_1_lazy_parquet_importer.html#_CPPv4N15foreign_storage19LazyParquetImporter25foreign_table_column_map_E">foreign_storage::LazyParquetImporter::foreign_table_column_map_ (C++ member)</a>
+</li>
+      <li><a href="api/class/classforeign__storage_1_1_lazy_parquet_importer.html#_CPPv4N15foreign_storage19LazyParquetImporter19LazyParquetImporterEPN13import_export6LoaderERKNSt6stringERKN13import_export10CopyParamsER22RowGroupMetadataVector">foreign_storage::LazyParquetImporter::LazyParquetImporter (C++ function)</a>
+</li>
+      <li><a href="api/class/classforeign__storage_1_1_lazy_parquet_importer.html#_CPPv4N15foreign_storage19LazyParquetImporter12metadataScanEv">foreign_storage::LazyParquetImporter::metadataScan (C++ function)</a>
+</li>
+      <li><a href="api/class/classforeign__storage_1_1_lazy_parquet_importer.html#_CPPv4N15foreign_storage19LazyParquetImporter13partialImportERK8IntervalI12RowGroupTypeERK8IntervalI10ColumnTypeEKb">foreign_storage::LazyParquetImporter::partialImport (C++ function)</a>
+</li>
+      <li><a href="api/class/classforeign__storage_1_1_lazy_parquet_importer.html#_CPPv4N15foreign_storage19LazyParquetImporter23row_group_metadata_vec_E">foreign_storage::LazyParquetImporter::row_group_metadata_vec_ (C++ member)</a>
+</li>
+      <li><a href="api/class/classforeign__storage_1_1_lazy_parquet_importer.html#_CPPv4N15foreign_storage19LazyParquetImporter22RowGroupMetadataVectorE">foreign_storage::LazyParquetImporter::RowGroupMetadataVector (C++ type)</a>
 </li>
       <li><a href="api/struct/structforeign__storage_1_1_metadata_scan_multi_threading_params.html#_CPPv4N15foreign_storage32MetadataScanMultiThreadingParamsE">foreign_storage::MetadataScanMultiThreadingParams (C++ class)</a>
 </li>
@@ -8883,6 +8951,104 @@
 </li>
       <li><a href="api/struct/structforeign__storage_1_1_options_container.html#_CPPv4N15foreign_storage16OptionsContainer18populateOptionsMapERKN9rapidjson5ValueE">foreign_storage::OptionsContainer::populateOptionsMap (C++ function)</a>, <a href="api/struct/structforeign__storage_1_1_options_container.html#_CPPv4N15foreign_storage16OptionsContainer18populateOptionsMapERKNSt6stringEb">[1]</a>
 </li>
+      <li><a href="api/class/classforeign__storage_1_1_parquet_data_wrapper.html#_CPPv4N15foreign_storage18ParquetDataWrapperE">foreign_storage::ParquetDataWrapper (C++ class)</a>
+</li>
+      <li><a href="api/class/classforeign__storage_1_1_parquet_data_wrapper.html#_CPPv4N15foreign_storage18ParquetDataWrapper17chunk_buffer_map_E">foreign_storage::ParquetDataWrapper::chunk_buffer_map_ (C++ member)</a>
+</li>
+      <li><a href="api/class/classforeign__storage_1_1_parquet_data_wrapper.html#_CPPv4N15foreign_storage18ParquetDataWrapper18current_row_group_E">foreign_storage::ParquetDataWrapper::current_row_group_ (C++ member)</a>
+</li>
+      <li><a href="api/class/classforeign__storage_1_1_parquet_data_wrapper.html#_CPPv4N15foreign_storage18ParquetDataWrapper6db_id_E">foreign_storage::ParquetDataWrapper::db_id_ (C++ member)</a>
+</li>
+      <li><a href="api/class/classforeign__storage_1_1_parquet_data_wrapper.html#_CPPv4N15foreign_storage18ParquetDataWrapper18fetchChunkMetadataEv">foreign_storage::ParquetDataWrapper::fetchChunkMetadata (C++ function)</a>
+</li>
+      <li><a href="api/class/classforeign__storage_1_1_parquet_data_wrapper.html#_CPPv4N15foreign_storage18ParquetDataWrapper19finalizeFragmentMapEv">foreign_storage::ParquetDataWrapper::finalizeFragmentMap (C++ function)</a>
+</li>
+      <li><a href="api/class/classforeign__storage_1_1_parquet_data_wrapper.html#_CPPv4N15foreign_storage18ParquetDataWrapper14foreign_table_E">foreign_storage::ParquetDataWrapper::foreign_table_ (C++ member)</a>
+</li>
+      <li><a href="api/class/classforeign__storage_1_1_parquet_data_wrapper.html#_CPPv4N15foreign_storage18ParquetDataWrapper25foreign_table_column_map_E">foreign_storage::ParquetDataWrapper::foreign_table_column_map_ (C++ member)</a>
+</li>
+      <li><a href="api/class/classforeign__storage_1_1_parquet_data_wrapper.html#_CPPv4N15foreign_storage18ParquetDataWrapper35fragment_to_row_group_interval_map_E">foreign_storage::ParquetDataWrapper::fragment_to_row_group_interval_map_ (C++ member)</a>
+</li>
+      <li><a href="api/class/classforeign__storage_1_1_parquet_data_wrapper.html#_CPPv4N15foreign_storage18ParquetDataWrapper14fragmentIsFullEv">foreign_storage::ParquetDataWrapper::fragmentIsFull (C++ function)</a>
+</li>
+      <li><a href="api/class/classforeign__storage_1_1_parquet_data_wrapper.html#_CPPv4N15foreign_storage18ParquetDataWrapper26FragmentToRowGroupIntervalE">foreign_storage::ParquetDataWrapper::FragmentToRowGroupInterval (C++ class)</a>, <a href="api/struct/structforeign__storage_1_1_parquet_data_wrapper_1_1_fragment_to_row_group_interval.html#_CPPv4N15foreign_storage18ParquetDataWrapper26FragmentToRowGroupIntervalE">[1]</a>
+</li>
+      <li><a href="api/class/classforeign__storage_1_1_parquet_data_wrapper.html#_CPPv4N15foreign_storage18ParquetDataWrapper26FragmentToRowGroupInterval19end_row_group_indexE">foreign_storage::ParquetDataWrapper::FragmentToRowGroupInterval::end_row_group_index (C++ member)</a>, <a href="api/struct/structforeign__storage_1_1_parquet_data_wrapper_1_1_fragment_to_row_group_interval.html#_CPPv4N15foreign_storage18ParquetDataWrapper26FragmentToRowGroupInterval19end_row_group_indexE">[1]</a>
+</li>
+      <li><a href="api/class/classforeign__storage_1_1_parquet_data_wrapper.html#_CPPv4N15foreign_storage18ParquetDataWrapper26FragmentToRowGroupInterval21start_row_group_indexE">foreign_storage::ParquetDataWrapper::FragmentToRowGroupInterval::start_row_group_index (C++ member)</a>, <a href="api/struct/structforeign__storage_1_1_parquet_data_wrapper_1_1_fragment_to_row_group_interval.html#_CPPv4N15foreign_storage18ParquetDataWrapper26FragmentToRowGroupInterval21start_row_group_indexE">[1]</a>
+</li>
+      <li><a href="api/class/classforeign__storage_1_1_parquet_data_wrapper.html#_CPPv4N15foreign_storage18ParquetDataWrapper26FragmentToRowGroupInterval20start_row_group_lineE">foreign_storage::ParquetDataWrapper::FragmentToRowGroupInterval::start_row_group_line (C++ member)</a>, <a href="api/struct/structforeign__storage_1_1_parquet_data_wrapper_1_1_fragment_to_row_group_interval.html#_CPPv4N15foreign_storage18ParquetDataWrapper26FragmentToRowGroupInterval20start_row_group_lineE">[1]</a>
+</li>
+      <li><a href="api/class/classforeign__storage_1_1_parquet_data_wrapper.html#_CPPv4N15foreign_storage18ParquetDataWrapper35getBufferFromMapOrLoadBufferIntoMapERK8ChunkKey">foreign_storage::ParquetDataWrapper::getBufferFromMapOrLoadBufferIntoMap (C++ function)</a>
+</li>
+      <li><a href="api/class/classforeign__storage_1_1_parquet_data_wrapper.html#_CPPv4N15foreign_storage18ParquetDataWrapper14getChunkBufferERK8ChunkKey">foreign_storage::ParquetDataWrapper::getChunkBuffer (C++ function)</a>
+</li>
+      <li><a href="api/class/classforeign__storage_1_1_parquet_data_wrapper.html#_CPPv4N15foreign_storage18ParquetDataWrapper14getChunkLoaderERN17Catalog_Namespace7CatalogERK8IntervalI12FragmentTypeERK8IntervalI10ColumnTypeEKi">foreign_storage::ParquetDataWrapper::getChunkLoader (C++ function)</a>
+</li>
+      <li><a href="api/class/classforeign__storage_1_1_parquet_data_wrapper.html#_CPPv4N15foreign_storage18ParquetDataWrapper22getColumnsToInitializeERK8IntervalI10ColumnTypeE">foreign_storage::ParquetDataWrapper::getColumnsToInitialize (C++ function)</a>
+</li>
+      <li><a href="api/class/classforeign__storage_1_1_parquet_data_wrapper.html#_CPPv4NK15foreign_storage18ParquetDataWrapper30getElementSizeFromImportBufferERKNSt10unique_ptrIN13import_export17TypedImportBufferEEE">foreign_storage::ParquetDataWrapper::getElementSizeFromImportBuffer (C++ function)</a>
+</li>
+      <li><a href="api/class/classforeign__storage_1_1_parquet_data_wrapper.html#_CPPv4N15foreign_storage18ParquetDataWrapper11getFilePathEv">foreign_storage::ParquetDataWrapper::getFilePath (C++ function)</a>
+</li>
+      <li><a href="api/class/classforeign__storage_1_1_parquet_data_wrapper.html#_CPPv4N15foreign_storage18ParquetDataWrapper17getMetadataLoaderERN17Catalog_Namespace7CatalogERKN19LazyParquetImporter22RowGroupMetadataVectorE">foreign_storage::ParquetDataWrapper::getMetadataLoader (C++ function)</a>
+</li>
+      <li><a href="api/class/classforeign__storage_1_1_parquet_data_wrapper.html#_CPPv4N15foreign_storage18ParquetDataWrapper37getRowGroupsColumnsAndFragmentsToLoadERK8ChunkKey">foreign_storage::ParquetDataWrapper::getRowGroupsColumnsAndFragmentsToLoad (C++ function)</a>
+</li>
+      <li><a href="api/class/classforeign__storage_1_1_parquet_data_wrapper.html#_CPPv4N15foreign_storage18ParquetDataWrapper21initializeChunkBufferERK8ChunkKey">foreign_storage::ParquetDataWrapper::initializeChunkBuffer (C++ function)</a>
+</li>
+      <li><a href="api/class/classforeign__storage_1_1_parquet_data_wrapper.html#_CPPv4N15foreign_storage18ParquetDataWrapper22initializeChunkBuffersEKi">foreign_storage::ParquetDataWrapper::initializeChunkBuffers (C++ function)</a>, <a href="api/class/classforeign__storage_1_1_parquet_data_wrapper.html#_CPPv4N15foreign_storage18ParquetDataWrapper22initializeChunkBuffersERK8IntervalI12FragmentTypeERK8IntervalI10ColumnTypeE">[1]</a>
+</li>
+      <li><a href="api/class/classforeign__storage_1_1_parquet_data_wrapper.html#_CPPv4N15foreign_storage18ParquetDataWrapper15IntervalsToLoadE">foreign_storage::ParquetDataWrapper::IntervalsToLoad (C++ class)</a>, <a href="api/struct/structforeign__storage_1_1_parquet_data_wrapper_1_1_intervals_to_load.html#_CPPv4N15foreign_storage18ParquetDataWrapper15IntervalsToLoadE">[1]</a>
+</li>
+      <li><a href="api/class/classforeign__storage_1_1_parquet_data_wrapper.html#_CPPv4N15foreign_storage18ParquetDataWrapper15IntervalsToLoad15column_intervalE">foreign_storage::ParquetDataWrapper::IntervalsToLoad::column_interval (C++ member)</a>, <a href="api/struct/structforeign__storage_1_1_parquet_data_wrapper_1_1_intervals_to_load.html#_CPPv4N15foreign_storage18ParquetDataWrapper15IntervalsToLoad15column_intervalE">[1]</a>
+</li>
+      <li><a href="api/class/classforeign__storage_1_1_parquet_data_wrapper.html#_CPPv4N15foreign_storage18ParquetDataWrapper15IntervalsToLoad17fragment_intervalE">foreign_storage::ParquetDataWrapper::IntervalsToLoad::fragment_interval (C++ member)</a>, <a href="api/struct/structforeign__storage_1_1_parquet_data_wrapper_1_1_intervals_to_load.html#_CPPv4N15foreign_storage18ParquetDataWrapper15IntervalsToLoad17fragment_intervalE">[1]</a>
+</li>
+      <li><a href="api/class/classforeign__storage_1_1_parquet_data_wrapper.html#_CPPv4N15foreign_storage18ParquetDataWrapper15IntervalsToLoad18row_group_intervalE">foreign_storage::ParquetDataWrapper::IntervalsToLoad::row_group_interval (C++ member)</a>, <a href="api/struct/structforeign__storage_1_1_parquet_data_wrapper_1_1_intervals_to_load.html#_CPPv4N15foreign_storage18ParquetDataWrapper15IntervalsToLoad18row_group_intervalE">[1]</a>
+</li>
+      <li><a href="api/class/classforeign__storage_1_1_parquet_data_wrapper.html#_CPPv4N15foreign_storage18ParquetDataWrapper17loadBufferIntoMapERK8ChunkKey">foreign_storage::ParquetDataWrapper::loadBufferIntoMap (C++ function)</a>
+</li>
+      <li><a href="api/class/classforeign__storage_1_1_parquet_data_wrapper.html#_CPPv4N15foreign_storage18ParquetDataWrapper9loadChunkEPK16ColumnDescriptorRK8ChunkKeyR12DataBlockPtrK6size_tK6size_tKbKbK6size_t">foreign_storage::ParquetDataWrapper::loadChunk (C++ function)</a>
+</li>
+      <li><a href="api/class/classforeign__storage_1_1_parquet_data_wrapper.html#_CPPv4N15foreign_storage18ParquetDataWrapper17loadMetadataChunkEPK16ColumnDescriptorRK8ChunkKeyR12DataBlockPtrK6size_tKb">foreign_storage::ParquetDataWrapper::loadMetadataChunk (C++ function)</a>
+</li>
+      <li><a href="api/class/classforeign__storage_1_1_parquet_data_wrapper.html#_CPPv4N15foreign_storage18ParquetDataWrapper14max_row_group_E">foreign_storage::ParquetDataWrapper::max_row_group_ (C++ member)</a>
+</li>
+      <li><a href="api/class/classforeign__storage_1_1_parquet_data_wrapper.html#_CPPv4N15foreign_storage18ParquetDataWrapper11newRowGroupEi">foreign_storage::ParquetDataWrapper::newRowGroup (C++ function)</a>
+</li>
+      <li><a href="api/class/classforeign__storage_1_1_parquet_data_wrapper.html#_CPPv4N15foreign_storage18ParquetDataWrapper18ParquetDataWrapperEKiPK12ForeignTable">foreign_storage::ParquetDataWrapper::ParquetDataWrapper (C++ function)</a>, <a href="api/class/classforeign__storage_1_1_parquet_data_wrapper.html#_CPPv4N15foreign_storage18ParquetDataWrapper18ParquetDataWrapperEPK12ForeignTable">[1]</a>
+</li>
+      <li><a href="api/class/classforeign__storage_1_1_parquet_data_wrapper.html#_CPPv4N15foreign_storage18ParquetDataWrapper25partial_import_row_count_E">foreign_storage::ParquetDataWrapper::partial_import_row_count_ (C++ member)</a>
+</li>
+      <li><a href="api/class/classforeign__storage_1_1_parquet_data_wrapper.html#_CPPv4N15foreign_storage18ParquetDataWrapper33populateMetadataForChunkKeyPrefixERK8ChunkKeyR19ChunkMetadataVector">foreign_storage::ParquetDataWrapper::populateMetadataForChunkKeyPrefix (C++ function)</a>
+</li>
+      <li><a href="api/class/classforeign__storage_1_1_parquet_data_wrapper.html#_CPPv4N15foreign_storage18ParquetDataWrapper20resetParquetMetadataEv">foreign_storage::ParquetDataWrapper::resetParquetMetadata (C++ function)</a>
+</li>
+      <li><a href="api/class/classforeign__storage_1_1_parquet_data_wrapper.html#_CPPv4N15foreign_storage18ParquetDataWrapper10row_count_E">foreign_storage::ParquetDataWrapper::row_count_ (C++ member)</a>
+</li>
+      <li><a href="api/class/classforeign__storage_1_1_parquet_data_wrapper.html#_CPPv4N15foreign_storage18ParquetDataWrapper20row_group_row_count_E">foreign_storage::ParquetDataWrapper::row_group_row_count_ (C++ member)</a>
+</li>
+      <li><a href="api/class/classforeign__storage_1_1_parquet_data_wrapper.html#_CPPv4N15foreign_storage18ParquetDataWrapper9shiftDataER12DataBlockPtrK6size_tK6size_t">foreign_storage::ParquetDataWrapper::shiftData (C++ function)</a>
+</li>
+      <li><a href="api/class/classforeign__storage_1_1_parquet_data_wrapper.html#_CPPv4N15foreign_storage18ParquetDataWrapper18supported_options_E">foreign_storage::ParquetDataWrapper::supported_options_ (C++ member)</a>
+</li>
+      <li><a href="api/class/classforeign__storage_1_1_parquet_data_wrapper.html#_CPPv4N15foreign_storage18ParquetDataWrapper17updateFragmentMapEii">foreign_storage::ParquetDataWrapper::updateFragmentMap (C++ function)</a>
+</li>
+      <li><a href="api/class/classforeign__storage_1_1_parquet_data_wrapper.html#_CPPv4N15foreign_storage18ParquetDataWrapper22updateRowGroupMetadataEi">foreign_storage::ParquetDataWrapper::updateRowGroupMetadata (C++ function)</a>
+</li>
+      <li><a href="api/class/classforeign__storage_1_1_parquet_data_wrapper.html#_CPPv4N15foreign_storage18ParquetDataWrapper20updateStatsForBufferEP14AbstractBufferRK12DataBlockPtrK6size_tK6size_t">foreign_storage::ParquetDataWrapper::updateStatsForBuffer (C++ function)</a>
+</li>
+      <li><a href="api/class/classforeign__storage_1_1_parquet_data_wrapper.html#_CPPv4N15foreign_storage18ParquetDataWrapper23validateAndGetBoolValueERKNSt6stringE">foreign_storage::ParquetDataWrapper::validateAndGetBoolValue (C++ function)</a>
+</li>
+      <li><a href="api/class/classforeign__storage_1_1_parquet_data_wrapper.html#_CPPv4N15foreign_storage18ParquetDataWrapper24validateAndGetCopyParamsEv">foreign_storage::ParquetDataWrapper::validateAndGetCopyParams (C++ function)</a>
+</li>
+      <li><a href="api/class/classforeign__storage_1_1_parquet_data_wrapper.html#_CPPv4N15foreign_storage18ParquetDataWrapper30validateAndGetStringWithLengthERKNSt6stringEK6size_t">foreign_storage::ParquetDataWrapper::validateAndGetStringWithLength (C++ function)</a>
+</li>
+      <li><a href="api/class/classforeign__storage_1_1_parquet_data_wrapper.html#_CPPv4N15foreign_storage18ParquetDataWrapper16validateFilePathEv">foreign_storage::ParquetDataWrapper::validateFilePath (C++ function)</a>
+</li>
+      <li><a href="api/class/classforeign__storage_1_1_parquet_data_wrapper.html#_CPPv4N15foreign_storage18ParquetDataWrapper15validateOptionsEPK12ForeignTable">foreign_storage::ParquetDataWrapper::validateOptions (C++ function)</a>
+</li>
       <li><a href="api/struct/structforeign__storage_1_1_parse_file_region_result.html#_CPPv4N15foreign_storage21ParseFileRegionResultE">foreign_storage::ParseFileRegionResult (C++ class)</a>
 </li>
       <li><a href="api/struct/structforeign__storage_1_1_parse_file_region_result.html#_CPPv4N15foreign_storage21ParseFileRegionResult11data_blocksE">foreign_storage::ParseFileRegionResult::data_blocks (C++ member)</a>
@@ -8892,6 +9058,18 @@
       <li><a href="api/struct/structforeign__storage_1_1_parse_file_region_result.html#_CPPv4NK15foreign_storage21ParseFileRegionResultltERK21ParseFileRegionResult">foreign_storage::ParseFileRegionResult::operator&lt; (C++ function)</a>
 </li>
       <li><a href="api/struct/structforeign__storage_1_1_parse_file_region_result.html#_CPPv4N15foreign_storage21ParseFileRegionResult9row_countE">foreign_storage::ParseFileRegionResult::row_count (C++ member)</a>
+</li>
+      <li><a href="api/struct/structforeign__storage_1_1_row_group_metadata.html#_CPPv4N15foreign_storage16RowGroupMetadataE">foreign_storage::RowGroupMetadata (C++ class)</a>
+</li>
+      <li><a href="api/struct/structforeign__storage_1_1_row_group_metadata.html#_CPPv4N15foreign_storage16RowGroupMetadata9has_nullsE">foreign_storage::RowGroupMetadata::has_nulls (C++ member)</a>
+</li>
+      <li><a href="api/struct/structforeign__storage_1_1_row_group_metadata.html#_CPPv4N15foreign_storage16RowGroupMetadata13metadata_onlyE">foreign_storage::RowGroupMetadata::metadata_only (C++ member)</a>
+</li>
+      <li><a href="api/struct/structforeign__storage_1_1_row_group_metadata.html#_CPPv4N15foreign_storage16RowGroupMetadata12num_elementsE">foreign_storage::RowGroupMetadata::num_elements (C++ member)</a>
+</li>
+      <li><a href="api/struct/structforeign__storage_1_1_row_group_metadata.html#_CPPv4N15foreign_storage16RowGroupMetadata15row_group_indexE">foreign_storage::RowGroupMetadata::row_group_index (C++ member)</a>
+</li>
+      <li><a href="api/struct/structforeign__storage_1_1_row_group_type.html#_CPPv4N15foreign_storage12RowGroupTypeE">foreign_storage::RowGroupType (C++ class)</a>
 </li>
       <li><a href="api/class/class_foreign_storage_buffer.html#_CPPv420ForeignStorageBuffer">ForeignStorageBuffer (C++ class)</a>
 </li>
@@ -10595,7 +10773,7 @@
 </li>
       <li><a href="api/class/classimport__export_1_1_loader.html#_CPPv4N13import_export6Loader13getTableEpochEv">import_export::Loader::getTableEpoch (C++ function)</a>
 </li>
-      <li><a href="api/class/classimport__export_1_1_loader.html#_CPPv4N13import_export6Loader4initEv">import_export::Loader::init (C++ function)</a>
+      <li><a href="api/class/classimport__export_1_1_loader.html#_CPPv4N13import_export6Loader4initEKb">import_export::Loader::init (C++ function)</a>
 </li>
       <li><a href="api/class/classimport__export_1_1_loader.html#_CPPv4N13import_export6Loader12insert_data_E">import_export::Loader::insert_data_ (C++ member)</a>
 </li>
@@ -10605,7 +10783,7 @@
 </li>
       <li><a href="api/class/classimport__export_1_1_loader.html#_CPPv4N13import_export6Loader16LoadCallbackTypeE">import_export::Loader::LoadCallbackType (C++ type)</a>
 </li>
-      <li><a href="api/class/classimport__export_1_1_loader.html#_CPPv4N13import_export6Loader6LoaderERN17Catalog_Namespace7CatalogEPK15TableDescriptor16LoadCallbackType">import_export::Loader::Loader (C++ function)</a>
+      <li><a href="api/class/classimport__export_1_1_loader.html#_CPPv4N13import_export6Loader6LoaderERN17Catalog_Namespace7CatalogEPK15TableDescriptor16LoadCallbackTypeb">import_export::Loader::Loader (C++ function)</a>
 </li>
       <li><a href="api/class/classimport__export_1_1_loader.html#_CPPv4N13import_export6Loader13loader_mutex_E">import_export::Loader::loader_mutex_ (C++ member)</a>
 </li>

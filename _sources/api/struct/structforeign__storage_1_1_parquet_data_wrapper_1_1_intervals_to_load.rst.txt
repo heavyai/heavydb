@@ -1,0 +1,9 @@
+Struct foreign_storage::ParquetDataWrapper::IntervalsToLoad
+===========================================================
+
+.. doxygenstruct:: foreign_storage::ParquetDataWrapper::IntervalsToLoad
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

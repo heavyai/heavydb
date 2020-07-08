@@ -1,0 +1,9 @@
+Class foreign_storage::ParquetDataWrapper
+=========================================
+
+.. doxygenclass:: foreign_storage::ParquetDataWrapper
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

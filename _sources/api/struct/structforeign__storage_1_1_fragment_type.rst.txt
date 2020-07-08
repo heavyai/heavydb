@@ -1,0 +1,9 @@
+Struct foreign_storage::FragmentType
+====================================
+
+.. doxygenstruct:: foreign_storage::FragmentType
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

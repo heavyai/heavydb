@@ -1,0 +1,9 @@
+Struct foreign_storage::RowGroupMetadata
+========================================
+
+.. doxygenstruct:: foreign_storage::RowGroupMetadata
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:
