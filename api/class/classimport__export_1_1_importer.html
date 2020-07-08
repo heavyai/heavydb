@@ -41,7 +41,7 @@
     <link rel="index" title="Index" href="../../genindex.html" />
     <link rel="search" title="Search" href="../../search.html" />
     <link rel="next" title="Class import_export::ImporterUtils" href="classimport__export_1_1_importer_utils.html" />
-    <link rel="prev" title="Class import_export::Detector" href="classimport__export_1_1_detector.html" /> 
+    <link rel="prev" title="Class import_export::GDAL" href="classimport__export_1_1_g_d_a_l.html" /> 
 </head>
 
 <body class="wy-body-for-nav">
@@ -65,7 +65,7 @@
             
             
               <div class="version">
-                5.4.0dev 2c44a39
+                5.4.0dev 7635f9f
               </div>
             
           
@@ -976,9 +976,13 @@
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_foreign_storage_mgr.html">Class foreign_storage::ForeignStorageMgr</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classimport__export_1_1_data_stream_sink.html">Class import_export::DataStreamSink</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classimport__export_1_1_detector.html">Class import_export::Detector</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classimport__export_1_1_g_d_a_l.html">Class import_export::GDAL</a></li>
 <li class="toctree-l2 current"><a class="current reference internal" href="#">Class import_export::Importer</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classimport__export_1_1_importer_utils.html">Class import_export::ImporterUtils</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classimport__export_1_1_loader.html">Class import_export::Loader</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classimport__export_1_1_query_exporter.html">Class import_export::QueryExporter</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classimport__export_1_1_query_exporter_c_s_v.html">Class import_export::QueryExporterCSV</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classimport__export_1_1_query_exporter_g_d_a_l.html">Class import_export::QueryExporterGDAL</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classimport__export_1_1_render_group_analyzer.html">Class import_export::RenderGroupAnalyzer</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classimport__export_1_1_typed_import_buffer.html">Class import_export::TypedImportBuffer</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classlegacylockmgr_1_1_lock_mgr.html">Class legacylockmgr::LockMgr</a></li>
@@ -1567,11 +1571,6 @@
 <div class="breathe-sectiondef docutils container">
 <p class="breathe-sectiondef-title rubric">Public Static Functions</p>
 <dl class="function">
-<dt id="_CPPv4N13import_export8Importer13hasGDALLibKMLEv">
-<span id="_CPPv3N13import_export8Importer13hasGDALLibKMLEv"></span><span id="_CPPv2N13import_export8Importer13hasGDALLibKMLEv"></span><span id="import_export::Importer::hasGDALLibKML"></span><span class="target" id="classimport__export_1_1_importer_1a01c4561805cd5f7480729bee45a3d36f"></span>bool <code class="sig-name descname">hasGDALLibKML</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N13import_export8Importer13hasGDALLibKMLEv" title="Permalink to this definition">¶</a><br /></dt>
-<dd></dd></dl>
-
-<dl class="function">
 <dt id="_CPPv4N13import_export8Importer17get_import_statusERKNSt6stringE">
 <span id="_CPPv3N13import_export8Importer17get_import_statusERKNSt6stringE"></span><span id="_CPPv2N13import_export8Importer17get_import_statusERKNSt6stringE"></span><span id="import_export::Importer::get_import_status__ssCR"></span><span class="target" id="classimport__export_1_1_importer_1aa15a1fbd15442b6ce7d1428590ae74e6"></span><a class="reference internal" href="../struct/structimport__export_1_1_import_status.html#_CPPv4N13import_export12ImportStatusE" title="import_export::ImportStatus">ImportStatus</a> <code class="sig-name descname">get_import_status</code><span class="sig-paren">(</span><em class="property">const</em> std::string &amp;<em>id</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N13import_export8Importer17get_import_statusERKNSt6stringE" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
@@ -1609,11 +1608,6 @@
 <dl class="function">
 <dt id="_CPPv4N13import_export8Importer22gdalGetLayersInGeoFileERKNSt6stringERK10CopyParams">
 <span id="_CPPv3N13import_export8Importer22gdalGetLayersInGeoFileERKNSt6stringERK10CopyParams"></span><span id="_CPPv2N13import_export8Importer22gdalGetLayersInGeoFileERKNSt6stringERK10CopyParams"></span><span id="import_export::Importer::gdalGetLayersInGeoFile__ssCR.CopyParamsCR"></span><span class="target" id="classimport__export_1_1_importer_1aad71e964eecc07109280cab2619d84d0"></span>std::vector&lt;<a class="reference internal" href="#_CPPv4N13import_export8ImporterE" title="import_export::Importer">Importer</a>::<a class="reference internal" href="#_CPPv4N13import_export8Importer16GeoFileLayerInfoE" title="import_export::Importer::GeoFileLayerInfo">GeoFileLayerInfo</a>&gt; <code class="sig-name descname">gdalGetLayersInGeoFile</code><span class="sig-paren">(</span><em class="property">const</em> std::string &amp;<em>file_name</em>, <em class="property">const</em> <a class="reference internal" href="../struct/structimport__export_1_1_copy_params.html#_CPPv4N13import_export10CopyParamsE" title="import_export::CopyParams">CopyParams</a> &amp;<em>copy_params</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N13import_export8Importer22gdalGetLayersInGeoFileERKNSt6stringERK10CopyParams" title="Permalink to this definition">¶</a><br /></dt>
-<dd></dd></dl>
-
-<dl class="function">
-<dt id="_CPPv4N13import_export8Importer29gdalSupportsNetworkFileAccessEv">
-<span id="_CPPv3N13import_export8Importer29gdalSupportsNetworkFileAccessEv"></span><span id="_CPPv2N13import_export8Importer29gdalSupportsNetworkFileAccessEv"></span><span id="import_export::Importer::gdalSupportsNetworkFileAccess"></span><span class="target" id="classimport__export_1_1_importer_1abe2c0f382d6a820a117f6f6139be5892"></span>bool <code class="sig-name descname">gdalSupportsNetworkFileAccess</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N13import_export8Importer29gdalSupportsNetworkFileAccessEv" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 <dl class="function">
@@ -1668,11 +1662,6 @@
 <div class="breathe-sectiondef docutils container">
 <p class="breathe-sectiondef-title rubric">Private Static Functions</p>
 <dl class="function">
-<dt id="_CPPv4N13import_export8Importer8initGDALEv">
-<span id="_CPPv3N13import_export8Importer8initGDALEv"></span><span id="_CPPv2N13import_export8Importer8initGDALEv"></span><span id="import_export::Importer::initGDAL"></span><span class="target" id="classimport__export_1_1_importer_1a606519022756d4bc36a969edd443ca02"></span>void <code class="sig-name descname">initGDAL</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N13import_export8Importer8initGDALEv" title="Permalink to this definition">¶</a><br /></dt>
-<dd></dd></dl>
-
-<dl class="function">
 <dt id="_CPPv4N13import_export8Importer16gdalStatInternalERKNSt6stringERK10CopyParamsb">
 <span id="_CPPv3N13import_export8Importer16gdalStatInternalERKNSt6stringERK10CopyParamsb"></span><span id="_CPPv2N13import_export8Importer16gdalStatInternalERKNSt6stringERK10CopyParamsb"></span><span id="import_export::Importer::gdalStatInternal__ssCR.CopyParamsCR.b"></span><span class="target" id="classimport__export_1_1_importer_1a49f1dadcdb1c666423e03160236a1b24"></span>bool <code class="sig-name descname">gdalStatInternal</code><span class="sig-paren">(</span><em class="property">const</em> std::string &amp;<em>path</em>, <em class="property">const</em> <a class="reference internal" href="../struct/structimport__export_1_1_copy_params.html#_CPPv4N13import_export10CopyParamsE" title="import_export::CopyParams">CopyParams</a> &amp;<em>copy_params</em>, bool <em>also_dir</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N13import_export8Importer16gdalStatInternalERKNSt6stringERK10CopyParamsb" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
@@ -1685,14 +1674,6 @@
 <dl class="function">
 <dt id="_CPPv4N13import_export8Importer26setGDALAuthorizationTokensERK10CopyParams">
 <span id="_CPPv3N13import_export8Importer26setGDALAuthorizationTokensERK10CopyParams"></span><span id="_CPPv2N13import_export8Importer26setGDALAuthorizationTokensERK10CopyParams"></span><span id="import_export::Importer::setGDALAuthorizationTokens__CopyParamsCR"></span><span class="target" id="classimport__export_1_1_importer_1a3f640424b175b991314c7ed119b2978d"></span>void <code class="sig-name descname">setGDALAuthorizationTokens</code><span class="sig-paren">(</span><em class="property">const</em> <a class="reference internal" href="../struct/structimport__export_1_1_copy_params.html#_CPPv4N13import_export10CopyParamsE" title="import_export::CopyParams">CopyParams</a> &amp;<em>copy_params</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N13import_export8Importer26setGDALAuthorizationTokensERK10CopyParams" title="Permalink to this definition">¶</a><br /></dt>
-<dd></dd></dl>
-
-</div>
-<div class="breathe-sectiondef docutils container">
-<p class="breathe-sectiondef-title rubric">Private Static Attributes</p>
-<dl class="member">
-<dt id="_CPPv4N13import_export8Importer15init_gdal_mutexE">
-<span id="_CPPv3N13import_export8Importer15init_gdal_mutexE"></span><span id="_CPPv2N13import_export8Importer15init_gdal_mutexE"></span><span id="import_export::Importer::init_gdal_mutex__std::mutex"></span><span class="target" id="classimport__export_1_1_importer_1a97f03a95bde79e828611d516a2472815"></span>std::mutex <code class="sig-name descname">init_gdal_mutex</code><a class="headerlink" href="#_CPPv4N13import_export8Importer15init_gdal_mutexE" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 </div>
@@ -1737,7 +1718,7 @@
         <a href="classimport__export_1_1_importer_utils.html" class="btn btn-neutral float-right" title="Class import_export::ImporterUtils" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right"></span></a>
       
       
-        <a href="classimport__export_1_1_detector.html" class="btn btn-neutral float-left" title="Class import_export::Detector" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left"></span> Previous</a>
+        <a href="classimport__export_1_1_g_d_a_l.html" class="btn btn-neutral float-left" title="Class import_export::GDAL" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left"></span> Previous</a>
       
     </div>
   

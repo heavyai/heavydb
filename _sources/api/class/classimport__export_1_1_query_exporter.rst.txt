@@ -1,0 +1,9 @@
+Class import_export::QueryExporter
+==================================
+
+.. doxygenclass:: import_export::QueryExporter
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

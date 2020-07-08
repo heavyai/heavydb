@@ -65,7 +65,7 @@
             
             
               <div class="version">
-                5.4.0dev 2c44a39
+                5.4.0dev 7635f9f
               </div>
             
           
@@ -976,9 +976,13 @@
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_foreign_storage_mgr.html">Class foreign_storage::ForeignStorageMgr</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classimport__export_1_1_data_stream_sink.html">Class import_export::DataStreamSink</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classimport__export_1_1_detector.html">Class import_export::Detector</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classimport__export_1_1_g_d_a_l.html">Class import_export::GDAL</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classimport__export_1_1_importer.html">Class import_export::Importer</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classimport__export_1_1_importer_utils.html">Class import_export::ImporterUtils</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classimport__export_1_1_loader.html">Class import_export::Loader</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classimport__export_1_1_query_exporter.html">Class import_export::QueryExporter</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classimport__export_1_1_query_exporter_c_s_v.html">Class import_export::QueryExporterCSV</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classimport__export_1_1_query_exporter_g_d_a_l.html">Class import_export::QueryExporterGDAL</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classimport__export_1_1_render_group_analyzer.html">Class import_export::RenderGroupAnalyzer</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classimport__export_1_1_typed_import_buffer.html">Class import_export::TypedImportBuffer</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classlegacylockmgr_1_1_lock_mgr.html">Class legacylockmgr::LockMgr</a></li>
@@ -1480,6 +1484,14 @@
 <dl class="member">
 <dt id="_CPPv4N6Parser15ExportQueryStmt16leafs_connector_E">
 <span id="_CPPv3N6Parser15ExportQueryStmt16leafs_connector_E"></span><span id="_CPPv2N6Parser15ExportQueryStmt16leafs_connector_E"></span><span id="Parser::ExportQueryStmt::leafs_connector___DistributedConnectorP"></span><span class="target" id="class_parser_1_1_export_query_stmt_1a007b50f60aaa8a8cbebf440d28bc85e7"></span><a class="reference internal" href="../struct/struct_parser_1_1_distributed_connector.html#_CPPv4N6Parser20DistributedConnectorE" title="Parser::DistributedConnector">DistributedConnector</a> *<code class="sig-name descname">leafs_connector_</code> = nullptr<a class="headerlink" href="#_CPPv4N6Parser15ExportQueryStmt16leafs_connector_E" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+</div>
+<div class="breathe-sectiondef docutils container">
+<p class="breathe-sectiondef-title rubric">Private Functions</p>
+<dl class="function">
+<dt id="_CPPv4N6Parser15ExportQueryStmt12parseOptionsERN13import_export10CopyParamsERN13import_export13QueryExporter8FileTypeERNSt6stringERN13import_export13QueryExporter15FileCompressionERN13import_export13QueryExporter17ArrayNullHandlingE">
+<span id="_CPPv3N6Parser15ExportQueryStmt12parseOptionsERN13import_export10CopyParamsERN13import_export13QueryExporter8FileTypeERNSt6stringERN13import_export13QueryExporter15FileCompressionERN13import_export13QueryExporter17ArrayNullHandlingE"></span><span id="_CPPv2N6Parser15ExportQueryStmt12parseOptionsERN13import_export10CopyParamsERN13import_export13QueryExporter8FileTypeERNSt6stringERN13import_export13QueryExporter15FileCompressionERN13import_export13QueryExporter17ArrayNullHandlingE"></span><span id="Parser::ExportQueryStmt::parseOptions__import_export::CopyParamsR.import_export::QueryExporter::FileTypeR.ssR.import_export::QueryExporter::FileCompressionR.import_export::QueryExporter::ArrayNullHandlingR"></span><span class="target" id="class_parser_1_1_export_query_stmt_1ac0ef18c1f54d664b62e8ea9b8fac7a74"></span>void <code class="sig-name descname">parseOptions</code><span class="sig-paren">(</span>import_export::<a class="reference internal" href="../struct/structimport__export_1_1_copy_params.html#_CPPv4N13import_export10CopyParamsE" title="import_export::CopyParams">CopyParams</a> &amp;<em>copy_params</em>, import_export::<a class="reference internal" href="classimport__export_1_1_query_exporter.html#_CPPv4N13import_export13QueryExporterE" title="import_export::QueryExporter">QueryExporter</a>::<a class="reference internal" href="classimport__export_1_1_query_exporter.html#_CPPv4N13import_export13QueryExporter8FileTypeE" title="import_export::QueryExporter::FileType">FileType</a> &amp;<em>file_type</em>, std::string &amp;<em>layer_name</em>, import_export::<a class="reference internal" href="classimport__export_1_1_query_exporter.html#_CPPv4N13import_export13QueryExporterE" title="import_export::QueryExporter">QueryExporter</a>::<a class="reference internal" href="classimport__export_1_1_query_exporter.html#_CPPv4N13import_export13QueryExporter15FileCompressionE" title="import_export::QueryExporter::FileCompression">FileCompression</a> &amp;<em>file_compression</em>, import_export::<a class="reference internal" href="classimport__export_1_1_query_exporter.html#_CPPv4N13import_export13QueryExporterE" title="import_export::QueryExporter">QueryExporter</a>::<a class="reference internal" href="classimport__export_1_1_query_exporter.html#_CPPv4N13import_export13QueryExporter17ArrayNullHandlingE" title="import_export::QueryExporter::ArrayNullHandling">ArrayNullHandling</a> &amp;<em>array_null_handling</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N6Parser15ExportQueryStmt12parseOptionsERN13import_export10CopyParamsERN13import_export13QueryExporter8FileTypeERNSt6stringERN13import_export13QueryExporter15FileCompressionERN13import_export13QueryExporter17ArrayNullHandlingE" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 </div>
