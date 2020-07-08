@@ -173,6 +173,7 @@ find_package(PNG REQUIRED)
 find_package(ZLIB REQUIRED)
 find_package(GDAL REQUIRED)
 find_package(GDALExtra REQUIRED)
+find_package(BLOSC REQUIRED)
 list(APPEND GDAL_LIBRARIES ${PNG_LIBRARIES} ${GDALExtra_LIBRARIES})
 include_directories(${GDAL_INCLUDE_DIRS})
 
@@ -314,8 +315,7 @@ add_definitions("-DARROW_NO_DEPRECATED_API")
 include_directories(${Arrow_INCLUDE_DIRS})
 
 option(ENABLE_IMPORT_PARQUET "Enable Parquet Importer support" ON)
-# temporarily disable parquet if static linking due to issues with arrow+zstd
-if(ENABLE_IMPORT_PARQUET AND NOT PREFER_STATIC_LIBS)
+if(ENABLE_IMPORT_PARQUET)
   find_package(Parquet)
   if(NOT Parquet_FOUND)
     set(ENABLE_IMPORT_PARQUET OFF CACHE BOOL "Enable Parquet Importer support" FORCE)
