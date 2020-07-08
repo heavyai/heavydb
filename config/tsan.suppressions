@@ -10,3 +10,4 @@ race:apache::thrift::server
 thread:libcuda.so
 # 2020-02-23: resolve thread safety issues when acquiring string dict proxy through resultset 
 race:ResultSet::makeTargetValue 
+race:^tbb*

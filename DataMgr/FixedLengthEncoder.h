@@ -25,6 +25,9 @@
 #include "Encoder.h"
 
 #include <Shared/DatumFetchers.h>
+#include <tbb/parallel_for.h>
+#include <tbb/parallel_reduce.h>
+#include <tuple>
 
 template <typename T, typename V>
 class FixedLengthEncoder : public Encoder {

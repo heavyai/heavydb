@@ -14,13 +14,12 @@
  * limitations under the License.
  */
 
-#include "../StringDictionary/StringDictionary.h"
 #include "TestHelpers.h"
+
+#include "../StringDictionary/StringDictionary.h"
 
 #include <cstdlib>
 #include <limits>
-
-#include <gtest/gtest.h>
 
 #ifndef BASE_PATH
 #define BASE_PATH "./tmp"

@@ -22,6 +22,10 @@
 
 #include <Shared/DatumFetchers.h>
 
+#include <tbb/parallel_for.h>
+#include <tbb/parallel_reduce.h>
+#include <tuple>
+
 template <typename T>
 T none_encoded_null_value() {
   return std::is_integral<T>::value ? inline_int_null_value<T>()

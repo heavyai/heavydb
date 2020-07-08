@@ -252,7 +252,7 @@ else()
   )
 endif()
 
-list(APPEND QUERY_ENGINE_LIBS ${LLVM_LINKER_FLAGS})
+list(APPEND QUERY_ENGINE_LIBS ${LLVM_LINKER_FLAGS} ${ZLIB_LIBRARIES})
 
 target_link_libraries(QueryEngine ${QUERY_ENGINE_LIBS})
 
