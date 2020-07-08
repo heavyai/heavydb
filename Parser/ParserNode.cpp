@@ -2690,6 +2690,11 @@ void InsertIntoTableAsSelectStmt::populateData(QueryStateProxy query_state_proxy
     return;
   }
 
+  int64_t total_row_count = 0;
+  int64_t total_source_query_time_ms = 0;
+  int64_t total_target_value_translate_time_ms = 0;
+  int64_t total_data_load_time_ms = 0;
+
   Fragmenter_Namespace::InsertDataLoader insertDataLoader(*leafs_connector_);
   auto target_column_descriptors = get_target_column_descriptors(td);
 
@@ -2705,8 +2710,10 @@ void InsertIntoTableAsSelectStmt::populateData(QueryStateProxy query_state_proxy
       allowed_outer_fragment_indices.push_back(outer_frag_idx);
     }
 
+    const auto query_clock_begin = timer_start();
     std::vector<AggregatedResult> query_results = leafs_connector_->query(
         query_state_proxy, select_query_, allowed_outer_fragment_indices);
+    total_source_query_time_ms += timer_stop(query_clock_begin);
 
     for (auto& res : query_results) {
       auto result_rows = res.rs;
@@ -2716,6 +2723,8 @@ void InsertIntoTableAsSelectStmt::populateData(QueryStateProxy query_state_proxy
       if (0 == num_rows) {
         continue;
       }
+
+      total_row_count += num_rows;
 
       size_t leaf_count = leafs_connector_->leafCount();
 
@@ -2845,6 +2854,7 @@ void InsertIntoTableAsSelectStmt::populateData(QueryStateProxy query_state_proxy
             value_converters.push_back(std::move(converter));
           }
 
+          const auto translate_clock_begin = timer_start();
           if (can_go_parallel) {
             std::vector<std::future<void>> worker_threads;
             for (int i = 0; i < num_worker_threads; ++i) {
@@ -2892,8 +2902,12 @@ void InsertIntoTableAsSelectStmt::populateData(QueryStateProxy query_state_proxy
           for (int col_idx = 0; col_idx < target_column_descriptors.size(); col_idx++) {
             value_converters[col_idx]->addDataBlocksToInsertData(insert_data);
           }
+          total_target_value_translate_time_ms += timer_stop(translate_clock_begin);
 
+          const auto data_load_clock_begin = timer_start();
           insertDataLoader.insertData(*session, insert_data);
+          total_data_load_time_ms += timer_stop(data_load_clock_begin);
+
         } catch (...) {
           try {
             if (td->nShards) {
@@ -2914,6 +2928,16 @@ void InsertIntoTableAsSelectStmt::populateData(QueryStateProxy query_state_proxy
       }
     }
   }
+
+  int64_t total_time_ms = total_source_query_time_ms +
+                          total_target_value_translate_time_ms + total_data_load_time_ms;
+
+  VLOG(1) << "CTAS/ITAS " << total_row_count << " rows loaded in " << total_time_ms
+          << "ms (outer_frag_count=" << outer_frag_count
+          << ", query_time=" << total_source_query_time_ms
+          << "ms, translation_time=" << total_target_value_translate_time_ms
+          << "ms, data_load_time=" << total_data_load_time_ms
+          << "ms)\nquery: " << select_query_;
 
   if (!is_temporary) {
     if (td->nShards) {
