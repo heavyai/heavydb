@@ -12,8 +12,13 @@ set(datamgr_source_files
     FileMgr/FileBuffer.cpp
     FileMgr/FileInfo.cpp
     ForeignStorage/ArrowCsvForeignStorage.cpp
+    ForeignStorage/CsvDataWrapper.cpp
     ForeignStorage/DummyForeignStorage.cpp
     ForeignStorage/ForeignStorageInterface.cpp
+    ForeignStorage/ForeignStorageBuffer.cpp
+    ForeignStorage/ForeignStorageMgr.cpp
+    ForeignStorage/ForeignStorageCache.cpp
+    ForeignStorage/CacheEvictionAlgorithms/LRUEvictionAlgorithm.cpp
     BufferMgr/GpuCudaBufferMgr/GpuCudaBufferMgr.cpp
     BufferMgr/GpuCudaBufferMgr/GpuCudaBuffer.cpp
     BufferMgr/CpuBufferMgr/CpuBufferMgr.cpp

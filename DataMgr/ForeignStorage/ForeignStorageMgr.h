@@ -20,13 +20,17 @@
 
 #include "DataMgr/AbstractBufferMgr.h"
 #include "ForeignDataWrapper.h"
+#include "ForeignStorageCache.h"
+#include "Shared/mapd_shared_mutex.h"
 
 using namespace Data_Namespace;
+
+extern size_t foreign_cache_entry_limit;
 
 namespace foreign_storage {
 class ForeignStorageMgr : public AbstractBufferMgr {
  public:
-  ForeignStorageMgr();
+  ForeignStorageMgr(File_Namespace::GlobalFileMgr* global_file_mgr);
 
   AbstractBuffer* createBuffer(const ChunkKey& chunk_key,
                                const size_t page_size,
@@ -59,12 +63,15 @@ class ForeignStorageMgr : public AbstractBufferMgr {
   std::string getStringMgrType() override;
   size_t getNumChunks() override;
   void removeTableRelatedDS(const int db_id, const int table_id) override;
+  ForeignStorageCache* getForeignStorageCache() const;
 
  private:
   void createDataWrapperIfNotExists(const ChunkKey& chunk_key);
   std::shared_ptr<ForeignDataWrapper> getDataWrapper(const ChunkKey& chunk_key);
 
   std::shared_mutex data_wrapper_mutex_;
+
   std::map<ChunkKey, std::shared_ptr<ForeignDataWrapper>> data_wrapper_map_;
+  std::unique_ptr<ForeignStorageCache> foreign_storage_cache_;
 };
 }  // namespace foreign_storage

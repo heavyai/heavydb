@@ -20,29 +20,56 @@
 #include "CsvDataWrapper.h"
 #include "ParquetDataWrapper.h"
 
+// TODO(Misiu): This initial limit should be set based on available disk space.
+size_t foreign_cache_entry_limit{1024};
+
 namespace foreign_storage {
-ForeignStorageMgr::ForeignStorageMgr() : AbstractBufferMgr(0), data_wrapper_map_({}) {}
+ForeignStorageMgr::ForeignStorageMgr(File_Namespace::GlobalFileMgr* gfm)
+    : AbstractBufferMgr(0)
+    , data_wrapper_map_({})
+    , foreign_storage_cache_(
+          std::make_unique<ForeignStorageCache>(gfm, foreign_cache_entry_limit)) {}
 
 AbstractBuffer* ForeignStorageMgr::getBuffer(const ChunkKey& chunk_key,
                                              const size_t num_bytes) {
-  return getDataWrapper(chunk_key)->getChunkBuffer(chunk_key);
+  // If this is a hit, then the buffer is allocated by the GFM currently.
+  AbstractBuffer* buffer = foreign_storage_cache_->getCachedChunkIfExists(chunk_key);
+  if (buffer == nullptr) {
+    buffer = getDataWrapper(chunk_key)->getChunkBuffer(chunk_key);
+  }
+  return buffer;
 }
 
 void ForeignStorageMgr::fetchBuffer(const ChunkKey& chunk_key,
                                     AbstractBuffer* destination_buffer,
                                     const size_t num_bytes) {
   CHECK(!destination_buffer->isDirty());
+  bool cached = true;
+  // This code is inlined from getBuffer() because we need to know if we had a cache hit
+  // to know if we need to write back to the cache later.
+  AbstractBuffer* buffer = foreign_storage_cache_->getCachedChunkIfExists(chunk_key);
+  if (buffer == nullptr) {
+    cached = false;
+    buffer = getDataWrapper(chunk_key)->getChunkBuffer(chunk_key);
+  }
 
-  auto chunk_buffer = getDataWrapper(chunk_key)->getChunkBuffer(chunk_key);
-  size_t chunk_size = (num_bytes == 0) ? chunk_buffer->size() : num_bytes;
+  // Read the contents of the source buffer into the dest buffer.
+  size_t chunk_size = (num_bytes == 0) ? buffer->size() : num_bytes;
   destination_buffer->reserve(chunk_size);
-  chunk_buffer->read(destination_buffer->getMemoryPtr() + destination_buffer->size(),
-                     chunk_size - destination_buffer->size(),
-                     destination_buffer->size(),
-                     destination_buffer->getType(),
-                     destination_buffer->getDeviceId());
+  buffer->read(destination_buffer->getMemoryPtr() + destination_buffer->size(),
+               chunk_size - destination_buffer->size(),
+               destination_buffer->size(),
+               destination_buffer->getType(),
+               destination_buffer->getDeviceId());
   destination_buffer->setSize(chunk_size);
-  destination_buffer->syncEncoder(chunk_buffer);
+  destination_buffer->syncEncoder(buffer);
+
+  // We only write back to the cache if we did not get the buffer from the cache.
+  if (!cached) {
+    // Set is_updated flag so the FileMgr knows to write the whole buffer.
+    destination_buffer->setUpdated();
+    foreign_storage_cache_->cacheChunk(chunk_key, destination_buffer);
+  }
 }
 
 void ForeignStorageMgr::getChunkMetadataVec(ChunkMetadataVector& chunk_metadata) {
@@ -50,18 +77,25 @@ void ForeignStorageMgr::getChunkMetadataVec(ChunkMetadataVector& chunk_metadata)
   for (auto& [table_chunk_key, data_wrapper] : data_wrapper_map_) {
     data_wrapper->populateMetadataForChunkKeyPrefix(table_chunk_key, chunk_metadata);
   }
+  foreign_storage_cache_->cacheMetadataVec(chunk_metadata);
 }
 
 void ForeignStorageMgr::getChunkMetadataVecForKeyPrefix(
     ChunkMetadataVector& chunk_metadata,
     const ChunkKey& keyPrefix) {
+  if (foreign_storage_cache_->hasCachedMetadataForKeyPrefix(keyPrefix)) {
+    foreign_storage_cache_->getCachedMetadataVecForKeyPrefix(chunk_metadata, keyPrefix);
+    return;
+  }
   createDataWrapperIfNotExists(keyPrefix);
   getDataWrapper(keyPrefix)->populateMetadataForChunkKeyPrefix(keyPrefix, chunk_metadata);
+  foreign_storage_cache_->cacheMetadataVec(chunk_metadata);
 }
 
 void ForeignStorageMgr::removeTableRelatedDS(const int db_id, const int table_id) {
   std::lock_guard data_wrapper_lock(data_wrapper_mutex_);
   data_wrapper_map_.erase({db_id, table_id});
+  foreign_storage_cache_->clearForTablePrefix({db_id, table_id});
 }
 
 MgrType ForeignStorageMgr::getMgrType() {
@@ -108,6 +142,10 @@ void ForeignStorageMgr::createDataWrapperIfNotExists(const ChunkKey& chunk_key) 
       throw std::runtime_error("Unsupported data wrapper");
     }
   }
+}
+
+ForeignStorageCache* ForeignStorageMgr::getForeignStorageCache() const {
+  return foreign_storage_cache_.get();
 }
 
 void ForeignStorageMgr::deleteBuffer(const ChunkKey& chunk_key, const bool purge) {

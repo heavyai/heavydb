@@ -30,7 +30,9 @@ class PersistentStorageMgr : public AbstractBufferMgr {
             std::make_unique<File_Namespace::GlobalFileMgr>(0,
                                                             data_dir,
                                                             num_reader_threads))
-      , foreign_storage_mgr(std::make_unique<foreign_storage::ForeignStorageMgr>()) {}
+      , foreign_storage_mgr(
+            std::make_unique<foreign_storage::ForeignStorageMgr>(global_file_mgr.get())) {
+  }
 
   AbstractBuffer* createBuffer(const ChunkKey& chunk_key,
                                const size_t page_size,
@@ -64,6 +66,7 @@ class PersistentStorageMgr : public AbstractBufferMgr {
   size_t getNumChunks() override;
   void removeTableRelatedDS(const int db_id, const int table_id) override;
   File_Namespace::GlobalFileMgr* getGlobalFileMgr();
+  foreign_storage::ForeignStorageMgr* getForeignStorageMgr() const;
 
  private:
   bool isForeignStorage(const ChunkKey& chunk_key);

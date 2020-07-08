@@ -23,6 +23,8 @@
 #include <boost/filesystem.hpp>
 
 #include "DBHandlerTestHelpers.h"
+#include "DataMgr/ForeignStorage/ForeignStorageCache.h"
+#include "DataMgr/ForeignStorage/ForeignStorageMgr.h"
 #include "Shared/geo_types.h"
 #include "TestHelpers.h"
 
@@ -37,6 +39,8 @@ namespace bp = boost::process;
 namespace bf = boost::filesystem;
 using path = bf::path;
 
+static const std::string default_table_name = "test_foreign_table";
+
 /**
  * Helper class for creating foreign tables
  */
@@ -45,28 +49,28 @@ class ForeignTableTest : public DBHandlerTestFixture {
   void SetUp() override { DBHandlerTestFixture::SetUp(); }
   void TearDown() override { DBHandlerTestFixture::TearDown(); }
 
-  std::string getCreateForeignTableQuery(const std::string& columns,
-                                         const std::string& file_name_base,
-                                         const std::string& data_wrapper_type,
-                                         const int table_number = 0) {
+  static std::string getCreateForeignTableQuery(const std::string& columns,
+                                                const std::string& file_name_base,
+                                                const std::string& data_wrapper_type,
+                                                const int table_number = 0) {
     return getCreateForeignTableQuery(
         columns, {}, file_name_base, data_wrapper_type, table_number);
   }
 
-  std::string getCreateForeignTableQuery(const std::string& columns,
-                                         const std::map<std::string, std::string> options,
-                                         const std::string& file_name_base,
-                                         const std::string& data_wrapper_type,
-                                         const int table_number = 0) {
-    std::string file_name = file_name_base + "." + data_wrapper_type;
-    path full_path =
-        bf::canonical(test_binary_file_path + "/../../Tests/FsiDataFiles/" + file_name);
-    std::string query{"CREATE FOREIGN TABLE test_foreign_table"};
+  static std::string getCreateForeignTableQuery(
+      const std::string& columns,
+      const std::map<std::string, std::string> options,
+      const std::string& file_name_base,
+      const std::string& data_wrapper_type,
+      const int table_number = 0,
+      const std::string& table_name = default_table_name) {
+    std::string query{"CREATE FOREIGN TABLE " + table_name};
     if (table_number) {
       query += "_" + std::to_string(table_number);
     }
     query += columns + " SERVER omnisci_local_" + data_wrapper_type +
-             " WITH (file_path = '" + full_path.string() + "'";
+             " WITH (file_path = '" + getDataFilesPath() + file_name_base + "." +
+             data_wrapper_type + "'";
     for (auto& [key, value] : options) {
       query += ", " + key + " = '" + value + "'";
     }
@@ -74,23 +78,24 @@ class ForeignTableTest : public DBHandlerTestFixture {
     return query;
   }
 
-  std::string getDataFilesPath() {
-    return bf::canonical(test_binary_file_path + "/../../Tests/FsiDataFiles").string();
+  static std::string getDataFilesPath() {
+    return bf::canonical(test_binary_file_path + "/../../Tests/FsiDataFiles").string() +
+           "/";
   }
 
-  void sqlCreateForeignTable(const std::string& table_name,
-                             const std::string& file_path,
-                             const std::string& columns,
-                             const std::map<std::string, std::string>& options) {
-    sql("DROP FOREIGN TABLE IF EXISTS " + table_name + ";");
-    std::string query{"CREATE FOREIGN TABLE " + table_name};
-    query += columns + " SERVER omnisci_local_csv WITH (file_path = '" +
-             bf::canonical(file_path).string() + "'";
-    for (auto& [key, value] : options) {
-      query += ", " + key + " = '" + value + "'";
-    }
-    query += ");";
+  static void sqlCreateForeignTable(const std::string& columns,
+                                    const std::string& file_name,
+                                    const std::string& data_wrapper_type,
+                                    const int table_number = 0,
+                                    const std::string& table_name = default_table_name) {
+    sqlDropForeignTable(table_name);
+    auto query = getCreateForeignTableQuery(
+        columns, {}, file_name, data_wrapper_type, table_number, table_name);
     sql(query);
+  }
+
+  static void sqlDropForeignTable(const std::string& table_name = default_table_name) {
+    sql("DROP FOREIGN TABLE IF EXISTS " + table_name);
   }
 };
 
@@ -506,63 +511,60 @@ TEST_F(SelectQueryTest, ReverseLongitudeAndLatitude) {
 
 class RefreshForeignTableTest : public ForeignTableTest {
  protected:
-  std::string base_path = "../../Tests/FsiDataFiles/";
-  std::string table_1_filename = base_path + "example_1.csv";
-  std::string table_2_filename = base_path + "example_1.csv";
-  std::string table_1_name = "test_foreign_table_1";
-  std::string table_2_name = "test_foreign_table_2";
+  std::string table_1_filename = "example_1";
+  std::string table_2_filename = "example_1";
 
   void SetUp() override { ForeignTableTest::SetUp(); }
 
   void TearDown() override {
-    sql("DROP FOREIGN TABLE IF EXISTS " + table_1_name + ";");
-    sql("DROP FOREIGN TABLE IF EXISTS " + table_2_name + ";");
+    sql("DROP FOREIGN TABLE IF EXISTS " + default_table_name + ";");
+    sql("DROP FOREIGN TABLE IF EXISTS " + default_table_name + "_1;");
     ForeignTableTest::TearDown();
   }
 };
 
 // Refresh is not enabled yet, so currently we expect throws.
 TEST_F(RefreshForeignTableTest, RefreshSingleTable) {
-  sqlCreateForeignTable(table_1_name, table_1_filename, "(t TEXT, i INTEGER[])", {});
-  sqlCreateForeignTable(table_2_name, table_2_filename, "(t TEXT, i INTEGER[])", {});
+  sqlCreateForeignTable("(t TEXT, i INTEGER[])", table_1_filename, "csv");
+  sqlCreateForeignTable("(t TEXT, i INTEGER[])", table_2_filename, "csv", 1);
   queryAndAssertException("REFRESH FOREIGN TABLES test_foreign_table",
                           "Exception: REFRESH FOREIGN TABLES is not yet implemented");
 }
 
 TEST_F(RefreshForeignTableTest, RefreshMultipleTables) {
-  sqlCreateForeignTable(table_1_name, table_1_filename, "(t TEXT, i INTEGER[])", {});
-  sqlCreateForeignTable(table_2_name, table_2_filename, "(t TEXT, i INTEGER[])", {});
+  sqlCreateForeignTable("(t TEXT, i INTEGER[])", table_1_filename, "csv");
+  sqlCreateForeignTable("(t TEXT, i INTEGER[])", table_2_filename, "csv", 1);
   queryAndAssertException(
       "REFRESH FOREIGN TABLES test_foreign_table, test_foreign_table_2",
       "Exception: REFRESH FOREIGN TABLES is not yet implemented");
 }
 
 TEST_F(RefreshForeignTableTest, RefreshEvictFalseCaps) {
-  sqlCreateForeignTable(table_1_name, table_1_filename, "(t TEXT, i INTEGER[])", {});
-  sqlCreateForeignTable(table_2_name, table_2_filename, "(t TEXT, i INTEGER[])", {});
+  sqlCreateForeignTable("(t TEXT, i INTEGER[])", table_1_filename, "csv");
+  sqlCreateForeignTable("(t TEXT, i INTEGER[])", table_2_filename, "csv", 1);
   queryAndAssertException(
       "REFRESH FOREIGN TABLES test_foreign_table WITH (EVICT='false')",
       "Exception: REFRESH FOREIGN TABLES is not yet implemented");
 }
 
 TEST_F(RefreshForeignTableTest, RefreshEvictFalse) {
-  sqlCreateForeignTable(table_1_name, table_1_filename, "(t TEXT, i INTEGER[])", {});
-  sqlCreateForeignTable(table_2_name, table_2_filename, "(t TEXT, i INTEGER[])", {});
+  sqlCreateForeignTable("(t TEXT, i INTEGER[])", table_1_filename, "csv");
+  sqlCreateForeignTable("(t TEXT, i INTEGER[])", table_2_filename, "csv", 1);
   queryAndAssertException(
       "REFRESH FOREIGN TABLES test_foreign_table WITH (evict='false')",
       "Exception: REFRESH FOREIGN TABLES is not yet implemented");
 }
 
 TEST_F(RefreshForeignTableTest, RefreshEvictTrue) {
-  sqlCreateForeignTable(table_1_name, table_1_filename, "(t TEXT, i INTEGER[])", {});
-  sqlCreateForeignTable(table_2_name, table_2_filename, "(t TEXT, i INTEGER[])", {});
+  sqlCreateForeignTable("(t TEXT, i INTEGER[])", table_1_filename, "csv");
+  sqlCreateForeignTable("(t TEXT, i INTEGER[])", table_2_filename, "csv", 1);
   queryAndAssertException("REFRESH FOREIGN TABLES test_foreign_table WITH (EVICT='true')",
                           "Exception: REFRESH FOREIGN TABLES is not yet implemented");
 }
 
 TEST_F(RefreshForeignTableTest, RefreshEvictTrueCaps) {
-  sqlCreateForeignTable(table_1_name, table_1_filename, "(t TEXT, i INTEGER[])", {});
-  sqlCreateForeignTable(table_2_name, table_2_filename, "(t TEXT, i INTEGER[])", {});
+  sqlCreateForeignTable("(t TEXT, i INTEGER[])", table_1_filename, "csv");
+  sqlCreateForeignTable("(t TEXT, i INTEGER[])", table_2_filename, "csv", 1);
   queryAndAssertException("REFRESH FOREIGN TABLES test_foreign_table WITH (EVICT='TRUE')",
                           "Exception: REFRESH FOREIGN TABLES is not yet implemented");
 }
@@ -834,6 +836,167 @@ TEST_P(RowGroupAndFragmentSizeSelectQueryTest, NoStatistics) {
           {i(6), i(8), "1", -100.},
       },
       result);
+}
+
+using namespace foreign_storage;
+class ForeignStorageCacheQueryTest : public ForeignTableTest {
+ protected:
+  inline static const std::string table_2_filename = "example_2";
+  inline static const std::string col_name1 = "col1";
+  inline static const std::string col_name2 = "col2";
+  inline static const std::string col_name3 = "col3";
+  inline static Catalog_Namespace::Catalog* cat;
+  inline static ForeignStorageCache* cache;
+  inline static File_Namespace::GlobalFileMgr* gfm;
+  inline static const TableDescriptor* td;
+  inline static const ColumnDescriptor *cd1, *cd2, *cd3;
+  inline static ChunkKey query_chunk_key1, query_chunk_key2, query_chunk_key3,
+      query_table_prefix;
+
+  static void SetUpTestSuite() {
+    DBHandlerTestFixture::SetUpTestSuite();
+    cat = &getCatalog();
+    cache = cat->getDataMgr().getForeignStorageMgr()->getForeignStorageCache();
+    gfm = cat->getDataMgr().getGlobalFileMgr();
+    sqlDropForeignTable();
+  }
+
+  static void TearDownTestSuite() { DBHandlerTestFixture::TearDownTestSuite(); }
+
+  static void createTestTable() {
+    sqlCreateForeignTable(
+        "(" + col_name1 + " TEXT, " + col_name2 + " INTEGER, " + col_name3 + " DOUBLE)",
+        table_2_filename,
+        "csv");
+    td = cat->getMetadataForTable(default_table_name);
+    cd1 = cat->getMetadataForColumn(td->tableId, col_name1);
+    cd2 = cat->getMetadataForColumn(td->tableId, col_name2);
+    cd3 = cat->getMetadataForColumn(td->tableId, col_name3);
+    query_chunk_key1 = {cat->getCurrentDB().dbId, td->tableId, cd1->columnId, 0};
+    query_chunk_key2 = {cat->getCurrentDB().dbId, td->tableId, cd2->columnId, 0};
+    query_chunk_key3 = {cat->getCurrentDB().dbId, td->tableId, cd3->columnId, 0};
+    query_table_prefix = {cat->getCurrentDB().dbId, td->tableId};
+  }
+
+  static void sqlSelect(const std::string& columns = "*",
+                        const std::string& table_name = "test_foreign_table") {
+    sql("SELECT " + columns + " FROM " + table_name + ";");
+  }
+
+  void SetUp() override {
+    ForeignTableTest::SetUp();
+    cache->clear();
+    createTestTable();
+  }
+
+  void TearDown() override {
+    sqlDropForeignTable();
+    ForeignTableTest::TearDown();
+  }
+};
+
+TEST_F(ForeignStorageCacheQueryTest, SelectPopulateChunks) {
+  ASSERT_EQ(cache->getCachedChunkIfExists(query_chunk_key2), nullptr);
+  ASSERT_FALSE(gfm->isBufferOnDevice(query_chunk_key2));
+  sqlSelect();
+  ASSERT_NE(cache->getCachedChunkIfExists(query_chunk_key2), nullptr);
+  ASSERT_TRUE(gfm->isBufferOnDevice(query_chunk_key2));
+  AbstractBuffer* buffer = cache->getCachedChunkIfExists(query_chunk_key2);
+  ASSERT_NE(buffer, nullptr);
+  int8_t array[4];
+  buffer->read(array, 4);
+  int32_t val = 1;
+  ASSERT_EQ(std::memcmp(array, &val, 4), 0);
+}
+
+TEST_F(ForeignStorageCacheQueryTest, CreatePopulateMetadata) {
+  sqlDropForeignTable();
+  ASSERT_FALSE(cache->isMetadataCached(query_chunk_key1));
+  ASSERT_FALSE(cache->isMetadataCached(query_chunk_key2));
+  ASSERT_FALSE(cache->isMetadataCached(query_chunk_key3));
+  ASSERT_FALSE(cache->hasCachedMetadataForKeyPrefix(query_chunk_key1));
+  ASSERT_FALSE(cache->hasCachedMetadataForKeyPrefix(query_table_prefix));
+  createTestTable();
+  ASSERT_TRUE(cache->isMetadataCached(query_chunk_key1));
+  ASSERT_TRUE(cache->isMetadataCached(query_chunk_key2));
+  ASSERT_TRUE(cache->isMetadataCached(query_chunk_key3));
+  ASSERT_TRUE(cache->hasCachedMetadataForKeyPrefix(query_chunk_key1));
+  ASSERT_TRUE(cache->hasCachedMetadataForKeyPrefix(query_table_prefix));
+}
+
+TEST_F(ForeignStorageCacheQueryTest, CacheEvictAfterDrop) {
+  sqlSelect();
+  ASSERT_EQ(cache->getNumCachedChunks(), 3U);
+  ASSERT_EQ(cache->getNumCachedMetadata(), 3U);
+  sqlDropForeignTable();
+  ASSERT_EQ(cache->getNumCachedChunks(), 0U);
+  ASSERT_EQ(cache->getNumCachedMetadata(), 0U);
+}
+
+// LRU specific tests (default algorithm).
+TEST_F(ForeignStorageCacheQueryTest, LRUEvictChunkByAlgOrderOne) {
+  sqlSelect(col_name3);
+  sqlSelect(col_name2);
+  sqlSelect(col_name1);
+  ASSERT_EQ(cache->getNumCachedChunks(), 3U);
+  ASSERT_NE(cache->getCachedChunkIfExists(query_chunk_key3), nullptr);
+  ASSERT_NE(cache->getCachedChunkIfExists(query_chunk_key2), nullptr);
+  ASSERT_NE(cache->getCachedChunkIfExists(query_chunk_key1), nullptr);
+  size_t old_limit = cache->getLimit();
+  cache->setLimit(2U);
+  ASSERT_FALSE(cache->getCachedChunkIfExists(query_chunk_key3));
+  ASSERT_TRUE(cache->getCachedChunkIfExists(query_chunk_key2));
+  ASSERT_TRUE(cache->getCachedChunkIfExists(query_chunk_key1));
+  cache->setLimit(1U);
+  ASSERT_EQ(cache->getCachedChunkIfExists(query_chunk_key3), nullptr);
+  ASSERT_EQ(cache->getCachedChunkIfExists(query_chunk_key2), nullptr);
+  ASSERT_NE(cache->getCachedChunkIfExists(query_chunk_key1), nullptr);
+  cache->setLimit(0U);
+  ASSERT_EQ(cache->getCachedChunkIfExists(query_chunk_key3), nullptr);
+  ASSERT_EQ(cache->getCachedChunkIfExists(query_chunk_key2), nullptr);
+  ASSERT_EQ(cache->getCachedChunkIfExists(query_chunk_key1), nullptr);
+  ASSERT_EQ(cache->getNumCachedChunks(), 0U);
+  cache->setLimit(old_limit);
+}
+
+// Verify that the LRU algorithm is working if we use a different order.
+TEST_F(ForeignStorageCacheQueryTest, LRUEvictChunkByAlgOrderTwo) {
+  sqlSelect(col_name1);
+  sqlSelect(col_name2);
+  sqlSelect(col_name3);
+  ASSERT_EQ(cache->getNumCachedChunks(), 3U);
+  ASSERT_NE(cache->getCachedChunkIfExists(query_chunk_key1), nullptr);
+  ASSERT_NE(cache->getCachedChunkIfExists(query_chunk_key2), nullptr);
+  ASSERT_NE(cache->getCachedChunkIfExists(query_chunk_key3), nullptr);
+  size_t old_limit = cache->getLimit();
+  cache->setLimit(2U);
+  ASSERT_EQ(cache->getCachedChunkIfExists(query_chunk_key1), nullptr);
+  ASSERT_NE(cache->getCachedChunkIfExists(query_chunk_key2), nullptr);
+  ASSERT_NE(cache->getCachedChunkIfExists(query_chunk_key3), nullptr);
+  cache->setLimit(1U);
+  ASSERT_EQ(cache->getCachedChunkIfExists(query_chunk_key1), nullptr);
+  ASSERT_EQ(cache->getCachedChunkIfExists(query_chunk_key2), nullptr);
+  ASSERT_NE(cache->getCachedChunkIfExists(query_chunk_key3), nullptr);
+  cache->setLimit(0U);
+  ASSERT_EQ(cache->getCachedChunkIfExists(query_chunk_key1), nullptr);
+  ASSERT_EQ(cache->getCachedChunkIfExists(query_chunk_key2), nullptr);
+  ASSERT_EQ(cache->getCachedChunkIfExists(query_chunk_key3), nullptr);
+  ASSERT_EQ(cache->getNumCachedChunks(), 0U);
+  cache->setLimit(old_limit);
+}
+
+TEST_F(ForeignStorageCacheQueryTest, WideLogicalColumns) {
+  cache->clear();
+  ASSERT_EQ(cache->getNumCachedChunks(), 0U);
+  ASSERT_EQ(cache->getNumCachedMetadata(), 0U);
+  sqlDropForeignTable();
+  sqlCreateForeignTable("(t TEXT, i INTEGER[])", "example_1", "csv");
+  sqlSelect();
+  // Metadata and chunk size differ because the INTEGER[] logical col expands into two
+  // physical columns.
+  ASSERT_EQ(cache->getNumCachedChunks(), 3U);
+  ASSERT_EQ(cache->getNumCachedMetadata(), 2U);
+  sqlDropForeignTable();
 }
 
 int main(int argc, char** argv) {

@@ -542,4 +542,11 @@ std::ostream& operator<<(std::ostream& os, const DataMgr::SystemMemoryUsage& mem
   return os;
 }
 
+foreign_storage::ForeignStorageMgr* DataMgr::getForeignStorageMgr() const {
+  if (g_enable_fsi) {
+    return dynamic_cast<PersistentStorageMgr*>(bufferMgrs_[0][0])->getForeignStorageMgr();
+  }
+  return nullptr;
+}
+
 }  // namespace Data_Namespace

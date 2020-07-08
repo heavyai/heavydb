@@ -150,6 +150,16 @@ TEST_F(FsiSchemaTest, FsiTablesAreDroppedWhenFsiIsDisabled) {
 
 class ForeignTablesTest : public DBHandlerTestFixture {
  protected:
+  static void SetUpTestSuite() {
+    g_enable_fsi = true;
+    DBHandlerTestFixture::SetUpTestSuite();
+  }
+
+  static void TearDownTestSuite() {
+    DBHandlerTestFixture::TearDownTestSuite();
+    g_enable_fsi = false;
+  }
+
   void SetUp() override {
     g_enable_fsi = true;
     DBHandlerTestFixture::SetUp();

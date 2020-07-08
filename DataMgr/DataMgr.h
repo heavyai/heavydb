@@ -27,6 +27,7 @@
 #include "AbstractBufferMgr.h"
 #include "BufferMgr/Buffer.h"
 #include "BufferMgr/BufferMgr.h"
+#include "ForeignStorage/ForeignStorageMgr.h"
 #include "MemoryLevel.h"
 
 #include <iomanip>
@@ -159,6 +160,8 @@ class DataMgr {
 
   SystemMemoryUsage getSystemMemoryUsage() const;
   static size_t getTotalSystemMemory();
+
+  foreign_storage::ForeignStorageMgr* getForeignStorageMgr() const;
 
  private:
   void populateMgrs(const SystemParameters& system_parameters,

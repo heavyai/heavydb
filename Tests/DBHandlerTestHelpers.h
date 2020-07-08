@@ -168,6 +168,10 @@ class DBHandlerTestFixture : public testing::Test {
     switchToAdmin();
   }
 
+  static void SetUpTestSuite() { createDBHandler(); }
+
+  static void TearDownTestSuite() {}
+
   static void createDBHandler() {
     if (!db_handler_) {
       // Based on default values observed from starting up an OmniSci DB server.
