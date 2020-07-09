@@ -638,7 +638,10 @@ void JoinHashTable::reifyOneToOneForDevice(
   }
 
   std::vector<std::shared_ptr<Chunk_NS::Chunk>> chunks_owner;
-  CudaAllocator dev_buff_owner(&data_mgr, device_id);
+  std::unique_ptr<DeviceAllocator> device_allocator;
+  if (effective_memory_level == MemoryLevel::GPU_LEVEL) {
+    device_allocator = std::make_unique<CudaAllocator>(&data_mgr, device_id);
+  }
   std::vector<std::shared_ptr<void>> malloc_owner;
 
   JoinColumn join_column = fetchJoinColumn(inner_col,
@@ -646,7 +649,7 @@ void JoinHashTable::reifyOneToOneForDevice(
                                            effective_memory_level,
                                            device_id,
                                            chunks_owner,
-                                           &dev_buff_owner,
+                                           device_allocator.get(),
                                            malloc_owner,
                                            executor_,
                                            &column_cache_);
@@ -691,7 +694,10 @@ void JoinHashTable::reifyOneToManyForDevice(
   }
 
   std::vector<std::shared_ptr<Chunk_NS::Chunk>> chunks_owner;
-  CudaAllocator dev_buff_owner(&data_mgr, device_id);
+  std::unique_ptr<DeviceAllocator> device_allocator;
+  if (effective_memory_level == MemoryLevel::GPU_LEVEL) {
+    device_allocator = std::make_unique<CudaAllocator>(&data_mgr, device_id);
+  }
   std::vector<std::shared_ptr<void>> malloc_owner;
 
   JoinColumn join_column = fetchJoinColumn(inner_col,
@@ -699,7 +705,7 @@ void JoinHashTable::reifyOneToManyForDevice(
                                            effective_memory_level,
                                            device_id,
                                            chunks_owner,
-                                           &dev_buff_owner,
+                                           device_allocator.get(),
                                            malloc_owner,
                                            executor_,
                                            &column_cache_);
