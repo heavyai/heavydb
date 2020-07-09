@@ -167,7 +167,7 @@ target_link_libraries(ForeignTableDmlTest ${THRIFT_HANDLER_TEST_LIBRARIES})
 target_link_libraries(FileMgrTest ${THRIFT_HANDLER_TEST_LIBRARIES})
 target_link_libraries(FilePathWhitelistTest ${THRIFT_HANDLER_TEST_LIBRARIES})
 target_link_libraries(SQLHintTest ${EXECUTE_TEST_LIBS})
-target_link_libraries(ForeignStorageCacheTest gtest ${MAPD_LIBRARIES})
+target_link_libraries(ForeignStorageCacheTest gtest Shared Catalog Parser QueryEngine ${TBB_LIBS})
 
 if(NOT ${CMAKE_SYSTEM_NAME} STREQUAL "Darwin")
   target_link_libraries(UdfTest gtest ${EXECUTE_TEST_LIBS})
