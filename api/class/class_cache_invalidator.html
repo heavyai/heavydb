@@ -41,7 +41,7 @@
     <link rel="index" title="Index" href="../../genindex.html" />
     <link rel="search" title="Search" href="../../search.html" />
     <link rel="next" title="Class Calcite" href="class_calcite.html" />
-    <link rel="prev" title="Class Buffer_Namespace::GpuCudaBufferMgr" href="class_buffer___namespace_1_1_gpu_cuda_buffer_mgr.html" /> 
+    <link rel="prev" title="Class CacheEvictionAlgorithm" href="class_cache_eviction_algorithm.html" /> 
 </head>
 
 <body class="wy-body-for-nav">
@@ -65,7 +65,7 @@
             
             
               <div class="version">
-                5.4.0dev 4efabf1
+                5.4.0dev a27c6e7
               </div>
             
           
@@ -331,6 +331,7 @@
 <li class="toctree-l2"><a class="reference internal" href="class_buffer___namespace_1_1_cpu_buffer_mgr.html">Class Buffer_Namespace::CpuBufferMgr</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_buffer___namespace_1_1_gpu_cuda_buffer.html">Class Buffer_Namespace::GpuCudaBuffer</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_buffer___namespace_1_1_gpu_cuda_buffer_mgr.html">Class Buffer_Namespace::GpuCudaBufferMgr</a></li>
+<li class="toctree-l2"><a class="reference internal" href="class_cache_eviction_algorithm.html">Class CacheEvictionAlgorithm</a></li>
 <li class="toctree-l2 current"><a class="current reference internal" href="#">Class CacheInvalidator</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_calcite.html">Class Calcite</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_call.html">Class Call</a></li>
@@ -475,6 +476,7 @@
 <li class="toctree-l2"><a class="reference internal" href="class_join_target_rebaser.html">Class JoinTargetRebaser</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_json_column_encoding.html">Class JsonColumnEncoding</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_json_column_sql_type.html">Class JsonColumnSqlType</a></li>
+<li class="toctree-l2"><a class="reference internal" href="class_l_r_u_eviction_algorithm.html">Class LRUEvictionAlgorithm</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_ldap_server.html">Class LdapServer</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_leaf_aggregator.html">Class LeafAggregator</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_leaf_host_info.html">Class LeafHostInfo</a></li>
@@ -487,6 +489,7 @@
 <li class="toctree-l2"><a class="reference internal" href="class_mem_cpy.html">Class MemCpy</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_modify_manipulation_target.html">Class ModifyManipulationTarget</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_native_execution_error.html">Class NativeExecutionError</a></li>
+<li class="toctree-l2"><a class="reference internal" href="class_no_entry_found_exception.html">Class NoEntryFoundException</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_none_encoder.html">Class NoneEncoder</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_null_aware_validator.html">Class NullAwareValidator</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_nullable_value.html">Class NullableValue</a></li>
@@ -973,6 +976,7 @@
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_csv_data_wrapper.html">Class foreign_storage::CsvDataWrapper</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_foreign_data_wrapper.html">Class foreign_storage::ForeignDataWrapper</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_foreign_storage_buffer.html">Class foreign_storage::ForeignStorageBuffer</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_foreign_storage_cache.html">Class foreign_storage::ForeignStorageCache</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_foreign_storage_mgr.html">Class foreign_storage::ForeignStorageMgr</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_foreign_table_column_map.html">Class foreign_storage::ForeignTableColumnMap</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_lazy_parquet_importer.html">Class foreign_storage::LazyParquetImporter</a></li>
@@ -1096,6 +1100,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_data___namespace_1_1_memory_data.html">Struct Data_Namespace::MemoryData</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_data___namespace_1_1_memory_info.html">Struct Data_Namespace::MemoryInfo</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_database_privileges.html">Struct DatabasePrivileges</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/struct_dataframe_table_descriptor.html">Struct DataframeTableDescriptor</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_decoded_join_hash_buffer_entry.html">Struct DecodedJoinHashBufferEntry</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_device_array_datum.html">Struct DeviceArrayDatum</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_dict_descriptor.html">Struct DictDescriptor</a></li>
@@ -1120,6 +1125,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_filter_selectivity.html">Struct FilterSelectivity</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_first_step_execution_result.html">Struct FirstStepExecutionResult</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_foreign_storage_column_buffer.html">Struct ForeignStorageColumnBuffer</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/struct_frag.html">Struct Frag</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_fragmenter___namespace_1_1_array_chunk_converter.html">Struct Fragmenter_Namespace::ArrayChunkConverter</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_fragmenter___namespace_1_1_block_with_column_id.html">Struct Fragmenter_Namespace::BlockWithColumnId</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_fragmenter___namespace_1_1_chunk_to_insert_data_converter.html">Struct Fragmenter_Namespace::ChunkToInsertDataConverter</a></li>
@@ -1522,7 +1528,7 @@
         <a href="class_calcite.html" class="btn btn-neutral float-right" title="Class Calcite" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right"></span></a>
       
       
-        <a href="class_buffer___namespace_1_1_gpu_cuda_buffer_mgr.html" class="btn btn-neutral float-left" title="Class Buffer_Namespace::GpuCudaBufferMgr" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left"></span> Previous</a>
+        <a href="class_cache_eviction_algorithm.html" class="btn btn-neutral float-left" title="Class CacheEvictionAlgorithm" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left"></span> Previous</a>
       
     </div>
   
