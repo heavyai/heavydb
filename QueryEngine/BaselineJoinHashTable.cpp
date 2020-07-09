@@ -356,8 +356,10 @@ void BaselineJoinHashTable::reifyWithLayout(
   }
   auto& data_mgr = catalog_->getDataMgr();
   std::vector<std::unique_ptr<CudaAllocator>> dev_buff_owners;
-  for (int device_id = 0; device_id < device_count_; ++device_id) {
-    dev_buff_owners.emplace_back(std::make_unique<CudaAllocator>(&data_mgr, device_id));
+  if (memory_level_ == Data_Namespace::MemoryLevel::GPU_LEVEL) {
+    for (int device_id = 0; device_id < device_count_; ++device_id) {
+      dev_buff_owners.emplace_back(std::make_unique<CudaAllocator>(&data_mgr, device_id));
+    }
   }
   std::vector<BaselineJoinHashTable::ColumnsForDevice> columns_per_device;
   const auto shard_count = shardCount();
@@ -367,7 +369,11 @@ void BaselineJoinHashTable::reifyWithLayout(
             ? only_shards_for_device(query_info.fragments, device_id, device_count_)
             : query_info.fragments;
     const auto columns_for_device =
-        fetchColumnsForDevice(fragments, device_id, dev_buff_owners[device_id].get());
+        fetchColumnsForDevice(fragments,
+                              device_id,
+                              memory_level_ == Data_Namespace::MemoryLevel::GPU_LEVEL
+                                  ? dev_buff_owners[device_id].get()
+                                  : nullptr);
     columns_per_device.push_back(columns_for_device);
   }
   if (layout == JoinHashTableInterface::HashType::OneToMany) {
