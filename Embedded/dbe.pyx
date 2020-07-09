@@ -165,7 +165,7 @@ cdef class PyDbEngine:
         except OSError as err:
             print("OS error: {0}".format(err))
         except ValueError:
-            print("Could not convert data to an integer.")
+            print("Wrong argument value")
         except:
             print("Unexpected error:", sys.exc_info()[0], sys.exc_info()[1])
 
