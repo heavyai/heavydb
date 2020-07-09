@@ -264,7 +264,7 @@ void ArrowCsvForeignStorage::prepareTable(const int db_id,
 
 void getSizeAndOffset(const Frag& frag,
                       const std::shared_ptr<arrow::Array>& chunk,
-                      size_t i,
+                      int i,
                       int& size,
                       int& offset) {
   offset = (i == frag.first_chunk) ? frag.first_chunk_offset : 0;
