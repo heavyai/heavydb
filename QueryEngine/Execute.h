@@ -962,10 +962,10 @@ class Executor {
   static const int max_gpu_count{16};
   std::mutex gpu_exec_mutex_[max_gpu_count];
 
-  mutable std::mutex gpu_active_modules_mutex_;
-  mutable uint32_t gpu_active_modules_device_mask_;
-  mutable void* gpu_active_modules_[max_gpu_count];
-  std::atomic<bool> interrupted_;
+  static std::mutex gpu_active_modules_mutex_;
+  static uint32_t gpu_active_modules_device_mask_;
+  static void* gpu_active_modules_[max_gpu_count];
+  static std::atomic<bool> interrupted_;
 
   mutable std::shared_ptr<StringDictionaryProxy> lit_str_dict_proxy_;
   mutable std::mutex str_dict_mutex_;
