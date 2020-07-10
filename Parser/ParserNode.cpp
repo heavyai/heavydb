@@ -2615,7 +2615,8 @@ void InsertIntoTableAsSelectStmt::populateData(QueryStateProxy query_state_proxy
           &(*std::next(source_column_descriptors.begin(), i));
       const ColumnDescriptor* target_cd = target_column_descriptors.at(i);
 
-      if ((!source_cd->columnType.is_string() && !target_cd->columnType.is_string()) &&
+      if ((!source_cd->columnType.is_integer() && !target_cd->columnType.is_integer()) &&
+          (!source_cd->columnType.is_string() && !target_cd->columnType.is_string()) &&
           (source_cd->columnType.get_type() != target_cd->columnType.get_type())) {
         throw std::runtime_error("Source '" + source_cd->columnName + " " +
                                  source_cd->columnType.get_type_name() +
@@ -2643,13 +2644,12 @@ void InsertIntoTableAsSelectStmt::populateData(QueryStateProxy query_state_proxy
           targetType = target_cd->columnType.get_elem_type();
         }
 
-        if ((sourceType.get_dimension() != targetType.get_dimension()) ||
-            (sourceType.get_scale() != targetType.get_scale())) {
-          throw std::runtime_error(
-              "Source '" + source_cd->columnName + " " +
-              source_cd->columnType.get_type_name() + "' and target '" +
-              target_cd->columnName + " " + target_cd->columnType.get_type_name() +
-              "' decimal columns dimension and or scale do not match.");
+        if (sourceType.get_scale() != targetType.get_scale()) {
+          throw std::runtime_error("Source '" + source_cd->columnName + " " +
+                                   source_cd->columnType.get_type_name() +
+                                   "' and target '" + target_cd->columnName + " " +
+                                   target_cd->columnType.get_type_name() +
+                                   "' decimal columns scales do not match.");
         }
       }
 
@@ -2676,6 +2676,9 @@ void InsertIntoTableAsSelectStmt::populateData(QueryStateProxy query_state_proxy
       }
 
       if (!source_cd->columnType.is_string() && !source_cd->columnType.is_geometry() &&
+          !source_cd->columnType.is_integer() && !source_cd->columnType.is_decimal() &&
+          !source_cd->columnType.is_date() && !source_cd->columnType.is_time() &&
+          !source_cd->columnType.is_timestamp() &&
           source_cd->columnType.get_size() > target_cd->columnType.get_size()) {
         throw std::runtime_error("Source '" + source_cd->columnName + " " +
                                  source_cd->columnType.get_type_name() +
