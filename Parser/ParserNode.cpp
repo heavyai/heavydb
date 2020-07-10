@@ -2515,6 +2515,12 @@ std::list<ColumnDescriptor> LocalConnector::getColumnDescriptors(AggregatedResul
       }
     }
 
+    if (cd.columnType.is_date() && !cd.columnType.is_date_in_days()) {
+      // default to kENCODING_DATE_IN_DAYS encoding
+      cd_for_create.columnType.set_compression(kENCODING_DATE_IN_DAYS);
+      cd_for_create.columnType.set_comp_param(0);
+    }
+
     column_descriptors_for_create.push_back(cd_for_create);
     column_descriptors.push_back(cd);
   }
