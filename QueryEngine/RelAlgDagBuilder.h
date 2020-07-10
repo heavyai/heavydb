@@ -14,8 +14,14 @@
  * limitations under the License.
  */
 
+/** Notes:
+ *  * All copy constuctors of child classes of RelAlgNode are deep copies,
+ *    and are invoked by the the RelAlgNode::deepCopy() overloads.
+ */
+
 #pragma once
 
+#include <atomic>
 #include <iterator>
 #include <memory>
 #include <unordered_map>
@@ -286,10 +292,13 @@ class RexSubQuery : public RexScalar {
     return *(result_.get());
   }
 
+  unsigned getId() const;
+
   const RelAlgNode* getRelAlg() const { return ra_.get(); }
 
   std::string toString() const override {
-    return "(RexSubQuery " + std::to_string(reinterpret_cast<const uint64_t>(this)) + ")";
+    return "(RexSubQuery " + std::to_string(reinterpret_cast<const uint64_t>(this)) +
+           " id(" + std::to_string(getId()) + "))";
   }
 
   std::unique_ptr<RexSubQuery> deepCopy() const;
@@ -900,6 +909,8 @@ class RelProject : public RelAlgNode, public ModifyManipulationTarget {
     inputs_.push_back(input);
   }
 
+  RelProject(RelProject const&);
+
   void setExpressions(std::vector<std::unique_ptr<const RexScalar>>& exprs) const {
     scalar_exprs_ = std::move(exprs);
   }
@@ -963,7 +974,9 @@ class RelProject : public RelAlgNode, public ModifyManipulationTarget {
     return result + ")";
   }
 
-  std::shared_ptr<RelAlgNode> deepCopy() const override;
+  std::shared_ptr<RelAlgNode> deepCopy() const override {
+    return std::make_shared<RelProject>(*this);
+  }
 
   bool hasWindowFunctionExpr() const;
 
@@ -1024,6 +1037,8 @@ class RelAggregate : public RelAlgNode {
     inputs_.push_back(input);
   }
 
+  RelAggregate(RelAggregate const&);
+
   size_t size() const override { return groupby_count_ + agg_exprs_.size(); }
 
   const size_t getGroupByCount() const { return groupby_count_; }
@@ -1070,7 +1085,9 @@ class RelAggregate : public RelAlgNode {
     return result + " ]))";
   }
 
-  std::shared_ptr<RelAlgNode> deepCopy() const override;
+  std::shared_ptr<RelAlgNode> deepCopy() const override {
+    return std::make_shared<RelAggregate>(*this);
+  }
 
   void addHint(const HintExplained& hint_explained) {
     if (!hint_applied_) {
@@ -1115,6 +1132,8 @@ class RelJoin : public RelAlgNode {
     inputs_.push_back(rhs);
   }
 
+  RelJoin(RelJoin const&);
+
   JoinType getJoinType() const { return join_type_; }
 
   const RexScalar* getCondition() const { return condition_.get(); }
@@ -1139,7 +1158,9 @@ class RelJoin : public RelAlgNode {
 
   size_t size() const override { return inputs_[0]->size() + inputs_[1]->size(); }
 
-  std::shared_ptr<RelAlgNode> deepCopy() const override;
+  std::shared_ptr<RelAlgNode> deepCopy() const override {
+    return std::make_shared<RelJoin>(*this);
+  }
 
   void addHint(const HintExplained& hint_explained) {
     if (!hint_applied_) {
@@ -1178,6 +1199,8 @@ class RelFilter : public RelAlgNode {
     inputs_.push_back(input);
   }
 
+  RelFilter(RelFilter const&);
+
   const RexScalar* getCondition() const { return filter_.get(); }
 
   const RexScalar* getAndReleaseCondition() { return filter_.release(); }
@@ -1199,7 +1222,9 @@ class RelFilter : public RelAlgNode {
     return result + "))";
   }
 
-  std::shared_ptr<RelAlgNode> deepCopy() const override;
+  std::shared_ptr<RelAlgNode> deepCopy() const override {
+    return std::make_shared<RelFilter>(*this);
+  }
 
  private:
   std::unique_ptr<const RexScalar> filter_;
@@ -1258,11 +1283,11 @@ class RelCompound : public RelAlgNode, public ModifyManipulationTarget {
                                  manipulation_target_table,
                                  target_columns)
       , filter_expr_(std::move(filter_expr))
-      , target_exprs_(target_exprs)
       , groupby_count_(groupby_count)
       , fields_(fields)
       , is_agg_(is_agg)
       , scalar_sources_(std::move(scalar_sources))
+      , target_exprs_(target_exprs)
       , hint_applied_(false)
       , hints_(std::make_unique<Hints>()) {
     CHECK_EQ(fields.size(), target_exprs.size());
@@ -1270,6 +1295,8 @@ class RelCompound : public RelAlgNode, public ModifyManipulationTarget {
       agg_exprs_.emplace_back(agg_expr);
     }
   }
+
+  RelCompound(RelCompound const&);
 
   void replaceInput(std::shared_ptr<const RelAlgNode> old_input,
                     std::shared_ptr<const RelAlgNode> input) override;
@@ -1321,7 +1348,9 @@ class RelCompound : public RelAlgNode, public ModifyManipulationTarget {
     return result + " ]))";
   }
 
-  std::shared_ptr<RelAlgNode> deepCopy() const override;
+  std::shared_ptr<RelAlgNode> deepCopy() const override {
+    return std::make_shared<RelCompound>(*this);
+  }
 
   void addHint(const HintExplained& hint_explained) {
     if (!hint_applied_) {
@@ -1346,7 +1375,6 @@ class RelCompound : public RelAlgNode, public ModifyManipulationTarget {
 
  private:
   std::unique_ptr<const RexScalar> filter_expr_;
-  const std::vector<const Rex*> target_exprs_;
   const size_t groupby_count_;
   std::vector<std::unique_ptr<const RexAgg>> agg_exprs_;
   const std::vector<std::string> fields_;
@@ -1354,6 +1382,7 @@ class RelCompound : public RelAlgNode, public ModifyManipulationTarget {
   std::vector<std::unique_ptr<const RexScalar>>
       scalar_sources_;  // building blocks for group_indices_ and agg_exprs_; not actually
                         // projected, just owned
+  const std::vector<const Rex*> target_exprs_;
   bool hint_applied_;
   std::unique_ptr<Hints> hints_;
 };
@@ -1408,7 +1437,9 @@ class RelSort : public RelAlgNode {
 
   size_t size() const override { return inputs_[0]->size(); }
 
-  std::shared_ptr<RelAlgNode> deepCopy() const override;
+  std::shared_ptr<RelAlgNode> deepCopy() const override {
+    return std::make_shared<RelSort>(*this);
+  }
 
  private:
   std::vector<SortField> collation_;
@@ -1490,12 +1521,7 @@ class RelModify : public RelAlgNode {
 
   size_t size() const override { return 0; }
   std::shared_ptr<RelAlgNode> deepCopy() const override {
-    return std::make_shared<RelModify>(catalog_,
-                                       table_descriptor_,
-                                       flattened_,
-                                       operation_,
-                                       target_column_list_,
-                                       inputs_[0]);
+    return std::make_shared<RelModify>(*this);
   }
 
   std::string toString() const override {
@@ -1595,6 +1621,8 @@ class RelTableFunction : public RelAlgNode {
     inputs_.emplace_back(input);
   }
 
+  RelTableFunction(RelTableFunction const&);
+
   void replaceInput(std::shared_ptr<const RelAlgNode> old_input,
                     std::shared_ptr<const RelAlgNode> input) override;
 
@@ -1625,7 +1653,9 @@ class RelTableFunction : public RelAlgNode {
     return fields_[idx];
   }
 
-  std::shared_ptr<RelAlgNode> deepCopy() const override;
+  std::shared_ptr<RelAlgNode> deepCopy() const override {
+    return std::make_shared<RelTableFunction>(*this);
+  }
 
   std::string toString() const override {
     std::string result = "RelTableFunction<" +
@@ -1667,6 +1697,8 @@ class RelLogicalValues : public RelAlgNode {
                    std::vector<RowValues>& values)
       : tuple_type_(tuple_type), values_(std::move(values)) {}
 
+  RelLogicalValues(RelLogicalValues const&);
+
   const std::vector<TargetMetaInfo> getTupleType() const { return tuple_type_; }
 
   std::string toString() const override {
@@ -1701,7 +1733,9 @@ class RelLogicalValues : public RelAlgNode {
 
   bool hasRows() const { return !values_.empty(); }
 
-  std::shared_ptr<RelAlgNode> deepCopy() const override;
+  std::shared_ptr<RelAlgNode> deepCopy() const override {
+    return std::make_shared<RelLogicalValues>(*this);
+  }
 
  private:
   const std::vector<TargetMetaInfo> tuple_type_;
@@ -1711,7 +1745,9 @@ class RelLogicalValues : public RelAlgNode {
 class RelLogicalUnion : public RelAlgNode {
  public:
   RelLogicalUnion(RelAlgInputs, bool is_all);
-  std::shared_ptr<RelAlgNode> deepCopy() const override;
+  std::shared_ptr<RelAlgNode> deepCopy() const override {
+    return std::make_shared<RelLogicalUnion>(*this);
+  }
   size_t size() const override;
   std::string toString() const override;
 

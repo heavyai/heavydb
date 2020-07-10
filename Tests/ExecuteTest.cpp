@@ -18662,6 +18662,146 @@ TEST(Select, Interop) {
   g_enable_interop = false;
 }
 
+// Test https://github.com/omnisci/omniscidb/issues/463
+TEST(Select, LeftJoinDictionaryGenerationIssue463) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    char const* drop_table1 = "DROP TABLE IF EXISTS issue463_table1;";
+    char const* drop_table2 = "DROP TABLE IF EXISTS issue463_table2;";
+    run_ddl_statement(drop_table1);
+    run_ddl_statement(drop_table2);
+    g_sqlite_comparator.query(drop_table1);
+    g_sqlite_comparator.query(drop_table2);
+    char const* create_table1 =
+        "CREATE TABLE issue463_table1 ("
+        " playerID TEXT ENCODING DICT(32),"
+        " yearID BIGINT,"
+        " stint BIGINT,"
+        " teamID TEXT ENCODING DICT(32),"
+        " lgID TEXT ENCODING DICT(32),"
+        " G BIGINT,"
+        " AB BIGINT,"
+        " R BIGINT,"
+        " H BIGINT,"
+        " X2B BIGINT,"
+        " X3B BIGINT,"
+        " HR BIGINT,"
+        " RBI BIGINT,"
+        " SB BIGINT,"
+        " CS BIGINT,"
+        " BB BIGINT,"
+        " SO BIGINT,"
+        " IBB BIGINT,"
+        " HBP BIGINT,"
+        " SH BIGINT,"
+        " SF BIGINT,"
+        " GIDP BIGINT);";
+    char const* create_table2 =
+        "CREATE TABLE issue463_table2 ("
+        " playerID TEXT ENCODING DICT(32),"
+        " awardID TEXT ENCODING DICT(32),"
+        " yearID BIGINT,"
+        " lgID TEXT ENCODING DICT(32),"
+        " tie TEXT ENCODING DICT(32),"
+        " notes TEXT ENCODING DICT(32));";
+    run_ddl_statement(create_table1);
+    run_ddl_statement(create_table2);
+    g_sqlite_comparator.query(create_table1);
+    g_sqlite_comparator.query(create_table2);
+    char const* insert_table1 =
+        "INSERT INTO issue463_table1 VALUES "
+        "('keefeti01',1880,1,'TRN','NL',12,43,4,10,3,0,0,3,0,0,1,12,0,0,0,0,0);";
+    char const* insert_table2 =
+        "INSERT INTO issue463_table2 VALUES ('keefeti01','Pitching Triple "
+        "Crown',1888,'NL',0,0);";
+    run_multiple_agg(insert_table1, dt);
+    run_multiple_agg(insert_table2, dt);
+    g_sqlite_comparator.query(insert_table1);
+    g_sqlite_comparator.query(insert_table2);
+    // SELECT returns no rows
+    char const* select_norows = R"Quote463(SELECT t0.*
+FROM (
+  SELECT *
+  FROM issue463_table1
+  WHERE "yearID" = 2015
+) t0
+  LEFT JOIN (
+    SELECT "playerID", "awardID", "tie", "notes"
+    FROM (
+      SELECT *
+      FROM issue463_table2
+      WHERE "lgID" = 'NL'
+    ) t2
+  ) t1
+    ON t0."playerID" = t1."playerID";
+)Quote463";
+    // SELECT returns one row
+    char const* select_onerow = R"Quote463(SELECT t0.*
+FROM (
+  SELECT *
+  FROM issue463_table1
+  WHERE "yearID" = 1880
+) t0
+  LEFT JOIN (
+    SELECT "playerID", "awardID", "tie", "notes"
+    FROM (
+      SELECT *
+      FROM issue463_table2
+      WHERE "lgID" = 'NL'
+    ) t2
+  ) t1
+    ON t0."playerID" = t1."playerID";
+)Quote463";
+    c(select_norows, dt);
+    c(select_onerow, dt);
+  }
+}
+
+// The subquery has an aggregate column that is not projected to the outer query,
+// and so is eliminated by an RA optimization. This tests internal logic that still
+// accesses the string "Chicago" from a StringDictionary with generation=-1.
+TEST(Select, StringFromEliminatedColumn) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    char const* drop_flights = "DROP TABLE IF EXISTS flights;";
+    run_ddl_statement(drop_flights);
+    g_sqlite_comparator.query(drop_flights);
+    std::string create_flights =
+        "CREATE TABLE flights (plane_model TEXT ENCODING DICT(32), dest_city TEXT "
+        "ENCODING DICT(32)) WITH (fragment_size = 2);";
+    run_ddl_statement(create_flights);
+    boost::algorithm::erase_all(create_flights, " ENCODING DICT(32)");
+    boost::algorithm::erase_all(create_flights, " WITH (fragment_size = 2)");
+    g_sqlite_comparator.query(create_flights);
+    for (std::string plane_model : {"B-1", "B-2", "B-3", "B-4"}) {
+      for (auto dest_city : {"Austin", "Dallas", "Chicago"}) {
+        std::string const insert =
+            "INSERT INTO flights VALUES ('" + plane_model + "', '" + dest_city + "');";
+        run_multiple_agg(insert, dt);
+        g_sqlite_comparator.query(insert);
+      }
+    }
+    char const* select =
+        "SELECT plane_model "
+        "FROM ("
+        "  SELECT plane_model, SUM(CASE WHEN dest_city IN ('Austin', 'Dallas') AND "
+        "plane_model IN (SELECT plane_model FROM flights WHERE dest_city = 'Chicago') "
+        "THEN 1 ELSE 0 END) AS \"mycolumn\""
+        "  FROM flights"
+        "  GROUP BY plane_model"
+        ") ORDER BY plane_model;";
+    c(select, dt);
+    // Previously triggered:
+    // StringDictionaryProxy.cpp:68 Check failed: generation_ >= 0 (-1 >= 0)
+    c("SELECT str FROM ("
+      " SELECT str, COUNT(str IN (SELECT str FROM test WHERE ss = 'fish')) AS mycolumn"
+      " FROM test"
+      " GROUP BY str"
+      ") ORDER BY str;",
+      dt);
+  }
+}
+
 TEST(Select, VarlenLazyFetch) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();

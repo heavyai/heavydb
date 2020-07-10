@@ -19,6 +19,8 @@
 
 #include <deque>
 #include <list>
+#include <set>
+#include <unordered_set>
 #include <vector>
 
 namespace shared {
@@ -64,11 +66,15 @@ PrintContainer<CONTAINER> printContainer(CONTAINER& container) {
 template <typename CONTAINER>
 struct is_std_container : std::false_type {};
 template <typename T, typename A>
-struct is_std_container<std::vector<T, A> > : std::true_type {};
+struct is_std_container<std::deque<T, A> > : std::true_type {};
 template <typename T, typename A>
 struct is_std_container<std::list<T, A> > : std::true_type {};
 template <typename T, typename A>
-struct is_std_container<std::deque<T, A> > : std::true_type {};
+struct is_std_container<std::set<T, A> > : std::true_type {};
+template <typename T, typename A>
+struct is_std_container<std::unordered_set<T, A> > : std::true_type {};
+template <typename T, typename A>
+struct is_std_container<std::vector<T, A> > : std::true_type {};
 
 template <typename OSTREAM, typename CONTAINER>
 OSTREAM& operator<<(OSTREAM& os, PrintContainer<CONTAINER> pc) {
