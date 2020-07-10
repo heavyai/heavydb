@@ -34,16 +34,35 @@ T get_fixed_array_null_value() {
   }
 }
 
+template <typename SOURCE_TYPE, typename RETURN_TYPE, typename CHECKED_CAST_TYPE>
+RETURN_TYPE checked_cast(SOURCE_TYPE val, bool check_null, RETURN_TYPE null_value) {
+  if (!std::is_same<SOURCE_TYPE, CHECKED_CAST_TYPE>::value) {
+    // do an overflow check
+    try {
+      CHECKED_CAST_TYPE castedVal = boost::numeric_cast<CHECKED_CAST_TYPE>(val);
+      if (check_null && castedVal == null_value) {
+        throw std::runtime_error("Overflow or underflow");
+      }
+    } catch (...) {
+      throw std::runtime_error("Overflow or underflow");
+    }
+  }
+
+  return static_cast<RETURN_TYPE>(val);
+}
+
 template <typename SOURCE_TYPE, typename TARGET_TYPE>
 struct NumericValueConverter : public TargetValueConverter {
   using ColumnDataPtr = std::unique_ptr<TARGET_TYPE, CheckedMallocDeleter<TARGET_TYPE>>;
   using ElementsBufferColumnPtr = ColumnDataPtr;
+  using CasterFunc = std::function<TARGET_TYPE(SOURCE_TYPE, bool, TARGET_TYPE)>;
 
   ColumnDataPtr column_data_;
   TARGET_TYPE null_value_;
   SOURCE_TYPE null_check_value_;
   bool do_null_check_;
   TARGET_TYPE fixed_array_null_value_;
+  CasterFunc checked_caster_ = nullptr;
 
   boost_variant_accessor<SOURCE_TYPE> SOURCE_TYPE_ACCESSOR;
 
@@ -63,6 +82,8 @@ struct NumericValueConverter : public TargetValueConverter {
   }
 
   ~NumericValueConverter() override {}
+
+  void setValueCaster(CasterFunc caster) { checked_caster_ = caster; }
 
   bool allowFixedNullArray() { return true; }
 
@@ -94,7 +115,11 @@ struct NumericValueConverter : public TargetValueConverter {
     if (do_null_check_ && null_check_value_ == val) {
       columnData[row] = null_value_;
     } else {
-      columnData[row] = static_cast<TARGET_TYPE>(val);
+      if (checked_caster_) {
+        columnData[row] = checked_caster_(val, do_null_check_, null_value_);
+      } else {
+        columnData[row] = static_cast<TARGET_TYPE>(val);
+      }
     }
   }
 

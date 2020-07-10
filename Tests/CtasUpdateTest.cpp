@@ -1090,7 +1090,7 @@ TEST(Itas, SyntaxCheck) {
   run_ddl_statement("CREATE TABLE ITAS_TARGET (id int encoding FIXED(8));");
 
   ddl = "INSERT INTO ITAS_TARGET SELECT * FROM ITAS_SOURCE;";
-  EXPECT_THROW(run_ddl_statement(ddl), std::runtime_error);
+  EXPECT_NO_THROW(run_ddl_statement(ddl));
 
   ddl = "DROP TABLE IF EXISTS ITAS_SOURCE;";
   run_ddl_statement(ddl);
@@ -1202,6 +1202,63 @@ TEST(Itas, DifferentColumnNames) {
   check(10, 1);
   check(20, 2);
   check(30, 3);
+}
+
+TEST(Itas, AllowDifferentFixedEncodings) {
+  run_ddl_statement("DROP TABLE IF EXISTS ITAS_SOURCE;");
+  run_ddl_statement("DROP TABLE IF EXISTS ITAS_TARGET;");
+
+  run_ddl_statement("CREATE TABLE ITAS_SOURCE (id int, val int);");
+  run_ddl_statement("CREATE TABLE ITAS_TARGET (id int, val bigint);");
+
+  EXPECT_NO_THROW(
+      run_ddl_statement("INSERT INTO ITAS_TARGET SELECT * FROM ITAS_SOURCE;"));
+
+  run_ddl_statement("DROP TABLE IF EXISTS ITAS_SOURCE;");
+  run_ddl_statement("DROP TABLE IF EXISTS ITAS_TARGET;");
+
+  run_ddl_statement("CREATE TABLE ITAS_SOURCE (id int, val bigint);");
+  run_ddl_statement("CREATE TABLE ITAS_TARGET (id int, val bigint encoding fixed(8));");
+
+  EXPECT_NO_THROW(
+      run_ddl_statement("INSERT INTO ITAS_TARGET SELECT * FROM ITAS_SOURCE;"));
+
+  run_ddl_statement("DROP TABLE IF EXISTS ITAS_SOURCE;");
+  run_ddl_statement("DROP TABLE IF EXISTS ITAS_TARGET;");
+
+  run_ddl_statement("CREATE TABLE ITAS_SOURCE (id int, val timestamp);");
+  run_ddl_statement(
+      "CREATE TABLE ITAS_TARGET (id int, val timestamp encoding fixed(32));");
+
+  EXPECT_NO_THROW(
+      run_ddl_statement("INSERT INTO ITAS_TARGET SELECT * FROM ITAS_SOURCE;"));
+
+  run_ddl_statement("DROP TABLE IF EXISTS ITAS_SOURCE;");
+  run_ddl_statement("DROP TABLE IF EXISTS ITAS_TARGET;");
+
+  run_ddl_statement("CREATE TABLE ITAS_SOURCE (id int, val time);");
+  run_ddl_statement("CREATE TABLE ITAS_TARGET (id int, val time encoding fixed(32));");
+
+  EXPECT_NO_THROW(
+      run_ddl_statement("INSERT INTO ITAS_TARGET SELECT * FROM ITAS_SOURCE;"));
+
+  run_ddl_statement("DROP TABLE IF EXISTS ITAS_SOURCE;");
+  run_ddl_statement("DROP TABLE IF EXISTS ITAS_TARGET;");
+
+  run_ddl_statement("CREATE TABLE ITAS_SOURCE (id int, val date);");
+  run_ddl_statement("CREATE TABLE ITAS_TARGET (id int, val date encoding fixed(16));");
+
+  EXPECT_NO_THROW(
+      run_ddl_statement("INSERT INTO ITAS_TARGET SELECT * FROM ITAS_SOURCE;"));
+
+  run_ddl_statement("DROP TABLE IF EXISTS ITAS_SOURCE;");
+  run_ddl_statement("DROP TABLE IF EXISTS ITAS_TARGET;");
+
+  run_ddl_statement("CREATE TABLE ITAS_SOURCE (id int, val decimal(17, 2));");
+  run_ddl_statement("CREATE TABLE ITAS_TARGET (id int, val decimal( 5, 2));");
+
+  EXPECT_NO_THROW(
+      run_ddl_statement("INSERT INTO ITAS_TARGET SELECT * FROM ITAS_SOURCE;"));
 }
 
 TEST(Itas, SelectStar) {
