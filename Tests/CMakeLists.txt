@@ -18,6 +18,7 @@ add_executable(ShowCommandsDdlTest ShowCommandsDdlTest.cpp)
 add_executable(CatalogMigrationTest CatalogMigrationTest.cpp)
 add_executable(CreateAndDropTableDdlTest CreateAndDropTableDdlTest.cpp)
 add_executable(ForeignTableDmlTest ForeignTableDmlTest.cpp)
+add_executable(DashboardTest DashboardTest.cpp)
 add_executable(FileMgrTest FileMgrTest.cpp)
 add_executable(FilePathWhitelistTest FilePathWhitelistTest.cpp)
 add_executable(EncoderTest EncoderTest.cpp)
@@ -164,6 +165,7 @@ target_link_libraries(CatalogMigrationTest ${THRIFT_HANDLER_TEST_LIBRARIES})
 target_link_libraries(CreateAndDropTableDdlTest ${THRIFT_HANDLER_TEST_LIBRARIES})
 target_link_libraries(ShowCommandsDdlTest ${THRIFT_HANDLER_TEST_LIBRARIES})
 target_link_libraries(ForeignTableDmlTest ${THRIFT_HANDLER_TEST_LIBRARIES})
+target_link_libraries(DashboardTest ${THRIFT_HANDLER_TEST_LIBRARIES})
 target_link_libraries(FileMgrTest ${THRIFT_HANDLER_TEST_LIBRARIES})
 target_link_libraries(FilePathWhitelistTest ${THRIFT_HANDLER_TEST_LIBRARIES})
 target_link_libraries(SQLHintTest ${EXECUTE_TEST_LIBS})
@@ -232,6 +234,7 @@ add_test(ShowCommandsDdlTest ShowCommandsDdlTest ${TEST_ARGS})
 add_test(CatalogMigrationTest CatalogMigrationTest ${TEST_ARGS})
 add_test(CreateAndDropTableDdlTest CreateAndDropTableDdlTest ${TEST_ARGS})
 add_test(ForeignTableDmlTest ForeignTableDmlTest ${TEST_ARGS})
+add_test(DashboardTest DashboardTest ${TEST_ARGS})
 add_test(FileMgrTest FileMgrTest ${TEST_ARGS})
 add_test(FilePathWhitelistTest FilePathWhitelistTest ${TEST_ARGS})
 add_test(EncoderTest EncoderTest ${TEST_ARGS})
@@ -308,6 +311,7 @@ set(TEST_PROGRAMS
   CatalogMigrationTest
   CreateAndDropTableDdlTest
   ForeignTableDmlTest
+  DashboardTest
   FileMgrTest
   FilePathWhitelistTest
   EncoderTest

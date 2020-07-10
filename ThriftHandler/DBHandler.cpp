@@ -3519,6 +3519,77 @@ std::vector<std::string> DBHandler::get_valid_groups(const TSessionId& session,
   return valid_groups;
 }
 
+void DBHandler::validateGroups(const std::vector<std::string>& groups) {
+  for (auto const& group : groups) {
+    if (!SysCatalog::instance().getGrantee(group)) {
+      THROW_MAPD_EXCEPTION("Exception: User/Role '" + group + "' does not exist");
+    }
+  }
+}
+
+void DBHandler::validateDashboardIdsForSharing(
+    const Catalog_Namespace::SessionInfo& session_info,
+    const std::vector<int32_t>& dashboard_ids) {
+  auto& cat = session_info.getCatalog();
+  std::map<std::string, std::list<int32_t>> errors;
+  for (auto const& dashboard_id : dashboard_ids) {
+    auto dashboard = cat.getMetadataForDashboard(dashboard_id);
+    if (!dashboard) {
+      errors["Dashboard id does not exist"].push_back(dashboard_id);
+    } else if (session_info.get_currentUser().userId != dashboard->userId &&
+               !session_info.get_currentUser().isSuper) {
+      errors["User should be either owner of dashboard or super user to share/unshare it"]
+          .push_back(dashboard_id);
+    }
+  }
+  if (!errors.empty()) {
+    std::stringstream error_stream;
+    error_stream << "Share dashboard(s) failed with error(s)\n";
+    for (const auto& [error, id_list] : errors) {
+      error_stream << "Dashboard ids " << join(id_list, ", ") << ": " << error << "\n";
+    }
+    THROW_MAPD_EXCEPTION(error_stream.str());
+  }
+}
+
+void DBHandler::share_dashboards(const TSessionId& session,
+                                 const std::vector<int32_t>& dashboard_ids,
+                                 const std::vector<std::string>& groups,
+                                 const TDashboardPermissions& permissions) {
+  auto stdlog = STDLOG(get_session_ptr(session));
+  stdlog.appendNameValuePairs("client", getConnectionInfo().toString());
+  check_read_only("share_dashboards");
+  if (!permissions.create_ && !permissions.delete_ && !permissions.edit_ &&
+      !permissions.view_) {
+    THROW_MAPD_EXCEPTION("At least one privilege should be assigned for grants");
+  }
+  auto session_ptr = stdlog.getConstSessionInfo();
+  auto const& catalog = session_ptr->getCatalog();
+  auto& sys_catalog = SysCatalog::instance();
+  validateGroups(groups);
+  validateDashboardIdsForSharing(*session_ptr, dashboard_ids);
+  std::vector<DBObject> batch_objects;
+  for (auto const& dashboard_id : dashboard_ids) {
+    DBObject object(dashboard_id, DBObjectType::DashboardDBObjectType);
+    AccessPrivileges privs;
+    if (permissions.delete_) {
+      privs.add(AccessPrivileges::DELETE_DASHBOARD);
+    }
+    if (permissions.create_) {
+      privs.add(AccessPrivileges::CREATE_DASHBOARD);
+    }
+    if (permissions.edit_) {
+      privs.add(AccessPrivileges::EDIT_DASHBOARD);
+    }
+    if (permissions.view_) {
+      privs.add(AccessPrivileges::VIEW_DASHBOARD);
+    }
+    object.setPrivileges(privs);
+    batch_objects.push_back(object);
+  }
+  sys_catalog.grantDBObjectPrivilegesBatch(groups, batch_objects, catalog);
+}
+
 // NOOP: Grants not available for objects as of now
 void DBHandler::share_dashboard(const TSessionId& session,
                                 const int32_t dashboard_id,
@@ -3526,47 +3597,7 @@ void DBHandler::share_dashboard(const TSessionId& session,
                                 const std::vector<std::string>& objects,
                                 const TDashboardPermissions& permissions,
                                 const bool grant_role = false) {
-  auto stdlog = STDLOG(get_session_ptr(session));
-  stdlog.appendNameValuePairs("client", getConnectionInfo().toString());
-  auto session_ptr = stdlog.getConstSessionInfo();
-  check_read_only("share_dashboard");
-  std::vector<std::string> valid_groups;
-  valid_groups = get_valid_groups(session, dashboard_id, groups);
-  auto const& cat = session_ptr->getCatalog();
-  // By default object type can only be dashboard
-  DBObjectType object_type = DBObjectType::DashboardDBObjectType;
-  DBObject object(dashboard_id, object_type);
-  if (!permissions.create_ && !permissions.delete_ && !permissions.edit_ &&
-      !permissions.view_) {
-    THROW_MAPD_EXCEPTION("Atleast one privilege should be assigned for grants");
-  } else {
-    AccessPrivileges privs;
-
-    object.resetPrivileges();
-    if (permissions.delete_) {
-      privs.add(AccessPrivileges::DELETE_DASHBOARD);
-    }
-
-    if (permissions.create_) {
-      privs.add(AccessPrivileges::CREATE_DASHBOARD);
-    }
-
-    if (permissions.edit_) {
-      privs.add(AccessPrivileges::EDIT_DASHBOARD);
-    }
-
-    if (permissions.view_) {
-      privs.add(AccessPrivileges::VIEW_DASHBOARD);
-    }
-
-    object.setPrivileges(privs);
-  }
-  SysCatalog::instance().grantDBObjectPrivilegesBatch(valid_groups, {object}, cat);
-  // grant system_role to grantees for underlying objects
-  if (grant_role) {
-    auto dash = cat.getMetadataForDashboard(dashboard_id);
-    SysCatalog::instance().grantRoleBatch({dash->dashboardSystemRoleName}, valid_groups);
-  }
+  share_dashboards(session, {dashboard_id}, groups, permissions);
 }
 
 void DBHandler::unshare_dashboard(const TSessionId& session,

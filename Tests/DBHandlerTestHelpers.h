@@ -260,7 +260,7 @@ class DBHandlerTestFixture : public testing::Test {
   }
 
   std::pair<DBHandler*, TSessionId&> getDbHandlerAndSessionId() {
-    return {db_handler_.get(), admin_session_id_};
+    return {db_handler_.get(), session_id_};
   }
 
   void resetCatalog() {
@@ -299,10 +299,10 @@ class DBHandlerTestFixture : public testing::Test {
     }
   }
 
-  void queryAndAssertException(const std::string& sql_statement,
-                               const std::string& error_message) {
+  template <typename Lambda>
+  void executeLambdaAndAssertException(Lambda lambda, const std::string& error_message) {
     try {
-      sql(sql_statement);
+      lambda();
       FAIL() << "An exception should have been thrown for this test case.";
     } catch (const TOmniSciException& e) {
       if (isDistributedMode()) {
@@ -313,6 +313,11 @@ class DBHandlerTestFixture : public testing::Test {
         ASSERT_EQ(error_message, e.error_msg);
       }
     }
+  }
+
+  void queryAndAssertException(const std::string& sql_statement,
+                               const std::string& error_message) {
+    executeLambdaAndAssertException([&] { sql(sql_statement); }, error_message);
   }
 
   void assertResultSetEqual(

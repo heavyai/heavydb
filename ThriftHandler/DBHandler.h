@@ -328,6 +328,10 @@ class DBHandler : public OmniSciIf {
                          const std::string& image_hash,
                          const std::string& dashboard_metadata) override;
   void delete_dashboard(const TSessionId& session, const int32_t dashboard_id) override;
+  void share_dashboards(const TSessionId& session,
+                        const std::vector<int32_t>& dashboard_ids,
+                        const std::vector<std::string>& groups,
+                        const TDashboardPermissions& permissions) override;
   void share_dashboard(const TSessionId& session,
                        const int32_t dashboard_id,
                        const std::vector<std::string>& groups,
@@ -572,6 +576,9 @@ class DBHandler : public OmniSciIf {
                               const bool get_physical);
   void check_read_only(const std::string& str);
   void check_session_exp_unsafe(const SessionMap::iterator& session_it);
+  void validateGroups(const std::vector<std::string>& groups);
+  void validateDashboardIdsForSharing(const Catalog_Namespace::SessionInfo& session_info,
+                                      const std::vector<int32_t>& dashboard_ids);
 
   // Use get_session_copy() or get_session_copy_ptr() instead of get_const_session_ptr()
   // unless you know what you are doing. If you need to save a SessionInfo beyond the
