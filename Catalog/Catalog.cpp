@@ -3911,7 +3911,8 @@ std::string Catalog::dumpSchema(const TableDescriptor* td) const {
         } else {
           os << " ENCODING NONE";
         }
-      } else if (ti.get_size() > 0 && ti.get_size() != ti.get_logical_size()) {
+      } else if (ti.is_date_in_days() ||
+                 (ti.get_size() > 0 && ti.get_size() != ti.get_logical_size())) {
         const auto comp_param = ti.get_comp_param() ? ti.get_comp_param() : 32;
         os << " ENCODING " << ti.get_compression_name() << "(" << comp_param << ")";
       }
@@ -4041,7 +4042,8 @@ std::string Catalog::dumpCreateTable(const TableDescriptor* td,
           } else {
             os << " ENCODING NONE";
           }
-        } else if (ti.get_size() > 0 && ti.get_size() != ti.get_logical_size()) {
+        } else if (ti.is_date_in_days() ||
+                   (ti.get_size() > 0 && ti.get_size() != ti.get_logical_size())) {
           const auto comp_param = ti.get_comp_param() ? ti.get_comp_param() : 32;
           os << " ENCODING " << ti.get_compression_name() << "(" << comp_param << ")";
         }
