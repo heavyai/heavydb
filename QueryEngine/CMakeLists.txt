@@ -106,6 +106,8 @@ set(query_engine_source_files
     JoinHashTable.cpp
     JoinHashTableInterface.cpp
     HashJoinRuntime.cpp
+    Visitors/RelRexDagVisitor.cpp
+    Visitors/RexSubQueryIdCollector.cpp
     WindowContext.cpp
     WindowExpressionRewrite.cpp
     WindowFunctionIR.cpp

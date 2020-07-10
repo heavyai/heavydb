@@ -202,6 +202,23 @@ class RexDeepCopyVisitor : public RexVisitorBase<std::unique_ptr<const RexScalar
 
  private:
   RetType defaultResult() const override { return nullptr; }
+
+ public:
+  using RowValues = std::vector<std::unique_ptr<const RexScalar>>;
+
+  static std::vector<RowValues> copy(std::vector<RowValues> const& rhs) {
+    RexDeepCopyVisitor copier;
+    std::vector<RowValues> retval;
+    retval.reserve(rhs.size());
+    for (auto const& row : rhs) {
+      retval.push_back({});
+      retval.back().reserve(row.size());
+      for (auto const& value : row) {
+        retval.back().push_back(copier.visit(value.get()));
+      }
+    }
+    return retval;
+  }
 };
 
 template <bool bAllowMissing>

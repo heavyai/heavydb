@@ -212,3 +212,7 @@ std::unordered_set<int> get_physical_table_inputs(const RelAlgNode* ra) {
   RelAlgPhysicalTableInputsVisitor phys_table_inputs_visitor;
   return phys_table_inputs_visitor.visit(ra);
 }
+
+std::ostream& operator<<(std::ostream& os, PhysicalInput const& physical_input) {
+  return os << '(' << physical_input.col_id << ',' << physical_input.table_id << ')';
+}

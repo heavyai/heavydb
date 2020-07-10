@@ -17,6 +17,7 @@
 #include "RelAlgOptimizer.h"
 #include "RexVisitor.h"
 #include "Shared/Logger.h"
+#include "Visitors/RexSubQueryIdCollector.h"
 
 #include <numeric>
 #include <string>
@@ -1226,6 +1227,33 @@ void eliminate_dead_columns(std::vector<std::shared_ptr<RelAlgNode>>& nodes) noe
   // Propagate
   propagate_input_renumbering(
       liveout_renumbering, ready_nodes, old_liveouts, intact_nodes, web, orig_node_sizes);
+}
+
+void eliminate_dead_subqueries(std::vector<std::shared_ptr<RexSubQuery>>& subqueries,
+                               RelAlgNode const* root) noexcept {
+  if (!subqueries.empty()) {
+    auto live_ids = RexSubQueryIdCollector::getLiveRexSubQueryIds(root);
+    auto sort_live_ids_first = [&live_ids](auto& a, auto& b) {
+      return live_ids.count(a->getId()) && !live_ids.count(b->getId());
+    };
+    std::stable_sort(subqueries.begin(), subqueries.end(), sort_live_ids_first);
+    size_t n_dead_subqueries;
+    if (live_ids.count(subqueries.front()->getId())) {
+      auto first_dead_itr = std::upper_bound(subqueries.cbegin(),
+                                             subqueries.cend(),
+                                             subqueries.front(),
+                                             sort_live_ids_first);
+      n_dead_subqueries = subqueries.cend() - first_dead_itr;
+    } else {
+      n_dead_subqueries = subqueries.size();
+    }
+    if (n_dead_subqueries) {
+      VLOG(1) << "Eliminating " << n_dead_subqueries
+              << (n_dead_subqueries == 1 ? " subquery." : " subqueries.");
+      subqueries.resize(subqueries.size() - n_dead_subqueries);
+      subqueries.shrink_to_fit();
+    }
+  }
 }
 
 namespace {
