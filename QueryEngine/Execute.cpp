@@ -133,8 +133,6 @@ Executor::Executor(const ExecutorId executor_id,
                    const std::string& debug_dir,
                    const std::string& debug_file)
     : cgen_state_(new CgenState({}, false))
-    , gpu_active_modules_device_mask_(0x0)
-    , interrupted_(false)
     , cpu_code_cache_(code_cache_size)
     , gpu_code_cache_(code_cache_size)
     , block_size_x_(block_size_x)
@@ -3584,6 +3582,11 @@ mapd_shared_mutex Executor::executor_session_mutex_;
 
 mapd_shared_mutex Executor::execute_mutex_;
 mapd_shared_mutex Executor::executors_cache_mutex_;
+
+std::mutex Executor::gpu_active_modules_mutex_;
+uint32_t Executor::gpu_active_modules_device_mask_{0x0};
+void* Executor::gpu_active_modules_[max_gpu_count];
+std::atomic<bool> Executor::interrupted_{false};
 
 std::mutex Executor::compilation_mutex_;
 std::mutex Executor::kernel_mutex_;

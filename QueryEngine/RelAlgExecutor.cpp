@@ -232,7 +232,6 @@ ExecutionResult RelAlgExecutor::executeRelAlgQueryNoRetry(const CompilationOptio
               executor_->executor_session_mutex_);
           executor_->removeFromQuerySessionList(query_session, session_write_lock);
           session_write_lock.unlock();
-          VLOG(1) << "Kill the pending query session: " << query_session;
           throw std::runtime_error(
               "Query execution has been interrupted (pending query)");
         }
@@ -276,6 +275,23 @@ ExecutionResult RelAlgExecutor::executeRelAlgQueryNoRetry(const CompilationOptio
   };
 
   if (g_enable_runtime_query_interrupt) {
+    // check whether this query session is already interrupted
+    // this case occurs when there is very short gap between being interrupted and
+    // taking the execute lock
+    // if so we interrupt the query session and remove it from the running session list
+    mapd_shared_lock<mapd_shared_mutex> session_read_lock(
+        executor_->executor_session_mutex_);
+    bool isAlreadyInterrupted =
+        executor_->checkIsQuerySessionInterrupted(query_session, session_read_lock);
+    session_read_lock.unlock();
+    if (isAlreadyInterrupted) {
+      mapd_unique_lock<mapd_shared_mutex> session_write_lock(
+          executor_->executor_session_mutex_);
+      executor_->removeFromQuerySessionList(query_session, session_write_lock);
+      session_write_lock.unlock();
+      throw std::runtime_error("Query execution has been interrupted");
+    }
+
     // make sure to set the running session ID
     mapd_unique_lock<mapd_shared_mutex> session_write_lock(
         executor_->executor_session_mutex_);

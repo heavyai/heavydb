@@ -67,15 +67,18 @@ void Executor::interrupt(const std::string& query_session,
       return;
     }
   }
+
   bool CPU_execution_mode = true;
 
 #ifdef HAVE_CUDA
   // The below code is basically for runtime query interrupt for GPU.
   // It is also possible that user forces to use CPU-mode even if the user has GPU(s).
   // In this case, we should not execute the code in below to avoid runtime failure
-  // Also, checking catalog ptr is to prevent runtime failure before we assign catalog
-  // i.e., send an interrupt signal in query preparation time
-  CHECK_GE(deviceCount(ExecutorDeviceType::GPU), 1);
+  CHECK_GE(Catalog_Namespace::SysCatalog::instance()
+               .getDataMgr()
+               .getCudaMgr()
+               ->getDeviceCount(),
+           1);
   std::lock_guard<std::mutex> lock(gpu_active_modules_mutex_);
   VLOG(1) << "Executor " << this << ": Interrupting Active Modules: mask 0x" << std::hex
           << gpu_active_modules_device_mask_;
@@ -91,12 +94,16 @@ void Executor::interrupt(const std::string& query_session,
         VLOG(1) << "Try to interrupt the running query on GPU";
         CPU_execution_mode = false;
       }
-      VLOG(1) << "Terminating module " << module << " on device "
-              << std::to_string(device_id)
-              << ", gpu_active_modules_device_mask_: " << std::hex
-              << std::to_string(gpu_active_modules_device_mask_);
+      VLOG(1) << "Executor " << this << ": Interrupting Active Modules: mask 0x"
+              << std::hex << gpu_active_modules_device_mask_ << " on device "
+              << std::to_string(device_id);
 
-      catalog_->getDataMgr().getCudaMgr()->setContext(device_id);
+      if (catalog_) {
+        catalog_->getDataMgr().getCudaMgr()->setContext(device_id);
+      } else {
+        Catalog_Namespace::SysCatalog::instance().getDataMgr().getCudaMgr()->setContext(
+            device_id);
+      }
 
       // Create high priority non-blocking communication stream
       CUstream cu_stream1;
@@ -186,10 +193,6 @@ void Executor::resetInterrupt() {
   std::lock_guard<std::mutex> lock(gpu_active_modules_mutex_);
 #endif
 
-  if (!interrupted_.load()) {
-    return;
-  }
-
   if (g_enable_dynamic_watchdog) {
     dynamic_watchdog_init(static_cast<unsigned>(DW_RESET));
   } else if (g_enable_runtime_query_interrupt) {
@@ -210,6 +213,8 @@ void Executor::resetInterrupt() {
     }
   }
 
-  interrupted_.store(false);
+  if (interrupted_.load()) {
+    interrupted_.store(false);
+  }
   VLOG(1) << "RESET Executor " << this << " that had previously been interrupted";
 }
