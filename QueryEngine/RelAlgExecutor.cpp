@@ -2793,7 +2793,9 @@ ExecutionResult RelAlgExecutor::executeWorkUnit(
                        getNDVEstimation(work_unit, is_agg, co, eo));
       CHECK_GT(estimated_groups_buffer_entry_guess, size_t(0));
       result = execute_and_handle_errors(estimated_groups_buffer_entry_guess, true);
-      executor_->addToCardinalityCache(cache_key, estimated_groups_buffer_entry_guess);
+      if (!(eo.just_validate || eo.just_explain)) {
+        executor_->addToCardinalityCache(cache_key, estimated_groups_buffer_entry_guess);
+      }
     }
   }
 
