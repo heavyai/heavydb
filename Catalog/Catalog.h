@@ -159,10 +159,10 @@ class Catalog final {
 
   const DashboardDescriptor* getMetadataForDashboard(const std::string& userId,
                                                      const std::string& dashName) const;
-  void deleteMetadataForDashboard(const std::string& userId, const std::string& dashName);
 
   const DashboardDescriptor* getMetadataForDashboard(const int32_t dashboard_id) const;
-  void deleteMetadataForDashboard(const int32_t dashboard_id);
+  void deleteMetadataForDashboards(const std::vector<int32_t> ids,
+                                   const UserMetadata& user);
 
   const LinkDescriptor* getMetadataForLink(const std::string& link) const;
   const LinkDescriptor* getMetadataForLink(int linkId) const;

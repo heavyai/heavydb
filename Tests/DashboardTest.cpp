@@ -368,6 +368,156 @@ TEST_F(ShareDashboardsTest, MixedErrors) {
   sql("REVOKE ACCESS ON DATABASE " + OMNISCI_DEFAULT_DB + " FROM test_user_1");
 }
 
+class DashboardBulkDeleteTest : public DBHandlerTestFixture {
+ public:
+  static void SetUpTestSuite() {
+    createDBHandler();
+    test_user_1_id = createTestUser("test_user", "test_pass");
+  }
+
+  static void TearDownTestSuite() {
+    loginAdmin();
+    dropTestUser("test_user");
+  }
+
+  size_t getNumDashboards() {
+    const auto& [db_handler, session_id] = getDbHandlerAndSessionId();
+    std::vector<TDashboard> dashboards;
+    db_handler->get_dashboards(dashboards, session_id);
+    return dashboards.size();
+  }
+
+ protected:
+  void SetUp() override {
+    DBHandlerTestFixture::SetUp();
+    const auto& [db_handler, session_id] = getDbHandlerAndSessionId();
+    // Remove any dashboards that may be left by previous tests
+    std::vector<TDashboard> dashboards;
+    db_handler->get_dashboards(dashboards, session_id);
+    if (dashboards.size()) {
+      std::vector<int32_t> db_ids;
+      for (const auto& dashboard : dashboards) {
+        db_ids.push_back(dashboard.dashboard_id);
+      }
+      db_handler->delete_dashboards(session_id, db_ids);
+    }
+  }
+  void TearDown() override { DBHandlerTestFixture::TearDown(); }
+
+  static int32_t createTestUser(const std::string& user_name, const std::string& pass) {
+    sql("CREATE USER " + user_name + " (password = '" + pass + "');");
+    sql("GRANT ACCESS ON DATABASE omnisci TO " + user_name + ";");
+    Catalog_Namespace::UserMetadata user_metadata{};
+    Catalog_Namespace::SysCatalog::instance().getMetadataForUser(user_name,
+                                                                 user_metadata);
+    return user_metadata.userId;
+  }
+
+  static void dropTestUser(const std::string& user_name) {
+    try {
+      sql("DROP USER " + user_name + ";");
+    } catch (const std::exception& e) {
+      // Swallow and log exceptions that may occur, since there is no "IF EXISTS" option.
+      LOG(WARNING) << e.what();
+    }
+  }
+
+  inline static int32_t test_user_1_id;
+};
+
+TEST_F(DashboardBulkDeleteTest, CreateDelete) {
+  const auto& [db_handler, session_id] = getDbHandlerAndSessionId();
+  auto db_id_1 =
+      db_handler->create_dashboard(session_id, "test1", "state", "image", "metadata");
+  auto db_id_2 =
+      db_handler->create_dashboard(session_id, "test2", "state", "image", "metadata");
+  ASSERT_EQ(getNumDashboards(), size_t(2));
+  db_handler->delete_dashboards(session_id, {db_id_1, db_id_2});
+  ASSERT_EQ(getNumDashboards(), size_t(0));
+}
+
+TEST_F(DashboardBulkDeleteTest, SomeInvalidIDs) {
+  const auto& [db_handler, session_id] = getDbHandlerAndSessionId();
+  auto db_id =
+      db_handler->create_dashboard(session_id, "test1", "state", "image", "metadata");
+
+  try {
+    db_handler->delete_dashboards(session_id, {db_id, 0});
+    FAIL() << "An exception should have been thrown for this test case.";
+  } catch (const TOmniSciException& e) {
+    assertExceptionMessage(e,
+                           "Exception: Delete dashboard(s) failed with "
+                           "error(s):\nDashboard id: 0 - Dashboard id does not exist");
+  }
+  ASSERT_EQ(getNumDashboards(), size_t(1));
+  db_handler->delete_dashboards(session_id, {db_id});
+  ASSERT_EQ(getNumDashboards(), size_t(0));
+}
+
+TEST_F(DashboardBulkDeleteTest, NoDeleteDashboardPrivilege) {
+  const auto& [db_handler, session_id] = getDbHandlerAndSessionId();
+  auto db_id_1 =
+      db_handler->create_dashboard(session_id, "test1", "state", "image", "metadata");
+  auto db_id_2 =
+      db_handler->create_dashboard(session_id, "test2", "state", "image", "metadata");
+  TSessionId unprivileged_session;
+  login("test_user", "test_pass", "omnisci", unprivileged_session);
+  sql("GRANT DELETE ON DASHBOARD " + std::to_string(db_id_1) + " to test_user");
+  try {
+    db_handler->delete_dashboards(unprivileged_session, {db_id_1, db_id_2});
+    FAIL() << "An exception should have been thrown for this test case.";
+  } catch (const TOmniSciException& e) {
+    assertExceptionMessage(
+        e,
+        "Exception: Delete dashboard(s) failed with error(s):\nDashboard id: " +
+            std::to_string(db_id_2) +
+            " - User should be either owner of dashboard or super user to delete it");
+  }
+  ASSERT_EQ(getNumDashboards(), size_t(2));
+  db_handler->delete_dashboards(session_id, {db_id_1, db_id_2});
+  ASSERT_EQ(getNumDashboards(), size_t(0));
+  logout(unprivileged_session);
+}
+
+TEST_F(DashboardBulkDeleteTest, NonSuperDeleteDashboardPrivilege) {
+  const auto& [db_handler, session_id] = getDbHandlerAndSessionId();
+  auto db_id_1 =
+      db_handler->create_dashboard(session_id, "test1", "state", "image", "metadata");
+  auto db_id_2 =
+      db_handler->create_dashboard(session_id, "test2", "state", "image", "metadata");
+  TSessionId non_super_session;
+  login("test_user", "test_pass", "omnisci", non_super_session);
+  sql("GRANT DELETE ON DASHBOARD " + std::to_string(db_id_1) + " to test_user");
+  sql("GRANT DELETE ON DASHBOARD " + std::to_string(db_id_2) + " to test_user");
+  db_handler->delete_dashboards(non_super_session, {db_id_1, db_id_2});
+  ASSERT_EQ(getNumDashboards(), size_t(0));
+  logout(non_super_session);
+}
+
+TEST_F(DashboardBulkDeleteTest, InvalidNoPrivilegeMix) {
+  const auto& [db_handler, session_id] = getDbHandlerAndSessionId();
+  auto db_id =
+      db_handler->create_dashboard(session_id, "test1", "state", "image", "metadata");
+  TSessionId non_super_session;
+  login("test_user", "test_pass", "omnisci", non_super_session);
+  try {
+    db_handler->delete_dashboards(non_super_session, {0, db_id});
+    FAIL() << "An exception should have been thrown for this test case.";
+  } catch (const TOmniSciException& e) {
+    assertExceptionMessage(
+        e,
+        std::string("Exception: Delete dashboard(s) failed with error(s):\n") +
+            "Dashboard id: 0 - Dashboard id does not exist\n" +
+            "Dashboard id: " + std::to_string(db_id) +
+            " - User should be either owner of dashboard or super user to delete it");
+  }
+  ASSERT_EQ(getNumDashboards(), size_t(1));
+  db_handler->delete_dashboards(session_id, {db_id});
+  ASSERT_EQ(getNumDashboards(), size_t(0));
+
+  logout(non_super_session);
+}
+
 int main(int argc, char** argv) {
   TestHelpers::init_logger_stderr_only(argc, argv);
   testing::InitGoogleTest(&argc, argv);

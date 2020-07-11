@@ -305,13 +305,18 @@ class DBHandlerTestFixture : public testing::Test {
       lambda();
       FAIL() << "An exception should have been thrown for this test case.";
     } catch (const TOmniSciException& e) {
-      if (isDistributedMode()) {
-        // In distributed mode, exception messages may be wrapped within
-        // another thrift exception. In this case, do a substring check.
-        ASSERT_TRUE(e.error_msg.find(error_message) != std::string::npos);
-      } else {
-        ASSERT_EQ(error_message, e.error_msg);
-      }
+      assertExceptionMessage(e, error_message);
+    }
+  }
+
+  void assertExceptionMessage(const TOmniSciException& e,
+                              const std::string& error_message) {
+    if (isDistributedMode()) {
+      // In distributed mode, exception messages may be wrapped within
+      // another thrift exception. In this case, do a substring check.
+      ASSERT_TRUE(e.error_msg.find(error_message) != std::string::npos);
+    } else {
+      ASSERT_EQ(error_message, e.error_msg);
     }
   }
 

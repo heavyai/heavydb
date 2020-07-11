@@ -1539,6 +1539,14 @@ void SysCatalog::revokeDBObjectPrivilegesBatch_unsafe(
   }
 }
 
+void SysCatalog::revokeDBObjectPrivilegesFromAllBatch_unsafe(
+    vector<DBObject>& objects,
+    Catalog_Namespace::Catalog* catalog) {
+  for (const auto& object : objects) {
+    revokeDBObjectPrivilegesFromAll_unsafe(object, catalog);
+  }
+}
+
 // REVOKE INSERT ON TABLE payroll_table FROM payroll_dept_role;
 void SysCatalog::revokeDBObjectPrivileges_unsafe(
     const std::string& granteeName,
@@ -2277,6 +2285,12 @@ void SysCatalog::revokeDBObjectPrivilegesBatch(
 
 void SysCatalog::revokeDBObjectPrivilegesFromAll(DBObject object, Catalog* catalog) {
   execInTransaction(&SysCatalog::revokeDBObjectPrivilegesFromAll_unsafe, object, catalog);
+}
+
+void SysCatalog::revokeDBObjectPrivilegesFromAllBatch(vector<DBObject>& objects,
+                                                      Catalog* catalog) {
+  execInTransaction(
+      &SysCatalog::revokeDBObjectPrivilegesFromAllBatch_unsafe, objects, catalog);
 }
 
 void SysCatalog::syncUserWithRemoteProvider(const std::string& user_name,

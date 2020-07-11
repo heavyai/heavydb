@@ -230,6 +230,10 @@ class SysCatalog : private CommonFileOperations {
                                      const Catalog_Namespace::Catalog& catalog);
   void revokeDBObjectPrivilegesFromAll(DBObject object, Catalog* catalog);
   void revokeDBObjectPrivilegesFromAll_unsafe(DBObject object, Catalog* catalog);
+  void revokeDBObjectPrivilegesFromAllBatch(std::vector<DBObject>& objects,
+                                            Catalog* catalog);
+  void revokeDBObjectPrivilegesFromAllBatch_unsafe(std::vector<DBObject>& objects,
+                                                   Catalog* catalog);
   void getDBObjectPrivileges(const std::string& granteeName,
                              DBObject& object,
                              const Catalog_Namespace::Catalog& catalog) const;

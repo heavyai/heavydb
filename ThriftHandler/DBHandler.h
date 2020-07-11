@@ -332,6 +332,8 @@ class DBHandler : public OmniSciIf {
                         const std::vector<int32_t>& dashboard_ids,
                         const std::vector<std::string>& groups,
                         const TDashboardPermissions& permissions) override;
+  void delete_dashboards(const TSessionId& session,
+                         const std::vector<int32_t>& dashboard_ids) override;
   void share_dashboard(const TSessionId& session,
                        const int32_t dashboard_id,
                        const std::vector<std::string>& groups,

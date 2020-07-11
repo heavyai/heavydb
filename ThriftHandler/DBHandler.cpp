@@ -3471,22 +3471,19 @@ void DBHandler::replace_dashboard(const TSessionId& session,
 }
 
 void DBHandler::delete_dashboard(const TSessionId& session, const int32_t dashboard_id) {
+  delete_dashboards(session, {dashboard_id});
+}
+
+void DBHandler::delete_dashboards(const TSessionId& session,
+                                  const std::vector<int32_t>& dashboard_ids) {
   auto stdlog = STDLOG(get_session_ptr(session));
   stdlog.appendNameValuePairs("client", getConnectionInfo().toString());
   auto session_ptr = stdlog.getConstSessionInfo();
-  check_read_only("delete_dashboard");
+  check_read_only("delete_dashboards");
   auto& cat = session_ptr->getCatalog();
-  auto dash = cat.getMetadataForDashboard(dashboard_id);
-  if (!dash) {
-    THROW_MAPD_EXCEPTION("Dashboard with id" + std::to_string(dashboard_id) +
-                         " doesn't exist, so cannot delete it");
-  }
-  if (!is_allowed_on_dashboard(
-          *session_ptr, dash->dashboardId, AccessPrivileges::DELETE_DASHBOARD)) {
-    THROW_MAPD_EXCEPTION("Not enough privileges to delete a dashboard.");
-  }
+  // Checks will be performed in catalog
   try {
-    cat.deleteMetadataForDashboard(dashboard_id);
+    cat.deleteMetadataForDashboards(dashboard_ids, session_ptr->get_currentUser());
   } catch (const std::exception& e) {
     THROW_MAPD_EXCEPTION(std::string("Exception: ") + e.what());
   }

@@ -232,7 +232,7 @@ class DashboardObject : public ::testing::Test {
     CHECK(session);
     auto& cat = session->getCatalog();
     if (cat.getMetadataForDashboard(id)) {
-      cat.deleteMetadataForDashboard(id);
+      cat.deleteMetadataForDashboards({id}, session->get_currentUser());
     }
   }
 
@@ -1673,9 +1673,10 @@ void drop_dashboards(std::string prefix, int max) {
 
   for (int i = 0; i < max; i++) {
     std::string name = "dash_" + prefix + std::to_string(i);
-
-    cat.deleteMetadataForDashboard(std::to_string(session->get_currentUser().userId),
-                                   name);
+    auto dash = cat.getMetadataForDashboard(
+        std::to_string(session->get_currentUser().userId), name);
+    ASSERT_TRUE(dash);
+    cat.deleteMetadataForDashboards({dash->dashboardId}, session->get_currentUser());
     auto fvd = cat.getMetadataForDashboard(
         std::to_string(session->get_currentUser().userId), name);
     ASSERT_FALSE(fvd);

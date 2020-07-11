@@ -1552,31 +1552,71 @@ const ColumnDescriptor* Catalog::getMetadataForColumnBySpi(const int tableId,
   return columnDescriptorMapById_.end() == colDescIt ? nullptr : colDescIt->second;
 }
 
-void Catalog::deleteMetadataForDashboard(const std::string& userId,
-                                         const std::string& dashName) {
-  cat_write_lock write_lock(this);
+void Catalog::deleteMetadataForDashboards(const std::vector<int32_t> dashboard_ids,
+                                          const UserMetadata& user) {
+  std::stringstream invalid_ids, restricted_ids;
 
-  auto viewDescIt = dashboardDescriptorMap_.find(userId + ":" + dashName);
-  if (viewDescIt == dashboardDescriptorMap_.end()) {  // check to make sure view exists
-    LOG(ERROR) << "No metadata for dashboard for user " << userId << " dashboard "
-               << dashName << " does not exist in map";
-    throw runtime_error("No metadata for dashboard for user " + userId + " dashboard " +
-                        dashName + " does not exist in map");
+  for (int32_t dashboard_id : dashboard_ids) {
+    if (!getMetadataForDashboard(dashboard_id)) {
+      invalid_ids << (!invalid_ids.str().empty() ? ", " : "") << dashboard_id;
+      continue;
+    }
+    DBObject object(dashboard_id, DashboardDBObjectType);
+    object.loadKey(*this);
+    object.setPrivileges(AccessPrivileges::DELETE_DASHBOARD);
+    std::vector<DBObject> privs = {object};
+    if (!SysCatalog::instance().checkPrivileges(user, privs))
+      restricted_ids << (!restricted_ids.str().empty() ? ", " : "") << dashboard_id;
   }
-  // found view in Map now remove it
-  dashboardDescriptorMap_.erase(viewDescIt);
-  // remove from DB
-  cat_sqlite_lock sqlite_lock(this);
-  sqliteConnector_.query("BEGIN TRANSACTION");
-  try {
-    sqliteConnector_.query_with_text_params(
-        "DELETE FROM mapd_dashboards WHERE name = ? and userid = ?",
-        std::vector<std::string>{dashName, userId});
-  } catch (std::exception& e) {
-    sqliteConnector_.query("ROLLBACK TRANSACTION");
-    throw;
+
+  if (invalid_ids.str().size() > 0 || restricted_ids.str().size() > 0) {
+    std::stringstream error_message;
+    error_message << "Delete dashboard(s) failed with error(s):";
+    if (invalid_ids.str().size() > 0)
+      error_message << "\nDashboard id: " << invalid_ids.str()
+                    << " - Dashboard id does not exist";
+    if (restricted_ids.str().size() > 0)
+      error_message
+          << "\nDashboard id: " << restricted_ids.str()
+          << " - User should be either owner of dashboard or super user to delete it";
+    throw std::runtime_error(error_message.str());
   }
-  sqliteConnector_.query("END TRANSACTION");
+  std::vector<DBObject> dash_objs;
+
+  for (int32_t dashboard_id : dashboard_ids) {
+    dash_objs.push_back(DBObject(dashboard_id, DashboardDBObjectType));
+  }
+  // BE-5245: Transactionally unsafe (like other combined Catalog/Syscatalog operations)
+  SysCatalog::instance().revokeDBObjectPrivilegesFromAllBatch(dash_objs, this);
+  {
+    cat_write_lock write_lock(this);
+    cat_sqlite_lock sqlite_lock(this);
+
+    sqliteConnector_.query("BEGIN TRANSACTION");
+    try {
+      for (int32_t dashboard_id : dashboard_ids) {
+        auto dash = getMetadataForDashboard(dashboard_id);
+        // Dash should still exist if revokeDBObjectPrivileges passed but throw and
+        // rollback if already deleted
+        if (!dash) {
+          throw std::runtime_error(
+              std::string("Delete dashboard(s) failed with error(s):\nDashboard id: ") +
+              std::to_string(dashboard_id) + " - Dashboard id does not exist ");
+        }
+        std::string user_id = std::to_string(dash->userId);
+        std::string dash_name = dash->dashboardName;
+        auto viewDescIt = dashboardDescriptorMap_.find(user_id + ":" + dash_name);
+        dashboardDescriptorMap_.erase(viewDescIt);
+        sqliteConnector_.query_with_text_params(
+            "DELETE FROM mapd_dashboards WHERE name = ? and userid = ?",
+            std::vector<std::string>{dash_name, user_id});
+      }
+    } catch (std::exception& e) {
+      sqliteConnector_.query("ROLLBACK TRANSACTION");
+      throw;
+    }
+    sqliteConnector_.query("END TRANSACTION");
+  }
 }
 
 const DashboardDescriptor* Catalog::getMetadataForDashboard(
@@ -1611,30 +1651,6 @@ const DashboardDescriptor* Catalog::getMetadataForDashboard(const int32_t id) co
     return getMetadataForDashboard(userId, name);
   }
   return nullptr;
-}
-
-void Catalog::deleteMetadataForDashboard(const int32_t id) {
-  std::string userId;
-  std::string name;
-  bool found{false};
-  {
-    cat_read_lock read_lock(this);
-    for (auto descp : dashboardDescriptorMap_) {
-      auto dash = descp.second.get();
-      if (dash->dashboardId == id) {
-        userId = std::to_string(dash->userId);
-        name = dash->dashboardName;
-        found = true;
-        break;
-      }
-    }
-  }
-  if (found) {
-    // TODO: transactionally unsafe
-    SysCatalog::instance().revokeDBObjectPrivilegesFromAll(
-        DBObject(id, DashboardDBObjectType), this);
-    deleteMetadataForDashboard(userId, name);
-  }
 }
 
 const LinkDescriptor* Catalog::getMetadataForLink(const string& link) const {
