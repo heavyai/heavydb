@@ -185,6 +185,8 @@ class CodeGenerator {
 
   llvm::Value* codegen(const Analyzer::KeyForStringExpr*, const CompilationOptions&);
 
+  llvm::Value* codegen(const Analyzer::SampleRatioExpr*, const CompilationOptions&);
+
   llvm::Value* codegen(const Analyzer::LowerExpr*, const CompilationOptions&);
 
   llvm::Value* codegen(const Analyzer::LikeExpr*, const CompilationOptions&);

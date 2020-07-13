@@ -75,6 +75,10 @@ class DeepCopyVisitor : public ScalarExprVisitor<std::shared_ptr<Analyzer::Expr>
     return makeExpr<Analyzer::KeyForStringExpr>(visit(expr->get_arg()));
   }
 
+  RetType visitSampleRatio(const Analyzer::SampleRatioExpr* expr) const override {
+    return makeExpr<Analyzer::SampleRatioExpr>(visit(expr->get_arg()));
+  }
+
   RetType visitLower(const Analyzer::LowerExpr* expr) const override {
     return makeExpr<Analyzer::LowerExpr>(visit(expr->get_arg()));
   }

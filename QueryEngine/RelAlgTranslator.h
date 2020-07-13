@@ -112,6 +112,8 @@ class RelAlgTranslator {
 
   std::shared_ptr<Analyzer::Expr> translateKeyForString(const RexFunctionOperator*) const;
 
+  std::shared_ptr<Analyzer::Expr> translateSampleRatio(const RexFunctionOperator*) const;
+
   std::shared_ptr<Analyzer::Expr> translateCurrentUser(const RexFunctionOperator*) const;
 
   std::shared_ptr<Analyzer::Expr> translateLower(const RexFunctionOperator*) const;

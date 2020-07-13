@@ -19230,6 +19230,43 @@ TEST(Select, VarlenLazyFetch) {
   }
 }
 
+TEST(Select, SampleRatio) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+
+    // looking for 8-12 pass at a 50% sampling rate. This is dependent on data
+    // distribution.
+    const auto num_rows = v<int64_t>(
+        run_simple_agg("SELECT COUNT(*) FROM test WHERE sample_ratio(0.5);", dt));
+    EXPECT_GE(num_rows, 8);
+    EXPECT_LE(num_rows, 12);
+
+    EXPECT_EQ(0, v<int64_t>(run_simple_agg("SELECT sample_ratio(null);", dt)));
+
+    EXPECT_NO_THROW(run_multiple_agg("SELECT sample_ratio(0);", dt));
+    EXPECT_NO_THROW(run_multiple_agg("SELECT sample_ratio(0.5);", dt));
+    EXPECT_NO_THROW(run_multiple_agg("SELECT sample_ratio(1);", dt));
+    EXPECT_NO_THROW(
+        run_multiple_agg("SELECT sample_ratio((SELECT max(x) FROM test));", dt));
+
+    EXPECT_ANY_THROW(run_multiple_agg("SELECT sample_ratio(str) FROM test LIMIT 1;", dt));
+    EXPECT_ANY_THROW(
+        run_multiple_agg("SELECT sample_ratio(null_str) FROM test LIMIT 1;", dt));
+    EXPECT_ANY_THROW(run_multiple_agg("SELECT sample_ratio(bn) FROM test LIMIT 1;", dt));
+    EXPECT_ANY_THROW(
+        run_multiple_agg("SELECT sample_ratio(arr_i64) FROM array_test LIMIT 1;", dt));
+
+    EXPECT_NO_THROW(run_multiple_agg("SELECT sample_ratio(w) FROM test LIMIT 1;", dt));
+    EXPECT_NO_THROW(run_multiple_agg("SELECT sample_ratio(x) FROM test LIMIT 1;", dt));
+    EXPECT_NO_THROW(run_multiple_agg("SELECT sample_ratio(y) FROM test LIMIT 1;", dt));
+    EXPECT_NO_THROW(run_multiple_agg("SELECT sample_ratio(f) FROM test LIMIT 1;", dt));
+    EXPECT_NO_THROW(run_multiple_agg("SELECT sample_ratio(fn) FROM test LIMIT 1;", dt));
+    EXPECT_NO_THROW(run_multiple_agg("SELECT sample_ratio(d) FROM test LIMIT 1;", dt));
+    EXPECT_NO_THROW(
+        run_multiple_agg("SELECT sample_ratio(arr_i64[0]) FROM array_test LIMIT 1;", dt));
+  }
+}
+
 namespace {
 
 int create_sharded_join_table(const std::string& table_name,

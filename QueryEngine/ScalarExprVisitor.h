@@ -64,6 +64,10 @@ class ScalarExprVisitor {
     if (key_for_string) {
       return visitKeyForString(key_for_string);
     }
+    const auto sample_ratio = dynamic_cast<const Analyzer::SampleRatioExpr*>(expr);
+    if (sample_ratio) {
+      return visitSampleRatio(sample_ratio);
+    }
     const auto lower = dynamic_cast<const Analyzer::LowerExpr*>(expr);
     if (lower) {
       return visitLower(lower);
@@ -186,6 +190,12 @@ class ScalarExprVisitor {
   virtual T visitKeyForString(const Analyzer::KeyForStringExpr* key_for_string) const {
     T result = defaultResult();
     result = aggregateResult(result, visit(key_for_string->get_arg()));
+    return result;
+  }
+
+  virtual T visitSampleRatio(const Analyzer::SampleRatioExpr* sample_ratio) const {
+    T result = defaultResult();
+    result = aggregateResult(result, visit(sample_ratio->get_arg()));
     return result;
   }
 

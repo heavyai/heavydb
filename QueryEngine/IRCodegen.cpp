@@ -89,6 +89,10 @@ std::vector<llvm::Value*> CodeGenerator::codegen(const Analyzer::Expr* expr,
   if (keyforstring_expr) {
     return {codegen(keyforstring_expr, co)};
   }
+  auto sample_ratio_expr = dynamic_cast<const Analyzer::SampleRatioExpr*>(expr);
+  if (sample_ratio_expr) {
+    return {codegen(sample_ratio_expr, co)};
+  }
   auto lower_expr = dynamic_cast<const Analyzer::LowerExpr*>(expr);
   if (lower_expr) {
     return {codegen(lower_expr, co)};
@@ -187,6 +191,32 @@ llvm::Value* CodeGenerator::codegen(const Analyzer::UOper* u_oper,
     default:
       abort();
   }
+}
+
+llvm::Value* CodeGenerator::codegen(const Analyzer::SampleRatioExpr* expr,
+                                    const CompilationOptions& co) {
+  auto input_expr = expr->get_arg();
+  CHECK(input_expr);
+
+  auto double_lv = codegen(input_expr, true, co);
+  CHECK_EQ(size_t(1), double_lv.size());
+
+  std::unique_ptr<CodeGenerator::NullCheckCodegen> nullcheck_codegen;
+  const bool is_nullable = !input_expr->get_type_info().get_notnull();
+  if (is_nullable) {
+    nullcheck_codegen = std::make_unique<NullCheckCodegen>(cgen_state_,
+                                                           executor(),
+                                                           double_lv.front(),
+                                                           input_expr->get_type_info(),
+                                                           "sample_ratio_nullcheck");
+  }
+  CHECK_EQ(input_expr->get_type_info().get_type(), kDOUBLE);
+  std::vector<llvm::Value*> args{double_lv[0], posArg(nullptr)};
+  auto ret = cgen_state_->emitCall("sample_ratio", args);
+  if (nullcheck_codegen) {
+    ret = nullcheck_codegen->finalize(ll_bool(false, cgen_state_->context_), ret);
+  }
+  return ret;
 }
 
 namespace {

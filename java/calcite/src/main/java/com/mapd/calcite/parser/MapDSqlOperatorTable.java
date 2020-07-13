@@ -177,6 +177,7 @@ public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
     opTab.addOperator(new Length());
     opTab.addOperator(new CharLength());
     opTab.addOperator(new KeyForString());
+    opTab.addOperator(new SampleRatio());
     opTab.addOperator(new ArrayLength());
     opTab.addOperator(new PgILike());
     opTab.addOperator(new RegexpLike());
@@ -620,6 +621,30 @@ public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
       return typeFactory.createTypeWithNullability(
               typeFactory.createSqlType(SqlTypeName.INTEGER),
               opBinding.getOperandType(0).isNullable());
+    }
+  }
+
+  public static class SampleRatio extends SqlFunction {
+    public SampleRatio() {
+      super("SAMPLE_RATIO",
+              SqlKind.OTHER_FUNCTION,
+              null,
+              null,
+              OperandTypes.family(signature()),
+              SqlFunctionCategory.SYSTEM);
+    }
+
+    @Override
+    public RelDataType inferReturnType(SqlOperatorBinding opBinding) {
+      final RelDataTypeFactory typeFactory = opBinding.getTypeFactory();
+      return typeFactory.createSqlType(SqlTypeName.BOOLEAN);
+    }
+
+    private static java.util.List<SqlTypeFamily> signature() {
+      java.util.ArrayList<SqlTypeFamily> families =
+              new java.util.ArrayList<SqlTypeFamily>();
+      families.add(SqlTypeFamily.NUMERIC);
+      return families;
     }
   }
 
@@ -1838,6 +1863,7 @@ public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
       assert false;
       return null;
     }
+
     private final boolean isRowUdf;
     private final SqlTypeName ret;
   }

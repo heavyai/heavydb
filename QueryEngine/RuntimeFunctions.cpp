@@ -1239,6 +1239,13 @@ extern "C" ALWAYS_INLINE DEVICE int32_t key_for_string_encoded(const int32_t str
   return str_id;
 }
 
+extern "C" ALWAYS_INLINE DEVICE bool sample_ratio(const double proportion,
+                                                  const int64_t row_offset) {
+  const int64_t threshold = 4294967296 * proportion;
+  // return ((row_offset * 2654435761) & 0X00000000FFFFFFFF) < threshold;
+  return (row_offset * 2654435761) % 4294967296 < threshold;
+}
+
 extern "C" ALWAYS_INLINE int64_t row_number_window_func(const int64_t output_buff,
                                                         const int64_t pos) {
   return reinterpret_cast<const int64_t*>(output_buff)[pos];

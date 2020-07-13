@@ -1208,6 +1208,18 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateKeyForString(
   return makeExpr<Analyzer::KeyForStringExpr>(args[0]);
 }
 
+std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateSampleRatio(
+    const RexFunctionOperator* rex_function) const {
+  CHECK_EQ(size_t(1), rex_function->size());
+  auto arg = translateScalarRex(rex_function->getOperand(0));
+  const auto& arg_ti = arg->get_type_info();
+  if (arg_ti.get_type() != kDOUBLE) {
+    const auto& double_ti = SQLTypeInfo(kDOUBLE, arg_ti.get_notnull());
+    arg = arg->add_cast(double_ti);
+  }
+  return makeExpr<Analyzer::SampleRatioExpr>(arg);
+}
+
 std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateCurrentUser(
     const RexFunctionOperator* rex_function) const {
   std::string user{"SESSIONLESS_USER"};
@@ -1416,6 +1428,9 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateFunction(
   }
   if (rex_function->getName() == "KEY_FOR_STRING"sv) {
     return translateKeyForString(rex_function);
+  }
+  if (rex_function->getName() == "SAMPLE_RATIO"sv) {
+    return translateSampleRatio(rex_function);
   }
   if (rex_function->getName() == "CURRENT_USER"sv) {
     return translateCurrentUser(rex_function);
