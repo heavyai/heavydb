@@ -540,30 +540,36 @@ class ShowForeignServerTest : public DBHandlerTestFixture {
     return std::difftime(datetime, current_time) <= TIME_EPSILON;
   }
 
-  void assertServerResult(const TQueryResult& result,
-                          int index,
-                          const std::string& name,
-                          const std::string& wrapper,
-                          const std::string& options) {
-    ASSERT_EQ(result.row_set.columns[SERVER_NAME].data.str_col[index], name);
-    ASSERT_EQ(result.row_set.columns[DATA_WRAPPER].data.str_col[index], wrapper);
-    ASSERT_EQ(result.row_set.columns[OPTIONS].data.str_col[index], options);
-    ASSERT_GT(result.row_set.columns[CREATED_AT].data.int_col[index], 0);
-    ASSERT_TRUE(isDateTimeInPast(result.row_set.columns[CREATED_AT].data.int_col[index]));
+  void assertServerResultFound(const TQueryResult& result,
+                               const std::string& name,
+                               const std::string& wrapper,
+                               const std::string& options) {
+    int num_matches = 0;
+    for (size_t index = 0;
+         index < result.row_set.columns[SERVER_NAME].data.str_col.size();
+         ++index) {
+      if (result.row_set.columns[SERVER_NAME].data.str_col[index] == name &&
+          result.row_set.columns[DATA_WRAPPER].data.str_col[index] == wrapper &&
+          result.row_set.columns[OPTIONS].data.str_col[index] == options) {
+        num_matches++;
+        ASSERT_GT(result.row_set.columns[CREATED_AT].data.int_col[index], 0);
+        ASSERT_TRUE(
+            isDateTimeInPast(result.row_set.columns[CREATED_AT].data.int_col[index]));
+      }
+    }
+    ASSERT_EQ(num_matches, 1);
   }
-  void assertServerLocalCSV(const TQueryResult& result, int index) {
-    assertServerResult(result,
-                       index,
-                       "omnisci_local_csv",
-                       "OMNISCI_CSV",
-                       "{\"BASE_PATH\":\"/\",\"STORAGE_TYPE\":\"LOCAL_FILE\"}");
+  void assertServerLocalCSVFound(const TQueryResult& result) {
+    assertServerResultFound(result,
+                            "omnisci_local_csv",
+                            "OMNISCI_CSV",
+                            "{\"BASE_PATH\":\"/\",\"STORAGE_TYPE\":\"LOCAL_FILE\"}");
   }
-  void assertServerLocalParquet(const TQueryResult& result, int index) {
-    assertServerResult(result,
-                       index,
-                       "omnisci_local_parquet",
-                       "OMNISCI_PARQUET",
-                       "{\"BASE_PATH\":\"/\",\"STORAGE_TYPE\":\"LOCAL_FILE\"}");
+  void assertServerLocalParquetFound(const TQueryResult& result) {
+    assertServerResultFound(result,
+                            "omnisci_local_parquet",
+                            "OMNISCI_PARQUET",
+                            "{\"BASE_PATH\":\"/\",\"STORAGE_TYPE\":\"LOCAL_FILE\"}");
   }
 
   void assertNumResults(const TQueryResult& result, size_t num_results) {
@@ -581,8 +587,8 @@ TEST_F(ShowForeignServerTest, SHOWALL_DEFAULT) {
   assertExpectedFormat(result);
   // Two default servers
   assertNumResults(result, 2);
-  assertServerLocalCSV(result, 0);
-  assertServerLocalParquet(result, 1);
+  assertServerLocalCSVFound(result);
+  assertServerLocalParquetFound(result);
 }
 
 TEST_F(ShowForeignServerTest, SHOW_WHERE_EQ) {
@@ -591,7 +597,7 @@ TEST_F(ShowForeignServerTest, SHOW_WHERE_EQ) {
   sql(result, query);
   assertExpectedFormat(result);
   assertNumResults(result, 1);
-  assertServerLocalCSV(result, 0);
+  assertServerLocalCSVFound(result);
 }
 
 TEST_F(ShowForeignServerTest, SHOW_WHERE_LIKE) {
@@ -600,7 +606,7 @@ TEST_F(ShowForeignServerTest, SHOW_WHERE_LIKE) {
   sql(result, query);
   assertExpectedFormat(result);
   assertNumResults(result, 1);
-  assertServerLocalParquet(result, 0);
+  assertServerLocalParquetFound(result);
 }
 
 TEST_F(ShowForeignServerTest, SHOW_WHERE_LIKE_OR_EQ) {
@@ -611,8 +617,8 @@ TEST_F(ShowForeignServerTest, SHOW_WHERE_LIKE_OR_EQ) {
   sql(result, query);
   assertExpectedFormat(result);
   assertNumResults(result, 2);
-  assertServerLocalCSV(result, 0);
-  assertServerLocalParquet(result, 1);
+  assertServerLocalCSVFound(result);
+  assertServerLocalParquetFound(result);
 }
 
 TEST_F(ShowForeignServerTest, SHOW_WHERE_LIKE_AND_EQ) {
@@ -622,7 +628,7 @@ TEST_F(ShowForeignServerTest, SHOW_WHERE_LIKE_AND_EQ) {
   sql(result, query);
   assertExpectedFormat(result);
   assertNumResults(result, 1);
-  assertServerLocalCSV(result, 0);
+  assertServerLocalCSVFound(result);
 }
 
 TEST_F(ShowForeignServerTest, SHOW_WHERE_LIKE_OR_LIKE_AND_LIKE) {
@@ -633,8 +639,8 @@ TEST_F(ShowForeignServerTest, SHOW_WHERE_LIKE_OR_LIKE_AND_LIKE) {
   sql(result, query);
   assertExpectedFormat(result);
   assertNumResults(result, 2);
-  assertServerLocalCSV(result, 0);
-  assertServerLocalParquet(result, 1);
+  assertServerLocalCSVFound(result);
+  assertServerLocalParquetFound(result);
 }
 
 TEST_F(ShowForeignServerTest, SHOW_WHERE_LIKE_EMPTY) {
@@ -686,12 +692,17 @@ TEST_F(ShowForeignServerTest, SHOW_TIMESTAMP_EQ) {
     char buffer[256];
     std::strftime(
         buffer, 256, "SHOW SERVERS WHERE created_at = '%Y-%m-%d %H:%M:%S';", ptm);
-    puts(buffer);
     sql(result, buffer);
-    assertNumResults(result, 1);
-    assertServerResult(result, 0, "test_server", "OMNISCI_CSV", options_json);
-    ASSERT_TRUE(isDateTimeAfterTimeStamp(
-        result.row_set.columns[CREATED_AT].data.int_col[0], current_time));
+    // Result must return the test_server, but may include the default servers, if the
+    // previous tests run in under 1s
+    size_t num_results = result.row_set.columns[CREATED_AT].data.int_col.size();
+    ASSERT_GT(num_results, size_t(0));
+    ASSERT_LT(num_results, size_t(4));
+    assertServerResultFound(result, "test_server", "OMNISCI_CSV", options_json);
+    for (const auto& timestamp : result.row_set.columns[CREATED_AT].data.int_col) {
+      // Check all returned values
+      ASSERT_TRUE(isDateTimeAfterTimeStamp(timestamp, current_time));
+    }
   }
 
   {
@@ -718,23 +729,23 @@ TEST_F(ShowForeignServerTest, SHOW_ADD_DROP) {
     std::string query{"SHOW SERVERS;"};
     sql(result, query);
     assertNumResults(result, 3);
-    assertServerLocalCSV(result, 0);
-    assertServerLocalParquet(result, 1);
-    assertServerResult(result, 2, "test_server", "OMNISCI_CSV", options_json);
+    assertServerLocalCSVFound(result);
+    assertServerLocalParquetFound(result);
+    assertServerResultFound(result, "test_server", "OMNISCI_CSV", options_json);
   }
   {
     TQueryResult result;
     std::string query{"SHOW SERVERS WHERE server_name = 'test_server';"};
     sql(result, query);
     assertNumResults(result, 1);
-    assertServerResult(result, 0, "test_server", "OMNISCI_CSV", options_json);
+    assertServerResultFound(result, "test_server", "OMNISCI_CSV", options_json);
   }
   {
     TQueryResult result;
     std::string query{"SHOW SERVERS WHERE options LIKE '%test_path%';"};
     sql(result, query);
     assertNumResults(result, 1);
-    assertServerResult(result, 0, "test_server", "OMNISCI_CSV", options_json);
+    assertServerResultFound(result, "test_server", "OMNISCI_CSV", options_json);
     ASSERT_TRUE(isDateTimeAfterTimeStamp(
         result.row_set.columns[CREATED_AT].data.int_col[0], current_time));
   }
@@ -750,8 +761,8 @@ TEST_F(ShowForeignServerTest, SHOW_ADD_DROP) {
     assertExpectedFormat(result);
     // Two default servers
     assertNumResults(result, 2);
-    assertServerLocalCSV(result, 0);
-    assertServerLocalParquet(result, 1);
+    assertServerLocalCSVFound(result);
+    assertServerLocalParquetFound(result);
   }
 }
 
@@ -774,8 +785,8 @@ TEST_F(ShowForeignServerTest, SHOW_PRIVILEGE) {
     sql(result, "SHOW SERVERS;", test_session_id);
     // Two default servers
     assertNumResults(result, 2);
-    assertServerLocalCSV(result, 0);
-    assertServerLocalParquet(result, 1);
+    assertServerLocalCSVFound(result);
+    assertServerLocalParquetFound(result);
   }
   logout(test_session_id);
   sql("DROP USER test;");
