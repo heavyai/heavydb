@@ -127,6 +127,10 @@ std::shared_ptr<Analyzer::Expr> KeyForStringExpr::deep_copy() const {
   return makeExpr<KeyForStringExpr>(arg->deep_copy());
 }
 
+std::shared_ptr<Analyzer::Expr> SampleRatioExpr::deep_copy() const {
+  return makeExpr<SampleRatioExpr>(arg->deep_copy());
+}
+
 std::shared_ptr<Analyzer::Expr> LowerExpr::deep_copy() const {
   return makeExpr<LowerExpr>(arg->deep_copy());
 }
@@ -1575,6 +1579,20 @@ void KeyForStringExpr::group_predicates(std::list<const Expr*>& scan_predicates,
   }
 }
 
+void SampleRatioExpr::group_predicates(std::list<const Expr*>& scan_predicates,
+                                       std::list<const Expr*>& join_predicates,
+                                       std::list<const Expr*>& const_predicates) const {
+  std::set<int> rte_idx_set;
+  arg->collect_rte_idx(rte_idx_set);
+  if (rte_idx_set.size() > 1) {
+    join_predicates.push_back(this);
+  } else if (rte_idx_set.size() == 1) {
+    scan_predicates.push_back(this);
+  } else {
+    const_predicates.push_back(this);
+  }
+}
+
 void LowerExpr::group_predicates(std::list<const Expr*>& scan_predicates,
                                  std::list<const Expr*>& join_predicates,
                                  std::list<const Expr*>& const_predicates) const {
@@ -2139,6 +2157,17 @@ bool KeyForStringExpr::operator==(const Expr& rhs) const {
   return true;
 }
 
+bool SampleRatioExpr::operator==(const Expr& rhs) const {
+  if (typeid(rhs) != typeid(SampleRatioExpr)) {
+    return false;
+  }
+  const SampleRatioExpr& rhs_cl = dynamic_cast<const SampleRatioExpr&>(rhs);
+  if (!(*arg == *rhs_cl.get_arg())) {
+    return false;
+  }
+  return true;
+}
+
 bool LowerExpr::operator==(const Expr& rhs) const {
   if (typeid(rhs) != typeid(LowerExpr)) {
     return false;
@@ -2560,6 +2589,13 @@ std::string KeyForStringExpr::toString() const {
   return str;
 }
 
+std::string SampleRatioExpr::toString() const {
+  std::string str{"SAMPLE_RATIO("};
+  str += arg->toString();
+  str += ") ";
+  return str;
+}
+
 std::string LowerExpr::toString() const {
   return "LOWER(" + arg->toString() + ") ";
 }
@@ -2826,6 +2862,15 @@ void CharLengthExpr::find_expr(bool (*f)(const Expr*),
 
 void KeyForStringExpr::find_expr(bool (*f)(const Expr*),
                                  std::list<const Expr*>& expr_list) const {
+  if (f(this)) {
+    add_unique(expr_list);
+    return;
+  }
+  arg->find_expr(f, expr_list);
+}
+
+void SampleRatioExpr::find_expr(bool (*f)(const Expr*),
+                                std::list<const Expr*>& expr_list) const {
   if (f(this)) {
     add_unique(expr_list);
     return;
