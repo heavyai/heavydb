@@ -3541,7 +3541,7 @@ void DBHandler::validateDashboardIdsForSharing(
   }
   if (!errors.empty()) {
     std::stringstream error_stream;
-    error_stream << "Share dashboard(s) failed with error(s)\n";
+    error_stream << "Share/Unshare dashboard(s) failed with error(s)\n";
     for (const auto& [error, id_list] : errors) {
       error_stream << "Dashboard ids " << join(id_list, ", ") << ": " << error << "\n";
     }
@@ -3549,16 +3549,18 @@ void DBHandler::validateDashboardIdsForSharing(
   }
 }
 
-void DBHandler::share_dashboards(const TSessionId& session,
-                                 const std::vector<int32_t>& dashboard_ids,
-                                 const std::vector<std::string>& groups,
-                                 const TDashboardPermissions& permissions) {
+void DBHandler::shareOrUnshareDashboards(const TSessionId& session,
+                                         const std::vector<int32_t>& dashboard_ids,
+                                         const std::vector<std::string>& groups,
+                                         const TDashboardPermissions& permissions,
+                                         const bool do_share) {
   auto stdlog = STDLOG(get_session_ptr(session));
   stdlog.appendNameValuePairs("client", getConnectionInfo().toString());
-  check_read_only("share_dashboards");
+  check_read_only(do_share ? "share_dashboards" : "unshare_dashboards");
   if (!permissions.create_ && !permissions.delete_ && !permissions.edit_ &&
       !permissions.view_) {
-    THROW_MAPD_EXCEPTION("At least one privilege should be assigned for grants");
+    THROW_MAPD_EXCEPTION("At least one privilege should be assigned for " +
+                         std::string(do_share ? "grants" : "revokes"));
   }
   auto session_ptr = stdlog.getConstSessionInfo();
   auto const& catalog = session_ptr->getCatalog();
@@ -3584,7 +3586,18 @@ void DBHandler::share_dashboards(const TSessionId& session,
     object.setPrivileges(privs);
     batch_objects.push_back(object);
   }
-  sys_catalog.grantDBObjectPrivilegesBatch(groups, batch_objects, catalog);
+  if (do_share) {
+    sys_catalog.grantDBObjectPrivilegesBatch(groups, batch_objects, catalog);
+  } else {
+    sys_catalog.revokeDBObjectPrivilegesBatch(groups, batch_objects, catalog);
+  }
+}
+
+void DBHandler::share_dashboards(const TSessionId& session,
+                                 const std::vector<int32_t>& dashboard_ids,
+                                 const std::vector<std::string>& groups,
+                                 const TDashboardPermissions& permissions) {
+  shareOrUnshareDashboards(session, dashboard_ids, groups, permissions, true);
 }
 
 // NOOP: Grants not available for objects as of now
@@ -3597,51 +3610,19 @@ void DBHandler::share_dashboard(const TSessionId& session,
   share_dashboards(session, {dashboard_id}, groups, permissions);
 }
 
+void DBHandler::unshare_dashboards(const TSessionId& session,
+                                   const std::vector<int32_t>& dashboard_ids,
+                                   const std::vector<std::string>& groups,
+                                   const TDashboardPermissions& permissions) {
+  shareOrUnshareDashboards(session, dashboard_ids, groups, permissions, false);
+}
+
 void DBHandler::unshare_dashboard(const TSessionId& session,
                                   const int32_t dashboard_id,
                                   const std::vector<std::string>& groups,
                                   const std::vector<std::string>& objects,
                                   const TDashboardPermissions& permissions) {
-  auto stdlog = STDLOG(get_session_ptr(session));
-  stdlog.appendNameValuePairs("client", getConnectionInfo().toString());
-  auto session_ptr = stdlog.getConstSessionInfo();
-  check_read_only("unshare_dashboard");
-  std::vector<std::string> valid_groups;
-  valid_groups = get_valid_groups(session, dashboard_id, groups);
-  auto const& cat = session_ptr->getCatalog();
-  // By default object type can only be dashboard
-  DBObjectType object_type = DBObjectType::DashboardDBObjectType;
-  DBObject object(dashboard_id, object_type);
-  if (!permissions.create_ && !permissions.delete_ && !permissions.edit_ &&
-      !permissions.view_) {
-    THROW_MAPD_EXCEPTION("Atleast one privilege should be assigned for revokes");
-  } else {
-    AccessPrivileges privs;
-
-    object.resetPrivileges();
-    if (permissions.delete_) {
-      privs.add(AccessPrivileges::DELETE_DASHBOARD);
-    }
-
-    if (permissions.create_) {
-      privs.add(AccessPrivileges::CREATE_DASHBOARD);
-    }
-
-    if (permissions.edit_) {
-      privs.add(AccessPrivileges::EDIT_DASHBOARD);
-    }
-
-    if (permissions.view_) {
-      privs.add(AccessPrivileges::VIEW_DASHBOARD);
-    }
-
-    object.setPrivileges(privs);
-  }
-  SysCatalog::instance().revokeDBObjectPrivilegesBatch(valid_groups, {object}, cat);
-  // revoke system_role from grantees for underlying objects
-  const auto dash = cat.getMetadataForDashboard(dashboard_id);
-  SysCatalog::instance().revokeDashboardSystemRole(dash->dashboardSystemRoleName,
-                                                   valid_groups);
+  unshare_dashboards(session, {dashboard_id}, groups, permissions);
 }
 
 void DBHandler::get_dashboard_grantees(

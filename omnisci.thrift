@@ -551,6 +551,7 @@ service OmniSci {
   void delete_dashboards(1: TSessionId session, 2: list<i32> dashboard_ids) throws (1: TOmniSciException e)
   void share_dashboard(1: TSessionId session, 2: i32 dashboard_id, 3: list<string> groups, 4: list<string> objects, 5: TDashboardPermissions permissions, 6: bool grant_role = false) throws (1: TOmniSciException e)
   void unshare_dashboard(1: TSessionId session, 2: i32 dashboard_id, 3: list<string> groups, 4: list<string> objects, 5: TDashboardPermissions permissions) throws (1: TOmniSciException e)
+  void unshare_dashboards(1: TSessionId session, 2: list<i32> dashboard_ids, 3: list<string> groups, 4: TDashboardPermissions permissions) throws (1: TOmniSciException e)
   list<TDashboardGrantees> get_dashboard_grantees(1: TSessionId session, 2: i32 dashboard_id) throws (1: TOmniSciException e)
   #dashboard links
   TFrontendView get_link_view(1: TSessionId session, 2: string link) throws (1: TOmniSciException e)

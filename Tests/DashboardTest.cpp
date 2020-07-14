@@ -15,8 +15,8 @@
  */
 
 /**
- * @file DashboardBulkCommandsTest.cpp
- * @brief Test suite for bulk dashboard commands
+ * @file DashboardTest.cpp
+ * @brief Test suite for dashboard commands
  */
 
 #include <gtest/gtest.h>
@@ -53,7 +53,7 @@ class ShareDashboardsTest : public DBHandlerTestFixture {
 
   std::vector<int32_t> getTestDashboardIds() const {
     std::vector<int32_t> ids;
-    for (const auto& test_dashboard : test_dashboards) {
+    for (const auto& test_dashboard : test_dashboards_) {
       ids.push_back(test_dashboard.dashboard_id);
     }
     return ids;
@@ -62,6 +62,7 @@ class ShareDashboardsTest : public DBHandlerTestFixture {
   struct TestPermissions {
     TDashboardPermissions permissions;
     std::map<std::string, AccessPrivileges> privileges;
+    std::map<std::string, AccessPrivileges> all_privileges;
 
     TestPermissions(bool create_permission,
                     bool delete_permission,
@@ -83,49 +84,87 @@ class ShareDashboardsTest : public DBHandlerTestFixture {
       if (view_permission) {
         privileges.insert({"VIEW_DASHBOARD", AccessPrivileges::VIEW_DASHBOARD});
       }
+      all_privileges.insert({"CREATE_DASHBOARD", AccessPrivileges::CREATE_DASHBOARD});
+      all_privileges.insert({"DELETE_DASHBOARD", AccessPrivileges::DELETE_DASHBOARD});
+      all_privileges.insert({"EDIT_DASHBOARD", AccessPrivileges::EDIT_DASHBOARD});
+      all_privileges.insert({"VIEW_DASHBOARD", AccessPrivileges::VIEW_DASHBOARD});
+    }
+
+    TestPermissions getComplement() {
+      return TestPermissions{!permissions.create_,
+                             !permissions.delete_,
+                             !permissions.edit_,
+                             !permissions.view_};
+    }
+
+    AccessPrivileges getPrivileges() {
+      AccessPrivileges priv;
+      if (permissions.create_) {
+        priv.add(AccessPrivileges::CREATE_DASHBOARD);
+      }
+      if (permissions.delete_) {
+        priv.add(AccessPrivileges::DELETE_DASHBOARD);
+      }
+      if (permissions.edit_) {
+        priv.add(AccessPrivileges::EDIT_DASHBOARD);
+      }
+      if (permissions.view_) {
+        priv.add(AccessPrivileges::VIEW_DASHBOARD);
+      }
+      return priv;
     }
   };
 
-  void shareDashBoards(const TestPermissions& test_permissions,
-                       const std::vector<std::string>& groups,
-                       const std::vector<int32_t>& dashboard_ids) {
+  void shareOrUnshareDashboards(const TestPermissions& test_permissions,
+                                const std::vector<std::string>& groups,
+                                const std::vector<int32_t>& dashboard_ids,
+                                const bool do_share = true) {
     auto [handler, session_id] = DBHandlerTestFixture::getDbHandlerAndSessionId();
-    handler->share_dashboards(
-        session_id, dashboard_ids, groups, test_permissions.permissions);
-  }
-
-  void shareDashBoards(const TestPermissions& test_permissions,
-                       const std::vector<std::string>& groups) {
-    shareDashBoards(test_permissions, groups, getTestDashboardIds());
-  }
-
-  void setupNewDashboards(int count) {
-    auto [handler, session_id] = DBHandlerTestFixture::getDbHandlerAndSessionId();
-    for (int i = 0; i < count; ++i) {
-      test_dashboards.emplace_back(i, handler, session_id);
+    if (do_share) {
+      handler->share_dashboards(
+          session_id, dashboard_ids, groups, test_permissions.permissions);
+    } else {
+      handler->unshare_dashboards(
+          session_id, dashboard_ids, groups, test_permissions.permissions);
     }
   }
 
-  void teardownLastDashboard() { test_dashboards.pop_back(); }
+  void shareOrUnshareDashboards(const TestPermissions& test_permissions,
+                                const std::vector<std::string>& groups,
+                                const bool do_share = true) {
+    shareOrUnshareDashboards(test_permissions, groups, getTestDashboardIds(), do_share);
+  }
 
-  void teardownDashboards() { test_dashboards.clear(); }
+  virtual void setupNewDashboards(int count) {
+    auto [handler, session_id] = DBHandlerTestFixture::getDbHandlerAndSessionId();
+    for (int i = 0; i < count; ++i) {
+      test_dashboards_.emplace_back(i, handler, session_id);
+    }
+  }
+
+  void teardownLastDashboard() { test_dashboards_.pop_back(); }
+
+  void teardownDashboards() { test_dashboards_.clear(); }
 
   void assertExpectedDashboardPrivilegesForUsers(const TestPermissions& test_permissions,
-                                                 const std::vector<std::string>& users,
-                                                 bool is_shared = true) {
+                                                 const std::vector<std::string>& users) {
     auto& sys_catalog = Catalog_Namespace::SysCatalog::instance();
     auto& catalog = getCatalog();
-    for (auto const& test_dashboard : test_dashboards) {
+    for (auto const& test_dashboard : test_dashboards_) {
       DBObject object(test_dashboard.dashboard_id, DBObjectType::DashboardDBObjectType);
       object.loadKey(catalog);
       for (auto const& user : users) {
-        for (auto const& [privilege_name, privilege] : test_permissions.privileges) {
+        for (auto const& [privilege_name, privilege] : test_permissions.all_privileges) {
           object.setPrivileges(privilege);
           bool privilege_allowed = sys_catalog.checkPrivileges(user, {object});
-          ASSERT_EQ(privilege_allowed, is_shared)
+          const auto& allowed_privileges = test_permissions.privileges;
+          bool should_privilege_be_allowed =
+              allowed_privileges.find(privilege_name) != allowed_privileges.end();
+          ASSERT_EQ(privilege_allowed, should_privilege_be_allowed)
               << " with user " << user << ", dashboard id " << test_dashboard.dashboard_id
               << " and privilege_name " << privilege_name << " being "
-              << privilege_allowed << " but expected to be " << is_shared;
+              << privilege_allowed << " but expected to be "
+              << should_privilege_be_allowed;
         }
       }
     }
@@ -146,21 +185,11 @@ class ShareDashboardsTest : public DBHandlerTestFixture {
     sql("DROP ROLE test_role_1;");
   }
 
-  static void dropTestUser(const std::string& user_name) {
-    try {
-      sql("DROP USER " + user_name + ";");
-    } catch (const std::exception& e) {
-      // Swallow and log exceptions that may occur, since there is no "IF EXISTS" option.
-      LOG(WARNING) << e.what();
-    }
-  }
-
- private:
   const static inline std::string dashboard_name_prefix_ = "test_dashboard";
   const static inline std::string dashboard_state_prefix_ = "test_state";
   const static inline std::string dashboard_image_hash_prefix_ = "test_image_hash";
   const static inline std::string dashboard_metadata_prefix_ = "test_metadata";
-  const static inline int num_test_dasbboards_ = 3;
+  const static inline int num_test_dashboards_ = 3;
 
   struct TestDashboard {
     int dashboard_id;
@@ -186,9 +215,8 @@ class ShareDashboardsTest : public DBHandlerTestFixture {
     ~TestDashboard() { handler->delete_dashboard(session, dashboard_id); }
   };
 
-  void setupDashboards() { setupNewDashboards(num_test_dasbboards_); }
-
-  std::list<TestDashboard> test_dashboards;
+  std::list<TestDashboard> test_dashboards_;
+  void setupDashboards() { setupNewDashboards(num_test_dashboards_); }
 };
 
 struct PermissionParam {
@@ -199,17 +227,105 @@ namespace {
 struct PrintToStringParamName {
   std::string operator()(const ::testing::TestParamInfo<PermissionParam>& info) const {
     std::stringstream ss;
-    ss << "create_permission_" << info.param.create_p << "_delete_permission_"
-       << info.param.delete_p << "_view_permission_" << info.param.view_p
-       << "_edit_permission_" << info.param.edit_p;
+    const auto& perm = info.param;
+    ss << "create_permission_" << perm.create_p << "_delete_permission_" << perm.delete_p
+       << "_view_permission_" << perm.view_p << "_edit_permission_" << perm.edit_p;
     return ss.str();
+  }
+
+  std::string operator()(const ::testing::TestParamInfo<bool>& info) const {
+    return info.param ? "share" : "unshare";
   }
 };
 }  // namespace
 
+class DashboardsTestWithInitialPermissions : public ShareDashboardsTest {
+ protected:
+  void grantInitialPermissions() {
+    for (auto const& test_dashboard : test_dashboards_) {
+      DBObject object(test_dashboard.dashboard_id, DBObjectType::DashboardDBObjectType);
+      object.setPrivileges(getInitialPermissions().getPrivileges());
+      auto entities =
+          std::vector<std::string>{"test_user_1", "test_user_2", "test_user_3"};
+      if (grantInitialPermissionsToGroupOnly()) {
+        entities = {"test_role_1"};
+      }
+      Catalog_Namespace::SysCatalog::instance().grantDBObjectPrivilegesBatch(
+          entities, {object}, getCatalog());
+    }
+  }
+
+  void setupNewDashboards(int count) override {
+    ShareDashboardsTest::setupNewDashboards(count);
+    grantInitialPermissions();
+  }
+
+  virtual TestPermissions getInitialPermissions() = 0;
+  virtual bool grantInitialPermissionsToGroupOnly() { return false; }
+};
+
+class ShareDashboardsGroupTest : public ShareDashboardsTest {
+ protected:
+  TestPermissions getInitialPermissions() {
+    return TestPermissions{false, false, false, false};
+  }
+};
+
+class UnshareDashboardsGroupTest : public DashboardsTestWithInitialPermissions {
+ protected:
+  TestPermissions getInitialPermissions() override {
+    return TestPermissions{true, true, true, true};
+  }
+
+  bool grantInitialPermissionsToGroupOnly() override { return true; }
+};
+
+class ShareDashboardsRegularTest : public ShareDashboardsTest {
+ protected:
+  TestPermissions getInitialPermissions() {
+    return TestPermissions{false, false, false, false};
+  }
+};
+
+class UnshareDashboardsRegularTest : public DashboardsTestWithInitialPermissions {
+ protected:
+  TestPermissions getInitialPermissions() override {
+    return TestPermissions{true, true, true, true};
+  }
+};
+
+class ShareAndUnshareDashboardsTest : public DashboardsTestWithInitialPermissions,
+                                      public testing::WithParamInterface<bool> {
+ protected:
+  bool getDoShare() { return GetParam(); }
+
+  TestPermissions getInitialPermissions() override {
+    return TestPermissions{true, false, true, false};
+  }
+};
+
+INSTANTIATE_TEST_SUITE_P(ShareAndUnshare,
+                         ShareAndUnshareDashboardsTest,
+                         ::testing::Values(true, false),
+                         PrintToStringParamName());
+
 class SharePermissionPermutationsTest
     : public ShareDashboardsTest,
-      public testing::WithParamInterface<PermissionParam> {};
+      public testing::WithParamInterface<PermissionParam> {
+ protected:
+  const PermissionParam& getPermissionParam() { return GetParam(); }
+};
+
+class UnsharePermissionPermutationsTest
+    : public DashboardsTestWithInitialPermissions,
+      public testing::WithParamInterface<PermissionParam> {
+ protected:
+  const PermissionParam& getPermissionParam() { return GetParam(); }
+
+  TestPermissions getInitialPermissions() override {
+    return TestPermissions{true, true, true, true};
+  }
+};
 
 INSTANTIATE_TEST_SUITE_P(AllLegalPermutations,
                          SharePermissionPermutationsTest,
@@ -222,30 +338,53 @@ INSTANTIATE_TEST_SUITE_P(AllLegalPermutations,
                                            PermissionParam{false, true, false, false}),
                          PrintToStringParamName());
 
+INSTANTIATE_TEST_SUITE_P(AllLegalPermutations,
+                         UnsharePermissionPermutationsTest,
+                         ::testing::Values(PermissionParam{true, true, true, true},
+                                           PermissionParam{true, true, true, false},
+                                           PermissionParam{true, true, false, false},
+                                           PermissionParam{true, false, true, false},
+                                           PermissionParam{false, true, true, false},
+                                           PermissionParam{true, false, false, false},
+                                           PermissionParam{false, true, false, false}),
+                         PrintToStringParamName());
+
 TEST_P(SharePermissionPermutationsTest, ShareAllLegalPermutations) {
-  auto& param = GetParam();
+  auto const& param = getPermissionParam();
   TestPermissions permissions(param.create_p, param.delete_p, param.edit_p, param.view_p);
-  shareDashBoards(permissions, {"test_user_1"});
+  shareOrUnshareDashboards(permissions, {"test_user_1"}, true);
   assertExpectedDashboardPrivilegesForUsers(permissions, {"test_user_1"});
 }
 
-TEST_F(ShareDashboardsTest, NoPermissions) {
-  TestPermissions no_permissions(false, false, false, false);
-  executeLambdaAndAssertException(
-      [&, this] { shareDashBoards(no_permissions, {"test_user_1"}); },
-      "At least one privilege should be assigned for grants");
-  assertExpectedDashboardPrivilegesForUsers(
-      TestPermissions{true, true, true, true}, {"test_user_1"}, false);
+TEST_P(UnsharePermissionPermutationsTest, UnshareAllLegalPermutations) {
+  auto const& param = getPermissionParam();
+  TestPermissions permissions(param.create_p, param.delete_p, param.edit_p, param.view_p);
+  shareOrUnshareDashboards(permissions, {"test_user_1"}, false);
+  assertExpectedDashboardPrivilegesForUsers(permissions.getComplement(), {"test_user_1"});
 }
 
-TEST_F(ShareDashboardsTest, NonExistentGroupOrUser) {
+TEST_P(ShareAndUnshareDashboardsTest, NoPermissions) {
+  bool do_share = getDoShare();
+  TestPermissions no_permissions(false, false, false, false);
+  executeLambdaAndAssertException(
+      [&, this] { shareOrUnshareDashboards(no_permissions, {"test_user_1"}, do_share); },
+      "At least one privilege should be assigned for " +
+          std::string(do_share ? "grants" : "revokes"));
+  assertExpectedDashboardPrivilegesForUsers(getInitialPermissions(), {"test_user_1"});
+}
+
+TEST_P(ShareAndUnshareDashboardsTest, NonExistentGroupOrUser) {
+  bool do_share = getDoShare();
   TestPermissions permissions(true, true, true, true);
   executeLambdaAndAssertException(
-      [&, this] { shareDashBoards(permissions, {"non_existent_user"}); },
+      [&, this] {
+        shareOrUnshareDashboards(permissions, {"non_existent_user"}, do_share);
+      },
       "Exception: User/Role 'non_existent_user' does not exist");
 }
 
-TEST_F(ShareDashboardsTest, NonExistentDashboards) {
+TEST_P(ShareAndUnshareDashboardsTest, NonExistentDashboards) {
+  bool do_share = getDoShare();
   TestPermissions permissions(true, true, true, true);
   auto dashboard_ids = getTestDashboardIds();
   teardownLastDashboard();
@@ -253,39 +392,53 @@ TEST_F(ShareDashboardsTest, NonExistentDashboards) {
   std::stringstream error_stream, id_list;
   id_list << dashboard_ids[dashboard_ids.size() - 2] << ", "
           << dashboard_ids[dashboard_ids.size() - 1];
-  error_stream << "Share dashboard(s) failed with error(s)\n"
+  error_stream << "Share/Unshare dashboard(s) failed with error(s)\n"
                << "Dashboard ids " << id_list.str() << ": Dashboard id does not exist\n";
   executeLambdaAndAssertException(
-      [&, this] { shareDashBoards(permissions, {"test_user_1"}, dashboard_ids); },
+      [&, this] {
+        shareOrUnshareDashboards(permissions, {"test_user_1"}, dashboard_ids, do_share);
+      },
       error_stream.str());
-  assertExpectedDashboardPrivilegesForUsers(
-      TestPermissions{true, true, true, true}, {"test_user_1"}, false);
+  assertExpectedDashboardPrivilegesForUsers(getInitialPermissions(), {"test_user_1"});
 }
 
-TEST_F(ShareDashboardsTest, GrantPermisionsToGroupWithOneUser) {
+TEST_F(ShareDashboardsGroupTest, Group) {
   TestPermissions permissions(true, true, true, true);
-  shareDashBoards(permissions, {"test_role_1"});
+  assertExpectedDashboardPrivilegesForUsers(getInitialPermissions(),
+                                            {"test_user_2", "test_user_3"});
+  shareOrUnshareDashboards(permissions, {"test_role_1"}, true);
   assertExpectedDashboardPrivilegesForUsers(permissions, {"test_user_2", "test_user_3"});
 }
 
-TEST_F(ShareDashboardsTest, AsUnauthorizedUser) {
+TEST_F(UnshareDashboardsGroupTest, Group) {
+  TestPermissions permissions(true, true, true, true);
+  assertExpectedDashboardPrivilegesForUsers(getInitialPermissions(),
+                                            {"test_user_2", "test_user_3"});
+  shareOrUnshareDashboards(permissions, {"test_role_1"}, false);
+  assertExpectedDashboardPrivilegesForUsers(permissions.getComplement(),
+                                            {"test_user_2", "test_user_3"});
+}
+
+TEST_P(ShareAndUnshareDashboardsTest, AsUnauthorizedUser) {
+  bool do_share = getDoShare();
   sql("GRANT ACCESS ON DATABASE " + OMNISCI_DEFAULT_DB + " TO test_user_1");
   login("test_user_1", "");
   std::stringstream error_stream;
-  error_stream << "Share dashboard(s) failed with error(s)\n";
+  error_stream << "Share/Unshare dashboard(s) failed with error(s)\n";
   error_stream
       << "Dashboard ids " << join(getTestDashboardIds(), ", ") << ": "
       << "User should be either owner of dashboard or super user to share/unshare it\n";
   TestPermissions permissions(true, true, true, true);
   executeLambdaAndAssertException(
-      [&, this] { shareDashBoards(permissions, {"test_user_1"}); }, error_stream.str());
-  assertExpectedDashboardPrivilegesForUsers(
-      TestPermissions{true, true, true, true}, {"test_user_1"}, false);
+      [&, this] { shareOrUnshareDashboards(permissions, {"test_user_1"}, do_share); },
+      error_stream.str());
+  assertExpectedDashboardPrivilegesForUsers(getInitialPermissions(), {"test_user_1"});
   loginAdmin();
   sql("REVOKE ACCESS ON DATABASE " + OMNISCI_DEFAULT_DB + " FROM test_user_1");
 }
 
-TEST_F(ShareDashboardsTest, AsUnauthorizedUserForSomeDashboards) {
+TEST_P(ShareAndUnshareDashboardsTest, AsUnauthorizedUserForSomeDashboards) {
+  bool do_share = getDoShare();
   sql("GRANT ACCESS ON DATABASE " + OMNISCI_DEFAULT_DB + " TO test_user_1, test_user_2;");
   sql("GRANT CREATE DASHBOARD ON DATABASE " + OMNISCI_DEFAULT_DB +
       " TO test_user_1, test_user_2;");
@@ -296,7 +449,7 @@ TEST_F(ShareDashboardsTest, AsUnauthorizedUserForSomeDashboards) {
   setupNewDashboards(1);
   auto dashboard_ids = getTestDashboardIds();
   std::stringstream error_stream, dashboard_ids_stream;
-  error_stream << "Share dashboard(s) failed with error(s)\n";
+  error_stream << "Share/Unshare dashboard(s) failed with error(s)\n";
   for (int i = 0; i < 3; ++i) {
     dashboard_ids_stream << (!dashboard_ids_stream.str().empty() ? ", " : "")
                          << dashboard_ids[i];
@@ -306,9 +459,9 @@ TEST_F(ShareDashboardsTest, AsUnauthorizedUserForSomeDashboards) {
       << "User should be either owner of dashboard or super user to share/unshare it\n";
   TestPermissions permissions(true, true, true, true);
   executeLambdaAndAssertException(
-      [&, this] { shareDashBoards(permissions, {"test_user_3"}); }, error_stream.str());
-  assertExpectedDashboardPrivilegesForUsers(
-      TestPermissions{true, true, true, true}, {"test_user_3"}, false);
+      [&, this] { shareOrUnshareDashboards(permissions, {"test_user_3"}, do_share); },
+      error_stream.str());
+  assertExpectedDashboardPrivilegesForUsers(getInitialPermissions(), {"test_user_3"});
   loginAdmin();
   sql("REVOKE CREATE DASHBOARD ON DATABASE " + OMNISCI_DEFAULT_DB +
       " FROM test_user_1, test_user_2;");
@@ -316,22 +469,36 @@ TEST_F(ShareDashboardsTest, AsUnauthorizedUserForSomeDashboards) {
       " FROM test_user_1, test_user_2;");
 }
 
-TEST_F(ShareDashboardsTest, AsNonSuperUser) {
+TEST_F(ShareDashboardsRegularTest, AsNonSuperUser) {
   sql("GRANT ACCESS ON DATABASE " + OMNISCI_DEFAULT_DB + " TO test_user_1");
   sql("GRANT CREATE DASHBOARD ON DATABASE " + OMNISCI_DEFAULT_DB + " TO test_user_1;");
   teardownDashboards();
   login("test_user_1", "");
   setupNewDashboards(3);
   TestPermissions permissions(true, true, true, true);
-  shareDashBoards(permissions, {"test_user_2"});
-  assertExpectedDashboardPrivilegesForUsers(TestPermissions{true, true, true, true},
-                                            {"test_user_2"});
+  shareOrUnshareDashboards(permissions, {"test_user_2"}, true);
+  assertExpectedDashboardPrivilegesForUsers(permissions, {"test_user_2"});
   loginAdmin();
   sql("REVOKE CREATE DASHBOARD ON DATABASE " + OMNISCI_DEFAULT_DB + " FROM test_user_1;");
   sql("REVOKE ACCESS ON DATABASE " + OMNISCI_DEFAULT_DB + " FROM test_user_1");
 }
 
-TEST_F(ShareDashboardsTest, MixedErrors) {
+TEST_F(UnshareDashboardsRegularTest, AsNonSuperUser) {
+  sql("GRANT ACCESS ON DATABASE " + OMNISCI_DEFAULT_DB + " TO test_user_1");
+  sql("GRANT CREATE DASHBOARD ON DATABASE " + OMNISCI_DEFAULT_DB + " TO test_user_1;");
+  teardownDashboards();
+  login("test_user_1", "");
+  setupNewDashboards(3);
+  TestPermissions permissions(true, true, true, true);
+  shareOrUnshareDashboards(permissions, {"test_user_2"}, false);
+  assertExpectedDashboardPrivilegesForUsers(permissions.getComplement(), {"test_user_2"});
+  loginAdmin();
+  sql("REVOKE CREATE DASHBOARD ON DATABASE " + OMNISCI_DEFAULT_DB + " FROM test_user_1;");
+  sql("REVOKE ACCESS ON DATABASE " + OMNISCI_DEFAULT_DB + " FROM test_user_1");
+}
+
+TEST_P(ShareAndUnshareDashboardsTest, MixedErrors) {
+  bool do_share = getDoShare();
   sql("GRANT ACCESS ON DATABASE " + OMNISCI_DEFAULT_DB + " TO test_user_1");
   sql("GRANT CREATE DASHBOARD ON DATABASE " + OMNISCI_DEFAULT_DB + " TO test_user_1;");
   login("test_user_1", "");
@@ -351,7 +518,7 @@ TEST_F(ShareDashboardsTest, MixedErrors) {
         << (!do_not_exist_dashboard_ids_stream.str().empty() ? ", " : "")
         << dashboard_ids[i];
   }
-  error_stream << "Share dashboard(s) failed with error(s)\n";
+  error_stream << "Share/Unshare dashboard(s) failed with error(s)\n";
   error_stream << "Dashboard ids " << do_not_exist_dashboard_ids_stream.str()
                << ": Dashboard id does not exist\n";
   error_stream
@@ -359,10 +526,11 @@ TEST_F(ShareDashboardsTest, MixedErrors) {
       << "User should be either owner of dashboard or super user to share/unshare it\n";
   TestPermissions permissions(true, true, true, true);
   executeLambdaAndAssertException(
-      [&, this] { shareDashBoards(permissions, {"test_user_2"}, dashboard_ids); },
+      [&, this] {
+        shareOrUnshareDashboards(permissions, {"test_user_2"}, dashboard_ids, do_share);
+      },
       error_stream.str());
-  assertExpectedDashboardPrivilegesForUsers(
-      TestPermissions{true, true, true, true}, {"test_user_2"}, false);
+  assertExpectedDashboardPrivilegesForUsers(getInitialPermissions(), {"test_user_2"});
   loginAdmin();
   sql("REVOKE CREATE DASHBOARD ON DATABASE " + OMNISCI_DEFAULT_DB + " FROM test_user_1;");
   sql("REVOKE ACCESS ON DATABASE " + OMNISCI_DEFAULT_DB + " FROM test_user_1");
