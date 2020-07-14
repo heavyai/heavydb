@@ -310,6 +310,24 @@ SQLTypeInfo ResultSet::getColType(const size_t col_idx) const {
                                             : targets_[col_idx].sql_type;
 }
 
+namespace {
+
+size_t get_truncated_row_count(size_t total_row_count, size_t limit, size_t offset) {
+  if (total_row_count < offset) {
+    return 0;
+  }
+
+  size_t total_truncated_row_count = total_row_count - offset;
+
+  if (limit) {
+    return std::min(total_truncated_row_count, limit);
+  }
+
+  return total_truncated_row_count;
+}
+
+}  // namespace
+
 size_t ResultSet::rowCount(const bool force_parallel) const {
   if (just_explain_) {
     return 1;
@@ -362,12 +380,7 @@ size_t ResultSet::binSearchRowCount() const {
     row_count += s->binSearchRowCount();
   }
 
-  if (keep_first_ + drop_first_) {
-    const auto limited_row_count = std::min(keep_first_ + drop_first_, row_count);
-    return limited_row_count < drop_first_ ? 0 : limited_row_count - drop_first_;
-  }
-
-  return row_count;
+  return get_truncated_row_count(row_count, getLimit(), drop_first_);
 }
 
 size_t ResultSet::parallelRowCount() const {
@@ -401,11 +414,8 @@ size_t ResultSet::parallelRowCount() const {
       g_use_tbb_pool
           ? execute_parallel_row_count(threadpool::ThreadPool<size_t>())
           : execute_parallel_row_count(threadpool::FuturesThreadPool<size_t>());
-  if (keep_first_ + drop_first_) {
-    const auto limited_row_count = std::min(keep_first_ + drop_first_, row_count);
-    return limited_row_count < drop_first_ ? 0 : limited_row_count - drop_first_;
-  }
-  return row_count;
+
+  return get_truncated_row_count(row_count, getLimit(), drop_first_);
 }
 
 bool ResultSet::definitelyHasNoRows() const {

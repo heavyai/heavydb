@@ -1887,6 +1887,197 @@ TEST(Select, Having) {
   }
 }
 
+TEST(Select, CountWithLimitAndOffset) {
+  SKIP_ALL_ON_AGGREGATOR();
+  run_ddl_statement("DROP TABLE IF EXISTS count_test;");
+  run_ddl_statement("CREATE TABLE count_test (val int);");
+
+  for (int i = 0; i < 10; i++) {
+    run_multiple_agg("INSERT INTO count_test VALUES(" + std::to_string(i) + ");",
+                     ExecutorDeviceType::CPU);
+  }
+
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+
+    EXPECT_EQ(int64_t(10),
+              v<int64_t>(run_simple_agg(
+                  "SELECT count(*) FROM (SELECT * FROM count_test);", dt)));
+    EXPECT_EQ(int64_t(9),
+              v<int64_t>(run_simple_agg(
+                  "SELECT count(*) FROM (SELECT * FROM count_test OFFSET 1);", dt)));
+    EXPECT_EQ(int64_t(8),
+              v<int64_t>(run_simple_agg(
+                  "SELECT count(*) FROM (SELECT * FROM count_test OFFSET 2);", dt)));
+    EXPECT_EQ(int64_t(1),
+              v<int64_t>(run_simple_agg(
+                  "SELECT count(*) FROM (SELECT * FROM count_test LIMIT 1);", dt)));
+    EXPECT_EQ(int64_t(2),
+              v<int64_t>(run_simple_agg(
+                  "SELECT count(*) FROM (SELECT * FROM count_test LIMIT 2);", dt)));
+    EXPECT_EQ(
+        int64_t(1),
+        v<int64_t>(run_simple_agg(
+            "SELECT count(*) FROM (SELECT * FROM count_test LIMIT 1 OFFSET 1);", dt)));
+    EXPECT_EQ(
+        int64_t(2),
+        v<int64_t>(run_simple_agg(
+            "SELECT count(*) FROM (SELECT * FROM count_test LIMIT 2 OFFSET 1);", dt)));
+    EXPECT_EQ(
+        int64_t(1),
+        v<int64_t>(run_simple_agg(
+            "SELECT count(*) FROM (SELECT * FROM count_test LIMIT 2 OFFSET 9);", dt)));
+    EXPECT_EQ(
+        int64_t(2),
+        v<int64_t>(run_simple_agg(
+            "SELECT count(*) FROM (SELECT * FROM count_test LIMIT 2 OFFSET 8);", dt)));
+    EXPECT_EQ(
+        int64_t(1),
+        v<int64_t>(run_simple_agg(
+            "SELECT count(*) FROM (SELECT * FROM count_test LIMIT 1 OFFSET 8);", dt)));
+
+    EXPECT_EQ(int64_t(10),
+              v<int64_t>(run_simple_agg(
+                  "SELECT count(*) FROM (SELECT * FROM count_test GROUP BY val);", dt)));
+    EXPECT_EQ(
+        int64_t(9),
+        v<int64_t>(run_simple_agg(
+            "SELECT count(*) FROM (SELECT * FROM count_test GROUP BY val OFFSET 1);",
+            dt)));
+    EXPECT_EQ(
+        int64_t(8),
+        v<int64_t>(run_simple_agg(
+            "SELECT count(*) FROM (SELECT * FROM count_test GROUP BY val OFFSET 2);",
+            dt)));
+    EXPECT_EQ(int64_t(1),
+              v<int64_t>(run_simple_agg(
+                  "SELECT count(*) FROM (SELECT * FROM count_test GROUP BY val LIMIT 1);",
+                  dt)));
+    EXPECT_EQ(int64_t(2),
+              v<int64_t>(run_simple_agg(
+                  "SELECT count(*) FROM (SELECT * FROM count_test GROUP BY val LIMIT 2);",
+                  dt)));
+    EXPECT_EQ(int64_t(1),
+              v<int64_t>(run_simple_agg("SELECT count(*) FROM (SELECT * FROM count_test "
+                                        "GROUP BY val LIMIT 1 OFFSET 1);",
+                                        dt)));
+    EXPECT_EQ(int64_t(2),
+              v<int64_t>(run_simple_agg("SELECT count(*) FROM (SELECT * FROM count_test "
+                                        "GROUP BY val LIMIT 2 OFFSET 1);",
+                                        dt)));
+    EXPECT_EQ(int64_t(1),
+              v<int64_t>(run_simple_agg("SELECT count(*) FROM (SELECT * FROM count_test "
+                                        "GROUP BY val LIMIT 2 OFFSET 9);",
+                                        dt)));
+    EXPECT_EQ(int64_t(2),
+              v<int64_t>(run_simple_agg("SELECT count(*) FROM (SELECT * FROM count_test "
+                                        "GROUP BY val LIMIT 2 OFFSET 8);",
+                                        dt)));
+    EXPECT_EQ(int64_t(1),
+              v<int64_t>(run_simple_agg("SELECT count(*) FROM (SELECT * FROM count_test "
+                                        "GROUP BY val LIMIT 1 OFFSET 8);",
+                                        dt)));
+  }
+
+  // now increase the data
+  for (int i = 0; i < 16; i++) {
+    run_ddl_statement("INSERT INTO count_test SELECT * from count_test;");
+  }
+  int64_t size = static_cast<int64_t>(pow(2, 16) * 10);
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+
+    EXPECT_EQ(int64_t(size),
+              v<int64_t>(run_simple_agg(
+                  "SELECT count(*) FROM (SELECT * FROM count_test);", dt)));
+    EXPECT_EQ(int64_t(size - 1),
+              v<int64_t>(run_simple_agg(
+                  "SELECT count(*) FROM (SELECT * FROM count_test OFFSET 1);", dt)));
+    EXPECT_EQ(int64_t(size - 2),
+              v<int64_t>(run_simple_agg(
+                  "SELECT count(*) FROM (SELECT * FROM count_test OFFSET 2);", dt)));
+    EXPECT_EQ(int64_t(1),
+              v<int64_t>(run_simple_agg(
+                  "SELECT count(*) FROM (SELECT * FROM count_test LIMIT 1);", dt)));
+    EXPECT_EQ(int64_t(2),
+              v<int64_t>(run_simple_agg(
+                  "SELECT count(*) FROM (SELECT * FROM count_test LIMIT 2);", dt)));
+    EXPECT_EQ(
+        int64_t(1),
+        v<int64_t>(run_simple_agg(
+            "SELECT count(*) FROM (SELECT * FROM count_test LIMIT 1 OFFSET 1);", dt)));
+    EXPECT_EQ(
+        int64_t(2),
+        v<int64_t>(run_simple_agg(
+            "SELECT count(*) FROM (SELECT * FROM count_test LIMIT 2 OFFSET 1);", dt)));
+    EXPECT_EQ(
+        int64_t(2),
+        v<int64_t>(run_simple_agg(
+            "SELECT count(*) FROM (SELECT * FROM count_test LIMIT 2 OFFSET 9);", dt)));
+    EXPECT_EQ(int64_t(1),
+              v<int64_t>(run_simple_agg(
+                  "SELECT count(*) FROM (SELECT * FROM count_test LIMIT 2 OFFSET " +
+                      std::to_string(size - 1) + ");",
+                  dt)));
+    EXPECT_EQ(
+        int64_t(2),
+        v<int64_t>(run_simple_agg(
+            "SELECT count(*) FROM (SELECT * FROM count_test LIMIT 2 OFFSET 8);", dt)));
+    EXPECT_EQ(
+        int64_t(1),
+        v<int64_t>(run_simple_agg(
+            "SELECT count(*) FROM (SELECT * FROM count_test LIMIT 1 OFFSET 8);", dt)));
+
+    EXPECT_EQ(
+        int64_t(size),
+        v<int64_t>(run_simple_agg(
+            "SELECT count(*) FROM (SELECT rowid FROM count_test GROUP BY rowid);", dt)));
+    EXPECT_EQ(int64_t(size - 1),
+              v<int64_t>(run_simple_agg("SELECT count(*) FROM (SELECT rowid FROM "
+                                        "count_test GROUP BY rowid OFFSET 1);",
+                                        dt)));
+    EXPECT_EQ(int64_t(size - 2),
+              v<int64_t>(run_simple_agg("SELECT count(*) FROM (SELECT rowid FROM "
+                                        "count_test GROUP BY rowid OFFSET 2);",
+                                        dt)));
+    EXPECT_EQ(
+        int64_t(1),
+        v<int64_t>(run_simple_agg(
+            "SELECT count(*) FROM (SELECT rowid FROM count_test GROUP BY rowid LIMIT 1);",
+            dt)));
+    EXPECT_EQ(
+        int64_t(2),
+        v<int64_t>(run_simple_agg(
+            "SELECT count(*) FROM (SELECT rowid FROM count_test GROUP BY rowid LIMIT 2);",
+            dt)));
+    EXPECT_EQ(int64_t(1),
+              v<int64_t>(run_simple_agg("SELECT count(*) FROM (SELECT rowid FROM "
+                                        "count_test GROUP BY rowid LIMIT 1 OFFSET 1);",
+                                        dt)));
+    EXPECT_EQ(int64_t(2),
+              v<int64_t>(run_simple_agg("SELECT count(*) FROM (SELECT rowid FROM "
+                                        "count_test GROUP BY rowid LIMIT 2 OFFSET 1);",
+                                        dt)));
+    EXPECT_EQ(int64_t(2),
+              v<int64_t>(run_simple_agg("SELECT count(*) FROM (SELECT rowid FROM "
+                                        "count_test GROUP BY rowid LIMIT 2 OFFSET 9);",
+                                        dt)));
+    EXPECT_EQ(int64_t(1),
+              v<int64_t>(run_simple_agg("SELECT count(*) FROM (SELECT rowid FROM "
+                                        "count_test GROUP BY rowid LIMIT 2 OFFSET " +
+                                            std::to_string(size - 1) + ");",
+                                        dt)));
+    EXPECT_EQ(int64_t(2),
+              v<int64_t>(run_simple_agg("SELECT count(*) FROM (SELECT rowid FROM "
+                                        "count_test GROUP BY rowid LIMIT 2 OFFSET 8);",
+                                        dt)));
+    EXPECT_EQ(int64_t(1),
+              v<int64_t>(run_simple_agg("SELECT count(*) FROM (SELECT rowid FROM "
+                                        "count_test GROUP BY rowid LIMIT 1 OFFSET 8);",
+                                        dt)));
+  }
+}
+
 TEST(Select, CountDistinct) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
@@ -20374,7 +20565,7 @@ int main(int argc, char** argv) {
 
   const bool use_existing_data = vm.count("use-existing-data");
   int err{0};
-  if (use_existing_data) {
+  if (use_existing_data && !vm.count("gtest_filter")) {
     testing::GTEST_FLAG(filter) = "Select*";
   } else {
     err = create_and_populate_tables(g_use_temporary_tables);
