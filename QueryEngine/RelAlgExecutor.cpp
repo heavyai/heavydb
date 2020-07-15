@@ -1387,6 +1387,8 @@ void RelAlgExecutor::executeUpdate(const RelAlgNode* node,
               if (update_params.tableIsTemporary()) {
                 eo.output_columnar_hint = true;
                 co_project.allow_lazy_fetch = false;
+                co_project.add_delete_column =
+                    false;  // project the entire delete column for columnar update
               }
 
               auto update_callback = yieldUpdateCallback(update_params);

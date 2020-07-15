@@ -15459,6 +15459,13 @@ TEST(Delete, MultiDelete) {
     run_multiple_agg("DELETE FROM multi_delete WHERE x = 1;", dt);
 
     EXPECT_EQ(9, v<int64_t>(run_simple_agg("SELECT SUM(x) FROM multi_delete", dt)));
+
+    run_multiple_agg("UPDATE multi_delete SET x = NULL WHERE str = 'hello';", dt);
+
+    EXPECT_EQ(5, v<int64_t>(run_simple_agg("SELECT SUM(x) FROM multi_delete", dt)));
+    EXPECT_EQ(1,
+              v<int64_t>(run_simple_agg(
+                  "SELECT COUNT(*) FROM multi_delete WHERE x IS NULL;", dt)));
   }
 }
 
