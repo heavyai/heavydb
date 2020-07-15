@@ -35,14 +35,14 @@ class DateTimeTranslator {
       if (is_subsecond_extract_field(field)) {
         const auto result =
             get_extract_high_precision_adjusted_scale(field, ti.get_dimension());
-        return result.second
-                   ? ExtractFromTime(field,
-                                     result.first == kDIVIDE ? timeval / result.second
-                                                             : timeval * result.second)
-                   : ExtractFromTime(field, timeval);
+        return result.second ? ExtractFromTime(field,
+                                               result.first == kDIVIDE
+                                                   ? floor_div(timeval, result.second)
+                                                   : timeval * result.second)
+                             : ExtractFromTime(field, timeval);
       } else {
         return ExtractFromTime(
-            field, timeval / get_timestamp_precision_scale(ti.get_dimension()));
+            field, floor_div(timeval, get_timestamp_precision_scale(ti.get_dimension())));
       }
     } else if (is_subsecond_extract_field(field)) {
       return ExtractFromTime(field,
@@ -56,12 +56,15 @@ class DateTimeTranslator {
                                                   const SQLTypeInfo& ti) {
     if (ti.is_high_precision_timestamp()) {
       if (is_subsecond_datetrunc_field(field)) {
+        int64_t date_truncate = DateTruncate(field, timeval);
         const auto result = get_datetrunc_high_precision_scale(field, ti.get_dimension());
-        return result != -1 ? (DateTruncate(field, timeval) / result) * result
-                            : DateTruncate(field, timeval);
+        if (result != -1) {
+          date_truncate -= unsigned_mod(date_truncate, result);
+        }
+        return date_truncate;
       } else {
         const int64_t scale = get_timestamp_precision_scale(ti.get_dimension());
-        return DateTruncate(field, timeval / scale) * scale;
+        return DateTruncate(field, floor_div(timeval, scale)) * scale;
       }
     }
     return DateTruncate(field, timeval);

@@ -1000,10 +1000,14 @@ public class DateTimeTest {
   }
 
   public static void main(String[] args) throws Exception {
-    long seed = System.currentTimeMillis();
+    long seed;
 
     // to reproduce a previous run, use the same seed
-    // seed = 1593081011125L;
+    if (0 < args.length) {
+      seed = Long.parseLong(args[0], 10);
+    } else {
+      seed = System.currentTimeMillis();
+    }
 
     System.out.println("Seed: " + seed);
     Random r = new Random(seed);

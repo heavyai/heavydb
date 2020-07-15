@@ -28,11 +28,12 @@
 #include <stdexcept>
 #include <string>
 
-#include "Logger.h"
-#include "StringTransform.h"
-
 #include "DateConverters.h"
+#include "Logger.h"
+#include "QueryEngine/DateTimeUtils.h"
+#include "StringTransform.h"
 #include "TimeGM.h"
+#include "misc.h"
 #include "sqltypes.h"
 
 std::string SQLTypeInfo::type_name[kSQLTYPE_LAST] = {"NULL",
@@ -227,6 +228,9 @@ bool DatumEqual(const Datum a, const Datum b, const SQLTypeInfo& ti) {
  * @brief convert datum to string
  */
 std::string DatumToString(Datum d, const SQLTypeInfo& ti) {
+  constexpr size_t buf_size = 32;
+  char buf[buf_size];  // Hold "2000-03-01 12:34:56.123456789" and large years.
+  static_assert(sizeof(int64_t) <= sizeof(time_t));
   switch (ti.get_type()) {
     case kBOOLEAN:
       if (d.boolval) {
@@ -256,35 +260,37 @@ std::string DatumToString(Datum d, const SQLTypeInfo& ti) {
     case kTIME: {
       std::tm tm_struct;
       gmtime_r(reinterpret_cast<time_t*>(&d.bigintval), &tm_struct);
-      char buf[9];
-      strftime(buf, 9, "%T", &tm_struct);
+      strftime(buf, buf_size, "%T", &tm_struct);
       return std::string(buf);
     }
     case kTIMESTAMP: {
-      std::tm tm_struct{0};
-      if (ti.get_dimension() > 0) {
-        std::string t = std::to_string(d.bigintval);
-        int cp = std::max(static_cast<int>(t.length()) - ti.get_dimension(), 1);
-        time_t sec = std::stoll(t.substr(0, cp));
-        t = t.substr(cp);
+      std::tm tm_struct;
+      if (ti.is_high_precision_timestamp()) {
+        auto scale = DateTimeUtils::get_timestamp_precision_scale(ti.get_dimension());
+        time_t const sec = static_cast<time_t>(floor_div(d.bigintval, scale));
+        int const frac = unsigned_mod(d.bigintval, scale);
         gmtime_r(&sec, &tm_struct);
-        char buf[21];
-        strftime(buf, 21, "%F %T.", &tm_struct);
-        return std::string(buf) += t;
+        size_t const datetime_len = shared::formatDateTime(buf, buf_size, &tm_struct);
+        CHECK_LE(19u, datetime_len);         // 19 == strlen("YYYY-MM-DD HH:MM:SS")
+        constexpr size_t max_frac_len = 10;  // == strlen(".123456789")
+        CHECK_LT(datetime_len + max_frac_len, buf_size);
+        int const frac_len = snprintf(
+            buf + datetime_len, max_frac_len + 1, ".%0*d", ti.get_dimension(), frac);
+        CHECK_EQ(frac_len, 1 + ti.get_dimension());
       } else {
-        time_t sec = static_cast<time_t>(d.bigintval);
+        time_t const sec = static_cast<time_t>(d.bigintval);
         gmtime_r(&sec, &tm_struct);
-        char buf[20];
-        strftime(buf, 20, "%F %T", &tm_struct);
-        return std::string(buf);
+        size_t const datetime_len = shared::formatDateTime(buf, buf_size, &tm_struct);
+        CHECK_LT(0u, datetime_len);
       }
+      return buf;
     }
     case kDATE: {
       std::tm tm_struct;
       time_t ntimeval = static_cast<time_t>(d.bigintval);
       gmtime_r(&ntimeval, &tm_struct);
-      char buf[11];
-      strftime(buf, 11, "%F", &tm_struct);
+      size_t const date_len = shared::formatDate(buf, buf_size, &tm_struct);
+      CHECK_LE(10u, date_len);  // 10 == strlen("YYYY-MM-DD")
       return std::string(buf);
     }
     case kINTERVAL_DAY_TIME:

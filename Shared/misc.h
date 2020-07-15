@@ -17,6 +17,7 @@
 #ifndef SHARED_MISC_H
 #define SHARED_MISC_H
 
+#include <ctime>
 #include <deque>
 #include <list>
 #include <set>
@@ -98,6 +99,24 @@ OSTREAM& operator<<(OSTREAM& os, PrintContainer<CONTAINER> pc) {
     return os << ')';
   }
 }
+
+// Same as strftime(buf, max, "%F", tm) but guarantees that the year is
+// zero-padded to a minimum length of 4, and may be larger.
+size_t formatDate(char* buf, size_t const max, std::tm const* tm);
+
+// Same as strftime(buf, max, "%F %T", tm) but guarantees that the year is
+// zero-padded to a minimum length of 4, and may be larger.
+size_t formatDateTime(char* buf, size_t const max, std::tm const* tm);
+
+// Safely write at most max chars (including terminating null byte) to buf
+// of the *tm year. At a minimum it will be 0-padded to 4 characters in length
+// but allows for more digits beyond the year 9999. Like strftime(), the length
+// of the string (not including null type) is returned, or 0 if max was not
+// large enough to hold the string.
+// This function is motivated by the observation that different compilers may write
+// %F and %Y differently. E.g. Day 1 = "0001-01-01" has been output as "1-01-01"
+// on Linux but as "0001-01-01" on Mac.
+size_t formatYear(char* buf, size_t const max, std::tm const* tm);
 
 }  // namespace shared
 

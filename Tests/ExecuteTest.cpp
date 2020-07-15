@@ -4814,6 +4814,216 @@ TEST(Select, DateTruncate) {
   }
 }
 
+namespace {
+std::string date_trunc(std::string const& unit, char const* ts, ExecutorDeviceType dt) {
+  std::string const query =
+      "SELECT CAST(DATE_TRUNC('" + unit + "', TIMESTAMP '" + ts + "') AS TEXT);";
+  return boost::get<std::string>(v<NullableString>(run_simple_agg(query, dt)));
+}
+}  // namespace
+
+TEST(Select, DateTruncate2) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+
+    ASSERT_EQ("1900-01-01 12:34:59", date_trunc("SECOND", "1900-01-01 12:34:59", dt));
+    ASSERT_EQ("1900-01-01 12:35:00", date_trunc("SECOND", "1900-01-01 12:35:00", dt));
+    ASSERT_EQ("3900-01-01 12:34:59", date_trunc("SECOND", "3900-01-01 12:34:59", dt));
+    ASSERT_EQ("3900-01-01 12:35:00", date_trunc("SECOND", "3900-01-01 12:35:00", dt));
+
+    ASSERT_EQ("1900-01-01 12:34:00", date_trunc("MINUTE", "1900-01-01 12:34:59", dt));
+    ASSERT_EQ("1900-01-01 12:35:00", date_trunc("MINUTE", "1900-01-01 12:35:00", dt));
+    ASSERT_EQ("3900-01-01 12:34:00", date_trunc("MINUTE", "3900-01-01 12:34:59", dt));
+    ASSERT_EQ("3900-01-01 12:35:00", date_trunc("MINUTE", "3900-01-01 12:35:00", dt));
+
+    ASSERT_EQ("1900-01-01 12:00:00", date_trunc("HOUR", "1900-01-01 12:59:59", dt));
+    ASSERT_EQ("1900-01-01 13:00:00", date_trunc("HOUR", "1900-01-01 13:00:00", dt));
+    ASSERT_EQ("3900-01-01 12:00:00", date_trunc("HOUR", "3900-01-01 12:59:59", dt));
+    ASSERT_EQ("3900-01-01 13:00:00", date_trunc("HOUR", "3900-01-01 13:00:00", dt));
+
+    ASSERT_EQ("1900-01-01 00:00:00", date_trunc("QUARTERDAY", "1900-01-01 00:00:00", dt));
+    ASSERT_EQ("1900-01-01 00:00:00", date_trunc("QUARTERDAY", "1900-01-01 05:59:59", dt));
+    ASSERT_EQ("1900-01-01 06:00:00", date_trunc("QUARTERDAY", "1900-01-01 06:00:00", dt));
+    ASSERT_EQ("1900-01-01 06:00:00", date_trunc("QUARTERDAY", "1900-01-01 11:59:59", dt));
+    ASSERT_EQ("1900-01-01 12:00:00", date_trunc("QUARTERDAY", "1900-01-01 12:00:00", dt));
+    ASSERT_EQ("1900-01-01 12:00:00", date_trunc("QUARTERDAY", "1900-01-01 17:59:59", dt));
+    ASSERT_EQ("1900-01-01 18:00:00", date_trunc("QUARTERDAY", "1900-01-01 18:00:00", dt));
+    ASSERT_EQ("1900-01-01 18:00:00", date_trunc("QUARTERDAY", "1900-01-01 23:59:59", dt));
+    ASSERT_EQ("3900-01-01 00:00:00", date_trunc("QUARTERDAY", "3900-01-01 00:00:00", dt));
+    ASSERT_EQ("3900-01-01 00:00:00", date_trunc("QUARTERDAY", "3900-01-01 05:59:59", dt));
+    ASSERT_EQ("3900-01-01 06:00:00", date_trunc("QUARTERDAY", "3900-01-01 06:00:00", dt));
+    ASSERT_EQ("3900-01-01 06:00:00", date_trunc("QUARTERDAY", "3900-01-01 11:59:59", dt));
+    ASSERT_EQ("3900-01-01 12:00:00", date_trunc("QUARTERDAY", "3900-01-01 12:00:00", dt));
+    ASSERT_EQ("3900-01-01 12:00:00", date_trunc("QUARTERDAY", "3900-01-01 17:59:59", dt));
+    ASSERT_EQ("3900-01-01 18:00:00", date_trunc("QUARTERDAY", "3900-01-01 18:00:00", dt));
+    ASSERT_EQ("3900-01-01 18:00:00", date_trunc("QUARTERDAY", "3900-01-01 23:59:59", dt));
+
+    ASSERT_EQ("1900-01-01 00:00:00", date_trunc("DAY", "1900-01-01 00:00:00", dt));
+    ASSERT_EQ("1900-01-01 00:00:00", date_trunc("DAY", "1900-01-01 23:59:59", dt));
+    ASSERT_EQ("3900-01-01 00:00:00", date_trunc("DAY", "3900-01-01 00:00:00", dt));
+    ASSERT_EQ("3900-01-01 00:00:00", date_trunc("DAY", "3900-01-01 23:59:59", dt));
+
+    // 1900-01-01 is a Monday (= start of "WEEK").
+    ASSERT_EQ("1900-01-01 00:00:00", date_trunc("WEEK", "1900-01-01 00:00:00", dt));
+    ASSERT_EQ("1900-01-01 00:00:00", date_trunc("WEEK", "1900-01-07 23:59:59", dt));
+    ASSERT_EQ("1900-01-08 00:00:00", date_trunc("WEEK", "1900-01-08 00:00:00", dt));
+    ASSERT_EQ("1900-01-08 00:00:00", date_trunc("WEEK", "1900-01-14 23:59:59", dt));
+    ASSERT_EQ("3900-01-01 00:00:00", date_trunc("WEEK", "3900-01-01 00:00:00", dt));
+    ASSERT_EQ("3900-01-01 00:00:00", date_trunc("WEEK", "3900-01-07 23:59:59", dt));
+    ASSERT_EQ("3900-01-08 00:00:00", date_trunc("WEEK", "3900-01-08 00:00:00", dt));
+    ASSERT_EQ("3900-01-08 00:00:00", date_trunc("WEEK", "3900-01-14 23:59:59", dt));
+
+    ASSERT_EQ("1900-01-01 00:00:00", date_trunc("MONTH", "1900-01-01 00:00:00", dt));
+    ASSERT_EQ("1900-01-01 00:00:00", date_trunc("MONTH", "1900-01-31 23:59:59", dt));
+    ASSERT_EQ("1900-02-01 00:00:00", date_trunc("MONTH", "1900-02-01 00:00:00", dt));
+    ASSERT_EQ("1900-02-01 00:00:00", date_trunc("MONTH", "1900-02-28 23:59:59", dt));
+    ASSERT_EQ("1900-03-01 00:00:00", date_trunc("MONTH", "1900-03-01 00:00:00", dt));
+    ASSERT_EQ("1900-03-01 00:00:00", date_trunc("MONTH", "1900-03-31 23:59:59", dt));
+    ASSERT_EQ("1900-04-01 00:00:00", date_trunc("MONTH", "1900-04-01 00:00:00", dt));
+    ASSERT_EQ("1900-04-01 00:00:00", date_trunc("MONTH", "1900-04-30 23:59:59", dt));
+    ASSERT_EQ("1900-05-01 00:00:00", date_trunc("MONTH", "1900-05-01 00:00:00", dt));
+    ASSERT_EQ("1900-05-01 00:00:00", date_trunc("MONTH", "1900-05-31 23:59:59", dt));
+    ASSERT_EQ("1900-06-01 00:00:00", date_trunc("MONTH", "1900-06-01 00:00:00", dt));
+    ASSERT_EQ("1900-06-01 00:00:00", date_trunc("MONTH", "1900-06-30 23:59:59", dt));
+    ASSERT_EQ("1900-07-01 00:00:00", date_trunc("MONTH", "1900-07-01 00:00:00", dt));
+    ASSERT_EQ("1900-07-01 00:00:00", date_trunc("MONTH", "1900-07-31 23:59:59", dt));
+    ASSERT_EQ("1900-08-01 00:00:00", date_trunc("MONTH", "1900-08-01 00:00:00", dt));
+    ASSERT_EQ("1900-08-01 00:00:00", date_trunc("MONTH", "1900-08-31 23:59:59", dt));
+    ASSERT_EQ("1900-09-01 00:00:00", date_trunc("MONTH", "1900-09-01 00:00:00", dt));
+    ASSERT_EQ("1900-09-01 00:00:00", date_trunc("MONTH", "1900-09-30 23:59:59", dt));
+    ASSERT_EQ("1900-10-01 00:00:00", date_trunc("MONTH", "1900-10-01 00:00:00", dt));
+    ASSERT_EQ("1900-10-01 00:00:00", date_trunc("MONTH", "1900-10-31 23:59:59", dt));
+    ASSERT_EQ("1900-11-01 00:00:00", date_trunc("MONTH", "1900-11-01 00:00:00", dt));
+    ASSERT_EQ("1900-11-01 00:00:00", date_trunc("MONTH", "1900-11-30 23:59:59", dt));
+    ASSERT_EQ("1900-12-01 00:00:00", date_trunc("MONTH", "1900-12-01 00:00:00", dt));
+    ASSERT_EQ("1900-12-01 00:00:00", date_trunc("MONTH", "1900-12-31 23:59:59", dt));
+
+    ASSERT_EQ("2000-01-01 00:00:00", date_trunc("MONTH", "2000-01-01 00:00:00", dt));
+    ASSERT_EQ("2000-01-01 00:00:00", date_trunc("MONTH", "2000-01-31 23:59:59", dt));
+    ASSERT_EQ("2000-02-01 00:00:00", date_trunc("MONTH", "2000-02-01 00:00:00", dt));
+    ASSERT_EQ("2000-02-01 00:00:00", date_trunc("MONTH", "2000-02-29 23:59:59", dt));
+    ASSERT_EQ("2000-03-01 00:00:00", date_trunc("MONTH", "2000-03-01 00:00:00", dt));
+    ASSERT_EQ("2000-03-01 00:00:00", date_trunc("MONTH", "2000-03-31 23:59:59", dt));
+    ASSERT_EQ("2000-04-01 00:00:00", date_trunc("MONTH", "2000-04-01 00:00:00", dt));
+    ASSERT_EQ("2000-04-01 00:00:00", date_trunc("MONTH", "2000-04-30 23:59:59", dt));
+    ASSERT_EQ("2000-05-01 00:00:00", date_trunc("MONTH", "2000-05-01 00:00:00", dt));
+    ASSERT_EQ("2000-05-01 00:00:00", date_trunc("MONTH", "2000-05-31 23:59:59", dt));
+    ASSERT_EQ("2000-06-01 00:00:00", date_trunc("MONTH", "2000-06-01 00:00:00", dt));
+    ASSERT_EQ("2000-06-01 00:00:00", date_trunc("MONTH", "2000-06-30 23:59:59", dt));
+    ASSERT_EQ("2000-07-01 00:00:00", date_trunc("MONTH", "2000-07-01 00:00:00", dt));
+    ASSERT_EQ("2000-07-01 00:00:00", date_trunc("MONTH", "2000-07-31 23:59:59", dt));
+    ASSERT_EQ("2000-08-01 00:00:00", date_trunc("MONTH", "2000-08-01 00:00:00", dt));
+    ASSERT_EQ("2000-08-01 00:00:00", date_trunc("MONTH", "2000-08-31 23:59:59", dt));
+    ASSERT_EQ("2000-09-01 00:00:00", date_trunc("MONTH", "2000-09-01 00:00:00", dt));
+    ASSERT_EQ("2000-09-01 00:00:00", date_trunc("MONTH", "2000-09-30 23:59:59", dt));
+    ASSERT_EQ("2000-10-01 00:00:00", date_trunc("MONTH", "2000-10-01 00:00:00", dt));
+    ASSERT_EQ("2000-10-01 00:00:00", date_trunc("MONTH", "2000-10-31 23:59:59", dt));
+    ASSERT_EQ("2000-11-01 00:00:00", date_trunc("MONTH", "2000-11-01 00:00:00", dt));
+    ASSERT_EQ("2000-11-01 00:00:00", date_trunc("MONTH", "2000-11-30 23:59:59", dt));
+    ASSERT_EQ("2000-12-01 00:00:00", date_trunc("MONTH", "2000-12-01 00:00:00", dt));
+    ASSERT_EQ("2000-12-01 00:00:00", date_trunc("MONTH", "2000-12-31 23:59:59", dt));
+
+    ASSERT_EQ("3900-01-01 00:00:00", date_trunc("MONTH", "3900-01-01 00:00:00", dt));
+    ASSERT_EQ("3900-01-01 00:00:00", date_trunc("MONTH", "3900-01-31 23:59:59", dt));
+    ASSERT_EQ("3900-02-01 00:00:00", date_trunc("MONTH", "3900-02-01 00:00:00", dt));
+    ASSERT_EQ("3900-02-01 00:00:00", date_trunc("MONTH", "3900-02-28 23:59:59", dt));
+    ASSERT_EQ("3900-03-01 00:00:00", date_trunc("MONTH", "3900-03-01 00:00:00", dt));
+    ASSERT_EQ("3900-03-01 00:00:00", date_trunc("MONTH", "3900-03-31 23:59:59", dt));
+    ASSERT_EQ("3900-04-01 00:00:00", date_trunc("MONTH", "3900-04-01 00:00:00", dt));
+    ASSERT_EQ("3900-04-01 00:00:00", date_trunc("MONTH", "3900-04-30 23:59:59", dt));
+    ASSERT_EQ("3900-05-01 00:00:00", date_trunc("MONTH", "3900-05-01 00:00:00", dt));
+    ASSERT_EQ("3900-05-01 00:00:00", date_trunc("MONTH", "3900-05-31 23:59:59", dt));
+    ASSERT_EQ("3900-06-01 00:00:00", date_trunc("MONTH", "3900-06-01 00:00:00", dt));
+    ASSERT_EQ("3900-06-01 00:00:00", date_trunc("MONTH", "3900-06-30 23:59:59", dt));
+    ASSERT_EQ("3900-07-01 00:00:00", date_trunc("MONTH", "3900-07-01 00:00:00", dt));
+    ASSERT_EQ("3900-07-01 00:00:00", date_trunc("MONTH", "3900-07-31 23:59:59", dt));
+    ASSERT_EQ("3900-08-01 00:00:00", date_trunc("MONTH", "3900-08-01 00:00:00", dt));
+    ASSERT_EQ("3900-08-01 00:00:00", date_trunc("MONTH", "3900-08-31 23:59:59", dt));
+    ASSERT_EQ("3900-09-01 00:00:00", date_trunc("MONTH", "3900-09-01 00:00:00", dt));
+    ASSERT_EQ("3900-09-01 00:00:00", date_trunc("MONTH", "3900-09-30 23:59:59", dt));
+    ASSERT_EQ("3900-10-01 00:00:00", date_trunc("MONTH", "3900-10-01 00:00:00", dt));
+    ASSERT_EQ("3900-10-01 00:00:00", date_trunc("MONTH", "3900-10-31 23:59:59", dt));
+    ASSERT_EQ("3900-11-01 00:00:00", date_trunc("MONTH", "3900-11-01 00:00:00", dt));
+    ASSERT_EQ("3900-11-01 00:00:00", date_trunc("MONTH", "3900-11-30 23:59:59", dt));
+    ASSERT_EQ("3900-12-01 00:00:00", date_trunc("MONTH", "3900-12-01 00:00:00", dt));
+    ASSERT_EQ("3900-12-01 00:00:00", date_trunc("MONTH", "3900-12-31 23:59:59", dt));
+
+    ASSERT_EQ("1900-01-01 00:00:00", date_trunc("QUARTER", "1900-01-01 00:00:00", dt));
+    ASSERT_EQ("1900-01-01 00:00:00", date_trunc("QUARTER", "1900-03-31 23:59:59", dt));
+    ASSERT_EQ("1900-04-01 00:00:00", date_trunc("QUARTER", "1900-04-01 00:00:00", dt));
+    ASSERT_EQ("1900-04-01 00:00:00", date_trunc("QUARTER", "1900-06-30 23:59:59", dt));
+    ASSERT_EQ("1900-07-01 00:00:00", date_trunc("QUARTER", "1900-07-01 00:00:00", dt));
+    ASSERT_EQ("1900-07-01 00:00:00", date_trunc("QUARTER", "1900-09-30 23:59:59", dt));
+    ASSERT_EQ("1900-10-01 00:00:00", date_trunc("QUARTER", "1900-10-01 00:00:00", dt));
+    ASSERT_EQ("1900-10-01 00:00:00", date_trunc("QUARTER", "1900-12-31 23:59:59", dt));
+
+    ASSERT_EQ("2000-01-01 00:00:00", date_trunc("QUARTER", "2000-01-01 00:00:00", dt));
+    ASSERT_EQ("2000-01-01 00:00:00", date_trunc("QUARTER", "2000-03-31 23:59:59", dt));
+    ASSERT_EQ("2000-04-01 00:00:00", date_trunc("QUARTER", "2000-04-01 00:00:00", dt));
+    ASSERT_EQ("2000-04-01 00:00:00", date_trunc("QUARTER", "2000-06-30 23:59:59", dt));
+    ASSERT_EQ("2000-07-01 00:00:00", date_trunc("QUARTER", "2000-07-01 00:00:00", dt));
+    ASSERT_EQ("2000-07-01 00:00:00", date_trunc("QUARTER", "2000-09-30 23:59:59", dt));
+    ASSERT_EQ("2000-10-01 00:00:00", date_trunc("QUARTER", "2000-10-01 00:00:00", dt));
+    ASSERT_EQ("2000-10-01 00:00:00", date_trunc("QUARTER", "2000-12-31 23:59:59", dt));
+
+    ASSERT_EQ("3900-01-01 00:00:00", date_trunc("QUARTER", "3900-01-01 00:00:00", dt));
+    ASSERT_EQ("3900-01-01 00:00:00", date_trunc("QUARTER", "3900-03-31 23:59:59", dt));
+    ASSERT_EQ("3900-04-01 00:00:00", date_trunc("QUARTER", "3900-04-01 00:00:00", dt));
+    ASSERT_EQ("3900-04-01 00:00:00", date_trunc("QUARTER", "3900-06-30 23:59:59", dt));
+    ASSERT_EQ("3900-07-01 00:00:00", date_trunc("QUARTER", "3900-07-01 00:00:00", dt));
+    ASSERT_EQ("3900-07-01 00:00:00", date_trunc("QUARTER", "3900-09-30 23:59:59", dt));
+    ASSERT_EQ("3900-10-01 00:00:00", date_trunc("QUARTER", "3900-10-01 00:00:00", dt));
+    ASSERT_EQ("3900-10-01 00:00:00", date_trunc("QUARTER", "3900-12-31 23:59:59", dt));
+
+    ASSERT_EQ("1900-01-01 00:00:00", date_trunc("YEAR", "1900-01-01 00:00:00", dt));
+    ASSERT_EQ("1900-01-01 00:00:00", date_trunc("YEAR", "1900-12-31 23:59:59", dt));
+    ASSERT_EQ("1901-01-01 00:00:00", date_trunc("YEAR", "1901-01-01 00:00:00", dt));
+    ASSERT_EQ("1901-01-01 00:00:00", date_trunc("YEAR", "1901-12-31 23:59:59", dt));
+
+    ASSERT_EQ("2000-01-01 00:00:00", date_trunc("YEAR", "2000-01-01 00:00:00", dt));
+    ASSERT_EQ("2000-01-01 00:00:00", date_trunc("YEAR", "2000-12-31 23:59:59", dt));
+    ASSERT_EQ("2001-01-01 00:00:00", date_trunc("YEAR", "2001-01-01 00:00:00", dt));
+    ASSERT_EQ("2001-01-01 00:00:00", date_trunc("YEAR", "2001-12-31 23:59:59", dt));
+
+    ASSERT_EQ("3900-01-01 00:00:00", date_trunc("YEAR", "3900-01-01 00:00:00", dt));
+    ASSERT_EQ("3900-01-01 00:00:00", date_trunc("YEAR", "3900-12-31 23:59:59", dt));
+    ASSERT_EQ("3901-01-01 00:00:00", date_trunc("YEAR", "3901-01-01 00:00:00", dt));
+    ASSERT_EQ("3901-01-01 00:00:00", date_trunc("YEAR", "3901-12-31 23:59:59", dt));
+
+    ASSERT_EQ("1900-01-01 00:00:00", date_trunc("DECADE", "1900-01-01 00:00:00", dt));
+    ASSERT_EQ("1900-01-01 00:00:00", date_trunc("DECADE", "1909-12-31 23:59:59", dt));
+    ASSERT_EQ("1910-01-01 00:00:00", date_trunc("DECADE", "1910-01-01 00:00:00", dt));
+    ASSERT_EQ("1910-01-01 00:00:00", date_trunc("DECADE", "1919-12-31 23:59:59", dt));
+
+    ASSERT_EQ("3900-01-01 00:00:00", date_trunc("DECADE", "3900-01-01 00:00:00", dt));
+    ASSERT_EQ("3900-01-01 00:00:00", date_trunc("DECADE", "3909-12-31 23:59:59", dt));
+    ASSERT_EQ("3910-01-01 00:00:00", date_trunc("DECADE", "3910-01-01 00:00:00", dt));
+    ASSERT_EQ("3910-01-01 00:00:00", date_trunc("DECADE", "3919-12-31 23:59:59", dt));
+
+    ASSERT_EQ("1801-01-01 00:00:00", date_trunc("CENTURY", "1801-01-01 00:00:00", dt));
+    ASSERT_EQ("1801-01-01 00:00:00", date_trunc("CENTURY", "1900-12-31 23:59:59", dt));
+    ASSERT_EQ("1901-01-01 00:00:00", date_trunc("CENTURY", "1901-01-01 00:00:00", dt));
+    ASSERT_EQ("1901-01-01 00:00:00", date_trunc("CENTURY", "2000-12-31 23:59:59", dt));
+    ASSERT_EQ("2001-01-01 00:00:00", date_trunc("CENTURY", "2001-01-01 00:00:00", dt));
+    ASSERT_EQ("2001-01-01 00:00:00", date_trunc("CENTURY", "2100-12-31 23:59:59", dt));
+    ASSERT_EQ("3901-01-01 00:00:00", date_trunc("CENTURY", "3901-01-01 00:00:00", dt));
+    ASSERT_EQ("3901-01-01 00:00:00", date_trunc("CENTURY", "4000-12-31 23:59:59", dt));
+
+    ASSERT_EQ("0001-01-01 00:00:00", date_trunc("MILLENNIUM", "0001-01-01 00:00:00", dt));
+    ASSERT_EQ("0001-01-01 00:00:00", date_trunc("MILLENNIUM", "1000-12-31 23:59:59", dt));
+    ASSERT_EQ("1001-01-01 00:00:00", date_trunc("MILLENNIUM", "1001-01-01 00:00:00", dt));
+    ASSERT_EQ("1001-01-01 00:00:00", date_trunc("MILLENNIUM", "1900-12-31 23:59:59", dt));
+    ASSERT_EQ("1001-01-01 00:00:00", date_trunc("MILLENNIUM", "1901-01-01 00:00:00", dt));
+    ASSERT_EQ("1001-01-01 00:00:00", date_trunc("MILLENNIUM", "2000-12-31 23:59:59", dt));
+    ASSERT_EQ("2001-01-01 00:00:00", date_trunc("MILLENNIUM", "2001-01-01 00:00:00", dt));
+    ASSERT_EQ("2001-01-01 00:00:00", date_trunc("MILLENNIUM", "3000-12-31 23:59:59", dt));
+    ASSERT_EQ("3001-01-01 00:00:00", date_trunc("MILLENNIUM", "3001-01-01 00:00:00", dt));
+    ASSERT_EQ("3001-01-01 00:00:00", date_trunc("MILLENNIUM", "4000-12-31 23:59:59", dt));
+    ASSERT_EQ("4001-01-01 00:00:00", date_trunc("MILLENNIUM", "4001-01-01 00:00:00", dt));
+    ASSERT_EQ("4001-01-01 00:00:00", date_trunc("MILLENNIUM", "5000-12-31 23:59:59", dt));
+  }
+}
+
 TEST(Select, TimeRedux) {
   // The time tests need a general cleanup. Collect tests found from specific bugs here so
   // we don't accidentally remove them

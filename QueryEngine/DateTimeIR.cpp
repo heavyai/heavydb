@@ -260,7 +260,7 @@ llvm::Value* CodeGenerator::codegenExtractHighPrecisionTimestamps(
                  ? cgen_state_->ir_builder_.CreateSDiv(
                        ts_lv, cgen_state_->llInt(static_cast<int64_t>(result.second)))
                  : cgen_state_->emitCall(
-                       "div_int64_t_nullable_lhs",
+                       "floor_div_nullable_lhs",
                        {ts_lv,
                         cgen_state_->llInt(static_cast<int64_t>(result.second)),
                         cgen_state_->inlineIntNull(ti)});
@@ -274,7 +274,7 @@ llvm::Value* CodeGenerator::codegenExtractHighPrecisionTimestamps(
                    cgen_state_->llInt(static_cast<int64_t>(
                        get_timestamp_precision_scale(ti.get_dimension()))))
              : cgen_state_->emitCall(
-                   "div_int64_t_nullable_lhs",
+                   "floor_div_nullable_lhs",
                    {ts_lv,
                     cgen_state_->llInt(get_timestamp_precision_scale(ti.get_dimension())),
                     cgen_state_->inlineIntNull(ti)});
@@ -293,7 +293,7 @@ llvm::Value* CodeGenerator::codegenDateTruncHighPrecisionTimestamps(
           ti.get_notnull()
               ? cgen_state_->ir_builder_.CreateSDiv(
                     ts_lv, cgen_state_->llInt(static_cast<int64_t>(result)))
-              : cgen_state_->emitCall("div_int64_t_nullable_lhs",
+              : cgen_state_->emitCall("floor_div_nullable_lhs",
                                       {ts_lv,
                                        cgen_state_->llInt(static_cast<int64_t>(result)),
                                        cgen_state_->inlineIntNull(ti)});
@@ -314,7 +314,7 @@ llvm::Value* CodeGenerator::codegenDateTruncHighPrecisionTimestamps(
   ts_lv = ti.get_notnull()
               ? cgen_state_->ir_builder_.CreateSDiv(
                     ts_lv, cgen_state_->llInt(static_cast<int64_t>(scale)))
-              : cgen_state_->emitCall("div_int64_t_nullable_lhs",
+              : cgen_state_->emitCall("floor_div_nullable_lhs",
                                       {ts_lv,
                                        cgen_state_->llInt(static_cast<int64_t>(scale)),
                                        cgen_state_->inlineIntNull(ti)});
