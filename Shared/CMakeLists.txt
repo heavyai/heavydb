@@ -10,6 +10,7 @@ set(shared_source_files
     StackTrace.cpp
     base64.cpp
     Logger.cpp
+    misc.cpp
     thread_count.cpp
 )
 

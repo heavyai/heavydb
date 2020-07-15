@@ -200,6 +200,18 @@ extern "C" ALWAYS_INLINE int64_t scale_decimal_down_not_nullable(const int64_t o
   return tmp / scale;
 }
 
+// Return floor(dividend / divisor) or NULL if dividend IS NULL.
+// Assumes 0 < divisor.
+extern "C" ALWAYS_INLINE int64_t floor_div_nullable_lhs(const int64_t dividend,
+                                                        const int64_t divisor,
+                                                        const int64_t null_val) {
+  if (dividend == null_val) {
+    return null_val;
+  } else {
+    return (dividend < 0 ? dividend - (divisor - 1) : dividend) / divisor;
+  }
+}
+
 #define DEF_UMINUS_NULLABLE(type, null_type)                                         \
   extern "C" ALWAYS_INLINE type uminus_##type##_nullable(const type operand,         \
                                                          const null_type null_val) { \

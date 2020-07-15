@@ -13,6 +13,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+/*
+ * Thank you Howard Hinnant for public domain date algorithms
+ * http://howardhinnant.github.io/date_algorithms.html
+ */
 
 #include "DateTruncate.h"
 #include "ExtractFromTime.h"
@@ -25,55 +29,11 @@
 #include <ctime>
 #include <iostream>
 
-DEVICE int64_t create_epoch(int32_t year) {
-  // Note this is not general purpose
-  // it has a final assumption that the year being passed can never be a leap
-  // year
-  // use 2001 epoch time 31 March as start
-
-  int64_t new_time = kEpochAdjustedDays * kSecsPerDay;
-  bool forward = true;
-  int32_t years_offset = year - kEpochAdjustedYears;
-  // convert year_offset to positive
-  if (years_offset < 0) {
-    forward = false;
-    years_offset = -years_offset;
-  }
-  // now get number of 400 year cycles in the years_offset;
-
-  int32_t year400 = years_offset / 400;
-  int32_t years_remaining = years_offset - (year400 * 400);
-  int32_t year100 = years_remaining / 100;
-  years_remaining -= year100 * 100;
-  int32_t year4 = years_remaining / 4;
-  years_remaining -= year4 * 4;
-
-  // get new date I know the final year will never be a leap year
-  if (forward) {
-    new_time += (year400 * kDaysPer400Years + year100 * kDaysPer100Years +
-                 year4 * kDaysPer4Years + years_remaining * kDaysPerYear -
-                 kDaysInJanuary - kDaysInFebruary) *
-                kSecsPerDay;
-  } else {
-    new_time -= (year400 * kDaysPer400Years + year100 * kDaysPer100Years +
-                 year4 * kDaysPer4Years + years_remaining * kDaysPerYear +
-                 // one more day for leap year of 2000 when going backward;
-                 1 + kDaysInJanuary + kDaysInFebruary) *
-                kSecsPerDay;
-  };
-
-  return new_time;
-}
-
 /*
  * @brief support the SQL DATE_TRUNC function
  */
 extern "C" NEVER_INLINE DEVICE int64_t DateTruncate(DatetruncField field,
                                                     const int64_t timeval) {
-  STATIC_QUAL const int32_t month_lengths[2][kMonsPerYear] = {
-      {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31},
-      {31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31}};
-
   STATIC_QUAL const uint32_t cumulative_month_epoch_starts[kMonsPerYear] = {0,
                                                                             2678400,
                                                                             5270400,
@@ -90,53 +50,29 @@ extern "C" NEVER_INLINE DEVICE int64_t DateTruncate(DatetruncField field,
       0, 7776000, 15638400, 23587200};
   STATIC_QUAL const uint32_t cumulative_quarter_epoch_starts_leap_year[4] = {
       0, 7862400, 15724800, 23673600};
+  // Number of days from March 1 to Jan 1.
+  constexpr unsigned marjan = 31 + 30 + 31 + 30 + 31 + 31 + 30 + 31 + 30 + 31;
+  constexpr unsigned janmar = 31 + 28;  // leap day handled separately
   switch (field) {
     case dtNANOSECOND:
     case dtMICROSECOND:
     case dtMILLISECOND:
     case dtSECOND:
       return timeval;
-    case dtMINUTE: {
-      int64_t ret = (timeval / kSecsPerMin) * kSecsPerMin;
-      if (timeval < 0 && timeval % kSecsPerMin) {
-        ret -= kSecsPerMin;
-      }
-      return ret;
-    }
-    case dtHOUR: {
-      int64_t ret = (timeval / kSecPerHour) * kSecPerHour;
-      if (timeval < 0 && timeval % kSecPerHour) {
-        ret -= kSecPerHour;
-      }
-      return ret;
-    }
-    case dtQUARTERDAY: {
-      int64_t ret = (timeval / kSecsPerQuarterDay) * kSecsPerQuarterDay;
-      if (timeval < 0 && timeval % kSecsPerQuarterDay) {
-        ret -= kSecsPerQuarterDay;
-      }
-      return ret;
-    }
-    case dtDAY: {
-      int64_t ret = (timeval / kSecsPerDay) * kSecsPerDay;
-      if (timeval < 0 && timeval % kSecsPerDay) {
-        ret -= kSecsPerDay;
-      }
-      return ret;
-    }
-    case dtWEEK: {
-      if (timeval >= 0L && timeval <= UINT32_MAX - (kEpochOffsetYear1900)) {
-        int64_t day = (timeval / kSecsPerDay) * kSecsPerDay;
-        if (timeval % kSecsPerDay) {
-          day -= kSecsPerDay;
-        }
-        int32_t dow = extract_dow(day);
-        return day - ((dow - 1) * kSecsPerDay);
-      }
-      break;
-    }
+    case dtMINUTE:
+      return timeval - unsigned_mod(timeval, kSecsPerMin);
+    case dtHOUR:
+      return timeval - unsigned_mod(timeval, kSecsPerHour);
+    case dtQUARTERDAY:
+      return timeval - unsigned_mod(timeval, kSecsPerQuarterDay);
+    case dtDAY:
+      return timeval - unsigned_mod(timeval, kSecsPerDay);
+    case dtWEEK:
+      // Truncate to Monday. 1 Jan 1970 is a Thursday (+3*kSecsPerDay).
+      return timeval - unsigned_mod(timeval + 3 * kSecsPerDay, 7 * kSecsPerDay);
     case dtMONTH: {
       if (timeval >= 0L && timeval <= UINT32_MAX - (kEpochOffsetYear1900)) {
+        // Handles times from Thu 01 Jan 1970 00:00:00 - Thu 07 Feb 2036 06:28:15.
         uint32_t seconds_march_1900 = timeval + kEpochOffsetYear1900 - kSecsJanToMar1900;
         uint32_t seconds_past_4year_period = seconds_march_1900 % kSecondsPer4YearCycle;
         uint32_t four_year_period_seconds =
@@ -159,11 +95,19 @@ extern "C" NEVER_INLINE DEVICE int64_t DateTruncate(DatetruncField field,
         return (static_cast<int64_t>(four_year_period_seconds) +
                 year_seconds_past_4year_period + cumulative_month_epoch_starts[month] -
                 kEpochOffsetYear1900 + kSecsJanToMar1900);
+      } else {
+        int64_t const day = floor_div(timeval, kSecsPerDay);
+        unsigned const doe = unsigned_mod(day - kEpochAdjustedDays, kDaysPer400Years);
+        unsigned const yoe = (doe - doe / 1460 + doe / 36524 - (doe == 146096)) / 365;
+        unsigned const doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+        unsigned const moe = (5 * doy + 2) / 153;
+        unsigned const dom = doy - (153 * moe + 2) / 5;
+        return (day - dom) * kSecsPerDay;
       }
-      break;
     }
     case dtQUARTER: {
       if (timeval >= 0L && timeval <= UINT32_MAX - kEpochOffsetYear1900) {
+        // Handles times from Thu 01 Jan 1970 00:00:00 - Thu 07 Feb 2036 06:28:15.
         uint32_t seconds_1900 = timeval + kEpochOffsetYear1900;
         uint32_t leap_years = (seconds_1900 - kSecsJanToMar1900) / kSecondsPer4YearCycle;
         uint32_t year =
@@ -183,11 +127,26 @@ extern "C" NEVER_INLINE DEVICE int64_t DateTruncate(DatetruncField field,
         }
         return (static_cast<int64_t>(base_year_seconds) + quarter_offsets[quarter] -
                 kEpochOffsetYear1900);
+      } else {
+        int64_t const day = floor_div(timeval, kSecsPerDay);
+        unsigned const doe = unsigned_mod(day - kEpochAdjustedDays, kDaysPer400Years);
+        unsigned const yoe = (doe - doe / 1460 + doe / 36524 - (doe == 146096)) / 365;
+        unsigned const doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+        constexpr unsigned apr1 = 31;  // Days in march
+        unsigned doq;  // Day-of-quarter = Days since last Apr1, Jul1, Oct1, Jan1.
+        if (doy < apr1) {
+          bool const leap = yoe % 4 == 0 && (yoe % 100 != 0 || yoe == 0);
+          doq = janmar + leap + doy;  // Q1
+        } else {
+          unsigned const q = (3 * (doy - apr1) + 2) / 275;  // quarter = 0, 1, 2
+          doq = doy - (apr1 + q * 92 - (q != 0));           // Q2, Q3, Q4
+        }
+        return (day - doq) * kSecsPerDay;
       }
-      break;
     }
     case dtYEAR: {
       if (timeval >= 0L && timeval <= UINT32_MAX - kEpochOffsetYear1900) {
+        // Handles times from Thu 01 Jan 1970 00:00:00 - Thu 07 Feb 2036 06:28:15.
         uint32_t seconds_1900 = static_cast<uint32_t>(timeval) + kEpochOffsetYear1900;
         uint32_t leap_years = (seconds_1900 - kSecsJanToMar1900) / kSecondsPer4YearCycle;
         uint32_t year =
@@ -195,107 +154,58 @@ extern "C" NEVER_INLINE DEVICE int64_t DateTruncate(DatetruncField field,
         uint32_t base_year_leap_years = (year - 1) / 4;
         return (static_cast<int64_t>(year) * kSecondsPerNonLeapYear +
                 base_year_leap_years * kUSecsPerDay - kEpochOffsetYear1900);
-      }
-      break;
-    }
-    default:
-      break;
-  }
-
-  // use ExtractFromTime functions where available
-  // have to do some extra work for these ones
-  tm tm_struct;
-  gmtime_r_newlib(timeval, tm_struct);
-  switch (field) {
-    case dtWEEK: {
-      // clear the time
-      int64_t day = (timeval / kSecsPerDay) * kSecsPerDay;
-      if (tm_struct.tm_hour >= 12) {
-        day -= kSecsPerDay;
-      }
-      // calculate the day of week
-      int32_t dow = tm_struct.tm_wday;
-      // offset to start of week
-      return day - (static_cast<int64_t>(dow - 1) * kSecsPerDay);
-    }
-    case dtMONTH: {
-      // clear the time
-      int64_t day = (timeval / kSecsPerDay) * kSecsPerDay;
-      if (tm_struct.tm_hour >= 12) {
-        day -= kSecsPerDay;
-      }
-      // calculate the day of month offset
-      int32_t dom = tm_struct.tm_mday;
-      return (day - (static_cast<int64_t>(dom - 1) * kSecsPerDay));
-    }
-    case dtQUARTER: {
-      // clear the time
-      int64_t day = (timeval / kSecsPerDay) * kSecsPerDay;
-      if (tm_struct.tm_hour >= 12) {
-        day -= kSecsPerDay;
-      }
-      // calculate the day of month offset
-      int32_t dom = tm_struct.tm_mday;
-      // go to the start of the current month
-      day = day - ((dom - 1) * kSecsPerDay);
-      // find what month we are
-      int32_t mon = tm_struct.tm_mon;
-      // find start of quarter
-      int32_t start_of_quarter = tm_struct.tm_mon / 3 * 3;
-      int32_t year = tm_struct.tm_year + kYearBase;
-      // are we in a leap year
-      int32_t leap_year = 0;
-      // only matters if month is March so save some mod operations
-      if (mon == 2) {
-        if (((year % 400) == 0) || ((year % 4) == 0 && ((year % 100) != 0))) {
-          leap_year = 1;
+      } else {
+        int64_t const day = floor_div(timeval, kSecsPerDay);
+        unsigned const doe = unsigned_mod(day - kEpochAdjustedDays, kDaysPer400Years);
+        unsigned const yoe = (doe - doe / 1460 + doe / 36524 - (doe == 146096)) / 365;
+        unsigned const doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+        unsigned docy;  // Day-of-calendar-year = Days since last Jan1.
+        if (doy < marjan) {
+          bool const leap = yoe % 4 == 0 && (yoe == 0 || yoe % 100 != 0);
+          docy = janmar + leap + doy;
+        } else {
+          docy = doy - marjan;
         }
+        return (day - docy) * kSecsPerDay;
       }
-      // now walk back until at correct quarter start
-      for (; mon > start_of_quarter; mon--) {
-        day = day - (month_lengths[0 + leap_year][mon - 1] * kSecsPerDay);
-      }
-      return day;
-    }
-    case dtYEAR: {
-      // clear the time
-      int64_t day = (timeval / kSecsPerDay) * kSecsPerDay;
-      if (tm_struct.tm_hour >= 12) {
-        day -= kSecsPerDay;
-      }
-      // calculate the day of year offset
-      int32_t doy = tm_struct.tm_yday;
-      return day - ((doy)*kSecsPerDay);
     }
     case dtDECADE: {
-      int32_t year = tm_struct.tm_year + kYearBase;
-      int32_t decade_start = (year / 10) * 10;
-      if (decade_start != 0 && decade_start % 4 == 0) {
-        auto prior_year_epoch = create_epoch(decade_start - 1);
-        return prior_year_epoch + kSecsPerDay * 365;
+      // Number of days from x00301 to (x+1)00101. Always includes exactly two leap days.
+      constexpr unsigned decmarjan = marjan + 9 * 365 + 2;
+      int64_t const day = floor_div(timeval, kSecsPerDay);
+      unsigned const doe = unsigned_mod(day - kEpochAdjustedDays, kDaysPer400Years);
+      unsigned const yoe = (doe - doe / 1460 + doe / 36524 - (doe == 146096)) / 365;
+      unsigned const decoe = yoe - yoe % 10;  // Decade-of-era
+      // Initialize to days after mar1 of decade, then adjust to after jan1 below.
+      unsigned days_after_decade = doe - (365 * decoe + decoe / 4 - decoe / 100);
+      if (days_after_decade < decmarjan) {
+        bool const leap = decoe % 4 == 0 && (decoe == 0 || decoe % 100 != 0);
+        days_after_decade += janmar + leap;
       } else {
-        return create_epoch(decade_start);
+        days_after_decade -= decmarjan;
       }
+      return (day - days_after_decade) * kSecsPerDay;
     }
     case dtCENTURY: {
-      int32_t year = tm_struct.tm_year + kYearBase;
-      int32_t century_start = ((year - 1) / 100) * 100 + 1;
-      if (century_start != 0 && century_start % 4 == 0) {
-        auto prior_year_epoch = create_epoch(century_start - 1);
-        return prior_year_epoch + kSecsPerDay * 365;
-      } else {
-        return create_epoch(century_start);
-      }
+      int64_t const day = floor_div(timeval, kSecsPerDay);
+      unsigned const doe = unsigned_mod(day - kEpochAdjustedDays, kDaysPer400Years);
+      // Day-of-century = Days since last 010101 (Jan 1 1901, 2001, 2101, etc.)
+      unsigned const doc = doe < marjan ? doe + (36525 - marjan) : (doe - marjan) % 36524;
+      return (day - doc) * kSecsPerDay;
     }
     case dtMILLENNIUM: {
-      int32_t year = tm_struct.tm_year + kYearBase;
-      int32_t millennium_start = ((year - 1) / 1000) * 1000 + 1;
-      if (millennium_start != 0 && millennium_start % 4 == 0) {
-        auto prior_year_epoch = create_epoch(millennium_start - 1);
-        return prior_year_epoch + kSecsPerDay * 365;
+      constexpr unsigned millennium2001 = 365242;  // Days from Jan 1 2001 to 3001.
+      int64_t const day = floor_div(timeval, kSecsPerDay);
+      // lcm(400, 1000) = 2000 so use 5*400-year eras at a time.
+      unsigned dom = unsigned_mod(day - kEpochAdjustedDays, 5 * kDaysPer400Years);
+      if (dom < marjan) {
+        dom += millennium2001 + 1 - marjan;
+      } else if (dom < marjan + millennium2001) {
+        dom -= marjan;
       } else {
-        return create_epoch(millennium_start);
+        dom -= marjan + millennium2001;
       }
+      return (day - dom) * kSecsPerDay;
     }
     default:
 #ifdef __CUDACC__
@@ -315,10 +225,10 @@ extern "C" DEVICE int64_t DateTruncateNullable(DatetruncField field,
   return DateTruncate(field, timeval);
 }
 
+// scale is 10^{3,6,9}
 extern "C" DEVICE int64_t DateTruncateHighPrecisionToDate(const int64_t timeval,
                                                           const int64_t scale) {
-  const int64_t retval = (timeval / (scale * kSecsPerDay)) * kSecsPerDay;
-  return retval < 0 ? retval - kSecsPerDay : retval;
+  return floor_div(timeval, scale * kSecsPerDay) * kSecsPerDay;
 }
 
 extern "C" DEVICE int64_t
@@ -347,7 +257,7 @@ extern "C" DEVICE int64_t DateDiff(const DatetruncField datepart,
     case dtMINUTE:
       return res / kSecsPerMin;
     case dtHOUR:
-      return res / kSecPerHour;
+      return res / kSecsPerHour;
     case dtQUARTERDAY:
       return res / kSecsPerQuarterDay;
     case dtDAY:

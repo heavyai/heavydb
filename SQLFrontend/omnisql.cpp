@@ -56,6 +56,7 @@
 #include "Shared/base64.h"
 #include "Shared/checked_alloc.h"
 #include "Shared/mapd_shared_ptr.h"
+#include "Shared/misc.h"
 #include "gen-cpp/OmniSci.h"
 
 #include "linenoise.h"
@@ -394,6 +395,8 @@ void process_backslash_commands(char* command, ClientContext& context) {
 }
 
 std::string scalar_datum_to_string(const TDatum& datum, const TTypeInfo& type_info) {
+  constexpr size_t buf_size = 32;
+  char buf[buf_size];  // Hold "2000-03-01 12:34:56.123456789" and large years.
   if (datum.is_null) {
     return "NULL";
   }
@@ -427,37 +430,37 @@ std::string scalar_datum_to_string(const TDatum& datum, const TTypeInfo& type_in
       time_t t = static_cast<time_t>(datum.val.int_val);
       std::tm tm_struct;
       gmtime_r(&t, &tm_struct);
-      char buf[9];
-      strftime(buf, 9, "%T", &tm_struct);
+      strftime(buf, buf_size, "%T", &tm_struct);
       return buf;
     }
     case TDatumType::TIMESTAMP: {
       std::tm tm_struct;
       if (type_info.precision > 0) {
         auto scale = static_cast<int64_t>(std::pow(10, type_info.precision));
-        auto dv = std::div(datum.val.int_val, scale);
-        auto modulus = (dv.rem + scale) % scale;
-        time_t sec = static_cast<time_t>(dv.quot - (dv.quot < 0 && modulus > 0));
+        time_t const sec = static_cast<time_t>(floor_div(datum.val.int_val, scale));
+        int const frac = unsigned_mod(datum.val.int_val, scale);
         gmtime_r(&sec, &tm_struct);
-        char buf[21];
-        strftime(buf, 21, "%F %T.", &tm_struct);
-        auto subsecond = std::to_string(modulus);
-        return std::string(buf) +
-               std::string(type_info.precision - subsecond.length(), '0') + subsecond;
+        size_t const datetime_len = shared::formatDateTime(buf, buf_size, &tm_struct);
+        CHECK_LE(19u, datetime_len);         // 19 == strlen("YYYY-MM-DD HH:MM:SS")
+        constexpr size_t max_frac_len = 10;  // == strlen(".123456789")
+        CHECK_LT(datetime_len + max_frac_len, buf_size);
+        int const frac_len = snprintf(
+            buf + datetime_len, max_frac_len + 1, ".%0*d", type_info.precision, frac);
+        CHECK_EQ(frac_len, 1 + type_info.precision);
       } else {
-        time_t sec = static_cast<time_t>(datum.val.int_val);
+        time_t const sec = static_cast<time_t>(datum.val.int_val);
         gmtime_r(&sec, &tm_struct);
-        char buf[20];
-        strftime(buf, 20, "%F %T", &tm_struct);
-        return std::string(buf);
+        size_t const datetime_len = shared::formatDateTime(buf, buf_size, &tm_struct);
+        CHECK_LT(0u, datetime_len);
       }
+      return buf;
     }
     case TDatumType::DATE: {
       time_t t = static_cast<time_t>(datum.val.int_val);
       std::tm tm_struct;
       gmtime_r(&t, &tm_struct);
-      char buf[11];
-      strftime(buf, 11, "%F", &tm_struct);
+      size_t const date_len = shared::formatDate(buf, buf_size, &tm_struct);
+      CHECK_LE(10u, date_len);  // 10 == strlen("YYYY-MM-DD")
       return buf;
     }
     case TDatumType::BOOL:

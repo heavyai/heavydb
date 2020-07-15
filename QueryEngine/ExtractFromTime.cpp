@@ -14,6 +14,11 @@
  * limitations under the License.
  */
 
+/*
+ * Thank you Howard Hinnant for public domain date algorithms
+ * http://howardhinnant.github.io/date_algorithms.html
+ */
+
 #include "ExtractFromTime.h"
 #include "../Shared/funcannotations.h"
 
@@ -22,19 +27,6 @@
 #endif
 
 namespace {
-
-DEVICE int64_t floor_div(int64_t const dividend, int64_t const divisor) {
-  return (dividend < 0 ? dividend - (divisor - 1) : dividend) / divisor;
-}
-
-// Assumes 0 < divisor.
-DEVICE int64_t unsigned_mod(int64_t const dividend, int64_t const divisor) {
-  int64_t mod = dividend % divisor;
-  if (mod < 0) {
-    mod += divisor;
-  }
-  return mod;
-}
 
 // Return day-of-era of the Monday of ISO 8601 week 1 in the given yoe.
 // Week 1 always contains Jan 4.
@@ -48,11 +40,11 @@ DEVICE unsigned iso_week_start_from_yoe(unsigned const yoe) {
 }  // namespace
 
 extern "C" NEVER_INLINE DEVICE int64_t extract_hour(const int64_t lcltime) {
-  return unsigned_mod(lcltime, kSecsPerDay) / kSecPerHour;
+  return unsigned_mod(lcltime, kSecsPerDay) / kSecsPerHour;
 }
 
 extern "C" NEVER_INLINE DEVICE int64_t extract_minute(const int64_t lcltime) {
-  return unsigned_mod(lcltime, kSecPerHour) / kSecsPerMin;
+  return unsigned_mod(lcltime, kSecsPerHour) / kSecsPerMin;
 }
 
 extern "C" NEVER_INLINE DEVICE int64_t extract_second(const int64_t lcltime) {
@@ -164,8 +156,8 @@ DEVICE tm gmtime_r_newlib(const int64_t lcltime, tm& res) {
   }
 
   /* compute hour, min, and sec */
-  res.tm_hour = static_cast<int32_t>(rem / kSecPerHour);
-  rem %= kSecPerHour;
+  res.tm_hour = static_cast<int32_t>(rem / kSecsPerHour);
+  rem %= kSecsPerHour;
   res.tm_min = static_cast<int32_t>(rem / kSecsPerMin);
   res.tm_sec = static_cast<int32_t>(rem % kSecsPerMin);
 
@@ -266,13 +258,10 @@ extern "C" NEVER_INLINE DEVICE int64_t extract_day_of_week(const int64_t timeval
   return tm_struct.tm_yday + 1;
 }
 
-// Credit: http://howardhinnant.github.io/date_algorithms.html#civil_from_days
-// "Consider these donated to the public domain."
 extern "C" NEVER_INLINE DEVICE int64_t extract_week(const int64_t timeval) {
   int64_t const day = floor_div(timeval, kSecsPerDay) - kEpochAdjustedDays;
-  int64_t const era = floor_div(day, kDaysPer400Years);
-  unsigned const doe = static_cast<unsigned>(day - era * kDaysPer400Years);
-  unsigned const yoe = (doe - doe / 1460 + doe / 36524 - unsigned(doe == 146096)) / 365;
+  unsigned const doe = unsigned_mod(day, kDaysPer400Years);
+  unsigned const yoe = (doe - doe / 1460 + doe / 36524 - (doe == 146096)) / 365;
   unsigned iso_week_start = iso_week_start_from_yoe(yoe);
   if (doe < iso_week_start) {
     if (yoe == 0) {

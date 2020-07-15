@@ -106,7 +106,7 @@ extern "C" NEVER_INLINE DEVICE int64_t DateAdd(DateaddField field,
     case daMINUTE:
       return timeval + number * kSecsPerMin;
     case daHOUR:
-      return timeval + number * kSecPerHour;
+      return timeval + number * kSecsPerHour;
     case daWEEKDAY:
     case daDAYOFYEAR:
     case daDAY:

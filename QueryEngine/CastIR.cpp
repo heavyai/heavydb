@@ -165,7 +165,7 @@ llvm::Value* CodeGenerator::codegenCastBetweenTimestamps(llvm::Value* ts_lv,
                      ts_lv, cgen_state_->llInt(static_cast<int64_t>(scale)));
   }
   return nullable
-             ? cgen_state_->emitCall("div_int64_t_nullable_lhs",
+             ? cgen_state_->emitCall("floor_div_nullable_lhs",
                                      {ts_lv,
                                       cgen_state_->llInt(static_cast<int64_t>(scale)),
                                       cgen_state_->inlineIntNull(operand_ti)})
