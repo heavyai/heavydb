@@ -146,7 +146,6 @@ class GroupByAndAggregate {
   static size_t shard_count_for_top_groups(const RelAlgExecutionUnit& ra_exe_unit,
                                            const Catalog_Namespace::Catalog& catalog);
 
- private:
   struct DiamondCodegen {
     DiamondCodegen(llvm::Value* cond,
                    Executor* executor,
@@ -166,6 +165,7 @@ class GroupByAndAggregate {
     DiamondCodegen* parent_;
   };
 
+ private:
   bool gpuCanHandleOrderEntries(const std::list<Analyzer::OrderEntry>& order_entries);
 
   std::unique_ptr<QueryMemoryDescriptor> initQueryMemoryDescriptor(

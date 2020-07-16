@@ -112,6 +112,22 @@ class CodeGenerator {
         : std::runtime_error("Executor required to generate this expression") {}
   };
 
+  struct NullCheckCodegen {
+    NullCheckCodegen(CgenState* cgen_state,
+                     Executor* executor,
+                     llvm::Value* nullable_lv,
+                     const SQLTypeInfo& nullable_ti,
+                     const std::string& name = "");
+
+    llvm::Value* finalize(llvm::Value* null_lv, llvm::Value* notnull_lv);
+
+    CgenState* cgen_state{nullptr};
+    std::string name;
+    llvm::BasicBlock* nullcheck_bb{nullptr};
+    llvm::PHINode* nullcheck_value{nullptr};
+    std::unique_ptr<GroupByAndAggregate::DiamondCodegen> null_check;
+  };
+
  private:
   std::vector<llvm::Value*> codegen(const Analyzer::Constant*,
                                     const EncodingType enc_type,
