@@ -267,6 +267,22 @@ TEST_F(SelectQueryTest, ParquetGeoTypesNull) {
                           "'test_foreign_table' for row group 0 and row 1.");
 }
 
+TEST_F(SelectQueryTest, ParquetNullRowgroups) {
+  const auto& query =
+      getCreateForeignTableQuery("(a SMALLINT, b SMALLINT)", "null_columns", "parquet");
+  sql(query);
+
+  TQueryResult result;
+  sql(result, "SELECT * FROM test_foreign_table;");
+  // clang-format off
+  assertResultSetEqual({{i(NULL_SMALLINT),i(1)},
+                        {i(NULL_SMALLINT),i(2)},
+                        {i(NULL_SMALLINT),i(NULL_SMALLINT)},
+                        {i(NULL_SMALLINT),i(NULL_SMALLINT)}},
+                       result);
+  // clang-format on
+}
+
 INSTANTIATE_TEST_SUITE_P(DataWrapperParameterizedTests,
                          DataWrapperSelectQueryTest,
                          ::testing::Values("csv", "parquet"),

@@ -307,7 +307,8 @@ void ParquetDataWrapper::loadMetadataChunk(const ColumnDescriptor* column,
                                            const ChunkKey& chunk_key,
                                            DataBlockPtr& data_block,
                                            const size_t import_count,
-                                           const bool has_nulls) {
+                                           const bool has_nulls,
+                                           const bool is_all_nulls) {
   auto type_info = column->columnType;
   CHECK(!(type_info.is_varlen() && !type_info.is_fixlen_array()));
   CHECK(chunk_buffer_map_.find(chunk_key) != chunk_buffer_map_.end());
@@ -318,8 +319,13 @@ void ParquetDataWrapper::loadMetadataChunk(const ColumnDescriptor* column,
   auto& chunk_stats = chunk_metadata_ptr->chunkStats;
   chunk_stats.has_nulls |= has_nulls;
   encoder->resetChunkStats(chunk_stats);
-  loadChunk(column, chunk_key, data_block, 2, 0, true);
-  encoder->setNumElems(encoder->getNumElems() + import_count - 2);
+  if (is_all_nulls) {  // do not attempt to load min/max statistics if entire row group is
+                       // null
+    encoder->setNumElems(encoder->getNumElems() + import_count);
+  } else {
+    loadChunk(column, chunk_key, data_block, 2, 0, true);
+    encoder->setNumElems(encoder->getNumElems() + import_count - 2);
+  }
 }
 
 void ParquetDataWrapper::loadChunk(const ColumnDescriptor* column,
@@ -489,7 +495,8 @@ import_export::Loader* ParquetDataWrapper::getMetadataLoader(
                               chunk_key,
                               data_blocks[i],
                               metadata.num_elements,
-                              metadata.has_nulls);
+                              metadata.has_nulls,
+                              metadata.is_all_nulls);
           }
         }
       }

@@ -105,7 +105,8 @@ class ParquetDataWrapper : public ForeignDataWrapper {
                          const ChunkKey& chunk_key,
                          DataBlockPtr& data_block,
                          const size_t import_count,
-                         const bool has_nulls);
+                         const bool has_nulls,
+                         const bool is_all_nulls);
 
   void loadChunk(const ColumnDescriptor* column,
                  const ChunkKey& chunk_key,

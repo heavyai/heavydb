@@ -32,6 +32,7 @@ struct RowGroupMetadata {
   bool metadata_only;
   bool has_nulls;
   size_t num_elements;
+  bool is_all_nulls;
 };
 
 /**

@@ -94,6 +94,14 @@ std::unordered_set<int> get_columns_with_stats_available(
           reason_for_not_supported = "there exists a column chunk with unset statistics.";
           break;
         }
+        auto stats = column_chunk->statistics();
+        bool is_all_nulls = stats->null_count() == group_metadata->num_rows();
+        if (!stats->HasMinMax() && !is_all_nulls) {
+          column_supported = false;
+          reason_for_not_supported =
+              "there exists a column chunk with statistics without a min max set.";
+          break;
+        }
       }
     }
     if (column_supported) {
@@ -255,18 +263,23 @@ void read_parquet_metadata_into_import_buffer(
   auto column_chunk = group_metadata->ColumnChunk(logical_idx);
   CHECK(column_chunk->is_stats_set());
   std::shared_ptr<parquet::Statistics> stats = column_chunk->statistics();
-  std::shared_ptr<arrow::Array> min_array, max_array;
-  std::shared_ptr<arrow::Scalar> min, max;
-  PARQUET_THROW_NOT_OK(parquet::arrow::StatisticsAsScalars(*stats, &min, &max));
-  arrow::Status status;
-  status = arrow::MakeArrayFromScalar(*min, 1, &min_array);
-  CHECK(status.ok()) << status.message();
-  status = arrow::MakeArrayFromScalar(*max, 1, &max_array);
-  CHECK(status.ok()) << status.message();
-  import_buffer->add_arrow_values(
-      column_desciptor, *min_array, false, {0, 1}, &bad_rows_tracker);
-  import_buffer->add_arrow_values(
-      column_desciptor, *max_array, false, {0, 1}, &bad_rows_tracker);
+  bool is_all_nulls = stats->null_count() == group_metadata->num_rows();
+  CHECK(is_all_nulls || stats->HasMinMax());
+  if (!is_all_nulls) {
+    std::shared_ptr<arrow::Array> min_array, max_array;
+    std::shared_ptr<arrow::Scalar> min, max;
+    PARQUET_THROW_NOT_OK(parquet::arrow::StatisticsAsScalars(*stats, &min, &max));
+    arrow::Status status;
+    status = arrow::MakeArrayFromScalar(*min, 1, &min_array);
+    CHECK(status.ok()) << status.message();
+    status = arrow::MakeArrayFromScalar(*max, 1, &max_array);
+    CHECK(status.ok()) << status.message();
+    import_buffer->add_arrow_values(
+        column_desciptor, *min_array, false, {0, 1}, &bad_rows_tracker);
+    import_buffer->add_arrow_values(
+        column_desciptor, *max_array, false, {0, 1}, &bad_rows_tracker);
+  }
+  metadata.is_all_nulls = is_all_nulls;
   metadata.has_nulls = stats->null_count() > 0;
   metadata.num_elements = array_size;
 }
