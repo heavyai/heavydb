@@ -30,7 +30,7 @@ std::unordered_map<const RelAlgNode*, std::unordered_set<const RelAlgNode*>> bui
 void eliminate_identical_copy(std::vector<std::shared_ptr<RelAlgNode>>& nodes) noexcept;
 void eliminate_dead_columns(std::vector<std::shared_ptr<RelAlgNode>>& nodes) noexcept;
 void eliminate_dead_subqueries(std::vector<std::shared_ptr<RexSubQuery>>& subqueries,
-                               RelAlgNode const* root) noexcept;
+                               RelAlgNode const* root);
 void fold_filters(std::vector<std::shared_ptr<RelAlgNode>>& nodes) noexcept;
 void hoist_filter_cond_to_cross_join(
     std::vector<std::shared_ptr<RelAlgNode>>& nodes) noexcept;

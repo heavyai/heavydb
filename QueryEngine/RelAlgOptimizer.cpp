@@ -1230,7 +1230,7 @@ void eliminate_dead_columns(std::vector<std::shared_ptr<RelAlgNode>>& nodes) noe
 }
 
 void eliminate_dead_subqueries(std::vector<std::shared_ptr<RexSubQuery>>& subqueries,
-                               RelAlgNode const* root) noexcept {
+                               RelAlgNode const* root) {
   if (!subqueries.empty()) {
     auto live_ids = RexSubQueryIdCollector::getLiveRexSubQueryIds(root);
     auto sort_live_ids_first = [&live_ids](auto& a, auto& b) {
