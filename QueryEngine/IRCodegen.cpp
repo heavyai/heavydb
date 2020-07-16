@@ -348,7 +348,7 @@ std::function<llvm::Value*(const std::vector<llvm::Value*>&, llvm::Value*)>
 Executor::buildIsDeletedCb(const RelAlgExecutionUnit& ra_exe_unit,
                            const size_t level_idx,
                            const CompilationOptions& co) {
-  if (!co.add_delete_column) {
+  if (!co.filter_on_deleted_column) {
     return nullptr;
   }
   CHECK_LT(level_idx + 1, ra_exe_unit.input_descs.size());

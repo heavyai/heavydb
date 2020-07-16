@@ -4711,7 +4711,7 @@ std::vector<PushedDownFilterInfo> DBHandler::execute_rel_alg(
       ExecutorOptLevel::Default,
       g_enable_dynamic_watchdog,
       /*allow_lazy_fetch=*/true,
-      /*add_delete_column=*/true,
+      /*filter_on_deleted_column=*/true,
       explain_info.explain_optimized ? ExecutorExplainType::Optimized
                                      : ExecutorExplainType::Default,
       intel_jit_profile_};
@@ -4783,7 +4783,7 @@ void DBHandler::execute_rel_alg_df(TDataFrame& _return,
                            ExecutorOptLevel::Default,
                            g_enable_dynamic_watchdog,
                            /*allow_lazy_fetch=*/true,
-                           /*add_delete_column=*/true,
+                           /*filter_on_deleted_column=*/true,
                            ExecutorExplainType::Default,
                            intel_jit_profile_};
   ExecutionOptions eo = {g_enable_columnar_output,

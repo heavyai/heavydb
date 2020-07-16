@@ -1417,7 +1417,7 @@ ResultSetPtr Executor::executeWorkUnitImpl(
                                         co.opt_level,
                                         co.with_dynamic_watchdog,
                                         co.allow_lazy_fetch,
-                                        co.add_delete_column,
+                                        co.filter_on_deleted_column,
                                         co.explain_type,
                                         co.register_intel_jit_listener},
                                        eo,
@@ -3171,7 +3171,7 @@ llvm::Value* Executor::castToIntPtrTyIn(llvm::Value* val, const size_t bitWidth)
 
 RelAlgExecutionUnit Executor::addDeletedColumn(const RelAlgExecutionUnit& ra_exe_unit,
                                                const CompilationOptions& co) {
-  if (!co.add_delete_column) {
+  if (!co.filter_on_deleted_column) {
     return ra_exe_unit;
   }
   auto ra_exe_unit_with_deleted = ra_exe_unit;
