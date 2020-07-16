@@ -84,7 +84,9 @@ void RelRexDagVisitor::visit(RelJoin const* rel_join) {
 void RelRexDagVisitor::visit(RelLeftDeepInnerJoin const* rel_left_deep_inner_join) {
   visit(rel_left_deep_inner_join->getInnerCondition());
   for (size_t level = 1; level < rel_left_deep_inner_join->inputCount(); ++level) {
-    visit(rel_left_deep_inner_join->getOuterCondition(level));
+    if (auto* outer_condition = rel_left_deep_inner_join->getOuterCondition(level)) {
+      visit(outer_condition);
+    }
   }
 }
 
