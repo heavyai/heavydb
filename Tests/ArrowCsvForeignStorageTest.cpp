@@ -462,6 +462,78 @@ TEST(DataframeOptionsTest, HeaderlessTest) {
   ASSERT_EQ(8, v<int64_t>(run_simple_agg("SELECT sum(int8) FROM opt_dataframe2;")));
 }
 
+TEST(NullValuesTest, NullDifferentTypes) {
+  run_ddl_statement(
+      "CREATE DATAFRAME fsi_nulls (int4 INTEGER, int8 BIGINT, fp4 FLOAT, fp8 DOUBLE) "
+      "from 'CSV:../../Tests/Import/datafiles/null_values_numeric.csv';");
+  CHECK_EQ(12,
+           v<int64_t>(run_simple_agg("SELECT int4 FROM fsi_nulls WHERE fp8 IS NULL;")));
+
+  CHECK_EQ(65,
+           v<int64_t>(run_simple_agg("SELECT int8 FROM fsi_nulls WHERE int4 IS NULL;")));
+
+  EXPECT_FLOAT_EQ(
+      34.2, v<float>(run_simple_agg("SELECT fp4 FROM fsi_nulls WHERE int8 IS NULL;")));
+
+  EXPECT_DOUBLE_EQ(
+      76.2, v<double>(run_simple_agg("SELECT fp8 FROM fsi_nulls WHERE fp4 IS NULL;")));
+}
+
+TEST(NullValuesTest, NullFullColumn) {
+  run_ddl_statement(
+      "CREATE DATAFRAME fsi_nulls_full (int4 INTEGER, int8 BIGINT, fp4 FLOAT, fp8 "
+      "DOUBLE) "
+      "from 'CSV:../../Tests/Import/datafiles/null_values_full_column.csv';");
+  CHECK_EQ(0,
+           v<int64_t>(run_simple_agg(
+               "SELECT COUNT(int4) FROM fsi_nulls_full WHERE int4 IS NOT NULL;")));
+
+  CHECK_EQ(0,
+           v<int64_t>(run_simple_agg(
+               "SELECT COUNT(int8) FROM fsi_nulls_full WHERE int8 IS NOT NULL;")));
+
+  CHECK_EQ(0,
+           v<int64_t>(run_simple_agg(
+               "SELECT COUNT(fp4) FROM fsi_nulls_full WHERE fp4 IS NOT NULL;")));
+
+  CHECK_EQ(0,
+           v<int64_t>(run_simple_agg(
+               "SELECT COUNT(fp8) FROM fsi_nulls_full WHERE fp8 IS NOT NULL;")));
+}
+
+TEST(NullValuesTest, NullFragmentedColumn) {
+  run_ddl_statement(
+      "CREATE DATAFRAME fsi_nulls_frag (int4 INTEGER, int8 BIGINT, fp4 FLOAT, fp8 "
+      "DOUBLE) "
+      "from 'CSV:../../Tests/Import/datafiles/null_values_fragments.csv' WITH "
+      "(fragment_size=50);");
+  CHECK_EQ(45, v<int64_t>(run_simple_agg("SELECT SUM(int4) FROM fsi_nulls_frag;")));
+
+  CHECK_EQ(45, v<int64_t>(run_simple_agg("SELECT SUM(int8) FROM fsi_nulls_frag;")));
+
+  EXPECT_FLOAT_EQ(45.f, v<float>(run_simple_agg("SELECT SUM(fp4) FROM fsi_nulls_frag;")));
+
+  EXPECT_DOUBLE_EQ(45.,
+                   v<double>(run_simple_agg("SELECT SUM(fp8) FROM fsi_nulls_frag;")));
+}
+
+TEST(NullValuesTest, NullTextColumn) {
+  run_ddl_statement(
+      "CREATE DATAFRAME fsi_nulls_text (col0 TEXT ENCODING DICT, col1 INTEGER, col2 "
+      "CHAR(4), col3 TEXT ENCODING NONE) from "
+      "'CSV:../../Tests/Import/datafiles/null_values_text.csv';");
+  CHECK_EQ(4,
+           v<int64_t>(run_simple_agg(
+               "SELECT COUNT(col1) FROM fsi_nulls_text WHERE col0 IS NULL;")));
+
+  CHECK_EQ(1,
+           v<int64_t>(run_simple_agg(
+               "SELECT COUNT(col2) FROM fsi_nulls_text WHERE col2 IS NOT NULL;")));
+  CHECK_EQ(1,
+           v<int64_t>(run_simple_agg(
+               "SELECT COUNT(col3) FROM fsi_nulls_text WHERE col3 IS NOT NULL;")));
+}
+
 }  // namespace
 
 int main(int argc, char** argv) {
