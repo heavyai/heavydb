@@ -1387,7 +1387,7 @@ void RelAlgExecutor::executeUpdate(const RelAlgNode* node,
               if (update_params.tableIsTemporary()) {
                 eo.output_columnar_hint = true;
                 co_project.allow_lazy_fetch = false;
-                co_project.add_delete_column =
+                co_project.filter_on_deleted_column =
                     false;  // project the entire delete column for columnar update
               }
 
@@ -1490,7 +1490,7 @@ void RelAlgExecutor::executeDelete(const RelAlgNode* node,
           auto eo = eo_in;
           if (delete_params.tableIsTemporary()) {
             eo.output_columnar_hint = true;
-            co_delete.add_delete_column =
+            co_delete.filter_on_deleted_column =
                 false;  // project the entire delete column for columnar update
           } else {
             CHECK_EQ(exe_unit.target_exprs.size(), size_t(1));

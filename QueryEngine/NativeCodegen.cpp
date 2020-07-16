@@ -2169,7 +2169,7 @@ Executor::compileWorkUnit(const std::vector<InputTableInfo>& query_infos,
 llvm::BasicBlock* Executor::codegenSkipDeletedOuterTableRow(
     const RelAlgExecutionUnit& ra_exe_unit,
     const CompilationOptions& co) {
-  if (!co.add_delete_column) {
+  if (!co.filter_on_deleted_column) {
     return nullptr;
   }
   CHECK(!ra_exe_unit.input_descs.empty());
