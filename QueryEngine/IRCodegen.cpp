@@ -620,3 +620,54 @@ Executor::GroupColLLVMValue Executor::groupByColumnCodegen(
   }
   return {group_key, orig_group_key};
 }
+
+CodeGenerator::NullCheckCodegen::NullCheckCodegen(CgenState* cgen_state,
+                                                  Executor* executor,
+                                                  llvm::Value* nullable_lv,
+                                                  const SQLTypeInfo& nullable_ti,
+                                                  const std::string& name)
+    : cgen_state(cgen_state), name(name) {
+  CHECK(nullable_ti.is_number() || nullable_ti.is_decimal() || nullable_ti.is_fp());
+
+  null_check = std::make_unique<GroupByAndAggregate::DiamondCodegen>(
+      nullable_ti.is_fp()
+          ? cgen_state->ir_builder_.CreateFCmp(llvm::FCmpInst::FCMP_OEQ,
+                                               nullable_lv,
+                                               cgen_state->inlineFpNull(nullable_ti))
+          : cgen_state->ir_builder_.CreateICmp(llvm::ICmpInst::ICMP_EQ,
+                                               nullable_lv,
+                                               cgen_state->inlineIntNull(nullable_ti)),
+      executor,
+      false,
+      name,
+      nullptr,
+      false);
+
+  // generate a phi node depending on whether we got a null or not
+  nullcheck_bb =
+      llvm::BasicBlock::Create(cgen_state->context_, name + "_bb", cgen_state->row_func_);
+
+  // update the blocks created by diamond codegen to point to the newly created phi
+  // block
+  cgen_state->ir_builder_.SetInsertPoint(null_check->cond_true_);
+  cgen_state->ir_builder_.CreateBr(nullcheck_bb);
+  cgen_state->ir_builder_.SetInsertPoint(null_check->cond_false_);
+}
+
+llvm::Value* CodeGenerator::NullCheckCodegen::finalize(llvm::Value* null_lv,
+                                                       llvm::Value* notnull_lv) {
+  CHECK(null_check);
+  cgen_state->ir_builder_.CreateBr(nullcheck_bb);
+
+  CHECK_EQ(null_lv->getType(), notnull_lv->getType());
+
+  cgen_state->ir_builder_.SetInsertPoint(nullcheck_bb);
+  nullcheck_value =
+      cgen_state->ir_builder_.CreatePHI(null_lv->getType(), 2, name + "_value");
+  nullcheck_value->addIncoming(notnull_lv, null_check->cond_false_);
+  nullcheck_value->addIncoming(null_lv, null_check->cond_true_);
+
+  null_check.reset(nullptr);
+  cgen_state->ir_builder_.SetInsertPoint(nullcheck_bb);
+  return nullcheck_value;
+}
