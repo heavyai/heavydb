@@ -65,7 +65,7 @@
             
             
               <div class="version">
-                5.4.0dev 72180ab
+                5.4.0dev 19b6dfc
               </div>
             
           
@@ -631,6 +631,7 @@
 <li class="toctree-l2"><a class="reference internal" href="class_rel_logical_values.html">Class RelLogicalValues</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_rel_modify.html">Class RelModify</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_rel_project.html">Class RelProject</a></li>
+<li class="toctree-l2"><a class="reference internal" href="class_rel_rex_dag_visitor.html">Class RelRexDagVisitor</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_rel_scan.html">Class RelScan</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_rel_sort.html">Class RelSort</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_rel_table_function.html">Class RelTableFunction</a></li>
@@ -660,6 +661,7 @@
 <li class="toctree-l2"><a class="reference internal" href="class_rex_ref.html">Class RexRef</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_rex_scalar.html">Class RexScalar</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_rex_sub_query.html">Class RexSubQuery</a></li>
+<li class="toctree-l2"><a class="reference internal" href="class_rex_sub_query_id_collector.html">Class RexSubQueryIdCollector</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_rex_visitor.html">Class RexVisitor</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_rex_visitor_base.html">Class RexVisitorBase</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_rex_window_function_operator.html">Class RexWindowFunctionOperator</a></li>
@@ -1279,6 +1281,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_text_converter_factory.html">Struct TextConverterFactory</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_thread_controller___n_s_1_1_future_getter.html">Struct ThreadController_NS::FutureGetter</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_thread_controller___n_s_1_1_future_getter_3_01void_01_4.html">Struct ThreadController_NS::FutureGetter&lt; void &gt;</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/struct_type_handler.html">Struct TypeHandler</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_updel_roll.html">Struct UpdelRoll</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_varlen_datum.html">Struct VarlenDatum</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_view_privileges.html">Struct ViewPrivileges</a></li>
@@ -1350,6 +1353,8 @@
 <li class="toctree-l2"><a class="reference internal" href="../struct/structshared_1_1is__std__container.html">Struct shared::is_std_container</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structshared_1_1is__std__container_3_01std_1_1deque_3_01_t_00_01_a_01_4_01_4.html">Struct shared::is_std_container&lt; std::deque&lt; T, A &gt; &gt;</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structshared_1_1is__std__container_3_01std_1_1list_3_01_t_00_01_a_01_4_01_4.html">Struct shared::is_std_container&lt; std::list&lt; T, A &gt; &gt;</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/structshared_1_1is__std__container_3_01std_1_1set_3_01_t_00_01_a_01_4_01_4.html">Struct shared::is_std_container&lt; std::set&lt; T, A &gt; &gt;</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/structshared_1_1is__std__container_3_01std_1_1unordered__set_3_01_t_00_01_a_01_4_01_4.html">Struct shared::is_std_container&lt; std::unordered_set&lt; T, A &gt; &gt;</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structshared_1_1is__std__container_3_01std_1_1vector_3_01_t_00_01_a_01_4_01_4.html">Struct shared::is_std_container&lt; std::vector&lt; T, A &gt; &gt;</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structstd_1_1equal__to_3_01shared__ptr_3_01const_01_input_col_descriptor_01_4_01_4.html">Struct std::equal_to&lt; shared_ptr&lt; const InputColDescriptor &gt; &gt;</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structstd_1_1hash_3_01_input_col_descriptor_01_4.html">Struct std::hash&lt; InputColDescriptor &gt;</a></li>
@@ -2242,26 +2247,6 @@
 <dd></dd></dl>
 
 <dl class="member">
-<dt id="_CPPv4N8Executor25gpu_active_modules_mutex_E">
-<span id="_CPPv3N8Executor25gpu_active_modules_mutex_E"></span><span id="_CPPv2N8Executor25gpu_active_modules_mutex_E"></span><span id="Executor::gpu_active_modules_mutex___std::mutex"></span><span class="target" id="class_executor_1a07424ecf10e9f3a91294e8ab143d1f20"></span>std::mutex <code class="sig-name descname">gpu_active_modules_mutex_</code><a class="headerlink" href="#_CPPv4N8Executor25gpu_active_modules_mutex_E" title="Permalink to this definition">¶</a><br /></dt>
-<dd></dd></dl>
-
-<dl class="member">
-<dt id="_CPPv4N8Executor31gpu_active_modules_device_mask_E">
-<span id="_CPPv3N8Executor31gpu_active_modules_device_mask_E"></span><span id="_CPPv2N8Executor31gpu_active_modules_device_mask_E"></span><span id="Executor::gpu_active_modules_device_mask___uint32_t"></span><span class="target" id="class_executor_1a94191f86f14ea21f662c4693784b8ffb"></span>uint32_t <code class="sig-name descname">gpu_active_modules_device_mask_</code><a class="headerlink" href="#_CPPv4N8Executor31gpu_active_modules_device_mask_E" title="Permalink to this definition">¶</a><br /></dt>
-<dd></dd></dl>
-
-<dl class="member">
-<dt id="_CPPv4N8Executor19gpu_active_modules_E">
-<span id="_CPPv3N8Executor19gpu_active_modules_E"></span><span id="_CPPv2N8Executor19gpu_active_modules_E"></span><span id="Executor::gpu_active_modules___voidPA"></span><span class="target" id="class_executor_1ad4917b138384fdc2a36a4d41593fed83"></span>void *<code class="sig-name descname">gpu_active_modules_</code>[<code class="sig-name descname">max_gpu_count</code>]<a class="headerlink" href="#_CPPv4N8Executor19gpu_active_modules_E" title="Permalink to this definition">¶</a><br /></dt>
-<dd></dd></dl>
-
-<dl class="member">
-<dt id="_CPPv4N8Executor12interrupted_E">
-<span id="_CPPv3N8Executor12interrupted_E"></span><span id="_CPPv2N8Executor12interrupted_E"></span><span id="Executor::interrupted___std::atomic:b:"></span><span class="target" id="class_executor_1a7acc285e7c0bad201f7cc669cff0727d"></span>std::atomic&lt;bool&gt; <code class="sig-name descname">interrupted_</code><a class="headerlink" href="#_CPPv4N8Executor12interrupted_E" title="Permalink to this definition">¶</a><br /></dt>
-<dd></dd></dl>
-
-<dl class="member">
 <dt id="_CPPv4N8Executor19lit_str_dict_proxy_E">
 <span id="_CPPv3N8Executor19lit_str_dict_proxy_E"></span><span id="_CPPv2N8Executor19lit_str_dict_proxy_E"></span><span id="Executor::lit_str_dict_proxy___std::shared_ptr:StringDictionaryProxy:"></span><span class="target" id="class_executor_1a3faeccc5f0f1178ecdb60e779b5b7d6d"></span>std::shared_ptr&lt;<a class="reference internal" href="class_string_dictionary_proxy.html#_CPPv421StringDictionaryProxy" title="StringDictionaryProxy">StringDictionaryProxy</a>&gt; <code class="sig-name descname">lit_str_dict_proxy_</code><a class="headerlink" href="#_CPPv4N8Executor19lit_str_dict_proxy_E" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
@@ -2380,6 +2365,26 @@
 <dl class="member">
 <dt id="_CPPv4N8Executor13max_gpu_countE">
 <span id="_CPPv3N8Executor13max_gpu_countE"></span><span id="_CPPv2N8Executor13max_gpu_countE"></span><span id="Executor::max_gpu_count__iC"></span><span class="target" id="class_executor_1a3d87e0dbe1ed95f05289514f8a67ffce"></span>int <em class="property">const</em> <code class="sig-name descname">max_gpu_count</code> = {16}<a class="headerlink" href="#_CPPv4N8Executor13max_gpu_countE" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="member">
+<dt id="_CPPv4N8Executor25gpu_active_modules_mutex_E">
+<span id="_CPPv3N8Executor25gpu_active_modules_mutex_E"></span><span id="_CPPv2N8Executor25gpu_active_modules_mutex_E"></span><span id="Executor::gpu_active_modules_mutex___std::mutex"></span><span class="target" id="class_executor_1a07424ecf10e9f3a91294e8ab143d1f20"></span>std::mutex <code class="sig-name descname">gpu_active_modules_mutex_</code><a class="headerlink" href="#_CPPv4N8Executor25gpu_active_modules_mutex_E" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="member">
+<dt id="_CPPv4N8Executor31gpu_active_modules_device_mask_E">
+<span id="_CPPv3N8Executor31gpu_active_modules_device_mask_E"></span><span id="_CPPv2N8Executor31gpu_active_modules_device_mask_E"></span><span id="Executor::gpu_active_modules_device_mask___uint32_t"></span><span class="target" id="class_executor_1a94191f86f14ea21f662c4693784b8ffb"></span>uint32_t <code class="sig-name descname">gpu_active_modules_device_mask_</code> = {0x0}<a class="headerlink" href="#_CPPv4N8Executor31gpu_active_modules_device_mask_E" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="member">
+<dt id="_CPPv4N8Executor19gpu_active_modules_E">
+<span id="_CPPv3N8Executor19gpu_active_modules_E"></span><span id="_CPPv2N8Executor19gpu_active_modules_E"></span><span id="Executor::gpu_active_modules___voidP"></span><span class="target" id="class_executor_1acb8bc3f527b33b19d03e99b4bb520013"></span>void *<code class="sig-name descname">gpu_active_modules_</code><a class="headerlink" href="#_CPPv4N8Executor19gpu_active_modules_E" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="member">
+<dt id="_CPPv4N8Executor12interrupted_E">
+<span id="_CPPv3N8Executor12interrupted_E"></span><span id="_CPPv2N8Executor12interrupted_E"></span><span id="Executor::interrupted___std::atomic:b:"></span><span class="target" id="class_executor_1a2c89df9261ec0eccf65f9a809ca56268"></span>std::atomic&lt;bool&gt; <code class="sig-name descname">interrupted_</code> = {false}<a class="headerlink" href="#_CPPv4N8Executor12interrupted_E" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 <dl class="member">

@@ -40,7 +40,7 @@
   <link rel="stylesheet" href="../../_static/theme_overrides.css" type="text/css" />
     <link rel="index" title="Index" href="../../genindex.html" />
     <link rel="search" title="Search" href="../../search.html" />
-    <link rel="next" title="Class RelScan" href="class_rel_scan.html" />
+    <link rel="next" title="Class RelRexDagVisitor" href="class_rel_rex_dag_visitor.html" />
     <link rel="prev" title="Class RelModify" href="class_rel_modify.html" /> 
 </head>
 
@@ -65,7 +65,7 @@
             
             
               <div class="version">
-                5.4.0dev 72180ab
+                5.4.0dev 19b6dfc
               </div>
             
           
@@ -631,6 +631,7 @@
 <li class="toctree-l2"><a class="reference internal" href="class_rel_logical_values.html">Class RelLogicalValues</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_rel_modify.html">Class RelModify</a></li>
 <li class="toctree-l2 current"><a class="current reference internal" href="#">Class RelProject</a></li>
+<li class="toctree-l2"><a class="reference internal" href="class_rel_rex_dag_visitor.html">Class RelRexDagVisitor</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_rel_scan.html">Class RelScan</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_rel_sort.html">Class RelSort</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_rel_table_function.html">Class RelTableFunction</a></li>
@@ -660,6 +661,7 @@
 <li class="toctree-l2"><a class="reference internal" href="class_rex_ref.html">Class RexRef</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_rex_scalar.html">Class RexScalar</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_rex_sub_query.html">Class RexSubQuery</a></li>
+<li class="toctree-l2"><a class="reference internal" href="class_rex_sub_query_id_collector.html">Class RexSubQueryIdCollector</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_rex_visitor.html">Class RexVisitor</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_rex_visitor_base.html">Class RexVisitorBase</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_rex_window_function_operator.html">Class RexWindowFunctionOperator</a></li>
@@ -1279,6 +1281,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_text_converter_factory.html">Struct TextConverterFactory</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_thread_controller___n_s_1_1_future_getter.html">Struct ThreadController_NS::FutureGetter</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_thread_controller___n_s_1_1_future_getter_3_01void_01_4.html">Struct ThreadController_NS::FutureGetter&lt; void &gt;</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/struct_type_handler.html">Struct TypeHandler</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_updel_roll.html">Struct UpdelRoll</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_varlen_datum.html">Struct VarlenDatum</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_view_privileges.html">Struct ViewPrivileges</a></li>
@@ -1350,6 +1353,8 @@
 <li class="toctree-l2"><a class="reference internal" href="../struct/structshared_1_1is__std__container.html">Struct shared::is_std_container</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structshared_1_1is__std__container_3_01std_1_1deque_3_01_t_00_01_a_01_4_01_4.html">Struct shared::is_std_container&lt; std::deque&lt; T, A &gt; &gt;</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structshared_1_1is__std__container_3_01std_1_1list_3_01_t_00_01_a_01_4_01_4.html">Struct shared::is_std_container&lt; std::list&lt; T, A &gt; &gt;</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/structshared_1_1is__std__container_3_01std_1_1set_3_01_t_00_01_a_01_4_01_4.html">Struct shared::is_std_container&lt; std::set&lt; T, A &gt; &gt;</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/structshared_1_1is__std__container_3_01std_1_1unordered__set_3_01_t_00_01_a_01_4_01_4.html">Struct shared::is_std_container&lt; std::unordered_set&lt; T, A &gt; &gt;</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structshared_1_1is__std__container_3_01std_1_1vector_3_01_t_00_01_a_01_4_01_4.html">Struct shared::is_std_container&lt; std::vector&lt; T, A &gt; &gt;</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structstd_1_1equal__to_3_01shared__ptr_3_01const_01_input_col_descriptor_01_4_01_4.html">Struct std::equal_to&lt; shared_ptr&lt; const InputColDescriptor &gt; &gt;</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structstd_1_1hash_3_01_input_col_descriptor_01_4.html">Struct std::hash&lt; InputColDescriptor &gt;</a></li>
@@ -1500,6 +1505,11 @@
 <dd></dd></dl>
 
 <dl class="function">
+<dt id="_CPPv4N10RelProject10RelProjectERK10RelProject">
+<span id="_CPPv3N10RelProject10RelProjectERK10RelProject"></span><span id="_CPPv2N10RelProject10RelProjectERK10RelProject"></span><span id="RelProject::RelProject__RelProjectCR"></span><span class="target" id="class_rel_project_1a7aa4f344d1f32409665f89b73fc4f4a6"></span><code class="sig-name descname">RelProject</code><span class="sig-paren">(</span><a class="reference internal" href="#_CPPv4N10RelProject10RelProjectERNSt6vectorINSt10unique_ptrIK9RexScalarEEEERKNSt6vectorINSt6stringEEENSt10shared_ptrIK10RelAlgNodeEE" title="RelProject::RelProject">RelProject</a> <em class="property">const</em> &amp;<em>rhs</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N10RelProject10RelProjectERK10RelProject" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="function">
 <dt id="_CPPv4NK10RelProject14setExpressionsERNSt6vectorINSt10unique_ptrIK9RexScalarEEEE">
 <span id="_CPPv3NK10RelProject14setExpressionsERNSt6vectorINSt10unique_ptrIK9RexScalarEEEE"></span><span id="_CPPv2NK10RelProject14setExpressionsERNSt6vectorINSt10unique_ptrIK9RexScalarEEEE"></span><span id="RelProject::setExpressions__std::vector:std::unique_ptr:RexScalarC::RC"></span><span class="target" id="class_rel_project_1a59244cd45966fb9736a32f40bffb203a"></span>void <code class="sig-name descname">setExpressions</code><span class="sig-paren">(</span>std::vector&lt;std::unique_ptr&lt;<em class="property">const</em> <a class="reference internal" href="class_rex_scalar.html#_CPPv49RexScalar" title="RexScalar">RexScalar</a>&gt;&gt; &amp;<em>exprs</em><span class="sig-paren">)</span> <em class="property">const</em><a class="headerlink" href="#_CPPv4NK10RelProject14setExpressionsERNSt6vectorINSt10unique_ptrIK9RexScalarEEEE" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
@@ -1576,7 +1586,7 @@
 
 <dl class="function">
 <dt id="_CPPv4NK10RelProject8deepCopyEv">
-<span id="_CPPv3NK10RelProject8deepCopyEv"></span><span id="_CPPv2NK10RelProject8deepCopyEv"></span><span id="RelProject::deepCopyC"></span><span class="target" id="class_rel_project_1a918081946b7dc8a23a0b4efb98553ab6"></span>std::shared_ptr&lt;<a class="reference internal" href="class_rel_alg_node.html#_CPPv410RelAlgNode" title="RelAlgNode">RelAlgNode</a>&gt; <code class="sig-name descname">deepCopy</code><span class="sig-paren">(</span><span class="sig-paren">)</span> <em class="property">const</em><a class="headerlink" href="#_CPPv4NK10RelProject8deepCopyEv" title="Permalink to this definition">¶</a><br /></dt>
+<span id="_CPPv3NK10RelProject8deepCopyEv"></span><span id="_CPPv2NK10RelProject8deepCopyEv"></span><span id="RelProject::deepCopyC"></span><span class="target" id="class_rel_project_1a96b0067786f31867e9f1f8fba6e41aa4"></span>std::shared_ptr&lt;<a class="reference internal" href="class_rel_alg_node.html#_CPPv410RelAlgNode" title="RelAlgNode">RelAlgNode</a>&gt; <code class="sig-name descname">deepCopy</code><span class="sig-paren">(</span><span class="sig-paren">)</span> <em class="property">const</em><a class="headerlink" href="#_CPPv4NK10RelProject8deepCopyEv" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 <dl class="function">
@@ -1656,7 +1666,7 @@
   
     <div class="rst-footer-buttons" role="navigation" aria-label="footer navigation">
       
-        <a href="class_rel_scan.html" class="btn btn-neutral float-right" title="Class RelScan" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right"></span></a>
+        <a href="class_rel_rex_dag_visitor.html" class="btn btn-neutral float-right" title="Class RelRexDagVisitor" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right"></span></a>
       
       
         <a href="class_rel_modify.html" class="btn btn-neutral float-left" title="Class RelModify" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left"></span> Previous</a>

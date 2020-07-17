@@ -64,7 +64,7 @@
             
             
               <div class="version">
-                5.4.0dev 72180ab
+                5.4.0dev 19b6dfc
               </div>
             
           
@@ -630,6 +630,7 @@
 <li class="toctree-l2"><a class="reference internal" href="api/class/class_rel_logical_values.html">Class RelLogicalValues</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/class_rel_modify.html">Class RelModify</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/class_rel_project.html">Class RelProject</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/class/class_rel_rex_dag_visitor.html">Class RelRexDagVisitor</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/class_rel_scan.html">Class RelScan</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/class_rel_sort.html">Class RelSort</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/class_rel_table_function.html">Class RelTableFunction</a></li>
@@ -659,6 +660,7 @@
 <li class="toctree-l2"><a class="reference internal" href="api/class/class_rex_ref.html">Class RexRef</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/class_rex_scalar.html">Class RexScalar</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/class_rex_sub_query.html">Class RexSubQuery</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/class/class_rex_sub_query_id_collector.html">Class RexSubQueryIdCollector</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/class_rex_visitor.html">Class RexVisitor</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/class_rex_visitor_base.html">Class RexVisitorBase</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/class_rex_window_function_operator.html">Class RexWindowFunctionOperator</a></li>
@@ -1278,6 +1280,7 @@
 <li class="toctree-l2"><a class="reference internal" href="api/struct/struct_text_converter_factory.html">Struct TextConverterFactory</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/struct/struct_thread_controller___n_s_1_1_future_getter.html">Struct ThreadController_NS::FutureGetter</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/struct/struct_thread_controller___n_s_1_1_future_getter_3_01void_01_4.html">Struct ThreadController_NS::FutureGetter&lt; void &gt;</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/struct/struct_type_handler.html">Struct TypeHandler</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/struct/struct_updel_roll.html">Struct UpdelRoll</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/struct/struct_varlen_datum.html">Struct VarlenDatum</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/struct/struct_view_privileges.html">Struct ViewPrivileges</a></li>
@@ -1349,6 +1352,8 @@
 <li class="toctree-l2"><a class="reference internal" href="api/struct/structshared_1_1is__std__container.html">Struct shared::is_std_container</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/struct/structshared_1_1is__std__container_3_01std_1_1deque_3_01_t_00_01_a_01_4_01_4.html">Struct shared::is_std_container&lt; std::deque&lt; T, A &gt; &gt;</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/struct/structshared_1_1is__std__container_3_01std_1_1list_3_01_t_00_01_a_01_4_01_4.html">Struct shared::is_std_container&lt; std::list&lt; T, A &gt; &gt;</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/struct/structshared_1_1is__std__container_3_01std_1_1set_3_01_t_00_01_a_01_4_01_4.html">Struct shared::is_std_container&lt; std::set&lt; T, A &gt; &gt;</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/struct/structshared_1_1is__std__container_3_01std_1_1unordered__set_3_01_t_00_01_a_01_4_01_4.html">Struct shared::is_std_container&lt; std::unordered_set&lt; T, A &gt; &gt;</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/struct/structshared_1_1is__std__container_3_01std_1_1vector_3_01_t_00_01_a_01_4_01_4.html">Struct shared::is_std_container&lt; std::vector&lt; T, A &gt; &gt;</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/struct/structstd_1_1equal__to_3_01shared__ptr_3_01const_01_input_col_descriptor_01_4_01_4.html">Struct std::equal_to&lt; shared_ptr&lt; const InputColDescriptor &gt; &gt;</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/struct/structstd_1_1hash_3_01_input_col_descriptor_01_4.html">Struct std::hash&lt; InputColDescriptor &gt;</a></li>
@@ -3933,7 +3938,7 @@
 </li>
       <li><a href="api/class/class_catalog___namespace_1_1_catalog.html#_CPPv4N17Catalog_Namespace7Catalog22deletedColumnPerTable_E">Catalog_Namespace::Catalog::deletedColumnPerTable_ (C++ member)</a>
 </li>
-      <li><a href="api/class/class_catalog___namespace_1_1_catalog.html#_CPPv4N17Catalog_Namespace7Catalog26deleteMetadataForDashboardEK7int32_t">Catalog_Namespace::Catalog::deleteMetadataForDashboard (C++ function)</a>, <a href="api/class/class_catalog___namespace_1_1_catalog.html#_CPPv4N17Catalog_Namespace7Catalog26deleteMetadataForDashboardERKNSt6stringERKNSt6stringE">[1]</a>
+      <li><a href="api/class/class_catalog___namespace_1_1_catalog.html#_CPPv4N17Catalog_Namespace7Catalog27deleteMetadataForDashboardsEKNSt6vectorI7int32_tEERK12UserMetadata">Catalog_Namespace::Catalog::deleteMetadataForDashboards (C++ function)</a>
 </li>
       <li><a href="api/class/class_catalog___namespace_1_1_catalog.html#_CPPv4N17Catalog_Namespace7Catalog23dictDescriptorMapByRef_E">Catalog_Namespace::Catalog::dictDescriptorMapByRef_ (C++ member)</a>
 </li>
@@ -4461,6 +4466,10 @@
 </li>
       <li><a href="api/class/class_catalog___namespace_1_1_sys_catalog.html#_CPPv4N17Catalog_Namespace10SysCatalog38revokeDBObjectPrivilegesFromAll_unsafeE8DBObjectP7Catalog">Catalog_Namespace::SysCatalog::revokeDBObjectPrivilegesFromAll_unsafe (C++ function)</a>
 </li>
+      <li><a href="api/class/class_catalog___namespace_1_1_sys_catalog.html#_CPPv4N17Catalog_Namespace10SysCatalog36revokeDBObjectPrivilegesFromAllBatchERNSt6vectorI8DBObjectEEP7Catalog">Catalog_Namespace::SysCatalog::revokeDBObjectPrivilegesFromAllBatch (C++ function)</a>
+</li>
+      <li><a href="api/class/class_catalog___namespace_1_1_sys_catalog.html#_CPPv4N17Catalog_Namespace10SysCatalog43revokeDBObjectPrivilegesFromAllBatch_unsafeERNSt6vectorI8DBObjectEEP7Catalog">Catalog_Namespace::SysCatalog::revokeDBObjectPrivilegesFromAllBatch_unsafe (C++ function)</a>
+</li>
       <li><a href="api/class/class_catalog___namespace_1_1_sys_catalog.html#_CPPv4N17Catalog_Namespace10SysCatalog10revokeRoleERKNSt6stringERKNSt6stringE">Catalog_Namespace::SysCatalog::revokeRole (C++ function)</a>
 </li>
       <li><a href="api/class/class_catalog___namespace_1_1_sys_catalog.html#_CPPv4N17Catalog_Namespace10SysCatalog17revokeRole_unsafeERKNSt6stringERKNSt6stringE">Catalog_Namespace::SysCatalog::revokeRole_unsafe (C++ function)</a>
@@ -4813,10 +4822,10 @@
 </li>
       <li><a href="api/class/class_code_generator.html#_CPPv4N13CodeGenerator10codegenDivEPN4llvm5ValueEPN4llvm5ValueERKNSt6stringERKNSt6stringERK11SQLTypeInfob">CodeGenerator::codegenDiv (C++ function)</a>
 </li>
-      <li><a href="api/class/class_code_generator.html#_CPPv4N13CodeGenerator13CodeGeneratorEP8Executor">CodeGenerator::CodeGenerator (C++ function)</a>, <a href="api/class/class_code_generator.html#_CPPv4N13CodeGenerator13CodeGeneratorEP9CgenStateP9PlanState">[1]</a>
-</li>
   </ul></td>
   <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="api/class/class_code_generator.html#_CPPv4N13CodeGenerator13CodeGeneratorEP8Executor">CodeGenerator::CodeGenerator (C++ function)</a>, <a href="api/class/class_code_generator.html#_CPPv4N13CodeGenerator13CodeGeneratorEP9CgenStateP9PlanState">[1]</a>
+</li>
       <li><a href="api/class/class_code_generator.html#_CPPv4N13CodeGenerator37codegenExtractHighPrecisionTimestampsEPN4llvm5ValueERK11SQLTypeInfoRK12ExtractField">CodeGenerator::codegenExtractHighPrecisionTimestamps (C++ function)</a>
 </li>
       <li><a href="api/class/class_code_generator.html#_CPPv4N13CodeGenerator24codegenFixedLengthColVarEPKN8Analyzer9ColumnVarEPN4llvm5ValueEPN4llvm5ValueE">CodeGenerator::codegenFixedLengthColVar (C++ function)</a>
@@ -6435,6 +6444,8 @@
 </li>
       <li><a href="api/class/class_d_b_handler.html#_CPPv4N9DBHandler16delete_dashboardERK10TSessionIdK7int32_t">DBHandler::delete_dashboard (C++ function)</a>
 </li>
+      <li><a href="api/class/class_d_b_handler.html#_CPPv4N9DBHandler17delete_dashboardsERK10TSessionIdRKNSt6vectorI7int32_tEE">DBHandler::delete_dashboards (C++ function)</a>
+</li>
       <li><a href="api/class/class_d_b_handler.html#_CPPv4N9DBHandler19detect_column_typesER13TDetectResultRK10TSessionIdRKNSt6stringERK11TCopyParams">DBHandler::detect_column_types (C++ function)</a>
 </li>
       <li><a href="api/class/class_d_b_handler.html#_CPPv4N9DBHandler10disconnectERK10TSessionId">DBHandler::disconnect (C++ function)</a>
@@ -6597,12 +6608,12 @@
 </li>
       <li><a href="api/class/class_d_b_handler.html#_CPPv4N9DBHandler8has_roleERK10TSessionIdRKNSt6stringERKNSt6stringE">DBHandler::has_role (C++ function)</a>
 </li>
-  </ul></td>
-  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="api/class/class_d_b_handler.html#_CPPv4N9DBHandler20has_table_permissionERK16AccessPrivilegesRK20TDBObjectPermissions">DBHandler::has_table_permission (C++ function)</a>
 </li>
       <li><a href="api/class/class_d_b_handler.html#_CPPv4N9DBHandler19has_view_permissionERK16AccessPrivilegesRK20TDBObjectPermissions">DBHandler::has_view_permission (C++ function)</a>
 </li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="api/class/class_d_b_handler.html#_CPPv4N9DBHandler24hasTableAccessPrivilegesEPK15TableDescriptorRKN17Catalog_Namespace11SessionInfoE">DBHandler::hasTableAccessPrivileges (C++ function)</a>
 </li>
       <li><a href="api/class/class_d_b_handler.html#_CPPv4N9DBHandler22idle_session_duration_E">DBHandler::idle_session_duration_ (C++ member)</a>
@@ -6701,6 +6712,10 @@
 </li>
       <li><a href="api/class/class_d_b_handler.html#_CPPv4N9DBHandler15share_dashboardERK10TSessionIdK7int32_tRKNSt6vectorINSt6stringEEERKNSt6vectorINSt6stringEEERK21TDashboardPermissionsKb">DBHandler::share_dashboard (C++ function)</a>
 </li>
+      <li><a href="api/class/class_d_b_handler.html#_CPPv4N9DBHandler16share_dashboardsERK10TSessionIdRKNSt6vectorI7int32_tEERKNSt6vectorINSt6stringEEERK21TDashboardPermissions">DBHandler::share_dashboards (C++ function)</a>
+</li>
+      <li><a href="api/class/class_d_b_handler.html#_CPPv4N9DBHandler24shareOrUnshareDashboardsERK10TSessionIdRKNSt6vectorI7int32_tEERKNSt6vectorINSt6stringEEERK21TDashboardPermissionsKb">DBHandler::shareOrUnshareDashboards (C++ function)</a>
+</li>
       <li><a href="api/class/class_d_b_handler.html#_CPPv4N9DBHandler8shutdownEv">DBHandler::shutdown (C++ function)</a>
 </li>
       <li><a href="api/class/class_d_b_handler.html#_CPPv4N9DBHandler11sql_executeER12TQueryResultRK10TSessionIdRKNSt6stringEKbRKNSt6stringEK7int32_tK7int32_t">DBHandler::sql_execute (C++ function)</a>
@@ -6737,9 +6752,15 @@
 </li>
       <li><a href="api/class/class_d_b_handler.html#_CPPv4N9DBHandler17unshare_dashboardERK10TSessionIdK7int32_tRKNSt6vectorINSt6stringEEERKNSt6vectorINSt6stringEEERK21TDashboardPermissions">DBHandler::unshare_dashboard (C++ function)</a>
 </li>
+      <li><a href="api/class/class_d_b_handler.html#_CPPv4N9DBHandler18unshare_dashboardsERK10TSessionIdRKNSt6vectorI7int32_tEERKNSt6vectorINSt6stringEEERK21TDashboardPermissions">DBHandler::unshare_dashboards (C++ function)</a>
+</li>
       <li><a href="api/class/class_d_b_handler.html#_CPPv4N9DBHandler21user_can_access_tableERKN17Catalog_Namespace11SessionInfoEPK15TableDescriptorK16AccessPrivileges">DBHandler::user_can_access_table (C++ function)</a>
 </li>
       <li><a href="api/class/class_d_b_handler.html#_CPPv4N9DBHandler16validate_rel_algER14TRowDescriptor15QueryStateProxy">DBHandler::validate_rel_alg (C++ function)</a>
+</li>
+      <li><a href="api/class/class_d_b_handler.html#_CPPv4N9DBHandler30validateDashboardIdsForSharingERKN17Catalog_Namespace11SessionInfoERKNSt6vectorI7int32_tEE">DBHandler::validateDashboardIdsForSharing (C++ function)</a>
+</li>
+      <li><a href="api/class/class_d_b_handler.html#_CPPv4N9DBHandler14validateGroupsERKNSt6vectorINSt6stringEEE">DBHandler::validateGroups (C++ function)</a>
 </li>
       <li><a href="api/class/class_d_b_handler.html#_CPPv4N9DBHandler15value_to_thriftERK11TargetValueRK11SQLTypeInfo">DBHandler::value_to_thrift (C++ function)</a>
 </li>
@@ -12485,10 +12506,10 @@
 </li>
       <li><a href="api/class/class_nullable_value.html#_CPPv4NK13NullableValuegtEK1T">NullableValue::operator&gt; (C++ function)</a>
 </li>
-  </ul></td>
-  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="api/class/class_nullable_value.html#_CPPv4NK13NullableValuegeEK1T">NullableValue::operator&gt;= (C++ function)</a>
 </li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="api/class/class_nullable_value.html#_CPPv4N13NullableValue5StateE">NullableValue::State (C++ enum)</a>
 </li>
       <li><a href="api/class/class_nullable_value.html#_CPPv4N13NullableValue6state_E">NullableValue::state_ (C++ member)</a>
@@ -12525,6 +12546,8 @@
 </li>
       <li><a href="api/struct/struct_numeric_value_converter.html#_CPPv4N21NumericValueConverter19allowFixedNullArrayEv">NumericValueConverter::allowFixedNullArray (C++ function)</a>
 </li>
+      <li><a href="api/struct/struct_numeric_value_converter.html#_CPPv4N21NumericValueConverter15checked_caster_E">NumericValueConverter::checked_caster_ (C++ member)</a>
+</li>
       <li><a href="api/struct/struct_numeric_value_converter.html#_CPPv4N21NumericValueConverter12column_data_E">NumericValueConverter::column_data_ (C++ member)</a>
 </li>
       <li><a href="api/struct/struct_numeric_value_converter.html#_CPPv4N21NumericValueConverter30convertElementToColumnarFormatE6size_tN23ElementsBufferColumnPtr7pointerEPK17ScalarTargetValue">NumericValueConverter::convertElementToColumnarFormat (C++ function)</a>
@@ -12545,9 +12568,13 @@
 </li>
       <li><a href="api/struct/struct_numeric_value_converter.html#_CPPv4N21NumericValueConverter18processArrayBufferERNSt10unique_ptrINSt6vectorINSt4pairI6size_t23ElementsBufferColumnPtrEEEEEENSt10unique_ptrINSt6vectorI10ArrayDatumEEE7pointerE">NumericValueConverter::processArrayBuffer (C++ function)</a>
 </li>
+      <li><a href="api/struct/struct_numeric_value_converter.html#_CPPv4N21NumericValueConverter14setValueCasterE10CasterFunc">NumericValueConverter::setValueCaster (C++ function)</a>
+</li>
       <li><a href="api/struct/struct_numeric_value_converter.html#_CPPv4N21NumericValueConverter20SOURCE_TYPE_ACCESSORE">NumericValueConverter::SOURCE_TYPE_ACCESSOR (C++ member)</a>
 </li>
       <li><a href="api/struct/struct_numeric_value_converter.html#_CPPv4N21NumericValueConverterD0Ev">NumericValueConverter::~NumericValueConverter (C++ function)</a>
+</li>
+      <li><a href="api/struct/struct_numeric_value_converter.html#_CPPv4IEN21NumericValueConverterI11SOURCE_TYPE11TARGET_TYPEE10CasterFuncE">NumericValueConverter&lt;SOURCE_TYPE, TARGET_TYPE&gt;::CasterFunc (C++ type)</a>
 </li>
       <li><a href="api/struct/struct_numeric_value_converter.html#_CPPv4IEN21NumericValueConverterI11SOURCE_TYPE11TARGET_TYPEE13ColumnDataPtrE">NumericValueConverter&lt;SOURCE_TYPE, TARGET_TYPE&gt;::ColumnDataPtr (C++ type)</a>
 </li>
@@ -15297,7 +15324,7 @@
 </li>
       <li><a href="api/class/class_rel_aggregate.html#_CPPv4N12RelAggregate6hints_E">RelAggregate::hints_ (C++ member)</a>
 </li>
-      <li><a href="api/class/class_rel_aggregate.html#_CPPv4N12RelAggregate12RelAggregateEK6size_tRNSt6vectorINSt10unique_ptrIK6RexAggEEEERKNSt6vectorINSt6stringEEENSt10shared_ptrIK10RelAlgNodeEE">RelAggregate::RelAggregate (C++ function)</a>
+      <li><a href="api/class/class_rel_aggregate.html#_CPPv4N12RelAggregate12RelAggregateEK6size_tRNSt6vectorINSt10unique_ptrIK6RexAggEEEERKNSt6vectorINSt6stringEEENSt10shared_ptrIK10RelAlgNodeEE">RelAggregate::RelAggregate (C++ function)</a>, <a href="api/class/class_rel_aggregate.html#_CPPv4N12RelAggregate12RelAggregateERK12RelAggregate">[1]</a>
 </li>
       <li><a href="api/class/class_rel_aggregate.html#_CPPv4N12RelAggregate11setAggExprsERNSt6vectorINSt10unique_ptrIK6RexAggEEEE">RelAggregate::setAggExprs (C++ function)</a>
 </li>
@@ -15779,7 +15806,7 @@
 </li>
       <li><a href="api/class/class_rel_compound.html#_CPPv4NK11RelCompound11isAggregateEv">RelCompound::isAggregate (C++ function)</a>
 </li>
-      <li><a href="api/class/class_rel_compound.html#_CPPv4N11RelCompound11RelCompoundERNSt10unique_ptrIK9RexScalarEERKNSt6vectorIPK3RexEEK6size_tRKNSt6vectorIPK6RexAggEERKNSt6vectorINSt6stringEEERNSt6vectorINSt10unique_ptrIK9RexScalarEEEEKbbbbPK15TableDescriptor14ColumnNameList">RelCompound::RelCompound (C++ function)</a>
+      <li><a href="api/class/class_rel_compound.html#_CPPv4N11RelCompound11RelCompoundERK11RelCompound">RelCompound::RelCompound (C++ function)</a>, <a href="api/class/class_rel_compound.html#_CPPv4N11RelCompound11RelCompoundERNSt10unique_ptrIK9RexScalarEERKNSt6vectorIPK3RexEEK6size_tRKNSt6vectorIPK6RexAggEERKNSt6vectorINSt6stringEEERNSt6vectorINSt10unique_ptrIK9RexScalarEEEEKbbbbPK15TableDescriptor14ColumnNameList">[1]</a>
 </li>
       <li><a href="api/class/class_rel_compound.html#_CPPv4N11RelCompound12replaceInputENSt10shared_ptrIK10RelAlgNodeEENSt10shared_ptrIK10RelAlgNodeEE">RelCompound::replaceInput (C++ function)</a>
 </li>
@@ -15805,7 +15832,7 @@
 </li>
       <li><a href="api/class/class_rel_filter.html#_CPPv4NK9RelFilter12getConditionEv">RelFilter::getCondition (C++ function)</a>
 </li>
-      <li><a href="api/class/class_rel_filter.html#_CPPv4N9RelFilter9RelFilterERNSt10unique_ptrIK9RexScalarEENSt10shared_ptrIK10RelAlgNodeEE">RelFilter::RelFilter (C++ function)</a>
+      <li><a href="api/class/class_rel_filter.html#_CPPv4N9RelFilter9RelFilterERK9RelFilter">RelFilter::RelFilter (C++ function)</a>, <a href="api/class/class_rel_filter.html#_CPPv4N9RelFilter9RelFilterERNSt10unique_ptrIK9RexScalarEENSt10shared_ptrIK10RelAlgNodeEE">[1]</a>
 </li>
       <li><a href="api/class/class_rel_filter.html#_CPPv4N9RelFilter12replaceInputENSt10shared_ptrIK10RelAlgNodeEENSt10shared_ptrIK10RelAlgNodeEE">RelFilter::replaceInput (C++ function)</a>
 </li>
@@ -15839,7 +15866,7 @@
 </li>
       <li><a href="api/class/class_rel_join.html#_CPPv4N7RelJoin10join_type_E">RelJoin::join_type_ (C++ member)</a>
 </li>
-      <li><a href="api/class/class_rel_join.html#_CPPv4N7RelJoin7RelJoinENSt10shared_ptrIK10RelAlgNodeEENSt10shared_ptrIK10RelAlgNodeEERNSt10unique_ptrIK9RexScalarEEK8JoinType">RelJoin::RelJoin (C++ function)</a>
+      <li><a href="api/class/class_rel_join.html#_CPPv4N7RelJoin7RelJoinENSt10shared_ptrIK10RelAlgNodeEENSt10shared_ptrIK10RelAlgNodeEERNSt10unique_ptrIK9RexScalarEEK8JoinType">RelJoin::RelJoin (C++ function)</a>, <a href="api/class/class_rel_join.html#_CPPv4N7RelJoin7RelJoinERK7RelJoin">[1]</a>
 </li>
       <li><a href="api/class/class_rel_join.html#_CPPv4N7RelJoin12replaceInputENSt10shared_ptrIK10RelAlgNodeEENSt10shared_ptrIK10RelAlgNodeEE">RelJoin::replaceInput (C++ function)</a>
 </li>
@@ -15909,7 +15936,7 @@
 </li>
       <li><a href="api/class/class_rel_logical_values.html#_CPPv4NK16RelLogicalValues7hasRowsEv">RelLogicalValues::hasRows (C++ function)</a>
 </li>
-      <li><a href="api/class/class_rel_logical_values.html#_CPPv4N16RelLogicalValues16RelLogicalValuesERKNSt6vectorI14TargetMetaInfoEERNSt6vectorI9RowValuesEE">RelLogicalValues::RelLogicalValues (C++ function)</a>
+      <li><a href="api/class/class_rel_logical_values.html#_CPPv4N16RelLogicalValues16RelLogicalValuesERK16RelLogicalValues">RelLogicalValues::RelLogicalValues (C++ function)</a>, <a href="api/class/class_rel_logical_values.html#_CPPv4N16RelLogicalValues16RelLogicalValuesERKNSt6vectorI14TargetMetaInfoEERNSt6vectorI9RowValuesEE">[1]</a>
 </li>
       <li><a href="api/class/class_rel_logical_values.html#_CPPv4N16RelLogicalValues9RowValuesE">RelLogicalValues::RowValues (C++ type)</a>
 </li>
@@ -16013,7 +16040,7 @@
 </li>
       <li><a href="api/class/class_rel_project.html#_CPPv4NK10RelProject8isSimpleEv">RelProject::isSimple (C++ function)</a>
 </li>
-      <li><a href="api/class/class_rel_project.html#_CPPv4N10RelProject10RelProjectERNSt6vectorINSt10unique_ptrIK9RexScalarEEEERKNSt6vectorINSt6stringEEENSt10shared_ptrIK10RelAlgNodeEE">RelProject::RelProject (C++ function)</a>
+      <li><a href="api/class/class_rel_project.html#_CPPv4N10RelProject10RelProjectERK10RelProject">RelProject::RelProject (C++ function)</a>, <a href="api/class/class_rel_project.html#_CPPv4N10RelProject10RelProjectERNSt6vectorINSt10unique_ptrIK9RexScalarEEEERKNSt6vectorINSt6stringEEENSt10shared_ptrIK10RelAlgNodeEE">[1]</a>
 </li>
       <li><a href="api/class/class_rel_project.html#_CPPv4N10RelProject12replaceInputENSt10shared_ptrIK10RelAlgNodeEENSt10shared_ptrIK10RelAlgNodeEE">RelProject::replaceInput (C++ function)</a>, <a href="api/class/class_rel_project.html#_CPPv4N10RelProject12replaceInputENSt10shared_ptrIK10RelAlgNodeEENSt10shared_ptrIK10RelAlgNodeEENSt8optionalINSt13unordered_mapIjjEEEE">[1]</a>
 </li>
@@ -16028,6 +16055,18 @@
       <li><a href="api/class/class_rel_project.html#_CPPv4NK10RelProject8toStringEv">RelProject::toString (C++ function)</a>
 </li>
       <li><a href="api/class/class_rel_project.html#_CPPv4I0ENK10RelProject16visitScalarExprsEv20EXPR_VISITOR_FUNCTOR">RelProject::visitScalarExprs (C++ function)</a>
+</li>
+      <li><a href="api/class/class_rel_rex_dag_visitor.html#_CPPv416RelRexDagVisitor">RelRexDagVisitor (C++ class)</a>
+</li>
+      <li><a href="api/class/class_rel_rex_dag_visitor.html#_CPPv4I00EN16RelRexDagVisitor4castEvPK1T">RelRexDagVisitor::cast (C++ function)</a>
+</li>
+      <li><a href="api/class/class_rel_rex_dag_visitor.html#_CPPv4N16RelRexDagVisitor8HandlersE">RelRexDagVisitor::Handlers (C++ type)</a>
+</li>
+      <li><a href="api/class/class_rel_rex_dag_visitor.html#_CPPv4I0DpEN16RelRexDagVisitor13make_handlersEN16RelRexDagVisitor8HandlersI1TXsZ2TsEEEv">RelRexDagVisitor::make_handlers (C++ function)</a>
+</li>
+      <li><a href="api/class/class_rel_rex_dag_visitor.html#_CPPv4N16RelRexDagVisitor5visitEPK10RelAlgNode">RelRexDagVisitor::visit (C++ function)</a>, <a href="api/class/class_rel_rex_dag_visitor.html#_CPPv4N16RelRexDagVisitor5visitEPK10RelProject">[1]</a>, <a href="api/class/class_rel_rex_dag_visitor.html#_CPPv4N16RelRexDagVisitor5visitEPK10RexLiteral">[2]</a>, <a href="api/class/class_rel_rex_dag_visitor.html#_CPPv4N16RelRexDagVisitor5visitEPK11RelCompound">[3]</a>, <a href="api/class/class_rel_rex_dag_visitor.html#_CPPv4N16RelRexDagVisitor5visitEPK11RexOperator">[4]</a>, <a href="api/class/class_rel_rex_dag_visitor.html#_CPPv4N16RelRexDagVisitor5visitEPK11RexSubQuery">[5]</a>, <a href="api/class/class_rel_rex_dag_visitor.html#_CPPv4N16RelRexDagVisitor5visitEPK12RelAggregate">[6]</a>, <a href="api/class/class_rel_rex_dag_visitor.html#_CPPv4N16RelRexDagVisitor5visitEPK15RelLogicalUnion">[7]</a>, <a href="api/class/class_rel_rex_dag_visitor.html#_CPPv4N16RelRexDagVisitor5visitEPK16RelLogicalValues">[8]</a>, <a href="api/class/class_rel_rex_dag_visitor.html#_CPPv4N16RelRexDagVisitor5visitEPK16RelTableFunction">[9]</a>, <a href="api/class/class_rel_rex_dag_visitor.html#_CPPv4N16RelRexDagVisitor5visitEPK16RexAbstractInput">[10]</a>, <a href="api/class/class_rel_rex_dag_visitor.html#_CPPv4N16RelRexDagVisitor5visitEPK19RexFunctionOperator">[11]</a>, <a href="api/class/class_rel_rex_dag_visitor.html#_CPPv4N16RelRexDagVisitor5visitEPK20RelLeftDeepInnerJoin">[12]</a>, <a href="api/class/class_rel_rex_dag_visitor.html#_CPPv4N16RelRexDagVisitor5visitEPK25RexWindowFunctionOperator">[13]</a>, <a href="api/class/class_rel_rex_dag_visitor.html#_CPPv4N16RelRexDagVisitor5visitEPK6RexRef">[14]</a>, <a href="api/class/class_rel_rex_dag_visitor.html#_CPPv4N16RelRexDagVisitor5visitEPK7RelJoin">[15]</a>, <a href="api/class/class_rel_rex_dag_visitor.html#_CPPv4N16RelRexDagVisitor5visitEPK7RelScan">[16]</a>, <a href="api/class/class_rel_rex_dag_visitor.html#_CPPv4N16RelRexDagVisitor5visitEPK7RelSort">[17]</a>, <a href="api/class/class_rel_rex_dag_visitor.html#_CPPv4N16RelRexDagVisitor5visitEPK7RexCase">[18]</a>, <a href="api/class/class_rel_rex_dag_visitor.html#_CPPv4N16RelRexDagVisitor5visitEPK8RexInput">[19]</a>, <a href="api/class/class_rel_rex_dag_visitor.html#_CPPv4N16RelRexDagVisitor5visitEPK9RelFilter">[20]</a>, <a href="api/class/class_rel_rex_dag_visitor.html#_CPPv4N16RelRexDagVisitor5visitEPK9RelModify">[21]</a>, <a href="api/class/class_rel_rex_dag_visitor.html#_CPPv4N16RelRexDagVisitor5visitEPK9RexScalar">[22]</a>
+</li>
+      <li><a href="api/class/class_rel_rex_dag_visitor.html#_CPPv4N16RelRexDagVisitorD0Ev">RelRexDagVisitor::~RelRexDagVisitor (C++ function)</a>
 </li>
       <li><a href="api/class/class_rel_scan.html#_CPPv47RelScan">RelScan (C++ class)</a>
 </li>
@@ -16117,7 +16156,7 @@
 </li>
       <li><a href="api/class/class_rel_table_function.html#_CPPv4NK16RelTableFunction22getTableFuncInputsSizeEv">RelTableFunction::getTableFuncInputsSize (C++ function)</a>
 </li>
-      <li><a href="api/class/class_rel_table_function.html#_CPPv4N16RelTableFunction16RelTableFunctionERKNSt6stringENSt10shared_ptrIK10RelAlgNodeEERNSt6vectorINSt6stringEEENSt6vectorIPK3RexEERNSt6vectorINSt10unique_ptrIK9RexScalarEEEERNSt6vectorINSt10unique_ptrIK9RexScalarEEEE">RelTableFunction::RelTableFunction (C++ function)</a>
+      <li><a href="api/class/class_rel_table_function.html#_CPPv4N16RelTableFunction16RelTableFunctionERK16RelTableFunction">RelTableFunction::RelTableFunction (C++ function)</a>, <a href="api/class/class_rel_table_function.html#_CPPv4N16RelTableFunction16RelTableFunctionERKNSt6stringENSt10shared_ptrIK10RelAlgNodeEERNSt6vectorINSt6stringEEENSt6vectorIPK3RexEERNSt6vectorINSt10unique_ptrIK9RexScalarEEEERNSt6vectorINSt10unique_ptrIK9RexScalarEEEE">[1]</a>
 </li>
       <li><a href="api/class/class_rel_table_function.html#_CPPv4N16RelTableFunction12replaceInputENSt10shared_ptrIK10RelAlgNodeEENSt10shared_ptrIK10RelAlgNodeEE">RelTableFunction::replaceInput (C++ function)</a>
 </li>
@@ -16239,10 +16278,10 @@
 </li>
       <li><a href="api/class/class_render_info.html#_CPPv4NK10RenderInfo17getQueryVboLayoutEv">RenderInfo::getQueryVboLayout (C++ function)</a>
 </li>
-  </ul></td>
-  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="api/class/class_render_info.html#_CPPv4NK10RenderInfo18getRenderQueryOptsEv">RenderInfo::getRenderQueryOpts (C++ function)</a>
 </li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="api/class/class_render_info.html#_CPPv4NK10RenderInfo21getRenderQueryOptsPtrEv">RenderInfo::getRenderQueryOptsPtr (C++ function)</a>
 </li>
       <li><a href="api/class/class_render_info.html#_CPPv4NK10RenderInfo14getSessionInfoEv">RenderInfo::getSessionInfo (C++ function)</a>
@@ -16959,9 +16998,13 @@
 </li>
       <li><a href="api/class/class_rex_deep_copy_visitor.html#_CPPv418RexDeepCopyVisitor">RexDeepCopyVisitor (C++ class)</a>
 </li>
+      <li><a href="api/class/class_rex_deep_copy_visitor.html#_CPPv4N18RexDeepCopyVisitor4copyERKNSt6vectorI9RowValuesEE">RexDeepCopyVisitor::copy (C++ function)</a>
+</li>
       <li><a href="api/class/class_rex_deep_copy_visitor.html#_CPPv4NK18RexDeepCopyVisitor13defaultResultEv">RexDeepCopyVisitor::defaultResult (C++ function)</a>
 </li>
       <li><a href="api/class/class_rex_deep_copy_visitor.html#_CPPv4N18RexDeepCopyVisitor7RetTypeE">RexDeepCopyVisitor::RetType (C++ type)</a>
+</li>
+      <li><a href="api/class/class_rex_deep_copy_visitor.html#_CPPv4N18RexDeepCopyVisitor9RowValuesE">RexDeepCopyVisitor::RowValues (C++ type)</a>
 </li>
       <li><a href="api/class/class_rex_deep_copy_visitor.html#_CPPv4NK18RexDeepCopyVisitor9visitCaseEPK7RexCase">RexDeepCopyVisitor::visitCase (C++ function)</a>
 </li>
@@ -17097,6 +17140,8 @@
 </li>
       <li><a href="api/class/class_rex_sub_query.html#_CPPv4NK11RexSubQuery18getExecutionResultEv">RexSubQuery::getExecutionResult (C++ function)</a>
 </li>
+      <li><a href="api/class/class_rex_sub_query.html#_CPPv4NK11RexSubQuery5getIdEv">RexSubQuery::getId (C++ function)</a>
+</li>
       <li><a href="api/class/class_rex_sub_query.html#_CPPv4NK11RexSubQuery9getRelAlgEv">RexSubQuery::getRelAlg (C++ function)</a>
 </li>
       <li><a href="api/class/class_rex_sub_query.html#_CPPv4NK11RexSubQuery7getTypeEv">RexSubQuery::getType (C++ function)</a>
@@ -17114,6 +17159,16 @@
       <li><a href="api/class/class_rex_sub_query.html#_CPPv4NK11RexSubQuery8toStringEv">RexSubQuery::toString (C++ function)</a>
 </li>
       <li><a href="api/class/class_rex_sub_query.html#_CPPv4N11RexSubQuery5type_E">RexSubQuery::type_ (C++ member)</a>
+</li>
+      <li><a href="api/class/class_rex_sub_query_id_collector.html#_CPPv422RexSubQueryIdCollector">RexSubQueryIdCollector (C++ class)</a>
+</li>
+      <li><a href="api/class/class_rex_sub_query_id_collector.html#_CPPv4N22RexSubQueryIdCollector21getLiveRexSubQueryIdsEPK10RelAlgNode">RexSubQueryIdCollector::getLiveRexSubQueryIds (C++ function)</a>
+</li>
+      <li><a href="api/class/class_rex_sub_query_id_collector.html#_CPPv4N22RexSubQueryIdCollector3IdsE">RexSubQueryIdCollector::Ids (C++ type)</a>
+</li>
+      <li><a href="api/class/class_rex_sub_query_id_collector.html#_CPPv4N22RexSubQueryIdCollector4ids_E">RexSubQueryIdCollector::ids_ (C++ member)</a>
+</li>
+      <li><a href="api/class/class_rex_sub_query_id_collector.html#_CPPv4N22RexSubQueryIdCollector5visitEPK11RexSubQuery">RexSubQueryIdCollector::visit (C++ function)</a>
 </li>
       <li><a href="api/class/class_rex_visitor.html#_CPPv4I0E10RexVisitor">RexVisitor (C++ class)</a>
 </li>
@@ -17591,6 +17646,10 @@
 </li>
       <li><a href="api/struct/structshared_1_1is__std__container_3_01std_1_1list_3_01_t_00_01_a_01_4_01_4.html#_CPPv4I00EN6shared16is_std_containerINSt4listI1T1AEEEE">shared::is_std_container&lt;std::list&lt;T, A&gt;&gt; (C++ class)</a>
 </li>
+      <li><a href="api/struct/structshared_1_1is__std__container_3_01std_1_1set_3_01_t_00_01_a_01_4_01_4.html#_CPPv4I00EN6shared16is_std_containerINSt3setI1T1AEEEE">shared::is_std_container&lt;std::set&lt;T, A&gt;&gt; (C++ class)</a>
+</li>
+      <li><a href="api/struct/structshared_1_1is__std__container_3_01std_1_1unordered__set_3_01_t_00_01_a_01_4_01_4.html#_CPPv4I00EN6shared16is_std_containerINSt13unordered_setI1T1AEEEE">shared::is_std_container&lt;std::unordered_set&lt;T, A&gt;&gt; (C++ class)</a>
+</li>
       <li><a href="api/struct/structshared_1_1is__std__container_3_01std_1_1vector_3_01_t_00_01_a_01_4_01_4.html#_CPPv4I00EN6shared16is_std_containerINSt6vectorI1T1AEEEE">shared::is_std_container&lt;std::vector&lt;T, A&gt;&gt; (C++ class)</a>
 </li>
       <li><a href="api/struct/structshared_1_1_print_container.html#_CPPv4I0EN6shared14PrintContainerE">shared::PrintContainer (C++ class)</a>
@@ -17897,10 +17956,10 @@
 </li>
       <li><a href="api/struct/structstd_1_1hash_3_01std_1_1vector_3_01int_01_4_01_4.html#_CPPv4IENSt4hashINSt6vectorIiEEEE">std::hash&lt;std::vector&lt;int&gt;&gt; (C++ class)</a>
 </li>
-      <li><a href="api/struct/structstd_1_1tuple__element_3_01_i_00_01boost_1_1tuples_1_1cons_3_01_t_00_01_u_01_4_01_4.html#_CPPv4I_6size_t00ENSt13tuple_elementI1IN5boost6tuples4consI1T1UEEEE">std::tuple_element&lt;I, boost::tuples::cons&lt;T, U&gt;&gt; (C++ class)</a>
-</li>
   </ul></td>
   <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="api/struct/structstd_1_1tuple__element_3_01_i_00_01boost_1_1tuples_1_1cons_3_01_t_00_01_u_01_4_01_4.html#_CPPv4I_6size_t00ENSt13tuple_elementI1IN5boost6tuples4consI1T1UEEEE">std::tuple_element&lt;I, boost::tuples::cons&lt;T, U&gt;&gt; (C++ class)</a>
+</li>
       <li><a href="api/struct/structstd_1_1tuple__size_3_01boost_1_1tuples_1_1cons_3_01_t_00_01_u_01_4_01_4.html#_CPPv4I00ENSt10tuple_sizeIN5boost6tuples4consI1T1UEEEE">std::tuple_size&lt;boost::tuples::cons&lt;T, U&gt;&gt; (C++ class)</a>
 </li>
       <li><a href="api/class/class_storage_i_o_facility.html#_CPPv4I00E17StorageIOFacility">StorageIOFacility (C++ class)</a>
@@ -18697,10 +18756,10 @@
 </li>
       <li><a href="api/struct/struct_target_expr_codegen_builder.html#_CPPv4NK24TargetExprCodegenBuilder33codegenMultiSlotSampleExpressionsEP19GroupByAndAggregateP8ExecutorRK21QueryMemoryDescriptorRK18CompilationOptionsRKNSt5tupleIPN4llvm5ValueEPN4llvm5ValueEEERKNSt6vectorIPN4llvm5ValueEEEPN4llvm5ValueEPN4llvm5ValueERN19GroupByAndAggregate14DiamondCodegenE">TargetExprCodegenBuilder::codegenMultiSlotSampleExpressions (C++ function)</a>
 </li>
-  </ul></td>
-  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="api/struct/struct_target_expr_codegen_builder.html#_CPPv4NK24TargetExprCodegenBuilder24codegenSampleExpressionsEP19GroupByAndAggregateP8ExecutorRK21QueryMemoryDescriptorRK18CompilationOptionsRKNSt5tupleIPN4llvm5ValueEPN4llvm5ValueEEERKNSt6vectorIPN4llvm5ValueEEEPN4llvm5ValueEPN4llvm5ValueERN19GroupByAndAggregate14DiamondCodegenE">TargetExprCodegenBuilder::codegenSampleExpressions (C++ function)</a>
 </li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="api/struct/struct_target_expr_codegen_builder.html#_CPPv4NK24TargetExprCodegenBuilder33codegenSingleSlotSampleExpressionEP19GroupByAndAggregateP8ExecutorRK21QueryMemoryDescriptorRK18CompilationOptionsRKNSt5tupleIPN4llvm5ValueEPN4llvm5ValueEEERKNSt6vectorIPN4llvm5ValueEEEPN4llvm5ValueEPN4llvm5ValueERN19GroupByAndAggregate14DiamondCodegenE">TargetExprCodegenBuilder::codegenSingleSlotSampleExpression (C++ function)</a>
 </li>
       <li><a href="api/struct/struct_target_expr_codegen_builder.html#_CPPv4NK24TargetExprCodegenBuilder19codegenSlotEmptyKeyEPN4llvm5ValueERNSt6vectorIPN4llvm5ValueEEEP8ExecutorK7int64_t">TargetExprCodegenBuilder::codegenSlotEmptyKey (C++ function)</a>
@@ -18954,6 +19013,12 @@
       <li><a href="api/class/class_tracking_processor.html#_CPPv4N17TrackingProcessor7processEN4mapd10shared_ptrIN6apache6thrift8protocol9TProtocolEEEN4mapd10shared_ptrIN6apache6thrift8protocol9TProtocolEEEPv">TrackingProcessor::process (C++ function)</a>
 </li>
       <li><a href="api/class/class_tracking_processor.html#_CPPv4N17TrackingProcessor17TrackingProcessorEN4mapd10shared_ptrI9OmniSciIfEE">TrackingProcessor::TrackingProcessor (C++ function)</a>
+</li>
+      <li><a href="api/struct/struct_type_handler.html#_CPPv4I00E11TypeHandler">TypeHandler (C++ class)</a>
+</li>
+      <li><a href="api/struct/struct_type_handler.html#_CPPv4N11TypeHandler10type_indexE">TypeHandler::type_index (C++ member)</a>
+</li>
+      <li><a href="api/struct/struct_type_handler.html#_CPPv4IEN11TypeHandlerI1T1UE7handlerE">TypeHandler&lt;T, U&gt;::handler (C++ member)</a>
 </li>
   </ul></td>
 </tr></table>

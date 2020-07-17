@@ -65,7 +65,7 @@
             
             
               <div class="version">
-                5.4.0dev 72180ab
+                5.4.0dev 19b6dfc
               </div>
             
           
@@ -631,6 +631,7 @@
 <li class="toctree-l2"><a class="reference internal" href="class_rel_logical_values.html">Class RelLogicalValues</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_rel_modify.html">Class RelModify</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_rel_project.html">Class RelProject</a></li>
+<li class="toctree-l2"><a class="reference internal" href="class_rel_rex_dag_visitor.html">Class RelRexDagVisitor</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_rel_scan.html">Class RelScan</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_rel_sort.html">Class RelSort</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_rel_table_function.html">Class RelTableFunction</a></li>
@@ -660,6 +661,7 @@
 <li class="toctree-l2"><a class="reference internal" href="class_rex_ref.html">Class RexRef</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_rex_scalar.html">Class RexScalar</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_rex_sub_query.html">Class RexSubQuery</a></li>
+<li class="toctree-l2"><a class="reference internal" href="class_rex_sub_query_id_collector.html">Class RexSubQueryIdCollector</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_rex_visitor.html">Class RexVisitor</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_rex_visitor_base.html">Class RexVisitorBase</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_rex_window_function_operator.html">Class RexWindowFunctionOperator</a></li>
@@ -1279,6 +1281,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_text_converter_factory.html">Struct TextConverterFactory</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_thread_controller___n_s_1_1_future_getter.html">Struct ThreadController_NS::FutureGetter</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_thread_controller___n_s_1_1_future_getter_3_01void_01_4.html">Struct ThreadController_NS::FutureGetter&lt; void &gt;</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/struct_type_handler.html">Struct TypeHandler</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_updel_roll.html">Struct UpdelRoll</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_varlen_datum.html">Struct VarlenDatum</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_view_privileges.html">Struct ViewPrivileges</a></li>
@@ -1350,6 +1353,8 @@
 <li class="toctree-l2"><a class="reference internal" href="../struct/structshared_1_1is__std__container.html">Struct shared::is_std_container</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structshared_1_1is__std__container_3_01std_1_1deque_3_01_t_00_01_a_01_4_01_4.html">Struct shared::is_std_container&lt; std::deque&lt; T, A &gt; &gt;</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structshared_1_1is__std__container_3_01std_1_1list_3_01_t_00_01_a_01_4_01_4.html">Struct shared::is_std_container&lt; std::list&lt; T, A &gt; &gt;</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/structshared_1_1is__std__container_3_01std_1_1set_3_01_t_00_01_a_01_4_01_4.html">Struct shared::is_std_container&lt; std::set&lt; T, A &gt; &gt;</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/structshared_1_1is__std__container_3_01std_1_1unordered__set_3_01_t_00_01_a_01_4_01_4.html">Struct shared::is_std_container&lt; std::unordered_set&lt; T, A &gt; &gt;</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structshared_1_1is__std__container_3_01std_1_1vector_3_01_t_00_01_a_01_4_01_4.html">Struct shared::is_std_container&lt; std::vector&lt; T, A &gt; &gt;</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structstd_1_1equal__to_3_01shared__ptr_3_01const_01_input_col_descriptor_01_4_01_4.html">Struct std::equal_to&lt; shared_ptr&lt; const InputColDescriptor &gt; &gt;</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structstd_1_1hash_3_01_input_col_descriptor_01_4.html">Struct std::hash&lt; InputColDescriptor &gt;</a></li>
@@ -1480,6 +1485,22 @@
 <dt id="_CPPv418RexDeepCopyVisitor">
 <span id="_CPPv318RexDeepCopyVisitor"></span><span id="_CPPv218RexDeepCopyVisitor"></span><span id="RexDeepCopyVisitor"></span><span class="target" id="class_rex_deep_copy_visitor"></span><em class="property">class </em><code class="sig-name descname">RexDeepCopyVisitor</code> : <em class="property">public</em> RexVisitorBase&lt;std::unique_ptr&lt;<em class="property">const</em> <a class="reference internal" href="class_rex_scalar.html#_CPPv49RexScalar" title="RexScalar">RexScalar</a>&gt;&gt;<a class="headerlink" href="#_CPPv418RexDeepCopyVisitor" title="Permalink to this definition">¶</a><br /></dt>
 <dd><p>Subclassed by <a class="reference internal" href="classanonymous__namespace_02_rel_alg_dag_builder_8cpp_03_1_1anonymous__namespace_02_rel_alg_dag_37bbb45ac7c2d8584821b5ef04b2b27a.html#classanonymous__namespace_02_rel_alg_dag_builder_8cpp_03_1_1anonymous__namespace_02_rel_alg_dag_37bbb45ac7c2d8584821b5ef04b2b27a"><span class="std std-ref">anonymous_namespace{RelAlgDagBuilder.cpp}::anonymous_namespace{RelAlgDagBuilder.cpp}::RexInputReplacementVisitor</span></a>, <a class="reference internal" href="classanonymous__namespace_02_rel_alg_dag_builder_8cpp_03_1_1_rex_input_backpropagation_visitor.html#classanonymous__namespace_02_rel_alg_dag_builder_8cpp_03_1_1_rex_input_backpropagation_visitor"><span class="std std-ref">anonymous_namespace{RelAlgDagBuilder.cpp}::RexInputBackpropagationVisitor</span></a>, <a class="reference internal" href="classanonymous__namespace_02_rel_alg_dag_builder_8cpp_03_1_1_rex_window_func_replacement_visitor.html#classanonymous__namespace_02_rel_alg_dag_builder_8cpp_03_1_1_rex_window_func_replacement_visitor"><span class="std std-ref">anonymous_namespace{RelAlgDagBuilder.cpp}::RexWindowFuncReplacementVisitor</span></a>, <a class="reference internal" href="classanonymous__namespace_02_rel_alg_optimizer_8cpp_03_1_1_rex_input_redirector.html#classanonymous__namespace_02_rel_alg_optimizer_8cpp_03_1_1_rex_input_redirector"><span class="std std-ref">anonymous_namespace{RelAlgOptimizer.cpp}::RexInputRedirector</span></a>, <a class="reference internal" href="classanonymous__namespace_02_rel_alg_optimizer_8cpp_03_1_1_rex_input_renumber_visitor.html#classanonymous__namespace_02_rel_alg_optimizer_8cpp_03_1_1_rex_input_renumber_visitor"><span class="std std-ref">anonymous_namespace{RelAlgOptimizer.cpp}::RexInputRenumberVisitor</span></a>, <a class="reference internal" href="classanonymous__namespace_02_rel_alg_optimizer_8cpp_03_1_1_rex_input_sinker.html#classanonymous__namespace_02_rel_alg_optimizer_8cpp_03_1_1_rex_input_sinker"><span class="std std-ref">anonymous_namespace{RelAlgOptimizer.cpp}::RexInputSinker</span></a>, <a class="reference internal" href="classanonymous__namespace_02_rel_alg_optimizer_8cpp_03_1_1_rex_project_input_redirector.html#classanonymous__namespace_02_rel_alg_optimizer_8cpp_03_1_1_rex_project_input_redirector"><span class="std std-ref">anonymous_namespace{RelAlgOptimizer.cpp}::RexProjectInputRedirector</span></a>, <a class="reference internal" href="classanonymous__namespace_02_rel_alg_optimizer_8cpp_03_1_1_sub_condition_replacer.html#classanonymous__namespace_02_rel_alg_optimizer_8cpp_03_1_1_sub_condition_replacer"><span class="std std-ref">anonymous_namespace{RelAlgOptimizer.cpp}::SubConditionReplacer</span></a>, <a class="reference internal" href="class_join_target_rebaser.html#class_join_target_rebaser"><span class="std std-ref">JoinTargetRebaser</span></a>, <a class="reference internal" href="class_rex_input_renumber.html#class_rex_input_renumber"><span class="std std-ref">RexInputRenumber&lt; bAllowMissing &gt;</span></a>, <a class="reference internal" href="class_sub_condition_remover.html#class_sub_condition_remover"><span class="std std-ref">SubConditionRemover</span></a></p>
+<div class="breathe-sectiondef docutils container">
+<p class="breathe-sectiondef-title rubric">Public Types</p>
+<dl class="type">
+<dt id="_CPPv4N18RexDeepCopyVisitor9RowValuesE">
+<span id="_CPPv3N18RexDeepCopyVisitor9RowValuesE"></span><span id="_CPPv2N18RexDeepCopyVisitor9RowValuesE"></span><span class="target" id="class_rex_deep_copy_visitor_1a4e52cc8ae754e7fde3e5931263989015"></span><em class="property">using </em><code class="sig-name descname">RowValues</code> = std::vector&lt;std::unique_ptr&lt;<em class="property">const</em> <a class="reference internal" href="class_rex_scalar.html#_CPPv49RexScalar" title="RexScalar">RexScalar</a>&gt;&gt;<a class="headerlink" href="#_CPPv4N18RexDeepCopyVisitor9RowValuesE" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+</div>
+<div class="breathe-sectiondef docutils container">
+<p class="breathe-sectiondef-title rubric">Public Static Functions</p>
+<dl class="function">
+<dt id="_CPPv4N18RexDeepCopyVisitor4copyERKNSt6vectorI9RowValuesEE">
+<span id="_CPPv3N18RexDeepCopyVisitor4copyERKNSt6vectorI9RowValuesEE"></span><span id="_CPPv2N18RexDeepCopyVisitor4copyERKNSt6vectorI9RowValuesEE"></span><span id="RexDeepCopyVisitor::copy__std::vector:RowValues:CR"></span><span class="target" id="class_rex_deep_copy_visitor_1a76a910ed9e72d1722522f84edc7280d8"></span><em class="property">static</em> std::vector&lt;<a class="reference internal" href="#_CPPv4N18RexDeepCopyVisitor9RowValuesE" title="RexDeepCopyVisitor::RowValues">RowValues</a>&gt; <code class="sig-name descname">copy</code><span class="sig-paren">(</span>std::vector&lt;<a class="reference internal" href="#_CPPv4N18RexDeepCopyVisitor9RowValuesE" title="RexDeepCopyVisitor::RowValues">RowValues</a>&gt; <em class="property">const</em> &amp;<em>rhs</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N18RexDeepCopyVisitor4copyERKNSt6vectorI9RowValuesEE" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+</div>
 <div class="breathe-sectiondef docutils container">
 <p class="breathe-sectiondef-title rubric">Protected Types</p>
 <dl class="type">

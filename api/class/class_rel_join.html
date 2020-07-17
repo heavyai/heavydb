@@ -65,7 +65,7 @@
             
             
               <div class="version">
-                5.4.0dev 72180ab
+                5.4.0dev 19b6dfc
               </div>
             
           
@@ -631,6 +631,7 @@
 <li class="toctree-l2"><a class="reference internal" href="class_rel_logical_values.html">Class RelLogicalValues</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_rel_modify.html">Class RelModify</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_rel_project.html">Class RelProject</a></li>
+<li class="toctree-l2"><a class="reference internal" href="class_rel_rex_dag_visitor.html">Class RelRexDagVisitor</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_rel_scan.html">Class RelScan</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_rel_sort.html">Class RelSort</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_rel_table_function.html">Class RelTableFunction</a></li>
@@ -660,6 +661,7 @@
 <li class="toctree-l2"><a class="reference internal" href="class_rex_ref.html">Class RexRef</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_rex_scalar.html">Class RexScalar</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_rex_sub_query.html">Class RexSubQuery</a></li>
+<li class="toctree-l2"><a class="reference internal" href="class_rex_sub_query_id_collector.html">Class RexSubQueryIdCollector</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_rex_visitor.html">Class RexVisitor</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_rex_visitor_base.html">Class RexVisitorBase</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_rex_window_function_operator.html">Class RexWindowFunctionOperator</a></li>
@@ -1279,6 +1281,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_text_converter_factory.html">Struct TextConverterFactory</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_thread_controller___n_s_1_1_future_getter.html">Struct ThreadController_NS::FutureGetter</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_thread_controller___n_s_1_1_future_getter_3_01void_01_4.html">Struct ThreadController_NS::FutureGetter&lt; void &gt;</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/struct_type_handler.html">Struct TypeHandler</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_updel_roll.html">Struct UpdelRoll</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_varlen_datum.html">Struct VarlenDatum</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_view_privileges.html">Struct ViewPrivileges</a></li>
@@ -1350,6 +1353,8 @@
 <li class="toctree-l2"><a class="reference internal" href="../struct/structshared_1_1is__std__container.html">Struct shared::is_std_container</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structshared_1_1is__std__container_3_01std_1_1deque_3_01_t_00_01_a_01_4_01_4.html">Struct shared::is_std_container&lt; std::deque&lt; T, A &gt; &gt;</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structshared_1_1is__std__container_3_01std_1_1list_3_01_t_00_01_a_01_4_01_4.html">Struct shared::is_std_container&lt; std::list&lt; T, A &gt; &gt;</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/structshared_1_1is__std__container_3_01std_1_1set_3_01_t_00_01_a_01_4_01_4.html">Struct shared::is_std_container&lt; std::set&lt; T, A &gt; &gt;</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/structshared_1_1is__std__container_3_01std_1_1unordered__set_3_01_t_00_01_a_01_4_01_4.html">Struct shared::is_std_container&lt; std::unordered_set&lt; T, A &gt; &gt;</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structshared_1_1is__std__container_3_01std_1_1vector_3_01_t_00_01_a_01_4_01_4.html">Struct shared::is_std_container&lt; std::vector&lt; T, A &gt; &gt;</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structstd_1_1equal__to_3_01shared__ptr_3_01const_01_input_col_descriptor_01_4_01_4.html">Struct std::equal_to&lt; shared_ptr&lt; const InputColDescriptor &gt; &gt;</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structstd_1_1hash_3_01_input_col_descriptor_01_4.html">Struct std::hash&lt; InputColDescriptor &gt;</a></li>
@@ -1487,6 +1492,11 @@
 <dd></dd></dl>
 
 <dl class="function">
+<dt id="_CPPv4N7RelJoin7RelJoinERK7RelJoin">
+<span id="_CPPv3N7RelJoin7RelJoinERK7RelJoin"></span><span id="_CPPv2N7RelJoin7RelJoinERK7RelJoin"></span><span id="RelJoin::RelJoin__RelJoinCR"></span><span class="target" id="class_rel_join_1a87fa20d41a682be9f9cc449a2e668e54"></span><code class="sig-name descname">RelJoin</code><span class="sig-paren">(</span><a class="reference internal" href="#_CPPv4N7RelJoin7RelJoinENSt10shared_ptrIK10RelAlgNodeEENSt10shared_ptrIK10RelAlgNodeEERNSt10unique_ptrIK9RexScalarEEK8JoinType" title="RelJoin::RelJoin">RelJoin</a> <em class="property">const</em> &amp;<em>rhs</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N7RelJoin7RelJoinERK7RelJoin" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="function">
 <dt id="_CPPv4NK7RelJoin11getJoinTypeEv">
 <span id="_CPPv3NK7RelJoin11getJoinTypeEv"></span><span id="_CPPv2NK7RelJoin11getJoinTypeEv"></span><span id="RelJoin::getJoinTypeC"></span><span class="target" id="class_rel_join_1a40e2a321567f011ea213c98b5b46514e"></span>JoinType <code class="sig-name descname">getJoinType</code><span class="sig-paren">(</span><span class="sig-paren">)</span> <em class="property">const</em><a class="headerlink" href="#_CPPv4NK7RelJoin11getJoinTypeEv" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
@@ -1523,7 +1533,7 @@
 
 <dl class="function">
 <dt id="_CPPv4NK7RelJoin8deepCopyEv">
-<span id="_CPPv3NK7RelJoin8deepCopyEv"></span><span id="_CPPv2NK7RelJoin8deepCopyEv"></span><span id="RelJoin::deepCopyC"></span><span class="target" id="class_rel_join_1a7adcbdddb6f16331660d2cfa7cb752b2"></span>std::shared_ptr&lt;<a class="reference internal" href="class_rel_alg_node.html#_CPPv410RelAlgNode" title="RelAlgNode">RelAlgNode</a>&gt; <code class="sig-name descname">deepCopy</code><span class="sig-paren">(</span><span class="sig-paren">)</span> <em class="property">const</em><a class="headerlink" href="#_CPPv4NK7RelJoin8deepCopyEv" title="Permalink to this definition">¶</a><br /></dt>
+<span id="_CPPv3NK7RelJoin8deepCopyEv"></span><span id="_CPPv2NK7RelJoin8deepCopyEv"></span><span id="RelJoin::deepCopyC"></span><span class="target" id="class_rel_join_1a2cb2f0fdd0bacdf335b17562c0e04be7"></span>std::shared_ptr&lt;<a class="reference internal" href="class_rel_alg_node.html#_CPPv410RelAlgNode" title="RelAlgNode">RelAlgNode</a>&gt; <code class="sig-name descname">deepCopy</code><span class="sig-paren">(</span><span class="sig-paren">)</span> <em class="property">const</em><a class="headerlink" href="#_CPPv4NK7RelJoin8deepCopyEv" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 <dl class="function">

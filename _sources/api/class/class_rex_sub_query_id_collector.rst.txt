@@ -1,0 +1,9 @@
+Class RexSubQueryIdCollector
+============================
+
+.. doxygenclass:: RexSubQueryIdCollector
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

@@ -1,0 +1,9 @@
+Class RelRexDagVisitor
+======================
+
+.. doxygenclass:: RelRexDagVisitor
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

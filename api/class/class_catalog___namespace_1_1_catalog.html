@@ -65,7 +65,7 @@
             
             
               <div class="version">
-                5.4.0dev 72180ab
+                5.4.0dev 19b6dfc
               </div>
             
           
@@ -631,6 +631,7 @@
 <li class="toctree-l2"><a class="reference internal" href="class_rel_logical_values.html">Class RelLogicalValues</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_rel_modify.html">Class RelModify</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_rel_project.html">Class RelProject</a></li>
+<li class="toctree-l2"><a class="reference internal" href="class_rel_rex_dag_visitor.html">Class RelRexDagVisitor</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_rel_scan.html">Class RelScan</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_rel_sort.html">Class RelSort</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_rel_table_function.html">Class RelTableFunction</a></li>
@@ -660,6 +661,7 @@
 <li class="toctree-l2"><a class="reference internal" href="class_rex_ref.html">Class RexRef</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_rex_scalar.html">Class RexScalar</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_rex_sub_query.html">Class RexSubQuery</a></li>
+<li class="toctree-l2"><a class="reference internal" href="class_rex_sub_query_id_collector.html">Class RexSubQueryIdCollector</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_rex_visitor.html">Class RexVisitor</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_rex_visitor_base.html">Class RexVisitorBase</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_rex_window_function_operator.html">Class RexWindowFunctionOperator</a></li>
@@ -1279,6 +1281,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_text_converter_factory.html">Struct TextConverterFactory</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_thread_controller___n_s_1_1_future_getter.html">Struct ThreadController_NS::FutureGetter</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_thread_controller___n_s_1_1_future_getter_3_01void_01_4.html">Struct ThreadController_NS::FutureGetter&lt; void &gt;</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/struct_type_handler.html">Struct TypeHandler</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_updel_roll.html">Struct UpdelRoll</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_varlen_datum.html">Struct VarlenDatum</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_view_privileges.html">Struct ViewPrivileges</a></li>
@@ -1350,6 +1353,8 @@
 <li class="toctree-l2"><a class="reference internal" href="../struct/structshared_1_1is__std__container.html">Struct shared::is_std_container</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structshared_1_1is__std__container_3_01std_1_1deque_3_01_t_00_01_a_01_4_01_4.html">Struct shared::is_std_container&lt; std::deque&lt; T, A &gt; &gt;</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structshared_1_1is__std__container_3_01std_1_1list_3_01_t_00_01_a_01_4_01_4.html">Struct shared::is_std_container&lt; std::list&lt; T, A &gt; &gt;</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/structshared_1_1is__std__container_3_01std_1_1set_3_01_t_00_01_a_01_4_01_4.html">Struct shared::is_std_container&lt; std::set&lt; T, A &gt; &gt;</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/structshared_1_1is__std__container_3_01std_1_1unordered__set_3_01_t_00_01_a_01_4_01_4.html">Struct shared::is_std_container&lt; std::unordered_set&lt; T, A &gt; &gt;</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structshared_1_1is__std__container_3_01std_1_1vector_3_01_t_00_01_a_01_4_01_4.html">Struct shared::is_std_container&lt; std::vector&lt; T, A &gt; &gt;</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structstd_1_1equal__to_3_01shared__ptr_3_01const_01_input_col_descriptor_01_4_01_4.html">Struct std::equal_to&lt; shared_ptr&lt; const InputColDescriptor &gt; &gt;</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structstd_1_1hash_3_01_input_col_descriptor_01_4.html">Struct std::hash&lt; InputColDescriptor &gt;</a></li>
@@ -1625,18 +1630,13 @@
 <dd></dd></dl>
 
 <dl class="function">
-<dt id="_CPPv4N17Catalog_Namespace7Catalog26deleteMetadataForDashboardERKNSt6stringERKNSt6stringE">
-<span id="_CPPv3N17Catalog_Namespace7Catalog26deleteMetadataForDashboardERKNSt6stringERKNSt6stringE"></span><span id="_CPPv2N17Catalog_Namespace7Catalog26deleteMetadataForDashboardERKNSt6stringERKNSt6stringE"></span><span id="Catalog_Namespace::Catalog::deleteMetadataForDashboard__ssCR.ssCR"></span><span class="target" id="class_catalog___namespace_1_1_catalog_1a1a2d3be9f931236d171be8d743c61f53"></span>void <code class="sig-name descname">deleteMetadataForDashboard</code><span class="sig-paren">(</span><em class="property">const</em> std::string &amp;<em>userId</em>, <em class="property">const</em> std::string &amp;<em>dashName</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N17Catalog_Namespace7Catalog26deleteMetadataForDashboardERKNSt6stringERKNSt6stringE" title="Permalink to this definition">¶</a><br /></dt>
-<dd></dd></dl>
-
-<dl class="function">
 <dt id="_CPPv4NK17Catalog_Namespace7Catalog23getMetadataForDashboardEK7int32_t">
 <span id="_CPPv3NK17Catalog_Namespace7Catalog23getMetadataForDashboardEK7int32_t"></span><span id="_CPPv2NK17Catalog_Namespace7Catalog23getMetadataForDashboardEK7int32_t"></span><span id="Catalog_Namespace::Catalog::getMetadataForDashboard__int32_tCC"></span><span class="target" id="class_catalog___namespace_1_1_catalog_1a5c10b824f5f4c9b2ef442549f086cd97"></span><em class="property">const</em> <a class="reference internal" href="../struct/struct_dashboard_descriptor.html#_CPPv419DashboardDescriptor" title="DashboardDescriptor">DashboardDescriptor</a> *<code class="sig-name descname">getMetadataForDashboard</code><span class="sig-paren">(</span><em class="property">const</em> int32_t <em>dashboard_id</em><span class="sig-paren">)</span> <em class="property">const</em><a class="headerlink" href="#_CPPv4NK17Catalog_Namespace7Catalog23getMetadataForDashboardEK7int32_t" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 <dl class="function">
-<dt id="_CPPv4N17Catalog_Namespace7Catalog26deleteMetadataForDashboardEK7int32_t">
-<span id="_CPPv3N17Catalog_Namespace7Catalog26deleteMetadataForDashboardEK7int32_t"></span><span id="_CPPv2N17Catalog_Namespace7Catalog26deleteMetadataForDashboardEK7int32_t"></span><span id="Catalog_Namespace::Catalog::deleteMetadataForDashboard__int32_tC"></span><span class="target" id="class_catalog___namespace_1_1_catalog_1a6ccdf247fad35db0fc97bd74889188a3"></span>void <code class="sig-name descname">deleteMetadataForDashboard</code><span class="sig-paren">(</span><em class="property">const</em> int32_t <em>dashboard_id</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N17Catalog_Namespace7Catalog26deleteMetadataForDashboardEK7int32_t" title="Permalink to this definition">¶</a><br /></dt>
+<dt id="_CPPv4N17Catalog_Namespace7Catalog27deleteMetadataForDashboardsEKNSt6vectorI7int32_tEERK12UserMetadata">
+<span id="_CPPv3N17Catalog_Namespace7Catalog27deleteMetadataForDashboardsEKNSt6vectorI7int32_tEERK12UserMetadata"></span><span id="_CPPv2N17Catalog_Namespace7Catalog27deleteMetadataForDashboardsEKNSt6vectorI7int32_tEERK12UserMetadata"></span><span id="Catalog_Namespace::Catalog::deleteMetadataForDashboards__std::vector:int32_t:C.UserMetadataCR"></span><span class="target" id="class_catalog___namespace_1_1_catalog_1a344a208d14060d05d3c6cd29e9caad10"></span>void <code class="sig-name descname">deleteMetadataForDashboards</code><span class="sig-paren">(</span><em class="property">const</em> std::vector&lt;int32_t&gt; <em>ids</em>, <em class="property">const</em> <a class="reference internal" href="../struct/struct_catalog___namespace_1_1_user_metadata.html#_CPPv4N17Catalog_Namespace12UserMetadataE" title="Catalog_Namespace::UserMetadata">UserMetadata</a> &amp;<em>user</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N17Catalog_Namespace7Catalog27deleteMetadataForDashboardsEKNSt6vectorI7int32_tEERK12UserMetadata" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 <dl class="function">

@@ -65,7 +65,7 @@
             
             
               <div class="version">
-                5.4.0dev 72180ab
+                5.4.0dev 19b6dfc
               </div>
             
           
@@ -631,6 +631,7 @@
 <li class="toctree-l2"><a class="reference internal" href="class_rel_logical_values.html">Class RelLogicalValues</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_rel_modify.html">Class RelModify</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_rel_project.html">Class RelProject</a></li>
+<li class="toctree-l2"><a class="reference internal" href="class_rel_rex_dag_visitor.html">Class RelRexDagVisitor</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_rel_scan.html">Class RelScan</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_rel_sort.html">Class RelSort</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_rel_table_function.html">Class RelTableFunction</a></li>
@@ -660,6 +661,7 @@
 <li class="toctree-l2"><a class="reference internal" href="class_rex_ref.html">Class RexRef</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_rex_scalar.html">Class RexScalar</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_rex_sub_query.html">Class RexSubQuery</a></li>
+<li class="toctree-l2"><a class="reference internal" href="class_rex_sub_query_id_collector.html">Class RexSubQueryIdCollector</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_rex_visitor.html">Class RexVisitor</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_rex_visitor_base.html">Class RexVisitorBase</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_rex_window_function_operator.html">Class RexWindowFunctionOperator</a></li>
@@ -1279,6 +1281,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_text_converter_factory.html">Struct TextConverterFactory</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_thread_controller___n_s_1_1_future_getter.html">Struct ThreadController_NS::FutureGetter</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_thread_controller___n_s_1_1_future_getter_3_01void_01_4.html">Struct ThreadController_NS::FutureGetter&lt; void &gt;</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/struct_type_handler.html">Struct TypeHandler</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_updel_roll.html">Struct UpdelRoll</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_varlen_datum.html">Struct VarlenDatum</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_view_privileges.html">Struct ViewPrivileges</a></li>
@@ -1350,6 +1353,8 @@
 <li class="toctree-l2"><a class="reference internal" href="../struct/structshared_1_1is__std__container.html">Struct shared::is_std_container</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structshared_1_1is__std__container_3_01std_1_1deque_3_01_t_00_01_a_01_4_01_4.html">Struct shared::is_std_container&lt; std::deque&lt; T, A &gt; &gt;</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structshared_1_1is__std__container_3_01std_1_1list_3_01_t_00_01_a_01_4_01_4.html">Struct shared::is_std_container&lt; std::list&lt; T, A &gt; &gt;</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/structshared_1_1is__std__container_3_01std_1_1set_3_01_t_00_01_a_01_4_01_4.html">Struct shared::is_std_container&lt; std::set&lt; T, A &gt; &gt;</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/structshared_1_1is__std__container_3_01std_1_1unordered__set_3_01_t_00_01_a_01_4_01_4.html">Struct shared::is_std_container&lt; std::unordered_set&lt; T, A &gt; &gt;</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structshared_1_1is__std__container_3_01std_1_1vector_3_01_t_00_01_a_01_4_01_4.html">Struct shared::is_std_container&lt; std::vector&lt; T, A &gt; &gt;</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structstd_1_1equal__to_3_01shared__ptr_3_01const_01_input_col_descriptor_01_4_01_4.html">Struct std::equal_to&lt; shared_ptr&lt; const InputColDescriptor &gt; &gt;</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structstd_1_1hash_3_01_input_col_descriptor_01_4.html">Struct std::hash&lt; InputColDescriptor &gt;</a></li>
@@ -1712,8 +1717,23 @@
 <dd></dd></dl>
 
 <dl class="function">
+<dt id="_CPPv4N9DBHandler16share_dashboardsERK10TSessionIdRKNSt6vectorI7int32_tEERKNSt6vectorINSt6stringEEERK21TDashboardPermissions">
+<span id="_CPPv3N9DBHandler16share_dashboardsERK10TSessionIdRKNSt6vectorI7int32_tEERKNSt6vectorINSt6stringEEERK21TDashboardPermissions"></span><span id="_CPPv2N9DBHandler16share_dashboardsERK10TSessionIdRKNSt6vectorI7int32_tEERKNSt6vectorINSt6stringEEERK21TDashboardPermissions"></span><span id="DBHandler::share_dashboards__TSessionIdCR.std::vector:int32_t:CR.std::vector:ss:CR.TDashboardPermissionsCR"></span><span class="target" id="class_d_b_handler_1aa23f568093b51df19da8173b21852b08"></span>void <code class="sig-name descname">share_dashboards</code><span class="sig-paren">(</span><em class="property">const</em> TSessionId &amp;<em>session</em>, <em class="property">const</em> std::vector&lt;int32_t&gt; &amp;<em>dashboard_ids</em>, <em class="property">const</em> std::vector&lt;std::string&gt; &amp;<em>groups</em>, <em class="property">const</em> TDashboardPermissions &amp;<em>permissions</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N9DBHandler16share_dashboardsERK10TSessionIdRKNSt6vectorI7int32_tEERKNSt6vectorINSt6stringEEERK21TDashboardPermissions" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="_CPPv4N9DBHandler17delete_dashboardsERK10TSessionIdRKNSt6vectorI7int32_tEE">
+<span id="_CPPv3N9DBHandler17delete_dashboardsERK10TSessionIdRKNSt6vectorI7int32_tEE"></span><span id="_CPPv2N9DBHandler17delete_dashboardsERK10TSessionIdRKNSt6vectorI7int32_tEE"></span><span id="DBHandler::delete_dashboards__TSessionIdCR.std::vector:int32_t:CR"></span><span class="target" id="class_d_b_handler_1acee49ca106b0d970e646a93f732ab8f6"></span>void <code class="sig-name descname">delete_dashboards</code><span class="sig-paren">(</span><em class="property">const</em> TSessionId &amp;<em>session</em>, <em class="property">const</em> std::vector&lt;int32_t&gt; &amp;<em>dashboard_ids</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N9DBHandler17delete_dashboardsERK10TSessionIdRKNSt6vectorI7int32_tEE" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="function">
 <dt id="_CPPv4N9DBHandler15share_dashboardERK10TSessionIdK7int32_tRKNSt6vectorINSt6stringEEERKNSt6vectorINSt6stringEEERK21TDashboardPermissionsKb">
 <span id="_CPPv3N9DBHandler15share_dashboardERK10TSessionIdK7int32_tRKNSt6vectorINSt6stringEEERKNSt6vectorINSt6stringEEERK21TDashboardPermissionsKb"></span><span id="_CPPv2N9DBHandler15share_dashboardERK10TSessionIdK7int32_tRKNSt6vectorINSt6stringEEERKNSt6vectorINSt6stringEEERK21TDashboardPermissionsKb"></span><span id="DBHandler::share_dashboard__TSessionIdCR.int32_tC.std::vector:ss:CR.std::vector:ss:CR.TDashboardPermissionsCR.bC"></span><span class="target" id="class_d_b_handler_1a35113f1fbdb73040ab8157669ded84b9"></span>void <code class="sig-name descname">share_dashboard</code><span class="sig-paren">(</span><em class="property">const</em> TSessionId &amp;<em>session</em>, <em class="property">const</em> int32_t <em>dashboard_id</em>, <em class="property">const</em> std::vector&lt;std::string&gt; &amp;<em>groups</em>, <em class="property">const</em> std::vector&lt;std::string&gt; &amp;<em>objects</em>, <em class="property">const</em> TDashboardPermissions &amp;<em>permissions</em>, <em class="property">const</em> bool <em>grant_role</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N9DBHandler15share_dashboardERK10TSessionIdK7int32_tRKNSt6vectorINSt6stringEEERKNSt6vectorINSt6stringEEERK21TDashboardPermissionsKb" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="_CPPv4N9DBHandler18unshare_dashboardsERK10TSessionIdRKNSt6vectorI7int32_tEERKNSt6vectorINSt6stringEEERK21TDashboardPermissions">
+<span id="_CPPv3N9DBHandler18unshare_dashboardsERK10TSessionIdRKNSt6vectorI7int32_tEERKNSt6vectorINSt6stringEEERK21TDashboardPermissions"></span><span id="_CPPv2N9DBHandler18unshare_dashboardsERK10TSessionIdRKNSt6vectorI7int32_tEERKNSt6vectorINSt6stringEEERK21TDashboardPermissions"></span><span id="DBHandler::unshare_dashboards__TSessionIdCR.std::vector:int32_t:CR.std::vector:ss:CR.TDashboardPermissionsCR"></span><span class="target" id="class_d_b_handler_1a662595bb33c7549d49f93a02566a998c"></span>void <code class="sig-name descname">unshare_dashboards</code><span class="sig-paren">(</span><em class="property">const</em> TSessionId &amp;<em>session</em>, <em class="property">const</em> std::vector&lt;int32_t&gt; &amp;<em>dashboard_ids</em>, <em class="property">const</em> std::vector&lt;std::string&gt; &amp;<em>groups</em>, <em class="property">const</em> TDashboardPermissions &amp;<em>permissions</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N9DBHandler18unshare_dashboardsERK10TSessionIdRKNSt6vectorI7int32_tEERKNSt6vectorINSt6stringEEERK21TDashboardPermissions" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 <dl class="function">
@@ -2138,6 +2158,21 @@
 <dl class="function">
 <dt id="_CPPv4N9DBHandler24check_session_exp_unsafeERKN10SessionMap8iteratorE">
 <span id="_CPPv3N9DBHandler24check_session_exp_unsafeERKN10SessionMap8iteratorE"></span><span id="_CPPv2N9DBHandler24check_session_exp_unsafeERKN10SessionMap8iteratorE"></span><span id="DBHandler::check_session_exp_unsafe__SessionMap::iteratorCR"></span><span class="target" id="class_d_b_handler_1a6a9430cad5611f9689d02139b7bef45a"></span>void <code class="sig-name descname">check_session_exp_unsafe</code><span class="sig-paren">(</span><em class="property">const</em> SessionMap::iterator &amp;<em>session_it</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N9DBHandler24check_session_exp_unsafeERKN10SessionMap8iteratorE" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="_CPPv4N9DBHandler14validateGroupsERKNSt6vectorINSt6stringEEE">
+<span id="_CPPv3N9DBHandler14validateGroupsERKNSt6vectorINSt6stringEEE"></span><span id="_CPPv2N9DBHandler14validateGroupsERKNSt6vectorINSt6stringEEE"></span><span id="DBHandler::validateGroups__std::vector:ss:CR"></span><span class="target" id="class_d_b_handler_1a785c60eefd0c387fe76a1340c837727b"></span>void <code class="sig-name descname">validateGroups</code><span class="sig-paren">(</span><em class="property">const</em> std::vector&lt;std::string&gt; &amp;<em>groups</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N9DBHandler14validateGroupsERKNSt6vectorINSt6stringEEE" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="_CPPv4N9DBHandler30validateDashboardIdsForSharingERKN17Catalog_Namespace11SessionInfoERKNSt6vectorI7int32_tEE">
+<span id="_CPPv3N9DBHandler30validateDashboardIdsForSharingERKN17Catalog_Namespace11SessionInfoERKNSt6vectorI7int32_tEE"></span><span id="_CPPv2N9DBHandler30validateDashboardIdsForSharingERKN17Catalog_Namespace11SessionInfoERKNSt6vectorI7int32_tEE"></span><span id="DBHandler::validateDashboardIdsForSharing__Catalog_Namespace::SessionInfoCR.std::vector:int32_t:CR"></span><span class="target" id="class_d_b_handler_1abedd30b06928c5457110bb1bc711da36"></span>void <code class="sig-name descname">validateDashboardIdsForSharing</code><span class="sig-paren">(</span><em class="property">const</em> Catalog_Namespace::<a class="reference internal" href="class_catalog___namespace_1_1_session_info.html#_CPPv4N17Catalog_Namespace11SessionInfoE" title="Catalog_Namespace::SessionInfo">SessionInfo</a> &amp;<em>session_info</em>, <em class="property">const</em> std::vector&lt;int32_t&gt; &amp;<em>dashboard_ids</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N9DBHandler30validateDashboardIdsForSharingERKN17Catalog_Namespace11SessionInfoERKNSt6vectorI7int32_tEE" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="_CPPv4N9DBHandler24shareOrUnshareDashboardsERK10TSessionIdRKNSt6vectorI7int32_tEERKNSt6vectorINSt6stringEEERK21TDashboardPermissionsKb">
+<span id="_CPPv3N9DBHandler24shareOrUnshareDashboardsERK10TSessionIdRKNSt6vectorI7int32_tEERKNSt6vectorINSt6stringEEERK21TDashboardPermissionsKb"></span><span id="_CPPv2N9DBHandler24shareOrUnshareDashboardsERK10TSessionIdRKNSt6vectorI7int32_tEERKNSt6vectorINSt6stringEEERK21TDashboardPermissionsKb"></span><span id="DBHandler::shareOrUnshareDashboards__TSessionIdCR.std::vector:int32_t:CR.std::vector:ss:CR.TDashboardPermissionsCR.bC"></span><span class="target" id="class_d_b_handler_1a4c6c92f7cbfd0d61e3b6716d40ecd3be"></span>void <code class="sig-name descname">shareOrUnshareDashboards</code><span class="sig-paren">(</span><em class="property">const</em> TSessionId &amp;<em>session</em>, <em class="property">const</em> std::vector&lt;int32_t&gt; &amp;<em>dashboard_ids</em>, <em class="property">const</em> std::vector&lt;std::string&gt; &amp;<em>groups</em>, <em class="property">const</em> TDashboardPermissions &amp;<em>permissions</em>, <em class="property">const</em> bool <em>do_share</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N9DBHandler24shareOrUnshareDashboardsERK10TSessionIdRKNSt6vectorI7int32_tEERKNSt6vectorINSt6stringEEERK21TDashboardPermissionsKb" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 <dl class="function">

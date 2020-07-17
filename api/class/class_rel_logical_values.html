@@ -65,7 +65,7 @@
             
             
               <div class="version">
-                5.4.0dev 72180ab
+                5.4.0dev 19b6dfc
               </div>
             
           
@@ -631,6 +631,7 @@
 <li class="toctree-l2 current"><a class="current reference internal" href="#">Class RelLogicalValues</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_rel_modify.html">Class RelModify</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_rel_project.html">Class RelProject</a></li>
+<li class="toctree-l2"><a class="reference internal" href="class_rel_rex_dag_visitor.html">Class RelRexDagVisitor</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_rel_scan.html">Class RelScan</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_rel_sort.html">Class RelSort</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_rel_table_function.html">Class RelTableFunction</a></li>
@@ -660,6 +661,7 @@
 <li class="toctree-l2"><a class="reference internal" href="class_rex_ref.html">Class RexRef</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_rex_scalar.html">Class RexScalar</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_rex_sub_query.html">Class RexSubQuery</a></li>
+<li class="toctree-l2"><a class="reference internal" href="class_rex_sub_query_id_collector.html">Class RexSubQueryIdCollector</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_rex_visitor.html">Class RexVisitor</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_rex_visitor_base.html">Class RexVisitorBase</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_rex_window_function_operator.html">Class RexWindowFunctionOperator</a></li>
@@ -1279,6 +1281,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_text_converter_factory.html">Struct TextConverterFactory</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_thread_controller___n_s_1_1_future_getter.html">Struct ThreadController_NS::FutureGetter</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_thread_controller___n_s_1_1_future_getter_3_01void_01_4.html">Struct ThreadController_NS::FutureGetter&lt; void &gt;</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/struct_type_handler.html">Struct TypeHandler</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_updel_roll.html">Struct UpdelRoll</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_varlen_datum.html">Struct VarlenDatum</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_view_privileges.html">Struct ViewPrivileges</a></li>
@@ -1350,6 +1353,8 @@
 <li class="toctree-l2"><a class="reference internal" href="../struct/structshared_1_1is__std__container.html">Struct shared::is_std_container</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structshared_1_1is__std__container_3_01std_1_1deque_3_01_t_00_01_a_01_4_01_4.html">Struct shared::is_std_container&lt; std::deque&lt; T, A &gt; &gt;</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structshared_1_1is__std__container_3_01std_1_1list_3_01_t_00_01_a_01_4_01_4.html">Struct shared::is_std_container&lt; std::list&lt; T, A &gt; &gt;</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/structshared_1_1is__std__container_3_01std_1_1set_3_01_t_00_01_a_01_4_01_4.html">Struct shared::is_std_container&lt; std::set&lt; T, A &gt; &gt;</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/structshared_1_1is__std__container_3_01std_1_1unordered__set_3_01_t_00_01_a_01_4_01_4.html">Struct shared::is_std_container&lt; std::unordered_set&lt; T, A &gt; &gt;</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structshared_1_1is__std__container_3_01std_1_1vector_3_01_t_00_01_a_01_4_01_4.html">Struct shared::is_std_container&lt; std::vector&lt; T, A &gt; &gt;</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structstd_1_1equal__to_3_01shared__ptr_3_01const_01_input_col_descriptor_01_4_01_4.html">Struct std::equal_to&lt; shared_ptr&lt; const InputColDescriptor &gt; &gt;</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structstd_1_1hash_3_01_input_col_descriptor_01_4.html">Struct std::hash&lt; InputColDescriptor &gt;</a></li>
@@ -1495,6 +1500,11 @@
 <dd></dd></dl>
 
 <dl class="function">
+<dt id="_CPPv4N16RelLogicalValues16RelLogicalValuesERK16RelLogicalValues">
+<span id="_CPPv3N16RelLogicalValues16RelLogicalValuesERK16RelLogicalValues"></span><span id="_CPPv2N16RelLogicalValues16RelLogicalValuesERK16RelLogicalValues"></span><span id="RelLogicalValues::RelLogicalValues__RelLogicalValuesCR"></span><span class="target" id="class_rel_logical_values_1a63d521d54a45b5fddd55fbb2755ca9f7"></span><code class="sig-name descname">RelLogicalValues</code><span class="sig-paren">(</span><a class="reference internal" href="#_CPPv4N16RelLogicalValues16RelLogicalValuesERKNSt6vectorI14TargetMetaInfoEERNSt6vectorI9RowValuesEE" title="RelLogicalValues::RelLogicalValues">RelLogicalValues</a> <em class="property">const</em> &amp;<em>rhs</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N16RelLogicalValues16RelLogicalValuesERK16RelLogicalValues" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="function">
 <dt id="_CPPv4NK16RelLogicalValues12getTupleTypeEv">
 <span id="_CPPv3NK16RelLogicalValues12getTupleTypeEv"></span><span id="_CPPv2NK16RelLogicalValues12getTupleTypeEv"></span><span id="RelLogicalValues::getTupleTypeC"></span><span class="target" id="class_rel_logical_values_1af28e25843f95ccc5ff3e9c7f7080bac8"></span><em class="property">const</em> std::vector&lt;<a class="reference internal" href="class_target_meta_info.html#_CPPv414TargetMetaInfo" title="TargetMetaInfo">TargetMetaInfo</a>&gt; <code class="sig-name descname">getTupleType</code><span class="sig-paren">(</span><span class="sig-paren">)</span> <em class="property">const</em><a class="headerlink" href="#_CPPv4NK16RelLogicalValues12getTupleTypeEv" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
@@ -1531,7 +1541,7 @@
 
 <dl class="function">
 <dt id="_CPPv4NK16RelLogicalValues8deepCopyEv">
-<span id="_CPPv3NK16RelLogicalValues8deepCopyEv"></span><span id="_CPPv2NK16RelLogicalValues8deepCopyEv"></span><span id="RelLogicalValues::deepCopyC"></span><span class="target" id="class_rel_logical_values_1af54a99dcc2d0558893cf56af2f2a40a1"></span>std::shared_ptr&lt;<a class="reference internal" href="class_rel_alg_node.html#_CPPv410RelAlgNode" title="RelAlgNode">RelAlgNode</a>&gt; <code class="sig-name descname">deepCopy</code><span class="sig-paren">(</span><span class="sig-paren">)</span> <em class="property">const</em><a class="headerlink" href="#_CPPv4NK16RelLogicalValues8deepCopyEv" title="Permalink to this definition">¶</a><br /></dt>
+<span id="_CPPv3NK16RelLogicalValues8deepCopyEv"></span><span id="_CPPv2NK16RelLogicalValues8deepCopyEv"></span><span id="RelLogicalValues::deepCopyC"></span><span class="target" id="class_rel_logical_values_1aba8e18971dc6ef66028d6eab18a172f9"></span>std::shared_ptr&lt;<a class="reference internal" href="class_rel_alg_node.html#_CPPv410RelAlgNode" title="RelAlgNode">RelAlgNode</a>&gt; <code class="sig-name descname">deepCopy</code><span class="sig-paren">(</span><span class="sig-paren">)</span> <em class="property">const</em><a class="headerlink" href="#_CPPv4NK16RelLogicalValues8deepCopyEv" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 </div>

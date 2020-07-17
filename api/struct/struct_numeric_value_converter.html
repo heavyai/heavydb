@@ -65,7 +65,7 @@
             
             
               <div class="version">
-                5.4.0dev 72180ab
+                5.4.0dev 19b6dfc
               </div>
             
           
@@ -631,6 +631,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../class/class_rel_logical_values.html">Class RelLogicalValues</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/class_rel_modify.html">Class RelModify</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/class_rel_project.html">Class RelProject</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../class/class_rel_rex_dag_visitor.html">Class RelRexDagVisitor</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/class_rel_scan.html">Class RelScan</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/class_rel_sort.html">Class RelSort</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/class_rel_table_function.html">Class RelTableFunction</a></li>
@@ -660,6 +661,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../class/class_rex_ref.html">Class RexRef</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/class_rex_scalar.html">Class RexScalar</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/class_rex_sub_query.html">Class RexSubQuery</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../class/class_rex_sub_query_id_collector.html">Class RexSubQueryIdCollector</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/class_rex_visitor.html">Class RexVisitor</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/class_rex_visitor_base.html">Class RexVisitorBase</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/class_rex_window_function_operator.html">Class RexWindowFunctionOperator</a></li>
@@ -1279,6 +1281,7 @@
 <li class="toctree-l2"><a class="reference internal" href="struct_text_converter_factory.html">Struct TextConverterFactory</a></li>
 <li class="toctree-l2"><a class="reference internal" href="struct_thread_controller___n_s_1_1_future_getter.html">Struct ThreadController_NS::FutureGetter</a></li>
 <li class="toctree-l2"><a class="reference internal" href="struct_thread_controller___n_s_1_1_future_getter_3_01void_01_4.html">Struct ThreadController_NS::FutureGetter&lt; void &gt;</a></li>
+<li class="toctree-l2"><a class="reference internal" href="struct_type_handler.html">Struct TypeHandler</a></li>
 <li class="toctree-l2"><a class="reference internal" href="struct_updel_roll.html">Struct UpdelRoll</a></li>
 <li class="toctree-l2"><a class="reference internal" href="struct_varlen_datum.html">Struct VarlenDatum</a></li>
 <li class="toctree-l2"><a class="reference internal" href="struct_view_privileges.html">Struct ViewPrivileges</a></li>
@@ -1350,6 +1353,8 @@
 <li class="toctree-l2"><a class="reference internal" href="structshared_1_1is__std__container.html">Struct shared::is_std_container</a></li>
 <li class="toctree-l2"><a class="reference internal" href="structshared_1_1is__std__container_3_01std_1_1deque_3_01_t_00_01_a_01_4_01_4.html">Struct shared::is_std_container&lt; std::deque&lt; T, A &gt; &gt;</a></li>
 <li class="toctree-l2"><a class="reference internal" href="structshared_1_1is__std__container_3_01std_1_1list_3_01_t_00_01_a_01_4_01_4.html">Struct shared::is_std_container&lt; std::list&lt; T, A &gt; &gt;</a></li>
+<li class="toctree-l2"><a class="reference internal" href="structshared_1_1is__std__container_3_01std_1_1set_3_01_t_00_01_a_01_4_01_4.html">Struct shared::is_std_container&lt; std::set&lt; T, A &gt; &gt;</a></li>
+<li class="toctree-l2"><a class="reference internal" href="structshared_1_1is__std__container_3_01std_1_1unordered__set_3_01_t_00_01_a_01_4_01_4.html">Struct shared::is_std_container&lt; std::unordered_set&lt; T, A &gt; &gt;</a></li>
 <li class="toctree-l2"><a class="reference internal" href="structshared_1_1is__std__container_3_01std_1_1vector_3_01_t_00_01_a_01_4_01_4.html">Struct shared::is_std_container&lt; std::vector&lt; T, A &gt; &gt;</a></li>
 <li class="toctree-l2"><a class="reference internal" href="structstd_1_1equal__to_3_01shared__ptr_3_01const_01_input_col_descriptor_01_4_01_4.html">Struct std::equal_to&lt; shared_ptr&lt; const InputColDescriptor &gt; &gt;</a></li>
 <li class="toctree-l2"><a class="reference internal" href="structstd_1_1hash_3_01_input_col_descriptor_01_4.html">Struct std::hash&lt; InputColDescriptor &gt;</a></li>
@@ -1491,6 +1496,11 @@
 <span id="_CPPv3IEN21NumericValueConverterI11SOURCE_TYPE11TARGET_TYPEE23ElementsBufferColumnPtrE"></span><span id="_CPPv2IEN21NumericValueConverterI11SOURCE_TYPE11TARGET_TYPEE23ElementsBufferColumnPtrE"></span>template&lt;&gt;<br /><span class="target" id="struct_numeric_value_converter_1a6bfe4e616b8dbc0271dce7f02afb9dd1"></span><em class="property">using </em><code class="sig-name descname">ElementsBufferColumnPtr</code> = <a class="reference internal" href="#_CPPv4IEN21NumericValueConverterI11SOURCE_TYPE11TARGET_TYPEE13ColumnDataPtrE" title="NumericValueConverter&lt;SOURCE_TYPE, TARGET_TYPE&gt;::ColumnDataPtr">ColumnDataPtr</a><a class="headerlink" href="#_CPPv4IEN21NumericValueConverterI11SOURCE_TYPE11TARGET_TYPEE23ElementsBufferColumnPtrE" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
+<dl class="type">
+<dt id="_CPPv4IEN21NumericValueConverterI11SOURCE_TYPE11TARGET_TYPEE10CasterFuncE">
+<span id="_CPPv3IEN21NumericValueConverterI11SOURCE_TYPE11TARGET_TYPEE10CasterFuncE"></span><span id="_CPPv2IEN21NumericValueConverterI11SOURCE_TYPE11TARGET_TYPEE10CasterFuncE"></span>template&lt;&gt;<br /><span class="target" id="struct_numeric_value_converter_1a57caa2c063e933856835f330bcf54ded"></span><em class="property">using </em><code class="sig-name descname">CasterFunc</code> = std::function&lt;TARGET_TYPE<span class="sig-paren">(</span>SOURCE_TYPE, bool, TARGET_TYPE<span class="sig-paren">)</span>&gt;<a class="headerlink" href="#_CPPv4IEN21NumericValueConverterI11SOURCE_TYPE11TARGET_TYPEE10CasterFuncE" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
 </div>
 <div class="breathe-sectiondef docutils container">
 <p class="breathe-sectiondef-title rubric">Public Functions</p>
@@ -1502,6 +1512,11 @@
 <dl class="function">
 <dt id="_CPPv4N21NumericValueConverterD0Ev">
 <span id="_CPPv3N21NumericValueConverterD0Ev"></span><span id="_CPPv2N21NumericValueConverterD0Ev"></span><span id="NumericValueConverter::~NumericValueConverter"></span><span class="target" id="struct_numeric_value_converter_1a0189bc88d8fe65d0da1a2cd4e9397b74"></span><code class="sig-name descname">~NumericValueConverter</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N21NumericValueConverterD0Ev" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="_CPPv4N21NumericValueConverter14setValueCasterE10CasterFunc">
+<span id="_CPPv3N21NumericValueConverter14setValueCasterE10CasterFunc"></span><span id="_CPPv2N21NumericValueConverter14setValueCasterE10CasterFunc"></span><span id="NumericValueConverter::setValueCaster__CasterFunc"></span><span class="target" id="struct_numeric_value_converter_1aa34129016e738156574fc1e3707f5724"></span>void <code class="sig-name descname">setValueCaster</code><span class="sig-paren">(</span>CasterFunc <em>caster</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N21NumericValueConverter14setValueCasterE10CasterFunc" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 <dl class="function">
@@ -1575,6 +1590,11 @@
 <dl class="member">
 <dt id="_CPPv4N21NumericValueConverter23fixed_array_null_value_E">
 <span id="_CPPv3N21NumericValueConverter23fixed_array_null_value_E"></span><span id="_CPPv2N21NumericValueConverter23fixed_array_null_value_E"></span><span id="NumericValueConverter::fixed_array_null_value___TARGET_TYPE"></span><span class="target" id="struct_numeric_value_converter_1ac5c906bc88ace21966c6a3ab3b167bc3"></span>TARGET_TYPE <code class="sig-name descname">fixed_array_null_value_</code><a class="headerlink" href="#_CPPv4N21NumericValueConverter23fixed_array_null_value_E" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="member">
+<dt id="_CPPv4N21NumericValueConverter15checked_caster_E">
+<span id="_CPPv3N21NumericValueConverter15checked_caster_E"></span><span id="_CPPv2N21NumericValueConverter15checked_caster_E"></span><span id="NumericValueConverter::checked_caster___CasterFunc"></span><span class="target" id="struct_numeric_value_converter_1a18842daa217f8d859ad77bebb580466b"></span>CasterFunc <code class="sig-name descname">checked_caster_</code> = nullptr<a class="headerlink" href="#_CPPv4N21NumericValueConverter15checked_caster_E" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 <dl class="member">
