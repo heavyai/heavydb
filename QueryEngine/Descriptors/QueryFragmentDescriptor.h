@@ -1,5 +1,5 @@
 /*
- * Copyright 2018 MapD Technologies, Inc.
+ * Copyright 2020 OmniSci, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,14 +16,15 @@
 
 /**
  * @file    QueryFragmentDescriptor.h
- * @author  Alex Baden <alex.baden@mapd.com>
- * @brief   Descriptor for the fragments required for a query.
+ * @author  Alex Baden <alex.baden@omnisci.com>
+ * @brief   Descriptor for the fragments required for an execution kernel.
  */
 
 #ifndef QUERYENGINE_QUERYFRAGMENTDESCRIPTOR_H
 #define QUERYENGINE_QUERYFRAGMENTDESCRIPTOR_H
 
 #include <deque>
+#include <functional>
 #include <map>
 #include <memory>
 #include <optional>
@@ -32,7 +33,8 @@
 #include <unordered_map>
 #include <vector>
 
-#include "../CompilationOptions.h"
+#include "DataMgr/ChunkMetadata.h"
+#include "QueryEngine/CompilationOptions.h"
 #include "Shared/Logger.h"
 
 namespace Fragmenter_Namespace {
@@ -44,6 +46,7 @@ struct MemoryInfo;
 }
 
 class Executor;
+class InputDescriptor;
 struct InputTableInfo;
 struct RelAlgExecutionUnit;
 
@@ -174,6 +177,18 @@ class QueryFragmentDescriptor {
                                const ExecutorDeviceType& device_type,
                                const bool enable_inner_join_fragment_skipping,
                                Executor* executor);
+
+  void buildFragmentPerKernelForTable(
+      const TableFragments* fragments,
+      const RelAlgExecutionUnit& ra_exe_unit,
+      const InputDescriptor& table_desc,
+      const std::vector<uint64_t>& frag_offsets,
+      const int device_count,
+      const size_t num_bytes_for_row,
+      const ChunkMetadataVector& deleted_chunk_metadata_vec,
+      const std::optional<size_t> table_desc_offset,
+      const ExecutorDeviceType& device_type,
+      Executor* executor);
 
   bool terminateDispatchMaybe(size_t& tuple_count,
                               const RelAlgExecutionUnit& ra_exe_unit,
