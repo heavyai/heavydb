@@ -40,8 +40,8 @@
   <link rel="stylesheet" href="../../_static/theme_overrides.css" type="text/css" />
     <link rel="index" title="Index" href="../../genindex.html" />
     <link rel="search" title="Search" href="../../search.html" />
-    <link rel="next" title="Struct ColumnDescriptor" href="struct_column_descriptor.html" />
-    <link rel="prev" title="Struct CodeGenerator::GPUTarget" href="struct_code_generator_1_1_g_p_u_target.html" /> 
+    <link rel="next" title="Struct Column" href="struct_column.html" />
+    <link rel="prev" title="Struct CodeGenerator::NullCheckCodegen" href="struct_code_generator_1_1_null_check_codegen.html" /> 
 </head>
 
 <body class="wy-body-for-nav">
@@ -65,7 +65,7 @@
             
             
               <div class="version">
-                5.4.0dev 19b6dfc
+                5.4.0dev 0f42a78
               </div>
             
           
@@ -309,6 +309,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../class/class_analyzer_1_1_query.html">Class Analyzer::Query</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/class_analyzer_1_1_range_table_entry.html">Class Analyzer::RangeTableEntry</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/class_analyzer_1_1_regexp_expr.html">Class Analyzer::RegexpExpr</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../class/class_analyzer_1_1_sample_ratio_expr.html">Class Analyzer::SampleRatioExpr</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/class_analyzer_1_1_subquery.html">Class Analyzer::Subquery</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/class_analyzer_1_1_target_entry.html">Class Analyzer::TargetEntry</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/class_analyzer_1_1_u_oper.html">Class Analyzer::UOper</a></li>
@@ -845,6 +846,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../class/classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_sql_operator_table_1_1_s_t___y_max.html">Class com::mapd::calcite::parser::MapDSqlOperatorTable::ST_YMax</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_sql_operator_table_1_1_s_t___y_min.html">Class com::mapd::calcite::parser::MapDSqlOperatorTable::ST_YMin</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_sql_operator_table_1_1_sample.html">Class com::mapd::calcite::parser::MapDSqlOperatorTable::Sample</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../class/classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_sql_operator_table_1_1_sample_ratio.html">Class com::mapd::calcite::parser::MapDSqlOperatorTable::SampleRatio</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_sql_operator_table_1_1_sign.html">Class com::mapd::calcite::parser::MapDSqlOperatorTable::Sign</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_sql_operator_table_1_1_sql_array_value_constructor_allowing_empty.html">Class com::mapd::calcite::parser::MapDSqlOperatorTable::SqlArrayValueConstructorAllowingEmpty</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_sql_operator_table_1_1_truncate.html">Class com::mapd::calcite::parser::MapDSqlOperatorTable::Truncate</a></li>
@@ -1084,7 +1086,9 @@
 <li class="toctree-l2"><a class="reference internal" href="struct_code_generator_1_1_arg_nullcheck_b_bs.html">Struct CodeGenerator::ArgNullcheckBBs</a></li>
 <li class="toctree-l2"><a class="reference internal" href="struct_code_generator_1_1_executor_required.html">Struct CodeGenerator::ExecutorRequired</a></li>
 <li class="toctree-l2"><a class="reference internal" href="struct_code_generator_1_1_g_p_u_target.html">Struct CodeGenerator::GPUTarget</a></li>
+<li class="toctree-l2"><a class="reference internal" href="struct_code_generator_1_1_null_check_codegen.html">Struct CodeGenerator::NullCheckCodegen</a></li>
 <li class="toctree-l2 current"><a class="current reference internal" href="#">Struct ColRangeInfo</a></li>
+<li class="toctree-l2"><a class="reference internal" href="struct_column.html">Struct Column</a></li>
 <li class="toctree-l2"><a class="reference internal" href="struct_column_descriptor.html">Struct ColumnDescriptor</a></li>
 <li class="toctree-l2"><a class="reference internal" href="struct_column_lazy_fetch_info.html">Struct ColumnLazyFetchInfo</a></li>
 <li class="toctree-l2"><a class="reference internal" href="struct_compilation_options.html">Struct CompilationOptions</a></li>
@@ -1532,10 +1536,10 @@
   
     <div class="rst-footer-buttons" role="navigation" aria-label="footer navigation">
       
-        <a href="struct_column_descriptor.html" class="btn btn-neutral float-right" title="Struct ColumnDescriptor" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right"></span></a>
+        <a href="struct_column.html" class="btn btn-neutral float-right" title="Struct Column" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right"></span></a>
       
       
-        <a href="struct_code_generator_1_1_g_p_u_target.html" class="btn btn-neutral float-left" title="Struct CodeGenerator::GPUTarget" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left"></span> Previous</a>
+        <a href="struct_code_generator_1_1_null_check_codegen.html" class="btn btn-neutral float-left" title="Struct CodeGenerator::NullCheckCodegen" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left"></span> Previous</a>
       
     </div>
   

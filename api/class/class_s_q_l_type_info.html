@@ -65,7 +65,7 @@
             
             
               <div class="version">
-                5.4.0dev 19b6dfc
+                5.4.0dev 0f42a78
               </div>
             
           
@@ -309,6 +309,7 @@
 <li class="toctree-l2"><a class="reference internal" href="class_analyzer_1_1_query.html">Class Analyzer::Query</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_analyzer_1_1_range_table_entry.html">Class Analyzer::RangeTableEntry</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_analyzer_1_1_regexp_expr.html">Class Analyzer::RegexpExpr</a></li>
+<li class="toctree-l2"><a class="reference internal" href="class_analyzer_1_1_sample_ratio_expr.html">Class Analyzer::SampleRatioExpr</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_analyzer_1_1_subquery.html">Class Analyzer::Subquery</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_analyzer_1_1_target_entry.html">Class Analyzer::TargetEntry</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_analyzer_1_1_u_oper.html">Class Analyzer::UOper</a></li>
@@ -845,6 +846,7 @@
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_sql_operator_table_1_1_s_t___y_max.html">Class com::mapd::calcite::parser::MapDSqlOperatorTable::ST_YMax</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_sql_operator_table_1_1_s_t___y_min.html">Class com::mapd::calcite::parser::MapDSqlOperatorTable::ST_YMin</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_sql_operator_table_1_1_sample.html">Class com::mapd::calcite::parser::MapDSqlOperatorTable::Sample</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_sql_operator_table_1_1_sample_ratio.html">Class com::mapd::calcite::parser::MapDSqlOperatorTable::SampleRatio</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_sql_operator_table_1_1_sign.html">Class com::mapd::calcite::parser::MapDSqlOperatorTable::Sign</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_sql_operator_table_1_1_sql_array_value_constructor_allowing_empty.html">Class com::mapd::calcite::parser::MapDSqlOperatorTable::SqlArrayValueConstructorAllowingEmpty</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_sql_operator_table_1_1_truncate.html">Class com::mapd::calcite::parser::MapDSqlOperatorTable::Truncate</a></li>
@@ -1084,7 +1086,9 @@
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_code_generator_1_1_arg_nullcheck_b_bs.html">Struct CodeGenerator::ArgNullcheckBBs</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_code_generator_1_1_executor_required.html">Struct CodeGenerator::ExecutorRequired</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_code_generator_1_1_g_p_u_target.html">Struct CodeGenerator::GPUTarget</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/struct_code_generator_1_1_null_check_codegen.html">Struct CodeGenerator::NullCheckCodegen</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_col_range_info.html">Struct ColRangeInfo</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/struct_column.html">Struct Column</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_column_descriptor.html">Struct ColumnDescriptor</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_column_lazy_fetch_info.html">Struct ColumnLazyFetchInfo</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_compilation_options.html">Struct CompilationOptions</a></li>
@@ -1742,6 +1746,11 @@
 <dd></dd></dl>
 
 <dl class="function">
+<dt id="_CPPv4NK11SQLTypeInfo9is_columnEv">
+<span id="_CPPv3NK11SQLTypeInfo9is_columnEv"></span><span id="_CPPv2NK11SQLTypeInfo9is_columnEv"></span><span id="SQLTypeInfo::is_columnC"></span><span class="target" id="class_s_q_l_type_info_1ad84f870ffc68fc45d55ace6c65d83504"></span>bool <code class="sig-name descname">is_column</code><span class="sig-paren">(</span><span class="sig-paren">)</span> <em class="property">const</em><a class="headerlink" href="#_CPPv4NK11SQLTypeInfo9is_columnEv" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="function">
 <dt id="_CPPv4NK11SQLTypeInfo9is_varlenEv">
 <span id="_CPPv3NK11SQLTypeInfo9is_varlenEv"></span><span id="_CPPv2NK11SQLTypeInfo9is_varlenEv"></span><span id="SQLTypeInfo::is_varlenC"></span><span class="target" id="class_s_q_l_type_info_1a939f639ac598c782a6c8e05c6ad4a6cd"></span>bool <code class="sig-name descname">is_varlen</code><span class="sig-paren">(</span><span class="sig-paren">)</span> <em class="property">const</em><a class="headerlink" href="#_CPPv4NK11SQLTypeInfo9is_varlenEv" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
@@ -1887,7 +1896,7 @@
 <p class="breathe-sectiondef-title rubric">Private Static Attributes</p>
 <dl class="member">
 <dt id="_CPPv4N11SQLTypeInfo9type_nameE">
-<span id="_CPPv3N11SQLTypeInfo9type_nameE"></span><span id="_CPPv2N11SQLTypeInfo9type_nameE"></span><span id="SQLTypeInfo::type_name__ss"></span><span class="target" id="class_s_q_l_type_info_1a121e7923967e80e29c1a335c97f32a06"></span>std::string <code class="sig-name descname">type_name</code> = {&quot;NULL&quot;, , , , , , , , , , , , , , , , , , , , , , , , , , , }<a class="headerlink" href="#_CPPv4N11SQLTypeInfo9type_nameE" title="Permalink to this definition">¶</a><br /></dt>
+<span id="_CPPv3N11SQLTypeInfo9type_nameE"></span><span id="_CPPv2N11SQLTypeInfo9type_nameE"></span><span id="SQLTypeInfo::type_name__ss"></span><span class="target" id="class_s_q_l_type_info_1a121e7923967e80e29c1a335c97f32a06"></span>std::string <code class="sig-name descname">type_name</code> = {&quot;NULL&quot;, , , , , , , , , , , , , , , , , , , , , , , , , , , , }<a class="headerlink" href="#_CPPv4N11SQLTypeInfo9type_nameE" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 <dl class="member">

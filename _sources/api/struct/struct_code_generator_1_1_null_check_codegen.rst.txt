@@ -1,0 +1,9 @@
+Struct CodeGenerator::NullCheckCodegen
+======================================
+
+.. doxygenstruct:: CodeGenerator::NullCheckCodegen
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

@@ -1,0 +1,9 @@
+Struct Column
+=============
+
+.. doxygenstruct:: Column
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

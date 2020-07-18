@@ -65,7 +65,7 @@
             
             
               <div class="version">
-                5.4.0dev 19b6dfc
+                5.4.0dev 0f42a78
               </div>
             
           
@@ -309,6 +309,7 @@
 <li class="toctree-l2"><a class="reference internal" href="class_analyzer_1_1_query.html">Class Analyzer::Query</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_analyzer_1_1_range_table_entry.html">Class Analyzer::RangeTableEntry</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_analyzer_1_1_regexp_expr.html">Class Analyzer::RegexpExpr</a></li>
+<li class="toctree-l2"><a class="reference internal" href="class_analyzer_1_1_sample_ratio_expr.html">Class Analyzer::SampleRatioExpr</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_analyzer_1_1_subquery.html">Class Analyzer::Subquery</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_analyzer_1_1_target_entry.html">Class Analyzer::TargetEntry</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_analyzer_1_1_u_oper.html">Class Analyzer::UOper</a></li>
@@ -845,6 +846,7 @@
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_sql_operator_table_1_1_s_t___y_max.html">Class com::mapd::calcite::parser::MapDSqlOperatorTable::ST_YMax</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_sql_operator_table_1_1_s_t___y_min.html">Class com::mapd::calcite::parser::MapDSqlOperatorTable::ST_YMin</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_sql_operator_table_1_1_sample.html">Class com::mapd::calcite::parser::MapDSqlOperatorTable::Sample</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_sql_operator_table_1_1_sample_ratio.html">Class com::mapd::calcite::parser::MapDSqlOperatorTable::SampleRatio</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_sql_operator_table_1_1_sign.html">Class com::mapd::calcite::parser::MapDSqlOperatorTable::Sign</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_sql_operator_table_1_1_sql_array_value_constructor_allowing_empty.html">Class com::mapd::calcite::parser::MapDSqlOperatorTable::SqlArrayValueConstructorAllowingEmpty</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_sql_operator_table_1_1_truncate.html">Class com::mapd::calcite::parser::MapDSqlOperatorTable::Truncate</a></li>
@@ -1084,7 +1086,9 @@
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_code_generator_1_1_arg_nullcheck_b_bs.html">Struct CodeGenerator::ArgNullcheckBBs</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_code_generator_1_1_executor_required.html">Struct CodeGenerator::ExecutorRequired</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_code_generator_1_1_g_p_u_target.html">Struct CodeGenerator::GPUTarget</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/struct_code_generator_1_1_null_check_codegen.html">Struct CodeGenerator::NullCheckCodegen</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_col_range_info.html">Struct ColRangeInfo</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/struct_column.html">Struct Column</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_column_descriptor.html">Struct ColumnDescriptor</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_column_lazy_fetch_info.html">Struct ColumnLazyFetchInfo</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_compilation_options.html">Struct CompilationOptions</a></li>
@@ -1710,6 +1714,11 @@
 <dd></dd></dl>
 
 <dl class="function">
+<dt id="_CPPv4N13CodeGenerator7codegenEPKN8Analyzer15SampleRatioExprERK18CompilationOptions">
+<span id="_CPPv3N13CodeGenerator7codegenEPKN8Analyzer15SampleRatioExprERK18CompilationOptions"></span><span id="_CPPv2N13CodeGenerator7codegenEPKN8Analyzer15SampleRatioExprERK18CompilationOptions"></span><span id="CodeGenerator::codegen__Analyzer::SampleRatioExprCP.CompilationOptionsCR"></span><span class="target" id="class_code_generator_1a2646a4e555e0fbe72d9383c14d15a27a"></span>llvm::Value *<code class="sig-name descname">codegen</code><span class="sig-paren">(</span><em class="property">const</em> Analyzer::<a class="reference internal" href="class_analyzer_1_1_sample_ratio_expr.html#_CPPv4N8Analyzer15SampleRatioExprE" title="Analyzer::SampleRatioExpr">SampleRatioExpr</a> *<em>expr</em>, <em class="property">const</em> <a class="reference internal" href="../struct/struct_compilation_options.html#_CPPv418CompilationOptions" title="CompilationOptions">CompilationOptions</a> &amp;<em>co</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N13CodeGenerator7codegenEPKN8Analyzer15SampleRatioExprERK18CompilationOptions" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="function">
 <dt id="_CPPv4N13CodeGenerator7codegenEPKN8Analyzer9LowerExprERK18CompilationOptions">
 <span id="_CPPv3N13CodeGenerator7codegenEPKN8Analyzer9LowerExprERK18CompilationOptions"></span><span id="_CPPv2N13CodeGenerator7codegenEPKN8Analyzer9LowerExprERK18CompilationOptions"></span><span id="CodeGenerator::codegen__Analyzer::LowerExprCP.CompilationOptionsCR"></span><span class="target" id="class_code_generator_1a61d6f83b722636f0474c0f0cf01c6f2b"></span>llvm::Value *<code class="sig-name descname">codegen</code><span class="sig-paren">(</span><em class="property">const</em> Analyzer::<a class="reference internal" href="class_analyzer_1_1_lower_expr.html#_CPPv4N8Analyzer9LowerExprE" title="Analyzer::LowerExpr">LowerExpr</a> *<em>expr</em>, <em class="property">const</em> <a class="reference internal" href="../struct/struct_compilation_options.html#_CPPv418CompilationOptions" title="CompilationOptions">CompilationOptions</a> &amp;<em>co</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N13CodeGenerator7codegenEPKN8Analyzer9LowerExprERK18CompilationOptions" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
@@ -2162,6 +2171,52 @@
 <dl class="member">
 <dt id="_CPPv4N13CodeGenerator9GPUTarget20row_func_not_inlinedE">
 <span id="_CPPv3N13CodeGenerator9GPUTarget20row_func_not_inlinedE"></span><span id="_CPPv2N13CodeGenerator9GPUTarget20row_func_not_inlinedE"></span><span id="CodeGenerator::GPUTarget::row_func_not_inlined__b"></span><span class="target" id="struct_code_generator_1_1_g_p_u_target_1a3cf737c54fcb709848bc1329d115d2b9"></span>bool <code class="sig-name descname">row_func_not_inlined</code><a class="headerlink" href="#_CPPv4N13CodeGenerator9GPUTarget20row_func_not_inlinedE" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+</div>
+</dd></dl>
+
+<dl class="class">
+<dt id="_CPPv4N13CodeGenerator16NullCheckCodegenE">
+<span id="_CPPv3N13CodeGenerator16NullCheckCodegenE"></span><span id="_CPPv2N13CodeGenerator16NullCheckCodegenE"></span><span id="CodeGenerator::NullCheckCodegen"></span><span class="target" id="struct_code_generator_1_1_null_check_codegen"></span><em class="property">struct </em><code class="sig-name descname">NullCheckCodegen</code><a class="headerlink" href="#_CPPv4N13CodeGenerator16NullCheckCodegenE" title="Permalink to this definition">¶</a><br /></dt>
+<dd><div class="breathe-sectiondef docutils container">
+<p class="breathe-sectiondef-title rubric">Public Functions</p>
+<dl class="function">
+<dt id="_CPPv4N13CodeGenerator16NullCheckCodegen16NullCheckCodegenEP9CgenStateP8ExecutorPN4llvm5ValueERK11SQLTypeInfoRKNSt6stringE">
+<span id="_CPPv3N13CodeGenerator16NullCheckCodegen16NullCheckCodegenEP9CgenStateP8ExecutorPN4llvm5ValueERK11SQLTypeInfoRKNSt6stringE"></span><span id="_CPPv2N13CodeGenerator16NullCheckCodegen16NullCheckCodegenEP9CgenStateP8ExecutorPN4llvm5ValueERK11SQLTypeInfoRKNSt6stringE"></span><span id="CodeGenerator::NullCheckCodegen::NullCheckCodegen__CgenStateP.ExecutorP.llvm::ValueP.SQLTypeInfoCR.ssCR"></span><span class="target" id="struct_code_generator_1_1_null_check_codegen_1ad28ae2a98eeccefe7ee54121e8f799b0"></span><code class="sig-name descname">NullCheckCodegen</code><span class="sig-paren">(</span><a class="reference internal" href="../struct/struct_cgen_state.html#_CPPv49CgenState" title="CgenState">CgenState</a> *<em>cgen_state</em>, <a class="reference internal" href="class_executor.html#_CPPv48Executor" title="Executor">Executor</a> *<em>executor</em>, llvm::Value *<em>nullable_lv</em>, <em class="property">const</em> <a class="reference internal" href="class_s_q_l_type_info.html#_CPPv411SQLTypeInfo" title="SQLTypeInfo">SQLTypeInfo</a> &amp;<em>nullable_ti</em>, <em class="property">const</em> std::string &amp;<em>name</em> = &quot;&quot;<span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N13CodeGenerator16NullCheckCodegen16NullCheckCodegenEP9CgenStateP8ExecutorPN4llvm5ValueERK11SQLTypeInfoRKNSt6stringE" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="_CPPv4N13CodeGenerator16NullCheckCodegen8finalizeEPN4llvm5ValueEPN4llvm5ValueE">
+<span id="_CPPv3N13CodeGenerator16NullCheckCodegen8finalizeEPN4llvm5ValueEPN4llvm5ValueE"></span><span id="_CPPv2N13CodeGenerator16NullCheckCodegen8finalizeEPN4llvm5ValueEPN4llvm5ValueE"></span><span id="CodeGenerator::NullCheckCodegen::finalize__llvm::ValueP.llvm::ValueP"></span><span class="target" id="struct_code_generator_1_1_null_check_codegen_1a889b238c40c29d107497e2b62802ea45"></span>llvm::Value *<code class="sig-name descname">finalize</code><span class="sig-paren">(</span>llvm::Value *<em>null_lv</em>, llvm::Value *<em>notnull_lv</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N13CodeGenerator16NullCheckCodegen8finalizeEPN4llvm5ValueEPN4llvm5ValueE" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+</div>
+<div class="breathe-sectiondef docutils container">
+<p class="breathe-sectiondef-title rubric">Public Members</p>
+<dl class="member">
+<dt id="_CPPv4N13CodeGenerator16NullCheckCodegen10cgen_stateE">
+<span id="_CPPv3N13CodeGenerator16NullCheckCodegen10cgen_stateE"></span><span id="_CPPv2N13CodeGenerator16NullCheckCodegen10cgen_stateE"></span><span id="CodeGenerator::NullCheckCodegen::cgen_state__CgenStateP"></span><span class="target" id="struct_code_generator_1_1_null_check_codegen_1a8cffff149456fbed26c1a8f924e849ff"></span><a class="reference internal" href="../struct/struct_cgen_state.html#_CPPv49CgenState" title="CgenState">CgenState</a> *<code class="sig-name descname">cgen_state</code> = {nullptr}<a class="headerlink" href="#_CPPv4N13CodeGenerator16NullCheckCodegen10cgen_stateE" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="member">
+<dt id="_CPPv4N13CodeGenerator16NullCheckCodegen4nameE">
+<span id="_CPPv3N13CodeGenerator16NullCheckCodegen4nameE"></span><span id="_CPPv2N13CodeGenerator16NullCheckCodegen4nameE"></span><span id="CodeGenerator::NullCheckCodegen::name__ss"></span><span class="target" id="struct_code_generator_1_1_null_check_codegen_1a3b1a1717f83321e5391947b77511f9d4"></span>std::string <code class="sig-name descname">name</code><a class="headerlink" href="#_CPPv4N13CodeGenerator16NullCheckCodegen4nameE" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="member">
+<dt id="_CPPv4N13CodeGenerator16NullCheckCodegen12nullcheck_bbE">
+<span id="_CPPv3N13CodeGenerator16NullCheckCodegen12nullcheck_bbE"></span><span id="_CPPv2N13CodeGenerator16NullCheckCodegen12nullcheck_bbE"></span><span id="CodeGenerator::NullCheckCodegen::nullcheck_bb__llvm::BasicBlockP"></span><span class="target" id="struct_code_generator_1_1_null_check_codegen_1a45cdab2d2b5ad9fdc6c420afcfb6a993"></span>llvm::BasicBlock *<code class="sig-name descname">nullcheck_bb</code> = {nullptr}<a class="headerlink" href="#_CPPv4N13CodeGenerator16NullCheckCodegen12nullcheck_bbE" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="member">
+<dt id="_CPPv4N13CodeGenerator16NullCheckCodegen15nullcheck_valueE">
+<span id="_CPPv3N13CodeGenerator16NullCheckCodegen15nullcheck_valueE"></span><span id="_CPPv2N13CodeGenerator16NullCheckCodegen15nullcheck_valueE"></span><span id="CodeGenerator::NullCheckCodegen::nullcheck_value__llvm::PHINodeP"></span><span class="target" id="struct_code_generator_1_1_null_check_codegen_1a94dfc2bfca69ae4602c78c8baf0f9578"></span>llvm::PHINode *<code class="sig-name descname">nullcheck_value</code> = {nullptr}<a class="headerlink" href="#_CPPv4N13CodeGenerator16NullCheckCodegen15nullcheck_valueE" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="member">
+<dt id="_CPPv4N13CodeGenerator16NullCheckCodegen10null_checkE">
+<span id="_CPPv3N13CodeGenerator16NullCheckCodegen10null_checkE"></span><span id="_CPPv2N13CodeGenerator16NullCheckCodegen10null_checkE"></span><span id="CodeGenerator::NullCheckCodegen::null_check__std::unique_ptr:GroupByAndAggregate::DiamondCodegen:"></span><span class="target" id="struct_code_generator_1_1_null_check_codegen_1af2b74a5a05ec3de6f7cd074f615983d4"></span>std::unique_ptr&lt;<a class="reference internal" href="class_group_by_and_aggregate.html#_CPPv419GroupByAndAggregate" title="GroupByAndAggregate">GroupByAndAggregate</a>::<a class="reference internal" href="class_group_by_and_aggregate.html#_CPPv4N19GroupByAndAggregate14DiamondCodegenE" title="GroupByAndAggregate::DiamondCodegen">DiamondCodegen</a>&gt; <code class="sig-name descname">null_check</code><a class="headerlink" href="#_CPPv4N13CodeGenerator16NullCheckCodegen10null_checkE" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 </div>

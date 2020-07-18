@@ -1,0 +1,9 @@
+Class com::mapd::calcite::parser::MapDSqlOperatorTable::SampleRatio
+===================================================================
+
+.. doxygenclass:: com::mapd::calcite::parser::MapDSqlOperatorTable::SampleRatio
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

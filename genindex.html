@@ -64,7 +64,7 @@
             
             
               <div class="version">
-                5.4.0dev 19b6dfc
+                5.4.0dev 0f42a78
               </div>
             
           
@@ -308,6 +308,7 @@
 <li class="toctree-l2"><a class="reference internal" href="api/class/class_analyzer_1_1_query.html">Class Analyzer::Query</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/class_analyzer_1_1_range_table_entry.html">Class Analyzer::RangeTableEntry</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/class_analyzer_1_1_regexp_expr.html">Class Analyzer::RegexpExpr</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/class/class_analyzer_1_1_sample_ratio_expr.html">Class Analyzer::SampleRatioExpr</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/class_analyzer_1_1_subquery.html">Class Analyzer::Subquery</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/class_analyzer_1_1_target_entry.html">Class Analyzer::TargetEntry</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/class_analyzer_1_1_u_oper.html">Class Analyzer::UOper</a></li>
@@ -844,6 +845,7 @@
 <li class="toctree-l2"><a class="reference internal" href="api/class/classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_sql_operator_table_1_1_s_t___y_max.html">Class com::mapd::calcite::parser::MapDSqlOperatorTable::ST_YMax</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_sql_operator_table_1_1_s_t___y_min.html">Class com::mapd::calcite::parser::MapDSqlOperatorTable::ST_YMin</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_sql_operator_table_1_1_sample.html">Class com::mapd::calcite::parser::MapDSqlOperatorTable::Sample</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/class/classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_sql_operator_table_1_1_sample_ratio.html">Class com::mapd::calcite::parser::MapDSqlOperatorTable::SampleRatio</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_sql_operator_table_1_1_sign.html">Class com::mapd::calcite::parser::MapDSqlOperatorTable::Sign</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_sql_operator_table_1_1_sql_array_value_constructor_allowing_empty.html">Class com::mapd::calcite::parser::MapDSqlOperatorTable::SqlArrayValueConstructorAllowingEmpty</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_sql_operator_table_1_1_truncate.html">Class com::mapd::calcite::parser::MapDSqlOperatorTable::Truncate</a></li>
@@ -1083,7 +1085,9 @@
 <li class="toctree-l2"><a class="reference internal" href="api/struct/struct_code_generator_1_1_arg_nullcheck_b_bs.html">Struct CodeGenerator::ArgNullcheckBBs</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/struct/struct_code_generator_1_1_executor_required.html">Struct CodeGenerator::ExecutorRequired</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/struct/struct_code_generator_1_1_g_p_u_target.html">Struct CodeGenerator::GPUTarget</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/struct/struct_code_generator_1_1_null_check_codegen.html">Struct CodeGenerator::NullCheckCodegen</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/struct/struct_col_range_info.html">Struct ColRangeInfo</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/struct/struct_column.html">Struct Column</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/struct/struct_column_descriptor.html">Struct ColumnDescriptor</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/struct/struct_column_lazy_fetch_info.html">Struct ColumnLazyFetchInfo</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/struct/struct_compilation_options.html">Struct CompilationOptions</a></li>
@@ -2322,8 +2326,6 @@
 </li>
       <li><a href="api/class/class_analyzer_1_1_key_for_string_expr.html#_CPPv4NK8Analyzer16KeyForStringExpr29rewrite_with_child_targetlistERKNSt6vectorINSt10shared_ptrI11TargetEntryEEEE">Analyzer::KeyForStringExpr::rewrite_with_child_targetlist (C++ function)</a>
 </li>
-  </ul></td>
-  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="api/class/class_analyzer_1_1_key_for_string_expr.html#_CPPv4NK8Analyzer16KeyForStringExpr23rewrite_with_targetlistERKNSt6vectorINSt10shared_ptrI11TargetEntryEEEE">Analyzer::KeyForStringExpr::rewrite_with_targetlist (C++ function)</a>
 </li>
       <li><a href="api/class/class_analyzer_1_1_key_for_string_expr.html#_CPPv4NK8Analyzer16KeyForStringExpr8toStringEv">Analyzer::KeyForStringExpr::toString (C++ function)</a>
@@ -2340,6 +2342,8 @@
 </li>
       <li><a href="api/class/class_analyzer_1_1_like_expr.html#_CPPv4N8Analyzer8LikeExpr11escape_exprE">Analyzer::LikeExpr::escape_expr (C++ member)</a>
 </li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="api/class/class_analyzer_1_1_like_expr.html#_CPPv4NK8Analyzer8LikeExpr9find_exprEPFbPK4ExprERNSt4listIPK4ExprEE">Analyzer::LikeExpr::find_expr (C++ function)</a>
 </li>
       <li><a href="api/class/class_analyzer_1_1_like_expr.html#_CPPv4NK8Analyzer8LikeExpr7get_argEv">Analyzer::LikeExpr::get_arg (C++ function)</a>
@@ -2647,6 +2651,36 @@
       <li><a href="api/class/class_analyzer_1_1_regexp_expr.html#_CPPv4NK8Analyzer10RegexpExpr23rewrite_with_targetlistERKNSt6vectorINSt10shared_ptrI11TargetEntryEEEE">Analyzer::RegexpExpr::rewrite_with_targetlist (C++ function)</a>
 </li>
       <li><a href="api/class/class_analyzer_1_1_regexp_expr.html#_CPPv4NK8Analyzer10RegexpExpr8toStringEv">Analyzer::RegexpExpr::toString (C++ function)</a>
+</li>
+      <li><a href="api/class/class_analyzer_1_1_sample_ratio_expr.html#_CPPv4N8Analyzer15SampleRatioExprE">Analyzer::SampleRatioExpr (C++ class)</a>
+</li>
+      <li><a href="api/class/class_analyzer_1_1_sample_ratio_expr.html#_CPPv4N8Analyzer15SampleRatioExpr3argE">Analyzer::SampleRatioExpr::arg (C++ member)</a>
+</li>
+      <li><a href="api/class/class_analyzer_1_1_sample_ratio_expr.html#_CPPv4NK8Analyzer15SampleRatioExpr18collect_column_varERNSt3setIPK9ColumnVarXbool(*colvar_set)(const  ColumnVar  *, const  ColumnVar  *)EEEb">Analyzer::SampleRatioExpr::collect_column_var (C++ function)</a>
+</li>
+      <li><a href="api/class/class_analyzer_1_1_sample_ratio_expr.html#_CPPv4NK8Analyzer15SampleRatioExpr15collect_rte_idxERNSt3setIiEE">Analyzer::SampleRatioExpr::collect_rte_idx (C++ function)</a>
+</li>
+      <li><a href="api/class/class_analyzer_1_1_sample_ratio_expr.html#_CPPv4NK8Analyzer15SampleRatioExpr9deep_copyEv">Analyzer::SampleRatioExpr::deep_copy (C++ function)</a>
+</li>
+      <li><a href="api/class/class_analyzer_1_1_sample_ratio_expr.html#_CPPv4NK8Analyzer15SampleRatioExpr9find_exprEPFbPK4ExprERNSt4listIPK4ExprEE">Analyzer::SampleRatioExpr::find_expr (C++ function)</a>
+</li>
+      <li><a href="api/class/class_analyzer_1_1_sample_ratio_expr.html#_CPPv4NK8Analyzer15SampleRatioExpr7get_argEv">Analyzer::SampleRatioExpr::get_arg (C++ function)</a>
+</li>
+      <li><a href="api/class/class_analyzer_1_1_sample_ratio_expr.html#_CPPv4NK8Analyzer15SampleRatioExpr11get_own_argEv">Analyzer::SampleRatioExpr::get_own_arg (C++ function)</a>
+</li>
+      <li><a href="api/class/class_analyzer_1_1_sample_ratio_expr.html#_CPPv4NK8Analyzer15SampleRatioExpr16group_predicatesERNSt4listIPK4ExprEERNSt4listIPK4ExprEERNSt4listIPK4ExprEE">Analyzer::SampleRatioExpr::group_predicates (C++ function)</a>
+</li>
+      <li><a href="api/class/class_analyzer_1_1_sample_ratio_expr.html#_CPPv4NK8Analyzer15SampleRatioExpreqERK4Expr">Analyzer::SampleRatioExpr::operator== (C++ function)</a>
+</li>
+      <li><a href="api/class/class_analyzer_1_1_sample_ratio_expr.html#_CPPv4NK8Analyzer15SampleRatioExpr18rewrite_agg_to_varERKNSt6vectorINSt10shared_ptrI11TargetEntryEEEE">Analyzer::SampleRatioExpr::rewrite_agg_to_var (C++ function)</a>
+</li>
+      <li><a href="api/class/class_analyzer_1_1_sample_ratio_expr.html#_CPPv4NK8Analyzer15SampleRatioExpr29rewrite_with_child_targetlistERKNSt6vectorINSt10shared_ptrI11TargetEntryEEEE">Analyzer::SampleRatioExpr::rewrite_with_child_targetlist (C++ function)</a>
+</li>
+      <li><a href="api/class/class_analyzer_1_1_sample_ratio_expr.html#_CPPv4NK8Analyzer15SampleRatioExpr23rewrite_with_targetlistERKNSt6vectorINSt10shared_ptrI11TargetEntryEEEE">Analyzer::SampleRatioExpr::rewrite_with_targetlist (C++ function)</a>
+</li>
+      <li><a href="api/class/class_analyzer_1_1_sample_ratio_expr.html#_CPPv4N8Analyzer15SampleRatioExpr15SampleRatioExprENSt10shared_ptrIN8Analyzer4ExprEEE">Analyzer::SampleRatioExpr::SampleRatioExpr (C++ function)</a>
+</li>
+      <li><a href="api/class/class_analyzer_1_1_sample_ratio_expr.html#_CPPv4NK8Analyzer15SampleRatioExpr8toStringEv">Analyzer::SampleRatioExpr::toString (C++ function)</a>
 </li>
       <li><a href="api/class/class_analyzer_1_1_subquery.html#_CPPv4N8Analyzer8SubqueryE">Analyzer::Subquery (C++ class)</a>
 </li>
@@ -4766,7 +4800,7 @@
 </li>
       <li><a href="api/class/class_code_generator.html#_CPPv4N13CodeGenerator21checkExpressionRangesEPKN8Analyzer5UOperE7int64_t7int64_t">CodeGenerator::checkExpressionRanges (C++ function)</a>, <a href="api/class/class_code_generator.html#_CPPv4N13CodeGenerator21checkExpressionRangesEPKN8Analyzer7BinOperE7int64_t7int64_t">[1]</a>
 </li>
-      <li><a href="api/class/class_code_generator.html#_CPPv4N13CodeGenerator7codegenEPKN8Analyzer10RegexpExprERK18CompilationOptions">CodeGenerator::codegen (C++ function)</a>, <a href="api/class/class_code_generator.html#_CPPv4N13CodeGenerator7codegenEPKN8Analyzer11DateaddExprERK18CompilationOptions">[1]</a>, <a href="api/class/class_code_generator.html#_CPPv4N13CodeGenerator7codegenEPKN8Analyzer11ExtractExprERK18CompilationOptions">[2]</a>, <a href="api/class/class_code_generator.html#_CPPv4N13CodeGenerator7codegenEPKN8Analyzer12DatediffExprERK18CompilationOptions">[3]</a>, <a href="api/class/class_code_generator.html#_CPPv4N13CodeGenerator7codegenEPKN8Analyzer12InIntegerSetERK18CompilationOptions">[4]</a>, <a href="api/class/class_code_generator.html#_CPPv4N13CodeGenerator7codegenEPKN8Analyzer13DatetruncExprERK18CompilationOptions">[5]</a>, <a href="api/class/class_code_generator.html#_CPPv4N13CodeGenerator7codegenEPKN8Analyzer14CharLengthExprERK18CompilationOptions">[6]</a>, <a href="api/class/class_code_generator.html#_CPPv4N13CodeGenerator7codegenEPKN8Analyzer15CardinalityExprERK18CompilationOptions">[7]</a>, <a href="api/class/class_code_generator.html#_CPPv4N13CodeGenerator7codegenEPKN8Analyzer16KeyForStringExprERK18CompilationOptions">[8]</a>, <a href="api/class/class_code_generator.html#_CPPv4N13CodeGenerator7codegenEPKN8Analyzer4ExprEKbRK18CompilationOptions">[9]</a>, <a href="api/class/class_code_generator.html#_CPPv4N13CodeGenerator7codegenEPKN8Analyzer5UOperERK18CompilationOptions">[10]</a>, <a href="api/class/class_code_generator.html#_CPPv4N13CodeGenerator7codegenEPKN8Analyzer7BinOperERK18CompilationOptions">[11]</a>, <a href="api/class/class_code_generator.html#_CPPv4N13CodeGenerator7codegenEPKN8Analyzer8CaseExprERK18CompilationOptions">[12]</a>, <a href="api/class/class_code_generator.html#_CPPv4N13CodeGenerator7codegenEPKN8Analyzer8ConstantEK12EncodingTypeKiRK18CompilationOptions">[13]</a>, <a href="api/class/class_code_generator.html#_CPPv4N13CodeGenerator7codegenEPKN8Analyzer8InValuesERK18CompilationOptions">[14]</a>, <a href="api/class/class_code_generator.html#_CPPv4N13CodeGenerator7codegenEPKN8Analyzer8LikeExprERK18CompilationOptions">[15]</a>, <a href="api/class/class_code_generator.html#_CPPv4N13CodeGenerator7codegenEPKN8Analyzer9LowerExprERK18CompilationOptions">[16]</a>
+      <li><a href="api/class/class_code_generator.html#_CPPv4N13CodeGenerator7codegenEPKN8Analyzer10RegexpExprERK18CompilationOptions">CodeGenerator::codegen (C++ function)</a>, <a href="api/class/class_code_generator.html#_CPPv4N13CodeGenerator7codegenEPKN8Analyzer11DateaddExprERK18CompilationOptions">[1]</a>, <a href="api/class/class_code_generator.html#_CPPv4N13CodeGenerator7codegenEPKN8Analyzer11ExtractExprERK18CompilationOptions">[2]</a>, <a href="api/class/class_code_generator.html#_CPPv4N13CodeGenerator7codegenEPKN8Analyzer12DatediffExprERK18CompilationOptions">[3]</a>, <a href="api/class/class_code_generator.html#_CPPv4N13CodeGenerator7codegenEPKN8Analyzer12InIntegerSetERK18CompilationOptions">[4]</a>, <a href="api/class/class_code_generator.html#_CPPv4N13CodeGenerator7codegenEPKN8Analyzer13DatetruncExprERK18CompilationOptions">[5]</a>, <a href="api/class/class_code_generator.html#_CPPv4N13CodeGenerator7codegenEPKN8Analyzer14CharLengthExprERK18CompilationOptions">[6]</a>, <a href="api/class/class_code_generator.html#_CPPv4N13CodeGenerator7codegenEPKN8Analyzer15CardinalityExprERK18CompilationOptions">[7]</a>, <a href="api/class/class_code_generator.html#_CPPv4N13CodeGenerator7codegenEPKN8Analyzer15SampleRatioExprERK18CompilationOptions">[8]</a>, <a href="api/class/class_code_generator.html#_CPPv4N13CodeGenerator7codegenEPKN8Analyzer16KeyForStringExprERK18CompilationOptions">[9]</a>, <a href="api/class/class_code_generator.html#_CPPv4N13CodeGenerator7codegenEPKN8Analyzer4ExprEKbRK18CompilationOptions">[10]</a>, <a href="api/class/class_code_generator.html#_CPPv4N13CodeGenerator7codegenEPKN8Analyzer5UOperERK18CompilationOptions">[11]</a>, <a href="api/class/class_code_generator.html#_CPPv4N13CodeGenerator7codegenEPKN8Analyzer7BinOperERK18CompilationOptions">[12]</a>, <a href="api/class/class_code_generator.html#_CPPv4N13CodeGenerator7codegenEPKN8Analyzer8CaseExprERK18CompilationOptions">[13]</a>, <a href="api/class/class_code_generator.html#_CPPv4N13CodeGenerator7codegenEPKN8Analyzer8ConstantEK12EncodingTypeKiRK18CompilationOptions">[14]</a>, <a href="api/class/class_code_generator.html#_CPPv4N13CodeGenerator7codegenEPKN8Analyzer8InValuesERK18CompilationOptions">[15]</a>, <a href="api/class/class_code_generator.html#_CPPv4N13CodeGenerator7codegenEPKN8Analyzer8LikeExprERK18CompilationOptions">[16]</a>, <a href="api/class/class_code_generator.html#_CPPv4N13CodeGenerator7codegenEPKN8Analyzer9LowerExprERK18CompilationOptions">[17]</a>
 </li>
       <li><a href="api/class/class_code_generator.html#_CPPv4N13CodeGenerator10codegenAddEPKN8Analyzer7BinOperEPN4llvm5ValueEPN4llvm5ValueERKNSt6stringERKNSt6stringERK11SQLTypeInfoRK18CompilationOptions">CodeGenerator::codegenAdd (C++ function)</a>
 </li>
@@ -4822,8 +4856,6 @@
 </li>
       <li><a href="api/class/class_code_generator.html#_CPPv4N13CodeGenerator10codegenDivEPN4llvm5ValueEPN4llvm5ValueERKNSt6stringERKNSt6stringERK11SQLTypeInfob">CodeGenerator::codegenDiv (C++ function)</a>
 </li>
-  </ul></td>
-  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="api/class/class_code_generator.html#_CPPv4N13CodeGenerator13CodeGeneratorEP8Executor">CodeGenerator::CodeGenerator (C++ function)</a>, <a href="api/class/class_code_generator.html#_CPPv4N13CodeGenerator13CodeGeneratorEP9CgenStateP9PlanState">[1]</a>
 </li>
       <li><a href="api/class/class_code_generator.html#_CPPv4N13CodeGenerator37codegenExtractHighPrecisionTimestampsEPN4llvm5ValueERK11SQLTypeInfoRK12ExtractField">CodeGenerator::codegenExtractHighPrecisionTimestamps (C++ function)</a>
@@ -4836,6 +4868,8 @@
 </li>
       <li><a href="api/class/class_code_generator.html#_CPPv4N13CodeGenerator19codegenFunctionOperEPKN8Analyzer12FunctionOperERK18CompilationOptions">CodeGenerator::codegenFunctionOper (C++ function)</a>
 </li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="api/class/class_code_generator.html#_CPPv4N13CodeGenerator27codegenFunctionOperCastArgsEPKN8Analyzer12FunctionOperEPK17ExtensionFunctionRKNSt6vectorIPN4llvm5ValueEEERKNSt13unordered_mapIPN4llvm5ValueEPN4llvm5ValueEEERK18CompilationOptions">CodeGenerator::codegenFunctionOperCastArgs (C++ function)</a>
 </li>
       <li><a href="api/class/class_code_generator.html#_CPPv4N13CodeGenerator26codegenFunctionOperNullArgEPKN8Analyzer12FunctionOperERKNSt6vectorIPN4llvm5ValueEEE">CodeGenerator::codegenFunctionOperNullArg (C++ function)</a>
@@ -4960,6 +4994,22 @@
 </li>
       <li><a href="api/class/class_code_generator.html#_CPPv4N13CodeGenerator20markDeadRuntimeFuncsERN4llvm6ModuleERKNSt6vectorIPN4llvm8FunctionEEERKNSt6vectorIPN4llvm8FunctionEEE">CodeGenerator::markDeadRuntimeFuncs (C++ function)</a>
 </li>
+      <li><a href="api/class/class_code_generator.html#_CPPv4N13CodeGenerator16NullCheckCodegenE">CodeGenerator::NullCheckCodegen (C++ class)</a>, <a href="api/struct/struct_code_generator_1_1_null_check_codegen.html#_CPPv4N13CodeGenerator16NullCheckCodegenE">[1]</a>
+</li>
+      <li><a href="api/class/class_code_generator.html#_CPPv4N13CodeGenerator16NullCheckCodegen10cgen_stateE">CodeGenerator::NullCheckCodegen::cgen_state (C++ member)</a>, <a href="api/struct/struct_code_generator_1_1_null_check_codegen.html#_CPPv4N13CodeGenerator16NullCheckCodegen10cgen_stateE">[1]</a>
+</li>
+      <li><a href="api/class/class_code_generator.html#_CPPv4N13CodeGenerator16NullCheckCodegen8finalizeEPN4llvm5ValueEPN4llvm5ValueE">CodeGenerator::NullCheckCodegen::finalize (C++ function)</a>, <a href="api/struct/struct_code_generator_1_1_null_check_codegen.html#_CPPv4N13CodeGenerator16NullCheckCodegen8finalizeEPN4llvm5ValueEPN4llvm5ValueE">[1]</a>
+</li>
+      <li><a href="api/class/class_code_generator.html#_CPPv4N13CodeGenerator16NullCheckCodegen4nameE">CodeGenerator::NullCheckCodegen::name (C++ member)</a>, <a href="api/struct/struct_code_generator_1_1_null_check_codegen.html#_CPPv4N13CodeGenerator16NullCheckCodegen4nameE">[1]</a>
+</li>
+      <li><a href="api/class/class_code_generator.html#_CPPv4N13CodeGenerator16NullCheckCodegen10null_checkE">CodeGenerator::NullCheckCodegen::null_check (C++ member)</a>, <a href="api/struct/struct_code_generator_1_1_null_check_codegen.html#_CPPv4N13CodeGenerator16NullCheckCodegen10null_checkE">[1]</a>
+</li>
+      <li><a href="api/class/class_code_generator.html#_CPPv4N13CodeGenerator16NullCheckCodegen12nullcheck_bbE">CodeGenerator::NullCheckCodegen::nullcheck_bb (C++ member)</a>, <a href="api/struct/struct_code_generator_1_1_null_check_codegen.html#_CPPv4N13CodeGenerator16NullCheckCodegen12nullcheck_bbE">[1]</a>
+</li>
+      <li><a href="api/class/class_code_generator.html#_CPPv4N13CodeGenerator16NullCheckCodegen15nullcheck_valueE">CodeGenerator::NullCheckCodegen::nullcheck_value (C++ member)</a>, <a href="api/struct/struct_code_generator_1_1_null_check_codegen.html#_CPPv4N13CodeGenerator16NullCheckCodegen15nullcheck_valueE">[1]</a>
+</li>
+      <li><a href="api/class/class_code_generator.html#_CPPv4N13CodeGenerator16NullCheckCodegen16NullCheckCodegenEP9CgenStateP8ExecutorPN4llvm5ValueERK11SQLTypeInfoRKNSt6stringE">CodeGenerator::NullCheckCodegen::NullCheckCodegen (C++ function)</a>, <a href="api/struct/struct_code_generator_1_1_null_check_codegen.html#_CPPv4N13CodeGenerator16NullCheckCodegen16NullCheckCodegenEP9CgenStateP8ExecutorPN4llvm5ValueERK11SQLTypeInfoRKNSt6stringE">[1]</a>
+</li>
       <li><a href="api/class/class_code_generator.html#_CPPv4N13CodeGenerator11plan_state_E">CodeGenerator::plan_state_ (C++ member)</a>
 </li>
       <li><a href="api/class/class_code_generator.html#_CPPv4NK13CodeGenerator6posArgEPKN8Analyzer4ExprE">CodeGenerator::posArg (C++ function)</a>
@@ -5039,6 +5089,12 @@
       <li><a href="api/class/class_col_slot_context.html#_CPPv4NK14ColSlotContext8toStringEv">ColSlotContext::toString (C++ function)</a>
 </li>
       <li><a href="api/class/class_col_slot_context.html#_CPPv4NK14ColSlotContext8validateEv">ColSlotContext::validate (C++ function)</a>
+</li>
+      <li><a href="api/struct/struct_column.html#_CPPv4I0E6Column">Column (C++ class)</a>
+</li>
+      <li><a href="api/struct/struct_column.html#_CPPv4N6Column3ptrE">Column::ptr (C++ member)</a>
+</li>
+      <li><a href="api/struct/struct_column.html#_CPPv4N6Column2szE">Column::sz (C++ member)</a>
 </li>
       <li><a href="api/class/class_columnar_conversion_not_supported.html#_CPPv430ColumnarConversionNotSupported">ColumnarConversionNotSupported (C++ class)</a>
 </li>
@@ -5271,6 +5327,8 @@
       <li><a href="api/class/classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_sql_operator_table.html#_CPPv4N3com4mapd7calcite6parser20MapDSqlOperatorTable9RowCopierE">com::mapd::calcite::parser::MapDSqlOperatorTable::RowCopier (C++ class)</a>, <a href="api/class/classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_sql_operator_table_1_1_row_copier.html#_CPPv4N3com4mapd7calcite6parser20MapDSqlOperatorTable9RowCopierE">[1]</a>
 </li>
       <li><a href="api/class/classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_sql_operator_table.html#_CPPv4N3com4mapd7calcite6parser20MapDSqlOperatorTable6SampleE">com::mapd::calcite::parser::MapDSqlOperatorTable::Sample (C++ class)</a>, <a href="api/class/classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_sql_operator_table_1_1_sample.html#_CPPv4N3com4mapd7calcite6parser20MapDSqlOperatorTable6SampleE">[1]</a>
+</li>
+      <li><a href="api/class/classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_sql_operator_table.html#_CPPv4N3com4mapd7calcite6parser20MapDSqlOperatorTable11SampleRatioE">com::mapd::calcite::parser::MapDSqlOperatorTable::SampleRatio (C++ class)</a>, <a href="api/class/classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_sql_operator_table_1_1_sample_ratio.html#_CPPv4N3com4mapd7calcite6parser20MapDSqlOperatorTable11SampleRatioE">[1]</a>
 </li>
       <li><a href="api/class/classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_sql_operator_table.html#_CPPv4N3com4mapd7calcite6parser20MapDSqlOperatorTable4SignE">com::mapd::calcite::parser::MapDSqlOperatorTable::Sign (C++ class)</a>, <a href="api/class/classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_sql_operator_table_1_1_sign.html#_CPPv4N3com4mapd7calcite6parser20MapDSqlOperatorTable4SignE">[1]</a>
 </li>
@@ -5654,8 +5712,6 @@
 </li>
       <li><a href="api/struct/struct_compilation_options.html#_CPPv418CompilationOptions">CompilationOptions (C++ class)</a>
 </li>
-      <li><a href="api/struct/struct_compilation_options.html#_CPPv4N18CompilationOptions17add_delete_columnE">CompilationOptions::add_delete_column (C++ member)</a>
-</li>
       <li><a href="api/struct/struct_compilation_options.html#_CPPv4N18CompilationOptions16allow_lazy_fetchE">CompilationOptions::allow_lazy_fetch (C++ member)</a>
 </li>
       <li><a href="api/struct/struct_compilation_options.html#_CPPv4N18CompilationOptions8defaultsEK18ExecutorDeviceType">CompilationOptions::defaults (C++ function)</a>
@@ -5663,6 +5719,8 @@
       <li><a href="api/struct/struct_compilation_options.html#_CPPv4N18CompilationOptions11device_typeE">CompilationOptions::device_type (C++ member)</a>
 </li>
       <li><a href="api/struct/struct_compilation_options.html#_CPPv4N18CompilationOptions12explain_typeE">CompilationOptions::explain_type (C++ member)</a>
+</li>
+      <li><a href="api/struct/struct_compilation_options.html#_CPPv4N18CompilationOptions24filter_on_deleted_columnE">CompilationOptions::filter_on_deleted_column (C++ member)</a>
 </li>
       <li><a href="api/struct/struct_compilation_options.html#_CPPv4N18CompilationOptions14hoist_literalsE">CompilationOptions::hoist_literals (C++ member)</a>
 </li>
@@ -6612,10 +6670,10 @@
 </li>
       <li><a href="api/class/class_d_b_handler.html#_CPPv4N9DBHandler19has_view_permissionERK16AccessPrivilegesRK20TDBObjectPermissions">DBHandler::has_view_permission (C++ function)</a>
 </li>
-  </ul></td>
-  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="api/class/class_d_b_handler.html#_CPPv4N9DBHandler24hasTableAccessPrivilegesEPK15TableDescriptorRKN17Catalog_Namespace11SessionInfoE">DBHandler::hasTableAccessPrivileges (C++ function)</a>
 </li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="api/class/class_d_b_handler.html#_CPPv4N9DBHandler22idle_session_duration_E">DBHandler::idle_session_duration_ (C++ member)</a>
 </li>
       <li><a href="api/class/class_d_b_handler.html#_CPPv4N9DBHandler16import_geo_tableERK10TSessionIdRKNSt6stringERKNSt6stringERK11TCopyParamsRK14TRowDescriptorRK13TCreateParams">DBHandler::import_geo_table (C++ function)</a>
@@ -7015,6 +7073,8 @@
       <li><a href="api/class/class_deep_copy_visitor.html#_CPPv4NK15DeepCopyVisitor21visitOffsetInFragmentEPKN8Analyzer16OffsetInFragmentE">DeepCopyVisitor::visitOffsetInFragment (C++ function)</a>
 </li>
       <li><a href="api/class/class_deep_copy_visitor.html#_CPPv4NK15DeepCopyVisitor15visitRegexpExprEPKN8Analyzer10RegexpExprE">DeepCopyVisitor::visitRegexpExpr (C++ function)</a>
+</li>
+      <li><a href="api/class/class_deep_copy_visitor.html#_CPPv4NK15DeepCopyVisitor16visitSampleRatioEPKN8Analyzer15SampleRatioExprE">DeepCopyVisitor::visitSampleRatio (C++ function)</a>
 </li>
       <li><a href="api/class/class_deep_copy_visitor.html#_CPPv4NK15DeepCopyVisitor10visitUOperEPKN8Analyzer5UOperE">DeepCopyVisitor::visitUOper (C++ function)</a>
 </li>
@@ -8940,10 +9000,10 @@
 </li>
       <li><a href="api/class/classforeign__storage_1_1_foreign_storage_mgr.html#_CPPv4N15foreign_storage17ForeignStorageMgr22foreign_storage_cache_E">foreign_storage::ForeignStorageMgr::foreign_storage_cache_ (C++ member)</a>
 </li>
-  </ul></td>
-  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="api/class/classforeign__storage_1_1_foreign_storage_mgr.html#_CPPv4N15foreign_storage17ForeignStorageMgr17ForeignStorageMgrEPN14File_Namespace13GlobalFileMgrE">foreign_storage::ForeignStorageMgr::ForeignStorageMgr (C++ function)</a>
 </li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="api/class/classforeign__storage_1_1_foreign_storage_mgr.html#_CPPv4N15foreign_storage17ForeignStorageMgr4freeEP14AbstractBuffer">foreign_storage::ForeignStorageMgr::free (C++ function)</a>
 </li>
       <li><a href="api/class/classforeign__storage_1_1_foreign_storage_mgr.html#_CPPv4N15foreign_storage17ForeignStorageMgr12getAllocatedEv">foreign_storage::ForeignStorageMgr::getAllocated (C++ function)</a>
@@ -9124,7 +9184,7 @@
 </li>
       <li><a href="api/class/classforeign__storage_1_1_parquet_data_wrapper.html#_CPPv4N15foreign_storage18ParquetDataWrapper9loadChunkEPK16ColumnDescriptorRK8ChunkKeyR12DataBlockPtrK6size_tK6size_tKbKbK6size_t">foreign_storage::ParquetDataWrapper::loadChunk (C++ function)</a>
 </li>
-      <li><a href="api/class/classforeign__storage_1_1_parquet_data_wrapper.html#_CPPv4N15foreign_storage18ParquetDataWrapper17loadMetadataChunkEPK16ColumnDescriptorRK8ChunkKeyR12DataBlockPtrK6size_tKb">foreign_storage::ParquetDataWrapper::loadMetadataChunk (C++ function)</a>
+      <li><a href="api/class/classforeign__storage_1_1_parquet_data_wrapper.html#_CPPv4N15foreign_storage18ParquetDataWrapper17loadMetadataChunkEPK16ColumnDescriptorRK8ChunkKeyR12DataBlockPtrK6size_tKbKb">foreign_storage::ParquetDataWrapper::loadMetadataChunk (C++ function)</a>
 </li>
       <li><a href="api/class/classforeign__storage_1_1_parquet_data_wrapper.html#_CPPv4N15foreign_storage18ParquetDataWrapper14max_row_group_E">foreign_storage::ParquetDataWrapper::max_row_group_ (C++ member)</a>
 </li>
@@ -9175,6 +9235,8 @@
       <li><a href="api/struct/structforeign__storage_1_1_row_group_metadata.html#_CPPv4N15foreign_storage16RowGroupMetadataE">foreign_storage::RowGroupMetadata (C++ class)</a>
 </li>
       <li><a href="api/struct/structforeign__storage_1_1_row_group_metadata.html#_CPPv4N15foreign_storage16RowGroupMetadata9has_nullsE">foreign_storage::RowGroupMetadata::has_nulls (C++ member)</a>
+</li>
+      <li><a href="api/struct/structforeign__storage_1_1_row_group_metadata.html#_CPPv4N15foreign_storage16RowGroupMetadata12is_all_nullsE">foreign_storage::RowGroupMetadata::is_all_nulls (C++ member)</a>
 </li>
       <li><a href="api/struct/structforeign__storage_1_1_row_group_metadata.html#_CPPv4N15foreign_storage16RowGroupMetadata13metadata_onlyE">foreign_storage::RowGroupMetadata::metadata_only (C++ member)</a>
 </li>
@@ -15718,6 +15780,8 @@
 </li>
       <li><a href="api/class/class_rel_alg_translator.html#_CPPv4NK16RelAlgTranslator15translateRegexpEPK19RexFunctionOperator">RelAlgTranslator::translateRegexp (C++ function)</a>
 </li>
+      <li><a href="api/class/class_rel_alg_translator.html#_CPPv4NK16RelAlgTranslator20translateSampleRatioEPK19RexFunctionOperator">RelAlgTranslator::translateSampleRatio (C++ function)</a>
+</li>
       <li><a href="api/class/class_rel_alg_translator.html#_CPPv4NK16RelAlgTranslator18translateScalarRexEPK9RexScalar">RelAlgTranslator::translateScalarRex (C++ function)</a>
 </li>
       <li><a href="api/class/class_rel_alg_translator.html#_CPPv4NK16RelAlgTranslator23translateScalarSubqueryEPK11RexSubQuery">RelAlgTranslator::translateScalarSubquery (C++ function)</a>
@@ -16278,10 +16342,10 @@
 </li>
       <li><a href="api/class/class_render_info.html#_CPPv4NK10RenderInfo17getQueryVboLayoutEv">RenderInfo::getQueryVboLayout (C++ function)</a>
 </li>
-      <li><a href="api/class/class_render_info.html#_CPPv4NK10RenderInfo18getRenderQueryOptsEv">RenderInfo::getRenderQueryOpts (C++ function)</a>
-</li>
   </ul></td>
   <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="api/class/class_render_info.html#_CPPv4NK10RenderInfo18getRenderQueryOptsEv">RenderInfo::getRenderQueryOpts (C++ function)</a>
+</li>
       <li><a href="api/class/class_render_info.html#_CPPv4NK10RenderInfo21getRenderQueryOptsPtrEv">RenderInfo::getRenderQueryOptsPtr (C++ function)</a>
 </li>
       <li><a href="api/class/class_render_info.html#_CPPv4NK10RenderInfo14getSessionInfoEv">RenderInfo::getSessionInfo (C++ function)</a>
@@ -17604,6 +17668,8 @@
 </li>
       <li><a href="api/class/class_scalar_expr_visitor.html#_CPPv4NK17ScalarExprVisitor15visitRegexpExprEPKN8Analyzer10RegexpExprE">ScalarExprVisitor::visitRegexpExpr (C++ function)</a>
 </li>
+      <li><a href="api/class/class_scalar_expr_visitor.html#_CPPv4NK17ScalarExprVisitor16visitSampleRatioEPKN8Analyzer15SampleRatioExprE">ScalarExprVisitor::visitSampleRatio (C++ function)</a>
+</li>
       <li><a href="api/class/class_scalar_expr_visitor.html#_CPPv4NK17ScalarExprVisitor10visitUOperEPKN8Analyzer5UOperE">ScalarExprVisitor::visitUOper (C++ function)</a>
 </li>
       <li><a href="api/class/class_scalar_expr_visitor.html#_CPPv4NK17ScalarExprVisitor8visitVarEPKN8Analyzer3VarE">ScalarExprVisitor::visitVar (C++ function)</a>
@@ -17858,6 +17924,8 @@
 </li>
       <li><a href="api/class/class_s_q_l_type_info.html#_CPPv4NK11SQLTypeInfo11is_castableERK11SQLTypeInfo">SQLTypeInfo::is_castable (C++ function)</a>
 </li>
+      <li><a href="api/class/class_s_q_l_type_info.html#_CPPv4NK11SQLTypeInfo9is_columnEv">SQLTypeInfo::is_column (C++ function)</a>
+</li>
       <li><a href="api/class/class_s_q_l_type_info.html#_CPPv4NK11SQLTypeInfo7is_dateEv">SQLTypeInfo::is_date (C++ function)</a>
 </li>
       <li><a href="api/class/class_s_q_l_type_info.html#_CPPv4NK11SQLTypeInfo15is_date_in_daysEv">SQLTypeInfo::is_date_in_days (C++ function)</a>
@@ -17954,10 +18022,10 @@
 </li>
       <li><a href="api/struct/structstd_1_1hash_3_01std_1_1pair_3_01int_00_01int_01_4_01_4.html#_CPPv4IENSt4hashINSt4pairIiiEEEE">std::hash&lt;std::pair&lt;int, int&gt;&gt; (C++ class)</a>
 </li>
-      <li><a href="api/struct/structstd_1_1hash_3_01std_1_1vector_3_01int_01_4_01_4.html#_CPPv4IENSt4hashINSt6vectorIiEEEE">std::hash&lt;std::vector&lt;int&gt;&gt; (C++ class)</a>
-</li>
   </ul></td>
   <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="api/struct/structstd_1_1hash_3_01std_1_1vector_3_01int_01_4_01_4.html#_CPPv4IENSt4hashINSt6vectorIiEEEE">std::hash&lt;std::vector&lt;int&gt;&gt; (C++ class)</a>
+</li>
       <li><a href="api/struct/structstd_1_1tuple__element_3_01_i_00_01boost_1_1tuples_1_1cons_3_01_t_00_01_u_01_4_01_4.html#_CPPv4I_6size_t00ENSt13tuple_elementI1IN5boost6tuples4consI1T1UEEEE">std::tuple_element&lt;I, boost::tuples::cons&lt;T, U&gt;&gt; (C++ class)</a>
 </li>
       <li><a href="api/struct/structstd_1_1tuple__size_3_01boost_1_1tuples_1_1cons_3_01_t_00_01_u_01_4_01_4.html#_CPPv4I00ENSt10tuple_sizeIN5boost6tuples4consI1T1UEEEE">std::tuple_size&lt;boost::tuples::cons&lt;T, U&gt;&gt; (C++ class)</a>
@@ -18504,6 +18572,8 @@
 </li>
       <li><a href="api/class/classtable__functions_1_1_table_function.html#_CPPv4NK15table_functions13TableFunction7getArgsEv">table_functions::TableFunction::getArgs (C++ function)</a>
 </li>
+      <li><a href="api/class/classtable__functions_1_1_table_function.html#_CPPv4NK15table_functions13TableFunction15getInputSQLTypeEK6size_t">table_functions::TableFunction::getInputSQLType (C++ function)</a>
+</li>
       <li><a href="api/class/classtable__functions_1_1_table_function.html#_CPPv4NK15table_functions13TableFunction7getNameEv">table_functions::TableFunction::getName (C++ function)</a>
 </li>
       <li><a href="api/class/classtable__functions_1_1_table_function.html#_CPPv4NK15table_functions13TableFunction21getOutputRowParameterEv">table_functions::TableFunction::getOutputRowParameter (C++ function)</a>
@@ -18527,6 +18597,8 @@
       <li><a href="api/class/classtable__functions_1_1_table_function.html#_CPPv4N15table_functions13TableFunction13output_sizer_E">table_functions::TableFunction::output_sizer_ (C++ member)</a>
 </li>
       <li><a href="api/class/classtable__functions_1_1_table_function.html#_CPPv4N15table_functions13TableFunction13TableFunctionERKNSt6stringEK27TableFunctionOutputRowSizerRKNSt6vectorI15ExtArgumentTypeEERKNSt6vectorI15ExtArgumentTypeEEb">table_functions::TableFunction::TableFunction (C++ function)</a>
+</li>
+      <li><a href="api/class/classtable__functions_1_1_table_function.html#_CPPv4NK15table_functions13TableFunction8toStringEv">table_functions::TableFunction::toString (C++ function)</a>
 </li>
       <li><a href="api/struct/structtable__functions_1_1_table_function_output_row_sizer.html#_CPPv4N15table_functions27TableFunctionOutputRowSizerE">table_functions::TableFunctionOutputRowSizer (C++ class)</a>
 </li>
@@ -18795,6 +18867,8 @@
       <li><a href="api/struct/struct_target_info.html#_CPPv4N10TargetInfo13skip_null_valE">TargetInfo::skip_null_val (C++ member)</a>
 </li>
       <li><a href="api/struct/struct_target_info.html#_CPPv4N10TargetInfo8sql_typeE">TargetInfo::sql_type (C++ member)</a>
+</li>
+      <li><a href="api/struct/struct_target_info.html#_CPPv4NK10TargetInfo8toStringEv">TargetInfo::toString (C++ function)</a>
 </li>
       <li><a href="api/class/class_target_meta_info.html#_CPPv414TargetMetaInfo">TargetMetaInfo (C++ class)</a>
 </li>

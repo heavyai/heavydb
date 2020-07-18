@@ -65,7 +65,7 @@
             
             
               <div class="version">
-                5.4.0dev 19b6dfc
+                5.4.0dev 0f42a78
               </div>
             
           
@@ -309,6 +309,7 @@
 <li class="toctree-l2"><a class="reference internal" href="class_analyzer_1_1_query.html">Class Analyzer::Query</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_analyzer_1_1_range_table_entry.html">Class Analyzer::RangeTableEntry</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_analyzer_1_1_regexp_expr.html">Class Analyzer::RegexpExpr</a></li>
+<li class="toctree-l2"><a class="reference internal" href="class_analyzer_1_1_sample_ratio_expr.html">Class Analyzer::SampleRatioExpr</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_analyzer_1_1_subquery.html">Class Analyzer::Subquery</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_analyzer_1_1_target_entry.html">Class Analyzer::TargetEntry</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_analyzer_1_1_u_oper.html">Class Analyzer::UOper</a></li>
@@ -845,6 +846,7 @@
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_sql_operator_table_1_1_s_t___y_max.html">Class com::mapd::calcite::parser::MapDSqlOperatorTable::ST_YMax</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_sql_operator_table_1_1_s_t___y_min.html">Class com::mapd::calcite::parser::MapDSqlOperatorTable::ST_YMin</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_sql_operator_table_1_1_sample.html">Class com::mapd::calcite::parser::MapDSqlOperatorTable::Sample</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_sql_operator_table_1_1_sample_ratio.html">Class com::mapd::calcite::parser::MapDSqlOperatorTable::SampleRatio</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_sql_operator_table_1_1_sign.html">Class com::mapd::calcite::parser::MapDSqlOperatorTable::Sign</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_sql_operator_table_1_1_sql_array_value_constructor_allowing_empty.html">Class com::mapd::calcite::parser::MapDSqlOperatorTable::SqlArrayValueConstructorAllowingEmpty</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_sql_operator_table_1_1_truncate.html">Class com::mapd::calcite::parser::MapDSqlOperatorTable::Truncate</a></li>
@@ -1084,7 +1086,9 @@
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_code_generator_1_1_arg_nullcheck_b_bs.html">Struct CodeGenerator::ArgNullcheckBBs</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_code_generator_1_1_executor_required.html">Struct CodeGenerator::ExecutorRequired</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_code_generator_1_1_g_p_u_target.html">Struct CodeGenerator::GPUTarget</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/struct_code_generator_1_1_null_check_codegen.html">Struct CodeGenerator::NullCheckCodegen</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_col_range_info.html">Struct ColRangeInfo</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/struct_column.html">Struct Column</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_column_descriptor.html">Struct ColumnDescriptor</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_column_lazy_fetch_info.html">Struct ColumnLazyFetchInfo</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_compilation_options.html">Struct CompilationOptions</a></li>
@@ -1610,6 +1614,11 @@
 <dl class="function">
 <dt id="_CPPv4NK16RelAlgTranslator21translateKeyForStringEPK19RexFunctionOperator">
 <span id="_CPPv3NK16RelAlgTranslator21translateKeyForStringEPK19RexFunctionOperator"></span><span id="_CPPv2NK16RelAlgTranslator21translateKeyForStringEPK19RexFunctionOperator"></span><span id="RelAlgTranslator::translateKeyForString__RexFunctionOperatorCPC"></span><span class="target" id="class_rel_alg_translator_1a883b42c20455d5ae7c1adb40ea71b15f"></span>std::shared_ptr&lt;Analyzer::<a class="reference internal" href="class_analyzer_1_1_expr.html#_CPPv4N8Analyzer4ExprE" title="Analyzer::Expr">Expr</a>&gt; <code class="sig-name descname">translateKeyForString</code><span class="sig-paren">(</span><em class="property">const</em> <a class="reference internal" href="class_rex_function_operator.html#_CPPv419RexFunctionOperator" title="RexFunctionOperator">RexFunctionOperator</a> *<em>rex_function</em><span class="sig-paren">)</span> <em class="property">const</em><a class="headerlink" href="#_CPPv4NK16RelAlgTranslator21translateKeyForStringEPK19RexFunctionOperator" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="_CPPv4NK16RelAlgTranslator20translateSampleRatioEPK19RexFunctionOperator">
+<span id="_CPPv3NK16RelAlgTranslator20translateSampleRatioEPK19RexFunctionOperator"></span><span id="_CPPv2NK16RelAlgTranslator20translateSampleRatioEPK19RexFunctionOperator"></span><span id="RelAlgTranslator::translateSampleRatio__RexFunctionOperatorCPC"></span><span class="target" id="class_rel_alg_translator_1a1c79a4e9f196998d5ee3bbc1594f4973"></span>std::shared_ptr&lt;Analyzer::<a class="reference internal" href="class_analyzer_1_1_expr.html#_CPPv4N8Analyzer4ExprE" title="Analyzer::Expr">Expr</a>&gt; <code class="sig-name descname">translateSampleRatio</code><span class="sig-paren">(</span><em class="property">const</em> <a class="reference internal" href="class_rex_function_operator.html#_CPPv419RexFunctionOperator" title="RexFunctionOperator">RexFunctionOperator</a> *<em>rex_function</em><span class="sig-paren">)</span> <em class="property">const</em><a class="headerlink" href="#_CPPv4NK16RelAlgTranslator20translateSampleRatioEPK19RexFunctionOperator" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 <dl class="function">
