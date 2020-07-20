@@ -120,6 +120,9 @@ DataMgr::SystemMemoryUsage DataMgr::getSystemMemoryUsage() const {
   usage.regular = (resident - shared) * page_size;
   usage.shared = shared * page_size;
 
+  ProcBuddyinfoParser bi;
+  usage.frag = bi.getFragmentationPercent();
+
 #else
 
   usage.total = 0;
@@ -128,6 +131,7 @@ DataMgr::SystemMemoryUsage DataMgr::getSystemMemoryUsage() const {
   usage.vtotal = 0;
   usage.regular = 0;
   usage.shared = 0;
+  usage.frag = 0;
 
 #endif
 
@@ -532,13 +536,17 @@ GlobalFileMgr* DataMgr::getGlobalFileMgr() const {
 }
 
 std::ostream& operator<<(std::ostream& os, const DataMgr::SystemMemoryUsage& mem_info) {
-  os << "CPU Memory Info:";
-  os << "\n\tTotal: " << mem_info.total / (1024. * 1024.) << " MB";
-  os << "\n\tFree: " << mem_info.free / (1024. * 1024.) << " MB";
-  os << "\n\tProcess: " << mem_info.resident / (1024. * 1024.) << " MB";
-  os << "\n\tVirtual: " << mem_info.vtotal / (1024. * 1024.) << " MB";
-  os << "\n\tProcess + Swap: " << mem_info.regular / (1024. * 1024.) << " MB";
-  os << "\n\tProcess Shared: " << mem_info.shared / (1024. * 1024.) << " MB";
+  os << "jsonlog ";
+  os << "{";
+  os << " \"name\": \"CPU Memory Info\",";
+  os << " \"TotalMB\": " << mem_info.total / (1024. * 1024.) << ",";
+  os << " \"FreeMB\": " << mem_info.free / (1024. * 1024.) << ",";
+  os << " \"ProcessMB\": " << mem_info.resident / (1024. * 1024.) << ",";
+  os << " \"VirtualMB\": " << mem_info.vtotal / (1024. * 1024.) << ",";
+  os << " \"ProcessPlusSwapMB\": " << mem_info.regular / (1024. * 1024.) << ",";
+  os << " \"ProcessSharedMB\": " << mem_info.shared / (1024. * 1024.) << ",";
+  os << " \"FragmentationPercent\": " << mem_info.frag;
+  os << " }";
   return os;
 }
 
