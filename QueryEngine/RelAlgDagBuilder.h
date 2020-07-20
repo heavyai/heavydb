@@ -1754,7 +1754,8 @@ class RelLogicalUnion : public RelAlgNode {
   std::string getFieldName(const size_t i) const;
 
   inline bool isAll() const { return is_all_; }
-  bool inputMetainfoTypesMatch() const;
+  // Will throw a std::runtime_error if MetaInfo types don't match.
+  void checkForMatchingMetaInfoTypes() const;
   RexScalar const* copyAndRedirectSource(RexScalar const*, size_t input_idx) const;
 
   // Not unique_ptr to allow for an easy deepCopy() implementation.

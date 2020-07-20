@@ -617,25 +617,33 @@ std::string RelLogicalUnion::getFieldName(const size_t i) const {
   return {};
 }
 
-bool RelLogicalUnion::inputMetainfoTypesMatch() const {
+void RelLogicalUnion::checkForMatchingMetaInfoTypes() const {
   std::vector<TargetMetaInfo> const& tmis0 = inputs_[0]->getOutputMetainfo();
   std::vector<TargetMetaInfo> const& tmis1 = inputs_[1]->getOutputMetainfo();
   if (tmis0.size() != tmis1.size()) {
     VLOG(2) << "tmis0.size() = " << tmis0.size() << " != " << tmis1.size()
             << " = tmis1.size()";
-    return false;
+    throw std::runtime_error("Subqueries of a UNION must have matching data types.");
   }
   for (size_t i = 0; i < tmis0.size(); ++i) {
     if (tmis0[i].get_type_info() != tmis1[i].get_type_info()) {
+      SQLTypeInfo const& ti0 = tmis0[i].get_type_info();
+      SQLTypeInfo const& ti1 = tmis1[i].get_type_info();
       VLOG(2) << "Types do not match for UNION:\n  tmis0[" << i
-              << "].get_type_info().to_string() = "
-              << tmis0[i].get_type_info().to_string() << "\n  tmis1[" << i
-              << "].get_type_info().to_string() = "
-              << tmis1[i].get_type_info().to_string();
-      return false;
+              << "].get_type_info().to_string() = " << ti0.to_string() << "\n  tmis1["
+              << i << "].get_type_info().to_string() = " << ti1.to_string();
+      if (ti0.is_dict_encoded_string() && ti1.is_dict_encoded_string() &&
+          ti0.get_comp_param() != ti1.get_comp_param()) {
+        throw std::runtime_error(
+            "Taking the UNION of different text-encoded dictionaries is not yet "
+            "supported. This may be resolved by using shared dictionaries. For example, "
+            "by making one a shared dictionary reference to the other.");
+      } else {
+        throw std::runtime_error(
+            "Subqueries of a UNION must have the exact same data types.");
+      }
     }
   }
-  return true;
 }
 
 // Rest of code requires a raw pointer, but RexInput object needs to live somewhere.
