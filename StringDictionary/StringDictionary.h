@@ -20,7 +20,7 @@
 #include "../Shared/mapd_shared_mutex.h"
 #include "DictRef.h"
 #include "DictionaryCache.hpp"
-#include "LeafHostInfo.h"
+#include "Distributed/os/LeafHostInfo.h"
 
 #include <future>
 #include <map>

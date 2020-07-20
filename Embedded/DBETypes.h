@@ -84,6 +84,7 @@ class Row {
   Row();
   Row(std::vector<TargetValue>& row);
   int64_t getInt(size_t col_num);
+  float getFloat(size_t col_num);
   double getDouble(size_t col_num);
   std::string getStr(size_t col_num);
 

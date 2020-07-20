@@ -15,7 +15,8 @@
  */
 
 #include "DBETypes.h"
-
+#include <iostream>
+#include <string>
 namespace EmbeddedDatabase {
 
 /** ColumnDetails methods */
@@ -61,11 +62,24 @@ int64_t Row::getInt(size_t col_num) {
   return 0;
 }
 
+float Row::getFloat(size_t col_num) {
+  if (col_num < row_.size()) {
+    if (ScalarTargetValue* scalar_value = boost::get<ScalarTargetValue>(&row_[col_num])) {
+      if (float* value = boost::get<float>(scalar_value)) {
+        return *value;
+      }
+    }
+  }
+  return 0.;
+}
+
 double Row::getDouble(size_t col_num) {
   if (col_num < row_.size()) {
-    const auto scalar_value = boost::get<ScalarTargetValue>(&row_[col_num]);
-    const auto value = boost::get<double>(scalar_value);
-    return *value;
+    if (ScalarTargetValue* scalar_value = boost::get<ScalarTargetValue>(&row_[col_num])) {
+      if (double* value = boost::get<double>(scalar_value)) {
+        return *value;
+      }
+    }
   }
   return 0.;
 }

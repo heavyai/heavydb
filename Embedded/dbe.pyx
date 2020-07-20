@@ -158,10 +158,12 @@ ColumnDetailsTp = namedtuple("ColumnDetails", ["name", "type", "nullable",
 cdef class PyDbEngine:
     cdef DBEngine* c_dbe  #Hold a C++ instance which we're wrapping
 
-    def __cinit__(self, path, port):
+    def __cinit__(self, path=None, **kwargs):
         try:
-            bpath = bytes(path, 'utf-8')
-            self.c_dbe = DBEngine.create(bpath, port)
+            bpath = ""
+            if path is not None:
+                bpath = bytes(path, 'utf-8')
+            self.c_dbe = DBEngine.create(bpath)
         except OSError as err:
             print("OS error: {0}".format(err))
         except ValueError:
@@ -196,6 +198,9 @@ cdef class PyDbEngine:
         obj.c_cursor = self.c_dbe.executeDML(bytes(query, 'utf-8'));
         prb = obj.getArrowRecordBatch()
         df = prb.to_pandas()
+
+    def get_tables(self):
+        return self.c_dbe.getTables()
 
     def get_table_details(self, table_name):
         cdef vector[ColumnDetails] table_details = self.c_dbe.getTableDetails(bytes(table_name, 'utf-8'))

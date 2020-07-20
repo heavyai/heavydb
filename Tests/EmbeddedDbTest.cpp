@@ -22,128 +22,132 @@
 #define BASE_PATH "./tmp"
 #endif
 
-#ifndef CALCITE_PORT
-#define CALCITE_PORT 5555
-#endif
-
 using namespace std;
 using namespace EmbeddedDatabase;
 
-DBEngine* engine = nullptr; 
+DBEngine* engine = nullptr;
 
-int select_int(const string& query_str) {
-  auto cursor = engine->executeDML(query_str);
-  auto row = cursor->getNextRow();
-std::cout << row.getInt(0) << std::endl;
-  return row.getInt(0);
+class DBEngineSQLTest : public ::testing::Test {
+protected:
+  DBEngineSQLTest() {}
+  virtual ~DBEngineSQLTest() {}
+
+  void SetUp(const std::string &table_spec) {
+    run_ddl("DROP TABLE IF EXISTS dbe_test;");
+    run_ddl("CREATE TABLE dbe_test " + table_spec + ";");
+  }
+
+  virtual void TearDown() {
+    run_ddl("DROP TABLE IF EXISTS dbe_test;");
+  }
+
+  int select_int(const string& query_str) {
+    auto cursor = ::engine->executeDML(query_str);
+    auto row = cursor->getNextRow();
+    return row.getInt(0);
+  }
+
+  float select_float(const string& query_str) {
+    auto cursor = ::engine->executeDML(query_str);
+    auto row = cursor->getNextRow();
+    return row.getFloat(0);
+  }
+
+  double select_double(const string& query_str) {
+    auto cursor = ::engine->executeDML(query_str);
+    auto row = cursor->getNextRow();
+    return row.getDouble(0);
+  }
+
+  void run_ddl(const string& query_str) {
+    ::engine->executeDDL(query_str);
+  }
+
+  std::shared_ptr<arrow::RecordBatch> run_dml(const string& query_str) {
+    auto cursor = ::engine->executeDML(query_str);
+    return cursor ? cursor->getArrowRecordBatch(): nullptr;
+  }
+};
+
+TEST_F(DBEngineSQLTest, InsertDict) {
+  EXPECT_NO_THROW(SetUp(
+    "(col1 TEXT ENCODING DICT) WITH (partitions='replicated')"));
+  EXPECT_NO_THROW(run_dml("INSERT INTO dbe_test VALUES('t1');"));
+  ASSERT_EQ(1, select_int("SELECT count(*) FROM dbe_test;"));
+
+  EXPECT_NO_THROW(run_dml("INSERT INTO dbe_test VALUES('t2');"));
+  ASSERT_EQ(2, select_int("SELECT count(*) FROM dbe_test;"));
+
+  EXPECT_NO_THROW(run_dml("INSERT INTO dbe_test VALUES('t3');"));
+  ASSERT_EQ(3, select_int("SELECT count(*) FROM dbe_test;"));
 }
 
-void run_ddl(const string& query_str) {
-  engine->executeDDL(query_str);
+TEST_F(DBEngineSQLTest, InsertDecimal) {
+  EXPECT_NO_THROW(SetUp(
+    "(big_dec DECIMAL(17, 2), med_dec DECIMAL(9, 2), "
+    "small_dec DECIMAL(4, 2)) WITH (fragment_size=2)"));
+
+  EXPECT_NO_THROW(run_dml(
+    "INSERT INTO dbe_test VALUES(999999999999999.99, 9999999.99, 99.99);"));
+  ASSERT_EQ(1, select_int("SELECT count(*) FROM dbe_test;"));
+
+  EXPECT_NO_THROW(run_dml(
+    "INSERT INTO dbe_test VALUES(-999999999999999.99, -9999999.99, -99.99);"));
+  ASSERT_EQ(2, select_int("SELECT count(*) FROM dbe_test;"));
+
+  EXPECT_NO_THROW(run_dml(
+    "INSERT INTO dbe_test VALUES(12.2382, 12.2382 , 12.2382);"));
+  ASSERT_EQ(3, select_int("SELECT count(*) FROM dbe_test;"));
 }
 
-std::shared_ptr<arrow::RecordBatch> run_dml(const string& query_str) {
-  auto cursor = engine->executeDML(query_str);
-  return cursor ? cursor->getArrowRecordBatch(): nullptr;
+TEST_F(DBEngineSQLTest, InsertShardedTableWithGeo) {
+  EXPECT_NO_THROW(SetUp(
+    "(x Int, poly POLYGON, b SMALLINT, SHARD KEY(b)) WITH (shard_count = 4)"));
+
+  EXPECT_NO_THROW(run_dml(
+    "INSERT INTO dbe_test VALUES (1,'POLYGON((0 0, 1 1, 2 2, 3 3))', 0);"));
+  EXPECT_NO_THROW(run_dml(
+    "INSERT INTO dbe_test (x, poly, b) VALUES (1, 'POLYGON((0 0, 1 1, 2 2, 3 3))', 1);"));
+  EXPECT_NO_THROW(run_dml(
+    "INSERT INTO dbe_test (b, poly, x) VALUES (2, 'POLYGON((0 0, 1 1, 2 2, 3 3))', 1);"));
+  EXPECT_NO_THROW(run_dml(
+    "INSERT INTO dbe_test (x, b, poly) VALUES (1, 3, 'POLYGON((0 0, 1 1, 2 2, 3 3))');"));
+  EXPECT_NO_THROW(run_dml(
+    "INSERT INTO dbe_test (poly, x, b) VALUES ('POLYGON((0 0, 1 1, 2 2, 3 3))', 1, 4);"));
+
+  ASSERT_EQ(5, select_int("SELECT count(*) FROM dbe_test;"));
 }
 
-TEST(Insert, Dict) {
-  EXPECT_NO_THROW(run_ddl("DROP TABLE IF EXISTS dist_test;"));
-  EXPECT_NO_THROW(run_ddl(
-      "CREATE TABLE dist_test (col1 TEXT ENCODING DICT) WITH (partitions='replicated');"));
-  EXPECT_NO_THROW(run_dml("INSERT INTO dist_test VALUES('t1');"));
-  ASSERT_EQ(1, select_int("SELECT count(*) FROM dist_test;"));
+TEST_F(DBEngineSQLTest, UpdateText) {
+  SetUp("(t text)");
 
-  EXPECT_NO_THROW(run_dml("INSERT INTO dist_test VALUES('t2');"));
-  ASSERT_EQ(2, select_int("SELECT count(*) FROM dist_test;"));
+  run_dml("insert into dbe_test values ('do');");
+  run_dml("insert into dbe_test values ('you');");
+  run_dml("insert into dbe_test values ('know');");
+  run_dml("insert into dbe_test values ('the');");
+  run_dml("insert into dbe_test values ('muffin');");
+  run_dml("insert into dbe_test values ('man');");
 
-  EXPECT_NO_THROW(run_dml("INSERT INTO dist_test VALUES('t3');"));
-  ASSERT_EQ(3, select_int("SELECT count(*) FROM dist_test;"));
-
-  run_ddl("DROP TABLE IF EXISTS dist_test;");
+  EXPECT_NO_THROW(run_dml("update dbe_test set t='pizza' where char_length(t) <= 3;"));
+  ASSERT_EQ(4, select_int("select count(t) from dbe_test where t='pizza';"));
 }
 
-TEST(Insert, Decimal) {
-  EXPECT_NO_THROW(run_ddl("DROP TABLE IF EXISTS dec_test;"));
-  EXPECT_NO_THROW(run_ddl("CREATE TABLE dec_test (big_dec DECIMAL(17, 2), "
-      "med_dec DECIMAL(9, 2), small_dec DECIMAL(4, 2)) WITH (fragment_size=2);"));
-
-  EXPECT_NO_THROW(run_dml("INSERT INTO dec_test VALUES("
-      "999999999999999.99, 9999999.99, 99.99);"));
-  ASSERT_EQ(1, select_int("SELECT count(*) FROM dec_test;"));
-
-  EXPECT_NO_THROW(run_dml("INSERT INTO dec_test VALUES("
-      "-999999999999999.99, -9999999.99, -99.99);"));
-  ASSERT_EQ(2, select_int("SELECT count(*) FROM dec_test;"));
-
-  EXPECT_NO_THROW(run_dml("INSERT INTO dec_test VALUES("
-      "12.2382, 12.2382 , 12.2382);"));
-  ASSERT_EQ(3, select_int("SELECT count(*) FROM dec_test;"));
-
-  EXPECT_NO_THROW(run_ddl("DROP TABLE IF EXISTS dec_test;"));
-}
-
-TEST(Insert, ShardedTableWithGeo) {
-  run_ddl("DROP TABLE IF EXISTS table_with_geo_and_shard_key;");
-  EXPECT_NO_THROW(
-    run_ddl("CREATE TABLE table_with_geo_and_shard_key (x Int, poly "
-            "POLYGON, b SMALLINT, SHARD KEY(b)) WITH (shard_count = 4);"));
-
-  EXPECT_NO_THROW(
-    run_dml("INSERT INTO table_with_geo_and_shard_key VALUES (1, "
-            "'POLYGON((0 0, 1 1, 2 2, 3 3))', 0);"));
-  EXPECT_NO_THROW(
-    run_dml("INSERT INTO table_with_geo_and_shard_key (x, poly, b) VALUES (1, "
-            "'POLYGON((0 0, 1 1, 2 2, 3 3))', 1);"));
-  EXPECT_NO_THROW(
-    run_dml("INSERT INTO table_with_geo_and_shard_key (b, poly, x) VALUES (2, "
-            "'POLYGON((0 0, 1 1, 2 2, 3 3))', 1);"));
-  EXPECT_NO_THROW(
-    run_dml("INSERT INTO table_with_geo_and_shard_key (x, b, poly) VALUES (1, 3, "
-            "'POLYGON((0 0, 1 1, 2 2, 3 3))');"));
-  EXPECT_NO_THROW(
-    run_dml("INSERT INTO table_with_geo_and_shard_key (poly, x, b) VALUES ("
-            "'POLYGON((0 0, 1 1, 2 2, 3 3))', 1, 4);"));
-
-  ASSERT_EQ(5, select_int("SELECT count(*) FROM table_with_geo_and_shard_key;"));
-  run_ddl("DROP TABLE IF EXISTS table_with_geo_and_shard_key;");
-}
-
-TEST(Update, Text) {
-  run_ddl("DROP TABLE IF EXISTS text_default;");
-  run_ddl("CREATE TABLE text_default (t text);");
-
-  run_dml("insert into text_default values ('do');");
-  run_dml("insert into text_default values ('you');");
-  run_dml("insert into text_default values ('know');");
-  run_dml("insert into text_default values ('the');");
-  run_dml("insert into text_default values ('muffin');");
-  run_dml("insert into text_default values ('man');");
-
-  EXPECT_NO_THROW(
-    run_dml("update text_default set t='pizza' where char_length(t) <= 3;"));
-  ASSERT_EQ(4,
-    select_int("select count(t) from text_default where t='pizza';"));
-  run_ddl("DROP TABLE IF EXISTS text_default;");
-}
-
-TEST(Select, FilterAndSimpleAggregation) {
+TEST_F(DBEngineSQLTest, FilterAndSimpleAggregation) {
   const ssize_t num_rows{10};
-  run_ddl("DROP TABLE IF EXISTS test;");
 
-  EXPECT_NO_THROW(
-    run_ddl("CREATE TABLE test(x int not null, w tinyint, y int, z smallint, t bigint, "
-            "b boolean, f float, ff float, fn float, d double, dn double, "
-            "str varchar(10), null_str text, fixed_str text, fixed_null_str text, "
-            "real_str text, shared_dict text, m timestamp(0), m_3 timestamp(3), "
-            "m_6 timestamp(6), m_9 timestamp(9), n time(0), o date, o1 date, o2 date, "
-            "fx int, dd decimal(10, 2), dd_notnull decimal(10, 2) not null, ss text, "
-            "u int, ofd int, ufd int not null, ofq bigint, ufq bigint not null, "
-            "smallint_nulls smallint, bn boolean not null);"));
+  EXPECT_NO_THROW(SetUp(
+    "(x int not null, w tinyint, y int, z smallint, t bigint, "
+    "b boolean, f float, ff float, fn float, d double, dn double, "
+    "str varchar(10), null_str text, fixed_str text, fixed_null_str text, "
+    "real_str text, shared_dict text, m timestamp(0), m_3 timestamp(3), "
+    "m_6 timestamp(6), m_9 timestamp(9), n time(0), o date, o1 date, o2 date, "
+    "fx int, dd decimal(10, 2), dd_notnull decimal(10, 2) not null, ss text, "
+    "u int, ofd int, ufd int not null, ofq bigint, ufq bigint not null, "
+    "smallint_nulls smallint, bn boolean not null)"));
 
   for (ssize_t i = 0; i < num_rows; ++i) {
     EXPECT_NO_THROW(run_dml(
-        "INSERT INTO test VALUES(7, -8, 42, 101, 1001, 't', 1.1, 1.1, null, 2.2, null, "
+        "INSERT INTO dbe_test VALUES(7, -8, 42, 101, 1001, 't', 1.1, 1.1, null, 2.2, null, "
         "'foo', null, 'foo', null, "
         "'real_foo', 'foo',"
         "'2014-12-13 22:23:15', '2014-12-13 22:23:15.323', '1999-07-11 "
@@ -155,7 +159,7 @@ TEST(Select, FilterAndSimpleAggregation) {
         "null, "
         "2147483647, -2147483648, null, -1, 32767, 't');"));
     EXPECT_NO_THROW(run_dml(
-        "INSERT INTO test VALUES(8, -7, 43, -78, 1002, 'f', 1.2, 101.2, -101.2, 2.4, "
+        "INSERT INTO dbe_test VALUES(8, -7, 43, -78, 1002, 'f', 1.2, 101.2, -101.2, 2.4, "
         "-2002.4, 'bar', null, 'bar', null, "
         "'real_bar', NULL, '2014-12-13 22:23:15', '2014-12-13 22:23:15.323', "
         "'2014-12-13 "
@@ -166,7 +170,7 @@ TEST(Select, FilterAndSimpleAggregation) {
         "-2147483647, "
         "9223372036854775807, -9223372036854775808, null, 'f');"));
     EXPECT_NO_THROW(run_dml(
-        "INSERT INTO test VALUES(7, -7, 43, 102, 1002, null, 1.3, 1000.3, -1000.3, 2.6, "
+        "INSERT INTO dbe_test VALUES(7, -7, 43, 102, 1002, null, 1.3, 1000.3, -1000.3, 2.6, "
         "-220.6, 'baz', null, null, null, "
         "'real_baz', 'baz', '2014-12-14 22:23:15', '2014-12-14 22:23:15.750', "
         "'2014-12-14 22:23:15.437321', "
@@ -178,23 +182,47 @@ TEST(Select, FilterAndSimpleAggregation) {
   }
 
   ASSERT_EQ(30, 
-    select_int("SELECT COUNT(*) FROM test;"));
+    select_int("SELECT COUNT(*) FROM dbe_test;"));
   ASSERT_EQ(30, 
-    select_int("SELECT COUNT(f) FROM test;"));
+    select_int("SELECT COUNT(f) FROM dbe_test;"));
   ASSERT_EQ(7, 
-    select_int("SELECT MIN(x) FROM test;"));
+    select_int("SELECT MIN(x) FROM dbe_test;"));
   ASSERT_EQ(8, 
-    select_int("SELECT MAX(x) FROM test;"));
+    select_int("SELECT MAX(x) FROM dbe_test;"));
   ASSERT_EQ(-78, 
-    select_int("SELECT MIN(z) FROM test;"));
+    select_int("SELECT MIN(z) FROM dbe_test;"));
   ASSERT_EQ(102, 
-    select_int("SELECT MAX(z) FROM test;"));
+    select_int("SELECT MAX(z) FROM dbe_test;"));
   ASSERT_EQ(1001, 
-    select_int("SELECT MIN(t) FROM test;"));
+    select_int("SELECT MIN(t) FROM dbe_test;"));
   ASSERT_EQ(1002, 
-    select_int("SELECT MAX(t) FROM test;"));
-
-  run_ddl("DROP TABLE IF EXISTS test;");
+    select_int("SELECT MAX(t) FROM dbe_test;"));
+  EXPECT_FLOAT_EQ(1.1,
+    select_float("SELECT MIN(ff) FROM dbe_test;"));
+  EXPECT_FLOAT_EQ(-1000.3,
+    select_float("SELECT MIN(fn) FROM dbe_test;"));
+  EXPECT_FLOAT_EQ(1000,
+    select_float("SELECT FLOOR(MAX(ff)) FROM dbe_test;"));
+  EXPECT_FLOAT_EQ(-102,
+    select_float("SELECT FLOOR(MAX(fn)) FROM dbe_test;"));
+  EXPECT_FLOAT_EQ(11026,
+    select_float("SELECT SUM(ff) FROM dbe_test;"));
+  EXPECT_FLOAT_EQ(-11015,
+    select_float("SELECT SUM(fn) FROM dbe_test;"));
+  ASSERT_EQ(1500,
+    select_int("SELECT SUM(x + y) FROM dbe_test;"));
+  ASSERT_EQ(2750,
+    select_int("SELECT SUM(x + y + z) FROM dbe_test;"));
+  ASSERT_EQ(32800,
+    select_int("SELECT SUM(x + y + z + t) FROM dbe_test;"));
+  ASSERT_EQ(20,
+    select_int("SELECT COUNT(*) FROM dbe_test WHERE x > 6 AND x < 8;"));
+  ASSERT_EQ(10,
+    select_int("SELECT COUNT(*) FROM dbe_test WHERE x > 6 AND x < 8 AND z > 100 AND z < 102;"));
+  ASSERT_EQ(20,
+    select_int("SELECT COUNT(*) FROM dbe_test WHERE x > 6 AND x < 8 OR (z > 100 AND z < 103);"));
+  ASSERT_EQ(10,
+    select_int("SELECT COUNT(*) FROM dbe_test WHERE x > 6 AND x < 8 AND z > 100 AND z < 102 AND t > 1000 AND t < 1002;"));
 }
 
 int main(int argc, char** argv) {
@@ -228,7 +256,7 @@ int main(int argc, char** argv) {
 
   logger::init(log_options);
 
-  engine = DBEngine::create(BASE_PATH, CALCITE_PORT);
+  engine = DBEngine::create(BASE_PATH);
 
   int err{0};
 
@@ -238,5 +266,6 @@ int main(int argc, char** argv) {
     LOG(ERROR) << e.what();
   }
   engine->reset();
+  //delete engine;
   return err;
 }

@@ -19,6 +19,8 @@
 #include <arrow/api.h>
 #include "DBETypes.h"
 
+#define DEFAULT_BASE_PATH "./tmp"
+
 namespace EmbeddedDatabase {
 
 class Cursor {
@@ -38,11 +40,19 @@ class Cursor {
 class DBEngine {
  public:
   void reset();
-  void executeDDL(std::string query);
-  Cursor* executeDML(std::string query);
-  static DBEngine* create(std::string path, int calcite_port);
+  void executeDDL(const std::string& query);
+  Cursor* executeDML(const std::string& query);
+  static DBEngine* create(const std::string& path = DEFAULT_BASE_PATH);
   std::vector<std::string> getTables();
   std::vector<ColumnDetails> getTableDetails(const std::string& table_name);
+  void createUser(const std::string& user_name, const std::string& password);
+  void dropUser(const std::string& user_name);
+  void createDatabase(const std::string& db_name);
+  void dropDatabase(const std::string& db_name);
+  bool setDatabase(std::string& db_name);
+  bool login(std::string& db_name,
+             std::string& user_name,
+             const std::string& password);
 
  protected:
   DBEngine() {}
