@@ -23,75 +23,58 @@
 #include <cstdlib>  // abort()
 #endif
 
-DEVICE
-int32_t is_leap(int64_t year) {
-  return (((year % 400) == 0) || ((year % 4) == 0 && ((year % 100) != 0))) ? 1 : 0;
-}
+namespace {
 
-DEVICE
-int64_t skip_months(int64_t timeval, int64_t months_to_go) {
-  const int32_t month_lengths[2][kMonsPerYear] = {
-      {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31},
-      {31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31}};
-  tm tm_struct;
-  gmtime_r_newlib(timeval, tm_struct);
-  auto tod = timeval % kSecsPerDay;
-  auto day = (timeval / kSecsPerDay) * kSecsPerDay;
-  // calculate the day of month offset
-  int32_t dom = tm_struct.tm_mday;
-  int64_t month = day - (dom * kSecsPerDay);
-  // find what month we are
-  int32_t mon = tm_struct.tm_mon;
-  int64_t months_covered = 0;
-  while (months_to_go != 0) {
-    int32_t leap_year = 0;
-    if (months_to_go >= 48) {
-      month += (months_to_go / 48) * kDaysPer4Years * kSecsPerDay;
-      months_to_go = months_to_go % 48;
-      months_covered += 48 * (months_to_go / 48);
-      continue;
-    }
-    if (months_to_go > 0) {
-      auto m = (mon + months_covered) % kMonsPerYear;
-      if (m == 1) {
-        leap_year = is_leap(ExtractFromTime(kYEAR, month));
-      }
-      month += (month_lengths[0 + leap_year][m] * kSecsPerDay);
-      months_to_go--;
-      months_covered++;
-      continue;
-    }
-    if (months_to_go <= -48) {
-      month -= ((-months_to_go) / 48) * kDaysPer4Years * kSecsPerDay;
-      months_to_go = -((-months_to_go) % 48);
-      months_covered += 48 * ((-months_to_go) / 48);
-      continue;
-    }
-    if (months_to_go < 0) {
-      auto m =
-          (((mon - 1 - months_covered) % kMonsPerYear) + kMonsPerYear) % kMonsPerYear;
-      if (m == 1) {
-        leap_year = is_leap(ExtractFromTime(kYEAR, month));
-      }
-      month -= (month_lengths[0 + leap_year][m] * kSecsPerDay);
-      months_to_go++;
-      months_covered++;
+// Represent time as number of months + day-of-month + seconds since 2000 March 1.
+class MonthDaySecond {
+  int64_t months;  // Number of months since 2000 March 1.
+  unsigned dom;    // day-of-month (0-based)
+  unsigned sod;    // second-of-day
+
+  // Clamp day-of-month to max day of the month. E.g. April 31 -> 30.
+  DEVICE static unsigned clampDom(unsigned yoe, unsigned moy, unsigned dom) {
+    constexpr unsigned max_days[11]{30, 29, 30, 29, 30, 30, 29, 30, 29, 30, 30};
+    if (dom < 28) {
+      return dom;
+    } else {
+      unsigned const max_day =
+          moy == 11 ? 27 + (++yoe % 4 == 0 && (yoe % 100 != 0 || yoe == 400))
+                    : max_days[moy];
+      return dom < max_day ? dom : max_day;
     }
   }
 
-  int64_t new_timeval = month + dom * kSecsPerDay + tod;
-  tm new_tm_struct;
-  gmtime_r_newlib(new_timeval, new_tm_struct);
-  int32_t new_dom = new_tm_struct.tm_mday;
-  if (dom > new_dom) {
-    // Landed on a month with fewer days, overshot by a few days,
-    // e.g. 2008-1-31 + INTERVAL '1' MONTH should yield 2008-2-29 and
-    // e.g. 2009-1-31 + INTERVAL '1' MONTH should yield 2008-2-28
-    // Go to the last day of preceeding month
-    new_timeval -= new_dom * kSecsPerDay;
+ public:
+  DEVICE MonthDaySecond(int64_t const timeval) {
+    int64_t const day = floor_div(timeval, kSecsPerDay);
+    int64_t const era = floor_div(day - kEpochAdjustedDays, kDaysPer400Years);
+    sod = timeval - day * kSecsPerDay;
+    unsigned const doe = day - kEpochAdjustedDays - era * kDaysPer400Years;
+    unsigned const yoe = (doe - doe / 1460 + doe / 36524 - doe / 146096) / 365;
+    unsigned const doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+    unsigned const moy = (5 * doy + 2) / 153;
+    dom = doy - (153 * moy + 2) / 5;
+    months = (era * 400 + yoe) * 12 + moy;
   }
-  return new_timeval;
-}
+
+  DEVICE MonthDaySecond const& addMonths(int64_t const months) {
+    this->months += months;
+    return *this;
+  }
+
+  // Return number of seconds since 1 January 1970.
+  DEVICE int64_t unixtime() const {
+    int64_t const era = floor_div(months, 12 * 400);
+    unsigned const moe = months - era * (12 * 400);
+    unsigned const yoe = moe / 12;
+    unsigned const moy = moe % 12;
+    unsigned const doy = (153 * moy + 2) / 5 + clampDom(yoe, moy, dom);
+    unsigned const doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
+    return (kEpochAdjustedDays + era * kDaysPer400Years + doe) * kSecsPerDay + sod;
+  }
+};
+
+}  // namespace
 
 extern "C" NEVER_INLINE DEVICE int64_t DateAdd(DateaddField field,
                                                const int64_t number,
@@ -112,31 +95,19 @@ extern "C" NEVER_INLINE DEVICE int64_t DateAdd(DateaddField field,
     case daDAY:
       return timeval + number * kSecsPerDay;
     case daWEEK:
-      return timeval + number * kDaysPerWeek * kSecsPerDay;
-    default:
-      break;
-  }
-
-  int64_t months_to_go;
-  switch (field) {
+      return timeval + number * (7 * kSecsPerDay);
     case daMONTH:
-      months_to_go = 1;
-      break;
+      return MonthDaySecond(timeval).addMonths(number).unixtime();
     case daQUARTER:
-      months_to_go = 3;
-      break;
+      return MonthDaySecond(timeval).addMonths(number * 3).unixtime();
     case daYEAR:
-      months_to_go = 12;
-      break;
+      return MonthDaySecond(timeval).addMonths(number * 12).unixtime();
     case daDECADE:
-      months_to_go = 10 * 12;
-      break;
+      return MonthDaySecond(timeval).addMonths(number * 120).unixtime();
     case daCENTURY:
-      months_to_go = 100 * 12;
-      break;
+      return MonthDaySecond(timeval).addMonths(number * 1200).unixtime();
     case daMILLENNIUM:
-      months_to_go = 1000 * 12;
-      break;
+      return MonthDaySecond(timeval).addMonths(number * 12000).unixtime();
     default:
 #ifdef __CUDACC__
       return -1;
@@ -144,8 +115,6 @@ extern "C" NEVER_INLINE DEVICE int64_t DateAdd(DateaddField field,
       abort();
 #endif
   }
-  months_to_go *= number;
-  return skip_months(timeval, months_to_go);
 }
 
 extern "C" NEVER_INLINE DEVICE int64_t DateAddHighPrecision(DateaddField field,
@@ -161,9 +130,9 @@ extern "C" NEVER_INLINE DEVICE int64_t DateAddHighPrecision(DateaddField field,
       just add the value.*/
       return timeval + number;
     default:
-      break;
+      return DateAdd(field, number, floor_div(timeval, scale)) * scale +
+             unsigned_mod(timeval, scale);
   }
-  return (DateAdd(field, number, timeval / scale) * scale) + (timeval % scale);
 }
 
 extern "C" DEVICE int64_t DateAddNullable(const DateaddField field,
