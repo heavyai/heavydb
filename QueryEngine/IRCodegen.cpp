@@ -266,13 +266,27 @@ std::vector<JoinLoop> Executor::buildJoinLoops(
        ++level_idx) {
     const auto& current_level_join_conditions = ra_exe_unit.join_quals[level_idx];
     std::vector<std::string> fail_reasons;
-    const auto current_level_hash_table =
-        buildCurrentLevelHashTable(current_level_join_conditions,
-                                   ra_exe_unit,
-                                   co,
-                                   query_infos,
-                                   column_cache,
-                                   fail_reasons);
+    const auto build_cur_level_hash_table = [&]() {
+      if (current_level_join_conditions.quals.size() > 1) {
+        const auto first_qual = *current_level_join_conditions.quals.begin();
+        auto qual_bin_oper =
+            std::dynamic_pointer_cast<const Analyzer::BinOper>(first_qual);
+        if (qual_bin_oper && qual_bin_oper->is_overlaps_oper() &&
+            current_level_join_conditions.type == JoinType::LEFT) {
+          JoinCondition join_condition{{first_qual}, current_level_join_conditions.type};
+
+          return buildCurrentLevelHashTable(
+              join_condition, ra_exe_unit, co, query_infos, column_cache, fail_reasons);
+        }
+      }
+      return buildCurrentLevelHashTable(current_level_join_conditions,
+                                        ra_exe_unit,
+                                        co,
+                                        query_infos,
+                                        column_cache,
+                                        fail_reasons);
+    };
+    const auto current_level_hash_table = build_cur_level_hash_table();
     const auto found_outer_join_matches_cb =
         [this, level_idx](llvm::Value* found_outer_join_matches) {
           CHECK_LT(level_idx, cgen_state_->outer_join_match_found_per_level_.size());
@@ -281,6 +295,31 @@ std::vector<JoinLoop> Executor::buildJoinLoops(
               found_outer_join_matches;
         };
     const auto is_deleted_cb = buildIsDeletedCb(ra_exe_unit, level_idx, co);
+    const auto outer_join_condition_multi_quals_cb =
+        [this, level_idx, &co, &current_level_join_conditions](
+            const std::vector<llvm::Value*>& prev_iters) {
+          // The values generated for the match path don't dominate all uses
+          // since on the non-match path nulls are generated. Reset the cache
+          // once the condition is generated to avoid incorrect reuse.
+          FetchCacheAnchor anchor(cgen_state_.get());
+          addJoinLoopIterator(prev_iters, level_idx + 1);
+          llvm::Value* left_join_cond = cgen_state_->llBool(true);
+          CodeGenerator code_generator(this);
+          // Do not want to look at all quals! only 1..N quals (ignore first qual)
+          // Note(jclay): this may need to support cases larger than 2
+          // are there any?
+          if (current_level_join_conditions.quals.size() >= 2) {
+            auto qual_it = std::next(current_level_join_conditions.quals.begin(), 1);
+            for (; qual_it != current_level_join_conditions.quals.end();
+                 std::advance(qual_it, 1)) {
+              left_join_cond = cgen_state_->ir_builder_.CreateAnd(
+                  left_join_cond,
+                  code_generator.toBool(
+                      code_generator.codegen(qual_it->get(), true, co).front()));
+            }
+          }
+          return left_join_cond;
+        };
     if (current_level_hash_table) {
       if (current_level_hash_table->getHashType() == JoinHashTable::HashType::OneToOne) {
         join_loops.emplace_back(
@@ -301,8 +340,9 @@ std::vector<JoinLoop> Executor::buildJoinLoops(
             is_deleted_cb);
       } else {
         join_loops.emplace_back(
-            JoinLoopKind::Set,
-            current_level_join_conditions.type,
+            /*kind=*/JoinLoopKind::Set,
+            /*type=*/current_level_join_conditions.type,
+            /*iteration_domain_codegen=*/
             [this, current_hash_table_idx, level_idx, current_level_hash_table, &co](
                 const std::vector<llvm::Value*>& prev_iters) {
               addJoinLoopIterator(prev_iters, level_idx);
@@ -313,11 +353,15 @@ std::vector<JoinLoop> Executor::buildJoinLoops(
               domain.element_count = matching_set.count;
               return domain;
             },
-            nullptr,
+            /*outer_condition_match=*/
             current_level_join_conditions.type == JoinType::LEFT
+                ? std::function<llvm::Value*(const std::vector<llvm::Value*>&)>(
+                      outer_join_condition_multi_quals_cb)
+                : nullptr,
+            /*found_outer_matches=*/current_level_join_conditions.type == JoinType::LEFT
                 ? std::function<void(llvm::Value*)>(found_outer_join_matches_cb)
                 : nullptr,
-            is_deleted_cb);
+            /*is_deleted=*/is_deleted_cb);
       }
       ++current_hash_table_idx;
     } else {
@@ -349,8 +393,9 @@ std::vector<JoinLoop> Executor::buildJoinLoops(
             return left_join_cond;
           };
       join_loops.emplace_back(
-          JoinLoopKind::UpperBound,
-          current_level_join_conditions.type,
+          /*kind=*/JoinLoopKind::UpperBound,
+          /*type=*/current_level_join_conditions.type,
+          /*iteration_domain_codegen=*/
           [this, level_idx](const std::vector<llvm::Value*>& prev_iters) {
             addJoinLoopIterator(prev_iters, level_idx);
             JoinLoopDomain domain{{0}};
@@ -361,14 +406,16 @@ std::vector<JoinLoop> Executor::buildJoinLoops(
                                                                      "num_rows_per_scan");
             return domain;
           },
+          /*outer_condition_match=*/
           current_level_join_conditions.type == JoinType::LEFT
               ? std::function<llvm::Value*(const std::vector<llvm::Value*>&)>(
                     outer_join_condition_cb)
               : nullptr,
+          /*found_outer_matches=*/
           current_level_join_conditions.type == JoinType::LEFT
               ? std::function<void(llvm::Value*)>(found_outer_join_matches_cb)
               : nullptr,
-          is_deleted_cb);
+          /*is_deleted=*/is_deleted_cb);
     }
   }
   return join_loops;
