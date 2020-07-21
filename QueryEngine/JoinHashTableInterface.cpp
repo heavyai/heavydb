@@ -15,13 +15,17 @@
  */
 
 #include "JoinHashTableInterface.h"
+
 #include "BaselineJoinHashTable.h"
 #include "ColumnFetcher.h"
 #include "EquiJoinCondition.h"
+#include "Execute.h"
 #include "JoinHashTable.h"
 #include "OverlapsJoinHashTable.h"
 #include "RuntimeFunctions.h"
 #include "ScalarExprVisitor.h"
+
+extern bool g_enable_overlaps_hashjoin;
 
 //! fetchJoinColumn() calls ColumnFetcher::makeJoinColumn(), then copies the
 //! JoinColumn's col_chunks_buff memory onto the GPU if required by the

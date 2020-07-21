@@ -165,7 +165,8 @@ void QueryFragmentDescriptor::buildFragmentPerKernelForTable(
       checkDeviceMemoryUsage(fragment, device_id, num_bytes_for_row);
     }
 
-    ExecutionKernel execution_kernel{device_id, {}, get_fragment_tuple_count(fragment)};
+    ExecutionKernelDescriptor execution_kernel_desc{
+        device_id, {}, get_fragment_tuple_count(fragment)};
     if (table_desc_offset) {
       const auto frag_ids =
           executor->getTableFragmentIndices(ra_exe_unit,
@@ -175,7 +176,7 @@ void QueryFragmentDescriptor::buildFragmentPerKernelForTable(
                                             selected_tables_fragments_,
                                             executor->getInnerTabIdToJoinCond());
       const auto table_id = ra_exe_unit.input_descs[*table_desc_offset].getTableId();
-      execution_kernel.fragments.emplace_back(FragmentsPerTable{table_id, frag_ids});
+      execution_kernel_desc.fragments.emplace_back(FragmentsPerTable{table_id, frag_ids});
 
     } else {
       for (size_t j = 0; j < ra_exe_unit.input_descs.size(); ++j) {
@@ -190,17 +191,19 @@ void QueryFragmentDescriptor::buildFragmentPerKernelForTable(
         auto table_frags_it = selected_tables_fragments_.find(table_id);
         CHECK(table_frags_it != selected_tables_fragments_.end());
 
-        execution_kernel.fragments.emplace_back(FragmentsPerTable{table_id, frag_ids});
+        execution_kernel_desc.fragments.emplace_back(
+            FragmentsPerTable{table_id, frag_ids});
       }
     }
 
     auto itr = execution_kernels_per_device_.find(device_id);
     if (itr == execution_kernels_per_device_.end()) {
       auto const pair = execution_kernels_per_device_.insert(std::make_pair(
-          device_id, std::vector<ExecutionKernel>{std::move(execution_kernel)}));
+          device_id,
+          std::vector<ExecutionKernelDescriptor>{std::move(execution_kernel_desc)}));
       CHECK(pair.second);
     } else {
-      itr->second.emplace_back(std::move(execution_kernel));
+      itr->second.emplace_back(std::move(execution_kernel_desc));
     }
   }
 }
@@ -370,10 +373,11 @@ void QueryFragmentDescriptor::buildMultifragKernelMap(
 
       if (execution_kernels_per_device_.find(device_id) ==
           execution_kernels_per_device_.end()) {
-        std::vector<ExecutionKernel> kernels{
-            ExecutionKernel{device_id, FragmentsList{}, std::nullopt}};
-        CHECK(execution_kernels_per_device_.insert(std::make_pair(device_id, kernels))
-                  .second);
+        std::vector<ExecutionKernelDescriptor> kernel_descs{
+            ExecutionKernelDescriptor{device_id, FragmentsList{}, std::nullopt}};
+        CHECK(
+            execution_kernels_per_device_.insert(std::make_pair(device_id, kernel_descs))
+                .second);
       }
 
       // Multifrag kernels only have one execution kernel per device. Grab the execution
@@ -418,7 +422,7 @@ bool is_sample_query(const RelAlgExecutionUnit& ra_exe_unit) {
 bool QueryFragmentDescriptor::terminateDispatchMaybe(
     size_t& tuple_count,
     const RelAlgExecutionUnit& ra_exe_unit,
-    const ExecutionKernel& kernel) const {
+    const ExecutionKernelDescriptor& kernel) const {
   const auto sample_query_limit =
       ra_exe_unit.sort_info.limit + ra_exe_unit.sort_info.offset;
   if (!kernel.outer_tuple_count) {

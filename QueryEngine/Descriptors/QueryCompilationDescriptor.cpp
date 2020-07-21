@@ -16,6 +16,8 @@
 
 #include "QueryCompilationDescriptor.h"
 
+#include "QueryEngine/Execute.h"
+
 std::unique_ptr<QueryMemoryDescriptor> QueryCompilationDescriptor::compile(
     const size_t max_groups_buffer_entry_guess,
     const int8_t crt_min_byte_width,

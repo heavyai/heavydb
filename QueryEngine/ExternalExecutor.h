@@ -16,15 +16,16 @@
 
 #pragma once
 
-#include "Execute.h"
-#include "PlanState.h"
-#include "SerializeToSql.h"
-#include "TargetMetaInfo.h"
-
-#include "ThirdParty/sqlite3/sqlite3.h"
-
 #include <string>
 #include <vector>
+
+#include "QueryEngine/ColumnFetcher.h"
+#include "QueryEngine/PlanState.h"
+#include "QueryEngine/SerializeToSql.h"
+#include "QueryEngine/TargetMetaInfo.h"
+#include "ThirdParty/sqlite3/sqlite3.h"
+
+class Executor;
 
 struct ExternalQueryTable {
   FetchResult fetch_result;

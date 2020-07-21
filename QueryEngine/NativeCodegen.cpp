@@ -1864,7 +1864,7 @@ bool is_gpu_shared_mem_supported(const QueryMemoryDescriptor* query_mem_desc_ptr
 
 }  // namespace
 
-std::tuple<Executor::CompilationResult, std::unique_ptr<QueryMemoryDescriptor>>
+std::tuple<CompilationResult, std::unique_ptr<QueryMemoryDescriptor>>
 Executor::compileWorkUnit(const std::vector<InputTableInfo>& query_infos,
                           const RelAlgExecutionUnit& ra_exe_unit,
                           const CompilationOptions& co,
@@ -2151,7 +2151,7 @@ Executor::compileWorkUnit(const std::vector<InputTableInfo>& query_infos,
           << serialize_llvm_object(cgen_state_->row_func_) << "\nEnd of IR";
 
   return std::make_tuple(
-      Executor::CompilationResult{
+      CompilationResult{
           co.device_type == ExecutorDeviceType::CPU
               ? optimizeAndCodegenCPU(query_func, multifrag_query_func, live_funcs, co)
               : optimizeAndCodegenGPU(query_func,

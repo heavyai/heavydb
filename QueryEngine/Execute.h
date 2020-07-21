@@ -24,6 +24,7 @@
 #include "CodeCache.h"
 #include "DateTimeUtils.h"
 #include "Descriptors/QueryFragmentDescriptor.h"
+#include "ExecutionKernel.h"
 #include "GpuSharedMemoryContext.h"
 #include "GroupByAndAggregate.h"
 #include "JoinHashTable.h"
@@ -36,6 +37,8 @@
 #include "TableGenerations.h"
 #include "TargetMetaInfo.h"
 #include "WindowContext.h"
+
+#include "QueryEngine/Descriptors/QueryCompilationDescriptor.h"
 
 #include "../Shared/Logger.h"
 #include "../Shared/SystemParameters.h"
@@ -68,7 +71,6 @@
 #include <unordered_map>
 #include <unordered_set>
 
-class QueryCompilationDescriptor;
 using QueryCompilationDescriptorOwned = std::unique_ptr<QueryCompilationDescriptor>;
 class QueryMemoryDescriptor;
 using QueryMemoryDescriptorOwned = std::unique_ptr<QueryMemoryDescriptor>;
@@ -82,7 +84,6 @@ extern void read_rt_udf_cpu_module(const std::string& udf_ir);
 extern bool is_rt_udf_module_present(bool cpu_only = false);
 
 class ColumnFetcher;
-class ExecutionResult;
 
 class WatchdogException : public std::runtime_error {
  public:
@@ -246,23 +247,6 @@ class SringConstInResultSet : public std::runtime_error {
 
 class ExtensionFunction;
 
-namespace std {
-template <>
-struct hash<std::vector<int>> {
-  size_t operator()(const std::vector<int>& vec) const {
-    return vec.size() ^ boost::hash_range(vec.begin(), vec.end());
-  }
-};
-
-template <>
-struct hash<std::pair<int, int>> {
-  size_t operator()(const std::pair<int, int>& p) const {
-    return boost::hash<std::pair<int, int>>()(p);
-  }
-};
-
-}  // namespace std
-
 using RowDataProvider = Fragmenter_Namespace::RowDataProvider;
 
 class UpdateLogForFragment : public RowDataProvider {
@@ -305,12 +289,6 @@ class UpdateLogForFragment : public RowDataProvider {
 using LLVMValueVector = std::vector<llvm::Value*>;
 
 class QueryCompilationDescriptor;
-
-struct FetchResult {
-  std::vector<std::vector<const int8_t*>> col_buffers;
-  std::vector<std::vector<int64_t>> num_rows;
-  std::vector<std::vector<uint64_t>> frag_offsets;
-};
 
 std::ostream& operator<<(std::ostream&, FetchResult const&);
 
@@ -437,14 +415,6 @@ class Executor {
 
   llvm::Value* aggregateWindowStatePtr();
 
-  struct CompilationResult {
-    std::shared_ptr<CompilationContext> generated_code;
-    std::unordered_map<int, CgenState::LiteralValues> literal_values;
-    bool output_columnar;
-    std::string llvm_ir;
-    GpuSharedMemoryContext gpu_smem_context;
-  };
-
   bool isArchPascalOrLater(const ExecutorDeviceType dt) const {
     if (dt == ExecutorDeviceType::GPU) {
       const auto cuda_mgr = catalog_->getDataMgr().getCudaMgr();
@@ -458,73 +428,6 @@ class Executor {
   bool needFetchAllFragments(const InputColDescriptor& col_desc,
                              const RelAlgExecutionUnit& ra_exe_unit,
                              const FragmentsList& selected_fragments) const;
-
-  class ExecutionDispatch {
-   private:
-    Executor* executor_;
-    const RelAlgExecutionUnit& ra_exe_unit_;
-    const std::vector<InputTableInfo>& query_infos_;
-    const Catalog_Namespace::Catalog& cat_;
-    mutable std::vector<uint64_t> all_frag_row_offsets_;
-    mutable std::mutex all_frag_row_offsets_mutex_;
-    const std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner_;
-    RenderInfo* render_info_;
-    std::vector<std::pair<ResultSetPtr, std::vector<size_t>>> all_fragment_results_;
-    std::atomic_flag dynamic_watchdog_set_ = ATOMIC_FLAG_INIT;
-    static std::mutex reduce_mutex_;
-
-    void runImpl(const ExecutorDeviceType chosen_device_type,
-                 int chosen_device_id,
-                 const ExecutionOptions& eo,
-                 const ColumnFetcher& column_fetcher,
-                 const QueryCompilationDescriptor& query_comp_desc,
-                 const QueryMemoryDescriptor& query_mem_desc,
-                 const FragmentsList& frag_list,
-                 const ExecutorDispatchMode kernel_dispatch_mode,
-                 const int64_t rowid_lookup_key);
-
-   public:
-    ExecutionDispatch(Executor* executor,
-                      const RelAlgExecutionUnit& ra_exe_unit,
-                      const std::vector<InputTableInfo>& query_infos,
-                      const Catalog_Namespace::Catalog& cat,
-                      const std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
-                      RenderInfo* render_info);
-
-    ExecutionDispatch(const ExecutionDispatch&) = delete;
-
-    ExecutionDispatch& operator=(const ExecutionDispatch&) = delete;
-
-    ExecutionDispatch(ExecutionDispatch&&) = delete;
-
-    ExecutionDispatch& operator=(ExecutionDispatch&&) = delete;
-
-    std::tuple<QueryCompilationDescriptorOwned, QueryMemoryDescriptorOwned> compile(
-        const size_t max_groups_buffer_entry_guess,
-        const int8_t crt_min_byte_width,
-        const CompilationOptions& co,
-        const ExecutionOptions& eo,
-        const ColumnFetcher& column_fetcher,
-        const bool has_cardinality_estimation);
-
-    void run(const ExecutorDeviceType chosen_device_type,
-             int chosen_device_id,
-             const ExecutionOptions& eo,
-             const ColumnFetcher& column_fetcher,
-             const QueryCompilationDescriptor& query_comp_desc,
-             const QueryMemoryDescriptor& query_mem_desc,
-             const FragmentsList& frag_ids,
-             const ExecutorDispatchMode kernel_dispatch_mode,
-             const int64_t rowid_lookup_key);
-
-    const RelAlgExecutionUnit& getExecutionUnit() const;
-
-    const std::vector<uint64_t>& getFragOffsets() const;
-
-    std::vector<std::pair<ResultSetPtr, std::vector<size_t>>>& getFragmentResults();
-
-    friend class QueryCompilationDescriptor;
-  };
 
   ResultSetPtr executeWorkUnit(size_t& max_groups_buffer_entry_guess,
                                const bool is_agg,
@@ -575,33 +478,31 @@ class Executor {
                                     const ExecutionOptions& eo,
                                     const Catalog_Namespace::Catalog& cat);
 
-  // TODO(alex): remove
   ExecutorDeviceType getDeviceTypeForTargets(
       const RelAlgExecutionUnit& ra_exe_unit,
       const ExecutorDeviceType requested_device_type);
 
   ResultSetPtr collectAllDeviceResults(
-      ExecutionDispatch& execution_dispatch,
-      const std::vector<Analyzer::Expr*>& target_exprs,
+      SharedKernelContext& shared_context,
+      const RelAlgExecutionUnit& ra_exe_unit,
       const QueryMemoryDescriptor& query_mem_desc,
       const ExecutorDeviceType device_type,
       std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner);
 
   ResultSetPtr collectAllDeviceShardedTopResults(
-      ExecutionDispatch& execution_dispatch) const;
+      SharedKernelContext& shared_context,
+      const RelAlgExecutionUnit& ra_exe_unit) const;
 
   std::unordered_map<int, const Analyzer::BinOper*> getInnerTabIdToJoinCond() const;
 
-  template <typename THREAD_POOL>
-  void dispatchFragments(
-      const std::function<void(const ExecutorDeviceType chosen_device_type,
-                               int chosen_device_id,
-                               const QueryCompilationDescriptor& query_comp_desc,
-                               const QueryMemoryDescriptor& query_mem_desc,
-                               const FragmentsList& frag_list,
-                               const ExecutorDispatchMode kernel_dispatch_mode,
-                               const int64_t rowid_lookup_key)> dispatch,
-      const ExecutionDispatch& execution_dispatch,
+  /**
+   * Determines execution dispatch mode and required fragments for a given query step,
+   * then creates kernels to execute the query and returns them for launch.
+   */
+  std::vector<std::unique_ptr<ExecutionKernel>> createKernels(
+      SharedKernelContext& shared_context,
+      const RelAlgExecutionUnit& ra_exe_unit,
+      ColumnFetcher& column_fetcher,
       const std::vector<InputTableInfo>& table_infos,
       const ExecutionOptions& eo,
       const bool is_agg,
@@ -609,8 +510,17 @@ class Executor {
       const size_t context_count,
       const QueryCompilationDescriptor& query_comp_desc,
       const QueryMemoryDescriptor& query_mem_desc,
+      RenderInfo* render_info,
       std::unordered_set<int>& available_gpus,
       int& available_cpus);
+
+  /**
+   * Launches execution kernels created by `createKernels` asynchronously using a thread
+   * pool.
+   */
+  template <typename THREAD_POOL>
+  void launchKernels(SharedKernelContext& shared_context,
+                     std::vector<std::unique_ptr<ExecutionKernel>>&& kernels);
 
   std::vector<size_t> getTableFragmentIndices(
       const RelAlgExecutionUnit& ra_exe_unit,
@@ -726,7 +636,8 @@ class Executor {
                              CodeCache&);
 
  private:
-  ResultSetPtr resultsUnion(ExecutionDispatch& execution_dispatch);
+  ResultSetPtr resultsUnion(SharedKernelContext& shared_context,
+                            const RelAlgExecutionUnit& ra_exe_unit);
   std::vector<int64_t> getJoinHashTablePtrs(const ExecutorDeviceType device_type,
                                             const int device_id);
   ResultSetPtr reduceMultiDeviceResults(
@@ -759,19 +670,19 @@ class Executor {
 
   std::vector<llvm::Value*> inlineHoistedLiterals();
 
-  std::tuple<Executor::CompilationResult, std::unique_ptr<QueryMemoryDescriptor>>
-  compileWorkUnit(const std::vector<InputTableInfo>& query_infos,
-                  const RelAlgExecutionUnit& ra_exe_unit,
-                  const CompilationOptions& co,
-                  const ExecutionOptions& eo,
-                  const CudaMgr_Namespace::CudaMgr* cuda_mgr,
-                  const bool allow_lazy_fetch,
-                  std::shared_ptr<RowSetMemoryOwner>,
-                  const size_t max_groups_buffer_entry_count,
-                  const int8_t crt_min_byte_width,
-                  const bool has_cardinality_estimation,
-                  ColumnCacheMap& column_cache,
-                  RenderInfo* render_info = nullptr);
+  std::tuple<CompilationResult, std::unique_ptr<QueryMemoryDescriptor>> compileWorkUnit(
+      const std::vector<InputTableInfo>& query_infos,
+      const RelAlgExecutionUnit& ra_exe_unit,
+      const CompilationOptions& co,
+      const ExecutionOptions& eo,
+      const CudaMgr_Namespace::CudaMgr* cuda_mgr,
+      const bool allow_lazy_fetch,
+      std::shared_ptr<RowSetMemoryOwner>,
+      const size_t max_groups_buffer_entry_count,
+      const int8_t crt_min_byte_width,
+      const bool has_cardinality_estimation,
+      ColumnCacheMap& column_cache,
+      RenderInfo* render_info = nullptr);
   // Generate code to skip the deleted rows in the outermost table.
   llvm::BasicBlock* codegenSkipDeletedOuterTableRow(
       const RelAlgExecutionUnit& ra_exe_unit,
@@ -1043,6 +954,7 @@ class Executor {
   friend class BaselineJoinHashTable;
   friend class CodeGenerator;
   friend class ColumnFetcher;
+  friend class ExecutionKernel;
   friend class OverlapsJoinHashTable;
   friend class GroupByAndAggregate;
   friend class QueryCompilationDescriptor;

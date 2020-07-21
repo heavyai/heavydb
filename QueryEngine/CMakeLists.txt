@@ -34,7 +34,7 @@ set(query_engine_source_files
     EquiJoinCondition.cpp
     Execute.cpp
     ExecuteUpdate.cpp
-    ExecutionDispatch.cpp
+    ExecutionKernel.cpp
     ExpressionRange.cpp
     ExpressionRewrite.cpp
     ExtensionFunctionsBinding.cpp

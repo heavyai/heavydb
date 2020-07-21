@@ -20,8 +20,7 @@
  * @brief   Descriptor for the fragments required for an execution kernel.
  */
 
-#ifndef QUERYENGINE_QUERYFRAGMENTDESCRIPTOR_H
-#define QUERYENGINE_QUERYFRAGMENTDESCRIPTOR_H
+#pragma once
 
 #include <deque>
 #include <functional>
@@ -58,7 +57,7 @@ struct FragmentsPerTable {
 using FragmentsList = std::vector<FragmentsPerTable>;
 using TableFragments = std::vector<Fragmenter_Namespace::FragmentInfo>;
 
-struct ExecutionKernel {
+struct ExecutionKernelDescriptor {
   int device_id;
   FragmentsList fragments;
   std::optional<size_t> outer_tuple_count;  // only for fragments with an exact tuple
@@ -150,7 +149,7 @@ class QueryFragmentDescriptor {
 
   std::map<int, const TableFragments*> selected_tables_fragments_;
 
-  std::map<int, std::vector<ExecutionKernel>> execution_kernels_per_device_;
+  std::map<int, std::vector<ExecutionKernelDescriptor>> execution_kernels_per_device_;
 
   double gpu_input_mem_limit_percent_;
   std::map<size_t, size_t> tuple_count_per_device_;
@@ -192,7 +191,7 @@ class QueryFragmentDescriptor {
 
   bool terminateDispatchMaybe(size_t& tuple_count,
                               const RelAlgExecutionUnit& ra_exe_unit,
-                              const ExecutionKernel& kernel) const;
+                              const ExecutionKernelDescriptor& kernel) const;
 
   void checkDeviceMemoryUsage(const Fragmenter_Namespace::FragmentInfo& fragment,
                               const int device_id,
@@ -200,5 +199,3 @@ class QueryFragmentDescriptor {
 };
 
 std::ostream& operator<<(std::ostream&, FragmentsPerTable const&);
-
-#endif  // QUERYENGINE_QUERYFRAGMENTDESCRIPTOR_H

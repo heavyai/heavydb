@@ -16,7 +16,33 @@
 
 #pragma once
 
-#include "Execute.h"
+#include "DataMgr/Allocators/DeviceAllocator.h"
+#include "QueryEngine/ColumnarResults.h"
+#include "QueryEngine/Descriptors/QueryFragmentDescriptor.h"
+#include "QueryEngine/HashJoinRuntime.h"
+
+namespace std {
+template <>
+struct hash<std::vector<int>> {
+  size_t operator()(const std::vector<int>& vec) const {
+    return vec.size() ^ boost::hash_range(vec.begin(), vec.end());
+  }
+};
+
+template <>
+struct hash<std::pair<int, int>> {
+  size_t operator()(const std::pair<int, int>& p) const {
+    return boost::hash<std::pair<int, int>>()(p);
+  }
+};
+
+}  // namespace std
+
+struct FetchResult {
+  std::vector<std::vector<const int8_t*>> col_buffers;
+  std::vector<std::vector<int64_t>> num_rows;
+  std::vector<std::vector<uint64_t>> frag_offsets;
+};
 
 class ColumnFetcher {
  public:
