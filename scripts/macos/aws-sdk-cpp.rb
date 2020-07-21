@@ -10,7 +10,7 @@ class AwsSdkCpp < Formula
 
   def install
     mkdir "build" do
-      system "cmake", "..", "-DBUILD_ONLY=s3", "-DBUILD_SHARED_LIBS=off", *std_cmake_args
+      system "cmake", "..", "-DBUILD_ONLY=s3;transfer;config", "-DBUILD_SHARED_LIBS=off", *std_cmake_args
       system "make"
       system "make", "install"
     end

@@ -31,6 +31,8 @@ class ApacheArrowOmnisci < Formula
       "-DARROW_JSON=ON",
       "-DARROW_BOOST_USE_SHARED=ON",
       "-DARROW_PARQUET=ON",
+      "-DARROW_FILESYSTEM=ON",
+      "-DARROW_S3=ON",
       "-DARROW_JEMALLOC=OFF",
       "-DTHRIFT_HOME=#{Formula["thrift"].opt_prefix}"
     ]

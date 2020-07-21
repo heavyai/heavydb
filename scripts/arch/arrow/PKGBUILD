@@ -29,6 +29,8 @@ build(){
   cd "$srcdir/build"
   ARROW_BUILD_TOOLCHAIN=/usr LZ4_HOME= ZSTD_HOME= BROTLI_HOME= DOUBLE_CONVERSION_HOME= SNAPPY_HOME= ZLIB_HOME= GFLAGS_HOME= GLOG_HOME=/usr FLATBUFFERS_HOME= cmake \
     ../$pkgname-apache-$pkgname-$pkgver/cpp -DARROW_PARQUET=ON \
+                                      -DARROW_FILESYSTEM=ON \
+                                      -DARROW_S3=ON \
                                       -DARROW_PYTHON=ON \
                                       -DCMAKE_BUILD_TYPE=Release \
                                       -DARROW_BUILD_TESTS=OFF \

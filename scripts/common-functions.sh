@@ -93,6 +93,8 @@ function install_arrow() {
     -DARROW_JEMALLOC=OFF \
     -DARROW_BOOST_USE_SHARED=${ARROW_BOOST_USE_SHARED:="OFF"} \
     -DARROW_PARQUET=ON \
+    -DARROW_FILESYSTEM=ON \
+    -DARROW_S3=ON \
     -DARROW_CUDA=ON \
     -DTHRIFT_HOME=${THRIFT_HOME:-$PREFIX} \
     ${ARROW_TSAN} \
@@ -138,7 +140,7 @@ function install_awscpp() {
     cmake \
         -DCMAKE_BUILD_TYPE=Release \
         -DCMAKE_INSTALL_PREFIX=$PREFIX \
-        -DBUILD_ONLY="s3" \
+        -DBUILD_ONLY="s3;transfer;config" \
         -DBUILD_SHARED_LIBS=0 \
         -DCUSTOM_MEMORY_MANAGEMENT=0 \
         -DCPP_STANDARD=$CPP_STANDARD \
