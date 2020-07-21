@@ -50,27 +50,17 @@ RelAlgExecutionUnit QueryRewriter::rewriteOverlapsJoin(
     for (const auto& join_qual_expr_in : join_condition_in.quals) {
       auto new_overlaps_quals = rewrite_overlaps_conjunction(join_qual_expr_in);
       if (new_overlaps_quals) {
-        if (join_condition_in.type == JoinType::LEFT) {
-          // TODO(jclay): Double check to confirm that this is the case.
-          // I have added this since the following query fails:
-          //
-          // # From CorrelatedSubQueryTest.cpp - Update.CorrelatedWithGeo
-          //
-          // UPDATE test_facts SET lookup_id = (SELECT test_lookup.id FROM test_lookup
-          // WHERE
-          // ST_CONTAINS(poly, pt));
-          LOG(ERROR)
-              << "Cannot rewrite to overlaps join since we do not support left join "
-                 "on nullable geo types";
-          return ra_exe_unit_in;
-        }
         const auto& overlaps_quals = *new_overlaps_quals;
+
+        // Add overlaps qual
         join_condition.quals.insert(join_condition.quals.end(),
                                     overlaps_quals.join_quals.begin(),
                                     overlaps_quals.join_quals.end());
 
-        quals.insert(
-            quals.end(), overlaps_quals.quals.begin(), overlaps_quals.quals.end());
+        // Add original quals
+        join_condition.quals.insert(join_condition.quals.end(),
+                                    overlaps_quals.quals.begin(),
+                                    overlaps_quals.quals.end());
       } else {
         join_condition.quals.push_back(join_qual_expr_in);
       }
