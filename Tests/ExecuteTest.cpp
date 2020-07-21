@@ -34,7 +34,9 @@
 #include <boost/algorithm/string.hpp>
 #include <boost/any.hpp>
 #include <boost/program_options.hpp>
+
 #include <cmath>
+#include <cstdio>
 
 #ifndef BASE_PATH
 #define BASE_PATH "./tmp"
@@ -4381,15 +4383,15 @@ TEST(Select, Time) {
                                         dt)));
     ASSERT_EQ(1,
               v<int64_t>(run_simple_agg("SELECT DATEADD('year', 411, o) = TIMESTAMP "
-                                        "'2410-09-12 00:00:00' from test limit 1;",
+                                        "'2410-09-09 00:00:00' from test limit 1;",
                                         dt)));
     ASSERT_EQ(1,
               v<int64_t>(run_simple_agg("SELECT DATEADD('year', -399, o) = TIMESTAMP "
-                                        "'1600-08-31 00:00:00' from test limit 1;",
+                                        "'1600-09-09 00:00:00' from test limit 1;",
                                         dt)));
     ASSERT_EQ(1,
               v<int64_t>(run_simple_agg("SELECT DATEADD('month', 6132, o) = TIMESTAMP "
-                                        "'2510-09-13 00:00:00' from test limit 1;",
+                                        "'2510-09-09 00:00:00' from test limit 1;",
                                         dt)));
     ASSERT_EQ(1,
               v<int64_t>(run_simple_agg("SELECT DATEADD('month', -1100, o) = TIMESTAMP "
@@ -4476,15 +4478,15 @@ TEST(Select, Time) {
                                         dt)));
     ASSERT_EQ(1,
               v<int64_t>(run_simple_agg("SELECT DATEADD('year', 411, o) = TIMESTAMP "
-                                        "'2410-09-12 00:00:00' from test limit 1;",
+                                        "'2410-09-09 00:00:00' from test limit 1;",
                                         dt)));
     ASSERT_EQ(1,
               v<int64_t>(run_simple_agg("SELECT DATEADD('year', -399, o) = TIMESTAMP "
-                                        "'1600-08-31 00:00:00' from test limit 1;",
+                                        "'1600-09-09 00:00:00' from test limit 1;",
                                         dt)));
     ASSERT_EQ(1,
               v<int64_t>(run_simple_agg("SELECT DATEADD('month', 6132, o) = TIMESTAMP "
-                                        "'2510-09-13 00:00:00' from test limit 1;",
+                                        "'2510-09-09 00:00:00' from test limit 1;",
                                         dt)));
     ASSERT_EQ(1,
               v<int64_t>(run_simple_agg("SELECT DATEADD('month', -1100, o) = TIMESTAMP "
@@ -9998,18 +10000,175 @@ TEST(Select, DateTimeZones) {
 #endif
 
 namespace {
-int64_t datediff(char const* unit,
-                 std::string const& start,
-                 std::string const& end,
-                 ExecutorDeviceType const dt) {
-  std::stringstream query;
-  int const dim_start = start.size() == 19 ? 0 : start.size() - 20;
-  int const dim_end = end.size() == 19 ? 0 : end.size() - 20;
-  query << "SELECT DATEDIFF('" << unit << "', TIMESTAMP(" << dim_start << ") '" << start
-        << "', TIMESTAMP(" << dim_end << ") '" << end << "');";
-  return v<int64_t>(run_simple_agg(query.str(), dt));
+
+// Example: "1969-12-31 23:59:59.999999" -> -1
+// The number of fractional digits must be 0, 3, 6, or 9.
+int64_t timestampToInt64(char const* timestr, ExecutorDeviceType const dt) {
+  constexpr int max = 128;
+  char query[max];
+  unsigned const dim = strlen(timestr) == 19 ? 0 : strlen(timestr) - 20;
+  int const n = snprintf(query, max, "SELECT TIMESTAMP(%d) '%s';", dim, timestr);
+  CHECK_LT(0, n);
+  CHECK_LT(n, max);
+  return v<int64_t>(run_simple_agg(query, dt));
 }
+
+int64_t dateadd(char const* unit,
+                int const num,
+                char const* timestr,
+                ExecutorDeviceType const dt) {
+  constexpr int max = 128;
+  char query[max];
+  unsigned const dim = strlen(timestr) == 19 ? 0 : strlen(timestr) - 20;
+  int const n = snprintf(query,
+                         max,
+                         // Cast from TIMESTAMP(6) to TEXT not supported
+                         // "SELECT CAST(DATEADD('%s', %d, TIMESTAMP(%d) '%s') AS TEXT);",
+                         "SELECT DATEADD('%s', %d, TIMESTAMP(%d) '%s');",
+                         unit,
+                         num,
+                         dim,
+                         timestr);
+  CHECK_LT(0, n);
+  CHECK_LT(n, max);
+  return v<int64_t>(run_simple_agg(query, dt));
+}
+
+int64_t datediff(char const* unit,
+                 char const* start,
+                 char const* end,
+                 ExecutorDeviceType const dt) {
+  constexpr int max = 128;
+  char query[max];
+  unsigned const dim_start = strlen(start) == 19 ? 0 : strlen(start) - 20;
+  unsigned const dim_end = strlen(end) == 19 ? 0 : strlen(end) - 20;
+  int const n = snprintf(query,
+                         max,
+                         "SELECT DATEDIFF('%s', TIMESTAMP(%d) '%s', TIMESTAMP(%d) '%s');",
+                         unit,
+                         dim_start,
+                         start,
+                         dim_end,
+                         end);
+  CHECK_LT(0, n);
+  CHECK_LT(n, max);
+  return v<int64_t>(run_simple_agg(query, dt));
+}
+
 }  // namespace
+
+// Select.Time does a lot of DATEADD tests already.  These focus on high-precision
+// timestamps before, across, and after the epoch=0 boundary.
+TEST(Select, Dateadd) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    // Comparing strings is preferred, but "Cast from TIMESTAMP(6) to TEXT not supported"
+    EXPECT_EQ(timestampToInt64("1960-03-29 23:59:59.999999", dt),
+              dateadd("month", 1, "1960-02-29 23:59:59.999999", dt));
+    EXPECT_EQ(timestampToInt64("1960-03-29 23:59:59.999999", dt),
+              dateadd("month", 1, "1960-02-29 23:59:59.999999", dt));
+
+    EXPECT_EQ(timestampToInt64("1961-02-28 23:59:59.999999", dt),
+              dateadd("year", 1, "1960-02-29 23:59:59.999999", dt));
+    EXPECT_EQ(timestampToInt64("1960-03-29 23:59:59.999", dt),
+              dateadd("month", 1, "1960-02-29 23:59:59.999", dt));
+
+    EXPECT_EQ(timestampToInt64("2961-02-28 23:59:59.999", dt),
+              dateadd("year", 1, "2960-02-29 23:59:59.999", dt));
+    EXPECT_EQ(timestampToInt64("2960-03-29 23:59:59.999", dt),
+              dateadd("month", 1, "2960-02-29 23:59:59.999", dt));
+
+    EXPECT_EQ(timestampToInt64("1960-01-01 00:00:00.000000000", dt),
+              dateadd("nanosecond", 1, "1959-12-31 23:59:59.999999999", dt));
+    EXPECT_EQ(timestampToInt64("1960-01-01 00:00:00.000000001", dt),
+              dateadd("nanosecond", 2, "1959-12-31 23:59:59.999999999", dt));
+
+    EXPECT_EQ(timestampToInt64("1970-01-01 00:00:00.000000000", dt),
+              dateadd("nanosecond", 1, "1969-12-31 23:59:59.999999999", dt));
+    EXPECT_EQ(timestampToInt64("1970-01-01 00:00:00.000000001", dt),
+              dateadd("nanosecond", 2, "1969-12-31 23:59:59.999999999", dt));
+
+    EXPECT_EQ(timestampToInt64("2020-01-01 00:00:00.000000000", dt),
+              dateadd("nanosecond", 1, "2019-12-31 23:59:59.999999999", dt));
+    EXPECT_EQ(timestampToInt64("2020-01-01 00:00:00.000000001", dt),
+              dateadd("nanosecond", 2, "2019-12-31 23:59:59.999999999", dt));
+
+    EXPECT_EQ(timestampToInt64("1960-01-01 00:00:00.000000999", dt),
+              dateadd("microsecond", 1, "1959-12-31 23:59:59.999999999", dt));
+    EXPECT_EQ(timestampToInt64("1960-01-01 00:00:00.000001999", dt),
+              dateadd("microsecond", 2, "1959-12-31 23:59:59.999999999", dt));
+
+    EXPECT_EQ(timestampToInt64("1970-01-01 00:00:00.000000999", dt),
+              dateadd("microsecond", 1, "1969-12-31 23:59:59.999999999", dt));
+    EXPECT_EQ(timestampToInt64("1970-01-01 00:00:00.000001999", dt),
+              dateadd("microsecond", 2, "1969-12-31 23:59:59.999999999", dt));
+
+    EXPECT_EQ(timestampToInt64("2020-01-01 00:00:00.000000999", dt),
+              dateadd("microsecond", 1, "2019-12-31 23:59:59.999999999", dt));
+    EXPECT_EQ(timestampToInt64("2020-01-01 00:00:00.000001999", dt),
+              dateadd("microsecond", 2, "2019-12-31 23:59:59.999999999", dt));
+
+    EXPECT_EQ(timestampToInt64("1960-01-01 00:00:00.000999999", dt),
+              dateadd("millisecond", 1, "1959-12-31 23:59:59.999999999", dt));
+    EXPECT_EQ(timestampToInt64("1960-01-01 00:00:00.001999999", dt),
+              dateadd("millisecond", 2, "1959-12-31 23:59:59.999999999", dt));
+
+    EXPECT_EQ(timestampToInt64("1970-01-01 00:00:00.000999999", dt),
+              dateadd("millisecond", 1, "1969-12-31 23:59:59.999999999", dt));
+    EXPECT_EQ(timestampToInt64("1970-01-01 00:00:00.001999999", dt),
+              dateadd("millisecond", 2, "1969-12-31 23:59:59.999999999", dt));
+
+    EXPECT_EQ(timestampToInt64("2020-01-01 00:00:00.000999999", dt),
+              dateadd("millisecond", 1, "2019-12-31 23:59:59.999999999", dt));
+    EXPECT_EQ(timestampToInt64("2020-01-01 00:00:00.001999999", dt),
+              dateadd("millisecond", 2, "2019-12-31 23:59:59.999999999", dt));
+
+    EXPECT_EQ(timestampToInt64("1960-01-01 00:00:00.999999999", dt),
+              dateadd("second", 1, "1959-12-31 23:59:59.999999999", dt));
+    EXPECT_EQ(timestampToInt64("1960-01-01 00:00:01.999999999", dt),
+              dateadd("second", 2, "1959-12-31 23:59:59.999999999", dt));
+
+    EXPECT_EQ(timestampToInt64("1970-01-01 00:00:00.999999999", dt),
+              dateadd("second", 1, "1969-12-31 23:59:59.999999999", dt));
+    EXPECT_EQ(timestampToInt64("1970-01-01 00:00:01.999999999", dt),
+              dateadd("second", 2, "1969-12-31 23:59:59.999999999", dt));
+
+    EXPECT_EQ(timestampToInt64("2020-01-01 00:00:00.999999999", dt),
+              dateadd("second", 1, "2019-12-31 23:59:59.999999999", dt));
+    EXPECT_EQ(timestampToInt64("2020-01-01 00:00:01.999999999", dt),
+              dateadd("second", 2, "2019-12-31 23:59:59.999999999", dt));
+
+    EXPECT_EQ(timestampToInt64("1960-01-01 00:00:59.999999999", dt),
+              dateadd("minute", 1, "1959-12-31 23:59:59.999999999", dt));
+    EXPECT_EQ(timestampToInt64("1960-01-01 00:01:59.999999999", dt),
+              dateadd("minute", 2, "1959-12-31 23:59:59.999999999", dt));
+
+    EXPECT_EQ(timestampToInt64("1970-01-01 00:00:59.999999999", dt),
+              dateadd("minute", 1, "1969-12-31 23:59:59.999999999", dt));
+    EXPECT_EQ(timestampToInt64("1970-01-01 00:01:59.999999999", dt),
+              dateadd("minute", 2, "1969-12-31 23:59:59.999999999", dt));
+
+    EXPECT_EQ(timestampToInt64("2020-01-01 00:00:59.999999999", dt),
+              dateadd("minute", 1, "2019-12-31 23:59:59.999999999", dt));
+    EXPECT_EQ(timestampToInt64("2020-01-01 00:01:59.999999999", dt),
+              dateadd("minute", 2, "2019-12-31 23:59:59.999999999", dt));
+
+    EXPECT_EQ(timestampToInt64("2100-02-28 23:59:59.999999", dt),
+              dateadd("decade", 2, "2080-02-29 23:59:59.999999", dt));
+    EXPECT_EQ(timestampToInt64("1900-02-28 23:59:59.999", dt),
+              dateadd("decade", -2, "1920-02-29 23:59:59.999", dt));
+
+    EXPECT_EQ(timestampToInt64("2100-02-28 23:59:59.999999", dt),
+              dateadd("century", 1, "2000-02-29 23:59:59.999999", dt));
+    EXPECT_EQ(timestampToInt64("1900-02-28 23:59:59.999", dt),
+              dateadd("century", -1, "2000-02-29 23:59:59.999", dt));
+
+    EXPECT_EQ(timestampToInt64("3000-02-28 23:59:59.999999", dt),
+              dateadd("millennium", 1, "2000-02-29 23:59:59.999999", dt));
+    EXPECT_EQ(timestampToInt64("5000-02-28 23:59:59.999", dt),
+              dateadd("millennium", 3, "2000-02-29 23:59:59.999", dt));
+  }
+}
 
 TEST(Select, Datediff) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
