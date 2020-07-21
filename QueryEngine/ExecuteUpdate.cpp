@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 MapD Technologies, Inc.
+ * Copyright 2020 OmniSci, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -90,8 +90,41 @@ void Executor::executeUpdate(const RelAlgExecutionUnit& ra_exe_unit_in,
     fragments.push_back(entry);
   }
 
-  // There could be benefit to multithread this once we see where the bottle necks really
-  // are
+  if (outer_fragments.empty()) {
+    return;
+  }
+
+  const auto max_tuple_count_fragment_it = std::max_element(
+      outer_fragments.begin(), outer_fragments.end(), [](const auto& a, const auto& b) {
+        return a.getNumTuples() < b.getNumTuples();
+      });
+  CHECK(max_tuple_count_fragment_it != outer_fragments.end());
+  int64_t global_max_groups_buffer_entry_guess =
+      max_tuple_count_fragment_it->getNumTuples();
+  if (is_agg) {
+    global_max_groups_buffer_entry_guess = std::min(
+        2 * global_max_groups_buffer_entry_guess, static_cast<int64_t>(100'000'000));
+  }
+
+  auto query_comp_desc = std::make_unique<QueryCompilationDescriptor>();
+  std::unique_ptr<QueryMemoryDescriptor> query_mem_desc;
+  {
+    auto clock_begin = timer_start();
+    std::lock_guard<std::mutex> compilation_lock(compilation_mutex_);
+    compilation_queue_time_ms_ += timer_stop(clock_begin);
+
+    query_mem_desc = query_comp_desc->compile(global_max_groups_buffer_entry_guess,
+                                              8,
+                                              /*has_cardinality_estimation=*/true,
+                                              ra_exe_unit,
+                                              table_infos,
+                                              column_fetcher,
+                                              co,
+                                              eo,
+                                              nullptr,
+                                              this);
+  }
+  CHECK(query_mem_desc);
 
   for (size_t fragment_index = 0; fragment_index < outer_fragments.size();
        ++fragment_index) {
@@ -101,31 +134,6 @@ void Executor::executeUpdate(const RelAlgExecutionUnit& ra_exe_unit_in,
       // nothing to update
       continue;
     }
-    int64_t max_groups_buffer_entry_guess = crt_fragment_tuple_count;
-    if (is_agg) {
-      max_groups_buffer_entry_guess =
-          std::min(2 * max_groups_buffer_entry_guess, static_cast<int64_t>(100'000'000));
-    }
-
-    auto query_comp_desc = std::make_unique<QueryCompilationDescriptor>();
-    std::unique_ptr<QueryMemoryDescriptor> query_mem_desc;
-    {
-      auto clock_begin = timer_start();
-      std::lock_guard<std::mutex> compilation_lock(compilation_mutex_);
-      compilation_queue_time_ms_ += timer_stop(clock_begin);
-
-      query_mem_desc = query_comp_desc->compile(max_groups_buffer_entry_guess,
-                                                8,
-                                                /*has_cardinality_estimation=*/true,
-                                                ra_exe_unit,
-                                                table_infos,
-                                                column_fetcher,
-                                                co,
-                                                eo,
-                                                nullptr,
-                                                this);
-    }
-    CHECK(query_mem_desc);
 
     SharedKernelContext shared_context(table_infos);
     fragments[0] = {table_id, {fragment_index}};
