@@ -4404,19 +4404,19 @@ TEST(Select, Time) {
                                         "'1934-11-15 00:00:00' from test limit 1 ;",
                                         dt)));
     ASSERT_EQ(
-        -303,
+        -302,
         v<int64_t>(run_simple_agg(
             "SELECT DATEDIFF('year', DATE '2302-04-21', o) from test limit 1;", dt)));
     ASSERT_EQ(
-        502,
+        501,
         v<int64_t>(run_simple_agg(
             "SELECT DATEDIFF('year', o, DATE '2501-04-21') from test limit 1;", dt)));
     ASSERT_EQ(
-        -4896,
+        -4895,
         v<int64_t>(run_simple_agg(
             "SELECT DATEDIFF('month', DATE '2407-09-01', o) from test limit 1;", dt)));
     ASSERT_EQ(
-        3818,
+        3817,
         v<int64_t>(run_simple_agg(
             "SELECT DATEDIFF('month', o, DATE '2317-11-01') from test limit 1;", dt)));
     ASSERT_EQ(
@@ -4499,19 +4499,19 @@ TEST(Select, Time) {
                                         "'1934-11-15 00:00:00' from test limit 1 ;",
                                         dt)));
     ASSERT_EQ(
-        -303,
+        -302,
         v<int64_t>(run_simple_agg(
             "SELECT DATEDIFF('year', DATE '2302-04-21', o) from test limit 1;", dt)));
     ASSERT_EQ(
-        502,
+        501,
         v<int64_t>(run_simple_agg(
             "SELECT DATEDIFF('year', o, DATE '2501-04-21') from test limit 1;", dt)));
     ASSERT_EQ(
-        -4896,
+        -4895,
         v<int64_t>(run_simple_agg(
             "SELECT DATEDIFF('month', DATE '2407-09-01', o) from test limit 1;", dt)));
     ASSERT_EQ(
-        3818,
+        3817,
         v<int64_t>(run_simple_agg(
             "SELECT DATEDIFF('month', o, DATE '2317-11-01') from test limit 1;", dt)));
     ASSERT_EQ(
@@ -9997,6 +9997,198 @@ TEST(Select, DateTimeZones) {
 }
 #endif
 
+namespace {
+int64_t datediff(char const* unit,
+                 std::string const& start,
+                 std::string const& end,
+                 ExecutorDeviceType const dt) {
+  std::stringstream query;
+  int const dim_start = start.size() == 19 ? 0 : start.size() - 20;
+  int const dim_end = end.size() == 19 ? 0 : end.size() - 20;
+  query << "SELECT DATEDIFF('" << unit << "', TIMESTAMP(" << dim_start << ") '" << start
+        << "', TIMESTAMP(" << dim_end << ") '" << end << "');";
+  return v<int64_t>(run_simple_agg(query.str(), dt));
+}
+}  // namespace
+
+TEST(Select, Datediff) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    EXPECT_EQ(
+        999999997L,
+        datediff(
+            "nanosecond", "1950-01-02 12:34:56.000000003", "1950-01-02 12:34:57", dt));
+    EXPECT_EQ(
+        -3,
+        datediff(
+            "nanosecond", "1950-01-02 12:34:56.000000003", "1950-01-02 12:34:56", dt));
+    EXPECT_EQ(
+        -1000000003,
+        datediff(
+            "nanosecond", "1950-01-02 12:34:56.000000003", "1950-01-02 12:34:55", dt));
+    EXPECT_EQ(
+        999999997L,
+        datediff(
+            "nanosecond", "2000-01-02 12:34:56.000000003", "2000-01-02 12:34:57", dt));
+    EXPECT_EQ(
+        -3,
+        datediff(
+            "nanosecond", "2000-01-02 12:34:56.000000003", "2000-01-02 12:34:56", dt));
+    EXPECT_EQ(
+        -1000000003,
+        datediff(
+            "nanosecond", "2000-01-02 12:34:56.000000003", "2000-01-02 12:34:55", dt));
+
+    EXPECT_EQ(
+        0,
+        datediff("second", "1950-01-02 12:34:56.000000003", "1950-01-02 12:34:57", dt));
+    EXPECT_EQ(
+        0,
+        datediff("second", "1950-01-02 12:34:56.000000003", "1950-01-02 12:34:56", dt));
+    EXPECT_EQ(
+        -1,
+        datediff("second", "1950-01-02 12:34:56.000000003", "1950-01-02 12:34:55", dt));
+    EXPECT_EQ(
+        0,
+        datediff("second", "2000-01-02 12:34:56.000000003", "2000-01-02 12:34:57", dt));
+    EXPECT_EQ(
+        0,
+        datediff("second", "2000-01-02 12:34:56.000000003", "2000-01-02 12:34:56", dt));
+    EXPECT_EQ(
+        -1,
+        datediff("second", "2000-01-02 12:34:56.000000003", "2000-01-02 12:34:55", dt));
+
+    EXPECT_EQ(0,
+              datediff("second",
+                       "1969-12-31 23:59:58.000000003",
+                       "1969-12-31 23:59:59.000000002",
+                       dt));
+    EXPECT_EQ(1,
+              datediff("second",
+                       "1969-12-31 23:59:58.000000003",
+                       "1969-12-31 23:59:59.000000003",
+                       dt));
+    EXPECT_EQ(1,
+              datediff("second",
+                       "1969-12-31 23:59:58.000000003",
+                       "1969-12-31 23:59:59.000000004",
+                       dt));
+    EXPECT_EQ(0,
+              datediff("second",
+                       "1969-12-31 23:59:59.000000003",
+                       "1970-01-01 00:00:00.000000002",
+                       dt));
+    EXPECT_EQ(1,
+              datediff("second",
+                       "1969-12-31 23:59:59.000000003",
+                       "1970-01-01 00:00:00.000000003",
+                       dt));
+    EXPECT_EQ(1,
+              datediff("second",
+                       "1969-12-31 23:59:59.000000003",
+                       "1970-01-01 00:00:00.000000004",
+                       dt));
+    EXPECT_EQ(0,
+              datediff("second",
+                       "1969-12-31 23:59:59.000000002",
+                       "1969-12-31 23:59:58.000000003",
+                       dt));
+    EXPECT_EQ(-1,
+              datediff("second",
+                       "1969-12-31 23:59:59.000000003",
+                       "1969-12-31 23:59:58.000000003",
+                       dt));
+    EXPECT_EQ(-1,
+              datediff("second",
+                       "1969-12-31 23:59:59.000000004",
+                       "1969-12-31 23:59:58.000000003",
+                       dt));
+    EXPECT_EQ(0,
+              datediff("second",
+                       "1970-01-01 00:00:00.000000002",
+                       "1969-12-31 23:59:59.000000003",
+                       dt));
+    EXPECT_EQ(-1,
+              datediff("second",
+                       "1970-01-01 00:00:00.000000003",
+                       "1969-12-31 23:59:59.000000003",
+                       dt));
+    EXPECT_EQ(-1,
+              datediff("second",
+                       "1970-01-01 00:00:00.000000004",
+                       "1969-12-31 23:59:59.000000003",
+                       dt));
+    EXPECT_EQ(
+        6,
+        datediff("millennium", "1900-02-15 12:00:00.003", "8900-02-15 12:00:00.002", dt));
+    EXPECT_EQ(
+        7,
+        datediff("millennium", "1900-02-15 12:00:00.003", "8900-02-15 12:00:00.003", dt));
+    EXPECT_EQ(
+        69,
+        datediff("century", "1900-02-15 12:00:00.003", "8900-02-15 12:00:00.002", dt));
+    EXPECT_EQ(
+        70,
+        datediff("century", "1900-02-15 12:00:00.003", "8900-02-15 12:00:00.003", dt));
+    EXPECT_EQ(
+        699,
+        datediff("decade", "1900-02-15 12:00:00.003", "8900-02-15 12:00:00.002", dt));
+    EXPECT_EQ(
+        700,
+        datediff("decade", "1900-02-15 12:00:00.003", "8900-02-15 12:00:00.003", dt));
+    EXPECT_EQ(6999,
+              datediff("year", "1900-02-15 12:00:00.003", "8900-02-15 12:00:00.002", dt));
+    EXPECT_EQ(7000,
+              datediff("year", "1900-02-15 12:00:00.003", "8900-02-15 12:00:00.003", dt));
+    EXPECT_EQ(
+        7000 * 4 - 1,
+        datediff("quarter", "1900-02-15 12:00:00.003", "8900-02-15 12:00:00.002", dt));
+    EXPECT_EQ(
+        7000 * 4,
+        datediff("quarter", "1900-02-15 12:00:00.003", "8900-02-15 12:00:00.003", dt));
+    EXPECT_EQ(
+        7000 * 12 - 1,
+        datediff("month", "1900-02-15 12:00:00.003", "8900-02-15 12:00:00.002", dt));
+    EXPECT_EQ(
+        7000 * 12,
+        datediff("month", "1900-02-15 12:00:00.003", "8900-02-15 12:00:00.003", dt));
+    EXPECT_EQ(2556697,
+              datediff("day", "1900-02-15 12:00:00.003", "8900-02-15 12:00:00.002", dt));
+    EXPECT_EQ(2556698,
+              datediff("day", "1900-02-15 12:00:00.003", "8900-02-15 12:00:00.003", dt));
+    EXPECT_EQ(
+        2556698 * 4 - 1,
+        datediff("quarterday", "1900-02-15 12:00:00.003", "8900-02-15 12:00:00.002", dt));
+    EXPECT_EQ(
+        2556698 * 4,
+        datediff("quarterday", "1900-02-15 12:00:00.003", "8900-02-15 12:00:00.003", dt));
+    EXPECT_EQ(2556698 * 24 - 1,
+              datediff("hour", "1900-02-15 12:00:00.003", "8900-02-15 12:00:00.002", dt));
+    EXPECT_EQ(2556698 * 24,
+              datediff("hour", "1900-02-15 12:00:00.003", "8900-02-15 12:00:00.003", dt));
+    EXPECT_EQ(
+        2556698 * 24 * 60L - 1,
+        datediff("minute", "1900-02-15 12:00:00.003", "8900-02-15 12:00:00.002", dt));
+    EXPECT_EQ(
+        2556698 * 24 * 60L,
+        datediff("minute", "1900-02-15 12:00:00.003", "8900-02-15 12:00:00.003", dt));
+    EXPECT_EQ(
+        2556698 * 24 * 60L * 60 - 1,
+        datediff("second", "1900-02-15 12:00:00.003", "8900-02-15 12:00:00.002", dt));
+    EXPECT_EQ(
+        2556698 * 24 * 60L * 60,
+        datediff("second", "1900-02-15 12:00:00.003", "8900-02-15 12:00:00.003", dt));
+    EXPECT_EQ(
+        2556698 * 24 * 60L * 60 * 1000 - 1,
+        datediff(
+            "millisecond", "1900-02-15 12:00:00.003", "8900-02-15 12:00:00.002", dt));
+    EXPECT_EQ(
+        2556698 * 24 * 60L * 60 * 1000,
+        datediff(
+            "millisecond", "1900-02-15 12:00:00.003", "8900-02-15 12:00:00.003", dt));
+  }
+}
+
 TEST(Select, TimestampPrecision) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
@@ -10554,22 +10746,22 @@ TEST(Select, TimestampPrecision) {
     ASSERT_EQ((1418509395000000000L - 1146023344607435125L) / (1000L * 1000L),
               v<int64_t>(run_simple_agg(
                   "SELECT DATEDIFF('millisecond', m_9, m) FROM test limit 1;", dt)));
-    ASSERT_EQ(((1146023344607435125L / 1000000000) - (931701773874533L / 1000000)),
+    ASSERT_EQ((1146023344607435125L - 931701773874533L * 1000) / 1000000000,
               v<int64_t>(run_simple_agg(
                   "SELECT DATEDIFF('second', m_6, m_9) FROM test limit 1;", dt)));
-    ASSERT_EQ(((931701773874533L / 1000000) - (1146023344607435125L / 1000000000)),
+    ASSERT_EQ((931701773874533L * 1000 - 1146023344607435125L) / 1000000000,
               v<int64_t>(run_simple_agg(
                   "SELECT DATEDIFF('second', m_9, m_6) FROM test limit 1;", dt)));
-    ASSERT_EQ(((1146023344607435125L / 1000000000) - (1418509395323L / 1000)),
+    ASSERT_EQ((1146023344607435125L - 1418509395323L * 1000000) / 1000000000,
               v<int64_t>(run_simple_agg(
                   "SELECT DATEDIFF('second', m_3, m_9) FROM test limit 1;", dt)));
-    ASSERT_EQ(((1418509395323L / 1000) - (1146023344607435125L / 1000000000)),
+    ASSERT_EQ((1418509395323L * 1000000 - 1146023344607435125L) / 1000000000,
               v<int64_t>(run_simple_agg(
                   "SELECT DATEDIFF('second', m_9, m_3) FROM test limit 1;", dt)));
-    ASSERT_EQ(((1146023344607435125L / 1000000000) - 1418509395L),
+    ASSERT_EQ((1146023344607435125L - 1418509395L * 1000000000) / 1000000000,
               v<int64_t>(run_simple_agg(
                   "SELECT DATEDIFF('second', m, m_9) FROM test limit 1;", dt)));
-    ASSERT_EQ((1418509395L - (1146023344607435125L / 1000000000)),
+    ASSERT_EQ((1418509395L * 1000000000 - 1146023344607435125L) / 1000000000,
               v<int64_t>(run_simple_agg(
                   "SELECT DATEDIFF('second', m_9, m) FROM test limit 1;", dt)));
     ASSERT_EQ((3572026L),
@@ -10632,22 +10824,22 @@ TEST(Select, TimestampPrecision) {
     ASSERT_EQ((-81),
               v<int64_t>(run_simple_agg(
                   "SELECT DATEDIFF('month', m_9, m_6) FROM test limit 1;", dt)));
-    ASSERT_EQ((-104),
+    ASSERT_EQ((-103),
               v<int64_t>(run_simple_agg(
                   "SELECT DATEDIFF('month', m_3, m_9) FROM test limit 1;", dt)));
-    ASSERT_EQ((104),
+    ASSERT_EQ((103),
               v<int64_t>(run_simple_agg(
                   "SELECT DATEDIFF('month', m_9, m_3) FROM test limit 1;", dt)));
-    ASSERT_EQ((-104),
+    ASSERT_EQ((-103),
               v<int64_t>(run_simple_agg(
                   "SELECT DATEDIFF('month', m, m_9) FROM test limit 1;", dt)));
-    ASSERT_EQ((104),
+    ASSERT_EQ((103),
               v<int64_t>(run_simple_agg(
                   "SELECT DATEDIFF('month', m_9, m) FROM test limit 1;", dt)));
-    ASSERT_EQ((7),
+    ASSERT_EQ((6),
               v<int64_t>(run_simple_agg(
                   "SELECT DATEDIFF('year', m_6, m_9) FROM test limit 1;", dt)));
-    ASSERT_EQ((-7),
+    ASSERT_EQ((-6),
               v<int64_t>(run_simple_agg(
                   "SELECT DATEDIFF('year', m_9, m_6) FROM test limit 1;", dt)));
     ASSERT_EQ(-8,
@@ -10662,16 +10854,16 @@ TEST(Select, TimestampPrecision) {
     ASSERT_EQ((8),
               v<int64_t>(run_simple_agg(
                   "SELECT DATEDIFF('year', m_9, m) FROM test limit 1;", dt)));
-    ASSERT_EQ(931701773874533L - 1418509395323000L,
+    ASSERT_EQ((931701773874533L - 1418509395323000L) * 1000,
               v<int64_t>(run_simple_agg(
                   "SELECT DATEDIFF('nanosecond', m_3, m_6) FROM test limit 1;", dt)));
-    ASSERT_EQ(1418509395323000L - 931701773874533L,
+    ASSERT_EQ((1418509395323000L - 931701773874533L) * 1000,
               v<int64_t>(run_simple_agg(
                   "SELECT DATEDIFF('nanosecond', m_6, m_3) FROM test limit 1;", dt)));
-    ASSERT_EQ(931701773874533L - 1418509395000000L,
+    ASSERT_EQ((931701773874533L - 1418509395000000L) * 1000,
               v<int64_t>(run_simple_agg(
                   "SELECT DATEDIFF('nanosecond', m, m_6) FROM test limit 1;", dt)));
-    ASSERT_EQ(1418509395000000L - 931701773874533L,
+    ASSERT_EQ((1418509395000000L - 931701773874533L) * 1000,
               v<int64_t>(run_simple_agg(
                   "SELECT DATEDIFF('nanosecond', m_6, m) FROM test limit 1;", dt)));
     ASSERT_EQ((931701773874533L - 1418509395323000L),
@@ -10698,16 +10890,16 @@ TEST(Select, TimestampPrecision) {
     ASSERT_EQ((1418509395000000L - 931701773874533L) / (1000L),
               v<int64_t>(run_simple_agg(
                   "SELECT DATEDIFF('millisecond', m_6, m) FROM test limit 1;", dt)));
-    ASSERT_EQ((931701773874533L / 1000000 - 1418509395323L / 1000),
+    ASSERT_EQ((931701773874533L - 1418509395323L * 1000) / 1000000,
               v<int64_t>(run_simple_agg(
                   "SELECT DATEDIFF('second', m_3, m_6) FROM test limit 1;", dt)));
-    ASSERT_EQ((1418509395323L / 1000 - 931701773874533L / 1000000),
+    ASSERT_EQ((1418509395323L * 1000 - 931701773874533L) / 1000000,
               v<int64_t>(run_simple_agg(
                   "SELECT DATEDIFF('second', m_6, m_3) FROM test limit 1;", dt)));
-    ASSERT_EQ((931701773874533L / 1000000 - 1418509395L),
+    ASSERT_EQ((931701773874533L - 1418509395L * 1000000) / 1000000,
               v<int64_t>(run_simple_agg(
                   "SELECT DATEDIFF('second', m, m_6) FROM test limit 1;", dt)));
-    ASSERT_EQ((1418509395L - 931701773874533L / 1000000),
+    ASSERT_EQ((1418509395L * 1000000 - 931701773874533L) / 1000000,
               v<int64_t>(run_simple_agg(
                   "SELECT DATEDIFF('second', m_6, m) FROM test limit 1;", dt)));
     ASSERT_EQ((931701773874533L / 1000000 - 1418509395323 / 1000L) / (60),
@@ -10770,16 +10962,16 @@ TEST(Select, TimestampPrecision) {
     ASSERT_EQ(-15,
               v<int64_t>(run_simple_agg(
                   "SELECT DATEDIFF('year', m, m_6) FROM test limit 1;", dt)));
-    ASSERT_EQ(1418509395000L - 1418509395323L,
+    ASSERT_EQ((1418509395000L - 1418509395323L) * 1000000,
               v<int64_t>(run_simple_agg(
                   "SELECT DATEDIFF('nanosecond', m_3, m) FROM test limit 1;", dt)));
-    ASSERT_EQ(1418509395323L - 1418509395000L,
+    ASSERT_EQ((1418509395323L - 1418509395000) * 1000000,
               v<int64_t>(run_simple_agg(
                   "SELECT DATEDIFF('nanosecond', m, m_3) FROM test limit 1;", dt)));
-    ASSERT_EQ((1418509395000L - 1418509395323L),
+    ASSERT_EQ((1418509395000L - 1418509395323L) * 1000,
               v<int64_t>(run_simple_agg(
                   "SELECT DATEDIFF('microsecond', m_3, m) FROM test limit 1;", dt)));
-    ASSERT_EQ((1418509395323L - 1418509395000L),
+    ASSERT_EQ((1418509395323L - 1418509395000L) * 1000,
               v<int64_t>(run_simple_agg(
                   "SELECT DATEDIFF('microsecond', m, m_3) FROM test limit 1;", dt)));
     ASSERT_EQ((1418509395000L - 1418509395323L),

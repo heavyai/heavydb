@@ -146,8 +146,14 @@ DateaddField to_dateadd_field(const std::string& field) {
 
 DatetruncField to_datediff_field(const std::string& field) {
   DatetruncField fieldno;
-  if (boost::iequals(field, "year") || boost::iequals(field, "yy") ||
-      boost::iequals(field, "yyyy") || boost::iequals(field, "sql_tsi_year")) {
+  if (boost::iequals(field, "millennium")) {
+    fieldno = dtMILLENNIUM;
+  } else if (boost::iequals(field, "century")) {
+    fieldno = dtCENTURY;
+  } else if (boost::iequals(field, "decade")) {
+    fieldno = dtDECADE;
+  } else if (boost::iequals(field, "year") || boost::iequals(field, "yy") ||
+             boost::iequals(field, "yyyy") || boost::iequals(field, "sql_tsi_year")) {
     fieldno = dtYEAR;
   } else if (boost::iequals(field, "quarter") || boost::iequals(field, "qq") ||
              boost::iequals(field, "q") || boost::iequals(field, "sql_tsi_quarter")) {
@@ -161,6 +167,8 @@ DatetruncField to_datediff_field(const std::string& field) {
   } else if (boost::iequals(field, "day") || boost::iequals(field, "dd") ||
              boost::iequals(field, "d") || boost::iequals(field, "sql_tsi_day")) {
     fieldno = dtDAY;
+  } else if (boost::iequals(field, "quarterday")) {
+    fieldno = dtQUARTERDAY;
   } else if (boost::iequals(field, "hour") || boost::iequals(field, "hh") ||
              boost::iequals(field, "sql_tsi_hour")) {
     fieldno = dtHOUR;
