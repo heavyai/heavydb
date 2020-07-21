@@ -196,17 +196,11 @@ llvm::Value* CodeGenerator::codegen(const Analyzer::DatediffExpr* datediff_expr,
       cgen_state_->llInt(static_cast<int32_t>(datediff_expr->get_field())), start, end};
   std::string datediff_fname{"DateDiff"};
   if (start_ti.is_high_precision_timestamp() || end_ti.is_high_precision_timestamp()) {
-    const auto adj_dimen = end_ti.get_dimension() - start_ti.get_dimension();
     datediff_fname += "HighPrecision";
-    datediff_args.push_back(cgen_state_->llInt(static_cast<int32_t>(adj_dimen)));
-    datediff_args.push_back(cgen_state_->llInt(
-        static_cast<int64_t>(get_timestamp_precision_scale(abs(adj_dimen)))));
     datediff_args.push_back(
-        cgen_state_->llInt(static_cast<int64_t>(get_timestamp_precision_scale(
-            adj_dimen < 0 ? end_ti.get_dimension() : start_ti.get_dimension()))));
+        cgen_state_->llInt(static_cast<int32_t>(start_ti.get_dimension())));
     datediff_args.push_back(
-        cgen_state_->llInt(static_cast<int64_t>(get_timestamp_precision_scale(
-            adj_dimen > 0 ? end_ti.get_dimension() : start_ti.get_dimension()))));
+        cgen_state_->llInt(static_cast<int32_t>(end_ti.get_dimension())));
   }
   const auto& ret_ti = datediff_expr->get_type_info();
   if (!start_ti.get_notnull() || !end_ti.get_notnull()) {

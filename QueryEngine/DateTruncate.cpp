@@ -28,6 +28,7 @@
 #include <cmath>
 #include <ctime>
 #include <iostream>
+#include <limits>
 
 /*
  * @brief support the SQL DATE_TRUNC function
@@ -100,8 +101,8 @@ extern "C" NEVER_INLINE DEVICE int64_t DateTruncate(DatetruncField field,
         unsigned const doe = unsigned_mod(day - kEpochAdjustedDays, kDaysPer400Years);
         unsigned const yoe = (doe - doe / 1460 + doe / 36524 - (doe == 146096)) / 365;
         unsigned const doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
-        unsigned const moe = (5 * doy + 2) / 153;
-        unsigned const dom = doy - (153 * moe + 2) / 5;
+        unsigned const moy = (5 * doy + 2) / 153;
+        unsigned const dom = doy - (153 * moy + 2) / 5;
         return (day - dom) * kSecsPerDay;
       }
     }
@@ -209,7 +210,7 @@ extern "C" NEVER_INLINE DEVICE int64_t DateTruncate(DatetruncField field,
     }
     default:
 #ifdef __CUDACC__
-      return -1;
+      return std::numeric_limits<int64_t>::min();
 #else
       abort();
 #endif
@@ -241,87 +242,164 @@ DateTruncateHighPrecisionToDateNullable(const int64_t timeval,
   return DateTruncateHighPrecisionToDate(timeval, scale);
 }
 
+namespace {
+
+struct EraTime {
+  int64_t const era;
+  int const yoe;  // year-of-era
+  int const moy;  // month-of-year (March = 0)
+  int const dom;  // day-of-month
+  int const sod;  // second-of-day
+
+  DEVICE static EraTime make(int64_t const time) {
+    int64_t const day = floor_div(time, kSecsPerDay);
+    int64_t const era = floor_div(day - kEpochAdjustedDays, kDaysPer400Years);
+    int const sod = time - day * kSecsPerDay;
+    int const doe = day - kEpochAdjustedDays - era * kDaysPer400Years;
+    int const yoe = (doe - doe / 1460 + doe / 36524 - doe / 146096) / 365;
+    int const doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+    int const moy = (5 * doy + 2) / 153;
+    int const dom = doy - (153 * moy + 2) / 5 + 1;
+    return {era, yoe, moy, dom, sod};
+  }
+
+  DEVICE EraTime operator-() const { return {-era, -yoe, -moy, -dom, -sod}; }
+
+  DEVICE EraTime operator-(EraTime const& rhs) {
+    return {era - rhs.era, yoe - rhs.yoe, moy - rhs.moy, dom - rhs.dom, sod - rhs.sod};
+  }
+
+  enum Field { ERA, YOE, MOY, DOM, SOD };
+  // Sign of EraTime starting at field.
+  DEVICE int sign(Field const field) const {
+    switch (field) {
+      case ERA:
+        if (era != 0) {
+          return era < 0 ? -1 : 1;
+        }
+      case YOE:
+        if (yoe != 0) {
+          return yoe < 0 ? -1 : 1;
+        }
+      case MOY:
+        if (moy != 0) {
+          return moy < 0 ? -1 : 1;
+        }
+      case DOM:
+        if (dom != 0) {
+          return dom < 0 ? -1 : 1;
+        }
+      case SOD:
+        if (sod != 0) {
+          return sod < 0 ? -1 : 1;
+        }
+      default:
+        return 0;
+    }
+  }
+
+  DEVICE int64_t count(DatetruncField const field) const {
+    int const sgn = sign(ERA);
+    EraTime const ut = sgn == -1 ? -*this : *this;  // Unsigned time
+    switch (field) {
+      case dtMONTH:
+        return sgn * (12 * (400 * ut.era + ut.yoe) + ut.moy - (ut.sign(DOM) == -1));
+      case dtQUARTER: {
+        int const quarters = ut.moy / 3;
+        int const rem = ut.moy % 3;
+        return sgn * (4 * (400 * ut.era + ut.yoe) + quarters -
+                      (rem < 0 || (rem == 0 && ut.sign(DOM) == -1)));
+      }
+      case dtYEAR:
+        return sgn * (400 * ut.era + ut.yoe - (ut.sign(MOY) == -1));
+      case dtDECADE: {
+        uint64_t const decades = (400 * ut.era + ut.yoe) / 10;
+        unsigned const rem = (400 * ut.era + ut.yoe) % 10;
+        return sgn * (decades - (rem == 0 && ut.sign(MOY) == -1));
+      }
+      case dtCENTURY: {
+        uint64_t const centuries = (400 * ut.era + ut.yoe) / 100;
+        unsigned const rem = (400 * ut.era + ut.yoe) % 100;
+        return sgn * (centuries - (rem == 0 && ut.sign(MOY) == -1));
+      }
+      case dtMILLENNIUM: {
+        uint64_t const millennia = (400 * ut.era + ut.yoe) / 1000;
+        unsigned const rem = (400 * ut.era + ut.yoe) % 1000;
+        return sgn * (millennia - (rem == 0 && ut.sign(MOY) == -1));
+      }
+      default:
+#ifdef __CUDACC__
+        return std::numeric_limits<int64_t>::min();
+#else
+        abort();
+#endif
+    }
+  }
+};
+
+}  // namespace
+
 extern "C" DEVICE int64_t DateDiff(const DatetruncField datepart,
                                    const int64_t startdate,
                                    const int64_t enddate) {
-  int64_t res = enddate - startdate;
   switch (datepart) {
     case dtNANOSECOND:
-      return res * kNanoSecsPerSec;
+      return (enddate - startdate) * kNanoSecsPerSec;
     case dtMICROSECOND:
-      return res * kMicroSecsPerSec;
+      return (enddate - startdate) * kMicroSecsPerSec;
     case dtMILLISECOND:
-      return res * kMilliSecsPerSec;
+      return (enddate - startdate) * kMilliSecsPerSec;
     case dtSECOND:
-      return res;
+      return enddate - startdate;
     case dtMINUTE:
-      return res / kSecsPerMin;
+      return (enddate - startdate) / kSecsPerMin;
     case dtHOUR:
-      return res / kSecsPerHour;
+      return (enddate - startdate) / kSecsPerHour;
     case dtQUARTERDAY:
-      return res / kSecsPerQuarterDay;
+      return (enddate - startdate) / (kSecsPerDay / 4);
     case dtDAY:
-      return res / kSecsPerDay;
+      return (enddate - startdate) / kSecsPerDay;
     case dtWEEK:
-      return res / (kSecsPerDay * kDaysPerWeek);
+      return (enddate - startdate) / (7 * kSecsPerDay);
     default:
-      break;
+      return (EraTime::make(enddate) - EraTime::make(startdate)).count(datepart);
   }
-
-  auto future_date = (res > 0);
-  auto end = future_date ? enddate : startdate;
-  auto start = future_date ? startdate : enddate;
-  res = 0;
-  int64_t crt = end;
-  while (crt > start) {
-    const int64_t dt = DateTruncate(datepart, crt);
-    if (dt <= start) {
-      break;
-    }
-    ++res;
-    crt = dt - 1;
-  }
-  return future_date ? res : -res;
 }
 
 extern "C" DEVICE int64_t DateDiffHighPrecision(const DatetruncField datepart,
                                                 const int64_t startdate,
                                                 const int64_t enddate,
-                                                const int32_t adj_dimen,
-                                                const int64_t adj_scale,
-                                                const int64_t sml_scale,
-                                                const int64_t scale) {
-  /* TODO(wamsi): When adj_dimen is 1 i.e. both precisions are same,
-     this code is really not required. We cam direcly do enddate-startdate here.
-     Need to address this in refactoring focussed subsequent PR.*/
-  int64_t res = (adj_dimen > 0) ? (enddate - (startdate * adj_scale))
-                                : ((enddate * adj_scale) - startdate);
+                                                const int32_t start_dim,
+                                                const int32_t end_dim) {
+  // Return pow(10,i). Only valid for i = 0, 3, 6, 9.
+  constexpr int pow10[10]{1, 0, 0, 1000, 0, 0, 1000 * 1000, 0, 0, 1000 * 1000 * 1000};
   switch (datepart) {
     case dtNANOSECOND:
-      // limit of current granularity
-      return res;
-    case dtMICROSECOND: {
-      if (scale == kNanoSecsPerSec) {
-        return res / kMilliSecsPerSec;
-      } else {
-        { return res; }
-      }
-    }
+    case dtMICROSECOND:
     case dtMILLISECOND: {
-      if (scale == kNanoSecsPerSec) {
-        return res / kMicroSecsPerSec;
-      } else if (scale == kMicroSecsPerSec) {
-        return res / kMilliSecsPerSec;
-      } else {
-        { return res; }
-      }
+      static_assert(dtMILLISECOND == 10);  // target_dim = 3
+      static_assert(dtMICROSECOND == 11);  // target_dim = 6
+      static_assert(dtNANOSECOND == 12);   // target_dim = 9
+      int const target_dim = (datepart - 9) * 3;
+      int const delta_dim = end_dim - start_dim;  // in [-9,9] multiple of 3
+      int const adj_dim = target_dim - (0 < delta_dim ? end_dim : start_dim);
+      int64_t const numerator = 0 < delta_dim ? enddate - startdate * pow10[delta_dim]
+                                              : enddate * pow10[-delta_dim] - startdate;
+      return adj_dim < 0 ? numerator / pow10[-adj_dim] : numerator * pow10[adj_dim];
     }
     default:
-      break;
+      int64_t const end_seconds = floor_div(enddate, pow10[end_dim]);
+      int delta_ns = (enddate - end_seconds * pow10[end_dim]) * pow10[9 - end_dim];
+      int64_t const start_seconds = floor_div(startdate, pow10[start_dim]);
+      delta_ns -= (startdate - start_seconds * pow10[start_dim]) * pow10[9 - start_dim];
+      int64_t const delta_s = end_seconds - start_seconds;
+      // sub-second values must be accounted for when calling DateDiff. Examples:
+      // 2000-02-15 12:00:00.006 to 2000-03-15 12:00:00.005 is 0 months.
+      // 2000-02-15 12:00:00.006 to 2000-03-15 12:00:00.006 is 1 month.
+      int const adj_sec =
+          0 < delta_s && delta_ns < 0 ? -1 : delta_s < 0 && 0 < delta_ns ? 1 : 0;
+      return DateDiff(datepart, start_seconds, end_seconds + adj_sec);
   }
-  const int64_t nstartdate = adj_dimen > 0 ? startdate / sml_scale : startdate / scale;
-  const int64_t nenddate = adj_dimen < 0 ? enddate / sml_scale : enddate / scale;
-  return DateDiff(datepart, nstartdate, nenddate);
 }
 
 extern "C" DEVICE int64_t DateDiffNullable(const DatetruncField datepart,
@@ -337,14 +415,11 @@ extern "C" DEVICE int64_t DateDiffNullable(const DatetruncField datepart,
 extern "C" DEVICE int64_t DateDiffHighPrecisionNullable(const DatetruncField datepart,
                                                         const int64_t startdate,
                                                         const int64_t enddate,
-                                                        const int32_t adj_dimen,
-                                                        const int64_t adj_scale,
-                                                        const int64_t sml_scale,
-                                                        const int64_t scale,
+                                                        const int32_t start_dim,
+                                                        const int32_t end_dim,
                                                         const int64_t null_val) {
   if (startdate == null_val || enddate == null_val) {
     return null_val;
   }
-  return DateDiffHighPrecision(
-      datepart, startdate, enddate, adj_dimen, adj_scale, sml_scale, scale);
+  return DateDiffHighPrecision(datepart, startdate, enddate, start_dim, end_dim);
 }
