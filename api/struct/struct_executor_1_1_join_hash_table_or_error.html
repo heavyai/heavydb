@@ -65,7 +65,7 @@
             
             
               <div class="version">
-                5.4.0dev 0f42a78
+                5.4.0dev b959f55
               </div>
             
           
@@ -246,8 +246,11 @@
 </ul>
 </li>
 <li class="toctree-l2"><a class="reference internal" href="../../execution/kernels.html">7.5. Execution Kernels</a><ul>
-<li class="toctree-l3"><a class="reference internal" href="../../execution/kernels.html#query-fragment-descriptor">7.5.1. Query Fragment Descriptor</a></li>
-<li class="toctree-l3"><a class="reference internal" href="../../execution/kernels.html#dispatch-fragments">7.5.2. Dispatch Fragments</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../execution/kernels.html#query-fragment-descriptor">7.5.1. Query Fragment Descriptor</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../execution/kernels.html#execution-modes">7.5.1.1. Execution Modes:</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../../execution/kernels.html#execution-kernel">7.5.2. Execution Kernel</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../../execution/kernels.html#query-execution-context">7.5.3. Query Execution Context</a><ul>
 <li class="toctree-l4"><a class="reference internal" href="../../execution/kernels.html#cpu-execution">7.5.3.1. CPU execution</a></li>
 <li class="toctree-l4"><a class="reference internal" href="../../execution/kernels.html#gpu-execution">7.5.3.2. GPU execution</a></li>
@@ -374,6 +377,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../class/class_d_b_object.html">Class DBObject</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/class_data___namespace_1_1_abstract_buffer.html">Class Data_Namespace::AbstractBuffer</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/class_data___namespace_1_1_data_mgr.html">Class Data_Namespace::DataMgr</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../class/class_data___namespace_1_1_proc_buddyinfo_parser.html">Class Data_Namespace::ProcBuddyinfoParser</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/class_data___namespace_1_1_proc_meminfo_parser.html">Class Data_Namespace::ProcMeminfoParser</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/class_data___namespace_1_1_typed_thrust_allocator.html">Class Data_Namespace::TypedThrustAllocator</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/class_data___namespace_1_1detail_1_1_data_mgr_memory_resource.html">Class Data_Namespace::detail::DataMgrMemoryResource</a></li>
@@ -406,9 +410,9 @@
 <li class="toctree-l2"><a class="reference internal" href="../class/class_encoder.html">Class Encoder</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/class_event_cb.html">Class EventCb</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/class_execution_engine_wrapper.html">Class ExecutionEngineWrapper</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../class/class_execution_kernel.html">Class ExecutionKernel</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/class_execution_result.html">Class ExecutionResult</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/class_executor.html">Class Executor</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../class/class_executor_1_1_execution_dispatch.html">Class Executor::ExecutionDispatch</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/class_executor_1_1_fetch_cache_anchor.html">Class Executor::FetchCacheAnchor</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/class_expression_range.html">Class ExpressionRange</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/class_extension_function.html">Class ExtensionFunction</a></li>
@@ -678,6 +682,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../class/class_scalar_expr_to_sql.html">Class ScalarExprToSql</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/class_scalar_expr_visitor.html">Class ScalarExprVisitor</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/class_scope_guard.html">Class ScopeGuard</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../class/class_shared_kernel_context.html">Class SharedKernelContext</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/class_show_databases_command.html">Class ShowDatabasesCommand</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/class_show_foreign_servers_command.html">Class ShowForeignServersCommand</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/class_show_tables_command.html">Class ShowTablesCommand</a></li>
@@ -1092,6 +1097,7 @@
 <li class="toctree-l2"><a class="reference internal" href="struct_column_descriptor.html">Struct ColumnDescriptor</a></li>
 <li class="toctree-l2"><a class="reference internal" href="struct_column_lazy_fetch_info.html">Struct ColumnLazyFetchInfo</a></li>
 <li class="toctree-l2"><a class="reference internal" href="struct_compilation_options.html">Struct CompilationOptions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="struct_compilation_result.html">Struct CompilationResult</a></li>
 <li class="toctree-l2"><a class="reference internal" href="struct_connection_info.html">Struct ConnectionInfo</a></li>
 <li class="toctree-l2"><a class="reference internal" href="struct_converter_create_parameter.html">Struct ConverterCreateParameter</a></li>
 <li class="toctree-l2"><a class="reference internal" href="struct_count_distinct_descriptor.html">Struct CountDistinctDescriptor</a></li>
@@ -1113,10 +1119,9 @@
 <li class="toctree-l2"><a class="reference internal" href="struct_dictionary_converter_factory.html">Struct DictionaryConverterFactory</a></li>
 <li class="toctree-l2"><a class="reference internal" href="struct_dictionary_value_converter.html">Struct DictionaryValueConverter</a></li>
 <li class="toctree-l2"><a class="reference internal" href="struct_do_nothing_deleter.html">Struct DoNothingDeleter</a></li>
-<li class="toctree-l2"><a class="reference internal" href="struct_execution_kernel.html">Struct ExecutionKernel</a></li>
+<li class="toctree-l2"><a class="reference internal" href="struct_execution_kernel_descriptor.html">Struct ExecutionKernelDescriptor</a></li>
 <li class="toctree-l2"><a class="reference internal" href="struct_execution_options.html">Struct ExecutionOptions</a></li>
 <li class="toctree-l2"><a class="reference internal" href="struct_execution_unit_sql.html">Struct ExecutionUnitSql</a></li>
-<li class="toctree-l2"><a class="reference internal" href="struct_executor_1_1_compilation_result.html">Struct Executor::CompilationResult</a></li>
 <li class="toctree-l2"><a class="reference internal" href="struct_executor_1_1_group_col_l_l_v_m_value.html">Struct Executor::GroupColLLVMValue</a></li>
 <li class="toctree-l2 current"><a class="current reference internal" href="#">Struct Executor::JoinHashTableOrError</a></li>
 <li class="toctree-l2"><a class="reference internal" href="struct_explain_info.html">Struct ExplainInfo</a></li>
@@ -1303,6 +1308,7 @@
 <li class="toctree-l2"><a class="reference internal" href="structanonymous__namespace_02_arrow_importer_8h_03_1_1_data_buffer_base.html">Struct anonymous_namespace{ArrowImporter.h}::DataBufferBase</a></li>
 <li class="toctree-l2"><a class="reference internal" href="structanonymous__namespace_02_d_b_handler_8cpp_03_1_1_force_disconnect.html">Struct anonymous_namespace{DBHandler.cpp}::ForceDisconnect</a></li>
 <li class="toctree-l2"><a class="reference internal" href="structanonymous__namespace_02_d_b_handler_8cpp_03_1_1_projection_tokens_for_completion.html">Struct anonymous_namespace{DBHandler.cpp}::ProjectionTokensForCompletion</a></li>
+<li class="toctree-l2"><a class="reference internal" href="structanonymous__namespace_02_date_truncate_8cpp_03_1_1_era_time.html">Struct anonymous_namespace{DateTruncate.cpp}::EraTime</a></li>
 <li class="toctree-l2"><a class="reference internal" href="structanonymous__namespace_02_external_executor_8cpp_03_1_1_decoded_string.html">Struct anonymous_namespace{ExternalExecutor.cpp}::DecodedString</a></li>
 <li class="toctree-l2"><a class="reference internal" href="structanonymous__namespace_02_external_executor_8cpp_03_1_1_omni_sci_cursor.html">Struct anonymous_namespace{ExternalExecutor.cpp}::OmniSciCursor</a></li>
 <li class="toctree-l2"><a class="reference internal" href="structanonymous__namespace_02_external_executor_8cpp_03_1_1_omni_sci_vtab.html">Struct anonymous_namespace{ExternalExecutor.cpp}::OmniSciVtab</a></li>

@@ -1,0 +1,9 @@
+Class Data_Namespace::ProcBuddyinfoParser
+=========================================
+
+.. doxygenclass:: Data_Namespace::ProcBuddyinfoParser
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

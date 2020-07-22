@@ -65,7 +65,7 @@
             
             
               <div class="version">
-                5.4.0dev 0f42a78
+                5.4.0dev b959f55
               </div>
             
           
@@ -246,8 +246,11 @@
 </ul>
 </li>
 <li class="toctree-l2 current"><a class="current reference internal" href="#">7.5. Execution Kernels</a><ul>
-<li class="toctree-l3"><a class="reference internal" href="#query-fragment-descriptor">7.5.1. Query Fragment Descriptor</a></li>
-<li class="toctree-l3"><a class="reference internal" href="#dispatch-fragments">7.5.2. Dispatch Fragments</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#query-fragment-descriptor">7.5.1. Query Fragment Descriptor</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#execution-modes">7.5.1.1. Execution Modes:</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="#execution-kernel">7.5.2. Execution Kernel</a></li>
 <li class="toctree-l3"><a class="reference internal" href="#query-execution-context">7.5.3. Query Execution Context</a><ul>
 <li class="toctree-l4"><a class="reference internal" href="#cpu-execution">7.5.3.1. CPU execution</a></li>
 <li class="toctree-l4"><a class="reference internal" href="#gpu-execution">7.5.3.2. GPU execution</a></li>
@@ -374,6 +377,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../api/class/class_d_b_object.html">Class DBObject</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../api/class/class_data___namespace_1_1_abstract_buffer.html">Class Data_Namespace::AbstractBuffer</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../api/class/class_data___namespace_1_1_data_mgr.html">Class Data_Namespace::DataMgr</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../api/class/class_data___namespace_1_1_proc_buddyinfo_parser.html">Class Data_Namespace::ProcBuddyinfoParser</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../api/class/class_data___namespace_1_1_proc_meminfo_parser.html">Class Data_Namespace::ProcMeminfoParser</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../api/class/class_data___namespace_1_1_typed_thrust_allocator.html">Class Data_Namespace::TypedThrustAllocator</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../api/class/class_data___namespace_1_1detail_1_1_data_mgr_memory_resource.html">Class Data_Namespace::detail::DataMgrMemoryResource</a></li>
@@ -406,9 +410,9 @@
 <li class="toctree-l2"><a class="reference internal" href="../api/class/class_encoder.html">Class Encoder</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../api/class/class_event_cb.html">Class EventCb</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../api/class/class_execution_engine_wrapper.html">Class ExecutionEngineWrapper</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../api/class/class_execution_kernel.html">Class ExecutionKernel</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../api/class/class_execution_result.html">Class ExecutionResult</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../api/class/class_executor.html">Class Executor</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../api/class/class_executor_1_1_execution_dispatch.html">Class Executor::ExecutionDispatch</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../api/class/class_executor_1_1_fetch_cache_anchor.html">Class Executor::FetchCacheAnchor</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../api/class/class_expression_range.html">Class ExpressionRange</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../api/class/class_extension_function.html">Class ExtensionFunction</a></li>
@@ -678,6 +682,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../api/class/class_scalar_expr_to_sql.html">Class ScalarExprToSql</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../api/class/class_scalar_expr_visitor.html">Class ScalarExprVisitor</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../api/class/class_scope_guard.html">Class ScopeGuard</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../api/class/class_shared_kernel_context.html">Class SharedKernelContext</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../api/class/class_show_databases_command.html">Class ShowDatabasesCommand</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../api/class/class_show_foreign_servers_command.html">Class ShowForeignServersCommand</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../api/class/class_show_tables_command.html">Class ShowTablesCommand</a></li>
@@ -1092,6 +1097,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../api/struct/struct_column_descriptor.html">Struct ColumnDescriptor</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../api/struct/struct_column_lazy_fetch_info.html">Struct ColumnLazyFetchInfo</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../api/struct/struct_compilation_options.html">Struct CompilationOptions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../api/struct/struct_compilation_result.html">Struct CompilationResult</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../api/struct/struct_connection_info.html">Struct ConnectionInfo</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../api/struct/struct_converter_create_parameter.html">Struct ConverterCreateParameter</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../api/struct/struct_count_distinct_descriptor.html">Struct CountDistinctDescriptor</a></li>
@@ -1113,10 +1119,9 @@
 <li class="toctree-l2"><a class="reference internal" href="../api/struct/struct_dictionary_converter_factory.html">Struct DictionaryConverterFactory</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../api/struct/struct_dictionary_value_converter.html">Struct DictionaryValueConverter</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../api/struct/struct_do_nothing_deleter.html">Struct DoNothingDeleter</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../api/struct/struct_execution_kernel.html">Struct ExecutionKernel</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../api/struct/struct_execution_kernel_descriptor.html">Struct ExecutionKernelDescriptor</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../api/struct/struct_execution_options.html">Struct ExecutionOptions</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../api/struct/struct_execution_unit_sql.html">Struct ExecutionUnitSql</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../api/struct/struct_executor_1_1_compilation_result.html">Struct Executor::CompilationResult</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../api/struct/struct_executor_1_1_group_col_l_l_v_m_value.html">Struct Executor::GroupColLLVMValue</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../api/struct/struct_executor_1_1_join_hash_table_or_error.html">Struct Executor::JoinHashTableOrError</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../api/struct/struct_explain_info.html">Struct ExplainInfo</a></li>
@@ -1303,6 +1308,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../api/struct/structanonymous__namespace_02_arrow_importer_8h_03_1_1_data_buffer_base.html">Struct anonymous_namespace{ArrowImporter.h}::DataBufferBase</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../api/struct/structanonymous__namespace_02_d_b_handler_8cpp_03_1_1_force_disconnect.html">Struct anonymous_namespace{DBHandler.cpp}::ForceDisconnect</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../api/struct/structanonymous__namespace_02_d_b_handler_8cpp_03_1_1_projection_tokens_for_completion.html">Struct anonymous_namespace{DBHandler.cpp}::ProjectionTokensForCompletion</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../api/struct/structanonymous__namespace_02_date_truncate_8cpp_03_1_1_era_time.html">Struct anonymous_namespace{DateTruncate.cpp}::EraTime</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../api/struct/structanonymous__namespace_02_external_executor_8cpp_03_1_1_decoded_string.html">Struct anonymous_namespace{ExternalExecutor.cpp}::DecodedString</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../api/struct/structanonymous__namespace_02_external_executor_8cpp_03_1_1_omni_sci_cursor.html">Struct anonymous_namespace{ExternalExecutor.cpp}::OmniSciCursor</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../api/struct/structanonymous__namespace_02_external_executor_8cpp_03_1_1_omni_sci_vtab.html">Struct anonymous_namespace{ExternalExecutor.cpp}::OmniSciVtab</a></li>
@@ -1485,8 +1491,9 @@
             
   <div class="section" id="execution-kernels">
 <h1>7.5. Execution Kernels<a class="headerlink" href="#execution-kernels" title="Permalink to this headline">¶</a></h1>
-<p>Query execution begins with <code class="docutils literal notranslate"><span class="pre">Executor::dispatchFragments</span></code> and ends with reducing results from each device and returning a <code class="docutils literal notranslate"><span class="pre">ResultSet</span></code> back to the <a class="reference internal" href="../api/class/class_rel_alg_executor.html#_CPPv414RelAlgExecutor" title="RelAlgExecutor"><code class="xref cpp cpp-class docutils literal notranslate"><span class="pre">RelAlgExecutor</span></code></a>. Each device (GPU or CPU thread) has a dedicated CPU thread. All devices initialize state and execute queries in parallel. On CPU, this means the execution within a single device is not parallel. On GPU, execution within a device also occurs in parallel.</p>
-<p>Input data is assigned to the relevant device in a pre-processing step. Input fragments are typically assigned in round-robin order, unless the input data is sharded. For sharded input data, all shards of the same <cite>key</cite> are assigned to the same device. Input assignment is managed by the <code class="docutils literal notranslate"><span class="pre">QueryFragmentDescriptor</span></code>.</p>
+<p>Each query step is executed in parallel. The smallest unit of parallelism in OmniSciDB is a fragment. The <a class="reference internal" href="../api/class/class_query_fragment_descriptor.html#_CPPv423QueryFragmentDescriptor" title="QueryFragmentDescriptor"><code class="xref cpp cpp-class docutils literal notranslate"><span class="pre">QueryFragmentDescriptor</span></code></a> determines fragments required for computation and assigns them to an <a class="reference internal" href="../api/class/class_execution_kernel.html#_CPPv415ExecutionKernel" title="ExecutionKernel"><code class="xref cpp cpp-class docutils literal notranslate"><span class="pre">ExecutionKernel</span></code></a>, which is then launched asynchronously using a thread pool. Once execution is finished, device results are stored in a <a class="reference internal" href="../api/class/class_result_set.html#_CPPv49ResultSet" title="ResultSet"><code class="xref cpp cpp-class docutils literal notranslate"><span class="pre">ResultSet</span></code></a>. After all devices have finished, the <code class="docutils literal notranslate"><span class="pre">ResultSet</span></code> objects are reduced to a single <code class="docutils literal notranslate"><span class="pre">ResultSet</span></code> which is returned to the caller.</p>
+<p>Each device (GPU or CPU thread) has a dedicated CPU thread. All devices initialize state and execute queries in parallel. On CPU, this means the execution within a single device is not parallel. On GPU, execution within a device also occurs in parallel.</p>
+<p>Input data is assigned to the relevant device in a pre-processing step. Input fragments are typically assigned in round-robin order, unless the input data is sharded. For sharded input data, all shards of the same <cite>key</cite> are assigned to the same device. Input assignment is managed by the <a class="reference internal" href="../api/class/class_query_fragment_descriptor.html#_CPPv423QueryFragmentDescriptor" title="QueryFragmentDescriptor"><code class="xref cpp cpp-class docutils literal notranslate"><span class="pre">QueryFragmentDescriptor</span></code></a>.</p>
 <p>The execution process consists of the following main steps (each run concurrently per execution device):</p>
 <ol class="arabic simple">
 <li><p>Fetch all assigned input chunks (assigned input fragments across columns required for the query).</p></li>
@@ -1494,21 +1501,43 @@
 <li><p>Execute the generated code (i.e. launch kernels on the device).</p></li>
 <li><p>Prepare <code class="docutils literal notranslate"><span class="pre">ResultSet</span></code> and return (reducing if necessary).</p></li>
 </ol>
-<p>Execution is managed by the <code class="docutils literal notranslate"><span class="pre">ExecutionDispatch</span></code> class (a singleton) which manages the execution process. Each device has its own <code class="docutils literal notranslate"><span class="pre">QueryExecutionContext</span></code>, which owns and manages the state for the duration of the <a class="reference internal" href="../glossary/index.html#term-kernel"><span class="xref std std-term">kernel</span></a> execution on the device.</p>
-<img alt="../_images/dispatch_fragments.png" src="../_images/dispatch_fragments.png" />
+<p>Per-kernel execution is managed by the <a class="reference internal" href="../api/class/class_execution_kernel.html#_CPPv415ExecutionKernel" title="ExecutionKernel"><code class="xref cpp cpp-class docutils literal notranslate"><span class="pre">ExecutionKernel</span></code></a> class with shared state residing in <a class="reference internal" href="../api/class/class_shared_kernel_context.html#_CPPv419SharedKernelContext" title="SharedKernelContext"><code class="xref cpp cpp-class docutils literal notranslate"><span class="pre">SharedKernelContext</span></code></a>. Each execution kernel manages the execution process on a single device (either a CPU thread or an entire GPU). Each kernel creates a <a class="reference internal" href="../api/class/class_query_execution_context.html#_CPPv421QueryExecutionContext" title="QueryExecutionContext"><code class="xref cpp cpp-class docutils literal notranslate"><span class="pre">QueryExecutionContext</span></code></a>, which owns and manages the state for the duration of the <a class="reference internal" href="../glossary/index.html#term-kernel"><span class="xref std std-term">kernel</span></a> execution on the device.</p>
+<div class="figure align-center">
+<p class="plantuml">
+<img src="../_images/plantuml-4e624aec822b6c19b980ce102f48108ead4cd28d.png" alt="&#64;startuml
+start
+
+:Create QueryFragmentDescriptor;
+if (Multifragment Kernels?) then (yes)
+    :Create Execution Kernel Per Device;
+    :Assign Fragments to Execution Kernels;
+else (no)
+    :Create Execution Kernel Per Fragment;
+endif
+:Launch Kernels using Thread Pool;
+
+stop
+&#64;enduml"/>
+</p>
+</div>
 <div class="section" id="query-fragment-descriptor">
 <h2>7.5.1. Query Fragment Descriptor<a class="headerlink" href="#query-fragment-descriptor" title="Permalink to this headline">¶</a></h2>
-<p>The basic unit of work in OmniSciDB is a fragment. The <code class="docutils literal notranslate"><span class="pre">QueryFragmentDescriptor</span></code> class maintains useful information about fragments that are involved with execution of a particular work unit; most importantly, the fragment descriptor partitions fragments among all available devices.</p>
+<p>The basic unit of work in OmniSciDB is a fragment. The <a class="reference internal" href="../api/class/class_query_fragment_descriptor.html#_CPPv423QueryFragmentDescriptor" title="QueryFragmentDescriptor"><code class="xref cpp cpp-class docutils literal notranslate"><span class="pre">QueryFragmentDescriptor</span></code></a> class maintains useful information about fragments that are involved with execution of a particular work unit; most importantly, the fragment descriptor partitions fragments among all available devices based on the execution mode (described below).</p>
+<div class="section" id="execution-modes">
+<h3>7.5.1.1. Execution Modes:<a class="headerlink" href="#execution-modes" title="Permalink to this headline">¶</a></h3>
+<ul class="simple">
+<li><p><strong>Kernel Per Fragment</strong>: Each outer table fragment in the query executes using its own kernel. This mode is used for CPU execution, on GPU when lazy fetch is enabled, and for <code class="docutils literal notranslate"><span class="pre">SELECT</span> <span class="pre">*</span> <span class="pre">LIMIT</span> <span class="pre">N</span></code> queries without a filter (where the executor can terminate early without a full table scan by tracking the number of tuples seen and quitting after <code class="docutils literal notranslate"><span class="pre">N</span></code>).</p></li>
+<li><p><strong>Multi-fragment Kernels</strong>: Outer table fragments are assigned across a number of kernels equal to the number of available execution devices. Currently, multi-fragment kernels are only used on GPU. Because the GPU parallelizes within a kernel, multi-fragment kernels are more efficient, as they run in parallel across all fragments and require fewer GPU kernel launches.</p></li>
+</ul>
 </div>
-<div class="section" id="dispatch-fragments">
-<h2>7.5.2. Dispatch Fragments<a class="headerlink" href="#dispatch-fragments" title="Permalink to this headline">¶</a></h2>
-<p>As discussed above, the <code class="docutils literal notranslate"><span class="pre">QueryFragmentDescriptor</span></code> assigns fragments to devices (i.e., kernels). Using this information, the <code class="docutils literal notranslate"><span class="pre">Executor</span></code> concurrently dispatches an execution procedure per device.</p>
-<p>All CPU queries are executed in <cite>kernel per fragment</cite> mode, meaning each CPU kernel executes over a single fragment.</p>
-<p>GPU queries can execute in either <cite>kernel per fragment</cite> mode or <cite>multi-fragment kernel</cite> mode, where a single GPU kernel executes over multiple input fragments. Since GPU execution supports intra-kernel parallelism, multi-fragment kernels are typically more efficient in GPU execution mode.</p>
+</div>
+<div class="section" id="execution-kernel">
+<h2>7.5.2. Execution Kernel<a class="headerlink" href="#execution-kernel" title="Permalink to this headline">¶</a></h2>
+<p>As discussed above, the <a class="reference internal" href="../api/class/class_query_fragment_descriptor.html#_CPPv423QueryFragmentDescriptor" title="QueryFragmentDescriptor"><code class="xref cpp cpp-class docutils literal notranslate"><span class="pre">QueryFragmentDescriptor</span></code></a> assigns fragments to devices (i.e., kernels). Using this information, the <a class="reference internal" href="../api/class/class_executor.html#_CPPv48Executor" title="Executor"><code class="xref cpp cpp-class docutils literal notranslate"><span class="pre">Executor</span></code></a> creates an <a class="reference internal" href="../api/class/class_execution_kernel.html#_CPPv415ExecutionKernel" title="ExecutionKernel"><code class="xref cpp cpp-class docutils literal notranslate"><span class="pre">ExecutionKernel</span></code></a> per fragment (or fragment group in a multi-fragment kernel) and then launches all kernels asynchronously using a thread pool. The individual <code class="docutils literal notranslate"><span class="pre">ExecutionKernel</span></code> takes as input compiled code and a fragments list, and manages data fetching, launching native code, and bringing results back from GPU (if required). A set of <code class="docutils literal notranslate"><span class="pre">ExecutionKernel</span></code> objects for a given query share state, and will place their results in the <a class="reference internal" href="../api/class/class_shared_kernel_context.html#_CPPv419SharedKernelContext" title="SharedKernelContext"><code class="xref cpp cpp-class docutils literal notranslate"><span class="pre">SharedKernelContext</span></code></a> once execution has completed and any results have been retrieved from an execution device (e.g. GPU).</p>
 </div>
 <div class="section" id="query-execution-context">
 <h2>7.5.3. Query Execution Context<a class="headerlink" href="#query-execution-context" title="Permalink to this headline">¶</a></h2>
-<p>The <code class="docutils literal notranslate"><span class="pre">QueryExecutionContext</span></code> object is created for each device and manages the following high level tasks:</p>
+<p>The <a class="reference internal" href="../api/class/class_query_execution_context.html#_CPPv421QueryExecutionContext" title="QueryExecutionContext"><code class="xref cpp cpp-class docutils literal notranslate"><span class="pre">QueryExecutionContext</span></code></a> object is created for each device and manages the following high level tasks:</p>
 <ol class="arabic simple">
 <li><p>Prepares for kernel execution (setup output buffers, parameters, etc)</p></li>
 <li><p>Launches the execution kernel on the device</p></li>

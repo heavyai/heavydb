@@ -1,0 +1,9 @@
+Class SharedKernelContext
+=========================
+
+.. doxygenclass:: SharedKernelContext
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

@@ -1,0 +1,9 @@
+Struct anonymous_namespace{DateTruncate.cpp}::EraTime
+=====================================================
+
+.. doxygenstruct:: anonymous_namespace{DateTruncate.cpp}::EraTime
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

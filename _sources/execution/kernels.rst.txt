@@ -4,9 +4,11 @@
 Execution Kernels
 ==================
 
-Query execution begins with ``Executor::dispatchFragments`` and ends with reducing results from each device and returning a ``ResultSet`` back to the :cpp:class:`RelAlgExecutor`. Each device (GPU or CPU thread) has a dedicated CPU thread. All devices initialize state and execute queries in parallel. On CPU, this means the execution within a single device is not parallel. On GPU, execution within a device also occurs in parallel. 
+Each query step is executed in parallel. The smallest unit of parallelism in OmniSciDB is a fragment. The :cpp:class:`QueryFragmentDescriptor` determines fragments required for computation and assigns them to an :cpp:class:`ExecutionKernel`, which is then launched asynchronously using a thread pool. Once execution is finished, device results are stored in a :cpp:class:`ResultSet`. After all devices have finished, the ``ResultSet`` objects are reduced to a single ``ResultSet`` which is returned to the caller. 
 
-Input data is assigned to the relevant device in a pre-processing step. Input fragments are typically assigned in round-robin order, unless the input data is sharded. For sharded input data, all shards of the same `key` are assigned to the same device. Input assignment is managed by the ``QueryFragmentDescriptor``.
+Each device (GPU or CPU thread) has a dedicated CPU thread. All devices initialize state and execute queries in parallel. On CPU, this means the execution within a single device is not parallel. On GPU, execution within a device also occurs in parallel. 
+
+Input data is assigned to the relevant device in a pre-processing step. Input fragments are typically assigned in round-robin order, unless the input data is sharded. For sharded input data, all shards of the same `key` are assigned to the same device. Input assignment is managed by the :cpp:class:`QueryFragmentDescriptor`.
 
 The execution process consists of the following main steps (each run concurrently per execution device):
 
@@ -15,28 +17,48 @@ The execution process consists of the following main steps (each run concurrentl
 3. Execute the generated code (i.e. launch kernels on the device).
 4. Prepare ``ResultSet`` and return (reducing if necessary).
 
-Execution is managed by the ``ExecutionDispatch`` class (a singleton) which manages the execution process. Each device has its own ``QueryExecutionContext``, which owns and manages the state for the duration of the :term:`kernel` execution on the device. 
+Per-kernel execution is managed by the :cpp:class:`ExecutionKernel` class with shared state residing in :cpp:class:`SharedKernelContext`. Each execution kernel manages the execution process on a single device (either a CPU thread or an entire GPU). Each kernel creates a :cpp:class:`QueryExecutionContext`, which owns and manages the state for the duration of the :term:`kernel` execution on the device. 
 
-.. image:: ../img/dispatch_fragments.png
+.. uml::
+    :align: center
+
+    @startuml
+    start
+
+    :Create QueryFragmentDescriptor;
+    if (Multifragment Kernels?) then (yes)
+        :Create Execution Kernel Per Device;
+        :Assign Fragments to Execution Kernels;
+    else (no)
+        :Create Execution Kernel Per Fragment;
+    endif
+    :Launch Kernels using Thread Pool;
+
+    stop
+    @enduml
 
 Query Fragment Descriptor
 ----------------------------------
 
-The basic unit of work in OmniSciDB is a fragment. The ``QueryFragmentDescriptor`` class maintains useful information about fragments that are involved with execution of a particular work unit; most importantly, the fragment descriptor partitions fragments among all available devices. 
+The basic unit of work in OmniSciDB is a fragment. The :cpp:class:`QueryFragmentDescriptor` class maintains useful information about fragments that are involved with execution of a particular work unit; most importantly, the fragment descriptor partitions fragments among all available devices based on the execution mode (described below). 
 
-Dispatch Fragments
+Execution Modes:
+^^^^^^^^^^^^^^^^
+
+* **Kernel Per Fragment**: Each outer table fragment in the query executes using its own kernel. This mode is used for CPU execution, on GPU when lazy fetch is enabled, and for ``SELECT * LIMIT N`` queries without a filter (where the executor can terminate early without a full table scan by tracking the number of tuples seen and quitting after ``N``).
+
+* **Multi-fragment Kernels**: Outer table fragments are assigned across a number of kernels equal to the number of available execution devices. Currently, multi-fragment kernels are only used on GPU. Because the GPU parallelizes within a kernel, multi-fragment kernels are more efficient, as they run in parallel across all fragments and require fewer GPU kernel launches.
+
+
+Execution Kernel
 ----------------------------------
 
-As discussed above, the ``QueryFragmentDescriptor`` assigns fragments to devices (i.e., kernels). Using this information, the ``Executor`` concurrently dispatches an execution procedure per device. 
-
-All CPU queries are executed in `kernel per fragment` mode, meaning each CPU kernel executes over a single fragment.
-
-GPU queries can execute in either `kernel per fragment` mode or `multi-fragment kernel` mode, where a single GPU kernel executes over multiple input fragments. Since GPU execution supports intra-kernel parallelism, multi-fragment kernels are typically more efficient in GPU execution mode. 
+As discussed above, the :cpp:class:`QueryFragmentDescriptor` assigns fragments to devices (i.e., kernels). Using this information, the :cpp:class:`Executor` creates an :cpp:class:`ExecutionKernel` per fragment (or fragment group in a multi-fragment kernel) and then launches all kernels asynchronously using a thread pool. The individual ``ExecutionKernel`` takes as input compiled code and a fragments list, and manages data fetching, launching native code, and bringing results back from GPU (if required). A set of ``ExecutionKernel`` objects for a given query share state, and will place their results in the :cpp:class:`SharedKernelContext` once execution has completed and any results have been retrieved from an execution device (e.g. GPU).
 
 Query Execution Context
 ----------------------------------
 
-The ``QueryExecutionContext`` object is created for each device and manages the following high level tasks:
+The :cpp:class:`QueryExecutionContext` object is created for each device and manages the following high level tasks:
 
 1. Prepares for kernel execution (setup output buffers, parameters, etc)
 2. Launches the execution kernel on the device

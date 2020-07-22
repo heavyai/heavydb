@@ -65,7 +65,7 @@
             
             
               <div class="version">
-                5.4.0dev 0f42a78
+                5.4.0dev b959f55
               </div>
             
           
@@ -246,8 +246,11 @@
 </ul>
 </li>
 <li class="toctree-l2"><a class="reference internal" href="../../execution/kernels.html">7.5. Execution Kernels</a><ul>
-<li class="toctree-l3"><a class="reference internal" href="../../execution/kernels.html#query-fragment-descriptor">7.5.1. Query Fragment Descriptor</a></li>
-<li class="toctree-l3"><a class="reference internal" href="../../execution/kernels.html#dispatch-fragments">7.5.2. Dispatch Fragments</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../execution/kernels.html#query-fragment-descriptor">7.5.1. Query Fragment Descriptor</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../execution/kernels.html#execution-modes">7.5.1.1. Execution Modes:</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../../execution/kernels.html#execution-kernel">7.5.2. Execution Kernel</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../../execution/kernels.html#query-execution-context">7.5.3. Query Execution Context</a><ul>
 <li class="toctree-l4"><a class="reference internal" href="../../execution/kernels.html#cpu-execution">7.5.3.1. CPU execution</a></li>
 <li class="toctree-l4"><a class="reference internal" href="../../execution/kernels.html#gpu-execution">7.5.3.2. GPU execution</a></li>
@@ -374,6 +377,7 @@
 <li class="toctree-l2"><a class="reference internal" href="class_d_b_object.html">Class DBObject</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_data___namespace_1_1_abstract_buffer.html">Class Data_Namespace::AbstractBuffer</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_data___namespace_1_1_data_mgr.html">Class Data_Namespace::DataMgr</a></li>
+<li class="toctree-l2"><a class="reference internal" href="class_data___namespace_1_1_proc_buddyinfo_parser.html">Class Data_Namespace::ProcBuddyinfoParser</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_data___namespace_1_1_proc_meminfo_parser.html">Class Data_Namespace::ProcMeminfoParser</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_data___namespace_1_1_typed_thrust_allocator.html">Class Data_Namespace::TypedThrustAllocator</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_data___namespace_1_1detail_1_1_data_mgr_memory_resource.html">Class Data_Namespace::detail::DataMgrMemoryResource</a></li>
@@ -406,9 +410,9 @@
 <li class="toctree-l2"><a class="reference internal" href="class_encoder.html">Class Encoder</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_event_cb.html">Class EventCb</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_execution_engine_wrapper.html">Class ExecutionEngineWrapper</a></li>
+<li class="toctree-l2"><a class="reference internal" href="class_execution_kernel.html">Class ExecutionKernel</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_execution_result.html">Class ExecutionResult</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_executor.html">Class Executor</a></li>
-<li class="toctree-l2"><a class="reference internal" href="class_executor_1_1_execution_dispatch.html">Class Executor::ExecutionDispatch</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_executor_1_1_fetch_cache_anchor.html">Class Executor::FetchCacheAnchor</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_expression_range.html">Class ExpressionRange</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_extension_function.html">Class ExtensionFunction</a></li>
@@ -678,6 +682,7 @@
 <li class="toctree-l2"><a class="reference internal" href="class_scalar_expr_to_sql.html">Class ScalarExprToSql</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_scalar_expr_visitor.html">Class ScalarExprVisitor</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_scope_guard.html">Class ScopeGuard</a></li>
+<li class="toctree-l2"><a class="reference internal" href="class_shared_kernel_context.html">Class SharedKernelContext</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_show_databases_command.html">Class ShowDatabasesCommand</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_show_foreign_servers_command.html">Class ShowForeignServersCommand</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_show_tables_command.html">Class ShowTablesCommand</a></li>
@@ -1092,6 +1097,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_column_descriptor.html">Struct ColumnDescriptor</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_column_lazy_fetch_info.html">Struct ColumnLazyFetchInfo</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_compilation_options.html">Struct CompilationOptions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/struct_compilation_result.html">Struct CompilationResult</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_connection_info.html">Struct ConnectionInfo</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_converter_create_parameter.html">Struct ConverterCreateParameter</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_count_distinct_descriptor.html">Struct CountDistinctDescriptor</a></li>
@@ -1113,10 +1119,9 @@
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_dictionary_converter_factory.html">Struct DictionaryConverterFactory</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_dictionary_value_converter.html">Struct DictionaryValueConverter</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_do_nothing_deleter.html">Struct DoNothingDeleter</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../struct/struct_execution_kernel.html">Struct ExecutionKernel</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/struct_execution_kernel_descriptor.html">Struct ExecutionKernelDescriptor</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_execution_options.html">Struct ExecutionOptions</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_execution_unit_sql.html">Struct ExecutionUnitSql</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../struct/struct_executor_1_1_compilation_result.html">Struct Executor::CompilationResult</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_executor_1_1_group_col_l_l_v_m_value.html">Struct Executor::GroupColLLVMValue</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_executor_1_1_join_hash_table_or_error.html">Struct Executor::JoinHashTableOrError</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_explain_info.html">Struct ExplainInfo</a></li>
@@ -1303,6 +1308,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../struct/structanonymous__namespace_02_arrow_importer_8h_03_1_1_data_buffer_base.html">Struct anonymous_namespace{ArrowImporter.h}::DataBufferBase</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structanonymous__namespace_02_d_b_handler_8cpp_03_1_1_force_disconnect.html">Struct anonymous_namespace{DBHandler.cpp}::ForceDisconnect</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structanonymous__namespace_02_d_b_handler_8cpp_03_1_1_projection_tokens_for_completion.html">Struct anonymous_namespace{DBHandler.cpp}::ProjectionTokensForCompletion</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/structanonymous__namespace_02_date_truncate_8cpp_03_1_1_era_time.html">Struct anonymous_namespace{DateTruncate.cpp}::EraTime</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structanonymous__namespace_02_external_executor_8cpp_03_1_1_decoded_string.html">Struct anonymous_namespace{ExternalExecutor.cpp}::DecodedString</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structanonymous__namespace_02_external_executor_8cpp_03_1_1_omni_sci_cursor.html">Struct anonymous_namespace{ExternalExecutor.cpp}::OmniSciCursor</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structanonymous__namespace_02_external_executor_8cpp_03_1_1_omni_sci_vtab.html">Struct anonymous_namespace{ExternalExecutor.cpp}::OmniSciVtab</a></li>
@@ -1544,8 +1550,13 @@
 <dd></dd></dl>
 
 <dl class="function">
-<dt id="_CPPv4NK23QueryFragmentDescriptor22terminateDispatchMaybeER6size_tRK19RelAlgExecutionUnitRK15ExecutionKernel">
-<span id="_CPPv3NK23QueryFragmentDescriptor22terminateDispatchMaybeER6size_tRK19RelAlgExecutionUnitRK15ExecutionKernel"></span><span id="_CPPv2NK23QueryFragmentDescriptor22terminateDispatchMaybeER6size_tRK19RelAlgExecutionUnitRK15ExecutionKernel"></span><span id="QueryFragmentDescriptor::terminateDispatchMaybe__sR.RelAlgExecutionUnitCR.ExecutionKernelCRC"></span><span class="target" id="class_query_fragment_descriptor_1a2fe32690e36bb3bc16e75209613888ca"></span>bool <code class="sig-name descname">terminateDispatchMaybe</code><span class="sig-paren">(</span>size_t &amp;<em>tuple_count</em>, <em class="property">const</em> <a class="reference internal" href="../struct/struct_rel_alg_execution_unit.html#_CPPv419RelAlgExecutionUnit" title="RelAlgExecutionUnit">RelAlgExecutionUnit</a> &amp;<em>ra_exe_unit</em>, <em class="property">const</em> <a class="reference internal" href="../struct/struct_execution_kernel.html#_CPPv415ExecutionKernel" title="ExecutionKernel">ExecutionKernel</a> &amp;<em>kernel</em><span class="sig-paren">)</span> <em class="property">const</em><a class="headerlink" href="#_CPPv4NK23QueryFragmentDescriptor22terminateDispatchMaybeER6size_tRK19RelAlgExecutionUnitRK15ExecutionKernel" title="Permalink to this definition">¶</a><br /></dt>
+<dt id="_CPPv4N23QueryFragmentDescriptor30buildFragmentPerKernelForTableEPK14TableFragmentsRK19RelAlgExecutionUnitRK15InputDescriptorRKNSt6vectorI8uint64_tEEKiK6size_tRK19ChunkMetadataVectorKNSt8optionalI6size_tEERK18ExecutorDeviceTypeP8Executor">
+<span id="_CPPv3N23QueryFragmentDescriptor30buildFragmentPerKernelForTableEPK14TableFragmentsRK19RelAlgExecutionUnitRK15InputDescriptorRKNSt6vectorI8uint64_tEEKiK6size_tRK19ChunkMetadataVectorKNSt8optionalI6size_tEERK18ExecutorDeviceTypeP8Executor"></span><span id="_CPPv2N23QueryFragmentDescriptor30buildFragmentPerKernelForTableEPK14TableFragmentsRK19RelAlgExecutionUnitRK15InputDescriptorRKNSt6vectorI8uint64_tEEKiK6size_tRK19ChunkMetadataVectorKNSt8optionalI6size_tEERK18ExecutorDeviceTypeP8Executor"></span><span id="QueryFragmentDescriptor::buildFragmentPerKernelForTable__TableFragmentsCP.RelAlgExecutionUnitCR.InputDescriptorCR.std::vector:uint64_t:CR.iC.sC.ChunkMetadataVectorCR.std::optional:s:C.ExecutorDeviceTypeCR.ExecutorP"></span><span class="target" id="class_query_fragment_descriptor_1ab89128210fc752ffeea44e930a1d26ec"></span>void <code class="sig-name descname">buildFragmentPerKernelForTable</code><span class="sig-paren">(</span><em class="property">const</em> TableFragments *<em>fragments</em>, <em class="property">const</em> <a class="reference internal" href="../struct/struct_rel_alg_execution_unit.html#_CPPv419RelAlgExecutionUnit" title="RelAlgExecutionUnit">RelAlgExecutionUnit</a> &amp;<em>ra_exe_unit</em>, <em class="property">const</em> <a class="reference internal" href="class_input_descriptor.html#_CPPv415InputDescriptor" title="InputDescriptor">InputDescriptor</a> &amp;<em>table_desc</em>, <em class="property">const</em> std::vector&lt;uint64_t&gt; &amp;<em>frag_offsets</em>, <em class="property">const</em> int <em>device_count</em>, <em class="property">const</em> size_t <em>num_bytes_for_row</em>, <em class="property">const</em> ChunkMetadataVector &amp;<em>deleted_chunk_metadata_vec</em>, <em class="property">const</em> std::optional&lt;size_t&gt; <em>table_desc_offset</em>, <em class="property">const</em> ExecutorDeviceType &amp;<em>device_type</em>, <a class="reference internal" href="class_executor.html#_CPPv48Executor" title="Executor">Executor</a> *<em>executor</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N23QueryFragmentDescriptor30buildFragmentPerKernelForTableEPK14TableFragmentsRK19RelAlgExecutionUnitRK15InputDescriptorRKNSt6vectorI8uint64_tEEKiK6size_tRK19ChunkMetadataVectorKNSt8optionalI6size_tEERK18ExecutorDeviceTypeP8Executor" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="_CPPv4NK23QueryFragmentDescriptor22terminateDispatchMaybeER6size_tRK19RelAlgExecutionUnitRK25ExecutionKernelDescriptor">
+<span id="_CPPv3NK23QueryFragmentDescriptor22terminateDispatchMaybeER6size_tRK19RelAlgExecutionUnitRK25ExecutionKernelDescriptor"></span><span id="_CPPv2NK23QueryFragmentDescriptor22terminateDispatchMaybeER6size_tRK19RelAlgExecutionUnitRK25ExecutionKernelDescriptor"></span><span id="QueryFragmentDescriptor::terminateDispatchMaybe__sR.RelAlgExecutionUnitCR.ExecutionKernelDescriptorCRC"></span><span class="target" id="class_query_fragment_descriptor_1a222b60675a48f3dda4ea44a5f26b526a"></span>bool <code class="sig-name descname">terminateDispatchMaybe</code><span class="sig-paren">(</span>size_t &amp;<em>tuple_count</em>, <em class="property">const</em> <a class="reference internal" href="../struct/struct_rel_alg_execution_unit.html#_CPPv419RelAlgExecutionUnit" title="RelAlgExecutionUnit">RelAlgExecutionUnit</a> &amp;<em>ra_exe_unit</em>, <em class="property">const</em> <a class="reference internal" href="../struct/struct_execution_kernel_descriptor.html#_CPPv425ExecutionKernelDescriptor" title="ExecutionKernelDescriptor">ExecutionKernelDescriptor</a> &amp;<em>kernel</em><span class="sig-paren">)</span> <em class="property">const</em><a class="headerlink" href="#_CPPv4NK23QueryFragmentDescriptor22terminateDispatchMaybeER6size_tRK19RelAlgExecutionUnitRK25ExecutionKernelDescriptor" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 <dl class="function">
@@ -1578,7 +1589,7 @@
 
 <dl class="member">
 <dt id="_CPPv4N23QueryFragmentDescriptor29execution_kernels_per_device_E">
-<span id="_CPPv3N23QueryFragmentDescriptor29execution_kernels_per_device_E"></span><span id="_CPPv2N23QueryFragmentDescriptor29execution_kernels_per_device_E"></span><span id="QueryFragmentDescriptor::execution_kernels_per_device___std::map:i.std::vector:ExecutionKernel::"></span><span class="target" id="class_query_fragment_descriptor_1a837666ff9666e97b573863e44504f240"></span>std::map&lt;int, std::vector&lt;<a class="reference internal" href="../struct/struct_execution_kernel.html#_CPPv415ExecutionKernel" title="ExecutionKernel">ExecutionKernel</a>&gt;&gt; <code class="sig-name descname">execution_kernels_per_device_</code><a class="headerlink" href="#_CPPv4N23QueryFragmentDescriptor29execution_kernels_per_device_E" title="Permalink to this definition">¶</a><br /></dt>
+<span id="_CPPv3N23QueryFragmentDescriptor29execution_kernels_per_device_E"></span><span id="_CPPv2N23QueryFragmentDescriptor29execution_kernels_per_device_E"></span><span id="QueryFragmentDescriptor::execution_kernels_per_device___std::map:i.std::vector:ExecutionKernelDescriptor::"></span><span class="target" id="class_query_fragment_descriptor_1abf96667607a0560c38cc3d512ce7f45d"></span>std::map&lt;int, std::vector&lt;<a class="reference internal" href="../struct/struct_execution_kernel_descriptor.html#_CPPv425ExecutionKernelDescriptor" title="ExecutionKernelDescriptor">ExecutionKernelDescriptor</a>&gt;&gt; <code class="sig-name descname">execution_kernels_per_device_</code><a class="headerlink" href="#_CPPv4N23QueryFragmentDescriptor29execution_kernels_per_device_E" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 <dl class="member">
