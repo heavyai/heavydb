@@ -307,6 +307,11 @@ void CommandLineOptions::fillOptions() {
       "enable-fsi",
       po::value<bool>(&g_enable_fsi)->default_value(g_enable_fsi)->implicit_value(true),
       "Enable foreign storage interface.");
+  help_desc.add_options()("enable-fsi-cache",
+                          po::value<bool>(&g_enable_fsi_cache)
+                              ->default_value(g_enable_fsi_cache)
+                              ->implicit_value(true),
+                          "Enable caching of foreign table data on disk.");
 #endif  // ENABLE_FSI
   help_desc.add_options()(
       "enable-interoperability",

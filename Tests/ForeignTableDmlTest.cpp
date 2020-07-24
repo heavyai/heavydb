@@ -33,6 +33,7 @@
 #endif
 
 extern bool g_enable_fsi;
+extern bool g_enable_fsi_cache;
 std::string test_binary_file_path;
 
 namespace bp = boost::process;
@@ -171,6 +172,21 @@ TEST_F(SelectQueryTest, DefaultLocalParquetServer) {
                         {"aaa", i(2), 2.2},
                         {"aaa", i(3), 3.3}},
                        result);
+}
+
+TEST_F(SelectQueryTest, CacheDisabled) {
+  g_enable_fsi_cache = false;
+  std::string query = "CREATE FOREIGN TABLE test_foreign_table (t TEXT, i INTEGER[]) "s +
+                      "SERVER omnisci_local_csv WITH (file_path = '" +
+                      getDataFilesPath() + "/example_1.csv');";
+  sql(query);
+  TQueryResult result;
+  sql(result, "SELECT * FROM test_foreign_table;");
+  assertResultSetEqual({{"a", array({i(1), i(1), i(1)})},
+                        {"aa", array({Null_i, i(2), i(2)})},
+                        {"aaa", array({i(3), Null_i, i(3)})}},
+                       result);
+  g_enable_fsi_cache = true;
 }
 
 namespace {
@@ -938,6 +954,35 @@ TEST_F(ForeignStorageCacheQueryTest, CreatePopulateMetadata) {
   ASSERT_TRUE(cache->isMetadataCached(query_chunk_key3));
   ASSERT_TRUE(cache->hasCachedMetadataForKeyPrefix(query_chunk_key1));
   ASSERT_TRUE(cache->hasCachedMetadataForKeyPrefix(query_table_prefix));
+}
+
+TEST_F(ForeignStorageCacheQueryTest, CacheDisableChunkUncached) {
+  g_enable_fsi_cache = false;
+  ASSERT_EQ(cache->getCachedChunkIfExists(query_chunk_key2), nullptr);
+  ASSERT_FALSE(gfm->isBufferOnDevice(query_chunk_key2));
+  sqlSelect();
+  // Check chunks were not cached
+  ASSERT_EQ(cache->getCachedChunkIfExists(query_chunk_key2), nullptr);
+  ASSERT_FALSE(gfm->isBufferOnDevice(query_chunk_key2));
+  g_enable_fsi_cache = true;
+}
+
+TEST_F(ForeignStorageCacheQueryTest, CacheDisableMetadataUncached) {
+  g_enable_fsi_cache = false;
+  sqlDropForeignTable();
+  ASSERT_FALSE(cache->isMetadataCached(query_chunk_key1));
+  ASSERT_FALSE(cache->isMetadataCached(query_chunk_key2));
+  ASSERT_FALSE(cache->isMetadataCached(query_chunk_key3));
+  ASSERT_FALSE(cache->hasCachedMetadataForKeyPrefix(query_chunk_key1));
+  ASSERT_FALSE(cache->hasCachedMetadataForKeyPrefix(query_table_prefix));
+  createTestTable();
+  // Check metadata was not cached
+  ASSERT_FALSE(cache->isMetadataCached(query_chunk_key1));
+  ASSERT_FALSE(cache->isMetadataCached(query_chunk_key2));
+  ASSERT_FALSE(cache->isMetadataCached(query_chunk_key3));
+  ASSERT_FALSE(cache->hasCachedMetadataForKeyPrefix(query_chunk_key1));
+  ASSERT_FALSE(cache->hasCachedMetadataForKeyPrefix(query_table_prefix));
+  g_enable_fsi_cache = true;
 }
 
 TEST_F(ForeignStorageCacheQueryTest, CacheEvictAfterDrop) {
