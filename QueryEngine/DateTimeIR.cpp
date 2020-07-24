@@ -52,7 +52,7 @@ const char* get_extract_function_name(ExtractField field) {
     case kWEEK:
       return "extract_week";
     case kDOY:
-      return "extract_day_of_week";
+      return "extract_day_of_year";
     case kMONTH:
       return "extract_month";
     case kQUARTER:
@@ -79,8 +79,8 @@ llvm::Value* CodeGenerator::codegen(const Analyzer::ExtractExpr* extract_expr,
           cgen_state_->ir_builder_.CreateCast(llvm::Instruction::CastOps::SExt,
                                               from_expr,
                                               get_int_type(64, cgen_state_->context_));
+      return from_expr;
     }
-    return from_expr;
   }
   CHECK(from_expr->getType()->isIntegerTy(64));
   if (extract_expr_ti.is_high_precision_timestamp()) {

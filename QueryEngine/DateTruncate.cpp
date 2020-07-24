@@ -259,7 +259,7 @@ struct EraTime {
     int const yoe = (doe - doe / 1460 + doe / 36524 - doe / 146096) / 365;
     int const doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
     int const moy = (5 * doy + 2) / 153;
-    int const dom = doy - (153 * moy + 2) / 5 + 1;
+    int const dom = doy - (153 * moy + 2) / 5;
     return {era, yoe, moy, dom, sod};
   }
 
@@ -377,14 +377,13 @@ extern "C" DEVICE int64_t DateDiffHighPrecision(const DatetruncField datepart,
     case dtNANOSECOND:
     case dtMICROSECOND:
     case dtMILLISECOND: {
-      static_assert(dtMILLISECOND == 10);  // target_dim = 3
-      static_assert(dtMICROSECOND == 11);  // target_dim = 6
-      static_assert(dtNANOSECOND == 12);   // target_dim = 9
-      int const target_dim = (datepart - 9) * 3;
+      static_assert(dtMILLISECOND + 1 == dtMICROSECOND, "Please keep these consecutive.");
+      static_assert(dtMICROSECOND + 1 == dtNANOSECOND, "Please keep these consecutive.");
+      int const target_dim = (datepart - (dtMILLISECOND - 1)) * 3;  // 3, 6, or 9.
       int const delta_dim = end_dim - start_dim;  // in [-9,9] multiple of 3
-      int const adj_dim = target_dim - (0 < delta_dim ? end_dim : start_dim);
-      int64_t const numerator = 0 < delta_dim ? enddate - startdate * pow10[delta_dim]
-                                              : enddate * pow10[-delta_dim] - startdate;
+      int const adj_dim = target_dim - (delta_dim < 0 ? start_dim : end_dim);
+      int64_t const numerator = delta_dim < 0 ? enddate * pow10[-delta_dim] - startdate
+                                              : enddate - startdate * pow10[delta_dim];
       return adj_dim < 0 ? numerator / pow10[-adj_dim] : numerator * pow10[adj_dim];
     }
     default:

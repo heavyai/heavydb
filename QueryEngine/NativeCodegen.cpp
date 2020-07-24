@@ -515,7 +515,7 @@ declare i64 @extract_dow(i64);
 declare i64 @extract_isodow(i64);
 declare i64 @extract_day(i64);
 declare i64 @extract_week(i64);
-declare i64 @extract_day_of_week(i64);
+declare i64 @extract_day_of_year(i64);
 declare i64 @extract_month(i64);
 declare i64 @extract_quarter(i64);
 declare i64 @extract_year(i64);

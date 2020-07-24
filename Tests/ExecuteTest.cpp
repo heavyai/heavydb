@@ -3189,6 +3189,66 @@ void check_one_date_trunc_group_with_agg(const ResultSet& rows,
   ASSERT_TRUE(empty_row.empty());
 }
 
+// Example: "1969-12-31 23:59:59.999999" -> -1
+// The number of fractional digits must be 0, 3, 6, or 9.
+int64_t timestampToInt64(char const* timestr, ExecutorDeviceType const dt) {
+  constexpr int max = 128;
+  char query[max];
+  unsigned const dim = strlen(timestr) == 19 ? 0 : strlen(timestr) - 20;
+  int const n = snprintf(query, max, "SELECT TIMESTAMP(%d) '%s';", dim, timestr);
+  CHECK_LT(0, n);
+  CHECK_LT(n, max);
+  return v<int64_t>(run_simple_agg(query, dt));
+}
+
+int64_t dateadd(char const* unit,
+                int const num,
+                char const* timestr,
+                ExecutorDeviceType const dt) {
+  constexpr int max = 128;
+  char query[max];
+  unsigned const dim = strlen(timestr) == 19 ? 0 : strlen(timestr) - 20;
+  int const n = snprintf(query,
+                         max,
+                         // Cast from TIMESTAMP(6) to TEXT not supported
+                         // "SELECT CAST(DATEADD('%s', %d, TIMESTAMP(%d) '%s') AS TEXT);",
+                         "SELECT DATEADD('%s', %d, TIMESTAMP(%d) '%s');",
+                         unit,
+                         num,
+                         dim,
+                         timestr);
+  CHECK_LT(0, n);
+  CHECK_LT(n, max);
+  return v<int64_t>(run_simple_agg(query, dt));
+}
+
+int64_t datediff(char const* unit,
+                 char const* start,
+                 char const* end,
+                 ExecutorDeviceType const dt) {
+  constexpr int max = 128;
+  char query[max];
+  unsigned const dim_start = strlen(start) == 19 ? 0 : strlen(start) - 20;
+  unsigned const dim_end = strlen(end) == 19 ? 0 : strlen(end) - 20;
+  int const n = snprintf(query,
+                         max,
+                         "SELECT DATEDIFF('%s', TIMESTAMP(%d) '%s', TIMESTAMP(%d) '%s');",
+                         unit,
+                         dim_start,
+                         start,
+                         dim_end,
+                         end);
+  CHECK_LT(0, n);
+  CHECK_LT(n, max);
+  return v<int64_t>(run_simple_agg(query, dt));
+}
+
+std::string date_trunc(std::string const& unit, char const* ts, ExecutorDeviceType dt) {
+  std::string const query =
+      "SELECT CAST(DATE_TRUNC('" + unit + "', TIMESTAMP '" + ts + "') AS TEXT);";
+  return boost::get<std::string>(v<NullableString>(run_simple_agg(query, dt)));
+}
+
 }  // namespace
 
 TEST(Select, TimeSyntaxCheck) {
@@ -4816,13 +4876,68 @@ TEST(Select, DateTruncate) {
   }
 }
 
-namespace {
-std::string date_trunc(std::string const& unit, char const* ts, ExecutorDeviceType dt) {
-  std::string const query =
-      "SELECT CAST(DATE_TRUNC('" + unit + "', TIMESTAMP '" + ts + "') AS TEXT);";
-  return boost::get<std::string>(v<NullableString>(run_simple_agg(query, dt)));
+TEST(Select, ExtractEpoch) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+
+    // Test EXTRACT(epoch) for high-precision timestamps when read from a table.
+    ASSERT_TRUE(v<int64_t>(run_simple_agg(
+        "SELECT MIN(DATEDIFF('second', DATE '1970-01-01', dt) = EXTRACT('epoch' FROM "
+        "CAST(dt AS TIMESTAMP(0)))) FROM test_date_time;",
+        dt)));
+    ASSERT_TRUE(v<int64_t>(run_simple_agg(
+        "SELECT MIN(DATEDIFF('second', DATE '1970-01-01', dt) = EXTRACT('epoch' FROM "
+        "CAST(dt AS TIMESTAMP(3)))) FROM test_date_time;",
+        dt)));
+    ASSERT_TRUE(v<int64_t>(run_simple_agg(
+        "SELECT MIN(DATEDIFF('second', DATE '1970-01-01', dt) = EXTRACT('epoch' FROM "
+        "CAST(dt AS TIMESTAMP(6)))) FROM test_date_time;",
+        dt)));
+    ASSERT_TRUE(v<int64_t>(run_simple_agg(
+        "SELECT MIN(DATEDIFF('second', DATE '1970-01-01', dt) = EXTRACT('epoch' FROM "
+        "CAST(dt AS TIMESTAMP(9)))) FROM test_date_time;",
+        dt)));
+
+    // Test EXTRACT(epoch) for constant high-precision timestamps.
+    ASSERT_EQ(
+        3,
+        v<int64_t>(run_simple_agg(
+            "SELECT EXTRACT('epoch' FROM TIMESTAMP(0) '1970-01-01 00:00:03');", dt)));
+    ASSERT_EQ(
+        3,
+        v<int64_t>(run_simple_agg(
+            "SELECT EXTRACT('epoch' FROM TIMESTAMP(3) '1970-01-01 00:00:03.123');", dt)));
+    ASSERT_EQ(
+        3,
+        v<int64_t>(run_simple_agg(
+            "SELECT EXTRACT('epoch' FROM TIMESTAMP(6) '1970-01-01 00:00:03.123456');",
+            dt)));
+    ASSERT_EQ(
+        3,
+        v<int64_t>(run_simple_agg(
+            "SELECT EXTRACT('epoch' FROM TIMESTAMP(9) '1970-01-01 00:00:03.123456789');",
+            dt)));
+
+    ASSERT_EQ(
+        -3,
+        v<int64_t>(run_simple_agg(
+            "SELECT EXTRACT('epoch' FROM TIMESTAMP(0) '1969-12-31 23:59:57');", dt)));
+    ASSERT_EQ(
+        -3,
+        v<int64_t>(run_simple_agg(
+            "SELECT EXTRACT('epoch' FROM TIMESTAMP(3) '1969-12-31 23:59:57.123');", dt)));
+    ASSERT_EQ(
+        -3,
+        v<int64_t>(run_simple_agg(
+            "SELECT EXTRACT('epoch' FROM TIMESTAMP(6) '1969-12-31 23:59:57.123456');",
+            dt)));
+    ASSERT_EQ(
+        -3,
+        v<int64_t>(run_simple_agg(
+            "SELECT EXTRACT('epoch' FROM TIMESTAMP(9) '1969-12-31 23:59:57.123456789');",
+            dt)));
+  }
 }
-}  // namespace
 
 TEST(Select, DateTruncate2) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
@@ -9866,59 +9981,71 @@ TEST(Select, TimestampPrecisionMeridiesEncoding) {
         dt));
     ASSERT_EQ(2,
               v<int64_t>(run_simple_agg("SELECT count(*) FROM ts_meridies_precisions "
-                                        "where extract(epoch from ts3) = 1325376000123;",
+                                        "where extract(epoch from ts3) = 1325376000 "
+                                        "AND extract('millisecond' from ts3) = 123;",
                                         dt)));
     ASSERT_EQ(
         2,
         v<int64_t>(run_simple_agg("SELECT count(*) FROM ts_meridies_precisions where "
-                                  "extract(epoch from ts6) = 1325376000123456;",
+                                  "extract(epoch from ts6) = 1325376000 "
+                                  "AND extract('microsecond' from ts6) = 123456;",
                                   dt)));
     ASSERT_EQ(
         2,
         v<int64_t>(run_simple_agg("SELECT count(*) FROM ts_meridies_precisions where "
-                                  "extract(epoch from ts9) = 1325376000123456789;",
+                                  "extract(epoch from ts9) = 1325376000 "
+                                  "AND extract('nanosecond' from ts9) = 123456789;",
                                   dt)));
     ASSERT_EQ(2,
               v<int64_t>(run_simple_agg("SELECT count(*) FROM ts_meridies_precisions "
-                                        "where extract(epoch from ts3) = 1325419200123;",
+                                        "where extract(epoch from ts3) = 1325419200 "
+                                        "AND extract('millisecond' from ts3) = 123;",
                                         dt)));
     ASSERT_EQ(
         2,
         v<int64_t>(run_simple_agg("SELECT count(*) FROM ts_meridies_precisions where "
-                                  "extract(epoch from ts6) = 1325419200123456;",
+                                  "extract(epoch from ts6) = 1325419200 "
+                                  "AND extract('microsecond' from ts6) = 123456;",
                                   dt)));
     ASSERT_EQ(
         2,
         v<int64_t>(run_simple_agg("SELECT count(*) FROM ts_meridies_precisions where "
-                                  "extract(epoch from ts9) = 1325419200123456789;",
+                                  "extract(epoch from ts9) = 1325419200 "
+                                  "AND extract('nanosecond' from ts9) = 123456789;",
                                   dt)));
     ASSERT_EQ(2,
               v<int64_t>(run_simple_agg("SELECT count(*) FROM ts_meridies_precisions "
-                                        "where extract(epoch from ts3) = 1325386800123;",
+                                        "where extract(epoch from ts3) = 1325386800 "
+                                        "AND extract('millisecond' from ts3) = 123;",
                                         dt)));
     ASSERT_EQ(
         2,
         v<int64_t>(run_simple_agg("SELECT count(*) FROM ts_meridies_precisions where "
-                                  "extract(epoch from ts6) = 1325386800123456;",
+                                  "extract(epoch from ts6) = 1325386800 "
+                                  "AND extract('microsecond' from ts6) = 123456;",
                                   dt)));
     ASSERT_EQ(
         2,
         v<int64_t>(run_simple_agg("SELECT count(*) FROM ts_meridies_precisions where "
-                                  "extract(epoch from ts9) = 1325386800123456789;",
+                                  "extract(epoch from ts9) = 1325386800 "
+                                  "AND extract('nanosecond' from ts9) = 123456789;",
                                   dt)));
     ASSERT_EQ(2,
               v<int64_t>(run_simple_agg("SELECT count(*) FROM ts_meridies_precisions "
-                                        "where extract(epoch from ts3) = 1325430000123;",
+                                        "where extract(epoch from ts3) = 1325430000 "
+                                        "AND extract('millisecond' from ts3) = 123;",
                                         dt)));
     ASSERT_EQ(
         2,
         v<int64_t>(run_simple_agg("SELECT count(*) FROM ts_meridies_precisions where "
-                                  "extract(epoch from ts6) = 1325430000123456;",
+                                  "extract(epoch from ts6) = 1325430000 "
+                                  "AND extract('microsecond' from ts6) = 123456;",
                                   dt)));
     ASSERT_EQ(
         2,
         v<int64_t>(run_simple_agg("SELECT count(*) FROM ts_meridies_precisions where "
-                                  "extract(epoch from ts9) = 1325430000123456789;",
+                                  "extract(epoch from ts9) = 1325430000 "
+                                  "AND extract('nanosecond' from ts9) = 123456789;",
                                   dt)));
     ASSERT_EQ(8,
               v<int64_t>(run_simple_agg("SELECT count(*) FROM ts_meridies_precisions "
@@ -9998,64 +10125,6 @@ TEST(Select, DateTimeZones) {
   }
 }
 #endif
-
-namespace {
-
-// Example: "1969-12-31 23:59:59.999999" -> -1
-// The number of fractional digits must be 0, 3, 6, or 9.
-int64_t timestampToInt64(char const* timestr, ExecutorDeviceType const dt) {
-  constexpr int max = 128;
-  char query[max];
-  unsigned const dim = strlen(timestr) == 19 ? 0 : strlen(timestr) - 20;
-  int const n = snprintf(query, max, "SELECT TIMESTAMP(%d) '%s';", dim, timestr);
-  CHECK_LT(0, n);
-  CHECK_LT(n, max);
-  return v<int64_t>(run_simple_agg(query, dt));
-}
-
-int64_t dateadd(char const* unit,
-                int const num,
-                char const* timestr,
-                ExecutorDeviceType const dt) {
-  constexpr int max = 128;
-  char query[max];
-  unsigned const dim = strlen(timestr) == 19 ? 0 : strlen(timestr) - 20;
-  int const n = snprintf(query,
-                         max,
-                         // Cast from TIMESTAMP(6) to TEXT not supported
-                         // "SELECT CAST(DATEADD('%s', %d, TIMESTAMP(%d) '%s') AS TEXT);",
-                         "SELECT DATEADD('%s', %d, TIMESTAMP(%d) '%s');",
-                         unit,
-                         num,
-                         dim,
-                         timestr);
-  CHECK_LT(0, n);
-  CHECK_LT(n, max);
-  return v<int64_t>(run_simple_agg(query, dt));
-}
-
-int64_t datediff(char const* unit,
-                 char const* start,
-                 char const* end,
-                 ExecutorDeviceType const dt) {
-  constexpr int max = 128;
-  char query[max];
-  unsigned const dim_start = strlen(start) == 19 ? 0 : strlen(start) - 20;
-  unsigned const dim_end = strlen(end) == 19 ? 0 : strlen(end) - 20;
-  int const n = snprintf(query,
-                         max,
-                         "SELECT DATEDIFF('%s', TIMESTAMP(%d) '%s', TIMESTAMP(%d) '%s');",
-                         unit,
-                         dim_start,
-                         start,
-                         dim_end,
-                         end);
-  CHECK_LT(0, n);
-  CHECK_LT(n, max);
-  return v<int64_t>(run_simple_agg(query, dt));
-}
-
-}  // namespace
 
 // Select.Time does a lot of DATEADD tests already.  These focus on high-precision
 // timestamps before, across, and after the epoch=0 boundary.
@@ -10470,7 +10539,7 @@ TEST(Select, TimestampPrecision) {
               v<int64_t>(run_simple_agg(
                   "SELECT DATE_TRUNC(nanosecond, m_9) FROM test limit 1;", dt)));
     /* ---Extract --- */
-    ASSERT_EQ(1146023344607435125L,
+    ASSERT_EQ(1146023344L,
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(epoch from m_9) FROM test limit 1;", dt)));
     ASSERT_EQ(1146009600L,
@@ -10521,7 +10590,7 @@ TEST(Select, TimestampPrecision) {
     ASSERT_EQ(2006L,
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(year from m_9) FROM test limit 1;", dt)));
-    ASSERT_EQ(931701773874533L,
+    ASSERT_EQ(931701773L,
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(epoch from m_6) FROM test limit 1;", dt)));
     ASSERT_EQ(931651200L,
@@ -10573,7 +10642,7 @@ TEST(Select, TimestampPrecision) {
     ASSERT_EQ(1999L,
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(year from m_6) FROM test limit 1;", dt)));
-    ASSERT_EQ(1418509395323L,
+    ASSERT_EQ(1418509395L,
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(epoch from m_3) FROM test limit 1;", dt)));
     ASSERT_EQ(1418428800L,
@@ -12538,61 +12607,65 @@ TEST(Select, TimestampPrecisionFormat) {
 
     ASSERT_EQ(3L,
               v<int64_t>(run_simple_agg("SELECT count(ts_3) FROM ts_format where "
-                                        "extract(epoch from ts_3) = 1337648523000;",
+                                        "extract(epoch from ts_3) = 1337648523 "
+                                        "AND extract('millisecond' from ts_3) = 3000;",
                                         dt)));
     ASSERT_EQ(2L,
               v<int64_t>(run_simple_agg("SELECT count(ts_3) FROM ts_format where "
-                                        "extract(epoch from ts_3) = 1337648523100;",
+                                        "extract(epoch from ts_3) = 1337648523 "
+                                        "AND extract('millisecond' from ts_3) = 3100;",
                                         dt)));
     ASSERT_EQ(1L,
               v<int64_t>(run_simple_agg("SELECT count(ts_3) FROM ts_format where "
-                                        "extract(epoch from ts_3) = 1337648523030;",
+                                        "extract(epoch from ts_3) = 1337648523 "
+                                        "AND extract('millisecond' from ts_3) = 3030;",
                                         dt)));
     ASSERT_EQ(1L,
               v<int64_t>(run_simple_agg("SELECT count(ts_3) FROM ts_format where "
-                                        "extract(epoch from ts_3) = 1337648523003;",
+                                        "extract(epoch from ts_3) = 1337648523 "
+                                        "AND extract('millisecond' from ts_3) = 3003;",
                                         dt)));
 
     ASSERT_EQ(3L,
               v<int64_t>(run_simple_agg(
                   "SELECT count(ts_6) FROM ts_format where extract(epoch from ts_6) = "
-                  "1337648523000000;",
+                  "1337648523 AND extract('microsecond' from ts_6) = 3000000;",
                   dt)));
     ASSERT_EQ(2L,
               v<int64_t>(run_simple_agg(
                   "SELECT count(ts_6) FROM ts_format where extract(epoch from ts_6) = "
-                  "1337648523100000;",
+                  "1337648523 AND extract('microsecond' from ts_6) = 3100000;",
                   dt)));
     ASSERT_EQ(1L,
               v<int64_t>(run_simple_agg(
                   "SELECT count(ts_6) FROM ts_format where extract(epoch from ts_6) = "
-                  "1337648523030000;",
+                  "1337648523 AND extract('microsecond' from ts_6) = 3030000;",
                   dt)));
     ASSERT_EQ(1L,
               v<int64_t>(run_simple_agg(
                   "SELECT count(ts_6) FROM ts_format where extract(epoch from ts_6) = "
-                  "1337648523000003;",
+                  "1337648523 AND extract('microsecond' from ts_6) = 3000003;",
                   dt)));
 
     ASSERT_EQ(3L,
               v<int64_t>(run_simple_agg(
                   "SELECT count(ts_9) FROM ts_format where extract(epoch from ts_9) = "
-                  "1337648523000000000;",
+                  "1337648523 AND extract('nanosecond' from ts_9) = 3000000000;",
                   dt)));
     ASSERT_EQ(2L,
               v<int64_t>(run_simple_agg(
                   "SELECT count(ts_9) FROM ts_format where extract(epoch from ts_9) = "
-                  "1337648523100000000;",
+                  "1337648523 AND extract('nanosecond' from ts_9) = 3100000000;",
                   dt)));
     ASSERT_EQ(1L,
               v<int64_t>(run_simple_agg(
                   "SELECT count(ts_9) FROM ts_format where extract(epoch from ts_9) = "
-                  "1337648523030000000;",
+                  "1337648523 AND extract('nanosecond' from ts_9) = 3030000000;",
                   dt)));
     ASSERT_EQ(1L,
               v<int64_t>(run_simple_agg(
                   "SELECT count(ts_9) FROM ts_format where extract(epoch from ts_9) = "
-                  "1337648523000000003;",
+                  "1337648523 AND extract('nanosecond' from ts_9) = 3000000003;",
                   dt)));
   }
 }

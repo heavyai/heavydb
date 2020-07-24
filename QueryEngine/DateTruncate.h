@@ -40,7 +40,7 @@
  * quarterday
  */
 enum DatetruncField {
-  dtYEAR = 0,
+  dtYEAR,
   dtQUARTER,
   dtMONTH,
   dtDAY,
