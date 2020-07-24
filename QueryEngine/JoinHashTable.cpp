@@ -746,12 +746,13 @@ void JoinHashTable::initOneToOneHashTableOnCpu(
         hash_entry_info.getNormalizedHashEntryCount());
     const StringDictionaryProxy* sd_inner_proxy{nullptr};
     const StringDictionaryProxy* sd_outer_proxy{nullptr};
-    if (ti.is_string()) {
+    const auto outer_col = dynamic_cast<const Analyzer::ColumnVar*>(cols.second);
+    if (ti.is_string() &&
+        (outer_col && !(inner_col->get_comp_param() == outer_col->get_comp_param()))) {
       CHECK_EQ(kENCODING_DICT, ti.get_compression());
       sd_inner_proxy = executor_->getStringDictionaryProxy(
           inner_col->get_comp_param(), executor_->row_set_mem_owner_, true);
       CHECK(sd_inner_proxy);
-      const auto outer_col = dynamic_cast<const Analyzer::ColumnVar*>(cols.second);
       CHECK(outer_col);
       sd_outer_proxy = executor_->getStringDictionaryProxy(
           outer_col->get_comp_param(), executor_->row_set_mem_owner_, true);

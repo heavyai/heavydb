@@ -286,7 +286,8 @@ BaselineJoinHashTable::CompositeKeyInfo BaselineJoinHashTable::getCompositeKeyIn
     ChunkKey cache_key_chunks_for_column{catalog_->getCurrentDB().dbId,
                                          inner_col->get_table_id(),
                                          inner_col->get_column_id()};
-    if (inner_ti.is_string()) {
+    if (inner_ti.is_string() &&
+        !(inner_ti.get_comp_param() == outer_ti.get_comp_param())) {
       CHECK(outer_ti.is_string());
       CHECK(inner_ti.get_compression() == kENCODING_DICT &&
             outer_ti.get_compression() == kENCODING_DICT);
