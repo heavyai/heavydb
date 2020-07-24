@@ -4340,6 +4340,14 @@ void Importer::readMetadataSampleGDAL(
         case wkbPolygon:
         case wkbMultiPolygon:
           break;
+        case wkbMultiPoint:
+        case wkbMultiLineString:
+          // supported if geo_explode_collections is specified
+          if (!copy_params.geo_explode_collections) {
+            throw std::runtime_error("Unsupported geometry type: " +
+                                     std::string(poGeometry->getGeometryName()));
+          }
+          break;
         default:
           throw std::runtime_error("Unsupported geometry type: " +
                                    std::string(poGeometry->getGeometryName()));
@@ -4689,6 +4697,13 @@ std::vector<Importer::GeoFileLayerInfo> Importer::gdalGetLayersInGeoFile(
           case wkbMultiPolygon:
             // layer has supported geo
             contents = GeoFileLayerContents::GEO;
+            break;
+          case wkbMultiPoint:
+          case wkbMultiLineString:
+            // supported if geo_explode_collections is specified
+            contents = copy_params.geo_explode_collections
+                           ? GeoFileLayerContents::GEO
+                           : GeoFileLayerContents::UNSUPPORTED_GEO;
             break;
           default:
             // layer has unsupported geometry
