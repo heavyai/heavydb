@@ -402,7 +402,7 @@ Logger::operator bool() const {
 }
 
 boost::log::record_ostream& Logger::stream(char const* file, int line) {
-  return *stream_ << filename(file) << ':' << line << ' ';
+  return *stream_ << thread_id() << ' ' << filename(file) << ':' << line << ' ';
 }
 
 // DebugTimer-related classes and functions.
