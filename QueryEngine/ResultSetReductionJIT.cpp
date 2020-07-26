@@ -883,9 +883,14 @@ void ResultSetReductionJIT::reduceOneEntryBaselineIdx(
   const auto that_qmd_handle = ir_reduce_one_entry_idx->arg(5);
   const auto serialized_varlen_buffer_arg = ir_reduce_one_entry_idx->arg(6);
   const auto row_bytes = ir_reduce_one_entry_idx->addConstant<ConstantInt>(
-      get_row_bytes(query_mem_desc_), Type::Int32);
-  const auto that_row_off_in_bytes = ir_reduce_one_entry_idx->add<BinaryOperator>(
-      BinaryOperator::BinaryOp::Mul, that_entry_idx, row_bytes, "that_row_off_in_bytes");
+      get_row_bytes(query_mem_desc_), Type::Int64);
+  const auto that_entry_idx_64 = ir_reduce_one_entry_idx->add<Cast>(
+      Cast::CastOp::SExt, that_entry_idx, Type::Int64, "that_entry_idx_64");
+  const auto that_row_off_in_bytes =
+      ir_reduce_one_entry_idx->add<BinaryOperator>(BinaryOperator::BinaryOp::Mul,
+                                                   that_entry_idx_64,
+                                                   row_bytes,
+                                                   "that_row_off_in_bytes");
   const auto that_row_ptr = ir_reduce_one_entry_idx->add<GetElementPtr>(
       that_buff, that_row_off_in_bytes, "that_row_ptr");
   const auto that_is_empty =
