@@ -2167,14 +2167,16 @@ ExecutionResult RelAlgExecutor::executeUnion(const RelLogicalUnion* logical_unio
   if (boost::algorithm::any_of(logical_union->getOutputMetainfo(), isGeometry)) {
     throw std::runtime_error("UNION does not support subqueries with geo-columns.");
   }
+#if 0  // We relax this for modin-omnisci mode
   // Only Projections and Aggregates from a UNION are supported for now.
   query_dag_->eachNode([logical_union](RelAlgNode const* node) {
-    if (node->hasInput(logical_union) &&
-        !shared::dynamic_castable_to_any<RelProject, RelLogicalUnion, RelAggregate>(
-            node)) {
-      throw std::runtime_error("UNION ALL not yet supported in this context.");
+   if (node->hasInput(logical_union) &&
+      !shared::dynamic_castable_to_any<RelProject, RelLogicalUnion, RelAggregate>(
+          node)) {
+    throw std::runtime_error("UNION ALL not yet supported in this context.");
     }
   });
+#endif
 
   auto work_unit =
       createUnionWorkUnit(logical_union, {{}, SortAlgorithm::Default, 0, 0}, eo);
