@@ -850,9 +850,11 @@ void ResultSetReductionJIT::reduceOneEntryNoCollisionsIdx(
   const auto that_qmd_handle = ir_reduce_one_entry_idx->arg(5);
   const auto serialized_varlen_buffer_arg = ir_reduce_one_entry_idx->arg(6);
   const auto row_bytes = ir_reduce_one_entry_idx->addConstant<ConstantInt>(
-      get_row_bytes(query_mem_desc_), Type::Int32);
+      get_row_bytes(query_mem_desc_), Type::Int64);
+  const auto entry_idx_64 = ir_reduce_one_entry_idx->add<Cast>(
+      Cast::CastOp::SExt, entry_idx, Type::Int64, "entry_idx_64");
   const auto row_off_in_bytes = ir_reduce_one_entry_idx->add<BinaryOperator>(
-      BinaryOperator::BinaryOp::Mul, entry_idx, row_bytes, "row_off_in_bytes");
+      BinaryOperator::BinaryOp::Mul, entry_idx_64, row_bytes, "row_off_in_bytes");
   const auto this_row_ptr = ir_reduce_one_entry_idx->add<GetElementPtr>(
       this_buff, row_off_in_bytes, "this_row_ptr");
   const auto that_row_ptr = ir_reduce_one_entry_idx->add<GetElementPtr>(
