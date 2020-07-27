@@ -1199,6 +1199,14 @@ ReductionCode ResultSetReductionJIT::finalizeReductionCode(
     const CodeCacheKey& key) const {
   CompilationOptions co{
       ExecutorDeviceType::CPU, false, ExecutorOptLevel::ReductionJIT, false};
+
+  LOG(IR) << "Reduction Loop:\n"
+          << serialize_llvm_object(reduction_code.llvm_reduce_loop);
+  LOG(IR) << "Reduction Is Empty Func:\n" << serialize_llvm_object(ir_is_empty);
+  LOG(IR) << "Reduction One Entry Func:\n" << serialize_llvm_object(ir_reduce_one_entry);
+  LOG(IR) << "Reduction One Entry Idx Func:\n"
+          << serialize_llvm_object(ir_reduce_one_entry_idx);
+
   reduction_code.module.release();
   auto ee = CodeGenerator::generateNativeCPUCode(
       reduction_code.llvm_reduce_loop, {reduction_code.llvm_reduce_loop}, co);
