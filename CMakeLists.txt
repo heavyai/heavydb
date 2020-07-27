@@ -219,6 +219,7 @@ if(ENABLE_ASAN)
   set(SAN_FLAGS "-fsanitize=address -O1 -fno-omit-frame-pointer")
   add_definitions("-DWITH_DECODERS_BOUNDS_CHECKING")
 elseif(ENABLE_TSAN)
+  add_definitions("-DHAVE_TSAN")
   # Copy the config directory to the build dir for TSAN suppressions
   file(COPY config DESTINATION ${CMAKE_BINARY_DIR})
 
