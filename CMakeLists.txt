@@ -271,18 +271,57 @@ include_directories(${CMAKE_SOURCE_DIR}
 ## Dependencies
 
 # LLVM
-set(llvm_config_cmd llvm-config)
+if(${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
+  list(APPEND CMAKE_PREFIX_PATH "/usr/local/opt/llvm")
+endif()
+find_package(LLVM CONFIG REQUIRED)
 
-execute_process(COMMAND ${llvm_config_cmd} "--includedir" OUTPUT_VARIABLE LLVM_INC_FLAGS)
-execute_process(COMMAND ${llvm_config_cmd} "--libs" OUTPUT_VARIABLE LLVM_LIB_FLAGS)
-execute_process(COMMAND ${llvm_config_cmd} "--ldflags" OUTPUT_VARIABLE LLVM_LD_FLAGS)
-execute_process(COMMAND ${llvm_config_cmd} "--version" OUTPUT_VARIABLE LLVM_VERSION_STR)
-string(REGEX MATCH "^([0-9]+)" LLVM_VERSION_MAJOR ${LLVM_VERSION_STR})
+message(STATUS "Found LLVM ${LLVM_PACKAGE_VERSION}")
+message(STATUS "Using LLVMConfig.cmake in: ${LLVM_DIR}")
 
-string(REPLACE "\n" " " LLVM_LINKER_FLAGS "${LLVM_LIB_FLAGS} ${LLVM_LD_FLAGS} ${CURSES_LIBRARIES}")
-string(STRIP "${LLVM_LINKER_FLAGS}" LLVM_LINKER_FLAGS)
+include_directories(${LLVM_INCLUDE_DIRS})
+add_definitions(${LLVM_DEFINITIONS})
 
-include_directories(${LLVM_INC_FLAGS})
+find_library(CLANG_LIB clang-cpp)
+find_library(LLVM_LIB LLVM)
+# Deps builds use separate libs for each clang component, while some distros now bundle into a single lib
+if (${CMAKE_SYSTEM_NAME} STREQUAL "Darwin" OR NOT LLVM_LIB) 
+  set(LLVM_COMPONENTS support mcjit core irreader option)
+
+  option(ENABLE_INTEL_JIT_LISTENER "Enable Intel Vtune JIT Listener" OFF)
+  if(ENABLE_INTEL_JIT_LISTENER)
+    list(APPEND LLVM_COMPONENTS inteljitevents)
+  endif()
+
+  llvm_map_components_to_libnames(llvm_libs ${LLVM_TARGETS_TO_BUILD} ${LLVM_COMPONENTS})
+  set(clang_libs 
+      clangFrontend
+      clangSerialization
+      clangDriver
+      clangTooling
+      clangParse
+      clangSema
+      clangAnalysis
+      clangEdit
+      clangAST
+      clangLex
+      clangBasic
+      clangRewrite
+      clangRewriteFrontend)
+else()
+  if(NOT CLANG_LIB) 
+    message(FATAL_ERROR "Could not find CLANG library.")
+  endif()
+
+  set(clang_libs ${CLANG_LIB})
+  set(llvm_libs ${LLVM_LIB})
+endif()
+
+# Clang (UDF Compiler)
+find_package(Clang REQUIRED)
+include_directories(${CLANG_INCLUDE_DIRS})
+add_definitions(${CLANG_DEFINITIONS})
+
 
 # Boost
 find_package(Boost COMPONENTS log log_setup filesystem program_options regex system thread timer locale iostreams REQUIRED)
@@ -663,14 +702,14 @@ endmacro()
 find_program(JQ_EXECUTABLE NAMES jq)
 if (NOT ${JQ_EXECUTABLE} STREQUAL "JQ_EXECUTABLE-NOTFOUND")
   file(WRITE ${CMAKE_BINARY_DIR}/jq.filter "map(select(.file | test(\".*/(build|ThirdParty)/.*\") | not))")
-  add_custom_target(clang-tidy
+  add_custom_target(run-clang-tidy
     COMMAND mkdir -p clang-tidy
     COMMAND ${JQ_EXECUTABLE} -f jq.filter ${CMAKE_BINARY_DIR}/compile_commands.json > clang-tidy/compile_commands.json
     COMMAND cd clang-tidy && ${CMAKE_SOURCE_DIR}/ThirdParty/clang/run-clang-tidy.py -quiet -format -fix -header-filter="${CMAKE_SOURCE_DIR}/.*" 2> /dev/null
     WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
   )
 else()
-  message(STATUS "jq not found, disabling clang-tidy target")
+  message(STATUS "jq not found, disabling run-clang-tidy target")
 endif()
 
 # doxygen

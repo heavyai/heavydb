@@ -181,10 +181,15 @@ ExecutionEngineWrapper::ExecutionEngineWrapper(llvm::ExecutionEngine* execution_
     : execution_engine_(execution_engine) {
   if (execution_engine_) {
     if (co.register_intel_jit_listener) {
+#ifdef ENABLE_INTEL_JIT_LISTENER
       intel_jit_listener_.reset(llvm::JITEventListener::createIntelJITEventListener());
       CHECK(intel_jit_listener_);
       execution_engine_->RegisterJITEventListener(intel_jit_listener_.get());
       LOG(INFO) << "Registered IntelJITEventListener";
+#else
+      LOG(WARNING) << "This build is not Intel JIT Listener enabled. Ignoring Intel JIT "
+                      "listener configuration parameter.";
+#endif  // ENABLE_INTEL_JIT_LISTENER
     }
   }
 }

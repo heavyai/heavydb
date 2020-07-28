@@ -233,28 +233,8 @@ set(QUERY_ENGINE_LIBS
   ${Arrow_LIBRARIES}
 )
 
-if(${LLVM_VERSION_MAJOR} EQUAL 10 AND NOT ${PREFER_STATIC_LIBS})
-  # Arch no longer building Clang with static libs
-  list(APPEND QUERY_ENGINE_LIBS clang-cpp)
-else()
-  list(APPEND QUERY_ENGINE_LIBS
-    clangFrontend
-    clangSerialization
-    clangDriver
-    clangTooling
-    clangParse
-    clangSema
-    clangAnalysis
-    clangEdit
-    clangAST
-    clangLex
-    clangBasic
-    clangRewrite
-    clangRewriteFrontend
-  )
-endif()
-
-list(APPEND QUERY_ENGINE_LIBS ${LLVM_LINKER_FLAGS} ${ZLIB_LIBRARIES})
+list(APPEND QUERY_ENGINE_LIBS ${clang_libs})
+list(APPEND QUERY_ENGINE_LIBS ${llvm_libs} ${ZLIB_LIBRARIES})
 
 target_link_libraries(QueryEngine ${QUERY_ENGINE_LIBS})
 
