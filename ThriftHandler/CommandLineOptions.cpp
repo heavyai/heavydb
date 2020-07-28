@@ -40,6 +40,7 @@ extern float g_fraction_code_cache_to_evict;
 unsigned connect_timeout{20000};
 unsigned recv_timeout{300000};
 unsigned send_timeout{300000};
+bool with_keepalive{false};
 
 void CommandLineOptions::init_logging() {
   if (verbose_logging && logger::Severity::DEBUG1 < log_options_.severity_) {
@@ -330,6 +331,11 @@ void CommandLineOptions::fillOptions() {
           ->default_value(system_parameters.calcite_timeout),
       "Calcite server timeout (milliseconds). Increase this on systems with frequent "
       "schema changes or when running large numbers of parallel queries.");
+  help_desc.add_options()("calcite-service-keepalive",
+                          po::value<size_t>(&system_parameters.calcite_keepalive)
+                              ->default_value(system_parameters.calcite_keepalive)
+                              ->implicit_value(true),
+                          "Enable keepalive on Calcite connections.");
   help_desc.add_options()(
       "stringdict-parallelizm",
       po::value<bool>(&g_enable_stringdict_parallel)
