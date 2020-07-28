@@ -184,8 +184,14 @@ static void start_calcite_server_as_daemon(const int db_port,
 
 std::pair<mapd::shared_ptr<CalciteServerClient>, mapd::shared_ptr<TTransport>>
 Calcite::getClient(int port) {
-  const auto transport = connMgr_->open_buffered_client_transport(
-      "localhost", port, ssl_ca_file_, true, 2000, service_timeout_, service_timeout_);
+  const auto transport = connMgr_->open_buffered_client_transport("localhost",
+                                                                  port,
+                                                                  ssl_ca_file_,
+                                                                  true,
+                                                                  service_keepalive_,
+                                                                  2000,
+                                                                  service_timeout_,
+                                                                  service_timeout_);
   try {
     transport->open();
 
@@ -285,8 +291,11 @@ Calcite::Calcite(const int db_port,
                  const std::string& data_dir,
                  const size_t calcite_max_mem,
                  const size_t service_timeout,
+                 const bool service_keepalive,
                  const std::string& udf_filename)
-    : server_available_(false), service_timeout_(service_timeout) {
+    : server_available_(false)
+    , service_timeout_(service_timeout)
+    , service_keepalive_(service_keepalive) {
   init(db_port, calcite_port, data_dir, calcite_max_mem, udf_filename);
 }
 
@@ -316,6 +325,7 @@ Calcite::Calcite(const SystemParameters& system_parameters,
                  const std::string& data_dir,
                  const std::string& udf_filename)
     : service_timeout_(system_parameters.calcite_timeout)
+    , service_keepalive_(system_parameters.calcite_keepalive)
     , ssl_trust_store_(system_parameters.ssl_trust_store)
     , ssl_trust_password_(system_parameters.ssl_trust_password)
     , ssl_key_file_(system_parameters.ssl_key_file)

@@ -59,6 +59,7 @@ class ThriftClientConnection {
       const int port,
       const std::string& ca_cert_name,
       const bool with_timeout = false,
+      const bool with_keepalive = true,
       const unsigned connect_timeout = 0,
       const unsigned recv_timeount = 0,
       const unsigned send_timeout = 0);

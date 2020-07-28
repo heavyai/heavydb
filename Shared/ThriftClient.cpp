@@ -198,6 +198,7 @@ mapd::shared_ptr<TTransport> ThriftClientConnection::open_buffered_client_transp
     const int port,
     const std::string& ca_cert_name,
     bool with_timeout,
+    bool with_keepalive,
     unsigned connect_timeout,
     unsigned recv_timeout,
     unsigned send_timeout) {
@@ -216,6 +217,7 @@ mapd::shared_ptr<TTransport> ThriftClientConnection::open_buffered_client_transp
   if (!using_X509_store_ && ca_cert_name.empty()) {
     const auto socket = mapd::make_shared<TSocket>(server_host, port);
     if (with_timeout) {
+      socket->setKeepAlive(with_keepalive);
       socket->setConnTimeout(connect_timeout);
       socket->setRecvTimeout(recv_timeout);
       socket->setSendTimeout(send_timeout);
@@ -224,6 +226,7 @@ mapd::shared_ptr<TTransport> ThriftClientConnection::open_buffered_client_transp
   } else {
     mapd::shared_ptr<TSocket> secure_socket = factory_->createSocket(server_host, port);
     if (with_timeout) {
+      secure_socket->setKeepAlive(with_keepalive);
       secure_socket->setConnTimeout(connect_timeout);
       secure_socket->setRecvTimeout(recv_timeout);
       secure_socket->setSendTimeout(send_timeout);
