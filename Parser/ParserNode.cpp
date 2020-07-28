@@ -2615,14 +2615,20 @@ void InsertIntoTableAsSelectStmt::populateData(QueryStateProxy query_state_proxy
           &(*std::next(source_column_descriptors.begin(), i));
       const ColumnDescriptor* target_cd = target_column_descriptors.at(i);
 
-      if ((!source_cd->columnType.is_integer() && !target_cd->columnType.is_integer()) &&
-          (!source_cd->columnType.is_string() && !target_cd->columnType.is_string()) &&
-          (source_cd->columnType.get_type() != target_cd->columnType.get_type())) {
-        throw std::runtime_error("Source '" + source_cd->columnName + " " +
-                                 source_cd->columnType.get_type_name() +
-                                 "' and target '" + target_cd->columnName + " " +
-                                 target_cd->columnType.get_type_name() +
-                                 "' column types do not match.");
+      if (source_cd->columnType.get_type() != target_cd->columnType.get_type()) {
+        auto type_cannot_be_cast = [](const auto& col_type) {
+          return (col_type.is_time() || col_type.is_geometry() || col_type.is_array() ||
+                  col_type.is_boolean());
+        };
+
+        if (type_cannot_be_cast(source_cd->columnType) ||
+            type_cannot_be_cast(target_cd->columnType)) {
+          throw std::runtime_error("Source '" + source_cd->columnName + " " +
+                                   source_cd->columnType.get_type_name() +
+                                   "' and target '" + target_cd->columnName + " " +
+                                   target_cd->columnType.get_type_name() +
+                                   "' column types do not match.");
+        }
       }
       if (source_cd->columnType.is_array()) {
         if (source_cd->columnType.get_subtype() != target_cd->columnType.get_subtype()) {
@@ -2654,6 +2660,13 @@ void InsertIntoTableAsSelectStmt::populateData(QueryStateProxy query_state_proxy
       }
 
       if (source_cd->columnType.is_string()) {
+        if (!target_cd->columnType.is_string()) {
+          throw std::runtime_error("Source '" + source_cd->columnName + " " +
+                                   source_cd->columnType.get_type_name() +
+                                   "' and target '" + target_cd->columnName + " " +
+                                   target_cd->columnType.get_type_name() +
+                                   "' column types do not match.");
+        }
         if (source_cd->columnType.get_compression() !=
             target_cd->columnType.get_compression()) {
           throw std::runtime_error("Source '" + source_cd->columnName + " " +
