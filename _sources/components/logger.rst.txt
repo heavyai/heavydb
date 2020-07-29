@@ -161,11 +161,11 @@ Format
 
 The general format of a log entry is::
 
-    (timestamp) (severity) (process_id) (filename:line_number) (message)
+    (timestamp) (severity) (process_id) (thread_id) (filename:line_number) (message)
 
 Example::
 
-    2019-09-18T16:25:25.659248 I 26481 DBHandler.cpp:181 OmniSci Server 4.9.0dev-20190918-bd97353685
+    2019-09-18T16:25:25.659248 I 26481 5 DBHandler.cpp:181 OmniSci Server 4.9.0dev-20190918-bd97353685
 
 Field descriptions:
 
@@ -173,9 +173,10 @@ Field descriptions:
 | 2. Single-character severity level. In same order as above severity levels:
 |    ``F`` ``E`` ``W`` ``I`` ``1`` ``2`` ``3`` ``4``
 |    For instance the ``I`` implies that the above log entry is of ``INFO`` severity.
-| 3. The process id assigned by the operating system.
-| 4. Source filename:Line number.
-| 5. Custom message sent to ``LOG()`` via the insertion ``<<`` operator.
+| 3. The `process_id` assigned by the operating system.
+| 4. The `thread_id` is a unique 64-bit integer incrementally assigned to each new thread. `thread_id=1` is assigned to the first thread each time the program starts.
+| 5. Source filename:Line number.
+| 6. Custom message sent to ``LOG()`` via the insertion ``<<`` operator.
 
 Note that log entries can contain line breaks, thus not all log lines will begin with these fields if
 the message itself contains multiple lines.

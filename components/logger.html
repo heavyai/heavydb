@@ -65,7 +65,7 @@
             
             
               <div class="version">
-                5.4.0dev 4f4a111
+                5.4.0dev 62f1aea
               </div>
             
           
@@ -1645,11 +1645,11 @@ suffix points to the latest version. Example:</p>
 <div class="section" id="format">
 <h4>Format<a class="headerlink" href="#format" title="Permalink to this headline">¶</a></h4>
 <p>The general format of a log entry is:</p>
-<div class="highlight-cpp notranslate"><div class="highlight"><pre><span></span><span class="p">(</span><span class="n">timestamp</span><span class="p">)</span> <span class="p">(</span><span class="n">severity</span><span class="p">)</span> <span class="p">(</span><span class="n">process_id</span><span class="p">)</span> <span class="p">(</span><span class="nl">filename</span><span class="p">:</span><span class="n">line_number</span><span class="p">)</span> <span class="p">(</span><span class="n">message</span><span class="p">)</span>
+<div class="highlight-cpp notranslate"><div class="highlight"><pre><span></span><span class="p">(</span><span class="n">timestamp</span><span class="p">)</span> <span class="p">(</span><span class="n">severity</span><span class="p">)</span> <span class="p">(</span><span class="n">process_id</span><span class="p">)</span> <span class="p">(</span><span class="n">thread_id</span><span class="p">)</span> <span class="p">(</span><span class="nl">filename</span><span class="p">:</span><span class="n">line_number</span><span class="p">)</span> <span class="p">(</span><span class="n">message</span><span class="p">)</span>
 </pre></div>
 </div>
 <p>Example:</p>
-<div class="highlight-cpp notranslate"><div class="highlight"><pre><span></span><span class="mi">2019</span><span class="o">-</span><span class="mi">09</span><span class="o">-</span><span class="mi">18</span><span class="nl">T16</span><span class="p">:</span><span class="mi">25</span><span class="o">:</span><span class="mf">25.659248</span> <span class="n">I</span> <span class="mi">26481</span> <span class="n">DBHandler</span><span class="p">.</span><span class="nl">cpp</span><span class="p">:</span><span class="mi">181</span> <span class="n">OmniSci</span> <span class="n">Server</span> <span class="mf">4.9.0</span><span class="n">dev</span><span class="o">-</span><span class="mi">20190918</span><span class="o">-</span><span class="n">bd97353685</span>
+<div class="highlight-cpp notranslate"><div class="highlight"><pre><span></span><span class="mi">2019</span><span class="o">-</span><span class="mi">09</span><span class="o">-</span><span class="mi">18</span><span class="nl">T16</span><span class="p">:</span><span class="mi">25</span><span class="o">:</span><span class="mf">25.659248</span> <span class="n">I</span> <span class="mi">26481</span> <span class="mi">5</span> <span class="n">DBHandler</span><span class="p">.</span><span class="nl">cpp</span><span class="p">:</span><span class="mi">181</span> <span class="n">OmniSci</span> <span class="n">Server</span> <span class="mf">4.9.0</span><span class="n">dev</span><span class="o">-</span><span class="mi">20190918</span><span class="o">-</span><span class="n">bd97353685</span>
 </pre></div>
 </div>
 <p>Field descriptions:</p>
@@ -1660,9 +1660,10 @@ suffix points to the latest version. Example:</p>
 <div class="line"><code class="docutils literal notranslate"><span class="pre">F</span></code> <code class="docutils literal notranslate"><span class="pre">E</span></code> <code class="docutils literal notranslate"><span class="pre">W</span></code> <code class="docutils literal notranslate"><span class="pre">I</span></code> <code class="docutils literal notranslate"><span class="pre">1</span></code> <code class="docutils literal notranslate"><span class="pre">2</span></code> <code class="docutils literal notranslate"><span class="pre">3</span></code> <code class="docutils literal notranslate"><span class="pre">4</span></code></div>
 <div class="line">For instance the <code class="docutils literal notranslate"><span class="pre">I</span></code> implies that the above log entry is of <code class="docutils literal notranslate"><span class="pre">INFO</span></code> severity.</div>
 </div>
-<div class="line">3. The process id assigned by the operating system.</div>
-<div class="line">4. Source filename:Line number.</div>
-<div class="line">5. Custom message sent to <code class="docutils literal notranslate"><span class="pre">LOG()</span></code> via the insertion <code class="docutils literal notranslate"><span class="pre">&lt;&lt;</span></code> operator.</div>
+<div class="line">3. The <cite>process_id</cite> assigned by the operating system.</div>
+<div class="line">4. The <cite>thread_id</cite> is a unique 64-bit integer incrementally assigned to each new thread. <cite>thread_id=1</cite> is assigned to the first thread each time the program starts.</div>
+<div class="line">5. Source filename:Line number.</div>
+<div class="line">6. Custom message sent to <code class="docutils literal notranslate"><span class="pre">LOG()</span></code> via the insertion <code class="docutils literal notranslate"><span class="pre">&lt;&lt;</span></code> operator.</div>
 </div>
 <p>Note that log entries can contain line breaks, thus not all log lines will begin with these fields if
 the message itself contains multiple lines.</p>
