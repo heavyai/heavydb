@@ -31,15 +31,16 @@
 #include <boost/program_options.hpp>
 #include <boost/range/combine.hpp>
 
-#include <Archive/PosixFileArchive.h>
-#include <Catalog/Catalog.h>
-#include <ImportExport/GDAL.h>
-#include <ImportExport/Importer.h>
-#include <Parser/parser.h>
-#include <QueryEngine/ResultSet.h>
-#include <QueryRunner/QueryRunner.h>
-#include <Shared/geo_types.h>
-#include <Shared/scope.h>
+#include "Archive/PosixFileArchive.h"
+#include "Catalog/Catalog.h"
+#include "ImportExport/DelimitedParserUtils.h"
+#include "ImportExport/GDAL.h"
+#include "ImportExport/Importer.h"
+#include "Parser/parser.h"
+#include "QueryEngine/ResultSet.h"
+#include "QueryRunner/QueryRunner.h"
+#include "Shared/geo_types.h"
+#include "Shared/scope.h"
 
 #ifndef BASE_PATH
 #define BASE_PATH "./tmp"
@@ -1396,6 +1397,7 @@ void check_geo_gdal_mpoly_tv_import() {
 class ImportTestGeo : public ::testing::Test {
  protected:
   void SetUp() override {
+    import_export::delimited_parser::set_max_buffer_resize(max_buffer_resize_);
     ASSERT_NO_THROW(run_ddl_statement("drop table if exists geospatial;"););
     ASSERT_NO_THROW(run_ddl_statement(create_table_geo););
   }
@@ -1404,6 +1406,9 @@ class ImportTestGeo : public ::testing::Test {
     ASSERT_NO_THROW(run_ddl_statement("drop table geospatial;"););
     ASSERT_NO_THROW(run_ddl_statement("drop table if exists geospatial;"););
   }
+
+  inline static size_t max_buffer_resize_ =
+      import_export::delimited_parser::get_max_buffer_resize();
 };
 
 TEST_F(ImportTestGeo, CSV_Import) {
@@ -1412,6 +1417,35 @@ TEST_F(ImportTestGeo, CSV_Import) {
   run_ddl_statement("COPY geospatial FROM '" + file_path.string() + "';");
   check_geo_import();
   check_geo_num_rows("p1, l, poly, mpoly, p2, p3, p4, trip_distance", 10);
+}
+
+TEST_F(ImportTestGeo, CSV_Import_Buffer_Size_Less_Than_Row_Size) {
+  const auto file_path =
+      boost::filesystem::path("../../Tests/Import/datafiles/geospatial.csv");
+  run_ddl_statement("COPY geospatial FROM '" + file_path.string() +
+                    "' WITH (buffer_size = 80);");
+  check_geo_import();
+  check_geo_num_rows("p1, l, poly, mpoly, p2, p3, p4, trip_distance", 10);
+}
+
+TEST_F(ImportTestGeo, CSV_Import_Max_Buffer_Resize_Less_Than_Row_Size) {
+  import_export::delimited_parser::set_max_buffer_resize(170);
+  const auto file_path =
+      boost::filesystem::path("../../Tests/Import/datafiles/geospatial.csv");
+
+  try {
+    run_ddl_statement("COPY geospatial FROM '" + file_path.string() +
+                      "' WITH (buffer_size = 80);");
+    FAIL() << "An exception should have been thrown for this test case.";
+  } catch (std::runtime_error& e) {
+    std::string expected_error_message{
+        "Unable to find an end of line character after reading 170 characters. "
+        "Please ensure that the correct \"line_delimiter\" option is specified "
+        "or update the \"buffer_size\" option appropriately. Row number: 10. "
+        "First few characters in row: "
+        "\"POINT(9 9)\", \"LINESTRING(9 0, 18 18, 19 19)\", \"PO"};
+    ASSERT_EQ(expected_error_message, e.what());
+  }
 }
 
 TEST_F(ImportTestGeo, CSV_Import_Empties) {

@@ -3639,7 +3639,7 @@ void CopyTableStmt::execute(const Catalog_Namespace::SessionInfo& session,
         if (int_literal == nullptr) {
           throw std::runtime_error("buffer_size option must be an integer.");
         }
-        copy_params.buffer_size = std::max<size_t>(1 << 20, int_literal->get_intval());
+        copy_params.buffer_size = int_literal->get_intval();
       } else if (boost::iequals(*p->get_name(), "threads")) {
         const IntLiteral* int_literal = dynamic_cast<const IntLiteral*>(p->get_value());
         if (int_literal == nullptr) {

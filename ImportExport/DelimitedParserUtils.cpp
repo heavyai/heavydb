@@ -79,12 +79,13 @@ size_t find_beginning(const char* buffer,
 size_t find_end(const char* buffer,
                 size_t size,
                 const import_export::CopyParams& copy_params,
-                unsigned int& num_rows_this_buffer) {
+                unsigned int& num_rows_this_buffer,
+                size_t buffer_first_row_index,
+                bool& in_quote,
+                size_t offset) {
   size_t last_line_delim_pos = 0;
+  const char* current = buffer + offset;
   if (copy_params.quoted) {
-    const char* current = buffer;
-    bool in_quote = false;
-
     while (current < buffer + size) {
       while (!in_quote && current < buffer + size) {
         // We are outside of quotes. We have to find the last possible line delimiter.
@@ -109,7 +110,6 @@ size_t find_end(const char* buffer,
       }
     }
   } else {
-    const char* current = buffer;
     while (current < buffer + size) {
       if (*current == copy_params.line_delim) {
         last_line_delim_pos = current - buffer;
@@ -120,14 +120,71 @@ size_t find_end(const char* buffer,
   }
 
   if (last_line_delim_pos <= 0) {
-    size_t slen = size < 50 ? size : 50;
-    std::string showMsgStr(buffer, buffer + slen);
-    LOG(ERROR) << "No line delimiter in block. Block was of size " << size
-               << " bytes, first few characters " << showMsgStr;
-    return size;
+    size_t excerpt_length = std::min<size_t>(50, size);
+    std::string buffer_excerpt{buffer, buffer + excerpt_length};
+    std::string error_message =
+        "Unable to find an end of line character after reading " + std::to_string(size) +
+        " characters. Please ensure that the correct \"line_delimiter\" option is "
+        "specified or update the \"buffer_size\" option appropriately. Row number: " +
+        std::to_string(buffer_first_row_index + 1) +
+        ". First few characters in row: " + buffer_excerpt;
+    throw InsufficientBufferSizeException{error_message};
   }
 
   return last_line_delim_pos + 1;
+}
+
+static size_t max_buffer_resize = 1024 * 1024 * 1024;
+
+size_t get_max_buffer_resize() {
+  return max_buffer_resize;
+}
+
+void set_max_buffer_resize(const size_t max_buffer_resize_param) {
+  max_buffer_resize = max_buffer_resize_param;
+}
+
+size_t find_row_end_pos(size_t& alloc_size,
+                        std::unique_ptr<char[]>& buffer,
+                        size_t& buffer_size,
+                        const CopyParams& copy_params,
+                        const size_t buffer_first_row_index,
+                        unsigned int& num_rows_in_buffer,
+                        FILE* file) {
+  bool found_end_pos{false};
+  bool in_quote{false};
+  size_t offset{0};
+  size_t end_pos;
+  const auto max_buffer_resize = get_max_buffer_resize();
+  while (!found_end_pos) {
+    try {
+      end_pos = delimited_parser::find_end(buffer.get(),
+                                           buffer_size,
+                                           copy_params,
+                                           num_rows_in_buffer,
+                                           buffer_first_row_index,
+                                           in_quote,
+                                           offset);
+      found_end_pos = true;
+    } catch (InsufficientBufferSizeException& e) {
+      if (alloc_size >= max_buffer_resize) {
+        throw;
+      }
+
+      auto old_buffer = std::move(buffer);
+      alloc_size = std::min(max_buffer_resize, alloc_size * 2);
+      LOG(INFO) << "Setting import thread buffer allocation size to " << alloc_size
+                << " bytes";
+      buffer = std::make_unique<char[]>(alloc_size);
+
+      memcpy(buffer.get(), old_buffer.get(), buffer_size);
+      auto fread_size =
+          fread(buffer.get() + buffer_size, 1, alloc_size - buffer_size, file);
+      offset = buffer_size;
+      buffer_size += fread_size;
+    }
+  }
+  return end_pos;
 }
 
 template <typename T>
