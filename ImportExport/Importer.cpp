@@ -4022,8 +4022,13 @@ ImportStatus Importer::importDelimited(const std::string& file_path,
     while (size > 0) {
       unsigned int num_rows_this_buffer = 0;
       CHECK(scratch_buffer);
-      end_pos = delimited_parser::find_end(
-          scratch_buffer.get(), size, copy_params, num_rows_this_buffer);
+      end_pos = delimited_parser::find_row_end_pos(alloc_size,
+                                                   scratch_buffer,
+                                                   size,
+                                                   copy_params,
+                                                   first_row_index_this_buffer,
+                                                   num_rows_this_buffer,
+                                                   p_file);
 
       // unput residual
       int nresidual = size - end_pos;
@@ -4055,10 +4060,8 @@ ImportStatus Importer::importDelimited(const std::string& file_path,
       scratch_buffer = std::make_unique<char[]>(alloc_size);
       CHECK(scratch_buffer);
       memcpy(scratch_buffer.get(), unbuf.get(), nresidual);
-      size = nresidual + fread(scratch_buffer.get() + nresidual,
-                               1,
-                               copy_params.buffer_size - nresidual,
-                               p_file);
+      size = nresidual +
+             fread(scratch_buffer.get() + nresidual, 1, alloc_size - nresidual, p_file);
 
       begin_pos = 0;
 

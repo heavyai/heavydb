@@ -245,6 +245,7 @@ struct ParseBufferRequest {
 
   std::unique_ptr<char[]> buffer;
   size_t buffer_size;
+  size_t buffer_alloc_size;
   size_t buffer_row_count;
   size_t begin_pos;
   size_t end_pos;

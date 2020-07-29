@@ -306,6 +306,15 @@ size_t get_buffer_size(const import_export::CopyParams& copy_params,
   return buffer_size;
 }
 
+size_t get_buffer_size(const FileRegions& file_regions) {
+  size_t buffer_size = 0;
+  for (const auto& file_region : file_regions) {
+    buffer_size = std::max(buffer_size, file_region.region_size);
+  }
+  CHECK(buffer_size);
+  return buffer_size;
+}
+
 /**
  * Gets the appropriate number of threads to be used for concurrent
  * processing within the data wrapper.
@@ -320,6 +329,17 @@ size_t get_thread_count(const import_export::CopyParams& copy_params,
   size_t num_buffers_in_file = (file_size + buffer_size - 1) / buffer_size;
   if (num_buffers_in_file < thread_count) {
     thread_count = num_buffers_in_file;
+  }
+  CHECK(thread_count);
+  return thread_count;
+}
+
+size_t get_thread_count(const import_export::CopyParams& copy_params,
+                        const FileRegions& file_regions) {
+  size_t thread_count = copy_params.threads;
+  if (thread_count == 0) {
+    thread_count =
+        std::min<size_t>(std::thread::hardware_concurrency(), file_regions.size());
   }
   CHECK(thread_count);
   return thread_count;
@@ -351,18 +371,16 @@ void CsvDataWrapper::populateChunk(ChunkKey chunk_key, Chunk_NS::Chunk& chunk) {
   const auto file_path = getFilePath();
   auto file = open_file(file_path);
 
-  fseek(file, 0, SEEK_END);
-  const size_t file_size = ftell(file);
+  const auto& file_regions = fragment_id_to_file_regions_map_[chunk_key[3]];
+  CHECK(!file_regions.empty());
 
-  const auto buffer_size = get_buffer_size(copy_params, file_size);
-  const auto thread_count = get_thread_count(copy_params, file_size, buffer_size);
+  const auto buffer_size = get_buffer_size(file_regions);
+  const auto thread_count = get_thread_count(copy_params, file_regions);
 
   auto catalog = Catalog_Namespace::Catalog::get(db_id_);
   CHECK(catalog);
   auto columns = catalog->getAllColumnMetadataForTableUnlocked(
       foreign_table_->tableId, false, false, true);
-
-  const auto& file_regions = fragment_id_to_file_regions_map_[chunk_key[3]];
   const int batch_size = (file_regions.size() + thread_count - 1) / thread_count;
 
   std::vector<csv_file_buffer_parser::ParseBufferRequest> parse_file_requests{};
@@ -375,6 +393,7 @@ void CsvDataWrapper::populateChunk(ChunkKey chunk_key, Chunk_NS::Chunk& chunk) {
         parse_file_requests.back();
     parse_file_request.buffer = std::make_unique<char[]>(buffer_size);
     parse_file_request.buffer_size = buffer_size;
+    parse_file_request.buffer_alloc_size = buffer_size;
     parse_file_request.copy_params = copy_params;
     parse_file_request.columns = columns;
     parse_file_request.catalog = catalog;
@@ -697,43 +716,70 @@ void dispatch_metadata_scan_request(
 }
 
 /**
+ * Optionally resizes the given buffer if the buffer size
+ * is less than the current buffer allocation size.
+ */
+void resize_buffer_if_needed(std::unique_ptr<char[]>& buffer,
+                             size_t& buffer_size,
+                             const size_t alloc_size) {
+  CHECK_LE(buffer_size, alloc_size);
+  if (buffer_size < alloc_size) {
+    buffer = std::make_unique<char[]>(alloc_size);
+    buffer_size = alloc_size;
+  }
+}
+
+/**
  * Reads from a CSV file iteratively and dispatches metadata scan
  * requests that are processed by worker threads.
  */
 void dispatch_metadata_scan_requests(
-    const size_t buffer_size,
+    const size_t& buffer_size,
     const std::string& file_path,
     std::FILE* file,
     const import_export::CopyParams& copy_params,
     MetadataScanMultiThreadingParams& multi_threading_params) {
-  auto residual_buffer = std::make_unique<char[]>(buffer_size);
+  auto alloc_size = buffer_size;
+  auto residual_buffer = std::make_unique<char[]>(alloc_size);
   size_t residual_buffer_size = 0;
+  size_t residual_buffer_alloc_size = alloc_size;
   size_t current_file_offset = get_offset_after_header(file_path, copy_params);
   size_t first_row_index_in_buffer = 0;
   fseek(file, current_file_offset, SEEK_SET);
 
   while (!feof(file)) {
     auto request = get_request_from_pool(multi_threading_params);
+    resize_buffer_if_needed(request.buffer, request.buffer_alloc_size, alloc_size);
+
     if (residual_buffer_size > 0) {
       memcpy(request.buffer.get(), residual_buffer.get(), residual_buffer_size);
     }
     size_t size = residual_buffer_size;
     size += fread(request.buffer.get() + residual_buffer_size,
                   1,
-                  buffer_size - residual_buffer_size,
+                  alloc_size - residual_buffer_size,
                   file);
     add_end_of_line_if_needed(
-        size, buffer_size, request.buffer.get(), copy_params.line_delim);
+        size, alloc_size, request.buffer.get(), copy_params.line_delim);
 
     unsigned int num_rows_in_buffer = 0;
-    request.end_pos = import_export::delimited_parser::find_end(
-        request.buffer.get(), size, copy_params, num_rows_in_buffer);
+    request.end_pos =
+        import_export::delimited_parser::find_row_end_pos(alloc_size,
+                                                          request.buffer,
+                                                          size,
+                                                          copy_params,
+                                                          first_row_index_in_buffer,
+                                                          num_rows_in_buffer,
+                                                          file);
+    request.buffer_size = size;
+    request.buffer_alloc_size = alloc_size;
     request.first_row_index = first_row_index_in_buffer;
     request.file_offset = current_file_offset;
     request.buffer_row_count = num_rows_in_buffer;
 
     residual_buffer_size = size - request.end_pos;
     if (residual_buffer_size > 0) {
+      resize_buffer_if_needed(residual_buffer, residual_buffer_alloc_size, alloc_size);
       memcpy(residual_buffer.get(),
              request.buffer.get() + request.end_pos,
              residual_buffer_size);
@@ -821,10 +867,22 @@ void CsvDataWrapper::populateMetadataForChunkKeyPrefix(
     parse_buffer_request.max_fragment_rows = foreign_table_->maxFragRows;
     parse_buffer_request.buffer = std::make_unique<char[]>(buffer_size);
     parse_buffer_request.buffer_size = buffer_size;
+    parse_buffer_request.buffer_alloc_size = buffer_size;
   }
 
-  dispatch_metadata_scan_requests(
-      buffer_size, file_path, file, copy_params, multi_threading_params);
+  try {
+    dispatch_metadata_scan_requests(
+        buffer_size, file_path, file, copy_params, multi_threading_params);
+  } catch (...) {
+    {
+      std::unique_lock<std::mutex> pending_requests_lock(
+          multi_threading_params.pending_requests_mutex);
+      multi_threading_params.continue_processing = false;
+    }
+    multi_threading_params.pending_requests_condition.notify_all();
+    throw;
+  }
+
   for (auto& future : futures) {
     // get() instead of wait() because we need to propagate potential exceptions.
     future.get();

@@ -29,6 +29,13 @@
 
 namespace import_export {
 namespace delimited_parser {
+
+class InsufficientBufferSizeException : public std::runtime_error {
+ public:
+  InsufficientBufferSizeException(const std::string& message)
+      : std::runtime_error(message) {}
+};
+
 /**
  * @brief Finds the closest possible row beginning in the given buffer.
  *
@@ -46,20 +53,40 @@ size_t find_beginning(const char* buffer,
                       const CopyParams& copy_params);
 
 /**
- * @brief Finds the closest possible row ending to the end of the given buffer.
+ * @brief Gets the maximum size to which thread buffers should be automatically resized.
+ */
+size_t get_max_buffer_resize();
+
+/**
+ * @brief Sets the maximum size to which thread buffers should be automatically resized.
+ * This function is only used for testing.
+ */
+void set_max_buffer_resize(const size_t max_buffer_resize);
+
+/**
+ * @brief Finds the closest possible row ending to the end of the given buffer. The
+ * buffer is resized as needed, with more content read from the file, until an
+ * end of row is found or a configured max buffer limit is reached.
  *
- * @param buffer               Given buffer which has the rows in csv format. (NOT OWN)
- * @param size                 Size of the buffer.
- * @param copy_params          Copy params for the table.
- * @param num_rows_this_buffer Number of rows until the closest possible row ending.
+ * @param alloc_size             Allocation size of subsequent buffer. This is
+ *                               adjusted as needed, if the buffer has to be resized.
+ * @param buffer                 Given buffer which has the rows in csv format.
+ * @param buffer_size            Size of the buffer.
+ * @param copy_params            Copy params for the table.
+ * @param buffer_first_row_index Index of first row in the buffer.
+ * @param num_rows_in_buffer     Number of rows until the closest possible row ending.
+ * @param file                   Handle to CSV file being parsed.
  *
  * @return The position of the closest possible row ending to the end of the given
  * buffer.
  */
-size_t find_end(const char* buffer,
-                size_t size,
-                const CopyParams& copy_params,
-                unsigned int& num_rows_this_buffer);
+size_t find_row_end_pos(size_t& alloc_size,
+                        std::unique_ptr<char[]>& buffer,
+                        size_t& buffer_size,
+                        const CopyParams& copy_params,
+                        const size_t buffer_first_row_index,
+                        unsigned int& num_rows_in_buffer,
+                        FILE* file);
 
 /**
  * @brief Parses the first row in the given buffer and inserts fields into given vector.

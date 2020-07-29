@@ -25,6 +25,7 @@
 #include "DBHandlerTestHelpers.h"
 #include "DataMgr/ForeignStorage/ForeignStorageCache.h"
 #include "DataMgr/ForeignStorage/ForeignStorageMgr.h"
+#include "ImportExport/DelimitedParserUtils.h"
 #include "Shared/geo_types.h"
 #include "TestHelpers.h"
 
@@ -121,6 +122,7 @@ class SelectQueryTest : public ForeignTableTest {
  protected:
   void SetUp() override {
     DBHandlerTestFixture::SetUp();
+    import_export::delimited_parser::set_max_buffer_resize(max_buffer_resize_);
     sql("DROP FOREIGN TABLE IF EXISTS test_foreign_table;");
     sql("DROP FOREIGN TABLE IF EXISTS test_foreign_table_2;");
     sql("DROP SERVER IF EXISTS test_server;");
@@ -132,6 +134,9 @@ class SelectQueryTest : public ForeignTableTest {
     sql("DROP SERVER IF EXISTS test_server;");
     DBHandlerTestFixture::TearDown();
   }
+
+  inline static size_t max_buffer_resize_ =
+      import_export::delimited_parser::get_max_buffer_resize();
 };
 
 class DataWrapperSelectQueryTest : public SelectQueryTest,
@@ -547,6 +552,33 @@ TEST_F(SelectQueryTest, WithBufferSizeOption) {
                         {"aa", array({Null_i, i(2), i(2)})},
                         {"aaa", array({i(3), Null_i, i(3)})}},
                        result);
+}
+
+TEST_F(SelectQueryTest, WithBufferSizeLessThanRowSize) {
+  const auto& query = getCreateForeignTableQuery(
+      "(t TEXT, i INTEGER[])", {{"buffer_size", "10"}}, "example_1", "csv");
+  sql(query);
+
+  TQueryResult result;
+  sql(result, "SELECT * FROM test_foreign_table ORDER BY t;");
+  assertResultSetEqual({{"a", array({i(1), i(1), i(1)})},
+                        {"aa", array({Null_i, i(2), i(2)})},
+                        {"aaa", array({i(3), Null_i, i(3)})}},
+                       result);
+}
+
+TEST_F(SelectQueryTest, WithMaxBufferResizeLessThanRowSize) {
+  import_export::delimited_parser::set_max_buffer_resize(15);
+  const auto& query = getCreateForeignTableQuery(
+      "(t TEXT, i INTEGER[])", {{"buffer_size", "10"}}, "example_1", "csv");
+  sql(query);
+
+  queryAndAssertException(
+      "SELECT * FROM test_foreign_table ORDER BY t;",
+      "Exception: Unable to find an end of line character after reading 15 characters. "
+      "Please ensure that the correct \"line_delimiter\" option is specified or update "
+      "the \"buffer_size\" option appropriately. Row number: 2. "
+      "First few characters in row: aa,{'NA', 2, 2}");
 }
 
 TEST_F(SelectQueryTest, ReverseLongitudeAndLatitude) {
