@@ -1242,7 +1242,6 @@ extern "C" ALWAYS_INLINE DEVICE int32_t key_for_string_encoded(const int32_t str
 extern "C" ALWAYS_INLINE DEVICE bool sample_ratio(const double proportion,
                                                   const int64_t row_offset) {
   const int64_t threshold = 4294967296 * proportion;
-  // return ((row_offset * 2654435761) & 0X00000000FFFFFFFF) < threshold;
   return (row_offset * 2654435761) % 4294967296 < threshold;
 }
 
