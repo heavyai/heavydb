@@ -3995,7 +3995,28 @@ void unserialize_key_metainfo(std::vector<std::string>& shared_dicts,
 
 }  // namespace
 
-// returns a "CREATE TABLE" statement in a string
+#include "Parser/ReservedKeywords.h"
+
+//! returns true if the string contains one or more spaces
+inline bool contains_spaces(std::string_view str) {
+  return std::find_if(str.begin(), str.end(), [](const unsigned char& ch) {
+           return std::isspace(ch);
+         }) != str.end();
+}
+
+//! returns true if the string contains one or more OmniSci SQL reserved characters
+inline bool contains_sql_reserved_chars(
+    std::string_view str,
+    std::string_view chars = "`~!@#$%^&*()-=+[{]}\\|;:'\",<.>/?") {
+  return str.find_first_of(chars) != std::string_view::npos;
+}
+
+//! returns true if the string equals an OmniSci SQL reserved keyword
+inline bool is_reserved_sql_keyword(std::string_view str) {
+  return reserved_keywords.find(to_upper(std::string(str))) != reserved_keywords.end();
+}
+
+// returns a "CREATE TABLE" statement in a string for "SHOW CREATE TABLE"
 std::string Catalog::dumpCreateTable(const TableDescriptor* td,
                                      bool multiline_formatting,
                                      bool dump_defaults) const {
@@ -4035,7 +4056,15 @@ std::string Catalog::dumpCreateTable(const TableDescriptor* td,
       if (multiline_formatting) {
         os << "\n  ";
       }
-      os << cd->columnName;
+      // column name
+      bool column_name_needs_quotes = is_reserved_sql_keyword(cd->columnName) ||
+                                      contains_spaces(cd->columnName) ||
+                                      contains_sql_reserved_chars(cd->columnName);
+      if (!column_name_needs_quotes) {
+        os << cd->columnName;
+      } else {
+        os << "\"" << cd->columnName << "\"";
+      }
       // CHAR is perculiar... better dump it as TEXT(32) like \d does
       if (ti.get_type() == SQLTypes::kCHAR) {
         os << " "
