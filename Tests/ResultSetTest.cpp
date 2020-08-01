@@ -1001,7 +1001,7 @@ void run_reduction(const std::vector<TargetInfo>& target_infos,
       storage2->getUnderlyingBuffer(), target_infos, query_mem_desc, generator2, step);
   ResultSetManager rs_manager;
   std::vector<ResultSet*> storage_set{rs1.get(), rs2.get()};
-  auto result_rs = rs_manager.reduce(storage_set);
+  rs_manager.reduce(storage_set);
 }
 
 void test_reduce(const std::vector<TargetInfo>& target_infos,
@@ -1062,11 +1062,11 @@ void test_reduce(const std::vector<TargetInfo>& target_infos,
                 case kINT:
                 case kBIGINT: {
                   const auto ival = v<int64_t>(row[i]);
-                  ASSERT_EQ(
+                  const int64_t ref =
                       (target_info.agg_kind == kSUM || target_info.agg_kind == kCOUNT)
                           ? step * row_idx
-                          : row_idx,
-                      ival);
+                          : row_idx;
+                  ASSERT_EQ(ref, ival);
                   break;
                 }
                 case kDOUBLE: {
