@@ -10122,6 +10122,14 @@ TEST(Select, CreateTableAsSelect) {
     c("SELECT f, COUNT(*) FROM ctas_test GROUP BY f;", dt);
     c("SELECT d, COUNT(*) FROM ctas_test GROUP BY d;", dt);
     c("SELECT COUNT(*) FROM empty_ctas_test;", dt);
+    c("SELECT x, w, y, z, b, f, ff, d, fx FROM ctas_test_full ORDER BY x, w, y, z, "
+      "b, f, ff, d, fx;",
+      dt);
+    c("SELECT count(dn), count(fn), count(null_str) FROM ctas_test_full;", dt);
+    c("SELECT str, count(*) FROM ctas_test_full GROUP BY str ORDER BY 2;", dt);
+    c("SELECT m, m_3, m_6, m_9, n, o, o1, o2 FROM ctas_test_full ORDER BY m, m_3, m_6, "
+      "m_9, n, o, o1, o2;",
+      dt);
   }
 }
 
@@ -22195,6 +22203,22 @@ int create_as_select() {
   return 0;
 }
 
+int create_as_select_full() {
+  try {
+    const std::string drop_ctas_test{"DROP TABLE IF EXISTS ctas_test_full;"};
+    run_ddl_statement(drop_ctas_test);
+    g_sqlite_comparator.query(drop_ctas_test);
+    const std::string create_ctas_test{
+        "CREATE TABLE ctas_test_full AS SELECT * FROM test;"};
+    run_ddl_statement(create_ctas_test);
+    g_sqlite_comparator.query(create_ctas_test);
+  } catch (...) {
+    LOG(ERROR) << "Failed to (re-)create table 'ctas_test_full'";
+    return -EEXIST;
+  }
+  return 0;
+}
+
 int create_as_select_empty() {
   try {
     const std::string drop_ctas_test{"DROP TABLE IF EXISTS empty_ctas_test;"};
@@ -22485,6 +22509,9 @@ int main(int argc, char** argv) {
     }
     if (!err && !g_use_temporary_tables) {
       SKIP_ON_AGGREGATOR(err = create_as_select());
+    }
+    if (!err && !g_use_temporary_tables) {
+      SKIP_ON_AGGREGATOR(err = create_as_select_full());
     }
     if (!err && !g_use_temporary_tables) {
       SKIP_ON_AGGREGATOR(err = create_as_select_empty());
