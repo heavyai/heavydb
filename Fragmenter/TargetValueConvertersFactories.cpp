@@ -66,7 +66,7 @@ struct NumericConverterFactory {
         target_null_value,
         param.can_be_null);
 
-    if (param.type.is_integer() || param.type.is_timestamp() || param.type.is_time()) {
+    if (param.type.is_integer()) {
       // only apply overflow checks for
       // the types using the fixed encoder
       ret->setValueCaster(std::move(caster));
