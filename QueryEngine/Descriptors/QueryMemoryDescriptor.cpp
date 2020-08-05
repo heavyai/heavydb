@@ -1026,7 +1026,7 @@ bool QueryMemoryDescriptor::isWarpSyncRequired(
   } else {
     auto cuda_mgr = executor_->getCatalog()->getDataMgr().getCudaMgr();
     CHECK(cuda_mgr);
-    return cuda_mgr->isArchVoltaForAll();
+    return cuda_mgr->isArchVoltaOrGreaterForAll();
   }
 }
 
