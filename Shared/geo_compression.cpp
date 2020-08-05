@@ -55,11 +55,13 @@ std::vector<uint8_t> compress_coords(std::vector<double>& coords, const SQLTypeI
   if (!ti.get_notnull()) {
     is_null_point = (ti.get_type() == kPOINT && coords[0] == NULL_ARRAY_DOUBLE);
   }
-  std::vector<uint8_t> compressed_coords;
+
   bool x = true;
   bool is_geoint32 =
       (ti.get_compression() == kENCODING_GEOINT && ti.get_comp_param() == 32);
   size_t coord_data_size = (is_geoint32) ? (ti.get_comp_param() / 8) : sizeof(double);
+  std::vector<uint8_t> compressed_coords;
+  compressed_coords.reserve(coords.size() * coord_data_size);
   for (auto coord : coords) {
     uint64_t coord_data;
     if (is_null_point) {
