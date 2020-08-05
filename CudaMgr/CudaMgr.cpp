@@ -298,9 +298,9 @@ bool CudaMgr::isArchMaxwellOrLaterForAll() const {
  * Returns true if all devices have Volta micro-architecture
  * Returns false, if there is any non-Volta device available.
  */
-bool CudaMgr::isArchVoltaForAll() const {
+bool CudaMgr::isArchVoltaOrGreaterForAll() const {
   for (int i = 0; i < device_count_; i++) {
-    if (device_properties_[i].computeMajor != 7) {
+    if (device_properties_[i].computeMajor < 7) {
       return false;
     }
   }
