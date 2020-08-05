@@ -1450,36 +1450,32 @@ void Importer::set_geo_physical_import_buffer(
       is_null_geo = false;
     }
   }
-  std::vector<TDatum> td_coords_data;
+  TDatum tdd_coords;
   // Get the raw data representing [optionally compressed] non-NULL geo's coords.
   // One exception - NULL POINT geo: coords need to be processed to encode nullness
   // in a fixlen array, compressed and uncompressed.
   if (!is_null_geo) {
     std::vector<uint8_t> compressed_coords = geospatial::compress_coords(coords, col_ti);
+    tdd_coords.val.arr_val.reserve(compressed_coords.size());
     for (auto cc : compressed_coords) {
-      TDatum td_byte;
-      td_byte.val.int_val = cc;
-      td_coords_data.push_back(td_byte);
+      tdd_coords.val.arr_val.emplace_back();
+      tdd_coords.val.arr_val.back().val.int_val = cc;
     }
   }
-  TDatum tdd_coords;
-  tdd_coords.val.arr_val = td_coords_data;
   tdd_coords.is_null = is_null_geo;
   import_buffers[col_idx++]->add_value(cd_coords, tdd_coords, false, replicate_count);
 
   if (col_type == kPOLYGON || col_type == kMULTIPOLYGON) {
     // Create ring_sizes array value and add it to the physical column
     auto cd_ring_sizes = catalog.getMetadataForColumn(cd->tableId, ++columnId);
-    std::vector<TDatum> td_ring_sizes;
+    TDatum tdd_ring_sizes;
+    tdd_ring_sizes.val.arr_val.reserve(ring_sizes.size());
     if (!is_null_geo) {
       for (auto ring_size : ring_sizes) {
-        TDatum td_ring_size;
-        td_ring_size.val.int_val = ring_size;
-        td_ring_sizes.push_back(td_ring_size);
+        tdd_ring_sizes.val.arr_val.emplace_back();
+        tdd_ring_sizes.val.arr_val.back().val.int_val = ring_size;
       }
     }
-    TDatum tdd_ring_sizes;
-    tdd_ring_sizes.val.arr_val = td_ring_sizes;
     tdd_ring_sizes.is_null = is_null_geo;
     import_buffers[col_idx++]->add_value(
         cd_ring_sizes, tdd_ring_sizes, false, replicate_count);
@@ -1488,16 +1484,14 @@ void Importer::set_geo_physical_import_buffer(
   if (col_type == kMULTIPOLYGON) {
     // Create poly_rings array value and add it to the physical column
     auto cd_poly_rings = catalog.getMetadataForColumn(cd->tableId, ++columnId);
-    std::vector<TDatum> td_poly_rings;
+    TDatum tdd_poly_rings;
+    tdd_poly_rings.val.arr_val.reserve(poly_rings.size());
     if (!is_null_geo) {
       for (auto num_rings : poly_rings) {
-        TDatum td_num_rings;
-        td_num_rings.val.int_val = num_rings;
-        td_poly_rings.push_back(td_num_rings);
+        tdd_poly_rings.val.arr_val.emplace_back();
+        tdd_poly_rings.val.arr_val.back().val.int_val = num_rings;
       }
     }
-    TDatum tdd_poly_rings;
-    tdd_poly_rings.val.arr_val = td_poly_rings;
     tdd_poly_rings.is_null = is_null_geo;
     import_buffers[col_idx++]->add_value(
         cd_poly_rings, tdd_poly_rings, false, replicate_count);
@@ -1505,16 +1499,14 @@ void Importer::set_geo_physical_import_buffer(
 
   if (col_type == kLINESTRING || col_type == kPOLYGON || col_type == kMULTIPOLYGON) {
     auto cd_bounds = catalog.getMetadataForColumn(cd->tableId, ++columnId);
-    std::vector<TDatum> td_bounds_data;
+    TDatum tdd_bounds;
+    tdd_bounds.val.arr_val.reserve(bounds.size());
     if (!is_null_geo) {
       for (auto b : bounds) {
-        TDatum td_double;
-        td_double.val.real_val = b;
-        td_bounds_data.push_back(td_double);
+        tdd_bounds.val.arr_val.emplace_back();
+        tdd_bounds.val.arr_val.back().val.real_val = b;
       }
     }
-    TDatum tdd_bounds;
-    tdd_bounds.val.arr_val = td_bounds_data;
     tdd_bounds.is_null = is_null_geo;
     import_buffers[col_idx++]->add_value(cd_bounds, tdd_bounds, false, replicate_count);
   }
