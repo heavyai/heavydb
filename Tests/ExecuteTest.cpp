@@ -1562,6 +1562,8 @@ TEST(Select, InValues) {
     c(R"(SELECT t FROM test WHERE t NOT IN (NULL) GROUP BY t ORDER BY t;)", dt);
     c(R"(SELECT t FROM test WHERE t NOT IN (1001, 1003, 1005, 1007, 1009, -10) GROUP BY t ORDER BY t;)",
       dt);
+    c(R"(WITH dimensionValues AS (SELECT b FROM test GROUP BY b ORDER BY b) SELECT x FROM test WHERE b in (SELECT b FROM dimensionValues) GROUP BY x ORDER BY x;)",
+      dt);
   }
 }
 
