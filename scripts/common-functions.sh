@@ -63,15 +63,11 @@ function install_cmake() {
   CXXFLAGS="-pthread" CFLAGS="-pthread" download_make_install ${HTTP_DEPS}/cmake-${CMAKE_VERSION}.tar.gz
 }
 
-ARROW_VERSION=apache-arrow-0.16.0
+ARROW_VERSION=apache-arrow-1.0.0
 
 function install_arrow() {
   download https://github.com/apache/arrow/archive/$ARROW_VERSION.tar.gz
   extract $ARROW_VERSION.tar.gz
-
-  pushd arrow-$ARROW_VERSION
-  patch -p1 < ${SCRIPTS_DIR}/0001-PARQUET-1823-C-Invalid-RowGroup-returned-by-parquet-.patch
-  popd
 
   mkdir -p arrow-$ARROW_VERSION/cpp/build
   pushd arrow-$ARROW_VERSION/cpp/build
@@ -82,15 +78,15 @@ function install_arrow() {
     -DARROW_BUILD_STATIC=ON \
     -DARROW_BUILD_TESTS=OFF \
     -DARROW_BUILD_BENCHMARKS=OFF \
-    -DARROW_WITH_BROTLI=OFF \
     -DARROW_CSV=ON \
     -DARROW_JSON=ON \
-    -DARROW_WITH_ZLIB=ON \
-    -DARROW_WITH_LZ4=OFF \
-    -DARROW_WITH_SNAPPY=ON \
-    -DARROW_WITH_ZSTD=ON \
+    -DARROW_WITH_BROTLI=BUNDLED \
+    -DARROW_WITH_ZLIB=BUNDLED \
+    -DARROW_WITH_LZ4=BUNDLED \
+    -DARROW_WITH_SNAPPY=BUNDLED \
+    -DARROW_WITH_ZSTD=BUNDLED \
     -DARROW_USE_GLOG=OFF \
-    -DARROW_JEMALLOC=OFF \
+    -DARROW_JEMALLOC=BUNDLED \
     -DARROW_BOOST_USE_SHARED=${ARROW_BOOST_USE_SHARED:="OFF"} \
     -DARROW_PARQUET=ON \
     -DARROW_FILESYSTEM=ON \

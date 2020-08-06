@@ -72,22 +72,28 @@ find_library(Arrow_GPU_CUDA_LIBRARY
   /usr/local/homebrew/lib
   /opt/local/lib)
 
+find_library(Arrow_DEPS_LIBRARY
+  NAMES arrow_bundled_dependencies
+  HINTS
+  ENV LD_LIBRARY_PATH
+  ENV DYLD_LIBRARY_PATH
+  PATHS
+  /usr/lib
+  /usr/local/lib
+  /usr/local/homebrew/lib
+  /opt/local/lib)
+
 get_filename_component(Arrow_LIBRARY_DIR ${Arrow_LIBRARY} DIRECTORY)
-
-# Set standard CMake FindPackage variables if found.
-set(Arrow_LIBRARIES ${Arrow_LIBRARY} ${Arrow_DC_LIBRARY})
-set(Arrow_GPU_CUDA_LIBRARIES ${Arrow_GPU_CUDA_LIBRARY})
-set(Arrow_LIBRARY_DIRS ${Arrow_LIBRARY_DIR})
-set(Arrow_INCLUDE_DIRS ${Arrow_LIBRARY_DIR}/../include)
-
-find_package(Snappy)
-if(Snappy_FOUND)
-  list(APPEND Arrow_LIBRARIES ${Snappy_LIBRARIES})
-endif()
 
 if(Arrow_USE_STATIC_LIBS)
   set(CMAKE_FIND_LIBRARY_SUFFIXES ${_CMAKE_FIND_LIBRARY_SUFFIXES})
 endif()
+
+# Set standard CMake FindPackage variables if found.
+set(Arrow_LIBRARIES ${Arrow_LIBRARY} ${Arrow_DC_LIBRARY} ${Arrow_DEPS_LIBRARY})
+set(Arrow_GPU_CUDA_LIBRARIES ${Arrow_GPU_CUDA_LIBRARY})
+set(Arrow_LIBRARY_DIRS ${Arrow_LIBRARY_DIR})
+set(Arrow_INCLUDE_DIRS ${Arrow_LIBRARY_DIR}/../include)
 
 include(FindPackageHandleStandardArgs)
 find_package_handle_standard_args(Arrow REQUIRED_VARS Arrow_LIBRARY)

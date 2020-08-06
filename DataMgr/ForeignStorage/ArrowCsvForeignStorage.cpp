@@ -325,8 +325,8 @@ void ArrowCsvForeignStorage::createDictionaryEncodedColumn(
           });
 
       std::shared_ptr<arrow::Buffer> indices_buf;
-      ARROW_THROW_NOT_OK(
-          arrow::AllocateBuffer(bulk_size * sizeof(int32_t), &indices_buf));
+      ARROW_ASSIGN_OR_THROW(indices_buf,
+                            arrow::AllocateBuffer(bulk_size * sizeof(int32_t)));
       auto raw_data = reinterpret_cast<int*>(indices_buf->mutable_data());
       auto time = measure<>::execution([&]() { dict->getOrAddBulk(bulk, raw_data); });
 
@@ -406,8 +406,8 @@ void ArrowCsvForeignStorage::createDecimalColumn(
   }
 
   std::shared_ptr<arrow::Buffer> result_buffer;
-  ARROW_THROW_NOT_OK(
-      arrow::AllocateBuffer(column_size * c.columnType.get_size(), &result_buffer));
+  ARROW_ASSIGN_OR_THROW(result_buffer,
+                        arrow::AllocateBuffer(column_size * c.columnType.get_size()));
 
   T* buffer_data = reinterpret_cast<T*>(result_buffer->mutable_data());
   tbb::parallel_for(
@@ -451,8 +451,11 @@ void ArrowCsvForeignStorage::createDecimalColumn(
               }
             }
 
-            auto converted_chunk = std::make_shared<ChunkType>(
-                size, result_buffer, nullptr, -1, offsets[f] + chunk_offset);
+            auto converted_chunk = std::make_shared<ChunkType>(size,
+                                                               result_buffer,
+                                                               nullptr,
+                                                               arrow::kUnknownNullCount,
+                                                               offsets[f] + chunk_offset);
             frag.chunks[i - fragments[f].first_chunk] = converted_chunk->data();
 
             chunk_offset += size;

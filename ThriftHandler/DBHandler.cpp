@@ -2583,8 +2583,8 @@ RecordBatchVector loadArrowStream(const std::string& stream) {
 
     arrow::io::BufferReader buf_reader(stream_buffer);
     std::shared_ptr<arrow::RecordBatchReader> batch_reader;
-    ARROW_THRIFT_THROW_NOT_OK(
-        arrow::ipc::RecordBatchStreamReader::Open(&buf_reader, &batch_reader));
+    ARROW_ASSIGN_OR_THROW(batch_reader,
+                          arrow::ipc::RecordBatchStreamReader::Open(&buf_reader));
 
     while (true) {
       std::shared_ptr<arrow::RecordBatch> batch;

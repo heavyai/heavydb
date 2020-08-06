@@ -28,7 +28,7 @@ if [ ! -w $(dirname $PREFIX) ] ; then
     SUDO=sudo
 fi
 $SUDO mkdir -p $PREFIX
-$SUDO chown -R $USER $PREFIX
+$SUDO chown -R $(id -u) $PREFIX
 
 export PATH=$PREFIX/bin:$PATH
 export LD_LIBRARY_PATH=$PREFIX/lib64:$PREFIX/lib:$LD_LIBRARY_PATH

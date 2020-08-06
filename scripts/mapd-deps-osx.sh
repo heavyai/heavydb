@@ -43,7 +43,7 @@ build_pin_dep gflags 2.2.2
 build_pin_dep glog 0.4.0
 build_pin_dep thrift 0.11.0
 build_pin_dep aws-sdk-cpp 1.7.280
-build_pin_dep apache-arrow-omnisci 0.16.0
+build_pin_dep apache-arrow-omnisci 1.0.0
 build_pin_dep bisonpp 1.21-45
 build_pin_dep librdkafka 1.2.2
 build_pin_dep xerces-c 3.2.2
