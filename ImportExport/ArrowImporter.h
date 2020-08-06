@@ -30,7 +30,8 @@
 #include "Shared/ThreadController.h"
 #include "Shared/sqltypes.h"
 
-using namespace arrow;
+using arrow::Array;
+using arrow::Type;
 
 struct ArrowImporterException : std::runtime_error {
   using std::runtime_error::runtime_error;
@@ -59,7 +60,7 @@ inline void arrow_throw_if(const bool cond, const std::string& message) {
 namespace {
 
 using VarValue =
-    boost::variant<bool, float, double, int64_t, std::string, void*, Decimal128>;
+    boost::variant<bool, float, double, int64_t, std::string, void*, arrow::Decimal128>;
 
 template <typename T>
 using enable_if_integral = typename std::enable_if_t<std::is_integral<T>::value, T>;
@@ -81,47 +82,47 @@ inline std::string error_context(const ColumnDescriptor* cd,
 }
 
 template <typename SrcType, typename DstType>
-inline VarValue get_numeric_value(const Array& array, const int64_t idx) {
-  using ArrayType = typename TypeTraits<SrcType>::ArrayType;
+inline VarValue get_numeric_value(const arrow::Array& array, const int64_t idx) {
+  using ArrayType = typename arrow::TypeTraits<SrcType>::ArrayType;
   return (DstType) static_cast<const ArrayType&>(array).Value(idx);
 }
 
 template <typename SrcType>
-inline VarValue get_string_value(const Array& array, const int64_t idx) {
-  using ArrayType = typename TypeTraits<SrcType>::ArrayType;
+inline VarValue get_string_value(const arrow::Array& array, const int64_t idx) {
+  using ArrayType = typename arrow::TypeTraits<SrcType>::ArrayType;
   return static_cast<const ArrayType&>(array).GetString(idx);
 }
 
 #define NUMERIC_CASE(tid, src_type, var_type) \
-  case Type::tid:                             \
+  case arrow::Type::tid:                      \
     return get_numeric_value<src_type, var_type>;
 #define STRING_CASE(tid, src_type) \
-  case Type::tid:                  \
+  case arrow::Type::tid:           \
     return get_string_value<src_type>;
 
-inline auto value_getter(const Array& array,
+inline auto value_getter(const arrow::Array& array,
                          const ColumnDescriptor* cd,
                          import_export::BadRowsTracker* const bad_rows_tracker) {
   switch (array.type_id()) {
-    NUMERIC_CASE(BOOL, BooleanType, bool)
-    NUMERIC_CASE(UINT8, UInt8Type, int64_t)
-    NUMERIC_CASE(UINT16, UInt16Type, int64_t)
-    NUMERIC_CASE(UINT32, UInt32Type, int64_t)
-    NUMERIC_CASE(UINT64, Int64Type, int64_t)
-    NUMERIC_CASE(INT8, Int8Type, int64_t)
-    NUMERIC_CASE(INT16, Int16Type, int64_t)
-    NUMERIC_CASE(INT32, Int32Type, int64_t)
-    NUMERIC_CASE(INT64, Int64Type, int64_t)
-    NUMERIC_CASE(FLOAT, FloatType, float)
-    NUMERIC_CASE(DOUBLE, DoubleType, double)
-    NUMERIC_CASE(DATE32, Date32Type, int64_t)
-    NUMERIC_CASE(DATE64, Date64Type, int64_t)
-    NUMERIC_CASE(TIME64, Time64Type, int64_t)
-    NUMERIC_CASE(TIME32, Time32Type, int64_t)
-    NUMERIC_CASE(TIMESTAMP, TimestampType, int64_t)
-    NUMERIC_CASE(DECIMAL, Decimal128Type, Decimal128)
-    STRING_CASE(STRING, StringType)
-    STRING_CASE(BINARY, BinaryType)
+    NUMERIC_CASE(BOOL, arrow::BooleanType, bool)
+    NUMERIC_CASE(UINT8, arrow::UInt8Type, int64_t)
+    NUMERIC_CASE(UINT16, arrow::UInt16Type, int64_t)
+    NUMERIC_CASE(UINT32, arrow::UInt32Type, int64_t)
+    NUMERIC_CASE(UINT64, arrow::Int64Type, int64_t)
+    NUMERIC_CASE(INT8, arrow::Int8Type, int64_t)
+    NUMERIC_CASE(INT16, arrow::Int16Type, int64_t)
+    NUMERIC_CASE(INT32, arrow::Int32Type, int64_t)
+    NUMERIC_CASE(INT64, arrow::Int64Type, int64_t)
+    NUMERIC_CASE(FLOAT, arrow::FloatType, float)
+    NUMERIC_CASE(DOUBLE, arrow::DoubleType, double)
+    NUMERIC_CASE(DATE32, arrow::Date32Type, int64_t)
+    NUMERIC_CASE(DATE64, arrow::Date64Type, int64_t)
+    NUMERIC_CASE(TIME64, arrow::Time64Type, int64_t)
+    NUMERIC_CASE(TIME32, arrow::Time32Type, int64_t)
+    NUMERIC_CASE(TIMESTAMP, arrow::TimestampType, int64_t)
+    NUMERIC_CASE(DECIMAL, arrow::Decimal128Type, arrow::Decimal128)
+    STRING_CASE(STRING, arrow::StringType)
+    STRING_CASE(BINARY, arrow::BinaryType)
     default:
       arrow_throw_if(true,
                      error_context(cd, bad_rows_tracker) + "Parquet type " +
@@ -161,24 +162,25 @@ inline void data_conversion_error(const std::string& v,
 // models the variant data buffers of TypedImportBuffer (LHS)
 struct DataBufferBase {
   const ColumnDescriptor* cd;
-  const Array& array;
+  const arrow::Array& array;
   import_export::BadRowsTracker* const bad_rows_tracker;
   // in case of arrow-decimal to omni-decimal conversion
   // dont get/set these info on every row of arrow array
-  const DataType& arrow_type;
+  const arrow::DataType& arrow_type;
   const int arrow_decimal_scale;
   const SQLTypeInfo old_type;
   const SQLTypeInfo new_type;
   DataBufferBase(const ColumnDescriptor* cd,
-                 const Array& array,
+                 const arrow::Array& array,
                  import_export::BadRowsTracker* const bad_rows_tracker)
       : cd(cd)
       , array(array)
       , bad_rows_tracker(bad_rows_tracker)
       , arrow_type(*array.type())
-      , arrow_decimal_scale(arrow_type.id() == Type::DECIMAL
-                                ? static_cast<const Decimal128Type&>(arrow_type).scale()
-                                : 0)
+      , arrow_decimal_scale(
+            arrow_type.id() == arrow::Type::DECIMAL
+                ? static_cast<const arrow::Decimal128Type&>(arrow_type).scale()
+                : 0)
       , old_type(cd->columnType.get_type(),
                  cd->columnType.get_dimension(),
                  arrow_decimal_scale,
@@ -193,7 +195,7 @@ template <typename DATA_TYPE>
 struct DataBuffer : DataBufferBase {
   std::vector<DATA_TYPE>& buffer;
   DataBuffer(const ColumnDescriptor* cd,
-             const Array& array,
+             const arrow::Array& array,
              std::vector<DATA_TYPE>& buffer,
              import_export::BadRowsTracker* const bad_rows_tracker)
       : DataBufferBase(cd, array, bad_rows_tracker), buffer(buffer) {}
@@ -206,18 +208,19 @@ constexpr int32_t kSecondsInDay = 86400;
 
 static const std::map<std::pair<int32_t, arrow::TimeUnit::type>,
                       std::pair<SQLOps, int64_t>>
-    _precision_scale_lookup{{{0, TimeUnit::MILLI}, {kDIVIDE, kMillisecondsInSecond}},
-                            {{0, TimeUnit::MICRO}, {kDIVIDE, kMicrosecondsInSecond}},
-                            {{0, TimeUnit::NANO}, {kDIVIDE, kNanosecondsinSecond}},
-                            {{3, TimeUnit::SECOND}, {kMULTIPLY, kMicrosecondsInSecond}},
-                            {{3, TimeUnit::MICRO}, {kDIVIDE, kMillisecondsInSecond}},
-                            {{3, TimeUnit::NANO}, {kDIVIDE, kMicrosecondsInSecond}},
-                            {{6, TimeUnit::SECOND}, {kMULTIPLY, kMicrosecondsInSecond}},
-                            {{6, TimeUnit::MILLI}, {kMULTIPLY, kMillisecondsInSecond}},
-                            {{6, TimeUnit::NANO}, {kDIVIDE, kMillisecondsInSecond}},
-                            {{9, TimeUnit::SECOND}, {kMULTIPLY, kNanosecondsinSecond}},
-                            {{9, TimeUnit::MILLI}, {kMULTIPLY, kMicrosecondsInSecond}},
-                            {{9, TimeUnit::MICRO}, {kMULTIPLY, kMillisecondsInSecond}}};
+    _precision_scale_lookup{
+        {{0, arrow::TimeUnit::MILLI}, {kDIVIDE, kMillisecondsInSecond}},
+        {{0, arrow::TimeUnit::MICRO}, {kDIVIDE, kMicrosecondsInSecond}},
+        {{0, arrow::TimeUnit::NANO}, {kDIVIDE, kNanosecondsinSecond}},
+        {{3, arrow::TimeUnit::SECOND}, {kMULTIPLY, kMicrosecondsInSecond}},
+        {{3, arrow::TimeUnit::MICRO}, {kDIVIDE, kMillisecondsInSecond}},
+        {{3, arrow::TimeUnit::NANO}, {kDIVIDE, kMicrosecondsInSecond}},
+        {{6, arrow::TimeUnit::SECOND}, {kMULTIPLY, kMicrosecondsInSecond}},
+        {{6, arrow::TimeUnit::MILLI}, {kMULTIPLY, kMillisecondsInSecond}},
+        {{6, arrow::TimeUnit::NANO}, {kDIVIDE, kMillisecondsInSecond}},
+        {{9, arrow::TimeUnit::SECOND}, {kMULTIPLY, kNanosecondsinSecond}},
+        {{9, arrow::TimeUnit::MILLI}, {kMULTIPLY, kMicrosecondsInSecond}},
+        {{9, arrow::TimeUnit::MICRO}, {kMULTIPLY, kMillisecondsInSecond}}};
 
 // models the variant values of Arrow Array (RHS)
 template <typename VALUE_TYPE>
@@ -234,17 +237,17 @@ struct ArrowValueBase {
   template <bool enabled = std::is_integral<VALUE_TYPE>::value>
   int64_t resolve_time(const VALUE_TYPE& v, std::enable_if_t<enabled>* = 0) const {
     const auto& type_id = data.arrow_type.id();
-    if (type_id == Type::DATE32 || type_id == Type::DATE64) {
-      auto& date_type = static_cast<const DateType&>(data.arrow_type);
+    if (type_id == arrow::Type::DATE32 || type_id == arrow::Type::DATE64) {
+      auto& date_type = static_cast<const arrow::DateType&>(data.arrow_type);
       switch (date_type.unit()) {
-        case DateUnit::DAY:
+        case arrow::DateUnit::DAY:
           return v * kSecondsInDay;
-        case DateUnit::MILLI:
+        case arrow::DateUnit::MILLI:
           return v / kMillisecondsInSecond;
       }
-    } else if (type_id == Type::TIME32 || type_id == Type::TIME64 ||
-               type_id == Type::TIMESTAMP) {
-      auto& time_type = static_cast<const TimeType&>(data.arrow_type);
+    } else if (type_id == arrow::Type::TIME32 || type_id == arrow::Type::TIME64 ||
+               type_id == arrow::Type::TIMESTAMP) {
+      auto& time_type = static_cast<const arrow::TimeType&>(data.arrow_type);
       const auto result =
           _precision_scale_lookup.find(std::make_pair(dimension, time_type.unit()));
       if (result != _precision_scale_lookup.end()) {
@@ -377,16 +380,16 @@ struct ArrowValue<int64_t> : ArrowValueBase<int64_t> {
   }
   explicit operator const std::string() const {
     const auto& type_id = data.arrow_type.id();
-    if (type_id == Type::DATE32 || type_id == Type::DATE64) {
-      auto& date_type = static_cast<const DateType&>(data.arrow_type);
+    if (type_id == arrow::Type::DATE32 || type_id == arrow::Type::DATE64) {
+      auto& date_type = static_cast<const arrow::DateType&>(data.arrow_type);
       SQLTypeInfo ti(kDATE);
-      Datum datum{.bigintval = date_type.unit() == DateUnit::MILLI
+      Datum datum{.bigintval = date_type.unit() == arrow::DateUnit::MILLI
                                    ? v / kMicrosecondsInSecond
                                    : v};
       return DatumToString(datum, ti);
-    } else if (type_id == Type::TIME32 || type_id == Type::TIME64 ||
-               type_id == Type::TIMESTAMP) {
-      auto& time_type = static_cast<const TimeType&>(data.arrow_type);
+    } else if (type_id == arrow::Type::TIME32 || type_id == arrow::Type::TIME64 ||
+               type_id == arrow::Type::TIMESTAMP) {
+      auto& time_type = static_cast<const arrow::TimeType&>(data.arrow_type);
       const auto result =
           _precision_scale_lookup.find(std::make_pair(0, time_type.unit()));
       int64_t divisor{1};
@@ -445,8 +448,8 @@ struct ArrowValue<std::string> : ArrowValueBase<std::string> {
 };
 
 template <>
-struct ArrowValue<Decimal128> : ArrowValueBase<Decimal128> {
-  using VALUE_TYPE = Decimal128;
+struct ArrowValue<arrow::Decimal128> : ArrowValueBase<arrow::Decimal128> {
+  using VALUE_TYPE = arrow::Decimal128;
   ArrowValue(const DataBufferBase& data, const VALUE_TYPE& v)
       : ArrowValueBase<VALUE_TYPE>(data, v) {
     // omni decimal has only 64 bits

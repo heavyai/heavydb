@@ -21,6 +21,8 @@
 #include <arrow/api.h>
 #include <arrow/io/memory.h>
 #include <arrow/ipc/api.h>
+#include <arrow/result.h>
+#include <arrow/status.h>
 #include <sys/ipc.h>
 #include <sys/shm.h>
 #include <thrift/Thrift.h>
@@ -166,8 +168,8 @@ TEST_F(ArrowIpcBasic, IpcCpu) {
 
   arrow::io::BufferReader reader(reinterpret_cast<const uint8_t*>(ipc_ptr),
                                  ipc_handle_size);
-  std::shared_ptr<arrow::RecordBatchReader> batch_reader;
-  ARROW_THROW_NOT_OK(arrow::ipc::RecordBatchStreamReader::Open(&reader, &batch_reader));
+  ARROW_ASSIGN_OR_THROW(auto batch_reader,
+                        arrow::ipc::RecordBatchStreamReader::Open(&reader));
   std::shared_ptr<arrow::RecordBatch> read_batch;
   ARROW_THROW_NOT_OK(batch_reader->ReadNext(&read_batch));
 
@@ -248,8 +250,8 @@ TEST_F(ArrowIpcBasic, IpcCpuScalarValues) {
 
   arrow::io::BufferReader reader(reinterpret_cast<const uint8_t*>(ipc_ptr),
                                  ipc_handle_size);
-  std::shared_ptr<arrow::RecordBatchReader> batch_reader;
-  ARROW_THROW_NOT_OK(arrow::ipc::RecordBatchStreamReader::Open(&reader, &batch_reader));
+  ARROW_ASSIGN_OR_THROW(auto batch_reader,
+                        arrow::ipc::RecordBatchStreamReader::Open(&reader));
   std::shared_ptr<arrow::RecordBatch> read_batch;
   ARROW_THROW_NOT_OK(batch_reader->ReadNext(&read_batch));
 
@@ -292,44 +294,52 @@ TEST_F(ArrowIpcBasic, IpcGpuScalarValues) {
   std::shared_ptr<arrow::Schema> schema;
   arrow::ipc::DictionaryMemo memo;
   std::unique_ptr<arrow::ipc::Message> schema_message;
-  ARROW_THROW_NOT_OK(message_reader->ReadNextMessage(&schema_message));
-  ARROW_THROW_NOT_OK(arrow::ipc::ReadSchema(*schema_message, &memo, &schema));
+  ARROW_ASSIGN_OR_THROW(schema_message, message_reader->ReadNextMessage());
+  ARROW_ASSIGN_OR_THROW(schema, arrow::ipc::ReadSchema(*schema_message, &memo));
 
   // read data
   std::shared_ptr<arrow::RecordBatch> read_batch;
 #ifdef HAVE_CUDA
   arrow::cuda::CudaDeviceManager* manager;
-  ARROW_THROW_NOT_OK(arrow::cuda::CudaDeviceManager::GetInstance(&manager));
+  ARROW_ASSIGN_OR_THROW(manager, arrow::cuda::CudaDeviceManager::Instance());
   std::shared_ptr<arrow::cuda::CudaContext> context;
-  ARROW_THROW_NOT_OK(manager->GetContext(device_id, &context));
+  ARROW_ASSIGN_OR_THROW(context, manager->GetContext(device_id));
 
   std::shared_ptr<arrow::cuda::CudaIpcMemHandle> cuda_handle;
-  ARROW_THROW_NOT_OK(arrow::cuda::CudaIpcMemHandle::FromBuffer(
-      reinterpret_cast<void*>(data_frame.df_handle.data()), &cuda_handle));
+  ARROW_ASSIGN_OR_THROW(cuda_handle,
+                        arrow::cuda::CudaIpcMemHandle::FromBuffer(
+                            reinterpret_cast<void*>(data_frame.df_handle.data())));
 
   std::shared_ptr<arrow::cuda::CudaBuffer> cuda_buffer;
-  ARROW_THROW_NOT_OK(context->OpenIpcBuffer(*cuda_handle, &cuda_buffer));
+  ARROW_ASSIGN_OR_THROW(cuda_buffer, context->OpenIpcBuffer(*cuda_handle));
 
   arrow::cuda::CudaBufferReader cuda_reader(cuda_buffer);
 
   std::unique_ptr<arrow::ipc::Message> message;
-  ARROW_THROW_NOT_OK(
-      arrow::cuda::ReadMessage(&cuda_reader, arrow::default_memory_pool(), &message));
+  ARROW_ASSIGN_OR_THROW(
+      message, arrow::ipc::ReadMessage(&cuda_reader, arrow::default_memory_pool()));
 
   ASSERT_TRUE(message);
 
-  ARROW_THROW_NOT_OK(arrow::ipc::ReadRecordBatch(*message, schema, &memo, &read_batch));
+  ARROW_ASSIGN_OR_THROW(
+      read_batch,
+      arrow::ipc::ReadRecordBatch(
+          *message, schema, &memo, arrow::ipc::IpcReadOptions::Defaults()));
 
   // Copy data to host for checking
   std::shared_ptr<arrow::Buffer> host_buffer;
   const int64_t size = cuda_buffer->size();
-  ARROW_THROW_NOT_OK(AllocateBuffer(arrow::default_memory_pool(), size, &host_buffer));
+  ARROW_ASSIGN_OR_THROW(host_buffer, AllocateBuffer(size, arrow::default_memory_pool()));
   ARROW_THROW_NOT_OK(cuda_buffer->CopyToHost(0, size, host_buffer->mutable_data()));
 
   std::shared_ptr<arrow::RecordBatch> cpu_batch;
   arrow::io::BufferReader cpu_reader(host_buffer);
-  ARROW_THROW_NOT_OK(
-      arrow::ipc::ReadRecordBatch(read_batch->schema(), &memo, &cpu_reader, &cpu_batch));
+  ARROW_ASSIGN_OR_THROW(
+      cpu_batch,
+      arrow::ipc::ReadRecordBatch(read_batch->schema(),
+                                  &memo,
+                                  arrow::ipc::IpcReadOptions::Defaults(),
+                                  &cpu_reader));
 
   test_scalar_values(read_batch);
 #else
@@ -372,13 +382,14 @@ TEST_F(ArrowIpcBasic, IpcGpu) {
   std::shared_ptr<arrow::Schema> schema;
   arrow::ipc::DictionaryMemo memo;
   std::unique_ptr<arrow::ipc::Message> schema_message;
-  ARROW_THROW_NOT_OK(message_reader->ReadNextMessage(&schema_message));
-  ARROW_THROW_NOT_OK(arrow::ipc::ReadSchema(*schema_message, &memo, &schema));
+  ARROW_ASSIGN_OR_THROW(schema_message, message_reader->ReadNextMessage());
+  ARROW_ASSIGN_OR_THROW(schema, arrow::ipc::ReadSchema(*schema_message, &memo));
 
   // read dictionaries
   std::shared_ptr<arrow::RecordBatchReader> dict_batch_reader;
-  ARROW_THROW_NOT_OK(arrow::ipc::RecordBatchStreamReader::Open(std::move(message_reader),
-                                                               &dict_batch_reader));
+  ARROW_ASSIGN_OR_THROW(
+      dict_batch_reader,
+      arrow::ipc::RecordBatchStreamReader::Open(std::move(message_reader)));
   for (int i = 0; i < schema->num_fields(); i++) {
     auto field = schema->field(i);
     if (field->type()->id() == arrow::Type::DICTIONARY) {
@@ -388,7 +399,7 @@ TEST_F(ArrowIpcBasic, IpcGpu) {
       ASSERT_EQ(tmp_record_batch->num_columns(), 1);
 
       int64_t dict_id = -1;
-      ARROW_THROW_NOT_OK(memo.GetId(*field, &dict_id));
+      ARROW_THROW_NOT_OK(memo.GetId(field.get(), &dict_id));
       CHECK_GE(dict_id, 0);
 
       CHECK(!memo.HasDictionary(dict_id));
@@ -400,37 +411,45 @@ TEST_F(ArrowIpcBasic, IpcGpu) {
   std::shared_ptr<arrow::RecordBatch> read_batch;
 #ifdef HAVE_CUDA
   arrow::cuda::CudaDeviceManager* manager;
-  ARROW_THROW_NOT_OK(arrow::cuda::CudaDeviceManager::GetInstance(&manager));
+  ARROW_ASSIGN_OR_THROW(manager, arrow::cuda::CudaDeviceManager::Instance());
   std::shared_ptr<arrow::cuda::CudaContext> context;
-  ARROW_THROW_NOT_OK(manager->GetContext(device_id, &context));
+  ARROW_ASSIGN_OR_THROW(context, manager->GetContext(device_id));
 
   std::shared_ptr<arrow::cuda::CudaIpcMemHandle> cuda_handle;
-  ARROW_THROW_NOT_OK(arrow::cuda::CudaIpcMemHandle::FromBuffer(
-      reinterpret_cast<void*>(data_frame.df_handle.data()), &cuda_handle));
+  ARROW_ASSIGN_OR_THROW(cuda_handle,
+                        arrow::cuda::CudaIpcMemHandle::FromBuffer(
+                            reinterpret_cast<void*>(data_frame.df_handle.data())));
 
   std::shared_ptr<arrow::cuda::CudaBuffer> cuda_buffer;
-  ARROW_THROW_NOT_OK(context->OpenIpcBuffer(*cuda_handle, &cuda_buffer));
+  ARROW_ASSIGN_OR_THROW(cuda_buffer, context->OpenIpcBuffer(*cuda_handle));
 
   arrow::cuda::CudaBufferReader cuda_reader(cuda_buffer);
 
   std::unique_ptr<arrow::ipc::Message> message;
-  ARROW_THROW_NOT_OK(
-      arrow::cuda::ReadMessage(&cuda_reader, arrow::default_memory_pool(), &message));
+  ARROW_ASSIGN_OR_THROW(
+      message, arrow::ipc::ReadMessage(&cuda_reader, arrow::default_memory_pool()));
 
   ASSERT_TRUE(message);
 
-  ARROW_THROW_NOT_OK(arrow::ipc::ReadRecordBatch(*message, schema, &memo, &read_batch));
+  ARROW_ASSIGN_OR_THROW(
+      read_batch,
+      arrow::ipc::ReadRecordBatch(
+          *message, schema, &memo, arrow::ipc::IpcReadOptions::Defaults()));
 
   // Copy data to host for checking
   std::shared_ptr<arrow::Buffer> host_buffer;
   const int64_t size = cuda_buffer->size();
-  ARROW_THROW_NOT_OK(AllocateBuffer(arrow::default_memory_pool(), size, &host_buffer));
+  ARROW_ASSIGN_OR_THROW(host_buffer, AllocateBuffer(size, arrow::default_memory_pool()));
   ARROW_THROW_NOT_OK(cuda_buffer->CopyToHost(0, size, host_buffer->mutable_data()));
 
   std::shared_ptr<arrow::RecordBatch> cpu_batch;
   arrow::io::BufferReader cpu_reader(host_buffer);
-  ARROW_THROW_NOT_OK(
-      arrow::ipc::ReadRecordBatch(read_batch->schema(), &memo, &cpu_reader, &cpu_batch));
+  ARROW_ASSIGN_OR_THROW(
+      cpu_batch,
+      arrow::ipc::ReadRecordBatch(read_batch->schema(),
+                                  &memo,
+                                  arrow::ipc::IpcReadOptions::Defaults(),
+                                  &cpu_reader));
 
   // int column
   auto int_array = cpu_batch->column(0);

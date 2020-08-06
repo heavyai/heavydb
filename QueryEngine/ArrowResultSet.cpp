@@ -232,12 +232,12 @@ void ArrowResultSet::resultSetArrowLoopback() {
 
   arrow::io::BufferReader schema_reader(serialized_arrow_output.schema);
 
-  std::shared_ptr<arrow::Schema> schema;
-  ARROW_THROW_NOT_OK(arrow::ipc::ReadSchema(&schema_reader, &dictionary_memo_, &schema));
+  ARROW_ASSIGN_OR_THROW(auto schema,
+                        arrow::ipc::ReadSchema(&schema_reader, &dictionary_memo_));
   CHECK_EQ(schema_memo.num_fields(), dictionary_memo_.num_fields());
 
   // add the dictionaries from the serialized output to the newly created memo
-  const auto& serialized_id_to_dict = schema_memo.id_to_dictionary();
+  const auto& serialized_id_to_dict = schema_memo.dictionaries();
   for (const auto& itr : serialized_id_to_dict) {
     const auto& id = itr.first;
     const auto& dict = itr.second;
@@ -247,8 +247,12 @@ void ArrowResultSet::resultSetArrowLoopback() {
 
   arrow::io::BufferReader records_reader(serialized_arrow_output.records);
 
-  ARROW_THROW_NOT_OK(arrow::ipc::ReadRecordBatch(
-      schema, &dictionary_memo_, &records_reader, &record_batch_));
+  ARROW_ASSIGN_OR_THROW(
+      record_batch_,
+      arrow::ipc::ReadRecordBatch(schema,
+                                  &dictionary_memo_,
+                                  arrow::ipc::IpcReadOptions::Defaults(),
+                                  &records_reader));
 
   CHECK_EQ(schema->num_fields(), record_batch_->num_columns());
 }

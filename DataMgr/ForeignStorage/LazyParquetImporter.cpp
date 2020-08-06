@@ -18,10 +18,12 @@
 
 #include <arrow/api.h>
 #include <arrow/io/api.h>
+#include <arrow/result.h>
 #include <parquet/types.h>
 
 #include "ImportExport/ArrowImporter.h"
 #include "ParquetTypeMappings.h"
+#include "Shared/ArrowUtil.h"
 #include "Shared/measure.h"
 #include "Shared/thread_count.h"
 
@@ -266,14 +268,10 @@ void read_parquet_metadata_into_import_buffer(
   bool is_all_nulls = stats->null_count() == group_metadata->num_rows();
   CHECK(is_all_nulls || stats->HasMinMax());
   if (!is_all_nulls) {
-    std::shared_ptr<arrow::Array> min_array, max_array;
     std::shared_ptr<arrow::Scalar> min, max;
     PARQUET_THROW_NOT_OK(parquet::arrow::StatisticsAsScalars(*stats, &min, &max));
-    arrow::Status status;
-    status = arrow::MakeArrayFromScalar(*min, 1, &min_array);
-    CHECK(status.ok()) << status.message();
-    status = arrow::MakeArrayFromScalar(*max, 1, &max_array);
-    CHECK(status.ok()) << status.message();
+    ARROW_ASSIGN_OR_THROW(auto min_array, arrow::MakeArrayFromScalar(*min, 1));
+    ARROW_ASSIGN_OR_THROW(auto max_array, arrow::MakeArrayFromScalar(*max, 1));
     import_buffer->add_arrow_values(
         column_desciptor, *min_array, false, {0, 1}, &bad_rows_tracker);
     import_buffer->add_arrow_values(

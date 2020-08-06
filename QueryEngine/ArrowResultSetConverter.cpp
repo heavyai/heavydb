@@ -209,17 +209,17 @@ ArrowResult ArrowResultSetConverter::getArrowResult() const {
     int64_t schema_size = 0;
     key_t records_shm_key = IPC_PRIVATE;
     ipc::DictionaryMemo memo;
-    auto options = ipc::IpcOptions::Defaults();
+    auto options = ipc::IpcWriteOptions::Defaults();
     auto dict_stream = arrow::io::BufferOutputStream::Create(1024).ValueOrDie();
 
     ARROW_THROW_NOT_OK(CollectDictionaries(*record_batch, &memo));
-    for (auto& pair : memo.id_to_dictionary()) {
-      ipc::internal::IpcPayload payload;
+    for (auto& pair : memo.dictionaries()) {
+      ipc::IpcPayload payload;
       int64_t dictionary_id = pair.first;
       const auto& dictionary = pair.second;
 
-      ARROW_THROW_NOT_OK(GetDictionaryPayload(
-          dictionary_id, dictionary, options, default_memory_pool(), &payload));
+      ARROW_THROW_NOT_OK(
+          GetDictionaryPayload(dictionary_id, dictionary, options, &payload));
       int32_t metadata_length = 0;
       ARROW_THROW_NOT_OK(
           WriteIpcPayload(payload, options, dict_stream.get(), &metadata_length));
@@ -227,8 +227,9 @@ ArrowResult ArrowResultSetConverter::getArrowResult() const {
     auto serialized_dict = dict_stream->Finish().ValueOrDie();
     auto dict_size = serialized_dict->size();
 
-    ARROW_THROW_NOT_OK(ipc::SerializeSchema(
-        *record_batch->schema(), nullptr, default_memory_pool(), &serialized_schema));
+    ARROW_ASSIGN_OR_THROW(
+        serialized_schema,
+        ipc::SerializeSchema(*record_batch->schema(), nullptr, default_memory_pool()));
     schema_size = serialized_schema->size();
 
     ARROW_THROW_NOT_OK(ipc::GetRecordBatchSize(*record_batch, &records_size));
@@ -244,8 +245,8 @@ ArrowResult ArrowResultSetConverter::getArrowResult() const {
 
     io::FixedSizeBufferWriter stream(
         SliceMutableBuffer(serialized_records, schema_size + dict_size));
-    ARROW_THROW_NOT_OK(
-        ipc::SerializeRecordBatch(*record_batch, arrow::default_memory_pool(), &stream));
+    ARROW_THROW_NOT_OK(ipc::SerializeRecordBatch(
+        *record_batch, arrow::ipc::IpcWriteOptions::Defaults(), &stream));
     memcpy(&record_handle_buffer[0],
            reinterpret_cast<const unsigned char*>(&records_shm_key),
            sizeof(key_t));
@@ -267,18 +268,16 @@ ArrowResult ArrowResultSetConverter::getArrowResult() const {
   arrow::ipc::DictionaryMemo current_memo;
   arrow::ipc::DictionaryMemo serialized_memo;
 
-  arrow::ipc::internal::IpcPayload schema_payload;
-  ARROW_THROW_NOT_OK(
-      arrow::ipc::internal::GetSchemaPayload(*record_batch->schema(),
-                                             arrow::ipc::IpcOptions::Defaults(),
-                                             &serialized_memo,
-                                             &schema_payload));
+  arrow::ipc::IpcPayload schema_payload;
+  ARROW_THROW_NOT_OK(arrow::ipc::GetSchemaPayload(*record_batch->schema(),
+                                                  arrow::ipc::IpcWriteOptions::Defaults(),
+                                                  &serialized_memo,
+                                                  &schema_payload));
   int32_t schema_payload_length = 0;
-  ARROW_THROW_NOT_OK(
-      arrow::ipc::internal::WriteIpcPayload(schema_payload,
-                                            arrow::ipc::IpcOptions::Defaults(),
-                                            out_stream.get(),
-                                            &schema_payload_length));
+  ARROW_THROW_NOT_OK(arrow::ipc::WriteIpcPayload(schema_payload,
+                                                 arrow::ipc::IpcWriteOptions::Defaults(),
+                                                 out_stream.get(),
+                                                 &schema_payload_length));
 
   ARROW_THROW_NOT_OK(CollectDictionaries(*record_batch, &current_memo));
 
@@ -289,7 +288,7 @@ ArrowResult ArrowResultSetConverter::getArrowResult() const {
     auto field = record_batch->schema()->field(i);
     if (field->type()->id() == arrow::Type::DICTIONARY) {
       int64_t dict_id = -1;
-      ARROW_THROW_NOT_OK(current_memo.GetId(*field, &dict_id));
+      ARROW_THROW_NOT_OK(current_memo.GetId(field.get(), &dict_id));
       CHECK_GE(dict_id, 0);
       std::shared_ptr<Array> dict;
       ARROW_THROW_NOT_OK(current_memo.GetDictionary(dict_id, &dict));
@@ -307,7 +306,7 @@ ArrowResult ArrowResultSetConverter::getArrowResult() const {
 
   if (!dict_batches.empty()) {
     ARROW_THROW_NOT_OK(arrow::ipc::WriteRecordBatchStream(
-        dict_batches, ipc::IpcOptions::Defaults(), out_stream.get()));
+        dict_batches, ipc::IpcWriteOptions::Defaults(), out_stream.get()));
   }
 
   auto complete_ipc_stream = out_stream->Finish();
@@ -321,20 +320,20 @@ ArrowResult ArrowResultSetConverter::getArrowResult() const {
          sizeof(key_t));
 
   arrow::cuda::CudaDeviceManager* manager;
-  ARROW_THROW_NOT_OK(arrow::cuda::CudaDeviceManager::GetInstance(&manager));
+  ARROW_ASSIGN_OR_THROW(manager, arrow::cuda::CudaDeviceManager::Instance());
   std::shared_ptr<arrow::cuda::CudaContext> context;
-  ARROW_THROW_NOT_OK(manager->GetContext(device_id_, &context));
+  ARROW_ASSIGN_OR_THROW(context, manager->GetContext(device_id_));
 
   std::shared_ptr<arrow::cuda::CudaBuffer> device_serialized;
-  ARROW_THROW_NOT_OK(
-      SerializeRecordBatch(*record_batch, context.get(), &device_serialized));
+  ARROW_ASSIGN_OR_THROW(device_serialized,
+                        SerializeRecordBatch(*record_batch, context.get()));
 
   std::shared_ptr<arrow::cuda::CudaIpcMemHandle> cuda_handle;
-  ARROW_THROW_NOT_OK(device_serialized->ExportForIpc(&cuda_handle));
+  ARROW_ASSIGN_OR_THROW(cuda_handle, device_serialized->ExportForIpc());
 
   std::shared_ptr<arrow::Buffer> serialized_cuda_handle;
-  ARROW_THROW_NOT_OK(
-      cuda_handle->Serialize(arrow::default_memory_pool(), &serialized_cuda_handle));
+  ARROW_ASSIGN_OR_THROW(serialized_cuda_handle,
+                        cuda_handle->Serialize(arrow::default_memory_pool()));
 
   std::vector<char> record_handle_buffer(serialized_cuda_handle->size(), 0);
   memcpy(&record_handle_buffer[0],
@@ -359,18 +358,20 @@ ArrowResultSetConverter::getSerializedArrowOutput(
   std::shared_ptr<arrow::RecordBatch> arrow_copy = convertToArrow();
   std::shared_ptr<arrow::Buffer> serialized_records, serialized_schema;
 
-  ARROW_THROW_NOT_OK(arrow::ipc::SerializeSchema(
-      *arrow_copy->schema(), memo, arrow::default_memory_pool(), &serialized_schema));
+  ARROW_ASSIGN_OR_THROW(serialized_schema,
+                        arrow::ipc::SerializeSchema(
+                            *arrow_copy->schema(), memo, arrow::default_memory_pool()));
 
   ARROW_THROW_NOT_OK(CollectDictionaries(*arrow_copy, memo));
 
   if (arrow_copy->num_rows()) {
     auto timer = DEBUG_TIMER("serialize records");
     ARROW_THROW_NOT_OK(arrow_copy->Validate());
-    ARROW_THROW_NOT_OK(arrow::ipc::SerializeRecordBatch(
-        *arrow_copy, arrow::default_memory_pool(), &serialized_records));
+    ARROW_ASSIGN_OR_THROW(serialized_records,
+                          arrow::ipc::SerializeRecordBatch(
+                              *arrow_copy, arrow::ipc::IpcWriteOptions::Defaults()));
   } else {
-    ARROW_THROW_NOT_OK(arrow::AllocateBuffer(0, &serialized_records));
+    ARROW_ASSIGN_OR_THROW(serialized_records, arrow::AllocateBuffer(0));
   }
   return {serialized_schema, serialized_records};
 }

@@ -1,59 +1,52 @@
 # Maintainer: Guillaume Horel <guillaume.horel@gmail.com>
 
 pkgname='arrow'
-pkgver=0.16.0
-pkgrel=9
+pkgver=1.0.0
+pkgrel=10
 pkgdesc="A columnar in-memory analytics layer for big data."
 arch=('x86_64')
 url="https://arrow.apache.org"
 license=('Apache')
-depends=('boost-libs' 'brotli' 'double-conversion' 'gflags' 'google-glog' 'lz4' 'protobuf' 'rapidjson' 'snappy' 'thrift' 'zstd')
+depends=('boost-libs' 'brotli' 'double-conversion' 'c-ares-cmake' 'gflags' 'grpc>=1.27.0' 'google-glog' 'lz4' 'protobuf' 'rapidjson' 'snappy' 'thrift' 'uriparser' 'zstd')
 checkdepends=('git')
 optdepends=()
 provides=('parquet-cpp')
 conflicts=('parquet-cpp')
-makedepends=('cmake' 'boost')
-source=("https://github.com/apache/arrow/archive/apache-arrow-$pkgver.tar.gz"
-        '0001-PARQUET-1823-C-Invalid-RowGroup-returned-by-parquet-.patch')
-sha256sums=('d7b3838758a365c8c47d55ab0df1006a70db951c6964440ba354f81f518b8d8d'
-            'da2f4d3c071c9b18948d73e08febf7f64425c7886daa3914ff220c2e10301be5')
-
-prepare(){
-  cd "${srcdir}/$pkgname-apache-$pkgname-$pkgver"
-  patch -p1 -i ../0001-PARQUET-1823-C-Invalid-RowGroup-returned-by-parquet-.patch
-}
+makedepends=('boost' 'cmake' 'flatbuffers' 'python-numpy')
+source=("https://github.com/apache/arrow/archive/apache-arrow-$pkgver.tar.gz")
+sha256sums=('SKIP')
 
 build(){
   cd "$srcdir"
   mkdir -p build
   cd "$srcdir/build"
-  ARROW_BUILD_TOOLCHAIN=/usr LZ4_HOME= ZSTD_HOME= BROTLI_HOME= DOUBLE_CONVERSION_HOME= SNAPPY_HOME= ZLIB_HOME= GFLAGS_HOME= GLOG_HOME=/usr FLATBUFFERS_HOME= cmake \
-    ../$pkgname-apache-$pkgname-$pkgver/cpp -DARROW_PARQUET=ON \
-                                      -DARROW_FILESYSTEM=ON \
-                                      -DARROW_S3=ON \
+  ARROW_BUILD_TOOLCHAIN=/usr DOUBLE_CONVERSION_HOME=/usr cmake \
+    ../$pkgname-apache-$pkgname-$pkgver/cpp -DARROW_DEPENDENCY_SOURCE=SYSTEM \
+                                      -DCMAKE_GENERATOR="Unix Makefiles" \
                                       -DARROW_PYTHON=ON \
                                       -DCMAKE_BUILD_TYPE=Release \
-                                      -DARROW_BUILD_TESTS=OFF \
+                                      -DARROW_BUILD_TESTS=ON \
                                       -DARROW_ALTIVEC=OFF \
                                       -DCMAKE_INSTALL_PREFIX="/usr" \
                                       -DCMAKE_INSTALL_LIBDIR="lib" \
+                                      -DARROW_COMPUTE=ON \
+                                      -DARROW_IPC=ON \
                                       -DARROW_JEMALLOC=ON \
                                       -DARROW_ORC=OFF \
+                                      -DARROW_PARQUET=ON \
                                       -DARROW_PLASMA=ON \
-                                      -DARROW_TENSORFLOW=OFF \
+                                      -DARROW_TENSORFLOW=ON \
                                       -DARROW_USE_SIMD=ON \
-                                      -DARROW_FLIGHT=OFF \
+                                      -DARROW_FLIGHT=ON \
                                       -DARROW_GANDIVA=OFF \
-                                      -DARROW_PROTOBUF_USE_SHARED=OFF \
-                                      -DARROW_NO_DEPRECATED_API=ON \
-                                      -DARROW_CSV=ON \
-                                      -DARROW_JSON=ON \
-                                      -DARROW_USE_GLOG=OFF \
-                                      -DARROW_WITH_BROTLI=OFF \
-                                      -DARROW_WITH_ZLIB=ON \
-                                      -DARROW_WITH_LZ4=OFF \
-                                      -DARROW_WITH_SNAPPY=ON \
-                                      -DARROW_WITH_ZSTD=ON \
+                                      -DARROW_PROTOBUF_USE_SHARED=ON \
+                                      -DARROW_GFLAGS_USE_SHARED=ON \
+                                      -DARROW_USE_GLOG=ON \
+                                      -DARROW_WITH_ZSTD=BUNDLED \
+                                      -DARROW_WITH_BROTLI=ON \
+                                      -DGTest_SOURCE=BUNDLED \
+                                      -DgRPC_SOURCE=BUNDLED \
+                                      -DgRPC_ROOT="/usr" \
                                       -DARROW_CUDA=ON
 
   make
@@ -61,11 +54,9 @@ build(){
 
 package(){
   cd "$srcdir/build"
-  make DESTDIR="${pkgdir}" install
+  make -j $(nproc) DESTDIR="${pkgdir}" install
+  find "${pkgdir}/usr/lib/" -name "*testing*" -delete
 }
 
-#check(){
-#  cd "$srcdir/build"
-#  make test
-#}
+
 # vim:ts=2:sw=2:et:
