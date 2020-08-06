@@ -80,6 +80,16 @@ std::pair<Datum, bool> datum_from_scalar_tv(const ScalarTargetValue* scalar_tv,
   Datum d{0};
   bool is_null_const{false};
   switch (ti.get_type()) {
+    case kBOOLEAN: {
+      const auto ival = boost::get<int64_t>(scalar_tv);
+      CHECK(ival);
+      if (*ival == inline_int_null_val(ti)) {
+        is_null_const = true;
+      } else {
+        d.boolval = *ival;
+      }
+      break;
+    }
     case kTINYINT: {
       const auto ival = boost::get<int64_t>(scalar_tv);
       CHECK(ival);
@@ -159,7 +169,7 @@ std::pair<Datum, bool> datum_from_scalar_tv(const ScalarTargetValue* scalar_tv,
       break;
     }
     default:
-      CHECK(false);
+      CHECK(false) << "Unhandled type: " << ti.get_type_name();
   }
   return {d, is_null_const};
 }
