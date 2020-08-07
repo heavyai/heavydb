@@ -722,14 +722,19 @@ std::vector<std::unordered_set<size_t>> get_live_ins(
     return {live_in};
   }
   if (auto table_func = dynamic_cast<const RelTableFunction*>(node)) {
-    CHECK_EQ(size_t(1), table_func->inputCount());
-
     const auto input_count = table_func->size();
     std::unordered_set<size_t> live_in;
     for (size_t i = 0; i < input_count; i++) {
       live_in.insert(i);
     }
-    return {live_in};
+
+    std::vector<std::unordered_set<size_t>> result;
+    // Is the computed result correct in general?
+    for (size_t i = table_func->inputCount(); i > 0; i--) {
+      result.push_back(live_in);
+    }
+
+    return result;
   }
   if (auto logical_union = dynamic_cast<const RelLogicalUnion*>(node)) {
     return std::vector<std::unordered_set<size_t>>(logical_union->inputCount(), live_out);

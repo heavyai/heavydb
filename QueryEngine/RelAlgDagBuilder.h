@@ -1621,6 +1621,22 @@ class RelTableFunction : public RelAlgNode {
     inputs_.emplace_back(input);
   }
 
+  RelTableFunction(const std::string& function_name,
+                   RelAlgInputs inputs,
+                   std::vector<std::string>& fields,
+                   std::vector<const Rex*> col_inputs,
+                   std::vector<std::unique_ptr<const RexScalar>>& table_func_inputs,
+                   std::vector<std::unique_ptr<const RexScalar>>& target_exprs)
+      : function_name_(function_name)
+      , fields_(fields)
+      , col_inputs_(col_inputs)
+      , table_func_inputs_(std::move(table_func_inputs))
+      , target_exprs_(std::move(target_exprs)) {
+    for (const auto& input : inputs) {
+      inputs_.emplace_back(input);
+    }
+  }
+
   RelTableFunction(RelTableFunction const&);
 
   void replaceInput(std::shared_ptr<const RelAlgNode> old_input,

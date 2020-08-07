@@ -1612,7 +1612,6 @@ ResultSetPtr Executor::executeTableFunction(
   compilation_context.compile(exe_unit, co, this);
 
   TableFunctionExecutionContext exe_context(getRowSetMemoryOwner());
-  CHECK_EQ(table_infos.size(), size_t(1));
   return exe_context.execute(exe_unit,
                              table_infos.front(),
                              &compilation_context,
