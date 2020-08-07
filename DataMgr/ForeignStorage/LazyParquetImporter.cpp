@@ -287,7 +287,6 @@ void read_parquet_metadata_into_import_buffer(
 void read_parquet_data_into_import_buffer(
     const import_export::Loader* loader,
     const int row_group,
-    const size_t array_size,
     const int logical_idx,
     const int physical_idx,
     const ForeignTableSchema& schema,
@@ -300,7 +299,6 @@ void read_parquet_data_into_import_buffer(
   std::shared_ptr<arrow::ChunkedArray> array;
   PARQUET_THROW_NOT_OK(reader->RowGroup(row_group)->Column(logical_idx)->Read(&array));
   auto& import_buffer = initialize_import_buffer(physical_idx, import_buffer_vec);
-  auto slice_range = std::make_pair(0, array_size);
   auto num_bad_rows_before_add_values = bad_rows_tracker.rows.size();
   // TODO: the following async call & wait suppresses a false-positive
   // lock-order-inversion warning from TSAN; remove its use once
@@ -308,7 +306,7 @@ void read_parquet_data_into_import_buffer(
   std::async(std::launch::async, [&] {
     for (auto chunk : array->chunks()) {
       import_buffer->add_arrow_values(
-          column_desciptor, *chunk, false, slice_range, &bad_rows_tracker);
+          column_desciptor, *chunk, false, {0, chunk->length()}, &bad_rows_tracker);
     }
   }).wait();
   // TODO: remove this check for failure to import geo-type once null
@@ -379,7 +377,6 @@ void import_row_group(
       // unsupported parquet metadata
       read_parquet_data_into_import_buffer(loader,
                                            row_group,
-                                           array_size,
                                            logical_idx,
                                            physical_idx,
                                            schema,
