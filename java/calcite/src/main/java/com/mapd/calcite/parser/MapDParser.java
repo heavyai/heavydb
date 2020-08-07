@@ -33,6 +33,9 @@ import org.apache.calcite.plan.RelOptLattice;
 import org.apache.calcite.plan.RelOptMaterialization;
 import org.apache.calcite.plan.RelOptTable;
 import org.apache.calcite.plan.RelOptUtil;
+import org.apache.calcite.plan.hep.HepPlanner;
+import org.apache.calcite.plan.hep.HepProgram;
+import org.apache.calcite.plan.hep.HepProgramBuilder;
 import org.apache.calcite.prepare.MapDPlanner;
 import org.apache.calcite.prepare.SqlIdentifierCapturer;
 import org.apache.calcite.rel.RelNode;
@@ -45,11 +48,11 @@ import org.apache.calcite.rel.core.TableModify.Operation;
 import org.apache.calcite.rel.hint.HintStrategyTable;
 import org.apache.calcite.rel.logical.LogicalProject;
 import org.apache.calcite.rel.logical.LogicalTableModify;
-import org.apache.calcite.rel.metadata.DefaultRelMetadataProvider;
 import org.apache.calcite.rel.rules.FilterMergeRule;
 import org.apache.calcite.rel.rules.FilterProjectTransposeRule;
 import org.apache.calcite.rel.rules.JoinProjectTransposeRule;
 import org.apache.calcite.rel.rules.ProjectMergeRule;
+import org.apache.calcite.rel.rules.ProjectRemoveRule;
 import org.apache.calcite.rel.type.RelDataType;
 import org.apache.calcite.rel.type.RelDataTypeFactory;
 import org.apache.calcite.rel.type.RelDataTypeField;
@@ -807,35 +810,22 @@ public final class MapDParser {
         return relR;
       }
 
-      // do some calcite based optimization
-      // will allow duplicate projects to merge
       ProjectMergeRule projectMergeRule =
               new ProjectMergeRule(true, RelFactories.LOGICAL_BUILDER);
-      final Program program =
-              Programs.hep(ImmutableList.of(FilterProjectTransposeRule.INSTANCE,
-                                   projectMergeRule,
-                                   ProjectProjectRemoveRule.INSTANCE,
-                                   FilterMergeRule.INSTANCE,
-                                   JoinProjectTransposeRule.LEFT_PROJECT_INCLUDE_OUTER,
-                                   JoinProjectTransposeRule.RIGHT_PROJECT_INCLUDE_OUTER,
-                                   JoinProjectTransposeRule.BOTH_PROJECT_INCLUDE_OUTER),
-                      true,
-                      DefaultRelMetadataProvider.INSTANCE);
 
-      RelNode oldRel;
-      RelNode newRel = relR.project();
+      HepProgramBuilder builder = new HepProgramBuilder();
+      builder.addRuleInstance(JoinProjectTransposeRule.BOTH_PROJECT_INCLUDE_OUTER);
+      builder.addRuleInstance(FilterMergeRule.INSTANCE);
+      builder.addRuleInstance(FilterProjectTransposeRule.INSTANCE);
+      builder.addRuleInstance(projectMergeRule);
+      builder.addRuleInstance(ProjectProjectRemoveRule.INSTANCE);
 
-      do {
-        oldRel = newRel;
-        newRel = program.run(null,
-                oldRel,
-                null,
-                ImmutableList.<RelOptMaterialization>of(),
-                ImmutableList.<RelOptLattice>of());
-        // there must be a better way to compare these
-      } while (!RelOptUtil.toString(oldRel).equals(RelOptUtil.toString(newRel)));
-      RelRoot optRel = RelRoot.of(newRel, relR.kind);
-      return optRel;
+      HepPlanner hepPlanner = new HepPlanner(builder.build());
+      final RelNode root = relR.project();
+      hepPlanner.setRoot(root);
+      final RelNode newRel = hepPlanner.findBestExp();
+
+      return RelRoot.of(newRel, relR.kind);
     }
   }
 

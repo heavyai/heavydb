@@ -47,6 +47,7 @@ extern bool g_enable_filter_push_down;
 double g_gpu_mem_limit_percent{0.9};
 
 extern bool g_serialize_temp_tables;
+bool g_enable_calcite_view_optimize{true};
 std::mutex calcite_lock;
 
 using namespace Catalog_Namespace;
@@ -569,7 +570,7 @@ std::shared_ptr<ExecutionResult> QueryRunner::runSelectQuery(
                                             {},
                                             true,
                                             false,
-                                            false,
+                                            g_enable_calcite_view_optimize,
                                             true)
                                   .plan_result;
         auto ra_executor = RelAlgExecutor(executor.get(), cat, query_ra);
