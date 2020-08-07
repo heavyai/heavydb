@@ -59,6 +59,7 @@ extern bool g_enable_overlaps_hashjoin;
 extern double g_gpu_mem_limit_percent;
 
 extern bool g_enable_window_functions;
+extern bool g_enable_calcite_view_optimize;
 extern bool g_enable_bump_allocator;
 extern bool g_enable_interop;
 extern bool g_enable_union;
@@ -9755,21 +9756,25 @@ TEST(Select, UnsupportedSortOfIntermediateResult) {
 TEST(Select, Views) {
   SKIP_WITH_TEMP_TABLES();
 
-  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
-    SKIP_NO_GPU();
-    c("SELECT x, COUNT(*) FROM view_test WHERE y > 41 GROUP BY x;", dt);
-    c("SELECT x FROM join_view_test WHERE x IS NULL;", dt);
-  }
-}
+  auto run_test = [] {
+    for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+      SKIP_NO_GPU();
+      c("SELECT x, COUNT(*) FROM view_test WHERE y > 41 GROUP BY x;", dt);
+      c("SELECT x FROM join_view_test WHERE x IS NULL;", dt);
+      c("SELECT t1.i FROM test_ranges t1 LEFT JOIN join_view_test t2 ON t1.i = t2.x;",
+        dt);
+      c("SELECT x, COUNT(*) FROM view_test WHERE y < (SELECT max(y) FROM test) GROUP BY "
+        "x;",
+        dt);
+    }
+  };
 
-TEST(Select, Views_With_Subquery) {
-  SKIP_WITH_TEMP_TABLES();
+  run_test();
 
-  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
-    SKIP_NO_GPU();
-    c("SELECT x, COUNT(*) FROM view_test WHERE y < (SELECT max(y) FROM test) GROUP BY x;",
-      dt);
-  }
+  ScopeGuard reset_calcite_view_opt = [] { g_enable_calcite_view_optimize = true; };
+  g_enable_calcite_view_optimize = false;
+  // re-run with calcite view optimization disabled
+  run_test();
 }
 
 TEST(Select, CreateTableAsSelect) {
