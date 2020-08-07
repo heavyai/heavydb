@@ -168,26 +168,31 @@ class Encoder {
   virtual void updateStats(const int64_t val, const bool is_null) = 0;
   virtual void updateStats(const double val, const bool is_null) = 0;
 
-  // Only called from ArrowStorageInterface to update stats on chunk of data
+  /**
+   * Update statistics for data without appending.
+   *
+   * @param src_data - the data with which to update statistics
+   * @param num_elements - the number of elements to scan in the data
+   */
   virtual void updateStats(const int8_t* const src_data, const size_t num_elements) = 0;
 
   /**
-   * Update statistics for string data without appending data.
+   * Update statistics for string data without appending.
    *
-   * @param dataBlock - the data block with which to update statistics
-   * @param startIdx - the `start_idx` that would normally be passed to `appendData`
-   * @param numElements - the number of elements in the data block
+   * @param src_data - the string data with which to update statistics
+   * @param start_idx - the offset into `src_data` to start the update
+   * @param num_elements - the number of elements to scan in the string data
    */
   virtual void updateStats(const std::vector<std::string>* const src_data,
                            const size_t start_idx,
                            const size_t num_elements) = 0;
 
   /**
-   * Update statistics for array data without appending data.
+   * Update statistics for array data without appending.
    *
-   * @param dataBlock - the data block with which to update statistics
-   * @param startIdx - the `start_idx` that would normally be passed to `appendData`
-   * @param numElements - the number of elements in the data block
+   * @param src_data - the array data with which to update statistics
+   * @param start_idx - the offset into `src_data` to start the update
+   * @param num_elements - the number of elements to scan in the array data
    */
   virtual void updateStats(const std::vector<ArrayDatum>* const src_data,
                            const size_t start_idx,
