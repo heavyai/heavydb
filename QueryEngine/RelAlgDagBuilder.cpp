@@ -196,7 +196,6 @@ RANodeOutput get_node_output(const RelAlgNode* ra_node) {
   const auto table_func_node = dynamic_cast<const RelTableFunction*>(ra_node);
   if (table_func_node) {
     // Table Function output count doesn't depend on the input
-    CHECK_EQ(size_t(1), table_func_node->inputCount());
     return n_outputs(table_func_node, table_func_node->size());
   }
   const auto sort_node = dynamic_cast<const RelSort*>(ra_node);
@@ -1143,7 +1142,6 @@ void bind_project_to_input(RelProject* project_node, const RANodeOutput& input) 
 
 void bind_table_func_to_input(RelTableFunction* table_func_node,
                               const RANodeOutput& input) noexcept {
-  CHECK_EQ(size_t(1), table_func_node->inputCount());
   std::vector<std::unique_ptr<const RexScalar>> disambiguated_exprs;
   for (size_t i = 0; i < table_func_node->getTableFuncInputsSize(); ++i) {
     const auto target_expr = table_func_node->getTableFuncInputAt(i);
@@ -2314,7 +2312,6 @@ class RelAlgDispatcher {
       const rapidjson::Value& table_func_ra,
       RelAlgDagBuilder& root_dag_builder) {
     const auto inputs = getRelAlgInputs(table_func_ra);
-    CHECK_EQ(size_t(1), inputs.size());
 
     const auto& invocation = field(table_func_ra, "invocation");
     CHECK(invocation.IsObject());
@@ -2386,7 +2383,7 @@ class RelAlgDispatcher {
     }
 
     return std::make_shared<RelTableFunction>(op_name.GetString(),
-                                              inputs[0],
+                                              inputs,
                                               fields,
                                               col_inputs,
                                               table_func_inputs,

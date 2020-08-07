@@ -139,11 +139,13 @@ DAG build_dag(const RelAlgNode* sink) {
       case 2:
         CHECK(dynamic_cast<const RelJoin*>(node) ||
               dynamic_cast<const RelLeftDeepInnerJoin*>(node) ||
-              dynamic_cast<const RelLogicalUnion*>(node));
+              dynamic_cast<const RelLogicalUnion*>(node) ||
+              dynamic_cast<const RelTableFunction*>(node));
         break;
       default:
         CHECK(dynamic_cast<const RelLeftDeepInnerJoin*>(node) ||
-              dynamic_cast<const RelLogicalUnion*>(node));
+              dynamic_cast<const RelLogicalUnion*>(node) ||
+              dynamic_cast<const RelTableFunction*>(node));
     }
     for (size_t i = 0; i < input_num; ++i) {
       const auto input = node->getInput(i);

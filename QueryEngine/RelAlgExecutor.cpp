@@ -770,6 +770,9 @@ class RexUsedInputsVisitor : public RexVisitor<std::unordered_set<const RexInput
 };
 
 const RelAlgNode* get_data_sink(const RelAlgNode* ra_node) {
+  if (auto table_func = dynamic_cast<const RelTableFunction*>(ra_node)) {
+    return table_func;
+  }
   if (auto join = dynamic_cast<const RelJoin*>(ra_node)) {
     CHECK_EQ(size_t(2), join->inputCount());
     return join;
@@ -957,6 +960,8 @@ get_join_source_used_inputs(const RelAlgNode* ra_node,
 
   if (dynamic_cast<const RelLogicalUnion*>(ra_node)) {
     CHECK_GT(ra_node->inputCount(), 1u) << ra_node->toString();
+  } else if (dynamic_cast<const RelTableFunction*>(ra_node)) {
+    CHECK_GT(ra_node->inputCount(), 0u) << ra_node->toString();
   } else {
     CHECK_EQ(ra_node->inputCount(), 1u) << ra_node->toString();
   }
@@ -3771,7 +3776,6 @@ RelAlgExecutor::TableFunctionWorkUnit RelAlgExecutor::createTableFunctionWorkUni
   std::tie(input_descs, input_col_descs, std::ignore) =
       get_input_desc(table_func, input_to_nest_level, {}, cat_);
   const auto query_infos = get_table_infos(input_descs, executor_);
-  CHECK_EQ(size_t(1), table_func->inputCount());
 
   RelAlgTranslator translator(
       cat_, query_state_, executor_, input_to_nest_level, {}, now_, just_explain);
