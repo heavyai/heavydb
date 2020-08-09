@@ -14,19 +14,20 @@
  * limitations under the License.
  */
 
-#include "JoinHashTable.h"
-#include "CodeGenerator.h"
-#include "ColumnFetcher.h"
-#include "Execute.h"
-#include "ExpressionRewrite.h"
-#include "HashJoinRuntime.h"
-#include "RangeTableIndexVisitor.h"
-#include "RuntimeFunctions.h"
-#include "Shared/Logger.h"
+#include "QueryEngine/JoinHashTable/JoinHashTable.h"
 
 #include <future>
 #include <numeric>
 #include <thread>
+
+#include "QueryEngine/CodeGenerator.h"
+#include "QueryEngine/ColumnFetcher.h"
+#include "QueryEngine/Execute.h"
+#include "QueryEngine/ExpressionRewrite.h"
+#include "QueryEngine/JoinHashTable/HashJoinRuntime.h"
+#include "QueryEngine/RangeTableIndexVisitor.h"
+#include "QueryEngine/RuntimeFunctions.h"
+#include "Shared/Logger.h"
 
 namespace {
 

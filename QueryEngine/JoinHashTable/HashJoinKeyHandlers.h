@@ -17,22 +17,22 @@
 #ifndef QUERYENGINE_HASHJOINKEYHANDLERS_H
 #define QUERYENGINE_HASHJOINKEYHANDLERS_H
 
-#include "../Shared/SqlTypesLayout.h"
+#include "../../Shared/SqlTypesLayout.h"
 #include "HashJoinRuntime.h"
 #include "JoinColumnIterator.h"
 
 #ifdef __CUDACC__
-#include "DecodersImpl.h"
+#include "../DecodersImpl.h"
 #else
-#include "../StringDictionary/StringDictionary.h"
-#include "../StringDictionary/StringDictionaryProxy.h"
-#include "RuntimeFunctions.h"
+#include "QueryEngine/RuntimeFunctions.h"
 #include "Shared/Logger.h"
+#include "StringDictionary/StringDictionary.h"
+#include "StringDictionary/StringDictionaryProxy.h"
 #endif
 
 #include <cmath>
 
-#include "../Shared/funcannotations.h"
+#include "../../Shared/funcannotations.h"
 
 struct GenericKeyHandler {
   GenericKeyHandler(const size_t key_component_count,

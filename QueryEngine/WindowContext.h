@@ -18,7 +18,7 @@
 
 #include "Analyzer/Analyzer.h"
 #include "DataMgr/Chunk/Chunk.h"
-#include "JoinHashTableInterface.h"
+#include "QueryEngine/JoinHashTable/JoinHashTableInterface.h"
 
 #include <functional>
 #include <unordered_map>

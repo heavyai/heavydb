@@ -15,16 +15,16 @@
  */
 
 #include "BaselineJoinHashTable.h"
-#include "CodeGenerator.h"
-#include "ColumnFetcher.h"
-#include "Execute.h"
-#include "ExpressionRewrite.h"
-#include "HashJoinKeyHandlers.h"
-#include "JoinHashTableGpuUtils.h"
-
-#include "DataMgr/Allocators/CudaAllocator.h"
 
 #include <future>
+
+#include "DataMgr/Allocators/CudaAllocator.h"
+#include "QueryEngine/CodeGenerator.h"
+#include "QueryEngine/ColumnFetcher.h"
+#include "QueryEngine/Execute.h"
+#include "QueryEngine/ExpressionRewrite.h"
+#include "QueryEngine/JoinHashTable/HashJoinKeyHandlers.h"
+#include "QueryEngine/JoinHashTable/JoinHashTableGpuUtils.h"
 
 std::vector<std::pair<BaselineJoinHashTable::HashTableCacheKey,
                       BaselineJoinHashTable::HashTableCacheValue>>

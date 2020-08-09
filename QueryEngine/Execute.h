@@ -27,7 +27,7 @@
 #include "ExecutionKernel.h"
 #include "GpuSharedMemoryContext.h"
 #include "GroupByAndAggregate.h"
-#include "JoinHashTable.h"
+#include "JoinHashTable/JoinHashTable.h"
 #include "LoopControlFlow/JoinLoop.h"
 #include "NvidiaKernel.h"
 #include "PlanState.h"

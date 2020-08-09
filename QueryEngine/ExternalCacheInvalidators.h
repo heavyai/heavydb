@@ -25,9 +25,9 @@
  */
 
 // Classes that are involved in needing a cache invalidated
-#include "BaselineJoinHashTable.h"
-#include "JoinHashTable.h"
-#include "OverlapsJoinHashTable.h"
+#include "JoinHashTable/BaselineJoinHashTable.h"
+#include "JoinHashTable/JoinHashTable.h"
+#include "JoinHashTable/OverlapsJoinHashTable.h"
 
 using UpdateTriggeredCacheInvalidator =
     CacheInvalidator<OverlapsJoinHashTable, BaselineJoinHashTable, JoinHashTable>;

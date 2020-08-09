@@ -14,14 +14,14 @@
  * limitations under the License.
  */
 
-#include "OverlapsJoinHashTable.h"
-#include "CodeGenerator.h"
-#include "ExpressionRewrite.h"
-#include "HashJoinKeyHandlers.h"
-#include "JoinHashTableGpuUtils.h"
-#include "JoinHashTableInterface.h"
+#include "QueryEngine/JoinHashTable/OverlapsJoinHashTable.h"
 
-#include "Execute.h"
+#include "QueryEngine/CodeGenerator.h"
+#include "QueryEngine/Execute.h"
+#include "QueryEngine/ExpressionRewrite.h"
+#include "QueryEngine/JoinHashTable/HashJoinKeyHandlers.h"
+#include "QueryEngine/JoinHashTable/JoinHashTableGpuUtils.h"
+#include "QueryEngine/JoinHashTable/JoinHashTableInterface.h"
 
 std::map<OverlapsJoinHashTable::HashTableCacheKey, double>
     OverlapsJoinHashTable::auto_tuner_cache_;
