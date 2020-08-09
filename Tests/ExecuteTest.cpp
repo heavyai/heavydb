@@ -9761,10 +9761,9 @@ TEST(Select, Views) {
       SKIP_NO_GPU();
       c("SELECT x, COUNT(*) FROM view_test WHERE y > 41 GROUP BY x;", dt);
       c("SELECT x FROM join_view_test WHERE x IS NULL;", dt);
-      c("SELECT t1.i FROM test_ranges t1 LEFT JOIN join_view_test t2 ON t1.i = t2.x;",
+      c(R"(SELECT t1.i FROM test_ranges t1 LEFT JOIN join_view_test t2 ON t1.i = t2.x ORDER BY 1;)",
         dt);
-      c("SELECT x, COUNT(*) FROM view_test WHERE y < (SELECT max(y) FROM test) GROUP BY "
-        "x;",
+      c(R"(SELECT x, COUNT(*) FROM view_test WHERE y < (SELECT max(y) FROM test) GROUP BY x;)",
         dt);
     }
   };
