@@ -1168,7 +1168,7 @@ extern "C" ALWAYS_INLINE void set_matching_group_value_perfect_hash_columnar(
 }
 
 #include "GroupByRuntime.cpp"
-#include "JoinHashTableQueryRuntime.cpp"
+#include "JoinHashTable/JoinHashTableQueryRuntime.cpp"
 
 extern "C" ALWAYS_INLINE int64_t* get_group_value_fast_keyless(
     int64_t* groups_buffer,

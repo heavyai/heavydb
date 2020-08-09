@@ -14,16 +14,16 @@
  * limitations under the License.
  */
 
-#include "JoinHashTableInterface.h"
+#include "QueryEngine/JoinHashTable/JoinHashTableInterface.h"
 
-#include "BaselineJoinHashTable.h"
-#include "ColumnFetcher.h"
-#include "EquiJoinCondition.h"
-#include "Execute.h"
-#include "JoinHashTable.h"
-#include "OverlapsJoinHashTable.h"
-#include "RuntimeFunctions.h"
-#include "ScalarExprVisitor.h"
+#include "QueryEngine/ColumnFetcher.h"
+#include "QueryEngine/EquiJoinCondition.h"
+#include "QueryEngine/Execute.h"
+#include "QueryEngine/JoinHashTable/BaselineJoinHashTable.h"
+#include "QueryEngine/JoinHashTable/JoinHashTable.h"
+#include "QueryEngine/JoinHashTable/OverlapsJoinHashTable.h"
+#include "QueryEngine/RuntimeFunctions.h"
+#include "QueryEngine/ScalarExprVisitor.h"
 
 extern bool g_enable_overlaps_hashjoin;
 

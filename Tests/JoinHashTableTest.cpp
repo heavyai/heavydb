@@ -30,7 +30,7 @@
 #include "QueryEngine/Execute.h"
 #include "QueryEngine/ExtensionFunctionsWhitelist.h"
 #include "QueryEngine/ExternalCacheInvalidators.h"
-#include "QueryEngine/OverlapsJoinHashTable.h"
+#include "QueryEngine/JoinHashTable/OverlapsJoinHashTable.h"
 #include "QueryEngine/ResultSet.h"
 #include "QueryEngine/UDFCompiler.h"
 #include "QueryRunner/QueryRunner.h"

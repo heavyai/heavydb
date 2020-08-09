@@ -20,12 +20,13 @@
 #include <cstdint>
 #include <set>
 #include <string>
+
 #include "Analyzer/Analyzer.h"
-#include "ColumnarResults.h"
-#include "CompilationOptions.h"
 #include "DataMgr/Allocators/ThrustAllocator.h"
-#include "Descriptors/RowSetMemoryOwner.h"
-#include "HashJoinRuntime.h"
+#include "QueryEngine/ColumnarResults.h"
+#include "QueryEngine/CompilationOptions.h"
+#include "QueryEngine/Descriptors/RowSetMemoryOwner.h"
+#include "QueryEngine/JoinHashTable/HashJoinRuntime.h"
 
 class TooManyHashEntries : public std::runtime_error {
  public:

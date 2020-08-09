@@ -16,14 +16,6 @@
 #ifndef QUERYENGINE_BASELINEJOINHASHTABLE_H
 #define QUERYENGINE_BASELINEJOINHASHTABLE_H
 
-#include "../Analyzer/Analyzer.h"
-#include "../DataMgr/MemoryLevel.h"
-#include "ColumnarResults.h"
-#include "Descriptors/RowSetMemoryOwner.h"
-#include "HashJoinRuntime.h"
-#include "InputMetadata.h"
-#include "JoinHashTableInterface.h"
-
 #ifdef HAVE_CUDA
 #include <cuda.h>
 #endif
@@ -33,6 +25,14 @@
 #include <thread>
 #include <unordered_set>
 #include <vector>
+
+#include "Analyzer/Analyzer.h"
+#include "DataMgr/MemoryLevel.h"
+#include "QueryEngine/ColumnarResults.h"
+#include "QueryEngine/Descriptors/RowSetMemoryOwner.h"
+#include "QueryEngine/InputMetadata.h"
+#include "QueryEngine/JoinHashTable/HashJoinRuntime.h"
+#include "QueryEngine/JoinHashTable/JoinHashTableInterface.h"
 
 class Executor;
 

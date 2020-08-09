@@ -17,9 +17,10 @@
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include "../Shared/geo_compression_runtime.h"
-#include "CompareKeysInl.h"
-#include "MurmurHash.h"
+
+#include "../../Shared/geo_compression_runtime.h"
+#include "../CompareKeysInl.h"
+#include "../MurmurHash.h"
 
 DEVICE bool compare_to_key(const int8_t* entry,
                            const int8_t* key,

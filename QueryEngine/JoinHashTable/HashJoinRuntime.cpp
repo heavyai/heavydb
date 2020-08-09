@@ -15,20 +15,21 @@
  */
 
 #include "HashJoinRuntime.h"
-#include "../Shared/shard_key.h"
-#include "CompareKeysInl.h"
-#include "HashJoinKeyHandlers.h"
-#include "HyperLogLogRank.h"
-#include "JoinColumnIterator.h"
-#include "MurmurHash1Inl.h"
+
+#include "../../Shared/shard_key.h"
+#include "../CompareKeysInl.h"
+#include "../HyperLogLogRank.h"
+#include "../JoinHashTable/HashJoinKeyHandlers.h"
+#include "../JoinHashTable/JoinColumnIterator.h"
+#include "../MurmurHash1Inl.h"
 #ifdef __CUDACC__
-#include "DecodersImpl.h"
-#include "GpuRtConstants.h"
-#include "JoinHashImpl.h"
+#include "../DecodersImpl.h"
+#include "../GpuRtConstants.h"
+#include "../JoinHashTable/JoinHashImpl.h"
 #else
 #include "Shared/Logger.h"
 
-#include "RuntimeFunctions.h"
+#include "QueryEngine/RuntimeFunctions.h"
 #include "Shared/likely.h"
 #include "StringDictionary/StringDictionary.h"
 #include "StringDictionary/StringDictionaryProxy.h"
@@ -39,7 +40,7 @@
 #if HAVE_CUDA
 #include <thrust/scan.h>
 #endif
-#include "../Shared/funcannotations.h"
+#include "../../Shared/funcannotations.h"
 
 #include <cmath>
 #include <numeric>

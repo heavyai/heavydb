@@ -26,14 +26,14 @@
 
 #include "Analyzer/Analyzer.h"
 #include "Catalog/Catalog.h"
-#include "ColumnarResults.h"
 #include "DataMgr/Allocators/ThrustAllocator.h"
 #include "DataMgr/Chunk/Chunk.h"
-#include "Descriptors/InputDescriptors.h"
-#include "Descriptors/RowSetMemoryOwner.h"
-#include "ExpressionRange.h"
-#include "InputMetadata.h"
-#include "JoinHashTableInterface.h"
+#include "QueryEngine/ColumnarResults.h"
+#include "QueryEngine/Descriptors/InputDescriptors.h"
+#include "QueryEngine/Descriptors/RowSetMemoryOwner.h"
+#include "QueryEngine/ExpressionRange.h"
+#include "QueryEngine/InputMetadata.h"
+#include "QueryEngine/JoinHashTable/JoinHashTableInterface.h"
 
 #include <llvm/IR/Value.h>
 

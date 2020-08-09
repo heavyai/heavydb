@@ -9,7 +9,6 @@ set(query_engine_source_files
     ArrayOps.cpp
     ArrowResultSetConverter.cpp
     ArrowResultSet.cpp
-    BaselineJoinHashTable.cpp
     CalciteAdapter.cpp
     CalciteDeserializerUtils.cpp
     CardinalityEstimator.cpp
@@ -55,6 +54,11 @@ set(query_engine_source_files
     InValuesBitmap.cpp
     InputMetadata.cpp
     JoinFilterPushDown.cpp
+    JoinHashTable/BaselineJoinHashTable.cpp
+    JoinHashTable/HashJoinRuntime.cpp
+    JoinHashTable/JoinHashTable.cpp
+    JoinHashTable/JoinHashTableInterface.cpp
+    JoinHashTable/OverlapsJoinHashTable.cpp
     LogicalIR.cpp
     LLVMFunctionAttributesUtil.cpp
     LLVMGlobalContext.cpp
@@ -63,7 +67,6 @@ set(query_engine_source_files
     NativeCodegen.cpp
     NvidiaKernel.cpp
     OutputBufferInitialization.cpp
-    OverlapsJoinHashTable.cpp
     QueryPhysicalInputsCollector.cpp
     PlanState.cpp
     QueryRewrite.cpp
@@ -103,9 +106,6 @@ set(query_engine_source_files
     StringFunctions.cpp
     StringOpsIR.cpp
     RegexpFunctions.cpp
-    JoinHashTable.cpp
-    JoinHashTableInterface.cpp
-    HashJoinRuntime.cpp
     Visitors/RelRexDagVisitor.cpp
     Visitors/RexSubQueryIdCollector.cpp
     WindowContext.cpp
@@ -175,7 +175,7 @@ else()
 endif()
 
 add_custom_command(
-    DEPENDS RuntimeFunctions.cpp JoinHashTableQueryRuntime.cpp RuntimeFunctions.h ${CMAKE_SOURCE_DIR}/Utils/StringLike.cpp GroupByRuntime.cpp TopKRuntime.cpp
+    DEPENDS RuntimeFunctions.cpp JoinHashTable/JoinHashTableQueryRuntime.cpp RuntimeFunctions.h ${CMAKE_SOURCE_DIR}/Utils/StringLike.cpp GroupByRuntime.cpp TopKRuntime.cpp
     OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/RuntimeFunctions.bc
     COMMAND ${llvm_clangpp_cmd}
     ARGS -std=c++14 ${RT_OPT_FLAGS} -c -emit-llvm
@@ -259,7 +259,7 @@ list(APPEND QUERY_ENGINE_LIBS ${LLVM_LINKER_FLAGS} ${ZLIB_LIBRARIES})
 target_link_libraries(QueryEngine ${QUERY_ENGINE_LIBS})
 
 add_custom_command(
-    DEPENDS cuda_mapd_rt.cu JoinHashTableQueryRuntime.cpp GpuInitGroups.cu GroupByRuntime.cpp TopKRuntime.cpp DateTruncate.cpp DateAdd.cpp ExtractFromTime.cpp ArrayOps.cpp StringFunctions.cpp RegexpFunctions.cpp ${CMAKE_SOURCE_DIR}/Utils/ChunkIter.cpp ${CMAKE_SOURCE_DIR}/Utils/StringLike.cpp ${CMAKE_SOURCE_DIR}/Utils/Regexp.cpp ${CMAKE_CURRENT_SOURCE_DIR}/ExtensionFunctions.hpp ${CMAKE_CURRENT_SOURCE_DIR}/ExtensionFunctionsGeo.hpp ${CMAKE_CURRENT_SOURCE_DIR}/TableFunctions/TableFunctions.hpp
+    DEPENDS cuda_mapd_rt.cu JoinHashTable/JoinHashTableQueryRuntime.cpp GpuInitGroups.cu GroupByRuntime.cpp TopKRuntime.cpp DateTruncate.cpp DateAdd.cpp ExtractFromTime.cpp ArrayOps.cpp StringFunctions.cpp RegexpFunctions.cpp ${CMAKE_SOURCE_DIR}/Utils/ChunkIter.cpp ${CMAKE_SOURCE_DIR}/Utils/StringLike.cpp ${CMAKE_SOURCE_DIR}/Utils/Regexp.cpp ${CMAKE_CURRENT_SOURCE_DIR}/ExtensionFunctions.hpp ${CMAKE_CURRENT_SOURCE_DIR}/ExtensionFunctionsGeo.hpp ${CMAKE_CURRENT_SOURCE_DIR}/TableFunctions/TableFunctions.hpp
     OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/cuda_mapd_rt.fatbin
     COMMAND nvcc
     ARGS
@@ -342,7 +342,7 @@ add_custom_command(
     )
 
 add_custom_command(
-    DEPENDS HashJoinRuntimeGpu.cu HashJoinRuntime.cpp
+    DEPENDS JoinHashTable/HashJoinRuntimeGpu.cu JoinHashTable/HashJoinRuntime.cpp
     OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/HashJoinRuntimeGpu.o
     COMMAND nvcc
     ARGS
@@ -353,7 +353,7 @@ add_custom_command(
         ${CUDA_COMPILATION_ARCH}
         -std=c++14
         ${NVCC_BUILD_TYPE_ARGS}
-        -c ${CMAKE_CURRENT_SOURCE_DIR}/HashJoinRuntimeGpu.cu
+        -c ${CMAKE_CURRENT_SOURCE_DIR}/JoinHashTable/HashJoinRuntimeGpu.cu
     )
 
 add_custom_target(QueryEngineCudaTargets

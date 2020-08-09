@@ -18,7 +18,7 @@
 #define QUERYENGINE_JOINHASHTABLE_GPUUTILS_H
 
 #include "DataMgr/Allocators/CudaAllocator.h"
-#include "GpuMemUtils.h"
+#include "QueryEngine/GpuMemUtils.h"
 
 template <class T>
 T* transfer_vector_of_flat_objects_to_gpu(const std::vector<T>& vec,
