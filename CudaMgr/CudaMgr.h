@@ -20,24 +20,14 @@
 #include <string>
 #include <vector>
 
+#include "Shared/DeviceGroup.h"
 #include "Shared/Logger.h"
-#include "Shared/uuid.h"
 
 #ifdef HAVE_CUDA
 #include <cuda.h>
 #else
 #include "Shared/nocuda.h"
 #endif  // HAVE_CUDA
-
-namespace omnisci {
-struct DeviceIdentifier {
-  const int index;    //!< index into device group (currently num_gpus - start_gpu)
-  const int cuda_id;  //!< Cuda ID for device (ignores start_gpu)
-  const UUID uuid;    //!< UUID for device (hardware invariant)
-};
-
-using DeviceGroup = std::vector<DeviceIdentifier>;
-}  // namespace omnisci
 
 namespace CudaMgr_Namespace {
 
