@@ -86,9 +86,6 @@ enum ExtractField {
   kDATEEPOCH
 };
 
-// Shared by DateTruncate
-extern "C" ALWAYS_INLINE DEVICE int64_t extract_dow(const int64_t lcltime);
-
 DEVICE int64_t ExtractFromTime(ExtractField field, const int64_t timeval);
 
 // Return floor(dividend / divisor).
