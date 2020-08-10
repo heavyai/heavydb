@@ -98,4 +98,4 @@ class GpuCompilationContext : public CompilationContext {
   std::vector<std::unique_ptr<GpuDeviceCompilationContext>> contexts_per_device_;
 };
 
-#define checkCudaErrors(err) CHECK_EQ(err, CUDA_SUCCESS);
+#define checkCudaErrors(err) CHECK_EQ(err, CUDA_SUCCESS)
