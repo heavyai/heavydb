@@ -3,22 +3,23 @@
 # TODO version parser from CMakeLists.txt
 
 package:
-  name: {{ name|lower }}
+  name: omniscidb
   version: {{ version }}
 
 source:
   path: ../..
 
 build:
-  number: 1
-  skip: True  # [win]
+  number: {{ number }}
+  string: "{{ build_string }}"
+  script_env:
+    - http_proxy
+    - https_proxy
 
 requirements:
   build:
-    - go-cgo
-    - {{ compiler('cxx') }}   # [not osx]
-    - {{ compiler('c') }}     # [not osx]
-    # we use clang++ from clangdev as a compiler
+    - {{ compiler('cxx') }}
+    - clangdev
     - clangxx
     - clangdev
     - cmake
@@ -27,10 +28,10 @@ requirements:
     - llvmdev 9.*
 
   host:
-    - arrow-cpp 0.16.*
-    - llvmdev 9.*
-    # for some reason, librdkafka 1.4+ triggers dependency conflicts
-    - librdkafka <1.4
+    - numpy =1.18.5
+    - cython
+    # omniscidb <=5.2.2 is not arrow-cpp 0.17+ ready
+    - arrow-cpp =0.16
     - bisonpp
     - blosc
     - boost-cpp
@@ -49,18 +50,70 @@ requirements:
     - openssl
     - snappy
     - thrift-cpp
-  run:
-    # omnscidb Load-time UDF support calls clang++
-    - clangxx 9.*
-    - openjdk 8
-    - boost-cpp
-    - bzip2
-    - ncurses
-    - xz
-    - zlib
-  run_constrained:
-    - arrow-cpp-proc
+    - tbb-devel =2020.1
 
+outputs:
+  - name: omniscidb-cpu
+    script: install-omniscidb-cpu.sh
+    requirements:
+      run:
+        - boost-cpp
+        - bzip2
+        # omnscidb Load-time UDF support calls clang++
+        - gxx_{{ target_platform }}
+        - ncurses
+        - openjdk 8.*
+        - xz
+        - zlib
+        - arrow-cpp =0.16
+        - tbb =2020.1
+      run_constrained:
+        - arrow-cpp-proc * {{ build_ext }}
+
+  - name: omniscidb-common
+    script: install-omniscidb-common.sh
+
+  - name: omniscidbe
+    script: install-omniscidbe.sh
+    requirements:
+      run:
+        - arrow-cpp =0.16
+        - tbb =2020.1
+        - {{ pin_subpackage('omniscidb-common', exact=True) }}
+
+  - name: omniscidbe4py
+    script: install-omniscidbe4py.sh
+    requirements:
+      host:
+        - python
+        - cython
+        - numpy =1.18.5
+        - pyarrow =0.16
+        - {{ pin_subpackage('omniscidbe', exact=True) }}
+      run:
+        - pyarrow =0.16
+        - arrow-cpp =0.16
+        - tbb =2020.1
+        - {{ pin_subpackage('omniscidbe', exact=True) }}
+        - boost-cpp
+        - double-conversion
+        - gflags
+        - glog
+        - llvm 9
+        - libarchive
+        - libgdal
+        - libkml
+        - libpng
+        # for some reason, librdkafka 1.4+ triggers dependency conflicts
+        - librdkafka <1.4
+        - ncurses
+        - openldap
+        - openssl
+        - snappy
+        - thrift-cpp
+    test:
+      imports:
+        - dbe
 
 about:
   home: https://www.omnisci.com/
@@ -70,8 +123,11 @@ about:
   summary: 'The OmniSci database'
 
   description: |
-    OmniSciDB is an in-memory, column store, SQL relational database 
-    that was designed from the ground up to run on GPUs.
+    LEGAL NOTICE: Use of this software package is subject to the software license
+    agreement (as set forth above, in the license section of the installed Conda
+    package and/or the README file) and all notices, disclaimers or license terms for
+    third party or open source software included in or with the software.
+    Third party programs: https://github.com/intel-go/omniscidb/blob/conda_build_changes/tpp.txt
   doc_url: https://www.omnisci.com/docs/latest/
   dev_url: https://github.com/omnisci/omniscidb
 

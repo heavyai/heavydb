@@ -1,87 +1,90 @@
 #!/usr/bin/env bash
 
 set -ex
-[ -z "$PREFIX" ] && export PREFIX=$CONDA_PREFIX
+
+# generate ~/.m2/settings.xml if proxy are set
+#python ~/recipe_root/make-m2-proxy.py
+
+# Free some disk space, see also
+# https://github.com/conda-forge/omniscidb-feedstock/issues/5
+df -h
+
+export EXTRA_CMAKE_OPTIONS=""
 
 # Make sure -fPIC is not in CXXFLAGS (that some conda packages may
-# add):
+# add), otherwise omniscidb server will crash when executing generated
+# machine code:
 export CXXFLAGS="`echo $CXXFLAGS | sed 's/-fPIC//'`"
 
-# go overwrites CC and CXX with nonsense (see
-# https://github.com/conda-forge/go-feedstock/issues/47), hence we
-# redefine these below. Reset GO env variables for omniscidb build
-# (IIRC, it is needed for CUDA support):
-export CGO_ENABLED=1
-export CGO_LDFLAGS=
-export CGO_CFLAGS=$CFLAGS
-export CGO_CPPFLAGS=
+# Fixes https://github.com/Quansight/pearu-sandbox/issues/7
+#       https://github.com/omnisci/omniscidb/issues/374
+export CXXFLAGS="$CXXFLAGS -Dsecure_getenv=getenv"
 
-if [ $(uname) == Darwin ]; then
-    # Darwin has only clang, must use clang++ from clangdev
-    # All these must be picked up from $PREFIX/bin
-    export CC=clang
-    export CXX=clang++
-    export CMAKE_CC=clang
-    export CMAKE_CXX=clang++
-    export MACOSX_DEPLOYMENT_TARGET=10.12
+# Fixes `error: expected ')' before 'PRIxPTR'`
+export CXXFLAGS="$CXXFLAGS -D__STDC_FORMAT_MACROS"
+
+# Remove --as-needed to resolve undefined reference to `__vdso_clock_gettime@GLIBC_PRIVATE'
+export LDFLAGS="`echo $LDFLAGS | sed 's/-Wl,--as-needed//'`"
+
+export EXTRA_CMAKE_OPTIONS="$EXTRA_CMAKE_OPTIONS -DCMAKE_C_COMPILER=${CC} -DCMAKE_CXX_COMPILER=${CXX}"
+
+# Run tests labels:
+#   0 - disable building and running sanity tests
+#   1 - build and run the sanity tests
+#   2 - detect if sanity tests can be run, then set 1, otherwise set 0
+#
+# Ideally, this should 2, but to save disk space, running sanity tests
+# will be disabled:
+export RUN_TESTS=0
+
+export INSTALL_BASE=. # was opt/omnisci-cpu
+
+if [[ "$RUN_TESTS" == "0" ]]
+then
+   export EXTRA_CMAKE_OPTIONS="$EXTRA_CMAKE_OPTIONS -DENABLE_TESTS=off"
 else
-    # Linux
-    echo "uname=${uname}"
-    # must use gcc compiler as llvmdev is built with gcc and there
-    # exists ABI incompatibility between llvmdev-7 built with gcc and
-    # clang.
-    COMPILERNAME=gcc                      # options: clang, gcc
-
-    if [ "$COMPILERNAME" == "clang" ]; then
-        # All these must be picked up from $PREFIX/bin
-        export CC=clang
-        export CXX=clang++
-        export CMAKE_CC=clang
-        export CMAKE_CXX=clang++
-    else
-        export CC=$HOST-gcc
-        export CXX=$HOST-g++
-        export CMAKE_CC=$HOST-gcc
-        export CMAKE_CXX=$HOST-g++
-    fi
-
-    GXX=$HOST-g++         # replace with $GXX
-    GCCVERSION=$(basename $(dirname $($GXX -print-libgcc-file-name)))
+   export RUN_TESTS=1
+   export EXTRA_CMAKE_OPTIONS="$EXTRA_CMAKE_OPTIONS -DENABLE_TESTS=on"
 fi
 
-set CMAKE_COMPILERS="-DCMAKE_C_COMPILER=$CMAKE_CC -DCMAKE_CXX_COMPILER=$CMAKE_CXX"
+export EXTRA_CMAKE_OPTIONS="$EXTRA_CMAKE_OPTIONS -DBoost_NO_BOOST_CMAKE=on"
 
-cmake -S . -B build -Wno-dev \
-    -DCMAKE_INSTALL_PREFIX="$PREFIX"\
-    -DCMAKE_C_COMPILER=$CMAKE_CC\
-    -DCMAKE_CXX_COMPILER=$CMAKE_CXX\
-    -DCMAKE_BUILD_TYPE=release\
-    -DMAPD_DOCS_DOWNLOAD=OFF\
-    -DENABLE_AWS_S3=OFF\
-    -DENABLE_CUDA=OFF\
-    -DENABLE_FOLLY=OFF\
-    -DENABLE_JAVA_REMOTE_DEBUG=OFF\
-    -DENABLE_PROFILER=OFF\
-    -DENABLE_TESTS=OFF\
-    -DPREFER_STATIC_LIBS=OFF\
-    -DENABLE_FSI=ON\
-    -DENABLE_TBB=ON\
-    -DENABLE_DBE=ON\
-    || exit 1
+this_dir=$(dirname "${BASH_SOURCE[0]}")
 
-pushd build
-# preventing races by executing vulnerable targets first
-make PatchParser PatchScanner thrift_gen -j && make -j || \
-     make --trace  # running sequentualy and enabling trace in case of failures
-make install || exit 1
+# Omnisci UDF support uses CLangTool for parsing Load-time UDF C++
+# code to AST. If the C++ code uses C++ std headers, we need to
+# specify the locations of include directories:
+. ${RECIPE_DIR:-${this_dir}}/get_cxx_include_path.sh
+export CPLUS_INCLUDE_PATH=$(get_cxx_include_path)
 
-# copy initdb to mapd_initdb to avoid conflict with psql initdb
-mv $PREFIX/bin/initdb $PREFIX/bin/omnisci_initdb
-cd ..
-rm -rf data
-mkdir data
-# do lightweight testing here, make sanity_tests should go to under test env
-omnisci_initdb -f data
-omnisci_server --enable-fsi --db-query-list SampleData/db-query-list-flights.sql --exit-after-warmup
-rm -rf data
-popd
+mkdir -p build
+cd build
+
+cmake -Wno-dev \
+    -DCMAKE_PREFIX_PATH=$PREFIX \
+    -DCMAKE_INSTALL_PREFIX=$PREFIX/$INSTALL_BASE \
+    -DCMAKE_BUILD_TYPE=release \
+    -DMAPD_DOCS_DOWNLOAD=off \
+    -DENABLE_AWS_S3=off \
+    -DENABLE_FOLLY=off \
+    -DENABLE_JAVA_REMOTE_DEBUG=off \
+    -DENABLE_PROFILER=off \
+    -DPREFER_STATIC_LIBS=off \
+    -DENABLE_CUDA=off \
+    -DENABLE_DBE=ON \
+    -DENABLE_FSI=ON \
+    $EXTRA_CMAKE_OPTIONS \
+    ..
+
+make -j $CPU_COUNT 
+
+
+if [[ "$RUN_TESTS" == "2" ]]
+then
+    mkdir tmp
+    $PREFIX/bin/initdb tmp
+    make sanity_tests
+    rm -rf tmp
+else
+    echo "Skipping sanity tests"
+fi
