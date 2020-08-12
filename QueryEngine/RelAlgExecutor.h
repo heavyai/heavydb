@@ -272,6 +272,7 @@ class RelAlgExecutor : private StorageIOFacility<RelAlgExecutorTraits> {
                                   const ssize_t previous_count = -1);
 
   size_t getNDVEstimation(const WorkUnit& work_unit,
+                          const int64_t range,
                           const bool is_agg,
                           const CompilationOptions& co,
                           const ExecutionOptions& eo);

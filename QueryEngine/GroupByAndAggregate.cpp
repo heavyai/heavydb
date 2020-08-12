@@ -112,6 +112,22 @@ bool is_column_range_too_big_for_perfect_hash(const ColRangeInfo& col_range_info
   }
 }
 
+bool cardinality_estimate_less_than_column_range(const int64_t cardinality_estimate,
+                                                 const ColRangeInfo& col_range_info) {
+  try {
+    // the cardinality estimate is the size of the baseline hash table. further penalize
+    // the baseline hash table by a factor of 2x due to overhead in computing baseline
+    // hash. This has the overall effect of penalizing baseline hash over perfect hash by
+    // 4x; i.e. if the cardinality of the filtered data is less than 25% of the entry
+    // count of the column, we use baseline hash on the filtered set
+    return checked_int64_t(cardinality_estimate) * 2 <
+           static_cast<int64_t>(checked_int64_t(col_range_info.max) -
+                                checked_int64_t(col_range_info.min));
+  } catch (...) {
+    return false;
+  }
+}
+
 }  // namespace
 
 ColRangeInfo GroupByAndAggregate::getColRangeInfo() {
@@ -175,10 +191,33 @@ ColRangeInfo GroupByAndAggregate::getColRangeInfo() {
   if (has_count_distinct(ra_exe_unit_)) {
     max_entry_count = std::min(max_entry_count, baseline_threshold);
   }
-  if ((!ra_exe_unit_.groupby_exprs.front()->get_type_info().is_string() &&
-       !expr_is_rowid(ra_exe_unit_.groupby_exprs.front().get(), *executor_->catalog_)) &&
-      is_column_range_too_big_for_perfect_hash(col_range_info, max_entry_count) &&
-      !col_range_info.bucket) {
+  const auto& groupby_expr_ti = ra_exe_unit_.groupby_exprs.front()->get_type_info();
+  if (groupby_expr_ti.is_string() && !col_range_info.bucket) {
+    CHECK(groupby_expr_ti.get_compression() == kENCODING_DICT);
+    if (!ra_exe_unit_.sort_info.order_entries.empty()) {
+      // use original col range for sort
+      // TODO(adb): allow some sorts to pass through this block by centralizing sort
+      // algorithm decision making
+      return col_range_info;
+    }
+    if ((!ra_exe_unit_.quals.empty() || !ra_exe_unit_.simple_quals.empty()) &&
+        is_column_range_too_big_for_perfect_hash(col_range_info, max_entry_count)) {
+      // if filters are present and the filtered range is less than the cardinality of the
+      // column, consider baseline hash
+      if (!group_cardinality_estimation_ ||
+          cardinality_estimate_less_than_column_range(*group_cardinality_estimation_,
+                                                      col_range_info)) {
+        return {QueryDescriptionType::GroupByBaselineHash,
+                col_range_info.min,
+                col_range_info.max,
+                0,
+                col_range_info.has_nulls};
+      }
+    }
+  } else if ((!expr_is_rowid(ra_exe_unit_.groupby_exprs.front().get(),
+                             *executor_->catalog_)) &&
+             is_column_range_too_big_for_perfect_hash(col_range_info, max_entry_count) &&
+             !col_range_info.bucket) {
     return {QueryDescriptionType::GroupByBaselineHash,
             col_range_info.min,
             col_range_info.max,
@@ -246,12 +285,14 @@ GroupByAndAggregate::GroupByAndAggregate(
     const ExecutorDeviceType device_type,
     const RelAlgExecutionUnit& ra_exe_unit,
     const std::vector<InputTableInfo>& query_infos,
-    std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner)
+    std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
+    const std::optional<int64_t>& group_cardinality_estimation)
     : executor_(executor)
     , ra_exe_unit_(ra_exe_unit)
     , query_infos_(query_infos)
     , row_set_mem_owner_(row_set_mem_owner)
-    , device_type_(device_type) {
+    , device_type_(device_type)
+    , group_cardinality_estimation_(group_cardinality_estimation) {
   for (const auto& groupby_expr : ra_exe_unit_.groupby_exprs) {
     if (!groupby_expr) {
       continue;
@@ -287,18 +328,18 @@ int64_t GroupByAndAggregate::getShardedTopBucket(const ColRangeInfo& col_range_i
     /*
       when a node has fewer devices than shard count,
       a) In a distributed setup, the minimum distance between two keys would be
-      device_count because shards are stored consecutively across the physical tables, i.e
-      if a shard column has values 0 to 9, and 3 shards on each leaf, then node 1 would
-      have values: 0,1,2,6,7,8 and node 2 would have values: 3,4,5,9. If each leaf node
-      has only 1 device, in this case, all the keys from each node are loaded on the
-      device each.
+      device_count because shards are stored consecutively across the physical tables,
+      i.e if a shard column has values 0 to 9, and 3 shards on each leaf, then node 1
+      would have values: 0,1,2,6,7,8 and node 2 would have values: 3,4,5,9. If each leaf
+      node has only 1 device, in this case, all the keys from each node are loaded on
+      the device each.
 
       b) In a single node setup, the distance would be minimum of device_count or
       difference of device_count - shard_count. For example: If a single node server
       running on 3 devices a shard column has values 0 to 9 in a table with 4 shards,
-      device to fragment keys mapping would be: device 1 - 4,8,3,7 device 2 - 1,5,9 device
-      3 - 2, 6 The bucket value would be 4(shards) - 3(devices) = 1 i.e. minimum of
-      device_count or difference.
+      device to fragment keys mapping would be: device 1 - 4,8,3,7 device 2 - 1,5,9
+      device 3 - 2, 6 The bucket value would be 4(shards) - 3(devices) = 1 i.e. minimum
+      of device_count or difference.
 
       When a node has device count equal to or more than shard count then the
       minimum distance is always at least shard_count * no of leaf nodes.

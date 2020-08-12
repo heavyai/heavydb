@@ -32,7 +32,13 @@
 
 class CardinalityEstimationRequired : public std::runtime_error {
  public:
-  CardinalityEstimationRequired() : std::runtime_error("CardinalityEstimationRequired") {}
+  CardinalityEstimationRequired(const int64_t range)
+      : std::runtime_error("CardinalityEstimationRequired"), range_(range) {}
+
+  int64_t range() const { return range_; }
+
+ private:
+  const int64_t range_;
 };
 
 namespace Analyzer {
@@ -101,9 +107,18 @@ class NDVEstimator : public Analyzer::Estimator {
   const std::list<std::shared_ptr<Analyzer::Expr>> expr_tuple_;
 };
 
+class LargeNDVEstimator : public NDVEstimator {
+ public:
+  LargeNDVEstimator(const std::list<std::shared_ptr<Analyzer::Expr>>& expr_tuple)
+      : NDVEstimator(expr_tuple) {}
+
+  size_t getBufferSize() const final;
+};
+
 }  // namespace Analyzer
 
-RelAlgExecutionUnit create_ndv_execution_unit(const RelAlgExecutionUnit& ra_exe_unit);
+RelAlgExecutionUnit create_ndv_execution_unit(const RelAlgExecutionUnit& ra_exe_unit,
+                                              const int64_t range);
 
 RelAlgExecutionUnit create_count_all_execution_unit(
     const RelAlgExecutionUnit& ra_exe_unit,

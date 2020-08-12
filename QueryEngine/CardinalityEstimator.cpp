@@ -19,6 +19,17 @@
 #include "ExpressionRewrite.h"
 #include "RelAlgExecutor.h"
 
+int64_t g_large_ndv_threshold = 10000000;
+size_t g_large_ndv_multiplier = 256;
+
+namespace Analyzer {
+
+size_t LargeNDVEstimator::getBufferSize() const {
+  return 1024 * 1024 * g_large_ndv_multiplier;
+}
+
+}  // namespace Analyzer
+
 size_t ResultSet::getNDVEstimator() const {
   CHECK(dynamic_cast<const Analyzer::NDVEstimator*>(estimator_.get()));
   CHECK(host_estimator_buffer_);
@@ -34,10 +45,11 @@ size_t ResultSet::getNDVEstimator() const {
 }
 
 size_t RelAlgExecutor::getNDVEstimation(const WorkUnit& work_unit,
+                                        const int64_t range,
                                         const bool is_agg,
                                         const CompilationOptions& co,
                                         const ExecutionOptions& eo) {
-  const auto estimator_exe_unit = create_ndv_execution_unit(work_unit.exe_unit);
+  const auto estimator_exe_unit = create_ndv_execution_unit(work_unit.exe_unit, range);
   size_t one{1};
   ColumnCacheMap column_cache;
   try {
@@ -71,7 +83,8 @@ size_t RelAlgExecutor::getNDVEstimation(const WorkUnit& work_unit,
   return 1;
 }
 
-RelAlgExecutionUnit create_ndv_execution_unit(const RelAlgExecutionUnit& ra_exe_unit) {
+RelAlgExecutionUnit create_ndv_execution_unit(const RelAlgExecutionUnit& ra_exe_unit,
+                                              const int64_t range) {
   return {ra_exe_unit.input_descs,
           ra_exe_unit.input_col_descs,
           ra_exe_unit.simple_quals,
@@ -79,7 +92,9 @@ RelAlgExecutionUnit create_ndv_execution_unit(const RelAlgExecutionUnit& ra_exe_
           ra_exe_unit.join_quals,
           {},
           {},
-          makeExpr<Analyzer::NDVEstimator>(ra_exe_unit.groupby_exprs),
+          range > g_large_ndv_threshold
+              ? makeExpr<Analyzer::LargeNDVEstimator>(ra_exe_unit.groupby_exprs)
+              : makeExpr<Analyzer::NDVEstimator>(ra_exe_unit.groupby_exprs),
           SortInfo{{}, SortAlgorithm::Default, 0, 0},
           0,
           false,

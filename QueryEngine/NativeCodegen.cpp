@@ -1885,7 +1885,13 @@ Executor::compileWorkUnit(const std::vector<InputTableInfo>& query_infos,
   nukeOldState(allow_lazy_fetch, query_infos, &ra_exe_unit);
 
   GroupByAndAggregate group_by_and_aggregate(
-      this, co.device_type, ra_exe_unit, query_infos, row_set_mem_owner);
+      this,
+      co.device_type,
+      ra_exe_unit,
+      query_infos,
+      row_set_mem_owner,
+      has_cardinality_estimation ? std::optional<int64_t>(max_groups_buffer_entry_guess)
+                                 : std::nullopt);
   auto query_mem_desc =
       group_by_and_aggregate.initQueryMemoryDescriptor(eo.allow_multifrag,
                                                        max_groups_buffer_entry_guess,
@@ -1897,7 +1903,8 @@ Executor::compileWorkUnit(const std::vector<InputTableInfo>& query_infos,
           QueryDescriptionType::GroupByBaselineHash &&
       !has_cardinality_estimation &&
       (!render_info || !render_info->isPotentialInSituRender()) && !eo.just_explain) {
-    throw CardinalityEstimationRequired();
+    const auto col_range_info = group_by_and_aggregate.getColRangeInfo();
+    throw CardinalityEstimationRequired(col_range_info.max - col_range_info.min);
   }
 
   const bool output_columnar = query_mem_desc->didOutputColumnar();

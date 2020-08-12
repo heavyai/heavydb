@@ -37,6 +37,9 @@ bool g_enable_thrift_logs{false};
 extern bool g_use_table_device_offset;
 extern float g_fraction_code_cache_to_evict;
 
+extern int64_t g_large_ndv_threshold;
+extern size_t g_large_ndv_multiplier;
+
 unsigned connect_timeout{20000};
 unsigned recv_timeout{300000};
 unsigned send_timeout{300000};
@@ -595,6 +598,12 @@ void CommandLineOptions::fillAdvancedOptions() {
                                "Specify libgeos shared object filename to be used for "
                                "geos-backed geo opertations.");
 #endif
+  developer_desc.add_options()(
+      "large-ndv-threshold",
+      po::value<int64_t>(&g_large_ndv_threshold)->default_value(g_large_ndv_threshold));
+  developer_desc.add_options()(
+      "large-ndv-multiplier",
+      po::value<size_t>(&g_large_ndv_multiplier)->default_value(g_large_ndv_multiplier));
 }
 
 namespace {
