@@ -321,6 +321,7 @@ class SysCatalog : private CommonFileOperations {
   void checkAndExecuteMigrations();
   void importDataFromOldMapdDB();
   void createUserRoles();
+  void addAdminUserRole();
   void migratePrivileges();
   void migratePrivileged_old();
   void updateUserSchema();
@@ -337,8 +338,7 @@ class SysCatalog : private CommonFileOperations {
 
   // Here go functions not wrapped into transactions (necessary for nested calls)
   void grantDefaultPrivilegesToRole_unsafe(const std::string& name, bool issuper);
-  void createRole_unsafe(const std::string& roleName,
-                         const bool& userPrivateRole = false);
+  void createRole_unsafe(const std::string& roleName, const bool userPrivateRole = false);
   void dropRole_unsafe(const std::string& roleName);
   void grantRoleBatch_unsafe(const std::vector<std::string>& roles,
                              const std::vector<std::string>& grantees);

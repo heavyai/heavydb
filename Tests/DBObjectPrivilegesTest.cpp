@@ -2825,6 +2825,12 @@ TEST_F(GetDbObjectsForGranteeTest, UserWithGrantAllPrivilegesOnDatabase) {
   allOnDatabase("ALL PRIVILEGES");
 }
 
+TEST(DefaultUser, RoleList) {
+  auto* grantee = sys_cat.getGrantee(OMNISCI_ROOT_USER);
+  EXPECT_TRUE(grantee);
+  EXPECT_TRUE(grantee->getRoles().empty());
+}
+
 int main(int argc, char* argv[]) {
   g_enable_fsi = true;
   testing::InitGoogleTest(&argc, argv);
