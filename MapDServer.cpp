@@ -413,7 +413,8 @@ int startMapdServer(CommandLineOptions& prog_config_opts, bool start_http_server
   };
 
   if (prog_config_opts.system_parameters.ha_group_id.empty()) {
-    mapd::shared_ptr<TProcessor> processor(new TrackingProcessor(g_mapd_handler));
+    mapd::shared_ptr<TProcessor> processor(
+        new TrackingProcessor(g_mapd_handler, prog_config_opts.log_user_origin));
     mapd::shared_ptr<TTransportFactory> bufTransportFactory(
         new TBufferedTransportFactory());
     mapd::shared_ptr<TProtocolFactory> bufProtocolFactory(new TBinaryProtocolFactory());

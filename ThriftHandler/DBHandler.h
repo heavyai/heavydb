@@ -112,7 +112,8 @@ using query_state::QueryStateProxy;
 
 class TrackingProcessor : public OmniSciProcessor {
  public:
-  TrackingProcessor(mapd::shared_ptr<OmniSciIf> handler) : OmniSciProcessor(handler) {}
+  TrackingProcessor(mapd::shared_ptr<OmniSciIf> handler, const bool check_origin)
+      : OmniSciProcessor(handler), check_origin_(check_origin) {}
 
   bool process(mapd::shared_ptr<::apache::thrift::protocol::TProtocol> in,
                mapd::shared_ptr<::apache::thrift::protocol::TProtocol> out,
@@ -120,7 +121,7 @@ class TrackingProcessor : public OmniSciProcessor {
     using namespace ::apache::thrift;
 
     auto transport = in->getTransport();
-    if (transport) {
+    if (transport && check_origin_) {
       static std::mutex processor_mutex;
       std::lock_guard lock(processor_mutex);
       const auto origin_str = transport->getOrigin();
@@ -151,6 +152,9 @@ class TrackingProcessor : public OmniSciProcessor {
 
   static thread_local std::string client_address;
   static thread_local ClientProtocol client_protocol;
+
+ private:
+  const bool check_origin_;
 };
 
 class DBHandler : public OmniSciIf {
