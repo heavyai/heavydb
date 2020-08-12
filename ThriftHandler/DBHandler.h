@@ -105,9 +105,7 @@ class MapDLeafHandler;
 // request briefly takes a lock to make a copy of the appropriate SessionInfo object. Then
 // it releases the lock and uses the copy for the remainder of the request.
 using SessionMap = std::map<TSessionId, std::shared_ptr<Catalog_Namespace::SessionInfo>>;
-using permissionFuncPtr = bool (*)(const AccessPrivileges&, const TDBObjectPermissions&);
-using TableMap = std::map<std::string, bool>;
-using OptionalTableMap = boost::optional<TableMap&>;
+using PermissionFuncPtr = bool (*)(const AccessPrivileges&, const TDBObjectPermissions&);
 using query_state::QueryStateProxy;
 
 class TrackingProcessor : public OmniSciProcessor {
@@ -825,7 +823,7 @@ class DBHandler : public OmniSciIf {
   friend class MapDAggHandler;
   friend class MapDLeafHandler;
 
-  std::map<const std::string, const permissionFuncPtr> permissionFuncMap_ = {
+  std::map<const std::string, const PermissionFuncPtr> permissionFuncMap_ = {
       {"database"s, has_database_permission},
       {"dashboard"s, has_dashboard_permission},
       {"table"s, has_table_permission},
