@@ -342,6 +342,12 @@ void CommandLineOptions::fillOptions() {
           ->default_value(g_enable_stringdict_parallel)
           ->implicit_value(true),
       "Allow StringDictionary to parallelize loads using multiple threads");
+  help_desc.add_options()("log-user-origin",
+                          po::value<bool>(&log_user_origin)
+                              ->default_value(log_user_origin)
+                              ->implicit_value(true),
+                          "Lookup the origin of inbound connections by IP address/DNS "
+                          "name, and print this information as part of stdlog.");
   help_desc.add(log_options_.get_options());
 }
 

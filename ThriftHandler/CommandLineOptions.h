@@ -56,6 +56,7 @@ class CommandLineOptions {
   bool read_only = false;
   bool allow_loop_joins = false;
   bool enable_legacy_syntax = true;
+  bool log_user_origin = true;
   AuthMetadata authMetadata;
 
   SystemParameters system_parameters;
