@@ -216,6 +216,7 @@ public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
     opTab.addOperator(new ST_SRID());
     opTab.addOperator(new ST_SetSRID());
     opTab.addOperator(new ST_Point());
+    opTab.addOperator(new ST_Centroid());
     opTab.addOperator(new ST_Buffer());
     opTab.addOperator(new ST_Intersection());
     opTab.addOperator(new ST_Union());
@@ -1520,6 +1521,31 @@ public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
       assert opBinding.getOperandCount() == 2;
       final RelDataTypeFactory typeFactory = opBinding.getTypeFactory();
       return typeFactory.createSqlType(SqlTypeName.INTEGER);
+    }
+  }
+
+  static class ST_Centroid extends SqlFunction {
+    ST_Centroid() {
+      super("ST_Centroid",
+              SqlKind.OTHER_FUNCTION,
+              null,
+              null,
+              OperandTypes.family(signature()),
+              SqlFunctionCategory.SYSTEM);
+    }
+
+    @Override
+    public RelDataType inferReturnType(SqlOperatorBinding opBinding) {
+      assert opBinding.getOperandCount() == 1;
+      final RelDataTypeFactory typeFactory = opBinding.getTypeFactory();
+      return typeFactory.createSqlType(SqlTypeName.INTEGER);
+    }
+
+    private static java.util.List<SqlTypeFamily> signature() {
+      java.util.List<SqlTypeFamily> st_centroid_sig =
+              new java.util.ArrayList<SqlTypeFamily>();
+      st_centroid_sig.add(SqlTypeFamily.ANY);
+      return st_centroid_sig;
     }
   }
 

@@ -17780,6 +17780,55 @@ TEST(Select, GeoSpatial_Projection) {
                   "SELECT COUNT(*) FROM geospatial_test WHERE "
                   "ST_Contains(poly, ST_Point(0.1 + ST_NRings(poly)/10.0, 0.1));",
                   dt)));
+
+    // ST_Centroid geo constructor
+    ASSERT_NEAR(static_cast<double>(0.0),
+                v<double>(run_simple_agg(
+                    "SELECT ST_Distance('POINT(1 1)', ST_Centroid('POINT(1 1)')) "
+                    "from geospatial_test limit 1;",
+                    dt)),
+                static_cast<double>(0.00001));
+    ASSERT_NEAR(static_cast<double>(0.0),
+                v<double>(run_simple_agg("SELECT ST_Distance('POINT(-6.0 40.5)', "
+                                         "ST_Centroid('LINESTRING(-20 35, 8 46)')) "
+                                         "from geospatial_test limit 1;",
+                                         dt)),
+                static_cast<double>(0.00001));
+    ASSERT_NEAR(static_cast<double>(0.0),
+                v<double>(run_simple_agg("SELECT ST_Distance('POINT(1.3333333 1)', "
+                                         "ST_Centroid('LINESTRING(0 0, 2 0, 2 2, 0 2)')) "
+                                         "from geospatial_test limit 1;",
+                                         dt)),
+                static_cast<double>(0.00001));
+    ASSERT_NEAR(
+        static_cast<double>(0.0),
+        v<double>(run_simple_agg("SELECT ST_Distance('POINT(1 1)', "
+                                 "ST_Centroid('LINESTRING(0 0, 2 0, 2 2, 0 2, 0 0)')) "
+                                 "from geospatial_test limit 1;",
+                                 dt)),
+        static_cast<double>(0.00001));
+    ASSERT_NEAR(static_cast<double>(0.0),
+                v<double>(run_simple_agg("SELECT ST_Distance('POINT(1 1)', "
+                                         "ST_Centroid('POLYGON((0 0, 2 0, 2 2, 0 2))')) "
+                                         "from geospatial_test limit 1;",
+                                         dt)),
+                static_cast<double>(0.00001));
+    ASSERT_NEAR(static_cast<double>(0.0),
+                v<double>(run_simple_agg(
+                    "SELECT ST_Distance('POINT(10.9291 50.68245)', "
+                    "ST_Centroid('POLYGON((10.9099 50.6917,10.9483 50.6917,10.9483 "
+                    "50.6732,10.9099 50.6732,10.9099 50.6917))')) "
+                    "from geospatial_test limit 1;",
+                    dt)),
+                static_cast<double>(0.0001));
+    ASSERT_NEAR(
+        static_cast<double>(0.0),
+        v<double>(run_simple_agg(
+            "SELECT ST_Distance('POINT(0.166666666 0.933333333)', "
+            "ST_Centroid('MULTIPOLYGON(((1 0,2 1,2 0,1 0)),((-1 -1,2 2,-1 2,-1 -1)))')) "
+            "from geospatial_test limit 1;",
+            dt)),
+        static_cast<double>(0.00001));
   }
 }
 
