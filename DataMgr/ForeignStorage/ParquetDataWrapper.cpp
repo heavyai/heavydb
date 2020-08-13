@@ -77,6 +77,7 @@ void ParquetDataWrapper::validateFilePath() {
 }
 
 void ParquetDataWrapper::resetParquetMetadata() {
+  row_count_ = 0;
   fragment_to_row_group_interval_map_.clear();
   fragment_to_row_group_interval_map_[0] = {0, 0, -1};
 

@@ -50,6 +50,7 @@ class ForeignStorageCache {
   void clearForTablePrefix(const ChunkKey&);
   void clear();
   void setLimit(size_t limit);
+  std::vector<ChunkKey> getCachedChunksForKeyPrefix(const ChunkKey&);
 
   // Exists for testing purposes.
   size_t getLimit() const { return entry_limit_; }

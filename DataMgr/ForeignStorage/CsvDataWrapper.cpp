@@ -775,6 +775,7 @@ void CsvDataWrapper::populateMetadataForChunkKeyPrefix(
   // TODO: handle multiple files and zip files
   auto timer = DEBUG_TIMER(__func__);
   CHECK_EQ(chunk_key_prefix.size(), static_cast<size_t>(2));
+  chunk_buffer_map_.clear();
   chunk_metadata_map_.clear();
   fragment_id_to_file_regions_map_.clear();
 
@@ -825,7 +826,8 @@ void CsvDataWrapper::populateMetadataForChunkKeyPrefix(
   dispatch_metadata_scan_requests(
       buffer_size, file_path, file, copy_params, multi_threading_params);
   for (auto& future : futures) {
-    future.wait();
+    // get() instead of wait() because we need to propagate potential exceptions.
+    future.get();
   }
   fclose(file);
 

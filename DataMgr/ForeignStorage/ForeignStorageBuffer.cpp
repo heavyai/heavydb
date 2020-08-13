@@ -63,7 +63,7 @@ size_t ForeignStorageBuffer::reservedSize() const {
 }
 
 MemoryLevel ForeignStorageBuffer::getType() const {
-  return DISK_LEVEL;
+  return CPU_LEVEL;
 }
 
 void ForeignStorageBuffer::write(int8_t* source,

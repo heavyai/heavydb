@@ -733,18 +733,45 @@ RefreshForeignTablesCommand::RefreshForeignTablesCommand(
     : DdlCommand(ddl_payload, session_ptr) {
   CHECK(ddl_payload.HasMember("tableNames"));
   CHECK(ddl_payload["tableNames"].IsArray());
-  for (auto const& tableName_def : ddl_payload["tableNames"].GetArray()) {
-    CHECK(tableName_def.IsString());
+  for (auto const& tablename_def : ddl_payload["tableNames"].GetArray()) {
+    CHECK(tablename_def.IsString());
   }
 }
 
 void RefreshForeignTablesCommand::execute(TQueryResult& _return) {
+  auto& cat = session_ptr_->getCatalog();
+  auto& data_mgr = cat.getDataMgr();
+  auto foreign_storage_mgr = data_mgr.getForeignStorageMgr();
+  const size_t num_tables = ddl_payload_["tableNames"].GetArray().Size();
+  std::vector<ChunkKey> table_keys(num_tables, ChunkKey(2));
+  // Once a refresh command is started it needs to lock all tables it's refreshing.
+  std::vector<std::unique_ptr<lockmgr::TableSchemaLockContainer<lockmgr::WriteLock>>>
+      locked_table_vec(num_tables);
+  for (size_t i = 0; i < num_tables; ++i) {
+    locked_table_vec[i] =
+        std::make_unique<lockmgr::TableSchemaLockContainer<lockmgr::WriteLock>>(
+            lockmgr::TableSchemaLockContainer<lockmgr::WriteLock>::acquireTableDescriptor(
+                cat, ddl_payload_["tableNames"].GetArray()[i].GetString(), false));
+  }
+  // We can only start refreshing once we have all the locks we need.
+  for (size_t i = 0; i < num_tables; ++i) {
+    const TableDescriptor* td = (*locked_table_vec[i])();
+    cat.removeFragmenterForTable(td->tableId);
+    ChunkKey table_prefix{cat.getCurrentDB().dbId, td->tableId};
+    data_mgr.deleteChunksWithPrefix(table_prefix, MemoryLevel::CPU_LEVEL);
+    data_mgr.deleteChunksWithPrefix(table_prefix, MemoryLevel::GPU_LEVEL);
+    table_keys[i] = table_prefix;
+  }
   foreign_storage::OptionsContainer opt;
   if (ddl_payload_.HasMember("options") && !ddl_payload_["options"].IsNull()) {
     opt.populateOptionsMap(ddl_payload_["options"]);
     CHECK(opt.options.find("EVICT") != opt.options.end());
     CHECK(boost::iequals(opt.options["EVICT"], "true") ||
           boost::iequals(opt.options["EVICT"], "false"));
+    if (boost::iequals(opt.options["EVICT"], "true")) {
+      foreign_storage_mgr->evictTablesFromCache(table_keys);
+      return;
+    }
   }
-  throw std::runtime_error("REFRESH FOREIGN TABLES is not yet implemented");
+  foreign_storage_mgr->refreshTablesInCache(table_keys);
 }

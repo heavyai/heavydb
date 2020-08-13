@@ -28,6 +28,19 @@ namespace foreign_storage {
 using read_lock = mapd_shared_lock<mapd_shared_mutex>;
 using write_lock = mapd_unique_lock<mapd_shared_mutex>;
 
+template <typename Func, typename T>
+static void iterateOverMatchingPrefix(Func func,
+                                      T& chunk_collection,
+                                      const ChunkKey& chunk_prefix) {
+  ChunkKey upper_prefix(chunk_prefix);
+  upper_prefix.push_back(std::numeric_limits<int>::max());
+  auto end_it = chunk_collection.upper_bound(static_cast<const ChunkKey>(upper_prefix));
+  for (auto chunk_it = chunk_collection.lower_bound(chunk_prefix); chunk_it != end_it;
+       ++chunk_it) {
+    func(*chunk_it);
+  }
+}
+
 void ForeignStorageCache::cacheChunk(const ChunkKey& chunk_key, AbstractBuffer* buffer) {
   auto timer = DEBUG_TIMER(__func__);
   write_lock lock(chunks_mutex_);
@@ -36,6 +49,9 @@ void ForeignStorageCache::cacheChunk(const ChunkKey& chunk_key, AbstractBuffer* 
   }
   eviction_alg_->touchChunk(chunk_key);
   cached_chunks_.emplace(chunk_key);
+  // Mark the buffer as is_updated so that we know we are writing the whole buffer.
+  // putBuffer will clear flags on buffer.
+  buffer->setUpdated();
   global_file_mgr_->putBuffer(chunk_key, buffer);
 }
 
@@ -71,18 +87,17 @@ void ForeignStorageCache::getCachedMetadataVecForKeyPrefix(
     const ChunkKey& chunk_prefix) {
   auto timer = DEBUG_TIMER(__func__);
   read_lock r_lock(metadata_mutex_);
-  ChunkKey upper_prefix(chunk_prefix);
-  upper_prefix.push_back(std::numeric_limits<int>::max());
-  auto end_it = cached_metadata_.upper_bound(static_cast<const ChunkKey>(upper_prefix));
-  for (auto meta_it = cached_metadata_.lower_bound(chunk_prefix); meta_it != end_it;
-       ++meta_it) {
-    metadata_vec.push_back(*meta_it);
-  }
+  iterateOverMatchingPrefix(
+      [&metadata_vec](auto chunk) { metadata_vec.push_back(chunk); },
+      cached_metadata_,
+      chunk_prefix);
 }
 
 bool ForeignStorageCache::hasCachedMetadataForKeyPrefix(const ChunkKey& chunk_prefix) {
   auto timer = DEBUG_TIMER(__func__);
   read_lock lock(metadata_mutex_);
+  // We don't use iterateOvermatchingPrefix() here because we want to exit early if
+  // possible.
   ChunkKey upper_prefix(chunk_prefix);
   upper_prefix.push_back(std::numeric_limits<int>::max());
   auto end_it = cached_metadata_.upper_bound(static_cast<const ChunkKey>(upper_prefix));
@@ -140,6 +155,15 @@ void ForeignStorageCache::setLimit(size_t limit) {
   }
 }
 
+std::vector<ChunkKey> ForeignStorageCache::getCachedChunksForKeyPrefix(
+    const ChunkKey& chunk_prefix) {
+  read_lock r_lock(chunks_mutex_);
+  std::vector<ChunkKey> ret_vec;
+  iterateOverMatchingPrefix(
+      [&ret_vec](auto chunk) { ret_vec.push_back(chunk); }, cached_chunks_, chunk_prefix);
+  return ret_vec;
+}
+
 // Private functions.  Locks should be acquired in the public interface before calling
 // these functions.
 // This function assumes the chunk has been erased from the eviction algorithm already.
@@ -189,5 +213,4 @@ std::string ForeignStorageCache::dumpCachedMetadataEntries() const {
 std::string ForeignStorageCache::dumpEvictionQueue() const {
   return ((LRUEvictionAlgorithm*)eviction_alg_.get())->dumpEvictionQueue();
 }
-
 }  // namespace foreign_storage

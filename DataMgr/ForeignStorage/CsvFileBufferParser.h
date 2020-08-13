@@ -37,8 +37,9 @@ void validate_expected_column_count(std::vector<std::string_view>& row,
   // Each POINT could consume two separate coords instead of a single WKT
   if (row.size() < num_cols || (num_cols + point_cols) < row.size()) {
     std::stringstream string_stream;
-    string_stream << "Incorrect Row (expected " << num_cols << " columns, has "
-                  << row.size() << "): " << shared::printContainer(row);
+    string_stream << "Mismatched number of logical columns: (expected " << num_cols
+                  << " columns, has " << row.size()
+                  << "): " << shared::printContainer(row);
     LOG(ERROR) << string_stream.str();
     throw std::runtime_error{string_stream.str()};
   }

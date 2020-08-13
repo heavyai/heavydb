@@ -130,6 +130,7 @@ class Catalog final {
   void addColumn(const TableDescriptor& td, ColumnDescriptor& cd);
   void dropColumn(const TableDescriptor& td, const ColumnDescriptor& cd);
   void removeChunks(const int table_id);
+  void removeFragmenterForTable(const int table_id);
 
   const std::map<int, const ColumnDescriptor*> getDictionaryToColumnMapping();
 

@@ -72,8 +72,6 @@ void ForeignStorageMgr::fetchBuffer(const ChunkKey& chunk_key,
 
   // We only write back to the cache if we did not get the buffer from the cache.
   if (g_enable_fsi_cache && !cached) {
-    // Set is_updated flag so the FileMgr knows to write the whole buffer.
-    destination_buffer->setUpdated();
     foreign_storage_cache_->cacheChunk(chunk_key, destination_buffer);
   }
 }
@@ -83,9 +81,9 @@ void ForeignStorageMgr::getChunkMetadataVec(ChunkMetadataVector& chunk_metadata)
   for (auto& [table_chunk_key, data_wrapper] : data_wrapper_map_) {
     data_wrapper->populateMetadataForChunkKeyPrefix(table_chunk_key, chunk_metadata);
   }
-
-  if (g_enable_fsi_cache)
+  if (g_enable_fsi_cache) {
     foreign_storage_cache_->cacheMetadataVec(chunk_metadata);
+  }
 }
 
 void ForeignStorageMgr::getChunkMetadataVecForKeyPrefix(
@@ -106,7 +104,6 @@ void ForeignStorageMgr::getChunkMetadataVecForKeyPrefix(
 void ForeignStorageMgr::removeTableRelatedDS(const int db_id, const int table_id) {
   std::lock_guard data_wrapper_lock(data_wrapper_mutex_);
   data_wrapper_map_.erase({db_id, table_id});
-
   // Clear regardless of g_enable_fsi_cache
   foreign_storage_cache_->clearForTablePrefix({db_id, table_id});
 }
@@ -159,6 +156,42 @@ void ForeignStorageMgr::createDataWrapperIfNotExists(const ChunkKey& chunk_key) 
 
 ForeignStorageCache* ForeignStorageMgr::getForeignStorageCache() const {
   return foreign_storage_cache_.get();
+}
+
+void ForeignStorageMgr::refreshTablesInCache(const std::vector<ChunkKey>& table_keys) {
+  if (!g_enable_fsi_cache) {
+    return;
+  }
+  for (const auto& table_key : table_keys) {
+    CHECK(table_key.size() == 2U);
+    // Get a list of which chunks were cached for a table.
+    std::vector<ChunkKey> chunk_keys =
+        foreign_storage_cache_->getCachedChunksForKeyPrefix(table_key);
+    foreign_storage_cache_->clearForTablePrefix(table_key);
+
+    // Refresh metadata.
+    ChunkMetadataVector metadata_vec;
+    getDataWrapper(table_key)->populateMetadataForChunkKeyPrefix(table_key, metadata_vec);
+    foreign_storage_cache_->cacheMetadataVec(metadata_vec);
+    // Iterate through previously cached chunks and re-cache them from new wrapper.
+    for (const auto& chunk_key : chunk_keys) {
+      if (foreign_storage_cache_->isMetadataCached(chunk_key)) {
+        foreign_storage_cache_->cacheChunk(
+            chunk_key, getDataWrapper(table_key)->getChunkBuffer(chunk_key));
+      }
+    }
+  }
+}
+
+void ForeignStorageMgr::evictTablesFromCache(const std::vector<ChunkKey>& table_keys) {
+  if (!g_enable_fsi_cache) {
+    return;
+  }
+
+  for (auto& table_key : table_keys) {
+    CHECK(table_key.size() == 2U);
+    foreign_storage_cache_->clearForTablePrefix(table_key);
+  }
 }
 
 void ForeignStorageMgr::deleteBuffer(const ChunkKey& chunk_key, const bool purge) {

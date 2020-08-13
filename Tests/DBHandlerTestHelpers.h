@@ -354,6 +354,14 @@ class DBHandlerTestFixture : public testing::Test {
     }
   }
 
+  void sqlAndCompareResult(
+      const std::string& sql_statement,
+      const std::vector<std::vector<TargetValue>>& expected_result_set) {
+    TQueryResult result_set;
+    sql(result_set, sql_statement);
+    assertResultSetEqual(expected_result_set, result_set);
+  }
+
   /**
    * Helper method used to cast a vector of scalars to an optional of the same object.
    */
@@ -367,6 +375,14 @@ class DBHandlerTestFixture : public testing::Test {
    * avoid compiler ambiguity).
    */
   constexpr int64_t i(int64_t i) { return i; }
+
+  bool setExecuteMode(const TExecuteMode::type mode) {
+    if (db_handler_->cpu_mode_only_ && TExecuteMode::GPU) {
+      return false;
+    }
+    db_handler_->set_execution_mode(session_id_, mode);
+    return true;
+  }
 
  private:
   size_t getRowCount(const TRowSet& row_set) {
