@@ -3,6 +3,9 @@ set -xe
 INSTALL_BASE=.
 
 cmake --install build --component "exe" --prefix $PREFIX/$INSTALL_BASE
+# copy initdb to omnisci_initdb to avoid conflict with psql initdb
+mv $PREFIX/$INSTALL_BASE/bin/initdb $PREFIX/$INSTALL_BASE/bin/omnisci_initdb
+exit 0
 
 mkdir -p "${PREFIX}/etc/conda/activate.d"
 cat > "${PREFIX}/etc/conda/activate.d/${PKG_NAME}_activate.sh" <<EOF

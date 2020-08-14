@@ -1,10 +1,13 @@
-#  conda env create -f scripts/mapd-deps-conda-dev-env.yml --force
+#  To create environment, execute:
+#     conda env create -f scripts/mapd-deps-conda-dev-env.yml
+#
+
 #  TODO: autogenerate this file from conda/meta.yaml
 name: omnisci-dev
 channels:
-    - local
-    - default
-    - conda-forge
+  - local
+  - defaults
+  - conda-forge
 
 dependencies:
   - gxx_linux-64
@@ -38,3 +41,6 @@ dependencies:
   - xz
   - bzip2
   - zlib
+  # when cuda is enabled, install also
+  - nvcc_linux-64
+  - arrow-cpp=0.16=*cuda

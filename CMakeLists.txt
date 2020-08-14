@@ -4,6 +4,9 @@ cmake_minimum_required(VERSION 3.2)
 set(ENABLE_CONDA OFF)
 if(DEFINED ENV{CONDA_PREFIX})
   set(ENABLE_CONDA ON)
+  list(APPEND CMAKE_PREFIX_PATH "$ENV{CONDA_PREFIX}")
+  # resolves link issue for zlib 
+  link_directories("$ENV{CONDA_PREFIX}/lib")
   # various fixes and workarounds
   add_definitions("-Dsecure_getenv=getenv")
   # fixes `undefined reference to `boost::system::detail::system_category_instance'`:
@@ -14,8 +17,7 @@ if(DEFINED ENV{CONDA_PREFIX})
   add_compile_options("-fno-semantic-interposition")
   # Adding `--sysroot=...` resolves `no member named 'signbit' in the global namespace` error:
   set(CMAKE_SYSROOT "$ENV{CONDA_BUILD_SYSROOT}")
-  set(CMAKE_PREFIX_PATH "$ENV{CONDA_PREFIX}")
-  # Adding `-I$BUILD_SYSROOT_INLCUDE` resolves `cassert file not found` error:
+  # Adding sysroot include dir resolves `cassert file not found` error:
   include_directories(SYSTEM "$ENV{CONDA_BUILD_SYSROOT}/usr/include")
 endif(DEFINED ENV{CONDA_PREFIX})
 
@@ -148,9 +150,12 @@ if(XCODE)
 endif()
 
 # fixme: hack works for Homebrew, might not work for Conda
-if(${CMAKE_SYSTEM_NAME} MATCHES "Darwin" AND NOT ENABLE_CONDA)
+if(ENABLE_CONDA)
+  set(OPENSSL_ROOT_DIR "$ENV{CONDA_PREFIX}")
+elseif(${CMAKE_SYSTEM_NAME} MATCHES "Darwin" )
   set(OPENSSL_ROOT_DIR "/usr/local/opt/openssl/")
 endif()
+
 find_package(OpenSSL REQUIRED)
 include_directories(${OPENSSL_INCLUDE_DIR})
 

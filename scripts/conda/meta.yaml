@@ -51,55 +51,95 @@ requirements:
     - snappy
     - thrift-cpp
     - tbb-devel =2020.1
+  # no need in run: section when using multiple outputs
 
 outputs:
-  - name: omniscidb-cpu
-    script: install-omniscidb-cpu.sh
+  - name: omniscidb-common
+    script: install-omniscidb-common.sh
     requirements:
-      run:
+      build:
+        - cmake    # there is no building, just copying
+      run:         # common part of run requirements for other packages
         - boost-cpp
         - bzip2
         # omnscidb Load-time UDF support calls clang++
         - gxx_{{ target_platform }}
+        - double-conversion
+        - libgdal
+        - libkml
+        - libpng
+        - libarchive
         - ncurses
         - openjdk 8.*
         - xz
         - zlib
         - arrow-cpp =0.16
         - tbb =2020.1
+  
+  - name: omniscidb-cpu
+    script: install-omniscidb-cpu.sh
+    requirements:
+      build:
+        - cmake    # there is no building, just copying
+      run:
+        - boost-cpp
+        - bzip2
+        # omnscidb Load-time UDF support calls clang++
+        - gxx_{{ target_platform }}
+        - double-conversion
+        - libgdal
+        - libkml
+        - libpng
+        - libarchive
+        - ncurses
+        - openjdk 8.*
+        - xz
+        - zlib
+        - arrow-cpp =0.16
+        - tbb =2020.1
+        - {{ pin_subpackage('omniscidb-common', exact=True) }}
       run_constrained:
         - arrow-cpp-proc * {{ build_ext }}
-
-  - name: omniscidb-common
-    script: install-omniscidb-common.sh
+    test:
+      commands:
+        - omnisql -v
+        - which omnisci_initdb
+        - which omnisci_server
 
   - name: omniscidbe
     script: install-omniscidbe.sh
     requirements:
+      build:
+        - cmake
       run:
-        - arrow-cpp =0.16
-        - tbb =2020.1
         - {{ pin_subpackage('omniscidb-common', exact=True) }}
 
   - name: omniscidbe4py
     script: install-omniscidbe4py.sh
     requirements:
+      build:
+        - {{ compiler('cxx') }}   # this section really builds
+        - clangdev
+        - clangxx
+        - cmake
+        - llvmdev 9
+        - make
+        - maven
       host:
-        - python
-        - cython
         - numpy =1.18.5
-        - pyarrow =0.16
-        - {{ pin_subpackage('omniscidbe', exact=True) }}
-      run:
-        - pyarrow =0.16
+        - cython
+        # omniscidb <=5.2.2 is not arrow-cpp 0.17+ ready
         - arrow-cpp =0.16
-        - tbb =2020.1
-        - {{ pin_subpackage('omniscidbe', exact=True) }}
+        - bisonpp
+        - blosc
         - boost-cpp
+        - clangdev
         - double-conversion
+        - flex
         - gflags
         - glog
-        - llvm 9
+        - llvmdev 9
+        - llvm
         - libarchive
         - libgdal
         - libkml
@@ -111,6 +151,17 @@ outputs:
         - openssl
         - snappy
         - thrift-cpp
+        - tbb-devel =2020.1
+        - python
+        - cython
+        - numpy =1.18.5
+        - pyarrow =0.16
+        - {{ pin_subpackage('omniscidbe', exact=True) }}
+      run:
+        - pyarrow =0.16
+        - tbb4py =2020.1
+        - {{ pin_subpackage('omniscidbe', exact=True) }}
+        - {{ pin_subpackage('omniscidb-common', exact=True) }}
     test:
       imports:
         - dbe
