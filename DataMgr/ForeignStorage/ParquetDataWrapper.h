@@ -24,10 +24,10 @@
 #include "Catalog/ForeignTable.h"
 #include "DataMgr/Chunk/Chunk.h"
 #include "ForeignDataWrapper.h"
-#include "ForeignTableColumnMap.h"
 #include "ImportExport/Importer.h"
 #include "Interval.h"
 #include "LazyParquetImporter.h"
+#include "ParquetForeignTableSchema.h"
 
 namespace foreign_storage {
 class ParquetDataWrapper : public ForeignDataWrapper {
@@ -48,7 +48,7 @@ class ParquetDataWrapper : public ForeignDataWrapper {
 
   std::list<const ColumnDescriptor*> getColumnsToInitialize(
       const Interval<ColumnType>& column_interval);
-  void initializeChunkBuffers(const Interval<FragmentType>& fragment_interval,
+  void initializeChunkBuffers(const int fragment_index,
                               const Interval<ColumnType>& column_interval);
   void initializeChunkBuffers(const int fragment_index);
   void fetchChunkMetadata();
@@ -71,35 +71,16 @@ class ParquetDataWrapper : public ForeignDataWrapper {
   std::string validateAndGetStringWithLength(const std::string& option_name,
                                              const size_t expected_num_chars);
 
-  /**
-   * Validates that the string value of given table option is either "true" or "false"
-   * (case insensitive). An exception is thrown if option value does not match one of
-   * the two possible values.
-   *
-   * @param option_name - name of table option whose value is validated and returned
-   * @return corresponding bool for option value. Returns an empty optional if table
-   * options do not contain provided option.
-   */
-  std::optional<bool> validateAndGetBoolValue(const std::string& option_name);
-
-  bool fragmentIsFull();
-  bool newRowGroup(int row_group);
-
-  void updateRowGroupMetadata(int row_group);
+  bool moveToNextFragment(size_t new_rows_count);
 
   void finalizeFragmentMap();
   void updateFragmentMap(int fragment_index, int row_group);
 
   void resetParquetMetadata();
 
-  void shiftData(DataBlockPtr& data_block,
-                 const size_t import_shift,
-                 const size_t element_size);
-
   void updateStatsForBuffer(AbstractBuffer* buffer,
                             const DataBlockPtr& data_block,
-                            const size_t import_count,
-                            const size_t import_shift);
+                            const size_t import_count);
 
   void loadMetadataChunk(const ColumnDescriptor* column,
                          const ChunkKey& chunk_key,
@@ -112,57 +93,29 @@ class ParquetDataWrapper : public ForeignDataWrapper {
                  const ChunkKey& chunk_key,
                  DataBlockPtr& data_block,
                  const size_t import_count,
-                 const size_t import_shift,
-                 const bool metadata_only = false,
-                 const bool first_fragment = false,
-                 const size_t element_size = 0);
+                 const bool metadata_only);
 
   import_export::Loader* getMetadataLoader(
       Catalog_Namespace::Catalog& catalog,
       const LazyParquetImporter::RowGroupMetadataVector& metadata_vector);
 
   import_export::Loader* getChunkLoader(Catalog_Namespace::Catalog& catalog,
-                                        const Interval<FragmentType>& fragment_interval,
                                         const Interval<ColumnType>& column_interval,
-                                        const int chunk_key_db);
-
-  size_t getElementSizeFromImportBuffer(
-      const std::unique_ptr<import_export::TypedImportBuffer>& import_buffer) const;
-
-  struct IntervalsToLoad {
-    Interval<RowGroupType> row_group_interval;
-    Interval<ColumnType> column_interval;
-    Interval<FragmentType> fragment_interval;
-  };
-
-  /**
-   * Determines intervals of row groups, columns and fragments to load based on a
-   * request for a given chunk key.
-   *
-   * @param chunk_key - chunk key that is to be loaded
-   *
-   * @return - (inclusive) intervals of row groups, columns, and fragments respectively,
-   * to load
-   */
-  IntervalsToLoad getRowGroupsColumnsAndFragmentsToLoad(const ChunkKey& chunk_key);
+                                        const int db_id,
+                                        const int fragment_index);
 
   struct FragmentToRowGroupInterval {
-    int64_t start_row_group_line;  // Line within row group where fragment starts
-    int start_row_group_index;     // Row group where fragment starts
-    int end_row_group_index;       // Row group where fragment ends
+    int start_row_group_index;  // Row group where fragment starts
+    int end_row_group_index;    // Row group where fragment ends
   };
   std::map<int, FragmentToRowGroupInterval> fragment_to_row_group_interval_map_;
   std::map<ChunkKey, std::unique_ptr<ForeignStorageBuffer>> chunk_buffer_map_;
   const int db_id_;
   const ForeignTable* foreign_table_;
-  size_t row_count_;
-
-  int max_row_group_;
-  int current_row_group_;
-  int64_t row_group_row_count_;
-  size_t partial_import_row_count_;
-
-  ForeignTableColumnMap foreign_table_column_map_;
+  int last_fragment_index_;
+  size_t last_fragment_row_count_;
+  int last_row_group_;
+  std::unique_ptr<ParquetForeignTableSchema> schema_;
 
   static constexpr std::array<char const*, 4> supported_options_{"BASE_PATH",
                                                                  "FILE_PATH",

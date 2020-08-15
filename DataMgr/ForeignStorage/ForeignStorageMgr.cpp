@@ -52,6 +52,7 @@ void ForeignStorageMgr::fetchBuffer(const ChunkKey& chunk_key,
     cached = false;
     buffer = getDataWrapper(chunk_key)->getChunkBuffer(chunk_key);
   }
+  CHECK(buffer);
 
   // Read the contents of the source buffer into the dest buffer.
   size_t chunk_size = (num_bytes == 0) ? buffer->size() : num_bytes;
