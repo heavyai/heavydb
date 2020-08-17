@@ -1,17 +1,14 @@
-{% set name = "omniscidb-cpu" %}
-{% set version = "5.4.0_dev" %}
 # TODO version parser from CMakeLists.txt
 
 package:
   name: omniscidb
-  version: {{ version }}
+  version: 0.1
 
 source:
   path: ../..
 
 build:
-  number: {{ number }}
-  string: "{{ build_string }}"
+  number: 0
   script_env:
     - http_proxy
     - https_proxy
@@ -21,7 +18,6 @@ requirements:
     - {{ compiler('cxx') }}
     - clangdev
     - clangxx
-    - clangdev
     - cmake
     - make
     - maven
@@ -45,6 +41,8 @@ requirements:
     - libgdal
     - libkml
     - libpng
+    # for some reason, librdkafka 1.4+ triggers dependency conflicts
+    - librdkafka <1.4
     - ncurses
     - openldap
     - openssl
@@ -99,72 +97,12 @@ outputs:
         - tbb =2020.1
         - {{ pin_subpackage('omniscidb-common', exact=True) }}
       run_constrained:
-        - arrow-cpp-proc * {{ build_ext }}
+        - arrow-cpp-proc * cpu
     test:
       commands:
         - omnisql -v
         - which omnisci_initdb
         - which omnisci_server
-
-  - name: omniscidbe
-    script: install-omniscidbe.sh
-    requirements:
-      build:
-        - cmake
-      run:
-        - {{ pin_subpackage('omniscidb-common', exact=True) }}
-
-  - name: omniscidbe4py
-    script: install-omniscidbe4py.sh
-    requirements:
-      build:
-        - {{ compiler('cxx') }}   # this section really builds
-        - clangdev
-        - clangxx
-        - cmake
-        - llvmdev 9
-        - make
-        - maven
-      host:
-        - numpy =1.18.5
-        - cython
-        # omniscidb <=5.2.2 is not arrow-cpp 0.17+ ready
-        - arrow-cpp =0.16
-        - bisonpp
-        - blosc
-        - boost-cpp
-        - clangdev
-        - double-conversion
-        - flex
-        - gflags
-        - glog
-        - llvmdev 9
-        - llvm
-        - libarchive
-        - libgdal
-        - libkml
-        - libpng
-        # for some reason, librdkafka 1.4+ triggers dependency conflicts
-        - librdkafka <1.4
-        - ncurses
-        - openldap
-        - openssl
-        - snappy
-        - thrift-cpp
-        - tbb-devel =2020.1
-        - python
-        - cython
-        - numpy =1.18.5
-        - pyarrow =0.16
-        - {{ pin_subpackage('omniscidbe', exact=True) }}
-      run:
-        - pyarrow =0.16
-        - tbb4py =2020.1
-        - {{ pin_subpackage('omniscidbe', exact=True) }}
-        - {{ pin_subpackage('omniscidb-common', exact=True) }}
-    test:
-      imports:
-        - dbe
 
 about:
   home: https://www.omnisci.com/
