@@ -16,7 +16,7 @@ import java.util.Random;
 import java.util.function.Function;
 
 /**
- *  a (hopefully) complete test case for date/time functions in OmniSci.
+ * a (hopefully) complete test case for date/time functions in OmniSci.
  */
 public class DateTimeTest {
   static enum DateTruncUnit {
@@ -570,33 +570,69 @@ public class DateTimeTest {
   }
 
   static enum Encoding {
-    TIMESTAMP("TIMESTAMP", "'TIMESTAMP' ''yyyy-MM-dd HH:mm:ss''", ChronoUnit.SECONDS),
-    TIMESTAMP_0(
-            "TIMESTAMP(0)", "'TIMESTAMP(0)' ''yyyy-MM-dd HH:mm:ss''", ChronoUnit.SECONDS),
+    TIMESTAMP("TIMESTAMP",
+            "'TIMESTAMP' ''yyyy-MM-dd HH:mm:ss''",
+            ChronoUnit.SECONDS,
+            LocalDateTime.ofEpochSecond(-30610224000L, 0, ZoneOffset.UTC),
+            LocalDateTime.ofEpochSecond(29379542399L, 0, ZoneOffset.UTC)),
+    TIMESTAMP_0("TIMESTAMP(0)",
+            "'TIMESTAMP(0)' ''yyyy-MM-dd HH:mm:ss''",
+            ChronoUnit.SECONDS,
+            LocalDateTime.ofEpochSecond(-30610224000L, 0, ZoneOffset.UTC),
+            LocalDateTime.ofEpochSecond(29379542399L, 0, ZoneOffset.UTC)),
     TIMESTAMP_3("TIMESTAMP(3)",
             "'TIMESTAMP(3)' ''yyyy-MM-dd HH:mm:ss.SSS''",
-            ChronoUnit.MILLIS),
+            ChronoUnit.MILLIS,
+            LocalDateTime.ofEpochSecond(-30610224000L, 0, ZoneOffset.UTC),
+            LocalDateTime.ofEpochSecond(29379542399L, 0, ZoneOffset.UTC)),
     TIMESTAMP_6("TIMESTAMP(6)",
             "'TIMESTAMP(6)' ''yyyy-MM-dd HH:mm:ss.SSSSSS''",
-            ChronoUnit.MICROS),
+            ChronoUnit.MICROS,
+            LocalDateTime.ofEpochSecond(-30610224000L, 0, ZoneOffset.UTC),
+            LocalDateTime.ofEpochSecond(29379542399L, 0, ZoneOffset.UTC)),
     TIMESTAMP_9("TIMESTAMP(9)",
             "'TIMESTAMP(9)' ''yyyy-MM-dd HH:mm:ss.SSSSSSSSS''",
-            ChronoUnit.NANOS),
+            ChronoUnit.NANOS,
+            LocalDateTime.ofEpochSecond(-9223372036L, 0, ZoneOffset.UTC),
+            LocalDateTime.ofEpochSecond(9223372036L, 0, ZoneOffset.UTC)),
     TIMESTAMP_FIXED_32("TIMESTAMP ENCODING FIXED(32)",
             "'TIMESTAMP' ''yyyy-MM-dd HH:mm:ss''",
-            ChronoUnit.SECONDS),
-    DATE("DATE", "'DATE' ''yyyy-MM-dd''", ChronoUnit.DAYS),
-    DATE_FIXED_16("DATE ENCODING FIXED(16)", "'DATE' ''yyyy-MM-dd''", ChronoUnit.DAYS),
-    DATE_FIXED_32("DATE ENCODING FIXED(32)", "'DATE' ''yyyy-MM-dd''", ChronoUnit.DAYS);
+            ChronoUnit.SECONDS,
+            LocalDateTime.ofEpochSecond(Integer.MIN_VALUE + 1, 0, ZoneOffset.UTC),
+            LocalDateTime.ofEpochSecond(Integer.MAX_VALUE, 0, ZoneOffset.UTC)),
+    DATE("DATE",
+            "'DATE' ''yyyy-MM-dd''",
+            ChronoUnit.DAYS,
+            LocalDateTime.ofEpochSecond(0, 0, ZoneOffset.UTC).plusDays(-2147483648L),
+            LocalDateTime.ofEpochSecond(0, 0, ZoneOffset.UTC).plusDays(2147483647L)),
+    DATE_DAYS_16("DATE ENCODING DAYS(16)",
+            "'DATE' ''yyyy-MM-dd''",
+            ChronoUnit.DAYS,
+            LocalDateTime.ofEpochSecond(0, 0, ZoneOffset.UTC)
+                    .plusDays(Short.MIN_VALUE + 1),
+            LocalDateTime.ofEpochSecond(0, 0, ZoneOffset.UTC).plusDays(Short.MAX_VALUE)),
+    DATE_DAYS_32("DATE ENCODING DAYS(32)",
+            "'DATE' ''yyyy-MM-dd''",
+            ChronoUnit.DAYS,
+            LocalDateTime.ofEpochSecond(0, 0, ZoneOffset.UTC).plusDays(-2147483648L),
+            LocalDateTime.ofEpochSecond(0, 0, ZoneOffset.UTC).plusDays(2147483647L));
 
     DateTimeFormatter formatter;
     String sqlType;
     ChronoUnit toClear;
+    LocalDateTime min;
+    LocalDateTime max;
 
-    Encoding(String sqlType, String pattern, ChronoUnit unit) {
+    Encoding(String sqlType,
+            String pattern,
+            ChronoUnit unit,
+            LocalDateTime min,
+            LocalDateTime max) {
       this.sqlType = sqlType;
       formatter = DateTimeFormatter.ofPattern(pattern);
       this.toClear = unit;
+      this.min = min;
+      this.max = max;
     }
 
     public String toSqlColumn(String prefx, LocalDateTime val) {
@@ -626,6 +662,10 @@ public class DateTimeTest {
       }
 
       return d;
+    }
+
+    public boolean isValid(LocalDateTime t) {
+      return t.isAfter(min) && t.isBefore(max);
     }
   }
 
@@ -685,6 +725,10 @@ public class DateTimeTest {
   public static LocalDateTime testDateTrunc(
           LocalDateTime d, DateTruncUnit f, MapdTestClient client, Encoding enc)
           throws Exception {
+    if (!enc.isValid(d)) {
+      return d;
+    }
+
     String sql = "SELECT DATE_TRUNC('" + f.sqlToken + "', " + enc.toSql(d) + ");";
     LocalDateTime r = getDateTimeFromQuery(client, sql);
     LocalDateTime expected = f.trunc.apply(d);
@@ -765,6 +809,10 @@ public class DateTimeTest {
   public static void testDateExtractTable(
           LocalDateTime d, DateExtractUnit f, MapdTestClient client, Encoding enc)
           throws Exception {
+    if (!enc.isValid(d)) {
+      return;
+    }
+
     updateValues(client, d, enc);
     String sql = "SELECT EXTRACT(" + f.sqlToken + " FROM " + enc.toSqlColumn("a", d)
             + ") FROM DateTimeTest;";
@@ -811,6 +859,10 @@ public class DateTimeTest {
           MapdTestClient client,
           Encoding enc0,
           Encoding enc1) throws Exception {
+    if (!enc0.isValid(d0) || !enc1.isValid(d1)) {
+      return;
+    }
+
     updateValues(client, d0, enc0, d1, enc1);
     String sql = "SELECT " + fn + "(" + f.sqlToken + ", " + enc0.toSqlColumn("a", d0)
             + ", " + enc1.toSqlColumn("b", d1) + ") FROM DateTimeTest;";
@@ -855,6 +907,10 @@ public class DateTimeTest {
           long units,
           MapdTestClient client,
           Encoding enc) throws Exception {
+    if (!enc.isValid(d)) {
+      return;
+    }
+
     updateValues(client, d, enc);
     String sql = "SELECT " + fn + "(" + f.sqlToken + ", " + units + ", "
             + enc.toSqlColumn("a", d) + ") FROM DateTimeTest;";
@@ -958,6 +1014,16 @@ public class DateTimeTest {
 
       if (expected == okish) return Fuzzy.okish;
 
+      if ((result == 59 && expected == 0) || (result == 0 && expected == 59)) {
+        // for minutes and seconds
+        return Fuzzy.okish;
+      }
+
+      if ((result == 23 && expected == 0) || (result == 0 && expected == 23)) {
+        // for hours
+        return Fuzzy.okish;
+      }
+
       return failed;
     }
 
@@ -1032,7 +1098,6 @@ public class DateTimeTest {
           LocalDateTime e = testDateTrunc(d0, f, su, enc0);
           e = e.minus(1, ChronoUnit.NANOS);
           testDateTrunc(e, f, su, enc0);
-
           e = testDateTrunc(d1, f, su, enc0);
           e = e.minus(1, ChronoUnit.NANOS);
           testDateTrunc(e, f, su, enc0);
