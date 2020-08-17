@@ -65,7 +65,7 @@
             
             
               <div class="version">
-                5.4.0dev 801e6ef
+                5.4.0dev 13564c1
               </div>
             
           
@@ -1001,6 +1001,7 @@
 <li class="toctree-l2"><a class="reference internal" href="classimport__export_1_1_query_exporter_g_d_a_l.html">Class import_export::QueryExporterGDAL</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classimport__export_1_1_render_group_analyzer.html">Class import_export::RenderGroupAnalyzer</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classimport__export_1_1_typed_import_buffer.html">Class import_export::TypedImportBuffer</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classimport__export_1_1delimited__parser_1_1_insufficient_buffer_size_exception.html">Class import_export::delimited_parser::InsufficientBufferSizeException</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classlegacylockmgr_1_1_lock_mgr.html">Class legacylockmgr::LockMgr</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classlockmgr_1_1_abstract_lock_container.html">Class lockmgr::AbstractLockContainer</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classlockmgr_1_1_insert_data_lock_mgr.html">Class lockmgr::InsertDataLockMgr</a></li>
@@ -1496,6 +1497,25 @@
 <dt id="_CPPv415SqliteConnector">
 <span id="_CPPv315SqliteConnector"></span><span id="_CPPv215SqliteConnector"></span><span id="SqliteConnector"></span><span class="target" id="class_sqlite_connector"></span><em class="property">class </em><code class="sig-name descname">SqliteConnector</code><a class="headerlink" href="#_CPPv415SqliteConnector" title="Permalink to this definition">¶</a><br /></dt>
 <dd><div class="breathe-sectiondef docutils container">
+<p class="breathe-sectiondef-title rubric">Public Types</p>
+<dl class="enum">
+<dt id="_CPPv4N15SqliteConnector8BindTypeE">
+<span id="_CPPv3N15SqliteConnector8BindTypeE"></span><span id="_CPPv2N15SqliteConnector8BindTypeE"></span><span class="target" id="class_sqlite_connector_1a24d115c86521ccbcb447b4c3f59ff96d"></span><em class="property">enum </em><code class="sig-name descname">BindType</code><a class="headerlink" href="#_CPPv4N15SqliteConnector8BindTypeE" title="Permalink to this definition">¶</a><br /></dt>
+<dd><p><em>Values:</em></p>
+<dl class="enumerator">
+<dt id="_CPPv4N15SqliteConnector4TEXTE">
+<span id="_CPPv3N15SqliteConnector4TEXTE"></span><span id="_CPPv2N15SqliteConnector4TEXTE"></span><span class="target" id="class_sqlite_connector_1a24d115c86521ccbcb447b4c3f59ff96da61a96ffcb251bb9bf0abf8fec19d0ea8"></span><code class="sig-name descname">TEXT</code> = 1<a class="headerlink" href="#_CPPv4N15SqliteConnector4TEXTE" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="enumerator">
+<dt id="_CPPv4N15SqliteConnector4BLOBE">
+<span id="_CPPv3N15SqliteConnector4BLOBE"></span><span id="_CPPv2N15SqliteConnector4BLOBE"></span><span class="target" id="class_sqlite_connector_1a24d115c86521ccbcb447b4c3f59ff96da1649cff06611a6025da3dd511a97fb43"></span><code class="sig-name descname">BLOB</code><a class="headerlink" href="#_CPPv4N15SqliteConnector4BLOBE" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+</div>
+<div class="breathe-sectiondef docutils container">
 <p class="breathe-sectiondef-title rubric">Public Functions</p>
 <dl class="function">
 <dt id="_CPPv4N15SqliteConnector15SqliteConnectorERKNSt6stringERKNSt6stringE">
@@ -1530,6 +1550,11 @@
 <dl class="function">
 <dt id="_CPPv4N15SqliteConnector22query_with_text_paramsERKNSt6stringERKNSt6vectorINSt6stringEEE">
 <span id="_CPPv3N15SqliteConnector22query_with_text_paramsERKNSt6stringERKNSt6vectorINSt6stringEEE"></span><span id="_CPPv2N15SqliteConnector22query_with_text_paramsERKNSt6stringERKNSt6vectorINSt6stringEEE"></span><span id="SqliteConnector::query_with_text_params__ssCR.std::vector:ss:CR"></span><span class="target" id="class_sqlite_connector_1a26cf39b19d7d937f29ebf0d05a731712"></span>void <code class="sig-name descname">query_with_text_params</code><span class="sig-paren">(</span><em class="property">const</em> std::string &amp;<em>queryString</em>, <em class="property">const</em> std::vector&lt;std::string&gt; &amp;<em>text_param</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N15SqliteConnector22query_with_text_paramsERKNSt6stringERKNSt6vectorINSt6stringEEE" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="_CPPv4N15SqliteConnector22query_with_text_paramsERKNSt6stringERKNSt6vectorINSt6stringEEERKNSt6vectorI8BindTypeEE">
+<span id="_CPPv3N15SqliteConnector22query_with_text_paramsERKNSt6stringERKNSt6vectorINSt6stringEEERKNSt6vectorI8BindTypeEE"></span><span id="_CPPv2N15SqliteConnector22query_with_text_paramsERKNSt6stringERKNSt6vectorINSt6stringEEERKNSt6vectorI8BindTypeEE"></span><span id="SqliteConnector::query_with_text_params__ssCR.std::vector:ss:CR.std::vector:BindType:CR"></span><span class="target" id="class_sqlite_connector_1a94bb2e516c7a1ae18aa0e6c57e7298b3"></span>void <code class="sig-name descname">query_with_text_params</code><span class="sig-paren">(</span><em class="property">const</em> std::string &amp;<em>queryString</em>, <em class="property">const</em> std::vector&lt;std::string&gt; &amp;<em>text_params</em>, <em class="property">const</em> std::vector&lt;<a class="reference internal" href="#_CPPv4N15SqliteConnector8BindTypeE" title="SqliteConnector::BindType">BindType</a>&gt; &amp;<em>bind_types</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N15SqliteConnector22query_with_text_paramsERKNSt6stringERKNSt6vectorINSt6stringEEERKNSt6vectorI8BindTypeEE" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 <dl class="function">

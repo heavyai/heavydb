@@ -65,7 +65,7 @@
             
             
               <div class="version">
-                5.4.0dev 801e6ef
+                5.4.0dev 13564c1
               </div>
             
           
@@ -1001,6 +1001,7 @@
 <li class="toctree-l2"><a class="reference internal" href="classimport__export_1_1_query_exporter_g_d_a_l.html">Class import_export::QueryExporterGDAL</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classimport__export_1_1_render_group_analyzer.html">Class import_export::RenderGroupAnalyzer</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classimport__export_1_1_typed_import_buffer.html">Class import_export::TypedImportBuffer</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classimport__export_1_1delimited__parser_1_1_insufficient_buffer_size_exception.html">Class import_export::delimited_parser::InsufficientBufferSizeException</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classlegacylockmgr_1_1_lock_mgr.html">Class legacylockmgr::LockMgr</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classlockmgr_1_1_abstract_lock_container.html">Class lockmgr::AbstractLockContainer</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classlockmgr_1_1_insert_data_lock_mgr.html">Class lockmgr::InsertDataLockMgr</a></li>
@@ -1541,17 +1542,26 @@
 <dl class="function">
 <dt id="_CPPv4N15DateDaysEncoder11updateStatsEPCK6int8_tK6size_t">
 <span id="_CPPv3N15DateDaysEncoder11updateStatsEPCK6int8_tK6size_t"></span><span id="_CPPv2N15DateDaysEncoder11updateStatsEPCK6int8_tK6size_t"></span><span id="DateDaysEncoder::updateStats__int8_tCPC.sC"></span><span class="target" id="class_date_days_encoder_1a97ec4534eae122ea711d3fc7a96300b9"></span>void <code class="sig-name descname">updateStats</code><span class="sig-paren">(</span><em class="property">const</em> int8_t *<em class="property">const</em> <em>src_data</em>, <em class="property">const</em> size_t <em>num_elements</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N15DateDaysEncoder11updateStatsEPCK6int8_tK6size_t" title="Permalink to this definition">¶</a><br /></dt>
-<dd></dd></dl>
+<dd><p>Update statistics for data without appending.</p>
+<p><dl class="simple">
+<dt><strong>Parameters</strong></dt><dd><ul class="breatheparameterlist simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">src_data</span></code>: - the data with which to update statistics </p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">num_elements</span></code>: - the number of elements to scan in the data </p></li>
+</ul>
+</dd>
+</dl>
+</p>
+</dd></dl>
 
 <dl class="function">
 <dt id="_CPPv4N15DateDaysEncoder11updateStatsEPCKNSt6vectorINSt6stringEEEK6size_tK6size_t">
 <span id="_CPPv3N15DateDaysEncoder11updateStatsEPCKNSt6vectorINSt6stringEEEK6size_tK6size_t"></span><span id="_CPPv2N15DateDaysEncoder11updateStatsEPCKNSt6vectorINSt6stringEEEK6size_tK6size_t"></span><span id="DateDaysEncoder::updateStats__std::vector:ss:CPC.sC.sC"></span><span class="target" id="class_date_days_encoder_1ac0053bacfde4cfa1385bedff54bfe34a"></span>void <code class="sig-name descname">updateStats</code><span class="sig-paren">(</span><em class="property">const</em> std::vector&lt;std::string&gt; *<em class="property">const</em> <em>src_data</em>, <em class="property">const</em> size_t <em>start_idx</em>, <em class="property">const</em> size_t <em>num_elements</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N15DateDaysEncoder11updateStatsEPCKNSt6vectorINSt6stringEEEK6size_tK6size_t" title="Permalink to this definition">¶</a><br /></dt>
-<dd><p>Update statistics for string data without appending data.</p>
+<dd><p>Update statistics for string data without appending.</p>
 <p><dl class="simple">
 <dt><strong>Parameters</strong></dt><dd><ul class="breatheparameterlist simple">
-<li><p><code class="docutils literal notranslate"><span class="pre">dataBlock</span></code>: - the data block with which to update statistics </p></li>
-<li><p><code class="docutils literal notranslate"><span class="pre">startIdx</span></code>: - the <code class="docutils literal notranslate"><span class="pre">start_idx</span></code> that would normally be passed to <code class="docutils literal notranslate"><span class="pre">appendData</span></code> </p></li>
-<li><p><code class="docutils literal notranslate"><span class="pre">numElements</span></code>: - the number of elements in the data block </p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">src_data</span></code>: - the string data with which to update statistics </p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">start_idx</span></code>: - the offset into <code class="docutils literal notranslate"><span class="pre">src_data</span></code> to start the update </p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">num_elements</span></code>: - the number of elements to scan in the string data </p></li>
 </ul>
 </dd>
 </dl>
@@ -1561,12 +1571,12 @@
 <dl class="function">
 <dt id="_CPPv4N15DateDaysEncoder11updateStatsEPCKNSt6vectorI10ArrayDatumEEK6size_tK6size_t">
 <span id="_CPPv3N15DateDaysEncoder11updateStatsEPCKNSt6vectorI10ArrayDatumEEK6size_tK6size_t"></span><span id="_CPPv2N15DateDaysEncoder11updateStatsEPCKNSt6vectorI10ArrayDatumEEK6size_tK6size_t"></span><span id="DateDaysEncoder::updateStats__std::vector:ArrayDatum:CPC.sC.sC"></span><span class="target" id="class_date_days_encoder_1a50ac39dea245c8b7f799f3118a82f12b"></span>void <code class="sig-name descname">updateStats</code><span class="sig-paren">(</span><em class="property">const</em> std::vector&lt;ArrayDatum&gt; *<em class="property">const</em> <em>src_data</em>, <em class="property">const</em> size_t <em>start_idx</em>, <em class="property">const</em> size_t <em>num_elements</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N15DateDaysEncoder11updateStatsEPCKNSt6vectorI10ArrayDatumEEK6size_tK6size_t" title="Permalink to this definition">¶</a><br /></dt>
-<dd><p>Update statistics for array data without appending data.</p>
+<dd><p>Update statistics for array data without appending.</p>
 <p><dl class="simple">
 <dt><strong>Parameters</strong></dt><dd><ul class="breatheparameterlist simple">
-<li><p><code class="docutils literal notranslate"><span class="pre">dataBlock</span></code>: - the data block with which to update statistics </p></li>
-<li><p><code class="docutils literal notranslate"><span class="pre">startIdx</span></code>: - the <code class="docutils literal notranslate"><span class="pre">start_idx</span></code> that would normally be passed to <code class="docutils literal notranslate"><span class="pre">appendData</span></code> </p></li>
-<li><p><code class="docutils literal notranslate"><span class="pre">numElements</span></code>: - the number of elements in the data block </p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">src_data</span></code>: - the array data with which to update statistics </p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">start_idx</span></code>: - the offset into <code class="docutils literal notranslate"><span class="pre">src_data</span></code> to start the update </p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">num_elements</span></code>: - the number of elements to scan in the array data </p></li>
 </ul>
 </dd>
 </dl>
