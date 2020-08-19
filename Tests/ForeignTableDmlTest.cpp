@@ -65,14 +65,16 @@ class ForeignTableTest : public DBHandlerTestFixture {
       const std::string& file_name_base,
       const std::string& data_wrapper_type,
       const int table_number = 0,
-      const std::string& table_name = default_table_name) {
+      const std::string& table_name = default_table_name,
+      const std::string extension = "") {
     std::string query{"CREATE FOREIGN TABLE " + table_name};
     if (table_number) {
       query += "_" + std::to_string(table_number);
     }
+    std::string filename =
+        file_name_base + "." + (extension.size() > 0 ? extension : data_wrapper_type);
     query += " " + columns + " SERVER omnisci_local_" + data_wrapper_type +
-             " WITH (file_path = '" + getDataFilesPath() + file_name_base + "." +
-             data_wrapper_type + "'";
+             " WITH (file_path = '" + getDataFilesPath() + filename + "'";
     for (auto& [key, value] : options) {
       query += ", " + key + " = '" + value + "'";
     }
@@ -142,12 +144,15 @@ class SelectQueryTest : public ForeignTableTest {
 class DataWrapperSelectQueryTest : public SelectQueryTest,
                                    public ::testing::WithParamInterface<std::string> {};
 
-class DataTypeFragmentSizeTest : public SelectQueryTest,
-                                 public testing::WithParamInterface<int> {};
+struct DataTypeFragmentSizeAndDataWrapperParam {
+  int fragment_size;
+  std::string wrapper;
+  std::string extension;
+};
 
 class DataTypeFragmentSizeAndDataWrapperTest
     : public SelectQueryTest,
-      public testing::WithParamInterface<std::pair<int, std::string>> {};
+      public testing::WithParamInterface<DataTypeFragmentSizeAndDataWrapperParam> {};
 
 class RowGroupAndFragmentSizeSelectQueryTest
     : public SelectQueryTest,
@@ -228,12 +233,27 @@ struct PrintToStringParamName {
   }
 
   std::string operator()(
+      const ::testing::TestParamInfo<DataTypeFragmentSizeAndDataWrapperParam>& info)
+      const {
+    std::stringstream ss;
+    ss << "Fragment_size_" << info.param.fragment_size << "_Data_wrapper_"
+       << info.param.wrapper << "_Extension_" << info.param.extension;
+
+    return ss.str();
+  }
+
+  std::string operator()(
       const ::testing::TestParamInfo<std::pair<int64_t, int64_t>>& info) const {
     std::stringstream ss;
     ss << "Rowgroup_size_" << info.param.first << "_Fragment_size_" << info.param.second;
     return ss.str();
   }
-
+  std::string operator()(
+      const ::testing::TestParamInfo<std::pair<std::string, std::string>>& info) const {
+    std::stringstream ss;
+    ss << "File_type_" << info.param.second;
+    return ss.str();
+  }
   std::string operator()(const ::testing::TestParamInfo<TExecuteMode::type>& info) const {
     std::stringstream ss;
     ss << ((info.param == TExecuteMode::GPU) ? "GPU" : "CPU");
@@ -463,6 +483,73 @@ TEST_F(SelectQueryTest, CSV_CustomDelimiters) {
     }},
     result);
   // clang-format on
+}
+
+class CSVFileTypeTests
+    : public SelectQueryTest,
+      public ::testing::WithParamInterface<std::pair<std::string, std::string>> {};
+
+INSTANTIATE_TEST_SUITE_P(
+    CSVFileTypeParameterizedTests,
+    CSVFileTypeTests,
+    ::testing::Values(std::make_pair("example_1.csv", "uncompressed"),
+                      std::make_pair("example_1.zip", "zip"),
+                      std::make_pair("example_1_multi.zip", "multi_zip"),
+                      std::make_pair("example_1_multilevel.zip", "multilevel_zip"),
+                      std::make_pair("example_1.tar.gz", "tar_gz"),
+                      std::make_pair("example_1_multi.tar.gz", "multi_tar_gz"),
+                      std::make_pair("example_1.7z", "7z"),
+                      std::make_pair("example_1.rar", "rar"),
+                      std::make_pair("example_1.bz2", "bz2"),
+                      std::make_pair("example_1_multi.7z", "7z_multi"),
+                      std::make_pair("example_1.csv.gz", "gz"),
+                      std::make_pair("example_1_dir", "dir"),
+                      std::make_pair("example_1_dir_archives", "dir_archives"),
+                      std::make_pair("example_1_dir_multilevel", "multilevel_dir")),
+    PrintToStringParamName());
+
+TEST_P(CSVFileTypeTests, SelectCSV) {
+  std::string query = "CREATE FOREIGN TABLE test_foreign_table (t TEXT, i INTEGER[]) "s +
+                      "SERVER omnisci_local_csv WITH (file_path = '" +
+                      getDataFilesPath() + "/" + GetParam().first + "');";
+  sql(query);
+  TQueryResult result;
+  sql(result, "SELECT * FROM test_foreign_table  ORDER BY t;");
+  assertResultSetEqual({{"a", array({i(1), i(1), i(1)})},
+                        {"aa", array({Null_i, i(2), i(2)})},
+                        {"aaa", array({i(3), Null_i, i(3)})}},
+                       result);
+}
+
+TEST_F(SelectQueryTest, CsvEmptyArchive) {
+  std::string query = "CREATE FOREIGN TABLE test_foreign_table (t TEXT, i INTEGER[]) "s +
+                      "SERVER omnisci_local_csv WITH (file_path = '" +
+                      getDataFilesPath() + "/" + "example_1_empty.zip" + "');";
+  sql(query);
+  TQueryResult result;
+  sql(result, "SELECT * FROM test_foreign_table  ORDER BY t;");
+  assertResultSetEqual({}, result);
+}
+
+TEST_F(SelectQueryTest, CsvDirectoryBadFileExt) {
+  std::string query = "CREATE FOREIGN TABLE test_foreign_table (t TEXT, i INTEGER[]) "s +
+                      "SERVER omnisci_local_csv WITH (file_path = '" +
+                      getDataFilesPath() + "/" + "example_1_dir_bad_ext/" + "');";
+  sql(query);
+  queryAndAssertException("SELECT * FROM test_foreign_table  ORDER BY t;",
+                          "Exception: Invalid extention for file \"" +
+                              getDataFilesPath() +
+                              "example_1_dir_bad_ext/example_1c.tmp\".");
+}
+
+TEST_F(SelectQueryTest, CsvArchiveInvalidFile) {
+  std::string query = "CREATE FOREIGN TABLE test_foreign_table (t TEXT, i INTEGER[]) "s +
+                      "SERVER omnisci_local_csv WITH (file_path = '" +
+                      getDataFilesPath() + "/" + "example_1_invalid_file.zip" + "');";
+  sql(query);
+  queryAndAssertException("SELECT * FROM test_foreign_table  ORDER BY t;",
+                          "Exception: Mismatched number of logical columns: (expected 2 "
+                          "columns, has 1): (random text)");
 }
 
 TEST_F(SelectQueryTest, CSV_CustomLineDelimiters) {
@@ -1094,31 +1181,36 @@ TEST_P(RefreshSyntaxTests, EvictFalse) {
   sqlAndCompareResult("SELECT * FROM " + table_names[0] + ";", {{i(1)}});
 }
 
-INSTANTIATE_TEST_SUITE_P(FragmentSize_Small_Default,
-                         DataTypeFragmentSizeTest,
-                         ::testing::Values(1, 2, 32000000));
-
-INSTANTIATE_TEST_SUITE_P(DataTypeFragmentSizeAndDataWrapperParameterizedTests,
-                         DataTypeFragmentSizeAndDataWrapperTest,
-                         ::testing::Values(std::make_pair(1, "csv"),
-                                           std::make_pair(1, "parquet"),
-                                           std::make_pair(2, "csv"),
-                                           std::make_pair(2, "parquet"),
-                                           std::make_pair(32000000, "csv"),
-                                           std::make_pair(32000000, "parquet")),
-                         PrintToStringParamName());
+INSTANTIATE_TEST_SUITE_P(
+    DataTypeFragmentSizeAndDataWrapperParameterizedTests,
+    DataTypeFragmentSizeAndDataWrapperTest,
+    ::testing::Values(
+        DataTypeFragmentSizeAndDataWrapperParam{1, "csv", "csv"},
+        DataTypeFragmentSizeAndDataWrapperParam{1, "csv", "zip"},
+        DataTypeFragmentSizeAndDataWrapperParam{1, "parquet", "parquet"},
+        DataTypeFragmentSizeAndDataWrapperParam{2, "csv", "csv"},
+        DataTypeFragmentSizeAndDataWrapperParam{2, "csv", "zip"},
+        DataTypeFragmentSizeAndDataWrapperParam{2, "parquet", "parquet"},
+        DataTypeFragmentSizeAndDataWrapperParam{32000000, "csv", "csv"},
+        DataTypeFragmentSizeAndDataWrapperParam{32000000, "csv", "zip"},
+        DataTypeFragmentSizeAndDataWrapperParam{32000000, "parquet", "parquet"}),
+    PrintToStringParamName());
 
 TEST_P(DataTypeFragmentSizeAndDataWrapperTest, ScalarTypes) {
   auto& param = GetParam();
-  int fragment_size = param.first;
-  std::string data_wrapper_type = param.second;
+  int fragment_size = param.fragment_size;
+  std::string data_wrapper_type = param.wrapper;
+  std::string extension = param.extension;
   const auto& query = getCreateForeignTableQuery(
       "(b BOOLEAN, t TINYINT, s SMALLINT, i INTEGER, bi BIGINT, f FLOAT, "
       "dc DECIMAL(10, 5), tm TIME, tp TIMESTAMP, d DATE, txt TEXT, "
       "txt_2 TEXT ENCODING NONE)",
       {{"fragment_size", std::to_string(fragment_size)}},
       "scalar_types",
-      data_wrapper_type);
+      data_wrapper_type,
+      0,
+      default_table_name,
+      extension);
   sql(query);
 
   TQueryResult result;
@@ -1141,17 +1233,27 @@ TEST_P(DataTypeFragmentSizeAndDataWrapperTest, ScalarTypes) {
   // clang-format on
 }
 
-// TODO: implement for parquet when kARRAY support implemented for parquet
-TEST_P(DataTypeFragmentSizeTest, ArrayTypes) {
+TEST_P(DataTypeFragmentSizeAndDataWrapperTest, ArrayTypes) {
+  auto& param = GetParam();
+  int fragment_size = param.fragment_size;
+  std::string data_wrapper_type = param.wrapper;
+  std::string extension = param.extension;
+  // TODO: implement for parquet when kARRAY support implemented for parquet
+  if (data_wrapper_type == "parquet") {
+    GTEST_SKIP();
+  }
   const auto& query = getCreateForeignTableQuery(
       "(b BOOLEAN[], t TINYINT[], s SMALLINT[], i INTEGER[], bi BIGINT[], f "
       "FLOAT[], "
       "tm "
       "TIME[], tp TIMESTAMP[], "
       "d DATE[], txt TEXT[], txt_2 TEXT[])",
-      {{"fragment_size", std::to_string(GetParam())}},
+      {{"fragment_size", std::to_string(fragment_size)}},
       "array_types",
-      "csv");
+      data_wrapper_type,
+      0,
+      default_table_name,
+      extension);
   sql(query);
 
   TQueryResult result;
@@ -1182,13 +1284,17 @@ TEST_P(DataTypeFragmentSizeTest, ArrayTypes) {
 
 TEST_P(DataTypeFragmentSizeAndDataWrapperTest, GeoTypes) {
   auto& param = GetParam();
-  int fragment_size = param.first;
-  std::string data_wrapper_type = param.second;
+  int fragment_size = param.fragment_size;
+  std::string data_wrapper_type = param.wrapper;
+  std::string extension = param.extension;
   const auto& query = getCreateForeignTableQuery(
       "(p POINT, l LINESTRING, poly POLYGON, multipoly MULTIPOLYGON)",
       {{"fragment_size", std::to_string(fragment_size)}},
       "geo_types",
-      data_wrapper_type);
+      data_wrapper_type,
+      0,
+      default_table_name,
+      extension);
   sql(query);
 
   TQueryResult result;

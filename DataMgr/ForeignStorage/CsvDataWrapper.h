@@ -22,6 +22,7 @@
 #include "Catalog/Catalog.h"
 #include "Catalog/ForeignTable.h"
 #include "DataMgr/Chunk/Chunk.h"
+#include "DataMgr/ForeignStorage/CsvReader.h"
 #include "ForeignDataWrapper.h"
 #include "ImportExport/Importer.h"
 
@@ -104,6 +105,8 @@ class CsvDataWrapper : public ForeignDataWrapper {
   std::map<ChunkKey, std::unique_ptr<ForeignStorageBuffer>> chunk_buffer_map_;
   std::map<ChunkKey, std::shared_ptr<ChunkMetadata>> chunk_metadata_map_;
   std::map<int, FileRegions> fragment_id_to_file_regions_map_;
+
+  std::unique_ptr<CsvReader> csv_reader_;
 
   const int db_id_;
   const ForeignTable* foreign_table_;

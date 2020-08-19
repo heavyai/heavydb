@@ -150,11 +150,13 @@ size_t find_row_end_pos(size_t& alloc_size,
                         const CopyParams& copy_params,
                         const size_t buffer_first_row_index,
                         unsigned int& num_rows_in_buffer,
-                        FILE* file) {
+                        FILE* file,
+                        foreign_storage::CsvReader* csv_reader) {
   bool found_end_pos{false};
   bool in_quote{false};
   size_t offset{0};
   size_t end_pos;
+  CHECK(file != nullptr || csv_reader != nullptr);
   const auto max_buffer_resize = get_max_buffer_resize();
   while (!found_end_pos) {
     try {
@@ -170,7 +172,9 @@ size_t find_row_end_pos(size_t& alloc_size,
       if (alloc_size >= max_buffer_resize) {
         throw;
       }
-
+      if (file == nullptr && csv_reader->isScanFinished()) {
+        throw;
+      }
       auto old_buffer = std::move(buffer);
       alloc_size = std::min(max_buffer_resize, alloc_size * 2);
       LOG(INFO) << "Setting import thread buffer allocation size to " << alloc_size
@@ -178,8 +182,13 @@ size_t find_row_end_pos(size_t& alloc_size,
       buffer = std::make_unique<char[]>(alloc_size);
 
       memcpy(buffer.get(), old_buffer.get(), buffer_size);
-      auto fread_size =
-          fread(buffer.get() + buffer_size, 1, alloc_size - buffer_size, file);
+      size_t fread_size;
+      if (file != nullptr) {
+        fread_size = fread(buffer.get() + buffer_size, 1, alloc_size - buffer_size, file);
+      } else {
+        fread_size =
+            csv_reader->read(buffer.get() + buffer_size, alloc_size - buffer_size);
+      }
       offset = buffer_size;
       buffer_size += fread_size;
     }
