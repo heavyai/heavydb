@@ -63,6 +63,17 @@ TEST(StringDictionary, HandleEmpty) {
   ASSERT_EQ(std::numeric_limits<int32_t>::min(), id1);
 }
 
+TEST(StringDictionary, RecoverZero) {
+  {
+    StringDictionary string_dict(BASE_PATH, false, false, g_cache_string_hash);
+    size_t num_strings = string_dict.storageEntryCount();
+    ASSERT_EQ(static_cast<size_t>(0), num_strings);
+  }
+  StringDictionary string_dict(BASE_PATH, false, true, g_cache_string_hash);
+  size_t num_strings = string_dict.storageEntryCount();
+  ASSERT_EQ(static_cast<size_t>(0), num_strings);
+}
+
 const int g_op_count{250000};
 
 TEST(StringDictionary, ManyAddsAndGets) {
@@ -80,6 +91,8 @@ TEST(StringDictionary, ManyAddsAndGets) {
 
 TEST(StringDictionary, RecoverMany) {
   StringDictionary string_dict(BASE_PATH, false, true, g_cache_string_hash);
+  size_t num_strings = string_dict.storageEntryCount();
+  ASSERT_EQ(static_cast<size_t>(g_op_count), num_strings);
   for (int i = 0; i < g_op_count; ++i) {
     CHECK_EQ(i, string_dict.getOrAdd(std::to_string(i)));
   }
