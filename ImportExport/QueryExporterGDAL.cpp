@@ -83,7 +83,7 @@ static constexpr std::array<std::array<bool, 3>, 4> compression_implemented = {
      {true, false, false}}};  // Shapefile: none
 
 static std::array<std::unordered_set<std::string>, 4> file_type_valid_extensions = {
-    {{".csv", ".tsv"}, {".geojson"}, {".geojson", ".json"}, {".shp"}}};
+    {{".csv", ".tsv"}, {".geojson", ".json"}, {".geojson", ".json"}, {".shp"}}};
 
 OGRFieldType sql_type_info_to_ogr_field_type(const std::string& name,
                                              const SQLTypeInfo& type_info,
