@@ -87,6 +87,7 @@ class OmniSciPreparedStatement implements PreparedStatement {
   private static final Pattern REGEX_IS_SELECT_PATTERN =
           Pattern.compile("^(?:\\s|--.*?\\R|/\\*[\\S\\s]*?\\*/|\\s*)*\\s*select[\\S\\s]*",
                   Pattern.CASE_INSENSITIVE | Pattern.MULTILINE);
+  private boolean isClosed = false;
 
   OmniSciPreparedStatement(String sql, String session, OmniSci.Client client) {
     MAPDLOGGER.debug("Entered");
@@ -173,7 +174,9 @@ class OmniSciPreparedStatement implements PreparedStatement {
   public int executeUpdate() throws SQLException {
     MAPDLOGGER.debug("Entered");
     executeQuery();
-    return 1;
+    // TODO: OmniSciDB supports updates, inserts and deletes, but
+    // there is no way to get number of affected rows at the moment
+    return -1;
   }
 
   @Override
@@ -756,6 +759,7 @@ class OmniSciPreparedStatement implements PreparedStatement {
       stmt.close();
       stmt = null;
     }
+    isClosed = true;
   }
 
   @Override
@@ -863,8 +867,7 @@ class OmniSciPreparedStatement implements PreparedStatement {
   @Override
   public int getUpdateCount() throws SQLException {
     MAPDLOGGER.debug("Entered");
-    // TODO MAT this needs to change when updates are added
-    return 0;
+    return stmt.getUpdateCount();
   }
 
   @Override
@@ -885,10 +888,7 @@ class OmniSciPreparedStatement implements PreparedStatement {
   @Override
   public int getFetchDirection() throws SQLException {
     MAPDLOGGER.debug("Entered");
-    throw new UnsupportedOperationException("Not supported yet,"
-            + " line:" + new Throwable().getStackTrace()[0].getLineNumber()
-            + " class:" + new Throwable().getStackTrace()[0].getClassName()
-            + " method:" + new Throwable().getStackTrace()[0].getMethodName());
+    return ResultSet.FETCH_FORWARD;
   }
 
   @Override
@@ -944,6 +944,7 @@ class OmniSciPreparedStatement implements PreparedStatement {
 
   @Override
   public int[] executeBatch() throws SQLException {
+    checkClosed();
     int ret[] = null;
     if (rows != null) {
       MAPDLOGGER.debug("executeBatch, rows=" + rows.size());
@@ -1057,10 +1058,7 @@ class OmniSciPreparedStatement implements PreparedStatement {
   @Override
   public boolean isClosed() throws SQLException {
     MAPDLOGGER.debug("Entered");
-    throw new UnsupportedOperationException("Not supported yet,"
-            + " line:" + new Throwable().getStackTrace()[0].getLineNumber()
-            + " class:" + new Throwable().getStackTrace()[0].getClassName()
-            + " method:" + new Throwable().getStackTrace()[0].getMethodName());
+    return isClosed;
   }
 
   @Override
@@ -1115,5 +1113,11 @@ class OmniSciPreparedStatement implements PreparedStatement {
             + " line:" + new Throwable().getStackTrace()[0].getLineNumber()
             + " class:" + new Throwable().getStackTrace()[0].getClassName()
             + " method:" + new Throwable().getStackTrace()[0].getMethodName());
+  }
+
+  private void checkClosed() throws SQLException {
+    if (isClosed) {
+      throw new SQLException("PreparedStatement is closed.");
+    }
   }
 }

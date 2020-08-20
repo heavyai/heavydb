@@ -45,6 +45,7 @@ public class OmniSciStatement implements java.sql.Statement {
   private TQueryResult sqlResult = null;
   private int maxRows = 100000; // add limit to unlimited queries
   private boolean escapeProcessing = false;
+  private boolean isClosed = false;
 
   OmniSciStatement(String tsession, OmniSciConnection tconnection) {
     session = tsession;
@@ -63,6 +64,7 @@ public class OmniSciStatement implements java.sql.Statement {
   @Override
   public ResultSet executeQuery(String sql)
           throws SQLException { // logger.debug("Entered");
+    checkClosed();
     if (maxRows >= 0) {
       // add limit to sql call if it doesn't already have one and is a select
       String[] tokens = sql.toLowerCase().split(" ", 3);
@@ -109,6 +111,7 @@ public class OmniSciStatement implements java.sql.Statement {
 
   @Override
   public void cancel() throws SQLException { // logger.debug("Entered");
+    checkClosed();
     OmniSciConnection alternate_connection = null;
     try {
       alternate_connection = connection.getAlternateConnection();
@@ -130,6 +133,7 @@ public class OmniSciStatement implements java.sql.Statement {
 
   @Override
   public int executeUpdate(String sql) throws SQLException { // logger.debug("Entered");
+    checkClosed();
     try {
       // remove " characters if it is a CREATE statement
       if (sql.trim().substring(0, 6).compareToIgnoreCase("CREATE") == 0) {
@@ -145,13 +149,17 @@ public class OmniSciStatement implements java.sql.Statement {
               "Query failed : " + OmniSciExceptionText.getExceptionDetail(ex), ex);
     }
 
-    return sqlResult.row_set.columns.size();
+    // TODO: OmniSciDB supports updates, inserts and deletes, but
+    // there is no way to get number of affected rows at the moment
+    return -1;
   }
 
   @Override
   public void close() throws SQLException { // logger.debug("Entered");
-
-    // clean up after -- nothing to do
+    if (currentRS != null) {
+      currentRS.close();
+    }
+    isClosed = true;
   }
 
   @Override
@@ -229,7 +237,6 @@ public class OmniSciStatement implements java.sql.Statement {
 
   @Override
   public boolean execute(String sql) throws SQLException { // logger.debug("Entered");
-
     ResultSet rs = executeQuery(sql);
     if (rs != null) {
       return true;
@@ -240,17 +247,21 @@ public class OmniSciStatement implements java.sql.Statement {
 
   @Override
   public ResultSet getResultSet() throws SQLException { // logger.debug("Entered");
+    checkClosed();
     return currentRS;
   }
 
   @Override
   public int getUpdateCount() throws SQLException { // logger.debug("Entered");
-    // TODO MAT fix update count
-    return 0;
+    checkClosed();
+    // TODO: OmniSciDB supports updates, inserts and deletes, but
+    // there is no way to get number of affected rows at the moment
+    return -1;
   }
 
   @Override
   public boolean getMoreResults() throws SQLException { // logger.debug("Entered");
+    checkClosed();
     // TODO MAT this needs to be fixed for complex queries
     return false;
   }
@@ -266,10 +277,7 @@ public class OmniSciStatement implements java.sql.Statement {
 
   @Override
   public int getFetchDirection() throws SQLException { // logger.debug("Entered");
-    throw new UnsupportedOperationException("Not supported yet,"
-            + " line:" + new Throwable().getStackTrace()[0].getLineNumber()
-            + " class:" + new Throwable().getStackTrace()[0].getClassName()
-            + " method:" + new Throwable().getStackTrace()[0].getMethodName());
+    return ResultSet.FETCH_FORWARD;
   }
 
   @Override
@@ -420,10 +428,7 @@ public class OmniSciStatement implements java.sql.Statement {
 
   @Override
   public boolean isClosed() throws SQLException { // logger.debug("Entered");
-    throw new UnsupportedOperationException("Not supported yet,"
-            + " line:" + new Throwable().getStackTrace()[0].getLineNumber()
-            + " class:" + new Throwable().getStackTrace()[0].getClassName()
-            + " method:" + new Throwable().getStackTrace()[0].getMethodName());
+    return isClosed;
   }
 
   @Override
@@ -537,5 +542,11 @@ public class OmniSciStatement implements java.sql.Statement {
     } while (!sql.equals(start));
 
     return sql;
+  }
+
+  private void checkClosed() throws SQLException {
+    if (isClosed) {
+      throw new SQLException("Statement is closed.");
+    }
   }
 }
