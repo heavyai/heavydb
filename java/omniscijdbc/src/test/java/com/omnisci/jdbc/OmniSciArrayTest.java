@@ -109,7 +109,7 @@ public class OmniSciArrayTest {
     ps.setArray(4, m_conn.createArrayOf("DECIMAL", da));
     ps.setArray(5, m_conn.createArrayOf("STR", sa));
     ps.setArray(6, m_conn.createArrayOf("TIMESTAMP", ta));
-    assertEquals(ps.executeUpdate(), 1);
+    ps.executeUpdate();
 
     ResultSet rs = stmt.executeQuery("SELECT i, ia, fa, da, sa, ta FROM arrays_tbl");
     assertTrue(rs.next());

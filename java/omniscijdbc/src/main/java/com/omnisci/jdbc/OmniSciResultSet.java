@@ -27,20 +27,7 @@ import java.io.InputStream;
 import java.io.Reader;
 import java.math.BigDecimal;
 import java.net.URL;
-import java.sql.Array;
-import java.sql.Blob;
-import java.sql.Clob;
-import java.sql.Date;
-import java.sql.NClob;
-import java.sql.Ref;
-import java.sql.ResultSetMetaData;
-import java.sql.RowId;
-import java.sql.SQLException;
-import java.sql.SQLWarning;
-import java.sql.SQLXML;
-import java.sql.Statement;
-import java.sql.Time;
-import java.sql.Timestamp;
+import java.sql.*;
 import java.util.Calendar;
 import java.util.HashMap;
 import java.util.List;
@@ -67,6 +54,7 @@ class OmniSciResultSet implements java.sql.ResultSet {
   private Map<String, Integer> columnMap;
   private int fetchSize = 0;
   private SQLWarning warnings = null;
+  private boolean isClosed = false;
 
   public OmniSciResultSet(TQueryResult tsqlResult, String sql)
           throws SQLException { // logger.debug("Entered "+ sql );
@@ -106,7 +94,7 @@ class OmniSciResultSet implements java.sql.ResultSet {
 
   @Override
   public boolean next() throws SQLException { // logger.debug("Entered "+ sql );
-
+    checkClosed();
     // do real work
     offset++;
     if (offset < numOfRecords) {
@@ -117,10 +105,10 @@ class OmniSciResultSet implements java.sql.ResultSet {
 
   @Override
   public void close() throws SQLException { // logger.debug("Entered "+ sql );
-    // clean up the result object
-    this.rowDesc = null;
-    this.rowSet = null;
-    this.sqlResult = null;
+    rowDesc = null;
+    rowSet = null;
+    sqlResult = null;
+    isClosed = true;
   }
 
   @Override
@@ -130,12 +118,7 @@ class OmniSciResultSet implements java.sql.ResultSet {
 
   @Override
   public String getString(int columnIndex) throws SQLException {
-    // System.out.println("Entered " + " line:" + new
-    // Throwable().getStackTrace()[0].getLineNumber() + " class:" + new
-    // Throwable().getStackTrace()[0].getClassName() + " method:" + new
-    // Throwable().getStackTrace()[0].getMethodName()); logger.info("Dump result columns
-    // "+rowSet.columns.toString()); logger.info("Dump column:offset "+ columnIndex + ":"
-    // +offset);
+    checkClosed();
     if (rowSet.columns.get(columnIndex - 1).nulls.get(offset)) {
       wasNull = true;
       return null;
@@ -194,6 +177,7 @@ class OmniSciResultSet implements java.sql.ResultSet {
   @Override
   public boolean getBoolean(int columnIndex)
           throws SQLException { // logger.debug("Entered "+ sql );
+    checkClosed();
     if (rowSet.columns.get(columnIndex - 1).nulls.get(offset)) {
       wasNull = true;
       return false;
@@ -220,8 +204,7 @@ class OmniSciResultSet implements java.sql.ResultSet {
   @Override
   public short getShort(int columnIndex)
           throws SQLException { // logger.debug("Entered "+ sql );
-    // logger.info("Dump result columns "+rowSet.columns.toString());
-    // logger.info("Dump column:offset "+ columnIndex + ":" +offset);
+    checkClosed();
     if (rowSet.columns.get(columnIndex - 1).nulls.get(offset)) {
       wasNull = true;
       return 0;
@@ -236,6 +219,7 @@ class OmniSciResultSet implements java.sql.ResultSet {
   @Override
   public int getInt(int columnIndex)
           throws SQLException { // logger.debug("Entered "+ sql );
+    checkClosed();
     if (rowSet.columns.get(columnIndex - 1).nulls.get(offset)) {
       wasNull = true;
       return 0;
@@ -250,6 +234,7 @@ class OmniSciResultSet implements java.sql.ResultSet {
   @Override
   public long getLong(int columnIndex)
           throws SQLException { // logger.debug("Entered "+ sql );
+    checkClosed();
     if (rowSet.columns.get(columnIndex - 1).nulls.get(offset)) {
       wasNull = true;
       return 0;
@@ -263,6 +248,7 @@ class OmniSciResultSet implements java.sql.ResultSet {
   @Override
   public float getFloat(int columnIndex)
           throws SQLException { // logger.debug("Entered "+ sql );
+    checkClosed();
     if (rowSet.columns.get(columnIndex - 1).nulls.get(offset)) {
       wasNull = true;
       return 0;
@@ -276,6 +262,7 @@ class OmniSciResultSet implements java.sql.ResultSet {
   @Override
   public double getDouble(int columnIndex)
           throws SQLException { // logger.debug("Entered "+ sql );
+    checkClosed();
     if (rowSet.columns.get(columnIndex - 1).nulls.get(offset)) {
       wasNull = true;
       return 0;
@@ -294,7 +281,6 @@ class OmniSciResultSet implements java.sql.ResultSet {
 
   private double getDoubleInternal(int columnIndex) throws SQLException {
     TDatumType type = sqlResult.row_set.row_desc.get(columnIndex - 1).col_type.type;
-
     switch (type) {
       case TINYINT:
       case SMALLINT:
@@ -326,6 +312,7 @@ class OmniSciResultSet implements java.sql.ResultSet {
   @Override
   public BigDecimal getBigDecimal(int columnIndex, int scale)
           throws SQLException { // logger.debug("Entered "+ sql );
+    checkClosed();
     if (rowSet.columns.get(columnIndex - 1).nulls.get(offset)) {
       wasNull = true;
       return null;
@@ -552,14 +539,14 @@ class OmniSciResultSet implements java.sql.ResultSet {
   @Override
   public ResultSetMetaData getMetaData()
           throws SQLException { // logger.debug("Entered "+ sql );
+    checkClosed();
     return new OmniSciResultSetMetaData(sqlResult, sql);
   }
 
   @Override
   public Object getObject(int columnIndex)
           throws SQLException { // logger.debug("Entered "+ sql );
-    // logger.info("Dump result column "+rowSet.columns.get(columnIndex-1));
-    // logger.info("Dump column:offset "+ columnIndex + ":" +offset);
+    checkClosed();
     if (rowSet.columns.get(columnIndex - 1).nulls.get(offset)) {
       wasNull = true;
       return null;
@@ -631,6 +618,7 @@ class OmniSciResultSet implements java.sql.ResultSet {
   @Override
   public BigDecimal getBigDecimal(int columnIndex)
           throws SQLException { // logger.debug("Entered "+ sql );
+    checkClosed();
     if (rowSet.columns.get(columnIndex - 1).nulls.get(offset)) {
       wasNull = true;
       return null;
@@ -650,34 +638,22 @@ class OmniSciResultSet implements java.sql.ResultSet {
 
   @Override
   public boolean isBeforeFirst() throws SQLException { // logger.debug("Entered "+ sql );
-    throw new UnsupportedOperationException("Not supported yet,"
-            + " line:" + new Throwable().getStackTrace()[0].getLineNumber()
-            + " class:" + new Throwable().getStackTrace()[0].getClassName()
-            + " method:" + new Throwable().getStackTrace()[0].getMethodName());
+    return offset == -1;
   }
 
   @Override
   public boolean isAfterLast() throws SQLException { // logger.debug("Entered "+ sql );
-    throw new UnsupportedOperationException("Not supported yet,"
-            + " line:" + new Throwable().getStackTrace()[0].getLineNumber()
-            + " class:" + new Throwable().getStackTrace()[0].getClassName()
-            + " method:" + new Throwable().getStackTrace()[0].getMethodName());
+    return offset == numOfRecords;
   }
 
   @Override
   public boolean isFirst() throws SQLException { // logger.debug("Entered "+ sql );
-    throw new UnsupportedOperationException("Not supported yet,"
-            + " line:" + new Throwable().getStackTrace()[0].getLineNumber()
-            + " class:" + new Throwable().getStackTrace()[0].getClassName()
-            + " method:" + new Throwable().getStackTrace()[0].getMethodName());
+    return offset == 0;
   }
 
   @Override
   public boolean isLast() throws SQLException { // logger.debug("Entered "+ sql );
-    throw new UnsupportedOperationException("Not supported yet,"
-            + " line:" + new Throwable().getStackTrace()[0].getLineNumber()
-            + " class:" + new Throwable().getStackTrace()[0].getClassName()
-            + " method:" + new Throwable().getStackTrace()[0].getMethodName());
+    return offset == numOfRecords - 1;
   }
 
   @Override
@@ -757,10 +733,7 @@ class OmniSciResultSet implements java.sql.ResultSet {
 
   @Override
   public int getFetchDirection() throws SQLException { // logger.debug("Entered "+ sql );
-    throw new UnsupportedOperationException("Not supported yet,"
-            + " line:" + new Throwable().getStackTrace()[0].getLineNumber()
-            + " class:" + new Throwable().getStackTrace()[0].getClassName()
-            + " method:" + new Throwable().getStackTrace()[0].getMethodName());
+    return FETCH_FORWARD;
   }
 
   @Override
@@ -779,10 +752,7 @@ class OmniSciResultSet implements java.sql.ResultSet {
 
   @Override
   public int getType() throws SQLException { // logger.debug("Entered "+ sql );
-    throw new UnsupportedOperationException("Not supported yet,"
-            + " line:" + new Throwable().getStackTrace()[0].getLineNumber()
-            + " class:" + new Throwable().getStackTrace()[0].getClassName()
-            + " method:" + new Throwable().getStackTrace()[0].getMethodName());
+    return TYPE_FORWARD_ONLY;
   }
 
   @Override
@@ -1262,6 +1232,7 @@ class OmniSciResultSet implements java.sql.ResultSet {
   @Override
   public Array getArray(int columnIndex)
           throws SQLException { // logger.debug("Entered "+ sql );
+    checkClosed();
     if (rowSet.columns.get(columnIndex - 1).nulls.get(offset)) {
       wasNull = true;
       return null;
@@ -1468,6 +1439,7 @@ class OmniSciResultSet implements java.sql.ResultSet {
 
   @Override
   public Date getDate(int columnIndex, Calendar cal) throws SQLException {
+    checkClosed();
     if (rowSet.columns.get(columnIndex - 1).nulls.get(offset)) {
       wasNull = true;
       return null;
@@ -1491,6 +1463,7 @@ class OmniSciResultSet implements java.sql.ResultSet {
   @Override
   public Time getTime(int columnIndex, Calendar cal)
           throws SQLException { // logger.debug("Entered "+ sql );
+    checkClosed();
     if (rowSet.columns.get(columnIndex - 1).nulls.get(offset)) {
       wasNull = true;
       return null;
@@ -1514,6 +1487,7 @@ class OmniSciResultSet implements java.sql.ResultSet {
   @Override
   public Timestamp getTimestamp(int columnIndex, Calendar cal)
           throws SQLException { // logger.debug("Entered "+ sql );
+    checkClosed();
     if (rowSet.columns.get(columnIndex - 1).nulls.get(offset)) {
       wasNull = true;
       return null;
@@ -1671,10 +1645,7 @@ class OmniSciResultSet implements java.sql.ResultSet {
 
   @Override
   public boolean isClosed() throws SQLException { // logger.debug("Entered "+ sql );
-    throw new UnsupportedOperationException("Not supported yet,"
-            + " line:" + new Throwable().getStackTrace()[0].getLineNumber()
-            + " class:" + new Throwable().getStackTrace()[0].getClassName()
-            + " method:" + new Throwable().getStackTrace()[0].getMethodName());
+    return isClosed;
   }
 
   @Override
@@ -2097,5 +2068,11 @@ class OmniSciResultSet implements java.sql.ResultSet {
       throw new SQLException("Could not find  the column " + name);
     }
     return colNum;
+  }
+
+  private void checkClosed() throws SQLException {
+    if (isClosed) {
+      throw new SQLException("ResultSet is closed.");
+    }
   }
 }
