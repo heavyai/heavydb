@@ -246,6 +246,27 @@ TEST_F(ArrayExtOpsEnv, ArrayAppend) {
       check_entire_integer_result(rows, inline_int_null_value<int8_t>());
     }
 
+    auto check_entire_bool_result = [&check_row_result](const auto& rows,
+                                                        const int64_t null_sentinel) {
+      ASSERT_EQ(rows->rowCount(), size_t(6));
+
+      check_row_result(rows->getNextRow(true, true),
+                       std::vector<int64_t>{true, false, true});
+      check_row_result(rows->getNextRow(true, true), std::vector<int64_t>{false});
+      check_row_result(rows->getNextRow(true, true), std::vector<int64_t>{true, false});
+      check_row_result(rows->getNextRow(true, true), std::vector<int64_t>{false});
+      check_row_result(rows->getNextRow(true, true),
+                       std::vector<int64_t>{false, true, null_sentinel});
+      check_row_result(rows->getNextRow(true, true), std::vector<int64_t>{null_sentinel});
+    };
+
+    // bool
+    {
+      const auto rows = run_multiple_agg(
+          "SELECT barray_append(arri1, i1) FROM array_ext_ops_test;", dt);
+      check_entire_bool_result(rows, inline_int_null_value<int8_t>());
+    }
+
     auto check_entire_double_result = [&check_row_result](const auto& rows) {
       ASSERT_EQ(rows->rowCount(), size_t(6));
 

@@ -77,3 +77,17 @@ EXTENSION_NOINLINE Array<float> array_append__4(const Array<float> in_arr,
   return Array<float>(0, true);
 #endif
 }
+
+/*
+  Overloading UDFs works for types in the same SQL family.  BOOLEAN
+  does not belong to NUMERIC family, hence we need to use different
+  name for boolean UDF.
+ */
+EXTENSION_NOINLINE Array<bool> barray_append(const Array<bool> in_arr, const bool val) {
+#ifndef __CUDACC__
+  return array_append_impl(in_arr, val);
+#else
+  assert(false);
+  return Array<bool>(0, true);
+#endif
+}

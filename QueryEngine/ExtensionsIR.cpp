@@ -98,6 +98,7 @@ llvm::Type* ext_arg_type_to_llvm_type(const ExtArgumentType ext_arg_type,
       return llvm::Type::getVoidTy(ctx);
     case ExtArgumentType::ArrayInt16:
       return llvm::Type::getVoidTy(ctx);
+    case ExtArgumentType::ArrayBool:  // pass thru to Array<Int8>
     case ExtArgumentType::ArrayInt8:
       return llvm::Type::getVoidTy(ctx);
     case ExtArgumentType::ArrayDouble:
@@ -158,6 +159,11 @@ inline llvm::Type* get_llvm_type_from_sql_array_type(const SQLTypeInfo ti,
         return llvm::Type::getDoublePtrTy(ctx);
     }
   }
+
+  if (elem_ti.is_boolean()) {
+    return llvm::Type::getInt8PtrTy(ctx);
+  }
+
   CHECK(elem_ti.is_integer());
   switch (elem_ti.get_size()) {
     case 1:
@@ -533,7 +539,7 @@ llvm::Value* CodeGenerator::codegenFunctionOperNullArg(
       one_arg_null = cgen_state_->ir_builder_.CreateOr(one_arg_null, is_null_lv);
       continue;
     }
-    CHECK(arg_ti.is_number());
+    CHECK(arg_ti.is_number() or arg_ti.is_boolean());
     one_arg_null = cgen_state_->ir_builder_.CreateOr(
         one_arg_null, codegenIsNullNumber(orig_arg_lvs[j], arg_ti));
   }

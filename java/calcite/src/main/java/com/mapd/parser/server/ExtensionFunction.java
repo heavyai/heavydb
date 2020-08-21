@@ -15,6 +15,8 @@
  */
 package com.mapd.parser.server;
 
+import org.apache.calcite.sql.type.SqlTypeFamily;
+import org.apache.calcite.sql.type.SqlTypeName;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -86,6 +88,11 @@ public class ExtensionFunction {
 
   public ExtArgumentType getRet() {
     return this.ret;
+  }
+
+  public SqlTypeName getSqlRet() {
+    if (this.isRowUdf) return toSqlTypeName(this.ret);
+    return null;
   }
 
   public boolean isRowUdf() {
@@ -197,4 +204,99 @@ public class ExtensionFunction {
   private final List<ExtArgumentType> args;
   private final ExtArgumentType ret;
   private final boolean isRowUdf;
+
+  public final java.util.List<SqlTypeFamily> toSqlSignature() {
+    java.util.List<SqlTypeFamily> sql_sig = new java.util.ArrayList<SqlTypeFamily>();
+    boolean isRowUdf = this.isRowUdf();
+    for (int arg_idx = 0; arg_idx < this.getArgs().size(); ++arg_idx) {
+      final ExtArgumentType arg_type = this.getArgs().get(arg_idx);
+      if (isRowUdf) {
+        sql_sig.add(toSqlTypeName(arg_type).getFamily());
+        if (isPointerType(arg_type)) {
+          ++arg_idx;
+        }
+      } else {
+        if (isPointerType(arg_type)) {
+          /* TODO: eliminate using getValueType */
+          sql_sig.add(toSqlTypeName(getValueType(arg_type)).getFamily());
+        } else {
+          sql_sig.add(toSqlTypeName(arg_type).getFamily());
+        }
+      }
+    }
+    return sql_sig;
+  }
+
+  private static boolean isPointerType(final ExtArgumentType type) {
+    return type == ExtArgumentType.PInt8 || type == ExtArgumentType.PInt16
+            || type == ExtArgumentType.PInt32 || type == ExtArgumentType.PInt64
+            || type == ExtArgumentType.PFloat || type == ExtArgumentType.PDouble
+            || type == ExtArgumentType.PBool;
+  }
+
+  private static ExtArgumentType getValueType(final ExtArgumentType type) {
+    switch (type) {
+      case PInt8:
+        return ExtArgumentType.Int8;
+      case PInt16:
+        return ExtArgumentType.Int16;
+      case PInt32:
+        return ExtArgumentType.Int32;
+      case PInt64:
+        return ExtArgumentType.Int64;
+      case PFloat:
+        return ExtArgumentType.Float;
+      case PDouble:
+        return ExtArgumentType.Double;
+      case PBool:
+        return ExtArgumentType.Bool;
+    }
+    MAPDLOGGER.error("getValueType: no value for type " + type);
+    assert false;
+    return null;
+  }
+
+  private static SqlTypeName toSqlTypeName(final ExtArgumentType type) {
+    switch (type) {
+      case Bool:
+        return SqlTypeName.BOOLEAN;
+      case Int8:
+        return SqlTypeName.TINYINT;
+      case Int16:
+        return SqlTypeName.SMALLINT;
+      case Int32:
+        return SqlTypeName.INTEGER;
+      case Int64:
+        return SqlTypeName.BIGINT;
+      case Float:
+        return SqlTypeName.FLOAT;
+      case Double:
+        return SqlTypeName.DOUBLE;
+      case PInt8:
+      case PInt16:
+      case PInt32:
+      case PInt64:
+      case PFloat:
+      case PDouble:
+      case PBool:
+      case ArrayInt8:
+      case ArrayInt16:
+      case ArrayInt32:
+      case ArrayInt64:
+      case ArrayFloat:
+      case ArrayDouble:
+      case ArrayBool:
+        return SqlTypeName.ARRAY;
+      case GeoPoint:
+      case GeoLineString:
+      case GeoPolygon:
+      case GeoMultiPolygon:
+        return SqlTypeName.GEOMETRY;
+      case Cursor:
+        return SqlTypeName.CURSOR;
+    }
+    MAPDLOGGER.error("toSqlTypeName: unknown type " + type);
+    assert false;
+    return null;
+  }
 }
