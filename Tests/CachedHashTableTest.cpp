@@ -204,11 +204,9 @@ int32_t probe_one_to_many_baseline_hashtable(const int32_t* key,
   return false;
 }
 
-bool check_one_to_many_baseline_hashtable(
-    std::vector<std::vector<int32_t>>& insert_keys,
-    const std::shared_ptr<std::vector<int8_t>>& baseline_hashtable,
-    size_t entry_count) {
-  const int8_t* cached_hashtable = baseline_hashtable->data();
+bool check_one_to_many_baseline_hashtable(std::vector<std::vector<int32_t>>& insert_keys,
+                                          const int8_t* cached_hashtable,
+                                          size_t entry_count) {
   int rowID = 0;
   for (auto keys : insert_keys) {
     if (!probe_one_to_many_baseline_hashtable(
@@ -313,11 +311,9 @@ bool probe_one_to_one_baseline_hashtable(const int8_t* cached_hashtable,
 // check whether cached baseline hashtable is correctly built.
 // this can be done by comparing rowID in the cached hashtable for a given tuple.
 // currently this function only supports a hashtable for integer type.
-bool check_one_to_one_baseline_hashtable(
-    std::vector<std::vector<int32_t>>& insert_keys,
-    const std::shared_ptr<std::vector<int8_t>>& baseline_hashtable,
-    size_t entry_count) {
-  int8_t* cached_hashtable = baseline_hashtable->data();
+bool check_one_to_one_baseline_hashtable(std::vector<std::vector<int32_t>>& insert_keys,
+                                         const int8_t* cached_hashtable,
+                                         size_t entry_count) {
   int rowID = 0;
   for (auto keys : insert_keys) {
     if (!probe_one_to_one_baseline_hashtable(cached_hashtable,

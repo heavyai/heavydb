@@ -33,7 +33,6 @@ class OverlapsJoinHashTable : public BaselineJoinHashTable {
       : BaselineJoinHashTable(condition,
                               query_infos,
                               memory_level,
-                              hash_layout_type,
                               entry_count,
                               column_cache,
                               executor,
@@ -60,6 +59,21 @@ class OverlapsJoinHashTable : public BaselineJoinHashTable {
   }
 
  protected:
+  int initHashTableForDevice(const std::vector<JoinColumn>& join_columns,
+                             const std::vector<JoinColumnTypeInfo>& join_column_types,
+                             const std::vector<JoinBucketInfo>& join_buckets,
+                             const JoinHashTableInterface::HashType layout,
+                             const Data_Namespace::MemoryLevel effective_memory_level,
+                             const int device_id) override;
+  virtual void reifyForDevice(const ColumnsForDevice& columns_for_device,
+                              const JoinHashTableInterface::HashType layout,
+                              const int device_id,
+                              const logger::ThreadId parent_thread_id) override;
+  // TODO(adb): remove
+#ifdef HAVE_CUDA
+  std::vector<Data_Namespace::AbstractBuffer*> gpu_hash_table_buff_;
+#endif
+
   void reifyWithLayout(const JoinHashTableInterface::HashType layout) override;
 
   std::pair<size_t, size_t> calculateCounts(
@@ -91,15 +105,7 @@ class OverlapsJoinHashTable : public BaselineJoinHashTable {
   int initHashTableOnCpu(const std::vector<JoinColumn>& join_columns,
                          const std::vector<JoinColumnTypeInfo>& join_column_types,
                          const std::vector<JoinBucketInfo>& join_bucket_info,
-                         const JoinHashTableInterface::HashType layout) override;
-
-  int initHashTableOnGpu(const std::vector<JoinColumn>& join_columns,
-                         const std::vector<JoinColumnTypeInfo>& join_column_types,
-                         const std::vector<JoinBucketInfo>& join_bucket_info,
-                         const JoinHashTableInterface::HashType layout,
-                         const size_t key_component_width,
-                         const size_t key_component_count,
-                         const int device_id) override;
+                         const JoinHashTableInterface::HashType layout);
 
   HashJoinMatchingSet codegenMatchingSet(const CompilationOptions&,
                                          const size_t) override;

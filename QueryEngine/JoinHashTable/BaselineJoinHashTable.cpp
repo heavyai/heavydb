@@ -23,11 +23,12 @@
 #include "QueryEngine/ColumnFetcher.h"
 #include "QueryEngine/Execute.h"
 #include "QueryEngine/ExpressionRewrite.h"
+#include "QueryEngine/JoinHashTable/BaselineHashTable.h"
+#include "QueryEngine/JoinHashTable/BaselineHashTableBuilder.h"
 #include "QueryEngine/JoinHashTable/HashJoinKeyHandlers.h"
 #include "QueryEngine/JoinHashTable/JoinHashTableGpuUtils.h"
 
-std::vector<std::pair<BaselineJoinHashTable::HashTableCacheKey,
-                      BaselineJoinHashTable::HashTableCacheValue>>
+std::vector<std::pair<HashTableCacheKey, BaselineJoinHashTable::HashTableCacheValue>>
     BaselineJoinHashTable::hash_table_cache_;
 std::mutex BaselineJoinHashTable::hash_table_cache_mutex_;
 
@@ -62,19 +63,18 @@ std::shared_ptr<BaselineJoinHashTable> BaselineJoinHashTable::getInstance(
                                : 0;
   const auto entries_per_device =
       get_entries_per_device(total_entries, shard_count, device_count, memory_level);
-  auto join_hash_table = std::shared_ptr<BaselineJoinHashTable>(
-      new BaselineJoinHashTable(condition,
-                                query_infos,
-                                memory_level,
-                                preferred_hash_type,
-                                entries_per_device,
-                                column_cache,
-                                executor,
-                                inner_outer_pairs,
-                                device_count));
+  auto join_hash_table =
+      std::shared_ptr<BaselineJoinHashTable>(new BaselineJoinHashTable(condition,
+                                                                       query_infos,
+                                                                       memory_level,
+                                                                       entries_per_device,
+                                                                       column_cache,
+                                                                       executor,
+                                                                       inner_outer_pairs,
+                                                                       device_count));
   join_hash_table->checkHashJoinReplicationConstraint(getInnerTableId(inner_outer_pairs));
   try {
-    join_hash_table->reify();
+    join_hash_table->reify(preferred_hash_type);
   } catch (const TableMustBeReplicated& e) {
     // Throw a runtime error to abort the query
     join_hash_table->freeHashBufferMemory();
@@ -112,7 +112,6 @@ BaselineJoinHashTable::BaselineJoinHashTable(
     const std::shared_ptr<Analyzer::BinOper> condition,
     const std::vector<InputTableInfo>& query_infos,
     const Data_Namespace::MemoryLevel memory_level,
-    const HashType preferred_hash_type,
     const size_t entry_count,
     ColumnCacheMap& column_cache,
     Executor* executor,
@@ -121,7 +120,6 @@ BaselineJoinHashTable::BaselineJoinHashTable(
     : condition_(condition)
     , query_infos_(query_infos)
     , memory_level_(memory_level)
-    , layout_(preferred_hash_type)
     , entry_count_(entry_count)
     , emitted_keys_count_(0)
     , executor_(executor)
@@ -129,7 +127,6 @@ BaselineJoinHashTable::BaselineJoinHashTable(
     , inner_outer_pairs_(inner_outer_pairs)
     , catalog_(executor->getCatalog())
     , device_count_(device_count)
-#ifdef HAVE_CUDA
     , block_size_(memory_level == Data_Namespace::MemoryLevel::GPU_LEVEL
                       ? executor->blockSize()
                       : 0)
@@ -137,12 +134,8 @@ BaselineJoinHashTable::BaselineJoinHashTable(
                      ? executor->gridSize()
                      : 0) {
   CHECK_GT(device_count_, 0);
+  hash_tables_for_device_.resize(std::max(device_count_, 1));
 }
-#else
-{
-  CHECK_GT(device_count_, 0);
-}
-#endif  // HAVE_CUDA
 
 size_t BaselineJoinHashTable::getShardCountForCondition(
     const Analyzer::BinOper* condition,
@@ -159,44 +152,25 @@ size_t BaselineJoinHashTable::getShardCountForCondition(
 
 int64_t BaselineJoinHashTable::getJoinHashBuffer(const ExecutorDeviceType device_type,
                                                  const int device_id) const noexcept {
-  if (device_type == ExecutorDeviceType::CPU && !cpu_hash_table_buff_) {
+  // TODO: just make device_id a size_t
+  CHECK_LT(size_t(device_id), hash_tables_for_device_.size());
+  if (device_type == ExecutorDeviceType::CPU && !hash_tables_for_device_[device_id]) {
     return 0;
   }
+  CHECK(hash_tables_for_device_[device_id]);
+  auto hash_table = hash_tables_for_device_[device_id].get();
 #ifdef HAVE_CUDA
-  CHECK_LT(static_cast<size_t>(device_id), gpu_hash_table_buff_.size());
   if (device_type == ExecutorDeviceType::CPU) {
-    return reinterpret_cast<int64_t>(&(*cpu_hash_table_buff_)[0]);
+    return reinterpret_cast<int64_t>(hash_table->getCpuBuffer());
   } else {
-    return gpu_hash_table_buff_[device_id]
-               ? reinterpret_cast<CUdeviceptr>(
-                     gpu_hash_table_buff_[device_id]->getMemoryPtr())
-               : reinterpret_cast<CUdeviceptr>(nullptr);
+    CHECK(hash_table);
+    const auto gpu_buff = hash_table->getGpuBuffer();
+    return gpu_buff ? reinterpret_cast<CUdeviceptr>(gpu_buff->getMemoryPtr())
+                    : reinterpret_cast<CUdeviceptr>(nullptr);
   }
 #else
   CHECK(device_type == ExecutorDeviceType::CPU);
-  return reinterpret_cast<int64_t>(&(*cpu_hash_table_buff_)[0]);
-#endif
-}
-
-size_t BaselineJoinHashTable::getJoinHashBufferSize(const ExecutorDeviceType device_type,
-                                                    const int device_id) const noexcept {
-  if (device_type == ExecutorDeviceType::CPU && !cpu_hash_table_buff_) {
-    return 0;
-  }
-#ifdef HAVE_CUDA
-  CHECK_LT(static_cast<size_t>(device_id), gpu_hash_table_buff_.size());
-  if (device_type == ExecutorDeviceType::CPU) {
-    return cpu_hash_table_buff_->size() *
-           sizeof(decltype(cpu_hash_table_buff_)::element_type::value_type);
-  } else {
-    return gpu_hash_table_buff_[device_id]
-               ? gpu_hash_table_buff_[device_id]->reservedSize()
-               : 0;
-  }
-#else
-  CHECK(device_type == ExecutorDeviceType::CPU);
-  return cpu_hash_table_buff_->size() *
-         sizeof(decltype(cpu_hash_table_buff_)::element_type::value_type);
+  return reinterpret_cast<int64_t>(hash_table->getCpuBuffer());
 #endif
 }
 
@@ -204,7 +178,10 @@ std::string BaselineJoinHashTable::toString(const ExecutorDeviceType device_type
                                             const int device_id,
                                             bool raw) const {
   auto buffer = getJoinHashBuffer(device_type, device_id);
-  auto buffer_size = getJoinHashBufferSize(device_type, device_id);
+  CHECK_LT(device_id, hash_tables_for_device_.size());
+  auto hash_table = hash_tables_for_device_[device_id];
+  CHECK(hash_table);
+  auto buffer_size = hash_table->getHashTableBufferSize(device_type);
 #ifdef HAVE_CUDA
   std::unique_ptr<int8_t[]> buffer_copy;
   if (device_type == ExecutorDeviceType::GPU) {
@@ -223,11 +200,13 @@ std::string BaselineJoinHashTable::toString(const ExecutorDeviceType device_type
   auto ptr2 = ptr1 + offsetBufferOff();
   auto ptr3 = ptr1 + countBufferOff();
   auto ptr4 = ptr1 + payloadBufferOff();
+  CHECK(hash_table);
+  const auto layout = getHashType();
   return JoinHashTableInterface::toString(
       !condition_->is_overlaps_oper() ? "keyed" : "geo",
-      getHashTypeString(layout_),
+      getHashTypeString(layout),
       getKeyComponentCount() +
-          (layout_ == JoinHashTableInterface::HashType::OneToOne ? 1 : 0),
+          (layout == JoinHashTableInterface::HashType::OneToOne ? 1 : 0),
       getKeyComponentWidth(),
       entry_count_,
       ptr1,
@@ -242,7 +221,9 @@ std::set<DecodedJoinHashBufferEntry> BaselineJoinHashTable::toSet(
     const ExecutorDeviceType device_type,
     const int device_id) const {
   auto buffer = getJoinHashBuffer(device_type, device_id);
-  auto buffer_size = getJoinHashBufferSize(device_type, device_id);
+  auto hash_table = getHashTableForDevice(device_id);
+  CHECK(hash_table);
+  auto buffer_size = hash_table->getHashTableBufferSize(device_type);
 #ifdef HAVE_CUDA
   std::unique_ptr<int8_t[]> buffer_copy;
   if (device_type == ExecutorDeviceType::GPU) {
@@ -261,9 +242,10 @@ std::set<DecodedJoinHashBufferEntry> BaselineJoinHashTable::toSet(
   auto ptr2 = ptr1 + offsetBufferOff();
   auto ptr3 = ptr1 + countBufferOff();
   auto ptr4 = ptr1 + payloadBufferOff();
+  const auto layout = getHashType();
   return JoinHashTableInterface::toSet(
       getKeyComponentCount() +
-          (layout_ == JoinHashTableInterface::HashType::OneToOne ? 1 : 0),
+          (layout == JoinHashTableInterface::HashType::OneToOne ? 1 : 0),
       getKeyComponentWidth(),
       entry_count_,
       ptr1,
@@ -273,8 +255,7 @@ std::set<DecodedJoinHashBufferEntry> BaselineJoinHashTable::toSet(
       buffer_size);
 }
 
-BaselineJoinHashTable::CompositeKeyInfo BaselineJoinHashTable::getCompositeKeyInfo()
-    const {
+CompositeKeyInfo BaselineJoinHashTable::getCompositeKeyInfo() const {
   std::vector<const void*> sd_inner_proxy_per_key;
   std::vector<const void*> sd_outer_proxy_per_key;
   std::vector<ChunkKey> cache_key_chunks;  // used for the cache key
@@ -308,15 +289,13 @@ BaselineJoinHashTable::CompositeKeyInfo BaselineJoinHashTable::getCompositeKeyIn
   return {sd_inner_proxy_per_key, sd_outer_proxy_per_key, cache_key_chunks};
 }
 
-void BaselineJoinHashTable::reify() {
+void BaselineJoinHashTable::reify(
+    const JoinHashTableInterface::HashType preferred_layout) {
   auto timer = DEBUG_TIMER(__func__);
   CHECK_LT(0, device_count_);
-#ifdef HAVE_CUDA
-  gpu_hash_table_buff_.resize(device_count_);
-#endif  // HAVE_CUDA
   const auto composite_key_info = getCompositeKeyInfo();
   const auto type_and_found = HashTypeCache::get(composite_key_info.cache_key_chunks);
-  const auto layout = type_and_found.second ? type_and_found.first : layout_;
+  const auto layout = type_and_found.second ? type_and_found.first : preferred_layout;
 
   if (condition_->is_overlaps_oper()) {
     CHECK_EQ(inner_outer_pairs_.size(), size_t(1));
@@ -350,7 +329,6 @@ void BaselineJoinHashTable::reify() {
 
 void BaselineJoinHashTable::reifyWithLayout(
     const JoinHashTableInterface::HashType layout) {
-  layout_ = layout;
   const auto& query_info = get_inner_query_info(getInnerTableId(), query_infos_).info;
   if (query_info.fragments.empty()) {
     return;
@@ -623,341 +601,6 @@ Data_Namespace::MemoryLevel BaselineJoinHashTable::getEffectiveMemoryLevel(
   return memory_level_;
 }
 
-int BaselineJoinHashTable::initHashTableOnCpu(
-    const std::vector<JoinColumn>& join_columns,
-    const std::vector<JoinColumnTypeInfo>& join_column_types,
-    const std::vector<JoinBucketInfo>& join_bucket_info,
-    const JoinHashTableInterface::HashType layout) {
-  auto timer = DEBUG_TIMER(__func__);
-  const auto composite_key_info = getCompositeKeyInfo();
-  CHECK(!join_columns.empty());
-  HashTableCacheKey cache_key{join_columns.front().num_elems,
-                              composite_key_info.cache_key_chunks,
-                              condition_->get_optype()};
-  initHashTableOnCpuFromCache(cache_key);
-  if (cpu_hash_table_buff_) {
-    return 0;
-  }
-  const auto key_component_width = getKeyComponentWidth();
-  const auto key_component_count = getKeyComponentCount();
-  const auto entry_size =
-      (key_component_count +
-       (layout == JoinHashTableInterface::HashType::OneToOne ? 1 : 0)) *
-      key_component_width;
-  const auto keys_for_all_rows = join_columns.front().num_elems;
-  const size_t one_to_many_hash_entries =
-      layout == JoinHashTableInterface::HashType::OneToMany
-          ? 2 * entry_count_ + keys_for_all_rows
-          : 0;
-  const size_t hash_table_size =
-      entry_size * entry_count_ + one_to_many_hash_entries * sizeof(int32_t);
-
-  // We can't allocate more than 2GB contiguous memory on GPU and each entry is 4 bytes.
-  if (hash_table_size > static_cast<size_t>(std::numeric_limits<int32_t>::max())) {
-    throw TooManyHashEntries(
-        "Hash tables for GPU requiring larger than 2GB contigious memory not supported "
-        "yet");
-  }
-
-  VLOG(1) << "Initializing CPU Join Hash Table with " << entry_count_
-          << " hash entries and " << one_to_many_hash_entries
-          << " entries in the one to many buffer";
-  VLOG(1) << "Total hash table size: " << hash_table_size << " Bytes";
-
-  cpu_hash_table_buff_.reset(new std::vector<int8_t>(hash_table_size));
-  int thread_count = cpu_threads();
-  std::vector<std::future<void>> init_cpu_buff_threads;
-  for (int thread_idx = 0; thread_idx < thread_count; ++thread_idx) {
-    init_cpu_buff_threads.emplace_back(
-        std::async(std::launch::async,
-                   [this,
-                    key_component_count,
-                    key_component_width,
-                    thread_idx,
-                    thread_count,
-                    layout] {
-                     switch (key_component_width) {
-                       case 4:
-                         init_baseline_hash_join_buff_32(
-                             &(*cpu_hash_table_buff_)[0],
-                             entry_count_,
-                             key_component_count,
-                             layout == JoinHashTableInterface::HashType::OneToOne,
-                             -1,
-                             thread_idx,
-                             thread_count);
-                         break;
-                       case 8:
-                         init_baseline_hash_join_buff_64(
-                             &(*cpu_hash_table_buff_)[0],
-                             entry_count_,
-                             key_component_count,
-                             layout == JoinHashTableInterface::HashType::OneToOne,
-                             -1,
-                             thread_idx,
-                             thread_count);
-                         break;
-                       default:
-                         CHECK(false);
-                     }
-                   }));
-  }
-  for (auto& child : init_cpu_buff_threads) {
-    child.get();
-  }
-  std::vector<std::future<int>> fill_cpu_buff_threads;
-  for (int thread_idx = 0; thread_idx < thread_count; ++thread_idx) {
-    fill_cpu_buff_threads.emplace_back(std::async(
-        std::launch::async,
-        [this,
-         &composite_key_info,
-         &join_columns,
-         &join_column_types,
-         key_component_count,
-         key_component_width,
-         layout,
-         thread_idx,
-         thread_count] {
-          switch (key_component_width) {
-            case 4: {
-              const auto key_handler =
-                  GenericKeyHandler(key_component_count,
-                                    true,
-                                    &join_columns[0],
-                                    &join_column_types[0],
-                                    &composite_key_info.sd_inner_proxy_per_key[0],
-                                    &composite_key_info.sd_outer_proxy_per_key[0]);
-              return fill_baseline_hash_join_buff_32(
-                  &(*cpu_hash_table_buff_)[0],
-                  entry_count_,
-                  -1,
-                  key_component_count,
-                  layout == JoinHashTableInterface::HashType::OneToOne,
-                  &key_handler,
-                  join_columns[0].num_elems,
-                  thread_idx,
-                  thread_count);
-              break;
-            }
-            case 8: {
-              const auto key_handler =
-                  GenericKeyHandler(key_component_count,
-                                    true,
-                                    &join_columns[0],
-                                    &join_column_types[0],
-                                    &composite_key_info.sd_inner_proxy_per_key[0],
-                                    &composite_key_info.sd_outer_proxy_per_key[0]);
-              return fill_baseline_hash_join_buff_64(
-                  &(*cpu_hash_table_buff_)[0],
-                  entry_count_,
-                  -1,
-                  key_component_count,
-                  layout == JoinHashTableInterface::HashType::OneToOne,
-                  &key_handler,
-                  join_columns[0].num_elems,
-                  thread_idx,
-                  thread_count);
-              break;
-            }
-            default:
-              CHECK(false);
-          }
-          return -1;
-        }));
-  }
-  int err = 0;
-  for (auto& child : fill_cpu_buff_threads) {
-    int partial_err = child.get();
-    if (partial_err) {
-      err = partial_err;
-    }
-  }
-  if (err) {
-    cpu_hash_table_buff_.reset();
-    return err;
-  }
-  if (layout == JoinHashTableInterface::HashType::OneToMany) {
-    auto one_to_many_buff = reinterpret_cast<int32_t*>(&(*cpu_hash_table_buff_)[0] +
-                                                       entry_count_ * entry_size);
-    init_hash_join_buff(one_to_many_buff, entry_count_, -1, 0, 1);
-    switch (key_component_width) {
-      case 4: {
-        const auto composite_key_dict =
-            reinterpret_cast<int32_t*>(&(*cpu_hash_table_buff_)[0]);
-        fill_one_to_many_baseline_hash_table_32(one_to_many_buff,
-                                                composite_key_dict,
-                                                entry_count_,
-                                                -1,
-                                                key_component_count,
-                                                join_columns,
-                                                join_column_types,
-                                                join_bucket_info,
-                                                composite_key_info.sd_inner_proxy_per_key,
-                                                composite_key_info.sd_outer_proxy_per_key,
-                                                thread_count);
-        break;
-      }
-      case 8: {
-        const auto composite_key_dict =
-            reinterpret_cast<int64_t*>(&(*cpu_hash_table_buff_)[0]);
-        fill_one_to_many_baseline_hash_table_64(one_to_many_buff,
-                                                composite_key_dict,
-                                                entry_count_,
-                                                -1,
-                                                key_component_count,
-                                                join_columns,
-                                                join_column_types,
-                                                join_bucket_info,
-                                                composite_key_info.sd_inner_proxy_per_key,
-                                                composite_key_info.sd_outer_proxy_per_key,
-                                                thread_count);
-        break;
-      }
-      default:
-        CHECK(false);
-    }
-  }
-  if (!err && getInnerTableId() > 0) {
-    putHashTableOnCpuToCache(cache_key);
-  }
-  return err;
-}
-
-int BaselineJoinHashTable::initHashTableOnGpu(
-    const std::vector<JoinColumn>& join_columns,
-    const std::vector<JoinColumnTypeInfo>& join_column_types,
-    const std::vector<JoinBucketInfo>& join_bucket_info,
-    const JoinHashTableInterface::HashType layout,
-    const size_t key_component_width,
-    const size_t key_component_count,
-    const int device_id) {
-  auto timer = DEBUG_TIMER(__func__);
-  int err = 0;
-#ifdef HAVE_CUDA
-  auto& data_mgr = catalog_->getDataMgr();
-  CudaAllocator allocator(&data_mgr, device_id);
-  auto dev_err_buff = reinterpret_cast<CUdeviceptr>(allocator.alloc(sizeof(int)));
-  copy_to_gpu(&data_mgr, dev_err_buff, &err, sizeof(err), device_id);
-  switch (key_component_width) {
-    case 4:
-      init_baseline_hash_join_buff_on_device_32(
-          reinterpret_cast<int8_t*>(gpu_hash_table_buff_[device_id]->getMemoryPtr()),
-          entry_count_,
-          key_component_count,
-          layout == JoinHashTableInterface::HashType::OneToOne,
-          -1,
-          block_size_,
-          grid_size_);
-      break;
-    case 8:
-      init_baseline_hash_join_buff_on_device_64(
-          reinterpret_cast<int8_t*>(gpu_hash_table_buff_[device_id]->getMemoryPtr()),
-          entry_count_,
-          key_component_count,
-          layout == JoinHashTableInterface::HashType::OneToOne,
-          -1,
-          block_size_,
-          grid_size_);
-      break;
-    default:
-      UNREACHABLE();
-  }
-  auto join_columns_gpu = transfer_vector_of_flat_objects_to_gpu(join_columns, allocator);
-  auto hash_buff =
-      reinterpret_cast<int8_t*>(gpu_hash_table_buff_[device_id]->getMemoryPtr());
-  auto join_column_types_gpu =
-      transfer_vector_of_flat_objects_to_gpu(join_column_types, allocator);
-
-  const auto key_handler = GenericKeyHandler(key_component_count,
-                                             true,
-                                             join_columns_gpu,
-                                             join_column_types_gpu,
-                                             nullptr,
-                                             nullptr);
-  const auto key_handler_gpu = transfer_flat_object_to_gpu(key_handler, allocator);
-  switch (key_component_width) {
-    case 4: {
-      fill_baseline_hash_join_buff_on_device_32(
-          hash_buff,
-          entry_count_,
-          -1,
-          key_component_count,
-          layout == JoinHashTableInterface::HashType::OneToOne,
-          reinterpret_cast<int*>(dev_err_buff),
-          key_handler_gpu,
-          join_columns.front().num_elems,
-          block_size_,
-          grid_size_);
-      copy_from_gpu(&data_mgr, &err, dev_err_buff, sizeof(err), device_id);
-      break;
-    }
-    case 8: {
-      fill_baseline_hash_join_buff_on_device_64(
-          hash_buff,
-          entry_count_,
-          -1,
-          key_component_count,
-          layout == JoinHashTableInterface::HashType::OneToOne,
-          reinterpret_cast<int*>(dev_err_buff),
-          key_handler_gpu,
-          join_columns.front().num_elems,
-          block_size_,
-          grid_size_);
-      copy_from_gpu(&data_mgr, &err, dev_err_buff, sizeof(err), device_id);
-      break;
-    }
-    default:
-      UNREACHABLE();
-  }
-  if (err) {
-    return err;
-  }
-  if (layout == JoinHashTableInterface::HashType::OneToMany) {
-    const auto entry_size = key_component_count * key_component_width;
-    auto one_to_many_buff = reinterpret_cast<int32_t*>(
-        gpu_hash_table_buff_[device_id]->getMemoryPtr() + entry_count_ * entry_size);
-    switch (key_component_width) {
-      case 4: {
-        const auto composite_key_dict =
-            reinterpret_cast<int32_t*>(gpu_hash_table_buff_[device_id]->getMemoryPtr());
-        init_hash_join_buff_on_device(
-            one_to_many_buff, entry_count_, -1, block_size_, grid_size_);
-        fill_one_to_many_baseline_hash_table_on_device_32(one_to_many_buff,
-                                                          composite_key_dict,
-                                                          entry_count_,
-                                                          -1,
-                                                          key_component_count,
-                                                          key_handler_gpu,
-                                                          join_columns.front().num_elems,
-                                                          block_size_,
-                                                          grid_size_);
-        break;
-      }
-      case 8: {
-        const auto composite_key_dict =
-            reinterpret_cast<int64_t*>(gpu_hash_table_buff_[device_id]->getMemoryPtr());
-        init_hash_join_buff_on_device(
-            one_to_many_buff, entry_count_, -1, block_size_, grid_size_);
-        fill_one_to_many_baseline_hash_table_on_device_64(one_to_many_buff,
-                                                          composite_key_dict,
-                                                          entry_count_,
-                                                          -1,
-                                                          key_handler_gpu,
-                                                          join_columns.front().num_elems,
-                                                          block_size_,
-                                                          grid_size_);
-        break;
-      }
-      default:
-        UNREACHABLE();
-    }
-  }
-#else
-  UNREACHABLE();
-#endif
-  return err;
-}
-
 int BaselineJoinHashTable::initHashTableForDevice(
     const std::vector<JoinColumn>& join_columns,
     const std::vector<JoinColumnTypeInfo>& join_column_types,
@@ -966,66 +609,120 @@ int BaselineJoinHashTable::initHashTableForDevice(
     const Data_Namespace::MemoryLevel effective_memory_level,
     const int device_id) {
   auto timer = DEBUG_TIMER(__func__);
-  const auto key_component_width = getKeyComponentWidth();
   const auto key_component_count = getKeyComponentCount();
   int err = 0;
-#ifdef HAVE_CUDA
-  auto& data_mgr = catalog_->getDataMgr();
-  if (memory_level_ == Data_Namespace::GPU_LEVEL) {
-    const auto entry_size =
-        (key_component_count +
-         (layout == JoinHashTableInterface::HashType::OneToOne ? 1 : 0)) *
-        key_component_width;
-    const auto keys_for_all_rows = emitted_keys_count_;
-    const size_t one_to_many_hash_entries = layoutRequiresAdditionalBuffers(layout)
-                                                ? 2 * entry_count_ + keys_for_all_rows
-                                                : 0;
-    const size_t hash_table_size =
-        entry_size * entry_count_ + one_to_many_hash_entries * sizeof(int32_t);
 
-    // We can't allocate more than 2GB contiguous memory on GPU and each entry is 4 bytes.
-    if (hash_table_size > static_cast<size_t>(std::numeric_limits<int32_t>::max())) {
-      throw TooManyHashEntries(
-          "Hash tables for GPU requiring larger than 2GB contigious memory not supported "
-          "yet");
-    }
-
-    VLOG(1) << "Initializing GPU Hash Table for device " << device_id << " with "
-            << entry_count_ << " hash entries and " << one_to_many_hash_entries
-            << " entries in the one to many buffer";
-    VLOG(1) << "Total hash table size: " << hash_table_size << " Bytes";
-    gpu_hash_table_buff_[device_id] =
-        CudaAllocator::allocGpuAbstractBuffer(&data_mgr, hash_table_size, device_id);
-  }
-#else
-  CHECK_EQ(Data_Namespace::CPU_LEVEL, effective_memory_level);
-#endif
   if (effective_memory_level == Data_Namespace::CPU_LEVEL) {
     std::lock_guard<std::mutex> cpu_hash_table_buff_lock(cpu_hash_table_buff_mutex_);
-    err = initHashTableOnCpu(join_columns, join_column_types, join_bucket_info, layout);
+
+    const auto composite_key_info = getCompositeKeyInfo();
+
+    CHECK(!join_columns.empty());
+    HashTableCacheKey cache_key{join_columns.front().num_elems,
+                                composite_key_info.cache_key_chunks,
+                                condition_->get_optype()};
+
+    if (memory_level_ == Data_Namespace::MemoryLevel::CPU_LEVEL) {
+      CHECK_EQ(device_id, size_t(0));
+    }
+    CHECK_LT(static_cast<size_t>(device_id), hash_tables_for_device_.size());
+
+    auto hash_table = initHashTableOnCpuFromCache(cache_key);
+    if (hash_table) {
+      hash_tables_for_device_[device_id] = hash_table;
+    } else {
+      BaselineJoinHashTableBuilder builder(catalog_);
+
+      const auto key_handler =
+          GenericKeyHandler(key_component_count,
+                            true,
+                            &join_columns[0],
+                            &join_column_types[0],
+                            &composite_key_info.sd_inner_proxy_per_key[0],
+                            &composite_key_info.sd_outer_proxy_per_key[0]);
+      err = builder.initHashTableOnCpu(&key_handler,
+                                       composite_key_info,
+                                       join_columns,
+                                       join_column_types,
+                                       join_bucket_info,
+                                       entry_count_,
+                                       join_columns.front().num_elems,
+                                       layout,
+                                       getKeyComponentWidth(),
+                                       getKeyComponentCount());
+      hash_tables_for_device_[device_id] = builder.getHashTable();
+
+      if (!err) {
+        if (getInnerTableId() > 0) {
+          putHashTableOnCpuToCache(cache_key, hash_tables_for_device_[device_id]);
+        }
+      }
+    }
     // Transfer the hash table on the GPU if we've only built it on CPU
     // but the query runs on GPU (join on dictionary encoded columns).
     // Don't transfer the buffer if there was an error since we'll bail anyway.
     if (memory_level_ == Data_Namespace::GPU_LEVEL && !err) {
 #ifdef HAVE_CUDA
-      copy_to_gpu(
-          &data_mgr,
-          reinterpret_cast<CUdeviceptr>(gpu_hash_table_buff_[device_id]->getMemoryPtr()),
-          &(*cpu_hash_table_buff_)[0],
-          cpu_hash_table_buff_->size() * sizeof((*cpu_hash_table_buff_)[0]),
-          device_id);
+      BaselineJoinHashTableBuilder builder(catalog_);
+
+      builder.allocateDeviceMemory(layout,
+                                   getKeyComponentWidth(),
+                                   getKeyComponentCount(),
+                                   entry_count_,
+                                   emitted_keys_count_,
+                                   device_id);
+
+      CHECK_LT(size_t(device_id), hash_tables_for_device_.size());
+      auto cpu_source_hash_table = hash_tables_for_device_[device_id];
+      CHECK(cpu_source_hash_table);
+      auto gpu_target_hash_table = builder.getHashTable();
+      CHECK(gpu_target_hash_table);
+
+      const auto gpu_buff = gpu_target_hash_table->getGpuBuffer();
+      CHECK(gpu_buff);
+      auto& data_mgr = catalog_->getDataMgr();
+      copy_to_gpu(&data_mgr,
+                  reinterpret_cast<CUdeviceptr>(gpu_buff->getMemoryPtr()),
+                  cpu_source_hash_table->getCpuBuffer(),
+                  cpu_source_hash_table->getCpuBufferSize(),
+                  device_id);
+      hash_tables_for_device_[device_id] = std::move(gpu_target_hash_table);
 #else
       CHECK(false);
 #endif
     }
   } else {
-    err = initHashTableOnGpu(join_columns,
-                             join_column_types,
-                             join_bucket_info,
-                             layout,
-                             key_component_width,
-                             key_component_count,
-                             device_id);
+#ifdef HAVE_CUDA
+    BaselineJoinHashTableBuilder builder(catalog_);
+
+    auto& data_mgr = catalog_->getDataMgr();
+    CudaAllocator allocator(&data_mgr, device_id);
+    auto join_column_types_gpu =
+        transfer_vector_of_flat_objects_to_gpu(join_column_types, allocator);
+    auto join_columns_gpu =
+        transfer_vector_of_flat_objects_to_gpu(join_columns, allocator);
+    const auto key_handler = GenericKeyHandler(key_component_count,
+                                               true,
+                                               join_columns_gpu,
+                                               join_column_types_gpu,
+                                               nullptr,
+                                               nullptr);
+
+    err = builder.initHashTableOnGpu(&key_handler,
+                                     join_columns,
+                                     layout,
+                                     getKeyComponentWidth(),
+                                     getKeyComponentCount(),
+                                     entry_count_,
+                                     emitted_keys_count_,
+                                     device_id,
+                                     block_size_,
+                                     grid_size_);
+    CHECK_LT(size_t(device_id), hash_tables_for_device_.size());
+    hash_tables_for_device_[device_id] = builder.getHashTable();
+#else
+    UNREACHABLE();
+#endif
   }
   return err;
 }
@@ -1060,7 +757,7 @@ HashJoinMatchingSet BaselineJoinHashTable::codegenMatchingSet(
   const auto key_component_width = getKeyComponentWidth();
   CHECK(key_component_width == 4 || key_component_width == 8);
   auto key_buff_lv = codegenKey(co);
-  CHECK(layout_ == JoinHashTableInterface::HashType::OneToMany);
+  CHECK(getHashType() == JoinHashTableInterface::HashType::OneToMany);
   auto hash_ptr = JoinHashTable::codegenHashTableLoad(index, executor_);
   const auto composite_dict_ptr_type =
       llvm::Type::getIntNPtrTy(LL_CONTEXT, key_component_width * 8);
@@ -1100,7 +797,7 @@ size_t BaselineJoinHashTable::offsetBufferOff() const noexcept {
 }
 
 size_t BaselineJoinHashTable::countBufferOff() const noexcept {
-  if (layoutRequiresAdditionalBuffers(layout_)) {
+  if (layoutRequiresAdditionalBuffers(getHashType())) {
     return offsetBufferOff() + getComponentBufferSize();
   } else {
     return getKeyBufferSize();
@@ -1108,32 +805,18 @@ size_t BaselineJoinHashTable::countBufferOff() const noexcept {
 }
 
 size_t BaselineJoinHashTable::payloadBufferOff() const noexcept {
-  if (layoutRequiresAdditionalBuffers(layout_)) {
+  if (layoutRequiresAdditionalBuffers(getHashType())) {
     return countBufferOff() + getComponentBufferSize();
   } else {
     return getKeyBufferSize();
   }
 }
 
-BaselineJoinHashTable::~BaselineJoinHashTable() {
-  // TODO: use freeHashBufferMemory?
-#ifdef HAVE_CUDA
-  CHECK(executor_);
-  CHECK(executor_->catalog_);
-  auto& data_mgr = executor_->catalog_->getDataMgr();
-  for (auto& gpu_buffer : gpu_hash_table_buff_) {
-    if (gpu_buffer) {
-      data_mgr.free(gpu_buffer);
-    }
-  }
-#endif
-}
-
 size_t BaselineJoinHashTable::getKeyBufferSize() const noexcept {
   const auto key_component_width = getKeyComponentWidth();
   CHECK(key_component_width == 4 || key_component_width == 8);
   const auto key_component_count = getKeyComponentCount();
-  if (layoutRequiresAdditionalBuffers(layout_)) {
+  if (layoutRequiresAdditionalBuffers(getHashType())) {
     return entry_count_ * key_component_count * key_component_width;
   } else {
     return entry_count_ * (key_component_count + 1) * key_component_width;
@@ -1222,7 +905,13 @@ int BaselineJoinHashTable::getInnerTableRteIdx() const noexcept {
 }
 
 JoinHashTableInterface::HashType BaselineJoinHashTable::getHashType() const noexcept {
-  return layout_;
+  auto hash_table = getHashTableForDevice(size_t(0));
+  CHECK(hash_table);
+  if (layout_override_) {
+    return *layout_override_;
+  } else {
+    return hash_table->getLayout();
+  }
 }
 
 int BaselineJoinHashTable::getInnerTableId(
@@ -1246,18 +935,8 @@ void BaselineJoinHashTable::checkHashJoinReplicationConstraint(const int table_i
   }
 }
 
-const BaselineJoinHashTable::HashTableCacheValue*
-BaselineJoinHashTable::findHashTableOnCpuInCache(const HashTableCacheKey& key) {
-  std::lock_guard<std::mutex> hash_table_cache_lock(hash_table_cache_mutex_);
-  for (const auto& kv : hash_table_cache_) {
-    if (kv.first == key) {
-      return &kv.second;
-    }
-  }
-  return nullptr;
-}
-
-void BaselineJoinHashTable::initHashTableOnCpuFromCache(const HashTableCacheKey& key) {
+std::shared_ptr<BaselineHashTable> BaselineJoinHashTable::initHashTableOnCpuFromCache(
+    const HashTableCacheKey& key) {
   auto timer = DEBUG_TIMER(__func__);
   VLOG(1) << "Checking CPU hash table cache.";
   std::lock_guard<std::mutex> hash_table_cache_lock(hash_table_cache_mutex_);
@@ -1267,19 +946,17 @@ void BaselineJoinHashTable::initHashTableOnCpuFromCache(const HashTableCacheKey&
   for (const auto& kv : hash_table_cache_) {
     if (kv.first == key) {
       VLOG(1) << "Found a suitable hash table in the cache.";
-      cpu_hash_table_buff_ = kv.second.buffer;
-      layout_ = kv.second.type;
-      entry_count_ = kv.second.entry_count;
-      emitted_keys_count_ = kv.second.emitted_keys_count;
-      break;
-    } else {
-      VLOG(1) << hash_table_cache_.size()
-              << " hash tables found in cache. None were suitable for this query.";
+      return kv.second;
     }
   }
+  VLOG(1) << hash_table_cache_.size()
+          << " hash tables found in cache. None were suitable for this query.";
+  return nullptr;
 }
 
-void BaselineJoinHashTable::putHashTableOnCpuToCache(const HashTableCacheKey& key) {
+void BaselineJoinHashTable::putHashTableOnCpuToCache(
+    const HashTableCacheKey& key,
+    std::shared_ptr<BaselineHashTable>& hash_table) {
   for (auto chunk_key : key.chunk_keys) {
     CHECK_GE(chunk_key.size(), size_t(2));
     if (chunk_key[1] < 0) {
@@ -1289,15 +966,14 @@ void BaselineJoinHashTable::putHashTableOnCpuToCache(const HashTableCacheKey& ke
 
   std::lock_guard<std::mutex> hash_table_cache_lock(hash_table_cache_mutex_);
   VLOG(1) << "Storing hash table in cache.";
-  for (const auto& kv : hash_table_cache_) {
+  for (auto& kv : hash_table_cache_) {
     if (std::get<0>(kv) == key) {
+      auto& cached_hash_table = std::get<1>(kv);
+      cached_hash_table = hash_table;
       return;
     }
   }
-  hash_table_cache_.emplace_back(
-      key,
-      HashTableCacheValue{
-          cpu_hash_table_buff_, layout_, entry_count_, emitted_keys_count_});
+  hash_table_cache_.emplace_back(key, hash_table);
 }
 
 std::pair<std::optional<size_t>, size_t>
@@ -1314,7 +990,10 @@ BaselineJoinHashTable::getApproximateTupleCountFromCache(
   std::lock_guard<std::mutex> hash_table_cache_lock(hash_table_cache_mutex_);
   for (const auto& kv : hash_table_cache_) {
     if (kv.first == key) {
-      return std::make_pair(kv.second.entry_count / 2, kv.second.emitted_keys_count);
+      const auto hash_tables_for_device = kv.second;
+      CHECK(hash_tables_for_device);
+      return std::make_pair(hash_tables_for_device->getEntryCount() / 2,
+                            hash_tables_for_device->getEmittedKeysCount());
     }
   }
   return std::make_pair(std::nullopt, 0);
@@ -1325,28 +1004,9 @@ bool BaselineJoinHashTable::isBitwiseEq() const {
 }
 
 void BaselineJoinHashTable::freeHashBufferMemory() {
-#ifdef HAVE_CUDA
-  freeHashBufferGpuMemory();
-#endif
-  freeHashBufferCpuMemory();
-}
-
-void BaselineJoinHashTable::freeHashBufferGpuMemory() {
-#ifdef HAVE_CUDA
-  auto& data_mgr = catalog_->getDataMgr();
-  for (auto& buf : gpu_hash_table_buff_) {
-    if (buf) {
-      CudaAllocator::freeGpuAbstractBuffer(&data_mgr, buf);
-      buf = nullptr;
-    }
-  }
-#else
-  CHECK(false);
-#endif  // HAVE_CUDA
-}
-
-void BaselineJoinHashTable::freeHashBufferCpuMemory() {
-  cpu_hash_table_buff_.reset();
+  std::vector<std::shared_ptr<BaselineHashTable>> empty_device_vector(
+      hash_tables_for_device_.size());
+  hash_tables_for_device_.swap(empty_device_vector);
 }
 
 std::map<std::vector<ChunkKey>, JoinHashTableInterface::HashType>
@@ -1373,4 +1033,9 @@ std::pair<JoinHashTableInterface::HashType, bool> HashTypeCache::get(
     return {JoinHashTableInterface::HashType::OneToOne, false};
   }
   return {it->second, true};
+}
+
+void HashTypeCache::clear() {
+  std::lock_guard<std::mutex> hash_type_cache_lock(hash_type_cache_mutex_);
+  hash_type_cache_.clear();
 }

@@ -19,12 +19,12 @@
 #include "QueryEngine/CodeGenerator.h"
 #include "QueryEngine/Execute.h"
 #include "QueryEngine/ExpressionRewrite.h"
+#include "QueryEngine/JoinHashTable/BaselineHashTableBuilder.h"
 #include "QueryEngine/JoinHashTable/HashJoinKeyHandlers.h"
 #include "QueryEngine/JoinHashTable/JoinHashTableGpuUtils.h"
 #include "QueryEngine/JoinHashTable/JoinHashTableInterface.h"
 
-std::map<OverlapsJoinHashTable::HashTableCacheKey, double>
-    OverlapsJoinHashTable::auto_tuner_cache_;
+std::map<HashTableCacheKey, double> OverlapsJoinHashTable::auto_tuner_cache_;
 std::mutex OverlapsJoinHashTable::auto_tuner_cache_mutex_;
 
 //! Make hash table from an in-flight SQL query's parse tree etc.
@@ -90,7 +90,7 @@ std::shared_ptr<OverlapsJoinHashTable> OverlapsJoinHashTable::getInstance(
                                                                  device_count);
   join_hash_table->checkHashJoinReplicationConstraint(getInnerTableId(inner_outer_pairs));
   try {
-    join_hash_table->reify();
+    join_hash_table->reify(layout);
   } catch (const HashJoinFail& e) {
     throw HashJoinFail(std::string("Could not build a 1-to-1 correspondence for columns "
                                    "involved in equijoin | ") +
@@ -115,9 +115,8 @@ void OverlapsJoinHashTable::reifyWithLayout(
     const JoinHashTableInterface::HashType layout) {
   auto timer = DEBUG_TIMER(__func__);
   CHECK(layoutRequiresAdditionalBuffers(layout));
-  layout_ = layout;
   const auto& query_info = get_inner_query_info(getInnerTableId(), query_infos_).info;
-  VLOG(1) << "Reify with layout " << getHashTypeString(layout_)
+  VLOG(1) << "Reify with layout " << getHashTypeString(layout)
           << "for table_id: " << getInnerTableId();
   if (query_info.fragments.empty()) {
     return;
@@ -502,6 +501,83 @@ size_t OverlapsJoinHashTable::getKeyComponentCount() const {
   return bucket_sizes_for_dimension_.size();
 }
 
+void OverlapsJoinHashTable::reifyForDevice(const ColumnsForDevice& columns_for_device,
+                                           const JoinHashTableInterface::HashType layout,
+                                           const int device_id,
+                                           const logger::ThreadId parent_thread_id) {
+  DEBUG_TIMER_NEW_THREAD(parent_thread_id);
+  const auto effective_memory_level = getEffectiveMemoryLevel(inner_outer_pairs_);
+  const auto err = initHashTableForDevice(columns_for_device.join_columns,
+                                          columns_for_device.join_column_types,
+                                          columns_for_device.join_buckets,
+                                          layout,
+                                          effective_memory_level,
+                                          device_id);
+  if (err) {
+    switch (err) {
+      case ERR_FAILED_TO_FETCH_COLUMN:
+        throw FailedToFetchColumn();
+      case ERR_FAILED_TO_JOIN_ON_VIRTUAL_COLUMN:
+        throw FailedToJoinOnVirtualColumn();
+      default:
+        throw HashJoinFail(
+            std::string("Unrecognized error when initializing baseline hash table (") +
+            std::to_string(err) + std::string(")"));
+    }
+  }
+}
+
+int OverlapsJoinHashTable::initHashTableForDevice(
+    const std::vector<JoinColumn>& join_columns,
+    const std::vector<JoinColumnTypeInfo>& join_column_types,
+    const std::vector<JoinBucketInfo>& join_buckets,
+    const JoinHashTableInterface::HashType layout,
+    const Data_Namespace::MemoryLevel effective_memory_level,
+    const int device_id) {
+  auto timer = DEBUG_TIMER(__func__);
+  CHECK_EQ(getKeyComponentWidth(), size_t(8));
+  CHECK(layoutRequiresAdditionalBuffers(layout));
+
+  if (effective_memory_level == Data_Namespace::MemoryLevel::CPU_LEVEL) {
+    return initHashTableOnCpu(join_columns, join_column_types, join_buckets, layout);
+  } else {
+    int err = 0;
+    // TODO(adb): 4 byte keys
+
+#ifdef HAVE_CUDA
+    BaselineJoinHashTableBuilder builder(catalog_);
+
+    auto& data_mgr = catalog_->getDataMgr();
+    CudaAllocator allocator(&data_mgr, device_id);
+    auto join_columns_gpu =
+        transfer_vector_of_flat_objects_to_gpu(join_columns, allocator);
+    CHECK_EQ(join_columns.size(), 1u);
+    CHECK(!join_buckets.empty());
+    auto& bucket_sizes_for_dimension = join_buckets[0].bucket_sizes_for_dimension;
+    auto bucket_sizes_gpu =
+        transfer_vector_of_flat_objects_to_gpu(bucket_sizes_for_dimension, allocator);
+    const auto key_handler = OverlapsKeyHandler(
+        bucket_sizes_for_dimension.size(), join_columns_gpu, bucket_sizes_gpu);
+
+    err = builder.initHashTableOnGpu(&key_handler,
+                                     join_columns,
+                                     layout,
+                                     getKeyComponentWidth(),
+                                     getKeyComponentCount(),
+                                     entry_count_,
+                                     emitted_keys_count_,
+                                     device_id,
+                                     block_size_,
+                                     grid_size_);
+    CHECK_LT(size_t(device_id), hash_tables_for_device_.size());
+    hash_tables_for_device_[device_id] = builder.getHashTable();
+#else
+    UNREACHABLE();
+#endif
+    return err;
+  }
+}
+
 int OverlapsJoinHashTable::initHashTableOnCpu(
     const std::vector<JoinColumn>& join_columns,
     const std::vector<JoinColumnTypeInfo>& join_column_types,
@@ -515,275 +591,43 @@ int OverlapsJoinHashTable::initHashTableOnCpu(
                               composite_key_info.cache_key_chunks,
                               condition_->get_optype(),
                               overlaps_hashjoin_bucket_threshold_};
-  initHashTableOnCpuFromCache(cache_key);
-  if (cpu_hash_table_buff_) {
+
+  if (auto hash_table = initHashTableOnCpuFromCache(cache_key)) {
     // See if a hash table of a different layout was returned.
     // If it was OneToMany, we can reuse it on ManyToMany.
-    if (layout != layout_) {
-      if (layout_ == JoinHashTableInterface::HashType::OneToMany &&
-          layout == JoinHashTableInterface::HashType::ManyToMany) {
-        layout_ = JoinHashTableInterface::HashType::ManyToMany;
-      }
+    if (layout == JoinHashTableInterface::HashType::ManyToMany &&
+        hash_table->getLayout() == JoinHashTableInterface::HashType::OneToMany) {
+      // use the cached hash table
+      layout_override_ = JoinHashTableInterface::HashType::ManyToMany;
+      CHECK_GT(hash_tables_for_device_.size(), size_t(0));
+      hash_tables_for_device_[0] = hash_table;
+      return 0;
     }
-    return 0;
   }
   CHECK(layoutRequiresAdditionalBuffers(layout));
-  const auto key_component_width = getKeyComponentWidth();
   const auto key_component_count = join_bucket_info[0].bucket_sizes_for_dimension.size();
-  const auto entry_size = key_component_count * key_component_width;
-  const auto keys_for_all_rows = emitted_keys_count_;
-  const size_t one_to_many_hash_entries = 2 * entry_count_ + keys_for_all_rows;
-  const size_t hash_table_size =
-      calculateHashTableSize(join_bucket_info[0].bucket_sizes_for_dimension.size(),
-                             emitted_keys_count_,
-                             entry_count_);
 
-  VLOG(1) << "Initializing CPU Overlaps Join Hash Table with " << entry_count_
-          << " hash entries and " << one_to_many_hash_entries
-          << " entries in the one to many buffer";
-  VLOG(1) << "Total hash table size: " << hash_table_size << " Bytes";
-
-  cpu_hash_table_buff_.reset(new std::vector<int8_t>(hash_table_size));
-  int thread_count = cpu_threads();
-  std::vector<std::future<void>> init_cpu_buff_threads;
-  for (int thread_idx = 0; thread_idx < thread_count; ++thread_idx) {
-    init_cpu_buff_threads.emplace_back(std::async(
-        std::launch::async,
-        [this, key_component_count, key_component_width, thread_idx, thread_count] {
-          switch (key_component_width) {
-            case 4:
-              init_baseline_hash_join_buff_32(&(*cpu_hash_table_buff_)[0],
-                                              entry_count_,
-                                              key_component_count,
-                                              false,
-                                              -1,
-                                              thread_idx,
-                                              thread_count);
-              break;
-            case 8:
-              init_baseline_hash_join_buff_64(&(*cpu_hash_table_buff_)[0],
-                                              entry_count_,
-                                              key_component_count,
-                                              false,
-                                              -1,
-                                              thread_idx,
-                                              thread_count);
-              break;
-            default:
-              CHECK(false);
-          }
-        }));
-  }
-  for (auto& child : init_cpu_buff_threads) {
-    child.get();
-  }
-  std::vector<std::future<int>> fill_cpu_buff_threads;
-  for (int thread_idx = 0; thread_idx < thread_count; ++thread_idx) {
-    fill_cpu_buff_threads.emplace_back(std::async(
-        std::launch::async,
-        [this,
-         &join_columns,
-         &join_bucket_info,
-         key_component_count,
-         key_component_width,
-         thread_idx,
-         thread_count] {
-          switch (key_component_width) {
-            case 4: {
-              const auto key_handler = OverlapsKeyHandler(
-                  key_component_count,
-                  &join_columns[0],
-                  join_bucket_info[0].bucket_sizes_for_dimension.data());
-              return overlaps_fill_baseline_hash_join_buff_32(&(*cpu_hash_table_buff_)[0],
-                                                              entry_count_,
-                                                              -1,
-                                                              key_component_count,
-                                                              false,
-                                                              &key_handler,
-                                                              join_columns[0].num_elems,
-                                                              thread_idx,
-                                                              thread_count);
-            }
-            case 8: {
-              const auto key_handler = OverlapsKeyHandler(
-                  key_component_count,
-                  &join_columns[0],
-                  join_bucket_info[0].bucket_sizes_for_dimension.data());
-              return overlaps_fill_baseline_hash_join_buff_64(&(*cpu_hash_table_buff_)[0],
-                                                              entry_count_,
-                                                              -1,
-                                                              key_component_count,
-                                                              false,
-                                                              &key_handler,
-                                                              join_columns[0].num_elems,
-                                                              thread_idx,
-                                                              thread_count);
-            }
-            default:
-              CHECK(false);
-          }
-          return -1;
-        }));
-  }
-  int err = 0;
-  for (auto& child : fill_cpu_buff_threads) {
-    int partial_err = child.get();
-    if (partial_err) {
-      err = partial_err;
-    }
-  }
-  if (err) {
-    cpu_hash_table_buff_.reset();
-    return err;
-  }
-  auto one_to_many_buff =
-      reinterpret_cast<int32_t*>(&(*cpu_hash_table_buff_)[0] + entry_count_ * entry_size);
-  init_hash_join_buff(one_to_many_buff, entry_count_, -1, 0, 1);
-  switch (key_component_width) {
-    case 4: {
-      const auto composite_key_dict =
-          reinterpret_cast<int32_t*>(&(*cpu_hash_table_buff_)[0]);
-      fill_one_to_many_baseline_hash_table_32(one_to_many_buff,
-                                              composite_key_dict,
-                                              entry_count_,
-                                              -1,
-                                              key_component_count,
+  const auto key_handler =
+      OverlapsKeyHandler(key_component_count,
+                         &join_columns[0],
+                         join_bucket_info[0].bucket_sizes_for_dimension.data());
+  BaselineJoinHashTableBuilder builder(catalog_);
+  const auto err = builder.initHashTableOnCpu(&key_handler,
+                                              composite_key_info,
                                               join_columns,
                                               join_column_types,
                                               join_bucket_info,
-                                              composite_key_info.sd_inner_proxy_per_key,
-                                              composite_key_info.sd_outer_proxy_per_key,
-                                              thread_count);
-      break;
-    }
-    case 8: {
-      const auto composite_key_dict =
-          reinterpret_cast<int64_t*>(&(*cpu_hash_table_buff_)[0]);
-      fill_one_to_many_baseline_hash_table_64(one_to_many_buff,
-                                              composite_key_dict,
                                               entry_count_,
-                                              -1,
-                                              key_component_count,
-                                              join_columns,
-                                              join_column_types,
-                                              join_bucket_info,
-                                              composite_key_info.sd_inner_proxy_per_key,
-                                              composite_key_info.sd_outer_proxy_per_key,
-                                              thread_count);
-      break;
-    }
-    default:
-      CHECK(false);
-  }
+                                              emitted_keys_count_,
+                                              layout,
+                                              getKeyComponentWidth(),
+                                              getKeyComponentCount());
+  CHECK(!hash_tables_for_device_.empty());
+  hash_tables_for_device_[0] = builder.getHashTable();
+
   if (!err && getInnerTableId() > 0) {
-    putHashTableOnCpuToCache(cache_key);
+    putHashTableOnCpuToCache(cache_key, hash_tables_for_device_[0]);
   }
-  return err;
-}
-
-int OverlapsJoinHashTable::initHashTableOnGpu(
-    const std::vector<JoinColumn>& join_columns,
-    const std::vector<JoinColumnTypeInfo>& join_column_types,
-    const std::vector<JoinBucketInfo>& join_bucket_info,
-    const JoinHashTableInterface::HashType layout,
-    const size_t key_component_width,
-    const size_t key_component_count,
-    const int device_id) {
-  auto timer = DEBUG_TIMER(__func__);
-  int err = 0;
-  // TODO(adb): 4 byte keys
-  CHECK_EQ(key_component_width, size_t(8));
-  CHECK(layoutRequiresAdditionalBuffers(layout));
-#ifdef HAVE_CUDA
-  const auto catalog = executor_->getCatalog();
-  auto& data_mgr = catalog->getDataMgr();
-  CudaAllocator allocator(&data_mgr, device_id);
-  auto dev_err_buff = reinterpret_cast<CUdeviceptr>(allocator.alloc(sizeof(int)));
-  copy_to_gpu(&data_mgr, dev_err_buff, &err, sizeof(err), device_id);
-  switch (key_component_width) {
-    case 4:
-      init_baseline_hash_join_buff_on_device_32(
-          reinterpret_cast<int8_t*>(gpu_hash_table_buff_[device_id]->getMemoryPtr()),
-          entry_count_,
-          key_component_count,
-          false,
-          -1,
-          executor_->blockSize(),
-          executor_->gridSize());
-      break;
-    case 8:
-      init_baseline_hash_join_buff_on_device_64(
-          reinterpret_cast<int8_t*>(gpu_hash_table_buff_[device_id]->getMemoryPtr()),
-          entry_count_,
-          key_component_count,
-          false,
-          -1,
-          executor_->blockSize(),
-          executor_->gridSize());
-      break;
-    default:
-      CHECK(false);
-  }
-  auto join_columns_gpu = transfer_vector_of_flat_objects_to_gpu(join_columns, allocator);
-  auto hash_buff = gpu_hash_table_buff_[device_id]->getMemoryPtr();
-  CHECK_EQ(join_columns.size(), 1u);
-  auto& bucket_sizes_for_dimension = join_bucket_info[0].bucket_sizes_for_dimension;
-  auto bucket_sizes_gpu =
-      transfer_vector_of_flat_objects_to_gpu(bucket_sizes_for_dimension, allocator);
-  const auto key_handler = OverlapsKeyHandler(
-      bucket_sizes_for_dimension.size(), join_columns_gpu, bucket_sizes_gpu);
-  const auto key_handler_gpu = transfer_flat_object_to_gpu(key_handler, allocator);
-  switch (key_component_width) {
-    case 8: {
-      overlaps_fill_baseline_hash_join_buff_on_device_64(
-          hash_buff,
-          entry_count_,
-          -1,
-          key_component_count,
-          false,
-          reinterpret_cast<int*>(dev_err_buff),
-          key_handler_gpu,
-          join_columns.front().num_elems,
-          executor_->blockSize(),
-          executor_->gridSize());
-      copy_from_gpu(&data_mgr, &err, dev_err_buff, sizeof(err), device_id);
-      break;
-    }
-    default:
-      UNREACHABLE();
-  }
-  if (err) {
-    return err;
-  }
-  const auto entry_size = key_component_count * key_component_width;
-  auto one_to_many_buff = reinterpret_cast<int32_t*>(
-      gpu_hash_table_buff_[device_id]->getMemoryPtr() + entry_count_ * entry_size);
-  switch (key_component_width) {
-    case 8: {
-      const auto composite_key_dict =
-          reinterpret_cast<int64_t*>(gpu_hash_table_buff_[device_id]->getMemoryPtr());
-      init_hash_join_buff_on_device(one_to_many_buff,
-                                    entry_count_,
-                                    -1,
-                                    executor_->blockSize(),
-                                    executor_->gridSize());
-      overlaps_fill_one_to_many_baseline_hash_table_on_device_64(
-          one_to_many_buff,
-          composite_key_dict,
-          entry_count_,
-          -1,
-          key_handler_gpu,
-          join_columns.front().num_elems,
-          executor_->blockSize(),
-          executor_->gridSize());
-      break;
-    }
-    default:
-      UNREACHABLE();
-  }
-#else
-  UNREACHABLE();
-#endif
   return err;
 }
 
@@ -871,7 +715,9 @@ std::vector<llvm::Value*> OverlapsJoinHashTable::codegenManyKey(
   AUTOMATIC_IR_METADATA(executor_->cgen_state_.get());
   const auto key_component_width = getKeyComponentWidth();
   CHECK(key_component_width == 4 || key_component_width == 8);
-  CHECK(layout_ == JoinHashTableInterface::HashType::ManyToMany);
+  auto hash_table = getHashTableForDevice(size_t(0));
+  CHECK(hash_table);
+  CHECK(getHashType() == JoinHashTableInterface::HashType::ManyToMany);
 
   VLOG(1) << "Performing codgen for ManyToMany";
   const auto& inner_outer_pair = inner_outer_pairs_[0];

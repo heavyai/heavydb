@@ -119,8 +119,11 @@ class JoinHashTableInterface {
 
   virtual HashType getHashType() const noexcept = 0;
 
-  virtual bool layoutRequiresAdditionalBuffers(
-      JoinHashTableInterface::HashType layout) const noexcept = 0;
+  static bool layoutRequiresAdditionalBuffers(
+      JoinHashTableInterface::HashType layout) noexcept {
+    return (layout == JoinHashTableInterface::HashType::ManyToMany ||
+            layout == JoinHashTableInterface::HashType::OneToMany);
+  }
 
   static std::string getHashTypeString(HashType ht) noexcept {
     const char* HashTypeStrings[3] = {"OneToOne", "OneToMany", "ManyToMany"};
@@ -204,7 +207,6 @@ class JoinHashTableInterface {
       const int device_count,
       ColumnCacheMap& column_cache,
       Executor* executor);
-
 };  // class JoinHashTableInterface
 
 std::ostream& operator<<(std::ostream& os, const DecodedJoinHashBufferEntry& e);

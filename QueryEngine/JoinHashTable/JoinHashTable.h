@@ -223,12 +223,6 @@ class JoinHashTable : public JoinHashTableInterface {
 
   size_t getComponentBufferSize() const noexcept;
 
-  bool layoutRequiresAdditionalBuffers(JoinHashTableInterface::HashType layout) const
-      noexcept override {
-    return (layout == JoinHashTableInterface::HashType::ManyToMany ||
-            layout == JoinHashTableInterface::HashType::OneToMany);
-  };
-
   std::shared_ptr<Analyzer::BinOper> qual_bin_oper_;
   std::shared_ptr<Analyzer::ColumnVar> col_var_;
   const std::vector<InputTableInfo>& query_infos_;

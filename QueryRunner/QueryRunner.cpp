@@ -590,8 +590,7 @@ const std::shared_ptr<std::vector<int32_t>>& QueryRunner::getCachedJoinHashTable
   return JoinHashTable::getCachedHashTable(idx);
 };
 
-const std::shared_ptr<std::vector<int8_t>>& QueryRunner::getCachedBaselineHashTable(
-    size_t idx) {
+const int8_t* QueryRunner::getCachedBaselineHashTable(size_t idx) {
   return BaselineJoinHashTable::getCachedHashTable(idx);
 };
 

@@ -417,15 +417,8 @@ TEST_F(OverlapsTest, EmptyPolyPolyJoin) {
 }
 
 int main(int argc, char* argv[]) {
-  testing::InitGoogleTest(&argc, argv);
   TestHelpers::init_logger_stderr_only(argc, argv);
-
-  logger::LogOptions log_options(argv[0]);
-
-  log_options.severity_ = logger::Severity::FATAL;
-  // log_options.severity_clog_ = logger::DEBUG4;
-  log_options.set_options();
-  logger::init(log_options);
+  testing::InitGoogleTest(&argc, argv);
 
   QR::init(BASE_PATH);
 
