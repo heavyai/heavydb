@@ -1,0 +1,9 @@
+Class foreign_storage::SingleFileReader
+=======================================
+
+.. doxygenclass:: foreign_storage::SingleFileReader
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

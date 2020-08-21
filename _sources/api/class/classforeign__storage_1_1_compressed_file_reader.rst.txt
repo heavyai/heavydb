@@ -1,0 +1,9 @@
+Class foreign_storage::CompressedFileReader
+===========================================
+
+.. doxygenclass:: foreign_storage::CompressedFileReader
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:
