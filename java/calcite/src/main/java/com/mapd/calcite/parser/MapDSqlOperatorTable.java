@@ -1740,48 +1740,11 @@ public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
               SqlKind.OTHER_FUNCTION,
               null,
               null,
-              OperandTypes.family(toSqlSignature(sig)),
+              OperandTypes.family(sig.toSqlSignature()),
               sig.isRowUdf() ? SqlFunctionCategory.SYSTEM
                              : SqlFunctionCategory.USER_DEFINED_TABLE_FUNCTION);
       isRowUdf = sig.isRowUdf();
-      if (isRowUdf) {
-        ret = toSqlTypeName(sig.getRet());
-      } else {
-        ret = null;
-      }
-    }
-
-    private static java.util.List<SqlTypeFamily> toSqlSignature(
-            final ExtensionFunction sig) {
-      java.util.List<SqlTypeFamily> sql_sig = new java.util.ArrayList<SqlTypeFamily>();
-      boolean isRowUdf = sig.isRowUdf();
-      for (int arg_idx = 0; arg_idx < sig.getArgs().size(); ++arg_idx) {
-        final ExtensionFunction.ExtArgumentType arg_type = sig.getArgs().get(arg_idx);
-        if (isRowUdf) {
-          sql_sig.add(toSqlTypeName(arg_type).getFamily());
-          if (isPointerType(arg_type)) {
-            ++arg_idx;
-          }
-        } else {
-          if (isPointerType(arg_type)) {
-            /* TODO: eliminate using getValueType */
-            sql_sig.add(toSqlTypeName(getValueType(arg_type)).getFamily());
-          } else {
-            sql_sig.add(toSqlTypeName(arg_type).getFamily());
-          }
-        }
-      }
-      return sql_sig;
-    }
-
-    private static boolean isPointerType(final ExtensionFunction.ExtArgumentType type) {
-      return type == ExtensionFunction.ExtArgumentType.PInt8
-              || type == ExtensionFunction.ExtArgumentType.PInt16
-              || type == ExtensionFunction.ExtArgumentType.PInt32
-              || type == ExtensionFunction.ExtArgumentType.PInt64
-              || type == ExtensionFunction.ExtArgumentType.PFloat
-              || type == ExtensionFunction.ExtArgumentType.PDouble
-              || type == ExtensionFunction.ExtArgumentType.PBool;
+      ret = sig.getSqlRet();
     }
 
     @Override
@@ -1794,74 +1757,6 @@ public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
         assert opBinding.getOperandCount() == 2;
         return opBinding.getCursorOperand(0);
       }
-    }
-
-    private static ExtensionFunction.ExtArgumentType getValueType(
-            final ExtensionFunction.ExtArgumentType type) {
-      switch (type) {
-        case PInt8:
-          return ExtensionFunction.ExtArgumentType.Int8;
-        case PInt16:
-          return ExtensionFunction.ExtArgumentType.Int16;
-        case PInt32:
-          return ExtensionFunction.ExtArgumentType.Int32;
-        case PInt64:
-          return ExtensionFunction.ExtArgumentType.Int64;
-        case PFloat:
-          return ExtensionFunction.ExtArgumentType.Float;
-        case PDouble:
-          return ExtensionFunction.ExtArgumentType.Double;
-        case PBool:
-          return ExtensionFunction.ExtArgumentType.Bool;
-      }
-      MAPDLOGGER.error("getValueType: no value for type " + type);
-      assert false;
-      return null;
-    }
-
-    private static SqlTypeName toSqlTypeName(
-            final ExtensionFunction.ExtArgumentType type) {
-      switch (type) {
-        case Bool:
-          return SqlTypeName.BOOLEAN;
-        case Int8:
-          return SqlTypeName.TINYINT;
-        case Int16:
-          return SqlTypeName.SMALLINT;
-        case Int32:
-          return SqlTypeName.INTEGER;
-        case Int64:
-          return SqlTypeName.BIGINT;
-        case Float:
-          return SqlTypeName.FLOAT;
-        case Double:
-          return SqlTypeName.DOUBLE;
-        case PInt8:
-        case PInt16:
-        case PInt32:
-        case PInt64:
-        case PFloat:
-        case PDouble:
-        case PBool:
-        case ArrayInt8:
-        case ArrayInt16:
-        case ArrayInt32:
-        case ArrayInt64:
-        case ArrayFloat:
-        case ArrayDouble:
-        case ArrayBool:
-          return SqlTypeName.ARRAY;
-        case GeoPoint:
-        case GeoLineString:
-        case GeoPolygon:
-        case GeoMultiPolygon:
-          return SqlTypeName.GEOMETRY;
-        case Cursor:
-          return SqlTypeName.CURSOR;
-      }
-      MAPDLOGGER.error("toSqlTypeName: unknown type " + type);
-      assert false;
-      return null;
     }
 
     private final boolean isRowUdf;
