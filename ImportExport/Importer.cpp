@@ -851,8 +851,7 @@ size_t TypedImportBuffer::add_arrow_values(const ColumnDescriptor* cd,
                                            const bool exact_type_match,
                                            const ArraySliceRange& slice_range,
                                            BadRowsTracker* const bad_rows_tracker) {
-  const auto type = cd->columnType.is_decimal() ? decimal_to_int_type(cd->columnType)
-                                                : cd->columnType.get_type();
+  const auto type = cd->columnType.get_type();
   if (cd->columnType.get_notnull()) {
     // We can't have any null values for this column; to have them is an error
     arrow_throw_if(col.null_count() > 0, "NULL not allowed for column " + cd->columnName);
@@ -884,6 +883,8 @@ size_t TypedImportBuffer::add_arrow_values(const ColumnDescriptor* cd,
       return convert_arrow_val_to_import_buffer(
           cd, col, *int_buffer_, slice_range, bad_rows_tracker);
     case kBIGINT:
+    case kNUMERIC:
+    case kDECIMAL:
       if (exact_type_match) {
         arrow_throw_if(col.type_id() != Type::INT64, "Expected int64 type");
       }

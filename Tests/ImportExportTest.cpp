@@ -908,7 +908,7 @@ const char* create_table_trips = R"(
       dropoff_datetime        TIMESTAMP,
       passenger_count         SMALLINT,
       trip_time_in_secs       INTEGER,
-      trip_distance           DECIMAL(14,2),
+      trip_distance           DECIMAL(5,2),
       pickup_longitude        DECIMAL(14,2),
       pickup_latitude         DECIMAL(14,2),
       dropoff_longitude       DECIMAL(14,2),
