@@ -65,7 +65,7 @@
             
             
               <div class="version">
-                5.4.0dev 1f443d8
+                5.4.0dev d2351c5
               </div>
             
           
@@ -326,6 +326,7 @@
 <li class="toctree-l2"><a class="reference internal" href="class_arrow_result_set.html">Class ArrowResultSet</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_arrow_result_set_converter.html">Class ArrowResultSetConverter</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_arrow_result_set_row_iterator.html">Class ArrowResultSetRowIterator</a></li>
+<li class="toctree-l2"><a class="reference internal" href="class_automatic_i_r_metadata_guard.html">Class AutomaticIRMetadataGuard</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_baseline_join_hash_table.html">Class BaselineJoinHashTable</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_binary_operator.html">Class BinaryOperator</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_blosc_compressor.html">Class BloscCompressor</a></li>
@@ -1076,6 +1077,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_arrow_result_set_converter_1_1_column_builder.html">Struct ArrowResultSetConverter::ColumnBuilder</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_arrow_result_set_converter_1_1_serialized_arrow_output.html">Struct ArrowResultSetConverter::SerializedArrowOutput</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_auth_metadata.html">Struct AuthMetadata</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/struct_automatic_i_r_metadata_guard_1_1_instruction_info.html">Struct AutomaticIRMetadataGuard::InstructionInfo</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_baseline_join_hash_table_1_1_columns_for_device.html">Struct BaselineJoinHashTable::ColumnsForDevice</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_baseline_join_hash_table_1_1_composite_key_info.html">Struct BaselineJoinHashTable::CompositeKeyInfo</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_baseline_join_hash_table_1_1_hash_table_cache_key.html">Struct BaselineJoinHashTable::HashTableCacheKey</a></li>
@@ -1365,6 +1367,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../struct/structquery__state_1_1_quote_formatter.html">Struct query_state::QuoteFormatter</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structquery__state_1_1_session_data.html">Struct query_state::SessionData</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structquery__state_1_1_session_info_formatter.html">Struct query_state::SessionInfoFormatter</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/structshared_1_1_div_u_mod.html">Struct shared::DivUMod</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structshared_1_1_print_container.html">Struct shared::PrintContainer</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structshared_1_1is__std__container.html">Struct shared::is_std_container</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structshared_1_1is__std__container_3_01std_1_1deque_3_01_t_00_01_a_01_4_01_4.html">Struct shared::is_std_container&lt; std::deque&lt; T, A &gt; &gt;</a></li>
@@ -1503,18 +1506,13 @@
 <dd><div class="breathe-sectiondef docutils container">
 <p class="breathe-sectiondef-title rubric">Public Functions</p>
 <dl class="function">
-<dt id="_CPPv4N16RelTableFunction16RelTableFunctionERKNSt6stringENSt10shared_ptrIK10RelAlgNodeEERNSt6vectorINSt6stringEEENSt6vectorIPK3RexEERNSt6vectorINSt10unique_ptrIK9RexScalarEEEERNSt6vectorINSt10unique_ptrIK9RexScalarEEEE">
-<span id="_CPPv3N16RelTableFunction16RelTableFunctionERKNSt6stringENSt10shared_ptrIK10RelAlgNodeEERNSt6vectorINSt6stringEEENSt6vectorIPK3RexEERNSt6vectorINSt10unique_ptrIK9RexScalarEEEERNSt6vectorINSt10unique_ptrIK9RexScalarEEEE"></span><span id="_CPPv2N16RelTableFunction16RelTableFunctionERKNSt6stringENSt10shared_ptrIK10RelAlgNodeEERNSt6vectorINSt6stringEEENSt6vectorIPK3RexEERNSt6vectorINSt10unique_ptrIK9RexScalarEEEERNSt6vectorINSt10unique_ptrIK9RexScalarEEEE"></span><span id="RelTableFunction::RelTableFunction__ssCR.std::shared_ptr:RelAlgNodeC:.std::vector:ss:R.std::vector:RexCP:.std::vector:std::unique_ptr:RexScalarC::R.std::vector:std::unique_ptr:RexScalarC::R"></span><span class="target" id="class_rel_table_function_1ac0bd67b9982229b05c6c46de2795a144"></span><code class="sig-name descname">RelTableFunction</code><span class="sig-paren">(</span><em class="property">const</em> std::string &amp;<em>function_name</em>, std::shared_ptr&lt;<em class="property">const</em> <a class="reference internal" href="class_rel_alg_node.html#_CPPv410RelAlgNode" title="RelAlgNode">RelAlgNode</a>&gt; <em>input</em>, std::vector&lt;std::string&gt; &amp;<em>fields</em>, std::vector&lt;<em class="property">const</em> <a class="reference internal" href="class_rex.html#_CPPv43Rex" title="Rex">Rex</a> *&gt; <em>col_inputs</em>, std::vector&lt;std::unique_ptr&lt;<em class="property">const</em> <a class="reference internal" href="class_rex_scalar.html#_CPPv49RexScalar" title="RexScalar">RexScalar</a>&gt;&gt; &amp;<em>table_func_inputs</em>, std::vector&lt;std::unique_ptr&lt;<em class="property">const</em> <a class="reference internal" href="class_rex_scalar.html#_CPPv49RexScalar" title="RexScalar">RexScalar</a>&gt;&gt; &amp;<em>target_exprs</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N16RelTableFunction16RelTableFunctionERKNSt6stringENSt10shared_ptrIK10RelAlgNodeEERNSt6vectorINSt6stringEEENSt6vectorIPK3RexEERNSt6vectorINSt10unique_ptrIK9RexScalarEEEERNSt6vectorINSt10unique_ptrIK9RexScalarEEEE" title="Permalink to this definition">¶</a><br /></dt>
-<dd></dd></dl>
-
-<dl class="function">
 <dt id="_CPPv4N16RelTableFunction16RelTableFunctionERKNSt6stringE12RelAlgInputsRNSt6vectorINSt6stringEEENSt6vectorIPK3RexEERNSt6vectorINSt10unique_ptrIK9RexScalarEEEERNSt6vectorINSt10unique_ptrIK9RexScalarEEEE">
 <span id="_CPPv3N16RelTableFunction16RelTableFunctionERKNSt6stringE12RelAlgInputsRNSt6vectorINSt6stringEEENSt6vectorIPK3RexEERNSt6vectorINSt10unique_ptrIK9RexScalarEEEERNSt6vectorINSt10unique_ptrIK9RexScalarEEEE"></span><span id="_CPPv2N16RelTableFunction16RelTableFunctionERKNSt6stringE12RelAlgInputsRNSt6vectorINSt6stringEEENSt6vectorIPK3RexEERNSt6vectorINSt10unique_ptrIK9RexScalarEEEERNSt6vectorINSt10unique_ptrIK9RexScalarEEEE"></span><span id="RelTableFunction::RelTableFunction__ssCR.RelAlgInputs.std::vector:ss:R.std::vector:RexCP:.std::vector:std::unique_ptr:RexScalarC::R.std::vector:std::unique_ptr:RexScalarC::R"></span><span class="target" id="class_rel_table_function_1ac1617b492ce24c543773e865d9c1b0ac"></span><code class="sig-name descname">RelTableFunction</code><span class="sig-paren">(</span><em class="property">const</em> std::string &amp;<em>function_name</em>, RelAlgInputs <em>inputs</em>, std::vector&lt;std::string&gt; &amp;<em>fields</em>, std::vector&lt;<em class="property">const</em> <a class="reference internal" href="class_rex.html#_CPPv43Rex" title="Rex">Rex</a> *&gt; <em>col_inputs</em>, std::vector&lt;std::unique_ptr&lt;<em class="property">const</em> <a class="reference internal" href="class_rex_scalar.html#_CPPv49RexScalar" title="RexScalar">RexScalar</a>&gt;&gt; &amp;<em>table_func_inputs</em>, std::vector&lt;std::unique_ptr&lt;<em class="property">const</em> <a class="reference internal" href="class_rex_scalar.html#_CPPv49RexScalar" title="RexScalar">RexScalar</a>&gt;&gt; &amp;<em>target_exprs</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N16RelTableFunction16RelTableFunctionERKNSt6stringE12RelAlgInputsRNSt6vectorINSt6stringEEENSt6vectorIPK3RexEERNSt6vectorINSt10unique_ptrIK9RexScalarEEEERNSt6vectorINSt10unique_ptrIK9RexScalarEEEE" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 <dl class="function">
 <dt id="_CPPv4N16RelTableFunction16RelTableFunctionERK16RelTableFunction">
-<span id="_CPPv3N16RelTableFunction16RelTableFunctionERK16RelTableFunction"></span><span id="_CPPv2N16RelTableFunction16RelTableFunctionERK16RelTableFunction"></span><span id="RelTableFunction::RelTableFunction__RelTableFunctionCR"></span><span class="target" id="class_rel_table_function_1a3f6a8fbe1e560d4292e4fdcf977bb4cc"></span><code class="sig-name descname">RelTableFunction</code><span class="sig-paren">(</span><a class="reference internal" href="#_CPPv4N16RelTableFunction16RelTableFunctionERKNSt6stringENSt10shared_ptrIK10RelAlgNodeEERNSt6vectorINSt6stringEEENSt6vectorIPK3RexEERNSt6vectorINSt10unique_ptrIK9RexScalarEEEERNSt6vectorINSt10unique_ptrIK9RexScalarEEEE" title="RelTableFunction::RelTableFunction">RelTableFunction</a> <em class="property">const</em> &amp;<em>rhs</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N16RelTableFunction16RelTableFunctionERK16RelTableFunction" title="Permalink to this definition">¶</a><br /></dt>
+<span id="_CPPv3N16RelTableFunction16RelTableFunctionERK16RelTableFunction"></span><span id="_CPPv2N16RelTableFunction16RelTableFunctionERK16RelTableFunction"></span><span id="RelTableFunction::RelTableFunction__RelTableFunctionCR"></span><span class="target" id="class_rel_table_function_1a3f6a8fbe1e560d4292e4fdcf977bb4cc"></span><code class="sig-name descname">RelTableFunction</code><span class="sig-paren">(</span><a class="reference internal" href="#_CPPv4N16RelTableFunction16RelTableFunctionERKNSt6stringE12RelAlgInputsRNSt6vectorINSt6stringEEENSt6vectorIPK3RexEERNSt6vectorINSt10unique_ptrIK9RexScalarEEEERNSt6vectorINSt10unique_ptrIK9RexScalarEEEE" title="RelTableFunction::RelTableFunction">RelTableFunction</a> <em class="property">const</em> &amp;<em>rhs</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N16RelTableFunction16RelTableFunctionERK16RelTableFunction" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 <dl class="function">

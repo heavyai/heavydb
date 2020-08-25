@@ -65,7 +65,7 @@
             
             
               <div class="version">
-                5.4.0dev 1f443d8
+                5.4.0dev d2351c5
               </div>
             
           
@@ -326,6 +326,7 @@
 <li class="toctree-l2"><a class="reference internal" href="class_arrow_result_set.html">Class ArrowResultSet</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_arrow_result_set_converter.html">Class ArrowResultSetConverter</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_arrow_result_set_row_iterator.html">Class ArrowResultSetRowIterator</a></li>
+<li class="toctree-l2"><a class="reference internal" href="class_automatic_i_r_metadata_guard.html">Class AutomaticIRMetadataGuard</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_baseline_join_hash_table.html">Class BaselineJoinHashTable</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_binary_operator.html">Class BinaryOperator</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_blosc_compressor.html">Class BloscCompressor</a></li>
@@ -1076,6 +1077,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_arrow_result_set_converter_1_1_column_builder.html">Struct ArrowResultSetConverter::ColumnBuilder</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_arrow_result_set_converter_1_1_serialized_arrow_output.html">Struct ArrowResultSetConverter::SerializedArrowOutput</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_auth_metadata.html">Struct AuthMetadata</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/struct_automatic_i_r_metadata_guard_1_1_instruction_info.html">Struct AutomaticIRMetadataGuard::InstructionInfo</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_baseline_join_hash_table_1_1_columns_for_device.html">Struct BaselineJoinHashTable::ColumnsForDevice</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_baseline_join_hash_table_1_1_composite_key_info.html">Struct BaselineJoinHashTable::CompositeKeyInfo</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_baseline_join_hash_table_1_1_hash_table_cache_key.html">Struct BaselineJoinHashTable::HashTableCacheKey</a></li>
@@ -1365,6 +1367,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../struct/structquery__state_1_1_quote_formatter.html">Struct query_state::QuoteFormatter</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structquery__state_1_1_session_data.html">Struct query_state::SessionData</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structquery__state_1_1_session_info_formatter.html">Struct query_state::SessionInfoFormatter</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/structshared_1_1_div_u_mod.html">Struct shared::DivUMod</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structshared_1_1_print_container.html">Struct shared::PrintContainer</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structshared_1_1is__std__container.html">Struct shared::is_std_container</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structshared_1_1is__std__container_3_01std_1_1deque_3_01_t_00_01_a_01_4_01_4.html">Struct shared::is_std_container&lt; std::deque&lt; T, A &gt; &gt;</a></li>
@@ -2018,6 +2021,11 @@
 <span class="target" id="classcom_1_1omnisci_1_1jdbc_1_1_omni_sci_prepared_statement_1a532ba3cbefeb193289481a66734575b8"></span><code class="sig-name descname">boolean com.omnisci.jdbc.OmniSciPreparedStatement.isSelect()</code></dt>
 <dd></dd></dl>
 
+<dl class="function">
+<dt>
+<span class="target" id="classcom_1_1omnisci_1_1jdbc_1_1_omni_sci_prepared_statement_1a47639716462304c244d213791ed0c0e5"></span><code class="sig-name descname">void com.omnisci.jdbc.OmniSciPreparedStatement.checkClosed()</code></dt>
+<dd></dd></dl>
+
 </div>
 <div class="breathe-sectiondef docutils container">
 <p class="breathe-sectiondef-title rubric">Private Members</p>
@@ -2094,6 +2102,11 @@
 <dl class="member">
 <dt>
 <span class="target" id="classcom_1_1omnisci_1_1jdbc_1_1_omni_sci_prepared_statement_1adbba6ee8b5740573f5265efc10b46b60"></span><code class="sig-name descname">List&lt;TStringRow&gt; com.omnisci.jdbc.OmniSciPreparedStatement.rows = null</code></dt>
+<dd></dd></dl>
+
+<dl class="member">
+<dt>
+<span class="target" id="classcom_1_1omnisci_1_1jdbc_1_1_omni_sci_prepared_statement_1afa0f56b177e1d39a2f2d36820bb8b012"></span><code class="sig-name descname">boolean com.omnisci.jdbc.OmniSciPreparedStatement.isClosed = false</code></dt>
 <dd></dd></dl>
 
 </div>

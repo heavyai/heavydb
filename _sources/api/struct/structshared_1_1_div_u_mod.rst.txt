@@ -1,0 +1,9 @@
+Struct shared::DivUMod
+======================
+
+.. doxygenstruct:: shared::DivUMod
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:
