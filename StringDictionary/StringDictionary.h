@@ -145,6 +145,7 @@ class StringDictionary {
   void increaseHashTableCapacity() noexcept;
   template <class String>
   void increaseHashTableCapacityFromStorageAndMemory(
+      const size_t str_count,
       const size_t storage_high_water_mark,
       const std::vector<String>& input_strings,
       const std::vector<size_t>& string_memory_ids,

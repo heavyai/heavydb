@@ -435,7 +435,8 @@ void StringDictionary::getOrAddBulkParallel(const std::vector<String>& input_str
 
     if (fillRateIsHigh(shadow_str_count)) {
       // resize when more than 50% is full
-      increaseHashTableCapacityFromStorageAndMemory(storage_high_water_mark,
+      increaseHashTableCapacityFromStorageAndMemory(shadow_str_count,
+                                                    storage_high_water_mark,
                                                     input_strings,
                                                     string_memory_ids,
                                                     input_strings_hashes);
@@ -995,16 +996,14 @@ void StringDictionary::increaseHashTableCapacity() noexcept {
   std::vector<int32_t> new_str_ids(string_id_hash_table_.size() * 2, INVALID_STR_ID);
 
   if (materialize_hashes_) {
-    for (size_t i = 0; i < string_id_hash_table_.size(); ++i) {
-      if (string_id_hash_table_[i] != INVALID_STR_ID) {
-        const hash_t hash = hash_cache_[string_id_hash_table_[i]];
-        const uint32_t bucket = computeUniqueBucketWithHash(hash, new_str_ids);
-        new_str_ids[bucket] = string_id_hash_table_[i];
-      }
+    for (size_t i = 0; i != str_count_; ++i) {
+      const hash_t hash = hash_cache_[i];
+      const uint32_t bucket = computeUniqueBucketWithHash(hash, new_str_ids);
+      new_str_ids[bucket] = i;
     }
     hash_cache_.resize(hash_cache_.size() * 2);
   } else {
-    for (size_t i = 0; i < str_count_; ++i) {
+    for (size_t i = 0; i != str_count_; ++i) {
       const auto str = getStringChecked(i);
       const hash_t hash = hash_string(str);
       const uint32_t bucket = computeUniqueBucketWithHash(hash, new_str_ids);
@@ -1016,18 +1015,18 @@ void StringDictionary::increaseHashTableCapacity() noexcept {
 
 template <class String>
 void StringDictionary::increaseHashTableCapacityFromStorageAndMemory(
+    const size_t str_count,  // str_count_ is only persisted strings, so need transient
+                             // shadow count
     const size_t storage_high_water_mark,
     const std::vector<String>& input_strings,
     const std::vector<size_t>& string_memory_ids,
     const std::vector<hash_t>& input_strings_hashes) noexcept {
   std::vector<int32_t> new_str_ids(string_id_hash_table_.size() * 2, INVALID_STR_ID);
   if (materialize_hashes_) {
-    for (size_t i = 0; i < string_id_hash_table_.size(); ++i) {
-      if (string_id_hash_table_[i] != INVALID_STR_ID) {
-        const hash_t hash = hash_cache_[string_id_hash_table_[i]];
-        const uint32_t bucket = computeUniqueBucketWithHash(hash, new_str_ids);
-        new_str_ids[bucket] = string_id_hash_table_[i];
-      }
+    for (size_t i = 0; i != str_count; ++i) {
+      const hash_t hash = hash_cache_[i];
+      const uint32_t bucket = computeUniqueBucketWithHash(hash, new_str_ids);
+      new_str_ids[bucket] = i;
     }
     hash_cache_.resize(hash_cache_.size() * 2);
   } else {
