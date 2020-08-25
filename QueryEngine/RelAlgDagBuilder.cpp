@@ -1180,8 +1180,17 @@ void bind_inputs(const std::vector<std::shared_ptr<RelAlgNode>>& nodes) noexcept
     }
     const auto table_func_node = std::dynamic_pointer_cast<RelTableFunction>(ra_node);
     if (table_func_node) {
-      bind_table_func_to_input(table_func_node.get(),
-                               get_node_output(table_func_node->getInput(0)));
+      /*
+        Collect all inputs from table function input (non-literal)
+        arguments.
+      */
+      RANodeOutput input;
+      input.reserve(table_func_node->inputCount());
+      for (size_t i = 0; i < table_func_node->inputCount(); i++) {
+        auto node_output = get_node_output(table_func_node->getInput(i));
+        input.insert(input.end(), node_output.begin(), node_output.end());
+      }
+      bind_table_func_to_input(table_func_node.get(), input);
     }
   }
 }
@@ -2312,7 +2321,6 @@ class RelAlgDispatcher {
       const rapidjson::Value& table_func_ra,
       RelAlgDagBuilder& root_dag_builder) {
     const auto inputs = getRelAlgInputs(table_func_ra);
-
     const auto& invocation = field(table_func_ra, "invocation");
     CHECK(invocation.IsObject());
 
@@ -2355,7 +2363,8 @@ class RelAlgDispatcher {
 
             // Forward the values from the prior node as RexInputs
             for (size_t i = 0; i < prior_node->size(); i++) {
-              table_func_inputs.emplace_back(std::make_unique<RexAbstractInput>(i));
+              table_func_inputs.emplace_back(
+                  std::make_unique<RexAbstractInput>(col_inputs.size()));
               col_inputs.emplace_back(table_func_inputs.back().get());
             }
             continue;
