@@ -9,4 +9,4 @@ if(ENABLE_KRB5)
   target_link_libraries(omnisql krb5_gss)
 endif()
 
-install(TARGETS omnisql DESTINATION bin)
+install(TARGETS omnisql DESTINATION bin COMPONENT "exe")

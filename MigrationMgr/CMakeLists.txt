@@ -4,5 +4,5 @@ set(migration_mgr_source_files
 
 add_library(MigrationMgr ${migration_mgr_source_files})
 
-target_link_libraries(MigrationMgr Shared QueryEngine)
+target_link_libraries(MigrationMgr Shared QueryEngine ${Boost_LIBRARIES})
 
