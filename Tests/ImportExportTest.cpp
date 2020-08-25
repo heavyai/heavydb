@@ -40,6 +40,7 @@
 #include "QueryEngine/ResultSet.h"
 #include "QueryRunner/QueryRunner.h"
 #include "Shared/geo_types.h"
+#include "Shared/misc.h"
 #include "Shared/scope.h"
 
 #ifndef BASE_PATH
@@ -629,11 +630,9 @@ std::string convert_date_to_string(int64_t d) {
   if (d == std::numeric_limits<int64_t>::min()) {
     return std::string("NULL");
   }
-  const auto date = static_cast<time_t>(d);
-  std::tm tm_struct;
-  gmtime_r(&date, &tm_struct);
-  char buf[11];
-  strftime(buf, 11, "%F", &tm_struct);
+  char buf[16];
+  size_t const len = shared::formatDate(buf, 16, d);
+  CHECK_LE(10u, len) << d;
   return std::string(buf);
 }
 
@@ -833,25 +832,11 @@ class ImportTestTimestamps : public ::testing::Test {
   }
 };
 
-std::string convert_timestamp_to_string(const time_t timeval, const int dimen) {
-  std::tm tm_struct;
-  if (dimen > 0) {
-    auto scale = static_cast<int64_t>(std::pow(10, dimen));
-    auto dv = std::div(static_cast<int64_t>(timeval), scale);
-    auto modulus = (dv.rem + scale) % scale;
-    time_t sec = dv.quot - (dv.quot < 0 && modulus > 0);
-    gmtime_r(&sec, &tm_struct);
-    char buf[21];
-    strftime(buf, 21, "%F %T.", &tm_struct);
-    auto subsecond = std::to_string(modulus);
-    return std::string(buf) + std::string(dimen - subsecond.length(), '0') + subsecond;
-  } else {
-    time_t sec = timeval;
-    gmtime_r(&sec, &tm_struct);
-    char buf[20];
-    strftime(buf, 20, "%F %T", &tm_struct);
-    return std::string(buf);
-  }
+std::string convert_timestamp_to_string(const int64_t timeval, const int dimen) {
+  char buf[32];
+  size_t const len = shared::formatDateTime(buf, 32, timeval, dimen);
+  CHECK_LE(19u + bool(dimen) + dimen, len) << timeval << ' ' << dimen;
+  return buf;
 }
 
 inline void run_mixed_timestamps_test() {

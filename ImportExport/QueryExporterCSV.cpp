@@ -20,6 +20,7 @@
 
 #include <QueryEngine/GroupByAndAggregate.h>
 #include <QueryEngine/ResultSet.h>
+#include "Shared/misc.h"
 
 namespace import_export {
 
@@ -131,11 +132,10 @@ void QueryExporterCSV::exportResults(const std::vector<AggregatedResult>& query_
           if (is_null) {
             outfile_ << copy_params_.null_str;
           } else if (ti.get_type() == kTIME) {
-            auto const t = static_cast<time_t>(int_val);
-            std::tm tm_struct;
-            gmtime_r(&t, &tm_struct);
-            char buf[9];
-            strftime(buf, 9, "%T", &tm_struct);
+            constexpr size_t buf_size = 9;
+            char buf[buf_size];
+            size_t const len = shared::formatHMS(buf, buf_size, int_val);
+            CHECK_EQ(8u, len);  // 8 == strlen("HH:MM:SS")
             outfile_ << buf;
           } else {
             outfile_ << int_val;

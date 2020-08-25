@@ -17,7 +17,7 @@
 #ifndef SHARED_MISC_H
 #define SHARED_MISC_H
 
-#include <ctime>
+#include <cstdint>
 #include <deque>
 #include <list>
 #include <set>
@@ -101,22 +101,46 @@ OSTREAM& operator<<(OSTREAM& os, PrintContainer<CONTAINER> pc) {
 }
 
 // Same as strftime(buf, max, "%F", tm) but guarantees that the year is
-// zero-padded to a minimum length of 4, and may be larger.
-size_t formatDate(char* buf, size_t const max, std::tm const* tm);
+// zero-padded to a minimum length of 4. Return the number of characters
+// written, not including null byte. If max is not large enough, return 0.
+size_t formatDate(char* buf, size_t const max, int64_t const unixtime);
 
 // Same as strftime(buf, max, "%F %T", tm) but guarantees that the year is
-// zero-padded to a minimum length of 4, and may be larger.
-size_t formatDateTime(char* buf, size_t const max, std::tm const* tm);
+// zero-padded to a minimum length of 4. Return the number of characters
+// written, not including null byte. If max is not large enough, return 0.
+// Requirement: 0 <= dimension <= 9.
+size_t formatDateTime(char* buf,
+                      size_t const max,
+                      int64_t const timestamp,
+                      int const dimension);
 
-// Safely write at most max chars (including terminating null byte) to buf
-// of the *tm year. At a minimum it will be 0-padded to 4 characters in length
-// but allows for more digits beyond the year 9999. Like strftime(), the length
-// of the string (not including null type) is returned, or 0 if max was not
-// large enough to hold the string.
-// This function is motivated by the observation that different compilers may write
-// %F and %Y differently. E.g. Day 1 = "0001-01-01" has been output as "1-01-01"
-// on Linux but as "0001-01-01" on Mac.
-size_t formatYear(char* buf, size_t const max, std::tm const* tm);
+// Write unixtime in seconds since epoch as "HH:MM:SS" format.
+size_t formatHMS(char* buf, size_t const max, int64_t const unixtime);
+
+// Result of division where quot is floored and rem is unsigned.
+struct DivUMod {
+  int64_t quot;
+  int64_t rem;
+};
+
+// Requirement: 0 < den
+inline DivUMod divUMod(int64_t num, int64_t den) {
+  DivUMod div{num / den, num % den};
+  if (div.rem < 0) {
+    --div.quot;
+    div.rem += den;
+  }
+  return div;
+}
+
+// Requirement: 0 < den.
+inline uint64_t unsignedMod(int64_t num, int64_t den) {
+  int64_t mod = num % den;
+  if (mod < 0) {
+    mod += den;
+  }
+  return mod;
+}
 
 }  // namespace shared
 

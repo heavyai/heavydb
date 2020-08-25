@@ -24,6 +24,7 @@
 #include <QueryEngine/GroupByAndAggregate.h>
 #include <QueryEngine/ResultSet.h>
 #include <Shared/geo_types.h>
+#include <Shared/misc.h>
 #include <Shared/scope.h>
 
 #include <ogrsf_frmts.h>
@@ -379,11 +380,10 @@ void insert_scalar_column(const ScalarTargetValue* scalar_tv,
       ogr_feature->SetFieldNull(field_index);
     } else if (ti.get_type() == kTIME) {
       CHECK_EQ(field_type, OFTString);
-      auto const t = static_cast<time_t>(int_val);
-      std::tm tm_struct;
-      gmtime_r(&t, &tm_struct);
-      char buf[9];
-      strftime(buf, 9, "%T", &tm_struct);
+      constexpr size_t buf_size = 9;
+      char buf[buf_size];
+      size_t const len = shared::formatHMS(buf, buf_size, int_val);
+      CHECK_EQ(8u, len);  // 8 == strlen("HH:MM:SS")
       ogr_feature->SetField(field_index, buf);
     } else if (is_int64) {
       CHECK_EQ(field_type, OFTInteger64);
@@ -513,11 +513,10 @@ void insert_array_column(const ArrayTargetValue* array_tv,
         if (is_null) {
           string_values.emplace_back("");
         } else {
-          auto const t = static_cast<time_t>(int_val);
-          std::tm tm_struct;
-          gmtime_r(&t, &tm_struct);
-          char buf[9];
-          strftime(buf, 9, "%T", &tm_struct);
+          constexpr size_t buf_size = 9;
+          char buf[buf_size];
+          size_t const len = shared::formatHMS(buf, buf_size, int_val);
+          CHECK_EQ(8u, len);  // 8 == strlen("HH:MM:SS")
           string_values.emplace_back(buf);
         }
       } else if (is_int64) {

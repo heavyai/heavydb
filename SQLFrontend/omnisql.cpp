@@ -427,40 +427,19 @@ std::string scalar_datum_to_string(const TDatum& datum, const TTypeInfo& type_in
     case TDatumType::STR:
       return datum.val.str_val;
     case TDatumType::TIME: {
-      time_t t = static_cast<time_t>(datum.val.int_val);
-      std::tm tm_struct;
-      gmtime_r(&t, &tm_struct);
-      strftime(buf, buf_size, "%T", &tm_struct);
+      size_t const len = shared::formatHMS(buf, buf_size, datum.val.int_val);
+      CHECK_EQ(8u, len);  // 8 == strlen("HH:MM:SS")
       return buf;
     }
     case TDatumType::TIMESTAMP: {
-      std::tm tm_struct;
-      if (type_info.precision > 0) {
-        auto scale = static_cast<int64_t>(std::pow(10, type_info.precision));
-        time_t const sec = static_cast<time_t>(floor_div(datum.val.int_val, scale));
-        int const frac = unsigned_mod(datum.val.int_val, scale);
-        gmtime_r(&sec, &tm_struct);
-        size_t const datetime_len = shared::formatDateTime(buf, buf_size, &tm_struct);
-        CHECK_LE(19u, datetime_len);         // 19 == strlen("YYYY-MM-DD HH:MM:SS")
-        constexpr size_t max_frac_len = 10;  // == strlen(".123456789")
-        CHECK_LT(datetime_len + max_frac_len, buf_size);
-        int const frac_len = snprintf(
-            buf + datetime_len, max_frac_len + 1, ".%0*d", type_info.precision, frac);
-        CHECK_EQ(frac_len, 1 + type_info.precision);
-      } else {
-        time_t const sec = static_cast<time_t>(datum.val.int_val);
-        gmtime_r(&sec, &tm_struct);
-        size_t const datetime_len = shared::formatDateTime(buf, buf_size, &tm_struct);
-        CHECK_LT(0u, datetime_len);
-      }
+      unsigned const dim = type_info.precision;  // assumes dim <= 9
+      size_t const len = shared::formatDateTime(buf, buf_size, datum.val.int_val, dim);
+      CHECK_LE(19u + bool(dim) + dim, len);  // 19 = strlen("YYYY-MM-DD HH:MM:SS")
       return buf;
     }
     case TDatumType::DATE: {
-      time_t t = static_cast<time_t>(datum.val.int_val);
-      std::tm tm_struct;
-      gmtime_r(&t, &tm_struct);
-      size_t const date_len = shared::formatDate(buf, buf_size, &tm_struct);
-      CHECK_LE(10u, date_len);  // 10 == strlen("YYYY-MM-DD")
+      size_t const len = shared::formatDate(buf, buf_size, datum.val.int_val);
+      CHECK_LE(10u, len);  // 10 == strlen("YYYY-MM-DD")
       return buf;
     }
     case TDatumType::BOOL:
