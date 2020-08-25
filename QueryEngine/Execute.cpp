@@ -1307,18 +1307,16 @@ RelAlgExecutionUnit replace_scan_limit(const RelAlgExecutionUnit& ra_exe_unit_in
 
 }  // namespace
 
-ResultSetPtr Executor::executeWorkUnit(
-    size_t& max_groups_buffer_entry_guess,
-    const bool is_agg,
-    const std::vector<InputTableInfo>& query_infos,
-    const RelAlgExecutionUnit& ra_exe_unit_in,
-    const CompilationOptions& co,
-    const ExecutionOptions& eo,
-    const Catalog_Namespace::Catalog& cat,
-    std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
-    RenderInfo* render_info,
-    const bool has_cardinality_estimation,
-    ColumnCacheMap& column_cache) {
+ResultSetPtr Executor::executeWorkUnit(size_t& max_groups_buffer_entry_guess,
+                                       const bool is_agg,
+                                       const std::vector<InputTableInfo>& query_infos,
+                                       const RelAlgExecutionUnit& ra_exe_unit_in,
+                                       const CompilationOptions& co,
+                                       const ExecutionOptions& eo,
+                                       const Catalog_Namespace::Catalog& cat,
+                                       RenderInfo* render_info,
+                                       const bool has_cardinality_estimation,
+                                       ColumnCacheMap& column_cache) {
   VLOG(1) << "Executor " << executor_id_ << " is executing work unit:" << ra_exe_unit_in;
 
   ScopeGuard cleanup_post_execution = [this] {
@@ -1339,7 +1337,7 @@ ResultSetPtr Executor::executeWorkUnit(
                                       co,
                                       eo,
                                       cat,
-                                      row_set_mem_owner,
+                                      row_set_mem_owner_,
                                       render_info,
                                       has_cardinality_estimation,
                                       column_cache);
@@ -1358,7 +1356,7 @@ ResultSetPtr Executor::executeWorkUnit(
                             co,
                             eo,
                             cat,
-                            row_set_mem_owner,
+                            row_set_mem_owner_,
                             render_info,
                             has_cardinality_estimation,
                             column_cache);
