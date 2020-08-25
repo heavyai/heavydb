@@ -1,6 +1,26 @@
 # fixme: this should be 3.3, but that breaks static ncurses
 cmake_minimum_required(VERSION 3.2)
 
+set(ENABLE_CONDA OFF)
+if(DEFINED ENV{CONDA_PREFIX})
+  set(ENABLE_CONDA ON)
+  list(APPEND CMAKE_PREFIX_PATH "$ENV{CONDA_PREFIX}")
+  # resolves link issue for zlib 
+  link_directories("$ENV{CONDA_PREFIX}/lib")
+  # various fixes and workarounds
+  add_definitions("-Dsecure_getenv=getenv")
+  # fixes `undefined reference to `boost::system::detail::system_category_instance'`:
+  add_definitions("-DBOOST_ERROR_CODE_HEADER_ONLY")
+  # Adding formating macros
+  add_definitions("-D__STDC_FORMAT_MACROS=1")
+  # fixes always_inline attribute errors
+  add_compile_options("-fno-semantic-interposition")
+  # Adding `--sysroot=...` resolves `no member named 'signbit' in the global namespace` error:
+  set(CMAKE_SYSROOT "$ENV{CONDA_BUILD_SYSROOT}")
+  # Adding sysroot include dir resolves `cassert file not found` error:
+  include_directories(SYSTEM "$ENV{CONDA_BUILD_SYSROOT}/usr/include")
+endif(DEFINED ENV{CONDA_PREFIX})
+
 # force `Release` build type if left unspecified
 if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
   set(CMAKE_BUILD_TYPE "Release" CACHE STRING "Choose the type of build." FORCE)
@@ -149,9 +169,12 @@ if (ENABLE_GEOS)
 endif()
 
 # fixme: hack works for Homebrew, might not work for Conda
-if(${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
+if(ENABLE_CONDA)
+  set(OPENSSL_ROOT_DIR "$ENV{CONDA_PREFIX}")
+elseif(${CMAKE_SYSTEM_NAME} MATCHES "Darwin" )
   set(OPENSSL_ROOT_DIR "/usr/local/opt/openssl/")
 endif()
+
 find_package(OpenSSL REQUIRED)
 include_directories(${OPENSSL_INCLUDE_DIR})
 
@@ -465,14 +488,7 @@ if(TBB_FOUND)
   list(APPEND TBB_LIBS ${TBB_LIBRARIES})
 endif()
 
-add_custom_command(
-  DEPENDS
-    ${CMAKE_SOURCE_DIR}/omnisci.thrift
-    ${CMAKE_SOURCE_DIR}/common.thrift
-    ${CMAKE_SOURCE_DIR}/completion_hints.thrift
-    ${CMAKE_SOURCE_DIR}/QueryEngine/serialized_result_set.thrift
-    ${CMAKE_SOURCE_DIR}/QueryEngine/extension_functions.thrift
-  OUTPUT
+set(gen_cpp_files
     ${CMAKE_BINARY_DIR}/gen-cpp/OmniSci.cpp
     ${CMAKE_BINARY_DIR}/gen-cpp/OmniSci.h
     ${CMAKE_BINARY_DIR}/gen-cpp/omnisci_constants.cpp
@@ -485,24 +501,23 @@ add_custom_command(
     ${CMAKE_BINARY_DIR}/gen-cpp/serialized_result_set_types.cpp
     ${CMAKE_BINARY_DIR}/gen-cpp/extension_functions_constants.cpp
     ${CMAKE_BINARY_DIR}/gen-cpp/extension_functions_types.cpp
+    ${CMAKE_BINARY_DIR}/gen-cpp/extension_functions_types.h
+)
+add_custom_command(
+  DEPENDS
+    ${CMAKE_SOURCE_DIR}/omnisci.thrift
+    ${CMAKE_SOURCE_DIR}/common.thrift
+    ${CMAKE_SOURCE_DIR}/completion_hints.thrift
+    ${CMAKE_SOURCE_DIR}/QueryEngine/serialized_result_set.thrift
+    ${CMAKE_SOURCE_DIR}/QueryEngine/extension_functions.thrift
+  OUTPUT ${gen_cpp_files}
   COMMAND ${Thrift_EXECUTABLE}
   ARGS -gen cpp -r -o ${CMAKE_BINARY_DIR} ${CMAKE_SOURCE_DIR}/omnisci.thrift)
 list(APPEND ADDITIONAL_MAKE_CLEAN_FILES ${CMAKE_BINARY_DIR}/gen-cpp/)
 
-add_library(mapd_thrift
-  ${CMAKE_BINARY_DIR}/gen-cpp/OmniSci.cpp
-  ${CMAKE_BINARY_DIR}/gen-cpp/OmniSci.h
-  ${CMAKE_BINARY_DIR}/gen-cpp/omnisci_constants.cpp
-  ${CMAKE_BINARY_DIR}/gen-cpp/omnisci_types.cpp
-  ${CMAKE_BINARY_DIR}/gen-cpp/common_constants.cpp
-  ${CMAKE_BINARY_DIR}/gen-cpp/common_types.cpp
-  ${CMAKE_BINARY_DIR}/gen-cpp/completion_hints_constants.cpp
-  ${CMAKE_BINARY_DIR}/gen-cpp/completion_hints_types.cpp
-  ${CMAKE_BINARY_DIR}/gen-cpp/serialized_result_set_constants.cpp
-  ${CMAKE_BINARY_DIR}/gen-cpp/serialized_result_set_types.cpp
-  ${CMAKE_BINARY_DIR}/gen-cpp/extension_functions_constants.cpp
-  ${CMAKE_BINARY_DIR}/gen-cpp/extension_functions_types.cpp
-)
+add_custom_target(thrift_gen DEPENDS ${gen_cpp_files})
+
+add_library(mapd_thrift ${gen_cpp_files})
 
 target_compile_options(mapd_thrift PRIVATE -fPIC)
 target_link_libraries(mapd_thrift ${Thrift_LIBRARIES})
@@ -712,7 +727,7 @@ add_dependencies(omnisci_server rerun_cmake)
 
 target_link_libraries(omnisci_server mapd_thrift thrift_handler ${MAPD_LIBRARIES} ${Boost_LIBRARIES} ${CMAKE_DL_LIBS} ${CUDA_LIBRARIES} ${PROFILER_LIBS} ${ZLIB_LIBRARIES} ${LOCALE_LINK_FLAG})
 
-target_link_libraries(initdb mapd_thrift DataMgr ${MAPD_LIBRARIES} ${Boost_LIBRARIES} ${CMAKE_DL_LIBS} ${CUDA_LIBRARIES} ${ZLIB_LIBRARIES})
+target_link_libraries(initdb mapd_thrift DataMgr ${MAPD_LIBRARIES} ${Boost_LIBRARIES} ${CMAKE_DL_LIBS} ${CUDA_LIBRARIES} ${ZLIB_LIBRARIES} ${LLVM_LIB_FLAGS})
 
 macro(set_dpkg_arch arch_in arch_out)
   if("${arch_in}" STREQUAL "x86_64")
@@ -772,10 +787,10 @@ endif()
 
 set_dpkg_arch(${CMAKE_SYSTEM_PROCESSOR} CPACK_DEBIAN_PACKAGE_ARCHITECTURE)
 
-install(DIRECTORY ThirdParty/licenses DESTINATION "ThirdParty/")
+install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/ThirdParty/licenses" DESTINATION "ThirdParty" COMPONENT "doc")
 
 # OmniSciTypes.h local includes (for UDF/UDTF)
-install(FILES Shared/funcannotations.h DESTINATION "Shared/")
+install(FILES Shared/funcannotations.h DESTINATION "Shared/" COMPONENT "include")
 
 # Frontend
 option(MAPD_IMMERSE_DOWNLOAD "Download OmniSci Immerse for packaging" OFF)
@@ -792,6 +807,7 @@ if(MAPD_IMMERSE_DOWNLOAD)
     LOG_DOWNLOAD on
     )
   externalproject_get_property(frontend source_dir)
+
   install(DIRECTORY ${source_dir}/ DESTINATION "frontend/" PATTERN .git EXCLUDE PATTERN node_modules EXCLUDE)
   add_custom_command(TARGET frontend COMMAND ${CMAKE_COMMAND} -E copy_directory ${source_dir} frontend)
   list(APPEND ADDITIONAL_MAKE_CLEAN_FILES ${CMAKE_BINARY_DIR}/frontend)
@@ -819,7 +835,7 @@ if(MAPD_DOCS_DOWNLOAD)
     LOG_DOWNLOAD on
     )
   externalproject_get_property(docs source_dir)
-  install(DIRECTORY ${source_dir}/ DESTINATION "docs/" PATTERN .git EXCLUDE)
+  install(DIRECTORY ${source_dir}/ DESTINATION "docs/" PATTERN .git EXCLUDE COMPONENT "doc")
   add_custom_command(TARGET docs COMMAND ${CMAKE_COMMAND} -E copy_directory ${source_dir} docs)
   list(APPEND ADDITIONAL_MAKE_CLEAN_FILES ${CMAKE_BINARY_DIR}/docs)
 endif()
@@ -878,23 +894,23 @@ add_custom_target(mapd_java_clean
   WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/java
   )
 add_dependencies(clean-all mapd_java_clean)
-install(FILES ${CMAKE_SOURCE_DIR}/java/mapd/target/mapd-1.0-SNAPSHOT-jar-with-dependencies.jar DESTINATION bin)
-install(FILES ${CMAKE_SOURCE_DIR}/java/omniscijdbc/target/${OMNISCI_JDBC_JAR} DESTINATION bin)
-install(FILES ${CMAKE_SOURCE_DIR}/java/calcite/target/calcite-1.0-SNAPSHOT-jar-with-dependencies.jar DESTINATION bin)
+install(FILES ${CMAKE_SOURCE_DIR}/java/mapd/target/mapd-1.0-SNAPSHOT-jar-with-dependencies.jar DESTINATION bin COMPONENT "jar")
+install(FILES ${CMAKE_SOURCE_DIR}/java/omniscijdbc/target/${OMNISCI_JDBC_JAR} DESTINATION bin COMPONENT "jar")
+install(FILES ${CMAKE_SOURCE_DIR}/java/calcite/target/calcite-1.0-SNAPSHOT-jar-with-dependencies.jar DESTINATION bin COMPONENT "jar")
 
 set_directory_properties(PROPERTIES ADDITIONAL_MAKE_CLEAN_FILES "${ADDITIONAL_MAKE_CLEAN_FILES}")
 
-install(TARGETS initdb omnisci_server DESTINATION bin)
-install(FILES ${CMAKE_BINARY_DIR}/MAPD_GIT_HASH.txt DESTINATION ".")
+install(TARGETS initdb omnisci_server DESTINATION bin COMPONENT "exe")
+install(FILES ${CMAKE_BINARY_DIR}/MAPD_GIT_HASH.txt DESTINATION "." COMPONENT "doc")
 if(ENABLE_CUDA)
-  install(FILES ${CMAKE_BINARY_DIR}/QueryEngine/cuda_mapd_rt.fatbin DESTINATION QueryEngine)
+  install(FILES ${CMAKE_BINARY_DIR}/QueryEngine/cuda_mapd_rt.fatbin DESTINATION QueryEngine COMPONENT "exe")
 endif()
-install(FILES completion_hints.thrift DESTINATION ".")
-install(FILES omnisci.thrift DESTINATION ".")
-install(FILES common.thrift DESTINATION ".")
-install(FILES QueryEngine/serialized_result_set.thrift DESTINATION "QueryEngine/")
+install(FILES completion_hints.thrift DESTINATION "." COMPONENT "thrift")
+install(FILES omnisci.thrift DESTINATION "." COMPONENT "thrift")
+install(FILES common.thrift DESTINATION "." COMPONENT "thrift")
+install(FILES QueryEngine/serialized_result_set.thrift DESTINATION "QueryEngine/" COMPONENT "thrift")
 
-if(NOT PREFER_STATIC_LIBS)
+if(NOT PREFER_STATIC_LIBS AND NOT ENABLE_CONDA)
   install(FILES ${Boost_LIBRARIES} DESTINATION ThirdParty/lib)
 endif()
 
@@ -905,11 +921,11 @@ else()
 endif()
 
 if("${MAPD_EDITION_LOWER}" STREQUAL "os")
-  install(FILES LICENSE.md DESTINATION ".")
+  install(FILES LICENSE.md DESTINATION "." COMPONENT "doc")
 endif()
 
 set(CPACK_RESOURCE_FILE_LICENSE "${EULA_FILE}")
-install(FILES "${EULA_FILE}" DESTINATION ".")
+install(FILES "${EULA_FILE}" DESTINATION "."  COMPONENT "doc")
 
 install(PROGRAMS startomnisci DESTINATION ".")
 install(PROGRAMS scripts/inneromnisci DESTINATION "scripts")

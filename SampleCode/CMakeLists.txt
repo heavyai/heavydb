@@ -56,10 +56,10 @@ target_link_libraries(StreamInsertSimple mapd_sample_thrift ${Boost_LIBRARIES} $
 target_link_libraries(StreamInsert mapd_sample_thrift ${CMAKE_DL_LIBS} ${Boost_LIBRARIES} ${PROFILER_LIBS})
 target_link_libraries(DataGen mapd_sample_thrift ${CMAKE_DL_LIBS} ${PROFILER_LIBS})
 
-install(TARGETS StreamInsertSimple StreamInsert DataGen DESTINATION SampleCode)
-install(DIRECTORY . DESTINATION SampleCode)
+install(TARGETS StreamInsertSimple StreamInsert DataGen DESTINATION SampleCode COMPONENT "data")
+install(DIRECTORY . DESTINATION SampleCode COMPONENT "data")
 install(
     FILES
         ${CMAKE_SOURCE_DIR}/omnisci.thrift
         ${CMAKE_SOURCE_DIR}/cmake/Modules/FindThrift.cmake
-    DESTINATION SampleCode)
+    DESTINATION SampleCode COMPONENT "data")
