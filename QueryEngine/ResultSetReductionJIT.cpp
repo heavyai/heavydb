@@ -351,8 +351,8 @@ std::unique_ptr<Function> setup_reduce_loop(ReductionCode* reduction_code) {
                          /*always_inline=*/false);
 }
 
-llvm::Function* create_llvm_function(const Function* function,
-                                     const CgenState* cgen_state) {
+llvm::Function* create_llvm_function(const Function* function, CgenState* cgen_state) {
+  AUTOMATIC_IR_METADATA(cgen_state);
   auto& ctx = cgen_state->context_;
   std::vector<llvm::Type*> parameter_types;
   const auto& arg_types = function->arg_types();
@@ -577,6 +577,7 @@ ReductionCode ResultSetReductionJIT::codegen() const {
   auto cgen_state = reduction_code.cgen_state.get();
   std::unique_ptr<llvm::Module> module = runtime_module_shallow_copy(cgen_state);
   cgen_state->module_ = module.get();
+  AUTOMATIC_IR_METADATA(cgen_state);
   auto ir_is_empty = create_llvm_function(reduction_code.ir_is_empty.get(), cgen_state);
   auto ir_reduce_one_entry =
       create_llvm_function(reduction_code.ir_reduce_one_entry.get(), cgen_state);
@@ -600,6 +601,7 @@ ReductionCode ResultSetReductionJIT::codegen() const {
       reduction_code.ir_reduce_loop.get(), ir_reduce_loop, reduction_code, f);
   reduction_code.llvm_reduce_loop = ir_reduce_loop;
   reduction_code.module = std::move(module);
+  AUTOMATIC_IR_METADATA_DONE();
   return finalizeReductionCode(std::move(reduction_code),
                                ir_is_empty,
                                ir_reduce_one_entry,
@@ -1202,12 +1204,16 @@ ReductionCode ResultSetReductionJIT::finalizeReductionCode(
   CompilationOptions co{
       ExecutorDeviceType::CPU, false, ExecutorOptLevel::ReductionJIT, false};
 
+#ifdef NDEBUG
   LOG(IR) << "Reduction Loop:\n"
           << serialize_llvm_object(reduction_code.llvm_reduce_loop);
   LOG(IR) << "Reduction Is Empty Func:\n" << serialize_llvm_object(ir_is_empty);
   LOG(IR) << "Reduction One Entry Func:\n" << serialize_llvm_object(ir_reduce_one_entry);
   LOG(IR) << "Reduction One Entry Idx Func:\n"
           << serialize_llvm_object(ir_reduce_one_entry_idx);
+#else
+  LOG(IR) << serialize_llvm_object(reduction_code.cgen_state->module_);
+#endif
 
   reduction_code.module.release();
   auto ee = CodeGenerator::generateNativeCPUCode(
@@ -1272,6 +1278,7 @@ ReductionCode GpuReductionHelperJIT::codegen() const {
   std::unique_ptr<llvm::Module> module(runtime_module_shallow_copy(cgen_state));
 
   cgen_state->module_ = module.get();
+  AUTOMATIC_IR_METADATA(cgen_state);
   auto ir_is_empty = create_llvm_function(reduction_code.ir_is_empty.get(), cgen_state);
   auto ir_reduce_one_entry =
       create_llvm_function(reduction_code.ir_reduce_one_entry.get(), cgen_state);

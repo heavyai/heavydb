@@ -131,11 +131,11 @@ llvm::Module* read_template_module(llvm::LLVMContext& context);
 
 template <class T>
 std::string serialize_llvm_object(const T* llvm_obj) {
-  std::stringstream ss;
-  llvm::raw_os_ostream os(ss);
-  llvm_obj->print(os);
+  std::string str;
+  llvm::raw_string_ostream os(str);
+  os << *llvm_obj;
   os.flush();
-  return ss.str();
+  return str;
 }
 
 void verify_function_ir(const llvm::Function* func);

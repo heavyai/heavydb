@@ -794,6 +794,7 @@ int OverlapsJoinHashTable::initHashTableOnGpu(
 #define ROW_FUNC executor_->cgen_state_->row_func_
 
 llvm::Value* OverlapsJoinHashTable::codegenKey(const CompilationOptions& co) {
+  AUTOMATIC_IR_METADATA(executor_->cgen_state_.get());
   const auto key_component_width = getKeyComponentWidth();
   CHECK(key_component_width == 4 || key_component_width == 8);
   const auto key_size_lv = LL_INT(getKeyComponentCount() * key_component_width);
@@ -867,6 +868,7 @@ llvm::Value* OverlapsJoinHashTable::codegenKey(const CompilationOptions& co) {
 
 std::vector<llvm::Value*> OverlapsJoinHashTable::codegenManyKey(
     const CompilationOptions& co) {
+  AUTOMATIC_IR_METADATA(executor_->cgen_state_.get());
   const auto key_component_width = getKeyComponentWidth();
   CHECK(key_component_width == 4 || key_component_width == 8);
   CHECK(layout_ == JoinHashTableInterface::HashType::ManyToMany);
@@ -911,6 +913,7 @@ std::vector<llvm::Value*> OverlapsJoinHashTable::codegenManyKey(
 HashJoinMatchingSet OverlapsJoinHashTable::codegenMatchingSet(
     const CompilationOptions& co,
     const size_t index) {
+  AUTOMATIC_IR_METADATA(executor_->cgen_state_.get());
   if (getHashType() == JoinHashTableInterface::HashType::ManyToMany) {
     VLOG(1) << "Building codegenMatchingSet for ManyToMany";
     const auto key_component_width = getKeyComponentWidth();

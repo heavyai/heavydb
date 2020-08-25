@@ -22,6 +22,7 @@
 
 llvm::Value* CodeGenerator::codegen(const Analyzer::InValues* expr,
                                     const CompilationOptions& co) {
+  AUTOMATIC_IR_METADATA(cgen_state_);
   const auto in_arg = expr->get_arg();
   if (is_unnest(in_arg)) {
     throw std::runtime_error("IN not supported for unnested expressions");
@@ -70,6 +71,7 @@ llvm::Value* CodeGenerator::codegen(const Analyzer::InValues* expr,
 
 llvm::Value* CodeGenerator::codegen(const Analyzer::InIntegerSet* in_integer_set,
                                     const CompilationOptions& co) {
+  AUTOMATIC_IR_METADATA(cgen_state_);
   const auto in_arg = in_integer_set->get_arg();
   if (is_unnest(in_arg)) {
     throw std::runtime_error("IN not supported for unnested expressions");
@@ -109,6 +111,7 @@ llvm::Value* CodeGenerator::codegen(const Analyzer::InIntegerSet* in_integer_set
 std::unique_ptr<InValuesBitmap> CodeGenerator::createInValuesBitmap(
     const Analyzer::InValues* in_values,
     const CompilationOptions& co) {
+  AUTOMATIC_IR_METADATA(cgen_state_);
   const auto& value_list = in_values->get_value_list();
   const auto val_count = value_list.size();
   const auto& ti = in_values->get_arg()->get_type_info();

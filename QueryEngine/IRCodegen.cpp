@@ -26,6 +26,7 @@
 std::vector<llvm::Value*> CodeGenerator::codegen(const Analyzer::Expr* expr,
                                                  const bool fetch_columns,
                                                  const CompilationOptions& co) {
+  AUTOMATIC_IR_METADATA(cgen_state_);
   if (!expr) {
     return {posArg(expr)};
   }
@@ -154,6 +155,7 @@ std::vector<llvm::Value*> CodeGenerator::codegen(const Analyzer::Expr* expr,
 
 llvm::Value* CodeGenerator::codegen(const Analyzer::BinOper* bin_oper,
                                     const CompilationOptions& co) {
+  AUTOMATIC_IR_METADATA(cgen_state_);
   const auto optype = bin_oper->get_optype();
   if (IS_ARITHMETIC(optype)) {
     return codegenArith(bin_oper, co);
@@ -172,6 +174,7 @@ llvm::Value* CodeGenerator::codegen(const Analyzer::BinOper* bin_oper,
 
 llvm::Value* CodeGenerator::codegen(const Analyzer::UOper* u_oper,
                                     const CompilationOptions& co) {
+  AUTOMATIC_IR_METADATA(cgen_state_);
   const auto optype = u_oper->get_optype();
   switch (optype) {
     case kNOT: {
@@ -195,6 +198,7 @@ llvm::Value* CodeGenerator::codegen(const Analyzer::UOper* u_oper,
 
 llvm::Value* CodeGenerator::codegen(const Analyzer::SampleRatioExpr* expr,
                                     const CompilationOptions& co) {
+  AUTOMATIC_IR_METADATA(cgen_state_);
   auto input_expr = expr->get_arg();
   CHECK(input_expr);
 
@@ -260,6 +264,7 @@ std::vector<JoinLoop> Executor::buildJoinLoops(
     const std::vector<InputTableInfo>& query_infos,
     ColumnCacheMap& column_cache) {
   INJECT_TIMER(buildJoinLoops);
+  AUTOMATIC_IR_METADATA(cgen_state_.get());
   std::vector<JoinLoop> join_loops;
   for (size_t level_idx = 0, current_hash_table_idx = 0;
        level_idx < ra_exe_unit.join_quals.size();
@@ -425,6 +430,7 @@ std::function<llvm::Value*(const std::vector<llvm::Value*>&, llvm::Value*)>
 Executor::buildIsDeletedCb(const RelAlgExecutionUnit& ra_exe_unit,
                            const size_t level_idx,
                            const CompilationOptions& co) {
+  AUTOMATIC_IR_METADATA(cgen_state_.get());
   if (!co.filter_on_deleted_column) {
     return nullptr;
   }
@@ -488,6 +494,7 @@ std::shared_ptr<JoinHashTableInterface> Executor::buildCurrentLevelHashTable(
     const std::vector<InputTableInfo>& query_infos,
     ColumnCacheMap& column_cache,
     std::vector<std::string>& fail_reasons) {
+  AUTOMATIC_IR_METADATA(cgen_state_.get());
   if (current_level_join_conditions.type != JoinType::INNER &&
       current_level_join_conditions.quals.size() > 1) {
     fail_reasons.emplace_back("No equijoin expression found for outer join");
@@ -529,6 +536,7 @@ std::shared_ptr<JoinHashTableInterface> Executor::buildCurrentLevelHashTable(
 
 llvm::Value* Executor::addJoinLoopIterator(const std::vector<llvm::Value*>& prev_iters,
                                            const size_t level_idx) {
+  AUTOMATIC_IR_METADATA(cgen_state_.get());
   // Iterators are added for loop-outer joins when the head of the loop is generated,
   // then once again when the body if generated. Allow this instead of special handling
   // of call sites.
@@ -552,6 +560,7 @@ void Executor::codegenJoinLoops(const std::vector<JoinLoop>& join_loops,
                                 const QueryMemoryDescriptor& query_mem_desc,
                                 const CompilationOptions& co,
                                 const ExecutionOptions& eo) {
+  AUTOMATIC_IR_METADATA(cgen_state_.get());
   const auto exit_bb =
       llvm::BasicBlock::Create(cgen_state_->context_, "exit", cgen_state_->row_func_);
   cgen_state_->ir_builder_.SetInsertPoint(exit_bb);
@@ -568,6 +577,7 @@ void Executor::codegenJoinLoops(const std::vector<JoinLoop>& join_loops,
        &group_by_and_aggregate,
        &join_loops,
        &ra_exe_unit](const std::vector<llvm::Value*>& prev_iters) {
+        AUTOMATIC_IR_METADATA(cgen_state_.get());
         addJoinLoopIterator(prev_iters, join_loops.size());
         auto& builder = cgen_state_->ir_builder_;
         const auto loop_body_bb = llvm::BasicBlock::Create(
@@ -586,7 +596,7 @@ void Executor::codegenJoinLoops(const std::vector<JoinLoop>& join_loops,
       },
       code_generator.posArg(nullptr),
       exit_bb,
-      cgen_state_->ir_builder_);
+      cgen_state_.get());
   cgen_state_->ir_builder_.SetInsertPoint(entry_bb);
   cgen_state_->ir_builder_.CreateBr(loops_entry_bb);
 }
@@ -600,6 +610,7 @@ Executor::GroupColLLVMValue Executor::groupByColumnCodegen(
     GroupByAndAggregate::DiamondCodegen& diamond_codegen,
     std::stack<llvm::BasicBlock*>& array_loops,
     const bool thread_mem_shared) {
+  AUTOMATIC_IR_METADATA(cgen_state_.get());
   CHECK_GE(col_width, sizeof(int32_t));
   CodeGenerator code_generator(this);
   auto group_key = code_generator.codegen(group_by_col, true, co).front();
@@ -704,6 +715,7 @@ CodeGenerator::NullCheckCodegen::NullCheckCodegen(CgenState* cgen_state,
                                                   const SQLTypeInfo& nullable_ti,
                                                   const std::string& name)
     : cgen_state(cgen_state), name(name) {
+  AUTOMATIC_IR_METADATA(cgen_state);
   CHECK(nullable_ti.is_number() || nullable_ti.is_decimal() || nullable_ti.is_fp());
 
   null_check = std::make_unique<GroupByAndAggregate::DiamondCodegen>(
@@ -733,6 +745,7 @@ CodeGenerator::NullCheckCodegen::NullCheckCodegen(CgenState* cgen_state,
 
 llvm::Value* CodeGenerator::NullCheckCodegen::finalize(llvm::Value* null_lv,
                                                        llvm::Value* notnull_lv) {
+  AUTOMATIC_IR_METADATA(cgen_state);
   CHECK(null_check);
   cgen_state->ir_builder_.CreateBr(nullcheck_bb);
 

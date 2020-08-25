@@ -93,6 +93,7 @@ int adjusted_range_table_index(const Analyzer::ColumnVar* col_var) {
 std::vector<llvm::Value*> CodeGenerator::codegenColumn(const Analyzer::ColumnVar* col_var,
                                                        const bool fetch_column,
                                                        const CompilationOptions& co) {
+  AUTOMATIC_IR_METADATA(cgen_state_);
   if (col_var->get_rte_idx() <= 0 ||
       cgen_state_->outer_join_match_found_per_level_.empty() ||
       !foundOuterJoinMatch(col_var->get_rte_idx())) {
@@ -105,6 +106,7 @@ std::vector<llvm::Value*> CodeGenerator::codegenColVar(const Analyzer::ColumnVar
                                                        const bool fetch_column,
                                                        const bool update_query_plan,
                                                        const CompilationOptions& co) {
+  AUTOMATIC_IR_METADATA(cgen_state_);
   const bool hoist_literals = co.hoist_literals;
   auto col_id = col_var->get_column_id();
   const int rte_idx = adjusted_range_table_index(col_var);
@@ -226,6 +228,7 @@ std::vector<llvm::Value*> CodeGenerator::codegenColVar(const Analyzer::ColumnVar
 llvm::Value* CodeGenerator::codegenWindowPosition(
     WindowFunctionContext* window_func_context,
     llvm::Value* pos_arg) {
+  AUTOMATIC_IR_METADATA(cgen_state_);
   const auto window_position = cgen_state_->emitCall(
       "row_number_window_func",
       {cgen_state_->llInt(reinterpret_cast<const int64_t>(window_func_context->output())),
@@ -239,6 +242,7 @@ llvm::Value* CodeGenerator::codegenWindowPosition(
 llvm::Value* CodeGenerator::codegenFixedLengthColVar(const Analyzer::ColumnVar* col_var,
                                                      llvm::Value* col_byte_stream,
                                                      llvm::Value* pos_arg) {
+  AUTOMATIC_IR_METADATA(cgen_state_);
   const auto decoder = get_col_decoder(col_var);
   auto dec_val = decoder->codegenDecode(col_byte_stream, pos_arg, cgen_state_->module_);
   cgen_state_->ir_builder_.Insert(dec_val);
@@ -277,6 +281,7 @@ llvm::Value* CodeGenerator::codegenFixedLengthColVarInWindow(
     const Analyzer::ColumnVar* col_var,
     llvm::Value* col_byte_stream,
     llvm::Value* pos_arg) {
+  AUTOMATIC_IR_METADATA(cgen_state_);
   const auto orig_bb = cgen_state_->ir_builder_.GetInsertBlock();
   const auto pos_is_valid =
       cgen_state_->ir_builder_.CreateICmpSGE(pos_arg, cgen_state_->llInt(int64_t(0)));
@@ -304,6 +309,7 @@ llvm::Value* CodeGenerator::codegenFixedLengthColVarInWindow(
 std::vector<llvm::Value*> CodeGenerator::codegenVariableLengthStringColVar(
     llvm::Value* col_byte_stream,
     llvm::Value* pos_arg) {
+  AUTOMATIC_IR_METADATA(cgen_state_);
   // real (not dictionary-encoded) strings; store the pointer to the payload
   auto ptr_and_len =
       cgen_state_->emitExternalCall("string_decode",
@@ -317,6 +323,7 @@ std::vector<llvm::Value*> CodeGenerator::codegenVariableLengthStringColVar(
 
 llvm::Value* CodeGenerator::codegenRowId(const Analyzer::ColumnVar* col_var,
                                          const CompilationOptions& co) {
+  AUTOMATIC_IR_METADATA(cgen_state_);
   const auto offset_lv = cgen_state_->frag_offsets_[adjusted_range_table_index(col_var)];
   llvm::Value* start_rowid_lv{nullptr};
   const auto& table_generation = executor()->getTableGeneration(col_var->get_table_id());
@@ -370,6 +377,7 @@ SQLTypes get_phys_int_type(const size_t byte_sz) {
 
 llvm::Value* CodeGenerator::codgenAdjustFixedEncNull(llvm::Value* val,
                                                      const SQLTypeInfo& col_ti) {
+  AUTOMATIC_IR_METADATA(cgen_state_);
   CHECK_LT(col_ti.get_size(), col_ti.get_logical_size());
   const auto col_phys_width = col_ti.get_size() * 8;
   auto from_typename = "int" + std::to_string(col_phys_width) + "_t";
@@ -419,6 +427,7 @@ std::vector<llvm::Value*> CodeGenerator::codegenOuterJoinNullPlaceholder(
     const Analyzer::ColumnVar* col_var,
     const bool fetch_column,
     const CompilationOptions& co) {
+  AUTOMATIC_IR_METADATA(cgen_state_);
   const auto grouped_col_lv = resolveGroupedColumnReference(col_var);
   if (grouped_col_lv) {
     return {grouped_col_lv};
@@ -507,6 +516,7 @@ llvm::Value* CodeGenerator::colByteStream(const Analyzer::ColumnVar* col_var,
 }
 
 llvm::Value* CodeGenerator::posArg(const Analyzer::Expr* expr) const {
+  AUTOMATIC_IR_METADATA(cgen_state_);
   const auto col_var = dynamic_cast<const Analyzer::ColumnVar*>(expr);
   if (col_var && col_var->get_rte_idx() > 0) {
     const auto hash_pos_it =

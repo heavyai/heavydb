@@ -1450,6 +1450,8 @@ void Executor::createErrorCheckControlFlow(llvm::Function* query_func,
                                            bool run_with_dynamic_watchdog,
                                            bool run_with_allowing_runtime_interrupt,
                                            ExecutorDeviceType device_type) {
+  AUTOMATIC_IR_METADATA(cgen_state_.get());
+
   // check whether the row processing was successful; currently, it can
   // fail by running out of group by buffer slots
 
@@ -1636,6 +1638,8 @@ void Executor::createErrorCheckControlFlow(llvm::Function* query_func,
 }
 
 std::vector<llvm::Value*> Executor::inlineHoistedLiterals() {
+  AUTOMATIC_IR_METADATA(cgen_state_.get());
+
   std::vector<llvm::Value*> hoisted_literals;
 
   // row_func_ is using literals whose defs have been hoisted up to the query_func_,
@@ -1979,6 +1983,7 @@ Executor::compileWorkUnit(const std::vector<InputTableInfo>& query_infos,
   }
 
   cgen_state_->module_ = rt_module_copy.release();
+  AUTOMATIC_IR_METADATA(cgen_state_.get());
 
   auto agg_fnames =
       get_agg_fnames(ra_exe_unit.target_exprs, !ra_exe_unit.groupby_exprs.empty());
@@ -2146,9 +2151,14 @@ Executor::compileWorkUnit(const std::vector<InputTableInfo>& query_infos,
   }
   verify_function_ir(cgen_state_->row_func_);
 
-  LOG(IR) << query_mem_desc->toString() << "\nGenerated IR\n"
-          << serialize_llvm_object(query_func)
+  AUTOMATIC_IR_METADATA_DONE();
+  LOG(IR) << "\n" << query_mem_desc->toString() << "\nGenerated IR\n";
+#ifdef NDEBUG
+  LOG(IR) << serialize_llvm_object(query_func)
           << serialize_llvm_object(cgen_state_->row_func_) << "\nEnd of IR";
+#else
+  LOG(IR) << serialize_llvm_object(cgen_state_->module_) << "\nEnd of IR";
+#endif
 
   return std::make_tuple(
       CompilationResult{
@@ -2170,6 +2180,7 @@ Executor::compileWorkUnit(const std::vector<InputTableInfo>& query_infos,
 llvm::BasicBlock* Executor::codegenSkipDeletedOuterTableRow(
     const RelAlgExecutionUnit& ra_exe_unit,
     const CompilationOptions& co) {
+  AUTOMATIC_IR_METADATA(cgen_state_.get());
   if (!co.filter_on_deleted_column) {
     return nullptr;
   }
@@ -2209,6 +2220,7 @@ bool Executor::compileBody(const RelAlgExecutionUnit& ra_exe_unit,
                            const QueryMemoryDescriptor& query_mem_desc,
                            const CompilationOptions& co,
                            const GpuSharedMemoryContext& gpu_smem_context) {
+  AUTOMATIC_IR_METADATA(cgen_state_.get());
   // generate the code for the filter
   std::vector<Analyzer::Expr*> primary_quals;
   std::vector<Analyzer::Expr*> deferred_quals;

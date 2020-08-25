@@ -64,6 +64,7 @@ extern "C" int32_t lower_encoded(int32_t string_id, int64_t string_dict_proxy_ad
 
 llvm::Value* CodeGenerator::codegen(const Analyzer::CharLengthExpr* expr,
                                     const CompilationOptions& co) {
+  AUTOMATIC_IR_METADATA(cgen_state_);
   auto str_lv = codegen(expr->get_arg(), true, co);
   if (str_lv.size() != 3) {
     CHECK_EQ(size_t(1), str_lv.size());
@@ -95,6 +96,7 @@ llvm::Value* CodeGenerator::codegen(const Analyzer::CharLengthExpr* expr,
 
 llvm::Value* CodeGenerator::codegen(const Analyzer::KeyForStringExpr* expr,
                                     const CompilationOptions& co) {
+  AUTOMATIC_IR_METADATA(cgen_state_);
   auto str_lv = codegen(expr->get_arg(), true, co);
   CHECK_EQ(size_t(1), str_lv.size());
   return cgen_state_->emitCall("key_for_string_encoded", str_lv);
@@ -102,6 +104,7 @@ llvm::Value* CodeGenerator::codegen(const Analyzer::KeyForStringExpr* expr,
 
 llvm::Value* CodeGenerator::codegen(const Analyzer::LowerExpr* expr,
                                     const CompilationOptions& co) {
+  AUTOMATIC_IR_METADATA(cgen_state_);
   if (co.device_type == ExecutorDeviceType::GPU) {
     throw QueryMustRunOnCpu();
   }
@@ -123,6 +126,7 @@ llvm::Value* CodeGenerator::codegen(const Analyzer::LowerExpr* expr,
 
 llvm::Value* CodeGenerator::codegen(const Analyzer::LikeExpr* expr,
                                     const CompilationOptions& co) {
+  AUTOMATIC_IR_METADATA(cgen_state_);
   if (is_unnest(extract_cast_arg(expr->get_arg()))) {
     throw std::runtime_error("LIKE not supported for unnested expressions");
   }
@@ -187,6 +191,7 @@ llvm::Value* CodeGenerator::codegenDictLike(
     const bool is_simple,
     const char escape_char,
     const CompilationOptions& co) {
+  AUTOMATIC_IR_METADATA(cgen_state_);
   const auto cast_oper = std::dynamic_pointer_cast<Analyzer::UOper>(like_arg);
   if (!cast_oper) {
     return nullptr;
@@ -257,6 +262,7 @@ llvm::Value* CodeGenerator::codegenDictStrCmp(const std::shared_ptr<Analyzer::Ex
                                               const std::shared_ptr<Analyzer::Expr> rhs,
                                               const SQLOps compare_operator,
                                               const CompilationOptions& co) {
+  AUTOMATIC_IR_METADATA(cgen_state_);
   auto rhs_cast_oper = std::dynamic_pointer_cast<const Analyzer::UOper>(rhs);
   auto lhs_cast_oper = std::dynamic_pointer_cast<const Analyzer::UOper>(lhs);
   auto rhs_col_var = std::dynamic_pointer_cast<const Analyzer::ColumnVar>(rhs);
@@ -337,6 +343,7 @@ llvm::Value* CodeGenerator::codegenDictStrCmp(const std::shared_ptr<Analyzer::Ex
 
 llvm::Value* CodeGenerator::codegen(const Analyzer::RegexpExpr* expr,
                                     const CompilationOptions& co) {
+  AUTOMATIC_IR_METADATA(cgen_state_);
   if (is_unnest(extract_cast_arg(expr->get_arg()))) {
     throw std::runtime_error("REGEXP not supported for unnested expressions");
   }
@@ -395,6 +402,7 @@ llvm::Value* CodeGenerator::codegenDictRegexp(
     const Analyzer::Constant* pattern,
     const char escape_char,
     const CompilationOptions& co) {
+  AUTOMATIC_IR_METADATA(cgen_state_);
   const auto cast_oper = std::dynamic_pointer_cast<Analyzer::UOper>(pattern_arg);
   if (!cast_oper) {
     return nullptr;

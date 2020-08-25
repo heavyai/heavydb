@@ -19,6 +19,7 @@
 
 std::vector<llvm::Value*> CodeGenerator::codegen(const Analyzer::CaseExpr* case_expr,
                                                  const CompilationOptions& co) {
+  AUTOMATIC_IR_METADATA(cgen_state_);
   const auto case_ti = case_expr->get_type_info();
   llvm::Type* case_llvm_type = nullptr;
   bool is_real_str = false;
@@ -55,6 +56,7 @@ llvm::Value* CodeGenerator::codegenCase(const Analyzer::CaseExpr* case_expr,
                                         llvm::Type* case_llvm_type,
                                         const bool is_real_str,
                                         const CompilationOptions& co) {
+  AUTOMATIC_IR_METADATA(cgen_state_);
   // Here the linear control flow will diverge and expressions cached during the
   // code branch code generation (currently just column decoding) are not going
   // to be available once we're done generating the case. Take a snapshot of

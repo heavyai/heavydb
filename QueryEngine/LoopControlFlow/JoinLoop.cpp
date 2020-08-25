@@ -15,6 +15,7 @@
  */
 
 #include "JoinLoop.h"
+#include "../CgenState.h"
 #include "Shared/Logger.h"
 
 #include <llvm/IR/Type.h>
@@ -48,7 +49,9 @@ llvm::BasicBlock* JoinLoop::codegen(
         body_codegen,
     llvm::Value* outer_iter,
     llvm::BasicBlock* exit_bb,
-    llvm::IRBuilder<>& builder) {
+    CgenState* cgen_state) {
+  AUTOMATIC_IR_METADATA(cgen_state);
+  llvm::IRBuilder<>& builder = cgen_state->ir_builder_;
   llvm::BasicBlock* prev_exit_bb{exit_bb};
   llvm::BasicBlock* prev_iter_advance_bb{nullptr};
   llvm::BasicBlock* last_head_bb{nullptr};
@@ -127,7 +130,7 @@ llvm::BasicBlock* JoinLoop::codegen(
                                          have_more_inner_rows,
                                          found_an_outer_match_ptr,
                                          current_condition_match_ptr,
-                                         builder);
+                                         cgen_state);
         } else {
           prev_comparison_result = have_more_inner_rows;
           last_head_bb = row_not_deleted_bb ? row_not_deleted_bb : head_bb;
@@ -218,7 +221,9 @@ std::pair<llvm::BasicBlock*, llvm::Value*> JoinLoop::evaluateOuterJoinCondition(
     llvm::Value* have_more_inner_rows,
     llvm::Value* found_an_outer_match_ptr,
     llvm::Value* current_condition_match_ptr,
-    llvm::IRBuilder<>& builder) {
+    CgenState* cgen_state) {
+  AUTOMATIC_IR_METADATA(cgen_state);
+  llvm::IRBuilder<>& builder = cgen_state->ir_builder_;
   auto& context = builder.getContext();
   const auto parent_func = builder.GetInsertBlock()->getParent();
   builder.CreateStore(ll_bool(false, context), current_condition_match_ptr);

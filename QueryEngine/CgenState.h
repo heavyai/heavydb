@@ -405,3 +405,5 @@ struct CgenState {
   std::unordered_map<int, LiteralValues> literals_;
   std::unordered_map<int, size_t> literal_bytes_;
 };
+
+#include "AutomaticIRMetadataGuard.h"

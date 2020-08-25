@@ -19,11 +19,13 @@
 
 llvm::Value* CodeGenerator::codegenUnnest(const Analyzer::UOper* uoper,
                                           const CompilationOptions& co) {
+  AUTOMATIC_IR_METADATA(cgen_state_);
   return codegen(uoper->get_operand(), true, co).front();
 }
 
 llvm::Value* CodeGenerator::codegenArrayAt(const Analyzer::BinOper* array_at,
                                            const CompilationOptions& co) {
+  AUTOMATIC_IR_METADATA(cgen_state_);
   const auto arr_expr = array_at->get_left_operand();
   const auto idx_expr = array_at->get_right_operand();
   const auto& idx_ti = idx_expr->get_type_info();
@@ -65,6 +67,7 @@ llvm::Value* CodeGenerator::codegenArrayAt(const Analyzer::BinOper* array_at,
 
 llvm::Value* CodeGenerator::codegen(const Analyzer::CardinalityExpr* expr,
                                     const CompilationOptions& co) {
+  AUTOMATIC_IR_METADATA(cgen_state_);
   const auto arr_expr = expr->get_arg();
   const auto& array_ti = arr_expr->get_type_info();
   CHECK(array_ti.is_array());
@@ -88,6 +91,7 @@ llvm::Value* CodeGenerator::codegen(const Analyzer::CardinalityExpr* expr,
 std::vector<llvm::Value*> CodeGenerator::codegenArrayExpr(
     Analyzer::ArrayExpr const* array_expr,
     CompilationOptions const& co) {
+  AUTOMATIC_IR_METADATA(cgen_state_);
   using ValueVector = std::vector<llvm::Value*>;
   ValueVector argument_list;
   auto& ir_builder(cgen_state_->ir_builder_);

@@ -21,6 +21,7 @@
 std::vector<llvm::Value*> CodeGenerator::codegenGeoUOper(
     const Analyzer::GeoUOper* geo_expr,
     const CompilationOptions& co) {
+  AUTOMATIC_IR_METADATA(cgen_state_);
   if (co.device_type == ExecutorDeviceType::GPU) {
     if (geo_expr->getOp() != Geo_namespace::GeoBase::GeoOp::kPROJECTION) {
       throw QueryMustRunOnCpu();
@@ -80,6 +81,7 @@ std::vector<llvm::Value*> CodeGenerator::codegenGeoUOper(
 std::vector<llvm::Value*> CodeGenerator::codegenGeoBinOper(
     Analyzer::GeoBinOper const* geo_expr,
     CompilationOptions const& co) {
+  AUTOMATIC_IR_METADATA(cgen_state_);
   if (co.device_type == ExecutorDeviceType::GPU) {
     throw QueryMustRunOnCpu();
   }
@@ -162,6 +164,7 @@ std::vector<llvm::Value*> CodeGenerator::codegenGeoBinOper(
 std::vector<llvm::Value*> CodeGenerator::codegenGeoArgs(
     const std::vector<std::shared_ptr<Analyzer::Expr>>& geo_args,
     const CompilationOptions& co) {
+  AUTOMATIC_IR_METADATA(cgen_state_);
   std::vector<llvm::Value*> argument_list;
   bool coord_col = true;
   for (const auto& geo_arg : geo_args) {
@@ -227,6 +230,7 @@ std::vector<llvm::Value*> CodeGenerator::codegenGeosPredicateCall(
     const std::string& func,
     std::vector<llvm::Value*> argument_list,
     const CompilationOptions& co) {
+  AUTOMATIC_IR_METADATA(cgen_state_);
   auto i8_type = get_int_type(8, cgen_state_->context_);
   auto result = cgen_state_->ir_builder_.CreateAlloca(i8_type, nullptr, "result");
   argument_list.emplace_back(result);
@@ -258,6 +262,7 @@ std::vector<llvm::Value*> CodeGenerator::codegenGeosConstructorCall(
     const std::string& func,
     std::vector<llvm::Value*> argument_list,
     const CompilationOptions& co) {
+  AUTOMATIC_IR_METADATA(cgen_state_);
   // Create output buffer pointers, append pointers to output args to
   auto i8_type = get_int_type(8, cgen_state_->context_);
   auto i32_type = get_int_type(32, cgen_state_->context_);

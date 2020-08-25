@@ -215,6 +215,7 @@ extern "C" void register_buffer_with_executor_rsm(int64_t exec, int8_t* buffer) 
 llvm::Value* CodeGenerator::codegenFunctionOper(
     const Analyzer::FunctionOper* function_oper,
     const CompilationOptions& co) {
+  AUTOMATIC_IR_METADATA(cgen_state_);
   auto ext_func_sig = bind_function(function_oper);
 
   const auto& ret_ti = function_oper->get_type_info();
@@ -331,6 +332,7 @@ llvm::Value* CodeGenerator::codegenFunctionOper(
 std::tuple<CodeGenerator::ArgNullcheckBBs, llvm::Value*>
 CodeGenerator::beginArgsNullcheck(const Analyzer::FunctionOper* function_oper,
                                   const std::vector<llvm::Value*>& orig_arg_lvs) {
+  AUTOMATIC_IR_METADATA(cgen_state_);
   llvm::BasicBlock* args_null_bb{nullptr};
   llvm::BasicBlock* args_notnull_bb{nullptr};
   llvm::BasicBlock* orig_bb = cgen_state_->ir_builder_.GetInsertBlock();
@@ -366,6 +368,7 @@ llvm::Value* CodeGenerator::endArgsNullcheck(
     llvm::Value* fn_ret_lv,
     llvm::Value* null_array_ptr,
     const Analyzer::FunctionOper* function_oper) {
+  AUTOMATIC_IR_METADATA(cgen_state_);
   if (bbs.args_null_bb) {
     CHECK(bbs.args_notnull_bb);
     cgen_state_->ir_builder_.CreateBr(bbs.args_null_bb);
@@ -442,6 +445,7 @@ bool call_requires_custom_type_handling(const Analyzer::FunctionOper* function_o
 llvm::Value* CodeGenerator::codegenFunctionOperWithCustomTypeHandling(
     const Analyzer::FunctionOperWithCustomTypeHandling* function_oper,
     const CompilationOptions& co) {
+  AUTOMATIC_IR_METADATA(cgen_state_);
   if (call_requires_custom_type_handling(function_oper)) {
     // Some functions need the return type to be the same as the input type.
     if (function_oper->getName() == "FLOOR" || function_oper->getName() == "CEIL") {
@@ -509,6 +513,7 @@ llvm::Value* CodeGenerator::codegenFunctionOperWithCustomTypeHandling(
 llvm::Value* CodeGenerator::codegenFunctionOperNullArg(
     const Analyzer::FunctionOper* function_oper,
     const std::vector<llvm::Value*>& orig_arg_lvs) {
+  AUTOMATIC_IR_METADATA(cgen_state_);
   llvm::Value* one_arg_null =
       llvm::ConstantInt::get(llvm::IntegerType::getInt1Ty(cgen_state_->context_), false);
   size_t physical_coord_cols = 0;
@@ -547,6 +552,7 @@ llvm::Value* CodeGenerator::codegenFunctionOperNullArg(
 }
 
 llvm::Value* CodeGenerator::codegenCompression(const SQLTypeInfo& type_info) {
+  AUTOMATIC_IR_METADATA(cgen_state_);
   int32_t compression = (type_info.get_compression() == kENCODING_GEOINT &&
                          type_info.get_comp_param() == 32)
                             ? 1
@@ -560,6 +566,7 @@ std::pair<llvm::Value*, llvm::Value*> CodeGenerator::codegenArrayBuff(
     llvm::Value* row_pos,
     SQLTypes array_type,
     bool cast_and_extend) {
+  AUTOMATIC_IR_METADATA(cgen_state_);
   const auto elem_ti =
       SQLTypeInfo(
           SQLTypes::kARRAY, 0, 0, false, EncodingType::kENCODING_NONE, 0, array_type)
@@ -588,6 +595,7 @@ void CodeGenerator::codegenArrayArgs(const std::string& ext_func_name,
                                      llvm::Value* array_size,
                                      llvm::Value* array_null,
                                      std::vector<llvm::Value*>& output_args) {
+  AUTOMATIC_IR_METADATA(cgen_state_);
   CHECK(array_buf);
   CHECK(array_size);
   CHECK(array_null);
@@ -644,6 +652,7 @@ void CodeGenerator::codegenGeoPointArgs(const std::string& udf_func_name,
                                         llvm::Value* input_srid,
                                         llvm::Value* output_srid,
                                         std::vector<llvm::Value*>& output_args) {
+  AUTOMATIC_IR_METADATA(cgen_state_);
   CHECK(point_buf);
   CHECK(point_size);
   CHECK(compression);
@@ -708,6 +717,7 @@ void CodeGenerator::codegenGeoLineStringArgs(const std::string& udf_func_name,
                                              llvm::Value* input_srid,
                                              llvm::Value* output_srid,
                                              std::vector<llvm::Value*>& output_args) {
+  AUTOMATIC_IR_METADATA(cgen_state_);
   CHECK(line_string_buf);
   CHECK(line_string_size);
   CHECK(compression);
@@ -774,6 +784,7 @@ void CodeGenerator::codegenGeoPolygonArgs(const std::string& udf_func_name,
                                           llvm::Value* input_srid,
                                           llvm::Value* output_srid,
                                           std::vector<llvm::Value*>& output_args) {
+  AUTOMATIC_IR_METADATA(cgen_state_);
   CHECK(polygon_buf);
   CHECK(polygon_size);
   CHECK(ring_sizes_buf);
@@ -852,6 +863,7 @@ void CodeGenerator::codegenGeoMultiPolygonArgs(const std::string& udf_func_name,
                                                llvm::Value* input_srid,
                                                llvm::Value* output_srid,
                                                std::vector<llvm::Value*>& output_args) {
+  AUTOMATIC_IR_METADATA(cgen_state_);
   CHECK(polygon_coords);
   CHECK(polygon_coords_size);
   CHECK(ring_sizes_buf);
@@ -913,6 +925,7 @@ std::vector<llvm::Value*> CodeGenerator::codegenFunctionOperCastArgs(
     const std::vector<llvm::Value*>& orig_arg_lvs,
     const std::unordered_map<llvm::Value*, llvm::Value*>& const_arr_size,
     const CompilationOptions& co) {
+  AUTOMATIC_IR_METADATA(cgen_state_);
   CHECK(ext_func_sig);
   const auto& ext_func_args = ext_func_sig->getArgs();
   CHECK_LE(function_oper->getArity(), ext_func_args.size());
@@ -1175,6 +1188,7 @@ std::vector<llvm::Value*> CodeGenerator::codegenFunctionOperCastArgs(
 
 llvm::Value* CodeGenerator::castArrayPointer(llvm::Value* ptr,
                                              const SQLTypeInfo& elem_ti) {
+  AUTOMATIC_IR_METADATA(cgen_state_);
   if (elem_ti.get_type() == kFLOAT) {
     return cgen_state_->ir_builder_.CreatePointerCast(
         ptr, llvm::Type::getFloatPtrTy(cgen_state_->context_));

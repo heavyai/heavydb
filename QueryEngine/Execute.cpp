@@ -3048,6 +3048,7 @@ void Executor::nukeOldState(const bool allow_lazy_fetch,
 
 void Executor::preloadFragOffsets(const std::vector<InputDescriptor>& input_descs,
                                   const std::vector<InputTableInfo>& query_infos) {
+  AUTOMATIC_IR_METADATA(cgen_state_.get());
   const auto ld_count = input_descs.size();
   auto frag_off_ptr = get_arg_by_name(cgen_state_->row_func_, "frag_row_off");
   for (size_t i = 0; i < ld_count; ++i) {
@@ -3141,6 +3142,7 @@ int64_t Executor::deviceCycles(int milliseconds) const {
 }
 
 llvm::Value* Executor::castToFP(llvm::Value* val) {
+  AUTOMATIC_IR_METADATA(cgen_state_.get());
   if (!val->getType()->isIntegerTy()) {
     return val;
   }
@@ -3161,6 +3163,7 @@ llvm::Value* Executor::castToFP(llvm::Value* val) {
 }
 
 llvm::Value* Executor::castToIntPtrTyIn(llvm::Value* val, const size_t bitWidth) {
+  AUTOMATIC_IR_METADATA(cgen_state_.get());
   CHECK(val->getType()->isPointerTy());
 
   const auto val_ptr_type = static_cast<llvm::PointerType*>(val->getType());

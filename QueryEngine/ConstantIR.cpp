@@ -21,6 +21,7 @@ std::vector<llvm::Value*> CodeGenerator::codegen(const Analyzer::Constant* const
                                                  const EncodingType enc_type,
                                                  const int dict_id,
                                                  const CompilationOptions& co) {
+  AUTOMATIC_IR_METADATA(cgen_state_);
   if (co.hoist_literals) {
     std::vector<const Analyzer::Constant*> constants(
         executor()->deviceCount(co.device_type), constant);
@@ -82,6 +83,7 @@ std::vector<llvm::Value*> CodeGenerator::codegen(const Analyzer::Constant* const
 }
 
 llvm::ConstantInt* CodeGenerator::codegenIntConst(const Analyzer::Constant* constant) {
+  AUTOMATIC_IR_METADATA(cgen_state_);
   const auto& type_info = constant->get_type_info();
   if (constant->get_is_null()) {
     return cgen_state_->inlineIntNull(type_info);
@@ -113,6 +115,7 @@ std::vector<llvm::Value*> CodeGenerator::codegenHoistedConstantsLoads(
     const EncodingType enc_type,
     const int dict_id,
     const int16_t lit_off) {
+  AUTOMATIC_IR_METADATA(cgen_state_);
   std::string literal_name = "literal_" + std::to_string(lit_off);
   auto lit_buff_query_func_lv = get_arg_by_name(cgen_state_->query_func_, "literals");
   const auto lit_buf_start = cgen_state_->query_func_entry_ir_builder_.CreateGEP(
@@ -201,6 +204,7 @@ std::vector<llvm::Value*> CodeGenerator::codegenHoistedConstantsPlaceholders(
     const EncodingType enc_type,
     const int16_t lit_off,
     const std::vector<llvm::Value*>& literal_loads) {
+  AUTOMATIC_IR_METADATA(cgen_state_);
   std::string literal_name = "literal_" + std::to_string(lit_off);
 
   if (type_info.is_string() && enc_type != kENCODING_DICT) {
@@ -274,6 +278,7 @@ std::vector<llvm::Value*> CodeGenerator::codegenHoistedConstants(
     const std::vector<const Analyzer::Constant*>& constants,
     const EncodingType enc_type,
     const int dict_id) {
+  AUTOMATIC_IR_METADATA(cgen_state_);
   CHECK(!constants.empty());
 
   const auto& type_info = constants.front()->get_type_info();

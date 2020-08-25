@@ -100,6 +100,7 @@ ScalarCodeGenerator::CompiledExpression ScalarCodeGenerator::compile(
   own_cgen_state_->row_func_ = scalar_expr_func;
   own_cgen_state_->ir_builder_.SetInsertPoint(bb_entry);
   cgen_state_ = own_cgen_state_.get();
+  AUTOMATIC_IR_METADATA(cgen_state_);
   const auto expr_lvs = codegen(expr, fetch_columns, co);
   CHECK_EQ(expr_lvs.size(), size_t(1));
   cgen_state_->ir_builder_.CreateStore(expr_lvs.front(),

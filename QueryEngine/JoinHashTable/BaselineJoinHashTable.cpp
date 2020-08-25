@@ -1032,6 +1032,7 @@ int BaselineJoinHashTable::initHashTableForDevice(
 
 llvm::Value* BaselineJoinHashTable::codegenSlot(const CompilationOptions& co,
                                                 const size_t index) {
+  AUTOMATIC_IR_METADATA(executor_->cgen_state_.get());
   CHECK(getHashType() == JoinHashTableInterface::HashType::OneToOne);
   const auto key_component_width = getKeyComponentWidth();
   CHECK(key_component_width == 4 || key_component_width == 8);
@@ -1049,6 +1050,7 @@ llvm::Value* BaselineJoinHashTable::codegenSlot(const CompilationOptions& co,
 HashJoinMatchingSet BaselineJoinHashTable::codegenMatchingSet(
     const CompilationOptions& co,
     const size_t index) {
+  AUTOMATIC_IR_METADATA(executor_->cgen_state_.get());
   const auto key_component_width = getKeyComponentWidth();
   CHECK(key_component_width == 4 || key_component_width == 8);
   auto key_buff_lv = codegenKey(co);
@@ -1137,6 +1139,7 @@ size_t BaselineJoinHashTable::getComponentBufferSize() const noexcept {
 }
 
 llvm::Value* BaselineJoinHashTable::codegenKey(const CompilationOptions& co) {
+  AUTOMATIC_IR_METADATA(executor_->cgen_state_.get());
   const auto key_component_width = getKeyComponentWidth();
   CHECK(key_component_width == 4 || key_component_width == 8);
   const auto key_size_lv = LL_INT(getKeyComponentCount() * key_component_width);
@@ -1169,6 +1172,7 @@ llvm::Value* BaselineJoinHashTable::codegenKey(const CompilationOptions& co) {
 }
 
 llvm::Value* BaselineJoinHashTable::hashPtr(const size_t index) {
+  AUTOMATIC_IR_METADATA(executor_->cgen_state_.get());
   auto hash_ptr = JoinHashTable::codegenHashTableLoad(index, executor_);
   const auto pi8_type = llvm::Type::getInt8PtrTy(LL_CONTEXT);
   return hash_ptr->getType()->isPointerTy()

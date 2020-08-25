@@ -183,6 +183,7 @@ std::shared_ptr<Analyzer::BinOper> lower_multicol_compare(
 
 llvm::Value* CodeGenerator::codegenCmp(const Analyzer::BinOper* bin_oper,
                                        const CompilationOptions& co) {
+  AUTOMATIC_IR_METADATA(cgen_state_);
   const auto qualifier = bin_oper->get_qualifier();
   const auto lhs = bin_oper->get_left_operand();
   const auto rhs = bin_oper->get_right_operand();
@@ -242,6 +243,7 @@ llvm::Value* CodeGenerator::codegenOverlaps(const SQLOps optype,
                                             const CompilationOptions& co) {
   // TODO(adb): we should never get here, but going to leave this in place for now since
   // it will likely be useful in factoring the bounds check out of ST_Contains
+  AUTOMATIC_IR_METADATA(cgen_state_);
   const auto lhs_ti = lhs->get_type_info();
   if (g_enable_overlaps_hashjoin) {
     LOG(FATAL) << "Fatal error when generating code for qualifier "
@@ -317,6 +319,7 @@ llvm::Value* CodeGenerator::codegenStrCmp(const SQLOps optype,
                                           const std::shared_ptr<Analyzer::Expr> lhs,
                                           const std::shared_ptr<Analyzer::Expr> rhs,
                                           const CompilationOptions& co) {
+  AUTOMATIC_IR_METADATA(cgen_state_);
   const auto lhs_ti = lhs->get_type_info();
   const auto rhs_ti = rhs->get_type_info();
 
@@ -342,12 +345,14 @@ llvm::Value* CodeGenerator::codegenStrCmp(const SQLOps optype,
   }
   return nullptr;
 }
+
 llvm::Value* CodeGenerator::codegenCmpDecimalConst(const SQLOps optype,
                                                    const SQLQualifier qualifier,
                                                    const Analyzer::Expr* lhs,
                                                    const SQLTypeInfo& lhs_ti,
                                                    const Analyzer::Expr* rhs,
                                                    const CompilationOptions& co) {
+  AUTOMATIC_IR_METADATA(cgen_state_);
   auto u_oper = dynamic_cast<const Analyzer::UOper*>(lhs);
   if (!u_oper || u_oper->get_optype() != kCAST) {
     return nullptr;
@@ -398,6 +403,7 @@ llvm::Value* CodeGenerator::codegenCmp(const SQLOps optype,
                                        const SQLTypeInfo& lhs_ti,
                                        const Analyzer::Expr* rhs,
                                        const CompilationOptions& co) {
+  AUTOMATIC_IR_METADATA(cgen_state_);
   CHECK(IS_COMPARISON(optype));
   const auto& rhs_ti = rhs->get_type_info();
   if (rhs_ti.is_array()) {
@@ -493,6 +499,7 @@ llvm::Value* CodeGenerator::codegenQualifierCmp(const SQLOps optype,
                                                 std::vector<llvm::Value*> lhs_lvs,
                                                 const Analyzer::Expr* rhs,
                                                 const CompilationOptions& co) {
+  AUTOMATIC_IR_METADATA(cgen_state_);
   const auto& rhs_ti = rhs->get_type_info();
   const Analyzer::Expr* arr_expr{rhs};
   if (dynamic_cast<const Analyzer::UOper*>(rhs)) {

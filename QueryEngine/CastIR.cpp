@@ -19,6 +19,7 @@
 
 llvm::Value* CodeGenerator::codegenCast(const Analyzer::UOper* uoper,
                                         const CompilationOptions& co) {
+  AUTOMATIC_IR_METADATA(cgen_state_);
   CHECK_EQ(uoper->get_optype(), kCAST);
   const auto& ti = uoper->get_type_info();
   const auto operand = uoper->get_operand();
@@ -55,6 +56,7 @@ llvm::Value* CodeGenerator::codegenCast(llvm::Value* operand_lv,
                                         const SQLTypeInfo& ti,
                                         const bool operand_is_const,
                                         const CompilationOptions& co) {
+  AUTOMATIC_IR_METADATA(cgen_state_);
   if (byte_array_cast(operand_ti, ti)) {
     auto* byte_array_type = get_int_array_type(8, ti.get_size(), cgen_state_->context_);
     return cgen_state_->ir_builder_.CreatePointerCast(operand_lv,
@@ -116,6 +118,7 @@ llvm::Value* CodeGenerator::codegenCast(llvm::Value* operand_lv,
 llvm::Value* CodeGenerator::codegenCastTimestampToDate(llvm::Value* ts_lv,
                                                        const int dimen,
                                                        const bool nullable) {
+  AUTOMATIC_IR_METADATA(cgen_state_);
   CHECK(ts_lv->getType()->isIntegerTy(64));
   std::vector<llvm::Value*> datetrunc_args{ts_lv};
   if (dimen > 0) {
@@ -146,6 +149,7 @@ llvm::Value* CodeGenerator::codegenCastBetweenTimestamps(llvm::Value* ts_lv,
                                                          const SQLTypeInfo& operand_ti,
                                                          const SQLTypeInfo& target_ti,
                                                          const bool nullable) {
+  AUTOMATIC_IR_METADATA(cgen_state_);
   const auto operand_dimen = operand_ti.get_dimension();
   const auto target_dimen = target_ti.get_dimension();
   if (operand_dimen == target_dimen) {
@@ -178,6 +182,7 @@ llvm::Value* CodeGenerator::codegenCastFromString(llvm::Value* operand_lv,
                                                   const SQLTypeInfo& ti,
                                                   const bool operand_is_const,
                                                   const CompilationOptions& co) {
+  AUTOMATIC_IR_METADATA(cgen_state_);
   if (!ti.is_string()) {
     throw std::runtime_error("Cast from " + operand_ti.get_type_name() + " to " +
                              ti.get_type_name() + " not supported");
@@ -245,6 +250,7 @@ llvm::Value* CodeGenerator::codegenCastBetweenIntTypes(llvm::Value* operand_lv,
                                                        const SQLTypeInfo& operand_ti,
                                                        const SQLTypeInfo& ti,
                                                        bool upscale) {
+  AUTOMATIC_IR_METADATA(cgen_state_);
   if (ti.is_decimal() &&
       (!operand_ti.is_decimal() || operand_ti.get_scale() <= ti.get_scale())) {
     if (upscale) {
@@ -318,6 +324,7 @@ void CodeGenerator::codegenCastBetweenIntTypesOverflowChecks(
     const SQLTypeInfo& operand_ti,
     const SQLTypeInfo& ti,
     const int64_t scale) {
+  AUTOMATIC_IR_METADATA(cgen_state_);
   llvm::Value* chosen_max{nullptr};
   llvm::Value* chosen_min{nullptr};
   std::tie(chosen_max, chosen_min) =
@@ -373,6 +380,7 @@ void CodeGenerator::codegenCastBetweenIntTypesOverflowChecks(
 llvm::Value* CodeGenerator::codegenCastToFp(llvm::Value* operand_lv,
                                             const SQLTypeInfo& operand_ti,
                                             const SQLTypeInfo& ti) {
+  AUTOMATIC_IR_METADATA(cgen_state_);
   if (!ti.is_fp()) {
     throw std::runtime_error("Cast from " + operand_ti.get_type_name() + " to " +
                              ti.get_type_name() + " not supported");
@@ -404,6 +412,7 @@ llvm::Value* CodeGenerator::codegenCastToFp(llvm::Value* operand_lv,
 llvm::Value* CodeGenerator::codegenCastFromFp(llvm::Value* operand_lv,
                                               const SQLTypeInfo& operand_ti,
                                               const SQLTypeInfo& ti) {
+  AUTOMATIC_IR_METADATA(cgen_state_);
   if (!operand_ti.is_fp() || !ti.is_number() || ti.is_decimal()) {
     throw std::runtime_error("Cast from " + operand_ti.get_type_name() + " to " +
                              ti.get_type_name() + " not supported");

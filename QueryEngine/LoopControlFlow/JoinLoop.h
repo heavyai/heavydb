@@ -22,6 +22,7 @@
 #include "Shared/Logger.h"
 
 #include "../../Shared/sqldefs.h"
+#include "../CgenState.h"
 #include "../IRCodegenUtils.h"
 
 #include <functional>
@@ -67,7 +68,7 @@ class JoinLoop {
           body_codegen,
       llvm::Value* outer_iter,
       llvm::BasicBlock* exit_bb,
-      llvm::IRBuilder<>& builder);
+      CgenState* cgen_state);
 
  private:
   static std::pair<llvm::BasicBlock*, llvm::Value*> evaluateOuterJoinCondition(
@@ -78,7 +79,7 @@ class JoinLoop {
       llvm::Value* have_more_inner_rows,
       llvm::Value* found_an_outer_match_ptr,
       llvm::Value* current_condition_match_ptr,
-      llvm::IRBuilder<>& builder);
+      CgenState* cgen_state);
 
   const JoinLoopKind kind_;
   // SQL type of the join.

@@ -68,6 +68,7 @@ const char* get_extract_function_name(ExtractField field) {
 
 llvm::Value* CodeGenerator::codegen(const Analyzer::ExtractExpr* extract_expr,
                                     const CompilationOptions& co) {
+  AUTOMATIC_IR_METADATA(cgen_state_);
   auto from_expr = codegen(extract_expr->get_from_expr(), true, co).front();
   const int32_t extract_field{extract_expr->get_field()};
   const auto& extract_expr_ti = extract_expr->get_from_expr()->get_type_info();
@@ -155,6 +156,7 @@ llvm::Value* CodeGenerator::codegen(const Analyzer::ExtractExpr* extract_expr,
 
 llvm::Value* CodeGenerator::codegen(const Analyzer::DateaddExpr* dateadd_expr,
                                     const CompilationOptions& co) {
+  AUTOMATIC_IR_METADATA(cgen_state_);
   const auto& dateadd_expr_ti = dateadd_expr->get_type_info();
   CHECK(dateadd_expr_ti.get_type() == kTIMESTAMP || dateadd_expr_ti.get_type() == kDATE);
   auto datetime = codegen(dateadd_expr->get_datetime_expr(), true, co).front();
@@ -186,6 +188,7 @@ llvm::Value* CodeGenerator::codegen(const Analyzer::DateaddExpr* dateadd_expr,
 
 llvm::Value* CodeGenerator::codegen(const Analyzer::DatediffExpr* datediff_expr,
                                     const CompilationOptions& co) {
+  AUTOMATIC_IR_METADATA(cgen_state_);
   auto start = codegen(datediff_expr->get_start_expr(), true, co).front();
   CHECK(start->getType()->isIntegerTy(64));
   auto end = codegen(datediff_expr->get_end_expr(), true, co).front();
@@ -213,6 +216,7 @@ llvm::Value* CodeGenerator::codegen(const Analyzer::DatediffExpr* datediff_expr,
 
 llvm::Value* CodeGenerator::codegen(const Analyzer::DatetruncExpr* datetrunc_expr,
                                     const CompilationOptions& co) {
+  AUTOMATIC_IR_METADATA(cgen_state_);
   auto from_expr = codegen(datetrunc_expr->get_from_expr(), true, co).front();
   const auto& datetrunc_expr_ti = datetrunc_expr->get_from_expr()->get_type_info();
   CHECK(from_expr->getType()->isIntegerTy(64));
@@ -235,6 +239,7 @@ llvm::Value* CodeGenerator::codegenExtractHighPrecisionTimestamps(
     llvm::Value* ts_lv,
     const SQLTypeInfo& ti,
     const ExtractField& field) {
+  AUTOMATIC_IR_METADATA(cgen_state_);
   CHECK(ti.is_high_precision_timestamp());
   CHECK(ts_lv->getType()->isIntegerTy(64));
   if (is_subsecond_extract_field(field)) {
@@ -278,6 +283,7 @@ llvm::Value* CodeGenerator::codegenDateTruncHighPrecisionTimestamps(
     llvm::Value* ts_lv,
     const SQLTypeInfo& ti,
     const DatetruncField& field) {
+  AUTOMATIC_IR_METADATA(cgen_state_);
   CHECK(ti.is_high_precision_timestamp());
   CHECK(ts_lv->getType()->isIntegerTy(64));
   if (is_subsecond_datetrunc_field(field)) {

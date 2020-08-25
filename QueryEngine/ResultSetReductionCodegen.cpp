@@ -141,6 +141,7 @@ void return_early(llvm::Value* cond,
                   llvm::Function* func,
                   llvm::Value* error_code) {
   auto cgen_state = reduction_code.cgen_state.get();
+  AUTOMATIC_IR_METADATA(cgen_state);
   auto& ctx = cgen_state->context_;
   const auto early_return = llvm::BasicBlock::Create(ctx, ".early_return", func, 0);
   const auto do_reduction = llvm::BasicBlock::Create(ctx, ".do_reduction", func, 0);
@@ -205,6 +206,7 @@ void translate_body(const std::vector<std::unique_ptr<Instruction>>& body,
                     std::unordered_map<const Value*, llvm::Value*>& m,
                     const std::unordered_map<const Function*, llvm::Function*>& f) {
   auto cgen_state = reduction_code.cgen_state.get();
+  AUTOMATIC_IR_METADATA(cgen_state);
   auto& ctx = cgen_state->context_;
   for (const auto& instr : body) {
     const auto instr_ptr = instr.get();
@@ -289,6 +291,7 @@ void translate_for(const For* for_loop,
                    std::unordered_map<const Value*, llvm::Value*>& m,
                    const std::unordered_map<const Function*, llvm::Function*>& f) {
   auto cgen_state = reduction_code.cgen_state.get();
+  AUTOMATIC_IR_METADATA(cgen_state);
   const auto bb_entry = cgen_state->ir_builder_.GetInsertBlock();
   auto& ctx = cgen_state->context_;
   const auto i64_type = get_int_type(64, cgen_state->context_);
@@ -337,7 +340,7 @@ void translate_for(const For* for_loop,
       },
       nullptr,
       bb_exit,
-      cgen_state->ir_builder_);
+      cgen_state);
   cgen_state->ir_builder_.SetInsertPoint(bb_entry);
   cgen_state->ir_builder_.CreateBr(bb_loop_body);
   cgen_state->ir_builder_.SetInsertPoint(bb_exit);
@@ -345,6 +348,7 @@ void translate_for(const For* for_loop,
 
 // Create the entry basic block into an initially empty function.
 void create_entry_block(llvm::Function* function, CgenState* cgen_state) {
+  AUTOMATIC_IR_METADATA(cgen_state);
   const auto bb_entry =
       llvm::BasicBlock::Create(cgen_state->context_, ".entry", function, 0);
   cgen_state->ir_builder_.SetInsertPoint(bb_entry);
@@ -357,6 +361,7 @@ void translate_function(const Function* function,
                         const ReductionCode& reduction_code,
                         const std::unordered_map<const Function*, llvm::Function*>& f) {
   auto cgen_state = reduction_code.cgen_state.get();
+  AUTOMATIC_IR_METADATA(cgen_state);
   create_entry_block(llvm_function, cgen_state);
   // Set the value mapping based on the input arguments.
   std::unordered_map<const Value*, llvm::Value*> m;

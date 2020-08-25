@@ -1234,6 +1234,7 @@ void JoinHashTable::putHashTableOnCpuToCache(
 }
 
 llvm::Value* JoinHashTable::codegenHashTableLoad(const size_t table_idx) {
+  AUTOMATIC_IR_METADATA(executor_->cgen_state_.get());
   const auto hash_ptr = codegenHashTableLoad(table_idx, executor_);
   if (hash_ptr->getType()->isIntegerTy(64)) {
     return hash_ptr;
@@ -1246,6 +1247,7 @@ llvm::Value* JoinHashTable::codegenHashTableLoad(const size_t table_idx) {
 
 llvm::Value* JoinHashTable::codegenHashTableLoad(const size_t table_idx,
                                                  Executor* executor) {
+  AUTOMATIC_IR_METADATA(executor->cgen_state_.get());
   llvm::Value* hash_ptr = nullptr;
   const auto total_table_count =
       executor->plan_state_->join_info_.join_hash_tables_.size();
@@ -1270,6 +1272,7 @@ std::vector<llvm::Value*> JoinHashTable::getHashJoinArgs(llvm::Value* hash_ptr,
                                                          const Analyzer::Expr* key_col,
                                                          const int shard_count,
                                                          const CompilationOptions& co) {
+  AUTOMATIC_IR_METADATA(executor_->cgen_state_.get());
   CodeGenerator code_generator(executor_);
   const auto key_lvs = code_generator.codegen(key_col, true, co);
   CHECK_EQ(size_t(1), key_lvs.size());
@@ -1318,6 +1321,7 @@ std::vector<llvm::Value*> JoinHashTable::getHashJoinArgs(llvm::Value* hash_ptr,
 
 HashJoinMatchingSet JoinHashTable::codegenMatchingSet(const CompilationOptions& co,
                                                       const size_t index) {
+  AUTOMATIC_IR_METADATA(executor_->cgen_state_.get());
   const auto cols = get_cols(
       qual_bin_oper_.get(), *executor_->getCatalog(), executor_->temporary_tables_);
   auto key_col = cols.second;
@@ -1349,6 +1353,7 @@ HashJoinMatchingSet JoinHashTable::codegenMatchingSet(
     const int64_t sub_buff_size,
     Executor* executor,
     bool is_bucketized) {
+  AUTOMATIC_IR_METADATA(executor->cgen_state_.get());
   using namespace std::string_literals;
 
   std::string fname(is_bucketized ? "bucketized_hash_join_idx"s : "hash_join_idx"s);
@@ -1517,6 +1522,7 @@ std::set<DecodedJoinHashBufferEntry> JoinHashTable::toSet(
 
 llvm::Value* JoinHashTable::codegenSlot(const CompilationOptions& co,
                                         const size_t index) {
+  AUTOMATIC_IR_METADATA(executor_->cgen_state_.get());
   using namespace std::string_literals;
 
   CHECK(getHashType() == JoinHashTableInterface::HashType::OneToOne);

@@ -187,6 +187,7 @@ bool CodeGenerator::prioritizeQuals(const RelAlgExecutionUnit& ra_exe_unit,
 
 llvm::Value* CodeGenerator::codegenLogicalShortCircuit(const Analyzer::BinOper* bin_oper,
                                                        const CompilationOptions& co) {
+  AUTOMATIC_IR_METADATA(cgen_state_);
   const auto optype = bin_oper->get_optype();
   auto lhs = bin_oper->get_left_operand();
   auto rhs = bin_oper->get_right_operand();
@@ -288,6 +289,7 @@ llvm::Value* CodeGenerator::codegenLogicalShortCircuit(const Analyzer::BinOper* 
 
 llvm::Value* CodeGenerator::codegenLogical(const Analyzer::BinOper* bin_oper,
                                            const CompilationOptions& co) {
+  AUTOMATIC_IR_METADATA(cgen_state_);
   const auto optype = bin_oper->get_optype();
   CHECK(IS_LOGIC(optype));
 
@@ -331,6 +333,7 @@ llvm::Value* CodeGenerator::codegenLogical(const Analyzer::BinOper* bin_oper,
 }
 
 llvm::Value* CodeGenerator::toBool(llvm::Value* lv) {
+  AUTOMATIC_IR_METADATA(cgen_state_);
   CHECK(lv->getType()->isIntegerTy());
   if (static_cast<llvm::IntegerType*>(lv->getType())->getBitWidth() > 1) {
     return cgen_state_->ir_builder_.CreateICmp(
@@ -350,6 +353,7 @@ bool is_qualified_bin_oper(const Analyzer::Expr* expr) {
 
 llvm::Value* CodeGenerator::codegenLogical(const Analyzer::UOper* uoper,
                                            const CompilationOptions& co) {
+  AUTOMATIC_IR_METADATA(cgen_state_);
   const auto optype = uoper->get_optype();
   CHECK_EQ(kNOT, optype);
   const auto operand = uoper->get_operand();
@@ -367,6 +371,7 @@ llvm::Value* CodeGenerator::codegenLogical(const Analyzer::UOper* uoper,
 
 llvm::Value* CodeGenerator::codegenIsNull(const Analyzer::UOper* uoper,
                                           const CompilationOptions& co) {
+  AUTOMATIC_IR_METADATA(cgen_state_);
   const auto operand = uoper->get_operand();
   if (dynamic_cast<const Analyzer::Constant*>(operand) &&
       dynamic_cast<const Analyzer::Constant*>(operand)->get_is_null()) {
@@ -395,6 +400,7 @@ llvm::Value* CodeGenerator::codegenIsNull(const Analyzer::UOper* uoper,
 
 llvm::Value* CodeGenerator::codegenIsNullNumber(llvm::Value* operand_lv,
                                                 const SQLTypeInfo& ti) {
+  AUTOMATIC_IR_METADATA(cgen_state_);
   if (ti.is_fp()) {
     return cgen_state_->ir_builder_.CreateFCmp(llvm::FCmpInst::FCMP_OEQ,
                                                operand_lv,

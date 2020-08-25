@@ -35,6 +35,7 @@ std::string numeric_or_time_interval_type_name(const SQLTypeInfo& ti1,
 
 llvm::Value* CodeGenerator::codegenArith(const Analyzer::BinOper* bin_oper,
                                          const CompilationOptions& co) {
+  AUTOMATIC_IR_METADATA(cgen_state_);
   const auto optype = bin_oper->get_optype();
   CHECK(IS_ARITHMETIC(optype));
   const auto lhs = bin_oper->get_left_operand();
@@ -75,6 +76,7 @@ llvm::Value* CodeGenerator::codegenIntArith(const Analyzer::BinOper* bin_oper,
                                             llvm::Value* lhs_lv,
                                             llvm::Value* rhs_lv,
                                             const CompilationOptions& co) {
+  AUTOMATIC_IR_METADATA(cgen_state_);
   const auto lhs = bin_oper->get_left_operand();
   const auto rhs = bin_oper->get_right_operand();
   const auto& lhs_type = lhs->get_type_info();
@@ -130,6 +132,7 @@ llvm::Value* CodeGenerator::codegenIntArith(const Analyzer::BinOper* bin_oper,
 llvm::Value* CodeGenerator::codegenFpArith(const Analyzer::BinOper* bin_oper,
                                            llvm::Value* lhs_lv,
                                            llvm::Value* rhs_lv) {
+  AUTOMATIC_IR_METADATA(cgen_state_);
   const auto lhs = bin_oper->get_left_operand();
   const auto rhs = bin_oper->get_right_operand();
   const auto& lhs_type = lhs->get_type_info();
@@ -215,6 +218,7 @@ llvm::Value* CodeGenerator::codegenAdd(const Analyzer::BinOper* bin_oper,
                                        const std::string& null_check_suffix,
                                        const SQLTypeInfo& ti,
                                        const CompilationOptions& co) {
+  AUTOMATIC_IR_METADATA(cgen_state_);
   CHECK_EQ(lhs_lv->getType(), rhs_lv->getType());
   CHECK(ti.is_integer() || ti.is_decimal() || ti.is_timeinterval());
   llvm::Value* chosen_max{nullptr};
@@ -276,6 +280,7 @@ llvm::Value* CodeGenerator::codegenSub(const Analyzer::BinOper* bin_oper,
                                        const std::string& null_check_suffix,
                                        const SQLTypeInfo& ti,
                                        const CompilationOptions& co) {
+  AUTOMATIC_IR_METADATA(cgen_state_);
   CHECK_EQ(lhs_lv->getType(), rhs_lv->getType());
   CHECK(ti.is_integer() || ti.is_decimal() || ti.is_timeinterval());
   llvm::Value* chosen_max{nullptr};
@@ -356,6 +361,7 @@ llvm::Value* CodeGenerator::codegenMul(const Analyzer::BinOper* bin_oper,
                                        const SQLTypeInfo& ti,
                                        const CompilationOptions& co,
                                        bool downscale) {
+  AUTOMATIC_IR_METADATA(cgen_state_);
   CHECK_EQ(lhs_lv->getType(), rhs_lv->getType());
   CHECK(ti.is_integer() || ti.is_decimal() || ti.is_timeinterval());
   llvm::Value* chosen_max{nullptr};
@@ -425,6 +431,7 @@ llvm::Value* CodeGenerator::codegenDiv(llvm::Value* lhs_lv,
                                        const std::string& null_check_suffix,
                                        const SQLTypeInfo& ti,
                                        bool upscale) {
+  AUTOMATIC_IR_METADATA(cgen_state_);
   CHECK_EQ(lhs_lv->getType(), rhs_lv->getType());
   if (ti.is_decimal()) {
     if (upscale) {
@@ -533,6 +540,7 @@ llvm::Value* CodeGenerator::codegenDiv(llvm::Value* lhs_lv,
 // It is both more efficient and avoids the overflow for a lot of practical cases.
 llvm::Value* CodeGenerator::codegenDeciDiv(const Analyzer::BinOper* bin_oper,
                                            const CompilationOptions& co) {
+  AUTOMATIC_IR_METADATA(cgen_state_);
   auto lhs = bin_oper->get_left_operand();
   auto rhs = bin_oper->get_right_operand();
   const auto& lhs_type = lhs->get_type_info();
@@ -587,6 +595,7 @@ llvm::Value* CodeGenerator::codegenMod(llvm::Value* lhs_lv,
                                        const std::string& null_typename,
                                        const std::string& null_check_suffix,
                                        const SQLTypeInfo& ti) {
+  AUTOMATIC_IR_METADATA(cgen_state_);
   CHECK_EQ(lhs_lv->getType(), rhs_lv->getType());
   CHECK(ti.is_integer());
   cgen_state_->needs_error_check_ = true;
@@ -636,6 +645,7 @@ bool CodeGenerator::checkExpressionRanges(const Analyzer::UOper* uoper,
 
 llvm::Value* CodeGenerator::codegenUMinus(const Analyzer::UOper* uoper,
                                           const CompilationOptions& co) {
+  AUTOMATIC_IR_METADATA(cgen_state_);
   CHECK_EQ(uoper->get_optype(), kUMINUS);
   const auto operand_lv = codegen(uoper->get_operand(), true, co).front();
   const auto& ti = uoper->get_type_info();
@@ -713,6 +723,7 @@ llvm::Value* CodeGenerator::codegenBinOpWithOverflowForCPU(
     llvm::Value* rhs_lv,
     const std::string& null_check_suffix,
     const SQLTypeInfo& ti) {
+  AUTOMATIC_IR_METADATA(cgen_state_);
   cgen_state_->needs_error_check_ = true;
 
   llvm::BasicBlock* check_ok =
