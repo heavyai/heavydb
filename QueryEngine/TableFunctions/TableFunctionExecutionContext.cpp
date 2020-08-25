@@ -219,13 +219,18 @@ ResultSetPtr TableFunctionExecutionContext::launchCpuCode(
   auto group_by_buffers_ptr = query_buffers->getGroupByBuffersPtr();
   CHECK(group_by_buffers_ptr);
 
+  auto output_buffers_ptr = reinterpret_cast<int64_t*>(group_by_buffers_ptr[0]);
+  std::vector<int64_t*> output_col_buf_ptrs;
+  for (size_t i = 0; i < exe_unit.target_exprs.size(); i++) {
+    output_col_buf_ptrs.emplace_back(output_buffers_ptr + i * elem_count);
+  }
+
   // execute
   const auto kernel_element_count = static_cast<int64_t>(elem_count);
-  const auto err =
-      compilation_context->getFuncPtr()(byte_stream_ptr,
-                                        &kernel_element_count,
-                                        query_buffers->getGroupByBuffersPtr(),
-                                        &output_row_count);
+  const auto err = compilation_context->getFuncPtr()(byte_stream_ptr,
+                                                     &kernel_element_count,
+                                                     output_col_buf_ptrs.data(),
+                                                     &output_row_count);
   if (err) {
     throw std::runtime_error("Error executing table function: " + std::to_string(err));
   }
