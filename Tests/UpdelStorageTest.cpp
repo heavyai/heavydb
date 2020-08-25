@@ -26,7 +26,7 @@
 
 #include "Catalog/Catalog.h"
 #include "Fragmenter/InsertOrderFragmenter.h"
-#include "Import/Importer.h"
+#include "ImportExport/Importer.h"
 #include "Parser/parser.h"
 #include "QueryEngine/Execute.h"
 #include "QueryEngine/ResultSet.h"
@@ -515,7 +515,7 @@ bool delete_and_vacuum_varlen_rows(const std::string& table,
       auto cat = QR::get()->getCatalog().get();
       const auto td = cat->getMetadataForTable(table,
                                                /*populateFragmenter=*/true);
-      auto executor = Executor::getExecutor(cat->getCurrentDB().dbId);
+      auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID);
       TableOptimizer optimizer(td, executor.get(), *cat);
       optimizer.vacuumDeletedRows();
       optimizer.recomputeMetadata();

@@ -21,6 +21,51 @@
 
 using namespace DateTimeUtils;
 
+namespace {
+
+const char* get_extract_function_name(ExtractField field) {
+  switch (field) {
+    case kEPOCH:
+      return "extract_epoch";
+    case kDATEEPOCH:
+      return "extract_dateepoch";
+    case kQUARTERDAY:
+      return "extract_quarterday";
+    case kHOUR:
+      return "extract_hour";
+    case kMINUTE:
+      return "extract_minute";
+    case kSECOND:
+      return "extract_second";
+    case kMILLISECOND:
+      return "extract_millisecond";
+    case kMICROSECOND:
+      return "extract_microsecond";
+    case kNANOSECOND:
+      return "extract_nanosecond";
+    case kDOW:
+      return "extract_dow";
+    case kISODOW:
+      return "extract_isodow";
+    case kDAY:
+      return "extract_day";
+    case kWEEK:
+      return "extract_week";
+    case kDOY:
+      return "extract_day_of_year";
+    case kMONTH:
+      return "extract_month";
+    case kQUARTER:
+      return "extract_quarter";
+    case kYEAR:
+      return "extract_year";
+  }
+  UNREACHABLE();
+  return "";
+}
+
+}  // namespace
+
 llvm::Value* CodeGenerator::codegen(const Analyzer::ExtractExpr* extract_expr,
                                     const CompilationOptions& co) {
   auto from_expr = codegen(extract_expr->get_from_expr(), true, co).front();
@@ -34,8 +79,8 @@ llvm::Value* CodeGenerator::codegen(const Analyzer::ExtractExpr* extract_expr,
           cgen_state_->ir_builder_.CreateCast(llvm::Instruction::CastOps::SExt,
                                               from_expr,
                                               get_int_type(64, cgen_state_->context_));
+      return from_expr;
     }
-    return from_expr;
   }
   CHECK(from_expr->getType()->isIntegerTy(64));
   if (extract_expr_ti.is_high_precision_timestamp()) {
@@ -57,15 +102,55 @@ llvm::Value* CodeGenerator::codegen(const Analyzer::ExtractExpr* extract_expr,
                        get_extract_timestamp_precision_scale(extract_expr->get_field())),
                    cgen_state_->inlineIntNull(extract_expr_ti)});
   }
-  std::vector<llvm::Value*> extract_args{
-      cgen_state_->llInt(static_cast<int32_t>(extract_expr->get_field())), from_expr};
-  std::string extract_fname{"ExtractFromTime"};
+  const auto extract_fname = get_extract_function_name(extract_expr->get_field());
   if (!extract_expr_ti.get_notnull()) {
-    extract_args.push_back(cgen_state_->inlineIntNull(extract_expr_ti));
-    extract_fname += "Nullable";
+    llvm::BasicBlock* extract_nullcheck_bb{nullptr};
+    llvm::PHINode* extract_nullcheck_value{nullptr};
+    {
+      GroupByAndAggregate::DiamondCodegen null_check(
+          cgen_state_->ir_builder_.CreateICmp(
+              llvm::ICmpInst::ICMP_EQ,
+              from_expr,
+              cgen_state_->inlineIntNull(extract_expr_ti)),
+          executor(),
+          false,
+          "extract_nullcheck",
+          nullptr,
+          false);
+      // generate a phi node depending on whether we got a null or not
+      extract_nullcheck_bb = llvm::BasicBlock::Create(
+          cgen_state_->context_, "extract_nullcheck_bb", cgen_state_->row_func_);
+
+      // update the blocks created by diamond codegen to point to the newly created phi
+      // block
+      cgen_state_->ir_builder_.SetInsertPoint(null_check.cond_true_);
+      cgen_state_->ir_builder_.CreateBr(extract_nullcheck_bb);
+      cgen_state_->ir_builder_.SetInsertPoint(null_check.cond_false_);
+      auto extract_call =
+          cgen_state_->emitExternalCall(extract_fname,
+                                        get_int_type(64, cgen_state_->context_),
+                                        std::vector<llvm::Value*>{from_expr});
+      cgen_state_->ir_builder_.CreateBr(extract_nullcheck_bb);
+
+      cgen_state_->ir_builder_.SetInsertPoint(extract_nullcheck_bb);
+      extract_nullcheck_value = cgen_state_->ir_builder_.CreatePHI(
+          get_int_type(64, cgen_state_->context_), 2, "extract_value");
+      extract_nullcheck_value->addIncoming(extract_call, null_check.cond_false_);
+      extract_nullcheck_value->addIncoming(cgen_state_->inlineIntNull(extract_expr_ti),
+                                           null_check.cond_true_);
+    }
+
+    // diamond codegen will set the insert point in its destructor. override it to
+    // continue using the extract nullcheck bb
+    CHECK(extract_nullcheck_bb);
+    cgen_state_->ir_builder_.SetInsertPoint(extract_nullcheck_bb);
+    CHECK(extract_nullcheck_value);
+    return extract_nullcheck_value;
+  } else {
+    return cgen_state_->emitExternalCall(extract_fname,
+                                         get_int_type(64, cgen_state_->context_),
+                                         std::vector<llvm::Value*>{from_expr});
   }
-  return cgen_state_->emitExternalCall(
-      extract_fname, get_int_type(64, cgen_state_->context_), extract_args);
 }
 
 llvm::Value* CodeGenerator::codegen(const Analyzer::DateaddExpr* dateadd_expr,
@@ -111,17 +196,11 @@ llvm::Value* CodeGenerator::codegen(const Analyzer::DatediffExpr* datediff_expr,
       cgen_state_->llInt(static_cast<int32_t>(datediff_expr->get_field())), start, end};
   std::string datediff_fname{"DateDiff"};
   if (start_ti.is_high_precision_timestamp() || end_ti.is_high_precision_timestamp()) {
-    const auto adj_dimen = end_ti.get_dimension() - start_ti.get_dimension();
     datediff_fname += "HighPrecision";
-    datediff_args.push_back(cgen_state_->llInt(static_cast<int32_t>(adj_dimen)));
-    datediff_args.push_back(cgen_state_->llInt(
-        static_cast<int64_t>(get_timestamp_precision_scale(abs(adj_dimen)))));
     datediff_args.push_back(
-        cgen_state_->llInt(static_cast<int64_t>(get_timestamp_precision_scale(
-            adj_dimen < 0 ? end_ti.get_dimension() : start_ti.get_dimension()))));
+        cgen_state_->llInt(static_cast<int32_t>(start_ti.get_dimension())));
     datediff_args.push_back(
-        cgen_state_->llInt(static_cast<int64_t>(get_timestamp_precision_scale(
-            adj_dimen > 0 ? end_ti.get_dimension() : start_ti.get_dimension()))));
+        cgen_state_->llInt(static_cast<int32_t>(end_ti.get_dimension())));
   }
   const auto& ret_ti = datediff_expr->get_type_info();
   if (!start_ti.get_notnull() || !end_ti.get_notnull()) {
@@ -175,7 +254,7 @@ llvm::Value* CodeGenerator::codegenExtractHighPrecisionTimestamps(
                  ? cgen_state_->ir_builder_.CreateSDiv(
                        ts_lv, cgen_state_->llInt(static_cast<int64_t>(result.second)))
                  : cgen_state_->emitCall(
-                       "div_int64_t_nullable_lhs",
+                       "floor_div_nullable_lhs",
                        {ts_lv,
                         cgen_state_->llInt(static_cast<int64_t>(result.second)),
                         cgen_state_->inlineIntNull(ti)});
@@ -189,7 +268,7 @@ llvm::Value* CodeGenerator::codegenExtractHighPrecisionTimestamps(
                    cgen_state_->llInt(static_cast<int64_t>(
                        get_timestamp_precision_scale(ti.get_dimension()))))
              : cgen_state_->emitCall(
-                   "div_int64_t_nullable_lhs",
+                   "floor_div_nullable_lhs",
                    {ts_lv,
                     cgen_state_->llInt(get_timestamp_precision_scale(ti.get_dimension())),
                     cgen_state_->inlineIntNull(ti)});
@@ -208,7 +287,7 @@ llvm::Value* CodeGenerator::codegenDateTruncHighPrecisionTimestamps(
           ti.get_notnull()
               ? cgen_state_->ir_builder_.CreateSDiv(
                     ts_lv, cgen_state_->llInt(static_cast<int64_t>(result)))
-              : cgen_state_->emitCall("div_int64_t_nullable_lhs",
+              : cgen_state_->emitCall("floor_div_nullable_lhs",
                                       {ts_lv,
                                        cgen_state_->llInt(static_cast<int64_t>(result)),
                                        cgen_state_->inlineIntNull(ti)});
@@ -229,7 +308,7 @@ llvm::Value* CodeGenerator::codegenDateTruncHighPrecisionTimestamps(
   ts_lv = ti.get_notnull()
               ? cgen_state_->ir_builder_.CreateSDiv(
                     ts_lv, cgen_state_->llInt(static_cast<int64_t>(scale)))
-              : cgen_state_->emitCall("div_int64_t_nullable_lhs",
+              : cgen_state_->emitCall("floor_div_nullable_lhs",
                                       {ts_lv,
                                        cgen_state_->llInt(static_cast<int64_t>(scale)),
                                        cgen_state_->inlineIntNull(ti)});

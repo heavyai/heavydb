@@ -77,7 +77,7 @@ inline std::string datum_to_string(const TargetValue& tv,
     return "NULL";
   }
   const auto scalar_tv = boost::get<ScalarTargetValue>(&tv);
-  if (ti.is_time()) {
+  if (ti.is_time() || ti.is_decimal()) {
     Datum datum;
     datum.bigintval = *boost::get<int64_t>(scalar_tv);
     if (datum.bigintval == NULL_BIGINT) {
@@ -146,7 +146,6 @@ class GroupByAndAggregate {
   static size_t shard_count_for_top_groups(const RelAlgExecutionUnit& ra_exe_unit,
                                            const Catalog_Namespace::Catalog& catalog);
 
- private:
   struct DiamondCodegen {
     DiamondCodegen(llvm::Value* cond,
                    Executor* executor,
@@ -166,6 +165,7 @@ class GroupByAndAggregate {
     DiamondCodegen* parent_;
   };
 
+ private:
   bool gpuCanHandleOrderEntries(const std::list<Analyzer::OrderEntry>& order_entries);
 
   std::unique_ptr<QueryMemoryDescriptor> initQueryMemoryDescriptor(
@@ -296,6 +296,8 @@ class GroupByAndAggregate {
 
   friend class Executor;
   friend class QueryMemoryDescriptor;
+  friend class CodeGenerator;
+  friend class ExecutionKernel;
   friend struct TargetExprCodegen;
   friend struct TargetExprCodegenBuilder;
 };

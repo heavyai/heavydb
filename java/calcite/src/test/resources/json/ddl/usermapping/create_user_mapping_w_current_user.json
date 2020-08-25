@@ -1,0 +1,13 @@
+{
+  "statementType": "DDL",
+  "payload": {
+    "command": "CREATE_USER_MAPPING",
+    "ifNotExists": false,
+    "serverName": "test_server",
+    "user": "CURRENT_USER",
+    "options": {
+      "attribute_1": "value_1",
+      "attribute_2": "2"
+    }
+  }
+}

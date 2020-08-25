@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 MapD Technologies, Inc.
+ * Copyright 2020 OmniScis, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -30,9 +30,9 @@
 #include <unordered_map>
 #include <unordered_set>
 
+#include "DataMgr/Allocators/ArenaAllocator.h"
 #include "QueryEngine/Descriptors/RowSetMemoryOwner.h"
 #include "QueryEngine/ResultSet.h"
-#include "Shared/ArenaAllocator.h"
 #include "Shared/measure.h"
 #include "Shared/thread_count.h"
 #include "Tests/TestHelpers.h"

@@ -45,7 +45,7 @@ class CreateForeignServerTest : public DBHandlerTestFixture {
 
   void assertExpectedForeignServer() {
     auto& catalog = getCatalog();
-    auto foreign_server = catalog.getForeignServerSkipCache("test_server");
+    auto foreign_server = catalog.getForeignServerFromStorage("test_server");
 
     ASSERT_GT(foreign_server->id, 0);
     ASSERT_EQ("test_server", foreign_server->name);
@@ -147,7 +147,7 @@ TEST_F(CreateForeignServerTest, FsiDisabled) {
       "CREATE SERVER test_server FOREIGN DATA WRAPPER omnisci_csv WITH "
       "(storage_type = 'LOCAL_FILE', base_path = '/test_path/');"};
   g_enable_fsi = false;
-  queryAndAssertException(query, "Syntax error at: SERVER");
+  queryAndAssertException(query, "Exception: Syntax error at: SERVER");
 }
 
 TEST_F(CreateForeignServerTest, InvalidDataWrapper) {
@@ -174,12 +174,21 @@ class DropForeignServerTest : public DBHandlerTestFixture {
     g_enable_fsi = true;
     dropTestTable();
     getCatalog().dropForeignServer("test_server");
+    getCatalog().dropForeignServer("test_server_1");
     DBHandlerTestFixture::TearDown();
+  }
+
+  void createTestServer1() {
+    const auto base_path =
+        boost::filesystem::canonical("../../Tests/FsiDataFiles/").string();
+    sql("CREATE SERVER test_server_1 FOREIGN DATA WRAPPER omnisci_csv "
+        "WITH (storage_type = 'LOCAL_FILE', base_path = '" +
+        base_path + "');");
   }
 
   void assertNullForeignServer(const std::string& server_name) {
     auto& catalog = getCatalog();
-    auto foreign_server = catalog.getForeignServerSkipCache(server_name);
+    auto foreign_server = catalog.getForeignServerFromStorage(server_name);
     ASSERT_EQ(nullptr, foreign_server);
   }
 
@@ -211,17 +220,19 @@ TEST_F(DropForeignServerTest, DefaultServers) {
 }
 
 TEST_F(DropForeignServerTest, ForeignTableReferencingServer) {
-  sql("CREATE FOREIGN TABLE test_table (c1 int) SERVER test_server "
-      "WITH (file_path = 'test_file.csv');");
+  createTestServer1();
+  sql("CREATE FOREIGN TABLE test_table (c1 int) SERVER test_server_1 "
+      "WITH (file_path = 'example_1.csv');");
   std::string error_message{
-      "Exception: Foreign server \"test_server\" is referenced by existing "
+      "Exception: Foreign server \"test_server_1\" is referenced by existing "
       "foreign tables and cannot be dropped."};
-  queryAndAssertException("DROP SERVER test_server;", error_message);
+  queryAndAssertException("DROP SERVER test_server_1;", error_message);
 }
 
 TEST_F(DropForeignServerTest, FsiDisabled) {
   g_enable_fsi = false;
-  queryAndAssertException("DROP SERVER test_server;", "Syntax error at: SERVER");
+  queryAndAssertException("DROP SERVER test_server;",
+                          "Exception: Syntax error at: SERVER");
 }
 
 class ForeignServerPrivilegesDdlTest : public DBHandlerTestFixture {
@@ -276,7 +287,7 @@ class ForeignServerPrivilegesDdlTest : public DBHandlerTestFixture {
 
   void assertExpectedForeignServerCreatedByUser() {
     auto& catalog = getCatalog();
-    auto foreign_server = catalog.getForeignServerSkipCache("test_server");
+    auto foreign_server = catalog.getForeignServerFromStorage("test_server");
     ASSERT_GT(foreign_server->id, 0);
     ASSERT_EQ(foreign_server->user_id, getCurrentUser().userId);
     ASSERT_EQ(getCurrentUser().userName, "test_user");
@@ -285,7 +296,7 @@ class ForeignServerPrivilegesDdlTest : public DBHandlerTestFixture {
 
   void assertNullForeignServer() {
     auto& catalog = getCatalog();
-    auto foreign_server = catalog.getForeignServerSkipCache("test_server");
+    auto foreign_server = catalog.getForeignServerFromStorage("test_server");
     ASSERT_EQ(nullptr, foreign_server);
   }
 };
@@ -529,30 +540,36 @@ class ShowForeignServerTest : public DBHandlerTestFixture {
     return std::difftime(datetime, current_time) <= TIME_EPSILON;
   }
 
-  void assertServerResult(const TQueryResult& result,
-                          int index,
-                          const std::string& name,
-                          const std::string& wrapper,
-                          const std::string& options) {
-    ASSERT_EQ(result.row_set.columns[SERVER_NAME].data.str_col[index], name);
-    ASSERT_EQ(result.row_set.columns[DATA_WRAPPER].data.str_col[index], wrapper);
-    ASSERT_EQ(result.row_set.columns[OPTIONS].data.str_col[index], options);
-    ASSERT_GT(result.row_set.columns[CREATED_AT].data.int_col[index], 0);
-    ASSERT_TRUE(isDateTimeInPast(result.row_set.columns[CREATED_AT].data.int_col[index]));
+  void assertServerResultFound(const TQueryResult& result,
+                               const std::string& name,
+                               const std::string& wrapper,
+                               const std::string& options) {
+    int num_matches = 0;
+    for (size_t index = 0;
+         index < result.row_set.columns[SERVER_NAME].data.str_col.size();
+         ++index) {
+      if (result.row_set.columns[SERVER_NAME].data.str_col[index] == name &&
+          result.row_set.columns[DATA_WRAPPER].data.str_col[index] == wrapper &&
+          result.row_set.columns[OPTIONS].data.str_col[index] == options) {
+        num_matches++;
+        ASSERT_GT(result.row_set.columns[CREATED_AT].data.int_col[index], 0);
+        ASSERT_TRUE(
+            isDateTimeInPast(result.row_set.columns[CREATED_AT].data.int_col[index]));
+      }
+    }
+    ASSERT_EQ(num_matches, 1);
   }
-  void assertServerLocalCSV(const TQueryResult& result, int index) {
-    assertServerResult(result,
-                       index,
-                       "omnisci_local_csv",
-                       "OMNISCI_CSV",
-                       "{\"BASE_PATH\":\"/\",\"STORAGE_TYPE\":\"LOCAL_FILE\"}");
+  void assertServerLocalCSVFound(const TQueryResult& result) {
+    assertServerResultFound(result,
+                            "omnisci_local_csv",
+                            "OMNISCI_CSV",
+                            "{\"BASE_PATH\":\"/\",\"STORAGE_TYPE\":\"LOCAL_FILE\"}");
   }
-  void assertServerLocalParquet(const TQueryResult& result, int index) {
-    assertServerResult(result,
-                       index,
-                       "omnisci_local_parquet",
-                       "OMNISCI_PARQUET",
-                       "{\"BASE_PATH\":\"/\",\"STORAGE_TYPE\":\"LOCAL_FILE\"}");
+  void assertServerLocalParquetFound(const TQueryResult& result) {
+    assertServerResultFound(result,
+                            "omnisci_local_parquet",
+                            "OMNISCI_PARQUET",
+                            "{\"BASE_PATH\":\"/\",\"STORAGE_TYPE\":\"LOCAL_FILE\"}");
   }
 
   void assertNumResults(const TQueryResult& result, size_t num_results) {
@@ -570,8 +587,8 @@ TEST_F(ShowForeignServerTest, SHOWALL_DEFAULT) {
   assertExpectedFormat(result);
   // Two default servers
   assertNumResults(result, 2);
-  assertServerLocalCSV(result, 0);
-  assertServerLocalParquet(result, 1);
+  assertServerLocalCSVFound(result);
+  assertServerLocalParquetFound(result);
 }
 
 TEST_F(ShowForeignServerTest, SHOW_WHERE_EQ) {
@@ -580,7 +597,7 @@ TEST_F(ShowForeignServerTest, SHOW_WHERE_EQ) {
   sql(result, query);
   assertExpectedFormat(result);
   assertNumResults(result, 1);
-  assertServerLocalCSV(result, 0);
+  assertServerLocalCSVFound(result);
 }
 
 TEST_F(ShowForeignServerTest, SHOW_WHERE_LIKE) {
@@ -589,7 +606,7 @@ TEST_F(ShowForeignServerTest, SHOW_WHERE_LIKE) {
   sql(result, query);
   assertExpectedFormat(result);
   assertNumResults(result, 1);
-  assertServerLocalParquet(result, 0);
+  assertServerLocalParquetFound(result);
 }
 
 TEST_F(ShowForeignServerTest, SHOW_WHERE_LIKE_OR_EQ) {
@@ -600,8 +617,8 @@ TEST_F(ShowForeignServerTest, SHOW_WHERE_LIKE_OR_EQ) {
   sql(result, query);
   assertExpectedFormat(result);
   assertNumResults(result, 2);
-  assertServerLocalCSV(result, 0);
-  assertServerLocalParquet(result, 1);
+  assertServerLocalCSVFound(result);
+  assertServerLocalParquetFound(result);
 }
 
 TEST_F(ShowForeignServerTest, SHOW_WHERE_LIKE_AND_EQ) {
@@ -611,7 +628,7 @@ TEST_F(ShowForeignServerTest, SHOW_WHERE_LIKE_AND_EQ) {
   sql(result, query);
   assertExpectedFormat(result);
   assertNumResults(result, 1);
-  assertServerLocalCSV(result, 0);
+  assertServerLocalCSVFound(result);
 }
 
 TEST_F(ShowForeignServerTest, SHOW_WHERE_LIKE_OR_LIKE_AND_LIKE) {
@@ -622,8 +639,8 @@ TEST_F(ShowForeignServerTest, SHOW_WHERE_LIKE_OR_LIKE_AND_LIKE) {
   sql(result, query);
   assertExpectedFormat(result);
   assertNumResults(result, 2);
-  assertServerLocalCSV(result, 0);
-  assertServerLocalParquet(result, 1);
+  assertServerLocalCSVFound(result);
+  assertServerLocalParquetFound(result);
 }
 
 TEST_F(ShowForeignServerTest, SHOW_WHERE_LIKE_EMPTY) {
@@ -675,12 +692,17 @@ TEST_F(ShowForeignServerTest, SHOW_TIMESTAMP_EQ) {
     char buffer[256];
     std::strftime(
         buffer, 256, "SHOW SERVERS WHERE created_at = '%Y-%m-%d %H:%M:%S';", ptm);
-    puts(buffer);
     sql(result, buffer);
-    assertNumResults(result, 1);
-    assertServerResult(result, 0, "test_server", "OMNISCI_CSV", options_json);
-    ASSERT_TRUE(isDateTimeAfterTimeStamp(
-        result.row_set.columns[CREATED_AT].data.int_col[0], current_time));
+    // Result must return the test_server, but may include the default servers, if the
+    // previous tests run in under 1s
+    size_t num_results = result.row_set.columns[CREATED_AT].data.int_col.size();
+    ASSERT_GT(num_results, size_t(0));
+    ASSERT_LT(num_results, size_t(4));
+    assertServerResultFound(result, "test_server", "OMNISCI_CSV", options_json);
+    for (const auto& timestamp : result.row_set.columns[CREATED_AT].data.int_col) {
+      // Check all returned values
+      ASSERT_TRUE(isDateTimeAfterTimeStamp(timestamp, current_time));
+    }
   }
 
   {
@@ -707,23 +729,23 @@ TEST_F(ShowForeignServerTest, SHOW_ADD_DROP) {
     std::string query{"SHOW SERVERS;"};
     sql(result, query);
     assertNumResults(result, 3);
-    assertServerLocalCSV(result, 0);
-    assertServerLocalParquet(result, 1);
-    assertServerResult(result, 2, "test_server", "OMNISCI_CSV", options_json);
+    assertServerLocalCSVFound(result);
+    assertServerLocalParquetFound(result);
+    assertServerResultFound(result, "test_server", "OMNISCI_CSV", options_json);
   }
   {
     TQueryResult result;
     std::string query{"SHOW SERVERS WHERE server_name = 'test_server';"};
     sql(result, query);
     assertNumResults(result, 1);
-    assertServerResult(result, 0, "test_server", "OMNISCI_CSV", options_json);
+    assertServerResultFound(result, "test_server", "OMNISCI_CSV", options_json);
   }
   {
     TQueryResult result;
     std::string query{"SHOW SERVERS WHERE options LIKE '%test_path%';"};
     sql(result, query);
     assertNumResults(result, 1);
-    assertServerResult(result, 0, "test_server", "OMNISCI_CSV", options_json);
+    assertServerResultFound(result, "test_server", "OMNISCI_CSV", options_json);
     ASSERT_TRUE(isDateTimeAfterTimeStamp(
         result.row_set.columns[CREATED_AT].data.int_col[0], current_time));
   }
@@ -739,8 +761,8 @@ TEST_F(ShowForeignServerTest, SHOW_ADD_DROP) {
     assertExpectedFormat(result);
     // Two default servers
     assertNumResults(result, 2);
-    assertServerLocalCSV(result, 0);
-    assertServerLocalParquet(result, 1);
+    assertServerLocalCSVFound(result);
+    assertServerLocalParquetFound(result);
   }
 }
 
@@ -763,8 +785,8 @@ TEST_F(ShowForeignServerTest, SHOW_PRIVILEGE) {
     sql(result, "SHOW SERVERS;", test_session_id);
     // Two default servers
     assertNumResults(result, 2);
-    assertServerLocalCSV(result, 0);
-    assertServerLocalParquet(result, 1);
+    assertServerLocalCSVFound(result);
+    assertServerLocalParquetFound(result);
   }
   logout(test_session_id);
   sql("DROP USER test;");
@@ -871,7 +893,7 @@ class AlterForeignServerTest : public DBHandlerTestFixture {
     assertForeignServersEqual(catalog.getForeignServer(expected_foreign_server.name),
                               expected_foreign_server);
     assertForeignServersEqual(
-        catalog.getForeignServerSkipCache(expected_foreign_server.name),
+        catalog.getForeignServerFromStorage(expected_foreign_server.name).get(),
         expected_foreign_server);
   }
 
@@ -879,7 +901,7 @@ class AlterForeignServerTest : public DBHandlerTestFixture {
     auto& catalog = getCatalog();
     const auto inmemory_foreign_server = catalog.getForeignServer(server_name);
     ASSERT_EQ(nullptr, inmemory_foreign_server);
-    const auto foreign_server = catalog.getForeignServerSkipCache(server_name);
+    const auto foreign_server = catalog.getForeignServerFromStorage(server_name);
     ASSERT_EQ(nullptr, foreign_server);
   }
 
@@ -1031,7 +1053,7 @@ TEST_F(AlterForeignServerTest, FsiDisabled) {
   createTestServer();
   g_enable_fsi = false;
   queryAndAssertException("ALTER SERVER test_server OWNER TO test_user;",
-                          "Syntax error at: SERVER");
+                          "Exception: Syntax error at: SERVER");
 }
 
 TEST_F(AlterForeignServerTest, OmniSciPrefix) {

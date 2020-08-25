@@ -118,9 +118,8 @@ std::shared_ptr<ChunkMetadata> StringNoneEncoder::appendData(
       if (len > 0) {
         (*srcData)[replicating ? 0 : i].copy(dest, len);
         size += len;
-      } else {
-        has_nulls = true;
       }
+      update_elem_stats((*srcData)[replicating ? 0 : i]);
     }
     if (size > 0) {
       buffer_->append(inbuf.get(), size);
@@ -136,4 +135,21 @@ std::shared_ptr<ChunkMetadata> StringNoneEncoder::appendData(
   auto chunk_metadata = std::make_shared<ChunkMetadata>();
   getMetadata(chunk_metadata);
   return chunk_metadata;
+}
+
+void StringNoneEncoder::updateStats(const std::vector<std::string>* const src_data,
+                                    const size_t start_idx,
+                                    const size_t num_elements) {
+  for (size_t n = start_idx; n < start_idx + num_elements; n++) {
+    update_elem_stats((*src_data)[n]);
+    if (has_nulls) {
+      break;
+    }
+  }
+}
+
+void StringNoneEncoder::update_elem_stats(const std::string& elem) {
+  if (!has_nulls && elem.empty()) {
+    has_nulls = true;
+  }
 }

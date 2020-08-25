@@ -186,14 +186,7 @@ std::vector<void*> ScalarCodeGenerator::generateNativeGPUCode(
   gpu_target.block_size = block_size;
   gpu_target.cgen_state = cgen_state_;
   gpu_target.row_func_not_inlined = false;
-  const auto gpu_code = CodeGenerator::generateNativeGPUCode(
+  gpu_compilation_context_ = CodeGenerator::generateNativeGPUCode(
       func, wrapper_func, {func, wrapper_func}, co, gpu_target);
-  for (const auto& cached_function : gpu_code.cached_functions) {
-    gpu_compilation_contexts_.emplace_back(std::get<1>(cached_function));
-  }
-  std::vector<void*> native_function_pointers;
-  for (const auto& cached_function : gpu_code.cached_functions) {
-    native_function_pointers.push_back(std::get<0>(cached_function));
-  }
-  return native_function_pointers;
+  return gpu_compilation_context_->getNativeFunctionPointers();
 }

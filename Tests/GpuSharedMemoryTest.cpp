@@ -160,7 +160,7 @@ void prepare_generated_gpu_kernel(llvm::Module* module,
   md->addOperand(llvm::MDNode::get(context, md_vals));
 }
 
-std::unique_ptr<GpuCompilationContext> compile_and_link_gpu_code(
+std::unique_ptr<GpuDeviceCompilationContext> compile_and_link_gpu_code(
     const std::string& cuda_llir,
     llvm::Module* module,
     CudaMgr_Namespace::CudaMgr* cuda_mgr,
@@ -181,13 +181,13 @@ std::unique_ptr<GpuCompilationContext> compile_and_link_gpu_code(
   auto cubin = cubin_result.cubin;
   auto link_state = cubin_result.link_state;
   const auto num_options = option_keys.size();
-  auto gpu_context = std::make_unique<GpuCompilationContext>(cubin,
-                                                             kernel_name,
-                                                             gpu_device_idx,
-                                                             cuda_mgr,
-                                                             num_options,
-                                                             &option_keys[0],
-                                                             &option_values[0]);
+  auto gpu_context = std::make_unique<GpuDeviceCompilationContext>(cubin,
+                                                                   kernel_name,
+                                                                   gpu_device_idx,
+                                                                   cuda_mgr,
+                                                                   num_options,
+                                                                   &option_keys[0],
+                                                                   &option_values[0]);
 
   checkCudaErrors(cuLinkDestroy(link_state));
   return gpu_context;
@@ -374,7 +374,7 @@ void GpuReductionTester::performReductionTest(
   os.flush();
   std::string module_str(ss.str());
 
-  std::unique_ptr<GpuCompilationContext> gpu_context(compile_and_link_gpu_code(
+  std::unique_ptr<GpuDeviceCompilationContext> gpu_context(compile_and_link_gpu_code(
       module_str, module_, cuda_mgr_, getWrapperKernel()->getName().str()));
 
   const auto buffer_size = query_mem_desc_.getBufferSizeBytes(ExecutorDeviceType::GPU);

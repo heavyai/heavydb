@@ -559,9 +559,12 @@ ReductionCode ResultSetReductionJIT::codegen() const {
   }
   std::lock_guard<std::mutex> reduction_guard(ReductionCode::s_reduction_mutex);
   CodeCacheKey key{cacheKey()};
-  const auto val_ptr = s_code_cache.get(key);
-  if (val_ptr) {
-    return {reinterpret_cast<ReductionCode::FuncPtr>(std::get<0>(val_ptr->first.front())),
+  const auto compilation_context = s_code_cache.get(key);
+  if (compilation_context) {
+    auto cpu_context =
+        std::dynamic_pointer_cast<CpuCompilationContext>(compilation_context->first);
+    CHECK(cpu_context);
+    return {reinterpret_cast<ReductionCode::FuncPtr>(cpu_context->func()),
             nullptr,
             nullptr,
             nullptr,
@@ -572,7 +575,7 @@ ReductionCode ResultSetReductionJIT::codegen() const {
   }
   reduction_code.cgen_state.reset(new CgenState({}, false));
   auto cgen_state = reduction_code.cgen_state.get();
-  std::unique_ptr<llvm::Module> module(runtime_module_shallow_copy(cgen_state));
+  std::unique_ptr<llvm::Module> module = runtime_module_shallow_copy(cgen_state);
   cgen_state->module_ = module.get();
   auto ir_is_empty = create_llvm_function(reduction_code.ir_is_empty.get(), cgen_state);
   auto ir_reduce_one_entry =
@@ -847,9 +850,11 @@ void ResultSetReductionJIT::reduceOneEntryNoCollisionsIdx(
   const auto that_qmd_handle = ir_reduce_one_entry_idx->arg(5);
   const auto serialized_varlen_buffer_arg = ir_reduce_one_entry_idx->arg(6);
   const auto row_bytes = ir_reduce_one_entry_idx->addConstant<ConstantInt>(
-      get_row_bytes(query_mem_desc_), Type::Int32);
+      get_row_bytes(query_mem_desc_), Type::Int64);
+  const auto entry_idx_64 = ir_reduce_one_entry_idx->add<Cast>(
+      Cast::CastOp::SExt, entry_idx, Type::Int64, "entry_idx_64");
   const auto row_off_in_bytes = ir_reduce_one_entry_idx->add<BinaryOperator>(
-      BinaryOperator::BinaryOp::Mul, entry_idx, row_bytes, "row_off_in_bytes");
+      BinaryOperator::BinaryOp::Mul, entry_idx_64, row_bytes, "row_off_in_bytes");
   const auto this_row_ptr = ir_reduce_one_entry_idx->add<GetElementPtr>(
       this_buff, row_off_in_bytes, "this_row_ptr");
   const auto that_row_ptr = ir_reduce_one_entry_idx->add<GetElementPtr>(
@@ -880,9 +885,14 @@ void ResultSetReductionJIT::reduceOneEntryBaselineIdx(
   const auto that_qmd_handle = ir_reduce_one_entry_idx->arg(5);
   const auto serialized_varlen_buffer_arg = ir_reduce_one_entry_idx->arg(6);
   const auto row_bytes = ir_reduce_one_entry_idx->addConstant<ConstantInt>(
-      get_row_bytes(query_mem_desc_), Type::Int32);
-  const auto that_row_off_in_bytes = ir_reduce_one_entry_idx->add<BinaryOperator>(
-      BinaryOperator::BinaryOp::Mul, that_entry_idx, row_bytes, "that_row_off_in_bytes");
+      get_row_bytes(query_mem_desc_), Type::Int64);
+  const auto that_entry_idx_64 = ir_reduce_one_entry_idx->add<Cast>(
+      Cast::CastOp::SExt, that_entry_idx, Type::Int64, "that_entry_idx_64");
+  const auto that_row_off_in_bytes =
+      ir_reduce_one_entry_idx->add<BinaryOperator>(BinaryOperator::BinaryOp::Mul,
+                                                   that_entry_idx_64,
+                                                   row_bytes,
+                                                   "that_row_off_in_bytes");
   const auto that_row_ptr = ir_reduce_one_entry_idx->add<GetElementPtr>(
       that_buff, that_row_off_in_bytes, "that_row_ptr");
   const auto that_is_empty =
@@ -1191,17 +1201,25 @@ ReductionCode ResultSetReductionJIT::finalizeReductionCode(
     const CodeCacheKey& key) const {
   CompilationOptions co{
       ExecutorDeviceType::CPU, false, ExecutorOptLevel::ReductionJIT, false};
+
+  LOG(IR) << "Reduction Loop:\n"
+          << serialize_llvm_object(reduction_code.llvm_reduce_loop);
+  LOG(IR) << "Reduction Is Empty Func:\n" << serialize_llvm_object(ir_is_empty);
+  LOG(IR) << "Reduction One Entry Func:\n" << serialize_llvm_object(ir_reduce_one_entry);
+  LOG(IR) << "Reduction One Entry Idx Func:\n"
+          << serialize_llvm_object(ir_reduce_one_entry_idx);
+
   reduction_code.module.release();
   auto ee = CodeGenerator::generateNativeCPUCode(
       reduction_code.llvm_reduce_loop, {reduction_code.llvm_reduce_loop}, co);
   reduction_code.func_ptr = reinterpret_cast<ReductionCode::FuncPtr>(
       ee->getPointerToFunction(reduction_code.llvm_reduce_loop));
-  auto cache_val =
-      std::make_tuple(reinterpret_cast<void*>(reduction_code.func_ptr), std::move(ee));
-  std::vector<std::tuple<void*, ExecutionEngineWrapper>> cache_vals;
-  cache_vals.emplace_back(std::move(cache_val));
-  Executor::addCodeToCache({key},
-                           std::move(cache_vals),
+
+  auto cpu_compilation_context = std::make_shared<CpuCompilationContext>(std::move(ee));
+  cpu_compilation_context->setFunctionPointer(reduction_code.llvm_reduce_loop);
+  reduction_code.compilation_context = cpu_compilation_context;
+  Executor::addCodeToCache(key,
+                           reduction_code.compilation_context,
                            reduction_code.llvm_reduce_loop->getParent(),
                            s_code_cache);
   return reduction_code;

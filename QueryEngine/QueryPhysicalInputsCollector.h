@@ -25,6 +25,7 @@
 #ifndef QUERYENGINE_QUERYPHYSICALINPUTSCOLLECTOR_H
 #define QUERYENGINE_QUERYPHYSICALINPUTSCOLLECTOR_H
 
+#include <ostream>
 #include <unordered_set>
 
 class RelAlgNode;
@@ -37,6 +38,8 @@ struct PhysicalInput {
     return col_id == that.col_id && table_id == that.table_id;
   }
 };
+
+std::ostream& operator<<(std::ostream&, PhysicalInput const&);
 
 namespace std {
 

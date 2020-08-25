@@ -36,6 +36,8 @@
 // Should the ColumnInfo and FragmentInfo structs be in
 // AbstractFragmenter?
 
+class Executor;
+
 namespace Chunk_NS {
 class Chunk;
 };
@@ -45,7 +47,7 @@ class AbstractBuffer;
 class AbstractDataMgr;
 };  // namespace Data_Namespace
 
-namespace Importer_NS {
+namespace import_export {
 class TypedImportBuffer;
 };
 
@@ -163,7 +165,8 @@ class AbstractFragmenter {
                              const RowDataProvider& sourceDataProvider,
                              const size_t indexOffFragmentOffsetColumn,
                              const Data_Namespace::MemoryLevel memoryLevel,
-                             UpdelRoll& updelRoll) = 0;
+                             UpdelRoll& updelRoll,
+                             Executor* executor) = 0;
 
   virtual void updateColumn(const Catalog_Namespace::Catalog* catalog,
                             const TableDescriptor* td,

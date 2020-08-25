@@ -31,12 +31,8 @@ std::vector<llvm::Value*> CodeGenerator::codegen(const Analyzer::Constant* const
       type_info.is_decimal() ? decimal_to_int_type(type_info) : type_info.get_type();
   switch (type) {
     case kBOOLEAN:
-      return type_info.get_notnull() ? std::vector<llvm::Value*>{llvm::ConstantInt::get(
-                                           get_int_type(1, cgen_state_->context_),
-                                           constant->get_constval().boolval)}
-                                     : std::vector<llvm::Value*>{llvm::ConstantInt::get(
-                                           get_int_type(8, cgen_state_->context_),
-                                           constant->get_constval().boolval)};
+      return {llvm::ConstantInt::get(get_int_type(8, cgen_state_->context_),
+                                     constant->get_constval().boolval)};
     case kTINYINT:
     case kSMALLINT:
     case kINT:
@@ -196,18 +192,8 @@ std::vector<llvm::Value*> CodeGenerator::codegenHoistedConstantsLoads(
   auto lit_lv = cgen_state_->query_func_entry_ir_builder_.CreateLoad(
       cgen_state_->query_func_entry_ir_builder_.CreateBitCast(lit_buf_start,
                                                               val_ptr_type));
-
-  llvm::Value* to_return_lv = lit_lv;
-
-  if (type_info.is_boolean() && type_info.get_notnull()) {
-    if (static_cast<llvm::IntegerType*>(lit_lv->getType())->getBitWidth() > 1) {
-      to_return_lv = cgen_state_->query_func_entry_ir_builder_.CreateICmp(
-          llvm::ICmpInst::ICMP_SGT, lit_lv, llvm::ConstantInt::get(lit_lv->getType(), 0));
-    }
-  }
-
-  to_return_lv->setName(literal_name);
-  return {to_return_lv};
+  lit_lv->setName(literal_name);
+  return {lit_lv};
 }
 
 std::vector<llvm::Value*> CodeGenerator::codegenHoistedConstantsPlaceholders(

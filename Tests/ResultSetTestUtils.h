@@ -158,6 +158,10 @@ QueryMemoryDescriptor baseline_hash_two_col_desc_large(
     const std::vector<TargetInfo>& target_infos,
     const int8_t num_bytes);
 
+QueryMemoryDescriptor baseline_hash_two_col_desc_overflow32(
+    const std::vector<TargetInfo>& target_infos,
+    const int8_t num_bytes);
+
 QueryMemoryDescriptor baseline_hash_two_col_desc(
     const std::vector<TargetInfo>& target_infos,
     const int8_t num_bytes);

@@ -46,7 +46,8 @@ enum class NvidiaDeviceArch {
   Maxwell,  // compute major = 5
   Pascal,   // compute major = 6
   Volta,    // compute major = 7, compute minor = 0
-  Turing    // compute major = 7, compute minor = 5
+  Turing,   // compute major = 7, compute minor = 5
+  Ampere    // compute major = 8
 };
 
 #ifdef HAVE_CUDA
@@ -54,8 +55,7 @@ std::string errorMessage(CUresult const);
 
 class CudaErrorException : public std::runtime_error {
  public:
-  CudaErrorException(CUresult status)
-      : std::runtime_error(errorMessage(status)), status_(status) {}
+  CudaErrorException(CUresult status);
 
   CUresult getStatus() const { return status_; }
 
@@ -153,7 +153,7 @@ class CudaMgr {
     return (getDeviceCount() > 0 && device_properties_[0].computeMajor >= 6);
   }
   bool isArchMaxwellOrLaterForAll() const;
-  bool isArchVoltaForAll() const;
+  bool isArchVoltaOrGreaterForAll() const;
 
   static std::string deviceArchToSM(const NvidiaDeviceArch arch) {
     // Must match ${CUDA_COMPILATION_ARCH} CMAKE flag
@@ -167,6 +167,8 @@ class CudaMgr {
       case NvidiaDeviceArch::Volta:
         return "sm_70";
       case NvidiaDeviceArch::Turing:
+        return "sm_75";
+      case NvidiaDeviceArch::Ampere:
         return "sm_75";
       default:
         LOG(WARNING) << "Unrecognized Nvidia device architecture, falling back to "
@@ -193,6 +195,8 @@ class CudaMgr {
           } else {
             return NvidiaDeviceArch::Turing;
           }
+        case 8:
+          return NvidiaDeviceArch::Ampere;
         default:
           return NvidiaDeviceArch::Kepler;
       }

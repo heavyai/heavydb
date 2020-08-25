@@ -18,6 +18,11 @@ add_executable(ShowCommandsDdlTest ShowCommandsDdlTest.cpp)
 add_executable(CatalogMigrationTest CatalogMigrationTest.cpp)
 add_executable(CreateAndDropTableDdlTest CreateAndDropTableDdlTest.cpp)
 add_executable(ForeignTableDmlTest ForeignTableDmlTest.cpp)
+add_executable(DashboardTest DashboardTest.cpp)
+add_executable(FileMgrTest FileMgrTest.cpp)
+add_executable(FilePathWhitelistTest FilePathWhitelistTest.cpp)
+add_executable(EncoderTest EncoderTest.cpp)
+add_executable(ForeignStorageCacheTest ForeignStorageCacheTest.cpp)
 
 if(ENABLE_CUDA)
   set(MAPD_DEFINITIONS -DHAVE_CUDA)
@@ -52,7 +57,7 @@ add_executable(ResultSetBaselineRadixSortTest ResultSetBaselineRadixSortTest.cpp
 add_executable(UtilTest UtilTest.cpp)
 add_executable(StorageTest StorageTest.cpp PopulateTableRandom.cpp ScanTable.cpp)
 add_executable(StoragePerfTest StoragePerfTest.cpp PopulateTableRandom.cpp ScanTable.cpp)
-add_executable(ImportTest ImportTest.cpp)
+add_executable(ImportExportTest ImportExportTest.cpp)
 add_executable(ArrowCsvForeignStorageTest ArrowCsvForeignStorageTest.cpp)
 add_executable(AlterColumnTest AlterColumnTest.cpp)
 add_executable(UpdelStorageTest UpdelStorageTest.cpp)
@@ -61,6 +66,7 @@ add_executable(BumpAllocatorTest BumpAllocatorTest.cpp)
 add_executable(SpecialCharsTest SpecialCharsTest.cpp)
 add_executable(TableFunctionsTest TableFunctionsTest.cpp)
 add_executable(ArrayTest ArrayTest.cpp)
+add_executable(ParallelExecutorsTest ParallelExecutorsTest.cpp)
 add_executable(MigrationMgrTest MigrationMgrTest.cpp)
 add_executable(TopKTest TopKTest.cpp)
 add_executable(TokenCompletionHintsTest TokenCompletionHintsTest.cpp)
@@ -80,11 +86,17 @@ add_executable(CachedHashTableTest CachedHashTableTest.cpp)
 add_executable(RuntimeInterruptTest RuntimeInterruptTest.cpp)
 add_executable(ColumnarResultsTest ColumnarResultsTest.cpp ResultSetTestUtils.cpp)
 add_executable(CommandLineTest CommandLineTest.cpp)
+add_executable(SQLHintTest SQLHintTest.cpp)
+
 if(NOT ${CMAKE_SYSTEM_NAME} STREQUAL "Darwin")
   add_executable(UdfTest UdfTest.cpp)
 endif()
 if(ENABLE_CUDA)
   add_executable(GpuSharedMemoryTest GpuSharedMemoryTest.cpp ResultSetTestUtils.cpp)
+endif()
+if("${MAPD_EDITION_LOWER}" STREQUAL "ee")
+  add_executable(UserMappingDdlTest ee/UserMappingDdlTest.cpp)
+  add_executable(PkiEncryptorTest ee/PkiEncryptorTest.cpp)
 endif()
 
 # Tests + Microbenchmarks
@@ -106,7 +118,7 @@ target_link_libraries(ColumnarResultsTest ${EXECUTE_TEST_LIBS})
 target_link_libraries(FromTableReorderingTest ${EXECUTE_TEST_LIBS})
 target_link_libraries(ResultSetBaselineRadixSortTest ${EXECUTE_TEST_LIBS})
 target_link_libraries(UtilTest Utils gtest Shared ${Boost_LIBRARIES})
-target_link_libraries(StringDictionaryTest StringDictionary gtest Shared ${Boost_LIBRARIES})
+target_link_libraries(StringDictionaryTest ${EXECUTE_TEST_LIBS})
 target_link_libraries(StringTransformTest Shared gtest ${Boost_LIBRARIES})
 target_link_libraries(StringFunctionsTest ${EXECUTE_TEST_LIBS})
 target_link_libraries(TokenCompletionHintsTest token_completion_hints gtest mapd_thrift Shared ${Boost_LIBRARIES})
@@ -114,7 +126,7 @@ target_link_libraries(DumpRestoreTest ${EXECUTE_TEST_LIBS})
 target_link_libraries(CodeGeneratorTest ${EXECUTE_TEST_LIBS})
 target_link_libraries(ExecuteTest ${EXECUTE_TEST_LIBS})
 target_link_libraries(RunQueryLoop ${EXECUTE_TEST_LIBS} bcrypt)
-target_link_libraries(ImportTest gtest ${EXECUTE_TEST_LIBS})
+target_link_libraries(ImportExportTest gtest ${EXECUTE_TEST_LIBS})
 target_link_libraries(ArrowCsvForeignStorageTest gtest ${EXECUTE_TEST_LIBS})
 target_link_libraries(AlterColumnTest gtest ${EXECUTE_TEST_LIBS})
 target_link_libraries(UpdelStorageTest gtest ${EXECUTE_TEST_LIBS})
@@ -122,6 +134,7 @@ target_link_libraries(StorageTest gtest ${EXECUTE_TEST_LIBS})
 target_link_libraries(ComputeMetadataTest ${EXECUTE_TEST_LIBS})
 target_link_libraries(TableFunctionsTest ${EXECUTE_TEST_LIBS})
 target_link_libraries(ArrayTest ${EXECUTE_TEST_LIBS})
+target_link_libraries(ParallelExecutorsTest ${EXECUTE_TEST_LIBS})
 target_link_libraries(MigrationMgrTest ${EXECUTE_TEST_LIBS})
 target_link_libraries(BumpAllocatorTest ${EXECUTE_TEST_LIBS})
 target_link_libraries(SpecialCharsTest ${EXECUTE_TEST_LIBS})
@@ -144,6 +157,7 @@ target_link_libraries(CalciteOptimizeTest ${EXECUTE_TEST_LIBS})
 target_link_libraries(JoinHashTableTest ${EXECUTE_TEST_LIBS})
 target_link_libraries(CachedHashTableTest ${EXECUTE_TEST_LIBS})
 target_link_libraries(RuntimeInterruptTest ${EXECUTE_TEST_LIBS})
+target_link_libraries(EncoderTest gtest DataMgr)
 target_link_libraries(CommandLineTest gtest Shared ${Boost_LIBRARIES})
 # Requires thrift_handler for DBHandler test fixture
 target_link_libraries(DBObjectPrivilegesTest ${THRIFT_HANDLER_TEST_LIBRARIES})
@@ -152,6 +166,11 @@ target_link_libraries(CatalogMigrationTest ${THRIFT_HANDLER_TEST_LIBRARIES})
 target_link_libraries(CreateAndDropTableDdlTest ${THRIFT_HANDLER_TEST_LIBRARIES})
 target_link_libraries(ShowCommandsDdlTest ${THRIFT_HANDLER_TEST_LIBRARIES})
 target_link_libraries(ForeignTableDmlTest ${THRIFT_HANDLER_TEST_LIBRARIES})
+target_link_libraries(DashboardTest ${THRIFT_HANDLER_TEST_LIBRARIES})
+target_link_libraries(FileMgrTest ${THRIFT_HANDLER_TEST_LIBRARIES})
+target_link_libraries(FilePathWhitelistTest ${THRIFT_HANDLER_TEST_LIBRARIES})
+target_link_libraries(SQLHintTest ${EXECUTE_TEST_LIBS})
+target_link_libraries(ForeignStorageCacheTest gtest Shared Catalog Parser QueryEngine ${TBB_LIBS})
 
 if(NOT ${CMAKE_SYSTEM_NAME} STREQUAL "Darwin")
   target_link_libraries(UdfTest gtest ${EXECUTE_TEST_LIBS})
@@ -162,10 +181,15 @@ if(ENABLE_CUDA)
   target_link_libraries(GpuSharedMemoryTest ${EXECUTE_TEST_LIBS})
 endif()
 
+if("${MAPD_EDITION_LOWER}" STREQUAL "ee")
+  target_link_libraries(UserMappingDdlTest ${THRIFT_HANDLER_TEST_LIBRARIES})
+  target_link_libraries(PkiEncryptorTest gtest Shared)
+endif()
+
 set(TEST_ARGS "--gtest_output=xml:../")
 add_test(DumpRestoreTest DumpRestoreTest ${TEST_ARGS})
 add_test(UpdelStorageTest UpdelStorageTest ${TEST_ARGS})
-add_test(ImportTest ImportTest ${TEST_ARGS})
+add_test(ImportExportTest ImportExportTest ${TEST_ARGS})
 add_test(ArrowCsvForeignStorageTest ArrowCsvForeignStorageTest ${TEST_ARGS})
 add_test(AlterColumnTest AlterColumnTest ${TEST_ARGS})
 add_test(UtilTest UtilTest ${TEST_ARGS})
@@ -189,6 +213,7 @@ add_test(BumpAllocatorTest BumpAllocatorTest ${TEST_ARGS})
 add_test(SpecialCharsTest SpecialCharsTest ${TEST_ARGS})
 add_test(TableFunctionsTest TableFunctionsTest ${TEST_ARGS})
 add_test(ArrayTest ArrayTest ${TEST_ARGS})
+add_test(ParallelExecutorsTest ParallelExecutorsTest ${TEST_ARGS})
 add_test(MigrationMgrTest MigrationMgrTest ${TEST_ARGS})
 add_test(StoragePerfTest StoragePerfTest ${TEST_ARGS})
 add_test(TopKTest TopKTest ${TEST_ARGS})
@@ -211,12 +236,23 @@ add_test(ShowCommandsDdlTest ShowCommandsDdlTest ${TEST_ARGS})
 add_test(CatalogMigrationTest CatalogMigrationTest ${TEST_ARGS})
 add_test(CreateAndDropTableDdlTest CreateAndDropTableDdlTest ${TEST_ARGS})
 add_test(ForeignTableDmlTest ForeignTableDmlTest ${TEST_ARGS})
+add_test(DashboardTest DashboardTest ${TEST_ARGS})
+add_test(FileMgrTest FileMgrTest ${TEST_ARGS})
+add_test(FilePathWhitelistTest FilePathWhitelistTest ${TEST_ARGS})
+add_test(EncoderTest EncoderTest ${TEST_ARGS})
+add_test(SQLHintTest SQLHintTest ${TEST_ARGS})
+add_test(ForeignStorageCacheTest ForeignStorageCacheTest ${TEST_ARGS})
 if(ENABLE_CUDA)
   add_test(GpuSharedMemoryTest GpuSharedMemoryTest ${TEST_ARGS})
 endif()
 
 if(NOT ${CMAKE_SYSTEM_NAME} STREQUAL "Darwin")
   add_test(UdfTest UdfTest ${TEST_ARGS})
+endif()
+
+if("${MAPD_EDITION_LOWER}" STREQUAL "ee")
+  add_test(UserMappingDdlTest UserMappingDdlTest ${TEST_ARGS})
+  add_test(PkiEncryptorTest PkiEncryptorTest ${TEST_ARGS})
 endif()
 
 add_executable(ArrowIpcIntegrationTest ArrowIpcIntegrationTest.cpp)
@@ -244,7 +280,7 @@ set(TEST_PROGRAMS
   FromTableReorderingTest
   ResultSetBaselineRadixSortTest
   StorageTest
-  ImportTest
+  ImportExportTest
   ArrowCsvForeignStorageTest
   AlterColumnTest
   UpdelStorageTest
@@ -253,6 +289,7 @@ set(TEST_PROGRAMS
   SpecialCharsTest
   TableFunctionsTest
   ArrayTest
+  ParallelExecutorsTest
   MigrationMgrTest
   TopKTest
   TokenCompletionHintsTest
@@ -277,6 +314,12 @@ set(TEST_PROGRAMS
   CatalogMigrationTest
   CreateAndDropTableDdlTest
   ForeignTableDmlTest
+  DashboardTest
+  FileMgrTest
+  FilePathWhitelistTest
+  EncoderTest
+  SQLHintTest
+  ForeignStorageCacheTest
 )
 
 if(ENABLE_CUDA)
@@ -285,6 +328,11 @@ endif()
 
 if(NOT ${CMAKE_SYSTEM_NAME} STREQUAL "Darwin")
   list(APPEND TEST_PROGRAMS UdfTest)
+endif()
+
+if("${MAPD_EDITION_LOWER}" STREQUAL "ee")
+  list(APPEND TEST_PROGRAMS UserMappingDdlTest)
+  list(APPEND TEST_PROGRAMS PkiEncryptorTest)
 endif()
 
 set(SANITY_TESTS ${TEST_PROGRAMS})

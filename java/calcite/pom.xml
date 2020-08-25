@@ -49,12 +49,12 @@
     <dependency>
       <groupId>com.google.guava</groupId>
       <artifactId>guava</artifactId>
-      <version>19.0</version>
+      <version>29.0-jre</version>
     </dependency>
     <dependency>
       <groupId>org.apache.calcite</groupId>
       <artifactId>calcite-core</artifactId>
-      <version>1.22.0</version>
+      <version>1.23.0</version>
       <exclusions>
         <exclusion>
           <groupId>org.pentaho</groupId>

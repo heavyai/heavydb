@@ -54,7 +54,10 @@ class InValuesBitmap {
 
   bool hasNull() const;
 
+  size_t gpuBuffers() const { return gpu_buffers_.size(); }
+
  private:
+  std::vector<Data_Namespace::AbstractBuffer*> gpu_buffers_;
   std::vector<int8_t*> bitsets_;
   bool rhs_has_null_;
   int64_t min_val_;
@@ -62,6 +65,7 @@ class InValuesBitmap {
   const int64_t null_val_;
   const Data_Namespace::MemoryLevel memory_level_;
   const int device_count_;
+  Data_Namespace::DataMgr* data_mgr_;
 };
 
 #endif  // QUERYENGINE_INVALUESBITMAP_H

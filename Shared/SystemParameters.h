@@ -38,6 +38,14 @@ struct SystemParameters {
   bool is_decr_start_epoch;         // are we doing a start epoch decrement?
   size_t cpu_buffer_mem_bytes = 0;  // max size of memory reserved for CPU buffers [bytes]
   size_t gpu_buffer_mem_bytes = 0;  // max size of memory reserved for GPU buffers [bytes]
+  size_t min_cpu_slab_size =
+      1L << 28;  // min size of CPU buffer pool memory allocations [bytes], default=256MB
+  size_t min_gpu_slab_size =
+      1L << 28;  // min size of GPU buffer pool memory allocations [bytes], default=256MB
+  size_t max_cpu_slab_size =
+      1L << 32;  // max size of CPU buffer pool memory allocations [bytes], default=4GB
+  size_t max_gpu_slab_size =
+      1L << 32;  // max size of CPU buffer pool memory allocations [bytes], default=4GB
   double gpu_input_mem_limit = 0.9;  // Punt query to CPU if input mem exceeds % GPU mem
   std::string config_file = "";
   std::string ssl_cert_file = "";    // file path to server's certified PKI certificate
@@ -53,5 +61,8 @@ struct SystemParameters {
       true;  // allow calcite to optimize the relalgebra for a view query
   size_t calcite_timeout =
       5000;  // calcite send/receive timeout (connect timeout hard coded to 2s)
+  size_t calcite_keepalive = false;  // calcite keepalive connection
+  int num_executors = 1;
+
   SystemParameters() : cuda_block_size(0), cuda_grid_size(0), calcite_max_mem(1024) {}
 };

@@ -48,5 +48,4 @@ using ForeignServerMap =
     std::map<std::string, std::shared_ptr<foreign_storage::ForeignServer>>;
 using ForeignServerMapById =
     std::map<int, std::shared_ptr<foreign_storage::ForeignServer>>;
-
 }  // namespace Catalog_Namespace

@@ -429,10 +429,19 @@ class ResultSet {
 
   size_t getNDVEstimator() const;
 
+  struct QueryExecutionTimings {
+    // all in ms
+    int64_t executor_queue_time{0};
+    int64_t render_time{0};
+    int64_t compilation_queue_time{0};
+    int64_t kernel_queue_time{0};
+  };
+
   void setQueueTime(const int64_t queue_time);
+  void setKernelQueueTime(const int64_t kernel_queue_time);
+  void addCompilationQueueTime(const int64_t compilation_queue_time);
 
   int64_t getQueueTime() const;
-
   int64_t getRenderTime() const;
 
   void moveToBegin() const;
@@ -743,7 +752,14 @@ class ResultSet {
         : order_entries_(order_entries)
         , use_heap_(use_heap)
         , result_set_(result_set)
-        , buffer_itr_(result_set) {}
+        , buffer_itr_(result_set) {
+      materializeCountDistinctColumns();
+    }
+
+    void materializeCountDistinctColumns();
+
+    std::vector<int64_t> materializeCountDistinctColumn(
+        const Analyzer::OrderEntry& order_entry) const;
 
     bool operator()(const uint32_t lhs, const uint32_t rhs) const;
 
@@ -752,11 +768,13 @@ class ResultSet {
     const bool use_heap_;
     const ResultSet* result_set_;
     const BufferIteratorType buffer_itr_;
+    std::vector<std::vector<int64_t>> count_distinct_materialized_buffers_;
   };
 
   std::function<bool(const uint32_t, const uint32_t)> createComparator(
       const std::list<Analyzer::OrderEntry>& order_entries,
       const bool use_heap) {
+    auto timer = DEBUG_TIMER(__func__);
     if (query_mem_desc_.didOutputColumnar()) {
       column_wise_comparator_ =
           std::make_unique<ResultSetComparator<ColumnWiseTargetAccessor>>(
@@ -827,8 +845,8 @@ class ResultSet {
   size_t keep_first_;
   std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner_;
   std::vector<uint32_t> permutation_;
-  int64_t queue_time_ms_;
-  int64_t render_time_ms_;
+
+  QueryExecutionTimings timings_;
   const Executor* executor_;  // TODO(alex): remove
 
   std::list<std::shared_ptr<Chunk_NS::Chunk>> chunks_;
@@ -842,8 +860,8 @@ class ResultSet {
   std::vector<std::vector<int64_t>> consistent_frag_sizes_;
 
   const std::shared_ptr<const Analyzer::Estimator> estimator_;
-  int8_t* estimator_buffer_;
-  mutable int8_t* host_estimator_buffer_;
+  Data_Namespace::AbstractBuffer* device_estimator_buffer_{nullptr};
+  mutable int8_t* host_estimator_buffer_{nullptr};
   Data_Namespace::DataMgr* data_mgr_;
 
   // only used by serialization

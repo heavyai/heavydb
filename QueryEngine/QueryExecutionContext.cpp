@@ -178,7 +178,7 @@ int32_t aggregate_error_codes(const std::vector<int32_t>& error_codes) {
 
 std::vector<int64_t*> QueryExecutionContext::launchGpuCode(
     const RelAlgExecutionUnit& ra_exe_unit,
-    const std::vector<std::pair<void*, void*>>& cu_functions,
+    const GpuCompilationContext* cu_functions,
     const bool hoist_literals,
     const std::vector<int8_t>& literal_buff,
     std::vector<std::vector<const int8_t*>> col_buffers,
@@ -208,7 +208,9 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(
     render_allocator = render_allocator_map->getRenderAllocator(device_id);
   }
 
-  auto cu_func = static_cast<CUfunction>(cu_functions[device_id].first);
+  CHECK(cu_functions);
+  const auto native_code = cu_functions->getNativeCode(device_id);
+  auto cu_func = static_cast<CUfunction>(native_code.first);
   std::vector<int64_t*> out_vec;
   uint32_t num_fragments = col_buffers.size();
   std::vector<int32_t> error_codes(grid_size_x * block_size_x);
@@ -228,11 +230,11 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(
   }
 
   if (g_enable_dynamic_watchdog) {
-    initializeDynamicWatchdog(cu_functions[device_id].second, device_id);
+    initializeDynamicWatchdog(native_code.second, device_id);
   }
 
   if (g_enable_runtime_query_interrupt) {
-    initializeRuntimeInterrupter(cu_functions[device_id].second, device_id);
+    initializeRuntimeInterrupter(native_code.second, device_id);
   }
 
   auto kernel_params = prepareKernelParams(col_buffers,
@@ -327,10 +329,10 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(
                                      nullptr));
     }
     if (g_enable_dynamic_watchdog || g_enable_runtime_query_interrupt) {
-      executor_->registerActiveModule(cu_functions[device_id].second, device_id);
+      executor_->registerActiveModule(native_code.second, device_id);
       cuEventRecord(stop1, 0);
       cuEventSynchronize(stop1);
-      executor_->unregisterActiveModule(cu_functions[device_id].second, device_id);
+      executor_->unregisterActiveModule(native_code.second, device_id);
       float milliseconds1 = 0;
       cuEventElapsedTime(&milliseconds1, start1, stop1);
       VLOG(1) << "Device " << std::to_string(device_id)
@@ -498,10 +500,10 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(
     }
 
     if (g_enable_dynamic_watchdog || g_enable_runtime_query_interrupt) {
-      executor_->registerActiveModule(cu_functions[device_id].second, device_id);
+      executor_->registerActiveModule(native_code.second, device_id);
       cuEventRecord(stop1, 0);
       cuEventSynchronize(stop1);
-      executor_->unregisterActiveModule(cu_functions[device_id].second, device_id);
+      executor_->unregisterActiveModule(native_code.second, device_id);
       float milliseconds1 = 0;
       cuEventElapsedTime(&milliseconds1, start1, stop1);
       VLOG(1) << "Device " << std::to_string(device_id)
@@ -560,7 +562,7 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(
 
 std::vector<int64_t*> QueryExecutionContext::launchCpuCode(
     const RelAlgExecutionUnit& ra_exe_unit,
-    const std::vector<std::pair<void*, void*>>& fn_ptrs,
+    const CpuCompilationContext* native_code,
     const bool hoist_literals,
     const std::vector<int8_t>& literal_buff,
     std::vector<std::vector<const int8_t*>> col_buffers,
@@ -625,6 +627,7 @@ std::vector<int64_t*> QueryExecutionContext::launchCpuCode(
                           query_mem_desc_);
   }
 
+  CHECK(native_code);
   const int64_t* join_hash_tables_ptr =
       join_hash_tables.size() == 1
           ? reinterpret_cast<int64_t*>(join_hash_tables[0])
@@ -643,7 +646,7 @@ std::vector<int64_t*> QueryExecutionContext::launchCpuCode(
                                const uint32_t*,  // num_tables
                                const int64_t*);  // join_hash_tables_ptr
     if (is_group_by) {
-      reinterpret_cast<agg_query>(fn_ptrs[0].first)(
+      reinterpret_cast<agg_query>(native_code->func())(
           multifrag_cols_ptr,
           &num_fragments,
           &literal_buff[0],
@@ -657,18 +660,18 @@ std::vector<int64_t*> QueryExecutionContext::launchCpuCode(
           &num_tables,
           join_hash_tables_ptr);
     } else {
-      reinterpret_cast<agg_query>(fn_ptrs[0].first)(multifrag_cols_ptr,
-                                                    &num_fragments,
-                                                    &literal_buff[0],
-                                                    num_rows_ptr,
-                                                    &flatened_frag_offsets[0],
-                                                    &scan_limit,
-                                                    &total_matched_init,
-                                                    &init_agg_vals[0],
-                                                    &out_vec[0],
-                                                    error_code,
-                                                    &num_tables,
-                                                    join_hash_tables_ptr);
+      reinterpret_cast<agg_query>(native_code->func())(multifrag_cols_ptr,
+                                                       &num_fragments,
+                                                       &literal_buff[0],
+                                                       num_rows_ptr,
+                                                       &flatened_frag_offsets[0],
+                                                       &scan_limit,
+                                                       &total_matched_init,
+                                                       &init_agg_vals[0],
+                                                       &out_vec[0],
+                                                       error_code,
+                                                       &num_tables,
+                                                       join_hash_tables_ptr);
     }
   } else {
     using agg_query = void (*)(const int8_t***,  // col_buffers
@@ -683,7 +686,7 @@ std::vector<int64_t*> QueryExecutionContext::launchCpuCode(
                                const uint32_t*,  // num_tables
                                const int64_t*);  // join_hash_tables_ptr
     if (is_group_by) {
-      reinterpret_cast<agg_query>(fn_ptrs[0].first)(
+      reinterpret_cast<agg_query>(native_code->func())(
           multifrag_cols_ptr,
           &num_fragments,
           num_rows_ptr,
@@ -696,17 +699,17 @@ std::vector<int64_t*> QueryExecutionContext::launchCpuCode(
           &num_tables,
           join_hash_tables_ptr);
     } else {
-      reinterpret_cast<agg_query>(fn_ptrs[0].first)(multifrag_cols_ptr,
-                                                    &num_fragments,
-                                                    num_rows_ptr,
-                                                    &flatened_frag_offsets[0],
-                                                    &scan_limit,
-                                                    &total_matched_init,
-                                                    &init_agg_vals[0],
-                                                    &out_vec[0],
-                                                    error_code,
-                                                    &num_tables,
-                                                    join_hash_tables_ptr);
+      reinterpret_cast<agg_query>(native_code->func())(multifrag_cols_ptr,
+                                                       &num_fragments,
+                                                       num_rows_ptr,
+                                                       &flatened_frag_offsets[0],
+                                                       &scan_limit,
+                                                       &total_matched_init,
+                                                       &init_agg_vals[0],
+                                                       &out_vec[0],
+                                                       error_code,
+                                                       &num_tables,
+                                                       join_hash_tables_ptr);
     }
   }
 

@@ -29,7 +29,14 @@ enum TExtArgumentType {
   GeoLineString,
   Cursor,
   GeoPolygon,
-  GeoMultiPolygon
+  GeoMultiPolygon,
+  ColumnInt8,
+  ColumnInt16,
+  ColumnInt32,
+  ColumnInt64,
+  ColumnFloat,
+  ColumnDouble,
+  ColumnBool
 }
 
 /* See QueryEngine/TableFunctions/TableFunctionsFactory.h for required values */

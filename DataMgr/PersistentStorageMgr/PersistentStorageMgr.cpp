@@ -136,9 +136,8 @@ File_Namespace::GlobalFileMgr* PersistentStorageMgr::getGlobalFileMgr() {
 void PersistentStorageMgr::removeTableRelatedDS(const int db_id, const int table_id) {
   if (isForeignStorage({db_id, table_id})) {
     foreign_storage_mgr->removeTableRelatedDS(db_id, table_id);
-  } else {
-    global_file_mgr->removeTableRelatedDS(db_id, table_id);
   }
+  global_file_mgr->removeTableRelatedDS(db_id, table_id);
 }
 
 bool PersistentStorageMgr::isForeignStorage(const ChunkKey& chunk_key) {
@@ -151,4 +150,8 @@ bool PersistentStorageMgr::isForeignStorage(const ChunkKey& chunk_key) {
   auto table = catalog->getMetadataForTableImpl(table_id, false);
   CHECK(table);
   return table->storageType == StorageType::FOREIGN_TABLE;
+}
+
+foreign_storage::ForeignStorageMgr* PersistentStorageMgr::getForeignStorageMgr() const {
+  return foreign_storage_mgr.get();
 }

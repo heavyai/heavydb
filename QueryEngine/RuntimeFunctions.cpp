@@ -200,6 +200,18 @@ extern "C" ALWAYS_INLINE int64_t scale_decimal_down_not_nullable(const int64_t o
   return tmp / scale;
 }
 
+// Return floor(dividend / divisor) or NULL if dividend IS NULL.
+// Assumes 0 < divisor.
+extern "C" ALWAYS_INLINE int64_t floor_div_nullable_lhs(const int64_t dividend,
+                                                        const int64_t divisor,
+                                                        const int64_t null_val) {
+  if (dividend == null_val) {
+    return null_val;
+  } else {
+    return (dividend < 0 ? dividend - (divisor - 1) : dividend) / divisor;
+  }
+}
+
 #define DEF_UMINUS_NULLABLE(type, null_type)                                         \
   extern "C" ALWAYS_INLINE type uminus_##type##_nullable(const type operand,         \
                                                          const null_type null_val) { \
@@ -1156,7 +1168,7 @@ extern "C" ALWAYS_INLINE void set_matching_group_value_perfect_hash_columnar(
 }
 
 #include "GroupByRuntime.cpp"
-#include "JoinHashTableQueryRuntime.cpp"
+#include "JoinHashTable/JoinHashTableQueryRuntime.cpp"
 
 extern "C" ALWAYS_INLINE int64_t* get_group_value_fast_keyless(
     int64_t* groups_buffer,
@@ -1225,6 +1237,12 @@ extern "C" ALWAYS_INLINE DEVICE int32_t char_length_nullable(const char* str,
 
 extern "C" ALWAYS_INLINE DEVICE int32_t key_for_string_encoded(const int32_t str_id) {
   return str_id;
+}
+
+extern "C" ALWAYS_INLINE DEVICE bool sample_ratio(const double proportion,
+                                                  const int64_t row_offset) {
+  const int64_t threshold = 4294967296 * proportion;
+  return (row_offset * 2654435761) % 4294967296 < threshold;
 }
 
 extern "C" ALWAYS_INLINE int64_t row_number_window_func(const int64_t output_buff,

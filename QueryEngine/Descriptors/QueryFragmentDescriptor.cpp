@@ -1,5 +1,5 @@
 /*
- * Copyright 2018 MapD Technologies, Inc.
+ * Copyright 2020 OmniSci, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,8 +16,9 @@
 
 #include "QueryFragmentDescriptor.h"
 
-#include <DataMgr/DataMgr.h>
-#include "../Execute.h"
+#include "Catalog/ColumnDescriptor.h"
+#include "DataMgr/DataMgr.h"
+#include "QueryEngine/Execute.h"
 #include "Shared/misc.h"
 
 QueryFragmentDescriptor::QueryFragmentDescriptor(
@@ -67,159 +68,74 @@ void QueryFragmentDescriptor::buildFragmentKernelMap(
     const bool enable_multifrag_kernels,
     const bool enable_inner_join_fragment_skipping,
     Executor* executor) {
+  // For joins, only consider the cardinality of the LHS
+  // columns in the bytes per row count.
+  std::set<int> lhs_table_ids;
+  for (const auto& input_desc : ra_exe_unit.input_descs) {
+    if (input_desc.getNestLevel() == 0) {
+      lhs_table_ids.insert(input_desc.getTableId());
+    }
+  }
+
+  const auto num_bytes_for_row = executor->getNumBytesForFetchedRow(lhs_table_ids);
+
   if (ra_exe_unit.union_all) {
-    buildFragmentPerKernelMapForUnion(
-        ra_exe_unit, frag_offsets, device_count, device_type, executor);
+    buildFragmentPerKernelMapForUnion(ra_exe_unit,
+                                      frag_offsets,
+                                      device_count,
+                                      num_bytes_for_row,
+                                      device_type,
+                                      executor);
   } else if (enable_multifrag_kernels) {
     buildMultifragKernelMap(ra_exe_unit,
                             frag_offsets,
                             device_count,
+                            num_bytes_for_row,
                             device_type,
                             enable_inner_join_fragment_skipping,
                             executor);
   } else {
-    buildFragmentPerKernelMap(
-        ra_exe_unit, frag_offsets, device_count, device_type, executor);
+    buildFragmentPerKernelMap(ra_exe_unit,
+                              frag_offsets,
+                              device_count,
+                              num_bytes_for_row,
+                              device_type,
+                              executor);
   }
 }
 
-namespace {
-std::optional<size_t> compute_fragment_tuple_count(
-    const Fragmenter_Namespace::FragmentInfo& fragment,
-    const ColumnDescriptor* deleted_cd) {
-  if (deleted_cd) {
-    return std::nullopt;
-  } else {
+void QueryFragmentDescriptor::buildFragmentPerKernelForTable(
+    const TableFragments* fragments,
+    const RelAlgExecutionUnit& ra_exe_unit,
+    const InputDescriptor& table_desc,
+    const std::vector<uint64_t>& frag_offsets,
+    const int device_count,
+    const size_t num_bytes_for_row,
+    const ChunkMetadataVector& deleted_chunk_metadata_vec,
+    const std::optional<size_t> table_desc_offset,
+    const ExecutorDeviceType& device_type,
+    Executor* executor) {
+  auto get_fragment_tuple_count =
+      [&deleted_chunk_metadata_vec](const auto& fragment) -> std::optional<size_t> {
+    // returning std::nullopt disables execution dispatch optimizations based on tuple
+    // counts as it signals to the dispatch mechanism that a reliable tuple count cannot
+    // be obtained. This is the case for fragments which have deleted rows, temporary
+    // table fragments, or fragments in a UNION query.
+    if (deleted_chunk_metadata_vec.empty()) {
+      return std::nullopt;
+    }
+    const auto fragment_id = fragment.fragmentId;
+    CHECK_GE(fragment_id, 0);
+    if (static_cast<size_t>(fragment_id) < deleted_chunk_metadata_vec.size()) {
+      const auto& chunk_metadata = deleted_chunk_metadata_vec[fragment_id];
+      if (chunk_metadata.second->chunkStats.max.tinyintval == 1) {
+        return std::nullopt;
+      }
+    }
     return fragment.getNumTuples();
-  }
-}
+  };
 
-}  // namespace
-
-void QueryFragmentDescriptor::buildFragmentPerKernelMapForUnion(
-    const RelAlgExecutionUnit& ra_exe_unit,
-    const std::vector<uint64_t>& frag_offsets,
-    const int device_count,
-    const ExecutorDeviceType& device_type,
-    Executor* executor) {
-  for (size_t j = 0; j < ra_exe_unit.input_descs.size(); ++j) {
-    auto const& table_desc = ra_exe_unit.input_descs[j];
-    int const table_id = table_desc.getTableId();
-    TableFragments const* fragments = selected_tables_fragments_.at(table_id);
-
-    const auto num_bytes_for_row = executor->getNumBytesForFetchedRow();
-
-    const ColumnDescriptor* deleted_cd{nullptr};
-    if (table_id > 0) {
-      // Temporary tables will not have a table descriptor and not have deleted rows.
-      const auto& catalog = executor->getCatalog();
-      const auto td = catalog->getMetadataForTable(table_id);
-      CHECK(td);
-      deleted_cd = catalog->getDeletedColumnIfRowsDeleted(td);
-    }
-    VLOG(1) << "table_id=" << table_id << " fragments->size()=" << fragments->size()
-            << " fragments->front().physicalTableId="
-            << fragments->front().physicalTableId
-            << " fragments->front().getNumTuples()=" << fragments->front().getNumTuples()
-            << " fragments->front().getPhysicalNumTuples()="
-            << fragments->front().getPhysicalNumTuples();
-
-    for (size_t i = 0; i < fragments->size(); ++i) {
-      const auto& fragment = (*fragments)[i];
-      const auto skip_frag = executor->skipFragment(
-          table_desc, fragment, ra_exe_unit.simple_quals, frag_offsets, i);
-      if (skip_frag.first) {
-        continue;
-      }
-      rowid_lookup_key_ = std::max(rowid_lookup_key_, skip_frag.second);
-      const int chosen_device_count =
-          device_type == ExecutorDeviceType::CPU ? 1 : device_count;
-      CHECK_GT(chosen_device_count, 0);
-      const auto memory_level = device_type == ExecutorDeviceType::GPU
-                                    ? Data_Namespace::GPU_LEVEL
-                                    : Data_Namespace::CPU_LEVEL;
-
-      int device_id = (device_type == ExecutorDeviceType::CPU || fragment.shard == -1)
-                          ? fragment.deviceIds[static_cast<int>(memory_level)]
-                          : fragment.shard % chosen_device_count;
-
-      VLOG(1) << "device_type_is_cpu=" << (device_type == ExecutorDeviceType::CPU)
-              << " chosen_device_count=" << chosen_device_count
-              << " fragment.shard=" << fragment.shard
-              << " fragment.deviceIds.size()=" << fragment.deviceIds.size()
-              << " int(memory_level)=" << int(memory_level) << " device_id=" << device_id;
-
-      if (device_type == ExecutorDeviceType::GPU) {
-        checkDeviceMemoryUsage(fragment, device_id, num_bytes_for_row);
-      }
-
-      const auto frag_ids =
-          executor->getTableFragmentIndices(ra_exe_unit,
-                                            device_type,
-                                            j,
-                                            i,
-                                            selected_tables_fragments_,
-                                            executor->getInnerTabIdToJoinCond());
-
-      VLOG(1) << "table_id=" << table_id << " frag_ids.size()=" << frag_ids.size()
-              << " frag_ids.front()=" << frag_ids.front();
-      ExecutionKernel execution_kernel{
-          device_id,
-          {FragmentsPerTable{table_id, frag_ids}},
-          compute_fragment_tuple_count(fragment, deleted_cd)};
-
-      auto itr = execution_kernels_per_device_.find(device_id);
-      if (itr == execution_kernels_per_device_.end()) {
-        auto const pair = execution_kernels_per_device_.insert(std::make_pair(
-            device_id, std::vector<ExecutionKernel>{std::move(execution_kernel)}));
-        CHECK(pair.second);
-      } else {
-        itr->second.emplace_back(std::move(execution_kernel));
-      }
-    }
-    std::vector<int> table_ids =
-        std::accumulate(execution_kernels_per_device_[0].begin(),
-                        execution_kernels_per_device_[0].end(),
-                        std::vector<int>(),
-                        [](auto&& vec, auto& exe_kern) {
-                          vec.push_back(exe_kern.fragments[0].table_id);
-                          return vec;
-                        });
-    VLOG(1) << "execution_kernels_per_device_.size()="
-            << execution_kernels_per_device_.size()
-            << " execution_kernels_per_device_[0].size()="
-            << execution_kernels_per_device_[0].size()
-            << " execution_kernels_per_device_[0][*].fragments[0].table_id="
-            << shared::printContainer(table_ids);
-  }
-}
-
-void QueryFragmentDescriptor::buildFragmentPerKernelMap(
-    const RelAlgExecutionUnit& ra_exe_unit,
-    const std::vector<uint64_t>& frag_offsets,
-    const int device_count,
-    const ExecutorDeviceType& device_type,
-    Executor* executor) {
-  const auto& outer_table_desc = ra_exe_unit.input_descs.front();
-  const int outer_table_id = outer_table_desc.getTableId();
-  auto it = selected_tables_fragments_.find(outer_table_id);
-  CHECK(it != selected_tables_fragments_.end());
-  const auto outer_fragments = it->second;
-  outer_fragments_size_ = outer_fragments->size();
-
-  const auto num_bytes_for_row = executor->getNumBytesForFetchedRow();
-
-  const ColumnDescriptor* deleted_cd{nullptr};
-  if (outer_table_id > 0) {
-    // Intermediate tables will not have a table descriptor and will also not have deleted
-    // rows.
-    const auto& catalog = executor->getCatalog();
-    const auto td = catalog->getMetadataForTable(outer_table_id);
-    CHECK(td);
-    deleted_cd = catalog->getDeletedColumnIfRowsDeleted(td);
-  }
-
-  for (size_t i = 0; i < outer_fragments->size(); ++i) {
+  for (size_t i = 0; i < fragments->size(); i++) {
     if (!allowed_outer_fragment_indices_.empty()) {
       if (std::find(allowed_outer_fragment_indices_.begin(),
                     allowed_outer_fragment_indices_.end(),
@@ -228,9 +144,9 @@ void QueryFragmentDescriptor::buildFragmentPerKernelMap(
       }
     }
 
-    const auto& fragment = (*outer_fragments)[i];
+    const auto& fragment = (*fragments)[i];
     const auto skip_frag = executor->skipFragment(
-        outer_table_desc, fragment, ra_exe_unit.simple_quals, frag_offsets, i);
+        table_desc, fragment, ra_exe_unit.simple_quals, frag_offsets, i);
     if (skip_frag.first) {
       continue;
     }
@@ -241,47 +157,161 @@ void QueryFragmentDescriptor::buildFragmentPerKernelMap(
     const auto memory_level = device_type == ExecutorDeviceType::GPU
                                   ? Data_Namespace::GPU_LEVEL
                                   : Data_Namespace::CPU_LEVEL;
-    int device_id = (device_type == ExecutorDeviceType::CPU || fragment.shard == -1)
-                        ? fragment.deviceIds[static_cast<int>(memory_level)]
-                        : fragment.shard % chosen_device_count;
+    const int device_id = (device_type == ExecutorDeviceType::CPU || fragment.shard == -1)
+                              ? fragment.deviceIds[static_cast<int>(memory_level)]
+                              : fragment.shard % chosen_device_count;
 
     if (device_type == ExecutorDeviceType::GPU) {
       checkDeviceMemoryUsage(fragment, device_id, num_bytes_for_row);
     }
 
-    ExecutionKernel execution_kernel{
-        device_id, {}, compute_fragment_tuple_count(fragment, deleted_cd)};
-    for (size_t j = 0; j < ra_exe_unit.input_descs.size(); ++j) {
+    ExecutionKernelDescriptor execution_kernel_desc{
+        device_id, {}, get_fragment_tuple_count(fragment)};
+    if (table_desc_offset) {
       const auto frag_ids =
           executor->getTableFragmentIndices(ra_exe_unit,
                                             device_type,
-                                            j,
+                                            *table_desc_offset,
                                             i,
                                             selected_tables_fragments_,
                                             executor->getInnerTabIdToJoinCond());
-      const auto table_id = ra_exe_unit.input_descs[j].getTableId();
-      auto table_frags_it = selected_tables_fragments_.find(table_id);
-      CHECK(table_frags_it != selected_tables_fragments_.end());
+      const auto table_id = ra_exe_unit.input_descs[*table_desc_offset].getTableId();
+      execution_kernel_desc.fragments.emplace_back(FragmentsPerTable{table_id, frag_ids});
 
-      execution_kernel.fragments.emplace_back(FragmentsPerTable{table_id, frag_ids});
+    } else {
+      for (size_t j = 0; j < ra_exe_unit.input_descs.size(); ++j) {
+        const auto frag_ids =
+            executor->getTableFragmentIndices(ra_exe_unit,
+                                              device_type,
+                                              j,
+                                              i,
+                                              selected_tables_fragments_,
+                                              executor->getInnerTabIdToJoinCond());
+        const auto table_id = ra_exe_unit.input_descs[j].getTableId();
+        auto table_frags_it = selected_tables_fragments_.find(table_id);
+        CHECK(table_frags_it != selected_tables_fragments_.end());
+
+        execution_kernel_desc.fragments.emplace_back(
+            FragmentsPerTable{table_id, frag_ids});
+      }
     }
 
-    if (execution_kernels_per_device_.find(device_id) ==
-        execution_kernels_per_device_.end()) {
-      CHECK(execution_kernels_per_device_
-                .insert(std::make_pair(device_id,
-                                       std::vector<ExecutionKernel>{execution_kernel}))
-                .second);
+    auto itr = execution_kernels_per_device_.find(device_id);
+    if (itr == execution_kernels_per_device_.end()) {
+      auto const pair = execution_kernels_per_device_.insert(std::make_pair(
+          device_id,
+          std::vector<ExecutionKernelDescriptor>{std::move(execution_kernel_desc)}));
+      CHECK(pair.second);
     } else {
-      execution_kernels_per_device_[device_id].emplace_back(execution_kernel);
+      itr->second.emplace_back(std::move(execution_kernel_desc));
     }
   }
+}
+
+void QueryFragmentDescriptor::buildFragmentPerKernelMapForUnion(
+    const RelAlgExecutionUnit& ra_exe_unit,
+    const std::vector<uint64_t>& frag_offsets,
+    const int device_count,
+    const size_t num_bytes_for_row,
+    const ExecutorDeviceType& device_type,
+    Executor* executor) {
+  const auto& catalog = executor->getCatalog();
+
+  for (size_t j = 0; j < ra_exe_unit.input_descs.size(); ++j) {
+    auto const& table_desc = ra_exe_unit.input_descs[j];
+    int const table_id = table_desc.getTableId();
+    TableFragments const* fragments = selected_tables_fragments_.at(table_id);
+
+    auto& data_mgr = catalog->getDataMgr();
+    ChunkMetadataVector deleted_chunk_metadata_vec;
+    if (table_id > 0) {
+      // Temporary tables will not have a table descriptor and not have deleted rows.
+      const auto td = catalog->getMetadataForTable(table_id);
+      CHECK(td);
+      auto deleted_cd = catalog->getDeletedColumnIfRowsDeleted(td);
+      if (deleted_cd) {
+        ChunkKey chunk_key_prefix = {
+            catalog->getCurrentDB().dbId, table_id, deleted_cd->columnId};
+        data_mgr.getChunkMetadataVecForKeyPrefix(deleted_chunk_metadata_vec,
+                                                 chunk_key_prefix);
+      }
+    }
+
+    buildFragmentPerKernelForTable(fragments,
+                                   ra_exe_unit,
+                                   table_desc,
+                                   frag_offsets,
+                                   device_count,
+                                   num_bytes_for_row,
+                                   {},
+                                   j,
+                                   device_type,
+                                   executor);
+
+    std::vector<int> table_ids =
+        std::accumulate(execution_kernels_per_device_[0].begin(),
+                        execution_kernels_per_device_[0].end(),
+                        std::vector<int>(),
+                        [](auto&& vec, auto& exe_kern) {
+                          vec.push_back(exe_kern.fragments[0].table_id);
+                          return vec;
+                        });
+    VLOG(1) << "execution_kernels_per_device_.size()="
+            << execution_kernels_per_device_.size()
+            << " execution_kernels_per_device_[0][*].fragments[0].table_id="
+            << shared::printContainer(table_ids);
+  }
+}
+
+void QueryFragmentDescriptor::buildFragmentPerKernelMap(
+    const RelAlgExecutionUnit& ra_exe_unit,
+    const std::vector<uint64_t>& frag_offsets,
+    const int device_count,
+    const size_t num_bytes_for_row,
+    const ExecutorDeviceType& device_type,
+    Executor* executor) {
+  const auto& outer_table_desc = ra_exe_unit.input_descs.front();
+  const int outer_table_id = outer_table_desc.getTableId();
+  auto it = selected_tables_fragments_.find(outer_table_id);
+  CHECK(it != selected_tables_fragments_.end());
+  const auto outer_fragments = it->second;
+  outer_fragments_size_ = outer_fragments->size();
+
+  const auto& catalog = executor->getCatalog();
+
+  auto& data_mgr = catalog->getDataMgr();
+  ChunkMetadataVector deleted_chunk_metadata_vec;
+
+  if (outer_table_id > 0) {
+    // Temporary tables will not have a table descriptor and not have deleted rows.
+    const auto td = catalog->getMetadataForTable(outer_table_id);
+    CHECK(td);
+    const auto deleted_cd = catalog->getDeletedColumnIfRowsDeleted(td);
+    if (deleted_cd) {
+      ChunkKey chunk_key_prefix = {
+          catalog->getCurrentDB().dbId, outer_table_id, deleted_cd->columnId};
+      data_mgr.getChunkMetadataVecForKeyPrefix(deleted_chunk_metadata_vec,
+                                               chunk_key_prefix);
+    }
+  }
+
+  buildFragmentPerKernelForTable(outer_fragments,
+                                 ra_exe_unit,
+                                 outer_table_desc,
+                                 frag_offsets,
+                                 device_count,
+                                 num_bytes_for_row,
+                                 deleted_chunk_metadata_vec,
+                                 std::nullopt,
+                                 device_type,
+                                 executor);
 }
 
 void QueryFragmentDescriptor::buildMultifragKernelMap(
     const RelAlgExecutionUnit& ra_exe_unit,
     const std::vector<uint64_t>& frag_offsets,
     const int device_count,
+    const size_t num_bytes_for_row,
     const ExecutorDeviceType& device_type,
     const bool enable_inner_join_fragment_skipping,
     Executor* executor) {
@@ -297,7 +327,6 @@ void QueryFragmentDescriptor::buildMultifragKernelMap(
   outer_fragments_size_ = outer_fragments->size();
 
   const auto inner_table_id_to_join_condition = executor->getInnerTabIdToJoinCond();
-  const auto num_bytes_for_row = executor->getNumBytesForFetchedRow();
 
   for (size_t outer_frag_id = 0; outer_frag_id < outer_fragments->size();
        ++outer_frag_id) {
@@ -344,10 +373,11 @@ void QueryFragmentDescriptor::buildMultifragKernelMap(
 
       if (execution_kernels_per_device_.find(device_id) ==
           execution_kernels_per_device_.end()) {
-        std::vector<ExecutionKernel> kernels{
-            ExecutionKernel{device_id, FragmentsList{}, std::nullopt}};
-        CHECK(execution_kernels_per_device_.insert(std::make_pair(device_id, kernels))
-                  .second);
+        std::vector<ExecutionKernelDescriptor> kernel_descs{
+            ExecutionKernelDescriptor{device_id, FragmentsList{}, std::nullopt}};
+        CHECK(
+            execution_kernels_per_device_.insert(std::make_pair(device_id, kernel_descs))
+                .second);
       }
 
       // Multifrag kernels only have one execution kernel per device. Grab the execution
@@ -392,7 +422,7 @@ bool is_sample_query(const RelAlgExecutionUnit& ra_exe_unit) {
 bool QueryFragmentDescriptor::terminateDispatchMaybe(
     size_t& tuple_count,
     const RelAlgExecutionUnit& ra_exe_unit,
-    const ExecutionKernel& kernel) const {
+    const ExecutionKernelDescriptor& kernel) const {
   const auto sample_query_limit =
       ra_exe_unit.sort_info.limit + ra_exe_unit.sort_info.offset;
   if (!kernel.outer_tuple_count) {

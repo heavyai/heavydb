@@ -1,0 +1,4 @@
+col_int, col_int_var_array, col_point
+0, {1 | 2 | 3}, POINT(0 0)
+4, {5 | \N | 7}, POINT(0 0)
+8, {9 | 10 | 11}, POINT(0 0)

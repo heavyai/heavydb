@@ -976,7 +976,6 @@ def create_results_dataset(**kwargs):
                 # If available, getting the last iteration's component-wise timing information as a json structure
                 if (
                     query_results["noninitial_iteration_results"][-1]["debug_info"]
-                    is not None
                 ):
                     detailed_timing_last_iteration = json.loads(
                         query_results["noninitial_iteration_results"][-1][

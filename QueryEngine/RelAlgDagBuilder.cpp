@@ -61,6 +61,10 @@ std::unique_ptr<RexSubQuery> RexSubQuery::deepCopy() const {
   return std::make_unique<RexSubQuery>(type_, result_, ra_->deepCopy());
 }
 
+unsigned RexSubQuery::getId() const {
+  return ra_->getId();
+}
+
 namespace {
 
 class RexRebindInputsVisitor : public RexVisitor<void*> {
@@ -192,7 +196,6 @@ RANodeOutput get_node_output(const RelAlgNode* ra_node) {
   const auto table_func_node = dynamic_cast<const RelTableFunction*>(ra_node);
   if (table_func_node) {
     // Table Function output count doesn't depend on the input
-    CHECK_EQ(size_t(1), table_func_node->inputCount());
     return n_outputs(table_func_node, table_func_node->size());
   }
   const auto sort_node = dynamic_cast<const RelSort*>(ra_node);
@@ -331,85 +334,133 @@ void RelCompound::replaceInput(std::shared_ptr<const RelAlgNode> old_input,
   }
 }
 
-std::shared_ptr<RelAlgNode> RelProject::deepCopy() const {
+RelProject::RelProject(RelProject const& rhs)
+    : RelAlgNode(rhs)
+    , ModifyManipulationTarget(rhs)
+    , fields_(rhs.fields_)
+    , hint_applied_(false)
+    , hints_(std::make_unique<Hints>()) {
   RexDeepCopyVisitor copier;
-  std::vector<std::unique_ptr<const RexScalar>> exprs_copy;
-  for (auto& expr : scalar_exprs_) {
-    exprs_copy.push_back(copier.visit(expr.get()));
+  for (auto const& expr : rhs.scalar_exprs_) {
+    scalar_exprs_.push_back(copier.visit(expr.get()));
   }
-  return std::make_shared<RelProject>(exprs_copy, fields_, inputs_[0]);
-}
-
-std::shared_ptr<RelAlgNode> RelLogicalValues::deepCopy() const {
-  RexDeepCopyVisitor copier;
-  std::vector<RelLogicalValues::RowValues> values_copy;
-  for (auto& row : values_) {
-    values_copy.emplace_back(RelLogicalValues::RowValues{});
-    for (auto& value : row) {
-      values_copy.back().push_back(copier.visit(value.get()));
+  if (rhs.hint_applied_) {
+    for (auto const& kv : *rhs.hints_) {
+      addHint(kv.second);
     }
   }
-  return std::make_shared<RelLogicalValues>(tuple_type_, values_copy);
 }
 
-std::shared_ptr<RelAlgNode> RelFilter::deepCopy() const {
+RelLogicalValues::RelLogicalValues(RelLogicalValues const& rhs)
+    : RelAlgNode(rhs)
+    , tuple_type_(rhs.tuple_type_)
+    , values_(RexDeepCopyVisitor::copy(rhs.values_)) {}
+
+RelFilter::RelFilter(RelFilter const& rhs) : RelAlgNode(rhs) {
   RexDeepCopyVisitor copier;
-  auto filter_copy = copier.visit(filter_.get());
-  return std::make_shared<RelFilter>(filter_copy, inputs_[0]);
+  filter_ = copier.visit(rhs.filter_.get());
 }
 
-std::shared_ptr<RelAlgNode> RelAggregate::deepCopy() const {
-  std::vector<std::unique_ptr<const RexAgg>> aggs_copy;
-  for (auto& agg : agg_exprs_) {
-    auto copy = agg->deepCopy();
-    aggs_copy.push_back(std::move(copy));
+RelAggregate::RelAggregate(RelAggregate const& rhs)
+    : RelAlgNode(rhs)
+    , groupby_count_(rhs.groupby_count_)
+    , fields_(rhs.fields_)
+    , hint_applied_(false)
+    , hints_(std::make_unique<Hints>()) {
+  agg_exprs_.reserve(rhs.agg_exprs_.size());
+  for (auto const& agg : rhs.agg_exprs_) {
+    agg_exprs_.push_back(agg->deepCopy());
   }
-  return std::make_shared<RelAggregate>(groupby_count_, aggs_copy, fields_, inputs_[0]);
+  if (rhs.hint_applied_) {
+    for (auto const& kv : *rhs.hints_) {
+      addHint(kv.second);
+    }
+  }
 }
 
-std::shared_ptr<RelAlgNode> RelJoin::deepCopy() const {
+RelJoin::RelJoin(RelJoin const& rhs)
+    : RelAlgNode(rhs)
+    , join_type_(rhs.join_type_)
+    , hint_applied_(false)
+    , hints_(std::make_unique<Hints>()) {
   RexDeepCopyVisitor copier;
-  auto condition_copy = copier.visit(condition_.get());
-  return std::make_shared<RelJoin>(inputs_[0], inputs_[1], condition_copy, join_type_);
+  condition_ = copier.visit(rhs.condition_.get());
+  if (rhs.hint_applied_) {
+    for (auto const& kv : *rhs.hints_) {
+      addHint(kv.second);
+    }
+  }
 }
 
-std::shared_ptr<RelAlgNode> RelCompound::deepCopy() const {
+namespace {
+
+std::vector<std::unique_ptr<const RexAgg>> copyAggExprs(
+    std::vector<std::unique_ptr<const RexAgg>> const& agg_exprs) {
+  std::vector<std::unique_ptr<const RexAgg>> agg_exprs_copy;
+  agg_exprs_copy.reserve(agg_exprs.size());
+  for (auto const& agg_expr : agg_exprs) {
+    agg_exprs_copy.push_back(agg_expr->deepCopy());
+  }
+  return agg_exprs_copy;
+}
+
+std::vector<std::unique_ptr<const RexScalar>> copyRexScalars(
+    std::vector<std::unique_ptr<const RexScalar>> const& scalar_sources) {
+  std::vector<std::unique_ptr<const RexScalar>> scalar_sources_copy;
+  scalar_sources_copy.reserve(scalar_sources.size());
   RexDeepCopyVisitor copier;
-  auto filter_copy = filter_expr_ ? copier.visit(filter_expr_.get()) : nullptr;
-  std::unordered_map<const Rex*, const Rex*> old_to_new_target;
-  std::vector<const RexAgg*> aggs_copy;
-  for (auto& agg : agg_exprs_) {
-    auto copy = agg->deepCopy();
-    old_to_new_target.insert(std::make_pair(agg.get(), copy.get()));
-    aggs_copy.push_back(copy.release());
+  for (auto const& scalar_source : scalar_sources) {
+    scalar_sources_copy.push_back(copier.visit(scalar_source.get()));
   }
-  std::vector<std::unique_ptr<const RexScalar>> sources_copy;
-  for (size_t i = 0; i < scalar_sources_.size(); ++i) {
-    auto copy = copier.visit(scalar_sources_[i].get());
-    old_to_new_target.insert(std::make_pair(scalar_sources_[i].get(), copy.get()));
-    sources_copy.push_back(std::move(copy));
+  return scalar_sources_copy;
+}
+
+std::vector<const Rex*> remapTargetPointers(
+    std::vector<std::unique_ptr<const RexAgg>> const& agg_exprs_new,
+    std::vector<std::unique_ptr<const RexScalar>> const& scalar_sources_new,
+    std::vector<std::unique_ptr<const RexAgg>> const& agg_exprs_old,
+    std::vector<std::unique_ptr<const RexScalar>> const& scalar_sources_old,
+    std::vector<const Rex*> const& target_exprs_old) {
+  std::vector<const Rex*> target_exprs(target_exprs_old);
+  std::unordered_map<const Rex*, const Rex*> old_to_new_target(target_exprs.size());
+  for (size_t i = 0; i < agg_exprs_new.size(); ++i) {
+    old_to_new_target.emplace(agg_exprs_old[i].get(), agg_exprs_new[i].get());
   }
-  std::vector<const Rex*> target_exprs_copy;
-  for (auto target : target_exprs_) {
+  for (size_t i = 0; i < scalar_sources_new.size(); ++i) {
+    old_to_new_target.emplace(scalar_sources_old[i].get(), scalar_sources_new[i].get());
+  }
+  for (auto& target : target_exprs) {
     auto target_it = old_to_new_target.find(target);
     CHECK(target_it != old_to_new_target.end());
-    target_exprs_copy.push_back(target_it->second);
+    target = target_it->second;
   }
-  auto new_compound = std::make_shared<RelCompound>(filter_copy,
-                                                    target_exprs_copy,
-                                                    groupby_count_,
-                                                    aggs_copy,
-                                                    fields_,
-                                                    sources_copy,
-                                                    is_agg_);
-  new_compound->addManagedInput(inputs_[0]);
-  return new_compound;
+  return target_exprs;
 }
 
-std::shared_ptr<RelAlgNode> RelSort::deepCopy() const {
-  auto ret = std::make_shared<RelSort>(collation_, limit_, offset_, inputs_[0]);
-  ret->setEmptyResult(isEmptyResult());
-  return ret;
+}  // namespace
+
+RelCompound::RelCompound(RelCompound const& rhs)
+    : RelAlgNode(rhs)
+    , ModifyManipulationTarget(rhs)
+    , groupby_count_(rhs.groupby_count_)
+    , agg_exprs_(copyAggExprs(rhs.agg_exprs_))
+    , fields_(rhs.fields_)
+    , is_agg_(rhs.is_agg_)
+    , scalar_sources_(copyRexScalars(rhs.scalar_sources_))
+    , target_exprs_(remapTargetPointers(agg_exprs_,
+                                        scalar_sources_,
+                                        rhs.agg_exprs_,
+                                        rhs.scalar_sources_,
+                                        rhs.target_exprs_))
+    , hint_applied_(false)
+    , hints_(std::make_unique<Hints>()) {
+  RexDeepCopyVisitor copier;
+  filter_expr_ = rhs.filter_expr_ ? copier.visit(rhs.filter_expr_.get()) : nullptr;
+  if (rhs.hint_applied_) {
+    for (auto const& kv : *rhs.hints_) {
+      addHint(kv.second);
+    }
+  }
 }
 
 void RelTableFunction::replaceInput(std::shared_ptr<const RelAlgNode> old_input,
@@ -424,37 +475,23 @@ void RelTableFunction::replaceInput(std::shared_ptr<const RelAlgNode> old_input,
   }
 }
 
-std::shared_ptr<RelAlgNode> RelTableFunction::deepCopy() const {
-  RexDeepCopyVisitor copier;
-
+RelTableFunction::RelTableFunction(RelTableFunction const& rhs)
+    : RelAlgNode(rhs)
+    , function_name_(rhs.function_name_)
+    , fields_(rhs.fields_)
+    , col_inputs_(rhs.col_inputs_)
+    , table_func_inputs_(copyRexScalars(rhs.table_func_inputs_))
+    , target_exprs_(copyRexScalars(rhs.target_exprs_)) {
   std::unordered_map<const Rex*, const Rex*> old_to_new_input;
-
-  std::vector<std::unique_ptr<const RexScalar>> table_func_inputs_copy;
-  for (auto& expr : table_func_inputs_) {
-    table_func_inputs_copy.push_back(copier.visit(expr.get()));
-    old_to_new_input.insert(
-        std::make_pair(expr.get(), table_func_inputs_copy.back().get()));
+  for (size_t i = 0; i < table_func_inputs_.size(); ++i) {
+    old_to_new_input.emplace(rhs.table_func_inputs_[i].get(),
+                             table_func_inputs_[i].get());
   }
-
-  std::vector<const Rex*> col_inputs_copy;
-  for (auto target : col_inputs_) {
+  for (auto& target : col_inputs_) {
     auto target_it = old_to_new_input.find(target);
     CHECK(target_it != old_to_new_input.end());
-    col_inputs_copy.push_back(target_it->second);
+    target = target_it->second;
   }
-  auto fields_copy = fields_;
-
-  std::vector<std::unique_ptr<const RexScalar>> target_exprs_copy;
-  for (auto& expr : target_exprs_) {
-    target_exprs_copy.push_back(copier.visit(expr.get()));
-  }
-
-  return std::make_shared<RelTableFunction>(function_name_,
-                                            inputs_[0],
-                                            fields_copy,
-                                            col_inputs_copy,
-                                            table_func_inputs_copy,
-                                            target_exprs_copy);
 }
 
 namespace std {
@@ -546,18 +583,14 @@ RelLogicalUnion::RelLogicalUnion(RelAlgInputs inputs, bool is_all)
         "UNION is not supported yet. There is an experimental enable-union option "
         "available to enable UNION ALL queries.");
   }
-  CHECK_LE(2u, inputs_.size());
+  CHECK_EQ(2u, inputs_.size());
   if (!is_all_) {
     throw QueryNotSupported("UNION without ALL is not supported yet.");
   }
 }
 
-std::shared_ptr<RelAlgNode> RelLogicalUnion::deepCopy() const {
-  return std::make_shared<RelLogicalUnion>(*this);
-}
-
 size_t RelLogicalUnion::size() const {
-  return inputs_.at(0)->size();
+  return inputs_.front()->size();
 }
 
 std::string RelLogicalUnion::toString() const {
@@ -583,25 +616,33 @@ std::string RelLogicalUnion::getFieldName(const size_t i) const {
   return {};
 }
 
-bool RelLogicalUnion::inputMetainfoTypesMatch() const {
+void RelLogicalUnion::checkForMatchingMetaInfoTypes() const {
   std::vector<TargetMetaInfo> const& tmis0 = inputs_[0]->getOutputMetainfo();
   std::vector<TargetMetaInfo> const& tmis1 = inputs_[1]->getOutputMetainfo();
   if (tmis0.size() != tmis1.size()) {
     VLOG(2) << "tmis0.size() = " << tmis0.size() << " != " << tmis1.size()
             << " = tmis1.size()";
-    return false;
+    throw std::runtime_error("Subqueries of a UNION must have matching data types.");
   }
   for (size_t i = 0; i < tmis0.size(); ++i) {
     if (tmis0[i].get_type_info() != tmis1[i].get_type_info()) {
+      SQLTypeInfo const& ti0 = tmis0[i].get_type_info();
+      SQLTypeInfo const& ti1 = tmis1[i].get_type_info();
       VLOG(2) << "Types do not match for UNION:\n  tmis0[" << i
-              << "].get_type_info().to_string() = "
-              << tmis0[i].get_type_info().to_string() << "\n  tmis1[" << i
-              << "].get_type_info().to_string() = "
-              << tmis1[i].get_type_info().to_string();
-      return false;
+              << "].get_type_info().to_string() = " << ti0.to_string() << "\n  tmis1["
+              << i << "].get_type_info().to_string() = " << ti1.to_string();
+      if (ti0.is_dict_encoded_string() && ti1.is_dict_encoded_string() &&
+          ti0.get_comp_param() != ti1.get_comp_param()) {
+        throw std::runtime_error(
+            "Taking the UNION of different text-encoded dictionaries is not yet "
+            "supported. This may be resolved by using shared dictionaries. For example, "
+            "by making one a shared dictionary reference to the other.");
+      } else {
+        throw std::runtime_error(
+            "Subqueries of a UNION must have the exact same data types.");
+      }
     }
   }
-  return true;
 }
 
 // Rest of code requires a raw pointer, but RexInput object needs to live somewhere.
@@ -1101,7 +1142,6 @@ void bind_project_to_input(RelProject* project_node, const RANodeOutput& input) 
 
 void bind_table_func_to_input(RelTableFunction* table_func_node,
                               const RANodeOutput& input) noexcept {
-  CHECK_EQ(size_t(1), table_func_node->inputCount());
   std::vector<std::unique_ptr<const RexScalar>> disambiguated_exprs;
   for (size_t i = 0; i < table_func_node->getTableFuncInputsSize(); ++i) {
     const auto target_expr = table_func_node->getTableFuncInputAt(i);
@@ -1144,6 +1184,47 @@ void bind_inputs(const std::vector<std::shared_ptr<RelAlgNode>>& nodes) noexcept
                                get_node_output(table_func_node->getInput(0)));
     }
   }
+}
+
+void handleQueryHint(const std::vector<std::shared_ptr<RelAlgNode>>& nodes,
+                     RelAlgDagBuilder* dag_builder) noexcept {
+  QueryHint query_hints;
+  for (auto node : nodes) {
+    const auto agg_node = std::dynamic_pointer_cast<RelAggregate>(node);
+    if (agg_node) {
+      if (agg_node->hasHintEnabled("cpu_mode")) {
+        query_hints.cpu_mode = true;
+      }
+    }
+    const auto project_node = std::dynamic_pointer_cast<RelProject>(node);
+    if (project_node) {
+      if (project_node->hasHintEnabled("cpu_mode")) {
+        query_hints.cpu_mode = true;
+      }
+    }
+    const auto scan_node = std::dynamic_pointer_cast<RelScan>(node);
+    if (scan_node) {
+      if (scan_node->hasHintEnabled("cpu_mode")) {
+        query_hints.cpu_mode = true;
+      }
+    }
+    const auto join_node = std::dynamic_pointer_cast<RelJoin>(node);
+    if (join_node) {
+      if (join_node->hasHintEnabled("cpu_mode")) {
+        query_hints.cpu_mode = true;
+      }
+    }
+    const auto compound_node = std::dynamic_pointer_cast<RelCompound>(node);
+    if (compound_node) {
+      if (compound_node->hasHintEnabled("cpu_mode")) {
+        query_hints.cpu_mode = true;
+      }
+    }
+  }
+  if (query_hints.cpu_mode) {
+    VLOG(1) << "A user forces to run the query on the CPU execution mode";
+  }
+  dag_builder->registerQueryHints(query_hints);
 }
 
 void mark_nops(const std::vector<std::shared_ptr<RelAlgNode>>& nodes) noexcept {
@@ -2077,6 +2158,11 @@ class RelAlgDispatcher {
     CHECK(scan_ra.IsObject());
     const auto td = getTableFromScanNode(cat_, scan_ra);
     const auto field_names = getFieldNamesFromScanNode(scan_ra);
+    if (scan_ra.HasMember("hints")) {
+      auto scan_node = std::make_shared<RelScan>(td, field_names);
+      getRelAlgHints(scan_ra, scan_node);
+      return scan_node;
+    }
     return std::make_shared<RelScan>(td, field_names);
   }
 
@@ -2092,6 +2178,12 @@ class RelAlgDispatcher {
       exprs.emplace_back(parse_scalar_expr(*exprs_json_it, cat_, root_dag_builder));
     }
     const auto& fields = field(proj_ra, "fields");
+    if (proj_ra.HasMember("hints")) {
+      auto project_node = std::make_shared<RelProject>(
+          exprs, strings_from_json_array(fields), inputs.front());
+      getRelAlgHints(proj_ra, project_node);
+      return project_node;
+    }
     return std::make_shared<RelProject>(
         exprs, strings_from_json_array(fields), inputs.front());
   }
@@ -2126,6 +2218,12 @@ class RelAlgDispatcher {
          ++aggs_json_arr_it) {
       aggs.emplace_back(parse_aggregate_expr(*aggs_json_arr_it));
     }
+    if (agg_ra.HasMember("hints")) {
+      auto agg_node =
+          std::make_shared<RelAggregate>(group.size(), aggs, fields, inputs.front());
+      getRelAlgHints(agg_ra, agg_node);
+      return agg_node;
+    }
     return std::make_shared<RelAggregate>(group.size(), aggs, fields, inputs.front());
   }
 
@@ -2136,6 +2234,12 @@ class RelAlgDispatcher {
     const auto join_type = to_join_type(json_str(field(join_ra, "joinType")));
     auto filter_rex =
         parse_scalar_expr(field(join_ra, "condition"), cat_, root_dag_builder);
+    if (join_ra.HasMember("hints")) {
+      auto join_node =
+          std::make_shared<RelJoin>(inputs[0], inputs[1], filter_rex, join_type);
+      getRelAlgHints(join_ra, join_node);
+      return join_node;
+    }
     return std::make_shared<RelJoin>(inputs[0], inputs[1], filter_rex, join_type);
   }
 
@@ -2208,7 +2312,6 @@ class RelAlgDispatcher {
       const rapidjson::Value& table_func_ra,
       RelAlgDagBuilder& root_dag_builder) {
     const auto inputs = getRelAlgInputs(table_func_ra);
-    CHECK_EQ(size_t(1), inputs.size());
 
     const auto& invocation = field(table_func_ra, "invocation");
     CHECK(invocation.IsObject());
@@ -2280,7 +2383,7 @@ class RelAlgDispatcher {
     }
 
     return std::make_shared<RelTableFunction>(op_name.GetString(),
-                                              inputs[0],
+                                              inputs,
                                               fields,
                                               col_inputs,
                                               table_func_inputs,
@@ -2348,6 +2451,114 @@ class RelAlgDispatcher {
     return {prev(node)};
   }
 
+  std::pair<std::string, std::string> getKVOptionPair(std::string& str, size_t& pos) {
+    auto option = str.substr(0, pos);
+    std::string delim = "=";
+    size_t delim_pos = option.find(delim);
+    auto key = option.substr(0, delim_pos);
+    auto val = option.substr(delim_pos + 1, option.length());
+    str.erase(0, pos + delim.length() + 1);
+    return {key, val};
+  }
+
+  HintExplained parseHintString(std::string& hint_string) {
+    std::string white_space_delim = " ";
+    int l = hint_string.length();
+    hint_string = hint_string.erase(0, 1).substr(0, l - 2);
+    size_t pos = 0;
+    if ((pos = hint_string.find("options:")) != std::string::npos) {
+      // need to parse hint options
+      std::vector<std::string> tokens;
+      std::string hint_name = hint_string.substr(0, hint_string.find(white_space_delim));
+      bool kv_list_op = false;
+      std::string raw_options = hint_string.substr(pos + 8, hint_string.length() - 2);
+      if (raw_options.find('{') != std::string::npos) {
+        kv_list_op = true;
+      } else {
+        CHECK(raw_options.find('[') != std::string::npos);
+      }
+      auto t1 = raw_options.erase(0, 1);
+      raw_options = t1.substr(0, t1.length() - 1);
+      std::string op_delim = ", ";
+      if (kv_list_op) {
+        // kv options
+        std::unordered_map<std::string, std::string> kv_options;
+        while ((pos = raw_options.find(op_delim)) != std::string::npos) {
+          auto kv_pair = getKVOptionPair(raw_options, pos);
+          kv_options.emplace(kv_pair.first, kv_pair.second);
+        }
+        // handle the last kv pair
+        auto kv_pair = getKVOptionPair(raw_options, pos);
+        kv_options.emplace(kv_pair.first, kv_pair.second);
+        return {hint_name, true, false, true, kv_options};
+      } else {
+        std::vector<std::string> list_options;
+        while ((pos = raw_options.find(op_delim)) != std::string::npos) {
+          list_options.emplace_back(raw_options.substr(0, pos));
+          raw_options.erase(0, pos + white_space_delim.length() + 1);
+        }
+        // handle the last option
+        list_options.emplace_back(raw_options.substr(0, pos));
+        return {hint_name, true, false, false, list_options};
+      }
+    } else {
+      // marker hint: no extra option for this hint
+      std::string hint_name = hint_string.substr(0, hint_string.find(white_space_delim));
+      return {hint_name, true, true, false};
+    }
+  }
+
+  void getRelAlgHints(const rapidjson::Value& json_node,
+                      std::shared_ptr<RelAlgNode> node) {
+    std::string hint_explained = json_str(field(json_node, "hints"));
+    size_t pos = 0;
+    std::string delim = "|";
+    std::vector<std::string> hint_list;
+    while ((pos = hint_explained.find(delim)) != std::string::npos) {
+      hint_list.emplace_back(hint_explained.substr(0, pos));
+      hint_explained.erase(0, pos + delim.length());
+    }
+    // handling the last one
+    hint_list.emplace_back(hint_explained.substr(0, pos));
+
+    const auto agg_node = std::dynamic_pointer_cast<RelAggregate>(node);
+    if (agg_node) {
+      for (std::string& hint : hint_list) {
+        auto parsed_hint = parseHintString(hint);
+        agg_node->addHint(parsed_hint);
+      }
+    }
+    const auto project_node = std::dynamic_pointer_cast<RelProject>(node);
+    if (project_node) {
+      for (std::string& hint : hint_list) {
+        auto parsed_hint = parseHintString(hint);
+        project_node->addHint(parsed_hint);
+      }
+    }
+    const auto scan_node = std::dynamic_pointer_cast<RelScan>(node);
+    if (scan_node) {
+      for (std::string& hint : hint_list) {
+        auto parsed_hint = parseHintString(hint);
+        scan_node->addHint(parsed_hint);
+      }
+    }
+    const auto join_node = std::dynamic_pointer_cast<RelJoin>(node);
+    if (join_node) {
+      for (std::string& hint : hint_list) {
+        auto parsed_hint = parseHintString(hint);
+        join_node->addHint(parsed_hint);
+      }
+    }
+
+    const auto compound_node = std::dynamic_pointer_cast<RelCompound>(node);
+    if (compound_node) {
+      for (std::string& hint : hint_list) {
+        auto parsed_hint = parseHintString(hint);
+        compound_node->addHint(parsed_hint);
+      }
+    }
+  }
+
   std::shared_ptr<const RelAlgNode> prev(const rapidjson::Value& crt_node) {
     const auto id = node_id(crt_node);
     CHECK(id);
@@ -2408,6 +2619,7 @@ void RelAlgDagBuilder::build(const rapidjson::Value& query_ast,
     alterRAForRender(nodes_, *render_info_);
   }
 
+  handleQueryHint(nodes_, this);
   mark_nops(nodes_);
   simplify_sort(nodes_);
   sink_projected_boolean_expr_to_join(nodes_);
@@ -2430,6 +2642,7 @@ void RelAlgDagBuilder::build(const rapidjson::Value& query_ast,
     hoist_filter_cond_to_cross_join(nodes_);
   }
   eliminate_dead_columns(nodes_);
+  eliminate_dead_subqueries(subqueries_, nodes_.back().get());
   separate_window_function_expressions(nodes_);
   if (g_cluster) {
     add_window_function_pre_project(nodes_);

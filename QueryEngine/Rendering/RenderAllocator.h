@@ -14,13 +14,12 @@
  * limitations under the License.
  */
 
-#ifndef QUERYENGINE_RENDERALLOCATOR_H
-#define QUERYENGINE_RENDERALLOCATOR_H
+#pragma once
 
 #ifdef HAVE_CUDA
 #include <cuda.h>
 #else
-#include "../Shared/nocuda.h"
+#include "Shared/nocuda.h"
 #endif  // HAVE_CUDA
 
 #include <cstdlib>
@@ -29,7 +28,7 @@
 #include <stdexcept>
 #include <vector>
 
-#include "../Allocators/DeviceAllocator.h"
+#include "DataMgr/Allocators/DeviceAllocator.h"
 
 namespace QueryRenderer {
 class JSONLocation;
@@ -115,4 +114,3 @@ class RenderAllocatorMap {
   using HostBufPtrType = std::unique_ptr<int8_t, HostBufferDeleter>;
   HostBufPtrType host_render_buffer_;
 };
-#endif  // QUERYENGINE_RENDERALLOCATOR_H

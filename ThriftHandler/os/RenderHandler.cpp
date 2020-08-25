@@ -30,6 +30,7 @@ class RenderHandler::Impl {};
 RenderHandler::RenderHandler(DBHandler* db_handler,
                              const size_t render_mem_bytes,
                              const size_t max_concurrent_render_sessions,
+                             const bool compositor_use_last_gpu,
                              const bool enable_auto_clear_render_mem,
                              const int render_oom_retry_threshold,
                              const SystemParameters system_parameters)

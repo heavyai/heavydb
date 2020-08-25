@@ -269,14 +269,14 @@ install_geos
 # TBB
 install_tbb static
 
-# Apache Arrow (see common-functions.sh)
-install_arrow
-
 # Go
 install_go
 
 # install AWS core and s3 sdk
 install_awscpp -j $(nproc)
+
+# Apache Arrow (see common-functions.sh)
+install_arrow
 
 # glslang (with spirv-tools)
 VERS=7.12.3352 # 8/20/19

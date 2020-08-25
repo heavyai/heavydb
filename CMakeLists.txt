@@ -149,6 +149,24 @@ if(XCODE)
   add_definitions("-DXCODE")
 endif()
 
+option(ENABLE_GEOS "Enable GEOS Support" ON)
+if (ENABLE_GEOS)
+  if(${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
+    set(ENABLE_GEOS OFF CACHE BOOL "Enable GEOS support" FORCE)
+    message(STATUS "GEOS functionality is not supported on macOS.")
+  else()
+    find_package(GEOS)
+    if(GEOS_NOTFOUND)
+      set(ENABLE_GEOS OFF CACHE BOOL "Enable GEOS support" FORCE)
+      message(STATUS "GEOS not found, disabling support.")
+    else()
+      set(GEOS_LIBRARY_FILENAME '"${GEOS_LIBRARY}"')
+      add_definitions("-DENABLE_GEOS -DGEOS_LIBRARY_FILENAME=${GEOS_LIBRARY_FILENAME}")
+      set(GEOS_RT_DEFINITIONS "-DENABLE_GEOS")
+    endif()
+  endif()
+endif()
+
 # fixme: hack works for Homebrew, might not work for Conda
 if(ENABLE_CONDA)
   set(OPENSSL_ROOT_DIR "$ENV{CONDA_PREFIX}")
@@ -179,6 +197,7 @@ find_package(PNG REQUIRED)
 find_package(ZLIB REQUIRED)
 find_package(GDAL REQUIRED)
 find_package(GDALExtra REQUIRED)
+find_package(BLOSC REQUIRED)
 list(APPEND GDAL_LIBRARIES ${PNG_LIBRARIES} ${GDALExtra_LIBRARIES})
 include_directories(${GDAL_INCLUDE_DIRS})
 
@@ -224,6 +243,7 @@ if(ENABLE_ASAN)
   set(SAN_FLAGS "-fsanitize=address -O1 -fno-omit-frame-pointer")
   add_definitions("-DWITH_DECODERS_BOUNDS_CHECKING")
 elseif(ENABLE_TSAN)
+  add_definitions("-DHAVE_TSAN")
   # Copy the config directory to the build dir for TSAN suppressions
   file(COPY config DESTINATION ${CMAKE_BINARY_DIR})
 
@@ -288,7 +308,7 @@ string(STRIP "${LLVM_LINKER_FLAGS}" LLVM_LINKER_FLAGS)
 include_directories(${LLVM_INC_FLAGS})
 
 # Boost
-find_package(Boost COMPONENTS log log_setup filesystem program_options regex system thread timer locale REQUIRED)
+find_package(Boost COMPONENTS log log_setup filesystem program_options regex system thread timer locale iostreams REQUIRED)
 include_directories(${Boost_INCLUDE_DIR})
 
 # CUDA architecture flags 
@@ -320,8 +340,7 @@ add_definitions("-DARROW_NO_DEPRECATED_API")
 include_directories(${Arrow_INCLUDE_DIRS})
 
 option(ENABLE_IMPORT_PARQUET "Enable Parquet Importer support" ON)
-# temporarily disable parquet if static linking due to issues with arrow+zstd
-if(ENABLE_IMPORT_PARQUET AND NOT PREFER_STATIC_LIBS)
+if(ENABLE_IMPORT_PARQUET)
   find_package(Parquet)
   if(NOT Parquet_FOUND)
     set(ENABLE_IMPORT_PARQUET OFF CACHE BOOL "Enable Parquet Importer support" FORCE)
@@ -489,6 +508,11 @@ else()
   set(PROFILER_LIBS "")
 endif()
 
+option(ENABLE_FSI "Enable Foreign Storage Interface" OFF)
+if(ENABLE_FSI)
+  add_definitions("-DENABLE_FSI")
+endif()
+
 add_subdirectory(SqliteConnector)
 
 add_subdirectory(StringDictionary)
@@ -499,7 +523,7 @@ include_directories(${CalciteThrift_BINARY_DIR})
 add_subdirectory(Catalog)
 add_subdirectory(Parser)
 add_subdirectory(Analyzer)
-add_subdirectory(Import)
+add_subdirectory(ImportExport)
 add_subdirectory(QueryEngine)
 add_subdirectory(DataMgr)
 add_subdirectory(CudaMgr)
@@ -524,7 +548,7 @@ if(ENABLE_ODBC)
   add_subdirectory(ODBC)
 endif()
 
-set(MAPD_LIBRARIES Shared Catalog SqliteConnector MigrationMgr TableArchiver Parser Analyzer CsvImport QueryRunner QueryEngine QueryState LockMgr DataMgr Fragmenter)
+set(MAPD_LIBRARIES Shared Catalog SqliteConnector MigrationMgr TableArchiver Parser Analyzer ImportExport QueryRunner QueryEngine QueryState LockMgr DataMgr Fragmenter)
 
 if("${MAPD_EDITION_LOWER}" STREQUAL "ee")
   list(APPEND MAPD_LIBRARIES Distributed)
@@ -850,22 +874,6 @@ else()
   install(FILES docker/Dockerfile.cpu RENAME Dockerfile DESTINATION "docker")
 endif()
 
-execute_process(
-  COMMAND ln -sf omnisql mapdql
-  COMMAND ln -sf omnisci_server mapd_server
-  WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/bin
-  )
-install(FILES
-  ${CMAKE_BINARY_DIR}/bin/mapdql
-  ${CMAKE_BINARY_DIR}/bin/mapd_server
-  DESTINATION "bin" COMPONENT "exe"
-  )
-execute_process(
-  COMMAND ln -sf startomnisci startmapd
-  WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
-  )
-install(FILES ${CMAKE_BINARY_DIR}/startmapd DESTINATION ".")
-
 exec_program(uname ARGS -m OUTPUT_VARIABLE MAPD_HOST_SYSTEM_ARCHITECTURE) # does not account for cross-compiling or Windows
 set(CPACK_PACKAGE_FILE_NAME "${CMAKE_PROJECT_NAME}-${MAPD_EDITION_LOWER}-${CPACK_PACKAGE_VERSION}-${CMAKE_SYSTEM_NAME}-${MAPD_HOST_SYSTEM_ARCHITECTURE}${MAPD_PACKAGE_FLAGS}")
 
@@ -884,8 +892,3 @@ if(DOXYGEN_FOUND)
 
   add_dependencies(sphinx doxygen)
 endif(DOXYGEN_FOUND)
-
-option(ENABLE_FSI "Enable Foreign Storage Interface" OFF)
-if(ENABLE_FSI)
-  add_definitions("-DENABLE_FSI")
-endif()

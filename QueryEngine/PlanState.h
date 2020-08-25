@@ -16,11 +16,11 @@
 
 #pragma once
 
-#include "../Analyzer/Analyzer.h"
-#include "Descriptors/InputDescriptors.h"
-#include "JoinHashTableInterface.h"
-
 #include <unordered_set>
+
+#include "Analyzer/Analyzer.h"
+#include "QueryEngine/Descriptors/InputDescriptors.h"
+#include "QueryEngine/JoinHashTable/JoinHashTableInterface.h"
 
 class Executor;
 

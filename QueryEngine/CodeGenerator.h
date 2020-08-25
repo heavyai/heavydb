@@ -83,11 +83,6 @@ class CodeGenerator {
 
   static bool alwaysCloneRuntimeFunction(const llvm::Function* func);
 
-  struct GPUCode {
-    std::vector<std::pair<void*, void*>> native_functions;
-    std::vector<std::tuple<void*, GpuCompilationContext*>> cached_functions;
-  };
-
   struct GPUTarget {
     llvm::TargetMachine* nvptx_target_machine;
     const CudaMgr_Namespace::CudaMgr* cuda_mgr;
@@ -96,7 +91,7 @@ class CodeGenerator {
     bool row_func_not_inlined;
   };
 
-  static GPUCode generateNativeGPUCode(
+  static std::shared_ptr<GpuCompilationContext> generateNativeGPUCode(
       llvm::Function* func,
       llvm::Function* wrapper_func,
       const std::unordered_set<llvm::Function*>& live_funcs,
@@ -115,6 +110,22 @@ class CodeGenerator {
   struct ExecutorRequired : public std::runtime_error {
     ExecutorRequired()
         : std::runtime_error("Executor required to generate this expression") {}
+  };
+
+  struct NullCheckCodegen {
+    NullCheckCodegen(CgenState* cgen_state,
+                     Executor* executor,
+                     llvm::Value* nullable_lv,
+                     const SQLTypeInfo& nullable_ti,
+                     const std::string& name = "");
+
+    llvm::Value* finalize(llvm::Value* null_lv, llvm::Value* notnull_lv);
+
+    CgenState* cgen_state{nullptr};
+    std::string name;
+    llvm::BasicBlock* nullcheck_bb{nullptr};
+    llvm::PHINode* nullcheck_value{nullptr};
+    std::unique_ptr<GroupByAndAggregate::DiamondCodegen> null_check;
   };
 
  private:
@@ -174,6 +185,8 @@ class CodeGenerator {
 
   llvm::Value* codegen(const Analyzer::KeyForStringExpr*, const CompilationOptions&);
 
+  llvm::Value* codegen(const Analyzer::SampleRatioExpr*, const CompilationOptions&);
+
   llvm::Value* codegen(const Analyzer::LowerExpr*, const CompilationOptions&);
 
   llvm::Value* codegen(const Analyzer::LikeExpr*, const CompilationOptions&);
@@ -189,8 +202,23 @@ class CodeGenerator {
   std::vector<llvm::Value*> codegenArrayExpr(const Analyzer::ArrayExpr*,
                                              const CompilationOptions&);
 
-  std::vector<llvm::Value*> codegenGeoExpr(const Analyzer::GeoExpr*,
-                                           const CompilationOptions&);
+  std::vector<llvm::Value*> codegenGeoUOper(const Analyzer::GeoUOper*,
+                                            const CompilationOptions&);
+
+  std::vector<llvm::Value*> codegenGeoBinOper(const Analyzer::GeoBinOper*,
+                                              const CompilationOptions&);
+
+  std::vector<llvm::Value*> codegenGeosPredicateCall(const std::string&,
+                                                     std::vector<llvm::Value*>,
+                                                     const CompilationOptions&);
+
+  std::vector<llvm::Value*> codegenGeosConstructorCall(const std::string&,
+                                                       std::vector<llvm::Value*>,
+                                                       const CompilationOptions&);
+
+  std::vector<llvm::Value*> codegenGeoArgs(
+      const std::vector<std::shared_ptr<Analyzer::Expr>>&,
+      const CompilationOptions&);
 
   llvm::Value* codegenFunctionOper(const Analyzer::FunctionOper*,
                                    const CompilationOptions&);
@@ -577,7 +605,7 @@ class ScalarCodeGenerator : public CodeGenerator {
   std::unique_ptr<CgenState> own_cgen_state_;
   std::unique_ptr<PlanState> own_plan_state_;
   std::unique_ptr<CudaMgr_Namespace::CudaMgr> cuda_mgr_;
-  std::vector<std::unique_ptr<GpuCompilationContext>> gpu_compilation_contexts_;
+  std::shared_ptr<GpuCompilationContext> gpu_compilation_context_;
   std::unique_ptr<llvm::TargetMachine> nvptx_target_machine_;
 };
 

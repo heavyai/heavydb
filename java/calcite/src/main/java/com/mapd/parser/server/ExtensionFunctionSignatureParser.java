@@ -216,6 +216,28 @@ class ExtensionFunctionSignatureParser {
     if (type_name.equals("Array<double>")) {
       return ExtensionFunction.ExtArgumentType.ArrayDouble;
     }
+    if (type_name.equals("Array<bool>")) {
+      return ExtensionFunction.ExtArgumentType.ArrayBool;
+    }
+    if (type_name.equals("Column<int8_t>") || type_name.equals("Column<char>")) {
+      return ExtensionFunction.ExtArgumentType.ColumnInt8;
+    }
+    if (type_name.equals("Column<int16_t>") || type_name.equals("Column<short>")) {
+      return ExtensionFunction.ExtArgumentType.ColumnInt16;
+    }
+    if (type_name.equals("Column<int32_t>") || type_name.equals("Column<int>")) {
+      return ExtensionFunction.ExtArgumentType.ColumnInt32;
+    }
+    if (type_name.equals("Column<int64_t>") || type_name.equals("Column<size_t>")
+            || type_name.equals("Column<long>")) {
+      return ExtensionFunction.ExtArgumentType.ColumnInt64;
+    }
+    if (type_name.equals("Column<float>")) {
+      return ExtensionFunction.ExtArgumentType.ColumnFloat;
+    }
+    if (type_name.equals("Column<double>")) {
+      return ExtensionFunction.ExtArgumentType.ColumnDouble;
+    }
     if (type_name.equals("Cursor")) {
       return ExtensionFunction.ExtArgumentType.Cursor;
     }

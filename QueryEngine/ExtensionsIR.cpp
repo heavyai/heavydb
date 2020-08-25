@@ -16,10 +16,14 @@
 
 #include "CodeGenerator.h"
 #include "Execute.h"
-#include "ExtensionFunctions.hpp"
 #include "ExtensionFunctionsBinding.h"
 #include "ExtensionFunctionsWhitelist.h"
+
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wreturn-type-c-linkage"
+#include "ExtensionFunctions.hpp"
 #include "TableFunctions/TableFunctions.hpp"
+#pragma GCC diagnostic pop
 
 #include <tuple>
 
@@ -94,6 +98,7 @@ llvm::Type* ext_arg_type_to_llvm_type(const ExtArgumentType ext_arg_type,
       return llvm::Type::getVoidTy(ctx);
     case ExtArgumentType::ArrayInt16:
       return llvm::Type::getVoidTy(ctx);
+    case ExtArgumentType::ArrayBool:  // pass thru to Array<Int8>
     case ExtArgumentType::ArrayInt8:
       return llvm::Type::getVoidTy(ctx);
     case ExtArgumentType::ArrayDouble:
@@ -154,6 +159,11 @@ inline llvm::Type* get_llvm_type_from_sql_array_type(const SQLTypeInfo ti,
         return llvm::Type::getDoublePtrTy(ctx);
     }
   }
+
+  if (elem_ti.is_boolean()) {
+    return llvm::Type::getInt8PtrTy(ctx);
+  }
+
   CHECK(elem_ti.is_integer());
   switch (elem_ti.get_size()) {
     case 1:
@@ -235,8 +245,19 @@ llvm::Value* CodeGenerator::codegenFunctionOper(
         ret_ti.is_array() || (array_expr_arg && array_expr_arg->isLocalAlloc());
     const auto& arg_ti = arg->get_type_info();
     const auto arg_lvs = codegen(arg, true, co);
+    auto geo_uoper_arg = dynamic_cast<const Analyzer::GeoUOper*>(arg);
+    auto geo_binoper_arg = dynamic_cast<const Analyzer::GeoBinOper*>(arg);
     // TODO(adb / d): Assuming no const array cols for geo (for now)
-    if (arg_ti.is_geometry()) {
+    if ((geo_uoper_arg || geo_binoper_arg) && arg_ti.is_geometry()) {
+      // Extract arr sizes and put them in the map, forward arr pointers
+      CHECK_EQ(2 * static_cast<size_t>(arg_ti.get_physical_coord_cols()), arg_lvs.size());
+      for (size_t i = 0; i < arg_lvs.size(); i++) {
+        auto arr = arg_lvs[i++];
+        auto size = arg_lvs[i];
+        orig_arg_lvs.push_back(arr);
+        const_arr_size[arr] = size;
+      }
+    } else if (arg_ti.is_geometry()) {
       CHECK_EQ(static_cast<size_t>(arg_ti.get_physical_coord_cols()), arg_lvs.size());
       for (size_t j = 0; j < arg_lvs.size(); j++) {
         orig_arg_lvs.push_back(arg_lvs[j]);
@@ -499,6 +520,15 @@ llvm::Value* CodeGenerator::codegenFunctionOperNullArg(
     if (arg_ti.get_notnull()) {
       continue;
     }
+#ifdef ENABLE_GEOS
+    // If geo arg is coming from geos, skip the null check, assume it's a valid geo
+    if (arg_ti.is_geometry()) {
+      auto* coords_load = llvm::dyn_cast<llvm::LoadInst>(orig_arg_lvs[i]);
+      if (coords_load) {
+        continue;
+      }
+    }
+#endif
     if (arg_ti.is_array() || arg_ti.is_geometry()) {
       // POINT [un]compressed coord check requires custom checker and chunk iterator
       // Non-POINT NULL geographies will have a normally encoded null coord array
@@ -509,7 +539,7 @@ llvm::Value* CodeGenerator::codegenFunctionOperNullArg(
       one_arg_null = cgen_state_->ir_builder_.CreateOr(one_arg_null, is_null_lv);
       continue;
     }
-    CHECK(arg_ti.is_number());
+    CHECK(arg_ti.is_number() or arg_ti.is_boolean());
     one_arg_null = cgen_state_->ir_builder_.CreateOr(
         one_arg_null, codegenIsNullNumber(orig_arg_lvs[j], arg_ti));
   }
@@ -1049,14 +1079,16 @@ std::vector<llvm::Value*> CodeGenerator::codegenFunctionOperCastArgs(
                                   args);
             k++;
           } else {
+            k++;
             // Ring Sizes
-
+            auto const_arr = const_arr_size.count(orig_arg_lvs[k]) > 0;
             auto [ring_size_buff, ring_size] =
-                codegenArrayBuff(orig_arg_lvs[k + 1], posArg(arg), SQLTypes::kINT, true);
-
+                (const_arr)
+                    ? std::make_pair(orig_arg_lvs[k], const_arr_size.at(orig_arg_lvs[k]))
+                    : codegenArrayBuff(
+                          orig_arg_lvs[k], posArg(arg), SQLTypes::kINT, true);
             args.push_back(ring_size_buff);
             args.push_back(ring_size);
-            k++;
             j++;
           }
           break;
@@ -1095,8 +1127,12 @@ std::vector<llvm::Value*> CodeGenerator::codegenFunctionOperCastArgs(
             k++;
             // Ring Sizes
             {
+              auto const_arr = const_arr_size.count(orig_arg_lvs[k]) > 0;
               auto [ring_size_buff, ring_size] =
-                  codegenArrayBuff(orig_arg_lvs[k], posArg(arg), SQLTypes::kINT, true);
+                  (const_arr) ? std::make_pair(orig_arg_lvs[k],
+                                               const_arr_size.at(orig_arg_lvs[k]))
+                              : codegenArrayBuff(
+                                    orig_arg_lvs[k], posArg(arg), SQLTypes::kINT, true);
 
               args.push_back(ring_size_buff);
               args.push_back(ring_size);
@@ -1105,8 +1141,12 @@ std::vector<llvm::Value*> CodeGenerator::codegenFunctionOperCastArgs(
 
             // Poly Rings
             {
+              auto const_arr = const_arr_size.count(orig_arg_lvs[k]) > 0;
               auto [poly_bounds_buff, poly_bounds_size] =
-                  codegenArrayBuff(orig_arg_lvs[k], posArg(arg), SQLTypes::kINT, true);
+                  (const_arr) ? std::make_pair(orig_arg_lvs[k],
+                                               const_arr_size.at(orig_arg_lvs[k]))
+                              : codegenArrayBuff(
+                                    orig_arg_lvs[k], posArg(arg), SQLTypes::kINT, true);
 
               args.push_back(poly_bounds_buff);
               args.push_back(poly_bounds_size);

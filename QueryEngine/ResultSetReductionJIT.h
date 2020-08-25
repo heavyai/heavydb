@@ -47,6 +47,7 @@ struct ReductionCode {
   std::unique_ptr<Function> ir_reduce_one_entry;
   std::unique_ptr<Function> ir_reduce_one_entry_idx;
   std::unique_ptr<Function> ir_reduce_loop;
+  std::shared_ptr<CompilationContext> compilation_context;
 
   static std::mutex s_reduction_mutex;
 };

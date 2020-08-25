@@ -143,10 +143,11 @@ class OmniSciResultSet implements java.sql.ResultSet {
       wasNull = false;
       TDatumType type = sqlResult.row_set.row_desc.get(columnIndex - 1).col_type.type;
 
-      if (type == TDatumType.STR) {
+      if (type == TDatumType.STR
+              && !sqlResult.row_set.row_desc.get(columnIndex - 1).col_type.is_array) {
         return rowSet.columns.get(columnIndex - 1).data.str_col.get(offset);
       } else {
-        return (String) getStringInternal(columnIndex);
+        return getStringInternal(columnIndex);
       }
     }
   }

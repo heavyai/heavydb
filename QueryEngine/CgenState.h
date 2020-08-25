@@ -39,6 +39,7 @@ struct CgenState {
       , outer_join_match_found_per_level_(std::max(query_infos.size(), size_t(1)) - 1)
       , query_infos_(query_infos)
       , needs_error_check_(false)
+      , needs_geos_(false)
       , query_func_(nullptr)
       , query_func_entry_ir_builder_(context_){};
 
@@ -331,6 +332,7 @@ struct CgenState {
   std::vector<std::unique_ptr<const InValuesBitmap>> in_values_bitmaps_;
   const std::vector<InputTableInfo>& query_infos_;
   bool needs_error_check_;
+  bool needs_geos_;
 
   llvm::Function* query_func_;
   llvm::IRBuilder<> query_func_entry_ir_builder_;

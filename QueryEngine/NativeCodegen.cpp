@@ -67,12 +67,55 @@ static_assert(false, "LLVM Version >= 4 is required.");
 #include <llvm/Support/SourceMgr.h>
 #include <llvm/Support/raw_ostream.h>
 
+float g_fraction_code_cache_to_evict = 0.2;
+
 std::unique_ptr<llvm::Module> udf_gpu_module;
 std::unique_ptr<llvm::Module> udf_cpu_module;
 std::unique_ptr<llvm::Module> rt_udf_gpu_module;
 std::unique_ptr<llvm::Module> rt_udf_cpu_module;
 
 extern std::unique_ptr<llvm::Module> g_rt_module;
+
+#ifdef ENABLE_GEOS
+extern std::unique_ptr<llvm::Module> g_rt_geos_module;
+
+#include <llvm/Support/DynamicLibrary.h>
+
+#ifndef GEOS_LIBRARY_FILENAME
+#error Configuration should include GEOS library file name
+#endif
+std::unique_ptr<std::string> g_libgeos_so_filename(
+    new std::string(GEOS_LIBRARY_FILENAME));
+static llvm::sys::DynamicLibrary geos_dynamic_library;
+static std::mutex geos_init_mutex;
+
+namespace {
+
+void load_geos_dynamic_library() {
+  std::lock_guard<std::mutex> guard(geos_init_mutex);
+
+  if (!geos_dynamic_library.isValid()) {
+    if (!g_libgeos_so_filename || g_libgeos_so_filename->empty()) {
+      LOG(WARNING) << "Misconfigured GEOS library file name, trying 'libgeos_c.so'";
+      g_libgeos_so_filename.reset(new std::string("libgeos_c.so"));
+    }
+    auto filename = *g_libgeos_so_filename;
+    std::string error_message;
+    geos_dynamic_library =
+        llvm::sys::DynamicLibrary::getPermanentLibrary(filename.c_str(), &error_message);
+    if (!geos_dynamic_library.isValid()) {
+      LOG(ERROR) << "Failed to load GEOS library '" + filename + "'";
+      std::string exception_message = "Failed to load GEOS library: " + error_message;
+      throw std::runtime_error(exception_message.c_str());
+    } else {
+      LOG(INFO) << "Loaded GEOS library '" + filename + "'";
+    }
+  }
+}
+
+}  // namespace
+#endif
+
 namespace {
 
 #if defined(HAVE_CUDA) || !defined(WITH_JIT_DEBUG)
@@ -162,55 +205,24 @@ void verify_function_ir(const llvm::Function* func) {
   }
 }
 
-std::vector<std::pair<void*, void*>> Executor::getCodeFromCache(const CodeCacheKey& key,
-                                                                const CodeCache& cache) {
+std::shared_ptr<CompilationContext> Executor::getCodeFromCache(const CodeCacheKey& key,
+                                                               const CodeCache& cache) {
   auto it = cache.find(key);
   if (it != cache.cend()) {
     delete cgen_state_->module_;
     cgen_state_->module_ = it->second.second;
-    std::vector<std::pair<void*, void*>> native_functions;
-    for (auto& native_code : it->second.first) {
-      GpuCompilationContext* gpu_context = std::get<2>(native_code).get();
-      native_functions.emplace_back(std::get<0>(native_code),
-                                    gpu_context ? gpu_context->module() : nullptr);
-    }
-    return native_functions;
+    return it->second.first;
   }
   return {};
 }
 
-void Executor::addCodeToCache(
-    const CodeCacheKey& key,
-    std::vector<std::tuple<void*, ExecutionEngineWrapper>> native_code,
-    llvm::Module* module,
-    CodeCache& cache) {
-  CHECK(!native_code.empty());
-  CodeCacheVal cache_val;
-  for (auto& native_func : native_code) {
-    cache_val.emplace_back(
-        std::get<0>(native_func), std::move(std::get<1>(native_func)), nullptr);
-  }
+void Executor::addCodeToCache(const CodeCacheKey& key,
+                              std::shared_ptr<CompilationContext> compilation_context,
+                              llvm::Module* module,
+                              CodeCache& cache) {
   cache.put(key,
-            std::make_pair<decltype(cache_val), decltype(module)>(std::move(cache_val),
-                                                                  std::move(module)));
-}
-
-void Executor::addCodeToCache(
-    const CodeCacheKey& key,
-    const std::vector<std::tuple<void*, GpuCompilationContext*>>& native_code,
-    llvm::Module* module,
-    CodeCache& cache) {
-  CHECK(!native_code.empty());
-  CodeCacheVal cache_val;
-  for (const auto& native_func : native_code) {
-    cache_val.emplace_back(
-        std::get<0>(native_func),
-        ExecutionEngineWrapper(),
-        std::unique_ptr<GpuCompilationContext>(std::get<1>(native_func)));
-  }
-  cache.put(key,
-            std::make_pair<decltype(cache_val), decltype(module)>(std::move(cache_val),
-                                                                  std::move(module)));
+            std::make_pair<std::shared_ptr<CompilationContext>, decltype(module)>(
+                std::move(compilation_context), std::move(module)));
 }
 
 ExecutionEngineWrapper CodeGenerator::generateNativeCPUCode(
@@ -251,7 +263,7 @@ ExecutionEngineWrapper CodeGenerator::generateNativeCPUCode(
   return execution_engine;
 }
 
-std::vector<std::pair<void*, void*>> Executor::optimizeAndCodegenCPU(
+std::shared_ptr<CompilationContext> Executor::optimizeAndCodegenCPU(
     llvm::Function* query_func,
     llvm::Function* multifrag_query_func,
     const std::unordered_set<llvm::Function*>& live_funcs,
@@ -263,20 +275,48 @@ std::vector<std::pair<void*, void*>> Executor::optimizeAndCodegenCPU(
     key.push_back(serialize_llvm_object(helper));
   }
   auto cached_code = getCodeFromCache(key, cpu_code_cache_);
-  if (!cached_code.empty()) {
+  if (cached_code) {
     return cached_code;
+  }
+
+  if (cgen_state_->needs_geos_) {
+#ifdef ENABLE_GEOS
+    load_geos_dynamic_library();
+
+    // Read geos runtime module and bind GEOS API function references to GEOS library
+    auto rt_geos_module_copy = llvm::CloneModule(
+#if LLVM_VERSION_MAJOR >= 7
+        *g_rt_geos_module.get(),
+#else
+        g_rt_geos_module.get(),
+#endif
+        cgen_state_->vmap_,
+        [](const llvm::GlobalValue* gv) {
+          auto func = llvm::dyn_cast<llvm::Function>(gv);
+          if (!func) {
+            return true;
+          }
+          return (func->getLinkage() == llvm::GlobalValue::LinkageTypes::PrivateLinkage ||
+                  func->getLinkage() ==
+                      llvm::GlobalValue::LinkageTypes::InternalLinkage ||
+                  func->getLinkage() == llvm::GlobalValue::LinkageTypes::ExternalLinkage);
+        });
+    CodeGenerator::link_udf_module(rt_geos_module_copy,
+                                   *module,
+                                   cgen_state_.get(),
+                                   llvm::Linker::Flags::LinkOnlyNeeded);
+#else
+    throw std::runtime_error("GEOS is disabled in this build");
+#endif
   }
 
   auto execution_engine =
       CodeGenerator::generateNativeCPUCode(query_func, live_funcs, co);
-  auto native_code = execution_engine->getPointerToFunction(multifrag_query_func);
-  CHECK(native_code);
-
-  std::vector<std::tuple<void*, ExecutionEngineWrapper>> cache;
-  cache.emplace_back(native_code, std::move(execution_engine));
-  addCodeToCache(key, std::move(cache), module, cpu_code_cache_);
-
-  return {std::make_pair(native_code, nullptr)};
+  auto cpu_compilation_context =
+      std::make_shared<CpuCompilationContext>(std::move(execution_engine));
+  cpu_compilation_context->setFunctionPointer(multifrag_query_func);
+  addCodeToCache(key, cpu_compilation_context, module, cpu_code_cache_);
+  return cpu_compilation_context;
 }
 
 void CodeGenerator::link_udf_module(const std::unique_ptr<llvm::Module>& udf_module,
@@ -462,16 +502,31 @@ declare i1 @slotEmptyKeyCAS(i64*, i64, i64);
 declare i1 @slotEmptyKeyCAS_int32(i32*, i32, i32);
 declare i1 @slotEmptyKeyCAS_int16(i16*, i16, i16);
 declare i1 @slotEmptyKeyCAS_int8(i8*, i8, i8);
-declare i64 @ExtractFromTime(i32, i64);
-declare i64 @ExtractFromTimeNullable(i32, i64, i64);
+declare i64 @extract_epoch(i64);
+declare i64 @extract_dateepoch(i64);
+declare i64 @extract_quarterday(i64);
+declare i64 @extract_hour(i64);
+declare i64 @extract_minute(i64);
+declare i64 @extract_second(i64);
+declare i64 @extract_millisecond(i64);
+declare i64 @extract_microsecond(i64);
+declare i64 @extract_nanosecond(i64);
+declare i64 @extract_dow(i64);
+declare i64 @extract_isodow(i64);
+declare i64 @extract_day(i64);
+declare i64 @extract_week(i64);
+declare i64 @extract_day_of_year(i64);
+declare i64 @extract_month(i64);
+declare i64 @extract_quarter(i64);
+declare i64 @extract_year(i64);
 declare i64 @DateTruncate(i32, i64);
 declare i64 @DateTruncateNullable(i32, i64, i64);
 declare i64 @DateTruncateHighPrecisionToDate(i64, i64);
 declare i64 @DateTruncateHighPrecisionToDateNullable(i64, i64, i64);
 declare i64 @DateDiff(i32, i64, i64);
 declare i64 @DateDiffNullable(i32, i64, i64, i64);
-declare i64 @DateDiffHighPrecision(i32, i64, i64, i32, i64, i64, i64);
-declare i64 @DateDiffHighPrecisionNullable(i32, i64, i64, i32, i64, i64, i64, i64);
+declare i64 @DateDiffHighPrecision(i32, i64, i64, i32, i32);
+declare i64 @DateDiffHighPrecisionNullable(i32, i64, i64, i32, i32, i64);
 declare i64 @DateAdd(i32, i64, i64);
 declare i64 @DateAddNullable(i32, i64, i64, i64);
 declare i64 @DateAddHighPrecision(i32, i64, i64, i64);
@@ -513,6 +568,7 @@ declare i32 @char_length_nullable(i8*, i32, i32);
 declare i32 @char_length_encoded(i8*, i32);
 declare i32 @char_length_encoded_nullable(i8*, i32, i32);
 declare i32 @key_for_string_encoded(i32);
+declare i1 @sample_ratio(double, i64);
 declare i1 @string_like(i8*, i32, i8*, i32, i8);
 declare i1 @string_ilike(i8*, i32, i8*, i32, i8);
 declare i8 @string_like_nullable(i8*, i32, i8*, i32, i8, i8);
@@ -651,7 +707,7 @@ std::map<std::string, std::string> get_device_parameters() {
   return result;
 }
 
-CodeGenerator::GPUCode CodeGenerator::generateNativeGPUCode(
+std::shared_ptr<GpuCompilationContext> CodeGenerator::generateNativeGPUCode(
     llvm::Function* func,
     llvm::Function* wrapper_func,
     const std::unordered_set<llvm::Function*>& live_funcs,
@@ -758,10 +814,6 @@ CodeGenerator::GPUCode CodeGenerator::generateNativeGPUCode(
   module->eraseNamedMetadata(md);
 
   auto cuda_llir = cuda_rt_decls + extension_function_decls(udf_declarations) + ss.str();
-
-  std::vector<std::pair<void*, void*>> native_functions;
-  std::vector<std::tuple<void*, GpuCompilationContext*>> cached_functions;
-
   const auto ptx = generatePTX(
       cuda_llir, gpu_target.nvptx_target_machine, gpu_target.cgen_state->context_);
 
@@ -775,32 +827,27 @@ CodeGenerator::GPUCode CodeGenerator::generateNativeGPUCode(
   const auto num_options = option_keys.size();
 
   auto func_name = wrapper_func->getName().str();
+  auto gpu_compilation_context = std::make_shared<GpuCompilationContext>();
   for (int device_id = 0; device_id < gpu_target.cuda_mgr->getDeviceCount();
        ++device_id) {
-    auto gpu_context = new GpuCompilationContext(cubin,
-                                                 func_name,
-                                                 device_id,
-                                                 gpu_target.cuda_mgr,
-                                                 num_options,
-                                                 &option_keys[0],
-                                                 &option_values[0]);
-    auto native_code = gpu_context->kernel();
-    auto native_module = gpu_context->module();
-    CHECK(native_code);
-    CHECK(native_module);
-    native_functions.emplace_back(native_code, native_module);
-    cached_functions.emplace_back(native_code, gpu_context);
+    gpu_compilation_context->addDeviceCode(
+        std::make_unique<GpuDeviceCompilationContext>(cubin,
+                                                      func_name,
+                                                      device_id,
+                                                      gpu_target.cuda_mgr,
+                                                      num_options,
+                                                      &option_keys[0],
+                                                      &option_values[0]));
   }
 
   checkCudaErrors(cuLinkDestroy(link_state));
-
-  return {native_functions, cached_functions};
+  return gpu_compilation_context;
 #else
   return {};
 #endif
 }
 
-std::vector<std::pair<void*, void*>> Executor::optimizeAndCodegenGPU(
+std::shared_ptr<CompilationContext> Executor::optimizeAndCodegenGPU(
     llvm::Function* query_func,
     llvm::Function* multifrag_query_func,
     std::unordered_set<llvm::Function*>& live_funcs,
@@ -817,7 +864,7 @@ std::vector<std::pair<void*, void*>> Executor::optimizeAndCodegenGPU(
     key.push_back(serialize_llvm_object(helper));
   }
   auto cached_code = getCodeFromCache(key, gpu_code_cache_);
-  if (!cached_code.empty()) {
+  if (cached_code) {
     return cached_code;
   }
 
@@ -845,14 +892,30 @@ std::vector<std::pair<void*, void*>> Executor::optimizeAndCodegenGPU(
                                       blockSize(),
                                       cgen_state_.get(),
                                       row_func_not_inlined};
-  const auto gpu_code = CodeGenerator::generateNativeGPUCode(
-      query_func, multifrag_query_func, live_funcs, co, gpu_target);
-
-  addCodeToCache(key, gpu_code.cached_functions, module, gpu_code_cache_);
-
-  return gpu_code.native_functions;
+  std::shared_ptr<GpuCompilationContext> compilation_context;
+  try {
+    compilation_context = CodeGenerator::generateNativeGPUCode(
+        query_func, multifrag_query_func, live_funcs, co, gpu_target);
+    addCodeToCache(key, compilation_context, module, gpu_code_cache_);
+  } catch (CudaMgr_Namespace::CudaErrorException& cuda_error) {
+    if (cuda_error.getStatus() == CUDA_ERROR_OUT_OF_MEMORY) {
+      // Thrown if memory not able to be allocated on gpu
+      // Retry once after evicting portion of code cache
+      LOG(WARNING) << "Failed to allocate GPU memory for generated code. Evicting "
+                   << g_fraction_code_cache_to_evict * 100.
+                   << "% of GPU code cache and re-trying.";
+      gpu_code_cache_.evictFractionEntries(g_fraction_code_cache_to_evict);
+      compilation_context = CodeGenerator::generateNativeGPUCode(
+          query_func, multifrag_query_func, live_funcs, co, gpu_target);
+      addCodeToCache(key, compilation_context, module, gpu_code_cache_);
+    } else {
+      throw;
+    }
+  }
+  CHECK(compilation_context);
+  return compilation_context;
 #else
-  return {};
+  return nullptr;
 #endif
 }
 
@@ -955,6 +1018,24 @@ llvm::Module* read_template_module(llvm::LLVMContext& context) {
 
   return module;
 }
+
+#ifdef ENABLE_GEOS
+llvm::Module* read_geos_module(llvm::LLVMContext& context) {
+  llvm::SMDiagnostic err;
+
+  auto buffer_or_error =
+      llvm::MemoryBuffer::getFile(mapd_root_abs_path() + "/QueryEngine/GeosRuntime.bc");
+  CHECK(!buffer_or_error.getError());
+  llvm::MemoryBuffer* buffer = buffer_or_error.get().get();
+
+  auto owner = llvm::parseBitcodeFile(buffer->getMemBufferRef(), context);
+  CHECK(!owner.takeError());
+  auto module = owner.get().release();
+  CHECK(module);
+
+  return module;
+}
+#endif
 
 namespace {
 
@@ -1235,6 +1316,10 @@ std::vector<std::string> get_agg_fnames(const std::vector<Analyzer::Expr*>& targ
 }  // namespace
 
 std::unique_ptr<llvm::Module> g_rt_module(read_template_module(getGlobalLLVMContext()));
+
+#ifdef ENABLE_GEOS
+std::unique_ptr<llvm::Module> g_rt_geos_module(read_geos_module(getGlobalLLVMContext()));
+#endif
 
 bool is_udf_module_present(bool cpu_only) {
   return (cpu_only || udf_gpu_module != nullptr) && (udf_cpu_module != nullptr);
@@ -1779,7 +1864,7 @@ bool is_gpu_shared_mem_supported(const QueryMemoryDescriptor* query_mem_desc_ptr
 
 }  // namespace
 
-std::tuple<Executor::CompilationResult, std::unique_ptr<QueryMemoryDescriptor>>
+std::tuple<CompilationResult, std::unique_ptr<QueryMemoryDescriptor>>
 Executor::compileWorkUnit(const std::vector<InputTableInfo>& query_infos,
                           const RelAlgExecutionUnit& ra_exe_unit,
                           const CompilationOptions& co,
@@ -2066,7 +2151,7 @@ Executor::compileWorkUnit(const std::vector<InputTableInfo>& query_infos,
           << serialize_llvm_object(cgen_state_->row_func_) << "\nEnd of IR";
 
   return std::make_tuple(
-      Executor::CompilationResult{
+      CompilationResult{
           co.device_type == ExecutorDeviceType::CPU
               ? optimizeAndCodegenCPU(query_func, multifrag_query_func, live_funcs, co)
               : optimizeAndCodegenGPU(query_func,
@@ -2085,7 +2170,7 @@ Executor::compileWorkUnit(const std::vector<InputTableInfo>& query_infos,
 llvm::BasicBlock* Executor::codegenSkipDeletedOuterTableRow(
     const RelAlgExecutionUnit& ra_exe_unit,
     const CompilationOptions& co) {
-  if (!co.add_delete_column) {
+  if (!co.filter_on_deleted_column) {
     return nullptr;
   }
   CHECK(!ra_exe_unit.input_descs.empty());

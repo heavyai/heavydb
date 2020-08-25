@@ -232,7 +232,7 @@ class DashboardObject : public ::testing::Test {
     CHECK(session);
     auto& cat = session->getCatalog();
     if (cat.getMetadataForDashboard(id)) {
-      cat.deleteMetadataForDashboard(id);
+      cat.deleteMetadataForDashboards({id}, session->get_currentUser());
     }
   }
 
@@ -345,11 +345,7 @@ class InvalidGrantSyntax : public DBHandlerTestFixture {};
 
 TEST_F(InvalidGrantSyntax, InvalidGrantSyntax) {
   std::string error_message;
-  if (g_aggregator) {
-    error_message = "Exception: Syntax error at: ON";
-  } else {
-    error_message = "Syntax error at: ON";
-  }
+  error_message = "Exception: Syntax error at: ON";
 
   queryAndAssertException("GRANT SELECT, INSERT, ON TABLE tbl TO Arsenal, Juventus;",
                           error_message);
@@ -1677,9 +1673,10 @@ void drop_dashboards(std::string prefix, int max) {
 
   for (int i = 0; i < max; i++) {
     std::string name = "dash_" + prefix + std::to_string(i);
-
-    cat.deleteMetadataForDashboard(std::to_string(session->get_currentUser().userId),
-                                   name);
+    auto dash = cat.getMetadataForDashboard(
+        std::to_string(session->get_currentUser().userId), name);
+    ASSERT_TRUE(dash);
+    cat.deleteMetadataForDashboards({dash->dashboardId}, session->get_currentUser());
     auto fvd = cat.getMetadataForDashboard(
         std::to_string(session->get_currentUser().userId), name);
     ASSERT_FALSE(fvd);
@@ -2781,43 +2778,57 @@ class GetDbObjectsForGranteeTest : public DBHandlerTestFixture {
     sql("DROP USER test_user;");
     DBHandlerTestFixture::TearDown();
   }
+
+  void allOnDatabase(std::string privilege) {
+    g_enable_fsi = false;
+    sql("GRANT " + privilege + " ON DATABASE omnisci TO test_user;");
+
+    const auto& [db_handler, session_id] = getDbHandlerAndSessionId();
+    std::vector<TDBObject> db_objects{};
+    db_handler->get_db_objects_for_grantee(db_objects, session_id, "test_user");
+
+    std::unordered_set<TDBObjectType::type> privilege_types{};
+    for (const auto& db_object : db_objects) {
+      ASSERT_EQ("omnisci", db_object.objectName);
+      ASSERT_EQ(TDBObjectType::DatabaseDBObjectType, db_object.objectType);
+      ASSERT_EQ("test_user", db_object.grantee);
+
+      if (db_object.privilegeObjectType == TDBObjectType::DatabaseDBObjectType) {
+        // The first two items represent CREATE and DROP DATABASE privileges, which are
+        // not granted
+        std::vector<bool> expected_privileges{false, false, true, true};
+        ASSERT_EQ(expected_privileges, db_object.privs);
+      } else {
+        ASSERT_TRUE(std::all_of(db_object.privs.begin(),
+                                db_object.privs.end(),
+                                [](bool has_privilege) { return has_privilege; }));
+      }
+      privilege_types.emplace(db_object.privilegeObjectType);
+    }
+
+    ASSERT_FALSE(privilege_types.find(TDBObjectType::DatabaseDBObjectType) ==
+                 privilege_types.end());
+    ASSERT_FALSE(privilege_types.find(TDBObjectType::TableDBObjectType) ==
+                 privilege_types.end());
+    ASSERT_FALSE(privilege_types.find(TDBObjectType::DashboardDBObjectType) ==
+                 privilege_types.end());
+    ASSERT_FALSE(privilege_types.find(TDBObjectType::ViewDBObjectType) ==
+                 privilege_types.end());
+  }
 };
 
 TEST_F(GetDbObjectsForGranteeTest, UserWithGrantAllOnDatabase) {
-  g_enable_fsi = false;
-  sql("GRANT ALL ON DATABASE omnisci TO test_user;");
+  allOnDatabase("ALL");
+}
 
-  const auto& [db_handler, session_id] = getDbHandlerAndSessionId();
-  std::vector<TDBObject> db_objects{};
-  db_handler->get_db_objects_for_grantee(db_objects, session_id, "test_user");
+TEST_F(GetDbObjectsForGranteeTest, UserWithGrantAllPrivilegesOnDatabase) {
+  allOnDatabase("ALL PRIVILEGES");
+}
 
-  std::unordered_set<TDBObjectType::type> privilege_types{};
-  for (const auto& db_object : db_objects) {
-    ASSERT_EQ("omnisci", db_object.objectName);
-    ASSERT_EQ(TDBObjectType::DatabaseDBObjectType, db_object.objectType);
-    ASSERT_EQ("test_user", db_object.grantee);
-
-    if (db_object.privilegeObjectType == TDBObjectType::DatabaseDBObjectType) {
-      // The first two items represent CREATE and DROP DATABASE privileges, which are not
-      // granted
-      std::vector<bool> expected_privileges{false, false, true, true};
-      ASSERT_EQ(expected_privileges, db_object.privs);
-    } else {
-      ASSERT_TRUE(std::all_of(db_object.privs.begin(),
-                              db_object.privs.end(),
-                              [](bool has_privilege) { return has_privilege; }));
-    }
-    privilege_types.emplace(db_object.privilegeObjectType);
-  }
-
-  ASSERT_FALSE(privilege_types.find(TDBObjectType::DatabaseDBObjectType) ==
-               privilege_types.end());
-  ASSERT_FALSE(privilege_types.find(TDBObjectType::TableDBObjectType) ==
-               privilege_types.end());
-  ASSERT_FALSE(privilege_types.find(TDBObjectType::DashboardDBObjectType) ==
-               privilege_types.end());
-  ASSERT_FALSE(privilege_types.find(TDBObjectType::ViewDBObjectType) ==
-               privilege_types.end());
+TEST(DefaultUser, RoleList) {
+  auto* grantee = sys_cat.getGrantee(OMNISCI_ROOT_USER);
+  EXPECT_TRUE(grantee);
+  EXPECT_TRUE(grantee->getRoles().empty());
 }
 
 int main(int argc, char* argv[]) {
@@ -2832,9 +2843,9 @@ int main(int argc, char* argv[]) {
   desc.add_options()("gtest_list_tests", "list all tests");
   desc.add_options()("gtest_filter", "filters tests, use --help for details");
 
-  desc.add_options()(
-      "test-help",
-      "Print all ImportTest specific options (for gtest options use `--help`).");
+  desc.add_options()("test-help",
+                     "Print all DBObjectPrivilegesTest specific options (for gtest "
+                     "options use `--help`).");
 
   logger::LogOptions log_options(argv[0]);
   log_options.max_files_ = 0;  // stderr only by default
@@ -2845,7 +2856,7 @@ int main(int argc, char* argv[]) {
   po::notify(vm);
 
   if (vm.count("test-help")) {
-    std::cout << "Usage: ImportTest" << std::endl << std::endl;
+    std::cout << "Usage: DBObjectPrivilegesTest" << std::endl << std::endl;
     std::cout << desc << std::endl;
     return 0;
   }

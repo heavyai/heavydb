@@ -13,10 +13,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include "EquiJoinCondition.h"
+#include "QueryEngine/EquiJoinCondition.h"
+
 #include "Analyzer/Analyzer.h"
-#include "HashJoinRuntime.h"
-#include "RangeTableIndexVisitor.h"
+#include "QueryEngine/JoinHashTable/HashJoinRuntime.h"
+#include "QueryEngine/RangeTableIndexVisitor.h"
 
 namespace {
 

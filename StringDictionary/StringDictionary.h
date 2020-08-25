@@ -20,6 +20,7 @@
 #include "../Shared/mapd_shared_mutex.h"
 #include "DictRef.h"
 #include "DictionaryCache.hpp"
+#include "LeafHostInfo.h"
 
 #include <future>
 #include <map>
@@ -37,8 +38,6 @@ class DictPayloadUnavailable : public std::runtime_error {
 
   DictPayloadUnavailable(const std::string& err) : std::runtime_error(err) {}
 };
-
-class LeafHostInfo;
 
 class StringDictionary {
  public:
@@ -139,6 +138,7 @@ class StringDictionary {
   void processDictionaryFutures(
       std::vector<std::future<std::vector<std::pair<uint32_t, unsigned int>>>>&
           dictionary_futures);
+  size_t getNumStringsFromStorage(const size_t storage_slots) const noexcept;
   bool fillRateIsHigh(const size_t num_strings) const noexcept;
   void increaseCapacity() noexcept;
   template <class String>
@@ -170,7 +170,7 @@ class StringDictionary {
       const std::vector<String>& input_strings,
       const std::vector<size_t>& string_memory_ids) const noexcept;
   uint32_t computeUniqueBucketWithHash(const uint32_t hash,
-                                       const std::vector<int32_t>& data) const noexcept;
+                                       const std::vector<int32_t>& data) noexcept;
   void checkAndConditionallyIncreasePayloadCapacity(const size_t write_length);
   void checkAndConditionallyIncreaseOffsetCapacity(const size_t write_length);
 
@@ -199,6 +199,7 @@ class StringDictionary {
   compare_cache_value_t* binary_search_cache(const std::string& pattern) const;
 
   size_t str_count_;
+  size_t collisions_;
   std::vector<int32_t> string_id_hash_table_;
   std::vector<uint32_t> rk_hashes_;
   std::vector<int32_t> sorted_cache;

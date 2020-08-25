@@ -77,6 +77,31 @@ class Encoding {
   int encoding_param;
 };
 
+enum class DataTransferType { IMPORT = 1, EXPORT };
+
+class FilePathWhitelist {
+ public:
+  static void initializeFromConfigFile(const std::string& server_config_path);
+  static void validateWhitelistedFilePath(
+      const std::vector<std::string>& expanded_file_paths,
+      const DataTransferType data_transfer_type);
+  static void clear();
+
+ private:
+  static std::vector<std::string> whitelisted_import_paths_;
+  static std::vector<std::string> whitelisted_export_paths_;
+};
+
+class FilePathBlacklist {
+ public:
+  static void addToBlacklist(const std::string& path);
+  static bool isBlacklistedPath(const std::string& path);
+  static void clear();
+
+ private:
+  static std::vector<std::string> blacklisted_paths_;
+};
+
 enum class TableType { TABLE = 1, VIEW, FOREIGN_TABLE };
 
 void set_default_encoding(ColumnDescriptor& cd);
@@ -113,10 +138,6 @@ void set_default_table_attributes(const std::string& table_name,
                                   TableDescriptor& td,
                                   const int32_t column_count);
 
-bool validate_nonexistent_table(const std::string& table_name,
-                                const Catalog_Namespace::Catalog& catalog,
-                                const bool if_not_exists);
-
 void validate_non_duplicate_column(const std::string& column_name,
                                    std::unordered_set<std::string>& upper_column_names);
 
@@ -126,4 +147,16 @@ void validate_drop_table_type(const TableDescriptor* td,
                               const TableType expected_table_type);
 
 std::string table_type_enum_to_string(const TableType table_type);
+
+/**
+ * Validates that the given file path is allowed. Validation entails ensuring
+ * that given path is not under a blacklisted root path and path is under a
+ * whitelisted path, if whitelisted paths have been configured.
+ *
+ * @param file_path - file path to validate
+ * @param data_transfer_type - enum indicating whether validation is for an import or
+ * export use case
+ */
+void validate_allowed_file_path(const std::string& file_path,
+                                const DataTransferType data_transfer_type);
 }  // namespace ddl_utils

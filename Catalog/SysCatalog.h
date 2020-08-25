@@ -230,6 +230,10 @@ class SysCatalog : private CommonFileOperations {
                                      const Catalog_Namespace::Catalog& catalog);
   void revokeDBObjectPrivilegesFromAll(DBObject object, Catalog* catalog);
   void revokeDBObjectPrivilegesFromAll_unsafe(DBObject object, Catalog* catalog);
+  void revokeDBObjectPrivilegesFromAllBatch(std::vector<DBObject>& objects,
+                                            Catalog* catalog);
+  void revokeDBObjectPrivilegesFromAllBatch_unsafe(std::vector<DBObject>& objects,
+                                                   Catalog* catalog);
   void getDBObjectPrivileges(const std::string& granteeName,
                              DBObject& object,
                              const Catalog_Namespace::Catalog& catalog) const;
@@ -317,6 +321,7 @@ class SysCatalog : private CommonFileOperations {
   void checkAndExecuteMigrations();
   void importDataFromOldMapdDB();
   void createUserRoles();
+  void addAdminUserRole();
   void migratePrivileges();
   void migratePrivileged_old();
   void updateUserSchema();
@@ -324,7 +329,6 @@ class SysCatalog : private CommonFileOperations {
   void updateBlankPasswordsToRandom();
   void updateSupportUserDeactivation();
   void migrateDBAccessPrivileges();
-
   void loginImpl(std::string& username,
                  const std::string& password,
                  UserMetadata& user_meta);
@@ -334,8 +338,7 @@ class SysCatalog : private CommonFileOperations {
 
   // Here go functions not wrapped into transactions (necessary for nested calls)
   void grantDefaultPrivilegesToRole_unsafe(const std::string& name, bool issuper);
-  void createRole_unsafe(const std::string& roleName,
-                         const bool& userPrivateRole = false);
+  void createRole_unsafe(const std::string& roleName, const bool userPrivateRole = false);
   void dropRole_unsafe(const std::string& roleName);
   void grantRoleBatch_unsafe(const std::vector<std::string>& roles,
                              const std::vector<std::string>& grantees);

@@ -27,6 +27,7 @@
 #include "AbstractBufferMgr.h"
 #include "BufferMgr/Buffer.h"
 #include "BufferMgr/BufferMgr.h"
+#include "ForeignStorage/ForeignStorageMgr.h"
 #include "MemoryLevel.h"
 
 #include <iomanip>
@@ -73,6 +74,7 @@ class ProcMeminfoParser {
     std::ifstream f("/proc/meminfo");
     std::stringstream ss;
     ss << f.rdbuf();
+
     for (const std::string& line : split(ss.str(), "\n")) {
       if (line.empty()) {
         continue;
@@ -90,9 +92,69 @@ class ProcMeminfoParser {
       }
     }
   }
+
   auto operator[](const std::string& name) { return items_[name]; }
   auto begin() { return items_.begin(); }
   auto end() { return items_.end(); }
+};
+
+//! Parse /proc/buddyinfo into a Fragmentation health score.
+class ProcBuddyinfoParser {
+  std::string inputText_;
+  std::vector<size_t> orders_;
+  size_t fragmentationPercent_;
+
+ public:
+  ProcBuddyinfoParser(std::string text = {}) {
+    if (text.empty()) {
+      std::ifstream f("/proc/buddyinfo");
+      std::stringstream ss;
+      ss << f.rdbuf();
+      text = ss.str();
+    }
+    inputText_ = text;
+
+    const size_t skipped_columns = 4;
+    // NOTE(sy): For now this calculation ignores the first four buddyinfo columns,
+    // but in the future we could break out subscores by node and/or by zone.
+    size_t number_of_columns = 0;
+    for (const std::string& line : split(text, "\n")) {
+      if (line.empty()) {
+        continue;
+      }
+      const auto columns = split(line);
+      CHECK_GT(columns.size(), skipped_columns) << "unexpected line format: " << line;
+      if (number_of_columns != 0) {
+        CHECK_EQ(columns.size(), number_of_columns)
+            << "expected line to have " << number_of_columns << " columns: " << line;
+      } else {
+        number_of_columns = columns.size();
+        orders_.resize(number_of_columns - skipped_columns, 0);
+      }
+      for (size_t i = skipped_columns; i < number_of_columns; ++i) {
+        orders_[i - skipped_columns] += strtoull(columns[i].c_str(), NULL, 10);
+      }
+    }
+
+    const long page_size =
+        sysconf(_SC_PAGE_SIZE);  // in case x86-64 is configured to use 2MB pages
+    size_t scaled = 0;
+    size_t total = 0;
+    for (size_t order = 0; order < orders_.size(); ++order) {
+      const size_t bytes = orders_[order] * (size_t(1) << order) * page_size;
+      scaled += (bytes * (orders_.size() - 1 - order)) / (orders_.size() - 1);
+      total += bytes;
+    }
+
+    CHECK_GT(total, size_t(0)) << "failed to parse:\n" << text;
+    fragmentationPercent_ = (scaled * 100) / total;
+  }
+
+  auto operator[](size_t order) { return orders_[order]; }
+  auto begin() { return orders_.begin(); }
+  auto end() { return orders_.end(); }
+  auto getFragmentationPercent() { return fragmentationPercent_; }
+  auto getInputText() { return inputText_; }
 };
 
 class DataMgr {
@@ -122,7 +184,6 @@ class DataMgr {
                         const int deviceId,
                         const size_t numBytes);
   void free(AbstractBuffer* buffer);
-  void freeAllBuffers();
   // copies one buffer to another
   void copy(AbstractBuffer* destBuffer, AbstractBuffer* srcBuffer);
   bool isBufferOnDevice(const ChunkKey& key,
@@ -132,7 +193,6 @@ class DataMgr {
   std::string dumpLevel(const MemoryLevel memLevel);
   void clearMemory(const MemoryLevel memLevel);
 
-  // const std::map<ChunkKey, File_Namespace::FileBuffer *> & getChunkMap();
   const std::map<ChunkKey, File_Namespace::FileBuffer*>& getChunkMap();
   void checkpoint(const int db_id,
                   const int tb_id);  // checkpoint for individual table of DB
@@ -151,16 +211,19 @@ class DataMgr {
   std::vector<int> levelSizes_;
 
   struct SystemMemoryUsage {
-    int64_t free;      // available CPU RAM memory in bytes
-    int64_t total;     // total CPU RAM memory in bytes
-    int64_t resident;  // resident process memory in bytes
-    int64_t vtotal;    // total process virtual memory in bytes
-    int64_t regular;   // process bytes non-shared
-    int64_t shared;    // process bytes shared (file maps + shmem)
+    size_t free;      // available CPU RAM memory in bytes
+    size_t total;     // total CPU RAM memory in bytes
+    size_t resident;  // resident process memory in bytes
+    size_t vtotal;    // total process virtual memory in bytes
+    size_t regular;   // process bytes non-shared
+    size_t shared;    // process bytes shared (file maps + shmem)
+    size_t frag;      // fragmentation percent
   };
 
   SystemMemoryUsage getSystemMemoryUsage() const;
   static size_t getTotalSystemMemory();
+
+  foreign_storage::ForeignStorageMgr* getForeignStorageMgr() const;
 
  private:
   void populateMgrs(const SystemParameters& system_parameters,
@@ -174,8 +237,7 @@ class DataMgr {
   std::string dataDir_;
   bool hasGpus_;
   size_t reservedGpuMem_;
-  std::map<ChunkKey, std::shared_ptr<mapd_shared_mutex>> chunkMutexMap_;
-  mapd_shared_mutex chunkMutexMapMutex_;
+  std::mutex buffer_access_mutex_;
 };
 
 std::ostream& operator<<(std::ostream& os, const DataMgr::SystemMemoryUsage&);

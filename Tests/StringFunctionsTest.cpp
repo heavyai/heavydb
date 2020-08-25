@@ -289,7 +289,7 @@ TEST_F(LowerFunctionTest, LowercaseNonTextColumn) {
 
 TEST_F(LowerFunctionTest, LowercaseGpuMode) {
 #ifndef HAVE_CUDA
-  std::cout
+  LOG(ERROR)
       << "This test case only applies to uses case where CUDA is enabled. Skipping test.";
   return;
 #else

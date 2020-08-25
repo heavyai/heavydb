@@ -156,7 +156,8 @@ StorageIOFacility<EXECUTOR_TRAITS, FRAGMENT_UPDATER>::yieldUpdateCallback(
           update_log,
           update_parameters.getUpdateColumnCount(),  // last column of result set
           Data_Namespace::MemoryLevel::CPU_LEVEL,
-          update_parameters.getTransactionTracker());
+          update_parameters.getTransactionTracker(),
+          executor_);
     };
     return callback;
   } else if (update_parameters.tableIsTemporary()) {

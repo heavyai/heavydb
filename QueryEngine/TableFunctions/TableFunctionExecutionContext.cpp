@@ -93,6 +93,7 @@ ResultSetPtr TableFunctionExecutionContext::execute(
           device_type == ExecutorDeviceType::CPU ? Data_Namespace::MemoryLevel::CPU_LEVEL
                                                  : Data_Namespace::MemoryLevel::GPU_LEVEL,
           device_id,
+          device_allocator.get(),
           chunks_owner,
           column_fetcher.columnarized_table_cache_);
       if (element_count < 0) {
@@ -331,11 +332,10 @@ ResultSetPtr TableFunctionExecutionContext::launchGpuCode(
   }
 
   // Get cu func
-  const auto gpu_code_ptr = compilation_context->getGpuCode();
-  CHECK(gpu_code_ptr);
-  CHECK_LT(static_cast<size_t>(device_id), gpu_code_ptr->native_functions.size());
-  const auto native_function_pointer = gpu_code_ptr->native_functions[device_id].first;
-  auto cu_func = static_cast<CUfunction>(native_function_pointer);
+  const auto gpu_context = compilation_context->getGpuCode();
+  CHECK(gpu_context);
+  const auto native_code = gpu_context->getNativeCode(device_id);
+  auto cu_func = static_cast<CUfunction>(native_code.first);
   checkCudaErrors(cuLaunchKernel(cu_func,
                                  grid_size_x,
                                  grid_size_y,

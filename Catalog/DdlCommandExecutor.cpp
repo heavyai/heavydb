@@ -21,6 +21,7 @@
 #include "Catalog/Catalog.h"
 #include "Catalog/SysCatalog.h"
 #include "DataMgr/ForeignStorage/CsvDataWrapper.h"
+#include "DataMgr/ForeignStorage/ParquetDataWrapper.h"
 #include "LockMgr/LockMgr.h"
 #include "Parser/ParserNode.h"
 #include "Shared/StringTransform.h"
@@ -87,6 +88,8 @@ void DdlCommandExecutor::execute(TQueryResult& _return) {
     ShowForeignServersCommand{payload, session_ptr_}.execute(_return);
   } else if (ddl_command == "ALTER_SERVER") {
     AlterForeignServerCommand{payload, session_ptr_}.execute(_return);
+  } else if (ddl_command == "REFRESH_FOREIGN_TABLES") {
+    RefreshForeignTablesCommand{payload, session_ptr_}.execute(_return);
   } else {
     throw std::runtime_error("Unsupported DDL command");
   }
@@ -496,7 +499,7 @@ void CreateForeignTableCommand::execute(TQueryResult& _return) {
   }
 
   bool if_not_exists = ddl_payload_["ifNotExists"].GetBool();
-  if (!ddl_utils::validate_nonexistent_table(table_name, catalog, if_not_exists)) {
+  if (!catalog.validateNonExistentTableOrView(table_name, if_not_exists)) {
     return;
   }
 
@@ -541,6 +544,9 @@ void CreateForeignTableCommand::setTableDetails(const std::string& table_name,
     if (foreign_table.foreign_server->data_wrapper_type ==
         foreign_storage::DataWrapperType::CSV) {
       foreign_storage::CsvDataWrapper::validateOptions(&foreign_table);
+    } else if (foreign_table.foreign_server->data_wrapper_type ==
+               foreign_storage::DataWrapperType::PARQUET) {
+      foreign_storage::ParquetDataWrapper::validateOptions(&foreign_table);
     }
   }
 
@@ -719,4 +725,53 @@ void ShowForeignServersCommand::execute(TQueryResult& _return) {
     for (size_t i = 0; i < _return.row_set.columns.size(); i++)
       _return.row_set.columns[i].nulls.emplace_back(false);
   }
+}
+
+RefreshForeignTablesCommand::RefreshForeignTablesCommand(
+    const rapidjson::Value& ddl_payload,
+    std::shared_ptr<Catalog_Namespace::SessionInfo const> session_ptr)
+    : DdlCommand(ddl_payload, session_ptr) {
+  CHECK(ddl_payload.HasMember("tableNames"));
+  CHECK(ddl_payload["tableNames"].IsArray());
+  for (auto const& tablename_def : ddl_payload["tableNames"].GetArray()) {
+    CHECK(tablename_def.IsString());
+  }
+}
+
+void RefreshForeignTablesCommand::execute(TQueryResult& _return) {
+  auto& cat = session_ptr_->getCatalog();
+  auto& data_mgr = cat.getDataMgr();
+  auto foreign_storage_mgr = data_mgr.getForeignStorageMgr();
+  const size_t num_tables = ddl_payload_["tableNames"].GetArray().Size();
+  std::vector<ChunkKey> table_keys(num_tables, ChunkKey(2));
+  // Once a refresh command is started it needs to lock all tables it's refreshing.
+  std::vector<std::unique_ptr<lockmgr::TableSchemaLockContainer<lockmgr::WriteLock>>>
+      locked_table_vec(num_tables);
+  for (size_t i = 0; i < num_tables; ++i) {
+    locked_table_vec[i] =
+        std::make_unique<lockmgr::TableSchemaLockContainer<lockmgr::WriteLock>>(
+            lockmgr::TableSchemaLockContainer<lockmgr::WriteLock>::acquireTableDescriptor(
+                cat, ddl_payload_["tableNames"].GetArray()[i].GetString(), false));
+  }
+  // We can only start refreshing once we have all the locks we need.
+  for (size_t i = 0; i < num_tables; ++i) {
+    const TableDescriptor* td = (*locked_table_vec[i])();
+    cat.removeFragmenterForTable(td->tableId);
+    ChunkKey table_prefix{cat.getCurrentDB().dbId, td->tableId};
+    data_mgr.deleteChunksWithPrefix(table_prefix, MemoryLevel::CPU_LEVEL);
+    data_mgr.deleteChunksWithPrefix(table_prefix, MemoryLevel::GPU_LEVEL);
+    table_keys[i] = table_prefix;
+  }
+  foreign_storage::OptionsContainer opt;
+  if (ddl_payload_.HasMember("options") && !ddl_payload_["options"].IsNull()) {
+    opt.populateOptionsMap(ddl_payload_["options"]);
+    CHECK(opt.options.find("EVICT") != opt.options.end());
+    CHECK(boost::iequals(opt.options["EVICT"], "true") ||
+          boost::iequals(opt.options["EVICT"], "false"));
+    if (boost::iequals(opt.options["EVICT"], "true")) {
+      foreign_storage_mgr->evictTablesFromCache(table_keys);
+      return;
+    }
+  }
+  foreign_storage_mgr->refreshTablesInCache(table_keys);
 }

@@ -304,9 +304,6 @@ TEST_F(MetadataUpdate, MetadataTimeNull) {
     EXPECT_THROW(query("update time_null_table set x=cast('-9223372036854775807' as "
                        "time) where x = '00:00:00';"),
                  std::runtime_error);
-    EXPECT_THROW(query("update time_null_table set x=cast('9223372036854775807' as time) "
-                       "where x = '23:59:59';"),
-                 std::runtime_error);
   });
 }
 

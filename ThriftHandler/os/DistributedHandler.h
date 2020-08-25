@@ -39,7 +39,7 @@ class MapDAggHandler {
                        const std::string& nonce,
                        const int32_t first_n,
                        const int32_t at_most_n,
-                       const SystemParameters& mapd_parameters) {
+                       const SystemParameters& system_parameters) {
     CHECK(false);
   }
   friend class DBHandler;

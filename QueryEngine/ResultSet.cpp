@@ -24,7 +24,7 @@
 
 #include "ResultSet.h"
 
-#include "Allocators/CudaAllocator.h"
+#include "DataMgr/Allocators/CudaAllocator.h"
 #include "DataMgr/BufferMgr/BufferMgr.h"
 #include "Execute.h"
 #include "GpuMemUtils.h"
@@ -53,7 +53,11 @@ std::vector<int64_t> initialize_target_values_for_storage(
       target_init_vals.push_back(0);
       continue;
     }
-    if (!target_info.sql_type.get_notnull()) {
+    if (target_info.sql_type.is_column()) {
+      int64_t init_val = null_val_bit_pattern(target_info.sql_type.get_subtype(),
+                                              takes_float_argument(target_info));
+      target_init_vals.push_back(target_info.is_agg ? init_val : 0);
+    } else if (!target_info.sql_type.get_notnull()) {
       int64_t init_val =
           null_val_bit_pattern(target_info.sql_type, takes_float_argument(target_info));
       target_init_vals.push_back(target_info.is_agg ? init_val : 0);
@@ -111,11 +115,7 @@ ResultSet::ResultSet(const std::vector<TargetInfo>& targets,
     , drop_first_(0)
     , keep_first_(0)
     , row_set_mem_owner_(row_set_mem_owner)
-    , queue_time_ms_(0)
-    , render_time_ms_(0)
     , executor_(executor)
-    , estimator_buffer_(nullptr)
-    , host_estimator_buffer_(nullptr)
     , data_mgr_(nullptr)
     , separate_varlen_storage_valid_(false)
     , just_explain_(false)
@@ -141,15 +141,11 @@ ResultSet::ResultSet(const std::vector<TargetInfo>& targets,
     , drop_first_(0)
     , keep_first_(0)
     , row_set_mem_owner_(row_set_mem_owner)
-    , queue_time_ms_(0)
-    , render_time_ms_(0)
     , executor_(executor)
     , lazy_fetch_info_(lazy_fetch_info)
     , col_buffers_{col_buffers}
     , frag_offsets_{frag_offsets}
     , consistent_frag_sizes_{consistent_frag_sizes}
-    , estimator_buffer_(nullptr)
-    , host_estimator_buffer_(nullptr)
     , data_mgr_(nullptr)
     , separate_varlen_storage_valid_(false)
     , just_explain_(false)
@@ -165,18 +161,17 @@ ResultSet::ResultSet(const std::shared_ptr<const Analyzer::Estimator> estimator,
     , query_mem_desc_{}
     , crt_row_buff_idx_(0)
     , estimator_(estimator)
-    , estimator_buffer_(nullptr)
-    , host_estimator_buffer_(nullptr)
     , data_mgr_(data_mgr)
     , separate_varlen_storage_valid_(false)
     , just_explain_(false)
     , cached_row_count_(-1)
     , geo_return_type_(GeoReturnType::WktString) {
   if (device_type == ExecutorDeviceType::GPU) {
-    estimator_buffer_ =
-        CudaAllocator::alloc(data_mgr_, estimator_->getBufferSize(), device_id_);
-    data_mgr->getCudaMgr()->zeroDeviceMem(
-        estimator_buffer_, estimator_->getBufferSize(), device_id_);
+    device_estimator_buffer_ = CudaAllocator::allocGpuAbstractBuffer(
+        data_mgr_, estimator_->getBufferSize(), device_id_);
+    data_mgr->getCudaMgr()->zeroDeviceMem(device_estimator_buffer_->getMemoryPtr(),
+                                          estimator_->getBufferSize(),
+                                          device_id_);
   } else {
     host_estimator_buffer_ =
         static_cast<int8_t*>(checked_calloc(estimator_->getBufferSize(), 1));
@@ -187,10 +182,6 @@ ResultSet::ResultSet(const std::string& explanation)
     : device_type_(ExecutorDeviceType::CPU)
     , device_id_(-1)
     , fetched_so_far_(0)
-    , queue_time_ms_(0)
-    , render_time_ms_(0)
-    , estimator_buffer_(nullptr)
-    , host_estimator_buffer_(nullptr)
     , separate_varlen_storage_valid_(false)
     , explanation_(explanation)
     , just_explain_(true)
@@ -204,10 +195,7 @@ ResultSet::ResultSet(int64_t queue_time_ms,
     , device_id_(-1)
     , fetched_so_far_(0)
     , row_set_mem_owner_(row_set_mem_owner)
-    , queue_time_ms_(queue_time_ms)
-    , render_time_ms_(render_time_ms)
-    , estimator_buffer_(nullptr)
-    , host_estimator_buffer_(nullptr)
+    , timings_(QueryExecutionTimings{queue_time_ms, render_time_ms, 0, 0})
     , separate_varlen_storage_valid_(false)
     , just_explain_(true)
     , cached_row_count_(-1)
@@ -226,8 +214,12 @@ ResultSet::~ResultSet() {
     }
   }
   if (host_estimator_buffer_) {
-    CHECK(device_type_ == ExecutorDeviceType::CPU || estimator_buffer_);
+    CHECK(device_type_ == ExecutorDeviceType::CPU || device_estimator_buffer_);
     free(host_estimator_buffer_);
+  }
+  if (device_estimator_buffer_) {
+    CHECK(data_mgr_);
+    data_mgr_->free(device_estimator_buffer_);
   }
 }
 
@@ -322,6 +314,24 @@ SQLTypeInfo ResultSet::getColType(const size_t col_idx) const {
                                             : targets_[col_idx].sql_type;
 }
 
+namespace {
+
+size_t get_truncated_row_count(size_t total_row_count, size_t limit, size_t offset) {
+  if (total_row_count < offset) {
+    return 0;
+  }
+
+  size_t total_truncated_row_count = total_row_count - offset;
+
+  if (limit) {
+    return std::min(total_truncated_row_count, limit);
+  }
+
+  return total_truncated_row_count;
+}
+
+}  // namespace
+
 size_t ResultSet::rowCount(const bool force_parallel) const {
   if (just_explain_) {
     return 1;
@@ -374,12 +384,7 @@ size_t ResultSet::binSearchRowCount() const {
     row_count += s->binSearchRowCount();
   }
 
-  if (keep_first_ + drop_first_) {
-    const auto limited_row_count = std::min(keep_first_ + drop_first_, row_count);
-    return limited_row_count < drop_first_ ? 0 : limited_row_count - drop_first_;
-  }
-
-  return row_count;
+  return get_truncated_row_count(row_count, getLimit(), drop_first_);
 }
 
 size_t ResultSet::parallelRowCount() const {
@@ -413,11 +418,8 @@ size_t ResultSet::parallelRowCount() const {
       g_use_tbb_pool
           ? execute_parallel_row_count(threadpool::ThreadPool<size_t>())
           : execute_parallel_row_count(threadpool::FuturesThreadPool<size_t>());
-  if (keep_first_ + drop_first_) {
-    const auto limited_row_count = std::min(keep_first_ + drop_first_, row_count);
-    return limited_row_count < drop_first_ ? 0 : limited_row_count - drop_first_;
-  }
-  return row_count;
+
+  return get_truncated_row_count(row_count, getLimit(), drop_first_);
 }
 
 bool ResultSet::definitelyHasNoRows() const {
@@ -440,7 +442,8 @@ const std::vector<int64_t>& ResultSet::getTargetInitVals() const {
 
 int8_t* ResultSet::getDeviceEstimatorBuffer() const {
   CHECK(device_type_ == ExecutorDeviceType::GPU);
-  return estimator_buffer_;
+  CHECK(device_estimator_buffer_);
+  return device_estimator_buffer_->getMemoryPtr();
 }
 
 int8_t* ResultSet::getHostEstimatorBuffer() const {
@@ -453,23 +456,34 @@ void ResultSet::syncEstimatorBuffer() const {
   CHECK_EQ(size_t(0), estimator_->getBufferSize() % sizeof(int64_t));
   host_estimator_buffer_ =
       static_cast<int8_t*>(checked_calloc(estimator_->getBufferSize(), 1));
+  CHECK(device_estimator_buffer_);
+  auto device_buffer_ptr = device_estimator_buffer_->getMemoryPtr();
   copy_from_gpu(data_mgr_,
                 host_estimator_buffer_,
-                reinterpret_cast<CUdeviceptr>(estimator_buffer_),
+                reinterpret_cast<CUdeviceptr>(device_buffer_ptr),
                 estimator_->getBufferSize(),
                 device_id_);
 }
 
 void ResultSet::setQueueTime(const int64_t queue_time) {
-  queue_time_ms_ = queue_time;
+  timings_.executor_queue_time = queue_time;
+}
+
+void ResultSet::setKernelQueueTime(const int64_t kernel_queue_time) {
+  timings_.kernel_queue_time = kernel_queue_time;
+}
+
+void ResultSet::addCompilationQueueTime(const int64_t compilation_queue_time) {
+  timings_.compilation_queue_time += compilation_queue_time;
 }
 
 int64_t ResultSet::getQueueTime() const {
-  return queue_time_ms_;
+  return timings_.executor_queue_time + timings_.kernel_queue_time +
+         timings_.compilation_queue_time;
 }
 
 int64_t ResultSet::getRenderTime() const {
-  return render_time_ms_;
+  return timings_.render_time;
 }
 
 void ResultSet::moveToBegin() const {
@@ -558,6 +572,7 @@ void ResultSet::sort(const std::list<Analyzer::OrderEntry>& order_entries,
 #ifdef HAVE_CUDA
 void ResultSet::baselineSort(const std::list<Analyzer::OrderEntry>& order_entries,
                              const size_t top_n) {
+  auto timer = DEBUG_TIMER(__func__);
   // If we only have on GPU, it's usually faster to do multi-threaded radix sort on CPU
   if (getGpuCount() > 1) {
     try {
@@ -573,6 +588,7 @@ void ResultSet::baselineSort(const std::list<Analyzer::OrderEntry>& order_entrie
 
 std::vector<uint32_t> ResultSet::initPermutationBuffer(const size_t start,
                                                        const size_t step) {
+  auto timer = DEBUG_TIMER(__func__);
   CHECK_NE(size_t(0), step);
   std::vector<uint32_t> permutation;
   const auto total_entries = query_mem_desc_.getEntryCount();
@@ -583,7 +599,7 @@ std::vector<uint32_t> ResultSet::initPermutationBuffer(const size_t start,
     const auto off = storage_lookup_result.fixedup_entry_idx;
     CHECK(lhs_storage);
     if (!lhs_storage->isEmptyEntry(off)) {
-      permutation.push_back(i);
+      permutation.emplace_back(i);
     }
   }
   return permutation;
@@ -595,6 +611,7 @@ const std::vector<uint32_t>& ResultSet::getPermutationBuffer() const {
 
 void ResultSet::parallelTop(const std::list<Analyzer::OrderEntry>& order_entries,
                             const size_t top_n) {
+  auto timer = DEBUG_TIMER(__func__);
   const size_t step = cpu_threads();
   std::vector<std::vector<uint32_t>> strided_permutations(step);
   std::vector<std::future<void>> init_futures;
@@ -654,11 +671,71 @@ std::pair<size_t, size_t> ResultSet::getStorageIndex(const size_t entry_idx) con
   return {};
 }
 
+template struct ResultSet::ResultSetComparator<ResultSet::RowWiseTargetAccessor>;
+template struct ResultSet::ResultSetComparator<ResultSet::ColumnWiseTargetAccessor>;
+
 ResultSet::StorageLookupResult ResultSet::findStorage(const size_t entry_idx) const {
   auto [stg_idx, fixedup_entry_idx] = getStorageIndex(entry_idx);
   return {stg_idx ? appended_storage_[stg_idx - 1].get() : storage_.get(),
           fixedup_entry_idx,
           stg_idx};
+}
+
+template <typename BUFFER_ITERATOR_TYPE>
+void ResultSet::ResultSetComparator<
+    BUFFER_ITERATOR_TYPE>::materializeCountDistinctColumns() {
+  for (const auto& order_entry : order_entries_) {
+    if (is_distinct_target(result_set_->targets_[order_entry.tle_no - 1])) {
+      count_distinct_materialized_buffers_.emplace_back(
+          materializeCountDistinctColumn(order_entry));
+    }
+  }
+}
+
+template <typename BUFFER_ITERATOR_TYPE>
+std::vector<int64_t>
+ResultSet::ResultSetComparator<BUFFER_ITERATOR_TYPE>::materializeCountDistinctColumn(
+    const Analyzer::OrderEntry& order_entry) const {
+  const size_t num_storage_entries = result_set_->query_mem_desc_.getEntryCount();
+  std::vector<int64_t> count_distinct_materialized_buffer(num_storage_entries);
+  const CountDistinctDescriptor count_distinct_descriptor =
+      result_set_->query_mem_desc_.getCountDistinctDescriptor(order_entry.tle_no - 1);
+  const size_t num_non_empty_entries = result_set_->permutation_.size();
+  const size_t worker_count = cpu_threads();
+  // TODO(tlm): Allow use of tbb after we determine how to easily encapsulate the choice
+  // between thread pool types
+  threadpool::FuturesThreadPool<void> thread_pool;
+  for (size_t i = 0,
+              start_entry = 0,
+              stride = (num_non_empty_entries + worker_count - 1) / worker_count;
+       i < worker_count && start_entry < num_non_empty_entries;
+       ++i, start_entry += stride) {
+    const auto end_entry = std::min(start_entry + stride, num_non_empty_entries);
+    thread_pool.append(
+        [this](const size_t start,
+               const size_t end,
+               const Analyzer::OrderEntry& order_entry,
+               const CountDistinctDescriptor& count_distinct_descriptor,
+               std::vector<int64_t>& count_distinct_materialized_buffer) {
+          for (size_t i = start; i < end; ++i) {
+            const uint32_t permuted_idx = result_set_->permutation_[i];
+            const auto storage_lookup_result = result_set_->findStorage(permuted_idx);
+            const auto storage = storage_lookup_result.storage_ptr;
+            const auto off = storage_lookup_result.fixedup_entry_idx;
+            const auto value = buffer_itr_.getColumnInternal(
+                storage->buff_, off, order_entry.tle_no - 1, storage_lookup_result);
+            count_distinct_materialized_buffer[permuted_idx] =
+                count_distinct_set_size(value.i1, count_distinct_descriptor);
+          }
+        },
+        start_entry,
+        end_entry,
+        std::cref(order_entry),
+        std::cref(count_distinct_descriptor),
+        std::ref(count_distinct_materialized_buffer));
+  }
+  thread_pool.join();
+  return count_distinct_materialized_buffer;
 }
 
 template <typename BUFFER_ITERATOR_TYPE>
@@ -673,6 +750,8 @@ bool ResultSet::ResultSetComparator<BUFFER_ITERATOR_TYPE>::operator()(
   const auto rhs_storage = rhs_storage_lookup_result.storage_ptr;
   const auto fixedup_lhs = lhs_storage_lookup_result.fixedup_entry_idx;
   const auto fixedup_rhs = rhs_storage_lookup_result.fixedup_entry_idx;
+  size_t materialized_count_distinct_buffer_idx{0};
+
   for (const auto& order_entry : order_entries_) {
     CHECK_GE(order_entry.tle_no, 1);
     const auto& agg_info = result_set_->targets_[order_entry.tle_no - 1];
@@ -681,7 +760,7 @@ bool ResultSet::ResultSetComparator<BUFFER_ITERATOR_TYPE>::operator()(
     // Need to determine if the float value has been stored as float
     // or if it has been compacted to a different (often larger 8 bytes)
     // in distributed case the floats are actually 4 bytes
-    // TODO the above takes_float_argument() is widely used  wonder if this problem
+    // TODO the above takes_float_argument() is widely used wonder if this problem
     // exists elsewhere
     if (entry_ti.get_type() == kFLOAT) {
       const auto is_col_lazy =
@@ -693,6 +772,23 @@ bool ResultSet::ResultSetComparator<BUFFER_ITERATOR_TYPE>::operator()(
             result_set_->query_mem_desc_.didOutputColumnar() ? !is_col_lazy : true;
       }
     }
+
+    const bool use_desc_cmp = use_heap_ ? !order_entry.is_desc : order_entry.is_desc;
+
+    if (UNLIKELY(is_distinct_target(agg_info))) {
+      CHECK_LT(materialized_count_distinct_buffer_idx,
+               count_distinct_materialized_buffers_.size());
+      const auto& count_distinct_materialized_buffer =
+          count_distinct_materialized_buffers_[materialized_count_distinct_buffer_idx];
+      const auto lhs_sz = count_distinct_materialized_buffer[lhs];
+      const auto rhs_sz = count_distinct_materialized_buffer[rhs];
+      ++materialized_count_distinct_buffer_idx;
+      if (lhs_sz == rhs_sz) {
+        continue;
+      }
+      return use_desc_cmp ? lhs_sz > rhs_sz : lhs_sz < rhs_sz;
+    }
+
     const auto lhs_v = buffer_itr_.getColumnInternal(lhs_storage->buff_,
                                                      fixedup_lhs,
                                                      order_entry.tle_no - 1,
@@ -701,6 +797,7 @@ bool ResultSet::ResultSetComparator<BUFFER_ITERATOR_TYPE>::operator()(
                                                      fixedup_rhs,
                                                      order_entry.tle_no - 1,
                                                      rhs_storage_lookup_result);
+
     if (UNLIKELY(isNull(entry_ti, lhs_v, float_argument_input) &&
                  isNull(entry_ti, rhs_v, float_argument_input))) {
       return false;
@@ -713,7 +810,7 @@ bool ResultSet::ResultSetComparator<BUFFER_ITERATOR_TYPE>::operator()(
                  !isNull(entry_ti, lhs_v, float_argument_input))) {
       return use_heap_ ? order_entry.nulls_first : !order_entry.nulls_first;
     }
-    const bool use_desc_cmp = use_heap_ ? !order_entry.is_desc : order_entry.is_desc;
+
     if (LIKELY(lhs_v.isInt())) {
       CHECK(rhs_v.isInt());
       if (UNLIKELY(entry_ti.is_string() &&
@@ -728,20 +825,7 @@ bool ResultSet::ResultSetComparator<BUFFER_ITERATOR_TYPE>::operator()(
         }
         return use_desc_cmp ? lhs_str > rhs_str : lhs_str < rhs_str;
       }
-      if (UNLIKELY(is_distinct_target(result_set_->targets_[order_entry.tle_no - 1]))) {
-        const auto lhs_sz = count_distinct_set_size(
-            lhs_v.i1,
-            result_set_->query_mem_desc_.getCountDistinctDescriptor(order_entry.tle_no -
-                                                                    1));
-        const auto rhs_sz = count_distinct_set_size(
-            rhs_v.i1,
-            result_set_->query_mem_desc_.getCountDistinctDescriptor(order_entry.tle_no -
-                                                                    1));
-        if (lhs_sz == rhs_sz) {
-          continue;
-        }
-        return use_desc_cmp ? lhs_sz > rhs_sz : lhs_sz < rhs_sz;
-      }
+
       if (lhs_v.i1 == rhs_v.i1) {
         continue;
       }
@@ -788,6 +872,7 @@ void ResultSet::topPermutation(
     std::vector<uint32_t>& to_sort,
     const size_t n,
     const std::function<bool(const uint32_t, const uint32_t)> compare) {
+  auto timer = DEBUG_TIMER(__func__);
   std::make_heap(to_sort.begin(), to_sort.end(), compare);
   std::vector<uint32_t> permutation_top;
   permutation_top.reserve(n);
@@ -801,11 +886,13 @@ void ResultSet::topPermutation(
 
 void ResultSet::sortPermutation(
     const std::function<bool(const uint32_t, const uint32_t)> compare) {
+  auto timer = DEBUG_TIMER(__func__);
   std::sort(permutation_.begin(), permutation_.end(), compare);
 }
 
 void ResultSet::radixSortOnGpu(
     const std::list<Analyzer::OrderEntry>& order_entries) const {
+  auto timer = DEBUG_TIMER(__func__);
   auto data_mgr = &executor_->catalog_->getDataMgr();
   const int device_id{0};
   CudaAllocator cuda_allocator(data_mgr, device_id);
@@ -840,6 +927,7 @@ void ResultSet::radixSortOnGpu(
 
 void ResultSet::radixSortOnCpu(
     const std::list<Analyzer::OrderEntry>& order_entries) const {
+  auto timer = DEBUG_TIMER(__func__);
   CHECK(!query_mem_desc_.hasKeylessHash());
   std::vector<int64_t> tmp_buff(query_mem_desc_.getEntryCount());
   std::vector<int32_t> idx_buff(query_mem_desc_.getEntryCount());

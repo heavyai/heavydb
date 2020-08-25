@@ -52,10 +52,19 @@ template <typename TEST_BODY>
 void executeAllScenarios(TEST_BODY fn) {
   for (const auto overlaps_state : {true, false}) {
     const auto enable_overlaps_hashjoin_state = g_enable_overlaps_hashjoin;
+    const auto enable_hashjoin_many_to_many_state = g_enable_hashjoin_many_to_many;
+
     g_enable_overlaps_hashjoin = overlaps_state;
-    ScopeGuard reset_overlaps_state = [&enable_overlaps_hashjoin_state] {
+    g_enable_hashjoin_many_to_many = overlaps_state;
+    g_trivial_loop_join_threshold = overlaps_state ? 1 : 1000;
+
+    ScopeGuard reset_overlaps_state = [&enable_overlaps_hashjoin_state,
+                                       &enable_hashjoin_many_to_many_state] {
       g_enable_overlaps_hashjoin = enable_overlaps_hashjoin_state;
+      g_enable_overlaps_hashjoin = enable_hashjoin_many_to_many_state;
+      g_trivial_loop_join_threshold = 1000;
     };
+
     for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
       SKIP_NO_GPU();
       fn(dt);
@@ -69,21 +78,31 @@ const auto init_stmts_ddl = {
     R"(drop table if exists does_intersect_b;)",
     R"(drop table if exists does_not_intersect_a;)",
     R"(drop table if exists does_not_intersect_b;)",
+    R"(drop table if exists empty_table;)",
     R"(create table does_intersect_a (id int,
                                       poly geometry(polygon, 4326),
+                                      mpoly geometry(multipolygon, 4326),
                                       pt geometry(point, 4326));
     )",
     R"(create table does_intersect_b (id int,
                                       poly geometry(polygon, 4326),
+                                      mpoly geometry(multipolygon, 4326),
                                       pt geometry(point, 4326));
     )",
     R"(create table does_not_intersect_a (id int,
                                         poly geometry(polygon, 4326),
+                                        mpoly geometry(multipolygon, 4326),
                                         pt geometry(point, 4326));
     )",
     R"(create table does_not_intersect_b (id int,
                                         poly geometry(polygon, 4326),
+                                        mpoly geometry(multipolygon, 4326),
                                         pt geometry(point, 4326));
+    )",
+    R"(create table empty_table (id int,
+                           poly geometry(polygon, 4326),
+                           mpoly geometry(multipolygon, 4326),
+                           pt geometry(point, 4326));
     )"
 };
 
@@ -91,37 +110,56 @@ const auto init_stmts_dml = {
     R"(insert into does_intersect_a
        values (0,
               'polygon((25 25,30 25,30 30,25 30,25 25))',
+              'multipolygon(((25 25,30 25,30 30,25 30,25 25)))',
               'point(22 22)');
     )",
     R"(insert into does_intersect_a 
        values (1,
               'polygon((2 2,10 2,10 10,2 10,2 2))',
+              'multipolygon(((2 2,10 2,10 10,2 10,2 2)))',
               'point(8 8)');
     )",
     R"(insert into does_intersect_a
        values (2,
               'polygon((2 2,10 2,10 10,2 10,2 2))',
+              'multipolygon(((2 2,10 2,10 10,2 10,2 2)))',
               'point(8 8)');
     )",
     R"(insert into does_intersect_b
        values (0,
               'polygon((0 0,30 0,30 0,30 30,0 0))',
+              'multipolygon(((0 0,30 0,30 0,30 30,0 0)))',
               'point(8 8)');
     )",
     R"(insert into does_intersect_b
        values (1,
               'polygon((25 25,30 25,30 30,25 30,25 25))',
+              'multipolygon(((25 25,30 25,30 30,25 30,25 25)))',
               'point(28 28)');
     )",
     R"(insert into does_not_intersect_a
        values (1,
               'polygon((0 0,0 1,1 0,1 1,0 0))',
+              'multipolygon(((0 0,0 1,1 0,1 1,0 0)))',
               'point(0 0)');
     )",
     R"(insert into does_not_intersect_a
        values (1,
               'polygon((0 0,0 1,1 0,1 1,0 0))',
+              'multipolygon(((0 0,0 1,1 0,1 1,0 0)))',
               'point(0 0)');
+    )",
+    R"(insert into does_not_intersect_a
+       values (1,
+              'polygon((0 0,0 1,1 0,1 1,0 0))',
+              'multipolygon(((0 0,0 1,1 0,1 1,0 0)))',
+              'point(0 0)');
+    )",
+    R"(insert into does_not_intersect_b
+       values (1,
+              'polygon((2 2,2 4,4 2,4 4,2 2))',
+              'multipolygon(((2 2,2 4,4 2,4 4,2 2)))',
+              'point(2 2)');
     )"
 };
 // clang-format on
@@ -142,7 +180,7 @@ class OverlapsTest : public ::testing::Test {
 TargetValue execSQL(const std::string& stmt,
                     const ExecutorDeviceType dt,
                     const bool geo_return_geo_tv = true) {
-  auto rows = QR::get()->runSQL(stmt, dt);
+  auto rows = QR::get()->runSQL(stmt, dt, true, false);
   if (geo_return_geo_tv) {
     rows->setGeoReturnType(ResultSet::GeoReturnType::GeoTargetValue);
   }
@@ -166,7 +204,7 @@ TEST_F(OverlapsTest, InnerJoinPointInPolyIntersects) {
     auto sql =
         "SELECT "
         "count(*) from "
-        "does_intersect_a as a JOIN does_intersect_b as b ON ST_Intersects(a.poly, "
+        "does_intersect_b as b JOIN does_intersect_a as a ON ST_Intersects(a.poly, "
         "b.pt);";
     ASSERT_EQ(static_cast<int64_t>(3), v<int64_t>(execSQL(sql, dt)));
 
@@ -177,16 +215,21 @@ TEST_F(OverlapsTest, InnerJoinPointInPolyIntersects) {
   });
 }
 
-// TODO(jclay): we fail when point is given as the first arg.
-// this passes in postgis.
-TEST_F(OverlapsTest, DISABLED_InnerJoinPolyInPointIntersects) {
+// TODO(jclay): This should succeed without failure.
+// For now, we test against the (incorrect) failure.
+TEST_F(OverlapsTest, InnerJoinPolyInPointIntersects) {
   executeAllScenarios([](ExecutorDeviceType dt) -> void {
     const auto sql =
         "SELECT "
         "count(*) from "
-        "does_intersect_a as a JOIN does_intersect_b as b ON ST_Intersects(a.pt, "
+        "does_intersect_b as b JOIN does_intersect_a as a ON ST_Intersects(a.pt, "
         "b.poly);";
-    ASSERT_EQ(static_cast<int64_t>(3), v<int64_t>(execSQL(sql, dt)));
+    if (g_enable_hashjoin_many_to_many) {
+      EXPECT_ANY_THROW(execSQL(sql, dt));
+    } else {
+      // Note(jclay): We return 0, postgis returns 4
+      ASSERT_EQ(static_cast<int64_t>(0), v<int64_t>(execSQL(sql, dt)));
+    }
   });
 }
 
@@ -199,10 +242,43 @@ TEST_F(OverlapsTest, InnerJoinPolyPolyIntersects) {
   });
 }
 
-TEST_F(OverlapsTest, DISABLED_InnerJoinPolyPolyIntersectsTranspose) {
-  // Note(jclay): We have a bug somewhere. This should == the result
-  // of InnerJoinPolyPolyIntersects, but it does not.
-  // have verified the expected value in Postgis
+TEST_F(OverlapsTest, InnerJoinMPolyPolyIntersects) {
+  executeAllScenarios([](ExecutorDeviceType dt) -> void {
+    auto sql = R"(SELECT count(*) from does_intersect_a as a
+                  JOIN does_intersect_b as b
+                  ON ST_Intersects(a.mpoly, b.poly);)";
+    ASSERT_EQ(static_cast<int64_t>(4), v<int64_t>(execSQL(sql, dt)));
+  });
+}
+
+TEST_F(OverlapsTest, InnerJoinMPolyMPolyIntersects) {
+  executeAllScenarios([](ExecutorDeviceType dt) -> void {
+    auto sql = R"(SELECT count(*) from does_intersect_a as a
+                  JOIN does_intersect_b as b
+                  ON ST_Intersects(a.mpoly, b.mpoly);)";
+    ASSERT_EQ(static_cast<int64_t>(4), v<int64_t>(execSQL(sql, dt)));
+  });
+}
+
+TEST_F(OverlapsTest, LeftJoinMPolyPolyIntersects) {
+  executeAllScenarios([](ExecutorDeviceType dt) -> void {
+    auto sql = R"(SELECT count(*) from does_intersect_a as a
+                  LEFT JOIN does_intersect_b as b
+                  ON ST_Intersects(a.mpoly, b.poly);)";
+    ASSERT_EQ(static_cast<int64_t>(4), v<int64_t>(execSQL(sql, dt)));
+  });
+}
+
+TEST_F(OverlapsTest, LeftJoinMPolyMPolyIntersects) {
+  executeAllScenarios([](ExecutorDeviceType dt) -> void {
+    auto sql = R"(SELECT count(*) from does_intersect_a as a
+                  LEFT JOIN does_intersect_b as b
+                  ON ST_Intersects(a.mpoly, b.poly);)";
+    ASSERT_EQ(static_cast<int64_t>(4), v<int64_t>(execSQL(sql, dt)));
+  });
+}
+
+TEST_F(OverlapsTest, InnerJoinPolyPolyIntersectsTranspose) {
   executeAllScenarios([](ExecutorDeviceType dt) -> void {
     const auto sql = R"(SELECT count(*) from does_intersect_a as a
                         JOIN does_intersect_b as b
@@ -213,39 +289,130 @@ TEST_F(OverlapsTest, DISABLED_InnerJoinPolyPolyIntersectsTranspose) {
 
 TEST_F(OverlapsTest, LeftJoinPolyPolyIntersects) {
   executeAllScenarios([](ExecutorDeviceType dt) -> void {
-    auto sql = R"(SELECT count(*) from does_intersect_a as a
-                      LEFT JOIN does_intersect_b as b
+    auto sql = R"(SELECT count(*) from does_intersect_b as b
+                      LEFT JOIN does_intersect_a as a
                       ON ST_Intersects(a.poly, b.poly);)";
     ASSERT_EQ(static_cast<int64_t>(4), v<int64_t>(execSQL(sql, dt)));
   });
 }
 
-// TODO(jclay): Fails currently, I believe this gets fixed in my
-// many to many overlaps branch.
-TEST_F(OverlapsTest, DISABLED_JoinPolyPointContains) {
+TEST_F(OverlapsTest, LeftJoinPointInPolyIntersects) {
   executeAllScenarios([](ExecutorDeviceType dt) -> void {
-    auto sql =
-        "SELECT "
-        "count(*) from "
-        "does_intersect_a as a JOIN does_intersect_b as b ON ST_Contains(a.poly, b.pt);";
+    auto sql = R"(SELECT count(*) from does_intersect_a as a
+                      LEFT JOIN does_intersect_b as b
+                      ON ST_Intersects(b.poly, a.pt);)";
     ASSERT_EQ(static_cast<int64_t>(3), v<int64_t>(execSQL(sql, dt)));
+  });
+}
 
-    sql =
-        "SELECT "
-        "count(*) from "
-        "does_intersect_a as a JOIN does_intersect_b as b ON ST_Contains(a.pt, b.poly);";
+// TODO(jclay): This should succeed without failure.
+// Look into rewriting this in overlaps rewrite.
+// For now, we test against the (incorrect) failure.
+// It should return 3.
+TEST_F(OverlapsTest, LeftJoinPointInPolyIntersectsWrongLHS) {
+  executeAllScenarios([](ExecutorDeviceType dt) -> void {
+    auto sql = R"(SELECT count(*) from does_intersect_a as a
+                      LEFT JOIN does_intersect_b as b
+                      ON ST_Intersects(a.poly, b.pt);)";
+    if (g_enable_hashjoin_many_to_many) {
+      EXPECT_ANY_THROW(execSQL(sql, dt));
+    } else {
+      ASSERT_EQ(static_cast<int64_t>(3), v<int64_t>(execSQL(sql, dt)));
+    }
+  });
+}
+
+TEST_F(OverlapsTest, InnerJoinPolyPolyContains) {
+  executeAllScenarios([](ExecutorDeviceType dt) -> void {
+    auto sql = R"(SELECT count(*) from does_intersect_b as b
+                  JOIN does_intersect_a as a
+                  ON ST_Contains(a.poly, b.poly);)";
     ASSERT_EQ(static_cast<int64_t>(0), v<int64_t>(execSQL(sql, dt)));
   });
 }
 
-// Note(jclay): This fails on master on GPU execution with overlaps hash join enabled.
+// TODO(jclay): The following runtime functions are not implemented:
+// - ST_Contains_MultiPolygon_MultiPolygon
+// - ST_Contains_MultiPolygon_Polygon
+// As a result, the following should succeed rather than throw error.
+TEST_F(OverlapsTest, InnerJoinMPolyPolyContains) {
+  executeAllScenarios([](ExecutorDeviceType dt) -> void {
+    auto sql = R"(SELECT count(*) from does_intersect_a as a
+                  JOIN does_intersect_b as b
+                  ON ST_Contains(a.mpoly, b.poly);)";
+    EXPECT_ANY_THROW(execSQL(sql, dt));
+  });
+}
+
+TEST_F(OverlapsTest, InnerJoinMPolyMPolyContains) {
+  executeAllScenarios([](ExecutorDeviceType dt) -> void {
+    auto sql = R"(SELECT count(*) from does_intersect_a as a
+                  JOIN does_intersect_b as b
+                  ON ST_Contains(a.mpoly, b.poly);)";
+    // should return 4
+    EXPECT_ANY_THROW(execSQL(sql, dt));
+  });
+}
+
+// NOTE(jclay): We don't support multipoly / poly ST_Contains
+TEST_F(OverlapsTest, LeftJoinMPolyPolyContains) {
+  executeAllScenarios([](ExecutorDeviceType dt) -> void {
+    auto sql = R"(SELECT count(*) from does_intersect_b as b
+                  LEFT JOIN does_intersect_a as a
+                  ON ST_Contains(a.mpoly, b.poly);)";
+    // should return 4
+    EXPECT_ANY_THROW(execSQL(sql, dt));
+  });
+}
+
+TEST_F(OverlapsTest, LeftJoinMPolyMPolyContains) {
+  executeAllScenarios([](ExecutorDeviceType dt) -> void {
+    auto sql = R"(SELECT count(*) from does_intersect_b as b
+                  LEFT JOIN does_intersect_a as a
+                  ON ST_Contains(a.mpoly, b.mpoly);)";
+    // should return 4
+    EXPECT_ANY_THROW(execSQL(sql, dt));
+  });
+}
+
+TEST_F(OverlapsTest, JoinPolyPointContains) {
+  executeAllScenarios([](ExecutorDeviceType dt) -> void {
+    auto sql =
+        "SELECT "
+        "count(*) from "
+        "does_intersect_b as b JOIN does_intersect_a as a ON ST_Contains(a.poly, b.pt);";
+    ASSERT_EQ(static_cast<int64_t>(3), v<int64_t>(execSQL(sql, dt)));
+
+    // sql =
+    //     "SELECT "
+    //     "count(*) from "
+    //     "does_intersect_b as b JOIN does_intersect_a as a ON ST_Contains(a.pt,
+    //     b.poly);";
+    // ASSERT_EQ(static_cast<int64_t>(0), v<int64_t>(execSQL(sql, dt)));
+  });
+}
+
 TEST_F(OverlapsTest, PolyPolyDoesNotIntersect) {
   executeAllScenarios([](ExecutorDeviceType dt) -> void {
     ASSERT_EQ(static_cast<int64_t>(0),
-              v<int64_t>(execSQL("SELECT count(*) FROM does_not_intersect_a as a "
-                                 "JOIN does_not_intersect_b as b "
+              v<int64_t>(execSQL("SELECT count(*) FROM does_not_intersect_b as b "
+                                 "JOIN does_not_intersect_a as a "
                                  "ON ST_Intersects(a.poly, b.poly);",
                                  dt)));
+  });
+}
+
+TEST_F(OverlapsTest, EmptyPolyPolyJoin) {
+  executeAllScenarios([](ExecutorDeviceType dt) -> void {
+    const auto sql =
+        "SELECT count(*) FROM does_not_intersect_a as a "
+        "JOIN empty_table as b "
+        "ON ST_Intersects(a.poly, b.poly);";
+    // TODO(jclay): Empty table causes a crash on GPU.
+    if (g_enable_overlaps_hashjoin && dt == ExecutorDeviceType::GPU) {
+      return;
+    }
+    ASSERT_EQ(static_cast<int64_t>(0), v<int64_t>(execSQL(sql, dt)));
   });
 }
 

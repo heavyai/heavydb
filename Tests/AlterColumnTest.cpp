@@ -22,7 +22,7 @@
 
 #include "Catalog/Catalog.h"
 #include "Fragmenter/InsertOrderFragmenter.h"
-#include "Import/Importer.h"
+#include "ImportExport/Importer.h"
 #include "Parser/parser.h"
 #include "QueryEngine/ResultSet.h"
 #include "QueryRunner/QueryRunner.h"

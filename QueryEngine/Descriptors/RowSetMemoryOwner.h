@@ -25,7 +25,8 @@
 #include <vector>
 
 #include "DataMgr/AbstractBuffer.h"
-#include "Shared/ArenaAllocator.h"
+#include "DataMgr/Allocators/ArenaAllocator.h"
+#include "DataMgr/DataMgr.h"
 #include "Shared/Logger.h"
 #include "StringDictionary/StringDictionaryProxy.h"
 

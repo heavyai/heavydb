@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 MapD Technologies, Inc.
+ * Copyright 2020 OmniSci, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,11 +14,13 @@
  * limitations under the License.
  */
 
-#include "ColumnFetcher.h"
-#include "Descriptors/QueryCompilationDescriptor.h"
-#include "Descriptors/QueryFragmentDescriptor.h"
-#include "Execute.h"
-#include "RelAlgExecutor.h"
+#include "QueryEngine/Execute.h"
+
+#include "QueryEngine/ColumnFetcher.h"
+#include "QueryEngine/Descriptors/QueryCompilationDescriptor.h"
+#include "QueryEngine/Descriptors/QueryFragmentDescriptor.h"
+#include "QueryEngine/ExecutionKernel.h"
+#include "QueryEngine/RelAlgExecutor.h"
 
 UpdateLogForFragment::UpdateLogForFragment(FragmentInfoType const& fragment_info,
                                            size_t const fragment_index,
@@ -88,44 +90,74 @@ void Executor::executeUpdate(const RelAlgExecutionUnit& ra_exe_unit_in,
     fragments.push_back(entry);
   }
 
-  // There could be benefit to multithread this once we see where the bottle necks really
-  // are
+  if (outer_fragments.empty()) {
+    return;
+  }
+
+  const auto max_tuple_count_fragment_it = std::max_element(
+      outer_fragments.begin(), outer_fragments.end(), [](const auto& a, const auto& b) {
+        return a.getNumTuples() < b.getNumTuples();
+      });
+  CHECK(max_tuple_count_fragment_it != outer_fragments.end());
+  int64_t global_max_groups_buffer_entry_guess =
+      max_tuple_count_fragment_it->getNumTuples();
+  if (is_agg) {
+    global_max_groups_buffer_entry_guess = std::min(
+        2 * global_max_groups_buffer_entry_guess, static_cast<int64_t>(100'000'000));
+  }
+
+  auto query_comp_desc = std::make_unique<QueryCompilationDescriptor>();
+  std::unique_ptr<QueryMemoryDescriptor> query_mem_desc;
+  {
+    auto clock_begin = timer_start();
+    std::lock_guard<std::mutex> compilation_lock(compilation_mutex_);
+    compilation_queue_time_ms_ += timer_stop(clock_begin);
+
+    query_mem_desc = query_comp_desc->compile(global_max_groups_buffer_entry_guess,
+                                              8,
+                                              /*has_cardinality_estimation=*/true,
+                                              ra_exe_unit,
+                                              table_infos,
+                                              column_fetcher,
+                                              co,
+                                              eo,
+                                              nullptr,
+                                              this);
+  }
+  CHECK(query_mem_desc);
+
   for (size_t fragment_index = 0; fragment_index < outer_fragments.size();
        ++fragment_index) {
-    ExecutionDispatch current_fragment_execution_dispatch(
-        this, ra_exe_unit, table_infos, cat, row_set_mem_owner, nullptr);
-
     const int64_t crt_fragment_tuple_count =
         outer_fragments[fragment_index].getNumTuples();
     if (crt_fragment_tuple_count == 0) {
       // nothing to update
       continue;
     }
-    int64_t max_groups_buffer_entry_guess = crt_fragment_tuple_count;
-    if (is_agg) {
-      max_groups_buffer_entry_guess =
-          std::min(2 * max_groups_buffer_entry_guess, static_cast<int64_t>(100'000'000));
-    }
 
-    const auto execution_descriptors = current_fragment_execution_dispatch.compile(
-        max_groups_buffer_entry_guess, 8, co, eo, column_fetcher, true);
-    // We may want to consider in the future allowing this to execute on devices other
-    // than CPU
-
+    SharedKernelContext shared_context(table_infos);
     fragments[0] = {table_id, {fragment_index}};
+    {
+      ExecutionKernel current_fragment_kernel(ra_exe_unit,
+                                              ExecutorDeviceType::CPU,
+                                              0,
+                                              eo,
+                                              column_fetcher,
+                                              *query_comp_desc,
+                                              *query_mem_desc,
+                                              fragments,
+                                              ExecutorDispatchMode::KernelPerFragment,
+                                              /*render_info=*/nullptr,
+                                              /*rowid_lookup_key=*/-1,
+                                              logger::thread_id());
 
-    current_fragment_execution_dispatch.run(
-        co.device_type,
-        0,
-        eo,
-        column_fetcher,
-        *std::get<QueryCompilationDescriptorOwned>(execution_descriptors),
-        *std::get<QueryMemoryDescriptorOwned>(execution_descriptors),
-        fragments,
-        ExecutorDispatchMode::KernelPerFragment,
-        -1);
-    const auto& proj_fragment_results =
-        current_fragment_execution_dispatch.getFragmentResults();
+      auto clock_begin = timer_start();
+      std::lock_guard<std::mutex> kernel_lock(kernel_mutex_);
+      kernel_queue_time_ms_ += timer_stop(clock_begin);
+
+      current_fragment_kernel.run(this, shared_context);
+    }
+    const auto& proj_fragment_results = shared_context.getFragmentResults();
     if (proj_fragment_results.empty()) {
       continue;
     }

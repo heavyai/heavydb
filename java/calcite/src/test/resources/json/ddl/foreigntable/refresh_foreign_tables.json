@@ -1,0 +1,10 @@
+{
+    "statementType": "DDL",
+    "payload": {
+        "command": "REFRESH_FOREIGN_TABLES",
+        "tableNames": [
+            "test_table",
+            "test_table2"
+        ]
+    }
+}

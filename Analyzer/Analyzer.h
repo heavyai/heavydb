@@ -35,6 +35,7 @@
 #include <utility>
 #include <vector>
 
+#include "../Shared/geo_types.h"
 #include "../Shared/sqldefs.h"
 #include "../Shared/sqltypes.h"
 
@@ -308,16 +309,22 @@ class Constant : public Expr {
   Constant(SQLTypes t, bool n) : Expr(t, !n), is_null(n) {
     if (n) {
       set_null_value();
+    } else {
+      type_info.set_notnull(true);
     }
   }
   Constant(SQLTypes t, bool n, Datum v) : Expr(t, !n), is_null(n), constval(v) {
     if (n) {
       set_null_value();
+    } else {
+      type_info.set_notnull(true);
     }
   }
   Constant(const SQLTypeInfo& ti, bool n, Datum v) : Expr(ti), is_null(n), constval(v) {
     if (n) {
       set_null_value();
+    } else {
+      type_info.set_notnull(true);
     }
   }
   Constant(const SQLTypeInfo& ti,
@@ -722,6 +729,51 @@ class KeyForStringExpr : public Expr {
   std::shared_ptr<Analyzer::Expr> rewrite_agg_to_var(
       const std::vector<std::shared_ptr<TargetEntry>>& tlist) const override {
     return makeExpr<KeyForStringExpr>(arg->rewrite_agg_to_var(tlist));
+  }
+  bool operator==(const Expr& rhs) const override;
+  std::string toString() const override;
+  void find_expr(bool (*f)(const Expr*),
+                 std::list<const Expr*>& expr_list) const override;
+
+ private:
+  std::shared_ptr<Analyzer::Expr> arg;
+};
+
+/*
+ * @type SampleRatioExpr
+ * @brief expression for the SAMPLE_RATIO expression. Argument range is expected to be
+ * between 0 and 1.
+ */
+class SampleRatioExpr : public Expr {
+ public:
+  SampleRatioExpr(std::shared_ptr<Analyzer::Expr> a)
+      : Expr(kBOOLEAN, a->get_type_info().get_notnull()), arg(a) {}
+  const Expr* get_arg() const { return arg.get(); }
+  const std::shared_ptr<Analyzer::Expr> get_own_arg() const { return arg; }
+  std::shared_ptr<Analyzer::Expr> deep_copy() const override;
+  void group_predicates(std::list<const Expr*>& scan_predicates,
+                        std::list<const Expr*>& join_predicates,
+                        std::list<const Expr*>& const_predicates) const override;
+  void collect_rte_idx(std::set<int>& rte_idx_set) const override {
+    arg->collect_rte_idx(rte_idx_set);
+  }
+  void collect_column_var(
+      std::set<const ColumnVar*, bool (*)(const ColumnVar*, const ColumnVar*)>&
+          colvar_set,
+      bool include_agg) const override {
+    arg->collect_column_var(colvar_set, include_agg);
+  }
+  std::shared_ptr<Analyzer::Expr> rewrite_with_targetlist(
+      const std::vector<std::shared_ptr<TargetEntry>>& tlist) const override {
+    return makeExpr<SampleRatioExpr>(arg->rewrite_with_targetlist(tlist));
+  }
+  std::shared_ptr<Analyzer::Expr> rewrite_with_child_targetlist(
+      const std::vector<std::shared_ptr<TargetEntry>>& tlist) const override {
+    return makeExpr<SampleRatioExpr>(arg->rewrite_with_child_targetlist(tlist));
+  }
+  std::shared_ptr<Analyzer::Expr> rewrite_agg_to_var(
+      const std::vector<std::shared_ptr<TargetEntry>>& tlist) const override {
+    return makeExpr<SampleRatioExpr>(arg->rewrite_agg_to_var(tlist));
   }
   bool operator==(const Expr& rhs) const override;
   std::string toString() const override;
@@ -1450,23 +1502,63 @@ class ArrayExpr : public Expr {
 };
 
 /*
- * @type GeoExpr
- * @brief Geospatial expression
+ * @type GeoUOper
+ * @brief Geo unary operation
  */
-class GeoExpr : public Expr {
+class GeoUOper : public Expr {
  public:
-  GeoExpr(const SQLTypeInfo& ti, const std::vector<std::shared_ptr<Analyzer::Expr>>& args)
-      : Expr(ti), args_(args){};
+  GeoUOper(const Geo_namespace::GeoBase::GeoOp op,
+           const SQLTypeInfo& ti,
+           const SQLTypeInfo& ti0,
+           const std::vector<std::shared_ptr<Analyzer::Expr>>& args)
+      : Expr(ti), op_(op), ti0_(ti0), args0_(args){};
 
   std::shared_ptr<Analyzer::Expr> deep_copy() const override;
 
   bool operator==(const Expr& rhs) const override;
   std::string toString() const override;
 
-  const std::vector<std::shared_ptr<Analyzer::Expr>>& getArgs() const { return args_; }
+  Geo_namespace::GeoBase::GeoOp getOp() const { return op_; }
+  const SQLTypeInfo getTypeInfo0() const { return ti0_; }
+  const std::vector<std::shared_ptr<Analyzer::Expr>>& getArgs0() const { return args0_; }
 
  private:
-  const std::vector<std::shared_ptr<Analyzer::Expr>> args_;
+  const Geo_namespace::GeoBase::GeoOp op_;
+  SQLTypeInfo ti0_;  // Type of geo input 0 (or geo output)
+  const std::vector<std::shared_ptr<Analyzer::Expr>> args0_;
+};
+
+/*
+ * @type GeoBinOper
+ * @brief Geo binary operation
+ */
+class GeoBinOper : public Expr {
+ public:
+  GeoBinOper(const Geo_namespace::GeoBase::GeoOp op,
+             const SQLTypeInfo& ti,
+             const SQLTypeInfo& ti0,
+             const SQLTypeInfo& ti1,
+             const std::vector<std::shared_ptr<Analyzer::Expr>>& args0,
+             const std::vector<std::shared_ptr<Analyzer::Expr>>& args1)
+      : Expr(ti), op_(op), ti0_(ti0), ti1_(ti1), args0_(args0), args1_(args1){};
+
+  std::shared_ptr<Analyzer::Expr> deep_copy() const override;
+
+  bool operator==(const Expr& rhs) const override;
+  std::string toString() const override;
+
+  Geo_namespace::GeoBase::GeoOp getOp() const { return op_; }
+  const SQLTypeInfo getTypeInfo0() const { return ti0_; }
+  const SQLTypeInfo getTypeInfo1() const { return ti1_; }
+  const std::vector<std::shared_ptr<Analyzer::Expr>>& getArgs0() const { return args0_; }
+  const std::vector<std::shared_ptr<Analyzer::Expr>>& getArgs1() const { return args1_; }
+
+ private:
+  const Geo_namespace::GeoBase::GeoOp op_;
+  SQLTypeInfo ti0_;  // Type of geo input 0 (or geo output)
+  SQLTypeInfo ti1_;  // Type of geo input 1
+  const std::vector<std::shared_ptr<Analyzer::Expr>> args0_;
+  const std::vector<std::shared_ptr<Analyzer::Expr>> args1_;
 };
 
 /*

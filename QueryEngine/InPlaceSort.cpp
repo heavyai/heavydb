@@ -18,7 +18,7 @@
 #include "InPlaceSortImpl.h"
 
 #include <Analyzer/Analyzer.h>
-#include "Allocators/ThrustAllocator.h"
+#include "DataMgr/Allocators/ThrustAllocator.h"
 #include "Descriptors/QueryMemoryDescriptor.h"
 #include "Shared/Logger.h"
 

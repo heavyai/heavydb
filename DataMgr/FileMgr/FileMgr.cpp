@@ -615,6 +615,16 @@ void FileMgr::checkpoint() {
 AbstractBuffer* FileMgr::createBuffer(const ChunkKey& key,
                                       const size_t pageSize,
                                       const size_t numBytes) {
+  mapd_unique_lock<mapd_shared_mutex> chunkIndexWriteLock(chunkIndexMutex_);
+  return createBufferUnlocked(key, pageSize, numBytes);
+}
+
+// The underlying implementation of createBuffer needs to be lockless since
+// some of the codepaths that call it will have already obtained a write lock
+// and should not release it until they are complete.
+AbstractBuffer* FileMgr::createBufferUnlocked(const ChunkKey& key,
+                                              const size_t pageSize,
+                                              const size_t numBytes) {
   size_t actualPageSize = pageSize;
   if (actualPageSize == 0) {
     actualPageSize = defaultPageSize_;
@@ -622,13 +632,11 @@ AbstractBuffer* FileMgr::createBuffer(const ChunkKey& key,
   /// @todo Make all accesses to chunkIndex_ thread-safe
   // we will do this lazily and not allocate space for the Chunk (i.e.
   // FileBuffer yet)
-  mapd_unique_lock<mapd_shared_mutex> chunkIndexWriteLock(chunkIndexMutex_);
 
   if (chunkIndex_.find(key) != chunkIndex_.end()) {
     LOG(FATAL) << "Chunk already exists for key: " << showChunk(key);
   }
   chunkIndex_[key] = new FileBuffer(this, actualPageSize, key, numBytes);
-  chunkIndexWriteLock.unlock();
   return (chunkIndex_[key]);
 }
 
@@ -743,7 +751,7 @@ AbstractBuffer* FileMgr::putBuffer(const ChunkKey& key,
   auto chunkIt = chunkIndex_.find(key);
   AbstractBuffer* chunk;
   if (chunkIt == chunkIndex_.end()) {
-    chunk = createBuffer(key, defaultPageSize_);
+    chunk = createBufferUnlocked(key, defaultPageSize_);
   } else {
     chunk = chunkIt->second;
   }
@@ -782,6 +790,8 @@ AbstractBuffer* FileMgr::putBuffer(const ChunkKey& key,
                   newChunkSize - oldChunkSize,
                   srcBuffer->getType(),
                   srcBuffer->getDeviceId());
+  } else {
+    UNREACHABLE() << "putBuffer() expects a buffer marked is_updated or is_appended";
   }
   // chunk->clearDirtyBits(); // Hack: because write and append will set dirty bits
   //@todo commenting out line above will make sure this metadata is set

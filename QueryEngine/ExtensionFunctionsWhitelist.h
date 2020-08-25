@@ -59,7 +59,14 @@ enum class ExtArgumentType {
   GeoLineString,
   Cursor,
   GeoPolygon,
-  GeoMultiPolygon
+  GeoMultiPolygon,
+  ColumnInt8,
+  ColumnInt16,
+  ColumnInt32,
+  ColumnInt64,
+  ColumnFloat,
+  ColumnDouble,
+  ColumnBool
 };
 
 SQLTypeInfo ext_arg_type_to_type_info(const ExtArgumentType ext_arg_type);

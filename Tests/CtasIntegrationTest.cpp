@@ -760,7 +760,7 @@ void exportTestBody(std::string sourcePartitionScheme = ")") {
   boost::filesystem::path temp =
       boost::filesystem::temp_directory_path() / boost::filesystem::unique_path();
 
-  std::string export_file_name = temp.native();
+  std::string export_file_name = temp.native() + ".csv";
 
   // execute CTAS
   std::string export_sql = "COPY (SELECT * FROM EXPORT_SOURCE) TO '" + export_file_name +
@@ -1227,9 +1227,9 @@ int main(int argc, char* argv[]) {
     desc.add_options()("db",
                        po::value<std::string>(&db)->default_value(db)->implicit_value(db),
                        "db to connect to");
-    desc.add_options()(
-        "test-help",
-        "Print all ImportTest specific options (for gtest options use `--help`).");
+    desc.add_options()("test-help",
+                       "Print all CtasIntegrationTest specific options (for gtest "
+                       "options use `--help`).");
 
     po::variables_map vm;
     po::store(po::command_line_parser(argc, argv).options(desc).run(), vm);

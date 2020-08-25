@@ -27,10 +27,11 @@ namespace Buffer_Namespace {
 class GpuCudaBufferMgr : public BufferMgr {
  public:
   GpuCudaBufferMgr(const int device_id,
-                   const size_t max_buffer_size,
+                   const size_t max_buffer_pool_size,
                    CudaMgr_Namespace::CudaMgr* cuda_mgr,
-                   const size_t buffer_alloc_increment = 1073741824,
-                   const size_t page_size = 512,
+                   const size_t min_slab_size,
+                   const size_t max_slab_size,
+                   const size_t page_size,
                    AbstractBufferMgr* parent_mgr = 0);
   inline MgrType getMgrType() override { return GPU_MGR; }
   inline std::string getStringMgrType() override { return ToString(GPU_MGR); }

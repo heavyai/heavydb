@@ -23,12 +23,18 @@
 namespace Buffer_Namespace {
 
 GpuCudaBufferMgr::GpuCudaBufferMgr(const int device_id,
-                                   const size_t max_buffer_size,
+                                   const size_t max_buffer_pool_size,
                                    CudaMgr_Namespace::CudaMgr* cuda_mgr,
-                                   const size_t buffer_alloc_increment,
+                                   const size_t min_slab_size,
+                                   const size_t max_slab_size,
                                    const size_t page_size,
                                    AbstractBufferMgr* parent_mgr)
-    : BufferMgr(device_id, max_buffer_size, buffer_alloc_increment, page_size, parent_mgr)
+    : BufferMgr(device_id,
+                max_buffer_pool_size,
+                min_slab_size,
+                max_slab_size,
+                page_size,
+                parent_mgr)
     , cuda_mgr_(cuda_mgr) {}
 
 GpuCudaBufferMgr::~GpuCudaBufferMgr() {

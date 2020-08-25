@@ -17,6 +17,7 @@
 #include "RelAlgOptimizer.h"
 #include "RexVisitor.h"
 #include "Shared/Logger.h"
+#include "Visitors/RexSubQueryIdCollector.h"
 
 #include <numeric>
 #include <string>
@@ -721,14 +722,19 @@ std::vector<std::unordered_set<size_t>> get_live_ins(
     return {live_in};
   }
   if (auto table_func = dynamic_cast<const RelTableFunction*>(node)) {
-    CHECK_EQ(size_t(1), table_func->inputCount());
-
     const auto input_count = table_func->size();
     std::unordered_set<size_t> live_in;
     for (size_t i = 0; i < input_count; i++) {
       live_in.insert(i);
     }
-    return {live_in};
+
+    std::vector<std::unordered_set<size_t>> result;
+    // Is the computed result correct in general?
+    for (size_t i = table_func->inputCount(); i > 0; i--) {
+      result.push_back(live_in);
+    }
+
+    return result;
   }
   if (auto logical_union = dynamic_cast<const RelLogicalUnion*>(node)) {
     return std::vector<std::unordered_set<size_t>>(logical_union->inputCount(), live_out);
@@ -1226,6 +1232,33 @@ void eliminate_dead_columns(std::vector<std::shared_ptr<RelAlgNode>>& nodes) noe
   // Propagate
   propagate_input_renumbering(
       liveout_renumbering, ready_nodes, old_liveouts, intact_nodes, web, orig_node_sizes);
+}
+
+void eliminate_dead_subqueries(std::vector<std::shared_ptr<RexSubQuery>>& subqueries,
+                               RelAlgNode const* root) {
+  if (!subqueries.empty()) {
+    auto live_ids = RexSubQueryIdCollector::getLiveRexSubQueryIds(root);
+    auto sort_live_ids_first = [&live_ids](auto& a, auto& b) {
+      return live_ids.count(a->getId()) && !live_ids.count(b->getId());
+    };
+    std::stable_sort(subqueries.begin(), subqueries.end(), sort_live_ids_first);
+    size_t n_dead_subqueries;
+    if (live_ids.count(subqueries.front()->getId())) {
+      auto first_dead_itr = std::upper_bound(subqueries.cbegin(),
+                                             subqueries.cend(),
+                                             subqueries.front(),
+                                             sort_live_ids_first);
+      n_dead_subqueries = subqueries.cend() - first_dead_itr;
+    } else {
+      n_dead_subqueries = subqueries.size();
+    }
+    if (n_dead_subqueries) {
+      VLOG(1) << "Eliminating " << n_dead_subqueries
+              << (n_dead_subqueries == 1 ? " subquery." : " subqueries.");
+      subqueries.resize(subqueries.size() - n_dead_subqueries);
+      subqueries.shrink_to_fit();
+    }
+  }
 }
 
 namespace {

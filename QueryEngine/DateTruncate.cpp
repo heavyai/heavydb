@@ -13,6 +13,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+/*
+ * Thank you Howard Hinnant for public domain date algorithms
+ * http://howardhinnant.github.io/date_algorithms.html
+ */
 
 #include "DateTruncate.h"
 #include "ExtractFromTime.h"
@@ -21,58 +25,16 @@
 #include <cstdlib>  // abort()
 #endif
 
+#include <cmath>
 #include <ctime>
 #include <iostream>
-
-extern "C" NEVER_INLINE DEVICE int64_t create_epoch(int32_t year) {
-  // Note this is not general purpose
-  // it has a final assumption that the year being passed can never be a leap
-  // year
-  // use 2001 epoch time 31 March as start
-
-  int64_t new_time = kEpochAdjustedDays * kSecsPerDay;
-  bool forward = true;
-  int32_t years_offset = year - kEpochAdjustedYears;
-  // convert year_offset to positive
-  if (years_offset < 0) {
-    forward = false;
-    years_offset = -years_offset;
-  }
-  // now get number of 400 year cycles in the years_offset;
-
-  int32_t year400 = years_offset / 400;
-  int32_t years_remaining = years_offset - (year400 * 400);
-  int32_t year100 = years_remaining / 100;
-  years_remaining -= year100 * 100;
-  int32_t year4 = years_remaining / 4;
-  years_remaining -= year4 * 4;
-
-  // get new date I know the final year will never be a leap year
-  if (forward) {
-    new_time += (year400 * kDaysPer400Years + year100 * kDaysPer100Years +
-                 year4 * kDaysPer4Years + years_remaining * kDaysPerYear -
-                 kDaysInJanuary - kDaysInFebruary) *
-                kSecsPerDay;
-  } else {
-    new_time -= (year400 * kDaysPer400Years + year100 * kDaysPer100Years +
-                 year4 * kDaysPer4Years + years_remaining * kDaysPerYear +
-                 // one more day for leap year of 2000 when going backward;
-                 1 + kDaysInJanuary + kDaysInFebruary) *
-                kSecsPerDay;
-  };
-
-  return new_time;
-}
+#include <limits>
 
 /*
  * @brief support the SQL DATE_TRUNC function
  */
 extern "C" NEVER_INLINE DEVICE int64_t DateTruncate(DatetruncField field,
                                                     const int64_t timeval) {
-  STATIC_QUAL const int32_t month_lengths[2][kMonsPerYear] = {
-      {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31},
-      {31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31}};
-
   STATIC_QUAL const uint32_t cumulative_month_epoch_starts[kMonsPerYear] = {0,
                                                                             2678400,
                                                                             5270400,
@@ -89,72 +51,29 @@ extern "C" NEVER_INLINE DEVICE int64_t DateTruncate(DatetruncField field,
       0, 7776000, 15638400, 23587200};
   STATIC_QUAL const uint32_t cumulative_quarter_epoch_starts_leap_year[4] = {
       0, 7862400, 15724800, 23673600};
+  // Number of days from March 1 to Jan 1.
+  constexpr unsigned marjan = 31 + 30 + 31 + 30 + 31 + 31 + 30 + 31 + 30 + 31;
+  constexpr unsigned janmar = 31 + 28;  // leap day handled separately
   switch (field) {
     case dtNANOSECOND:
     case dtMICROSECOND:
     case dtMILLISECOND:
     case dtSECOND:
       return timeval;
-    case dtMINUTE: {
-      int64_t ret = (timeval / kSecsPerMin) * kSecsPerMin;
-      // in the case of a negative time we still want to push down so need to push
-      // one
-      // more
-      if (ret < 0) {
-        {
-          ret -= kSecsPerMin;
-        }
-      }
-      return ret;
-    }
-    case dtHOUR: {
-      int64_t ret = (timeval / kSecPerHour) * kSecPerHour;
-      // in the case of a negative time we still want to push down so need to push
-      // one
-      // more
-      if (ret < 0) {
-        {
-          ret -= kSecPerHour;
-        }
-      }
-      return ret;
-    }
-    case dtQUARTERDAY: {
-      int64_t ret = (timeval / kSecsPerQuarterDay) * kSecsPerQuarterDay;
-      // in the case of a negative time we still want to push down so need to push
-      // one
-      // more
-      if (ret < 0) {
-        {
-          ret -= kSecsPerQuarterDay;
-        }
-      }
-      return ret;
-    }
-    case dtDAY: {
-      int64_t ret = (timeval / kSecsPerDay) * kSecsPerDay;
-      // in the case of a negative time we still want to push down so need to push
-      // one
-      // more
-      if (ret < 0) {
-        {
-          ret -= kSecsPerDay;
-        }
-      }
-      return ret;
-    }
-    case dtWEEK: {
-      int64_t day = (timeval / kSecsPerDay) * kSecsPerDay;
-      if (day < 0) {
-        {
-          day -= kSecsPerDay;
-        }
-      }
-      int32_t dow = extract_dow(day);
-      return day - (dow * kSecsPerDay);
-    }
+    case dtMINUTE:
+      return timeval - unsigned_mod(timeval, kSecsPerMin);
+    case dtHOUR:
+      return timeval - unsigned_mod(timeval, kSecsPerHour);
+    case dtQUARTERDAY:
+      return timeval - unsigned_mod(timeval, kSecsPerQuarterDay);
+    case dtDAY:
+      return timeval - unsigned_mod(timeval, kSecsPerDay);
+    case dtWEEK:
+      // Truncate to Monday. 1 Jan 1970 is a Thursday (+3*kSecsPerDay).
+      return timeval - unsigned_mod(timeval + 3 * kSecsPerDay, 7 * kSecsPerDay);
     case dtMONTH: {
       if (timeval >= 0L && timeval <= UINT32_MAX - (kEpochOffsetYear1900)) {
+        // Handles times from Thu 01 Jan 1970 00:00:00 - Thu 07 Feb 2036 06:28:15.
         uint32_t seconds_march_1900 = timeval + kEpochOffsetYear1900 - kSecsJanToMar1900;
         uint32_t seconds_past_4year_period = seconds_march_1900 % kSecondsPer4YearCycle;
         uint32_t four_year_period_seconds =
@@ -177,11 +96,19 @@ extern "C" NEVER_INLINE DEVICE int64_t DateTruncate(DatetruncField field,
         return (static_cast<int64_t>(four_year_period_seconds) +
                 year_seconds_past_4year_period + cumulative_month_epoch_starts[month] -
                 kEpochOffsetYear1900 + kSecsJanToMar1900);
+      } else {
+        int64_t const day = floor_div(timeval, kSecsPerDay);
+        unsigned const doe = unsigned_mod(day - kEpochAdjustedDays, kDaysPer400Years);
+        unsigned const yoe = (doe - doe / 1460 + doe / 36524 - (doe == 146096)) / 365;
+        unsigned const doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+        unsigned const moy = (5 * doy + 2) / 153;
+        unsigned const dom = doy - (153 * moy + 2) / 5;
+        return (day - dom) * kSecsPerDay;
       }
-      break;
     }
     case dtQUARTER: {
       if (timeval >= 0L && timeval <= UINT32_MAX - kEpochOffsetYear1900) {
+        // Handles times from Thu 01 Jan 1970 00:00:00 - Thu 07 Feb 2036 06:28:15.
         uint32_t seconds_1900 = timeval + kEpochOffsetYear1900;
         uint32_t leap_years = (seconds_1900 - kSecsJanToMar1900) / kSecondsPer4YearCycle;
         uint32_t year =
@@ -189,7 +116,7 @@ extern "C" NEVER_INLINE DEVICE int64_t DateTruncate(DatetruncField field,
         uint32_t base_year_leap_years = (year - 1) / 4;
         uint32_t base_year_seconds =
             year * kSecondsPerNonLeapYear + base_year_leap_years * kUSecsPerDay;
-        bool is_leap_year = year % 4 == 0 && year != 0;
+        const bool is_leap_year = year % 4 == 0 && year != 0;
         const uint32_t* quarter_offsets = is_leap_year
                                               ? cumulative_quarter_epoch_starts_leap_year
                                               : cumulative_quarter_epoch_starts;
@@ -201,11 +128,26 @@ extern "C" NEVER_INLINE DEVICE int64_t DateTruncate(DatetruncField field,
         }
         return (static_cast<int64_t>(base_year_seconds) + quarter_offsets[quarter] -
                 kEpochOffsetYear1900);
+      } else {
+        int64_t const day = floor_div(timeval, kSecsPerDay);
+        unsigned const doe = unsigned_mod(day - kEpochAdjustedDays, kDaysPer400Years);
+        unsigned const yoe = (doe - doe / 1460 + doe / 36524 - (doe == 146096)) / 365;
+        unsigned const doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+        constexpr unsigned apr1 = 31;  // Days in march
+        unsigned doq;  // Day-of-quarter = Days since last Apr1, Jul1, Oct1, Jan1.
+        if (doy < apr1) {
+          bool const leap = yoe % 4 == 0 && (yoe % 100 != 0 || yoe == 0);
+          doq = janmar + leap + doy;  // Q1
+        } else {
+          unsigned const q = (3 * (doy - apr1) + 2) / 275;  // quarter = 0, 1, 2
+          doq = doy - (apr1 + q * 92 - (q != 0));           // Q2, Q3, Q4
+        }
+        return (day - doq) * kSecsPerDay;
       }
-      break;
     }
     case dtYEAR: {
       if (timeval >= 0L && timeval <= UINT32_MAX - kEpochOffsetYear1900) {
+        // Handles times from Thu 01 Jan 1970 00:00:00 - Thu 07 Feb 2036 06:28:15.
         uint32_t seconds_1900 = static_cast<uint32_t>(timeval) + kEpochOffsetYear1900;
         uint32_t leap_years = (seconds_1900 - kSecsJanToMar1900) / kSecondsPer4YearCycle;
         uint32_t year =
@@ -213,91 +155,62 @@ extern "C" NEVER_INLINE DEVICE int64_t DateTruncate(DatetruncField field,
         uint32_t base_year_leap_years = (year - 1) / 4;
         return (static_cast<int64_t>(year) * kSecondsPerNonLeapYear +
                 base_year_leap_years * kUSecsPerDay - kEpochOffsetYear1900);
-      }
-      break;
-    }
-    default:
-      break;
-  }
-
-  // use ExtractFromTime functions where available
-  // have to do some extra work for these ones
-  tm tm_struct;
-  gmtime_r_newlib(timeval, tm_struct);
-  switch (field) {
-    case dtMONTH: {
-      // clear the time
-      int64_t day = (timeval / kSecsPerDay) * kSecsPerDay;
-      if (day < 0) {
-        {
-          day -= kSecsPerDay;
+      } else {
+        int64_t const day = floor_div(timeval, kSecsPerDay);
+        unsigned const doe = unsigned_mod(day - kEpochAdjustedDays, kDaysPer400Years);
+        unsigned const yoe = (doe - doe / 1460 + doe / 36524 - (doe == 146096)) / 365;
+        unsigned const doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+        unsigned docy;  // Day-of-calendar-year = Days since last Jan1.
+        if (doy < marjan) {
+          bool const leap = yoe % 4 == 0 && (yoe == 0 || yoe % 100 != 0);
+          docy = janmar + leap + doy;
+        } else {
+          docy = doy - marjan;
         }
+        return (day - docy) * kSecsPerDay;
       }
-      // calculate the day of month offset
-      int32_t dom = tm_struct.tm_mday;
-      return (day - (static_cast<int64_t>(dom - 1) * kSecsPerDay));
-    }
-    case dtQUARTER: {
-      // clear the time
-      int64_t day = (timeval / kSecsPerDay) * kSecsPerDay;
-      if (day < 0) {
-        {
-          day -= kSecsPerDay;
-        }
-      }
-      // calculate the day of month offset
-      int32_t dom = tm_struct.tm_mday;
-      // go to the start of the current month
-      day = day - ((dom - 1) * kSecsPerDay);
-      // find what month we are
-      int32_t mon = tm_struct.tm_mon;
-      // find start of quarter
-      int32_t start_of_quarter = tm_struct.tm_mon / 3 * 3;
-      int32_t year = tm_struct.tm_year + kYearBase;
-      // are we in a leap year
-      int32_t leap_year = 0;
-      // only matters if month is March so save some mod operations
-      if (mon == 2) {
-        if (((year % 400) == 0) || ((year % 4) == 0 && ((year % 100) != 0))) {
-          leap_year = 1;
-        }
-      }
-      // now walk back until at correct quarter start
-      for (; mon > start_of_quarter; mon--) {
-        day = day - (month_lengths[0 + leap_year][mon - 1] * kSecsPerDay);
-      }
-      return day;
-    }
-    case dtYEAR: {
-      // clear the time
-      int64_t day = (timeval / kSecsPerDay) * kSecsPerDay;
-      if (day < 0) {
-        {
-          day -= kSecsPerDay;
-        }
-      }
-      // calculate the day of year offset
-      int32_t doy = tm_struct.tm_yday;
-      return day - ((doy)*kSecsPerDay);
     }
     case dtDECADE: {
-      int32_t year = tm_struct.tm_year + kYearBase;
-      int32_t decade_start = ((year - 1) / 10) * 10 + 1;
-      return create_epoch(decade_start);
+      // Number of days from x00301 to (x+1)00101. Always includes exactly two leap days.
+      constexpr unsigned decmarjan = marjan + 9 * 365 + 2;
+      int64_t const day = floor_div(timeval, kSecsPerDay);
+      unsigned const doe = unsigned_mod(day - kEpochAdjustedDays, kDaysPer400Years);
+      unsigned const yoe = (doe - doe / 1460 + doe / 36524 - (doe == 146096)) / 365;
+      unsigned const decoe = yoe - yoe % 10;  // Decade-of-era
+      // Initialize to days after mar1 of decade, then adjust to after jan1 below.
+      unsigned days_after_decade = doe - (365 * decoe + decoe / 4 - decoe / 100);
+      if (days_after_decade < decmarjan) {
+        bool const leap = decoe % 4 == 0 && (decoe == 0 || decoe % 100 != 0);
+        days_after_decade += janmar + leap;
+      } else {
+        days_after_decade -= decmarjan;
+      }
+      return (day - days_after_decade) * kSecsPerDay;
     }
     case dtCENTURY: {
-      int32_t year = tm_struct.tm_year + kYearBase;
-      int32_t century_start = ((year - 1) / 100) * 100 + 1;
-      return create_epoch(century_start);
+      int64_t const day = floor_div(timeval, kSecsPerDay);
+      unsigned const doe = unsigned_mod(day - kEpochAdjustedDays, kDaysPer400Years);
+      // Day-of-century = Days since last 010101 (Jan 1 1901, 2001, 2101, etc.)
+      unsigned const doc = doe < marjan ? doe + (36525 - marjan) : (doe - marjan) % 36524;
+      return (day - doc) * kSecsPerDay;
     }
     case dtMILLENNIUM: {
-      int32_t year = tm_struct.tm_year + kYearBase;
-      int32_t millennium_start = ((year - 1) / 1000) * 1000 + 1;
-      return create_epoch(millennium_start);
+      constexpr unsigned millennium2001 = 365242;  // Days from Jan 1 2001 to 3001.
+      int64_t const day = floor_div(timeval, kSecsPerDay);
+      // lcm(400, 1000) = 2000 so use 5*400-year eras at a time.
+      unsigned dom = unsigned_mod(day - kEpochAdjustedDays, 5 * kDaysPer400Years);
+      if (dom < marjan) {
+        dom += millennium2001 + 1 - marjan;
+      } else if (dom < marjan + millennium2001) {
+        dom -= marjan;
+      } else {
+        dom -= marjan + millennium2001;
+      }
+      return (day - dom) * kSecsPerDay;
     }
     default:
 #ifdef __CUDACC__
-      return -1;
+      return std::numeric_limits<int64_t>::min();
 #else
       abort();
 #endif
@@ -313,10 +226,10 @@ extern "C" DEVICE int64_t DateTruncateNullable(DatetruncField field,
   return DateTruncate(field, timeval);
 }
 
+// scale is 10^{3,6,9}
 extern "C" DEVICE int64_t DateTruncateHighPrecisionToDate(const int64_t timeval,
                                                           const int64_t scale) {
-  const int64_t retval = (timeval / (scale * kSecsPerDay)) * kSecsPerDay;
-  return retval < 0 ? retval - kSecsPerDay : retval;
+  return floor_div(timeval, scale * kSecsPerDay) * kSecsPerDay;
 }
 
 extern "C" DEVICE int64_t
@@ -329,87 +242,163 @@ DateTruncateHighPrecisionToDateNullable(const int64_t timeval,
   return DateTruncateHighPrecisionToDate(timeval, scale);
 }
 
+namespace {
+
+struct EraTime {
+  int64_t const era;
+  int const yoe;  // year-of-era
+  int const moy;  // month-of-year (March = 0)
+  int const dom;  // day-of-month
+  int const sod;  // second-of-day
+
+  DEVICE static EraTime make(int64_t const time) {
+    int64_t const day = floor_div(time, kSecsPerDay);
+    int64_t const era = floor_div(day - kEpochAdjustedDays, kDaysPer400Years);
+    int const sod = time - day * kSecsPerDay;
+    int const doe = day - kEpochAdjustedDays - era * kDaysPer400Years;
+    int const yoe = (doe - doe / 1460 + doe / 36524 - doe / 146096) / 365;
+    int const doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+    int const moy = (5 * doy + 2) / 153;
+    int const dom = doy - (153 * moy + 2) / 5;
+    return {era, yoe, moy, dom, sod};
+  }
+
+  DEVICE EraTime operator-() const { return {-era, -yoe, -moy, -dom, -sod}; }
+
+  DEVICE EraTime operator-(EraTime const& rhs) {
+    return {era - rhs.era, yoe - rhs.yoe, moy - rhs.moy, dom - rhs.dom, sod - rhs.sod};
+  }
+
+  enum Field { ERA, YOE, MOY, DOM, SOD };
+  // Sign of EraTime starting at field.
+  DEVICE int sign(Field const field) const {
+    switch (field) {
+      case ERA:
+        if (era != 0) {
+          return era < 0 ? -1 : 1;
+        }
+      case YOE:
+        if (yoe != 0) {
+          return yoe < 0 ? -1 : 1;
+        }
+      case MOY:
+        if (moy != 0) {
+          return moy < 0 ? -1 : 1;
+        }
+      case DOM:
+        if (dom != 0) {
+          return dom < 0 ? -1 : 1;
+        }
+      case SOD:
+        if (sod != 0) {
+          return sod < 0 ? -1 : 1;
+        }
+      default:
+        return 0;
+    }
+  }
+
+  DEVICE int64_t count(DatetruncField const field) const {
+    int const sgn = sign(ERA);
+    EraTime const ut = sgn == -1 ? -*this : *this;  // Unsigned time
+    switch (field) {
+      case dtMONTH:
+        return sgn * (12 * (400 * ut.era + ut.yoe) + ut.moy - (ut.sign(DOM) == -1));
+      case dtQUARTER: {
+        int const quarters = ut.moy / 3;
+        int const rem = ut.moy % 3;
+        return sgn * (4 * (400 * ut.era + ut.yoe) + quarters -
+                      (rem < 0 || (rem == 0 && ut.sign(DOM) == -1)));
+      }
+      case dtYEAR:
+        return sgn * (400 * ut.era + ut.yoe - (ut.sign(MOY) == -1));
+      case dtDECADE: {
+        uint64_t const decades = (400 * ut.era + ut.yoe) / 10;
+        unsigned const rem = (400 * ut.era + ut.yoe) % 10;
+        return sgn * (decades - (rem == 0 && ut.sign(MOY) == -1));
+      }
+      case dtCENTURY: {
+        uint64_t const centuries = (400 * ut.era + ut.yoe) / 100;
+        unsigned const rem = (400 * ut.era + ut.yoe) % 100;
+        return sgn * (centuries - (rem == 0 && ut.sign(MOY) == -1));
+      }
+      case dtMILLENNIUM: {
+        uint64_t const millennia = (400 * ut.era + ut.yoe) / 1000;
+        unsigned const rem = (400 * ut.era + ut.yoe) % 1000;
+        return sgn * (millennia - (rem == 0 && ut.sign(MOY) == -1));
+      }
+      default:
+#ifdef __CUDACC__
+        return std::numeric_limits<int64_t>::min();
+#else
+        abort();
+#endif
+    }
+  }
+};
+
+}  // namespace
+
 extern "C" DEVICE int64_t DateDiff(const DatetruncField datepart,
                                    const int64_t startdate,
                                    const int64_t enddate) {
-  int64_t res = enddate - startdate;
   switch (datepart) {
     case dtNANOSECOND:
-      return res * kNanoSecsPerSec;
+      return (enddate - startdate) * kNanoSecsPerSec;
     case dtMICROSECOND:
-      return res * kMicroSecsPerSec;
+      return (enddate - startdate) * kMicroSecsPerSec;
     case dtMILLISECOND:
-      return res * kMilliSecsPerSec;
+      return (enddate - startdate) * kMilliSecsPerSec;
     case dtSECOND:
-      return res;
+      return enddate - startdate;
     case dtMINUTE:
-      return res / kSecsPerMin;
+      return (enddate - startdate) / kSecsPerMin;
     case dtHOUR:
-      return res / kSecPerHour;
+      return (enddate - startdate) / kSecsPerHour;
     case dtQUARTERDAY:
-      return res / kSecsPerQuarterDay;
+      return (enddate - startdate) / (kSecsPerDay / 4);
     case dtDAY:
-      return res / kSecsPerDay;
+      return (enddate - startdate) / kSecsPerDay;
     case dtWEEK:
-      return res / (kSecsPerDay * kDaysPerWeek);
+      return (enddate - startdate) / (7 * kSecsPerDay);
     default:
-      break;
+      return (EraTime::make(enddate) - EraTime::make(startdate)).count(datepart);
   }
-
-  auto future_date = (res > 0);
-  auto end = future_date ? enddate : startdate;
-  auto start = future_date ? startdate : enddate;
-  res = 0;
-  int64_t crt = end;
-  while (crt > start) {
-    const int64_t dt = DateTruncate(datepart, crt);
-    if (dt <= start) {
-      break;
-    }
-    ++res;
-    crt = dt - 1;
-  }
-  return future_date ? res : -res;
 }
 
 extern "C" DEVICE int64_t DateDiffHighPrecision(const DatetruncField datepart,
                                                 const int64_t startdate,
                                                 const int64_t enddate,
-                                                const int32_t adj_dimen,
-                                                const int64_t adj_scale,
-                                                const int64_t sml_scale,
-                                                const int64_t scale) {
-  /* TODO(wamsi): When adj_dimen is 1 i.e. both precisions are same,
-     this code is really not required. We cam direcly do enddate-startdate here.
-     Need to address this in refactoring focussed subsequent PR.*/
-  int64_t res = (adj_dimen > 0) ? (enddate - (startdate * adj_scale))
-                                : ((enddate * adj_scale) - startdate);
+                                                const int32_t start_dim,
+                                                const int32_t end_dim) {
+  // Return pow(10,i). Only valid for i = 0, 3, 6, 9.
+  constexpr int pow10[10]{1, 0, 0, 1000, 0, 0, 1000 * 1000, 0, 0, 1000 * 1000 * 1000};
   switch (datepart) {
     case dtNANOSECOND:
-      // limit of current granularity
-      return res;
-    case dtMICROSECOND: {
-      if (scale == kNanoSecsPerSec) {
-        return res / kMilliSecsPerSec;
-      } else {
-        { return res; }
-      }
-    }
+    case dtMICROSECOND:
     case dtMILLISECOND: {
-      if (scale == kNanoSecsPerSec) {
-        return res / kMicroSecsPerSec;
-      } else if (scale == kMicroSecsPerSec) {
-        return res / kMilliSecsPerSec;
-      } else {
-        { return res; }
-      }
+      static_assert(dtMILLISECOND + 1 == dtMICROSECOND, "Please keep these consecutive.");
+      static_assert(dtMICROSECOND + 1 == dtNANOSECOND, "Please keep these consecutive.");
+      int const target_dim = (datepart - (dtMILLISECOND - 1)) * 3;  // 3, 6, or 9.
+      int const delta_dim = end_dim - start_dim;  // in [-9,9] multiple of 3
+      int const adj_dim = target_dim - (delta_dim < 0 ? start_dim : end_dim);
+      int64_t const numerator = delta_dim < 0 ? enddate * pow10[-delta_dim] - startdate
+                                              : enddate - startdate * pow10[delta_dim];
+      return adj_dim < 0 ? numerator / pow10[-adj_dim] : numerator * pow10[adj_dim];
     }
     default:
-      break;
+      int64_t const end_seconds = floor_div(enddate, pow10[end_dim]);
+      int delta_ns = (enddate - end_seconds * pow10[end_dim]) * pow10[9 - end_dim];
+      int64_t const start_seconds = floor_div(startdate, pow10[start_dim]);
+      delta_ns -= (startdate - start_seconds * pow10[start_dim]) * pow10[9 - start_dim];
+      int64_t const delta_s = end_seconds - start_seconds;
+      // sub-second values must be accounted for when calling DateDiff. Examples:
+      // 2000-02-15 12:00:00.006 to 2000-03-15 12:00:00.005 is 0 months.
+      // 2000-02-15 12:00:00.006 to 2000-03-15 12:00:00.006 is 1 month.
+      int const adj_sec =
+          0 < delta_s && delta_ns < 0 ? -1 : delta_s < 0 && 0 < delta_ns ? 1 : 0;
+      return DateDiff(datepart, start_seconds, end_seconds + adj_sec);
   }
-  const int64_t nstartdate = adj_dimen > 0 ? startdate / sml_scale : startdate / scale;
-  const int64_t nenddate = adj_dimen < 0 ? enddate / sml_scale : enddate / scale;
-  return DateDiff(datepart, nstartdate, nenddate);
 }
 
 extern "C" DEVICE int64_t DateDiffNullable(const DatetruncField datepart,
@@ -425,14 +414,11 @@ extern "C" DEVICE int64_t DateDiffNullable(const DatetruncField datepart,
 extern "C" DEVICE int64_t DateDiffHighPrecisionNullable(const DatetruncField datepart,
                                                         const int64_t startdate,
                                                         const int64_t enddate,
-                                                        const int32_t adj_dimen,
-                                                        const int64_t adj_scale,
-                                                        const int64_t sml_scale,
-                                                        const int64_t scale,
+                                                        const int32_t start_dim,
+                                                        const int32_t end_dim,
                                                         const int64_t null_val) {
   if (startdate == null_val || enddate == null_val) {
     return null_val;
   }
-  return DateDiffHighPrecision(
-      datepart, startdate, enddate, adj_dimen, adj_scale, sml_scale, scale);
+  return DateDiffHighPrecision(datepart, startdate, enddate, start_dim, end_dim);
 }

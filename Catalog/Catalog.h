@@ -130,6 +130,9 @@ class Catalog final {
   void addColumn(const TableDescriptor& td, ColumnDescriptor& cd);
   void dropColumn(const TableDescriptor& td, const ColumnDescriptor& cd);
   void removeChunks(const int table_id);
+  void removeFragmenterForTable(const int table_id);
+
+  const std::map<int, const ColumnDescriptor*> getDictionaryToColumnMapping();
 
   /**
    * @brief Returns a pointer to a const TableDescriptor struct matching
@@ -143,11 +146,13 @@ class Catalog final {
                                              const bool populateFragmenter = true) const;
   const TableDescriptor* getMetadataForTableImpl(int tableId,
                                                  const bool populateFragmenter) const;
-  const TableDescriptor* getMetadataForTable(int tableId) const;
+  const TableDescriptor* getMetadataForTable(int tableId,
+                                             bool populateFragmenter = true) const;
 
   const ColumnDescriptor* getMetadataForColumn(int tableId,
                                                const std::string& colName) const;
   const ColumnDescriptor* getMetadataForColumn(int tableId, int columnId) const;
+  const ColumnDescriptor* getMetadataForColumnUnlocked(int tableId, int columnId) const;
 
   const int getColumnIdBySpi(const int tableId, const size_t spi) const;
   const ColumnDescriptor* getMetadataForColumnBySpi(const int tableId,
@@ -155,10 +160,10 @@ class Catalog final {
 
   const DashboardDescriptor* getMetadataForDashboard(const std::string& userId,
                                                      const std::string& dashName) const;
-  void deleteMetadataForDashboard(const std::string& userId, const std::string& dashName);
 
   const DashboardDescriptor* getMetadataForDashboard(const int32_t dashboard_id) const;
-  void deleteMetadataForDashboard(const int32_t dashboard_id);
+  void deleteMetadataForDashboards(const std::vector<int32_t> ids,
+                                   const UserMetadata& user);
 
   const LinkDescriptor* getMetadataForLink(const std::string& link) const;
   const LinkDescriptor* getMetadataForLink(int linkId) const;
@@ -176,6 +181,14 @@ class Catalog final {
       const bool fetchSystemColumns,
       const bool fetchVirtualColumns,
       const bool fetchPhysicalColumns) const;
+  /**
+   * Same as above, but without first taking a catalog read lock.
+   */
+  std::list<const ColumnDescriptor*> getAllColumnMetadataForTableUnlocked(
+      const int tableId,
+      const bool fetchSystemColumns,
+      const bool fetchVirtualColumns,
+      const bool fetchPhysicalColumns) const;
 
   std::list<const TableDescriptor*> getAllTableMetadata() const;
   std::list<const DashboardDescriptor*> getAllDashboardsMetadata() const;
@@ -185,6 +198,7 @@ class Catalog final {
   const std::string& getBasePath() const { return basePath_; }
 
   const DictDescriptor* getMetadataForDict(int dict_ref, bool loadDict = true) const;
+  const DictDescriptor* getMetadataForDictUnlocked(int dict_ref, bool loadDict) const;
 
   const std::vector<LeafHostInfo>& getStringDictionaryHosts() const;
 
@@ -250,6 +264,24 @@ class Catalog final {
                               bool dump_defaults = false) const;
 
   /**
+   * Gets the DDL statement used to create a foreign table schema.
+   *
+   * @param if_not_exists - flag that indicates whether or not to include
+   * the "IF NOT EXISTS" phrase in the DDL statement
+   * @return string containing DDL statement
+   */
+  static const std::string getForeignTableSchema(bool if_not_exists = false);
+
+  /**
+   * Gets the DDL statement used to create a foreign server schema.
+   *
+   * @param if_not_exists - flag that indicates whether or not to include
+   * the "IF NOT EXISTS" phrase in the DDL statement
+   * @return string containing DDL statement
+   */
+  static const std::string getForeignServerSchema(bool if_not_exists = false);
+
+  /**
    * Creates a new foreign server DB object.
    *
    * @param foreign_server - unique pointer to struct containing foreign server details
@@ -272,15 +304,15 @@ class Catalog final {
       const std::string& server_name) const;
 
   /**
-   * Gets a pointer to a struct containing foreign server details.
-   * Skip in-memory cache of foreign server struct when attempting to fetch foreign server
-   * details. This is mainly used for testing.
+   * Gets a pointer to a struct containing foreign server details fetched from storage.
+   * This is mainly used for testing when asserting that expected catalog data is
+   * persisted.
    *
    * @param server_name - Name of foreign server whose details will be fetched
    * @return pointer to a struct containing foreign server details. nullptr is returned if
    * no foreign server exists with the given name
    */
-  const foreign_storage::ForeignServer* getForeignServerSkipCache(
+  const std::unique_ptr<const foreign_storage::ForeignServer> getForeignServerFromStorage(
       const std::string& server_name);
 
   /**
@@ -344,6 +376,18 @@ class Catalog final {
    */
   void createDefaultServersIfNotExists();
 
+  /**
+   * Validates that a table or view with given name does not already exist.
+   * An exception is thrown if a table or view with given name already exists and
+   * "if_not_exists" is false.
+   *
+   * @param name - Name of table or view whose existence is checked
+   * @param if_not_exists - flag indicating whether or not existence of a table or view
+   * with given name is an exception
+   * @return true if table or view with name does not exist. Otherwise, return false
+   */
+  bool validateNonExistentTableOrView(const std::string& name, const bool if_not_exists);
+
  protected:
   void CheckAndExecuteMigrations();
   void CheckAndExecuteMigrationsPostBuildMaps();
@@ -393,11 +437,11 @@ class Catalog final {
   void doTruncateTable(const TableDescriptor* td);
   void renamePhysicalTable(const TableDescriptor* td, const std::string& newTableName);
   void instantiateFragmenter(TableDescriptor* td) const;
-  void getAllColumnMetadataForTable(const TableDescriptor* td,
-                                    std::list<const ColumnDescriptor*>& colDescs,
-                                    const bool fetchSystemColumns,
-                                    const bool fetchVirtualColumns,
-                                    const bool fetchPhysicalColumns) const;
+  void getAllColumnMetadataForTableImpl(const TableDescriptor* td,
+                                        std::list<const ColumnDescriptor*>& colDescs,
+                                        const bool fetchSystemColumns,
+                                        const bool fetchVirtualColumns,
+                                        const bool fetchPhysicalColumns) const;
   std::string calculateSHA1(const std::string& data);
   std::string generatePhysicalTableName(const std::string& logicalTableName,
                                         const int32_t& shardNumber);

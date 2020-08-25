@@ -31,6 +31,7 @@
 #include "ResultSetGeoSerialization.h"
 #include "RuntimeFunctions.h"
 #include "Shared/SqlTypesLayout.h"
+#include "Shared/geo_compression.h"
 #include "Shared/sqltypes.h"
 #include "TypePunning.h"
 
@@ -144,8 +145,8 @@ std::vector<TargetValue> ResultSet::getRowAt(
         align_to_int64(get_key_bytes_rowwise(query_mem_desc_));
     rowwise_target_ptr = keys_ptr + key_bytes_with_padding;
   }
-  for (size_t target_idx = 0; target_idx < storage_->targets_.size(); ++target_idx) {
-    const auto& agg_info = storage_->targets_[target_idx];
+  for (size_t target_idx = 0; target_idx < storage->targets_.size(); ++target_idx) {
+    const auto& agg_info = storage->targets_[target_idx];
     if (query_mem_desc_.didOutputColumnar()) {
       if (UNLIKELY(!targets_to_skip.empty())) {
         row.push_back(!targets_to_skip[target_idx]
@@ -309,30 +310,30 @@ std::vector<TargetValue> ResultSet::getNextRowUnlocked(
     fetched_so_far_ = 1;
     return {explanation_};
   }
-  while (fetched_so_far_ < drop_first_) {
-    const auto row = getNextRowImpl(translate_strings, decimal_to_double);
-    if (row.empty()) {
-      return row;
-    }
-  }
   return getNextRowImpl(translate_strings, decimal_to_double);
 }
 
 std::vector<TargetValue> ResultSet::getNextRowImpl(const bool translate_strings,
                                                    const bool decimal_to_double) const {
-  auto entry_buff_idx = advanceCursorToNextEntry();
-  if (keep_first_ && fetched_so_far_ >= drop_first_ + keep_first_) {
-    return {};
-  }
+  size_t entry_buff_idx = 0;
+  do {
+    if (keep_first_ && fetched_so_far_ >= drop_first_ + keep_first_) {
+      return {};
+    }
 
-  if (crt_row_buff_idx_ >= entryCount()) {
-    CHECK_EQ(entryCount(), crt_row_buff_idx_);
-    return {};
-  }
+    entry_buff_idx = advanceCursorToNextEntry();
+
+    if (crt_row_buff_idx_ >= entryCount()) {
+      CHECK_EQ(entryCount(), crt_row_buff_idx_);
+      return {};
+    }
+    ++crt_row_buff_idx_;
+    ++fetched_so_far_;
+
+  } while (drop_first_ && fetched_so_far_ <= drop_first_);
+
   auto row = getRowAt(entry_buff_idx, translate_strings, decimal_to_double, false);
   CHECK(!row.empty());
-  ++crt_row_buff_idx_;
-  ++fetched_so_far_;
 
   return row;
 }
@@ -434,6 +435,9 @@ InternalTargetValue ResultSet::RowWiseTargetAccessor::getColumnInternal(
 
   const auto& offsets_for_target = offsets_for_storage_[storage_idx][target_logical_idx];
   const auto& agg_info = result_set_->storage_->targets_[target_logical_idx];
+  const auto& type_info =
+      (agg_info.sql_type.is_column() ? agg_info.sql_type.get_elem_type()
+                                     : agg_info.sql_type);
 
   keys_ptr = get_rowwise_ptr(buff, entry_idx);
   rowwise_target_ptr = keys_ptr + key_bytes_with_padding_;
@@ -449,7 +453,6 @@ InternalTargetValue ResultSet::RowWiseTargetAccessor::getColumnInternal(
       result_set_->lazyReadInt(read_int_from_buff(ptr1, offsets_for_target.compact_sz1),
                                target_logical_idx,
                                storage_lookup_result);
-
   if (agg_info.is_agg && agg_info.agg_kind == kAVG) {
     CHECK(offsets_for_target.ptr2);
     const auto ptr2 =
@@ -457,8 +460,7 @@ InternalTargetValue ResultSet::RowWiseTargetAccessor::getColumnInternal(
     const auto i2 = read_int_from_buff(ptr2, offsets_for_target.compact_sz2);
     return InternalTargetValue(i1, i2);
   } else {
-    if (agg_info.sql_type.is_string() &&
-        agg_info.sql_type.get_compression() == kENCODING_NONE) {
+    if (type_info.is_string() && type_info.get_compression() == kENCODING_NONE) {
       CHECK(!agg_info.is_agg);
       if (!result_set_->lazy_fetch_info_.empty()) {
         CHECK_LT(target_logical_idx, result_set_->lazy_fetch_info_.size());
@@ -487,9 +489,7 @@ InternalTargetValue ResultSet::RowWiseTargetAccessor::getColumnInternal(
       return result_set_->getVarlenOrderEntry(i1, str_len);
     }
     return InternalTargetValue(
-        agg_info.sql_type.is_fp()
-            ? i1
-            : int_resize_cast(i1, agg_info.sql_type.get_logical_size()));
+        type_info.is_fp() ? i1 : int_resize_cast(i1, type_info.get_logical_size()));
   }
 }
 
@@ -562,6 +562,9 @@ InternalTargetValue ResultSet::ColumnWiseTargetAccessor::getColumnInternal(
 
   const auto& offsets_for_target = offsets_for_storage_[storage_idx][target_logical_idx];
   const auto& agg_info = result_set_->storage_->targets_[target_logical_idx];
+  const auto& type_info =
+      (agg_info.sql_type.is_column() ? agg_info.sql_type.get_elem_type()
+                                     : agg_info.sql_type);
   auto ptr1 = offsets_for_target.ptr1;
   if (result_set_->query_mem_desc_.targetGroupbyIndicesSize() > 0) {
     if (result_set_->query_mem_desc_.getTargetGroupbyIndex(target_logical_idx) >= 0) {
@@ -587,8 +590,7 @@ InternalTargetValue ResultSet::ColumnWiseTargetAccessor::getColumnInternal(
     return InternalTargetValue(i1, i2);
   } else {
     // for TEXT ENCODING NONE:
-    if (agg_info.sql_type.is_string() &&
-        agg_info.sql_type.get_compression() == kENCODING_NONE) {
+    if (type_info.is_string() && type_info.get_compression() == kENCODING_NONE) {
       CHECK(!agg_info.is_agg);
       if (!result_set_->lazy_fetch_info_.empty()) {
         CHECK_LT(target_logical_idx, result_set_->lazy_fetch_info_.size());
@@ -618,9 +620,7 @@ InternalTargetValue ResultSet::ColumnWiseTargetAccessor::getColumnInternal(
       return result_set_->getVarlenOrderEntry(i1, i2);
     }
     return InternalTargetValue(
-        agg_info.sql_type.is_fp()
-            ? i1
-            : int_resize_cast(i1, agg_info.sql_type.get_logical_size()));
+        type_info.is_fp() ? i1 : int_resize_cast(i1, type_info.get_logical_size()));
   }
 }
 
@@ -763,7 +763,9 @@ int64_t lazy_decode(const ColumnLazyFetchInfo& col_lazy_fetch,
                     const int8_t* byte_stream,
                     const int64_t pos) {
   CHECK(col_lazy_fetch.is_lazily_fetched);
-  const auto& type_info = col_lazy_fetch.type;
+  const auto& type_info =
+      (col_lazy_fetch.type.is_column() ? col_lazy_fetch.type.get_elem_type()
+                                       : col_lazy_fetch.type);
   if (type_info.is_fp()) {
     if (type_info.get_type() == kFLOAT) {
       double fval = fixed_width_float_decode_noinline(byte_stream, pos);
@@ -800,8 +802,7 @@ int64_t lazy_decode(const ColumnLazyFetchInfo& col_lazy_fetch,
   if (type_info.get_compression() != kENCODING_NONE &&
       type_info.get_compression() != kENCODING_DATE_IN_DAYS) {
     CHECK(type_info.get_compression() == kENCODING_FIXED ||
-          type_info.get_compression() == kENCODING_DICT ||
-          type_info.get_compression() == kENCODING_PACKED_PIXEL_COORD);
+          type_info.get_compression() == kENCODING_DICT);
     auto encoding = type_info.get_compression();
     if (encoding == kENCODING_FIXED) {
       encoding = kENCODING_NONE;
@@ -1787,8 +1788,10 @@ TargetValue ResultSet::makeTargetValue(const int8_t* ptr,
                                        const bool decimal_to_double,
                                        const size_t entry_buff_idx) const {
   auto actual_compact_sz = compact_sz;
-  if (target_info.sql_type.get_type() == kFLOAT &&
-      !query_mem_desc_.forceFourByteFloat()) {
+  const auto& type_info =
+      (target_info.sql_type.is_column() ? target_info.sql_type.get_elem_type()
+                                        : target_info.sql_type);
+  if (type_info.get_type() == kFLOAT && !query_mem_desc_.forceFourByteFloat()) {
     if (query_mem_desc_.isLogicalSizedColumnsAllowed()) {
       actual_compact_sz = sizeof(float);
     } else {
@@ -1809,9 +1812,8 @@ TargetValue ResultSet::makeTargetValue(const int8_t* ptr,
   }
 
   // String dictionary keys are read as 32-bit values regardless of encoding
-  if (target_info.sql_type.is_string() &&
-      target_info.sql_type.get_compression() == kENCODING_DICT &&
-      target_info.sql_type.get_comp_param()) {
+  if (type_info.is_string() && type_info.get_compression() == kENCODING_DICT &&
+      type_info.get_comp_param()) {
     actual_compact_sz = sizeof(int32_t);
   }
 
@@ -1864,7 +1866,7 @@ TargetValue ResultSet::makeTargetValue(const int8_t* ptr,
     // right type instead
     if (inline_int_null_val(chosen_type) ==
         int_resize_cast(ival, chosen_type.get_logical_size())) {
-      return inline_int_null_val(target_info.sql_type);
+      return inline_int_null_val(type_info);
     }
     return ival;
   }
@@ -2223,15 +2225,16 @@ bool ResultSetStorage::isEmptyEntry(const size_t entry_idx) const {
 bool ResultSet::isNull(const SQLTypeInfo& ti,
                        const InternalTargetValue& val,
                        const bool float_argument_input) {
-  if (ti.get_notnull()) {
+  const auto& ti_ = (ti.is_column() ? ti.get_elem_type() : ti);
+  if (ti_.get_notnull()) {
     return false;
   }
   if (val.isInt()) {
-    return val.i1 == null_val_bit_pattern(ti, float_argument_input);
+    return val.i1 == null_val_bit_pattern(ti_, float_argument_input);
   }
   if (val.isPair()) {
     return !val.i2 ||
-           pair_to_double({val.i1, val.i2}, ti, float_argument_input) == NULL_DOUBLE;
+           pair_to_double({val.i1, val.i2}, ti_, float_argument_input) == NULL_DOUBLE;
   }
   if (val.isStr()) {
     return !val.i1;

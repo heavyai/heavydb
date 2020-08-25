@@ -120,6 +120,9 @@ DataMgr::SystemMemoryUsage DataMgr::getSystemMemoryUsage() const {
   usage.regular = (resident - shared) * page_size;
   usage.shared = shared * page_size;
 
+  ProcBuddyinfoParser bi;
+  usage.frag = bi.getFragmentationPercent();
+
 #else
 
   usage.total = 0;
@@ -128,6 +131,7 @@ DataMgr::SystemMemoryUsage DataMgr::getSystemMemoryUsage() const {
   usage.vtotal = 0;
   usage.regular = 0;
   usage.shared = 0;
+  usage.frag = 0;
 
 #endif
 
@@ -155,6 +159,7 @@ size_t DataMgr::getTotalSystemMemory() {
 
 void DataMgr::populateMgrs(const SystemParameters& system_parameters,
                            const size_t userSpecifiedNumReaderThreads) {
+  // no need for locking, as this is only called in the constructor
   bufferMgrs_.resize(2);
   if (g_enable_fsi) {
     bufferMgrs_[0].push_back(
@@ -164,6 +169,7 @@ void DataMgr::populateMgrs(const SystemParameters& system_parameters,
         new GlobalFileMgr(0, dataDir_, userSpecifiedNumReaderThreads));
   }
   levelSizes_.push_back(1);
+  size_t page_size{512};
   size_t cpuBufferSize = system_parameters.cpu_buffer_mem_bytes;
   if (cpuBufferSize == 0) {  // if size is not specified
     const auto total_system_memory = getTotalSystemMemory();
@@ -172,17 +178,25 @@ void DataMgr::populateMgrs(const SystemParameters& system_parameters,
     cpuBufferSize = total_system_memory *
                     0.8;  // should get free memory instead of this ugly heuristic
   }
-  size_t cpuSlabSize = std::min(static_cast<size_t>(1L << 32), cpuBufferSize);
-  // cpuSlabSize -= cpuSlabSize % 512 == 0 ? 0 : 512 - (cpuSlabSize % 512);
-  cpuSlabSize = (cpuSlabSize / 512) * 512;
-  LOG(INFO) << "cpuSlabSize is " << (float)cpuSlabSize / (1024 * 1024) << "M";
-  LOG(INFO) << "memory pool for CPU is " << (float)cpuBufferSize / (1024 * 1024) << "M";
+  size_t minCpuSlabSize = std::min(system_parameters.min_cpu_slab_size, cpuBufferSize);
+  minCpuSlabSize = (minCpuSlabSize / page_size) * page_size;
+  size_t maxCpuSlabSize = std::min(system_parameters.max_cpu_slab_size, cpuBufferSize);
+  maxCpuSlabSize = (maxCpuSlabSize / page_size) * page_size;
+  LOG(INFO) << "Min CPU Slab Size is " << (float)minCpuSlabSize / (1024 * 1024) << "MB";
+  LOG(INFO) << "Max CPU Slab Size is " << (float)maxCpuSlabSize / (1024 * 1024) << "MB";
+  LOG(INFO) << "Max memory pool size for CPU is " << (float)cpuBufferSize / (1024 * 1024)
+            << "MB";
   if (hasGpus_) {
-    LOG(INFO) << "reserved GPU memory is " << (float)reservedGpuMem_ / (1024 * 1024)
-              << "M includes render buffer allocation";
+    LOG(INFO) << "Reserved GPU memory is " << (float)reservedGpuMem_ / (1024 * 1024)
+              << "MB includes render buffer allocation";
     bufferMgrs_.resize(3);
-    bufferMgrs_[1].push_back(new CpuBufferMgr(
-        0, cpuBufferSize, cudaMgr_.get(), cpuSlabSize, 512, bufferMgrs_[0][0]));
+    bufferMgrs_[1].push_back(new CpuBufferMgr(0,
+                                              cpuBufferSize,
+                                              cudaMgr_.get(),
+                                              minCpuSlabSize,
+                                              maxCpuSlabSize,
+                                              page_size,
+                                              bufferMgrs_[0][0]));
     levelSizes_.push_back(1);
     int numGpus = cudaMgr_->getDeviceCount();
     for (int gpuNum = 0; gpuNum < numGpus; ++gpuNum) {
@@ -190,23 +204,42 @@ void DataMgr::populateMgrs(const SystemParameters& system_parameters,
           system_parameters.gpu_buffer_mem_bytes != 0
               ? system_parameters.gpu_buffer_mem_bytes
               : (cudaMgr_->getDeviceProperties(gpuNum)->globalMem) - (reservedGpuMem_);
-      size_t gpuSlabSize = std::min(static_cast<size_t>(1L << 31), gpuMaxMemSize);
-      gpuSlabSize -= gpuSlabSize % 512 == 0 ? 0 : 512 - (gpuSlabSize % 512);
-      LOG(INFO) << "gpuSlabSize is " << (float)gpuSlabSize / (1024 * 1024) << "M";
-      LOG(INFO) << "memory pool for GPU " << gpuNum << " is "
-                << (float)gpuMaxMemSize / (1024 * 1024) << "M";
-      bufferMgrs_[2].push_back(new GpuCudaBufferMgr(
-          gpuNum, gpuMaxMemSize, cudaMgr_.get(), gpuSlabSize, 512, bufferMgrs_[1][0]));
+      size_t minGpuSlabSize =
+          std::min(system_parameters.min_gpu_slab_size, gpuMaxMemSize);
+      minGpuSlabSize = (minGpuSlabSize / page_size) * page_size;
+      size_t maxGpuSlabSize =
+          std::min(system_parameters.max_gpu_slab_size, gpuMaxMemSize);
+      maxGpuSlabSize = (maxGpuSlabSize / page_size) * page_size;
+      LOG(INFO) << "Min GPU Slab size for GPU " << gpuNum << " is "
+                << (float)minGpuSlabSize / (1024 * 1024) << "MB";
+      LOG(INFO) << "Max GPU Slab size for GPU " << gpuNum << " is "
+                << (float)maxGpuSlabSize / (1024 * 1024) << "MB";
+      LOG(INFO) << "Max memory pool size for GPU " << gpuNum << " is "
+                << (float)gpuMaxMemSize / (1024 * 1024) << "MB";
+      bufferMgrs_[2].push_back(new GpuCudaBufferMgr(gpuNum,
+                                                    gpuMaxMemSize,
+                                                    cudaMgr_.get(),
+                                                    minGpuSlabSize,
+                                                    maxGpuSlabSize,
+                                                    page_size,
+                                                    bufferMgrs_[1][0]));
     }
     levelSizes_.push_back(numGpus);
   } else {
-    bufferMgrs_[1].push_back(new CpuBufferMgr(
-        0, cpuBufferSize, cudaMgr_.get(), cpuSlabSize, 512, bufferMgrs_[0][0]));
+    bufferMgrs_[1].push_back(new CpuBufferMgr(0,
+                                              cpuBufferSize,
+                                              cudaMgr_.get(),
+                                              minCpuSlabSize,
+                                              maxCpuSlabSize,
+                                              page_size,
+                                              bufferMgrs_[0][0]));
     levelSizes_.push_back(1);
   }
 }
 
 void DataMgr::convertDB(const std::string basePath) {
+  // no need for locking, as this is only called in the constructor
+
   /* check that "mapd_data" directory exists and it's empty */
   std::string mapdDataPath(basePath + "/../mapd_data/");
   boost::filesystem::path path(mapdDataPath);
@@ -256,116 +289,71 @@ void DataMgr::createTopLevelMetadata()
 }
 
 std::vector<MemoryInfo> DataMgr::getMemoryInfo(const MemoryLevel memLevel) {
-  // TODO (vraj) : Reduce the duplicate code
-  std::vector<MemoryInfo> memInfo;
+  std::lock_guard<std::mutex> buffer_lock(buffer_access_mutex_);
+
+  std::vector<MemoryInfo> mem_info;
   if (memLevel == MemoryLevel::CPU_LEVEL) {
-    CpuBufferMgr* cpuBuffer =
+    CpuBufferMgr* cpu_buffer =
         dynamic_cast<CpuBufferMgr*>(bufferMgrs_[MemoryLevel::CPU_LEVEL][0]);
+    CHECK(cpu_buffer);
     MemoryInfo mi;
 
-    mi.pageSize = cpuBuffer->getPageSize();
-    mi.maxNumPages = cpuBuffer->getMaxSize() / mi.pageSize;
-    mi.isAllocationCapped = cpuBuffer->isAllocationCapped();
-    mi.numPageAllocated = cpuBuffer->getAllocated() / mi.pageSize;
+    mi.pageSize = cpu_buffer->getPageSize();
+    mi.maxNumPages = cpu_buffer->getMaxSize() / mi.pageSize;
+    mi.isAllocationCapped = cpu_buffer->isAllocationCapped();
+    mi.numPageAllocated = cpu_buffer->getAllocated() / mi.pageSize;
 
-    const std::vector<BufferList> slab_segments = cpuBuffer->getSlabSegments();
-    size_t numSlabs = slab_segments.size();
-
-    for (size_t slabNum = 0; slabNum != numSlabs; ++slabNum) {
-      for (auto segIt : slab_segments[slabNum]) {
+    const auto& slab_segments = cpu_buffer->getSlabSegments();
+    for (size_t slab_num = 0; slab_num < slab_segments.size(); ++slab_num) {
+      for (auto segment : slab_segments[slab_num]) {
         MemoryData md;
-        md.slabNum = slabNum;
-        md.startPage = segIt.start_page;
-        md.numPages = segIt.num_pages;
-        md.touch = segIt.last_touched;
-        md.memStatus = segIt.mem_status;
+        md.slabNum = slab_num;
+        md.startPage = segment.start_page;
+        md.numPages = segment.num_pages;
+        md.touch = segment.last_touched;
+        md.memStatus = segment.mem_status;
         md.chunk_key.insert(
-            md.chunk_key.end(), segIt.chunk_key.begin(), segIt.chunk_key.end());
+            md.chunk_key.end(), segment.chunk_key.begin(), segment.chunk_key.end());
         mi.nodeMemoryData.push_back(md);
       }
     }
-    memInfo.push_back(mi);
+    mem_info.push_back(mi);
   } else if (hasGpus_) {
     int numGpus = cudaMgr_->getDeviceCount();
     for (int gpuNum = 0; gpuNum < numGpus; ++gpuNum) {
-      GpuCudaBufferMgr* gpuBuffer =
+      GpuCudaBufferMgr* gpu_buffer =
           dynamic_cast<GpuCudaBufferMgr*>(bufferMgrs_[MemoryLevel::GPU_LEVEL][gpuNum]);
+      CHECK(gpu_buffer);
       MemoryInfo mi;
 
-      mi.pageSize = gpuBuffer->getPageSize();
-      mi.maxNumPages = gpuBuffer->getMaxSize() / mi.pageSize;
-      mi.isAllocationCapped = gpuBuffer->isAllocationCapped();
-      mi.numPageAllocated = gpuBuffer->getAllocated() / mi.pageSize;
-      const std::vector<BufferList> slab_segments = gpuBuffer->getSlabSegments();
-      size_t numSlabs = slab_segments.size();
+      mi.pageSize = gpu_buffer->getPageSize();
+      mi.maxNumPages = gpu_buffer->getMaxSize() / mi.pageSize;
+      mi.isAllocationCapped = gpu_buffer->isAllocationCapped();
+      mi.numPageAllocated = gpu_buffer->getAllocated() / mi.pageSize;
 
-      for (size_t slabNum = 0; slabNum != numSlabs; ++slabNum) {
-        for (auto segIt : slab_segments[slabNum]) {
+      const auto& slab_segments = gpu_buffer->getSlabSegments();
+      for (size_t slab_num = 0; slab_num < slab_segments.size(); ++slab_num) {
+        for (auto segment : slab_segments[slab_num]) {
           MemoryData md;
-          md.slabNum = slabNum;
-          md.startPage = segIt.start_page;
-          md.numPages = segIt.num_pages;
-          md.touch = segIt.last_touched;
+          md.slabNum = slab_num;
+          md.startPage = segment.start_page;
+          md.numPages = segment.num_pages;
+          md.touch = segment.last_touched;
           md.chunk_key.insert(
-              md.chunk_key.end(), segIt.chunk_key.begin(), segIt.chunk_key.end());
-          md.memStatus = segIt.mem_status;
+              md.chunk_key.end(), segment.chunk_key.begin(), segment.chunk_key.end());
+          md.memStatus = segment.mem_status;
           mi.nodeMemoryData.push_back(md);
         }
       }
-      memInfo.push_back(mi);
+      mem_info.push_back(mi);
     }
   }
-  return memInfo;
+  return mem_info;
 }
-
-/*
-std::vector<MemoryData> DataMgr::getGpuMemory() {
-  std::vector<MemoryData> memInfo;
-  if (hasGpus_) {
-    int numGpus = cudaMgr_->getDeviceCount();
-    for (int gpuNum = 0; gpuNum < numGpus; ++gpuNum) {
-      gpuMemorySummary gms;
-      gms.max = bufferMgrs_[MemoryLevel::GPU_LEVEL][gpuNum]->getMaxSize();
-      gms.inUse = bufferMgrs_[MemoryLevel::GPU_LEVEL][gpuNum]->getInUseSize();
-      gms.allocated = bufferMgrs_[MemoryLevel::GPU_LEVEL][gpuNum]->getAllocated();
-      gms.isAllocationCapped =
-bufferMgrs_[MemoryLevel::GPU_LEVEL][gpuNum]->isAllocationCapped(); memInfo.push_back(gms);
-    }
-  }
-  return memInfo;
-}
-
-*/
-//  std::ostringstream tss;
-//  size_t mb = 1024 * 1024;
-//  tss << std::endl;
-//  // tss << "CPU RAM TOTAL AVAILABLE   : "  std::fixed << setw(9) << setprecision(2) <<
-//  // ((float)bufferMgrs_[MemoryLevel::CPU_LEVEL][0]->getMaxSize() / mb)
-//  //    << std::endl;
-//  tss << "CPU RAM IN BUFFER USE     : " << std::fixed << setw(9) << setprecision(2)
-//      << ((float)bufferMgrs_[MemoryLevel::CPU_LEVEL][0]->getInUseSize() / mb) << " MB"
-//      << std::endl;
-//  if (hasGpus_) {
-//    int numGpus = cudaMgr_->getDeviceCount();
-//    for (int gpuNum = 0; gpuNum < numGpus; ++gpuNum) {
-//      tss << "GPU" << setfill(' ') << setw(2) << gpuNum << " RAM TOTAL AVAILABLE : " <<
-//      std::fixed << setw(9)
-//          << setprecision(2) <<
-//          ((float)bufferMgrs_[MemoryLevel::GPU_LEVEL][gpuNum]->getMaxSize() / mb) << "
-//          MB"
-//          << std::endl;
-//      tss << "GPU" << setfill(' ') << setw(2) << gpuNum << " RAM IN BUFFER USE   : " <<
-//      std::fixed << setw(9)
-//          << setprecision(2) <<
-//          ((float)bufferMgrs_[MemoryLevel::GPU_LEVEL][gpuNum]->getInUseSize() / mb) << "
-//          MB"
-//          << std::endl;
-//    }
-//  }
-//  return tss.str();
-//}
 
 std::string DataMgr::dumpLevel(const MemoryLevel memLevel) {
+  std::lock_guard<std::mutex> buffer_lock(buffer_access_mutex_);
+
   // if gpu we need to iterate through all the buffermanagers for each card
   if (memLevel == MemoryLevel::GPU_LEVEL) {
     int numGpus = cudaMgr_->getDeviceCount();
@@ -380,6 +368,8 @@ std::string DataMgr::dumpLevel(const MemoryLevel memLevel) {
 }
 
 void DataMgr::clearMemory(const MemoryLevel memLevel) {
+  std::lock_guard<std::mutex> buffer_lock(buffer_access_mutex_);
+
   // if gpu we need to iterate through all the buffermanagers for each card
   if (memLevel == MemoryLevel::GPU_LEVEL) {
     if (cudaMgr_) {
@@ -399,12 +389,14 @@ void DataMgr::clearMemory(const MemoryLevel memLevel) {
 bool DataMgr::isBufferOnDevice(const ChunkKey& key,
                                const MemoryLevel memLevel,
                                const int deviceId) {
+  std::lock_guard<std::mutex> buffer_lock(buffer_access_mutex_);
   return bufferMgrs_[memLevel][deviceId]->isBufferOnDevice(key);
 }
 
 void DataMgr::getChunkMetadataVec(ChunkMetadataVector& chunkMetadataVec) {
   // Can we always assume this will just be at the disklevel bc we just
   // started?
+  // access to this object is locked by the file mgr
   bufferMgrs_[0][0]->getChunkMetadataVec(chunkMetadataVec);
 }
 
@@ -417,6 +409,7 @@ AbstractBuffer* DataMgr::createChunkBuffer(const ChunkKey& key,
                                            const MemoryLevel memoryLevel,
                                            const int deviceId,
                                            const size_t page_size) {
+  std::lock_guard<std::mutex> buffer_lock(buffer_access_mutex_);
   int level = static_cast<int>(memoryLevel);
   return bufferMgrs_[level][deviceId]->createBuffer(key, page_size);
 }
@@ -425,6 +418,7 @@ AbstractBuffer* DataMgr::getChunkBuffer(const ChunkKey& key,
                                         const MemoryLevel memoryLevel,
                                         const int deviceId,
                                         const size_t numBytes) {
+  std::lock_guard<std::mutex> buffer_lock(buffer_access_mutex_);
   const auto level = static_cast<size_t>(memoryLevel);
   CHECK_LT(level, levelSizes_.size());     // make sure we have a legit buffermgr
   CHECK_LT(deviceId, levelSizes_[level]);  // make sure we have a legit buffermgr
@@ -432,6 +426,8 @@ AbstractBuffer* DataMgr::getChunkBuffer(const ChunkKey& key,
 }
 
 void DataMgr::deleteChunksWithPrefix(const ChunkKey& keyPrefix) {
+  std::lock_guard<std::mutex> buffer_lock(buffer_access_mutex_);
+
   int numLevels = bufferMgrs_.size();
   for (int level = numLevels - 1; level >= 0; --level) {
     for (int device = 0; device < levelSizes_[level]; ++device) {
@@ -443,6 +439,8 @@ void DataMgr::deleteChunksWithPrefix(const ChunkKey& keyPrefix) {
 // only deletes the chunks at the given memory level
 void DataMgr::deleteChunksWithPrefix(const ChunkKey& keyPrefix,
                                      const MemoryLevel memLevel) {
+  std::lock_guard<std::mutex> buffer_lock(buffer_access_mutex_);
+
   if (bufferMgrs_.size() <= memLevel) {
     return;
   }
@@ -454,19 +452,16 @@ void DataMgr::deleteChunksWithPrefix(const ChunkKey& keyPrefix,
 AbstractBuffer* DataMgr::alloc(const MemoryLevel memoryLevel,
                                const int deviceId,
                                const size_t numBytes) {
+  std::lock_guard<std::mutex> buffer_lock(buffer_access_mutex_);
   const auto level = static_cast<int>(memoryLevel);
   CHECK_LT(deviceId, levelSizes_[level]);
   return bufferMgrs_[level][deviceId]->alloc(numBytes);
 }
 
 void DataMgr::free(AbstractBuffer* buffer) {
+  std::lock_guard<std::mutex> buffer_lock(buffer_access_mutex_);
   int level = static_cast<int>(buffer->getType());
   bufferMgrs_[level][buffer->getDeviceId()]->free(buffer);
-}
-
-void DataMgr::freeAllBuffers() {
-  ChunkKey keyPrefix = {-1};
-  deleteChunksWithPrefix(keyPrefix);
 }
 
 void DataMgr::copy(AbstractBuffer* destBuffer, AbstractBuffer* srcBuffer) {
@@ -484,6 +479,7 @@ void DataMgr::copy(AbstractBuffer* destBuffer, AbstractBuffer* srcBuffer) {
 //} /
 
 void DataMgr::checkpoint(const int db_id, const int tb_id) {
+  // TODO(adb): do we need a buffer mgr lock here?
   for (auto levelIt = bufferMgrs_.rbegin(); levelIt != bufferMgrs_.rend(); ++levelIt) {
     // use reverse iterator so we start at GPU level, then CPU then DISK
     for (auto deviceIt = levelIt->begin(); deviceIt != levelIt->end(); ++deviceIt) {
@@ -493,6 +489,7 @@ void DataMgr::checkpoint(const int db_id, const int tb_id) {
 }
 
 void DataMgr::checkpoint() {
+  // TODO(adb): SAA
   for (auto levelIt = bufferMgrs_.rbegin(); levelIt != bufferMgrs_.rend(); ++levelIt) {
     // use reverse iterator so we start at GPU level, then CPU then DISK
     for (auto deviceIt = levelIt->begin(); deviceIt != levelIt->end(); ++deviceIt) {
@@ -502,6 +499,7 @@ void DataMgr::checkpoint() {
 }
 
 void DataMgr::removeTableRelatedDS(const int db_id, const int tb_id) {
+  std::lock_guard<std::mutex> buffer_lock(buffer_access_mutex_);
   bufferMgrs_[0][0]->removeTableRelatedDS(db_id, tb_id);
 }
 
@@ -538,14 +536,25 @@ GlobalFileMgr* DataMgr::getGlobalFileMgr() const {
 }
 
 std::ostream& operator<<(std::ostream& os, const DataMgr::SystemMemoryUsage& mem_info) {
-  os << "CPU Memory Info:";
-  os << "\n\tTotal: " << mem_info.total / (1024. * 1024.) << " MB";
-  os << "\n\tFree: " << mem_info.free / (1024. * 1024.) << " MB";
-  os << "\n\tProcess: " << mem_info.resident / (1024. * 1024.) << " MB";
-  os << "\n\tVirtual: " << mem_info.vtotal / (1024. * 1024.) << " MB";
-  os << "\n\tProcess + Swap: " << mem_info.regular / (1024. * 1024.) << " MB";
-  os << "\n\tProcess Shared: " << mem_info.shared / (1024. * 1024.) << " MB";
+  os << "jsonlog ";
+  os << "{";
+  os << " \"name\": \"CPU Memory Info\",";
+  os << " \"TotalMB\": " << mem_info.total / (1024. * 1024.) << ",";
+  os << " \"FreeMB\": " << mem_info.free / (1024. * 1024.) << ",";
+  os << " \"ProcessMB\": " << mem_info.resident / (1024. * 1024.) << ",";
+  os << " \"VirtualMB\": " << mem_info.vtotal / (1024. * 1024.) << ",";
+  os << " \"ProcessPlusSwapMB\": " << mem_info.regular / (1024. * 1024.) << ",";
+  os << " \"ProcessSharedMB\": " << mem_info.shared / (1024. * 1024.) << ",";
+  os << " \"FragmentationPercent\": " << mem_info.frag;
+  os << " }";
   return os;
+}
+
+foreign_storage::ForeignStorageMgr* DataMgr::getForeignStorageMgr() const {
+  if (g_enable_fsi) {
+    return dynamic_cast<PersistentStorageMgr*>(bufferMgrs_[0][0])->getForeignStorageMgr();
+  }
+  return nullptr;
 }
 
 }  // namespace Data_Namespace

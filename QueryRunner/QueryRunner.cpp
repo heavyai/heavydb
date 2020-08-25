@@ -19,11 +19,12 @@
 #include "Calcite/Calcite.h"
 #include "Catalog/Catalog.h"
 #include "DistributedLoader.h"
-#include "Import/CopyParams.h"
+#include "ImportExport/CopyParams.h"
 #include "Parser/ParserWrapper.h"
 #include "Parser/parser.h"
 #include "QueryEngine/CalciteAdapter.h"
 #include "QueryEngine/ExtensionFunctionsWhitelist.h"
+#include "QueryEngine/QueryDispatchQueue.h"
 #include "QueryEngine/RelAlgExecutor.h"
 #include "QueryEngine/TableFunctions/TableFunctionsFactory.h"
 #include "Shared/Logger.h"
@@ -46,6 +47,7 @@ extern bool g_enable_filter_push_down;
 double g_gpu_mem_limit_percent{0.9};
 
 extern bool g_serialize_temp_tables;
+bool g_enable_calcite_view_optimize{true};
 std::mutex calcite_lock;
 
 using namespace Catalog_Namespace;
@@ -127,7 +129,8 @@ QueryRunner::QueryRunner(const char* db_path,
                          const size_t max_gpu_mem,
                          const int reserved_gpu_mem,
                          const bool create_user,
-                         const bool create_db) {
+                         const bool create_db)
+    : dispatch_queue_(std::make_unique<QueryDispatchQueue>(1)) {
   g_serialize_temp_tables = true;
 
   boost::filesystem::path base_path{db_path};
@@ -141,7 +144,7 @@ QueryRunner::QueryRunner(const char* db_path,
   register_signal_handler();
   logger::set_once_fatal_func(&calcite_shutdown_handler);
   g_calcite =
-      std::make_shared<Calcite>(-1, CALCITEPORT, db_path, 1024, 5000, udf_filename);
+      std::make_shared<Calcite>(-1, CALCITEPORT, db_path, 1024, 5000, true, udf_filename);
   ExtensionFunctionsWhitelist::add(g_calcite->getExtensionFunctionWhitelist());
   if (!udf_filename.empty()) {
     ExtensionFunctionsWhitelist::addUdfs(g_calcite->getUserDefinedFunctionWhitelist());
@@ -191,8 +194,13 @@ QueryRunner::QueryRunner(const char* db_path,
       cat, user, ExecutorDeviceType::GPU, "");
 }
 
+void QueryRunner::resizeDispatchQueue(const size_t num_executors) {
+  dispatch_queue_ = std::make_unique<QueryDispatchQueue>(num_executors);
+}
+
 QueryRunner::QueryRunner(std::unique_ptr<Catalog_Namespace::SessionInfo> session)
-    : session_info_(std::move(session)) {}
+    : session_info_(std::move(session))
+    , dispatch_queue_(std::make_unique<QueryDispatchQueue>(1)) {}
 
 std::shared_ptr<Catalog_Namespace::Catalog> QueryRunner::getCatalog() const {
   CHECK(session_info_);
@@ -230,6 +238,27 @@ std::string apply_copy_to_shim(const std::string& query_str) {
     });
   }
   return result;
+}
+
+QueryHint QueryRunner::getParsedQueryHintofQuery(const std::string& query_str) {
+  CHECK(session_info_);
+  CHECK(!Catalog_Namespace::SysCatalog::instance().isAggregator());
+  auto query_state = create_query_state(session_info_, query_str);
+  const auto& cat = session_info_->getCatalog();
+  auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID);
+  auto calcite_mgr = cat.getCalciteMgr();
+  const auto query_ra = calcite_mgr
+                            ->process(query_state->createQueryStateProxy(),
+                                      pg_shim(query_str),
+                                      {},
+                                      true,
+                                      false,
+                                      false,
+                                      true)
+                            .plan_result;
+  auto ra_executor = RelAlgExecutor(executor.get(), cat, query_ra);
+  const auto& query_hints = ra_executor.getParsedQueryHints();
+  return query_hints;
 }
 
 void QueryRunner::runDDLStatement(const std::string& stmt_str_in) {
@@ -273,7 +302,7 @@ std::shared_ptr<ResultSet> QueryRunner::runSQL(const std::string& query_str,
     const auto execution_result =
         runSelectQuery(query_str, device_type, hoist_literals, allow_loop_joins);
     VLOG(1) << session_info_->getCatalog().getDataMgr().getSystemMemoryUsage();
-    return execution_result.getRows();
+    return execution_result->getRows();
   }
 
   auto query_state = create_query_state(session_info_, query_str);
@@ -296,8 +325,7 @@ std::shared_ptr<Executor> QueryRunner::getExecutor() const {
   CHECK(!Catalog_Namespace::SysCatalog::instance().isAggregator());
   auto query_state = create_query_state(session_info_, "");
   auto stdlog = STDLOG(query_state);
-  const auto& cat = query_state->getConstSessionInfo()->getCatalog();
-  auto executor = Executor::getExecutor(cat.getCurrentDB().dbId);
+  auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID);
   return executor;
 }
 
@@ -393,15 +421,15 @@ void QueryRunner::runImport(Parser::CopyTableStmt* import_stmt) {
   import_stmt->execute(*session_info_);
 }
 
-std::unique_ptr<Importer_NS::Loader> QueryRunner::getLoader(
+std::unique_ptr<import_export::Loader> QueryRunner::getLoader(
     const TableDescriptor* td) const {
   auto cat = getCatalog();
-  return std::make_unique<Importer_NS::Loader>(*cat, td);
+  return std::make_unique<import_export::Loader>(*cat, td);
 }
 
 namespace {
 
-ExecutionResult run_select_query_with_filter_push_down(
+std::shared_ptr<ExecutionResult> run_select_query_with_filter_push_down(
     QueryStateProxy query_state_proxy,
     const ExecutorDeviceType device_type,
     const bool hoist_literals,
@@ -410,7 +438,7 @@ ExecutionResult run_select_query_with_filter_push_down(
     const bool with_filter_push_down) {
   auto const& query_state = query_state_proxy.getQueryState();
   const auto& cat = query_state.getConstSessionInfo()->getCatalog();
-  auto executor = Executor::getExecutor(cat.getCurrentDB().dbId);
+  auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID);
   CompilationOptions co = CompilationOptions::defaults(device_type);
   co.opt_level = ExecutorOptLevel::LoopStrengthReduction;
 
@@ -438,9 +466,14 @@ ExecutionResult run_select_query_with_filter_push_down(
                                       false,
                                       true)
                             .plan_result;
-  auto result = RelAlgExecutor(executor.get(), cat, query_ra)
-                    .executeRelAlgQuery(co, eo, false, nullptr);
-  const auto& filter_push_down_requests = result.getPushedDownFilterInfo();
+  auto ra_executor = RelAlgExecutor(executor.get(), cat, query_ra);
+  const auto& query_hints = ra_executor.getParsedQueryHints();
+  if (query_hints.cpu_mode) {
+    co.device_type = ExecutorDeviceType::CPU;
+  }
+  auto result = std::make_shared<ExecutionResult>(
+      ra_executor.executeRelAlgQuery(co, eo, false, nullptr));
+  const auto& filter_push_down_requests = result->getPushedDownFilterInfo();
   if (!filter_push_down_requests.empty()) {
     std::vector<TFilterPushDownInfo> filter_push_down_info;
     for (const auto& req : filter_push_down_requests) {
@@ -472,8 +505,9 @@ ExecutionResult run_select_query_with_filter_push_down(
                                        /*just_calcite_explain=*/false,
                                        eo.gpu_input_mem_limit_percent,
                                        eo.allow_runtime_query_interrupt};
-    return RelAlgExecutor(executor.get(), cat, new_query_ra)
-        .executeRelAlgQuery(co, eo_modified, false, nullptr);
+    auto new_ra_executor = RelAlgExecutor(executor.get(), cat, new_query_ra);
+    return std::make_shared<ExecutionResult>(
+        new_ra_executor.executeRelAlgQuery(co, eo_modified, false, nullptr));
   } else {
     return result;
   }
@@ -481,11 +515,12 @@ ExecutionResult run_select_query_with_filter_push_down(
 
 }  // namespace
 
-ExecutionResult QueryRunner::runSelectQuery(const std::string& query_str,
-                                            const ExecutorDeviceType device_type,
-                                            const bool hoist_literals,
-                                            const bool allow_loop_joins,
-                                            const bool just_explain) {
+std::shared_ptr<ExecutionResult> QueryRunner::runSelectQuery(
+    const std::string& query_str,
+    const ExecutorDeviceType device_type,
+    const bool hoist_literals,
+    const bool allow_loop_joins,
+    const bool just_explain) {
   CHECK(session_info_);
   CHECK(!Catalog_Namespace::SysCatalog::instance().isAggregator());
   auto query_state = create_query_state(session_info_, query_str);
@@ -500,36 +535,58 @@ ExecutionResult QueryRunner::runSelectQuery(const std::string& query_str,
   }
 
   const auto& cat = session_info_->getCatalog();
-  auto executor = Executor::getExecutor(cat.getCurrentDB().dbId);
-  CompilationOptions co = CompilationOptions::defaults(device_type);
-  co.opt_level = ExecutorOptLevel::LoopStrengthReduction;
 
-  ExecutionOptions eo = {g_enable_columnar_output,
-                         true,
-                         just_explain,
-                         allow_loop_joins,
-                         false,
-                         false,
-                         false,
-                         false,
-                         10000,
-                         false,
-                         false,
-                         g_gpu_mem_limit_percent,
-                         false,
-                         1000};
-  auto calcite_mgr = cat.getCalciteMgr();
-  const auto query_ra = calcite_mgr
-                            ->process(query_state->createQueryStateProxy(),
-                                      pg_shim(query_str),
-                                      {},
-                                      true,
-                                      false,
-                                      false,
-                                      true)
-                            .plan_result;
-  return RelAlgExecutor(executor.get(), cat, query_ra)
-      .executeRelAlgQuery(co, eo, false, nullptr);
+  std::shared_ptr<ExecutionResult> result;
+  auto query_launch_task =
+      std::make_shared<QueryDispatchQueue::Task>([&cat,
+                                                  &query_str,
+                                                  &device_type,
+                                                  &allow_loop_joins,
+                                                  &just_explain,
+                                                  &query_state,
+                                                  &result](const size_t worker_id) {
+        auto executor = Executor::getExecutor(worker_id);
+        CompilationOptions co = CompilationOptions::defaults(device_type);
+        co.opt_level = ExecutorOptLevel::LoopStrengthReduction;
+
+        ExecutionOptions eo = {g_enable_columnar_output,
+                               true,
+                               just_explain,
+                               allow_loop_joins,
+                               false,
+                               false,
+                               false,
+                               false,
+                               10000,
+                               false,
+                               false,
+                               g_gpu_mem_limit_percent,
+                               false,
+                               1000};
+        auto calcite_mgr = cat.getCalciteMgr();
+        const auto query_ra = calcite_mgr
+                                  ->process(query_state->createQueryStateProxy(),
+                                            pg_shim(query_str),
+                                            {},
+                                            true,
+                                            false,
+                                            g_enable_calcite_view_optimize,
+                                            true)
+                                  .plan_result;
+        auto ra_executor = RelAlgExecutor(executor.get(), cat, query_ra);
+        const auto& query_hints = ra_executor.getParsedQueryHints();
+        if (query_hints.cpu_mode) {
+          co.device_type = ExecutorDeviceType::CPU;
+        }
+        result = std::make_shared<ExecutionResult>(
+            ra_executor.executeRelAlgQuery(co, eo, false, nullptr));
+      });
+  CHECK(dispatch_queue_);
+  dispatch_queue_->submit(query_launch_task);
+  auto result_future = query_launch_task->get_future();
+  result_future.get();
+  CHECK(result);
+  return result;
 }
 
 const std::shared_ptr<std::vector<int32_t>>& QueryRunner::getCachedJoinHashTable(
@@ -569,7 +626,7 @@ void ImportDriver::importGeoTable(const std::string& file_path,
                                   const bool compression,
                                   const bool create_table,
                                   const bool explode_collections) {
-  using namespace Importer_NS;
+  using namespace import_export;
 
   CHECK(session_info_);
   const std::string geo_column_name(OMNISCI_GEO_PREFIX);
@@ -656,7 +713,7 @@ void ImportDriver::importGeoTable(const std::string& file_path,
     throw std::runtime_error("Error: Failed to create table " + table_name);
   }
 
-  Importer_NS::Importer importer(cat, td, file_path, copy_params);
+  import_export::Importer importer(cat, td, file_path, copy_params);
   auto ms = measure<>::execution([&]() { importer.importGDAL(colname_to_src); });
   LOG(INFO) << "Import Time for " << table_name << ": " << (double)ms / 1000.0 << " s";
 }

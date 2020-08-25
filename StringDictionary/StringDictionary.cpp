@@ -31,6 +31,8 @@
 #include <boost/filesystem/path.hpp>
 #include <boost/sort/spreadsort/string_sort.hpp>
 
+#include <tbb/parallel_for.h>
+
 #include <future>
 #include <iostream>
 #include <string_view>
@@ -140,8 +142,9 @@ StringDictionary::StringDictionary(const std::string& folder,
     payload_file_size_ = file_size(payload_fd_);
     offset_file_size_ = file_size(offset_fd_);
   }
-
+  bool storage_is_empty = false;
   if (payload_file_size_ == 0) {
+    storage_is_empty = true;
     addPayloadCapacity();
   }
   if (offset_file_size_ == 0) {
@@ -156,16 +159,26 @@ StringDictionary::StringDictionary(const std::string& folder,
       if (bytes % sizeof(StringIdxEntry) != 0) {
         LOG(WARNING) << "Offsets " << offsets_path_ << " file is truncated";
       }
-      const uint64_t str_count = bytes / sizeof(StringIdxEntry);
+      const uint64_t str_count =
+          storage_is_empty ? 0 : getNumStringsFromStorage(bytes / sizeof(StringIdxEntry));
+      collisions_ = 0;
       // at this point we know the size of the StringDict we need to load
       // so lets reallocate the vector to the correct size
-      const uint64_t max_entries = round_up_p2(str_count * 2 + 1);
+      const uint64_t max_entries =
+          std::max(round_up_p2(str_count * 2 + 1),
+                   round_up_p2(std::max(initial_capacity, static_cast<size_t>(1))));
       std::vector<int32_t> new_str_ids(max_entries, INVALID_STR_ID);
       string_id_hash_table_.swap(new_str_ids);
       if (materialize_hashes_) {
         std::vector<uint32_t> new_rk_hashes(max_entries / 2);
         rk_hashes_.swap(new_rk_hashes);
       }
+      // Bail early if we know we don't have strings to add (i.e. a new or empty
+      // dictionary)
+      if (str_count == 0) {
+        return;
+      }
+
       unsigned string_id = 0;
       mapd_lock_guard<mapd_shared_mutex> write_lock(rw_mutex_);
 
@@ -202,6 +215,10 @@ StringDictionary::StringDictionary(const std::string& folder,
       if (dictionary_futures.size() != 0) {
         processDictionaryFutures(dictionary_futures);
       }
+      VLOG(1) << "Opened string dictionary " << folder << " # Strings: " << str_count_
+              << " Hash table size: " << string_id_hash_table_.size() << " Fill rate: "
+              << static_cast<double>(str_count_) * 100.0 / string_id_hash_table_.size()
+              << "% Collisions: " << collisions_;
     }
   }
 }
@@ -223,6 +240,36 @@ void StringDictionary::processDictionaryFutures(
     }
   }
   dictionary_futures.clear();
+}
+
+/**
+ * Method to retrieve number of strings in storage via a binary search for the first
+ * canary
+ * @param storage_slots number of storage entries we should search to find the minimum
+ * canary
+ * @return number of strings in storage
+ */
+size_t StringDictionary::getNumStringsFromStorage(const size_t storage_slots) const
+    noexcept {
+  if (storage_slots == 0) {
+    return 0;
+  }
+  // Must use signed integers since final binary search step can wrap to max size_t value
+  // if dictionary is empty
+  int64_t min_bound = 0;
+  int64_t max_bound = storage_slots - 1;
+  int64_t guess{0};
+  while (min_bound <= max_bound) {
+    guess = (max_bound + min_bound) / 2;
+    CHECK_GE(guess, 0);
+    if (getStringFromStorage(guess).canary) {
+      max_bound = guess - 1;
+    } else {
+      min_bound = guess + 1;
+    }
+  }
+  CHECK_GE(guess + (min_bound > guess ? 1 : 0), 0);
+  return guess + (min_bound > guess ? 1 : 0);
 }
 
 StringDictionary::StringDictionary(const LeafHostInfo& host, const DictRef dict_ref)
@@ -299,28 +346,16 @@ template <class String>
 void StringDictionary::hashStrings(const std::vector<String>& string_vec,
                                    std::vector<uint32_t>& hashes) const noexcept {
   CHECK_EQ(string_vec.size(), hashes.size());
-  const size_t min_target_strings_per_thread{2000};
-  const size_t str_count = string_vec.size();
-  const size_t max_thread_count = std::thread::hardware_concurrency();
-  const size_t items_per_thread =
-      std::max<size_t>(min_target_strings_per_thread, str_count / max_thread_count + 1);
 
-  std::vector<std::thread> workers;
-  for (size_t string_id = 0; string_id < str_count; string_id += items_per_thread) {
-    workers.emplace_back(
-        [&string_vec, &hashes, string_id, str_count, items_per_thread]() {
-          const size_t end_id = std::min(string_id + items_per_thread, str_count);
-          for (size_t curr_id = string_id; curr_id < end_id; ++curr_id) {
-            if (string_vec[curr_id].empty()) {
-              continue;
-            }
-            hashes[curr_id] = rk_hash(string_vec[curr_id]);
-          }
-        });
-  }
-  for (auto& worker : workers) {
-    worker.join();
-  }
+  tbb::parallel_for(tbb::blocked_range<size_t>(0, string_vec.size()),
+                    [&string_vec, &hashes](const tbb::blocked_range<size_t>& r) {
+                      for (size_t curr_id = r.begin(); curr_id != r.end(); ++curr_id) {
+                        if (string_vec[curr_id].empty()) {
+                          continue;
+                        }
+                        hashes[curr_id] = rk_hash(string_vec[curr_id]);
+                      }
+                    });
 }
 
 template <class T, class String>
@@ -1160,13 +1195,14 @@ uint32_t StringDictionary::computeBucketFromStorageAndMemory(
 
 uint32_t StringDictionary::computeUniqueBucketWithHash(
     const uint32_t hash,
-    const std::vector<int32_t>& data) const noexcept {
+    const std::vector<int32_t>& data) noexcept {
   auto bucket = hash & (data.size() - 1);
   while (true) {
     if (data[bucket] ==
         INVALID_STR_ID) {  // In this case it means the slot is available for use
       break;
     }
+    collisions_++;
     // wrap around
     if (++bucket == data.size()) {
       bucket = 0;

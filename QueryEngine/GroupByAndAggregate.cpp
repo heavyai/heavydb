@@ -16,7 +16,6 @@
 
 #include "GroupByAndAggregate.h"
 #include "AggregateUtils.h"
-#include "Allocators/CudaAllocator.h"
 
 #include "CardinalityEstimator.h"
 #include "CodeGenerator.h"
@@ -275,6 +274,8 @@ int64_t GroupByAndAggregate::getShardedTopBucket(const ColRangeInfo& col_range_i
                                                  const size_t shard_count) const {
   size_t device_count{0};
   if (device_type_ == ExecutorDeviceType::GPU) {
+    auto cuda_mgr = executor_->getCatalog()->getDataMgr().getCudaMgr();
+    CHECK(cuda_mgr);
     device_count = executor_->getCatalog()->getDataMgr().getCudaMgr()->getDeviceCount();
     CHECK_GT(device_count, 0u);
   }
@@ -1444,7 +1445,7 @@ llvm::Value* GroupByAndAggregate::codegenWindowRowPointer(
     const CompilationOptions& co,
     DiamondCodegen& diamond_codegen) {
   const auto window_func_context =
-      WindowProjectNodeContext::getActiveWindowFunctionContext();
+      WindowProjectNodeContext::getActiveWindowFunctionContext(executor_);
   if (window_func_context && window_function_is_aggregate(window_func->getKind())) {
     const int32_t row_size_quad = query_mem_desc.didOutputColumnar()
                                       ? 0
@@ -1828,8 +1829,10 @@ std::vector<llvm::Value*> GroupByAndAggregate::codegenAggArg(
               bool const fetch_columns) -> std::vector<llvm::Value*> {
         const auto target_lvs =
             code_generator.codegen(selected_target_expr, fetch_columns, co);
-        const auto geo_expr = dynamic_cast<const Analyzer::GeoExpr*>(target_expr);
-        if (geo_expr) {
+        const auto geo_uoper = dynamic_cast<const Analyzer::GeoUOper*>(target_expr);
+        const auto geo_binoper = dynamic_cast<const Analyzer::GeoBinOper*>(target_expr);
+        if (geo_uoper || geo_binoper) {
+          CHECK(target_expr->get_type_info().is_geometry());
           CHECK_EQ(2 * static_cast<size_t>(target_ti.get_physical_coord_cols()),
                    target_lvs.size());
           return target_lvs;

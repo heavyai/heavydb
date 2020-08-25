@@ -79,7 +79,7 @@ class CreateAndDropTableDdlTest : public DBHandlerTestFixture {
     query += table_name + columns;
     if (table_type == ddl_utils::TableType::FOREIGN_TABLE) {
       query += " SERVER omnisci_local_csv";
-      options["file_path"] = "'test_file.csv'";
+      options["file_path"] = "'" + getTestFilePath() + "'";
     }
     if (!options.empty()) {
       query += " WITH (";
@@ -113,6 +113,11 @@ class CreateAndDropTableDdlTest : public DBHandlerTestFixture {
     }
     query += table_name + ";";
     return query;
+  }
+
+  std::string getTestFilePath() {
+    return boost::filesystem::canonical("../../Tests/FsiDataFiles/example_1.csv")
+        .string();
   }
 
   void createTestUser() {
@@ -186,7 +191,7 @@ class CreateTableTest : public CreateAndDropTableDdlTest,
       EXPECT_EQ(StorageType::FOREIGN_TABLE, foreign_table->storageType);
       ASSERT_TRUE(foreign_table->options.find("FILE_PATH") !=
                   foreign_table->options.end());
-      EXPECT_EQ("test_file.csv", foreign_table->options.find("FILE_PATH")->second);
+      EXPECT_EQ(getTestFilePath(), foreign_table->options.find("FILE_PATH")->second);
       EXPECT_EQ("omnisci_local_csv", foreign_table->foreign_server->name);
     } else {
       EXPECT_EQ(column_count + 2, td->nColumns);  // +2 for rowid and $deleted$ columns
@@ -631,7 +636,7 @@ TEST_P(CreateTableTest, GeoTypes) {
   expected_attributes.precision = 4326;
   expected_attributes.scale = 4326;
   expected_attributes.encoding_type = kENCODING_NONE;
-  expected_attributes.encoding_size = 64;
+  expected_attributes.encoding_size = 0;
   assertColumnDetails(expected_attributes, column);
 
   std::advance(it, 2);
@@ -667,7 +672,7 @@ TEST_P(CreateTableTest, GeoTypes) {
   expected_attributes.precision = 4326;
   expected_attributes.scale = 4326;
   expected_attributes.encoding_type = kENCODING_NONE;
-  expected_attributes.encoding_size = 64;
+  expected_attributes.encoding_size = 0;
   assertColumnDetails(expected_attributes, column);
 
   std::advance(it, 3);
@@ -1189,13 +1194,15 @@ TEST_F(CreateForeignTableTest, NonExistentServer) {
 
 TEST_F(CreateForeignTableTest, DefaultCsvFileServerName) {
   sql("CREATE FOREIGN TABLE test_foreign_table(col1 INTEGER) "
-      "SERVER omnisci_local_csv WITH (file_path = 'test_file.csv');");
+      "SERVER omnisci_local_csv WITH (file_path = '" +
+      getTestFilePath() + "');");
   ASSERT_NE(nullptr, getCatalog().getMetadataForTable("test_foreign_table", false));
 }
 
 TEST_F(CreateForeignTableTest, DefaultParquetFileServerName) {
   sql("CREATE FOREIGN TABLE test_foreign_table(col1 INTEGER) "
-      "SERVER omnisci_local_parquet WITH (file_path = 'test_file.csv');");
+      "SERVER omnisci_local_parquet WITH (file_path = '" +
+      getTestFilePath() + "');");
   ASSERT_NE(nullptr, getCatalog().getMetadataForTable("test_foreign_table", false));
 }
 
@@ -1231,7 +1238,7 @@ TEST_F(CreateForeignTableTest, FsiDisabled) {
   g_enable_fsi = false;
   std::string query = getCreateTableQuery(
       ddl_utils::TableType::FOREIGN_TABLE, "test_foreign_table", "(col1 INTEGER)");
-  queryAndAssertException(query, "Syntax error at: FOREIGN");
+  queryAndAssertException(query, "Exception: Syntax error at: FOREIGN");
 }
 
 class DropTableTest : public CreateAndDropTableDdlTest,
@@ -1305,7 +1312,7 @@ TEST_P(CreateTableTest, InvalidSyntax) {
     if (GetParam() == ddl_utils::TableType::FOREIGN_TABLE) {
       ASSERT_TRUE(e.error_msg.find("Exception: Parse failed") != std::string::npos);
     } else {
-      ASSERT_EQ("Syntax error at: INTEGER", e.error_msg);
+      ASSERT_EQ("Exception: Syntax error at: INTEGER", e.error_msg);
     }
   }
 }

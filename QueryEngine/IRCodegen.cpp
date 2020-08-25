@@ -89,6 +89,10 @@ std::vector<llvm::Value*> CodeGenerator::codegen(const Analyzer::Expr* expr,
   if (keyforstring_expr) {
     return {codegen(keyforstring_expr, co)};
   }
+  auto sample_ratio_expr = dynamic_cast<const Analyzer::SampleRatioExpr*>(expr);
+  if (sample_ratio_expr) {
+    return {codegen(sample_ratio_expr, co)};
+  }
   auto lower_expr = dynamic_cast<const Analyzer::LowerExpr*>(expr);
   if (lower_expr) {
     return {codegen(lower_expr, co)};
@@ -127,9 +131,13 @@ std::vector<llvm::Value*> CodeGenerator::codegen(const Analyzer::Expr* expr,
   if (array_oper_expr) {
     return {codegenArrayExpr(array_oper_expr, co)};
   }
-  auto geo_expr = dynamic_cast<const Analyzer::GeoExpr*>(expr);
-  if (geo_expr) {
-    return {codegenGeoExpr(geo_expr, co)};
+  auto geo_uop = dynamic_cast<const Analyzer::GeoUOper*>(expr);
+  if (geo_uop) {
+    return {codegenGeoUOper(geo_uop, co)};
+  }
+  auto geo_binop = dynamic_cast<const Analyzer::GeoBinOper*>(expr);
+  if (geo_binop) {
+    return {codegenGeoBinOper(geo_binop, co)};
   }
   auto function_oper_expr = dynamic_cast<const Analyzer::FunctionOper*>(expr);
   if (function_oper_expr) {
@@ -185,6 +193,32 @@ llvm::Value* CodeGenerator::codegen(const Analyzer::UOper* u_oper,
   }
 }
 
+llvm::Value* CodeGenerator::codegen(const Analyzer::SampleRatioExpr* expr,
+                                    const CompilationOptions& co) {
+  auto input_expr = expr->get_arg();
+  CHECK(input_expr);
+
+  auto double_lv = codegen(input_expr, true, co);
+  CHECK_EQ(size_t(1), double_lv.size());
+
+  std::unique_ptr<CodeGenerator::NullCheckCodegen> nullcheck_codegen;
+  const bool is_nullable = !input_expr->get_type_info().get_notnull();
+  if (is_nullable) {
+    nullcheck_codegen = std::make_unique<NullCheckCodegen>(cgen_state_,
+                                                           executor(),
+                                                           double_lv.front(),
+                                                           input_expr->get_type_info(),
+                                                           "sample_ratio_nullcheck");
+  }
+  CHECK_EQ(input_expr->get_type_info().get_type(), kDOUBLE);
+  std::vector<llvm::Value*> args{double_lv[0], posArg(nullptr)};
+  auto ret = cgen_state_->emitCall("sample_ratio", args);
+  if (nullcheck_codegen) {
+    ret = nullcheck_codegen->finalize(ll_bool(false, cgen_state_->context_), ret);
+  }
+  return ret;
+}
+
 namespace {
 
 void add_qualifier_to_execution_unit(RelAlgExecutionUnit& ra_exe_unit,
@@ -232,13 +266,27 @@ std::vector<JoinLoop> Executor::buildJoinLoops(
        ++level_idx) {
     const auto& current_level_join_conditions = ra_exe_unit.join_quals[level_idx];
     std::vector<std::string> fail_reasons;
-    const auto current_level_hash_table =
-        buildCurrentLevelHashTable(current_level_join_conditions,
-                                   ra_exe_unit,
-                                   co,
-                                   query_infos,
-                                   column_cache,
-                                   fail_reasons);
+    const auto build_cur_level_hash_table = [&]() {
+      if (current_level_join_conditions.quals.size() > 1) {
+        const auto first_qual = *current_level_join_conditions.quals.begin();
+        auto qual_bin_oper =
+            std::dynamic_pointer_cast<const Analyzer::BinOper>(first_qual);
+        if (qual_bin_oper && qual_bin_oper->is_overlaps_oper() &&
+            current_level_join_conditions.type == JoinType::LEFT) {
+          JoinCondition join_condition{{first_qual}, current_level_join_conditions.type};
+
+          return buildCurrentLevelHashTable(
+              join_condition, ra_exe_unit, co, query_infos, column_cache, fail_reasons);
+        }
+      }
+      return buildCurrentLevelHashTable(current_level_join_conditions,
+                                        ra_exe_unit,
+                                        co,
+                                        query_infos,
+                                        column_cache,
+                                        fail_reasons);
+    };
+    const auto current_level_hash_table = build_cur_level_hash_table();
     const auto found_outer_join_matches_cb =
         [this, level_idx](llvm::Value* found_outer_join_matches) {
           CHECK_LT(level_idx, cgen_state_->outer_join_match_found_per_level_.size());
@@ -247,6 +295,31 @@ std::vector<JoinLoop> Executor::buildJoinLoops(
               found_outer_join_matches;
         };
     const auto is_deleted_cb = buildIsDeletedCb(ra_exe_unit, level_idx, co);
+    const auto outer_join_condition_multi_quals_cb =
+        [this, level_idx, &co, &current_level_join_conditions](
+            const std::vector<llvm::Value*>& prev_iters) {
+          // The values generated for the match path don't dominate all uses
+          // since on the non-match path nulls are generated. Reset the cache
+          // once the condition is generated to avoid incorrect reuse.
+          FetchCacheAnchor anchor(cgen_state_.get());
+          addJoinLoopIterator(prev_iters, level_idx + 1);
+          llvm::Value* left_join_cond = cgen_state_->llBool(true);
+          CodeGenerator code_generator(this);
+          // Do not want to look at all quals! only 1..N quals (ignore first qual)
+          // Note(jclay): this may need to support cases larger than 2
+          // are there any?
+          if (current_level_join_conditions.quals.size() >= 2) {
+            auto qual_it = std::next(current_level_join_conditions.quals.begin(), 1);
+            for (; qual_it != current_level_join_conditions.quals.end();
+                 std::advance(qual_it, 1)) {
+              left_join_cond = cgen_state_->ir_builder_.CreateAnd(
+                  left_join_cond,
+                  code_generator.toBool(
+                      code_generator.codegen(qual_it->get(), true, co).front()));
+            }
+          }
+          return left_join_cond;
+        };
     if (current_level_hash_table) {
       if (current_level_hash_table->getHashType() == JoinHashTable::HashType::OneToOne) {
         join_loops.emplace_back(
@@ -267,8 +340,9 @@ std::vector<JoinLoop> Executor::buildJoinLoops(
             is_deleted_cb);
       } else {
         join_loops.emplace_back(
-            JoinLoopKind::Set,
-            current_level_join_conditions.type,
+            /*kind=*/JoinLoopKind::Set,
+            /*type=*/current_level_join_conditions.type,
+            /*iteration_domain_codegen=*/
             [this, current_hash_table_idx, level_idx, current_level_hash_table, &co](
                 const std::vector<llvm::Value*>& prev_iters) {
               addJoinLoopIterator(prev_iters, level_idx);
@@ -279,11 +353,15 @@ std::vector<JoinLoop> Executor::buildJoinLoops(
               domain.element_count = matching_set.count;
               return domain;
             },
-            nullptr,
+            /*outer_condition_match=*/
             current_level_join_conditions.type == JoinType::LEFT
+                ? std::function<llvm::Value*(const std::vector<llvm::Value*>&)>(
+                      outer_join_condition_multi_quals_cb)
+                : nullptr,
+            /*found_outer_matches=*/current_level_join_conditions.type == JoinType::LEFT
                 ? std::function<void(llvm::Value*)>(found_outer_join_matches_cb)
                 : nullptr,
-            is_deleted_cb);
+            /*is_deleted=*/is_deleted_cb);
       }
       ++current_hash_table_idx;
     } else {
@@ -315,8 +393,9 @@ std::vector<JoinLoop> Executor::buildJoinLoops(
             return left_join_cond;
           };
       join_loops.emplace_back(
-          JoinLoopKind::UpperBound,
-          current_level_join_conditions.type,
+          /*kind=*/JoinLoopKind::UpperBound,
+          /*type=*/current_level_join_conditions.type,
+          /*iteration_domain_codegen=*/
           [this, level_idx](const std::vector<llvm::Value*>& prev_iters) {
             addJoinLoopIterator(prev_iters, level_idx);
             JoinLoopDomain domain{{0}};
@@ -327,14 +406,16 @@ std::vector<JoinLoop> Executor::buildJoinLoops(
                                                                      "num_rows_per_scan");
             return domain;
           },
+          /*outer_condition_match=*/
           current_level_join_conditions.type == JoinType::LEFT
               ? std::function<llvm::Value*(const std::vector<llvm::Value*>&)>(
                     outer_join_condition_cb)
               : nullptr,
+          /*found_outer_matches=*/
           current_level_join_conditions.type == JoinType::LEFT
               ? std::function<void(llvm::Value*)>(found_outer_join_matches_cb)
               : nullptr,
-          is_deleted_cb);
+          /*is_deleted=*/is_deleted_cb);
     }
   }
   return join_loops;
@@ -344,7 +425,7 @@ std::function<llvm::Value*(const std::vector<llvm::Value*>&, llvm::Value*)>
 Executor::buildIsDeletedCb(const RelAlgExecutionUnit& ra_exe_unit,
                            const size_t level_idx,
                            const CompilationOptions& co) {
-  if (!co.add_delete_column) {
+  if (!co.filter_on_deleted_column) {
     return nullptr;
   }
   CHECK_LT(level_idx + 1, ra_exe_unit.input_descs.size());
@@ -615,4 +696,55 @@ Executor::GroupColLLVMValue Executor::groupByColumnCodegen(
         get_int_type(col_width * 8, cgen_state_->context_));
   }
   return {group_key, orig_group_key};
+}
+
+CodeGenerator::NullCheckCodegen::NullCheckCodegen(CgenState* cgen_state,
+                                                  Executor* executor,
+                                                  llvm::Value* nullable_lv,
+                                                  const SQLTypeInfo& nullable_ti,
+                                                  const std::string& name)
+    : cgen_state(cgen_state), name(name) {
+  CHECK(nullable_ti.is_number() || nullable_ti.is_decimal() || nullable_ti.is_fp());
+
+  null_check = std::make_unique<GroupByAndAggregate::DiamondCodegen>(
+      nullable_ti.is_fp()
+          ? cgen_state->ir_builder_.CreateFCmp(llvm::FCmpInst::FCMP_OEQ,
+                                               nullable_lv,
+                                               cgen_state->inlineFpNull(nullable_ti))
+          : cgen_state->ir_builder_.CreateICmp(llvm::ICmpInst::ICMP_EQ,
+                                               nullable_lv,
+                                               cgen_state->inlineIntNull(nullable_ti)),
+      executor,
+      false,
+      name,
+      nullptr,
+      false);
+
+  // generate a phi node depending on whether we got a null or not
+  nullcheck_bb =
+      llvm::BasicBlock::Create(cgen_state->context_, name + "_bb", cgen_state->row_func_);
+
+  // update the blocks created by diamond codegen to point to the newly created phi
+  // block
+  cgen_state->ir_builder_.SetInsertPoint(null_check->cond_true_);
+  cgen_state->ir_builder_.CreateBr(nullcheck_bb);
+  cgen_state->ir_builder_.SetInsertPoint(null_check->cond_false_);
+}
+
+llvm::Value* CodeGenerator::NullCheckCodegen::finalize(llvm::Value* null_lv,
+                                                       llvm::Value* notnull_lv) {
+  CHECK(null_check);
+  cgen_state->ir_builder_.CreateBr(nullcheck_bb);
+
+  CHECK_EQ(null_lv->getType(), notnull_lv->getType());
+
+  cgen_state->ir_builder_.SetInsertPoint(nullcheck_bb);
+  nullcheck_value =
+      cgen_state->ir_builder_.CreatePHI(null_lv->getType(), 2, name + "_value");
+  nullcheck_value->addIncoming(notnull_lv, null_check->cond_false_);
+  nullcheck_value->addIncoming(null_lv, null_check->cond_true_);
+
+  null_check.reset(nullptr);
+  cgen_state->ir_builder_.SetInsertPoint(nullcheck_bb);
+  return nullcheck_value;
 }

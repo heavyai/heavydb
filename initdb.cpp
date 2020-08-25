@@ -24,7 +24,7 @@
 #include <string>
 
 #include "Catalog/Catalog.h"
-#include "Import/Importer.h"
+#include "ImportExport/Importer.h"
 #include "QueryRunner/QueryRunner.h"
 #include "Shared/Logger.h"
 #include "Shared/mapdpath.h"
@@ -144,7 +144,8 @@ int main(int argc, char* argv[]) {
     SystemParameters sys_parms;
     auto dummy =
         std::make_shared<Data_Namespace::DataMgr>(data_path, sys_parms, false, 0);
-    auto calcite = std::make_shared<Calcite>(-1, CALCITEPORT, base_path, 1024, 5000);
+    auto calcite =
+        std::make_shared<Calcite>(-1, CALCITEPORT, base_path, 1024, 5000, true, "");
     auto& sys_cat = Catalog_Namespace::SysCatalog::instance();
     sys_cat.init(base_path, dummy, {}, calcite, true, false, {});
 

@@ -67,7 +67,7 @@ stages involved in executing a query.
 .. _Bison: https://www.gnu.org/software/bison/
 
 Simplified Execution Model
-======================
+==========================
 
 .. uml::
    :align: center

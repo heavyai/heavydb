@@ -16,7 +16,7 @@
 
 #pragma once
 
-#include "Allocators/DeviceAllocator.h"
+#include "DataMgr/Allocators/DeviceAllocator.h"
 
 #include "Descriptors/QueryMemoryDescriptor.h"
 #include "GpuMemUtils.h"
@@ -217,6 +217,7 @@ class QueryMemoryInitializer {
   int8_t* count_distinct_bitmap_host_mem_;
 
   DeviceAllocator* device_allocator_{nullptr};
+  std::vector<Data_Namespace::AbstractBuffer*> temporary_buffers_;
 
   friend class Executor;  // Accesses result_sets_
   friend class QueryExecutionContext;

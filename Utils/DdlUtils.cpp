@@ -19,9 +19,15 @@
 #include <unordered_set>
 
 #include <boost/algorithm/string.hpp>
+#include <boost/filesystem.hpp>
+#include <boost/program_options.hpp>
+
+#include "rapidjson/document.h"
 
 #include "Fragmenter/FragmentDefaultValues.h"
 #include "Parser/ReservedKeywords.h"
+#include "Shared/mapd_glob.h"
+#include "Shared/misc.h"
 
 bool g_use_date_in_days_default_encoding{true};
 
@@ -341,18 +347,14 @@ void validate_and_set_dictionary_encoding(ColumnDescriptor& cd, int encoding_siz
 }
 
 void validate_and_set_none_encoding(ColumnDescriptor& cd) {
-  if (cd.columnType.is_geometry()) {
-    cd.columnType.set_compression(kENCODING_NONE);
-    cd.columnType.set_comp_param(64);
-  } else {
-    if (!cd.columnType.is_string() && !cd.columnType.is_string_array()) {
-      throw std::runtime_error(
-          cd.columnName +
-          ": None encoding is only supported on string or string array columns.");
-    }
-    cd.columnType.set_compression(kENCODING_NONE);
-    cd.columnType.set_comp_param(0);
+  if (!cd.columnType.is_string() && !cd.columnType.is_string_array() &&
+      !cd.columnType.is_geometry()) {
+    throw std::runtime_error(
+        cd.columnName +
+        ": None encoding is only supported on string, string array, or geo columns.");
   }
+  cd.columnType.set_compression(kENCODING_NONE);
+  cd.columnType.set_comp_param(0);
 }
 
 void validate_and_set_sparse_encoding(ColumnDescriptor& cd, int encoding_size) {
@@ -515,19 +517,6 @@ void set_default_table_attributes(const std::string& table_name,
   td.maxRows = DEFAULT_MAX_ROWS;
 }
 
-bool validate_nonexistent_table(const std::string& table_name,
-                                const Catalog_Namespace::Catalog& catalog,
-                                const bool if_not_exists) {
-  if (catalog.getMetadataForTable(table_name, false)) {
-    if (if_not_exists) {
-      return false;
-    }
-    throw std::runtime_error("Table or View with name \"" + table_name +
-                             "\" already exists.");
-  }
-  return true;
-}
-
 void validate_non_duplicate_column(const std::string& column_name,
                                    std::unordered_set<std::string>& upper_column_names) {
   const auto upper_column_name = boost::to_upper_copy<std::string>(column_name);
@@ -573,4 +562,181 @@ std::string table_type_enum_to_string(const TableType table_type) {
   }
   throw std::runtime_error{"Unexpected table type"};
 }
+
+std::string get_malformed_config_error_message(const std::string& config_key) {
+  return "Configuration value for \"" + config_key +
+         "\" is malformed. Value should be a list of paths with format: [ "
+         "\"root-path-1\", \"root-path-2\", ... ]";
+}
+
+void validate_expanded_file_path(const std::string& file_path,
+                                 const std::vector<std::string>& whitelisted_root_paths) {
+  boost::filesystem::path canonical_file_path = boost::filesystem::canonical(file_path);
+  for (const auto& root_path : whitelisted_root_paths) {
+    if (boost::istarts_with(canonical_file_path.string(), root_path)) {
+      return;
+    }
+  }
+  throw std::runtime_error{"File or directory path \"" + file_path +
+                           "\" is not whitelisted."};
+}
+
+std::vector<std::string> get_expanded_file_paths(
+    const std::string& file_path,
+    const DataTransferType data_transfer_type) {
+  std::vector<std::string> file_paths;
+  if (data_transfer_type == DataTransferType::IMPORT) {
+    file_paths = mapd_glob(file_path);
+    if (file_paths.size() == 0) {
+      throw std::runtime_error{"File or directory \"" + file_path + "\" does not exist."};
+    }
+  } else {
+    std::string path;
+    if (!boost::filesystem::exists(file_path)) {
+      // For exports, it is possible to provide a path to a new (nonexistent) file. In
+      // this case, validate using the parent path.
+      path = boost::filesystem::path(file_path).parent_path().string();
+      if (!boost::filesystem::exists(path)) {
+        throw std::runtime_error{"File or directory \"" + file_path +
+                                 "\" does not exist."};
+      }
+    } else {
+      path = file_path;
+    }
+    file_paths = {path};
+  }
+  return file_paths;
+}
+
+void validate_allowed_file_path(const std::string& file_path,
+                                const DataTransferType data_transfer_type) {
+  const auto& expanded_file_paths =
+      get_expanded_file_paths(file_path, data_transfer_type);
+  for (const auto& path : expanded_file_paths) {
+    if (FilePathBlacklist::isBlacklistedPath(path)) {
+      throw std::runtime_error{"Access to file or directory path \"" + file_path +
+                               "\" is not allowed."};
+    }
+  }
+  FilePathWhitelist::validateWhitelistedFilePath(expanded_file_paths, data_transfer_type);
+}
+
+void set_whitelisted_paths(const std::string& config_key,
+                           const std::string& config_value,
+                           std::vector<std::string>& whitelisted_paths) {
+  CHECK(whitelisted_paths.empty());
+  rapidjson::Document whitelisted_root_paths;
+  whitelisted_root_paths.Parse(config_value);
+  if (!whitelisted_root_paths.IsArray()) {
+    throw std::runtime_error{get_malformed_config_error_message(config_key)};
+  }
+  for (const auto& root_path : whitelisted_root_paths.GetArray()) {
+    if (!root_path.IsString()) {
+      throw std::runtime_error{get_malformed_config_error_message(config_key)};
+    }
+    if (!boost::filesystem::exists(root_path.GetString())) {
+      throw std::runtime_error{"Whitelisted root path \"" +
+                               std::string{root_path.GetString()} + "\" does not exist."};
+    }
+    whitelisted_paths.emplace_back(
+        boost::filesystem::canonical(root_path.GetString()).string());
+  }
+  LOG(INFO) << config_key << " " << shared::printContainer(whitelisted_paths);
+}
+
+void FilePathWhitelist::initializeFromConfigFile(const std::string& server_config_path) {
+  if (server_config_path.empty()) {
+    return;
+  }
+
+  if (!boost::filesystem::exists(server_config_path)) {
+    throw std::runtime_error{"Configuration file at \"" + server_config_path +
+                             "\" does not exist."};
+  }
+
+  std::string import_config_key{"allowed-import-paths"};
+  std::string export_config_key{"allowed-export-paths"};
+  std::string import_config_value, export_config_value;
+
+  namespace po = boost::program_options;
+  po::options_description desc{};
+  desc.add_options()(import_config_key.c_str(),
+                     po::value<std::string>(&import_config_value));
+  desc.add_options()(export_config_key.c_str(),
+                     po::value<std::string>(&export_config_value));
+  po::variables_map vm;
+  po::store(po::parse_config_file<char>(server_config_path.c_str(), desc, true), vm);
+  po::notify(vm);
+  if (vm.count(import_config_key)) {
+    set_whitelisted_paths(
+        import_config_key, import_config_value, whitelisted_import_paths_);
+  }
+  if (vm.count(export_config_key)) {
+    set_whitelisted_paths(
+        export_config_key, export_config_value, whitelisted_export_paths_);
+  }
+}
+
+void FilePathWhitelist::validateWhitelistedFilePath(
+    const std::vector<std::string>& expanded_file_paths,
+    const DataTransferType data_transfer_type) {
+  // Skip validation if no whitelist configuration is provided.
+  if ((data_transfer_type == DataTransferType::IMPORT &&
+       whitelisted_import_paths_.empty()) ||
+      (data_transfer_type == DataTransferType::EXPORT &&
+       whitelisted_export_paths_.empty())) {
+    return;
+  }
+
+  for (const auto& path : expanded_file_paths) {
+    if (data_transfer_type == DataTransferType::IMPORT) {
+      validate_expanded_file_path(path, whitelisted_import_paths_);
+    } else if (data_transfer_type == DataTransferType::EXPORT) {
+      validate_expanded_file_path(path, whitelisted_export_paths_);
+    } else {
+      UNREACHABLE();
+    }
+  }
+}
+
+void FilePathWhitelist::clear() {
+  whitelisted_import_paths_.clear();
+  whitelisted_export_paths_.clear();
+}
+
+std::vector<std::string> FilePathWhitelist::whitelisted_import_paths_{};
+std::vector<std::string> FilePathWhitelist::whitelisted_export_paths_{};
+
+void FilePathBlacklist::addToBlacklist(const std::string& path) {
+  CHECK(!path.empty());
+  blacklisted_paths_.emplace_back(path);
+}
+
+bool FilePathBlacklist::isBlacklistedPath(const std::string& path) {
+  const auto canonical_path = boost::filesystem::canonical(path).string();
+  for (const auto& blacklisted_path : blacklisted_paths_) {
+    std::string full_path;
+    try {
+      full_path = boost::filesystem::canonical(blacklisted_path).string();
+    } catch (...) {
+      /**
+       * boost::filesystem::canonical throws an exception if provided path
+       * does not exist. This may happen for use cases like license path
+       * where the path may not necessarily contain a file. Fallback to
+       * boost::filesystem::absolute in this case.
+       */
+      full_path = boost::filesystem::absolute(blacklisted_path).string();
+    }
+    if (boost::istarts_with(canonical_path, full_path)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+void FilePathBlacklist::clear() {
+  blacklisted_paths_.clear();
+}
+
+std::vector<std::string> FilePathBlacklist::blacklisted_paths_{};
 }  // namespace ddl_utils

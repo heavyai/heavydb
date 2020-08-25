@@ -65,7 +65,8 @@ enum SQLTypes {
   kEVAL_CONTEXT_TYPE = 25,  // Placeholder Type for ANY
   kVOID = 26,
   kCURSOR = 27,
-  kSQLTYPE_LAST = 28
+  kCOLUMN = 28,
+  kSQLTYPE_LAST = 29
 };
 
 struct VarlenDatum {
@@ -152,16 +153,15 @@ union DataBlockPtr {
 
 // must not change because these values persist in catalogs.
 enum EncodingType {
-  kENCODING_NONE = 0,                // no encoding
-  kENCODING_FIXED = 1,               // Fixed-bit encoding
-  kENCODING_RL = 2,                  // Run Length encoding
-  kENCODING_DIFF = 3,                // Differential encoding
-  kENCODING_DICT = 4,                // Dictionary encoding
-  kENCODING_SPARSE = 5,              // Null encoding for sparse columns
-  kENCODING_GEOINT = 6,              // Encoding coordinates as intergers
-  kENCODING_DATE_IN_DAYS = 7,        // Date encoding in days
-  kENCODING_PACKED_PIXEL_COORD = 8,  // Render Pixel Coordinate (packed 14.2+14.2)
-  kENCODING_LAST = 9
+  kENCODING_NONE = 0,          // no encoding
+  kENCODING_FIXED = 1,         // Fixed-bit encoding
+  kENCODING_RL = 2,            // Run Length encoding
+  kENCODING_DIFF = 3,          // Differential encoding
+  kENCODING_DICT = 4,          // Dictionary encoding
+  kENCODING_SPARSE = 5,        // Null encoding for sparse columns
+  kENCODING_GEOINT = 6,        // Encoding coordinates as intergers
+  kENCODING_DATE_IN_DAYS = 7,  // Date encoding in days
+  kENCODING_LAST = 8
 };
 
 #define IS_INTEGER(T) \
@@ -381,6 +381,12 @@ class SQLTypeInfo {
       CHECK_LT(static_cast<int>(subtype), kSQLTYPE_LAST);
       return type_name[static_cast<int>(subtype)] + ps + "[" + num_elems + "]";
     }
+    if (type == kCOLUMN) {
+      auto elem_ti = get_elem_type();
+      auto num_elems = (size > 0) ? std::to_string(size / elem_ti.get_size()) : "";
+      CHECK_LT(static_cast<int>(subtype), kSQLTYPE_LAST);
+      return "Column" + type_name[static_cast<int>(subtype)] + ps + "[" + num_elems + "]";
+    }
     return type_name[static_cast<int>(type)] + ps;
   }
   inline std::string get_compression_name() const { return comp_name[(int)compression]; }
@@ -419,6 +425,7 @@ class SQLTypeInfo {
   inline bool is_fixlen_array() const { return type == kARRAY && size > 0; }
   inline bool is_timeinterval() const { return IS_INTERVAL(type); }
   inline bool is_geometry() const { return IS_GEO(type); }
+  inline bool is_column() const { return type == kCOLUMN; }
 
   inline bool is_varlen() const {  // TODO: logically this should ignore fixlen arrays
     return (IS_STRING(type) && compression != kENCODING_DICT) || type == kARRAY ||
@@ -434,10 +441,6 @@ class SQLTypeInfo {
 
   inline bool is_dict_encoded_string() const {
     return is_string() && compression == kENCODING_DICT;
-  }
-
-  inline bool is_packed_pixel_coord() const {
-    return type == kINT && compression == kENCODING_PACKED_PIXEL_COORD;
   }
 
   HOST DEVICE inline bool operator!=(const SQLTypeInfo& rhs) const {
@@ -500,6 +503,8 @@ class SQLTypeInfo {
     } else if (type == kBOOLEAN && new_type_info.is_number()) {
       return true;
     } else if (type == kARRAY && new_type_info.get_type() == kARRAY) {
+      return get_elem_type().is_castable(new_type_info.get_elem_type());
+    } else if (type == kCOLUMN && new_type_info.get_type() == kCOLUMN) {
       return get_elem_type().is_castable(new_type_info.get_elem_type());
     } else {
       return false;
@@ -682,7 +687,6 @@ class SQLTypeInfo {
       case kINT:
         switch (compression) {
           case kENCODING_NONE:
-          case kENCODING_PACKED_PIXEL_COORD:
             return sizeof(int32_t);
           case kENCODING_FIXED:
           case kENCODING_SPARSE:
@@ -785,6 +789,7 @@ class SQLTypeInfo {
       case kLINESTRING:
       case kPOLYGON:
       case kMULTIPOLYGON:
+      case kCOLUMN:
         break;
       default:
         break;
@@ -825,10 +830,15 @@ inline SQLTypeInfo get_logical_type_info(const SQLTypeInfo& type_info) {
                      type_info.get_subtype());
 }
 
-inline SQLTypeInfo get_nullable_logical_type_info(const SQLTypeInfo& type_info) {
-  SQLTypeInfo nullable_type_info = get_logical_type_info(type_info);
+inline SQLTypeInfo get_nullable_type_info(const SQLTypeInfo& type_info) {
+  SQLTypeInfo nullable_type_info = type_info;
   nullable_type_info.set_notnull(false);
   return nullable_type_info;
+}
+
+inline SQLTypeInfo get_nullable_logical_type_info(const SQLTypeInfo& type_info) {
+  SQLTypeInfo nullable_type_info = get_logical_type_info(type_info);
+  return get_nullable_type_info(nullable_type_info);
 }
 
 template <class T>

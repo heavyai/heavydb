@@ -170,7 +170,8 @@ std::shared_ptr<Analyzer::Expr> ExtractExpr::generate(
   if (constant != nullptr) {
     Datum d;
     d.bigintval = field == kEPOCH
-                      ? constant->get_constval().bigintval
+                      ? floor_div(constant->get_constval().bigintval,
+                                  get_timestamp_precision_scale(expr_ti.get_dimension()))
                       : getExtractFromTimeConstantValue(
                             constant->get_constval().bigintval, field, expr_ti);
     constant->set_constval(d);

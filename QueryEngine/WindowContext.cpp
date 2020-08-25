@@ -14,15 +14,18 @@
  * limitations under the License.
  */
 
-#include "WindowContext.h"
+#include "QueryEngine/WindowContext.h"
+
 #include <numeric>
-#include "../Shared/checked_alloc.h"
-#include "../Shared/sql_window_function_to_string.h"
-#include "Descriptors/CountDistinctDescriptor.h"
-#include "OutputBufferInitialization.h"
-#include "ResultSetBufferAccessors.h"
-#include "RuntimeFunctions.h"
-#include "TypePunning.h"
+
+#include "QueryEngine/Descriptors/CountDistinctDescriptor.h"
+#include "QueryEngine/Execute.h"
+#include "QueryEngine/OutputBufferInitialization.h"
+#include "QueryEngine/ResultSetBufferAccessors.h"
+#include "QueryEngine/RuntimeFunctions.h"
+#include "QueryEngine/TypePunning.h"
+#include "Shared/checked_alloc.h"
+#include "Shared/sql_window_function_to_string.h"
 
 WindowFunctionContext::WindowFunctionContext(
     const Analyzer::WindowFunction* window_func,
@@ -802,34 +805,34 @@ void WindowProjectNodeContext::addWindowFunctionContext(
 }
 
 const WindowFunctionContext* WindowProjectNodeContext::activateWindowFunctionContext(
+    Executor* executor,
     const size_t target_index) const {
   const auto it = window_contexts_.find(target_index);
   CHECK(it != window_contexts_.end());
-  s_active_window_function_ = it->second.get();
-  return s_active_window_function_;
+  executor->active_window_function_ = it->second.get();
+  return executor->active_window_function_;
 }
 
-void WindowProjectNodeContext::resetWindowFunctionContext() {
-  s_active_window_function_ = nullptr;
+void WindowProjectNodeContext::resetWindowFunctionContext(Executor* executor) {
+  executor->active_window_function_ = nullptr;
 }
 
-WindowFunctionContext* WindowProjectNodeContext::getActiveWindowFunctionContext() {
-  return s_active_window_function_;
+WindowFunctionContext* WindowProjectNodeContext::getActiveWindowFunctionContext(
+    Executor* executor) {
+  return executor->active_window_function_;
 }
 
-WindowProjectNodeContext* WindowProjectNodeContext::create() {
-  s_instance_ = std::make_unique<WindowProjectNodeContext>();
-  return s_instance_.get();
+WindowProjectNodeContext* WindowProjectNodeContext::create(Executor* executor) {
+  executor->window_project_node_context_owned_ =
+      std::make_unique<WindowProjectNodeContext>();
+  return executor->window_project_node_context_owned_.get();
 }
 
-const WindowProjectNodeContext* WindowProjectNodeContext::get() {
-  return s_instance_.get();
+const WindowProjectNodeContext* WindowProjectNodeContext::get(Executor* executor) {
+  return executor->window_project_node_context_owned_.get();
 }
 
-void WindowProjectNodeContext::reset() {
-  s_instance_ = nullptr;
-  s_active_window_function_ = nullptr;
+void WindowProjectNodeContext::reset(Executor* executor) {
+  executor->window_project_node_context_owned_ = nullptr;
+  executor->active_window_function_ = nullptr;
 }
-
-std::unique_ptr<WindowProjectNodeContext> WindowProjectNodeContext::s_instance_;
-WindowFunctionContext* WindowProjectNodeContext::s_active_window_function_{nullptr};

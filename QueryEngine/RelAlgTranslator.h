@@ -34,22 +34,32 @@ class Expr;
 namespace Catalog_Namespace {
 
 class Catalog;
+class SessionInfo;
 
 }  // namespace Catalog_Namespace
+
+namespace query_state {
+
+class QueryState;
+
+}  // namespace query_state
 
 class RelAlgTranslator {
  public:
   RelAlgTranslator(const Catalog_Namespace::Catalog& cat,
+                   std::shared_ptr<const query_state::QueryState> q_s,
                    const Executor* executor,
                    const std::unordered_map<const RelAlgNode*, int>& input_to_nest_level,
                    const std::vector<JoinType>& join_types,
                    const time_t now,
                    const bool just_explain)
       : cat_(cat)
+      , query_state_(q_s)
       , executor_(executor)
       , input_to_nest_level_(input_to_nest_level)
       , join_types_(join_types)
       , now_(now)
+      , generated_geos_ops_(false)
       , just_explain_(just_explain) {}
 
   std::shared_ptr<Analyzer::Expr> translateScalarRex(const RexScalar* rex) const;
@@ -59,6 +69,8 @@ class RelAlgTranslator {
       const std::vector<std::shared_ptr<Analyzer::Expr>>& scalar_sources);
 
   static std::shared_ptr<Analyzer::Expr> translateLiteral(const RexLiteral*);
+
+  bool generated_geos_ops() { return generated_geos_ops_; }
 
  private:
   std::shared_ptr<Analyzer::Expr> translateScalarSubquery(const RexSubQuery*) const;
@@ -99,6 +111,10 @@ class RelAlgTranslator {
   std::shared_ptr<Analyzer::Expr> translateLength(const RexFunctionOperator*) const;
 
   std::shared_ptr<Analyzer::Expr> translateKeyForString(const RexFunctionOperator*) const;
+
+  std::shared_ptr<Analyzer::Expr> translateSampleRatio(const RexFunctionOperator*) const;
+
+  std::shared_ptr<Analyzer::Expr> translateCurrentUser(const RexFunctionOperator*) const;
 
   std::shared_ptr<Analyzer::Expr> translateLower(const RexFunctionOperator*) const;
 
@@ -142,8 +158,18 @@ class RelAlgTranslator {
 
   std::shared_ptr<Analyzer::Expr> translateGeoComparison(const RexOperator*) const;
 
-  std::shared_ptr<Analyzer::Expr> translateGeoConstructor(
-      const RexFunctionOperator*) const;
+  std::shared_ptr<Analyzer::Expr> translateGeoProjection(const RexFunctionOperator*,
+                                                         SQLTypeInfo&,
+                                                         const bool with_bounds) const;
+
+  std::shared_ptr<Analyzer::Expr> translateGeoPredicate(const RexFunctionOperator*,
+                                                        SQLTypeInfo&,
+                                                        const bool with_bounds) const;
+
+  std::shared_ptr<Analyzer::Expr> translateGeoBinaryConstructor(
+      const RexFunctionOperator*,
+      SQLTypeInfo&,
+      const bool with_bounds) const;
 
   std::shared_ptr<Analyzer::Expr> translateGeoOverlapsOper(const RexOperator*) const;
 
@@ -168,10 +194,12 @@ class RelAlgTranslator {
                                                                    bool) const;
 
   const Catalog_Namespace::Catalog& cat_;
+  std::shared_ptr<const query_state::QueryState> query_state_;
   const Executor* executor_;
   const std::unordered_map<const RelAlgNode*, int> input_to_nest_level_;
   const std::vector<JoinType> join_types_;
   time_t now_;
+  mutable bool generated_geos_ops_;
   const bool just_explain_;
 };
 

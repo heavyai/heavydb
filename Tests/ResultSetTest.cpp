@@ -979,12 +979,37 @@ std::vector<OneRow> get_rows_sorted_by_col(ResultSet& rs, const size_t col_idx) 
   return result;
 }
 
+void run_reduction(const std::vector<TargetInfo>& target_infos,
+                   const QueryMemoryDescriptor& query_mem_desc,
+                   NumberGenerator& generator1,
+                   NumberGenerator& generator2,
+                   const int step) {
+  const ResultSetStorage* storage1{nullptr};
+  const ResultSetStorage* storage2{nullptr};
+  const auto row_set_mem_owner =
+      std::make_shared<RowSetMemoryOwner>(Executor::getArenaBlockSize());
+  row_set_mem_owner->addStringDict(g_sd, 1, g_sd->storageEntryCount());
+  const auto rs1 = std::make_unique<ResultSet>(
+      target_infos, ExecutorDeviceType::CPU, query_mem_desc, row_set_mem_owner, nullptr);
+  storage1 = rs1->allocateStorage();
+  fill_storage_buffer(
+      storage1->getUnderlyingBuffer(), target_infos, query_mem_desc, generator1, step);
+  const auto rs2 = std::make_unique<ResultSet>(
+      target_infos, ExecutorDeviceType::CPU, query_mem_desc, row_set_mem_owner, nullptr);
+  storage2 = rs2->allocateStorage();
+  fill_storage_buffer(
+      storage2->getUnderlyingBuffer(), target_infos, query_mem_desc, generator2, step);
+  ResultSetManager rs_manager;
+  std::vector<ResultSet*> storage_set{rs1.get(), rs2.get()};
+  rs_manager.reduce(storage_set);
+}
+
 void test_reduce(const std::vector<TargetInfo>& target_infos,
                  const QueryMemoryDescriptor& query_mem_desc,
                  NumberGenerator& generator1,
                  NumberGenerator& generator2,
-                 const int step) {
-  SQLTypeInfo double_ti(kDOUBLE, false);
+                 const int step,
+                 const bool sort) {
   const ResultSetStorage* storage1{nullptr};
   const ResultSetStorage* storage2{nullptr};
   const auto row_set_mem_owner =
@@ -1003,47 +1028,67 @@ void test_reduce(const std::vector<TargetInfo>& target_infos,
   ResultSetManager rs_manager;
   std::vector<ResultSet*> storage_set{rs1.get(), rs2.get()};
   auto result_rs = rs_manager.reduce(storage_set);
-  int64_t ref_val{0};
-  std::list<Analyzer::OrderEntry> order_entries;
-  order_entries.emplace_back(1, false, false);
-  result_rs->sort(order_entries, 0);
-  while (true) {
-    const auto row = result_rs->getNextRow(false, false);
-    if (row.empty()) {
-      break;
-    }
-    CHECK_EQ(target_infos.size(), row.size());
-    for (size_t i = 0; i < target_infos.size(); ++i) {
-      const auto& target_info = target_infos[i];
-      const auto& ti = target_info.agg_kind == kAVG ? double_ti : target_info.sql_type;
-      switch (ti.get_type()) {
-        case kTINYINT:
-        case kSMALLINT:
-        case kINT:
-        case kBIGINT: {
-          const auto ival = v<int64_t>(row[i]);
-          ASSERT_EQ((target_info.agg_kind == kSUM || target_info.agg_kind == kCOUNT)
-                        ? step * ref_val
-                        : ref_val,
-                    ival);
-          break;
-        }
-        case kDOUBLE: {
-          const auto dval = v<double>(row[i]);
-          ASSERT_TRUE(approx_eq(static_cast<double>((target_info.agg_kind == kSUM ||
-                                                     target_info.agg_kind == kCOUNT)
-                                                        ? step * ref_val
-                                                        : ref_val),
-                                dval));
-          break;
-        }
-        case kTEXT:
-          break;
-        default:
-          CHECK(false);
-      }
-    }
-    ref_val += step;
+
+  if (sort) {
+    std::list<Analyzer::OrderEntry> order_entries;
+    order_entries.emplace_back(1, false, false);
+    result_rs->sort(order_entries, 0);
+  }
+  const size_t thread_count = cpu_threads();
+  const auto row_count = result_rs->rowCount();
+  std::vector<std::future<void>> reduction_threads;
+  for (size_t thread_idx = 0; thread_idx < thread_count; ++thread_idx) {
+    const auto thread_row_count = (row_count + thread_count - 1) / thread_count;
+    const auto start_index = thread_idx * thread_row_count;
+    const auto end_index = std::min(start_index + thread_row_count, row_count);
+    reduction_threads.emplace_back(std::async(
+        std::launch::async, [start_index, end_index, result_rs, &target_infos, step] {
+          SQLTypeInfo double_ti(kDOUBLE, false);
+
+          for (size_t row_idx = start_index; row_idx < end_index; ++row_idx) {
+            const auto row = result_rs->getRowAtNoTranslations(row_idx);
+            if (row.empty()) {
+              continue;
+            }
+            ASSERT_EQ(target_infos.size(), row.size());
+
+            for (size_t i = 0; i < target_infos.size(); ++i) {
+              const auto& target_info = target_infos[i];
+              const auto& ti =
+                  target_info.agg_kind == kAVG ? double_ti : target_info.sql_type;
+              switch (ti.get_type()) {
+                case kTINYINT:
+                case kSMALLINT:
+                case kINT:
+                case kBIGINT: {
+                  const auto ival = v<int64_t>(row[i]);
+                  const int64_t ref =
+                      (target_info.agg_kind == kSUM || target_info.agg_kind == kCOUNT)
+                          ? step * row_idx
+                          : row_idx;
+                  ASSERT_EQ(ref, ival);
+                  break;
+                }
+                case kDOUBLE: {
+                  const auto dval = v<double>(row[i]);
+                  ASSERT_DOUBLE_EQ(static_cast<double>((target_info.agg_kind == kSUM ||
+                                                        target_info.agg_kind == kCOUNT)
+                                                           ? step * row_idx
+                                                           : row_idx),
+                                   dval);
+                  break;
+                }
+                case kTEXT:
+                  break;
+                default:
+                  CHECK(false);
+              }
+            }
+          }
+        }));
+  }
+  for (auto& t : reduction_threads) {
+    t.get();
   }
 }
 
@@ -1520,7 +1565,7 @@ TEST(Reduce, PerfectHashOneCol) {
   const auto query_mem_desc = perfect_hash_one_col_desc(target_infos, 8, 0, 99);
   EvenNumberGenerator generator1;
   EvenNumberGenerator generator2;
-  test_reduce(target_infos, query_mem_desc, generator1, generator2, 2);
+  test_reduce(target_infos, query_mem_desc, generator1, generator2, 2, false);
 }
 
 TEST(Reduce, PerfectHashOneCol32) {
@@ -1528,7 +1573,7 @@ TEST(Reduce, PerfectHashOneCol32) {
   const auto query_mem_desc = perfect_hash_one_col_desc(target_infos, 4, 0, 99);
   EvenNumberGenerator generator1;
   EvenNumberGenerator generator2;
-  test_reduce(target_infos, query_mem_desc, generator1, generator2, 2);
+  test_reduce(target_infos, query_mem_desc, generator1, generator2, 2, false);
 }
 
 TEST(Reduce, PerfectHashOneColColumnar) {
@@ -1537,7 +1582,7 @@ TEST(Reduce, PerfectHashOneColColumnar) {
   query_mem_desc.setOutputColumnar(true);
   EvenNumberGenerator generator1;
   EvenNumberGenerator generator2;
-  test_reduce(target_infos, query_mem_desc, generator1, generator2, 2);
+  test_reduce(target_infos, query_mem_desc, generator1, generator2, 2, false);
 }
 
 TEST(Reduce, PerfectHashOneColColumnar32) {
@@ -1546,7 +1591,7 @@ TEST(Reduce, PerfectHashOneColColumnar32) {
   query_mem_desc.setOutputColumnar(true);
   EvenNumberGenerator generator1;
   EvenNumberGenerator generator2;
-  test_reduce(target_infos, query_mem_desc, generator1, generator2, 2);
+  test_reduce(target_infos, query_mem_desc, generator1, generator2, 2, false);
 }
 
 TEST(Reduce, PerfectHashOneColColumnar16) {
@@ -1562,7 +1607,7 @@ TEST(Reduce, PerfectHashOneColColumnar16) {
   query_mem_desc.setOutputColumnar(true);
   EvenNumberGenerator generator1;
   EvenNumberGenerator generator2;
-  test_reduce(target_infos, query_mem_desc, generator1, generator2, 2);
+  test_reduce(target_infos, query_mem_desc, generator1, generator2, 2, false);
 }
 
 TEST(Reduce, PerfectHashOneColColumnar8) {
@@ -1578,7 +1623,7 @@ TEST(Reduce, PerfectHashOneColColumnar8) {
   query_mem_desc.setOutputColumnar(true);
   EvenNumberGenerator generator1;
   EvenNumberGenerator generator2;
-  test_reduce(target_infos, query_mem_desc, generator1, generator2, 2);
+  test_reduce(target_infos, query_mem_desc, generator1, generator2, 2, false);
 }
 
 TEST(Reduce, PerfectHashOneColKeyless) {
@@ -1588,7 +1633,7 @@ TEST(Reduce, PerfectHashOneColKeyless) {
   query_mem_desc.setTargetIdxForKey(2);
   EvenNumberGenerator generator1;
   EvenNumberGenerator generator2;
-  test_reduce(target_infos, query_mem_desc, generator1, generator2, 2);
+  test_reduce(target_infos, query_mem_desc, generator1, generator2, 2, false);
 }
 
 TEST(Reduce, PerfectHashOneColKeyless32) {
@@ -1598,7 +1643,7 @@ TEST(Reduce, PerfectHashOneColKeyless32) {
   query_mem_desc.setTargetIdxForKey(2);
   EvenNumberGenerator generator1;
   EvenNumberGenerator generator2;
-  test_reduce(target_infos, query_mem_desc, generator1, generator2, 2);
+  test_reduce(target_infos, query_mem_desc, generator1, generator2, 2, false);
 }
 
 TEST(Reduce, PerfectHashOneColColumnarKeyless) {
@@ -1609,7 +1654,7 @@ TEST(Reduce, PerfectHashOneColColumnarKeyless) {
   query_mem_desc.setTargetIdxForKey(2);
   EvenNumberGenerator generator1;
   EvenNumberGenerator generator2;
-  test_reduce(target_infos, query_mem_desc, generator1, generator2, 2);
+  test_reduce(target_infos, query_mem_desc, generator1, generator2, 2, false);
 }
 
 TEST(Reduce, PerfectHashOneColColumnarKeyless32) {
@@ -1620,7 +1665,7 @@ TEST(Reduce, PerfectHashOneColColumnarKeyless32) {
   query_mem_desc.setTargetIdxForKey(2);
   EvenNumberGenerator generator1;
   EvenNumberGenerator generator2;
-  test_reduce(target_infos, query_mem_desc, generator1, generator2, 2);
+  test_reduce(target_infos, query_mem_desc, generator1, generator2, 2, false);
 }
 
 TEST(Reduce, PerfectHashOneColColumnarKeyless16) {
@@ -1638,7 +1683,7 @@ TEST(Reduce, PerfectHashOneColColumnarKeyless16) {
   query_mem_desc.setTargetIdxForKey(2);
   EvenNumberGenerator generator1;
   EvenNumberGenerator generator2;
-  test_reduce(target_infos, query_mem_desc, generator1, generator2, 2);
+  test_reduce(target_infos, query_mem_desc, generator1, generator2, 2, false);
 }
 
 TEST(Reduce, PerfectHashOneColColumnarKeyless8) {
@@ -1656,7 +1701,7 @@ TEST(Reduce, PerfectHashOneColColumnarKeyless8) {
   query_mem_desc.setTargetIdxForKey(2);
   EvenNumberGenerator generator1;
   EvenNumberGenerator generator2;
-  test_reduce(target_infos, query_mem_desc, generator1, generator2, 2);
+  test_reduce(target_infos, query_mem_desc, generator1, generator2, 2, false);
 }
 
 TEST(Reduce, PerfectHashTwoCol) {
@@ -1664,7 +1709,7 @@ TEST(Reduce, PerfectHashTwoCol) {
   const auto query_mem_desc = perfect_hash_two_col_desc(target_infos, 8);
   EvenNumberGenerator generator1;
   EvenNumberGenerator generator2;
-  test_reduce(target_infos, query_mem_desc, generator1, generator2, 2);
+  test_reduce(target_infos, query_mem_desc, generator1, generator2, 2, false);
 }
 
 TEST(Reduce, PerfectHashTwoCol32) {
@@ -1672,7 +1717,7 @@ TEST(Reduce, PerfectHashTwoCol32) {
   const auto query_mem_desc = perfect_hash_two_col_desc(target_infos, 4);
   EvenNumberGenerator generator1;
   EvenNumberGenerator generator2;
-  test_reduce(target_infos, query_mem_desc, generator1, generator2, 2);
+  test_reduce(target_infos, query_mem_desc, generator1, generator2, 2, false);
 }
 
 TEST(Reduce, PerfectHashTwoColColumnar) {
@@ -1681,7 +1726,7 @@ TEST(Reduce, PerfectHashTwoColColumnar) {
   query_mem_desc.setOutputColumnar(true);
   EvenNumberGenerator generator1;
   EvenNumberGenerator generator2;
-  test_reduce(target_infos, query_mem_desc, generator1, generator2, 2);
+  test_reduce(target_infos, query_mem_desc, generator1, generator2, 2, false);
 }
 
 TEST(Reduce, PerfectHashTwoColColumnar32) {
@@ -1690,7 +1735,7 @@ TEST(Reduce, PerfectHashTwoColColumnar32) {
   query_mem_desc.setOutputColumnar(true);
   EvenNumberGenerator generator1;
   EvenNumberGenerator generator2;
-  test_reduce(target_infos, query_mem_desc, generator1, generator2, 2);
+  test_reduce(target_infos, query_mem_desc, generator1, generator2, 2, false);
 }
 
 TEST(Reduce, PerfectHashTwoColKeyless) {
@@ -1700,7 +1745,7 @@ TEST(Reduce, PerfectHashTwoColKeyless) {
   query_mem_desc.setTargetIdxForKey(2);
   EvenNumberGenerator generator1;
   EvenNumberGenerator generator2;
-  test_reduce(target_infos, query_mem_desc, generator1, generator2, 2);
+  test_reduce(target_infos, query_mem_desc, generator1, generator2, 2, false);
 }
 
 TEST(Reduce, PerfectHashTwoColKeyless32) {
@@ -1710,7 +1755,7 @@ TEST(Reduce, PerfectHashTwoColKeyless32) {
   query_mem_desc.setTargetIdxForKey(2);
   EvenNumberGenerator generator1;
   EvenNumberGenerator generator2;
-  test_reduce(target_infos, query_mem_desc, generator1, generator2, 2);
+  test_reduce(target_infos, query_mem_desc, generator1, generator2, 2, false);
 }
 
 TEST(Reduce, PerfectHashTwoColColumnarKeyless) {
@@ -1721,7 +1766,7 @@ TEST(Reduce, PerfectHashTwoColColumnarKeyless) {
   query_mem_desc.setTargetIdxForKey(2);
   EvenNumberGenerator generator1;
   EvenNumberGenerator generator2;
-  test_reduce(target_infos, query_mem_desc, generator1, generator2, 2);
+  test_reduce(target_infos, query_mem_desc, generator1, generator2, 2, false);
 }
 
 TEST(Reduce, PerfectHashTwoColColumnarKeyless32) {
@@ -1732,7 +1777,7 @@ TEST(Reduce, PerfectHashTwoColColumnarKeyless32) {
   query_mem_desc.setTargetIdxForKey(2);
   EvenNumberGenerator generator1;
   EvenNumberGenerator generator2;
-  test_reduce(target_infos, query_mem_desc, generator1, generator2, 2);
+  test_reduce(target_infos, query_mem_desc, generator1, generator2, 2, false);
 }
 
 TEST(Reduce, BaselineHash) {
@@ -1740,7 +1785,7 @@ TEST(Reduce, BaselineHash) {
   const auto query_mem_desc = baseline_hash_two_col_desc(target_infos, 8);
   EvenNumberGenerator generator1;
   ReverseOddOrEvenNumberGenerator generator2(2 * query_mem_desc.getEntryCount() - 1);
-  test_reduce(target_infos, query_mem_desc, generator1, generator2, 1);
+  test_reduce(target_infos, query_mem_desc, generator1, generator2, 1, true);
 }
 
 TEST(Reduce, BaselineHashColumnar) {
@@ -1749,8 +1794,45 @@ TEST(Reduce, BaselineHashColumnar) {
   query_mem_desc.setOutputColumnar(true);
   EvenNumberGenerator generator1;
   ReverseOddOrEvenNumberGenerator generator2(2 * query_mem_desc.getEntryCount() - 1);
-  test_reduce(target_infos, query_mem_desc, generator1, generator2, 1);
+  test_reduce(target_infos, query_mem_desc, generator1, generator2, 1, true);
 }
+
+#ifndef HAVE_TSAN
+// The large buffers tests allocate too much memory to instrument under TSAN
+TEST(ReduceLargeBuffers, PerfectHashOne_Overflow32) {
+  const auto target_infos = generate_random_groups_nullable_target_infos();
+  auto query_mem_desc = perfect_hash_one_col_desc(target_infos, 8, 0, 222208903, {8});
+  EvenNumberGenerator gen1;
+  EvenNumberGenerator gen2;
+  test_reduce(target_infos, query_mem_desc, gen1, gen2, 2, false);
+}
+
+TEST(ReduceLargeBuffers, PerfectHashColumnarOne_Overflow32) {
+  const auto target_infos = generate_random_groups_nullable_target_infos();
+  auto query_mem_desc = perfect_hash_one_col_desc(target_infos, 8, 0, 222208903, {8});
+  query_mem_desc.setOutputColumnar(true);
+  EvenNumberGenerator gen1;
+  EvenNumberGenerator gen2;
+  test_reduce(target_infos, query_mem_desc, gen1, gen2, 2, false);
+}
+
+TEST(ReduceLargeBuffers, BaselineHash_Overflow32) {
+  const auto target_infos = generate_random_groups_nullable_target_infos();
+  auto query_mem_desc = baseline_hash_two_col_desc_overflow32(target_infos, 8);
+  EvenNumberGenerator gen1;
+  EvenNumberGenerator gen2;
+  run_reduction(target_infos, query_mem_desc, gen1, gen2, 2);
+}
+
+TEST(ReduceLargeBuffers, BaselineHashColumnar_Overflow32) {
+  const auto target_infos = generate_random_groups_nullable_target_infos();
+  auto query_mem_desc = baseline_hash_two_col_desc_overflow32(target_infos, 8);
+  query_mem_desc.setOutputColumnar(true);
+  EvenNumberGenerator gen1;
+  EvenNumberGenerator gen2;
+  run_reduction(target_infos, query_mem_desc, gen1, gen2, 2);
+}
+#endif
 
 TEST(MoreReduce, MissingValues) {
   std::vector<TargetInfo> target_infos;

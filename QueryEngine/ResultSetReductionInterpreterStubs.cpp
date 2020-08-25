@@ -166,6 +166,9 @@ extern "C" void write_stub_result_int(void* output_handle, const int64_t int_val
 // Generates a stub function with a fixed signature which can be called from the
 // interpreter. The generated function extracts the values from the list of wrapped values
 // from the interpreter, consistent with the provided argument types.
+// NOTE: this is currently thread safe because only one interpreter reduction can run at a
+// time. If the interpreter allows multiple stubs to run at a time we will need to ensure
+// proper ownership of the compilation context.
 StubGenerator::Stub StubGenerator::generateStub(const std::string& name,
                                                 const std::vector<Type>& arg_types,
                                                 const Type ret_type,
@@ -173,9 +176,12 @@ StubGenerator::Stub StubGenerator::generateStub(const std::string& name,
   const auto stub_name = name + "_stub";
   CodeCacheKey key{stub_name};
   std::lock_guard<std::mutex> s_stubs_cache_lock(s_stubs_cache_mutex);
-  const auto val_ptr = s_stubs_cache.get(key);
-  if (val_ptr) {
-    return reinterpret_cast<StubGenerator::Stub>(std::get<0>(val_ptr->first.front()));
+  const auto compilation_context = s_stubs_cache.get(key);
+  if (compilation_context) {
+    auto cpu_context =
+        std::dynamic_pointer_cast<CpuCompilationContext>(compilation_context->first);
+    CHECK(cpu_context);
+    return reinterpret_cast<StubGenerator::Stub>(cpu_context->func());
   }
   auto cgen_state = std::make_unique<CgenState>(std::vector<InputTableInfo>{}, false);
   std::unique_ptr<llvm::Module> module(runtime_module_shallow_copy(cgen_state.get()));
@@ -239,11 +245,11 @@ StubGenerator::Stub StubGenerator::generateStub(const std::string& name,
   auto ee = CodeGenerator::generateNativeCPUCode(function, {function}, co);
   auto func_ptr =
       reinterpret_cast<StubGenerator::Stub>(ee->getPointerToFunction(function));
-  auto cache_val = std::make_tuple(reinterpret_cast<void*>(func_ptr), std::move(ee));
-  std::vector<std::tuple<void*, ExecutionEngineWrapper>> cache_vals;
-  cache_vals.emplace_back(std::move(cache_val));
+
+  auto cpu_compilation_context = std::make_shared<CpuCompilationContext>(std::move(ee));
+  cpu_compilation_context->setFunctionPointer(function);
   Executor::addCodeToCache(
-      key, std::move(cache_vals), function->getParent(), s_stubs_cache);
+      key, cpu_compilation_context, function->getParent(), s_stubs_cache);
   return func_ptr;
 }
 

@@ -42,7 +42,8 @@
 
 #include "../Fragmenter/InsertDataLoader.h"
 
-#include <Import/Importer.h>
+#include <ImportExport/Importer.h>
+#include <ImportExport/QueryExporter.h>
 
 #include <functional>
 
@@ -255,6 +256,7 @@ class UserLiteral : public Literal {
       const Catalog_Namespace::Catalog& catalog,
       Analyzer::Query& query,
       TlistRefType allow_tlist_ref = TLIST_NONE) const override;
+  static std::shared_ptr<Analyzer::Expr> get(const std::string&);
   std::string to_string() const override { return "USER"; }
 };
 
@@ -1436,11 +1438,11 @@ class CopyTableStmt : public DDLStmt {
   }
   void execute(const Catalog_Namespace::SessionInfo& session) override;
   void execute(const Catalog_Namespace::SessionInfo& session,
-               const std::function<std::unique_ptr<Importer_NS::Importer>(
+               const std::function<std::unique_ptr<import_export::Importer>(
                    Catalog_Namespace::Catalog&,
                    const TableDescriptor*,
                    const std::string&,
-                   const Importer_NS::CopyParams&)>& importer_factory);
+                   const import_export::CopyParams&)>& importer_factory);
   std::unique_ptr<std::string> return_message;
 
   std::string& get_table() const {
@@ -1454,7 +1456,7 @@ class CopyTableStmt : public DDLStmt {
 
   void get_geo_copy_from_payload(std::string& geo_copy_from_table,
                                  std::string& geo_copy_from_file_name,
-                                 Importer_NS::CopyParams& geo_copy_from_copy_params,
+                                 import_export::CopyParams& geo_copy_from_copy_params,
                                  std::string& geo_copy_from_partitions) {
     geo_copy_from_table = *table;
     geo_copy_from_file_name = _geo_copy_from_file_name;
@@ -1471,7 +1473,7 @@ class CopyTableStmt : public DDLStmt {
 
   bool _was_geo_copy_from = false;
   std::string _geo_copy_from_file_name;
-  Importer_NS::CopyParams _geo_copy_from_copy_params;
+  import_export::CopyParams _geo_copy_from_copy_params;
   std::string _geo_copy_from_partitions;
 };
 
@@ -1821,6 +1823,13 @@ class ExportQueryStmt : public DDLStmt {
   std::unique_ptr<std::string> select_stmt;
   std::unique_ptr<std::string> file_path;
   std::list<std::unique_ptr<NameValueAssign>> options;
+
+  void parseOptions(import_export::CopyParams& copy_params,
+                    // @TODO(se) move rest to CopyParams when we have a Thrift endpoint
+                    import_export::QueryExporter::FileType& file_type,
+                    std::string& layer_name,
+                    import_export::QueryExporter::FileCompression& file_compression,
+                    import_export::QueryExporter::ArrayNullHandling& array_null_handling);
 };
 
 /*

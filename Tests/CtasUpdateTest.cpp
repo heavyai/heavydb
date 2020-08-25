@@ -680,6 +680,7 @@ std::shared_ptr<ResultSet> run_multiple_agg(const std::string& sql,
 TEST(Ctas, SyntaxCheck) {
   run_ddl_statement("DROP TABLE IF EXISTS CTAS_SOURCE;");
   run_ddl_statement("DROP TABLE IF EXISTS CTAS_SOURCE_WITH;");
+  run_ddl_statement("DROP TABLE IF EXISTS CTAS_SOURCE_TEXT;");
   run_ddl_statement("DROP TABLE IF EXISTS CTAS_TARGET;");
 
   run_ddl_statement("CREATE TABLE CTAS_SOURCE (id int);");
@@ -724,6 +725,60 @@ TEST(Ctas, SyntaxCheck) {
   EXPECT_THROW(run_ddl_statement(ddl), std::runtime_error);
   ddl = "DROP TABLE CTAS_TARGET;";
   run_ddl_statement(ddl);
+
+  run_ddl_statement("CREATE TABLE CTAS_SOURCE_TEXT (id text);");
+  ddl =
+      "CREATE TABLE CTAS_TARGET AS SELECT * FROM CTAS_SOURCE_TEXT WITH( "
+      "USE_SHARED_DICTIONARIES='FALSE' );";
+  run_ddl_statement(ddl);
+
+  {
+    auto& cat = QR::get()->getSession()->getCatalog();
+    auto td_source = cat.getMetadataForTable("CTAS_SOURCE_TEXT");
+    auto cd_source = cat.getMetadataForColumn(td_source->tableId, "id");
+
+    auto td_target = cat.getMetadataForTable("CTAS_TARGET");
+    auto cd_target = cat.getMetadataForColumn(td_target->tableId, "id");
+
+    ASSERT_TRUE(cd_source->columnType.get_comp_param() !=
+                cd_target->columnType.get_comp_param());
+  }
+
+  ddl = "DROP TABLE CTAS_TARGET;";
+  run_ddl_statement(ddl);
+  ddl = "CREATE TABLE CTAS_TARGET AS SELECT * FROM CTAS_SOURCE_TEXT;";
+  run_ddl_statement(ddl);
+
+  {
+    auto& cat = QR::get()->getSession()->getCatalog();
+    auto td_source = cat.getMetadataForTable("CTAS_SOURCE_TEXT");
+    auto cd_source = cat.getMetadataForColumn(td_source->tableId, "id");
+
+    auto td_target = cat.getMetadataForTable("CTAS_TARGET");
+    auto cd_target = cat.getMetadataForColumn(td_target->tableId, "id");
+
+    ASSERT_EQ(cd_source->columnType.get_comp_param(),
+              cd_target->columnType.get_comp_param());
+  }
+
+  ddl = "DROP TABLE CTAS_TARGET;";
+  run_ddl_statement(ddl);
+  ddl =
+      "CREATE TABLE CTAS_TARGET AS SELECT * FROM CTAS_SOURCE_TEXT WITH( "
+      "USE_SHARED_DICTIONARIES='TRUE' );";
+  run_ddl_statement(ddl);
+
+  {
+    auto& cat = QR::get()->getSession()->getCatalog();
+    auto td_source = cat.getMetadataForTable("CTAS_SOURCE_TEXT");
+    auto cd_source = cat.getMetadataForColumn(td_source->tableId, "id");
+
+    auto td_target = cat.getMetadataForTable("CTAS_TARGET");
+    auto cd_target = cat.getMetadataForColumn(td_target->tableId, "id");
+
+    ASSERT_EQ(cd_source->columnType.get_comp_param(),
+              cd_target->columnType.get_comp_param());
+  }
 }
 
 TEST(Ctas, LiteralStringTest) {
@@ -1035,7 +1090,7 @@ TEST(Itas, SyntaxCheck) {
   run_ddl_statement("CREATE TABLE ITAS_TARGET (id int encoding FIXED(8));");
 
   ddl = "INSERT INTO ITAS_TARGET SELECT * FROM ITAS_SOURCE;";
-  EXPECT_THROW(run_ddl_statement(ddl), std::runtime_error);
+  EXPECT_NO_THROW(run_ddl_statement(ddl));
 
   ddl = "DROP TABLE IF EXISTS ITAS_SOURCE;";
   run_ddl_statement(ddl);
@@ -1149,6 +1204,63 @@ TEST(Itas, DifferentColumnNames) {
   check(30, 3);
 }
 
+TEST(Itas, AllowDifferentFixedEncodings) {
+  run_ddl_statement("DROP TABLE IF EXISTS ITAS_SOURCE;");
+  run_ddl_statement("DROP TABLE IF EXISTS ITAS_TARGET;");
+
+  run_ddl_statement("CREATE TABLE ITAS_SOURCE (id int, val int);");
+  run_ddl_statement("CREATE TABLE ITAS_TARGET (id int, val bigint);");
+
+  EXPECT_NO_THROW(
+      run_ddl_statement("INSERT INTO ITAS_TARGET SELECT * FROM ITAS_SOURCE;"));
+
+  run_ddl_statement("DROP TABLE IF EXISTS ITAS_SOURCE;");
+  run_ddl_statement("DROP TABLE IF EXISTS ITAS_TARGET;");
+
+  run_ddl_statement("CREATE TABLE ITAS_SOURCE (id int, val bigint);");
+  run_ddl_statement("CREATE TABLE ITAS_TARGET (id int, val bigint encoding fixed(8));");
+
+  EXPECT_NO_THROW(
+      run_ddl_statement("INSERT INTO ITAS_TARGET SELECT * FROM ITAS_SOURCE;"));
+
+  run_ddl_statement("DROP TABLE IF EXISTS ITAS_SOURCE;");
+  run_ddl_statement("DROP TABLE IF EXISTS ITAS_TARGET;");
+
+  run_ddl_statement("CREATE TABLE ITAS_SOURCE (id int, val timestamp);");
+  run_ddl_statement(
+      "CREATE TABLE ITAS_TARGET (id int, val timestamp encoding fixed(32));");
+
+  EXPECT_NO_THROW(
+      run_ddl_statement("INSERT INTO ITAS_TARGET SELECT * FROM ITAS_SOURCE;"));
+
+  run_ddl_statement("DROP TABLE IF EXISTS ITAS_SOURCE;");
+  run_ddl_statement("DROP TABLE IF EXISTS ITAS_TARGET;");
+
+  run_ddl_statement("CREATE TABLE ITAS_SOURCE (id int, val time);");
+  run_ddl_statement("CREATE TABLE ITAS_TARGET (id int, val time encoding fixed(32));");
+
+  EXPECT_NO_THROW(
+      run_ddl_statement("INSERT INTO ITAS_TARGET SELECT * FROM ITAS_SOURCE;"));
+
+  run_ddl_statement("DROP TABLE IF EXISTS ITAS_SOURCE;");
+  run_ddl_statement("DROP TABLE IF EXISTS ITAS_TARGET;");
+
+  run_ddl_statement("CREATE TABLE ITAS_SOURCE (id int, val date);");
+  run_ddl_statement("CREATE TABLE ITAS_TARGET (id int, val date encoding fixed(16));");
+
+  EXPECT_NO_THROW(
+      run_ddl_statement("INSERT INTO ITAS_TARGET SELECT * FROM ITAS_SOURCE;"));
+
+  run_ddl_statement("DROP TABLE IF EXISTS ITAS_SOURCE;");
+  run_ddl_statement("DROP TABLE IF EXISTS ITAS_TARGET;");
+
+  run_ddl_statement("CREATE TABLE ITAS_SOURCE (id int, val decimal(17, 2));");
+  run_ddl_statement("CREATE TABLE ITAS_TARGET (id int, val decimal( 5, 2));");
+
+  EXPECT_NO_THROW(
+      run_ddl_statement("INSERT INTO ITAS_TARGET SELECT * FROM ITAS_SOURCE;"));
+}
+
 TEST(Itas, SelectStar) {
   run_ddl_statement("DROP TABLE IF EXISTS ITAS_SOURCE_1;");
   run_ddl_statement("DROP TABLE IF EXISTS ITAS_SOURCE_2;");
@@ -1168,6 +1280,114 @@ TEST(Itas, SelectStar) {
   run_ddl_statement("DROP TABLE ITAS_SOURCE_1;");
   run_ddl_statement("DROP TABLE ITAS_SOURCE_2;");
   run_ddl_statement("DROP TABLE ITAS_TARGET;");
+}
+
+TEST(Itas, UnsupportedBooleanCast) {
+  run_ddl_statement("DROP TABLE IF EXISTS ITAS_TARGET;");
+  run_ddl_statement("DROP TABLE IF EXISTS ITAS_SOURCE;");
+
+  run_ddl_statement("CREATE TABLE ITAS_TARGET (id boolean);");
+  run_ddl_statement(
+      "CREATE TABLE ITAS_SOURCE (id int, str text, val timestamp(3), g point);");
+
+  EXPECT_ANY_THROW(
+      run_ddl_statement("INSERT INTO ITAS_TARGET (SELECT id FROM ITAS_SOURCE);"));
+  EXPECT_ANY_THROW(
+      run_ddl_statement("INSERT INTO ITAS_TARGET (SELECT str FROM ITAS_SOURCE);"));
+  EXPECT_ANY_THROW(
+      run_ddl_statement("INSERT INTO ITAS_TARGET (SELECT val FROM ITAS_SOURCE);"));
+  EXPECT_ANY_THROW(
+      run_ddl_statement("INSERT INTO ITAS_TARGET (SELECT g FROM ITAS_SOURCE);"));
+  EXPECT_NO_THROW(run_ddl_statement(
+      "INSERT INTO ITAS_TARGET (SELECT CAST(id AS boolean) FROM ITAS_SOURCE);"));
+
+  run_ddl_statement("DROP TABLE ITAS_TARGET;");
+  run_ddl_statement("DROP TABLE ITAS_SOURCE;");
+}
+
+TEST(Itas, UnsupportedGeo) {
+  run_ddl_statement("DROP TABLE IF EXISTS ITAS_TARGET;");
+  run_ddl_statement("DROP TABLE IF EXISTS ITAS_SOURCE;");
+
+  run_ddl_statement("CREATE TABLE ITAS_TARGET (p point);");
+  run_ddl_statement(
+      "CREATE TABLE ITAS_SOURCE (id int, str text, val timestamp(3), g linestring);");
+
+  EXPECT_ANY_THROW(
+      run_ddl_statement("INSERT INTO ITAS_TARGET (SELECT id FROM ITAS_SOURCE);"));
+  EXPECT_ANY_THROW(
+      run_ddl_statement("INSERT INTO ITAS_TARGET (SELECT str FROM ITAS_SOURCE);"));
+  EXPECT_ANY_THROW(
+      run_ddl_statement("INSERT INTO ITAS_TARGET (SELECT val FROM ITAS_SOURCE);"));
+  EXPECT_ANY_THROW(
+      run_ddl_statement("INSERT INTO ITAS_TARGET (SELECT g FROM ITAS_SOURCE);"));
+
+  run_ddl_statement("DROP TABLE ITAS_TARGET;");
+  run_ddl_statement("DROP TABLE ITAS_SOURCE;");
+}
+
+TEST(Itas, UnsupportedDateTime) {
+  // time
+  run_ddl_statement("DROP TABLE IF EXISTS ITAS_TARGET;");
+  run_ddl_statement("DROP TABLE IF EXISTS ITAS_SOURCE;");
+
+  run_ddl_statement("CREATE TABLE ITAS_TARGET (t time);");
+  run_ddl_statement(
+      "CREATE TABLE ITAS_SOURCE (id int, str text, val timestamp(3), d date);");
+
+  EXPECT_ANY_THROW(
+      run_ddl_statement("INSERT INTO ITAS_TARGET (SELECT id FROM ITAS_SOURCE);"));
+  EXPECT_ANY_THROW(
+      run_ddl_statement("INSERT INTO ITAS_TARGET (SELECT str FROM ITAS_SOURCE);"));
+  EXPECT_ANY_THROW(
+      run_ddl_statement("INSERT INTO ITAS_TARGET (SELECT val FROM ITAS_SOURCE);"));
+  EXPECT_ANY_THROW(
+      run_ddl_statement("INSERT INTO ITAS_TARGET (SELECT d FROM ITAS_SOURCE);"));
+
+  run_ddl_statement("DROP TABLE ITAS_TARGET;");
+  run_ddl_statement("DROP TABLE ITAS_SOURCE;");
+
+  // date
+  run_ddl_statement("DROP TABLE IF EXISTS ITAS_TARGET;");
+  run_ddl_statement("DROP TABLE IF EXISTS ITAS_SOURCE;");
+
+  run_ddl_statement("CREATE TABLE ITAS_TARGET (t date);");
+  run_ddl_statement(
+      "CREATE TABLE ITAS_SOURCE (id int, str text, val timestamp(3), d time);");
+
+  EXPECT_ANY_THROW(
+      run_ddl_statement("INSERT INTO ITAS_TARGET (SELECT id FROM ITAS_SOURCE);"));
+  EXPECT_ANY_THROW(
+      run_ddl_statement("INSERT INTO ITAS_TARGET (SELECT str FROM ITAS_SOURCE);"));
+  EXPECT_ANY_THROW(
+      run_ddl_statement("INSERT INTO ITAS_TARGET (SELECT val FROM ITAS_SOURCE);"));
+  EXPECT_ANY_THROW(
+      run_ddl_statement("INSERT INTO ITAS_TARGET (SELECT d FROM ITAS_SOURCE);"));
+
+  run_ddl_statement("DROP TABLE ITAS_TARGET;");
+  run_ddl_statement("DROP TABLE ITAS_SOURCE;");
+
+  // timestamp
+  run_ddl_statement("DROP TABLE IF EXISTS ITAS_TARGET;");
+  run_ddl_statement("DROP TABLE IF EXISTS ITAS_SOURCE;");
+
+  run_ddl_statement("CREATE TABLE ITAS_TARGET (t timestamp);");
+  run_ddl_statement(
+      "CREATE TABLE ITAS_SOURCE (id int, str text, val timestamp(3), d date);");
+
+  EXPECT_ANY_THROW(
+      run_ddl_statement("INSERT INTO ITAS_TARGET (SELECT id FROM ITAS_SOURCE);"));
+  EXPECT_ANY_THROW(
+      run_ddl_statement("INSERT INTO ITAS_TARGET (SELECT str FROM ITAS_SOURCE);"));
+  EXPECT_ANY_THROW(
+      run_ddl_statement("INSERT INTO ITAS_TARGET (SELECT val FROM ITAS_SOURCE);"));
+  EXPECT_NO_THROW(run_ddl_statement(
+      "INSERT INTO ITAS_TARGET (SELECT CAST(val AS TIMESTAMP) FROM ITAS_SOURCE);"));
+  EXPECT_ANY_THROW(
+      run_ddl_statement("INSERT INTO ITAS_TARGET (SELECT d FROM ITAS_SOURCE);"));
+
+  run_ddl_statement("DROP TABLE ITAS_TARGET;");
+  run_ddl_statement("DROP TABLE ITAS_SOURCE;");
 }
 
 void itasTestBody(std::vector<std::shared_ptr<TestColumnDescriptor>>& columnDescriptors,
@@ -1341,7 +1561,7 @@ void exportTestBody(std::string sourcePartitionScheme = ")") {
   boost::filesystem::path temp =
       boost::filesystem::temp_directory_path() / boost::filesystem::unique_path();
 
-  std::string export_file_name = temp.native();
+  std::string export_file_name = temp.native() + ".csv";
 
   // execute CTAS
   std::string export_sql = "COPY (SELECT * FROM EXPORT_SOURCE) TO '" + export_file_name +

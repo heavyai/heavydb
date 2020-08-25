@@ -79,7 +79,7 @@ bool CudaMgr::isArchMaxwellOrLaterForAll() const {
   CHECK(false);
   return false;
 }
-bool CudaMgr::isArchVoltaForAll() const {
+bool CudaMgr::isArchVoltaOrGreaterForAll() const {
   CHECK(false);
   return false;
 }

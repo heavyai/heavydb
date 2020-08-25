@@ -20,13 +20,17 @@
 
 #include "DataMgr/AbstractBufferMgr.h"
 #include "ForeignDataWrapper.h"
+#include "ForeignStorageCache.h"
+#include "Shared/mapd_shared_mutex.h"
 
 using namespace Data_Namespace;
+
+extern size_t foreign_cache_entry_limit;
 
 namespace foreign_storage {
 class ForeignStorageMgr : public AbstractBufferMgr {
  public:
-  ForeignStorageMgr();
+  ForeignStorageMgr(File_Namespace::GlobalFileMgr* global_file_mgr);
 
   AbstractBuffer* createBuffer(const ChunkKey& chunk_key,
                                const size_t page_size,
@@ -41,7 +45,15 @@ class ForeignStorageMgr : public AbstractBufferMgr {
   AbstractBuffer* putBuffer(const ChunkKey& chunk_key,
                             AbstractBuffer* source_buffer,
                             const size_t num_bytes) override;
+  /*
+    Obtains (and caches) chunk-metadata for all existing data wrappers, but will not
+    create new ones.
+   */
   void getChunkMetadataVec(ChunkMetadataVector& chunk_metadata) override;
+  /*
+    Obtains and caches chunk-metadata relating to a prefix.  Will create and use new
+    datawrappers if none are found for the given prefix.
+   */
   void getChunkMetadataVecForKeyPrefix(ChunkMetadataVector& chunk_metadata,
                                        const ChunkKey& chunk_key_prefix) override;
   bool isBufferOnDevice(const ChunkKey& chunk_key) override;
@@ -59,12 +71,17 @@ class ForeignStorageMgr : public AbstractBufferMgr {
   std::string getStringMgrType() override;
   size_t getNumChunks() override;
   void removeTableRelatedDS(const int db_id, const int table_id) override;
+  ForeignStorageCache* getForeignStorageCache() const;
+  void refreshTablesInCache(const std::vector<ChunkKey>& table_keys);
+  void evictTablesFromCache(const std::vector<ChunkKey>& table_keys);
 
  private:
   void createDataWrapperIfNotExists(const ChunkKey& chunk_key);
   std::shared_ptr<ForeignDataWrapper> getDataWrapper(const ChunkKey& chunk_key);
 
   std::shared_mutex data_wrapper_mutex_;
+
   std::map<ChunkKey, std::shared_ptr<ForeignDataWrapper>> data_wrapper_map_;
+  std::unique_ptr<ForeignStorageCache> foreign_storage_cache_;
 };
 }  // namespace foreign_storage

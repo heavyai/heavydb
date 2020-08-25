@@ -114,7 +114,7 @@ inline ExecutionOptions get_execution_options() {
 
 void TableOptimizer::recomputeMetadata() const {
   INJECT_TIMER(optimizeMetadata);
-  std::lock_guard<std::mutex> lock(executor_->execute_mutex_);
+  mapd_unique_lock<mapd_shared_mutex> lock(executor_->execute_mutex_);
 
   LOG(INFO) << "Recomputing metadata for " << td_->tableName;
 

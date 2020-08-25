@@ -10,6 +10,7 @@ import org.junit.Test;
 import java.math.BigDecimal;
 import java.sql.*;
 import java.util.Properties;
+import java.util.TimeZone;
 
 // Create Array and validate
 // Insert arrays and validate it is the same
@@ -39,6 +40,7 @@ public class OmniSciArrayTest {
     pt.setProperty("user", user);
     pt.setProperty("password", password);
     m_conn = DriverManager.getConnection(url, pt);
+    TimeZone.setDefault(TimeZone.getTimeZone("UTC"));
   }
 
   @After

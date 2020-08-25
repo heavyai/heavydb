@@ -562,6 +562,27 @@ QueryMemoryDescriptor baseline_hash_two_col_desc_large(
   return query_mem_desc;
 }
 
+QueryMemoryDescriptor baseline_hash_two_col_desc_overflow32(
+    const std::vector<TargetInfo>& target_infos,
+    const int8_t num_bytes) {
+  QueryMemoryDescriptor query_mem_desc(
+      QueryDescriptionType::GroupByBaselineHash, 0, 54703480, false, {8, 8});
+  for (const auto& target_info : target_infos) {
+    const auto slot_bytes =
+        std::max(num_bytes, static_cast<int8_t>(target_info.sql_type.get_size()));
+    std::vector<std::tuple<int8_t, int8_t>> slots_for_target;
+    if (target_info.agg_kind == kAVG) {
+      CHECK(target_info.is_agg);
+      slots_for_target.emplace_back(std::make_tuple(slot_bytes, slot_bytes));
+    }
+    slots_for_target.emplace_back(std::make_tuple(slot_bytes, slot_bytes));
+    query_mem_desc.addColSlotInfo(slots_for_target);
+  }
+  query_mem_desc.setEntryCount(query_mem_desc.getMaxVal() - query_mem_desc.getMinVal() +
+                               1);
+  return query_mem_desc;
+}
+
 QueryMemoryDescriptor baseline_hash_two_col_desc(
     const std::vector<TargetInfo>& target_infos,
     const int8_t num_bytes) {

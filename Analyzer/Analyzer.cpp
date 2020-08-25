@@ -127,6 +127,10 @@ std::shared_ptr<Analyzer::Expr> KeyForStringExpr::deep_copy() const {
   return makeExpr<KeyForStringExpr>(arg->deep_copy());
 }
 
+std::shared_ptr<Analyzer::Expr> SampleRatioExpr::deep_copy() const {
+  return makeExpr<SampleRatioExpr>(arg->deep_copy());
+}
+
 std::shared_ptr<Analyzer::Expr> LowerExpr::deep_copy() const {
   return makeExpr<LowerExpr>(arg->deep_copy());
 }
@@ -205,8 +209,15 @@ ExpressionPtr ArrayExpr::deep_copy() const {
       type_info, contained_expressions_, is_null_, local_alloc_);
 }
 
-std::shared_ptr<Analyzer::Expr> GeoExpr::deep_copy() const {
-  return makeExpr<GeoExpr>(type_info, args_);
+std::shared_ptr<Analyzer::Expr> GeoUOper::deep_copy() const {
+  if (op_ == Geo_namespace::GeoBase::GeoOp::kPROJECTION) {
+    return makeExpr<GeoUOper>(op_, type_info, type_info, args0_);
+  }
+  return makeExpr<GeoUOper>(op_, type_info, ti0_, args0_);
+}
+
+std::shared_ptr<Analyzer::Expr> GeoBinOper::deep_copy() const {
+  return makeExpr<GeoBinOper>(op_, type_info, ti0_, ti1_, args0_, args1_);
 }
 
 SQLTypeInfo BinOper::analyze_type_info(SQLOps op,
@@ -1068,11 +1079,61 @@ void Constant::cast_to_string(const SQLTypeInfo& str_type_info) {
   type_info = str_type_info;
 }
 
+namespace {
+
+// TODO(adb): we should revisit this, as one could argue a Datum should never contain
+// a null sentinel. In fact, if we bundle Datum with a null boolean ("NullableDatum"),
+// the logic becomes more explicit. There are likely other bugs associated with the
+// current logic -- for example, boolean is set to -128 which is likely UB
+inline bool is_null_value(const SQLTypeInfo& ti, const Datum& constval) {
+  switch (ti.get_type()) {
+    case kBOOLEAN:
+      return constval.tinyintval == NULL_BOOLEAN;
+    case kTINYINT:
+      return constval.tinyintval == NULL_TINYINT;
+    case kINT:
+      return constval.intval == NULL_INT;
+    case kSMALLINT:
+      return constval.smallintval == NULL_SMALLINT;
+    case kBIGINT:
+    case kNUMERIC:
+    case kDECIMAL:
+      return constval.bigintval == NULL_BIGINT;
+    case kTIME:
+    case kTIMESTAMP:
+    case kDATE:
+      return constval.bigintval == NULL_BIGINT;
+    case kVARCHAR:
+    case kCHAR:
+    case kTEXT:
+      return constval.stringval == nullptr;
+    case kPOINT:
+    case kLINESTRING:
+    case kPOLYGON:
+    case kMULTIPOLYGON:
+      return constval.stringval == nullptr;
+    case kFLOAT:
+      return constval.floatval == NULL_FLOAT;
+    case kDOUBLE:
+      return constval.doubleval == NULL_DOUBLE;
+    case kNULLT:
+      return constval.bigintval == 0;
+    case kARRAY:
+      return constval.arrayval == nullptr;
+    default:
+      UNREACHABLE();
+  }
+  UNREACHABLE();
+  return false;
+}
+
+}  // namespace
+
 void Constant::do_cast(const SQLTypeInfo& new_type_info) {
   if (type_info == new_type_info) {
     return;
   }
-  if (is_null) {
+  if (is_null && !new_type_info.get_notnull()) {
     type_info = new_type_info;
     set_null_value();
     return;
@@ -1133,6 +1194,12 @@ void Constant::do_cast(const SQLTypeInfo& new_type_info) {
                                new_type_info.is_string() || new_type_info.is_boolean())) {
     type_info = new_type_info;
     set_null_value();
+  } else if (!is_null_value(type_info, constval) &&
+             get_nullable_type_info(type_info) == new_type_info) {
+    CHECK(!is_null);
+    // relax nullability
+    type_info = new_type_info;
+    return;
   } else {
     throw std::runtime_error("Cast from " + type_info.get_type_name() + " to " +
                              new_type_info.get_type_name() + " not supported");
@@ -1501,6 +1568,20 @@ void CharLengthExpr::group_predicates(std::list<const Expr*>& scan_predicates,
 void KeyForStringExpr::group_predicates(std::list<const Expr*>& scan_predicates,
                                         std::list<const Expr*>& join_predicates,
                                         std::list<const Expr*>& const_predicates) const {
+  std::set<int> rte_idx_set;
+  arg->collect_rte_idx(rte_idx_set);
+  if (rte_idx_set.size() > 1) {
+    join_predicates.push_back(this);
+  } else if (rte_idx_set.size() == 1) {
+    scan_predicates.push_back(this);
+  } else {
+    const_predicates.push_back(this);
+  }
+}
+
+void SampleRatioExpr::group_predicates(std::list<const Expr*>& scan_predicates,
+                                       std::list<const Expr*>& join_predicates,
+                                       std::list<const Expr*>& const_predicates) const {
   std::set<int> rte_idx_set;
   arg->collect_rte_idx(rte_idx_set);
   if (rte_idx_set.size() > 1) {
@@ -2076,6 +2157,17 @@ bool KeyForStringExpr::operator==(const Expr& rhs) const {
   return true;
 }
 
+bool SampleRatioExpr::operator==(const Expr& rhs) const {
+  if (typeid(rhs) != typeid(SampleRatioExpr)) {
+    return false;
+  }
+  const SampleRatioExpr& rhs_cl = dynamic_cast<const SampleRatioExpr&>(rhs);
+  if (!(*arg == *rhs_cl.get_arg())) {
+    return false;
+  }
+  return true;
+}
+
 bool LowerExpr::operator==(const Expr& rhs) const {
   if (typeid(rhs) != typeid(LowerExpr)) {
     return false;
@@ -2280,15 +2372,32 @@ bool ArrayExpr::operator==(Expr const& rhs) const {
   ;
 }
 
-bool GeoExpr::operator==(const Expr& rhs) const {
-  const auto rhs_geo = dynamic_cast<const GeoExpr*>(&rhs);
+bool GeoUOper::operator==(const Expr& rhs) const {
+  const auto rhs_geo = dynamic_cast<const GeoUOper*>(&rhs);
   if (!rhs_geo) {
     return false;
   }
-  if (args_.size() != rhs_geo->args_.size()) {
+  if (op_ != rhs_geo->getOp() || ti0_ != rhs_geo->getTypeInfo0() ||
+      args0_.size() != rhs_geo->getArgs0().size()) {
     return false;
   }
-  return expr_list_match(args_, rhs_geo->args_);
+  return expr_list_match(args0_, rhs_geo->getArgs0());
+}
+
+bool GeoBinOper::operator==(const Expr& rhs) const {
+  const auto rhs_geo = dynamic_cast<const GeoBinOper*>(&rhs);
+  if (!rhs_geo) {
+    return false;
+  }
+  if (op_ != rhs_geo->getOp() || ti0_ != rhs_geo->getTypeInfo0() ||
+      args0_.size() != rhs_geo->getArgs0().size()) {
+    return false;
+  }
+  if (ti1_ != rhs_geo->getTypeInfo1() || args1_.size() != rhs_geo->getArgs1().size()) {
+    return false;
+  }
+  return expr_list_match(args0_, rhs_geo->getArgs0()) ||
+         expr_list_match(args1_, rhs_geo->getArgs1());
 }
 
 std::string ColumnVar::toString() const {
@@ -2480,6 +2589,13 @@ std::string KeyForStringExpr::toString() const {
   return str;
 }
 
+std::string SampleRatioExpr::toString() const {
+  std::string str{"SAMPLE_RATIO("};
+  str += arg->toString();
+  str += ") ";
+  return str;
+}
+
 std::string LowerExpr::toString() const {
   return "LOWER(" + arg->toString() + ") ";
 }
@@ -2621,13 +2737,57 @@ std::string ArrayExpr::toString() const {
   return str;
 }
 
-std::string GeoExpr::toString() const {
-  // TODO: generate ST_GeomFromText(wkt)
-  std::string result = "Geo(";
-  for (const auto& arg : args_) {
+std::string GeoUOper::toString() const {
+  std::string fn;
+  switch (op_) {
+    case Geo_namespace::GeoBase::GeoOp::kPROJECTION:
+      fn = "Geo";
+      break;
+    case Geo_namespace::GeoBase::GeoOp::kISEMPTY:
+      fn = "ST_IsEmpty";
+      break;
+    case Geo_namespace::GeoBase::GeoOp::kISVALID:
+      fn = "ST_IsValid";
+      break;
+    default:
+      fn = "Geo_UNKNOWN";
+      break;
+  }
+  std::string result = fn + "(";
+  for (const auto& arg : args0_) {
     result += " " + arg->toString();
   }
-  return result + ") ";
+  return result + " ) ";
+}
+
+std::string GeoBinOper::toString() const {
+  std::string fn;
+  switch (op_) {
+    case Geo_namespace::GeoBase::GeoOp::kINTERSECTION:
+      fn = "ST_Intersection";
+      break;
+    case Geo_namespace::GeoBase::GeoOp::kDIFFERENCE:
+      fn = "ST_Difference";
+      break;
+    case Geo_namespace::GeoBase::GeoOp::kUNION:
+      fn = "ST_Union";
+      break;
+    case Geo_namespace::GeoBase::GeoOp::kBUFFER:
+      fn = "ST_Buffer";
+      break;
+    default:
+      fn = "Geo_UNKNOWN";
+      break;
+  }
+  std::string result = fn + "(";
+  // TODO: generate wkt
+  for (const auto& arg : args0_) {
+    result += " " + arg->toString();
+  }
+  for (const auto& arg : args1_) {
+    result += " " + arg->toString();
+  }
+  return result + " ) ";
 }
 
 std::string TargetEntry::toString() const {
@@ -2702,6 +2862,15 @@ void CharLengthExpr::find_expr(bool (*f)(const Expr*),
 
 void KeyForStringExpr::find_expr(bool (*f)(const Expr*),
                                  std::list<const Expr*>& expr_list) const {
+  if (f(this)) {
+    add_unique(expr_list);
+    return;
+  }
+  arg->find_expr(f, expr_list);
+}
+
+void SampleRatioExpr::find_expr(bool (*f)(const Expr*),
+                                std::list<const Expr*>& expr_list) const {
   if (f(this)) {
     add_unique(expr_list);
     return;

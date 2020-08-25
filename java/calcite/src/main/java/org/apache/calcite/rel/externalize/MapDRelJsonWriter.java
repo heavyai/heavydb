@@ -18,24 +18,19 @@ package org.apache.calcite.rel.externalize;
 
 import com.google.common.collect.ImmutableList;
 
-import org.apache.calcite.adapter.enumerable.EnumerableTableScan;
-import org.apache.calcite.avatica.util.Spaces;
 import org.apache.calcite.rel.RelNode;
 import org.apache.calcite.rel.RelWriter;
 import org.apache.calcite.rel.core.TableScan;
-import org.apache.calcite.rel.logical.LogicalAggregate;
-import org.apache.calcite.rel.logical.LogicalTableModify;
-import org.apache.calcite.rel.logical.LogicalTableScan;
+import org.apache.calcite.rel.hint.RelHint;
+import org.apache.calcite.rel.logical.*;
 import org.apache.calcite.rel.type.RelDataType;
 import org.apache.calcite.sql.SqlExplainLevel;
 import org.apache.calcite.util.JsonBuilder;
 import org.apache.calcite.util.Pair;
 import org.apache.commons.text.StringEscapeUtils;
 
-import java.util.ArrayList;
-import java.util.IdentityHashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
+import java.util.stream.Collectors;
 
 final class EscapedStringJsonBuilder extends JsonBuilder {
   @Override
@@ -90,6 +85,11 @@ public class MapDRelJsonWriter implements RelWriter {
       // FIX-ME:  What goes here?
     }
 
+    // handle hints
+    if (deliverHints(rel)) {
+      map.put("hints", explainHints(rel));
+    }
+
     for (Pair<String, Object> value : values) {
       if (value.right instanceof RelNode) {
         continue;
@@ -125,6 +125,67 @@ public class MapDRelJsonWriter implements RelWriter {
       list.add(id);
     }
     return list;
+  }
+
+  private boolean deliverHints(RelNode rel) {
+    if (rel instanceof LogicalTableScan) {
+      LogicalTableScan node = (LogicalTableScan) rel;
+      if (!node.getHints().isEmpty()) {
+        return true;
+      } else {
+        return false;
+      }
+    } else if (rel instanceof LogicalAggregate) {
+      LogicalAggregate node = (LogicalAggregate) rel;
+      if (!node.getHints().isEmpty()) {
+        return true;
+      } else {
+        return false;
+      }
+    } else if (rel instanceof LogicalJoin) {
+      LogicalJoin node = (LogicalJoin) rel;
+      if (!node.getHints().isEmpty()) {
+        return true;
+      } else {
+        return false;
+      }
+    } else if (rel instanceof LogicalProject) {
+      LogicalProject node = (LogicalProject) rel;
+      if (!node.getHints().isEmpty()) {
+        return true;
+      } else {
+        return false;
+      }
+    } else if (rel instanceof LogicalCalc) {
+      LogicalCalc node = (LogicalCalc) rel;
+      if (!node.getHints().isEmpty()) {
+        return true;
+      } else {
+        return false;
+      }
+    }
+    return false;
+  }
+
+  private String explainHints(RelNode rel) {
+    List<String> explained = new ArrayList<>();
+    if (rel instanceof LogicalTableScan) {
+      LogicalTableScan node = (LogicalTableScan) rel;
+      node.getHints().stream().forEach(s -> explained.add(s.toString().toLowerCase()));
+    } else if (rel instanceof LogicalAggregate) {
+      LogicalAggregate node = (LogicalAggregate) rel;
+      node.getHints().stream().forEach(s -> explained.add(s.toString().toLowerCase()));
+    } else if (rel instanceof LogicalJoin) {
+      LogicalJoin node = (LogicalJoin) rel;
+      node.getHints().stream().forEach(s -> explained.add(s.toString().toLowerCase()));
+    } else if (rel instanceof LogicalProject) {
+      LogicalProject node = (LogicalProject) rel;
+      node.getHints().stream().forEach(s -> explained.add(s.toString().toLowerCase()));
+    } else if (rel instanceof LogicalCalc) {
+      LogicalCalc node = (LogicalCalc) rel;
+      node.getHints().stream().forEach(s -> explained.add(s.toString().toLowerCase()));
+    }
+    return explained.stream().collect(Collectors.joining("|"));
   }
 
   public final void explain(RelNode rel, List<Pair<String, Object>> valueList) {

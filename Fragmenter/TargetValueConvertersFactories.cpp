@@ -25,18 +25,32 @@ struct NumericConverterFactory {
     SOURCE_TYPE source_null_value =
         static_cast<SOURCE_TYPE>(inline_int_null_value<SOURCE_TYPE>());
 
+    using CasterFunc = std::function<TARGET_TYPE(SOURCE_TYPE, bool, TARGET_TYPE)>;
+
+    CasterFunc caster = nullptr;
+
     switch (param.type.get_size()) {
       case 8:
         source_null_value = static_cast<SOURCE_TYPE>(inline_int_null_value<int64_t>());
+        caster = checked_cast<SOURCE_TYPE, TARGET_TYPE, int64_t>;
         break;
       case 4:
         source_null_value = static_cast<SOURCE_TYPE>(inline_int_null_value<int32_t>());
+        if (param.source.get_physical_type_info().get_size() > 4) {
+          caster = checked_cast<SOURCE_TYPE, TARGET_TYPE, int32_t>;
+        }
         break;
       case 2:
         source_null_value = static_cast<SOURCE_TYPE>(inline_int_null_value<int16_t>());
+        if (param.source.get_physical_type_info().get_size() > 2) {
+          caster = checked_cast<SOURCE_TYPE, TARGET_TYPE, int16_t>;
+        }
         break;
       case 1:
         source_null_value = static_cast<SOURCE_TYPE>(inline_int_null_value<int8_t>());
+        if (param.source.get_physical_type_info().get_size() > 1) {
+          caster = checked_cast<SOURCE_TYPE, TARGET_TYPE, int8_t>;
+        }
         break;
       default:
         CHECK(false);
@@ -45,12 +59,20 @@ struct NumericConverterFactory {
     TARGET_TYPE target_null_value =
         static_cast<TARGET_TYPE>(inline_int_null_value<TARGET_TYPE>());
 
-    return std::make_unique<NumericValueConverter<SOURCE_TYPE, TARGET_TYPE>>(
+    auto ret = std::make_unique<NumericValueConverter<SOURCE_TYPE, TARGET_TYPE>>(
         param.target,
         param.num_rows,
         source_null_value,
         target_null_value,
         param.can_be_null);
+
+    if (param.type.is_integer() || param.type.is_timestamp() || param.type.is_time()) {
+      // only apply overflow checks for
+      // the types using the fixed encoder
+      ret->setValueCaster(std::move(caster));
+    }
+
+    return ret;
   }
 
   std::unique_ptr<TargetValueConverter> operator()(ConverterCreateParameter param) {

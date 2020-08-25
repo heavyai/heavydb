@@ -45,6 +45,10 @@ std::string test_query_medium{"SELECT count(1) FROM t_medium t1, t_medium t2;"};
 // nested loop over 1k * 1k
 std::string test_query_small{"SELECT count(1) FROM t_small t1, t_small t2;"};
 
+std::string pending_query_interrupted_msg =
+    "Query execution has been interrupted (pending query)";
+std::string running_query_interrupted_msg = "Query execution has been interrupted";
+
 bool skip_tests(const ExecutorDeviceType device_type) {
 #ifdef HAVE_CUDA
   return device_type == ExecutorDeviceType::GPU && !(QR::get()->gpusPresent());
@@ -122,13 +126,16 @@ int create_and_populate_table() {
     large_out.close();
 
     std::string import_small_table_str{
-        "COPY t_small FROM '../../Tests/Import/datafiles/interrupt_table_small.txt' WITH "
+        "COPY t_small FROM "
+        "'../../Tests/Import/datafiles/interrupt_table_small.txt' WITH "
         "(header='false')"};
     std::string import_medium_table_str{
-        "COPY t_medium FROM '../../Tests/Import/datafiles/interrupt_table_medium.txt' "
+        "COPY t_medium FROM "
+        "'../../Tests/Import/datafiles/interrupt_table_medium.txt' "
         "WITH (header='false')"};
     std::string import_large_table_str{
-        "COPY t_large FROM '../../Tests/Import/datafiles/interrupt_table_large.txt' WITH "
+        "COPY t_large FROM "
+        "'../../Tests/Import/datafiles/interrupt_table_large.txt' WITH "
         "(header='false')"};
     run_ddl_statement(import_small_table_str);
     run_ddl_statement(import_medium_table_str);
@@ -222,10 +229,10 @@ TEST(Interrupt, Kill_RunningQuery) {
         CHECK_EQ((int64_t)1000000 * 1000000, ret_val);
       }
     } catch (const std::runtime_error& e) {
-      std::string expected_err_msg = "Query execution has been interrupted";
       std::string received_err_msg = e.what();
-      bool check = (expected_err_msg == received_err_msg) ? true : false;
-      CHECK(check);
+      CHECK((pending_query_interrupted_msg == received_err_msg) ||
+            (running_query_interrupted_msg == received_err_msg))
+          << received_err_msg;
     }
   }
 }
@@ -294,11 +301,10 @@ TEST(Interrupt, Kill_PendingQuery) {
       // catch exception due to runtime query interrupt
       // and compare thrown message to confirm that
       // this exception comes from our interrupt request
-      std::string expected_err_msg =
-          "Query execution has been interrupted (pending query)";
       std::string received_err_msg = e.what();
-      bool check = (expected_err_msg == received_err_msg) ? true : false;
-      CHECK(check);
+      CHECK((pending_query_interrupted_msg == received_err_msg) ||
+            (running_query_interrupted_msg == received_err_msg))
+          << received_err_msg;
     }
     // check running query's result
     CHECK_EQ(1, (int64_t)res1.get()->rowCount());
@@ -374,10 +380,10 @@ TEST(Interrupt, Make_PendingQuery_Run) {
       // catch exception due to runtime query interrupt
       // and compare thrown message to confirm that
       // this exception comes from our interrupt request
-      std::string expected_err_msg = "Query execution has been interrupted";
       std::string received_err_msg = e.what();
-      bool check = (expected_err_msg == received_err_msg) ? true : false;
-      CHECK(check);
+      CHECK((pending_query_interrupted_msg == received_err_msg) ||
+            (running_query_interrupted_msg == received_err_msg))
+          << received_err_msg;
     }
     // check running query's result
     CHECK_EQ(1, (int64_t)res2.get()->rowCount());

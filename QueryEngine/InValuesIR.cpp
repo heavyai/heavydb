@@ -18,6 +18,7 @@
 #include "Execute.h"
 
 #include <future>
+#include <memory>
 
 llvm::Value* CodeGenerator::codegen(const Analyzer::InValues* expr,
                                     const CompilationOptions& co) {
@@ -82,7 +83,7 @@ llvm::Value* CodeGenerator::codegen(const Analyzer::InIntegerSet* in_integer_set
         "IN subquery with many right-hand side values not supported when literal "
         "hoisting is disabled");
   }
-  auto in_vals_bitmap = boost::make_unique<InValuesBitmap>(
+  auto in_vals_bitmap = std::make_unique<InValuesBitmap>(
       in_integer_set->get_value_list(),
       needle_null_val,
       co.device_type == ExecutorDeviceType::GPU ? Data_Namespace::GPU_LEVEL
@@ -144,7 +145,7 @@ std::unique_ptr<InValuesBitmap> CodeGenerator::createInValuesBitmap(
             return false;
           }
           const auto& in_val_ti = in_val->get_type_info();
-          CHECK(in_val_ti == ti);
+          CHECK(in_val_ti == ti || get_nullable_type_info(in_val_ti) == ti);
           if (ti.is_string()) {
             CHECK(sdp);
             const auto string_id =
@@ -185,13 +186,13 @@ std::unique_ptr<InValuesBitmap> CodeGenerator::createInValuesBitmap(
       }
     }
     try {
-      return boost::make_unique<InValuesBitmap>(values,
-                                                needle_null_val,
-                                                co.device_type == ExecutorDeviceType::GPU
-                                                    ? Data_Namespace::GPU_LEVEL
-                                                    : Data_Namespace::CPU_LEVEL,
-                                                executor()->deviceCount(co.device_type),
-                                                &executor()->getCatalog()->getDataMgr());
+      return std::make_unique<InValuesBitmap>(values,
+                                              needle_null_val,
+                                              co.device_type == ExecutorDeviceType::GPU
+                                                  ? Data_Namespace::GPU_LEVEL
+                                                  : Data_Namespace::CPU_LEVEL,
+                                              executor()->deviceCount(co.device_type),
+                                              &executor()->getCatalog()->getDataMgr());
     } catch (...) {
       return nullptr;
     }

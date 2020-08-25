@@ -113,8 +113,22 @@ class FixedLengthArrayNoneEncoder : public Encoder {
 
   void reduceStats(const Encoder&) override { CHECK(false); }
 
-  void updateStats(const int8_t* const dst, const size_t numBytes) override {
-    CHECK(false);
+  void updateStats(const int8_t* const src_data, const size_t num_elements) override {
+    UNREACHABLE();
+  }
+
+  void updateStats(const std::vector<std::string>* const src_data,
+                   const size_t start_idx,
+                   const size_t num_elements) override {
+    UNREACHABLE();
+  }
+
+  void updateStats(const std::vector<ArrayDatum>* const src_data,
+                   const size_t start_idx,
+                   const size_t num_elements) override {
+    for (size_t n = start_idx; n < start_idx + num_elements; n++) {
+      update_elem_stats((*src_data)[n]);
+    }
   }
 
   void writeMetadata(FILE* f) override {

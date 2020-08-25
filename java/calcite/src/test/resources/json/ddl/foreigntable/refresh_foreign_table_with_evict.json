@@ -1,0 +1,12 @@
+{
+    "statementType": "DDL",
+    "payload": {
+        "command": "REFRESH_FOREIGN_TABLES",
+        "tableNames": [
+            "test_table"
+        ],
+        "options": {
+            "evict": "true"
+        }
+    }
+}
