@@ -65,13 +65,12 @@ size_t get_output_row_count(const TableFunctionExecutionUnit& exe_unit,
 
 ResultSetPtr TableFunctionExecutionContext::execute(
     const TableFunctionExecutionUnit& exe_unit,
-    const InputTableInfo& table_info,
+    const std::vector<InputTableInfo>& table_infos,
     const TableFunctionCompilationContext* compilation_context,
     const ColumnFetcher& column_fetcher,
     const ExecutorDeviceType device_type,
     Executor* executor) {
   CHECK(compilation_context);
-
   std::vector<std::shared_ptr<Chunk_NS::Chunk>> chunks_owner;
   std::vector<std::unique_ptr<char[]>> literals_owner;
 
@@ -81,11 +80,12 @@ ResultSetPtr TableFunctionExecutionContext::execute(
     auto& data_mgr = executor->catalog_->getDataMgr();
     device_allocator.reset(new CudaAllocator(&data_mgr, device_id));
   }
-
   std::vector<const int8_t*> col_buf_ptrs;
   ssize_t element_count = -1;
+  size_t table_info_count = 0;
   for (const auto& input_expr : exe_unit.input_exprs) {
     if (auto col_var = dynamic_cast<Analyzer::ColumnVar*>(input_expr)) {
+      auto table_info = table_infos[table_info_count++];
       auto [col_buf, buf_elem_count] = ColumnFetcher::getOneColumnFragment(
           executor,
           *col_var,

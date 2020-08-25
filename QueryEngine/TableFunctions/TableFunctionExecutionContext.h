@@ -35,7 +35,7 @@ class TableFunctionExecutionContext {
   TableFunctionExecutionContext& operator=(const TableFunctionExecutionContext&) = delete;
 
   ResultSetPtr execute(const TableFunctionExecutionUnit& exe_unit,
-                       const InputTableInfo& table_info,
+                       const std::vector<InputTableInfo>& table_infos,
                        const TableFunctionCompilationContext* compilation_context,
                        const ColumnFetcher& column_fetcher,
                        const ExecutorDeviceType device_type,

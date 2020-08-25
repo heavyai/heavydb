@@ -39,11 +39,12 @@ std::pair<const int8_t*, size_t> ColumnFetcher::getOneColumnFragment(
   if (fragment.isEmptyPhysicalFragment()) {
     return {nullptr, 0};
   }
+  const auto table_id = hash_col.get_table_id();
   auto chunk_meta_it = fragment.getChunkMetadataMap().find(hash_col.get_column_id());
   CHECK(chunk_meta_it != fragment.getChunkMetadataMap().end());
   const auto& catalog = *executor->getCatalog();
-  const auto cd = get_column_descriptor_maybe(
-      hash_col.get_column_id(), hash_col.get_table_id(), catalog);
+  const auto cd =
+      get_column_descriptor_maybe(hash_col.get_column_id(), table_id, catalog);
   CHECK(!cd || !(cd->isVirtualCol));
   const int8_t* col_buff = nullptr;
   if (cd) {  // real table
@@ -68,7 +69,6 @@ std::pair<const int8_t*, size_t> ColumnFetcher::getOneColumnFragment(
     const ColumnarResults* col_frag{nullptr};
     {
       std::lock_guard<std::mutex> columnar_conversion_guard(columnar_conversion_mutex);
-      const auto table_id = hash_col.get_table_id();
       const auto frag_id = fragment.fragmentId;
       if (column_cache.empty() || !column_cache.count(table_id)) {
         column_cache.insert(std::make_pair(
@@ -76,12 +76,12 @@ std::pair<const int8_t*, size_t> ColumnFetcher::getOneColumnFragment(
       }
       auto& frag_id_to_result = column_cache[table_id];
       if (frag_id_to_result.empty() || !frag_id_to_result.count(frag_id)) {
-        frag_id_to_result.insert(std::make_pair(
-            frag_id,
-            std::shared_ptr<const ColumnarResults>(columnarize_result(
-                executor->row_set_mem_owner_,
-                get_temporary_table(executor->temporary_tables_, hash_col.get_table_id()),
-                frag_id))));
+        frag_id_to_result.insert(
+            std::make_pair(frag_id,
+                           std::shared_ptr<const ColumnarResults>(columnarize_result(
+                               executor->row_set_mem_owner_,
+                               get_temporary_table(executor->temporary_tables_, table_id),
+                               frag_id))));
       }
       col_frag = column_cache[table_id][frag_id].get();
     }

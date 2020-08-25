@@ -1612,12 +1612,8 @@ ResultSetPtr Executor::executeTableFunction(
   compilation_context.compile(exe_unit, co, this);
 
   TableFunctionExecutionContext exe_context(getRowSetMemoryOwner());
-  return exe_context.execute(exe_unit,
-                             table_infos.front(),
-                             &compilation_context,
-                             column_fetcher,
-                             co.device_type,
-                             this);
+  return exe_context.execute(
+      exe_unit, table_infos, &compilation_context, column_fetcher, co.device_type, this);
 }
 
 ResultSetPtr Executor::executeExplain(const QueryCompilationDescriptor& query_comp_desc) {

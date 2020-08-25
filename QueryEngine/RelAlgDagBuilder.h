@@ -1608,20 +1608,6 @@ class RelModify : public RelAlgNode {
 class RelTableFunction : public RelAlgNode {
  public:
   RelTableFunction(const std::string& function_name,
-                   std::shared_ptr<const RelAlgNode> input,
-                   std::vector<std::string>& fields,
-                   std::vector<const Rex*> col_inputs,
-                   std::vector<std::unique_ptr<const RexScalar>>& table_func_inputs,
-                   std::vector<std::unique_ptr<const RexScalar>>& target_exprs)
-      : function_name_(function_name)
-      , fields_(fields)
-      , col_inputs_(col_inputs)
-      , table_func_inputs_(std::move(table_func_inputs))
-      , target_exprs_(std::move(target_exprs)) {
-    inputs_.emplace_back(input);
-  }
-
-  RelTableFunction(const std::string& function_name,
                    RelAlgInputs inputs,
                    std::vector<std::string>& fields,
                    std::vector<const Rex*> col_inputs,
@@ -1676,13 +1662,48 @@ class RelTableFunction : public RelAlgNode {
   std::string toString() const override {
     std::string result = "RelTableFunction<" +
                          std::to_string(reinterpret_cast<uint64_t>(this)) + ">(" +
-                         function_name_ + " ";
+                         function_name_ + ", ";
 
-    result += "targets: " + std::to_string(target_exprs_.size());
-    result += "inputs: [";
+    result += "inputs=[";
+    for (size_t i = 0; i < inputs_.size(); ++i) {
+      result += inputs_[i]->toString();
+      if (i < inputs_.size() - 1) {
+        result += ", ";
+      }
+    }
+    result += "], ";
+
+    result += "target_exprs=[";
     for (size_t i = 0; i < target_exprs_.size(); ++i) {
       result += target_exprs_[i]->toString();
       if (i < target_exprs_.size() - 1) {
+        result += ", ";
+      }
+    }
+    result += "], ";
+
+    result += "table_func_inputs=[";
+    for (size_t i = 0; i < table_func_inputs_.size(); ++i) {
+      result += table_func_inputs_[i]->toString();
+      if (i < table_func_inputs_.size() - 1) {
+        result += ", ";
+      }
+    }
+    result += "], ";
+
+    result += "col_inputs=[";
+    for (size_t i = 0; i < col_inputs_.size(); ++i) {
+      result += std::to_string((size_t)col_inputs_[i]);
+      if (i < col_inputs_.size() - 1) {
+        result += ", ";
+      }
+    }
+    result += "], ";
+
+    result += "fields=[";
+    for (size_t i = 0; i < fields_.size(); ++i) {
+      result += fields_[i];
+      if (i < fields_.size() - 1) {
         result += ", ";
       }
     }
