@@ -379,6 +379,26 @@ class Executor {
   unsigned blockSize() const;
   size_t maxGpuSlabSize() const;
 
+  ResultSetPtr executeWorkUnit(size_t& max_groups_buffer_entry_guess,
+                               const bool is_agg,
+                               const std::vector<InputTableInfo>&,
+                               const RelAlgExecutionUnit&,
+                               const CompilationOptions&,
+                               const ExecutionOptions& options,
+                               const Catalog_Namespace::Catalog&,
+                               RenderInfo* render_info,
+                               const bool has_cardinality_estimation,
+                               ColumnCacheMap& column_cache);
+
+  void executeUpdate(const RelAlgExecutionUnit& ra_exe_unit,
+                     const std::vector<InputTableInfo>& table_infos,
+                     const CompilationOptions& co,
+                     const ExecutionOptions& eo,
+                     const Catalog_Namespace::Catalog& cat,
+                     std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
+                     const UpdateLogForFragment::Callback& cb,
+                     const bool is_agg);
+
  private:
   void clearMetaInfoCache();
 
@@ -428,27 +448,6 @@ class Executor {
   bool needFetchAllFragments(const InputColDescriptor& col_desc,
                              const RelAlgExecutionUnit& ra_exe_unit,
                              const FragmentsList& selected_fragments) const;
-
-  ResultSetPtr executeWorkUnit(size_t& max_groups_buffer_entry_guess,
-                               const bool is_agg,
-                               const std::vector<InputTableInfo>&,
-                               const RelAlgExecutionUnit&,
-                               const CompilationOptions&,
-                               const ExecutionOptions& options,
-                               const Catalog_Namespace::Catalog&,
-                               std::shared_ptr<RowSetMemoryOwner>,
-                               RenderInfo* render_info,
-                               const bool has_cardinality_estimation,
-                               ColumnCacheMap& column_cache);
-
-  void executeUpdate(const RelAlgExecutionUnit& ra_exe_unit,
-                     const std::vector<InputTableInfo>& table_infos,
-                     const CompilationOptions& co,
-                     const ExecutionOptions& eo,
-                     const Catalog_Namespace::Catalog& cat,
-                     std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
-                     const UpdateLogForFragment::Callback& cb,
-                     const bool is_agg);
 
   using PerFragmentCallBack =
       std::function<void(ResultSetPtr, const Fragmenter_Namespace::FragmentInfo&)>;
@@ -806,6 +805,9 @@ class Executor {
  public:
   void setupCaching(const std::unordered_set<PhysicalInput>& phys_inputs,
                     const std::unordered_set<int>& phys_table_ids);
+  void setColRangeCache(const AggregatedColRange& aggregated_col_range) {
+    agg_col_range_cache_ = aggregated_col_range;
+  }
 
   template <typename SESSION_MAP_LOCK>
   void setCurrentQuerySession(const std::string& query_session,
