@@ -142,14 +142,14 @@ class StringDictionary {
           dictionary_futures);
   size_t getNumStringsFromStorage(const size_t storage_slots) const noexcept;
   bool fillRateIsHigh(const size_t num_strings) const noexcept;
-  void increaseCapacity() noexcept;
+  void increaseHashTableCapacity() noexcept;
   template <class String>
-  void increaseCapacityFromStorageAndMemory(
+  void increaseHashTableCapacityFromStorageAndMemory(
       const size_t storage_high_water_mark,
       const std::vector<String>& input_strings,
       const std::vector<size_t>& string_memory_ids,
       const std::vector<hash_t>& input_strings_hashes) noexcept;
-  int32_t getOrAddImpl(const std::string& str) noexcept;
+  int32_t getOrAddImpl(const std::string_view& str) noexcept;
   template <class String>
   void hashStrings(const std::vector<String>& string_vec,
                    std::vector<hash_t>& hashes) const noexcept;
@@ -161,8 +161,8 @@ class StringDictionary {
   std::pair<char*, size_t> getStringBytesChecked(const int string_id) const noexcept;
   template <class String>
   uint32_t computeBucket(const hash_t hash,
-                         const String& str,
-                         const std::vector<int32_t>& data) const noexcept;
+                         const String& input_string,
+                         const std::vector<int32_t>& string_id_hash_table) const noexcept;
   template <class String>
   uint32_t computeBucketFromStorageAndMemory(
       const hash_t input_string_hash,
@@ -171,13 +171,14 @@ class StringDictionary {
       const size_t storage_high_water_mark,
       const std::vector<String>& input_strings,
       const std::vector<size_t>& string_memory_ids) const noexcept;
-  uint32_t computeUniqueBucketWithHash(const hash_t hash,
-                                       const std::vector<int32_t>& data) noexcept;
+  uint32_t computeUniqueBucketWithHash(
+      const hash_t hash,
+      const std::vector<int32_t>& string_id_hash_table) noexcept;
   void checkAndConditionallyIncreasePayloadCapacity(const size_t write_length);
   void checkAndConditionallyIncreaseOffsetCapacity(const size_t write_length);
 
   template <class String>
-  void appendToStorage(String str) noexcept;
+  void appendToStorage(const String str) noexcept;
   template <class String>
   void appendToStorageBulk(const std::vector<String>& input_strings,
                            const std::vector<size_t>& string_memory_ids,
