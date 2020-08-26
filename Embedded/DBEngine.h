@@ -50,9 +50,7 @@ class DBEngine {
   void createDatabase(const std::string& db_name);
   void dropDatabase(const std::string& db_name);
   bool setDatabase(std::string& db_name);
-  bool login(std::string& db_name,
-             std::string& user_name,
-             const std::string& password);
+  bool login(std::string& db_name, std::string& user_name, const std::string& password);
 
  protected:
   DBEngine() {}
