@@ -3806,12 +3806,13 @@ RelAlgExecutor::TableFunctionWorkUnit RelAlgExecutor::createTableFunctionWorkUni
   }
 
   std::vector<Analyzer::ColumnVar*> input_col_exprs;
+  size_t index = 0;
   for (auto input_expr : input_exprs) {
     if (auto col_var = dynamic_cast<Analyzer::ColumnVar*>(input_expr)) {
-      size_t i = input_col_exprs.size();
-      input_expr->set_type_info(table_function_impl.getInputSQLType(i));
+      input_expr->set_type_info(table_function_impl.getInputSQLType(index));
       input_col_exprs.push_back(col_var);
     }
+    index++;
   }
   CHECK_EQ(input_col_exprs.size(), table_func->getColInputsSize());
 

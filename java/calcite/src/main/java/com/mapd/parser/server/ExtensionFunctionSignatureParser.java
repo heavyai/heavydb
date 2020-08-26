@@ -107,7 +107,9 @@ class ExtensionFunctionSignatureParser {
     List<String> json_sigs = new ArrayList<String>();
     if (sigs != null) {
       for (Map.Entry<String, ExtensionFunction> sig : sigs.entrySet()) {
-        json_sigs.add(sig.getValue().toJson(sig.getKey()));
+        if (sig.getValue().isRowUdf()) {
+          json_sigs.add(sig.getValue().toJson(sig.getKey()));
+        }
       }
     }
     return "[" + join(json_sigs, ",") + "]";
@@ -146,7 +148,8 @@ class ExtensionFunctionSignatureParser {
         args.add(arg_type);
       }
     }
-    return new ExtensionFunction(args, deserializeType(ret), is_row_func);
+    assert is_row_func;
+    return new ExtensionFunction(args, deserializeType(ret));
   }
   private static ExtensionFunction.ExtArgumentType deserializeType(
           final String type_name) {

@@ -71,19 +71,23 @@ public class ExtensionFunction {
   ExtensionFunction(final List<ExtArgumentType> args, final ExtArgumentType ret) {
     this.args = args;
     this.ret = ret;
+    this.outs = null;
     this.isRowUdf = true;
   }
 
-  ExtensionFunction(final List<ExtArgumentType> args,
-          final ExtArgumentType ret,
-          final boolean row_udf) {
+  ExtensionFunction(final List<ExtArgumentType> args, final List<ExtArgumentType> outs) {
     this.args = args;
-    this.ret = ret;
-    this.isRowUdf = row_udf;
+    this.ret = null;
+    this.outs = outs;
+    this.isRowUdf = false;
   }
 
   public List<ExtArgumentType> getArgs() {
     return this.args;
+  }
+
+  public List<ExtArgumentType> getOuts() {
+    return this.outs;
   }
 
   public ExtArgumentType getRet() {
@@ -91,8 +95,18 @@ public class ExtensionFunction {
   }
 
   public SqlTypeName getSqlRet() {
-    if (this.isRowUdf) return toSqlTypeName(this.ret);
-    return null;
+    assert this.isRowUdf();
+    return toSqlTypeName(this.ret);
+  }
+
+  public List<SqlTypeName> getSqlOuts() {
+    assert this.isTableUdf();
+    List<SqlTypeName> sql_outs = new ArrayList<SqlTypeName>();
+    for (final ExtArgumentType otype : this.getOuts()) {
+      assert isColumnType(otype);
+      sql_outs.add(toSqlTypeName(getValueType(otype)));
+    }
+    return sql_outs;
   }
 
   public boolean isRowUdf() {
@@ -108,7 +122,18 @@ public class ExtensionFunction {
     StringBuilder json_cons = new StringBuilder();
     json_cons.append("{");
     json_cons.append("\"name\":").append(dq(name)).append(",");
-    json_cons.append("\"ret\":").append(dq(typeName(ret))).append(",");
+    if (isRowUdf) {
+      json_cons.append("\"ret\":").append(dq(typeName(ret))).append(",");
+    } else {
+      json_cons.append("\"outs\":");
+      json_cons.append("[");
+      List<String> param_list = new ArrayList<String>();
+      for (final ExtArgumentType out : outs) {
+        param_list.add(dq(typeName(out)));
+      }
+      json_cons.append(ExtensionFunctionSignatureParser.join(param_list, ","));
+      json_cons.append("],");
+    }
     json_cons.append("\"args\":");
     json_cons.append("[");
     List<String> param_list = new ArrayList<String>();
@@ -202,7 +227,8 @@ public class ExtensionFunction {
   }
 
   private final List<ExtArgumentType> args;
-  private final ExtArgumentType ret;
+  private final List<ExtArgumentType> outs; // only used by UDTFs
+  private final ExtArgumentType ret; // only used by UDFs
   private final boolean isRowUdf;
 
   public final java.util.List<SqlTypeFamily> toSqlSignature() {
@@ -216,12 +242,8 @@ public class ExtensionFunction {
           ++arg_idx;
         }
       } else {
-        if (isPointerType(arg_type)) {
-          /* TODO: eliminate using getValueType */
-          sql_sig.add(toSqlTypeName(getValueType(arg_type)).getFamily());
-        } else {
-          sql_sig.add(toSqlTypeName(arg_type).getFamily());
-        }
+        assert isColumnType(arg_type);
+        sql_sig.add(toSqlTypeName(arg_type).getFamily());
       }
     }
     return sql_sig;
@@ -234,21 +256,35 @@ public class ExtensionFunction {
             || type == ExtArgumentType.PBool;
   }
 
+  private static boolean isColumnType(final ExtArgumentType type) {
+    return type == ExtArgumentType.ColumnInt8 || type == ExtArgumentType.ColumnInt16
+            || type == ExtArgumentType.ColumnInt32 || type == ExtArgumentType.ColumnInt64
+            || type == ExtArgumentType.ColumnFloat || type == ExtArgumentType.ColumnDouble
+            || type == ExtArgumentType.ColumnBool;
+  }
+
   private static ExtArgumentType getValueType(final ExtArgumentType type) {
     switch (type) {
       case PInt8:
+      case ColumnInt8:
         return ExtArgumentType.Int8;
+      case ColumnInt16:
       case PInt16:
         return ExtArgumentType.Int16;
       case PInt32:
+      case ColumnInt32:
         return ExtArgumentType.Int32;
       case PInt64:
+      case ColumnInt64:
         return ExtArgumentType.Int64;
       case PFloat:
+      case ColumnFloat:
         return ExtArgumentType.Float;
       case PDouble:
+      case ColumnDouble:
         return ExtArgumentType.Double;
       case PBool:
+      case ColumnBool:
         return ExtArgumentType.Bool;
     }
     MAPDLOGGER.error("getValueType: no value for type " + type);

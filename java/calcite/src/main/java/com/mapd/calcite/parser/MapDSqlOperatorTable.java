@@ -1744,7 +1744,13 @@ public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
               sig.isRowUdf() ? SqlFunctionCategory.SYSTEM
                              : SqlFunctionCategory.USER_DEFINED_TABLE_FUNCTION);
       isRowUdf = sig.isRowUdf();
-      ret = sig.getSqlRet();
+      if (isRowUdf) {
+        ret = sig.getSqlRet();
+        outs = null;
+      } else {
+        ret = null;
+        outs = sig.getSqlOuts();
+      }
     }
 
     @Override
@@ -1754,13 +1760,23 @@ public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
         return typeFactory.createTypeWithNullability(
                 typeFactory.createSqlType(ret), true);
       } else {
-        assert opBinding.getOperandCount() == 2;
-        return opBinding.getCursorOperand(0);
+        final RelDataTypeFactory typeFactory = opBinding.getTypeFactory();
+        java.util.List<RelDataType> typeList = new java.util.ArrayList<RelDataType>();
+        java.util.List<java.lang.String> fieldNameList =
+                new java.util.ArrayList<java.lang.String>();
+
+        for (int out_idx = 0; out_idx < outs.size(); ++out_idx) {
+          // TODO: use the argument names of output columns as field names
+          fieldNameList.add("out" + out_idx);
+          typeList.add(typeFactory.createSqlType(outs.get(out_idx)));
+        }
+        return typeFactory.createStructType(typeList, fieldNameList);
       }
     }
 
     private final boolean isRowUdf;
-    private final SqlTypeName ret;
+    private final SqlTypeName ret; // used only by UDFs
+    private final List<SqlTypeName> outs; // used only by UDTFs
   }
 
   //
