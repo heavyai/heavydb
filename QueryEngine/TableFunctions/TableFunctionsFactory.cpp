@@ -44,6 +44,8 @@ SQLTypeInfo ext_arg_pointer_type_to_type_info(const ExtArgumentType ext_arg_type
       return SQLTypeInfo(kFLOAT, false);
     case ExtArgumentType::PDouble:
       return SQLTypeInfo(kDOUBLE, false);
+    case ExtArgumentType::PBool:
+      return SQLTypeInfo(kBOOLEAN, false);
     case ExtArgumentType::ColumnInt8:
       return generate_column_type(kTINYINT);
     case ExtArgumentType::ColumnInt16:
@@ -59,6 +61,9 @@ SQLTypeInfo ext_arg_pointer_type_to_type_info(const ExtArgumentType ext_arg_type
     case ExtArgumentType::ColumnBool:
       return generate_column_type(kBOOLEAN);
     default:
+      LOG(WARNING) << "ext_arg_pointer_type_to_type_info: ExtArgumentType `"
+                   << ExtensionFunctionsWhitelist::toString(ext_arg_type)
+                   << "` conversion to SQLTypeInfo not implemented.";
       UNREACHABLE();
   }
   UNREACHABLE();
@@ -94,14 +99,6 @@ void TableFunctionsFactory::init() {
     return;
   }
   std::call_once(init_flag, []() {
-    TableFunctionsFactory::add(
-        "row_copierOLDAPI",
-        TableFunctionOutputRowSizer{OutputBufferSizeType::kUserSpecifiedRowMultiplier, 2},
-        std::vector<ExtArgumentType>{ExtArgumentType::PDouble,
-                                     ExtArgumentType::PInt32,
-                                     ExtArgumentType::PInt64,
-                                     ExtArgumentType::PInt64},
-        std::vector<ExtArgumentType>{ExtArgumentType::PDouble});
     TableFunctionsFactory::add(
         "row_copier",
         TableFunctionOutputRowSizer{OutputBufferSizeType::kUserSpecifiedRowMultiplier, 2},

@@ -910,13 +910,15 @@ std::unordered_map<const RelAlgNode*, std::unordered_set<size_t>> mark_live_colu
   for (auto node_it = nodes.rbegin(); node_it != nodes.rend(); ++node_it) {
     auto node = node_it->get();
     if (dynamic_cast<const RelScan*>(node) || live_outs.count(node) ||
-        dynamic_cast<const RelModify*>(node)) {
+        dynamic_cast<const RelModify*>(node) ||
+        dynamic_cast<const RelTableFunction*>(node)) {
       continue;
     }
     std::vector<size_t> all_live(node->size());
     std::iota(all_live.begin(), all_live.end(), size_t(0));
     live_outs.insert(std::make_pair(
         node, std::unordered_set<size_t>(all_live.begin(), all_live.end())));
+
     work_set.push_back(node);
     while (!work_set.empty()) {
       auto walker = work_set.back();
@@ -927,7 +929,8 @@ std::unordered_map<const RelAlgNode*, std::unordered_set<size_t>> mark_live_colu
       CHECK_EQ(live_ins.size(), walker->inputCount());
       for (size_t i = 0; i < walker->inputCount(); ++i) {
         auto src = walker->getInput(i);
-        if (dynamic_cast<const RelScan*>(src) || live_ins[i].empty()) {
+        if (dynamic_cast<const RelScan*>(src) ||
+            dynamic_cast<const RelTableFunction*>(src) || live_ins[i].empty()) {
           continue;
         }
         if (!live_outs.count(src)) {

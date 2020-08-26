@@ -370,6 +370,7 @@ public class CalciteServerHandler implements CalciteServer.Iface {
       }
     }
 
+    // udfRTSigsJson will contain only the signatures of UDFs:
     udfRTSigsJson = ExtensionFunctionSignatureParser.signaturesToJson(udfRTSigs);
     // Expose RT UDFs to Calcite server:
     extSigs.putAll(udfRTSigs);
@@ -386,7 +387,7 @@ public class CalciteServerHandler implements CalciteServer.Iface {
         args.add(arg_type);
       }
     }
-    return new ExtensionFunction(args, toExtArgumentType(udf.retType), true);
+    return new ExtensionFunction(args, toExtArgumentType(udf.retType));
   }
 
   private static ExtensionFunction toExtensionFunction(TUserDefinedTableFunction udtf) {
@@ -395,7 +396,12 @@ public class CalciteServerHandler implements CalciteServer.Iface {
     for (TExtArgumentType atype : udtf.sqlArgTypes) {
       args.add(toExtArgumentType(atype));
     }
-    return new ExtensionFunction(args, ExtensionFunction.ExtArgumentType.Void, false);
+    List<ExtensionFunction.ExtArgumentType> outs =
+            new ArrayList<ExtensionFunction.ExtArgumentType>();
+    for (TExtArgumentType otype : udtf.outputArgTypes) {
+      outs.add(toExtArgumentType(otype));
+    }
+    return new ExtensionFunction(args, outs);
   }
 
   private static ExtensionFunction.ExtArgumentType toExtArgumentType(

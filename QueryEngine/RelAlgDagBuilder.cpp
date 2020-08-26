@@ -2336,7 +2336,6 @@ class RelAlgDispatcher {
          ++exprs_json_it) {
       const auto& expr_json = *exprs_json_it;
       CHECK(expr_json.IsObject());
-
       if (expr_json.HasMember("op")) {
         const auto op_str = json_str(field(expr_json, "op"));
         if (op_str == "CAST" && expr_json.HasMember("type")) {
@@ -2353,14 +2352,8 @@ class RelAlgDispatcher {
                   "Table functions currently only support one ResultSet input");
             }
 
-            CHECK(expr_json.HasMember("type"));
-            const auto& expr_types = field(invocation, "type");
-            CHECK(expr_types.IsArray());
-
             const auto prior_node = prev(table_func_ra);
             CHECK(prior_node);
-            CHECK_EQ(prior_node->size(), expr_types.Size());
-
             // Forward the values from the prior node as RexInputs
             for (size_t i = 0; i < prior_node->size(); i++) {
               table_func_inputs.emplace_back(
@@ -2383,7 +2376,6 @@ class RelAlgDispatcher {
     CHECK(row_types.IsArray());
     CHECK_GE(row_types.Size(), unsigned(0));
     const auto& row_types_array = row_types.GetArray();
-
     for (size_t i = 0; i < row_types_array.Size(); i++) {
       // We don't care about the type information in rowType -- replace each output with
       // a reference to be resolved later in the translator
