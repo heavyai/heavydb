@@ -983,6 +983,7 @@ void DBHandler::sql_execute(TQueryResult& _return,
   auto query_state = create_query_state(session_ptr, query_str);
   auto stdlog = STDLOG(session_ptr, query_state);
   stdlog.appendNameValuePairs("client", getConnectionInfo().toString());
+  stdlog.appendNameValuePairs("nonce", nonce);
   auto timer = DEBUG_TIMER(__func__);
 
   try {
@@ -3282,6 +3283,7 @@ void DBHandler::render_vega(TRenderResult& _return,
                        "nonce",
                        nonce);
   stdlog.appendNameValuePairs("client", getConnectionInfo().toString());
+  stdlog.appendNameValuePairs("nonce", nonce);
   auto session_ptr = stdlog.getConstSessionInfo();
   if (!render_handler_) {
     THROW_MAPD_EXCEPTION("Backend rendering is disabled.");
