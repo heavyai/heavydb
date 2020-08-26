@@ -17829,6 +17829,48 @@ TEST(Select, GeoSpatial_Projection) {
             "from geospatial_test limit 1;",
             dt)),
         static_cast<double>(0.00001));
+    // Degenerate input geometries triggering fall backs to linestring and point centroids
+    // zero-area, non-zero-length: fall back to linestring centroid
+    ASSERT_NEAR(
+        static_cast<double>(0.0),
+        v<double>(run_simple_agg(
+            "SELECT ST_Distance('POINT(1.585786 1.0)', ST_Centroid('MULTIPOLYGON(((0 0, "
+            "2 2, 0 2, 2 0, 0 0)),((3 0, 3 2, 3 1, 3 0)))'));",
+            dt)),
+        static_cast<double>(0.0001));
+    ASSERT_NEAR(static_cast<double>(0.0),
+                v<double>(run_simple_agg(
+                    "SELECT ST_Distance('POINT(1.0 1.0)', ST_Centroid('MULTIPOLYGON(((0 "
+                    "0, 1 0, 2 0)),((0 2, 1 2, 2 2)))'));",
+                    dt)),
+                static_cast<double>(0.0001));
+    // zero-area, zero-length: point centroid
+    ASSERT_NEAR(static_cast<double>(0.0),
+                v<double>(run_simple_agg(
+                    "SELECT ST_Distance('POINT(1.5 1.5)', ST_Centroid('MULTIPOLYGON(((0 "
+                    "0, 0 0, 0 0, 0 0)),((3 3, 3 3, 3 3, 3 3)))'));",
+                    dt)),
+                static_cast<double>(0.0001));
+    // zero-area, non-zero-length: linestring centroid
+    ASSERT_NEAR(
+        static_cast<double>(0.0),
+        v<double>(run_simple_agg("SELECT ST_Distance('POINT(1.0 1.0)', "
+                                 "ST_Centroid('POLYGON((0 0, 2 2, 0 2, 2 0, 0 0))'));",
+                                 dt)),
+        static_cast<double>(0.0001));
+    // zero-area, zero-length: point centroid
+    ASSERT_NEAR(static_cast<double>(0.0),
+                v<double>(run_simple_agg("SELECT ST_Distance('POINT(3.0 3.0)', "
+                                         "ST_Centroid('POLYGON((3 3, 3 3, 3 3, 3 3))'));",
+                                         dt)),
+                static_cast<double>(0.0001));
+    // zero-length: fallback to point centroid
+    ASSERT_NEAR(
+        static_cast<double>(0.0),
+        v<double>(run_simple_agg("SELECT ST_Distance('POINT(0 89)', "
+                                 "ST_CENTROID('LINESTRING(0 89, 0 89, 0 89, 0 89)'));",
+                                 dt)),
+        static_cast<double>(0.0001));
   }
 }
 
