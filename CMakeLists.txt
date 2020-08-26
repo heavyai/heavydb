@@ -17,8 +17,6 @@ if(DEFINED ENV{CONDA_PREFIX})
   add_compile_options("-fno-semantic-interposition")
   # Adding `--sysroot=...` resolves `no member named 'signbit' in the global namespace` error:
   set(CMAKE_SYSROOT "$ENV{CONDA_BUILD_SYSROOT}")
-  # Adding sysroot include dir resolves `cassert file not found` error:
-  include_directories(SYSTEM "$ENV{CONDA_BUILD_SYSROOT}/usr/include")
 endif(DEFINED ENV{CONDA_PREFIX})
 
 # force `Release` build type if left unspecified
@@ -727,7 +725,7 @@ add_dependencies(omnisci_server rerun_cmake)
 
 target_link_libraries(omnisci_server mapd_thrift thrift_handler ${MAPD_LIBRARIES} ${Boost_LIBRARIES} ${CMAKE_DL_LIBS} ${CUDA_LIBRARIES} ${PROFILER_LIBS} ${ZLIB_LIBRARIES} ${LOCALE_LINK_FLAG})
 
-target_link_libraries(initdb mapd_thrift DataMgr ${MAPD_LIBRARIES} ${Boost_LIBRARIES} ${CMAKE_DL_LIBS} ${CUDA_LIBRARIES} ${ZLIB_LIBRARIES} ${LLVM_LIB_FLAGS})
+target_link_libraries(initdb mapd_thrift DataMgr ${MAPD_LIBRARIES} ${Boost_LIBRARIES} ${CMAKE_DL_LIBS} ${CUDA_LIBRARIES} ${ZLIB_LIBRARIES})
 
 macro(set_dpkg_arch arch_in arch_out)
   if("${arch_in}" STREQUAL "x86_64")
