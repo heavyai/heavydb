@@ -23,6 +23,7 @@ add_executable(FileMgrTest FileMgrTest.cpp)
 add_executable(FilePathWhitelistTest FilePathWhitelistTest.cpp)
 add_executable(EncoderTest EncoderTest.cpp)
 add_executable(ForeignStorageCacheTest ForeignStorageCacheTest.cpp)
+add_executable(PersistentStorageTest PersistentStorageTest.cpp)
 
 if(ENABLE_CUDA)
   set(MAPD_DEFINITIONS -DHAVE_CUDA)
@@ -173,6 +174,7 @@ target_link_libraries(FileMgrTest ${THRIFT_HANDLER_TEST_LIBRARIES})
 target_link_libraries(FilePathWhitelistTest ${THRIFT_HANDLER_TEST_LIBRARIES})
 target_link_libraries(SQLHintTest ${EXECUTE_TEST_LIBS})
 target_link_libraries(ForeignStorageCacheTest gtest Shared Catalog Parser QueryEngine ${TBB_LIBS})
+target_link_libraries(PersistentStorageTest gtest ${MAPD_LIBRARIES})
 
 if(NOT ${CMAKE_SYSTEM_NAME} STREQUAL "Darwin")
   target_link_libraries(UdfTest gtest ${EXECUTE_TEST_LIBS})
@@ -245,6 +247,7 @@ add_test(FilePathWhitelistTest FilePathWhitelistTest ${TEST_ARGS})
 add_test(EncoderTest EncoderTest ${TEST_ARGS})
 add_test(SQLHintTest SQLHintTest ${TEST_ARGS})
 add_test(ForeignStorageCacheTest ForeignStorageCacheTest ${TEST_ARGS})
+add_test(PersistentStorageTest PersistentStorageTest ${TEST_ARGS})
 if(ENABLE_CUDA)
   add_test(GpuSharedMemoryTest GpuSharedMemoryTest ${TEST_ARGS})
 endif()
@@ -324,6 +327,7 @@ set(TEST_PROGRAMS
   EncoderTest
   SQLHintTest
   ForeignStorageCacheTest
+  PersistentStorageTest
 )
 
 if(ENABLE_CUDA)

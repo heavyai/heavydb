@@ -120,6 +120,16 @@ FileMgr::~FileMgr() {
   for (auto file_info : files_) {
     delete file_info;
   }
+
+  if (epochFile_) {
+    close(epochFile_);
+    epochFile_ = nullptr;
+  }
+
+  if (DBMetaFile_) {
+    close(DBMetaFile_);
+    DBMetaFile_ = nullptr;
+  }
 }
 
 void FileMgr::init(const size_t num_reader_threads) {

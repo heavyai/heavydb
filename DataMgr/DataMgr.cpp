@@ -52,7 +52,8 @@ DataMgr::DataMgr(const string& dataDir,
                  const int numGpus,
                  const int startGpu,
                  const size_t reservedGpuMem,
-                 const size_t numReaderThreads)
+                 const size_t numReaderThreads,
+                 const DiskCacheConfig cache_config)
     : dataDir_(dataDir) {
   if (useGpus) {
     try {
@@ -68,7 +69,7 @@ DataMgr::DataMgr(const string& dataDir,
     hasGpus_ = false;
   }
 
-  populateMgrs(system_parameters, numReaderThreads);
+  populateMgrs(system_parameters, numReaderThreads, cache_config);
   createTopLevelMetadata();
 }
 
@@ -157,13 +158,29 @@ size_t DataMgr::getTotalSystemMemory() {
 #endif
 }
 
+// This function exists for testing purposes so that we can test a reset of the cache.
+void DataMgr::resetPersistentStorage(const DiskCacheConfig& cache_config,
+                                     const size_t num_reader_threads,
+                                     const SystemParameters& sys_params) {
+  int numLevels = bufferMgrs_.size();
+  for (int level = numLevels - 1; level >= 0; --level) {
+    for (size_t device = 0; device < bufferMgrs_[level].size(); device++) {
+      delete bufferMgrs_[level][device];
+    }
+  }
+  bufferMgrs_.clear();
+  populateMgrs(sys_params, num_reader_threads, cache_config);
+  createTopLevelMetadata();
+}
+
 void DataMgr::populateMgrs(const SystemParameters& system_parameters,
-                           const size_t userSpecifiedNumReaderThreads) {
+                           const size_t userSpecifiedNumReaderThreads,
+                           const DiskCacheConfig& cache_config) {
   // no need for locking, as this is only called in the constructor
   bufferMgrs_.resize(2);
   if (g_enable_fsi) {
     bufferMgrs_[0].push_back(
-        new PersistentStorageMgr(dataDir_, userSpecifiedNumReaderThreads));
+        new PersistentStorageMgr(dataDir_, userSpecifiedNumReaderThreads, cache_config));
   } else {
     bufferMgrs_[0].push_back(
         new GlobalFileMgr(0, dataDir_, userSpecifiedNumReaderThreads));

@@ -138,6 +138,7 @@ QueryRunner::QueryRunner(const char* db_path,
   auto system_db_file = base_path / "mapd_catalogs" / OMNISCI_DEFAULT_DB;
   CHECK(boost::filesystem::exists(system_db_file));
   auto data_dir = base_path / "mapd_data";
+  DiskCacheConfig disk_cache_config{(base_path / "omnisci_disk_cache").string()};
   Catalog_Namespace::UserMetadata user;
   Catalog_Namespace::DBMetadata db;
 
@@ -159,8 +160,14 @@ QueryRunner::QueryRunner(const char* db_path,
   mapd_params.gpu_buffer_mem_bytes = max_gpu_mem;
   mapd_params.aggregator = !leaf_servers.empty();
 
-  auto data_mgr = std::make_shared<Data_Namespace::DataMgr>(
-      data_dir.string(), mapd_params, uses_gpus, -1, 0, reserved_gpu_mem);
+  auto data_mgr = std::make_shared<Data_Namespace::DataMgr>(data_dir.string(),
+                                                            mapd_params,
+                                                            uses_gpus,
+                                                            -1,
+                                                            0,
+                                                            reserved_gpu_mem,
+                                                            0,
+                                                            disk_cache_config);
 
   auto& sys_cat = Catalog_Namespace::SysCatalog::instance();
 

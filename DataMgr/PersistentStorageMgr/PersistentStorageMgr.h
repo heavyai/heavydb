@@ -21,18 +21,11 @@
 #include "DataMgr/ForeignStorage/ForeignStorageMgr.h"
 
 using namespace Data_Namespace;
-
 class PersistentStorageMgr : public AbstractBufferMgr {
  public:
-  PersistentStorageMgr(const std::string& data_dir, const size_t num_reader_threads)
-      : AbstractBufferMgr(0)
-      , global_file_mgr(
-            std::make_unique<File_Namespace::GlobalFileMgr>(0,
-                                                            data_dir,
-                                                            num_reader_threads))
-      , foreign_storage_mgr(
-            std::make_unique<foreign_storage::ForeignStorageMgr>(global_file_mgr.get())) {
-  }
+  PersistentStorageMgr(const std::string& data_dir,
+                       const size_t num_reader_threads,
+                       const DiskCacheConfig& disk_cache_config);
 
   AbstractBuffer* createBuffer(const ChunkKey& chunk_key,
                                const size_t page_size,
@@ -67,10 +60,12 @@ class PersistentStorageMgr : public AbstractBufferMgr {
   void removeTableRelatedDS(const int db_id, const int table_id) override;
   File_Namespace::GlobalFileMgr* getGlobalFileMgr();
   foreign_storage::ForeignStorageMgr* getForeignStorageMgr() const;
+  foreign_storage::ForeignStorageCache* getDiskCache() const;
 
  private:
   bool isForeignStorage(const ChunkKey& chunk_key);
 
-  std::unique_ptr<File_Namespace::GlobalFileMgr> global_file_mgr;
-  std::unique_ptr<foreign_storage::ForeignStorageMgr> foreign_storage_mgr;
+  std::unique_ptr<File_Namespace::GlobalFileMgr> global_file_mgr_;
+  std::unique_ptr<foreign_storage::ForeignStorageMgr> foreign_storage_mgr_;
+  std::unique_ptr<foreign_storage::ForeignStorageCache> disk_cache_;
 };

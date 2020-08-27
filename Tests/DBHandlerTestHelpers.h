@@ -172,7 +172,7 @@ class DBHandlerTestFixture : public testing::Test {
 
   static void TearDownTestSuite() {}
 
-  static void createDBHandler() {
+  static void createDBHandler(bool disk_cache_enabled = true) {
     if (!db_handler_) {
       // Based on default values observed from starting up an OmniSci DB server.
       const bool cpu_only{false};
@@ -198,6 +198,8 @@ class DBHandlerTestFixture : public testing::Test {
       system_parameters_.omnisci_server_port = -1;
       system_parameters_.calcite_port = 3280;
 
+      DiskCacheConfig disk_cache_config(std::string(BASE_PATH) + "/omnisci_disk_cache",
+                                        disk_cache_enabled);
       db_handler_ = std::make_unique<DBHandler>(db_leaves_,
                                                 string_leaves_,
                                                 BASE_PATH,
@@ -225,13 +227,11 @@ class DBHandlerTestFixture : public testing::Test {
                                                 enable_runtime_udf_registration,
                                                 udf_filename_,
                                                 udf_compiler_path_,
-                                                udf_compiler_options_
+                                                udf_compiler_options_,
 #ifdef ENABLE_GEOS
-                                                ,
-                                                libgeos_so_filename_
+                                                libgeos_so_filename_,
 #endif
-      );
-
+                                                disk_cache_config);
       loginAdmin();
     }
   }
@@ -263,7 +263,7 @@ class DBHandlerTestFixture : public testing::Test {
     return {db_handler_.get(), session_id_};
   }
 
-  void resetCatalog() {
+  static void resetCatalog() {
     auto& catalog = getCatalog();
     catalog.remove(catalog.getCurrentDB().dbName);
   }
@@ -274,6 +274,7 @@ class DBHandlerTestFixture : public testing::Test {
     admin_session_id_ = session_id_;
   }
   static bool isDistributedMode() { return system_parameters_.aggregator; }
+  static SystemParameters getSystemParameters() { return system_parameters_; }
   static void switchToAdmin() { session_id_ = admin_session_id_; }
 
   static void logout(const TSessionId& id) { db_handler_->disconnect(id); }

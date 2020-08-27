@@ -311,15 +311,22 @@ void CommandLineOptions::fillOptions() {
       "enable-fsi",
       po::value<bool>(&g_enable_fsi)->default_value(g_enable_fsi)->implicit_value(true),
       "Enable foreign storage interface.");
-  help_desc.add_options()("enable-fsi-cache",
-                          po::value<bool>(&g_enable_fsi_cache)
-                              ->default_value(g_enable_fsi_cache)
-                              ->implicit_value(true),
-                          "Enable caching of foreign table data on disk.");
   help_desc.add_options()("encryption-key-store",
                           po::value<std::string>(&encryption_key_store_path),
                           "Path to directory where encryption related keys will reside.");
-
+  help_desc.add_options()("disk-cache-path",
+                          po::value<std::string>(&(disk_cache_config.path))
+                              ->default_value(base_path + "/omnisci_disk_cache"),
+                          "Specify the path for the disk cache.");
+  help_desc.add_options()("enable-disk-cache",
+                          po::value<bool>(&(disk_cache_config.is_enabled))
+                              ->default_value(true)
+                              ->implicit_value(true),
+                          "Enable caching of table data on disk.");
+  help_desc.add_options()(
+      "disk-cache-entry-limit",
+      po::value<std::size_t>(&(disk_cache_config.entry_limit))->default_value(1024),
+      "Specify the size of the the disk cache.");
 #endif  // ENABLE_FSI
   help_desc.add_options()(
       "enable-interoperability",
@@ -729,6 +736,9 @@ void CommandLineOptions::validate() {
   ddl_utils::FilePathBlacklist::addToBlacklist(base_path + "/mapd_catalogs");
   ddl_utils::FilePathBlacklist::addToBlacklist(base_path + "/mapd_data");
   ddl_utils::FilePathBlacklist::addToBlacklist(base_path + "/mapd_log");
+#ifdef ENABLE_FSI
+  ddl_utils::FilePathBlacklist::addToBlacklist(disk_cache_config.path);
+#endif
   if (!license_path.empty()) {
     ddl_utils::FilePathBlacklist::addToBlacklist(license_path);
   }

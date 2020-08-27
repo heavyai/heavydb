@@ -25,12 +25,10 @@
 
 using namespace Data_Namespace;
 
-extern size_t foreign_cache_entry_limit;
-
 namespace foreign_storage {
 class ForeignStorageMgr : public AbstractBufferMgr {
  public:
-  ForeignStorageMgr(File_Namespace::GlobalFileMgr* global_file_mgr);
+  ForeignStorageMgr(ForeignStorageCache* fsc = nullptr);
 
   AbstractBuffer* createBuffer(const ChunkKey& chunk_key,
                                const size_t page_size,
@@ -82,6 +80,7 @@ class ForeignStorageMgr : public AbstractBufferMgr {
   std::shared_mutex data_wrapper_mutex_;
 
   std::map<ChunkKey, std::shared_ptr<ForeignDataWrapper>> data_wrapper_map_;
-  std::unique_ptr<ForeignStorageCache> foreign_storage_cache_;
+  ForeignStorageCache* foreign_storage_cache_;
+  bool is_cache_enabled_;
 };
 }  // namespace foreign_storage

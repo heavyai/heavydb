@@ -21,7 +21,6 @@
 */
 
 #include "ForeignStorageCache.h"
-
 #include "Shared/measure.h"
 
 namespace foreign_storage {
@@ -39,6 +38,15 @@ static void iterateOverMatchingPrefix(Func func,
        ++chunk_it) {
     func(*chunk_it);
   }
+}
+
+ForeignStorageCache::ForeignStorageCache(const std::string& cache_dir,
+                                         const size_t num_reader_threads,
+                                         const size_t limit)
+    : entry_limit_(limit) {
+  validatePath(cache_dir);
+  global_file_mgr_ =
+      std::make_unique<File_Namespace::GlobalFileMgr>(0, cache_dir, num_reader_threads);
 }
 
 void ForeignStorageCache::cacheChunk(const ChunkKey& chunk_key, AbstractBuffer* buffer) {
@@ -213,4 +221,25 @@ std::string ForeignStorageCache::dumpCachedMetadataEntries() const {
 std::string ForeignStorageCache::dumpEvictionQueue() const {
   return ((LRUEvictionAlgorithm*)eviction_alg_.get())->dumpEvictionQueue();
 }
+
+void ForeignStorageCache::validatePath(const std::string& base_path) {
+  // check if base_path already exists, and if not create one
+  boost::filesystem::path path(base_path);
+  if (boost::filesystem::exists(path)) {
+    if (!boost::filesystem::is_directory(path)) {
+      throw std::runtime_error{
+          "cache path \"" + base_path +
+          "\" is not a directory.  Please specify a valid directory "
+          "with --disk_cache_path=<path>, or use the default location."};
+    }
+  } else {  // data directory does not exist
+    if (!boost::filesystem::create_directory(path)) {
+      throw std::runtime_error{
+          "could not create directory at cache path \"" + base_path +
+          "\".  Please specify a valid directory location "
+          "with --disk_cache_path=<path> or use the default location."};
+    }
+  }
+}
+
 }  // namespace foreign_storage

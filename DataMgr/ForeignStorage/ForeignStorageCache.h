@@ -33,14 +33,28 @@
 #include "DataMgr/FileMgr/GlobalFileMgr.h"
 #include "ForeignDataWrapper.h"
 
+struct DiskCacheConfig {
+  std::string path;
+  bool is_enabled = false;
+  size_t entry_limit = 1024;
+  size_t num_reader_threads = 0;
+  DiskCacheConfig() {}
+  DiskCacheConfig(std::string p,
+                  bool enabled = true,
+                  size_t limit = 1024,
+                  size_t readers = 0)
+      : path(p), is_enabled(enabled), entry_limit(limit), num_reader_threads(readers) {}
+};
+
 using namespace Data_Namespace;
 
 namespace foreign_storage {
 
 class ForeignStorageCache {
  public:
-  ForeignStorageCache(File_Namespace::GlobalFileMgr* gfm, size_t limit)
-      : global_file_mgr_(gfm), entry_limit_(limit) {}
+  ForeignStorageCache(const std::string& cache_dir,
+                      const size_t num_reader_threads,
+                      const size_t limit);
   void cacheChunk(const ChunkKey&, AbstractBuffer*);
   AbstractBuffer* getCachedChunkIfExists(const ChunkKey&);
   bool isMetadataCached(const ChunkKey&);
@@ -62,19 +76,22 @@ class ForeignStorageCache {
   std::string dumpCachedMetadataEntries() const;
   std::string dumpEvictionQueue() const;
 
+  File_Namespace::GlobalFileMgr* getGlobalFileMgr() { return global_file_mgr_.get(); }
+
  private:
   // These methods are private and assume locks are already acquired when called.
   std::set<ChunkKey>::iterator eraseChunk(const std::set<ChunkKey>::iterator&);
   void eraseChunk(const ChunkKey&);
   void evictChunkByAlg();
   bool isCacheFull() const;
+  void validatePath(const std::string&);
 
   // We can swap out different eviction algorithms here.
   std::unique_ptr<CacheEvictionAlgorithm> eviction_alg_ =
       std::make_unique<LRUEvictionAlgorithm>();
 
-  // Need pointer to GFM as it is used for storage.
-  File_Namespace::GlobalFileMgr* global_file_mgr_;
+  // Underlying storage is handled by a GlobalFileMgr unique to the cache.
+  std::unique_ptr<File_Namespace::GlobalFileMgr> global_file_mgr_;
 
   // Keeps tracks of which Chunks/ChunkMetadata are cached.
   std::set<ChunkKey> cached_chunks_;

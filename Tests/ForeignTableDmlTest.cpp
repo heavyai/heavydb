@@ -34,7 +34,6 @@
 #endif
 
 extern bool g_enable_fsi;
-extern bool g_enable_fsi_cache;
 std::string test_binary_file_path;
 
 namespace bp = boost::process;
@@ -50,7 +49,6 @@ class ForeignTableTest : public DBHandlerTestFixture {
  protected:
   void SetUp() override { DBHandlerTestFixture::SetUp(); }
   void TearDown() override { DBHandlerTestFixture::TearDown(); }
-
   static std::string getCreateForeignTableQuery(const std::string& columns,
                                                 const std::string& file_name_base,
                                                 const std::string& data_wrapper_type,
@@ -123,7 +121,7 @@ class ForeignTableTest : public DBHandlerTestFixture {
 class SelectQueryTest : public ForeignTableTest {
  protected:
   void SetUp() override {
-    DBHandlerTestFixture::SetUp();
+    ForeignTableTest::SetUp();
     import_export::delimited_parser::set_max_buffer_resize(max_buffer_resize_);
     sql("DROP FOREIGN TABLE IF EXISTS test_foreign_table;");
     sql("DROP FOREIGN TABLE IF EXISTS test_foreign_table_2;");
@@ -134,11 +132,46 @@ class SelectQueryTest : public ForeignTableTest {
     sql("DROP FOREIGN TABLE IF EXISTS test_foreign_table;");
     sql("DROP FOREIGN TABLE IF EXISTS test_foreign_table_2;");
     sql("DROP SERVER IF EXISTS test_server;");
-    DBHandlerTestFixture::TearDown();
+    ForeignTableTest::TearDown();
   }
 
   inline static size_t max_buffer_resize_ =
       import_export::delimited_parser::get_max_buffer_resize();
+};
+
+class CacheControllingSelectQueryTest : public SelectQueryTest,
+                                        public ::testing::WithParamInterface<bool> {
+ public:
+  inline static std::string cache_path_ = to_string(BASE_PATH) + "/omnisci_disk_cache/";
+  bool starting_cache_state_;
+
+ protected:
+  void resetPersistentStorageMgr(bool cache_enabled) {
+    for (auto table_it : getCatalog().getAllTableMetadata()) {
+      getCatalog().removeFragmenterForTable(table_it->tableId);
+    }
+    getCatalog().getDataMgr().resetPersistentStorage(
+        {cache_path_, cache_enabled}, 0, getSystemParameters());
+  }
+
+  void SetUp() override {
+    // Disable/enable the cache as test param requires
+    starting_cache_state_ =
+        (getCatalog().getDataMgr().getForeignStorageMgr()->getForeignStorageCache() !=
+         nullptr);
+    if (starting_cache_state_ != GetParam()) {
+      resetPersistentStorageMgr(GetParam());
+    }
+    SelectQueryTest::SetUp();
+  }
+
+  void TearDown() override {
+    SelectQueryTest::TearDown();
+    // Reset cache to pre-test conditions
+    if (starting_cache_state_ != GetParam()) {
+      resetPersistentStorageMgr(starting_cache_state_);
+    }
+  }
 };
 
 class DataWrapperSelectQueryTest : public SelectQueryTest,
@@ -157,64 +190,6 @@ class DataTypeFragmentSizeAndDataWrapperTest
 class RowGroupAndFragmentSizeSelectQueryTest
     : public SelectQueryTest,
       public ::testing::WithParamInterface<std::pair<int64_t, int64_t>> {};
-
-TEST_F(SelectQueryTest, CustomServer) {
-  sql("CREATE SERVER test_server FOREIGN DATA WRAPPER omnisci_csv "s +
-      "WITH (storage_type = 'LOCAL_FILE', base_path = '" + getDataFilesPath() + "');");
-  sql("CREATE FOREIGN TABLE test_foreign_table (t TEXT, i INTEGER[]) "
-      "SERVER test_server WITH (file_path = 'example_1.csv');");
-  TQueryResult result;
-  sql(result, "SELECT * FROM test_foreign_table;");
-  assertResultSetEqual({{"a", array({i(1), i(1), i(1)})},
-                        {"aa", array({Null_i, i(2), i(2)})},
-                        {"aaa", array({i(3), Null_i, i(3)})}},
-                       result);
-}
-
-TEST_F(SelectQueryTest, DefaultLocalCsvServer) {
-  std::string query = "CREATE FOREIGN TABLE test_foreign_table (t TEXT, i INTEGER[]) "s +
-                      "SERVER omnisci_local_csv WITH (file_path = '" +
-                      getDataFilesPath() + "/example_1.csv');";
-  sql(query);
-  TQueryResult result;
-  sql(result, "SELECT * FROM test_foreign_table;");
-  assertResultSetEqual({{"a", array({i(1), i(1), i(1)})},
-                        {"aa", array({Null_i, i(2), i(2)})},
-                        {"aaa", array({i(3), Null_i, i(3)})}},
-                       result);
-}
-
-TEST_F(SelectQueryTest, DefaultLocalParquetServer) {
-  std::string query =
-      "CREATE FOREIGN TABLE test_foreign_table (t TEXT, i INTEGER, f DOUBLE) "s +
-      "SERVER omnisci_local_parquet WITH (file_path = '" + getDataFilesPath() +
-      "/example_2.parquet');";
-  sql(query);
-  TQueryResult result;
-  sql(result, "SELECT * FROM test_foreign_table;");
-  assertResultSetEqual({{"a", i(1), 1.1},
-                        {"aa", i(1), 1.1},
-                        {"aa", i(2), 2.2},
-                        {"aaa", i(1), 1.1},
-                        {"aaa", i(2), 2.2},
-                        {"aaa", i(3), 3.3}},
-                       result);
-}
-
-TEST_F(SelectQueryTest, CacheDisabled) {
-  g_enable_fsi_cache = false;
-  std::string query = "CREATE FOREIGN TABLE test_foreign_table (t TEXT, i INTEGER[]) "s +
-                      "SERVER omnisci_local_csv WITH (file_path = '" +
-                      getDataFilesPath() + "/example_1.csv');";
-  sql(query);
-  TQueryResult result;
-  sql(result, "SELECT * FROM test_foreign_table;");
-  assertResultSetEqual({{"a", array({i(1), i(1), i(1)})},
-                        {"aa", array({Null_i, i(2), i(2)})},
-                        {"aaa", array({i(3), Null_i, i(3)})}},
-                       result);
-  g_enable_fsi_cache = true;
-}
 
 namespace {
 struct PrintToStringParamName {
@@ -262,9 +237,52 @@ struct PrintToStringParamName {
 };
 }  // namespace
 
+TEST_P(CacheControllingSelectQueryTest, CustomServer) {
+  sql("CREATE SERVER test_server FOREIGN DATA WRAPPER omnisci_csv "s +
+      "WITH (storage_type = 'LOCAL_FILE', base_path = '" + getDataFilesPath() + "');");
+  sql("CREATE FOREIGN TABLE test_foreign_table (t TEXT, i INTEGER[]) "
+      "SERVER test_server WITH (file_path = 'example_1.csv');");
+  TQueryResult result;
+  sql(result, "SELECT * FROM test_foreign_table;");
+  assertResultSetEqual({{"a", array({i(1), i(1), i(1)})},
+                        {"aa", array({Null_i, i(2), i(2)})},
+                        {"aaa", array({i(3), Null_i, i(3)})}},
+                       result);
+}
+
+TEST_P(CacheControllingSelectQueryTest, DefaultLocalCsvServer) {
+  std::string query = "CREATE FOREIGN TABLE test_foreign_table (t TEXT, i INTEGER[]) "s +
+                      "SERVER omnisci_local_csv WITH (file_path = '" +
+                      getDataFilesPath() + "/example_1.csv');";
+  sql(query);
+  TQueryResult result;
+  sql(result, "SELECT * FROM test_foreign_table;");
+  assertResultSetEqual({{"a", array({i(1), i(1), i(1)})},
+                        {"aa", array({Null_i, i(2), i(2)})},
+                        {"aaa", array({i(3), Null_i, i(3)})}},
+                       result);
+}
+
+TEST_P(CacheControllingSelectQueryTest, DefaultLocalParquetServer) {
+  std::string query =
+      "CREATE FOREIGN TABLE test_foreign_table (t TEXT, i INTEGER, f DOUBLE) "s +
+      "SERVER omnisci_local_parquet WITH (file_path = '" + getDataFilesPath() +
+      "/example_2.parquet');";
+  sql(query);
+  TQueryResult result;
+  sql(result, "SELECT * FROM test_foreign_table;");
+  assertResultSetEqual({{"a", i(1), 1.1},
+                        {"aa", i(1), 1.1},
+                        {"aa", i(2), 2.2},
+                        {"aaa", i(1), 1.1},
+                        {"aaa", i(2), 2.2},
+                        {"aaa", i(3), 3.3}},
+                       result);
+}
+
 // Create table with multiple fragments with file buffers less than size of a
 // fragment Includes both fixed and variable length data
-TEST_F(SelectQueryTest, MultipleDataBlocksPerFragment) {
+TEST_P(CacheControllingSelectQueryTest, MultipleDataBlocksPerFragment) {
   const auto& query =
       getCreateForeignTableQuery("(i INTEGER,  txt TEXT, txt_2 TEXT ENCODING NONE)",
                                  {{"buffer_size", "25"}, {"fragment_size", "64"}},
@@ -307,7 +325,7 @@ TEST_F(SelectQueryTest, MultipleDataBlocksPerFragment) {
   }
 }
 
-TEST_F(SelectQueryTest, ParquetGeoTypesMalformed) {
+TEST_P(CacheControllingSelectQueryTest, ParquetGeoTypesMalformed) {
   const auto& query = getCreateForeignTableQuery(
       "(p POINT, l LINESTRING, poly POLYGON, multipoly MULTIPOLYGON)",
       "geo_types.malformed",
@@ -319,7 +337,7 @@ TEST_F(SelectQueryTest, ParquetGeoTypesMalformed) {
                           "'test_foreign_table' for row group 0 and row 1.");
 }
 
-TEST_F(SelectQueryTest, ParquetGeoTypesNull) {
+TEST_P(CacheControllingSelectQueryTest, ParquetGeoTypesNull) {
   const auto& query = getCreateForeignTableQuery(
       "(p POINT, l LINESTRING, poly POLYGON, multipoly MULTIPOLYGON)",
       "geo_types.null",
@@ -331,7 +349,7 @@ TEST_F(SelectQueryTest, ParquetGeoTypesNull) {
                           "'test_foreign_table' for row group 0 and row 1.");
 }
 
-TEST_F(SelectQueryTest, ParquetNullRowgroups) {
+TEST_P(CacheControllingSelectQueryTest, ParquetNullRowgroups) {
   const auto& query =
       getCreateForeignTableQuery("(a SMALLINT, b SMALLINT)", "null_columns", "parquet");
   sql(query);
@@ -346,6 +364,16 @@ TEST_F(SelectQueryTest, ParquetNullRowgroups) {
                        result);
   // clang-format on
 }
+
+TEST_P(CacheControllingSelectQueryTest, CacheExists) {
+  auto cache = getCatalog().getDataMgr().getForeignStorageMgr()->getForeignStorageCache();
+  ASSERT_EQ((cache != nullptr), GetParam());
+}
+
+INSTANTIATE_TEST_SUITE_P(CachOnOffSelectQueryTests,
+                         CacheControllingSelectQueryTest,
+                         ::testing::Values(true, false),
+                         PrintToStringParamName());
 
 INSTANTIATE_TEST_SUITE_P(DataWrapperParameterizedTests,
                          DataWrapperSelectQueryTest,
@@ -368,7 +396,7 @@ TEST_P(DataWrapperSelectQueryTest, AggregateAndGroupBy) {
 }
 
 // TODO: implement for parquet when kARRAY support implemented for parquet
-TEST_F(SelectQueryTest, Join) {
+TEST_P(CacheControllingSelectQueryTest, Join) {
   auto query = getCreateForeignTableQuery("(t TEXT, i INTEGER[])", "example_1", "csv");
   sql(query);
 
@@ -405,7 +433,7 @@ TEST_P(DataWrapperSelectQueryTest, Filter) {
 }
 
 // TODO: implement for parquet when kARRAY support implemented for parquet
-TEST_F(SelectQueryTest, Sort) {
+TEST_P(CacheControllingSelectQueryTest, Sort) {
   const auto& query =
       getCreateForeignTableQuery("(t TEXT, i INTEGER[])", "example_1", "csv");
   sql(query);
@@ -456,7 +484,7 @@ TEST_P(DataWrapperSelectQueryTest, Delete) {
                           "supported for foreign tables.");
 }
 
-TEST_F(SelectQueryTest, CSV_CustomDelimiters) {
+TEST_P(CacheControllingSelectQueryTest, CSV_CustomDelimiters) {
   const auto& query = getCreateForeignTableQuery(
       "(b BOOLEAN, i INTEGER, f FLOAT, t TIME, tp TIMESTAMP, d DATE, "
       "txt TEXT, txt_2 TEXT, i_arr INTEGER[], txt_arr TEXT[])",
@@ -521,7 +549,7 @@ TEST_P(CSVFileTypeTests, SelectCSV) {
                        result);
 }
 
-TEST_F(SelectQueryTest, CsvEmptyArchive) {
+TEST_P(CacheControllingSelectQueryTest, CsvEmptyArchive) {
   std::string query = "CREATE FOREIGN TABLE test_foreign_table (t TEXT, i INTEGER[]) "s +
                       "SERVER omnisci_local_csv WITH (file_path = '" +
                       getDataFilesPath() + "/" + "example_1_empty.zip" + "');";
@@ -531,7 +559,7 @@ TEST_F(SelectQueryTest, CsvEmptyArchive) {
   assertResultSetEqual({}, result);
 }
 
-TEST_F(SelectQueryTest, CsvDirectoryBadFileExt) {
+TEST_P(CacheControllingSelectQueryTest, CsvDirectoryBadFileExt) {
   std::string query = "CREATE FOREIGN TABLE test_foreign_table (t TEXT, i INTEGER[]) "s +
                       "SERVER omnisci_local_csv WITH (file_path = '" +
                       getDataFilesPath() + "/" + "example_1_dir_bad_ext/" + "');";
@@ -542,7 +570,7 @@ TEST_F(SelectQueryTest, CsvDirectoryBadFileExt) {
                               "example_1_dir_bad_ext/example_1c.tmp\".");
 }
 
-TEST_F(SelectQueryTest, CsvArchiveInvalidFile) {
+TEST_P(CacheControllingSelectQueryTest, CsvArchiveInvalidFile) {
   std::string query = "CREATE FOREIGN TABLE test_foreign_table (t TEXT, i INTEGER[]) "s +
                       "SERVER omnisci_local_csv WITH (file_path = '" +
                       getDataFilesPath() + "/" + "example_1_invalid_file.zip" + "');";
@@ -552,7 +580,7 @@ TEST_F(SelectQueryTest, CsvArchiveInvalidFile) {
                           "columns, has 1): (random text)");
 }
 
-TEST_F(SelectQueryTest, CSV_CustomLineDelimiters) {
+TEST_P(CacheControllingSelectQueryTest, CSV_CustomLineDelimiters) {
   const auto& query = getCreateForeignTableQuery("(b BOOLEAN, i INTEGER, t TEXT)",
                                                  {{"line_delimiter", "*"}},
                                                  "custom_line_delimiter",
@@ -571,7 +599,7 @@ TEST_F(SelectQueryTest, CSV_CustomLineDelimiters) {
 
 // TODO: implement for parquet when kARRAY support implemented for parquet
 // Note: only need to test array_marker and array_delimiter
-TEST_F(SelectQueryTest, CSV_CustomMarkers) {
+TEST_P(CacheControllingSelectQueryTest, CSV_CustomMarkers) {
   const auto& query = getCreateForeignTableQuery(
       "(t TEXT, t2 TEXT, i INTEGER[])",
       {{"array_marker", "[]"}, {"escape", "\\"}, {"nulls", "NIL"}, {"quote", "|"}},
@@ -587,7 +615,7 @@ TEST_F(SelectQueryTest, CSV_CustomMarkers) {
                        result);
 }
 
-TEST_F(SelectQueryTest, CSV_NoHeader) {
+TEST_P(CacheControllingSelectQueryTest, CSV_NoHeader) {
   const auto& query = getCreateForeignTableQuery(
       "(t TEXT, i INTEGER[])", {{"header", "false"}}, "no_header", "csv");
   sql(query);
@@ -600,7 +628,7 @@ TEST_F(SelectQueryTest, CSV_NoHeader) {
                        result);
 }
 
-TEST_F(SelectQueryTest, CSV_QuotedHeader) {
+TEST_P(CacheControllingSelectQueryTest, CSV_QuotedHeader) {
   const auto& query =
       getCreateForeignTableQuery("(t TEXT, i INTEGER[])", "quoted_headers", "csv");
   sql(query);
@@ -613,7 +641,7 @@ TEST_F(SelectQueryTest, CSV_QuotedHeader) {
                        result);
 }
 
-TEST_F(SelectQueryTest, CSV_NonQuotedFields) {
+TEST_P(CacheControllingSelectQueryTest, CSV_NonQuotedFields) {
   const auto& query = getCreateForeignTableQuery(
       "(t TEXT, t2 TEXT)", {{"quoted", "false"}}, "non_quoted", "csv");
   sql(query);
@@ -628,7 +656,7 @@ TEST_F(SelectQueryTest, CSV_NonQuotedFields) {
   // clang-format on
 }
 
-TEST_F(SelectQueryTest, WithBufferSizeOption) {
+TEST_P(CacheControllingSelectQueryTest, WithBufferSizeOption) {
   const auto& query = getCreateForeignTableQuery(
       "(t TEXT, i INTEGER[])", {{"buffer_size", "25"}}, "example_1", "csv");
   sql(query);
@@ -641,7 +669,7 @@ TEST_F(SelectQueryTest, WithBufferSizeOption) {
                        result);
 }
 
-TEST_F(SelectQueryTest, WithBufferSizeLessThanRowSize) {
+TEST_P(CacheControllingSelectQueryTest, WithBufferSizeLessThanRowSize) {
   const auto& query = getCreateForeignTableQuery(
       "(t TEXT, i INTEGER[])", {{"buffer_size", "10"}}, "example_1", "csv");
   sql(query);
@@ -654,7 +682,7 @@ TEST_F(SelectQueryTest, WithBufferSizeLessThanRowSize) {
                        result);
 }
 
-TEST_F(SelectQueryTest, WithMaxBufferResizeLessThanRowSize) {
+TEST_P(CacheControllingSelectQueryTest, WithMaxBufferResizeLessThanRowSize) {
   import_export::delimited_parser::set_max_buffer_resize(15);
   const auto& query = getCreateForeignTableQuery(
       "(t TEXT, i INTEGER[])", {{"buffer_size", "10"}}, "example_1", "csv");
@@ -668,7 +696,7 @@ TEST_F(SelectQueryTest, WithMaxBufferResizeLessThanRowSize) {
       "First few characters in row: aa,{'NA', 2, 2}");
 }
 
-TEST_F(SelectQueryTest, ReverseLongitudeAndLatitude) {
+TEST_P(CacheControllingSelectQueryTest, ReverseLongitudeAndLatitude) {
   const auto& query = getCreateForeignTableQuery(
       "(p POINT)", {{"lonlat", "false"}}, "reversed_long_lat", "csv");
   sql(query);
@@ -1114,7 +1142,6 @@ INSTANTIATE_TEST_SUITE_P(RefreshDeviceTestsParameterizedTests,
 
 TEST_P(RefreshDeviceTests, Device) {
   if (!setExecuteMode(GetParam())) {
-    std::cerr << "Unable to set execution mode, skipping test\n";
     return;
   }
   // Create initial files and tables
@@ -1488,7 +1515,7 @@ class ForeignStorageCacheQueryTest : public ForeignTableTest {
     DBHandlerTestFixture::SetUpTestSuite();
     cat = &getCatalog();
     cache = cat->getDataMgr().getForeignStorageMgr()->getForeignStorageCache();
-    gfm = cat->getDataMgr().getGlobalFileMgr();
+    gfm = cache->getGlobalFileMgr();
     sqlDropForeignTable();
   }
 
@@ -1553,35 +1580,6 @@ TEST_F(ForeignStorageCacheQueryTest, CreatePopulateMetadata) {
   ASSERT_TRUE(cache->isMetadataCached(query_chunk_key3));
   ASSERT_TRUE(cache->hasCachedMetadataForKeyPrefix(query_chunk_key1));
   ASSERT_TRUE(cache->hasCachedMetadataForKeyPrefix(query_table_prefix));
-}
-
-TEST_F(ForeignStorageCacheQueryTest, CacheDisableChunkUncached) {
-  g_enable_fsi_cache = false;
-  ASSERT_EQ(cache->getCachedChunkIfExists(query_chunk_key2), nullptr);
-  ASSERT_FALSE(gfm->isBufferOnDevice(query_chunk_key2));
-  sqlSelect();
-  // Check chunks were not cached
-  ASSERT_EQ(cache->getCachedChunkIfExists(query_chunk_key2), nullptr);
-  ASSERT_FALSE(gfm->isBufferOnDevice(query_chunk_key2));
-  g_enable_fsi_cache = true;
-}
-
-TEST_F(ForeignStorageCacheQueryTest, CacheDisableMetadataUncached) {
-  g_enable_fsi_cache = false;
-  sqlDropForeignTable();
-  ASSERT_FALSE(cache->isMetadataCached(query_chunk_key1));
-  ASSERT_FALSE(cache->isMetadataCached(query_chunk_key2));
-  ASSERT_FALSE(cache->isMetadataCached(query_chunk_key3));
-  ASSERT_FALSE(cache->hasCachedMetadataForKeyPrefix(query_chunk_key1));
-  ASSERT_FALSE(cache->hasCachedMetadataForKeyPrefix(query_table_prefix));
-  createTestTable();
-  // Check metadata was not cached
-  ASSERT_FALSE(cache->isMetadataCached(query_chunk_key1));
-  ASSERT_FALSE(cache->isMetadataCached(query_chunk_key2));
-  ASSERT_FALSE(cache->isMetadataCached(query_chunk_key3));
-  ASSERT_FALSE(cache->hasCachedMetadataForKeyPrefix(query_chunk_key1));
-  ASSERT_FALSE(cache->hasCachedMetadataForKeyPrefix(query_table_prefix));
-  g_enable_fsi_cache = true;
 }
 
 TEST_F(ForeignStorageCacheQueryTest, CacheEvictAfterDrop) {
@@ -1657,6 +1655,14 @@ TEST_F(ForeignStorageCacheQueryTest, WideLogicalColumns) {
   ASSERT_EQ(cache->getNumCachedChunks(), 3U);
   ASSERT_EQ(cache->getNumCachedMetadata(), 2U);
   sqlDropForeignTable();
+}
+
+class CacheDefaultTest : public DBHandlerTestFixture {};
+TEST_F(CacheDefaultTest, Path) {
+  auto cat = &getCatalog();
+  auto cache = cat->getDataMgr().getForeignStorageMgr()->getForeignStorageCache();
+  ASSERT_EQ(cache->getGlobalFileMgr()->getBasePath(),
+            to_string(BASE_PATH) + "/omnisci_disk_cache/");
 }
 
 int main(int argc, char** argv) {

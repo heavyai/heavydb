@@ -157,6 +157,8 @@ class TrackingProcessor : public OmniSciProcessor {
   const bool check_origin_;
 };
 
+class DiskCacheConfig;
+
 class DBHandler : public OmniSciIf {
  public:
   DBHandler(const std::vector<LeafHostInfo>& db_leaves,
@@ -186,12 +188,11 @@ class DBHandler : public OmniSciIf {
             const bool enable_runtime_udf_registration,
             const std::string& udf_filename,
             const std::string& clang_path,
-            const std::vector<std::string>& clang_options
+            const std::vector<std::string>& clang_options,
 #ifdef ENABLE_GEOS
-            ,
-            const std::string& libgeos_so_filename
+            const std::string& libgeos_so_filename,
 #endif
-  );
+            const DiskCacheConfig& disk_cache_config);
 
   ~DBHandler() override;
 

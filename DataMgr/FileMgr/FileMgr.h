@@ -244,10 +244,10 @@ class FileMgr : public AbstractBufferMgr {  // implements
   size_t defaultPageSize_;
   unsigned nextFileId_;  /// the index of the next file id
   int epoch_;            /// the current epoch (time of last checkpoint)
-  FILE* epochFile_;
-  int db_version_;    /// DB version from dbmeta file, should be compatible with
-                      /// GlobalFileMgr::mapd_db_version_
-  FILE* DBMetaFile_;  /// pointer to DB level metadata
+  FILE* epochFile_ = nullptr;
+  int db_version_;              /// DB version from dbmeta file, should be compatible with
+                                /// GlobalFileMgr::mapd_db_version_
+  FILE* DBMetaFile_ = nullptr;  /// pointer to DB level metadata
   // bool isDirty_;      /// true if metadata changed since last writeState()
   std::mutex getPageMutex_;
   mutable mapd_shared_mutex chunkIndexMutex_;

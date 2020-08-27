@@ -161,14 +161,16 @@ class DataMgr {
   friend class GlobalFileMgr;
 
  public:
-  DataMgr(const std::string& dataDir,
-          const SystemParameters& system_parameters,
-          const bool useGpus,
-          const int numGpus,
-          const int startGpu = 0,
-          const size_t reservedGpuMem = (1 << 27),
-          const size_t numReaderThreads =
-              0); /* 0 means use default for # of reader threads */
+  DataMgr(
+      const std::string& dataDir,
+      const SystemParameters& system_parameters,
+      const bool useGpus,
+      const int numGpus,
+      const int startGpu = 0,
+      const size_t reservedGpuMem = (1 << 27),
+      const size_t numReaderThreads = 0, /* 0 means use default for # of reader threads */
+      const DiskCacheConfig cacheConfig = DiskCacheConfig());
+
   ~DataMgr();
   AbstractBuffer* createChunkBuffer(const ChunkKey& key,
                                     const MemoryLevel memoryLevel,
@@ -224,10 +226,14 @@ class DataMgr {
   static size_t getTotalSystemMemory();
 
   foreign_storage::ForeignStorageMgr* getForeignStorageMgr() const;
+  void resetPersistentStorage(const DiskCacheConfig& cache_config,
+                              const size_t num_reader_threads,
+                              const SystemParameters& sys_params);
 
  private:
   void populateMgrs(const SystemParameters& system_parameters,
-                    const size_t userSpecifiedNumReaderThreads);
+                    const size_t userSpecifiedNumReaderThreads,
+                    const DiskCacheConfig& cache_config);
   void convertDB(const std::string basePath);
   void checkpoint();  // checkpoint for whole DB, called from convertDB proc only
   void createTopLevelMetadata() const;

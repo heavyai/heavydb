@@ -198,7 +198,6 @@ ExecutionResult RelAlgExecutor::executeRelAlgQueryNoRetry(const CompilationOptio
   if (g_enable_dynamic_watchdog) {
     executor_->resetInterrupt();
   }
-
   std::string query_session = "";
   if (eo.allow_runtime_query_interrupt || g_enable_runtime_query_interrupt) {
     // a request of query execution without session id can happen, i.e., test query
@@ -2734,7 +2733,6 @@ ExecutionResult RelAlgExecutor::executeWorkUnit(
       }
     }
   }
-
   ExecutionResult result{std::make_shared<ResultSet>(std::vector<TargetInfo>{},
                                                      co.device_type,
                                                      QueryMemoryDescriptor(),
