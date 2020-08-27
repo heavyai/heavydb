@@ -9085,6 +9085,23 @@ TEST(Select, Joins_OuterJoin_OptBy_NullRejection) {
       "select a,b,c,d,e,f from outer_join_foo, outer_join_bar where c = f and b = e and "
       "c is not null and b is not null and e < 9999999 order by a,b,c,d,e,f;",
       dt);
+
+    // [BE-5406] incorrectly rewriting left join when filter used
+    auto test_query =
+        "select count(1) from outer_join_foo t1 left outer join (select g from "
+        "outer_join_bar2 where h = 1) as t2 on t1.a = t2.g;";
+    c(test_query, test_query, dt);
+
+    auto test_query2 =
+        "select count(1) from outer_join_foo t1 left outer join (select g as h from "
+        "outer_join_bar2 where h = 1) as t2 on t1.a = t2.h;";
+    c(test_query2, test_query2, dt);
+
+    auto test_query3 =
+        "select count(1) from outer_join_foo t1 left outer join (select d, g as h, i "
+        "from "
+        "outer_join_bar2 where h = 1) as t2 on t1.a = t2.h;";
+    c(test_query3, test_query3, dt);
   }
 }
 
@@ -20320,6 +20337,38 @@ int create_and_populate_tables(const bool use_temporary_tables,
     row_vec.emplace_back("INSERT INTO outer_join_bar VALUES (null,9,7)");
     row_vec.emplace_back("INSERT INTO outer_join_bar VALUES (9,null,8)");
     row_vec.emplace_back("INSERT INTO outer_join_bar VALUES (null,null,11)");
+    for (std::string insert_query : row_vec) {
+      run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
+      g_sqlite_comparator.query(insert_query);
+    }
+  }
+  try {
+    const std::string drop_old_outer_join_bar{"DROP TABLE IF EXISTS outer_join_bar2;"};
+    run_ddl_statement(drop_old_outer_join_bar);
+    g_sqlite_comparator.query(drop_old_outer_join_bar);
+    if (g_aggregator) {
+      run_ddl_statement(
+          "CREATE TABLE outer_join_bar2 (d int, e int, f int, g int, h int, i int, j "
+          "int) WITH "
+          "(PARTITIONS='REPLICATED');");
+    } else {
+      run_ddl_statement(
+          "CREATE TABLE outer_join_bar2 (d int, e int, f int, g int, h int, i int, j "
+          "int)");
+    }
+    g_sqlite_comparator.query(
+        "CREATE TABLE outer_join_bar2 (d int, e int, f int, g int, h int, i int, j int)");
+  } catch (...) {
+    LOG(ERROR) << "Failed to (re-)create table 'outer_join_bar2'";
+    return -EEXIST;
+  }
+  {
+    std::vector<std::string> row_vec;
+    row_vec.emplace_back("INSERT INTO outer_join_bar2 VALUES (1,3,4,1,1,1,1)");
+    row_vec.emplace_back("INSERT INTO outer_join_bar2 VALUES (4,3,5,2,2,2,2)");
+    row_vec.emplace_back("INSERT INTO outer_join_bar2 VALUES (null,9,7,2,2,2,2)");
+    row_vec.emplace_back("INSERT INTO outer_join_bar2 VALUES (9,null,8,2,2,2,2)");
+    row_vec.emplace_back("INSERT INTO outer_join_bar2 VALUES (null,null,11,2,2,2,2)");
     for (std::string insert_query : row_vec) {
       run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
       g_sqlite_comparator.query(insert_query);

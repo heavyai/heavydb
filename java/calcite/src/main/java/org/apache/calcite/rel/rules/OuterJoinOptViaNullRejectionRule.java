@@ -23,16 +23,20 @@ import org.apache.calcite.rel.core.Join;
 import org.apache.calcite.rel.core.JoinRelType;
 import org.apache.calcite.rel.logical.LogicalFilter;
 import org.apache.calcite.rel.logical.LogicalJoin;
+import org.apache.calcite.rel.logical.LogicalProject;
 import org.apache.calcite.rex.RexCall;
 import org.apache.calcite.rex.RexInputRef;
 import org.apache.calcite.rex.RexNode;
 import org.apache.calcite.sql.SqlKind;
 import org.apache.calcite.tools.RelBuilder;
 import org.apache.calcite.tools.RelBuilderFactory;
+import org.apache.calcite.util.mapping.Mappings;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 public class OuterJoinOptViaNullRejectionRule extends QueryOptimizationRules {
@@ -88,21 +92,37 @@ public class OuterJoinOptViaNullRejectionRule extends QueryOptimizationRules {
     if (!(join.getCondition() instanceof RexCall)) {
       return; // an inner join
     }
+    if (join.getJoinType() == JoinRelType.INNER || join.getJoinType() == JoinRelType.SEMI
+            || join.getJoinType() == JoinRelType.ANTI) {
+      return; // non target
+    }
     // an outer join contains its join cond in itself,
     // not in a filter as typical inner join op. does
     RexCall joinCond = (RexCall) join.getCondition();
-    Set<RexInputRef> leftJoinCols = new HashSet<>();
-    Set<RexInputRef> rightJoinCols = new HashSet<>();
+    Set<Integer> leftJoinCols = new HashSet<>();
+    Set<Integer> rightJoinCols = new HashSet<>();
+    Map<Integer, String> leftJoinColToColNameMap = new HashMap<>();
+    Map<Integer, String> rightJoinColToColNameMap = new HashMap<>();
 
     if (joinCond.getKind() == SqlKind.EQUALS) {
-      addJoinCols(joinCond, leftJoinCols, rightJoinCols);
+      addJoinCols(joinCond,
+              join,
+              leftJoinCols,
+              rightJoinCols,
+              leftJoinColToColNameMap,
+              rightJoinColToColNameMap);
     }
 
     if (joinCond.getKind() == SqlKind.AND || joinCond.getKind() == SqlKind.OR) {
       for (RexNode n : joinCond.getOperands()) {
         if (n instanceof RexCall) {
           RexCall op = (RexCall) n;
-          addJoinCols(op, leftJoinCols, rightJoinCols);
+          addJoinCols(op,
+                  join,
+                  leftJoinCols,
+                  rightJoinCols,
+                  leftJoinColToColNameMap,
+                  rightJoinColToColNameMap);
         }
       }
     }
@@ -124,8 +144,8 @@ public class OuterJoinOptViaNullRejectionRule extends QueryOptimizationRules {
 
     // check whether join column has filter predicate(s)
     // and collect join column info used in target join nodes to be translated
-    Set<RexInputRef> nullRejectedLeftJoinCols = new HashSet<>();
-    Set<RexInputRef> nullRejectedRightJoinCols = new HashSet<>();
+    Set<Integer> nullRejectedLeftJoinCols = new HashSet<>();
+    Set<Integer> nullRejectedRightJoinCols = new HashSet<>();
     for (LogicalFilter filter : collectedFilterNodes) {
       List<RexNode> filterExprs = filter.getChildExps();
       for (RexNode node : filterExprs) {
@@ -136,20 +156,22 @@ public class OuterJoinOptViaNullRejectionRule extends QueryOptimizationRules {
               if (n instanceof RexCall) {
                 RexCall c = (RexCall) n;
                 addNullRejectedJoinCols(c,
-                        leftJoinCols,
-                        rightJoinCols,
+                        filter,
                         nullRejectedLeftJoinCols,
-                        nullRejectedRightJoinCols);
+                        nullRejectedRightJoinCols,
+                        leftJoinColToColNameMap,
+                        rightJoinColToColNameMap);
               }
             }
           } else {
             if (curExpr instanceof RexCall) {
               RexCall c = (RexCall) curExpr;
               addNullRejectedJoinCols(c,
-                      leftJoinCols,
-                      rightJoinCols,
+                      filter,
                       nullRejectedLeftJoinCols,
-                      nullRejectedRightJoinCols);
+                      nullRejectedRightJoinCols,
+                      leftJoinColToColNameMap,
+                      rightJoinColToColNameMap);
             }
           }
         }
@@ -215,8 +237,11 @@ public class OuterJoinOptViaNullRejectionRule extends QueryOptimizationRules {
   }
 
   void addJoinCols(RexCall joinCond,
-          Set<RexInputRef> leftJoinCols,
-          Set<RexInputRef> rightJoinCols) {
+          LogicalJoin joinOp,
+          Set<Integer> leftJoinCols,
+          Set<Integer> rightJoinCols,
+          Map<Integer, String> leftJoinColToColNameMap,
+          Map<Integer, String> rightJoinColToColNameMap) {
     if (joinCond.getOperands().size() != 2
             || !(joinCond.getOperands().get(0) instanceof RexInputRef)
             || !(joinCond.getOperands().get(1) instanceof RexInputRef)) {
@@ -224,27 +249,50 @@ public class OuterJoinOptViaNullRejectionRule extends QueryOptimizationRules {
     }
     RexInputRef leftJoinCol = (RexInputRef) joinCond.getOperands().get(0);
     RexInputRef rightJoinCol = (RexInputRef) joinCond.getOperands().get(1);
-    leftJoinCols.add(leftJoinCol);
-    rightJoinCols.add(rightJoinCol);
+    int originalLeftColOffset = traceColOffset(joinOp.getLeft(), leftJoinCol, 0);
+    int originalRightColOffset = traceColOffset(joinOp.getRight(),
+            rightJoinCol,
+            joinOp.getLeft().getRowType().getFieldCount());
+    int leftColOffset =
+            originalLeftColOffset == -1 ? leftJoinCol.getIndex() : originalLeftColOffset;
+    int rightColOffset = originalRightColOffset == -1 ? rightJoinCol.getIndex()
+                                                      : originalRightColOffset;
+    leftJoinCols.add(leftColOffset);
+    rightJoinCols.add(rightColOffset);
+    leftJoinColToColNameMap.put(
+            leftColOffset, joinOp.getRowType().getFieldNames().get(leftColOffset));
+    rightJoinColToColNameMap.put(
+            rightColOffset, joinOp.getRowType().getFieldNames().get(rightColOffset));
     return;
   }
 
   void addNullRejectedJoinCols(RexCall joinCol,
-          Set<RexInputRef> leftJoinCols,
-          Set<RexInputRef> rightJoinCols,
-          Set<RexInputRef> nullRejectedLeftJoinCols,
-          Set<RexInputRef> nullRejectedRightJoinCols) {
+          LogicalFilter targetFilter,
+          Set<Integer> nullRejectedLeftJoinCols,
+          Set<Integer> nullRejectedRightJoinCols,
+          Map<Integer, String> leftJoinColToColNameMap,
+          Map<Integer, String> rightJoinColToColNameMap) {
     if (joinCol.getKind() != SqlKind.IS_NULL
             && joinCol.getOperands().get(0) instanceof RexInputRef) {
       RexInputRef col = (RexInputRef) joinCol.getOperands().get(0);
-      Boolean l = leftJoinCols.contains(col);
-      Boolean r = rightJoinCols.contains(col);
+      int colId = col.getIndex();
+      String colName = targetFilter.getRowType().getFieldNames().get(colId);
+      Boolean l = false;
+      Boolean r = false;
+      if (leftJoinColToColNameMap.containsKey(colId)
+              && leftJoinColToColNameMap.get(colId).equals(colName)) {
+        l = true;
+      }
+      if (rightJoinColToColNameMap.containsKey(colId)
+              && rightJoinColToColNameMap.get(colId).equals(colName)) {
+        r = true;
+      }
       if (l && !r) {
-        nullRejectedLeftJoinCols.add(col);
+        nullRejectedLeftJoinCols.add(colId);
         return;
       }
       if (r && !l) {
-        nullRejectedRightJoinCols.add(col);
+        nullRejectedRightJoinCols.add(colId);
         return;
       }
     }
@@ -264,5 +312,41 @@ public class OuterJoinOptViaNullRejectionRule extends QueryOptimizationRules {
     for (int i = 0; i < curNode.getInputs().size(); i++) {
       collectFilterCondition(curNode.getInput(i), collectedFilterNodes);
     }
+  }
+
+  void collectProjectNode(RelNode curNode, List<LogicalProject> collectedProject) {
+    if (curNode instanceof HepRelVertex) {
+      curNode = ((HepRelVertex) curNode).getCurrentRel();
+    }
+    if (curNode instanceof LogicalProject) {
+      collectedProject.add((LogicalProject) curNode);
+    }
+    if (curNode.getInputs().size() == 0) {
+      // end of the query plan, move out
+      return;
+    }
+    for (int i = 0; i < curNode.getInputs().size(); i++) {
+      collectProjectNode(curNode.getInput(i), collectedProject);
+    }
+  }
+
+  int traceColOffset(RelNode curNode, RexInputRef colRef, int startOffset) {
+    int colOffset = -1;
+    ArrayList<LogicalProject> collectedProjectNodes = new ArrayList<>();
+    collectProjectNode(curNode, collectedProjectNodes);
+    // the nearest project node that may permute the column offset
+    if (!collectedProjectNodes.isEmpty()) {
+      // get the closest project node from the cur join node's target child
+      LogicalProject projectNode = collectedProjectNodes.get(0);
+      Mappings.TargetMapping targetMapping = projectNode.getMapping();
+      if (null != colRef && null != targetMapping) {
+        // try to track the original col offset
+        int base_offset = colRef.getIndex() - startOffset;
+        if (base_offset >= 0 && base_offset < targetMapping.getSourceCount()) {
+          colOffset = targetMapping.getSourceOpt(base_offset);
+        }
+      }
+    }
+    return colOffset;
   }
 }
