@@ -65,7 +65,7 @@
             
             
               <div class="version">
-                5.4.0dev 60ae11f
+                5.4.0dev 267b0bd
               </div>
             
           
@@ -304,6 +304,7 @@
 <li class="toctree-l2"><a class="reference internal" href="class_analyzer_1_1_in_integer_set.html">Class Analyzer::InIntegerSet</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_analyzer_1_1_in_values.html">Class Analyzer::InValues</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_analyzer_1_1_key_for_string_expr.html">Class Analyzer::KeyForStringExpr</a></li>
+<li class="toctree-l2"><a class="reference internal" href="class_analyzer_1_1_large_n_d_v_estimator.html">Class Analyzer::LargeNDVEstimator</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_analyzer_1_1_like_expr.html">Class Analyzer::LikeExpr</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_analyzer_1_1_likelihood_expr.html">Class Analyzer::LikelihoodExpr</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_analyzer_1_1_lower_expr.html">Class Analyzer::LowerExpr</a></li>
@@ -818,6 +819,7 @@
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_sql_operator_table_1_1_row_copier.html">Class com::mapd::calcite::parser::MapDSqlOperatorTable::RowCopier</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_sql_operator_table_1_1_s_t___area.html">Class com::mapd::calcite::parser::MapDSqlOperatorTable::ST_Area</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_sql_operator_table_1_1_s_t___buffer.html">Class com::mapd::calcite::parser::MapDSqlOperatorTable::ST_Buffer</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_sql_operator_table_1_1_s_t___centroid.html">Class com::mapd::calcite::parser::MapDSqlOperatorTable::ST_Centroid</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_sql_operator_table_1_1_s_t___contains.html">Class com::mapd::calcite::parser::MapDSqlOperatorTable::ST_Contains</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_sql_operator_table_1_1_s_t___d_fully_within.html">Class com::mapd::calcite::parser::MapDSqlOperatorTable::ST_DFullyWithin</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_sql_operator_table_1_1_s_t___d_within.html">Class com::mapd::calcite::parser::MapDSqlOperatorTable::ST_DWithin</a></li>
@@ -1506,8 +1508,21 @@
 <dd><div class="breathe-sectiondef docutils container">
 <p class="breathe-sectiondef-title rubric">Public Functions</p>
 <dl class="function">
-<dt id="_CPPv4N29CardinalityEstimationRequired29CardinalityEstimationRequiredEv">
-<span id="_CPPv3N29CardinalityEstimationRequired29CardinalityEstimationRequiredEv"></span><span id="_CPPv2N29CardinalityEstimationRequired29CardinalityEstimationRequiredEv"></span><span id="CardinalityEstimationRequired::CardinalityEstimationRequired"></span><span class="target" id="class_cardinality_estimation_required_1ad4564e27ab78802b8b36c3507cef276d"></span><code class="sig-name descname">CardinalityEstimationRequired</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N29CardinalityEstimationRequired29CardinalityEstimationRequiredEv" title="Permalink to this definition">¶</a><br /></dt>
+<dt id="_CPPv4N29CardinalityEstimationRequired29CardinalityEstimationRequiredEK7int64_t">
+<span id="_CPPv3N29CardinalityEstimationRequired29CardinalityEstimationRequiredEK7int64_t"></span><span id="_CPPv2N29CardinalityEstimationRequired29CardinalityEstimationRequiredEK7int64_t"></span><span id="CardinalityEstimationRequired::CardinalityEstimationRequired__int64_tC"></span><span class="target" id="class_cardinality_estimation_required_1ae72f9049a51f29a3cffb795d54236bd7"></span><code class="sig-name descname">CardinalityEstimationRequired</code><span class="sig-paren">(</span><em class="property">const</em> int64_t <em>range</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N29CardinalityEstimationRequired29CardinalityEstimationRequiredEK7int64_t" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="_CPPv4NK29CardinalityEstimationRequired5rangeEv">
+<span id="_CPPv3NK29CardinalityEstimationRequired5rangeEv"></span><span id="_CPPv2NK29CardinalityEstimationRequired5rangeEv"></span><span id="CardinalityEstimationRequired::rangeC"></span><span class="target" id="class_cardinality_estimation_required_1aa1d592392a3c13c9ca6e29766e56ad6c"></span>int64_t <code class="sig-name descname">range</code><span class="sig-paren">(</span><span class="sig-paren">)</span> <em class="property">const</em><a class="headerlink" href="#_CPPv4NK29CardinalityEstimationRequired5rangeEv" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+</div>
+<div class="breathe-sectiondef docutils container">
+<p class="breathe-sectiondef-title rubric">Private Members</p>
+<dl class="member">
+<dt id="_CPPv4N29CardinalityEstimationRequired6range_E">
+<span id="_CPPv3N29CardinalityEstimationRequired6range_E"></span><span id="_CPPv2N29CardinalityEstimationRequired6range_E"></span><span id="CardinalityEstimationRequired::range___int64_tC"></span><span class="target" id="class_cardinality_estimation_required_1a1b3ea3f4e16b7d61079ee4e37f5913d1"></span><em class="property">const</em> int64_t <code class="sig-name descname">range_</code><a class="headerlink" href="#_CPPv4N29CardinalityEstimationRequired6range_E" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 </div>

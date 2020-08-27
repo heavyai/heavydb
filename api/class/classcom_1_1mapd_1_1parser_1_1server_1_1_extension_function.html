@@ -65,7 +65,7 @@
             
             
               <div class="version">
-                5.4.0dev 60ae11f
+                5.4.0dev 267b0bd
               </div>
             
           
@@ -304,6 +304,7 @@
 <li class="toctree-l2"><a class="reference internal" href="class_analyzer_1_1_in_integer_set.html">Class Analyzer::InIntegerSet</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_analyzer_1_1_in_values.html">Class Analyzer::InValues</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_analyzer_1_1_key_for_string_expr.html">Class Analyzer::KeyForStringExpr</a></li>
+<li class="toctree-l2"><a class="reference internal" href="class_analyzer_1_1_large_n_d_v_estimator.html">Class Analyzer::LargeNDVEstimator</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_analyzer_1_1_like_expr.html">Class Analyzer::LikeExpr</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_analyzer_1_1_likelihood_expr.html">Class Analyzer::LikelihoodExpr</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_analyzer_1_1_lower_expr.html">Class Analyzer::LowerExpr</a></li>
@@ -818,6 +819,7 @@
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_sql_operator_table_1_1_row_copier.html">Class com::mapd::calcite::parser::MapDSqlOperatorTable::RowCopier</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_sql_operator_table_1_1_s_t___area.html">Class com::mapd::calcite::parser::MapDSqlOperatorTable::ST_Area</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_sql_operator_table_1_1_s_t___buffer.html">Class com::mapd::calcite::parser::MapDSqlOperatorTable::ST_Buffer</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_sql_operator_table_1_1_s_t___centroid.html">Class com::mapd::calcite::parser::MapDSqlOperatorTable::ST_Centroid</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_sql_operator_table_1_1_s_t___contains.html">Class com::mapd::calcite::parser::MapDSqlOperatorTable::ST_Contains</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_sql_operator_table_1_1_s_t___d_fully_within.html">Class com::mapd::calcite::parser::MapDSqlOperatorTable::ST_DFullyWithin</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_sql_operator_table_1_1_s_t___d_within.html">Class com::mapd::calcite::parser::MapDSqlOperatorTable::ST_DWithin</a></li>
@@ -1517,12 +1519,22 @@
 
 <dl class="function">
 <dt>
+<span class="target" id="classcom_1_1mapd_1_1parser_1_1server_1_1_extension_function_1ab4b5e3709b6f76e890c4eec7b784a0bf"></span><code class="sig-name descname">List&lt;ExtArgumentType&gt; com.mapd.parser.server.ExtensionFunction.getOuts()</code></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt>
 <span class="target" id="classcom_1_1mapd_1_1parser_1_1server_1_1_extension_function_1a7e489631c4c387cd2128a7d9cc9143ad"></span><code class="sig-name descname">ExtArgumentType com.mapd.parser.server.ExtensionFunction.getRet()</code></dt>
 <dd></dd></dl>
 
 <dl class="function">
 <dt>
 <span class="target" id="classcom_1_1mapd_1_1parser_1_1server_1_1_extension_function_1ac1ffe534db5b3518b40798a72ce5ab07"></span><code class="sig-name descname">SqlTypeName com.mapd.parser.server.ExtensionFunction.getSqlRet()</code></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt>
+<span class="target" id="classcom_1_1mapd_1_1parser_1_1server_1_1_extension_function_1a965cf21f3934673faa7fe21c5cd387d6"></span><code class="sig-name descname">List&lt;SqlTypeName&gt; com.mapd.parser.server.ExtensionFunction.getSqlOuts()</code></dt>
 <dd></dd></dl>
 
 <dl class="function">
@@ -1555,6 +1567,11 @@
 
 <dl class="member">
 <dt>
+<span class="target" id="classcom_1_1mapd_1_1parser_1_1server_1_1_extension_function_1a5f4dc9134e6cdf5d6e30432dc37be2a4"></span><code class="sig-name descname">final List&lt;ExtArgumentType&gt; com.mapd.parser.server.ExtensionFunction.outs</code></dt>
+<dd></dd></dl>
+
+<dl class="member">
+<dt>
 <span class="target" id="classcom_1_1mapd_1_1parser_1_1server_1_1_extension_function_1a179a29ddbd540bdb275665d04cc68db6"></span><code class="sig-name descname">final ExtArgumentType com.mapd.parser.server.ExtensionFunction.ret</code></dt>
 <dd></dd></dl>
 
@@ -1579,6 +1596,11 @@
 <dl class="function">
 <dt>
 <span class="target" id="classcom_1_1mapd_1_1parser_1_1server_1_1_extension_function_1a48fe378f40ebabe188aab5cde85935ad"></span><code class="sig-name descname">static boolean com.mapd.parser.server.ExtensionFunction.isPointerType(final  ExtArgumentType type)</code></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt>
+<span class="target" id="classcom_1_1mapd_1_1parser_1_1server_1_1_extension_function_1acde1d61b81e8395435fd5cfa228b0cfb"></span><code class="sig-name descname">static boolean com.mapd.parser.server.ExtensionFunction.isColumnType(final  ExtArgumentType type)</code></dt>
 <dd></dd></dl>
 
 <dl class="function">
