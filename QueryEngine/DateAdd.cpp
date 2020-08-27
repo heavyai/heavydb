@@ -15,7 +15,6 @@
  */
 
 #include "DateAdd.h"
-#include "ExtractFromTime.h"
 
 #ifdef EXECUTE_INCLUDE
 
@@ -76,15 +75,11 @@ class MonthDaySecond {
 
 }  // namespace
 
-extern "C" NEVER_INLINE DEVICE int64_t DateAdd(DateaddField field,
-                                               const int64_t number,
-                                               const int64_t timeval) {
+extern "C" ALWAYS_INLINE DEVICE int64_t DateAdd(DateaddField field,
+                                                const int64_t number,
+                                                const int64_t timeval) {
   switch (field) {
-    case daNANOSECOND:
-    case daMICROSECOND:
-    case daMILLISECOND:
     case daSECOND:
-      /* this is the limit of current granularity */
       return timeval + number;
     case daMINUTE:
       return timeval + number * kSecsPerMin;
@@ -117,43 +112,55 @@ extern "C" NEVER_INLINE DEVICE int64_t DateAdd(DateaddField field,
   }
 }
 
-extern "C" NEVER_INLINE DEVICE int64_t DateAddHighPrecision(DateaddField field,
-                                                            const int64_t number,
-                                                            const int64_t timeval,
-                                                            const int64_t scale) {
+// The dimension of the return value is always equal to the timeval dimension.
+extern "C" ALWAYS_INLINE DEVICE int64_t DateAddHighPrecision(DateaddField field,
+                                                             const int64_t number,
+                                                             const int64_t timeval,
+                                                             const int32_t dim) {
+  // Valid only for i=0, 3, 6, 9.
+  constexpr unsigned pow10[10]{
+      1, 0, 0, 1000, 0, 0, 1000 * 1000, 0, 0, 1000 * 1000 * 1000};
   switch (field) {
     case daNANOSECOND:
     case daMICROSECOND:
-    case daMILLISECOND:
-      /* Since number is constant, it is being adjusted according to the dimension
-      of type and field in RelAlgTranslator. Therefore, here would skip math and
-      just add the value.*/
-      return timeval + number;
+    case daMILLISECOND: {
+      static_assert(daMILLISECOND + 1 == daMICROSECOND, "Please keep these consecutive.");
+      static_assert(daMICROSECOND + 1 == daNANOSECOND, "Please keep these consecutive.");
+      unsigned const field_dim = (field - (daMILLISECOND - 1)) * 3;
+      int const adj_dim = dim - field_dim;
+      if (adj_dim < 0) {
+        return timeval + floor_div(number, pow10[-adj_dim]);
+      } else {
+        return timeval + number * pow10[adj_dim];
+      }
+    }
     default:
+      unsigned const scale = pow10[dim];
       return DateAdd(field, number, floor_div(timeval, scale)) * scale +
              unsigned_mod(timeval, scale);
   }
 }
 
-extern "C" DEVICE int64_t DateAddNullable(const DateaddField field,
-                                          const int64_t number,
-                                          const int64_t timeval,
-                                          const int64_t null_val) {
+extern "C" ALWAYS_INLINE DEVICE int64_t DateAddNullable(const DateaddField field,
+                                                        const int64_t number,
+                                                        const int64_t timeval,
+                                                        const int64_t null_val) {
   if (timeval == null_val) {
     return null_val;
   }
   return DateAdd(field, number, timeval);
 }
 
-extern "C" DEVICE int64_t DateAddHighPrecisionNullable(const DateaddField field,
-                                                       const int64_t number,
-                                                       const int64_t timeval,
-                                                       const int64_t scale,
-                                                       const int64_t null_val) {
+extern "C" ALWAYS_INLINE DEVICE int64_t
+DateAddHighPrecisionNullable(const DateaddField field,
+                             const int64_t number,
+                             const int64_t timeval,
+                             const int32_t dim,
+                             const int64_t null_val) {
   if (timeval == null_val) {
     return null_val;
   }
-  return DateAddHighPrecision(field, number, timeval, scale);
+  return DateAddHighPrecision(field, number, timeval, dim);
 }
 
 #endif  // EXECUTE_INCLUDE

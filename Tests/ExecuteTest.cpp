@@ -10245,6 +10245,163 @@ TEST(Select, Dateadd) {
   }
 }
 
+// Test adding intervals that are higher precision than the timestamp being added to.
+TEST(Select, DateaddHighPrecision) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    // Comparing strings is preferred, but "Cast from TIMESTAMP(6) to TEXT not supported"
+    EXPECT_EQ(timestampToInt64("1960-02-29 23:59:59", dt),
+              dateadd("millisecond", 999, "1960-02-29 23:59:59", dt));
+    EXPECT_EQ(timestampToInt64("1960-03-01 00:00:00", dt),
+              dateadd("millisecond", 1000, "1960-02-29 23:59:59", dt));
+    EXPECT_EQ(timestampToInt64("1960-03-01 00:00:00", dt),
+              dateadd("millisecond", 1999, "1960-02-29 23:59:59", dt));
+    EXPECT_EQ(timestampToInt64("1960-02-29 23:59:59", dt),
+              dateadd("millisecond", -1, "1960-03-01 00:00:00", dt));
+    EXPECT_EQ(timestampToInt64("1960-02-29 23:59:59", dt),
+              dateadd("millisecond", -1000, "1960-03-01 00:00:00", dt));
+    EXPECT_EQ(timestampToInt64("1960-02-29 23:59:58", dt),
+              dateadd("millisecond", -1001, "1960-03-01 00:00:00", dt));
+
+    EXPECT_EQ(timestampToInt64("1960-02-29 23:59:59", dt),
+              dateadd("microsecond", 999999, "1960-02-29 23:59:59", dt));
+    EXPECT_EQ(timestampToInt64("1960-02-29 23:59:59.999", dt),
+              dateadd("microsecond", 999999, "1960-02-29 23:59:59.000", dt));
+    EXPECT_EQ(timestampToInt64("1960-03-01 00:00:00", dt),
+              dateadd("microsecond", 1000000, "1960-02-29 23:59:59", dt));
+    EXPECT_EQ(timestampToInt64("1960-03-01 00:00:00.000", dt),
+              dateadd("microsecond", 1000000, "1960-02-29 23:59:59.000", dt));
+    EXPECT_EQ(timestampToInt64("1960-03-01 00:00:00", dt),
+              dateadd("microsecond", 1999999, "1960-02-29 23:59:59", dt));
+    EXPECT_EQ(timestampToInt64("1960-03-01 00:00:00.999", dt),
+              dateadd("microsecond", 1999999, "1960-02-29 23:59:59.000", dt));
+    EXPECT_EQ(timestampToInt64("1960-02-29 23:59:59", dt),
+              dateadd("microsecond", -1, "1960-03-01 00:00:00", dt));
+    EXPECT_EQ(timestampToInt64("1960-02-29 23:59:59.999", dt),
+              dateadd("microsecond", -1, "1960-03-01 00:00:00.000", dt));
+    EXPECT_EQ(timestampToInt64("1960-02-29 23:59:59", dt),
+              dateadd("microsecond", -1000000, "1960-03-01 00:00:00", dt));
+    EXPECT_EQ(timestampToInt64("1960-02-29 23:59:59.000", dt),
+              dateadd("microsecond", -1000000, "1960-03-01 00:00:00.000", dt));
+    EXPECT_EQ(timestampToInt64("1960-02-29 23:59:58", dt),
+              dateadd("microsecond", -1000001, "1960-03-01 00:00:00", dt));
+    EXPECT_EQ(timestampToInt64("1960-02-29 23:59:58.999", dt),
+              dateadd("microsecond", -1000001, "1960-03-01 00:00:00.000", dt));
+
+    EXPECT_EQ(timestampToInt64("1960-02-29 23:59:59", dt),
+              dateadd("nanosecond", 999999999, "1960-02-29 23:59:59", dt));
+    EXPECT_EQ(timestampToInt64("1960-02-29 23:59:59.999", dt),
+              dateadd("nanosecond", 999999999, "1960-02-29 23:59:59.000", dt));
+    EXPECT_EQ(timestampToInt64("1960-02-29 23:59:59.999999", dt),
+              dateadd("nanosecond", 999999999, "1960-02-29 23:59:59.000000", dt));
+    EXPECT_EQ(timestampToInt64("1960-03-01 00:00:00", dt),
+              dateadd("nanosecond", 1000000000, "1960-02-29 23:59:59", dt));
+    EXPECT_EQ(timestampToInt64("1960-03-01 00:00:00.000", dt),
+              dateadd("nanosecond", 1000000000, "1960-02-29 23:59:59.000", dt));
+    EXPECT_EQ(timestampToInt64("1960-03-01 00:00:00.000000", dt),
+              dateadd("nanosecond", 1000000000, "1960-02-29 23:59:59.000000", dt));
+    EXPECT_EQ(timestampToInt64("1960-03-01 00:00:00", dt),
+              dateadd("nanosecond", 1999999999, "1960-02-29 23:59:59", dt));
+    EXPECT_EQ(timestampToInt64("1960-03-01 00:00:00.999", dt),
+              dateadd("nanosecond", 1999999999, "1960-02-29 23:59:59.000", dt));
+    EXPECT_EQ(timestampToInt64("1960-03-01 00:00:00.999999", dt),
+              dateadd("nanosecond", 1999999999, "1960-02-29 23:59:59.000000", dt));
+    EXPECT_EQ(timestampToInt64("1960-02-29 23:59:59", dt),
+              dateadd("nanosecond", -1, "1960-03-01 00:00:00", dt));
+    EXPECT_EQ(timestampToInt64("1960-02-29 23:59:59.999", dt),
+              dateadd("nanosecond", -1, "1960-03-01 00:00:00.000", dt));
+    EXPECT_EQ(timestampToInt64("1960-02-29 23:59:59.999999", dt),
+              dateadd("nanosecond", -1, "1960-03-01 00:00:00.000000", dt));
+    EXPECT_EQ(timestampToInt64("1960-02-29 23:59:59", dt),
+              dateadd("nanosecond", -1000000000, "1960-03-01 00:00:00", dt));
+    EXPECT_EQ(timestampToInt64("1960-02-29 23:59:59.000", dt),
+              dateadd("nanosecond", -1000000000, "1960-03-01 00:00:00.000", dt));
+    EXPECT_EQ(timestampToInt64("1960-02-29 23:59:59.000000", dt),
+              dateadd("nanosecond", -1000000000, "1960-03-01 00:00:00.000000", dt));
+    EXPECT_EQ(timestampToInt64("1960-02-29 23:59:58", dt),
+              dateadd("nanosecond", -1000000001, "1960-03-01 00:00:00", dt));
+    EXPECT_EQ(timestampToInt64("1960-02-29 23:59:58.999", dt),
+              dateadd("nanosecond", -1000000001, "1960-03-01 00:00:00.000", dt));
+    EXPECT_EQ(timestampToInt64("1960-02-29 23:59:58.999999", dt),
+              dateadd("nanosecond", -1000000001, "1960-03-01 00:00:00.000000", dt));
+
+    EXPECT_EQ(timestampToInt64("2000-02-29 23:59:59", dt),
+              dateadd("millisecond", 999, "2000-02-29 23:59:59", dt));
+    EXPECT_EQ(timestampToInt64("2000-03-01 00:00:00", dt),
+              dateadd("millisecond", 1000, "2000-02-29 23:59:59", dt));
+    EXPECT_EQ(timestampToInt64("2000-03-01 00:00:00", dt),
+              dateadd("millisecond", 1999, "2000-02-29 23:59:59", dt));
+    EXPECT_EQ(timestampToInt64("2000-02-29 23:59:59", dt),
+              dateadd("millisecond", -1, "2000-03-01 00:00:00", dt));
+    EXPECT_EQ(timestampToInt64("2000-02-29 23:59:59", dt),
+              dateadd("millisecond", -1000, "2000-03-01 00:00:00", dt));
+    EXPECT_EQ(timestampToInt64("2000-02-29 23:59:58", dt),
+              dateadd("millisecond", -1001, "2000-03-01 00:00:00", dt));
+
+    EXPECT_EQ(timestampToInt64("2000-02-29 23:59:59", dt),
+              dateadd("microsecond", 999999, "2000-02-29 23:59:59", dt));
+    EXPECT_EQ(timestampToInt64("2000-02-29 23:59:59.999", dt),
+              dateadd("microsecond", 999999, "2000-02-29 23:59:59.000", dt));
+    EXPECT_EQ(timestampToInt64("2000-03-01 00:00:00", dt),
+              dateadd("microsecond", 1000000, "2000-02-29 23:59:59", dt));
+    EXPECT_EQ(timestampToInt64("2000-03-01 00:00:00.000", dt),
+              dateadd("microsecond", 1000000, "2000-02-29 23:59:59.000", dt));
+    EXPECT_EQ(timestampToInt64("2000-03-01 00:00:00", dt),
+              dateadd("microsecond", 1999999, "2000-02-29 23:59:59", dt));
+    EXPECT_EQ(timestampToInt64("2000-03-01 00:00:00.999", dt),
+              dateadd("microsecond", 1999999, "2000-02-29 23:59:59.000", dt));
+    EXPECT_EQ(timestampToInt64("2000-02-29 23:59:59", dt),
+              dateadd("microsecond", -1, "2000-03-01 00:00:00", dt));
+    EXPECT_EQ(timestampToInt64("2000-02-29 23:59:59.999", dt),
+              dateadd("microsecond", -1, "2000-03-01 00:00:00.000", dt));
+    EXPECT_EQ(timestampToInt64("2000-02-29 23:59:59", dt),
+              dateadd("microsecond", -1000000, "2000-03-01 00:00:00", dt));
+    EXPECT_EQ(timestampToInt64("2000-02-29 23:59:59.000", dt),
+              dateadd("microsecond", -1000000, "2000-03-01 00:00:00.000", dt));
+    EXPECT_EQ(timestampToInt64("2000-02-29 23:59:58", dt),
+              dateadd("microsecond", -1000001, "2000-03-01 00:00:00", dt));
+    EXPECT_EQ(timestampToInt64("2000-02-29 23:59:58.999", dt),
+              dateadd("microsecond", -1000001, "2000-03-01 00:00:00.000", dt));
+
+    EXPECT_EQ(timestampToInt64("2000-02-29 23:59:59", dt),
+              dateadd("nanosecond", 999999999, "2000-02-29 23:59:59", dt));
+    EXPECT_EQ(timestampToInt64("2000-02-29 23:59:59.999", dt),
+              dateadd("nanosecond", 999999999, "2000-02-29 23:59:59.000", dt));
+    EXPECT_EQ(timestampToInt64("2000-02-29 23:59:59.999999", dt),
+              dateadd("nanosecond", 999999999, "2000-02-29 23:59:59.000000", dt));
+    EXPECT_EQ(timestampToInt64("2000-03-01 00:00:00", dt),
+              dateadd("nanosecond", 1000000000, "2000-02-29 23:59:59", dt));
+    EXPECT_EQ(timestampToInt64("2000-03-01 00:00:00.000", dt),
+              dateadd("nanosecond", 1000000000, "2000-02-29 23:59:59.000", dt));
+    EXPECT_EQ(timestampToInt64("2000-03-01 00:00:00.000000", dt),
+              dateadd("nanosecond", 1000000000, "2000-02-29 23:59:59.000000", dt));
+    EXPECT_EQ(timestampToInt64("2000-03-01 00:00:00", dt),
+              dateadd("nanosecond", 1999999999, "2000-02-29 23:59:59", dt));
+    EXPECT_EQ(timestampToInt64("2000-03-01 00:00:00.999", dt),
+              dateadd("nanosecond", 1999999999, "2000-02-29 23:59:59.000", dt));
+    EXPECT_EQ(timestampToInt64("2000-03-01 00:00:00.999999", dt),
+              dateadd("nanosecond", 1999999999, "2000-02-29 23:59:59.000000", dt));
+    EXPECT_EQ(timestampToInt64("2000-02-29 23:59:59", dt),
+              dateadd("nanosecond", -1, "2000-03-01 00:00:00", dt));
+    EXPECT_EQ(timestampToInt64("2000-02-29 23:59:59.999", dt),
+              dateadd("nanosecond", -1, "2000-03-01 00:00:00.000", dt));
+    EXPECT_EQ(timestampToInt64("2000-02-29 23:59:59.999999", dt),
+              dateadd("nanosecond", -1, "2000-03-01 00:00:00.000000", dt));
+    EXPECT_EQ(timestampToInt64("2000-02-29 23:59:59", dt),
+              dateadd("nanosecond", -1000000000, "2000-03-01 00:00:00", dt));
+    EXPECT_EQ(timestampToInt64("2000-02-29 23:59:59.000", dt),
+              dateadd("nanosecond", -1000000000, "2000-03-01 00:00:00.000", dt));
+    EXPECT_EQ(timestampToInt64("2000-02-29 23:59:59.000000", dt),
+              dateadd("nanosecond", -1000000000, "2000-03-01 00:00:00.000000", dt));
+    EXPECT_EQ(timestampToInt64("2000-02-29 23:59:58", dt),
+              dateadd("nanosecond", -1000000001, "2000-03-01 00:00:00", dt));
+    EXPECT_EQ(timestampToInt64("2000-02-29 23:59:58.999", dt),
+              dateadd("nanosecond", -1000000001, "2000-03-01 00:00:00.000", dt));
+    EXPECT_EQ(timestampToInt64("2000-02-29 23:59:58.999999", dt),
+              dateadd("nanosecond", -1000000001, "2000-03-01 00:00:00.000000", dt));
+  }
+}
+
 TEST(Select, Datediff) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();

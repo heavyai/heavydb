@@ -169,10 +169,11 @@ llvm::Value* CodeGenerator::codegen(const Analyzer::DateaddExpr* dateadd_expr,
       number,
       datetime};
   std::string dateadd_fname{"DateAdd"};
-  if (dateadd_expr_ti.is_high_precision_timestamp()) {
+  if (is_subsecond_dateadd_field(dateadd_expr->get_field()) ||
+      dateadd_expr_ti.is_high_precision_timestamp()) {
     dateadd_fname += "HighPrecision";
-    dateadd_args.push_back(cgen_state_->llInt(static_cast<int64_t>(
-        get_timestamp_precision_scale(dateadd_expr_ti.get_dimension()))));
+    dateadd_args.push_back(
+        cgen_state_->llInt(static_cast<int32_t>(datetime_ti.get_dimension())));
   }
   if (!datetime_ti.get_notnull()) {
     dateadd_args.push_back(cgen_state_->inlineIntNull(datetime_ti));
