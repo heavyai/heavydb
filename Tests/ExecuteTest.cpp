@@ -2387,6 +2387,9 @@ TEST(Select, OrderBy) {
       "LIMIT 5;",
       "SELECT * FROM ( SELECT x, y FROM test ORDER BY x, y ASC LIMIT 10 ) t0 LIMIT 5;",
       dt);
+    c(R"(SELECT str, COUNT(*) FROM test GROUP BY str ORDER BY 2 DESC NULLS FIRST LIMIT 50 OFFSET 10;)",
+      R"(SELECT str, COUNT(*) FROM test GROUP BY str ORDER BY 2 DESC LIMIT 50 OFFSET 10;)",
+      dt);
   }
 }
 
