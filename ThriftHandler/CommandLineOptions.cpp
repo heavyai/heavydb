@@ -643,6 +643,12 @@ bool trim_and_check_file_exists(std::string& filename, const std::string desc) {
   return true;
 }
 
+void addOptionalFileToBlacklist(std::string& filename) {
+  if (!filename.empty()) {
+    ddl_utils::FilePathBlacklist::addToBlacklist(filename);
+  }
+}
+
 }  // namespace
 
 void CommandLineOptions::validate_base_path() {
@@ -739,9 +745,19 @@ void CommandLineOptions::validate() {
 #ifdef ENABLE_FSI
   ddl_utils::FilePathBlacklist::addToBlacklist(disk_cache_config.path);
 #endif
-  if (!license_path.empty()) {
-    ddl_utils::FilePathBlacklist::addToBlacklist(license_path);
-  }
+
+  ddl_utils::FilePathBlacklist::addToBlacklist("/etc/passwd");
+  ddl_utils::FilePathBlacklist::addToBlacklist("/etc/shadow");
+
+  // If passed in, blacklist all security config files
+  addOptionalFileToBlacklist(license_path);
+  addOptionalFileToBlacklist(system_parameters.ssl_cert_file);
+  addOptionalFileToBlacklist(authMetadata.ca_file_name);
+  addOptionalFileToBlacklist(system_parameters.ssl_trust_store);
+  addOptionalFileToBlacklist(system_parameters.ssl_keystore);
+  addOptionalFileToBlacklist(system_parameters.ssl_key_file);
+  addOptionalFileToBlacklist(system_parameters.ssl_trust_ca_file);
+  addOptionalFileToBlacklist(cluster_file);
 }
 
 boost::optional<int> CommandLineOptions::parse_command_line(

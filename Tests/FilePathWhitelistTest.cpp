@@ -198,6 +198,137 @@ INSTANTIATE_TEST_SUITE_P(FilePathWhitelistTest,
                          testing::Values("CopyFrom", "CopyTo", "ForeignTable"),
                          [](const auto& param_info) { return param_info.param; });
 
+TEST_F(FilePathWhitelistTest, DetectTypesBlacklist) {
+  const auto& file_path = temp_file_path_;
+  ddl_utils::FilePathBlacklist::addToBlacklist(file_path);
+  auto db_handler_and_session_id = getDbHandlerAndSessionId();
+  auto db_handler = db_handler_and_session_id.first;
+  auto session_id = db_handler_and_session_id.second;
+  TDetectResult temp;
+  executeLambdaAndAssertException(
+      [&] {
+        db_handler->detect_column_types(temp, session_id, file_path, TCopyParams{});
+      },
+      "Access to file or directory path \"" + file_path + "\" is not allowed.");
+}
+
+TEST_F(FilePathWhitelistTest, ImportTableBlacklist) {
+  const auto& file_path = temp_file_path_;
+  ddl_utils::FilePathBlacklist::addToBlacklist(file_path);
+  auto db_handler_and_session_id = getDbHandlerAndSessionId();
+  auto db_handler = db_handler_and_session_id.first;
+  auto session_id = db_handler_and_session_id.second;
+  executeLambdaAndAssertException(
+      [&] { db_handler->import_table(session_id, "test1", file_path, TCopyParams{}); },
+      "Exception: Access to file or directory path \"" + file_path +
+          "\" is not allowed.");
+}
+
+TEST_F(FilePathWhitelistTest, ImportGeoTableBlacklist) {
+  const auto& file_path = temp_file_path_;
+  ddl_utils::FilePathBlacklist::addToBlacklist(file_path);
+  auto db_handler_and_session_id = getDbHandlerAndSessionId();
+  auto db_handler = db_handler_and_session_id.first;
+  auto session_id = db_handler_and_session_id.second;
+  executeLambdaAndAssertException(
+      [&] {
+        db_handler->import_geo_table(session_id,
+                                     "test1",
+                                     file_path,
+                                     TCopyParams{},
+                                     TRowDescriptor{},
+                                     TCreateParams{});
+      },
+      "Access to file or directory path \"" + file_path + "\" is not allowed.");
+}
+
+TEST_F(FilePathWhitelistTest, GetFirstGeoFileBlacklist) {
+  const auto& file_path = temp_file_path_;
+  ddl_utils::FilePathBlacklist::addToBlacklist(file_path);
+  auto db_handler_and_session_id = getDbHandlerAndSessionId();
+  auto db_handler = db_handler_and_session_id.first;
+  auto session_id = db_handler_and_session_id.second;
+  std::string temp;
+  executeLambdaAndAssertException(
+      [&] {
+        db_handler->get_first_geo_file_in_archive(
+            temp, session_id, file_path, TCopyParams());
+      },
+      "Access to file or directory path \"" + file_path + "\" is not allowed.");
+}
+
+TEST_F(FilePathWhitelistTest, GetAllFilesBlacklist) {
+  const auto& file_path = temp_file_path_;
+  ddl_utils::FilePathBlacklist::addToBlacklist(file_path);
+  auto db_handler_and_session_id = getDbHandlerAndSessionId();
+  auto db_handler = db_handler_and_session_id.first;
+  auto session_id = db_handler_and_session_id.second;
+  std::vector<std::string> temp;
+  executeLambdaAndAssertException(
+      [&] {
+        db_handler->get_all_files_in_archive(temp, session_id, file_path, TCopyParams());
+      },
+      "Access to file or directory path \"" + file_path + "\" is not allowed.");
+}
+
+TEST_F(FilePathWhitelistTest, GetLayersInGeoFileBlacklist) {
+  const auto& file_path = temp_file_path_;
+  ddl_utils::FilePathBlacklist::addToBlacklist(file_path);
+  auto db_handler_and_session_id = getDbHandlerAndSessionId();
+  auto db_handler = db_handler_and_session_id.first;
+  auto session_id = db_handler_and_session_id.second;
+  std::vector<TGeoFileLayerInfo> temp;
+  executeLambdaAndAssertException(
+      [&] {
+        db_handler->get_layers_in_geo_file(temp, session_id, file_path, TCopyParams());
+      },
+      "Access to file or directory path \"" + file_path + "\" is not allowed.");
+}
+TEST_F(FilePathWhitelistTest, DumpTableBlacklist) {
+  const auto& file_path = temp_file_path_;
+  ddl_utils::FilePathBlacklist::addToBlacklist(file_path);
+  queryAndAssertException("DUMP TABLE test_table TO '" + file_path + "';",
+                          "Exception: Access to file or directory path \"" + file_path +
+                              "\" is not allowed.");
+}
+
+TEST_F(FilePathWhitelistTest, RestoreTableBlacklist) {
+  const auto& file_path = temp_file_path_;
+  ddl_utils::FilePathBlacklist::addToBlacklist(file_path);
+  queryAndAssertException("RESTORE TABLE test1 FROM '" + file_path + "';",
+                          "Exception: Access to file or directory path \"" + file_path +
+                              "\" is not allowed.");
+}
+
+TEST_F(FilePathWhitelistTest, ThrowOnPunctuation) {
+  executeLambdaAndAssertException(
+      [&] {
+        validate_allowed_file_path("name with spaces",
+                                   ddl_utils::DataTransferType::IMPORT);
+      },
+      "Whitespace is not allowed in file path: name with spaces");
+}
+
+TEST_F(FilePathWhitelistTest, ThrowOnSpace) {
+  executeLambdaAndAssertException(
+      [&] {
+        validate_allowed_file_path("name_with_&", ddl_utils::DataTransferType::IMPORT);
+      },
+      "Punctuation \"&\" is not allowed in file path: name_with_&");
+}
+
+TEST_F(FilePathWhitelistTest, ThrowOnAsterisk) {
+  executeLambdaAndAssertException(
+      [&] {
+        validate_allowed_file_path("name_with_*", ddl_utils::DataTransferType::IMPORT);
+      },
+      "Punctuation \"*\" is not allowed in file path: name_with_*");
+}
+
+TEST_F(FilePathWhitelistTest, AllowAsteriskForWildcard) {
+  validate_allowed_file_path("/tmp/*", ddl_utils::DataTransferType::IMPORT, true);
+}
+
 int main(int argc, char** argv) {
   g_enable_fsi = true;
   TestHelpers::init_logger_stderr_only(argc, argv);

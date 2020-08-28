@@ -609,7 +609,24 @@ std::vector<std::string> get_expanded_file_paths(
 }
 
 void validate_allowed_file_path(const std::string& file_path,
-                                const DataTransferType data_transfer_type) {
+                                const DataTransferType data_transfer_type,
+                                const bool allow_wildcards) {
+  // Reject any filenames containing whitespace for now.
+  for (const auto& ch : file_path) {
+    if (std::isspace(ch)) {
+      throw std::runtime_error("Whitespace is not allowed in file path: " + file_path);
+    }
+  }
+
+  // Reject any punctuation characters except for a few safe ones.
+  static const std::string safe_punctuation{"./_+-=:"};
+  for (const auto& ch : file_path) {
+    if (std::ispunct(ch) && safe_punctuation.find(ch) == std::string::npos &&
+        !(allow_wildcards && ch == '*')) {
+      throw std::runtime_error(std::string("Punctuation \"") + ch +
+                               "\" is not allowed in file path: " + file_path);
+    }
+  }
   const auto& expanded_file_paths =
       get_expanded_file_paths(file_path, data_transfer_type);
   for (const auto& path : expanded_file_paths) {

@@ -307,6 +307,8 @@ class DBHandlerTestFixture : public testing::Test {
       FAIL() << "An exception should have been thrown for this test case.";
     } catch (const TOmniSciException& e) {
       assertExceptionMessage(e, error_message);
+    } catch (const std::runtime_error& e) {
+      assertExceptionMessage(e, error_message);
     }
   }
 
@@ -319,6 +321,11 @@ class DBHandlerTestFixture : public testing::Test {
     } else {
       ASSERT_EQ(error_message, e.error_msg);
     }
+  }
+
+  void assertExceptionMessage(const std::runtime_error& e,
+                              const std::string& error_message) {
+    ASSERT_EQ(error_message, e.what());
   }
 
   void queryAndAssertException(const std::string& sql_statement,

@@ -124,7 +124,8 @@ inline std::string run(const std::string& cmd, const std::string& chdir = "") {
 inline std::string simple_file_cat(const std::string& archive_path,
                                    const std::string& file_name,
                                    const std::string& compression) {
-  filename_security_check(archive_path);
+  ddl_utils::validate_allowed_file_path(archive_path,
+                                        ddl_utils::DataTransferType::IMPORT);
 #if defined(__APPLE__)
   constexpr static auto opt_occurrence = "--fast-read";
 #else
@@ -240,7 +241,8 @@ void rename_table_directories(const File_Namespace::GlobalFileMgr* global_file_m
 void TableArchiver::dumpTable(const TableDescriptor* td,
                               const std::string& archive_path,
                               const std::string& compression) {
-  filename_security_check(archive_path);
+  ddl_utils::validate_allowed_file_path(archive_path,
+                                        ddl_utils::DataTransferType::EXPORT);
   if (g_cluster) {
     throw std::runtime_error("DUMP/RESTORE is not supported yet on distributed setup.");
   }
@@ -312,7 +314,8 @@ void TableArchiver::restoreTable(const Catalog_Namespace::SessionInfo& session,
                                  const TableDescriptor* td,
                                  const std::string& archive_path,
                                  const std::string& compression) {
-  filename_security_check(archive_path);
+  ddl_utils::validate_allowed_file_path(archive_path,
+                                        ddl_utils::DataTransferType::IMPORT);
   if (g_cluster) {
     throw std::runtime_error("DUMP/RESTORE is not supported yet on distributed setup.");
   }

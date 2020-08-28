@@ -3573,8 +3573,8 @@ void CopyTableStmt::execute(const Catalog_Namespace::SessionInfo& session,
   boost::regex non_local_file_regex{R"(^\s*(s3|http|https)://.+)",
                                     boost::regex::extended | boost::regex::icase};
   if (!boost::regex_match(*file_pattern, non_local_file_regex)) {
-    ddl_utils::validate_allowed_file_path(*file_pattern,
-                                          ddl_utils::DataTransferType::IMPORT);
+    ddl_utils::validate_allowed_file_path(
+        *file_pattern, ddl_utils::DataTransferType::IMPORT, true);
   }
 
   size_t rows_completed = 0;
