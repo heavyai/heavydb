@@ -157,7 +157,7 @@ class TrackingProcessor : public OmniSciProcessor {
   const bool check_origin_;
 };
 
-class DiskCacheConfig;
+struct DiskCacheConfig;
 
 class DBHandler : public OmniSciIf {
  public:
