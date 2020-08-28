@@ -3942,6 +3942,13 @@ std::string Catalog::dumpSchema(const TableDescriptor* td) const {
                  (ti.get_size() > 0 && ti.get_size() != ti.get_logical_size())) {
         const auto comp_param = ti.get_comp_param() ? ti.get_comp_param() : 32;
         os << " ENCODING " << ti.get_compression_name() << "(" << comp_param << ")";
+      } else if (ti.is_geometry()) {
+        if (ti.get_compression() == kENCODING_GEOINT) {
+          os << " ENCODING " << ti.get_compression_name() << "(" << ti.get_comp_param()
+             << ")";
+        } else {
+          os << " ENCODING NONE";
+        }
       }
       comma = ", ";
     }

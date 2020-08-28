@@ -238,6 +238,111 @@ TEST_UNSHARDED_AND_SHARDED(DumpRestoreTest, DumpMigrate_Rollback)
 TEST_UNSHARDED_AND_SHARDED(DumpRestoreTest, DumpMigrate_Altered)
 TEST_UNSHARDED_AND_SHARDED(DumpRestoreTest, DumpMigrate_Altered_Rollback)
 
+class GeoDumpRestoreTest : public ::testing::Test {
+ protected:
+  void SetUp() override {
+    boost::filesystem::remove_all(tar_ball_path);
+    run_ddl_statement("DROP TABLE IF EXISTS test_table;");
+    run_ddl_statement("DROP TABLE IF EXISTS test_table_2;");
+    g_test_rollback_dump_restore = false;
+  }
+
+  void TearDown() override {
+    boost::filesystem::remove_all(tar_ball_path);
+    run_ddl_statement("DROP TABLE IF EXISTS test_table;");
+    run_ddl_statement("DROP TABLE IF EXISTS test_table_2;");
+  }
+
+  void sqlAndCompareResult(const std::string& sql,
+                           std::vector<std::string> expected_result) {
+    auto result = run_multiple_agg(sql);
+    ASSERT_EQ(expected_result.size(), result->colCount());
+    auto row = result->getNextRow(true, true);
+    for (size_t i = 0; i < expected_result.size(); i++) {
+      auto& target_value = boost::get<ScalarTargetValue>(row[i]);
+      auto& nullable_str = boost::get<NullableString>(target_value);
+      auto& str = boost::get<std::string>(nullable_str);
+      EXPECT_EQ(expected_result[i], str);
+    }
+  }
+};
+
+TEST_F(GeoDumpRestoreTest, DifferentEncodings) {
+  run_ddl_statement(
+      "CREATE TABLE test_table ("
+      "p1 GEOMETRY(POINT, 4326) ENCODING COMPRESSED(32), p2 GEOMETRY(POINT, 4326) "
+      "ENCODING NONE, "
+      "l1 GEOMETRY(LINESTRING, 4326) ENCODING COMPRESSED(32), l2 GEOMETRY(LINESTRING, "
+      "4326) ENCODING NONE, "
+      "poly1 GEOMETRY(POLYGON, 4326) ENCODING COMPRESSED(32), poly2 GEOMETRY(POLYGON, "
+      "4326) ENCODING NONE, "
+      "mpoly1 GEOMETRY(MULTIPOLYGON, 4326) ENCODING COMPRESSED(32), "
+      "mpoly2 GEOMETRY(MULTIPOLYGON, 4326) ENCODING NONE);");
+
+  run_multiple_agg(
+      "INSERT INTO test_table VALUES("
+      "'POINT(1 0)', 'POINT(1 0)', 'LINESTRING(1 0,0 1)', 'LINESTRING(1 0,0 1)', "
+      "'POLYGON((0 0,1 0,0 1,0 0))', 'POLYGON((0 0,1 0,0 1,0 0)))', "
+      "'MULTIPOLYGON(((0 0,1 0,0 1,0 0)),((0 0,2 0,0 2,0 0)))', "
+      "'MULTIPOLYGON(((0 0,1 0,0 1,0 0)),((0 0,2 0,0 2,0 0)))');");
+
+  std::vector<std::string> expected_result{
+      "POINT (0.999999940861017 0.0)",
+      "POINT (1 0)",
+      "LINESTRING (0.999999940861017 0.0,0.0 0.999999982770532)",
+      "LINESTRING (1 0,0 1)",
+      "POLYGON ((0 0,0.999999940861017 0.0,0.0 0.999999982770532,0 0))",
+      "POLYGON ((0 0,1 0,0 1,0 0))",
+      "MULTIPOLYGON (((0 0,0.999999940861017 0.0,0.0 0.999999982770532,0 0)),((0 "
+      "0,1.99999996554106 0.0,0.0 1.99999996554106,0 0)))",
+      "MULTIPOLYGON (((0 0,1 0,0 1,0 0)),((0 0,2 0,0 2,0 0)))"};
+
+  sqlAndCompareResult("SELECT * FROM test_table;", expected_result);
+  run_ddl_statement("DUMP TABLE test_table TO '" + tar_ball_path + "';");
+  run_ddl_statement("RESTORE TABLE test_table_2 FROM '" + tar_ball_path + "';");
+  sqlAndCompareResult("SELECT * FROM test_table_2;", expected_result);
+}
+
+TEST_F(GeoDumpRestoreTest, DifferentSRIDs) {
+  run_ddl_statement(
+      "CREATE TABLE test_table ("
+      "p1 POINT, p2 GEOMETRY(POINT, 4326), p3 GEOMETRY(POINT, 900913), "
+      "l1 LINESTRING, l2 GEOMETRY(LINESTRING, 4326), l3 GEOMETRY(LINESTRING, 900913), "
+      "poly1 POLYGON, poly2 GEOMETRY(POLYGON, 4326), poly3 GEOMETRY(POLYGON, 900913), "
+      "mpoly1 MULTIPOLYGON, mpoly2 GEOMETRY(MULTIPOLYGON, 4326), mpoly3 "
+      "GEOMETRY(MULTIPOLYGON, 900913));");
+
+  run_multiple_agg(
+      "INSERT INTO test_table VALUES("
+      "'POINT(1 0)', 'POINT(1 0)', 'POINT(1 0)', "
+      "'LINESTRING(1 0,0 1)', 'LINESTRING(1 0,0 1)', 'LINESTRING(1 0,0 1)', "
+      "'POLYGON((0 0,1 0,0 1,0 0))', 'POLYGON((0 0,1 0,0 1,0 0))', 'POLYGON((0 0,1 0,0 "
+      "1,0 0)))', "
+      "'MULTIPOLYGON(((0 0,1 0,0 1,0 0)),((0 0,2 0,0 2,0 0)))',"
+      "'MULTIPOLYGON(((0 0,1 0,0 1,0 0)),((0 0,2 0,0 2,0 0)))', "
+      "'MULTIPOLYGON(((0 0,1 0,0 1,0 0)),((0 0,2 0,0 2,0 0)))');");
+
+  std::vector<std::string> expected_result{
+      "POINT (1 0)",
+      "POINT (0.999999940861017 0.0)",
+      "POINT (1 0)",
+      "LINESTRING (1 0,0 1)",
+      "LINESTRING (0.999999940861017 0.0,0.0 0.999999982770532)",
+      "LINESTRING (1 0,0 1)",
+      "POLYGON ((0 0,1 0,0 1,0 0))",
+      "POLYGON ((0 0,0.999999940861017 0.0,0.0 0.999999982770532,0 0))",
+      "POLYGON ((0 0,1 0,0 1,0 0))",
+      "MULTIPOLYGON (((0 0,1 0,0 1,0 0)),((0 0,2 0,0 2,0 0)))",
+      "MULTIPOLYGON (((0 0,0.999999940861017 0.0,0.0 0.999999982770532,0 0)),((0 "
+      "0,1.99999996554106 0.0,0.0 1.99999996554106,0 0)))",
+      "MULTIPOLYGON (((0 0,1 0,0 1,0 0)),((0 0,2 0,0 2,0 0)))"};
+
+  sqlAndCompareResult("SELECT * FROM test_table;", expected_result);
+  run_ddl_statement("DUMP TABLE test_table TO '" + tar_ball_path + "';");
+  run_ddl_statement("RESTORE TABLE test_table_2 FROM '" + tar_ball_path + "';");
+  sqlAndCompareResult("SELECT * FROM test_table_2;", expected_result);
+}
+
 int main(int argc, char** argv) {
   testing::InitGoogleTest(&argc, argv);
 
