@@ -4463,7 +4463,7 @@ TEST_F(AlterForeignTableTest, Owner) {
   createScheduledTable("manual");
   queryAndAssertExceptionSubstr(
       "ALTER FOREIGN TABLE test_foreign_table OWNER TO test_user;",
-      "Encountered \"OWNER\"");
+      "Incorrect syntax near the keyword \'OWNER\'");
 }
 
 TEST_F(AlterForeignTableTest, ColumnDoesNotExist) {
@@ -4494,80 +4494,81 @@ TEST_F(AlterForeignTableTest, ColumnAlreadyExists) {
 TEST_F(AlterForeignTableTest, Add) {
   createScheduledTable("manual");
   queryAndAssertExceptionSubstr("ALTER FOREIGN TABLE test_foreign_table ADD a;",
-                                "Encountered \"ADD\"");
+                                "Incorrect syntax near the keyword \'ADD\'");
 }
 
 TEST_F(AlterForeignTableTest, AddColumn) {
   createScheduledTable("manual");
   queryAndAssertExceptionSubstr("ALTER FOREIGN TABLE test_foreign_table ADD COLUMN a;",
-                                "Encountered \"ADD\"");
+                                "Incorrect syntax near the keyword \'ADD\'");
 }
 
 TEST_F(AlterForeignTableTest, Drop) {
   createScheduledTable("manual");
   queryAndAssertExceptionSubstr("ALTER FOREIGN TABLE test_foreign_table DROP i;",
-                                "Encountered \"DROP\"");
+                                "Incorrect syntax near the keyword \'DROP\'");
 }
 
 TEST_F(AlterForeignTableTest, DropColumn) {
   createScheduledTable("manual");
   queryAndAssertExceptionSubstr("ALTER FOREIGN TABLE test_foreign_table DROP COLUMN i;",
-                                "Encountered \"DROP\"");
+                                "Incorrect syntax near the keyword \'DROP\'");
 }
 
 TEST_F(AlterForeignTableTest, DropIfExists) {
   createScheduledTable("manual");
   queryAndAssertExceptionSubstr(
-      "ALTER FOREIGN TABLE test_foreign_table DROP IF EXISTS i;", "Encountered \"DROP\"");
+      "ALTER FOREIGN TABLE test_foreign_table DROP IF EXISTS i;",
+      "Incorrect syntax near the keyword \'DROP\'");
 }
 
 TEST_F(AlterForeignTableTest, AlterType) {
   createScheduledTable("manual");
   queryAndAssertExceptionSubstr(
       "ALTER FOREIGN TABLE test_foreign_table ALTER i TYPE float;",
-      "Encountered \"ALTER\"");
+      "Incorrect syntax near the keyword \'ALTER\'");
 }
 
 TEST_F(AlterForeignTableTest, AlterColumnType) {
   createScheduledTable("manual");
   queryAndAssertExceptionSubstr(
       "ALTER FOREIGN TABLE test_foreign_table ALTER COLUMN i TYPE float;",
-      "Encountered \"ALTER\"");
+      "Incorrect syntax near the keyword \'ALTER\'");
 }
 
 TEST_F(AlterForeignTableTest, AlterSetDataType) {
   createScheduledTable("manual");
   queryAndAssertExceptionSubstr(
       "ALTER FOREIGN TABLE test_foreign_table ALTER i SET DATA TYPE float;",
-      "Encountered \"ALTER\"");
+      "Incorrect syntax near the keyword \'ALTER\'");
 }
 
 TEST_F(AlterForeignTableTest, AlterTypeSetNotNull) {
   createScheduledTable("manual");
   queryAndAssertExceptionSubstr(
       "ALTER FOREIGN TABLE test_foreign_table ALTER i TYPE float SET NOT NULL;",
-      "Encountered \"ALTER\"");
+      "Incorrect syntax near the keyword \'ALTER\'");
 }
 
 TEST_F(AlterForeignTableTest, AlterTypeDropNotNull) {
   createScheduledTable("manual");
   queryAndAssertExceptionSubstr(
       "ALTER FOREIGN TABLE test_foreign_table ALTER i TYPE float DROP NOT NULL;",
-      "Encountered \"ALTER\"");
+      "Incorrect syntax near the keyword \'ALTER\'");
 }
 
 TEST_F(AlterForeignTableTest, AlterTypeSetEncoding) {
   createScheduledTable("manual");
   queryAndAssertExceptionSubstr(
       "ALTER FOREIGN TABLE test_foreign_table ALTER i TYPE text SET ENCODING DICT(32);",
-      "Encountered \"ALTER\"");
+      "Incorrect syntax near the keyword \'ALTER\'");
 }
 
 TEST_F(AlterForeignTableTest, AlterTypeDropEncoding) {
   createScheduledTable("manual");
   queryAndAssertExceptionSubstr(
       "ALTER FOREIGN TABLE test_foreign_table ALTER i TYPE text DROP ENCODING DICT(32);",
-      "Encountered \"ALTER\"");
+      "Incorrect syntax near the keyword \'ALTER\'");
 }
 
 TEST_F(AlterForeignTableTest, RenameRegularTable) {

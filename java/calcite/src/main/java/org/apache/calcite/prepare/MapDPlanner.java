@@ -164,7 +164,7 @@ public class MapDPlanner extends PlannerImpl {
             createCatalogReader(),
             getTypeFactory(),
             validatorConfig);
-    SqlAdvisor advisor = new MapDSqlAdvisor(advisor_validator);
+    SqlAdvisor advisor = new MapDSqlAdvisor(advisor_validator, config.getParserConfig());
     String[] replaced = new String[1];
     int adjusted_cursor = cursor < 0 ? sql.length() : cursor;
     java.util.List<SqlMoniker> hints =

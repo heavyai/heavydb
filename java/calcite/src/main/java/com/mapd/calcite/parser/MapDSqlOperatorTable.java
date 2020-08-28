@@ -41,6 +41,7 @@ import org.apache.calcite.sql.util.ChainedSqlOperatorTable;
 import org.apache.calcite.sql.util.ListSqlOperatorTable;
 import org.apache.calcite.sql.util.ReflectiveSqlOperatorTable;
 import org.apache.calcite.sql.validate.SqlNameMatcher;
+import org.apache.calcite.util.Optionality;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -1918,7 +1919,10 @@ public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
               null,
               OperandTypes.or(OperandTypes.family(SqlTypeFamily.ANY),
                       OperandTypes.family(SqlTypeFamily.ANY, SqlTypeFamily.INTEGER)),
-              SqlFunctionCategory.SYSTEM);
+              SqlFunctionCategory.SYSTEM,
+              false,
+              false,
+              Optionality.FORBIDDEN);
     }
 
     @Override
@@ -1936,7 +1940,10 @@ public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
               null,
               null,
               OperandTypes.family(SqlTypeFamily.NUMERIC),
-              SqlFunctionCategory.SYSTEM);
+              SqlFunctionCategory.SYSTEM,
+              false,
+              false,
+              Optionality.FORBIDDEN);
     }
 
     @Override
@@ -1949,11 +1956,15 @@ public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
   public static class Sample extends SqlAggFunction {
     public Sample() {
       super("SAMPLE",
+              null,
               SqlKind.OTHER_FUNCTION,
               null,
               null,
               OperandTypes.ANY,
-              SqlFunctionCategory.SYSTEM);
+              SqlFunctionCategory.SYSTEM,
+              false,
+              false,
+              Optionality.FORBIDDEN);
     }
 
     @Override
@@ -1966,11 +1977,15 @@ public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
   public static class LastSample extends SqlAggFunction {
     public LastSample() {
       super("LAST_SAMPLE",
+              null,
               SqlKind.OTHER_FUNCTION,
               null,
               null,
               OperandTypes.ANY,
-              SqlFunctionCategory.SYSTEM);
+              SqlFunctionCategory.SYSTEM,
+              false,
+              false,
+              Optionality.FORBIDDEN);
     }
 
     @Override

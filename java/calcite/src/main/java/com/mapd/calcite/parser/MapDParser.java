@@ -54,6 +54,7 @@ import org.apache.calcite.rel.hint.HintStrategyTable;
 import org.apache.calcite.rel.logical.LogicalProject;
 import org.apache.calcite.rel.logical.LogicalTableModify;
 import org.apache.calcite.rel.metadata.DefaultRelMetadataProvider;
+import org.apache.calcite.rel.rules.CoreRules;
 import org.apache.calcite.rel.rules.FilterMergeRule;
 import org.apache.calcite.rel.rules.FilterProjectTransposeRule;
 import org.apache.calcite.rel.rules.JoinProjectTransposeRule;
@@ -78,7 +79,6 @@ import org.apache.calcite.sql.SqlCall;
 import org.apache.calcite.sql.SqlDataTypeSpec;
 import org.apache.calcite.sql.SqlDdl;
 import org.apache.calcite.sql.SqlDelete;
-import org.apache.calcite.sql.SqlDialect;
 import org.apache.calcite.sql.SqlFunctionCategory;
 import org.apache.calcite.sql.SqlIdentifier;
 import org.apache.calcite.sql.SqlJoin;
@@ -92,6 +92,7 @@ import org.apache.calcite.sql.SqlSelect;
 import org.apache.calcite.sql.SqlUnresolvedFunction;
 import org.apache.calcite.sql.SqlUpdate;
 import org.apache.calcite.sql.SqlWith;
+import org.apache.calcite.sql.dialect.CalciteSqlDialect;
 import org.apache.calcite.sql.fun.SqlCase;
 import org.apache.calcite.sql.fun.SqlStdOperatorTable;
 import org.apache.calcite.sql.parser.SqlParseException;
@@ -147,10 +148,6 @@ public final class MapDParser {
 
   final static Logger MAPDLOGGER = LoggerFactory.getLogger(MapDParser.class);
 
-  // private SqlTypeFactoryImpl typeFactory;
-  // private MapDCatalogReader catalogReader;
-  // private SqlValidatorImpl validator;
-  // private SqlToRelConverter converter;
   private final Supplier<MapDSqlOperatorTable> mapDSqlOperatorTable;
   private final String dataDir;
 
@@ -215,7 +212,7 @@ public final class MapDParser {
   }
 
   private boolean isCorrelated(SqlNode expression) {
-    String queryString = expression.toSqlString(SqlDialect.CALCITE).getSql();
+    String queryString = expression.toSqlString(CalciteSqlDialect.DEFAULT).getSql();
     Boolean isCorrelatedSubquery = SubqueryCorrMemo.get(queryString);
     if (null != isCorrelatedSubquery) {
       return isCorrelatedSubquery;
@@ -687,7 +684,7 @@ public final class MapDParser {
     }
 
     MapDPlanner planner = getPlanner(true, allowPushdownJoinCondition);
-    SqlNode node = planner.parse(select.toSqlString(SqlDialect.CALCITE).getSql());
+    SqlNode node = planner.parse(select.toSqlString(CalciteSqlDialect.DEFAULT).getSql());
     node = planner.validate(node);
     RelRoot root = planner.rel(node);
     LogicalProject project = (LogicalProject) root.project();
@@ -800,7 +797,8 @@ public final class MapDParser {
       planner.close();
       // create a new one
       planner = getPlanner(allowCorrelatedSubQueryExpansion, allowPushdownJoinCondition);
-      node = parseSql(node.toSqlString(SqlDialect.CALCITE).toString(), false, planner);
+      node = parseSql(
+              node.toSqlString(CalciteSqlDialect.DEFAULT).toString(), false, planner);
     }
 
     SqlNode validateR = planner.validate(node);
@@ -831,14 +829,11 @@ public final class MapDParser {
         return relR;
       }
 
-      ProjectMergeRule projectMergeRule =
-              new ProjectMergeRule(true, RelFactories.LOGICAL_BUILDER);
-
       HepProgramBuilder builder = new HepProgramBuilder();
-      builder.addRuleInstance(JoinProjectTransposeRule.BOTH_PROJECT_INCLUDE_OUTER);
-      builder.addRuleInstance(FilterMergeRule.INSTANCE);
-      builder.addRuleInstance(FilterProjectTransposeRule.INSTANCE);
-      builder.addRuleInstance(projectMergeRule);
+      builder.addRuleInstance(CoreRules.JOIN_PROJECT_BOTH_TRANSPOSE_INCLUDE_OUTER);
+      builder.addRuleInstance(CoreRules.FILTER_MERGE);
+      builder.addRuleInstance(CoreRules.FILTER_PROJECT_TRANSPOSE);
+      builder.addRuleInstance(CoreRules.PROJECT_MERGE);
       builder.addRuleInstance(ProjectProjectRemoveRule.INSTANCE);
 
       HepPlanner hepPlanner = new HepPlanner(builder.build());

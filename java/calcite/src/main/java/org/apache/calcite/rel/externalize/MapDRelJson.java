@@ -206,7 +206,7 @@ public class MapDRelJson {
     if (o instanceof List) {
       @SuppressWarnings("unchecked")
       final List<Map<String, Object>> jsonList = (List<Map<String, Object>>) o;
-      final RelDataTypeFactory.FieldInfoBuilder builder = typeFactory.builder();
+      final RelDataTypeFactory.Builder builder = typeFactory.builder();
       for (Map<String, Object> jsonMap : jsonList) {
         builder.add((String) jsonMap.get("name"), toType(typeFactory, jsonMap));
       }
@@ -463,7 +463,8 @@ public class MapDRelJson {
         final SqlTypeName sqlTypeName =
                 Util.enumVal(SqlTypeName.class, (String) map.get("type"));
         if (literal == null) {
-          return rexBuilder.makeNullLiteral(sqlTypeName);
+          return rexBuilder.makeNullLiteral(
+                  cluster.getTypeFactory().createSqlType(sqlTypeName));
         }
 
         // omnisci serializes numeric literals differently, we need more data
