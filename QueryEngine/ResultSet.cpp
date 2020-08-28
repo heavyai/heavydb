@@ -337,6 +337,9 @@ size_t ResultSet::rowCount(const bool force_parallel) const {
     return 1;
   }
   if (!permutation_.empty()) {
+    if (drop_first_ > permutation_.size()) {
+      return 0;
+    }
     const auto limited_row_count = keep_first_ + drop_first_;
     return limited_row_count ? std::min(limited_row_count, permutation_.size())
                              : permutation_.size();
@@ -518,6 +521,10 @@ QueryMemoryDescriptor ResultSet::fixupQueryMemoryDescriptor(
 void ResultSet::sort(const std::list<Analyzer::OrderEntry>& order_entries,
                      const size_t top_n) {
   auto timer = DEBUG_TIMER(__func__);
+
+  if (!storage_) {
+    return;
+  }
   CHECK_EQ(-1, cached_row_count_);
   CHECK(!targets_.empty());
 #ifdef HAVE_CUDA
