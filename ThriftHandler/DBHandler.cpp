@@ -5871,7 +5871,7 @@ void DBHandler::emergency_shutdown() {
   }
 }
 
-extern std::map<std::string, std::string> get_device_parameters();
+extern std::map<std::string, std::string> get_device_parameters(bool cpu_only);
 
 #define EXPOSE_THRIFT_MAP(TYPENAME)                                             \
   {                                                                             \
@@ -5887,7 +5887,7 @@ extern std::map<std::string, std::string> get_device_parameters();
 void DBHandler::get_device_parameters(std::map<std::string, std::string>& _return,
                                       const TSessionId& session) {
   const auto session_info = get_session_copy(session);
-  auto params = ::get_device_parameters();
+  auto params = ::get_device_parameters(cpu_mode_only_);
   for (auto item : params) {
     _return.insert(item);
   }
