@@ -401,7 +401,10 @@ void StringDictionary::getOrAddBulk(const std::vector<String>& input_strings,
     output_string_ids[idx++] = string_id;
     ++str_count_;
   }
-  invalidateInvertedIndex();
+  const size_t num_strings_added = str_count_ - initial_str_count;
+  if (num_strings_added > 0) {
+    invalidateInvertedIndex();
+  }
 }
 
 template <class T, class String>
@@ -481,9 +484,11 @@ void StringDictionary::getOrAddBulkParallel(const std::vector<String>& input_str
     output_string_ids[input_string_idx++] = shadow_str_count++;
   }
   appendToStorageBulk(input_strings, string_memory_ids, sum_new_string_lengths);
+  const size_t num_strings_added = shadow_str_count - str_count_;
   str_count_ = shadow_str_count;
-
-  invalidateInvertedIndex();
+  if (num_strings_added > 0) {
+    invalidateInvertedIndex();
+  }
 }
 template void StringDictionary::getOrAddBulk(const std::vector<std::string>& string_vec,
                                              uint8_t* encoded_vec);
