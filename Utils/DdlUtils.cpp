@@ -619,7 +619,7 @@ void validate_allowed_file_path(const std::string& file_path,
   }
 
   // Reject any punctuation characters except for a few safe ones.
-  static const std::string safe_punctuation{"./_+-=:"};
+  static const std::string safe_punctuation{"./_+-=:~"};
   for (const auto& ch : file_path) {
     if (std::ispunct(ch) && safe_punctuation.find(ch) == std::string::npos &&
         !(allow_wildcards && ch == '*')) {

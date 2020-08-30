@@ -329,6 +329,22 @@ TEST_F(FilePathWhitelistTest, AllowAsteriskForWildcard) {
   validate_allowed_file_path("/tmp/*", ddl_utils::DataTransferType::IMPORT, true);
 }
 
+TEST_F(FilePathWhitelistTest, AllowRelativePath) {
+  validate_allowed_file_path("./../../Tests/FilePathWhitelist/example.csv",
+                             ddl_utils::DataTransferType::IMPORT);
+}
+
+TEST_F(FilePathWhitelistTest, AllowTilde) {
+  // This test case ensures that an exception is not thrown because of the
+  // presence of the "~" character. Although, an exception is thrown because
+  // the file path does not exist (cannot rely on home directory on test machines).
+  executeLambdaAndAssertException(
+      [&] {
+        validate_allowed_file_path("~/test_path", ddl_utils::DataTransferType::IMPORT);
+      },
+      "File or directory \"~/test_path\" does not exist.");
+}
+
 int main(int argc, char** argv) {
   g_enable_fsi = true;
   TestHelpers::init_logger_stderr_only(argc, argv);
