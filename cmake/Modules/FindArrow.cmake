@@ -72,16 +72,20 @@ find_library(Arrow_GPU_CUDA_LIBRARY
   /usr/local/homebrew/lib
   /opt/local/lib)
 
-find_library(Arrow_DEPS_LIBRARY
-  NAMES arrow_bundled_dependencies
-  HINTS
-  ENV LD_LIBRARY_PATH
-  ENV DYLD_LIBRARY_PATH
-  PATHS
-  /usr/lib
-  /usr/local/lib
-  /usr/local/homebrew/lib
-  /opt/local/lib)
+if(Arrow_USE_STATIC_LIBS)
+  find_library(Arrow_DEPS_LIBRARY
+    NAMES arrow_bundled_dependencies
+    HINTS
+    ENV LD_LIBRARY_PATH
+    ENV DYLD_LIBRARY_PATH
+    PATHS
+    /usr/lib
+    /usr/local/lib
+    /usr/local/homebrew/lib
+    /opt/local/lib)
+else()
+  set(Arrow_DEPS_LIBRARY "")
+endif()
 
 get_filename_component(Arrow_LIBRARY_DIR ${Arrow_LIBRARY} DIRECTORY)
 
