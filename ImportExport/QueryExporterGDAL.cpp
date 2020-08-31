@@ -218,7 +218,8 @@ void QueryExporterGDAL::beginExport(const std::string& file_path,
     // validate SRID
     if (geo_column_srid <= 0) {
       throw std::runtime_error("Geo column '" + geo_column_name + "' has invalid SRID (" +
-                               std::to_string(geo_column_srid) + ") for export");
+                               std::to_string(geo_column_srid) +
+                               "). Use ST_SetSRID() in query to override.");
     }
 
     // get driver
