@@ -14,20 +14,22 @@
  * limitations under the License.
  */
 
-#include <ImportExport/QueryExporterGDAL.h>
+#include "ImportExport/QueryExporterGDAL.h"
 
 #include <array>
 #include <string>
 #include <unordered_set>
 
-#include <ImportExport/GDAL.h>
-#include <QueryEngine/GroupByAndAggregate.h>
-#include <QueryEngine/ResultSet.h>
-#include <Shared/geo_types.h>
-#include <Shared/misc.h>
-#include <Shared/scope.h>
+#include <boost/filesystem.hpp>
 
 #include <ogrsf_frmts.h>
+
+#include "ImportExport/GDAL.h"
+#include "QueryEngine/GroupByAndAggregate.h"
+#include "QueryEngine/ResultSet.h"
+#include "Shared/geo_types.h"
+#include "Shared/misc.h"
+#include "Shared/scope.h"
 
 namespace import_export {
 
@@ -177,6 +179,7 @@ void QueryExporterGDAL::beginExport(const std::string& file_path,
     int num_geo_columns = 0;
     int geo_column_srid = 0;
     uint32_t num_columns = 0;
+    std::string geo_column_name;
     for (auto const& column_info : column_infos) {
       auto const& type_info = column_info.get_type_info();
       if (type_info.is_geometry()) {
@@ -197,6 +200,7 @@ void QueryExporterGDAL::beginExport(const std::string& file_path,
             CHECK(false);
         }
         geo_column_srid = type_info.get_output_srid();
+        geo_column_name = safeColumnName(column_info.get_resname(), num_columns + 1);
         num_geo_columns++;
       } else {
         auto column_name = safeColumnName(column_info.get_resname(), num_columns + 1);
@@ -211,6 +215,12 @@ void QueryExporterGDAL::beginExport(const std::string& file_path,
                                "' requires exactly one geo column in query results");
     }
 
+    // validate SRID
+    if (geo_column_srid <= 0) {
+      throw std::runtime_error("Geo column '" + geo_column_name + "' has invalid SRID (" +
+                               std::to_string(geo_column_srid) + ") for export");
+    }
+
     // get driver
     auto const& driver_name = driver_names[SCI(file_type_)];
     auto gdal_driver = GetGDALDriverManager()->GetDriverByName(driver_name);
@@ -220,7 +230,8 @@ void QueryExporterGDAL::beginExport(const std::string& file_path,
     }
 
     // compression?
-    auto actual_file_path{file_path};
+    auto gdal_file_path{file_path};
+    auto user_file_path{file_path};
     if (file_compression != FileCompression::kNone) {
       auto impl = compression_implemented[SCI(file_type_)][SCI(file_compression)];
       if (!impl) {
@@ -229,13 +240,27 @@ void QueryExporterGDAL::beginExport(const std::string& file_path,
             "Selected file compression option not yet supported for file type '" +
             std::string(file_type_names[SCI(file_type_)]) + "'");
       }
-      actual_file_path.insert(0, compression_prefix[SCI(file_compression)]);
-      actual_file_path.append(compression_suffix[SCI(file_compression)]);
+      gdal_file_path.insert(0, compression_prefix[SCI(file_compression)]);
+      gdal_file_path.append(compression_suffix[SCI(file_compression)]);
+      user_file_path.append(compression_suffix[SCI(file_compression)]);
     }
+
+    // delete any existing file(s) (with and without compression suffix)
+    // GeoJSON driver occasionally refuses to overwrite
+    auto remove_file = [](const std::string& filename) {
+      if (boost::filesystem::exists(filename)) {
+        LOG(INFO) << "Deleting existing file '" << filename << "'";
+        boost::filesystem::remove(filename);
+      }
+    };
+    remove_file(file_path);
+    remove_file(user_file_path);
+
+    LOG(INFO) << "Exporting to file '" << user_file_path << "'";
 
     // create dataset
     gdal_dataset_ =
-        gdal_driver->Create(actual_file_path.c_str(), 0, 0, 0, GDT_Unknown, NULL);
+        gdal_driver->Create(gdal_file_path.c_str(), 0, 0, 0, GDT_Unknown, NULL);
     if (gdal_dataset_ == nullptr) {
       throw std::runtime_error("Failed to create File '" + file_path + "'");
     }
