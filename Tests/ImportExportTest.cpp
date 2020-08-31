@@ -1850,10 +1850,17 @@ class ExportTest : public ::testing::Test {
                 const std::string& file_type,
                 const std::string& file_compression,
                 const std::string& geo_type,
-                const bool with_array_columns) {
+                const bool with_array_columns,
+                const bool force_invalid_srid) {
     std::string ddl = "COPY (SELECT ";
     ddl += (with_array_columns ? NON_GEO_COLUMN_NAMES : NON_GEO_COLUMN_NAMES_NO_ARRAYS);
-    ddl += ", col_" + geo_type + " FROM query_export_test) TO '" + file_path + "'";
+    ddl += ", ";
+    if (force_invalid_srid) {
+      ddl += "ST_SetSRID(col_" + geo_type + ", 0)";
+    } else {
+      ddl += "col_" + geo_type;
+    }
+    ddl += " FROM query_export_test) TO '" + file_path + "'";
 
     auto f = (file_type.size() > 0);
     auto c = (file_compression.size() > 0);
@@ -2009,6 +2016,8 @@ class ExportTest : public ::testing::Test {
 
   constexpr static bool WITH_ARRAYS = true;
   constexpr static bool NO_ARRAYS = false;
+  constexpr static bool INVALID_SRID = true;
+  constexpr static bool DEFAULT_SRID = false;
   constexpr static bool GZIPPED = true;
   constexpr static bool PLAIN_TEXT = false;
   constexpr static bool COMPARE_IGNORING_COMMA_DIFF = true;
@@ -2128,7 +2137,7 @@ TEST_F(ExportTest, Default) {
   doCreateAndImport();
   auto run_test = [&](const std::string& geo_type) {
     std::string exp_file = "query_export_test_csv_no_header_" + geo_type + ".csv";
-    ASSERT_NO_THROW(doExport(exp_file, "", "", geo_type, WITH_ARRAYS));
+    ASSERT_NO_THROW(doExport(exp_file, "", "", geo_type, WITH_ARRAYS, DEFAULT_SRID));
     ASSERT_NO_THROW(doCompareText(exp_file, PLAIN_TEXT));
     doImportAgainAndCompare(exp_file, "", geo_type, WITH_ARRAYS);
     removeExportedFile(exp_file);
@@ -2141,7 +2150,8 @@ TEST_F(ExportTest, InvalidFileType) {
   doCreateAndImport();
   std::string geo_type = "point";
   std::string exp_file = "query_export_test_csv_" + geo_type + ".csv";
-  EXPECT_THROW(doExport(exp_file, "Fred", "", geo_type, WITH_ARRAYS), std::runtime_error);
+  EXPECT_THROW(doExport(exp_file, "Fred", "", geo_type, WITH_ARRAYS, DEFAULT_SRID),
+               std::runtime_error);
 }
 
 TEST_F(ExportTest, InvalidCompressionType) {
@@ -2149,7 +2159,8 @@ TEST_F(ExportTest, InvalidCompressionType) {
   doCreateAndImport();
   std::string geo_type = "point";
   std::string exp_file = "query_export_test_csv_" + geo_type + ".csv";
-  EXPECT_THROW(doExport(exp_file, "", "Fred", geo_type, WITH_ARRAYS), std::runtime_error);
+  EXPECT_THROW(doExport(exp_file, "", "Fred", geo_type, WITH_ARRAYS, DEFAULT_SRID),
+               std::runtime_error);
 }
 
 TEST_F(ExportTest, CSV) {
@@ -2157,9 +2168,21 @@ TEST_F(ExportTest, CSV) {
   doCreateAndImport();
   auto run_test = [&](const std::string& geo_type) {
     std::string exp_file = "query_export_test_csv_" + geo_type + ".csv";
-    ASSERT_NO_THROW(doExport(exp_file, "CSV", "", geo_type, WITH_ARRAYS));
+    ASSERT_NO_THROW(doExport(exp_file, "CSV", "", geo_type, WITH_ARRAYS, DEFAULT_SRID));
     ASSERT_NO_THROW(doCompareText(exp_file, PLAIN_TEXT));
     doImportAgainAndCompare(exp_file, "CSV", geo_type, WITH_ARRAYS);
+    removeExportedFile(exp_file);
+  };
+  RUN_TEST_ON_ALL_GEO_TYPES();
+}
+
+TEST_F(ExportTest, CSV_Overwrite) {
+  SKIP_ALL_ON_AGGREGATOR();
+  doCreateAndImport();
+  auto run_test = [&](const std::string& geo_type) {
+    std::string exp_file = "query_export_test_csv_" + geo_type + ".csv";
+    ASSERT_NO_THROW(doExport(exp_file, "CSV", "", geo_type, WITH_ARRAYS, DEFAULT_SRID));
+    ASSERT_NO_THROW(doExport(exp_file, "CSV", "", geo_type, WITH_ARRAYS, DEFAULT_SRID));
     removeExportedFile(exp_file);
   };
   RUN_TEST_ON_ALL_GEO_TYPES();
@@ -2170,7 +2193,8 @@ TEST_F(ExportTest, CSV_InvalidName) {
   doCreateAndImport();
   std::string geo_type = "point";
   std::string exp_file = "query_export_test_csv_" + geo_type + ".jpg";
-  EXPECT_THROW(doExport(exp_file, "CSV", "", geo_type, WITH_ARRAYS), std::runtime_error);
+  EXPECT_THROW(doExport(exp_file, "CSV", "", geo_type, WITH_ARRAYS, DEFAULT_SRID),
+               std::runtime_error);
 }
 
 TEST_F(ExportTest, CSV_Zip_Unimplemented) {
@@ -2178,7 +2202,7 @@ TEST_F(ExportTest, CSV_Zip_Unimplemented) {
   doCreateAndImport();
   auto run_test = [&](const std::string& geo_type) {
     std::string exp_file = "query_export_test_csv_" + geo_type + ".csv";
-    EXPECT_THROW(doExport(exp_file, "CSV", "Zip", geo_type, WITH_ARRAYS),
+    EXPECT_THROW(doExport(exp_file, "CSV", "Zip", geo_type, WITH_ARRAYS, DEFAULT_SRID),
                  std::runtime_error);
   };
   RUN_TEST_ON_ALL_GEO_TYPES();
@@ -2189,7 +2213,7 @@ TEST_F(ExportTest, CSV_GZip_Unimplemented) {
   doCreateAndImport();
   auto run_test = [&](const std::string& geo_type) {
     std::string exp_file = "query_export_test_geojson_" + geo_type + ".geojson";
-    EXPECT_THROW(doExport(exp_file, "CSV", "GZip", geo_type, WITH_ARRAYS),
+    EXPECT_THROW(doExport(exp_file, "CSV", "GZip", geo_type, WITH_ARRAYS, DEFAULT_SRID),
                  std::runtime_error);
   };
   RUN_TEST_ON_ALL_GEO_TYPES();
@@ -2200,9 +2224,24 @@ TEST_F(ExportTest, GeoJSON) {
   doCreateAndImport();
   auto run_test = [&](const std::string& geo_type) {
     std::string exp_file = "query_export_test_geojson_" + geo_type + ".geojson";
-    ASSERT_NO_THROW(doExport(exp_file, "GeoJSON", "", geo_type, WITH_ARRAYS));
+    ASSERT_NO_THROW(
+        doExport(exp_file, "GeoJSON", "", geo_type, WITH_ARRAYS, DEFAULT_SRID));
     ASSERT_NO_THROW(doCompareText(exp_file, PLAIN_TEXT));
     doImportAgainAndCompare(exp_file, "GeoJSON", geo_type, WITH_ARRAYS);
+    removeExportedFile(exp_file);
+  };
+  RUN_TEST_ON_ALL_GEO_TYPES();
+}
+
+TEST_F(ExportTest, GeoJSON_Overwrite) {
+  SKIP_ALL_ON_AGGREGATOR();
+  doCreateAndImport();
+  auto run_test = [&](const std::string& geo_type) {
+    std::string exp_file = "query_export_test_geojson_" + geo_type + ".geojson";
+    ASSERT_NO_THROW(
+        doExport(exp_file, "GeoJSON", "", geo_type, WITH_ARRAYS, DEFAULT_SRID));
+    ASSERT_NO_THROW(
+        doExport(exp_file, "GeoJSON", "", geo_type, WITH_ARRAYS, DEFAULT_SRID));
     removeExportedFile(exp_file);
   };
   RUN_TEST_ON_ALL_GEO_TYPES();
@@ -2213,8 +2252,19 @@ TEST_F(ExportTest, GeoJSON_InvalidName) {
   doCreateAndImport();
   std::string geo_type = "point";
   std::string exp_file = "query_export_test_geojson_" + geo_type + ".jpg";
-  EXPECT_THROW(doExport(exp_file, "GeoJSON", "", geo_type, WITH_ARRAYS),
+  EXPECT_THROW(doExport(exp_file, "GeoJSON", "", geo_type, WITH_ARRAYS, DEFAULT_SRID),
                std::runtime_error);
+}
+
+TEST_F(ExportTest, GeoJSON_Invalid_SRID) {
+  SKIP_ALL_ON_AGGREGATOR();
+  doCreateAndImport();
+  auto run_test = [&](const std::string& geo_type) {
+    std::string exp_file = "query_export_test_geojson_" + geo_type + ".geojson";
+    EXPECT_THROW(doExport(exp_file, "GeoJSON", "", geo_type, WITH_ARRAYS, INVALID_SRID),
+                 std::runtime_error);
+  };
+  RUN_TEST_ON_ALL_GEO_TYPES();
 }
 
 TEST_F(ExportTest, GeoJSON_GZip) {
@@ -2223,7 +2273,8 @@ TEST_F(ExportTest, GeoJSON_GZip) {
   auto run_test = [&](const std::string& geo_type) {
     std::string req_file = "query_export_test_geojson_" + geo_type + ".geojson";
     std::string exp_file = req_file + ".gz";
-    ASSERT_NO_THROW(doExport(req_file, "GeoJSON", "GZip", geo_type, WITH_ARRAYS));
+    ASSERT_NO_THROW(
+        doExport(req_file, "GeoJSON", "GZip", geo_type, WITH_ARRAYS, DEFAULT_SRID));
     ASSERT_NO_THROW(doCompareText(exp_file, GZIPPED));
     doImportAgainAndCompare(exp_file, "GeoJSON", geo_type, WITH_ARRAYS);
     removeExportedFile(exp_file);
@@ -2236,8 +2287,9 @@ TEST_F(ExportTest, GeoJSON_Zip_Unimplemented) {
   doCreateAndImport();
   auto run_test = [&](const std::string& geo_type) {
     std::string exp_file = "query_export_test_geojson_" + geo_type + ".geojson";
-    EXPECT_THROW(doExport(exp_file, "GeoJSON", "Zip", geo_type, WITH_ARRAYS),
-                 std::runtime_error);
+    EXPECT_THROW(
+        doExport(exp_file, "GeoJSON", "Zip", geo_type, WITH_ARRAYS, DEFAULT_SRID),
+        std::runtime_error);
   };
   RUN_TEST_ON_ALL_GEO_TYPES();
 }
@@ -2247,7 +2299,8 @@ TEST_F(ExportTest, GeoJSONL_GeoJSON) {
   doCreateAndImport();
   auto run_test = [&](const std::string& geo_type) {
     std::string exp_file = "query_export_test_geojsonl_" + geo_type + ".geojson";
-    ASSERT_NO_THROW(doExport(exp_file, "GeoJSONL", "", geo_type, WITH_ARRAYS));
+    ASSERT_NO_THROW(
+        doExport(exp_file, "GeoJSONL", "", geo_type, WITH_ARRAYS, DEFAULT_SRID));
     ASSERT_NO_THROW(doCompareText(exp_file, PLAIN_TEXT));
     doImportAgainAndCompare(exp_file, "GeoJSONL", geo_type, WITH_ARRAYS);
     removeExportedFile(exp_file);
@@ -2260,9 +2313,24 @@ TEST_F(ExportTest, GeoJSONL_Json) {
   doCreateAndImport();
   auto run_test = [&](const std::string& geo_type) {
     std::string exp_file = "query_export_test_geojsonl_" + geo_type + ".json";
-    ASSERT_NO_THROW(doExport(exp_file, "GeoJSONL", "", geo_type, WITH_ARRAYS));
+    ASSERT_NO_THROW(
+        doExport(exp_file, "GeoJSONL", "", geo_type, WITH_ARRAYS, DEFAULT_SRID));
     ASSERT_NO_THROW(doCompareText(exp_file, PLAIN_TEXT));
     doImportAgainAndCompare(exp_file, "GeoJSONL", geo_type, WITH_ARRAYS);
+    removeExportedFile(exp_file);
+  };
+  RUN_TEST_ON_ALL_GEO_TYPES();
+}
+
+TEST_F(ExportTest, GeoJSONL_Overwrite) {
+  SKIP_ALL_ON_AGGREGATOR();
+  doCreateAndImport();
+  auto run_test = [&](const std::string& geo_type) {
+    std::string exp_file = "query_export_test_geojsonl_" + geo_type + ".geojson";
+    ASSERT_NO_THROW(
+        doExport(exp_file, "GeoJSONL", "", geo_type, WITH_ARRAYS, DEFAULT_SRID));
+    ASSERT_NO_THROW(
+        doExport(exp_file, "GeoJSONL", "", geo_type, WITH_ARRAYS, DEFAULT_SRID));
     removeExportedFile(exp_file);
   };
   RUN_TEST_ON_ALL_GEO_TYPES();
@@ -2273,8 +2341,19 @@ TEST_F(ExportTest, GeoJSONL_InvalidName) {
   doCreateAndImport();
   std::string geo_type = "point";
   std::string exp_file = "query_export_test_geojsonl_" + geo_type + ".jpg";
-  EXPECT_THROW(doExport(exp_file, "GeoJSONL", "", geo_type, WITH_ARRAYS),
+  EXPECT_THROW(doExport(exp_file, "GeoJSONL", "", geo_type, WITH_ARRAYS, DEFAULT_SRID),
                std::runtime_error);
+}
+
+TEST_F(ExportTest, GeoJSONL_Invalid_SRID) {
+  SKIP_ALL_ON_AGGREGATOR();
+  doCreateAndImport();
+  auto run_test = [&](const std::string& geo_type) {
+    std::string exp_file = "query_export_test_geojsonl_" + geo_type + ".geojson";
+    EXPECT_THROW(doExport(exp_file, "GeoJSONL", "", geo_type, WITH_ARRAYS, INVALID_SRID),
+                 std::runtime_error);
+  };
+  RUN_TEST_ON_ALL_GEO_TYPES();
 }
 
 TEST_F(ExportTest, GeoJSONL_GZip) {
@@ -2283,7 +2362,8 @@ TEST_F(ExportTest, GeoJSONL_GZip) {
   auto run_test = [&](const std::string& geo_type) {
     std::string req_file = "query_export_test_geojsonl_" + geo_type + ".geojson";
     std::string exp_file = req_file + ".gz";
-    ASSERT_NO_THROW(doExport(req_file, "GeoJSONL", "GZip", geo_type, WITH_ARRAYS));
+    ASSERT_NO_THROW(
+        doExport(req_file, "GeoJSONL", "GZip", geo_type, WITH_ARRAYS, DEFAULT_SRID));
     ASSERT_NO_THROW(doCompareText(exp_file, GZIPPED));
     doImportAgainAndCompare(exp_file, "GeoJSONL", geo_type, WITH_ARRAYS);
     removeExportedFile(exp_file);
@@ -2296,8 +2376,9 @@ TEST_F(ExportTest, GeoJSONL_Zip_Unimplemented) {
   doCreateAndImport();
   auto run_test = [&](const std::string& geo_type) {
     std::string exp_file = "query_export_test_geojsonl_" + geo_type + ".geojson";
-    EXPECT_THROW(doExport(exp_file, "GeoJSONL", "Zip", geo_type, WITH_ARRAYS),
-                 std::runtime_error);
+    EXPECT_THROW(
+        doExport(exp_file, "GeoJSONL", "Zip", geo_type, WITH_ARRAYS, DEFAULT_SRID),
+        std::runtime_error);
   };
   RUN_TEST_ON_ALL_GEO_TYPES();
 }
@@ -2310,10 +2391,31 @@ TEST_F(ExportTest, Shapefile) {
     std::string shx_file = "query_export_test_shapefile_" + geo_type + ".shx";
     std::string prj_file = "query_export_test_shapefile_" + geo_type + ".prj";
     std::string dbf_file = "query_export_test_shapefile_" + geo_type + ".dbf";
-    ASSERT_NO_THROW(doExport(shp_file, "Shapefile", "", geo_type, NO_ARRAYS));
+    ASSERT_NO_THROW(
+        doExport(shp_file, "Shapefile", "", geo_type, NO_ARRAYS, DEFAULT_SRID));
     std::string layer_name = "query_export_test_shapefile_" + geo_type;
     ASSERT_NO_THROW(doCompareWithOGRInfo(shp_file, layer_name, COMPARE_EXPLICIT));
     doImportAgainAndCompare(shp_file, "Shapefile", geo_type, NO_ARRAYS);
+    removeExportedFile(shp_file);
+    removeExportedFile(shx_file);
+    removeExportedFile(prj_file);
+    removeExportedFile(dbf_file);
+  };
+  RUN_TEST_ON_ALL_GEO_TYPES();
+}
+
+TEST_F(ExportTest, Shapefile_Overwrite) {
+  SKIP_ALL_ON_AGGREGATOR();
+  doCreateAndImport();
+  auto run_test = [&](const std::string& geo_type) {
+    std::string shp_file = "query_export_test_shapefile_" + geo_type + ".shp";
+    std::string shx_file = "query_export_test_shapefile_" + geo_type + ".shx";
+    std::string prj_file = "query_export_test_shapefile_" + geo_type + ".prj";
+    std::string dbf_file = "query_export_test_shapefile_" + geo_type + ".dbf";
+    ASSERT_NO_THROW(
+        doExport(shp_file, "Shapefile", "", geo_type, NO_ARRAYS, DEFAULT_SRID));
+    ASSERT_NO_THROW(
+        doExport(shp_file, "Shapefile", "", geo_type, NO_ARRAYS, DEFAULT_SRID));
     removeExportedFile(shp_file);
     removeExportedFile(shx_file);
     removeExportedFile(prj_file);
@@ -2327,8 +2429,19 @@ TEST_F(ExportTest, Shapefile_InvalidName) {
   doCreateAndImport();
   std::string geo_type = "point";
   std::string shp_file = "query_export_test_shapefile_" + geo_type + ".jpg";
-  EXPECT_THROW(doExport(shp_file, "Shapefile", "", geo_type, NO_ARRAYS),
+  EXPECT_THROW(doExport(shp_file, "Shapefile", "", geo_type, NO_ARRAYS, DEFAULT_SRID),
                std::runtime_error);
+}
+
+TEST_F(ExportTest, Shapefile_Invalid_SRID) {
+  SKIP_ALL_ON_AGGREGATOR();
+  doCreateAndImport();
+  auto run_test = [&](const std::string& geo_type) {
+    std::string shp_file = "query_export_test_shapefile_" + geo_type + ".shp";
+    EXPECT_THROW(doExport(shp_file, "Shapefile", "", geo_type, NO_ARRAYS, INVALID_SRID),
+                 std::runtime_error);
+  };
+  RUN_TEST_ON_ALL_GEO_TYPES();
 }
 
 TEST_F(ExportTest, Shapefile_RejectArrayColumns) {
@@ -2336,7 +2449,7 @@ TEST_F(ExportTest, Shapefile_RejectArrayColumns) {
   doCreateAndImport();
   std::string geo_type = "point";
   std::string shp_file = "query_export_test_shapefile_" + geo_type + ".shp";
-  EXPECT_THROW(doExport(shp_file, "Shapefile", "", geo_type, WITH_ARRAYS),
+  EXPECT_THROW(doExport(shp_file, "Shapefile", "", geo_type, WITH_ARRAYS, DEFAULT_SRID),
                std::runtime_error);
 }
 
@@ -2345,8 +2458,9 @@ TEST_F(ExportTest, Shapefile_GZip_Unimplemented) {
   doCreateAndImport();
   auto run_test = [&](const std::string& geo_type) {
     std::string shp_file = "query_export_test_shapefile_" + geo_type + ".shp";
-    EXPECT_THROW(doExport(shp_file, "Shapefile", "GZip", geo_type, NO_ARRAYS),
-                 std::runtime_error);
+    EXPECT_THROW(
+        doExport(shp_file, "Shapefile", "GZip", geo_type, NO_ARRAYS, DEFAULT_SRID),
+        std::runtime_error);
   };
   RUN_TEST_ON_ALL_GEO_TYPES();
 }
@@ -2356,8 +2470,9 @@ TEST_F(ExportTest, Shapefile_Zip_Unimplemented) {
   doCreateAndImport();
   auto run_test = [&](const std::string& geo_type) {
     std::string shp_file = "query_export_test_shapefile_" + geo_type + ".shp";
-    EXPECT_THROW(doExport(shp_file, "Shapefile", "Zip", geo_type, NO_ARRAYS),
-                 std::runtime_error);
+    EXPECT_THROW(
+        doExport(shp_file, "Shapefile", "Zip", geo_type, NO_ARRAYS, DEFAULT_SRID),
+        std::runtime_error);
   };
   RUN_TEST_ON_ALL_GEO_TYPES();
 }
