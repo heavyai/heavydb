@@ -1868,6 +1868,58 @@ bool is_gpu_shared_mem_supported(const QueryMemoryDescriptor* query_mem_desc_ptr
   return false;
 }
 
+std::string serialize_llvm_metadata_footnotes(llvm::Function* query_func,
+                                              CgenState* cgen_state) {
+  std::string llvm_ir;
+  std::unordered_set<llvm::MDNode*> md;
+
+  // Loop over all instructions in the query function.
+  for (auto bb_it = query_func->begin(); bb_it != query_func->end(); ++bb_it) {
+    for (auto instr_it = bb_it->begin(); instr_it != bb_it->end(); ++instr_it) {
+      llvm::SmallVector<std::pair<unsigned, llvm::MDNode*>, 100> imd;
+      instr_it->getAllMetadata(imd);
+      for (auto [kind, node] : imd) {
+        md.insert(node);
+      }
+    }
+  }
+
+  // Loop over all instructions in the row function.
+  for (auto bb_it = cgen_state->row_func_->begin(); bb_it != cgen_state->row_func_->end();
+       ++bb_it) {
+    for (auto instr_it = bb_it->begin(); instr_it != bb_it->end(); ++instr_it) {
+      llvm::SmallVector<std::pair<unsigned, llvm::MDNode*>, 100> imd;
+      instr_it->getAllMetadata(imd);
+      for (auto [kind, node] : imd) {
+        md.insert(node);
+      }
+    }
+  }
+
+  // Sort the metadata by canonical number and convert to text.
+  if (!md.empty()) {
+    std::map<size_t, std::string> sorted_strings;
+    for (auto p : md) {
+      std::string str;
+      llvm::raw_string_ostream os(str);
+      p->print(os, cgen_state->module_, true);
+      os.flush();
+      auto fields = split(str, {}, 1);
+      if (fields.empty() || fields[0].empty()) {
+        continue;
+      }
+      sorted_strings.emplace(std::stoul(fields[0].substr(1)), str);
+    }
+    llvm_ir += "\n";
+    for (auto [id, text] : sorted_strings) {
+      llvm_ir += text;
+      llvm_ir += "\n";
+    }
+  }
+
+  return llvm_ir;
+}
+
 }  // namespace
 
 std::tuple<CompilationResult, std::unique_ptr<QueryMemoryDescriptor>>
@@ -2142,6 +2194,12 @@ Executor::compileWorkUnit(const std::vector<InputTableInfo>& query_infos,
                                           {query_func, cgen_state_->row_func_},
                                           {multifrag_query_func});
 
+#ifndef NDEBUG
+  // Add helpful metadata to the LLVM IR for debugging.
+  AUTOMATIC_IR_METADATA_DONE();
+#endif
+
+  // Serialize the important LLVM IR functions to text for SQL EXPLAIN.
   std::string llvm_ir;
   if (eo.just_explain) {
     if (co.explain_type == ExecutorExplainType::Optimized) {
@@ -2157,10 +2215,13 @@ Executor::compileWorkUnit(const std::vector<InputTableInfo>& query_infos,
     }
     llvm_ir =
         serialize_llvm_object(query_func) + serialize_llvm_object(cgen_state_->row_func_);
-  }
-  verify_function_ir(cgen_state_->row_func_);
 
-  AUTOMATIC_IR_METADATA_DONE();
+#ifndef NDEBUG
+    llvm_ir += serialize_llvm_metadata_footnotes(query_func, cgen_state_.get());
+#endif
+  }
+
+  // Serialize the LLVM IR to text for the --log-channels=IR setting.
   LOG(IR) << "\n" << query_mem_desc->toString() << "\nGenerated IR\n";
 #ifdef NDEBUG
   LOG(IR) << serialize_llvm_object(query_func)
@@ -2169,6 +2230,10 @@ Executor::compileWorkUnit(const std::vector<InputTableInfo>& query_infos,
   LOG(IR) << serialize_llvm_object(cgen_state_->module_) << "\nEnd of IR";
 #endif
 
+  // Run some basic validation checks on the LLVM IR before code is generated below.
+  verify_function_ir(cgen_state_->row_func_);
+
+  // Generate final native code from the LLVM IR.
   return std::make_tuple(
       CompilationResult{
           co.device_type == ExecutorDeviceType::CPU
