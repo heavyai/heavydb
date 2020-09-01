@@ -68,6 +68,9 @@ class GeoBase {
   virtual GeoType getType() const = 0;
   const OGRGeometry* getOGRGeometry() const { return geom_; }
 
+  int32_t getBestPlanarSRID() const;
+  bool transform(int32_t srid0, int32_t srid1);
+
   virtual bool operator==(const GeoBase& other) const;
 
   bool isEmpty() const;

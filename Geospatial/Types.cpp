@@ -198,6 +198,151 @@ bool GeoBase::operator==(const GeoBase& other) const {
   return this->geom_->Equals(other.geom_);
 }
 
+/**  World Mercator, equivalent to EPSG:3395 */
+#define SRID_WORLD_MERCATOR 999000
+/**  Start of UTM North zone, equivalent to EPSG:32601 */
+#define SRID_NORTH_UTM_START 999001
+/**  End of UTM North zone, equivalent to EPSG:32660 */
+#define SRID_NORTH_UTM_END 999060
+/** Lambert Azimuthal Equal Area (LAEA) North Pole, equivalent to EPSG:3574 */
+#define SRID_NORTH_LAMBERT 999061
+/**  Start of UTM South zone, equivalent to EPSG:32701 */
+#define SRID_SOUTH_UTM_START 999101
+/**  Start of UTM South zone, equivalent to EPSG:32760 */
+#define SRID_SOUTH_UTM_END 999160
+/** Lambert Azimuthal Equal Area (LAEA) South Pole, equivalent to EPSG:3409 */
+#define SRID_SOUTH_LAMBERT 999161
+/** LAEA zones start (6 latitude bands x up to 20 longitude bands) */
+#define SRID_LAEA_START 999163
+/** LAEA zones end (6 latitude bands x up to 20 longitude bands) */
+#define SRID_LAEA_END 999283
+
+int32_t GeoBase::getBestPlanarSRID() const {
+  if (!this->geom_) {
+    return 0;
+  }
+  double cx, cy, xwidth, ywidth;
+  OGREnvelope envelope;
+  geom_->getEnvelope(&envelope);
+  // Can't use GDAL's Centroid geom_->Centroid(OGRPoint*): requires GEOS
+  // Use center of the bounding box for now.
+  // TODO: hook up our own Centroid implementation
+  cx = (envelope.MaxX + envelope.MinX) / 2.0;
+  cy = (envelope.MaxY + envelope.MinY) / 2.0;
+  xwidth = envelope.MaxX - envelope.MinX;
+  ywidth = envelope.MaxY - envelope.MinY;
+
+  // Arctic coords: Lambert Azimuthal Equal Area North
+  if (cy > 70.0 && ywidth < 45.0) {
+    return SRID_NORTH_LAMBERT;
+  }
+  // Antarctic coords: Lambert Azimuthal Equal Area South
+  if (cy < -70.0 && ywidth < 45.0) {
+    return SRID_SOUTH_LAMBERT;
+  }
+
+  // Can geometry fit into a single UTM zone?
+  if (xwidth < 6.0) {
+    int zone = floor((cx + 180.0) / 6.0);
+    if (zone > 59) {
+      zone = 59;
+    }
+    // Below the equator: UTM South
+    // Above the equator: UTM North
+    if (cy < 0.0) {
+      return SRID_SOUTH_UTM_START + zone;
+    } else {
+      return SRID_NORTH_UTM_START + zone;
+    }
+  }
+
+  // Can geometry fit into a custom LAEA area 30 degrees high? Allow some overlap.
+  if (ywidth < 25.0) {
+    int xzone = -1;
+    int yzone = 3 + floor(cy / 30.0);  // range of 0-5
+    if ((yzone == 2 || yzone == 3) && xwidth < 30.0) {
+      // Equatorial band, 12 zones, 30 degrees wide
+      xzone = 6 + floor(cx / 30.0);
+    } else if ((yzone == 1 || yzone == 4) && xwidth < 45.0) {
+      // Temperate band, 8 zones, 45 degrees wide
+      xzone = 4 + floor(cx / 45.0);
+    } else if ((yzone == 0 || yzone == 5) && xwidth < 90.0) {
+      // Arctic band, 4 zones, 90 degrees wide
+      xzone = 2 + floor(cx / 90.0);
+    }
+    // Found an appropriate xzone to fit in?
+    if (xzone != -1) {
+      return SRID_LAEA_START + 20 * yzone + xzone;
+    }
+  }
+
+  // Fall-back to Mercator
+  return SRID_WORLD_MERCATOR;
+}
+
+bool GeoBase::transform(int32_t srid0, int32_t srid1) {
+  auto setSpatialReference = [&](OGRSpatialReference* sr, int32_t srid) -> bool {
+    if (srid == 4326) {
+      sr->importFromEPSG(4326);
+    } else if (srid == SRID_NORTH_LAMBERT) {
+      // +proj=laea +lat_0=90 +lon_0=-40 +x_0=0 +y_0=0 +ellps=WGS84 +datum=WGS84 +units=m
+      // +no_defs
+      sr->importFromEPSG(3574);
+    } else if (srid == SRID_SOUTH_LAMBERT) {
+      // +proj=laea +lat_0=-90 +lon_0=0 +x_0=0 +y_0=0 +ellps=WGS84 +datum=WGS84 +units=m
+      // +no_defs
+      sr->importFromEPSG(3409);
+    } else if (SRID_SOUTH_UTM_START <= srid && srid <= SRID_SOUTH_UTM_END) {
+      // +proj=utm +zone=%d +south +ellps=WGS84 +datum=WGS84 +units=m +no_defs
+      int32_t zone = srid - SRID_SOUTH_UTM_START;
+      sr->importFromEPSG(32701 + zone);
+    } else if (SRID_NORTH_UTM_START <= srid && srid <= SRID_NORTH_UTM_END) {
+      // +proj=utm +zone=%d +ellps=WGS84 +datum=WGS84 +units=m +no_defs"
+      int32_t zone = srid - SRID_NORTH_UTM_START;
+      sr->importFromEPSG(32601 + zone);
+    } else if (SRID_LAEA_START <= srid && srid <= SRID_LAEA_END) {
+      // TODO: add support and coordinate operations for custom Lambert zones,
+      // need to calculate lat/lon for the zone, SetCoordinateOperation in options.
+      // +proj=laea +ellps=WGS84 +datum=WGS84 +lat_0=%g +lon_0=%g +units=m +no_defs
+      // Go with Mercator for now
+      sr->importFromEPSG(3395);
+    } else if (srid == SRID_WORLD_MERCATOR) {
+      // +proj=merc +lon_0=0 +k=1 +x_0=0 +y_0=0 +ellps=WGS84 +datum=WGS84 +units=m
+      // +no_defs
+      sr->importFromEPSG(3395);
+    } else {
+      return false;
+    }
+#if GDAL_VERSION_MAJOR >= 3
+    // GDAL 3.x (really Proj.4 6.x) now enforces lat, lon order
+    // this results in X and Y being transposed for angle-based
+    // coordinate systems. This restores the previous behavior.
+    sr->SetAxisMappingStrategy(OAMS_TRADITIONAL_GIS_ORDER);
+#endif
+    return true;
+  };
+
+  OGRSpatialReference sr0;
+  if (!setSpatialReference(&sr0, srid0)) {
+    return false;
+  }
+  OGRSpatialReference sr1;
+  if (!setSpatialReference(&sr1, srid1)) {
+    return false;
+  }
+  // GDAL 3 allows specification of advanced transformations in
+  // OGRCoordinateTransformationOptions, including multi-step pipelines.
+  // GDAL 3 would be required to handle Lambert zone proj4 strings.
+  // Using a simple transform for now.
+  std::unique_ptr<OGRCoordinateTransformation> coordinate_transformation(
+      OGRCreateCoordinateTransformation(&sr0, &sr1));
+  if (coordinate_transformation == nullptr) {
+    return false;
+  }
+  auto ogr_status = geom_->transform(coordinate_transformation.get());
+  return (ogr_status == OGRERR_NONE);
+}
+
 // Run a specific geo operation on this and other geometries
 std::unique_ptr<GeoBase> GeoBase::run(GeoBase::GeoOp op, const GeoBase& other) const {
   OGRGeometry* result = nullptr;

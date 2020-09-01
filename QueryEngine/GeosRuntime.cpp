@@ -96,21 +96,45 @@ bool toWkb(WKB& wkb,
            int64_t meta1_size,  // e.g. num_rings
            int32_t* meta2,      // e.g. rings (number of rings in each poly)
            int64_t meta2_size,  // e.g. num_polys
-           int32_t ic           // input compression
-) {
+           int32_t ic,          // input compression
+           int32_t* best_planar_srid_ptr) {
   // decompressed double coords
   auto cv = Geospatial::decompress_coords<double, int32_t>(ic, coords, coords_size);
   if (static_cast<SQLTypes>(type) == kPOINT) {
     GeoPoint point(*cv);
+    if (best_planar_srid_ptr) {
+      // A non-NULL pointer signifies a request to find the best planar srid
+      // to transform this WGS84 geometry to.
+      *best_planar_srid_ptr = point.getBestPlanarSRID();
+      if (!point.transform(4326, *best_planar_srid_ptr)) {
+        return false;
+      }
+    }
     return point.getWkb(wkb);
   }
   if (static_cast<SQLTypes>(type) == kLINESTRING) {
     GeoLineString linestring(*cv);
+    if (best_planar_srid_ptr) {
+      // A non-NULL pointer signifies a request to find the best planar srid
+      // to transform this WGS84 geometry to, based on geometry's centroid.
+      *best_planar_srid_ptr = linestring.getBestPlanarSRID();
+      if (!linestring.transform(4326, *best_planar_srid_ptr)) {
+        return false;
+      }
+    }
     return linestring.getWkb(wkb);
   }
   std::vector<int32_t> meta1v(meta1, meta1 + meta1_size);
   if (static_cast<SQLTypes>(type) == kPOLYGON) {
     GeoPolygon poly(*cv, meta1v);
+    if (best_planar_srid_ptr) {
+      // A non-NULL pointer signifies a request to find the best planar srid
+      // to transform this WGS84 geometry to, based on geometry's centroid.
+      *best_planar_srid_ptr = poly.getBestPlanarSRID();
+      if (!poly.transform(4326, *best_planar_srid_ptr)) {
+        return false;
+      };
+    }
     return poly.getWkb(wkb);
   }
   std::vector<int32_t> meta2v(meta2, meta2 + meta2_size);
@@ -126,6 +150,14 @@ bool toWkb(WKB& wkb,
       }
     }
     GeoMultiPolygon mpoly(*cv, meta1v, meta2v);
+    if (best_planar_srid_ptr) {
+      // A non-NULL pointer signifies a request to find the best planar srid
+      // to transform this WGS84 geometry to, based on geometry's centroid.
+      *best_planar_srid_ptr = mpoly.getBestPlanarSRID();
+      if (!mpoly.transform(4326, *best_planar_srid_ptr)) {
+        return false;
+      };
+    }
     return mpoly.getWkb(wkb);
   }
   return false;
@@ -140,8 +172,16 @@ bool fromWkb(WKB& wkb,
              int32_t** result_meta1,
              int64_t* result_meta1_size,
              int32_t** result_meta2,
-             int64_t* result_meta2_size) {
+             int64_t* result_meta2_size,
+             int32_t* best_planar_srid_ptr) {
   auto result = GeoTypesFactory::createGeoType(wkb);
+  if (best_planar_srid_ptr && !result->isEmpty()) {
+    // If original geometry has previously been projected to planar srid,
+    // need to transform back to WGS84
+    if (!result->transform(*best_planar_srid_ptr, 4326)) {
+      return false;
+    }
+  }
 
   // Get the column values
   std::vector<double> coords{};
@@ -272,7 +312,8 @@ extern "C" bool Geos_Wkb_Wkb(int op,
              arg1_meta1_size,
              arg1_meta2,
              arg1_meta2_size,
-             arg1_ic)) {
+             arg1_ic,
+             nullptr)) {
     return false;
   }
   WKB wkb2{};
@@ -284,7 +325,8 @@ extern "C" bool Geos_Wkb_Wkb(int op,
              arg2_meta1_size,
              arg2_meta2,
              arg2_meta2_size,
-             arg2_ic)) {
+             arg2_ic,
+             nullptr)) {
     return false;
   }
   auto status = false;
@@ -294,10 +336,8 @@ extern "C" bool Geos_Wkb_Wkb(int op,
   }
   auto* g1 = GEOSGeomFromWKB_buf_r(context, wkb1.data(), wkb1.size());
   if (g1) {
-    GEOSSetSRID_r(context, g1, arg1_srid);
     auto* g2 = GEOSGeomFromWKB_buf_r(context, wkb2.data(), wkb2.size());
     if (g2) {
-      GEOSSetSRID_r(context, g2, arg2_srid);
       GEOSGeometry* g = nullptr;
       if (static_cast<GeoBase::GeoOp>(op) == GeoBase::GeoOp::kINTERSECTION) {
         g = GEOSIntersection_r(context, g1, g2);
@@ -320,7 +360,8 @@ extern "C" bool Geos_Wkb_Wkb(int op,
                            result_meta1,
                            result_meta1_size,
                            result_meta2,
-                           result_meta2_size);
+                           result_meta2_size,
+                           nullptr);
         }
         GEOSGeom_destroy_r(context, g);
       }
@@ -356,7 +397,15 @@ extern "C" bool Geos_Wkb_double(int op,
                                 int32_t** result_meta2,
                                 int64_t* result_meta2_size) {
 #ifndef __CUDACC__
+  int32_t best_planar_srid;
+  int32_t* best_planar_srid_ptr = nullptr;
+  if (arg1_srid == 4326 && static_cast<GeoBase::GeoOp>(op) == GeoBase::GeoOp::kBUFFER) {
+    // Use the best (location-based) planar transform to project geometry before
+    // running geos operation, back-project the result to 4326
+    best_planar_srid_ptr = &best_planar_srid;
+  }
   WKB wkb1{};
+  // Project to best planar srid before running certain geos ops
   if (!toWkb(wkb1,
              arg1_type,
              arg1_coords,
@@ -365,7 +414,8 @@ extern "C" bool Geos_Wkb_double(int op,
              arg1_meta1_size,
              arg1_meta2,
              arg1_meta2_size,
-             arg1_ic)) {
+             arg1_ic,
+             best_planar_srid_ptr)) {
     return false;
   }
 
@@ -376,7 +426,6 @@ extern "C" bool Geos_Wkb_double(int op,
   }
   auto* g1 = GEOSGeomFromWKB_buf_r(context, wkb1.data(), wkb1.size());
   if (g1) {
-    GEOSSetSRID_r(context, g1, arg1_srid);
     GEOSGeometry* g = nullptr;
     if (static_cast<GeoBase::GeoOp>(op) == GeoBase::GeoOp::kBUFFER) {
       int quadsegs = 8;  // default
@@ -389,6 +438,7 @@ extern "C" bool Geos_Wkb_double(int op,
       if (wkb_buf && wkb_size > 0ULL) {
         WKB wkb(wkb_buf, wkb_buf + wkb_size);
         free(wkb_buf);
+        // Back-project the result from planar to 4326 if necessary
         status = fromWkb(wkb,
                          result_type,
                          result_coords,
@@ -396,7 +446,8 @@ extern "C" bool Geos_Wkb_double(int op,
                          result_meta1,
                          result_meta1_size,
                          result_meta2,
-                         result_meta2_size);
+                         result_meta2_size,
+                         best_planar_srid_ptr);
       }
       GEOSGeom_destroy_r(context, g);
     }
@@ -431,7 +482,8 @@ extern "C" bool Geos_Wkb(int op,
                         arg_meta1_size,
                         arg_meta2,
                         arg_meta2_size,
-                        arg_ic)) {
+                        arg_ic,
+                        nullptr)) {
     return false;
   }
 
@@ -442,7 +494,6 @@ extern "C" bool Geos_Wkb(int op,
   }
   auto* g1 = GEOSGeomFromWKB_buf_r(context, wkb1.data(), wkb1.size());
   if (g1) {
-    GEOSSetSRID_r(context, g1, arg_srid);
     if (static_cast<GeoBase::GeoOp>(op) == GeoBase::GeoOp::kISEMPTY) {
       *result = GEOSisEmpty_r(context, g1);
       status = true;
