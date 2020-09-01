@@ -1510,6 +1510,14 @@ TEST_F(ImportTestGeo, Geo_CSV_Local_SRID_Other) {
       std::runtime_error);
 }
 
+TEST_F(ImportTestGeo, Geo_CSV_WKB) {
+  const auto file_path =
+      boost::filesystem::path("../../Tests/Import/datafiles/geospatial_wkb.csv");
+  run_ddl_statement("COPY geospatial FROM '" + file_path.string() + "';");
+  check_geo_import();
+  check_geo_num_rows("p1, l, poly, mpoly, p2, p3, p4, trip_distance", 1);
+}
+
 class ImportTestGDAL : public ::testing::Test {
  protected:
   void SetUp() override {

@@ -212,11 +212,13 @@ class GeoGeometryCollection : public GeoBase {
 
 class GeoTypesFactory {
  public:
-  static std::unique_ptr<GeoBase> createGeoType(const std::string& wkt);
+  static OGRGeometry* createOGRGeometry(const std::string& wkt_or_wkb_hex);
+
+  static std::unique_ptr<GeoBase> createGeoType(const std::string& wkt_or_wkb_hex);
   static std::unique_ptr<GeoBase> createGeoType(const std::vector<uint8_t>& wkb);
   static std::unique_ptr<GeoBase> createGeoType(OGRGeometry* geom);
 
-  static bool getGeoColumns(const std::string& wkt,
+  static bool getGeoColumns(const std::string& wkt_or_wkb_hex,
                             SQLTypeInfo& ti,
                             std::vector<double>& coords,
                             std::vector<double>& bounds,
@@ -240,7 +242,7 @@ class GeoTypesFactory {
                             std::vector<int>& poly_rings,
                             const bool promote_poly_to_mpoly = false);
 
-  static bool getGeoColumns(const std::vector<std::string>* wkt_column,
+  static bool getGeoColumns(const std::vector<std::string>* wkt_or_wkb_hex_column,
                             SQLTypeInfo& ti,
                             std::vector<std::vector<double>>& coords_column,
                             std::vector<std::vector<double>>& bounds_column,

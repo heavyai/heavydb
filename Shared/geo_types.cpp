@@ -612,13 +612,76 @@ GeoGeometryCollection::GeoGeometryCollection(const std::string& wkt) {
   }
 }
 
-std::unique_ptr<GeoBase> GeoTypesFactory::createGeoType(const std::string& wkt) {
+namespace {
+
+struct HexDigitToDecimalTable {
+  uint8_t table_[128];
+  constexpr HexDigitToDecimalTable() : table_{} {
+    table_['1'] = 1;
+    table_['2'] = 2;
+    table_['3'] = 3;
+    table_['4'] = 4;
+    table_['5'] = 5;
+    table_['6'] = 6;
+    table_['7'] = 7;
+    table_['8'] = 8;
+    table_['9'] = 9;
+    table_['a'] = 10;
+    table_['A'] = 10;
+    table_['b'] = 11;
+    table_['B'] = 11;
+    table_['c'] = 12;
+    table_['C'] = 12;
+    table_['d'] = 13;
+    table_['D'] = 13;
+    table_['e'] = 14;
+    table_['E'] = 14;
+    table_['f'] = 15;
+    table_['F'] = 15;
+  }
+  constexpr uint8_t operator[](const char& hex_digit) const {
+    return (hex_digit < 0) ? 0 : table_[static_cast<int>(hex_digit)];
+  }
+} constexpr hex_digit_to_decimal_table;
+
+inline uint8_t hex_to_binary(const char& usb, const char& lsb) {
+  return (hex_digit_to_decimal_table[usb] << 4) | hex_digit_to_decimal_table[lsb];
+}
+
+std::vector<uint8_t> hex_string_to_binary_vector(const std::string& wkb_hex) {
+  auto num_bytes = wkb_hex.size() >> 1;
+  std::vector<uint8_t> wkb(num_bytes);
+  auto* chars = wkb_hex.data();
+  auto* bytes = wkb.data();
+  for (size_t i = 0; i < num_bytes; i++) {
+    auto const& usb = *chars++;
+    auto const& lsb = *chars++;
+    *bytes++ = hex_to_binary(usb, lsb);
+  }
+  return wkb;
+}
+
+}  // namespace
+
+OGRGeometry* GeoTypesFactory::createOGRGeometry(const std::string& wkt_or_wkb_hex) {
   OGRGeometry* geom = nullptr;
-  const auto err = GeoBase::createFromWktString(wkt, &geom);
+  OGRErr err = OGRERR_NONE;
+  if (wkt_or_wkb_hex.empty()) {
+    err = OGRERR_NOT_ENOUGH_DATA;
+  } else if (wkt_or_wkb_hex[0] == '0') {  // all WKB hex strings start with a 0
+    err = GeoBase::createFromWkb(hex_string_to_binary_vector(wkt_or_wkb_hex), &geom);
+  } else {
+    err = GeoBase::createFromWktString(wkt_or_wkb_hex, &geom);
+  }
   if (err != OGRERR_NONE) {
     throw GeoTypesError("GeoFactory", err);
   }
-  return GeoTypesFactory::createGeoTypeImpl(geom);
+  return geom;
+}
+
+std::unique_ptr<GeoBase> GeoTypesFactory::createGeoType(
+    const std::string& wkt_or_wkb_hex) {
+  return GeoTypesFactory::createGeoTypeImpl(createOGRGeometry(wkt_or_wkb_hex));
 }
 
 std::unique_ptr<GeoBase> GeoTypesFactory::createGeoType(const std::vector<uint8_t>& wkb) {
@@ -634,7 +697,7 @@ std::unique_ptr<GeoBase> GeoTypesFactory::createGeoType(OGRGeometry* geom) {
   return GeoTypesFactory::createGeoTypeImpl(geom, false);
 }
 
-bool GeoTypesFactory::getGeoColumns(const std::string& wkt,
+bool GeoTypesFactory::getGeoColumns(const std::string& wkt_or_wkb_hex,
                                     SQLTypeInfo& ti,
                                     std::vector<double>& coords,
                                     std::vector<double>& bounds,
@@ -642,13 +705,13 @@ bool GeoTypesFactory::getGeoColumns(const std::string& wkt,
                                     std::vector<int>& poly_rings,
                                     const bool promote_poly_to_mpoly) {
   try {
-    if (wkt.empty() || wkt == "NULL") {
+    if (wkt_or_wkb_hex.empty() || wkt_or_wkb_hex == "NULL") {
       getNullGeoColumns(
           ti, coords, bounds, ring_sizes, poly_rings, promote_poly_to_mpoly);
       return true;
     }
 
-    const auto geospatial_base = GeoTypesFactory::createGeoType(wkt);
+    const auto geospatial_base = GeoTypesFactory::createGeoType(wkt_or_wkb_hex);
 
     int srid = 0;
     ti.set_input_srid(srid);
@@ -730,7 +793,7 @@ bool GeoTypesFactory::getGeoColumns(OGRGeometry* geom,
   return true;
 }
 
-bool GeoTypesFactory::getGeoColumns(const std::vector<std::string>* wkt_column,
+bool GeoTypesFactory::getGeoColumns(const std::vector<std::string>* wkt_or_wkb_hex_column,
                                     SQLTypeInfo& ti,
                                     std::vector<std::vector<double>>& coords_column,
                                     std::vector<std::vector<double>>& bounds_column,
@@ -738,15 +801,20 @@ bool GeoTypesFactory::getGeoColumns(const std::vector<std::string>* wkt_column,
                                     std::vector<std::vector<int>>& poly_rings_column,
                                     const bool promote_poly_to_mpoly) {
   try {
-    for (const auto& wkt : *wkt_column) {
+    for (const auto& wkt_or_wkb_hex : *wkt_or_wkb_hex_column) {
       std::vector<double> coords;
       std::vector<double> bounds;
       std::vector<int> ring_sizes;
       std::vector<int> poly_rings;
 
       SQLTypeInfo row_ti;
-      getGeoColumns(
-          wkt, row_ti, coords, bounds, ring_sizes, poly_rings, promote_poly_to_mpoly);
+      getGeoColumns(wkt_or_wkb_hex,
+                    row_ti,
+                    coords,
+                    bounds,
+                    ring_sizes,
+                    poly_rings,
+                    promote_poly_to_mpoly);
 
       if (ti.get_type() != row_ti.get_type()) {
         throw GeoTypesError("GeoFactory", "Columnar: Geometry type mismatch");

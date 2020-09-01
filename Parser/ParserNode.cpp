@@ -1678,15 +1678,16 @@ void InsertValuesStmt::analyze(const Catalog_Namespace::Catalog& catalog,
         }
       }
       bool is_null = false;
-      std::string* wkt{nullptr};
+      std::string* geo_string{nullptr};
       if (c) {
         is_null = c->get_is_null();
         if (!is_null) {
-          wkt = c->get_constval().stringval;
+          geo_string = c->get_constval().stringval;
         }
       }
-      if (!is_null && !wkt) {
-        throw std::runtime_error("Expecting a WKT string for column " + cd->columnName);
+      if (!is_null && !geo_string) {
+        throw std::runtime_error("Expecting a WKT or WKB hex string for column " +
+                                 cd->columnName);
       }
       std::vector<double> coords;
       std::vector<double> bounds;
@@ -1697,7 +1698,7 @@ void InsertValuesStmt::analyze(const Catalog_Namespace::Catalog& catalog,
       SQLTypeInfo import_ti{cd->columnType};
       if (!is_null) {
         if (!Geo_namespace::GeoTypesFactory::getGeoColumns(
-                *wkt, import_ti, coords, bounds, ring_sizes, poly_rings)) {
+                *geo_string, import_ti, coords, bounds, ring_sizes, poly_rings)) {
           throw std::runtime_error("Cannot read geometry to insert into column " +
                                    cd->columnName);
         }

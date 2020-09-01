@@ -1917,7 +1917,7 @@ static ImportStatus import_thread_delimited(
                   cd, copy_params.null_str, true, copy_params);
 
               // WKT from string we're not storing
-              auto const& wkt = row[import_idx];
+              auto const& geo_string = row[import_idx];
 
               // next
               ++import_idx;
@@ -1932,12 +1932,14 @@ static ImportStatus import_thread_delimited(
               std::vector<int> poly_rings;
               int render_group = 0;
 
-              if (!is_null && col_type == kPOINT && wkt.size() > 0 &&
-                  (wkt[0] == '.' || isdigit(wkt[0]) || wkt[0] == '-')) {
-                // Invalid WKT, looks more like a scalar.
-                // Try custom POINT import: from two separate scalars rather than WKT
-                // string
-                double lon = std::atof(std::string(wkt).c_str());
+              // if this is a POINT column, and the field is not null, and
+              // looks like a scalar numeric value (and not a hex blob)
+              // attempt to import two columns as lon/lat (or lat/lon)
+              if (col_type == kPOINT && !is_null && geo_string.size() > 0 &&
+                  (geo_string[0] == '.' || isdigit(geo_string[0]) ||
+                   geo_string[0] == '-') &&
+                  geo_string.find_first_of("ABCDEFabcdef") == std::string::npos) {
+                double lon = std::atof(std::string(geo_string).c_str());
                 double lat = NAN;
                 auto lat_str = row[import_idx];
                 ++import_idx;
@@ -1994,7 +1996,7 @@ static ImportStatus import_thread_delimited(
                   } else {
                     // extract geometry directly from WKT
                     if (!Geo_namespace::GeoTypesFactory::getGeoColumns(
-                            std::string(wkt),
+                            std::string(geo_string),
                             import_ti,
                             coords,
                             bounds,
@@ -2068,14 +2070,11 @@ static ImportStatus import_thread_delimited(
 
       if (copy_params.geo_explode_collections) {
         // explode and import
-        // @TODO(se) convert to structure-bindings when we can use C++17 here
-        auto collection_idx_type_name = explode_collections_step1(col_descs);
-        int collection_col_idx = std::get<0>(collection_idx_type_name);
-        SQLTypes collection_child_type = std::get<1>(collection_idx_type_name);
-        std::string collection_col_name = std::get<2>(collection_idx_type_name);
-        // pull out the collection WKT
+        auto const [collection_col_idx, collection_child_type, collection_col_name] =
+            explode_collections_step1(col_descs);
+        // pull out the collection WKT or WKB hex
         CHECK_LT(collection_col_idx, (int)row.size()) << "column index out of range";
-        auto const& collection_wkt = row[collection_col_idx];
+        auto const& collection_geo_string = row[collection_col_idx];
         // convert to OGR
         OGRGeometry* ogr_geometry = nullptr;
         ScopeGuard destroy_ogr_geometry = [&] {
@@ -2083,11 +2082,8 @@ static ImportStatus import_thread_delimited(
             OGRGeometryFactory::destroyGeometry(ogr_geometry);
           }
         };
-        OGRErr ogr_status = OGRGeometryFactory::createFromWkt(
-            collection_wkt.data(), nullptr, &ogr_geometry);
-        if (ogr_status != OGRERR_NONE) {
-          throw std::runtime_error("Failed to convert WKT to geometry");
-        }
+        ogr_geometry = Geo_namespace::GeoTypesFactory::createOGRGeometry(
+            std::string(collection_geo_string));
         // do the explode and import
         us = explode_collections_step2(ogr_geometry,
                                        collection_child_type,
@@ -2442,10 +2438,8 @@ static ImportStatus import_thread_shapefile(
 
     if (pGeometry && copy_params.geo_explode_collections) {
       // explode and import
-      // @TODO(se) convert to structure-bindings when we can use C++17 here
-      auto collection_idx_type_name = explode_collections_step1(col_descs);
-      SQLTypes collection_child_type = std::get<1>(collection_idx_type_name);
-      std::string collection_col_name = std::get<2>(collection_idx_type_name);
+      auto const [collection_idx_type_name, collection_child_type, collection_col_name] =
+          explode_collections_step1(col_descs);
       explode_collections_step2(pGeometry,
                                 collection_child_type,
                                 collection_col_name,
@@ -3034,13 +3028,29 @@ SQLTypes Detector::detect_sqltype(const std::string& str) {
     } else if (str_upper_case.find_first_not_of("0123456789ABCDEF") ==
                    std::string::npos &&
                (str_upper_case.size() % 2) == 0) {
-      // could be a WKB hex blob
-      // we can't handle these yet
-      // leave as TEXT for now
-      // deliberate return here, as otherwise this would get matched as TIME
-      // @TODO
-      // implement WKB import
-      return type;
+      // simple hex blob (two characters per byte, not uu-encode or base64)
+      if (str_upper_case.size() >= 10) {
+        // match WKB blobs for supported geometry types
+        // the first byte specifies if the data is big-endian or little-endian
+        // the next four bytes are the geometry type (1 = POINT etc.)
+        // @TODO support eWKB, which has extra bits set in the geometry type
+        auto first_five_bytes = str_upper_case.substr(0, 10);
+        if (first_five_bytes == "0000000001" || first_five_bytes == "0101000000") {
+          type = kPOINT;
+        } else if (first_five_bytes == "0000000002" || first_five_bytes == "0102000000") {
+          type = kLINESTRING;
+        } else if (first_five_bytes == "0000000003" || first_five_bytes == "0103000000") {
+          type = kPOLYGON;
+        } else if (first_five_bytes == "0000000006" || first_five_bytes == "0106000000") {
+          type = kMULTIPOLYGON;
+        } else {
+          // unsupported WKB type
+          return type;
+        }
+      } else {
+        // too short to be WKB
+        return type;
+      }
     }
   }
 
@@ -3469,7 +3479,7 @@ void Importer::import_local_parquet(const std::string& file_path) {
       open_parquet_table(file_path, infile, reader, table);
   // column_list has no $deleted
   const auto& column_list = get_column_descs();
-  // for now geo columns expect a wkt string
+  // for now geo columns expect a wkt or wkb hex string
   std::vector<const ColumnDescriptor*> cds;
   int num_physical_cols = 0;
   for (auto& cd : column_list) {

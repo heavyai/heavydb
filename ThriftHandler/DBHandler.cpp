@@ -2515,13 +2515,14 @@ void DBHandler::load_table_binary_columnar(const TSessionId& session,
       // For geometry columns: process WKT strings and fill physical columns
       if (cd->columnType.is_geometry()) {
         auto geo_col_idx = col_idx - 1;
-        const auto wkt_column = import_buffers[geo_col_idx]->getGeoStringBuffer();
+        const auto wkt_or_wkb_hex_column =
+            import_buffers[geo_col_idx]->getGeoStringBuffer();
         std::vector<std::vector<double>> coords_column, bounds_column;
         std::vector<std::vector<int>> ring_sizes_column, poly_rings_column;
         int render_group = 0;
         SQLTypeInfo ti = cd->columnType;
-        if (numRows != wkt_column->size() ||
-            !Geo_namespace::GeoTypesFactory::getGeoColumns(wkt_column,
+        if (numRows != wkt_or_wkb_hex_column->size() ||
+            !Geo_namespace::GeoTypesFactory::getGeoColumns(wkt_or_wkb_hex_column,
                                                            ti,
                                                            coords_column,
                                                            bounds_column,

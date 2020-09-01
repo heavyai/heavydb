@@ -46,7 +46,9 @@ void validate_expected_column_count(std::vector<std::string_view>& row,
 }
 
 bool is_coordinate_scalar(const std::string_view datum) {
-  return datum.size() > 0 && (datum[0] == '.' || isdigit(datum[0]) || datum[0] == '-');
+  // field looks like a scalar numeric value (and not a hex blob)
+  return datum.size() > 0 && (datum[0] == '.' || isdigit(datum[0]) || datum[0] == '-') &&
+         datum.find_first_of("ABCDEFabcdef") == std::string_view::npos;
 }
 
 bool set_coordinates_from_separate_lon_lat_columns(const std::string_view lon_str,
@@ -115,7 +117,7 @@ void process_geo_column(
   // store null string in the base column
   import_buffers[col_idx]->add_value(cd, copy_params.null_str, true, copy_params);
 
-  auto const& wkt = row[import_idx];
+  auto const& geo_string = row[import_idx];
   ++import_idx;
   ++col_idx;
 
@@ -125,9 +127,9 @@ void process_geo_column(
   std::vector<int> poly_rings;
   int render_group = 0;
 
-  if (!is_null && col_type == kPOINT && is_coordinate_scalar(wkt)) {
+  if (!is_null && col_type == kPOINT && is_coordinate_scalar(geo_string)) {
     if (!set_coordinates_from_separate_lon_lat_columns(
-            wkt, row[import_idx], coords, copy_params.lonlat)) {
+            geo_string, row[import_idx], coords, copy_params.lonlat)) {
       throw std::runtime_error("Cannot read lon/lat to insert into POINT column " +
                                cd->columnName);
     }
@@ -144,7 +146,7 @@ void process_geo_column(
     } else {
       // extract geometry directly from WKT
       if (!Geo_namespace::GeoTypesFactory::getGeoColumns(
-              std::string(wkt),
+              std::string(geo_string),
               import_ti,
               coords,
               bounds,
