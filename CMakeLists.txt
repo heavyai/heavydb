@@ -568,7 +568,7 @@ if (ENABLE_TESTS)
   add_subdirectory(SampleCode)
 endif()
 
-if(ENABLE_RENDERING AND (ENABLE_TESTS OR ENABLE_RENDER_TESTS))
+if(ENABLE_RENDERING AND ENABLE_RENDER_TESTS)
   enable_testing()
   add_subdirectory(Tests/RenderTests)
 endif()
