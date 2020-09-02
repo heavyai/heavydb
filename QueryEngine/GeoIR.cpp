@@ -197,7 +197,23 @@ std::vector<llvm::Value*> CodeGenerator::codegenGeoArgs(
     } else {
       CHECK_EQ(size_t(1), arg_lvs.size());
       if (arg_ti.get_size() > 0) {
-        argument_list.emplace_back(arg_lvs.front());
+        // Set up the pointer lv for a dynamically generated point
+        auto ptr_lv = arg_lvs.front();
+        auto col_var = dynamic_cast<const Analyzer::ColumnVar*>(arg);
+        // Override for point coord column access
+        if (col_var) {
+          ptr_lv = cgen_state_->emitExternalCall(
+              "fast_fixlen_array_buff",
+              llvm::Type::getInt8PtrTy(cgen_state_->context_),
+              {arg_lvs.front(), posArg(arg)});
+        }
+        if (coord_col) {
+          coord_col = false;
+        } else {
+          ptr_lv = cgen_state_->ir_builder_.CreatePointerCast(
+              ptr_lv, llvm::Type::getInt32PtrTy(cgen_state_->context_));
+        }
+        argument_list.emplace_back(ptr_lv);
         argument_list.emplace_back(cgen_state_->llInt<int64_t>(arg_ti.get_size()));
       } else {
         auto ptr_lv =

@@ -17952,6 +17952,13 @@ TEST(Select, GeoSpatial_Geos) {
                                          "FROM geospatial_test WHERE id = 3;",
                                          dt)),
                 static_cast<double>(0.03));
+    // ST_Buffer on a point, 1.0 width: distance to buffer
+    ASSERT_NEAR(
+        static_cast<double>(2.0),
+        v<double>(run_simple_agg("SELECT ST_Distance(ST_Buffer(p, 1.0), 'POINT(0 3)') "
+                                 "FROM geospatial_test WHERE id = 3;",
+                                 dt)),
+        static_cast<double>(0.03));
     // ST_Buffer on a linestring, 1.0 width: two 10-unit segments
     // each segment is buffered by ~2x10 wide stretch (2 * 2 * 10) plus circular areas
     // around mid- and endpoints
