@@ -30,7 +30,7 @@ template <typename T>
 class FuturesThreadPoolBase {
  public:
   template <class Function, class... Args>
-  void append(Function&& f, Args&&... args) {
+  void spawn(Function&& f, Args&&... args) {
     threads_.push_back(std::async(std::launch::async, f, args...));
   }
 
@@ -85,7 +85,7 @@ class TbbThreadPool : public TbbThreadPoolBase {
   TbbThreadPool() {}
 
   template <class Function, class... Args>
-  void append(Function&& f, Args&&... args) {
+  void spawn(Function&& f, Args&&... args) {
     tasks_.run([f, args...] { f(args...); });
   }
 
@@ -99,7 +99,7 @@ class TbbThreadPool<T, std::enable_if_t<std::is_object<T>::value>>
   TbbThreadPool() {}
 
   template <class Function, class... Args>
-  void append(Function&& f, Args&&... args) {
+  void spawn(Function&& f, Args&&... args) {
     const size_t result_idx = results_.size();
     results_.emplace_back(T{});
     tasks_.run([this, result_idx, f, args...] { results_[result_idx] = f(args...); });

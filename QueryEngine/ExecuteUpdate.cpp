@@ -148,8 +148,7 @@ void Executor::executeUpdate(const RelAlgExecutionUnit& ra_exe_unit_in,
                                               fragments,
                                               ExecutorDispatchMode::KernelPerFragment,
                                               /*render_info=*/nullptr,
-                                              /*rowid_lookup_key=*/-1,
-                                              logger::thread_id());
+                                              /*rowid_lookup_key=*/-1);
 
       auto clock_begin = timer_start();
       std::lock_guard<std::mutex> kernel_lock(kernel_mutex_);

@@ -57,8 +57,7 @@ class ExecutionKernel {
                   const FragmentsList& frag_list,
                   const ExecutorDispatchMode kernel_dispatch_mode,
                   RenderInfo* render_info,
-                  const int64_t rowid_lookup_key,
-                  const logger::ThreadId parent_thread_id)
+                  const int64_t rowid_lookup_key)
       : ra_exe_unit_(ra_exe_unit)
       , chosen_device_type(chosen_device_type)
       , chosen_device_id(chosen_device_id)
@@ -69,8 +68,7 @@ class ExecutionKernel {
       , frag_list(frag_list)
       , kernel_dispatch_mode(kernel_dispatch_mode)
       , render_info_(render_info)
-      , rowid_lookup_key(rowid_lookup_key)
-      , parent_thread_id(parent_thread_id) {}
+      , rowid_lookup_key(rowid_lookup_key) {}
 
   void run(Executor* executor, SharedKernelContext& shared_context);
 
@@ -86,7 +84,6 @@ class ExecutionKernel {
   const ExecutorDispatchMode kernel_dispatch_mode;
   RenderInfo* render_info_;
   const int64_t rowid_lookup_key;
-  const logger::ThreadId parent_thread_id;
 
   ResultSetPtr device_results_;
 

@@ -1578,8 +1578,7 @@ void Executor::executeWorkUnitPerFragment(const RelAlgExecutionUnit& ra_exe_unit
                              fragments_list,
                              ExecutorDispatchMode::KernelPerFragment,
                              /*render_info=*/nullptr,
-                             /*rowid_lookup_key=*/-1,
-                             logger::thread_id());
+                             /*rowid_lookup_key=*/-1);
       kernel.run(this, kernel_context);
     }
   }
@@ -1995,11 +1994,9 @@ std::vector<std::unique_ptr<ExecutionKernel>> Executor::createKernels(
                                       &eo,
                                       &query_comp_desc,
                                       &query_mem_desc,
-                                      render_info,
-                                      parent_thread_id = logger::thread_id()](
-                                         const int device_id,
-                                         const FragmentsList& frag_list,
-                                         const int64_t rowid_lookup_key) {
+                                      render_info](const int device_id,
+                                                   const FragmentsList& frag_list,
+                                                   const int64_t rowid_lookup_key) {
       execution_kernels.emplace_back(
           std::make_unique<ExecutionKernel>(ra_exe_unit,
                                             ExecutorDeviceType::GPU,
@@ -2011,8 +2008,7 @@ std::vector<std::unique_ptr<ExecutionKernel>> Executor::createKernels(
                                             frag_list,
                                             ExecutorDispatchMode::MultifragmentKernel,
                                             render_info,
-                                            rowid_lookup_key,
-                                            parent_thread_id));
+                                            rowid_lookup_key));
     };
     fragment_descriptor.assignFragsToMultiDispatch(multifrag_kernel_dispatch);
   } else {
@@ -2041,11 +2037,9 @@ std::vector<std::unique_ptr<ExecutionKernel>> Executor::createKernels(
                                          &device_type,
                                          &query_comp_desc,
                                          &query_mem_desc,
-                                         render_info,
-                                         parent_thread_id = logger::thread_id()](
-                                            const int device_id,
-                                            const FragmentsList& frag_list,
-                                            const int64_t rowid_lookup_key) {
+                                         render_info](const int device_id,
+                                                      const FragmentsList& frag_list,
+                                                      const int64_t rowid_lookup_key) {
       if (!frag_list.size()) {
         return;
       }
@@ -2062,8 +2056,7 @@ std::vector<std::unique_ptr<ExecutionKernel>> Executor::createKernels(
                                             frag_list,
                                             ExecutorDispatchMode::KernelPerFragment,
                                             render_info,
-                                            rowid_lookup_key,
-                                            parent_thread_id));
+                                            rowid_lookup_key));
       ++frag_list_idx;
     };
 
@@ -2084,9 +2077,11 @@ void Executor::launchKernels(SharedKernelContext& shared_context,
   THREAD_POOL thread_pool;
   VLOG(1) << "Launching " << kernels.size() << " kernels for query.";
   for (auto& kernel : kernels) {
-    thread_pool.append(
-        [this, &shared_context](ExecutionKernel* kernel) {
+    thread_pool.spawn(
+        [this, &shared_context, parent_thread_id = logger::thread_id()](
+            ExecutionKernel* kernel) {
           CHECK(kernel);
+          DEBUG_TIMER_NEW_THREAD(parent_thread_id);
           kernel->run(this, shared_context);
         },
         kernel.get());

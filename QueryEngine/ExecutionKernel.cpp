@@ -88,7 +88,7 @@ SharedKernelContext::getFragmentResults() {
 }
 
 void ExecutionKernel::run(Executor* executor, SharedKernelContext& shared_context) {
-  DEBUG_TIMER_NEW_THREAD(parent_thread_id);
+  DEBUG_TIMER("ExecutionKernel::run");
   INJECT_TIMER(kernel_run);
   try {
     runImpl(executor, shared_context);
