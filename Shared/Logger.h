@@ -312,8 +312,14 @@ ThreadId thread_id();
 // Typical usage: auto timer = DEBUG_TIMER(__func__);
 #define DEBUG_TIMER(name) logger::DebugTimer(logger::INFO, __FILE__, __LINE__, name)
 
-#define DEBUG_TIMER_NEW_THREAD(parent_thread_id) \
-  logger::debug_timer_new_thread(parent_thread_id)
+// This MUST NOT be called more than once per thread, otherwise a failed CHECK() occurs.
+// Best practice is to call it from the point where the new thread is spawned.
+// Beware of threads that are re-used.
+#define DEBUG_TIMER_NEW_THREAD(parent_thread_id)        \
+  do {                                                  \
+    if (g_enable_debug_timer)                           \
+      logger::debug_timer_new_thread(parent_thread_id); \
+  } while (false)
 
 }  // namespace logger
 

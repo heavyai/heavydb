@@ -399,7 +399,7 @@ size_t ResultSet::parallelRowCount() const {
          i < worker_count && start_entry < entryCount();
          ++i, start_entry += stride) {
       const auto end_entry = std::min(start_entry + stride, entryCount());
-      counter_threads.append(
+      counter_threads.spawn(
           [this](const size_t start, const size_t end) {
             size_t row_count{0};
             for (size_t i = start; i < end; ++i) {
@@ -718,7 +718,7 @@ ResultSet::ResultSetComparator<BUFFER_ITERATOR_TYPE>::materializeCountDistinctCo
        i < worker_count && start_entry < num_non_empty_entries;
        ++i, start_entry += stride) {
     const auto end_entry = std::min(start_entry + stride, num_non_empty_entries);
-    thread_pool.append(
+    thread_pool.spawn(
         [this](const size_t start,
                const size_t end,
                const Analyzer::OrderEntry& order_entry,

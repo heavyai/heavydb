@@ -700,16 +700,14 @@ std::string DebugTimer::stopAndGetJson() {
 /// Call this when a new thread is spawned that will have timers that need to be
 /// associated with timers on the parent thread.
 void debug_timer_new_thread(ThreadId parent_thread_id) {
-  if (g_enable_debug_timer) {
-    std::lock_guard<std::mutex> lock_guard(g_duration_tree_map_mutex);
-    auto parent_itr = g_duration_tree_map.find(parent_thread_id);
-    CHECK(parent_itr != g_duration_tree_map.end());
-    auto const current_depth = parent_itr->second->currentDepth();
-    auto& duration_tree_ptr = g_duration_tree_map[g_thread_id];
-    CHECK(!duration_tree_ptr);
-    duration_tree_ptr = std::make_unique<DurationTree>(g_thread_id, current_depth + 1);
-    parent_itr->second->pushDurationTree(*duration_tree_ptr);
-  }
+  std::lock_guard<std::mutex> lock_guard(g_duration_tree_map_mutex);
+  auto parent_itr = g_duration_tree_map.find(parent_thread_id);
+  CHECK(parent_itr != g_duration_tree_map.end());
+  auto const current_depth = parent_itr->second->currentDepth();
+  auto& duration_tree_ptr = g_duration_tree_map[g_thread_id];
+  CHECK(!duration_tree_ptr) << __func__ << " called twice on same thread.";
+  duration_tree_ptr = std::make_unique<DurationTree>(g_thread_id, current_depth + 1);
+  parent_itr->second->pushDurationTree(*duration_tree_ptr);
 }
 
 ThreadId thread_id() {
