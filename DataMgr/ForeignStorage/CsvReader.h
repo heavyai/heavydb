@@ -168,13 +168,10 @@ class CompressedFileReader : public CsvReader {
   bool scan_finished_;
 };
 
-// Single file or directory with multiple files
+// Combines several archives into single object
 class MultiFileReader : public CsvReader {
  public:
-  MultiFileReader(const std::string& file_path,
-                  const import_export::CopyParams& copy_params);
-
-  ~MultiFileReader() override {}
+  MultiFileReader();
   bool getSize(size_t& size) override {
     if (size_known_) {
       size = total_size_;
@@ -187,6 +184,13 @@ class MultiFileReader : public CsvReader {
 
   bool isScanFinished() override { return (current_index_ >= files_.size()); }
 
+ protected:
+  std::vector<std::unique_ptr<CsvReader>> files_;
+  // Total file size if known
+  size_t total_size_;
+  // If total file size is known
+  bool size_known_;
+
  private:
   /**
    * @param byte_offset byte offset into the fileset from the initial scan
@@ -194,16 +198,19 @@ class MultiFileReader : public CsvReader {
    */
   size_t offsetToIndex(size_t byte_offset);
 
-  std::vector<std::unique_ptr<CsvReader>> files_;
   // Size of each file + all previous files
   std::vector<size_t> cumulative_sizes_;
   // Current file being read
   size_t current_index_;
   // Overall number of bytes read in the directory (minus headers)
   size_t current_offset_;
-  // Total file size if known
-  size_t total_size_;
-  // If total file size is known
-  bool size_known_;
 };
+
+// Single file or directory with multiple files
+class LocalMultiFileReader : public MultiFileReader {
+ public:
+  LocalMultiFileReader(const std::string& file_path,
+                       const import_export::CopyParams& copy_params);
+};
+
 }  // namespace foreign_storage

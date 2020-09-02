@@ -53,24 +53,35 @@ void CsvDataWrapper::validateOptions(const ForeignTable* foreign_table) {
 
 std::string CsvDataWrapper::getFilePath() {
   auto& server_options = foreign_table_->foreign_server->options;
-  auto base_path_entry = server_options.find("BASE_PATH");
-  if (base_path_entry == server_options.end()) {
-    throw std::runtime_error{"No base path found in foreign server options."};
-  }
   auto file_path_entry = foreign_table_->options.find("FILE_PATH");
   std::string file_path{};
   if (file_path_entry != foreign_table_->options.end()) {
     file_path = file_path_entry->second;
   }
-  const std::string separator{boost::filesystem::path::preferred_separator};
-  return std::regex_replace(base_path_entry->second + separator + file_path,
-                            std::regex{separator + "{2,}"},
-                            separator);
+  std::string base_path{};
+  if (server_options.find(ForeignServer::STORAGE_TYPE_KEY)->second ==
+      ForeignServer::LOCAL_FILE_STORAGE_TYPE) {
+    auto base_path_entry = server_options.find(ForeignServer::BASE_PATH_KEY);
+    if (base_path_entry == server_options.end()) {
+      throw std::runtime_error{"No base path found in foreign server options."};
+    }
+    base_path = base_path_entry->second;
+    const std::string separator{boost::filesystem::path::preferred_separator};
+    return std::regex_replace(
+        base_path + separator + file_path, std::regex{separator + "{2,}"}, separator);
+  } else {
+    // Just return the file path as a prefix
+    return file_path;
+  }
 }
 
 void CsvDataWrapper::validateFilePath() {
-  ddl_utils::validate_allowed_file_path(getFilePath(),
-                                        ddl_utils::DataTransferType::IMPORT);
+  auto& server_options = foreign_table_->foreign_server->options;
+  if (server_options.find(ForeignServer::STORAGE_TYPE_KEY)->second ==
+      ForeignServer::LOCAL_FILE_STORAGE_TYPE) {
+    ddl_utils::validate_allowed_file_path(getFilePath(),
+                                          ddl_utils::DataTransferType::IMPORT);
+  }
 }
 
 import_export::CopyParams CsvDataWrapper::validateAndGetCopyParams() {
@@ -360,7 +371,6 @@ void initialize_import_buffers(
 
 void CsvDataWrapper::populateChunk(ChunkKey chunk_key, Chunk_NS::Chunk& chunk) {
   const auto copy_params = validateAndGetCopyParams();
-  const auto file_path = getFilePath();
 
   const auto& file_regions = fragment_id_to_file_regions_map_[chunk_key[3]];
   CHECK(!file_regions.empty());
@@ -795,9 +805,19 @@ void CsvDataWrapper::populateMetadataForChunkKeyPrefix(
   fragment_id_to_file_regions_map_.clear();
   const auto copy_params = validateAndGetCopyParams();
   const auto file_path = getFilePath();
-  csv_reader_ = std::make_unique<MultiFileReader>(file_path, copy_params);
+  auto& server_options = foreign_table_->foreign_server->options;
+  if (server_options.find(ForeignServer::STORAGE_TYPE_KEY)->second ==
+      ForeignServer::LOCAL_FILE_STORAGE_TYPE) {
+    csv_reader_ = std::make_unique<LocalMultiFileReader>(file_path, copy_params);
+  } else {
+    UNREACHABLE();
+  }
   size_t file_size;
   bool size_known = csv_reader_->getSize(file_size);
+  if (size_known && file_size == 0) {
+    // Empty file
+    return;
+  }
   auto buffer_size = get_buffer_size(copy_params, size_known, file_size);
   auto thread_count = get_thread_count(copy_params, size_known, file_size, buffer_size);
 

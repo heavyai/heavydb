@@ -34,6 +34,10 @@ set(datamgr_source_files
     ForeignStorage/LazyParquetImporter.cpp
 )
 
+if("${MAPD_EDITION_LOWER}" STREQUAL "ee")
+  list(APPEND datamgr_source_files ForeignStorage/ee/CsvReaderS3.cpp)
+endif()
+
 add_library(DataMgr ${datamgr_source_files})
 
 target_link_libraries(DataMgr CudaMgr Shared ${Boost_THREAD_LIBRARY} ${TBB_LIBS})

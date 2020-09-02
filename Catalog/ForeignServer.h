@@ -45,6 +45,8 @@ struct ForeignServer : public OptionsContainer {
   static constexpr std::string_view LOCAL_FILE_STORAGE_TYPE = "LOCAL_FILE";
   static constexpr std::array<std::string_view, 1> supported_storage_types{
       LOCAL_FILE_STORAGE_TYPE};
+  static constexpr std::array<std::string_view, 2> all_option_keys{STORAGE_TYPE_KEY,
+                                                                   BASE_PATH_KEY};
 
   int32_t id;
   std::string name;
@@ -77,6 +79,13 @@ struct ForeignServer : public OptionsContainer {
       , user_id(user_id) {}
 
   void validate() {
+    validateDataWrapperType();
+    validateStorageParameters();
+    validateRecognizedOption();
+  }
+
+ private:
+  void validateDataWrapperType() {
     const auto& supported_wrapper_types = DataWrapperType::supported_data_wrapper_types;
     if (std::find(supported_wrapper_types.begin(),
                   supported_wrapper_types.end(),
@@ -85,29 +94,41 @@ struct ForeignServer : public OptionsContainer {
                                "\". Data wrapper type must be one of the following: " +
                                join(supported_wrapper_types, ", ") + "."};
     }
+  }
+
+  void validateStorageParameters() {
     if (options.find(STORAGE_TYPE_KEY) == options.end()) {
       throw std::runtime_error{"Foreign server options must contain \"STORAGE_TYPE\"."};
     }
-    if (options.find(BASE_PATH_KEY) == options.end()) {
-      throw std::runtime_error{"Foreign server options must contain \"BASE_PATH\"."};
-    }
-    for (const auto& entry : options) {
-      if (entry.first != STORAGE_TYPE_KEY && entry.first != BASE_PATH_KEY) {
-        throw std::runtime_error{
-            "Invalid option \"" + entry.first +
-            "\". "
-            "Option must be one of the following: STORAGE_TYPE, BASE_PATH."};
-      }
-    }
+
     if (std::find(supported_storage_types.begin(),
                   supported_storage_types.end(),
                   options.find(STORAGE_TYPE_KEY)->second) ==
         supported_storage_types.end()) {
-      std::string error_message{
-          "Invalid storage type value. Value must be one of the following: "};
-      error_message += join(supported_storage_types, ", ");
-      error_message += ".";
+      std::string error_message =
+          "Invalid storage type value. Value must be one of the following: " +
+          join(supported_storage_types, ", ") + ".";
       throw std::runtime_error{error_message};
+    }
+
+    if (options.find(STORAGE_TYPE_KEY)->second == LOCAL_FILE_STORAGE_TYPE) {
+      if (options.find(BASE_PATH_KEY) == options.end()) {
+        throw std::runtime_error{"Foreign server options must contain \"BASE_PATH\"."};
+      }
+    } else {
+      UNREACHABLE();
+    }
+  }
+
+  void validateRecognizedOption() {
+    for (const auto& entry : options) {
+      if (std::find(all_option_keys.begin(), all_option_keys.end(), entry.first) ==
+          all_option_keys.end()) {
+        std::string error_message =
+            "Invalid option \"" + entry.first + "\"." +
+            " Option must be one of the following: " + join(all_option_keys, ", ") + ".";
+        throw std::runtime_error{error_message};
+      }
     }
   }
 };

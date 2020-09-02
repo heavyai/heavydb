@@ -176,10 +176,11 @@ void CompressedFileReader::skipBytes(size_t n_bytes) {
     }
   }
 }
+MultiFileReader::MultiFileReader()
+    : current_index_(0), current_offset_(0), total_size_(0), size_known_(true) {}
 
-MultiFileReader::MultiFileReader(const std::string& file_path,
-                                 const import_export::CopyParams& copy_params)
-    : current_index_(0), current_offset_(0), total_size_(0), size_known_(true) {
+LocalMultiFileReader::LocalMultiFileReader(const std::string& file_path,
+                                           const import_export::CopyParams& copy_params) {
   std::vector<std::string> file_locations;
   if (boost::filesystem::is_directory(file_path)) {
     // Find all files in this directory
@@ -210,15 +211,16 @@ MultiFileReader::MultiFileReader(const std::string& file_path,
     } else {
       throw std::runtime_error{"Invalid extention for file \"" + location + "\"."};
     }
+    if (files_.back()->isScanFinished()) {
+      // remove any initially empty files
+      files_.pop_back();
+      continue;
+    }
     size_t new_size;
     size_known_ = size_known_ && files_.back()->getSize(new_size);
     if (size_known_) {
       total_size_ += new_size;
     }
-  }
-  // Skip any initial empty files
-  while (current_index_ < files_.size() && files_[current_index_]->isScanFinished()) {
-    current_index_++;
   }
 }
 
@@ -226,6 +228,7 @@ size_t MultiFileReader::read(void* buffer, size_t max_size) {
   if (isScanFinished()) {
     return 0;
   }
+
   size_t bytes_read = files_[current_index_].get()->read(buffer, max_size);
   current_offset_ += bytes_read;
   if (current_index_ < files_.size() && files_[current_index_].get()->isScanFinished()) {

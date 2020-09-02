@@ -128,7 +128,8 @@ TEST_F(CreateForeignServerTest, InvalidOption) {
       "(invalid_key = 'value', storage_type = 'LOCAL_FILE', base_path = '/test_path/');"};
   std::string error_message{
       "Exception: Invalid option \"INVALID_KEY\". "
-      "Option must be one of the following: STORAGE_TYPE, BASE_PATH."};
+      "Option must be one of the following: STORAGE_TYPE, BASE_PATH, S3_BUCKET, "
+      "AWS_REGION."};
   queryAndAssertException(query, error_message);
 }
 
@@ -138,7 +139,7 @@ TEST_F(CreateForeignServerTest, InvalidStorageType) {
       "(storage_type = 'INVALID_TYPE', base_path = '/test_path/');"};
   std::string error_message{
       "Exception: Invalid storage type value. Value must be one of the following: "
-      "LOCAL_FILE."};
+      "LOCAL_FILE, AWS_S3."};
   queryAndAssertException(query, error_message);
 }
 
@@ -1075,7 +1076,8 @@ TEST_F(AlterForeignServerTest, InvalidOption) {
   std::string query{"ALTER SERVER test_server WITH (invalid_key = 'value');"};
   std::string error_message{
       "Exception: Invalid option \"INVALID_KEY\". "
-      "Option must be one of the following: STORAGE_TYPE, BASE_PATH."};
+      "Option must be one of the following: STORAGE_TYPE, BASE_PATH, S3_BUCKET, "
+      "AWS_REGION."};
   queryAndAssertException(query, error_message);
   assertExpectedForeignServer(
       createExpectedForeignServer("test_server", "omnisci_csv", DEFAULT_OPTIONS));
@@ -1088,7 +1090,7 @@ TEST_F(AlterForeignServerTest, InvalidStorageType) {
       "(storage_type = 'INVALID_TYPE', base_path = '/test_path/');"};
   std::string error_message{
       "Exception: Invalid storage type value. Value must be one of the following: "
-      "LOCAL_FILE."};
+      "LOCAL_FILE, AWS_S3."};
   queryAndAssertException(query, error_message);
   assertExpectedForeignServer(
       createExpectedForeignServer("test_server", "omnisci_csv", DEFAULT_OPTIONS));
