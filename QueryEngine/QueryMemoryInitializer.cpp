@@ -315,7 +315,6 @@ QueryMemoryInitializer::QueryMemoryInitializer(
     , count_distinct_bitmap_host_mem_(nullptr)
     , device_allocator_(device_allocator) {
   // Table functions output columnar, basically treat this as a projection
-
   const auto& consistent_frag_sizes = get_consistent_frags_sizes(frag_offsets);
   if (consistent_frag_sizes.empty()) {
     // No fragments in the input, no underlying buffers will be needed.
@@ -323,9 +322,8 @@ QueryMemoryInitializer::QueryMemoryInitializer(
   }
 
   size_t group_buffer_size{0};
-  // TODO(adb): this is going to give us an index buffer and then the target buffers. this
-  // might not be desireable -- revisit
-  group_buffer_size = query_mem_desc.getBufferSizeBytes(device_type, num_rows_);
+  const size_t num_columns = query_mem_desc.getBufferColSlotCount();
+  group_buffer_size = num_rows_ * num_columns * sizeof(int64_t);
   CHECK_GE(group_buffer_size, size_t(0));
 
   const auto index_buffer_qw =
@@ -809,18 +807,73 @@ GpuGroupByBuffers QueryMemoryInitializer::setupTableFunctionGpuBuffers(
     const int device_id,
     const unsigned block_size_x,
     const unsigned grid_size_x) {
-  return create_dev_group_by_buffers(device_allocator_,
-                                     group_by_buffers_,
-                                     query_mem_desc,
-                                     block_size_x,
-                                     grid_size_x,
-                                     device_id,
-                                     ExecutorDispatchMode::MultifragmentKernel,
-                                     num_rows_,
-                                     false,
-                                     false,
-                                     false,
-                                     nullptr);
+  const size_t num_columns = query_mem_desc.getBufferColSlotCount();
+  CHECK_GT(num_columns, size_t(0));
+
+  const size_t column_size = num_rows_ * sizeof(int64_t);
+  const size_t groups_buffer_size = num_columns * column_size;
+  const size_t mem_size =
+      groups_buffer_size * (query_mem_desc.blocksShareMemory() ? 1 : grid_size_x);
+
+  int8_t* dev_buffers_allocation{nullptr};
+  dev_buffers_allocation = device_allocator_->alloc(mem_size);
+  CHECK(dev_buffers_allocation);
+
+  CUdeviceptr dev_buffers_mem = reinterpret_cast<CUdeviceptr>(dev_buffers_allocation);
+  const size_t step{block_size_x};
+  const size_t num_ptrs{block_size_x * grid_size_x};
+  std::vector<CUdeviceptr> dev_buffers(num_columns * num_ptrs);
+  auto dev_buffer = dev_buffers_mem;
+  for (size_t i = 0; i < num_ptrs; i += step) {
+    for (size_t j = 0; j < step; j += 1) {
+      for (size_t k = 0; k < num_columns; k++) {
+        dev_buffers[(i + j) * num_columns + k] = dev_buffer + k * column_size;
+      }
+    }
+    if (!query_mem_desc.blocksShareMemory()) {
+      dev_buffer += groups_buffer_size;
+    }
+  }
+
+  auto dev_ptr = device_allocator_->alloc(num_columns * num_ptrs * sizeof(CUdeviceptr));
+  device_allocator_->copyToDevice(dev_ptr,
+                                  reinterpret_cast<int8_t*>(dev_buffers.data()),
+                                  num_columns * num_ptrs * sizeof(CUdeviceptr));
+
+  return {reinterpret_cast<CUdeviceptr>(dev_ptr), dev_buffers_mem, (size_t)num_rows_};
+}
+
+void QueryMemoryInitializer::copyFromTableFunctionGpuBuffers(
+    Data_Namespace::DataMgr* data_mgr,
+    const QueryMemoryDescriptor& query_mem_desc,
+    const size_t entry_count,
+    const GpuGroupByBuffers& gpu_group_by_buffers,
+    const int device_id,
+    const unsigned block_size_x,
+    const unsigned grid_size_x) {
+  const size_t num_columns = query_mem_desc.getBufferColSlotCount();
+  const size_t column_size = entry_count * sizeof(int64_t);
+  const size_t orig_column_size = gpu_group_by_buffers.entry_count * sizeof(int64_t);
+  int8_t* dev_buffer = reinterpret_cast<int8_t*>(gpu_group_by_buffers.second);
+  int8_t* host_buffer = reinterpret_cast<int8_t*>(group_by_buffers_[0]);
+  CHECK_LE(column_size, orig_column_size);
+  if (orig_column_size == column_size) {
+    copy_from_gpu(data_mgr,
+                  host_buffer,
+                  reinterpret_cast<CUdeviceptr>(dev_buffer),
+                  column_size * num_columns,
+                  device_id);
+  } else {
+    for (size_t k = 0; k < num_columns; ++k) {
+      copy_from_gpu(data_mgr,
+                    host_buffer,
+                    reinterpret_cast<CUdeviceptr>(dev_buffer),
+                    column_size,
+                    device_id);
+      dev_buffer += orig_column_size;
+      host_buffer += column_size;
+    }
+  }
 }
 
 #endif
