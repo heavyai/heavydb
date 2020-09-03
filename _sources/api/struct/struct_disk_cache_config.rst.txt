@@ -1,0 +1,9 @@
+Struct DiskCacheConfig
+======================
+
+.. doxygenstruct:: DiskCacheConfig
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

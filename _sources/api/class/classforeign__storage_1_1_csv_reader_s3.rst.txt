@@ -1,0 +1,9 @@
+Class foreign_storage::CsvReaderS3
+==================================
+
+.. doxygenclass:: foreign_storage::CsvReaderS3
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

@@ -1,0 +1,9 @@
+Class foreign_storage::MultiS3Reader
+====================================
+
+.. doxygenclass:: foreign_storage::MultiS3Reader
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

@@ -1,0 +1,9 @@
+Class foreign_storage::ParquetForeignTableSchema
+================================================
+
+.. doxygenclass:: foreign_storage::ParquetForeignTableSchema
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:
