@@ -108,6 +108,13 @@ class QueryMemoryInitializer {
       const int device_id,
       const unsigned block_size_x,
       const unsigned grid_size_x);
+  void copyFromTableFunctionGpuBuffers(Data_Namespace::DataMgr* data_mgr,
+                                       const QueryMemoryDescriptor& query_mem_desc,
+                                       const size_t entry_count,
+                                       const GpuGroupByBuffers& gpu_group_by_buffers,
+                                       const int device_id,
+                                       const unsigned block_size_x,
+                                       const unsigned grid_size_x);
 #endif
 
   void copyGroupByBuffersFromGpu(Data_Namespace::DataMgr* data_mgr,
@@ -202,7 +209,6 @@ class QueryMemoryInitializer {
                                    const int device_id);
 
   const int64_t num_rows_;
-
   std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner_;
   std::vector<std::unique_ptr<ResultSet>> result_sets_;
 
