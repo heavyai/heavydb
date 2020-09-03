@@ -177,7 +177,7 @@ void CompressedFileReader::skipBytes(size_t n_bytes) {
   }
 }
 MultiFileReader::MultiFileReader()
-    : current_index_(0), current_offset_(0), total_size_(0), size_known_(true) {}
+    : total_size_(0), size_known_(true), current_index_(0), current_offset_(0) {}
 
 LocalMultiFileReader::LocalMultiFileReader(const std::string& file_path,
                                            const import_export::CopyParams& copy_params) {

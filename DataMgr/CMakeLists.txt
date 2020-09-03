@@ -35,7 +35,9 @@ set(datamgr_source_files
 )
 
 if("${MAPD_EDITION_LOWER}" STREQUAL "ee")
+if(ENABLE_AWS_S3)
   list(APPEND datamgr_source_files ForeignStorage/ee/CsvReaderS3.cpp)
+endif()
 endif()
 
 add_library(DataMgr ${datamgr_source_files})
