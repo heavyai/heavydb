@@ -3972,7 +3972,9 @@ std::string Catalog::dumpSchema(const TableDescriptor* td) const {
     const auto shard_cd = getMetadataForColumn(td->tableId, td->shardedColumnId);
     CHECK(shard_cd);
     os << ", SHARD KEY(" << shard_cd->columnName << ")";
-    with_options.push_back("SHARD_COUNT=" + std::to_string(td->nShards));
+    with_options.push_back(
+        "SHARD_COUNT=" +
+        std::to_string(td->nShards * std::max(g_leaf_count, static_cast<size_t>(1))));
   }
   if (td->sortedColumnId > 0) {
     const auto sort_cd = getMetadataForColumn(td->tableId, td->sortedColumnId);
@@ -4154,7 +4156,9 @@ std::string Catalog::dumpCreateTable(const TableDescriptor* td,
   if (td->nShards > 0) {
     const auto shard_cd = getMetadataForColumn(td->tableId, td->shardedColumnId);
     CHECK(shard_cd);
-    with_options.push_back("SHARD_COUNT=" + std::to_string(td->nShards));
+    with_options.push_back(
+        "SHARD_COUNT=" +
+        std::to_string(td->nShards * std::max(g_leaf_count, static_cast<size_t>(1))));
   }
   if (td->sortedColumnId > 0) {
     const auto sort_cd = getMetadataForColumn(td->tableId, td->sortedColumnId);
