@@ -256,6 +256,24 @@ int32_t GeoBase::getBestPlanarSRID() const {
     }
   }
 
+  // TODO: to be removed once we add custom LAEA zone transforms
+  // Can geometry still fit into 5 consecutive UTM zones?
+  // Then go for the mid-UTM zone, tolerating some limited distortion
+  // in the left and right corners. That's still better than Mercator.
+  if (xwidth < 30.0) {
+    int zone = floor((cx + 180.0) / 6.0);
+    if (zone > 59) {
+      zone = 59;
+    }
+    // Below the equator: UTM South
+    // Above the equator: UTM North
+    if (cy < 0.0) {
+      return SRID_SOUTH_UTM_START + zone;
+    } else {
+      return SRID_NORTH_UTM_START + zone;
+    }
+  }
+
   // Can geometry fit into a custom LAEA area 30 degrees high? Allow some overlap.
   if (ywidth < 25.0) {
     int xzone = -1;
