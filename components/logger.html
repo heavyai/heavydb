@@ -65,7 +65,7 @@
             
             
               <div class="version">
-                5.4.0dev c4abd67
+                5.4.0dev 93380f2
               </div>
             
           
@@ -243,6 +243,7 @@
 <li class="toctree-l4"><a class="reference internal" href="../execution/codegen.html#code-cache">7.4.5.3. Code Cache</a></li>
 </ul>
 </li>
+<li class="toctree-l3"><a class="reference internal" href="../execution/codegen.html#troubleshooting">7.4.6. Troubleshooting</a></li>
 </ul>
 </li>
 <li class="toctree-l2"><a class="reference internal" href="../execution/kernels.html">7.5. Execution Kernels</a><ul>
@@ -1538,7 +1539,7 @@ See <a class="reference internal" href="#check">CHECK</a>.</p>
                                       <span class="n">WARNING</span> <span class="n">ERROR</span> <span class="n">FATAL</span>
 <span class="o">--</span><span class="n">log</span><span class="o">-</span><span class="n">severity</span><span class="o">-</span><span class="n">clog</span> <span class="n">arg</span> <span class="p">(</span><span class="o">=</span><span class="n">ERROR</span><span class="p">)</span>      <span class="n">Log</span> <span class="n">to</span> <span class="n">console</span> <span class="n">severity</span> <span class="nl">level</span><span class="p">:</span> <span class="n">INFO</span>
                                       <span class="n">WARNING</span> <span class="n">ERROR</span> <span class="n">FATAL</span>
-<span class="o">--</span><span class="n">log</span><span class="o">-</span><span class="n">channels</span> <span class="n">arg</span>                    <span class="n">Log</span> <span class="n">channel</span> <span class="n">debug</span> <span class="nl">info</span><span class="p">:</span> <span class="n">IR</span> <span class="n">PTX</span>
+<span class="o">--</span><span class="n">log</span><span class="o">-</span><span class="n">channels</span> <span class="n">arg</span>                    <span class="n">Log</span> <span class="n">channel</span> <span class="n">debug</span> <span class="nl">info</span><span class="p">:</span> <span class="n">IR</span> <span class="n">PTX</span> <span class="n">ASM</span>
 <span class="o">--</span><span class="n">log</span><span class="o">-</span><span class="k">auto</span><span class="o">-</span><span class="n">flush</span> <span class="n">arg</span> <span class="p">(</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>              <span class="n">Flush</span> <span class="n">logging</span> <span class="n">buffer</span> <span class="n">to</span> <span class="n">file</span> <span class="n">after</span> <span class="n">each</span>
                                       <span class="n">message</span><span class="p">.</span>
 <span class="o">--</span><span class="n">log</span><span class="o">-</span><span class="n">max</span><span class="o">-</span><span class="n">files</span> <span class="n">arg</span> <span class="p">(</span><span class="o">=</span><span class="mi">100</span><span class="p">)</span>             <span class="n">Maximum</span> <span class="n">number</span> <span class="n">of</span> <span class="n">log</span> <span class="n">files</span> <span class="n">to</span> <span class="n">keep</span><span class="p">.</span>
@@ -1687,7 +1688,7 @@ the message itself contains multiple lines.</p>
 <h3>Channel<a class="headerlink" href="#channel" title="Permalink to this headline">¶</a></h3>
 <p>Channels are similar to severities, but exist outside of the severity hierarchy, have no ordering of their own,
 and can only be activated by explicitly including them in the <code class="docutils literal notranslate"><span class="pre">--log-channels</span></code> program option.</p>
-<p>Currently there are 2 channels: <code class="docutils literal notranslate"><span class="pre">IR</span></code> <code class="docutils literal notranslate"><span class="pre">PTX</span></code></p>
+<p>Currently there are 3 channels: <code class="docutils literal notranslate"><span class="pre">IR</span></code> <code class="docutils literal notranslate"><span class="pre">PTX</span></code> <code class="docutils literal notranslate"><span class="pre">ASM</span></code></p>
 <p>which log intermediate representation, and parallel thread execution code, respectively. Scripts may be
 used for other purposes that parse and analyze these logs, therefore using channels outside of the severity
 hierarchy is convenient so that the output is not interleaved with unrelated <code class="docutils literal notranslate"><span class="pre">INFO</span></code> or <code class="docutils literal notranslate"><span class="pre">DEBUG</span></code> log lines.</p>

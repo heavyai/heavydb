@@ -47,7 +47,7 @@ Program Options
                                           WARNING ERROR FATAL
     --log-severity-clog arg (=ERROR)      Log to console severity level: INFO
                                           WARNING ERROR FATAL
-    --log-channels arg                    Log channel debug info: IR PTX
+    --log-channels arg                    Log channel debug info: IR PTX ASM
     --log-auto-flush arg (=1)              Flush logging buffer to file after each
                                           message.
     --log-max-files arg (=100)             Maximum number of log files to keep.
@@ -187,7 +187,7 @@ Channel
 Channels are similar to severities, but exist outside of the severity hierarchy, have no ordering of their own,
 and can only be activated by explicitly including them in the ``--log-channels`` program option.
 
-Currently there are 2 channels: ``IR`` ``PTX``
+Currently there are 3 channels: ``IR`` ``PTX`` ``ASM``
 
 which log intermediate representation, and parallel thread execution code, respectively. Scripts may be
 used for other purposes that parse and analyze these logs, therefore using channels outside of the severity
