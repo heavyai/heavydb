@@ -4,9 +4,9 @@ HTTP_DEPS="https://dependencies.mapd.com/thirdparty"
 SCRIPTS_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 
 if [ "$TSAN" = "true" ]; then
-  ARROW_TSAN="-DARROW_USE_TSAN=ON"
+  ARROW_TSAN="-DARROW_JEMALLOC=OFF -DARROW_USE_TSAN=ON"
 elif [ "$TSAN" = "false" ]; then
-  ARROW_TSAN=""
+  ARROW_TSAN="-DARROW_JEMALLOC=BUNDLED"
 fi
 
 function download() {
@@ -86,7 +86,6 @@ function install_arrow() {
     -DARROW_WITH_SNAPPY=BUNDLED \
     -DARROW_WITH_ZSTD=BUNDLED \
     -DARROW_USE_GLOG=OFF \
-    -DARROW_JEMALLOC=BUNDLED \
     -DARROW_BOOST_USE_SHARED=${ARROW_BOOST_USE_SHARED:="OFF"} \
     -DARROW_PARQUET=ON \
     -DARROW_FILESYSTEM=ON \
