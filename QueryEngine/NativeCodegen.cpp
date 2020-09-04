@@ -225,6 +225,23 @@ void Executor::addCodeToCache(const CodeCacheKey& key,
                 std::move(compilation_context), std::move(module)));
 }
 
+namespace {
+
+std::string assemblyForCPU(ExecutionEngineWrapper& execution_engine,
+                           llvm::Module* module) {
+  llvm::legacy::PassManager pass_manager;
+  auto cpu_target_machine = execution_engine->getTargetMachine();
+  CHECK(cpu_target_machine);
+  llvm::SmallString<256> code_str;
+  llvm::raw_svector_ostream os(code_str);
+  cpu_target_machine->addPassesToEmitFile(
+      pass_manager, os, nullptr, llvm::TargetMachine::CGFT_AssemblyFile);
+  pass_manager.run(*module);
+  return "Assembly for the CPU:\n" + std::string(code_str.str()) + "\nEnd of assembly";
+}
+
+}  // namespace
+
 ExecutionEngineWrapper CodeGenerator::generateNativeCPUCode(
     llvm::Function* func,
     const std::unordered_set<llvm::Function*>& live_funcs,
@@ -257,6 +274,7 @@ ExecutionEngineWrapper CodeGenerator::generateNativeCPUCode(
 
   ExecutionEngineWrapper execution_engine(eb.create(), co);
   CHECK(execution_engine.get());
+  LOG(ASM) << assemblyForCPU(execution_engine, module);
 
   execution_engine->finalizeObject();
 
@@ -1936,6 +1954,16 @@ Executor::compileWorkUnit(const std::vector<InputTableInfo>& query_infos,
                           ColumnCacheMap& column_cache,
                           RenderInfo* render_info) {
   auto timer = DEBUG_TIMER(__func__);
+
+#ifndef NDEBUG
+  static std::uint64_t counter = 0;
+  ++counter;
+  VLOG(1) << "CODEGEN #" << counter << ":";
+  LOG(IR) << "CODEGEN #" << counter << ":";
+  LOG(PTX) << "CODEGEN #" << counter << ":";
+  LOG(ASM) << "CODEGEN #" << counter << ":";
+#endif
+
   nukeOldState(allow_lazy_fetch, query_infos, &ra_exe_unit);
 
   GroupByAndAggregate group_by_and_aggregate(
@@ -2221,8 +2249,9 @@ Executor::compileWorkUnit(const std::vector<InputTableInfo>& query_infos,
 #endif
   }
 
-  // Serialize the LLVM IR to text for the --log-channels=IR setting.
-  LOG(IR) << "\n" << query_mem_desc->toString() << "\nGenerated IR\n";
+  LOG(IR) << "\n\n" << query_mem_desc->toString() << "\n";
+  LOG(IR) << "IR for the "
+          << (co.device_type == ExecutorDeviceType::CPU ? "CPU:\n" : "GPU:\n");
 #ifdef NDEBUG
   LOG(IR) << serialize_llvm_object(query_func)
           << serialize_llvm_object(cgen_state_->row_func_) << "\nEnd of IR";

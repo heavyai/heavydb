@@ -58,11 +58,11 @@ extern bool g_enable_debug_timer;
 namespace logger {
 
 // Channel, ChannelNames, and ChannelSymbols must be updated together.
-enum Channel { IR = 0, PTX, _NCHANNELS };
+enum Channel { IR = 0, PTX, ASM, _NCHANNELS };
 
-constexpr std::array<char const*, 2> ChannelNames{"IR", "PTX"};
+constexpr std::array<char const*, 3> ChannelNames{"IR", "PTX", "ASM"};
 
-constexpr std::array<char, 2> ChannelSymbols{'R', 'P'};
+constexpr std::array<char, 3> ChannelSymbols{'R', 'P', 'A'};
 
 static_assert(Channel::_NCHANNELS == ChannelNames.size(),
               "Size of ChannelNames must equal number of Channels.");
