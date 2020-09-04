@@ -216,7 +216,7 @@ std::pair<int64_t, int64_t> get_datetime_min_and_max(
     const ColumnDescriptor* column_descriptor,
     const parquet::ColumnDescriptor* parquet_column_descriptor,
     std::shared_ptr<parquet::Statistics> stats) {
-  int64_t min, max;
+  int64_t min{0}, max{0};
   auto& type = column_descriptor->columnType;
   auto logical_type = parquet_column_descriptor->logical_type();
   auto physical_type = parquet_column_descriptor->physical_type();
@@ -303,7 +303,7 @@ std::pair<int64_t, int64_t> get_decimal_min_and_max(
   auto encoded_min = stats->EncodeMin();
   auto encoded_max = stats->EncodeMax();
 
-  int64_t min, max;
+  int64_t min{0}, max{0};
   CHECK_GT(decimal_type->precision(), 0);
   if (physical_type == parquet::Type::BYTE_ARRAY ||
       physical_type == parquet::Type::FIXED_LEN_BYTE_ARRAY) {

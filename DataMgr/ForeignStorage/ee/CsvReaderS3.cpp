@@ -170,7 +170,6 @@ MultiS3Reader::MultiS3Reader(const std::string& prefix_name,
   auto credentials = get_credentials();
   auto config = get_s3_config(server_options);
   s3_client.reset(new Aws::S3::S3Client(credentials, config));
-  bool found_objects = false;
   auto list_objects_outcome = s3_client->ListObjectsV2(objects_request);
   if (list_objects_outcome.IsSuccess()) {
     auto object_list = list_objects_outcome.GetResult().GetContents();
