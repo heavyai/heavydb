@@ -3127,13 +3127,9 @@ void DBHandler::detect_column_types(TDetectResult& _return,
   stdlog.appendNameValuePairs("client", getConnectionInfo().toString());
   check_read_only("detect_column_types");
 
-  ddl_utils::validate_allowed_file_path(file_name_in,
-                                        ddl_utils::DataTransferType::IMPORT);
-
   import_export::CopyParams copy_params = thrift_to_copyparams(cp);
 
   std::string file_name{file_name_in};
-
   if (path_is_relative(file_name)) {
     // assume relative paths are relative to data_path / mapd_import / <session>
     auto file_path = import_path_ / picosha2::hash256_hex_string(session) /
@@ -3187,6 +3183,8 @@ void DBHandler::detect_column_types(TDetectResult& _return,
       }
     }
   }
+  ddl_utils::validate_allowed_file_path(file_name, ddl_utils::DataTransferType::IMPORT);
+
   try {
     if (copy_params.file_type == import_export::FileType::DELIMITED
 #ifdef ENABLE_IMPORT_PARQUET
@@ -3828,9 +3826,6 @@ void DBHandler::import_table(const TSessionId& session,
     check_read_only("import_table");
     LOG(INFO) << "import_table " << table_name << " from " << file_name_in;
 
-    ddl_utils::validate_allowed_file_path(file_name_in,
-                                          ddl_utils::DataTransferType::IMPORT);
-
     auto& cat = session_ptr->getCatalog();
     const auto td_with_lock =
         lockmgr::TableSchemaLockContainer<lockmgr::ReadLock>::acquireTableDescriptor(
@@ -3852,6 +3847,7 @@ void DBHandler::import_table(const TSessionId& session,
         THROW_MAPD_EXCEPTION("File does not exist: " + file_path.string());
       }
     }
+    ddl_utils::validate_allowed_file_path(file_name, ddl_utils::DataTransferType::IMPORT);
 
     // TODO(andrew): add delimiter detection to Importer
     if (copy_params.delimiter == '\0') {
@@ -3943,8 +3939,6 @@ void DBHandler::import_geo_table(const TSessionId& session,
   check_read_only("import_table");
   auto& cat = session_ptr->getCatalog();
 
-  ddl_utils::validate_allowed_file_path(file_name_in,
-                                        ddl_utils::DataTransferType::IMPORT);
   import_export::CopyParams copy_params = thrift_to_copyparams(cp);
 
   std::string file_name{file_name_in};
@@ -3955,6 +3949,7 @@ void DBHandler::import_geo_table(const TSessionId& session,
                      boost::filesystem::path(file_name).filename();
     file_name = file_path.string();
   }
+  ddl_utils::validate_allowed_file_path(file_name, ddl_utils::DataTransferType::IMPORT);
 
   if (is_a_supported_geo_file(file_name, true)) {
     // prepare to load geo file directly
@@ -4402,8 +4397,6 @@ void DBHandler::get_first_geo_file_in_archive(std::string& _return,
       STDLOG(get_session_ptr(session), "get_first_geo_file_in_archive", archive_path_in);
   stdlog.appendNameValuePairs("client", getConnectionInfo().toString());
 
-  ddl_utils::validate_allowed_file_path(archive_path_in,
-                                        ddl_utils::DataTransferType::IMPORT);
   std::string archive_path(archive_path_in);
 
   if (path_is_relative(archive_path)) {
@@ -4412,6 +4405,8 @@ void DBHandler::get_first_geo_file_in_archive(std::string& _return,
                      boost::filesystem::path(archive_path).filename();
     archive_path = file_path.string();
   }
+  ddl_utils::validate_allowed_file_path(archive_path,
+                                        ddl_utils::DataTransferType::IMPORT);
 
   if (is_a_supported_archive_file(archive_path)) {
     // find the archive file
@@ -4446,8 +4441,6 @@ void DBHandler::get_all_files_in_archive(std::vector<std::string>& _return,
       STDLOG(get_session_ptr(session), "get_all_files_in_archive", archive_path_in);
   stdlog.appendNameValuePairs("client", getConnectionInfo().toString());
 
-  ddl_utils::validate_allowed_file_path(archive_path_in,
-                                        ddl_utils::DataTransferType::IMPORT);
   std::string archive_path(archive_path_in);
   if (path_is_relative(archive_path)) {
     // assume relative paths are relative to data_path / mapd_import / <session>
@@ -4455,6 +4448,8 @@ void DBHandler::get_all_files_in_archive(std::vector<std::string>& _return,
                      boost::filesystem::path(archive_path).filename();
     archive_path = file_path.string();
   }
+  ddl_utils::validate_allowed_file_path(archive_path,
+                                        ddl_utils::DataTransferType::IMPORT);
 
   if (is_a_supported_archive_file(archive_path)) {
     // find the archive file
@@ -4480,8 +4475,7 @@ void DBHandler::get_layers_in_geo_file(std::vector<TGeoFileLayerInfo>& _return,
                                        const TCopyParams& cp) {
   auto stdlog = STDLOG(get_session_ptr(session), "get_layers_in_geo_file", file_name_in);
   stdlog.appendNameValuePairs("client", getConnectionInfo().toString());
-  ddl_utils::validate_allowed_file_path(file_name_in,
-                                        ddl_utils::DataTransferType::IMPORT);
+
   std::string file_name(file_name_in);
 
   import_export::CopyParams copy_params = thrift_to_copyparams(cp);
@@ -4493,6 +4487,7 @@ void DBHandler::get_layers_in_geo_file(std::vector<TGeoFileLayerInfo>& _return,
                      boost::filesystem::path(file_name).filename();
     file_name = file_path.string();
   }
+  ddl_utils::validate_allowed_file_path(file_name, ddl_utils::DataTransferType::IMPORT);
 
   // validate file_name
   if (is_a_supported_geo_file(file_name, true)) {
