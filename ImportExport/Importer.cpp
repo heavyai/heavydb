@@ -5067,7 +5067,11 @@ void RenderGroupAnalyzer::seedFromExistingTableContents(
     CHECK(!is_end);
     CHECK(vd.pointer);
     int renderGroup = *reinterpret_cast<int32_t*>(vd.pointer);
-    CHECK_GE(renderGroup, 0);
+
+    // skip rows with invalid render groups (e.g. EMPTY geometry)
+    if (renderGroup < 0) {
+      continue;
+    }
 
     // store
     nodes[row] = std::make_pair(bounding_box, renderGroup);
