@@ -682,9 +682,11 @@ void QueryExporterGDAL::exportResults(
                                   array_null_handling_);
             } else {
               auto const geo_tv = boost::get<GeoTargetValue>(&tv);
-              CHECK(geo_tv);
-              CHECK(geo_tv->is_initialized());
-              insert_geo_column(geo_tv, ti, field_index, ogr_feature);
+              if (geo_tv && geo_tv->is_initialized()) {
+                insert_geo_column(geo_tv, ti, field_index, ogr_feature);
+              } else {
+                ogr_feature->SetGeometry(nullptr);
+              }
             }
           }
         }

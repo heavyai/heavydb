@@ -2019,7 +2019,27 @@ class ExportTest : public ::testing::Test {
     run_ddl_statement("COPY (SELECT * FROM query_export_test) TO '" + exp_file +
                       "' WITH (file_type='GeoJSON'" + other_options + ");");
     ASSERT_NO_THROW(doCompareText(file, PLAIN_TEXT));
-    ASSERT_NO_THROW(removeExportedFile(exp_file));
+    ASSERT_NO_THROW(removeExportedFile(file));
+  }
+
+  void doTestNulls(const std::string& file,
+                   const std::string& file_type,
+                   const std::string& select) {
+    std::string exp_file = BASE_PATH "/mapd_export/" + file;
+    ASSERT_NO_THROW(
+        run_ddl_statement("CREATE TABLE query_export_test (a GEOMETRY(POINT, 4326), b "
+                          "GEOMETRY(LINESTRING, 4326), c GEOMETRY(POLYGON, 4326), d "
+                          "GEOMETRY(MULTIPOLYGON, 4326));"));
+    ASSERT_NO_THROW(
+        run_ddl_statement("COPY query_export_test FROM "
+                          "'../../Tests/Export/QueryExport/datafiles/"
+                          "query_export_test_nulls.csv' WITH (header='true');"));
+    ASSERT_NO_THROW(run_ddl_statement("COPY (SELECT " + select +
+                                      " FROM query_export_test) TO '" + exp_file +
+                                      "' WITH (file_type='" + file_type + "');"));
+    ASSERT_NO_THROW(doCompareText(file, PLAIN_TEXT));
+    ASSERT_NO_THROW(removeExportedFile(file));
+    ASSERT_NO_THROW(run_ddl_statement("DROP TABLE query_export_test;"));
   }
 
   constexpr static bool WITH_ARRAYS = true;
@@ -2227,6 +2247,11 @@ TEST_F(ExportTest, CSV_GZip_Unimplemented) {
   RUN_TEST_ON_ALL_GEO_TYPES();
 }
 
+TEST_F(ExportTest, CSV_Nulls) {
+  SKIP_ALL_ON_AGGREGATOR();
+  ASSERT_NO_THROW(doTestNulls("query_export_test_csv_nulls.csv", "CSV", "*"));
+}
+
 TEST_F(ExportTest, GeoJSON) {
   SKIP_ALL_ON_AGGREGATOR();
   doCreateAndImport();
@@ -2300,6 +2325,18 @@ TEST_F(ExportTest, GeoJSON_Zip_Unimplemented) {
         std::runtime_error);
   };
   RUN_TEST_ON_ALL_GEO_TYPES();
+}
+
+TEST_F(ExportTest, GeoJSON_Nulls) {
+  SKIP_ALL_ON_AGGREGATOR();
+  ASSERT_NO_THROW(
+      doTestNulls("query_export_test_geojson_nulls_point.geojson", "GeoJSON", "a"));
+  ASSERT_NO_THROW(
+      doTestNulls("query_export_test_geojson_nulls_linestring.geojson", "GeoJSON", "b"));
+  ASSERT_NO_THROW(
+      doTestNulls("query_export_test_geojson_nulls_polygon.geojson", "GeoJSON", "c"));
+  ASSERT_NO_THROW(doTestNulls(
+      "query_export_test_geojson_nulls_multipolygon.geojson", "GeoJSON", "d"));
 }
 
 TEST_F(ExportTest, GeoJSONL_GeoJSON) {
@@ -2389,6 +2426,18 @@ TEST_F(ExportTest, GeoJSONL_Zip_Unimplemented) {
         std::runtime_error);
   };
   RUN_TEST_ON_ALL_GEO_TYPES();
+}
+
+TEST_F(ExportTest, GeoJSONL_Nulls) {
+  SKIP_ALL_ON_AGGREGATOR();
+  ASSERT_NO_THROW(
+      doTestNulls("query_export_test_geojsonl_nulls_point.geojson", "GeoJSONL", "a"));
+  ASSERT_NO_THROW(doTestNulls(
+      "query_export_test_geojsonl_nulls_linestring.geojson", "GeoJSONL", "b"));
+  ASSERT_NO_THROW(
+      doTestNulls("query_export_test_geojsonl_nulls_polygon.geojson", "GeoJSONL", "c"));
+  ASSERT_NO_THROW(doTestNulls(
+      "query_export_test_geojsonl_nulls_multipolygon.geojson", "GeoJSONL", "d"));
 }
 
 TEST_F(ExportTest, Shapefile) {

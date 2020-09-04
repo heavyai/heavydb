@@ -1,0 +1,6 @@
+{ "type": "Feature", "properties": { }, "geometry": { "type": "LineString", "coordinates": [ [ 0.9999999, 1.0 ], [ 2.0, 2.0 ] ] } }
+{ "type": "Feature", "properties": { }, "geometry": { "type": "LineString", "coordinates": [ [ 0.9999999, 1.0 ], [ 2.0, 2.0 ] ] } }
+{ "type": "Feature", "properties": { }, "geometry": null }
+{ "type": "Feature", "properties": { }, "geometry": { "type": "LineString", "coordinates": [ [ 0.9999999, 1.0 ], [ 2.0, 2.0 ] ] } }
+{ "type": "Feature", "properties": { }, "geometry": { "type": "LineString", "coordinates": [ [ 0.9999999, 1.0 ], [ 2.0, 2.0 ] ] } }
+{ "type": "Feature", "properties": { }, "geometry": null }

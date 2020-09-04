@@ -1,0 +1,7 @@
+"point","linestring","polygon","multipolygon"
+"POINT(1 1)","LINESTRING(1 1, 2 2)","POLYGON((1 1, 2 2, 3 3, 4 4))","MULTIPOLYGON(((1 1, 2 2, 3 3, 4 4)))"
+"NULL","LINESTRING(1 1, 2 2)","POLYGON((1 1, 2 2, 3 3, 4 4))","MULTIPOLYGON(((1 1, 2 2, 3 3, 4 4)))"
+"POINT(1 1)","NULL","POLYGON((1 1, 2 2, 3 3, 4 4))","MULTIPOLYGON(((1 1, 2 2, 3 3, 4 4)))"
+"POINT(1 1)","LINESTRING(1 1, 2 2)","NULL","MULTIPOLYGON(((1 1, 2 2, 3 3, 4 4)))"
+"POINT(1 1)","LINESTRING(1 1, 2 2)","POLYGON((1 1, 2 2, 3 3, 4 4))","NULL"
+"NULL","NULL","NULL","NULL"
