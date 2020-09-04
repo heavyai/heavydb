@@ -234,8 +234,16 @@ std::string assemblyForCPU(ExecutionEngineWrapper& execution_engine,
   CHECK(cpu_target_machine);
   llvm::SmallString<256> code_str;
   llvm::raw_svector_ostream os(code_str);
+#if LLVM_VERSION_MAJOR >= 10
+  cpu_target_machine->addPassesToEmitFile(
+      pass_manager, os, nullptr, llvm::CGFT_AssemblyFile);
+#elif LLVM_VERSION_MAJOR >= 7
   cpu_target_machine->addPassesToEmitFile(
       pass_manager, os, nullptr, llvm::TargetMachine::CGFT_AssemblyFile);
+#else
+  cpu_target_machine->addPassesToEmitFile(
+      pass_manager, os, llvm::TargetMachine::CGFT_AssemblyFile);
+#endif
   pass_manager.run(*module);
   return "Assembly for the CPU:\n" + std::string(code_str.str()) + "\nEnd of assembly";
 }
