@@ -21,6 +21,7 @@
 #include <boost/optional.hpp>
 
 #include "Catalog/Catalog.h"
+#include "QueryRunner/TestProcessSignalHandler.h"
 #include "ThriftHandler/DBHandler.h"
 
 constexpr int64_t True = 1;
@@ -176,6 +177,8 @@ class DBHandlerTestFixture : public testing::Test {
 
   static void createDBHandler(DiskCacheLevel cache_level = DiskCacheLevel::fsi) {
     if (!db_handler_) {
+      setupSignalHandler();
+
       // Based on default values observed from starting up an OmniSci DB server.
       const bool cpu_only{false};
       const bool allow_multifrag{true};
@@ -478,6 +481,15 @@ class DBHandlerTestFixture : public testing::Test {
     } else {
       return row_set.rows[index].cols;
     }
+  }
+
+  static void setupSignalHandler() {
+    TestProcessSignalHandler::registerSignalHandler();
+    TestProcessSignalHandler::addShutdownCallback([]() {
+      if (db_handler_) {
+        db_handler_->shutdown();
+      }
+    });
   }
 
   static std::unique_ptr<DBHandler> db_handler_;

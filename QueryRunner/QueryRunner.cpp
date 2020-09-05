@@ -32,6 +32,7 @@
 #include "Shared/StringTransform.h"
 #include "Shared/SystemParameters.h"
 #include "Shared/import_helpers.h"
+#include "TestProcessSignalHandler.h"
 #include "bcrypt.h"
 #include "gen-cpp/CalciteServer.h"
 
@@ -62,23 +63,9 @@ void calcite_shutdown_handler() noexcept {
   }
 }
 
-void mapd_signal_handler(int signal_number) {
-  LOG(ERROR) << "Interrupt signal (" << signal_number << ") received.";
-  calcite_shutdown_handler();
-  // shut down logging force a flush
-  logger::shutdown();
-  // terminate program
-  if (signal_number == SIGTERM) {
-    std::exit(EXIT_SUCCESS);
-  } else {
-    std::exit(signal_number);
-  }
-}
-
-void register_signal_handler() {
-  std::signal(SIGTERM, mapd_signal_handler);
-  std::signal(SIGSEGV, mapd_signal_handler);
-  std::signal(SIGABRT, mapd_signal_handler);
+void setup_signal_handler() {
+  TestProcessSignalHandler::registerSignalHandler();
+  TestProcessSignalHandler::addShutdownCallback(calcite_shutdown_handler);
 }
 
 }  // namespace
@@ -143,7 +130,7 @@ QueryRunner::QueryRunner(const char* db_path,
   Catalog_Namespace::UserMetadata user;
   Catalog_Namespace::DBMetadata db;
 
-  register_signal_handler();
+  setup_signal_handler();
   logger::set_once_fatal_func(&calcite_shutdown_handler);
   g_calcite =
       std::make_shared<Calcite>(-1, CALCITEPORT, db_path, 1024, 5000, true, udf_filename);

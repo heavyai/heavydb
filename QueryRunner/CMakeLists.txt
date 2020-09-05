@@ -1,5 +1,6 @@
 set(query_runner_source_files
     QueryRunner.cpp
+    TestProcessSignalHandler.cpp
 )
 
 set(QR_LIBRARIES mapd_thrift Catalog QueryState Parser QueryEngine ImportExport Shared)
