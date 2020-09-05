@@ -2974,6 +2974,7 @@ TCopyParams DBHandler::copyparams_to_thrift(const import_export::CopyParams& cp)
   return copy_params;
 }
 
+namespace {
 void add_vsi_network_prefix(std::string& path) {
   // do we support network file access?
   bool gdal_network = import_export::GDAL::supportsNetworkFileAccess();
@@ -3119,6 +3120,19 @@ std::string find_first_geo_file_in_archive(const std::string& archive_path,
   return file_name;
 }
 
+bool is_local_file(const std::string& file_path) {
+  return (!boost::istarts_with(file_path, "s3://") &&
+          !boost::istarts_with(file_path, "http://") &&
+          !boost::istarts_with(file_path, "https://"));
+}
+
+void validate_import_file_path_if_local(const std::string& file_path) {
+  if (is_local_file(file_path)) {
+    ddl_utils::validate_allowed_file_path(file_path, ddl_utils::DataTransferType::IMPORT);
+  }
+}
+}  // namespace
+
 void DBHandler::detect_column_types(TDetectResult& _return,
                                     const TSessionId& session,
                                     const std::string& file_name_in,
@@ -3136,6 +3150,7 @@ void DBHandler::detect_column_types(TDetectResult& _return,
                      boost::filesystem::path(file_name).filename();
     file_name = file_path.string();
   }
+  validate_import_file_path_if_local(file_name);
 
   // if it's a geo table, handle alternative paths (S3, HTTP, archive etc.)
   if (copy_params.file_type == import_export::FileType::POLYGON) {
@@ -3183,7 +3198,6 @@ void DBHandler::detect_column_types(TDetectResult& _return,
       }
     }
   }
-  ddl_utils::validate_allowed_file_path(file_name, ddl_utils::DataTransferType::IMPORT);
 
   try {
     if (copy_params.file_type == import_export::FileType::DELIMITED
@@ -3847,7 +3861,7 @@ void DBHandler::import_table(const TSessionId& session,
         THROW_MAPD_EXCEPTION("File does not exist: " + file_path.string());
       }
     }
-    ddl_utils::validate_allowed_file_path(file_name, ddl_utils::DataTransferType::IMPORT);
+    validate_import_file_path_if_local(file_name);
 
     // TODO(andrew): add delimiter detection to Importer
     if (copy_params.delimiter == '\0') {
@@ -3949,7 +3963,7 @@ void DBHandler::import_geo_table(const TSessionId& session,
                      boost::filesystem::path(file_name).filename();
     file_name = file_path.string();
   }
-  ddl_utils::validate_allowed_file_path(file_name, ddl_utils::DataTransferType::IMPORT);
+  validate_import_file_path_if_local(file_name);
 
   if (is_a_supported_geo_file(file_name, true)) {
     // prepare to load geo file directly
@@ -4405,8 +4419,7 @@ void DBHandler::get_first_geo_file_in_archive(std::string& _return,
                      boost::filesystem::path(archive_path).filename();
     archive_path = file_path.string();
   }
-  ddl_utils::validate_allowed_file_path(archive_path,
-                                        ddl_utils::DataTransferType::IMPORT);
+  validate_import_file_path_if_local(archive_path);
 
   if (is_a_supported_archive_file(archive_path)) {
     // find the archive file
@@ -4448,8 +4461,7 @@ void DBHandler::get_all_files_in_archive(std::vector<std::string>& _return,
                      boost::filesystem::path(archive_path).filename();
     archive_path = file_path.string();
   }
-  ddl_utils::validate_allowed_file_path(archive_path,
-                                        ddl_utils::DataTransferType::IMPORT);
+  validate_import_file_path_if_local(archive_path);
 
   if (is_a_supported_archive_file(archive_path)) {
     // find the archive file
@@ -4487,7 +4499,7 @@ void DBHandler::get_layers_in_geo_file(std::vector<TGeoFileLayerInfo>& _return,
                      boost::filesystem::path(file_name).filename();
     file_name = file_path.string();
   }
-  ddl_utils::validate_allowed_file_path(file_name, ddl_utils::DataTransferType::IMPORT);
+  validate_import_file_path_if_local(file_name);
 
   // validate file_name
   if (is_a_supported_geo_file(file_name, true)) {

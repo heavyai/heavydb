@@ -304,8 +304,41 @@ TEST_F(FilePathWhitelistTest, RestoreTableBlacklist) {
                               "\" is not allowed.");
 }
 
-class DBHandlerFilePathTest : public DBHandlerTestFixture,
-                              public testing::WithParamInterface<bool> {
+namespace {
+enum class FileLocationType {
+  RELATIVE,
+  ABSOLUTE,
+  S3,
+  HTTP,
+  HTTPS,
+  First = RELATIVE,
+  Last = HTTPS
+};
+}
+
+class DBHandlerFilePathTest
+    : public DBHandlerTestFixture,
+      public testing::WithParamInterface<std::tuple<int, std::string>> {
+ public:
+  static std::string testParamsToString(const std::tuple<int, std::string>& params) {
+    auto [file_location_type, suffix] = getTestParams(params);
+    std::string param_str;
+    if (file_location_type == FileLocationType::RELATIVE) {
+      param_str = "RelativePath";
+    } else if (file_location_type == FileLocationType::ABSOLUTE) {
+      param_str = "AbsolutePath";
+    } else if (file_location_type == FileLocationType::S3) {
+      param_str = "S3";
+    } else if (file_location_type == FileLocationType::HTTPS) {
+      param_str = "Https";
+    } else if (file_location_type == FileLocationType::HTTP) {
+      param_str = "Http";
+    } else {
+      UNREACHABLE();
+    }
+    return param_str + suffix;
+  }
+
  protected:
   static void SetUpTestSuite() {
     createDBHandler();
@@ -324,24 +357,44 @@ class DBHandlerFilePathTest : public DBHandlerTestFixture,
     return boost::filesystem::canonical(BASE_PATH) / "mapd_import";
   }
 
-  std::string getFilePath(const std::string& file_name) {
-    auto session_id = getDbHandlerAndSessionId().second;
-    auto session_directory = getImportPath() / picosha2::hash256_hex_string(session_id);
-    if (!boost::filesystem::exists(session_directory)) {
-      boost::filesystem::create_directory(session_directory);
-    }
-    auto full_file_path =
-        session_directory / boost::filesystem::path(file_name).filename();
-    if (!boost::filesystem::exists(full_file_path)) {
-      boost::filesystem::copy_file("../../Tests/FilePathWhitelist/" + file_name,
-                                   full_file_path);
-    }
-    bool is_absolute_path = GetParam();
-    if (is_absolute_path) {
-      return full_file_path.string();
+  std::string getFilePath(const std::string& file_name_prefix) {
+    auto [file_location_type, suffix] = getTestParams();
+    std::replace(suffix.begin(), suffix.end(), '_', '.');
+
+    std::string file_name = file_name_prefix + suffix;
+    std::string path;
+    if (file_location_type == FileLocationType::S3) {
+      path = "s3://omnisci-import-test/" + file_name;
+    } else if (file_location_type == FileLocationType::HTTPS) {
+      path = "https://omnisci-import-test.s3-us-west-1.amazonaws.com/" + file_name;
+    } else if (file_location_type == FileLocationType::HTTP) {
+      path = "http://omnisci-import-test.s3-us-west-1.amazonaws.com/" + file_name;
     } else {
-      return file_name;
+      auto session_id = getDbHandlerAndSessionId().second;
+      auto session_directory = getImportPath() / picosha2::hash256_hex_string(session_id);
+      if (!boost::filesystem::exists(session_directory)) {
+        boost::filesystem::create_directory(session_directory);
+      }
+      auto full_file_path =
+          session_directory / boost::filesystem::path(file_name).filename();
+      if (!boost::filesystem::exists(full_file_path)) {
+        boost::filesystem::copy_file("../../Tests/FilePathWhitelist/" + file_name,
+                                     full_file_path);
+      }
+      if (file_location_type == FileLocationType::ABSOLUTE) {
+        path = full_file_path.string();
+      } else if (file_location_type == FileLocationType::RELATIVE) {
+        path = file_name;
+      } else {
+        UNREACHABLE();
+      }
     }
+    return path;
+  }
+
+  static std::pair<FileLocationType, std::string> getTestParams(
+      const std::tuple<int, std::string>& params = GetParam()) {
+    return {static_cast<FileLocationType>(std::get<0>(params)), std::get<1>(params)};
   }
 };
 
@@ -352,6 +405,13 @@ TEST_P(DBHandlerFilePathTest, DetectColumnTypes) {
       result, session_id, getFilePath("example.csv"), TCopyParams{});
 }
 
+TEST_P(DBHandlerFilePathTest, DetectColumnTypes_GeoFile) {
+  auto [db_handler, session_id] = getDbHandlerAndSessionId();
+  TDetectResult result;
+  db_handler->detect_column_types(
+      result, session_id, getFilePath("example.geojson"), TCopyParams{});
+}
+
 TEST_P(DBHandlerFilePathTest, ImportTable) {
   auto [db_handler, session_id] = getDbHandlerAndSessionId();
   db_handler->import_table(
@@ -359,6 +419,12 @@ TEST_P(DBHandlerFilePathTest, ImportTable) {
 }
 
 TEST_P(DBHandlerFilePathTest, ImportGeoTable) {
+  // TODO: Undo test case skipping when GDAL failure is resolved
+  if (auto [file_location_type, suffix] = getTestParams();
+      file_location_type == FileLocationType::S3 && suffix == "_tar_gz") {
+    GTEST_SKIP();
+  }
+
   auto [db_handler, session_id] = getDbHandlerAndSessionId();
   db_handler->import_geo_table(session_id,
                                "test_table_2",
@@ -372,34 +438,38 @@ TEST_P(DBHandlerFilePathTest, GetFirstGeoFileInArchive) {
   auto [db_handler, session_id] = getDbHandlerAndSessionId();
   std::string result;
   db_handler->get_first_geo_file_in_archive(
-      result, session_id, getFilePath("example.geojson.tar"), TCopyParams());
+      result, session_id, getFilePath("example.geojson"), TCopyParams());
 }
 
 TEST_P(DBHandlerFilePathTest, GetAllFilesInArchive) {
   auto [db_handler, session_id] = getDbHandlerAndSessionId();
   std::vector<std::string> result;
   db_handler->get_all_files_in_archive(
-      result, session_id, getFilePath("example.geojson.tar"), TCopyParams());
+      result, session_id, getFilePath("example.geojson"), TCopyParams());
 }
 
 TEST_P(DBHandlerFilePathTest, GetLayersInGeoFile) {
+  // TODO: Undo test case skipping when GDAL failure is resolved
+  if (auto [file_location_type, suffix] = getTestParams();
+      file_location_type == FileLocationType::S3 && suffix == "_tar_gz") {
+    GTEST_SKIP();
+  }
+
   auto [db_handler, session_id] = getDbHandlerAndSessionId();
   std::vector<TGeoFileLayerInfo> result;
   db_handler->get_layers_in_geo_file(
       result, session_id, getFilePath("example.geojson"), TCopyParams());
 }
 
-INSTANTIATE_TEST_SUITE_P(DBHandlerFilePathTest,
-                         DBHandlerFilePathTest,
-                         testing::Values(true, false),
-                         [](const auto& param_info) {
-                           bool is_absolute_path = param_info.param;
-                           if (is_absolute_path) {
-                             return "AbsolutePath";
-                           } else {
-                             return "RelativePath";
-                           }
-                         });
+INSTANTIATE_TEST_SUITE_P(
+    DBHandlerFilePathTest,
+    DBHandlerFilePathTest,
+    testing::Combine(testing::Range(static_cast<int>(FileLocationType::First),
+                                    static_cast<int>(FileLocationType::Last) + 1),
+                     testing::Values("", "_tar", "_gz", "_tar_gz")),
+    [](const auto& param_info) {
+      return DBHandlerFilePathTest::testParamsToString(param_info.param);
+    });
 
 TEST_F(FilePathWhitelistTest, ThrowOnPunctuation) {
   executeLambdaAndAssertException(
