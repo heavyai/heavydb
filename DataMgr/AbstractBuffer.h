@@ -108,7 +108,7 @@ class AbstractBuffer {
     is_dirty_ = true;
   }
 
-  void setSize(const size_t size) { size_ = size; }
+  virtual void setSize(const size_t size) { size_ = size; }
   void clearDirtyBits() {
     is_appended_ = false;
     is_updated_ = false;

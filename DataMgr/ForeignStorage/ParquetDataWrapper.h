@@ -49,11 +49,18 @@ class ParquetDataWrapper : public ForeignDataWrapper {
   std::list<const ColumnDescriptor*> getColumnsToInitialize(
       const Interval<ColumnType>& column_interval);
   void initializeChunkBuffers(const int fragment_index,
-                              const Interval<ColumnType>& column_interval);
+                              const Interval<ColumnType>& column_interval,
+                              const bool reserve_buffers_and_set_stats = false,
+                              const size_t physical_byte_size = 0);
   void initializeChunkBuffers(const int fragment_index);
   void fetchChunkMetadata();
   ForeignStorageBuffer* getBufferFromMapOrLoadBufferIntoMap(const ChunkKey& chunk_key);
   ForeignStorageBuffer* loadBufferIntoMap(const ChunkKey& chunk_key);
+  ForeignStorageBuffer* loadBufferIntoMapUsingLazyParquetImporter(
+      const ChunkKey& chunk_key);
+  ForeignStorageBuffer* loadBufferIntoMapUsingLazyParquetChunkLoader(
+      const ChunkKey& chunk_key,
+      const size_t physical_byte_size);
 
   void validateFilePath();
   std::string getFilePath();
@@ -110,6 +117,7 @@ class ParquetDataWrapper : public ForeignDataWrapper {
   };
   std::map<int, FragmentToRowGroupInterval> fragment_to_row_group_interval_map_;
   std::map<ChunkKey, std::unique_ptr<ForeignStorageBuffer>> chunk_buffer_map_;
+  std::map<ChunkKey, std::shared_ptr<ChunkMetadata>> chunk_metadata_map_;
   const int db_id_;
   const ForeignTable* foreign_table_;
   int last_fragment_index_;

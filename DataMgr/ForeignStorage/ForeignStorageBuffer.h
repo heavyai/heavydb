@@ -48,6 +48,7 @@ class ForeignStorageBuffer : public AbstractBuffer {
   size_t pageCount() const override;
   size_t pageSize() const override;
   size_t size() const override;
+  void setSize(const size_t num_bytes) override;
   size_t reservedSize() const override;
   MemoryLevel getType() const override;
 

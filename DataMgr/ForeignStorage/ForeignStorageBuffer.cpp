@@ -58,6 +58,10 @@ size_t ForeignStorageBuffer::size() const {
   return byte_count;
 }
 
+void ForeignStorageBuffer::setSize(const size_t num_bytes) {
+  byte_count = num_bytes;
+}
+
 size_t ForeignStorageBuffer::reservedSize() const {
   return reserved_byte_count;
 }

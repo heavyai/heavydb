@@ -368,6 +368,220 @@ TEST_P(CacheControllingSelectQueryTest, ParquetNullRowgroups) {
   // clang-format on
 }
 
+TEST_F(SelectQueryTest, ParquetNumericAndBooleanTypesWithAllNullPlacementPermutations) {
+  const auto& query = getCreateForeignTableQuery(
+      "( id INT, bool BOOLEAN, i8 TINYINT, u8 SMALLINT, i16 SMALLINT, "
+      "u16 INT, i32 INT, u32 BIGINT, i64 BIGINT, f32 FLOAT, "
+      "f64 DOUBLE, fixedpoint DECIMAL(10,5) )",
+      "numeric_and_boolean_types_with_all_null_placement_permutations",
+      "parquet");
+  sql(query);
+
+  TQueryResult result;
+  sql(result, "SELECT * from test_foreign_table order by id;");
+
+  // clang-format off
+  assertResultSetEqual({
+   {i(1),i(True),i(100),i(100),i(23000),i(23000),i(2047483647),i(2047483647),i(9123372036854775807),(1e-4f),(1e-4),(1.123)},
+   {i(2),i(False),i(-127),i(0),i(-32767),i(0),i(-2147483647),i(0),i(-9223372036854775807),(3.141592f),(3.141592653589793),(100.1)},
+   {i(3),i(True),i(127),i(255),i(32767),i(65535),i(2147483647),i(4294967295),i(9223372036854775807),(1e9f),(1e19),(2.22)},
+   {i(4),i(NULL_TINYINT),i(NULL_TINYINT),i(NULL_SMALLINT),i(NULL_SMALLINT),i(NULL_INT),i(NULL_INT),i(NULL_BIGINT),i(NULL_BIGINT),(NULL_FLOAT),(NULL_DOUBLE),(NULL_DOUBLE)},
+   {i(5),i(False),i(-127),i(0),i(-32767),i(0),i(-2147483647),i(0),i(-9223372036854775807),(3.141592f),(3.141592653589793),(100.1)},
+   {i(6),i(True),i(127),i(255),i(32767),i(65535),i(2147483647),i(4294967295),i(9223372036854775807),(1e9f),(1e19),(2.22)},
+   {i(7),i(True),i(100),i(100),i(23000),i(23000),i(2047483647),i(2047483647),i(9123372036854775807),(1e-4f),(1e-4),(1.123)},
+   {i(8),i(NULL_TINYINT),i(NULL_TINYINT),i(NULL_SMALLINT),i(NULL_SMALLINT),i(NULL_INT),i(NULL_INT),i(NULL_BIGINT),i(NULL_BIGINT),(NULL_FLOAT),(NULL_DOUBLE),(NULL_DOUBLE)},
+   {i(9),i(True),i(127),i(255),i(32767),i(65535),i(2147483647),i(4294967295),i(9223372036854775807),(1e9f),(1e19),(2.22)},
+   {i(10),i(True),i(100),i(100),i(23000),i(23000),i(2047483647),i(2047483647),i(9123372036854775807),(1e-4f),(1e-4),(1.123)},
+   {i(11),i(False),i(-127),i(0),i(-32767),i(0),i(-2147483647),i(0),i(-9223372036854775807),(3.141592f),(3.141592653589793),(100.1)},
+   {i(12),i(NULL_TINYINT),i(NULL_TINYINT),i(NULL_SMALLINT),i(NULL_SMALLINT),i(NULL_INT),i(NULL_INT),i(NULL_BIGINT),i(NULL_BIGINT),(NULL_FLOAT),(NULL_DOUBLE),(NULL_DOUBLE)},
+   {i(13),i(NULL_TINYINT),i(NULL_TINYINT),i(NULL_SMALLINT),i(NULL_SMALLINT),i(NULL_INT),i(NULL_INT),i(NULL_BIGINT),i(NULL_BIGINT),(NULL_FLOAT),(NULL_DOUBLE),(NULL_DOUBLE)},
+   {i(14),i(NULL_TINYINT),i(NULL_TINYINT),i(NULL_SMALLINT),i(NULL_SMALLINT),i(NULL_INT),i(NULL_INT),i(NULL_BIGINT),i(NULL_BIGINT),(NULL_FLOAT),(NULL_DOUBLE),(NULL_DOUBLE)},
+   {i(15),i(True),i(127),i(255),i(32767),i(65535),i(2147483647),i(4294967295),i(9223372036854775807),(1e9f),(1e19),(2.22)},
+   {i(16),i(NULL_TINYINT),i(NULL_TINYINT),i(NULL_SMALLINT),i(NULL_SMALLINT),i(NULL_INT),i(NULL_INT),i(NULL_BIGINT),i(NULL_BIGINT),(NULL_FLOAT),(NULL_DOUBLE),(NULL_DOUBLE)},
+   {i(17),i(False),i(-127),i(0),i(-32767),i(0),i(-2147483647),i(0),i(-9223372036854775807),(3.141592f),(3.141592653589793),(100.1)},
+   {i(18),i(NULL_TINYINT),i(NULL_TINYINT),i(NULL_SMALLINT),i(NULL_SMALLINT),i(NULL_INT),i(NULL_INT),i(NULL_BIGINT),i(NULL_BIGINT),(NULL_FLOAT),(NULL_DOUBLE),(NULL_DOUBLE)},
+   {i(19),i(True),i(100),i(100),i(23000),i(23000),i(2047483647),i(2047483647),i(9123372036854775807),(1e-4f),(1e-4),(1.123)},
+   {i(20),i(NULL_TINYINT),i(NULL_TINYINT),i(NULL_SMALLINT),i(NULL_SMALLINT),i(NULL_INT),i(NULL_INT),i(NULL_BIGINT),i(NULL_BIGINT),(NULL_FLOAT),(NULL_DOUBLE),(NULL_DOUBLE)},
+   {i(21),i(NULL_TINYINT),i(NULL_TINYINT),i(NULL_SMALLINT),i(NULL_SMALLINT),i(NULL_INT),i(NULL_INT),i(NULL_BIGINT),i(NULL_BIGINT),(NULL_FLOAT),(NULL_DOUBLE),(NULL_DOUBLE)},
+   {i(22),i(NULL_TINYINT),i(NULL_TINYINT),i(NULL_SMALLINT),i(NULL_SMALLINT),i(NULL_INT),i(NULL_INT),i(NULL_BIGINT),i(NULL_BIGINT),(NULL_FLOAT),(NULL_DOUBLE),(NULL_DOUBLE)},
+   {i(23),i(NULL_TINYINT),i(NULL_TINYINT),i(NULL_SMALLINT),i(NULL_SMALLINT),i(NULL_INT),i(NULL_INT),i(NULL_BIGINT),i(NULL_BIGINT),(NULL_FLOAT),(NULL_DOUBLE),(NULL_DOUBLE)},
+   {i(24),i(NULL_TINYINT),i(NULL_TINYINT),i(NULL_SMALLINT),i(NULL_SMALLINT),i(NULL_INT),i(NULL_INT),i(NULL_BIGINT),i(NULL_BIGINT),(NULL_FLOAT),(NULL_DOUBLE),(NULL_DOUBLE)},
+  },
+  result);
+  // clang-format on
+}
+
+TEST_F(SelectQueryTest, ParquetNumericAndBooleanTypes) {
+  const auto& query = getCreateForeignTableQuery(
+      "( bool BOOLEAN, i8 TINYINT, u8 SMALLINT, i16 SMALLINT, "
+      "u16 INT, i32 INT, u32 BIGINT, i64 BIGINT, f32 FLOAT, "
+      "f64 DOUBLE, fixedpoint DECIMAL(10,5) )",
+      "numeric_and_boolean_types",
+      "parquet");
+  sql(query);
+
+  TQueryResult result;
+  sql(result, "SELECT * from test_foreign_table;");
+
+  // clang-format off
+  assertResultSetEqual({
+   {i(True),i(100),i(100),i(23000),i(23000),i(2047483647),i(2047483647),i(9123372036854775807),(1e-4f),(1e-4),(1.123)},
+   {i(False),i(-127),i(0),i(-32767),i(0),i(-2147483647),i(0),i(-9223372036854775807),(3.141592f),(3.141592653589793),(100.1)},
+   {i(True),i(127),i(255),i(32767),i(65535),i(2147483647),i(4294967295),i(9223372036854775807),(1e9f),(1e19),(2.22)},
+  },
+  result);
+  // clang-format on
+}
+
+TEST_F(SelectQueryTest, ParquetFixedEncodedTypes) {
+  const auto& query = getCreateForeignTableQuery(
+      "( i8 BIGINT ENCODING FIXED(8), u8 BIGINT ENCODING FIXED(16),"
+      " i16 BIGINT ENCODING FIXED(16), "
+      "u16 BIGINT ENCODING FIXED (32), i32 BIGINT ENCODING FIXED (32),"
+      "i8_2 INT ENCODING FIXED(8), u8_2 INT ENCODING FIXED(16),"
+      " i16_2 INT ENCODING FIXED(16),"
+      "i8_3 SMALLINT ENCODING FIXED(8) )",
+      "fixed_encoded_types",
+      "parquet");
+  sql(query);
+
+  TQueryResult result;
+  sql(result, "SELECT * from test_foreign_table;");
+
+  // clang-format off
+  assertResultSetEqual({
+      {i(100),i(100),i(23000),i(23000),i(2047483647),i(100),i(100),i(23000),i(100)},
+      {i(-127),i(0),i(-32767),i(0),i(-2147483647),i(-127),i(0),i(-32767),i(-127)},
+      {i(127),i(255),i(32767),i(65535),i(2147483647),i(127),i(255),i(32767),i(127)}
+  },
+  result);
+  // clang-format on
+}
+
+TEST_F(SelectQueryTest, ParquetDecimalTypeMappings) {
+  const auto& query = getCreateForeignTableQuery(
+      "( decimal_i32 DECIMAL(8,3), decimal_i64 DECIMAL(10,3), decimal_fbla DECIMAL(7,3), "
+      "decimal_ba DECIMAL(9,3)  ) ",
+      "decimal",
+      "parquet");
+  sql(query);
+
+  TQueryResult result;
+  sql(result, "SELECT * from test_foreign_table;");
+
+  // clang-format off
+  assertResultSetEqual({
+   {1.123,1.123,1.123,1.123},
+   {100.100,100.100,100.100,100.100},
+   {2.220,2.220,2.220,2.220},
+  },
+  result);
+  // clang-format on
+}
+
+TEST_F(SelectQueryTest, ParquetTimestampNoEncodingInSeconds) {
+  const auto& query = getCreateForeignTableQuery(
+      "(ts_milli TIMESTAMP, ts_micro TIMESTAMP, ts_nano TIMESTAMP)",
+      "timestamp",
+      "parquet");
+  sql(query);
+  TQueryResult result;
+  sql(result, "SELECT * from test_foreign_table;");
+
+  assertResultSetEqual(
+      {{NULL_BIGINT, NULL_BIGINT, NULL_BIGINT},
+       {NULL_BIGINT, NULL_BIGINT, NULL_BIGINT},
+       {NULL_BIGINT, NULL_BIGINT, NULL_BIGINT},
+       {"1/1/1900 00:00:10", "1/1/1900 00:00:10", "1/1/1900 00:00:10"},
+       {"1/1/2200 00:00:10", "1/1/2200 00:00:10", "1/1/2200 00:00:10"},
+       {"8/25/2020 00:00:10", "8/25/2020 00:00:10", "8/25/2020 00:00:10"}},
+      result);
+}
+
+TEST_F(SelectQueryTest, ParquetTimestampNoEncodingAllPrecisions) {
+  const auto& query = getCreateForeignTableQuery(
+      "(ts_milli TIMESTAMP (3), ts_micro TIMESTAMP (6), ts_nano TIMESTAMP (9))",
+      "timestamp",
+      "parquet");
+  sql(query);
+  TQueryResult result;
+  sql(result, "SELECT * from test_foreign_table;");
+  assertResultSetEqual({{NULL_BIGINT, NULL_BIGINT, NULL_BIGINT},
+                        {NULL_BIGINT, NULL_BIGINT, NULL_BIGINT},
+                        {NULL_BIGINT, NULL_BIGINT, NULL_BIGINT},
+                        {"1/1/1900 00:00:10.123",
+                         "1/1/1900 00:00:10.123456",
+                         "1/1/1900 00:00:10.123456789"},
+                        {"1/1/2200 00:00:10.123",
+                         "1/1/2200 00:00:10.123456",
+                         "1/1/2200 00:00:10.123456789"},
+                        {"8/25/2020 00:00:10.123",
+                         "8/25/2020 00:00:10.123456",
+                         "8/25/2020 00:00:10.123456789"}},
+                       result);
+}
+
+TEST_F(SelectQueryTest, ParquetTimeNoEncodingInSeconds) {
+  const auto& query = getCreateForeignTableQuery(
+      "(time_milli TIME, time_micro TIME, time_nano TIME)", "time", "parquet");
+  sql(query);
+  TQueryResult result;
+  sql(result, "SELECT * from test_foreign_table;");
+  assertResultSetEqual({{NULL_BIGINT, NULL_BIGINT, NULL_BIGINT},
+                        {NULL_BIGINT, NULL_BIGINT, NULL_BIGINT},
+                        {NULL_BIGINT, NULL_BIGINT, NULL_BIGINT},
+                        {"00:00:01", "00:00:01", "00:00:01"},
+                        {"00:00:00", "00:00:00", "00:00:00"},
+                        {"23:59:59", "23:59:59", "23:59:59"}},
+                       result);
+}
+
+TEST_F(SelectQueryTest, ParquetTimeFixedLength32EncodingInSeconds) {
+  const auto& query = getCreateForeignTableQuery(
+      "(time_milli TIME ENCODING FIXED(32), time_micro TIME, time_nano TIME)",
+      "time",
+      "parquet");
+  sql(query);
+  TQueryResult result;
+  sql(result, "SELECT * from test_foreign_table;");
+  assertResultSetEqual({{NULL_BIGINT, NULL_BIGINT, NULL_BIGINT},
+                        {NULL_BIGINT, NULL_BIGINT, NULL_BIGINT},
+                        {NULL_BIGINT, NULL_BIGINT, NULL_BIGINT},
+                        {"00:00:01", "00:00:01", "00:00:01"},
+                        {"00:00:00", "00:00:00", "00:00:00"},
+                        {"23:59:59", "23:59:59", "23:59:59"}},
+                       result);
+}
+
+TEST_F(SelectQueryTest, ParquetDateNoEncoding) {
+  const auto& query = getCreateForeignTableQuery("(days DATE)", "date", "parquet");
+  sql(query);
+  TQueryResult result;
+  sql(result, "SELECT * from test_foreign_table;");
+  assertResultSetEqual({{NULL_BIGINT},
+                        {NULL_BIGINT},
+                        {NULL_BIGINT},
+                        {"1/1/1900"},
+                        {"1/1/2200"},
+                        {"8/25/2020"}},
+                       result);
+}
+
+TEST_F(SelectQueryTest, ParquetDateDays32Encoding) {
+  const auto& query =
+      getCreateForeignTableQuery("(days DATE ENCODING DAYS (32) )", "date", "parquet");
+  sql(query);
+  TQueryResult result;
+  sql(result, "SELECT * from test_foreign_table;");
+  assertResultSetEqual({{NULL_BIGINT},
+                        {NULL_BIGINT},
+                        {NULL_BIGINT},
+                        {"1/1/1900"},
+                        {"1/1/2200"},
+                        {"8/25/2020"}},
+                       result);
+}
+
 TEST_P(CacheControllingSelectQueryTest, CacheExists) {
   auto cache = getCatalog().getDataMgr().getForeignStorageMgr()->getForeignStorageCache();
   ASSERT_EQ((cache != nullptr), GetParam());
@@ -757,41 +971,6 @@ TEST_F(SelectQueryTest, NonUtcTimestamp) {
   queryAndAssertException("SELECT * FROM test_foreign_table;",
                           "Exception: Non-UTC timezone specified in Parquet file for "
                           "column \"tstamp\". Only UTC timezone is currently supported.");
-}
-
-TEST_F(SelectQueryTest, DateTimePrecision) {
-  const auto& query = getCreateForeignTableQuery(
-      "(time_millis TIME, time_micros TIME, time_nanos TIME, "
-      "tstamp_millis TIMESTAMP, tstamp_micros TIMESTAMP, tstamp_nanos "
-      "TIMESTAMP, "
-      "tstamp_millis_2 TIMESTAMP(3), tstamp_micros_2 TIMESTAMP(6), tstamp_nanos_2 "
-      "TIMESTAMP(9))",
-      {},
-      "datetime_precision",
-      "parquet");
-  sql(query);
-
-  TQueryResult result;
-  sql(result, "SELECT * FROM test_foreign_table;");
-  // clang-format off
-  assertResultSetEqual({
-    {
-      "00:00:10", "00:00:10", "00:00:10",
-      "1/1/2000 00:00:59", "1/1/2000 00:00:59", "1/1/2000 00:00:59",
-      "1/1/2000 00:00:59.123", "1/1/2000 00:00:59.123456", "1/1/2000 00:00:59.123456000"
-    },
-    {
-      "00:10:00", "00:10:00", "00:10:00",
-      "6/15/2020 00:59:59", "6/15/2020 00:59:59", "6/15/2020 00:59:59",
-      "6/15/2020 00:59:59.123", "6/15/2020 00:59:59.123456", "6/15/2020 00:59:59.123456000"
-    },
-    {
-      "10:00:00", "10:00:00", "10:00:00",
-      "12/31/2050 23:59:59", "12/31/2050 23:59:59", "12/31/2050 23:59:59",
-      "12/31/2050 23:59:59.123", "12/31/2050 23:59:59.123456", "12/31/2050 23:59:59.123456000"
-    }
-  }, result);
-  // clang-format on
 }
 
 TEST_F(SelectQueryTest, DecimalIntEncoding) {
