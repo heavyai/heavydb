@@ -264,7 +264,7 @@ struct ParseBufferRequest {
 };
 
 struct ParseBufferResult {
-  std::map<int, DataBlockPtr> data_blocks;
+  std::map<int, DataBlockPtr> column_id_to_data_blocks_map;
   size_t row_count;
   std::vector<size_t> row_offsets;
 };
@@ -357,7 +357,8 @@ ParseBufferResult parse_buffer(ParseBufferRequest& request) {
   ParseBufferResult result{};
   result.row_offsets = row_offsets;
   result.row_count = row_count;
-  result.data_blocks = convert_import_buffers_to_data_blocks(request.import_buffers);
+  result.column_id_to_data_blocks_map =
+      convert_import_buffers_to_data_blocks(request.import_buffers);
   return result;
 }
 }  // namespace csv_file_buffer_parser

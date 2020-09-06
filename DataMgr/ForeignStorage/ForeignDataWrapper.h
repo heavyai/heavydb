@@ -29,22 +29,24 @@ class ForeignDataWrapper {
   virtual ~ForeignDataWrapper() = default;
 
   /**
-   * Gets the buffer for chunk identified by given chunk key.
+   * Populates given chunk metadata vector with metadata for all chunks in related
+   * foreign table.
    *
-   * @param chunk_key - key for chunk whose buffer will be returned
-   * @return buffer for chunk identified by given chunk key
-   */
-  virtual ForeignStorageBuffer* getChunkBuffer(const ChunkKey& chunk_key) = 0;
-
-  /**
-   * Populates given chunk_metadata_vector with metadata for all chunks with the given
-   * prefix.
-   *
-   * @param chunk_key_prefix - key prefix for chunks whose metadata will be provided
    * @param chunk_metadata_vector - vector that will be populated with chunk metadata
    */
-  virtual void populateMetadataForChunkKeyPrefix(
-      const ChunkKey& chunk_key_prefix,
-      ChunkMetadataVector& chunk_metadata_vector) = 0;
+  virtual void populateChunkMetadata(ChunkMetadataVector& chunk_metadata_vector) = 0;
+
+  /**
+   * Populates given chunk buffers identified by chunk keys. All provided chunk
+   * buffers are expected to be for the same fragment.
+   *
+   * @param required_buffers - chunk buffers that must always be populated
+   * @param optional_buffers - chunk buffers that can be optionally populated,
+   * if the data wrapper has to scan through chunk data anyways (typically for
+   * row wise data formats)
+   */
+  virtual void populateChunkBuffers(
+      std::map<ChunkKey, AbstractBuffer*>& required_buffers,
+      std::map<ChunkKey, AbstractBuffer*>& optional_buffers) = 0;
 };
 }  // namespace foreign_storage

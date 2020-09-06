@@ -72,33 +72,36 @@ class ParquetInPlaceEncoder {
    * @param def_levels - an array containing the Dremel encoding definition levels
    * @param values_read - the number of non-null values read
    * @param levels_read - the total number of values (non-null & null) that are read
+   * @param values - values that are read
    *
    * Note that the Parquet format encodes nulls using Dremel encoding.
    */
-  virtual void appendData(int16_t* def_levels, int64_t values_read, int64_t levels_read) {
-    int8_t* data_ptr = getMemoryPtr();
+  virtual void appendData(int16_t* def_levels,
+                          int64_t values_read,
+                          int64_t levels_read,
+                          int8_t* values) {
     if (omnisci_data_type_byte_size_ < parquet_data_type_byte_size_) {
       for (int64_t i = 0; i < values_read; ++i) {
-        encodeAndCopy(data_ptr + i * parquet_data_type_byte_size_,
-                      data_ptr + i * omnisci_data_type_byte_size_);
+        encodeAndCopy(values + i * parquet_data_type_byte_size_,
+                      values + i * omnisci_data_type_byte_size_);
       }
     }
 
     if (values_read < levels_read) {  // nulls exist
       decodeNullsAndEncodeData(
-          data_ptr,
+          values,
           def_levels,
           values_read,
           levels_read,
           omnisci_data_type_byte_size_ >= parquet_data_type_byte_size_);
     } else if (omnisci_data_type_byte_size_ >= parquet_data_type_byte_size_) {
       for (int64_t i = levels_read - 1; i >= 0; --i) {
-        encodeAndCopy(data_ptr + i * parquet_data_type_byte_size_,
-                      data_ptr + i * omnisci_data_type_byte_size_);
+        encodeAndCopy(values + i * parquet_data_type_byte_size_,
+                      values + i * omnisci_data_type_byte_size_);
       }
     }
 
-    buffer_->setSize(buffer_->size() + levels_read * omnisci_data_type_byte_size_);
+    buffer_->append(values, levels_read * omnisci_data_type_byte_size_);
   }
 
  protected:
@@ -107,8 +110,6 @@ class ParquetInPlaceEncoder {
                     int8_t* omnisci_data_bytes_destination) = 0;
   virtual void encodeAndCopy(const int8_t* parquet_data_bytes,
                              int8_t* omnisci_data_bytes) = 0;
-
-  int8_t* getMemoryPtr() { return buffer_->getMemoryPtr() + buffer_->size(); }
 
   Data_Namespace::AbstractBuffer* buffer_;
   const size_t omnisci_data_type_byte_size_;
@@ -154,18 +155,18 @@ class TypedParquetInPlaceEncoder : public ParquetInPlaceEncoder {
    */
   void appendData(int16_t* def_levels,
                   int64_t values_read,
-                  int64_t levels_read) override {
-    int8_t* data_ptr = getMemoryPtr();
+                  int64_t levels_read,
+                  int8_t* values) override {
     if (std::is_same<V, T>::value && values_read == levels_read) {
       if (!encodingIsIdentityForSameTypes()) {
         for (int64_t i = 0; i < levels_read; ++i) {
-          encodeAndCopy(data_ptr + i * omnisci_data_type_byte_size_,
-                        data_ptr + i * omnisci_data_type_byte_size_);
+          encodeAndCopy(values + i * omnisci_data_type_byte_size_,
+                        values + i * omnisci_data_type_byte_size_);
         }
       }
-      buffer_->setSize(buffer_->size() + levels_read * omnisci_data_type_byte_size_);
+      buffer_->append(values, levels_read * omnisci_data_type_byte_size_);
     } else {
-      ParquetInPlaceEncoder::appendData(def_levels, values_read, levels_read);
+      ParquetInPlaceEncoder::appendData(def_levels, values_read, levels_read, values);
     }
   }
 

@@ -55,7 +55,17 @@ class ForeignStorageCache {
   ForeignStorageCache(const std::string& cache_dir,
                       const size_t num_reader_threads,
                       const size_t limit);
-  void cacheChunk(const ChunkKey&, AbstractBuffer*);
+
+  /**
+   * Caches the chunks for the given chunk keys. Chunk buffers
+   * for chunks to be cached are expected to have already been
+   * populated before calling this method. This method also
+   * expects all provided chunk keys to be for the same table.
+   *
+   * @param chunk_keys - keys of chunks to be cached
+   */
+  void cacheTableChunks(const std::vector<ChunkKey>& chunk_keys);
+
   AbstractBuffer* getCachedChunkIfExists(const ChunkKey&);
   bool isMetadataCached(const ChunkKey&);
   void cacheMetadataVec(const ChunkMetadataVector&);
@@ -66,6 +76,8 @@ class ForeignStorageCache {
   void setLimit(size_t limit);
   std::vector<ChunkKey> getCachedChunksForKeyPrefix(const ChunkKey&);
   bool recoverCacheForTable(ChunkMetadataVector&, const ChunkKey&);
+  std::map<ChunkKey, AbstractBuffer*> getChunkBuffersForCaching(
+      const std::vector<ChunkKey>& chunk_keys);
 
   // Exists for testing purposes.
   size_t getLimit() const { return entry_limit_; }

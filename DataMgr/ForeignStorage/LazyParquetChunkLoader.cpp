@@ -265,7 +265,8 @@ void append_row_groups(const Interval<RowGroupType>& row_group_interval,
                        AbstractBuffer* buffer,
                        parquet::ParquetFileReader* reader,
                        int16_t* def_levels,
-                       int16_t* rep_levels) {
+                       int16_t* rep_levels,
+                       int8_t* values) {
   auto encoder =
       create_parquet_encoder(column_descriptor, parquet_column_descriptor, buffer);
   CHECK(encoder.get());
@@ -284,18 +285,14 @@ void append_row_groups(const Interval<RowGroupType>& row_group_interval,
     }
 
     while (col_reader->HasNext()) {
-      size_t buffer_size = buffer->size();
-      CHECK(buffer->reservedSize() - buffer_size >=
-            LazyParquetChunkLoader::batch_reader_num_elements);
-      uint8_t* values = reinterpret_cast<uint8_t*>(buffer->getMemoryPtr() + buffer_size);
       int64_t levels_read =
           parquet::ScanAllValues(LazyParquetChunkLoader::batch_reader_num_elements,
                                  def_levels,
                                  rep_levels,
-                                 values,
+                                 reinterpret_cast<uint8_t*>(values),
                                  &values_read,
                                  col_reader.get());
-      encoder->appendData(def_levels, values_read, levels_read);
+      encoder->appendData(def_levels, values_read, levels_read, values);
     }
   }
 }
@@ -487,7 +484,10 @@ void LazyParquetChunkLoader::loadChunk(const Interval<RowGroupType>& row_group_i
   CHECK(buffer);
 
   auto parquet_column_descriptor = get_column_descriptor(reader, parquet_column_index);
-
+  auto max_type_byte_size =
+      std::max(column_descriptor->columnType.get_size(),
+               parquet::GetTypeByteSize(parquet_column_descriptor->physical_type()));
+  values_.resize(batch_reader_num_elements * max_type_byte_size);
   append_row_groups(row_group_interval,
                     parquet_column_index,
                     column_descriptor,
@@ -495,7 +495,8 @@ void LazyParquetChunkLoader::loadChunk(const Interval<RowGroupType>& row_group_i
                     buffer,
                     reader->parquet_reader(),
                     def_levels_.data(),
-                    rep_levels_.data());
+                    rep_levels_.data(),
+                    values_.data());
 }
 
 }  // namespace foreign_storage

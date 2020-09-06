@@ -16,10 +16,12 @@
 
 #pragma once
 
+#include "Catalog/Catalog.h"
+
 namespace foreign_storage {
-class ParquetForeignTableSchema {
+class ForeignTableSchema {
  public:
-  ParquetForeignTableSchema(const int32_t db_id, const ForeignTable* foreign_table) {
+  ForeignTableSchema(const int32_t db_id, const ForeignTable* foreign_table) {
     catalog_ = Catalog_Namespace::Catalog::get(db_id);
     CHECK(catalog_);
 

@@ -67,6 +67,7 @@ class LazyParquetChunkLoader {
   std::string file_name_;
   std::vector<int16_t> def_levels_;
   std::vector<int16_t> rep_levels_;
+  std::vector<int8_t> values_;
 };
 
 }  // namespace foreign_storage

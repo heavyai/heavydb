@@ -19,9 +19,9 @@
 #include <limits>
 #include <list>
 
+#include "ForeignTableSchema.h"
 #include "ImportExport/Importer.h"
 #include "Interval.h"
-#include "ParquetForeignTableSchema.h"
 
 namespace foreign_storage {
 
@@ -47,7 +47,7 @@ class LazyParquetImporter : public import_export::Importer {
                       const std::string& file_name,
                       const import_export::CopyParams& copy_params,
                       RowGroupMetadataVector& metadata_vector,
-                      ParquetForeignTableSchema& schema);
+                      ForeignTableSchema& schema);
 
   /**
    * Partial load of a Parquet file
@@ -70,7 +70,7 @@ class LazyParquetImporter : public import_export::Importer {
 
  private:
   RowGroupMetadataVector& row_group_metadata_vec_;
-  ParquetForeignTableSchema& schema_;
+  ForeignTableSchema& schema_;
 };
 
 }  // namespace foreign_storage

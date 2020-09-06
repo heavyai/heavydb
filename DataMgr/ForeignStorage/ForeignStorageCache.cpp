@@ -49,19 +49,24 @@ ForeignStorageCache::ForeignStorageCache(const std::string& cache_dir,
       std::make_unique<File_Namespace::GlobalFileMgr>(0, cache_dir, num_reader_threads);
 }
 
-void ForeignStorageCache::cacheChunk(const ChunkKey& chunk_key, AbstractBuffer* buffer) {
+void ForeignStorageCache::cacheTableChunks(const std::vector<ChunkKey>& chunk_keys) {
   auto timer = DEBUG_TIMER(__func__);
   write_lock lock(chunks_mutex_);
-  if (isCacheFull()) {
-    evictChunkByAlg();
+  CHECK(!chunk_keys.empty());
+  auto db_id = chunk_keys[0][CHUNK_KEY_DB_IDX];
+  auto table_id = chunk_keys[0][CHUNK_KEY_TABLE_IDX];
+  for (const auto& chunk_key : chunk_keys) {
+    CHECK_EQ(db_id, chunk_key[CHUNK_KEY_DB_IDX]);
+    CHECK_EQ(table_id, chunk_key[CHUNK_KEY_TABLE_IDX]);
+    CHECK(global_file_mgr_->isBufferOnDevice(chunk_key));
+
+    if (isCacheFull()) {
+      evictChunkByAlg();
+    }
+    eviction_alg_->touchChunk(chunk_key);
+    cached_chunks_.emplace(chunk_key);
   }
-  eviction_alg_->touchChunk(chunk_key);
-  cached_chunks_.emplace(chunk_key);
-  // Mark the buffer as is_updated so that we know we are writing the whole buffer.
-  // putBuffer will clear flags on buffer.
-  buffer->setUpdated();
-  global_file_mgr_->putBuffer(chunk_key, buffer);
-  global_file_mgr_->checkpoint(chunk_key[0], chunk_key[1]);
+  global_file_mgr_->checkpoint(db_id, table_id);
 }
 
 AbstractBuffer* ForeignStorageCache::getCachedChunkIfExists(const ChunkKey& chunk_key) {
@@ -118,14 +123,44 @@ void ForeignStorageCache::cacheMetadataVec(const ChunkMetadataVector& metadata_v
   for (auto& [chunk_key, metadata] : metadata_vec) {
     cached_metadata_.emplace(chunk_key);
     AbstractBuffer* buf;
+    AbstractBuffer* index_buffer = nullptr;
+    ChunkKey index_chunk_key;
+    if (isVarLenKey(chunk_key)) {
+      // For variable length chunks, metadata is associated with the data chunk
+      CHECK(isVarLenDataKey(chunk_key));
+      index_chunk_key = {chunk_key[CHUNK_KEY_DB_IDX],
+                         chunk_key[CHUNK_KEY_TABLE_IDX],
+                         chunk_key[CHUNK_KEY_COLUMN_IDX],
+                         chunk_key[CHUNK_KEY_FRAGMENT_IDX],
+                         2};
+    }
+
     if (!global_file_mgr_->isBufferOnDevice(chunk_key)) {
       buf = global_file_mgr_->createBuffer(chunk_key);
+
+      if (!index_chunk_key.empty()) {
+        CHECK(!global_file_mgr_->isBufferOnDevice(index_chunk_key));
+        index_buffer = global_file_mgr_->createBuffer(index_chunk_key);
+        CHECK(index_buffer);
+      }
     } else {
       buf = global_file_mgr_->getBuffer(chunk_key);
+
+      if (!index_chunk_key.empty()) {
+        CHECK(global_file_mgr_->isBufferOnDevice(index_chunk_key));
+        index_buffer = global_file_mgr_->getBuffer(chunk_key);
+        CHECK(index_buffer);
+      }
     }
 
     setMetadataForBuffer(buf, metadata.get());
     evictThenEraseChunk(chunk_key);
+
+    if (!index_chunk_key.empty()) {
+      CHECK(index_buffer);
+      index_buffer->isUpdated();
+      evictThenEraseChunk(index_chunk_key);
+    }
   }
   global_file_mgr_->checkpoint();
 }
@@ -227,6 +262,25 @@ std::vector<ChunkKey> ForeignStorageCache::getCachedChunksForKeyPrefix(
   iterateOverMatchingPrefix(
       [&ret_vec](auto chunk) { ret_vec.push_back(chunk); }, cached_chunks_, chunk_prefix);
   return ret_vec;
+}
+
+std::map<ChunkKey, AbstractBuffer*> ForeignStorageCache::getChunkBuffersForCaching(
+    const std::vector<ChunkKey>& chunk_keys) {
+  auto timer = DEBUG_TIMER(__func__);
+  std::map<ChunkKey, AbstractBuffer*> chunk_buffer_map;
+  read_lock lock(chunks_mutex_);
+  for (const auto& chunk_key : chunk_keys) {
+    CHECK(cached_chunks_.find(chunk_key) == cached_chunks_.end());
+    CHECK(global_file_mgr_->isBufferOnDevice(chunk_key));
+    chunk_buffer_map[chunk_key] = global_file_mgr_->getBuffer(chunk_key);
+    CHECK_EQ(chunk_buffer_map[chunk_key]->pageCount(), static_cast<size_t>(0));
+
+    // Clear all buffer metadata
+    chunk_buffer_map[chunk_key]->encoder = nullptr;
+    chunk_buffer_map[chunk_key]->has_encoder = false;
+    chunk_buffer_map[chunk_key]->setSize(0);
+  }
+  return chunk_buffer_map;
 }
 
 // Private functions.  Locks should be acquired in the public interface before calling

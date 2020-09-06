@@ -34,12 +34,29 @@
 // ChunkKey (also referred to as the keyspace id)
 using ChunkKey = std::vector<int>;
 
+#define CHUNK_KEY_DB_IDX 0
+#define CHUNK_KEY_TABLE_IDX 1
+#define CHUNK_KEY_COLUMN_IDX 2
+#define CHUNK_KEY_FRAGMENT_IDX 3
+
 inline bool isTableKey(const ChunkKey& key) {
   return key.size() == 2;
 }
 
 inline bool isColumnKey(const ChunkKey& key) {
   return key.size() == 3;
+}
+
+inline bool isVarLenKey(const ChunkKey& key) {
+  return key.size() == 5;
+}
+
+inline bool isVarLenDataKey(const ChunkKey& key) {
+  return key.size() == 5 && key[4] == 1;
+}
+
+inline bool isVarLenIndexKey(const ChunkKey& key) {
+  return key.size() == 5 && key[4] == 2;
 }
 
 inline std::string showChunk(const ChunkKey& key) {

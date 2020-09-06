@@ -29,32 +29,11 @@ using namespace foreign_storage;
 using namespace File_Namespace;
 using namespace TestHelpers;
 
-static const ChunkKey chunk_key1 = {1, 1, 1, 0};
-
 class PersistentStorageMgrTest : public testing::Test {
  protected:
   inline static const std::string cache_path_ = "./test_foreign_data_cache";
   void TearDown() override { boost::filesystem::remove_all(cache_path_); }
 };
-
-TEST_F(PersistentStorageMgrTest, DiskCache_FileCreation) {
-  boost::filesystem::remove_all(cache_path_);
-  {
-    ForeignStorageCache cache{cache_path_, 0, 1024};
-    GlobalFileMgr* gfm = cache.getGlobalFileMgr();
-    ASSERT_TRUE(boost::filesystem::exists(cache_path_));
-    ASSERT_FALSE(boost::filesystem::exists(cache_path_ + "/table_1_1"));
-    ASSERT_EQ(cache.getCachedChunkIfExists(chunk_key1), nullptr);
-    ASSERT_FALSE(gfm->isBufferOnDevice(chunk_key1));
-    TestBuffer source_buffer{std::vector<int8_t>{1, 2, 3, 4}};
-    cache.cacheChunk(chunk_key1, &source_buffer);
-    ASSERT_TRUE(gfm->isBufferOnDevice(chunk_key1));
-    ASSERT_TRUE(boost::filesystem::exists(
-        cache_path_ + "/table_1_1/0." + to_string(gfm->getDefaultPageSize()) + ".mapd"));
-  }
-  // Cache files should persist after cache is destroyed.
-  ASSERT_TRUE(boost::filesystem::exists(cache_path_));
-}
 
 TEST_F(PersistentStorageMgrTest, DiskCache_CustomPath) {
   DiskCacheConfig disk_cache_config(cache_path_);

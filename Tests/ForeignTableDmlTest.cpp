@@ -1112,6 +1112,7 @@ TEST_F(RefreshMetadataTypeTest, ScalarTypes) {
   sql("REFRESH FOREIGN TABLES " + default_table_name + ";");
   sql("SELECT * FROM " + default_table_name + ";");
 }
+
 TEST_F(RefreshMetadataTypeTest, ArrayTypes) {
   const auto& query = getCreateForeignTableQuery(
       "(b BOOLEAN[], t TINYINT[], s SMALLINT[], i INTEGER[], bi BIGINT[], f "
@@ -1130,6 +1131,7 @@ TEST_F(RefreshMetadataTypeTest, ArrayTypes) {
   sql("REFRESH FOREIGN TABLES " + default_table_name + ";");
   sql("SELECT * FROM " + default_table_name + ";");
 }
+
 TEST_F(RefreshMetadataTypeTest, GeoTypes) {
   const auto& query = getCreateForeignTableQuery(
       "(p POINT, l LINESTRING, poly POLYGON, multipoly MULTIPOLYGON)",

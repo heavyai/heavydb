@@ -769,9 +769,9 @@ void RefreshForeignTablesCommand::execute(TQueryResult& _return) {
     CHECK(boost::iequals(opt.options["EVICT"], "true") ||
           boost::iequals(opt.options["EVICT"], "false"));
     if (boost::iequals(opt.options["EVICT"], "true")) {
-      foreign_storage_mgr->evictTablesFromCache(table_keys);
+      foreign_storage_mgr->refreshTables(table_keys, true);
       return;
     }
   }
-  foreign_storage_mgr->refreshTablesInCache(table_keys);
+  foreign_storage_mgr->refreshTables(table_keys, false);
 }

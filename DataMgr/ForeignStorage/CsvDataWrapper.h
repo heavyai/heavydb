@@ -56,25 +56,27 @@ class CsvDataWrapper : public ForeignDataWrapper {
  public:
   CsvDataWrapper(const int db_id, const ForeignTable* foreign_table);
 
-  ForeignStorageBuffer* getChunkBuffer(const ChunkKey& chunk_key) override;
-  void populateMetadataForChunkKeyPrefix(
-      const ChunkKey& chunk_key_prefix,
-      ChunkMetadataVector& chunk_metadata_vector) override;
+  void populateChunkMetadata(ChunkMetadataVector& chunk_metadata_vector) override;
+
+  void populateChunkBuffers(
+      std::map<ChunkKey, AbstractBuffer*>& required_buffers,
+      std::map<ChunkKey, AbstractBuffer*>& optional_buffers) override;
+
   static void validateOptions(const ForeignTable* foreign_table);
 
  private:
   CsvDataWrapper(const ForeignTable* foreign_table);
 
   /**
-   * Populates provided chunk with appropriate data by parsing all file regions
+   * Populates provided chunks with appropriate data by parsing all file regions
    * containing chunk data.
    *
-   * @param chunk_key - chunk key for chunk to be populated
-   * @param chunk - object containing data and (optional) index buffers to be populated
+   * @param column_id_to_chunk_map - map of column id to chunks to be populated
+   * @param fragment_id - fragment id of given chunks
    */
-  void populateChunk(ChunkKey chunk_key, Chunk_NS::Chunk& chunk);
+  void populateChunks(std::map<int, Chunk_NS::Chunk>& column_id_to_chunk_map,
+                      int fragment_id);
 
-  ForeignStorageBuffer* getBufferFromMap(const ChunkKey& chunk_key);
   std::string getFilePath();
   import_export::CopyParams validateAndGetCopyParams();
   void validateFilePath();
@@ -102,7 +104,11 @@ class CsvDataWrapper : public ForeignDataWrapper {
    */
   std::optional<bool> validateAndGetBoolValue(const std::string& option_name);
 
-  std::map<ChunkKey, std::unique_ptr<ForeignStorageBuffer>> chunk_buffer_map_;
+  void populateChunkMapForColumns(const std::set<const ColumnDescriptor*>& columns,
+                                  const int fragment_id,
+                                  const std::map<ChunkKey, AbstractBuffer*>& buffers,
+                                  std::map<int, Chunk_NS::Chunk>& column_id_to_chunk_map);
+
   std::map<ChunkKey, std::shared_ptr<ChunkMetadata>> chunk_metadata_map_;
   std::map<int, FileRegions> fragment_id_to_file_regions_map_;
 

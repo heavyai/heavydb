@@ -70,18 +70,35 @@ class ForeignStorageMgr : public AbstractBufferMgr {
   size_t getNumChunks() override;
   void removeTableRelatedDS(const int db_id, const int table_id) override;
   ForeignStorageCache* getForeignStorageCache() const;
-  void refreshTablesInCache(const std::vector<ChunkKey>& table_keys);
-  void evictTablesFromCache(const std::vector<ChunkKey>& table_keys);
+  void refreshTables(const std::vector<ChunkKey>& table_keys,
+                     const bool evict_cached_entries);
   bool hasDataWrapperForChunk(const ChunkKey& chunk_key);
 
  private:
   bool createDataWrapperIfNotExists(const ChunkKey& chunk_key);
   std::shared_ptr<ForeignDataWrapper> getDataWrapper(const ChunkKey& chunk_key);
-  AbstractBuffer* getBufferFromOptionallyCreatedWrapper(const ChunkKey& chunk_key);
+  void populateBuffersFromOptionallyCreatedWrapper(
+      const ChunkKey& chunk_key,
+      std::map<ChunkKey, AbstractBuffer*>& required_buffers,
+      std::map<ChunkKey, AbstractBuffer*>& optional_buffers);
+  std::map<ChunkKey, AbstractBuffer*> getChunkBuffersToPopulate(
+      const ChunkKey& chunk_key,
+      AbstractBuffer* destination_buffer,
+      std::vector<ChunkKey>& chunk_keys);
+  void refreshTablesInCache(const std::vector<ChunkKey>& table_keys);
+  void evictTablesFromCache(const std::vector<ChunkKey>& table_keys);
+  void clearTempChunkBufferMap(const std::vector<ChunkKey>& table_keys);
+  void clearTempChunkBufferMapEntriesForTable(const int db_id, const int table_id);
 
   std::shared_mutex data_wrapper_mutex_;
 
   std::map<ChunkKey, std::shared_ptr<ForeignDataWrapper>> data_wrapper_map_;
+
+  // TODO: Remove below map, which is used to temporarily hold chunk buffers,
+  // when buffer mgr interface is updated to accept multiple buffers in one call
+  std::map<ChunkKey, std::unique_ptr<AbstractBuffer>> temp_chunk_buffer_map_;
+  std::shared_mutex temp_chunk_buffer_map_mutex_;
+
   ForeignStorageCache* foreign_storage_cache_;
   bool is_cache_enabled_;
 };

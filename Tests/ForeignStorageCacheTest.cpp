@@ -78,7 +78,11 @@ class ForeignStorageCacheUnitTest : public testing::Test {
     }
 
     void cacheChunk(const ChunkKey& chunk_key) {
-      cache_->cacheChunk(chunk_key, chunk->getBuffer());
+      auto buffer_map = cache_->getChunkBuffersForCaching({chunk_key});
+      buffer_map[chunk_key]->write(chunk->getBuffer()->getMemoryPtr(),
+                                   chunk->getBuffer()->size());
+      buffer_map[chunk_key]->syncEncoder(chunk->getBuffer());
+      cache_->cacheTableChunks({chunk_key});
     }
 
     void cacheMetadataThenChunk(const ChunkKey& chunk_key) {
@@ -498,10 +502,17 @@ TEST_F(ForeignStorageCacheFileTest, FileCreation) {
     ASSERT_EQ(cache.getCachedChunkIfExists(chunk_key1), nullptr);
     ASSERT_FALSE(gfm->isBufferOnDevice(chunk_key1));
     TestBuffer source_buffer{std::vector<int8_t>{1, 2, 3, 4}};
-    cache.cacheChunk(chunk_key1, &source_buffer);
+    source_buffer.initEncoder(kINT);
+    std::shared_ptr<ChunkMetadata> cached_meta = std::make_shared<ChunkMetadata>();
+    source_buffer.encoder->getMetadata(cached_meta);
+    cache.cacheMetadataVec({std::make_pair(chunk_key1, cached_meta)});
+    auto buffer_map = cache.getChunkBuffersForCaching({chunk_key1});
+    buffer_map[chunk_key1]->write(source_buffer.getMemoryPtr(), source_buffer.size());
+    cache.cacheTableChunks({chunk_key1});
     ASSERT_TRUE(gfm->isBufferOnDevice(chunk_key1));
+    ASSERT_TRUE(boost::filesystem::exists(cache_path_ + "/table_1_1/0.4096.mapd"));
     ASSERT_TRUE(boost::filesystem::exists(
-        cache_path_ + "/table_1_1/0." + to_string(gfm->getDefaultPageSize()) + ".mapd"));
+        cache_path_ + "/table_1_1/1." + to_string(gfm->getDefaultPageSize()) + ".mapd"));
   }
   // Cache files should persist after cache is destroyed.
   ASSERT_TRUE(boost::filesystem::exists(cache_path_));

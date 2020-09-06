@@ -315,8 +315,7 @@ void CommandLineOptions::fillOptions() {
                           po::value<std::string>(&encryption_key_store_path),
                           "Path to directory where encryption related keys will reside.");
   help_desc.add_options()("disk-cache-path",
-                          po::value<std::string>(&(disk_cache_config.path))
-                              ->default_value(base_path + "/omnisci_disk_cache"),
+                          po::value<std::string>(&disk_cache_config.path),
                           "Specify the path for the disk cache.");
   help_desc.add_options()("enable-disk-cache",
                           po::value<bool>(&(disk_cache_config.is_enabled))
@@ -742,9 +741,13 @@ void CommandLineOptions::validate() {
   ddl_utils::FilePathBlacklist::addToBlacklist(base_path + "/mapd_catalogs");
   ddl_utils::FilePathBlacklist::addToBlacklist(base_path + "/mapd_data");
   ddl_utils::FilePathBlacklist::addToBlacklist(base_path + "/mapd_log");
-#ifdef ENABLE_FSI
-  ddl_utils::FilePathBlacklist::addToBlacklist(disk_cache_config.path);
-#endif
+
+  if (g_enable_fsi) {
+    if (disk_cache_config.path.empty()) {
+      disk_cache_config.path = base_path + "/omnisci_disk_cache";
+    }
+    ddl_utils::FilePathBlacklist::addToBlacklist(disk_cache_config.path);
+  }
 
   ddl_utils::FilePathBlacklist::addToBlacklist("/etc/passwd");
   ddl_utils::FilePathBlacklist::addToBlacklist("/etc/shadow");

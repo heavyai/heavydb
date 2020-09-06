@@ -73,7 +73,7 @@ void validate_allowed_mapping(const parquet::ColumnDescriptor* descr,
 void validate_parquet_metadata(
     const std::shared_ptr<parquet::FileMetaData>& file_metadata,
     const std::string& file_path,
-    const ParquetForeignTableSchema& schema) {
+    const ForeignTableSchema& schema) {
   if (schema.numLogicalColumns() != file_metadata->num_columns()) {
     std::stringstream error_msg;
     error_msg << "Mismatched number of logical columns in table '"
@@ -144,7 +144,7 @@ void initialize_bad_rows_tracker(import_export::BadRowsTracker& bad_rows_tracker
 
 void initialize_import_buffers_vec(
     const import_export::Loader* loader,
-    const ParquetForeignTableSchema& schema,
+    const ForeignTableSchema& schema,
     std::vector<std::unique_ptr<TypedImportBuffer>>& import_buffer_vec) {
   import_buffer_vec.clear();
   for (const auto cd : schema.getLogicalAndPhysicalColumns()) {
@@ -324,7 +324,7 @@ std::pair<int64_t, int64_t> get_decimal_min_and_max(
 void read_parquet_metadata_into_import_buffer(
     const size_t num_rows,
     const int row_group,
-    const ParquetForeignTableSchema& schema,
+    const ForeignTableSchema& schema,
     const std::unique_ptr<parquet::RowGroupMetaData>& group_metadata,
     const ColumnDescriptor* column_descriptor,
     import_export::BadRowsTracker& bad_rows_tracker,
@@ -378,7 +378,7 @@ void read_parquet_metadata_into_import_buffer(
 void read_parquet_data_into_import_buffer(
     const import_export::Loader* loader,
     const int row_group,
-    const ParquetForeignTableSchema& schema,
+    const ForeignTableSchema& schema,
     const ColumnDescriptor* column_descriptor,
     std::unique_ptr<parquet::arrow::FileReader>& reader,
     import_export::BadRowsTracker& bad_rows_tracker,
@@ -415,7 +415,7 @@ void read_parquet_data_into_import_buffer(
 void import_row_group(
     const int row_group,
     const bool metadata_scan,
-    const ParquetForeignTableSchema& schema,
+    const ForeignTableSchema& schema,
     const std::string& file_path,
     const Interval<ColumnType>& column_interval,
     import_export::Importer* importer,
@@ -513,7 +513,7 @@ LazyParquetImporter::LazyParquetImporter(import_export::Loader* provided_loader,
                                          const std::string& file_name,
                                          const import_export::CopyParams& copy_params,
                                          RowGroupMetadataVector& metadata_vector,
-                                         ParquetForeignTableSchema& schema)
+                                         ForeignTableSchema& schema)
     : import_export::Importer(provided_loader, file_name, copy_params)
     , row_group_metadata_vec_(metadata_vector)
     , schema_(schema) {}
