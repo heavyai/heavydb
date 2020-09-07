@@ -26,6 +26,7 @@
 #include "Catalog/Catalog.h"
 
 const std::string data_path = "./tmp/mapd_data";
+const size_t cache_entry_limit = 1024;
 extern bool g_enable_fsi;
 
 using namespace foreign_storage;
@@ -42,96 +43,265 @@ static const ChunkKey chunk_key2 = {1, 1, 2, 0};
 static const ChunkKey chunk_key3 = {1, 1, 3, 0};
 static const ChunkKey chunk_key_table2 = {1, 2, 1, 0};
 static const ChunkKey table_prefix1 = {1, 1};
+static const ChunkKey table_prefix2 = {1, 2};
 
 class ForeignStorageCacheUnitTest : public testing::Test {
  protected:
   inline static GlobalFileMgr* gfm_;
   inline static std::unique_ptr<ForeignStorageCache> cache_;
-  inline static const std::string cache_path_ = "./test_foreign_data_cache";
+  inline static std::string cache_path_;
+
+  template <typename T>
+  struct ChunkWrapper {
+    std::unique_ptr<ColumnDescriptor> cd;
+    std::unique_ptr<TestBuffer> test_buf;
+    std::unique_ptr<TestBuffer> index_buf;
+    std::unique_ptr<DataBlockPtr> data_block;
+    std::unique_ptr<std::vector<T>> data_vec;
+    std::unique_ptr<Chunk_NS::Chunk> chunk;
+    ChunkWrapper(const SQLTypeInfo& type, const std::vector<T>& data) {
+      cd = std::make_unique<ColumnDescriptor>();
+      cd->columnType = type;
+      test_buf = std::make_unique<TestBuffer>(type);
+      chunk = std::make_unique<Chunk_NS::Chunk>(test_buf.get(), nullptr, cd.get());
+      data_block = std::make_unique<DataBlockPtr>();
+      data_vec = std::make_unique<std::vector<T>>(data);
+      data_block->numbersPtr = reinterpret_cast<int8_t*>(data_vec->data());
+      chunk->initEncoder();
+      chunk->appendData(*data_block, data_vec->size(), 0);
+    }
+
+    void cacheMetadata(const ChunkKey& chunk_key) {
+      std::shared_ptr<ChunkMetadata> cached_meta = std::make_shared<ChunkMetadata>();
+      chunk->getBuffer()->encoder->getMetadata(cached_meta);
+      cache_->cacheMetadataVec({std::make_pair(chunk_key, cached_meta)});
+    }
+
+    void cacheChunk(const ChunkKey& chunk_key) {
+      cache_->cacheChunk(chunk_key, chunk->getBuffer());
+    }
+
+    void cacheMetadataThenChunk(const ChunkKey& chunk_key) {
+      cacheMetadata(chunk_key);
+      cacheChunk(chunk_key);
+    }
+  };
+
+  template <typename T>
+  std::vector<ArrayDatum> convertToArrayDatum(std::vector<std::vector<T>> data,
+                                              ArrayDatum null_datum) {
+    std::vector<ArrayDatum> datums;
+    for (auto& array : data) {
+      if (array.size()) {
+        size_t num_bytes = array.size() * sizeof(T);
+        datums.push_back(
+            ArrayDatum(num_bytes, reinterpret_cast<int8_t*>(array.data()), false));
+      } else {
+        datums.push_back(null_datum);
+      }
+    }
+    return datums;
+  }
+
+  struct CacheLimitScope {
+    size_t old_limit;
+    CacheLimitScope(const size_t limit) {
+      old_limit = cache_->getLimit();
+      cache_->setLimit(limit);
+    }
+    ~CacheLimitScope() { cache_->setLimit(old_limit); }
+  };
+
+  std::shared_ptr<ChunkMetadata> createMetadata(const size_t num_bytes,
+                                                const size_t num_elements,
+                                                const int32_t in_min,
+                                                const int32_t in_max,
+                                                const bool has_nulls) {
+    Datum min, max;
+    min.intval = in_min;
+    max.intval = in_max;
+    return std::make_shared<ChunkMetadata>(
+        kINT, num_bytes, num_elements, ChunkStats{min, max, has_nulls});
+  }
+
+  static void assertMetadataEqual(const std::shared_ptr<ChunkMetadata> left_metadata,
+                                  const std::shared_ptr<ChunkMetadata> right_metadata) {
+    ASSERT_EQ(*left_metadata, *right_metadata) << left_metadata->dump() << "\n"
+                                               << right_metadata->dump() << "\n";
+  }
+
+  void evictChunksKeepMetadata() {
+    size_t old_limit = cache_->getLimit();
+    cache_->setLimit(0);
+    cache_->setLimit(old_limit);
+  }
+
+  static void reinitializeCache(std::unique_ptr<ForeignStorageCache>& cache,
+                                GlobalFileMgr*& gfm,
+                                const std::string cache_path = cache_path_,
+                                const size_t cel = cache_entry_limit) {
+    cache = std::make_unique<ForeignStorageCache>(cache_path_, 0, cel);
+    gfm = cache->getGlobalFileMgr();
+  }
+
   static void SetUpTestSuite() {
+    cache_path_ = "./tmp/mapd_data/test_foreign_data_cache";
     boost::filesystem::remove_all(cache_path_);
-    cache_ = std::make_unique<ForeignStorageCache>(cache_path_, 0, 1024);
-    gfm_ = cache_->getGlobalFileMgr();
+    reinitializeCache(cache_, gfm_);
   }
 
   static void TearDownTestSuite() { boost::filesystem::remove_all(cache_path_); }
 
-  void SetUp() override { cache_->clear(); }
+  void SetUp() override {
+    cache_->clear();
+    ASSERT_EQ(gfm_->getNumChunks(), 0U);
+    ASSERT_EQ(cache_->getNumCachedChunks(), 0U);
+    ASSERT_EQ(cache_->getNumCachedMetadata(), 0U);
+  }
+
+  void TearDown() override {}
 };
 
-TEST_F(ForeignStorageCacheUnitTest, CacheChunk) {
-  ASSERT_EQ(cache_->getCachedChunkIfExists(chunk_key1), nullptr);
-  TestBuffer source_buffer{std::vector<int8_t>{1, 2, 3, 4}};
-  cache_->cacheChunk(chunk_key1, &source_buffer);
-  AbstractBuffer* cached_buffer = cache_->getCachedChunkIfExists(chunk_key1);
-  ASSERT_NE(cached_buffer, nullptr);
-  ASSERT_TRUE(source_buffer.compare(cached_buffer, 4));
-}
+namespace {
+struct PrintToStringParamName {
+  std::string operator()(const ::testing::TestParamInfo<SQLTypeInfo>& info) const {
+    std::string str = info.param.get_type_name();
+    return str.substr(0, str.find("("));
+  }
+};
+}  // namespace
 
 TEST_F(ForeignStorageCacheUnitTest, CacheMetadata) {
-  ASSERT_FALSE(cache_->isMetadataCached(chunk_key1));
-  ASSERT_FALSE(cache_->hasCachedMetadataForKeyPrefix(table_prefix1));
-  std::shared_ptr<ChunkMetadata> metadata =
-      std::make_shared<ChunkMetadata>(kTINYINT, 0, 0, ChunkStats{});
-  ChunkMetadataVector metadata_vec_source{std::make_pair(chunk_key1, metadata)};
-  cache_->cacheMetadataVec(metadata_vec_source);
-  ASSERT_TRUE(cache_->isMetadataCached(chunk_key1));
-  ASSERT_TRUE(cache_->hasCachedMetadataForKeyPrefix(table_prefix1));
+  ChunkWrapper<int32_t> chunk_wrapper{kINT, {1, 2, 3, 4}};
+  chunk_wrapper.cacheMetadata(chunk_key1);
+  ASSERT_EQ(cache_->getCachedChunkIfExists(chunk_key1), nullptr);
+
   ChunkMetadataVector metadata_vec_cached{};
   cache_->getCachedMetadataVecForKeyPrefix(metadata_vec_cached, chunk_key1);
-  ASSERT_EQ(metadata_vec_cached.size(), 1U);
-  ASSERT_EQ(metadata_vec_cached[0].second, metadata_vec_source[0].second);
+  assertMetadataEqual(metadata_vec_cached[0].second, createMetadata(16, 4, 1, 4, false));
+  ASSERT_EQ(cache_->getCachedChunkIfExists(chunk_key1), nullptr);
+}
+
+TEST_F(ForeignStorageCacheUnitTest, CacheMetadata_Empty) {
+  ChunkWrapper<int32_t> chunk_wrapper{kINT, {}};
+  chunk_wrapper.cacheMetadata(chunk_key1);
+  ASSERT_EQ(cache_->getCachedChunkIfExists(chunk_key1), nullptr);
+
+  ChunkMetadataVector metadata_vec_cached{};
+  cache_->getCachedMetadataVecForKeyPrefix(metadata_vec_cached, chunk_key1);
+  assertMetadataEqual(metadata_vec_cached[0].second,
+                      createMetadata(0,
+                                     0,
+                                     std::numeric_limits<int32_t>::max(),
+                                     std::numeric_limits<int32_t>::lowest(),
+                                     false));
+  ASSERT_EQ(cache_->getCachedChunkIfExists(chunk_key1), nullptr);
+}
+
+TEST_F(ForeignStorageCacheUnitTest, CacheMetadata_Update) {
+  ChunkWrapper<int32_t> chunk_wrapper{kINT, {1, 2, 3, 4}};
+  chunk_wrapper.cacheMetadata(chunk_key1);
+
+  ChunkWrapper<int32_t> overwrite_wrapper{kINT, {5, 6}};
+  overwrite_wrapper.cacheMetadata(chunk_key1);
+  ASSERT_EQ(cache_->getCachedChunkIfExists(chunk_key1), nullptr);
+
+  ChunkMetadataVector metadata_vec_cached{};
+  cache_->getCachedMetadataVecForKeyPrefix(metadata_vec_cached, chunk_key1);
+  assertMetadataEqual(metadata_vec_cached[0].second, createMetadata(8, 2, 5, 6, false));
+  ASSERT_EQ(cache_->getCachedChunkIfExists(chunk_key1), nullptr);
+}
+
+TEST_F(ForeignStorageCacheUnitTest, CacheChunk) {
+  ChunkWrapper<int32_t> chunk_wrapper{kINT, {1, 2, 3, 4}};
+  chunk_wrapper.cacheMetadataThenChunk(chunk_key1);
+  AbstractBuffer* cached_buf = cache_->getCachedChunkIfExists(chunk_key1);
+  ASSERT_NE(cached_buf, nullptr);
+  ASSERT_TRUE(chunk_wrapper.test_buf->compare(cached_buf, 16));
+}
+
+TEST_F(ForeignStorageCacheUnitTest, UpdateMetadata_ClearsChunk) {
+  ChunkWrapper<int32_t> chunk_wrapper1{kINT, {1}};
+  ChunkWrapper<int32_t> chunk_wrapper2{kINT, {2}};
+  chunk_wrapper1.cacheMetadataThenChunk(chunk_key1);
+  chunk_wrapper2.cacheMetadata(chunk_key1);
+  ASSERT_EQ(cache_->getCachedChunkIfExists(chunk_key1), nullptr);
+}
+
+TEST_F(ForeignStorageCacheUnitTest, UpdateMetadata_ClearsChunkWithSameMeta) {
+  ChunkWrapper<int32_t> chunk_wrapper1{kINT, {1, 2, 1}};
+  ChunkWrapper<int32_t> chunk_wrapper2{kINT, {1, 2, 2}};
+  chunk_wrapper1.cacheMetadataThenChunk(chunk_key1);
+  chunk_wrapper2.cacheMetadata(chunk_key1);
+  ASSERT_EQ(cache_->getCachedChunkIfExists(chunk_key1), nullptr);
+}
+
+TEST_F(ForeignStorageCacheUnitTest, UpdateMetadata_UpdatesMetadata) {
+  ChunkWrapper<int32_t> chunk_wrapper1{kINT, {1}};
+  ChunkWrapper<int32_t> chunk_wrapper2{kINT, {2}};
+  chunk_wrapper1.cacheMetadataThenChunk(chunk_key1);
+  chunk_wrapper2.cacheMetadata(chunk_key1);
+  ChunkMetadataVector metadata_vec_cached{};
+  cache_->getCachedMetadataVecForKeyPrefix(metadata_vec_cached, table_prefix1);
+  assertMetadataEqual(metadata_vec_cached[0].second, createMetadata(4, 1, 2, 2, false));
+}
+
+TEST_F(ForeignStorageCacheUnitTest, UpdateMetadataUsingChunk) {
+  ChunkWrapper<int32_t> chunk_wrapper1{kINT, {1}};
+  ChunkWrapper<int32_t> chunk_wrapper2{kINT, {2}};
+  chunk_wrapper1.cacheMetadata(chunk_key1);
+  chunk_wrapper2.cacheChunk(chunk_key1);
+  ChunkMetadataVector metadata_vec_cached{};
+  cache_->getCachedMetadataVecForKeyPrefix(metadata_vec_cached, table_prefix1);
+  assertMetadataEqual(metadata_vec_cached[0].second, createMetadata(4, 1, 2, 2, false));
+}
+
+TEST_F(ForeignStorageCacheUnitTest, CacheChunk_CacheFull) {
+  CacheLimitScope scope{1};
+  ChunkWrapper<int32_t> chunk_wrapper1{kINT, {1}};
+  ChunkWrapper<int32_t> chunk_wrapper2{kINT, {2}};
+  chunk_wrapper1.cacheMetadataThenChunk(chunk_key1);
+  chunk_wrapper2.cacheMetadataThenChunk(chunk_key2);
+  ASSERT_EQ(cache_->getNumCachedChunks(), 1U);
+  ASSERT_NE(cache_->getCachedChunkIfExists(chunk_key2), nullptr);
 }
 
 TEST_F(ForeignStorageCacheUnitTest, HasCachedMetadataForKeyPrefix) {
-  ASSERT_FALSE(cache_->isMetadataCached(chunk_key1));
   ASSERT_FALSE(cache_->hasCachedMetadataForKeyPrefix(table_prefix1));
-  std::shared_ptr<ChunkMetadata> metadata =
-      std::make_shared<ChunkMetadata>(kTINYINT, 0, 0, ChunkStats{});
-  ChunkMetadataVector metadata_vec_source{std::make_pair(chunk_key_table2, metadata)};
-  cache_->cacheMetadataVec(metadata_vec_source);
-  ASSERT_FALSE(cache_->isMetadataCached(chunk_key1));
-  ASSERT_FALSE(cache_->hasCachedMetadataForKeyPrefix(table_prefix1));
-  ASSERT_TRUE(cache_->isMetadataCached(chunk_key_table2));
-  ASSERT_TRUE(cache_->hasCachedMetadataForKeyPrefix(chunk_key_table2));
+  ASSERT_FALSE(cache_->hasCachedMetadataForKeyPrefix(table_prefix2));
+  ChunkWrapper<int32_t> chunk_wrapper{kINT, {1, 2, 3, 4}};
+  chunk_wrapper.cacheMetadata(chunk_key1);
+  ASSERT_TRUE(cache_->hasCachedMetadataForKeyPrefix(table_prefix1));
+  ASSERT_FALSE(cache_->hasCachedMetadataForKeyPrefix(table_prefix2));
 }
 
 TEST_F(ForeignStorageCacheUnitTest, GetCachedMetadataVecForKeyPrefix) {
-  ASSERT_FALSE(cache_->isMetadataCached(chunk_key1));
-  ASSERT_FALSE(cache_->hasCachedMetadataForKeyPrefix(table_prefix1));
-  std::shared_ptr<ChunkMetadata> metadata =
-      std::make_shared<ChunkMetadata>(kTINYINT, 0, 0, ChunkStats{});
-  ChunkMetadataVector metadata_vec_source{std::make_pair(chunk_key1, metadata),
-                                          std::make_pair(chunk_key2, metadata),
-                                          std::make_pair(chunk_key_table2, metadata)};
-  cache_->cacheMetadataVec(metadata_vec_source);
-  ASSERT_TRUE(cache_->isMetadataCached(chunk_key1));
-  ASSERT_TRUE(cache_->hasCachedMetadataForKeyPrefix(table_prefix1));
+  ChunkWrapper<int32_t> chunk_wrapper1{kINT, {1}};
+  ChunkWrapper<int32_t> chunk_wrapper2{kINT, {2}};
+  ChunkWrapper<int32_t> chunk_wrapper3{kINT, {3}};
+  chunk_wrapper1.cacheMetadata(chunk_key1);
+  chunk_wrapper2.cacheMetadata(chunk_key2);
+  chunk_wrapper3.cacheMetadata(chunk_key_table2);
   ChunkMetadataVector metadata_vec_cached{};
   cache_->getCachedMetadataVecForKeyPrefix(metadata_vec_cached, table_prefix1);
   ASSERT_EQ(metadata_vec_cached.size(), 2U);
+  assertMetadataEqual(metadata_vec_cached[0].second, createMetadata(4, 1, 1, 1, false));
+  assertMetadataEqual(metadata_vec_cached[1].second, createMetadata(4, 1, 2, 2, false));
+
   ChunkMetadataVector col_meta_vec{};
-  cache_->getCachedMetadataVecForKeyPrefix(col_meta_vec, {1, 1, 1});
+  cache_->getCachedMetadataVecForKeyPrefix(col_meta_vec, {1, 1, 2});
   ASSERT_EQ(col_meta_vec.size(), 1U);
+  assertMetadataEqual(col_meta_vec[0].second, createMetadata(4, 1, 2, 2, false));
 }
 
 TEST_F(ForeignStorageCacheUnitTest, ClearForTablePrefix) {
-  TestBuffer test_buffer1{std::vector<int8_t>{1}};
-  TestBuffer test_buffer2{std::vector<int8_t>{1}};
-  TestBuffer test_buffer3{std::vector<int8_t>{1}};
-  cache_->cacheChunk(chunk_key1, &test_buffer1);
-  cache_->cacheChunk(chunk_key2, &test_buffer2);
-  cache_->cacheChunk(chunk_key_table2, &test_buffer3);
+  ChunkWrapper<int8_t> chunk_wrapper1{kTINYINT, {1}};
+  ChunkWrapper<int8_t> chunk_wrapper2{kTINYINT, {2}};
+  ChunkWrapper<int8_t> chunk_wrapper3{kTINYINT, {3}};
+  chunk_wrapper1.cacheMetadataThenChunk(chunk_key1);
+  chunk_wrapper2.cacheMetadataThenChunk(chunk_key2);
+  chunk_wrapper3.cacheMetadataThenChunk(chunk_key_table2);
   ASSERT_EQ(cache_->getNumCachedChunks(), 3U);
-  ASSERT_TRUE(gfm_->isBufferOnDevice(chunk_key1));
-  ASSERT_TRUE(gfm_->isBufferOnDevice(chunk_key2));
-  ASSERT_TRUE(gfm_->isBufferOnDevice(chunk_key_table2));
-  std::shared_ptr<ChunkMetadata> metadata =
-      std::make_shared<ChunkMetadata>(kTINYINT, 0, 0, ChunkStats{});
-  ChunkMetadataVector metadata_vec_source{std::make_pair(chunk_key1, metadata),
-                                          std::make_pair(chunk_key2, metadata),
-                                          std::make_pair(chunk_key_table2, metadata)};
-  cache_->cacheMetadataVec(metadata_vec_source);
   ASSERT_EQ(cache_->getNumCachedMetadata(), 3U);
   cache_->clearForTablePrefix(table_prefix1);
   ASSERT_EQ(cache_->getNumCachedChunks(), 1U);
@@ -142,22 +312,13 @@ TEST_F(ForeignStorageCacheUnitTest, ClearForTablePrefix) {
 }
 
 TEST_F(ForeignStorageCacheUnitTest, Clear) {
-  TestBuffer test_buffer1{std::vector<int8_t>{1}};
-  TestBuffer test_buffer2{std::vector<int8_t>{1}};
-  TestBuffer test_buffer3{std::vector<int8_t>{1}};
-  cache_->cacheChunk(chunk_key1, &test_buffer1);
-  cache_->cacheChunk(chunk_key2, &test_buffer2);
-  cache_->cacheChunk(chunk_key_table2, &test_buffer3);
-  ASSERT_TRUE(gfm_->isBufferOnDevice(chunk_key1));
-  ASSERT_TRUE(gfm_->isBufferOnDevice(chunk_key2));
-  ASSERT_TRUE(gfm_->isBufferOnDevice(chunk_key_table2));
+  ChunkWrapper<int8_t> chunk_wrapper1{kTINYINT, {1}};
+  ChunkWrapper<int8_t> chunk_wrapper2{kTINYINT, {2}};
+  ChunkWrapper<int8_t> chunk_wrapper3{kTINYINT, {3}};
+  chunk_wrapper1.cacheMetadataThenChunk(chunk_key1);
+  chunk_wrapper2.cacheMetadataThenChunk(chunk_key2);
+  chunk_wrapper3.cacheMetadataThenChunk(chunk_key_table2);
   ASSERT_EQ(cache_->getNumCachedChunks(), 3U);
-  std::shared_ptr<ChunkMetadata> metadata =
-      std::make_shared<ChunkMetadata>(kTINYINT, 0, 0, ChunkStats{});
-  ChunkMetadataVector metadata_vec_source{std::make_pair(chunk_key1, metadata),
-                                          std::make_pair(chunk_key2, metadata),
-                                          std::make_pair(chunk_key_table2, metadata)};
-  cache_->cacheMetadataVec(metadata_vec_source);
   ASSERT_EQ(cache_->getNumCachedMetadata(), 3U);
   cache_->clear();
   ASSERT_EQ(cache_->getNumCachedChunks(), 0U);
@@ -168,21 +329,106 @@ TEST_F(ForeignStorageCacheUnitTest, Clear) {
 }
 
 TEST_F(ForeignStorageCacheUnitTest, SetLimit) {
-  size_t old_limit = cache_->getLimit();
-  size_t new_limit = 1;
-  TestBuffer test_buffer1{std::vector<int8_t>{1}};
-  TestBuffer test_buffer2{std::vector<int8_t>{1}};
-  TestBuffer test_buffer3{std::vector<int8_t>{1}};
-  cache_->cacheChunk(chunk_key1, &test_buffer1);
-  cache_->cacheChunk(chunk_key2, &test_buffer2);
+  ChunkWrapper<int8_t> chunk_wrapper1{kTINYINT, {1}};
+  ChunkWrapper<int8_t> chunk_wrapper2{kTINYINT, {2}};
+  ChunkWrapper<int8_t> chunk_wrapper3{kTINYINT, {3}};
+  chunk_wrapper1.cacheMetadataThenChunk(chunk_key1);
+  chunk_wrapper2.cacheMetadataThenChunk(chunk_key2);
+  chunk_wrapper3.cacheMetadata(chunk_key3);
   ASSERT_EQ(cache_->getNumCachedChunks(), 2U);
-  cache_->setLimit(new_limit);
+  size_t new_limit = 1;
+  CacheLimitScope temp_limit{new_limit};
   ASSERT_EQ(cache_->getLimit(), new_limit);
   ASSERT_EQ(cache_->getNumCachedChunks(), new_limit);
-  cache_->cacheChunk(chunk_key3, &test_buffer3);
+  ASSERT_EQ(cache_->getNumCachedMetadata(), 3U);
+  chunk_wrapper3.cacheChunk(chunk_key3);
   ASSERT_EQ(cache_->getLimit(), new_limit);
   ASSERT_EQ(cache_->getNumCachedChunks(), new_limit);
-  cache_->setLimit(old_limit);
+}
+
+class CacheDiskStorageTest : public ForeignStorageCacheUnitTest {
+ protected:
+  static void SetUpTestSuite() {
+    cache_path_ = "./tmp/mapd_data/test_foreign_data_cache";
+  }
+  static void TearDownTestSuite() {}
+  void SetUp() override {
+    boost::filesystem::remove_all(cache_path_);
+    reinitializeCache(cache_, gfm_);
+  }
+  void TearDown() override { boost::filesystem::remove_all(cache_path_); }
+};
+
+TEST_F(CacheDiskStorageTest, CachePath_CreateBaseDir) {
+  ASSERT_FALSE(boost::filesystem::exists(cache_path_ + "/table_1_1"));
+  ChunkWrapper<int32_t> chunk_wrapper1{kINT, {1, 2, 3, 4}};
+  chunk_wrapper1.cacheMetadata(chunk_key1);
+  ASSERT_TRUE(boost::filesystem::exists(cache_path_ + "/table_1_1"));
+}
+
+TEST_F(CacheDiskStorageTest, CacheMetadata_VerifyMetadataFileCreated) {
+  ChunkWrapper<int32_t> chunk_wrapper1{kINT, {1, 2, 3, 4}};
+  chunk_wrapper1.cacheMetadata(chunk_key1);
+  ASSERT_TRUE(boost::filesystem::exists(cache_path_ + "/table_1_1/0.4096.mapd"));
+}
+
+TEST_F(CacheDiskStorageTest, CacheChunk_VerifyChunkFileCreated) {
+  ChunkWrapper<int32_t> chunk_wrapper1{kINT, {1, 2, 3, 4}};
+  chunk_wrapper1.cacheMetadataThenChunk(chunk_key1);
+  ASSERT_TRUE(boost::filesystem::exists(cache_path_ + "/table_1_1/1." +
+                                        to_string(gfm_->getDefaultPageSize()) + ".mapd"));
+}
+
+TEST_F(CacheDiskStorageTest, RecoverCache_Metadata) {
+  ChunkWrapper<int32_t> chunk_wrapper1{kINT, {1, 2, 3, 4}};
+  chunk_wrapper1.cacheMetadata(chunk_key1);
+  reinitializeCache(cache_, gfm_);
+  ASSERT_EQ(cache_->getNumCachedMetadata(), 0U);
+  ChunkMetadataVector metadata_vec_cached{};
+  cache_->recoverCacheForTable(metadata_vec_cached, table_prefix1);
+  ASSERT_EQ(cache_->getNumCachedMetadata(), 1U);
+  ASSERT_EQ(cache_->getNumCachedChunks(), 0U);
+  assertMetadataEqual(metadata_vec_cached[0].second, createMetadata(16, 4, 1, 4, false));
+}
+
+TEST_F(CacheDiskStorageTest, RecoverCache_UpdatedMetadata) {
+  ChunkWrapper<int32_t> chunk_wrapper1{kINT, {1, 2, 3, 4}};
+  chunk_wrapper1.cacheMetadata(chunk_key1);
+  ChunkWrapper<int32_t> chunk_wrapper2{kINT, {5, 6}};
+  chunk_wrapper2.cacheMetadata(chunk_key1);
+  reinitializeCache(cache_, gfm_);
+  ChunkMetadataVector metadata_vec_cached{};
+  cache_->recoverCacheForTable(metadata_vec_cached, table_prefix1);
+  ASSERT_EQ(cache_->getNumCachedMetadata(), 1U);
+  assertMetadataEqual(metadata_vec_cached[0].second, createMetadata(8, 2, 5, 6, false));
+}
+
+TEST_F(CacheDiskStorageTest, RecoverCache_SingleChunk) {
+  ChunkWrapper<int32_t> chunk_wrapper1{kINT, {1, 2, 3, 4}};
+  chunk_wrapper1.cacheMetadataThenChunk(chunk_key1);
+  reinitializeCache(cache_, gfm_);
+  ASSERT_EQ(cache_->getNumCachedChunks(), 0U);
+  ChunkMetadataVector metadata_vec_cached{};
+  cache_->recoverCacheForTable(metadata_vec_cached, table_prefix1);
+  ASSERT_EQ(cache_->getNumCachedChunks(), 1U);
+  AbstractBuffer* cached_buf = cache_->getCachedChunkIfExists(chunk_key1);
+  ASSERT_NE(cached_buf, nullptr);
+  ASSERT_TRUE(chunk_wrapper1.test_buf->compare(cached_buf, 16));
+}
+
+TEST_F(CacheDiskStorageTest, RecoverCache_SingleChunkAfterEvict) {
+  ChunkWrapper<int32_t> chunk_wrapper1{kINT, {1, 2, 3, 4}};
+  chunk_wrapper1.cacheMetadataThenChunk(chunk_key1);
+  ChunkWrapper<int32_t> chunk_wrapper2{kINT, {5, 6}};
+  chunk_wrapper2.cacheMetadataThenChunk(chunk_key2);
+  { CacheLimitScope scope{1}; }
+  reinitializeCache(cache_, gfm_);
+  ChunkMetadataVector metadata_vec_cached{};
+  cache_->recoverCacheForTable(metadata_vec_cached, table_prefix1);
+  ASSERT_EQ(cache_->getNumCachedChunks(), 1U);
+  AbstractBuffer* cached_buf = cache_->getCachedChunkIfExists(chunk_key2);
+  ASSERT_NE(cached_buf, nullptr);
+  ASSERT_TRUE(chunk_wrapper2.test_buf->compare(cached_buf, 8));
 }
 
 class ForeignStorageCacheLRUTest : public testing::Test {};
@@ -240,6 +486,47 @@ class ForeignStorageCacheFileTest : public testing::Test {
   std::string cache_path_;
   void TearDown() override { boost::filesystem::remove_all(cache_path_); }
 };
+
+TEST_F(ForeignStorageCacheFileTest, FileCreation) {
+  cache_path_ = "./test_foreign_data_cache";
+  boost::filesystem::remove_all(cache_path_);
+  {
+    ForeignStorageCache cache{cache_path_, 0, 1024};
+    GlobalFileMgr* gfm = cache.getGlobalFileMgr();
+    ASSERT_TRUE(boost::filesystem::exists(cache_path_));
+    ASSERT_FALSE(boost::filesystem::exists(cache_path_ + "/table_1_1"));
+    ASSERT_EQ(cache.getCachedChunkIfExists(chunk_key1), nullptr);
+    ASSERT_FALSE(gfm->isBufferOnDevice(chunk_key1));
+    TestBuffer source_buffer{std::vector<int8_t>{1, 2, 3, 4}};
+    cache.cacheChunk(chunk_key1, &source_buffer);
+    ASSERT_TRUE(gfm->isBufferOnDevice(chunk_key1));
+    ASSERT_TRUE(boost::filesystem::exists(
+        cache_path_ + "/table_1_1/0." + to_string(gfm->getDefaultPageSize()) + ".mapd"));
+  }
+  // Cache files should persist after cache is destroyed.
+  ASSERT_TRUE(boost::filesystem::exists(cache_path_));
+}
+
+TEST_F(ForeignStorageCacheFileTest, CustomPath) {
+  cache_path_ = "./test_foreign_data_cache";
+  DiskCacheConfig disk_cache_config(cache_path_);
+  PersistentStorageMgr psm(data_path, 0, disk_cache_config);
+  ASSERT_EQ(psm.getDiskCache()->getGlobalFileMgr()->getBasePath(), cache_path_ + "/");
+}
+
+TEST_F(ForeignStorageCacheFileTest, InitializeSansCache) {
+  cache_path_ = "./test_foreign_data_cache";
+  DiskCacheConfig disk_cache_config(cache_path_, false);
+  PersistentStorageMgr psm(data_path, 0, disk_cache_config);
+  ASSERT_EQ(psm.getForeignStorageMgr()->getForeignStorageCache(), nullptr);
+}
+
+TEST_F(ForeignStorageCacheFileTest, EnableCache) {
+  cache_path_ = "./test_foreign_data_cache";
+  DiskCacheConfig disk_cache_config(cache_path_);
+  PersistentStorageMgr psm(data_path, 0, disk_cache_config);
+  ASSERT_NE(psm.getForeignStorageMgr()->getForeignStorageCache(), nullptr);
+}
 
 TEST_F(ForeignStorageCacheFileTest, FileBlocksPath) {
   cache_path_ = "./test_foreign_data_cache";

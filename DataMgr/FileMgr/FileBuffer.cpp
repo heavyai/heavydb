@@ -161,18 +161,16 @@ void FileBuffer::calcHeaderBuffer() {
   // pageDataSize_ = pageSize_-reservedHeaderSize_;
 }
 
-void FileBuffer::freePages() {
-  // Need to zero headers (actually just first four bytes of header)
-
-  // First delete metadata pages
+void FileBuffer::freeMetadataPages() {
   for (auto metaPageIt = metadataPages_.pageVersions.begin();
        metaPageIt != metadataPages_.pageVersions.end();
        ++metaPageIt) {
     FileInfo* fileInfo = fm_->getFileInfoForFileId(metaPageIt->fileId);
     fileInfo->freePage(metaPageIt->pageNum);
   }
+}
 
-  // Now delete regular pages
+void FileBuffer::freeChunkPages() {
   for (auto multiPageIt = multiPages_.begin(); multiPageIt != multiPages_.end();
        ++multiPageIt) {
     for (auto pageIt = multiPageIt->pageVersions.begin();
@@ -182,6 +180,11 @@ void FileBuffer::freePages() {
       fileInfo->freePage(pageIt->pageNum);
     }
   }
+}
+
+void FileBuffer::freePages() {
+  freeMetadataPages();
+  freeChunkPages();
 }
 
 struct readThreadDS {

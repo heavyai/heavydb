@@ -58,13 +58,14 @@ class ForeignStorageCache {
   void cacheChunk(const ChunkKey&, AbstractBuffer*);
   AbstractBuffer* getCachedChunkIfExists(const ChunkKey&);
   bool isMetadataCached(const ChunkKey&);
-  void cacheMetadataVec(ChunkMetadataVector&);
+  void cacheMetadataVec(const ChunkMetadataVector&);
   void getCachedMetadataVecForKeyPrefix(ChunkMetadataVector&, const ChunkKey&);
   bool hasCachedMetadataForKeyPrefix(const ChunkKey&);
   void clearForTablePrefix(const ChunkKey&);
   void clear();
   void setLimit(size_t limit);
   std::vector<ChunkKey> getCachedChunksForKeyPrefix(const ChunkKey&);
+  bool recoverCacheForTable(ChunkMetadataVector&, const ChunkKey&);
 
   // Exists for testing purposes.
   size_t getLimit() const { return entry_limit_; }
@@ -82,6 +83,7 @@ class ForeignStorageCache {
   // These methods are private and assume locks are already acquired when called.
   std::set<ChunkKey>::iterator eraseChunk(const std::set<ChunkKey>::iterator&);
   void eraseChunk(const ChunkKey&);
+  void evictThenEraseChunk(const ChunkKey&);
   void evictChunkByAlg();
   bool isCacheFull() const;
   void validatePath(const std::string&);
@@ -95,7 +97,7 @@ class ForeignStorageCache {
 
   // Keeps tracks of which Chunks/ChunkMetadata are cached.
   std::set<ChunkKey> cached_chunks_;
-  std::map<ChunkKey, std::shared_ptr<ChunkMetadata>> cached_metadata_;
+  std::set<ChunkKey> cached_metadata_;
 
   // Separate mutexes for chunks/metadata.
   mapd_shared_mutex chunks_mutex_;

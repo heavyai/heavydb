@@ -25,6 +25,10 @@ class TestBuffer : public AbstractBuffer {
   TestBuffer(const std::vector<int8_t> bytes) : AbstractBuffer(0, kTINYINT) {
     write((int8_t*)bytes.data(), bytes.size());
   }
+  TestBuffer(const std::vector<int32_t> bytes) : AbstractBuffer(0, kINT) {
+    write((int8_t*)bytes.data(), bytes.size() * 4);
+  }
+
   ~TestBuffer() override {
     if (mem_ != nullptr) {
       free(mem_);
@@ -44,16 +48,10 @@ class TestBuffer : public AbstractBuffer {
              const size_t offset = 0,
              const MemoryLevel src_buffer_type = CPU_LEVEL,
              const int src_device_id = -1) override {
+    is_updated_ = true;
     reserve(num_bytes + offset);
     memcpy(mem_ + offset, src, num_bytes);
     is_dirty_ = true;
-    if (offset < size_) {
-      is_updated_ = true;
-    }
-    if (offset + num_bytes > size_) {
-      is_appended_ = true;
-      size_ = offset + num_bytes;
-    }
   }
 
   void reserve(size_t num_bytes) override {
@@ -69,7 +67,11 @@ class TestBuffer : public AbstractBuffer {
               const size_t num_bytes,
               const MemoryLevel src_buffer_type,
               const int device_id) override {
-    UNREACHABLE();
+    size_t offset = size_;
+    reserve(size_ + num_bytes);
+    memcpy(mem_ + offset, src, num_bytes);
+    is_dirty_ = true;
+    is_updated_ = true;
   }
 
   int8_t* getMemoryPtr() override { return mem_; }

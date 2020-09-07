@@ -44,14 +44,14 @@ using namespace Data_Namespace;
 namespace File_Namespace {
 
 class GlobalFileMgr;  // forward declaration
-                      /**
-                       * @type PageSizeFileMMap
-                       * @brief Maps logical page sizes to files.
-                       *
-                       * The file manager uses this type in order to quickly find files of a certain page size.
-                       * A multimap is used to associate the key (page size) with values (file identifiers of
-                       * files                       having the matching page size).
-                       */
+/**
+ * @type PageSizeFileMMap
+ * @brief Maps logical page sizes to files.
+ *
+ * The file manager uses this type in order to quickly find files of a certain page size.
+ * A multimap is used to associate the key (page size) with values (file identifiers of
+ * files having the matching page size).
+ */
 using PageSizeFileMMap = std::multimap<size_t, int>;
 
 /**

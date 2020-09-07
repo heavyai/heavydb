@@ -34,6 +34,14 @@
 // ChunkKey (also referred to as the keyspace id)
 using ChunkKey = std::vector<int>;
 
+inline bool isTableKey(const ChunkKey& key) {
+  return key.size() == 2;
+}
+
+inline bool isColumnKey(const ChunkKey& key) {
+  return key.size() == 3;
+}
+
 inline std::string showChunk(const ChunkKey& key) {
   std::ostringstream tss;
   for (auto vecIt = key.begin(); vecIt != key.end(); ++vecIt) {

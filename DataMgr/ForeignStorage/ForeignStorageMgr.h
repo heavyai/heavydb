@@ -72,10 +72,12 @@ class ForeignStorageMgr : public AbstractBufferMgr {
   ForeignStorageCache* getForeignStorageCache() const;
   void refreshTablesInCache(const std::vector<ChunkKey>& table_keys);
   void evictTablesFromCache(const std::vector<ChunkKey>& table_keys);
+  bool hasDataWrapperForChunk(const ChunkKey& chunk_key);
 
  private:
-  void createDataWrapperIfNotExists(const ChunkKey& chunk_key);
+  bool createDataWrapperIfNotExists(const ChunkKey& chunk_key);
   std::shared_ptr<ForeignDataWrapper> getDataWrapper(const ChunkKey& chunk_key);
+  AbstractBuffer* getBufferFromOptionallyCreatedWrapper(const ChunkKey& chunk_key);
 
   std::shared_mutex data_wrapper_mutex_;
 

@@ -34,6 +34,13 @@ struct ChunkMetadata {
   size_t numElements;
   ChunkStats chunkStats;
 
+  std::string dump() {
+    return "numBytes: " + to_string(numBytes) + " numElements " + to_string(numElements) +
+           " min: " + DatumToString(chunkStats.min, sqlType) +
+           " max: " + DatumToString(chunkStats.max, sqlType) +
+           " has_nulls: " + to_string(chunkStats.has_nulls);
+  }
+
   ChunkMetadata(const SQLTypeInfo& sql_type,
                 const size_t num_bytes,
                 const size_t num_elements,

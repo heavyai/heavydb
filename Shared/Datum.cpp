@@ -217,6 +217,12 @@ bool DatumEqual(const Datum a, const Datum b, const SQLTypeInfo& ti) {
       if (ti.get_compression() == kENCODING_DICT) {
         return a.intval == b.intval;
       }
+      if (a.stringval == nullptr && b.stringval == nullptr) {
+        return true;
+      }
+      if (a.stringval == nullptr || b.stringval == nullptr) {
+        return false;
+      }
       return *a.stringval == *b.stringval;
     default:
       return false;
@@ -279,6 +285,9 @@ std::string DatumToString(Datum d, const SQLTypeInfo& ti) {
     case kTEXT:
     case kVARCHAR:
     case kCHAR:
+      if (d.stringval == nullptr) {
+        return "NULL";
+      }
       return *d.stringval;
     default:
       throw std::runtime_error("Internal error: invalid type " + ti.get_type_name() +

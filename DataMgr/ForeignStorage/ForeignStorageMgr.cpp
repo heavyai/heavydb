@@ -1,3 +1,4 @@
+
 /*
  * Copyright 2020 OmniSci, Inc.
  *
@@ -33,7 +34,7 @@ AbstractBuffer* ForeignStorageMgr::getBuffer(const ChunkKey& chunk_key,
                                ? foreign_storage_cache_->getCachedChunkIfExists(chunk_key)
                                : nullptr;
   if (buffer == nullptr) {
-    buffer = getDataWrapper(chunk_key)->getChunkBuffer(chunk_key);
+    buffer = getBufferFromOptionallyCreatedWrapper(chunk_key);
   }
   return buffer;
 }
@@ -50,7 +51,7 @@ void ForeignStorageMgr::fetchBuffer(const ChunkKey& chunk_key,
                                : nullptr;
   if (buffer == nullptr) {
     cached = false;
-    buffer = getDataWrapper(chunk_key)->getChunkBuffer(chunk_key);
+    buffer = getBufferFromOptionallyCreatedWrapper(chunk_key);
   }
   CHECK(buffer);
 
@@ -90,6 +91,15 @@ void ForeignStorageMgr::getChunkMetadataVecForKeyPrefix(
     foreign_storage_cache_->getCachedMetadataVecForKeyPrefix(chunk_metadata, keyPrefix);
     return;
   }
+  // If we haven't created a data wrapper yet then check to see if we can recover data.
+  if (is_cache_enabled_) {
+    if (data_wrapper_map_.find(keyPrefix) == data_wrapper_map_.end()) {
+      if (foreign_storage_cache_->recoverCacheForTable(chunk_metadata, keyPrefix)) {
+        // If we recovered table data from disk then no need to create data wrappers yet.
+        return;
+      }
+    }
+  }
   createDataWrapperIfNotExists(keyPrefix);
   getDataWrapper(keyPrefix)->populateMetadataForChunkKeyPrefix(keyPrefix, chunk_metadata);
 
@@ -115,6 +125,12 @@ std::string ForeignStorageMgr::getStringMgrType() {
   return ToString(FOREIGN_STORAGE_MGR);
 }
 
+bool ForeignStorageMgr::hasDataWrapperForChunk(const ChunkKey& chunk_key) {
+  std::shared_lock data_wrapper_lock(data_wrapper_mutex_);
+  ChunkKey table_key{chunk_key[0], chunk_key[1]};
+  return data_wrapper_map_.find(table_key) != data_wrapper_map_.end();
+}
+
 std::shared_ptr<ForeignDataWrapper> ForeignStorageMgr::getDataWrapper(
     const ChunkKey& chunk_key) {
   std::shared_lock data_wrapper_lock(data_wrapper_mutex_);
@@ -123,7 +139,7 @@ std::shared_ptr<ForeignDataWrapper> ForeignStorageMgr::getDataWrapper(
   return data_wrapper_map_[table_key];
 }
 
-void ForeignStorageMgr::createDataWrapperIfNotExists(const ChunkKey& chunk_key) {
+bool ForeignStorageMgr::createDataWrapperIfNotExists(const ChunkKey& chunk_key) {
   std::lock_guard data_wrapper_lock(data_wrapper_mutex_);
   ChunkKey table_key{chunk_key[0], chunk_key[1]};
   if (data_wrapper_map_.find(table_key) == data_wrapper_map_.end()) {
@@ -150,7 +166,9 @@ void ForeignStorageMgr::createDataWrapperIfNotExists(const ChunkKey& chunk_key) 
     } else {
       throw std::runtime_error("Unsupported data wrapper");
     }
+    return true;
   }
+  return false;
 }
 
 ForeignStorageCache* ForeignStorageMgr::getForeignStorageCache() const {
@@ -191,6 +209,17 @@ void ForeignStorageMgr::evictTablesFromCache(const std::vector<ChunkKey>& table_
     CHECK(table_key.size() == 2U);
     foreign_storage_cache_->clearForTablePrefix(table_key);
   }
+}
+
+AbstractBuffer* ForeignStorageMgr::getBufferFromOptionallyCreatedWrapper(
+    const ChunkKey& chunk_key) {
+  if (createDataWrapperIfNotExists(chunk_key)) {
+    ChunkMetadataVector chunk_metadata;
+    ChunkKey table_key{chunk_key[0], chunk_key[1]};
+    getDataWrapper(table_key)->populateMetadataForChunkKeyPrefix(table_key,
+                                                                 chunk_metadata);
+  }
+  return getDataWrapper(chunk_key)->getChunkBuffer(chunk_key);
 }
 
 void ForeignStorageMgr::deleteBuffer(const ChunkKey& chunk_key, const bool purge) {

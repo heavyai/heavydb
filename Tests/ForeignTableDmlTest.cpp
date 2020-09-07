@@ -327,7 +327,7 @@ TEST_P(CacheControllingSelectQueryTest, MultipleDataBlocksPerFragment) {
 }
 
 // TODO: Re-enable after fixing issue with malformed/null geo columns
-TEST_F(CacheControllingSelectQueryTest, DISABLED_ParquetGeoTypesMalformed) {
+TEST_P(CacheControllingSelectQueryTest, DISABLED_ParquetGeoTypesMalformed) {
   const auto& query = getCreateForeignTableQuery(
       "(p POINT, l LINESTRING, poly POLYGON, multipoly MULTIPOLYGON)",
       "geo_types.malformed",
@@ -340,7 +340,7 @@ TEST_F(CacheControllingSelectQueryTest, DISABLED_ParquetGeoTypesMalformed) {
 }
 
 // TODO: Re-enable after fixing issue with malformed/null geo columns
-TEST_F(CacheControllingSelectQueryTest, DISABLED_ParquetGeoTypesNull) {
+TEST_P(CacheControllingSelectQueryTest, DISABLED_ParquetGeoTypesNull) {
   const auto& query = getCreateForeignTableQuery(
       "(p POINT, l LINESTRING, poly POLYGON, multipoly MULTIPOLYGON)",
       "geo_types.null",
@@ -1080,6 +1080,56 @@ class RefreshTests : public ForeignTableTest {
   }
 };
 
+class RefreshMetadataTypeTest : public SelectQueryTest {};
+TEST_F(RefreshMetadataTypeTest, ScalarTypes) {
+  const auto& query = getCreateForeignTableQuery(
+      "(b BOOLEAN, t TINYINT, s SMALLINT, i INTEGER, bi BIGINT, f FLOAT, "
+      "dc DECIMAL(10, 5), tm TIME, tp TIMESTAMP, d DATE, txt TEXT, "
+      "txt_2 TEXT ENCODING NONE)",
+      {},
+      "scalar_types",
+      "csv",
+      0,
+      default_table_name,
+      "csv");
+  sql(query);
+  sql("SELECT * FROM " + default_table_name + ";");
+  sql("REFRESH FOREIGN TABLES " + default_table_name + ";");
+  sql("SELECT * FROM " + default_table_name + ";");
+}
+TEST_F(RefreshMetadataTypeTest, ArrayTypes) {
+  const auto& query = getCreateForeignTableQuery(
+      "(b BOOLEAN[], t TINYINT[], s SMALLINT[], i INTEGER[], bi BIGINT[], f "
+      "FLOAT[], "
+      "tm "
+      "TIME[], tp TIMESTAMP[], "
+      "d DATE[], txt TEXT[], txt_2 TEXT[])",
+      {},
+      "array_types",
+      "csv",
+      0,
+      default_table_name,
+      "csv");
+  sql(query);
+  sql("SELECT * FROM " + default_table_name + ";");
+  sql("REFRESH FOREIGN TABLES " + default_table_name + ";");
+  sql("SELECT * FROM " + default_table_name + ";");
+}
+TEST_F(RefreshMetadataTypeTest, GeoTypes) {
+  const auto& query = getCreateForeignTableQuery(
+      "(p POINT, l LINESTRING, poly POLYGON, multipoly MULTIPOLYGON)",
+      {},
+      "geo_types",
+      "csv",
+      0,
+      default_table_name,
+      "csv");
+  sql(query);
+  sql("SELECT * FROM " + default_table_name + ";");
+  sql("REFRESH FOREIGN TABLES " + default_table_name + ";");
+  sql("SELECT * FROM " + default_table_name + ";");
+}
+
 class RefreshParamTests : public RefreshTests,
                           public ::testing::WithParamInterface<std::string> {
  protected:
@@ -1810,20 +1860,6 @@ class ForeignStorageCacheQueryTest : public ForeignTableTest {
   }
 };
 
-TEST_F(ForeignStorageCacheQueryTest, SelectPopulateChunks) {
-  ASSERT_EQ(cache->getCachedChunkIfExists(query_chunk_key2), nullptr);
-  ASSERT_FALSE(gfm->isBufferOnDevice(query_chunk_key2));
-  sqlSelect();
-  ASSERT_NE(cache->getCachedChunkIfExists(query_chunk_key2), nullptr);
-  ASSERT_TRUE(gfm->isBufferOnDevice(query_chunk_key2));
-  AbstractBuffer* buffer = cache->getCachedChunkIfExists(query_chunk_key2);
-  ASSERT_NE(buffer, nullptr);
-  int8_t array[4];
-  buffer->read(array, 4);
-  int32_t val = 1;
-  ASSERT_EQ(std::memcmp(array, &val, 4), 0);
-}
-
 TEST_F(ForeignStorageCacheQueryTest, CreatePopulateMetadata) {
   sqlDropForeignTable();
   ASSERT_FALSE(cache->isMetadataCached(query_chunk_key1));
@@ -1920,6 +1956,106 @@ TEST_F(CacheDefaultTest, Path) {
   auto cache = cat->getDataMgr().getForeignStorageMgr()->getForeignStorageCache();
   ASSERT_EQ(cache->getGlobalFileMgr()->getBasePath(),
             to_string(BASE_PATH) + "/omnisci_disk_cache/");
+}
+
+class RecoverCacheQueryTest : public ForeignTableTest {
+ public:
+  inline static std::string cache_path_ = to_string(BASE_PATH) + "/omnisci_disk_cache/";
+  bool starting_cache_state_;
+
+ protected:
+  void resetPersistentStorageMgr(bool cache_enabled) {
+    for (auto table_it : getCatalog().getAllTableMetadata()) {
+      getCatalog().removeFragmenterForTable(table_it->tableId);
+    }
+    getCatalog().getDataMgr().resetPersistentStorage(
+        {cache_path_, cache_enabled}, 0, getSystemParameters());
+  }
+  void SetUp() override { DBHandlerTestFixture::SetUp(); }
+  void TearDown() override { DBHandlerTestFixture::TearDown(); }
+  static void SetUpTestSuite() {}
+  static void TearDownTestSuite() {}
+};
+
+TEST_F(RecoverCacheQueryTest, RecoverWithoutWrappers) {
+  auto cat = &getCatalog();
+  auto fsm = cat->getDataMgr().getForeignStorageMgr();
+  auto cache = fsm->getForeignStorageCache();
+
+  sqlDropForeignTable();
+  sqlCreateForeignTable("(col1 INTEGER)", "1", "csv");
+
+  auto td = cat->getMetadataForTable(default_table_name);
+  ChunkKey key{cat->getCurrentDB().dbId, td->tableId, 1, 0};
+  ChunkKey table_key{cat->getCurrentDB().dbId, td->tableId};
+
+  sqlAndCompareResult("SELECT * FROM " + default_table_name + ";", {{i(1)}});
+  // Cache is now populated.
+
+  // Reset cache and clear memory representations.
+  resetPersistentStorageMgr(true);
+  fsm = cat->getDataMgr().getForeignStorageMgr();
+  cache = fsm->getForeignStorageCache();
+  cat->getDataMgr().deleteChunksWithPrefix(table_key, MemoryLevel::CPU_LEVEL);
+  cat->getDataMgr().deleteChunksWithPrefix(table_key, MemoryLevel::GPU_LEVEL);
+
+  // Cache should be empty until query prompts recovery from disk
+  ASSERT_EQ(cache->getNumCachedMetadata(), 0U);
+  ASSERT_EQ(cache->getNumCachedChunks(), 0U);
+
+  // This query should hit recovered disk data and not need to create datawrappers.
+  sqlAndCompareResult("SELECT * FROM " + default_table_name + ";", {{i(1)}});
+
+  ASSERT_EQ(cache->getNumCachedMetadata(), 1U);
+  ASSERT_EQ(cache->getNumCachedChunks(), 1U);
+
+  // Datawrapper should not have been created.
+  ASSERT_FALSE(fsm->hasDataWrapperForChunk(key));
+
+  sqlDropForeignTable();
+}
+
+TEST_F(RecoverCacheQueryTest, RecoverThenPopulateDataWrappersOnDemand) {
+  auto cat = &getCatalog();
+  auto fsm = cat->getDataMgr().getForeignStorageMgr();
+  auto cache = fsm->getForeignStorageCache();
+
+  sqlDropForeignTable();
+  sqlCreateForeignTable("(col1 INTEGER)", "1", "csv");
+
+  auto td = cat->getMetadataForTable(default_table_name);
+  ChunkKey key{cat->getCurrentDB().dbId, td->tableId, 1, 0};
+  ChunkKey table_key{cat->getCurrentDB().dbId, td->tableId};
+
+  sqlAndCompareResult("SELECT COUNT(*) FROM " + default_table_name + ";", {{i(1)}});
+  // Cache now has metadata only.
+  ASSERT_EQ(cache->getNumCachedMetadata(), 1U);
+  ASSERT_EQ(cache->getNumCachedChunks(), 0U);
+  ASSERT_TRUE(fsm->hasDataWrapperForChunk(key));
+
+  // Reset cache and clear memory representations.
+  resetPersistentStorageMgr(true);
+  fsm = cat->getDataMgr().getForeignStorageMgr();
+  cache = fsm->getForeignStorageCache();
+  cat->getDataMgr().deleteChunksWithPrefix(table_key, MemoryLevel::CPU_LEVEL);
+  cat->getDataMgr().deleteChunksWithPrefix(table_key, MemoryLevel::GPU_LEVEL);
+
+  // Cache should be empty until query prompts recovery from disk
+  ASSERT_EQ(cache->getNumCachedMetadata(), 0U);
+  ASSERT_EQ(cache->getNumCachedChunks(), 0U);
+
+  // This query should hit recovered disk data and not need to create datawrappers.
+  sqlAndCompareResult("SELECT COUNT(*) FROM " + default_table_name + ";", {{i(1)}});
+
+  ASSERT_EQ(cache->getNumCachedMetadata(), 1U);
+  ASSERT_EQ(cache->getNumCachedChunks(), 0U);
+  ASSERT_FALSE(fsm->hasDataWrapperForChunk(key));
+
+  sqlAndCompareResult("SELECT * FROM " + default_table_name + ";", {{i(1)}});
+  ASSERT_EQ(cache->getNumCachedChunks(), 1U);
+  ASSERT_TRUE(fsm->hasDataWrapperForChunk(key));
+
+  sqlDropForeignTable();
 }
 
 int main(int argc, char** argv) {

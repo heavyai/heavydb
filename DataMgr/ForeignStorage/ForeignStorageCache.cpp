@@ -61,6 +61,7 @@ void ForeignStorageCache::cacheChunk(const ChunkKey& chunk_key, AbstractBuffer* 
   // putBuffer will clear flags on buffer.
   buffer->setUpdated();
   global_file_mgr_->putBuffer(chunk_key, buffer);
+  global_file_mgr_->checkpoint(chunk_key[0], chunk_key[1]);
 }
 
 AbstractBuffer* ForeignStorageCache::getCachedChunkIfExists(const ChunkKey& chunk_key) {
@@ -82,12 +83,51 @@ bool ForeignStorageCache::isMetadataCached(const ChunkKey& chunk_key) {
   return (cached_metadata_.find(chunk_key) != cached_metadata_.end());
 }
 
-void ForeignStorageCache::cacheMetadataVec(ChunkMetadataVector& metadata_vec) {
-  auto timer = DEBUG_TIMER(__func__);
-  write_lock lock(metadata_mutex_);
-  for (auto& [chunk_key, metadata] : metadata_vec) {
-    cached_metadata_[chunk_key] = metadata;
+bool ForeignStorageCache::recoverCacheForTable(ChunkMetadataVector& meta_vec,
+                                               const ChunkKey& table_key) {
+  CHECK(meta_vec.size() == 0);
+  CHECK(isTableKey(table_key));
+  global_file_mgr_->getChunkMetadataVecForKeyPrefix(meta_vec, table_key);
+  for (auto& [chunk_key, metadata] : meta_vec) {
+    cached_metadata_.emplace(chunk_key);
+    // If a filebuffer has no pages, then it only has cached metadata and no cached chunk.
+    if (global_file_mgr_->getBuffer(chunk_key)->pageCount() > 0) {
+      cached_chunks_.emplace(chunk_key);
+    }
   }
+  return (meta_vec.size() > 0);
+}
+
+static void setMetadataForBuffer(AbstractBuffer* buffer, ChunkMetadata* meta) {
+  buffer->initEncoder(meta->sqlType);
+  buffer->setSize(meta->numBytes);
+  buffer->encoder->setNumElems(meta->numElements);
+  buffer->encoder->resetChunkStats(meta->chunkStats);
+  buffer->setUpdated();
+}
+
+void ForeignStorageCache::evictThenEraseChunk(const ChunkKey& chunk_key) {
+  eviction_alg_->removeChunk(chunk_key);
+  eraseChunk(chunk_key);
+}
+
+void ForeignStorageCache::cacheMetadataVec(const ChunkMetadataVector& metadata_vec) {
+  auto timer = DEBUG_TIMER(__func__);
+  write_lock meta_lock(metadata_mutex_);
+  write_lock chunk_lock(chunks_mutex_);
+  for (auto& [chunk_key, metadata] : metadata_vec) {
+    cached_metadata_.emplace(chunk_key);
+    AbstractBuffer* buf;
+    if (!global_file_mgr_->isBufferOnDevice(chunk_key)) {
+      buf = global_file_mgr_->createBuffer(chunk_key);
+    } else {
+      buf = global_file_mgr_->getBuffer(chunk_key);
+    }
+
+    setMetadataForBuffer(buf, metadata.get());
+    evictThenEraseChunk(chunk_key);
+  }
+  global_file_mgr_->checkpoint();
 }
 
 void ForeignStorageCache::getCachedMetadataVecForKeyPrefix(
@@ -96,7 +136,11 @@ void ForeignStorageCache::getCachedMetadataVecForKeyPrefix(
   auto timer = DEBUG_TIMER(__func__);
   read_lock r_lock(metadata_mutex_);
   iterateOverMatchingPrefix(
-      [&metadata_vec](auto chunk) { metadata_vec.push_back(chunk); },
+      [&metadata_vec, this](auto chunk) {
+        std::shared_ptr<ChunkMetadata> buf_metadata = std::make_shared<ChunkMetadata>();
+        global_file_mgr_->getBuffer(chunk)->encoder->getMetadata(buf_metadata);
+        metadata_vec.push_back(std::make_pair(chunk, buf_metadata));
+      },
       cached_metadata_,
       chunk_prefix);
 }
@@ -117,38 +161,50 @@ bool ForeignStorageCache::hasCachedMetadataForKeyPrefix(const ChunkKey& chunk_pr
 }
 
 void ForeignStorageCache::clearForTablePrefix(const ChunkKey& chunk_prefix) {
-  CHECK(chunk_prefix.size() == 2U);
+  CHECK(isTableKey(chunk_prefix));
   auto timer = DEBUG_TIMER(__func__);
   ChunkKey upper_prefix(chunk_prefix);
   upper_prefix.push_back(std::numeric_limits<int>::max());
   {
     write_lock w_lock(chunks_mutex_);
     // Delete chunks for prefix
+    // We won't delete the buffers here because metadata delete will do that for us later.
     auto end_it = cached_chunks_.upper_bound(static_cast<const ChunkKey>(upper_prefix));
     for (auto chunk_it = cached_chunks_.lower_bound(chunk_prefix); chunk_it != end_it;) {
-      chunk_it = eraseChunk(chunk_it);
+      eviction_alg_->removeChunk(*chunk_it);
+      chunk_it = cached_chunks_.erase(chunk_it);
     }
   }
   {
     write_lock w_lock(metadata_mutex_);
     // Delete metadata for prefix
-    cached_metadata_.erase(
-        cached_metadata_.lower_bound(chunk_prefix),
-        cached_metadata_.upper_bound(static_cast<const ChunkKey>(upper_prefix)));
+    auto end_it = cached_metadata_.upper_bound(static_cast<const ChunkKey>(upper_prefix));
+    for (auto meta_it = cached_metadata_.lower_bound(chunk_prefix); meta_it != end_it;) {
+      meta_it = cached_metadata_.erase(meta_it);
+    }
   }
+  global_file_mgr_->removeTableRelatedDS(chunk_prefix[0], chunk_prefix[1]);
 }
 
 void ForeignStorageCache::clear() {
   auto timer = DEBUG_TIMER(__func__);
+  std::set<ChunkKey> table_keys;
   {
     write_lock w_lock(chunks_mutex_);
     for (auto chunk_it = cached_chunks_.begin(); chunk_it != cached_chunks_.end();) {
-      chunk_it = eraseChunk(chunk_it);
+      eviction_alg_->removeChunk(*chunk_it);
+      chunk_it = cached_chunks_.erase(chunk_it);
     }
   }
   {
     write_lock w_lock(metadata_mutex_);
-    cached_metadata_.clear();
+    for (auto meta_it = cached_metadata_.begin(); meta_it != cached_metadata_.end();) {
+      table_keys.emplace(ChunkKey{(*meta_it)[0], (*meta_it)[1]});
+      meta_it = cached_metadata_.erase(meta_it);
+    }
+  }
+  for (const auto& table_key : table_keys) {
+    global_file_mgr_->removeTableRelatedDS(table_key[0], table_key[1]);
   }
 }
 
@@ -161,6 +217,7 @@ void ForeignStorageCache::setLimit(size_t limit) {
   while (cached_chunks_.size() > entry_limit_) {
     evictChunkByAlg();
   }
+  global_file_mgr_->checkpoint();
 }
 
 std::vector<ChunkKey> ForeignStorageCache::getCachedChunksForKeyPrefix(
@@ -177,17 +234,10 @@ std::vector<ChunkKey> ForeignStorageCache::getCachedChunksForKeyPrefix(
 // This function assumes the chunk has been erased from the eviction algorithm already.
 void ForeignStorageCache::eraseChunk(const ChunkKey& chunk_key) {
   auto timer = DEBUG_TIMER(__func__);
-  global_file_mgr_->deleteBuffer(chunk_key);
+  File_Namespace::FileBuffer* file_buffer =
+      static_cast<File_Namespace::FileBuffer*>(global_file_mgr_->getBuffer(chunk_key));
+  file_buffer->freeChunkPages();
   cached_chunks_.erase(chunk_key);
-}
-
-// This function assumes the chunk has not already been erased from the eviction alg.
-std::set<ChunkKey>::iterator ForeignStorageCache::eraseChunk(
-    const std::set<ChunkKey>::iterator& chunk_it) {
-  auto timer = DEBUG_TIMER(__func__);
-  global_file_mgr_->deleteBuffer(*chunk_it);
-  eviction_alg_->removeChunk(*chunk_it);
-  return cached_chunks_.erase(chunk_it);
 }
 
 void ForeignStorageCache::evictChunkByAlg() {
@@ -212,8 +262,8 @@ std::string ForeignStorageCache::dumpCachedChunkEntries() const {
 std::string ForeignStorageCache::dumpCachedMetadataEntries() const {
   auto timer = DEBUG_TIMER(__func__);
   std::string ret_string = "Cached ChunkMetadata:\n";
-  for (const auto& meta_pair : cached_metadata_) {
-    ret_string += "  " + showChunk(meta_pair.first) + "\n";
+  for (const auto& meta_key : cached_metadata_) {
+    ret_string += "  " + showChunk(meta_key) + "\n";
   }
   return ret_string;
 }
