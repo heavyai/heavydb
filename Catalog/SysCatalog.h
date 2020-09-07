@@ -375,6 +375,13 @@ class SysCatalog : private CommonFileOperations {
   bool isDashboardSystemRole(const std::string& roleName);
   void updateUserRoleName(const std::string& roleName, const std::string& newName);
 
+  /**
+   * For servers configured to use external authentication providers, determine whether
+   * users will be allowed to fallback to local login accounts. If no external providers
+   * are configured, returns true.
+   */
+  bool allowLocalLogin() const;
+
   template <typename F, typename... Args>
   void execInTransaction(F&& f, Args&&... args);
 

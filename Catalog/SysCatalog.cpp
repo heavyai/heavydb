@@ -123,7 +123,6 @@ void SysCatalog::init(const std::string& basePath,
     basePath_ = basePath;
     dataMgr_ = dataMgr;
     authMetadata_ = &authMetadata;
-    ldap_server_.reset(new LdapServer(*authMetadata_));
     rest_server_.reset(new RestServer(*authMetadata_));
     pki_server_.reset(new PkiServer(*authMetadata_));
     calciteMgr_ = calcite;
