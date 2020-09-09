@@ -285,7 +285,7 @@ add_definitions(${LLVM_DEFINITIONS})
 find_library(CLANG_LIB clang-cpp)
 find_library(LLVM_LIB LLVM)
 # Deps builds use separate libs for each clang component, while some distros now bundle into a single lib
-if (${CMAKE_SYSTEM_NAME} STREQUAL "Darwin" OR NOT LLVM_LIB) 
+if (${CMAKE_SYSTEM_NAME} STREQUAL "Darwin" OR NOT LLVM_LIB)
   set(LLVM_COMPONENTS support mcjit core irreader option)
 
   option(ENABLE_INTEL_JIT_LISTENER "Enable Intel Vtune JIT Listener" OFF)
@@ -294,7 +294,7 @@ if (${CMAKE_SYSTEM_NAME} STREQUAL "Darwin" OR NOT LLVM_LIB)
   endif()
 
   llvm_map_components_to_libnames(llvm_libs ${LLVM_TARGETS_TO_BUILD} ${LLVM_COMPONENTS})
-  set(clang_libs 
+  set(clang_libs
       clangFrontend
       clangSerialization
       clangDriver
@@ -308,8 +308,20 @@ if (${CMAKE_SYSTEM_NAME} STREQUAL "Darwin" OR NOT LLVM_LIB)
       clangBasic
       clangRewrite
       clangRewriteFrontend)
+
+  # LLVMSupport explicitly lists tinfo in its INTERFACE_LINK_LIBRARIES, even
+  # though we provide it in our build of ncurses. Since LLVMSupport is listed
+  # as a requirement for other llvm libs, we need to walk through the entire
+  # list in order to remove all instances of tinfo.
+  foreach(lib ${llvm_libs})
+    get_target_property(interface_libs ${lib} INTERFACE_LINK_LIBRARIES)
+    list(REMOVE_ITEM interface_libs tinfo z rt pthread -lpthread m dl)
+    set_target_properties(${lib} PROPERTIES INTERFACE_LINK_LIBRARIES "${interface_libs}")
+  endforeach()
+
+  list(APPEND llvm_libs ${CURSES_NCURSES_LIBRARY})
 else()
-  if(NOT CLANG_LIB) 
+  if(NOT CLANG_LIB)
     message(FATAL_ERROR "Could not find CLANG library.")
   endif()
 
@@ -327,7 +339,7 @@ add_definitions(${CLANG_DEFINITIONS})
 find_package(Boost COMPONENTS log log_setup filesystem program_options regex system thread timer locale iostreams REQUIRED)
 include_directories(${Boost_INCLUDE_DIR})
 
-# CUDA architecture flags 
+# CUDA architecture flags
 set (CUDA_COMPILATION_ARCH
   -gencode=arch=compute_35,code=compute_35
   -gencode=arch=compute_50,code=compute_50
