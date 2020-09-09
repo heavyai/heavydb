@@ -259,6 +259,8 @@ enum EncodingType {
 
 #include "InlineNullValues.h"
 
+#define INF_FLOAT HUGE_VALF
+#define INF_DOUBLE HUGE_VAL
 #define TRANSIENT_DICT_ID 0
 #define TRANSIENT_DICT(ID) (-(ID))
 #define REGULAR_DICT(TRANSIENTID) (-(TRANSIENTID))
