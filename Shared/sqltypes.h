@@ -27,6 +27,9 @@
 #include "funcannotations.h"
 
 #include <cassert>
+#include <cfloat>
+#include <cmath>
+#include <cstdint>
 #include <ctime>
 #include <memory>
 #include <ostream>

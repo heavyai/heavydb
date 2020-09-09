@@ -113,6 +113,23 @@
     return null_val;                                              \
   }
 
+#define DEF_SAFE_INF_DIV_NULLABLE(type, null_type, opname)                      \
+  extern "C" ALWAYS_INLINE type safe_inf_div_##type(const type lhs,             \
+                                                    const type rhs,             \
+                                                    const null_type inf_val,    \
+                                                    const null_type null_val) { \
+    if (rhs != 0) {                                                             \
+      return lhs / rhs;                                                         \
+    }                                                                           \
+    if (lhs > 0) {                                                              \
+      return inf_val;                                                           \
+    } else if (lhs == 0) {                                                      \
+      return null_val;                                                          \
+    } else {                                                                    \
+      return -inf_val;                                                          \
+    }                                                                           \
+  }
+
 #define DEF_BINARY_NULLABLE_ALL_OPS(type, null_type) \
   DEF_ARITH_NULLABLE(type, null_type, add, +)        \
   DEF_ARITH_NULLABLE(type, null_type, sub, -)        \
@@ -164,6 +181,8 @@ DEF_ARITH_NULLABLE_RHS(int8_t, int64_t, mod, %)
 DEF_ARITH_NULLABLE_RHS(int16_t, int64_t, mod, %)
 DEF_ARITH_NULLABLE_RHS(int32_t, int64_t, mod, %)
 DEF_ARITH_NULLABLE_RHS(int64_t, int64_t, mod, %)
+DEF_SAFE_INF_DIV_NULLABLE(float, float, safe_inf_div)
+DEF_SAFE_INF_DIV_NULLABLE(double, double, safe_inf_div)
 
 #undef DEF_BINARY_NULLABLE_ALL_OPS
 #undef DEF_SAFE_DIV_NULLABLE
@@ -173,6 +192,7 @@ DEF_ARITH_NULLABLE_RHS(int64_t, int64_t, mod, %)
 #undef DEF_ARITH_NULLABLE_RHS
 #undef DEF_ARITH_NULLABLE_LHS
 #undef DEF_ARITH_NULLABLE
+#undef DEF_SAFE_INF_DIV_NULLABLE
 
 extern "C" ALWAYS_INLINE int64_t scale_decimal_up(const int64_t operand,
                                                   const uint64_t scale,

@@ -6336,6 +6336,21 @@ TEST(Select, ReturnNullFromDivByZero) {
   }
 }
 
+TEST(Select, ReturnInfFromDivByZero) {
+  SKIP_ALL_ON_AGGREGATOR();
+
+  g_inf_div_by_zero = true;
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    c("SELECT f / 0. FROM test;", "SELECT 2e308 FROM test;", dt);
+    c("SELECT d / 0. FROM test;", "SELECT 2e308 FROM test;", dt);
+    c("SELECT -f / 0. FROM test;", "SELECT -2e308 FROM test;", dt);
+    c("SELECT -d / 0. FROM test;", "SELECT -2e308 FROM test;", dt);
+    c("SELECT f / (f - f) FROM test;", "SELECT 2e308 FROM test;", dt);
+    c("SELECT (f - f) / 0. FROM test;", dt);
+  }
+}
+
 TEST(Select, ConstantFolding) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();

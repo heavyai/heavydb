@@ -82,6 +82,7 @@ unsigned g_dynamic_watchdog_time_limit{10000};
 bool g_allow_cpu_retry{true};
 bool g_allow_query_step_cpu_retry{true};
 bool g_null_div_by_zero{false};
+bool g_inf_div_by_zero{false};
 unsigned g_trivial_loop_join_threshold{1000};
 bool g_from_table_reordering{true};
 bool g_inner_join_fragment_skipping{true};
