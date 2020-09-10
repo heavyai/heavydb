@@ -5107,7 +5107,7 @@ void DBHandler::sql_execute_impl(TQueryResult& _return,
 
   _return.nonce = nonce;
   _return.execution_time_ms = 0;
-  auto const& query_str = query_state_proxy.getQueryState().getQueryStr();
+  auto const query_str = strip(query_state_proxy.getQueryState().getQueryStr());
   auto session_ptr = query_state_proxy.getQueryState().getConstSessionInfo();
   // Call to DistributedValidate() below may change cat.
   auto& cat = session_ptr->getCatalog();
