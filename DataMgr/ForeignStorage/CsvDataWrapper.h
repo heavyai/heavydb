@@ -113,7 +113,15 @@ class CsvDataWrapper : public ForeignDataWrapper {
   std::mutex file_access_mutex_;
   std::mutex file_regions_mutex_;
 
-  static constexpr std::array<char const*, 13> supported_options_{"BASE_PATH",
+  // Data needed for append workflow
+  std::map<ChunkKey, std::unique_ptr<ForeignStorageBuffer>> chunk_encoder_buffers_;
+  std::map<ChunkKey, size_t> chunk_byte_count_;
+  // How many rows have been read
+  size_t num_rows_;
+  // What byte offset we left off at in the csv_reader
+  size_t append_start_offset_;
+
+  static constexpr std::array<char const*, 14> supported_options_{"BASE_PATH",
                                                                   "FILE_PATH",
                                                                   "ARRAY_DELIMITER",
                                                                   "ARRAY_MARKER",
@@ -125,6 +133,7 @@ class CsvDataWrapper : public ForeignDataWrapper {
                                                                   "LONLAT",
                                                                   "NULLS",
                                                                   "QUOTE",
-                                                                  "QUOTED"};
+                                                                  "QUOTED",
+                                                                  "UPDATE_MODE"};
 };
 }  // namespace foreign_storage

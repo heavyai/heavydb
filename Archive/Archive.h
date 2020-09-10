@@ -95,7 +95,6 @@ class Archive {
 
   virtual bool read_next_header() {
     int rc;
-    archive_entry* entry;
     switch (rc = archive_read_next_header(ar, &entry)) {
       case ARCHIVE_EOF:
         return false;  // signal caller end of stream
@@ -182,10 +181,13 @@ class Archive {
 
   const std::string url_part(const int i) { return url_parts[i]; }
 
+  std::string entryName() { return std::string(archive_entry_pathname(entry)); }
+
  protected:
   std::string url;
   std::map<int, std::string> url_parts;
   archive* ar = 0;
+  archive_entry* entry;
   bool plain_text;
 };
 

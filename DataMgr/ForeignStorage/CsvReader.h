@@ -29,7 +29,8 @@ namespace foreign_storage {
 // Previously read data can then be re-read with readRegion()
 class CsvReader {
  public:
-  CsvReader() = default;
+  CsvReader(const std::string& file_path, const import_export::CopyParams& copy_params)
+      : copy_params_(copy_params), file_path_(file_path){};
   virtual ~CsvReader() = default;
 
   /**
@@ -59,11 +60,29 @@ class CsvReader {
   virtual size_t readRegion(void* buffer, size_t offset, size_t size) = 0;
 
   /**
-   * @param size - variable passed by reference is updated with the size of this CSV
-   * object
-   * @return if size is known
+   * @return size of the CSV remaining to be read
+   * */
+  virtual size_t getRemainingSize() = 0;
+
+  /**
+   * @return if remaining size is known
    */
-  virtual bool getSize(size_t& size) = 0;
+  virtual bool isRemainingSizeKnown() = 0;
+  /**
+   * Rescan the target files
+   * Throws an exception if the rescan fails (ie files are not in a valid appended state
+   * or not supported)
+   * @param file_offset - where to resume the scan from (end of the last row) as
+   *  not all of the bytes may have been consumed by the upstream compoennet
+
+   */
+  virtual void checkForMoreRows(size_t file_offset) {
+    throw std::runtime_error{"APPEND mode not yet supported for this table."};
+  }
+
+ protected:
+  import_export::CopyParams copy_params_;
+  std::string file_path_;
 };
 
 // Single uncompressed file, that supports FSEEK for faster random access
@@ -82,6 +101,8 @@ class SingleFileReader : public CsvReader {
     if (!scan_finished_) {
       scan_finished_ = feof(file_);
     }
+
+    total_bytes_read_ += bytes_read;
     return bytes_read;
   }
 
@@ -97,20 +118,74 @@ class SingleFileReader : public CsvReader {
 
   bool isScanFinished() override { return scan_finished_; }
 
-  bool getSize(size_t& size) override {
-    size = file_size_;
-    return true;
-  }
+  size_t getRemainingSize() override { return data_size_ - total_bytes_read_; }
+
+  bool isRemainingSizeKnown() override { return true; };
+  void checkForMoreRows(size_t file_offset) override;
 
  private:
   std::FILE* file_;
-  size_t file_size_;
-  std::string file_path_;
+  // Size of CSV data in file
+  size_t data_size_;
   // We've reached the end of the file
   bool scan_finished_;
 
   // Size of the CSV header in bytes
   size_t header_offset_;
+
+  size_t total_bytes_read_;
+};
+
+class ArchiveWrapper {
+ public:
+  ArchiveWrapper(const std::string& file_path)
+      : current_block_(nullptr)
+      , block_chars_remaining_(0)
+      , current_entry_(-1)
+      , file_path_(file_path) {
+    resetArchive();
+  }
+
+  /**
+   * Skip to entry in archive
+   */
+  void skipToEntry(int entry_number);
+
+  // Go to next consecutive entry in archive
+  bool nextEntry();
+
+  bool currentEntryFinished() const { return (block_chars_remaining_ == 0); }
+
+  bool currentEntryDataAvailable() const { return block_chars_remaining_; }
+
+  // Consume given amount of data from current block, copying into dest_buffer if set
+  void consumeDataFromCurrentEntry(size_t size, char* dest_buffer = nullptr);
+
+  // Return the next char from the buffer without consuming it
+  char peekNextChar();
+
+  int getCurrentEntryIndex() const { return current_entry_; }
+
+  // Reset archive, start reading again from the first entry
+  void resetArchive();
+
+  std::string entryName() { return arch_->entryName(); }
+
+ private:
+  /**
+   * Get the next block from the current archive file
+   */
+  void fetchBlock();
+
+  std::unique_ptr<Archive> arch_;
+  // Pointer to current uncompressed block from the archive
+  const void* current_block_;
+  // Number of chars remaining in the current block
+  size_t block_chars_remaining_;
+  // Index of entry of the archive file
+  int current_entry_;
+
+  std::string file_path_;
 };
 
 // Single archive, does not support random access
@@ -125,14 +200,13 @@ class CompressedFileReader : public CsvReader {
 
   bool isScanFinished() override { return scan_finished_; }
 
-  bool getSize(size_t& size) override { return false; }
+  size_t getRemainingSize() override { return 0; }
+
+  bool isRemainingSizeKnown() override { return false; };
+
+  void checkForMoreRows(size_t file_offset) override;
 
  private:
-  /**
-   * Reopen file and reset back to the beginning
-   */
-  void resetArchive();
-
   /**
    * Go to next archive entry/header with valid data
    */
@@ -144,40 +218,47 @@ class CompressedFileReader : public CsvReader {
   void skipHeader();
 
   /**
-   * Get the next block from the current archive file
-   */
-  void fetchBlock();
-
-  /**
-   * Skip forward N bytes without reading the data
+   * Skip forward N bytes in current entry without reading the data
    * @param n_bytes - number of bytes to skip
    */
   void skipBytes(size_t n_bytes);
 
-  std::string file_path_;
-  import_export::CopyParams copy_params_;
+  // Read bytes in current entry adjusting for EOF
+  size_t readInternal(void* buffer, size_t read_size, size_t buffer_size);
 
-  std::unique_ptr<Archive> arch_;
-  // Pointer to current uncompressed block from the archive
-  const void* current_block_;
-  // Number of chars remaining in the current block
-  size_t block_chars_remaining_;
-  // Overall number of bytes read in the archive (minus headers)
-  size_t current_offset_;
+  ArchiveWrapper archive_;
+
+  // Are we doing initial scan or an append
+  bool initial_scan_;
   // We've reached the end of the last file
   bool scan_finished_;
+
+  // Overall number of bytes read in the archive (minus headers)
+  size_t current_offset_;
+
+  // Index of current entry in order they appear in
+  // cumulative_sizes_/sourcenames_/archive_entry_index_
+  int current_index_;
+
+  // Size of each file + all previous files
+  std::vector<size_t> cumulative_sizes_;
+  // Names of the file in the archive
+  std::vector<std::string> sourcenames_;
+  // Index of the entry in the archive
+  // Order can change during append operation
+  std::vector<int> archive_entry_index_;
 };
 
 // Combines several archives into single object
 class MultiFileReader : public CsvReader {
  public:
-  MultiFileReader();
-  bool getSize(size_t& size) override {
-    if (size_known_) {
-      size = total_size_;
-    }
-    return size_known_;
-  }
+  MultiFileReader(const std::string& file_path,
+                  const import_export::CopyParams& copy_params);
+
+  size_t getRemainingSize() override;
+
+  bool isRemainingSizeKnown() override;
+
   size_t read(void* buffer, size_t max_size) override;
 
   size_t readRegion(void* buffer, size_t offset, size_t size) override;
@@ -186,17 +267,7 @@ class MultiFileReader : public CsvReader {
 
  protected:
   std::vector<std::unique_ptr<CsvReader>> files_;
-  // Total file size if known
-  size_t total_size_;
-  // If total file size is known
-  bool size_known_;
-
- private:
-  /**
-   * @param byte_offset byte offset into the fileset from the initial scan
-   * @return the file index for a given byte offset
-   */
-  size_t offsetToIndex(size_t byte_offset);
+  std::set<std::string> file_locations_;
 
   // Size of each file + all previous files
   std::vector<size_t> cumulative_sizes_;
@@ -211,6 +282,11 @@ class LocalMultiFileReader : public MultiFileReader {
  public:
   LocalMultiFileReader(const std::string& file_path,
                        const import_export::CopyParams& copy_params);
+
+  void checkForMoreRows(size_t file_offset) override;
+
+ private:
+  void insertFile(std::string location);
 };
 
 }  // namespace foreign_storage

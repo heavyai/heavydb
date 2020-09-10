@@ -83,7 +83,8 @@ CsvReaderS3::CsvReaderS3(const std::string& obj_key,
                          size_t file_size,
                          const import_export::CopyParams& copy_params,
                          const ForeignServer* server_options)
-    : file_size_(file_size)
+    : CsvReader(obj_key, copy_params)
+    , file_size_(file_size)
     , scan_finished_(false)
     , obj_key_(obj_key)
     , copy_params_(copy_params)
@@ -160,7 +161,8 @@ void CsvReaderS3::skipHeader() {
 
 MultiS3Reader::MultiS3Reader(const std::string& prefix_name,
                              const import_export::CopyParams& copy_params,
-                             const ForeignServer* server_options) {
+                             const ForeignServer* server_options)
+    : MultiFileReader(prefix_name, copy_params) {
   Aws::S3::Model::ListObjectsV2Request objects_request;
   auto bucket_name = server_options->options.find(ForeignServer::S3_BUCKET_KEY)->second;
   objects_request.WithBucket(bucket_name);
@@ -199,12 +201,6 @@ MultiS3Reader::MultiS3Reader(const std::string& prefix_name,
       }
       files_.emplace_back(std::make_unique<CsvReaderS3>(
           objkey, obj.GetSize(), copy_params, server_options));
-
-      size_t new_size;
-      size_known_ = size_known_ && files_.back()->getSize(new_size);
-      if (size_known_) {
-        total_size_ += new_size;
-      }
     }
   } else {
     throw std::runtime_error("Could not list objects for s3 url '" +

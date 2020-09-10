@@ -216,23 +216,6 @@ ForeignStorageBuffer* CsvDataWrapper::getChunkBuffer(const ChunkKey& chunk_key) 
 }
 
 /**
- * Adds an end of line character (specified by the line_delim parameter) to provided
- * buffer, if this is the last read buffer and if the buffer does not already end with an
- * end of line character. This allows for appropriate parsing by the
- * csv_file_buffer_parser utility functions, which expect the end of rows to be indicated
- * by end of line characters in the buffer.
- */
-void add_end_of_line_if_needed(size_t& read_size,
-                               const size_t buffer_size,
-                               char* buffer,
-                               const char line_delim) {
-  if (read_size > 0 && read_size < buffer_size && buffer[read_size - 1] != line_delim) {
-    buffer[read_size] = line_delim;
-    read_size++;
-  }
-}
-
-/**
  * Data structure containing data and metadata gotten from parsing a set of file regions.
  */
 struct ParseFileRegionResult {
@@ -271,10 +254,6 @@ ParseFileRegionResult parse_file_regions(
                                         file_regions[i].first_row_file_offset,
                                         file_regions[i].region_size);
     }
-    add_end_of_line_if_needed(read_size,
-                              parse_file_request.buffer_size,
-                              parse_file_request.buffer.get(),
-                              parse_file_request.copy_params.line_delim);
 
     CHECK_EQ(file_regions[i].region_size, read_size);
     parse_file_request.begin_pos = 0;
@@ -720,13 +699,13 @@ void dispatch_metadata_scan_requests(
     const std::string& file_path,
     CsvReader& csv_reader,
     const import_export::CopyParams& copy_params,
-    MetadataScanMultiThreadingParams& multi_threading_params) {
+    MetadataScanMultiThreadingParams& multi_threading_params,
+    size_t& first_row_index_in_buffer,
+    size_t& current_file_offset) {
   auto alloc_size = buffer_size;
   auto residual_buffer = std::make_unique<char[]>(alloc_size);
   size_t residual_buffer_size = 0;
   size_t residual_buffer_alloc_size = alloc_size;
-  size_t current_file_offset = 0;
-  size_t first_row_index_in_buffer = 0;
 
   while (!csv_reader.isScanFinished()) {
     auto request = get_request_from_pool(multi_threading_params);
@@ -738,9 +717,17 @@ void dispatch_metadata_scan_requests(
     size_t size = residual_buffer_size;
     size += csv_reader.read(request.buffer.get() + residual_buffer_size,
                             alloc_size - residual_buffer_size);
-    add_end_of_line_if_needed(
-        size, alloc_size, request.buffer.get(), copy_params.line_delim);
 
+    if (size == 0) {
+      // In some cases at the end of a file we will read 0 bytes even when
+      // csv_reader.isScanFinished() is false
+      continue;
+    } else if (size == 1 && request.buffer[0] == copy_params.line_delim) {
+      // In some cases files with newlines at the end will be encoded with a second
+      // newline that can end up being the only thing in the buffer
+      current_file_offset++;
+      continue;
+    }
     unsigned int num_rows_in_buffer = 0;
     request.end_pos =
         import_export::delimited_parser::find_row_end_pos(alloc_size,
@@ -802,24 +789,28 @@ void CsvDataWrapper::populateMetadataForChunkKeyPrefix(
   CHECK_EQ(chunk_key_prefix.size(), static_cast<size_t>(2));
   chunk_buffer_map_.clear();
   chunk_metadata_map_.clear();
-  fragment_id_to_file_regions_map_.clear();
+
+  auto update_mode_it = foreign_table_->options.find("UPDATE_MODE");
+  bool append_mode = (update_mode_it != foreign_table_->options.end()) &&
+                     boost::iequals(update_mode_it->second, "APPEND");
+
   const auto copy_params = validateAndGetCopyParams();
   const auto file_path = getFilePath();
-  auto& server_options = foreign_table_->foreign_server->options;
-  if (server_options.find(ForeignServer::STORAGE_TYPE_KEY)->second ==
-      ForeignServer::LOCAL_FILE_STORAGE_TYPE) {
-    csv_reader_ = std::make_unique<LocalMultiFileReader>(file_path, copy_params);
+
+  if (append_mode && csv_reader_ != nullptr) {
+    csv_reader_->checkForMoreRows(append_start_offset_);
   } else {
-    UNREACHABLE();
+    fragment_id_to_file_regions_map_.clear();
+    auto& server_options = foreign_table_->foreign_server->options;
+    if (server_options.find(ForeignServer::STORAGE_TYPE_KEY)->second ==
+        ForeignServer::LOCAL_FILE_STORAGE_TYPE) {
+      csv_reader_ = std::make_unique<LocalMultiFileReader>(file_path, copy_params);
+    } else {
+      UNREACHABLE();
+    }
+    num_rows_ = 0;
+    append_start_offset_ = 0;
   }
-  size_t file_size;
-  bool size_known = csv_reader_->getSize(file_size);
-  if (size_known && file_size == 0) {
-    // Empty file
-    return;
-  }
-  auto buffer_size = get_buffer_size(copy_params, size_known, file_size);
-  auto thread_count = get_thread_count(copy_params, size_known, file_size, buffer_size);
 
   auto catalog = Catalog_Namespace::Catalog::get(db_id_);
   CHECK(catalog);
@@ -829,49 +820,69 @@ void CsvDataWrapper::populateMetadataForChunkKeyPrefix(
   for (auto column : columns) {
     column_by_id[column->columnId] = column;
   }
-
   MetadataScanMultiThreadingParams multi_threading_params;
-  multi_threading_params.continue_processing = true;
 
-  std::vector<std::future<void>> futures{};
-  for (size_t i = 0; i < thread_count; i++) {
-    futures.emplace_back(std::async(std::launch::async,
-                                    scan_metadata,
-                                    std::ref(multi_threading_params),
-                                    std::ref(fragment_id_to_file_regions_map_),
-                                    std::ref(file_regions_mutex_)));
-
-    multi_threading_params.request_pool.emplace();
-    csv_file_buffer_parser::ParseBufferRequest& parse_buffer_request =
-        multi_threading_params.request_pool.back();
-    initialize_import_buffers(columns, catalog, parse_buffer_request.import_buffers);
-    parse_buffer_request.copy_params = copy_params;
-    parse_buffer_request.columns = columns;
-    parse_buffer_request.catalog = catalog;
-    parse_buffer_request.db_id = db_id_;
-    parse_buffer_request.table_id = foreign_table_->tableId;
-    parse_buffer_request.max_fragment_rows = foreign_table_->maxFragRows;
-    parse_buffer_request.buffer = std::make_unique<char[]>(buffer_size);
-    parse_buffer_request.buffer_size = buffer_size;
-    parse_buffer_request.buffer_alloc_size = buffer_size;
+  // Restore previous chunk data
+  if (append_mode) {
+    multi_threading_params.chunk_byte_count = chunk_byte_count_;
+    multi_threading_params.chunk_encoder_buffers = std::move(chunk_encoder_buffers_);
   }
 
-  try {
-    dispatch_metadata_scan_requests(
-        buffer_size, file_path, (*csv_reader_), copy_params, multi_threading_params);
-  } catch (...) {
-    {
-      std::unique_lock<std::mutex> pending_requests_lock(
-          multi_threading_params.pending_requests_mutex);
-      multi_threading_params.continue_processing = false;
+  if (!csv_reader_->isScanFinished()) {
+    auto buffer_size = get_buffer_size(copy_params,
+                                       csv_reader_->isRemainingSizeKnown(),
+                                       csv_reader_->getRemainingSize());
+    auto thread_count = get_thread_count(copy_params,
+                                         csv_reader_->isRemainingSizeKnown(),
+                                         csv_reader_->getRemainingSize(),
+                                         buffer_size);
+    multi_threading_params.continue_processing = true;
+
+    std::vector<std::future<void>> futures{};
+    for (size_t i = 0; i < thread_count; i++) {
+      futures.emplace_back(std::async(std::launch::async,
+                                      scan_metadata,
+                                      std::ref(multi_threading_params),
+                                      std::ref(fragment_id_to_file_regions_map_),
+                                      std::ref(file_regions_mutex_)));
+
+      multi_threading_params.request_pool.emplace();
+      csv_file_buffer_parser::ParseBufferRequest& parse_buffer_request =
+          multi_threading_params.request_pool.back();
+      initialize_import_buffers(columns, catalog, parse_buffer_request.import_buffers);
+      parse_buffer_request.copy_params = copy_params;
+      parse_buffer_request.columns = columns;
+      parse_buffer_request.catalog = catalog;
+      parse_buffer_request.db_id = db_id_;
+      parse_buffer_request.table_id = foreign_table_->tableId;
+      parse_buffer_request.max_fragment_rows = foreign_table_->maxFragRows;
+      parse_buffer_request.buffer = std::make_unique<char[]>(buffer_size);
+      parse_buffer_request.buffer_size = buffer_size;
+      parse_buffer_request.buffer_alloc_size = buffer_size;
     }
-    multi_threading_params.pending_requests_condition.notify_all();
-    throw;
-  }
 
-  for (auto& future : futures) {
-    // get() instead of wait() because we need to propagate potential exceptions.
-    future.get();
+    try {
+      dispatch_metadata_scan_requests(buffer_size,
+                                      file_path,
+                                      (*csv_reader_),
+                                      copy_params,
+                                      multi_threading_params,
+                                      num_rows_,
+                                      append_start_offset_);
+    } catch (...) {
+      {
+        std::unique_lock<std::mutex> pending_requests_lock(
+            multi_threading_params.pending_requests_mutex);
+        multi_threading_params.continue_processing = false;
+      }
+      multi_threading_params.pending_requests_condition.notify_all();
+      throw;
+    }
+
+    for (auto& future : futures) {
+      // get() instead of wait() because we need to propagate potential exceptions.
+      future.get();
+    }
   }
 
   for (auto& [chunk_key, buffer] : multi_threading_params.chunk_encoder_buffers) {
@@ -881,6 +892,12 @@ void CsvDataWrapper::populateMetadataForChunkKeyPrefix(
     chunk_metadata->numBytes = multi_threading_params.chunk_byte_count[chunk_key];
     chunk_metadata_vector.emplace_back(chunk_key, chunk_metadata);
     chunk_metadata_map_[chunk_key] = chunk_metadata;
+  }
+
+  // Save chunk data
+  if (append_mode) {
+    chunk_byte_count_ = multi_threading_params.chunk_byte_count;
+    chunk_encoder_buffers_ = std::move(multi_threading_params.chunk_encoder_buffers);
   }
 
   for (auto& entry : fragment_id_to_file_regions_map_) {

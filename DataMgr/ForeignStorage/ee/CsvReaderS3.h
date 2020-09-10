@@ -46,10 +46,9 @@ class CsvReaderS3 : public CsvReader {
 
   bool isScanFinished() override { return scan_finished_; }
 
-  bool getSize(size_t& size) override {
-    size = file_size_;
-    return true;
-  }
+  size_t getRemainingSize() override { return file_size_ - current_offset_; }
+
+  bool isRemainingSizeKnown() override { return true; };
 
  private:
   void skipHeader();

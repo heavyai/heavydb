@@ -184,6 +184,13 @@ struct DataTypeFragmentSizeAndDataWrapperParam {
   std::string extension;
 };
 
+struct CsvAppendTestParam {
+  int fragment_size;
+  std::string wrapper;
+  std::string filename;
+  std::string file_display;
+};
+
 class DataTypeFragmentSizeAndDataWrapperTest
     : public SelectQueryTest,
       public testing::WithParamInterface<DataTypeFragmentSizeAndDataWrapperParam> {};
@@ -218,6 +225,12 @@ struct PrintToStringParamName {
     return ss.str();
   }
 
+  std::string operator()(const ::testing::TestParamInfo<CsvAppendTestParam>& info) const {
+    std::stringstream ss;
+    ss << "Fragment_size_" << info.param.fragment_size << "_Data_wrapper_"
+       << info.param.wrapper << "_file_" << info.param.file_display;
+    return ss.str();
+  }
   std::string operator()(
       const ::testing::TestParamInfo<std::pair<int64_t, int64_t>>& info) const {
     std::stringstream ss;
@@ -739,6 +752,7 @@ INSTANTIATE_TEST_SUITE_P(
     CSVFileTypeTests,
     ::testing::Values(std::make_pair("example_1.csv", "uncompressed"),
                       std::make_pair("example_1.zip", "zip"),
+                      std::make_pair("example_1_newline.zip", "zip_newline"),
                       std::make_pair("example_1_multi.zip", "multi_zip"),
                       std::make_pair("example_1_multilevel.zip", "multilevel_zip"),
                       std::make_pair("example_1.tar.gz", "tar_gz"),
@@ -749,6 +763,7 @@ INSTANTIATE_TEST_SUITE_P(
                       std::make_pair("example_1_multi.7z", "7z_multi"),
                       std::make_pair("example_1.csv.gz", "gz"),
                       std::make_pair("example_1_dir", "dir"),
+                      std::make_pair("example_1_dir_newline", "dir_newline"),
                       std::make_pair("example_1_dir_archives", "dir_archives"),
                       std::make_pair("example_1_dir_multilevel", "multilevel_dir")),
     PrintToStringParamName());
@@ -907,10 +922,10 @@ TEST_P(CacheControllingSelectQueryTest, WithMaxBufferResizeLessThanRowSize) {
 
   queryAndAssertException(
       "SELECT * FROM test_foreign_table ORDER BY t;",
-      "Exception: Unable to find an end of line character after reading 15 characters. "
+      "Exception: Unable to find an end of line character after reading 14 characters. "
       "Please ensure that the correct \"line_delimiter\" option is specified or update "
       "the \"buffer_size\" option appropriately. Row number: 2. "
-      "First few characters in row: aa,{'NA', 2, 2}");
+      "First few characters in row: aa,{'NA', 2, 2");
 }
 
 TEST_P(CacheControllingSelectQueryTest, ReverseLongitudeAndLatitude) {
@@ -1138,6 +1153,7 @@ class RefreshParamTests : public RefreshTests,
     RefreshTests::SetUp();
   }
 };
+
 INSTANTIATE_TEST_SUITE_P(RefreshParamTestsParameterizedTests,
                          RefreshParamTests,
                          ::testing::Values("csv", "parquet"),
@@ -1541,6 +1557,202 @@ TEST_P(RefreshSyntaxTests, EvictFalse) {
   // Compare new results
   ASSERT_TRUE(isChunkAndMetadataCached(orig_key));
   sqlAndCompareResult("SELECT * FROM " + table_names[0] + ";", {{i(1)}});
+}
+
+class CsvAppendTest : public ForeignTableTest,
+                      public ::testing::WithParamInterface<CsvAppendTestParam> {
+ protected:
+  const std::string default_name = "refresh_tmp";
+  std::string file_type;
+
+  void SetUp() override {
+    ForeignTableTest::SetUp();
+    sqlDropForeignTable(0, default_name);
+  }
+
+  void TearDown() override {
+    sqlDropForeignTable(0, default_name);
+    ForeignTableTest::TearDown();
+  }
+};
+
+void recursive_copy(const std::string& origin, const std::string& dest) {
+  bf::create_directory(dest);
+  for (bf::directory_iterator file(origin); file != bf::directory_iterator(); ++file) {
+    const auto& path = file->path();
+    if (bf::is_directory(path)) {
+      recursive_copy(path.string(), dest + "/" + path.filename().string());
+    } else {
+      bf::copy_file(path.string(), dest + "/" + path.filename().string());
+    }
+  }
+}
+
+INSTANTIATE_TEST_SUITE_P(
+    AppendParamaterizedTests,
+    CsvAppendTest,
+    ::testing::Values(
+        CsvAppendTestParam{1, "csv", "single_file.csv", "single_csv"},
+        CsvAppendTestParam{1, "csv", "dir_file", "dir"},
+        CsvAppendTestParam{1, "csv", "dir_file.zip", "dir_zip"},
+        CsvAppendTestParam{1, "csv", "dir_file_multi", "dir_file_multi"},
+        CsvAppendTestParam{1, "csv", "dir_file_multi.zip", "dir_multi_zip"},
+        CsvAppendTestParam{1, "csv", "single_file.zip", "single_zip"},
+        CsvAppendTestParam{4, "csv", "single_file.csv", "single_csv"},
+        CsvAppendTestParam{4, "csv", "dir_file", "dir"},
+        CsvAppendTestParam{4, "csv", "dir_file.zip", "dir_zip"},
+        CsvAppendTestParam{4, "csv", "dir_file_multi", "dir_file_multi"},
+        CsvAppendTestParam{4, "csv", "dir_file_multi.zip", "dir_multi_zip"},
+        CsvAppendTestParam{4, "csv", "single_file.zip", "single_zip"},
+        CsvAppendTestParam{32000000, "csv", "single_file.csv", "single_csv"},
+        CsvAppendTestParam{32000000, "csv", "dir_file", "dir"},
+        CsvAppendTestParam{32000000, "csv", "dir_file.zip", "dir_zip"},
+        CsvAppendTestParam{32000000, "csv", "dir_file_multi", "dir_file_multi"},
+        CsvAppendTestParam{32000000, "csv", "dir_file_multi.zip", "dir_multi_zip"},
+        CsvAppendTestParam{32000000, "csv", "single_file.zip", "single_zip"}),
+    PrintToStringParamName());
+
+TEST_P(CsvAppendTest, AppendFragsCSV) {
+  auto& param = GetParam();
+  int fragment_size = param.fragment_size;
+  std::string filename = param.filename;
+
+  // Create initial files and tables
+  bf::remove_all(getDataFilesPath() + "append_tmp");
+
+  recursive_copy(getDataFilesPath() + "append_before", getDataFilesPath() + "append_tmp");
+  std::string file_path = getDataFilesPath() + "append_tmp/" + "single_file.csv";
+
+  std::string query = "CREATE FOREIGN TABLE " + default_name + " (i INTEGER) "s +
+                      "SERVER omnisci_local_csv WITH (file_path = '" +
+                      getDataFilesPath() + "append_tmp/" + filename +
+                      "', fragment_size = '" + std::to_string(fragment_size) +
+                      "', UPDATE_MODE = 'APPEND');";
+  sql(query);
+
+  std::string select = "SELECT * FROM "s + default_name + " ORDER BY i;";
+  // Read from table
+  sqlAndCompareResult(select, {{i(1)}, {i(2)}});
+  bf::remove_all(getDataFilesPath() + "append_tmp");
+  recursive_copy(getDataFilesPath() + "append_after", getDataFilesPath() + "append_tmp");
+
+  // Refresh command
+  sql("REFRESH FOREIGN TABLES " + default_name + ";");
+  sqlAndCompareResult(select, {{i(1)}, {i(2)}, {i(3)}, {i(4)}, {i(5)}});
+
+  bf::remove_all(getDataFilesPath() + "append_tmp");
+}
+
+TEST_P(CsvAppendTest, AppendNothing) {
+  auto& param = GetParam();
+  int fragment_size = param.fragment_size;
+  std::string filename = param.filename;
+
+  std::string query = "CREATE FOREIGN TABLE " + default_name + " (i INTEGER) "s +
+                      "SERVER omnisci_local_csv WITH (file_path = '" +
+                      getDataFilesPath() + "append_before/" + filename +
+                      "', fragment_size = '" + std::to_string(fragment_size) +
+                      "', UPDATE_MODE = 'APPEND');";
+  sql(query);
+  std::string select = "SELECT * FROM "s + default_name + " ORDER BY i;";
+  // Read from table
+  sqlAndCompareResult(select, {{i(1)}, {i(2)}});
+  // Refresh command
+  sql("REFRESH FOREIGN TABLES " + default_name + ";");
+  // Read from table
+  sqlAndCompareResult(select, {{i(1)}, {i(2)}});
+}
+
+TEST_F(CsvAppendTest, MissingRows) {
+  int fragment_size = 1;
+  std::string filename = "single_file_delete_rows.csv";
+  // Create initial files and tables
+  bf::remove_all(getDataFilesPath() + "append_tmp");
+  recursive_copy(getDataFilesPath() + "append_before", getDataFilesPath() + "append_tmp");
+
+  std::string query = "CREATE FOREIGN TABLE " + default_name + " (i INTEGER) "s +
+                      "SERVER omnisci_local_csv WITH (file_path = '" +
+                      getDataFilesPath() + "append_tmp/" + filename +
+                      "', fragment_size = '" + std::to_string(fragment_size) +
+                      "', UPDATE_MODE = 'APPEND');";
+  sql(query);
+
+  std::string select = "SELECT * FROM "s + default_name + " ORDER BY i;";
+  // Read from table
+  sqlAndCompareResult(select, {{i(1)}, {i(2)}});
+
+  // Modify files
+  bf::remove_all(getDataFilesPath() + "append_tmp");
+  recursive_copy(getDataFilesPath() + "append_after", getDataFilesPath() + "append_tmp");
+
+  // Refresh command
+  queryAndAssertException(
+      "REFRESH FOREIGN TABLES " + default_name + ";",
+      "Exception: Refresh of foreign table created with APPEND update mode failed as "
+      "file reduced in size: \"single_file_delete_rows.csv\".");
+
+  bf::remove_all(getDataFilesPath() + "append_tmp");
+}
+
+TEST_F(CsvAppendTest, MissingFileArchive) {
+  int fragment_size = 1;
+  std::string filename = "archive_delete_file.zip";
+  // Create initial files and tables
+  bf::remove_all(getDataFilesPath() + "append_tmp");
+  recursive_copy(getDataFilesPath() + "append_before", getDataFilesPath() + "append_tmp");
+
+  std::string query = "CREATE FOREIGN TABLE " + default_name + " (i INTEGER) "s +
+                      "SERVER omnisci_local_csv WITH (file_path = '" +
+                      getDataFilesPath() + "append_tmp/" + filename +
+                      "', fragment_size = '" + std::to_string(fragment_size) +
+                      "', UPDATE_MODE = 'APPEND');";
+  sql(query);
+
+  std::string select = "SELECT * FROM "s + default_name + " ORDER BY i;";
+  // Read from table
+  sqlAndCompareResult(select, {{i(1)}, {i(2)}});
+
+  // Modify files
+  bf::remove_all(getDataFilesPath() + "append_tmp");
+  recursive_copy(getDataFilesPath() + "append_after", getDataFilesPath() + "append_tmp");
+
+  // Refresh command
+  queryAndAssertException(
+      "REFRESH FOREIGN TABLES " + default_name + ";",
+      "Exception: Foreign table refreshed with APPEND mode missing archive entry "
+      "\"single_file_delete_rows.csv\" from file \"archive_delete_file.zip\".");
+
+  bf::remove_all(getDataFilesPath() + "append_tmp");
+}
+
+TEST_F(CsvAppendTest, MultifileAppendtoFile) {
+  int fragment_size = 1;
+  std::string filename = "dir_file_multi_bad_append";
+
+  // Create initial files and tables
+  bf::remove_all(getDataFilesPath() + "append_tmp");
+
+  recursive_copy(getDataFilesPath() + "append_before", getDataFilesPath() + "append_tmp");
+  std::string file_path = getDataFilesPath() + "append_tmp/" + "single_file.csv";
+
+  std::string query = "CREATE FOREIGN TABLE " + default_name + " (i INTEGER) "s +
+                      "SERVER omnisci_local_csv WITH (file_path = '" +
+                      getDataFilesPath() + "append_tmp/" + filename +
+                      "', fragment_size = '" + std::to_string(fragment_size) +
+                      "', UPDATE_MODE = 'APPEND');";
+  sql(query);
+
+  std::string select = "SELECT * FROM "s + default_name + " ORDER BY i;";
+  // Read from table
+  sqlAndCompareResult(select, {{i(1)}, {i(2)}});
+  bf::remove_all(getDataFilesPath() + "append_tmp");
+  recursive_copy(getDataFilesPath() + "append_after", getDataFilesPath() + "append_tmp");
+
+  // Refresh command
+  sql("REFRESH FOREIGN TABLES " + default_name + ";");
+  sqlAndCompareResult(select, {{i(1)}, {i(2)}});
+
+  bf::remove_all(getDataFilesPath() + "append_tmp");
 }
 
 INSTANTIATE_TEST_SUITE_P(
