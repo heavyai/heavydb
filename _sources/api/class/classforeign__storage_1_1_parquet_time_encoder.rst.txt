@@ -1,0 +1,9 @@
+Class foreign_storage::ParquetTimeEncoder
+=========================================
+
+.. doxygenclass:: foreign_storage::ParquetTimeEncoder
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

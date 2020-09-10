@@ -40,7 +40,7 @@
   <link rel="stylesheet" href="../../_static/theme_overrides.css" type="text/css" />
     <link rel="index" title="Index" href="../../genindex.html" />
     <link rel="search" title="Search" href="../../search.html" />
-    <link rel="next" title="Class foreign_storage::ParquetForeignTableSchema" href="classforeign__storage_1_1_parquet_foreign_table_schema.html" />
+    <link rel="next" title="Class foreign_storage::ParquetDecimalEncoder" href="classforeign__storage_1_1_parquet_decimal_encoder.html" />
     <link rel="prev" title="Class foreign_storage::MultiS3Reader" href="classforeign__storage_1_1_multi_s3_reader.html" /> 
 </head>
 
@@ -65,7 +65,7 @@
             
             
               <div class="version">
-                5.4.0dev 93380f2
+                5.5.0dev 93884ef
               </div>
             
           
@@ -994,13 +994,21 @@
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_foreign_storage_buffer.html">Class foreign_storage::ForeignStorageBuffer</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_foreign_storage_cache.html">Class foreign_storage::ForeignStorageCache</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_foreign_storage_mgr.html">Class foreign_storage::ForeignStorageMgr</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_lazy_parquet_chunk_loader.html">Class foreign_storage::LazyParquetChunkLoader</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_lazy_parquet_importer.html">Class foreign_storage::LazyParquetImporter</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_local_multi_file_reader.html">Class foreign_storage::LocalMultiFileReader</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_multi_file_reader.html">Class foreign_storage::MultiFileReader</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_multi_s3_reader.html">Class foreign_storage::MultiS3Reader</a></li>
 <li class="toctree-l2 current"><a class="current reference internal" href="#">Class foreign_storage::ParquetDataWrapper</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_parquet_decimal_encoder.html">Class foreign_storage::ParquetDecimalEncoder</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_parquet_fixed_length_encoder.html">Class foreign_storage::ParquetFixedLengthEncoder</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_parquet_foreign_table_schema.html">Class foreign_storage::ParquetForeignTableSchema</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_parquet_in_place_encoder.html">Class foreign_storage::ParquetInPlaceEncoder</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_parquet_time_encoder.html">Class foreign_storage::ParquetTimeEncoder</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_parquet_timestamp_encoder.html">Class foreign_storage::ParquetTimestampEncoder</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_parquet_unsigned_fixed_length_encoder.html">Class foreign_storage::ParquetUnsignedFixedLengthEncoder</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_single_file_reader.html">Class foreign_storage::SingleFileReader</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_typed_parquet_in_place_encoder.html">Class foreign_storage::TypedParquetInPlaceEncoder</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classimport__export_1_1_data_stream_sink.html">Class import_export::DataStreamSink</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classimport__export_1_1_detector.html">Class import_export::Detector</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classimport__export_1_1_g_d_a_l.html">Class import_export::GDAL</a></li>
@@ -1572,8 +1580,8 @@
 <dd></dd></dl>
 
 <dl class="function">
-<dt id="_CPPv4N15foreign_storage18ParquetDataWrapper22initializeChunkBuffersEKiRK8IntervalI10ColumnTypeE">
-<span id="_CPPv3N15foreign_storage18ParquetDataWrapper22initializeChunkBuffersEKiRK8IntervalI10ColumnTypeE"></span><span id="_CPPv2N15foreign_storage18ParquetDataWrapper22initializeChunkBuffersEKiRK8IntervalI10ColumnTypeE"></span><span id="foreign_storage::ParquetDataWrapper::initializeChunkBuffers__iC.Interval:ColumnType:CR"></span><span class="target" id="classforeign__storage_1_1_parquet_data_wrapper_1abc331b9a1b2fca4152d49a740a1c095b"></span>void <code class="sig-name descname">initializeChunkBuffers</code><span class="sig-paren">(</span><em class="property">const</em> int <em>fragment_index</em>, <em class="property">const</em> Interval&lt;<a class="reference internal" href="../struct/structforeign__storage_1_1_column_type.html#_CPPv4N15foreign_storage10ColumnTypeE" title="foreign_storage::ColumnType">ColumnType</a>&gt; &amp;<em>column_interval</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N15foreign_storage18ParquetDataWrapper22initializeChunkBuffersEKiRK8IntervalI10ColumnTypeE" title="Permalink to this definition">¶</a><br /></dt>
+<dt id="_CPPv4N15foreign_storage18ParquetDataWrapper22initializeChunkBuffersEKiRK8IntervalI10ColumnTypeEKbK6size_t">
+<span id="_CPPv3N15foreign_storage18ParquetDataWrapper22initializeChunkBuffersEKiRK8IntervalI10ColumnTypeEKbK6size_t"></span><span id="_CPPv2N15foreign_storage18ParquetDataWrapper22initializeChunkBuffersEKiRK8IntervalI10ColumnTypeEKbK6size_t"></span><span id="foreign_storage::ParquetDataWrapper::initializeChunkBuffers__iC.Interval:ColumnType:CR.bC.sC"></span><span class="target" id="classforeign__storage_1_1_parquet_data_wrapper_1a4c721f56a3dfbe8987812d4728e00bee"></span>void <code class="sig-name descname">initializeChunkBuffers</code><span class="sig-paren">(</span><em class="property">const</em> int <em>fragment_index</em>, <em class="property">const</em> Interval&lt;<a class="reference internal" href="../struct/structforeign__storage_1_1_column_type.html#_CPPv4N15foreign_storage10ColumnTypeE" title="foreign_storage::ColumnType">ColumnType</a>&gt; &amp;<em>column_interval</em>, <em class="property">const</em> bool <em>reserve_buffers_and_set_stats</em> = false, <em class="property">const</em> size_t <em>physical_byte_size</em> = 0<span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N15foreign_storage18ParquetDataWrapper22initializeChunkBuffersEKiRK8IntervalI10ColumnTypeEKbK6size_t" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 <dl class="function">
@@ -1594,6 +1602,16 @@
 <dl class="function">
 <dt id="_CPPv4N15foreign_storage18ParquetDataWrapper17loadBufferIntoMapERK8ChunkKey">
 <span id="_CPPv3N15foreign_storage18ParquetDataWrapper17loadBufferIntoMapERK8ChunkKey"></span><span id="_CPPv2N15foreign_storage18ParquetDataWrapper17loadBufferIntoMapERK8ChunkKey"></span><span id="foreign_storage::ParquetDataWrapper::loadBufferIntoMap__ChunkKeyCR"></span><span class="target" id="classforeign__storage_1_1_parquet_data_wrapper_1a0b54fdffce3b4e377b89ebdbfe6311ac"></span><a class="reference internal" href="classforeign__storage_1_1_foreign_storage_buffer.html#_CPPv4N15foreign_storage20ForeignStorageBufferE" title="foreign_storage::ForeignStorageBuffer">ForeignStorageBuffer</a> *<code class="sig-name descname">loadBufferIntoMap</code><span class="sig-paren">(</span><em class="property">const</em> ChunkKey &amp;<em>chunk_key</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N15foreign_storage18ParquetDataWrapper17loadBufferIntoMapERK8ChunkKey" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="_CPPv4N15foreign_storage18ParquetDataWrapper41loadBufferIntoMapUsingLazyParquetImporterERK8ChunkKey">
+<span id="_CPPv3N15foreign_storage18ParquetDataWrapper41loadBufferIntoMapUsingLazyParquetImporterERK8ChunkKey"></span><span id="_CPPv2N15foreign_storage18ParquetDataWrapper41loadBufferIntoMapUsingLazyParquetImporterERK8ChunkKey"></span><span id="foreign_storage::ParquetDataWrapper::loadBufferIntoMapUsingLazyParquetImporter__ChunkKeyCR"></span><span class="target" id="classforeign__storage_1_1_parquet_data_wrapper_1abd1a72df80bcf964540ca593d5861471"></span><a class="reference internal" href="classforeign__storage_1_1_foreign_storage_buffer.html#_CPPv4N15foreign_storage20ForeignStorageBufferE" title="foreign_storage::ForeignStorageBuffer">ForeignStorageBuffer</a> *<code class="sig-name descname">loadBufferIntoMapUsingLazyParquetImporter</code><span class="sig-paren">(</span><em class="property">const</em> ChunkKey &amp;<em>chunk_key</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N15foreign_storage18ParquetDataWrapper41loadBufferIntoMapUsingLazyParquetImporterERK8ChunkKey" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="_CPPv4N15foreign_storage18ParquetDataWrapper44loadBufferIntoMapUsingLazyParquetChunkLoaderERK8ChunkKeyK6size_t">
+<span id="_CPPv3N15foreign_storage18ParquetDataWrapper44loadBufferIntoMapUsingLazyParquetChunkLoaderERK8ChunkKeyK6size_t"></span><span id="_CPPv2N15foreign_storage18ParquetDataWrapper44loadBufferIntoMapUsingLazyParquetChunkLoaderERK8ChunkKeyK6size_t"></span><span id="foreign_storage::ParquetDataWrapper::loadBufferIntoMapUsingLazyParquetChunkLoader__ChunkKeyCR.sC"></span><span class="target" id="classforeign__storage_1_1_parquet_data_wrapper_1a6b4adf56676c91a64eebb954022ac355"></span><a class="reference internal" href="classforeign__storage_1_1_foreign_storage_buffer.html#_CPPv4N15foreign_storage20ForeignStorageBufferE" title="foreign_storage::ForeignStorageBuffer">ForeignStorageBuffer</a> *<code class="sig-name descname">loadBufferIntoMapUsingLazyParquetChunkLoader</code><span class="sig-paren">(</span><em class="property">const</em> ChunkKey &amp;<em>chunk_key</em>, <em class="property">const</em> size_t <em>physical_byte_size</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N15foreign_storage18ParquetDataWrapper44loadBufferIntoMapUsingLazyParquetChunkLoaderERK8ChunkKeyK6size_t" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 <dl class="function">
@@ -1686,6 +1704,11 @@
 <dd></dd></dl>
 
 <dl class="member">
+<dt id="_CPPv4N15foreign_storage18ParquetDataWrapper19chunk_metadata_map_E">
+<span id="_CPPv3N15foreign_storage18ParquetDataWrapper19chunk_metadata_map_E"></span><span id="_CPPv2N15foreign_storage18ParquetDataWrapper19chunk_metadata_map_E"></span><span id="foreign_storage::ParquetDataWrapper::chunk_metadata_map___std::map:ChunkKey.std::shared_ptr:ChunkMetadata::"></span><span class="target" id="classforeign__storage_1_1_parquet_data_wrapper_1a37fd00fbf779085aa25ad7540b507e92"></span>std::map&lt;ChunkKey, std::shared_ptr&lt;<a class="reference internal" href="../struct/struct_chunk_metadata.html#_CPPv413ChunkMetadata" title="ChunkMetadata">ChunkMetadata</a>&gt;&gt; <code class="sig-name descname">chunk_metadata_map_</code><a class="headerlink" href="#_CPPv4N15foreign_storage18ParquetDataWrapper19chunk_metadata_map_E" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="member">
 <dt id="_CPPv4N15foreign_storage18ParquetDataWrapper6db_id_E">
 <span id="_CPPv3N15foreign_storage18ParquetDataWrapper6db_id_E"></span><span id="_CPPv2N15foreign_storage18ParquetDataWrapper6db_id_E"></span><span id="foreign_storage::ParquetDataWrapper::db_id___iC"></span><span class="target" id="classforeign__storage_1_1_parquet_data_wrapper_1a245586d9621edf26a338d291da00e9e5"></span><em class="property">const</em> int <code class="sig-name descname">db_id_</code><a class="headerlink" href="#_CPPv4N15foreign_storage18ParquetDataWrapper6db_id_E" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
@@ -1754,7 +1777,7 @@
   
     <div class="rst-footer-buttons" role="navigation" aria-label="footer navigation">
       
-        <a href="classforeign__storage_1_1_parquet_foreign_table_schema.html" class="btn btn-neutral float-right" title="Class foreign_storage::ParquetForeignTableSchema" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right"></span></a>
+        <a href="classforeign__storage_1_1_parquet_decimal_encoder.html" class="btn btn-neutral float-right" title="Class foreign_storage::ParquetDecimalEncoder" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right"></span></a>
       
       
         <a href="classforeign__storage_1_1_multi_s3_reader.html" class="btn btn-neutral float-left" title="Class foreign_storage::MultiS3Reader" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left"></span> Previous</a>

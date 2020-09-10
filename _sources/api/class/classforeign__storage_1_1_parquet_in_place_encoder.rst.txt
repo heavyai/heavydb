@@ -1,0 +1,9 @@
+Class foreign_storage::ParquetInPlaceEncoder
+============================================
+
+.. doxygenclass:: foreign_storage::ParquetInPlaceEncoder
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

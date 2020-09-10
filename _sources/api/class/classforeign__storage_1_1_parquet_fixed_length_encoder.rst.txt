@@ -1,0 +1,9 @@
+Class foreign_storage::ParquetFixedLengthEncoder
+================================================
+
+.. doxygenclass:: foreign_storage::ParquetFixedLengthEncoder
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:
