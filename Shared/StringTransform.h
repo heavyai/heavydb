@@ -55,10 +55,12 @@ std::vector<std::pair<size_t, size_t>> find_string_literals(const std::string& q
 // Replace passwords, keys, etc. in a sql query with 'XXXXXXXX'.
 std::string hide_sensitive_data_from_query(std::string const& query_str);
 
-ssize_t inside_string_literal(
+#ifndef __CUDACC__
+std::optional<size_t> inside_string_literal(
     const size_t start,
     const size_t length,
     const std::vector<std::pair<size_t, size_t>>& literal_positions);
+#endif  // __CUDACC__
 
 template <typename T>
 std::string join(T const& container, std::string const& delim) {

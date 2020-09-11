@@ -96,13 +96,13 @@ int64_t parse_numeric(const std::string_view s, SQLTypeInfo& ti) {
     ti.set_dimension(before_dot_digits + ti.get_scale());
     ti.set_notnull(false);
   } else {
+    CHECK_GE(ti.get_scale(), 0);
     if (before_dot_digits + ti.get_scale() > static_cast<size_t>(ti.get_dimension())) {
       throw std::runtime_error("numeric value " + std::string(s) +
                                " exceeds the maximum precision of " +
                                std::to_string(ti.get_dimension()));
     }
-    for (ssize_t i = 0; i < static_cast<ssize_t>(after_dot.length()) - ti.get_scale();
-         i++) {
+    for (size_t i = static_cast<size_t>(ti.get_scale()); i < after_dot.length(); ++i) {
       fraction /= 10;  // truncate the digits after decimal point.
     }
   }
