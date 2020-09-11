@@ -308,13 +308,15 @@ namespace {
 enum class FileLocationType {
   RELATIVE,
   ABSOLUTE,
+#ifdef HAVE_AWS_S3
   S3,
+#endif  // HAVE_AWS_S3
   HTTP,
   HTTPS,
   First = RELATIVE,
   Last = HTTPS
 };
-}
+}  // namespace
 
 class DBHandlerFilePathTest
     : public DBHandlerTestFixture,
@@ -327,8 +329,10 @@ class DBHandlerFilePathTest
       param_str = "RelativePath";
     } else if (file_location_type == FileLocationType::ABSOLUTE) {
       param_str = "AbsolutePath";
+#ifdef HAVE_AWS_S3
     } else if (file_location_type == FileLocationType::S3) {
       param_str = "S3";
+#endif  // HAVE_AWS_S3
     } else if (file_location_type == FileLocationType::HTTPS) {
       param_str = "Https";
     } else if (file_location_type == FileLocationType::HTTP) {
@@ -363,12 +367,14 @@ class DBHandlerFilePathTest
 
     std::string file_name = file_name_prefix + suffix;
     std::string path;
-    if (file_location_type == FileLocationType::S3) {
-      path = "s3://omnisci-import-test/" + file_name;
-    } else if (file_location_type == FileLocationType::HTTPS) {
+    if (file_location_type == FileLocationType::HTTPS) {
       path = "https://omnisci-import-test.s3-us-west-1.amazonaws.com/" + file_name;
     } else if (file_location_type == FileLocationType::HTTP) {
       path = "http://omnisci-import-test.s3-us-west-1.amazonaws.com/" + file_name;
+#ifdef HAVE_AWS_S3
+    } else if (file_location_type == FileLocationType::S3) {
+      path = "s3://omnisci-import-test/" + file_name;
+#endif  // HAVE_AWS_S3
     } else {
       auto session_id = getDbHandlerAndSessionId().second;
       auto session_directory = getImportPath() / picosha2::hash256_hex_string(session_id);
@@ -419,11 +425,13 @@ TEST_P(DBHandlerFilePathTest, ImportTable) {
 }
 
 TEST_P(DBHandlerFilePathTest, ImportGeoTable) {
-  // TODO: Undo test case skipping when GDAL failure is resolved
+// TODO: Undo test case skipping when GDAL failure is resolved
+#ifdef HAVE_AWS_S3
   if (auto [file_location_type, suffix] = getTestParams();
       file_location_type == FileLocationType::S3 && suffix == "_tar_gz") {
     GTEST_SKIP();
   }
+#endif  // HAVE_AWS_S3
 
   auto [db_handler, session_id] = getDbHandlerAndSessionId();
   db_handler->import_geo_table(session_id,
@@ -449,11 +457,13 @@ TEST_P(DBHandlerFilePathTest, GetAllFilesInArchive) {
 }
 
 TEST_P(DBHandlerFilePathTest, GetLayersInGeoFile) {
-  // TODO: Undo test case skipping when GDAL failure is resolved
+// TODO: Undo test case skipping when GDAL failure is resolved
+#ifdef HAVE_AWS_S3
   if (auto [file_location_type, suffix] = getTestParams();
       file_location_type == FileLocationType::S3 && suffix == "_tar_gz") {
     GTEST_SKIP();
   }
+#endif  // HAVE_AWS_S3
 
   auto [db_handler, session_id] = getDbHandlerAndSessionId();
   std::vector<TGeoFileLayerInfo> result;
