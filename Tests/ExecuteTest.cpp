@@ -8720,6 +8720,13 @@ TEST(Select, Joins_OuterJoin_OptBy_NullRejection) {
       "where a is not null and c < 2 order by a,b,c,d,e,f;",
       dt);
 
+    // reverse column order in outer join predicate
+    c("select a,b,c,d,e,f from outer_join_foo full outer join outer_join_bar on d = a "
+      "where a is not null and c < 2 order by a,b,c,d,e,f;",
+      "select a,b,c,d,e,f from outer_join_foo left outer join outer_join_bar on d = a "
+      "where a is not null and c < 2 order by a,b,c,d,e,f;",
+      dt);
+
     c("select a,b,c,d,e,f from outer_join_foo full outer join outer_join_bar on a = d "
       "where a > 7 order by a,b,c,d,e,f;",
       "select a,b,c,d,e,f from outer_join_foo left outer join outer_join_bar on a = d "
@@ -8795,6 +8802,13 @@ TEST(Select, Joins_OuterJoin_OptBy_NullRejection) {
       "null and b is not null and a < 0 order by a,b,c,d,e,f;",
       dt);
 
+    // reverse column order in outer join predicate
+    c("select a,b,c,d,e,f from outer_join_foo full outer join outer_join_bar on b = e "
+      "where e is not null and b is not null and a < 0 order by a,b,c,d,e,f;",
+      "select a,b,c,d,e,f from outer_join_foo, outer_join_bar where b = e and e is not "
+      "null and b is not null and a < 0 order by a,b,c,d,e,f;",
+      dt);
+
     c("select a,b,c,d,e,f from outer_join_foo full outer join outer_join_bar on b = e "
       "where e < 5 and b < 0 order by a,b,c,d,e,f;",
       "select a,b,c,d,e,f from outer_join_foo, outer_join_bar where b = e and e < 5 and "
@@ -8846,12 +8860,6 @@ TEST(Select, Joins_OuterJoin_OptBy_NullRejection) {
       dt);
 
     c("select a,b,c,d,e,f from outer_join_foo full outer join outer_join_bar on b = e "
-      "where b < 5 order by a,b,c,d,e,f;",
-      "select a,b,c,d,e,f from outer_join_foo, outer_join_bar where b = e and b < 5 "
-      "order by a,b,c,d,e,f;",
-      dt);
-
-    c("select a,b,c,d,e,f from outer_join_foo full outer join outer_join_bar on b = e "
       "where b is not null and e > -14 order by a,b,c,d,e,f;",
       "select a,b,c,d,e,f from outer_join_foo, outer_join_bar where b = e and b is not "
       "null and e > -14 order by a,b,c,d,e,f;",
@@ -8871,6 +8879,19 @@ TEST(Select, Joins_OuterJoin_OptBy_NullRejection) {
       "null and a < 0 order by a,b,c,d,e,f;",
       dt);
 
+    // reverse column order in outer join predicate
+    c("select a,b,c,d,e,f from outer_join_foo left outer join outer_join_bar on d = a "
+      "where d is not null and a < 0 order by a,b,c,d,e,f;",
+      "select a,b,c,d,e,f from outer_join_foo, outer_join_bar where a = d and d is not "
+      "null and a < 0 order by a,b,c,d,e,f;",
+      dt);
+
+    c("select a,b,c,d,e,f from outer_join_foo left outer join outer_join_bar on a = d "
+      "where a < 0 order by a,b,c,d,e,f;",
+      "select a,b,c,d,e,f from outer_join_foo, outer_join_bar where a = d and a < 0 "
+      "order by a,b,c,d,e,f;",
+      dt);
+
     c("select a,b,c,d,e,f from outer_join_foo left outer join outer_join_bar on b = e "
       "where b is not null and a < 0 order by a,b,c,d,e,f;",
       "select a,b,c,d,e,f from outer_join_foo, outer_join_bar where b = e and b is not "
@@ -8879,51 +8900,51 @@ TEST(Select, Joins_OuterJoin_OptBy_NullRejection) {
 
     //    b) return a single matching row
     c("select a,b,c,d,e,f from outer_join_foo left outer join outer_join_bar on a = d "
-      "where a is not null and d is not null order by a,b,c,d,e,f;",
+      "where a is not null order by a,b,c,d,e,f;",
       "select a,b,c,d,e,f from outer_join_foo, outer_join_bar where a = d and a is not "
-      "null and d is not null order by a,b,c,d,e,f;",
+      "null order by a,b,c,d,e,f;",
       dt);
 
     //    c) return multiple matching rows (four rows)
     c("select a,b,c,d,e,f from outer_join_foo left outer join outer_join_bar on b = e "
-      "where e > 1 and b > 1 order by a,b,c,d,e,f;",
-      "select a,b,c,d,e,f from outer_join_foo, outer_join_bar where b = e and e > 1 and "
-      "b > 1",
+      "where b > 1 order by a,b,c,d,e,f;",
+      "select a,b,c,d,e,f from outer_join_foo, outer_join_bar where b = e and b > 1 "
+      "order by a,b,c,d,e,f",
       dt);
 
     // multi-column outer join predicates
     // 1. execute full outer join via left outer join
     //    a) return zero matching row
     c("select a,b,c,d,e,f from outer_join_foo full outer join outer_join_bar on a = d "
-      "and b = e where a is not null and c < 2 order by a,b,c,d,e,f;",
+      "and b = e where a is not null and b < 2 order by a,b,c,d,e,f;",
       "select a,b,c,d,e,f from outer_join_foo left outer join outer_join_bar on a = d "
-      "and b = e where a is not null and c < 2 order by a,b,c,d,e,f;",
+      "and b = e where a is not null and b < 2 order by a,b,c,d,e,f;",
       dt);
 
     //    b) return a single matching row
     c("select a,b,c,d,e,f from outer_join_foo full outer join outer_join_bar on a = d "
-      "and b = e where a is not null and c < 3 order by a,b,c,d,e,f;",
+      "and b = e where a is not null and b < 3 order by a,b,c,d,e,f;",
       "select a,b,c,d,e,f from outer_join_foo left outer join outer_join_bar on a = d "
-      "and b = e where a is not null and c < 3 order by a,b,c,d,e,f;",
+      "and b = e where a is not null and b < 3 order by a,b,c,d,e,f;",
       dt);
 
     //    c) return multiple matching rows
     c("select a,b,c,d,e,f from outer_join_foo full outer join outer_join_bar on a = d "
-      "and b = e where a is not null order by a,b,c,d,e,f;",
+      "and b = e where a is not null and b is not null order by a,b,c,d,e,f;",
       "select a,b,c,d,e,f from outer_join_foo left outer join outer_join_bar on a = d "
-      "and b = e where a is not null order by a,b,c,d,e,f;",
+      "and b = e where a is not null and b is not null order by a,b,c,d,e,f;",
       dt);
 
     c("select a,b,c,d,e,f from outer_join_foo full outer join outer_join_bar on a = d "
-      "and b = e where b is not null and b < 6 order by a,b,c,d,e,f;",
+      "and b = e where a is not null and b < 6 order by a,b,c,d,e,f;",
       "select a,b,c,d,e,f from outer_join_foo left outer join outer_join_bar on a = d "
-      "and b = e where b is not null and b < 6 order by a,b,c,d,e,f;",
+      "and b = e where a is not null and b < 6 order by a,b,c,d,e,f;",
       dt);
 
     c("select a,b,c,d,e,f from outer_join_foo full outer join outer_join_bar on a = d "
-      "and c = f where c is not null and c < 7 order by a,b,c,d,e,f;",
+      "and c = f where a is not null and c < 7 order by a,b,c,d,e,f;",
       "select a,b,c,d,e,f from outer_join_foo left outer join outer_join_bar on a = d "
-      "and c = f where c is not null and c < 7 order by a,b,c,d,e,f;",
+      "and c = f where a is not null and c < 7 order by a,b,c,d,e,f;",
       dt);
 
     c("select a,b,c,d,e,f from outer_join_foo full outer join outer_join_bar on a = d "
@@ -8933,9 +8954,11 @@ TEST(Select, Joins_OuterJoin_OptBy_NullRejection) {
       dt);
 
     c("select a,b,c,d,e,f from outer_join_foo full outer join outer_join_bar on c = f "
-      "and b = e where b is not null and c is not null and c < 7 order by a,b,c,d,e,f;",
+      "and b = e where b is not null and c is not null and b < 7 and a is not null order "
+      "by a,b,c,d,e,f;",
       "select a,b,c,d,e,f from outer_join_foo left outer join outer_join_bar on c = f "
-      "and b = e where b is not null and c is not null and c < 7 order by a,b,c,d,e,f;",
+      "and b = e where b is not null and c is not null and b < 7 and a is not null order "
+      "by a,b,c,d,e,f;",
       dt);
 
     c("select a,b,c,d,e,f from outer_join_foo full outer join outer_join_bar on a = d "
@@ -8945,49 +8968,27 @@ TEST(Select, Joins_OuterJoin_OptBy_NullRejection) {
       dt);
 
     c("select a,b,c,d,e,f from outer_join_foo full outer join outer_join_bar on a = d "
-      "and b = e and c = f where a is not null order by a,b,c,d,e,f;",
-      "select a,b,c,d,e,f from outer_join_foo left outer join outer_join_bar on a = d "
-      "and b = e and c = f where a is not null order by a,b,c,d,e,f;",
-      dt);
-
-    c("select a,b,c,d,e,f from outer_join_foo full outer join outer_join_bar on a = d "
-      "and b = e and c = f where b is not null and b < 6 order by a,b,c,d,e,f;",
-      "select a,b,c,d,e,f from outer_join_foo left outer join outer_join_bar on a = d "
-      "and b = e and c = f where b is not null and b < 6 order by a,b,c,d,e,f;",
-      dt);
-
-    c("select a,b,c,d,e,f from outer_join_foo full outer join outer_join_bar on a = d "
-      "and b = e and c = f where c is not null and c < 7 order by a,b,c,d,e,f;",
-      "select a,b,c,d,e,f from outer_join_foo left outer join outer_join_bar on a = d "
-      "and b = e and c = f where c is not null and c < 7 order by a,b,c,d,e,f;",
-      dt);
-
-    c("select a,b,c,d,e,f from outer_join_foo full outer join outer_join_bar on a = d "
-      "and b = e and c = f where a is not null and b is not null order by a,b,c,d,e,f;",
-      "select a,b,c,d,e,f from outer_join_foo left outer join outer_join_bar on a = d "
-      "and b = e and c = f where a is not null and b is not null order by a,b,c,d,e,f;",
-      dt);
-
-    c("select a,b,c,d,e,f from outer_join_foo full outer join outer_join_bar on a = d "
-      "and b = e and c = f where b is not null and c is not null and c < 7 order by "
-      "a,b,c,d,e,f;",
-      "select a,b,c,d,e,f from outer_join_foo left outer join outer_join_bar on a = d "
-      "and b = e and c = f where b is not null and c is not null and c < 7 order by "
-      "a,b,c,d,e,f;",
-      dt);
-
-    c("select a,b,c,d,e,f from outer_join_foo full outer join outer_join_bar on a = d "
-      "and b = e and c = f where a is not null and c is not null order by a,b,c,d,e,f;",
-      "select a,b,c,d,e,f from outer_join_foo left outer join outer_join_bar on a = d "
-      "and b = e and c = f where a is not null and c is not null order by a,b,c,d,e,f;",
-      dt);
-
-    c("select a,b,c,d,e,f from outer_join_foo full outer join outer_join_bar on a = d "
       "and b = e and c = f where a is not null and b is not null and c is not null order "
       "by a,b,c,d,e,f;",
       "select a,b,c,d,e,f from outer_join_foo left outer join outer_join_bar on a = d "
       "and b = e and c = f where a is not null and b is not null and c is not null order "
       "by a,b,c,d,e,f;",
+      dt);
+
+    c("select a,b,c,d,e,f from outer_join_foo full outer join outer_join_bar on a = d "
+      "and b = e and c = f where a is not null and c is not null and b < 6 order by "
+      "a,b,c,d,e,f;",
+      "select a,b,c,d,e,f from outer_join_foo left outer join outer_join_bar on a = d "
+      "and b = e and c = f where b is not null and c is not null and b < 6 order by "
+      "a,b,c,d,e,f;",
+      dt);
+
+    c("select a,b,c,d,e,f from outer_join_foo full outer join outer_join_bar on a = d "
+      "and b = e and c = f where a is not null and c is not null and b < 7 order by "
+      "a,b,c,d,e,f;",
+      "select a,b,c,d,e,f from outer_join_foo left outer join outer_join_bar on a = d "
+      "and b = e and c = f where a is not null and c is not null and b < 7 order by "
+      "a,b,c,d,e,f;",
       dt);
 
     //    d) expect to throw an error due to unsupported full outer join
@@ -8995,56 +8996,56 @@ TEST(Select, Joins_OuterJoin_OptBy_NullRejection) {
     EXPECT_THROW(
         run_multiple_agg(
             "select a,b,c,d,e,f from outer_join_foo full outer join outer_join_bar on a "
-            "= d and c = f where d is not null and b < 2 order by a,b,c,d,e,f;",
+            "= d and c = f where d is not null and f < 2 order by a,b,c,d,e,f;",
             dt),
         std::runtime_error);
     EXPECT_THROW(
         run_multiple_agg(
             "select a,b,c,d,e,f from outer_join_foo full outer join outer_join_bar on a "
-            "= d and c = f where b < 2 order by a,b,c,d,e,f;",
+            "= d and c = f where a < 2 order by a,b,c,d,e,f;",
             dt),
         std::runtime_error);
 
     // 2. execute full outer join via inner join
     //    a) return zero matching row
     c("select a,b,c,d,e,f from outer_join_foo full outer join outer_join_bar on a = d "
-      "and b = e where a is not null and b is not null and d < 1 order by a,b,c,d,e,f;",
+      "and b = e where a is not null and b is not null and d < 1 and e is not null order "
+      "by a,b,c,d,e,f;",
       "select a,b,c,d,e,f from outer_join_foo, outer_join_bar where a = d and b = e and "
-      "a is not null and b is not null and d < 1 order by a,b,c,d,e,f;",
-      dt);
-
-    c("select a,b,c,d,e,f from outer_join_foo full outer join outer_join_bar on a = d "
-      "and c = f where a is not null and c is not null and d < 1 order by a,b,c,d,e,f;",
-      "select a,b,c,d,e,f from outer_join_foo, outer_join_bar where a = d and c = f and "
-      "a is not null and c is not null and d < 1 order by a,b,c,d,e,f;",
+      "a is not null and b is not null and d < 1 and e is not null order by a,b,c,d,e,f;",
       dt);
 
     c("select a,b,c,d,e,f from outer_join_foo full outer join outer_join_bar on c = f "
-      "and b = e where c is not null and b is not null and f > 4 order by a,b,c,d,e,f;",
+      "and b = e where c is not null and b is not null and f > 4 and e is not null order "
+      "by a,b,c,d,e,f;",
       "select a,b,c,d,e,f from outer_join_foo, outer_join_bar where c = f and b = e and "
-      "c is not null and b is not null and f > 4 order by a,b,c,d,e,f;",
+      "c is not null and b is not null and f > 4 and e is not null order by a,b,c,d,e,f;",
       dt);
 
     //    b) return a single matching row
     c("select a,b,c,d,e,f from outer_join_foo full outer join outer_join_bar on a = d "
-      "and b = e where a is not null and b is not null and d < 999999 order by "
+      "and b = e where a is not null and b is not null and d < 999999 and e is not null "
+      "order by "
       "a,b,c,d,e,f;",
       "select a,b,c,d,e,f from outer_join_foo, outer_join_bar where a = d and b = e and "
-      "a is not null and b is not null and d < 999999 order by a,b,c,d,e,f;",
+      "a is not null and b is not null and d < 999999 and e is not null order by "
+      "a,b,c,d,e,f;",
       dt);
 
     c("select a,b,c,d,e,f from outer_join_foo full outer join outer_join_bar on a = d "
-      "and c = f where a is not null and c is not null and d < 9999999 order by "
-      "a,b,c,d,e,f;",
+      "and c = f where a is not null and c is not null and d < 9999999 and f is not null "
+      "order by a,b,c,d,e,f;",
       "select a,b,c,d,e,f from outer_join_foo, outer_join_bar where a = d and c = f and "
-      "a is not null and c is not null and d < 9999999 order by a,b,c,d,e,f;",
+      "a is not null and c is not null and d < 9999999 and f is not null order by "
+      "a,b,c,d,e,f;",
       dt);
 
     c("select a,b,c,d,e,f from outer_join_foo full outer join outer_join_bar on c = f "
-      "and b = e where c is not null and b is not null and e < 9999999 order by "
-      "a,b,c,d,e,f;",
+      "and b = e where c is not null and b is not null and e < 9999999 and f is not null "
+      "order by a,b,c,d,e,f;",
       "select a,b,c,d,e,f from outer_join_foo, outer_join_bar where c = f and b = e and "
-      "c is not null and b is not null and e < 9999999 order by a,b,c,d,e,f;",
+      "c is not null and b is not null and e < 9999999 and f is not null order by "
+      "a,b,c,d,e,f;",
       dt);
 
     // 3. execute left outer join via inner join
@@ -9089,22 +9090,86 @@ TEST(Select, Joins_OuterJoin_OptBy_NullRejection) {
       "c is not null and b is not null and e < 9999999 order by a,b,c,d,e,f;",
       dt);
 
-    // [BE-5406] incorrectly rewriting left join when filter used
-    auto test_query =
-        "select count(1) from outer_join_foo t1 left outer join (select g from "
-        "outer_join_bar2 where h = 1) as t2 on t1.a = t2.g;";
-    c(test_query, test_query, dt);
+    {
+      // [BE-5406] incorrectly rewriting left join when filter used
+      auto test_query =
+          "select count(1) from outer_join_foo t1 left outer join (select g from "
+          "outer_join_bar2 where h = 1) as t2 on t1.a = t2.g;";
+      c(test_query, test_query, dt);
 
-    auto test_query2 =
-        "select count(1) from outer_join_foo t1 left outer join (select g as h from "
-        "outer_join_bar2 where h = 1) as t2 on t1.a = t2.h;";
-    c(test_query2, test_query2, dt);
+      auto test_query2 =
+          "select count(1) from outer_join_foo t1 left outer join (select g as h from "
+          "outer_join_bar2 where h = 1) as t2 on t1.a = t2.h;";
+      c(test_query2, test_query2, dt);
 
-    auto test_query3 =
-        "select count(1) from outer_join_foo t1 left outer join (select d, g as h, i "
-        "from "
-        "outer_join_bar2 where h = 1) as t2 on t1.a = t2.h;";
-    c(test_query3, test_query3, dt);
+      auto test_query3 =
+          "select count(1) from outer_join_foo t1 left outer join (select d, g as h, i "
+          "from "
+          "outer_join_bar2 where h = 1) as t2 on t1.a = t2.h;";
+      c(test_query3, test_query3, dt);
+
+      auto test_query4 =
+          "select count(1) from outer_join_foo t1 left outer join (select g as h from "
+          "outer_join_bar2 where h = 1) as t2 on t1.a = t2.h;";
+      c(test_query4, test_query4, dt);
+
+      auto test_query5 =
+          "select count(1) from outer_join_foo t1 left outer join (select g as h from "
+          "outer_join_bar2) as t2 on t1.a = t2.h and t2.h = 1;";
+      c(test_query5, test_query5, dt);
+    }
+
+    {
+      // [BE-5447] null rejection rule issue v2
+      // reported query
+      auto test_query1 =
+          "select foo.c, tmp.c from outer_join_foo foo left outer join (select a, c from "
+          "outer_join_foo where a = 1) tmp on tmp.a = foo.a order by 1, 2;";
+      c(test_query1, test_query1, dt);
+      auto test_query2 =
+          "select foo.c, tmp.c from outer_join_foo foo left outer join (select a, c from "
+          "outer_join_foo where a is not null) tmp on tmp.a = foo.a order by 1, 2;";
+      c(test_query2, test_query2, dt);
+      // reverse join column order
+      auto test_query3 =
+          "select foo.c, tmp.c from outer_join_foo foo left outer join (select a, c from "
+          "outer_join_foo where a = 1) tmp on foo.a = tmp.a order by 1, 2;";
+      c(test_query3, test_query3, dt);
+      auto test_query4 =
+          "select foo.c, tmp.c from outer_join_foo foo left outer join (select a, c from "
+          "outer_join_foo where a is not null) tmp on foo.a = tmp.a order by 1, 2;";
+      c(test_query4, test_query4, dt);
+      auto test_query5 =
+          "select foo.c, tmp.c from outer_join_foo foo left outer join (select c, b from "
+          "outer_join_foo where a = 1) tmp on tmp.b = foo.b order by 1, 2;";
+      c(test_query5, test_query5, dt);
+      auto test_query6 =
+          "select foo.c, tmp.c from outer_join_foo foo left outer join (select c, b from "
+          "outer_join_foo where a is not null) tmp on tmp.b = foo.b order by 1, 2;";
+      c(test_query6, test_query6, dt);
+      auto test_query7 =
+          "select foo.c, tmp.c from outer_join_foo foo left outer join (select a, b, c "
+          "from "
+          "outer_join_foo where a = 1) tmp on tmp.b = foo.b and foo.a = tmp.a order by "
+          "1, 2;";
+      c(test_query7, test_query7, dt);
+      auto test_query8 =
+          "select foo.c, tmp.c from outer_join_foo foo left outer join (select a, b, c "
+          "from "
+          "outer_join_foo where a is not null) tmp on tmp.b = foo.b and foo.a = tmp.a "
+          "order by 1, 2;";
+      c(test_query8, test_query8, dt);
+      auto test_query9 =
+          "select foo.c, tmp.c from outer_join_foo foo left outer "
+          "join (select a, b, c from outer_join_foo where c = 1) tmp on tmp.a = foo.a "
+          "and tmp.b = foo.b and tmp.c = foo.c order by 1, 2;";
+      c(test_query9, test_query9, dt);
+      auto test_query10 =
+          "select foo.c, tmp.c from outer_join_foo foo left outer "
+          "join (select a, b, c from outer_join_foo where c is not null) tmp on tmp.a = "
+          "foo.a and tmp.b = foo.b and tmp.c = foo.c order by 1, 2;";
+      c(test_query10, test_query10, dt);
+    }
   }
 }
 
