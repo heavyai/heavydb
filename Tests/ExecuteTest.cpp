@@ -458,7 +458,7 @@ class SQLiteComparator {
   SqliteConnector connector_;
 };
 
-const ssize_t g_num_rows{10};
+const size_t g_num_rows{10};
 SQLiteComparator g_sqlite_comparator;
 
 void c(const std::string& query_string, const ExecutorDeviceType device_type) {
@@ -1153,7 +1153,7 @@ TEST(Select, FilterAndSimpleAggregation) {
     ASSERT_EQ(19,
               v<int64_t>(run_simple_agg("SELECT rowid FROM test WHERE rowid = 19;", dt)));
     ASSERT_EQ(
-        2 * g_num_rows,
+        static_cast<int64_t>(2 * g_num_rows),
         v<int64_t>(run_simple_agg("SELECT MAX(rowid) - MIN(rowid) + 1 FROM test;", dt)));
     ASSERT_EQ(
         15,
@@ -2795,18 +2795,18 @@ TEST(Select, Strings) {
       dt);
     c("SELECT COUNT(*) FROM emp WHERE ename LIKE 'D%%' OR ename = 'Julia';", dt);
     THROW_ON_AGGREGATOR(
-        ASSERT_EQ(2 * g_num_rows,
+        ASSERT_EQ(static_cast<int64_t>(2 * g_num_rows),
                   v<int64_t>(run_simple_agg(
                       "SELECT COUNT(*) FROM test WHERE CHAR_LENGTH(str) = 3;",
                       dt))));  // Cast from dictionary-encoded string to none-encoded not
                                // supported for distributed queries
-    ASSERT_EQ(g_num_rows,
+    ASSERT_EQ(static_cast<int64_t>(g_num_rows),
               v<int64_t>(run_simple_agg(
                   "SELECT COUNT(*) FROM test WHERE str ILIKE 'f%%';", dt)));
-    ASSERT_EQ(g_num_rows,
+    ASSERT_EQ(static_cast<int64_t>(g_num_rows),
               v<int64_t>(run_simple_agg(
                   "SELECT COUNT(*) FROM test WHERE (str ILIKE 'f%%');", dt)));
-    ASSERT_EQ(g_num_rows,
+    ASSERT_EQ(static_cast<int64_t>(g_num_rows),
               v<int64_t>(run_simple_agg(
                   "SELECT COUNT(*) FROM test WHERE ( str ILIKE 'f%%' );", dt)));
     ASSERT_EQ(0,
@@ -2818,50 +2818,50 @@ TEST(Select, Strings) {
     ASSERT_EQ("bar",
               boost::get<std::string>(v<NullableString>(run_simple_agg(
                   "SELECT str FROM test WHERE REGEXP_LIKE(str, '^[a-z]+r$');", dt))));
-    ASSERT_EQ(2 * g_num_rows,
+    ASSERT_EQ(static_cast<int64_t>(2 * g_num_rows),
               v<int64_t>(run_simple_agg(
                   "SELECT COUNT(*) FROM test WHERE str REGEXP '.*';", dt)));
-    ASSERT_EQ(2 * g_num_rows,
+    ASSERT_EQ(static_cast<int64_t>(2 * g_num_rows),
               v<int64_t>(run_simple_agg(
                   "SELECT COUNT(*) FROM test WHERE str REGEXP '...';", dt)));
-    ASSERT_EQ(2 * g_num_rows,
+    ASSERT_EQ(static_cast<int64_t>(2 * g_num_rows),
               v<int64_t>(run_simple_agg(
                   "SELECT COUNT(*) FROM test WHERE str REGEXP '.+.+.+';", dt)));
-    ASSERT_EQ(2 * g_num_rows,
+    ASSERT_EQ(static_cast<int64_t>(2 * g_num_rows),
               v<int64_t>(run_simple_agg(
                   "SELECT COUNT(*) FROM test WHERE str REGEXP '.?.?.?';", dt)));
-    ASSERT_EQ(2 * g_num_rows,
+    ASSERT_EQ(static_cast<int64_t>(2 * g_num_rows),
               v<int64_t>(run_simple_agg(
                   "SELECT COUNT(*) FROM test WHERE str REGEXP 'ba.' or str REGEXP 'fo.';",
                   dt)));
-    ASSERT_EQ(2 * g_num_rows,
+    ASSERT_EQ(static_cast<int64_t>(2 * g_num_rows),
               v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test WHERE "
                                         "REGEXP_LIKE(str, 'ba.') or str REGEXP 'fo.?';",
                                         dt)));
-    ASSERT_EQ(2 * g_num_rows,
+    ASSERT_EQ(static_cast<int64_t>(2 * g_num_rows),
               v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test WHERE str REGEXP "
                                         "'ba.' or REGEXP_LIKE(str, 'fo.+');",
                                         dt)));
-    ASSERT_EQ(g_num_rows,
+    ASSERT_EQ(static_cast<int64_t>(g_num_rows),
               v<int64_t>(run_simple_agg(
                   "SELECT COUNT(*) FROM test WHERE str REGEXP 'ba.+';", dt)));
-    ASSERT_EQ(g_num_rows,
+    ASSERT_EQ(static_cast<int64_t>(g_num_rows),
               v<int64_t>(run_simple_agg(
                   "SELECT COUNT(*) FROM test WHERE REGEXP_LIKE(str, '.?ba.*');", dt)));
     ASSERT_EQ(
-        2 * g_num_rows,
+        static_cast<int64_t>(2 * g_num_rows),
         v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test WHERE "
                                   "REGEXP_LIKE(str,'ba.') or REGEXP_LIKE(str, 'fo.+');",
                                   dt)));
-    ASSERT_EQ(2 * g_num_rows,
+    ASSERT_EQ(static_cast<int64_t>(2 * g_num_rows),
               v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test WHERE str REGEXP "
                                         "'ba.' or REGEXP_LIKE(str, 'fo.+');",
                                         dt)));
-    ASSERT_EQ(2 * g_num_rows,
+    ASSERT_EQ(static_cast<int64_t>(2 * g_num_rows),
               v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test WHERE "
                                         "REGEXP_LIKE(str, 'ba.') or str REGEXP 'fo.?';",
                                         dt)));
-    ASSERT_EQ(2 * g_num_rows,
+    ASSERT_EQ(static_cast<int64_t>(2 * g_num_rows),
               v<int64_t>(run_simple_agg(
                   "SELECT COUNT(*) FROM test WHERE str REGEXP 'ba.' or str REGEXP 'fo.';",
                   dt)));
@@ -2930,13 +2930,13 @@ TEST(Select, SharedDictionary) {
         15,
         v<int64_t>(run_simple_agg(
             "SELECT COUNT(*) FROM test WHERE CHAR_LENGTH(shared_dict) = 3;", dt))));
-    ASSERT_EQ(g_num_rows,
+    ASSERT_EQ(static_cast<int64_t>(g_num_rows),
               v<int64_t>(run_simple_agg(
                   "SELECT COUNT(*) FROM test WHERE shared_dict ILIKE 'f%%';", dt)));
-    ASSERT_EQ(g_num_rows,
+    ASSERT_EQ(static_cast<int64_t>(g_num_rows),
               v<int64_t>(run_simple_agg(
                   "SELECT COUNT(*) FROM test WHERE (shared_dict ILIKE 'f%%');", dt)));
-    ASSERT_EQ(g_num_rows,
+    ASSERT_EQ(static_cast<int64_t>(g_num_rows),
               v<int64_t>(run_simple_agg(
                   "SELECT COUNT(*) FROM test WHERE ( shared_dict ILIKE 'f%%' );", dt)));
     ASSERT_EQ(
@@ -3096,28 +3096,28 @@ TEST(Select, StringsNoneEncoding) {
       dt);
     c("SELECT COUNT(*) FROM test WHERE real_str = real_str;", dt);
     c("SELECT COUNT(*) FROM test WHERE real_str <> real_str;", dt);
-    ASSERT_EQ(g_num_rows,
+    ASSERT_EQ(static_cast<int64_t>(g_num_rows),
               v<int64_t>(run_simple_agg(
                   "SELECT COUNT(*) FROM test WHERE real_str ILIKE 'rEaL_f%%';", dt)));
     c("SELECT COUNT(*) FROM test WHERE LENGTH(real_str) = 8;", dt);
-    ASSERT_EQ(2 * g_num_rows,
+    ASSERT_EQ(static_cast<int64_t>(2 * g_num_rows),
               v<int64_t>(run_simple_agg(
                   "SELECT COUNT(*) FROM test WHERE CHAR_LENGTH(real_str) = 8;", dt)));
     SKIP_ON_AGGREGATOR(ASSERT_EQ(
-        2 * g_num_rows,
+        static_cast<int64_t>(2 * g_num_rows),
         v<int64_t>(run_simple_agg(
             "SELECT COUNT(*) FROM test WHERE REGEXP_LIKE(real_str,'real_.*.*.*');",
             dt))));
     SKIP_ON_AGGREGATOR(ASSERT_EQ(
-        g_num_rows,
+        static_cast<int64_t>(g_num_rows),
         v<int64_t>(run_simple_agg(
             "SELECT COUNT(*) FROM test WHERE real_str REGEXP 'real_ba.*';", dt))));
     SKIP_ON_AGGREGATOR(
-        ASSERT_EQ(2 * g_num_rows,
+        ASSERT_EQ(static_cast<int64_t>(2 * g_num_rows),
                   v<int64_t>(run_simple_agg(
                       "SELECT COUNT(*) FROM test WHERE real_str REGEXP '.*';", dt))));
     SKIP_ON_AGGREGATOR(ASSERT_EQ(
-        g_num_rows,
+        static_cast<int64_t>(g_num_rows),
         v<int64_t>(run_simple_agg(
             "SELECT COUNT(*) FROM test WHERE real_str REGEXP 'real_f.*.*';", dt))));
     SKIP_ON_AGGREGATOR(ASSERT_EQ(
@@ -3145,7 +3145,7 @@ void check_date_trunc_groups(const ResultSet& rows) {
     const auto sv1 = boost::get<std::string>(v<NullableString>(crt_row[1]));
     ASSERT_EQ("foo", sv1);
     const auto sv2 = v<int64_t>(crt_row[2]);
-    ASSERT_EQ(g_num_rows, sv2);
+    ASSERT_EQ(static_cast<int64_t>(g_num_rows), sv2);
   }
   {
     const auto crt_row = rows.getNextRow(true, true);
@@ -3156,7 +3156,7 @@ void check_date_trunc_groups(const ResultSet& rows) {
     const auto sv1 = boost::get<std::string>(v<NullableString>(crt_row[1]));
     ASSERT_EQ("bar", sv1);
     const auto sv2 = v<int64_t>(crt_row[2]);
-    ASSERT_EQ(g_num_rows / 2, sv2);
+    ASSERT_EQ(static_cast<int64_t>(g_num_rows) / 2, sv2);
   }
   {
     const auto crt_row = rows.getNextRow(true, true);
@@ -3167,7 +3167,7 @@ void check_date_trunc_groups(const ResultSet& rows) {
     const auto sv1 = boost::get<std::string>(v<NullableString>(crt_row[1]));
     ASSERT_EQ("baz", sv1);
     const auto sv2 = v<int64_t>(crt_row[2]);
-    ASSERT_EQ(g_num_rows / 2, sv2);
+    ASSERT_EQ(static_cast<int64_t>(g_num_rows) / 2, sv2);
   }
   const auto crt_row = rows.getNextRow(true, true);
   CHECK(crt_row.empty());
@@ -3365,37 +3365,37 @@ TEST(Select, Time) {
     SKIP_NO_GPU();
     // check DATE Formats
     ASSERT_EQ(
-        g_num_rows + g_num_rows / 2,
+        static_cast<int64_t>(g_num_rows + g_num_rows / 2),
         v<int64_t>(run_simple_agg(
             "SELECT COUNT(*) FROM test WHERE CAST('1999-09-10' AS DATE) > o;", dt)));
     ASSERT_EQ(
-        g_num_rows + g_num_rows / 2,
+        static_cast<int64_t>(g_num_rows + g_num_rows / 2),
         v<int64_t>(run_simple_agg(
             "SELECT COUNT(*) FROM test WHERE CAST('10/09/1999' AS DATE) > o;", dt)));
-    ASSERT_EQ(g_num_rows + g_num_rows / 2,
+    ASSERT_EQ(static_cast<int64_t>(g_num_rows + g_num_rows / 2),
               v<int64_t>(run_simple_agg(
                   "SELECT COUNT(*) FROM test WHERE CAST('10-Sep-99' AS DATE) > o;", dt)));
     ASSERT_EQ(
-        g_num_rows + g_num_rows / 2,
+        static_cast<int64_t>(g_num_rows + g_num_rows / 2),
         v<int64_t>(run_simple_agg(
             "SELECT COUNT(*) FROM test WHERE CAST('31/Oct/2013' AS DATE) > o;", dt)));
     // check TIME FORMATS
-    ASSERT_EQ(2 * g_num_rows,
+    ASSERT_EQ(static_cast<int64_t>(2 * g_num_rows),
               v<int64_t>(run_simple_agg(
                   "SELECT COUNT(*) FROM test WHERE CAST('15:13:15' AS TIME) > n;", dt)));
-    ASSERT_EQ(2 * g_num_rows,
+    ASSERT_EQ(static_cast<int64_t>(2 * g_num_rows),
               v<int64_t>(run_simple_agg(
                   "SELECT COUNT(*) FROM test WHERE CAST('151315' AS TIME) > n;", dt)));
 
     ASSERT_EQ(
-        g_num_rows + g_num_rows / 2,
+        static_cast<int64_t>(g_num_rows + g_num_rows / 2),
         v<int64_t>(run_simple_agg(
             "SELECT COUNT(*) FROM test WHERE CAST('1999-09-10' AS DATE) > o;", dt)));
     ASSERT_EQ(
         0,
         v<int64_t>(run_simple_agg(
             "SELECT COUNT(*) FROM test WHERE CAST('1999-09-10' AS DATE) <= o;", dt)));
-    ASSERT_EQ(2 * g_num_rows,
+    ASSERT_EQ(static_cast<int64_t>(2 * g_num_rows),
               v<int64_t>(run_simple_agg(
                   "SELECT COUNT(*) FROM test WHERE CAST('15:13:15' AS TIME) > n;", dt)));
     ASSERT_EQ(0,
@@ -3405,13 +3405,13 @@ TEST(Select, Time) {
     EXPECT_ANY_THROW(run_simple_agg("SELECT DATETIME(NULL) FROM test LIMIT 1;", dt));
     // these next tests work because all dates are before now 2015-12-8 17:00:00
     ASSERT_EQ(
-        2 * g_num_rows,
+        static_cast<int64_t>(2 * g_num_rows),
         v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test WHERE m < NOW();", dt)));
-    ASSERT_EQ(2 * g_num_rows,
+    ASSERT_EQ(static_cast<int64_t>(2 * g_num_rows),
               v<int64_t>(run_simple_agg(
                   "SELECT COUNT(*) FROM test WHERE m > timestamp(0) '2014-12-13T000000';",
                   dt)));
-    ASSERT_EQ(g_num_rows + g_num_rows / 2,
+    ASSERT_EQ(static_cast<int64_t>(g_num_rows + g_num_rows / 2),
               v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test WHERE CAST(o AS "
                                         "TIMESTAMP) > timestamp(0) '1999-09-08T160000';",
                                         dt)));
@@ -3549,18 +3549,18 @@ TEST(Select, Time) {
               v<int64_t>(run_simple_agg(
                   "select CAST('2015-06-21' AS DATE) FROM test limit 1;", dt)));
     ASSERT_EQ(
-        g_num_rows + g_num_rows / 2,
+        static_cast<int64_t>(g_num_rows + g_num_rows / 2),
         v<int64_t>(run_simple_agg(
             "SELECT COUNT(*) FROM test WHERE o < CAST('06/21/2015' AS DATE);", dt)));
-    ASSERT_EQ(g_num_rows + g_num_rows / 2,
+    ASSERT_EQ(static_cast<int64_t>(g_num_rows + g_num_rows / 2),
               v<int64_t>(run_simple_agg(
                   "SELECT COUNT(*) FROM test WHERE o < CAST('21-Jun-15' AS DATE);", dt)));
     ASSERT_EQ(
-        g_num_rows + g_num_rows / 2,
+        static_cast<int64_t>(g_num_rows + g_num_rows / 2),
         v<int64_t>(run_simple_agg(
             "SELECT COUNT(*) FROM test WHERE o < CAST('21/Jun/2015' AS DATE);", dt)));
     ASSERT_EQ(
-        g_num_rows + g_num_rows / 2,
+        static_cast<int64_t>(g_num_rows + g_num_rows / 2),
         v<int64_t>(run_simple_agg(
             "SELECT COUNT(*) FROM test WHERE o < CAST('1434844800' AS DATE);", dt)));
 
@@ -3570,50 +3570,50 @@ TEST(Select, Time) {
         1434896116L,
         v<int64_t>(run_simple_agg(
             "select CAST('2015-06-21 14:15:16' AS timestamp) FROM test limit 1;", dt)));
-    ASSERT_EQ(2 * g_num_rows,
+    ASSERT_EQ(static_cast<int64_t>(2 * g_num_rows),
               v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test WHERE m <= "
                                         "CAST('2015-06-21:141516' AS TIMESTAMP);",
                                         dt)));
     ASSERT_EQ(
-        2 * g_num_rows,
+        static_cast<int64_t>(2 * g_num_rows),
         v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test WHERE m <= CAST('21-JUN-15 "
                                   "2.15.16.12345 PM' AS TIMESTAMP);",
                                   dt)));
     ASSERT_EQ(
-        2 * g_num_rows,
+        static_cast<int64_t>(2 * g_num_rows),
         v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test WHERE m <= CAST('21-JUN-15 "
                                   "2.15.16.12345 AM' AS TIMESTAMP);",
                                   dt)));
-    ASSERT_EQ(2 * g_num_rows,
+    ASSERT_EQ(static_cast<int64_t>(2 * g_num_rows),
               v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test WHERE m <= "
                                         "CAST('21-JUN-15 2:15:16 AM' AS TIMESTAMP);",
                                         dt)));
 
-    ASSERT_EQ(2 * g_num_rows,
+    ASSERT_EQ(static_cast<int64_t>(2 * g_num_rows),
               v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test WHERE m <= "
                                         "CAST('06/21/2015 14:15:16' AS TIMESTAMP);",
                                         dt)));
 
     // Support ISO date offset format
     ASSERT_EQ(
-        2 * g_num_rows,
+        static_cast<int64_t>(2 * g_num_rows),
         v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test WHERE m <= "
                                   "CAST('21/Aug/2015:12:13:14 -0600' AS TIMESTAMP);",
                                   dt)));
-    ASSERT_EQ(2 * g_num_rows,
+    ASSERT_EQ(static_cast<int64_t>(2 * g_num_rows),
               v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test WHERE m <= "
                                         "CAST('2015-08-21T12:13:14 -0600' AS TIMESTAMP);",
                                         dt)));
-    ASSERT_EQ(2 * g_num_rows,
+    ASSERT_EQ(static_cast<int64_t>(2 * g_num_rows),
               v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test WHERE m <= "
                                         "CAST('21-Aug-15 12:13:14 -0600' AS TIMESTAMP);",
                                         dt)));
     ASSERT_EQ(
-        2 * g_num_rows,
+        static_cast<int64_t>(2 * g_num_rows),
         v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test WHERE m <= "
                                   "CAST('21/Aug/2015:13:13:14 -0500' AS TIMESTAMP);",
                                   dt)));
-    ASSERT_EQ(2 * g_num_rows,
+    ASSERT_EQ(static_cast<int64_t>(2 * g_num_rows),
               v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test WHERE m <= "
                                         "CAST('2015-08-21T18:13:14' AS TIMESTAMP);",
                                         dt)));
@@ -4364,7 +4364,7 @@ TEST(Select, Time) {
                                         "DATE '2017-05-30' = DATE '2017-05-31' OR "
                                         "DATE '2017-05-31' = DATE '2017-05-30';",
                                         dt)));
-    ASSERT_EQ(2 * g_num_rows,
+    ASSERT_EQ(static_cast<int64_t>(2 * g_num_rows),
               v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test where "
                                         "EXTRACT(DOW from TIMESTAMPADD(HOUR, -5, "
                                         "TIMESTAMP '2017-05-31 1:11:11')) = 1 OR "
@@ -5205,7 +5205,7 @@ TEST(Select, DivByZero) {
         std::runtime_error);
     EXPECT_THROW(run_simple_agg("SELECT COUNT(*) FROM test WHERE y / (x - x) = 0;", dt),
                  std::runtime_error);
-    ASSERT_EQ(2 * g_num_rows,
+    ASSERT_EQ(static_cast<int64_t>(2 * g_num_rows),
               v<int64_t>(run_simple_agg(
                   "SELECT COUNT(*) FROM test WHERE x = x OR  y / (x - x) = y;", dt)));
   }
@@ -5401,14 +5401,14 @@ TEST(Select, OverflowAndUnderFlow) {
 TEST(Select, BooleanColumn) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
-    ASSERT_EQ(g_num_rows + g_num_rows / 2,
+    ASSERT_EQ(static_cast<int64_t>(g_num_rows + g_num_rows / 2),
               v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test WHERE bn;", dt)));
-    ASSERT_EQ(g_num_rows,
+    ASSERT_EQ(static_cast<int64_t>(g_num_rows),
               v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test WHERE b;", dt)));
-    ASSERT_EQ(g_num_rows / 2,
+    ASSERT_EQ(static_cast<int64_t>(g_num_rows / 2),
               v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test WHERE NOT bn;", dt)));
     ASSERT_EQ(
-        g_num_rows + g_num_rows / 2,
+        static_cast<int64_t>(g_num_rows + g_num_rows / 2),
         v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test WHERE x < 8 AND bn;", dt)));
     ASSERT_EQ(0,
               v<int64_t>(run_simple_agg(
@@ -5419,7 +5419,7 @@ TEST(Select, BooleanColumn) {
     ASSERT_EQ(7,
               v<int64_t>(run_simple_agg(
                   "SELECT MAX(x) FROM test WHERE b = CAST('t' AS boolean);", dt)));
-    ASSERT_EQ(3 * g_num_rows,
+    ASSERT_EQ(static_cast<int64_t>(3 * g_num_rows),
               v<int64_t>(run_simple_agg(
                   " SELECT SUM(2 *(CASE when x = 7 then 1 else 0 END)) FROM test;", dt)));
     c("SELECT COUNT(*) AS n FROM test GROUP BY x = 7, b ORDER BY n;", dt);
@@ -5672,15 +5672,15 @@ TEST(Select, TimeInterval) {
         v<int64_t>(run_simple_agg(
             "SELECT INTERVAL '1' MONTH FROM test group by m order by m LIMIT 1;", dt)));
     ASSERT_EQ(
-        2 * g_num_rows,
+        static_cast<int64_t>(2 * g_num_rows),
         v<int64_t>(run_simple_agg(
             "SELECT COUNT(*) FROM test WHERE INTERVAL '1' MONTH < INTERVAL '2' MONTH;",
             dt)));
     ASSERT_EQ(
-        2 * g_num_rows,
+        static_cast<int64_t>(2 * g_num_rows),
         v<int64_t>(run_simple_agg(
             "SELECT COUNT(*) FROM test WHERE INTERVAL '1' DAY < INTERVAL '2' DAY;", dt)));
-    ASSERT_EQ(2 * g_num_rows,
+    ASSERT_EQ(static_cast<int64_t>(2 * g_num_rows),
               v<int64_t>(run_simple_agg(
                   "SELECT COUNT(*) FROM test GROUP BY INTERVAL '1' DAY;", dt)));
     ASSERT_EQ(3 * 60 * 60 * 1000L,
@@ -6277,18 +6277,18 @@ void import_subquery_test() {
   g_sqlite_comparator.query(subquery_test);
   run_ddl_statement("CREATE TABLE subquery_test(x int) WITH (fragment_size=2);");
   g_sqlite_comparator.query("CREATE TABLE subquery_test(x int);");
-  CHECK_EQ(g_num_rows % 2, 0);
-  for (ssize_t i = 0; i < g_num_rows; ++i) {
+  CHECK_EQ(g_num_rows % 2, size_t(0));
+  for (size_t i = 0; i < g_num_rows; ++i) {
     const std::string insert_query{"INSERT INTO subquery_test VALUES(7);"};
     run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
     g_sqlite_comparator.query(insert_query);
   }
-  for (ssize_t i = 0; i < g_num_rows / 2; ++i) {
+  for (size_t i = 0; i < g_num_rows / 2; ++i) {
     const std::string insert_query{"INSERT INTO subquery_test VALUES(8);"};
     run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
     g_sqlite_comparator.query(insert_query);
   }
-  for (ssize_t i = 0; i < g_num_rows / 2; ++i) {
+  for (size_t i = 0; i < g_num_rows / 2; ++i) {
     const std::string insert_query{"INSERT INTO subquery_test VALUES(9);"};
     run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
     g_sqlite_comparator.query(insert_query);
@@ -6630,7 +6630,7 @@ void import_geospatial_test() {
       /*is_replicated=*/false);
   run_ddl_statement(create_ddl);
   TestHelpers::ValuesGenerator gen("geospatial_test");
-  for (ssize_t i = 0; i < g_num_rows; ++i) {
+  for (size_t i = 0; i < g_num_rows; ++i) {
     const std::string point{"'POINT(" + std::to_string(i) + " " + std::to_string(i) +
                             ")'"};
     const std::string linestring{
@@ -6677,7 +6677,7 @@ void import_geospatial_join_test(const bool replicate_inner_table = false) {
                                    g_aggregator);
   run_ddl_statement(create_statement);
   TestHelpers::ValuesGenerator gen("geospatial_inner_join_test");
-  for (ssize_t i = 0; i < g_num_rows; i += 2) {
+  for (size_t i = 0; i < g_num_rows; i += 2) {
     const std::string point{"'POINT(" + std::to_string(i) + " " + std::to_string(i) +
                             ")'"};
     const std::string linestring{
@@ -6712,7 +6712,7 @@ void import_geospatial_null_test() {
       /*is_replicated=*/false);
   run_ddl_statement(create_ddl);
   TestHelpers::ValuesGenerator gen("geospatial_null_test");
-  for (ssize_t i = 0; i < g_num_rows; ++i) {
+  for (size_t i = 0; i < g_num_rows; ++i) {
     const std::string point{"'POINT(" + std::to_string(i) + " " + std::to_string(i) +
                             ")'"};
     const std::string linestring{
@@ -7866,7 +7866,7 @@ TEST(Select, Joins_Arrays) {
               v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test, array_test_inner "
                                         "WHERE 7 = array_test_inner.arr_i16[1];",
                                         dt)));
-    ASSERT_EQ(int64_t(2 * g_num_rows),
+    ASSERT_EQ(static_cast<int64_t>(2 * g_num_rows),
               v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test, array_test WHERE "
                                         "test.x = array_test.x AND 'bb' = ANY arr_str;",
                                         dt)));
@@ -11821,71 +11821,71 @@ TEST(Select, TimestampPrecision) {
         run_simple_agg("SELECT PG_DATE_TRUNC(NULL, m) FROM test LIMIT 1;", dt));
     /*-- Dates ---*/
     ASSERT_EQ(
-        g_num_rows + g_num_rows / 2,
+        static_cast<int64_t>(g_num_rows + g_num_rows / 2),
         v<int64_t>(run_simple_agg(
             "SELECT count(*) FROM test where cast(o as timestamp(0)) between "
             "TIMESTAMP(0) '1999-09-08 22:23:14' and TIMESTAMP(0) '1999-09-09 22:23:15'",
             dt)));
-    ASSERT_EQ(g_num_rows + g_num_rows / 2,
+    ASSERT_EQ(static_cast<int64_t>(g_num_rows + g_num_rows / 2),
               v<int64_t>(run_simple_agg(
                   "SELECT count(*) FROM test where cast(o as timestamp(3)) between "
                   "TIMESTAMP(3) '1999-09-08 12:12:31.500' and TIMESTAMP(3) '1999-09-09 "
                   "22:23:15'",
                   dt)));
-    ASSERT_EQ(g_num_rows + g_num_rows / 2,
+    ASSERT_EQ(static_cast<int64_t>(g_num_rows + g_num_rows / 2),
               v<int64_t>(run_simple_agg(
                   "SELECT count(*) FROM test where cast(o as timestamp(6)) between "
                   "TIMESTAMP(6) '1999-09-08 12:12:31.500' and TIMESTAMP(6) '1999-09-09 "
                   "22:23:15'",
                   dt)));
-    ASSERT_EQ(g_num_rows + g_num_rows / 2,
+    ASSERT_EQ(static_cast<int64_t>(g_num_rows + g_num_rows / 2),
               v<int64_t>(run_simple_agg(
                   "SELECT count(*) FROM test where cast(o as timestamp(9)) between "
                   "TIMESTAMP(9) '1999-09-08 12:12:31.500' and TIMESTAMP(9) '1999-09-09 "
                   "22:23:15'",
                   dt)));
-    ASSERT_EQ(g_num_rows + g_num_rows / 2,
+    ASSERT_EQ(static_cast<int64_t>(g_num_rows + g_num_rows / 2),
               v<int64_t>(run_simple_agg(
                   "SELECT count(*) FROM test where cast(o as timestamp(0)) between "
                   "TIMESTAMP(3) '1999-09-08 12:12:31.500' and TIMESTAMP(3) '1999-09-09 "
                   "22:23:15.500'",
                   dt)));
-    ASSERT_EQ(g_num_rows + g_num_rows / 2,
+    ASSERT_EQ(static_cast<int64_t>(g_num_rows + g_num_rows / 2),
               v<int64_t>(run_simple_agg(
                   "SELECT count(*) FROM test where cast(o as timestamp(3)) between "
                   "TIMESTAMP(0) '1999-09-08 12:12:31' and TIMESTAMP(0) '1999-09-09 "
                   "22:23:15'",
                   dt)));
-    ASSERT_EQ(g_num_rows + g_num_rows / 2,
+    ASSERT_EQ(static_cast<int64_t>(g_num_rows + g_num_rows / 2),
               v<int64_t>(run_simple_agg(
                   "SELECT count(*) FROM test where cast(o as timestamp(6)) between "
                   "TIMESTAMP(0) '1999-09-08 12:12:31' and TIMESTAMP(0) '1999-09-09 "
                   "22:23:15'",
                   dt)));
-    ASSERT_EQ(g_num_rows + g_num_rows / 2,
+    ASSERT_EQ(static_cast<int64_t>(g_num_rows + g_num_rows / 2),
               v<int64_t>(run_simple_agg(
                   "SELECT count(*) FROM test where cast(o as timestamp(9)) between "
                   "TIMESTAMP(0) '1999-09-08 12:12:31' and TIMESTAMP(0) '1999-09-09 "
                   "22:23:15'",
                   dt)));
-    ASSERT_EQ(g_num_rows + g_num_rows / 2,
+    ASSERT_EQ(static_cast<int64_t>(g_num_rows + g_num_rows / 2),
               v<int64_t>(run_simple_agg(
                   "SELECT count(*) FROM test where cast(o as timestamp(6)) between "
                   "TIMESTAMP(0) '1999-09-08 12:12:31' and TIMESTAMP(0) '1999-09-09 "
                   "22:23:15'",
                   dt)));
-    ASSERT_EQ(g_num_rows + g_num_rows / 2,
+    ASSERT_EQ(static_cast<int64_t>(g_num_rows + g_num_rows / 2),
               v<int64_t>(run_simple_agg(
                   "SELECT count(*) FROM test where cast(o as timestamp(9)) between "
                   "TIMESTAMP(3) '1999-09-08 12:12:31.099' and TIMESTAMP(3) '1999-09-09 "
                   "22:23:15.789'",
                   dt)));
-    ASSERT_EQ(g_num_rows + g_num_rows / 2,
+    ASSERT_EQ(static_cast<int64_t>(g_num_rows + g_num_rows / 2),
               v<int64_t>(run_simple_agg(
                   "SELECT count(*) FROM test where cast(o as timestamp(3)) = "
                   "TIMESTAMP(3) '1999-09-09 00:00:00.000'",
                   dt)));
-    ASSERT_EQ(g_num_rows + g_num_rows / 2,
+    ASSERT_EQ(static_cast<int64_t>(g_num_rows + g_num_rows / 2),
               v<int64_t>(run_simple_agg(
                   "SELECT count(*) FROM test where cast(o as timestamp(6)) >= "
                   "TIMESTAMP(6) '1999-09-08 23:23:59.999999'",
@@ -11895,41 +11895,41 @@ TEST(Select, TimestampPrecision) {
                   "SELECT count(*) FROM test where cast(o as timestamp(9)) = "
                   "TIMESTAMP(9) '1999-09-09 00:00:00.000000001'",
                   dt)));
-    ASSERT_EQ(g_num_rows + g_num_rows / 2,
+    ASSERT_EQ(static_cast<int64_t>(g_num_rows + g_num_rows / 2),
               v<int64_t>(
                   run_simple_agg("SELECT count(*) FROM test where cast(o as "
                                  "timestamp(3)) < TIMESTAMP(3) '1999-09-09 12:12:31.500'",
                                  dt)));
-    ASSERT_EQ(g_num_rows + g_num_rows / 2,
+    ASSERT_EQ(static_cast<int64_t>(g_num_rows + g_num_rows / 2),
               v<int64_t>(run_simple_agg(
                   "SELECT count(*) FROM test where cast(o as timestamp(3)) < m_3", dt)));
     ASSERT_EQ(0,
               v<int64_t>(run_simple_agg(
                   "SELECT count(*) FROM test where cast(o as timestamp(3)) >= m_3", dt)));
-    ASSERT_EQ(g_num_rows + g_num_rows / 2,
+    ASSERT_EQ(static_cast<int64_t>(g_num_rows + g_num_rows / 2),
               v<int64_t>(
                   run_simple_agg("SELECT count(*) FROM test where cast(o as "
                                  "timestamp(3)) = TIMESTAMP(3) '1999-09-09 00:00:00.000'",
                                  dt)));
-    ASSERT_EQ(g_num_rows + g_num_rows / 2,
+    ASSERT_EQ(static_cast<int64_t>(g_num_rows + g_num_rows / 2),
               v<int64_t>(run_simple_agg(
                   "SELECT count(*) FROM test where cast(o as timestamp(6)) = "
                   "TIMESTAMP(6) '1999-09-09 00:00:00.000000'",
                   dt)));
-    ASSERT_EQ(g_num_rows + g_num_rows / 2,
+    ASSERT_EQ(static_cast<int64_t>(g_num_rows + g_num_rows / 2),
               v<int64_t>(run_simple_agg(
                   "SELECT count(*) FROM test where cast(o as timestamp(9)) = "
                   "TIMESTAMP(9) '1999-09-09 00:00:00.000000000'",
                   dt)));
-    ASSERT_EQ(g_num_rows + g_num_rows / 2,
+    ASSERT_EQ(static_cast<int64_t>(g_num_rows + g_num_rows / 2),
               v<int64_t>(run_simple_agg("SELECT count(*) FROM test where cast(o as "
                                         "timestamp(3)) = '1999-09-09 00:00:00.000'",
                                         dt)));
-    ASSERT_EQ(g_num_rows + g_num_rows / 2,
+    ASSERT_EQ(static_cast<int64_t>(g_num_rows + g_num_rows / 2),
               v<int64_t>(run_simple_agg("SELECT count(*) FROM test where cast(o as "
                                         "timestamp(6)) = '1999-09-09 00:00:00.000000'",
                                         dt)));
-    ASSERT_EQ(g_num_rows + g_num_rows / 2,
+    ASSERT_EQ(static_cast<int64_t>(g_num_rows + g_num_rows / 2),
               v<int64_t>(run_simple_agg("SELECT count(*) FROM test where cast(o as "
                                         "timestamp(9)) = '1999-09-09 00:00:00.000000000'",
                                         dt)));
@@ -12077,13 +12077,13 @@ TEST(Select, TimestampPrecision) {
         0,
         v<int64_t>(run_simple_agg(
             "select count(*) from test where cast(m_9 as timestamp(3)) = m_3;", dt)));
-    ASSERT_EQ(g_num_rows + g_num_rows,
+    ASSERT_EQ(static_cast<int64_t>(g_num_rows + g_num_rows),
               v<int64_t>(run_simple_agg(
                   "SELECT count(*) FROM test where CAST(m as TIMESTAMP(3)) < m_3", dt)));
     ASSERT_EQ(0,
               v<int64_t>(run_simple_agg(
                   "SELECT count(*) FROM test where CAST(m as TIMESTAMP(3)) > m_3;", dt)));
-    ASSERT_EQ(g_num_rows + g_num_rows,
+    ASSERT_EQ(static_cast<int64_t>(g_num_rows + g_num_rows),
               v<int64_t>(run_simple_agg(
                   "SELECT count(*) FROM test where CAST(m_3 as TIMESTAMP(0)) = m", dt)));
     ASSERT_EQ(
@@ -12092,43 +12092,43 @@ TEST(Select, TimestampPrecision) {
             "SELECT count(*) FROM test where m_3 >= TIMESTAMP(0) '2014-12-14 22:23:14';",
             dt)));
     ASSERT_EQ(
-        g_num_rows + g_num_rows / 2,
+        static_cast<int64_t>(g_num_rows + g_num_rows / 2),
         v<int64_t>(run_simple_agg(
             "SELECT count(*) FROM test where cast(m as timestamp(0)) between "
             "TIMESTAMP(0) '2014-12-13 22:23:14' and TIMESTAMP(0) '2014-12-13 22:23:15'",
             dt)));
-    ASSERT_EQ(g_num_rows + g_num_rows / 2,
+    ASSERT_EQ(static_cast<int64_t>(g_num_rows + g_num_rows / 2),
               v<int64_t>(run_simple_agg(
                   "SELECT count(*) FROM test where cast(m as timestamp(3)) between "
                   "TIMESTAMP(3) '2014-12-12 22:23:15.320' and TIMESTAMP(3) '2014-12-13 "
                   "22:23:15.323'",
                   dt)));
     ASSERT_EQ(
-        g_num_rows + g_num_rows / 2,
+        static_cast<int64_t>(g_num_rows + g_num_rows / 2),
         v<int64_t>(run_simple_agg(
             "SELECT count(*) FROM test where cast(m_3 as timestamp(0)) between "
             "TIMESTAMP(0) '2014-12-13 22:23:14' and TIMESTAMP(3) '2014-12-13 22:23:15'",
             dt)));
-    ASSERT_EQ(g_num_rows / 2,
+    ASSERT_EQ(static_cast<int64_t>(g_num_rows / 2),
               v<int64_t>(run_simple_agg(
                   "SELECT count(*) FROM test where cast(m_6 as timestamp(3)) between "
                   "TIMESTAMP(3) '2014-12-13 22:23:15.870' and TIMESTAMP(3) '2014-12-13 "
                   "22:23:15.875'",
                   dt)));
     ASSERT_EQ(
-        g_num_rows / 2,
+        static_cast<int64_t>(g_num_rows / 2),
         v<int64_t>(run_simple_agg(
             "SELECT count(*) FROM test where cast(m_6 as timestamp(0)) between "
             "TIMESTAMP(0) '2014-12-13 22:23:14' and TIMESTAMP(3) '2014-12-13 22:23:15'",
             dt)));
-    ASSERT_EQ(g_num_rows / 2,
+    ASSERT_EQ(static_cast<int64_t>(g_num_rows / 2),
               v<int64_t>(run_simple_agg(
                   "SELECT count(*) FROM test where cast(m_9 as timestamp(3)) between "
                   "TIMESTAMP(3) '2014-12-13 22:23:15.607' and TIMESTAMP(3) '2014-12-13 "
                   "22:23:15.608'",
                   dt)));
     ASSERT_EQ(
-        g_num_rows / 2,
+        static_cast<int64_t>(g_num_rows / 2),
         v<int64_t>(run_simple_agg(
             "SELECT count(*) FROM test where cast(m_9 as timestamp(0)) between "
             "TIMESTAMP(0) '2014-12-13 22:23:14' and TIMESTAMP(0) '2014-12-13 22:23:15'",
@@ -18432,7 +18432,7 @@ TEST(Select, Sample) {
       const auto str_ptr = boost::get<std::string>(&nullable_str);
       ASSERT_TRUE(str_ptr);
       ASSERT_EQ("real_bar", boost::get<std::string>(*str_ptr));
-      ASSERT_EQ(g_num_rows / 2, v<int64_t>(crt_row[1]));
+      ASSERT_EQ(static_cast<int64_t>(g_num_rows / 2), v<int64_t>(crt_row[1]));
       const auto empty_row = rows->getNextRow(true, true);
       ASSERT_EQ(size_t(0), empty_row.size());
     });
@@ -18445,7 +18445,7 @@ TEST(Select, Sample) {
       const auto str_ptr = boost::get<std::string>(&nullable_str);
       ASSERT_TRUE(str_ptr);
       ASSERT_EQ("real_bar", boost::get<std::string>(*str_ptr));
-      ASSERT_EQ(g_num_rows / 2, v<int64_t>(crt_row[1]));
+      ASSERT_EQ(static_cast<int64_t>(g_num_rows / 2), v<int64_t>(crt_row[1]));
       const auto empty_row = rows->getNextRow(true, true);
       ASSERT_EQ(size_t(0), empty_row.size());
     }
@@ -20666,8 +20666,8 @@ int create_and_populate_tables(const bool use_temporary_tables,
     LOG(ERROR) << "Failed to (re-)create table 'test'";
     return -EEXIST;
   }
-  CHECK_EQ(g_num_rows % 2, 0);
-  for (ssize_t i = 0; i < g_num_rows; ++i) {
+  CHECK_EQ(g_num_rows % 2, size_t(0));
+  for (size_t i = 0; i < g_num_rows; ++i) {
     const std::string insert_query{
         "INSERT INTO test VALUES(7, -8, 42, 101, 1001, 't', 1.1, 1.1, null, 2.2, null, "
         "'foo', null, 'foo', null, "
@@ -20683,7 +20683,7 @@ int create_and_populate_tables(const bool use_temporary_tables,
     run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
     g_sqlite_comparator.query(insert_query);
   }
-  for (ssize_t i = 0; i < g_num_rows / 2; ++i) {
+  for (size_t i = 0; i < g_num_rows / 2; ++i) {
     const std::string insert_query{
         "INSERT INTO test VALUES(8, -7, 43, -78, 1002, 'f', 1.2, 101.2, -101.2, 2.4, "
         "-2002.4, 'bar', null, 'bar', null, "
@@ -20698,7 +20698,7 @@ int create_and_populate_tables(const bool use_temporary_tables,
     run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
     g_sqlite_comparator.query(insert_query);
   }
-  for (ssize_t i = 0; i < g_num_rows / 2; ++i) {
+  for (size_t i = 0; i < g_num_rows / 2; ++i) {
     const std::string insert_query{
         "INSERT INTO test VALUES(7, -7, 43, 102, 1002, null, 1.3, 1000.3, -1000.3, 2.6, "
         "-220.6, 'baz', null, null, null, "
@@ -20909,8 +20909,8 @@ int create_and_populate_tables(const bool use_temporary_tables,
     LOG(ERROR) << "Failed to (re-)create table 'test_x'";
     return -EEXIST;
   }
-  CHECK_EQ(g_num_rows % 2, 0);
-  for (ssize_t i = 0; i < g_num_rows; ++i) {
+  CHECK_EQ(g_num_rows % 2, size_t(0));
+  for (size_t i = 0; i < g_num_rows; ++i) {
     const std::string insert_query{
         "INSERT INTO test_x VALUES(7, 42, 101, 1001, 't', 1.1, 1.1, null, 2.2, null, "
         "'foo', null, 'foo', 'real_foo', "
@@ -20923,7 +20923,7 @@ int create_and_populate_tables(const bool use_temporary_tables,
     run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
     g_sqlite_comparator.query(insert_query);
   }
-  for (ssize_t i = 0; i < g_num_rows / 2; ++i) {
+  for (size_t i = 0; i < g_num_rows / 2; ++i) {
     const std::string insert_query{
         "INSERT INTO test_x VALUES(8, 43, 102, 1002, 'f', 1.2, 101.2, -101.2, 2.4, "
         "-2002.4, 'bar', null, 'bar', "
@@ -20937,7 +20937,7 @@ int create_and_populate_tables(const bool use_temporary_tables,
     run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
     g_sqlite_comparator.query(insert_query);
   }
-  for (ssize_t i = 0; i < g_num_rows / 2; ++i) {
+  for (size_t i = 0; i < g_num_rows / 2; ++i) {
     const std::string insert_query{
         "INSERT INTO test_x VALUES(7, 43, 102, 1002, 't', 1.3, 1000.3, -1000.3, 2.6, "
         "-220.6, 'baz', null, 'baz', "
