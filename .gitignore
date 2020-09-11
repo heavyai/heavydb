@@ -45,6 +45,10 @@ Debug/
 .vscode/
 *.code-workspace
 
+# VS settings files
+.vs
+CMakeSettings.json
+
 # VIM editor files
 .*.swp
 
