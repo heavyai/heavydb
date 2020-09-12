@@ -14,10 +14,8 @@
  * limitations under the License.
  */
 
-#ifndef QUERYENGINE_STRINGDICTIONARYGENERATION_H
-#define QUERYENGINE_STRINGDICTIONARYGENERATION_H
+#pragma once
 
-#include <unistd.h>
 #include <cstdint>
 #include <unordered_map>
 
@@ -36,5 +34,3 @@ class StringDictionaryGenerations {
  private:
   std::unordered_map<uint32_t, size_t> id_to_generation_;
 };
-
-#endif  // QUERYENGINE_STRINGDICTIONARYGENERATION_H
