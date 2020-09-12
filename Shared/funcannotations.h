@@ -40,6 +40,8 @@
 
 #ifdef __CUDACC__
 #define FORCE_INLINE __forceinline__
+#elif defined(_MSC_VER)
+#define FORCE_INLINE __forceinline
 #else
 #define FORCE_INLINE inline __attribute__((always_inline))
 #endif
@@ -50,12 +52,16 @@
 #elif defined(ENABLE_EMBEDDED_DATABASE)
 #define ALWAYS_INLINE \
   __attribute__((always_inline)) __attribute__((__visibility__("hidden")))
+#elif defined(_MSC_VER)
+#define FORCE_INLINE __forceinline
 #else
 #define ALWAYS_INLINE __attribute__((always_inline))
 #endif
 
 #ifdef __CUDACC__
 #define NEVER_INLINE
+#elif defined(_MSC_VER)
+#define NEVER_INLINE __declspec(noinline)
 #else
 #define NEVER_INLINE __attribute__((noinline))
 #endif
