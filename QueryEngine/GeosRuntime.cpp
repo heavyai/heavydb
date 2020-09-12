@@ -210,6 +210,22 @@ bool fromWkb(WKB& wkb,
 
   return true;
 }
+
+GEOSGeometry* postprocess(GEOSContextHandle_t context, GEOSGeometry* g) {
+  if (g && GEOSisEmpty_r(context, g) == 0) {
+    auto type = GEOSGeomTypeId_r(context, g);
+    if (type != -1) {
+      if (type != GEOS_POINT && type != GEOS_POLYGON && type != GEOS_MULTIPOLYGON) {
+        int quadsegs = 1;  // coarse
+        double tiny_distance = 0.000000001;
+        auto ng = GEOSBuffer_r(context, g, tiny_distance, quadsegs);
+        GEOSGeom_destroy_r(context, g);
+        return ng;
+      }
+    }
+  }
+  return g;
+}
 #endif
 
 extern "C" bool Geos_Wkb_Wkb(int op,
@@ -290,6 +306,7 @@ extern "C" bool Geos_Wkb_Wkb(int op,
       } else if (static_cast<GeoBase::GeoOp>(op) == GeoBase::GeoOp::kUNION) {
         g = GEOSUnion_r(context, g1, g2);
       }
+      g = postprocess(context, g);
       if (g) {
         size_t wkb_size = 0ULL;
         auto wkb_buf = GEOSGeomToWKB_buf_r(context, g, &wkb_size);
@@ -365,6 +382,7 @@ extern "C" bool Geos_Wkb_double(int op,
       int quadsegs = 8;  // default
       g = GEOSBuffer_r(context, g1, arg2, quadsegs);
     }
+    g = postprocess(context, g);
     if (g) {
       size_t wkb_size = 0ULL;
       auto wkb_buf = GEOSGeomToWKB_buf_r(context, g, &wkb_size);

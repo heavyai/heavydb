@@ -18118,6 +18118,34 @@ TEST(Select, GeoSpatial_Geos) {
                        "FROM geospatial_test WHERE id = 2;",
                        dt),
         std::runtime_error);
+    // Handling geos returning a MULTIPOINT
+    ASSERT_NEAR(
+        static_cast<double>(0.9),
+        v<double>(run_simple_agg(
+            "SELECT ST_Distance(ST_Union('POINT(2 1)', 'POINT(3 0)'), 'POINT(2 0.1)');",
+            dt)),
+        static_cast<double>(0.00001));
+    // Handling geos returning a LINESTRING
+    ASSERT_NEAR(
+        static_cast<double>(0.8062257740),
+        v<double>(run_simple_agg("SELECT ST_Distance(ST_Union('LINESTRING(2 1, 3 1)', "
+                                 "'LINESTRING(3 1, 4 1, 3 0)'), 'POINT(2.2 0.1)');",
+                                 dt)),
+        static_cast<double>(0.00001));
+    // Handling geos returning a MULTILINESTRING
+    ASSERT_NEAR(
+        static_cast<double>(0.9),
+        v<double>(run_simple_agg("SELECT ST_Distance(ST_Union('LINESTRING(2 1, 3 1)', "
+                                 "'LINESTRING(3 -1, 2 -1)'), 'POINT(2 0.1)');",
+                                 dt)),
+        static_cast<double>(0.00001));
+    // Handling geos returning a GEOMETRYCOLLECTION
+    ASSERT_NEAR(
+        static_cast<double>(0.9),
+        v<double>(run_simple_agg("SELECT ST_Distance(ST_Union('LINESTRING(2 1, 3 1)', "
+                                 "'POINT(2 -1)'), 'POINT(2 0.1)');",
+                                 dt)),
+        static_cast<double>(0.00001));
 #else
     // geos disabled, expect throws
     EXPECT_THROW(
