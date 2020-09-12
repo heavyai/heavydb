@@ -20,13 +20,18 @@
  * @brief   Implementation of helper methods for File I/O.
  *
  */
-#include "File.h"
-#include <boost/filesystem.hpp>
+#include "Shared/File.h"
+
+#include <algorithm>
+#include <atomic>
+#include <cerrno>
+#include <chrono>
 #include <cstdio>
 #include <cstring>
 #include <iostream>
 #include <stdexcept>
 #include <string>
+
 #include "Logger/Logger.h"
 
 namespace File_Namespace {

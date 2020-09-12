@@ -17,15 +17,19 @@
 /**
  * @file		Compressor.cpp
  * @brief		singleton class to handle concurrancy and state for blosc library.
- *A C++ wraper over a pure C library.
+ *          A C++ wrapper over a pure C library.
  *
  * Copyright (c) 2018 OmniSci, Inc.  All rights reserved.
  **/
 
-#include "Compressor.h"
-#include <blosc.h>
-#include <string>
+#include "Shared/Compressor.h"
+
+#include <cstdint>
+#include <memory>
 #include <thread>
+
+#include <blosc.h>
+
 #include "Logger/Logger.h"
 
 // we only compress data if the payload size is greater than 512 MB

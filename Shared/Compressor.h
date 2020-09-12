@@ -17,18 +17,18 @@
 /**
  * @file		Compressor.h
  * @brief		singleton class to handle concurrancy and state for blosc library.
- *A C++ wraper over a pure C library.
+ *          A C++ wrapper over a pure C library.
  *
  * Copyright (c) 2018 OmniSci, Inc.  All rights reserved.
  **/
 
-#include <memory>
-#include <mutex>
-#include <string>
-#include <vector>
+#pragma once
 
-#ifndef COMPRESSOR_H
-#define COMPRESSOR_H
+#include <cstddef>
+#include <cstdint>
+#include <mutex>
+#include <stdexcept>
+#include <string>
 
 class CompressionFailedError : public std::runtime_error {
  public:
@@ -86,5 +86,3 @@ class BloscCompressor {
   std::mutex compressor_lock;
   static BloscCompressor* instance;
 };
-
-#endif

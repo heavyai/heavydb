@@ -20,16 +20,18 @@
  * @brief   A selection of helper methods for File I/O.
  *
  */
-#ifndef DATAMGR_FILE_FILE_H
-#define DATAMGR_FILE_FILE_H
+#pragma once
 
 #define MAPD_FILE_EXT ".mapd"
 #define MAX_FILE_N_PAGES 256
 #define MAX_FILE_N_METADATA_PAGES 4096
 
+#include <cstdint>
+#include <cstdio>
 #include <iostream>
 #include <string>
-#include "../../Shared/types.h"
+
+#include "Shared/types.h"
 
 namespace File_Namespace {
 
@@ -150,5 +152,3 @@ size_t fileSize(FILE* f);
 void renameForDelete(const std::string directoryName);
 
 }  // namespace File_Namespace
-
-#endif  // DATAMGR_FILE_FILE_H
