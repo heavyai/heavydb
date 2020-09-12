@@ -26,8 +26,8 @@
 #include "Catalog/Catalog.h"
 #include "ImportExport/Importer.h"
 #include "Logger/Logger.h"
+#include "OSDependent/omnisci_path.h"
 #include "QueryRunner/QueryRunner.h"
-#include "Shared/mapdpath.h"
 
 #define CALCITEPORT 3279
 
@@ -167,7 +167,7 @@ int main(int argc, char* argv[]) {
         const std::string file_name = SampleGeoFileNames[i];
 
         const auto file_path = boost::filesystem::path(
-            mapd_root_abs_path() + "/ThirdParty/geo_samples/" + file_name);
+            omnisci::get_root_abs_path() + "/ThirdParty/geo_samples/" + file_name);
         if (!boost::filesystem::exists(file_path)) {
           throw std::runtime_error(
               "Unable to populate geo sample data. File does not exist: " +

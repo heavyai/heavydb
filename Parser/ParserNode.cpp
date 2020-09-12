@@ -59,7 +59,6 @@
 #include "Shared/TimeGM.h"
 #include "Shared/geo_compression.h"
 #include "Shared/geo_types.h"
-#include "Shared/mapd_glob.h"
 #include "Shared/measure.h"
 #include "Shared/shard_key.h"
 #include "TableArchiver/TableArchiver.h"

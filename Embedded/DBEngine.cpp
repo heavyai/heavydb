@@ -23,7 +23,6 @@
 #include "QueryEngine/CompilationOptions.h"
 #include "QueryEngine/ResultSet.h"
 #include "QueryRunner/QueryRunner.h"
-#include "Shared/mapdpath.h"
 #include "Shared/sqltypes.h"
 
 namespace EmbeddedDatabase {

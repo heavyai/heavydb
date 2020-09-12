@@ -20,7 +20,7 @@
 
 #include "Archive/PosixFileArchive.h"
 #include "ImportExport/CopyParams.h"
-#include "Shared/mapd_glob.h"
+
 namespace foreign_storage {
 
 // Archive reader for csv archives

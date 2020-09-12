@@ -16,8 +16,8 @@
 
 #include "NvidiaKernel.h"
 
-#include "../Shared/mapdpath.h"
 #include "Logger/Logger.h"
+#include "OSDependent/omnisci_path.h"
 
 #include <boost/filesystem/operations.hpp>
 
@@ -48,7 +48,7 @@ void fill_options(std::vector<CUjit_option>& option_keys,
 }
 
 boost::filesystem::path get_gpu_rt_path() {
-  boost::filesystem::path gpu_rt_path{mapd_root_abs_path()};
+  boost::filesystem::path gpu_rt_path{omnisci::get_root_abs_path()};
   gpu_rt_path /= "QueryEngine";
   gpu_rt_path /= "cuda_mapd_rt.fatbin";
   if (!boost::filesystem::exists(gpu_rt_path)) {

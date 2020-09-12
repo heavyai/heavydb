@@ -25,8 +25,8 @@
 #include "rapidjson/document.h"
 
 #include "Fragmenter/FragmentDefaultValues.h"
+#include "OSDependent/omnisci_glob.h"
 #include "Parser/ReservedKeywords.h"
-#include "Shared/mapd_glob.h"
 #include "Shared/misc.h"
 
 bool g_use_date_in_days_default_encoding{true};
@@ -586,7 +586,7 @@ std::vector<std::string> get_expanded_file_paths(
     const DataTransferType data_transfer_type) {
   std::vector<std::string> file_paths;
   if (data_transfer_type == DataTransferType::IMPORT) {
-    file_paths = mapd_glob(file_path);
+    file_paths = omnisci::glob(file_path);
     if (file_paths.size() == 0) {
       throw std::runtime_error{"File or directory \"" + file_path + "\" does not exist."};
     }

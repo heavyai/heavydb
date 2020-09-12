@@ -24,11 +24,11 @@
 #include "Calcite.h"
 #include "Catalog/Catalog.h"
 #include "Logger/Logger.h"
+#include "OSDependent/omnisci_path.h"
 #include "Shared/SystemParameters.h"
 #include "Shared/ThriftClient.h"
 #include "Shared/fixautotools.h"
 #include "Shared/mapd_shared_ptr.h"
-#include "Shared/mapdpath.h"
 #include "Shared/measure.h"
 #include "ThriftHandler/QueryState.h"
 
@@ -76,15 +76,16 @@ static void start_calcite_server_as_daemon(const int db_port,
                                            const std::string& ssl_key_file,
                                            const std::string& db_config_file,
                                            const std::string& udf_filename) {
+  auto root_abs_path = omnisci::get_root_abs_path();
   std::string const xDebug = "-Xdebug";
   std::string const remoteDebug =
       "-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=5005";
   std::string xmxP = "-Xmx" + std::to_string(calcite_max_mem) + "m";
   std::string jarP = "-jar";
   std::string jarD =
-      mapd_root_abs_path() + "/bin/calcite-1.0-SNAPSHOT-jar-with-dependencies.jar";
+      root_abs_path + "/bin/calcite-1.0-SNAPSHOT-jar-with-dependencies.jar";
   std::string extensionsP = "-e";
-  std::string extensionsD = mapd_root_abs_path() + "/QueryEngine/";
+  std::string extensionsD = root_abs_path + "/QueryEngine/";
   std::string dataP = "-d";
   std::string dataD = data_dir;
   std::string localPortP = "-p";

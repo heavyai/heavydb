@@ -23,7 +23,7 @@
 #include <gdal_priv.h>
 
 #include <Logger/Logger.h>
-#include <Shared/mapdpath.h>
+#include <OSDependent/omnisci_path.h>
 
 namespace import_export {
 
@@ -61,7 +61,7 @@ void GDAL::init() {
   if (!initialized_) {
     // FIXME(andrewseidl): investigate if CPLPushFinderLocation can be public
     setenv("GDAL_DATA",
-           std::string(mapd_root_abs_path() + "/ThirdParty/gdal-data").c_str(),
+           std::string(omnisci::get_root_abs_path() + "/ThirdParty/gdal-data").c_str(),
            true);
 
     // configure SSL certificate path (per S3Archive::init_for_read)

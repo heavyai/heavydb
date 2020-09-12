@@ -22,12 +22,11 @@
 #include <llvm/Support/SourceMgr.h>
 #include <llvm/Support/raw_os_ostream.h>
 
-#include "../Analyzer/Analyzer.h"
-#include "../QueryEngine/CodeGenerator.h"
-#include "../QueryEngine/Execute.h"
-#include "../QueryEngine/IRCodegenUtils.h"
-#include "../QueryEngine/LLVMGlobalContext.h"
-#include "../Shared/mapdpath.h"
+#include "Analyzer/Analyzer.h"
+#include "QueryEngine/CodeGenerator.h"
+#include "QueryEngine/Execute.h"
+#include "QueryEngine/IRCodegenUtils.h"
+#include "QueryEngine/LLVMGlobalContext.h"
 #include "TestHelpers.h"
 
 TEST(CodeGeneratorTest, IntegerConstant) {

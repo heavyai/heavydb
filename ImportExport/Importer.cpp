@@ -56,14 +56,13 @@
 #include "ImportExport/DelimitedParserUtils.h"
 #include "ImportExport/GDAL.h"
 #include "Logger/Logger.h"
+#include "OSDependent/omnisci_glob.h"
 #include "QueryEngine/TypePunning.h"
 #include "Shared/SqlTypesLayout.h"
 #include "Shared/geo_compression.h"
 #include "Shared/geo_types.h"
 #include "Shared/geosupport.h"
 #include "Shared/import_helpers.h"
-#include "Shared/mapd_glob.h"
-#include "Shared/mapdpath.h"
 #include "Shared/measure.h"
 #include "Shared/misc.h"
 #include "Shared/scope.h"
@@ -3301,7 +3300,7 @@ ImportStatus DataStreamSink::archivePlumber() {
   // in generalized importing scheme, reaching here file_path may
   // contain a file path, a url or a wildcard of file paths.
   // see CopyTableStmt::execute.
-  auto file_paths = mapd_glob(file_path);
+  auto file_paths = omnisci::glob(file_path);
   if (file_paths.size() == 0) {
     file_paths.push_back(file_path);
   }

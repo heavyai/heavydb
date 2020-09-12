@@ -25,7 +25,6 @@
 #include "QueryEngine/OutputBufferInitialization.h"
 #include "ResultSetTestUtils.h"
 #include "Shared/TargetInfo.h"
-#include "Shared/mapdpath.h"
 #include "TestHelpers.h"
 
 #include <gtest/gtest.h>

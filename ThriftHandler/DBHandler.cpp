@@ -48,6 +48,7 @@
 #include "ImportExport/GDAL.h"
 #include "ImportExport/Importer.h"
 #include "LockMgr/LockMgr.h"
+#include "OSDependent/omnisci_hostname.h"
 #include "Parser/ParserWrapper.h"
 #include "Parser/ReservedKeywords.h"
 #include "Parser/parser.h"
@@ -63,7 +64,6 @@
 #include "QueryEngine/TableOptimizer.h"
 #include "QueryEngine/ThriftSerializers.h"
 #include "Shared/StringTransform.h"
-#include "Shared/SysInfo.h"
 #include "Shared/geo_types.h"
 #include "Shared/geosupport.h"
 #include "Shared/import_helpers.h"
@@ -677,7 +677,7 @@ void DBHandler::get_server_status(TServerStatus& _return, const TSessionId& sess
   _return.poly_rendering_enabled = rendering_enabled;
   _return.start_time = start_time_;
   _return.edition = MAPD_EDITION;
-  _return.host_name = get_hostname();
+  _return.host_name = omnisci::get_hostname();
 }
 
 void DBHandler::get_status(std::vector<TServerStatus>& _return,
@@ -692,7 +692,7 @@ void DBHandler::get_status(std::vector<TServerStatus>& _return,
   ret.poly_rendering_enabled = rendering_enabled;
   ret.start_time = start_time_;
   ret.edition = MAPD_EDITION;
-  ret.host_name = get_hostname();
+  ret.host_name = omnisci::get_hostname();
 
   // TSercivePort tcp_port{}
 
@@ -2296,7 +2296,7 @@ void DBHandler::get_memory(std::vector<TNodeMemoryInfo>& _return,
   for (auto memInfo : internal_memory) {
     TNodeMemoryInfo nodeInfo;
     if (leaf_aggregator_.leafCount() > 0) {
-      nodeInfo.host_name = get_hostname();
+      nodeInfo.host_name = omnisci::get_hostname();
     }
     nodeInfo.page_size = memInfo.pageSize;
     nodeInfo.max_num_pages = memInfo.maxNumPages;

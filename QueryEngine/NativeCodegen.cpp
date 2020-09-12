@@ -22,8 +22,8 @@
 #include "OutputBufferInitialization.h"
 #include "QueryTemplateGenerator.h"
 
+#include "OSDependent/omnisci_path.h"
 #include "Shared/MathUtils.h"
-#include "Shared/mapdpath.h"
 #include "StreamingTopN.h"
 
 #if LLVM_VERSION_MAJOR < 4
@@ -1048,7 +1048,7 @@ bool CodeGenerator::alwaysCloneRuntimeFunction(const llvm::Function* func) {
 llvm::Module* read_template_module(llvm::LLVMContext& context) {
   llvm::SMDiagnostic err;
 
-  auto buffer_or_error = llvm::MemoryBuffer::getFile(mapd_root_abs_path() +
+  auto buffer_or_error = llvm::MemoryBuffer::getFile(omnisci::get_root_abs_path() +
                                                      "/QueryEngine/RuntimeFunctions.bc");
   CHECK(!buffer_or_error.getError());
   llvm::MemoryBuffer* buffer = buffer_or_error.get().get();
@@ -1065,8 +1065,8 @@ llvm::Module* read_template_module(llvm::LLVMContext& context) {
 llvm::Module* read_geos_module(llvm::LLVMContext& context) {
   llvm::SMDiagnostic err;
 
-  auto buffer_or_error =
-      llvm::MemoryBuffer::getFile(mapd_root_abs_path() + "/QueryEngine/GeosRuntime.bc");
+  auto buffer_or_error = llvm::MemoryBuffer::getFile(omnisci::get_root_abs_path() +
+                                                     "/QueryEngine/GeosRuntime.bc");
   CHECK(!buffer_or_error.getError());
   llvm::MemoryBuffer* buffer = buffer_or_error.get().get();
 
