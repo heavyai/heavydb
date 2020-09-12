@@ -16,4 +16,4 @@
 
 #include "thread_count.h"
 
-std::size_t g_cpu_threads_override{0};
+unsigned g_cpu_threads_override{0};

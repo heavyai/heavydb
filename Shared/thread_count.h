@@ -14,20 +14,14 @@
  * limitations under the License.
  */
 
-#ifndef THREAD_COUNT_H
-#define THREAD_COUNT_H
+#pragma once
 
-#include <unistd.h>
 #include <algorithm>
+#include <thread>
 
-extern std::size_t g_cpu_threads_override;
+extern unsigned g_cpu_threads_override;
 
 inline int cpu_threads() {
-  // could use std::thread::hardware_concurrency(), but some
-  // slightly out-of-date compilers (gcc 4.7) implement it as always 0.
-  // Play it POSIX.1 safe instead.
   auto ov = g_cpu_threads_override;
-  return (ov <= 0) ? std::max(2 * sysconf(_SC_NPROCESSORS_CONF), 1L) : ov;
+  return (ov <= 0) ? std::max(2 * std::thread::hardware_concurrency(), 1U) : ov;
 }
-
-#endif  // THREAD_COUNT_H
