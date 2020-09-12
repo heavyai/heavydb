@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 MapD Technologies, Inc.
+ * Copyright 2020 OmniSci, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,12 +14,15 @@
  * limitations under the License.
  */
 
-#ifndef SHARED_MAPD_GLOB_H
-#define SHARED_MAPD_GLOB_H
+#include "OSDependent/omnisci_glob.h"
 
 #include <string>
 #include <vector>
 
-std::vector<std::string> mapd_glob(const std::string& pattern);
+namespace omnisci {
+std::vector<std::string> glob(const std::string& pattern) {
+  std::vector<std::string> results;
 
-#endif  // SHARED_MAPD_GLOB_H
+  return results;
+}
+}  // namespace omnisci

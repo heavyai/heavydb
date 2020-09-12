@@ -226,6 +226,7 @@ else()
 endif()
 
 set(QUERY_ENGINE_LIBS
+  OSDependent
   Analyzer
   StringDictionary
   Utils

@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 MapD Technologies, Inc.
+ * Copyright 2020 OmniSci, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,18 +14,10 @@
  * limitations under the License.
  */
 
-#include "mapd_glob.h"
-#include <glob.h>
-#include <string>
-#include <vector>
+#pragma once
 
-std::vector<std::string> mapd_glob(const std::string& pattern) {
-  std::vector<std::string> results;
-  glob_t glob_result;
-  ::glob(pattern.c_str(), GLOB_BRACE | GLOB_TILDE, nullptr, &glob_result);
-  for (size_t i = 0; i < glob_result.gl_pathc; i++) {
-    results.emplace_back(glob_result.gl_pathv[i]);
-  }
-  globfree(&glob_result);
-  return results;
+#include <string>
+
+namespace omnisci {
+std::string get_root_abs_path();
 }

@@ -1,11 +1,9 @@
 set(shared_source_files
     Datum.cpp
     timegm.cpp
-    mapd_glob.cpp
     StringTransform.cpp
     geo_compression.cpp
     geo_types.cpp
-    SysInfo.cpp
     File.cpp
     StackTrace.cpp
     base64.cpp

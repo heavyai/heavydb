@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 MapD Technologies, Inc.
+ * Copyright 2020 OmniSci, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,11 +14,7 @@
  * limitations under the License.
  */
 
-#ifndef _MAPDPATH_H
-#define _MAPDPATH_H
-
-#include <boost/filesystem/path.hpp>
-#include "Logger/Logger.h"
+#include "OSDependent/omnisci_path.h"
 
 #ifdef __APPLE__
 #include <libproc.h>
@@ -27,7 +23,13 @@
 #endif
 #include <unistd.h>
 
-inline std::string mapd_root_abs_path() {
+#include <boost/filesystem/path.hpp>
+
+#include "Logger/Logger.h"
+
+namespace omnisci {
+
+std::string get_root_abs_path() {
 #ifdef __APPLE__
   char abs_exe_path[PROC_PIDPATHINFO_MAXSIZE] = {0};
   auto path_len = proc_pidpath(getpid(), abs_exe_path, sizeof(abs_exe_path));
@@ -47,4 +49,4 @@ inline std::string mapd_root_abs_path() {
   return mapd_root.string();
 }
 
-#endif  // _MAPDPATH_H
+}  // namespace omnisci
