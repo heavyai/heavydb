@@ -19,9 +19,12 @@
 #include <limits>
 #include <list>
 
+#include <arrow/filesystem/filesystem.h>
+
 #include "ForeignTableSchema.h"
 #include "ImportExport/Importer.h"
 #include "Interval.h"
+#include "ParquetShared.h"
 
 namespace foreign_storage {
 
@@ -36,41 +39,47 @@ struct RowGroupMetadata {
   bool is_all_nulls;
 };
 
+struct ParquetLoaderMetadata {
+  std::string file_path;
+  std::vector<RowGroupMetadata> row_group_metadata_vector;
+};
+
 /**
  * A lazy Parquet file loader
  */
 class LazyParquetImporter : public import_export::Importer {
  public:
-  using RowGroupMetadataVector = std::vector<RowGroupMetadata>;
-
   LazyParquetImporter(import_export::Loader* provided_loader,
-                      const std::string& file_name,
+                      const std::string& base_path,
+                      std::shared_ptr<arrow::fs::FileSystem> file_system,
                       const import_export::CopyParams& copy_params,
-                      RowGroupMetadataVector& metadata_vector,
+                      ParquetLoaderMetadata& parquet_loader_metadata,
                       ForeignTableSchema& schema);
 
   /**
    * Partial load of a Parquet file
    *
-   * @param row_group_interval - [start,end] inclusive interval specifying row groups to
-   * read
-   * @param column_interval - [start,end] inclusive interval specifying range of
+   * @param row_group_interval - vector of start and end (inclusive) row group intervals
+   * to read in a file
+   * @param column_interval - start and end (inclusive) interval specifying range of
    * columns to read
-   * @param metadata_scan - if true, a scan is performed over the entire Parquet file to
-   * load metadata
+   * @param is_metadata_scan - flag indicating whether or not partial import is only for
+   * scanning metadata
    */
-  void partialImport(const Interval<RowGroupType>& row_group_interval,
+  void partialImport(const std::vector<RowGroupInterval>& row_group_intervals,
                      const Interval<ColumnType>& column_interval,
-                     const bool metadata_scan = false);
+                     const bool is_metadata_scan = false);
 
   /**
    * Scan the parquet file, importing only the metadata
    */
-  void metadataScan() { partialImport({0, 0}, {0, 0}, true); }
+  void metadataScan();
 
  private:
-  RowGroupMetadataVector& row_group_metadata_vec_;
-  ForeignTableSchema& schema_;
+  ParquetLoaderMetadata& parquet_loader_metadata_;
+  const ForeignTableSchema& schema_;
+  const std::string base_path_;
+  std::shared_ptr<arrow::fs::FileSystem> file_system_;
 };
 
 }  // namespace foreign_storage

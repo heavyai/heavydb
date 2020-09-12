@@ -50,8 +50,7 @@ class ParquetDataWrapper : public ForeignDataWrapper {
   void initializeChunkBuffers(const int fragment_index,
                               const Interval<ColumnType>& column_interval,
                               std::map<ChunkKey, AbstractBuffer*>& required_buffers,
-                              const bool reserve_buffers_and_set_stats = false,
-                              const size_t physical_byte_size = 0);
+                              const bool reserve_buffers_and_set_stats = false);
   void fetchChunkMetadata();
   void loadBuffersUsingLazyParquetImporter(
       const int logical_column_id,
@@ -60,12 +59,11 @@ class ParquetDataWrapper : public ForeignDataWrapper {
   void loadBuffersUsingLazyParquetChunkLoader(
       const int logical_column_id,
       const int fragment_id,
-      const size_t physical_byte_size,
       std::map<ChunkKey, AbstractBuffer*>& required_buffers);
 
-  void validateFilePath();
-  std::string getFilePath();
-  import_export::CopyParams validateAndGetCopyParams();
+  void validateFilePath() const;
+  std::string getFilePath() const;
+  import_export::CopyParams validateAndGetCopyParams() const;
 
   /**
    * Validates that the value of given table option has the expected number of characters.
@@ -77,12 +75,16 @@ class ParquetDataWrapper : public ForeignDataWrapper {
    * empty string if table options do not contain provided option.
    */
   std::string validateAndGetStringWithLength(const std::string& option_name,
-                                             const size_t expected_num_chars);
+                                             const size_t expected_num_chars) const;
 
-  bool moveToNextFragment(size_t new_rows_count);
+  bool moveToNextFragment(size_t new_rows_count) const;
 
   void finalizeFragmentMap();
-  void updateFragmentMap(int fragment_index, int row_group);
+  void addNewFragment(int row_group, const std::string& file_path);
+
+  bool isNewFile(const std::string& file_path) const;
+
+  void addNewFile(const std::string& file_path);
 
   void resetParquetMetadata();
 
@@ -106,7 +108,7 @@ class ParquetDataWrapper : public ForeignDataWrapper {
 
   import_export::Loader* getMetadataLoader(
       Catalog_Namespace::Catalog& catalog,
-      const LazyParquetImporter::RowGroupMetadataVector& metadata_vector);
+      const ParquetLoaderMetadata& parquet_loader_metadata);
 
   import_export::Loader* getChunkLoader(
       Catalog_Namespace::Catalog& catalog,
@@ -115,11 +117,7 @@ class ParquetDataWrapper : public ForeignDataWrapper {
       const int fragment_index,
       std::map<ChunkKey, AbstractBuffer*>& required_buffers);
 
-  struct FragmentToRowGroupInterval {
-    int start_row_group_index;  // Row group where fragment starts
-    int end_row_group_index;    // Row group where fragment ends
-  };
-  std::map<int, FragmentToRowGroupInterval> fragment_to_row_group_interval_map_;
+  std::map<int, std::vector<RowGroupInterval>> fragment_to_row_group_interval_map_;
   std::map<ChunkKey, std::shared_ptr<ChunkMetadata>> chunk_metadata_map_;
   const int db_id_;
   const ForeignTable* foreign_table_;
@@ -127,6 +125,7 @@ class ParquetDataWrapper : public ForeignDataWrapper {
   size_t last_fragment_row_count_;
   int last_row_group_;
   std::unique_ptr<ForeignTableSchema> schema_;
+  std::shared_ptr<arrow::fs::FileSystem> file_system_;
 
   static constexpr std::array<char const*, 4> supported_options_{"BASE_PATH",
                                                                  "FILE_PATH",

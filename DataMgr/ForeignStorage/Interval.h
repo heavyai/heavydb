@@ -17,8 +17,6 @@
 
 namespace foreign_storage {
 
-struct RowGroupType {};
-
 struct ColumnType {};
 
 struct FragmentType {};

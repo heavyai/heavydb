@@ -37,18 +37,6 @@ std::string type_to_string(SQLTypes type) {
   return SQLTypeInfo(type, false).get_type_name();
 }
 
-std::tuple<int, int> open_parquet_table(
-    const std::string& file_path,
-    std::unique_ptr<parquet::arrow::FileReader>& reader) {
-  std::shared_ptr<arrow::io::ReadableFile> infile;
-  PARQUET_ASSIGN_OR_THROW(infile, arrow::io::ReadableFile::Open(file_path));
-  PARQUET_THROW_NOT_OK(OpenFile(infile, arrow::default_memory_pool(), &reader));
-  auto file_metadata = reader->parquet_reader()->metadata();
-  const auto num_row_groups = file_metadata->num_row_groups();
-  const auto num_columns = file_metadata->num_columns();
-  return std::make_tuple(num_row_groups, num_columns);
-}
-
 void validate_allowed_mapping(const parquet::ColumnDescriptor* descr,
                               const ColumnDescriptor* cd) {
   const auto type = cd->columnType.get_type();
@@ -154,7 +142,7 @@ void initialize_import_buffers_vec(
 
 void initialize_row_group_metadata_vec(
     const size_t num_logical_and_physical_columns,
-    LazyParquetImporter::RowGroupMetadataVector& row_group_metadata_vec) {
+    std::vector<RowGroupMetadata>& row_group_metadata_vec) {
   row_group_metadata_vec.clear();
   row_group_metadata_vec.resize(num_logical_and_physical_columns);
 }
@@ -321,6 +309,32 @@ std::pair<int64_t, int64_t> get_decimal_min_and_max(
   return {min, max};
 }
 
+std::set<std::string> get_file_paths(std::shared_ptr<arrow::fs::FileSystem> file_system,
+                                     const std::string& base_path) {
+  auto timer = DEBUG_TIMER(__func__);
+  std::set<std::string> file_paths;
+  arrow::fs::FileSelector file_selector{};
+  file_selector.base_dir = base_path;
+  file_selector.recursive = true;
+
+  auto file_info_result = file_system->GetFileInfo(file_selector);
+  if (!file_info_result.ok()) {
+    // This is expected when `base_path` points to a single file.
+    file_paths.emplace(base_path);
+  } else {
+    auto& file_info_vector = file_info_result.ValueOrDie();
+    for (const auto& file_info : file_info_vector) {
+      if (file_info.type() == arrow::fs::FileType::File) {
+        file_paths.emplace(file_info.path());
+      }
+    }
+    if (file_paths.empty()) {
+      throw std::runtime_error{"No file found at given path \"" + base_path + "\"."};
+    }
+  }
+  return file_paths;
+}
+
 void read_parquet_metadata_into_import_buffer(
     const size_t num_rows,
     const int row_group,
@@ -329,7 +343,7 @@ void read_parquet_metadata_into_import_buffer(
     const ColumnDescriptor* column_descriptor,
     import_export::BadRowsTracker& bad_rows_tracker,
     std::vector<std::unique_ptr<TypedImportBuffer>>& import_buffer_vec,
-    LazyParquetImporter::RowGroupMetadataVector& row_group_metadata_vec) {
+    ParquetLoaderMetadata& parquet_loader_metadata) {
   auto column_id = column_descriptor->columnId;
   auto& import_buffer = initialize_import_buffer(column_id, import_buffer_vec);
   auto parquet_column_index = schema.getParquetColumnIndex(column_id);
@@ -366,6 +380,7 @@ void read_parquet_metadata_into_import_buffer(
 
   // Set the same metadata for the logical column and all its related physical columns
   auto physical_columns_count = column_descriptor->columnType.get_physical_cols();
+  auto& row_group_metadata_vec = parquet_loader_metadata.row_group_metadata_vector;
   for (auto i = column_id - 1; i < (column_id + physical_columns_count); i++) {
     row_group_metadata_vec[i].metadata_only = true;
     row_group_metadata_vec[i].row_group_index = row_group;
@@ -416,11 +431,10 @@ void import_row_group(
     const int row_group,
     const bool metadata_scan,
     const ForeignTableSchema& schema,
-    const std::string& file_path,
     const Interval<ColumnType>& column_interval,
     import_export::Importer* importer,
     std::unique_ptr<parquet::arrow::FileReader>& reader,
-    LazyParquetImporter::RowGroupMetadataVector& row_group_metadata_vec,
+    ParquetLoaderMetadata& parquet_loader_metadata,
     import_export::BadRowsTracker& bad_rows_tracker,
     std::vector<std::unique_ptr<TypedImportBuffer>>& import_buffer_vec) {
   auto loader = importer->getLoader();
@@ -428,8 +442,9 @@ void import_row_group(
   // Initialize
   initialize_import_buffers_vec(loader, schema, import_buffer_vec);
   initialize_row_group_metadata_vec(schema.numLogicalAndPhysicalColumns(),
-                                    row_group_metadata_vec);
-  initialize_bad_rows_tracker(bad_rows_tracker, row_group, file_path, importer);
+                                    parquet_loader_metadata.row_group_metadata_vector);
+  initialize_bad_rows_tracker(
+      bad_rows_tracker, row_group, parquet_loader_metadata.file_path, importer);
 
   // Read metadata
   auto file_metadata = reader->parquet_reader()->metadata();
@@ -450,7 +465,7 @@ void import_row_group(
                                                column_descriptor,
                                                bad_rows_tracker,
                                                import_buffer_vec,
-                                               row_group_metadata_vec);
+                                               parquet_loader_metadata);
     } else {
       // Regular import branch
       read_parquet_data_into_import_buffer(loader,
@@ -466,55 +481,116 @@ void import_row_group(
   importer->load(import_buffer_vec, num_rows);
 }
 
-}  // namespace
-
-void LazyParquetImporter::partialImport(const Interval<RowGroupType>& row_group_interval,
-                                        const Interval<ColumnType>& column_interval,
-                                        const bool metadata_scan) {
-  using namespace import_export;
-
-  CHECK_LE(row_group_interval.start, row_group_interval.end);
-  CHECK_LE(column_interval.start, column_interval.end);
-
-  std::unique_ptr<parquet::arrow::FileReader> reader;
-  int num_row_groups, num_columns;
-  std::tie(num_row_groups, num_columns) = open_parquet_table(file_path, reader);
-  validate_parquet_metadata(reader->parquet_reader()->metadata(), file_path, schema_);
-
-  // Check which row groups and columns to import
-  auto row_groups_to_import_interval =
-      metadata_scan ? Interval<RowGroupType>{0, num_row_groups - 1} : row_group_interval;
-  auto columns_to_import_interval =
-      metadata_scan
-          ? Interval<ColumnType>{schema_.getLogicalAndPhysicalColumns().front()->columnId,
-                                 schema_.getLogicalAndPhysicalColumns().back()->columnId}
-          : column_interval;
-
-  auto& import_buffers_vec = get_import_buffers_vec();
-  import_buffers_vec.resize(1);
-  std::vector<BadRowsTracker> bad_rows_trackers(1);
-  for (int row_group = row_groups_to_import_interval.start;
-       row_group <= row_groups_to_import_interval.end && !load_failed;
+void import_row_groups(
+    const RowGroupInterval& row_group_interval,
+    bool& load_failed,
+    const bool metadata_scan,
+    const ForeignTableSchema& schema,
+    const Interval<ColumnType>& column_interval,
+    import_export::Importer* importer,
+    std::unique_ptr<parquet::arrow::FileReader>& reader,
+    ParquetLoaderMetadata& parquet_loader_metadata,
+    import_export::BadRowsTracker& bad_rows_tracker,
+    std::vector<std::unique_ptr<TypedImportBuffer>>& import_buffer_vec) {
+  CHECK_LE(row_group_interval.start_index, row_group_interval.end_index);
+  for (int row_group = row_group_interval.start_index;
+       row_group <= row_group_interval.end_index && !load_failed;
        ++row_group) {
     import_row_group(row_group,
                      metadata_scan,
-                     schema_,
-                     file_path,
-                     columns_to_import_interval,
-                     this,
+                     schema,
+                     column_interval,
+                     importer,
                      reader,
-                     row_group_metadata_vec_,
-                     bad_rows_trackers[0],
-                     import_buffers_vec[0]);
+                     parquet_loader_metadata,
+                     bad_rows_tracker,
+                     import_buffer_vec);
   }
 }
 
-LazyParquetImporter::LazyParquetImporter(import_export::Loader* provided_loader,
-                                         const std::string& file_name,
-                                         const import_export::CopyParams& copy_params,
-                                         RowGroupMetadataVector& metadata_vector,
-                                         ForeignTableSchema& schema)
-    : import_export::Importer(provided_loader, file_name, copy_params)
-    , row_group_metadata_vec_(metadata_vector)
-    , schema_(schema) {}
+void validate_equal_schema(const parquet::arrow::FileReader* reference_file_reader,
+                           const parquet::arrow::FileReader* new_file_reader,
+                           const std::string& reference_file_path,
+                           const std::string& new_file_path) {
+  const auto reference_num_columns =
+      reference_file_reader->parquet_reader()->metadata()->num_columns();
+  const auto new_num_columns =
+      new_file_reader->parquet_reader()->metadata()->num_columns();
+  if (reference_num_columns != new_num_columns) {
+    throw std::runtime_error{"Parquet file \"" + new_file_path +
+                             "\" has a different schema. Please ensure that all Parquet "
+                             "files use the same schema. Reference Parquet file: \"" +
+                             reference_file_path + "\" has " +
+                             std::to_string(reference_num_columns) +
+                             " columns. New Parquet file \"" + new_file_path + "\" has " +
+                             std::to_string(new_num_columns) + " columns."};
+  }
+
+  for (int i = 0; i < reference_num_columns; i++) {
+    validate_equal_column_descriptor(get_column_descriptor(reference_file_reader, i),
+                                     get_column_descriptor(new_file_reader, i),
+                                     reference_file_path,
+                                     new_file_path);
+  }
+}
+}  // namespace
+
+void LazyParquetImporter::metadataScan() {
+  auto columns_interval =
+      Interval<ColumnType>{schema_.getLogicalAndPhysicalColumns().front()->columnId,
+                           schema_.getLogicalAndPhysicalColumns().back()->columnId};
+  auto file_paths = get_file_paths(file_system_, base_path_);
+  CHECK(!file_paths.empty());
+  std::unique_ptr<parquet::arrow::FileReader> first_file_reader;
+  const auto& first_file_path = *file_paths.begin();
+  open_parquet_table(first_file_path, first_file_reader, file_system_);
+  for (const auto& file_path : file_paths) {
+    std::unique_ptr<parquet::arrow::FileReader> reader;
+    open_parquet_table(file_path, reader, file_system_);
+    validate_equal_schema(
+        first_file_reader.get(), reader.get(), first_file_path, file_path);
+    int num_row_groups = get_parquet_table_size(reader).first;
+    auto row_group_interval = RowGroupInterval{file_path, 0, num_row_groups - 1};
+    partialImport({row_group_interval}, columns_interval, true);
+  }
+}
+
+void LazyParquetImporter::partialImport(
+    const std::vector<RowGroupInterval>& row_group_intervals,
+    const Interval<ColumnType>& column_interval,
+    const bool is_metadata_scan) {
+  CHECK_LE(column_interval.start, column_interval.end);
+  for (const auto& row_group_interval : row_group_intervals) {
+    std::unique_ptr<parquet::arrow::FileReader> reader;
+    open_parquet_table(row_group_interval.file_path, reader, file_system_);
+    validate_parquet_metadata(reader->parquet_reader()->metadata(), file_path, schema_);
+    auto& import_buffers_vec = get_import_buffers_vec();
+    import_buffers_vec.resize(1);
+    std::vector<import_export::BadRowsTracker> bad_rows_trackers(1);
+    parquet_loader_metadata_.file_path = row_group_interval.file_path;
+    import_row_groups(row_group_interval,
+                      load_failed,
+                      is_metadata_scan,
+                      schema_,
+                      column_interval,
+                      this,
+                      reader,
+                      parquet_loader_metadata_,
+                      bad_rows_trackers[0],
+                      import_buffers_vec[0]);
+  }
+}
+
+LazyParquetImporter::LazyParquetImporter(
+    import_export::Loader* provided_loader,
+    const std::string& base_path,
+    std::shared_ptr<arrow::fs::FileSystem> file_system,
+    const import_export::CopyParams& copy_params,
+    ParquetLoaderMetadata& parquet_loader_metadata,
+    ForeignTableSchema& schema)
+    : import_export::Importer(provided_loader, base_path, copy_params)
+    , parquet_loader_metadata_(parquet_loader_metadata)
+    , schema_(schema)
+    , base_path_(base_path)
+    , file_system_(file_system) {}
 }  // namespace foreign_storage

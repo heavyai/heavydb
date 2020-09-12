@@ -20,6 +20,7 @@
 #include <aws/s3/S3Client.h>
 
 #include "Catalog/ForeignServer.h"
+#include "Catalog/ee/UserMapping.h"
 #include "DataMgr/ForeignStorage/CsvReader.h"
 namespace foreign_storage {
 
@@ -28,7 +29,8 @@ class MultiS3Reader : public MultiFileReader {
  public:
   MultiS3Reader(const std::string& file_path,
                 const import_export::CopyParams& copy_params,
-                const ForeignServer* server_options);
+                const ForeignServer* server_options,
+                const UserMapping* user_mapping);
 };
 
 class CsvReaderS3 : public CsvReader {
@@ -36,7 +38,8 @@ class CsvReaderS3 : public CsvReader {
   CsvReaderS3(const std::string& obj_key,
               size_t file_size,
               const import_export::CopyParams& copy_params,
-              const ForeignServer* server_options);
+              const ForeignServer* server_options,
+              const UserMapping* user_mapping);
   size_t read(void* buffer, size_t max_size) override;
   size_t readRegion(void* buffer, size_t offset, size_t size) override {
     CHECK(isScanFinished());

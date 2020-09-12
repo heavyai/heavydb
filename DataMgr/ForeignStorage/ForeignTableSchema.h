@@ -22,9 +22,7 @@ namespace foreign_storage {
 class ForeignTableSchema {
  public:
   ForeignTableSchema(const int32_t db_id, const ForeignTable* foreign_table) {
-    catalog_ = Catalog_Namespace::Catalog::get(db_id);
-    CHECK(catalog_);
-
+    catalog_ = Catalog_Namespace::Catalog::checkedGet(db_id);
     foreign_table_ = foreign_table;
     logical_and_physical_columns_ = catalog_->getAllColumnMetadataForTableUnlocked(
         foreign_table->tableId, false, false, true);

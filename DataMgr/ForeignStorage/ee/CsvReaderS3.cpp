@@ -68,12 +68,25 @@ Aws::S3::Model::GetObjectRequest create_request(const std::string& bucket_name,
   return object_request;
 }
 
-std::string get_s3_url(std::string bucket, std::string prefix) {
-  return "s3://" + bucket + "/" + prefix;
+std::string get_access_error_message(const std::string& bucket,
+                                     const std::string& object_name,
+                                     const std::string& exception_name,
+                                     const std::string& message) {
+  return "Unable to access s3 file: " + bucket + "/" + object_name + ". " +
+         exception_name + ": " + message;
 }
 
-std::shared_ptr<Aws::Auth::AWSCredentialsProvider> get_credentials() {
-  // TODO: get user config mapping
+std::shared_ptr<Aws::Auth::AWSCredentialsProvider> get_credentials(
+    const UserMapping* user_mapping) {
+  if (user_mapping) {
+    const auto options = user_mapping->getUnencryptedOptions();
+    if (options.find(UserMapping::S3_ACCESS_KEY) != options.end() &&
+        options.find(UserMapping::S3_SECRET_KEY) != options.end()) {
+      return std::make_shared<Aws::Auth::SimpleAWSCredentialsProvider>(
+          options.find(UserMapping::S3_ACCESS_KEY)->second,
+          options.find(UserMapping::S3_SECRET_KEY)->second);
+    }
+  }
   return std::make_shared<Aws::Auth::AnonymousAWSCredentialsProvider>();
 }
 
@@ -82,7 +95,8 @@ std::shared_ptr<Aws::Auth::AWSCredentialsProvider> get_credentials() {
 CsvReaderS3::CsvReaderS3(const std::string& obj_key,
                          size_t file_size,
                          const import_export::CopyParams& copy_params,
-                         const ForeignServer* server_options)
+                         const ForeignServer* server_options,
+                         const UserMapping* user_mapping)
     : CsvReader(obj_key, copy_params)
     , file_size_(file_size)
     , scan_finished_(false)
@@ -91,8 +105,8 @@ CsvReaderS3::CsvReaderS3(const std::string& obj_key,
     , current_offset_(0)
     , header_offset_(0) {
   bucket_name_ = server_options->options.find(ForeignServer::S3_BUCKET_KEY)->second;
-  s3_client_.reset(
-      new Aws::S3::S3Client(get_credentials(), get_s3_config(server_options)));
+  s3_client_.reset(new Aws::S3::S3Client(get_credentials(user_mapping),
+                                         get_s3_config(server_options)));
   skipHeader();
   if (header_offset_ >= file_size_) {
     scan_finished_ = true;
@@ -107,10 +121,11 @@ size_t CsvReaderS3::read(void* buffer, size_t max_size) {
   auto get_object_outcome = s3_client_->GetObject(object_request);
 
   if (!get_object_outcome.IsSuccess()) {
-    throw std::runtime_error("Failed to get object '" + obj_key_ + "' of s3 url '" +
-                             get_s3_url(bucket_name_, obj_key_) +
-                             "': " + get_object_outcome.GetError().GetExceptionName() +
-                             ": " + get_object_outcome.GetError().GetMessage());
+    throw std::runtime_error{
+        get_access_error_message(bucket_name_,
+                                 obj_key_,
+                                 get_object_outcome.GetError().GetExceptionName(),
+                                 get_object_outcome.GetError().GetMessage())};
   }
   get_object_outcome.GetResult().GetBody().read(static_cast<char*>(buffer), max_size);
 
@@ -133,10 +148,11 @@ void CsvReaderS3::skipHeader() {
       auto get_object_outcome = s3_client_->GetObject(object_request);
 
       if (!get_object_outcome.IsSuccess()) {
-        throw std::runtime_error("Failed to get object '" + obj_key_ + "' of s3 url '" +
-                                 get_s3_url(bucket_name_, obj_key_) + "': " +
-                                 get_object_outcome.GetError().GetExceptionName() + ": " +
-                                 get_object_outcome.GetError().GetMessage());
+        throw std::runtime_error{
+            get_access_error_message(bucket_name_,
+                                     obj_key_,
+                                     get_object_outcome.GetError().GetExceptionName(),
+                                     get_object_outcome.GetError().GetMessage())};
       }
 
       get_object_outcome.GetResult().GetBody().getline((header_buff.get()), header_size);
@@ -161,23 +177,24 @@ void CsvReaderS3::skipHeader() {
 
 MultiS3Reader::MultiS3Reader(const std::string& prefix_name,
                              const import_export::CopyParams& copy_params,
-                             const ForeignServer* server_options)
+                             const ForeignServer* foreign_server,
+                             const UserMapping* user_mapping)
     : MultiFileReader(prefix_name, copy_params) {
   Aws::S3::Model::ListObjectsV2Request objects_request;
-  auto bucket_name = server_options->options.find(ForeignServer::S3_BUCKET_KEY)->second;
+  auto bucket_name = foreign_server->options.find(ForeignServer::S3_BUCKET_KEY)->second;
   objects_request.WithBucket(bucket_name);
   objects_request.WithPrefix(prefix_name);
 
   std::unique_ptr<Aws::S3::S3Client> s3_client;
-  auto credentials = get_credentials();
-  auto config = get_s3_config(server_options);
+  auto credentials = get_credentials(user_mapping);
+  auto config = get_s3_config(foreign_server);
   s3_client.reset(new Aws::S3::S3Client(credentials, config));
   auto list_objects_outcome = s3_client->ListObjectsV2(objects_request);
   if (list_objects_outcome.IsSuccess()) {
     auto object_list = list_objects_outcome.GetResult().GetContents();
     if (0 == object_list.size()) {
-      throw std::runtime_error("No object was found with s3 url '" +
-                               get_s3_url(bucket_name, prefix_name) + "'");
+      throw std::runtime_error{get_access_error_message(
+          bucket_name, prefix_name, "Error", "No object was found at the given path.")};
     }
     // Instantiate CsvReaderS3 for each valid object
     for (auto const& obj : object_list) {
@@ -200,11 +217,14 @@ MultiS3Reader::MultiS3Reader(const std::string& prefix_name,
         continue;
       }
       files_.emplace_back(std::make_unique<CsvReaderS3>(
-          objkey, obj.GetSize(), copy_params, server_options));
+          objkey, obj.GetSize(), copy_params, foreign_server, user_mapping));
     }
   } else {
-    throw std::runtime_error("Could not list objects for s3 url '" +
-                             get_s3_url(bucket_name, prefix_name) + "'");
+    throw std::runtime_error{
+        get_access_error_message(bucket_name,
+                                 prefix_name,
+                                 list_objects_outcome.GetError().GetExceptionName(),
+                                 list_objects_outcome.GetError().GetMessage())};
   }
 }
 }  // namespace foreign_storage

@@ -160,9 +160,7 @@ void PersistentStorageMgr::removeTableRelatedDS(const int db_id, const int table
 bool PersistentStorageMgr::isForeignStorage(const ChunkKey& chunk_key) {
   auto db_id = chunk_key[0];
   auto table_id = chunk_key[1];
-
-  auto catalog = Catalog_Namespace::Catalog::get(db_id);
-  CHECK(catalog);
+  auto catalog = Catalog_Namespace::Catalog::checkedGet(db_id);
 
   auto table = catalog->getMetadataForTableImpl(table_id, false);
   CHECK(table);

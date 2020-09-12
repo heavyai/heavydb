@@ -25,7 +25,6 @@
 #include "Archive/S3Archive.h"
 #include "DBHandlerTestHelpers.h"
 #include "DataMgr/ForeignStorage/ForeignStorageCache.h"
-#include "DataMgr/ForeignStorage/ForeignStorageMgr.h"
 #include "ImportExport/DelimitedParserUtils.h"
 #include "Shared/geo_types.h"
 #include "TestHelpers.h"
@@ -70,8 +69,16 @@ class ForeignTableTest : public DBHandlerTestFixture {
     if (table_number) {
       query += "_" + std::to_string(table_number);
     }
-    std::string filename =
-        file_name_base + "." + (extension.size() > 0 ? extension : data_wrapper_type);
+
+    std::string filename = file_name_base;
+    if (extension == "dir") {
+      filename += "_" + data_wrapper_type + "_dir";
+    } else if (extension.empty()) {
+      filename += "." + data_wrapper_type;
+    } else {
+      filename += "." + extension;
+    }
+
     query += " " + columns + " SERVER omnisci_local_" + data_wrapper_type +
              " WITH (file_path = '" + getDataFilesPath() + filename + "'";
     for (auto& [key, value] : options) {
@@ -675,6 +682,41 @@ TEST_F(SelectQueryTest, ParquetDateDays32Encoding) {
                        result);
 }
 
+TEST_F(SelectQueryTest, DirectoryWithDifferentSchema_SameNumberOfColumns) {
+  std::string query = "CREATE FOREIGN TABLE test_foreign_table (t TIMESTAMP) "s +
+                      "SERVER omnisci_local_parquet WITH (file_path = '" +
+                      getDataFilesPath() + "/different_parquet_schemas_1');";
+  sql(query);
+  queryAndAssertException("SELECT * FROM test_foreign_table;",
+                          "Exception: Parquet file \"" + getDataFilesPath() +
+                              "different_parquet_schemas_1/timestamp_millis.parquet\" "
+                              "has a different schema. Please ensure that all Parquet "
+                              "files use the same schema. Reference Parquet file: " +
+                              getDataFilesPath() +
+                              "different_parquet_schemas_1/timestamp_micros.parquet, "
+                              "column name: timestamp_micros. New Parquet file: " +
+                              getDataFilesPath() +
+                              "different_parquet_schemas_1/timestamp_millis.parquet, "
+                              "column name: timestamp_millis.");
+}
+
+TEST_F(SelectQueryTest, DirectoryWithDifferentSchema_DifferentNumberOfColumns) {
+  std::string query = "CREATE FOREIGN TABLE test_foreign_table (i INTEGER) "s +
+                      "SERVER omnisci_local_parquet WITH (file_path = '" +
+                      getDataFilesPath() + "/different_parquet_schemas_2');";
+  sql(query);
+  queryAndAssertException(
+      "SELECT * FROM test_foreign_table;",
+      "Exception: Parquet file \"" + getDataFilesPath() +
+          "different_parquet_schemas_2/two_col_1_2.parquet\" has a different schema. "
+          "Please ensure that all Parquet files use the same schema. Reference Parquet "
+          "file: \"" +
+          getDataFilesPath() +
+          "different_parquet_schemas_2/1.parquet\" has 1 columns. New Parquet file \"" +
+          getDataFilesPath() +
+          "different_parquet_schemas_2/two_col_1_2.parquet\" has 2 columns.");
+}
+
 TEST_P(CacheControllingSelectQueryTest, CacheExists) {
   auto cache = getCatalog().getDataMgr().getForeignStorageMgr()->getForeignStorageCache();
   ASSERT_EQ((cache != nullptr), GetParam());
@@ -1195,7 +1237,7 @@ TEST_F(RefreshMetadataTypeTest, ScalarTypes) {
 
 TEST_F(RefreshMetadataTypeTest, ArrayTypes) {
   const auto& query = getCreateForeignTableQuery(
-      "(b BOOLEAN[], t TINYINT[], s SMALLINT[], i INTEGER[], bi BIGINT[], f "
+      "(index int, b BOOLEAN[], t TINYINT[], s SMALLINT[], i INTEGER[], bi BIGINT[], f "
       "FLOAT[], "
       "tm "
       "TIME[], tp TIMESTAMP[], "
@@ -1214,7 +1256,7 @@ TEST_F(RefreshMetadataTypeTest, ArrayTypes) {
 
 TEST_F(RefreshMetadataTypeTest, GeoTypes) {
   const auto& query = getCreateForeignTableQuery(
-      "(p POINT, l LINESTRING, poly POLYGON, multipoly MULTIPOLYGON)",
+      "(index int, p POINT, l LINESTRING, poly POLYGON, multipoly MULTIPOLYGON)",
       {},
       "geo_types",
       "csv",
@@ -1842,14 +1884,20 @@ INSTANTIATE_TEST_SUITE_P(
     DataTypeFragmentSizeAndDataWrapperTest,
     ::testing::Values(
         DataTypeFragmentSizeAndDataWrapperParam{1, "csv", "csv"},
+        DataTypeFragmentSizeAndDataWrapperParam{1, "csv", "dir"},
         DataTypeFragmentSizeAndDataWrapperParam{1, "csv", "zip"},
         DataTypeFragmentSizeAndDataWrapperParam{1, "parquet", "parquet"},
+        DataTypeFragmentSizeAndDataWrapperParam{1, "parquet", "dir"},
         DataTypeFragmentSizeAndDataWrapperParam{2, "csv", "csv"},
+        DataTypeFragmentSizeAndDataWrapperParam{2, "csv", "dir"},
         DataTypeFragmentSizeAndDataWrapperParam{2, "csv", "zip"},
         DataTypeFragmentSizeAndDataWrapperParam{2, "parquet", "parquet"},
+        DataTypeFragmentSizeAndDataWrapperParam{2, "parquet", "dir"},
         DataTypeFragmentSizeAndDataWrapperParam{32000000, "csv", "csv"},
+        DataTypeFragmentSizeAndDataWrapperParam{32000000, "csv", "dir"},
         DataTypeFragmentSizeAndDataWrapperParam{32000000, "csv", "zip"},
-        DataTypeFragmentSizeAndDataWrapperParam{32000000, "parquet", "parquet"}),
+        DataTypeFragmentSizeAndDataWrapperParam{32000000, "parquet", "parquet"},
+        DataTypeFragmentSizeAndDataWrapperParam{32000000, "parquet", "dir"}),
     PrintToStringParamName());
 
 TEST_P(DataTypeFragmentSizeAndDataWrapperTest, ScalarTypes) {
@@ -1870,7 +1918,7 @@ TEST_P(DataTypeFragmentSizeAndDataWrapperTest, ScalarTypes) {
   sql(query);
 
   TQueryResult result;
-  sql(result, "SELECT * FROM test_foreign_table;");
+  sql(result, "SELECT * FROM test_foreign_table ORDER BY t;");
   // clang-format off
   assertResultSetEqual({
     {
@@ -1898,8 +1946,10 @@ TEST_P(DataTypeFragmentSizeAndDataWrapperTest, ArrayTypes) {
   if (data_wrapper_type == "parquet") {
     GTEST_SKIP();
   }
+
+  // index column added for sorting, since order of files in a directory may vary
   const auto& query = getCreateForeignTableQuery(
-      "(b BOOLEAN[], t TINYINT[], s SMALLINT[], i INTEGER[], bi BIGINT[], f "
+      "(index int, b BOOLEAN[], t TINYINT[], s SMALLINT[], i INTEGER[], bi BIGINT[], f "
       "FLOAT[], "
       "tm "
       "TIME[], tp TIMESTAMP[], "
@@ -1913,23 +1963,23 @@ TEST_P(DataTypeFragmentSizeAndDataWrapperTest, ArrayTypes) {
   sql(query);
 
   TQueryResult result;
-  sql(result, "SELECT * FROM test_foreign_table;");
+  sql(result, "SELECT * FROM test_foreign_table ORDER BY index;");
   // clang-format off
   assertResultSetEqual({
     {
-      array({True}), array({i(50), i(100)}), array({i(30000), i(20000)}), array({i(2000000000)}),
+      i(1), array({True}), array({i(50), i(100)}), array({i(30000), i(20000)}), array({i(2000000000)}),
       array({i(9000000000000000000)}), array({10.1f, 11.1f}), array({"00:00:10"}),
       array({"1/1/2000 00:00:59", "1/1/2010 00:00:59"}), array({"1/1/2000", "2/2/2000"}),
       array({"text_1"}), array({"quoted text"})
     },
     {
-      array({False, True}), array({i(110)}), array({i(30500)}), array({i(2000500000)}),
+      i(2), array({False, True}), array({i(110)}), array({i(30500)}), array({i(2000500000)}),
       array({i(9000000050000000000)}), array({100.12f}), array({"00:10:00", "00:20:00"}),
       array({"6/15/2020 00:59:59"}), array({"6/15/2020"}),
       array({"text_2", "text_3"}), array({"quoted text 2"})
     },
     {
-      array({True}), array({i(120)}), array({i(31000)}), array({i(2100000000), i(200000000)}),
+      i(3), array({True}), array({i(120)}), array({i(31000)}), array({i(2100000000), i(200000000)}),
       array({i(9100000000000000000), i(9200000000000000000)}), array({1000.123f}), array({"10:00:00"}),
       array({"12/31/2500 23:59:59"}), array({"12/31/2500"}),
       array({"text_4"}), array({"quoted text 3", "quoted text 4"})
@@ -1943,8 +1993,10 @@ TEST_P(DataTypeFragmentSizeAndDataWrapperTest, GeoTypes) {
   int fragment_size = param.fragment_size;
   std::string data_wrapper_type = param.wrapper;
   std::string extension = param.extension;
+
+  // index column added for sorting, since order of files in a directory may vary
   const auto& query = getCreateForeignTableQuery(
-      "(p POINT, l LINESTRING, poly POLYGON, multipoly MULTIPOLYGON)",
+      "(index int, p POINT, l LINESTRING, poly POLYGON, multipoly MULTIPOLYGON)",
       {{"fragment_size", std::to_string(fragment_size)}},
       "geo_types",
       data_wrapper_type,
@@ -1954,19 +2006,19 @@ TEST_P(DataTypeFragmentSizeAndDataWrapperTest, GeoTypes) {
   sql(query);
 
   TQueryResult result;
-  sql(result, "SELECT * FROM test_foreign_table;");
+  sql(result, "SELECT * FROM test_foreign_table ORDER BY index;");
   // clang-format off
   assertResultSetEqual({
     {
-      "POINT (0 0)", "LINESTRING (0 0,0 0)", "POLYGON ((0 0,1 0,0 1,1 1,0 0))",
+      i(1), "POINT (0 0)", "LINESTRING (0 0,0 0)", "POLYGON ((0 0,1 0,0 1,1 1,0 0))",
       "MULTIPOLYGON (((0 0,1 0,0 1,0 0)))"
     },
     {
-      "POINT (1 1)", "LINESTRING (1 1,2 2,3 3)", "POLYGON ((5 4,7 4,6 5,5 4))",
+      i(2), "POINT (1 1)", "LINESTRING (1 1,2 2,3 3)", "POLYGON ((5 4,7 4,6 5,5 4))",
       "MULTIPOLYGON (((0 0,1 0,0 1,0 0)),((0 0,2 0,0 2,0 0)))"
     },
     {
-      "POINT (2 2)", "LINESTRING (2 2,3 3)", "POLYGON ((1 1,3 1,2 3,1 1))",
+      i(3), "POINT (2 2)", "LINESTRING (2 2,3 3)", "POLYGON ((1 1,3 1,2 3,1 1))",
       "MULTIPOLYGON (((0 0,3 0,0 3,0 0)),((0 0,1 0,0 1,0 0)),((0 0,2 0,0 2,0 0)))"
     }},
     result);
@@ -2394,9 +2446,9 @@ TEST_F(RecoverCacheQueryTest, RecoverThenPopulateDataWrappersOnDemandVarLen) {
 }
 
 int main(int argc, char** argv) {
+  g_enable_fsi = true;
   TestHelpers::init_logger_stderr_only(argc, argv);
   testing::InitGoogleTest(&argc, argv);
-  g_enable_fsi = true;
 
   // get dirname of test binary
   test_binary_file_path = bf::canonical(argv[0]).parent_path().string();

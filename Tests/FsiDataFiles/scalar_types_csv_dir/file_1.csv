@@ -1,0 +1,2 @@
+boolean,tiny_int,small_int,int,big_int,float,decimal,time,timestamp,date,text,quoted_text
+true,100,30000,2000000000,9000000000000000000,10.1,100.1234,00:00:10,1/1/2000 00:00:59,1/1/2000,text_1,"quoted text"

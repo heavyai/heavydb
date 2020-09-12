@@ -16,11 +16,13 @@
 
 #pragma once
 
+#include <arrow/filesystem/filesystem.h>
 #include <parquet/schema.h>
 
 #include "DataMgr/Chunk/Chunk.h"
 #include "ImportExport/Importer.h"
 #include "Interval.h"
+#include "ParquetShared.h"
 
 namespace foreign_storage {
 /**
@@ -33,7 +35,7 @@ class LazyParquetChunkLoader {
   // Most filesystems use a default block size of 4096 bytes.
   const static int batch_reader_num_elements = 4096;
 
-  LazyParquetChunkLoader(const std::string& file_name);
+  LazyParquetChunkLoader(std::shared_ptr<arrow::fs::FileSystem> file_system);
 
   /**
    * Load a number of row groups of a column in a parquet file into a chunk
@@ -54,7 +56,7 @@ class LazyParquetChunkLoader {
    * contents of the loaded data.
    */
   std::shared_ptr<ChunkMetadata> loadChunk(
-      const Interval<RowGroupType>& row_group_interval,
+      const std::vector<RowGroupInterval>& row_group_intervals,
       const int parquet_column_index,
       Chunk_NS::Chunk& chunk,
       StringDictionary* string_dictionary = nullptr);
@@ -72,7 +74,7 @@ class LazyParquetChunkLoader {
                                        const parquet::ColumnDescriptor* parquet_column);
 
  private:
-  std::string file_name_;
+  std::shared_ptr<arrow::fs::FileSystem> file_system_;
 };
 
 }  // namespace foreign_storage

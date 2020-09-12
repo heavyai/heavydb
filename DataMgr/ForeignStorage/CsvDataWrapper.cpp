@@ -235,8 +235,7 @@ void CsvDataWrapper::populateChunkBuffers(
     std::map<ChunkKey, AbstractBuffer*>& required_buffers,
     std::map<ChunkKey, AbstractBuffer*>& optional_buffers) {
   auto timer = DEBUG_TIMER(__func__);
-  auto catalog = Catalog_Namespace::Catalog::get(db_id_);
-  CHECK(catalog);
+  auto catalog = Catalog_Namespace::Catalog::checkedGet(db_id_);
   CHECK(!required_buffers.empty());
 
   auto fragment_id = required_buffers.begin()->first[CHUNK_KEY_FRAGMENT_IDX];
@@ -405,8 +404,7 @@ void CsvDataWrapper::populateChunks(
   const auto buffer_size = get_buffer_size(file_regions);
   const auto thread_count = get_thread_count(copy_params, file_regions);
 
-  auto catalog = Catalog_Namespace::Catalog::get(db_id_);
-  CHECK(catalog);
+  auto catalog = Catalog_Namespace::Catalog::checkedGet(db_id_);
   auto columns = catalog->getAllColumnMetadataForTableUnlocked(
       foreign_table_->tableId, false, false, true);
   const int batch_size = (file_regions.size() + thread_count - 1) / thread_count;
@@ -842,6 +840,7 @@ void CsvDataWrapper::populateChunkMetadata(ChunkMetadataVector& chunk_metadata_v
 
   const auto copy_params = validateAndGetCopyParams();
   const auto file_path = getFilePath();
+  auto catalog = Catalog_Namespace::Catalog::checkedGet(db_id_);
 
   if (append_mode && csv_reader_ != nullptr) {
     csv_reader_->checkForMoreRows(append_start_offset_);
@@ -858,8 +857,6 @@ void CsvDataWrapper::populateChunkMetadata(ChunkMetadataVector& chunk_metadata_v
     append_start_offset_ = 0;
   }
 
-  auto catalog = Catalog_Namespace::Catalog::get(db_id_);
-  CHECK(catalog);
   auto columns = catalog->getAllColumnMetadataForTableUnlocked(
       foreign_table_->tableId, false, false, true);
   std::map<int32_t, const ColumnDescriptor*> column_by_id{};

@@ -102,9 +102,7 @@ std::map<ChunkKey, AbstractBuffer*> ForeignStorageMgr::getChunkBuffersToPopulate
   auto table_id = destination_chunk_key[CHUNK_KEY_TABLE_IDX];
   auto destination_column_id = destination_chunk_key[CHUNK_KEY_COLUMN_IDX];
   auto fragment_id = destination_chunk_key[CHUNK_KEY_FRAGMENT_IDX];
-
-  auto catalog = Catalog_Namespace::Catalog::get(db_id);
-  CHECK(catalog);
+  auto catalog = Catalog_Namespace::Catalog::checkedGet(db_id);
 
   auto table = catalog->getMetadataForTableImpl(table_id, false);
   CHECK(table);
@@ -232,9 +230,7 @@ bool ForeignStorageMgr::createDataWrapperIfNotExists(const ChunkKey& chunk_key) 
   if (data_wrapper_map_.find(table_key) == data_wrapper_map_.end()) {
     auto db_id = chunk_key[CHUNK_KEY_DB_IDX];
     auto table_id = chunk_key[CHUNK_KEY_TABLE_IDX];
-
-    auto catalog = Catalog_Namespace::Catalog::get(db_id);
-    CHECK(catalog);
+    auto catalog = Catalog_Namespace::Catalog::checkedGet(db_id);
 
     auto table = catalog->getMetadataForTableImpl(table_id, false);
     CHECK(table);

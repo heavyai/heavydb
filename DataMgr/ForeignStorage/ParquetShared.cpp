@@ -23,9 +23,14 @@
 namespace foreign_storage {
 
 void open_parquet_table(const std::string& file_path,
-                        std::unique_ptr<parquet::arrow::FileReader>& reader) {
-  std::shared_ptr<arrow::io::ReadableFile> infile;
-  PARQUET_ASSIGN_OR_THROW(infile, arrow::io::ReadableFile::Open(file_path));
+                        std::unique_ptr<parquet::arrow::FileReader>& reader,
+                        std::shared_ptr<arrow::fs::FileSystem>& file_system) {
+  auto file_result = file_system->OpenInputFile(file_path);
+  if (!file_result.ok()) {
+    throw std::runtime_error{"Unable to access " + file_system->type_name() + " file: " +
+                             file_path + ". " + file_result.status().message()};
+  }
+  auto infile = file_result.ValueOrDie();
   PARQUET_THROW_NOT_OK(OpenFile(infile, arrow::default_memory_pool(), &reader));
 }
 
@@ -38,7 +43,7 @@ std::pair<int, int> get_parquet_table_size(
 }
 
 const parquet::ColumnDescriptor* get_column_descriptor(
-    std::unique_ptr<parquet::arrow::FileReader>& reader,
+    const parquet::arrow::FileReader* reader,
     const int logical_column_index) {
   return reader->parquet_reader()->metadata()->schema()->Column(logical_column_index);
 }
@@ -52,9 +57,20 @@ parquet::Type::type get_physical_type(std::unique_ptr<parquet::arrow::FileReader
       ->physical_type();
 }
 
-size_t get_physical_type_byte_size(std::unique_ptr<parquet::arrow::FileReader>& reader,
-                                   const int logical_column_index) {
-  return parquet::GetTypeByteSize(get_physical_type(reader, logical_column_index));
+void validate_equal_column_descriptor(
+    const parquet::ColumnDescriptor* reference_descriptor,
+    const parquet::ColumnDescriptor* new_descriptor,
+    const std::string& reference_file_path,
+    const std::string& new_file_path) {
+  if (!reference_descriptor->Equals(*new_descriptor)) {
+    throw std::runtime_error{"Parquet file \"" + new_file_path +
+                             "\" has a different schema. Please ensure that all Parquet "
+                             "files use the same schema. Reference Parquet file: " +
+                             reference_file_path +
+                             ", column name: " + reference_descriptor->name() +
+                             ". New Parquet file: " + new_file_path +
+                             ", column name: " + new_descriptor->name() + "."};
+  }
 }
 
 }  // namespace foreign_storage

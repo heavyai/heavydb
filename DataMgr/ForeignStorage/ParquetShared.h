@@ -17,23 +17,33 @@
 #pragma once
 
 #include <arrow/api.h>
+#include <arrow/filesystem/filesystem.h>
 #include <arrow/io/api.h>
 #include <parquet/arrow/reader.h>
 #include <parquet/types.h>
 
 namespace foreign_storage {
 
+struct RowGroupInterval {
+  std::string file_path;
+  int start_index{-1}, end_index{-1};
+};
+
 void open_parquet_table(const std::string& file_path,
-                        std::unique_ptr<parquet::arrow::FileReader>& reader);
+                        std::unique_ptr<parquet::arrow::FileReader>& reader,
+                        std::shared_ptr<arrow::fs::FileSystem>& file_system);
 
 std::pair<int, int> get_parquet_table_size(
     const std::unique_ptr<parquet::arrow::FileReader>& reader);
 
 const parquet::ColumnDescriptor* get_column_descriptor(
-    std::unique_ptr<parquet::arrow::FileReader>& reader,
+    const parquet::arrow::FileReader* reader,
     const int logical_column_index);
 
-size_t get_physical_type_byte_size(std::unique_ptr<parquet::arrow::FileReader>& reader,
-                                   const int logical_column_index);
+void validate_equal_column_descriptor(
+    const parquet::ColumnDescriptor* reference_descriptor,
+    const parquet::ColumnDescriptor* new_descriptor,
+    const std::string& reference_file_path,
+    const std::string& new_file_path);
 
 }  // namespace foreign_storage
