@@ -138,11 +138,6 @@ DEVICE int32_t extract_year_fast(const int64_t lcltime) {
   return year;
 }
 
-namespace {
-constexpr unsigned MARJAN = 31 + 30 + 31 + 30 + 31 + 31 + 30 + 31 + 30 + 31;
-constexpr unsigned JANMAR = 31 + 28;
-}  // namespace
-
 extern "C" ALWAYS_INLINE DEVICE int64_t extract_epoch(const int64_t timeval) {
   return timeval;
 }

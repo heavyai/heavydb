@@ -716,7 +716,7 @@ CodeGenerator::NullCheckCodegen::NullCheckCodegen(CgenState* cgen_state,
                                                   const std::string& name)
     : cgen_state(cgen_state), name(name) {
   AUTOMATIC_IR_METADATA(cgen_state);
-  CHECK(nullable_ti.is_number() || nullable_ti.is_decimal() || nullable_ti.is_fp());
+  CHECK(nullable_ti.is_number() || nullable_ti.is_time());
 
   null_check = std::make_unique<GroupByAndAggregate::DiamondCodegen>(
       nullable_ti.is_fp()

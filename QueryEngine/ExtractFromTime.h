@@ -66,6 +66,10 @@ static constexpr uint32_t kUSecsPerDay = 86400;
 static constexpr uint32_t kEpochOffsetYear1900 = 2208988800;
 static constexpr uint32_t kSecsJanToMar1900 = 5097600;
 
+// Number of days from March 1 to Jan 1.
+constexpr unsigned MARJAN = 31 + 30 + 31 + 30 + 31 + 31 + 30 + 31 + 30 + 31;
+constexpr unsigned JANMAR = 31 + 28;  // leap day handled separately
+
 enum ExtractField {
   kYEAR,
   kQUARTER,

@@ -120,29 +120,36 @@ llvm::Value* CodeGenerator::codegenCastTimestampToDate(llvm::Value* ts_lv,
                                                        const bool nullable) {
   AUTOMATIC_IR_METADATA(cgen_state_);
   CHECK(ts_lv->getType()->isIntegerTy(64));
-  std::vector<llvm::Value*> datetrunc_args{ts_lv};
   if (dimen > 0) {
-    static const std::string hptodate_fname = "DateTruncateHighPrecisionToDate";
-    static const std::string hptodate_null_fname =
-        "DateTruncateHighPrecisionToDateNullable";
-    datetrunc_args.push_back(
-        cgen_state_->llInt(DateTimeUtils::get_timestamp_precision_scale(dimen)));
     if (nullable) {
-      datetrunc_args.push_back(cgen_state_->inlineIntNull(SQLTypeInfo(kBIGINT, false)));
+      return cgen_state_->emitExternalCall(
+          "DateTruncateHighPrecisionToDateNullable",
+          get_int_type(64, cgen_state_->context_),
+          {{ts_lv,
+            cgen_state_->llInt(DateTimeUtils::get_timestamp_precision_scale(dimen)),
+            cgen_state_->inlineIntNull(SQLTypeInfo(kBIGINT, false))}});
     }
-    return cgen_state_->emitExternalCall(nullable ? hptodate_null_fname : hptodate_fname,
-                                         get_int_type(64, cgen_state_->context_),
-                                         datetrunc_args);
+    return cgen_state_->emitExternalCall(
+        "DateTruncateHighPrecisionToDate",
+        get_int_type(64, cgen_state_->context_),
+        {{ts_lv,
+          cgen_state_->llInt(DateTimeUtils::get_timestamp_precision_scale(dimen))}});
   }
-  std::string datetrunc_fname{"DateTruncate"};
-  datetrunc_args.insert(datetrunc_args.begin(),
-                        cgen_state_->llInt(static_cast<int32_t>(dtDAY)));
+  std::unique_ptr<CodeGenerator::NullCheckCodegen> nullcheck_codegen;
   if (nullable) {
-    datetrunc_args.push_back(cgen_state_->inlineIntNull(SQLTypeInfo(kBIGINT, false)));
-    datetrunc_fname += "Nullable";
+    nullcheck_codegen =
+        std::make_unique<NullCheckCodegen>(cgen_state_,
+                                           executor(),
+                                           ts_lv,
+                                           SQLTypeInfo(kTIMESTAMP, dimen, 0, !nullable),
+                                           "cast_timestamp_nullcheck");
   }
-  return cgen_state_->emitExternalCall(
-      datetrunc_fname, get_int_type(64, cgen_state_->context_), datetrunc_args);
+  auto ret = cgen_state_->emitExternalCall(
+      "datetrunc_day", get_int_type(64, cgen_state_->context_), {{ts_lv}});
+  if (nullcheck_codegen) {
+    ret = nullcheck_codegen->finalize(ll_int(NULL_BIGINT, cgen_state_->context_), ret);
+  }
+  return ret;
 }
 
 llvm::Value* CodeGenerator::codegenCastBetweenTimestamps(llvm::Value* ts_lv,

@@ -221,19 +221,31 @@ llvm::Value* CodeGenerator::codegen(const Analyzer::DatetruncExpr* datetrunc_exp
   auto from_expr = codegen(datetrunc_expr->get_from_expr(), true, co).front();
   const auto& datetrunc_expr_ti = datetrunc_expr->get_from_expr()->get_type_info();
   CHECK(from_expr->getType()->isIntegerTy(64));
+  DatetruncField const field = datetrunc_expr->get_field();
   if (datetrunc_expr_ti.is_high_precision_timestamp()) {
-    return codegenDateTruncHighPrecisionTimestamps(
-        from_expr, datetrunc_expr_ti, datetrunc_expr->get_field());
+    return codegenDateTruncHighPrecisionTimestamps(from_expr, datetrunc_expr_ti, field);
   }
-  std::vector<llvm::Value*> datetrunc_args{
-      cgen_state_->llInt(static_cast<int32_t>(datetrunc_expr->get_field())), from_expr};
-  std::string datetrunc_fname{"DateTruncate"};
-  if (!datetrunc_expr_ti.get_notnull()) {
-    datetrunc_args.push_back(cgen_state_->inlineIntNull(datetrunc_expr_ti));
-    datetrunc_fname += "Nullable";
+  static_assert(dtSECOND + 1 == dtMILLISECOND, "Please keep these consecutive.");
+  static_assert(dtMILLISECOND + 1 == dtMICROSECOND, "Please keep these consecutive.");
+  static_assert(dtMICROSECOND + 1 == dtNANOSECOND, "Please keep these consecutive.");
+  if (dtSECOND <= field && field <= dtNANOSECOND) {
+    return cgen_state_->ir_builder_.CreateCast(llvm::Instruction::CastOps::SExt,
+                                               from_expr,
+                                               get_int_type(64, cgen_state_->context_));
   }
-  return cgen_state_->emitExternalCall(
-      datetrunc_fname, get_int_type(64, cgen_state_->context_), datetrunc_args);
+  std::unique_ptr<CodeGenerator::NullCheckCodegen> nullcheck_codegen;
+  const bool is_nullable = !datetrunc_expr_ti.get_notnull();
+  if (is_nullable) {
+    nullcheck_codegen = std::make_unique<NullCheckCodegen>(
+        cgen_state_, executor(), from_expr, datetrunc_expr_ti, "date_trunc_nullcheck");
+  }
+  char const* const fname = datetrunc_fname_lookup.at(field);
+  auto ret = cgen_state_->emitExternalCall(
+      fname, get_int_type(64, cgen_state_->context_), {{from_expr}});
+  if (is_nullable) {
+    ret = nullcheck_codegen->finalize(ll_int(NULL_BIGINT, cgen_state_->context_), ret);
+  }
+  return ret;
 }
 
 llvm::Value* CodeGenerator::codegenExtractHighPrecisionTimestamps(
@@ -284,54 +296,57 @@ llvm::Value* CodeGenerator::codegenDateTruncHighPrecisionTimestamps(
     llvm::Value* ts_lv,
     const SQLTypeInfo& ti,
     const DatetruncField& field) {
+  // Only needed for i in { 0, 3, 6, 9 }.
+  constexpr int64_t pow10[10]{1, 0, 0, 1000, 0, 0, 1000000, 0, 0, 1000000000};
   AUTOMATIC_IR_METADATA(cgen_state_);
   CHECK(ti.is_high_precision_timestamp());
   CHECK(ts_lv->getType()->isIntegerTy(64));
-  if (is_subsecond_datetrunc_field(field)) {
-    const auto result = get_datetrunc_high_precision_scale(field, ti.get_dimension());
-    if (result != -1) {
-      ts_lv =
-          ti.get_notnull()
-              ? cgen_state_->ir_builder_.CreateSDiv(
-                    ts_lv, cgen_state_->llInt(static_cast<int64_t>(result)))
-              : cgen_state_->emitCall("floor_div_nullable_lhs",
-                                      {ts_lv,
-                                       cgen_state_->llInt(static_cast<int64_t>(result)),
-                                       cgen_state_->inlineIntNull(ti)});
-      return ti.get_notnull()
-                 ? cgen_state_->ir_builder_.CreateMul(
-                       ts_lv, cgen_state_->llInt(static_cast<int64_t>(result)))
-                 : cgen_state_->emitCall(
-                       "mul_int64_t_nullable_lhs",
-                       {ts_lv,
-                        cgen_state_->llInt(static_cast<int64_t>(result)),
-                        cgen_state_->inlineIntNull(ti)});
+  bool const is_nullable = !ti.get_notnull();
+  static_assert(dtSECOND + 1 == dtMILLISECOND, "Please keep these consecutive.");
+  static_assert(dtMILLISECOND + 1 == dtMICROSECOND, "Please keep these consecutive.");
+  static_assert(dtMICROSECOND + 1 == dtNANOSECOND, "Please keep these consecutive.");
+  if (dtSECOND <= field && field <= dtNANOSECOND) {
+    unsigned const start_dim = ti.get_dimension();      // 0, 3, 6, 9
+    unsigned const trunc_dim = (field - dtSECOND) * 3;  // 0, 3, 6, 9
+    if (start_dim <= trunc_dim) {
+      return ts_lv;  // Truncating to an equal or higher precision has no effect.
+    }
+    int64_t const dscale = pow10[start_dim - trunc_dim];  // 1e3, 1e6, 1e9
+    if (is_nullable) {
+      ts_lv = cgen_state_->emitCall(
+          "floor_div_nullable_lhs",
+          {ts_lv, cgen_state_->llInt(dscale), cgen_state_->inlineIntNull(ti)});
+      return cgen_state_->emitCall(
+          "mul_int64_t_nullable_lhs",
+          {ts_lv, cgen_state_->llInt(dscale), cgen_state_->inlineIntNull(ti)});
     } else {
-      return ts_lv;
+      ts_lv = cgen_state_->ir_builder_.CreateSDiv(ts_lv, cgen_state_->llInt(dscale));
+      return cgen_state_->ir_builder_.CreateMul(ts_lv, cgen_state_->llInt(dscale));
     }
   }
-  std::string datetrunc_fname = "DateTruncate";
-  const int64_t scale = get_timestamp_precision_scale(ti.get_dimension());
-  ts_lv = ti.get_notnull()
-              ? cgen_state_->ir_builder_.CreateSDiv(
-                    ts_lv, cgen_state_->llInt(static_cast<int64_t>(scale)))
-              : cgen_state_->emitCall("floor_div_nullable_lhs",
-                                      {ts_lv,
-                                       cgen_state_->llInt(static_cast<int64_t>(scale)),
-                                       cgen_state_->inlineIntNull(ti)});
-  std::vector<llvm::Value*> datetrunc_args{
-      cgen_state_->llInt(static_cast<int32_t>(field)), ts_lv};
-  if (!ti.get_notnull()) {
-    datetrunc_fname += "Nullable";
-    datetrunc_args.push_back(cgen_state_->inlineIntNull(ti));
+  int64_t const scale = pow10[ti.get_dimension()];
+  ts_lv = is_nullable
+              ? cgen_state_->emitCall(
+                    "floor_div_nullable_lhs",
+                    {ts_lv, cgen_state_->llInt(scale), cgen_state_->inlineIntNull(ti)})
+              : cgen_state_->ir_builder_.CreateSDiv(ts_lv, cgen_state_->llInt(scale));
+
+  std::unique_ptr<CodeGenerator::NullCheckCodegen> nullcheck_codegen;
+  if (is_nullable) {
+    nullcheck_codegen = std::make_unique<NullCheckCodegen>(
+        cgen_state_, executor(), ts_lv, ti, "date_trunc_hp_nullcheck");
   }
+  char const* const fname = datetrunc_fname_lookup.at(field);
   ts_lv = cgen_state_->emitExternalCall(
-      datetrunc_fname, get_int_type(64, cgen_state_->context_), datetrunc_args);
-  return ti.get_notnull()
-             ? cgen_state_->ir_builder_.CreateMul(
-                   ts_lv, cgen_state_->llInt(static_cast<int64_t>(scale)))
-             : cgen_state_->emitCall("mul_int64_t_nullable_lhs",
-                                     {ts_lv,
-                                      cgen_state_->llInt(static_cast<int64_t>(scale)),
-                                      cgen_state_->inlineIntNull(ti)});
+      fname, get_int_type(64, cgen_state_->context_), {{ts_lv}});
+  if (is_nullable) {
+    ts_lv =
+        nullcheck_codegen->finalize(ll_int(NULL_BIGINT, cgen_state_->context_), ts_lv);
+  }
+
+  return is_nullable
+             ? cgen_state_->emitCall(
+                   "mul_int64_t_nullable_lhs",
+                   {ts_lv, cgen_state_->llInt(scale), cgen_state_->inlineIntNull(ti)})
+             : cgen_state_->ir_builder_.CreateMul(ts_lv, cgen_state_->llInt(scale));
 }

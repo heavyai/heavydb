@@ -138,7 +138,7 @@ llvm::Value* CgenState::emitCall(const std::string& fname,
                                  const std::vector<llvm::Value*>& args) {
   // Get the implementation from the runtime module.
   auto func_impl = g_rt_module->getFunction(fname);
-  CHECK(func_impl);
+  CHECK(func_impl) << fname;
   // Get the function reference from the query module.
   auto func = module_->getFunction(fname);
   CHECK(func);
