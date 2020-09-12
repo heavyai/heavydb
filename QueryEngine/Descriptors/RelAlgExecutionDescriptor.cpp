@@ -234,15 +234,16 @@ RaExecutionDesc* RaExecutionSequence::next() {
   return nullptr;
 }
 
-ssize_t RaExecutionSequence::nextStepId(const bool after_broadcast) const {
+std::optional<size_t> RaExecutionSequence::nextStepId(const bool after_broadcast) const {
   if (after_broadcast) {
     if (current_vertex_ == ordering_.size()) {
-      return -1;
+      return std::nullopt;
     }
-    const auto steps_to_next_broadcast = static_cast<ssize_t>(stepsToNextBroadcast());
-    return static_cast<ssize_t>(descs_.size()) + steps_to_next_broadcast;
+    return descs_.size() + stepsToNextBroadcast();
+  } else if (current_vertex_ == ordering_.size()) {
+    return std::nullopt;
   } else {
-    return current_vertex_ == ordering_.size() ? -1 : descs_.size();
+    return descs_.size();
   }
 }
 
@@ -252,8 +253,7 @@ bool RaExecutionSequence::executionFinished() const {
     return true;
   } else {
     const auto next_step_id = nextStepId(true);
-    if (next_step_id < 0 ||
-        (static_cast<size_t>(next_step_id) == totalDescriptorsCount())) {
+    if (!next_step_id || (*next_step_id == totalDescriptorsCount())) {
       // One step remains (the current vertex), or all remaining steps can be executed
       // without another broadcast (i.e. on the aggregator)
       return true;

@@ -117,9 +117,9 @@ class RaExecutionSequence {
   /**
    * Returns the index of the next execution descriptor in the graph. If after_broadcast
    * is true, returns the index of the first execution descriptor after the next global
-   * broadcast. Returns -1 if no execution descriptors remain in the graph.
+   * broadcast. Returns std::nullopt if no execution descriptors remain in the graph.
    */
-  ssize_t nextStepId(const bool after_broadcast) const;
+  std::optional<size_t> nextStepId(const bool after_broadcast) const;
 
   bool executionFinished() const;
 
