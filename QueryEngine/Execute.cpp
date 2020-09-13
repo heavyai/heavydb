@@ -208,9 +208,8 @@ StringDictionaryProxy* Executor::getStringDictionaryProxy(
     CHECK(dd->stringDict);
     CHECK_LE(dd->dictNBits, 32);
     CHECK(row_set_mem_owner);
-    const auto generation = with_generation
-                                ? string_dictionary_generations_.getGeneration(dict_id)
-                                : ssize_t(-1);
+    const int64_t generation =
+        with_generation ? string_dictionary_generations_.getGeneration(dict_id) : -1;
     return row_set_mem_owner->addStringDict(dd->stringDict, dict_id, generation);
   }
   CHECK_EQ(0, dict_id);
@@ -1122,15 +1121,15 @@ bool is_trivial_loop_join(const std::vector<InputTableInfo>& query_infos,
   // where ra_exe_unit.input_descs.size() > 2 for now.
   const auto inner_table_id = ra_exe_unit.input_descs.back().getTableId();
 
-  ssize_t inner_table_idx = -1;
+  std::optional<size_t> inner_table_idx;
   for (size_t i = 0; i < query_infos.size(); ++i) {
     if (query_infos[i].table_id == inner_table_id) {
       inner_table_idx = i;
       break;
     }
   }
-  CHECK_NE(ssize_t(-1), inner_table_idx);
-  return query_infos[inner_table_idx].info.getNumTuples() <=
+  CHECK(inner_table_idx);
+  return query_infos[*inner_table_idx].info.getNumTuples() <=
          g_trivial_loop_join_threshold;
 }
 
@@ -3488,7 +3487,8 @@ TableGenerations Executor::computeTableGenerations(
   for (const int table_id : phys_table_ids) {
     const auto table_info = getTableInfo(table_id);
     table_generations.setGeneration(
-        table_id, TableGeneration{table_info.getPhysicalNumTuples(), 0});
+        table_id,
+        TableGeneration{static_cast<int64_t>(table_info.getPhysicalNumTuples()), 0});
   }
   return table_generations;
 }

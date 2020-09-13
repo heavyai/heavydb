@@ -1339,7 +1339,7 @@ size_t StringDictionary::addStorageCapacity(
   memset(CANARY_BUFFER, 0xff, canary_buff_size_to_add);
 
   CHECK_NE(lseek(fd, 0, SEEK_END), -1);
-  ssize_t write_return = write(fd, CANARY_BUFFER, canary_buff_size_to_add);
+  const auto write_return = write(fd, CANARY_BUFFER, canary_buff_size_to_add);
   CHECK(write_return > 0 &&
         (static_cast<size_t>(write_return) == canary_buff_size_to_add));
   return canary_buff_size_to_add;

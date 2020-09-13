@@ -21,8 +21,8 @@
 #include <unordered_map>
 
 struct TableGeneration {
-  size_t tuple_count;
-  size_t start_rowid;
+  int64_t tuple_count;
+  int64_t start_rowid;
 };
 
 class TableGenerations {

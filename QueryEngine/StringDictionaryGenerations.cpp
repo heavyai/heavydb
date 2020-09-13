@@ -19,17 +19,17 @@
 #include "Logger/Logger.h"
 
 void StringDictionaryGenerations::setGeneration(const uint32_t id,
-                                                const size_t generation) {
+                                                const uint64_t generation) {
   id_to_generation_.emplace(id, generation);
 }
 
 void StringDictionaryGenerations::updateGeneration(const uint32_t id,
-                                                   const size_t generation) {
+                                                   const uint64_t generation) {
   CHECK(id_to_generation_.count(id));
   id_to_generation_[id] = generation;
 }
 
-ssize_t StringDictionaryGenerations::getGeneration(const uint32_t id) const {
+int64_t StringDictionaryGenerations::getGeneration(const uint32_t id) const {
   const auto it = id_to_generation_.find(id);
   if (it != id_to_generation_.end()) {
     return it->second;
@@ -44,7 +44,7 @@ ssize_t StringDictionaryGenerations::getGeneration(const uint32_t id) const {
   return -1;
 }
 
-const std::unordered_map<uint32_t, size_t>& StringDictionaryGenerations::asMap() const {
+const std::unordered_map<uint32_t, uint64_t>& StringDictionaryGenerations::asMap() const {
   return id_to_generation_;
 }
 

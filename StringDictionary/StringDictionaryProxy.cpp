@@ -27,7 +27,7 @@
 #include <thread>
 
 StringDictionaryProxy::StringDictionaryProxy(std::shared_ptr<StringDictionary> sd,
-                                             const ssize_t generation)
+                                             const int64_t generation)
     : string_dict_(sd), generation_(generation) {}
 
 int32_t truncate_to_generation(const int32_t id, const size_t generation) {
@@ -221,7 +221,7 @@ size_t StringDictionaryProxy::storageEntryCount() const {
   return string_dict_.get()->storageEntryCount();
 }
 
-void StringDictionaryProxy::updateGeneration(const ssize_t generation) noexcept {
+void StringDictionaryProxy::updateGeneration(const int64_t generation) noexcept {
   if (generation == -1) {
     return;
   }
@@ -236,6 +236,6 @@ StringDictionary* StringDictionaryProxy::getDictionary() noexcept {
   return string_dict_.get();
 }
 
-ssize_t StringDictionaryProxy::getGeneration() const noexcept {
+int64_t StringDictionaryProxy::getGeneration() const noexcept {
   return generation_;
 }

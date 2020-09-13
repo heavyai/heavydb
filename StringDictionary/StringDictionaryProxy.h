@@ -28,11 +28,11 @@
 // used to access a StringDictionary when transient strings are involved
 class StringDictionaryProxy {
  public:
-  StringDictionaryProxy(std::shared_ptr<StringDictionary> sd, const ssize_t generation);
+  StringDictionaryProxy(std::shared_ptr<StringDictionary> sd, const int64_t generation);
 
   int32_t getOrAdd(const std::string& str) noexcept;
   StringDictionary* getDictionary() noexcept;
-  ssize_t getGeneration() const noexcept;
+  int64_t getGeneration() const noexcept;
   int32_t getOrAddTransient(const std::string& str);
   int32_t getIdOfString(const std::string& str) const;
   int32_t getIdOfStringNoGeneration(
@@ -40,7 +40,7 @@ class StringDictionaryProxy {
   std::string getString(int32_t string_id) const;
   std::pair<const char*, size_t> getStringBytes(int32_t string_id) const noexcept;
   size_t storageEntryCount() const;
-  void updateGeneration(const ssize_t generation) noexcept;
+  void updateGeneration(const int64_t generation) noexcept;
 
   std::vector<int32_t> getLike(const std::string& pattern,
                                const bool icase,
@@ -60,7 +60,7 @@ class StringDictionaryProxy {
   std::shared_ptr<StringDictionary> string_dict_;
   std::map<int32_t, std::string> transient_int_to_str_;
   std::map<std::string, int32_t> transient_str_to_int_;
-  ssize_t generation_;
+  int64_t generation_;
   mutable mapd_shared_mutex rw_mutex_;
 };
 #endif  // STRINGDICTIONARY_STRINGDICTIONARYPROXY_H
