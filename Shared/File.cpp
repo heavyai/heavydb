@@ -54,7 +54,7 @@ FILE* create(const std::string& basePath,
                << "', the error was: " << std::strerror(errno);
     ;
   }
-  fseek(f, (pageSize * numPages) - 1, SEEK_SET);
+  fseek(f, static_cast<long>((pageSize * numPages) - 1), SEEK_SET);
   fputc(EOF, f);
   fseek(f, 0, SEEK_SET);  // rewind
   if (fileSize(f) != pageSize * numPages) {
@@ -73,7 +73,7 @@ FILE* create(const std::string& fullPath, const size_t requestedFileSize) {
                << "', the error was:  " << std::strerror(errno);
     ;
   }
-  fseek(f, requestedFileSize - 1, SEEK_SET);
+  fseek(f, static_cast<long>(requestedFileSize - 1), SEEK_SET);
   fputc(EOF, f);
   fseek(f, 0, SEEK_SET);  // rewind
   if (fileSize(f) != requestedFileSize) {
@@ -116,7 +116,7 @@ bool removeFile(const std::string basePath, const std::string filename) {
 
 size_t read(FILE* f, const size_t offset, const size_t size, int8_t* buf) {
   // read "size" bytes from the offset location in the file into the buffer
-  CHECK_EQ(fseek(f, offset, SEEK_SET), 0);
+  CHECK_EQ(fseek(f, static_cast<long>(offset), SEEK_SET), 0);
   size_t bytesRead = fread(buf, sizeof(int8_t), size, f);
   CHECK_EQ(bytesRead, sizeof(int8_t) * size);
   return bytesRead;
@@ -124,7 +124,7 @@ size_t read(FILE* f, const size_t offset, const size_t size, int8_t* buf) {
 
 size_t write(FILE* f, const size_t offset, const size_t size, int8_t* buf) {
   // write size bytes from the buffer to the offset location in the file
-  if (fseek(f, offset, SEEK_SET) != 0) {
+  if (fseek(f, static_cast<long>(offset), SEEK_SET) != 0) {
     LOG(FATAL)
         << "Error trying to write to file (during positioning seek) the error was: "
         << std::strerror(errno);

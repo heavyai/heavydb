@@ -112,7 +112,7 @@ std::string BloscCompressor::compress(const std::string& buffer) {
       compressed_buffer.resize(compressed_len);
       return {compressed_buffer.begin(), compressed_buffer.end()};
     }
-  } catch (const CompressionFailedError& e) {
+  } catch (const CompressionFailedError&) {
   }
   return buffer;
 }
@@ -153,7 +153,7 @@ std::string BloscCompressor::decompress(const std::string& buffer,
     decompress(
         (uint8_t*)&buffer[0], (uint8_t*)&decompressed_buffer[0], decompressed_size);
     return {decompressed_buffer.begin(), decompressed_buffer.end()};
-  } catch (const CompressionFailedError& e) {
+  } catch (const CompressionFailedError&) {
   }
   return buffer;
 }
@@ -171,7 +171,7 @@ size_t BloscCompressor::compressOrMemcpy(const uint8_t* input_buffer,
     if (compressed_size > 0) {
       return compressed_size;
     }
-  } catch (const CompressionFailedError& e) {
+  } catch (const CompressionFailedError&) {
     // catch exceptions from blosc
     // we copy regardless what happens in compressor
     if (uncompressed_size > min_compressor_bytes) {
@@ -189,7 +189,7 @@ bool BloscCompressor::decompressOrMemcpy(const uint8_t* compressed_buffer,
   try {
     decompress(compressed_buffer, decompressed_buffer, decompressed_size);
     return true;
-  } catch (const CompressionFailedError& e) {
+  } catch (const CompressionFailedError&) {
     // we will memcpy if we find that the buffer is not compressed
 
     if (compressed_size > decompressed_size) {
@@ -222,7 +222,7 @@ BloscCompressor* BloscCompressor::getCompressor() {
 
 int BloscCompressor::setThreads(size_t num_threads) {
   std::lock_guard<std::mutex> compressor_lock_(compressor_lock);
-  return blosc_set_nthreads(num_threads);
+  return blosc_set_nthreads(static_cast<int>(num_threads));
 }
 
 int BloscCompressor::setCompressor(std::string& compressor_name) {

@@ -44,7 +44,9 @@ class BloscCompressor {
   // buffer to do the scratch work. We have to provide the compressor extra 10%
   // space for it.
   // https://github.com/Blosc/c-blosc/blob/c7792d6153eaf3d3d86eb33a28e9c613d2337040/blosc/blosclz.h#L28
-  inline size_t getScratchSpaceSize(const size_t len) const { return len * 1.1; }
+  inline size_t getScratchSpaceSize(const size_t len) const {
+    return static_cast<size_t>(len * 1.1);
+  }
 
   // requires a compressed buffer at least as large as uncompressed buffer.
   // use 0 to always force compression for min_compressor_bytes.

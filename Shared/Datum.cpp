@@ -92,8 +92,8 @@ int64_t parse_numeric(const std::string_view s, SQLTypeInfo& ti) {
   }
   if (ti.get_dimension() == 0) {
     // set the type info based on the literal string
-    ti.set_scale(after_dot.length());
-    ti.set_dimension(before_dot_digits + ti.get_scale());
+    ti.set_scale(static_cast<int>(after_dot.length()));
+    ti.set_dimension(static_cast<int>(before_dot_digits + ti.get_scale()));
     ti.set_notnull(false);
   } else {
     CHECK_GE(ti.get_scale(), 0);
