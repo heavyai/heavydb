@@ -134,8 +134,15 @@ void ParquetDataWrapper::initializeChunkBuffers(
       auto& encoder = buffer->encoder;
       encoder->resetChunkStats(metadata->chunkStats);
       encoder->setNumElems(metadata->numElements);
-      size_t num_bytes_to_reserve = metadata->numElements * column->columnType.get_size();
-      buffer->reserve(num_bytes_to_reserve);
+      if (column->columnType.is_string() &&
+          column->columnType.get_compression() == kENCODING_NONE) {
+        auto index_buffer = chunk.getIndexBuf();
+        index_buffer->reserve(sizeof(StringOffsetT) * (metadata->numElements + 1));
+      } else {
+        size_t num_bytes_to_reserve =
+            metadata->numElements * column->columnType.get_size();
+        buffer->reserve(num_bytes_to_reserve);
+      }
     }
   }
 }
@@ -419,16 +426,48 @@ void ParquetDataWrapper::loadBuffersUsingLazyParquetChunkLoader(
       fragment_id, column_interval, required_buffers, true, physical_byte_size);
 
   const auto& row_group_interval = fragment_to_row_group_interval_map_[fragment_id];
+
+  StringDictionary* string_dictionary = nullptr;
+  if (logical_column->columnType.is_dict_encoded_string()) {
+    auto dict_descriptor = catalog->getMetadataForDictUnlocked(
+        logical_column->columnType.get_comp_param(), true);
+    CHECK(dict_descriptor);
+    string_dictionary = dict_descriptor->stringDict.get();
+  }
+
   LazyParquetChunkLoader chunk_loader(getFilePath());
   Chunk_NS::Chunk chunk{logical_column};
-  ChunkKey chunk_key = {db_id_, foreign_table_->tableId, logical_column_id, fragment_id};
-  auto buffer = required_buffers[chunk_key];
-  CHECK(buffer);
-  chunk.setBuffer(buffer);
-  chunk_loader.loadChunk(
+  if (logical_column->columnType.is_varlen_indeed()) {
+    ChunkKey data_chunk_key = {
+        db_id_, foreign_table_->tableId, logical_column_id, fragment_id, 1};
+    auto buffer = required_buffers[data_chunk_key];
+    CHECK(buffer);
+    chunk.setBuffer(buffer);
+    ChunkKey index_chunk_key = {
+        db_id_, foreign_table_->tableId, logical_column_id, fragment_id, 2};
+    CHECK(required_buffers.find(index_chunk_key) != required_buffers.end());
+    chunk.setIndexBuffer(required_buffers[index_chunk_key]);
+  } else {
+    ChunkKey chunk_key = {
+        db_id_, foreign_table_->tableId, logical_column_id, fragment_id};
+    auto buffer = required_buffers[chunk_key];
+    CHECK(buffer);
+    chunk.setBuffer(buffer);
+  }
+  auto metadata = chunk_loader.loadChunk(
       {row_group_interval.start_row_group_index, row_group_interval.end_row_group_index},
       parquet_column_index,
-      chunk);
+      chunk,
+      string_dictionary);
+
+  if (logical_column->columnType
+          .is_dict_encoded_string()) {  // update metadata for dictionary encoded strings
+    CHECK(metadata.get());
+    auto fragmenter = foreign_table_->fragmenter;
+    if (fragmenter) {
+      fragmenter->updateColumnChunkMetadata(logical_column, fragment_id, metadata);
+    }
+  }
 }
 
 void ParquetDataWrapper::loadBuffersUsingLazyParquetImporter(

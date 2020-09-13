@@ -381,6 +381,86 @@ TEST_P(CacheControllingSelectQueryTest, ParquetNullRowgroups) {
   // clang-format on
 }
 
+TEST_F(SelectQueryTest, ParquetStringsAllNullPlacementPermutations) {
+  const auto& query = getCreateForeignTableQuery(
+      "( id INT, txt1 TEXT ENCODING NONE, txt2 TEXT ENCODING DICT (32), txt3 TEXT "
+      "ENCODING DICT (16), txt4 TEXT ENCODING DICT (8))",
+      "strings_with_all_null_placement_permutations",
+      "parquet");
+  sql(query);
+
+  TQueryResult result;
+  sql(result, "SELECT * from test_foreign_table ORDER BY id;");
+  // clang-format off
+  assertResultSetEqual(
+      {
+        { i(1), "txt1", "txt1", "txt1", "txt1"},
+        { i(2), "txt2", "txt2", "txt2", "txt2"},
+        { i(3), "txt3", "txt3", "txt3", "txt3"},
+        { i(4), "", "", "", "" },
+        { i(5), "txt5", "txt5", "txt5", "txt5"},
+        { i(6), "txt6", "txt6", "txt6", "txt6"},
+        { i(7), "txt7", "txt7", "txt7", "txt7"},
+        { i(8), "", "", "", "" },
+        { i(9), "txt9", "txt9", "txt9", "txt9"},
+        { i(10), "txt10", "txt10", "txt10", "txt10"},
+        { i(11), "txt11", "txt11", "txt11", "txt11"},
+        { i(12), "", "", "", "" },
+        { i(13), "", "", "", "" },
+        { i(14), "", "", "", "" },
+        { i(15), "txt15", "txt15", "txt15", "txt15"},
+        { i(16), "", "", "", "" },
+        { i(17), "txt17", "txt17", "txt17", "txt17"},
+        { i(18), "", "", "", "" },
+        { i(19), "txt19", "txt19", "txt19", "txt19"},
+        { i(20), "", "", "", "" },
+        { i(21), "", "", "", "" },
+        { i(22), "", "", "", "" },
+        { i(23), "", "", "", "" },
+        { i(24), "", "", "", "" }
+      },
+      result);
+  // clang-format on
+}
+
+TEST_F(SelectQueryTest, DISABLED_ParquetStringDictionaryEncodedMetadataTest) {
+  // TODO: This test fails, it highlights a major issue with loading
+  // dictionaries for dict encoded strings upon chunk load time: only an empty
+  // dictionary exists during the first query, thus any comparisons to fixed
+  // string literals will fail until the dictionary exits.
+
+  const auto& query = getCreateForeignTableQuery("(txt TEXT ENCODING DICT (32) )",
+                                                 {{"fragment_size", "4"}},
+                                                 "strings_repeating",
+                                                 "parquet");
+  sql(query);
+
+  TQueryResult result;
+  sql(result, "SELECT count(txt) from test_foreign_table WHERE txt = 'a';");
+  assertResultSetEqual({{
+                           i(5),
+                       }},
+                       result);
+}
+
+TEST_F(SelectQueryTest, ParquetStringDictionaryEncodedMetadataTestAfterChunkLoad) {
+  const auto& query = getCreateForeignTableQuery("(txt TEXT ENCODING DICT (32) )",
+                                                 {{"fragment_size", "4"}},
+                                                 "strings_repeating",
+                                                 "parquet");
+  sql(query);
+
+  // Update the metadata of the string dictionary encoded column with the first
+  // query
+  sql("SELECT count(txt) from test_foreign_table WHERE txt = 'a';");
+  TQueryResult result;
+  sql(result, "SELECT count(txt) from test_foreign_table WHERE txt = 'a';");
+  assertResultSetEqual({{
+                           i(5),
+                       }},
+                       result);
+}
+
 TEST_F(SelectQueryTest, ParquetNumericAndBooleanTypesWithAllNullPlacementPermutations) {
   const auto& query = getCreateForeignTableQuery(
       "( id INT, bool BOOLEAN, i8 TINYINT, u8 SMALLINT, i16 SMALLINT, "

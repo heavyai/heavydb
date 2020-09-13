@@ -16,11 +16,12 @@
 
 #pragma once
 
+#include "ParquetEncoder.h"
+
 #include <parquet/schema.h>
 #include <parquet/types.h>
 
 #include "Catalog/ColumnDescriptor.h"
-#include "DataMgr/AbstractBuffer.h"
 
 namespace foreign_storage {
 
@@ -53,15 +54,14 @@ inline V get_null_value() {
   return inline_fp_null_value<V>();
 }
 
-class ParquetInPlaceEncoder {
+class ParquetInPlaceEncoder : public ParquetEncoder {
  public:
   ParquetInPlaceEncoder(Data_Namespace::AbstractBuffer* buffer,
-                        const ColumnDescriptor* column_desciptor,
-                        const parquet::ColumnDescriptor* parquet_column_descriptor)
-      : buffer_(buffer)
-      , omnisci_data_type_byte_size_(column_desciptor->columnType.get_size())
-      , parquet_data_type_byte_size_(
-            parquet::GetTypeByteSize(parquet_column_descriptor->physical_type())) {}
+                        const size_t omnisci_data_type_byte_size,
+                        const size_t parquet_data_type_byte_size)
+      : ParquetEncoder(buffer)
+      , omnisci_data_type_byte_size_(omnisci_data_type_byte_size)
+      , parquet_data_type_byte_size_(parquet_data_type_byte_size) {}
 
   /**
    * Appends Parquet data to the buffer using an in-place algorithm.  Any
@@ -76,10 +76,10 @@ class ParquetInPlaceEncoder {
    *
    * Note that the Parquet format encodes nulls using Dremel encoding.
    */
-  virtual void appendData(int16_t* def_levels,
-                          int64_t values_read,
-                          int64_t levels_read,
-                          int8_t* values) {
+  void appendData(int16_t* def_levels,
+                  int64_t values_read,
+                  int64_t levels_read,
+                  int8_t* values) override {
     if (omnisci_data_type_byte_size_ < parquet_data_type_byte_size_) {
       for (int64_t i = 0; i < values_read; ++i) {
         encodeAndCopy(values + i * parquet_data_type_byte_size_,
@@ -111,7 +111,6 @@ class ParquetInPlaceEncoder {
   virtual void encodeAndCopy(const int8_t* parquet_data_bytes,
                              int8_t* omnisci_data_bytes) = 0;
 
-  Data_Namespace::AbstractBuffer* buffer_;
   const size_t omnisci_data_type_byte_size_;
 
  private:
@@ -145,7 +144,17 @@ class TypedParquetInPlaceEncoder : public ParquetInPlaceEncoder {
   TypedParquetInPlaceEncoder(Data_Namespace::AbstractBuffer* buffer,
                              const ColumnDescriptor* column_desciptor,
                              const parquet::ColumnDescriptor* parquet_column_descriptor)
-      : ParquetInPlaceEncoder(buffer, column_desciptor, parquet_column_descriptor) {}
+      : ParquetInPlaceEncoder(
+            buffer,
+            column_desciptor->columnType.get_size(),
+            parquet::GetTypeByteSize(parquet_column_descriptor->physical_type())) {}
+
+  TypedParquetInPlaceEncoder(Data_Namespace::AbstractBuffer* buffer,
+                             const size_t omnisci_data_type_byte_size,
+                             const size_t parquet_data_type_byte_size)
+      : ParquetInPlaceEncoder(buffer,
+                              omnisci_data_type_byte_size,
+                              parquet_data_type_byte_size) {}
 
   /**
    * This is a specialization of `ParquetInPlaceEncoder::appendData` for known

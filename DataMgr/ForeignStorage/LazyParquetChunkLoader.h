@@ -43,13 +43,21 @@ class LazyParquetChunkLoader {
    * @param parquet_column_index - the logical column index in the parquet file (and
    * omnisci db) of column to load
    * @param chunk - the chunk to load
+   * @param string_dictionary - a string dictionary for the column corresponding to the
+   * column, if applicable
+   *
+   * @return An empty ChunkMetadata pointer when no metadata update is
+   * applicable, otherwise a ChunkMetadata pointer with which to update the
+   * column chunk metadata
    *
    * This function expects the chunk buffer to have enough space allocated to hold the
    * contents of the loaded data.
    */
-  void loadChunk(const Interval<RowGroupType>& row_group_interval,
-                 const int parquet_column_index,
-                 Chunk_NS::Chunk& chunk);
+  std::shared_ptr<ChunkMetadata> loadChunk(
+      const Interval<RowGroupType>& row_group_interval,
+      const int parquet_column_index,
+      Chunk_NS::Chunk& chunk,
+      StringDictionary* string_dictionary = nullptr);
 
   /**
    * Determine if a Parquet to OmniSci column mapping is supported.
@@ -65,9 +73,6 @@ class LazyParquetChunkLoader {
 
  private:
   std::string file_name_;
-  std::vector<int16_t> def_levels_;
-  std::vector<int16_t> rep_levels_;
-  std::vector<int8_t> values_;
 };
 
 }  // namespace foreign_storage

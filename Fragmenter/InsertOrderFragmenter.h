@@ -90,6 +90,10 @@ class InsertOrderFragmenter : public AbstractFragmenter {
 
   void dropFragmentsToSize(const size_t maxRows) override;
 
+  void updateColumnChunkMetadata(const ColumnDescriptor* cd,
+                                 const int fragment_id,
+                                 const std::shared_ptr<ChunkMetadata> metadata) override;
+
   void updateChunkStats(
       const ColumnDescriptor* cd,
       std::unordered_map</*fragment_id*/ int, ChunkStats>& stats_map) override;

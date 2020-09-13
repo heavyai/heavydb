@@ -259,6 +259,19 @@ void InsertOrderFragmenter::deleteFragments(const vector<int>& dropFragIds) {
   }
 }
 
+void InsertOrderFragmenter::updateColumnChunkMetadata(
+    const ColumnDescriptor* cd,
+    const int fragment_id,
+    const std::shared_ptr<ChunkMetadata> metadata) {
+  // synchronize concurrent accesses to fragmentInfoVec_
+  mapd_unique_lock<mapd_shared_mutex> writeLock(fragmentInfoMutex_);
+
+  CHECK(metadata.get());
+  auto fragment_info = getFragmentInfo(fragment_id);
+  CHECK(fragment_info);
+  fragment_info->setChunkMetadata(cd->columnId, metadata);
+}
+
 void InsertOrderFragmenter::updateChunkStats(
     const ColumnDescriptor* cd,
     std::unordered_map</*fragment_id*/ int, ChunkStats>& stats_map) {

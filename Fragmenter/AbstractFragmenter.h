@@ -207,6 +207,18 @@ class AbstractFragmenter {
 
   //! Iterates through chunk metadata to return whether any rows have been deleted.
   virtual bool hasDeletedRows(const int delete_column_id) = 0;
+
+  /**
+   * @brief Updates the metadata for a column chunk
+   *
+   * @param cd - ColumnDescriptor for the column
+   * @param fragment_id - Fragment id of the chunk within the column
+   * @param metadata -  shared_ptr  of the metadata to update column chunk with
+   */
+  virtual void updateColumnChunkMetadata(
+      const ColumnDescriptor* cd,
+      const int fragment_id,
+      const std::shared_ptr<ChunkMetadata> metadata) = 0;
 };
 
 }  // namespace Fragmenter_Namespace
