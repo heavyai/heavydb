@@ -81,7 +81,7 @@ ResultSetPtr TableFunctionExecutionContext::execute(
     device_allocator.reset(new CudaAllocator(&data_mgr, device_id));
   }
   std::vector<const int8_t*> col_buf_ptrs;
-  ssize_t element_count = -1;
+  std::optional<size_t> element_count;
   size_t table_info_count = 0;
   for (const auto& input_expr : exe_unit.input_exprs) {
     if (auto col_var = dynamic_cast<Analyzer::ColumnVar*>(input_expr)) {
@@ -96,10 +96,10 @@ ResultSetPtr TableFunctionExecutionContext::execute(
           device_allocator.get(),
           chunks_owner,
           column_fetcher.columnarized_table_cache_);
-      if (element_count < 0) {
-        element_count = static_cast<ssize_t>(buf_elem_count);
+      if (!element_count) {
+        element_count = buf_elem_count;
       } else {
-        CHECK_EQ(static_cast<ssize_t>(buf_elem_count), element_count);
+        CHECK(element_count && (buf_elem_count == *element_count));
       }
       col_buf_ptrs.push_back(col_buf);
     } else if (const auto& constant_val = dynamic_cast<Analyzer::Constant*>(input_expr)) {
@@ -161,19 +161,16 @@ ResultSetPtr TableFunctionExecutionContext::execute(
   }
   CHECK_EQ(col_buf_ptrs.size(), exe_unit.input_exprs.size());
 
-  CHECK_GE(element_count, ssize_t(0));
+  CHECK(element_count);
   switch (device_type) {
     case ExecutorDeviceType::CPU:
-      return launchCpuCode(exe_unit,
-                           compilation_context,
-                           col_buf_ptrs,
-                           static_cast<size_t>(element_count),
-                           executor);
+      return launchCpuCode(
+          exe_unit, compilation_context, col_buf_ptrs, *element_count, executor);
     case ExecutorDeviceType::GPU:
       return launchGpuCode(exe_unit,
                            compilation_context,
                            col_buf_ptrs,
-                           static_cast<size_t>(element_count),
+                           *element_count,
                            /*device_id=*/0,
                            executor);
   }
