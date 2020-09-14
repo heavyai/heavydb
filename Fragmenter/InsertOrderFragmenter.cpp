@@ -164,16 +164,17 @@ void InsertOrderFragmenter::getChunkMetadata() {
     }
   }
 
-  ssize_t maxFixedColSize = 0;
+  size_t maxFixedColSize = 0;
 
   for (auto colIt = columnMap_.begin(); colIt != columnMap_.end(); ++colIt) {
-    ssize_t size = colIt->second.getColumnDesc()->columnType.get_size();
+    auto size = colIt->second.getColumnDesc()->columnType.get_size();
     if (size == -1) {  // variable length
       varLenColInfo_.insert(std::make_pair(colIt->first, 0));
       size = 8;  // b/c we use this for string and array indices - gross to have magic
                  // number here
     }
-    maxFixedColSize = std::max(maxFixedColSize, size);
+    CHECK_GE(size, 0);
+    maxFixedColSize = std::max(maxFixedColSize, static_cast<size_t>(size));
   }
 
   // this is maximum number of rows assuming everything is fixed length
