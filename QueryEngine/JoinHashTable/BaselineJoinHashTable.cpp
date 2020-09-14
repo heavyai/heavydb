@@ -431,8 +431,10 @@ std::pair<size_t, size_t> BaselineJoinHashTable::approximateTupleCount(
                                 composite_key_info.cache_key_chunks,
                                 condition_->get_optype()};
     const auto cached_count_info = getApproximateTupleCountFromCache(cache_key);
-    if (cached_count_info.first >= 0) {
-      return std::make_pair(cached_count_info.first, cached_count_info.second);
+    if (cached_count_info.first) {
+      VLOG(1) << "Using a cached tuple count: " << *cached_count_info.first
+              << ", emitted keys count: " << cached_count_info.second;
+      return std::make_pair(*cached_count_info.first, cached_count_info.second);
     }
     int thread_count = cpu_threads();
     std::vector<uint8_t> hll_buffer_all_cpus(thread_count * padded_size_bytes);
@@ -1279,12 +1281,13 @@ void BaselineJoinHashTable::putHashTableOnCpuToCache(const HashTableCacheKey& ke
           cpu_hash_table_buff_, layout_, entry_count_, emitted_keys_count_});
 }
 
-std::pair<ssize_t, size_t> BaselineJoinHashTable::getApproximateTupleCountFromCache(
+std::pair<std::optional<size_t>, size_t>
+BaselineJoinHashTable::getApproximateTupleCountFromCache(
     const HashTableCacheKey& key) const {
   for (auto chunk_key : key.chunk_keys) {
     CHECK_GE(chunk_key.size(), size_t(2));
     if (chunk_key[1] < 0) {
-      return std::make_pair(-1, 0);
+      return std::make_pair(std::nullopt, 0);
       ;
     }
   }
@@ -1295,7 +1298,7 @@ std::pair<ssize_t, size_t> BaselineJoinHashTable::getApproximateTupleCountFromCa
       return std::make_pair(kv.second.entry_count / 2, kv.second.emitted_keys_count);
     }
   }
-  return std::make_pair(-1, 0);
+  return std::make_pair(std::nullopt, 0);
 }
 
 bool BaselineJoinHashTable::isBitwiseEq() const {

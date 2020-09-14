@@ -245,7 +245,7 @@ class BaselineJoinHashTable : public JoinHashTableInterface {
 
   void putHashTableOnCpuToCache(const HashTableCacheKey&);
 
-  std::pair<ssize_t, size_t> getApproximateTupleCountFromCache(
+  std::pair<std::optional<size_t>, size_t> getApproximateTupleCountFromCache(
       const HashTableCacheKey&) const;
 
   bool isBitwiseEq() const;

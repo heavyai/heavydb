@@ -365,10 +365,10 @@ std::pair<size_t, size_t> OverlapsJoinHashTable::approximateTupleCount(
                                 condition_->get_optype(),
                                 overlaps_hashjoin_bucket_threshold_};
     const auto cached_count_info = getApproximateTupleCountFromCache(cache_key);
-    if (cached_count_info.first >= 0) {
-      VLOG(1) << "Using a cached tuple count: " << cached_count_info.first
+    if (cached_count_info.first) {
+      VLOG(1) << "Using a cached tuple count: " << *cached_count_info.first
               << ", emitted keys count: " << cached_count_info.second;
-      return std::make_pair(cached_count_info.first, cached_count_info.second);
+      return std::make_pair(*cached_count_info.first, cached_count_info.second);
     }
     int thread_count = cpu_threads();
     std::vector<uint8_t> hll_buffer_all_cpus(thread_count * padded_size_bytes);
