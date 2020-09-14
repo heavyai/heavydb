@@ -416,10 +416,10 @@ llvm::Value* CodeGenerator::codgenAdjustFixedEncNull(llvm::Value* val,
        cgen_state_->inlineIntNull(col_ti)});
 }
 
-llvm::Value* CodeGenerator::foundOuterJoinMatch(const ssize_t nesting_level) const {
-  CHECK_GE(nesting_level, ssize_t(0));
+llvm::Value* CodeGenerator::foundOuterJoinMatch(const size_t nesting_level) const {
+  CHECK_GE(nesting_level, size_t(1));
   CHECK_LE(nesting_level,
-           static_cast<ssize_t>(cgen_state_->outer_join_match_found_per_level_.size()));
+           static_cast<size_t>(cgen_state_->outer_join_match_found_per_level_.size()));
   return cgen_state_->outer_join_match_found_per_level_[nesting_level - 1];
 }
 

@@ -194,7 +194,7 @@ size_t get_int_constant_from_expr(const Analyzer::Expr* expr) {
 }
 
 // Gets the lag or lead argument canonicalized as lag (lag = -lead).
-ssize_t get_lag_or_lead_argument(const Analyzer::WindowFunction* window_func) {
+int64_t get_lag_or_lead_argument(const Analyzer::WindowFunction* window_func) {
   CHECK(window_func->getKind() == SqlWindowFunctionKind::LAG ||
         window_func->getKind() == SqlWindowFunctionKind::LEAD);
   const auto& args = window_func->getArgs();
@@ -202,7 +202,8 @@ ssize_t get_lag_or_lead_argument(const Analyzer::WindowFunction* window_func) {
     throw std::runtime_error("LAG with default not supported yet");
   }
   if (args.size() == 2) {
-    const ssize_t lag_or_lead = get_int_constant_from_expr(args[1].get());
+    const int64_t lag_or_lead =
+        static_cast<int64_t>(get_int_constant_from_expr(args[1].get()));
     return window_func->getKind() == SqlWindowFunctionKind::LAG ? lag_or_lead
                                                                 : -lag_or_lead;
   }
@@ -225,14 +226,14 @@ void apply_permutation_to_partition(int64_t* output_for_partition_buff,
 }
 
 // Applies a lag to the given sorted_indices, reusing it as an output buffer.
-void apply_lag_to_partition(const ssize_t lag,
+void apply_lag_to_partition(const int64_t lag,
                             const int32_t* original_indices,
                             int64_t* sorted_indices,
                             const size_t partition_size) {
   std::vector<int64_t> lag_sorted_indices(partition_size, -1);
-  for (ssize_t idx = 0; idx < static_cast<ssize_t>(partition_size); ++idx) {
-    ssize_t lag_idx = idx - lag;
-    if (lag_idx < 0 || lag_idx >= static_cast<ssize_t>(partition_size)) {
+  for (int64_t idx = 0; idx < static_cast<int64_t>(partition_size); ++idx) {
+    int64_t lag_idx = idx - lag;
+    if (lag_idx < 0 || lag_idx >= static_cast<int64_t>(partition_size)) {
       continue;
     }
     lag_sorted_indices[idx] = sorted_indices[lag_idx];
@@ -741,12 +742,12 @@ void WindowFunctionContext::fillPartitionStart() {
                                                  1};
   partition_start_ = static_cast<int8_t*>(
       checked_calloc(partition_start_bitmap.bitmapPaddedSizeBytes(), 1));
-  ssize_t partition_count = partitionCount();
+  int64_t partition_count = partitionCount();
   std::vector<size_t> partition_offsets(partition_count);
   std::partial_sum(counts(), counts() + partition_count, partition_offsets.begin());
   auto partition_start_handle = reinterpret_cast<int64_t>(partition_start_);
   agg_count_distinct_bitmap(&partition_start_handle, 0, 0);
-  for (ssize_t i = 0; i < partition_count - 1; ++i) {
+  for (int64_t i = 0; i < partition_count - 1; ++i) {
     agg_count_distinct_bitmap(&partition_start_handle, partition_offsets[i], 0);
   }
 }
@@ -760,11 +761,11 @@ void WindowFunctionContext::fillPartitionEnd() {
                                                  1};
   partition_end_ = static_cast<int8_t*>(
       checked_calloc(partition_start_bitmap.bitmapPaddedSizeBytes(), 1));
-  ssize_t partition_count = partitionCount();
+  int64_t partition_count = partitionCount();
   std::vector<size_t> partition_offsets(partition_count);
   std::partial_sum(counts(), counts() + partition_count, partition_offsets.begin());
   auto partition_end_handle = reinterpret_cast<int64_t>(partition_end_);
-  for (ssize_t i = 0; i < partition_count - 1; ++i) {
+  for (int64_t i = 0; i < partition_count - 1; ++i) {
     if (partition_offsets[i] == 0) {
       continue;
     }

@@ -1565,15 +1565,15 @@ const InputTableInfo& JoinHashTable::getInnerQueryInfo(
 const InputTableInfo& get_inner_query_info(
     const int inner_table_id,
     const std::vector<InputTableInfo>& query_infos) {
-  ssize_t ti_idx = -1;
+  std::optional<size_t> ti_idx;
   for (size_t i = 0; i < query_infos.size(); ++i) {
     if (inner_table_id == query_infos[i].table_id) {
       ti_idx = i;
       break;
     }
   }
-  CHECK_NE(ssize_t(-1), ti_idx);
-  return query_infos[ti_idx];
+  CHECK(ti_idx);
+  return query_infos[*ti_idx];
 }
 
 size_t get_entries_per_device(const size_t total_entries,

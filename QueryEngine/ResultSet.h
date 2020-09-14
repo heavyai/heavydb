@@ -871,7 +871,7 @@ class ResultSet {
   bool separate_varlen_storage_valid_;
   std::string explanation_;
   const bool just_explain_;
-  mutable std::atomic<ssize_t> cached_row_count_;
+  mutable std::atomic<int64_t> cached_row_count_;
   mutable std::mutex row_iteration_mutex_;
 
   // only used by geo

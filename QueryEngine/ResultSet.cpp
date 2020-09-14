@@ -373,7 +373,7 @@ size_t ResultSet::rowCount(const bool force_parallel) const {
 }
 
 void ResultSet::setCachedRowCount(const size_t row_count) const {
-  CHECK(cached_row_count_ == -1 || cached_row_count_ == static_cast<ssize_t>(row_count));
+  CHECK(cached_row_count_ == -1 || cached_row_count_ == static_cast<int64_t>(row_count));
   cached_row_count_ = row_count;
 }
 
