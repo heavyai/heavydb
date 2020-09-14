@@ -197,7 +197,7 @@ class RelAlgExecutor : private StorageIOFacility<RelAlgExecutorTraits> {
                                  const ExecutionOptions&,
                                  RenderInfo*,
                                  const int64_t queue_time_ms,
-                                 const ssize_t previous_count);
+                                 const std::optional<size_t> previous_count);
 
   ExecutionResult executeTableFunction(const RelTableFunction*,
                                        const CompilationOptions&,
@@ -262,14 +262,15 @@ class RelAlgExecutor : private StorageIOFacility<RelAlgExecutorTraits> {
 
   WorkUnit createSortInputWorkUnit(const RelSort*, const ExecutionOptions& eo);
 
-  ExecutionResult executeWorkUnit(const WorkUnit& work_unit,
-                                  const std::vector<TargetMetaInfo>& targets_meta,
-                                  const bool is_agg,
-                                  const CompilationOptions& co_in,
-                                  const ExecutionOptions& eo,
-                                  RenderInfo*,
-                                  const int64_t queue_time_ms,
-                                  const ssize_t previous_count = -1);
+  ExecutionResult executeWorkUnit(
+      const WorkUnit& work_unit,
+      const std::vector<TargetMetaInfo>& targets_meta,
+      const bool is_agg,
+      const CompilationOptions& co_in,
+      const ExecutionOptions& eo,
+      RenderInfo*,
+      const int64_t queue_time_ms,
+      const std::optional<size_t> previous_count = std::nullopt);
 
   size_t getNDVEstimation(const WorkUnit& work_unit,
                           const int64_t range,
@@ -277,10 +278,10 @@ class RelAlgExecutor : private StorageIOFacility<RelAlgExecutorTraits> {
                           const CompilationOptions& co,
                           const ExecutionOptions& eo);
 
-  ssize_t getFilteredCountAll(const WorkUnit& work_unit,
-                              const bool is_agg,
-                              const CompilationOptions& co,
-                              const ExecutionOptions& eo);
+  std::optional<size_t> getFilteredCountAll(const WorkUnit& work_unit,
+                                            const bool is_agg,
+                                            const CompilationOptions& co,
+                                            const ExecutionOptions& eo);
 
   FilterSelectivity getFilterSelectivity(
       const std::vector<std::shared_ptr<Analyzer::Expr>>& filter_expressions,

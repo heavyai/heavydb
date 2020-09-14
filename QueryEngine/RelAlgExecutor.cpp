@@ -613,7 +613,7 @@ void RelAlgExecutor::executeRelAlgStep(const RaExecutionSequence& seq,
     } else if (project->isUpdateViaSelect()) {
       executeUpdate(project, co, eo_work_unit, queue_time_ms);
     } else {
-      ssize_t prev_count = -1;
+      std::optional<size_t> prev_count;
       // Disabling the intermediate count optimization in distributed, as the previous
       // execution descriptor will likely not hold the aggregated result.
       if (g_skip_intermediate_count && step_idx > 0 && !g_cluster) {
@@ -632,11 +632,10 @@ void RelAlgExecutor::executeRelAlgStep(const RaExecutionSequence& seq,
           const auto& prev_exe_result = prev_exec_desc->getResult();
           const auto prev_result = prev_exe_result.getRows();
           if (prev_result) {
-            prev_count = static_cast<ssize_t>(prev_result->rowCount());
+            prev_count = prev_result->rowCount();
+            VLOG(3) << "Setting output row count for projection node to previous node ("
+                    << prev_exec_desc->getBody()->toString() << ") to " << *prev_count;
           }
-          VLOG(3) << "prev_exec_desc->getBody()->toString()="
-                  << prev_exec_desc->getBody()->toString()
-                  << " prev_count=" << prev_count;
         }
       }
       exec_desc.setResult(executeProject(
@@ -1596,12 +1595,13 @@ bool is_window_execution_unit(const RelAlgExecutionUnit& ra_exe_unit) {
 
 }  // namespace
 
-ExecutionResult RelAlgExecutor::executeProject(const RelProject* project,
-                                               const CompilationOptions& co,
-                                               const ExecutionOptions& eo,
-                                               RenderInfo* render_info,
-                                               const int64_t queue_time_ms,
-                                               const ssize_t previous_count) {
+ExecutionResult RelAlgExecutor::executeProject(
+    const RelProject* project,
+    const CompilationOptions& co,
+    const ExecutionOptions& eo,
+    RenderInfo* render_info,
+    const int64_t queue_time_ms,
+    const std::optional<size_t> previous_count) {
   auto timer = DEBUG_TIMER(__func__);
   auto work_unit = createProjectWorkUnit(project, {{}, SortAlgorithm::Default, 0, 0}, eo);
   CompilationOptions co_project = co;
@@ -2663,7 +2663,7 @@ ExecutionResult RelAlgExecutor::executeWorkUnit(
     const ExecutionOptions& eo,
     RenderInfo* render_info,
     const int64_t queue_time_ms,
-    const ssize_t previous_count) {
+    const std::optional<size_t> previous_count) {
   INJECT_TIMER(executeWorkUnit);
   auto timer = DEBUG_TIMER(__func__);
 
@@ -2716,8 +2716,8 @@ ExecutionResult RelAlgExecutor::executeWorkUnit(
         table_infos.front().info.fragments.front().getNumTuples();
     ra_exe_unit.scan_limit = max_groups_buffer_entry_guess;
   } else if (compute_output_buffer_size(ra_exe_unit) && !isRowidLookup(work_unit)) {
-    if (previous_count > 0 && !exe_unit_has_quals(ra_exe_unit)) {
-      ra_exe_unit.scan_limit = static_cast<size_t>(previous_count);
+    if (previous_count && !exe_unit_has_quals(ra_exe_unit)) {
+      ra_exe_unit.scan_limit = *previous_count;
     } else {
       // TODO(adb): enable bump allocator path for render queries
       if (can_use_bump_allocator(ra_exe_unit, co, eo) && !render_info) {
@@ -2727,8 +2727,8 @@ ExecutionResult RelAlgExecutor::executeWorkUnit(
         ra_exe_unit.scan_limit = 0;
       } else if (!eo.just_explain) {
         const auto filter_count_all = getFilteredCountAll(work_unit, true, co, eo);
-        if (filter_count_all >= 0) {
-          ra_exe_unit.scan_limit = std::max(filter_count_all, ssize_t(1));
+        if (filter_count_all) {
+          ra_exe_unit.scan_limit = std::max(*filter_count_all, size_t(1));
         }
       }
     }
@@ -2819,10 +2819,10 @@ ExecutionResult RelAlgExecutor::executeWorkUnit(
   return result;
 }
 
-ssize_t RelAlgExecutor::getFilteredCountAll(const WorkUnit& work_unit,
-                                            const bool is_agg,
-                                            const CompilationOptions& co,
-                                            const ExecutionOptions& eo) {
+std::optional<size_t> RelAlgExecutor::getFilteredCountAll(const WorkUnit& work_unit,
+                                                          const bool is_agg,
+                                                          const CompilationOptions& co,
+                                                          const ExecutionOptions& eo) {
   const auto count =
       makeExpr<Analyzer::AggExpr>(SQLTypeInfo(g_bigint_count ? kBIGINT : kINT, false),
                                   kCOUNT,
@@ -2848,7 +2848,7 @@ ssize_t RelAlgExecutor::getFilteredCountAll(const WorkUnit& work_unit,
                                    column_cache);
   } catch (const std::exception& e) {
     LOG(WARNING) << "Failed to run pre-flight filtered count with error " << e.what();
-    return -1;
+    return std::nullopt;
   }
   const auto count_row = count_all_result->getNextRow(false, false);
   CHECK_EQ(size_t(1), count_row.size());
