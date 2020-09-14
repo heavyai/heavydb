@@ -24,7 +24,7 @@
 #include "QueryEngine/TargetMetaInfo.h"
 #include "gen-cpp/OmniSci.h"
 
-#include "Shared/Logger.h"
+#include "Logger/Logger.h"
 
 namespace Catalog_Namespace {
 class SessionInfo;

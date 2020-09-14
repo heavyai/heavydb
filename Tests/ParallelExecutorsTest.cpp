@@ -16,7 +16,7 @@
 
 #include "TestHelpers.h"
 
-#include "Shared/Logger.h"
+#include "Logger/Logger.h"
 
 #include "../QueryEngine/Descriptors/RelAlgExecutionDescriptor.h"
 #include "../QueryEngine/Execute.h"

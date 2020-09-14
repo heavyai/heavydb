@@ -20,9 +20,9 @@
 #include "../Shared/sqldefs.h"
 #include "DeepCopyVisitor.h"
 #include "Execute.h"
+#include "Logger/Logger.h"
 #include "RelAlgTranslator.h"
 #include "ScalarExprVisitor.h"
-#include "Shared/Logger.h"
 #include "WindowExpressionRewrite.h"
 
 #include <boost/locale/conversion.hpp>

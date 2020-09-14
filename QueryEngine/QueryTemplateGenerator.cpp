@@ -16,7 +16,7 @@
 
 #include "QueryTemplateGenerator.h"
 #include "IRCodegenUtils.h"
-#include "Shared/Logger.h"
+#include "Logger/Logger.h"
 
 #include <llvm/IR/Constants.h>
 #include <llvm/IR/IRBuilder.h>

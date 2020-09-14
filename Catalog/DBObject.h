@@ -31,7 +31,7 @@
 
 #include <string>
 #include <unordered_set>
-#include "Shared/Logger.h"
+#include "Logger/Logger.h"
 
 namespace Catalog_Namespace {
 class Catalog;

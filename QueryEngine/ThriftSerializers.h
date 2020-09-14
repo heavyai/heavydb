@@ -30,7 +30,7 @@
 #include "Descriptors/Types.h"
 
 #include <Shared/ThriftTypesConvert.h>
-#include "Shared/Logger.h"
+#include "Logger/Logger.h"
 
 namespace ThriftSerializers {
 
@@ -119,7 +119,11 @@ inline TTypeInfo type_info_to_thrift(const SQLTypeInfo& ti) {
   thrift_ti.encoding = encoding_to_thrift(ti);
   thrift_ti.nullable = !ti.get_notnull();
   thrift_ti.is_array = ti.is_array();
-  thrift_ti.precision = ti.get_precision();
+  // TODO: Properly serialize geospatial subtype. For now, the value in precision is the
+  // same as the value in scale; overload the precision field with the subtype of the
+  // geospatial type (currently kGEOMETRY or kGEOGRAPHY)
+  thrift_ti.precision =
+      IS_GEO(ti.get_type()) ? static_cast<int32_t>(ti.get_subtype()) : ti.get_precision();
   thrift_ti.scale = ti.get_scale();
   thrift_ti.comp_param = ti.get_comp_param();
   thrift_ti.size = ti.get_size();

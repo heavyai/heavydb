@@ -22,7 +22,7 @@
 #include <llvm/IR/Type.h>
 #include <llvm/Support/raw_os_ostream.h>
 
-#include "Shared/Logger.h"
+#include "Logger/Logger.h"
 
 #if LLVM_VERSION_MAJOR >= 10
 #define LLVM_ALIGN(alignment) llvm::Align(alignment)

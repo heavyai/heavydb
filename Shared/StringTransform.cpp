@@ -15,6 +15,7 @@
  */
 
 #include "StringTransform.h"
+#include "Logger/Logger.h"
 
 #include <numeric>
 #include <random>
@@ -222,16 +223,6 @@ bool remove_unquoted_newlines_linefeeds_and_tabs_from_sql_string(
   // accounting for backslashes should mean that this should only be the
   // case with truly malformed strings which Calcite will barf on anyway
   return (inside_quote == 0);
-}
-
-bool unquote(std::string& str) {
-  if (1 < str.size() && (str.front() == '\'' || str.front() == '"') &&
-      str.front() == str.back()) {
-    str.erase(str.size() - 1, 1);
-    str.erase(0, 1);
-    return true;
-  }
-  return false;
 }
 
 #ifndef __CUDACC__

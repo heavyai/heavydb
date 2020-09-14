@@ -16,7 +16,7 @@
 
 #ifndef FIXED_LENGTH_ENCODER_H
 #define FIXED_LENGTH_ENCODER_H
-#include "Shared/Logger.h"
+#include "Logger/Logger.h"
 
 #include <iostream>
 #include <memory>

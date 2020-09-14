@@ -47,9 +47,9 @@
 #include <thrift/transport/TBufferTransports.h>
 #include <thrift/transport/TSocket.h>
 #include "../Fragmenter/InsertOrderFragmenter.h"
+#include "Logger/Logger.h"
 #include "MapDRelease.h"
 #include "MapDServer.h"
-#include "Shared/Logger.h"
 #include "Shared/StringTransform.h"
 #include "Shared/ThriftClient.h"
 #include "Shared/ThriftTypesConvert.h"

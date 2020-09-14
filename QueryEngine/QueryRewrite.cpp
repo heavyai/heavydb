@@ -22,8 +22,8 @@
 
 #include "ExpressionRange.h"
 #include "ExpressionRewrite.h"
+#include "Logger/Logger.h"
 #include "Parser/ParserNode.h"
-#include "Shared/Logger.h"
 
 RelAlgExecutionUnit QueryRewriter::rewrite(
     const RelAlgExecutionUnit& ra_exe_unit_in) const {

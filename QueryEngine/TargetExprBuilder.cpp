@@ -25,9 +25,9 @@
 #include "CodeGenerator.h"
 #include "Execute.h"
 #include "GroupByAndAggregate.h"
+#include "Logger/Logger.h"
 #include "MaxwellCodegenPatch.h"
 #include "OutputBufferInitialization.h"
-#include "Shared/Logger.h"
 
 #define LL_CONTEXT executor->cgen_state_->context_
 #define LL_BUILDER executor->cgen_state_->ir_builder_

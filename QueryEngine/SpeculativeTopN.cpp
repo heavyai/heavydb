@@ -16,9 +16,9 @@
 
 #include "SpeculativeTopN.h"
 
+#include "Logger/Logger.h"
 #include "RelAlgExecutor.h"
 #include "ResultSet.h"
-#include "Shared/Logger.h"
 
 SpeculativeTopNMap::SpeculativeTopNMap() : unknown_(0) {}
 

@@ -25,7 +25,7 @@
 #include <boost/filesystem.hpp>
 #include <boost/process.hpp>
 
-#include "Shared/Logger.h"
+#include "Logger/Logger.h"
 #include "TestHelpers.h"
 
 namespace bp = boost::process;

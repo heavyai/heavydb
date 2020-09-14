@@ -19,7 +19,7 @@
 #include "../Utils/Regexp.h"
 #include "../Utils/StringLike.h"
 #include "LeafHostInfo.h"
-#include "Shared/Logger.h"
+#include "Logger/Logger.h"
 #include "Shared/thread_count.h"
 #include "StringDictionaryClient.h"
 

@@ -29,7 +29,7 @@
 #include "DataMgr/AbstractBuffer.h"
 #include "DataMgr/DataMgr.h"
 #include "LockMgr/LockMgr.h"
-#include "Shared/Logger.h"
+#include "Logger/Logger.h"
 #include "Shared/checked_alloc.h"
 #include "Shared/thread_count.h"
 

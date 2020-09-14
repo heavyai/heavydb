@@ -28,7 +28,7 @@
 #include "RuntimeFunctions.h"
 
 #include "../Shared/sqltypes.h"
-#include "Shared/Logger.h"
+#include "Logger/Logger.h"
 
 #include <llvm/IR/Function.h>
 #include <llvm/IR/Instructions.h>

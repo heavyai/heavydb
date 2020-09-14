@@ -17,7 +17,7 @@
 #include "CalciteDeserializerUtils.h"
 
 #include "../Analyzer/Analyzer.h"
-#include "Shared/Logger.h"
+#include "Logger/Logger.h"
 
 #include <boost/algorithm/string.hpp>
 

@@ -17,7 +17,7 @@
 #ifndef INLINENULLVALUES_H
 #define INLINENULLVALUES_H
 
-#include "Logger.h"
+#include "Logger/Logger.h"
 
 template <typename T>
 T inline_fp_null_value();

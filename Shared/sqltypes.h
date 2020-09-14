@@ -22,6 +22,7 @@
 
 #pragma once
 
+#include "Logger/Logger.h"
 #include "StringTransform.h"
 #include "funcannotations.h"
 

@@ -24,7 +24,7 @@
 #include <map>
 #include <string>
 #include <unordered_set>
-#include "Shared/Logger.h"
+#include "Logger/Logger.h"
 
 class User;
 class Role;

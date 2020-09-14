@@ -24,7 +24,7 @@
 
 #include <string_view>
 
-#include "Shared/Logger.h"
+#include "Logger/Logger.h"
 #include "StringDictionary/StringDictionary.h"
 
 namespace {

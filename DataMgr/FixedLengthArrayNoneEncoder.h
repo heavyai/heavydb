@@ -24,7 +24,7 @@
 #ifndef FIXED_LENGTH_ARRAY_NONE_ENCODER_H
 #define FIXED_LENGTH_ARRAY_NONE_ENCODER_H
 
-#include "Shared/Logger.h"
+#include "Logger/Logger.h"
 
 #include <cassert>
 #include <cstring>

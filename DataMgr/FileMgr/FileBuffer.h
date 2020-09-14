@@ -28,7 +28,7 @@
 #include <iostream>
 #include <stdexcept>
 
-#include "Shared/Logger.h"
+#include "Logger/Logger.h"
 
 using namespace Data_Namespace;
 

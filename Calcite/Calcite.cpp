@@ -23,7 +23,7 @@
 
 #include "Calcite.h"
 #include "Catalog/Catalog.h"
-#include "Shared/Logger.h"
+#include "Logger/Logger.h"
 #include "Shared/SystemParameters.h"
 #include "Shared/ThriftClient.h"
 #include "Shared/fixautotools.h"

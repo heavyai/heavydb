@@ -29,9 +29,9 @@
 #include "Catalog/DataframeTableDescriptor.h"
 #include "DataMgr/ForeignStorage/ForeignStorageInterface.h"
 #include "DataMgr/StringNoneEncoder.h"
+#include "Logger/Logger.h"
 #include "QueryEngine/ArrowResultSet.h"
 #include "Shared/ArrowUtil.h"
-#include "Shared/Logger.h"
 #include "Shared/measure.h"
 
 struct Frag {

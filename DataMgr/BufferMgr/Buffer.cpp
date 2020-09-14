@@ -20,7 +20,7 @@
 #include <stdexcept>
 
 #include "DataMgr/BufferMgr/BufferMgr.h"
-#include "Shared/Logger.h"
+#include "Logger/Logger.h"
 
 namespace Buffer_Namespace {
 

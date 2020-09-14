@@ -17,13 +17,13 @@
 #pragma once
 
 #include "CudaMgr/CudaMgr.h"
+#include "Logger/Logger.h"
 #include "QueryEngine/CodeGenerator.h"
 #include "QueryEngine/GpuSharedMemoryUtils.h"
 #include "QueryEngine/LLVMFunctionAttributesUtil.h"
 #include "QueryEngine/NvidiaKernel.h"
 #include "QueryEngine/OutputBufferInitialization.h"
 #include "ResultSetTestUtils.h"
-#include "Shared/Logger.h"
 #include "Shared/TargetInfo.h"
 #include "Shared/mapdpath.h"
 #include "TestHelpers.h"

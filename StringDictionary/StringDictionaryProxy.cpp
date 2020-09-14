@@ -18,7 +18,7 @@
 #include "../Shared/sqltypes.h"
 #include "../Utils/Regexp.h"
 #include "../Utils/StringLike.h"
-#include "Shared/Logger.h"
+#include "Logger/Logger.h"
 #include "Shared/thread_count.h"
 #include "StringDictionary.h"
 

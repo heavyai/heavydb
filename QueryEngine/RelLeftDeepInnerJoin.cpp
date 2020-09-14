@@ -15,9 +15,9 @@
  */
 
 #include "RelLeftDeepInnerJoin.h"
+#include "Logger/Logger.h"
 #include "RelAlgDagBuilder.h"
 #include "RexVisitor.h"
-#include "Shared/Logger.h"
 
 #include <numeric>
 

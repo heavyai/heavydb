@@ -18,7 +18,7 @@
 
 #include <CudaMgr/CudaMgr.h>
 #include <DataMgr/DataMgr.h>
-#include <Shared/Logger.h>
+#include <Logger/Logger.h>
 #include <Shared/types.h>
 
 CudaAllocator::CudaAllocator(Data_Namespace::DataMgr* data_mgr, const int device_id)

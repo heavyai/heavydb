@@ -26,7 +26,7 @@
 #include <limits>
 
 #include "DataMgr/BufferMgr/Buffer.h"
-#include "Shared/Logger.h"
+#include "Logger/Logger.h"
 #include "Shared/measure.h"
 
 using namespace std;

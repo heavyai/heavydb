@@ -23,6 +23,7 @@
 #include "rapidjson/stringbuffer.h"
 #include "rapidjson/writer.h"
 
+#include "Logger/Logger.h"
 #include "Shared/StringTransform.h"
 
 namespace foreign_storage {

@@ -31,7 +31,7 @@
 #include "Encoder.h"
 #include "MemoryLevel.h"
 
-#include "Shared/Logger.h"
+#include "Logger/Logger.h"
 #include "Shared/sqltypes.h"
 #include "Shared/types.h"
 

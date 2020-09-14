@@ -29,7 +29,7 @@
 #include <string>
 
 #include "DateConverters.h"
-#include "Logger.h"
+#include "Logger/Logger.h"
 #include "QueryEngine/DateTimeUtils.h"
 #include "StringTransform.h"
 #include "TimeGM.h"

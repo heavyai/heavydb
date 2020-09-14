@@ -25,8 +25,8 @@
 
 #include "Catalog/Catalog.h"
 #include "ImportExport/Importer.h"
+#include "Logger/Logger.h"
 #include "QueryRunner/QueryRunner.h"
-#include "Shared/Logger.h"
 #include "Shared/mapdpath.h"
 
 #define CALCITEPORT 3279

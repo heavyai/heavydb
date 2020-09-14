@@ -17,7 +17,7 @@
 #include "NvidiaKernel.h"
 
 #include "../Shared/mapdpath.h"
-#include "Shared/Logger.h"
+#include "Logger/Logger.h"
 
 #include <boost/filesystem/operations.hpp>
 

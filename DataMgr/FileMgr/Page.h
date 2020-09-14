@@ -23,7 +23,7 @@
 #ifndef DATAMGR_MEMORY_FILE_PAGE_H
 #define DATAMGR_MEMORY_FILE_PAGE_H
 
-#include "Shared/Logger.h"
+#include "Logger/Logger.h"
 
 #include <cassert>
 #include <deque>

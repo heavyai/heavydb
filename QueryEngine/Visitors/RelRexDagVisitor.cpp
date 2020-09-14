@@ -23,7 +23,7 @@
  */
 
 #include "RelRexDagVisitor.h"
-#include "Shared/Logger.h"
+#include "Logger/Logger.h"
 
 #include <algorithm>
 #include <typeindex>

@@ -29,8 +29,8 @@
 
 #include "Descriptors/QueryMemoryDescriptor.h"
 #include "IRCodegenUtils.h"
+#include "Logger/Logger.h"
 #include "ResultSet.h"
-#include "Shared/Logger.h"
 #include "Shared/TargetInfo.h"
 
 /**

@@ -18,9 +18,9 @@
 
 #include <cmath>
 #include <cstring>
+#include "Logger/Logger.h"
 #include "Shared/DateConverters.h"
 #include "Shared/InlineNullValues.h"
-#include "Shared/Logger.h"
 #include "Shared/sqltypes.h"
 
 namespace {

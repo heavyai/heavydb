@@ -228,6 +228,7 @@ set(QUERY_ENGINE_LIBS
   Analyzer
   StringDictionary
   Utils
+  Logger
   Shared
   sqlite3
   ${Arrow_LIBRARIES}
@@ -243,6 +244,7 @@ add_custom_command(
     OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/cuda_mapd_rt.fatbin
     COMMAND nvcc
     ARGS
+        -I ${CMAKE_SOURCE_DIR}
         ${MAPD_HOST_COMPILER_FLAG}
         -Xcompiler -fPIC
         -D__STDC_LIMIT_MACROS
@@ -326,6 +328,7 @@ add_custom_command(
     OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/HashJoinRuntimeGpu.o
     COMMAND nvcc
     ARGS
+        -I ${CMAKE_SOURCE_DIR}
         ${MAPD_HOST_COMPILER_FLAG}
         -Xcompiler -fPIC
         -D_FORCE_INLINES
@@ -347,4 +350,4 @@ add_custom_target(QueryEngineCudaTargets
     )
 
 add_executable(group_by_hash_test ${group_by_hash_test_files})
-target_link_libraries(group_by_hash_test gtest Shared ${Boost_LIBRARIES} ${PROFILER_LIBS})
+target_link_libraries(group_by_hash_test gtest Logger Shared ${Boost_LIBRARIES} ${PROFILER_LIBS})

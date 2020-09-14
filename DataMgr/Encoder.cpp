@@ -19,8 +19,8 @@
 #include "DateDaysEncoder.h"
 #include "FixedLengthArrayNoneEncoder.h"
 #include "FixedLengthEncoder.h"
+#include "Logger/Logger.h"
 #include "NoneEncoder.h"
-#include "Shared/Logger.h"
 #include "StringNoneEncoder.h"
 
 Encoder* Encoder::Create(Data_Namespace::AbstractBuffer* buffer,

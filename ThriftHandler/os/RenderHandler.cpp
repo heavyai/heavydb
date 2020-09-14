@@ -23,7 +23,7 @@
 
 #include "ThriftHandler/RenderHandler.h"
 
-#include "Shared/Logger.h"
+#include "Logger/Logger.h"
 
 class RenderHandler::Impl {};
 

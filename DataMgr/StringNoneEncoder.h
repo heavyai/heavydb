@@ -23,7 +23,7 @@
  **/
 #ifndef STRING_NONE_ENCODER_H
 #define STRING_NONE_ENCODER_H
-#include "Shared/Logger.h"
+#include "Logger/Logger.h"
 
 #include <cassert>
 #include <string>

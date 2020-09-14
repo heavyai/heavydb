@@ -33,9 +33,9 @@
 
 #include "DataMgr/FileMgr/GlobalFileMgr.h"
 #include "LockMgr/LockMgr.h"
+#include "Logger/Logger.h"
 #include "Parser/ParseDDL.h"
 #include "Shared/File.h"
-#include "Shared/Logger.h"
 #include "Shared/StringTransform.h"
 #include "Shared/ThreadController.h"
 #include "Shared/measure.h"

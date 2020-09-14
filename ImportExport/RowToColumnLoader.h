@@ -26,7 +26,7 @@
  * Copyright (c) 2017 MapD Technologies, Inc.  All rights reserved.
  **/
 
-#include "Shared/Logger.h"
+#include "Logger/Logger.h"
 
 #include <boost/algorithm/string.hpp>
 #include <boost/algorithm/string/trim.hpp>

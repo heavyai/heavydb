@@ -23,7 +23,7 @@
 #ifndef OMNISCI_THRIFTHANDLER_QUERYSTATE_H
 #define OMNISCI_THRIFTHANDLER_QUERYSTATE_H
 
-#include "Shared/Logger.h"
+#include "Logger/Logger.h"
 #include "Shared/StringTransform.h"
 
 #include <boost/circular_buffer.hpp>

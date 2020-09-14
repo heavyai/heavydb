@@ -34,7 +34,7 @@
 #include <memory>
 
 #include "Execute.h"
-#include "Shared/Logger.h"
+#include "Logger/Logger.h"
 
 using namespace clang;
 using namespace clang::tooling;

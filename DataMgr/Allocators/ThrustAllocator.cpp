@@ -24,7 +24,7 @@
 #include "CudaMgr/CudaMgr.h"
 #include "DataMgr/Allocators/CudaAllocator.h"
 #include "DataMgr/DataMgr.h"
-#include "Shared/Logger.h"
+#include "Logger/Logger.h"
 
 int8_t* ThrustAllocator::allocate(std::ptrdiff_t num_bytes) {
   VLOG(1) << "Thrust allocation: Device #" << device_id_ << " Allocation #"

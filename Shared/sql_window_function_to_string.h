@@ -19,7 +19,7 @@
 #include "sqldefs.h"
 
 #include <string>
-#include "Logger.h"
+#include "Logger/Logger.h"
 
 inline std::string sql_window_function_to_str(const SqlWindowFunctionKind kind) {
   switch (kind) {

@@ -24,7 +24,7 @@
 #ifndef ARRAY_NONE_ENCODER_H
 #define ARRAY_NONE_ENCODER_H
 
-#include "Shared/Logger.h"
+#include "Logger/Logger.h"
 
 #include <cassert>
 #include <cstring>

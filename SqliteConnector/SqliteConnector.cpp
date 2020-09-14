@@ -24,7 +24,7 @@
 
 #include <iostream>
 
-#include "Shared/Logger.h"
+#include "Logger/Logger.h"
 
 using std::cout;
 using std::endl;

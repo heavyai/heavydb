@@ -16,7 +16,7 @@
 
 #pragma once
 
-#include <Shared/Logger.h>
+#include <Logger/Logger.h>
 
 #include <memory>
 #include <string>

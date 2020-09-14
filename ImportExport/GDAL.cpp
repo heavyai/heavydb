@@ -22,7 +22,7 @@
 #include <gdal.h>
 #include <gdal_priv.h>
 
-#include <Shared/Logger.h>
+#include <Logger/Logger.h>
 #include <Shared/mapdpath.h>
 
 namespace import_export {

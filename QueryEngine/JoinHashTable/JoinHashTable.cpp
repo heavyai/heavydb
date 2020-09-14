@@ -20,6 +20,7 @@
 #include <numeric>
 #include <thread>
 
+#include "Logger/Logger.h"
 #include "QueryEngine/CodeGenerator.h"
 #include "QueryEngine/ColumnFetcher.h"
 #include "QueryEngine/Execute.h"
@@ -27,7 +28,6 @@
 #include "QueryEngine/JoinHashTable/HashJoinRuntime.h"
 #include "QueryEngine/RangeTableIndexVisitor.h"
 #include "QueryEngine/RuntimeFunctions.h"
-#include "Shared/Logger.h"
 
 namespace {
 

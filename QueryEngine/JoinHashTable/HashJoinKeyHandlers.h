@@ -24,8 +24,8 @@
 #ifdef __CUDACC__
 #include "../DecodersImpl.h"
 #else
+#include "Logger/Logger.h"
 #include "QueryEngine/RuntimeFunctions.h"
-#include "Shared/Logger.h"
 #include "StringDictionary/StringDictionary.h"
 #include "StringDictionary/StringDictionaryProxy.h"
 #endif

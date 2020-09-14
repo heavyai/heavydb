@@ -2,7 +2,7 @@
 Logger
 ======
 
-``#include "Shared/Logger.h"``
+``#include "Logger/Logger.h"``
 
 The OmniSci Logger is based on `Boost.Log`_ with a design goal of being largely, though not completely, backward
 compatible with `glog`_ in usage, but with additional control over the logging format and other features.

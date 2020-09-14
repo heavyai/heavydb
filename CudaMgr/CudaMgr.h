@@ -20,8 +20,8 @@
 #include <string>
 #include <vector>
 
+#include "Logger/Logger.h"
 #include "Shared/DeviceGroup.h"
-#include "Shared/Logger.h"
 
 #ifdef HAVE_CUDA
 #include <cuda.h>

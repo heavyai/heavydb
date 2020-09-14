@@ -30,8 +30,8 @@
 #include <iterator>
 #include <string>
 
+#include "Logger/Logger.h"
 #include "RowToColumnLoader.h"
-#include "Shared/Logger.h"
 #include "Shared/ThriftClient.h"
 #include "Shared/sqltypes.h"
 

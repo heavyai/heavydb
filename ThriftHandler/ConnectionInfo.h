@@ -18,7 +18,7 @@
 
 #include <string>
 
-#include "Shared/Logger.h"
+#include "Logger/Logger.h"
 
 enum class ClientProtocol { TCP, HTTP, Other };
 

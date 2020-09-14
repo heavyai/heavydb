@@ -17,8 +17,8 @@
 #include "TableOptimizer.h"
 
 #include "Analyzer/Analyzer.h"
+#include "Logger/Logger.h"
 #include "QueryEngine/Execute.h"
-#include "Shared/Logger.h"
 #include "Shared/scope.h"
 
 TableOptimizer::TableOptimizer(const TableDescriptor* td,

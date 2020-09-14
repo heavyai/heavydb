@@ -27,7 +27,7 @@
 
 #include "../QueryEngine/GpuRtConstants.h"
 
-#include "../Shared/Logger.h"
+#include "../Logger/Logger.h"
 
 #ifdef HAVE_CUDA
 #include <cuda_runtime_api.h>

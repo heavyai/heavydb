@@ -19,9 +19,9 @@
 #include "Execute.h"
 #include "GpuInitGroups.h"
 #include "GpuMemUtils.h"
+#include "Logger/Logger.h"
 #include "OutputBufferInitialization.h"
 #include "ResultSet.h"
-#include "Shared/Logger.h"
 #include "StreamingTopN.h"
 
 #include <Shared/checked_alloc.h>

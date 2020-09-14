@@ -26,7 +26,7 @@
 #include <blosc.h>
 #include <string>
 #include <thread>
-#include "Logger.h"
+#include "Logger/Logger.h"
 
 // we only compress data if the payload size is greater than 512 MB
 size_t g_compression_limit_bytes{512 * 1024 * 1024};

@@ -47,7 +47,7 @@
 #include "DataMgr/Chunk/Chunk.h"
 #include "Fragmenter/Fragmenter.h"
 #include "ImportExport/CopyParams.h"
-#include "Shared/Logger.h"
+#include "Logger/Logger.h"
 #include "Shared/ThreadController.h"
 #include "Shared/checked_alloc.h"
 #include "Shared/fixautotools.h"

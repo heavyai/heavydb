@@ -19,7 +19,6 @@ bool g_enable_debug_timer{false};
 #ifndef __CUDACC__
 
 #include "Logger.h"
-#include "StringTransform.h"
 
 #include <rapidjson/document.h>
 #include <rapidjson/stringbuffer.h>
@@ -97,7 +96,11 @@ void LogOptions::set_base_path(std::string const& base_path) {
 // May be called to update default values based on updated member variables.
 void LogOptions::set_options() {
   options_ = std::make_unique<boost::program_options::options_description>("Logging");
-  std::string const channels = join(ChannelNames, " ");
+  std::string const channels =
+      std::accumulate(ChannelNames.cbegin() + 1,
+                      ChannelNames.cend(),
+                      std::string(ChannelNames.front()),
+                      [](auto a, auto channel) { return a + ' ' + channel; });
   // Filter out DEBUG[1-4] severities from --help options
   std::string severities;
   for (auto const& name : SeverityNames) {
@@ -310,6 +313,20 @@ void set_once_fatal_func(FatalFunc fatal_func) {
 void shutdown() {
   boost::log::core::get()->remove_all_sinks();
 }
+
+namespace {
+
+// Remove quotes if they match from beginning and end of string.
+// Does not check for escaped quotes within string.
+void unquote(std::string& str) {
+  if (1 < str.size() && (str.front() == '\'' || str.front() == '"') &&
+      str.front() == str.back()) {
+    str.erase(str.size() - 1, 1);
+    str.erase(0, 1);
+  }
+}
+
+}  // namespace
 
 // Used by boost::program_options when parsing enum Channel.
 std::istream& operator>>(std::istream& in, Channels& channels) {
@@ -591,7 +608,7 @@ class JsonEncoder : boost::static_visitor<rapidjson::Value> {
     end_ = duration_tree.durations().cend();
     rapidjson::Value retval(rapidjson::kObjectType);
     retval.AddMember("type", "duration_tree", alloc_);
-    retval.AddMember("thread_id", to_string(duration_tree.thread_id_), alloc_);
+    retval.AddMember("thread_id", std::to_string(duration_tree.thread_id_), alloc_);
     retval.AddMember("children", childNodes(duration_tree.depth_), alloc_);
     return retval;
   }
@@ -619,7 +636,7 @@ class JsonEncoder : boost::static_visitor<rapidjson::Value> {
     if (begin_ != end_) {
       auto const& root_duration = boost::get<Duration>(*(begin_++));
       retval.AddMember("type", "root", alloc_);
-      retval.AddMember("thread_id", to_string(kv_pair.first), alloc_);
+      retval.AddMember("thread_id", std::to_string(kv_pair.first), alloc_);
       retval.AddMember(
           "total_duration_ms", rapidjson::Value(root_duration.value()), alloc_);
       retval.AddMember("name", rapidjson::StringRef(root_duration.name_), alloc_);

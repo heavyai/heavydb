@@ -18,7 +18,7 @@
 #define _MAPDPATH_H
 
 #include <boost/filesystem/path.hpp>
-#include "Logger.h"
+#include "Logger/Logger.h"
 
 #ifdef __APPLE__
 #include <libproc.h>

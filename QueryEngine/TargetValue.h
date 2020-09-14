@@ -27,7 +27,7 @@
 
 #include <boost/optional.hpp>
 #include <boost/variant.hpp>
-#include "Shared/Logger.h"
+#include "Logger/Logger.h"
 
 #include <Shared/sqltypes.h>
 

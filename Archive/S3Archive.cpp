@@ -26,7 +26,7 @@
 #include <fstream>
 #include <memory>
 
-#include "Shared/Logger.h"
+#include "Logger/Logger.h"
 
 int S3Archive::awsapi_count;
 std::mutex S3Archive::awsapi_mtx;

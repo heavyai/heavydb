@@ -17,8 +17,6 @@
 #ifndef SHARED_STRINGTRANSFORM_H
 #define SHARED_STRINGTRANSFORM_H
 
-#include "Logger.h"
-
 #ifndef __CUDACC__
 #include <boost/config.hpp>
 #include <boost/regex.hpp>
@@ -120,11 +118,6 @@ std::string strip(std::string_view str);
 //! sanitize an SQL string
 bool remove_unquoted_newlines_linefeeds_and_tabs_from_sql_string(
     std::string& str) noexcept;
-
-// Remove quotes if they match from beginning and end of string.
-// Return true if string was changed, false if not.
-// Does not check for escaped quotes within string.
-bool unquote(std::string&);
 
 #ifndef __CUDACC__
 //! Quote a string while escaping any existing quotes in the string.

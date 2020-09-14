@@ -16,9 +16,9 @@
 
 #pragma once
 
+#include "Logger/Logger.h"
 #include "QueryEngine/ColumnFetcher.h"
 #include "QueryEngine/Descriptors/QueryCompilationDescriptor.h"
-#include "Shared/Logger.h"
 
 class SharedKernelContext {
  public:

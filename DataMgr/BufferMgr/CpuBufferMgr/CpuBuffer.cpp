@@ -20,7 +20,7 @@
 #include <cstring>
 
 #include "CudaMgr/CudaMgr.h"
-#include "Shared/Logger.h"
+#include "Logger/Logger.h"
 
 namespace Buffer_Namespace {
 

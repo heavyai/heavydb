@@ -18,7 +18,7 @@
 
 #include <memory>
 
-#include "Shared/Logger.h"
+#include "Logger/Logger.h"
 
 const Parser::SharedDictionaryDef compress_reference_path(
     Parser::SharedDictionaryDef cur_node,

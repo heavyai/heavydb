@@ -19,10 +19,10 @@
 #include <boost/variant.hpp>
 #include <iostream>
 #include "Catalog/Catalog.h"
+#include "Logger/Logger.h"
 #include "QueryEngine/CompilationOptions.h"
 #include "QueryEngine/ResultSet.h"
 #include "QueryRunner/QueryRunner.h"
-#include "Shared/Logger.h"
 #include "Shared/mapdpath.h"
 #include "Shared/sqltypes.h"
 

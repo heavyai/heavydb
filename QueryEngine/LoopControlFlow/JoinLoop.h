@@ -19,7 +19,7 @@
 #include <llvm/IR/BasicBlock.h>
 #include <llvm/IR/IRBuilder.h>
 #include <llvm/IR/Value.h>
-#include "Shared/Logger.h"
+#include "Logger/Logger.h"
 
 #include "../../Shared/sqldefs.h"
 #include "../CgenState.h"

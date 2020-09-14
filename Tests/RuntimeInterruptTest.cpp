@@ -23,11 +23,11 @@
 #include <stdexcept>
 
 #include "Catalog/Catalog.h"
+#include "Logger/Logger.h"
 #include "QueryEngine/CompilationOptions.h"
 #include "QueryEngine/Execute.h"
 #include "QueryEngine/ResultSet.h"
 #include "QueryRunner/QueryRunner.h"
-#include "Shared/Logger.h"
 #include "Shared/StringTransform.h"
 
 using QR = QueryRunner::QueryRunner;

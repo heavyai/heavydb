@@ -19,7 +19,7 @@
 
 #include "gen-cpp/omnisci_types.h"
 
-#include "Logger.h"
+#include "Logger/Logger.h"
 
 #include <string>
 

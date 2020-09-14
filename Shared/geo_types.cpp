@@ -15,7 +15,7 @@
  */
 
 #include "geo_types.h"
-#include "Logger.h"
+#include "Logger/Logger.h"
 #include "sqltypes.h"
 
 #include <gdal.h>

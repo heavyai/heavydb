@@ -24,7 +24,7 @@
 
 #include "../Shared/TargetInfo.h"
 
-#include "Logger.h"
+#include "Logger/Logger.h"
 
 #include <limits>
 

@@ -27,7 +27,7 @@
 #include <iostream>
 #include <stdexcept>
 #include <string>
-#include "Logger.h"
+#include "Logger/Logger.h"
 
 namespace File_Namespace {
 

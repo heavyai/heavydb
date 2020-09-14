@@ -33,8 +33,8 @@
 #include <vector>
 
 #include "DataMgr/ChunkMetadata.h"
+#include "Logger/Logger.h"
 #include "QueryEngine/CompilationOptions.h"
-#include "Shared/Logger.h"
 
 namespace Fragmenter_Namespace {
 class FragmentInfo;

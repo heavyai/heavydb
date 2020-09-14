@@ -39,7 +39,7 @@
 #include "../Shared/DateConverters.h"
 #include "../Shared/measure.h"
 #include "../Shared/sqltypes.h"
-#include "Shared/Logger.h"
+#include "Logger/Logger.h"
 
 using namespace Catalog_Namespace;
 using namespace Fragmenter_Namespace;

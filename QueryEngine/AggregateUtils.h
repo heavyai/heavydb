@@ -21,7 +21,7 @@
 #include "BufferCompaction.h"
 #include "TypePunning.h"
 
-#include "Shared/Logger.h"
+#include "Logger/Logger.h"
 
 inline void set_component(int8_t* group_by_buffer,
                           const size_t comp_sz,

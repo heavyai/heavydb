@@ -40,7 +40,7 @@
 
 #include "QueryEngine/Descriptors/QueryCompilationDescriptor.h"
 
-#include "../Shared/Logger.h"
+#include "../Logger/Logger.h"
 #include "../Shared/SystemParameters.h"
 #include "../Shared/mapd_shared_mutex.h"
 #include "../Shared/measure.h"

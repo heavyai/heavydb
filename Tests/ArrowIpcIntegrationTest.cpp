@@ -40,9 +40,9 @@ using namespace ::apache::thrift;
 using namespace ::apache::thrift::protocol;
 using namespace ::apache::thrift::transport;
 
+#include "Logger/Logger.h"
 #include "QueryEngine/CompilationOptions.h"
 #include "Shared/ArrowUtil.h"
-#include "Shared/Logger.h"
 #include "Shared/ThriftClient.h"
 
 #include "gen-cpp/OmniSci.h"

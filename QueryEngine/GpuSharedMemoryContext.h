@@ -15,7 +15,7 @@
  */
 
 #pragma once
-#include "Shared/Logger.h"
+#include "Logger/Logger.h"
 
 class GpuSharedMemoryContext {
  public:

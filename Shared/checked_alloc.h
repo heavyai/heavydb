@@ -24,7 +24,7 @@
 #include <ostream>
 #include <stdexcept>
 #include <string>
-#include "../Shared/Logger.h"
+#include "../Logger/Logger.h"
 #include "../Shared/types.h"
 
 class OutOfHostMemory : public std::bad_alloc {

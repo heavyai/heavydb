@@ -26,12 +26,12 @@
 #include "Catalog/Catalog.h"
 #include "Catalog/DBObject.h"
 #include "DataMgr/DataMgr.h"
+#include "Logger/Logger.h"
 #include "QueryEngine/Execute.h"
 #include "QueryEngine/ExtensionFunctionsWhitelist.h"
 #include "QueryEngine/ResultSet.h"
 #include "QueryEngine/UDFCompiler.h"
 #include "QueryRunner/QueryRunner.h"
-#include "Shared/Logger.h"
 #include "TestHelpers.h"
 
 #ifndef BASE_PATH

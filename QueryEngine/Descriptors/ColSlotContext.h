@@ -24,7 +24,7 @@
 
 #pragma once
 
-#include "Shared/Logger.h"
+#include "Logger/Logger.h"
 
 #include <algorithm>
 #include <string>

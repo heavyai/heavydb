@@ -24,7 +24,7 @@
 #ifndef ANALYZER_H
 #define ANALYZER_H
 
-#include "../Shared/Logger.h"
+#include "../Logger/Logger.h"
 
 #include <cstdint>
 #include <iostream>

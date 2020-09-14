@@ -15,7 +15,7 @@
  */
 
 #include "CudaMgr.h"
-#include "Shared/Logger.h"
+#include "Logger/Logger.h"
 
 namespace CudaMgr_Namespace {
 

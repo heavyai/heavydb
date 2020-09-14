@@ -19,7 +19,7 @@
 #include <thread>
 
 #include "DynamicWatchdog.h"
-#include "Shared/Logger.h"
+#include "Logger/Logger.h"
 
 static __inline__ uint64_t read_cycle_counter(void) {
 #if (defined(__x86_64__) || defined(__x86_64))

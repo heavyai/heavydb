@@ -16,9 +16,9 @@
 
 #include "QueryEngine/ExternalExecutor.h"
 
+#include "Logger/Logger.h"
 #include "QueryEngine/Execute.h"
 #include "QueryEngine/OutputBufferInitialization.h"
-#include "Shared/Logger.h"
 #include "SqliteConnector/SqliteConnector.h"
 
 namespace {

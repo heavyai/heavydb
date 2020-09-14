@@ -27,12 +27,12 @@
 #include "Catalog/Catalog.h"
 #include "Catalog/DBObject.h"
 #include "DataMgr/DataMgr.h"
+#include "Logger/Logger.h"
 #include "QueryEngine/Execute.h"
 #include "QueryEngine/MurmurHash1Inl.h"
 #include "QueryEngine/ResultSet.h"
 #include "QueryEngine/UDFCompiler.h"
 #include "QueryRunner/QueryRunner.h"
-#include "Shared/Logger.h"
 #include "Shared/SystemParameters.h"
 #include "TestHelpers.h"
 

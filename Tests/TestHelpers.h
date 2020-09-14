@@ -18,7 +18,7 @@
 #define TEST_HELPERS_H_
 
 #include "../QueryEngine/TargetValue.h"
-#include "Shared/Logger.h"
+#include "Logger/Logger.h"
 
 #include "LeafHostInfo.h"
 

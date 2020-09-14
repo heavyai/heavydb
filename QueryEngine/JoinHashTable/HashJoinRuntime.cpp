@@ -27,7 +27,7 @@
 #include "../GpuRtConstants.h"
 #include "../JoinHashTable/JoinHashImpl.h"
 #else
-#include "Shared/Logger.h"
+#include "Logger/Logger.h"
 
 #include "QueryEngine/RuntimeFunctions.h"
 #include "Shared/likely.h"

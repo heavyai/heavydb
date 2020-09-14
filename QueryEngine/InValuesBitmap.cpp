@@ -23,8 +23,8 @@
 #include "../Parser/ParserNode.h"
 #include "../Shared/checked_alloc.h"
 #include "GroupByAndAggregate.h"
+#include "Logger/Logger.h"
 #include "RuntimeFunctions.h"
-#include "Shared/Logger.h"
 
 #include <boost/multiprecision/cpp_int.hpp>
 #include <limits>

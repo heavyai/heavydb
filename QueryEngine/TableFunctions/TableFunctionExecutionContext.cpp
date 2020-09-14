@@ -17,10 +17,10 @@
 #include "QueryEngine/TableFunctions/TableFunctionExecutionContext.h"
 
 #include "Analyzer/Analyzer.h"
+#include "Logger/Logger.h"
 #include "QueryEngine/ColumnFetcher.h"
 #include "QueryEngine/GpuMemUtils.h"
 #include "QueryEngine/TableFunctions/TableFunctionCompilationContext.h"
-#include "Shared/Logger.h"
 
 namespace {
 

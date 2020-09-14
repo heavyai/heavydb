@@ -22,9 +22,9 @@
 #include <unordered_map>
 #include <vector>
 
+#include "Logger/Logger.h"
 #include "QueryEngine/Execute.h"
 #include "QueryEngine/TableOptimizer.h"
-#include "Shared/Logger.h"
 #include "Shared/sqltypes.h"
 
 #include "MapDRelease.h"

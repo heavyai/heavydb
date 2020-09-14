@@ -19,7 +19,7 @@
 
 #include "../Analyzer/Analyzer.h"
 #include "../Parser/ParserNode.h"
-#include "Shared/Logger.h"
+#include "Logger/Logger.h"
 
 #include "DateTimeTranslator.h"
 

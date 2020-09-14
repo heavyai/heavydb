@@ -16,7 +16,7 @@
 
 #include "StringDictionaryGenerations.h"
 
-#include "Shared/Logger.h"
+#include "Logger/Logger.h"
 
 void StringDictionaryGenerations::setGeneration(const uint32_t id,
                                                 const size_t generation) {

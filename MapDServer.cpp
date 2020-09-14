@@ -35,7 +35,7 @@
 #include <thrift/transport/TServerSocket.h>
 
 #include "Archive/S3Archive.h"
-#include "Shared/Logger.h"
+#include "Logger/Logger.h"
 #include "Shared/SystemParameters.h"
 #include "Shared/file_delete.h"
 #include "Shared/mapd_shared_mutex.h"

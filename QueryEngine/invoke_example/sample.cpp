@@ -20,7 +20,7 @@
 #include <cstring>
 #include <fstream>
 #include <iostream>
-#include "Shared/Logger.h"
+#include "Logger/Logger.h"
 #include "cuda.h"
 
 template <typename TimeT = std::chrono::milliseconds>
