@@ -75,7 +75,7 @@ int64_t* alloc_group_by_buffer(const size_t numBytes,
 
 inline int64_t get_consistent_frag_size(const std::vector<uint64_t>& frag_offsets) {
   if (frag_offsets.size() < 2) {
-    return ssize_t(-1);
+    return int64_t(-1);
   }
   const auto frag_size = frag_offsets[1] - frag_offsets[0];
   for (size_t i = 2; i < frag_offsets.size(); ++i) {
@@ -522,12 +522,12 @@ void QueryMemoryInitializer::initColumnPerRow(const QueryMemoryDescriptor& query
                                               int8_t* row_ptr,
                                               const size_t bin,
                                               const std::vector<int64_t>& init_vals,
-                                              const std::vector<ssize_t>& bitmap_sizes) {
+                                              const std::vector<int64_t>& bitmap_sizes) {
   int8_t* col_ptr = row_ptr;
   size_t init_vec_idx = 0;
   for (size_t col_idx = 0; col_idx < query_mem_desc.getSlotCount();
        col_ptr += query_mem_desc.getNextColOffInBytes(col_ptr, bin, col_idx++)) {
-    const ssize_t bm_sz{bitmap_sizes[col_idx]};
+    const int64_t bm_sz{bitmap_sizes[col_idx]};
     int64_t init_val{0};
     if (!bm_sz || !query_mem_desc.isGroupBy()) {
       if (query_mem_desc.getPaddedSlotWidthBytes(col_idx) > 0) {
@@ -594,12 +594,12 @@ void QueryMemoryInitializer::allocateCountDistinctGpuMem(
 
 // deferred is true for group by queries; initGroups will allocate a bitmap
 // for each group slot
-std::vector<ssize_t> QueryMemoryInitializer::allocateCountDistinctBuffers(
+std::vector<int64_t> QueryMemoryInitializer::allocateCountDistinctBuffers(
     const QueryMemoryDescriptor& query_mem_desc,
     const bool deferred,
     const Executor* executor) {
   const size_t agg_col_count{query_mem_desc.getSlotCount()};
-  std::vector<ssize_t> agg_bitmap_size(deferred ? agg_col_count : 0);
+  std::vector<int64_t> agg_bitmap_size(deferred ? agg_col_count : 0);
 
   CHECK_GE(agg_col_count, executor->plan_state_->target_exprs_.size());
   for (size_t target_idx = 0; target_idx < executor->plan_state_->target_exprs_.size();

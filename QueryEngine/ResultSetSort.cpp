@@ -69,7 +69,7 @@ void ResultSet::doBaselineSort(const ExecutorDeviceType device_type,
   const auto target_groupby_indices_sz = query_mem_desc_.targetGroupbyIndicesSize();
   CHECK(target_groupby_indices_sz == 0 ||
         static_cast<size_t>(oe.tle_no) <= target_groupby_indices_sz);
-  const ssize_t target_groupby_index{
+  const int64_t target_groupby_index{
       target_groupby_indices_sz == 0
           ? -1
           : query_mem_desc_.getTargetGroupbyIndex(oe.tle_no - 1)};

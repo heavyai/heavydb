@@ -355,7 +355,7 @@ inline size_t get_count_distinct_sub_bitmap_count(const size_t bitmap_sz_bits,
 template <class T>
 inline std::vector<int8_t> get_col_byte_widths(
     const T& col_expr_list,
-    const std::vector<ssize_t>& col_exprs_to_not_project) {
+    const std::vector<int64_t>& col_exprs_to_not_project) {
   // Note that non-projected col exprs could be projected cols that we can lazy fetch or
   // grouped cols with keyless hash
   if (!col_exprs_to_not_project.empty()) {

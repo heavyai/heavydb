@@ -151,11 +151,11 @@ class QueryMemoryInitializer {
                         int8_t* row_ptr,
                         const size_t bin,
                         const std::vector<int64_t>& init_vals,
-                        const std::vector<ssize_t>& bitmap_sizes);
+                        const std::vector<int64_t>& bitmap_sizes);
 
   void allocateCountDistinctGpuMem(const QueryMemoryDescriptor& query_mem_desc);
 
-  std::vector<ssize_t> allocateCountDistinctBuffers(
+  std::vector<int64_t> allocateCountDistinctBuffers(
       const QueryMemoryDescriptor& query_mem_desc,
       const bool deferred,
       const Executor* executor);

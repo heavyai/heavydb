@@ -81,7 +81,7 @@ class QueryMemoryDescriptor {
                         const ColSlotContext& col_slot_context,
                         const std::vector<int8_t>& group_col_widths,
                         const int8_t group_col_compact_width,
-                        const std::vector<ssize_t>& target_groupby_indices,
+                        const std::vector<int64_t>& target_groupby_indices,
                         const size_t entry_count,
                         const CountDistinctDescriptors count_distinct_descriptors,
                         const bool sort_on_gpu_hint,
@@ -223,12 +223,12 @@ class QueryMemoryDescriptor {
 
   void alignPaddedSlots();
 
-  ssize_t getTargetGroupbyIndex(const size_t target_idx) const {
+  int64_t getTargetGroupbyIndex(const size_t target_idx) const {
     CHECK_LT(target_idx, target_groupby_indices_.size());
     return target_groupby_indices_[target_idx];
   }
 
-  void setAllTargetGroupbyIndices(std::vector<ssize_t> group_by_indices) {
+  void setAllTargetGroupbyIndices(std::vector<int64_t> group_by_indices) {
     target_groupby_indices_ = group_by_indices;
   }
 
@@ -237,7 +237,7 @@ class QueryMemoryDescriptor {
     return std::count_if(
         target_groupby_indices_.begin(),
         target_groupby_indices_.end(),
-        [](const ssize_t& target_group_by_index) { return target_group_by_index < 0; });
+        [](const int64_t& target_group_by_index) { return target_group_by_index < 0; });
   }
   void clearTargetGroupbyIndices() { target_groupby_indices_.clear(); }
 
@@ -341,7 +341,7 @@ class QueryMemoryDescriptor {
   int8_t group_col_compact_width_;  // compact width for all group
                                     // cols if able to be consistent
                                     // otherwise 0
-  std::vector<ssize_t> target_groupby_indices_;
+  std::vector<int64_t> target_groupby_indices_;
   size_t entry_count_;  // the number of entries in the main buffer
   int64_t min_val_;     // meaningful for OneColKnownRange,
                         // MultiColPerfectHash only

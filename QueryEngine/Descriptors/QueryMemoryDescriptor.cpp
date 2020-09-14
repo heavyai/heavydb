@@ -37,10 +37,10 @@ bool is_int_and_no_bigger_than(const SQLTypeInfo& ti, const size_t byte_width) {
   return get_bit_width(ti) <= (byte_width * 8);
 }
 
-std::vector<ssize_t> target_expr_group_by_indices(
+std::vector<int64_t> target_expr_group_by_indices(
     const std::list<std::shared_ptr<Analyzer::Expr>>& groupby_exprs,
     const std::vector<Analyzer::Expr*>& target_exprs) {
-  std::vector<ssize_t> indices(target_exprs.size(), -1);
+  std::vector<int64_t> indices(target_exprs.size(), -1);
   for (size_t target_idx = 0; target_idx < target_exprs.size(); ++target_idx) {
     const auto target_expr = target_exprs[target_idx];
     if (dynamic_cast<const Analyzer::AggExpr*>(target_expr)) {
@@ -55,13 +55,13 @@ std::vector<ssize_t> target_expr_group_by_indices(
   return indices;
 }
 
-std::vector<ssize_t> target_expr_proj_indices(const RelAlgExecutionUnit& ra_exe_unit,
+std::vector<int64_t> target_expr_proj_indices(const RelAlgExecutionUnit& ra_exe_unit,
                                               const Catalog_Namespace::Catalog& cat) {
   if (ra_exe_unit.input_descs.size() > 1 ||
       !ra_exe_unit.sort_info.order_entries.empty()) {
     return {};
   }
-  std::vector<ssize_t> target_indices(ra_exe_unit.target_exprs.size(), -1);
+  std::vector<int64_t> target_indices(ra_exe_unit.target_exprs.size(), -1);
   UsedColumnsVisitor columns_visitor;
   std::unordered_set<int> used_columns;
   for (const auto& simple_qual : ra_exe_unit.simple_quals) {
@@ -227,7 +227,7 @@ std::unique_ptr<QueryMemoryDescriptor> QueryMemoryDescriptor::init(
         col_slot_context,
         std::vector<int8_t>{},
         /*group_col_compact_width=*/0,
-        std::vector<ssize_t>{},
+        std::vector<int64_t>{},
         /*entry_count=*/1,
         count_distinct_descriptors,
         false,
@@ -245,7 +245,7 @@ std::unique_ptr<QueryMemoryDescriptor> QueryMemoryDescriptor::init(
   int8_t group_col_compact_width = 0;
   int32_t idx_target_as_key = -1;
   auto output_columnar = output_columnar_hint;
-  std::vector<ssize_t> target_groupby_indices;
+  std::vector<int64_t> target_groupby_indices;
 
   switch (col_range_info.hash_type_) {
     case QueryDescriptionType::GroupByPerfectHash: {
@@ -343,7 +343,7 @@ std::unique_ptr<QueryMemoryDescriptor> QueryMemoryDescriptor::init(
       CHECK(catalog);
       target_groupby_indices = executor->plan_state_->allow_lazy_fetch_
                                    ? target_expr_proj_indices(ra_exe_unit, *catalog)
-                                   : std::vector<ssize_t>{};
+                                   : std::vector<int64_t>{};
 
       col_slot_context = ColSlotContext(ra_exe_unit.target_exprs, target_groupby_indices);
       break;
@@ -386,7 +386,7 @@ QueryMemoryDescriptor::QueryMemoryDescriptor(
     const ColSlotContext& col_slot_context,
     const std::vector<int8_t>& group_col_widths,
     const int8_t group_col_compact_width,
-    const std::vector<ssize_t>& target_groupby_indices,
+    const std::vector<int64_t>& target_groupby_indices,
     const size_t entry_count,
     const CountDistinctDescriptors count_distinct_descriptors,
     const bool sort_on_gpu_hint,
@@ -979,7 +979,7 @@ size_t QueryMemoryDescriptor::getBufferColSlotCount() const {
   }
   return total_slot_count - std::count_if(target_groupby_indices_.begin(),
                                           target_groupby_indices_.end(),
-                                          [](const ssize_t i) { return i >= 0; });
+                                          [](const int64_t i) { return i >= 0; });
 }
 
 bool QueryMemoryDescriptor::usesGetGroupValueFast() const {

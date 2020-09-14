@@ -32,7 +32,7 @@ struct GroupByBufferLayoutInfo {
   const size_t col_bytes;
   const size_t row_bytes;
   const TargetInfo oe_target_info;
-  const ssize_t target_groupby_index;
+  const int64_t target_groupby_index;
 };
 
 namespace Data_Namespace {

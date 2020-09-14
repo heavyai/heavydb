@@ -34,7 +34,7 @@
 extern bool g_bigint_count;
 
 ColSlotContext::ColSlotContext(const std::vector<Analyzer::Expr*>& col_expr_list,
-                               const std::vector<ssize_t>& col_exprs_to_not_project) {
+                               const std::vector<int64_t>& col_exprs_to_not_project) {
   // Note that non-projected col exprs could be projected cols that we can lazy fetch or
   // grouped cols with keyless hash
   if (!col_exprs_to_not_project.empty()) {
