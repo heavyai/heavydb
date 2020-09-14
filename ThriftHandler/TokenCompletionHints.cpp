@@ -30,8 +30,8 @@ bool is_qualified_identifier_part(const char ch) {
 }  // namespace
 
 // Straightforward port from SqlAdvisor.getCompletionHints.
-std::string find_last_word_from_cursor(const std::string& sql, const ssize_t cursor) {
-  if (cursor > static_cast<ssize_t>(sql.size())) {
+std::string find_last_word_from_cursor(const std::string& sql, const int64_t cursor) {
+  if (cursor > static_cast<int64_t>(sql.size())) {
     return "";
   }
   auto word_start = cursor;
@@ -51,11 +51,11 @@ std::string find_last_word_from_cursor(const std::string& sql, const ssize_t cur
   // Search forwards to the end of the word we should remove. Eat up
   // trailing double-quote, if any
   auto word_end = cursor;
-  while (word_end < static_cast<ssize_t>(sql.size()) &&
+  while (word_end < static_cast<int64_t>(sql.size()) &&
          is_qualified_identifier_part(sql[word_end - 1])) {
     ++word_end;
   }
-  if (quoted && (word_end < static_cast<ssize_t>(sql.size())) && (sql[word_end] == '"')) {
+  if (quoted && (word_end < static_cast<int64_t>(sql.size())) && (sql[word_end] == '"')) {
     ++word_end;
   }
   std::string last_word(sql.begin() + word_start + (quoted ? 1 : 0),

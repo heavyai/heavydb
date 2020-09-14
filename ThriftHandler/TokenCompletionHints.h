@@ -24,7 +24,7 @@
 
 // Find last "word" (can contain: alphanumeric, underscore, dot) from position
 // `cursor` inside or at the end of `sql`.
-std::string find_last_word_from_cursor(const std::string& sql, const ssize_t cursor);
+std::string find_last_word_from_cursor(const std::string& sql, const int64_t cursor);
 
 // Only allows a few whitelisted keywords, filters out everything else.
 std::vector<TCompletionHint> just_whitelisted_keyword_hints(
