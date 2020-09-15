@@ -34,8 +34,8 @@ source $SCRIPTS_DIR/common-functions.sh
 source /etc/os-release
 if [ "$ID" == "ubuntu" ] ; then
   PACKAGER="apt -y"
-  if [ "$VERSION_ID" != "19.10" ] && [ "$VERSION_ID" != "19.04" ] && [ "$VERSION_ID" != "18.04" ] && [ "$VERSION_ID" != "16.04" ]; then
-    echo "Ubuntu 19.10, 19.04, 18.04, and 16.04 are the only debian-based releases supported by this script"
+  if [ "$VERSION_ID" != "20.04" ] && [ "$VERSION_ID" != "19.10" ] && [ "$VERSION_ID" != "19.04" ] && [ "$VERSION_ID" != "18.04" ]; then
+    echo "Ubuntu 20.04, 19.10, 19.04, and 18.04 are the only debian-based releases supported by this script"
     exit 1
   fi
 else
@@ -46,8 +46,8 @@ fi
 sudo mkdir -p $PREFIX
 sudo chown -R $(id -u) $PREFIX
 
-sudo apt update
-sudo apt install -y \
+DEBIAN_FRONTEND=noninteractive sudo apt update
+DEBIAN_FRONTEND=noninteractive sudo apt install -y \
     software-properties-common \
     build-essential \
     ccache \
@@ -116,6 +116,7 @@ install_cmake
 
 # llvm
 # (see common-functions.sh)
+LLVM_BUILD_DYLIB=true
 install_llvm
 
 # Geo Support

@@ -9,8 +9,8 @@ PREFIX=/usr/local/mapd-deps
 source /etc/os-release
 if [ "$ID" == "ubuntu" ] ; then
   PACKAGER="apt -y"
-  if [ "$VERSION_ID" != "19.10" ] && [ "$VERSION_ID" != "19.04" ] && [ "$VERSION_ID" != "18.04" ] && [ "$VERSION_ID" != "16.04" ]; then
-    echo "Ubuntu 19.10, 19.04, 18.04, and 16.04 are the only debian-based releases supported by this script"
+  if [ "$VERSION_ID" != "20.04" ] && [ "$VERSION_ID" != "19.10" ] && [ "$VERSION_ID" != "19.04" ] && [ "$VERSION_ID" != "18.04" ]; then
+    echo "Ubuntu 20.04, 19.10, 19.04, and 18.04 are the only debian-based releases supported by this script"
     exit 1
   fi
 elif [ "$ID" == "centos" ] ; then
@@ -102,6 +102,7 @@ if [ "$ID" == "ubuntu" ] ; then
       jq \
       python-dev \
       python-yaml \
+      libxerces-c-dev \
       swig
 
 # Set up gcc-8 as default gcc
