@@ -33,6 +33,7 @@ bool g_enable_debug_timer{false};
 #include <boost/log/support/date_time.hpp>
 #include <boost/log/utility/setup.hpp>
 #include <boost/phoenix.hpp>
+#include <boost/smart_ptr/weak_ptr.hpp>
 #include <boost/variant.hpp>
 
 #include <atomic>
