@@ -194,8 +194,8 @@ logger::Severity StdLog::stdlogBeginSeverity(char const* func) {
 void StdLog::log(logger::Severity severity, char const* label) {
   if (logger::fast_logging_check(severity)) {
     std::stringstream ss;
-    ss << file_ << ':' << line_ << ' ' << label << ' ' << func_ << ' ' << match_ << ' '
-       << duration<std::chrono::milliseconds>() << ' ';
+    ss << logger::thread_id() << ' ' << file_ << ':' << line_ << ' ' << label << ' '
+       << func_ << ' ' << match_ << ' ' << duration<std::chrono::milliseconds>() << ' ';
     if (session_info_) {
       ss << SessionInfoFormatter{*session_info_} << ' ';
     } else if (query_state_ && query_state_->getSessionData()) {

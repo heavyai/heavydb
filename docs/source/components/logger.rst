@@ -227,7 +227,7 @@ STDLOG
 ``DBHandler`` uses a logging helper class ``StdLog`` for logging query-specific information in
 a standard format::
 
- (timestamp) (severity) (process_id) (filename:line_number) stdlog (function_name) (match_id)
+ (timestamp) (severity) (process_id) (thread_id) (filename:line_number) stdlog (function_name) (match_id)
  (time_ms) (username) (dbname) (public_session_id) (array of names) (array of values)
 
 Since this contains timing information, it is logged at the end of query execution.  If the ``DEBUG1`` severity is
