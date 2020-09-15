@@ -2352,6 +2352,47 @@ TEST_F(RecoverCacheQueryTest, RecoverThenPopulateDataWrappersOnDemand) {
   sqlDropForeignTable();
 }
 
+TEST_F(RecoverCacheQueryTest, RecoverThenPopulateDataWrappersOnDemandVarLen) {
+  auto cat = &getCatalog();
+  auto fsm = cat->getDataMgr().getForeignStorageMgr();
+  auto cache = fsm->getForeignStorageCache();
+
+  sqlDropForeignTable();
+  std::string query = "CREATE FOREIGN TABLE " + default_table_name +
+                      " (t TEXT, i INTEGER[]) "s +
+                      "SERVER omnisci_local_csv WITH (file_path = '" +
+                      getDataFilesPath() + "/" + "example_1_dir_archives/');";
+  sql(query);
+  auto td = cat->getMetadataForTable(default_table_name);
+  ChunkKey key{cat->getCurrentDB().dbId, td->tableId, 1, 0};
+  ChunkKey table_key{cat->getCurrentDB().dbId, td->tableId};
+
+  sqlAndCompareResult("SELECT COUNT(*) FROM " + default_table_name + ";", {{i(3)}});
+  // 2 columns
+  ASSERT_EQ(cache->getNumCachedMetadata(), 2U);
+  ASSERT_EQ(cache->getNumCachedChunks(), 0U);
+  // Reset cache and clear memory representations.
+  resetPersistentStorageMgr(true);
+  fsm = cat->getDataMgr().getForeignStorageMgr();
+  cache = fsm->getForeignStorageCache();
+  cat->getDataMgr().deleteChunksWithPrefix(table_key, MemoryLevel::CPU_LEVEL);
+  cat->getDataMgr().deleteChunksWithPrefix(table_key, MemoryLevel::GPU_LEVEL);
+
+  // Cache should be empty until query prompts recovery from disk
+  ASSERT_EQ(cache->getNumCachedMetadata(), 0U);
+  ASSERT_EQ(cache->getNumCachedChunks(), 0U);
+
+  sqlAndCompareResult("SELECT * FROM " + default_table_name + "  ORDER BY t;",
+                      {{"a", array({i(1), i(1), i(1)})},
+                       {"aa", array({Null_i, i(2), i(2)})},
+                       {"aaa", array({i(3), Null_i, i(3)})}});
+  // 2 columns
+  ASSERT_EQ(cache->getNumCachedMetadata(), 2U);
+  // extra chunk for varlen
+  ASSERT_EQ(cache->getNumCachedChunks(), 3U);
+  sqlDropForeignTable();
+}
+
 int main(int argc, char** argv) {
   TestHelpers::init_logger_stderr_only(argc, argv);
   testing::InitGoogleTest(&argc, argv);

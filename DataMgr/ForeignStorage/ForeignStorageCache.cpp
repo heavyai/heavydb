@@ -148,7 +148,7 @@ void ForeignStorageCache::cacheMetadataVec(const ChunkMetadataVector& metadata_v
 
       if (!index_chunk_key.empty()) {
         CHECK(global_file_mgr_->isBufferOnDevice(index_chunk_key));
-        index_buffer = global_file_mgr_->getBuffer(chunk_key);
+        index_buffer = global_file_mgr_->getBuffer(index_chunk_key);
         CHECK(index_buffer);
       }
     }
@@ -158,7 +158,7 @@ void ForeignStorageCache::cacheMetadataVec(const ChunkMetadataVector& metadata_v
 
     if (!index_chunk_key.empty()) {
       CHECK(index_buffer);
-      index_buffer->isUpdated();
+      index_buffer->setUpdated();
       evictThenEraseChunk(index_chunk_key);
     }
   }
