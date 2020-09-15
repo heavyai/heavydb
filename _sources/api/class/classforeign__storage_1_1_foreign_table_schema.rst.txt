@@ -1,0 +1,9 @@
+Class foreign_storage::ForeignTableSchema
+=========================================
+
+.. doxygenclass:: foreign_storage::ForeignTableSchema
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

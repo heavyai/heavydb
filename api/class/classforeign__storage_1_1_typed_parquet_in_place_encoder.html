@@ -65,7 +65,7 @@
             
             
               <div class="version">
-                5.5.0dev 93884ef
+                5.5.0dev 8a228a1
               </div>
             
           
@@ -107,7 +107,7 @@
 </li>
 <li class="toctree-l3"><a class="reference internal" href="../../quickstart/deps.html#building-on-ubuntu">2.1.2. Building on Ubuntu</a><ul>
 <li class="toctree-l4"><a class="reference internal" href="../../quickstart/deps.html#ubuntu-16-04">2.1.2.1. Ubuntu 16.04</a></li>
-<li class="toctree-l4"><a class="reference internal" href="../../quickstart/deps.html#ubuntu-18-04">2.1.2.2. Ubuntu 18.04</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../quickstart/deps.html#ubuntu-18-04-and-20-04">2.1.2.2. Ubuntu 18.04 and 20.04</a></li>
 </ul>
 </li>
 <li class="toctree-l3"><a class="reference internal" href="../../quickstart/deps.html#building-on-centos">2.1.3. Building on CentOS</a></li>
@@ -986,6 +986,7 @@
 <li class="toctree-l2"><a class="reference internal" href="classddl__utils_1_1_file_path_whitelist.html">Class ddl_utils::FilePathWhitelist</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classddl__utils_1_1_sql_type.html">Class ddl_utils::SqlType</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classdetails_1_1_rel_alg_dispatcher.html">Class details::RelAlgDispatcher</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_archive_wrapper.html">Class foreign_storage::ArchiveWrapper</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_compressed_file_reader.html">Class foreign_storage::CompressedFileReader</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_csv_data_wrapper.html">Class foreign_storage::CsvDataWrapper</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_csv_reader.html">Class foreign_storage::CsvReader</a></li>
@@ -994,6 +995,7 @@
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_foreign_storage_buffer.html">Class foreign_storage::ForeignStorageBuffer</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_foreign_storage_cache.html">Class foreign_storage::ForeignStorageCache</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_foreign_storage_mgr.html">Class foreign_storage::ForeignStorageMgr</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_foreign_table_schema.html">Class foreign_storage::ForeignTableSchema</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_lazy_parquet_chunk_loader.html">Class foreign_storage::LazyParquetChunkLoader</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_lazy_parquet_importer.html">Class foreign_storage::LazyParquetImporter</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_local_multi_file_reader.html">Class foreign_storage::LocalMultiFileReader</a></li>
@@ -1001,9 +1003,11 @@
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_multi_s3_reader.html">Class foreign_storage::MultiS3Reader</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_parquet_data_wrapper.html">Class foreign_storage::ParquetDataWrapper</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_parquet_decimal_encoder.html">Class foreign_storage::ParquetDecimalEncoder</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_parquet_encoder.html">Class foreign_storage::ParquetEncoder</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_parquet_fixed_length_encoder.html">Class foreign_storage::ParquetFixedLengthEncoder</a></li>
-<li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_parquet_foreign_table_schema.html">Class foreign_storage::ParquetForeignTableSchema</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_parquet_in_place_encoder.html">Class foreign_storage::ParquetInPlaceEncoder</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_parquet_string_encoder.html">Class foreign_storage::ParquetStringEncoder</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_parquet_string_none_encoder.html">Class foreign_storage::ParquetStringNoneEncoder</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_parquet_time_encoder.html">Class foreign_storage::ParquetTimeEncoder</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_parquet_timestamp_encoder.html">Class foreign_storage::ParquetTimestampEncoder</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_parquet_unsigned_fixed_length_encoder.html">Class foreign_storage::ParquetUnsignedFixedLengthEncoder</a></li>
@@ -1526,10 +1530,15 @@
 <dd></dd></dl>
 
 <dl class="function">
-<dt id="_CPPv4N15foreign_storage26TypedParquetInPlaceEncoder10appendDataEP7int16_t7int64_t7int64_t">
-<span id="_CPPv3N15foreign_storage26TypedParquetInPlaceEncoder10appendDataEP7int16_t7int64_t7int64_t"></span><span id="_CPPv2N15foreign_storage26TypedParquetInPlaceEncoder10appendDataEP7int16_t7int64_t7int64_t"></span><span id="foreign_storage::TypedParquetInPlaceEncoder::appendData__int16_tP.int64_t.int64_t"></span><span class="target" id="classforeign__storage_1_1_typed_parquet_in_place_encoder_1aade70ac912b72f747940dbf0dd4c96f3"></span>void <code class="sig-name descname">appendData</code><span class="sig-paren">(</span>int16_t *<em>def_levels</em>, int64_t <em>values_read</em>, int64_t <em>levels_read</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N15foreign_storage26TypedParquetInPlaceEncoder10appendDataEP7int16_t7int64_t7int64_t" title="Permalink to this definition">¶</a><br /></dt>
-<dd><p>This is a specialization of <code class="docutils literal notranslate"><a class="reference internal" href="classforeign__storage_1_1_parquet_in_place_encoder.html#classforeign__storage_1_1_parquet_in_place_encoder_1a15ff2dfe0b5f601b4c839bee5dfccb1b"><span class="std std-ref"><span class="pre">ParquetInPlaceEncoder::appendData</span></span></a></code> for known types that allows for optimization.</p>
-<p>See comment for <code class="docutils literal notranslate"><a class="reference internal" href="classforeign__storage_1_1_parquet_in_place_encoder.html#classforeign__storage_1_1_parquet_in_place_encoder_1a15ff2dfe0b5f601b4c839bee5dfccb1b"><span class="std std-ref"><span class="pre">ParquetInPlaceEncoder::appendData</span></span></a></code> for details. </p>
+<dt id="_CPPv4N15foreign_storage26TypedParquetInPlaceEncoder26TypedParquetInPlaceEncoderEPN14Data_Namespace14AbstractBufferEK6size_tK6size_t">
+<span id="_CPPv3N15foreign_storage26TypedParquetInPlaceEncoder26TypedParquetInPlaceEncoderEPN14Data_Namespace14AbstractBufferEK6size_tK6size_t"></span><span id="_CPPv2N15foreign_storage26TypedParquetInPlaceEncoder26TypedParquetInPlaceEncoderEPN14Data_Namespace14AbstractBufferEK6size_tK6size_t"></span><span id="foreign_storage::TypedParquetInPlaceEncoder::TypedParquetInPlaceEncoder__Data_Namespace::AbstractBufferP.sC.sC"></span><span class="target" id="classforeign__storage_1_1_typed_parquet_in_place_encoder_1ae35670cb34950c3f6a99fb489e8d1d48"></span><code class="sig-name descname">TypedParquetInPlaceEncoder</code><span class="sig-paren">(</span>Data_Namespace::<a class="reference internal" href="class_data___namespace_1_1_abstract_buffer.html#_CPPv4N14Data_Namespace14AbstractBufferE" title="Data_Namespace::AbstractBuffer">AbstractBuffer</a> *<em>buffer</em>, <em class="property">const</em> size_t <em>omnisci_data_type_byte_size</em>, <em class="property">const</em> size_t <em>parquet_data_type_byte_size</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N15foreign_storage26TypedParquetInPlaceEncoder26TypedParquetInPlaceEncoderEPN14Data_Namespace14AbstractBufferEK6size_tK6size_t" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="_CPPv4N15foreign_storage26TypedParquetInPlaceEncoder10appendDataEP7int16_t7int64_t7int64_tP6int8_t">
+<span id="_CPPv3N15foreign_storage26TypedParquetInPlaceEncoder10appendDataEP7int16_t7int64_t7int64_tP6int8_t"></span><span id="_CPPv2N15foreign_storage26TypedParquetInPlaceEncoder10appendDataEP7int16_t7int64_t7int64_tP6int8_t"></span><span id="foreign_storage::TypedParquetInPlaceEncoder::appendData__int16_tP.int64_t.int64_t.int8_tP"></span><span class="target" id="classforeign__storage_1_1_typed_parquet_in_place_encoder_1a79f5ba739d71f513f81d37f5ac8e58d2"></span>void <code class="sig-name descname">appendData</code><span class="sig-paren">(</span>int16_t *<em>def_levels</em>, int64_t <em>values_read</em>, int64_t <em>levels_read</em>, int8_t *<em>values</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N15foreign_storage26TypedParquetInPlaceEncoder10appendDataEP7int16_t7int64_t7int64_tP6int8_t" title="Permalink to this definition">¶</a><br /></dt>
+<dd><p>This is a specialization of <code class="docutils literal notranslate"><a class="reference internal" href="classforeign__storage_1_1_parquet_in_place_encoder.html#classforeign__storage_1_1_parquet_in_place_encoder_1a753c9e27370ea10cc6430053e3d0d0bc"><span class="std std-ref"><span class="pre">ParquetInPlaceEncoder::appendData</span></span></a></code> for known types that allows for optimization.</p>
+<p>See comment for <code class="docutils literal notranslate"><a class="reference internal" href="classforeign__storage_1_1_parquet_in_place_encoder.html#classforeign__storage_1_1_parquet_in_place_encoder_1a753c9e27370ea10cc6430053e3d0d0bc"><span class="std std-ref"><span class="pre">ParquetInPlaceEncoder::appendData</span></span></a></code> for details. </p>
 </dd></dl>
 
 </div>

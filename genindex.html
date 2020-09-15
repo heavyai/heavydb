@@ -64,7 +64,7 @@
             
             
               <div class="version">
-                5.5.0dev 93884ef
+                5.5.0dev 8a228a1
               </div>
             
           
@@ -106,7 +106,7 @@
 </li>
 <li class="toctree-l3"><a class="reference internal" href="quickstart/deps.html#building-on-ubuntu">2.1.2. Building on Ubuntu</a><ul>
 <li class="toctree-l4"><a class="reference internal" href="quickstart/deps.html#ubuntu-16-04">2.1.2.1. Ubuntu 16.04</a></li>
-<li class="toctree-l4"><a class="reference internal" href="quickstart/deps.html#ubuntu-18-04">2.1.2.2. Ubuntu 18.04</a></li>
+<li class="toctree-l4"><a class="reference internal" href="quickstart/deps.html#ubuntu-18-04-and-20-04">2.1.2.2. Ubuntu 18.04 and 20.04</a></li>
 </ul>
 </li>
 <li class="toctree-l3"><a class="reference internal" href="quickstart/deps.html#building-on-centos">2.1.3. Building on CentOS</a></li>
@@ -985,6 +985,7 @@
 <li class="toctree-l2"><a class="reference internal" href="api/class/classddl__utils_1_1_file_path_whitelist.html">Class ddl_utils::FilePathWhitelist</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/classddl__utils_1_1_sql_type.html">Class ddl_utils::SqlType</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/classdetails_1_1_rel_alg_dispatcher.html">Class details::RelAlgDispatcher</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/class/classforeign__storage_1_1_archive_wrapper.html">Class foreign_storage::ArchiveWrapper</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/classforeign__storage_1_1_compressed_file_reader.html">Class foreign_storage::CompressedFileReader</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/classforeign__storage_1_1_csv_data_wrapper.html">Class foreign_storage::CsvDataWrapper</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/classforeign__storage_1_1_csv_reader.html">Class foreign_storage::CsvReader</a></li>
@@ -993,6 +994,7 @@
 <li class="toctree-l2"><a class="reference internal" href="api/class/classforeign__storage_1_1_foreign_storage_buffer.html">Class foreign_storage::ForeignStorageBuffer</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/classforeign__storage_1_1_foreign_storage_cache.html">Class foreign_storage::ForeignStorageCache</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/classforeign__storage_1_1_foreign_storage_mgr.html">Class foreign_storage::ForeignStorageMgr</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/class/classforeign__storage_1_1_foreign_table_schema.html">Class foreign_storage::ForeignTableSchema</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/classforeign__storage_1_1_lazy_parquet_chunk_loader.html">Class foreign_storage::LazyParquetChunkLoader</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/classforeign__storage_1_1_lazy_parquet_importer.html">Class foreign_storage::LazyParquetImporter</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/classforeign__storage_1_1_local_multi_file_reader.html">Class foreign_storage::LocalMultiFileReader</a></li>
@@ -1000,9 +1002,11 @@
 <li class="toctree-l2"><a class="reference internal" href="api/class/classforeign__storage_1_1_multi_s3_reader.html">Class foreign_storage::MultiS3Reader</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/classforeign__storage_1_1_parquet_data_wrapper.html">Class foreign_storage::ParquetDataWrapper</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/classforeign__storage_1_1_parquet_decimal_encoder.html">Class foreign_storage::ParquetDecimalEncoder</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/class/classforeign__storage_1_1_parquet_encoder.html">Class foreign_storage::ParquetEncoder</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/classforeign__storage_1_1_parquet_fixed_length_encoder.html">Class foreign_storage::ParquetFixedLengthEncoder</a></li>
-<li class="toctree-l2"><a class="reference internal" href="api/class/classforeign__storage_1_1_parquet_foreign_table_schema.html">Class foreign_storage::ParquetForeignTableSchema</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/classforeign__storage_1_1_parquet_in_place_encoder.html">Class foreign_storage::ParquetInPlaceEncoder</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/class/classforeign__storage_1_1_parquet_string_encoder.html">Class foreign_storage::ParquetStringEncoder</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/class/classforeign__storage_1_1_parquet_string_none_encoder.html">Class foreign_storage::ParquetStringNoneEncoder</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/classforeign__storage_1_1_parquet_time_encoder.html">Class foreign_storage::ParquetTimeEncoder</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/classforeign__storage_1_1_parquet_timestamp_encoder.html">Class foreign_storage::ParquetTimestampEncoder</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/classforeign__storage_1_1_parquet_unsigned_fixed_length_encoder.html">Class foreign_storage::ParquetUnsignedFixedLengthEncoder</a></li>
@@ -2397,10 +2401,10 @@
 </li>
       <li><a href="api/class/class_analyzer_1_1_like_expr.html#_CPPv4N8Analyzer8LikeExpr9is_simpleE">Analyzer::LikeExpr::is_simple (C++ member)</a>
 </li>
-  </ul></td>
-  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="api/class/class_analyzer_1_1_like_expr.html#_CPPv4N8Analyzer8LikeExpr9like_exprE">Analyzer::LikeExpr::like_expr (C++ member)</a>
 </li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="api/class/class_analyzer_1_1_like_expr.html#_CPPv4N8Analyzer8LikeExpr8LikeExprENSt10shared_ptrIN8Analyzer4ExprEEENSt10shared_ptrIN8Analyzer4ExprEEENSt10shared_ptrIN8Analyzer4ExprEEEbb">Analyzer::LikeExpr::LikeExpr (C++ function)</a>
 </li>
       <li><a href="api/class/class_analyzer_1_1_like_expr.html#_CPPv4NK8Analyzer8LikeExpreqERK4Expr">Analyzer::LikeExpr::operator== (C++ function)</a>
@@ -2894,6 +2898,10 @@
       <li><a href="api/class/class_archive.html#_CPPv4N7Archive13archive_errorEi">Archive::archive_error (C++ function)</a>
 </li>
       <li><a href="api/class/class_archive.html#_CPPv4N7Archive5closeEP7archivePv">Archive::close (C++ function)</a>, <a href="api/class/class_archive.html#_CPPv4N7Archive5closeEv">[1]</a>
+</li>
+      <li><a href="api/class/class_archive.html#_CPPv4N7Archive5entryE">Archive::entry (C++ member)</a>
+</li>
+      <li><a href="api/class/class_archive.html#_CPPv4N7Archive9entryNameEv">Archive::entryName (C++ function)</a>
 </li>
       <li><a href="api/class/class_archive.html#_CPPv4NK7Archive23get_position_compressedEv">Archive::get_position_compressed (C++ function)</a>
 </li>
@@ -4339,6 +4347,8 @@
 </li>
       <li><a href="api/class/class_catalog___namespace_1_1read__lock.html#_CPPv4N17Catalog_Namespace9read_lock9read_lockEPK1T">Catalog_Namespace::read_lock::read_lock (C++ function)</a>
 </li>
+      <li><a href="api/class/class_catalog___namespace_1_1read__lock.html#_CPPv4N17Catalog_Namespace9read_lock6unlockEv">Catalog_Namespace::read_lock::unlock (C++ function)</a>
+</li>
       <li><a href="api/class/class_catalog___namespace_1_1read__lock.html#_CPPv4N17Catalog_Namespace9read_lockD0Ev">Catalog_Namespace::read_lock::~read_lock (C++ function)</a>
 </li>
       <li><a href="api/class/class_catalog___namespace_1_1_session_info.html#_CPPv4N17Catalog_Namespace11SessionInfoE">Catalog_Namespace::SessionInfo (C++ class)</a>
@@ -4407,6 +4417,8 @@
 </li>
       <li><a href="api/class/class_catalog___namespace_1_1sqlite__lock.html#_CPPv4N17Catalog_Namespace11sqlite_lock11sqlite_lockEPK1T">Catalog_Namespace::sqlite_lock::sqlite_lock (C++ function)</a>
 </li>
+      <li><a href="api/class/class_catalog___namespace_1_1sqlite__lock.html#_CPPv4N17Catalog_Namespace11sqlite_lock6unlockEv">Catalog_Namespace::sqlite_lock::unlock (C++ function)</a>
+</li>
       <li><a href="api/class/class_catalog___namespace_1_1sqlite__lock.html#_CPPv4N17Catalog_Namespace11sqlite_lockD0Ev">Catalog_Namespace::sqlite_lock::~sqlite_lock (C++ function)</a>
 </li>
       <li><a href="api/class/class_catalog___namespace_1_1_sys_catalog.html#_CPPv4N17Catalog_Namespace10SysCatalogE">Catalog_Namespace::SysCatalog (C++ class)</a>
@@ -4414,6 +4426,8 @@
       <li><a href="api/class/class_catalog___namespace_1_1_sys_catalog.html#_CPPv4N17Catalog_Namespace10SysCatalog16addAdminUserRoleEv">Catalog_Namespace::SysCatalog::addAdminUserRole (C++ function)</a>
 </li>
       <li><a href="api/class/class_catalog___namespace_1_1_sys_catalog.html#_CPPv4N17Catalog_Namespace10SysCatalog11aggregator_E">Catalog_Namespace::SysCatalog::aggregator_ (C++ member)</a>
+</li>
+      <li><a href="api/class/class_catalog___namespace_1_1_sys_catalog.html#_CPPv4NK17Catalog_Namespace10SysCatalog15allowLocalLoginEv">Catalog_Namespace::SysCatalog::allowLocalLogin (C++ function)</a>
 </li>
       <li><a href="api/class/class_catalog___namespace_1_1_sys_catalog.html#_CPPv4N17Catalog_Namespace10SysCatalog9alterUserEK7int32_tPKNSt6stringEPbPKNSt6stringEPb">Catalog_Namespace::SysCatalog::alterUser (C++ function)</a>
 </li>
@@ -4668,6 +4682,8 @@
       <li><a href="api/class/class_catalog___namespace_1_1write__lock.html#_CPPv4N17Catalog_Namespace10write_lock4lockE">Catalog_Namespace::write_lock::lock (C++ member)</a>
 </li>
       <li><a href="api/class/class_catalog___namespace_1_1write__lock.html#_CPPv4I0EN17Catalog_Namespace10write_lock12lock_catalogEvPK10inner_type">Catalog_Namespace::write_lock::lock_catalog (C++ function)</a>
+</li>
+      <li><a href="api/class/class_catalog___namespace_1_1write__lock.html#_CPPv4N17Catalog_Namespace10write_lock6unlockEv">Catalog_Namespace::write_lock::unlock (C++ function)</a>
 </li>
       <li><a href="api/class/class_catalog___namespace_1_1write__lock.html#_CPPv4N17Catalog_Namespace10write_lock10write_lockEPK1T">Catalog_Namespace::write_lock::write_lock (C++ function)</a>
 </li>
@@ -4963,12 +4979,12 @@
 </li>
       <li><a href="api/class/class_code_generator.html#_CPPv4N13CodeGenerator19codegenFunctionOperEPKN8Analyzer12FunctionOperERK18CompilationOptions">CodeGenerator::codegenFunctionOper (C++ function)</a>
 </li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="api/class/class_code_generator.html#_CPPv4N13CodeGenerator27codegenFunctionOperCastArgsEPKN8Analyzer12FunctionOperEPK17ExtensionFunctionRKNSt6vectorIPN4llvm5ValueEEERKNSt13unordered_mapIPN4llvm5ValueEPN4llvm5ValueEEERK18CompilationOptions">CodeGenerator::codegenFunctionOperCastArgs (C++ function)</a>
 </li>
       <li><a href="api/class/class_code_generator.html#_CPPv4N13CodeGenerator26codegenFunctionOperNullArgEPKN8Analyzer12FunctionOperERKNSt6vectorIPN4llvm5ValueEEE">CodeGenerator::codegenFunctionOperNullArg (C++ function)</a>
 </li>
-  </ul></td>
-  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="api/class/class_code_generator.html#_CPPv4N13CodeGenerator41codegenFunctionOperWithCustomTypeHandlingEPKN8Analyzer34FunctionOperWithCustomTypeHandlingERK18CompilationOptions">CodeGenerator::codegenFunctionOperWithCustomTypeHandling (C++ function)</a>
 </li>
       <li><a href="api/class/class_code_generator.html#_CPPv4N13CodeGenerator14codegenGeoArgsERKNSt6vectorINSt10shared_ptrIN8Analyzer4ExprEEEEERK18CompilationOptions">CodeGenerator::codegenGeoArgs (C++ function)</a>
@@ -8923,27 +8939,63 @@
 </li>
       <li><a href="api/struct/structforeign__storage_1_1_allowed_parquet_metadata_type_mappings.html#_CPPv4N15foreign_storage34AllowedParquetMetadataTypeMappings21validateStringMappingERK11SQLTypeInfoRKNSt10shared_ptrIKN7parquet11LogicalTypeEEE">foreign_storage::AllowedParquetMetadataTypeMappings::validateStringMapping (C++ function)</a>
 </li>
+      <li><a href="api/class/classforeign__storage_1_1_archive_wrapper.html#_CPPv4N15foreign_storage14ArchiveWrapperE">foreign_storage::ArchiveWrapper (C++ class)</a>
+</li>
+      <li><a href="api/class/classforeign__storage_1_1_archive_wrapper.html#_CPPv4N15foreign_storage14ArchiveWrapper5arch_E">foreign_storage::ArchiveWrapper::arch_ (C++ member)</a>
+</li>
+      <li><a href="api/class/classforeign__storage_1_1_archive_wrapper.html#_CPPv4N15foreign_storage14ArchiveWrapper14ArchiveWrapperERKNSt6stringE">foreign_storage::ArchiveWrapper::ArchiveWrapper (C++ function)</a>
+</li>
+      <li><a href="api/class/classforeign__storage_1_1_archive_wrapper.html#_CPPv4N15foreign_storage14ArchiveWrapper22block_chars_remaining_E">foreign_storage::ArchiveWrapper::block_chars_remaining_ (C++ member)</a>
+</li>
+      <li><a href="api/class/classforeign__storage_1_1_archive_wrapper.html#_CPPv4N15foreign_storage14ArchiveWrapper27consumeDataFromCurrentEntryE6size_tPc">foreign_storage::ArchiveWrapper::consumeDataFromCurrentEntry (C++ function)</a>
+</li>
+      <li><a href="api/class/classforeign__storage_1_1_archive_wrapper.html#_CPPv4N15foreign_storage14ArchiveWrapper14current_block_E">foreign_storage::ArchiveWrapper::current_block_ (C++ member)</a>
+</li>
+      <li><a href="api/class/classforeign__storage_1_1_archive_wrapper.html#_CPPv4N15foreign_storage14ArchiveWrapper14current_entry_E">foreign_storage::ArchiveWrapper::current_entry_ (C++ member)</a>
+</li>
+      <li><a href="api/class/classforeign__storage_1_1_archive_wrapper.html#_CPPv4NK15foreign_storage14ArchiveWrapper25currentEntryDataAvailableEv">foreign_storage::ArchiveWrapper::currentEntryDataAvailable (C++ function)</a>
+</li>
+      <li><a href="api/class/classforeign__storage_1_1_archive_wrapper.html#_CPPv4NK15foreign_storage14ArchiveWrapper20currentEntryFinishedEv">foreign_storage::ArchiveWrapper::currentEntryFinished (C++ function)</a>
+</li>
+      <li><a href="api/class/classforeign__storage_1_1_archive_wrapper.html#_CPPv4N15foreign_storage14ArchiveWrapper9entryNameEv">foreign_storage::ArchiveWrapper::entryName (C++ function)</a>
+</li>
+      <li><a href="api/class/classforeign__storage_1_1_archive_wrapper.html#_CPPv4N15foreign_storage14ArchiveWrapper10fetchBlockEv">foreign_storage::ArchiveWrapper::fetchBlock (C++ function)</a>
+</li>
+      <li><a href="api/class/classforeign__storage_1_1_archive_wrapper.html#_CPPv4N15foreign_storage14ArchiveWrapper10file_path_E">foreign_storage::ArchiveWrapper::file_path_ (C++ member)</a>
+</li>
+      <li><a href="api/class/classforeign__storage_1_1_archive_wrapper.html#_CPPv4NK15foreign_storage14ArchiveWrapper20getCurrentEntryIndexEv">foreign_storage::ArchiveWrapper::getCurrentEntryIndex (C++ function)</a>
+</li>
+      <li><a href="api/class/classforeign__storage_1_1_archive_wrapper.html#_CPPv4N15foreign_storage14ArchiveWrapper9nextEntryEv">foreign_storage::ArchiveWrapper::nextEntry (C++ function)</a>
+</li>
+      <li><a href="api/class/classforeign__storage_1_1_archive_wrapper.html#_CPPv4N15foreign_storage14ArchiveWrapper12peekNextCharEv">foreign_storage::ArchiveWrapper::peekNextChar (C++ function)</a>
+</li>
+      <li><a href="api/class/classforeign__storage_1_1_archive_wrapper.html#_CPPv4N15foreign_storage14ArchiveWrapper12resetArchiveEv">foreign_storage::ArchiveWrapper::resetArchive (C++ function)</a>
+</li>
+      <li><a href="api/class/classforeign__storage_1_1_archive_wrapper.html#_CPPv4N15foreign_storage14ArchiveWrapper11skipToEntryEi">foreign_storage::ArchiveWrapper::skipToEntry (C++ function)</a>
+</li>
       <li><a href="api/struct/structforeign__storage_1_1_column_type.html#_CPPv4N15foreign_storage10ColumnTypeE">foreign_storage::ColumnType (C++ class)</a>
 </li>
       <li><a href="api/class/classforeign__storage_1_1_compressed_file_reader.html#_CPPv4N15foreign_storage20CompressedFileReaderE">foreign_storage::CompressedFileReader (C++ class)</a>
 </li>
-      <li><a href="api/class/classforeign__storage_1_1_compressed_file_reader.html#_CPPv4N15foreign_storage20CompressedFileReader5arch_E">foreign_storage::CompressedFileReader::arch_ (C++ member)</a>
+      <li><a href="api/class/classforeign__storage_1_1_compressed_file_reader.html#_CPPv4N15foreign_storage20CompressedFileReader8archive_E">foreign_storage::CompressedFileReader::archive_ (C++ member)</a>
 </li>
-      <li><a href="api/class/classforeign__storage_1_1_compressed_file_reader.html#_CPPv4N15foreign_storage20CompressedFileReader22block_chars_remaining_E">foreign_storage::CompressedFileReader::block_chars_remaining_ (C++ member)</a>
+      <li><a href="api/class/classforeign__storage_1_1_compressed_file_reader.html#_CPPv4N15foreign_storage20CompressedFileReader20archive_entry_index_E">foreign_storage::CompressedFileReader::archive_entry_index_ (C++ member)</a>
+</li>
+      <li><a href="api/class/classforeign__storage_1_1_compressed_file_reader.html#_CPPv4N15foreign_storage20CompressedFileReader16checkForMoreRowsE6size_t">foreign_storage::CompressedFileReader::checkForMoreRows (C++ function)</a>
 </li>
       <li><a href="api/class/classforeign__storage_1_1_compressed_file_reader.html#_CPPv4N15foreign_storage20CompressedFileReader20CompressedFileReaderERKNSt6stringERKN13import_export10CopyParamsE">foreign_storage::CompressedFileReader::CompressedFileReader (C++ function)</a>
 </li>
-      <li><a href="api/class/classforeign__storage_1_1_compressed_file_reader.html#_CPPv4N15foreign_storage20CompressedFileReader12copy_params_E">foreign_storage::CompressedFileReader::copy_params_ (C++ member)</a>
+      <li><a href="api/class/classforeign__storage_1_1_compressed_file_reader.html#_CPPv4N15foreign_storage20CompressedFileReader17cumulative_sizes_E">foreign_storage::CompressedFileReader::cumulative_sizes_ (C++ member)</a>
 </li>
-      <li><a href="api/class/classforeign__storage_1_1_compressed_file_reader.html#_CPPv4N15foreign_storage20CompressedFileReader14current_block_E">foreign_storage::CompressedFileReader::current_block_ (C++ member)</a>
+      <li><a href="api/class/classforeign__storage_1_1_compressed_file_reader.html#_CPPv4N15foreign_storage20CompressedFileReader14current_index_E">foreign_storage::CompressedFileReader::current_index_ (C++ member)</a>
 </li>
       <li><a href="api/class/classforeign__storage_1_1_compressed_file_reader.html#_CPPv4N15foreign_storage20CompressedFileReader15current_offset_E">foreign_storage::CompressedFileReader::current_offset_ (C++ member)</a>
 </li>
-      <li><a href="api/class/classforeign__storage_1_1_compressed_file_reader.html#_CPPv4N15foreign_storage20CompressedFileReader10fetchBlockEv">foreign_storage::CompressedFileReader::fetchBlock (C++ function)</a>
+      <li><a href="api/class/classforeign__storage_1_1_compressed_file_reader.html#_CPPv4N15foreign_storage20CompressedFileReader16getRemainingSizeEv">foreign_storage::CompressedFileReader::getRemainingSize (C++ function)</a>
 </li>
-      <li><a href="api/class/classforeign__storage_1_1_compressed_file_reader.html#_CPPv4N15foreign_storage20CompressedFileReader10file_path_E">foreign_storage::CompressedFileReader::file_path_ (C++ member)</a>
+      <li><a href="api/class/classforeign__storage_1_1_compressed_file_reader.html#_CPPv4N15foreign_storage20CompressedFileReader13initial_scan_E">foreign_storage::CompressedFileReader::initial_scan_ (C++ member)</a>
 </li>
-      <li><a href="api/class/classforeign__storage_1_1_compressed_file_reader.html#_CPPv4N15foreign_storage20CompressedFileReader7getSizeER6size_t">foreign_storage::CompressedFileReader::getSize (C++ function)</a>
+      <li><a href="api/class/classforeign__storage_1_1_compressed_file_reader.html#_CPPv4N15foreign_storage20CompressedFileReader20isRemainingSizeKnownEv">foreign_storage::CompressedFileReader::isRemainingSizeKnown (C++ function)</a>
 </li>
       <li><a href="api/class/classforeign__storage_1_1_compressed_file_reader.html#_CPPv4N15foreign_storage20CompressedFileReader14isScanFinishedEv">foreign_storage::CompressedFileReader::isScanFinished (C++ function)</a>
 </li>
@@ -8951,15 +9003,17 @@
 </li>
       <li><a href="api/class/classforeign__storage_1_1_compressed_file_reader.html#_CPPv4N15foreign_storage20CompressedFileReader4readEPv6size_t">foreign_storage::CompressedFileReader::read (C++ function)</a>
 </li>
-      <li><a href="api/class/classforeign__storage_1_1_compressed_file_reader.html#_CPPv4N15foreign_storage20CompressedFileReader10readRegionEPv6size_t6size_t">foreign_storage::CompressedFileReader::readRegion (C++ function)</a>
+      <li><a href="api/class/classforeign__storage_1_1_compressed_file_reader.html#_CPPv4N15foreign_storage20CompressedFileReader12readInternalEPv6size_t6size_t">foreign_storage::CompressedFileReader::readInternal (C++ function)</a>
 </li>
-      <li><a href="api/class/classforeign__storage_1_1_compressed_file_reader.html#_CPPv4N15foreign_storage20CompressedFileReader12resetArchiveEv">foreign_storage::CompressedFileReader::resetArchive (C++ function)</a>
+      <li><a href="api/class/classforeign__storage_1_1_compressed_file_reader.html#_CPPv4N15foreign_storage20CompressedFileReader10readRegionEPv6size_t6size_t">foreign_storage::CompressedFileReader::readRegion (C++ function)</a>
 </li>
       <li><a href="api/class/classforeign__storage_1_1_compressed_file_reader.html#_CPPv4N15foreign_storage20CompressedFileReader14scan_finished_E">foreign_storage::CompressedFileReader::scan_finished_ (C++ member)</a>
 </li>
       <li><a href="api/class/classforeign__storage_1_1_compressed_file_reader.html#_CPPv4N15foreign_storage20CompressedFileReader9skipBytesE6size_t">foreign_storage::CompressedFileReader::skipBytes (C++ function)</a>
 </li>
       <li><a href="api/class/classforeign__storage_1_1_compressed_file_reader.html#_CPPv4N15foreign_storage20CompressedFileReader10skipHeaderEv">foreign_storage::CompressedFileReader::skipHeader (C++ function)</a>
+</li>
+      <li><a href="api/class/classforeign__storage_1_1_compressed_file_reader.html#_CPPv4N15foreign_storage20CompressedFileReader12sourcenames_E">foreign_storage::CompressedFileReader::sourcenames_ (C++ member)</a>
 </li>
       <li><a href="api/struct/structforeign__storage_1_1csv__file__buffer__parser_1_1_parse_buffer_request.html#_CPPv4N15foreign_storage22csv_file_buffer_parser18ParseBufferRequestE">foreign_storage::csv_file_buffer_parser::ParseBufferRequest (C++ class)</a>
 </li>
@@ -8999,7 +9053,7 @@
 </li>
       <li><a href="api/struct/structforeign__storage_1_1csv__file__buffer__parser_1_1_parse_buffer_result.html#_CPPv4N15foreign_storage22csv_file_buffer_parser17ParseBufferResultE">foreign_storage::csv_file_buffer_parser::ParseBufferResult (C++ class)</a>
 </li>
-      <li><a href="api/struct/structforeign__storage_1_1csv__file__buffer__parser_1_1_parse_buffer_result.html#_CPPv4N15foreign_storage22csv_file_buffer_parser17ParseBufferResult11data_blocksE">foreign_storage::csv_file_buffer_parser::ParseBufferResult::data_blocks (C++ member)</a>
+      <li><a href="api/struct/structforeign__storage_1_1csv__file__buffer__parser_1_1_parse_buffer_result.html#_CPPv4N15foreign_storage22csv_file_buffer_parser17ParseBufferResult28column_id_to_data_blocks_mapE">foreign_storage::csv_file_buffer_parser::ParseBufferResult::column_id_to_data_blocks_map (C++ member)</a>
 </li>
       <li><a href="api/struct/structforeign__storage_1_1csv__file__buffer__parser_1_1_parse_buffer_result.html#_CPPv4N15foreign_storage22csv_file_buffer_parser17ParseBufferResult9row_countE">foreign_storage::csv_file_buffer_parser::ParseBufferResult::row_count (C++ member)</a>
 </li>
@@ -9007,7 +9061,11 @@
 </li>
       <li><a href="api/class/classforeign__storage_1_1_csv_data_wrapper.html#_CPPv4N15foreign_storage14CsvDataWrapperE">foreign_storage::CsvDataWrapper (C++ class)</a>
 </li>
-      <li><a href="api/class/classforeign__storage_1_1_csv_data_wrapper.html#_CPPv4N15foreign_storage14CsvDataWrapper17chunk_buffer_map_E">foreign_storage::CsvDataWrapper::chunk_buffer_map_ (C++ member)</a>
+      <li><a href="api/class/classforeign__storage_1_1_csv_data_wrapper.html#_CPPv4N15foreign_storage14CsvDataWrapper20append_start_offset_E">foreign_storage::CsvDataWrapper::append_start_offset_ (C++ member)</a>
+</li>
+      <li><a href="api/class/classforeign__storage_1_1_csv_data_wrapper.html#_CPPv4N15foreign_storage14CsvDataWrapper17chunk_byte_count_E">foreign_storage::CsvDataWrapper::chunk_byte_count_ (C++ member)</a>
+</li>
+      <li><a href="api/class/classforeign__storage_1_1_csv_data_wrapper.html#_CPPv4N15foreign_storage14CsvDataWrapper22chunk_encoder_buffers_E">foreign_storage::CsvDataWrapper::chunk_encoder_buffers_ (C++ member)</a>
 </li>
       <li><a href="api/class/classforeign__storage_1_1_csv_data_wrapper.html#_CPPv4N15foreign_storage14CsvDataWrapper19chunk_metadata_map_E">foreign_storage::CsvDataWrapper::chunk_metadata_map_ (C++ member)</a>
 </li>
@@ -9025,15 +9083,17 @@
 </li>
       <li><a href="api/class/classforeign__storage_1_1_csv_data_wrapper.html#_CPPv4N15foreign_storage14CsvDataWrapper32fragment_id_to_file_regions_map_E">foreign_storage::CsvDataWrapper::fragment_id_to_file_regions_map_ (C++ member)</a>
 </li>
-      <li><a href="api/class/classforeign__storage_1_1_csv_data_wrapper.html#_CPPv4N15foreign_storage14CsvDataWrapper16getBufferFromMapERK8ChunkKey">foreign_storage::CsvDataWrapper::getBufferFromMap (C++ function)</a>
-</li>
-      <li><a href="api/class/classforeign__storage_1_1_csv_data_wrapper.html#_CPPv4N15foreign_storage14CsvDataWrapper14getChunkBufferERK8ChunkKey">foreign_storage::CsvDataWrapper::getChunkBuffer (C++ function)</a>
-</li>
       <li><a href="api/class/classforeign__storage_1_1_csv_data_wrapper.html#_CPPv4N15foreign_storage14CsvDataWrapper11getFilePathEv">foreign_storage::CsvDataWrapper::getFilePath (C++ function)</a>
 </li>
-      <li><a href="api/class/classforeign__storage_1_1_csv_data_wrapper.html#_CPPv4N15foreign_storage14CsvDataWrapper13populateChunkE8ChunkKeyRN8Chunk_NS5ChunkE">foreign_storage::CsvDataWrapper::populateChunk (C++ function)</a>
+      <li><a href="api/class/classforeign__storage_1_1_csv_data_wrapper.html#_CPPv4N15foreign_storage14CsvDataWrapper9num_rows_E">foreign_storage::CsvDataWrapper::num_rows_ (C++ member)</a>
 </li>
-      <li><a href="api/class/classforeign__storage_1_1_csv_data_wrapper.html#_CPPv4N15foreign_storage14CsvDataWrapper33populateMetadataForChunkKeyPrefixERK8ChunkKeyR19ChunkMetadataVector">foreign_storage::CsvDataWrapper::populateMetadataForChunkKeyPrefix (C++ function)</a>
+      <li><a href="api/class/classforeign__storage_1_1_csv_data_wrapper.html#_CPPv4N15foreign_storage14CsvDataWrapper20populateChunkBuffersERNSt3mapI8ChunkKeyP14AbstractBufferEERNSt3mapI8ChunkKeyP14AbstractBufferEE">foreign_storage::CsvDataWrapper::populateChunkBuffers (C++ function)</a>
+</li>
+      <li><a href="api/class/classforeign__storage_1_1_csv_data_wrapper.html#_CPPv4N15foreign_storage14CsvDataWrapper26populateChunkMapForColumnsERKNSt3setIPK16ColumnDescriptorEEKiRKNSt3mapI8ChunkKeyP14AbstractBufferEERNSt3mapIiN8Chunk_NS5ChunkEEE">foreign_storage::CsvDataWrapper::populateChunkMapForColumns (C++ function)</a>
+</li>
+      <li><a href="api/class/classforeign__storage_1_1_csv_data_wrapper.html#_CPPv4N15foreign_storage14CsvDataWrapper21populateChunkMetadataER19ChunkMetadataVector">foreign_storage::CsvDataWrapper::populateChunkMetadata (C++ function)</a>
+</li>
+      <li><a href="api/class/classforeign__storage_1_1_csv_data_wrapper.html#_CPPv4N15foreign_storage14CsvDataWrapper14populateChunksERNSt3mapIiN8Chunk_NS5ChunkEEEi">foreign_storage::CsvDataWrapper::populateChunks (C++ function)</a>
 </li>
       <li><a href="api/class/classforeign__storage_1_1_csv_data_wrapper.html#_CPPv4N15foreign_storage14CsvDataWrapper18supported_options_E">foreign_storage::CsvDataWrapper::supported_options_ (C++ member)</a>
 </li>
@@ -9049,9 +9109,17 @@
 </li>
       <li><a href="api/class/classforeign__storage_1_1_csv_reader.html#_CPPv4N15foreign_storage9CsvReaderE">foreign_storage::CsvReader (C++ class)</a>
 </li>
-      <li><a href="api/class/classforeign__storage_1_1_csv_reader.html#_CPPv4N15foreign_storage9CsvReader9CsvReaderEv">foreign_storage::CsvReader::CsvReader (C++ function)</a>
+      <li><a href="api/class/classforeign__storage_1_1_csv_reader.html#_CPPv4N15foreign_storage9CsvReader16checkForMoreRowsE6size_t">foreign_storage::CsvReader::checkForMoreRows (C++ function)</a>
 </li>
-      <li><a href="api/class/classforeign__storage_1_1_csv_reader.html#_CPPv4N15foreign_storage9CsvReader7getSizeER6size_t">foreign_storage::CsvReader::getSize (C++ function)</a>
+      <li><a href="api/class/classforeign__storage_1_1_csv_reader.html#_CPPv4N15foreign_storage9CsvReader12copy_params_E">foreign_storage::CsvReader::copy_params_ (C++ member)</a>
+</li>
+      <li><a href="api/class/classforeign__storage_1_1_csv_reader.html#_CPPv4N15foreign_storage9CsvReader9CsvReaderERKNSt6stringERKN13import_export10CopyParamsE">foreign_storage::CsvReader::CsvReader (C++ function)</a>
+</li>
+      <li><a href="api/class/classforeign__storage_1_1_csv_reader.html#_CPPv4N15foreign_storage9CsvReader10file_path_E">foreign_storage::CsvReader::file_path_ (C++ member)</a>
+</li>
+      <li><a href="api/class/classforeign__storage_1_1_csv_reader.html#_CPPv4N15foreign_storage9CsvReader16getRemainingSizeEv">foreign_storage::CsvReader::getRemainingSize (C++ function)</a>
+</li>
+      <li><a href="api/class/classforeign__storage_1_1_csv_reader.html#_CPPv4N15foreign_storage9CsvReader20isRemainingSizeKnownEv">foreign_storage::CsvReader::isRemainingSizeKnown (C++ function)</a>
 </li>
       <li><a href="api/class/classforeign__storage_1_1_csv_reader.html#_CPPv4N15foreign_storage9CsvReader14isScanFinishedEv">foreign_storage::CsvReader::isScanFinished (C++ function)</a>
 </li>
@@ -9073,9 +9141,11 @@
 </li>
       <li><a href="api/class/classforeign__storage_1_1_csv_reader_s3.html#_CPPv4N15foreign_storage11CsvReaderS310file_size_E">foreign_storage::CsvReaderS3::file_size_ (C++ member)</a>
 </li>
-      <li><a href="api/class/classforeign__storage_1_1_csv_reader_s3.html#_CPPv4N15foreign_storage11CsvReaderS37getSizeER6size_t">foreign_storage::CsvReaderS3::getSize (C++ function)</a>
+      <li><a href="api/class/classforeign__storage_1_1_csv_reader_s3.html#_CPPv4N15foreign_storage11CsvReaderS316getRemainingSizeEv">foreign_storage::CsvReaderS3::getRemainingSize (C++ function)</a>
 </li>
       <li><a href="api/class/classforeign__storage_1_1_csv_reader_s3.html#_CPPv4N15foreign_storage11CsvReaderS314header_offset_E">foreign_storage::CsvReaderS3::header_offset_ (C++ member)</a>
+</li>
+      <li><a href="api/class/classforeign__storage_1_1_csv_reader_s3.html#_CPPv4N15foreign_storage11CsvReaderS320isRemainingSizeKnownEv">foreign_storage::CsvReaderS3::isRemainingSizeKnown (C++ function)</a>
 </li>
       <li><a href="api/class/classforeign__storage_1_1_csv_reader_s3.html#_CPPv4N15foreign_storage11CsvReaderS314isScanFinishedEv">foreign_storage::CsvReaderS3::isScanFinished (C++ function)</a>
 </li>
@@ -9117,9 +9187,9 @@
 </li>
       <li><a href="api/class/classforeign__storage_1_1_foreign_data_wrapper.html#_CPPv4N15foreign_storage18ForeignDataWrapper18ForeignDataWrapperEv">foreign_storage::ForeignDataWrapper::ForeignDataWrapper (C++ function)</a>
 </li>
-      <li><a href="api/class/classforeign__storage_1_1_foreign_data_wrapper.html#_CPPv4N15foreign_storage18ForeignDataWrapper14getChunkBufferERK8ChunkKey">foreign_storage::ForeignDataWrapper::getChunkBuffer (C++ function)</a>
+      <li><a href="api/class/classforeign__storage_1_1_foreign_data_wrapper.html#_CPPv4N15foreign_storage18ForeignDataWrapper20populateChunkBuffersERNSt3mapI8ChunkKeyP14AbstractBufferEERNSt3mapI8ChunkKeyP14AbstractBufferEE">foreign_storage::ForeignDataWrapper::populateChunkBuffers (C++ function)</a>
 </li>
-      <li><a href="api/class/classforeign__storage_1_1_foreign_data_wrapper.html#_CPPv4N15foreign_storage18ForeignDataWrapper33populateMetadataForChunkKeyPrefixERK8ChunkKeyR19ChunkMetadataVector">foreign_storage::ForeignDataWrapper::populateMetadataForChunkKeyPrefix (C++ function)</a>
+      <li><a href="api/class/classforeign__storage_1_1_foreign_data_wrapper.html#_CPPv4N15foreign_storage18ForeignDataWrapper21populateChunkMetadataER19ChunkMetadataVector">foreign_storage::ForeignDataWrapper::populateChunkMetadata (C++ function)</a>
 </li>
       <li><a href="api/class/classforeign__storage_1_1_foreign_data_wrapper.html#_CPPv4N15foreign_storage18ForeignDataWrapperD0Ev">foreign_storage::ForeignDataWrapper::~ForeignDataWrapper (C++ function)</a>
 </li>
@@ -9165,13 +9235,13 @@
 </li>
       <li><a href="api/class/classforeign__storage_1_1_foreign_storage_cache.html#_CPPv4N15foreign_storage19ForeignStorageCacheE">foreign_storage::ForeignStorageCache (C++ class)</a>
 </li>
-      <li><a href="api/class/classforeign__storage_1_1_foreign_storage_cache.html#_CPPv4N15foreign_storage19ForeignStorageCache10cacheChunkERK8ChunkKeyP14AbstractBuffer">foreign_storage::ForeignStorageCache::cacheChunk (C++ function)</a>
-</li>
       <li><a href="api/class/classforeign__storage_1_1_foreign_storage_cache.html#_CPPv4N15foreign_storage19ForeignStorageCache14cached_chunks_E">foreign_storage::ForeignStorageCache::cached_chunks_ (C++ member)</a>
 </li>
       <li><a href="api/class/classforeign__storage_1_1_foreign_storage_cache.html#_CPPv4N15foreign_storage19ForeignStorageCache16cached_metadata_E">foreign_storage::ForeignStorageCache::cached_metadata_ (C++ member)</a>
 </li>
       <li><a href="api/class/classforeign__storage_1_1_foreign_storage_cache.html#_CPPv4N15foreign_storage19ForeignStorageCache16cacheMetadataVecERK19ChunkMetadataVector">foreign_storage::ForeignStorageCache::cacheMetadataVec (C++ function)</a>
+</li>
+      <li><a href="api/class/classforeign__storage_1_1_foreign_storage_cache.html#_CPPv4N15foreign_storage19ForeignStorageCache16cacheTableChunksERKNSt6vectorI8ChunkKeyEE">foreign_storage::ForeignStorageCache::cacheTableChunks (C++ function)</a>
 </li>
       <li><a href="api/class/classforeign__storage_1_1_foreign_storage_cache.html#_CPPv4N15foreign_storage19ForeignStorageCache13chunks_mutex_E">foreign_storage::ForeignStorageCache::chunks_mutex_ (C++ member)</a>
 </li>
@@ -9202,6 +9272,8 @@
       <li><a href="api/class/classforeign__storage_1_1_foreign_storage_cache.html#_CPPv4N15foreign_storage19ForeignStorageCache27getCachedChunksForKeyPrefixERK8ChunkKey">foreign_storage::ForeignStorageCache::getCachedChunksForKeyPrefix (C++ function)</a>
 </li>
       <li><a href="api/class/classforeign__storage_1_1_foreign_storage_cache.html#_CPPv4N15foreign_storage19ForeignStorageCache32getCachedMetadataVecForKeyPrefixER19ChunkMetadataVectorRK8ChunkKey">foreign_storage::ForeignStorageCache::getCachedMetadataVecForKeyPrefix (C++ function)</a>
+</li>
+      <li><a href="api/class/classforeign__storage_1_1_foreign_storage_cache.html#_CPPv4N15foreign_storage19ForeignStorageCache25getChunkBuffersForCachingERKNSt6vectorI8ChunkKeyEE">foreign_storage::ForeignStorageCache::getChunkBuffersForCaching (C++ function)</a>
 </li>
       <li><a href="api/class/classforeign__storage_1_1_foreign_storage_cache.html#_CPPv4N15foreign_storage19ForeignStorageCache16getGlobalFileMgrEv">foreign_storage::ForeignStorageCache::getGlobalFileMgr (C++ function)</a>
 </li>
@@ -9235,6 +9307,10 @@
 </li>
       <li><a href="api/class/classforeign__storage_1_1_foreign_storage_mgr.html#_CPPv4N15foreign_storage17ForeignStorageMgr10clearSlabsEv">foreign_storage::ForeignStorageMgr::clearSlabs (C++ function)</a>
 </li>
+      <li><a href="api/class/classforeign__storage_1_1_foreign_storage_mgr.html#_CPPv4N15foreign_storage17ForeignStorageMgr23clearTempChunkBufferMapERKNSt6vectorI8ChunkKeyEE">foreign_storage::ForeignStorageMgr::clearTempChunkBufferMap (C++ function)</a>
+</li>
+      <li><a href="api/class/classforeign__storage_1_1_foreign_storage_mgr.html#_CPPv4N15foreign_storage17ForeignStorageMgr38clearTempChunkBufferMapEntriesForTableEKiKi">foreign_storage::ForeignStorageMgr::clearTempChunkBufferMapEntriesForTable (C++ function)</a>
+</li>
       <li><a href="api/class/classforeign__storage_1_1_foreign_storage_mgr.html#_CPPv4N15foreign_storage17ForeignStorageMgr12createBufferERK8ChunkKeyK6size_tK6size_t">foreign_storage::ForeignStorageMgr::createBuffer (C++ function)</a>
 </li>
       <li><a href="api/class/classforeign__storage_1_1_foreign_storage_mgr.html#_CPPv4N15foreign_storage17ForeignStorageMgr28createDataWrapperIfNotExistsERK8ChunkKey">foreign_storage::ForeignStorageMgr::createDataWrapperIfNotExists (C++ function)</a>
@@ -9261,20 +9337,20 @@
 </li>
       <li><a href="api/class/classforeign__storage_1_1_foreign_storage_mgr.html#_CPPv4N15foreign_storage17ForeignStorageMgr9getBufferERK8ChunkKeyK6size_t">foreign_storage::ForeignStorageMgr::getBuffer (C++ function)</a>
 </li>
-      <li><a href="api/class/classforeign__storage_1_1_foreign_storage_mgr.html#_CPPv4N15foreign_storage17ForeignStorageMgr37getBufferFromOptionallyCreatedWrapperERK8ChunkKey">foreign_storage::ForeignStorageMgr::getBufferFromOptionallyCreatedWrapper (C++ function)</a>
+      <li><a href="api/class/classforeign__storage_1_1_foreign_storage_mgr.html#_CPPv4N15foreign_storage17ForeignStorageMgr25getChunkBuffersToPopulateERK8ChunkKeyP14AbstractBufferRNSt6vectorI8ChunkKeyEE">foreign_storage::ForeignStorageMgr::getChunkBuffersToPopulate (C++ function)</a>
 </li>
       <li><a href="api/class/classforeign__storage_1_1_foreign_storage_mgr.html#_CPPv4N15foreign_storage17ForeignStorageMgr19getChunkMetadataVecER19ChunkMetadataVector">foreign_storage::ForeignStorageMgr::getChunkMetadataVec (C++ function)</a>
 </li>
       <li><a href="api/class/classforeign__storage_1_1_foreign_storage_mgr.html#_CPPv4N15foreign_storage17ForeignStorageMgr31getChunkMetadataVecForKeyPrefixER19ChunkMetadataVectorRK8ChunkKey">foreign_storage::ForeignStorageMgr::getChunkMetadataVecForKeyPrefix (C++ function)</a>
 </li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="api/class/classforeign__storage_1_1_foreign_storage_mgr.html#_CPPv4N15foreign_storage17ForeignStorageMgr14getDataWrapperERK8ChunkKey">foreign_storage::ForeignStorageMgr::getDataWrapper (C++ function)</a>
 </li>
       <li><a href="api/class/classforeign__storage_1_1_foreign_storage_mgr.html#_CPPv4NK15foreign_storage17ForeignStorageMgr22getForeignStorageCacheEv">foreign_storage::ForeignStorageMgr::getForeignStorageCache (C++ function)</a>
 </li>
       <li><a href="api/class/classforeign__storage_1_1_foreign_storage_mgr.html#_CPPv4N15foreign_storage17ForeignStorageMgr12getInUseSizeEv">foreign_storage::ForeignStorageMgr::getInUseSize (C++ function)</a>
 </li>
-  </ul></td>
-  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="api/class/classforeign__storage_1_1_foreign_storage_mgr.html#_CPPv4N15foreign_storage17ForeignStorageMgr10getMaxSizeEv">foreign_storage::ForeignStorageMgr::getMaxSize (C++ function)</a>
 </li>
       <li><a href="api/class/classforeign__storage_1_1_foreign_storage_mgr.html#_CPPv4N15foreign_storage17ForeignStorageMgr10getMgrTypeEv">foreign_storage::ForeignStorageMgr::getMgrType (C++ function)</a>
@@ -9291,19 +9367,59 @@
 </li>
       <li><a href="api/class/classforeign__storage_1_1_foreign_storage_mgr.html#_CPPv4N15foreign_storage17ForeignStorageMgr16isBufferOnDeviceERK8ChunkKey">foreign_storage::ForeignStorageMgr::isBufferOnDevice (C++ function)</a>
 </li>
+      <li><a href="api/class/classforeign__storage_1_1_foreign_storage_mgr.html#_CPPv4N15foreign_storage17ForeignStorageMgr43populateBuffersFromOptionallyCreatedWrapperERK8ChunkKeyRNSt3mapI8ChunkKeyP14AbstractBufferEERNSt3mapI8ChunkKeyP14AbstractBufferEE">foreign_storage::ForeignStorageMgr::populateBuffersFromOptionallyCreatedWrapper (C++ function)</a>
+</li>
       <li><a href="api/class/classforeign__storage_1_1_foreign_storage_mgr.html#_CPPv4N15foreign_storage17ForeignStorageMgr10printSlabsEv">foreign_storage::ForeignStorageMgr::printSlabs (C++ function)</a>
 </li>
       <li><a href="api/class/classforeign__storage_1_1_foreign_storage_mgr.html#_CPPv4N15foreign_storage17ForeignStorageMgr9putBufferERK8ChunkKeyP14AbstractBufferK6size_t">foreign_storage::ForeignStorageMgr::putBuffer (C++ function)</a>
 </li>
+      <li><a href="api/class/classforeign__storage_1_1_foreign_storage_mgr.html#_CPPv4N15foreign_storage17ForeignStorageMgr13refreshTablesERKNSt6vectorI8ChunkKeyEEKb">foreign_storage::ForeignStorageMgr::refreshTables (C++ function)</a>
+</li>
       <li><a href="api/class/classforeign__storage_1_1_foreign_storage_mgr.html#_CPPv4N15foreign_storage17ForeignStorageMgr20refreshTablesInCacheERKNSt6vectorI8ChunkKeyEE">foreign_storage::ForeignStorageMgr::refreshTablesInCache (C++ function)</a>
 </li>
       <li><a href="api/class/classforeign__storage_1_1_foreign_storage_mgr.html#_CPPv4N15foreign_storage17ForeignStorageMgr20removeTableRelatedDSEKiKi">foreign_storage::ForeignStorageMgr::removeTableRelatedDS (C++ function)</a>
+</li>
+      <li><a href="api/class/classforeign__storage_1_1_foreign_storage_mgr.html#_CPPv4N15foreign_storage17ForeignStorageMgr22temp_chunk_buffer_map_E">foreign_storage::ForeignStorageMgr::temp_chunk_buffer_map_ (C++ member)</a>
+</li>
+      <li><a href="api/class/classforeign__storage_1_1_foreign_storage_mgr.html#_CPPv4N15foreign_storage17ForeignStorageMgr28temp_chunk_buffer_map_mutex_E">foreign_storage::ForeignStorageMgr::temp_chunk_buffer_map_mutex_ (C++ member)</a>
 </li>
       <li><a href="api/struct/structforeign__storage_1_1_foreign_table.html#_CPPv4N15foreign_storage12ForeignTableE">foreign_storage::ForeignTable (C++ class)</a>
 </li>
       <li><a href="api/struct/structforeign__storage_1_1_foreign_table.html#_CPPv4N15foreign_storage12ForeignTable14foreign_serverE">foreign_storage::ForeignTable::foreign_server (C++ member)</a>
 </li>
       <li><a href="api/struct/structforeign__storage_1_1_foreign_table.html#_CPPv4N15foreign_storage12ForeignTable17supported_optionsE">foreign_storage::ForeignTable::supported_options (C++ member)</a>
+</li>
+      <li><a href="api/class/classforeign__storage_1_1_foreign_table_schema.html#_CPPv4N15foreign_storage18ForeignTableSchemaE">foreign_storage::ForeignTableSchema (C++ class)</a>
+</li>
+      <li><a href="api/class/classforeign__storage_1_1_foreign_table_schema.html#_CPPv4N15foreign_storage18ForeignTableSchema8catalog_E">foreign_storage::ForeignTableSchema::catalog_ (C++ member)</a>
+</li>
+      <li><a href="api/class/classforeign__storage_1_1_foreign_table_schema.html#_CPPv4N15foreign_storage18ForeignTableSchema14foreign_table_E">foreign_storage::ForeignTableSchema::foreign_table_ (C++ member)</a>
+</li>
+      <li><a href="api/class/classforeign__storage_1_1_foreign_table_schema.html#_CPPv4N15foreign_storage18ForeignTableSchema18ForeignTableSchemaEK7int32_tPK12ForeignTable">foreign_storage::ForeignTableSchema::ForeignTableSchema (C++ function)</a>
+</li>
+      <li><a href="api/class/classforeign__storage_1_1_foreign_table_schema.html#_CPPv4NK15foreign_storage18ForeignTableSchema19getColumnDescriptorEKi">foreign_storage::ForeignTableSchema::getColumnDescriptor (C++ function)</a>
+</li>
+      <li><a href="api/class/classforeign__storage_1_1_foreign_table_schema.html#_CPPv4NK15foreign_storage18ForeignTableSchema15getForeignTableEv">foreign_storage::ForeignTableSchema::getForeignTable (C++ function)</a>
+</li>
+      <li><a href="api/class/classforeign__storage_1_1_foreign_table_schema.html#_CPPv4NK15foreign_storage18ForeignTableSchema28getLogicalAndPhysicalColumnsEv">foreign_storage::ForeignTableSchema::getLogicalAndPhysicalColumns (C++ function)</a>
+</li>
+      <li><a href="api/class/classforeign__storage_1_1_foreign_table_schema.html#_CPPv4NK15foreign_storage18ForeignTableSchema16getLogicalColumnEKi">foreign_storage::ForeignTableSchema::getLogicalColumn (C++ function)</a>
+</li>
+      <li><a href="api/class/classforeign__storage_1_1_foreign_table_schema.html#_CPPv4NK15foreign_storage18ForeignTableSchema26getLogicalColumnIdIteratorEKi">foreign_storage::ForeignTableSchema::getLogicalColumnIdIterator (C++ function)</a>
+</li>
+      <li><a href="api/class/classforeign__storage_1_1_foreign_table_schema.html#_CPPv4NK15foreign_storage18ForeignTableSchema17getLogicalColumnsEv">foreign_storage::ForeignTableSchema::getLogicalColumns (C++ function)</a>
+</li>
+      <li><a href="api/class/classforeign__storage_1_1_foreign_table_schema.html#_CPPv4NK15foreign_storage18ForeignTableSchema21getParquetColumnIndexEKi">foreign_storage::ForeignTableSchema::getParquetColumnIndex (C++ function)</a>
+</li>
+      <li><a href="api/class/classforeign__storage_1_1_foreign_table_schema.html#_CPPv4N15foreign_storage18ForeignTableSchema29logical_and_physical_columns_E">foreign_storage::ForeignTableSchema::logical_and_physical_columns_ (C++ member)</a>
+</li>
+      <li><a href="api/class/classforeign__storage_1_1_foreign_table_schema.html#_CPPv4N15foreign_storage18ForeignTableSchema19logical_column_ids_E">foreign_storage::ForeignTableSchema::logical_column_ids_ (C++ member)</a>
+</li>
+      <li><a href="api/class/classforeign__storage_1_1_foreign_table_schema.html#_CPPv4N15foreign_storage18ForeignTableSchema16logical_columns_E">foreign_storage::ForeignTableSchema::logical_columns_ (C++ member)</a>
+</li>
+      <li><a href="api/class/classforeign__storage_1_1_foreign_table_schema.html#_CPPv4NK15foreign_storage18ForeignTableSchema28numLogicalAndPhysicalColumnsEv">foreign_storage::ForeignTableSchema::numLogicalAndPhysicalColumns (C++ function)</a>
+</li>
+      <li><a href="api/class/classforeign__storage_1_1_foreign_table_schema.html#_CPPv4NK15foreign_storage18ForeignTableSchema17numLogicalColumnsEv">foreign_storage::ForeignTableSchema::numLogicalColumns (C++ function)</a>
 </li>
       <li><a href="api/struct/structforeign__storage_1_1_fragment_type.html#_CPPv4N15foreign_storage12FragmentTypeE">foreign_storage::FragmentType (C++ class)</a>
 </li>
@@ -9317,21 +9433,17 @@
 </li>
       <li><a href="api/class/classforeign__storage_1_1_lazy_parquet_chunk_loader.html#_CPPv4N15foreign_storage22LazyParquetChunkLoader25batch_reader_num_elementsE">foreign_storage::LazyParquetChunkLoader::batch_reader_num_elements (C++ member)</a>
 </li>
-      <li><a href="api/class/classforeign__storage_1_1_lazy_parquet_chunk_loader.html#_CPPv4N15foreign_storage22LazyParquetChunkLoader11def_levels_E">foreign_storage::LazyParquetChunkLoader::def_levels_ (C++ member)</a>
-</li>
       <li><a href="api/class/classforeign__storage_1_1_lazy_parquet_chunk_loader.html#_CPPv4N15foreign_storage22LazyParquetChunkLoader10file_name_E">foreign_storage::LazyParquetChunkLoader::file_name_ (C++ member)</a>
 </li>
       <li><a href="api/class/classforeign__storage_1_1_lazy_parquet_chunk_loader.html#_CPPv4N15foreign_storage22LazyParquetChunkLoader24isColumnMappingSupportedEPK16ColumnDescriptorPKN7parquet16ColumnDescriptorE">foreign_storage::LazyParquetChunkLoader::isColumnMappingSupported (C++ function)</a>
 </li>
       <li><a href="api/class/classforeign__storage_1_1_lazy_parquet_chunk_loader.html#_CPPv4N15foreign_storage22LazyParquetChunkLoader22LazyParquetChunkLoaderERKNSt6stringE">foreign_storage::LazyParquetChunkLoader::LazyParquetChunkLoader (C++ function)</a>
 </li>
-      <li><a href="api/class/classforeign__storage_1_1_lazy_parquet_chunk_loader.html#_CPPv4N15foreign_storage22LazyParquetChunkLoader9loadChunkERK8IntervalI12RowGroupTypeEKiRN8Chunk_NS5ChunkE">foreign_storage::LazyParquetChunkLoader::loadChunk (C++ function)</a>
-</li>
-      <li><a href="api/class/classforeign__storage_1_1_lazy_parquet_chunk_loader.html#_CPPv4N15foreign_storage22LazyParquetChunkLoader11rep_levels_E">foreign_storage::LazyParquetChunkLoader::rep_levels_ (C++ member)</a>
+      <li><a href="api/class/classforeign__storage_1_1_lazy_parquet_chunk_loader.html#_CPPv4N15foreign_storage22LazyParquetChunkLoader9loadChunkERK8IntervalI12RowGroupTypeEKiRN8Chunk_NS5ChunkEP16StringDictionary">foreign_storage::LazyParquetChunkLoader::loadChunk (C++ function)</a>
 </li>
       <li><a href="api/class/classforeign__storage_1_1_lazy_parquet_importer.html#_CPPv4N15foreign_storage19LazyParquetImporterE">foreign_storage::LazyParquetImporter (C++ class)</a>
 </li>
-      <li><a href="api/class/classforeign__storage_1_1_lazy_parquet_importer.html#_CPPv4N15foreign_storage19LazyParquetImporter19LazyParquetImporterEPN13import_export6LoaderERKNSt6stringERKN13import_export10CopyParamsER22RowGroupMetadataVectorR25ParquetForeignTableSchema">foreign_storage::LazyParquetImporter::LazyParquetImporter (C++ function)</a>
+      <li><a href="api/class/classforeign__storage_1_1_lazy_parquet_importer.html#_CPPv4N15foreign_storage19LazyParquetImporter19LazyParquetImporterEPN13import_export6LoaderERKNSt6stringERKN13import_export10CopyParamsER22RowGroupMetadataVectorR18ForeignTableSchema">foreign_storage::LazyParquetImporter::LazyParquetImporter (C++ function)</a>
 </li>
       <li><a href="api/class/classforeign__storage_1_1_lazy_parquet_importer.html#_CPPv4N15foreign_storage19LazyParquetImporter12metadataScanEv">foreign_storage::LazyParquetImporter::metadataScan (C++ function)</a>
 </li>
@@ -9344,6 +9456,10 @@
       <li><a href="api/class/classforeign__storage_1_1_lazy_parquet_importer.html#_CPPv4N15foreign_storage19LazyParquetImporter7schema_E">foreign_storage::LazyParquetImporter::schema_ (C++ member)</a>
 </li>
       <li><a href="api/class/classforeign__storage_1_1_local_multi_file_reader.html#_CPPv4N15foreign_storage20LocalMultiFileReaderE">foreign_storage::LocalMultiFileReader (C++ class)</a>
+</li>
+      <li><a href="api/class/classforeign__storage_1_1_local_multi_file_reader.html#_CPPv4N15foreign_storage20LocalMultiFileReader16checkForMoreRowsE6size_t">foreign_storage::LocalMultiFileReader::checkForMoreRows (C++ function)</a>
+</li>
+      <li><a href="api/class/classforeign__storage_1_1_local_multi_file_reader.html#_CPPv4N15foreign_storage20LocalMultiFileReader10insertFileENSt6stringE">foreign_storage::LocalMultiFileReader::insertFile (C++ function)</a>
 </li>
       <li><a href="api/class/classforeign__storage_1_1_local_multi_file_reader.html#_CPPv4N15foreign_storage20LocalMultiFileReader20LocalMultiFileReaderERKNSt6stringERKN13import_export10CopyParamsE">foreign_storage::LocalMultiFileReader::LocalMultiFileReader (C++ function)</a>
 </li>
@@ -9379,23 +9495,21 @@
 </li>
       <li><a href="api/class/classforeign__storage_1_1_multi_file_reader.html#_CPPv4N15foreign_storage15MultiFileReader15current_offset_E">foreign_storage::MultiFileReader::current_offset_ (C++ member)</a>
 </li>
+      <li><a href="api/class/classforeign__storage_1_1_multi_file_reader.html#_CPPv4N15foreign_storage15MultiFileReader15file_locations_E">foreign_storage::MultiFileReader::file_locations_ (C++ member)</a>
+</li>
       <li><a href="api/class/classforeign__storage_1_1_multi_file_reader.html#_CPPv4N15foreign_storage15MultiFileReader6files_E">foreign_storage::MultiFileReader::files_ (C++ member)</a>
 </li>
-      <li><a href="api/class/classforeign__storage_1_1_multi_file_reader.html#_CPPv4N15foreign_storage15MultiFileReader7getSizeER6size_t">foreign_storage::MultiFileReader::getSize (C++ function)</a>
+      <li><a href="api/class/classforeign__storage_1_1_multi_file_reader.html#_CPPv4N15foreign_storage15MultiFileReader16getRemainingSizeEv">foreign_storage::MultiFileReader::getRemainingSize (C++ function)</a>
+</li>
+      <li><a href="api/class/classforeign__storage_1_1_multi_file_reader.html#_CPPv4N15foreign_storage15MultiFileReader20isRemainingSizeKnownEv">foreign_storage::MultiFileReader::isRemainingSizeKnown (C++ function)</a>
 </li>
       <li><a href="api/class/classforeign__storage_1_1_multi_file_reader.html#_CPPv4N15foreign_storage15MultiFileReader14isScanFinishedEv">foreign_storage::MultiFileReader::isScanFinished (C++ function)</a>
 </li>
-      <li><a href="api/class/classforeign__storage_1_1_multi_file_reader.html#_CPPv4N15foreign_storage15MultiFileReader15MultiFileReaderEv">foreign_storage::MultiFileReader::MultiFileReader (C++ function)</a>
-</li>
-      <li><a href="api/class/classforeign__storage_1_1_multi_file_reader.html#_CPPv4N15foreign_storage15MultiFileReader13offsetToIndexE6size_t">foreign_storage::MultiFileReader::offsetToIndex (C++ function)</a>
+      <li><a href="api/class/classforeign__storage_1_1_multi_file_reader.html#_CPPv4N15foreign_storage15MultiFileReader15MultiFileReaderERKNSt6stringERKN13import_export10CopyParamsE">foreign_storage::MultiFileReader::MultiFileReader (C++ function)</a>
 </li>
       <li><a href="api/class/classforeign__storage_1_1_multi_file_reader.html#_CPPv4N15foreign_storage15MultiFileReader4readEPv6size_t">foreign_storage::MultiFileReader::read (C++ function)</a>
 </li>
       <li><a href="api/class/classforeign__storage_1_1_multi_file_reader.html#_CPPv4N15foreign_storage15MultiFileReader10readRegionEPv6size_t6size_t">foreign_storage::MultiFileReader::readRegion (C++ function)</a>
-</li>
-      <li><a href="api/class/classforeign__storage_1_1_multi_file_reader.html#_CPPv4N15foreign_storage15MultiFileReader11size_known_E">foreign_storage::MultiFileReader::size_known_ (C++ member)</a>
-</li>
-      <li><a href="api/class/classforeign__storage_1_1_multi_file_reader.html#_CPPv4N15foreign_storage15MultiFileReader11total_size_E">foreign_storage::MultiFileReader::total_size_ (C++ member)</a>
 </li>
       <li><a href="api/class/classforeign__storage_1_1_multi_s3_reader.html#_CPPv4N15foreign_storage13MultiS3ReaderE">foreign_storage::MultiS3Reader (C++ class)</a>
 </li>
@@ -9412,8 +9526,6 @@
       <li><a href="api/struct/structforeign__storage_1_1_options_container.html#_CPPv4N15foreign_storage16OptionsContainer18populateOptionsMapERKN9rapidjson5ValueE">foreign_storage::OptionsContainer::populateOptionsMap (C++ function)</a>, <a href="api/struct/structforeign__storage_1_1_options_container.html#_CPPv4N15foreign_storage16OptionsContainer18populateOptionsMapERKNSt6stringEb">[1]</a>
 </li>
       <li><a href="api/class/classforeign__storage_1_1_parquet_data_wrapper.html#_CPPv4N15foreign_storage18ParquetDataWrapperE">foreign_storage::ParquetDataWrapper (C++ class)</a>
-</li>
-      <li><a href="api/class/classforeign__storage_1_1_parquet_data_wrapper.html#_CPPv4N15foreign_storage18ParquetDataWrapper17chunk_buffer_map_E">foreign_storage::ParquetDataWrapper::chunk_buffer_map_ (C++ member)</a>
 </li>
       <li><a href="api/class/classforeign__storage_1_1_parquet_data_wrapper.html#_CPPv4N15foreign_storage18ParquetDataWrapper19chunk_metadata_map_E">foreign_storage::ParquetDataWrapper::chunk_metadata_map_ (C++ member)</a>
 </li>
@@ -9433,11 +9545,7 @@
 </li>
       <li><a href="api/class/classforeign__storage_1_1_parquet_data_wrapper.html#_CPPv4N15foreign_storage18ParquetDataWrapper26FragmentToRowGroupInterval21start_row_group_indexE">foreign_storage::ParquetDataWrapper::FragmentToRowGroupInterval::start_row_group_index (C++ member)</a>, <a href="api/struct/structforeign__storage_1_1_parquet_data_wrapper_1_1_fragment_to_row_group_interval.html#_CPPv4N15foreign_storage18ParquetDataWrapper26FragmentToRowGroupInterval21start_row_group_indexE">[1]</a>
 </li>
-      <li><a href="api/class/classforeign__storage_1_1_parquet_data_wrapper.html#_CPPv4N15foreign_storage18ParquetDataWrapper35getBufferFromMapOrLoadBufferIntoMapERK8ChunkKey">foreign_storage::ParquetDataWrapper::getBufferFromMapOrLoadBufferIntoMap (C++ function)</a>
-</li>
-      <li><a href="api/class/classforeign__storage_1_1_parquet_data_wrapper.html#_CPPv4N15foreign_storage18ParquetDataWrapper14getChunkBufferERK8ChunkKey">foreign_storage::ParquetDataWrapper::getChunkBuffer (C++ function)</a>
-</li>
-      <li><a href="api/class/classforeign__storage_1_1_parquet_data_wrapper.html#_CPPv4N15foreign_storage18ParquetDataWrapper14getChunkLoaderERN17Catalog_Namespace7CatalogERK8IntervalI10ColumnTypeEKiKi">foreign_storage::ParquetDataWrapper::getChunkLoader (C++ function)</a>
+      <li><a href="api/class/classforeign__storage_1_1_parquet_data_wrapper.html#_CPPv4N15foreign_storage18ParquetDataWrapper14getChunkLoaderERN17Catalog_Namespace7CatalogERK8IntervalI10ColumnTypeEKiKiRNSt3mapI8ChunkKeyP14AbstractBufferEE">foreign_storage::ParquetDataWrapper::getChunkLoader (C++ function)</a>
 </li>
       <li><a href="api/class/classforeign__storage_1_1_parquet_data_wrapper.html#_CPPv4N15foreign_storage18ParquetDataWrapper22getColumnsToInitializeERK8IntervalI10ColumnTypeE">foreign_storage::ParquetDataWrapper::getColumnsToInitialize (C++ function)</a>
 </li>
@@ -9445,9 +9553,7 @@
 </li>
       <li><a href="api/class/classforeign__storage_1_1_parquet_data_wrapper.html#_CPPv4N15foreign_storage18ParquetDataWrapper17getMetadataLoaderERN17Catalog_Namespace7CatalogERKN19LazyParquetImporter22RowGroupMetadataVectorE">foreign_storage::ParquetDataWrapper::getMetadataLoader (C++ function)</a>
 </li>
-      <li><a href="api/class/classforeign__storage_1_1_parquet_data_wrapper.html#_CPPv4N15foreign_storage18ParquetDataWrapper21initializeChunkBufferERK8ChunkKey">foreign_storage::ParquetDataWrapper::initializeChunkBuffer (C++ function)</a>
-</li>
-      <li><a href="api/class/classforeign__storage_1_1_parquet_data_wrapper.html#_CPPv4N15foreign_storage18ParquetDataWrapper22initializeChunkBuffersEKi">foreign_storage::ParquetDataWrapper::initializeChunkBuffers (C++ function)</a>, <a href="api/class/classforeign__storage_1_1_parquet_data_wrapper.html#_CPPv4N15foreign_storage18ParquetDataWrapper22initializeChunkBuffersEKiRK8IntervalI10ColumnTypeEKbK6size_t">[1]</a>
+      <li><a href="api/class/classforeign__storage_1_1_parquet_data_wrapper.html#_CPPv4N15foreign_storage18ParquetDataWrapper22initializeChunkBuffersEKiRK8IntervalI10ColumnTypeERNSt3mapI8ChunkKeyP14AbstractBufferEEKbK6size_t">foreign_storage::ParquetDataWrapper::initializeChunkBuffers (C++ function)</a>
 </li>
       <li><a href="api/class/classforeign__storage_1_1_parquet_data_wrapper.html#_CPPv4N15foreign_storage18ParquetDataWrapper20last_fragment_index_E">foreign_storage::ParquetDataWrapper::last_fragment_index_ (C++ member)</a>
 </li>
@@ -9455,13 +9561,11 @@
 </li>
       <li><a href="api/class/classforeign__storage_1_1_parquet_data_wrapper.html#_CPPv4N15foreign_storage18ParquetDataWrapper15last_row_group_E">foreign_storage::ParquetDataWrapper::last_row_group_ (C++ member)</a>
 </li>
-      <li><a href="api/class/classforeign__storage_1_1_parquet_data_wrapper.html#_CPPv4N15foreign_storage18ParquetDataWrapper17loadBufferIntoMapERK8ChunkKey">foreign_storage::ParquetDataWrapper::loadBufferIntoMap (C++ function)</a>
+      <li><a href="api/class/classforeign__storage_1_1_parquet_data_wrapper.html#_CPPv4N15foreign_storage18ParquetDataWrapper38loadBuffersUsingLazyParquetChunkLoaderEKiKiK6size_tRNSt3mapI8ChunkKeyP14AbstractBufferEE">foreign_storage::ParquetDataWrapper::loadBuffersUsingLazyParquetChunkLoader (C++ function)</a>
 </li>
-      <li><a href="api/class/classforeign__storage_1_1_parquet_data_wrapper.html#_CPPv4N15foreign_storage18ParquetDataWrapper44loadBufferIntoMapUsingLazyParquetChunkLoaderERK8ChunkKeyK6size_t">foreign_storage::ParquetDataWrapper::loadBufferIntoMapUsingLazyParquetChunkLoader (C++ function)</a>
+      <li><a href="api/class/classforeign__storage_1_1_parquet_data_wrapper.html#_CPPv4N15foreign_storage18ParquetDataWrapper35loadBuffersUsingLazyParquetImporterEKiKiRNSt3mapI8ChunkKeyP14AbstractBufferEE">foreign_storage::ParquetDataWrapper::loadBuffersUsingLazyParquetImporter (C++ function)</a>
 </li>
-      <li><a href="api/class/classforeign__storage_1_1_parquet_data_wrapper.html#_CPPv4N15foreign_storage18ParquetDataWrapper41loadBufferIntoMapUsingLazyParquetImporterERK8ChunkKey">foreign_storage::ParquetDataWrapper::loadBufferIntoMapUsingLazyParquetImporter (C++ function)</a>
-</li>
-      <li><a href="api/class/classforeign__storage_1_1_parquet_data_wrapper.html#_CPPv4N15foreign_storage18ParquetDataWrapper9loadChunkEPK16ColumnDescriptorRK8ChunkKeyR12DataBlockPtrK6size_tKb">foreign_storage::ParquetDataWrapper::loadChunk (C++ function)</a>
+      <li><a href="api/class/classforeign__storage_1_1_parquet_data_wrapper.html#_CPPv4N15foreign_storage18ParquetDataWrapper9loadChunkEPK16ColumnDescriptorRK8ChunkKeyR12DataBlockPtrK6size_tRNSt3mapI8ChunkKeyP14AbstractBufferEE">foreign_storage::ParquetDataWrapper::loadChunk (C++ function)</a>
 </li>
       <li><a href="api/class/classforeign__storage_1_1_parquet_data_wrapper.html#_CPPv4N15foreign_storage18ParquetDataWrapper17loadMetadataChunkEPK16ColumnDescriptorRK8ChunkKeyR12DataBlockPtrK6size_tKbKb">foreign_storage::ParquetDataWrapper::loadMetadataChunk (C++ function)</a>
 </li>
@@ -9469,7 +9573,9 @@
 </li>
       <li><a href="api/class/classforeign__storage_1_1_parquet_data_wrapper.html#_CPPv4N15foreign_storage18ParquetDataWrapper18ParquetDataWrapperEKiPK12ForeignTable">foreign_storage::ParquetDataWrapper::ParquetDataWrapper (C++ function)</a>, <a href="api/class/classforeign__storage_1_1_parquet_data_wrapper.html#_CPPv4N15foreign_storage18ParquetDataWrapper18ParquetDataWrapperEPK12ForeignTable">[1]</a>
 </li>
-      <li><a href="api/class/classforeign__storage_1_1_parquet_data_wrapper.html#_CPPv4N15foreign_storage18ParquetDataWrapper33populateMetadataForChunkKeyPrefixERK8ChunkKeyR19ChunkMetadataVector">foreign_storage::ParquetDataWrapper::populateMetadataForChunkKeyPrefix (C++ function)</a>
+      <li><a href="api/class/classforeign__storage_1_1_parquet_data_wrapper.html#_CPPv4N15foreign_storage18ParquetDataWrapper20populateChunkBuffersERNSt3mapI8ChunkKeyP14AbstractBufferEERNSt3mapI8ChunkKeyP14AbstractBufferEE">foreign_storage::ParquetDataWrapper::populateChunkBuffers (C++ function)</a>
+</li>
+      <li><a href="api/class/classforeign__storage_1_1_parquet_data_wrapper.html#_CPPv4N15foreign_storage18ParquetDataWrapper21populateChunkMetadataER19ChunkMetadataVector">foreign_storage::ParquetDataWrapper::populateChunkMetadata (C++ function)</a>
 </li>
       <li><a href="api/class/classforeign__storage_1_1_parquet_data_wrapper.html#_CPPv4N15foreign_storage18ParquetDataWrapper20resetParquetMetadataEv">foreign_storage::ParquetDataWrapper::resetParquetMetadata (C++ function)</a>
 </li>
@@ -9479,7 +9585,7 @@
 </li>
       <li><a href="api/class/classforeign__storage_1_1_parquet_data_wrapper.html#_CPPv4N15foreign_storage18ParquetDataWrapper17updateFragmentMapEii">foreign_storage::ParquetDataWrapper::updateFragmentMap (C++ function)</a>
 </li>
-      <li><a href="api/class/classforeign__storage_1_1_parquet_data_wrapper.html#_CPPv4N15foreign_storage18ParquetDataWrapper20updateStatsForBufferEP14AbstractBufferRK12DataBlockPtrK6size_t">foreign_storage::ParquetDataWrapper::updateStatsForBuffer (C++ function)</a>
+      <li><a href="api/class/classforeign__storage_1_1_parquet_data_wrapper.html#_CPPv4N15foreign_storage18ParquetDataWrapper21updateStatsForEncoderEP7EncoderK11SQLTypeInfoRK12DataBlockPtrK6size_t">foreign_storage::ParquetDataWrapper::updateStatsForEncoder (C++ function)</a>
 </li>
       <li><a href="api/class/classforeign__storage_1_1_parquet_data_wrapper.html#_CPPv4N15foreign_storage18ParquetDataWrapper24validateAndGetCopyParamsEv">foreign_storage::ParquetDataWrapper::validateAndGetCopyParams (C++ function)</a>
 </li>
@@ -9501,6 +9607,16 @@
 </li>
       <li><a href="api/class/classforeign__storage_1_1_parquet_decimal_encoder.html#_CPPv4N15foreign_storage21ParquetDecimalEncoder21ParquetDecimalEncoderEPN14Data_Namespace14AbstractBufferEPK16ColumnDescriptorPKN7parquet16ColumnDescriptorE">foreign_storage::ParquetDecimalEncoder::ParquetDecimalEncoder (C++ function)</a>
 </li>
+      <li><a href="api/class/classforeign__storage_1_1_parquet_encoder.html#_CPPv4N15foreign_storage14ParquetEncoderE">foreign_storage::ParquetEncoder (C++ class)</a>
+</li>
+      <li><a href="api/class/classforeign__storage_1_1_parquet_encoder.html#_CPPv4N15foreign_storage14ParquetEncoder10appendDataEP7int16_t7int64_t7int64_tP6int8_t">foreign_storage::ParquetEncoder::appendData (C++ function)</a>
+</li>
+      <li><a href="api/class/classforeign__storage_1_1_parquet_encoder.html#_CPPv4N15foreign_storage14ParquetEncoder7buffer_E">foreign_storage::ParquetEncoder::buffer_ (C++ member)</a>
+</li>
+      <li><a href="api/class/classforeign__storage_1_1_parquet_encoder.html#_CPPv4N15foreign_storage14ParquetEncoder14ParquetEncoderEPN14Data_Namespace14AbstractBufferE">foreign_storage::ParquetEncoder::ParquetEncoder (C++ function)</a>
+</li>
+      <li><a href="api/class/classforeign__storage_1_1_parquet_encoder.html#_CPPv4N15foreign_storage14ParquetEncoderD0Ev">foreign_storage::ParquetEncoder::~ParquetEncoder (C++ function)</a>
+</li>
       <li><a href="api/class/classforeign__storage_1_1_parquet_fixed_length_encoder.html#_CPPv4I00EN15foreign_storage25ParquetFixedLengthEncoderE">foreign_storage::ParquetFixedLengthEncoder (C++ class)</a>
 </li>
       <li><a href="api/class/classforeign__storage_1_1_parquet_fixed_length_encoder.html#_CPPv4N15foreign_storage25ParquetFixedLengthEncoder13encodeAndCopyEPK6int8_tP6int8_t">foreign_storage::ParquetFixedLengthEncoder::encodeAndCopy (C++ function)</a>
@@ -9509,43 +9625,9 @@
 </li>
       <li><a href="api/class/classforeign__storage_1_1_parquet_fixed_length_encoder.html#_CPPv4N15foreign_storage25ParquetFixedLengthEncoder25ParquetFixedLengthEncoderEPN14Data_Namespace14AbstractBufferEPK16ColumnDescriptorPKN7parquet16ColumnDescriptorE">foreign_storage::ParquetFixedLengthEncoder::ParquetFixedLengthEncoder (C++ function)</a>
 </li>
-      <li><a href="api/class/classforeign__storage_1_1_parquet_foreign_table_schema.html#_CPPv4N15foreign_storage25ParquetForeignTableSchemaE">foreign_storage::ParquetForeignTableSchema (C++ class)</a>
-</li>
-      <li><a href="api/class/classforeign__storage_1_1_parquet_foreign_table_schema.html#_CPPv4N15foreign_storage25ParquetForeignTableSchema8catalog_E">foreign_storage::ParquetForeignTableSchema::catalog_ (C++ member)</a>
-</li>
-      <li><a href="api/class/classforeign__storage_1_1_parquet_foreign_table_schema.html#_CPPv4N15foreign_storage25ParquetForeignTableSchema14foreign_table_E">foreign_storage::ParquetForeignTableSchema::foreign_table_ (C++ member)</a>
-</li>
-      <li><a href="api/class/classforeign__storage_1_1_parquet_foreign_table_schema.html#_CPPv4NK15foreign_storage25ParquetForeignTableSchema19getColumnDescriptorEKi">foreign_storage::ParquetForeignTableSchema::getColumnDescriptor (C++ function)</a>
-</li>
-      <li><a href="api/class/classforeign__storage_1_1_parquet_foreign_table_schema.html#_CPPv4NK15foreign_storage25ParquetForeignTableSchema15getForeignTableEv">foreign_storage::ParquetForeignTableSchema::getForeignTable (C++ function)</a>
-</li>
-      <li><a href="api/class/classforeign__storage_1_1_parquet_foreign_table_schema.html#_CPPv4NK15foreign_storage25ParquetForeignTableSchema28getLogicalAndPhysicalColumnsEv">foreign_storage::ParquetForeignTableSchema::getLogicalAndPhysicalColumns (C++ function)</a>
-</li>
-      <li><a href="api/class/classforeign__storage_1_1_parquet_foreign_table_schema.html#_CPPv4NK15foreign_storage25ParquetForeignTableSchema16getLogicalColumnEKi">foreign_storage::ParquetForeignTableSchema::getLogicalColumn (C++ function)</a>
-</li>
-      <li><a href="api/class/classforeign__storage_1_1_parquet_foreign_table_schema.html#_CPPv4NK15foreign_storage25ParquetForeignTableSchema26getLogicalColumnIdIteratorEKi">foreign_storage::ParquetForeignTableSchema::getLogicalColumnIdIterator (C++ function)</a>
-</li>
-      <li><a href="api/class/classforeign__storage_1_1_parquet_foreign_table_schema.html#_CPPv4NK15foreign_storage25ParquetForeignTableSchema17getLogicalColumnsEv">foreign_storage::ParquetForeignTableSchema::getLogicalColumns (C++ function)</a>
-</li>
-      <li><a href="api/class/classforeign__storage_1_1_parquet_foreign_table_schema.html#_CPPv4NK15foreign_storage25ParquetForeignTableSchema21getParquetColumnIndexEKi">foreign_storage::ParquetForeignTableSchema::getParquetColumnIndex (C++ function)</a>
-</li>
-      <li><a href="api/class/classforeign__storage_1_1_parquet_foreign_table_schema.html#_CPPv4N15foreign_storage25ParquetForeignTableSchema29logical_and_physical_columns_E">foreign_storage::ParquetForeignTableSchema::logical_and_physical_columns_ (C++ member)</a>
-</li>
-      <li><a href="api/class/classforeign__storage_1_1_parquet_foreign_table_schema.html#_CPPv4N15foreign_storage25ParquetForeignTableSchema19logical_column_ids_E">foreign_storage::ParquetForeignTableSchema::logical_column_ids_ (C++ member)</a>
-</li>
-      <li><a href="api/class/classforeign__storage_1_1_parquet_foreign_table_schema.html#_CPPv4N15foreign_storage25ParquetForeignTableSchema16logical_columns_E">foreign_storage::ParquetForeignTableSchema::logical_columns_ (C++ member)</a>
-</li>
-      <li><a href="api/class/classforeign__storage_1_1_parquet_foreign_table_schema.html#_CPPv4NK15foreign_storage25ParquetForeignTableSchema28numLogicalAndPhysicalColumnsEv">foreign_storage::ParquetForeignTableSchema::numLogicalAndPhysicalColumns (C++ function)</a>
-</li>
-      <li><a href="api/class/classforeign__storage_1_1_parquet_foreign_table_schema.html#_CPPv4NK15foreign_storage25ParquetForeignTableSchema17numLogicalColumnsEv">foreign_storage::ParquetForeignTableSchema::numLogicalColumns (C++ function)</a>
-</li>
-      <li><a href="api/class/classforeign__storage_1_1_parquet_foreign_table_schema.html#_CPPv4N15foreign_storage25ParquetForeignTableSchema25ParquetForeignTableSchemaEK7int32_tPK12ForeignTable">foreign_storage::ParquetForeignTableSchema::ParquetForeignTableSchema (C++ function)</a>
-</li>
       <li><a href="api/class/classforeign__storage_1_1_parquet_in_place_encoder.html#_CPPv4N15foreign_storage21ParquetInPlaceEncoderE">foreign_storage::ParquetInPlaceEncoder (C++ class)</a>
 </li>
-      <li><a href="api/class/classforeign__storage_1_1_parquet_in_place_encoder.html#_CPPv4N15foreign_storage21ParquetInPlaceEncoder10appendDataEP7int16_t7int64_t7int64_t">foreign_storage::ParquetInPlaceEncoder::appendData (C++ function)</a>
-</li>
-      <li><a href="api/class/classforeign__storage_1_1_parquet_in_place_encoder.html#_CPPv4N15foreign_storage21ParquetInPlaceEncoder7buffer_E">foreign_storage::ParquetInPlaceEncoder::buffer_ (C++ member)</a>
+      <li><a href="api/class/classforeign__storage_1_1_parquet_in_place_encoder.html#_CPPv4N15foreign_storage21ParquetInPlaceEncoder10appendDataEP7int16_t7int64_t7int64_tP6int8_t">foreign_storage::ParquetInPlaceEncoder::appendData (C++ function)</a>
 </li>
       <li><a href="api/class/classforeign__storage_1_1_parquet_in_place_encoder.html#_CPPv4N15foreign_storage21ParquetInPlaceEncoder4copyEPK6int8_tP6int8_t">foreign_storage::ParquetInPlaceEncoder::copy (C++ function)</a>
 </li>
@@ -9553,15 +9635,49 @@
 </li>
       <li><a href="api/class/classforeign__storage_1_1_parquet_in_place_encoder.html#_CPPv4N15foreign_storage21ParquetInPlaceEncoder13encodeAndCopyEPK6int8_tP6int8_t">foreign_storage::ParquetInPlaceEncoder::encodeAndCopy (C++ function)</a>
 </li>
-      <li><a href="api/class/classforeign__storage_1_1_parquet_in_place_encoder.html#_CPPv4N15foreign_storage21ParquetInPlaceEncoder12getMemoryPtrEv">foreign_storage::ParquetInPlaceEncoder::getMemoryPtr (C++ function)</a>
-</li>
       <li><a href="api/class/classforeign__storage_1_1_parquet_in_place_encoder.html#_CPPv4N15foreign_storage21ParquetInPlaceEncoder28omnisci_data_type_byte_size_E">foreign_storage::ParquetInPlaceEncoder::omnisci_data_type_byte_size_ (C++ member)</a>
 </li>
       <li><a href="api/class/classforeign__storage_1_1_parquet_in_place_encoder.html#_CPPv4N15foreign_storage21ParquetInPlaceEncoder28parquet_data_type_byte_size_E">foreign_storage::ParquetInPlaceEncoder::parquet_data_type_byte_size_ (C++ member)</a>
 </li>
-      <li><a href="api/class/classforeign__storage_1_1_parquet_in_place_encoder.html#_CPPv4N15foreign_storage21ParquetInPlaceEncoder21ParquetInPlaceEncoderEPN14Data_Namespace14AbstractBufferEPK16ColumnDescriptorPKN7parquet16ColumnDescriptorE">foreign_storage::ParquetInPlaceEncoder::ParquetInPlaceEncoder (C++ function)</a>
+      <li><a href="api/class/classforeign__storage_1_1_parquet_in_place_encoder.html#_CPPv4N15foreign_storage21ParquetInPlaceEncoder21ParquetInPlaceEncoderEPN14Data_Namespace14AbstractBufferEK6size_tK6size_t">foreign_storage::ParquetInPlaceEncoder::ParquetInPlaceEncoder (C++ function)</a>
 </li>
       <li><a href="api/class/classforeign__storage_1_1_parquet_in_place_encoder.html#_CPPv4N15foreign_storage21ParquetInPlaceEncoder7setNullEP6int8_t">foreign_storage::ParquetInPlaceEncoder::setNull (C++ function)</a>
+</li>
+      <li><a href="api/class/classforeign__storage_1_1_parquet_string_encoder.html#_CPPv4I0EN15foreign_storage20ParquetStringEncoderE">foreign_storage::ParquetStringEncoder (C++ class)</a>
+</li>
+      <li><a href="api/class/classforeign__storage_1_1_parquet_string_encoder.html#_CPPv4N15foreign_storage20ParquetStringEncoder10appendDataEP7int16_t7int64_t7int64_tP6int8_t">foreign_storage::ParquetStringEncoder::appendData (C++ function)</a>
+</li>
+      <li><a href="api/class/classforeign__storage_1_1_parquet_string_encoder.html#_CPPv4N15foreign_storage20ParquetStringEncoder15chunk_metadata_E">foreign_storage::ParquetStringEncoder::chunk_metadata_ (C++ member)</a>
+</li>
+      <li><a href="api/class/classforeign__storage_1_1_parquet_string_encoder.html#_CPPv4N15foreign_storage20ParquetStringEncoder14encode_buffer_E">foreign_storage::ParquetStringEncoder::encode_buffer_ (C++ member)</a>
+</li>
+      <li><a href="api/class/classforeign__storage_1_1_parquet_string_encoder.html#_CPPv4N15foreign_storage20ParquetStringEncoder13encodeAndCopyEPK6int8_tP6int8_t">foreign_storage::ParquetStringEncoder::encodeAndCopy (C++ function)</a>
+</li>
+      <li><a href="api/class/classforeign__storage_1_1_parquet_string_encoder.html#_CPPv4NK15foreign_storage20ParquetStringEncoder30encodingIsIdentityForSameTypesEv">foreign_storage::ParquetStringEncoder::encodingIsIdentityForSameTypes (C++ function)</a>
+</li>
+      <li><a href="api/class/classforeign__storage_1_1_parquet_string_encoder.html#_CPPv4N15foreign_storage20ParquetStringEncoder10has_nulls_E">foreign_storage::ParquetStringEncoder::has_nulls_ (C++ member)</a>
+</li>
+      <li><a href="api/class/classforeign__storage_1_1_parquet_string_encoder.html#_CPPv4N15foreign_storage20ParquetStringEncoder4max_E">foreign_storage::ParquetStringEncoder::max_ (C++ member)</a>
+</li>
+      <li><a href="api/class/classforeign__storage_1_1_parquet_string_encoder.html#_CPPv4N15foreign_storage20ParquetStringEncoder4min_E">foreign_storage::ParquetStringEncoder::min_ (C++ member)</a>
+</li>
+      <li><a href="api/class/classforeign__storage_1_1_parquet_string_encoder.html#_CPPv4N15foreign_storage20ParquetStringEncoder13num_elements_E">foreign_storage::ParquetStringEncoder::num_elements_ (C++ member)</a>
+</li>
+      <li><a href="api/class/classforeign__storage_1_1_parquet_string_encoder.html#_CPPv4N15foreign_storage20ParquetStringEncoder20ParquetStringEncoderEPN14Data_Namespace14AbstractBufferEP16StringDictionaryRKNSt10shared_ptrI13ChunkMetadataEE">foreign_storage::ParquetStringEncoder::ParquetStringEncoder (C++ function)</a>
+</li>
+      <li><a href="api/class/classforeign__storage_1_1_parquet_string_encoder.html#_CPPv4N15foreign_storage20ParquetStringEncoder18string_dictionary_E">foreign_storage::ParquetStringEncoder::string_dictionary_ (C++ member)</a>
+</li>
+      <li><a href="api/class/classforeign__storage_1_1_parquet_string_encoder.html#_CPPv4N15foreign_storage20ParquetStringEncoder14updateMetadataE7int64_t7int64_tP6int8_t">foreign_storage::ParquetStringEncoder::updateMetadata (C++ function)</a>
+</li>
+      <li><a href="api/class/classforeign__storage_1_1_parquet_string_none_encoder.html#_CPPv4N15foreign_storage24ParquetStringNoneEncoderE">foreign_storage::ParquetStringNoneEncoder (C++ class)</a>
+</li>
+      <li><a href="api/class/classforeign__storage_1_1_parquet_string_none_encoder.html#_CPPv4N15foreign_storage24ParquetStringNoneEncoder10appendDataEP7int16_t7int64_t7int64_tP6int8_t">foreign_storage::ParquetStringNoneEncoder::appendData (C++ function)</a>
+</li>
+      <li><a href="api/class/classforeign__storage_1_1_parquet_string_none_encoder.html#_CPPv4N15foreign_storage24ParquetStringNoneEncoder14encode_buffer_E">foreign_storage::ParquetStringNoneEncoder::encode_buffer_ (C++ member)</a>
+</li>
+      <li><a href="api/class/classforeign__storage_1_1_parquet_string_none_encoder.html#_CPPv4N15foreign_storage24ParquetStringNoneEncoder13index_buffer_E">foreign_storage::ParquetStringNoneEncoder::index_buffer_ (C++ member)</a>
+</li>
+      <li><a href="api/class/classforeign__storage_1_1_parquet_string_none_encoder.html#_CPPv4N15foreign_storage24ParquetStringNoneEncoder24ParquetStringNoneEncoderEPN14Data_Namespace14AbstractBufferEPN14Data_Namespace14AbstractBufferE">foreign_storage::ParquetStringNoneEncoder::ParquetStringNoneEncoder (C++ function)</a>
 </li>
       <li><a href="api/class/classforeign__storage_1_1_parquet_time_encoder.html#_CPPv4I00EN15foreign_storage18ParquetTimeEncoderE">foreign_storage::ParquetTimeEncoder (C++ class)</a>
 </li>
@@ -9589,7 +9705,7 @@
 </li>
       <li><a href="api/struct/structforeign__storage_1_1_parse_file_region_result.html#_CPPv4N15foreign_storage21ParseFileRegionResultE">foreign_storage::ParseFileRegionResult (C++ class)</a>
 </li>
-      <li><a href="api/struct/structforeign__storage_1_1_parse_file_region_result.html#_CPPv4N15foreign_storage21ParseFileRegionResult11data_blocksE">foreign_storage::ParseFileRegionResult::data_blocks (C++ member)</a>
+      <li><a href="api/struct/structforeign__storage_1_1_parse_file_region_result.html#_CPPv4N15foreign_storage21ParseFileRegionResult28column_id_to_data_blocks_mapE">foreign_storage::ParseFileRegionResult::column_id_to_data_blocks_map (C++ member)</a>
 </li>
       <li><a href="api/struct/structforeign__storage_1_1_parse_file_region_result.html#_CPPv4N15foreign_storage21ParseFileRegionResult11file_offsetE">foreign_storage::ParseFileRegionResult::file_offset (C++ member)</a>
 </li>
@@ -9613,15 +9729,17 @@
 </li>
       <li><a href="api/class/classforeign__storage_1_1_single_file_reader.html#_CPPv4N15foreign_storage16SingleFileReaderE">foreign_storage::SingleFileReader (C++ class)</a>
 </li>
+      <li><a href="api/class/classforeign__storage_1_1_single_file_reader.html#_CPPv4N15foreign_storage16SingleFileReader16checkForMoreRowsE6size_t">foreign_storage::SingleFileReader::checkForMoreRows (C++ function)</a>
+</li>
+      <li><a href="api/class/classforeign__storage_1_1_single_file_reader.html#_CPPv4N15foreign_storage16SingleFileReader10data_size_E">foreign_storage::SingleFileReader::data_size_ (C++ member)</a>
+</li>
       <li><a href="api/class/classforeign__storage_1_1_single_file_reader.html#_CPPv4N15foreign_storage16SingleFileReader5file_E">foreign_storage::SingleFileReader::file_ (C++ member)</a>
 </li>
-      <li><a href="api/class/classforeign__storage_1_1_single_file_reader.html#_CPPv4N15foreign_storage16SingleFileReader10file_path_E">foreign_storage::SingleFileReader::file_path_ (C++ member)</a>
-</li>
-      <li><a href="api/class/classforeign__storage_1_1_single_file_reader.html#_CPPv4N15foreign_storage16SingleFileReader10file_size_E">foreign_storage::SingleFileReader::file_size_ (C++ member)</a>
-</li>
-      <li><a href="api/class/classforeign__storage_1_1_single_file_reader.html#_CPPv4N15foreign_storage16SingleFileReader7getSizeER6size_t">foreign_storage::SingleFileReader::getSize (C++ function)</a>
+      <li><a href="api/class/classforeign__storage_1_1_single_file_reader.html#_CPPv4N15foreign_storage16SingleFileReader16getRemainingSizeEv">foreign_storage::SingleFileReader::getRemainingSize (C++ function)</a>
 </li>
       <li><a href="api/class/classforeign__storage_1_1_single_file_reader.html#_CPPv4N15foreign_storage16SingleFileReader14header_offset_E">foreign_storage::SingleFileReader::header_offset_ (C++ member)</a>
+</li>
+      <li><a href="api/class/classforeign__storage_1_1_single_file_reader.html#_CPPv4N15foreign_storage16SingleFileReader20isRemainingSizeKnownEv">foreign_storage::SingleFileReader::isRemainingSizeKnown (C++ function)</a>
 </li>
       <li><a href="api/class/classforeign__storage_1_1_single_file_reader.html#_CPPv4N15foreign_storage16SingleFileReader14isScanFinishedEv">foreign_storage::SingleFileReader::isScanFinished (C++ function)</a>
 </li>
@@ -9635,11 +9753,13 @@
 </li>
       <li><a href="api/class/classforeign__storage_1_1_single_file_reader.html#_CPPv4N15foreign_storage16SingleFileReader16SingleFileReaderERK16SingleFileReader">foreign_storage::SingleFileReader::SingleFileReader (C++ function)</a>, <a href="api/class/classforeign__storage_1_1_single_file_reader.html#_CPPv4N15foreign_storage16SingleFileReader16SingleFileReaderERKNSt6stringERKN13import_export10CopyParamsE">[1]</a>
 </li>
+      <li><a href="api/class/classforeign__storage_1_1_single_file_reader.html#_CPPv4N15foreign_storage16SingleFileReader17total_bytes_read_E">foreign_storage::SingleFileReader::total_bytes_read_ (C++ member)</a>
+</li>
       <li><a href="api/class/classforeign__storage_1_1_single_file_reader.html#_CPPv4N15foreign_storage16SingleFileReaderD0Ev">foreign_storage::SingleFileReader::~SingleFileReader (C++ function)</a>
 </li>
       <li><a href="api/class/classforeign__storage_1_1_typed_parquet_in_place_encoder.html#_CPPv4I00EN15foreign_storage26TypedParquetInPlaceEncoderE">foreign_storage::TypedParquetInPlaceEncoder (C++ class)</a>
 </li>
-      <li><a href="api/class/classforeign__storage_1_1_typed_parquet_in_place_encoder.html#_CPPv4N15foreign_storage26TypedParquetInPlaceEncoder10appendDataEP7int16_t7int64_t7int64_t">foreign_storage::TypedParquetInPlaceEncoder::appendData (C++ function)</a>
+      <li><a href="api/class/classforeign__storage_1_1_typed_parquet_in_place_encoder.html#_CPPv4N15foreign_storage26TypedParquetInPlaceEncoder10appendDataEP7int16_t7int64_t7int64_tP6int8_t">foreign_storage::TypedParquetInPlaceEncoder::appendData (C++ function)</a>
 </li>
       <li><a href="api/class/classforeign__storage_1_1_typed_parquet_in_place_encoder.html#_CPPv4N15foreign_storage26TypedParquetInPlaceEncoder4copyEPK6int8_tP6int8_t">foreign_storage::TypedParquetInPlaceEncoder::copy (C++ function)</a>
 </li>
@@ -9647,7 +9767,7 @@
 </li>
       <li><a href="api/class/classforeign__storage_1_1_typed_parquet_in_place_encoder.html#_CPPv4N15foreign_storage26TypedParquetInPlaceEncoder7setNullEP6int8_t">foreign_storage::TypedParquetInPlaceEncoder::setNull (C++ function)</a>
 </li>
-      <li><a href="api/class/classforeign__storage_1_1_typed_parquet_in_place_encoder.html#_CPPv4N15foreign_storage26TypedParquetInPlaceEncoder26TypedParquetInPlaceEncoderEPN14Data_Namespace14AbstractBufferEPK16ColumnDescriptorPKN7parquet16ColumnDescriptorE">foreign_storage::TypedParquetInPlaceEncoder::TypedParquetInPlaceEncoder (C++ function)</a>
+      <li><a href="api/class/classforeign__storage_1_1_typed_parquet_in_place_encoder.html#_CPPv4N15foreign_storage26TypedParquetInPlaceEncoder26TypedParquetInPlaceEncoderEPN14Data_Namespace14AbstractBufferEK6size_tK6size_t">foreign_storage::TypedParquetInPlaceEncoder::TypedParquetInPlaceEncoder (C++ function)</a>, <a href="api/class/classforeign__storage_1_1_typed_parquet_in_place_encoder.html#_CPPv4N15foreign_storage26TypedParquetInPlaceEncoder26TypedParquetInPlaceEncoderEPN14Data_Namespace14AbstractBufferEPK16ColumnDescriptorPKN7parquet16ColumnDescriptorE">[1]</a>
 </li>
       <li><a href="api/class/class_foreign_storage_buffer.html#_CPPv420ForeignStorageBuffer">ForeignStorageBuffer (C++ class)</a>
 </li>
@@ -9808,6 +9928,8 @@
       <li><a href="api/class/class_fragmenter___namespace_1_1_abstract_fragmenter.html#_CPPv4N20Fragmenter_Namespace18AbstractFragmenter16updateChunkStatsEPK16ColumnDescriptorRNSt13unordered_mapIi10ChunkStatsEE">Fragmenter_Namespace::AbstractFragmenter::updateChunkStats (C++ function)</a>
 </li>
       <li><a href="api/class/class_fragmenter___namespace_1_1_abstract_fragmenter.html#_CPPv4N20Fragmenter_Namespace18AbstractFragmenter12updateColumnEPKN17Catalog_Namespace7CatalogEPK15TableDescriptorPK16ColumnDescriptorKiRKNSt6vectorI8uint64_tEERK17ScalarTargetValueRK11SQLTypeInfoKN14Data_Namespace11MemoryLevelER9UpdelRoll">Fragmenter_Namespace::AbstractFragmenter::updateColumn (C++ function)</a>, <a href="api/class/class_fragmenter___namespace_1_1_abstract_fragmenter.html#_CPPv4N20Fragmenter_Namespace18AbstractFragmenter12updateColumnEPKN17Catalog_Namespace7CatalogEPK15TableDescriptorPK16ColumnDescriptorKiRKNSt6vectorI8uint64_tEERKNSt6vectorI17ScalarTargetValueEERK11SQLTypeInfoKN14Data_Namespace11MemoryLevelER9UpdelRoll">[1]</a>
+</li>
+      <li><a href="api/class/class_fragmenter___namespace_1_1_abstract_fragmenter.html#_CPPv4N20Fragmenter_Namespace18AbstractFragmenter25updateColumnChunkMetadataEPK16ColumnDescriptorKiKNSt10shared_ptrI13ChunkMetadataEE">Fragmenter_Namespace::AbstractFragmenter::updateColumnChunkMetadata (C++ function)</a>
 </li>
       <li><a href="api/class/class_fragmenter___namespace_1_1_abstract_fragmenter.html#_CPPv4N20Fragmenter_Namespace18AbstractFragmenter20updateColumnMetadataEPK16ColumnDescriptorR12FragmentInfoNSt10shared_ptrIN8Chunk_NS5ChunkEEEKbKdKdK7int64_tK7int64_tRK11SQLTypeInfoR9UpdelRoll">Fragmenter_Namespace::AbstractFragmenter::updateColumnMetadata (C++ function)</a>
 </li>
@@ -10066,6 +10188,8 @@
       <li><a href="api/class/class_fragmenter___namespace_1_1_insert_order_fragmenter.html#_CPPv4N20Fragmenter_Namespace21InsertOrderFragmenter16updateChunkStatsEPK16ColumnDescriptorRNSt13unordered_mapIi10ChunkStatsEE">Fragmenter_Namespace::InsertOrderFragmenter::updateChunkStats (C++ function)</a>
 </li>
       <li><a href="api/class/class_fragmenter___namespace_1_1_insert_order_fragmenter.html#_CPPv4N20Fragmenter_Namespace21InsertOrderFragmenter12updateColumnEPKN17Catalog_Namespace7CatalogEPK15TableDescriptorPK16ColumnDescriptorKiRKNSt6vectorI8uint64_tEERK17ScalarTargetValueRK11SQLTypeInfoKN14Data_Namespace11MemoryLevelER9UpdelRoll">Fragmenter_Namespace::InsertOrderFragmenter::updateColumn (C++ function)</a>, <a href="api/class/class_fragmenter___namespace_1_1_insert_order_fragmenter.html#_CPPv4N20Fragmenter_Namespace21InsertOrderFragmenter12updateColumnEPKN17Catalog_Namespace7CatalogEPK15TableDescriptorPK16ColumnDescriptorKiRKNSt6vectorI8uint64_tEERKNSt6vectorI17ScalarTargetValueEERK11SQLTypeInfoKN14Data_Namespace11MemoryLevelER9UpdelRoll">[1]</a>, <a href="api/class/class_fragmenter___namespace_1_1_insert_order_fragmenter.html#_CPPv4N20Fragmenter_Namespace21InsertOrderFragmenter12updateColumnEPKN17Catalog_Namespace7CatalogERKNSt6stringERKNSt6stringEKiRKNSt6vectorI8uint64_tEERKNSt6vectorI17ScalarTargetValueEERK11SQLTypeInfoKN14Data_Namespace11MemoryLevelER9UpdelRoll">[2]</a>
+</li>
+      <li><a href="api/class/class_fragmenter___namespace_1_1_insert_order_fragmenter.html#_CPPv4N20Fragmenter_Namespace21InsertOrderFragmenter25updateColumnChunkMetadataEPK16ColumnDescriptorKiKNSt10shared_ptrI13ChunkMetadataEE">Fragmenter_Namespace::InsertOrderFragmenter::updateColumnChunkMetadata (C++ function)</a>
 </li>
       <li><a href="api/class/class_fragmenter___namespace_1_1_insert_order_fragmenter.html#_CPPv4N20Fragmenter_Namespace21InsertOrderFragmenter20updateColumnMetadataEPK16ColumnDescriptorR12FragmentInfoNSt10shared_ptrIN8Chunk_NS5ChunkEEEKbKdKdK7int64_tK7int64_tRK11SQLTypeInfoR9UpdelRoll">Fragmenter_Namespace::InsertOrderFragmenter::updateColumnMetadata (C++ function)</a>
 </li>

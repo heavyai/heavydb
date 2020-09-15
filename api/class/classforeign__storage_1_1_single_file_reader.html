@@ -65,7 +65,7 @@
             
             
               <div class="version">
-                5.5.0dev 93884ef
+                5.5.0dev 8a228a1
               </div>
             
           
@@ -107,7 +107,7 @@
 </li>
 <li class="toctree-l3"><a class="reference internal" href="../../quickstart/deps.html#building-on-ubuntu">2.1.2. Building on Ubuntu</a><ul>
 <li class="toctree-l4"><a class="reference internal" href="../../quickstart/deps.html#ubuntu-16-04">2.1.2.1. Ubuntu 16.04</a></li>
-<li class="toctree-l4"><a class="reference internal" href="../../quickstart/deps.html#ubuntu-18-04">2.1.2.2. Ubuntu 18.04</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../quickstart/deps.html#ubuntu-18-04-and-20-04">2.1.2.2. Ubuntu 18.04 and 20.04</a></li>
 </ul>
 </li>
 <li class="toctree-l3"><a class="reference internal" href="../../quickstart/deps.html#building-on-centos">2.1.3. Building on CentOS</a></li>
@@ -986,6 +986,7 @@
 <li class="toctree-l2"><a class="reference internal" href="classddl__utils_1_1_file_path_whitelist.html">Class ddl_utils::FilePathWhitelist</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classddl__utils_1_1_sql_type.html">Class ddl_utils::SqlType</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classdetails_1_1_rel_alg_dispatcher.html">Class details::RelAlgDispatcher</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_archive_wrapper.html">Class foreign_storage::ArchiveWrapper</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_compressed_file_reader.html">Class foreign_storage::CompressedFileReader</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_csv_data_wrapper.html">Class foreign_storage::CsvDataWrapper</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_csv_reader.html">Class foreign_storage::CsvReader</a></li>
@@ -994,6 +995,7 @@
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_foreign_storage_buffer.html">Class foreign_storage::ForeignStorageBuffer</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_foreign_storage_cache.html">Class foreign_storage::ForeignStorageCache</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_foreign_storage_mgr.html">Class foreign_storage::ForeignStorageMgr</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_foreign_table_schema.html">Class foreign_storage::ForeignTableSchema</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_lazy_parquet_chunk_loader.html">Class foreign_storage::LazyParquetChunkLoader</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_lazy_parquet_importer.html">Class foreign_storage::LazyParquetImporter</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_local_multi_file_reader.html">Class foreign_storage::LocalMultiFileReader</a></li>
@@ -1001,9 +1003,11 @@
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_multi_s3_reader.html">Class foreign_storage::MultiS3Reader</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_parquet_data_wrapper.html">Class foreign_storage::ParquetDataWrapper</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_parquet_decimal_encoder.html">Class foreign_storage::ParquetDecimalEncoder</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_parquet_encoder.html">Class foreign_storage::ParquetEncoder</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_parquet_fixed_length_encoder.html">Class foreign_storage::ParquetFixedLengthEncoder</a></li>
-<li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_parquet_foreign_table_schema.html">Class foreign_storage::ParquetForeignTableSchema</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_parquet_in_place_encoder.html">Class foreign_storage::ParquetInPlaceEncoder</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_parquet_string_encoder.html">Class foreign_storage::ParquetStringEncoder</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_parquet_string_none_encoder.html">Class foreign_storage::ParquetStringNoneEncoder</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_parquet_time_encoder.html">Class foreign_storage::ParquetTimeEncoder</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_parquet_timestamp_encoder.html">Class foreign_storage::ParquetTimestampEncoder</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_parquet_unsigned_fixed_length_encoder.html">Class foreign_storage::ParquetUnsignedFixedLengthEncoder</a></li>
@@ -1583,13 +1587,31 @@
 </dd></dl>
 
 <dl class="function">
-<dt id="_CPPv4N15foreign_storage16SingleFileReader7getSizeER6size_t">
-<span id="_CPPv3N15foreign_storage16SingleFileReader7getSizeER6size_t"></span><span id="_CPPv2N15foreign_storage16SingleFileReader7getSizeER6size_t"></span><span id="foreign_storage::SingleFileReader::getSize__sR"></span><span class="target" id="classforeign__storage_1_1_single_file_reader_1a5a599575abe0e76f6401296d922dbaa0"></span>bool <code class="sig-name descname">getSize</code><span class="sig-paren">(</span>size_t &amp;<em>size</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N15foreign_storage16SingleFileReader7getSizeER6size_t" title="Permalink to this definition">¶</a><br /></dt>
+<dt id="_CPPv4N15foreign_storage16SingleFileReader16getRemainingSizeEv">
+<span id="_CPPv3N15foreign_storage16SingleFileReader16getRemainingSizeEv"></span><span id="_CPPv2N15foreign_storage16SingleFileReader16getRemainingSizeEv"></span><span id="foreign_storage::SingleFileReader::getRemainingSize"></span><span class="target" id="classforeign__storage_1_1_single_file_reader_1a055798cbcbf0592653d5b1d6e0c3ebda"></span>size_t <code class="sig-name descname">getRemainingSize</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N15foreign_storage16SingleFileReader16getRemainingSizeEv" title="Permalink to this definition">¶</a><br /></dt>
 <dd><p><dl class="simple">
-<dt><strong>Return</strong></dt><dd><p>if size is known </p>
+<dt><strong>Return</strong></dt><dd><p>size of the CSV remaining to be read </p>
 </dd>
+</dl>
+</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="_CPPv4N15foreign_storage16SingleFileReader20isRemainingSizeKnownEv">
+<span id="_CPPv3N15foreign_storage16SingleFileReader20isRemainingSizeKnownEv"></span><span id="_CPPv2N15foreign_storage16SingleFileReader20isRemainingSizeKnownEv"></span><span id="foreign_storage::SingleFileReader::isRemainingSizeKnown"></span><span class="target" id="classforeign__storage_1_1_single_file_reader_1add247d627d1258cd61f7ba62acb21a63"></span>bool <code class="sig-name descname">isRemainingSizeKnown</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N15foreign_storage16SingleFileReader20isRemainingSizeKnownEv" title="Permalink to this definition">¶</a><br /></dt>
+<dd><p><dl class="simple">
+<dt><strong>Return</strong></dt><dd><p>if remaining size is known </p>
+</dd>
+</dl>
+</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="_CPPv4N15foreign_storage16SingleFileReader16checkForMoreRowsE6size_t">
+<span id="_CPPv3N15foreign_storage16SingleFileReader16checkForMoreRowsE6size_t"></span><span id="_CPPv2N15foreign_storage16SingleFileReader16checkForMoreRowsE6size_t"></span><span id="foreign_storage::SingleFileReader::checkForMoreRows__s"></span><span class="target" id="classforeign__storage_1_1_single_file_reader_1aa178fe7ba06235cdefa1e870b2b160ae"></span>void <code class="sig-name descname">checkForMoreRows</code><span class="sig-paren">(</span>size_t <em>file_offset</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N15foreign_storage16SingleFileReader16checkForMoreRowsE6size_t" title="Permalink to this definition">¶</a><br /></dt>
+<dd><p>Rescan the target files Throws an exception if the rescan fails (ie files are not in a valid appended state or not supported) <dl class="simple">
 <dt><strong>Parameters</strong></dt><dd><ul class="breatheparameterlist simple">
-<li><p><code class="docutils literal notranslate"><span class="pre">size</span></code>: - variable passed by reference is updated with the size of this CSV object </p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">file_offset</span></code>: - where to resume the scan from (end of the last row) as not all of the bytes may have been consumed by the upstream compoennet </p></li>
 </ul>
 </dd>
 </dl>
@@ -1605,13 +1627,8 @@
 <dd></dd></dl>
 
 <dl class="member">
-<dt id="_CPPv4N15foreign_storage16SingleFileReader10file_size_E">
-<span id="_CPPv3N15foreign_storage16SingleFileReader10file_size_E"></span><span id="_CPPv2N15foreign_storage16SingleFileReader10file_size_E"></span><span id="foreign_storage::SingleFileReader::file_size___s"></span><span class="target" id="classforeign__storage_1_1_single_file_reader_1a498ff6fd503cffd049cd8d013e5d205a"></span>size_t <code class="sig-name descname">file_size_</code><a class="headerlink" href="#_CPPv4N15foreign_storage16SingleFileReader10file_size_E" title="Permalink to this definition">¶</a><br /></dt>
-<dd></dd></dl>
-
-<dl class="member">
-<dt id="_CPPv4N15foreign_storage16SingleFileReader10file_path_E">
-<span id="_CPPv3N15foreign_storage16SingleFileReader10file_path_E"></span><span id="_CPPv2N15foreign_storage16SingleFileReader10file_path_E"></span><span id="foreign_storage::SingleFileReader::file_path___ss"></span><span class="target" id="classforeign__storage_1_1_single_file_reader_1ac492bf92b092cc322c3ca303d78a5781"></span>std::string <code class="sig-name descname">file_path_</code><a class="headerlink" href="#_CPPv4N15foreign_storage16SingleFileReader10file_path_E" title="Permalink to this definition">¶</a><br /></dt>
+<dt id="_CPPv4N15foreign_storage16SingleFileReader10data_size_E">
+<span id="_CPPv3N15foreign_storage16SingleFileReader10data_size_E"></span><span id="_CPPv2N15foreign_storage16SingleFileReader10data_size_E"></span><span id="foreign_storage::SingleFileReader::data_size___s"></span><span class="target" id="classforeign__storage_1_1_single_file_reader_1a41c9f4d84e1fe6f531a839c95cc09f78"></span>size_t <code class="sig-name descname">data_size_</code><a class="headerlink" href="#_CPPv4N15foreign_storage16SingleFileReader10data_size_E" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 <dl class="member">
@@ -1622,6 +1639,11 @@
 <dl class="member">
 <dt id="_CPPv4N15foreign_storage16SingleFileReader14header_offset_E">
 <span id="_CPPv3N15foreign_storage16SingleFileReader14header_offset_E"></span><span id="_CPPv2N15foreign_storage16SingleFileReader14header_offset_E"></span><span id="foreign_storage::SingleFileReader::header_offset___s"></span><span class="target" id="classforeign__storage_1_1_single_file_reader_1abc9d76a5c02a29234e4f2f7319a27283"></span>size_t <code class="sig-name descname">header_offset_</code><a class="headerlink" href="#_CPPv4N15foreign_storage16SingleFileReader14header_offset_E" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="member">
+<dt id="_CPPv4N15foreign_storage16SingleFileReader17total_bytes_read_E">
+<span id="_CPPv3N15foreign_storage16SingleFileReader17total_bytes_read_E"></span><span id="_CPPv2N15foreign_storage16SingleFileReader17total_bytes_read_E"></span><span id="foreign_storage::SingleFileReader::total_bytes_read___s"></span><span class="target" id="classforeign__storage_1_1_single_file_reader_1aa5d6d2e427d3a15e43e4d83c4709f473"></span>size_t <code class="sig-name descname">total_bytes_read_</code><a class="headerlink" href="#_CPPv4N15foreign_storage16SingleFileReader17total_bytes_read_E" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 </div>

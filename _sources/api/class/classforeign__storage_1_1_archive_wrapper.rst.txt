@@ -1,0 +1,9 @@
+Class foreign_storage::ArchiveWrapper
+=====================================
+
+.. doxygenclass:: foreign_storage::ArchiveWrapper
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

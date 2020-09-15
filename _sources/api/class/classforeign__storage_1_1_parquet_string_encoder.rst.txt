@@ -1,0 +1,9 @@
+Class foreign_storage::ParquetStringEncoder
+===========================================
+
+.. doxygenclass:: foreign_storage::ParquetStringEncoder
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

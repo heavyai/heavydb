@@ -65,7 +65,7 @@
             
             
               <div class="version">
-                5.5.0dev 93884ef
+                5.5.0dev 8a228a1
               </div>
             
           
@@ -107,7 +107,7 @@
 </li>
 <li class="toctree-l3"><a class="reference internal" href="../../quickstart/deps.html#building-on-ubuntu">2.1.2. Building on Ubuntu</a><ul>
 <li class="toctree-l4"><a class="reference internal" href="../../quickstart/deps.html#ubuntu-16-04">2.1.2.1. Ubuntu 16.04</a></li>
-<li class="toctree-l4"><a class="reference internal" href="../../quickstart/deps.html#ubuntu-18-04">2.1.2.2. Ubuntu 18.04</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../quickstart/deps.html#ubuntu-18-04-and-20-04">2.1.2.2. Ubuntu 18.04 and 20.04</a></li>
 </ul>
 </li>
 <li class="toctree-l3"><a class="reference internal" href="../../quickstart/deps.html#building-on-centos">2.1.3. Building on CentOS</a></li>
@@ -986,6 +986,7 @@
 <li class="toctree-l2"><a class="reference internal" href="classddl__utils_1_1_file_path_whitelist.html">Class ddl_utils::FilePathWhitelist</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classddl__utils_1_1_sql_type.html">Class ddl_utils::SqlType</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classdetails_1_1_rel_alg_dispatcher.html">Class details::RelAlgDispatcher</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_archive_wrapper.html">Class foreign_storage::ArchiveWrapper</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_compressed_file_reader.html">Class foreign_storage::CompressedFileReader</a></li>
 <li class="toctree-l2 current"><a class="current reference internal" href="#">Class foreign_storage::CsvDataWrapper</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_csv_reader.html">Class foreign_storage::CsvReader</a></li>
@@ -994,6 +995,7 @@
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_foreign_storage_buffer.html">Class foreign_storage::ForeignStorageBuffer</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_foreign_storage_cache.html">Class foreign_storage::ForeignStorageCache</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_foreign_storage_mgr.html">Class foreign_storage::ForeignStorageMgr</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_foreign_table_schema.html">Class foreign_storage::ForeignTableSchema</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_lazy_parquet_chunk_loader.html">Class foreign_storage::LazyParquetChunkLoader</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_lazy_parquet_importer.html">Class foreign_storage::LazyParquetImporter</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_local_multi_file_reader.html">Class foreign_storage::LocalMultiFileReader</a></li>
@@ -1001,9 +1003,11 @@
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_multi_s3_reader.html">Class foreign_storage::MultiS3Reader</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_parquet_data_wrapper.html">Class foreign_storage::ParquetDataWrapper</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_parquet_decimal_encoder.html">Class foreign_storage::ParquetDecimalEncoder</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_parquet_encoder.html">Class foreign_storage::ParquetEncoder</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_parquet_fixed_length_encoder.html">Class foreign_storage::ParquetFixedLengthEncoder</a></li>
-<li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_parquet_foreign_table_schema.html">Class foreign_storage::ParquetForeignTableSchema</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_parquet_in_place_encoder.html">Class foreign_storage::ParquetInPlaceEncoder</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_parquet_string_encoder.html">Class foreign_storage::ParquetStringEncoder</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_parquet_string_none_encoder.html">Class foreign_storage::ParquetStringNoneEncoder</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_parquet_time_encoder.html">Class foreign_storage::ParquetTimeEncoder</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_parquet_timestamp_encoder.html">Class foreign_storage::ParquetTimestampEncoder</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_parquet_unsigned_fixed_length_encoder.html">Class foreign_storage::ParquetUnsignedFixedLengthEncoder</a></li>
@@ -1525,14 +1529,12 @@
 <dd></dd></dl>
 
 <dl class="function">
-<dt id="_CPPv4N15foreign_storage14CsvDataWrapper14getChunkBufferERK8ChunkKey">
-<span id="_CPPv3N15foreign_storage14CsvDataWrapper14getChunkBufferERK8ChunkKey"></span><span id="_CPPv2N15foreign_storage14CsvDataWrapper14getChunkBufferERK8ChunkKey"></span><span id="foreign_storage::CsvDataWrapper::getChunkBuffer__ChunkKeyCR"></span><span class="target" id="classforeign__storage_1_1_csv_data_wrapper_1a488937c6723b1c9182de345b082794c4"></span><a class="reference internal" href="classforeign__storage_1_1_foreign_storage_buffer.html#_CPPv4N15foreign_storage20ForeignStorageBufferE" title="foreign_storage::ForeignStorageBuffer">ForeignStorageBuffer</a> *<code class="sig-name descname">getChunkBuffer</code><span class="sig-paren">(</span><em class="property">const</em> ChunkKey &amp;<em>chunk_key</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N15foreign_storage14CsvDataWrapper14getChunkBufferERK8ChunkKey" title="Permalink to this definition">¶</a><br /></dt>
-<dd><p>Gets the buffer for chunk identified by given chunk key.</p>
+<dt id="_CPPv4N15foreign_storage14CsvDataWrapper21populateChunkMetadataER19ChunkMetadataVector">
+<span id="_CPPv3N15foreign_storage14CsvDataWrapper21populateChunkMetadataER19ChunkMetadataVector"></span><span id="_CPPv2N15foreign_storage14CsvDataWrapper21populateChunkMetadataER19ChunkMetadataVector"></span><span id="foreign_storage::CsvDataWrapper::populateChunkMetadata__ChunkMetadataVectorR"></span><span class="target" id="classforeign__storage_1_1_csv_data_wrapper_1ae5f9a6f17afabb85bfe5280ec9c46e78"></span>void <code class="sig-name descname">populateChunkMetadata</code><span class="sig-paren">(</span>ChunkMetadataVector &amp;<em>chunk_metadata_vector</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N15foreign_storage14CsvDataWrapper21populateChunkMetadataER19ChunkMetadataVector" title="Permalink to this definition">¶</a><br /></dt>
+<dd><p>Populates provided chunk metadata vector with metadata for table specified in given chunk key. Metadata scan for CSV file(s) configured for foreign table occurs in parallel whenever appropriate. Parallel processing involves the main thread creating ParseBufferRequest objects, which contain buffers with CSV content read from file and adding these request objects to a queue that is consumed by a fixed number of threads. After request processing, request objects are put back into a pool for reuse for subsequent requests in order to avoid unnecessary allocation of new buffers.</p>
 <p><dl class="simple">
-<dt><strong>Return</strong></dt><dd><p>buffer for chunk identified by given chunk key </p>
-</dd>
 <dt><strong>Parameters</strong></dt><dd><ul class="breatheparameterlist simple">
-<li><p><code class="docutils literal notranslate"><span class="pre">chunk_key</span></code>: - key for chunk whose buffer will be returned </p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">chunk_metadata_vector</span></code>: - vector to be populated with chunk metadata </p></li>
 </ul>
 </dd>
 </dl>
@@ -1540,13 +1542,13 @@
 </dd></dl>
 
 <dl class="function">
-<dt id="_CPPv4N15foreign_storage14CsvDataWrapper33populateMetadataForChunkKeyPrefixERK8ChunkKeyR19ChunkMetadataVector">
-<span id="_CPPv3N15foreign_storage14CsvDataWrapper33populateMetadataForChunkKeyPrefixERK8ChunkKeyR19ChunkMetadataVector"></span><span id="_CPPv2N15foreign_storage14CsvDataWrapper33populateMetadataForChunkKeyPrefixERK8ChunkKeyR19ChunkMetadataVector"></span><span id="foreign_storage::CsvDataWrapper::populateMetadataForChunkKeyPrefix__ChunkKeyCR.ChunkMetadataVectorR"></span><span class="target" id="classforeign__storage_1_1_csv_data_wrapper_1afcb87c9922be73381cc2daf206800d4f"></span>void <code class="sig-name descname">populateMetadataForChunkKeyPrefix</code><span class="sig-paren">(</span><em class="property">const</em> ChunkKey &amp;<em>chunk_key_prefix</em>, ChunkMetadataVector &amp;<em>chunk_metadata_vector</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N15foreign_storage14CsvDataWrapper33populateMetadataForChunkKeyPrefixERK8ChunkKeyR19ChunkMetadataVector" title="Permalink to this definition">¶</a><br /></dt>
-<dd><p>Populates provided chunk metadata vector with metadata for table specified in given chunk key. Metadata scan for CSV file(s) configured for foreign table occurs in parallel whenever appropriate. Parallel processing involves the main thread creating ParseBufferRequest objects, which contain buffers with CSV content read from file and adding these request objects to a queue that is consumed by a fixed number of threads. After request processing, request objects are put back into a pool for reuse for subsequent requests in order to avoid unnecessary allocation of new buffers.</p>
+<dt id="_CPPv4N15foreign_storage14CsvDataWrapper20populateChunkBuffersERNSt3mapI8ChunkKeyP14AbstractBufferEERNSt3mapI8ChunkKeyP14AbstractBufferEE">
+<span id="_CPPv3N15foreign_storage14CsvDataWrapper20populateChunkBuffersERNSt3mapI8ChunkKeyP14AbstractBufferEERNSt3mapI8ChunkKeyP14AbstractBufferEE"></span><span id="_CPPv2N15foreign_storage14CsvDataWrapper20populateChunkBuffersERNSt3mapI8ChunkKeyP14AbstractBufferEERNSt3mapI8ChunkKeyP14AbstractBufferEE"></span><span id="foreign_storage::CsvDataWrapper::populateChunkBuffers__std::map:ChunkKey.AbstractBufferP:R.std::map:ChunkKey.AbstractBufferP:R"></span><span class="target" id="classforeign__storage_1_1_csv_data_wrapper_1a6a544548243b269c5cd8e83a760abd6c"></span>void <code class="sig-name descname">populateChunkBuffers</code><span class="sig-paren">(</span>std::map&lt;ChunkKey, AbstractBuffer *&gt; &amp;<em>required_buffers</em>, std::map&lt;ChunkKey, AbstractBuffer *&gt; &amp;<em>optional_buffers</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N15foreign_storage14CsvDataWrapper20populateChunkBuffersERNSt3mapI8ChunkKeyP14AbstractBufferEERNSt3mapI8ChunkKeyP14AbstractBufferEE" title="Permalink to this definition">¶</a><br /></dt>
+<dd><p>Populates given chunk buffers identified by chunk keys. All provided chunk buffers are expected to be for the same fragment.</p>
 <p><dl class="simple">
 <dt><strong>Parameters</strong></dt><dd><ul class="breatheparameterlist simple">
-<li><p><code class="docutils literal notranslate"><span class="pre">chunk_key_prefix</span></code>: - chunk key prefix identifying a table within a database </p></li>
-<li><p><code class="docutils literal notranslate"><span class="pre">chunk_metadata_vector</span></code>: - vector to be populated with chunk metadata </p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">required_buffers</span></code>: - chunk buffers that must always be populated </p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">optional_buffers</span></code>: - chunk buffers that can be optionally populated, if the data wrapper has to scan through chunk data anyways (typically for row wise data formats) </p></li>
 </ul>
 </dd>
 </dl>
@@ -1570,23 +1572,18 @@
 <dd></dd></dl>
 
 <dl class="function">
-<dt id="_CPPv4N15foreign_storage14CsvDataWrapper13populateChunkE8ChunkKeyRN8Chunk_NS5ChunkE">
-<span id="_CPPv3N15foreign_storage14CsvDataWrapper13populateChunkE8ChunkKeyRN8Chunk_NS5ChunkE"></span><span id="_CPPv2N15foreign_storage14CsvDataWrapper13populateChunkE8ChunkKeyRN8Chunk_NS5ChunkE"></span><span id="foreign_storage::CsvDataWrapper::populateChunk__ChunkKey.Chunk_NS::ChunkR"></span><span class="target" id="classforeign__storage_1_1_csv_data_wrapper_1a3bd6e46b836337b513c41fce17d15ea8"></span>void <code class="sig-name descname">populateChunk</code><span class="sig-paren">(</span>ChunkKey <em>chunk_key</em>, Chunk_NS::<a class="reference internal" href="class_chunk___n_s_1_1_chunk.html#_CPPv4N8Chunk_NS5ChunkE" title="Chunk_NS::Chunk">Chunk</a> &amp;<em>chunk</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N15foreign_storage14CsvDataWrapper13populateChunkE8ChunkKeyRN8Chunk_NS5ChunkE" title="Permalink to this definition">¶</a><br /></dt>
-<dd><p>Populates provided chunk with appropriate data by parsing all file regions containing chunk data.</p>
+<dt id="_CPPv4N15foreign_storage14CsvDataWrapper14populateChunksERNSt3mapIiN8Chunk_NS5ChunkEEEi">
+<span id="_CPPv3N15foreign_storage14CsvDataWrapper14populateChunksERNSt3mapIiN8Chunk_NS5ChunkEEEi"></span><span id="_CPPv2N15foreign_storage14CsvDataWrapper14populateChunksERNSt3mapIiN8Chunk_NS5ChunkEEEi"></span><span id="foreign_storage::CsvDataWrapper::populateChunks__std::map:i.Chunk_NS::Chunk:R.i"></span><span class="target" id="classforeign__storage_1_1_csv_data_wrapper_1addd13b0ae80927d49e60f30ab738dd12"></span>void <code class="sig-name descname">populateChunks</code><span class="sig-paren">(</span>std::map&lt;int, Chunk_NS::<a class="reference internal" href="class_chunk___n_s_1_1_chunk.html#_CPPv4N8Chunk_NS5ChunkE" title="Chunk_NS::Chunk">Chunk</a>&gt; &amp;<em>column_id_to_chunk_map</em>, int <em>fragment_id</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N15foreign_storage14CsvDataWrapper14populateChunksERNSt3mapIiN8Chunk_NS5ChunkEEEi" title="Permalink to this definition">¶</a><br /></dt>
+<dd><p>Populates provided chunks with appropriate data by parsing all file regions containing chunk data.</p>
 <p><dl class="simple">
 <dt><strong>Parameters</strong></dt><dd><ul class="breatheparameterlist simple">
-<li><p><code class="docutils literal notranslate"><span class="pre">chunk_key</span></code>: - chunk key for chunk to be populated </p></li>
-<li><p><code class="docutils literal notranslate"><span class="pre">chunk</span></code>: - object containing data and (optional) index buffers to be populated </p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">column_id_to_chunk_map</span></code>: - map of column id to chunks to be populated </p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">fragment_id</span></code>: - fragment id of given chunks </p></li>
 </ul>
 </dd>
 </dl>
 </p>
 </dd></dl>
-
-<dl class="function">
-<dt id="_CPPv4N15foreign_storage14CsvDataWrapper16getBufferFromMapERK8ChunkKey">
-<span id="_CPPv3N15foreign_storage14CsvDataWrapper16getBufferFromMapERK8ChunkKey"></span><span id="_CPPv2N15foreign_storage14CsvDataWrapper16getBufferFromMapERK8ChunkKey"></span><span id="foreign_storage::CsvDataWrapper::getBufferFromMap__ChunkKeyCR"></span><span class="target" id="classforeign__storage_1_1_csv_data_wrapper_1ad5c81a4aeae014b59c5c9a70da690a8b"></span><a class="reference internal" href="classforeign__storage_1_1_foreign_storage_buffer.html#_CPPv4N15foreign_storage20ForeignStorageBufferE" title="foreign_storage::ForeignStorageBuffer">ForeignStorageBuffer</a> *<code class="sig-name descname">getBufferFromMap</code><span class="sig-paren">(</span><em class="property">const</em> ChunkKey &amp;<em>chunk_key</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N15foreign_storage14CsvDataWrapper16getBufferFromMapERK8ChunkKey" title="Permalink to this definition">¶</a><br /></dt>
-<dd></dd></dl>
 
 <dl class="function">
 <dt id="_CPPv4N15foreign_storage14CsvDataWrapper11getFilePathEv">
@@ -1634,14 +1631,14 @@
 </p>
 </dd></dl>
 
+<dl class="function">
+<dt id="_CPPv4N15foreign_storage14CsvDataWrapper26populateChunkMapForColumnsERKNSt3setIPK16ColumnDescriptorEEKiRKNSt3mapI8ChunkKeyP14AbstractBufferEERNSt3mapIiN8Chunk_NS5ChunkEEE">
+<span id="_CPPv3N15foreign_storage14CsvDataWrapper26populateChunkMapForColumnsERKNSt3setIPK16ColumnDescriptorEEKiRKNSt3mapI8ChunkKeyP14AbstractBufferEERNSt3mapIiN8Chunk_NS5ChunkEEE"></span><span id="_CPPv2N15foreign_storage14CsvDataWrapper26populateChunkMapForColumnsERKNSt3setIPK16ColumnDescriptorEEKiRKNSt3mapI8ChunkKeyP14AbstractBufferEERNSt3mapIiN8Chunk_NS5ChunkEEE"></span><span id="foreign_storage::CsvDataWrapper::populateChunkMapForColumns__std::set:ColumnDescriptorCP:CR.iC.std::map:ChunkKey.AbstractBufferP:CR.std::map:i.Chunk_NS::Chunk:R"></span><span class="target" id="classforeign__storage_1_1_csv_data_wrapper_1a5abb8802d53bf5ec8eb4d521ac7d3e20"></span>void <code class="sig-name descname">populateChunkMapForColumns</code><span class="sig-paren">(</span><em class="property">const</em> std::set&lt;<em class="property">const</em> <a class="reference internal" href="../struct/struct_column_descriptor.html#_CPPv416ColumnDescriptor" title="ColumnDescriptor">ColumnDescriptor</a> *&gt; &amp;<em>columns</em>, <em class="property">const</em> int <em>fragment_id</em>, <em class="property">const</em> std::map&lt;ChunkKey, AbstractBuffer *&gt; &amp;<em>buffers</em>, std::map&lt;int, Chunk_NS::<a class="reference internal" href="class_chunk___n_s_1_1_chunk.html#_CPPv4N8Chunk_NS5ChunkE" title="Chunk_NS::Chunk">Chunk</a>&gt; &amp;<em>column_id_to_chunk_map</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N15foreign_storage14CsvDataWrapper26populateChunkMapForColumnsERKNSt3setIPK16ColumnDescriptorEEKiRKNSt3mapI8ChunkKeyP14AbstractBufferEERNSt3mapIiN8Chunk_NS5ChunkEEE" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
 </div>
 <div class="breathe-sectiondef docutils container">
 <p class="breathe-sectiondef-title rubric">Private Members</p>
-<dl class="member">
-<dt id="_CPPv4N15foreign_storage14CsvDataWrapper17chunk_buffer_map_E">
-<span id="_CPPv3N15foreign_storage14CsvDataWrapper17chunk_buffer_map_E"></span><span id="_CPPv2N15foreign_storage14CsvDataWrapper17chunk_buffer_map_E"></span><span id="foreign_storage::CsvDataWrapper::chunk_buffer_map___std::map:ChunkKey.std::unique_ptr:ForeignStorageBuffer::"></span><span class="target" id="classforeign__storage_1_1_csv_data_wrapper_1a949b21411acc4911e123ea046b14ce27"></span>std::map&lt;ChunkKey, std::unique_ptr&lt;<a class="reference internal" href="classforeign__storage_1_1_foreign_storage_buffer.html#_CPPv4N15foreign_storage20ForeignStorageBufferE" title="foreign_storage::ForeignStorageBuffer">ForeignStorageBuffer</a>&gt;&gt; <code class="sig-name descname">chunk_buffer_map_</code><a class="headerlink" href="#_CPPv4N15foreign_storage14CsvDataWrapper17chunk_buffer_map_E" title="Permalink to this definition">¶</a><br /></dt>
-<dd></dd></dl>
-
 <dl class="member">
 <dt id="_CPPv4N15foreign_storage14CsvDataWrapper19chunk_metadata_map_E">
 <span id="_CPPv3N15foreign_storage14CsvDataWrapper19chunk_metadata_map_E"></span><span id="_CPPv2N15foreign_storage14CsvDataWrapper19chunk_metadata_map_E"></span><span id="foreign_storage::CsvDataWrapper::chunk_metadata_map___std::map:ChunkKey.std::shared_ptr:ChunkMetadata::"></span><span class="target" id="classforeign__storage_1_1_csv_data_wrapper_1a0a6220d3a7f0a6341cac4314ca843029"></span>std::map&lt;ChunkKey, std::shared_ptr&lt;<a class="reference internal" href="../struct/struct_chunk_metadata.html#_CPPv413ChunkMetadata" title="ChunkMetadata">ChunkMetadata</a>&gt;&gt; <code class="sig-name descname">chunk_metadata_map_</code><a class="headerlink" href="#_CPPv4N15foreign_storage14CsvDataWrapper19chunk_metadata_map_E" title="Permalink to this definition">¶</a><br /></dt>
@@ -1677,12 +1674,32 @@
 <span id="_CPPv3N15foreign_storage14CsvDataWrapper19file_regions_mutex_E"></span><span id="_CPPv2N15foreign_storage14CsvDataWrapper19file_regions_mutex_E"></span><span id="foreign_storage::CsvDataWrapper::file_regions_mutex___std::mutex"></span><span class="target" id="classforeign__storage_1_1_csv_data_wrapper_1a7593328d91160ac90035a3e244c2b986"></span>std::mutex <code class="sig-name descname">file_regions_mutex_</code><a class="headerlink" href="#_CPPv4N15foreign_storage14CsvDataWrapper19file_regions_mutex_E" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
+<dl class="member">
+<dt id="_CPPv4N15foreign_storage14CsvDataWrapper22chunk_encoder_buffers_E">
+<span id="_CPPv3N15foreign_storage14CsvDataWrapper22chunk_encoder_buffers_E"></span><span id="_CPPv2N15foreign_storage14CsvDataWrapper22chunk_encoder_buffers_E"></span><span id="foreign_storage::CsvDataWrapper::chunk_encoder_buffers___std::map:ChunkKey.std::unique_ptr:ForeignStorageBuffer::"></span><span class="target" id="classforeign__storage_1_1_csv_data_wrapper_1ab0bd10a753867d4583599e771db88963"></span>std::map&lt;ChunkKey, std::unique_ptr&lt;<a class="reference internal" href="classforeign__storage_1_1_foreign_storage_buffer.html#_CPPv4N15foreign_storage20ForeignStorageBufferE" title="foreign_storage::ForeignStorageBuffer">ForeignStorageBuffer</a>&gt;&gt; <code class="sig-name descname">chunk_encoder_buffers_</code><a class="headerlink" href="#_CPPv4N15foreign_storage14CsvDataWrapper22chunk_encoder_buffers_E" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="member">
+<dt id="_CPPv4N15foreign_storage14CsvDataWrapper17chunk_byte_count_E">
+<span id="_CPPv3N15foreign_storage14CsvDataWrapper17chunk_byte_count_E"></span><span id="_CPPv2N15foreign_storage14CsvDataWrapper17chunk_byte_count_E"></span><span id="foreign_storage::CsvDataWrapper::chunk_byte_count___std::map:ChunkKey.s:"></span><span class="target" id="classforeign__storage_1_1_csv_data_wrapper_1a358a16e14c5eb8d986ae864f0d6c20b4"></span>std::map&lt;ChunkKey, size_t&gt; <code class="sig-name descname">chunk_byte_count_</code><a class="headerlink" href="#_CPPv4N15foreign_storage14CsvDataWrapper17chunk_byte_count_E" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="member">
+<dt id="_CPPv4N15foreign_storage14CsvDataWrapper9num_rows_E">
+<span id="_CPPv3N15foreign_storage14CsvDataWrapper9num_rows_E"></span><span id="_CPPv2N15foreign_storage14CsvDataWrapper9num_rows_E"></span><span id="foreign_storage::CsvDataWrapper::num_rows___s"></span><span class="target" id="classforeign__storage_1_1_csv_data_wrapper_1ab3a3aca06e4e3708ba5d426d0b482abf"></span>size_t <code class="sig-name descname">num_rows_</code><a class="headerlink" href="#_CPPv4N15foreign_storage14CsvDataWrapper9num_rows_E" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="member">
+<dt id="_CPPv4N15foreign_storage14CsvDataWrapper20append_start_offset_E">
+<span id="_CPPv3N15foreign_storage14CsvDataWrapper20append_start_offset_E"></span><span id="_CPPv2N15foreign_storage14CsvDataWrapper20append_start_offset_E"></span><span id="foreign_storage::CsvDataWrapper::append_start_offset___s"></span><span class="target" id="classforeign__storage_1_1_csv_data_wrapper_1a9419cf60c2b2d558cb1445779a36959d"></span>size_t <code class="sig-name descname">append_start_offset_</code><a class="headerlink" href="#_CPPv4N15foreign_storage14CsvDataWrapper20append_start_offset_E" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
 </div>
 <div class="breathe-sectiondef docutils container">
 <p class="breathe-sectiondef-title rubric">Private Static Attributes</p>
 <dl class="member">
 <dt id="_CPPv4N15foreign_storage14CsvDataWrapper18supported_options_E">
-<span id="_CPPv3N15foreign_storage14CsvDataWrapper18supported_options_E"></span><span id="_CPPv2N15foreign_storage14CsvDataWrapper18supported_options_E"></span><span id="foreign_storage::CsvDataWrapper::supported_options___std::array:cCP.13:"></span><span class="target" id="classforeign__storage_1_1_csv_data_wrapper_1af2a1854a7f058dfe2a643830acba812e"></span><em class="property">constexpr</em> std::array&lt;char <em class="property">const</em> *, 13&gt; <code class="sig-name descname">supported_options_</code>{&quot;BASE_PATH&quot;, , , , , , , , , , , , }<a class="headerlink" href="#_CPPv4N15foreign_storage14CsvDataWrapper18supported_options_E" title="Permalink to this definition">¶</a><br /></dt>
+<span id="_CPPv3N15foreign_storage14CsvDataWrapper18supported_options_E"></span><span id="_CPPv2N15foreign_storage14CsvDataWrapper18supported_options_E"></span><span id="foreign_storage::CsvDataWrapper::supported_options___std::array:cCP.14:"></span><span class="target" id="classforeign__storage_1_1_csv_data_wrapper_1ab63c03196d79d050d28266030e86ea42"></span><em class="property">constexpr</em> std::array&lt;char <em class="property">const</em> *, 14&gt; <code class="sig-name descname">supported_options_</code>{&quot;BASE_PATH&quot;, , , , , , , , , , , , , }<a class="headerlink" href="#_CPPv4N15foreign_storage14CsvDataWrapper18supported_options_E" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 </div>

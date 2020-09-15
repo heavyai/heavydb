@@ -65,7 +65,7 @@
             
             
               <div class="version">
-                5.5.0dev 93884ef
+                5.5.0dev 8a228a1
               </div>
             
           
@@ -107,7 +107,7 @@
 </li>
 <li class="toctree-l3"><a class="reference internal" href="../../quickstart/deps.html#building-on-ubuntu">2.1.2. Building on Ubuntu</a><ul>
 <li class="toctree-l4"><a class="reference internal" href="../../quickstart/deps.html#ubuntu-16-04">2.1.2.1. Ubuntu 16.04</a></li>
-<li class="toctree-l4"><a class="reference internal" href="../../quickstart/deps.html#ubuntu-18-04">2.1.2.2. Ubuntu 18.04</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../quickstart/deps.html#ubuntu-18-04-and-20-04">2.1.2.2. Ubuntu 18.04 and 20.04</a></li>
 </ul>
 </li>
 <li class="toctree-l3"><a class="reference internal" href="../../quickstart/deps.html#building-on-centos">2.1.3. Building on CentOS</a></li>
@@ -986,6 +986,7 @@
 <li class="toctree-l2"><a class="reference internal" href="classddl__utils_1_1_file_path_whitelist.html">Class ddl_utils::FilePathWhitelist</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classddl__utils_1_1_sql_type.html">Class ddl_utils::SqlType</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classdetails_1_1_rel_alg_dispatcher.html">Class details::RelAlgDispatcher</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_archive_wrapper.html">Class foreign_storage::ArchiveWrapper</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_compressed_file_reader.html">Class foreign_storage::CompressedFileReader</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_csv_data_wrapper.html">Class foreign_storage::CsvDataWrapper</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_csv_reader.html">Class foreign_storage::CsvReader</a></li>
@@ -994,6 +995,7 @@
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_foreign_storage_buffer.html">Class foreign_storage::ForeignStorageBuffer</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_foreign_storage_cache.html">Class foreign_storage::ForeignStorageCache</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_foreign_storage_mgr.html">Class foreign_storage::ForeignStorageMgr</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_foreign_table_schema.html">Class foreign_storage::ForeignTableSchema</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_lazy_parquet_chunk_loader.html">Class foreign_storage::LazyParquetChunkLoader</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_lazy_parquet_importer.html">Class foreign_storage::LazyParquetImporter</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_local_multi_file_reader.html">Class foreign_storage::LocalMultiFileReader</a></li>
@@ -1001,9 +1003,11 @@
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_multi_s3_reader.html">Class foreign_storage::MultiS3Reader</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_parquet_data_wrapper.html">Class foreign_storage::ParquetDataWrapper</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_parquet_decimal_encoder.html">Class foreign_storage::ParquetDecimalEncoder</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_parquet_encoder.html">Class foreign_storage::ParquetEncoder</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_parquet_fixed_length_encoder.html">Class foreign_storage::ParquetFixedLengthEncoder</a></li>
-<li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_parquet_foreign_table_schema.html">Class foreign_storage::ParquetForeignTableSchema</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_parquet_in_place_encoder.html">Class foreign_storage::ParquetInPlaceEncoder</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_parquet_string_encoder.html">Class foreign_storage::ParquetStringEncoder</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_parquet_string_none_encoder.html">Class foreign_storage::ParquetStringNoneEncoder</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_parquet_time_encoder.html">Class foreign_storage::ParquetTimeEncoder</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_parquet_timestamp_encoder.html">Class foreign_storage::ParquetTimestampEncoder</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_parquet_unsigned_fixed_length_encoder.html">Class foreign_storage::ParquetUnsignedFixedLengthEncoder</a></li>
@@ -1531,14 +1535,12 @@
 <dd></dd></dl>
 
 <dl class="function">
-<dt id="_CPPv4N15foreign_storage18ForeignDataWrapper14getChunkBufferERK8ChunkKey">
-<span id="_CPPv3N15foreign_storage18ForeignDataWrapper14getChunkBufferERK8ChunkKey"></span><span id="_CPPv2N15foreign_storage18ForeignDataWrapper14getChunkBufferERK8ChunkKey"></span><span id="foreign_storage::ForeignDataWrapper::getChunkBuffer__ChunkKeyCR"></span><span class="target" id="classforeign__storage_1_1_foreign_data_wrapper_1a28527a6c7b392fdddd25183302b4ef3c"></span><em class="property">virtual</em> <a class="reference internal" href="classforeign__storage_1_1_foreign_storage_buffer.html#_CPPv4N15foreign_storage20ForeignStorageBufferE" title="foreign_storage::ForeignStorageBuffer">ForeignStorageBuffer</a> *<code class="sig-name descname">getChunkBuffer</code><span class="sig-paren">(</span><em class="property">const</em> ChunkKey &amp;<em>chunk_key</em><span class="sig-paren">)</span> = 0<a class="headerlink" href="#_CPPv4N15foreign_storage18ForeignDataWrapper14getChunkBufferERK8ChunkKey" title="Permalink to this definition">¶</a><br /></dt>
-<dd><p>Gets the buffer for chunk identified by given chunk key.</p>
+<dt id="_CPPv4N15foreign_storage18ForeignDataWrapper21populateChunkMetadataER19ChunkMetadataVector">
+<span id="_CPPv3N15foreign_storage18ForeignDataWrapper21populateChunkMetadataER19ChunkMetadataVector"></span><span id="_CPPv2N15foreign_storage18ForeignDataWrapper21populateChunkMetadataER19ChunkMetadataVector"></span><span id="foreign_storage::ForeignDataWrapper::populateChunkMetadata__ChunkMetadataVectorR"></span><span class="target" id="classforeign__storage_1_1_foreign_data_wrapper_1a4b86d72077af0cea39d91cf8c4828d67"></span><em class="property">virtual</em> void <code class="sig-name descname">populateChunkMetadata</code><span class="sig-paren">(</span>ChunkMetadataVector &amp;<em>chunk_metadata_vector</em><span class="sig-paren">)</span> = 0<a class="headerlink" href="#_CPPv4N15foreign_storage18ForeignDataWrapper21populateChunkMetadataER19ChunkMetadataVector" title="Permalink to this definition">¶</a><br /></dt>
+<dd><p>Populates given chunk metadata vector with metadata for all chunks in related foreign table.</p>
 <p><dl class="simple">
-<dt><strong>Return</strong></dt><dd><p>buffer for chunk identified by given chunk key </p>
-</dd>
 <dt><strong>Parameters</strong></dt><dd><ul class="breatheparameterlist simple">
-<li><p><code class="docutils literal notranslate"><span class="pre">chunk_key</span></code>: - key for chunk whose buffer will be returned </p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">chunk_metadata_vector</span></code>: - vector that will be populated with chunk metadata </p></li>
 </ul>
 </dd>
 </dl>
@@ -1546,13 +1548,13 @@
 </dd></dl>
 
 <dl class="function">
-<dt id="_CPPv4N15foreign_storage18ForeignDataWrapper33populateMetadataForChunkKeyPrefixERK8ChunkKeyR19ChunkMetadataVector">
-<span id="_CPPv3N15foreign_storage18ForeignDataWrapper33populateMetadataForChunkKeyPrefixERK8ChunkKeyR19ChunkMetadataVector"></span><span id="_CPPv2N15foreign_storage18ForeignDataWrapper33populateMetadataForChunkKeyPrefixERK8ChunkKeyR19ChunkMetadataVector"></span><span id="foreign_storage::ForeignDataWrapper::populateMetadataForChunkKeyPrefix__ChunkKeyCR.ChunkMetadataVectorR"></span><span class="target" id="classforeign__storage_1_1_foreign_data_wrapper_1a0ad8a118ae3116e6c749818de8f684ee"></span><em class="property">virtual</em> void <code class="sig-name descname">populateMetadataForChunkKeyPrefix</code><span class="sig-paren">(</span><em class="property">const</em> ChunkKey &amp;<em>chunk_key_prefix</em>, ChunkMetadataVector &amp;<em>chunk_metadata_vector</em><span class="sig-paren">)</span> = 0<a class="headerlink" href="#_CPPv4N15foreign_storage18ForeignDataWrapper33populateMetadataForChunkKeyPrefixERK8ChunkKeyR19ChunkMetadataVector" title="Permalink to this definition">¶</a><br /></dt>
-<dd><p>Populates given chunk_metadata_vector with metadata for all chunks with the given prefix.</p>
+<dt id="_CPPv4N15foreign_storage18ForeignDataWrapper20populateChunkBuffersERNSt3mapI8ChunkKeyP14AbstractBufferEERNSt3mapI8ChunkKeyP14AbstractBufferEE">
+<span id="_CPPv3N15foreign_storage18ForeignDataWrapper20populateChunkBuffersERNSt3mapI8ChunkKeyP14AbstractBufferEERNSt3mapI8ChunkKeyP14AbstractBufferEE"></span><span id="_CPPv2N15foreign_storage18ForeignDataWrapper20populateChunkBuffersERNSt3mapI8ChunkKeyP14AbstractBufferEERNSt3mapI8ChunkKeyP14AbstractBufferEE"></span><span id="foreign_storage::ForeignDataWrapper::populateChunkBuffers__std::map:ChunkKey.AbstractBufferP:R.std::map:ChunkKey.AbstractBufferP:R"></span><span class="target" id="classforeign__storage_1_1_foreign_data_wrapper_1a6f2cdaec8c9f72677ceee1ffe0ce8095"></span><em class="property">virtual</em> void <code class="sig-name descname">populateChunkBuffers</code><span class="sig-paren">(</span>std::map&lt;ChunkKey, AbstractBuffer *&gt; &amp;<em>required_buffers</em>, std::map&lt;ChunkKey, AbstractBuffer *&gt; &amp;<em>optional_buffers</em><span class="sig-paren">)</span> = 0<a class="headerlink" href="#_CPPv4N15foreign_storage18ForeignDataWrapper20populateChunkBuffersERNSt3mapI8ChunkKeyP14AbstractBufferEERNSt3mapI8ChunkKeyP14AbstractBufferEE" title="Permalink to this definition">¶</a><br /></dt>
+<dd><p>Populates given chunk buffers identified by chunk keys. All provided chunk buffers are expected to be for the same fragment.</p>
 <p><dl class="simple">
 <dt><strong>Parameters</strong></dt><dd><ul class="breatheparameterlist simple">
-<li><p><code class="docutils literal notranslate"><span class="pre">chunk_key_prefix</span></code>: - key prefix for chunks whose metadata will be provided </p></li>
-<li><p><code class="docutils literal notranslate"><span class="pre">chunk_metadata_vector</span></code>: - vector that will be populated with chunk metadata </p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">required_buffers</span></code>: - chunk buffers that must always be populated </p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">optional_buffers</span></code>: - chunk buffers that can be optionally populated, if the data wrapper has to scan through chunk data anyways (typically for row wise data formats) </p></li>
 </ul>
 </dd>
 </dl>

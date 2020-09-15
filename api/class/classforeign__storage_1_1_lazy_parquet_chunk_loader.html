@@ -41,7 +41,7 @@
     <link rel="index" title="Index" href="../../genindex.html" />
     <link rel="search" title="Search" href="../../search.html" />
     <link rel="next" title="Class foreign_storage::LazyParquetImporter" href="classforeign__storage_1_1_lazy_parquet_importer.html" />
-    <link rel="prev" title="Class foreign_storage::ForeignStorageMgr" href="classforeign__storage_1_1_foreign_storage_mgr.html" /> 
+    <link rel="prev" title="Class foreign_storage::ForeignTableSchema" href="classforeign__storage_1_1_foreign_table_schema.html" /> 
 </head>
 
 <body class="wy-body-for-nav">
@@ -65,7 +65,7 @@
             
             
               <div class="version">
-                5.5.0dev 93884ef
+                5.5.0dev 8a228a1
               </div>
             
           
@@ -107,7 +107,7 @@
 </li>
 <li class="toctree-l3"><a class="reference internal" href="../../quickstart/deps.html#building-on-ubuntu">2.1.2. Building on Ubuntu</a><ul>
 <li class="toctree-l4"><a class="reference internal" href="../../quickstart/deps.html#ubuntu-16-04">2.1.2.1. Ubuntu 16.04</a></li>
-<li class="toctree-l4"><a class="reference internal" href="../../quickstart/deps.html#ubuntu-18-04">2.1.2.2. Ubuntu 18.04</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../quickstart/deps.html#ubuntu-18-04-and-20-04">2.1.2.2. Ubuntu 18.04 and 20.04</a></li>
 </ul>
 </li>
 <li class="toctree-l3"><a class="reference internal" href="../../quickstart/deps.html#building-on-centos">2.1.3. Building on CentOS</a></li>
@@ -986,6 +986,7 @@
 <li class="toctree-l2"><a class="reference internal" href="classddl__utils_1_1_file_path_whitelist.html">Class ddl_utils::FilePathWhitelist</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classddl__utils_1_1_sql_type.html">Class ddl_utils::SqlType</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classdetails_1_1_rel_alg_dispatcher.html">Class details::RelAlgDispatcher</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_archive_wrapper.html">Class foreign_storage::ArchiveWrapper</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_compressed_file_reader.html">Class foreign_storage::CompressedFileReader</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_csv_data_wrapper.html">Class foreign_storage::CsvDataWrapper</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_csv_reader.html">Class foreign_storage::CsvReader</a></li>
@@ -994,6 +995,7 @@
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_foreign_storage_buffer.html">Class foreign_storage::ForeignStorageBuffer</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_foreign_storage_cache.html">Class foreign_storage::ForeignStorageCache</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_foreign_storage_mgr.html">Class foreign_storage::ForeignStorageMgr</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_foreign_table_schema.html">Class foreign_storage::ForeignTableSchema</a></li>
 <li class="toctree-l2 current"><a class="current reference internal" href="#">Class foreign_storage::LazyParquetChunkLoader</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_lazy_parquet_importer.html">Class foreign_storage::LazyParquetImporter</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_local_multi_file_reader.html">Class foreign_storage::LocalMultiFileReader</a></li>
@@ -1001,9 +1003,11 @@
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_multi_s3_reader.html">Class foreign_storage::MultiS3Reader</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_parquet_data_wrapper.html">Class foreign_storage::ParquetDataWrapper</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_parquet_decimal_encoder.html">Class foreign_storage::ParquetDecimalEncoder</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_parquet_encoder.html">Class foreign_storage::ParquetEncoder</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_parquet_fixed_length_encoder.html">Class foreign_storage::ParquetFixedLengthEncoder</a></li>
-<li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_parquet_foreign_table_schema.html">Class foreign_storage::ParquetForeignTableSchema</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_parquet_in_place_encoder.html">Class foreign_storage::ParquetInPlaceEncoder</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_parquet_string_encoder.html">Class foreign_storage::ParquetStringEncoder</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_parquet_string_none_encoder.html">Class foreign_storage::ParquetStringNoneEncoder</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_parquet_time_encoder.html">Class foreign_storage::ParquetTimeEncoder</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_parquet_timestamp_encoder.html">Class foreign_storage::ParquetTimestampEncoder</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_parquet_unsigned_fixed_length_encoder.html">Class foreign_storage::ParquetUnsignedFixedLengthEncoder</a></li>
@@ -1526,15 +1530,18 @@
 <dd></dd></dl>
 
 <dl class="function">
-<dt id="_CPPv4N15foreign_storage22LazyParquetChunkLoader9loadChunkERK8IntervalI12RowGroupTypeEKiRN8Chunk_NS5ChunkE">
-<span id="_CPPv3N15foreign_storage22LazyParquetChunkLoader9loadChunkERK8IntervalI12RowGroupTypeEKiRN8Chunk_NS5ChunkE"></span><span id="_CPPv2N15foreign_storage22LazyParquetChunkLoader9loadChunkERK8IntervalI12RowGroupTypeEKiRN8Chunk_NS5ChunkE"></span><span id="foreign_storage::LazyParquetChunkLoader::loadChunk__Interval:RowGroupType:CR.iC.Chunk_NS::ChunkR"></span><span class="target" id="classforeign__storage_1_1_lazy_parquet_chunk_loader_1aa7cc2d0e600d3fd0ff911775a2cc1458"></span>void <code class="sig-name descname">loadChunk</code><span class="sig-paren">(</span><em class="property">const</em> Interval&lt;<a class="reference internal" href="../struct/structforeign__storage_1_1_row_group_type.html#_CPPv4N15foreign_storage12RowGroupTypeE" title="foreign_storage::RowGroupType">RowGroupType</a>&gt; &amp;<em>row_group_interval</em>, <em class="property">const</em> int <em>parquet_column_index</em>, Chunk_NS::<a class="reference internal" href="class_chunk___n_s_1_1_chunk.html#_CPPv4N8Chunk_NS5ChunkE" title="Chunk_NS::Chunk">Chunk</a> &amp;<em>chunk</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N15foreign_storage22LazyParquetChunkLoader9loadChunkERK8IntervalI12RowGroupTypeEKiRN8Chunk_NS5ChunkE" title="Permalink to this definition">¶</a><br /></dt>
+<dt id="_CPPv4N15foreign_storage22LazyParquetChunkLoader9loadChunkERK8IntervalI12RowGroupTypeEKiRN8Chunk_NS5ChunkEP16StringDictionary">
+<span id="_CPPv3N15foreign_storage22LazyParquetChunkLoader9loadChunkERK8IntervalI12RowGroupTypeEKiRN8Chunk_NS5ChunkEP16StringDictionary"></span><span id="_CPPv2N15foreign_storage22LazyParquetChunkLoader9loadChunkERK8IntervalI12RowGroupTypeEKiRN8Chunk_NS5ChunkEP16StringDictionary"></span><span id="foreign_storage::LazyParquetChunkLoader::loadChunk__Interval:RowGroupType:CR.iC.Chunk_NS::ChunkR.StringDictionaryP"></span><span class="target" id="classforeign__storage_1_1_lazy_parquet_chunk_loader_1a65aa9043b51dce5838ee9fdfd09078f4"></span>std::shared_ptr&lt;<a class="reference internal" href="../struct/struct_chunk_metadata.html#_CPPv413ChunkMetadata" title="ChunkMetadata">ChunkMetadata</a>&gt; <code class="sig-name descname">loadChunk</code><span class="sig-paren">(</span><em class="property">const</em> Interval&lt;<a class="reference internal" href="../struct/structforeign__storage_1_1_row_group_type.html#_CPPv4N15foreign_storage12RowGroupTypeE" title="foreign_storage::RowGroupType">RowGroupType</a>&gt; &amp;<em>row_group_interval</em>, <em class="property">const</em> int <em>parquet_column_index</em>, Chunk_NS::<a class="reference internal" href="class_chunk___n_s_1_1_chunk.html#_CPPv4N8Chunk_NS5ChunkE" title="Chunk_NS::Chunk">Chunk</a> &amp;<em>chunk</em>, <a class="reference internal" href="class_string_dictionary.html#_CPPv416StringDictionary" title="StringDictionary">StringDictionary</a> *<em>string_dictionary</em> = nullptr<span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N15foreign_storage22LazyParquetChunkLoader9loadChunkERK8IntervalI12RowGroupTypeEKiRN8Chunk_NS5ChunkEP16StringDictionary" title="Permalink to this definition">¶</a><br /></dt>
 <dd><p><a class="reference internal" href="class_load.html#class_load"><span class="std std-ref">Load</span></a> a number of row groups of a column in a parquet file into a chunk</p>
 <p><p>This function expects the chunk buffer to have enough space allocated to hold the contents of the loaded data. </p>
 <dl class="simple">
+<dt><strong>Return</strong></dt><dd><p>An empty <a class="reference internal" href="../struct/struct_chunk_metadata.html#struct_chunk_metadata"><span class="std std-ref">ChunkMetadata</span></a> pointer when no metadata update is applicable, otherwise a <a class="reference internal" href="../struct/struct_chunk_metadata.html#struct_chunk_metadata"><span class="std std-ref">ChunkMetadata</span></a> pointer with which to update the column chunk metadata</p>
+</dd>
 <dt><strong>Parameters</strong></dt><dd><ul class="breatheparameterlist simple">
 <li><p><code class="docutils literal notranslate"><span class="pre">row_group_interval</span></code>: - an inclusive interval [start,end] that specifies row groups to load </p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">parquet_column_index</span></code>: - the logical column index in the parquet file (and omnisci db) of column to load </p></li>
-<li><p><code class="docutils literal notranslate"><span class="pre">chunk</span></code>: - the chunk to load</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">chunk</span></code>: - the chunk to load </p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">string_dictionary</span></code>: - a string dictionary for the column corresponding to the column, if applicable</p></li>
 </ul>
 </dd>
 </dl>
@@ -1576,16 +1583,6 @@
 <span id="_CPPv3N15foreign_storage22LazyParquetChunkLoader10file_name_E"></span><span id="_CPPv2N15foreign_storage22LazyParquetChunkLoader10file_name_E"></span><span id="foreign_storage::LazyParquetChunkLoader::file_name___ss"></span><span class="target" id="classforeign__storage_1_1_lazy_parquet_chunk_loader_1a84278c51941be132f33c40e55835e002"></span>std::string <code class="sig-name descname">file_name_</code><a class="headerlink" href="#_CPPv4N15foreign_storage22LazyParquetChunkLoader10file_name_E" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
-<dl class="member">
-<dt id="_CPPv4N15foreign_storage22LazyParquetChunkLoader11def_levels_E">
-<span id="_CPPv3N15foreign_storage22LazyParquetChunkLoader11def_levels_E"></span><span id="_CPPv2N15foreign_storage22LazyParquetChunkLoader11def_levels_E"></span><span id="foreign_storage::LazyParquetChunkLoader::def_levels___std::vector:int16_t:"></span><span class="target" id="classforeign__storage_1_1_lazy_parquet_chunk_loader_1aa7d55341077af35c9e94452e704d0516"></span>std::vector&lt;int16_t&gt; <code class="sig-name descname">def_levels_</code><a class="headerlink" href="#_CPPv4N15foreign_storage22LazyParquetChunkLoader11def_levels_E" title="Permalink to this definition">¶</a><br /></dt>
-<dd></dd></dl>
-
-<dl class="member">
-<dt id="_CPPv4N15foreign_storage22LazyParquetChunkLoader11rep_levels_E">
-<span id="_CPPv3N15foreign_storage22LazyParquetChunkLoader11rep_levels_E"></span><span id="_CPPv2N15foreign_storage22LazyParquetChunkLoader11rep_levels_E"></span><span id="foreign_storage::LazyParquetChunkLoader::rep_levels___std::vector:int16_t:"></span><span class="target" id="classforeign__storage_1_1_lazy_parquet_chunk_loader_1a29a18f306683c666a98134c40e309385"></span>std::vector&lt;int16_t&gt; <code class="sig-name descname">rep_levels_</code><a class="headerlink" href="#_CPPv4N15foreign_storage22LazyParquetChunkLoader11rep_levels_E" title="Permalink to this definition">¶</a><br /></dt>
-<dd></dd></dl>
-
 </div>
 </dd></dl>
 
@@ -1602,7 +1599,7 @@
         <a href="classforeign__storage_1_1_lazy_parquet_importer.html" class="btn btn-neutral float-right" title="Class foreign_storage::LazyParquetImporter" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right"></span></a>
       
       
-        <a href="classforeign__storage_1_1_foreign_storage_mgr.html" class="btn btn-neutral float-left" title="Class foreign_storage::ForeignStorageMgr" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left"></span> Previous</a>
+        <a href="classforeign__storage_1_1_foreign_table_schema.html" class="btn btn-neutral float-left" title="Class foreign_storage::ForeignTableSchema" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left"></span> Previous</a>
       
     </div>
   

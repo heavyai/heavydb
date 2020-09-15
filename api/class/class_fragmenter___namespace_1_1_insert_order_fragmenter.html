@@ -65,7 +65,7 @@
             
             
               <div class="version">
-                5.5.0dev 93884ef
+                5.5.0dev 8a228a1
               </div>
             
           
@@ -107,7 +107,7 @@
 </li>
 <li class="toctree-l3"><a class="reference internal" href="../../quickstart/deps.html#building-on-ubuntu">2.1.2. Building on Ubuntu</a><ul>
 <li class="toctree-l4"><a class="reference internal" href="../../quickstart/deps.html#ubuntu-16-04">2.1.2.1. Ubuntu 16.04</a></li>
-<li class="toctree-l4"><a class="reference internal" href="../../quickstart/deps.html#ubuntu-18-04">2.1.2.2. Ubuntu 18.04</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../quickstart/deps.html#ubuntu-18-04-and-20-04">2.1.2.2. Ubuntu 18.04 and 20.04</a></li>
 </ul>
 </li>
 <li class="toctree-l3"><a class="reference internal" href="../../quickstart/deps.html#building-on-centos">2.1.3. Building on CentOS</a></li>
@@ -986,6 +986,7 @@
 <li class="toctree-l2"><a class="reference internal" href="classddl__utils_1_1_file_path_whitelist.html">Class ddl_utils::FilePathWhitelist</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classddl__utils_1_1_sql_type.html">Class ddl_utils::SqlType</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classdetails_1_1_rel_alg_dispatcher.html">Class details::RelAlgDispatcher</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_archive_wrapper.html">Class foreign_storage::ArchiveWrapper</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_compressed_file_reader.html">Class foreign_storage::CompressedFileReader</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_csv_data_wrapper.html">Class foreign_storage::CsvDataWrapper</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_csv_reader.html">Class foreign_storage::CsvReader</a></li>
@@ -994,6 +995,7 @@
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_foreign_storage_buffer.html">Class foreign_storage::ForeignStorageBuffer</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_foreign_storage_cache.html">Class foreign_storage::ForeignStorageCache</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_foreign_storage_mgr.html">Class foreign_storage::ForeignStorageMgr</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_foreign_table_schema.html">Class foreign_storage::ForeignTableSchema</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_lazy_parquet_chunk_loader.html">Class foreign_storage::LazyParquetChunkLoader</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_lazy_parquet_importer.html">Class foreign_storage::LazyParquetImporter</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_local_multi_file_reader.html">Class foreign_storage::LocalMultiFileReader</a></li>
@@ -1001,9 +1003,11 @@
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_multi_s3_reader.html">Class foreign_storage::MultiS3Reader</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_parquet_data_wrapper.html">Class foreign_storage::ParquetDataWrapper</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_parquet_decimal_encoder.html">Class foreign_storage::ParquetDecimalEncoder</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_parquet_encoder.html">Class foreign_storage::ParquetEncoder</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_parquet_fixed_length_encoder.html">Class foreign_storage::ParquetFixedLengthEncoder</a></li>
-<li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_parquet_foreign_table_schema.html">Class foreign_storage::ParquetForeignTableSchema</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_parquet_in_place_encoder.html">Class foreign_storage::ParquetInPlaceEncoder</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_parquet_string_encoder.html">Class foreign_storage::ParquetStringEncoder</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_parquet_string_none_encoder.html">Class foreign_storage::ParquetStringNoneEncoder</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_parquet_time_encoder.html">Class foreign_storage::ParquetTimeEncoder</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_parquet_timestamp_encoder.html">Class foreign_storage::ParquetTimestampEncoder</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_parquet_unsigned_fixed_length_encoder.html">Class foreign_storage::ParquetUnsignedFixedLengthEncoder</a></li>
@@ -1563,6 +1567,21 @@
 <dt id="_CPPv4N20Fragmenter_Namespace21InsertOrderFragmenter19dropFragmentsToSizeEK6size_t">
 <span id="_CPPv3N20Fragmenter_Namespace21InsertOrderFragmenter19dropFragmentsToSizeEK6size_t"></span><span id="_CPPv2N20Fragmenter_Namespace21InsertOrderFragmenter19dropFragmentsToSizeEK6size_t"></span><span id="Fragmenter_Namespace::InsertOrderFragmenter::dropFragmentsToSize__sC"></span><span class="target" id="class_fragmenter___namespace_1_1_insert_order_fragmenter_1ace29b4444e52c42f9a63e369fb05b824"></span>void <code class="sig-name descname">dropFragmentsToSize</code><span class="sig-paren">(</span><em class="property">const</em> size_t <em>maxRows</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N20Fragmenter_Namespace21InsertOrderFragmenter19dropFragmentsToSizeEK6size_t" title="Permalink to this definition">¶</a><br /></dt>
 <dd><p>Will truncate table to less than maxRows by dropping fragments. </p>
+</dd></dl>
+
+<dl class="function">
+<dt id="_CPPv4N20Fragmenter_Namespace21InsertOrderFragmenter25updateColumnChunkMetadataEPK16ColumnDescriptorKiKNSt10shared_ptrI13ChunkMetadataEE">
+<span id="_CPPv3N20Fragmenter_Namespace21InsertOrderFragmenter25updateColumnChunkMetadataEPK16ColumnDescriptorKiKNSt10shared_ptrI13ChunkMetadataEE"></span><span id="_CPPv2N20Fragmenter_Namespace21InsertOrderFragmenter25updateColumnChunkMetadataEPK16ColumnDescriptorKiKNSt10shared_ptrI13ChunkMetadataEE"></span><span id="Fragmenter_Namespace::InsertOrderFragmenter::updateColumnChunkMetadata__ColumnDescriptorCP.iC.std::shared_ptr:ChunkMetadata:C"></span><span class="target" id="class_fragmenter___namespace_1_1_insert_order_fragmenter_1a60d5ebd2c463aeb58a826b500861a11f"></span>void <code class="sig-name descname">updateColumnChunkMetadata</code><span class="sig-paren">(</span><em class="property">const</em> <a class="reference internal" href="../struct/struct_column_descriptor.html#_CPPv416ColumnDescriptor" title="ColumnDescriptor">ColumnDescriptor</a> *<em>cd</em>, <em class="property">const</em> int <em>fragment_id</em>, <em class="property">const</em> std::shared_ptr&lt;<a class="reference internal" href="../struct/struct_chunk_metadata.html#_CPPv413ChunkMetadata" title="ChunkMetadata">ChunkMetadata</a>&gt; <em>metadata</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N20Fragmenter_Namespace21InsertOrderFragmenter25updateColumnChunkMetadataEPK16ColumnDescriptorKiKNSt10shared_ptrI13ChunkMetadataEE" title="Permalink to this definition">¶</a><br /></dt>
+<dd><p>Updates the metadata for a column chunk. </p>
+<p><dl class="simple">
+<dt><strong>Parameters</strong></dt><dd><ul class="breatheparameterlist simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">cd</span></code>: - <a class="reference internal" href="../struct/struct_column_descriptor.html#struct_column_descriptor"><span class="std std-ref">ColumnDescriptor</span></a> for the column </p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">fragment_id</span></code>: - Fragment id of the chunk within the column </p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">metadata</span></code>: - shared_ptr of the metadata to update column chunk with </p></li>
+</ul>
+</dd>
+</dl>
+</p>
 </dd></dl>
 
 <dl class="function">
