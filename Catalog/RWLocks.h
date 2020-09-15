@@ -53,9 +53,13 @@ class read_lock {
  public:
   read_lock(const T* cat) : catalog(cat), holds_lock(false) { lock_catalog(cat); }
 
-  ~read_lock() {
+  ~read_lock() { unlock(); }
+
+  void unlock() {
     if (holds_lock) {
       T::thread_holds_read_lock = false;
+      lock.unlock();
+      holds_lock = false;
     }
   }
 };
@@ -85,10 +89,15 @@ class sqlite_lock {
     lock_catalog(cat);
   }
 
-  ~sqlite_lock() {
+  ~sqlite_lock() { unlock(); }
+
+  void unlock() {
     if (holds_lock) {
       std::thread::id no_thread;
       catalog->thread_holding_sqlite_lock = no_thread;
+      lock.unlock();
+      cat_read_lock.unlock();
+      holds_lock = false;
     }
   }
 };
@@ -113,10 +122,14 @@ class write_lock {
  public:
   write_lock(const T* cat) : catalog(cat), holds_lock(false) { lock_catalog(cat); }
 
-  ~write_lock() {
+  ~write_lock() { unlock(); }
+
+  void unlock() {
     if (holds_lock) {
       std::thread::id no_thread;
       catalog->thread_holding_write_lock = no_thread;
+      lock.unlock();
+      holds_lock = false;
     }
   }
 };

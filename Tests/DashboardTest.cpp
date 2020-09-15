@@ -29,6 +29,80 @@
 #define BASE_PATH "./tmp"
 #endif
 
+class DashboardBasicTest : public DBHandlerTestFixture {
+ public:
+  static void SetUpTestSuite() {
+    createDBHandler();
+    test_user_1_id = createTestUser("test_user", "test_pass");
+  }
+
+  static void TearDownTestSuite() {
+    loginAdmin();
+    dropTestUser("test_user");
+  }
+
+  size_t getNumDashboards() {
+    const auto& [db_handler, session_id] = getDbHandlerAndSessionId();
+    std::vector<TDashboard> dashboards;
+    db_handler->get_dashboards(dashboards, session_id);
+    return dashboards.size();
+  }
+
+ protected:
+  void SetUp() override {
+    DBHandlerTestFixture::SetUp();
+    const auto& [db_handler, session_id] = getDbHandlerAndSessionId();
+    // Remove any dashboards that may be left by previous tests
+    std::vector<TDashboard> dashboards;
+    db_handler->get_dashboards(dashboards, session_id);
+    if (dashboards.size()) {
+      std::vector<int32_t> db_ids;
+      for (const auto& dashboard : dashboards) {
+        db_ids.push_back(dashboard.dashboard_id);
+      }
+      db_handler->delete_dashboards(session_id, db_ids);
+    }
+  }
+  void TearDown() override { DBHandlerTestFixture::TearDown(); }
+
+  static int32_t createTestUser(const std::string& user_name, const std::string& pass) {
+    sql("CREATE USER " + user_name + " (password = '" + pass + "');");
+    sql("GRANT ACCESS ON DATABASE omnisci TO " + user_name + ";");
+    Catalog_Namespace::UserMetadata user_metadata{};
+    Catalog_Namespace::SysCatalog::instance().getMetadataForUser(user_name,
+                                                                 user_metadata);
+    return user_metadata.userId;
+  }
+
+  static void dropTestUser(const std::string& user_name) {
+    try {
+      sql("DROP USER " + user_name + ";");
+    } catch (const std::exception& e) {
+      // Swallow and log exceptions that may occur, since there is no "IF EXISTS" option.
+      LOG(WARNING) << e.what();
+    }
+  }
+
+  inline static int32_t test_user_1_id;
+};
+
+TEST_F(DashboardBasicTest, CreateReplaceDelete) {
+  const auto& [db_handler, session_id] = getDbHandlerAndSessionId();
+  auto db_id =
+      db_handler->create_dashboard(session_id, "testdb", "state", "image", "metadata");
+  ASSERT_EQ(getNumDashboards(), size_t(1));
+
+  db_handler->replace_dashboard(
+      session_id, db_id, "testdb", "test_user", "state", "image", "metadata");
+
+  TDashboard db;
+  db_handler->get_dashboard(db, session_id, db_id);
+  CHECK_EQ(db.dashboard_owner, "test_user");
+
+  db_handler->delete_dashboard(session_id, db_id);
+  ASSERT_EQ(getNumDashboards(), size_t(0));
+}
+
 class ShareDashboardsTest : public DBHandlerTestFixture {
  public:
   static void SetUpTestSuite() {

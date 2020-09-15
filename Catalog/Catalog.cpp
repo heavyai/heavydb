@@ -3300,61 +3300,61 @@ void Catalog::renameColumn(const TableDescriptor* td,
 }
 
 int32_t Catalog::createDashboard(DashboardDescriptor& vd) {
-  {
-    cat_write_lock write_lock(this);
-    cat_sqlite_lock sqlite_lock(this);
-    sqliteConnector_.query("BEGIN TRANSACTION");
-    try {
-      // TODO(andrew): this should be an upsert
+  cat_write_lock write_lock(this);
+  cat_sqlite_lock sqlite_lock(this);
+  sqliteConnector_.query("BEGIN TRANSACTION");
+  try {
+    // TODO(andrew): this should be an upsert
+    sqliteConnector_.query_with_text_params(
+        "SELECT id FROM mapd_dashboards WHERE name = ? and userid = ?",
+        std::vector<std::string>{vd.dashboardName, std::to_string(vd.userId)});
+    if (sqliteConnector_.getNumRows() > 0) {
       sqliteConnector_.query_with_text_params(
-          "SELECT id FROM mapd_dashboards WHERE name = ? and userid = ?",
-          std::vector<std::string>{vd.dashboardName, std::to_string(vd.userId)});
-      if (sqliteConnector_.getNumRows() > 0) {
-        sqliteConnector_.query_with_text_params(
-            "UPDATE mapd_dashboards SET state = ?, image_hash = ?, metadata = ?, "
-            "update_time = "
-            "datetime('now') where name = ? "
-            "and userid = ?",
-            std::vector<std::string>{vd.dashboardState,
-                                     vd.imageHash,
-                                     vd.dashboardMetadata,
-                                     vd.dashboardName,
-                                     std::to_string(vd.userId)});
-      } else {
-        sqliteConnector_.query_with_text_params(
-            "INSERT INTO mapd_dashboards (name, state, image_hash, metadata, "
-            "update_time, "
-            "userid) "
-            "VALUES "
-            "(?,?,?,?, "
-            "datetime('now'), ?)",
-            std::vector<std::string>{vd.dashboardName,
-                                     vd.dashboardState,
-                                     vd.imageHash,
-                                     vd.dashboardMetadata,
-                                     std::to_string(vd.userId)});
-      }
-    } catch (std::exception& e) {
-      sqliteConnector_.query("ROLLBACK TRANSACTION");
-      throw;
-    }
-    sqliteConnector_.query("END TRANSACTION");
-
-    // now get the auto generated dashboardId
-    try {
+          "UPDATE mapd_dashboards SET state = ?, image_hash = ?, metadata = ?, "
+          "update_time = "
+          "datetime('now') where name = ? "
+          "and userid = ?",
+          std::vector<std::string>{vd.dashboardState,
+                                   vd.imageHash,
+                                   vd.dashboardMetadata,
+                                   vd.dashboardName,
+                                   std::to_string(vd.userId)});
+    } else {
       sqliteConnector_.query_with_text_params(
-          "SELECT id, strftime('%Y-%m-%dT%H:%M:%SZ', update_time) FROM mapd_dashboards "
-          "WHERE name = ? and userid = ?",
-          std::vector<std::string>{vd.dashboardName, std::to_string(vd.userId)});
-      vd.dashboardId = sqliteConnector_.getData<int>(0, 0);
-      vd.updateTime = sqliteConnector_.getData<std::string>(0, 1);
-    } catch (std::exception& e) {
-      throw;
+          "INSERT INTO mapd_dashboards (name, state, image_hash, metadata, "
+          "update_time, "
+          "userid) "
+          "VALUES "
+          "(?,?,?,?, "
+          "datetime('now'), ?)",
+          std::vector<std::string>{vd.dashboardName,
+                                   vd.dashboardState,
+                                   vd.imageHash,
+                                   vd.dashboardMetadata,
+                                   std::to_string(vd.userId)});
     }
-    vd.dashboardSystemRoleName = generate_dashboard_system_rolename(
-        std::to_string(currentDB_.dbId), std::to_string(vd.dashboardId));
-    addFrontendViewToMap(vd);
+  } catch (std::exception& e) {
+    sqliteConnector_.query("ROLLBACK TRANSACTION");
+    throw;
   }
+  sqliteConnector_.query("END TRANSACTION");
+
+  // now get the auto generated dashboardId
+  try {
+    sqliteConnector_.query_with_text_params(
+        "SELECT id, strftime('%Y-%m-%dT%H:%M:%SZ', update_time) FROM mapd_dashboards "
+        "WHERE name = ? and userid = ?",
+        std::vector<std::string>{vd.dashboardName, std::to_string(vd.userId)});
+    vd.dashboardId = sqliteConnector_.getData<int>(0, 0);
+    vd.updateTime = sqliteConnector_.getData<std::string>(0, 1);
+  } catch (std::exception& e) {
+    throw;
+  }
+  vd.dashboardSystemRoleName = generate_dashboard_system_rolename(
+      std::to_string(currentDB_.dbId), std::to_string(vd.dashboardId));
+  addFrontendViewToMap(vd);
+  sqlite_lock.unlock();
+  write_lock.unlock();
   // NOTE(wamsi): Transactionally unsafe
   createOrUpdateDashboardSystemRole(
       vd.dashboardMetadata, vd.userId, vd.dashboardSystemRoleName);
@@ -3373,12 +3373,12 @@ void Catalog::replaceDashboard(DashboardDescriptor& vd) {
     if (sqliteConnector_.getNumRows() > 0) {
       sqliteConnector_.query_with_text_params(
           "UPDATE mapd_dashboards SET name = ?, state = ?, image_hash = ?, metadata = ?, "
-          "update_time = "
-          "datetime('now') where id = ? ",
+          "userid = ?, update_time = datetime('now') where id = ? ",
           std::vector<std::string>{vd.dashboardName,
                                    vd.dashboardState,
                                    vd.imageHash,
                                    vd.dashboardMetadata,
+                                   std::to_string(vd.userId),
                                    std::to_string(vd.dashboardId)});
     } else {
       LOG(ERROR) << "Error replacing dashboard id " << vd.dashboardId
@@ -3428,6 +3428,8 @@ void Catalog::replaceDashboard(DashboardDescriptor& vd) {
   vd.dashboardSystemRoleName = generate_dashboard_system_rolename(
       std::to_string(currentDB_.dbId), std::to_string(vd.dashboardId));
   addFrontendViewToMapNoLock(vd);
+  sqlite_lock.unlock();
+  write_lock.unlock();
   // NOTE(wamsi): Transactionally unsafe
   createOrUpdateDashboardSystemRole(
       vd.dashboardMetadata, vd.userId, vd.dashboardSystemRoleName);
