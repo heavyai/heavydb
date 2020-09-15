@@ -198,13 +198,14 @@ add_custom_command(
     -I ${GEOS_INCLUDE_DIR} -Qy
     ${CMAKE_CURRENT_SOURCE_DIR}/GeosRuntime.cpp)
 
+find_package(PythonInterp REQUIRED) 
+
 add_custom_command(
     DEPENDS ExtensionFunctions.hpp ExtensionFunctionsGeo.hpp ExtensionFunctionsArray.hpp
     OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/ExtensionFunctions.ast
     COMMAND ${llvm_clangpp_cmd}
     ARGS -std=c++14 -fsyntax-only -Xclang -ast-dump -fno-diagnostics-color -Wno-return-type-c-linkage
-    ${CMAKE_CURRENT_SOURCE_DIR}/ExtensionFunctions.hpp | grep FunctionDecl | grep ExtensionFunctions |
-    sed -E "s/\\-FunctionDecl.*line:[0-9]+:[0-9]+//g" > ${CMAKE_CURRENT_BINARY_DIR}/ExtensionFunctions.ast)
+    ${CMAKE_CURRENT_SOURCE_DIR}/ExtensionFunctions.hpp | ${PYTHON_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/scripts/parse_ast.py > ${CMAKE_CURRENT_BINARY_DIR}/ExtensionFunctions.ast)
 
 add_custom_target(QueryEngineFunctionsTargets
     DEPENDS
