@@ -22,12 +22,12 @@
 
 #include "Catalog/Catalog.h"
 #include "Fragmenter/InsertOrderFragmenter.h"
+#include "Geospatial/Types.h"
 #include "ImportExport/Importer.h"
 #include "Parser/parser.h"
 #include "QueryEngine/ResultSet.h"
 #include "QueryRunner/QueryRunner.h"
 #include "Shared/UpdelRoll.h"
-#include "Shared/geo_types.h"
 #include "Shared/scope.h"
 #include "Tests/TestHelpers.h"
 
@@ -105,7 +105,7 @@ bool alter_common(const std::string& table,
       }
 #else
       // somehow these do not work as advertised ...
-      using namespace Geo_namespace;
+      using namespace Geospatial;
       if (boost::iequals(type, "POINT") && GeoPoint(geo) == GeoPoint(val2))
         ++r_cnt;
       else if (boost::iequals(type, "LINESTRING") &&

@@ -19,9 +19,9 @@
 #include <memory>
 #include <vector>
 
+#include "Geospatial/Compression.h"
+#include "Geospatial/Types.h"
 #include "QueryEngine/ExpressionRewrite.h"
-#include "Shared/geo_compression.h"
-#include "Shared/geo_types.h"
 
 std::vector<std::shared_ptr<Analyzer::Expr>> RelAlgTranslator::translateGeoColumn(
     const RexInput* rex_input,
@@ -123,7 +123,7 @@ std::vector<std::shared_ptr<Analyzer::Expr>> RelAlgTranslator::translateGeoLiter
   std::vector<int> ring_sizes;
   std::vector<int> poly_rings;
   int32_t srid = ti.get_output_srid();
-  if (!Geo_namespace::GeoTypesFactory::getGeoColumns(
+  if (!Geospatial::GeoTypesFactory::getGeoColumns(
           *wkt->get_constval().stringval, ti, coords, bounds, ring_sizes, poly_rings)) {
     throw QueryNotSupported("Could not read geometry from text");
   }
@@ -138,7 +138,7 @@ std::vector<std::shared_ptr<Analyzer::Expr>> RelAlgTranslator::translateGeoLiter
 
   std::vector<std::shared_ptr<Analyzer::Expr>> args;
 
-  std::vector<uint8_t> compressed_coords = geospatial::compress_coords(coords, ti);
+  std::vector<uint8_t> compressed_coords = Geospatial::compress_coords(coords, ti);
   std::list<std::shared_ptr<Analyzer::Expr>> compressed_coords_exprs;
   for (auto cc : compressed_coords) {
     Datum d;
@@ -557,7 +557,7 @@ std::vector<std::shared_ptr<Analyzer::Expr>> RelAlgTranslator::translateGeoFunct
                                 " doesn't support indexed LINESTRINGs");
       }
       Datum input_compression;
-      input_compression.intval = geospatial::get_compression_scheme(geo_ti);
+      input_compression.intval = Geospatial::get_compression_scheme(geo_ti);
       geoargs.push_back(makeExpr<Analyzer::Constant>(kINT, false, input_compression));
       Datum input_srid;
       input_srid.intval = geo_ti.get_input_srid();
@@ -624,7 +624,7 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateGeoProjection(
         "Indexed LINESTRING geometries not supported in this context");
   }
   return makeExpr<Analyzer::GeoUOper>(
-      Geo_namespace::GeoBase::GeoOp::kPROJECTION, ti, ti, geoargs);
+      Geospatial::GeoBase::GeoOp::kPROJECTION, ti, ti, geoargs);
 }
 
 std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateGeoBinaryConstructor(
@@ -635,13 +635,13 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateGeoBinaryConstructor(
   throw QueryNotSupported(rex_function->getName() +
                           " geo constructor requires enabled GEOS support");
 #endif
-  Geo_namespace::GeoBase::GeoOp op = Geo_namespace::GeoBase::GeoOp::kINTERSECTION;
+  Geospatial::GeoBase::GeoOp op = Geospatial::GeoBase::GeoOp::kINTERSECTION;
   if (rex_function->getName() == "ST_Difference"sv) {
-    op = Geo_namespace::GeoBase::GeoOp::kDIFFERENCE;
+    op = Geospatial::GeoBase::GeoOp::kDIFFERENCE;
   } else if (rex_function->getName() == "ST_Union"sv) {
-    op = Geo_namespace::GeoBase::GeoOp::kUNION;
+    op = Geospatial::GeoBase::GeoOp::kUNION;
   } else if (rex_function->getName() == "ST_Buffer"sv) {
-    op = Geo_namespace::GeoBase::GeoOp::kBUFFER;
+    op = Geospatial::GeoBase::GeoOp::kBUFFER;
   }
 
   Analyzer::ExpressionPtrVector geoargs0{};
@@ -717,8 +717,8 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateGeoPredicate(
   }
   ti = SQLTypeInfo(kBOOLEAN, false);
   auto op = (rex_function->getName() == "ST_IsEmpty"sv)
-                ? Geo_namespace::GeoBase::GeoOp::kISEMPTY
-                : Geo_namespace::GeoBase::GeoOp::kISVALID;
+                ? Geospatial::GeoBase::GeoOp::kISEMPTY
+                : Geospatial::GeoBase::GeoOp::kISVALID;
   return makeExpr<Analyzer::GeoUOper>(op, ti, arg_ti, geoargs);
 }
 
@@ -757,7 +757,7 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateUnaryGeoFunction(
     geoargs.erase(geoargs.begin() + 1, geoargs.end());  // remove all but coords
     // Add compression information
     Datum input_compression;
-    input_compression.intval = geospatial::get_compression_scheme(arg_ti);
+    input_compression.intval = Geospatial::get_compression_scheme(arg_ti);
     geoargs.push_back(makeExpr<Analyzer::Constant>(kINT, false, input_compression));
     return makeExpr<Analyzer::FunctionOper>(
         rex_function->getType(), specialized_geofunc, geoargs);
@@ -775,7 +775,7 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateUnaryGeoFunction(
     }
     // Add compression information
     Datum input_compression;
-    input_compression.intval = geospatial::get_compression_scheme(arg_ti);
+    input_compression.intval = Geospatial::get_compression_scheme(arg_ti);
     geoargs.push_back(makeExpr<Analyzer::Constant>(kINT, false, input_compression));
     Datum input_srid;
     input_srid.intval = arg_ti.get_input_srid();
@@ -892,7 +892,7 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateUnaryGeoFunction(
   // Add input compression mode and SRID args to enable on-the-fly
   // decompression/transforms
   Datum input_compression;
-  input_compression.intval = geospatial::get_compression_scheme(arg_ti);
+  input_compression.intval = Geospatial::get_compression_scheme(arg_ti);
   geoargs.push_back(makeExpr<Analyzer::Constant>(kINT, false, input_compression));
   Datum input_srid;
   input_srid.intval = arg_ti.get_input_srid();
@@ -1038,7 +1038,7 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateBinaryGeoFunction(
   // Add first input's compression mode and SRID args to enable on-the-fly
   // decompression/transforms
   Datum input_compression0;
-  input_compression0.intval = geospatial::get_compression_scheme(arg0_ti);
+  input_compression0.intval = Geospatial::get_compression_scheme(arg0_ti);
   geoargs.push_back(makeExpr<Analyzer::Constant>(kINT, false, input_compression0));
   Datum input_srid0;
   input_srid0.intval = arg0_ti.get_input_srid();
@@ -1047,7 +1047,7 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateBinaryGeoFunction(
   // Add second input's compression mode and SRID args to enable on-the-fly
   // decompression/transforms
   Datum input_compression1;
-  input_compression1.intval = geospatial::get_compression_scheme(arg1_ti);
+  input_compression1.intval = Geospatial::get_compression_scheme(arg1_ti);
   geoargs.push_back(makeExpr<Analyzer::Constant>(kINT, false, input_compression1));
   Datum input_srid1;
   input_srid1.intval = arg1_ti.get_input_srid();
@@ -1154,7 +1154,7 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateFunctionWithGeoArg(
 
     // Add compression information
     Datum input_compression;
-    input_compression.intval = geospatial::get_compression_scheme(arg_ti);
+    input_compression.intval = Geospatial::get_compression_scheme(arg_ti);
     args.push_back(makeExpr<Analyzer::Constant>(kINT, false, input_compression));
     if (arg_ti.get_input_srid() != 4326) {
       throw QueryNotSupported(
@@ -1193,7 +1193,7 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateFunctionWithGeoArg(
 
     // Add compression information
     Datum input_compression;
-    input_compression.intval = geospatial::get_compression_scheme(arg_ti);
+    input_compression.intval = Geospatial::get_compression_scheme(arg_ti);
     args.push_back(makeExpr<Analyzer::Constant>(kINT, false, input_compression));
     if (arg_ti.get_input_srid() != 4326) {
       throw QueryNotSupported(
@@ -1222,7 +1222,7 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateFunctionWithGeoArg(
 
     // Add compression information
     Datum input_compression;
-    input_compression.intval = geospatial::get_compression_scheme(arg_ti);
+    input_compression.intval = Geospatial::get_compression_scheme(arg_ti);
     args.push_back(makeExpr<Analyzer::Constant>(kINT, false, input_compression));
     if (arg_ti.get_input_srid() != 4326) {
       throw QueryNotSupported(

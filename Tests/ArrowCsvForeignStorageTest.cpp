@@ -27,11 +27,11 @@
 #include "Archive/PosixFileArchive.h"
 #include "Catalog/Catalog.h"
 #include "DataMgr/ForeignStorage/ArrowCsvForeignStorage.h"
+#include "Geospatial/Types.h"
 #include "ImportExport/Importer.h"
 #include "Parser/parser.h"
 #include "QueryEngine/ResultSet.h"
 #include "QueryRunner/QueryRunner.h"
-#include "Shared/geo_types.h"
 #include "Shared/scope.h"
 
 #ifndef BASE_PATH

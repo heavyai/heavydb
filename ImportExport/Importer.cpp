@@ -53,15 +53,15 @@
 #include "Archive/PosixFileArchive.h"
 #include "Archive/S3Archive.h"
 #include "ArrowImporter.h"
+#include "Geospatial/Compression.h"
+#include "Geospatial/Transforms.h"
+#include "Geospatial/Types.h"
 #include "ImportExport/DelimitedParserUtils.h"
 #include "ImportExport/GDAL.h"
 #include "Logger/Logger.h"
 #include "OSDependent/omnisci_glob.h"
 #include "QueryEngine/TypePunning.h"
 #include "Shared/SqlTypesLayout.h"
-#include "Shared/geo_compression.h"
-#include "Shared/geo_types.h"
-#include "Shared/geosupport.h"
 #include "Shared/import_helpers.h"
 #include "Shared/measure.h"
 #include "Shared/misc.h"
@@ -783,17 +783,17 @@ size_t TypedImportBuffer::convert_arrow_val_to_import_buffer(
       try {
         SQLTypeInfo import_ti{ti};
         if (array.IsNull(row)) {
-          Geo_namespace::GeoTypesFactory::getNullGeoColumns(
+          Geospatial::GeoTypesFactory::getNullGeoColumns(
               import_ti, coords, bounds, ring_sizes, poly_rings, false);
         } else {
           arrow_throw_if<GeoImportException>(
-              !Geo_namespace::GeoTypesFactory::getGeoColumns(geo_string_buffer_->back(),
-                                                             ti,
-                                                             coords,
-                                                             bounds,
-                                                             ring_sizes,
-                                                             poly_rings,
-                                                             false),
+              !Geospatial::GeoTypesFactory::getGeoColumns(geo_string_buffer_->back(),
+                                                          ti,
+                                                          coords,
+                                                          bounds,
+                                                          ring_sizes,
+                                                          poly_rings,
+                                                          false),
               error_context(cd, bad_rows_tracker) + "Invalid geometry");
           arrow_throw_if<GeoImportException>(
               cd->columnType.get_type() != ti.get_type(),
@@ -1455,7 +1455,7 @@ void Importer::set_geo_physical_import_buffer(
   // One exception - NULL POINT geo: coords need to be processed to encode nullness
   // in a fixlen array, compressed and uncompressed.
   if (!is_null_geo) {
-    std::vector<uint8_t> compressed_coords = geospatial::compress_coords(coords, col_ti);
+    std::vector<uint8_t> compressed_coords = Geospatial::compress_coords(coords, col_ti);
     tdd_coords.val.arr_val.reserve(compressed_coords.size());
     for (auto cc : compressed_coords) {
       tdd_coords.val.arr_val.emplace_back();
@@ -1560,7 +1560,7 @@ void Importer::set_geo_physical_import_buffer_columnar(
     std::vector<TDatum> td_coords_data;
     if (!is_null_geo) {
       std::vector<uint8_t> compressed_coords =
-          geospatial::compress_coords(coords, col_ti);
+          Geospatial::compress_coords(coords, col_ti);
       for (auto cc : compressed_coords) {
         TDatum td_byte;
         td_byte.val.int_val = cc;
@@ -1968,7 +1968,7 @@ static ImportStatus import_thread_delimited(
                   if (col_ti.get_notnull()) {
                     throw std::runtime_error("NULL geo for column " + cd->columnName);
                   }
-                  Geo_namespace::GeoTypesFactory::getNullGeoColumns(
+                  Geospatial::GeoTypesFactory::getNullGeoColumns(
                       import_ti,
                       coords,
                       bounds,
@@ -1978,7 +1978,7 @@ static ImportStatus import_thread_delimited(
                 } else {
                   if (import_geometry) {
                     // geometry already exploded
-                    if (!Geo_namespace::GeoTypesFactory::getGeoColumns(
+                    if (!Geospatial::GeoTypesFactory::getGeoColumns(
                             import_geometry,
                             import_ti,
                             coords,
@@ -1995,7 +1995,7 @@ static ImportStatus import_thread_delimited(
                     }
                   } else {
                     // extract geometry directly from WKT
-                    if (!Geo_namespace::GeoTypesFactory::getGeoColumns(
+                    if (!Geospatial::GeoTypesFactory::getGeoColumns(
                             std::string(geo_string),
                             import_ti,
                             coords,
@@ -2082,7 +2082,7 @@ static ImportStatus import_thread_delimited(
             OGRGeometryFactory::destroyGeometry(ogr_geometry);
           }
         };
-        ogr_geometry = Geo_namespace::GeoTypesFactory::createOGRGeometry(
+        ogr_geometry = Geospatial::GeoTypesFactory::createOGRGeometry(
             std::string(collection_geo_string));
         // do the explode and import
         us = explode_collections_step2(ogr_geometry,
@@ -2211,7 +2211,7 @@ static ImportStatus import_thread_shapefile(
               if (col_ti.get_notnull()) {
                 throw std::runtime_error("NULL geo for column " + cd->columnName);
               }
-              Geo_namespace::GeoTypesFactory::getNullGeoColumns(
+              Geospatial::GeoTypesFactory::getNullGeoColumns(
                   import_ti,
                   coords,
                   bounds,
@@ -2219,7 +2219,7 @@ static ImportStatus import_thread_shapefile(
                   poly_rings,
                   PROMOTE_POLYGON_TO_MULTIPOLYGON);
             } else {
-              if (!Geo_namespace::GeoTypesFactory::getGeoColumns(
+              if (!Geospatial::GeoTypesFactory::getGeoColumns(
                       import_geometry,
                       import_ti,
                       coords,
@@ -2263,7 +2263,7 @@ static ImportStatus import_thread_shapefile(
             std::vector<TDatum> td_coord_data;
             if (!is_null_geo) {
               std::vector<uint8_t> compressed_coords =
-                  geospatial::compress_coords(coords, col_ti);
+                  Geospatial::compress_coords(coords, col_ti);
               for (auto cc : compressed_coords) {
                 TDatum td_byte;
                 td_byte.val.int_val = cc;

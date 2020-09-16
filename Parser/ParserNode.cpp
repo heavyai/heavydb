@@ -48,6 +48,8 @@
 #include "Fragmenter/InsertOrderFragmenter.h"
 #include "Fragmenter/SortedOrderFragmenter.h"
 #include "Fragmenter/TargetValueConvertersFactories.h"
+#include "Geospatial/Compression.h"
+#include "Geospatial/Types.h"
 #include "ImportExport/Importer.h"
 #include "LockMgr/LockMgr.h"
 #include "QueryEngine/CalciteAdapter.h"
@@ -57,8 +59,6 @@
 #include "ReservedKeywords.h"
 #include "Shared/StringTransform.h"
 #include "Shared/TimeGM.h"
-#include "Shared/geo_compression.h"
-#include "Shared/geo_types.h"
 #include "Shared/measure.h"
 #include "Shared/shard_key.h"
 #include "TableArchiver/TableArchiver.h"
@@ -1696,7 +1696,7 @@ void InsertValuesStmt::analyze(const Catalog_Namespace::Catalog& catalog,
           0;  // @TODO simon.eves where to get render_group from in this context?!
       SQLTypeInfo import_ti{cd->columnType};
       if (!is_null) {
-        if (!Geo_namespace::GeoTypesFactory::getGeoColumns(
+        if (!Geospatial::GeoTypesFactory::getGeoColumns(
                 *geo_string, import_ti, coords, bounds, ring_sizes, poly_rings)) {
           throw std::runtime_error("Cannot read geometry to insert into column " +
                                    cd->columnName);
@@ -1733,7 +1733,7 @@ void InsertValuesStmt::analyze(const Catalog_Namespace::Catalog& catalog,
       CHECK_EQ(cd_coords->columnType.get_subtype(), kTINYINT);
       std::list<std::shared_ptr<Analyzer::Expr>> value_exprs;
       if (!is_null || cd->columnType.get_type() == kPOINT) {
-        auto compressed_coords = geospatial::compress_coords(coords, col_ti);
+        auto compressed_coords = Geospatial::compress_coords(coords, col_ti);
         for (auto cc : compressed_coords) {
           Datum d;
           d.tinyintval = cc;
@@ -3414,13 +3414,13 @@ void AddColumnStmt::execute(const Catalog_Namespace::SessionInfo& session) {
                 std::vector<int> ring_sizes, poly_rings;
                 int render_group = 0;
                 SQLTypeInfo tinfo{cd->columnType};
-                if (!Geo_namespace::GeoTypesFactory::getGeoColumns(defaultval,
-                                                                   tinfo,
-                                                                   coords,
-                                                                   bounds,
-                                                                   ring_sizes,
-                                                                   poly_rings,
-                                                                   false)) {
+                if (!Geospatial::GeoTypesFactory::getGeoColumns(defaultval,
+                                                                tinfo,
+                                                                coords,
+                                                                bounds,
+                                                                ring_sizes,
+                                                                poly_rings,
+                                                                false)) {
                   throw std::runtime_error("Bad geometry data: '" + defaultval + "'");
                 }
                 size_t col_idx = 1 + std::distance(import_buffers.begin(), it);

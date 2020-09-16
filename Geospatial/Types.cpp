@@ -14,15 +14,16 @@
  * limitations under the License.
  */
 
-#include "geo_types.h"
-#include "Logger/Logger.h"
-#include "sqltypes.h"
+#include "Geospatial/Types.h"
+
+#include <limits>
 
 #include <gdal.h>
 #include <ogr_geometry.h>
 #include <ogrsf_frmts.h>
 
-#include <limits>
+#include "Logger/Logger.h"
+#include "Shared/sqltypes.h"
 
 /**
  * Note: We use dynamic_cast to convert the OGRGeometry pointer from the base class into
@@ -72,7 +73,7 @@ int process_poly_ring(OGRLinearRing* ring,
   int num_points_added = 0;
   int num_points_in_ring = ring->getNumPoints();
   if (num_points_in_ring < 3) {
-    throw Geo_namespace::GeoTypesError(
+    throw Geospatial::GeoTypesError(
         "PolyRing",
         "All poly rings must have more than 3 points. Found ring with " +
             std::to_string(num_points_in_ring) + " points.");
@@ -95,7 +96,7 @@ int process_poly_ring(OGRLinearRing* ring,
     coords.pop_back();
     num_points_added--;
     if (num_points_added < 3) {
-      throw Geo_namespace::GeoTypesError(
+      throw Geospatial::GeoTypesError(
           "PolyRing",
           "All exterior rings must have more than 3 points. Found ring with " +
               std::to_string(num_points_added) + " points.");
@@ -106,7 +107,7 @@ int process_poly_ring(OGRLinearRing* ring,
 
 }  // namespace
 
-namespace Geo_namespace {
+namespace Geospatial {
 
 std::string GeoTypesError::OGRErrorToStr(const int ogr_err) {
   switch (ogr_err) {
@@ -933,4 +934,4 @@ void GeoTypesFactory::getNullGeoColumns(SQLTypeInfo& ti,
   }
 }
 
-}  // namespace Geo_namespace
+}  // namespace Geospatial

@@ -14,11 +14,11 @@
  * limitations under the License.
  */
 
-#include "Shared/geo_compression.h"
+#include "Geospatial/Compression.h"
+#include "Geospatial/Types.h"
 #include "QueryEngine/TypePunning.h"
-#include "Shared/geo_types.h"
 
-namespace geospatial {
+namespace Geospatial {
 
 int32_t get_compression_scheme(const SQLTypeInfo& ti) {
   if (ti.get_compression() == kENCODING_GEOINT && ti.get_comp_param() == 32) {
@@ -32,16 +32,16 @@ int32_t get_compression_scheme(const SQLTypeInfo& ti) {
 
 uint64_t compress_coord(double coord, const SQLTypeInfo& ti, bool x) {
   if (ti.get_compression() == kENCODING_GEOINT && ti.get_comp_param() == 32) {
-    return x ? Geo_namespace::compress_longitude_coord_geoint32(coord)
-             : Geo_namespace::compress_lattitude_coord_geoint32(coord);
+    return x ? Geospatial::compress_longitude_coord_geoint32(coord)
+             : Geospatial::compress_lattitude_coord_geoint32(coord);
   }
   return *reinterpret_cast<uint64_t*>(may_alias_ptr(&coord));
 }
 
 uint64_t compress_null_point(const SQLTypeInfo& ti, bool x) {
   if (ti.get_compression() == kENCODING_GEOINT && ti.get_comp_param() == 32) {
-    return x ? Geo_namespace::compress_null_point_longitude_geoint32()
-             : Geo_namespace::compress_null_point_lattitude_geoint32();
+    return x ? Geospatial::compress_null_point_longitude_geoint32()
+             : Geospatial::compress_null_point_lattitude_geoint32();
   }
   double n = x ? NULL_ARRAY_DOUBLE : NULL_DOUBLE;
   auto u = *reinterpret_cast<uint64_t*>(may_alias_ptr(&n));
@@ -137,9 +137,9 @@ void decompress_geo_coords_geoint32(std::vector<T>& dec,
   const auto num_coords = sz / sizeof(int32_t);
   dec.resize(num_coords);
   for (size_t i = 0; i < num_coords; i += 2) {
-    dec[i] = Geo_namespace::decompress_longitude_coord_geoint32(compressed_coords[i]);
+    dec[i] = Geospatial::decompress_longitude_coord_geoint32(compressed_coords[i]);
     dec[i + 1] =
-        Geo_namespace::decompress_lattitude_coord_geoint32(compressed_coords[i + 1]);
+        Geospatial::decompress_lattitude_coord_geoint32(compressed_coords[i + 1]);
   }
 }
 
@@ -181,7 +181,7 @@ bool is_null_point(const SQLTypeInfo& geo_ti,
   if (geo_ti.get_type() == kPOINT && !geo_ti.get_notnull()) {
     if (geo_ti.get_compression() == kENCODING_GEOINT) {
       if (geo_ti.get_comp_param() == 32) {
-        return Geo_namespace::is_null_point_longitude_geoint32(*((int32_t*)coords));
+        return Geospatial::is_null_point_longitude_geoint32(*((int32_t*)coords));
       }
     } else {
       CHECK_EQ(geo_ti.get_compression(), kENCODING_NONE);
@@ -191,4 +191,4 @@ bool is_null_point(const SQLTypeInfo& geo_ti,
   return false;
 }
 
-}  // namespace geospatial
+}  // namespace Geospatial

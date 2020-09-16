@@ -182,10 +182,11 @@ add_custom_command(
     ${CLANG_SDK_INC}
     ${CLANG_CRT_INC}
     ${MAPD_DEFINITIONS}
+    -I ${CMAKE_SOURCE_DIR}
     ${CMAKE_CURRENT_SOURCE_DIR}/RuntimeFunctions.cpp)
 
 add_custom_command(
-    DEPENDS GeosRuntime.cpp GeosRuntime.h ${CMAKE_SOURCE_DIR}/Shared/geo_compression.cpp
+    DEPENDS GeosRuntime.cpp GeosRuntime.h ${CMAKE_SOURCE_DIR}/Geospatial/Compression.cpp
     OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/GeosRuntime.bc
     COMMAND ${llvm_clangpp_cmd}
     ARGS -std=c++17 ${RT_OPT_FLAGS} -c -emit-llvm
@@ -205,6 +206,7 @@ add_custom_command(
     OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/ExtensionFunctions.ast
     COMMAND ${llvm_clangpp_cmd}
     ARGS -std=c++14 -fsyntax-only -Xclang -ast-dump -fno-diagnostics-color -Wno-return-type-c-linkage
+    -I ${CMAKE_SOURCE_DIR}
     ${CMAKE_CURRENT_SOURCE_DIR}/ExtensionFunctions.hpp | ${PYTHON_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/scripts/parse_ast.py > ${CMAKE_CURRENT_BINARY_DIR}/ExtensionFunctions.ast)
 
 add_custom_target(QueryEngineFunctionsTargets

@@ -19,9 +19,9 @@
 #include <cstdint>
 #include <vector>
 
-#include "Shared/geo_compression_runtime.h"
+#include "Geospatial/CompressionRuntime.h"
 #include "Shared/sqltypes.h"
-namespace geospatial {
+namespace Geospatial {
 
 int32_t get_compression_scheme(const SQLTypeInfo& ti);
 
@@ -43,4 +43,4 @@ template <typename T, typename C>
 std::shared_ptr<std::vector<T>> decompress_coords(const C& compression,
                                                   const int8_t* coords,
                                                   const size_t coords_sz);
-}  // namespace geospatial
+}  // namespace Geospatial

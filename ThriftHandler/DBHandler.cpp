@@ -45,6 +45,8 @@
 #include "DataMgr/ForeignStorage/ForeignStorageInterface.h"
 #include "DistributedHandler.h"
 #include "Fragmenter/InsertOrderFragmenter.h"
+#include "Geospatial/Transforms.h"
+#include "Geospatial/Types.h"
 #include "ImportExport/GDAL.h"
 #include "ImportExport/Importer.h"
 #include "LockMgr/LockMgr.h"
@@ -64,8 +66,6 @@
 #include "QueryEngine/TableOptimizer.h"
 #include "QueryEngine/ThriftSerializers.h"
 #include "Shared/StringTransform.h"
-#include "Shared/geo_types.h"
-#include "Shared/geosupport.h"
 #include "Shared/import_helpers.h"
 #include "Shared/mapd_shared_mutex.h"
 #include "Shared/measure.h"
@@ -2524,13 +2524,13 @@ void DBHandler::load_table_binary_columnar(const TSessionId& session,
         int render_group = 0;
         SQLTypeInfo ti = cd->columnType;
         if (numRows != wkt_or_wkb_hex_column->size() ||
-            !Geo_namespace::GeoTypesFactory::getGeoColumns(wkt_or_wkb_hex_column,
-                                                           ti,
-                                                           coords_column,
-                                                           bounds_column,
-                                                           ring_sizes_column,
-                                                           poly_rings_column,
-                                                           false)) {
+            !Geospatial::GeoTypesFactory::getGeoColumns(wkt_or_wkb_hex_column,
+                                                        ti,
+                                                        coords_column,
+                                                        bounds_column,
+                                                        ring_sizes_column,
+                                                        poly_rings_column,
+                                                        false)) {
           std::ostringstream oss;
           oss << "load_table_binary_columnar: Invalid geometry in column "
               << cd->columnName;
@@ -2726,14 +2726,13 @@ void DBHandler::load_table(const TSessionId& session,
             int render_group = 0;
             SQLTypeInfo ti;
             if (row.cols[import_idx].is_null ||
-                !Geo_namespace::GeoTypesFactory::getGeoColumns(
-                    row.cols[import_idx].str_val,
-                    ti,
-                    coords,
-                    bounds,
-                    ring_sizes,
-                    poly_rings,
-                    false)) {
+                !Geospatial::GeoTypesFactory::getGeoColumns(row.cols[import_idx].str_val,
+                                                            ti,
+                                                            coords,
+                                                            bounds,
+                                                            ring_sizes,
+                                                            poly_rings,
+                                                            false)) {
               throw std::runtime_error("Invalid geometry");
             }
             if (cd->columnType.get_type() != ti.get_type()) {

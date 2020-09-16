@@ -22,10 +22,9 @@
  *
  */
 
-#ifndef SHARED_GEO_COMPRESSION_H
-#define SHARED_GEO_COMPRESSION_H
+#pragma once
 
-#include "funcannotations.h"
+#include "Shared/funcannotations.h"
 
 #define COMPRESSION_NONE 0
 #define COMPRESSION_GEOINT32 1
@@ -36,7 +35,7 @@
 #define TOLERANCE_DEFAULT 0.000000001
 #define TOLERANCE_GEOINT32 0.0000001
 
-namespace Geo_namespace {
+namespace Geospatial {
 
 DEVICE inline double decompress_longitude_coord_geoint32(const int32_t compressed) {
   // decompress longitude: -2,147,483,647..2,147,483,647  --->  -180..180
@@ -82,6 +81,4 @@ DEVICE constexpr uint64_t compress_null_point_lattitude_geoint32() {
   return 0x0000000080000000ULL;
 }
 
-};  // namespace Geo_namespace
-
-#endif  // SHARED_GEO_COMPRESSION_H
+};  // namespace Geospatial

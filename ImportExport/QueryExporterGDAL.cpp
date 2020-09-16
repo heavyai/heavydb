@@ -24,10 +24,10 @@
 
 #include <ogrsf_frmts.h>
 
+#include "Geospatial/Types.h"
 #include "ImportExport/GDAL.h"
 #include "QueryEngine/GroupByAndAggregate.h"
 #include "QueryEngine/ResultSet.h"
-#include "Shared/geo_types.h"
 #include "Shared/misc.h"
 #include "Shared/scope.h"
 
@@ -328,14 +328,14 @@ void insert_geo_column(const GeoTargetValue* geo_tv,
       auto const point_tv = boost::get<GeoPointTargetValue>(geo_tv->get());
       auto* coords = point_tv.coords.get();
       CHECK(coords);
-      Geo_namespace::GeoPoint point(*coords);
+      Geospatial::GeoPoint point(*coords);
       ogr_feature->SetGeometry(point.getOGRGeometry());
     } break;
     case kLINESTRING: {
       auto const linestring_tv = boost::get<GeoLineStringTargetValue>(geo_tv->get());
       auto* coords = linestring_tv.coords.get();
       CHECK(coords);
-      Geo_namespace::GeoLineString linestring(*coords);
+      Geospatial::GeoLineString linestring(*coords);
       ogr_feature->SetGeometry(linestring.getOGRGeometry());
     } break;
     case kPOLYGON: {
@@ -344,7 +344,7 @@ void insert_geo_column(const GeoTargetValue* geo_tv,
       CHECK(coords);
       auto* ring_sizes = polygon_tv.ring_sizes.get();
       CHECK(ring_sizes);
-      Geo_namespace::GeoPolygon polygon(*coords, *ring_sizes);
+      Geospatial::GeoPolygon polygon(*coords, *ring_sizes);
       ogr_feature->SetGeometry(polygon.getOGRGeometry());
     } break;
     case kMULTIPOLYGON: {
@@ -355,7 +355,7 @@ void insert_geo_column(const GeoTargetValue* geo_tv,
       CHECK(ring_sizes);
       auto* poly_rings = multipolygon_tv.poly_rings.get();
       CHECK(poly_rings);
-      Geo_namespace::GeoMultiPolygon multipolygon(*coords, *ring_sizes, *poly_rings);
+      Geospatial::GeoMultiPolygon multipolygon(*coords, *ring_sizes, *poly_rings);
       ogr_feature->SetGeometry(multipolygon.getOGRGeometry());
     } break;
     default:

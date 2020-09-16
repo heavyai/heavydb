@@ -22,16 +22,16 @@
  * Copyright (c) 2014 MapD Technologies, Inc.  All rights reserved.
  */
 
-#include "../Shared/geo_types.h"
-#include "../Shared/likely.h"
 #include "Execute.h"
+#include "Geospatial/Compression.h"
+#include "Geospatial/Types.h"
 #include "ParserNode.h"
 #include "QueryEngine/TargetValue.h"
 #include "ResultSet.h"
 #include "ResultSetGeoSerialization.h"
 #include "RuntimeFunctions.h"
 #include "Shared/SqlTypesLayout.h"
-#include "Shared/geo_compression.h"
+#include "Shared/likely.h"
 #include "Shared/sqltypes.h"
 #include "TypePunning.h"
 

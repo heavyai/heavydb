@@ -1,4 +1,4 @@
-#include "../Shared/geo_compression_runtime.h"
+#include "Geospatial/CompressionRuntime.h"
 
 // Adjustable tolerance, determined by compression mode.
 // The criteria is to still recognize a compressed+decompressed number.
@@ -48,9 +48,9 @@ DEVICE ALWAYS_INLINE double decompress_coord(int8_t* data,
     auto compressed_coords = reinterpret_cast<int32_t*>(data);
     auto compressed_coord = compressed_coords[index];
     if (x) {
-      return Geo_namespace::decompress_longitude_coord_geoint32(compressed_coord);
+      return Geospatial::decompress_longitude_coord_geoint32(compressed_coord);
     } else {
-      return Geo_namespace::decompress_lattitude_coord_geoint32(compressed_coord);
+      return Geospatial::decompress_lattitude_coord_geoint32(compressed_coord);
     }
   }
   auto double_coords = reinterpret_cast<double*>(data);

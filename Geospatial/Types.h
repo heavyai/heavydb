@@ -14,19 +14,18 @@
  * limitations under the License.
  */
 
-#ifndef GEOSPATIAL_TYPES_H_
-#define GEOSPATIAL_TYPES_H_
+#pragma once
 
 #include <memory>
 #include <stdexcept>
 #include <string>
 #include <vector>
 
-#include "sqltypes.h"
+#include "Shared/sqltypes.h"
 
 class OGRGeometry;
 
-namespace Geo_namespace {
+namespace Geospatial {
 
 class GeoTypesError : public std::runtime_error {
  public:
@@ -258,7 +257,7 @@ class GeoTypesFactory {
                                 const bool promote_poly_to_mpoly = false);
 
  private:
-  static std::unique_ptr<Geo_namespace::GeoBase> createGeoTypeImpl(
+  static std::unique_ptr<Geospatial::GeoBase> createGeoTypeImpl(
       OGRGeometry* geom,
       const bool owns_geom_obj = true);
   static void getGeoColumnsImpl(const std::unique_ptr<GeoBase>& geospatial_base,
@@ -270,6 +269,4 @@ class GeoTypesFactory {
                                 const bool promote_poly_to_mpoly = false);
 };
 
-}  // namespace Geo_namespace
-
-#endif  // GEOSPATIAL_TYPES_H_
+}  // namespace Geospatial

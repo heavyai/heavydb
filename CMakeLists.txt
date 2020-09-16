@@ -589,7 +589,7 @@ add_subdirectory(QueryRunner)
 add_subdirectory(SQLFrontend)
 add_subdirectory(TableArchiver)
 add_subdirectory(ThriftHandler)
-
+add_subdirectory(Geospatial)
 add_subdirectory(Distributed)
 
 if(ENABLE_DBE)
@@ -601,7 +601,7 @@ if(ENABLE_ODBC)
   add_subdirectory(ODBC)
 endif()
 
-set(MAPD_LIBRARIES OSDependent Shared Catalog SqliteConnector MigrationMgr TableArchiver Parser Analyzer ImportExport QueryRunner QueryEngine QueryState LockMgr DataMgr Fragmenter Logger)
+set(MAPD_LIBRARIES OSDependent Shared Catalog SqliteConnector MigrationMgr TableArchiver Parser Analyzer ImportExport QueryRunner QueryEngine QueryState LockMgr DataMgr Fragmenter Logger Geospatial)
 
 if("${MAPD_EDITION_LOWER}" STREQUAL "ee")
   list(APPEND MAPD_LIBRARIES Distributed)

@@ -21,16 +21,16 @@
 #include <cstdarg>
 #include <mutex>
 
-#include "../Shared/checked_alloc.h"
-#include "../Shared/funcannotations.h"
-#include "../Shared/geo_compression.h"
-#include "../Shared/geo_types.h"
-#include "GeosRuntime.h"
+#include "Geospatial/Compression.h"
+#include "Geospatial/Types.h"
+#include "QueryEngine/GeosRuntime.h"
+#include "Shared/checked_alloc.h"
+#include "Shared/funcannotations.h"
 
 #define GEOS_USE_ONLY_R_API
 #include <geos_c.h>
 
-using namespace Geo_namespace;
+using namespace Geospatial;
 
 using WKB = std::vector<uint8_t>;
 
@@ -99,7 +99,7 @@ bool toWkb(WKB& wkb,
            int32_t ic           // input compression
 ) {
   // decompressed double coords
-  auto cv = geospatial::decompress_coords<double, int32_t>(ic, coords, coords_size);
+  auto cv = Geospatial::decompress_coords<double, int32_t>(ic, coords, coords_size);
   if (static_cast<SQLTypes>(type) == kPOINT) {
     GeoPoint point(*cv);
     return point.getWkb(wkb);

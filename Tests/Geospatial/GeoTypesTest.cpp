@@ -14,12 +14,12 @@
  * limitations under the License.
  */
 
-#include <Shared/geo_types.h>
+#include "Geospatial/Types.h"
 #include "Tests/TestHelpers.h"
 
 #include <gtest/gtest.h>
 
-using namespace Geo_namespace;
+using namespace Geospatial;
 
 namespace {
 

@@ -210,7 +210,7 @@ ExpressionPtr ArrayExpr::deep_copy() const {
 }
 
 std::shared_ptr<Analyzer::Expr> GeoUOper::deep_copy() const {
-  if (op_ == Geo_namespace::GeoBase::GeoOp::kPROJECTION) {
+  if (op_ == Geospatial::GeoBase::GeoOp::kPROJECTION) {
     return makeExpr<GeoUOper>(op_, type_info, type_info, args0_);
   }
   return makeExpr<GeoUOper>(op_, type_info, ti0_, args0_);
@@ -2740,13 +2740,13 @@ std::string ArrayExpr::toString() const {
 std::string GeoUOper::toString() const {
   std::string fn;
   switch (op_) {
-    case Geo_namespace::GeoBase::GeoOp::kPROJECTION:
+    case Geospatial::GeoBase::GeoOp::kPROJECTION:
       fn = "Geo";
       break;
-    case Geo_namespace::GeoBase::GeoOp::kISEMPTY:
+    case Geospatial::GeoBase::GeoOp::kISEMPTY:
       fn = "ST_IsEmpty";
       break;
-    case Geo_namespace::GeoBase::GeoOp::kISVALID:
+    case Geospatial::GeoBase::GeoOp::kISVALID:
       fn = "ST_IsValid";
       break;
     default:
@@ -2763,16 +2763,16 @@ std::string GeoUOper::toString() const {
 std::string GeoBinOper::toString() const {
   std::string fn;
   switch (op_) {
-    case Geo_namespace::GeoBase::GeoOp::kINTERSECTION:
+    case Geospatial::GeoBase::GeoOp::kINTERSECTION:
       fn = "ST_Intersection";
       break;
-    case Geo_namespace::GeoBase::GeoOp::kDIFFERENCE:
+    case Geospatial::GeoBase::GeoOp::kDIFFERENCE:
       fn = "ST_Difference";
       break;
-    case Geo_namespace::GeoBase::GeoOp::kUNION:
+    case Geospatial::GeoBase::GeoOp::kUNION:
       fn = "ST_Union";
       break;
-    case Geo_namespace::GeoBase::GeoOp::kBUFFER:
+    case Geospatial::GeoBase::GeoOp::kBUFFER:
       fn = "ST_Buffer";
       break;
     default:

@@ -26,7 +26,7 @@
 #include "DBHandlerTestHelpers.h"
 #include "DataMgr/ForeignStorage/ForeignStorageCache.h"
 #include "ImportExport/DelimitedParserUtils.h"
-#include "Shared/geo_types.h"
+#include "Geospatial/Types.h"
 #include "TestHelpers.h"
 
 #ifndef BASE_PATH

@@ -1,7 +1,7 @@
 #pragma once
 
+#include "Geospatial/Types.h"
 #include "ImportExport/DelimitedParserUtils.h"
-#include "Shared/geo_types.h"
 #include "Shared/misc.h"
 
 namespace foreign_storage {
@@ -137,22 +137,21 @@ void process_geo_column(
   } else {
     SQLTypeInfo import_ti{col_ti};
     if (is_null) {
-      Geo_namespace::GeoTypesFactory::getNullGeoColumns(import_ti,
-                                                        coords,
-                                                        bounds,
-                                                        ring_sizes,
-                                                        poly_rings,
-                                                        PROMOTE_POLYGON_TO_MULTIPOLYGON);
+      Geospatial::GeoTypesFactory::getNullGeoColumns(import_ti,
+                                                     coords,
+                                                     bounds,
+                                                     ring_sizes,
+                                                     poly_rings,
+                                                     PROMOTE_POLYGON_TO_MULTIPOLYGON);
     } else {
       // extract geometry directly from WKT
-      if (!Geo_namespace::GeoTypesFactory::getGeoColumns(
-              std::string(geo_string),
-              import_ti,
-              coords,
-              bounds,
-              ring_sizes,
-              poly_rings,
-              PROMOTE_POLYGON_TO_MULTIPOLYGON)) {
+      if (!Geospatial::GeoTypesFactory::getGeoColumns(std::string(geo_string),
+                                                      import_ti,
+                                                      coords,
+                                                      bounds,
+                                                      ring_sizes,
+                                                      poly_rings,
+                                                      PROMOTE_POLYGON_TO_MULTIPOLYGON)) {
         std::string msg = "Failed to extract valid geometry from row " +
                           std::to_string(first_row_index + row_index_plus_one) +
                           " for column " + cd->columnName;

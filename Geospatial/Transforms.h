@@ -14,8 +14,7 @@
  * limitations under the License.
  */
 
-#ifndef _GEOSUPPORT_H_
-#define _GEOSUPPORT_H_
+#pragma once
 
 #include <cmath>
 #include <string>
@@ -41,5 +40,3 @@ inline std::pair<double, double> geotransform(const std::string& src_proj,
                                               const double y) {
   return geotransform_4326_to_900913(x, y);
 }
-
-#endif  // _GEOSUPPORT_H_

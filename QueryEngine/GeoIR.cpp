@@ -14,23 +14,23 @@
  * limitations under the License.
  */
 
-#include "CodeGenerator.h"
-#include "Execute.h"
-#include "Shared/geo_compression.h"
+#include "Geospatial/Compression.h"
+#include "QueryEngine/CodeGenerator.h"
+#include "QueryEngine/Execute.h"
 
 std::vector<llvm::Value*> CodeGenerator::codegenGeoUOper(
     const Analyzer::GeoUOper* geo_expr,
     const CompilationOptions& co) {
   AUTOMATIC_IR_METADATA(cgen_state_);
   if (co.device_type == ExecutorDeviceType::GPU) {
-    if (geo_expr->getOp() != Geo_namespace::GeoBase::GeoOp::kPROJECTION) {
+    if (geo_expr->getOp() != Geospatial::GeoBase::GeoOp::kPROJECTION) {
       throw QueryMustRunOnCpu();
     }
   }
 
   auto argument_list = codegenGeoArgs(geo_expr->getArgs0(), co);
 
-  if (geo_expr->getOp() == Geo_namespace::GeoBase::GeoOp::kPROJECTION) {
+  if (geo_expr->getOp() == Geospatial::GeoBase::GeoOp::kPROJECTION) {
     return argument_list;
   }
 
@@ -62,15 +62,15 @@ std::vector<llvm::Value*> CodeGenerator::codegenGeoUOper(
   argument_list.insert(
       argument_list.end(),
       cgen_state_->llInt(static_cast<int>(
-          geospatial::get_compression_scheme(geo_expr->getTypeInfo0()))));
+          Geospatial::get_compression_scheme(geo_expr->getTypeInfo0()))));
   // Append geo expr SRID
   argument_list.insert(
       argument_list.end(),
       cgen_state_->llInt(static_cast<int>(geo_expr->getTypeInfo0().get_output_srid())));
 
   // Deal with unary geo predicates
-  if (geo_expr->getOp() == Geo_namespace::GeoBase::GeoOp::kISEMPTY ||
-      geo_expr->getOp() == Geo_namespace::GeoBase::GeoOp::kISVALID) {
+  if (geo_expr->getOp() == Geospatial::GeoBase::GeoOp::kISEMPTY ||
+      geo_expr->getOp() == Geospatial::GeoBase::GeoOp::kISVALID) {
     return codegenGeosPredicateCall(func, argument_list, co);
   }
 
@@ -115,7 +115,7 @@ std::vector<llvm::Value*> CodeGenerator::codegenGeoBinOper(
   argument_list.insert(
       argument_list.end(),
       cgen_state_->llInt(static_cast<int>(
-          geospatial::get_compression_scheme(geo_expr->getTypeInfo0()))));
+          Geospatial::get_compression_scheme(geo_expr->getTypeInfo0()))));
   // Append geo expr SRID
   argument_list.insert(
       argument_list.end(),
@@ -123,9 +123,9 @@ std::vector<llvm::Value*> CodeGenerator::codegenGeoBinOper(
 
   auto arg1_list = codegenGeoArgs(geo_expr->getArgs1(), co);
 
-  if (geo_expr->getOp() == Geo_namespace::GeoBase::GeoOp::kDIFFERENCE ||
-      geo_expr->getOp() == Geo_namespace::GeoBase::GeoOp::kINTERSECTION ||
-      geo_expr->getOp() == Geo_namespace::GeoBase::GeoOp::kUNION) {
+  if (geo_expr->getOp() == Geospatial::GeoBase::GeoOp::kDIFFERENCE ||
+      geo_expr->getOp() == Geospatial::GeoBase::GeoOp::kINTERSECTION ||
+      geo_expr->getOp() == Geospatial::GeoBase::GeoOp::kUNION) {
     func += "_Wkb"s;
     if (geo_expr->getTypeInfo1().get_output_srid() !=
         geo_expr->get_type_info().get_output_srid()) {
@@ -144,11 +144,11 @@ std::vector<llvm::Value*> CodeGenerator::codegenGeoBinOper(
     // Append geo expr compression
     arg1_list.insert(arg1_list.end(),
                      cgen_state_->llInt(static_cast<int>(
-                         geospatial::get_compression_scheme(geo_expr->getTypeInfo1()))));
+                         Geospatial::get_compression_scheme(geo_expr->getTypeInfo1()))));
     // Append geo expr compression
     arg1_list.insert(arg1_list.end(),
                      cgen_state_->llInt(geo_expr->getTypeInfo1().get_output_srid()));
-  } else if (geo_expr->getOp() == Geo_namespace::GeoBase::GeoOp::kBUFFER) {
+  } else if (geo_expr->getOp() == Geospatial::GeoBase::GeoOp::kBUFFER) {
     // Extra argument in this case is double
     func += "_double"s;
   } else {

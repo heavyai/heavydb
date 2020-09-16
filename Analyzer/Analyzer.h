@@ -24,8 +24,6 @@
 #ifndef ANALYZER_H
 #define ANALYZER_H
 
-#include "../Logger/Logger.h"
-
 #include <cstdint>
 #include <iostream>
 #include <list>
@@ -35,9 +33,10 @@
 #include <utility>
 #include <vector>
 
-#include "../Shared/geo_types.h"
-#include "../Shared/sqldefs.h"
-#include "../Shared/sqltypes.h"
+#include "Geospatial/Types.h"
+#include "Logger/Logger.h"
+#include "Shared/sqldefs.h"
+#include "Shared/sqltypes.h"
 
 namespace Analyzer {
 class Expr;
@@ -1507,7 +1506,7 @@ class ArrayExpr : public Expr {
  */
 class GeoUOper : public Expr {
  public:
-  GeoUOper(const Geo_namespace::GeoBase::GeoOp op,
+  GeoUOper(const Geospatial::GeoBase::GeoOp op,
            const SQLTypeInfo& ti,
            const SQLTypeInfo& ti0,
            const std::vector<std::shared_ptr<Analyzer::Expr>>& args)
@@ -1518,12 +1517,12 @@ class GeoUOper : public Expr {
   bool operator==(const Expr& rhs) const override;
   std::string toString() const override;
 
-  Geo_namespace::GeoBase::GeoOp getOp() const { return op_; }
+  Geospatial::GeoBase::GeoOp getOp() const { return op_; }
   const SQLTypeInfo getTypeInfo0() const { return ti0_; }
   const std::vector<std::shared_ptr<Analyzer::Expr>>& getArgs0() const { return args0_; }
 
  private:
-  const Geo_namespace::GeoBase::GeoOp op_;
+  const Geospatial::GeoBase::GeoOp op_;
   SQLTypeInfo ti0_;  // Type of geo input 0 (or geo output)
   const std::vector<std::shared_ptr<Analyzer::Expr>> args0_;
 };
@@ -1534,7 +1533,7 @@ class GeoUOper : public Expr {
  */
 class GeoBinOper : public Expr {
  public:
-  GeoBinOper(const Geo_namespace::GeoBase::GeoOp op,
+  GeoBinOper(const Geospatial::GeoBase::GeoOp op,
              const SQLTypeInfo& ti,
              const SQLTypeInfo& ti0,
              const SQLTypeInfo& ti1,
@@ -1547,14 +1546,14 @@ class GeoBinOper : public Expr {
   bool operator==(const Expr& rhs) const override;
   std::string toString() const override;
 
-  Geo_namespace::GeoBase::GeoOp getOp() const { return op_; }
+  Geospatial::GeoBase::GeoOp getOp() const { return op_; }
   const SQLTypeInfo getTypeInfo0() const { return ti0_; }
   const SQLTypeInfo getTypeInfo1() const { return ti1_; }
   const std::vector<std::shared_ptr<Analyzer::Expr>>& getArgs0() const { return args0_; }
   const std::vector<std::shared_ptr<Analyzer::Expr>>& getArgs1() const { return args1_; }
 
  private:
-  const Geo_namespace::GeoBase::GeoOp op_;
+  const Geospatial::GeoBase::GeoOp op_;
   SQLTypeInfo ti0_;  // Type of geo input 0 (or geo output)
   SQLTypeInfo ti1_;  // Type of geo input 1
   const std::vector<std::shared_ptr<Analyzer::Expr>> args0_;

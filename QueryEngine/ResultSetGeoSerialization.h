@@ -24,15 +24,15 @@
 #ifndef QUERYENGINE_RESULTSET_GEOSERIALIZATION_H
 #define QUERYENGINE_RESULTSET_GEOSERIALIZATION_H
 
+#include "Geospatial/Compression.h"
+#include "Geospatial/Types.h"
 #include "QueryEngine/ResultSet.h"
 #include "QueryEngine/TargetValue.h"
-#include "Shared/geo_compression.h"
-#include "Shared/geo_types.h"
 #include "Shared/sqltypes.h"
 
 using VarlenDatumPtr = std::unique_ptr<VarlenDatum>;
 
-using namespace geospatial;
+using namespace Geospatial;
 
 template <SQLTypes GEO_SOURCE_TYPE>
 struct GeoTargetValueSerializer {
@@ -96,7 +96,7 @@ struct GeoWktSerializer<kPOINT> {
     if (!geo_ti.get_notnull() && vals[0]->is_null) {
       return NullableString("NULL");
     }
-    Geo_namespace::GeoPoint point(*decompress_coords<double, SQLTypeInfo>(
+    Geospatial::GeoPoint point(*decompress_coords<double, SQLTypeInfo>(
         geo_ti, vals[0]->pointer, vals[0]->length));
     return NullableString(point.getWktString());
   }
@@ -137,7 +137,7 @@ struct GeoWktSerializer<kLINESTRING> {
       // May need to generate "LINESTRING EMPTY" instead of NULL
       return NullableString("NULL");
     }
-    Geo_namespace::GeoLineString linestring(*decompress_coords<double, SQLTypeInfo>(
+    Geospatial::GeoLineString linestring(*decompress_coords<double, SQLTypeInfo>(
         geo_ti, vals[0]->pointer, vals[0]->length));
     return NullableString(linestring.getWktString());
   }
@@ -183,9 +183,9 @@ struct GeoWktSerializer<kPOLYGON> {
     }
     std::vector<int32_t> ring_sizes_vec;
     unpack_geo_vector(ring_sizes_vec, vals[1]->pointer, vals[1]->length);
-    Geo_namespace::GeoPolygon poly(*decompress_coords<double, SQLTypeInfo>(
-                                       geo_ti, vals[0]->pointer, vals[0]->length),
-                                   ring_sizes_vec);
+    Geospatial::GeoPolygon poly(*decompress_coords<double, SQLTypeInfo>(
+                                    geo_ti, vals[0]->pointer, vals[0]->length),
+                                ring_sizes_vec);
     return NullableString(poly.getWktString());
   };
 };
@@ -237,10 +237,10 @@ struct GeoWktSerializer<kMULTIPOLYGON> {
     unpack_geo_vector(ring_sizes_vec, vals[1]->pointer, vals[1]->length);
     std::vector<int32_t> poly_rings_vec;
     unpack_geo_vector(poly_rings_vec, vals[2]->pointer, vals[2]->length);
-    Geo_namespace::GeoMultiPolygon mpoly(*decompress_coords<double, SQLTypeInfo>(
-                                             geo_ti, vals[0]->pointer, vals[0]->length),
-                                         ring_sizes_vec,
-                                         poly_rings_vec);
+    Geospatial::GeoMultiPolygon mpoly(*decompress_coords<double, SQLTypeInfo>(
+                                          geo_ti, vals[0]->pointer, vals[0]->length),
+                                      ring_sizes_vec,
+                                      poly_rings_vec);
     return NullableString(mpoly.getWktString());
   }
 };
