@@ -19,6 +19,7 @@
 
 #include <cstdint>
 #include <deque>
+#include <iterator>
 #include <list>
 #include <set>
 #include <unordered_set>
