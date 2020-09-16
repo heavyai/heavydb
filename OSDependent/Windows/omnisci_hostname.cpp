@@ -16,8 +16,17 @@
 
 #include "OSDependent/omnisci_hostname.h"
 
+#include <windows.h>
+
 namespace omnisci {
 std::string get_hostname() {
-  return {};
+  static constexpr DWORD kSize = MAX_COMPUTERNAME_LENGTH + 1;
+  DWORD buffer_size = kSize;
+  char hostname[MAX_COMPUTERNAME_LENGTH + 1];
+  if (GetComputerNameA(hostname, &buffer_size)) {
+    return {hostname};
+  } else {
+    return {};
+  }
 }
 }  // namespace omnisci
