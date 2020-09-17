@@ -124,9 +124,6 @@ bool remove_unquoted_newlines_linefeeds_and_tabs_from_sql_string(
 std::string get_quoted_string(const std::string& filename,
                               char quote = '"',
                               char escape = '\\');
-
-//! Throw exception if security problems found in a filename.
-void filename_security_check(const std::string& filename);
 #endif  // __CUDACC__
 
 #ifndef __CUDACC__

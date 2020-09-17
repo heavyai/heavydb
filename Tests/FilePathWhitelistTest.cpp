@@ -484,18 +484,29 @@ INSTANTIATE_TEST_SUITE_P(
 TEST_F(FilePathWhitelistTest, ThrowOnPunctuation) {
   executeLambdaAndAssertException(
       [&] {
-        validate_allowed_file_path("name with spaces",
-                                   ddl_utils::DataTransferType::IMPORT);
-      },
-      "Whitespace is not allowed in file path: name with spaces");
-}
-
-TEST_F(FilePathWhitelistTest, ThrowOnSpace) {
-  executeLambdaAndAssertException(
-      [&] {
         validate_allowed_file_path("name_with_&", ddl_utils::DataTransferType::IMPORT);
       },
       "Punctuation \"&\" is not allowed in file path: name_with_&");
+  executeLambdaAndAssertException(
+      [&] {
+        validate_allowed_file_path("name_with_;", ddl_utils::DataTransferType::IMPORT);
+      },
+      "Punctuation \";\" is not allowed in file path: name_with_;");
+  executeLambdaAndAssertException(
+      [&] {
+        validate_allowed_file_path("name_with_\\", ddl_utils::DataTransferType::IMPORT);
+      },
+      "Punctuation \"\\\" is not allowed in file path: name_with_\\");
+  executeLambdaAndAssertException(
+      [&] {
+        validate_allowed_file_path("name_with_$", ddl_utils::DataTransferType::IMPORT);
+      },
+      "Punctuation \"$\" is not allowed in file path: name_with_$");
+  executeLambdaAndAssertException(
+      [&] {
+        validate_allowed_file_path("name_with_!", ddl_utils::DataTransferType::IMPORT);
+      },
+      "Punctuation \"!\" is not allowed in file path: name_with_!");
 }
 
 TEST_F(FilePathWhitelistTest, ThrowOnAsterisk) {
