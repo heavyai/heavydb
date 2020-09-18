@@ -1,7 +1,13 @@
 #include "../Shared/funcannotations.h"
 #ifndef __CUDACC__
 #include <cstdint>
+
+#ifdef _MSC_VER
+#include <corecrt_math_defines.h>
 #endif
+
+#endif
+
 #include <cmath>
 #include <cstdlib>
 
