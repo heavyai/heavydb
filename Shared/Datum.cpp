@@ -244,11 +244,11 @@ std::string DatumToString(Datum d, const SQLTypeInfo& ti) {
       return "f";
     case kNUMERIC:
     case kDECIMAL: {
-      // we need to consider buf_size including the scale and null terminator
-      char str[ti.get_dimension() + ti.get_scale() + 2];
       double v = (double)d.bigintval / pow(10, ti.get_scale());
-      sprintf(str, "%*.*f", ti.get_dimension(), ti.get_scale(), v);
-      return std::string(str);
+      int size = snprintf(buf, buf_size, "%*.*f", ti.get_dimension(), ti.get_scale(), v);
+      CHECK_LE(0, size) << v << ' ' << ti.to_string();
+      CHECK_LT(size_t(size), buf_size) << v << ' ' << ti.to_string();
+      return buf;
     }
     case kINT:
       return std::to_string(d.intval);
