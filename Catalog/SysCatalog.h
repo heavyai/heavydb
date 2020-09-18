@@ -42,7 +42,6 @@
 #include <vector>
 
 #include "Grantee.h"
-#include "LdapServer.h"
 #include "ObjectRoleDescriptor.h"
 #include "PkiServer.h"
 
@@ -390,7 +389,6 @@ class SysCatalog : private CommonFileOperations {
   std::unique_ptr<SqliteConnector> sqliteConnector_;
 
   std::shared_ptr<Data_Namespace::DataMgr> dataMgr_;
-  std::unique_ptr<LdapServer> ldap_server_;
   std::unique_ptr<PkiServer> pki_server_;
   const AuthMetadata* authMetadata_;
   std::shared_ptr<Calcite> calciteMgr_;
