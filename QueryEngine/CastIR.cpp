@@ -338,10 +338,10 @@ void CodeGenerator::codegenCastBetweenIntTypesOverflowChecks(
       cgen_state_->inlineIntMaxMin(ti.get_logical_size(), true);
 
   cgen_state_->needs_error_check_ = true;
-  auto cast_ok =
-      llvm::BasicBlock::Create(cgen_state_->context_, "cast_ok", cgen_state_->row_func_);
+  auto cast_ok = llvm::BasicBlock::Create(
+      cgen_state_->context_, "cast_ok", cgen_state_->current_func_);
   auto cast_fail = llvm::BasicBlock::Create(
-      cgen_state_->context_, "cast_fail", cgen_state_->row_func_);
+      cgen_state_->context_, "cast_fail", cgen_state_->current_func_);
   auto operand_max = static_cast<llvm::ConstantInt*>(chosen_max)->getSExtValue() / scale;
   auto operand_min = static_cast<llvm::ConstantInt*>(chosen_min)->getSExtValue() / scale;
   const auto ti_llvm_type =

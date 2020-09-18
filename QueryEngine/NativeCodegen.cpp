@@ -302,6 +302,9 @@ std::shared_ptr<CompilationContext> Executor::optimizeAndCodegenCPU(
   auto module = multifrag_query_func->getParent();
   CodeCacheKey key{serialize_llvm_object(query_func),
                    serialize_llvm_object(cgen_state_->row_func_)};
+  if (cgen_state_->filter_func_) {
+    key.push_back(serialize_llvm_object(cgen_state_->filter_func_));
+  }
   for (const auto helper : cgen_state_->helper_functions_) {
     key.push_back(serialize_llvm_object(helper));
   }
@@ -795,6 +798,9 @@ std::shared_ptr<GpuCompilationContext> CodeGenerator::generateNativeGPUCode(
     clear_function_attributes(gpu_target.cgen_state->row_func_);
     roots.insert(gpu_target.cgen_state->row_func_);
   }
+  if (gpu_target.cgen_state->filter_func_) {
+    roots.insert(gpu_target.cgen_state->filter_func_);
+  }
 
   // prevent helper functions from being removed
   for (auto f : gpu_target.cgen_state->helper_functions_) {
@@ -901,7 +907,9 @@ std::shared_ptr<CompilationContext> Executor::optimizeAndCodegenGPU(
   CHECK(cuda_mgr);
   CodeCacheKey key{serialize_llvm_object(query_func),
                    serialize_llvm_object(cgen_state_->row_func_)};
-
+  if (cgen_state_->filter_func_) {
+    key.push_back(serialize_llvm_object(cgen_state_->filter_func_));
+  }
   for (const auto helper : cgen_state_->helper_functions_) {
     key.push_back(serialize_llvm_object(helper));
   }
@@ -1157,13 +1165,11 @@ void set_row_func_argnames(llvm::Function* row_func,
   arg_it->setName("join_hash_tables");
 }
 
-std::pair<llvm::Function*, std::vector<llvm::Value*>> create_row_function(
-    const size_t in_col_count,
-    const size_t agg_col_count,
-    const bool hoist_literals,
-    llvm::Function* query_func,
-    llvm::Module* module,
-    llvm::LLVMContext& context) {
+llvm::Function* create_row_function(const size_t in_col_count,
+                                    const size_t agg_col_count,
+                                    const bool hoist_literals,
+                                    llvm::Module* module,
+                                    llvm::LLVMContext& context) {
   std::vector<llvm::Type*> row_process_arg_types;
 
   if (agg_col_count) {
@@ -1201,15 +1207,6 @@ std::pair<llvm::Function*, std::vector<llvm::Value*>> create_row_function(
     row_process_arg_types.push_back(llvm::Type::getInt8PtrTy(context));
   }
 
-  // Generate the function signature and column head fetches s.t.
-  // double indirection isn't needed in the inner loop
-  auto& fetch_bb = query_func->front();
-  llvm::IRBuilder<> fetch_ir_builder(&fetch_bb);
-  fetch_ir_builder.SetInsertPoint(&*fetch_bb.begin());
-  auto col_heads = generate_column_heads_load(
-      in_col_count, query_func->args().begin(), fetch_ir_builder, context);
-  CHECK_EQ(in_col_count, col_heads.size());
-
   // column buffer arguments
   for (size_t i = 0; i < in_col_count; ++i) {
     row_process_arg_types.emplace_back(llvm::Type::getInt8PtrTy(context));
@@ -1228,7 +1225,7 @@ std::pair<llvm::Function*, std::vector<llvm::Value*>> create_row_function(
   // set the row function argument names; for debugging purposes only
   set_row_func_argnames(row_func, in_col_count, agg_col_count, hoist_literals);
 
-  return std::make_pair(row_func, col_heads);
+  return row_func;
 }
 
 void bind_query(llvm::Function* query_func,
@@ -1525,8 +1522,8 @@ void Executor::createErrorCheckControlFlow(llvm::Function* query_func,
       if (!llvm::isa<llvm::CallInst>(*inst_it)) {
         continue;
       }
-      auto& filter_call = llvm::cast<llvm::CallInst>(*inst_it);
-      if (std::string(filter_call.getCalledFunction()->getName()) == "row_process") {
+      auto& row_func_call = llvm::cast<llvm::CallInst>(*inst_it);
+      if (std::string(row_func_call.getCalledFunction()->getName()) == "row_process") {
         auto next_inst_it = inst_it;
         ++next_inst_it;
         auto new_bb = bb_it->splitBasicBlock(next_inst_it);
@@ -1709,36 +1706,84 @@ std::vector<llvm::Value*> Executor::inlineHoistedLiterals() {
                              "row_func_hoisted_literals",
                              cgen_state_->row_func_->getParent());
 
-  // make sure it's in-lined, we don't want register spills in the inner loop
-  mark_function_always_inline(row_func_with_hoisted_literals);
-
-  auto arg_it = row_func_with_hoisted_literals->arg_begin();
+  auto row_func_arg_it = row_func_with_hoisted_literals->arg_begin();
   for (llvm::Function::arg_iterator I = cgen_state_->row_func_->arg_begin(),
                                     E = cgen_state_->row_func_->arg_end();
        I != E;
        ++I) {
     if (I->hasName()) {
-      arg_it->setName(I->getName());
+      row_func_arg_it->setName(I->getName());
     }
-    ++arg_it;
+    ++row_func_arg_it;
+  }
+
+  decltype(row_func_with_hoisted_literals) filter_func_with_hoisted_literals{nullptr};
+  decltype(row_func_arg_it) filter_func_arg_it{nullptr};
+  if (cgen_state_->filter_func_) {
+    // filter_func_ is using literals whose defs have been hoisted up to the row_func_,
+    // extend filter_func_ signature to include extra args to pass these literal values.
+    std::vector<llvm::Type*> filter_func_arg_types;
+
+    for (llvm::Function::arg_iterator I = cgen_state_->filter_func_->arg_begin(),
+                                      E = cgen_state_->filter_func_->arg_end();
+         I != E;
+         ++I) {
+      filter_func_arg_types.push_back(I->getType());
+    }
+
+    for (auto& element : cgen_state_->query_func_literal_loads_) {
+      for (auto value : element.second) {
+        filter_func_arg_types.push_back(value->getType());
+      }
+    }
+
+    auto ft2 = llvm::FunctionType::get(
+        get_int_type(32, cgen_state_->context_), filter_func_arg_types, false);
+    filter_func_with_hoisted_literals =
+        llvm::Function::Create(ft2,
+                               llvm::Function::ExternalLinkage,
+                               "filter_func_hoisted_literals",
+                               cgen_state_->filter_func_->getParent());
+
+    filter_func_arg_it = filter_func_with_hoisted_literals->arg_begin();
+    for (llvm::Function::arg_iterator I = cgen_state_->filter_func_->arg_begin(),
+                                      E = cgen_state_->filter_func_->arg_end();
+         I != E;
+         ++I) {
+      if (I->hasName()) {
+        filter_func_arg_it->setName(I->getName());
+      }
+      ++filter_func_arg_it;
+    }
   }
 
   std::unordered_map<int, std::vector<llvm::Value*>>
-      query_func_literal_loads_function_arguments;
+      query_func_literal_loads_function_arguments,
+      query_func_literal_loads_function_arguments2;
 
   for (auto& element : cgen_state_->query_func_literal_loads_) {
-    std::vector<llvm::Value*> argument_values;
+    std::vector<llvm::Value*> argument_values, argument_values2;
 
     for (auto value : element.second) {
       hoisted_literals.push_back(value);
-      argument_values.push_back(&*arg_it);
-      if (value->hasName()) {
-        arg_it->setName("arg_" + value->getName());
+      argument_values.push_back(&*row_func_arg_it);
+      if (cgen_state_->filter_func_) {
+        argument_values2.push_back(&*filter_func_arg_it);
+        cgen_state_->filter_func_args_[&*row_func_arg_it] = &*filter_func_arg_it;
       }
-      ++arg_it;
+      if (value->hasName()) {
+        row_func_arg_it->setName("arg_" + value->getName());
+        if (cgen_state_->filter_func_) {
+          filter_func_arg_it->getContext();
+          filter_func_arg_it->setName("arg_" + value->getName());
+        }
+      }
+      ++row_func_arg_it;
+      ++filter_func_arg_it;
     }
 
     query_func_literal_loads_function_arguments[element.first] = argument_values;
+    query_func_literal_loads_function_arguments2[element.first] = argument_values2;
   }
 
   // copy the row_func function body over
@@ -1756,6 +1801,7 @@ std::vector<llvm::Value*> Executor::inlineHoistedLiterals() {
        ++I) {
     I->replaceAllUsesWith(&*I2);
     I2->takeName(&*I);
+    cgen_state_->filter_func_args_.replace(&*I, &*I2);
     ++I2;
   }
 
@@ -1783,6 +1829,53 @@ std::vector<llvm::Value*> Executor::inlineHoistedLiterals() {
   }
   for (auto placeholder : placeholders) {
     placeholder->removeFromParent();
+  }
+
+  if (cgen_state_->filter_func_) {
+    // copy the filter_func function body over
+    // see
+    // https://stackoverflow.com/questions/12864106/move-function-body-avoiding-full-cloning/18751365
+    filter_func_with_hoisted_literals->getBasicBlockList().splice(
+        filter_func_with_hoisted_literals->begin(),
+        cgen_state_->filter_func_->getBasicBlockList());
+
+    // also replace filter_func arguments with the arguments from
+    // filter_func_hoisted_literals
+    for (llvm::Function::arg_iterator I = cgen_state_->filter_func_->arg_begin(),
+                                      E = cgen_state_->filter_func_->arg_end(),
+                                      I2 = filter_func_with_hoisted_literals->arg_begin();
+         I != E;
+         ++I) {
+      I->replaceAllUsesWith(&*I2);
+      I2->takeName(&*I);
+      ++I2;
+    }
+
+    cgen_state_->filter_func_ = filter_func_with_hoisted_literals;
+
+    // and finally replace  literal placeholders
+    std::vector<llvm::Instruction*> placeholders;
+    std::string prefix("__placeholder__literal_");
+    for (auto it = llvm::inst_begin(filter_func_with_hoisted_literals),
+              e = llvm::inst_end(filter_func_with_hoisted_literals);
+         it != e;
+         ++it) {
+      if (it->hasName() && it->getName().startswith(prefix)) {
+        auto offset_and_index_entry = cgen_state_->row_func_hoisted_literals_.find(
+            llvm::dyn_cast<llvm::Value>(&*it));
+        CHECK(offset_and_index_entry != cgen_state_->row_func_hoisted_literals_.end());
+
+        int lit_off = offset_and_index_entry->second.offset_in_literal_buffer;
+        int lit_idx = offset_and_index_entry->second.index_of_literal_load;
+
+        it->replaceAllUsesWith(
+            query_func_literal_loads_function_arguments2[lit_off][lit_idx]);
+        placeholders.push_back(&*it);
+      }
+    }
+    for (auto placeholder : placeholders) {
+      placeholder->removeFromParent();
+    }
   }
 
   return hoisted_literals;
@@ -1932,6 +2025,21 @@ std::string serialize_llvm_metadata_footnotes(llvm::Function* query_func,
       instr_it->getAllMetadata(imd);
       for (auto [kind, node] : imd) {
         md.insert(node);
+      }
+    }
+  }
+
+  // Loop over all instructions in the filter function.
+  if (cgen_state->filter_func_) {
+    for (auto bb_it = cgen_state->filter_func_->begin();
+         bb_it != cgen_state->filter_func_->end();
+         ++bb_it) {
+      for (auto instr_it = bb_it->begin(); instr_it != bb_it->end(); ++instr_it) {
+        llvm::SmallVector<std::pair<unsigned, llvm::MDNode*>, 100> imd;
+        instr_it->getAllMetadata(imd);
+        for (auto [kind, node] : imd) {
+          md.insert(node);
+        }
       }
     }
   }
@@ -2102,54 +2210,78 @@ Executor::compileWorkUnit(const std::vector<InputTableInfo>& query_infos,
   const auto agg_slot_count = ra_exe_unit.estimator ? size_t(1) : agg_fnames.size();
 
   const bool is_group_by{query_mem_desc->isGroupBy()};
-  auto query_func = is_group_by ? query_group_by_template(cgen_state_->module_,
+  auto [query_func, row_func_call] = is_group_by
+                                         ? query_group_by_template(cgen_state_->module_,
+                                                                   co.hoist_literals,
+                                                                   *query_mem_desc,
+                                                                   co.device_type,
+                                                                   ra_exe_unit.scan_limit,
+                                                                   gpu_smem_context)
+                                         : query_template(cgen_state_->module_,
+                                                          agg_slot_count,
                                                           co.hoist_literals,
-                                                          *query_mem_desc,
-                                                          co.device_type,
-                                                          ra_exe_unit.scan_limit,
-                                                          gpu_smem_context)
-                                : query_template(cgen_state_->module_,
-                                                 agg_slot_count,
-                                                 co.hoist_literals,
-                                                 !!ra_exe_unit.estimator,
-                                                 gpu_smem_context);
+                                                          !!ra_exe_unit.estimator,
+                                                          gpu_smem_context);
   bind_pos_placeholders("pos_start", true, query_func, cgen_state_->module_);
   bind_pos_placeholders("group_buff_idx", false, query_func, cgen_state_->module_);
   bind_pos_placeholders("pos_step", false, query_func, cgen_state_->module_);
 
   cgen_state_->query_func_ = query_func;
+  cgen_state_->row_func_call_ = row_func_call;
   cgen_state_->query_func_entry_ir_builder_.SetInsertPoint(
       &query_func->getEntryBlock().front());
 
-  std::vector<llvm::Value*> col_heads;
-  std::tie(cgen_state_->row_func_, col_heads) =
-      create_row_function(ra_exe_unit.input_col_descs.size(),
-                          is_group_by ? 0 : agg_slot_count,
-                          co.hoist_literals,
-                          query_func,
-                          cgen_state_->module_,
-                          cgen_state_->context_);
+  // Generate the function signature and column head fetches s.t.
+  // double indirection isn't needed in the inner loop
+  auto& fetch_bb = query_func->front();
+  llvm::IRBuilder<> fetch_ir_builder(&fetch_bb);
+  fetch_ir_builder.SetInsertPoint(&*fetch_bb.begin());
+  auto col_heads = generate_column_heads_load(ra_exe_unit.input_col_descs.size(),
+                                              query_func->args().begin(),
+                                              fetch_ir_builder,
+                                              cgen_state_->context_);
+  CHECK_EQ(ra_exe_unit.input_col_descs.size(), col_heads.size());
+
+  cgen_state_->row_func_ = create_row_function(ra_exe_unit.input_col_descs.size(),
+                                               is_group_by ? 0 : agg_slot_count,
+                                               co.hoist_literals,
+                                               cgen_state_->module_,
+                                               cgen_state_->context_);
   CHECK(cgen_state_->row_func_);
-  // make sure it's in-lined, we don't want register spills in the inner loop
-  mark_function_always_inline(cgen_state_->row_func_);
-  auto bb =
+  cgen_state_->row_func_bb_ =
       llvm::BasicBlock::Create(cgen_state_->context_, "entry", cgen_state_->row_func_);
-  cgen_state_->ir_builder_.SetInsertPoint(bb);
+
+  if (g_enable_filter_function) {
+    auto filter_func_ft =
+        llvm::FunctionType::get(get_int_type(32, cgen_state_->context_), {}, false);
+    cgen_state_->filter_func_ = llvm::Function::Create(filter_func_ft,
+                                                       llvm::Function::ExternalLinkage,
+                                                       "filter_func",
+                                                       cgen_state_->module_);
+    CHECK(cgen_state_->filter_func_);
+    cgen_state_->filter_func_bb_ = llvm::BasicBlock::Create(
+        cgen_state_->context_, "entry", cgen_state_->filter_func_);
+  }
+
+  cgen_state_->current_func_ = cgen_state_->row_func_;
+  cgen_state_->ir_builder_.SetInsertPoint(cgen_state_->row_func_bb_);
+
   preloadFragOffsets(ra_exe_unit.input_descs, query_infos);
   RelAlgExecutionUnit body_execution_unit = ra_exe_unit;
   const auto join_loops =
       buildJoinLoops(body_execution_unit, co, eo, query_infos, column_cache);
+
   plan_state_->allocateLocalColumnIds(ra_exe_unit.input_col_descs);
   const auto is_not_deleted_bb = codegenSkipDeletedOuterTableRow(ra_exe_unit, co);
   if (is_not_deleted_bb) {
-    bb = is_not_deleted_bb;
+    cgen_state_->row_func_bb_ = is_not_deleted_bb;
   }
   if (!join_loops.empty()) {
     codegenJoinLoops(join_loops,
                      body_execution_unit,
                      group_by_and_aggregate,
                      query_func,
-                     bb,
+                     cgen_state_->row_func_bb_,
                      *(query_mem_desc.get()),
                      co,
                      eo);
@@ -2177,30 +2309,35 @@ Executor::compileWorkUnit(const std::vector<InputTableInfo>& query_infos,
     // we have some hoisted literals...
     hoisted_literals = inlineHoistedLiterals();
   }
-  // iterate through all the instruction in the query template function and
-  // replace the call to the filter placeholder with the call to the actual filter
-  for (auto it = llvm::inst_begin(query_func), e = llvm::inst_end(query_func); it != e;
-       ++it) {
-    if (!llvm::isa<llvm::CallInst>(*it)) {
-      continue;
-    }
-    auto& filter_call = llvm::cast<llvm::CallInst>(*it);
-    if (std::string(filter_call.getCalledFunction()->getName()) == "row_process") {
-      std::vector<llvm::Value*> args;
-      for (size_t i = 0; i < filter_call.getNumArgOperands(); ++i) {
-        args.push_back(filter_call.getArgOperand(i));
-      }
-      args.insert(args.end(), col_heads.begin(), col_heads.end());
-      args.push_back(get_arg_by_name(query_func, "join_hash_tables"));
-      // push hoisted literals arguments, if any
-      args.insert(args.end(), hoisted_literals.begin(), hoisted_literals.end());
 
-      llvm::ReplaceInstWithInst(&filter_call,
-                                llvm::CallInst::Create(cgen_state_->row_func_, args, ""));
-      break;
+  // replace the row func placeholder call with the call to the actual row func
+  std::vector<llvm::Value*> row_func_args;
+  for (size_t i = 0; i < cgen_state_->row_func_call_->getNumArgOperands(); ++i) {
+    row_func_args.push_back(cgen_state_->row_func_call_->getArgOperand(i));
+  }
+  row_func_args.insert(row_func_args.end(), col_heads.begin(), col_heads.end());
+  row_func_args.push_back(get_arg_by_name(query_func, "join_hash_tables"));
+  // push hoisted literals arguments, if any
+  row_func_args.insert(
+      row_func_args.end(), hoisted_literals.begin(), hoisted_literals.end());
+  llvm::ReplaceInstWithInst(
+      cgen_state_->row_func_call_,
+      llvm::CallInst::Create(cgen_state_->row_func_, row_func_args, ""));
+
+  // replace the filter func placeholder call with the call to the actual filter func
+  if (cgen_state_->filter_func_) {
+    std::vector<llvm::Value*> filter_func_args;
+    for (auto arg_it = cgen_state_->filter_func_args_.begin();
+         arg_it != cgen_state_->filter_func_args_.end();
+         ++arg_it) {
+      filter_func_args.push_back(arg_it->first);
     }
+    llvm::ReplaceInstWithInst(
+        cgen_state_->filter_func_call_,
+        llvm::CallInst::Create(cgen_state_->filter_func_, filter_func_args, ""));
   }
 
+  // Aggregate
   plan_state_->init_agg_vals_ =
       init_agg_val_vec(ra_exe_unit.target_exprs, ra_exe_unit.quals, *query_mem_desc);
 
@@ -2239,10 +2376,21 @@ Executor::compileWorkUnit(const std::vector<InputTableInfo>& query_infos,
              multifrag_query_func,
              cgen_state_->module_);
 
-  auto live_funcs =
-      CodeGenerator::markDeadRuntimeFuncs(*cgen_state_->module_,
-                                          {query_func, cgen_state_->row_func_},
-                                          {multifrag_query_func});
+  std::vector<llvm::Function*> root_funcs{query_func, cgen_state_->row_func_};
+  if (cgen_state_->filter_func_) {
+    root_funcs.push_back(cgen_state_->filter_func_);
+  }
+  auto live_funcs = CodeGenerator::markDeadRuntimeFuncs(
+      *cgen_state_->module_, root_funcs, {multifrag_query_func});
+
+  // Always inline the row function and the filter function.
+  // We don't want register spills in the inner loops.
+  // LLVM seems to correctly free up alloca instructions
+  // in these functions even when they are inlined.
+  mark_function_always_inline(cgen_state_->row_func_);
+  if (cgen_state_->filter_func_) {
+    mark_function_always_inline(cgen_state_->filter_func_);
+  }
 
 #ifndef NDEBUG
   // Add helpful metadata to the LLVM IR for debugging.
@@ -2264,7 +2412,10 @@ Executor::compileWorkUnit(const std::vector<InputTableInfo>& query_infos,
 #endif  // WITH_JIT_DEBUG
     }
     llvm_ir =
-        serialize_llvm_object(query_func) + serialize_llvm_object(cgen_state_->row_func_);
+        serialize_llvm_object(query_func) +
+        serialize_llvm_object(cgen_state_->row_func_) +
+        (cgen_state_->filter_func_ ? serialize_llvm_object(cgen_state_->filter_func_)
+                                   : "");
 
 #ifndef NDEBUG
     llvm_ir += serialize_llvm_metadata_footnotes(query_func, cgen_state_.get());
@@ -2276,13 +2427,19 @@ Executor::compileWorkUnit(const std::vector<InputTableInfo>& query_infos,
           << (co.device_type == ExecutorDeviceType::CPU ? "CPU:\n" : "GPU:\n");
 #ifdef NDEBUG
   LOG(IR) << serialize_llvm_object(query_func)
-          << serialize_llvm_object(cgen_state_->row_func_) << "\nEnd of IR";
+          << serialize_llvm_object(cgen_state_->row_func_)
+          << (cgen_state_->filter_func_ ? serialize_llvm_object(cgen_state_->filter_func_)
+                                        : "")
+          << "\nEnd of IR";
 #else
   LOG(IR) << serialize_llvm_object(cgen_state_->module_) << "\nEnd of IR";
 #endif
 
   // Run some basic validation checks on the LLVM IR before code is generated below.
   verify_function_ir(cgen_state_->row_func_);
+  if (cgen_state_->filter_func_) {
+    verify_function_ir(cgen_state_->filter_func_);
+  }
 
   // Generate final native code from the LLVM IR.
   return std::make_tuple(
@@ -2346,6 +2503,29 @@ bool Executor::compileBody(const RelAlgExecutionUnit& ra_exe_unit,
                            const CompilationOptions& co,
                            const GpuSharedMemoryContext& gpu_smem_context) {
   AUTOMATIC_IR_METADATA(cgen_state_.get());
+
+  // Switch the code generation into a separate filter function if enabled.
+  // Note that accesses to function arguments are still codegenned from the
+  // row function's arguments, then later automatically forwarded and
+  // remapped into filter function arguments by redeclareFilterFunction().
+  cgen_state_->row_func_bb_ = cgen_state_->ir_builder_.GetInsertBlock();
+  llvm::Value* loop_done{nullptr};
+  std::unique_ptr<Executor::FetchCacheAnchor> fetch_cache_anchor;
+  if (cgen_state_->filter_func_) {
+    if (cgen_state_->row_func_bb_->getName() == "loop_body") {
+      auto row_func_entry_bb = &cgen_state_->row_func_->getEntryBlock();
+      cgen_state_->ir_builder_.SetInsertPoint(row_func_entry_bb,
+                                              row_func_entry_bb->begin());
+      loop_done = cgen_state_->ir_builder_.CreateAlloca(
+          get_int_type(1, cgen_state_->context_), nullptr, "loop_done");
+      cgen_state_->ir_builder_.SetInsertPoint(cgen_state_->row_func_bb_);
+      cgen_state_->ir_builder_.CreateStore(cgen_state_->llBool(true), loop_done);
+    }
+    cgen_state_->ir_builder_.SetInsertPoint(cgen_state_->filter_func_bb_);
+    cgen_state_->current_func_ = cgen_state_->filter_func_;
+    fetch_cache_anchor = std::make_unique<Executor::FetchCacheAnchor>(cgen_state_.get());
+  }
+
   // generate the code for the filter
   std::vector<Analyzer::Expr*> primary_quals;
   std::vector<Analyzer::Expr*> deferred_quals;
@@ -2367,9 +2547,9 @@ bool Executor::compileBody(const RelAlgExecutionUnit& ra_exe_unit,
   llvm::BasicBlock* sc_false{nullptr};
   if (!deferred_quals.empty()) {
     auto sc_true = llvm::BasicBlock::Create(
-        cgen_state_->context_, "sc_true", cgen_state_->row_func_);
+        cgen_state_->context_, "sc_true", cgen_state_->current_func_);
     sc_false = llvm::BasicBlock::Create(
-        cgen_state_->context_, "sc_false", cgen_state_->row_func_);
+        cgen_state_->context_, "sc_false", cgen_state_->current_func_);
     cgen_state_->ir_builder_.CreateCondBr(filter_lv, sc_true, sc_false);
     cgen_state_->ir_builder_.SetInsertPoint(sc_false);
     if (ra_exe_unit.join_quals.empty()) {
@@ -2384,8 +2564,40 @@ bool Executor::compileBody(const RelAlgExecutionUnit& ra_exe_unit,
   }
 
   CHECK(filter_lv->getType()->isIntegerTy(1));
-  return group_by_and_aggregate.codegen(
+  auto ret = group_by_and_aggregate.codegen(
       filter_lv, sc_false, query_mem_desc, co, gpu_smem_context);
+
+  // Switch the code generation back to the row function if a filter
+  // function was enabled.
+  if (cgen_state_->filter_func_) {
+    if (cgen_state_->row_func_bb_->getName() == "loop_body") {
+      cgen_state_->ir_builder_.CreateStore(cgen_state_->llBool(false), loop_done);
+      cgen_state_->ir_builder_.CreateRet(cgen_state_->llInt<int32_t>(0));
+    }
+
+    redeclareFilterFunction();
+
+    cgen_state_->ir_builder_.SetInsertPoint(cgen_state_->row_func_bb_);
+    cgen_state_->current_func_ = cgen_state_->row_func_;
+    cgen_state_->filter_func_call_ =
+        cgen_state_->ir_builder_.CreateCall(cgen_state_->filter_func_, {});
+
+    if (cgen_state_->row_func_bb_->getName() == "loop_body") {
+      auto loop_done_true = llvm::BasicBlock::Create(
+          cgen_state_->context_, "loop_done_true", cgen_state_->row_func_);
+      auto loop_done_false = llvm::BasicBlock::Create(
+          cgen_state_->context_, "loop_done_false", cgen_state_->row_func_);
+      auto loop_done_flag = cgen_state_->ir_builder_.CreateLoad(loop_done);
+      cgen_state_->ir_builder_.CreateCondBr(
+          loop_done_flag, loop_done_true, loop_done_false);
+      cgen_state_->ir_builder_.SetInsertPoint(loop_done_true);
+      cgen_state_->ir_builder_.CreateRet(cgen_state_->filter_func_call_);
+      cgen_state_->ir_builder_.SetInsertPoint(loop_done_false);
+    } else {
+      cgen_state_->ir_builder_.CreateRet(cgen_state_->filter_func_call_);
+    }
+  }
+  return ret;
 }
 
 std::unique_ptr<llvm::Module> runtime_module_shallow_copy(CgenState* cgen_state) {

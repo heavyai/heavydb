@@ -183,11 +183,12 @@ llvm::Function* row_process(llvm::Module* mod,
 }  // namespace
 
 template <class Attributes>
-llvm::Function* query_template_impl(llvm::Module* mod,
-                                    const size_t aggr_col_count,
-                                    const bool hoist_literals,
-                                    const bool is_estimate_query,
-                                    const GpuSharedMemoryContext& gpu_smem_context) {
+std::tuple<llvm::Function*, llvm::CallInst*> query_template_impl(
+    llvm::Module* mod,
+    const size_t aggr_col_count,
+    const bool hoist_literals,
+    const bool is_estimate_query,
+    const GpuSharedMemoryContext& gpu_smem_context) {
   using namespace llvm;
 
   auto func_pos_start = pos_start<Attributes>(mod);
@@ -512,11 +513,11 @@ llvm::Function* query_template_impl(llvm::Module* mod,
     LOG(FATAL) << "Generated invalid code. ";
   }
 
-  return query_func_ptr;
+  return {query_func_ptr, row_process};
 }
 
 template <class Attributes>
-llvm::Function* query_group_by_template_impl(
+std::tuple<llvm::Function*, llvm::CallInst*> query_group_by_template_impl(
     llvm::Module* mod,
     const bool hoist_literals,
     const QueryMemoryDescriptor& query_mem_desc,
@@ -821,24 +822,26 @@ llvm::Function* query_group_by_template_impl(
     LOG(FATAL) << "Generated invalid code. ";
   }
 
-  return query_func_ptr;
+  return {query_func_ptr, row_process};
 }
 
 #if LLVM_VERSION_MAJOR >= 6
-llvm::Function* query_template(llvm::Module* module,
-                               const size_t aggr_col_count,
-                               const bool hoist_literals,
-                               const bool is_estimate_query,
-                               const GpuSharedMemoryContext& gpu_smem_context) {
+std::tuple<llvm::Function*, llvm::CallInst*> query_template(
+    llvm::Module* module,
+    const size_t aggr_col_count,
+    const bool hoist_literals,
+    const bool is_estimate_query,
+    const GpuSharedMemoryContext& gpu_smem_context) {
   return query_template_impl<llvm::AttributeList>(
       module, aggr_col_count, hoist_literals, is_estimate_query, gpu_smem_context);
 }
-llvm::Function* query_group_by_template(llvm::Module* module,
-                                        const bool hoist_literals,
-                                        const QueryMemoryDescriptor& query_mem_desc,
-                                        const ExecutorDeviceType device_type,
-                                        const bool check_scan_limit,
-                                        const GpuSharedMemoryContext& gpu_smem_context) {
+std::tuple<llvm::Function*, llvm::CallInst*> query_group_by_template(
+    llvm::Module* module,
+    const bool hoist_literals,
+    const QueryMemoryDescriptor& query_mem_desc,
+    const ExecutorDeviceType device_type,
+    const bool check_scan_limit,
+    const GpuSharedMemoryContext& gpu_smem_context) {
   return query_group_by_template_impl<llvm::AttributeList>(module,
                                                            hoist_literals,
                                                            query_mem_desc,
@@ -847,20 +850,22 @@ llvm::Function* query_group_by_template(llvm::Module* module,
                                                            gpu_smem_context);
 }
 #else
-llvm::Function* query_template(llvm::Module* module,
-                               const size_t aggr_col_count,
-                               const bool hoist_literals,
-                               const bool is_estimate_query,
-                               const GpuSharedMemoryContext& gpu_smem_context) {
+std::tuple<llvm::Function*, llvm::CallInst*> query_template(
+    llvm::Module* module,
+    const size_t aggr_col_count,
+    const bool hoist_literals,
+    const bool is_estimate_query,
+    const GpuSharedMemoryContext& gpu_smem_context) {
   return query_template_impl<llvm::AttributeSet>(
       module, aggr_col_count, hoist_literals, is_estimate_query, gpu_smem_context);
 }
-llvm::Function* query_group_by_template(llvm::Module* module,
-                                        const bool hoist_literals,
-                                        const QueryMemoryDescriptor& query_mem_desc,
-                                        const ExecutorDeviceType device_type,
-                                        const bool check_scan_limit,
-                                        const GpuSharedMemoryContext& gpu_smem_context) {
+std::tuple<llvm::Function*, llvm::CallInst*> query_group_by_template(
+    llvm::Module* module,
+    const bool hoist_literals,
+    const QueryMemoryDescriptor& query_mem_desc,
+    const ExecutorDeviceType device_type,
+    const bool check_scan_limit,
+    const GpuSharedMemoryContext& gpu_smem_context) {
   return query_group_by_template_impl<llvm::AttributeSet>(module,
                                                           hoist_literals,
                                                           query_mem_desc,

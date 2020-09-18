@@ -259,9 +259,9 @@ std::vector<llvm::Value*> CodeGenerator::codegenGeosPredicateCall(
   llvm::BasicBlock* geos_pred_ok_bb{nullptr};
   llvm::BasicBlock* geos_pred_fail_bb{nullptr};
   geos_pred_ok_bb = llvm::BasicBlock::Create(
-      cgen_state_->context_, "geos_pred_ok_bb", cgen_state_->row_func_);
+      cgen_state_->context_, "geos_pred_ok_bb", cgen_state_->current_func_);
   geos_pred_fail_bb = llvm::BasicBlock::Create(
-      cgen_state_->context_, "geos_pred_fail_bb", cgen_state_->row_func_);
+      cgen_state_->context_, "geos_pred_fail_bb", cgen_state_->current_func_);
   if (!status_lv) {
     status_lv = cgen_state_->llBool(false);
   }
@@ -317,9 +317,9 @@ std::vector<llvm::Value*> CodeGenerator::codegenGeosConstructorCall(
   llvm::BasicBlock* geos_ok_bb{nullptr};
   llvm::BasicBlock* geos_fail_bb{nullptr};
   geos_ok_bb = llvm::BasicBlock::Create(
-      cgen_state_->context_, "geos_ok_bb", cgen_state_->row_func_);
+      cgen_state_->context_, "geos_ok_bb", cgen_state_->current_func_);
   geos_fail_bb = llvm::BasicBlock::Create(
-      cgen_state_->context_, "geos_fail_bb", cgen_state_->row_func_);
+      cgen_state_->context_, "geos_fail_bb", cgen_state_->current_func_);
   if (!status_lv) {
     status_lv = cgen_state_->llBool(false);
   }

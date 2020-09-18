@@ -706,6 +706,7 @@ class Executor {
       const std::vector<InputTableInfo>& query_infos,
       ColumnCacheMap& column_cache,
       std::vector<std::string>& fail_reasons);
+  void redeclareFilterFunction();
   llvm::Value* addJoinLoopIterator(const std::vector<llvm::Value*>& prev_iters,
                                    const size_t level_idx);
   void codegenJoinLoops(const std::vector<JoinLoop>& join_loops,

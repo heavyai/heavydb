@@ -184,9 +184,9 @@ llvm::BasicBlock* Executor::codegenWindowResetStateControlFlow() {
                                                    null_val,
                                                    null_bool_val}));
   const auto reset_state_true_bb = llvm::BasicBlock::Create(
-      cgen_state_->context_, "reset_state.true", cgen_state_->row_func_);
+      cgen_state_->context_, "reset_state.true", cgen_state_->current_func_);
   const auto reset_state_false_bb = llvm::BasicBlock::Create(
-      cgen_state_->context_, "reset_state.false", cgen_state_->row_func_);
+      cgen_state_->context_, "reset_state.false", cgen_state_->current_func_);
   cgen_state_->ir_builder_.CreateCondBr(
       reset_state, reset_state_true_bb, reset_state_false_bb);
   cgen_state_->ir_builder_.SetInsertPoint(reset_state_true_bb);

@@ -120,7 +120,7 @@ llvm::Value* CodeGenerator::codegen(const Analyzer::ExtractExpr* extract_expr,
           false);
       // generate a phi node depending on whether we got a null or not
       extract_nullcheck_bb = llvm::BasicBlock::Create(
-          cgen_state_->context_, "extract_nullcheck_bb", cgen_state_->row_func_);
+          cgen_state_->context_, "extract_nullcheck_bb", cgen_state_->current_func_);
 
       // update the blocks created by diamond codegen to point to the newly created phi
       // block

@@ -351,9 +351,9 @@ CodeGenerator::beginArgsNullcheck(const Analyzer::FunctionOper* function_oper,
     const auto args_notnull_lv = cgen_state_->ir_builder_.CreateNot(
         codegenFunctionOperNullArg(function_oper, orig_arg_lvs));
     args_notnull_bb = llvm::BasicBlock::Create(
-        cgen_state_->context_, "args_notnull", cgen_state_->row_func_);
+        cgen_state_->context_, "args_notnull", cgen_state_->current_func_);
     args_null_bb = llvm::BasicBlock::Create(
-        cgen_state_->context_, "args_null", cgen_state_->row_func_);
+        cgen_state_->context_, "args_null", cgen_state_->current_func_);
     cgen_state_->ir_builder_.CreateCondBr(args_notnull_lv, args_notnull_bb, args_null_bb);
     cgen_state_->ir_builder_.SetInsertPoint(args_notnull_bb);
   }

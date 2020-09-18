@@ -97,7 +97,7 @@ ScalarCodeGenerator::CompiledExpression ScalarCodeGenerator::compile(
   auto bb_entry = llvm::BasicBlock::Create(ctx, ".entry", scalar_expr_func, 0);
   own_cgen_state_ = std::make_unique<CgenState>(g_table_infos, false);
   own_cgen_state_->module_ = module_.get();
-  own_cgen_state_->row_func_ = scalar_expr_func;
+  own_cgen_state_->row_func_ = own_cgen_state_->current_func_ = scalar_expr_func;
   own_cgen_state_->ir_builder_.SetInsertPoint(bb_entry);
   cgen_state_ = own_cgen_state_.get();
   AUTOMATIC_IR_METADATA(cgen_state_);

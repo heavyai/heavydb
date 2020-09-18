@@ -221,7 +221,6 @@ std::vector<llvm::Value*> CodeGenerator::codegenColVar(const Analyzer::ColumnVar
       codegenFixedLengthColVar(col_var, col_byte_stream, pos_arg);
   auto it_ok = cgen_state_->fetch_cache_.insert(
       std::make_pair(local_col_id, std::vector<llvm::Value*>{fixed_length_column_lv}));
-  CHECK(it_ok.second);
   return {it_ok.first->second};
 }
 
@@ -286,9 +285,9 @@ llvm::Value* CodeGenerator::codegenFixedLengthColVarInWindow(
   const auto pos_is_valid =
       cgen_state_->ir_builder_.CreateICmpSGE(pos_arg, cgen_state_->llInt(int64_t(0)));
   const auto pos_valid_bb = llvm::BasicBlock::Create(
-      cgen_state_->context_, "window.pos_valid", cgen_state_->row_func_);
+      cgen_state_->context_, "window.pos_valid", cgen_state_->current_func_);
   const auto pos_notvalid_bb = llvm::BasicBlock::Create(
-      cgen_state_->context_, "window.pos_notvalid", cgen_state_->row_func_);
+      cgen_state_->context_, "window.pos_notvalid", cgen_state_->current_func_);
   cgen_state_->ir_builder_.CreateCondBr(pos_is_valid, pos_valid_bb, pos_notvalid_bb);
   cgen_state_->ir_builder_.SetInsertPoint(pos_valid_bb);
   const auto fixed_length_column_lv =
@@ -432,20 +431,18 @@ std::vector<llvm::Value*> CodeGenerator::codegenOuterJoinNullPlaceholder(
   if (grouped_col_lv) {
     return {grouped_col_lv};
   }
-  const auto bb = cgen_state_->ir_builder_.GetInsertBlock();
   const auto outer_join_args_bb = llvm::BasicBlock::Create(
-      cgen_state_->context_, "outer_join_args", cgen_state_->row_func_);
+      cgen_state_->context_, "outer_join_args", cgen_state_->current_func_);
   const auto outer_join_nulls_bb = llvm::BasicBlock::Create(
-      cgen_state_->context_, "outer_join_nulls", cgen_state_->row_func_);
+      cgen_state_->context_, "outer_join_nulls", cgen_state_->current_func_);
   const auto phi_bb = llvm::BasicBlock::Create(
-      cgen_state_->context_, "outer_join_phi", cgen_state_->row_func_);
-  cgen_state_->ir_builder_.SetInsertPoint(bb);
+      cgen_state_->context_, "outer_join_phi", cgen_state_->current_func_);
   const auto outer_join_match_lv = foundOuterJoinMatch(col_var->get_rte_idx());
   CHECK(outer_join_match_lv);
   cgen_state_->ir_builder_.CreateCondBr(
       outer_join_match_lv, outer_join_args_bb, outer_join_nulls_bb);
   const auto back_from_outer_join_bb = llvm::BasicBlock::Create(
-      cgen_state_->context_, "back_from_outer_join", cgen_state_->row_func_);
+      cgen_state_->context_, "back_from_outer_join", cgen_state_->current_func_);
   cgen_state_->ir_builder_.SetInsertPoint(outer_join_args_bb);
   Executor::FetchCacheAnchor anchor(cgen_state_);
   const auto orig_lvs = codegenColVar(col_var, fetch_column, true, co);

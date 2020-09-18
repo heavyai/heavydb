@@ -238,13 +238,13 @@ llvm::Value* CodeGenerator::codegenAdd(const Analyzer::BinOper* bin_oper,
   llvm::BasicBlock* add_fail{nullptr};
   if (need_overflow_check) {
     cgen_state_->needs_error_check_ = true;
-    add_ok =
-        llvm::BasicBlock::Create(cgen_state_->context_, "add_ok", cgen_state_->row_func_);
+    add_ok = llvm::BasicBlock::Create(
+        cgen_state_->context_, "add_ok", cgen_state_->current_func_);
     if (!null_check_suffix.empty()) {
       codegenSkipOverflowCheckForNull(lhs_lv, rhs_lv, add_ok, ti);
     }
     add_fail = llvm::BasicBlock::Create(
-        cgen_state_->context_, "add_fail", cgen_state_->row_func_);
+        cgen_state_->context_, "add_fail", cgen_state_->current_func_);
     llvm::Value* detected{nullptr};
     auto const_zero = llvm::ConstantInt::get(lhs_lv->getType(), 0, true);
     auto overflow = cgen_state_->ir_builder_.CreateAnd(
@@ -300,13 +300,13 @@ llvm::Value* CodeGenerator::codegenSub(const Analyzer::BinOper* bin_oper,
   llvm::BasicBlock* sub_fail{nullptr};
   if (need_overflow_check) {
     cgen_state_->needs_error_check_ = true;
-    sub_ok =
-        llvm::BasicBlock::Create(cgen_state_->context_, "sub_ok", cgen_state_->row_func_);
+    sub_ok = llvm::BasicBlock::Create(
+        cgen_state_->context_, "sub_ok", cgen_state_->current_func_);
     if (!null_check_suffix.empty()) {
       codegenSkipOverflowCheckForNull(lhs_lv, rhs_lv, sub_ok, ti);
     }
     sub_fail = llvm::BasicBlock::Create(
-        cgen_state_->context_, "sub_fail", cgen_state_->row_func_);
+        cgen_state_->context_, "sub_fail", cgen_state_->current_func_);
     llvm::Value* detected{nullptr};
     auto const_zero = llvm::ConstantInt::get(lhs_lv->getType(), 0, true);
     auto overflow = cgen_state_->ir_builder_.CreateAnd(
@@ -347,7 +347,7 @@ void CodeGenerator::codegenSkipOverflowCheckForNull(llvm::Value* lhs_lv,
                                                  codegenIsNullNumber(rhs_lv, ti))
              : lhs_is_null_lv;
   auto operands_not_null = llvm::BasicBlock::Create(
-      cgen_state_->context_, "operands_not_null", cgen_state_->row_func_);
+      cgen_state_->context_, "operands_not_null", cgen_state_->current_func_);
   cgen_state_->ir_builder_.CreateCondBr(
       has_null_operand_lv, no_overflow_bb, operands_not_null);
   cgen_state_->ir_builder_.SetInsertPoint(operands_not_null);
@@ -381,15 +381,15 @@ llvm::Value* CodeGenerator::codegenMul(const Analyzer::BinOper* bin_oper,
   llvm::BasicBlock* mul_fail{nullptr};
   if (need_overflow_check) {
     cgen_state_->needs_error_check_ = true;
-    mul_ok =
-        llvm::BasicBlock::Create(cgen_state_->context_, "mul_ok", cgen_state_->row_func_);
+    mul_ok = llvm::BasicBlock::Create(
+        cgen_state_->context_, "mul_ok", cgen_state_->current_func_);
     if (!null_check_suffix.empty()) {
       codegenSkipOverflowCheckForNull(lhs_lv, rhs_lv, mul_ok, ti);
     }
     mul_fail = llvm::BasicBlock::Create(
-        cgen_state_->context_, "mul_fail", cgen_state_->row_func_);
+        cgen_state_->context_, "mul_fail", cgen_state_->current_func_);
     auto mul_check = llvm::BasicBlock::Create(
-        cgen_state_->context_, "mul_check", cgen_state_->row_func_);
+        cgen_state_->context_, "mul_check", cgen_state_->current_func_);
     auto const_zero = llvm::ConstantInt::get(rhs_lv->getType(), 0, true);
     cgen_state_->ir_builder_.CreateCondBr(
         cgen_state_->ir_builder_.CreateICmpEQ(rhs_lv, const_zero), mul_ok, mul_check);
@@ -445,12 +445,12 @@ llvm::Value* CodeGenerator::codegenDiv(llvm::Value* lhs_lv,
       llvm::Value* chosen_min{nullptr};
       std::tie(chosen_max, chosen_min) = cgen_state_->inlineIntMaxMin(8, true);
       auto decimal_div_ok = llvm::BasicBlock::Create(
-          cgen_state_->context_, "decimal_div_ok", cgen_state_->row_func_);
+          cgen_state_->context_, "decimal_div_ok", cgen_state_->current_func_);
       if (!null_check_suffix.empty()) {
         codegenSkipOverflowCheckForNull(lhs_lv, rhs_lv, decimal_div_ok, ti);
       }
       auto decimal_div_fail = llvm::BasicBlock::Create(
-          cgen_state_->context_, "decimal_div_fail", cgen_state_->row_func_);
+          cgen_state_->context_, "decimal_div_fail", cgen_state_->current_func_);
       auto lhs_max = static_cast<llvm::ConstantInt*>(chosen_max)->getSExtValue() /
                      exp_to_scale(ti.get_scale());
       auto lhs_max_lv =
@@ -493,13 +493,13 @@ llvm::Value* CodeGenerator::codegenDiv(llvm::Value* lhs_lv,
                                  {lhs_lv, rhs_lv, null_lv});
   }
   cgen_state_->needs_error_check_ = true;
-  auto div_ok =
-      llvm::BasicBlock::Create(cgen_state_->context_, "div_ok", cgen_state_->row_func_);
+  auto div_ok = llvm::BasicBlock::Create(
+      cgen_state_->context_, "div_ok", cgen_state_->current_func_);
   if (!null_check_suffix.empty()) {
     codegenSkipOverflowCheckForNull(lhs_lv, rhs_lv, div_ok, ti);
   }
-  auto div_zero =
-      llvm::BasicBlock::Create(cgen_state_->context_, "div_zero", cgen_state_->row_func_);
+  auto div_zero = llvm::BasicBlock::Create(
+      cgen_state_->context_, "div_zero", cgen_state_->current_func_);
   auto zero_const = rhs_lv->getType()->isIntegerTy()
                         ? llvm::ConstantInt::get(rhs_lv->getType(), 0, true)
                         : llvm::ConstantFP::get(rhs_lv->getType(), 0.);
@@ -600,10 +600,10 @@ llvm::Value* CodeGenerator::codegenMod(llvm::Value* lhs_lv,
   CHECK(ti.is_integer());
   cgen_state_->needs_error_check_ = true;
   // Generate control flow for division by zero error handling.
-  auto mod_ok =
-      llvm::BasicBlock::Create(cgen_state_->context_, "mod_ok", cgen_state_->row_func_);
-  auto mod_zero =
-      llvm::BasicBlock::Create(cgen_state_->context_, "mod_zero", cgen_state_->row_func_);
+  auto mod_ok = llvm::BasicBlock::Create(
+      cgen_state_->context_, "mod_ok", cgen_state_->current_func_);
+  auto mod_zero = llvm::BasicBlock::Create(
+      cgen_state_->context_, "mod_zero", cgen_state_->current_func_);
   auto zero_const = llvm::ConstantInt::get(rhs_lv->getType(), 0, true);
   cgen_state_->ir_builder_.CreateCondBr(
       cgen_state_->ir_builder_.CreateICmp(llvm::ICmpInst::ICMP_NE, rhs_lv, zero_const),
@@ -664,12 +664,12 @@ llvm::Value* CodeGenerator::codegenUMinus(const Analyzer::UOper* uoper,
   if (need_overflow_check) {
     cgen_state_->needs_error_check_ = true;
     uminus_ok = llvm::BasicBlock::Create(
-        cgen_state_->context_, "uminus_ok", cgen_state_->row_func_);
+        cgen_state_->context_, "uminus_ok", cgen_state_->current_func_);
     if (!ti.get_notnull()) {
       codegenSkipOverflowCheckForNull(operand_lv, nullptr, uminus_ok, ti);
     }
     uminus_fail = llvm::BasicBlock::Create(
-        cgen_state_->context_, "uminus_fail", cgen_state_->row_func_);
+        cgen_state_->context_, "uminus_fail", cgen_state_->current_func_);
     auto const_min = llvm::ConstantInt::get(
         operand_lv->getType(),
         static_cast<llvm::ConstantInt*>(chosen_min)->getSExtValue(),
@@ -726,10 +726,10 @@ llvm::Value* CodeGenerator::codegenBinOpWithOverflowForCPU(
   AUTOMATIC_IR_METADATA(cgen_state_);
   cgen_state_->needs_error_check_ = true;
 
-  llvm::BasicBlock* check_ok =
-      llvm::BasicBlock::Create(cgen_state_->context_, "ovf_ok", cgen_state_->row_func_);
+  llvm::BasicBlock* check_ok = llvm::BasicBlock::Create(
+      cgen_state_->context_, "ovf_ok", cgen_state_->current_func_);
   llvm::BasicBlock* check_fail = llvm::BasicBlock::Create(
-      cgen_state_->context_, "ovf_detected", cgen_state_->row_func_);
+      cgen_state_->context_, "ovf_detected", cgen_state_->current_func_);
   llvm::BasicBlock* null_check{nullptr};
 
   if (!null_check_suffix.empty()) {

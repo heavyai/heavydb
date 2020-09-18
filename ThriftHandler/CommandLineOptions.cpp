@@ -610,6 +610,13 @@ void CommandLineOptions::fillAdvancedOptions() {
   developer_desc.add_options()(
       "large-ndv-multiplier",
       po::value<size_t>(&g_large_ndv_multiplier)->default_value(g_large_ndv_multiplier));
+  developer_desc.add_options()(
+      "enable-filter-function",
+      po::value<bool>(&g_enable_filter_function)
+          ->default_value(g_enable_filter_function)
+          ->implicit_value(true),
+      "Enable the filter function protection feature for the SQL JIT compiler. "
+      "Normally should be on but techs might want to disable for troubleshooting.");
 }
 
 namespace {

@@ -222,19 +222,19 @@ llvm::Value* CodeGenerator::codegenLogicalShortCircuit(const Analyzer::BinOper* 
   // the control flow converges.
   Executor::FetchCacheAnchor anchor(cgen_state_);
 
-  auto rhs_bb =
-      llvm::BasicBlock::Create(cgen_state_->context_, "rhs_bb", cgen_state_->row_func_);
-  auto ret_bb =
-      llvm::BasicBlock::Create(cgen_state_->context_, "ret_bb", cgen_state_->row_func_);
+  auto rhs_bb = llvm::BasicBlock::Create(
+      cgen_state_->context_, "rhs_bb", cgen_state_->current_func_);
+  auto ret_bb = llvm::BasicBlock::Create(
+      cgen_state_->context_, "ret_bb", cgen_state_->current_func_);
   llvm::BasicBlock* nullcheck_ok_bb{nullptr};
   llvm::BasicBlock* nullcheck_fail_bb{nullptr};
 
   if (!ti.get_notnull()) {
     // need lhs nullcheck before short circuiting
     nullcheck_ok_bb = llvm::BasicBlock::Create(
-        cgen_state_->context_, "nullcheck_ok_bb", cgen_state_->row_func_);
+        cgen_state_->context_, "nullcheck_ok_bb", cgen_state_->current_func_);
     nullcheck_fail_bb = llvm::BasicBlock::Create(
-        cgen_state_->context_, "nullcheck_fail_bb", cgen_state_->row_func_);
+        cgen_state_->context_, "nullcheck_fail_bb", cgen_state_->current_func_);
     if (lhs_lv->getType()->isIntegerTy(1)) {
       lhs_lv = cgen_state_->castToTypeIn(lhs_lv, 8);
     }

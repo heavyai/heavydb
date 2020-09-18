@@ -279,6 +279,7 @@ int64_t GroupByAndAggregate::getBucketedCardinality(const ColRangeInfo& col_rang
 #define LL_INT(v) executor_->cgen_state_->llInt(v)
 #define LL_FP(v) executor_->cgen_state_->llFp(v)
 #define ROW_FUNC executor_->cgen_state_->row_func_
+#define CUR_FUNC executor_->cgen_state_->current_func_
 
 GroupByAndAggregate::GroupByAndAggregate(
     Executor* executor,
@@ -886,13 +887,13 @@ GroupByAndAggregate::DiamondCodegen::DiamondCodegen(
   if (parent_) {
     CHECK(!chain_to_next_);
   }
-  cond_true_ = llvm::BasicBlock::Create(LL_CONTEXT, label_prefix + "_true", ROW_FUNC);
+  cond_true_ = llvm::BasicBlock::Create(LL_CONTEXT, label_prefix + "_true", CUR_FUNC);
   if (share_false_edge_with_parent) {
     CHECK(parent);
     orig_cond_false_ = cond_false_ = parent_->cond_false_;
   } else {
     orig_cond_false_ = cond_false_ =
-        llvm::BasicBlock::Create(LL_CONTEXT, label_prefix + "_false", ROW_FUNC);
+        llvm::BasicBlock::Create(LL_CONTEXT, label_prefix + "_false", CUR_FUNC);
   }
 
   LL_BUILDER.CreateCondBr(cond, cond_true_, cond_false_);
@@ -941,7 +942,7 @@ bool GroupByAndAggregate::codegen(llvm::Value* filter_result,
     DiamondCodegen filter_cfg(filter_result,
                               executor_,
                               !is_group_by || query_mem_desc.usesGetGroupValueFast(),
-                              "filter",
+                              "filter",  // filter_true and filter_false basic blocks
                               nullptr,
                               false);
     filter_false = filter_cfg.cond_false_;
@@ -1841,18 +1842,18 @@ std::vector<llvm::Value*> GroupByAndAggregate::codegenAggArg(
           const auto size = LL_BUILDER.CreateExtractValue(target_lv, 1);
           const auto null_flag = LL_BUILDER.CreateExtractValue(target_lv, 2);
 
-          const auto nullcheck_ok_bb = llvm::BasicBlock::Create(
-              LL_CONTEXT, "arr_nullcheck_ok_bb", executor_->cgen_state_->row_func_);
-          const auto nullcheck_fail_bb = llvm::BasicBlock::Create(
-              LL_CONTEXT, "arr_nullcheck_fail_bb", executor_->cgen_state_->row_func_);
+          const auto nullcheck_ok_bb =
+              llvm::BasicBlock::Create(LL_CONTEXT, "arr_nullcheck_ok_bb", CUR_FUNC);
+          const auto nullcheck_fail_bb =
+              llvm::BasicBlock::Create(LL_CONTEXT, "arr_nullcheck_fail_bb", CUR_FUNC);
 
           // TODO(adb): probably better to zext the bool
           const auto nullcheck = LL_BUILDER.CreateICmpEQ(
               null_flag, executor_->cgen_state_->llInt(static_cast<int8_t>(1)));
           LL_BUILDER.CreateCondBr(nullcheck, nullcheck_fail_bb, nullcheck_ok_bb);
 
-          const auto ret_bb = llvm::BasicBlock::Create(
-              LL_CONTEXT, "arr_return", executor_->cgen_state_->row_func_);
+          const auto ret_bb =
+              llvm::BasicBlock::Create(LL_CONTEXT, "arr_return", CUR_FUNC);
           LL_BUILDER.SetInsertPoint(ret_bb);
           auto result_phi = LL_BUILDER.CreatePHI(i8p_ty, 2, "array_ptr_return");
           result_phi->addIncoming(ptr, nullcheck_ok_bb);
@@ -1970,6 +1971,7 @@ void GroupByAndAggregate::checkErrorCode(llvm::Value* retCode) {
   executor_->cgen_state_->emitErrorCheck(rc_check_condition, retCode, "rc");
 }
 
+#undef CUR_FUNC
 #undef ROW_FUNC
 #undef LL_FP
 #undef LL_INT

@@ -24,16 +24,18 @@
 
 #include <string>
 
-llvm::Function* query_template(llvm::Module*,
-                               const size_t aggr_col_count,
-                               const bool hoist_literals,
-                               const bool is_estimate_query,
-                               const GpuSharedMemoryContext& gpu_smem_context);
-llvm::Function* query_group_by_template(llvm::Module*,
-                                        const bool hoist_literals,
-                                        const QueryMemoryDescriptor& query_mem_desc,
-                                        const ExecutorDeviceType,
-                                        const bool check_scan_limit,
-                                        const GpuSharedMemoryContext& gpu_smem_context);
+std::tuple<llvm::Function*, llvm::CallInst*> query_template(
+    llvm::Module*,
+    const size_t aggr_col_count,
+    const bool hoist_literals,
+    const bool is_estimate_query,
+    const GpuSharedMemoryContext& gpu_smem_context);
+std::tuple<llvm::Function*, llvm::CallInst*> query_group_by_template(
+    llvm::Module*,
+    const bool hoist_literals,
+    const QueryMemoryDescriptor& query_mem_desc,
+    const ExecutorDeviceType,
+    const bool check_scan_limit,
+    const GpuSharedMemoryContext& gpu_smem_context);
 
 #endif  // QUERYENGINE_QUERYTEMPLATEGENERATOR_H
