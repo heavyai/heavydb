@@ -23,8 +23,9 @@
 #include "ParquetDataWrapper.h"
 
 namespace foreign_storage {
-
 namespace {
+constexpr int64_t MAX_REFRESH_TIME_IN_SECONDS = 60 * 60;
+
 const ForeignTable* get_foreign_table(const ChunkKey& chunk_key) {
   CHECK(chunk_key.size() >= 2);
   auto db_id = chunk_key[CHUNK_KEY_DB_IDX];
@@ -205,17 +206,18 @@ void ForeignStorageMgr::getChunkMetadataVecForKeyPrefix(
 }
 
 void ForeignStorageMgr::removeTableRelatedDS(const int db_id, const int table_id) {
+  const ChunkKey table_key{db_id, table_id};
   {
     std::lock_guard data_wrapper_lock(data_wrapper_mutex_);
-    data_wrapper_map_.erase({db_id, table_id});
+    data_wrapper_map_.erase(table_key);
   }
 
   // Clear regardless of is_cache_enabled_
   if (is_cache_enabled_) {
-    foreign_storage_cache_->clearForTablePrefix({db_id, table_id});
+    foreign_storage_cache_->clearForTablePrefix(table_key);
   }
 
-  clearTempChunkBufferMapEntriesForTable(db_id, table_id);
+  clearTempChunkBufferMapEntriesForTable(table_key);
 }
 
 MgrType ForeignStorageMgr::getMgrType() {
@@ -238,6 +240,16 @@ std::shared_ptr<ForeignDataWrapper> ForeignStorageMgr::getDataWrapper(
   ChunkKey table_key{chunk_key[CHUNK_KEY_DB_IDX], chunk_key[CHUNK_KEY_TABLE_IDX]};
   CHECK(data_wrapper_map_.find(table_key) != data_wrapper_map_.end());
   return data_wrapper_map_[table_key];
+}
+
+void ForeignStorageMgr::setDataWrapper(
+    const ChunkKey& table_key,
+    std::shared_ptr<MockForeignDataWrapper> data_wrapper) {
+  CHECK(isTableKey(table_key));
+  std::lock_guard data_wrapper_lock(data_wrapper_mutex_);
+  CHECK(data_wrapper_map_.find(table_key) != data_wrapper_map_.end());
+  data_wrapper->setParentWrapper(data_wrapper_map_[table_key]);
+  data_wrapper_map_[table_key] = data_wrapper;
 }
 
 bool ForeignStorageMgr::createDataWrapperIfNotExists(const ChunkKey& chunk_key) {
@@ -295,56 +307,57 @@ ForeignStorageCache* ForeignStorageMgr::getForeignStorageCache() const {
   return foreign_storage_cache_;
 }
 
-void ForeignStorageMgr::refreshTables(const std::vector<ChunkKey>& table_keys,
-                                      const bool evict_cached_entries) {
-  clearTempChunkBufferMap(table_keys);
+void ForeignStorageMgr::refreshTable(const ChunkKey& table_key,
+                                     const bool evict_cached_entries) {
+  clearTempChunkBufferMapEntriesForTable(table_key);
   if (evict_cached_entries) {
-    evictTablesFromCache(table_keys);
+    evictTableFromCache(table_key);
   } else {
-    refreshTablesInCache(table_keys);
+    refreshTableInCache(table_key);
   }
 }
 
-void ForeignStorageMgr::refreshTablesInCache(const std::vector<ChunkKey>& table_keys) {
+void ForeignStorageMgr::refreshTableInCache(const ChunkKey& table_key) {
   if (!is_cache_enabled_) {
     return;
   }
-  for (const auto& table_key : table_keys) {
-    CHECK(isTableKey(table_key));
 
-    bool append_mode = get_foreign_table(table_key)->isAppendMode();
+  CHECK(isTableKey(table_key));
+  bool append_mode = get_foreign_table(table_key)->isAppendMode();
 
-    // create datawrapper if it does not exist prior to clearing metadata
-    if (createDataWrapperIfNotExists(table_key) && append_mode) {
-      // Restore last state if we are appending
-      recoverDataWrapperFromDisk(table_key);
-    }
-    // Get a list of which chunks were cached for a table.
-    std::vector<ChunkKey> old_chunk_keys =
-        foreign_storage_cache_->getCachedChunksForKeyPrefix(table_key);
+  // create datawrapper if it does not exist prior to clearing metadata
+  if (createDataWrapperIfNotExists(table_key) && append_mode) {
+    // Restore last state if we are appending
+    recoverDataWrapperFromDisk(table_key);
+  }
+  // Get a list of which chunks were cached for a table.
+  std::vector<ChunkKey> old_chunk_keys =
+      foreign_storage_cache_->getCachedChunksForKeyPrefix(table_key);
 
-    int last_frag_id = 0;
-    if (append_mode) {
-      // Determine last fragment ID
-      if (foreign_storage_cache_->hasCachedMetadataForKeyPrefix(table_key)) {
-        ChunkMetadataVector metadata_vec;
-        foreign_storage_cache_->getCachedMetadataVecForKeyPrefix(metadata_vec, table_key);
-        for (const auto& metadata : metadata_vec) {
-          last_frag_id = std::max(last_frag_id, metadata.first[CHUNK_KEY_FRAGMENT_IDX]);
-        }
+  // Refresh metadata.
+  ChunkMetadataVector metadata_vec;
+  getDataWrapper(table_key)->populateChunkMetadata(metadata_vec);
+  getDataWrapper(table_key)->serializeDataWrapperInternals(
+      foreign_storage_cache_->getCacheDirectoryForTablePrefix(table_key) +
+      "/wrapper_metadata.json");
+
+  int last_frag_id = 0;
+  if (append_mode) {
+    // Determine last fragment ID
+    if (foreign_storage_cache_->hasCachedMetadataForKeyPrefix(table_key)) {
+      ChunkMetadataVector cached_metadata_vec;
+      foreign_storage_cache_->getCachedMetadataVecForKeyPrefix(cached_metadata_vec,
+                                                               table_key);
+      for (const auto& metadata : cached_metadata_vec) {
+        last_frag_id = std::max(last_frag_id, metadata.first[CHUNK_KEY_FRAGMENT_IDX]);
       }
-    } else {
-      // Clear entire table
-      foreign_storage_cache_->clearForTablePrefix(table_key);
     }
+  } else {
+    // Clear entire table
+    foreign_storage_cache_->clearForTablePrefix(table_key);
+  }
 
-    // Refresh metadata.
-    ChunkMetadataVector metadata_vec;
-    getDataWrapper(table_key)->populateChunkMetadata(metadata_vec);
-    getDataWrapper(table_key)->serializeDataWrapperInternals(
-        foreign_storage_cache_->getCacheDirectoryForTablePrefix(table_key) +
-        "/wrapper_metadata.json");
-
+  try {
     if (append_mode) {
       // Only re-cache last fragment and above
       ChunkMetadataVector new_metadata_vec;
@@ -361,6 +374,8 @@ void ForeignStorageMgr::refreshTablesInCache(const std::vector<ChunkKey>& table_
     // done one fragment at a time, for all applicable chunks in the fragment.
     std::map<ChunkKey, AbstractBuffer*> optional_buffers;
     std::vector<ChunkKey> chunk_keys_to_be_cached;
+    int64_t total_time{0};
+    auto fragment_refresh_start_time = std::chrono::high_resolution_clock::now();
     if (!old_chunk_keys.empty()) {
       auto fragment_id = old_chunk_keys[0][CHUNK_KEY_FRAGMENT_IDX];
       std::vector<ChunkKey> chunk_keys_in_fragment;
@@ -376,6 +391,22 @@ void ForeignStorageMgr::refreshTablesInCache(const std::vector<ChunkKey>& table_
               getDataWrapper(table_key)->populateChunkBuffers(required_buffers,
                                                               optional_buffers);
               chunk_keys_in_fragment.clear();
+            }
+
+            // At this point, cache buffers for refreshable chunks in the last fragment
+            // have been populated. Exit if the max refresh time has been exceeded.
+            // Otherwise, move to the next fragment.
+            auto current_time = std::chrono::high_resolution_clock::now();
+            total_time += std::chrono::duration_cast<std::chrono::seconds>(
+                              current_time - fragment_refresh_start_time)
+                              .count();
+            if (total_time >= MAX_REFRESH_TIME_IN_SECONDS) {
+              LOG(WARNING) << "Refresh time exceeded for table key: { " << table_key[0]
+                           << ", " << table_key[1]
+                           << " } after fragment id: " << fragment_id;
+              break;
+            } else {
+              fragment_refresh_start_time = std::chrono::high_resolution_clock::now();
             }
             fragment_id = chunk_key[CHUNK_KEY_FRAGMENT_IDX];
           }
@@ -401,33 +432,28 @@ void ForeignStorageMgr::refreshTablesInCache(const std::vector<ChunkKey>& table_
       }
       foreign_storage_cache_->cacheTableChunks(chunk_keys_to_be_cached);
     }
+  } catch (std::runtime_error& e) {
+    throw PostEvictionRefreshException(e);
   }
 }
 
-void ForeignStorageMgr::evictTablesFromCache(const std::vector<ChunkKey>& table_keys) {
+void ForeignStorageMgr::evictTableFromCache(const ChunkKey& table_key) {
   if (!is_cache_enabled_) {
     return;
   }
 
-  for (auto& table_key : table_keys) {
-    CHECK(isTableKey(table_key));
-    foreign_storage_cache_->clearForTablePrefix(table_key);
-  }
+  CHECK(isTableKey(table_key));
+  foreign_storage_cache_->clearForTablePrefix(table_key);
 }
 
-void ForeignStorageMgr::clearTempChunkBufferMap(const std::vector<ChunkKey>& table_keys) {
-  for (const auto& table_key : table_keys) {
-    CHECK(isTableKey(table_key));
-    clearTempChunkBufferMapEntriesForTable(table_key[CHUNK_KEY_DB_IDX],
-                                           table_key[CHUNK_KEY_TABLE_IDX]);
-  }
-}
-
-void ForeignStorageMgr::clearTempChunkBufferMapEntriesForTable(const int db_id,
-                                                               const int table_id) {
+void ForeignStorageMgr::clearTempChunkBufferMapEntriesForTable(
+    const ChunkKey& table_key) {
+  CHECK(isTableKey(table_key));
   std::lock_guard temp_chunk_buffer_map_lock(temp_chunk_buffer_map_mutex_);
-  auto start_it = temp_chunk_buffer_map_.lower_bound({db_id, table_id});
-  ChunkKey upper_bound_prefix{db_id, table_id, std::numeric_limits<int>::max()};
+  auto start_it = temp_chunk_buffer_map_.lower_bound(table_key);
+  ChunkKey upper_bound_prefix{table_key[CHUNK_KEY_DB_IDX],
+                              table_key[CHUNK_KEY_TABLE_IDX],
+                              std::numeric_limits<int>::max()};
   auto end_it = temp_chunk_buffer_map_.upper_bound(upper_bound_prefix);
   temp_chunk_buffer_map_.erase(start_it, end_it);
 }

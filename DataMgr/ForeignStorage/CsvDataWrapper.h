@@ -64,6 +64,8 @@ class CsvDataWrapper : public ForeignDataWrapper {
 
   static void validateOptions(const ForeignTable* foreign_table);
 
+  static std::vector<std::string_view> getSupportedOptions();
+
   void serializeDataWrapperInternals(const std::string& filepath) override;
 
   void restoreDataWrapperInternals(const std::string& filepath,

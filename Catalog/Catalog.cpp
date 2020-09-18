@@ -66,6 +66,7 @@
 #include "Parser/ParserNode.h"
 #include "QueryEngine/Execute.h"
 #include "QueryEngine/TableOptimizer.h"
+#include "RefreshTimeCalculator.h"
 #include "Shared/DateTimeParser.h"
 #include "Shared/File.h"
 #include "Shared/StringTransform.h"
@@ -679,7 +680,8 @@ const std::string Catalog::getForeignServerSchema(bool if_not_exists) {
 const std::string Catalog::getForeignTableSchema(bool if_not_exists) {
   return "CREATE TABLE " + (if_not_exists ? std::string{"IF NOT EXISTS "} : "") +
          "omnisci_foreign_tables(table_id integer unique, server_id integer, " +
-         "options text, FOREIGN KEY(table_id) REFERENCES mapd_tables(tableid), " +
+         "options text, last_refresh_time integer, next_refresh_time integer, " +
+         "FOREIGN KEY(table_id) REFERENCES mapd_tables(tableid), " +
          "FOREIGN KEY(server_id) REFERENCES omnisci_foreign_servers(id))";
 }
 
@@ -2115,6 +2117,19 @@ void Catalog::expandGeoColumn(const ColumnDescriptor& cd,
   }
 }
 
+namespace {
+int64_t get_next_refresh_time(const foreign_storage::ForeignTable& foreign_table) {
+  auto timing_type_entry =
+      foreign_table.options.find(foreign_storage::ForeignTable::REFRESH_TIMING_TYPE_KEY);
+  CHECK(timing_type_entry != foreign_table.options.end());
+  if (timing_type_entry->second ==
+      foreign_storage::ForeignTable::SCHEDULE_REFRESH_TIMING_TYPE) {
+    return foreign_storage::get_next_refresh_time(foreign_table.options);
+  }
+  return foreign_storage::ForeignTable::NULL_REFRESH_TIME;
+}
+}  // namespace
+
 void Catalog::createTable(
     TableDescriptor& td,
     const list<ColumnDescriptor>& cols,
@@ -2255,13 +2270,16 @@ void Catalog::createTable(
             std::vector<std::string>{std::to_string(td.tableId), td.viewSQL});
       }
       if (td.storageType == StorageType::FOREIGN_TABLE) {
-        auto& foreignTable = dynamic_cast<foreign_storage::ForeignTable&>(td);
+        auto& foreign_table = dynamic_cast<foreign_storage::ForeignTable&>(td);
+        foreign_table.next_refresh_time = get_next_refresh_time(foreign_table);
         sqliteConnector_.query_with_text_params(
-            "INSERT INTO omnisci_foreign_tables (table_id, server_id, options) VALUES "
-            "(?, ?, ?)",
-            std::vector<std::string>{std::to_string(foreignTable.tableId),
-                                     std::to_string(foreignTable.foreign_server->id),
-                                     foreignTable.getOptionsAsJsonString()});
+            "INSERT INTO omnisci_foreign_tables (table_id, server_id, options, "
+            "last_refresh_time, next_refresh_time) VALUES (?, ?, ?, ?, ?)",
+            std::vector<std::string>{std::to_string(foreign_table.tableId),
+                                     std::to_string(foreign_table.foreign_server->id),
+                                     foreign_table.getOptionsAsJsonString(),
+                                     std::to_string(foreign_table.last_refresh_time),
+                                     std::to_string(foreign_table.next_refresh_time)});
       }
     } catch (std::exception& e) {
       sqliteConnector_.query("ROLLBACK TRANSACTION");
@@ -3089,7 +3107,7 @@ void Catalog::doTruncateTable(const TableDescriptor* td) {
 
 void Catalog::removeFragmenterForTable(const int table_id) {
   cat_write_lock write_lock(this);
-  auto td = getMetadataForTable(table_id);
+  auto td = getMetadataForTable(table_id, false);
   if (td->fragmenter != nullptr) {
     auto tableDescIt = tableDescriptorMapById_.find(table_id);
     CHECK(tableDescIt != tableDescriptorMapById_.end());
@@ -3778,12 +3796,15 @@ void Catalog::buildForeignServerMap() {
 
 void Catalog::addForeignTableDetails() {
   sqliteConnector_.query(
-      "SELECT table_id, server_id, options from omnisci_foreign_tables");
+      "SELECT table_id, server_id, options, last_refresh_time, next_refresh_time from "
+      "omnisci_foreign_tables");
   auto num_rows = sqliteConnector_.getNumRows();
   for (size_t r = 0; r < num_rows; r++) {
     const auto table_id = sqliteConnector_.getData<int32_t>(r, 0);
     const auto server_id = sqliteConnector_.getData<int32_t>(r, 1);
     const auto& options = sqliteConnector_.getData<std::string>(r, 2);
+    const auto last_refresh_time = sqliteConnector_.getData<int>(r, 3);
+    const auto next_refresh_time = sqliteConnector_.getData<int>(r, 4);
 
     CHECK(tableDescriptorMapById_.find(table_id) != tableDescriptorMapById_.end());
     auto foreign_table =
@@ -3792,6 +3813,8 @@ void Catalog::addForeignTableDetails() {
     foreign_table->foreign_server = foreignServerMapById_[server_id].get();
     CHECK(foreign_table->foreign_server);
     foreign_table->populateOptionsMap(options);
+    foreign_table->last_refresh_time = last_refresh_time;
+    foreign_table->next_refresh_time = next_refresh_time;
   }
 }
 
@@ -4197,4 +4220,50 @@ bool Catalog::validateNonExistentTableOrView(const std::string& name,
   return true;
 }
 
+std::vector<const TableDescriptor*> Catalog::getAllForeignTablesForRefresh() const {
+  cat_read_lock read_lock(this);
+  std::vector<const TableDescriptor*> tables;
+  for (auto entry : tableDescriptorMapById_) {
+    auto table_descriptor = entry.second;
+    if (table_descriptor->storageType == StorageType::FOREIGN_TABLE) {
+      auto foreign_table = dynamic_cast<foreign_storage::ForeignTable*>(table_descriptor);
+      CHECK(foreign_table);
+      auto timing_type_entry = foreign_table->options.find(
+          foreign_storage::ForeignTable::REFRESH_TIMING_TYPE_KEY);
+      CHECK(timing_type_entry != foreign_table->options.end());
+      int64_t current_time = std::chrono::duration_cast<std::chrono::seconds>(
+                                 std::chrono::system_clock::now().time_since_epoch())
+                                 .count();
+      if (timing_type_entry->second ==
+              foreign_storage::ForeignTable::SCHEDULE_REFRESH_TIMING_TYPE &&
+          foreign_table->next_refresh_time <= current_time) {
+        tables.emplace_back(foreign_table);
+      }
+    }
+  }
+  return tables;
+}
+
+void Catalog::updateForeignTableRefreshTimes(const int32_t table_id) {
+  cat_write_lock write_lock(this);
+  cat_sqlite_lock sqlite_lock(this);
+  CHECK(tableDescriptorMapById_.find(table_id) != tableDescriptorMapById_.end());
+  auto table_descriptor = tableDescriptorMapById_.find(table_id)->second;
+  CHECK(table_descriptor);
+  auto foreign_table = dynamic_cast<foreign_storage::ForeignTable*>(table_descriptor);
+  CHECK(foreign_table);
+  int64_t current_time = std::chrono::duration_cast<std::chrono::seconds>(
+                             std::chrono::system_clock::now().time_since_epoch())
+                             .count();
+  auto last_refresh_time = current_time;
+  auto next_refresh_time = get_next_refresh_time(*foreign_table);
+  sqliteConnector_.query_with_text_params(
+      "UPDATE omnisci_foreign_tables SET last_refresh_time = ?, next_refresh_time = ? "
+      "WHERE table_id = ?",
+      std::vector<std::string>{std::to_string(last_refresh_time),
+                               std::to_string(next_refresh_time),
+                               std::to_string(foreign_table->tableId)});
+  foreign_table->last_refresh_time = last_refresh_time;
+  foreign_table->next_refresh_time = next_refresh_time;
+}
 }  // namespace Catalog_Namespace

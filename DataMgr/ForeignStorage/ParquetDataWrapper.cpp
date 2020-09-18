@@ -75,6 +75,11 @@ void ParquetDataWrapper::validateOptions(const ForeignTable* foreign_table) {
   data_wrapper.validateFilePath();
 }
 
+std::vector<std::string_view> ParquetDataWrapper::getSupportedOptions() {
+  return std::vector<std::string_view>{supported_options_.begin(),
+                                       supported_options_.end()};
+}
+
 void ParquetDataWrapper::validateFilePath() const {
   auto& server_options = foreign_table_->foreign_server->options;
   if (server_options.find(ForeignServer::STORAGE_TYPE_KEY)->second ==

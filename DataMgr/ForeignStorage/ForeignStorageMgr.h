@@ -26,6 +26,27 @@
 using namespace Data_Namespace;
 
 namespace foreign_storage {
+class PostEvictionRefreshException : public std::runtime_error {
+ public:
+  PostEvictionRefreshException() = delete;
+  PostEvictionRefreshException(const PostEvictionRefreshException&) = delete;
+  PostEvictionRefreshException& operator=(const PostEvictionRefreshException&) = delete;
+  PostEvictionRefreshException(const std::runtime_error& exception)
+      : std::runtime_error(""), original_exception_(exception){};
+
+  std::runtime_error getOriginalException() { return original_exception_; }
+
+ private:
+  std::runtime_error original_exception_;
+};
+
+// For testing purposes only
+class MockForeignDataWrapper : public ForeignDataWrapper {
+ public:
+  virtual void setParentWrapper(
+      std::shared_ptr<ForeignDataWrapper> parent_data_wrapper) = 0;
+};
+
 class ForeignStorageMgr : public AbstractBufferMgr {
  public:
   ForeignStorageMgr(ForeignStorageCache* fsc = nullptr);
@@ -70,12 +91,15 @@ class ForeignStorageMgr : public AbstractBufferMgr {
   size_t getNumChunks() override;
   void removeTableRelatedDS(const int db_id, const int table_id) override;
   ForeignStorageCache* getForeignStorageCache() const;
-  void refreshTables(const std::vector<ChunkKey>& table_keys,
-                     const bool evict_cached_entries);
+  void refreshTable(const ChunkKey& table_key, const bool evict_cached_entries);
   bool hasDataWrapperForChunk(const ChunkKey& chunk_key);
 
   // For testing, is datawrapper state recovered from disk
   bool isDatawrapperRestored(const ChunkKey& chunk_key);
+
+  // For testing purposes only
+  void setDataWrapper(const ChunkKey& table_key,
+                      std::shared_ptr<MockForeignDataWrapper> data_wrapper);
 
  private:
   bool createDataWrapperIfNotExists(const ChunkKey& chunk_key);
@@ -85,10 +109,9 @@ class ForeignStorageMgr : public AbstractBufferMgr {
       const ChunkKey& chunk_key,
       AbstractBuffer* destination_buffer,
       std::vector<ChunkKey>& chunk_keys);
-  void refreshTablesInCache(const std::vector<ChunkKey>& table_keys);
-  void evictTablesFromCache(const std::vector<ChunkKey>& table_keys);
-  void clearTempChunkBufferMap(const std::vector<ChunkKey>& table_keys);
-  void clearTempChunkBufferMapEntriesForTable(const int db_id, const int table_id);
+  void refreshTableInCache(const ChunkKey& table_key);
+  void evictTableFromCache(const ChunkKey& table_key);
+  void clearTempChunkBufferMapEntriesForTable(const ChunkKey& table_key);
 
   std::shared_mutex data_wrapper_mutex_;
 

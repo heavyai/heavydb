@@ -389,6 +389,23 @@ class Catalog final {
    */
   bool validateNonExistentTableOrView(const std::string& name, const bool if_not_exists);
 
+  /**
+   * Gets all the foreign tables that are pending refreshes. The list of tables
+   * includes tables that are configured for scheduled refreshes with next
+   * refresh timestamps that are in the past.
+   *
+   * @return foreign tables pending refreshes
+   */
+  std::vector<const TableDescriptor*> getAllForeignTablesForRefresh() const;
+
+  /**
+   * Updates the last and next (if applicable) refresh times of the foreign table
+   * with the given table id.
+   *
+   * @param table_id - id of table to apply updates to
+   */
+  void updateForeignTableRefreshTimes(const int32_t table_id);
+
  protected:
   void CheckAndExecuteMigrations();
   void CheckAndExecuteMigrationsPostBuildMaps();

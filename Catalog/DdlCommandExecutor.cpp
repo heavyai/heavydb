@@ -21,6 +21,7 @@
 #include "Catalog/Catalog.h"
 #include "Catalog/SysCatalog.h"
 #include "DataMgr/ForeignStorage/CsvDataWrapper.h"
+#include "DataMgr/ForeignStorage/ForeignTableRefresh.h"
 #include "DataMgr/ForeignStorage/ParquetDataWrapper.h"
 #include "LockMgr/LockMgr.h"
 #include "Parser/ParserNode.h"
@@ -540,19 +541,49 @@ void CreateForeignTableCommand::setTableDetails(const std::string& table_name,
   if (ddl_payload_.HasMember("options") && !ddl_payload_["options"].IsNull()) {
     CHECK(ddl_payload_["options"].IsObject());
     foreign_table.populateOptionsMap(ddl_payload_["options"]);
+    setRefreshOptions(foreign_table);
 
+    std::vector<std::string_view> supported_data_wrapper_options;
     if (foreign_table.foreign_server->data_wrapper_type ==
         foreign_storage::DataWrapperType::CSV) {
       foreign_storage::CsvDataWrapper::validateOptions(&foreign_table);
+      supported_data_wrapper_options =
+          foreign_storage::CsvDataWrapper::getSupportedOptions();
     } else if (foreign_table.foreign_server->data_wrapper_type ==
                foreign_storage::DataWrapperType::PARQUET) {
       foreign_storage::ParquetDataWrapper::validateOptions(&foreign_table);
+      supported_data_wrapper_options =
+          foreign_storage::ParquetDataWrapper::getSupportedOptions();
     }
+    foreign_table.validate(supported_data_wrapper_options);
   }
 
   if (const auto it = foreign_table.options.find("FRAGMENT_SIZE");
       it != foreign_table.options.end()) {
     foreign_table.maxFragRows = std::stoi(it->second);
+  }
+}
+
+void CreateForeignTableCommand::setRefreshOptions(
+    foreign_storage::ForeignTable& foreign_table) {
+  auto refresh_timing_entry =
+      foreign_table.options.find(foreign_storage::ForeignTable::REFRESH_TIMING_TYPE_KEY);
+  if (refresh_timing_entry == foreign_table.options.end()) {
+    foreign_table.options[foreign_storage::ForeignTable::REFRESH_TIMING_TYPE_KEY] =
+        foreign_storage::ForeignTable::MANUAL_REFRESH_TIMING_TYPE;
+  } else {
+    foreign_table.options[foreign_storage::ForeignTable::REFRESH_TIMING_TYPE_KEY] =
+        to_upper(refresh_timing_entry->second);
+  }
+
+  auto update_type_entry =
+      foreign_table.options.find(foreign_storage::ForeignTable::REFRESH_UPDATE_TYPE_KEY);
+  if (update_type_entry == foreign_table.options.end()) {
+    foreign_table.options[foreign_storage::ForeignTable::REFRESH_UPDATE_TYPE_KEY] =
+        foreign_storage::ForeignTable::ALL_REFRESH_UPDATE_TYPE;
+  } else {
+    foreign_table.options[foreign_storage::ForeignTable::REFRESH_UPDATE_TYPE_KEY] =
+        to_upper(update_type_entry->second);
   }
 }
 
@@ -739,39 +770,34 @@ RefreshForeignTablesCommand::RefreshForeignTablesCommand(
 }
 
 void RefreshForeignTablesCommand::execute(TQueryResult& _return) {
-  auto& cat = session_ptr_->getCatalog();
-  auto& data_mgr = cat.getDataMgr();
-  auto foreign_storage_mgr = data_mgr.getForeignStorageMgr();
-  const size_t num_tables = ddl_payload_["tableNames"].GetArray().Size();
-  std::vector<ChunkKey> table_keys(num_tables, ChunkKey(2));
-  // Once a refresh command is started it needs to lock all tables it's refreshing.
-  std::vector<std::unique_ptr<lockmgr::TableSchemaLockContainer<lockmgr::WriteLock>>>
-      locked_table_vec(num_tables);
-  for (size_t i = 0; i < num_tables; ++i) {
-    locked_table_vec[i] =
-        std::make_unique<lockmgr::TableSchemaLockContainer<lockmgr::WriteLock>>(
-            lockmgr::TableSchemaLockContainer<lockmgr::WriteLock>::acquireTableDescriptor(
-                cat, ddl_payload_["tableNames"].GetArray()[i].GetString(), false));
-  }
-  // We can only start refreshing once we have all the locks we need.
-  for (size_t i = 0; i < num_tables; ++i) {
-    const TableDescriptor* td = (*locked_table_vec[i])();
-    cat.removeFragmenterForTable(td->tableId);
-    ChunkKey table_prefix{cat.getCurrentDB().dbId, td->tableId};
-    data_mgr.deleteChunksWithPrefix(table_prefix, MemoryLevel::CPU_LEVEL);
-    data_mgr.deleteChunksWithPrefix(table_prefix, MemoryLevel::GPU_LEVEL);
-    table_keys[i] = table_prefix;
-  }
+  bool evict_cached_entries{false};
   foreign_storage::OptionsContainer opt;
   if (ddl_payload_.HasMember("options") && !ddl_payload_["options"].IsNull()) {
     opt.populateOptionsMap(ddl_payload_["options"]);
+    for (const auto entry : opt.options) {
+      if (entry.first != "EVICT") {
+        throw std::runtime_error{
+            "Invalid option \"" + entry.first +
+            "\" provided for refresh command. Only \"EVICT\" option is supported."};
+      }
+    }
     CHECK(opt.options.find("EVICT") != opt.options.end());
-    CHECK(boost::iequals(opt.options["EVICT"], "true") ||
-          boost::iequals(opt.options["EVICT"], "false"));
-    if (boost::iequals(opt.options["EVICT"], "true")) {
-      foreign_storage_mgr->refreshTables(table_keys, true);
-      return;
+
+    if (boost::iequals(opt.options["EVICT"], "true") ||
+        boost::iequals(opt.options["EVICT"], "false")) {
+      if (boost::iequals(opt.options["EVICT"], "true")) {
+        evict_cached_entries = true;
+      }
+    } else {
+      throw std::runtime_error{
+          "Invalid value \"" + opt.options["EVICT"] +
+          "\" provided for EVICT option. Value must be either \"true\" or \"false\"."};
     }
   }
-  foreign_storage_mgr->refreshTables(table_keys, false);
+
+  auto& cat = session_ptr_->getCatalog();
+  for (const auto& table_name_json : ddl_payload_["tableNames"].GetArray()) {
+    std::string table_name = table_name_json.GetString();
+    foreign_storage::refresh_foreign_table(cat, table_name, evict_cached_entries);
+  }
 }

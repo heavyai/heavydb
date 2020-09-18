@@ -42,6 +42,8 @@ class ParquetDataWrapper : public ForeignDataWrapper {
 
   static void validateOptions(const ForeignTable* foreign_table);
 
+  static std::vector<std::string_view> getSupportedOptions();
+
  private:
   ParquetDataWrapper(const ForeignTable* foreign_table);
 

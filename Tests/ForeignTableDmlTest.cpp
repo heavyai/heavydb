@@ -26,6 +26,7 @@
 #include "Archive/S3Archive.h"
 #include "DBHandlerTestHelpers.h"
 #include "DataMgr/ForeignStorage/ForeignStorageCache.h"
+#include "DataMgr/ForeignStorage/ForeignTableRefresh.h"
 #include "Geospatial/Types.h"
 #include "ImportExport/DelimitedParserUtils.h"
 #include "TestHelpers.h"
@@ -1280,6 +1281,7 @@ class RefreshTests : public ForeignTableTest {
     for (auto table_name : table_names) {
       sqlDropForeignTable(0, table_name);
     }
+    sqlDropForeignTable(0, default_name);
     ForeignTableTest::TearDown();
   }
 
@@ -1304,6 +1306,30 @@ class RefreshTests : public ForeignTableTest {
       sqlCreateForeignTable(
           column_schema, tmp_file_names[i], file_type, table_options, 0, table_names[i]);
     }
+  }
+
+  int64_t getCurrentTime() const {
+    return std::chrono::duration_cast<std::chrono::seconds>(
+               std::chrono::system_clock::now().time_since_epoch())
+        .count();
+  }
+
+  std::pair<int64_t, int64_t> getLastAndNextRefreshTimes(
+      const std::string& table_name = "test_foreign_table") {
+    auto table = getCatalog().getMetadataForTable(table_name, false);
+    CHECK(table);
+    const auto foreign_table = dynamic_cast<const foreign_storage::ForeignTable*>(table);
+    CHECK(foreign_table);
+    return {foreign_table->last_refresh_time, foreign_table->next_refresh_time};
+  }
+
+  void assertNullRefreshTime(int64_t refresh_time) { ASSERT_EQ(-1, refresh_time); }
+
+  void assertRefreshTimeBetween(int64_t refresh_time,
+                                int64_t start_time,
+                                int64_t end_time) {
+    ASSERT_GE(refresh_time, start_time);
+    ASSERT_LE(refresh_time, end_time);
   }
 };
 
@@ -1593,12 +1619,19 @@ TEST_P(RefreshParamTests, EvictTrue) {
   ASSERT_TRUE(isChunkAndMetadataCached(orig_key));
 
   // Refresh command
+  auto start_time = getCurrentTime();
   sql("REFRESH FOREIGN TABLES " + tmp_file_names[0] + " WITH (evict = true);");
+  auto end_time = getCurrentTime();
 
   // Compare new results
   ASSERT_EQ(cache->getCachedChunkIfExists(orig_key), nullptr);
   ASSERT_FALSE(cache->isMetadataCached(orig_key));
   sqlAndCompareResult("SELECT * FROM " + table_names[0] + ";", {{i(1)}});
+
+  auto [last_refresh_time, next_refresh_time] =
+      getLastAndNextRefreshTimes(table_names[0]);
+  assertRefreshTimeBetween(last_refresh_time, start_time, end_time);
+  assertNullRefreshTime(next_refresh_time);
 }
 
 TEST_P(RefreshParamTests, TwoColumn) {
@@ -1856,11 +1889,44 @@ TEST_P(RefreshSyntaxTests, EvictFalse) {
   ASSERT_TRUE(isChunkAndMetadataCached(orig_key));
 
   // Refresh command
+  auto start_time = getCurrentTime();
   sql("REFRESH FOREIGN TABLES " + tmp_file_names[0] + GetParam() + ";");
+  auto end_time = getCurrentTime();
 
   // Compare new results
   ASSERT_TRUE(isChunkAndMetadataCached(orig_key));
   sqlAndCompareResult("SELECT * FROM " + table_names[0] + ";", {{i(1)}});
+
+  auto [last_refresh_time, next_refresh_time] =
+      getLastAndNextRefreshTimes(table_names[0]);
+  assertRefreshTimeBetween(last_refresh_time, start_time, end_time);
+  assertNullRefreshTime(next_refresh_time);
+}
+
+class RefreshSyntaxErrorTests : public RefreshTests {
+ protected:
+  void SetUp() override {
+    RefreshTests::SetUp();
+    file_type = "csv";
+  }
+};
+
+TEST_F(RefreshSyntaxErrorTests, InvalidEvictValue) {
+  createFilesAndTables({"0"});
+  std::string query{"REFRESH FOREIGN TABLES " + tmp_file_names[0] +
+                    " WITH (evict = 'invalid');"};
+  queryAndAssertException(query,
+                          "Exception: Invalid value \"invalid\" provided for EVICT "
+                          "option. Value must be either \"true\" or \"false\".");
+}
+
+TEST_F(RefreshSyntaxErrorTests, InvalidOption) {
+  createFilesAndTables({"0"});
+  std::string query{"REFRESH FOREIGN TABLES " + tmp_file_names[0] +
+                    " WITH (invalid_key = false);"};
+  queryAndAssertException(query,
+                          "Exception: Invalid option \"INVALID_KEY\" provided for "
+                          "refresh command. Only \"EVICT\" option is supported.");
 }
 
 class CsvAppendTest : public RecoverCacheQueryTest,
@@ -2862,6 +2928,346 @@ TEST_F(RecoverCacheQueryTest, AppendData) {
       default_table_name, getDataFilesPath() + "/wrapper_metadata/append_after.json"));
 
   bf::remove_all(getDataFilesPath() + "append_tmp");
+}
+
+class MockDataWrapper : public foreign_storage::MockForeignDataWrapper {
+ public:
+  MockDataWrapper() : throw_on_metadata_scan_(false), throw_on_chunk_fetch_(false) {}
+
+  void populateChunkMetadata(ChunkMetadataVector& chunk_metadata_vector) override {
+    if (throw_on_metadata_scan_) {
+      throw std::runtime_error{"populateChunkMetadata mock exception"};
+    } else {
+      parent_data_wrapper_->populateChunkMetadata(chunk_metadata_vector);
+    }
+  }
+
+  void populateChunkBuffers(
+      std::map<ChunkKey, AbstractBuffer*>& required_buffers,
+      std::map<ChunkKey, AbstractBuffer*>& optional_buffers) override {
+    if (throw_on_chunk_fetch_) {
+      throw std::runtime_error{"populateChunkBuffers mock exception"};
+    } else {
+      parent_data_wrapper_->populateChunkBuffers(required_buffers, optional_buffers);
+    }
+  }
+
+  void setParentWrapper(
+      std::shared_ptr<ForeignDataWrapper> parent_data_wrapper) override {
+    parent_data_wrapper_ = parent_data_wrapper;
+  }
+
+  void throwOnMetadataScan(bool throw_on_metadata_scan) {
+    throw_on_metadata_scan_ = throw_on_metadata_scan;
+  }
+
+  void throwOnChunkFetch(bool throw_on_chunk_fetch) {
+    throw_on_chunk_fetch_ = throw_on_chunk_fetch;
+  }
+
+ private:
+  std::shared_ptr<foreign_storage::ForeignDataWrapper> parent_data_wrapper_;
+  std::atomic<bool> throw_on_metadata_scan_;
+  std::atomic<bool> throw_on_chunk_fetch_;
+};
+
+class ScheduledRefreshTest : public RefreshTests {
+ protected:
+  static void SetUpTestSuite() {
+    createDBHandler();
+    foreign_storage::ForeignTableRefreshScheduler::setWaitDuration(1);
+  }
+
+  static void TearDownTestSuite() { stopScheduler(); }
+
+  static void startScheduler() {
+    is_program_running_ = true;
+    foreign_storage::ForeignTableRefreshScheduler::start(is_program_running_);
+    ASSERT_TRUE(foreign_storage::ForeignTableRefreshScheduler::isRunning());
+  }
+
+  static void stopScheduler() {
+    is_program_running_ = false;
+    foreign_storage::ForeignTableRefreshScheduler::stop();
+    ASSERT_FALSE(foreign_storage::ForeignTableRefreshScheduler::isRunning());
+  }
+
+  void SetUp() override {
+    ForeignTableTest::SetUp();
+    boost::filesystem::create_directory(REFRESH_TEST_DIR);
+    sql("DROP FOREIGN TABLE IF EXISTS test_foreign_table;");
+    foreign_storage::ForeignTableRefreshScheduler::resetHasRefreshedTable();
+    startScheduler();
+  }
+
+  void TearDown() override {
+    sql("DROP FOREIGN TABLE IF EXISTS test_foreign_table;");
+    boost::filesystem::remove_all(REFRESH_TEST_DIR);
+    ForeignTableTest::TearDown();
+  }
+
+  void setTestFile(const std::string& file_name) {
+    bf::copy_file(getDataFilesPath() + "/" + file_name,
+                  REFRESH_TEST_DIR + "/test.csv",
+                  bf::copy_option::overwrite_if_exists);
+  }
+
+  std::string getCreateScheduledRefreshTableQuery(
+      const std::string& refresh_interval,
+      const std::string& update_type = "all",
+      int sec_from_now = 1,
+      const std::string& timing_type = "scheduled") {
+    std::time_t timestamp = getCurrentTime() + sec_from_now;
+    std::tm* gmt_time = std::gmtime(&timestamp);
+    constexpr int buffer_size = 256;
+    char buffer[buffer_size];
+    std::strftime(buffer, buffer_size, "%Y-%m-%d %H:%M:%S", gmt_time);
+    std::string start_date_time = buffer;
+
+    auto test_file_path = boost::filesystem::canonical(REFRESH_TEST_DIR) / "test.csv";
+    std::string query =
+        "CREATE FOREIGN TABLE test_foreign_table (i INTEGER) server "
+        "omnisci_local_csv with (file_path = '" +
+        test_file_path.string() + "', refresh_update_type = '" + update_type +
+        "', refresh_timing_type = '" + timing_type + "', refresh_start_date_time = '" +
+        start_date_time + "'";
+    if (!refresh_interval.empty()) {
+      query += ", refresh_interval = '" + refresh_interval + "'";
+    }
+    query += ");";
+    return query;
+  }
+
+  void waitForSchedulerRefresh(bool reset_refreshed_table_flag = true) {
+    if (foreign_storage::ForeignTableRefreshScheduler::isRunning()) {
+      constexpr size_t max_check_count = 10;
+      size_t count = 0;
+      if (reset_refreshed_table_flag) {
+        foreign_storage::ForeignTableRefreshScheduler::resetHasRefreshedTable();
+      }
+      while (!foreign_storage::ForeignTableRefreshScheduler::hasRefreshedTable() &&
+             count < max_check_count) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(500));
+        count++;
+      }
+      if (!foreign_storage::ForeignTableRefreshScheduler::hasRefreshedTable()) {
+        throw std::runtime_error{
+            "Max wait time for scheduled table refresh has been exceeded."};
+      }
+    }
+  }
+
+  inline static const std::string REFRESH_TEST_DIR{"./fsi_scheduled_refresh_test"};
+  inline static std::atomic<bool> is_program_running_;
+};
+
+TEST_F(ScheduledRefreshTest, BatchMode) {
+  setTestFile("0.csv");
+  auto query = getCreateScheduledRefreshTableQuery("1S");
+  sql(query);
+  sqlAndCompareResult("SELECT * FROM test_foreign_table;", {{i(0)}});
+
+  setTestFile("1.csv");
+  waitForSchedulerRefresh();
+  sqlAndCompareResult("SELECT * FROM test_foreign_table;", {{i(1)}});
+}
+
+TEST_F(ScheduledRefreshTest, AppendMode) {
+  setTestFile("1.csv");
+  auto query = getCreateScheduledRefreshTableQuery("1S", "append");
+  sql(query);
+  sqlAndCompareResult("SELECT * FROM test_foreign_table;", {{i(1)}});
+
+  setTestFile("two_row_1_2.csv");
+  waitForSchedulerRefresh();
+  sqlAndCompareResult("SELECT * FROM test_foreign_table;", {{i(1)}, {i(2)}});
+}
+
+TEST_F(ScheduledRefreshTest, OnlyStartDateTime) {
+  stopScheduler();
+  setTestFile("0.csv");
+  auto query = getCreateScheduledRefreshTableQuery("", "all");
+  sql(query);
+  sqlAndCompareResult("SELECT * FROM test_foreign_table;", {{i(0)}});
+
+  setTestFile("1.csv");
+  startScheduler();
+  waitForSchedulerRefresh(false);
+  sqlAndCompareResult("SELECT * FROM test_foreign_table;", {{i(1)}});
+}
+
+TEST_F(ScheduledRefreshTest, StartDateTimeInThePast) {
+  setTestFile("0.csv");
+  auto query = getCreateScheduledRefreshTableQuery("1S", "all", -60);
+  queryAndAssertException(
+      query, "Exception: REFRESH_START_DATE_TIME cannot be a past date time.");
+}
+
+TEST_F(ScheduledRefreshTest, SecondsInterval) {
+  stopScheduler();
+  auto start_time = getCurrentTime();
+  setTestFile("0.csv");
+  auto query = getCreateScheduledRefreshTableQuery("10S");
+  sql(query);
+
+  startScheduler();
+  waitForSchedulerRefresh(false);
+  auto refresh_end_time = getCurrentTime();
+
+  // Next refresh should be set based on interval
+  auto [last_refresh_time, next_refresh_time] = getLastAndNextRefreshTimes();
+  assertRefreshTimeBetween(last_refresh_time, start_time, refresh_end_time);
+  constexpr int interval_duration = 10;
+  assertRefreshTimeBetween(
+      next_refresh_time, start_time, refresh_end_time + interval_duration);
+}
+
+TEST_F(ScheduledRefreshTest, HoursInterval) {
+  stopScheduler();
+  auto start_time = getCurrentTime();
+  setTestFile("0.csv");
+  auto query = getCreateScheduledRefreshTableQuery("10H");
+  sql(query);
+
+  startScheduler();
+  waitForSchedulerRefresh(false);
+  auto refresh_end_time = getCurrentTime();
+
+  // Next refresh should be set based on interval
+  auto [last_refresh_time, next_refresh_time] = getLastAndNextRefreshTimes();
+  assertRefreshTimeBetween(last_refresh_time, start_time, refresh_end_time);
+  constexpr int interval_duration = 10 * 60 * 60;
+  assertRefreshTimeBetween(
+      next_refresh_time, start_time, refresh_end_time + interval_duration);
+}
+
+TEST_F(ScheduledRefreshTest, DaysInterval) {
+  stopScheduler();
+  auto start_time = getCurrentTime();
+  setTestFile("0.csv");
+  auto query = getCreateScheduledRefreshTableQuery("10D");
+  sql(query);
+
+  startScheduler();
+  waitForSchedulerRefresh(false);
+  auto refresh_end_time = getCurrentTime();
+
+  // Next refresh should be set based on interval
+  auto [last_refresh_time, next_refresh_time] = getLastAndNextRefreshTimes();
+  assertRefreshTimeBetween(last_refresh_time, start_time, refresh_end_time);
+  constexpr int interval_duration = 10 * 60 * 60 * 24;
+  assertRefreshTimeBetween(
+      next_refresh_time, start_time, refresh_end_time + interval_duration);
+}
+
+TEST_F(ScheduledRefreshTest, InvalidInterval) {
+  setTestFile("0.csv");
+  auto query = getCreateScheduledRefreshTableQuery("10A");
+  queryAndAssertException(
+      query, "Exception: Invalid value provided for the REFRESH_INTERVAL option.");
+}
+
+TEST_F(ScheduledRefreshTest, InvalidRefreshTimingType) {
+  setTestFile("0.csv");
+  auto query = getCreateScheduledRefreshTableQuery("1S", "all", 1, "invalid");
+  queryAndAssertException(query,
+                          "Exception: Invalid value provided for the REFRESH_TIMING_TYPE "
+                          "option. Value must be \"MANUAL\" or \"SCHEDULED\".");
+}
+
+TEST_F(ScheduledRefreshTest, MissingStartDateTime) {
+  setTestFile("0.csv");
+  auto test_file_path = boost::filesystem::canonical(REFRESH_TEST_DIR) / "test.csv";
+  std::string query =
+      "CREATE FOREIGN TABLE test_foreign_table (i INTEGER) "
+      "server omnisci_local_csv with (file_path = '" +
+      test_file_path.string() +
+      "', "
+      "refresh_timing_type = 'scheduled');";
+  queryAndAssertException(query,
+                          "Exception: REFRESH_START_DATE_TIME option must be provided "
+                          "for scheduled refreshes.");
+}
+
+TEST_F(ScheduledRefreshTest, InvalidStartDateTime) {
+  setTestFile("0.csv");
+  auto test_file_path = boost::filesystem::canonical(REFRESH_TEST_DIR) / "test.csv";
+  std::string query =
+      "CREATE FOREIGN TABLE test_foreign_table (i INTEGER) "
+      "server omnisci_local_csv with (file_path = '" +
+      test_file_path.string() +
+      "', "
+      "refresh_timing_type = 'scheduled', refresh_start_date_time = "
+      "'invalid_date_time');";
+  queryAndAssertException(query,
+                          "Exception: Invalid DATE/TIMESTAMP string (invalid_date_time)");
+}
+
+TEST_F(ScheduledRefreshTest, SchedulerStop) {
+  setTestFile("0.csv");
+  auto query = getCreateScheduledRefreshTableQuery("1S");
+  sql(query);
+  sqlAndCompareResult("SELECT * FROM test_foreign_table;", {{i(0)}});
+
+  stopScheduler();
+  setTestFile("1.csv");
+  waitForSchedulerRefresh();
+  sqlAndCompareResult("SELECT * FROM test_foreign_table;", {{i(0)}});
+
+  startScheduler();
+  setTestFile("1.csv");
+  waitForSchedulerRefresh();
+  sqlAndCompareResult("SELECT * FROM test_foreign_table;", {{i(1)}});
+}
+
+TEST_F(ScheduledRefreshTest, PreEvictionError) {
+  setTestFile("0.csv");
+  auto query = getCreateScheduledRefreshTableQuery("1S");
+  sql(query);
+  sqlAndCompareResult("SELECT * FROM test_foreign_table;", {{i(0)}});
+
+  auto& catalog = getCatalog();
+  auto foreign_storage_mgr = catalog.getDataMgr().getForeignStorageMgr();
+  auto table = catalog.getMetadataForTable("test_foreign_table", false);
+
+  auto mock_data_wrapper = std::make_shared<MockDataWrapper>();
+  mock_data_wrapper->throwOnMetadataScan(true);
+  foreign_storage_mgr->setDataWrapper({catalog.getCurrentDB().dbId, table->tableId},
+                                      mock_data_wrapper);
+
+  // Assert that stale cached data is still used
+  setTestFile("1.csv");
+  waitForSchedulerRefresh();
+  mock_data_wrapper->throwOnMetadataScan(false);
+  sqlAndCompareResult("SELECT * FROM test_foreign_table;", {{i(0)}});
+}
+
+// This currently results in an assertion failure because the cache
+// file buffer encoder is deleted when the exception occurs and
+// subsequent cache method calls attempt to access the encoder.
+// TODO: Look into individual cache buffer encoder recovery
+// or an alternate solution that does not rely on buffer encoder
+// resets.
+TEST_F(ScheduledRefreshTest, DISABLED_PostEvictionError) {
+  setTestFile("0.csv");
+  auto query = getCreateScheduledRefreshTableQuery("1S");
+  sql(query);
+  sqlAndCompareResult("SELECT * FROM test_foreign_table;", {{i(0)}});
+
+  auto& catalog = getCatalog();
+  auto foreign_storage_mgr = catalog.getDataMgr().getForeignStorageMgr();
+  auto table = catalog.getMetadataForTable("test_foreign_table", false);
+
+  auto mock_data_wrapper = std::make_shared<MockDataWrapper>();
+  mock_data_wrapper->throwOnChunkFetch(true);
+  foreign_storage_mgr->setDataWrapper({catalog.getCurrentDB().dbId, table->tableId},
+                                      mock_data_wrapper);
+
+  // Assert that new data is fetched
+  setTestFile("1.csv");
+  waitForSchedulerRefresh();
+  mock_data_wrapper->throwOnChunkFetch(false);
+  sqlAndCompareResult("SELECT * FROM test_foreign_table;", {{i(1)}});
 }
 
 int main(int argc, char** argv) {

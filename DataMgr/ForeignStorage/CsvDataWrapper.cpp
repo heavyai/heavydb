@@ -43,16 +43,14 @@ CsvDataWrapper::CsvDataWrapper(const ForeignTable* foreign_table)
     : db_id_(-1), foreign_table_(foreign_table), is_restored_(false) {}
 
 void CsvDataWrapper::validateOptions(const ForeignTable* foreign_table) {
-  for (const auto& entry : foreign_table->options) {
-    if (!ForeignTable::isValidOption(entry) &&
-        std::find(supported_options_.begin(), supported_options_.end(), entry.first) ==
-            supported_options_.end()) {
-      throw std::runtime_error{"Invalid foreign table option \"" + entry.first + "\"."};
-    }
-  }
   CsvDataWrapper data_wrapper{foreign_table};
   data_wrapper.validateAndGetCopyParams();
   data_wrapper.validateFilePath();
+}
+
+std::vector<std::string_view> CsvDataWrapper::getSupportedOptions() {
+  return std::vector<std::string_view>{supported_options_.begin(),
+                                       supported_options_.end()};
 }
 
 std::string CsvDataWrapper::getFilePath() {

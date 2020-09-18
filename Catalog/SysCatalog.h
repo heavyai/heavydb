@@ -298,6 +298,7 @@ class SysCatalog : private CommonFileOperations {
   std::unordered_map<std::string, std::vector<std::string>> getGranteesOfSharedDashboards(
       const std::vector<std::string>& dashboard_ids);
   void check_for_session_encryption(const std::string& pki_cert, std::string& session);
+  std::vector<std::shared_ptr<Catalog>> getCatalogsForAllDbs();
 
  private:
   using GranteeMap = std::map<std::string, Grantee*>;

@@ -123,6 +123,7 @@ class CreateForeignTableCommand : public DdlCommand {
                        TableDescriptor& td,
                        const size_t column_count);
   void setColumnDetails(std::list<ColumnDescriptor>& columns);
+  void setRefreshOptions(foreign_storage::ForeignTable& foreign_table);
 };
 
 class DropForeignTableCommand : public DdlCommand {

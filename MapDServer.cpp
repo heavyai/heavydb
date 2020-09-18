@@ -54,7 +54,9 @@
 #include <sstream>
 #include <thread>
 #include <vector>
+
 #include "MapDRelease.h"
+#include "DataMgr/ForeignStorage/ForeignTableRefresh.h"
 #include "Shared/Compressor.h"
 #include "Shared/SystemParameters.h"
 #include "Shared/file_delete.h"
@@ -374,6 +376,10 @@ int startMapdServer(CommandLineOptions& prog_config_opts, bool start_http_server
     LOG(FATAL) << "Failed to initialize service handler: " << e.what();
   }
 
+  if (g_enable_fsi) {
+    foreign_storage::ForeignTableRefreshScheduler::start(g_running);
+  }
+
   mapd::shared_ptr<TServerSocket> serverSocket;
   mapd::shared_ptr<TServerSocket> httpServerSocket;
   if (!prog_config_opts.system_parameters.ssl_cert_file.empty() &&
@@ -470,6 +476,10 @@ int startMapdServer(CommandLineOptions& prog_config_opts, bool start_http_server
   file_delete_thread.join();
   heartbeat_thread.join();
   ForeignStorageInterface::destroy();
+
+  if (g_enable_fsi) {
+    foreign_storage::ForeignTableRefreshScheduler::stop();
+  }
 
   int signum = g_saw_signal;
   if (signum <= 0 || signum == SIGTERM) {

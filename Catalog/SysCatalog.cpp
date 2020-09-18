@@ -872,6 +872,16 @@ void SysCatalog::dropUser(const string& name) {
   sqliteConnector_->query("END TRANSACTION");
 }
 
+std::vector<std::shared_ptr<Catalog>> SysCatalog::getCatalogsForAllDbs() {
+  std::vector<std::shared_ptr<Catalog>> catalogs{};
+  const auto& db_metadata_list = getAllDBMetadata();
+  for (const auto& db_metadata : db_metadata_list) {
+    catalogs.emplace_back(Catalog::get(
+        basePath_, db_metadata, dataMgr_, string_dict_hosts_, calciteMgr_, false));
+  }
+  return catalogs;
+}
+
 namespace {  // anonymous namespace
 
 auto append_with_commas = [](string& s, const string& t) {
