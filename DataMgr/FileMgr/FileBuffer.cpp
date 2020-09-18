@@ -400,18 +400,18 @@ void FileBuffer::readMetadata(const Page& page) {
   fread((int8_t*)&(typeData[0]), sizeof(int), typeData.size(), f);
   int version = typeData[0];
   CHECK(version == METADATA_VERSION);  // add backward compatibility code here
-  has_encoder = static_cast<bool>(typeData[1]);
+  bool has_encoder = static_cast<bool>(typeData[1]);
   if (has_encoder) {
-    sql_type.set_type(static_cast<SQLTypes>(typeData[2]));
-    sql_type.set_subtype(static_cast<SQLTypes>(typeData[3]));
-    sql_type.set_dimension(typeData[4]);
-    sql_type.set_scale(typeData[5]);
-    sql_type.set_notnull(static_cast<bool>(typeData[6]));
-    sql_type.set_compression(static_cast<EncodingType>(typeData[7]));
-    sql_type.set_comp_param(typeData[8]);
-    sql_type.set_size(typeData[9]);
-    initEncoder(sql_type);
-    encoder->readMetadata(f);
+    sql_type_.set_type(static_cast<SQLTypes>(typeData[2]));
+    sql_type_.set_subtype(static_cast<SQLTypes>(typeData[3]));
+    sql_type_.set_dimension(typeData[4]);
+    sql_type_.set_scale(typeData[5]);
+    sql_type_.set_notnull(static_cast<bool>(typeData[6]));
+    sql_type_.set_compression(static_cast<EncodingType>(typeData[7]));
+    sql_type_.set_comp_param(typeData[8]);
+    sql_type_.set_size(typeData[9]);
+    initEncoder(sql_type_);
+    encoder_->readMetadata(f);
   }
 }
 
@@ -427,43 +427,30 @@ void FileBuffer::writeMetadata(const int epoch) {
   vector<int> typeData(NUM_METADATA);  // assumes we will encode hasEncoder, bufferType,
                                        // encodingType, encodingBits all as int
   typeData[0] = METADATA_VERSION;
-  typeData[1] = static_cast<int>(has_encoder);
-  if (has_encoder) {
-    typeData[2] = static_cast<int>(sql_type.get_type());
-    typeData[3] = static_cast<int>(sql_type.get_subtype());
-    typeData[4] = sql_type.get_dimension();
-    typeData[5] = sql_type.get_scale();
-    typeData[6] = static_cast<int>(sql_type.get_notnull());
-    typeData[7] = static_cast<int>(sql_type.get_compression());
-    typeData[8] = sql_type.get_comp_param();
-    typeData[9] = sql_type.get_size();
+  typeData[1] = static_cast<int>(hasEncoder());
+  if (hasEncoder()) {
+    typeData[2] = static_cast<int>(sql_type_.get_type());
+    typeData[3] = static_cast<int>(sql_type_.get_subtype());
+    typeData[4] = sql_type_.get_dimension();
+    typeData[5] = sql_type_.get_scale();
+    typeData[6] = static_cast<int>(sql_type_.get_notnull());
+    typeData[7] = static_cast<int>(sql_type_.get_compression());
+    typeData[8] = sql_type_.get_comp_param();
+    typeData[9] = sql_type_.get_size();
   }
   fwrite((int8_t*)&(typeData[0]), sizeof(int), typeData.size(), f);
-  if (has_encoder) {  // redundant
-    encoder->writeMetadata(f);
+  if (hasEncoder()) {  // redundant
+    encoder_->writeMetadata(f);
   }
   metadataPages_.epochs.push_back(epoch);
   metadataPages_.pageVersions.push_back(page);
 }
 
-/*
-void FileBuffer::checkpoint() {
-    if (is_appended_) {
-        Page page = multiPages_[multiPages.size()-1].current();
-        writeHeader(page,0,multiPages_[0].epochs.back());
-    }
-    is_dirty_ = false;
-    is_updated_ = false;
-    is_appended_ = false;
-}
-*/
-
 void FileBuffer::append(int8_t* src,
                         const size_t numBytes,
                         const MemoryLevel srcBufferType,
                         const int deviceId) {
-  is_dirty_ = true;
-  is_appended_ = true;
+  setAppended();
 
   size_t startPage = size_ / pageDataSize_;
   size_t startPageOffset = size_ % pageDataSize_;
@@ -511,16 +498,16 @@ void FileBuffer::write(int8_t* src,
   if (srcBufferType != CPU_LEVEL) {
     LOG(FATAL) << "Unsupported Buffer type";
   }
-  is_dirty_ = true;
-  if (offset < size_) {
-    is_updated_ = true;
-  }
-  bool tempIsAppended = false;
 
+  bool tempIsAppended = false;
+  setDirty();
+  if (offset < size_) {
+    setUpdated();
+  }
   if (offset + numBytes > size_) {
     tempIsAppended = true;  // because is_appended_ could have already been true - to
                             // avoid rewriting header
-    is_appended_ = true;
+    setAppended();
     size_ = offset + numBytes;
   }
 

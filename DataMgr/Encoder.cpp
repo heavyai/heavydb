@@ -221,11 +221,11 @@ Encoder* Encoder::Create(Data_Namespace::AbstractBuffer* buffer,
 Encoder::Encoder(Data_Namespace::AbstractBuffer* buffer)
     : num_elems_(0)
     , buffer_(buffer)
-    , decimal_overflow_validator_(buffer ? buffer->sql_type : SQLTypeInfo())
-    , date_days_overflow_validator_(buffer ? buffer->sql_type : SQLTypeInfo()){};
+    , decimal_overflow_validator_(buffer ? buffer->getSqlType() : SQLTypeInfo())
+    , date_days_overflow_validator_(buffer ? buffer->getSqlType() : SQLTypeInfo()){};
 
 void Encoder::getMetadata(const std::shared_ptr<ChunkMetadata>& chunkMetadata) {
-  chunkMetadata->sqlType = buffer_->sql_type;
+  chunkMetadata->sqlType = buffer_->getSqlType();
   chunkMetadata->numBytes = buffer_->size();
   chunkMetadata->numElements = num_elems_;
 }

@@ -99,14 +99,15 @@ void Buffer::write(int8_t* src,
   writeData(src, num_bytes, offset, src_buffer_type, src_device_id);
 
   // update dirty flags for buffer and each affected page
-  is_dirty_ = true;
+  setDirty();
   if (offset < size_) {
-    is_updated_ = true;
+    setUpdated();
   }
   if (offset + num_bytes > size_) {
-    is_appended_ = true;
+    setAppended();
     size_ = offset + num_bytes;
   }
+
   // std::cout << "Size after write: " << size_ << std::endl;
 
   size_t first_dirty_page = offset / page_size_;
@@ -127,8 +128,7 @@ void Buffer::append(int8_t* src,
       append_mutex_);  // keep another thread from getting an append lock
 #endif
 
-  is_dirty_ = true;
-  is_appended_ = true;
+  setAppended();
 
   if (num_bytes + size_ > reservedSize()) {
     reserve(num_bytes + size_);

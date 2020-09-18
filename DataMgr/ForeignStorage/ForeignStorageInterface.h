@@ -69,8 +69,6 @@ class ForeignStorageBuffer : public Data_Namespace::AbstractBuffer {
     return Data_Namespace::MemoryLevel::DISK_LEVEL;
   };
 
-  size_t size() const override { return size_; }
-
   std::vector<int8_t> moveBuffer() { return std::move(buff_); }
 
   void write(int8_t* src,

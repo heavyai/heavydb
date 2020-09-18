@@ -72,15 +72,7 @@ void ForeignStorageMgr::fetchBuffer(const ChunkKey& chunk_key,
   // Read the contents of the source buffer into the destination buffer, if the
   // destination buffer was not directly populated by the data wrapper
   if (is_cache_enabled_ || is_buffer_from_map) {
-    size_t chunk_size = (num_bytes == 0) ? buffer->size() : num_bytes;
-    destination_buffer->reserve(chunk_size);
-    buffer->read(destination_buffer->getMemoryPtr() + destination_buffer->size(),
-                 chunk_size - destination_buffer->size(),
-                 destination_buffer->size(),
-                 destination_buffer->getType(),
-                 destination_buffer->getDeviceId());
-    destination_buffer->setSize(chunk_size);
-    destination_buffer->syncEncoder(buffer);
+    buffer->copyTo(destination_buffer, num_bytes);
   }
 
   if (is_buffer_from_map) {

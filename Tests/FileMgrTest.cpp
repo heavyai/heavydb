@@ -66,7 +66,7 @@ class FileMgrTest : public DBHandlerTestFixture {
     left_buffer->read(left_array, num_bytes);
     right_buffer->read(right_array, num_bytes);
     ASSERT_EQ(std::memcmp(left_array, right_array, num_bytes), 0);
-    ASSERT_EQ(left_buffer->has_encoder, right_buffer->has_encoder);
+    ASSERT_EQ(left_buffer->hasEncoder(), right_buffer->hasEncoder());
   }
 
   void compareBuffersAndMetadata(AbstractBuffer* left_buffer,
@@ -77,16 +77,14 @@ class FileMgrTest : public DBHandlerTestFixture {
     left_buffer->read(left_array, num_bytes);
     right_buffer->read(right_array, num_bytes);
     ASSERT_EQ(std::memcmp(left_array, right_array, num_bytes), 0);
-    ASSERT_EQ(left_buffer->has_encoder, right_buffer->has_encoder);
-    if (left_buffer->has_encoder) {
-      ASSERT_TRUE(left_buffer->encoder);
-      ASSERT_TRUE(right_buffer->encoder);
+    ASSERT_EQ(left_buffer->hasEncoder(), right_buffer->hasEncoder());
+    if (left_buffer->hasEncoder()) {
       const std::shared_ptr<ChunkMetadata> left_chunk_metadata =
           std::make_shared<ChunkMetadata>();
       const std::shared_ptr<ChunkMetadata> right_chunk_metadata =
           std::make_shared<ChunkMetadata>();
-      left_buffer->encoder->getMetadata(left_chunk_metadata);
-      right_buffer->encoder->getMetadata(right_chunk_metadata);
+      left_buffer->getEncoder()->getMetadata(left_chunk_metadata);
+      right_buffer->getEncoder()->getMetadata(right_chunk_metadata);
       ASSERT_EQ(*left_chunk_metadata, *right_chunk_metadata);
     }
   }

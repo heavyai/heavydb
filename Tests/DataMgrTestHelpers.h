@@ -48,10 +48,9 @@ class TestBuffer : public AbstractBuffer {
              const size_t offset = 0,
              const MemoryLevel src_buffer_type = CPU_LEVEL,
              const int src_device_id = -1) override {
-    is_updated_ = true;
     reserve(num_bytes + offset);
     memcpy(mem_ + offset, src, num_bytes);
-    is_dirty_ = true;
+    setUpdated();
   }
 
   void reserve(size_t num_bytes) override {
@@ -70,8 +69,7 @@ class TestBuffer : public AbstractBuffer {
     size_t offset = size_;
     reserve(size_ + num_bytes);
     memcpy(mem_ + offset, src, num_bytes);
-    is_dirty_ = true;
-    is_updated_ = true;
+    setAppended();
   }
 
   int8_t* getMemoryPtr() override { return mem_; }
@@ -86,8 +84,6 @@ class TestBuffer : public AbstractBuffer {
     return 0;
   }
 
-  size_t size() const override { return size_; }
-
   size_t reservedSize() const override { return size_; }
 
   MemoryLevel getType() const override { return Data_Namespace::CPU_LEVEL; }
@@ -98,7 +94,7 @@ class TestBuffer : public AbstractBuffer {
     read(left_array, num_bytes);
     buffer->read(right_array, num_bytes);
     if ((std::memcmp(left_array, right_array, num_bytes) == 0) &&
-        (has_encoder == buffer->has_encoder)) {
+        (hasEncoder() == buffer->hasEncoder())) {
       return true;
     }
     std::cerr << "buffers do not match:\n";
@@ -111,7 +107,6 @@ class TestBuffer : public AbstractBuffer {
 
  protected:
   int8_t* mem_ = nullptr;
-  size_t size_ = 0;
 };
 
 }  // namespace TestHelpers

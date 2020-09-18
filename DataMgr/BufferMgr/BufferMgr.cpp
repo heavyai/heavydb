@@ -673,7 +673,7 @@ void BufferMgr::checkpoint() {
   for (auto& chunk_itr : chunk_index_) {
     // checks that buffer is actual chunk (not just buffer) and is dirty
     auto& buffer_itr = chunk_itr.second;
-    if (buffer_itr->chunk_key[0] != -1 && buffer_itr->buffer->is_dirty_) {
+    if (buffer_itr->chunk_key[0] != -1 && buffer_itr->buffer->isDirty()) {
       parent_mgr_->putBuffer(buffer_itr->chunk_key, buffer_itr->buffer);
       buffer_itr->buffer->clearDirtyBits();
     }
@@ -699,7 +699,7 @@ void BufferMgr::checkpoint(const int db_id, const int tb_id) {
                      key_prefix.begin(),
                      key_prefix.end()) != buffer_it->first.begin() + key_prefix.size()) {
     if (buffer_it->second->chunk_key[0] != -1 &&
-        buffer_it->second->buffer->is_dirty_) {  // checks that buffer is actual chunk
+        buffer_it->second->buffer->isDirty()) {  // checks that buffer is actual chunk
                                                  // (not just buffer) and is dirty
 
       parent_mgr_->putBuffer(buffer_it->second->chunk_key, buffer_it->second->buffer);
@@ -778,24 +778,8 @@ void BufferMgr::fetchBuffer(const ChunkKey& key,
     }
     sized_segs_lock.unlock();
   }
-  size_t chunk_size = num_bytes == 0 ? buffer->size() : num_bytes;
   lock.unlock();
-  dest_buffer->reserve(chunk_size);
-  if (buffer->isUpdated()) {
-    buffer->read(dest_buffer->getMemoryPtr(),
-                 chunk_size,
-                 0,
-                 dest_buffer->getType(),
-                 dest_buffer->getDeviceId());
-  } else {
-    buffer->read(dest_buffer->getMemoryPtr() + dest_buffer->size(),
-                 chunk_size - dest_buffer->size(),
-                 dest_buffer->size(),
-                 dest_buffer->getType(),
-                 dest_buffer->getDeviceId());
-  }
-  dest_buffer->setSize(chunk_size);
-  dest_buffer->syncEncoder(buffer);
+  buffer->copyTo(dest_buffer, num_bytes);
   buffer->unPin();
 }
 

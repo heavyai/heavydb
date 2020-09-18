@@ -52,21 +52,14 @@ void PersistentStorageMgr::deleteBuffersWithPrefix(const ChunkKey& chunk_key_pre
 
 AbstractBuffer* PersistentStorageMgr::getBuffer(const ChunkKey& chunk_key,
                                                 const size_t num_bytes) {
-  if (isForeignStorage(chunk_key)) {
-    return foreign_storage_mgr_->getBuffer(chunk_key, num_bytes);
-  } else {
-    return global_file_mgr_->getBuffer(chunk_key, num_bytes);
-  }
+  return getStorageMgrForTableKey(chunk_key)->getBuffer(chunk_key, num_bytes);
 }
 
 void PersistentStorageMgr::fetchBuffer(const ChunkKey& chunk_key,
                                        AbstractBuffer* destination_buffer,
                                        const size_t num_bytes) {
-  if (isForeignStorage(chunk_key)) {
-    foreign_storage_mgr_->fetchBuffer(chunk_key, destination_buffer, num_bytes);
-  } else {
-    global_file_mgr_->fetchBuffer(chunk_key, destination_buffer, num_bytes);
-  }
+  getStorageMgrForTableKey(chunk_key)->fetchBuffer(
+      chunk_key, destination_buffer, num_bytes);
 }
 
 AbstractBuffer* PersistentStorageMgr::putBuffer(const ChunkKey& chunk_key,
@@ -83,11 +76,8 @@ void PersistentStorageMgr::getChunkMetadataVec(ChunkMetadataVector& chunk_metada
 void PersistentStorageMgr::getChunkMetadataVecForKeyPrefix(
     ChunkMetadataVector& chunk_metadata,
     const ChunkKey& keyPrefix) {
-  if (isForeignStorage(keyPrefix)) {
-    foreign_storage_mgr_->getChunkMetadataVecForKeyPrefix(chunk_metadata, keyPrefix);
-  } else {
-    global_file_mgr_->getChunkMetadataVecForKeyPrefix(chunk_metadata, keyPrefix);
-  }
+  getStorageMgrForTableKey(keyPrefix)->getChunkMetadataVecForKeyPrefix(chunk_metadata,
+                                                                       keyPrefix);
 }
 
 bool PersistentStorageMgr::isBufferOnDevice(const ChunkKey& chunk_key) {
@@ -157,7 +147,7 @@ void PersistentStorageMgr::removeTableRelatedDS(const int db_id, const int table
   global_file_mgr_->removeTableRelatedDS(db_id, table_id);
 }
 
-bool PersistentStorageMgr::isForeignStorage(const ChunkKey& chunk_key) {
+bool PersistentStorageMgr::isForeignStorage(const ChunkKey& chunk_key) const {
   auto db_id = chunk_key[0];
   auto table_id = chunk_key[1];
   auto catalog = Catalog_Namespace::Catalog::checkedGet(db_id);
@@ -165,6 +155,15 @@ bool PersistentStorageMgr::isForeignStorage(const ChunkKey& chunk_key) {
   auto table = catalog->getMetadataForTableImpl(table_id, false);
   CHECK(table);
   return table->storageType == StorageType::FOREIGN_TABLE;
+}
+
+AbstractBufferMgr* PersistentStorageMgr::getStorageMgrForTableKey(
+    const ChunkKey& table_key) const {
+  if (isForeignStorage(table_key)) {
+    return foreign_storage_mgr_.get();
+  } else {
+    return global_file_mgr_.get();
+  }
 }
 
 foreign_storage::ForeignStorageMgr* PersistentStorageMgr::getForeignStorageMgr() const {

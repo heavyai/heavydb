@@ -47,14 +47,11 @@ class ForeignStorageBuffer : public AbstractBuffer {
   int8_t* getMemoryPtr() override;
   size_t pageCount() const override;
   size_t pageSize() const override;
-  size_t size() const override;
-  void setSize(const size_t num_bytes) override;
   size_t reservedSize() const override;
   MemoryLevel getType() const override;
 
  private:
   std::unique_ptr<int8_t[]> buffer;
-  size_t byte_count;
   size_t reserved_byte_count;
 };
 }  // namespace foreign_storage

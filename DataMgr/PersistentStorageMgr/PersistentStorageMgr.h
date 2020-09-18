@@ -63,7 +63,8 @@ class PersistentStorageMgr : public AbstractBufferMgr {
   foreign_storage::ForeignStorageCache* getDiskCache() const;
 
  private:
-  bool isForeignStorage(const ChunkKey& chunk_key);
+  bool isForeignStorage(const ChunkKey& chunk_key) const;
+  AbstractBufferMgr* getStorageMgrForTableKey(const ChunkKey& table_key) const;
 
   std::unique_ptr<File_Namespace::GlobalFileMgr> global_file_mgr_;
   std::unique_ptr<foreign_storage::ForeignStorageMgr> foreign_storage_mgr_;

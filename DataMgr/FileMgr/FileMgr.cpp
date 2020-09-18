@@ -592,13 +592,7 @@ void FileMgr::checkpoint() {
   VLOG(2) << "Checkpointing epoch: " << epoch_;
   mapd_unique_lock<mapd_shared_mutex> chunkIndexWriteLock(chunkIndexMutex_);
   for (auto chunkIt = chunkIndex_.begin(); chunkIt != chunkIndex_.end(); ++chunkIt) {
-    /*
-    for (auto vecIt = chunkIt->first.begin(); vecIt != chunkIt->first.end(); ++vecIt) {
-        std::cout << *vecIt << ",";
-    }
-    cout << "Is dirty: " << chunkIt->second->isDirty_ << endl;
-    */
-    if (chunkIt->second->is_dirty_) {
+    if (chunkIt->second->isDirty()) {
       chunkIt->second->writeMetadata(epoch_);
       chunkIt->second->clearDirtyBits();
     }
@@ -622,9 +616,9 @@ void FileMgr::checkpoint() {
   free_pages.clear();
 }
 
-AbstractBuffer* FileMgr::createBuffer(const ChunkKey& key,
-                                      const size_t pageSize,
-                                      const size_t numBytes) {
+FileBuffer* FileMgr::createBuffer(const ChunkKey& key,
+                                  const size_t pageSize,
+                                  const size_t numBytes) {
   mapd_unique_lock<mapd_shared_mutex> chunkIndexWriteLock(chunkIndexMutex_);
   return createBufferUnlocked(key, pageSize, numBytes);
 }
@@ -632,9 +626,9 @@ AbstractBuffer* FileMgr::createBuffer(const ChunkKey& key,
 // The underlying implementation of createBuffer needs to be lockless since
 // some of the codepaths that call it will have already obtained a write lock
 // and should not release it until they are complete.
-AbstractBuffer* FileMgr::createBufferUnlocked(const ChunkKey& key,
-                                              const size_t pageSize,
-                                              const size_t numBytes) {
+FileBuffer* FileMgr::createBufferUnlocked(const ChunkKey& key,
+                                          const size_t pageSize,
+                                          const size_t numBytes) {
   size_t actualPageSize = pageSize;
   if (actualPageSize == 0) {
     actualPageSize = defaultPageSize_;
@@ -699,7 +693,7 @@ void FileMgr::deleteBuffersWithPrefix(const ChunkKey& keyPrefix, const bool purg
   }
 }
 
-AbstractBuffer* FileMgr::getBuffer(const ChunkKey& key, const size_t numBytes) {
+FileBuffer* FileMgr::getBuffer(const ChunkKey& key, const size_t numBytes) {
   mapd_shared_lock<mapd_shared_mutex> chunkIndexReadLock(chunkIndexMutex_);
   auto chunkIt = chunkIndex_.find(key);
   if (chunkIt == chunkIndex_.end()) {
@@ -726,40 +720,24 @@ void FileMgr::fetchBuffer(const ChunkKey& key,
   chunkIndexReadLock.unlock();
 
   AbstractBuffer* chunk = chunkIt->second;
-  // ChunkSize is either specified in function call with numBytes or we
+  // chunk's size is either specified in function call with numBytes or we
   // just look at pageSize * numPages in FileBuffer
-  size_t chunkSize = numBytes == 0 ? chunk->size() : numBytes;
   if (numBytes > 0 && numBytes > chunk->size()) {
     LOG(FATAL) << "Chunk retrieved for key `" << showChunk(key) << "` is smaller ("
                << chunk->size() << ") than number of bytes requested (" << numBytes
                << ")";
   }
-  destBuffer->reserve(chunkSize);
-  // std::cout << "After reserve chunksize: " << chunkSize << std::endl;
-  if (chunk->isUpdated()) {
-    chunk->read(destBuffer->getMemoryPtr(),
-                chunkSize,
-                0,
-                destBuffer->getType(),
-                destBuffer->getDeviceId());
-  } else {
-    chunk->read(destBuffer->getMemoryPtr() + destBuffer->size(),
-                chunkSize - destBuffer->size(),
-                destBuffer->size(),
-                destBuffer->getType(),
-                destBuffer->getDeviceId());
-  }
-  destBuffer->setSize(chunkSize);
-  destBuffer->syncEncoder(chunk);
+
+  chunk->copyTo(destBuffer, numBytes);
 }
 
-AbstractBuffer* FileMgr::putBuffer(const ChunkKey& key,
-                                   AbstractBuffer* srcBuffer,
-                                   const size_t numBytes) {
+FileBuffer* FileMgr::putBuffer(const ChunkKey& key,
+                               AbstractBuffer* srcBuffer,
+                               const size_t numBytes) {
   // obtain a pointer to the Chunk
   mapd_unique_lock<mapd_shared_mutex> chunkIndexWriteLock(chunkIndexMutex_);
   auto chunkIt = chunkIndex_.find(key);
-  AbstractBuffer* chunk;
+  FileBuffer* chunk;
   if (chunkIt == chunkIndex_.end()) {
     chunk = createBufferUnlocked(key, defaultPageSize_);
   } else {
@@ -954,9 +932,9 @@ void FileMgr::getChunkMetadataVec(ChunkMetadataVector& chunkMetadataVec) {
   mapd_unique_lock<mapd_shared_mutex> chunkIndexWriteLock(chunkIndexMutex_);
   chunkMetadataVec.reserve(chunkIndex_.size());
   for (auto chunkIt = chunkIndex_.begin(); chunkIt != chunkIndex_.end(); ++chunkIt) {
-    if (chunkIt->second->has_encoder) {
+    if (chunkIt->second->hasEncoder()) {
       auto chunk_metadata = std::make_shared<ChunkMetadata>();
-      chunkIt->second->encoder->getMetadata(chunk_metadata);
+      chunkIt->second->encoder_->getMetadata(chunk_metadata);
       chunkMetadataVec.emplace_back(chunkIt->first, chunk_metadata);
     }
   }
@@ -976,15 +954,9 @@ void FileMgr::getChunkMetadataVecForKeyPrefix(ChunkMetadataVector& chunkMetadata
                      chunkIt->first.begin() + keyPrefix.size(),
                      keyPrefix.begin(),
                      keyPrefix.end()) != chunkIt->first.begin() + keyPrefix.size()) {
-    /*
-    for (auto vecIt = chunkIt->first.begin(); vecIt != chunkIt->first.end(); ++vecIt) {
-        std::cout << *vecIt << ",";
-    }
-    cout << endl;
-    */
-    if (chunkIt->second->has_encoder) {
+    if (chunkIt->second->hasEncoder()) {
       auto chunk_metadata = std::make_shared<ChunkMetadata>();
-      chunkIt->second->encoder->getMetadata(chunk_metadata);
+      chunkIt->second->encoder_->getMetadata(chunk_metadata);
       chunkMetadataVec.emplace_back(chunkIt->first, chunk_metadata);
     }
     chunkIt++;

@@ -47,18 +47,19 @@ namespace Data_Namespace {
 class AbstractBuffer {
  public:
   AbstractBuffer(const int device_id)
-      : has_encoder(false)
+      : encoder_(nullptr)
       , size_(0)
+      , device_id_(device_id)
       , is_dirty_(false)
       , is_appended_(false)
-      , is_updated_(false)
-      , device_id_(device_id) {}
+      , is_updated_(false) {}
+
   AbstractBuffer(const int device_id, const SQLTypeInfo sql_type)
       : size_(0)
+      , device_id_(device_id)
       , is_dirty_(false)
       , is_appended_(false)
-      , is_updated_(false)
-      , device_id_(device_id) {
+      , is_updated_(false) {
     initEncoder(sql_type);
   }
   virtual ~AbstractBuffer() {}
@@ -79,12 +80,9 @@ class AbstractBuffer {
                       const MemoryLevel src_buffer_type = CPU_LEVEL,
                       const int device_id = -1) = 0;
   virtual int8_t* getMemoryPtr() = 0;
-
   virtual size_t pageCount() const = 0;
   virtual size_t pageSize() const = 0;
-  virtual size_t size() const = 0;
   virtual size_t reservedSize() const = 0;
-  virtual int getDeviceId() const { return device_id_; }
   virtual MemoryLevel getType() const = 0;
 
   // Next three methods are dummy methods so FileBuffer does not implement these
@@ -92,56 +90,54 @@ class AbstractBuffer {
   virtual inline int unPin() { return 0; }
   virtual inline int getPinCount() { return 0; }
 
-  virtual inline bool isDirty() const { return is_dirty_; }
-  virtual inline bool isAppended() const { return is_appended_; }
-  virtual inline bool isUpdated() const { return is_updated_; }
+  // These getters should not vary when inherited and therefore don't need to be virtual.
+  inline size_t size() const { return size_; }
+  inline int getDeviceId() const { return device_id_; }
+  inline bool isDirty() const { return is_dirty_; }
+  inline bool isAppended() const { return is_appended_; }
+  inline bool isUpdated() const { return is_updated_; }
+  inline bool hasEncoder() const { return (encoder_ != nullptr); }
+  inline SQLTypeInfo getSqlType() const { return sql_type_; }
+  inline void setSqlType(const SQLTypeInfo& sql_type) { sql_type_ = sql_type; }
+  inline Encoder* getEncoder() const {
+    CHECK(hasEncoder());
+    return encoder_.get();
+  }
 
-  virtual inline void setDirty() { is_dirty_ = true; }
+  inline void setDirty() { is_dirty_ = true; }
 
-  virtual inline void setUpdated() {
+  inline void setUpdated() {
     is_updated_ = true;
     is_dirty_ = true;
   }
 
-  virtual inline void setAppended() {
+  inline void setAppended() {
     is_appended_ = true;
     is_dirty_ = true;
   }
 
-  virtual void setSize(const size_t size) { size_ = size; }
-  void clearDirtyBits() {
+  inline void setSize(const size_t size) { size_ = size; }
+  inline void clearDirtyBits() {
     is_appended_ = false;
     is_updated_ = false;
     is_dirty_ = false;
   }
-  void initEncoder(const SQLTypeInfo tmp_sql_type) {
-    has_encoder = true;
-    sql_type = tmp_sql_type;
-    encoder.reset(Encoder::Create(this, sql_type));
-    LOG_IF(FATAL, encoder == nullptr)
-        << "Failed to create encoder for SQL Type " << sql_type.get_type_name();
-  }
 
-  void syncEncoder(const AbstractBuffer* src_buffer) {
-    has_encoder = src_buffer->has_encoder;
-    if (has_encoder) {
-      if (!encoder) {  // Encoder not initialized
-        initEncoder(src_buffer->sql_type);
-      }
-      encoder->copyMetadata(src_buffer->encoder.get());
-    }
-  }
-
-  std::unique_ptr<Encoder> encoder;
-  bool has_encoder;
-  SQLTypeInfo sql_type;
+  void initEncoder(const SQLTypeInfo& tmp_sql_type);
+  void syncEncoder(const AbstractBuffer* src_buffer);
+  void copyTo(AbstractBuffer* destination_buffer, const size_t num_bytes = 0);
+  void resetToEmpty();
 
  protected:
+  std::unique_ptr<Encoder> encoder_;
+  SQLTypeInfo sql_type_;
   size_t size_;
+  int device_id_;
+
+ private:
   bool is_dirty_;
   bool is_appended_;
   bool is_updated_;
-  int device_id_;
 
 #ifdef BUFFER_MUTEX
   boost::shared_mutex read_write_mutex_;

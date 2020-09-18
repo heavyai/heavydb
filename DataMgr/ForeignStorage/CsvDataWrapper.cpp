@@ -625,14 +625,15 @@ void update_metadata(MetadataScanMultiThreadingParams& multi_threading_params,
         multi_threading_params.chunk_encoder_buffers[chunk_key]->initEncoder(
             column->columnType);
       }
-      update_stats(multi_threading_params.chunk_encoder_buffers[chunk_key]->encoder.get(),
+      update_stats(multi_threading_params.chunk_encoder_buffers[chunk_key]->getEncoder(),
                    column->columnType,
                    data_block,
                    result.row_count);
       size_t num_elements = multi_threading_params.chunk_encoder_buffers[chunk_key]
-                                ->encoder->getNumElems() +
+                                ->getEncoder()
+                                ->getNumElems() +
                             result.row_count;
-      multi_threading_params.chunk_encoder_buffers[chunk_key]->encoder->setNumElems(
+      multi_threading_params.chunk_encoder_buffers[chunk_key]->getEncoder()->setNumElems(
           num_elements);
     }
   }
@@ -930,8 +931,8 @@ void CsvDataWrapper::populateChunkMetadata(ChunkMetadataVector& chunk_metadata_v
 
   for (auto& [chunk_key, buffer] : multi_threading_params.chunk_encoder_buffers) {
     auto chunk_metadata =
-        buffer->encoder->getMetadata(column_by_id[chunk_key[2]]->columnType);
-    chunk_metadata->numElements = buffer->encoder->getNumElems();
+        buffer->getEncoder()->getMetadata(column_by_id[chunk_key[2]]->columnType);
+    chunk_metadata->numElements = buffer->getEncoder()->getNumElems();
     chunk_metadata->numBytes = multi_threading_params.chunk_byte_count[chunk_key];
     chunk_metadata_vector.emplace_back(chunk_key, chunk_metadata);
     chunk_metadata_map_[chunk_key] = chunk_metadata;

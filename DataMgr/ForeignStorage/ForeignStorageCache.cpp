@@ -106,8 +106,8 @@ bool ForeignStorageCache::recoverCacheForTable(ChunkMetadataVector& meta_vec,
 static void setMetadataForBuffer(AbstractBuffer* buffer, ChunkMetadata* meta) {
   buffer->initEncoder(meta->sqlType);
   buffer->setSize(meta->numBytes);
-  buffer->encoder->setNumElems(meta->numElements);
-  buffer->encoder->resetChunkStats(meta->chunkStats);
+  buffer->getEncoder()->setNumElems(meta->numElements);
+  buffer->getEncoder()->resetChunkStats(meta->chunkStats);
   buffer->setUpdated();
 }
 
@@ -173,7 +173,7 @@ void ForeignStorageCache::getCachedMetadataVecForKeyPrefix(
   iterateOverMatchingPrefix(
       [&metadata_vec, this](auto chunk) {
         std::shared_ptr<ChunkMetadata> buf_metadata = std::make_shared<ChunkMetadata>();
-        global_file_mgr_->getBuffer(chunk)->encoder->getMetadata(buf_metadata);
+        global_file_mgr_->getBuffer(chunk)->getEncoder()->getMetadata(buf_metadata);
         metadata_vec.push_back(std::make_pair(chunk, buf_metadata));
       },
       cached_metadata_,
@@ -276,9 +276,7 @@ std::map<ChunkKey, AbstractBuffer*> ForeignStorageCache::getChunkBuffersForCachi
     CHECK_EQ(chunk_buffer_map[chunk_key]->pageCount(), static_cast<size_t>(0));
 
     // Clear all buffer metadata
-    chunk_buffer_map[chunk_key]->encoder = nullptr;
-    chunk_buffer_map[chunk_key]->has_encoder = false;
-    chunk_buffer_map[chunk_key]->setSize(0);
+    chunk_buffer_map[chunk_key]->resetToEmpty();
   }
   return chunk_buffer_map;
 }

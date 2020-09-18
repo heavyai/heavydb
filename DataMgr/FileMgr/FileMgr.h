@@ -106,9 +106,9 @@ class FileMgr : public AbstractBufferMgr {  // implements
   ~FileMgr() override;
 
   /// Creates a chunk with the specified key and page size.
-  AbstractBuffer* createBuffer(const ChunkKey& key,
-                               size_t pageSize = 0,
-                               const size_t numBytes = 0) override;
+  FileBuffer* createBuffer(const ChunkKey& key,
+                           size_t pageSize = 0,
+                           const size_t numBytes = 0) override;
 
   bool isBufferOnDevice(const ChunkKey& key) override;
   /// Deletes the chunk with the specified key
@@ -121,7 +121,7 @@ class FileMgr : public AbstractBufferMgr {  // implements
                                const bool purge = true) override;
 
   /// Returns the a pointer to the chunk with the specified key.
-  AbstractBuffer* getBuffer(const ChunkKey& key, const size_t numBytes = 0) override;
+  FileBuffer* getBuffer(const ChunkKey& key, const size_t numBytes = 0) override;
 
   void fetchBuffer(const ChunkKey& key,
                    AbstractBuffer* destBuffer,
@@ -133,9 +133,9 @@ class FileMgr : public AbstractBufferMgr {  // implements
    * @param d - An object representing the source data for the Chunk.
    * @return AbstractBuffer*
    */
-  AbstractBuffer* putBuffer(const ChunkKey& key,
-                            AbstractBuffer* d,
-                            const size_t numBytes = 0) override;
+  FileBuffer* putBuffer(const ChunkKey& key,
+                        AbstractBuffer* d,
+                        const size_t numBytes = 0) override;
 
   // Buffer API
   AbstractBuffer* alloc(const size_t numBytes) override;
@@ -287,9 +287,9 @@ class FileMgr : public AbstractBufferMgr {  // implements
   void setEpoch(int epoch);  // resets current value of epoch at startup
   void processFileFutures(std::vector<std::future<std::vector<HeaderInfo>>>& file_futures,
                           std::vector<HeaderInfo>& headerVec);
-  AbstractBuffer* createBufferUnlocked(const ChunkKey& key,
-                                       size_t pageSize = 0,
-                                       const size_t numBytes = 0);
+  FileBuffer* createBufferUnlocked(const ChunkKey& key,
+                                   size_t pageSize = 0,
+                                   const size_t numBytes = 0);
 };
 
 }  // namespace File_Namespace

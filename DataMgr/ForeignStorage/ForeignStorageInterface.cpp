@@ -31,15 +31,14 @@ void ForeignStorageBuffer::read(int8_t* const dst,
                                 const int dstDeviceId) {
   CHECK_EQ(size_t(0), offset);
   CHECK_EQ(-1, dstDeviceId);
-  persistent_foreign_storage_->read(chunk_key_, sql_type, dst, numBytes);
+  persistent_foreign_storage_->read(chunk_key_, sql_type_, dst, numBytes);
 }
 
 void ForeignStorageBuffer::append(int8_t* src,
                                   const size_t numBytes,
                                   const Data_Namespace::MemoryLevel srcBufferType,
                                   const int deviceId) {
-  is_dirty_ = true;
-  is_appended_ = true;
+  setAppended();
   buff_.insert(buff_.end(), src, src + numBytes);
   size_ += numBytes;
 }
@@ -56,7 +55,7 @@ void ForeignStorageBufferMgr::checkpoint() {
   for (auto& kv : chunk_index_) {
     const auto buffer = kv.second->moveBuffer();
     column_buffers.emplace_back(
-        ForeignStorageColumnBuffer{kv.first, kv.second->sql_type, buffer});
+        ForeignStorageColumnBuffer{kv.first, kv.second->getSqlType(), buffer});
   }
   persistent_foreign_storage_->append(column_buffers);
 }
@@ -113,12 +112,12 @@ void ForeignStorageBufferMgr::getChunkMetadataVecForKeyPrefix(
     if (chunk_key.size() == 5) {
       if (chunk_key[4] == 1) {
         const auto& buffer = *chunk_it->second;
-        auto type = buffer.sql_type;
+        auto type = buffer.getSqlType();
         auto size = buffer.size();
         auto subkey = chunk_key;
         subkey[4] = 2;
         auto& index_buf = *(chunk_index_.find(subkey)->second);
-        auto bs = index_buf.size() / index_buf.sql_type.get_size();
+        auto bs = index_buf.size() / index_buf.getSqlType().get_size();
         auto chunk_metadata =
             std::make_shared<ChunkMetadata>(type, size, bs, ChunkStats{});
         chunkMetadataVec.emplace_back(chunk_key, chunk_metadata);
@@ -126,8 +125,8 @@ void ForeignStorageBufferMgr::getChunkMetadataVecForKeyPrefix(
     } else {
       const auto& buffer = *chunk_it->second;
       auto chunk_metadata = std::make_shared<ChunkMetadata>();
-      chunk_metadata->sqlType = buffer.sql_type;
-      buffer.encoder->getMetadata(chunk_metadata);
+      chunk_metadata->sqlType = buffer.getSqlType();
+      buffer.getEncoder()->getMetadata(chunk_metadata);
       chunkMetadataVec.emplace_back(chunk_key, chunk_metadata);
     }
     chunk_it++;

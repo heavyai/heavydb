@@ -310,10 +310,10 @@ void InsertOrderFragmenter::updateChunkStats(
                                              chunk_meta_it->second->numElements);
       auto buf = chunk->getBuffer();
       CHECK(buf);
-      auto encoder = buf->encoder.get();
-      if (!encoder) {
+      if (!buf->hasEncoder()) {
         throw std::runtime_error("No encoder for chunk " + showChunk(chunk_key));
       }
+      auto encoder = buf->getEncoder();
 
       auto chunk_stats = stats_itr->second;
 

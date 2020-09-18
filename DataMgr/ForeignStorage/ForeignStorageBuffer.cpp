@@ -18,7 +18,7 @@
 
 namespace foreign_storage {
 ForeignStorageBuffer::ForeignStorageBuffer()
-    : AbstractBuffer(0), buffer(nullptr), byte_count(0), reserved_byte_count(0) {}
+    : AbstractBuffer(0), buffer(nullptr), reserved_byte_count(0) {}
 
 void ForeignStorageBuffer::read(int8_t* const destination,
                                 const size_t num_bytes,
@@ -29,12 +29,12 @@ void ForeignStorageBuffer::read(int8_t* const destination,
 }
 
 void ForeignStorageBuffer::reserve(size_t additional_num_bytes) {
-  if (byte_count + additional_num_bytes > reserved_byte_count) {
+  if (size_ + additional_num_bytes > reserved_byte_count) {
     auto old_buffer = std::move(buffer);
     reserved_byte_count += additional_num_bytes;
     buffer = std::make_unique<int8_t[]>(reserved_byte_count);
     if (old_buffer) {
-      memcpy(buffer.get(), old_buffer.get(), byte_count);
+      memcpy(buffer.get(), old_buffer.get(), size_);
     }
   }
 }
@@ -43,23 +43,15 @@ void ForeignStorageBuffer::append(int8_t* source,
                                   const size_t num_bytes,
                                   const MemoryLevel source_buffer_type,
                                   const int device_id) {
-  if (byte_count + num_bytes > reserved_byte_count) {
+  if (size_ + num_bytes > reserved_byte_count) {
     reserve(num_bytes);
   }
-  memcpy(buffer.get() + byte_count, source, num_bytes);
-  byte_count += num_bytes;
+  memcpy(buffer.get() + size_, source, num_bytes);
+  size_ += num_bytes;
 }
 
 int8_t* ForeignStorageBuffer::getMemoryPtr() {
   return buffer.get();
-}
-
-size_t ForeignStorageBuffer::size() const {
-  return byte_count;
-}
-
-void ForeignStorageBuffer::setSize(const size_t num_bytes) {
-  byte_count = num_bytes;
 }
 
 size_t ForeignStorageBuffer::reservedSize() const {

@@ -79,8 +79,6 @@ class TestBuffer : public AbstractBuffer {
     return 0;
   }
 
-  size_t size() const override { return 0; }
-
   size_t reservedSize() const override {
     UNREACHABLE();
     return 0;
@@ -138,24 +136,22 @@ class EncoderUpdateStatsTest : public EncoderTest {
   }
 
   void updateWithArrayData(const std::vector<ArrayDatum>& data) {
-    auto& encoder = buffer_->encoder;
-    encoder->updateStats(&data, 0, data.size());
+    buffer_->getEncoder()->updateStats(&data, 0, data.size());
   }
 
   void updateWithStrings(const std::vector<std::string>& data) {
-    auto& encoder = buffer_->encoder;
-    encoder->updateStats(&data, 0, data.size());
+    buffer_->getEncoder()->updateStats(&data, 0, data.size());
   }
 
   template <typename T>
   void updateWithData(const std::vector<T>& data) {
-    auto& encoder = buffer_->encoder;
-    encoder->updateStats(reinterpret_cast<const int8_t*>(data.data()), data.size());
+    buffer_->getEncoder()->updateStats(reinterpret_cast<const int8_t*>(data.data()),
+                                       data.size());
   }
 
   template <typename T>
   void assertExpectedStats(const T& min, const T& max, const bool has_nulls) {
-    auto& encoder = buffer_->encoder;
+    auto encoder = buffer_->getEncoder();
     auto chunk_metadata = std::make_shared<ChunkMetadata>();
     encoder->getMetadata(chunk_metadata);
     const auto& chunkStats = chunk_metadata->chunkStats;
@@ -167,7 +163,7 @@ class EncoderUpdateStatsTest : public EncoderTest {
   }
 
   void assertHasNulls(bool has_nulls) {
-    auto& encoder = buffer_->encoder;
+    auto encoder = buffer_->getEncoder();
     auto chunk_metadata = std::make_shared<ChunkMetadata>();
     encoder->getMetadata(chunk_metadata);
     const auto& chunkStats = chunk_metadata->chunkStats;

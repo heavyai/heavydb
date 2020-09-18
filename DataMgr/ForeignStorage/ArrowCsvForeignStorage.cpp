@@ -393,9 +393,7 @@ void ArrowCsvForeignStorage::createDictionaryEncodedColumn(
           auto& frag = col[f];
           frag.chunks.resize(fragments[f].last_chunk - fragments[f].first_chunk + 1);
           auto b = mgr->createBuffer(key);
-          b->sql_type = c.columnType;
-          b->encoder.reset(Encoder::Create(b, c.columnType));
-          b->has_encoder = true;
+          b->initEncoder(c.columnType);
           size_t current_ind = 0;
           for (int i = fragments[f].first_chunk, e = fragments[f].last_chunk; i <= e;
                i++) {
@@ -410,11 +408,11 @@ void ArrowCsvForeignStorage::createDictionaryEncodedColumn(
             frag.offset = 0;
             auto len = frag.chunks[i - fragments[f].first_chunk]->length;
             auto data = frag.chunks[i - fragments[f].first_chunk]->GetValues<int32_t>(1);
-            b->encoder->updateStats((const int8_t*)data, len);
+            b->getEncoder()->updateStats((const int8_t*)data, len);
           }
 
-          b->setSize(frag.sz * b->sql_type.get_size());
-          b->encoder->setNumElems(frag.sz);
+          b->setSize(frag.sz * b->getSqlType().get_size());
+          b->getEncoder()->setNumElems(frag.sz);
         });
       }
     });
@@ -505,10 +503,8 @@ void ArrowCsvForeignStorage::createDecimalColumn(
           }
 
           auto b = mgr->createBuffer(key);
-          b->sql_type = c.columnType;
-          b->setSize(frag.sz * b->sql_type.get_size());
-          b->encoder.reset(Encoder::Create(b, c.columnType));
-          b->has_encoder = true;
+          b->setSize(frag.sz * b->getSqlType().get_size());
+          b->initEncoder(c.columnType);
           if (!empty) {
             tg.run([&frag, b]() {
               for (size_t i = 0; i < frag.chunks.size(); i++) {
@@ -516,12 +512,12 @@ void ArrowCsvForeignStorage::createDecimalColumn(
                 int offset = chunk->offset;
                 size_t size = chunk->length;
                 auto data = chunk->buffers[1]->data();
-                b->encoder->updateStats(
-                    (const int8_t*)data + offset * b->sql_type.get_size(), size);
+                b->getEncoder()->updateStats(
+                    (const int8_t*)data + offset * b->getSqlType().get_size(), size);
               }
             });
           }
-          b->encoder->setNumElems(frag.sz);
+          b->getEncoder()->setNumElems(frag.sz);
         }
       });
 }
@@ -708,22 +704,18 @@ void ArrowCsvForeignStorage::registerTable(Catalog_Namespace::Catalog* catalog,
           {
             auto b = mgr->createBuffer(k);
             b->setSize(varlen);
-            b->encoder.reset(Encoder::Create(b, c.columnType));
-            b->has_encoder = true;
-            b->sql_type = c.columnType;
+            b->initEncoder(c.columnType);
           }
           k[4] = 2;
           {
             auto b = mgr->createBuffer(k);
-            b->sql_type = SQLTypeInfo(kINT, false);
-            b->setSize(frag.sz * b->sql_type.get_size());
+            b->setSqlType(SQLTypeInfo(kINT, false));
+            b->setSize(frag.sz * b->getSqlType().get_size());
           }
         } else {
           auto b = mgr->createBuffer(key);
-          b->sql_type = c.columnType;
-          b->setSize(frag.sz * b->sql_type.get_size());
-          b->encoder.reset(Encoder::Create(b, c.columnType));
-          b->has_encoder = true;
+          b->initEncoder(c.columnType);
+          b->setSize(frag.sz * b->getSqlType().get_size());
           if (!empty) {
             size_t type_size = c.columnType.get_size();
             tg.run([b, fr = &frag, type_size]() {
@@ -735,11 +727,12 @@ void ArrowCsvForeignStorage::registerTable(Catalog_Namespace::Catalog* catalog,
                                                            : (chunk->length - offset);
                 sz += size;
                 auto data = chunk->buffers[1]->data();
-                b->encoder->updateStats((const int8_t*)data + offset * type_size, size);
+                b->getEncoder()->updateStats((const int8_t*)data + offset * type_size,
+                                             size);
               }
             });
           }
-          b->encoder->setNumElems(frag.sz);
+          b->getEncoder()->setNumElems(frag.sz);
         }
       }
       if (ctype != kDECIMAL && ctype != kNUMERIC && !c.columnType.is_string()) {

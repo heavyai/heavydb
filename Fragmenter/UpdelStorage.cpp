@@ -574,18 +574,19 @@ void InsertOrderFragmenter::updateColumns(
   insertDataNoCheckpoint(insert_data);
 
   // update metdata
-  if (!deletedChunk->getBuffer()->has_encoder) {
+  if (!deletedChunk->getBuffer()->hasEncoder()) {
     deletedChunk->initEncoder();
   }
-  deletedChunk->getBuffer()->encoder->updateStats(static_cast<int64_t>(true), false);
+  deletedChunk->getBuffer()->getEncoder()->updateStats(static_cast<int64_t>(true), false);
 
   auto& shadowDeletedChunkMeta =
       fragment.shadowChunkMetadataMap[deletedChunk->getColumnDesc()->columnId];
   if (shadowDeletedChunkMeta->numElements >
-      deletedChunk->getBuffer()->encoder->getNumElems()) {
+      deletedChunk->getBuffer()->getEncoder()->getNumElems()) {
     // the append will have populated shadow meta data, otherwise use existing num
     // elements
-    deletedChunk->getBuffer()->encoder->setNumElems(shadowDeletedChunkMeta->numElements);
+    deletedChunk->getBuffer()->getEncoder()->setNumElems(
+        shadowDeletedChunkMeta->numElements);
   }
   deletedChunk->getBuffer()->setUpdated();
 }
@@ -945,7 +946,7 @@ void InsertOrderFragmenter::updateColumnMetadata(const ColumnDescriptor* cd,
   auto buffer = chunk->getBuffer();
   const auto& lhs_type = cd->columnType;
 
-  auto encoder = buffer->encoder.get();
+  auto encoder = buffer->getEncoder();
   auto update_stats = [&encoder](auto min, auto max, auto has_null) {
     static_assert(std::is_same<decltype(min), decltype(max)>::value,
                   "Type mismatch on min/max");
@@ -971,7 +972,7 @@ void InsertOrderFragmenter::updateColumnMetadata(const ColumnDescriptor* cd,
              !(lhs_type.is_string() && kENCODING_DICT != lhs_type.get_compression())) {
     update_stats(min_int64t_per_chunk, max_int64t_per_chunk, has_null_per_chunk);
   }
-  buffer->encoder->getMetadata(chunkMetadata[cd->columnId]);
+  buffer->getEncoder()->getMetadata(chunkMetadata[cd->columnId]);
 
   // removed as @alex suggests. keep it commented in case of any chance to revisit
   // it once after vacuum code is introduced. fragment.invalidateChunkMetadataMap();
@@ -1227,7 +1228,7 @@ void InsertOrderFragmenter::compactRows(const Catalog_Namespace::Catalog* catalo
       size_t nbytes_fix_data_to_keep;
       nbytes_fix_data_to_keep = vacuum_fixlen_rows(fragment, chunk, frag_offsets);
 
-      data_buffer->encoder->setNumElems(nrows_to_keep);
+      data_buffer->getEncoder()->setNumElems(nrows_to_keep);
       data_buffer->setSize(nbytes_fix_data_to_keep);
       data_buffer->setUpdated();
 
@@ -1239,7 +1240,7 @@ void InsertOrderFragmenter::compactRows(const Catalog_Namespace::Catalog* catalo
       for (size_t irow = 0; irow < nrows_to_keep; ++irow, daddr += element_size) {
         if (col_type.is_fixlen_array()) {
           auto encoder =
-              dynamic_cast<FixedLengthArrayNoneEncoder*>(data_buffer->encoder.get());
+              dynamic_cast<FixedLengthArrayNoneEncoder*>(data_buffer->getEncoder());
           CHECK(encoder);
           encoder->updateMetadata((int8_t*)daddr);
         } else if (col_type.is_fp()) {
@@ -1262,7 +1263,7 @@ void InsertOrderFragmenter::compactRows(const Catalog_Namespace::Catalog* catalo
       size_t nbytes_var_data_to_keep;
       nbytes_var_data_to_keep = vacuum_varlen_rows(fragment, chunk, frag_offsets);
 
-      data_buffer->encoder->setNumElems(nrows_to_keep);
+      data_buffer->getEncoder()->setNumElems(nrows_to_keep);
       data_buffer->setSize(nbytes_var_data_to_keep);
       data_buffer->setUpdated();
 

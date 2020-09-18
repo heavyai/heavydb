@@ -278,7 +278,7 @@ class ArrayNoneEncoder : public Encoder {
     if (array.is_null) {
       has_nulls = true;
     }
-    switch (buffer_->sql_type.get_subtype()) {
+    switch (buffer_->getSqlType().get_subtype()) {
       case kBOOLEAN: {
         if (!initialized) {
           elem_min.boolval = true;
@@ -470,7 +470,7 @@ class ArrayNoneEncoder : public Encoder {
       case kCHAR:
       case kVARCHAR:
       case kTEXT: {
-        CHECK_EQ(buffer_->sql_type.get_compression(), kENCODING_DICT);
+        CHECK_EQ(buffer_->getSqlType().get_compression(), kENCODING_DICT);
         if (!initialized) {
           elem_min.intval = 1;
           elem_max.intval = 0;

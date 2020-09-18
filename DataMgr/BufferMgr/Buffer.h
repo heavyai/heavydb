@@ -113,8 +113,6 @@ class Buffer : public AbstractBuffer {
    */
   int8_t* getMemoryPtr() override;
 
-  inline size_t size() const override { return size_; }
-
   /// Returns the total number of bytes allocated for the buffer.
   inline size_t reservedSize() const override { return page_size_ * num_pages_; }
 
@@ -123,9 +121,6 @@ class Buffer : public AbstractBuffer {
 
   /// Returns the size in bytes of each page in the buffer.
   inline size_t pageSize() const override { return page_size_; }
-
-  /// Returns whether or not the buffer has been modified since the last flush/checkpoint.
-  inline bool isDirty() const override { return is_dirty_; }
 
   inline int pin() override {
     std::lock_guard<std::mutex> pin_lock(pin_mutex_);

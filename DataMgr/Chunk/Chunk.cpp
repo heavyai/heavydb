@@ -76,7 +76,7 @@ void Chunk::getChunkBuffer(DataMgr* data_mgr,
                                                    // length can be calculated
     switch (column_desc_->columnType.get_type()) {
       case kARRAY: {
-        auto array_encoder = dynamic_cast<ArrayNoneEncoder*>(buffer_->encoder.get());
+        auto array_encoder = dynamic_cast<ArrayNoneEncoder*>(buffer_->getEncoder());
         CHECK(array_encoder);
         array_encoder->setIndexBuffer(index_buf_);
         break;
@@ -85,7 +85,7 @@ void Chunk::getChunkBuffer(DataMgr* data_mgr,
       case kVARCHAR:
       case kCHAR: {
         CHECK_EQ(kENCODING_NONE, column_desc_->columnType.get_compression());
-        auto str_encoder = dynamic_cast<StringNoneEncoder*>(buffer_->encoder.get());
+        auto str_encoder = dynamic_cast<StringNoneEncoder*>(buffer_->getEncoder());
         CHECK(str_encoder);
         str_encoder->setIndexBuffer(index_buf_);
         break;
@@ -94,7 +94,7 @@ void Chunk::getChunkBuffer(DataMgr* data_mgr,
       case kLINESTRING:
       case kPOLYGON:
       case kMULTIPOLYGON: {
-        auto str_encoder = dynamic_cast<StringNoneEncoder*>(buffer_->encoder.get());
+        auto str_encoder = dynamic_cast<StringNoneEncoder*>(buffer_->getEncoder());
         CHECK(str_encoder);
         str_encoder->setIndexBuffer(index_buf_);
         break;
@@ -135,12 +135,12 @@ size_t Chunk::getNumElemsForBytesInsertData(const DataBlockPtr& src_data,
     case kARRAY: {
       if (column_desc_->columnType.get_size() > 0) {
         FixedLengthArrayNoneEncoder* array_encoder =
-            dynamic_cast<FixedLengthArrayNoneEncoder*>(buffer_->encoder.get());
+            dynamic_cast<FixedLengthArrayNoneEncoder*>(buffer_->getEncoder());
         return array_encoder->getNumElemsForBytesInsertData(
             src_data.arraysPtr, start_idx, num_elems, byte_limit, replicating);
       }
       ArrayNoneEncoder* array_encoder =
-          dynamic_cast<ArrayNoneEncoder*>(buffer_->encoder.get());
+          dynamic_cast<ArrayNoneEncoder*>(buffer_->getEncoder());
       return array_encoder->getNumElemsForBytesInsertData(
           src_data.arraysPtr, start_idx, num_elems, byte_limit, replicating);
     }
@@ -149,7 +149,7 @@ size_t Chunk::getNumElemsForBytesInsertData(const DataBlockPtr& src_data,
     case kCHAR: {
       CHECK_EQ(kENCODING_NONE, column_desc_->columnType.get_compression());
       StringNoneEncoder* str_encoder =
-          dynamic_cast<StringNoneEncoder*>(buffer_->encoder.get());
+          dynamic_cast<StringNoneEncoder*>(buffer_->getEncoder());
       return str_encoder->getNumElemsForBytesInsertData(
           src_data.stringsPtr, start_idx, num_elems, byte_limit, replicating);
     }
@@ -158,7 +158,7 @@ size_t Chunk::getNumElemsForBytesInsertData(const DataBlockPtr& src_data,
     case kPOLYGON:
     case kMULTIPOLYGON: {
       StringNoneEncoder* str_encoder =
-          dynamic_cast<StringNoneEncoder*>(buffer_->encoder.get());
+          dynamic_cast<StringNoneEncoder*>(buffer_->getEncoder());
       return str_encoder->getNumElemsForBytesInsertData(
           src_data.stringsPtr, start_idx, num_elems, byte_limit, replicating);
     }
@@ -178,12 +178,12 @@ std::shared_ptr<ChunkMetadata> Chunk::appendData(DataBlockPtr& src_data,
       case kARRAY: {
         if (ti.get_size() > 0) {
           FixedLengthArrayNoneEncoder* array_encoder =
-              dynamic_cast<FixedLengthArrayNoneEncoder*>(buffer_->encoder.get());
+              dynamic_cast<FixedLengthArrayNoneEncoder*>(buffer_->getEncoder());
           return array_encoder->appendData(
               src_data.arraysPtr, start_idx, num_elems, replicating);
         }
         ArrayNoneEncoder* array_encoder =
-            dynamic_cast<ArrayNoneEncoder*>(buffer_->encoder.get());
+            dynamic_cast<ArrayNoneEncoder*>(buffer_->getEncoder());
         return array_encoder->appendData(
             src_data.arraysPtr, start_idx, num_elems, replicating);
       }
@@ -192,7 +192,7 @@ std::shared_ptr<ChunkMetadata> Chunk::appendData(DataBlockPtr& src_data,
       case kCHAR: {
         CHECK_EQ(kENCODING_NONE, ti.get_compression());
         StringNoneEncoder* str_encoder =
-            dynamic_cast<StringNoneEncoder*>(buffer_->encoder.get());
+            dynamic_cast<StringNoneEncoder*>(buffer_->getEncoder());
         return str_encoder->appendData(
             src_data.stringsPtr, start_idx, num_elems, replicating);
       }
@@ -201,7 +201,7 @@ std::shared_ptr<ChunkMetadata> Chunk::appendData(DataBlockPtr& src_data,
       case kPOLYGON:
       case kMULTIPOLYGON: {
         StringNoneEncoder* str_encoder =
-            dynamic_cast<StringNoneEncoder*>(buffer_->encoder.get());
+            dynamic_cast<StringNoneEncoder*>(buffer_->getEncoder());
         return str_encoder->appendData(
             src_data.stringsPtr, start_idx, num_elems, replicating);
       }
@@ -209,7 +209,8 @@ std::shared_ptr<ChunkMetadata> Chunk::appendData(DataBlockPtr& src_data,
         CHECK(false);
     }
   }
-  return buffer_->encoder->appendData(src_data.numbersPtr, num_elems, ti, replicating);
+  return buffer_->getEncoder()->appendData(
+      src_data.numbersPtr, num_elems, ti, replicating);
 }
 
 void Chunk::unpinBuffer() {
@@ -228,7 +229,7 @@ void Chunk::initEncoder() {
     switch (column_desc_->columnType.get_type()) {
       case kARRAY: {
         ArrayNoneEncoder* array_encoder =
-            dynamic_cast<ArrayNoneEncoder*>(buffer_->encoder.get());
+            dynamic_cast<ArrayNoneEncoder*>(buffer_->getEncoder());
         array_encoder->setIndexBuffer(index_buf_);
         break;
       }
@@ -237,7 +238,7 @@ void Chunk::initEncoder() {
       case kCHAR: {
         CHECK_EQ(kENCODING_NONE, column_desc_->columnType.get_compression());
         StringNoneEncoder* str_encoder =
-            dynamic_cast<StringNoneEncoder*>(buffer_->encoder.get());
+            dynamic_cast<StringNoneEncoder*>(buffer_->getEncoder());
         str_encoder->setIndexBuffer(index_buf_);
         break;
       }
@@ -246,7 +247,7 @@ void Chunk::initEncoder() {
       case kPOLYGON:
       case kMULTIPOLYGON: {
         StringNoneEncoder* str_encoder =
-            dynamic_cast<StringNoneEncoder*>(buffer_->encoder.get());
+            dynamic_cast<StringNoneEncoder*>(buffer_->getEncoder());
         str_encoder->setIndexBuffer(index_buf_);
         break;
       }

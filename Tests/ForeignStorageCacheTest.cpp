@@ -73,7 +73,7 @@ class ForeignStorageCacheUnitTest : public testing::Test {
 
     void cacheMetadata(const ChunkKey& chunk_key) {
       std::shared_ptr<ChunkMetadata> cached_meta = std::make_shared<ChunkMetadata>();
-      chunk->getBuffer()->encoder->getMetadata(cached_meta);
+      chunk->getBuffer()->getEncoder()->getMetadata(cached_meta);
       cache_->cacheMetadataVec({std::make_pair(chunk_key, cached_meta)});
     }
 
@@ -504,7 +504,7 @@ TEST_F(ForeignStorageCacheFileTest, FileCreation) {
     TestBuffer source_buffer{std::vector<int8_t>{1, 2, 3, 4}};
     source_buffer.initEncoder(kINT);
     std::shared_ptr<ChunkMetadata> cached_meta = std::make_shared<ChunkMetadata>();
-    source_buffer.encoder->getMetadata(cached_meta);
+    source_buffer.getEncoder()->getMetadata(cached_meta);
     cache.cacheMetadataVec({std::make_pair(chunk_key1, cached_meta)});
     auto buffer_map = cache.getChunkBuffersForCaching({chunk_key1});
     buffer_map[chunk_key1]->write(source_buffer.getMemoryPtr(), source_buffer.size());

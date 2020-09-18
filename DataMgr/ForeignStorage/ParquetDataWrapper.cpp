@@ -142,7 +142,7 @@ void ParquetDataWrapper::initializeChunkBuffers(
       CHECK(metadata_it != chunk_metadata_map_.end());
       auto buffer = chunk.getBuffer();
       auto& metadata = metadata_it->second;
-      auto& encoder = buffer->encoder;
+      auto encoder = buffer->getEncoder();
       encoder->resetChunkStats(metadata->chunkStats);
       encoder->setNumElems(metadata->numElements);
       if (column->columnType.is_string() &&
@@ -317,7 +317,7 @@ void ParquetDataWrapper::loadMetadataChunk(const ColumnDescriptor* column,
   }
   ForeignStorageBuffer buffer;
   buffer.initEncoder(type_info);
-  auto encoder = buffer.encoder.get();
+  auto encoder = buffer.getEncoder();
   if (chunk_metadata_map_.find(data_chunk_key) != chunk_metadata_map_.end()) {
     encoder->resetChunkStats(chunk_metadata_map_[data_chunk_key]->chunkStats);
     encoder->setNumElems(chunk_metadata_map_[data_chunk_key]->numElements);
