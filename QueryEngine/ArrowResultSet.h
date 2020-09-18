@@ -81,12 +81,15 @@ class ArrowResultSetRowIterator {
   friend class ArrowResultSet;
 };
 
+enum class ArrowTransport { SHARED_MEMORY = 0, WIRE = 1 };
+
 struct ArrowResult {
   std::vector<char> sm_handle;
   int64_t sm_size;
   std::vector<char> df_handle;
   int64_t df_size;
   std::string serialized_cuda_handle;  // Only for GPU memory deallocation
+  std::vector<char> df_buffer;         // Only present when transport is WIRE
 };
 
 // Expose Arrow buffers as a subset of the ResultSet interface
@@ -176,13 +179,15 @@ class ArrowResultSetConverter {
                           const ExecutorDeviceType device_type,
                           const int32_t device_id,
                           const std::vector<std::string>& col_names,
-                          const int32_t first_n)
+                          const int32_t first_n,
+                          const ArrowTransport transport_method)
       : results_(results)
       , data_mgr_(data_mgr)
       , device_type_(device_type)
       , device_id_(device_id)
       , col_names_(col_names)
-      , top_n_(first_n) {}
+      , top_n_(first_n)
+      , transport_method_(transport_method) {}
 
   ArrowResult getArrowResult() const;
 
@@ -232,6 +237,7 @@ class ArrowResultSetConverter {
   int32_t device_id_ = 0;
   std::vector<std::string> col_names_;
   int32_t top_n_;
+  ArrowTransport transport_method_;
 
   friend class ArrowResultSet;
 };

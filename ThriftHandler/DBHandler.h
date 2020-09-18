@@ -277,7 +277,8 @@ class DBHandler : public OmniSciIf {
                       const std::string& query,
                       const TDeviceType::type device_type,
                       const int32_t device_id,
-                      const int32_t first_n) override;
+                      const int32_t first_n,
+                      const TArrowTransport::type transport_method) override;
   void sql_execute_gdf(TDataFrame& _return,
                        const TSessionId& session,
                        const std::string& query,
@@ -667,7 +668,8 @@ class DBHandler : public OmniSciIf {
                           const Catalog_Namespace::SessionInfo& session_info,
                           const ExecutorDeviceType device_type,
                           const size_t device_id,
-                          const int32_t first_n) const;
+                          const int32_t first_n,
+                          const TArrowTransport::type transport_method) const;
 
   void executeDdl(TQueryResult& _return,
                   const std::string& query_ra,

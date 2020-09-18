@@ -66,10 +66,147 @@ TQueryResult run_multiple_agg(const std::string& sql) {
   return result;
 }
 
-TDataFrame execute_arrow_ipc(const std::string& sql,
-                             const ExecutorDeviceType device_type,
-                             const size_t device_id = 0,
-                             const int32_t first_n = -1) {
+class ArrowOutput {
+ public:
+  ArrowOutput(TDataFrame& tdf,
+              const ExecutorDeviceType device_type,
+              const TArrowTransport::type transport_method) {
+    if (transport_method == TArrowTransport::WIRE) {
+      arrow::io::BufferReader reader(
+          reinterpret_cast<const uint8_t*>(tdf.df_buffer.data()), tdf.df_buffer.size());
+
+      ARROW_ASSIGN_OR_THROW(batch_reader,
+                            arrow::ipc::RecordBatchStreamReader::Open(&reader));
+
+      ARROW_THROW_NOT_OK(batch_reader->ReadNext(&record_batch));
+      schema = record_batch->schema();
+    } else {
+      if (device_type == ExecutorDeviceType::CPU) {
+        key_t shmem_key = -1;
+        std::memcpy(&shmem_key, tdf.df_handle.data(), sizeof(key_t));
+        int shmem_id = shmget(shmem_key, tdf.df_size, 0666);
+        if (shmem_id < 0) {
+          throw std::runtime_error("Failed to get IPC memory segment.");
+        }
+
+        auto ipc_ptr = shmat(shmem_id, NULL, 0);
+        if (reinterpret_cast<int64_t>(ipc_ptr) == -1) {
+          throw std::runtime_error("Failed to attach to IPC memory segment.");
+        }
+
+        arrow::io::BufferReader reader(reinterpret_cast<const uint8_t*>(ipc_ptr),
+                                       tdf.df_size);
+        ARROW_ASSIGN_OR_THROW(batch_reader,
+                              arrow::ipc::RecordBatchStreamReader::Open(&reader));
+        ARROW_THROW_NOT_OK(batch_reader->ReadNext(&record_batch));
+        schema = record_batch->schema();
+      }
+      if (device_type == ExecutorDeviceType::GPU) {
+        // Read schema from IPC memory
+        key_t shmem_key = -1;
+        std::memcpy(&shmem_key, tdf.sm_handle.data(), sizeof(key_t));
+        int shmem_id = shmget(shmem_key, tdf.sm_size, 0666);
+        if (shmem_id < 0) {
+          throw std::runtime_error("Failed to get IPC memory segment.");
+        }
+
+        auto ipc_ptr = shmat(shmem_id, NULL, 0);
+        if (reinterpret_cast<int64_t>(ipc_ptr) == -1) {
+          throw std::runtime_error("Failed to attach to IPC memory segment.");
+        }
+
+        arrow::io::BufferReader reader(reinterpret_cast<const uint8_t*>(ipc_ptr),
+                                       tdf.sm_size);
+        auto message_reader = arrow::ipc::MessageReader::Open(&reader);
+
+        // read schema
+        std::unique_ptr<arrow::ipc::Message> schema_message;
+        ARROW_ASSIGN_OR_THROW(schema_message, message_reader->ReadNextMessage());
+        ARROW_ASSIGN_OR_THROW(schema,
+                              arrow::ipc::ReadSchema(*schema_message, &dict_memo));
+
+        // read dictionaries
+        if (dict_memo.num_fields() > 0) {
+          ARROW_ASSIGN_OR_THROW(
+              gpu_dict_batch_reader,
+              arrow::ipc::RecordBatchStreamReader::Open(std::move(message_reader)));
+
+          for (size_t i = 0; i < schema->fields().size(); i++) {
+            auto field = schema->field(i);
+            if (field->type()->id() == arrow::Type::DICTIONARY) {
+              std::shared_ptr<arrow::RecordBatch> tmp_record_batch;
+              ARROW_THROW_NOT_OK(gpu_dict_batch_reader->ReadNext(&tmp_record_batch));
+
+              int64_t dict_id = -1;
+              ARROW_THROW_NOT_OK(dict_memo.GetId(field.get(), &dict_id));
+              CHECK_GE(dict_id, 0);
+
+              CHECK(!dict_memo.HasDictionary(dict_id));
+              ARROW_THROW_NOT_OK(
+                  dict_memo.AddDictionary(dict_id, tmp_record_batch->column(0)));
+            }
+          }
+        }
+#ifdef HAVE_CUDA
+        const size_t device_id = 0;
+        arrow::cuda::CudaDeviceManager* manager;
+        ARROW_ASSIGN_OR_THROW(manager, arrow::cuda::CudaDeviceManager::Instance());
+        std::shared_ptr<arrow::cuda::CudaContext> context;
+        ARROW_ASSIGN_OR_THROW(context, manager->GetContext(device_id));
+
+        std::shared_ptr<arrow::cuda::CudaIpcMemHandle> cuda_handle;
+        ARROW_ASSIGN_OR_THROW(cuda_handle,
+                              arrow::cuda::CudaIpcMemHandle::FromBuffer(
+                                  reinterpret_cast<void*>(tdf.df_handle.data())));
+
+        std::shared_ptr<arrow::cuda::CudaBuffer> cuda_buffer;
+        ARROW_ASSIGN_OR_THROW(cuda_buffer, context->OpenIpcBuffer(*cuda_handle));
+
+        arrow::cuda::CudaBufferReader cuda_reader(cuda_buffer);
+
+        std::unique_ptr<arrow::ipc::Message> message;
+        ARROW_ASSIGN_OR_THROW(
+            message, arrow::ipc::ReadMessage(&cuda_reader, arrow::default_memory_pool()));
+
+        ARROW_ASSIGN_OR_THROW(
+            record_batch,
+            arrow::ipc::ReadRecordBatch(
+                *message, schema, &dict_memo, arrow::ipc::IpcReadOptions::Defaults()));
+
+        // Copy data to host for checking
+        std::shared_ptr<arrow::Buffer> host_buffer;
+        const int64_t size = cuda_buffer->size();
+        ARROW_ASSIGN_OR_THROW(host_buffer,
+                              AllocateBuffer(size, arrow::default_memory_pool()));
+        ARROW_THROW_NOT_OK(cuda_buffer->CopyToHost(0, size, host_buffer->mutable_data()));
+
+        arrow::io::BufferReader cpu_reader(host_buffer);
+        ARROW_ASSIGN_OR_THROW(
+            record_batch,
+            arrow::ipc::ReadRecordBatch(record_batch->schema(),
+                                        &dict_memo,
+                                        arrow::ipc::IpcReadOptions::Defaults(),
+                                        &cpu_reader));
+
+#endif
+      }
+    }
+  }
+  std::shared_ptr<arrow::Schema> schema;
+  std::shared_ptr<arrow::RecordBatchReader> batch_reader;
+  std::shared_ptr<arrow::RecordBatch> record_batch;
+  std::shared_ptr<arrow::RecordBatchReader> gpu_dict_batch_reader;
+  arrow::ipc::DictionaryMemo dict_memo;
+
+ private:
+};
+
+TDataFrame execute_arrow_ipc(
+    const std::string& sql,
+    const ExecutorDeviceType device_type,
+    const size_t device_id = 0,
+    const int32_t first_n = -1,
+    const TArrowTransport::type transport_method = TArrowTransport::type::SHARED_MEMORY) {
   TDataFrame result;
   g_client->sql_execute_df(
       result,
@@ -77,7 +214,8 @@ TDataFrame execute_arrow_ipc(const std::string& sql,
       sql,
       device_type == ExecutorDeviceType::GPU ? TDeviceType::GPU : TDeviceType::CPU,
       0,
-      first_n);
+      first_n,
+      transport_method);
   return result;
 }
 
@@ -146,37 +284,18 @@ class ArrowIpcBasic : public ::testing::Test {
   void TearDown() override { run_ddl_statement("DROP TABLE IF EXISTS arrow_ipc_test;"); }
 };
 
-TEST_F(ArrowIpcBasic, IpcCpu) {
-  auto data_frame =
-      execute_arrow_ipc("SELECT * FROM arrow_ipc_test;", ExecutorDeviceType::CPU);
-  auto ipc_handle = data_frame.df_handle;
-  auto ipc_handle_size = data_frame.df_size;
+TEST_F(ArrowIpcBasic, IpcWire) {
+  auto data_frame = execute_arrow_ipc("SELECT * FROM arrow_ipc_test;",
+                                      ExecutorDeviceType::CPU,
+                                      0,
+                                      -1,
+                                      TArrowTransport::type::WIRE);
+  auto df = ArrowOutput(data_frame, ExecutorDeviceType::CPU, TArrowTransport::type::WIRE);
 
-  ASSERT_TRUE(ipc_handle_size > 0);
-
-  key_t shmem_key = -1;
-  std::memcpy(&shmem_key, ipc_handle.data(), sizeof(key_t));
-  int shmem_id = shmget(shmem_key, ipc_handle_size, 0666);
-  if (shmem_id < 0) {
-    throw std::runtime_error("Failed to get IPC memory segment.");
-  }
-
-  auto ipc_ptr = shmat(shmem_id, NULL, 0);
-  if (reinterpret_cast<int64_t>(ipc_ptr) == -1) {
-    throw std::runtime_error("Failed to attach to IPC memory segment.");
-  }
-
-  arrow::io::BufferReader reader(reinterpret_cast<const uint8_t*>(ipc_ptr),
-                                 ipc_handle_size);
-  ARROW_ASSIGN_OR_THROW(auto batch_reader,
-                        arrow::ipc::RecordBatchStreamReader::Open(&reader));
-  std::shared_ptr<arrow::RecordBatch> read_batch;
-  ARROW_THROW_NOT_OK(batch_reader->ReadNext(&read_batch));
-
-  ASSERT_EQ(read_batch->schema()->num_fields(), 3);
+  ASSERT_EQ(df.schema->num_fields(), 3);
 
   // int column
-  auto int_array = read_batch->column(0);
+  auto int_array = df.record_batch->column(0);
   ASSERT_EQ(int_array->type()->id(), arrow::Type::type::INT32);
   std::shared_ptr<arrow::Array> int_truth_array;
   {
@@ -188,7 +307,7 @@ TEST_F(ArrowIpcBasic, IpcCpu) {
   ASSERT_TRUE(int_array->Equals(int_truth_array));
 
   // double column
-  auto double_array = read_batch->column(1);
+  auto double_array = df.record_batch->column(1);
   ASSERT_EQ(double_array->type()->id(), arrow::Type::type::DOUBLE);
   std::shared_ptr<arrow::Array> double_truth_array;
   {
@@ -200,7 +319,69 @@ TEST_F(ArrowIpcBasic, IpcCpu) {
   ASSERT_TRUE(double_array->ApproxEquals(double_truth_array));
 
   // string column
-  auto string_array = read_batch->column(2);
+  auto string_array = df.record_batch->column(2);
+  ASSERT_EQ(string_array->type()->id(), arrow::Type::type::DICTIONARY);
+  std::shared_ptr<arrow::Array> text_truth_array;
+  {
+    arrow::StringBuilder builder(arrow::default_memory_pool());
+    ARROW_THROW_NOT_OK(builder.AppendValues(
+        std::vector<std::string>{"foo", "", "bar", "hello", "world"}));
+    ARROW_THROW_NOT_OK(builder.Finish(&text_truth_array));
+  }
+  const auto& dict_array = static_cast<const arrow::DictionaryArray&>(*string_array);
+  const auto& indices = static_cast<const arrow::Int32Array&>(*dict_array.indices());
+  const auto& dictionary =
+      static_cast<const arrow::StringArray&>(*dict_array.dictionary());
+  const auto& truth_strings = static_cast<const arrow::StringArray&>(*text_truth_array);
+  std::vector<bool> null_strings{1, 0, 1, 1, 1};
+  for (int i = 0; i < string_array->length(); i++) {
+    if (!null_strings[i]) {
+      ASSERT_TRUE(indices.IsNull(i));
+    } else {
+      const auto index = indices.Value(i);
+      const auto str = dictionary.GetString(index);
+      ASSERT_EQ(str, truth_strings.GetString(i));
+    }
+  }
+}
+
+TEST_F(ArrowIpcBasic, IpcCpu) {
+  auto data_frame =
+      execute_arrow_ipc("SELECT * FROM arrow_ipc_test;", ExecutorDeviceType::CPU);
+
+  ASSERT_TRUE(data_frame.df_size > 0);
+
+  auto df =
+      ArrowOutput(data_frame, ExecutorDeviceType::CPU, TArrowTransport::SHARED_MEMORY);
+
+  ASSERT_EQ(df.schema->num_fields(), 3);
+
+  // int column
+  auto int_array = df.record_batch->column(0);
+  ASSERT_EQ(int_array->type()->id(), arrow::Type::type::INT32);
+  std::shared_ptr<arrow::Array> int_truth_array;
+  {
+    arrow::Int32Builder builder(arrow::default_memory_pool());
+    ARROW_THROW_NOT_OK(builder.AppendValues(std::vector<int32_t>{1, 2, 3, 4, 5},
+                                            std::vector<bool>{1, 1, 0, 1, 1}));
+    ARROW_THROW_NOT_OK(builder.Finish(&int_truth_array));
+  }
+  ASSERT_TRUE(int_array->Equals(int_truth_array));
+
+  // double column
+  auto double_array = df.record_batch->column(1);
+  ASSERT_EQ(double_array->type()->id(), arrow::Type::type::DOUBLE);
+  std::shared_ptr<arrow::Array> double_truth_array;
+  {
+    arrow::DoubleBuilder builder(arrow::default_memory_pool());
+    ARROW_THROW_NOT_OK(builder.AppendValues(std::vector<double>{1.1, 2.1, 3.1, 4.1, 5.1},
+                                            std::vector<bool>{1, 1, 1, 0, 1}));
+    ARROW_THROW_NOT_OK(builder.Finish(&double_truth_array));
+  }
+  ASSERT_TRUE(double_array->ApproxEquals(double_truth_array));
+
+  // string column
+  auto string_array = df.record_batch->column(2);
   ASSERT_EQ(string_array->type()->id(), arrow::Type::type::DICTIONARY);
   std::shared_ptr<arrow::Array> text_truth_array;
   {
@@ -231,31 +412,13 @@ TEST_F(ArrowIpcBasic, IpcCpu) {
 TEST_F(ArrowIpcBasic, IpcCpuScalarValues) {
   auto data_frame =
       execute_arrow_ipc("SELECT * FROM test_data_scalars;", ExecutorDeviceType::CPU);
-  auto ipc_handle = data_frame.df_handle;
-  auto ipc_handle_size = data_frame.df_size;
 
-  ASSERT_TRUE(ipc_handle_size > 0);
+  ASSERT_TRUE(data_frame.df_size > 0);
 
-  key_t shmem_key = -1;
-  std::memcpy(&shmem_key, ipc_handle.data(), sizeof(key_t));
-  int shmem_id = shmget(shmem_key, ipc_handle_size, 0666);
-  if (shmem_id < 0) {
-    throw std::runtime_error("Failed to get IPC memory segment.");
-  }
+  auto df =
+      ArrowOutput(data_frame, ExecutorDeviceType::CPU, TArrowTransport::SHARED_MEMORY);
 
-  auto ipc_ptr = shmat(shmem_id, NULL, 0);
-  if (reinterpret_cast<int64_t>(ipc_ptr) == -1) {
-    throw std::runtime_error("Failed to attach to IPC memory segment.");
-  }
-
-  arrow::io::BufferReader reader(reinterpret_cast<const uint8_t*>(ipc_ptr),
-                                 ipc_handle_size);
-  ARROW_ASSIGN_OR_THROW(auto batch_reader,
-                        arrow::ipc::RecordBatchStreamReader::Open(&reader));
-  std::shared_ptr<arrow::RecordBatch> read_batch;
-  ARROW_THROW_NOT_OK(batch_reader->ReadNext(&read_batch));
-
-  test_scalar_values(read_batch);
+  test_scalar_values(df.record_batch);
 
   deallocate_df(data_frame, ExecutorDeviceType::CPU);
 }
@@ -268,80 +431,13 @@ TEST_F(ArrowIpcBasic, IpcGpuScalarValues) {
   }
   auto data_frame = execute_arrow_ipc(
       "SELECT * FROM test_data_scalars;", ExecutorDeviceType::GPU, device_id);
-  auto ipc_handle = data_frame.sm_handle;
-  auto ipc_handle_size = data_frame.sm_size;
 
-  ASSERT_TRUE(ipc_handle_size > 0);
-
-  // Read schema from IPC memory
-  key_t shmem_key = -1;
-  std::memcpy(&shmem_key, ipc_handle.data(), sizeof(key_t));
-  int shmem_id = shmget(shmem_key, ipc_handle_size, 0666);
-  if (shmem_id < 0) {
-    throw std::runtime_error("Failed to get IPC memory segment.");
-  }
-
-  auto ipc_ptr = shmat(shmem_id, NULL, 0);
-  if (reinterpret_cast<int64_t>(ipc_ptr) == -1) {
-    throw std::runtime_error("Failed to attach to IPC memory segment.");
-  }
-
-  arrow::io::BufferReader reader(reinterpret_cast<const uint8_t*>(ipc_ptr),
-                                 ipc_handle_size);
-  auto message_reader = arrow::ipc::MessageReader::Open(&reader);
-
-  // read schema
-  std::shared_ptr<arrow::Schema> schema;
-  arrow::ipc::DictionaryMemo memo;
-  std::unique_ptr<arrow::ipc::Message> schema_message;
-  ARROW_ASSIGN_OR_THROW(schema_message, message_reader->ReadNextMessage());
-  ARROW_ASSIGN_OR_THROW(schema, arrow::ipc::ReadSchema(*schema_message, &memo));
-
-  // read data
-  std::shared_ptr<arrow::RecordBatch> read_batch;
+  ASSERT_TRUE(data_frame.df_size > 0);
 #ifdef HAVE_CUDA
-  arrow::cuda::CudaDeviceManager* manager;
-  ARROW_ASSIGN_OR_THROW(manager, arrow::cuda::CudaDeviceManager::Instance());
-  std::shared_ptr<arrow::cuda::CudaContext> context;
-  ARROW_ASSIGN_OR_THROW(context, manager->GetContext(device_id));
+  auto df =
+      ArrowOutput(data_frame, ExecutorDeviceType::GPU, TArrowTransport::SHARED_MEMORY);
 
-  std::shared_ptr<arrow::cuda::CudaIpcMemHandle> cuda_handle;
-  ARROW_ASSIGN_OR_THROW(cuda_handle,
-                        arrow::cuda::CudaIpcMemHandle::FromBuffer(
-                            reinterpret_cast<void*>(data_frame.df_handle.data())));
-
-  std::shared_ptr<arrow::cuda::CudaBuffer> cuda_buffer;
-  ARROW_ASSIGN_OR_THROW(cuda_buffer, context->OpenIpcBuffer(*cuda_handle));
-
-  arrow::cuda::CudaBufferReader cuda_reader(cuda_buffer);
-
-  std::unique_ptr<arrow::ipc::Message> message;
-  ARROW_ASSIGN_OR_THROW(
-      message, arrow::ipc::ReadMessage(&cuda_reader, arrow::default_memory_pool()));
-
-  ASSERT_TRUE(message);
-
-  ARROW_ASSIGN_OR_THROW(
-      read_batch,
-      arrow::ipc::ReadRecordBatch(
-          *message, schema, &memo, arrow::ipc::IpcReadOptions::Defaults()));
-
-  // Copy data to host for checking
-  std::shared_ptr<arrow::Buffer> host_buffer;
-  const int64_t size = cuda_buffer->size();
-  ARROW_ASSIGN_OR_THROW(host_buffer, AllocateBuffer(size, arrow::default_memory_pool()));
-  ARROW_THROW_NOT_OK(cuda_buffer->CopyToHost(0, size, host_buffer->mutable_data()));
-
-  std::shared_ptr<arrow::RecordBatch> cpu_batch;
-  arrow::io::BufferReader cpu_reader(host_buffer);
-  ARROW_ASSIGN_OR_THROW(
-      cpu_batch,
-      arrow::ipc::ReadRecordBatch(read_batch->schema(),
-                                  &memo,
-                                  arrow::ipc::IpcReadOptions::Defaults(),
-                                  &cpu_reader));
-
-  test_scalar_values(read_batch);
+  test_scalar_values(df.record_batch);
 #else
   ASSERT_TRUE(false) << "Test should be skipped in CPU-only mode!";
 #endif
@@ -361,98 +457,12 @@ TEST_F(ArrowIpcBasic, IpcGpu) {
 
   ASSERT_TRUE(ipc_handle_size > 0);
 
-  // Read schema from IPC memory
-  key_t shmem_key = -1;
-  std::memcpy(&shmem_key, ipc_handle.data(), sizeof(key_t));
-  int shmem_id = shmget(shmem_key, ipc_handle_size, 0666);
-  if (shmem_id < 0) {
-    throw std::runtime_error("Failed to get IPC memory segment.");
-  }
-
-  auto ipc_ptr = shmat(shmem_id, NULL, 0);
-  if (reinterpret_cast<int64_t>(ipc_ptr) == -1) {
-    throw std::runtime_error("Failed to attach to IPC memory segment.");
-  }
-
-  arrow::io::BufferReader reader(reinterpret_cast<const uint8_t*>(ipc_ptr),
-                                 ipc_handle_size);
-  auto message_reader = arrow::ipc::MessageReader::Open(&reader);
-
-  // read schema
-  std::shared_ptr<arrow::Schema> schema;
-  arrow::ipc::DictionaryMemo memo;
-  std::unique_ptr<arrow::ipc::Message> schema_message;
-  ARROW_ASSIGN_OR_THROW(schema_message, message_reader->ReadNextMessage());
-  ARROW_ASSIGN_OR_THROW(schema, arrow::ipc::ReadSchema(*schema_message, &memo));
-
-  // read dictionaries
-  std::shared_ptr<arrow::RecordBatchReader> dict_batch_reader;
-  ARROW_ASSIGN_OR_THROW(
-      dict_batch_reader,
-      arrow::ipc::RecordBatchStreamReader::Open(std::move(message_reader)));
-  for (int i = 0; i < schema->num_fields(); i++) {
-    auto field = schema->field(i);
-    if (field->type()->id() == arrow::Type::DICTIONARY) {
-      std::shared_ptr<arrow::RecordBatch> tmp_record_batch;
-      ARROW_THROW_NOT_OK(dict_batch_reader->ReadNext(&tmp_record_batch));
-      ASSERT_TRUE(tmp_record_batch);
-      ASSERT_EQ(tmp_record_batch->num_columns(), 1);
-
-      int64_t dict_id = -1;
-      ARROW_THROW_NOT_OK(memo.GetId(field.get(), &dict_id));
-      CHECK_GE(dict_id, 0);
-
-      CHECK(!memo.HasDictionary(dict_id));
-      ARROW_THROW_NOT_OK(memo.AddDictionary(dict_id, tmp_record_batch->column(0)));
-    }
-  }
-
-  // read data
-  std::shared_ptr<arrow::RecordBatch> read_batch;
 #ifdef HAVE_CUDA
-  arrow::cuda::CudaDeviceManager* manager;
-  ARROW_ASSIGN_OR_THROW(manager, arrow::cuda::CudaDeviceManager::Instance());
-  std::shared_ptr<arrow::cuda::CudaContext> context;
-  ARROW_ASSIGN_OR_THROW(context, manager->GetContext(device_id));
-
-  std::shared_ptr<arrow::cuda::CudaIpcMemHandle> cuda_handle;
-  ARROW_ASSIGN_OR_THROW(cuda_handle,
-                        arrow::cuda::CudaIpcMemHandle::FromBuffer(
-                            reinterpret_cast<void*>(data_frame.df_handle.data())));
-
-  std::shared_ptr<arrow::cuda::CudaBuffer> cuda_buffer;
-  ARROW_ASSIGN_OR_THROW(cuda_buffer, context->OpenIpcBuffer(*cuda_handle));
-
-  arrow::cuda::CudaBufferReader cuda_reader(cuda_buffer);
-
-  std::unique_ptr<arrow::ipc::Message> message;
-  ARROW_ASSIGN_OR_THROW(
-      message, arrow::ipc::ReadMessage(&cuda_reader, arrow::default_memory_pool()));
-
-  ASSERT_TRUE(message);
-
-  ARROW_ASSIGN_OR_THROW(
-      read_batch,
-      arrow::ipc::ReadRecordBatch(
-          *message, schema, &memo, arrow::ipc::IpcReadOptions::Defaults()));
-
-  // Copy data to host for checking
-  std::shared_ptr<arrow::Buffer> host_buffer;
-  const int64_t size = cuda_buffer->size();
-  ARROW_ASSIGN_OR_THROW(host_buffer, AllocateBuffer(size, arrow::default_memory_pool()));
-  ARROW_THROW_NOT_OK(cuda_buffer->CopyToHost(0, size, host_buffer->mutable_data()));
-
-  std::shared_ptr<arrow::RecordBatch> cpu_batch;
-  arrow::io::BufferReader cpu_reader(host_buffer);
-  ARROW_ASSIGN_OR_THROW(
-      cpu_batch,
-      arrow::ipc::ReadRecordBatch(read_batch->schema(),
-                                  &memo,
-                                  arrow::ipc::IpcReadOptions::Defaults(),
-                                  &cpu_reader));
+  auto df =
+      ArrowOutput(data_frame, ExecutorDeviceType::GPU, TArrowTransport::SHARED_MEMORY);
 
   // int column
-  auto int_array = cpu_batch->column(0);
+  auto int_array = df.record_batch->column(0);
   ASSERT_EQ(int_array->type()->id(), arrow::Type::type::INT32);
   std::shared_ptr<arrow::Array> int_truth_array;
   {
@@ -464,7 +474,7 @@ TEST_F(ArrowIpcBasic, IpcGpu) {
   ASSERT_TRUE(int_array->Equals(int_truth_array));
 
   // double column
-  auto double_array = cpu_batch->column(1);
+  auto double_array = df.record_batch->column(1);
   ASSERT_EQ(double_array->type()->id(), arrow::Type::type::DOUBLE);
   std::shared_ptr<arrow::Array> double_truth_array;
   {
@@ -476,7 +486,7 @@ TEST_F(ArrowIpcBasic, IpcGpu) {
   ASSERT_TRUE(double_array->ApproxEquals(double_truth_array));
 
   // string column
-  auto string_array = cpu_batch->column(2);
+  auto string_array = df.record_batch->column(2);
   ASSERT_EQ(string_array->type()->id(), arrow::Type::type::DICTIONARY);
   std::shared_ptr<arrow::Array> text_truth_array;
   {

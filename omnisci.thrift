@@ -130,6 +130,11 @@ enum TQueryType {
   SCHEMA_WRITE
 }
 
+enum TArrowTransport {
+  SHARED_MEMORY,
+  WIRE
+}
+
 struct TQueryResult {
   1: TRowSet row_set
   2: i64 execution_time_ms
@@ -147,6 +152,7 @@ struct TDataFrame {
   4: i64 df_size
   5: i64 execution_time_ms
   6: i64 arrow_conversion_time_ms
+  7: binary df_buffer
 }
 
 struct TDBInfo {
@@ -532,7 +538,7 @@ service OmniSci {
   TSessionInfo get_session_info(1: TSessionId session) throws (1: TOmniSciException e)
   # query, render
   TQueryResult sql_execute(1: TSessionId session, 2: string query 3: bool column_format, 4: string nonce, 5: i32 first_n = -1, 6: i32 at_most_n = -1) throws (1: TOmniSciException e)
-  TDataFrame sql_execute_df(1: TSessionId session, 2: string query 3: common.TDeviceType device_type 4: i32 device_id = 0 5: i32 first_n = -1) throws (1: TOmniSciException e)
+  TDataFrame sql_execute_df(1: TSessionId session, 2: string query 3: common.TDeviceType device_type 4: i32 device_id = 0 5: i32 first_n = -1 6: TArrowTransport transport_method) throws (1: TOmniSciException e)
   TDataFrame sql_execute_gdf(1: TSessionId session, 2: string query 3: i32 device_id = 0, 4: i32 first_n = -1) throws (1: TOmniSciException e)
   void deallocate_df(1: TSessionId session, 2: TDataFrame df, 3: common.TDeviceType device_type, 4: i32 device_id = 0) throws (1: TOmniSciException e)
   void interrupt(1: TSessionId query_session, 2: TSessionId interrupt_session) throws (1: TOmniSciException e)

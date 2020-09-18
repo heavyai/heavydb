@@ -1084,7 +1084,8 @@ void DBHandler::sql_execute_df(TDataFrame& _return,
                                const std::string& query_str,
                                const TDeviceType::type device_type,
                                const int32_t device_id,
-                               const int32_t first_n) {
+                               const int32_t first_n,
+                               const TArrowTransport::type transport_method) {
   auto session_ptr = get_session_ptr(session);
   auto query_state = create_query_state(session_ptr, query_str);
   auto stdlog = STDLOG(session_ptr, query_state);
@@ -1135,7 +1136,8 @@ void DBHandler::sql_execute_df(TDataFrame& _return,
                          device_type == TDeviceType::CPU ? ExecutorDeviceType::CPU
                                                          : ExecutorDeviceType::GPU,
                          static_cast<size_t>(device_id),
-                         first_n);
+                         first_n,
+                         transport_method);
       return;
     }
   } catch (std::exception& e) {
@@ -1151,7 +1153,13 @@ void DBHandler::sql_execute_gdf(TDataFrame& _return,
                                 const int32_t device_id,
                                 const int32_t first_n) {
   auto stdlog = STDLOG(get_session_ptr(session));
-  sql_execute_df(_return, session, query_str, TDeviceType::GPU, device_id, first_n);
+  sql_execute_df(_return,
+                 session,
+                 query_str,
+                 TDeviceType::GPU,
+                 device_id,
+                 first_n,
+                 TArrowTransport::SHARED_MEMORY);
 }
 
 // For now we have only one user of a data frame in all cases.
@@ -4794,7 +4802,8 @@ void DBHandler::execute_rel_alg_df(TDataFrame& _return,
                                    const Catalog_Namespace::SessionInfo& session_info,
                                    const ExecutorDeviceType device_type,
                                    const size_t device_id,
-                                   const int32_t first_n) const {
+                                   const int32_t first_n,
+                                   const TArrowTransport::type transport_method) const {
   const auto& cat = session_info.getCatalog();
   CHECK(device_type == ExecutorDeviceType::CPU ||
         session_info.get_executor_device_type() == ExecutorDeviceType::GPU);
@@ -4845,7 +4854,8 @@ void DBHandler::execute_rel_alg_df(TDataFrame& _return,
                                                 device_type,
                                                 device_id,
                                                 getTargetNames(result.getTargetsMeta()),
-                                                first_n);
+                                                first_n,
+                                                ArrowTransport(transport_method));
   ArrowResult arrow_result;
   _return.arrow_conversion_time_ms +=
       measure<>::execution([&] { arrow_result = converter->getArrowResult(); });
@@ -4854,6 +4864,8 @@ void DBHandler::execute_rel_alg_df(TDataFrame& _return,
   _return.sm_size = arrow_result.sm_size;
   _return.df_handle =
       std::string(arrow_result.df_handle.begin(), arrow_result.df_handle.end());
+  _return.df_buffer =
+      std::string(arrow_result.df_buffer.begin(), arrow_result.df_buffer.end());
   if (device_type == ExecutorDeviceType::GPU) {
     std::lock_guard<std::mutex> map_lock(handle_to_dev_ptr_mutex_);
     CHECK(!ipc_handle_to_dev_ptr_.count(_return.df_handle));
