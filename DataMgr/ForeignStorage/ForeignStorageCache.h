@@ -91,6 +91,8 @@ class ForeignStorageCache {
 
   File_Namespace::GlobalFileMgr* getGlobalFileMgr() { return global_file_mgr_.get(); }
 
+  std::string getCacheDirectoryForTablePrefix(const ChunkKey&);
+
  private:
   // These methods are private and assume locks are already acquired when called.
   std::set<ChunkKey>::iterator eraseChunk(const std::set<ChunkKey>::iterator&);

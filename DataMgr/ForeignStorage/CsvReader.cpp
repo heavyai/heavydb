@@ -15,6 +15,8 @@
  */
 
 #include "DataMgr/ForeignStorage/CsvReader.h"
+#include "FsiJsonUtils.h"
+
 namespace foreign_storage {
 
 namespace {
@@ -88,11 +90,37 @@ SingleFileReader::SingleFileReader(const std::string& file_path,
 
   data_size_ = get_data_size(ftell(file_), header_offset_);
 
-  if (fseek(file_, header_offset_, SEEK_SET) != 0) {
+  if (fseek(file_, static_cast<long int>(header_offset_), SEEK_SET) != 0) {
     throw std::runtime_error{"An error occurred when attempting to open file \"" +
                              file_path + "\". " + strerror(errno)};
   };
 }
+
+SingleFileReader::SingleFileReader(const std::string& file_path,
+                                   const import_export::CopyParams& copy_params,
+                                   const rapidjson::Value& value)
+    : CsvReader(file_path, copy_params)
+    , scan_finished_(true)
+    , header_offset_(0)
+    , total_bytes_read_(0) {
+  file_ = fopen(file_path.c_str(), "rb");
+  if (!file_) {
+    throw std::runtime_error{"An error occurred when attempting to open file \"" +
+                             file_path + "\". " + strerror(errno)};
+  }
+  json_utils::get_value_from_object(value, header_offset_, "header_offset");
+  json_utils::get_value_from_object(value, total_bytes_read_, "total_bytes_read");
+  json_utils::get_value_from_object(value, data_size_, "data_size");
+}
+
+void SingleFileReader::serialize(rapidjson::Value& value,
+                                 rapidjson::Document::AllocatorType& allocator) const {
+  CHECK(scan_finished_);
+  json_utils::add_value_to_object(value, header_offset_, "header_offset", allocator);
+  json_utils::add_value_to_object(
+      value, total_bytes_read_, "total_bytes_read", allocator);
+  json_utils::add_value_to_object(value, data_size_, "data_size", allocator);
+};
 
 void SingleFileReader::checkForMoreRows(size_t file_offset) {
   CHECK(isScanFinished());
@@ -112,7 +140,7 @@ void SingleFileReader::checkForMoreRows(size_t file_offset) {
         "reduced in size: \"" +
         boost::filesystem::path(file_path_).filename().string() + "\"."};
   }
-  if (fseek(file_, file_offset + header_offset_, SEEK_SET) != 0) {
+  if (fseek(file_, static_cast<long int>(file_offset + header_offset_), SEEK_SET) != 0) {
     throw std::runtime_error{"An error occurred when attempting to read offset " +
                              std::to_string(file_offset + header_offset_) +
                              " in file: \"" + file_path_ + "\". " + strerror(errno)};
@@ -196,6 +224,20 @@ CompressedFileReader::CompressedFileReader(const std::string& file_path,
   nextEntry();
 }
 
+CompressedFileReader::CompressedFileReader(const std::string& file_path,
+                                           const import_export::CopyParams& copy_params,
+                                           const rapidjson::Value& value)
+    : CompressedFileReader(file_path, copy_params) {
+  scan_finished_ = true;
+  initial_scan_ = false;
+  sourcenames_.clear();
+  archive_entry_index_.clear();
+  cumulative_sizes_.clear();
+  json_utils::get_value_from_object(value, sourcenames_, "sourcenames");
+  json_utils::get_value_from_object(value, cumulative_sizes_, "cumulative_sizes");
+  json_utils::get_value_from_object(value, archive_entry_index_, "archive_entry_index");
+}
+
 size_t CompressedFileReader::readInternal(void* buffer,
                                           size_t read_size,
                                           size_t buffer_size) {
@@ -235,7 +277,7 @@ size_t CompressedFileReader::readRegion(void* buffer, size_t offset, size_t size
   size_t index = offset_to_index(cumulative_sizes_, offset);
   CHECK(archive_entry_index_.size() > index);
   auto archive_entry = archive_entry_index_[index];
-  current_index_ = index;
+  current_index_ = static_cast<int>(index);
 
   // If we are in the wrong entry or too far in the right one skip to the correct entry
   if (archive_entry != archive_.getCurrentEntryIndex() ||
@@ -340,7 +382,7 @@ void CompressedFileReader::checkForMoreRows(size_t file_offset) {
     auto it = find(sourcenames_.begin(), sourcenames_.end(), archive_.entryName());
     if (it != sourcenames_.end()) {
       // Record new index of already read file
-      int index = it - sourcenames_.begin();
+      auto index = it - sourcenames_.begin();
       archive_entry_index_[index] = entry_number;
     } else {
       // Append new source file
@@ -363,7 +405,7 @@ void CompressedFileReader::checkForMoreRows(size_t file_offset) {
   archive_.resetArchive();
   if (initial_entries < archive_entry_index_.size()) {
     // We found more files
-    current_index_ = initial_entries - 1;
+    current_index_ = static_cast<int>(initial_entries) - 1;
     current_offset_ = cumulative_sizes_[current_index_];
     // iterate through new entries until we get one with data
     do {
@@ -390,7 +432,7 @@ void CompressedFileReader::checkForMoreRows(size_t file_offset) {
       }
     }
     if (num_csv_entries == 1) {
-      current_index_ = csv_index;
+      current_index_ = static_cast<int>(csv_index);
       current_offset_ = 0;
       size_t last_eof = cumulative_sizes_[csv_index];
 
@@ -415,9 +457,56 @@ void CompressedFileReader::checkForMoreRows(size_t file_offset) {
   }
 };
 
+void CompressedFileReader::serialize(
+    rapidjson::Value& value,
+    rapidjson::Document::AllocatorType& allocator) const {
+  // Should be done initial scan
+  CHECK(scan_finished_);
+  CHECK(!initial_scan_);
+
+  json_utils::add_value_to_object(value, sourcenames_, "sourcenames", allocator);
+  json_utils::add_value_to_object(
+      value, cumulative_sizes_, "cumulative_sizes", allocator);
+  json_utils::add_value_to_object(
+      value, archive_entry_index_, "archive_entry_index", allocator);
+};
+
 MultiFileReader::MultiFileReader(const std::string& file_path,
                                  const import_export::CopyParams& copy_params)
     : CsvReader(file_path, copy_params), current_index_(0), current_offset_(0) {}
+
+MultiFileReader::MultiFileReader(const std::string& file_path,
+                                 const import_export::CopyParams& copy_params,
+                                 const rapidjson::Value& value)
+    : CsvReader(file_path, copy_params), current_index_(0), current_offset_(0) {
+  json_utils::get_value_from_object(value, file_locations_, "file_locations");
+  json_utils::get_value_from_object(value, cumulative_sizes_, "cumulative_sizes");
+  json_utils::get_value_from_object(value, current_offset_, "current_offset");
+  json_utils::get_value_from_object(value, current_index_, "current_index");
+
+  // Validate files_metadata here, but objects will be recreated by child class
+  CHECK(value.HasMember("files_metadata"));
+  CHECK(value["files_metadata"].IsArray());
+  CHECK(file_locations_.size() == value["files_metadata"].GetArray().Size());
+}
+
+void MultiFileReader::serialize(rapidjson::Value& value,
+                                rapidjson::Document::AllocatorType& allocator) const {
+  json_utils::add_value_to_object(value, file_locations_, "file_locations", allocator);
+  json_utils::add_value_to_object(
+      value, cumulative_sizes_, "cumulative_sizes", allocator);
+  json_utils::add_value_to_object(value, current_offset_, "current_offset", allocator);
+  json_utils::add_value_to_object(value, current_index_, "current_index", allocator);
+
+  // Serialize metadata from all files
+  rapidjson::Value files_metadata(rapidjson::kArrayType);
+  for (size_t index = 0; index < files_.size(); index++) {
+    rapidjson::Value file_metadata(rapidjson::kObjectType);
+    files_[index]->serialize(file_metadata, allocator);
+    files_metadata.PushBack(file_metadata, allocator);
+  }
+  value.AddMember("files_metadata", files_metadata, allocator);
+};
 
 size_t MultiFileReader::getRemainingSize() {
   size_t total_size = 0;
@@ -438,46 +527,74 @@ bool MultiFileReader::isRemainingSizeKnown() {
 LocalMultiFileReader::LocalMultiFileReader(const std::string& file_path,
                                            const import_export::CopyParams& copy_params)
     : MultiFileReader(file_path, copy_params) {
-  std::vector<std::string> file_locations;
+  std::set<std::string> file_locations;
   if (boost::filesystem::is_directory(file_path)) {
     // Find all files in this directory
     for (boost::filesystem::recursive_directory_iterator it(file_path), eit; it != eit;
          ++it) {
       if (!boost::filesystem::is_directory(it->path())) {
-        file_locations.push_back(it->path().string());
+        file_locations.insert(it->path().string());
       }
     }
   } else {
-    file_locations.push_back(file_path);
+    file_locations.insert(file_path);
   }
-
   for (const auto& location : file_locations) {
     insertFile(location);
   }
 }
 
-void LocalMultiFileReader::insertFile(std::string location) {
+namespace {
+bool is_compressed_file(const std::string& location) {
   const std::vector<std::string> compressed_exts = {
       ".zip", ".gz", ".tar", ".rar", ".bz2", ".7z", ".tgz"};
   const std::vector<std::string> uncompressed_exts = {"", ".csv", ".tsv", ".txt"};
-  files_.reserve(file_locations_.size());
-  file_locations_.insert(location);
   if (std::find(compressed_exts.begin(),
                 compressed_exts.end(),
                 boost::filesystem::extension(location)) != compressed_exts.end()) {
-    files_.emplace_back(std::make_unique<CompressedFileReader>(location, copy_params_));
+    return true;
   } else if (std::find(uncompressed_exts.begin(),
                        uncompressed_exts.end(),
                        boost::filesystem::extension(location)) !=
              uncompressed_exts.end()) {
-    files_.emplace_back(std::make_unique<SingleFileReader>(location, copy_params_));
+    return false;
   } else {
     throw std::runtime_error{"Invalid extention for file \"" + location + "\"."};
+  }
+}
+}  // namespace
+
+LocalMultiFileReader::LocalMultiFileReader(const std::string& file_path,
+                                           const import_export::CopyParams& copy_params,
+                                           const rapidjson::Value& value)
+    : MultiFileReader(file_path, copy_params, value) {
+  // Constructs file from files_metadata
+  for (size_t index = 0; index < file_locations_.size(); index++) {
+    if (is_compressed_file(file_locations_[index])) {
+      files_.emplace_back(std::make_unique<CompressedFileReader>(
+          file_locations_[index],
+          copy_params_,
+          value["files_metadata"].GetArray()[index]));
+    } else {
+      files_.emplace_back(
+          std::make_unique<SingleFileReader>(file_locations_[index],
+                                             copy_params_,
+                                             value["files_metadata"].GetArray()[index]));
+    }
+  }
+}
+
+void LocalMultiFileReader::insertFile(std::string location) {
+  if (is_compressed_file(location)) {
+    files_.emplace_back(std::make_unique<CompressedFileReader>(location, copy_params_));
+  } else {
+    files_.emplace_back(std::make_unique<SingleFileReader>(location, copy_params_));
   }
   if (files_.back()->isScanFinished()) {
     // skip any initially empty files
     files_.pop_back();
-    return;
+  } else {
+    file_locations_.push_back(location);
   }
 }
 
@@ -489,8 +606,10 @@ void LocalMultiFileReader::checkForMoreRows(size_t file_offset) {
     // Find all files in this directory
     for (boost::filesystem::recursive_directory_iterator it(file_path_), eit; it != eit;
          ++it) {
-      if (!boost::filesystem::is_directory(it->path()) &&
-          (file_locations_.find(it->path().string()) == file_locations_.end())) {
+      bool new_file =
+          std::find(file_locations_.begin(), file_locations_.end(), it->path()) ==
+          file_locations_.end();
+      if (!boost::filesystem::is_directory(it->path()) && new_file) {
         new_locations.insert(it->path().string());
       }
     }

@@ -120,6 +120,7 @@ void ForeignStorageCache::cacheMetadataVec(const ChunkMetadataVector& metadata_v
   auto timer = DEBUG_TIMER(__func__);
   write_lock meta_lock(metadata_mutex_);
   write_lock chunk_lock(chunks_mutex_);
+
   for (auto& [chunk_key, metadata] : metadata_vec) {
     cached_metadata_.emplace(chunk_key);
     AbstractBuffer* buf;
@@ -342,6 +343,14 @@ void ForeignStorageCache::validatePath(const std::string& base_path) {
           "with --disk_cache_path=<path> or use the default location."};
     }
   }
+}
+
+std::string ForeignStorageCache::getCacheDirectoryForTablePrefix(
+    const ChunkKey& table_prefix) {
+  CHECK(table_prefix.size() >= 2);
+  return dynamic_cast<File_Namespace::FileMgr*>(
+             getGlobalFileMgr()->getFileMgr(table_prefix))
+      ->getFileMgrBasePath();
 }
 
 }  // namespace foreign_storage

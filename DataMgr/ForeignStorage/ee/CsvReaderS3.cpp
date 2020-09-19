@@ -19,6 +19,7 @@
 #include <aws/s3/model/Object.h>
 
 #include "Catalog/ForeignServer.h"
+#include "DataMgr/ForeignStorage/FsiJsonUtils.h"
 #include "DataMgr/ForeignStorage/ee/CsvReaderS3.h"
 
 namespace foreign_storage {
@@ -113,6 +114,32 @@ CsvReaderS3::CsvReaderS3(const std::string& obj_key,
   }
   file_size_ = file_size_ - header_offset_;
 }
+
+CsvReaderS3::CsvReaderS3(const std::string& obj_key,
+                         const import_export::CopyParams& copy_params,
+                         const ForeignServer* server_options,
+                         const UserMapping* user_mapping,
+                         const rapidjson::Value& value)
+    : CsvReader(obj_key, copy_params)
+    , scan_finished_(false)
+    , obj_key_(obj_key)
+    , copy_params_(copy_params)
+    , current_offset_(0)
+    , header_offset_(0) {
+  bucket_name_ = server_options->options.find(ForeignServer::S3_BUCKET_KEY)->second;
+  s3_client_.reset(new Aws::S3::S3Client(get_credentials(user_mapping),
+                                         get_s3_config(server_options)));
+  scan_finished_ = true;
+  json_utils::get_value_from_object(value, header_offset_, "header_offset");
+  json_utils::get_value_from_object(value, file_size_, "file_size");
+}
+
+void CsvReaderS3::serialize(rapidjson::Value& value,
+                            rapidjson::Document::AllocatorType& allocator) const {
+  CHECK(scan_finished_);
+  json_utils::add_value_to_object(value, header_offset_, "header_offset", allocator);
+  json_utils::add_value_to_object(value, file_size_, "file_size", allocator);
+};
 
 size_t CsvReaderS3::read(void* buffer, size_t max_size) {
   size_t byte_start = header_offset_ + current_offset_;
@@ -218,6 +245,7 @@ MultiS3Reader::MultiS3Reader(const std::string& prefix_name,
       }
       files_.emplace_back(std::make_unique<CsvReaderS3>(
           objkey, obj.GetSize(), copy_params, foreign_server, user_mapping));
+      file_locations_.push_back(objkey);
     }
   } else {
     throw std::runtime_error{
@@ -225,6 +253,24 @@ MultiS3Reader::MultiS3Reader(const std::string& prefix_name,
                                  prefix_name,
                                  list_objects_outcome.GetError().GetExceptionName(),
                                  list_objects_outcome.GetError().GetMessage())};
+  }
+}
+
+MultiS3Reader::MultiS3Reader(const std::string& file_path,
+                             const import_export::CopyParams& copy_params,
+                             const ForeignServer* server_options,
+                             const UserMapping* user_mapping,
+                             const rapidjson::Value& value)
+    : MultiFileReader(file_path, copy_params, value) {
+  // reconstruct files from metadata
+  CHECK(value.HasMember("files_metadata"));
+  for (size_t index = 0; index < file_locations_.size(); index++) {
+    files_.emplace_back(
+        std::make_unique<CsvReaderS3>(file_locations_[index],
+                                      copy_params,
+                                      server_options,
+                                      user_mapping,
+                                      value["files_metadata"].GetArray()[index]));
   }
 }
 }  // namespace foreign_storage

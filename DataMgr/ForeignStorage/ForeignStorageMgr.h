@@ -74,13 +74,13 @@ class ForeignStorageMgr : public AbstractBufferMgr {
                      const bool evict_cached_entries);
   bool hasDataWrapperForChunk(const ChunkKey& chunk_key);
 
+  // For testing, is datawrapper state recovered from disk
+  bool isDatawrapperRestored(const ChunkKey& chunk_key);
+
  private:
   bool createDataWrapperIfNotExists(const ChunkKey& chunk_key);
+  bool recoverDataWrapperFromDisk(const ChunkKey& chunk_key);
   std::shared_ptr<ForeignDataWrapper> getDataWrapper(const ChunkKey& chunk_key);
-  void populateBuffersFromOptionallyCreatedWrapper(
-      const ChunkKey& chunk_key,
-      std::map<ChunkKey, AbstractBuffer*>& required_buffers,
-      std::map<ChunkKey, AbstractBuffer*>& optional_buffers);
   std::map<ChunkKey, AbstractBuffer*> getChunkBuffersToPopulate(
       const ChunkKey& chunk_key,
       AbstractBuffer* destination_buffer,

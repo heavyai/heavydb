@@ -1,0 +1,1 @@
+{"fragment_id_to_file_regions_map":[{"key":0,"value":[{"first_row_file_offset":0,"first_row_index":0,"region_size":2,"row_count":1}]}],"reader_metadata":{"file_locations":["BASEPATH/1.csv"],"cumulative_sizes":[2],"current_offset":2,"current_index":1,"files_metadata":[{"header_offset":2,"total_bytes_read":1,"data_size":2}]},"num_rows":1,"append_start_offset":2}

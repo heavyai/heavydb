@@ -64,6 +64,12 @@ class CsvDataWrapper : public ForeignDataWrapper {
 
   static void validateOptions(const ForeignTable* foreign_table);
 
+  void serializeDataWrapperInternals(const std::string& filepath) override;
+
+  void restoreDataWrapperInternals(const std::string& filepath,
+                                   const ChunkMetadataVector& chunk_metadata) override;
+  bool isRestored() const override;
+
  private:
   CsvDataWrapper(const ForeignTable* foreign_table);
 
@@ -109,6 +115,11 @@ class CsvDataWrapper : public ForeignDataWrapper {
                                   const std::map<ChunkKey, AbstractBuffer*>& buffers,
                                   std::map<int, Chunk_NS::Chunk>& column_id_to_chunk_map);
 
+  /**
+   * @return bool indicating if we are in append or bulk refrsh mode
+   */
+  bool isAppendMode();
+
   std::map<ChunkKey, std::shared_ptr<ChunkMetadata>> chunk_metadata_map_;
   std::map<int, FileRegions> fragment_id_to_file_regions_map_;
 
@@ -126,7 +137,8 @@ class CsvDataWrapper : public ForeignDataWrapper {
   size_t num_rows_;
   // What byte offset we left off at in the csv_reader
   size_t append_start_offset_;
-
+  // Is this datawrapper restored from disk
+  bool is_restored_;
   static constexpr std::array<char const*, 14> supported_options_{"BASE_PATH",
                                                                   "FILE_PATH",
                                                                   "ARRAY_DELIMITER",

@@ -19,6 +19,7 @@ set(datamgr_source_files
     ForeignStorage/ForeignStorageBuffer.cpp
     ForeignStorage/ForeignStorageMgr.cpp
     ForeignStorage/ForeignStorageCache.cpp
+    ForeignStorage/FsiJsonUtils.cpp
     ForeignStorage/CacheEvictionAlgorithms/LRUEvictionAlgorithm.cpp
     ForeignStorage/CsvReader.cpp
     BufferMgr/GpuCudaBufferMgr/GpuCudaBufferMgr.cpp

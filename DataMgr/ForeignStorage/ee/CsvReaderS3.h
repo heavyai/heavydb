@@ -31,6 +31,12 @@ class MultiS3Reader : public MultiFileReader {
                 const import_export::CopyParams& copy_params,
                 const ForeignServer* server_options,
                 const UserMapping* user_mapping);
+
+  MultiS3Reader(const std::string& file_path,
+                const import_export::CopyParams& copy_params,
+                const ForeignServer* server_options,
+                const UserMapping* user_mapping,
+                const rapidjson::Value& value);
 };
 
 class CsvReaderS3 : public CsvReader {
@@ -40,6 +46,13 @@ class CsvReaderS3 : public CsvReader {
               const import_export::CopyParams& copy_params,
               const ForeignServer* server_options,
               const UserMapping* user_mapping);
+
+  CsvReaderS3(const std::string& obj_key,
+              const import_export::CopyParams& copy_params,
+              const ForeignServer* server_options,
+              const UserMapping* user_mapping,
+              const rapidjson::Value& value);
+
   size_t read(void* buffer, size_t max_size) override;
   size_t readRegion(void* buffer, size_t offset, size_t size) override {
     CHECK(isScanFinished());
@@ -52,6 +65,9 @@ class CsvReaderS3 : public CsvReader {
   size_t getRemainingSize() override { return file_size_ - current_offset_; }
 
   bool isRemainingSizeKnown() override { return true; };
+
+  void serialize(rapidjson::Value& value,
+                 rapidjson::Document::AllocatorType& allocator) const override;
 
  private:
   void skipHeader();

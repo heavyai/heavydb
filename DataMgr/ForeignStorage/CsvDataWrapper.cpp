@@ -18,9 +18,14 @@
 
 #include <algorithm>
 #include <condition_variable>
+#include <fstream>
 #include <mutex>
 #include <regex>
 
+#include <rapidjson/document.h>
+#include <rapidjson/istreamwrapper.h>
+#include <rapidjson/ostreamwrapper.h>
+#include <rapidjson/writer.h>
 #include <boost/filesystem.hpp>
 
 #include "DataMgr/ForeignStorage/CsvFileBufferParser.h"
@@ -28,13 +33,14 @@
 #include "ImportExport/DelimitedParserUtils.h"
 #include "ImportExport/Importer.h"
 #include "Utils/DdlUtils.h"
+#include "FsiJsonUtils.h"
 
 namespace foreign_storage {
 CsvDataWrapper::CsvDataWrapper(const int db_id, const ForeignTable* foreign_table)
-    : db_id_(db_id), foreign_table_(foreign_table) {}
+    : db_id_(db_id), foreign_table_(foreign_table), is_restored_(false) {}
 
 CsvDataWrapper::CsvDataWrapper(const ForeignTable* foreign_table)
-    : db_id_(-1), foreign_table_(foreign_table) {}
+    : db_id_(-1), foreign_table_(foreign_table), is_restored_(false) {}
 
 void CsvDataWrapper::validateOptions(const ForeignTable* foreign_table) {
   for (const auto& entry : foreign_table->options) {
@@ -835,15 +841,11 @@ void CsvDataWrapper::populateChunkMetadata(ChunkMetadataVector& chunk_metadata_v
   auto timer = DEBUG_TIMER(__func__);
   chunk_metadata_map_.clear();
 
-  auto update_mode_it = foreign_table_->options.find("UPDATE_MODE");
-  bool append_mode = (update_mode_it != foreign_table_->options.end()) &&
-                     boost::iequals(update_mode_it->second, "APPEND");
-
   const auto copy_params = validateAndGetCopyParams();
   const auto file_path = getFilePath();
   auto catalog = Catalog_Namespace::Catalog::checkedGet(db_id_);
 
-  if (append_mode && csv_reader_ != nullptr) {
+  if (isAppendMode() && csv_reader_ != nullptr) {
     csv_reader_->checkForMoreRows(append_start_offset_);
   } else {
     fragment_id_to_file_regions_map_.clear();
@@ -867,7 +869,7 @@ void CsvDataWrapper::populateChunkMetadata(ChunkMetadataVector& chunk_metadata_v
   MetadataScanMultiThreadingParams multi_threading_params;
 
   // Restore previous chunk data
-  if (append_mode) {
+  if (isAppendMode()) {
     multi_threading_params.chunk_byte_count = chunk_byte_count_;
     multi_threading_params.chunk_encoder_buffers = std::move(chunk_encoder_buffers_);
   }
@@ -939,7 +941,7 @@ void CsvDataWrapper::populateChunkMetadata(ChunkMetadataVector& chunk_metadata_v
   }
 
   // Save chunk data
-  if (append_mode) {
+  if (isAppendMode()) {
     chunk_byte_count_ = multi_threading_params.chunk_byte_count;
     chunk_encoder_buffers_ = std::move(multi_threading_params.chunk_encoder_buffers);
   }
@@ -948,4 +950,126 @@ void CsvDataWrapper::populateChunkMetadata(ChunkMetadataVector& chunk_metadata_v
     std::sort(entry.second.begin(), entry.second.end());
   }
 }
+
+// Serialization functions for FileRegion
+void set_value(rapidjson::Value& json_val,
+               const FileRegion& file_region,
+               rapidjson::Document::AllocatorType& allocator) {
+  json_val.SetObject();
+  json_utils::add_value_to_object(
+      json_val, file_region.first_row_file_offset, "first_row_file_offset", allocator);
+  json_utils::add_value_to_object(
+      json_val, file_region.first_row_index, "first_row_index", allocator);
+  json_utils::add_value_to_object(
+      json_val, file_region.region_size, "region_size", allocator);
+  json_utils::add_value_to_object(
+      json_val, file_region.row_count, "row_count", allocator);
+}
+
+void get_value(const rapidjson::Value& json_val, FileRegion& file_region) {
+  CHECK(json_val.IsObject());
+  json_utils::get_value_from_object(
+      json_val, file_region.first_row_file_offset, "first_row_file_offset");
+  json_utils::get_value_from_object(
+      json_val, file_region.first_row_index, "first_row_index");
+  json_utils::get_value_from_object(json_val, file_region.region_size, "region_size");
+  json_utils::get_value_from_object(json_val, file_region.row_count, "row_count");
+}
+
+void CsvDataWrapper::serializeDataWrapperInternals(const std::string& filepath) {
+  rapidjson::Document d;
+  d.SetObject();
+
+  // Save fragment map
+  json_utils::add_value_to_object(d,
+                                  fragment_id_to_file_regions_map_,
+                                  "fragment_id_to_file_regions_map",
+                                  d.GetAllocator());
+
+  // Save csv_reader metadata
+  rapidjson::Value reader_metadata(rapidjson::kObjectType);
+  csv_reader_->serialize(reader_metadata, d.GetAllocator());
+  d.AddMember("reader_metadata", reader_metadata, d.GetAllocator());
+
+  json_utils::add_value_to_object(d, num_rows_, "num_rows", d.GetAllocator());
+  json_utils::add_value_to_object(
+      d, append_start_offset_, "append_start_offset", d.GetAllocator());
+
+  // Write to disk
+  std::ofstream ofs(filepath);
+  if (!ofs) {
+    throw std::runtime_error{"Error trying to create file '" + filepath +
+                             "', the error was: " + std::strerror(errno)};
+  }
+  rapidjson::OStreamWrapper osw(ofs);
+  rapidjson::Writer<rapidjson::OStreamWrapper> writer(osw);
+  d.Accept(writer);
+}
+
+void CsvDataWrapper::restoreDataWrapperInternals(
+    const std::string& filepath,
+    const ChunkMetadataVector& chunk_metadata) {
+  std::ifstream ifs(filepath);
+  if (!ifs) {
+    throw std::runtime_error{"Error trying to open file '" + filepath +
+                             "', the error was: " + std::strerror(errno)};
+  }
+  rapidjson::IStreamWrapper isw(ifs);
+  rapidjson::Document d;
+  d.ParseStream(isw);
+  CHECK(d.IsObject());
+
+  // Restore fragment map
+  json_utils::get_value_from_object(
+      d, fragment_id_to_file_regions_map_, "fragment_id_to_file_regions_map");
+
+  // Construct csv_reader with metadta
+  CHECK(d.HasMember("reader_metadata"));
+  const auto copy_params = validateAndGetCopyParams();
+  const auto csv_file_path = getFilePath();
+  auto& server_options = foreign_table_->foreign_server->options;
+  if (server_options.find(ForeignServer::STORAGE_TYPE_KEY)->second ==
+      ForeignServer::LOCAL_FILE_STORAGE_TYPE) {
+    csv_reader_ = std::make_unique<LocalMultiFileReader>(
+        csv_file_path, copy_params, d["reader_metadata"]);
+  } else {
+    UNREACHABLE();
+  }
+
+  json_utils::get_value_from_object(d, num_rows_, "num_rows");
+  json_utils::get_value_from_object(d, append_start_offset_, "append_start_offset");
+
+  // Now restore the internal metadata maps
+  CHECK(chunk_metadata_map_.empty());
+  CHECK(chunk_encoder_buffers_.empty());
+
+  for (auto& pair : chunk_metadata) {
+    chunk_metadata_map_[pair.first] = pair.second;
+
+    if (isAppendMode()) {
+      // Restore encoder state for append mode
+      chunk_encoder_buffers_[pair.first] = std::make_unique<ForeignStorageBuffer>();
+      chunk_encoder_buffers_[pair.first]->initEncoder(pair.second->sqlType);
+      chunk_encoder_buffers_[pair.first]->setSize(pair.second->numBytes);
+      chunk_encoder_buffers_[pair.first]->getEncoder()->setNumElems(
+          pair.second->numElements);
+      chunk_encoder_buffers_[pair.first]->getEncoder()->resetChunkStats(
+          pair.second->chunkStats);
+      chunk_encoder_buffers_[pair.first]->setUpdated();
+      chunk_byte_count_[pair.first] = pair.second->numBytes;
+    }
+  }
+  is_restored_ = true;
+}
+
+bool CsvDataWrapper::isAppendMode() {
+  auto update_mode_it = foreign_table_->options.find("UPDATE_MODE");
+  return (update_mode_it != foreign_table_->options.end()) &&
+         boost::iequals(update_mode_it->second, "APPEND");
+}
+
+bool CsvDataWrapper::isRestored() const {
+  return is_restored_;
+}
+
 }  // namespace foreign_storage

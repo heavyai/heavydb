@@ -45,8 +45,29 @@ class ForeignDataWrapper {
    * if the data wrapper has to scan through chunk data anyways (typically for
    * row wise data formats)
    */
+
   virtual void populateChunkBuffers(
       std::map<ChunkKey, AbstractBuffer*>& required_buffers,
       std::map<ChunkKey, AbstractBuffer*>& optional_buffers) = 0;
+
+  /**
+   * Serialize internal state of wrapper into file at given path if implemented
+   * @param filepath - location to save file to
+   */
+  virtual void serializeDataWrapperInternals(const std::string& filepath){};
+
+  /**
+   * Restore internal state of datawrapper
+   * @param filepath - location of file created by serializeMetadata
+   * @param chunk_metadata_vector - vector of chunk metadata recovered from disk
+   */
+  virtual void restoreDataWrapperInternals(const std::string& filepath,
+                                           const ChunkMetadataVector& chunk_metadata) {
+    // Should not be called if serializeMetadata doesnt create file
+    UNREACHABLE();
+  };
+
+  // For testing, is this data wrapper restored from disk
+  virtual bool isRestored() const { return false; }
 };
 }  // namespace foreign_storage

@@ -17,6 +17,7 @@
 #pragma once
 
 #include <boost/filesystem.hpp>
+#include "rapidjson/document.h"
 
 #include "Archive/PosixFileArchive.h"
 #include "ImportExport/CopyParams.h"
@@ -74,11 +75,21 @@ class CsvReader {
    * or not supported)
    * @param file_offset - where to resume the scan from (end of the last row) as
    *  not all of the bytes may have been consumed by the upstream compoennet
-
    */
   virtual void checkForMoreRows(size_t file_offset) {
     throw std::runtime_error{"APPEND mode not yet supported for this table."};
   }
+
+  /**
+   * Serialize internal state to given json object
+   * This Json will later be used to restore the reader state  through a constructor
+   * must be called when isScanFinished() is true
+   * @param value - json object to store needed state to
+   *                this function can store any needed data or none
+   * @param allocator - allocator to use for json contruction
+   */
+  virtual void serialize(rapidjson::Value& value,
+                         rapidjson::Document::AllocatorType& allocator) const = 0;
 
  protected:
   import_export::CopyParams copy_params_;
@@ -90,6 +101,9 @@ class SingleFileReader : public CsvReader {
  public:
   SingleFileReader(const std::string& file_path,
                    const import_export::CopyParams& copy_params);
+  SingleFileReader(const std::string& file_path,
+                   const import_export::CopyParams& copy_params,
+                   const rapidjson::Value& value);
   ~SingleFileReader() override { fclose(file_); }
 
   // Delete copy assignment to prevent copying resource pointer
@@ -108,7 +122,7 @@ class SingleFileReader : public CsvReader {
 
   size_t readRegion(void* buffer, size_t offset, size_t size) override {
     CHECK(isScanFinished());
-    if (fseek(file_, offset + header_offset_, SEEK_SET) != 0) {
+    if (fseek(file_, static_cast<long int>(offset + header_offset_), SEEK_SET) != 0) {
       throw std::runtime_error{"An error occurred when attempting to read offset " +
                                std::to_string(offset) + " in file: \"" + file_path_ +
                                "\". " + strerror(errno)};
@@ -122,6 +136,9 @@ class SingleFileReader : public CsvReader {
 
   bool isRemainingSizeKnown() override { return true; };
   void checkForMoreRows(size_t file_offset) override;
+
+  void serialize(rapidjson::Value& value,
+                 rapidjson::Document::AllocatorType& allocator) const override;
 
  private:
   std::FILE* file_;
@@ -156,7 +173,7 @@ class ArchiveWrapper {
 
   bool currentEntryFinished() const { return (block_chars_remaining_ == 0); }
 
-  bool currentEntryDataAvailable() const { return block_chars_remaining_; }
+  size_t currentEntryDataAvailable() const { return block_chars_remaining_; }
 
   // Consume given amount of data from current block, copying into dest_buffer if set
   void consumeDataFromCurrentEntry(size_t size, char* dest_buffer = nullptr);
@@ -193,16 +210,26 @@ class CompressedFileReader : public CsvReader {
  public:
   CompressedFileReader(const std::string& file_path,
                        const import_export::CopyParams& copy_params);
-
+  CompressedFileReader(const std::string& file_path,
+                       const import_export::CopyParams& copy_params,
+                       const rapidjson::Value& value);
   size_t read(void* buffer, size_t max_size) override;
 
   size_t readRegion(void* buffer, size_t offset, size_t size) override;
 
   bool isScanFinished() override { return scan_finished_; }
 
+  bool isRemainingSizeKnown() override { return false; };
   size_t getRemainingSize() override { return 0; }
 
-  bool isRemainingSizeKnown() override { return false; };
+  void serialize(rapidjson::Value& value,
+                 rapidjson::Document::AllocatorType& allocator) const override;
+
+ private:
+  /**
+   * Reopen file and reset back to the beginning
+   */
+  void resetArchive();
 
   void checkForMoreRows(size_t file_offset) override;
 
@@ -254,6 +281,9 @@ class MultiFileReader : public CsvReader {
  public:
   MultiFileReader(const std::string& file_path,
                   const import_export::CopyParams& copy_params);
+  MultiFileReader(const std::string& file_path,
+                  const import_export::CopyParams& copy_params,
+                  const rapidjson::Value& value);
 
   size_t getRemainingSize() override;
 
@@ -265,9 +295,12 @@ class MultiFileReader : public CsvReader {
 
   bool isScanFinished() override { return (current_index_ >= files_.size()); }
 
+  void serialize(rapidjson::Value& value,
+                 rapidjson::Document::AllocatorType& allocator) const override;
+
  protected:
   std::vector<std::unique_ptr<CsvReader>> files_;
-  std::set<std::string> file_locations_;
+  std::vector<std::string> file_locations_;
 
   // Size of each file + all previous files
   std::vector<size_t> cumulative_sizes_;
@@ -282,6 +315,10 @@ class LocalMultiFileReader : public MultiFileReader {
  public:
   LocalMultiFileReader(const std::string& file_path,
                        const import_export::CopyParams& copy_params);
+
+  LocalMultiFileReader(const std::string& file_path,
+                       const import_export::CopyParams& copy_params,
+                       const rapidjson::Value& value);
 
   void checkForMoreRows(size_t file_offset) override;
 
