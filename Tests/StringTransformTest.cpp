@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#include <type_traits>
 #include "../Shared/StringTransform.h"
 #include "TestHelpers.h"
 
@@ -164,6 +165,89 @@ TEST(StringTransform, Split) {
   {
     auto v = split(split_test_strings[8]);
     ASSERT_EQ(v.size(), 0U);
+  }
+}
+
+TEST(StringTransform, toString) {
+  {
+    ASSERT_EQ(::toString(123), "123");
+    ASSERT_EQ(::toString(12.3f), "12.300000");
+    ASSERT_EQ(::toString(std::string("123")), "\"123\"");
+    {
+      std::vector<int> v = {1, 2, 3};
+      ASSERT_EQ(::toString(v), "[1, 2, 3]");
+    }
+    {
+      std::vector<std::string> v = {"1", "2", "3"};
+      ASSERT_EQ(::toString(v), "[\"1\", \"2\", \"3\"]");
+    }
+  }
+
+  {
+    class A {
+     public:
+    };
+    A a;
+    ASSERT_EQ(::toString(a), "StringTransform_toString_Test::TestBody()::A");
+    ASSERT_EQ(::toString(&a), "&StringTransform_toString_Test::TestBody()::A");
+  }
+
+  {
+    class A {
+     public:
+      std::string toString() const { return "A"; }
+    };
+    A a;
+    ASSERT_EQ(::toString(a), "A");
+    ASSERT_EQ(::toString(&a), "&A");
+  }
+
+  {
+    class A {
+     public:
+      virtual std::string toString() const = 0;
+    };
+
+    class A1 : public A {
+     public:
+      std::string toString() const override { return "A1"; };
+    };
+
+    class A2 : public A1 {
+     public:
+      std::string toString() const override { return "A2"; };
+    };
+
+    A1 a1;
+    ASSERT_EQ(::toString(a1), "A1");
+
+    A1* p = &a1;
+    ASSERT_EQ(::toString(p), "&A1");
+    ASSERT_EQ(::toString(&p), "&&A1");
+
+    A* p1 = &a1;
+    ASSERT_EQ(::toString(p1), "&A1");
+
+    A2 a2;
+    ASSERT_EQ(::toString(a2), "A2");
+    {
+      std::vector<const A*> v = {&a1, &a2};
+      ASSERT_EQ(::toString(v), "[&A1, &A2]");
+      ASSERT_EQ(::toString(&v), "&[&A1, &A2]");
+    }
+    {
+      auto a1 = std::make_shared<A1>();
+      auto a2 = std::make_shared<A2>();
+      std::vector<std::shared_ptr<const A>> v = {a1, a2};
+      ASSERT_EQ(::toString(v), "[A1, A2]");
+      ASSERT_EQ(::toString(&v), "&[A1, A2]");
+    }
+    {
+      auto a1 = std::make_shared<A1>();
+      std::vector<std::shared_ptr<const A1>> v = {a1};
+      ASSERT_EQ(::toString(v), "[A1]");
+      ASSERT_EQ(::toString(&v), "&[A1]");
+    }
   }
 }
 

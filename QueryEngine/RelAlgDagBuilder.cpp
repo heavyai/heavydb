@@ -594,7 +594,7 @@ size_t RelLogicalUnion::size() const {
 }
 
 std::string RelLogicalUnion::toString() const {
-  return cat("(RelLogicalUnion<", this, ">(is_all(", is_all_, ")))");
+  return cat(::typeName(this), "(is_all(", is_all_, "))");
 }
 
 std::string RelLogicalUnion::getFieldName(const size_t i) const {
@@ -2677,4 +2677,36 @@ std::string tree_string(const RelAlgNode* ra, const size_t depth) {
     result += tree_string(ra->getInput(i), depth + 1);
   }
   return result;
+}
+
+std::string RexSubQuery::toString() const {
+  return cat(::typeName(this), "(", ::toString(ra_.get()), ")");
+}
+
+std::string RexInput::toString() const {
+  return cat(::typeName(this),
+             "(node=",
+             ::toString(node_),
+             ", in_index=",
+             std::to_string(getIndex()),
+             ")");
+}
+
+std::string RelCompound::toString() const {
+  return cat(::typeName(this),
+             "(",
+             (filter_expr_ ? filter_expr_->toString() : "null"),
+             ", target_exprs=",
+             ::toString(target_exprs_),
+             ", ",
+             std::to_string(groupby_count_),
+             ", agg_exps=",
+             ::toString(agg_exprs_),
+             ", fields=",
+             ::toString(fields_),
+             ", scalar_sources=",
+             ::toString(scalar_sources_),
+             ", is_agg=",
+             std::to_string(is_agg_),
+             ")");
 }
