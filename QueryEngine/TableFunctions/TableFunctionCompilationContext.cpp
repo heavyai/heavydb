@@ -67,6 +67,9 @@ inline llvm::Type* get_llvm_type_from_sql_column_type(const SQLTypeInfo ti,
         return llvm::Type::getDoublePtrTy(ctx);
     }
   }
+  if (elem_ti.is_boolean()) {
+    return llvm::Type::getInt8PtrTy(ctx);
+  }
   CHECK(elem_ti.is_integer());
   switch (elem_ti.get_size()) {
     case 1:

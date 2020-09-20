@@ -82,14 +82,18 @@ ResultSetPtr TableFunctionExecutionContext::execute(
   }
   std::vector<const int8_t*> col_buf_ptrs;
   std::optional<size_t> element_count;
-  size_t table_info_count = 0;
   for (const auto& input_expr : exe_unit.input_exprs) {
     if (auto col_var = dynamic_cast<Analyzer::ColumnVar*>(input_expr)) {
-      auto table_info = table_infos[table_info_count++];
+      auto table_id = col_var->get_table_id();
+      auto table_info_it = std::find_if(
+          table_infos.begin(), table_infos.end(), [&table_id](const auto& table_info) {
+            return table_info.table_id == table_id;
+          });
+      CHECK(table_info_it != table_infos.end());
       auto [col_buf, buf_elem_count] = ColumnFetcher::getOneColumnFragment(
           executor,
           *col_var,
-          table_info.info.fragments.front(),
+          table_info_it->info.fragments.front(),
           device_type == ExecutorDeviceType::CPU ? Data_Namespace::MemoryLevel::CPU_LEVEL
                                                  : Data_Namespace::MemoryLevel::GPU_LEVEL,
           device_id,
