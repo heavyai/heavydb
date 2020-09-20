@@ -14,17 +14,16 @@
  * limitations under the License.
  */
 
-#include "StringDictionaryProxy.h"
-#include "../Shared/sqltypes.h"
-#include "../Utils/Regexp.h"
-#include "../Utils/StringLike.h"
-#include "Logger/Logger.h"
-#include "Shared/thread_count.h"
-#include "StringDictionary.h"
-
-#include <sys/fcntl.h>
+#include "StringDictionary/StringDictionaryProxy.h"
 
 #include <thread>
+
+#include "Logger/Logger.h"
+#include "Shared/sqltypes.h"
+#include "Shared/thread_count.h"
+#include "StringDictionary/StringDictionary.h"
+#include "Utils/Regexp.h"
+#include "Utils/StringLike.h"
 
 StringDictionaryProxy::StringDictionaryProxy(std::shared_ptr<StringDictionary> sd,
                                              const int64_t generation)
