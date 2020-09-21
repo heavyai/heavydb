@@ -234,7 +234,7 @@ bool DatumEqual(const Datum a, const Datum b, const SQLTypeInfo& ti) {
  * @brief convert datum to string
  */
 std::string DatumToString(Datum d, const SQLTypeInfo& ti) {
-  constexpr size_t buf_size = 32;
+  constexpr size_t buf_size = 64;
   char buf[buf_size];  // Hold "2000-03-01 12:34:56.123456789" and large years.
   switch (ti.get_type()) {
     case kBOOLEAN:
