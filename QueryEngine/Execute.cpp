@@ -91,7 +91,6 @@ size_t g_filter_push_down_passing_row_ubound{0};
 bool g_enable_columnar_output{false};
 bool g_enable_overlaps_hashjoin{false};
 bool g_enable_hashjoin_many_to_many{false};
-bool g_cache_string_hash{true};
 size_t g_overlaps_max_table_size_bytes{1024 * 1024 * 1024};
 bool g_strip_join_covered_quals{false};
 size_t g_constrained_by_in_threshold{10};
@@ -122,6 +121,8 @@ bool g_enable_smem_non_grouped_agg{
             // non-grouped aggregates
 bool g_is_test_env{false};  // operating under a unit test environment. Currently only
                             // limits the allocation for the output buffer arena
+
+extern bool g_cache_string_hash;
 
 int const Executor::max_gpu_count;
 

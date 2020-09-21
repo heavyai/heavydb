@@ -25,8 +25,12 @@
 #include <string_view>
 #include <thread>
 
-// TODO(adb): remove on windows?
+// TODO(adb): fixup
+#ifdef _MSC_VER
+#include <fcntl.h>
+#else
 #include <sys/fcntl.h>
+#endif
 
 #include "Logger/Logger.h"
 #include "OSDependent/omnisci_fs.h"
@@ -37,6 +41,8 @@
 #include "Utils/StringLike.h"
 
 #include "LeafHostInfo.h"
+
+bool g_cache_string_hash{true};
 
 namespace {
 

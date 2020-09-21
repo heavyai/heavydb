@@ -36,6 +36,7 @@ bool g_enable_thrift_logs{false};
 
 extern bool g_use_table_device_offset;
 extern float g_fraction_code_cache_to_evict;
+extern bool g_cache_string_hash;
 
 extern int64_t g_large_ndv_threshold;
 extern size_t g_large_ndv_multiplier;
