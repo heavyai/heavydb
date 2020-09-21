@@ -45,7 +45,6 @@
 #include "LdapServer.h"
 #include "ObjectRoleDescriptor.h"
 #include "PkiServer.h"
-#include "RestServer.h"
 
 #include "../DataMgr/DataMgr.h"
 #include "../SqliteConnector/SqliteConnector.h"
@@ -392,7 +391,6 @@ class SysCatalog : private CommonFileOperations {
 
   std::shared_ptr<Data_Namespace::DataMgr> dataMgr_;
   std::unique_ptr<LdapServer> ldap_server_;
-  std::unique_ptr<RestServer> rest_server_;
   std::unique_ptr<PkiServer> pki_server_;
   const AuthMetadata* authMetadata_;
   std::shared_ptr<Calcite> calciteMgr_;

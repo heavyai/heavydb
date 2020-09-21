@@ -937,8 +937,6 @@ boost::optional<int> CommandLineOptions::parse_command_line(
   boost::algorithm::trim_if(authMetadata.ldapQueryUrl, boost::is_any_of("\"'"));
   boost::algorithm::trim_if(authMetadata.ldapRoleRegex, boost::is_any_of("\"'"));
   boost::algorithm::trim_if(authMetadata.ldapSuperUserRole, boost::is_any_of("\"'"));
-  boost::algorithm::trim_if(authMetadata.restToken, boost::is_any_of("\"'"));
-  boost::algorithm::trim_if(authMetadata.restUrl, boost::is_any_of("\"'"));
 
   return boost::none;
 }

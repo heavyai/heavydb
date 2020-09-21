@@ -27,8 +27,6 @@ struct AuthMetadata {
   std::string ldapRoleRegex;
   std::string ldapSuperUserRole;
   std::string domainComp;
-  std::string restUrl;
-  std::string restToken;
   bool pki_db_client_auth = false;
   std::string ca_file_name;
   bool allowLocalAuthFallback;
