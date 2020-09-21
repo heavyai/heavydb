@@ -207,6 +207,7 @@ std::string concat_with(std::string_view with, Types&&... parms) {
 */
 
 #include <cxxabi.h>
+#include <sstream>
 #include <type_traits>
 
 template <typename T>
@@ -249,6 +250,10 @@ std::string toString(const T& v) {
     return v.toString();
   } else if constexpr (get_has_toString_v<T>) {
     return v.get()->toString();
+  } else if constexpr (std::is_same_v<T, void*>) {
+    std::ostringstream ss;
+    ss << std::hex << (uintptr_t)v;
+    return "0x" + ss.str();
   } else if constexpr (std::is_pointer_v<T>) {
     return (v == NULL ? "NULL" : "&" + toString(*v));
   } else {

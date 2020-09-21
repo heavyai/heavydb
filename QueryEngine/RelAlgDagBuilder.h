@@ -1406,9 +1406,17 @@ class RelSort : public RelAlgNode {
   size_t getOffset() const { return offset_; }
 
   std::string toString() const override {
-    return cat(::typeName(this) + "(" + "collation=" + ::toString(collation_) +
-               ", limit=" + std::to_string(limit_) + ", offset" +
-               std::to_string(offset_) + ", inputs=" + ::toString(inputs_) + ")");
+    return cat(::typeName(this),
+               "(",
+               "collation=",
+               ::toString(collation_),
+               ", limit=",
+               std::to_string(limit_),
+               ", offset",
+               std::to_string(offset_),
+               ", inputs=",
+               ::toString(inputs_),
+               ")");
   }
 
   size_t size() const override { return inputs_[0]->size(); }
