@@ -29,10 +29,11 @@ size_t formatDate(char* buf, size_t const max, int64_t const unixtime) {
   unsigned const yoe = (doe - doe / 1460 + doe / 36524 - (doe == 146096)) / 365;
   unsigned const doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
   unsigned const moy = (5 * doy + 2) / 153;
-  int const y = static_cast<int>(2000 + div_era.quot * 400 + yoe + (9 < moy));
+  static_assert(8 <= sizeof(long long));  // long long needed for snprintf()
+  long long const y = 2000 + div_era.quot * 400 + yoe + (9 < moy);
   unsigned const m = moy + (9 < moy ? -9 : 3);
   unsigned const d = doy - (153 * moy + 2) / 5 + 1;
-  int const len = snprintf(buf, max, "%04d-%02u-%02u", y, m, d);
+  int const len = snprintf(buf, max, "%04lld-%02u-%02u", y, m, d);
   if (0 <= len && static_cast<size_t>(len) < max) {
     return static_cast<size_t>(len);
   }
@@ -52,7 +53,8 @@ size_t formatDateTime(char* buf,
   unsigned const yoe = (doe - doe / 1460 + doe / 36524 - (doe == 146096)) / 365;
   unsigned const doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
   unsigned const moy = (5 * doy + 2) / 153;
-  int const y = static_cast<int>(2000 + div_era.quot * 400 + yoe + (9 < moy));
+  static_assert(8 <= sizeof(long long));  // long long needed for snprintf()
+  long long const y = 2000 + div_era.quot * 400 + yoe + (9 < moy);
   unsigned const m = moy + (9 < moy ? -9 : 3);
   unsigned const d = doy - (153 * moy + 2) / 5 + 1;
   unsigned const minutes = static_cast<unsigned>(div_day.rem) / 60;
@@ -60,7 +62,7 @@ size_t formatDateTime(char* buf,
   unsigned const hh = minutes / 60;
   unsigned const mm = minutes % 60;
   int const len =
-      snprintf(buf, max, "%04d-%02u-%02u %02u:%02u:%02u", y, m, d, hh, mm, ss);
+      snprintf(buf, max, "%04lld-%02u-%02u %02u:%02u:%02u", y, m, d, hh, mm, ss);
   if (0 <= len && static_cast<size_t>(len) < max) {
     if (dimension) {
       int const len_frac = snprintf(
