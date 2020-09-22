@@ -794,7 +794,7 @@ TEST_F(ShowForeignServerTest, SHOW_PRIVILEGE) {
 
 TEST_F(ShowForeignServerTest, BadTimestamp) {
   std::string query{"SHOW SERVERS WHERE created_at = 'test';"};
-  queryAndAssertException(query, "Exception: Invalid DATE/TIMESTAMP string test");
+  queryAndAssertException(query, "Exception: Invalid DATE/TIMESTAMP string (test)");
 }
 
 TEST_F(ShowForeignServerTest, BadQuery) {

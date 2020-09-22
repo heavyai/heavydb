@@ -29,10 +29,10 @@
 #include <string>
 
 #include "DateConverters.h"
+#include "DateTimeParser.h"
 #include "Logger/Logger.h"
 #include "QueryEngine/DateTimeUtils.h"
 #include "StringTransform.h"
-#include "TimeGM.h"
 #include "misc.h"
 #include "sqltypes.h"
 
@@ -161,14 +161,13 @@ Datum StringToDatum(std::string_view s, SQLTypeInfo& ti) {
         d.doubleval = std::stod(std::string(s));
         break;
       case kTIME:
-        d.bigintval = DateTimeStringValidate<kTIME>()(std::string(s), ti.get_dimension());
+        d.bigintval = dateTimeParse<kTIME>(s, ti.get_dimension());
         break;
       case kTIMESTAMP:
-        d.bigintval =
-            DateTimeStringValidate<kTIMESTAMP>()(std::string(s), ti.get_dimension());
+        d.bigintval = dateTimeParse<kTIMESTAMP>(s, ti.get_dimension());
         break;
       case kDATE:
-        d.bigintval = DateTimeStringValidate<kDATE>()(std::string(s), ti.get_dimension());
+        d.bigintval = dateTimeParse<kDATE>(s, ti.get_dimension());
         break;
       case kPOINT:
       case kLINESTRING:

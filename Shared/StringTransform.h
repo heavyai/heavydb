@@ -39,11 +39,7 @@ void apply_shim(std::string& result,
 template <typename... Ts>
 std::string cat(Ts&&... args) {
   std::ostringstream oss;
-#ifdef BOOST_NO_CXX17_FOLD_EXPRESSIONS
-  (void)(int[]){0, ((void)(oss << std::forward<Ts>(args)), 0)...};
-#else
   (oss << ... << std::forward<Ts>(args));
-#endif
   return oss.str();
 }
 #endif  // __CUDACC__

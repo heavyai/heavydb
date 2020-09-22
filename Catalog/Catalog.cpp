@@ -66,9 +66,9 @@
 #include "Parser/ParserNode.h"
 #include "QueryEngine/Execute.h"
 #include "QueryEngine/TableOptimizer.h"
+#include "Shared/DateTimeParser.h"
 #include "Shared/File.h"
 #include "Shared/StringTransform.h"
-#include "Shared/TimeGM.h"
 #include "Shared/measure.h"
 #include "StringDictionary/StringDictionaryClient.h"
 
@@ -2646,7 +2646,7 @@ void Catalog::getForeignServersForUser(
 
       if (timestamp_column && equals_operator) {
         arguments.push_back(std::to_string(
-            DateTimeStringValidate<kTIMESTAMP>()(filter_def["value"].GetString(), 0)));
+            dateTimeParse<kTIMESTAMP>(filter_def["value"].GetString(), 0)));
       } else {
         arguments.push_back(filter_def["value"].GetString());
       }

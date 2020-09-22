@@ -24,7 +24,6 @@
 #include "../QueryEngine/FromTableReordering.h"
 #include "../QueryRunner/QueryRunner.h"
 #include "../Shared/Compressor.h"
-#include "../Shared/TimeGM.h"
 #include "../Shared/scope.h"
 #include "../SqliteConnector/SqliteConnector.h"
 #include "DistributedLoader.h"

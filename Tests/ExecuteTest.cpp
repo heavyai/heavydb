@@ -24,7 +24,6 @@
 #include "../QueryEngine/ResultSetReductionJIT.h"
 #include "../QueryRunner/QueryRunner.h"
 #include "../Shared/StringTransform.h"
-#include "../Shared/TimeGM.h"
 #include "../Shared/scope.h"
 #include "../SqliteConnector/SqliteConnector.h"
 #include "ClusterTester.h"
@@ -196,8 +195,19 @@ bool approx_eq(const double v, const double target, const double eps = 0.01) {
   return v_u64 == target_u64 || (target - eps < v && v < target + eps);
 }
 
-int parse_fractional_seconds(uint sfrac, int ntotal, SQLTypeInfo& ti) {
-  return TimeGM::instance().parse_fractional_seconds(sfrac, ntotal, ti.get_dimension());
+// Moved from TimeGM::parse_fractional_seconds().
+int parse_fractional_seconds(unsigned sfrac, const int ntotal, const SQLTypeInfo& ti) {
+  int dimen = ti.get_dimension();
+  int nfrac = log10(sfrac) + 1;
+  if (ntotal - nfrac > dimen) {
+    return 0;
+  }
+  if (ntotal >= 0 && ntotal < dimen) {
+    sfrac *= pow(10, dimen - ntotal);
+  } else if (ntotal > dimen) {
+    sfrac /= pow(10, ntotal - dimen);
+  }
+  return sfrac;
 }
 
 class SQLiteComparator {
@@ -10153,7 +10163,6 @@ TEST(Select, TimestampPrecisionMeridiesEncoding) {
   }
 }
 
-#ifndef __APPLE__
 TEST(Select, DateTimeZones) {
   static const std::map<std::string, std::vector<int64_t>> gmt_epochs_ = {
       {"NZ", {1541336400, 1541289600, 7200}},
@@ -10215,7 +10224,6 @@ TEST(Select, DateTimeZones) {
     }
   }
 }
-#endif
 
 // Select.Time does a lot of DATEADD tests already.  These focus on high-precision
 // timestamps before, across, and after the epoch=0 boundary.

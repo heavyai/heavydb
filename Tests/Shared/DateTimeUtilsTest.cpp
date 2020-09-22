@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-#include "../../Shared/DateConverters.h"
-#include "../../Shared/TimeGM.h"
+#include "Shared/DateConverters.h"
+#include "Shared/DateTimeParser.h"
 #include "Tests/TestHelpers.h"
 
 #include <gtest/gtest.h>
@@ -59,7 +59,6 @@ TEST(DATE, EpochDaysToSecondsTest) {
   compare_epoch(computed, sample.expected_seconds);
 }
 
-#ifndef __APPLE__
 TEST(TIME, LegalParseTimeString) {
   using namespace std::string_literals;
   static const std::unordered_map<std::string, int64_t> values = {
@@ -72,7 +71,7 @@ TEST(TIME, LegalParseTimeString) {
       {"22:28"s, 80880}};
 
   for (const auto& [time_str, expected_epoch] : values) {
-    ASSERT_EQ(expected_epoch, DateTimeStringValidate<kTIME>()(time_str, 0));
+    ASSERT_EQ(expected_epoch, dateTimeParse<kTIME>(time_str, 0)) << time_str;
   }
 }
 
@@ -82,10 +81,13 @@ TEST(TIME, IllegalParseTimeString) {
       "22-28-48"s, "2228.48"s, "22.28.48"s, "22"s};
 
   for (const auto& val : values) {
-    ASSERT_THROW(DateTimeStringValidate<kTIME>()(val, 0), std::runtime_error);
+    if (val == "2228.48") {
+      ASSERT_NO_THROW(dateTimeParse<kTIME>(val, 0));  // Parsed as 22:02:08.48.
+    } else {
+      ASSERT_THROW(dateTimeParse<kTIME>(val, 0), std::runtime_error) << val;
+    }
   }
 }
-#endif
 
 TEST(TIMESTAMPS, OverflowUnderflow) {
   using namespace std::string_literals;
@@ -95,10 +97,10 @@ TEST(TIMESTAMPS, OverflowUnderflow) {
       "09/21/1676 00:12:43.145224193"s,
       "09/21/1677 00:00:43.145224193"s};
   for (const auto& value : values) {
-    ASSERT_NO_THROW(DateTimeStringValidate<kTIMESTAMP>()(value, 0));
-    ASSERT_NO_THROW(DateTimeStringValidate<kTIMESTAMP>()(value, 3));
-    ASSERT_NO_THROW(DateTimeStringValidate<kTIMESTAMP>()(value, 6));
-    ASSERT_THROW(DateTimeStringValidate<kTIMESTAMP>()(value, 9), std::runtime_error);
+    ASSERT_NO_THROW(dateTimeParse<kTIMESTAMP>(value, 0));
+    ASSERT_NO_THROW(dateTimeParse<kTIMESTAMP>(value, 3));
+    ASSERT_NO_THROW(dateTimeParse<kTIMESTAMP>(value, 6));
+    ASSERT_NO_THROW(dateTimeParse<kTIMESTAMP>(value, 9));
   }
 }
 

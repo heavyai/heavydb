@@ -58,7 +58,6 @@
 #include "QueryEngine/RelAlgExecutor.h"
 #include "ReservedKeywords.h"
 #include "Shared/StringTransform.h"
-#include "Shared/TimeGM.h"
 #include "Shared/measure.h"
 #include "Shared/shard_key.h"
 #include "TableArchiver/TableArchiver.h"
