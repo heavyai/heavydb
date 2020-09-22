@@ -1307,6 +1307,96 @@ class RefreshTests : public ForeignTableTest {
   }
 };
 
+TEST_F(RefreshTests, InvalidRefreshMode) {
+  std::string filename = "archive_delete_file.zip";
+  std::string query = "CREATE FOREIGN TABLE " + default_name + " (i INTEGER) "s +
+                      "SERVER omnisci_local_csv WITH (file_path = '" +
+                      getDataFilesPath() + "append_before/" + filename +
+                      "', fragment_size = '1' " + ", REFRESH_UPDATE_TYPE = 'INVALID');";
+  queryAndAssertException(
+      query,
+      "Exception: Invalid value \"INVALID\" for REFRESH_UPDATE_TYPE option. "
+      "Value must be \"APPEND\" or \"ALL\".");
+}
+
+void recursive_copy(const std::string& origin, const std::string& dest) {
+  bf::create_directory(dest);
+  for (bf::directory_iterator file(origin); file != bf::directory_iterator(); ++file) {
+    const auto& path = file->path();
+    if (bf::is_directory(path)) {
+      recursive_copy(path.string(), dest + "/" + path.filename().string());
+    } else {
+      bf::copy_file(path.string(), dest + "/" + path.filename().string());
+    }
+  }
+}
+
+bool does_cache_contain_chunks(Catalog_Namespace::Catalog* cat,
+                               const std::string& table_name,
+                               const std::vector<std::vector<int>> subkeys) {
+  // subkey is chunkey without db, table ids
+  auto td = cat->getMetadataForTable(table_name);
+  ChunkKey table_key{cat->getCurrentDB().dbId, td->tableId};
+  auto cache = cat->getDataMgr().getForeignStorageMgr()->getForeignStorageCache();
+
+  for (const auto& subkey : subkeys) {
+    auto chunk_key = table_key;
+    chunk_key.insert(chunk_key.end(), subkey.begin(), subkey.end());
+    if (cache->getCachedChunkIfExists(chunk_key) == nullptr) {
+      return false;
+    }
+  }
+  return true;
+}
+
+// Check that chunks/metadata are fully cleared in bulk update mode
+TEST_F(RefreshTests, BulkUpdateCacheUpdate) {
+  int fragment_size = 1;
+  std::string filename = "single_file.csv";
+  auto cache = getCatalog().getDataMgr().getForeignStorageMgr()->getForeignStorageCache();
+  // Create initial files and tables
+  bf::remove_all(getDataFilesPath() + "append_tmp");
+
+  recursive_copy(getDataFilesPath() + "append_before", getDataFilesPath() + "append_tmp");
+  std::string file_path = getDataFilesPath() + "append_tmp/" + "single_file.csv";
+
+  std::string query = "CREATE FOREIGN TABLE " + default_name + " (i INTEGER) "s +
+                      "SERVER omnisci_local_csv WITH (file_path = '" +
+                      getDataFilesPath() + "append_tmp/" + filename +
+                      "', fragment_size = '" + std::to_string(fragment_size) +
+                      "', REFRESH_UPDATE_TYPE = 'ALL');";
+  sql(query);
+
+  std::string select = "SELECT * FROM "s + default_name + " ORDER BY i;";
+  // Read from table
+  sqlAndCompareResult(select, {{i(1)}, {i(2)}});
+  bf::remove_all(getDataFilesPath() + "append_tmp");
+  recursive_copy(getDataFilesPath() + "append_after", getDataFilesPath() + "append_tmp");
+  size_t mdata_count = cache->getNumMetadataAdded();
+  size_t chunk_count = cache->getNumChunksAdded();
+
+  // Refresh command
+  sql("REFRESH FOREIGN TABLES " + default_name + ";");
+
+  // All  chunks + will be updated
+  size_t update_count = 5;
+  ASSERT_EQ(update_count, cache->getNumMetadataAdded() - mdata_count);
+  // 2 original chunks are recached
+  ASSERT_EQ(2U, cache->getNumChunksAdded() - chunk_count);
+
+  // cache contains original chunks;
+  ASSERT_TRUE(does_cache_contain_chunks(cat, default_name, {{1, 0}, {1, 1}}));
+
+  sqlAndCompareResult(select, {{i(1)}, {i(2)}, {i(3)}, {i(4)}, {i(5)}});
+  ASSERT_EQ(update_count, cache->getNumMetadataAdded() - mdata_count);
+  // Now all new chunks are cached
+  ASSERT_EQ(update_count, cache->getNumChunksAdded() - chunk_count);
+  ASSERT_TRUE(does_cache_contain_chunks(
+      cat, default_name, {{1, 0}, {1, 1}, {1, 2}, {1, 3}, {1, 4}}));
+
+  bf::remove_all(getDataFilesPath() + "append_tmp");
+}
+
 class RefreshMetadataTypeTest : public SelectQueryTest {};
 TEST_F(RefreshMetadataTypeTest, ScalarTypes) {
   const auto& query = getCreateForeignTableQuery(
@@ -1790,18 +1880,6 @@ class CsvAppendTest : public RecoverCacheQueryTest,
   }
 };
 
-void recursive_copy(const std::string& origin, const std::string& dest) {
-  bf::create_directory(dest);
-  for (bf::directory_iterator file(origin); file != bf::directory_iterator(); ++file) {
-    const auto& path = file->path();
-    if (bf::is_directory(path)) {
-      recursive_copy(path.string(), dest + "/" + path.filename().string());
-    } else {
-      bf::copy_file(path.string(), dest + "/" + path.filename().string());
-    }
-  }
-}
-
 INSTANTIATE_TEST_SUITE_P(
     AppendParamaterizedTests,
     CsvAppendTest,
@@ -1847,7 +1925,7 @@ TEST_P(CsvAppendTest, AppendFragsCSV) {
                       "SERVER omnisci_local_csv WITH (file_path = '" +
                       getDataFilesPath() + "append_tmp/" + filename +
                       "', fragment_size = '" + std::to_string(fragment_size) +
-                      "', UPDATE_MODE = 'APPEND');";
+                      "', REFRESH_UPDATE_TYPE = 'APPEND');";
   sql(query);
 
   std::string select = "SELECT * FROM "s + default_name + " ORDER BY i;";
@@ -1860,12 +1938,45 @@ TEST_P(CsvAppendTest, AppendFragsCSV) {
     // Reset cache
     resetPersistentStorageMgr(true);
   }
-
+  auto cache = getCatalog().getDataMgr().getForeignStorageMgr()->getForeignStorageCache();
+  size_t mdata_count = cache->getNumMetadataAdded();
+  size_t chunk_count = cache->getNumChunksAdded();
   // Refresh command
   sql("REFRESH FOREIGN TABLES " + default_name + ";");
-  sqlAndCompareResult(select, {{i(1)}, {i(2)}, {i(3)}, {i(4)}, {i(5)}});
 
+  size_t original_chunks = std::ceil(double(2) / fragment_size);
+  size_t final_chunks = std::ceil(double(5) / fragment_size);
+  // All new chunks + last original chunk will be updated
+  size_t update_count = final_chunks - original_chunks + 1;
+  ASSERT_EQ(update_count, cache->getNumMetadataAdded() - mdata_count);
+  // Only last original chunk is recached
+  ASSERT_EQ(1U, cache->getNumChunksAdded() - chunk_count);
+
+  // cache contains all original chunks
+  {
+    std::vector<std::vector<int>> chunk_subkeys;
+    for (int i = 0; i < static_cast<int>(original_chunks); i++) {
+      chunk_subkeys.push_back({1, i});
+    }
+    ASSERT_TRUE(does_cache_contain_chunks(&getCatalog(), default_name, chunk_subkeys));
+  }
+  // Check count to ensure metadata is updated
+  sqlAndCompareResult("SELECT COUNT(*) FROM "s + default_name + ";", {{i(5)}});
+
+  sqlAndCompareResult(select, {{i(1)}, {i(2)}, {i(3)}, {i(4)}, {i(5)}});
+  ASSERT_EQ(update_count, cache->getNumMetadataAdded() - mdata_count);
+  // Now all new chunks are cached
+  ASSERT_EQ(update_count, cache->getNumChunksAdded() - chunk_count);
   ASSERT_EQ(param.recover_cache, isTableDatawrapperRestored(default_name));
+
+  // cache contains all original+new chunks
+  {
+    std::vector<std::vector<int>> chunk_subkeys;
+    for (int i = 0; i < static_cast<int>(final_chunks); i++) {
+      chunk_subkeys.push_back({1, i});
+    }
+    ASSERT_TRUE(does_cache_contain_chunks(&getCatalog(), default_name, chunk_subkeys));
+  }
 
   bf::remove_all(getDataFilesPath() + "append_tmp");
 }
@@ -1879,7 +1990,7 @@ TEST_P(CsvAppendTest, AppendNothing) {
                       "SERVER omnisci_local_csv WITH (file_path = '" +
                       getDataFilesPath() + "append_before/" + filename +
                       "', fragment_size = '" + std::to_string(fragment_size) +
-                      "', UPDATE_MODE = 'APPEND');";
+                      "', REFRESH_UPDATE_TYPE = 'APPEND');";
   sql(query);
   std::string select = "SELECT * FROM "s + default_name + " ORDER BY i;";
   // Read from table
@@ -1889,13 +2000,23 @@ TEST_P(CsvAppendTest, AppendNothing) {
     // Reset cache
     resetPersistentStorageMgr(true);
   }
-
+  auto cache = getCatalog().getDataMgr().getForeignStorageMgr()->getForeignStorageCache();
+  size_t mdata_count = cache->getNumMetadataAdded();
+  size_t chunk_count = cache->getNumChunksAdded();
   // Refresh command
   sql("REFRESH FOREIGN TABLES " + default_name + ";");
+
+  // Only last original chunk is recached
+  ASSERT_EQ(1U, cache->getNumMetadataAdded() - mdata_count);
+  ASSERT_EQ(1U, cache->getNumChunksAdded() - chunk_count);
   // Read from table
   sqlAndCompareResult(select, {{i(1)}, {i(2)}});
 
   ASSERT_EQ(param.recover_cache, isTableDatawrapperRestored(default_name));
+
+  // no updates to the cache
+  ASSERT_EQ(1U, cache->getNumMetadataAdded() - mdata_count);
+  ASSERT_EQ(1U, cache->getNumChunksAdded() - chunk_count);
 }
 
 TEST_F(CsvAppendTest, MissingRows) {
@@ -1909,7 +2030,7 @@ TEST_F(CsvAppendTest, MissingRows) {
                       "SERVER omnisci_local_csv WITH (file_path = '" +
                       getDataFilesPath() + "append_tmp/" + filename +
                       "', fragment_size = '" + std::to_string(fragment_size) +
-                      "', UPDATE_MODE = 'APPEND');";
+                      "', REFRESH_UPDATE_TYPE = 'APPEND');";
   sql(query);
 
   std::string select = "SELECT * FROM "s + default_name + " ORDER BY i;";
@@ -1940,7 +2061,7 @@ TEST_F(CsvAppendTest, MissingFileArchive) {
                       "SERVER omnisci_local_csv WITH (file_path = '" +
                       getDataFilesPath() + "append_tmp/" + filename +
                       "', fragment_size = '" + std::to_string(fragment_size) +
-                      "', UPDATE_MODE = 'APPEND');";
+                      "', REFRESH_UPDATE_TYPE = 'APPEND');";
   sql(query);
 
   std::string select = "SELECT * FROM "s + default_name + " ORDER BY i;";
@@ -1974,7 +2095,7 @@ TEST_F(CsvAppendTest, MultifileAppendtoFile) {
                       "SERVER omnisci_local_csv WITH (file_path = '" +
                       getDataFilesPath() + "append_tmp/" + filename +
                       "', fragment_size = '" + std::to_string(fragment_size) +
-                      "', UPDATE_MODE = 'APPEND');";
+                      "', REFRESH_UPDATE_TYPE = 'APPEND');";
   sql(query);
 
   std::string select = "SELECT * FROM "s + default_name + " ORDER BY i;";
@@ -2702,7 +2823,7 @@ TEST_F(RecoverCacheQueryTest, AppendData) {
                       "SERVER omnisci_local_csv WITH (file_path = '" +
                       getDataFilesPath() + "append_tmp/" + filename +
                       "', fragment_size = '" + std::to_string(fragment_size) +
-                      "', UPDATE_MODE = 'APPEND');";
+                      "', REFRESH_UPDATE_TYPE = 'APPEND');";
   sql(query);
 
   auto td = cat->getMetadataForTable(default_table_name);

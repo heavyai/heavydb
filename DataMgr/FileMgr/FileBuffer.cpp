@@ -180,6 +180,7 @@ void FileBuffer::freeChunkPages() {
       fileInfo->freePage(pageIt->pageNum);
     }
   }
+  multiPages_.clear();
 }
 
 void FileBuffer::freePages() {

@@ -23,6 +23,21 @@
 #include "ParquetDataWrapper.h"
 
 namespace foreign_storage {
+
+namespace {
+const ForeignTable* get_foreign_table(const ChunkKey& chunk_key) {
+  CHECK(chunk_key.size() >= 2);
+  auto db_id = chunk_key[CHUNK_KEY_DB_IDX];
+  auto table_id = chunk_key[CHUNK_KEY_TABLE_IDX];
+  auto catalog = Catalog_Namespace::Catalog::checkedGet(db_id);
+  auto table = catalog->getMetadataForTableImpl(table_id, false);
+  CHECK(table);
+  auto foreign_table = dynamic_cast<const foreign_storage::ForeignTable*>(table);
+  CHECK(foreign_table);
+  return foreign_table;
+}
+}  // namespace
+
 ForeignStorageMgr::ForeignStorageMgr(ForeignStorageCache* fsc)
     : AbstractBufferMgr(0), data_wrapper_map_({}), foreign_storage_cache_(fsc) {
   is_cache_enabled_ = (foreign_storage_cache_ != nullptr);
@@ -101,13 +116,7 @@ std::map<ChunkKey, AbstractBuffer*> ForeignStorageMgr::getChunkBuffersToPopulate
   auto table_id = destination_chunk_key[CHUNK_KEY_TABLE_IDX];
   auto destination_column_id = destination_chunk_key[CHUNK_KEY_COLUMN_IDX];
   auto fragment_id = destination_chunk_key[CHUNK_KEY_FRAGMENT_IDX];
-  auto catalog = Catalog_Namespace::Catalog::checkedGet(db_id);
-
-  auto table = catalog->getMetadataForTableImpl(table_id, false);
-  CHECK(table);
-
-  auto foreign_table = dynamic_cast<const foreign_storage::ForeignTable*>(table);
-  CHECK(foreign_table);
+  auto foreign_table = get_foreign_table(destination_chunk_key);
 
   ForeignTableSchema schema{db_id, foreign_table};
   auto logical_column = schema.getLogicalColumn(destination_column_id);
@@ -236,14 +245,7 @@ bool ForeignStorageMgr::createDataWrapperIfNotExists(const ChunkKey& chunk_key) 
   ChunkKey table_key{chunk_key[CHUNK_KEY_DB_IDX], chunk_key[CHUNK_KEY_TABLE_IDX]};
   if (data_wrapper_map_.find(table_key) == data_wrapper_map_.end()) {
     auto db_id = chunk_key[CHUNK_KEY_DB_IDX];
-    auto table_id = chunk_key[CHUNK_KEY_TABLE_IDX];
-    auto catalog = Catalog_Namespace::Catalog::checkedGet(db_id);
-
-    auto table = catalog->getMetadataForTableImpl(table_id, false);
-    CHECK(table);
-
-    auto foreign_table = dynamic_cast<const foreign_storage::ForeignTable*>(table);
-    CHECK(foreign_table);
+    auto foreign_table = get_foreign_table(chunk_key);
 
     if (foreign_table->foreign_server->data_wrapper_type ==
         foreign_storage::DataWrapperType::CSV) {
@@ -309,23 +311,52 @@ void ForeignStorageMgr::refreshTablesInCache(const std::vector<ChunkKey>& table_
   }
   for (const auto& table_key : table_keys) {
     CHECK(isTableKey(table_key));
-    // Restore datawrapper if it does not exist prior to clearing metadata
-    if (createDataWrapperIfNotExists(table_key)) {
+
+    bool append_mode = get_foreign_table(table_key)->isAppendMode();
+
+    // create datawrapper if it does not exist prior to clearing metadata
+    if (createDataWrapperIfNotExists(table_key) && append_mode) {
+      // Restore last state if we are appending
       recoverDataWrapperFromDisk(table_key);
     }
-
     // Get a list of which chunks were cached for a table.
     std::vector<ChunkKey> old_chunk_keys =
         foreign_storage_cache_->getCachedChunksForKeyPrefix(table_key);
-    foreign_storage_cache_->clearForTablePrefix(table_key);
+
+    int last_frag_id = 0;
+    if (append_mode) {
+      // Determine last fragment ID
+      if (foreign_storage_cache_->hasCachedMetadataForKeyPrefix(table_key)) {
+        ChunkMetadataVector metadata_vec;
+        foreign_storage_cache_->getCachedMetadataVecForKeyPrefix(metadata_vec, table_key);
+        for (const auto& metadata : metadata_vec) {
+          last_frag_id = std::max(last_frag_id, metadata.first[CHUNK_KEY_FRAGMENT_IDX]);
+        }
+      }
+    } else {
+      // Clear entire table
+      foreign_storage_cache_->clearForTablePrefix(table_key);
+    }
 
     // Refresh metadata.
     ChunkMetadataVector metadata_vec;
     getDataWrapper(table_key)->populateChunkMetadata(metadata_vec);
-    foreign_storage_cache_->cacheMetadataVec(metadata_vec);
     getDataWrapper(table_key)->serializeDataWrapperInternals(
         foreign_storage_cache_->getCacheDirectoryForTablePrefix(table_key) +
         "/wrapper_metadata.json");
+
+    if (append_mode) {
+      // Only re-cache last fragment and above
+      ChunkMetadataVector new_metadata_vec;
+      for (const auto& chunk_metadata : metadata_vec) {
+        if (chunk_metadata.first[CHUNK_KEY_FRAGMENT_IDX] >= last_frag_id) {
+          new_metadata_vec.push_back(chunk_metadata);
+        }
+      }
+      foreign_storage_cache_->cacheMetadataVec(new_metadata_vec);
+    } else {
+      foreign_storage_cache_->cacheMetadataVec(metadata_vec);
+    }
     // Iterate through previously cached chunks and re-cache them. Caching is
     // done one fragment at a time, for all applicable chunks in the fragment.
     std::map<ChunkKey, AbstractBuffer*> optional_buffers;
@@ -334,13 +365,18 @@ void ForeignStorageMgr::refreshTablesInCache(const std::vector<ChunkKey>& table_
       auto fragment_id = old_chunk_keys[0][CHUNK_KEY_FRAGMENT_IDX];
       std::vector<ChunkKey> chunk_keys_in_fragment;
       for (const auto& chunk_key : old_chunk_keys) {
+        if (append_mode && (chunk_key[CHUNK_KEY_FRAGMENT_IDX] < last_frag_id)) {
+          continue;
+        }
         if (foreign_storage_cache_->isMetadataCached(chunk_key)) {
-          if (chunk_key[CHUNK_KEY_FRAGMENT_IDX] != fragment_id) {
-            auto required_buffers =
-                foreign_storage_cache_->getChunkBuffersForCaching(chunk_keys_in_fragment);
-            getDataWrapper(table_key)->populateChunkBuffers(required_buffers,
-                                                            optional_buffers);
-            chunk_keys_in_fragment.clear();
+          if ((chunk_key[CHUNK_KEY_FRAGMENT_IDX] != fragment_id)) {
+            if (chunk_keys_in_fragment.size() > 0) {
+              auto required_buffers = foreign_storage_cache_->getChunkBuffersForCaching(
+                  chunk_keys_in_fragment);
+              getDataWrapper(table_key)->populateChunkBuffers(required_buffers,
+                                                              optional_buffers);
+              chunk_keys_in_fragment.clear();
+            }
             fragment_id = chunk_key[CHUNK_KEY_FRAGMENT_IDX];
           }
           if (isVarLenKey(chunk_key)) {
@@ -357,9 +393,12 @@ void ForeignStorageMgr::refreshTablesInCache(const std::vector<ChunkKey>& table_
           chunk_keys_to_be_cached.emplace_back(chunk_key);
         }
       }
-      auto required_buffers =
-          foreign_storage_cache_->getChunkBuffersForCaching(chunk_keys_in_fragment);
-      getDataWrapper(table_key)->populateChunkBuffers(required_buffers, optional_buffers);
+      if (chunk_keys_in_fragment.size() > 0) {
+        auto required_buffers =
+            foreign_storage_cache_->getChunkBuffersForCaching(chunk_keys_in_fragment);
+        getDataWrapper(table_key)->populateChunkBuffers(required_buffers,
+                                                        optional_buffers);
+      }
       foreign_storage_cache_->cacheTableChunks(chunk_keys_to_be_cached);
     }
   }

@@ -83,6 +83,8 @@ class ForeignStorageCache {
   size_t getLimit() const { return entry_limit_; }
   size_t getNumCachedChunks() const { return cached_chunks_.size(); }
   size_t getNumCachedMetadata() const { return cached_metadata_.size(); }
+  size_t getNumChunksAdded() const { return num_chunks_added_; }
+  size_t getNumMetadataAdded() const { return num_metadata_added_; }
 
   // Useful for debugging.
   std::string dumpCachedChunkEntries() const;
@@ -112,6 +114,10 @@ class ForeignStorageCache {
   // Keeps tracks of which Chunks/ChunkMetadata are cached.
   std::set<ChunkKey> cached_chunks_;
   std::set<ChunkKey> cached_metadata_;
+
+  // Keeps tracks of how many times we cache chunks or metadata for testing purposes.
+  size_t num_chunks_added_;
+  size_t num_metadata_added_;
 
   // Separate mutexes for chunks/metadata.
   mapd_shared_mutex chunks_mutex_;

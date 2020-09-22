@@ -115,11 +115,6 @@ class CsvDataWrapper : public ForeignDataWrapper {
                                   const std::map<ChunkKey, AbstractBuffer*>& buffers,
                                   std::map<int, Chunk_NS::Chunk>& column_id_to_chunk_map);
 
-  /**
-   * @return bool indicating if we are in append or bulk refrsh mode
-   */
-  bool isAppendMode();
-
   std::map<ChunkKey, std::shared_ptr<ChunkMetadata>> chunk_metadata_map_;
   std::map<int, FileRegions> fragment_id_to_file_regions_map_;
 
@@ -139,7 +134,7 @@ class CsvDataWrapper : public ForeignDataWrapper {
   size_t append_start_offset_;
   // Is this datawrapper restored from disk
   bool is_restored_;
-  static constexpr std::array<char const*, 14> supported_options_{"BASE_PATH",
+  static constexpr std::array<char const*, 13> supported_options_{"BASE_PATH",
                                                                   "FILE_PATH",
                                                                   "ARRAY_DELIMITER",
                                                                   "ARRAY_MARKER",
@@ -151,7 +146,6 @@ class CsvDataWrapper : public ForeignDataWrapper {
                                                                   "LONLAT",
                                                                   "NULLS",
                                                                   "QUOTE",
-                                                                  "QUOTED",
-                                                                  "UPDATE_MODE"};
+                                                                  "QUOTED"};
 };
 }  // namespace foreign_storage

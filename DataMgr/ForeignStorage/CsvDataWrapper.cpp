@@ -30,10 +30,10 @@
 
 #include "DataMgr/ForeignStorage/CsvFileBufferParser.h"
 #include "DataMgr/ForeignStorage/CsvReader.h"
+#include "FsiJsonUtils.h"
 #include "ImportExport/DelimitedParserUtils.h"
 #include "ImportExport/Importer.h"
 #include "Utils/DdlUtils.h"
-#include "FsiJsonUtils.h"
 
 namespace foreign_storage {
 CsvDataWrapper::CsvDataWrapper(const int db_id, const ForeignTable* foreign_table)
@@ -44,9 +44,7 @@ CsvDataWrapper::CsvDataWrapper(const ForeignTable* foreign_table)
 
 void CsvDataWrapper::validateOptions(const ForeignTable* foreign_table) {
   for (const auto& entry : foreign_table->options) {
-    const auto& table_options = foreign_table->supported_options;
-    if (std::find(table_options.begin(), table_options.end(), entry.first) ==
-            table_options.end() &&
+    if (!ForeignTable::isValidOption(entry) &&
         std::find(supported_options_.begin(), supported_options_.end(), entry.first) ==
             supported_options_.end()) {
       throw std::runtime_error{"Invalid foreign table option \"" + entry.first + "\"."};
@@ -845,7 +843,7 @@ void CsvDataWrapper::populateChunkMetadata(ChunkMetadataVector& chunk_metadata_v
   const auto file_path = getFilePath();
   auto catalog = Catalog_Namespace::Catalog::checkedGet(db_id_);
 
-  if (isAppendMode() && csv_reader_ != nullptr) {
+  if (foreign_table_->isAppendMode() && csv_reader_ != nullptr) {
     csv_reader_->checkForMoreRows(append_start_offset_);
   } else {
     fragment_id_to_file_regions_map_.clear();
@@ -869,7 +867,7 @@ void CsvDataWrapper::populateChunkMetadata(ChunkMetadataVector& chunk_metadata_v
   MetadataScanMultiThreadingParams multi_threading_params;
 
   // Restore previous chunk data
-  if (isAppendMode()) {
+  if (foreign_table_->isAppendMode()) {
     multi_threading_params.chunk_byte_count = chunk_byte_count_;
     multi_threading_params.chunk_encoder_buffers = std::move(chunk_encoder_buffers_);
   }
@@ -941,7 +939,7 @@ void CsvDataWrapper::populateChunkMetadata(ChunkMetadataVector& chunk_metadata_v
   }
 
   // Save chunk data
-  if (isAppendMode()) {
+  if (foreign_table_->isAppendMode()) {
     chunk_byte_count_ = multi_threading_params.chunk_byte_count;
     chunk_encoder_buffers_ = std::move(multi_threading_params.chunk_encoder_buffers);
   }
@@ -1046,7 +1044,7 @@ void CsvDataWrapper::restoreDataWrapperInternals(
   for (auto& pair : chunk_metadata) {
     chunk_metadata_map_[pair.first] = pair.second;
 
-    if (isAppendMode()) {
+    if (foreign_table_->isAppendMode()) {
       // Restore encoder state for append mode
       chunk_encoder_buffers_[pair.first] = std::make_unique<ForeignStorageBuffer>();
       chunk_encoder_buffers_[pair.first]->initEncoder(pair.second->sqlType);
@@ -1060,12 +1058,6 @@ void CsvDataWrapper::restoreDataWrapperInternals(
     }
   }
   is_restored_ = true;
-}
-
-bool CsvDataWrapper::isAppendMode() {
-  auto update_mode_it = foreign_table_->options.find("UPDATE_MODE");
-  return (update_mode_it != foreign_table_->options.end()) &&
-         boost::iequals(update_mode_it->second, "APPEND");
 }
 
 bool CsvDataWrapper::isRestored() const {

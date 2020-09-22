@@ -43,7 +43,7 @@ static void iterateOverMatchingPrefix(Func func,
 ForeignStorageCache::ForeignStorageCache(const std::string& cache_dir,
                                          const size_t num_reader_threads,
                                          const size_t limit)
-    : entry_limit_(limit) {
+    : num_chunks_added_(0), num_metadata_added_(0), entry_limit_(limit) {
   validatePath(cache_dir);
   global_file_mgr_ =
       std::make_unique<File_Namespace::GlobalFileMgr>(0, cache_dir, num_reader_threads);
@@ -63,6 +63,7 @@ void ForeignStorageCache::cacheTableChunks(const std::vector<ChunkKey>& chunk_ke
     if (isCacheFull()) {
       evictChunkByAlg();
     }
+    num_chunks_added_++;
     eviction_alg_->touchChunk(chunk_key);
     cached_chunks_.emplace(chunk_key);
   }
@@ -120,7 +121,6 @@ void ForeignStorageCache::cacheMetadataVec(const ChunkMetadataVector& metadata_v
   auto timer = DEBUG_TIMER(__func__);
   write_lock meta_lock(metadata_mutex_);
   write_lock chunk_lock(chunks_mutex_);
-
   for (auto& [chunk_key, metadata] : metadata_vec) {
     cached_metadata_.emplace(chunk_key);
     AbstractBuffer* buf;
@@ -162,6 +162,7 @@ void ForeignStorageCache::cacheMetadataVec(const ChunkMetadataVector& metadata_v
       index_buffer->setUpdated();
       evictThenEraseChunk(index_chunk_key);
     }
+    num_metadata_added_++;
   }
   global_file_mgr_->checkpoint();
 }
