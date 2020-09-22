@@ -18,9 +18,16 @@
 #include "ArrowResultSet.h"
 #include "Execute.h"
 
+#ifndef _MSC_VER
 #include <sys/ipc.h>
 #include <sys/shm.h>
 #include <sys/types.h>
+#else
+// IPC shared memory not yet supported on windows
+using key_t = size_t;
+#define IPC_PRIVATE 0
+#endif
+
 #include <algorithm>
 #include <cerrno>
 #include <cstdio>
@@ -232,6 +239,7 @@ void convert_column(ResultSetPtr result,
   }
 }
 
+#ifndef _MSC_VER
 std::pair<key_t, void*> get_shm(size_t shmsz) {
   if (!shmsz) {
     return std::make_pair(IPC_PRIVATE, nullptr);
@@ -268,12 +276,18 @@ std::pair<key_t, void*> get_shm(size_t shmsz) {
 
   return std::make_pair(key, ipc_ptr);
 }
+#endif
 
 std::pair<key_t, std::shared_ptr<Buffer>> get_shm_buffer(size_t size) {
+#ifdef _MSC_VER
+  throw std::runtime_error("Arrow IPC not yet supported on Windows.");
+  return std::make_pair(0, nullptr);
+#else
   auto [key, ipc_ptr] = get_shm(size);
   std::shared_ptr<Buffer> buffer(new MutableBuffer(static_cast<uint8_t*>(ipc_ptr), size));
   return std::make_pair<key_t, std::shared_ptr<Buffer>>(std::move(key),
                                                         std::move(buffer));
+#endif
 }
 
 }  // namespace
@@ -281,6 +295,9 @@ std::pair<key_t, std::shared_ptr<Buffer>> get_shm_buffer(size_t size) {
 namespace arrow {
 
 key_t get_and_copy_to_shm(const std::shared_ptr<Buffer>& data) {
+#ifdef _MSC_VER
+  throw std::runtime_error("Arrow IPC not yet supported on Windows.");
+#else
   auto [key, ipc_ptr] = get_shm(data->size());
   // copy the arrow records buffer to shared memory
   // TODO(ptaylor): I'm sure it's possible to tell Arrow's RecordBatchStreamWriter to
@@ -289,6 +306,7 @@ key_t get_and_copy_to_shm(const std::shared_ptr<Buffer>& data) {
   // detach from the shared memory segment
   shmdt(ipc_ptr);
   return key;
+#endif
 }
 
 }  // namespace arrow
@@ -862,19 +880,19 @@ std::shared_ptr<arrow::DataType> get_arrow_type(const SQLTypeInfo& sql_type,
                                                 const ExecutorDeviceType device_type) {
   switch (get_physical_type(sql_type)) {
     case kBOOLEAN:
-      return boolean();
+      return arrow::boolean();
     case kTINYINT:
-      return int8();
+      return arrow::int8();
     case kSMALLINT:
-      return int16();
+      return arrow::int16();
     case kINT:
-      return int32();
+      return arrow::int32();
     case kBIGINT:
-      return int64();
+      return arrow::int64();
     case kFLOAT:
-      return float32();
+      return arrow::float32();
     case kDOUBLE:
-      return float64();
+      return arrow::float64();
     case kCHAR:
     case kVARCHAR:
     case kTEXT:
@@ -932,6 +950,7 @@ void ArrowResultSet::deallocateArrowResultBuffer(
     const ExecutorDeviceType device_type,
     const size_t device_id,
     std::shared_ptr<Data_Namespace::DataMgr>& data_mgr) {
+#ifndef _MSC_VER
   // CPU buffers skip the sm handle, serializing the entire RecordBatch to df.
   // Remove shared memory on sysmem
   if (!result.sm_handle.empty()) {
@@ -963,6 +982,7 @@ void ArrowResultSet::deallocateArrowResultBuffer(
   // CUDA buffers become owned by the caller, and will automatically be freed
   // TODO: What if the client never takes ownership of the result? we may want to
   // establish a check to see if the GPU buffer still exists, and then free it.
+#endif
 }
 
 void ArrowResultSetConverter::initializeColumnBuilder(
