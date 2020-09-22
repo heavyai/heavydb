@@ -48,8 +48,11 @@ class LruCache {
 
   const_list_iterator_t find(const key_t& key) const {
     auto it = cache_items_map_.find(key);
-    auto val = (it == cache_items_map_.end() ? cend() : it->second);
-    return (val);
+    if (it == cache_items_map_.end()) {
+      return cend();
+    } else {
+      return it->second;
+    }
   }
 
   const_list_iterator_t cend() const { return (cache_items_list_.cend()); }
