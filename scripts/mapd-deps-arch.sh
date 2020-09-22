@@ -7,6 +7,8 @@ cd "$( dirname "${BASH_SOURCE[0]}" )"
 
 hash yay || { echo >&2 "yay is required but is not installed. Aborting."; exit 1; }
 
+unset CMAKE_GENERATOR
+
 # Install all normal dependencies
 yay -S \
     aws-sdk-cpp \
@@ -38,16 +40,9 @@ yay -S \
     zlib
 
 # Install Arrow
-# Package cannot be built in a path that incudes "internal" as a substring.
-ARROW_PKG_DIR=$HOME/omnisci_tmp_arrow
-mkdir -p $ARROW_PKG_DIR
-cp -r arch/arrow/ $ARROW_PKG_DIR
-pushd $ARROW_PKG_DIR/arrow
+pushd arch/arrow
 makepkg -cis
-rm -f PKGBUILD
 popd
-mv $ARROW_PKG_DIR/arrow/{apache-arrow-*.tar.gz,arrow-*.pkg.tar.xz} arch/arrow/
-rm -rf $ARROW_PKG_DIR
 
 # Install SPIRV-Cross
 pushd arch/spirv-cross

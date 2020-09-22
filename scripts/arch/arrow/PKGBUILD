@@ -7,7 +7,7 @@ pkgdesc="A columnar in-memory analytics layer for big data."
 arch=('x86_64')
 url="https://arrow.apache.org"
 license=('Apache')
-depends=('boost-libs' 'brotli' 'double-conversion' 'c-ares-cmake' 'gflags' 'grpc>=1.27.0' 'google-glog' 'lz4' 'protobuf' 'rapidjson' 'snappy' 'thrift' 'uriparser' 'zstd')
+depends=('boost-libs' 'double-conversion' 'c-ares-cmake' 'gflags' 'google-glog' 'lz4' 'protobuf' 'rapidjson' 'thrift' 'uriparser' 'zstd')
 checkdepends=('git')
 optdepends=()
 provides=('parquet-cpp')
@@ -25,7 +25,8 @@ build(){
                                       -DCMAKE_GENERATOR="Unix Makefiles" \
                                       -DARROW_PYTHON=ON \
                                       -DCMAKE_BUILD_TYPE=Release \
-                                      -DARROW_BUILD_TESTS=ON \
+                                      -DBUILD_SHARED_LIBS=ON \
+                                      -DARROW_BUILD_TESTS=OFF \
                                       -DARROW_ALTIVEC=OFF \
                                       -DCMAKE_INSTALL_PREFIX="/usr" \
                                       -DCMAKE_INSTALL_LIBDIR="lib" \
@@ -36,20 +37,22 @@ build(){
                                       -DARROW_PARQUET=ON \
                                       -DARROW_PLASMA=ON \
                                       -DARROW_TENSORFLOW=ON \
-                                      -DARROW_USE_SIMD=ON \
-                                      -DARROW_FLIGHT=ON \
+                                      -DARROW_FLIGHT=OFF \
                                       -DARROW_GANDIVA=OFF \
                                       -DARROW_PROTOBUF_USE_SHARED=ON \
                                       -DARROW_GFLAGS_USE_SHARED=ON \
                                       -DARROW_USE_GLOG=ON \
                                       -DARROW_WITH_ZSTD=BUNDLED \
-                                      -DARROW_WITH_BROTLI=ON \
+                                      -DARROW_WITH_SNAPPY=BUNDLED \
+                                      -DARROW_WITH_BROTLI=BUNDLED \
+                                      -DARROW_WITH_ZLIB=BUNDLED \
                                       -DGTest_SOURCE=BUNDLED \
                                       -DgRPC_SOURCE=BUNDLED \
-                                      -DgRPC_ROOT="/usr" \
+                                      -DARROW_S3=OFF \
+                                      -DARROW_FILESYSTEM=OFF \
                                       -DARROW_CUDA=ON
 
-  make
+  make -j $(nproc)
 }
 
 package(){

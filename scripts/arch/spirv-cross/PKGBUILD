@@ -1,34 +1,69 @@
-pkgname='SPIRV-Cross'
-_tag='2019-09-04'
-pkgver=${_tag//-/.} # pkgver cannot contain hyphens.
-_srcdir=$pkgname-$_tag
+# Maintainer: Daniel Bermond <dbermond@archlinux.org>
+
+_glslang_commit='839704450200e407490c538418f4d1a493b789ab'
+_spirv_tools_commit='d4b9f576ebb48e716efe14c7ea634a11427fa34d'
+_spirv_headers_commit='11d7637e7a43cd88cfd4e42c99581dcb682936aa'
+
+pkgname=spirv-cross
+pkgver=2020.06.29
 pkgrel=1
-pkgdesc="A practical tool and library for performing reflection on SPIR-V and disassembling SPIR-V back to high level languages."
+pkgdesc='A tool and library for parsing and converting SPIR-V to other shader languages'
 arch=('x86_64')
-url="https://github.com/KhronosGroup/SPIRV-Cross"
-license=('Apache-2.0')
-optdepends=()
-source=("https://github.com/KhronosGroup/$pkgname/archive/$_tag.tar.gz")
-sha256sums=('b4e2e50c4514eda7dfbfeb3b80656a5306372e0ce904ba770c52fa903802d178')
+url='https://github.com/KhronosGroup/SPIRV-Cross/'
+license=('Apache')
+depends=('gcc-libs')
+makedepends=('git' 'cmake' 'python' 'python-nose')
+source=("git+https://github.com/KhronosGroup/SPIRV-Cross.git#tag=${pkgver//./-}"
+        "git+https://github.com/KhronosGroup/glslang.git#commit=${_glslang_commit}"
+        "git+https://github.com/KhronosGroup/SPIRV-Tools.git#commit=${_spirv_tools_commit}"
+        "git+https://github.com/KhronosGroup/SPIRV-Headers.git#commit=${_spirv_headers_commit}")
+sha256sums=('SKIP'
+            'SKIP'
+            'SKIP'
+            'SKIP')
 
-build(){
-  mkdir build
-  cd build
-  cmake \
-    -DCMAKE_BUILD_TYPE=RelWithDebInfo \
-    -DCMAKE_POSITION_INDEPENDENT_CODE=on \
-    -DSPIRV_CROSS_ENABLE_TESTS=OFF \
-    "../$_srcdir"
-  make
+prepare() {
+    mkdir -p SPIRV-Cross/external/{glslang,spirv-tools}
+
+    ln -sf "${srcdir}/glslang"       SPIRV-Cross/external/glslang
+    ln -sf "${srcdir}/SPIRV-Tools"   SPIRV-Cross/external/spirv-tools
+    ln -sf "${srcdir}/SPIRV-Headers" SPIRV-Tools/external/spirv-headers
 }
 
-package(){
-  cd build
-  make DESTDIR="$pkgdir" install
+build() {
+    # NOTE: test suite fails when using 'None' build type
+
+    # glslang (required for tests)
+    printf '%s\n' '  -> Building glslang...'
+    cmake -B SPIRV-Cross/external/glslang-build -S glslang \
+        -DCMAKE_BUILD_TYPE:STRING='Release' \
+        -DCMAKE_INSTALL_PREFIX:PATH='output' \
+        -Wno-dev
+    cmake --build SPIRV-Cross/external/glslang-build --config Release --target install
+
+    # spirv-tools (required for tests)
+    printf '%s\n' '  -> Building SPIRV-Tools...'
+    cmake -B SPIRV-Cross/external/spirv-tools-build -S SPIRV-Tools \
+        -DCMAKE_BUILD_TYPE:STRING='Release' \
+        -DSPIRV_WERROR:BOOL='OFF' \
+        -DCMAKE_INSTALL_PREFIX:PATH='output' \
+        -Wno-dev
+    cmake --build SPIRV-Cross/external/spirv-tools-build --config Release --target install
+
+    # spirv-cross
+    printf '%s\n' '  -> Building SPIRV-Cross...'
+    cmake -B build-SPIRV-Cross -S SPIRV-Cross \
+        -DCMAKE_BUILD_TYPE:STRING='Release' \
+        -DCMAKE_INSTALL_PREFIX:PATH='/usr' \
+        -DSPIRV_CROSS_SHARED:BOOL='ON' \
+        -Wno-dev
+    make -C build-SPIRV-Cross
 }
 
-#check(){
-#  cd build
-#  make test
-#}
-# vim:ts=2:sw=2:et:
+check() {
+    make -C build-SPIRV-Cross test
+}
+
+package() {
+    make -C build-SPIRV-Cross DESTDIR="$pkgdir" install
+}
