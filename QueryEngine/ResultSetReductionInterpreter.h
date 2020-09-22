@@ -18,6 +18,7 @@
 
 #include "ResultSetReductionOps.h"
 
+#include <optional>
 #include <unordered_map>
 
 class ReductionInterpreter {
