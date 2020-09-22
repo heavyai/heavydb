@@ -3254,15 +3254,23 @@ std::tuple<bool, int64_t, int64_t> get_hpt_overflow_underflow_safe_scaled_values
     return {true, chunk_min / scale, chunk_max / scale};
   }
 
-  int64_t upscaled_chunk_min;
-  int64_t upscaled_chunk_max;
+  using checked_int64_t = boost::multiprecision::number<
+      boost::multiprecision::cpp_int_backend<64,
+                                             64,
+                                             boost::multiprecision::signed_magnitude,
+                                             boost::multiprecision::checked,
+                                             void>>;
 
-  if (__builtin_mul_overflow(chunk_min, scale, &upscaled_chunk_min) ||
-      __builtin_mul_overflow(chunk_max, scale, &upscaled_chunk_max)) {
-    return std::make_tuple(false, chunk_min, chunk_max);
+  try {
+    auto ret =
+        std::make_tuple(true,
+                        int64_t(checked_int64_t(chunk_min) * checked_int64_t(scale)),
+                        int64_t(checked_int64_t(chunk_max) * checked_int64_t(scale)));
+    return ret;
+  } catch (const std::overflow_error& e) {
+    // noop
   }
-
-  return std::make_tuple(true, upscaled_chunk_min, upscaled_chunk_max);
+  return std::make_tuple(false, chunk_min, chunk_max);
 }
 
 }  // namespace
