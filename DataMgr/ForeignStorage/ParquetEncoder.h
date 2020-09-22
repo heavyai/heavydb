@@ -26,13 +26,30 @@ class ParquetEncoder {
   ParquetEncoder(Data_Namespace::AbstractBuffer* buffer) : buffer_(buffer) {}
   virtual ~ParquetEncoder() = default;
 
-  virtual void appendData(int16_t* def_levels,
-                          int64_t values_read,
-                          int64_t levels_read,
+  virtual void appendData(const int16_t* def_levels,
+                          const int16_t* rep_levels,
+                          const int64_t values_read,
+                          const int64_t levels_read,
+                          const bool is_last_batch,
                           int8_t* values) = 0;
 
  protected:
   Data_Namespace::AbstractBuffer* buffer_;
+};
+
+class ParquetScalarEncoder : public ParquetEncoder {
+ public:
+  ParquetScalarEncoder(Data_Namespace::AbstractBuffer* buffer) : ParquetEncoder(buffer) {}
+
+  virtual void setNull(int8_t* omnisci_data_bytes) = 0;
+  virtual void copy(const int8_t* omnisci_data_bytes_source,
+                    int8_t* omnisci_data_bytes_destination) = 0;
+  virtual void encodeAndCopy(const int8_t* parquet_data_bytes,
+                             int8_t* omnisci_data_bytes) = 0;
+
+  virtual void encodeAndCopyContiguous(const int8_t* parquet_data_bytes,
+                                       int8_t* omnisci_data_bytes,
+                                       const size_t num_elements) = 0;
 };
 
 }  // namespace foreign_storage

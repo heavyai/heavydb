@@ -29,7 +29,6 @@ class ParquetFixedLengthEncoder : public TypedParquetInPlaceEncoder<V, T> {
                                          column_desciptor,
                                          parquet_column_descriptor) {}
 
- protected:
   void encodeAndCopy(const int8_t* parquet_data_bytes,
                      int8_t* omnisci_data_bytes) override {
     const auto& parquet_data_value = reinterpret_cast<const T*>(parquet_data_bytes)[0];
@@ -37,6 +36,7 @@ class ParquetFixedLengthEncoder : public TypedParquetInPlaceEncoder<V, T> {
     omnisci_data_value = parquet_data_value;
   }
 
+ protected:
   bool encodingIsIdentityForSameTypes() const override { return true; }
 };
 
@@ -51,7 +51,6 @@ class ParquetUnsignedFixedLengthEncoder : public TypedParquetInPlaceEncoder<V, T
                                          column_desciptor,
                                          parquet_column_descriptor) {}
 
- protected:
   void encodeAndCopy(const int8_t* parquet_data_bytes,
                      int8_t* omnisci_data_bytes) override {
     const auto& parquet_data_value = reinterpret_cast<const T*>(parquet_data_bytes)[0];

@@ -1,2 +1,2 @@
-index,boolean,tiny_int,small_int,int,big_int,float,time,timestamp,date,text,quoted_text
-2,{false, true},{110},{30500},{2000500000},{9000000050000000000},{100.12},{00:10:00, 00:20:00},{6/15/2020 00:59:59},{6/15/2020},{text_2, text_3},{"quoted text 2"}
+index,boolean,tiny_int,small_int,int,big_int,float,time,timestamp,date,text,fixedpoint
+2,{false, true},{110},{30500},{2000500000},{9000000050000000000},{100.12},{00:10:00, 00:20:00},{6/15/2020 00:59:59},{6/15/2020},{text_2, text_3},{3.45600,4.50000,5.60000}

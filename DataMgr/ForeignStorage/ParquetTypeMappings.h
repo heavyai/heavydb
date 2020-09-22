@@ -33,7 +33,9 @@ struct AllowedParquetMetadataTypeMappings {
   inline static bool isColumnMappingSupported(
       const ColumnDescriptor* omnisci_desc,
       const parquet::ColumnDescriptor* parquet_desc) {
-    auto column_type = omnisci_desc->columnType;
+    auto column_type = omnisci_desc->columnType.is_array()
+                           ? omnisci_desc->columnType.get_elem_type()
+                           : omnisci_desc->columnType;
     auto logical_type = parquet_desc->logical_type();
     if (logical_type->is_none()) {  // Fallback on physical type
       return physical_type_mappings.find(

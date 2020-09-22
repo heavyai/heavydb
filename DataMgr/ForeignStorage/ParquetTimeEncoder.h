@@ -35,7 +35,6 @@ class ParquetTimeEncoder : public TypedParquetInPlaceEncoder<V, T> {
         get_time_conversion_denominator(time_logical_type->time_unit());
   }
 
- protected:
   void encodeAndCopy(const int8_t* parquet_data_bytes,
                      int8_t* omnisci_data_bytes) override {
     const auto& parquet_data_value = reinterpret_cast<const T*>(parquet_data_bytes)[0];

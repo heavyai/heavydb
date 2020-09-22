@@ -31,7 +31,6 @@ class ParquetDecimalEncoder : public TypedParquetInPlaceEncoder<V, T> {
                                          parquet_column_descriptor)
       , parquet_column_type_length_(parquet_column_descriptor->type_length()) {}
 
- protected:
   void encodeAndCopy(const int8_t* parquet_data_bytes,
                      int8_t* omnisci_data_bytes) override {
     const auto& parquet_data_value = reinterpret_cast<const T*>(parquet_data_bytes)[0];
@@ -39,6 +38,7 @@ class ParquetDecimalEncoder : public TypedParquetInPlaceEncoder<V, T> {
     encodeAndCopy(parquet_data_value, omnisci_data_value);
   }
 
+ protected:
   void encodeAndCopy(const int32_t& parquet_data_value, V& omnisci_data_value) {
     omnisci_data_value = parquet_data_value;
   }

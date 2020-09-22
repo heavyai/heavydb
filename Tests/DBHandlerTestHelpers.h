@@ -437,7 +437,10 @@ class DBHandlerTestFixture : public testing::Test {
     }
   }
 
-  void setDatum(TDatum& datum, const TColumnData& column_data, const size_t index) {
+  void setDatum(TDatum& datum,
+                const TColumnData& column_data,
+                const size_t index,
+                const bool is_null) {
     if (!column_data.int_col.empty()) {
       datum.val.int_val = column_data.int_col[index];
     } else if (!column_data.real_col.empty()) {
@@ -446,7 +449,9 @@ class DBHandlerTestFixture : public testing::Test {
       datum.val.str_val = column_data.str_col[index];
     } else if (!column_data.arr_col.empty()) {
       std::vector<TDatum> datum_array{};
-      setDatumArray(datum_array, column_data.arr_col[index].data);
+      if (!is_null) {
+        setDatumArray(datum_array, column_data.arr_col[index].data);
+      }
       datum.val.arr_val = datum_array;
     } else {
       throw std::runtime_error{"Unexpected column data"};
@@ -458,8 +463,9 @@ class DBHandlerTestFixture : public testing::Test {
       std::vector<TDatum> row{};
       for (auto& column : row_set.columns) {
         TDatum datum{};
-        setDatum(datum, column.data, index);
-        if (column.nulls[index]) {
+        auto is_null = column.nulls[index];
+        setDatum(datum, column.data, index, is_null);
+        if (is_null) {
           datum.is_null = true;
         }
         row.emplace_back(datum);

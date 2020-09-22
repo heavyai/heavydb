@@ -50,7 +50,9 @@ class LazyParquetChunkLoader {
    *
    * @return An empty ChunkMetadata pointer when no metadata update is
    * applicable, otherwise a ChunkMetadata pointer with which to update the
-   * column chunk metadata
+   * column chunk metadata. NOTE: Only ChunkMetadata.sqlType and the min & max
+   * values of the ChunkMetadata.chunkStats are valid, other values are not
+   * set.
    *
    * This function expects the chunk buffer to have enough space allocated to hold the
    * contents of the loaded data.

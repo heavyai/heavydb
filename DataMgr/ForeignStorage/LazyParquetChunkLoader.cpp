@@ -24,6 +24,8 @@
 #include <parquet/platform.h>
 #include <parquet/types.h>
 
+#include "ParquetArrayEncoder.h"
+#include "ParquetDateInSecondsEncoder.h"
 #include "ParquetDecimalEncoder.h"
 #include "ParquetFixedLengthEncoder.h"
 #include "ParquetStringEncoder.h"
@@ -39,6 +41,87 @@ bool is_valid_parquet_string(const parquet::ColumnDescriptor* parquet_column) {
   return (parquet_column->logical_type()->is_none() &&
           parquet_column->physical_type() == parquet::Type::BYTE_ARRAY) ||
          parquet_column->logical_type()->is_string();
+}
+
+/**
+ * @brief Detect a valid list parquet column.
+ *
+ * @param parquet_column - the parquet column descriptor of the column to
+ * detect
+ *
+ * @return true if it is a valid parquet list column
+ *
+ * Note: the notion of a valid parquet list column is adapted from the parquet
+ * schema specification for logical type definitions:
+ *
+ *    <list-repetition> group <name> (LIST) {
+ *      repeated group list {
+ *        <element-repetition> <element-type> element;
+ *      }
+ *    }
+ *
+ *  Testing has shown that there are small deviations from this specification in
+ *  at least one library-- pyarrow-- where the innermost schema node is named
+ *  "item" as opposed to "element".
+ *
+ *  The following is also true of the schema definition.
+ *
+ *    * The outer-most level must be a group annotated with LIST that contains a
+ *      single field named list. The repetition of this level must be either
+ *      optional or required and determines whether the list is nullable.
+ *
+ *    * The middle level, named list, must be a repeated group with a single field
+ *      named element.
+ *
+ *    * The element field encodes the list's element type and
+ *      repetition. Element repetition must be required or optional.
+ *
+ *  FSI further restricts lists to be defined only at the top level, meaning
+ *  directly below the root schema node.
+ */
+bool is_valid_parquet_list_column(const parquet::ColumnDescriptor* parquet_column) {
+  const parquet::schema::Node* node = parquet_column->schema_node().get();
+  if ((node->name() != "element" && node->name() != "item") ||
+      !(node->is_required() ||
+        node->is_optional())) {  // ensure first innermost node is named "element"
+                                 // which is required by the parquet specification;
+                                 // however testing shows that pyarrow generates this
+                                 // column with the name of "item"
+                                 // this field must be either required or optional
+    return false;
+  }
+  node = node->parent();
+  if (!node) {  // required nested structure
+    return false;
+  }
+  if (node->name() != "list" || !node->is_repeated() ||
+      !node->is_group()) {  // ensure second innermost node is named "list" which is
+                            // a repeated group; this is
+                            // required by the parquet specification
+    return false;
+  }
+  node = node->parent();
+  if (!node) {  // required nested structure
+    return false;
+  }
+  if (!node->logical_type()->is_list() ||
+      !(node->is_optional() ||
+        node->is_required())) {  // ensure third outermost node has logical type LIST
+                                 // which is either optional or required; this is required
+                                 // by the parquet specification
+    return false;
+  }
+  node =
+      node->parent();  // this must now be the root node of schema which is required by
+                       // FSI (lists can not be embedded into a deeper nested structure)
+  if (!node) {         // required nested structure
+    return false;
+  }
+  node = node->parent();
+  if (node) {  // implies the previous node was not the root node
+    return false;
+  }
+  return true;
 }
 
 template <typename V>
@@ -226,6 +309,9 @@ std::shared_ptr<ParquetEncoder> create_parquet_date_encoder(
     if (column_type.get_compression() == kENCODING_DATE_IN_DAYS) {
       return std::make_shared<ParquetFixedLengthEncoder<int32_t, int32_t>>(
           buffer, omnisci_column, parquet_column);
+    } else if (column_type.get_compression() == kENCODING_NONE) {  // for array types
+      return std::make_shared<ParquetDateInSecondsEncoder>(
+          buffer, omnisci_column, parquet_column);
     } else {
       UNREACHABLE();
     }
@@ -269,6 +355,16 @@ std::shared_ptr<ParquetEncoder> create_parquet_string_encoder(
   return {};
 }
 
+// forward declare `create_parquet_array_encoder`:
+// `create_parquet_encoder` and `create_parquet_array_encoder` each make use of
+// each other, so one of the two functions must have a forward declaration
+std::shared_ptr<ParquetEncoder> create_parquet_array_encoder(
+    const ColumnDescriptor* omnisci_column,
+    const parquet::ColumnDescriptor* parquet_column,
+    Chunk_NS::Chunk& chunk,
+    StringDictionary* string_dictionary,
+    std::shared_ptr<ChunkMetadata>& chunk_metadata);
+
 std::shared_ptr<ParquetEncoder> create_parquet_encoder(
     const ColumnDescriptor* omnisci_column,
     const parquet::ColumnDescriptor* parquet_column,
@@ -276,6 +372,10 @@ std::shared_ptr<ParquetEncoder> create_parquet_encoder(
     StringDictionary* string_dictionary,
     std::shared_ptr<ChunkMetadata>& chunk_metadata) {
   auto buffer = chunk.getBuffer();
+  if (auto encoder = create_parquet_array_encoder(
+          omnisci_column, parquet_column, chunk, string_dictionary, chunk_metadata)) {
+    return encoder;
+  }
   if (auto encoder =
           create_parquet_decimal_encoder(omnisci_column, parquet_column, buffer)) {
     return encoder;
@@ -306,6 +406,58 @@ std::shared_ptr<ParquetEncoder> create_parquet_encoder(
   }
   UNREACHABLE();
   return {};
+}
+
+std::shared_ptr<ParquetEncoder> create_parquet_array_encoder(
+    const ColumnDescriptor* omnisci_column,
+    const parquet::ColumnDescriptor* parquet_column,
+    Chunk_NS::Chunk& chunk,
+    StringDictionary* string_dictionary,
+    std::shared_ptr<ChunkMetadata>& chunk_metadata) {
+  bool is_valid_parquet_list = is_valid_parquet_list_column(parquet_column);
+  if (!is_valid_parquet_list || !omnisci_column->columnType.is_array() ||
+      omnisci_column->columnType.is_fixlen_array()) {
+    return {};
+  }
+  std::unique_ptr<ColumnDescriptor> omnisci_column_sub_type_column =
+      get_sub_type_column_descriptor(omnisci_column);
+  auto encoder = create_parquet_encoder(omnisci_column_sub_type_column.get(),
+                                        parquet_column,
+                                        chunk,
+                                        string_dictionary,
+                                        chunk_metadata);
+  CHECK(encoder.get());
+
+  auto scalar_encoder = std::dynamic_pointer_cast<ParquetScalarEncoder>(encoder);
+  CHECK(scalar_encoder);
+  encoder = std::make_shared<ParquetArrayEncoder>(
+      chunk.getBuffer(), chunk.getIndexBuf(), scalar_encoder, omnisci_column);
+
+  return encoder;
+}
+
+void validate_max_repetition_level(
+    const parquet::ColumnDescriptor* parquet_column_descriptor) {
+  bool is_valid_parquet_list = is_valid_parquet_list_column(parquet_column_descriptor);
+  if (is_valid_parquet_list) {
+    if (parquet_column_descriptor->max_repetition_level() != 1) {
+      throw std::runtime_error(
+          "Incorrect schema max repetition level detected in column '" +
+          parquet_column_descriptor->name() +
+          "'. Expected a max repetition level of 1 for list column but column has a max "
+          "repetition level of " +
+          std::to_string(parquet_column_descriptor->max_repetition_level()) + ".");
+    }
+  } else {
+    if (parquet_column_descriptor->max_repetition_level() != 0) {
+      throw std::runtime_error(
+          "Incorrect schema max repetition level detected in column '" +
+          parquet_column_descriptor->name() +
+          "'. Expected a max repetition level of 0 for flat column but column has a max "
+          "repetition level of " +
+          std::to_string(parquet_column_descriptor->max_repetition_level()) + ".");
+    }
+  }
 }
 
 void resize_values_buffer(const ColumnDescriptor* omnisci_column,
@@ -366,6 +518,7 @@ std::shared_ptr<ChunkMetadata> append_row_groups(
                                      first_file_path,
                                      row_group_interval.file_path);
 
+    validate_max_repetition_level(parquet_column_descriptor);
     int64_t values_read = 0;
     for (int row_group_index = row_group_interval.start_index;
          row_group_index <= row_group_interval.end_index;
@@ -373,11 +526,6 @@ std::shared_ptr<ChunkMetadata> append_row_groups(
       auto group_reader = parquet_reader->RowGroup(row_group_index);
       std::shared_ptr<parquet::ColumnReader> col_reader =
           group_reader->Column(parquet_column_index);
-      if (col_reader->descr()->max_repetition_level() > 0) {
-        throw std::runtime_error("Nested schema detected in column '" +
-                                 parquet_column_descriptor->name() +
-                                 "'. Only flat schemas are supported.");
-      }
 
       while (col_reader->HasNext()) {
         int64_t levels_read =
@@ -387,7 +535,12 @@ std::shared_ptr<ChunkMetadata> append_row_groups(
                                    reinterpret_cast<uint8_t*>(values.data()),
                                    &values_read,
                                    col_reader.get());
-        encoder->appendData(def_levels.data(), values_read, levels_read, values.data());
+        encoder->appendData(def_levels.data(),
+                            rep_levels.data(),
+                            values_read,
+                            levels_read,
+                            !col_reader->HasNext(),
+                            values.data());
       }
     }
   }
@@ -525,10 +678,12 @@ bool validate_time_mapping(const ColumnDescriptor* omnisci_column,
 bool validate_date_mapping(const ColumnDescriptor* omnisci_column,
                            const parquet::ColumnDescriptor* parquet_column) {
   if (!(omnisci_column->columnType.get_type() == kDATE &&
-        (omnisci_column->columnType.get_compression() == kENCODING_DATE_IN_DAYS &&
-         omnisci_column->columnType.get_comp_param() ==
-             0)  // DATE ENCODING DAYS (32) specifies comp_param of 0
-        )) {
+        ((omnisci_column->columnType.get_compression() == kENCODING_DATE_IN_DAYS &&
+          omnisci_column->columnType.get_comp_param() ==
+              0)  // DATE ENCODING DAYS (32) specifies comp_param of 0
+         || omnisci_column->columnType.get_compression() ==
+                kENCODING_NONE  // for array types
+         ))) {
     return false;
   }
   return parquet_column->logical_type()->is_date();
@@ -542,11 +697,26 @@ bool validate_string_mapping(const ColumnDescriptor* omnisci_column,
           omnisci_column->columnType.get_compression() == kENCODING_DICT);
 }
 
+bool validate_array_mapping(const ColumnDescriptor* omnisci_column,
+                            const parquet::ColumnDescriptor* parquet_column) {
+  if (is_valid_parquet_list_column(parquet_column) &&
+      omnisci_column->columnType.is_array() &&
+      !omnisci_column->columnType.is_fixlen_array()) {
+    auto omnisci_column_sub_type_column = get_sub_type_column_descriptor(omnisci_column);
+    return LazyParquetChunkLoader::isColumnMappingSupported(
+        omnisci_column_sub_type_column.get(), parquet_column);
+  }
+  return false;
+}
+
 }  // namespace
 
 bool LazyParquetChunkLoader::isColumnMappingSupported(
     const ColumnDescriptor* omnisci_column,
     const parquet::ColumnDescriptor* parquet_column) {
+  if (validate_array_mapping(omnisci_column, parquet_column)) {
+    return true;
+  }
   if (validate_decimal_mapping(omnisci_column, parquet_column)) {
     return true;
   }

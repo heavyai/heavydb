@@ -22,6 +22,8 @@
 #include <parquet/arrow/reader.h>
 #include <parquet/types.h>
 
+#include "Catalog/ColumnDescriptor.h"
+
 namespace foreign_storage {
 
 struct RowGroupInterval {
@@ -45,5 +47,8 @@ void validate_equal_column_descriptor(
     const parquet::ColumnDescriptor* new_descriptor,
     const std::string& reference_file_path,
     const std::string& new_file_path);
+
+std::unique_ptr<ColumnDescriptor> get_sub_type_column_descriptor(
+    const ColumnDescriptor* column);
 
 }  // namespace foreign_storage

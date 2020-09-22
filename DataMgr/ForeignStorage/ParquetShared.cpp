@@ -73,4 +73,14 @@ void validate_equal_column_descriptor(
   }
 }
 
+std::unique_ptr<ColumnDescriptor> get_sub_type_column_descriptor(
+    const ColumnDescriptor* column) {
+  auto column_type = column->columnType.get_elem_type();
+  if (column_type.get_size() == -1 && column_type.is_dict_encoded_string()) {
+    column_type.set_size(4);  // override default size of -1
+  }
+  return std::make_unique<ColumnDescriptor>(
+      column->tableId, column->columnId, column->columnName, column_type);
+}
+
 }  // namespace foreign_storage

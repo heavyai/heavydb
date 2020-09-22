@@ -1331,7 +1331,7 @@ TEST_F(RefreshMetadataTypeTest, ArrayTypes) {
       "FLOAT[], "
       "tm "
       "TIME[], tp TIMESTAMP[], "
-      "d DATE[], txt TEXT[], txt_2 TEXT[])",
+      "d DATE[], txt TEXT[], fixedpoint DECIMAL(10,5)[])",
       {},
       "array_types",
       "csv",
@@ -2048,23 +2048,118 @@ TEST_P(DataTypeFragmentSizeAndDataWrapperTest, ScalarTypes) {
   // clang-format on
 }
 
+TEST_F(SelectQueryTest, CsvArrayQuotedText) {
+  const auto& query = getCreateForeignTableQuery(
+      "(index INT, quoted_text TEXT[])", "array_quoted_text", "csv");
+  sql(query);
+
+  TQueryResult result;
+  sql(result, "SELECT * FROM test_foreign_table ORDER BY index;");
+  // clang-format off
+  assertResultSetEqual({
+    { i(1),array({"quoted text"}) },
+    { i(2),array({"quoted text 2"}) },
+    { i(3),array({"quoted text 3", "quoted text 4"}) }},
+    result);
+  // clang-format on
+}
+
+TEST_F(SelectQueryTest, ParquetArrayDateTimeTypes) {
+  const auto& query = getCreateForeignTableQuery(
+      "(index INT, time_milli_array TIME[], time_micro_array TIME[],"
+      " time_nano_array TIME[], timestamp_milli1_array TIMESTAMP[],"
+      " timestamp_micro1_array TIMESTAMP[], timestamp_milli2_array TIMESTAMP(3)[],"
+      " timestamp_micro2_array TIMESTAMP(6)[], date_array DATE[])",
+      "array_datetime_types",
+      "parquet");
+  sql(query);
+
+  TQueryResult result;
+  sql(result, "SELECT * FROM test_foreign_table ORDER BY index;");
+
+  // clang-format off
+  assertResultSetEqual(
+      {
+          {
+            i(1),array({}), array({}), array({}), array({}), array({}), array({}),
+            array({}), array({})
+          },
+          {
+            i(2),array({"23:59:59", "00:59:59", "12:00:00"}),
+            array({"23:59:59", "00:59:59", "12:00:00"}),
+            array({"23:59:59", "00:59:59", "12:00:00"}),
+            array({"1871-07-06 23:59:59", "1931-03-01 00:59:59", "1900-12-29 12:00:00"}),
+            array({"1871-07-06 23:59:59", "1931-03-01 00:59:59", "1900-12-29 12:00:00"}),
+            array({"1871-07-06 23:59:59.123", "1931-03-01 00:59:59.123",
+                   "1900-12-29 12:00:00.123"}), array({"1871-07-06 23:59:59.123456",
+                   "1931-03-01 00:59:59.123456", "1900-12-29 12:00:00.123456"}),
+            array({"1871-07-06", "1931-03-01", "1900-12-29"})
+          },
+          {
+            i(3),array({"10:10:10", i(NULL_BIGINT)}), array({"10:10:10", i(NULL_BIGINT)}),
+            array({"10:10:10", i(NULL_BIGINT)}),
+            array({"2020-11-10 10:10:10", i(NULL_BIGINT)}),
+            array({"2020-11-10 10:10:10", i(NULL_BIGINT)}),
+            array({"2020-11-10 10:10:10.123", i(NULL_BIGINT)}),
+            array({"2020-11-10 10:10:10.123456", i(NULL_BIGINT)}),
+            array({"2020-11-10", i(NULL_BIGINT)})
+          },
+          {
+            i(4),array({}), array({}), array({}),
+            array({}), array({}), array({}), array({}), array({})
+          },
+          {
+            i(5),array({"00:00:01"}),
+            array({"00:00:01"}), array({"00:00:01"}), array({"2200-01-01 00:00:01"}),
+            array({"2200-01-01 00:00:01"}), array({"2200-01-01 00:00:01.123"}),
+            array({"2200-01-01 00:00:01.123456"}), array({"2200-01-01"})
+          },
+      }, result);
+  // clang-format on
+}
+
+TEST_F(SelectQueryTest, ParquetArrayUnsignedIntegerTypes) {
+  const auto& query = getCreateForeignTableQuery(
+      "( index INT, utinyint_array SMALLINT[], usmallint_array INT[],"
+      " uint_array BIGINT[] )",
+      "array_unsigned_types",
+      "parquet");
+  sql(query);
+
+  TQueryResult result;
+  sql(result, "SELECT * FROM test_foreign_table ORDER BY index;");
+
+  // clang-format off
+  assertResultSetEqual( {
+        {
+          i(1),array({i(1),i(2)}),array({i(1),i(2)}),array({i(1),i(2)})
+        },
+        {
+          i(2),array({i(3),i(4),i(5)}),array({i(3),i(4),i(5)}),array({i(3),i(4),i(5)})
+        },
+        {
+          i(3),array({i(6),i(NULL_SMALLINT)}),
+          array({i(6),i(NULL_INT)}),array({i(6),i(NULL_BIGINT)})
+        },
+        {
+          i(4),array({}),array({}),array({}),array({})
+        },
+        {
+          i(5),array({i(7)}),array({i(7)}),array({i(7)})
+        }
+      }, result);
+  // clang-format on
+}
+
 TEST_P(DataTypeFragmentSizeAndDataWrapperTest, ArrayTypes) {
   auto& param = GetParam();
   int fragment_size = param.fragment_size;
   std::string data_wrapper_type = param.wrapper;
   std::string extension = param.extension;
-  // TODO: implement for parquet when kARRAY support implemented for parquet
-  if (data_wrapper_type == "parquet") {
-    GTEST_SKIP();
-  }
-
-  // index column added for sorting, since order of files in a directory may vary
   const auto& query = getCreateForeignTableQuery(
-      "(index int, b BOOLEAN[], t TINYINT[], s SMALLINT[], i INTEGER[], bi BIGINT[], f "
-      "FLOAT[], "
-      "tm "
-      "TIME[], tp TIMESTAMP[], "
-      "d DATE[], txt TEXT[], txt_2 TEXT[])",
+      "(index INT, b BOOLEAN[], t TINYINT[], s SMALLINT[], i INTEGER[], bi BIGINT[],"
+      " f FLOAT[], tm TIME[], tp TIMESTAMP[], d DATE[], txt TEXT[],"
+      " fixedpoint DECIMAL(10,5)[])",
       {{"fragment_size", std::to_string(fragment_size)}},
       "array_types",
       data_wrapper_type,
@@ -2081,19 +2176,19 @@ TEST_P(DataTypeFragmentSizeAndDataWrapperTest, ArrayTypes) {
       i(1), array({True}), array({i(50), i(100)}), array({i(30000), i(20000)}), array({i(2000000000)}),
       array({i(9000000000000000000)}), array({10.1f, 11.1f}), array({"00:00:10"}),
       array({"1/1/2000 00:00:59", "1/1/2010 00:00:59"}), array({"1/1/2000", "2/2/2000"}),
-      array({"text_1"}), array({"quoted text"})
+      array({"text_1"}),array({1.23,2.34})
     },
     {
       i(2), array({False, True}), array({i(110)}), array({i(30500)}), array({i(2000500000)}),
       array({i(9000000050000000000)}), array({100.12f}), array({"00:10:00", "00:20:00"}),
       array({"6/15/2020 00:59:59"}), array({"6/15/2020"}),
-      array({"text_2", "text_3"}), array({"quoted text 2"})
+      array({"text_2", "text_3"}),array({3.456,4.5,5.6})
     },
     {
       i(3), array({True}), array({i(120)}), array({i(31000)}), array({i(2100000000), i(200000000)}),
       array({i(9100000000000000000), i(9200000000000000000)}), array({1000.123f}), array({"10:00:00"}),
       array({"12/31/2500 23:59:59"}), array({"12/31/2500"}),
-      array({"text_4"}), array({"quoted text 3", "quoted text 4"})
+      array({"text_4"}),array({6.78})
     }},
     result);
   // clang-format on

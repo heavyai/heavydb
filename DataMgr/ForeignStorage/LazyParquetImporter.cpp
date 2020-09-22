@@ -335,6 +335,52 @@ std::set<std::string> get_file_paths(std::shared_ptr<arrow::fs::FileSystem> file
   return file_paths;
 }
 
+void update_array_metadata_stats(
+    ArrayMetadataStats& array_stats,
+    const ColumnDescriptor* column_descriptor,
+    const parquet::ColumnDescriptor* parquet_column_descriptor,
+    std::shared_ptr<parquet::Statistics> stats) {
+  auto encoded_min = stats->EncodeMin();
+  auto encoded_max = stats->EncodeMax();
+  switch (parquet_column_descriptor->physical_type()) {
+    case parquet::Type::BOOLEAN: {
+      auto min_value = reinterpret_cast<const bool*>(encoded_min.data())[0];
+      auto max_value = reinterpret_cast<const bool*>(encoded_max.data())[0];
+      array_stats.updateStats(column_descriptor->columnType, min_value, max_value);
+      break;
+    }
+    case parquet::Type::INT32: {
+      auto min_value = reinterpret_cast<const int32_t*>(encoded_min.data())[0];
+      auto max_value = reinterpret_cast<const int32_t*>(encoded_max.data())[0];
+      array_stats.updateStats(column_descriptor->columnType, min_value, max_value);
+      break;
+    }
+    case parquet::Type::INT64: {
+      auto min_value = reinterpret_cast<const int64_t*>(encoded_min.data())[0];
+      auto max_value = reinterpret_cast<const int64_t*>(encoded_max.data())[0];
+      array_stats.updateStats(column_descriptor->columnType, min_value, max_value);
+      break;
+    }
+    case parquet::Type::DOUBLE: {
+      auto min_value = reinterpret_cast<const double*>(encoded_min.data())[0];
+      auto max_value = reinterpret_cast<const double*>(encoded_max.data())[0];
+      array_stats.updateStats(column_descriptor->columnType, min_value, max_value);
+      break;
+    }
+    case parquet::Type::FLOAT: {
+      auto min_value = reinterpret_cast<const float*>(encoded_min.data())[0];
+      auto max_value = reinterpret_cast<const float*>(encoded_max.data())[0];
+      array_stats.updateStats(column_descriptor->columnType, min_value, max_value);
+      break;
+    }
+    default:
+      throw std::runtime_error(
+          "Unsupported physical type detected while"
+          " scanning metadata of parquet column '" +
+          parquet_column_descriptor->name() + "'.");
+  }
+}
+
 void read_parquet_metadata_into_import_buffer(
     const size_t num_rows,
     const int row_group,
@@ -350,22 +396,45 @@ void read_parquet_metadata_into_import_buffer(
   auto column_chunk = group_metadata->ColumnChunk(parquet_column_index);
   CHECK(column_chunk->is_stats_set());
   std::shared_ptr<parquet::Statistics> stats = column_chunk->statistics();
-  bool is_all_nulls = (stats->null_count() == group_metadata->num_rows());
+  bool is_all_nulls = stats->null_count() == column_chunk->num_values();
   CHECK(is_all_nulls || stats->HasMinMax());
 
   const auto& type = column_descriptor->columnType;
   auto parquet_column_descriptor = group_metadata->schema()->Column(parquet_column_index);
+  auto& row_group_metadata_vec = parquet_loader_metadata.row_group_metadata_vector;
   if (!is_all_nulls) {
-    if (is_datetime(type.get_type())) {
-      auto [min, max] =
-          get_datetime_min_and_max(column_descriptor, parquet_column_descriptor, stats);
-      import_buffer->addBigint(min);
-      import_buffer->addBigint(max);
-    } else if (type.is_decimal()) {
-      auto [min, max] =
-          get_decimal_min_and_max(column_descriptor, parquet_column_descriptor, stats);
-      import_buffer->addBigint(min);
-      import_buffer->addBigint(max);
+    if (is_datetime(type.get_type()) ||
+        (type.is_array() && is_datetime(type.get_elem_type().get_type()))) {
+      if (type.is_array()) {
+        auto sub_type_column_descriptor =
+            get_sub_type_column_descriptor(column_descriptor);
+        auto [min, max] = get_datetime_min_and_max(
+            sub_type_column_descriptor.get(), parquet_column_descriptor, stats);
+        auto& metadata = row_group_metadata_vec[column_id - 1];
+        metadata.array_stats.updateStats(
+            sub_type_column_descriptor->columnType, min, max);
+      } else {
+        auto [min, max] =
+            get_datetime_min_and_max(column_descriptor, parquet_column_descriptor, stats);
+        import_buffer->addBigint(min);
+        import_buffer->addBigint(max);
+      }
+    } else if (type.is_decimal() ||
+               (type.is_array() && type.get_elem_type().is_decimal())) {
+      if (type.is_array()) {
+        auto sub_type_column_descriptor =
+            get_sub_type_column_descriptor(column_descriptor);
+        auto [min, max] = get_decimal_min_and_max(
+            sub_type_column_descriptor.get(), parquet_column_descriptor, stats);
+        auto& metadata = row_group_metadata_vec[column_id - 1];
+        metadata.array_stats.updateStats(
+            sub_type_column_descriptor->columnType, min, max);
+      } else {
+        auto [min, max] =
+            get_decimal_min_and_max(column_descriptor, parquet_column_descriptor, stats);
+        import_buffer->addBigint(min);
+        import_buffer->addBigint(max);
+      }
     } else if (!type.is_string() && !type.is_varlen()) {
       std::shared_ptr<arrow::Scalar> min, max;
       PARQUET_THROW_NOT_OK(parquet::arrow::StatisticsAsScalars(*stats, &min, &max));
@@ -375,12 +444,17 @@ void read_parquet_metadata_into_import_buffer(
           column_descriptor, *min_array, false, {0, 1}, &bad_rows_tracker);
       import_buffer->add_arrow_values(
           column_descriptor, *max_array, false, {0, 1}, &bad_rows_tracker);
+    } else if (type.is_array() && !type.get_elem_type().is_string()) {
+      auto sub_type_column_descriptor = get_sub_type_column_descriptor(column_descriptor);
+      update_array_metadata_stats(row_group_metadata_vec[column_id - 1].array_stats,
+                                  sub_type_column_descriptor.get(),
+                                  parquet_column_descriptor,
+                                  stats);
     }
   }
 
   // Set the same metadata for the logical column and all its related physical columns
   auto physical_columns_count = column_descriptor->columnType.get_physical_cols();
-  auto& row_group_metadata_vec = parquet_loader_metadata.row_group_metadata_vector;
   for (auto i = column_id - 1; i < (column_id + physical_columns_count); i++) {
     row_group_metadata_vec[i].metadata_only = true;
     row_group_metadata_vec[i].row_group_index = row_group;

@@ -36,51 +36,56 @@ class ParquetStringEncoder : public TypedParquetInPlaceEncoder<V, V> {
       , chunk_metadata_(chunk_metadata)
       , encode_buffer_(LazyParquetChunkLoader::batch_reader_num_elements * sizeof(V))
       , min_(std::numeric_limits<V>::max())
-      , max_(std::numeric_limits<V>::lowest())
-      , has_nulls_(false)
-      , num_elements_(0) {}
+      , max_(std::numeric_limits<V>::lowest()) {}
 
-  void appendData(int16_t* def_levels,
-                  int64_t values_read,
-                  int64_t levels_read,
+  void appendData(const int16_t* def_levels,
+                  const int16_t* rep_levels,
+                  const int64_t values_read,
+                  const int64_t levels_read,
+                  const bool is_last_batch,
                   int8_t* values) override {
-    V* data_ptr = reinterpret_cast<V*>(encode_buffer_.data());
-    auto parquet_data_ptr = reinterpret_cast<const parquet::ByteArray*>(values);
+    encodeAndCopyContiguous(values, encode_buffer_.data(), values_read);
+    TypedParquetInPlaceEncoder<V, V>::appendData(def_levels,
+                                                 rep_levels,
+                                                 values_read,
+                                                 levels_read,
+                                                 is_last_batch,
+                                                 encode_buffer_.data());
+  }
+
+  void encodeAndCopyContiguous(const int8_t* parquet_data_bytes,
+                               int8_t* omnisci_data_bytes,
+                               const size_t num_elements) override {
+    auto parquet_data_ptr =
+        reinterpret_cast<const parquet::ByteArray*>(parquet_data_bytes);
+    auto omnisci_data_ptr = reinterpret_cast<V*>(omnisci_data_bytes);
     std::vector<std::string_view> string_views;
-    string_views.reserve(values_read);
-    for (int64_t i = 0; i < values_read; ++i) {
+    string_views.reserve(num_elements);
+    for (size_t i = 0; i < num_elements; ++i) {
       auto& byte_array = parquet_data_ptr[i];
       string_views.emplace_back(reinterpret_cast<const char*>(byte_array.ptr),
                                 byte_array.len);
     }
-    string_dictionary_->getOrAddBulk(string_views, data_ptr);
-    updateMetadata(values_read, levels_read, encode_buffer_.data());
-    TypedParquetInPlaceEncoder<V, V>::appendData(
-        def_levels, values_read, levels_read, encode_buffer_.data());
+    string_dictionary_->getOrAddBulk(string_views, omnisci_data_ptr);
+    updateMetadataStats(num_elements, omnisci_data_bytes);
   }
 
- protected:
   void encodeAndCopy(const int8_t* parquet_data_bytes,
                      int8_t* omnisci_data_bytes) override {
     TypedParquetInPlaceEncoder<V, V>::copy(parquet_data_bytes, omnisci_data_bytes);
   }
 
+ protected:
   bool encodingIsIdentityForSameTypes() const override { return true; }
 
  private:
-  void updateMetadata(int64_t values_read, int64_t levels_read, int8_t* values) {
-    num_elements_ += levels_read;
+  void updateMetadataStats(int64_t values_read, int8_t* values) {
     V* data_ptr = reinterpret_cast<V*>(values);
     for (int64_t i = 0; i < values_read; ++i) {
       min_ = std::min<V>(data_ptr[i], min_);
       max_ = std::max<V>(data_ptr[i], max_);
     }
-    if (values_read < levels_read) {
-      has_nulls_ = true;
-    }
-    chunk_metadata_->fillChunkStats(min_, max_, has_nulls_);
-    chunk_metadata_->numBytes = num_elements_ * sizeof(V);
-    chunk_metadata_->numElements = num_elements_;
+    chunk_metadata_->fillChunkStats(min_, max_, false);
   }
 
   StringDictionary* string_dictionary_;
@@ -88,8 +93,6 @@ class ParquetStringEncoder : public TypedParquetInPlaceEncoder<V, V> {
   std::vector<int8_t> encode_buffer_;
 
   V min_, max_;
-  bool has_nulls_;
-  size_t num_elements_;
 };
 
 }  // namespace foreign_storage

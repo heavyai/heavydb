@@ -1,2 +1,2 @@
-index,boolean,tiny_int,small_int,int,big_int,float,time,timestamp,date,text,quoted_text
-1,{true},{50, 100},{30000, 20000},{2000000000},{9000000000000000000},{10.1, 11.1},{00:00:10},{1/1/2000 00:00:59, 1/1/2010 00:00:59},{1/1/2000, 2/2/2000},{text_1},{"quoted text"}
+index,boolean,tiny_int,small_int,int,big_int,float,time,timestamp,date,text,fixedpoint
+1,{true},{50, 100},{30000, 20000},{2000000000},{9000000000000000000},{10.1, 11.1},{00:00:10},{1/1/2000 00:00:59, 1/1/2010 00:00:59},{1/1/2000, 2/2/2000},{text_1},{1.23000,2.34000}

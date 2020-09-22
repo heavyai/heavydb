@@ -149,6 +149,9 @@ void ParquetDataWrapper::initializeChunkBuffers(
           column->columnType.get_compression() == kENCODING_NONE) {
         auto index_buffer = chunk.getIndexBuf();
         index_buffer->reserve(sizeof(StringOffsetT) * (metadata->numElements + 1));
+      } else if (!column->columnType.is_fixlen_array() && column->columnType.is_array()) {
+        auto index_buffer = chunk.getIndexBuf();
+        index_buffer->reserve(sizeof(ArrayOffsetT) * (metadata->numElements + 1));
       } else {
         size_t num_bytes_to_reserve =
             metadata->numElements * column->columnType.get_size();
@@ -309,7 +312,8 @@ void ParquetDataWrapper::loadMetadataChunk(const ColumnDescriptor* column,
                                            DataBlockPtr& data_block,
                                            const size_t import_count,
                                            const bool has_nulls,
-                                           const bool is_all_nulls) {
+                                           const bool is_all_nulls,
+                                           const ArrayMetadataStats& array_stats) {
   auto type_info = column->columnType;
   ChunkKey data_chunk_key = chunk_key;
   if (type_info.is_varlen_indeed()) {
@@ -324,6 +328,16 @@ void ParquetDataWrapper::loadMetadataChunk(const ColumnDescriptor* column,
     buffer.setSize(chunk_metadata_map_[data_chunk_key]->numBytes);
   } else {
     chunk_metadata_map_[data_chunk_key] = std::make_shared<ChunkMetadata>();
+    if (type_info.is_array()) {
+      // ChunkStats for arrays must be manually initialized as the encoders do
+      // not initialize them
+      ArrayMetadataStats array_stats_local;
+      auto sub_type_info = type_info.get_elem_type();
+      chunk_metadata_map_[data_chunk_key]->fillChunkStats(
+          array_stats_local.getMin(sub_type_info),
+          array_stats_local.getMax(sub_type_info),
+          false);
+    }
   }
 
   auto logical_type_info =
@@ -337,7 +351,24 @@ void ParquetDataWrapper::loadMetadataChunk(const ColumnDescriptor* column,
     updateStatsForEncoder(encoder, type_info, data_block, 2);
     encoder->setNumElems(encoder->getNumElems() + import_count - 2);
   }
-  encoder->getMetadata(chunk_metadata_map_[data_chunk_key]);
+  if (type_info.is_array()) {
+    // For array types, resetChunkStats is not implemented, so we must fill
+    // metadata manually
+    auto chunk_metadata = chunk_metadata_map_[data_chunk_key];
+    ChunkStats saved_chunk_stats =
+        chunk_metadata
+            ->chunkStats;  // save a copy of chunk stats before they are clobbered
+    encoder->getMetadata(chunk_metadata);
+    auto sub_type_info = type_info.get_elem_type();
+    auto array_stats_local = array_stats;
+    array_stats_local.updateStats(
+        sub_type_info, saved_chunk_stats.min, saved_chunk_stats.max);
+    chunk_metadata->fillChunkStats(array_stats_local.getMin(sub_type_info),
+                                   array_stats_local.getMax(sub_type_info),
+                                   saved_chunk_stats.has_nulls);
+  } else {
+    encoder->getMetadata(chunk_metadata_map_[data_chunk_key]);
+  }
   chunk_metadata_map_[data_chunk_key]->chunkStats.has_nulls |= has_nulls;
 }
 
@@ -438,7 +469,8 @@ import_export::Loader* ParquetDataWrapper::getMetadataLoader(
                             data_blocks[i],
                             metadata.num_elements,
                             metadata.has_nulls,
-                            metadata.is_all_nulls);
+                            metadata.is_all_nulls,
+                            metadata.array_stats);
         }
 
         last_fragment_row_count_ += import_row_count;
@@ -476,8 +508,13 @@ void ParquetDataWrapper::loadBuffersUsingLazyParquetChunkLoader(
 
   const auto& row_group_intervals = fragment_to_row_group_interval_map_[fragment_id];
 
+  const bool is_dictionary_encoded_string_column =
+      logical_column->columnType.is_dict_encoded_string() ||
+      (logical_column->columnType.is_array() &&
+       logical_column->columnType.get_elem_type().is_dict_encoded_string());
+
   StringDictionary* string_dictionary = nullptr;
-  if (logical_column->columnType.is_dict_encoded_string()) {
+  if (is_dictionary_encoded_string_column) {
     auto dict_descriptor = catalog->getMetadataForDictUnlocked(
         logical_column->columnType.get_comp_param(), true);
     CHECK(dict_descriptor);
@@ -506,12 +543,33 @@ void ParquetDataWrapper::loadBuffersUsingLazyParquetChunkLoader(
   LazyParquetChunkLoader chunk_loader(file_system_);
   auto metadata = chunk_loader.loadChunk(
       row_group_intervals, parquet_column_index, chunk, string_dictionary);
-  if (logical_column->columnType
-          .is_dict_encoded_string()) {  // update metadata for dictionary encoded strings
+  if (is_dictionary_encoded_string_column) {  // update metadata for dictionary encoded
+                                              // column
     CHECK(metadata.get());
     auto fragmenter = foreign_table_->fragmenter;
     if (fragmenter) {
-      fragmenter->updateColumnChunkMetadata(logical_column, fragment_id, metadata);
+      ChunkKey data_chunk_key = {
+          db_id_, foreign_table_->tableId, logical_column_id, fragment_id};
+      if (logical_column->columnType.is_varlen_indeed()) {
+        data_chunk_key.emplace_back(1);
+      }
+      CHECK(chunk_metadata_map_.find(data_chunk_key) != chunk_metadata_map_.end());
+      auto cached_metadata = chunk_metadata_map_[data_chunk_key];
+      cached_metadata->chunkStats.max = metadata->chunkStats.max;
+      cached_metadata->chunkStats.min = metadata->chunkStats.min;
+      cached_metadata->numBytes = chunk.getBuffer()->size();
+      fragmenter->updateColumnChunkMetadata(logical_column, fragment_id, cached_metadata);
+    }
+  } else if (logical_column->columnType
+                 .is_varlen_indeed()) {  // update metadata for variable length column
+    auto fragmenter = foreign_table_->fragmenter;
+    if (fragmenter) {
+      ChunkKey data_chunk_key = {
+          db_id_, foreign_table_->tableId, logical_column_id, fragment_id, 1};
+      CHECK(chunk_metadata_map_.find(data_chunk_key) != chunk_metadata_map_.end());
+      auto cached_metadata = chunk_metadata_map_[data_chunk_key];
+      cached_metadata->numBytes = chunk.getBuffer()->size();
+      fragmenter->updateColumnChunkMetadata(logical_column, fragment_id, cached_metadata);
     }
   }
 }
@@ -573,6 +631,20 @@ void ParquetDataWrapper::populateChunkBuffers(
             get_column_descriptor(reader.get(), parquet_column_index))) {
       loadBuffersUsingLazyParquetChunkLoader(column_id, fragment_id, required_buffers);
     } else {
+      if (column_descriptor->columnType
+              .is_array()) {  // arrays are not supported in LazyParquetImporter
+        auto parquet_column = get_column_descriptor(reader.get(), parquet_column_index);
+        std::string parquet_type;
+        if (parquet_column->logical_type()->is_none()) {
+          parquet_type = parquet::TypeToString(parquet_column->physical_type());
+        } else {
+          parquet_type = parquet_column->logical_type()->ToString();
+        }
+        throw std::runtime_error{
+            "Conversion from Parquet type \"" + parquet_type + "\" to OmniSci type \"" +
+            column_descriptor->columnType.get_type_name() +
+            "\" is not allowed. Please use an appropriate column type."};
+      }
       loadBuffersUsingLazyParquetImporter(column_id, fragment_id, required_buffers);
     }
   }

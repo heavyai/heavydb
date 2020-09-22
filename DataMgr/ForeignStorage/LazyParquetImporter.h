@@ -21,6 +21,7 @@
 
 #include <arrow/filesystem/filesystem.h>
 
+#include "ArrayMetadataStats.h"
 #include "ForeignTableSchema.h"
 #include "ImportExport/Importer.h"
 #include "Interval.h"
@@ -37,6 +38,7 @@ struct RowGroupMetadata {
   bool has_nulls;
   size_t num_elements;
   bool is_all_nulls;
+  ArrayMetadataStats array_stats;
 };
 
 struct ParquetLoaderMetadata {

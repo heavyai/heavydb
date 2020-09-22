@@ -33,9 +33,11 @@ class ParquetStringNoneEncoder : public ParquetEncoder {
       , encode_buffer_(LazyParquetChunkLoader::batch_reader_num_elements *
                        sizeof(StringOffsetT)) {}
 
-  void appendData(int16_t* def_levels,
-                  int64_t values_read,
-                  int64_t levels_read,
+  void appendData(const int16_t* def_levels,
+                  const int16_t* rep_levels,
+                  const int64_t values_read,
+                  const int64_t levels_read,
+                  const bool is_last_batch,
                   int8_t* values) override {
     if (!buffer_->size()) {
       CHECK(levels_read > 0);
