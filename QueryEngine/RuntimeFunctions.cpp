@@ -304,7 +304,11 @@ extern "C" ALWAYS_INLINE void agg_count_distinct_bitmap(int64_t* agg,
   reinterpret_cast<int8_t*>(*agg)[bitmap_idx >> 3] |= (1 << (bitmap_idx & 7));
 }
 
+#ifdef _MSC_VER
+#define GPU_RT_STUB NEVER_INLINE
+#else
 #define GPU_RT_STUB NEVER_INLINE __attribute__((optnone))
+#endif
 
 extern "C" GPU_RT_STUB void agg_count_distinct_bitmap_gpu(int64_t*,
                                                           const int64_t,
@@ -895,7 +899,7 @@ extern "C" GPU_RT_STUB void write_back_non_grouped_agg(int64_t* input_buffer,
                                                        const int32_t num_agg_cols){};
 // x64 stride functions
 
-extern "C" __attribute__((noinline)) int32_t pos_start_impl(int32_t* error_code) {
+extern "C" NEVER_INLINE int32_t pos_start_impl(int32_t* error_code) {
   int32_t row_index_resume{0};
   if (error_code) {
     row_index_resume = error_code[0];
@@ -904,11 +908,11 @@ extern "C" __attribute__((noinline)) int32_t pos_start_impl(int32_t* error_code)
   return row_index_resume;
 }
 
-extern "C" __attribute__((noinline)) int32_t group_buff_idx_impl() {
+extern "C" NEVER_INLINE int32_t group_buff_idx_impl() {
   return pos_start_impl(nullptr);
 }
 
-extern "C" __attribute__((noinline)) int32_t pos_step_impl() {
+extern "C" NEVER_INLINE int32_t pos_step_impl() {
   return 1;
 }
 
@@ -949,15 +953,15 @@ extern "C" ALWAYS_INLINE int32_t get_error_code(int32_t* error_codes) {
 
 // group by helpers
 
-extern "C" __attribute__((noinline)) const int64_t* init_shared_mem_nop(
+extern "C" NEVER_INLINE const int64_t* init_shared_mem_nop(
     const int64_t* groups_buffer,
     const int32_t groups_buffer_size) {
   return groups_buffer;
 }
 
-extern "C" __attribute__((noinline)) void write_back_nop(int64_t* dest,
-                                                         int64_t* src,
-                                                         const int32_t sz) {
+extern "C" NEVER_INLINE void write_back_nop(int64_t* dest,
+                                            int64_t* src,
+                                            const int32_t sz) {
   // the body is not really needed, just make sure the call is not optimized away
   assert(dest);
 }
@@ -967,7 +971,7 @@ extern "C" int64_t* init_shared_mem(const int64_t* global_groups_buffer,
   return nullptr;
 }
 
-extern "C" __attribute__((noinline)) void init_group_by_buffer_gpu(
+extern "C" NEVER_INLINE void init_group_by_buffer_gpu(
     int64_t* groups_buffer,
     const int64_t* init_vals,
     const uint32_t groups_buffer_entry_count,
@@ -979,7 +983,7 @@ extern "C" __attribute__((noinline)) void init_group_by_buffer_gpu(
   assert(groups_buffer);
 }
 
-extern "C" __attribute__((noinline)) void init_columnar_group_by_buffer_gpu(
+extern "C" NEVER_INLINE void init_columnar_group_by_buffer_gpu(
     int64_t* groups_buffer,
     const int64_t* init_vals,
     const uint32_t groups_buffer_entry_count,
@@ -992,7 +996,7 @@ extern "C" __attribute__((noinline)) void init_columnar_group_by_buffer_gpu(
   assert(groups_buffer);
 }
 
-extern "C" __attribute__((noinline)) void init_group_by_buffer_impl(
+extern "C" NEVER_INLINE void init_group_by_buffer_impl(
     int64_t* groups_buffer,
     const int64_t* init_vals,
     const uint32_t groups_buffer_entry_count,
@@ -1204,13 +1208,11 @@ extern "C" ALWAYS_INLINE int32_t extract_str_len(const uint64_t str_and_len) {
   return static_cast<int64_t>(str_and_len) >> 48;
 }
 
-extern "C" __attribute__((noinline)) int8_t* extract_str_ptr_noinline(
-    const uint64_t str_and_len) {
+extern "C" NEVER_INLINE int8_t* extract_str_ptr_noinline(const uint64_t str_and_len) {
   return extract_str_ptr(str_and_len);
 }
 
-extern "C" __attribute__((noinline)) int32_t extract_str_len_noinline(
-    const uint64_t str_and_len) {
+extern "C" NEVER_INLINE int32_t extract_str_len_noinline(const uint64_t str_and_len) {
   return extract_str_len(str_and_len);
 }
 
@@ -1306,18 +1308,17 @@ extern "C" NEVER_INLINE void linear_probabilistic_count(uint8_t* bitmap,
   reinterpret_cast<uint32_t*>(bitmap)[word_idx] |= 1 << bit_idx;
 }
 
-extern "C" __attribute__((noinline)) void query_stub_hoisted_literals(
-    const int8_t** col_buffers,
-    const int8_t* literals,
-    const int64_t* num_rows,
-    const uint64_t* frag_row_offsets,
-    const int32_t* max_matched,
-    const int64_t* init_agg_value,
-    int64_t** out,
-    uint32_t frag_idx,
-    const int64_t* join_hash_tables,
-    int32_t* error_code,
-    int32_t* total_matched) {
+extern "C" NEVER_INLINE void query_stub_hoisted_literals(const int8_t** col_buffers,
+                                                         const int8_t* literals,
+                                                         const int64_t* num_rows,
+                                                         const uint64_t* frag_row_offsets,
+                                                         const int32_t* max_matched,
+                                                         const int64_t* init_agg_value,
+                                                         int64_t** out,
+                                                         uint32_t frag_idx,
+                                                         const int64_t* join_hash_tables,
+                                                         int32_t* error_code,
+                                                         int32_t* total_matched) {
   assert(col_buffers || literals || num_rows || frag_row_offsets || max_matched ||
          init_agg_value || out || frag_idx || error_code || join_hash_tables ||
          total_matched);
@@ -1350,16 +1351,16 @@ extern "C" void multifrag_query_hoisted_literals(const int8_t*** col_buffers,
   }
 }
 
-extern "C" __attribute__((noinline)) void query_stub(const int8_t** col_buffers,
-                                                     const int64_t* num_rows,
-                                                     const uint64_t* frag_row_offsets,
-                                                     const int32_t* max_matched,
-                                                     const int64_t* init_agg_value,
-                                                     int64_t** out,
-                                                     uint32_t frag_idx,
-                                                     const int64_t* join_hash_tables,
-                                                     int32_t* error_code,
-                                                     int32_t* total_matched) {
+extern "C" NEVER_INLINE void query_stub(const int8_t** col_buffers,
+                                        const int64_t* num_rows,
+                                        const uint64_t* frag_row_offsets,
+                                        const int32_t* max_matched,
+                                        const int64_t* init_agg_value,
+                                        int64_t** out,
+                                        uint32_t frag_idx,
+                                        const int64_t* join_hash_tables,
+                                        int32_t* error_code,
+                                        int32_t* total_matched) {
   assert(col_buffers || num_rows || frag_row_offsets || max_matched || init_agg_value ||
          out || frag_idx || error_code || join_hash_tables || total_matched);
 }
