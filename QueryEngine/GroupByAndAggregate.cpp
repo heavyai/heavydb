@@ -1543,7 +1543,7 @@ bool GroupByAndAggregate::codegenAggCalls(
   auto agg_out_ptr_w_idx = agg_out_ptr_w_idx_in;
   // TODO(alex): unify the two cases, the output for non-group by queries
   //             should be a contiguous buffer
-  const bool is_group_by{std::get<0>(agg_out_ptr_w_idx)};
+  const bool is_group_by = std::get<0>(agg_out_ptr_w_idx);
   bool can_return_error = false;
   if (is_group_by) {
     CHECK(agg_out_vec.empty());
