@@ -20,8 +20,9 @@
 
 #include "DynamicWatchdog.h"
 #include "Logger/Logger.h"
+#include "Shared/funcannotations.h"
 
-static __inline__ uint64_t read_cycle_counter(void) {
+static FORCE_INLINE uint64_t read_cycle_counter(void) {
 #if (defined(__x86_64__) || defined(__x86_64))
   unsigned hi, lo;
   __asm__ __volatile__("rdtsc" : "=a"(lo), "=d"(hi));
