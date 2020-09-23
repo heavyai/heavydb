@@ -20,6 +20,8 @@
 #include <chrono>
 #include <iomanip>
 #include <sstream>
+#include <type_traits>
+
 #include "Logger/Logger.h"
 
 extern bool g_enable_debug_timer;
