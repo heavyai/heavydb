@@ -326,7 +326,7 @@ void redirect_inputs_of(
 
 void cleanup_dead_nodes(std::vector<std::shared_ptr<RelAlgNode>>& nodes) {
   for (auto nodeIt = nodes.rbegin(); nodeIt != nodes.rend(); ++nodeIt) {
-    if (nodeIt->unique()) {
+    if (nodeIt->use_count() == 1) {
       LOG(INFO) << "ID=" << (*nodeIt)->getId() << " " << (*nodeIt)->toString()
                 << " deleted!";
       nodeIt->reset();

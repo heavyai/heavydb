@@ -2649,7 +2649,7 @@ void RelAlgDagBuilder::build(const rapidjson::Value& query_ast,
     add_window_function_pre_project(nodes_);
   }
   coalesce_nodes(nodes_, left_deep_joins);
-  CHECK(nodes_.back().unique());
+  CHECK(nodes_.back().use_count() == 1);
   create_left_deep_join(nodes_);
 }
 
