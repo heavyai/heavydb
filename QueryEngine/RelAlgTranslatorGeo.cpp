@@ -1073,7 +1073,7 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateTernaryGeoFunction(
   auto distance_expr = translateScalarRex(rex_function->getOperand(2));
   const auto& distance_ti = SQLTypeInfo(kDOUBLE, false);
   if (distance_expr->get_type_info().get_type() != kDOUBLE) {
-    distance_expr->add_cast(distance_ti);
+    distance_expr = distance_expr->add_cast(distance_ti);
   }
 
   // Translate the geo distance function call portion
@@ -1116,7 +1116,7 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateGeoComparison(
         distance_ti, "ST_Distance_Point_Point_Squared"s, geoargs);
     auto distance_expr = translateScalarRex(rex_operator->getOperand(1));
     if (distance_expr->get_type_info().get_type() != kDOUBLE) {
-      distance_expr->add_cast(distance_ti);
+      distance_expr = distance_expr->add_cast(distance_ti);
     }
     distance_expr = makeExpr<Analyzer::BinOper>(distance_ti,
                                                 distance_expr->get_contains_agg(),

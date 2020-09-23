@@ -17550,6 +17550,10 @@ TEST(Select, GeoSpatial_Projection) {
               v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM geospatial_test WHERE "
                                         "ST_DWithin(poly, 'POINT(5 5)', 3.0);",
                                         dt)));
+    ASSERT_EQ(static_cast<int64_t>(6),
+              v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM geospatial_test WHERE "
+                                        "ST_DWithin(poly, 'POINT(5 5)', id);",
+                                        dt)));
     // Check if Paris and LA are within a 10000km geodesic distance
     ASSERT_EQ(static_cast<int64_t>(1),
               v<int64_t>(run_simple_agg(
