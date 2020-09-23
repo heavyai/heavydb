@@ -108,6 +108,11 @@ DEVICE void SUFFIX(init_hash_join_buff)(int32_t* groups_buffer,
 
 #ifdef __CUDACC__
 #define mapd_cas(address, compare, val) atomicCAS(address, compare, val)
+#elif defined(_MSC_VER)
+#define mapd_cas(address, compare, val)                                 \
+  InterlockedCompareExchange(reinterpret_cast<volatile long*>(address), \
+                             static_cast<long>(val),                    \
+                             static_cast<long>(compare))
 #else
 #define mapd_cas(address, compare, val) __sync_val_compare_and_swap(address, compare, val)
 #endif
@@ -393,11 +398,23 @@ __device__ T* get_matching_baseline_hash_slot_at(int8_t* hash_buff,
 }
 #else
 
+#ifdef _MSC_VER
+#define cas_cst(ptr, expected, desired)                                      \
+  (InterlockedCompareExchangePointer(reinterpret_cast<void* volatile*>(ptr), \
+                                     reinterpret_cast<void*>(&desired),      \
+                                     expected) == expected)
+#define store_cst(ptr, val)                                          \
+  InterlockedExchangePointer(reinterpret_cast<void* volatile*>(ptr), \
+                             reinterpret_cast<void*>(val))
+#define load_cst(ptr) \
+  InterlockedCompareExchange(reinterpret_cast<volatile long*>(ptr), 0, 0)
+#else
 #define cas_cst(ptr, expected, desired) \
   __atomic_compare_exchange_n(          \
       ptr, expected, desired, false, __ATOMIC_SEQ_CST, __ATOMIC_SEQ_CST)
 #define store_cst(ptr, val) __atomic_store_n(ptr, val, __ATOMIC_SEQ_CST)
 #define load_cst(ptr) __atomic_load_n(ptr, __ATOMIC_SEQ_CST)
+#endif
 
 template <typename T>
 T* get_matching_baseline_hash_slot_at(int8_t* hash_buff,
@@ -531,6 +548,10 @@ DEVICE int SUFFIX(fill_baseline_hash_join_buff)(int8_t* hash_buff,
 
 #ifdef __CUDACC__
 #define mapd_add(address, val) atomicAdd(address, val)
+#elif defined(_MSC_VER)
+#define mapd_add(address, val)                                      \
+  InterlockedExchangeAdd(reinterpret_cast<volatile long*>(address), \
+                         static_cast<long>(val))
 #else
 #define mapd_add(address, val) __sync_fetch_and_add(address, val)
 #endif

@@ -16,6 +16,7 @@
 
 #include "QueryEngine/JoinHashTable/JoinHashTable.h"
 
+#include <atomic>
 #include <future>
 #include <numeric>
 #include <thread>
@@ -775,7 +776,7 @@ void JoinHashTable::initOneToOneHashTableOnCpu(
       t.join();
     }
     init_cpu_buff_threads.clear();
-    int err{0};
+    std::atomic<int> err{0};
     for (int thread_idx = 0; thread_idx < thread_count; ++thread_idx) {
       init_cpu_buff_threads.emplace_back([this,
                                           hash_join_invalid_val,
@@ -803,7 +804,8 @@ void JoinHashTable::initOneToOneHashTableOnCpu(
                                            thread_idx,
                                            thread_count,
                                            hash_entry_info.bucket_normalization);
-        __sync_val_compare_and_swap(&err, 0, partial_err);
+        int zero{0};
+        err.compare_exchange_strong(zero, partial_err);
       });
     }
     for (auto& t : init_cpu_buff_threads) {

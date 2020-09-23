@@ -592,14 +592,22 @@ void ResultSetStorage::rewriteAggregateBufferOffsets(
 
 namespace {
 
+#ifdef _MSC_VER
+#define mapd_cas(address, compare, val)                                 \
+  InterlockedCompareExchange(reinterpret_cast<volatile long*>(address), \
+                             static_cast<long>(val),                    \
+                             static_cast<long>(compare))
+#else
+#define mapd_cas(address, compare, val) __sync_val_compare_and_swap(address, compare, val)
+#endif
+
 GroupValueInfo get_matching_group_value_columnar_reduction(int64_t* groups_buffer,
                                                            const uint32_t h,
                                                            const int64_t* key,
                                                            const uint32_t key_qw_count,
                                                            const size_t entry_count) {
   auto off = h;
-  const auto old_key =
-      __sync_val_compare_and_swap(&groups_buffer[off], EMPTY_KEY_64, *key);
+  const auto old_key = mapd_cas(&groups_buffer[off], EMPTY_KEY_64, *key);
   if (old_key == EMPTY_KEY_64) {
     for (size_t i = 0; i < key_qw_count; ++i) {
       groups_buffer[off] = key[i];
@@ -616,6 +624,8 @@ GroupValueInfo get_matching_group_value_columnar_reduction(int64_t* groups_buffe
   }
   return {&groups_buffer[off], false};
 }
+
+#undef mapd_cas
 
 // TODO(alex): fix synchronization when we enable it
 GroupValueInfo get_group_value_columnar_reduction(
@@ -641,11 +651,23 @@ GroupValueInfo get_group_value_columnar_reduction(
   return {nullptr, true};
 }
 
+#ifdef _MSC_VER
+#define cas_cst(ptr, expected, desired)                                      \
+  (InterlockedCompareExchangePointer(reinterpret_cast<void* volatile*>(ptr), \
+                                     reinterpret_cast<void*>(&desired),      \
+                                     expected) == expected)
+#define store_cst(ptr, val)                                          \
+  InterlockedExchangePointer(reinterpret_cast<void* volatile*>(ptr), \
+                             reinterpret_cast<void*>(val))
+#define load_cst(ptr) \
+  InterlockedCompareExchange(reinterpret_cast<volatile long*>(ptr), 0, 0)
+#else
 #define cas_cst(ptr, expected, desired) \
   __atomic_compare_exchange_n(          \
       ptr, expected, desired, false, __ATOMIC_SEQ_CST, __ATOMIC_SEQ_CST)
 #define store_cst(ptr, val) __atomic_store_n(ptr, val, __ATOMIC_SEQ_CST)
 #define load_cst(ptr) __atomic_load_n(ptr, __ATOMIC_SEQ_CST)
+#endif
 
 template <typename T = int64_t>
 GroupValueInfo get_matching_group_value_reduction(
