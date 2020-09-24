@@ -182,6 +182,7 @@ class DBHandlerTestFixture : public testing::Test {
       const bool read_only{false};
       const bool allow_loop_joins{false};
       const bool enable_rendering{false};
+      const bool renderer_use_vulkan_driver{false};
       const bool enable_auto_clear_render_mem{false};
       const int render_oom_retry_threshold{0};
       const size_t render_mem_bytes{500000000};
@@ -210,6 +211,7 @@ class DBHandlerTestFixture : public testing::Test {
                                                 read_only,
                                                 allow_loop_joins,
                                                 enable_rendering,
+                                                renderer_use_vulkan_driver,
                                                 enable_auto_clear_render_mem,
                                                 render_oom_retry_threshold,
                                                 render_mem_bytes,

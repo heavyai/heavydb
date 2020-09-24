@@ -69,6 +69,7 @@ class CommandLineOptions {
   size_t render_mem_bytes = 1000000000;
   size_t max_concurrent_render_sessions = 500;
   bool render_compositor_use_last_gpu = true;
+  bool renderer_use_vulkan_driver = false;
 
   bool enable_runtime_udf = false;
 

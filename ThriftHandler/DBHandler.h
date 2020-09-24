@@ -168,6 +168,7 @@ class DBHandler : public OmniSciIf {
             const bool read_only,
             const bool allow_loop_joins,
             const bool enable_rendering,
+            const bool renderer_use_vulkan_driver,
             const bool enable_auto_clear_render_mem,
             const int render_oom_retry_threshold,
             const size_t render_mem_bytes,

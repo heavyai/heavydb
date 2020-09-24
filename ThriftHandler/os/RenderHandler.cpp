@@ -33,6 +33,7 @@ RenderHandler::RenderHandler(DBHandler* db_handler,
                              const bool compositor_use_last_gpu,
                              const bool enable_auto_clear_render_mem,
                              const int render_oom_retry_threshold,
+                             const bool renderer_use_vulkan_driver,
                              const SystemParameters system_parameters)
     : impl_(nullptr) {
   throw std::runtime_error(

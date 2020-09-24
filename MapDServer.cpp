@@ -350,6 +350,7 @@ int startMapdServer(CommandLineOptions& prog_config_opts, bool start_http_server
                                      prog_config_opts.read_only,
                                      prog_config_opts.allow_loop_joins,
                                      prog_config_opts.enable_rendering,
+                                     prog_config_opts.renderer_use_vulkan_driver,
                                      prog_config_opts.enable_auto_clear_render_mem,
                                      prog_config_opts.render_oom_retry_threshold,
                                      prog_config_opts.render_mem_bytes,
