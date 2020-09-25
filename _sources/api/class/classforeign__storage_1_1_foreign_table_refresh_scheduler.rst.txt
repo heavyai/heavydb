@@ -1,0 +1,9 @@
+Class foreign_storage::ForeignTableRefreshScheduler
+===================================================
+
+.. doxygenclass:: foreign_storage::ForeignTableRefreshScheduler
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

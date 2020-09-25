@@ -1,0 +1,9 @@
+Struct foreign_storage::RowGroupInterval
+========================================
+
+.. doxygenstruct:: foreign_storage::RowGroupInterval
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

@@ -1,0 +1,9 @@
+Class foreign_storage::ParquetDateInSecondsEncoder
+==================================================
+
+.. doxygenclass:: foreign_storage::ParquetDateInSecondsEncoder
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

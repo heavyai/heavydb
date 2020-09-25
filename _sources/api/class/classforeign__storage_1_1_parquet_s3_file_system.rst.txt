@@ -1,0 +1,9 @@
+Class foreign_storage::ParquetS3FileSystem
+==========================================
+
+.. doxygenclass:: foreign_storage::ParquetS3FileSystem
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

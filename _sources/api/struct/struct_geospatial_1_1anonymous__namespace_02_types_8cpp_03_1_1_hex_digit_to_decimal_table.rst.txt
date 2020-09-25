@@ -1,0 +1,9 @@
+Struct Geospatial::anonymous_namespace{Types.cpp}::HexDigitToDecimalTable
+=========================================================================
+
+.. doxygenstruct:: Geospatial::anonymous_namespace{Types.cpp}::HexDigitToDecimalTable
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

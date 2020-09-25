@@ -1,0 +1,9 @@
+Struct foreign_storage::ParquetLoaderMetadata
+=============================================
+
+.. doxygenstruct:: foreign_storage::ParquetLoaderMetadata
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

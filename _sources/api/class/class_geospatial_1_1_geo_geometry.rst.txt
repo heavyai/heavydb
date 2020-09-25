@@ -1,0 +1,9 @@
+Class Geospatial::GeoGeometry
+=============================
+
+.. doxygenclass:: Geospatial::GeoGeometry
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

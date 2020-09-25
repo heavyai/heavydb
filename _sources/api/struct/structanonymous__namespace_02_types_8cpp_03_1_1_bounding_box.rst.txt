@@ -1,0 +1,9 @@
+Struct anonymous_namespace{Types.cpp}::BoundingBox
+==================================================
+
+.. doxygenstruct:: anonymous_namespace{Types.cpp}::BoundingBox
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

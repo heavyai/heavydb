@@ -1,0 +1,9 @@
+Class CacheTooSmallException
+============================
+
+.. doxygenclass:: CacheTooSmallException
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

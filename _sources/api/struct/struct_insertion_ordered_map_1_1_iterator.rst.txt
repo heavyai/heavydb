@@ -1,0 +1,9 @@
+Struct InsertionOrderedMap::Iterator
+====================================
+
+.. doxygenstruct:: InsertionOrderedMap::Iterator
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

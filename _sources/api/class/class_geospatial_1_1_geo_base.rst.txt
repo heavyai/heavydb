@@ -1,0 +1,9 @@
+Class Geospatial::GeoBase
+=========================
+
+.. doxygenclass:: Geospatial::GeoBase
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

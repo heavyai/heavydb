@@ -1,0 +1,9 @@
+Struct anonymous_namespace{Types.cpp}::Coords
+=============================================
+
+.. doxygenstruct:: anonymous_namespace{Types.cpp}::Coords
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

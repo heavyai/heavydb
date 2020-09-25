@@ -1,0 +1,9 @@
+Class foreign_storage::PostEvictionRefreshException
+===================================================
+
+.. doxygenclass:: foreign_storage::PostEvictionRefreshException
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

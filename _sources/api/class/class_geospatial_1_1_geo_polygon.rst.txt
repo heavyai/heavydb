@@ -1,0 +1,9 @@
+Class Geospatial::GeoPolygon
+============================
+
+.. doxygenclass:: Geospatial::GeoPolygon
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:
