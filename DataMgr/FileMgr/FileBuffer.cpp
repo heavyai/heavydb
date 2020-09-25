@@ -168,9 +168,13 @@ void FileBuffer::freeMetadataPages() {
     FileInfo* fileInfo = fm_->getFileInfoForFileId(metaPageIt->fileId);
     fileInfo->freePage(metaPageIt->pageNum);
   }
+  while (metadataPages_.pageVersions.size() > 0) {
+    metadataPages_.pop();
+  }
 }
 
-void FileBuffer::freeChunkPages() {
+size_t FileBuffer::freeChunkPages() {
+  size_t num_pages_freed = multiPages_.size();
   for (auto multiPageIt = multiPages_.begin(); multiPageIt != multiPages_.end();
        ++multiPageIt) {
     for (auto pageIt = multiPageIt->pageVersions.begin();
@@ -181,6 +185,7 @@ void FileBuffer::freeChunkPages() {
     }
   }
   multiPages_.clear();
+  return num_pages_freed;
 }
 
 void FileBuffer::freePages() {

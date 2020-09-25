@@ -27,7 +27,7 @@ PersistentStorageMgr::PersistentStorageMgr(const std::string& data_dir,
                                                           num_reader_threads)) {
   if (disk_cache_config.is_enabled) {
     disk_cache_ = std::make_unique<foreign_storage::ForeignStorageCache>(
-        disk_cache_config.path, num_reader_threads, disk_cache_config.entry_limit);
+        disk_cache_config.path, num_reader_threads, disk_cache_config.size_limit);
     foreign_storage_mgr_ =
         std::make_unique<foreign_storage::ForeignStorageMgr>(disk_cache_.get());
   } else {

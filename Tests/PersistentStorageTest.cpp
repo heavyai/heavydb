@@ -36,7 +36,7 @@ class PersistentStorageMgrTest : public testing::Test {
 };
 
 TEST_F(PersistentStorageMgrTest, DiskCache_CustomPath) {
-  DiskCacheConfig disk_cache_config(cache_path_);
+  DiskCacheConfig disk_cache_config{cache_path_, true};
   PersistentStorageMgr psm(data_path, 0, disk_cache_config);
   ASSERT_EQ(psm.getDiskCache()->getGlobalFileMgr()->getBasePath(), cache_path_ + "/");
 }

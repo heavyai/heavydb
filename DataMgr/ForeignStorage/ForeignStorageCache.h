@@ -33,28 +33,34 @@
 #include "DataMgr/FileMgr/GlobalFileMgr.h"
 #include "ForeignDataWrapper.h"
 
+class CacheTooSmallException : public std::runtime_error {
+ public:
+  CacheTooSmallException(const std::string& msg) : std::runtime_error(msg) {}
+};
+
 struct DiskCacheConfig {
   std::string path;
   bool is_enabled = false;
-  size_t entry_limit = 1024;
+  uint64_t size_limit = 21474836480;  // 20GB default
   size_t num_reader_threads = 0;
-  DiskCacheConfig() {}
-  DiskCacheConfig(std::string p,
-                  bool enabled = true,
-                  size_t limit = 1024,
-                  size_t readers = 0)
-      : path(p), is_enabled(enabled), entry_limit(limit), num_reader_threads(readers) {}
 };
 
 using namespace Data_Namespace;
 
 namespace foreign_storage {
 
+struct TableEvictionTracker {
+  // We can swap out different eviction algorithms here.
+  std::unique_ptr<CacheEvictionAlgorithm> eviction_alg_ =
+      std::make_unique<LRUEvictionAlgorithm>();
+  size_t num_pages_ = 0;
+};
+
 class ForeignStorageCache {
  public:
   ForeignStorageCache(const std::string& cache_dir,
                       const size_t num_reader_threads,
-                      const size_t limit);
+                      const uint64_t limit);
 
   /**
    * Caches the chunks for the given chunk keys. Chunk buffers
@@ -67,22 +73,24 @@ class ForeignStorageCache {
   void cacheTableChunks(const std::vector<ChunkKey>& chunk_keys);
 
   AbstractBuffer* getCachedChunkIfExists(const ChunkKey&);
-  bool isMetadataCached(const ChunkKey&);
+  bool isMetadataCached(const ChunkKey&) const;
   void cacheMetadataVec(const ChunkMetadataVector&);
-  void getCachedMetadataVecForKeyPrefix(ChunkMetadataVector&, const ChunkKey&);
-  bool hasCachedMetadataForKeyPrefix(const ChunkKey&);
+  void getCachedMetadataVecForKeyPrefix(ChunkMetadataVector&, const ChunkKey&) const;
+  bool hasCachedMetadataForKeyPrefix(const ChunkKey&) const;
   void clearForTablePrefix(const ChunkKey&);
   void clear();
-  void setLimit(size_t limit);
-  std::vector<ChunkKey> getCachedChunksForKeyPrefix(const ChunkKey&);
+  void setLimit(uint64_t limit);
+  std::vector<ChunkKey> getCachedChunksForKeyPrefix(const ChunkKey&) const;
   bool recoverCacheForTable(ChunkMetadataVector&, const ChunkKey&);
   std::map<ChunkKey, AbstractBuffer*> getChunkBuffersForCaching(
-      const std::vector<ChunkKey>& chunk_keys);
+      const std::vector<ChunkKey>& chunk_keys) const;
 
   // Exists for testing purposes.
-  size_t getLimit() const { return entry_limit_; }
-  size_t getNumCachedChunks() const { return cached_chunks_.size(); }
-  size_t getNumCachedMetadata() const { return cached_metadata_.size(); }
+  inline uint64_t getLimit() const {
+    return max_pages_per_table_ * global_file_mgr_->getDefaultPageSize();
+  }
+  inline size_t getNumCachedChunks() const { return cached_chunks_.size(); }
+  inline size_t getNumCachedMetadata() const { return cached_metadata_.size(); }
   size_t getNumChunksAdded() const { return num_chunks_added_; }
   size_t getNumMetadataAdded() const { return num_metadata_added_; }
 
@@ -91,22 +99,25 @@ class ForeignStorageCache {
   std::string dumpCachedMetadataEntries() const;
   std::string dumpEvictionQueue() const;
 
-  File_Namespace::GlobalFileMgr* getGlobalFileMgr() { return global_file_mgr_.get(); }
+  inline File_Namespace::GlobalFileMgr* getGlobalFileMgr() const {
+    return global_file_mgr_.get();
+  }
 
   std::string getCacheDirectoryForTablePrefix(const ChunkKey&);
 
  private:
   // These methods are private and assume locks are already acquired when called.
   std::set<ChunkKey>::iterator eraseChunk(const std::set<ChunkKey>::iterator&);
-  void eraseChunk(const ChunkKey&);
+  void eraseChunk(const ChunkKey&, TableEvictionTracker& tracker);
+  std::set<ChunkKey>::iterator eraseChunkByIterator(
+      const std::set<ChunkKey>::iterator& chunk_it);
   void evictThenEraseChunk(const ChunkKey&);
-  void evictChunkByAlg();
-  bool isCacheFull() const;
-  void validatePath(const std::string&);
+  void validatePath(const std::string&) const;
+  void cacheChunk(const ChunkKey&);
+  void createTrackerMapEntryIfNoneExists(const ChunkKey& chunk_key);
 
-  // We can swap out different eviction algorithms here.
-  std::unique_ptr<CacheEvictionAlgorithm> eviction_alg_ =
-      std::make_unique<LRUEvictionAlgorithm>();
+  std::map<const ChunkKey, TableEvictionTracker> eviction_tracker_map_;
+  uint64_t max_pages_per_table_;
 
   // Underlying storage is handled by a GlobalFileMgr unique to the cache.
   std::unique_ptr<File_Namespace::GlobalFileMgr> global_file_mgr_;
@@ -120,10 +131,10 @@ class ForeignStorageCache {
   size_t num_metadata_added_;
 
   // Separate mutexes for chunks/metadata.
-  mapd_shared_mutex chunks_mutex_;
-  mapd_shared_mutex metadata_mutex_;
+  mutable mapd_shared_mutex chunks_mutex_;
+  mutable mapd_shared_mutex metadata_mutex_;
 
-  // Maximum number of Chunks that can be in the cache before eviction.
-  size_t entry_limit_;
+  // Maximum number of chunk bytes that can be in the cache before eviction.
+  uint64_t max_cached_bytes_;
 };  // ForeignStorageCache
 }  // namespace foreign_storage

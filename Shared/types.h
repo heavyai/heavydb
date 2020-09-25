@@ -29,6 +29,8 @@
 #include <thread>
 #include <vector>
 
+#include "Logger/Logger.h"
+
 // The ChunkKey is a unique identifier for chunks in the database file.
 // The first element of the underlying vector for ChunkKey indicates the type of
 // ChunkKey (also referred to as the keyspace id)
@@ -38,6 +40,15 @@ using ChunkKey = std::vector<int>;
 #define CHUNK_KEY_TABLE_IDX 1
 #define CHUNK_KEY_COLUMN_IDX 2
 #define CHUNK_KEY_FRAGMENT_IDX 3
+
+inline bool hasTableKey(const ChunkKey& key) {
+  return key.size() >= 2;
+}
+
+inline ChunkKey getTableKey(const ChunkKey& key) {
+  CHECK(hasTableKey(key));
+  return ChunkKey{key[CHUNK_KEY_DB_IDX], key[CHUNK_KEY_TABLE_IDX]};
+}
 
 inline bool isTableKey(const ChunkKey& key) {
   return key.size() == 2;

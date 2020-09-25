@@ -199,8 +199,8 @@ class DBHandlerTestFixture : public testing::Test {
       system_parameters_.omnisci_server_port = -1;
       system_parameters_.calcite_port = 3280;
 
-      DiskCacheConfig disk_cache_config(std::string(BASE_PATH) + "/omnisci_disk_cache",
-                                        disk_cache_enabled);
+      DiskCacheConfig disk_cache_config{std::string(BASE_PATH) + "/omnisci_disk_cache",
+                                        disk_cache_enabled};
       db_handler_ = std::make_unique<DBHandler>(db_leaves_,
                                                 string_leaves_,
                                                 BASE_PATH,

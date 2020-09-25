@@ -2623,58 +2623,6 @@ TEST_F(ForeignStorageCacheQueryTest, CacheEvictAfterDrop) {
   ASSERT_EQ(cache->getNumCachedMetadata(), 0U);
 }
 
-// LRU specific tests (default algorithm).
-TEST_F(ForeignStorageCacheQueryTest, LRUEvictChunkByAlgOrderOne) {
-  sqlSelect(col_name3);
-  sqlSelect(col_name2);
-  sqlSelect(col_name1);
-  ASSERT_EQ(cache->getNumCachedChunks(), 3U);
-  ASSERT_NE(cache->getCachedChunkIfExists(query_chunk_key3), nullptr);
-  ASSERT_NE(cache->getCachedChunkIfExists(query_chunk_key2), nullptr);
-  ASSERT_NE(cache->getCachedChunkIfExists(query_chunk_key1), nullptr);
-  size_t old_limit = cache->getLimit();
-  cache->setLimit(2U);
-  ASSERT_FALSE(cache->getCachedChunkIfExists(query_chunk_key3));
-  ASSERT_TRUE(cache->getCachedChunkIfExists(query_chunk_key2));
-  ASSERT_TRUE(cache->getCachedChunkIfExists(query_chunk_key1));
-  cache->setLimit(1U);
-  ASSERT_EQ(cache->getCachedChunkIfExists(query_chunk_key3), nullptr);
-  ASSERT_EQ(cache->getCachedChunkIfExists(query_chunk_key2), nullptr);
-  ASSERT_NE(cache->getCachedChunkIfExists(query_chunk_key1), nullptr);
-  cache->setLimit(0U);
-  ASSERT_EQ(cache->getCachedChunkIfExists(query_chunk_key3), nullptr);
-  ASSERT_EQ(cache->getCachedChunkIfExists(query_chunk_key2), nullptr);
-  ASSERT_EQ(cache->getCachedChunkIfExists(query_chunk_key1), nullptr);
-  ASSERT_EQ(cache->getNumCachedChunks(), 0U);
-  cache->setLimit(old_limit);
-}
-
-// Verify that the LRU algorithm is working if we use a different order.
-TEST_F(ForeignStorageCacheQueryTest, LRUEvictChunkByAlgOrderTwo) {
-  sqlSelect(col_name1);
-  sqlSelect(col_name2);
-  sqlSelect(col_name3);
-  ASSERT_EQ(cache->getNumCachedChunks(), 3U);
-  ASSERT_NE(cache->getCachedChunkIfExists(query_chunk_key1), nullptr);
-  ASSERT_NE(cache->getCachedChunkIfExists(query_chunk_key2), nullptr);
-  ASSERT_NE(cache->getCachedChunkIfExists(query_chunk_key3), nullptr);
-  size_t old_limit = cache->getLimit();
-  cache->setLimit(2U);
-  ASSERT_EQ(cache->getCachedChunkIfExists(query_chunk_key1), nullptr);
-  ASSERT_NE(cache->getCachedChunkIfExists(query_chunk_key2), nullptr);
-  ASSERT_NE(cache->getCachedChunkIfExists(query_chunk_key3), nullptr);
-  cache->setLimit(1U);
-  ASSERT_EQ(cache->getCachedChunkIfExists(query_chunk_key1), nullptr);
-  ASSERT_EQ(cache->getCachedChunkIfExists(query_chunk_key2), nullptr);
-  ASSERT_NE(cache->getCachedChunkIfExists(query_chunk_key3), nullptr);
-  cache->setLimit(0U);
-  ASSERT_EQ(cache->getCachedChunkIfExists(query_chunk_key1), nullptr);
-  ASSERT_EQ(cache->getCachedChunkIfExists(query_chunk_key2), nullptr);
-  ASSERT_EQ(cache->getCachedChunkIfExists(query_chunk_key3), nullptr);
-  ASSERT_EQ(cache->getNumCachedChunks(), 0U);
-  cache->setLimit(old_limit);
-}
-
 TEST_F(ForeignStorageCacheQueryTest, WideLogicalColumns) {
   cache->clear();
   ASSERT_EQ(cache->getNumCachedChunks(), 0U);

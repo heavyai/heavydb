@@ -324,9 +324,9 @@ void CommandLineOptions::fillOptions() {
                               ->implicit_value(true),
                           "Enable caching of table data on disk.");
   help_desc.add_options()(
-      "disk-cache-entry-limit",
-      po::value<std::size_t>(&(disk_cache_config.entry_limit))->default_value(1024),
-      "Specify the size of the the disk cache.");
+      "disk-cache-size-limit",
+      po::value<std::size_t>(&(disk_cache_config.size_limit)),
+      "Specify the maximum size of the the disk cache per table in bytes.");
 #endif  // ENABLE_FSI
   help_desc.add_options()(
       "enable-interoperability",

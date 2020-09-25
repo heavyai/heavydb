@@ -83,7 +83,7 @@ class FileBuffer : public AbstractBuffer {
   void reserve(const size_t numBytes) override;
 
   void freePages();
-  void freeChunkPages();
+  size_t freeChunkPages();
   void freeMetadataPages();
 
   void read(int8_t* const dst,
