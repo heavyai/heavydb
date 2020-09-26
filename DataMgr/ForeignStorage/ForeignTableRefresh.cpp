@@ -75,8 +75,10 @@ void ForeignTableRefreshScheduler::start(std::atomic<bool>& is_program_running) 
 }
 
 void ForeignTableRefreshScheduler::stop() {
-  scheduler_thread_.join();
-  is_schedular_running_ = false;
+  if (is_schedular_running_) {
+    scheduler_thread_.join();
+    is_schedular_running_ = false;
+  }
 }
 
 void ForeignTableRefreshScheduler::setWaitDuration(int64_t duration_in_seconds) {

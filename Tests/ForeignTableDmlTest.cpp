@@ -3005,6 +3005,13 @@ class ScheduledRefreshTest : public RefreshTests {
     }
   }
 
+  // For some test cases, a wait is done for two refresh cycles in order to ensure
+  // that a refresh is done, at least once, using new file content
+  void waitTwoRefreshCycles() {
+    waitForSchedulerRefresh();
+    waitForSchedulerRefresh();
+  }
+
   inline static const std::string REFRESH_TEST_DIR{"./fsi_scheduled_refresh_test"};
   inline static std::atomic<bool> is_program_running_;
 };
@@ -3016,7 +3023,8 @@ TEST_F(ScheduledRefreshTest, BatchMode) {
   sqlAndCompareResult("SELECT * FROM test_foreign_table;", {{i(0)}});
 
   setTestFile("1.csv");
-  waitForSchedulerRefresh();
+  waitTwoRefreshCycles();
+
   sqlAndCompareResult("SELECT * FROM test_foreign_table;", {{i(1)}});
 }
 
@@ -3027,7 +3035,8 @@ TEST_F(ScheduledRefreshTest, AppendMode) {
   sqlAndCompareResult("SELECT * FROM test_foreign_table;", {{i(1)}});
 
   setTestFile("two_row_1_2.csv");
-  waitForSchedulerRefresh();
+  waitTwoRefreshCycles();
+
   sqlAndCompareResult("SELECT * FROM test_foreign_table;", {{i(1)}, {i(2)}});
 }
 
@@ -3182,11 +3191,10 @@ TEST_F(ScheduledRefreshTest, PreEvictionError) {
   mock_data_wrapper->throwOnMetadataScan(true);
   foreign_storage_mgr->setDataWrapper({catalog.getCurrentDB().dbId, table->tableId},
                                       mock_data_wrapper);
+  setTestFile("1.csv");
+  waitTwoRefreshCycles();
 
   // Assert that stale cached data is still used
-  setTestFile("1.csv");
-  waitForSchedulerRefresh();
-  mock_data_wrapper->throwOnMetadataScan(false);
   sqlAndCompareResult("SELECT * FROM test_foreign_table;", {{i(0)}});
 }
 
