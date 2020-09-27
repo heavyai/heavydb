@@ -654,7 +654,9 @@ int BaselineJoinHashTable::initHashTableOnCpu(
 
   // We can't allocate more than 2GB contiguous memory on GPU and each entry is 4 bytes.
   if (hash_table_size > static_cast<size_t>(std::numeric_limits<int32_t>::max())) {
-    throw TooManyHashEntries();
+    throw TooManyHashEntries(
+        "Hash tables for GPU requiring larger than 2GB contigious memory not supported "
+        "yet");
   }
 
   VLOG(1) << "Initializing CPU Join Hash Table with " << entry_count_
@@ -983,7 +985,9 @@ int BaselineJoinHashTable::initHashTableForDevice(
 
     // We can't allocate more than 2GB contiguous memory on GPU and each entry is 4 bytes.
     if (hash_table_size > static_cast<size_t>(std::numeric_limits<int32_t>::max())) {
-      throw TooManyHashEntries();
+      throw TooManyHashEntries(
+          "Hash tables for GPU requiring larger than 2GB contigious memory not supported "
+          "yet");
     }
 
     VLOG(1) << "Initializing GPU Hash Table for device " << device_id << " with "
