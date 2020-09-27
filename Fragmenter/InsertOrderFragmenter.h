@@ -112,16 +112,6 @@ class InsertOrderFragmenter : public AbstractFragmenter {
   size_t getNumRows() override { return numTuples_; }
   void setNumRows(const size_t numTuples) override { numTuples_ = numTuples; }
 
-  static void updateColumn(const Catalog_Namespace::Catalog* catalog,
-                           const std::string& tab_name,
-                           const std::string& col_name,
-                           const int fragment_id,
-                           const std::vector<uint64_t>& frag_offsets,
-                           const std::vector<ScalarTargetValue>& rhs_values,
-                           const SQLTypeInfo& rhs_type,
-                           const Data_Namespace::MemoryLevel memory_level,
-                           UpdelRoll& updel_roll);
-
   void updateColumn(const Catalog_Namespace::Catalog* catalog,
                     const TableDescriptor* td,
                     const ColumnDescriptor* cd,

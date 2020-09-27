@@ -24,6 +24,7 @@ std::unique_ptr<QueryMemoryDescriptor> QueryCompilationDescriptor::compile(
     const bool has_cardinality_estimation,
     const RelAlgExecutionUnit& ra_exe_unit,
     const std::vector<InputTableInfo>& table_infos,
+    const PlanState::DeletedColumnsMap& deleted_cols_map,
     const ColumnFetcher& column_fetcher,
     const CompilationOptions& co,
     const ExecutionOptions& eo,
@@ -37,6 +38,7 @@ std::unique_ptr<QueryMemoryDescriptor> QueryCompilationDescriptor::compile(
   try {
     std::tie(compilation_result_, query_mem_desc) = executor->compileWorkUnit(
         table_infos,
+        deleted_cols_map,
         ra_exe_unit,
         co,
         eo,
@@ -54,6 +56,7 @@ std::unique_ptr<QueryMemoryDescriptor> QueryCompilationDescriptor::compile(
     }
     std::tie(compilation_result_, query_mem_desc) =
         executor->compileWorkUnit(table_infos,
+                                  deleted_cols_map,
                                   ra_exe_unit,
                                   co,
                                   eo,

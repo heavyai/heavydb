@@ -671,6 +671,7 @@ class Executor {
 
   std::tuple<CompilationResult, std::unique_ptr<QueryMemoryDescriptor>> compileWorkUnit(
       const std::vector<InputTableInfo>& query_infos,
+      const PlanState::DeletedColumnsMap& deleted_cols_map,
       const RelAlgExecutionUnit& ra_exe_unit,
       const CompilationOptions& co,
       const ExecutionOptions& eo,
@@ -744,6 +745,7 @@ class Executor {
       ColumnCacheMap& column_cache);
   void nukeOldState(const bool allow_lazy_fetch,
                     const std::vector<InputTableInfo>& query_infos,
+                    const PlanState::DeletedColumnsMap& deleted_cols_map,
                     const RelAlgExecutionUnit* ra_exe_unit);
 
   std::shared_ptr<CompilationContext> optimizeAndCodegenCPU(
@@ -780,8 +782,9 @@ class Executor {
   llvm::Value* castToFP(llvm::Value* val);
   llvm::Value* castToIntPtrTyIn(llvm::Value* val, const size_t bit_width);
 
-  RelAlgExecutionUnit addDeletedColumn(const RelAlgExecutionUnit& ra_exe_unit,
-                                       const CompilationOptions& co);
+  std::tuple<RelAlgExecutionUnit, PlanState::DeletedColumnsMap> addDeletedColumn(
+      const RelAlgExecutionUnit& ra_exe_unit,
+      const CompilationOptions& co);
 
   std::pair<bool, int64_t> skipFragment(
       const InputDescriptor& table_desc,

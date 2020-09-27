@@ -1213,17 +1213,38 @@ std::string DBHandler::apply_copy_to_shim(const std::string& query_str) {
 void DBHandler::sql_validate(TRowDescriptor& _return,
                              const TSessionId& session,
                              const std::string& query_str) {
-  auto stdlog = STDLOG(get_session_ptr(session));
-  stdlog.appendNameValuePairs("client", getConnectionInfo().toString());
-  auto query_state = create_query_state(stdlog.getSessionInfo(), query_str);
-  stdlog.setQueryState(query_state);
+  try {
+    auto stdlog = STDLOG(get_session_ptr(session));
+    stdlog.appendNameValuePairs("client", getConnectionInfo().toString());
+    auto query_state = create_query_state(stdlog.getSessionInfo(), query_str);
+    stdlog.setQueryState(query_state);
 
-  ParserWrapper pw{query_str};
-  if ((pw.getExplainType() != ParserWrapper::ExplainType::None) || pw.is_ddl ||
-      pw.is_update_dml) {
-    THROW_MAPD_EXCEPTION("Can only validate SELECT statements.");
+    ParserWrapper pw{query_str};
+    if ((pw.getExplainType() != ParserWrapper::ExplainType::None) || pw.is_ddl ||
+        pw.is_update_dml) {
+      throw std::runtime_error("Can only validate SELECT statements.");
+    }
+
+    const auto execute_read_lock = mapd_shared_lock<mapd_shared_mutex>(
+        *legacylockmgr::LockMgr<mapd_shared_mutex, bool>::getMutex(
+            legacylockmgr::ExecutorOuterLock, true));
+
+    TPlanResult parse_result;
+    lockmgr::LockedTableDescriptors locks;
+    std::tie(parse_result, locks) = parse_to_ra(query_state->createQueryStateProxy(),
+                                                query_state->getQueryStr(),
+                                                {},
+                                                true,
+                                                system_parameters_,
+                                                /*check_privileges=*/true);
+    const auto query_ra = parse_result.plan_result;
+
+    const auto result = validate_rel_alg(query_ra, query_state->createQueryStateProxy());
+    _return = fixup_row_descriptor(result.row_set.row_desc,
+                                   query_state->getConstSessionInfo()->getCatalog());
+  } catch (const std::exception& e) {
+    THROW_MAPD_EXCEPTION("Exception: " + std::string(e.what()));
   }
-  DBHandler::validate_rel_alg(_return, query_state->createQueryStateProxy());
 }
 
 namespace {
@@ -1416,43 +1437,28 @@ std::unordered_set<std::string> DBHandler::get_uc_compatible_table_names_by_colu
   return compatible_table_names_by_column;
 }
 
-void DBHandler::validate_rel_alg(TRowDescriptor& _return,
-                                 QueryStateProxy query_state_proxy) {
-  try {
-    const auto execute_read_lock = mapd_shared_lock<mapd_shared_mutex>(
-        *legacylockmgr::LockMgr<mapd_shared_mutex, bool>::getMutex(
-            legacylockmgr::ExecutorOuterLock, true));
-
-    // TODO(adb): for a validate query we do not need write locks, though the lock would
-    // generally be short lived.
-    TPlanResult parse_result;
-    lockmgr::LockedTableDescriptors locks;
-    std::tie(parse_result, locks) =
-        parse_to_ra(query_state_proxy,
-                    query_state_proxy.getQueryState().getQueryStr(),
-                    {},
-                    true,
-                    system_parameters_);
-    const auto query_ra = parse_result.plan_result;
-
-    TQueryResult result;
-    DBHandler::execute_rel_alg(result,
-                               query_state_proxy,
-                               query_ra,
-                               true,
-                               ExecutorDeviceType::CPU,
-                               -1,
-                               -1,
-                               /*just_validate=*/true,
-                               /*find_filter_push_down_candidates=*/false,
-                               ExplainInfo::defaults());
-
-    _return = fixup_row_descriptor(
-        result.row_set.row_desc,
-        query_state_proxy.getQueryState().getConstSessionInfo()->getCatalog());
-  } catch (std::exception& e) {
-    THROW_MAPD_EXCEPTION(std::string("Exception: ") + e.what());
-  }
+TQueryResult DBHandler::validate_rel_alg(const std::string& query_ra,
+                                         QueryStateProxy query_state_proxy) {
+  TQueryResult result;
+  auto execute_rel_alg_task = std::make_shared<QueryDispatchQueue::Task>(
+      [this, &result, &query_state_proxy, &query_ra](const size_t executor_index) {
+        execute_rel_alg(result,
+                        query_state_proxy,
+                        query_ra,
+                        true,
+                        ExecutorDeviceType::CPU,
+                        -1,
+                        -1,
+                        /*just_validate=*/true,
+                        /*find_filter_push_down_candidates=*/false,
+                        ExplainInfo::defaults(),
+                        executor_index);
+      });
+  CHECK(dispatch_queue_);
+  dispatch_queue_->submit(execute_rel_alg_task, /*is_update_delete=*/false);
+  auto result_future = execute_rel_alg_task->get_future();
+  result_future.get();
+  return result;
 }
 
 void DBHandler::get_roles(std::vector<std::string>& roles, const TSessionId& session) {
@@ -1981,17 +1987,9 @@ void DBHandler::get_table_details_impl(TTableDetails& _return,
             have_privileges_on_view_sources = false;
           }
 
-          TQueryResult result;
-          execute_rel_alg(result,
-                          query_state->createQueryStateProxy(),
-                          query_ra.first.plan_result,
-                          true,
-                          ExecutorDeviceType::CPU,
-                          -1,
-                          -1,
-                          /*just_validate=*/true,
-                          /*find_filter_push_down_candidates=*/false,
-                          ExplainInfo::defaults());
+          const auto result = validate_rel_alg(query_ra.first.plan_result,
+                                               query_state->createQueryStateProxy());
+
           _return.row_desc = fixup_row_descriptor(result.row_set.row_desc, cat);
         } else {
           throw std::runtime_error(
@@ -5248,7 +5246,9 @@ void DBHandler::sql_execute_impl(TQueryResult& _return,
           }
         });
     CHECK(dispatch_queue_);
-    dispatch_queue_->submit(execute_rel_alg_task);
+    dispatch_queue_->submit(execute_rel_alg_task,
+                            pw.getDMLType() == ParserWrapper::DMLType::Update ||
+                                pw.getDMLType() == ParserWrapper::DMLType::Delete);
     auto result_future = execute_rel_alg_task->get_future();
     result_future.get();
     return;
@@ -5529,29 +5529,25 @@ std::pair<TPlanResult, lockmgr::LockedTableDescriptors> DBHandler::parse_to_ra(
                     result.resolved_accessed_objects.tables_deleted_from.begin(),
                     result.resolved_accessed_objects.tables_deleted_from.end());
       // avoid deadlocks by enforcing a deterministic locking sequence
+      // first, obtain table schema locks
+      // then, obtain table data locks
       std::sort(tables.begin(), tables.end());
       for (const auto& table : tables) {
-        // first, obtain table schema locks
-        // then, obtain table data locks
+        locks.emplace_back(
+            std::make_unique<lockmgr::TableSchemaLockContainer<lockmgr::ReadLock>>(
+                lockmgr::TableSchemaLockContainer<
+                    lockmgr::ReadLock>::acquireTableDescriptor(*cat.get(), table)));
         if (read_only_tables.count(table)) {
-          locks.emplace_back(
-              std::make_unique<lockmgr::TableSchemaLockContainer<lockmgr::ReadLock>>(
-                  lockmgr::TableSchemaLockContainer<
-                      lockmgr::ReadLock>::acquireTableDescriptor(*cat.get(), table)));
           locks.emplace_back(
               std::make_unique<lockmgr::TableDataLockContainer<lockmgr::ReadLock>>(
                   lockmgr::TableDataLockContainer<lockmgr::ReadLock>::acquire(
                       cat->getDatabaseId(), (*locks.back())())));
         } else {
+          // Aquire an insert data lock for updates/deletes, consistent w/ insert. The
+          // table data lock will be aquired in the fragmenter during checkpoint.
           locks.emplace_back(
-              std::make_unique<lockmgr::TableSchemaLockContainer<lockmgr::WriteLock>>(
-                  lockmgr::TableSchemaLockContainer<
-                      lockmgr::WriteLock>::acquireTableDescriptor(*cat.get(), table)));
-          // TODO(adb): Should we be taking this lock for inserts? Are inserts even
-          // going down this path?
-          locks.emplace_back(
-              std::make_unique<lockmgr::TableDataLockContainer<lockmgr::WriteLock>>(
-                  lockmgr::TableDataLockContainer<lockmgr::WriteLock>::acquire(
+              std::make_unique<lockmgr::TableInsertLockContainer<lockmgr::WriteLock>>(
+                  lockmgr::TableInsertLockContainer<lockmgr::WriteLock>::acquire(
                       cat->getDatabaseId(), (*locks.back())())));
         }
       }

@@ -141,16 +141,21 @@ void update_common(const std::string& table,
   std::vector<uint64_t> fragOffsets;
   std::vector<ScalarTargetValue> rhsValues;
   update_prepare_offsets_values<T>(cnt, step, val, fragOffsets, rhsValues);
-  Fragmenter_Namespace::InsertOrderFragmenter::updateColumn(
-      QR::get()->getCatalog().get(),
-      table,
-      column,
-      0,  // 1st frag since we have only 100 rows
-      fragOffsets,
-      rhsValues,
-      rhsType,
-      Data_Namespace::MemoryLevel::CPU_LEVEL,
-      updelRoll);
+  auto catalog = QR::get()->getCatalog();
+  const auto td = catalog->getMetadataForTable(table);
+  CHECK(td);
+  CHECK(td->fragmenter);
+  const auto cd = catalog->getMetadataForColumn(td->tableId, column);
+  CHECK(cd);
+  td->fragmenter->updateColumn(catalog.get(),
+                               td,
+                               cd,
+                               0,  // 1st frag since we have only 100 rows
+                               fragOffsets,
+                               rhsValues,
+                               rhsType,
+                               Data_Namespace::MemoryLevel::CPU_LEVEL,
+                               updelRoll);
   if (commit) {
     updelRoll.commitUpdate();
   }
@@ -388,16 +393,22 @@ bool prepare_table_for_delete(const std::string& table = "trips",
     rhsValues.emplace_back(ScalarTargetValue(i));
   }
   auto ms = measure<>::execution([&]() {
-    Fragmenter_Namespace::InsertOrderFragmenter::updateColumn(
-        QR::get()->getCatalog().get(),
-        table,
-        column,
-        0,  // 1st frag since we have only 100 rows
-        fragOffsets,
-        rhsValues,
-        SQLTypeInfo(kBIGINT, false),
-        Data_Namespace::MemoryLevel::CPU_LEVEL,
-        updelRoll);
+    auto catalog = QR::get()->getCatalog();
+    const auto td = catalog->getMetadataForTable(table);
+    CHECK(td);
+    CHECK(td->fragmenter);
+    const auto cd = catalog->getMetadataForColumn(td->tableId, column);
+    CHECK(cd);
+
+    td->fragmenter->updateColumn(catalog.get(),
+                                 td,
+                                 cd,
+                                 0,  // 1st frag since we have only 100 rows
+                                 fragOffsets,
+                                 rhsValues,
+                                 SQLTypeInfo(kBIGINT, false),
+                                 Data_Namespace::MemoryLevel::CPU_LEVEL,
+                                 updelRoll);
   });
   if (UpdelTestConfig::showMeasuredTime) {
     VLOG(1) << "time on update " << cnt << " rows:" << ms << " ms";

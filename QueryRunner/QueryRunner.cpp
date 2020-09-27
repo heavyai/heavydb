@@ -589,7 +589,7 @@ std::shared_ptr<ExecutionResult> QueryRunner::runSelectQuery(
             ra_executor.executeRelAlgQuery(co, eo, false, nullptr));
       });
   CHECK(dispatch_queue_);
-  dispatch_queue_->submit(query_launch_task);
+  dispatch_queue_->submit(query_launch_task, /*is_update_delete=*/false);
   auto result_future = query_launch_task->get_future();
   result_future.get();
   CHECK(result);

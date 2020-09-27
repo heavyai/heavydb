@@ -30,8 +30,7 @@
 
 struct CgenState {
  public:
-  CgenState(const std::vector<InputTableInfo>& query_infos,
-            const bool contains_left_deep_outer_join)
+  CgenState(const size_t num_query_infos, const bool contains_left_deep_outer_join)
       : module_(nullptr)
       , row_func_(nullptr)
       , filter_func_(nullptr)
@@ -43,8 +42,18 @@ struct CgenState {
       , context_(getGlobalLLVMContext())
       , ir_builder_(context_)
       , contains_left_deep_outer_join_(contains_left_deep_outer_join)
-      , outer_join_match_found_per_level_(std::max(query_infos.size(), size_t(1)) - 1)
-      , query_infos_(query_infos)
+      , outer_join_match_found_per_level_(std::max(num_query_infos, size_t(1)) - 1)
+      , needs_error_check_(false)
+      , needs_geos_(false)
+      , query_func_(nullptr)
+      , query_func_entry_ir_builder_(context_){};
+
+  CgenState(llvm::LLVMContext& context)
+      : module_(nullptr)
+      , row_func_(nullptr)
+      , context_(context)
+      , ir_builder_(context_)
+      , contains_left_deep_outer_join_(false)
       , needs_error_check_(false)
       , needs_geos_(false)
       , query_func_(nullptr)
@@ -344,7 +353,6 @@ struct CgenState {
   std::unordered_map<int, llvm::Value*> scan_idx_to_hash_pos_;
   InsertionOrderedMap filter_func_args_;
   std::vector<std::unique_ptr<const InValuesBitmap>> in_values_bitmaps_;
-  const std::vector<InputTableInfo>& query_infos_;
   bool needs_error_check_;
   bool needs_geos_;
 

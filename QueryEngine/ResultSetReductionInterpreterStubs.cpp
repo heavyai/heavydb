@@ -183,7 +183,8 @@ StubGenerator::Stub StubGenerator::generateStub(const std::string& name,
     CHECK(cpu_context);
     return reinterpret_cast<StubGenerator::Stub>(cpu_context->func());
   }
-  auto cgen_state = std::make_unique<CgenState>(std::vector<InputTableInfo>{}, false);
+  auto cgen_state = std::make_unique<CgenState>(/*num_query_infos=*/0,
+                                                /*contains_left_deep_outer_join=*/false);
   std::unique_ptr<llvm::Module> module(runtime_module_shallow_copy(cgen_state.get()));
   cgen_state->module_ = module.get();
   const auto function = create_stub_function(stub_name, cgen_state.get());

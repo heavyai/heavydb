@@ -140,7 +140,8 @@ llvm::Value* alloc_column(std::string col_name,
 }  // namespace
 
 TableFunctionCompilationContext::TableFunctionCompilationContext()
-    : cgen_state_(std::make_unique<CgenState>(std::vector<InputTableInfo>{}, false)) {
+    : cgen_state_(std::make_unique<CgenState>(/*num_query_infos=*/0,
+                                              /*contains_left_deep_outer_join=*/false)) {
   auto cgen_state = cgen_state_.get();
   CHECK(cgen_state);
 

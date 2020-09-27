@@ -1383,7 +1383,7 @@ ResultSetPtr Executor::executeWorkUnitImpl(
     const bool has_cardinality_estimation,
     ColumnCacheMap& column_cache) {
   INJECT_TIMER(Exec_executeWorkUnit);
-  const auto ra_exe_unit = addDeletedColumn(ra_exe_unit_in, co);
+  const auto [ra_exe_unit, deleted_cols_map] = addDeletedColumn(ra_exe_unit_in, co);
   const auto device_type = getDeviceTypeForTargets(ra_exe_unit, co.device_type);
   CHECK(!query_infos.empty());
   if (!max_groups_buffer_entry_guess) {
@@ -1413,6 +1413,7 @@ ResultSetPtr Executor::executeWorkUnitImpl(
                                            has_cardinality_estimation,
                                            ra_exe_unit,
                                            query_infos,
+                                           deleted_cols_map,
                                            column_fetcher,
                                            {device_type,
                                             co.hoist_literals,
@@ -1432,7 +1433,7 @@ ResultSetPtr Executor::executeWorkUnitImpl(
         continue;
       }
     } else {
-      plan_state_.reset(new PlanState(false, this));
+      plan_state_.reset(new PlanState(false, query_infos, deleted_cols_map, this));
       plan_state_->allocateLocalColumnIds(ra_exe_unit.input_col_descs);
       CHECK(!query_mem_desc_owned);
       query_mem_desc_owned.reset(
@@ -1529,7 +1530,7 @@ void Executor::executeWorkUnitPerFragment(const RelAlgExecutionUnit& ra_exe_unit
                                           const ExecutionOptions& eo,
                                           const Catalog_Namespace::Catalog& cat,
                                           PerFragmentCallBack& cb) {
-  const auto ra_exe_unit = addDeletedColumn(ra_exe_unit_in, co);
+  const auto [ra_exe_unit, deleted_cols_map] = addDeletedColumn(ra_exe_unit_in, co);
   ColumnCacheMap column_cache;
 
   std::vector<InputTableInfo> table_infos{table_info};
@@ -1548,6 +1549,7 @@ void Executor::executeWorkUnitPerFragment(const RelAlgExecutionUnit& ra_exe_unit
                                        /*has_cardinality_estimation=*/false,
                                        ra_exe_unit,
                                        table_infos,
+                                       deleted_cols_map,
                                        column_fetcher,
                                        co,
                                        eo,
@@ -1600,7 +1602,7 @@ ResultSetPtr Executor::executeTableFunction(
     const ExecutionOptions& eo,
     const Catalog_Namespace::Catalog& cat) {
   INJECT_TIMER(Exec_executeTableFunction);
-  nukeOldState(false, table_infos, nullptr);
+  nukeOldState(false, table_infos, PlanState::DeletedColumnsMap{}, nullptr);
 
   ColumnCacheMap column_cache;  // Note: if we add retries to the table function
                                 // framework, we may want to move this up a level
@@ -3026,6 +3028,7 @@ std::vector<int64_t> Executor::getJoinHashTablePtrs(const ExecutorDeviceType dev
 
 void Executor::nukeOldState(const bool allow_lazy_fetch,
                             const std::vector<InputTableInfo>& query_infos,
+                            const PlanState::DeletedColumnsMap& deleted_cols_map,
                             const RelAlgExecutionUnit* ra_exe_unit) {
   kernel_queue_time_ms_ = 0;
   compilation_queue_time_ms_ = 0;
@@ -3035,9 +3038,11 @@ void Executor::nukeOldState(const bool allow_lazy_fetch,
                                   [](const JoinCondition& join_condition) {
                                     return join_condition.type == JoinType::LEFT;
                                   }) != ra_exe_unit->join_quals.end();
-  cgen_state_.reset(new CgenState(query_infos, contains_left_deep_outer_join));
-  plan_state_.reset(
-      new PlanState(allow_lazy_fetch && !contains_left_deep_outer_join, this));
+  cgen_state_.reset(new CgenState(query_infos.size(), contains_left_deep_outer_join));
+  plan_state_.reset(new PlanState(allow_lazy_fetch && !contains_left_deep_outer_join,
+                                  query_infos,
+                                  deleted_cols_map,
+                                  this));
 }
 
 void Executor::preloadFragOffsets(const std::vector<InputDescriptor>& input_descs,
@@ -3187,12 +3192,14 @@ llvm::Value* Executor::castToIntPtrTyIn(llvm::Value* val, const size_t bitWidth)
 #include "StringFunctions.cpp"
 #undef EXECUTE_INCLUDE
 
-RelAlgExecutionUnit Executor::addDeletedColumn(const RelAlgExecutionUnit& ra_exe_unit,
-                                               const CompilationOptions& co) {
+std::tuple<RelAlgExecutionUnit, PlanState::DeletedColumnsMap> Executor::addDeletedColumn(
+    const RelAlgExecutionUnit& ra_exe_unit,
+    const CompilationOptions& co) {
   if (!co.filter_on_deleted_column) {
-    return ra_exe_unit;
+    return std::make_tuple(ra_exe_unit, PlanState::DeletedColumnsMap{});
   }
   auto ra_exe_unit_with_deleted = ra_exe_unit;
+  PlanState::DeletedColumnsMap deleted_cols_map;
   for (const auto& input_table : ra_exe_unit_with_deleted.input_descs) {
     if (input_table.getSourceType() != InputSourceType::TABLE) {
       continue;
@@ -3217,9 +3224,16 @@ RelAlgExecutionUnit Executor::addDeletedColumn(const RelAlgExecutionUnit& ra_exe
       // add deleted column
       ra_exe_unit_with_deleted.input_col_descs.emplace_back(new InputColDescriptor(
           deleted_cd->columnId, deleted_cd->tableId, input_table.getNestLevel()));
+      auto deleted_cols_it = deleted_cols_map.find(deleted_cd->tableId);
+      if (deleted_cols_it == deleted_cols_map.end()) {
+        CHECK(deleted_cols_map.insert(std::make_pair(deleted_cd->tableId, deleted_cd))
+                  .second);
+      } else {
+        CHECK_EQ(deleted_cd, deleted_cols_it->second);
+      }
     }
   }
-  return ra_exe_unit_with_deleted;
+  return std::make_tuple(ra_exe_unit_with_deleted, deleted_cols_map);
 }
 
 namespace {
@@ -3341,8 +3355,12 @@ std::pair<bool, int64_t> Executor::skipFragment(
         return {false, -1};
       }
     }
-    CodeGenerator code_generator(this);
-    const auto rhs_val = code_generator.codegenIntConst(rhs_const)->getSExtValue();
+    llvm::LLVMContext local_context;
+    CgenState local_cgen_state(local_context);
+    CodeGenerator code_generator(&local_cgen_state, nullptr);
+
+    const auto rhs_val =
+        CodeGenerator::codegenIntConst(rhs_const, &local_cgen_state)->getSExtValue();
 
     switch (comp_expr->get_optype()) {
       case kGE:

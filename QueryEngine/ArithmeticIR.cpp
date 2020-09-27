@@ -197,15 +197,18 @@ bool CodeGenerator::checkExpressionRanges(const Analyzer::BinOper* bin_oper,
     return false;
   }
 
-  auto expr_range_info =
-      cgen_state_->query_infos_.size() > 0
-          ? getExpressionRange(bin_oper, cgen_state_->query_infos_, executor())
-          : ExpressionRange::makeInvalidRange();
-  if (expr_range_info.getType() != ExpressionRangeType::Integer) {
-    return false;
-  }
-  if (expr_range_info.getIntMin() >= min && expr_range_info.getIntMax() <= max) {
-    return true;
+  CHECK(plan_state_);
+  if (executor_) {
+    auto expr_range_info =
+        plan_state_->query_infos_.size() > 0
+            ? getExpressionRange(bin_oper, plan_state_->query_infos_, executor())
+            : ExpressionRange::makeInvalidRange();
+    if (expr_range_info.getType() != ExpressionRangeType::Integer) {
+      return false;
+    }
+    if (expr_range_info.getIntMin() >= min && expr_range_info.getIntMax() <= max) {
+      return true;
+    }
   }
 
   return false;
@@ -567,8 +570,8 @@ llvm::Value* CodeGenerator::codegenDeciDiv(const Analyzer::BinOper* bin_oper,
   if (rhs_constant) {
     const auto rhs_lit = Parser::IntLiteral::analyzeValue(
         rhs_constant->get_constval().bigintval / exp_to_scale(rhs_type.get_scale()));
-    auto rhs_lit_lv =
-        codegenIntConst(dynamic_cast<const Analyzer::Constant*>(rhs_lit.get()));
+    auto rhs_lit_lv = CodeGenerator::codegenIntConst(
+        dynamic_cast<const Analyzer::Constant*>(rhs_lit.get()), cgen_state_);
     rhs_lv = codegenCastBetweenIntTypes(
         rhs_lit_lv, rhs_lit->get_type_info(), lhs_type, /*upscale*/ false);
   } else if (rhs_cast) {
@@ -629,15 +632,18 @@ bool CodeGenerator::checkExpressionRanges(const Analyzer::UOper* uoper,
     return false;
   }
 
-  auto expr_range_info =
-      cgen_state_->query_infos_.size() > 0
-          ? getExpressionRange(uoper, cgen_state_->query_infos_, executor())
-          : ExpressionRange::makeInvalidRange();
-  if (expr_range_info.getType() != ExpressionRangeType::Integer) {
-    return false;
-  }
-  if (expr_range_info.getIntMin() >= min && expr_range_info.getIntMax() <= max) {
-    return true;
+  CHECK(plan_state_);
+  if (executor_) {
+    auto expr_range_info =
+        plan_state_->query_infos_.size() > 0
+            ? getExpressionRange(uoper, plan_state_->query_infos_, executor())
+            : ExpressionRange::makeInvalidRange();
+    if (expr_range_info.getType() != ExpressionRangeType::Integer) {
+      return false;
+    }
+    if (expr_range_info.getIntMin() >= min && expr_range_info.getIntMax() <= max) {
+      return true;
+    }
   }
 
   return false;

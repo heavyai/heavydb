@@ -43,7 +43,7 @@ std::vector<llvm::Value*> CodeGenerator::codegen(const Analyzer::Constant* const
     case kDATE:
     case kINTERVAL_DAY_TIME:
     case kINTERVAL_YEAR_MONTH:
-      return {codegenIntConst(constant)};
+      return {CodeGenerator::codegenIntConst(constant, cgen_state_)};
     case kFLOAT:
       return {llvm::ConstantFP::get(llvm::Type::getFloatTy(cgen_state_->context_),
                                     constant->get_constval().floatval)};
@@ -82,32 +82,34 @@ std::vector<llvm::Value*> CodeGenerator::codegen(const Analyzer::Constant* const
   abort();
 }
 
-llvm::ConstantInt* CodeGenerator::codegenIntConst(const Analyzer::Constant* constant) {
-  AUTOMATIC_IR_METADATA(cgen_state_);
+llvm::ConstantInt* CodeGenerator::codegenIntConst(const Analyzer::Constant* constant,
+                                                  CgenState* cgen_state) {
   const auto& type_info = constant->get_type_info();
   if (constant->get_is_null()) {
-    return cgen_state_->inlineIntNull(type_info);
+    return cgen_state->inlineIntNull(type_info);
   }
   const auto type =
       type_info.is_decimal() ? decimal_to_int_type(type_info) : type_info.get_type();
   switch (type) {
     case kTINYINT:
-      return cgen_state_->llInt(constant->get_constval().tinyintval);
+      return cgen_state->llInt(constant->get_constval().tinyintval);
     case kSMALLINT:
-      return cgen_state_->llInt(constant->get_constval().smallintval);
+      return cgen_state->llInt(constant->get_constval().smallintval);
     case kINT:
-      return cgen_state_->llInt(constant->get_constval().intval);
+      return cgen_state->llInt(constant->get_constval().intval);
     case kBIGINT:
-      return cgen_state_->llInt(constant->get_constval().bigintval);
+      return cgen_state->llInt(constant->get_constval().bigintval);
     case kTIME:
     case kTIMESTAMP:
     case kDATE:
     case kINTERVAL_DAY_TIME:
     case kINTERVAL_YEAR_MONTH:
-      return cgen_state_->llInt(constant->get_constval().bigintval);
+      return cgen_state->llInt(constant->get_constval().bigintval);
     default:
-      abort();
+      UNREACHABLE();
   }
+  UNREACHABLE();
+  return nullptr;
 }
 
 std::vector<llvm::Value*> CodeGenerator::codegenHoistedConstantsLoads(

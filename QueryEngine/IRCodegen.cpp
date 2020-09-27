@@ -440,9 +440,8 @@ Executor::buildIsDeletedCb(const RelAlgExecutionUnit& ra_exe_unit,
   if (input_desc.getSourceType() != InputSourceType::TABLE) {
     return nullptr;
   }
-  const auto td = catalog_->getMetadataForTable(input_desc.getTableId());
-  CHECK(td);
-  const auto deleted_cd = catalog_->getDeletedColumnIfRowsDeleted(td);
+
+  const auto deleted_cd = plan_state_->getDeletedColForTable(input_desc.getTableId());
   if (!deleted_cd) {
     return nullptr;
   }

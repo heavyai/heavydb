@@ -159,7 +159,8 @@ std::unique_ptr<InValuesBitmap> CodeGenerator::createInValuesBitmap(
               out_vals.push_back(string_id);
             }
           } else {
-            out_vals.push_back(codegenIntConst(in_val_const)->getSExtValue());
+            out_vals.push_back(CodeGenerator::codegenIntConst(in_val_const, cgen_state_)
+                                   ->getSExtValue());
           }
         }
         return true;

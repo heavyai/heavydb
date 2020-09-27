@@ -25,6 +25,7 @@
 #include "DataMgr/DataMgr.h"
 #include "DataMgr/FixedLengthArrayNoneEncoder.h"
 #include "Fragmenter/InsertOrderFragmenter.h"
+#include "LockMgr/LockMgr.h"
 #include "Logger/Logger.h"
 #include "QueryEngine/Execute.h"
 #include "QueryEngine/TargetValue.h"
@@ -49,30 +50,6 @@ inline bool is_integral(const SQLTypeInfo& t) {
 }
 
 bool FragmentInfo::unconditionalVacuum_{false};
-
-void InsertOrderFragmenter::updateColumn(const Catalog_Namespace::Catalog* catalog,
-                                         const std::string& tab_name,
-                                         const std::string& col_name,
-                                         const int fragment_id,
-                                         const std::vector<uint64_t>& frag_offsets,
-                                         const std::vector<ScalarTargetValue>& rhs_values,
-                                         const SQLTypeInfo& rhs_type,
-                                         const Data_Namespace::MemoryLevel memory_level,
-                                         UpdelRoll& updel_roll) {
-  const auto td = catalog->getMetadataForTable(tab_name);
-  CHECK(td);
-  const auto cd = catalog->getMetadataForColumn(td->tableId, col_name);
-  CHECK(cd);
-  td->fragmenter->updateColumn(catalog,
-                               td,
-                               cd,
-                               fragment_id,
-                               frag_offsets,
-                               rhs_values,
-                               rhs_type,
-                               memory_level,
-                               updel_roll);
-}
 
 void InsertOrderFragmenter::updateColumn(const Catalog_Namespace::Catalog* catalog,
                                          const TableDescriptor* td,
@@ -973,9 +950,6 @@ void InsertOrderFragmenter::updateColumnMetadata(const ColumnDescriptor* cd,
     update_stats(min_int64t_per_chunk, max_int64t_per_chunk, has_null_per_chunk);
   }
   buffer->getEncoder()->getMetadata(chunkMetadata[cd->columnId]);
-
-  // removed as @alex suggests. keep it commented in case of any chance to revisit
-  // it once after vacuum code is introduced. fragment.invalidateChunkMetadataMap();
 }
 
 void InsertOrderFragmenter::updateMetadata(const Catalog_Namespace::Catalog* catalog,
@@ -1315,6 +1289,9 @@ void UpdelRoll::commitUpdate() {
   }
   const auto td = catalog->getMetadataForTable(logicalTableId);
   CHECK(td);
+  ChunkKey chunk_key{catalog->getDatabaseId(), td->tableId};
+  const auto table_lock = lockmgr::TableDataLockMgr::getWriteLockForTable(chunk_key);
+
   // checkpoint all shards regardless, or epoch becomes out of sync
   if (td->persistenceLevel == Data_Namespace::MemoryLevel::DISK_LEVEL) {
     catalog->checkpoint(logicalTableId);
@@ -1338,8 +1315,11 @@ void UpdelRoll::cancelUpdate() {
     return;
   }
 
+  // TODO: needed?
+  ChunkKey chunk_key{catalog->getDatabaseId(), logicalTableId};
+  const auto table_lock = lockmgr::TableDataLockMgr::getWriteLockForTable(chunk_key);
   if (is_varlen_update) {
-    int databaseId = catalog->getCurrentDB().dbId;
+    int databaseId = catalog->getDatabaseId();
     int32_t tableEpoch = catalog->getTableEpoch(databaseId, logicalTableId);
 
     dirtyChunks.clear();

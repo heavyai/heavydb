@@ -226,9 +226,7 @@ void QueryFragmentDescriptor::buildFragmentPerKernelMapForUnion(
     ChunkMetadataVector deleted_chunk_metadata_vec;
     if (table_id > 0) {
       // Temporary tables will not have a table descriptor and not have deleted rows.
-      const auto td = catalog->getMetadataForTable(table_id);
-      CHECK(td);
-      auto deleted_cd = catalog->getDeletedColumnIfRowsDeleted(td);
+      const auto deleted_cd = executor->plan_state_->getDeletedColForTable(table_id);
       if (deleted_cd) {
         ChunkKey chunk_key_prefix = {
             catalog->getCurrentDB().dbId, table_id, deleted_cd->columnId};
@@ -284,9 +282,7 @@ void QueryFragmentDescriptor::buildFragmentPerKernelMap(
 
   if (outer_table_id > 0) {
     // Temporary tables will not have a table descriptor and not have deleted rows.
-    const auto td = catalog->getMetadataForTable(outer_table_id);
-    CHECK(td);
-    const auto deleted_cd = catalog->getDeletedColumnIfRowsDeleted(td);
+    const auto deleted_cd = executor->plan_state_->getDeletedColForTable(outer_table_id);
     if (deleted_cd) {
       ChunkKey chunk_key_prefix = {
           catalog->getCurrentDB().dbId, outer_table_id, deleted_cd->columnId};

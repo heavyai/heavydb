@@ -215,6 +215,55 @@ class TableDataLockContainer<ReadLock>
       , TableLockContainerImpl(obj->tableName) {}
 };
 
+template <typename LOCK_TYPE>
+class TableInsertLockContainer
+    : public LockContainerImpl<const TableDescriptor*, LOCK_TYPE>,
+      public TableLockContainerImpl {
+  static_assert(std::is_same<LOCK_TYPE, ReadLock>::value ||
+                std::is_same<LOCK_TYPE, WriteLock>::value);
+
+ public:
+  TableInsertLockContainer(const TableInsertLockContainer&) = delete;  // non-copyable
+};
+
+template <>
+class TableInsertLockContainer<WriteLock>
+    : public LockContainerImpl<const TableDescriptor*, WriteLock>,
+      public TableLockContainerImpl {
+ public:
+  static auto acquire(const int db_id, const TableDescriptor* td) {
+    CHECK(td);
+    ChunkKey chunk_key{db_id, td->tableId};
+    VLOG(1) << "Acquiring Table Insert Write Lock for table: " << td->tableName;
+    return TableInsertLockContainer<WriteLock>(
+        td, InsertDataLockMgr::getWriteLockForTable(chunk_key));
+  }
+
+ private:
+  TableInsertLockContainer<WriteLock>(const TableDescriptor* obj, WriteLock&& lock)
+      : LockContainerImpl<const TableDescriptor*, WriteLock>(obj, std::move(lock))
+      , TableLockContainerImpl(obj->tableName) {}
+};
+
+template <>
+class TableInsertLockContainer<ReadLock>
+    : public LockContainerImpl<const TableDescriptor*, ReadLock>,
+      public TableLockContainerImpl {
+ public:
+  static auto acquire(const int db_id, const TableDescriptor* td) {
+    CHECK(td);
+    ChunkKey chunk_key{db_id, td->tableId};
+    VLOG(1) << "Acquiring Table Insert Read Lock for table: " << td->tableName;
+    return TableInsertLockContainer<ReadLock>(
+        td, InsertDataLockMgr::getReadLockForTable(chunk_key));
+  }
+
+ private:
+  TableInsertLockContainer<ReadLock>(const TableDescriptor* obj, ReadLock&& lock)
+      : LockContainerImpl<const TableDescriptor*, ReadLock>(obj, std::move(lock))
+      , TableLockContainerImpl(obj->tableName) {}
+};
+
 using LockedTableDescriptors =
     std::vector<std::unique_ptr<lockmgr::AbstractLockContainer<const TableDescriptor*>>>;
 

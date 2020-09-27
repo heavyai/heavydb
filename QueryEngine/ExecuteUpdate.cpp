@@ -68,9 +68,10 @@ void Executor::executeUpdate(const RelAlgExecutionUnit& ra_exe_unit_in,
                              const UpdateLogForFragment::Callback& cb,
                              const bool is_agg) {
   CHECK(cb);
-  VLOG(1) << "Executing update/delete work unit:" << ra_exe_unit_in;
+  VLOG(1) << "Executor " << executor_id_
+          << " is executing update/delete work unit:" << ra_exe_unit_in;
 
-  const auto ra_exe_unit = addDeletedColumn(ra_exe_unit_in, co);
+  const auto [ra_exe_unit, deleted_cols_map] = addDeletedColumn(ra_exe_unit_in, co);
   ColumnCacheMap column_cache;
 
   ColumnFetcher column_fetcher(this, column_cache);
@@ -118,6 +119,7 @@ void Executor::executeUpdate(const RelAlgExecutionUnit& ra_exe_unit_in,
                                               /*has_cardinality_estimation=*/true,
                                               ra_exe_unit,
                                               table_infos,
+                                              deleted_cols_map,
                                               column_fetcher,
                                               co,
                                               eo,

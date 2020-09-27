@@ -74,7 +74,8 @@ ScalarCodeGenerator::CompiledExpression ScalarCodeGenerator::compile(
     const Analyzer::Expr* expr,
     const bool fetch_columns,
     const CompilationOptions& co) {
-  own_plan_state_ = std::make_unique<PlanState>(false, nullptr);
+  own_plan_state_ = std::make_unique<PlanState>(
+      false, std::vector<InputTableInfo>{}, PlanState::DeletedColumnsMap{}, nullptr);
   plan_state_ = own_plan_state_.get();
   const auto used_columns = prepare(expr);
   std::vector<llvm::Type*> arg_types(plan_state_->global_to_local_col_ids_.size() + 1);
@@ -95,7 +96,7 @@ ScalarCodeGenerator::CompiledExpression ScalarCodeGenerator::compile(
   auto scalar_expr_func = llvm::Function::Create(
       ft, llvm::Function::ExternalLinkage, "scalar_expr", module_.get());
   auto bb_entry = llvm::BasicBlock::Create(ctx, ".entry", scalar_expr_func, 0);
-  own_cgen_state_ = std::make_unique<CgenState>(g_table_infos, false);
+  own_cgen_state_ = std::make_unique<CgenState>(g_table_infos.size(), false);
   own_cgen_state_->module_ = module_.get();
   own_cgen_state_->row_func_ = own_cgen_state_->current_func_ = scalar_expr_func;
   own_cgen_state_->ir_builder_.SetInsertPoint(bb_entry);

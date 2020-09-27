@@ -19,6 +19,7 @@
 #include <future>
 
 #include "Fragmenter/InsertOrderFragmenter.h"
+#include "LockMgr/LockMgr.h"
 #include "QueryEngine/CodeGenerator.h"
 #include "QueryEngine/ExternalCacheInvalidators.h"
 #include "QueryEngine/InputMetadata.h"
@@ -172,6 +173,11 @@ StorageIOFacility<EXECUTOR_TRAITS, FRAGMENT_UPDATER>::yieldUpdateCallback(
       // Temporary table updates require the full projected column
       CHECK_EQ(rs->rowCount(), update_log.getRowCount());
 
+      ChunkKey chunk_key_prefix{catalog_.getCurrentDB().dbId,
+                                update_parameters.getTableDescriptor()->tableId};
+      const auto table_lock =
+          lockmgr::TableDataLockMgr::getWriteLockForTable(chunk_key_prefix);
+
       auto& fragment_info = update_log.getFragmentInfo();
       const auto td = catalog_.getMetadataForTable(update_log.getPhysicalTableId());
       CHECK(td);
@@ -203,6 +209,7 @@ StorageIOFacility<EXECUTOR_TRAITS, FRAGMENT_UPDATER>::yieldUpdateCallback(
           StorageIOFacility<EXECUTOR_TRAITS, FRAGMENT_UPDATER>::getRsBufferNoPadding(
               rs.get(), 0, cd->columnType, rs->rowCount());
       auto buffer = reinterpret_cast<int8_t*>(owned_buffer.get());
+
       const auto new_chunk_metadata =
           encoder->appendData(buffer, rs->rowCount(), cd->columnType, false, 0);
       CHECK(new_chunk_metadata);
@@ -372,6 +379,11 @@ StorageIOFacility<EXECUTOR_TRAITS, FRAGMENT_UPDATER>::yieldDeleteCallback(
 
       // Temporary table updates require the full projected column
       CHECK_EQ(rs->rowCount(), update_log.getRowCount());
+
+      ChunkKey chunk_key_prefix{catalog_.getCurrentDB().dbId,
+                                update_log.getPhysicalTableId()};
+      const auto table_lock =
+          lockmgr::TableDataLockMgr::getWriteLockForTable(chunk_key_prefix);
 
       auto& fragment_info = update_log.getFragmentInfo();
       const auto td = catalog_.getMetadataForTable(update_log.getPhysicalTableId());

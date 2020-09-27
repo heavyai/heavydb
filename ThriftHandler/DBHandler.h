@@ -636,7 +636,8 @@ class DBHandler : public OmniSciIf {
   void execute_distributed_copy_statement(
       Parser::CopyTableStmt*,
       const Catalog_Namespace::SessionInfo& session_info);
-  void validate_rel_alg(TRowDescriptor& _return, QueryStateProxy);
+
+  TQueryResult validate_rel_alg(const std::string& query_ra, QueryStateProxy);
 
   std::vector<PushedDownFilterInfo> execute_rel_alg(
       TQueryResult& _return,

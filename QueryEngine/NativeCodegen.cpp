@@ -2072,6 +2072,7 @@ std::string serialize_llvm_metadata_footnotes(llvm::Function* query_func,
 
 std::tuple<CompilationResult, std::unique_ptr<QueryMemoryDescriptor>>
 Executor::compileWorkUnit(const std::vector<InputTableInfo>& query_infos,
+                          const PlanState::DeletedColumnsMap& deleted_cols_map,
                           const RelAlgExecutionUnit& ra_exe_unit,
                           const CompilationOptions& co,
                           const ExecutionOptions& eo,
@@ -2094,7 +2095,7 @@ Executor::compileWorkUnit(const std::vector<InputTableInfo>& query_infos,
   LOG(ASM) << "CODEGEN #" << counter << ":";
 #endif
 
-  nukeOldState(allow_lazy_fetch, query_infos, &ra_exe_unit);
+  nukeOldState(allow_lazy_fetch, query_infos, deleted_cols_map, &ra_exe_unit);
 
   GroupByAndAggregate group_by_and_aggregate(
       this,
@@ -2471,9 +2472,8 @@ llvm::BasicBlock* Executor::codegenSkipDeletedOuterTableRow(
   if (outer_input_desc.getSourceType() != InputSourceType::TABLE) {
     return nullptr;
   }
-  const auto td = catalog_->getMetadataForTable(outer_input_desc.getTableId());
-  CHECK(td);
-  const auto deleted_cd = catalog_->getDeletedColumnIfRowsDeleted(td);
+  const auto deleted_cd =
+      plan_state_->getDeletedColForTable(outer_input_desc.getTableId());
   if (!deleted_cd) {
     return nullptr;
   }

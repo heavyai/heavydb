@@ -15,6 +15,7 @@
  */
 package com.mapd.tests;
 
+import org.apache.commons.cli.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -48,9 +49,20 @@ public class UpdateDeleteInsertConcurrencyTest {
           "p"};
 
   public static void main(String[] args) throws Exception {
+    Options options = new Options();
+    options.addOption(Option.builder("t")
+                              .longOpt("temptables")
+                              .desc("Use temporary tables for test")
+                              .build());
+    CommandLineParser clp = new DefaultParser();
+    final CommandLine commandLine = clp.parse(options, args);
+
+    Boolean useTemporaryTables = commandLine.hasOption("temptables");
     UpdateDeleteInsertConcurrencyTest test = new UpdateDeleteInsertConcurrencyTest();
-    test.testUpdateDeleteInsertConcurrency();
+    test.testUpdateDeleteInsertConcurrency(useTemporaryTables);
   }
+
+  private Boolean useTemporaryTables_ = false;
 
   private void runTest(String db,
           String dbaUser,
@@ -70,7 +82,9 @@ public class UpdateDeleteInsertConcurrencyTest {
         try {
           MapdTestClient dba =
                   MapdTestClient.getClient("localhost", 6274, db, dbaUser, dbaPassword);
-          dba.runSql("CREATE TABLE " + tableName
+          final String createPrefix =
+                  useTemporaryTables_ ? "CREATE TEMPORARY TABLE " : "CREATE TABLE ";
+          dba.runSql(createPrefix + tableName
                   + "(x BIGINT, y INTEGER, z SMALLINT, a TINYINT, f FLOAT, d DOUBLE, deci DECIMAL(18,6), str TEXT ENCODING NONE) WITH (FRAGMENT_SIZE = "
                   + fragment_size + ")");
           if (!concurrentInserts) {
@@ -208,9 +222,14 @@ public class UpdateDeleteInsertConcurrencyTest {
     }
   }
 
-  public void testUpdateDeleteInsertConcurrency() throws Exception {
+  public void testUpdateDeleteInsertConcurrency(Boolean useTemporaryTables)
+          throws Exception {
     logger.info("testUpdateDeleteInsertConcurrency()");
 
+    useTemporaryTables_ = useTemporaryTables;
+    if (useTemporaryTables_) {
+      logger.info("Using temporary tables");
+    }
     MapdTestClient su = MapdTestClient.getClient(
             "localhost", 6274, "omnisci", "admin", "HyperInteractive");
     su.runSql("CREATE USER dba (password = 'password', is_super = 'true');");

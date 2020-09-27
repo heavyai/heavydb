@@ -27,6 +27,7 @@
 #include "QueryEngine/ColumnFetcher.h"
 #include "QueryEngine/CompilationContext.h"
 #include "QueryEngine/GpuSharedMemoryContext.h"
+#include "QueryEngine/PlanState.h"
 
 struct CompilationResult {
   std::shared_ptr<CompilationContext> generated_code;
@@ -49,6 +50,7 @@ class QueryCompilationDescriptor {
       const bool has_cardinality_estimation,
       const RelAlgExecutionUnit& ra_exe_unit,
       const std::vector<InputTableInfo>& table_infos,
+      const PlanState::DeletedColumnsMap& deleted_cols_map,
       const ColumnFetcher& column_fetcher,
       const CompilationOptions& co,
       const ExecutionOptions& eo,

@@ -43,7 +43,19 @@ class QueryDispatchQueue {
    * expected to maintain a copy of the shared_ptr which will be used to access results
    * once the task runs.
    */
-  void submit(std::shared_ptr<Task> task) {
+  void submit(std::shared_ptr<Task> task, const bool is_update_delete) {
+    if (workers_.size() == 1 && is_update_delete) {
+      std::lock_guard<decltype(update_delete_mutex_)> update_delete_lock(
+          update_delete_mutex_);
+      CHECK(task);
+      // We only have 1 worker. Run this task on the calling thread on a special, second
+      // worker. The task is under the update delete lock, so we don't have to worry about
+      // contention on the special worker. This protects against deadlocks should the
+      // query running (or any pending queries) hold a read lock on something that
+      // requires a write lock during update/delete.
+      (*task)(2);
+      return;
+    }
     std::unique_lock<decltype(queue_mutex_)> lock(queue_mutex_);
 
     LOG(INFO) << "Dispatching query with " << queue_.size() << " queries in the queue.";
@@ -77,7 +89,8 @@ class QueryDispatchQueue {
         auto task = queue_.front();
         queue_.pop();
 
-        LOG(INFO) << "Running query and returning control. There are now "
+        LOG(INFO) << "Worker " << worker_idx
+                  << " running query and returning control. There are now "
                   << queue_.size() << " queries in the queue.";
         // allow other threads to pick up tasks
         lock.unlock();
@@ -92,6 +105,8 @@ class QueryDispatchQueue {
 
   std::mutex queue_mutex_;
   std::condition_variable cv_;
+
+  std::mutex update_delete_mutex_;
 
   bool threads_should_exit_{false};
   std::queue<std::shared_ptr<Task>> queue_;

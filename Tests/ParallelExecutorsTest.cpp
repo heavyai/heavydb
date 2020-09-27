@@ -33,6 +33,7 @@
 
 bool g_keep_data{false};
 size_t g_max_num_executors{8};
+size_t g_num_tables{25};
 
 extern bool g_is_test_env;
 
@@ -235,8 +236,6 @@ TEST_F(SingleTableTestEnv, AllTables) {
   }
 }
 
-size_t g_num_tables{50};
-
 class MultiTableTestEnv : public ::testing::Test {
  protected:
   void SetUp() override {
@@ -282,6 +281,320 @@ TEST_F(MultiTableTestEnv, AllTables) {
       });
       LOG(ERROR) << "Finished execution with " << g_num_tables << " tables, " << i
                  << " executors, " << execution_time << " ms.";
+    }
+  }
+}
+
+class UpdateDeleteTestEnv : public ::testing::Test {
+ protected:
+  void SetUp() override {
+    for (size_t i = 0; i < g_max_num_executors * 2; i++) {
+      build_table("test_parallel_" + std::to_string(i));
+    }
+
+    if (!skip_tests(ExecutorDeviceType::GPU)) {
+      // warm up the PTX JIT
+      run_simple_agg("SELECT COUNT(*) FROM test_parallel_0;", ExecutorDeviceType::GPU);
+    }
+  }
+
+  void TearDown() override {
+    if (!g_keep_data) {
+      for (size_t i = 0; i < g_max_num_executors * 2; i++) {
+        run_ddl_statement("DROP TABLE IF EXISTS test_parallel_" + std::to_string(i) +
+                          ";");
+      }
+    }
+  }
+
+ public:
+  size_t num_tables{g_max_num_executors * 2};
+};
+
+TEST_F(UpdateDeleteTestEnv, Delete_OneTable) {
+  const size_t iterations = 5;
+  QR::get()->resizeDispatchQueue(g_max_num_executors);
+
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+
+    for (size_t i = 0; i < iterations; i++) {
+      std::vector<std::future<void>> worker_threads;
+      auto execution_time = measure<>::execution([&]() {
+        // three readers, one writer
+        for (size_t j = 0; j < 4; j++) {
+          worker_threads.push_back(std::async(
+              std::launch::async,
+              [j](const std::string& table_name, const ExecutorDeviceType dt) {
+                if (j == 0) {
+                  // run insert, then delete
+                  QR::get()->runSQL(
+                      "INSERT INTO " + table_name +
+                          " VALUES(1, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL);",
+                      ExecutorDeviceType::CPU);
+                  QR::get()->runSQL("DELETE FROM " + table_name + " WHERE i64 = 1;",
+                                    ExecutorDeviceType::CPU);
+                  EXPECT_EQ(
+                      0,
+                      v<int64_t>(run_simple_agg(
+                          "SELECT COUNT(*) FROM " + table_name + " WHERE i64 = 1;", dt)));
+                } else {
+                  // run select
+                  EXPECT_DOUBLE_EQ(
+                      double(1.0001),
+                      v<double>(run_simple_agg(
+                          "SELECT MIN(d) FROM " + table_name + " WHERE i1 IS NOT NULL;",
+                          dt)));
+                }
+              },
+              "test_parallel_0",
+              dt));
+        }
+        for (auto& t : worker_threads) {
+          t.get();
+        }
+      });
+      LOG(ERROR) << "Finished execution of iteration " << i << " , " << execution_time
+                 << " ms.";
+    }
+  }
+}
+
+TEST_F(UpdateDeleteTestEnv, Delete_TwoTables) {
+  QR::get()->resizeDispatchQueue(g_max_num_executors);
+
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+
+    std::vector<std::future<void>> worker_threads;
+    // three readers, one writer
+    for (size_t j = 0; j < 4; j++) {
+      worker_threads.push_back(std::async(
+          std::launch::async,
+          [j](const std::string& select_table_name,
+              const std::string& delete_table_name,
+              const ExecutorDeviceType dt) {
+            if (j == 0) {
+              // run insert, then delete
+              QR::get()->runSQL(
+                  "INSERT INTO " + delete_table_name +
+                      " VALUES(1, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL);",
+                  ExecutorDeviceType::CPU);
+              QR::get()->runSQL("DELETE FROM " + delete_table_name + " WHERE i64 = 1;",
+                                ExecutorDeviceType::CPU);
+              EXPECT_EQ(
+                  0,
+                  v<int64_t>(run_simple_agg(
+                      "SELECT COUNT(*) FROM " + delete_table_name + " WHERE i64 = 1;",
+                      dt)));
+            } else {
+              // run select
+              run_sql_execute_test(select_table_name, dt);
+            }
+          },
+          "test_parallel_0",
+          "test_parallel_1",
+          dt));
+    }
+    for (auto& t : worker_threads) {
+      t.get();
+    }
+  }
+}
+
+TEST_F(UpdateDeleteTestEnv, Update_OneTable) {
+  const size_t iterations = 5;
+  QR::get()->resizeDispatchQueue(g_max_num_executors);
+
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+
+    for (size_t i = 0; i < iterations; i++) {
+      std::vector<std::future<void>> worker_threads;
+      auto execution_time = measure<>::execution([&]() {
+        // three readers, one writer
+        for (size_t j = 0; j < 4; j++) {
+          worker_threads.push_back(std::async(
+              std::launch::async,
+              [i, j](const std::string& table_name, const ExecutorDeviceType dt) {
+                if (j == 0) {
+                  // run insert, then delete
+                  QR::get()->runSQL(
+                      "INSERT INTO " + table_name +
+                          " VALUES(1, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL);",
+                      ExecutorDeviceType::CPU);
+                  QR::get()->runSQL(
+                      "UPDATE " + table_name + " SET i64 = -1 WHERE i64 = 1;",
+                      ExecutorDeviceType::CPU);
+                  EXPECT_EQ(
+                      0,
+                      v<int64_t>(run_simple_agg(
+                          "SELECT COUNT(*) FROM " + table_name + " WHERE i64 = 1;", dt)));
+                } else {
+                  // run select
+                  EXPECT_DOUBLE_EQ(
+                      double(1.0001),
+                      v<double>(run_simple_agg(
+                          "SELECT MIN(d) FROM " + table_name + " WHERE i1 IS NOT NULL;",
+                          dt)));
+                }
+              },
+              "test_parallel_0",
+              dt));
+        }
+        for (auto& t : worker_threads) {
+          t.get();
+        }
+      });
+      LOG(ERROR) << "Finished execution of iteration " << i << " , " << execution_time
+                 << " ms.";
+    }
+  }
+}
+
+TEST_F(UpdateDeleteTestEnv, Update_OneTableVarlen) {
+  const size_t iterations = 5;
+  QR::get()->resizeDispatchQueue(g_max_num_executors);
+
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+
+    for (size_t i = 0; i < iterations; i++) {
+      std::vector<std::future<void>> worker_threads;
+      auto execution_time = measure<>::execution([&]() {
+        // three readers, one writer
+        for (size_t j = 0; j < 4; j++) {
+          worker_threads.push_back(std::async(
+              std::launch::async,
+              [j](const std::string& table_name, const ExecutorDeviceType dt) {
+                if (j == 0) {
+                  // run insert, then delete
+                  QR::get()->runSQL(
+                      "INSERT INTO " + table_name +
+                          " VALUES(1, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL);",
+                      ExecutorDeviceType::CPU);
+                  QR::get()->runSQL("UPDATE " + table_name +
+                                        " SET arri64 = ARRAY[1,2,3] WHERE i64 = 1;",
+                                    ExecutorDeviceType::CPU);
+                  EXPECT_EQ(
+                      1,
+                      v<int64_t>(run_simple_agg(
+                          "SELECT COUNT(*) FROM " + table_name + " WHERE i64 = 1;", dt)));
+                  QR::get()->runSQL("UPDATE " + table_name +
+                                        " SET arri64 = ARRAY[1,2,3] WHERE i64 = 1;",
+                                    ExecutorDeviceType::CPU);
+                  QR::get()->runSQL("DELETE FROM " + table_name + " WHERE i64 = 1;",
+                                    ExecutorDeviceType::CPU);
+                } else {
+                  // run select
+                  EXPECT_DOUBLE_EQ(
+                      double(1.0001),
+                      v<double>(run_simple_agg(
+                          "SELECT MIN(d) FROM " + table_name + " WHERE i1 IS NOT NULL;",
+                          dt)));
+                }
+              },
+              "test_parallel_0",
+              dt));
+        }
+        for (auto& t : worker_threads) {
+          t.get();
+        }
+      });
+      LOG(ERROR) << "Finished execution of iteration " << i << " , " << execution_time
+                 << " ms.";
+    }
+  }
+}
+
+TEST_F(UpdateDeleteTestEnv, Update_TwoTables) {
+  QR::get()->resizeDispatchQueue(g_max_num_executors);
+
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+
+    std::vector<std::future<void>> worker_threads;
+    // three readers, one writer
+    for (size_t j = 0; j < 4; j++) {
+      worker_threads.push_back(std::async(
+          std::launch::async,
+          [j](const std::string& select_table_name,
+              const std::string& delete_table_name,
+              const ExecutorDeviceType dt) {
+            if (j == 0) {
+              // run insert, then delete
+              QR::get()->runSQL(
+                  "INSERT INTO " + delete_table_name +
+                      " VALUES(1, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL);",
+                  ExecutorDeviceType::CPU);
+              QR::get()->runSQL(
+                  "UPDATE " + delete_table_name + " SET i64 = -1 WHERE i64 = 1;",
+                  ExecutorDeviceType::CPU);
+              EXPECT_EQ(
+                  0,
+                  v<int64_t>(run_simple_agg(
+                      "SELECT COUNT(*) FROM " + delete_table_name + " WHERE i64 = 1;",
+                      dt)));
+            } else {
+              // run select
+              run_sql_execute_test(select_table_name, dt);
+            }
+          },
+          "test_parallel_0",
+          "test_parallel_1",
+          dt));
+    }
+    for (auto& t : worker_threads) {
+      t.get();
+    }
+  }
+}
+
+TEST_F(UpdateDeleteTestEnv, UpdateDelete_TwoTables) {
+  QR::get()->resizeDispatchQueue(g_max_num_executors);
+
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+
+    std::vector<std::future<void>> worker_threads;
+    // three readers, one delete, one update
+    for (size_t j = 0; j < 5; j++) {
+      worker_threads.push_back(std::async(
+          std::launch::async,
+          [j](const std::string& update_table_name,
+              const std::string& delete_table_name,
+              const ExecutorDeviceType dt) {
+            if (j == 0) {
+              // run insert, then delete
+              QR::get()->runSQL(
+                  "INSERT INTO " + delete_table_name +
+                      " VALUES(1, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL);",
+                  ExecutorDeviceType::CPU);
+              QR::get()->runSQL("DELETE FROM " + delete_table_name + " WHERE i64 = 1;",
+                                ExecutorDeviceType::CPU);
+              EXPECT_EQ(
+                  0,
+                  v<int64_t>(run_simple_agg(
+                      "SELECT COUNT(*) FROM " + delete_table_name + " WHERE i64 = 1;",
+                      dt)));
+            } else if (j == 1) {
+              QR::get()->runSQL(
+                  "UPDATE " + update_table_name + " SET i32 = -1 WHERE i64 = 500;", dt);
+            } else {
+              // run select
+              EXPECT_DOUBLE_EQ(
+                  double(1.0001),
+                  v<double>(run_simple_agg("SELECT MIN(d) FROM " + update_table_name +
+                                               " WHERE i1 IS NOT NULL;",
+                                           dt)));
+            }
+          },
+          "test_parallel_0",
+          "test_parallel_1",
+          dt));
+    }
+    for (auto& t : worker_threads) {
+      t.get();
     }
   }
 }

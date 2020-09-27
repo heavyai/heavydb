@@ -51,7 +51,6 @@
 #include "Catalog/TableDescriptor.h"
 #include "Catalog/Types.h"
 #include "DataMgr/DataMgr.h"
-#include "LockMgr/LockMgrImpl.h"
 #include "QueryEngine/CompilationOptions.h"
 #include "Shared/mapd_shared_mutex.h"
 #include "SqliteConnector/SqliteConnector.h"

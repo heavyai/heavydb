@@ -39,13 +39,19 @@ struct JoinInfo {
 };
 
 struct PlanState {
-  PlanState(const bool allow_lazy_fetch, const Executor* executor)
-      : allow_lazy_fetch_(allow_lazy_fetch)
-      , join_info_({std::vector<std::shared_ptr<Analyzer::BinOper>>{}, {}})
-      , executor_(executor) {}
-
   using TableId = int;
   using ColumnId = int;
+  using DeletedColumnsMap = std::unordered_map<TableId, const ColumnDescriptor*>;
+
+  PlanState(const bool allow_lazy_fetch,
+            const std::vector<InputTableInfo>& query_infos,
+            const DeletedColumnsMap& deleted_columns,
+            const Executor* executor)
+      : allow_lazy_fetch_(allow_lazy_fetch)
+      , join_info_({std::vector<std::shared_ptr<Analyzer::BinOper>>{}, {}})
+      , deleted_columns_(deleted_columns)
+      , query_infos_(query_infos)
+      , executor_(executor) {}
 
   std::vector<int64_t> init_agg_vals_;
   std::vector<Analyzer::Expr*> target_exprs_;
@@ -54,6 +60,8 @@ struct PlanState {
   std::set<std::pair<TableId, ColumnId>> columns_to_not_fetch_;
   bool allow_lazy_fetch_;
   JoinInfo join_info_;
+  const DeletedColumnsMap deleted_columns_;
+  const std::vector<InputTableInfo>& query_infos_;
   const Executor* executor_;
 
   void allocateLocalColumnIds(
@@ -69,5 +77,13 @@ struct PlanState {
                                col_desc.getColId(),
                                col_desc.getScanDesc().getNestLevel());
     return isLazyFetchColumn(&column);
+  }
+
+  const ColumnDescriptor* getDeletedColForTable(const TableId table_id) {
+    auto deleted_cols_it = deleted_columns_.find(table_id);
+    if (deleted_cols_it != deleted_columns_.end()) {
+      return deleted_cols_it->second;
+    }
+    return nullptr;
   }
 };
