@@ -52,7 +52,7 @@ struct ParquetLoaderMetadata {
 class LazyParquetImporter : public import_export::Importer {
  public:
   LazyParquetImporter(import_export::Loader* provided_loader,
-                      const std::string& base_path,
+                      const std::set<std::string>& file_paths,
                       std::shared_ptr<arrow::fs::FileSystem> file_system,
                       const import_export::CopyParams& copy_params,
                       ParquetLoaderMetadata& parquet_loader_metadata,
@@ -80,7 +80,7 @@ class LazyParquetImporter : public import_export::Importer {
  private:
   ParquetLoaderMetadata& parquet_loader_metadata_;
   const ForeignTableSchema& schema_;
-  const std::string base_path_;
+  const std::set<std::string>& file_paths_;
   std::shared_ptr<arrow::fs::FileSystem> file_system_;
 };
 

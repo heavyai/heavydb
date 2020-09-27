@@ -15,6 +15,7 @@
  */
 
 #include "DataMgr/ForeignStorage/CsvReader.h"
+#include "ForeignDataWrapperShared.h"
 #include "FsiJsonUtils.h"
 
 namespace foreign_storage {
@@ -137,10 +138,7 @@ void SingleFileReader::checkForMoreRows(size_t file_offset,
   size_t new_file_size = ftell(file_);
   size_t new_data_size = get_data_size(new_file_size, header_offset_);
   if (new_data_size < data_size_) {
-    throw std::runtime_error{
-        "Refresh of foreign table created with APPEND update mode failed as file "
-        "reduced in size: \"" +
-        boost::filesystem::path(file_path_).filename().string() + "\"."};
+    throw_removed_row_error(file_path_);
   }
   if (fseek(file_, static_cast<long int>(file_offset + header_offset_), SEEK_SET) != 0) {
     throw std::runtime_error{"An error occurred when attempting to read offset " +
@@ -611,6 +609,7 @@ void LocalMultiFileReader::checkForMoreRows(size_t file_offset,
   CHECK(file_offset == current_offset_);
   if (boost::filesystem::is_directory(file_path_)) {
     // Find all files in this directory
+    std::set<std::string> all_file_paths;
     for (boost::filesystem::recursive_directory_iterator it(file_path_), eit; it != eit;
          ++it) {
       bool new_file =
@@ -618,6 +617,13 @@ void LocalMultiFileReader::checkForMoreRows(size_t file_offset,
           file_locations_.end();
       if (!boost::filesystem::is_directory(it->path()) && new_file) {
         new_locations.insert(it->path().string());
+      }
+      all_file_paths.emplace(it->path().string());
+    }
+
+    for (const auto& file_path : file_locations_) {
+      if (all_file_paths.find(file_path) == all_file_paths.end()) {
+        throw_removed_file_error(file_path);
       }
     }
   }

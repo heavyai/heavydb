@@ -66,9 +66,9 @@ class CsvDataWrapper : public ForeignDataWrapper {
 
   static std::vector<std::string_view> getSupportedOptions();
 
-  void serializeDataWrapperInternals(const std::string& filepath) override;
+  void serializeDataWrapperInternals(const std::string& file_path) const override;
 
-  void restoreDataWrapperInternals(const std::string& filepath,
+  void restoreDataWrapperInternals(const std::string& file_path,
                                    const ChunkMetadataVector& chunk_metadata) override;
   bool isRestored() const override;
 

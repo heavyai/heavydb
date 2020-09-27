@@ -52,22 +52,19 @@ class ForeignDataWrapper {
 
   /**
    * Serialize internal state of wrapper into file at given path if implemented
-   * @param filepath - location to save file to
+   * @param file_path - location to save file to
    */
-  virtual void serializeDataWrapperInternals(const std::string& filepath){};
+  virtual void serializeDataWrapperInternals(const std::string& file_path) const = 0;
 
   /**
    * Restore internal state of datawrapper
-   * @param filepath - location of file created by serializeMetadata
+   * @param file_path - location of file created by serializeMetadata
    * @param chunk_metadata_vector - vector of chunk metadata recovered from disk
    */
-  virtual void restoreDataWrapperInternals(const std::string& filepath,
-                                           const ChunkMetadataVector& chunk_metadata) {
-    // Should not be called if serializeMetadata doesnt create file
-    UNREACHABLE();
-  };
+  virtual void restoreDataWrapperInternals(const std::string& file_path,
+                                           const ChunkMetadataVector& chunk_metadata) = 0;
 
   // For testing, is this data wrapper restored from disk
-  virtual bool isRestored() const { return false; }
+  virtual bool isRestored() const = 0;
 };
 }  // namespace foreign_storage

@@ -18,14 +18,10 @@
 
 #include <algorithm>
 #include <condition_variable>
-#include <fstream>
 #include <mutex>
 #include <regex>
 
 #include <rapidjson/document.h>
-#include <rapidjson/istreamwrapper.h>
-#include <rapidjson/ostreamwrapper.h>
-#include <rapidjson/writer.h>
 #include <boost/filesystem.hpp>
 
 #include "DataMgr/ForeignStorage/CsvFileBufferParser.h"
@@ -976,7 +972,7 @@ void get_value(const rapidjson::Value& json_val, FileRegion& file_region) {
   json_utils::get_value_from_object(json_val, file_region.row_count, "row_count");
 }
 
-void CsvDataWrapper::serializeDataWrapperInternals(const std::string& filepath) {
+void CsvDataWrapper::serializeDataWrapperInternals(const std::string& file_path) const {
   rapidjson::Document d;
   d.SetObject();
 
@@ -995,28 +991,13 @@ void CsvDataWrapper::serializeDataWrapperInternals(const std::string& filepath) 
   json_utils::add_value_to_object(
       d, append_start_offset_, "append_start_offset", d.GetAllocator());
 
-  // Write to disk
-  std::ofstream ofs(filepath);
-  if (!ofs) {
-    throw std::runtime_error{"Error trying to create file '" + filepath +
-                             "', the error was: " + std::strerror(errno)};
-  }
-  rapidjson::OStreamWrapper osw(ofs);
-  rapidjson::Writer<rapidjson::OStreamWrapper> writer(osw);
-  d.Accept(writer);
+  json_utils::write_to_file(d, file_path);
 }
 
 void CsvDataWrapper::restoreDataWrapperInternals(
-    const std::string& filepath,
+    const std::string& file_path,
     const ChunkMetadataVector& chunk_metadata) {
-  std::ifstream ifs(filepath);
-  if (!ifs) {
-    throw std::runtime_error{"Error trying to open file '" + filepath +
-                             "', the error was: " + std::strerror(errno)};
-  }
-  rapidjson::IStreamWrapper isw(ifs);
-  rapidjson::Document d;
-  d.ParseStream(isw);
+  auto d = json_utils::read_from_file(file_path);
   CHECK(d.IsObject());
 
   // Restore fragment map

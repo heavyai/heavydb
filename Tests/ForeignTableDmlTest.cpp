@@ -394,12 +394,22 @@ class RecoverCacheQueryTest : public ForeignTableTest {
     cat_->getDataMgr().deleteChunksWithPrefix(table_key, MemoryLevel::GPU_LEVEL);
   }
 
+  std::string getWrapperMetadataPath(const std::string& prefix,
+                                     const std::string& data_wrapper_type = {}) {
+    std::string path = getDataFilesPath() + "/wrapper_metadata/" + prefix;
+    if (!data_wrapper_type.empty()) {
+      path += "_" + data_wrapper_type;
+    }
+    return path + ".json";
+  }
+
   void SetUp() override {
     DBHandlerTestFixture::SetUp();
     cat_ = &getCatalog();
     psm_ = cat_->getDataMgr().getPersistentStorageMgr();
     cache_ = psm_->getDiskCache();
   }
+
   void TearDown() override { DBHandlerTestFixture::TearDown(); }
   static void SetUpTestSuite() {}
   static void TearDownTestSuite() {}
@@ -414,7 +424,7 @@ struct DataTypeFragmentSizeAndDataWrapperParam {
   std::string extension;
 };
 
-struct CsvAppendTestParam {
+struct AppendRefreshTestParam {
   int fragment_size;
   std::string wrapper;
   std::string filename;
@@ -456,7 +466,8 @@ struct PrintToStringParamName {
     return ss.str();
   }
 
-  std::string operator()(const ::testing::TestParamInfo<CsvAppendTestParam>& info) const {
+  std::string operator()(
+      const ::testing::TestParamInfo<AppendRefreshTestParam>& info) const {
     std::stringstream ss;
     ss << "Fragment_size_" << info.param.fragment_size << "_Data_wrapper_"
        << info.param.wrapper << "_file_" << info.param.file_display
@@ -2073,8 +2084,8 @@ TEST_F(RefreshSyntaxErrorTests, InvalidOption) {
                           "refresh command. Only \"EVICT\" option is supported.");
 }
 
-class CsvAppendTest : public RecoverCacheQueryTest,
-                      public ::testing::WithParamInterface<CsvAppendTestParam> {
+class AppendRefreshTest : public RecoverCacheQueryTest,
+                          public ::testing::WithParamInterface<AppendRefreshTestParam> {
  protected:
   const std::string default_name = "refresh_tmp";
   std::string file_type;
@@ -2090,37 +2101,150 @@ class CsvAppendTest : public RecoverCacheQueryTest,
   }
 };
 
+TEST_F(AppendRefreshTest, CSV_MissingFileArchive) {
+  int fragment_size = 1;
+  std::string filename = "archive_delete_file.zip";
+  // Create initial files and tables
+  bf::remove_all(getDataFilesPath() + "append_tmp");
+  recursive_copy(getDataFilesPath() + "append_before", getDataFilesPath() + "append_tmp");
+
+  std::string query = "CREATE FOREIGN TABLE " + default_name + " (i INTEGER) "s +
+                      "SERVER omnisci_local_csv WITH (file_path = '" +
+                      getDataFilesPath() + "append_tmp/" + filename +
+                      "', fragment_size = '" + std::to_string(fragment_size) +
+                      "', REFRESH_UPDATE_TYPE = 'APPEND');";
+  sql(query);
+
+  std::string select = "SELECT * FROM "s + default_name + " ORDER BY i;";
+  // Read from table
+  sqlAndCompareResult(select, {{i(1)}, {i(2)}});
+
+  // Modify files
+  bf::remove_all(getDataFilesPath() + "append_tmp");
+  recursive_copy(getDataFilesPath() + "append_after", getDataFilesPath() + "append_tmp");
+
+  // Refresh command
+  queryAndAssertException(
+      "REFRESH FOREIGN TABLES " + default_name + ";",
+      "Exception: Foreign table refreshed with APPEND mode missing archive entry "
+      "\"single_file_delete_rows.csv\" from file \"archive_delete_file.zip\".");
+
+  bf::remove_all(getDataFilesPath() + "append_tmp");
+}
+
+class FragmentSizesAppendRefreshTest : public AppendRefreshTest {};
+
 INSTANTIATE_TEST_SUITE_P(
     AppendParamaterizedTests,
-    CsvAppendTest,
+    FragmentSizesAppendRefreshTest,
     ::testing::Values(
-        CsvAppendTestParam{1, "csv", "single_file.csv", "single_csv", false},
-        CsvAppendTestParam{1, "csv", "dir_file", "dir", false},
-        CsvAppendTestParam{1, "csv", "dir_file.zip", "dir_zip", false},
-        CsvAppendTestParam{1, "csv", "dir_file_multi", "dir_file_multi", false},
-        CsvAppendTestParam{1, "csv", "dir_file_multi.zip", "dir_multi_zip", false},
-        CsvAppendTestParam{1, "csv", "single_file.zip", "single_zip", false},
-        CsvAppendTestParam{4, "csv", "single_file.csv", "single_csv", false},
-        CsvAppendTestParam{4, "csv", "dir_file", "dir", false},
-        CsvAppendTestParam{4, "csv", "dir_file.zip", "dir_zip", false},
-        CsvAppendTestParam{4, "csv", "dir_file_multi", "dir_file_multi", false},
-        CsvAppendTestParam{4, "csv", "dir_file_multi.zip", "dir_multi_zip", false},
-        CsvAppendTestParam{4, "csv", "single_file.zip", "single_zip", false},
-        CsvAppendTestParam{32000000, "csv", "single_file.csv", "single_csv", false},
-        CsvAppendTestParam{32000000, "csv", "dir_file", "dir", false},
-        CsvAppendTestParam{32000000, "csv", "dir_file.zip", "dir_zip"},
-        CsvAppendTestParam{32000000, "csv", "dir_file_multi", "dir_file_multi", false},
-        CsvAppendTestParam{32000000, "csv", "dir_file_multi.zip", "dir_multi_zip", false},
-        CsvAppendTestParam{32000000, "csv", "single_file.zip", "single_zip", false},
-        CsvAppendTestParam{1, "csv", "single_file.csv", "single_csv", true},
-        CsvAppendTestParam{1, "csv", "dir_file", "dir", true},
-        CsvAppendTestParam{1, "csv", "dir_file.zip", "dir_zip", true},
-        CsvAppendTestParam{1, "csv", "dir_file_multi", "dir_file_multi", true},
-        CsvAppendTestParam{1, "csv", "dir_file_multi.zip", "dir_multi_zip", true},
-        CsvAppendTestParam{1, "csv", "single_file.zip", "single_zip", true}),
+        AppendRefreshTestParam{1, "csv", "single_file.csv", "single_csv", false},
+        AppendRefreshTestParam{1,
+                               "parquet",
+                               "single_file.parquet",
+                               "single_parquet",
+                               false},
+        AppendRefreshTestParam{1, "csv", "csv_dir_file", "csv_dir", false},
+        AppendRefreshTestParam{1, "parquet", "parquet_dir_file", "parquet_dir", false},
+        AppendRefreshTestParam{1, "csv", "dir_file.zip", "csv_dir_zip", false},
+        AppendRefreshTestParam{1,
+                               "csv",
+                               "csv_dir_file_multi",
+                               "csv_dir_file_multi",
+                               false},
+        AppendRefreshTestParam{1,
+                               "parquet",
+                               "parquet_dir_file_multi",
+                               "parquet_dir_file_multi",
+                               false},
+        AppendRefreshTestParam{1,
+                               "csv",
+                               "dir_file_multi.zip",
+                               "csv_dir_multi_zip",
+                               false},
+        AppendRefreshTestParam{1, "csv", "single_file.zip", "csv_single_zip", false},
+        AppendRefreshTestParam{4, "csv", "single_file.csv", "single_csv", false},
+        AppendRefreshTestParam{4,
+                               "parquet",
+                               "single_file.parquet",
+                               "single_parquet",
+                               false},
+        AppendRefreshTestParam{4, "csv", "csv_dir_file", "csv_dir", false},
+        AppendRefreshTestParam{4, "parquet", "parquet_dir_file", "parquet_dir", false},
+        AppendRefreshTestParam{4, "csv", "dir_file.zip", "csv_dir_zip", false},
+        AppendRefreshTestParam{4,
+                               "csv",
+                               "csv_dir_file_multi",
+                               "csv_dir_file_multi",
+                               false},
+        AppendRefreshTestParam{4,
+                               "parquet",
+                               "parquet_dir_file_multi",
+                               "parquet_dir_file_multi",
+                               false},
+        AppendRefreshTestParam{4,
+                               "csv",
+                               "dir_file_multi.zip",
+                               "csv_dir_multi_zip",
+                               false},
+        AppendRefreshTestParam{4, "csv", "single_file.zip", "csv_single_zip", false},
+        AppendRefreshTestParam{32000000, "csv", "single_file.csv", "single_csv", false},
+        AppendRefreshTestParam{32000000,
+                               "parquet",
+                               "single_file.parquet",
+                               "single_parquet",
+                               false},
+        AppendRefreshTestParam{32000000, "csv", "csv_dir_file", "csv_dir", false},
+        AppendRefreshTestParam{32000000,
+                               "parquet",
+                               "parquet_dir_file",
+                               "parquet_dir",
+                               false},
+        AppendRefreshTestParam{32000000, "csv", "dir_file.zip", "csv_dir_zip"},
+        AppendRefreshTestParam{32000000,
+                               "csv",
+                               "csv_dir_file_multi",
+                               "csv_dir_file_multi",
+                               false},
+        AppendRefreshTestParam{32000000,
+                               "parquet",
+                               "parquet_dir_file_multi",
+                               "parquet_dir_file_multi",
+                               false},
+        AppendRefreshTestParam{32000000,
+                               "csv",
+                               "dir_file_multi.zip",
+                               "csv_dir_multi_zip",
+                               false},
+        AppendRefreshTestParam{32000000,
+                               "csv",
+                               "single_file.zip",
+                               "csv_single_zip",
+                               false},
+        AppendRefreshTestParam{1, "csv", "single_file.csv", "single_csv", true},
+        AppendRefreshTestParam{1,
+                               "parquet",
+                               "single_file.parquet",
+                               "single_parquet",
+                               true},
+        AppendRefreshTestParam{1, "csv", "csv_dir_file", "csv_dir", true},
+        AppendRefreshTestParam{1, "parquet", "parquet_dir_file", "parquet_dir", true},
+        AppendRefreshTestParam{1, "csv", "dir_file.zip", "csv_dir_zip", true},
+        AppendRefreshTestParam{1,
+                               "csv",
+                               "csv_dir_file_multi",
+                               "csv_dir_file_multi",
+                               true},
+        AppendRefreshTestParam{1,
+                               "parquet",
+                               "parquet_dir_file_multi",
+                               "parquet_dir_file_multi",
+                               true},
+        AppendRefreshTestParam{1, "csv", "dir_file_multi.zip", "csv_dir_multi_zip", true},
+        AppendRefreshTestParam{1, "csv", "single_file.zip", "csv_single_zip", true}),
     PrintToStringParamName());
 
-TEST_P(CsvAppendTest, AppendFragsCSV) {
+TEST_P(FragmentSizesAppendRefreshTest, AppendFrags) {
   auto& param = GetParam();
   int fragment_size = param.fragment_size;
   std::string filename = param.filename;
@@ -2129,10 +2253,11 @@ TEST_P(CsvAppendTest, AppendFragsCSV) {
   bf::remove_all(getDataFilesPath() + "append_tmp");
 
   recursive_copy(getDataFilesPath() + "append_before", getDataFilesPath() + "append_tmp");
-  std::string file_path = getDataFilesPath() + "append_tmp/" + "single_file.csv";
+  std::string file_path =
+      getDataFilesPath() + "append_tmp/" + "single_file." + param.wrapper;
 
   std::string query = "CREATE FOREIGN TABLE " + default_name + " (i INTEGER) "s +
-                      "SERVER omnisci_local_csv WITH (file_path = '" +
+                      "SERVER omnisci_local_" + param.wrapper + " WITH (file_path = '" +
                       getDataFilesPath() + "append_tmp/" + filename +
                       "', fragment_size = '" + std::to_string(fragment_size) +
                       "', REFRESH_UPDATE_TYPE = 'APPEND');";
@@ -2190,13 +2315,32 @@ TEST_P(CsvAppendTest, AppendFragsCSV) {
   bf::remove_all(getDataFilesPath() + "append_tmp");
 }
 
-TEST_P(CsvAppendTest, AppendNothing) {
+class DataWrapperAppendRefreshTest : public AppendRefreshTest {};
+
+INSTANTIATE_TEST_SUITE_P(
+    AppendParamaterizedTests,
+    DataWrapperAppendRefreshTest,
+    ::testing::Values(
+        AppendRefreshTestParam{1, "csv", "single_file.csv", "single_csv", false},
+        AppendRefreshTestParam{1,
+                               "parquet",
+                               "single_file.parquet",
+                               "single_parquet",
+                               false},
+        AppendRefreshTestParam{1, "csv", "single_file.csv", "single_csv", true},
+        AppendRefreshTestParam{1,
+                               "parquet",
+                               "single_file.parquet",
+                               "single_parquet",
+                               true}));
+
+TEST_P(DataWrapperAppendRefreshTest, AppendNothing) {
   auto& param = GetParam();
-  int fragment_size = param.fragment_size;
-  std::string filename = param.filename;
+  int fragment_size = 1;
+  std::string filename = "single_file." + param.wrapper;
 
   std::string query = "CREATE FOREIGN TABLE " + default_name + " (i INTEGER) "s +
-                      "SERVER omnisci_local_csv WITH (file_path = '" +
+                      "SERVER omnisci_local_" + param.wrapper + " WITH (file_path = '" +
                       getDataFilesPath() + "append_before/" + filename +
                       "', fragment_size = '" + std::to_string(fragment_size) +
                       "', REFRESH_UPDATE_TYPE = 'APPEND');";
@@ -2227,15 +2371,16 @@ TEST_P(CsvAppendTest, AppendNothing) {
   ASSERT_EQ(1U, cache_->getNumChunksAdded() - chunk_count);
 }
 
-TEST_F(CsvAppendTest, MissingRows) {
+TEST_P(DataWrapperAppendRefreshTest, MissingRows) {
   int fragment_size = 1;
-  std::string filename = "single_file_delete_rows.csv";
+  std::string wrapper = GetParam().wrapper;
+  std::string filename = "single_file_delete_rows." + wrapper;
   // Create initial files and tables
   bf::remove_all(getDataFilesPath() + "append_tmp");
   recursive_copy(getDataFilesPath() + "append_before", getDataFilesPath() + "append_tmp");
 
   std::string query = "CREATE FOREIGN TABLE " + default_name + " (i INTEGER) "s +
-                      "SERVER omnisci_local_csv WITH (file_path = '" +
+                      "SERVER omnisci_local_" + wrapper + " WITH (file_path = '" +
                       getDataFilesPath() + "append_tmp/" + filename +
                       "', fragment_size = '" + std::to_string(fragment_size) +
                       "', REFRESH_UPDATE_TYPE = 'APPEND');";
@@ -2252,21 +2397,26 @@ TEST_F(CsvAppendTest, MissingRows) {
   // Refresh command
   queryAndAssertException(
       "REFRESH FOREIGN TABLES " + default_name + ";",
-      "Exception: Refresh of foreign table created with APPEND update mode failed as "
-      "file reduced in size: \"single_file_delete_rows.csv\".");
+      "Exception: Refresh of foreign table created with \"APPEND\" update type failed as "
+      "file reduced in size: " +
+          getDataFilesPath() + "append_tmp/single_file_delete_rows." + wrapper);
 
   bf::remove_all(getDataFilesPath() + "append_tmp");
 }
 
-TEST_F(CsvAppendTest, MissingFileArchive) {
+TEST_P(DataWrapperAppendRefreshTest, MissingFile) {
   int fragment_size = 1;
-  std::string filename = "archive_delete_file.zip";
+  std::string wrapper = GetParam().wrapper;
+  std::string filename = wrapper + "_dir_missing_file";
+
   // Create initial files and tables
   bf::remove_all(getDataFilesPath() + "append_tmp");
+
   recursive_copy(getDataFilesPath() + "append_before", getDataFilesPath() + "append_tmp");
+  std::string file_path = getDataFilesPath() + "append_tmp/" + "single_file." + wrapper;
 
   std::string query = "CREATE FOREIGN TABLE " + default_name + " (i INTEGER) "s +
-                      "SERVER omnisci_local_csv WITH (file_path = '" +
+                      "SERVER omnisci_local_" + wrapper + " WITH (file_path = '" +
                       getDataFilesPath() + "append_tmp/" + filename +
                       "', fragment_size = '" + std::to_string(fragment_size) +
                       "', REFRESH_UPDATE_TYPE = 'APPEND');";
@@ -2275,32 +2425,35 @@ TEST_F(CsvAppendTest, MissingFileArchive) {
   std::string select = "SELECT * FROM "s + default_name + " ORDER BY i;";
   // Read from table
   sqlAndCompareResult(select, {{i(1)}, {i(2)}});
-
-  // Modify files
   bf::remove_all(getDataFilesPath() + "append_tmp");
   recursive_copy(getDataFilesPath() + "append_after", getDataFilesPath() + "append_tmp");
 
   // Refresh command
   queryAndAssertException(
       "REFRESH FOREIGN TABLES " + default_name + ";",
-      "Exception: Foreign table refreshed with APPEND mode missing archive entry "
-      "\"single_file_delete_rows.csv\" from file \"archive_delete_file.zip\".");
+      "Exception: Refresh of foreign table created with \"APPEND\" update type failed as "
+      "file \"" +
+          getDataFilesPath() + "append_tmp/" + filename + "/one_row_2." + wrapper +
+          "\" was removed.");
 
   bf::remove_all(getDataFilesPath() + "append_tmp");
 }
 
-TEST_F(CsvAppendTest, MultifileAppendtoFile) {
+// This tests the use case where there are multiple files in a
+// directory but an update is made to only one of the files.
+TEST_P(DataWrapperAppendRefreshTest, MultifileAppendtoFile) {
   int fragment_size = 1;
-  std::string filename = "dir_file_multi_bad_append";
+  std::string wrapper = GetParam().wrapper;
+  std::string filename = wrapper + "_dir_file_multi_bad_append";
 
   // Create initial files and tables
   bf::remove_all(getDataFilesPath() + "append_tmp");
 
   recursive_copy(getDataFilesPath() + "append_before", getDataFilesPath() + "append_tmp");
-  std::string file_path = getDataFilesPath() + "append_tmp/" + "single_file.csv";
+  std::string file_path = getDataFilesPath() + "append_tmp/" + "single_file." + wrapper;
 
   std::string query = "CREATE FOREIGN TABLE " + default_name + " (i INTEGER) "s +
-                      "SERVER omnisci_local_csv WITH (file_path = '" +
+                      "SERVER omnisci_local_" + wrapper + " WITH (file_path = '" +
                       getDataFilesPath() + "append_tmp/" + filename +
                       "', fragment_size = '" + std::to_string(fragment_size) +
                       "', REFRESH_UPDATE_TYPE = 'APPEND');";
@@ -3130,45 +3283,6 @@ TEST_F(RecoverCacheQueryTest, RecoverWithoutWrappers) {
   sqlDropForeignTable();
 }
 
-TEST_F(RecoverCacheQueryTest, RecoverThenPopulateDataWrappersOnDemand) {
-  sqlDropForeignTable();
-  sqlCreateForeignTable("(col1 INTEGER)", "1", "csv");
-
-  auto td = cat_->getMetadataForTable(default_table_name);
-  ChunkKey key{cat_->getCurrentDB().dbId, td->tableId, 1, 0};
-  ChunkKey table_key{cat_->getCurrentDB().dbId, td->tableId};
-
-  sqlAndCompareResult("SELECT COUNT(*) FROM " + default_table_name + ";", {{i(1)}});
-  // Cache now has metadata only.
-  ASSERT_EQ(cache_->getNumCachedMetadata(), 1U);
-  ASSERT_EQ(cache_->getNumCachedChunks(), 0U);
-  ASSERT_TRUE(psm_->getForeignStorageMgr()->hasDataWrapperForChunk(key));
-
-  // Reset cache and clear memory representations.
-  resetStorageManagerAndClearTableMemory(table_key);
-
-  // Cache should be empty until query prompts recovery from disk
-  ASSERT_EQ(cache_->getNumCachedMetadata(), 0U);
-  ASSERT_EQ(cache_->getNumCachedChunks(), 0U);
-
-  ASSERT_TRUE(isTableDatawrapperDataOnDisk(default_table_name));
-  ASSERT_TRUE(compareTableDatawrapperMetadataToFile(
-      default_table_name, getDataFilesPath() + "/wrapper_metadata/1_csv.json"));
-
-  // This query should hit recovered disk data and not need to create datawrappers.
-  sqlAndCompareResult("SELECT COUNT(*) FROM " + default_table_name + ";", {{i(1)}});
-
-  ASSERT_EQ(cache_->getNumCachedMetadata(), 1U);
-  ASSERT_EQ(cache_->getNumCachedChunks(), 0U);
-  ASSERT_FALSE(psm_->getForeignStorageMgr()->hasDataWrapperForChunk(key));
-
-  sqlAndCompareResult("SELECT * FROM " + default_table_name + ";", {{i(1)}});
-  ASSERT_EQ(cache_->getNumCachedChunks(), 1U);
-  ASSERT_TRUE(psm_->getForeignStorageMgr()->hasDataWrapperForChunk(key));
-
-  sqlDropForeignTable();
-}
-
 TEST_F(RecoverCacheQueryTest, RecoverThenPopulateDataWrappersOnDemandVarLen) {
   sqlDropForeignTable();
   std::string query = "CREATE FOREIGN TABLE " + default_table_name +
@@ -3191,8 +3305,8 @@ TEST_F(RecoverCacheQueryTest, RecoverThenPopulateDataWrappersOnDemandVarLen) {
   ASSERT_EQ(cache_->getNumCachedChunks(), 0U);
 
   ASSERT_TRUE(isTableDatawrapperDataOnDisk(default_table_name));
-  ASSERT_TRUE(compareTableDatawrapperMetadataToFile(
-      default_table_name, getDataFilesPath() + "/wrapper_metadata/example_1.json"));
+  ASSERT_TRUE(compareTableDatawrapperMetadataToFile(default_table_name,
+                                                    getWrapperMetadataPath("example_1")));
 
   sqlAndCompareResult("SELECT * FROM " + default_table_name + "  ORDER BY t;",
                       {{"a", array({i(1), i(1), i(1)})},
@@ -3226,8 +3340,7 @@ TEST_F(RecoverCacheQueryTest, RecoverThenPopulateDataWrappersOnDemandFromCsvArch
   ASSERT_FALSE(isTableDatawrapperRestored(default_table_name));
   ASSERT_TRUE(isTableDatawrapperDataOnDisk(default_table_name));
   ASSERT_TRUE(compareTableDatawrapperMetadataToFile(
-      default_table_name,
-      getDataFilesPath() + "/wrapper_metadata/example_1_archive.json"));
+      default_table_name, getWrapperMetadataPath("example_1_archive")));
 
   // Reset cache and clear memory representations.
   resetStorageManagerAndClearTableMemory(table_key);
@@ -3249,20 +3362,66 @@ TEST_F(RecoverCacheQueryTest, RecoverThenPopulateDataWrappersOnDemandFromCsvArch
   sqlDropForeignTable();
 }
 
-// Check that csv datawrapper metadata is generated and restored correctly when appending
+class DataWrapperRecoverCacheQueryTest
+    : public RecoverCacheQueryTest,
+      public ::testing::WithParamInterface<std::string> {};
+
+TEST_P(DataWrapperRecoverCacheQueryTest, RecoverThenPopulateDataWrappersOnDemand) {
+  auto wrapper = GetParam();
+
+  sqlDropForeignTable();
+  sqlCreateForeignTable("(col1 INTEGER)", "1", wrapper);
+
+  auto td = cat_->getMetadataForTable(default_table_name);
+  ChunkKey key{cat_->getCurrentDB().dbId, td->tableId, 1, 0};
+  ChunkKey table_key{cat_->getCurrentDB().dbId, td->tableId};
+
+  sqlAndCompareResult("SELECT COUNT(*) FROM " + default_table_name + ";", {{i(1)}});
+  // Cache now has metadata only.
+  ASSERT_EQ(cache_->getNumCachedMetadata(), 1U);
+  ASSERT_EQ(cache_->getNumCachedChunks(), 0U);
+  ASSERT_TRUE(psm_->getForeignStorageMgr()->hasDataWrapperForChunk(key));
+
+  // Reset cache and clear memory representations.
+  resetStorageManagerAndClearTableMemory(table_key);
+
+  // Cache should be empty until query prompts recovery from disk
+  ASSERT_EQ(cache_->getNumCachedMetadata(), 0U);
+  ASSERT_EQ(cache_->getNumCachedChunks(), 0U);
+
+  ASSERT_TRUE(isTableDatawrapperDataOnDisk(default_table_name));
+  ASSERT_TRUE(compareTableDatawrapperMetadataToFile(
+      default_table_name, getWrapperMetadataPath("1", wrapper)));
+
+  // This query should hit recovered disk data and not need to create datawrappers.
+  sqlAndCompareResult("SELECT COUNT(*) FROM " + default_table_name + ";", {{i(1)}});
+
+  ASSERT_EQ(cache_->getNumCachedMetadata(), 1U);
+  ASSERT_EQ(cache_->getNumCachedChunks(), 0U);
+  ASSERT_FALSE(psm_->getForeignStorageMgr()->hasDataWrapperForChunk(key));
+
+  sqlAndCompareResult("SELECT * FROM " + default_table_name + ";", {{i(1)}});
+  ASSERT_EQ(cache_->getNumCachedChunks(), 1U);
+  ASSERT_TRUE(psm_->getForeignStorageMgr()->hasDataWrapperForChunk(key));
+
+  sqlDropForeignTable();
+}
+
+// Check that datawrapper metadata is generated and restored correctly when appending
 // data
-TEST_F(RecoverCacheQueryTest, AppendData) {
+TEST_P(DataWrapperRecoverCacheQueryTest, AppendData) {
   int fragment_size = 2;
-  std::string filename = "dir_file_multi";
+  auto wrapper = GetParam();
+  std::string filename = wrapper + "_dir_file_multi";
   sqlDropForeignTable();
   // Create initial files and tables
   bf::remove_all(getDataFilesPath() + "append_tmp");
 
   recursive_copy(getDataFilesPath() + "append_before", getDataFilesPath() + "append_tmp");
-  std::string file_path = getDataFilesPath() + "append_tmp/" + "single_file.csv";
+  std::string file_path = getDataFilesPath() + "append_tmp/" + "single_file." + wrapper;
 
   std::string query = "CREATE FOREIGN TABLE " + default_table_name + " (i INTEGER) "s +
-                      "SERVER omnisci_local_csv WITH (file_path = '" +
+                      "SERVER omnisci_local_" + wrapper + " WITH (file_path = '" +
                       getDataFilesPath() + "append_tmp/" + filename +
                       "', fragment_size = '" + std::to_string(fragment_size) +
                       "', REFRESH_UPDATE_TYPE = 'APPEND');";
@@ -3278,7 +3437,7 @@ TEST_F(RecoverCacheQueryTest, AppendData) {
 
   ASSERT_TRUE(isTableDatawrapperDataOnDisk(default_table_name));
   ASSERT_TRUE(compareTableDatawrapperMetadataToFile(
-      default_table_name, getDataFilesPath() + "/wrapper_metadata/append_before.json"));
+      default_table_name, getWrapperMetadataPath("append_before", wrapper)));
 
   // Reset cache and clear memory representations.
   resetStorageManagerAndClearTableMemory(table_key);
@@ -3299,10 +3458,15 @@ TEST_F(RecoverCacheQueryTest, AppendData) {
   // Metadata file should be updated
   ASSERT_TRUE(isTableDatawrapperDataOnDisk(default_table_name));
   ASSERT_TRUE(compareTableDatawrapperMetadataToFile(
-      default_table_name, getDataFilesPath() + "/wrapper_metadata/append_after.json"));
+      default_table_name, getWrapperMetadataPath("append_after", wrapper)));
 
   bf::remove_all(getDataFilesPath() + "append_tmp");
+  sqlDropForeignTable();
 }
+
+INSTANTIATE_TEST_SUITE_P(DataWrapperRecoverCacheQueryTest,
+                         DataWrapperRecoverCacheQueryTest,
+                         ::testing::Values("csv", "parquet"));
 
 class MockDataWrapper : public foreign_storage::MockForeignDataWrapper {
  public:
@@ -3338,6 +3502,13 @@ class MockDataWrapper : public foreign_storage::MockForeignDataWrapper {
   void throwOnChunkFetch(bool throw_on_chunk_fetch) {
     throw_on_chunk_fetch_ = throw_on_chunk_fetch;
   }
+
+  void serializeDataWrapperInternals(const std::string& file_path) const override{};
+
+  void restoreDataWrapperInternals(const std::string& file_path,
+                                   const ChunkMetadataVector& chunk_metadata) override{};
+
+  bool isRestored() const override { return false; };
 
  private:
   std::shared_ptr<foreign_storage::ForeignDataWrapper> parent_data_wrapper_;

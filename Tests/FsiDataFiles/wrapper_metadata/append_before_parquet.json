@@ -1,0 +1,1 @@
+{"fragment_to_row_group_interval_map":[{"key":0,"value":[{"file_path":"BASEPATH/append_tmp/parquet_dir_file_multi/one_row_1.parquet","start_index":0,"end_index":0},{"file_path":"BASEPATH/append_tmp/parquet_dir_file_multi/one_row_2.parquet","start_index":0,"end_index":0}]}],"last_row_group":0,"last_fragment_index":0,"last_fragment_row_count":2,"total_row_count":2}

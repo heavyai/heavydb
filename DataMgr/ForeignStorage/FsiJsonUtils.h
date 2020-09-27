@@ -131,5 +131,11 @@ void get_value_from_object(const rapidjson::Value& object,
   get_value(object[name], value);
 }
 
+// Read JSON content from the given file path
+rapidjson::Document read_from_file(const std::string& file_path);
+
+// Write JSON content (encapsulated by the given Document object) to the given file path
+void write_to_file(const rapidjson::Document& document, const std::string& file_path);
+
 }  // namespace json_utils
 }  // namespace foreign_storage

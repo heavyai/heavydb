@@ -44,6 +44,14 @@ class ParquetDataWrapper : public ForeignDataWrapper {
 
   static std::vector<std::string_view> getSupportedOptions();
 
+  void serializeDataWrapperInternals(const std::string& file_path) const override;
+
+  void restoreDataWrapperInternals(
+      const std::string& file_path,
+      const ChunkMetadataVector& chunk_metadata_vector) override;
+
+  bool isRestored() const override;
+
  private:
   ParquetDataWrapper(const ForeignTable* foreign_table);
 
@@ -64,7 +72,10 @@ class ParquetDataWrapper : public ForeignDataWrapper {
       std::map<ChunkKey, AbstractBuffer*>& required_buffers);
 
   void validateFilePath() const;
-  std::string getFilePath() const;
+  std::string getConfiguredFilePath() const;
+  std::set<std::string> getProcessedFilePaths();
+  std::set<std::string> getAllFilePaths();
+
   import_export::CopyParams validateAndGetCopyParams() const;
 
   /**
@@ -126,7 +137,9 @@ class ParquetDataWrapper : public ForeignDataWrapper {
   const ForeignTable* foreign_table_;
   int last_fragment_index_;
   size_t last_fragment_row_count_;
+  size_t total_row_count_;
   int last_row_group_;
+  bool is_restored_;
   std::unique_ptr<ForeignTableSchema> schema_;
   std::shared_ptr<arrow::fs::FileSystem> file_system_;
 

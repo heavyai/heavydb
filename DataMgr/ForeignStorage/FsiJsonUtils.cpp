@@ -16,6 +16,12 @@
 
 #include "FsiJsonUtils.h"
 
+#include <fstream>
+
+#include <rapidjson/istreamwrapper.h>
+#include <rapidjson/ostreamwrapper.h>
+#include <rapidjson/writer.h>
+
 namespace foreign_storage {
 namespace json_utils {
 
@@ -50,6 +56,30 @@ void set_value(rapidjson::Value& json_val,
 void get_value(const rapidjson::Value& json_val, std::string& value) {
   CHECK(json_val.IsString());
   value = json_val.GetString();
+}
+
+rapidjson::Document read_from_file(const std::string& file_path) {
+  std::ifstream ifs(file_path);
+  if (!ifs) {
+    throw std::runtime_error{"Error trying to open file \"" + file_path +
+                             "\". The error was: " + std::strerror(errno)};
+  }
+
+  rapidjson::IStreamWrapper isw(ifs);
+  rapidjson::Document d;
+  d.ParseStream(isw);
+  return d;
+}
+
+void write_to_file(const rapidjson::Document& document, const std::string& filepath) {
+  std::ofstream ofs(filepath);
+  if (!ofs) {
+    throw std::runtime_error{"Error trying to create file \"" + filepath +
+                             "\". The error was: " + std::strerror(errno)};
+  }
+  rapidjson::OStreamWrapper osw(ofs);
+  rapidjson::Writer<rapidjson::OStreamWrapper> writer(osw);
+  document.Accept(writer);
 }
 
 }  // namespace json_utils

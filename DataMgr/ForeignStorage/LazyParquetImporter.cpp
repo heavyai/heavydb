@@ -309,32 +309,6 @@ std::pair<int64_t, int64_t> get_decimal_min_and_max(
   return {min, max};
 }
 
-std::set<std::string> get_file_paths(std::shared_ptr<arrow::fs::FileSystem> file_system,
-                                     const std::string& base_path) {
-  auto timer = DEBUG_TIMER(__func__);
-  std::set<std::string> file_paths;
-  arrow::fs::FileSelector file_selector{};
-  file_selector.base_dir = base_path;
-  file_selector.recursive = true;
-
-  auto file_info_result = file_system->GetFileInfo(file_selector);
-  if (!file_info_result.ok()) {
-    // This is expected when `base_path` points to a single file.
-    file_paths.emplace(base_path);
-  } else {
-    auto& file_info_vector = file_info_result.ValueOrDie();
-    for (const auto& file_info : file_info_vector) {
-      if (file_info.type() == arrow::fs::FileType::File) {
-        file_paths.emplace(file_info.path());
-      }
-    }
-    if (file_paths.empty()) {
-      throw std::runtime_error{"No file found at given path \"" + base_path + "\"."};
-    }
-  }
-  return file_paths;
-}
-
 void update_array_metadata_stats(
     ArrayMetadataStats& array_stats,
     const ColumnDescriptor* column_descriptor,
@@ -613,12 +587,11 @@ void LazyParquetImporter::metadataScan() {
   auto columns_interval =
       Interval<ColumnType>{schema_.getLogicalAndPhysicalColumns().front()->columnId,
                            schema_.getLogicalAndPhysicalColumns().back()->columnId};
-  auto file_paths = get_file_paths(file_system_, base_path_);
-  CHECK(!file_paths.empty());
+  CHECK(!file_paths_.empty());
   std::unique_ptr<parquet::arrow::FileReader> first_file_reader;
-  const auto& first_file_path = *file_paths.begin();
+  const auto& first_file_path = *file_paths_.begin();
   open_parquet_table(first_file_path, first_file_reader, file_system_);
-  for (const auto& file_path : file_paths) {
+  for (const auto& file_path : file_paths_) {
     std::unique_ptr<parquet::arrow::FileReader> reader;
     open_parquet_table(file_path, reader, file_system_);
     validate_equal_schema(
@@ -637,7 +610,8 @@ void LazyParquetImporter::partialImport(
   for (const auto& row_group_interval : row_group_intervals) {
     std::unique_ptr<parquet::arrow::FileReader> reader;
     open_parquet_table(row_group_interval.file_path, reader, file_system_);
-    validate_parquet_metadata(reader->parquet_reader()->metadata(), file_path, schema_);
+    validate_parquet_metadata(
+        reader->parquet_reader()->metadata(), row_group_interval.file_path, schema_);
     auto& import_buffers_vec = get_import_buffers_vec();
     import_buffers_vec.resize(1);
     std::vector<import_export::BadRowsTracker> bad_rows_trackers(1);
@@ -657,14 +631,14 @@ void LazyParquetImporter::partialImport(
 
 LazyParquetImporter::LazyParquetImporter(
     import_export::Loader* provided_loader,
-    const std::string& base_path,
+    const std::set<std::string>& file_paths,
     std::shared_ptr<arrow::fs::FileSystem> file_system,
     const import_export::CopyParams& copy_params,
     ParquetLoaderMetadata& parquet_loader_metadata,
     ForeignTableSchema& schema)
-    : import_export::Importer(provided_loader, base_path, copy_params)
+    : import_export::Importer(provided_loader, {}, copy_params)
     , parquet_loader_metadata_(parquet_loader_metadata)
     , schema_(schema)
-    , base_path_(base_path)
+    , file_paths_(file_paths)
     , file_system_(file_system) {}
 }  // namespace foreign_storage
