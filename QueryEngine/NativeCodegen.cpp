@@ -797,9 +797,9 @@ std::shared_ptr<GpuCompilationContext> CodeGenerator::generateNativeGPUCode(
   if (gpu_target.row_func_not_inlined) {
     clear_function_attributes(gpu_target.cgen_state->row_func_);
     roots.insert(gpu_target.cgen_state->row_func_);
-  }
-  if (gpu_target.cgen_state->filter_func_) {
-    roots.insert(gpu_target.cgen_state->filter_func_);
+    if (gpu_target.cgen_state->filter_func_) {
+      roots.insert(gpu_target.cgen_state->filter_func_);
+    }
   }
 
   // prevent helper functions from being removed
