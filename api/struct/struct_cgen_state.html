@@ -65,7 +65,7 @@
             
             
               <div class="version">
-                5.5.0dev 2b310ab
+                5.5.0dev 1241207
               </div>
             
           
@@ -1042,6 +1042,9 @@
 <li class="toctree-l2"><a class="reference internal" href="../class/classlockmgr_1_1_table_data_lock_container_3_01_read_lock_01_4.html">Class lockmgr::TableDataLockContainer&lt; ReadLock &gt;</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/classlockmgr_1_1_table_data_lock_container_3_01_write_lock_01_4.html">Class lockmgr::TableDataLockContainer&lt; WriteLock &gt;</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/classlockmgr_1_1_table_data_lock_mgr.html">Class lockmgr::TableDataLockMgr</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../class/classlockmgr_1_1_table_insert_lock_container.html">Class lockmgr::TableInsertLockContainer</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../class/classlockmgr_1_1_table_insert_lock_container_3_01_read_lock_01_4.html">Class lockmgr::TableInsertLockContainer&lt; ReadLock &gt;</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../class/classlockmgr_1_1_table_insert_lock_container_3_01_write_lock_01_4.html">Class lockmgr::TableInsertLockContainer&lt; WriteLock &gt;</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/classlockmgr_1_1_table_lock_container_impl.html">Class lockmgr::TableLockContainerImpl</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/classlockmgr_1_1_table_lock_mgr_impl.html">Class lockmgr::TableLockMgrImpl</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/classlockmgr_1_1_table_schema_lock_container.html">Class lockmgr::TableSchemaLockContainer</a></li>
@@ -1549,8 +1552,13 @@
 <div class="breathe-sectiondef docutils container">
 <p class="breathe-sectiondef-title rubric">Public Functions</p>
 <dl class="function">
-<dt id="_CPPv4N9CgenState9CgenStateERKNSt6vectorI14InputTableInfoEEKb">
-<span id="_CPPv3N9CgenState9CgenStateERKNSt6vectorI14InputTableInfoEEKb"></span><span id="_CPPv2N9CgenState9CgenStateERKNSt6vectorI14InputTableInfoEEKb"></span><span id="CgenState::CgenState__std::vector:InputTableInfo:CR.bC"></span><span class="target" id="struct_cgen_state_1afd286d75509e7e18df1388476e6dfffe"></span><code class="sig-name descname">CgenState</code><span class="sig-paren">(</span><em class="property">const</em> std::vector&lt;<a class="reference internal" href="struct_input_table_info.html#_CPPv414InputTableInfo" title="InputTableInfo">InputTableInfo</a>&gt; &amp;<em>query_infos</em>, <em class="property">const</em> bool <em>contains_left_deep_outer_join</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N9CgenState9CgenStateERKNSt6vectorI14InputTableInfoEEKb" title="Permalink to this definition">¶</a><br /></dt>
+<dt id="_CPPv4N9CgenState9CgenStateEK6size_tKb">
+<span id="_CPPv3N9CgenState9CgenStateEK6size_tKb"></span><span id="_CPPv2N9CgenState9CgenStateEK6size_tKb"></span><span id="CgenState::CgenState__sC.bC"></span><span class="target" id="struct_cgen_state_1ae02d18087f40af9d2533375907ca8b3c"></span><code class="sig-name descname">CgenState</code><span class="sig-paren">(</span><em class="property">const</em> size_t <em>num_query_infos</em>, <em class="property">const</em> bool <em>contains_left_deep_outer_join</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N9CgenState9CgenStateEK6size_tKb" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="_CPPv4N9CgenState9CgenStateERN4llvm11LLVMContextE">
+<span id="_CPPv3N9CgenState9CgenStateERN4llvm11LLVMContextE"></span><span id="_CPPv2N9CgenState9CgenStateERN4llvm11LLVMContextE"></span><span id="CgenState::CgenState__llvm::LLVMContextR"></span><span class="target" id="struct_cgen_state_1a35e3112e779a2819367714dc97267a56"></span><code class="sig-name descname">CgenState</code><span class="sig-paren">(</span>llvm::LLVMContext &amp;<em>context</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N9CgenState9CgenStateERN4llvm11LLVMContextE" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 <dl class="function">
@@ -1744,11 +1752,6 @@
 <dl class="member">
 <dt id="_CPPv4N9CgenState18in_values_bitmaps_E">
 <span id="_CPPv3N9CgenState18in_values_bitmaps_E"></span><span id="_CPPv2N9CgenState18in_values_bitmaps_E"></span><span id="CgenState::in_values_bitmaps___std::vector:std::unique_ptr:InValuesBitmapC::"></span><span class="target" id="struct_cgen_state_1a610efc2201ef3ce25411a226c3b4ad42"></span>std::vector&lt;std::unique_ptr&lt;<em class="property">const</em> <a class="reference internal" href="../class/class_in_values_bitmap.html#_CPPv414InValuesBitmap" title="InValuesBitmap">InValuesBitmap</a>&gt;&gt; <code class="sig-name descname">in_values_bitmaps_</code><a class="headerlink" href="#_CPPv4N9CgenState18in_values_bitmaps_E" title="Permalink to this definition">¶</a><br /></dt>
-<dd></dd></dl>
-
-<dl class="member">
-<dt id="_CPPv4N9CgenState12query_infos_E">
-<span id="_CPPv3N9CgenState12query_infos_E"></span><span id="_CPPv2N9CgenState12query_infos_E"></span><span id="CgenState::query_infos___std::vector:InputTableInfo:CR"></span><span class="target" id="struct_cgen_state_1a756fa250ce5eaf6d6032f75a83e56887"></span><em class="property">const</em> std::vector&lt;<a class="reference internal" href="struct_input_table_info.html#_CPPv414InputTableInfo" title="InputTableInfo">InputTableInfo</a>&gt; &amp;<code class="sig-name descname">query_infos_</code><a class="headerlink" href="#_CPPv4N9CgenState12query_infos_E" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 <dl class="member">

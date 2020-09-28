@@ -65,7 +65,7 @@
             
             
               <div class="version">
-                5.5.0dev 2b310ab
+                5.5.0dev 1241207
               </div>
             
           
@@ -1042,6 +1042,9 @@
 <li class="toctree-l2"><a class="reference internal" href="classlockmgr_1_1_table_data_lock_container_3_01_read_lock_01_4.html">Class lockmgr::TableDataLockContainer&lt; ReadLock &gt;</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classlockmgr_1_1_table_data_lock_container_3_01_write_lock_01_4.html">Class lockmgr::TableDataLockContainer&lt; WriteLock &gt;</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classlockmgr_1_1_table_data_lock_mgr.html">Class lockmgr::TableDataLockMgr</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classlockmgr_1_1_table_insert_lock_container.html">Class lockmgr::TableInsertLockContainer</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classlockmgr_1_1_table_insert_lock_container_3_01_read_lock_01_4.html">Class lockmgr::TableInsertLockContainer&lt; ReadLock &gt;</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classlockmgr_1_1_table_insert_lock_container_3_01_write_lock_01_4.html">Class lockmgr::TableInsertLockContainer&lt; WriteLock &gt;</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classlockmgr_1_1_table_lock_container_impl.html">Class lockmgr::TableLockContainerImpl</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classlockmgr_1_1_table_lock_mgr_impl.html">Class lockmgr::TableLockMgrImpl</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classlockmgr_1_1_table_schema_lock_container.html">Class lockmgr::TableSchemaLockContainer</a></li>
@@ -1685,14 +1688,6 @@
 <span id="_CPPv3N20Fragmenter_Namespace21InsertOrderFragmenter14hasDeletedRowsEKi"></span><span id="_CPPv2N20Fragmenter_Namespace21InsertOrderFragmenter14hasDeletedRowsEKi"></span><span id="Fragmenter_Namespace::InsertOrderFragmenter::hasDeletedRows__iC"></span><span class="target" id="class_fragmenter___namespace_1_1_insert_order_fragmenter_1ab443787c6df768e8325f95fb65b02bdf"></span>bool <code class="sig-name descname">hasDeletedRows</code><span class="sig-paren">(</span><em class="property">const</em> int <em>delete_column_id</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N20Fragmenter_Namespace21InsertOrderFragmenter14hasDeletedRowsEKi" title="Permalink to this definition">¶</a><br /></dt>
 <dd><p>Iterates through chunk metadata to return whether any rows have been deleted. </p>
 </dd></dl>
-
-</div>
-<div class="breathe-sectiondef docutils container">
-<p class="breathe-sectiondef-title rubric">Public Static Functions</p>
-<dl class="function">
-<dt id="_CPPv4N20Fragmenter_Namespace21InsertOrderFragmenter12updateColumnEPKN17Catalog_Namespace7CatalogERKNSt6stringERKNSt6stringEKiRKNSt6vectorI8uint64_tEERKNSt6vectorI17ScalarTargetValueEERK11SQLTypeInfoKN14Data_Namespace11MemoryLevelER9UpdelRoll">
-<span id="_CPPv3N20Fragmenter_Namespace21InsertOrderFragmenter12updateColumnEPKN17Catalog_Namespace7CatalogERKNSt6stringERKNSt6stringEKiRKNSt6vectorI8uint64_tEERKNSt6vectorI17ScalarTargetValueEERK11SQLTypeInfoKN14Data_Namespace11MemoryLevelER9UpdelRoll"></span><span id="_CPPv2N20Fragmenter_Namespace21InsertOrderFragmenter12updateColumnEPKN17Catalog_Namespace7CatalogERKNSt6stringERKNSt6stringEKiRKNSt6vectorI8uint64_tEERKNSt6vectorI17ScalarTargetValueEERK11SQLTypeInfoKN14Data_Namespace11MemoryLevelER9UpdelRoll"></span><span id="Fragmenter_Namespace::InsertOrderFragmenter::updateColumn__Catalog_Namespace::CatalogCP.ssCR.ssCR.iC.std::vector:uint64_t:CR.std::vector:ScalarTargetValue:CR.SQLTypeInfoCR.Data_Namespace::MemoryLevelC.UpdelRollR"></span><span class="target" id="class_fragmenter___namespace_1_1_insert_order_fragmenter_1a7c1095a01c634d8c7098616a90d43087"></span>void <code class="sig-name descname">updateColumn</code><span class="sig-paren">(</span><em class="property">const</em> Catalog_Namespace::<a class="reference internal" href="class_catalog___namespace_1_1_catalog.html#_CPPv4N17Catalog_Namespace7CatalogE" title="Catalog_Namespace::Catalog">Catalog</a> *<em>catalog</em>, <em class="property">const</em> std::string &amp;<em>tab_name</em>, <em class="property">const</em> std::string &amp;<em>col_name</em>, <em class="property">const</em> int <em>fragment_id</em>, <em class="property">const</em> std::vector&lt;uint64_t&gt; &amp;<em>frag_offsets</em>, <em class="property">const</em> std::vector&lt;ScalarTargetValue&gt; &amp;<em>rhs_values</em>, <em class="property">const</em> <a class="reference internal" href="class_s_q_l_type_info.html#_CPPv411SQLTypeInfo" title="SQLTypeInfo">SQLTypeInfo</a> &amp;<em>rhs_type</em>, <em class="property">const</em> Data_Namespace::MemoryLevel <em>memory_level</em>, <a class="reference internal" href="../struct/struct_updel_roll.html#_CPPv49UpdelRoll" title="UpdelRoll">UpdelRoll</a> &amp;<em>updel_roll</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N20Fragmenter_Namespace21InsertOrderFragmenter12updateColumnEPKN17Catalog_Namespace7CatalogERKNSt6stringERKNSt6stringEKiRKNSt6vectorI8uint64_tEERKNSt6vectorI17ScalarTargetValueEERK11SQLTypeInfoKN14Data_Namespace11MemoryLevelER9UpdelRoll" title="Permalink to this definition">¶</a><br /></dt>
-<dd></dd></dl>
 
 </div>
 <div class="breathe-sectiondef docutils container">

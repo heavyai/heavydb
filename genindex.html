@@ -64,7 +64,7 @@
             
             
               <div class="version">
-                5.5.0dev 2b310ab
+                5.5.0dev 1241207
               </div>
             
           
@@ -1041,6 +1041,9 @@
 <li class="toctree-l2"><a class="reference internal" href="api/class/classlockmgr_1_1_table_data_lock_container_3_01_read_lock_01_4.html">Class lockmgr::TableDataLockContainer&lt; ReadLock &gt;</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/classlockmgr_1_1_table_data_lock_container_3_01_write_lock_01_4.html">Class lockmgr::TableDataLockContainer&lt; WriteLock &gt;</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/classlockmgr_1_1_table_data_lock_mgr.html">Class lockmgr::TableDataLockMgr</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/class/classlockmgr_1_1_table_insert_lock_container.html">Class lockmgr::TableInsertLockContainer</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/class/classlockmgr_1_1_table_insert_lock_container_3_01_read_lock_01_4.html">Class lockmgr::TableInsertLockContainer&lt; ReadLock &gt;</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/class/classlockmgr_1_1_table_insert_lock_container_3_01_write_lock_01_4.html">Class lockmgr::TableInsertLockContainer&lt; WriteLock &gt;</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/classlockmgr_1_1_table_lock_container_impl.html">Class lockmgr::TableLockContainerImpl</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/classlockmgr_1_1_table_lock_mgr_impl.html">Class lockmgr::TableLockMgrImpl</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/classlockmgr_1_1_table_schema_lock_container.html">Class lockmgr::TableSchemaLockContainer</a></li>
@@ -4715,7 +4718,7 @@
 </li>
       <li><a href="api/struct/struct_cgen_state.html#_CPPv4N9CgenState12castToTypeInEPN4llvm5ValueEK6size_t">CgenState::castToTypeIn (C++ function)</a>
 </li>
-      <li><a href="api/struct/struct_cgen_state.html#_CPPv4N9CgenState9CgenStateERKNSt6vectorI14InputTableInfoEEKb">CgenState::CgenState (C++ function)</a>
+      <li><a href="api/struct/struct_cgen_state.html#_CPPv4N9CgenState9CgenStateEK6size_tKb">CgenState::CgenState (C++ function)</a>, <a href="api/struct/struct_cgen_state.html#_CPPv4N9CgenState9CgenStateERN4llvm11LLVMContextE">[1]</a>
 </li>
       <li><a href="api/struct/struct_cgen_state.html#_CPPv4N9CgenState30contains_left_deep_outer_join_E">CgenState::contains_left_deep_outer_join_ (C++ member)</a>
 </li>
@@ -4804,8 +4807,6 @@
       <li><a href="api/struct/struct_cgen_state.html#_CPPv4N9CgenState28query_func_entry_ir_builder_E">CgenState::query_func_entry_ir_builder_ (C++ member)</a>
 </li>
       <li><a href="api/struct/struct_cgen_state.html#_CPPv4N9CgenState25query_func_literal_loads_E">CgenState::query_func_literal_loads_ (C++ member)</a>
-</li>
-      <li><a href="api/struct/struct_cgen_state.html#_CPPv4N9CgenState12query_infos_E">CgenState::query_infos_ (C++ member)</a>
 </li>
       <li><a href="api/struct/struct_cgen_state.html#_CPPv4N9CgenState9row_func_E">CgenState::row_func_ (C++ member)</a>
 </li>
@@ -4999,10 +5000,10 @@
 </li>
       <li><a href="api/class/class_code_generator.html#_CPPv4N13CodeGenerator13CodeGeneratorEP8Executor">CodeGenerator::CodeGenerator (C++ function)</a>, <a href="api/class/class_code_generator.html#_CPPv4N13CodeGenerator13CodeGeneratorEP9CgenStateP9PlanState">[1]</a>
 </li>
-  </ul></td>
-  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="api/class/class_code_generator.html#_CPPv4N13CodeGenerator37codegenExtractHighPrecisionTimestampsEPN4llvm5ValueERK11SQLTypeInfoRK12ExtractField">CodeGenerator::codegenExtractHighPrecisionTimestamps (C++ function)</a>
 </li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="api/class/class_code_generator.html#_CPPv4N13CodeGenerator24codegenFixedLengthColVarEPKN8Analyzer9ColumnVarEPN4llvm5ValueEPN4llvm5ValueE">CodeGenerator::codegenFixedLengthColVar (C++ function)</a>
 </li>
       <li><a href="api/class/class_code_generator.html#_CPPv4N13CodeGenerator32codegenFixedLengthColVarInWindowEPKN8Analyzer9ColumnVarEPN4llvm5ValueEPN4llvm5ValueE">CodeGenerator::codegenFixedLengthColVarInWindow (C++ function)</a>
@@ -5043,7 +5044,7 @@
 </li>
       <li><a href="api/class/class_code_generator.html#_CPPv4N13CodeGenerator15codegenIntArithEPKN8Analyzer7BinOperEPN4llvm5ValueEPN4llvm5ValueERK18CompilationOptions">CodeGenerator::codegenIntArith (C++ function)</a>
 </li>
-      <li><a href="api/class/class_code_generator.html#_CPPv4N13CodeGenerator15codegenIntConstEPKN8Analyzer8ConstantE">CodeGenerator::codegenIntConst (C++ function)</a>
+      <li><a href="api/class/class_code_generator.html#_CPPv4N13CodeGenerator15codegenIntConstEPKN8Analyzer8ConstantEP9CgenState">CodeGenerator::codegenIntConst (C++ function)</a>
 </li>
       <li><a href="api/class/class_code_generator.html#_CPPv4N13CodeGenerator13codegenIsNullEPKN8Analyzer5UOperERK18CompilationOptions">CodeGenerator::codegenIsNull (C++ function)</a>
 </li>
@@ -7037,7 +7038,7 @@
 </li>
       <li><a href="api/class/class_d_b_handler.html#_CPPv4N9DBHandler21user_can_access_tableERKN17Catalog_Namespace11SessionInfoEPK15TableDescriptorK16AccessPrivileges">DBHandler::user_can_access_table (C++ function)</a>
 </li>
-      <li><a href="api/class/class_d_b_handler.html#_CPPv4N9DBHandler16validate_rel_algER14TRowDescriptor15QueryStateProxy">DBHandler::validate_rel_alg (C++ function)</a>
+      <li><a href="api/class/class_d_b_handler.html#_CPPv4N9DBHandler16validate_rel_algERKNSt6stringE15QueryStateProxy">DBHandler::validate_rel_alg (C++ function)</a>
 </li>
       <li><a href="api/class/class_d_b_handler.html#_CPPv4N9DBHandler30validateDashboardIdsForSharingERKN17Catalog_Namespace11SessionInfoERKNSt6vectorI7int32_tEE">DBHandler::validateDashboardIdsForSharing (C++ function)</a>
 </li>
@@ -7891,7 +7892,7 @@
 </li>
       <li><a href="api/class/class_executor.html#_CPPv4N8Executor11compileBodyERK19RelAlgExecutionUnitR19GroupByAndAggregateRK21QueryMemoryDescriptorRK18CompilationOptionsRK22GpuSharedMemoryContext">Executor::compileBody (C++ function)</a>
 </li>
-      <li><a href="api/class/class_executor.html#_CPPv4N8Executor15compileWorkUnitERKNSt6vectorI14InputTableInfoEERK19RelAlgExecutionUnitRK18CompilationOptionsRK16ExecutionOptionsPKN17CudaMgr_Namespace7CudaMgrEKbNSt10shared_ptrI17RowSetMemoryOwnerEEK6size_tK6int8_tKbR14ColumnCacheMapP10RenderInfo">Executor::compileWorkUnit (C++ function)</a>
+      <li><a href="api/class/class_executor.html#_CPPv4N8Executor15compileWorkUnitERKNSt6vectorI14InputTableInfoEERKN9PlanState17DeletedColumnsMapERK19RelAlgExecutionUnitRK18CompilationOptionsRK16ExecutionOptionsPKN17CudaMgr_Namespace7CudaMgrEKbNSt10shared_ptrI17RowSetMemoryOwnerEEK6size_tK6int8_tKbR14ColumnCacheMapP10RenderInfo">Executor::compileWorkUnit (C++ function)</a>
 </li>
       <li><a href="api/class/class_executor.html#_CPPv4N8Executor21computeColRangesCacheERKNSt13unordered_setI13PhysicalInputEE">Executor::computeColRangesCache (C++ function)</a>
 </li>
@@ -8113,7 +8114,7 @@
 </li>
       <li><a href="api/class/class_executor.html#_CPPv4N8Executor20nukeCacheOfExecutorsEv">Executor::nukeCacheOfExecutors (C++ function)</a>
 </li>
-      <li><a href="api/class/class_executor.html#_CPPv4N8Executor12nukeOldStateEKbRKNSt6vectorI14InputTableInfoEEPK19RelAlgExecutionUnit">Executor::nukeOldState (C++ function)</a>
+      <li><a href="api/class/class_executor.html#_CPPv4N8Executor12nukeOldStateEKbRKNSt6vectorI14InputTableInfoEERKN9PlanState17DeletedColumnsMapEPK19RelAlgExecutionUnit">Executor::nukeOldState (C++ function)</a>
 </li>
       <li><a href="api/class/class_executor.html#_CPPv4NK8Executor14numBlocksPerMPEv">Executor::numBlocksPerMP (C++ function)</a>
 </li>
@@ -9071,7 +9072,7 @@
 </li>
       <li><a href="api/class/classforeign__storage_1_1_compressed_file_reader.html#_CPPv4N15foreign_storage20CompressedFileReader20archive_entry_index_E">foreign_storage::CompressedFileReader::archive_entry_index_ (C++ member)</a>
 </li>
-      <li><a href="api/class/classforeign__storage_1_1_compressed_file_reader.html#_CPPv4N15foreign_storage20CompressedFileReader16checkForMoreRowsE6size_t">foreign_storage::CompressedFileReader::checkForMoreRows (C++ function)</a>
+      <li><a href="api/class/classforeign__storage_1_1_compressed_file_reader.html#_CPPv4N15foreign_storage20CompressedFileReader16checkForMoreRowsE6size_tPK13ForeignServerPK11UserMapping">foreign_storage::CompressedFileReader::checkForMoreRows (C++ function)</a>
 </li>
       <li><a href="api/class/classforeign__storage_1_1_compressed_file_reader.html#_CPPv4N15foreign_storage20CompressedFileReader20CompressedFileReaderERKNSt6stringERKN13import_export10CopyParamsE">foreign_storage::CompressedFileReader::CompressedFileReader (C++ function)</a>, <a href="api/class/classforeign__storage_1_1_compressed_file_reader.html#_CPPv4N15foreign_storage20CompressedFileReader20CompressedFileReaderERKNSt6stringERKN13import_export10CopyParamsERKN9rapidjson5ValueE">[1]</a>
 </li>
@@ -9213,7 +9214,7 @@
 </li>
       <li><a href="api/class/classforeign__storage_1_1_csv_reader.html#_CPPv4N15foreign_storage9CsvReaderE">foreign_storage::CsvReader (C++ class)</a>
 </li>
-      <li><a href="api/class/classforeign__storage_1_1_csv_reader.html#_CPPv4N15foreign_storage9CsvReader16checkForMoreRowsE6size_t">foreign_storage::CsvReader::checkForMoreRows (C++ function)</a>
+      <li><a href="api/class/classforeign__storage_1_1_csv_reader.html#_CPPv4N15foreign_storage9CsvReader16checkForMoreRowsE6size_tPK13ForeignServerPK11UserMapping">foreign_storage::CsvReader::checkForMoreRows (C++ function)</a>
 </li>
       <li><a href="api/class/classforeign__storage_1_1_csv_reader.html#_CPPv4N15foreign_storage9CsvReader12copy_params_E">foreign_storage::CsvReader::copy_params_ (C++ member)</a>
 </li>
@@ -9250,6 +9251,8 @@
       <li><a href="api/class/classforeign__storage_1_1_csv_reader_s3.html#_CPPv4N15foreign_storage11CsvReaderS316getRemainingSizeEv">foreign_storage::CsvReaderS3::getRemainingSize (C++ function)</a>
 </li>
       <li><a href="api/class/classforeign__storage_1_1_csv_reader_s3.html#_CPPv4N15foreign_storage11CsvReaderS314header_offset_E">foreign_storage::CsvReaderS3::header_offset_ (C++ member)</a>
+</li>
+      <li><a href="api/class/classforeign__storage_1_1_csv_reader_s3.html#_CPPv4N15foreign_storage11CsvReaderS316increaseFileSizeE6size_t">foreign_storage::CsvReaderS3::increaseFileSize (C++ function)</a>
 </li>
       <li><a href="api/class/classforeign__storage_1_1_csv_reader_s3.html#_CPPv4N15foreign_storage11CsvReaderS320isRemainingSizeKnownEv">foreign_storage::CsvReaderS3::isRemainingSizeKnown (C++ function)</a>
 </li>
@@ -9519,14 +9522,14 @@
 </li>
       <li><a href="api/struct/structforeign__storage_1_1_foreign_table.html#_CPPv4N15foreign_storage12ForeignTable17FRAGMENT_SIZE_KEYE">foreign_storage::ForeignTable::FRAGMENT_SIZE_KEY (C++ member)</a>
 </li>
-  </ul></td>
-  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="api/struct/structforeign__storage_1_1_foreign_table.html#_CPPv4NK15foreign_storage12ForeignTable12isAppendModeEv">foreign_storage::ForeignTable::isAppendMode (C++ function)</a>
 </li>
       <li><a href="api/struct/structforeign__storage_1_1_foreign_table.html#_CPPv4N15foreign_storage12ForeignTable17last_refresh_timeE">foreign_storage::ForeignTable::last_refresh_time (C++ member)</a>
 </li>
       <li><a href="api/struct/structforeign__storage_1_1_foreign_table.html#_CPPv4N15foreign_storage12ForeignTable26MANUAL_REFRESH_TIMING_TYPEE">foreign_storage::ForeignTable::MANUAL_REFRESH_TIMING_TYPE (C++ member)</a>
 </li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="api/struct/structforeign__storage_1_1_foreign_table.html#_CPPv4N15foreign_storage12ForeignTable17next_refresh_timeE">foreign_storage::ForeignTable::next_refresh_time (C++ member)</a>
 </li>
       <li><a href="api/struct/structforeign__storage_1_1_foreign_table.html#_CPPv4N15foreign_storage12ForeignTable17NULL_REFRESH_TIMEE">foreign_storage::ForeignTable::NULL_REFRESH_TIME (C++ member)</a>
@@ -9639,7 +9642,7 @@
 </li>
       <li><a href="api/class/classforeign__storage_1_1_local_multi_file_reader.html#_CPPv4N15foreign_storage20LocalMultiFileReaderE">foreign_storage::LocalMultiFileReader (C++ class)</a>
 </li>
-      <li><a href="api/class/classforeign__storage_1_1_local_multi_file_reader.html#_CPPv4N15foreign_storage20LocalMultiFileReader16checkForMoreRowsE6size_t">foreign_storage::LocalMultiFileReader::checkForMoreRows (C++ function)</a>
+      <li><a href="api/class/classforeign__storage_1_1_local_multi_file_reader.html#_CPPv4N15foreign_storage20LocalMultiFileReader16checkForMoreRowsE6size_tPK13ForeignServerPK11UserMapping">foreign_storage::LocalMultiFileReader::checkForMoreRows (C++ function)</a>
 </li>
       <li><a href="api/class/classforeign__storage_1_1_local_multi_file_reader.html#_CPPv4N15foreign_storage20LocalMultiFileReader10insertFileENSt6stringE">foreign_storage::LocalMultiFileReader::insertFile (C++ function)</a>
 </li>
@@ -9701,7 +9704,23 @@
 </li>
       <li><a href="api/class/classforeign__storage_1_1_multi_s3_reader.html#_CPPv4N15foreign_storage13MultiS3ReaderE">foreign_storage::MultiS3Reader (C++ class)</a>
 </li>
+      <li><a href="api/class/classforeign__storage_1_1_multi_s3_reader.html#_CPPv4N15foreign_storage13MultiS3Reader12bucket_name_E">foreign_storage::MultiS3Reader::bucket_name_ (C++ member)</a>
+</li>
+      <li><a href="api/class/classforeign__storage_1_1_multi_s3_reader.html#_CPPv4N15foreign_storage13MultiS3Reader16checkForMoreRowsE6size_tPK13ForeignServerPK11UserMapping">foreign_storage::MultiS3Reader::checkForMoreRows (C++ function)</a>
+</li>
+      <li><a href="api/class/classforeign__storage_1_1_multi_s3_reader.html#_CPPv4N15foreign_storage13MultiS3Reader10file_size_E">foreign_storage::MultiS3Reader::file_size_ (C++ member)</a>
+</li>
+      <li><a href="api/class/classforeign__storage_1_1_multi_s3_reader.html#_CPPv4N15foreign_storage13MultiS3Reader11file_sizes_E">foreign_storage::MultiS3Reader::file_sizes_ (C++ member)</a>
+</li>
       <li><a href="api/class/classforeign__storage_1_1_multi_s3_reader.html#_CPPv4N15foreign_storage13MultiS3Reader13MultiS3ReaderERKNSt6stringERKN13import_export10CopyParamsEPK13ForeignServerPK11UserMapping">foreign_storage::MultiS3Reader::MultiS3Reader (C++ function)</a>, <a href="api/class/classforeign__storage_1_1_multi_s3_reader.html#_CPPv4N15foreign_storage13MultiS3Reader13MultiS3ReaderERKNSt6stringERKN13import_export10CopyParamsEPK13ForeignServerPK11UserMappingRKN9rapidjson5ValueE">[1]</a>
+</li>
+      <li><a href="api/class/classforeign__storage_1_1_multi_s3_reader.html#_CPPv4N15foreign_storage13MultiS3Reader10s3_client_E">foreign_storage::MultiS3Reader::s3_client_ (C++ member)</a>
+</li>
+      <li><a href="api/class/classforeign__storage_1_1_multi_s3_reader.html#_CPPv4N15foreign_storage13MultiS3Reader14scan_finished_E">foreign_storage::MultiS3Reader::scan_finished_ (C++ member)</a>
+</li>
+      <li><a href="api/class/classforeign__storage_1_1_multi_s3_reader.html#_CPPv4NK15foreign_storage13MultiS3Reader9serializeERN9rapidjson5ValueERN9rapidjson8Document13AllocatorTypeE">foreign_storage::MultiS3Reader::serialize (C++ function)</a>
+</li>
+      <li><a href="api/class/classforeign__storage_1_1_multi_s3_reader.html#_CPPv4N15foreign_storage13MultiS3Reader10skipHeaderEv">foreign_storage::MultiS3Reader::skipHeader (C++ function)</a>
 </li>
       <li><a href="api/struct/structforeign__storage_1_1_options_container.html#_CPPv4N15foreign_storage16OptionsContainerE">foreign_storage::OptionsContainer (C++ class)</a>
 </li>
@@ -10005,7 +10024,7 @@
 </li>
       <li><a href="api/class/classforeign__storage_1_1_single_file_reader.html#_CPPv4N15foreign_storage16SingleFileReaderE">foreign_storage::SingleFileReader (C++ class)</a>
 </li>
-      <li><a href="api/class/classforeign__storage_1_1_single_file_reader.html#_CPPv4N15foreign_storage16SingleFileReader16checkForMoreRowsE6size_t">foreign_storage::SingleFileReader::checkForMoreRows (C++ function)</a>
+      <li><a href="api/class/classforeign__storage_1_1_single_file_reader.html#_CPPv4N15foreign_storage16SingleFileReader16checkForMoreRowsE6size_tPK13ForeignServerPK11UserMapping">foreign_storage::SingleFileReader::checkForMoreRows (C++ function)</a>
 </li>
       <li><a href="api/class/classforeign__storage_1_1_single_file_reader.html#_CPPv4N15foreign_storage16SingleFileReader10data_size_E">foreign_storage::SingleFileReader::data_size_ (C++ member)</a>
 </li>
@@ -10469,7 +10488,7 @@
 </li>
       <li><a href="api/class/class_fragmenter___namespace_1_1_insert_order_fragmenter.html#_CPPv4N20Fragmenter_Namespace21InsertOrderFragmenter16updateChunkStatsEPK16ColumnDescriptorRNSt13unordered_mapIi10ChunkStatsEE">Fragmenter_Namespace::InsertOrderFragmenter::updateChunkStats (C++ function)</a>
 </li>
-      <li><a href="api/class/class_fragmenter___namespace_1_1_insert_order_fragmenter.html#_CPPv4N20Fragmenter_Namespace21InsertOrderFragmenter12updateColumnEPKN17Catalog_Namespace7CatalogEPK15TableDescriptorPK16ColumnDescriptorKiRKNSt6vectorI8uint64_tEERK17ScalarTargetValueRK11SQLTypeInfoKN14Data_Namespace11MemoryLevelER9UpdelRoll">Fragmenter_Namespace::InsertOrderFragmenter::updateColumn (C++ function)</a>, <a href="api/class/class_fragmenter___namespace_1_1_insert_order_fragmenter.html#_CPPv4N20Fragmenter_Namespace21InsertOrderFragmenter12updateColumnEPKN17Catalog_Namespace7CatalogEPK15TableDescriptorPK16ColumnDescriptorKiRKNSt6vectorI8uint64_tEERKNSt6vectorI17ScalarTargetValueEERK11SQLTypeInfoKN14Data_Namespace11MemoryLevelER9UpdelRoll">[1]</a>, <a href="api/class/class_fragmenter___namespace_1_1_insert_order_fragmenter.html#_CPPv4N20Fragmenter_Namespace21InsertOrderFragmenter12updateColumnEPKN17Catalog_Namespace7CatalogERKNSt6stringERKNSt6stringEKiRKNSt6vectorI8uint64_tEERKNSt6vectorI17ScalarTargetValueEERK11SQLTypeInfoKN14Data_Namespace11MemoryLevelER9UpdelRoll">[2]</a>
+      <li><a href="api/class/class_fragmenter___namespace_1_1_insert_order_fragmenter.html#_CPPv4N20Fragmenter_Namespace21InsertOrderFragmenter12updateColumnEPKN17Catalog_Namespace7CatalogEPK15TableDescriptorPK16ColumnDescriptorKiRKNSt6vectorI8uint64_tEERK17ScalarTargetValueRK11SQLTypeInfoKN14Data_Namespace11MemoryLevelER9UpdelRoll">Fragmenter_Namespace::InsertOrderFragmenter::updateColumn (C++ function)</a>, <a href="api/class/class_fragmenter___namespace_1_1_insert_order_fragmenter.html#_CPPv4N20Fragmenter_Namespace21InsertOrderFragmenter12updateColumnEPKN17Catalog_Namespace7CatalogEPK15TableDescriptorPK16ColumnDescriptorKiRKNSt6vectorI8uint64_tEERKNSt6vectorI17ScalarTargetValueEERK11SQLTypeInfoKN14Data_Namespace11MemoryLevelER9UpdelRoll">[1]</a>
 </li>
       <li><a href="api/class/class_fragmenter___namespace_1_1_insert_order_fragmenter.html#_CPPv4N20Fragmenter_Namespace21InsertOrderFragmenter25updateColumnChunkMetadataEPK16ColumnDescriptorKiKNSt10shared_ptrI13ChunkMetadataEE">Fragmenter_Namespace::InsertOrderFragmenter::updateColumnChunkMetadata (C++ function)</a>
 </li>
@@ -12899,6 +12918,16 @@
 </li>
       <li><a href="api/class/classlockmgr_1_1_table_data_lock_mgr.html#_CPPv4N7lockmgr16TableDataLockMgr16TableDataLockMgrEv">lockmgr::TableDataLockMgr::TableDataLockMgr (C++ function)</a>
 </li>
+      <li><a href="api/class/classlockmgr_1_1_table_insert_lock_container.html#_CPPv4I0EN7lockmgr24TableInsertLockContainerE">lockmgr::TableInsertLockContainer (C++ class)</a>
+</li>
+      <li><a href="api/class/classlockmgr_1_1_table_insert_lock_container_3_01_read_lock_01_4.html#_CPPv4N7lockmgr24TableInsertLockContainer7acquireEKiPK15TableDescriptor">lockmgr::TableInsertLockContainer::acquire (C++ function)</a>, <a href="api/class/classlockmgr_1_1_table_insert_lock_container_3_01_write_lock_01_4.html#_CPPv4N7lockmgr24TableInsertLockContainer7acquireEKiPK15TableDescriptor">[1]</a>
+</li>
+      <li><a href="api/class/classlockmgr_1_1_table_insert_lock_container.html#_CPPv4N7lockmgr24TableInsertLockContainer24TableInsertLockContainerERK24TableInsertLockContainer">lockmgr::TableInsertLockContainer::TableInsertLockContainer (C++ function)</a>, <a href="api/class/classlockmgr_1_1_table_insert_lock_container_3_01_read_lock_01_4.html#_CPPv4N7lockmgr24TableInsertLockContainer24TableInsertLockContainerEPK15TableDescriptorRR8ReadLock">[1]</a>, <a href="api/class/classlockmgr_1_1_table_insert_lock_container_3_01_write_lock_01_4.html#_CPPv4N7lockmgr24TableInsertLockContainer24TableInsertLockContainerEPK15TableDescriptorRR9WriteLock">[2]</a>
+</li>
+      <li><a href="api/class/classlockmgr_1_1_table_insert_lock_container_3_01_read_lock_01_4.html#_CPPv4IEN7lockmgr24TableInsertLockContainerI8ReadLockEE">lockmgr::TableInsertLockContainer&lt;ReadLock&gt; (C++ class)</a>
+</li>
+      <li><a href="api/class/classlockmgr_1_1_table_insert_lock_container_3_01_write_lock_01_4.html#_CPPv4IEN7lockmgr24TableInsertLockContainerI9WriteLockEE">lockmgr::TableInsertLockContainer&lt;WriteLock&gt; (C++ class)</a>
+</li>
       <li><a href="api/class/classlockmgr_1_1_table_lock_container_impl.html#_CPPv4N7lockmgr22TableLockContainerImplE">lockmgr::TableLockContainerImpl (C++ class)</a>
 </li>
       <li><a href="api/class/classlockmgr_1_1_table_lock_container_impl.html#_CPPv4NK7lockmgr22TableLockContainerImpl12getTableNameEv">lockmgr::TableLockContainerImpl::getTableName (C++ function)</a>
@@ -12945,12 +12974,12 @@
 </li>
       <li><a href="api/class/classlockmgr_1_1_tracked_ref_lock.html#_CPPv4N7lockmgr14TrackedRefLock6mutex_E">lockmgr::TrackedRefLock::mutex_ (C++ member)</a>
 </li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="api/class/classlockmgr_1_1_tracked_ref_lock.html#_CPPv4N7lockmgr14TrackedRefLockaSERK14TrackedRefLock">lockmgr::TrackedRefLock::operator= (C++ function)</a>
 </li>
       <li><a href="api/class/classlockmgr_1_1_tracked_ref_lock.html#_CPPv4N7lockmgr14TrackedRefLock14TrackedRefLockEP12MutexTracker">lockmgr::TrackedRefLock::TrackedRefLock (C++ function)</a>, <a href="api/class/classlockmgr_1_1_tracked_ref_lock.html#_CPPv4N7lockmgr14TrackedRefLock14TrackedRefLockERK14TrackedRefLock">[1]</a>, <a href="api/class/classlockmgr_1_1_tracked_ref_lock.html#_CPPv4N7lockmgr14TrackedRefLock14TrackedRefLockERR14TrackedRefLock">[2]</a>
 </li>
-  </ul></td>
-  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="api/class/classlockmgr_1_1_tracked_ref_lock.html#_CPPv4N7lockmgr14TrackedRefLockD0Ev">lockmgr::TrackedRefLock::~TrackedRefLock (C++ function)</a>
 </li>
       <li><a href="api/class/classlogger_1_1_debug_timer.html#_CPPv4N6logger10DebugTimerE">logger::DebugTimer (C++ class)</a>
@@ -14509,14 +14538,14 @@
 </li>
       <li><a href="api/struct/struct_parser_1_1_local_connector.html#_CPPv4N6Parser14LocalConnector21getOuterFragmentCountE15QueryStateProxyRNSt6stringE">Parser::LocalConnector::getOuterFragmentCount (C++ function)</a>
 </li>
-  </ul></td>
-  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="api/struct/struct_parser_1_1_local_connector.html#_CPPv4N6Parser14LocalConnector16insertDataToLeafERKN17Catalog_Namespace11SessionInfoEK6size_tRN20Fragmenter_Namespace10InsertDataE">Parser::LocalConnector::insertDataToLeaf (C++ function)</a>
 </li>
       <li><a href="api/struct/struct_parser_1_1_local_connector.html#_CPPv4N6Parser14LocalConnector9leafCountEv">Parser::LocalConnector::leafCount (C++ function)</a>
 </li>
       <li><a href="api/struct/struct_parser_1_1_local_connector.html#_CPPv4N6Parser14LocalConnector5queryE15QueryStateProxyRNSt6stringENSt6vectorI6size_tEE">Parser::LocalConnector::query (C++ function)</a>, <a href="api/struct/struct_parser_1_1_local_connector.html#_CPPv4N6Parser14LocalConnector5queryE15QueryStateProxyRNSt6stringENSt6vectorI6size_tEEb">[1]</a>
 </li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="api/struct/struct_parser_1_1_local_connector.html#_CPPv4N6Parser14LocalConnector8rollbackERKN17Catalog_Namespace11SessionInfoEi">Parser::LocalConnector::rollback (C++ function)</a>
 </li>
       <li><a href="api/struct/struct_parser_1_1_local_connector.html#_CPPv4N6Parser14LocalConnectorD0Ev">Parser::LocalConnector::~LocalConnector (C++ function)</a>
@@ -15281,12 +15310,22 @@
 </li>
       <li><a href="api/struct/struct_plan_state.html#_CPPv4N9PlanState21columns_to_not_fetch_E">PlanState::columns_to_not_fetch_ (C++ member)</a>
 </li>
+      <li><a href="api/struct/struct_plan_state.html#_CPPv4N9PlanState16deleted_columns_E15deleted_columns">PlanState::deleted_columns_ (C++ function)</a>
+
+      <ul>
+        <li><a href="api/struct/struct_plan_state.html#_CPPv4N9PlanState16deleted_columns_E">(C++ member)</a>
+</li>
+      </ul></li>
+      <li><a href="api/struct/struct_plan_state.html#_CPPv4N9PlanState17DeletedColumnsMapE">PlanState::DeletedColumnsMap (C++ type)</a>
+</li>
       <li><a href="api/struct/struct_plan_state.html#_CPPv4N9PlanState9executor_E8executor">PlanState::executor_ (C++ function)</a>
 
       <ul>
         <li><a href="api/struct/struct_plan_state.html#_CPPv4N9PlanState9executor_E">(C++ member)</a>
 </li>
       </ul></li>
+      <li><a href="api/struct/struct_plan_state.html#_CPPv4N9PlanState21getDeletedColForTableEK7TableId">PlanState::getDeletedColForTable (C++ function)</a>
+</li>
       <li><a href="api/struct/struct_plan_state.html#_CPPv4N9PlanState16getLocalColumnIdEPKN8Analyzer9ColumnVarEKb">PlanState::getLocalColumnId (C++ function)</a>
 </li>
       <li><a href="api/struct/struct_plan_state.html#_CPPv4N9PlanState24global_to_local_col_ids_E">PlanState::global_to_local_col_ids_ (C++ member)</a>
@@ -15297,8 +15336,14 @@
 </li>
       <li><a href="api/struct/struct_plan_state.html#_CPPv4N9PlanState10join_info_E">PlanState::join_info_ (C++ member)</a>
 </li>
-      <li><a href="api/struct/struct_plan_state.html#_CPPv4N9PlanState9PlanStateEKbPK8Executor">PlanState::PlanState (C++ function)</a>
+      <li><a href="api/struct/struct_plan_state.html#_CPPv4N9PlanState9PlanStateEKbRKNSt6vectorI14InputTableInfoEERK17DeletedColumnsMapPK8Executor">PlanState::PlanState (C++ function)</a>
 </li>
+      <li><a href="api/struct/struct_plan_state.html#_CPPv4N9PlanState12query_infos_E11query_infos">PlanState::query_infos_ (C++ function)</a>
+
+      <ul>
+        <li><a href="api/struct/struct_plan_state.html#_CPPv4N9PlanState12query_infos_E">(C++ member)</a>
+</li>
+      </ul></li>
       <li><a href="api/struct/struct_plan_state.html#_CPPv4N9PlanState7TableIdE">PlanState::TableId (C++ type)</a>
 </li>
       <li><a href="api/struct/struct_plan_state.html#_CPPv4N9PlanState13target_exprs_E">PlanState::target_exprs_ (C++ member)</a>
@@ -15529,7 +15574,7 @@
 </li>
       <li><a href="api/class/class_query_compilation_descriptor.html#_CPPv4N26QueryCompilationDescriptor19compilation_result_E">QueryCompilationDescriptor::compilation_result_ (C++ member)</a>
 </li>
-      <li><a href="api/class/class_query_compilation_descriptor.html#_CPPv4N26QueryCompilationDescriptor7compileEK6size_tK6int8_tKbRK19RelAlgExecutionUnitRKNSt6vectorI14InputTableInfoEERK13ColumnFetcherRK18CompilationOptionsRK16ExecutionOptionsP10RenderInfoP8Executor">QueryCompilationDescriptor::compile (C++ function)</a>
+      <li><a href="api/class/class_query_compilation_descriptor.html#_CPPv4N26QueryCompilationDescriptor7compileEK6size_tK6int8_tKbRK19RelAlgExecutionUnitRKNSt6vectorI14InputTableInfoEERKN9PlanState17DeletedColumnsMapERK13ColumnFetcherRK18CompilationOptionsRK16ExecutionOptionsP10RenderInfoP8Executor">QueryCompilationDescriptor::compile (C++ function)</a>
 </li>
       <li><a href="api/class/class_query_compilation_descriptor.html#_CPPv4NK26QueryCompilationDescriptor20getCompilationResultEv">QueryCompilationDescriptor::getCompilationResult (C++ function)</a>
 </li>
@@ -15555,9 +15600,11 @@
 </li>
       <li><a href="api/class/class_query_dispatch_queue.html#_CPPv4N18QueryDispatchQueue12queue_mutex_E">QueryDispatchQueue::queue_mutex_ (C++ member)</a>
 </li>
-      <li><a href="api/class/class_query_dispatch_queue.html#_CPPv4N18QueryDispatchQueue6submitENSt10shared_ptrI4TaskEE">QueryDispatchQueue::submit (C++ function)</a>
+      <li><a href="api/class/class_query_dispatch_queue.html#_CPPv4N18QueryDispatchQueue6submitENSt10shared_ptrI4TaskEEKb">QueryDispatchQueue::submit (C++ function)</a>
 </li>
       <li><a href="api/class/class_query_dispatch_queue.html#_CPPv4N18QueryDispatchQueue4TaskE">QueryDispatchQueue::Task (C++ type)</a>
+</li>
+      <li><a href="api/class/class_query_dispatch_queue.html#_CPPv4N18QueryDispatchQueue20update_delete_mutex_E">QueryDispatchQueue::update_delete_mutex_ (C++ member)</a>
 </li>
       <li><a href="api/class/class_query_dispatch_queue.html#_CPPv4N18QueryDispatchQueue6workerEK6size_t">QueryDispatchQueue::worker (C++ function)</a>
 </li>
@@ -19507,8 +19554,6 @@
 </li>
       <li><a href="api/struct/structtable__functions_1_1_table_function_output_row_sizer.html#_CPPv4N15table_functions27TableFunctionOutputRowSizerE">table_functions::TableFunctionOutputRowSizer (C++ class)</a>
 </li>
-      <li><a href="api/struct/structtable__functions_1_1_table_function_output_row_sizer.html#_CPPv4N15table_functions27TableFunctionOutputRowSizer4typeE">table_functions::TableFunctionOutputRowSizer::type (C++ member)</a>
-</li>
       <li><a href="api/struct/structtable__functions_1_1_table_function_output_row_sizer.html#_CPPv4N15table_functions27TableFunctionOutputRowSizer3valE">table_functions::TableFunctionOutputRowSizer::val (C++ member)</a>
 </li>
       <li><a href="api/class/classtable__functions_1_1_table_functions_factory.html#_CPPv4N15table_functions21TableFunctionsFactoryE">table_functions::TableFunctionsFactory (C++ class)</a>
@@ -19723,10 +19768,10 @@
 </li>
       <li><a href="api/struct/struct_target_expr_codegen.html#_CPPv4N17TargetExprCodegen10target_idxE">TargetExprCodegen::target_idx (C++ member)</a>
 </li>
-  </ul></td>
-  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="api/struct/struct_target_expr_codegen.html#_CPPv4N17TargetExprCodegen11target_infoE">TargetExprCodegen::target_info (C++ member)</a>
 </li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="api/struct/struct_target_expr_codegen.html#_CPPv4N17TargetExprCodegen17TargetExprCodegenEPKN8Analyzer4ExprER10TargetInfoK7int32_tK6size_tKb">TargetExprCodegen::TargetExprCodegen (C++ function)</a>
 </li>
       <li><a href="api/struct/struct_target_expr_codegen_builder.html#_CPPv424TargetExprCodegenBuilder">TargetExprCodegenBuilder (C++ class)</a>
@@ -19953,7 +19998,7 @@
 </li>
       <li><a href="api/class/class_too_many_hash_entries.html#_CPPv418TooManyHashEntries">TooManyHashEntries (C++ class)</a>
 </li>
-      <li><a href="api/class/class_too_many_hash_entries.html#_CPPv4N18TooManyHashEntries18TooManyHashEntriesEv">TooManyHashEntries::TooManyHashEntries (C++ function)</a>
+      <li><a href="api/class/class_too_many_hash_entries.html#_CPPv4N18TooManyHashEntries18TooManyHashEntriesERKNSt6stringE">TooManyHashEntries::TooManyHashEntries (C++ function)</a>, <a href="api/class/class_too_many_hash_entries.html#_CPPv4N18TooManyHashEntries18TooManyHashEntriesEv">[1]</a>
 </li>
       <li><a href="api/class/class_too_many_literals.html#_CPPv415TooManyLiterals">TooManyLiterals (C++ class)</a>
 </li>

@@ -65,7 +65,7 @@
             
             
               <div class="version">
-                5.5.0dev 2b310ab
+                5.5.0dev 1241207
               </div>
             
           
@@ -1042,6 +1042,9 @@
 <li class="toctree-l2"><a class="reference internal" href="classlockmgr_1_1_table_data_lock_container_3_01_read_lock_01_4.html">Class lockmgr::TableDataLockContainer&lt; ReadLock &gt;</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classlockmgr_1_1_table_data_lock_container_3_01_write_lock_01_4.html">Class lockmgr::TableDataLockContainer&lt; WriteLock &gt;</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classlockmgr_1_1_table_data_lock_mgr.html">Class lockmgr::TableDataLockMgr</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classlockmgr_1_1_table_insert_lock_container.html">Class lockmgr::TableInsertLockContainer</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classlockmgr_1_1_table_insert_lock_container_3_01_read_lock_01_4.html">Class lockmgr::TableInsertLockContainer&lt; ReadLock &gt;</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classlockmgr_1_1_table_insert_lock_container_3_01_write_lock_01_4.html">Class lockmgr::TableInsertLockContainer&lt; WriteLock &gt;</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classlockmgr_1_1_table_lock_container_impl.html">Class lockmgr::TableLockContainerImpl</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classlockmgr_1_1_table_lock_mgr_impl.html">Class lockmgr::TableLockMgrImpl</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classlockmgr_1_1_table_schema_lock_container.html">Class lockmgr::TableSchemaLockContainer</a></li>
@@ -1543,6 +1546,69 @@
 <dl class="function">
 <dt id="_CPPv4N15foreign_storage13MultiS3Reader13MultiS3ReaderERKNSt6stringERKN13import_export10CopyParamsEPK13ForeignServerPK11UserMappingRKN9rapidjson5ValueE">
 <span id="_CPPv3N15foreign_storage13MultiS3Reader13MultiS3ReaderERKNSt6stringERKN13import_export10CopyParamsEPK13ForeignServerPK11UserMappingRKN9rapidjson5ValueE"></span><span id="_CPPv2N15foreign_storage13MultiS3Reader13MultiS3ReaderERKNSt6stringERKN13import_export10CopyParamsEPK13ForeignServerPK11UserMappingRKN9rapidjson5ValueE"></span><span id="foreign_storage::MultiS3Reader::MultiS3Reader__ssCR.import_export::CopyParamsCR.ForeignServerCP.UserMappingCP.rapidjson::ValueCR"></span><span class="target" id="classforeign__storage_1_1_multi_s3_reader_1af9a310121226417d65538ca33858b8fe"></span><code class="sig-name descname">MultiS3Reader</code><span class="sig-paren">(</span><em class="property">const</em> std::string &amp;<em>file_path</em>, <em class="property">const</em> import_export::<a class="reference internal" href="../struct/structimport__export_1_1_copy_params.html#_CPPv4N13import_export10CopyParamsE" title="import_export::CopyParams">CopyParams</a> &amp;<em>copy_params</em>, <em class="property">const</em> <a class="reference internal" href="../struct/structforeign__storage_1_1_foreign_server.html#_CPPv4N15foreign_storage13ForeignServerE" title="foreign_storage::ForeignServer">ForeignServer</a> *<em>server_options</em>, <em class="property">const</em> UserMapping *<em>user_mapping</em>, <em class="property">const</em> rapidjson::Value &amp;<em>value</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N15foreign_storage13MultiS3Reader13MultiS3ReaderERKNSt6stringERKN13import_export10CopyParamsEPK13ForeignServerPK11UserMappingRKN9rapidjson5ValueE" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="_CPPv4N15foreign_storage13MultiS3Reader16checkForMoreRowsE6size_tPK13ForeignServerPK11UserMapping">
+<span id="_CPPv3N15foreign_storage13MultiS3Reader16checkForMoreRowsE6size_tPK13ForeignServerPK11UserMapping"></span><span id="_CPPv2N15foreign_storage13MultiS3Reader16checkForMoreRowsE6size_tPK13ForeignServerPK11UserMapping"></span><span id="foreign_storage::MultiS3Reader::checkForMoreRows__s.ForeignServerCP.UserMappingCP"></span><span class="target" id="classforeign__storage_1_1_multi_s3_reader_1a830cc3f2506f9a40348ab1ebf073022f"></span>void <code class="sig-name descname">checkForMoreRows</code><span class="sig-paren">(</span>size_t <em>file_offset</em>, <em class="property">const</em> <a class="reference internal" href="../struct/structforeign__storage_1_1_foreign_server.html#_CPPv4N15foreign_storage13ForeignServerE" title="foreign_storage::ForeignServer">ForeignServer</a> *<em>server_options</em>, <em class="property">const</em> UserMapping *<em>user_mapping</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N15foreign_storage13MultiS3Reader16checkForMoreRowsE6size_tPK13ForeignServerPK11UserMapping" title="Permalink to this definition">¶</a><br /></dt>
+<dd><p>Rescan the target files Throws an exception if the rescan fails (ie files are not in a valid appended state or not supported) <dl class="simple">
+<dt><strong>Parameters</strong></dt><dd><ul class="breatheparameterlist simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">file_offset</span></code>: - where to resume the scan from (end of the last row) as not all of the bytes may have been consumed by the upstream compoennet </p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">server_options</span></code>: - only needed for S3 backed CSV </p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">user_mapping</span></code>: - only needed for S3 backed CSV </p></li>
+</ul>
+</dd>
+</dl>
+</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="_CPPv4NK15foreign_storage13MultiS3Reader9serializeERN9rapidjson5ValueERN9rapidjson8Document13AllocatorTypeE">
+<span id="_CPPv3NK15foreign_storage13MultiS3Reader9serializeERN9rapidjson5ValueERN9rapidjson8Document13AllocatorTypeE"></span><span id="_CPPv2NK15foreign_storage13MultiS3Reader9serializeERN9rapidjson5ValueERN9rapidjson8Document13AllocatorTypeE"></span><span id="foreign_storage::MultiS3Reader::serialize__rapidjson::ValueR.rapidjson::Document::AllocatorTypeRC"></span><span class="target" id="classforeign__storage_1_1_multi_s3_reader_1a69bc4985b02fbb1131c9532c165b2828"></span>void <code class="sig-name descname">serialize</code><span class="sig-paren">(</span>rapidjson::Value &amp;<em>value</em>, rapidjson::Document::AllocatorType &amp;<em>allocator</em><span class="sig-paren">)</span> <em class="property">const</em><a class="headerlink" href="#_CPPv4NK15foreign_storage13MultiS3Reader9serializeERN9rapidjson5ValueERN9rapidjson8Document13AllocatorTypeE" title="Permalink to this definition">¶</a><br /></dt>
+<dd><p>Serialize internal state to given json object This Json will later be used to restore the reader state through a constructor must be called when <a class="reference internal" href="classforeign__storage_1_1_multi_file_reader.html#classforeign__storage_1_1_multi_file_reader_1a0d456e406ceedf3de161051553d21e1e"><span class="std std-ref">isScanFinished()</span></a> is true <dl class="simple">
+<dt><strong>Parameters</strong></dt><dd><ul class="breatheparameterlist simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">value</span></code>: - json object to store needed state to this function can store any needed data or none </p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">allocator</span></code>: - allocator to use for json contruction </p></li>
+</ul>
+</dd>
+</dl>
+</p>
+</dd></dl>
+
+</div>
+<div class="breathe-sectiondef docutils container">
+<p class="breathe-sectiondef-title rubric">Private Functions</p>
+<dl class="function">
+<dt id="_CPPv4N15foreign_storage13MultiS3Reader10skipHeaderEv">
+<span id="_CPPv3N15foreign_storage13MultiS3Reader10skipHeaderEv"></span><span id="_CPPv2N15foreign_storage13MultiS3Reader10skipHeaderEv"></span><span id="foreign_storage::MultiS3Reader::skipHeader"></span><span class="target" id="classforeign__storage_1_1_multi_s3_reader_1ac19195dd28a21abb426de76204f81169"></span>void <code class="sig-name descname">skipHeader</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N15foreign_storage13MultiS3Reader10skipHeaderEv" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+</div>
+<div class="breathe-sectiondef docutils container">
+<p class="breathe-sectiondef-title rubric">Private Members</p>
+<dl class="member">
+<dt id="_CPPv4N15foreign_storage13MultiS3Reader10file_size_E">
+<span id="_CPPv3N15foreign_storage13MultiS3Reader10file_size_E"></span><span id="_CPPv2N15foreign_storage13MultiS3Reader10file_size_E"></span><span id="foreign_storage::MultiS3Reader::file_size___s"></span><span class="target" id="classforeign__storage_1_1_multi_s3_reader_1aaa33add782ca2877a2b77447f95914f7"></span>size_t <code class="sig-name descname">file_size_</code><a class="headerlink" href="#_CPPv4N15foreign_storage13MultiS3Reader10file_size_E" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="member">
+<dt id="_CPPv4N15foreign_storage13MultiS3Reader14scan_finished_E">
+<span id="_CPPv3N15foreign_storage13MultiS3Reader14scan_finished_E"></span><span id="_CPPv2N15foreign_storage13MultiS3Reader14scan_finished_E"></span><span id="foreign_storage::MultiS3Reader::scan_finished___b"></span><span class="target" id="classforeign__storage_1_1_multi_s3_reader_1ae874968a3ed7669dc9dce5e39c73000f"></span>bool <code class="sig-name descname">scan_finished_</code><a class="headerlink" href="#_CPPv4N15foreign_storage13MultiS3Reader14scan_finished_E" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="member">
+<dt id="_CPPv4N15foreign_storage13MultiS3Reader10s3_client_E">
+<span id="_CPPv3N15foreign_storage13MultiS3Reader10s3_client_E"></span><span id="_CPPv2N15foreign_storage13MultiS3Reader10s3_client_E"></span><span id="foreign_storage::MultiS3Reader::s3_client___std::unique_ptr:Aws::S3::S3Client:"></span><span class="target" id="classforeign__storage_1_1_multi_s3_reader_1a06a63648f856a35e1d533888b2411b03"></span>std::unique_ptr&lt;Aws::S3::S3Client&gt; <code class="sig-name descname">s3_client_</code><a class="headerlink" href="#_CPPv4N15foreign_storage13MultiS3Reader10s3_client_E" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="member">
+<dt id="_CPPv4N15foreign_storage13MultiS3Reader11file_sizes_E">
+<span id="_CPPv3N15foreign_storage13MultiS3Reader11file_sizes_E"></span><span id="_CPPv2N15foreign_storage13MultiS3Reader11file_sizes_E"></span><span id="foreign_storage::MultiS3Reader::file_sizes___std::vector:s:"></span><span class="target" id="classforeign__storage_1_1_multi_s3_reader_1af84b308bca49f09d46d96108651abc30"></span>std::vector&lt;size_t&gt; <code class="sig-name descname">file_sizes_</code><a class="headerlink" href="#_CPPv4N15foreign_storage13MultiS3Reader11file_sizes_E" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="member">
+<dt id="_CPPv4N15foreign_storage13MultiS3Reader12bucket_name_E">
+<span id="_CPPv3N15foreign_storage13MultiS3Reader12bucket_name_E"></span><span id="_CPPv2N15foreign_storage13MultiS3Reader12bucket_name_E"></span><span id="foreign_storage::MultiS3Reader::bucket_name___ss"></span><span class="target" id="classforeign__storage_1_1_multi_s3_reader_1a03384414f4a6e2744034e8b043b42b11"></span>std::string <code class="sig-name descname">bucket_name_</code><a class="headerlink" href="#_CPPv4N15foreign_storage13MultiS3Reader12bucket_name_E" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 </div>

@@ -65,7 +65,7 @@
             
             
               <div class="version">
-                5.5.0dev 2b310ab
+                5.5.0dev 1241207
               </div>
             
           
@@ -1042,6 +1042,9 @@
 <li class="toctree-l2"><a class="reference internal" href="../class/classlockmgr_1_1_table_data_lock_container_3_01_read_lock_01_4.html">Class lockmgr::TableDataLockContainer&lt; ReadLock &gt;</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/classlockmgr_1_1_table_data_lock_container_3_01_write_lock_01_4.html">Class lockmgr::TableDataLockContainer&lt; WriteLock &gt;</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/classlockmgr_1_1_table_data_lock_mgr.html">Class lockmgr::TableDataLockMgr</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../class/classlockmgr_1_1_table_insert_lock_container.html">Class lockmgr::TableInsertLockContainer</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../class/classlockmgr_1_1_table_insert_lock_container_3_01_read_lock_01_4.html">Class lockmgr::TableInsertLockContainer&lt; ReadLock &gt;</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../class/classlockmgr_1_1_table_insert_lock_container_3_01_write_lock_01_4.html">Class lockmgr::TableInsertLockContainer&lt; WriteLock &gt;</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/classlockmgr_1_1_table_lock_container_impl.html">Class lockmgr::TableLockContainerImpl</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/classlockmgr_1_1_table_lock_mgr_impl.html">Class lockmgr::TableLockMgrImpl</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/classlockmgr_1_1_table_schema_lock_container.html">Class lockmgr::TableSchemaLockContainer</a></li>
@@ -1545,12 +1548,27 @@
 <span id="_CPPv3N9PlanState8ColumnIdE"></span><span id="_CPPv2N9PlanState8ColumnIdE"></span><span class="target" id="struct_plan_state_1a484e639a2c5dd2bedd42a7d05e89a68c"></span><em class="property">using </em><code class="sig-name descname">ColumnId</code> = int<a class="headerlink" href="#_CPPv4N9PlanState8ColumnIdE" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
+<dl class="type">
+<dt id="_CPPv4N9PlanState17DeletedColumnsMapE">
+<span id="_CPPv3N9PlanState17DeletedColumnsMapE"></span><span id="_CPPv2N9PlanState17DeletedColumnsMapE"></span><span class="target" id="struct_plan_state_1aaa4d1ea4a24c47aa3f4811531efd3aac"></span><em class="property">using </em><code class="sig-name descname">DeletedColumnsMap</code> = std::unordered_map&lt;<a class="reference internal" href="#_CPPv4N9PlanState7TableIdE" title="PlanState::TableId">TableId</a>, <em class="property">const</em> <a class="reference internal" href="struct_column_descriptor.html#_CPPv416ColumnDescriptor" title="ColumnDescriptor">ColumnDescriptor</a> *&gt;<a class="headerlink" href="#_CPPv4N9PlanState17DeletedColumnsMapE" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
 </div>
 <div class="breathe-sectiondef docutils container">
 <p class="breathe-sectiondef-title rubric">Public Functions</p>
 <dl class="function">
-<dt id="_CPPv4N9PlanState9PlanStateEKbPK8Executor">
-<span id="_CPPv3N9PlanState9PlanStateEKbPK8Executor"></span><span id="_CPPv2N9PlanState9PlanStateEKbPK8Executor"></span><span id="PlanState::PlanState__bC.ExecutorCP"></span><span class="target" id="struct_plan_state_1a38d60d00a0c45b35d5017e6b42da3640"></span><code class="sig-name descname">PlanState</code><span class="sig-paren">(</span><em class="property">const</em> bool <em>allow_lazy_fetch</em>, <em class="property">const</em> <a class="reference internal" href="../class/class_executor.html#_CPPv48Executor" title="Executor">Executor</a> *<em>executor</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N9PlanState9PlanStateEKbPK8Executor" title="Permalink to this definition">¶</a><br /></dt>
+<dt id="_CPPv4N9PlanState9PlanStateEKbRKNSt6vectorI14InputTableInfoEERK17DeletedColumnsMapPK8Executor">
+<span id="_CPPv3N9PlanState9PlanStateEKbRKNSt6vectorI14InputTableInfoEERK17DeletedColumnsMapPK8Executor"></span><span id="_CPPv2N9PlanState9PlanStateEKbRKNSt6vectorI14InputTableInfoEERK17DeletedColumnsMapPK8Executor"></span><span id="PlanState::PlanState__bC.std::vector:InputTableInfo:CR.DeletedColumnsMapCR.ExecutorCP"></span><span class="target" id="struct_plan_state_1a13666fbee998a66531c0f1b2b0b9c1b3"></span><code class="sig-name descname">PlanState</code><span class="sig-paren">(</span><em class="property">const</em> bool <em>allow_lazy_fetch</em>, <em class="property">const</em> std::vector&lt;<a class="reference internal" href="struct_input_table_info.html#_CPPv414InputTableInfo" title="InputTableInfo">InputTableInfo</a>&gt; &amp;<em>query_infos</em>, <em class="property">const</em> <a class="reference internal" href="#_CPPv4N9PlanState17DeletedColumnsMapE" title="PlanState::DeletedColumnsMap">DeletedColumnsMap</a> &amp;<em>deleted_columns</em>, <em class="property">const</em> <a class="reference internal" href="../class/class_executor.html#_CPPv48Executor" title="Executor">Executor</a> *<em>executor</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N9PlanState9PlanStateEKbRKNSt6vectorI14InputTableInfoEERK17DeletedColumnsMapPK8Executor" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="_CPPv4N9PlanState16deleted_columns_E15deleted_columns">
+<span id="_CPPv3N9PlanState16deleted_columns_E15deleted_columns"></span><span id="_CPPv2N9PlanState16deleted_columns_E15deleted_columns"></span><span id="PlanState::deleted_columns___deleted_columns"></span><span class="target" id="struct_plan_state_1ae748574ed00142a92dcbd17f7d094475"></span><code class="sig-name descname">deleted_columns_</code><span class="sig-paren">(</span>deleted_columns<span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N9PlanState16deleted_columns_E15deleted_columns" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="_CPPv4N9PlanState12query_infos_E11query_infos">
+<span id="_CPPv3N9PlanState12query_infos_E11query_infos"></span><span id="_CPPv2N9PlanState12query_infos_E11query_infos"></span><span id="PlanState::query_infos___query_infos"></span><span class="target" id="struct_plan_state_1afce39ebf039e2f1cb972a94167542372"></span><code class="sig-name descname">query_infos_</code><span class="sig-paren">(</span>query_infos<span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N9PlanState12query_infos_E11query_infos" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 <dl class="function">
@@ -1576,6 +1594,11 @@
 <dl class="function">
 <dt id="_CPPv4N9PlanState17isLazyFetchColumnERK18InputColDescriptor">
 <span id="_CPPv3N9PlanState17isLazyFetchColumnERK18InputColDescriptor"></span><span id="_CPPv2N9PlanState17isLazyFetchColumnERK18InputColDescriptor"></span><span id="PlanState::isLazyFetchColumn__InputColDescriptorCR"></span><span class="target" id="struct_plan_state_1a01205748fb5d8ff36e2195e0ad60299c"></span>bool <code class="sig-name descname">isLazyFetchColumn</code><span class="sig-paren">(</span><em class="property">const</em> <a class="reference internal" href="../class/class_input_col_descriptor.html#_CPPv418InputColDescriptor" title="InputColDescriptor">InputColDescriptor</a> &amp;<em>col_desc</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N9PlanState17isLazyFetchColumnERK18InputColDescriptor" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="_CPPv4N9PlanState21getDeletedColForTableEK7TableId">
+<span id="_CPPv3N9PlanState21getDeletedColForTableEK7TableId"></span><span id="_CPPv2N9PlanState21getDeletedColForTableEK7TableId"></span><span id="PlanState::getDeletedColForTable__TableIdC"></span><span class="target" id="struct_plan_state_1ab70cbb426a65b211ad1647c9be2335e2"></span><em class="property">const</em> <a class="reference internal" href="struct_column_descriptor.html#_CPPv416ColumnDescriptor" title="ColumnDescriptor">ColumnDescriptor</a> *<code class="sig-name descname">getDeletedColForTable</code><span class="sig-paren">(</span><em class="property">const</em> <a class="reference internal" href="#_CPPv4N9PlanState7TableIdE" title="PlanState::TableId">TableId</a> <em>table_id</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N9PlanState21getDeletedColForTableEK7TableId" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 </div>
@@ -1614,6 +1637,16 @@
 <dl class="member">
 <dt id="_CPPv4N9PlanState10join_info_E">
 <span id="_CPPv3N9PlanState10join_info_E"></span><span id="_CPPv2N9PlanState10join_info_E"></span><span id="PlanState::join_info___JoinInfo"></span><span class="target" id="struct_plan_state_1ae9b4bf15952ed4e6c9594382860d8b23"></span><a class="reference internal" href="struct_join_info.html#_CPPv48JoinInfo" title="JoinInfo">JoinInfo</a> <code class="sig-name descname">join_info_</code><a class="headerlink" href="#_CPPv4N9PlanState10join_info_E" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="member">
+<dt id="_CPPv4N9PlanState16deleted_columns_E">
+<span id="_CPPv3N9PlanState16deleted_columns_E"></span><span id="_CPPv2N9PlanState16deleted_columns_E"></span><span id="PlanState::deleted_columns___DeletedColumnsMapC"></span><span class="target" id="struct_plan_state_1a9009590517d4f5be1d1164f36398bf02"></span><em class="property">const</em> <a class="reference internal" href="#_CPPv4N9PlanState17DeletedColumnsMapE" title="PlanState::DeletedColumnsMap">DeletedColumnsMap</a> <code class="sig-name descname">deleted_columns_</code><a class="headerlink" href="#_CPPv4N9PlanState16deleted_columns_E" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="member">
+<dt id="_CPPv4N9PlanState12query_infos_E">
+<span id="_CPPv3N9PlanState12query_infos_E"></span><span id="_CPPv2N9PlanState12query_infos_E"></span><span id="PlanState::query_infos___std::vector:InputTableInfo:CR"></span><span class="target" id="struct_plan_state_1a815d92816e9d477b0f0e3944f9fb623c"></span><em class="property">const</em> std::vector&lt;<a class="reference internal" href="struct_input_table_info.html#_CPPv414InputTableInfo" title="InputTableInfo">InputTableInfo</a>&gt; &amp;<code class="sig-name descname">query_infos_</code><a class="headerlink" href="#_CPPv4N9PlanState12query_infos_E" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 <dl class="member">

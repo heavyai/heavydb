@@ -65,7 +65,7 @@
             
             
               <div class="version">
-                5.5.0dev 2b310ab
+                5.5.0dev 1241207
               </div>
             
           
@@ -1042,6 +1042,9 @@
 <li class="toctree-l2"><a class="reference internal" href="classlockmgr_1_1_table_data_lock_container_3_01_read_lock_01_4.html">Class lockmgr::TableDataLockContainer&lt; ReadLock &gt;</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classlockmgr_1_1_table_data_lock_container_3_01_write_lock_01_4.html">Class lockmgr::TableDataLockContainer&lt; WriteLock &gt;</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classlockmgr_1_1_table_data_lock_mgr.html">Class lockmgr::TableDataLockMgr</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classlockmgr_1_1_table_insert_lock_container.html">Class lockmgr::TableInsertLockContainer</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classlockmgr_1_1_table_insert_lock_container_3_01_read_lock_01_4.html">Class lockmgr::TableInsertLockContainer&lt; ReadLock &gt;</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classlockmgr_1_1_table_insert_lock_container_3_01_write_lock_01_4.html">Class lockmgr::TableInsertLockContainer&lt; WriteLock &gt;</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classlockmgr_1_1_table_lock_container_impl.html">Class lockmgr::TableLockContainerImpl</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classlockmgr_1_1_table_lock_mgr_impl.html">Class lockmgr::TableLockMgrImpl</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classlockmgr_1_1_table_schema_lock_container.html">Class lockmgr::TableSchemaLockContainer</a></li>
@@ -1557,11 +1560,6 @@
 <dd></dd></dl>
 
 <dl class="function">
-<dt id="_CPPv4N13CodeGenerator15codegenIntConstEPKN8Analyzer8ConstantE">
-<span id="_CPPv3N13CodeGenerator15codegenIntConstEPKN8Analyzer8ConstantE"></span><span id="_CPPv2N13CodeGenerator15codegenIntConstEPKN8Analyzer8ConstantE"></span><span id="CodeGenerator::codegenIntConst__Analyzer::ConstantCP"></span><span class="target" id="class_code_generator_1a53c0ef5c598c1b71950d5be94c36d7a8"></span>llvm::ConstantInt *<code class="sig-name descname">codegenIntConst</code><span class="sig-paren">(</span><em class="property">const</em> Analyzer::<a class="reference internal" href="class_analyzer_1_1_constant.html#_CPPv4N8Analyzer8ConstantE" title="Analyzer::Constant">Constant</a> *<em>constant</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N13CodeGenerator15codegenIntConstEPKN8Analyzer8ConstantE" title="Permalink to this definition">¶</a><br /></dt>
-<dd></dd></dl>
-
-<dl class="function">
 <dt id="_CPPv4N13CodeGenerator26codegenCastBetweenIntTypesEPN4llvm5ValueERK11SQLTypeInfoRK11SQLTypeInfob">
 <span id="_CPPv3N13CodeGenerator26codegenCastBetweenIntTypesEPN4llvm5ValueERK11SQLTypeInfoRK11SQLTypeInfob"></span><span id="_CPPv2N13CodeGenerator26codegenCastBetweenIntTypesEPN4llvm5ValueERK11SQLTypeInfoRK11SQLTypeInfob"></span><span id="CodeGenerator::codegenCastBetweenIntTypes__llvm::ValueP.SQLTypeInfoCR.SQLTypeInfoCR.b"></span><span class="target" id="class_code_generator_1a6b77ff312f8a074656db965b4f0ccdf8"></span>llvm::Value *<code class="sig-name descname">codegenCastBetweenIntTypes</code><span class="sig-paren">(</span>llvm::Value *<em>operand_lv</em>, <em class="property">const</em> <a class="reference internal" href="class_s_q_l_type_info.html#_CPPv411SQLTypeInfo" title="SQLTypeInfo">SQLTypeInfo</a> &amp;<em>operand_ti</em>, <em class="property">const</em> <a class="reference internal" href="class_s_q_l_type_info.html#_CPPv411SQLTypeInfo" title="SQLTypeInfo">SQLTypeInfo</a> &amp;<em>ti</em>, bool <em>upscale</em> = true<span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N13CodeGenerator26codegenCastBetweenIntTypesEPN4llvm5ValueERK11SQLTypeInfoRK11SQLTypeInfob" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
@@ -1589,6 +1587,11 @@
 </div>
 <div class="breathe-sectiondef docutils container">
 <p class="breathe-sectiondef-title rubric">Public Static Functions</p>
+<dl class="function">
+<dt id="_CPPv4N13CodeGenerator15codegenIntConstEPKN8Analyzer8ConstantEP9CgenState">
+<span id="_CPPv3N13CodeGenerator15codegenIntConstEPKN8Analyzer8ConstantEP9CgenState"></span><span id="_CPPv2N13CodeGenerator15codegenIntConstEPKN8Analyzer8ConstantEP9CgenState"></span><span id="CodeGenerator::codegenIntConst__Analyzer::ConstantCP.CgenStateP"></span><span class="target" id="class_code_generator_1a623820b775034c815e7162e65cccf32c"></span>llvm::ConstantInt *<code class="sig-name descname">codegenIntConst</code><span class="sig-paren">(</span><em class="property">const</em> Analyzer::<a class="reference internal" href="class_analyzer_1_1_constant.html#_CPPv4N8Analyzer8ConstantE" title="Analyzer::Constant">Constant</a> *<em>constant</em>, <a class="reference internal" href="../struct/struct_cgen_state.html#_CPPv49CgenState" title="CgenState">CgenState</a> *<em>cgen_state</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N13CodeGenerator15codegenIntConstEPKN8Analyzer8ConstantEP9CgenState" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
 <dl class="function">
 <dt id="_CPPv4N13CodeGenerator20markDeadRuntimeFuncsERN4llvm6ModuleERKNSt6vectorIPN4llvm8FunctionEEERKNSt6vectorIPN4llvm8FunctionEEE">
 <span id="_CPPv3N13CodeGenerator20markDeadRuntimeFuncsERN4llvm6ModuleERKNSt6vectorIPN4llvm8FunctionEEERKNSt6vectorIPN4llvm8FunctionEEE"></span><span id="_CPPv2N13CodeGenerator20markDeadRuntimeFuncsERN4llvm6ModuleERKNSt6vectorIPN4llvm8FunctionEEERKNSt6vectorIPN4llvm8FunctionEEE"></span><span id="CodeGenerator::markDeadRuntimeFuncs__llvm::ModuleR.std::vector:llvm::FunctionP:CR.std::vector:llvm::FunctionP:CR"></span><span class="target" id="class_code_generator_1af4ebb63a2a66214bb646ad4447300abb"></span>std::unordered_set&lt;llvm::Function *&gt; <code class="sig-name descname">markDeadRuntimeFuncs</code><span class="sig-paren">(</span>llvm::Module &amp;<em>module</em>, <em class="property">const</em> std::vector&lt;llvm::Function *&gt; &amp;<em>roots</em>, <em class="property">const</em> std::vector&lt;llvm::Function *&gt; &amp;<em>leaves</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N13CodeGenerator20markDeadRuntimeFuncsERN4llvm6ModuleERKNSt6vectorIPN4llvm8FunctionEEERKNSt6vectorIPN4llvm8FunctionEEE" title="Permalink to this definition">¶</a><br /></dt>

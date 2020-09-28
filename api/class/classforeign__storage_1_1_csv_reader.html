@@ -65,7 +65,7 @@
             
             
               <div class="version">
-                5.5.0dev 2b310ab
+                5.5.0dev 1241207
               </div>
             
           
@@ -1042,6 +1042,9 @@
 <li class="toctree-l2"><a class="reference internal" href="classlockmgr_1_1_table_data_lock_container_3_01_read_lock_01_4.html">Class lockmgr::TableDataLockContainer&lt; ReadLock &gt;</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classlockmgr_1_1_table_data_lock_container_3_01_write_lock_01_4.html">Class lockmgr::TableDataLockContainer&lt; WriteLock &gt;</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classlockmgr_1_1_table_data_lock_mgr.html">Class lockmgr::TableDataLockMgr</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classlockmgr_1_1_table_insert_lock_container.html">Class lockmgr::TableInsertLockContainer</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classlockmgr_1_1_table_insert_lock_container_3_01_read_lock_01_4.html">Class lockmgr::TableInsertLockContainer&lt; ReadLock &gt;</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classlockmgr_1_1_table_insert_lock_container_3_01_write_lock_01_4.html">Class lockmgr::TableInsertLockContainer&lt; WriteLock &gt;</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classlockmgr_1_1_table_lock_container_impl.html">Class lockmgr::TableLockContainerImpl</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classlockmgr_1_1_table_lock_mgr_impl.html">Class lockmgr::TableLockMgrImpl</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classlockmgr_1_1_table_schema_lock_container.html">Class lockmgr::TableSchemaLockContainer</a></li>
@@ -1610,11 +1613,13 @@
 </dd></dl>
 
 <dl class="function">
-<dt id="_CPPv4N15foreign_storage9CsvReader16checkForMoreRowsE6size_t">
-<span id="_CPPv3N15foreign_storage9CsvReader16checkForMoreRowsE6size_t"></span><span id="_CPPv2N15foreign_storage9CsvReader16checkForMoreRowsE6size_t"></span><span id="foreign_storage::CsvReader::checkForMoreRows__s"></span><span class="target" id="classforeign__storage_1_1_csv_reader_1a69934216f593b16e21dec24662293223"></span><em class="property">virtual</em> void <code class="sig-name descname">checkForMoreRows</code><span class="sig-paren">(</span>size_t <em>file_offset</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N15foreign_storage9CsvReader16checkForMoreRowsE6size_t" title="Permalink to this definition">¶</a><br /></dt>
+<dt id="_CPPv4N15foreign_storage9CsvReader16checkForMoreRowsE6size_tPK13ForeignServerPK11UserMapping">
+<span id="_CPPv3N15foreign_storage9CsvReader16checkForMoreRowsE6size_tPK13ForeignServerPK11UserMapping"></span><span id="_CPPv2N15foreign_storage9CsvReader16checkForMoreRowsE6size_tPK13ForeignServerPK11UserMapping"></span><span id="foreign_storage::CsvReader::checkForMoreRows__s.ForeignServerCP.UserMappingCP"></span><span class="target" id="classforeign__storage_1_1_csv_reader_1add9ab165887ce39da2651fd5d87bb6b2"></span><em class="property">virtual</em> void <code class="sig-name descname">checkForMoreRows</code><span class="sig-paren">(</span>size_t <em>file_offset</em>, <em class="property">const</em> <a class="reference internal" href="../struct/structforeign__storage_1_1_foreign_server.html#_CPPv4N15foreign_storage13ForeignServerE" title="foreign_storage::ForeignServer">ForeignServer</a> *<em>server_options</em> = nullptr, <em class="property">const</em> UserMapping *<em>user_mapping</em> = nullptr<span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N15foreign_storage9CsvReader16checkForMoreRowsE6size_tPK13ForeignServerPK11UserMapping" title="Permalink to this definition">¶</a><br /></dt>
 <dd><p>Rescan the target files Throws an exception if the rescan fails (ie files are not in a valid appended state or not supported) <dl class="simple">
 <dt><strong>Parameters</strong></dt><dd><ul class="breatheparameterlist simple">
 <li><p><code class="docutils literal notranslate"><span class="pre">file_offset</span></code>: - where to resume the scan from (end of the last row) as not all of the bytes may have been consumed by the upstream compoennet </p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">server_options</span></code>: - only needed for S3 backed CSV </p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">user_mapping</span></code>: - only needed for S3 backed CSV </p></li>
 </ul>
 </dd>
 </dl>
