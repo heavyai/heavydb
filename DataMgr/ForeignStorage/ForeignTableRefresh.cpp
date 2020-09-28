@@ -51,7 +51,7 @@ void refresh_foreign_table(Catalog_Namespace::Catalog& catalog,
 }
 
 void ForeignTableRefreshScheduler::start(std::atomic<bool>& is_program_running) {
-  if (!is_schedular_running_) {
+  if (!is_scheduler_running_) {
     scheduler_thread_ = std::thread([&is_program_running]() {
       while (is_program_running) {
         auto& sys_catalog = Catalog_Namespace::SysCatalog::instance();
@@ -70,14 +70,14 @@ void ForeignTableRefreshScheduler::start(std::atomic<bool>& is_program_running) 
         std::this_thread::sleep_for(thread_wait_duration_);
       }
     });
-    is_schedular_running_ = true;
+    is_scheduler_running_ = true;
   }
 }
 
 void ForeignTableRefreshScheduler::stop() {
-  if (is_schedular_running_) {
+  if (is_scheduler_running_) {
     scheduler_thread_.join();
-    is_schedular_running_ = false;
+    is_scheduler_running_ = false;
   }
 }
 
@@ -86,7 +86,7 @@ void ForeignTableRefreshScheduler::setWaitDuration(int64_t duration_in_seconds) 
 }
 
 bool ForeignTableRefreshScheduler::isRunning() {
-  return is_schedular_running_;
+  return is_scheduler_running_;
 }
 
 bool ForeignTableRefreshScheduler::hasRefreshedTable() {
@@ -97,7 +97,7 @@ void ForeignTableRefreshScheduler::resetHasRefreshedTable() {
   has_refreshed_table_ = false;
 }
 
-bool ForeignTableRefreshScheduler::is_schedular_running_{false};
+bool ForeignTableRefreshScheduler::is_scheduler_running_{false};
 std::chrono::seconds ForeignTableRefreshScheduler::thread_wait_duration_{60};
 std::thread ForeignTableRefreshScheduler::scheduler_thread_;
 std::atomic<bool> ForeignTableRefreshScheduler::has_refreshed_table_{false};
