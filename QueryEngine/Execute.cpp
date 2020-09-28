@@ -3327,6 +3327,10 @@ std::pair<bool, int64_t> Executor::skipFragment(
       chunk_min = extract_min_stat(chunk_meta_it->second->chunkStats, chunk_type);
       chunk_max = extract_max_stat(chunk_meta_it->second->chunkStats, chunk_type);
     }
+    if (chunk_min > chunk_max) {
+      // invalid metadata range, do not skip fragment
+      return {false, -1};
+    }
     if (lhs->get_type_info().is_timestamp() &&
         (lhs_col->get_type_info().get_dimension() !=
          rhs_const->get_type_info().get_dimension()) &&
