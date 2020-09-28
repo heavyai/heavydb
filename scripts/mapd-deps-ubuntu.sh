@@ -208,7 +208,7 @@ popd
 install_rdkafka
 
 # glslang (with spirv-tools)
-VERS=7.12.3352 # 8/20/19
+VERS=8.13.3743 # stable 4/27/20
 rm -rf glslang
 mkdir -p glslang
 pushd glslang
@@ -229,7 +229,7 @@ popd # glslang-$VERS
 popd # glslang
 
 # spirv-cross
-VERS=2019-09-04
+VERS=2020-06-29 # latest from 6/29/20
 rm -rf spirv-cross
 mkdir -p spirv-cross
 pushd spirv-cross
@@ -252,7 +252,7 @@ popd # spirv-cross
 
 # Vulkan
 # Custom tarball which excludes the spir-v toolchain
-VERS=1.1.126.0 # 11/1/19
+VERS=1.2.148.1 # stable 8/9/20
 rm -rf vulkan
 mkdir -p vulkan
 pushd vulkan
