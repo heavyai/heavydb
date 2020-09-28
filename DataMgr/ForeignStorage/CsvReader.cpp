@@ -122,7 +122,9 @@ void SingleFileReader::serialize(rapidjson::Value& value,
   json_utils::add_value_to_object(value, data_size_, "data_size", allocator);
 };
 
-void SingleFileReader::checkForMoreRows(size_t file_offset) {
+void SingleFileReader::checkForMoreRows(size_t file_offset,
+                                        const ForeignServer* server_options,
+                                        const UserMapping* user_mapping) {
   CHECK(isScanFinished());
   // Re-open file and check if there is any new data in it
   fclose(file_);
@@ -366,7 +368,9 @@ void CompressedFileReader::skipBytes(size_t n_bytes) {
   }
 }
 
-void CompressedFileReader::checkForMoreRows(size_t file_offset) {
+void CompressedFileReader::checkForMoreRows(size_t file_offset,
+                                            const ForeignServer* server_options,
+                                            const UserMapping* user_mapping) {
   CHECK(initial_scan_ == false);
   size_t initial_entries = archive_entry_index_.size();
 
@@ -598,9 +602,12 @@ void LocalMultiFileReader::insertFile(std::string location) {
   }
 }
 
-void LocalMultiFileReader::checkForMoreRows(size_t file_offset) {
+void LocalMultiFileReader::checkForMoreRows(size_t file_offset,
+                                            const ForeignServer* server_options,
+                                            const UserMapping* user_mapping) {
   // Look for new files
   std::set<std::string> new_locations;
+  CHECK(isScanFinished());
   CHECK(file_offset == current_offset_);
   if (boost::filesystem::is_directory(file_path_)) {
     // Find all files in this directory

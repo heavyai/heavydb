@@ -202,20 +202,24 @@ void CsvReaderS3::skipHeader() {
   }
 }
 
-MultiS3Reader::MultiS3Reader(const std::string& prefix_name,
-                             const import_export::CopyParams& copy_params,
-                             const ForeignServer* foreign_server,
-                             const UserMapping* user_mapping)
-    : MultiFileReader(prefix_name, copy_params) {
+void CsvReaderS3::increaseFileSize(size_t new_size) {
+  CHECK(scan_finished_);
+  CHECK_GT(new_size, file_size_);
+  current_offset_ = file_size_;
+  file_size_ = new_size;
+  scan_finished_ = false;
+}
+
+namespace {
+
+using S3FileInfo = std::pair<std::string, size_t>;
+void list_files_s3(std::unique_ptr<Aws::S3::S3Client>& s3_client,
+                   const std::string& prefix_name,
+                   const std::string& bucket_name,
+                   std::set<S3FileInfo>& file_info_set) {
   Aws::S3::Model::ListObjectsV2Request objects_request;
-  auto bucket_name = foreign_server->options.find(ForeignServer::S3_BUCKET_KEY)->second;
   objects_request.WithBucket(bucket_name);
   objects_request.WithPrefix(prefix_name);
-
-  std::unique_ptr<Aws::S3::S3Client> s3_client;
-  auto credentials = get_credentials(user_mapping);
-  auto config = get_s3_config(foreign_server);
-  s3_client.reset(new Aws::S3::S3Client(credentials, config));
   auto list_objects_outcome = s3_client->ListObjectsV2(objects_request);
   if (list_objects_outcome.IsSuccess()) {
     auto object_list = list_objects_outcome.GetResult().GetContents();
@@ -243,9 +247,7 @@ MultiS3Reader::MultiS3Reader(const std::string& prefix_name,
           boost::filesystem::extension(path) != ".tsv") {
         continue;
       }
-      files_.emplace_back(std::make_unique<CsvReaderS3>(
-          objkey, obj.GetSize(), copy_params, foreign_server, user_mapping));
-      file_locations_.push_back(objkey);
+      file_info_set.insert(S3FileInfo(objkey, obj.GetSize()));
     }
   } else {
     throw std::runtime_error{
@@ -255,22 +257,103 @@ MultiS3Reader::MultiS3Reader(const std::string& prefix_name,
                                  list_objects_outcome.GetError().GetMessage())};
   }
 }
+}  // namespace
+
+MultiS3Reader::MultiS3Reader(const std::string& prefix_name,
+                             const import_export::CopyParams& copy_params,
+                             const ForeignServer* foreign_server,
+                             const UserMapping* user_mapping)
+    : MultiFileReader(prefix_name, copy_params) {
+  auto credentials = get_credentials(user_mapping);
+  auto config = get_s3_config(foreign_server);
+  s3_client_.reset(new Aws::S3::S3Client(credentials, config));
+  bucket_name_ = foreign_server->options.find(ForeignServer::S3_BUCKET_KEY)->second;
+  std::set<S3FileInfo> file_info_set;
+  list_files_s3(s3_client_, prefix_name, bucket_name_, file_info_set);
+  for (const auto& file_info : file_info_set) {
+    files_.emplace_back(std::make_unique<CsvReaderS3>(
+        file_info.first, file_info.second, copy_params, foreign_server, user_mapping));
+    file_locations_.push_back(file_info.first);
+    file_sizes_.push_back(file_info.second);
+  }
+}
 
 MultiS3Reader::MultiS3Reader(const std::string& file_path,
                              const import_export::CopyParams& copy_params,
-                             const ForeignServer* server_options,
+                             const ForeignServer* foreign_server,
                              const UserMapping* user_mapping,
                              const rapidjson::Value& value)
     : MultiFileReader(file_path, copy_params, value) {
+  auto credentials = get_credentials(user_mapping);
+  auto config = get_s3_config(foreign_server);
+  s3_client_.reset(new Aws::S3::S3Client(credentials, config));
+  bucket_name_ = foreign_server->options.find(ForeignServer::S3_BUCKET_KEY)->second;
   // reconstruct files from metadata
   CHECK(value.HasMember("files_metadata"));
   for (size_t index = 0; index < file_locations_.size(); index++) {
     files_.emplace_back(
         std::make_unique<CsvReaderS3>(file_locations_[index],
                                       copy_params,
-                                      server_options,
+                                      foreign_server,
                                       user_mapping,
                                       value["files_metadata"].GetArray()[index]));
   }
+  json_utils::get_value_from_object(value, file_sizes_, "file_sizes");
 }
+
+void MultiS3Reader::serialize(rapidjson::Value& value,
+                              rapidjson::Document::AllocatorType& allocator) const {
+  json_utils::add_value_to_object(value, file_sizes_, "file_sizes", allocator);
+  MultiFileReader::serialize(value, allocator);
+};
+
+void MultiS3Reader::checkForMoreRows(size_t file_offset,
+                                     const ForeignServer* foreign_server,
+                                     const UserMapping* user_mapping) {
+  CHECK(isScanFinished());
+  CHECK(file_offset == current_offset_);
+  CHECK(foreign_server != nullptr);
+
+  // Look for new files
+  std::set<S3FileInfo> file_info_set;
+  list_files_s3(s3_client_, file_path_, bucket_name_, file_info_set);
+  int new_files = 0;
+  for (const auto& file_info : file_info_set) {
+    if (std::find(file_locations_.begin(), file_locations_.end(), file_info.first) ==
+        file_locations_.end()) {
+      files_.emplace_back(std::make_unique<CsvReaderS3>(
+          file_info.first, file_info.second, copy_params_, foreign_server, user_mapping));
+      file_locations_.push_back(file_info.first);
+      new_files++;
+    }
+  }
+  // If no new files added and only one file in archive, check for new rows
+  if (new_files == 0 && files_.size() == 1) {
+    if (file_info_set.size() < 1 ||
+        find(file_locations_.begin(),
+             file_locations_.end(),
+             file_info_set.begin()->first) == file_locations_.end()) {
+      throw std::runtime_error{
+          "Foreign table refreshed with APPEND mode missing entry \"" +
+          file_locations_[0] + "\"."};
+    }
+    if (file_info_set.begin()->second < file_sizes_[0]) {
+      throw std::runtime_error{
+          "Refresh of foreign table created with APPEND update mode failed as remote "
+          "file "
+          "reduced in size: \"" +
+          file_locations_[0] + "\"."};
+    }
+
+    if (file_info_set.begin()->second > file_sizes_[0]) {
+      CsvReaderS3* s3_reader = dynamic_cast<CsvReaderS3*>(files_[0].get());
+      CHECK(s3_reader != nullptr);
+      s3_reader->increaseFileSize(file_info_set.begin()->second);
+      file_sizes_[0] = file_info_set.begin()->second;
+      current_index_ = 0;
+      cumulative_sizes_ = {};
+    }
+  }
+}
+
 }  // namespace foreign_storage

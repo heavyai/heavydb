@@ -840,12 +840,16 @@ void CsvDataWrapper::populateChunkMetadata(ChunkMetadataVector& chunk_metadata_v
   const auto copy_params = validateAndGetCopyParams();
   const auto file_path = getFilePath();
   auto catalog = Catalog_Namespace::Catalog::checkedGet(db_id_);
-
+  auto& server_options = foreign_table_->foreign_server->options;
   if (foreign_table_->isAppendMode() && csv_reader_ != nullptr) {
-    csv_reader_->checkForMoreRows(append_start_offset_);
+    if (server_options.find(ForeignServer::STORAGE_TYPE_KEY)->second ==
+        ForeignServer::LOCAL_FILE_STORAGE_TYPE) {
+      csv_reader_->checkForMoreRows(append_start_offset_);
+    } else {
+      UNREACHABLE();
+    }
   } else {
     fragment_id_to_file_regions_map_.clear();
-    auto& server_options = foreign_table_->foreign_server->options;
     if (server_options.find(ForeignServer::STORAGE_TYPE_KEY)->second ==
         ForeignServer::LOCAL_FILE_STORAGE_TYPE) {
       csv_reader_ = std::make_unique<LocalMultiFileReader>(file_path, copy_params);

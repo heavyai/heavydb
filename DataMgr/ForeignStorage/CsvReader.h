@@ -24,6 +24,9 @@
 
 namespace foreign_storage {
 
+class ForeignServer;
+class UserMapping;
+
 // Archive reader for csv archives
 // Supports an initial full scan with calls to read()
 // When the entire Csv object has been read isScanFinished() returns true
@@ -75,8 +78,12 @@ class CsvReader {
    * or not supported)
    * @param file_offset - where to resume the scan from (end of the last row) as
    *  not all of the bytes may have been consumed by the upstream compoennet
+   * @param server_options - only needed for S3 backed CSV
+   * @param user_mapping - only needed for S3 backed CSV
    */
-  virtual void checkForMoreRows(size_t file_offset) {
+  virtual void checkForMoreRows(size_t file_offset,
+                                const ForeignServer* server_options = nullptr,
+                                const UserMapping* user_mapping = nullptr) {
     throw std::runtime_error{"APPEND mode not yet supported for this table."};
   }
 
@@ -135,7 +142,9 @@ class SingleFileReader : public CsvReader {
   size_t getRemainingSize() override { return data_size_ - total_bytes_read_; }
 
   bool isRemainingSizeKnown() override { return true; };
-  void checkForMoreRows(size_t file_offset) override;
+  void checkForMoreRows(size_t file_offset,
+                        const ForeignServer* server_options,
+                        const UserMapping* user_mapping) override;
 
   void serialize(rapidjson::Value& value,
                  rapidjson::Document::AllocatorType& allocator) const override;
@@ -231,7 +240,9 @@ class CompressedFileReader : public CsvReader {
    */
   void resetArchive();
 
-  void checkForMoreRows(size_t file_offset) override;
+  void checkForMoreRows(size_t file_offset,
+                        const ForeignServer* server_options,
+                        const UserMapping* user_mapping) override;
 
  private:
   /**
@@ -320,7 +331,9 @@ class LocalMultiFileReader : public MultiFileReader {
                        const import_export::CopyParams& copy_params,
                        const rapidjson::Value& value);
 
-  void checkForMoreRows(size_t file_offset) override;
+  void checkForMoreRows(size_t file_offset,
+                        const ForeignServer* server_options,
+                        const UserMapping* user_mapping) override;
 
  private:
   void insertFile(std::string location);

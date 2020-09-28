@@ -37,6 +37,20 @@ class MultiS3Reader : public MultiFileReader {
                 const ForeignServer* server_options,
                 const UserMapping* user_mapping,
                 const rapidjson::Value& value);
+  void checkForMoreRows(size_t file_offset,
+                        const ForeignServer* server_options,
+                        const UserMapping* user_mapping) override;
+  void serialize(rapidjson::Value& value,
+                 rapidjson::Document::AllocatorType& allocator) const override;
+
+ private:
+  void skipHeader();
+  size_t file_size_;
+  // We've reached the end of the file
+  bool scan_finished_;
+  std::unique_ptr<Aws::S3::S3Client> s3_client_;
+  std::vector<size_t> file_sizes_;
+  std::string bucket_name_;
 };
 
 class CsvReaderS3 : public CsvReader {
@@ -68,6 +82,9 @@ class CsvReaderS3 : public CsvReader {
 
   void serialize(rapidjson::Value& value,
                  rapidjson::Document::AllocatorType& allocator) const override;
+
+  // Increase file size and continue metadata scan
+  void increaseFileSize(size_t new_size);
 
  private:
   void skipHeader();
