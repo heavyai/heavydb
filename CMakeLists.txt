@@ -1,5 +1,7 @@
-# fixme: this should be 3.3, but that breaks static ncurses
-cmake_minimum_required(VERSION 3.2)
+cmake_minimum_required(VERSION 3.16)
+
+# Required for LLVM / JIT, alternative to setting CMP0065 to OLD
+set(CMAKE_ENABLE_EXPORTS True)
 
 # force `Release` build type if left unspecified
 if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
