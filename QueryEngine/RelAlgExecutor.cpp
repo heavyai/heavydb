@@ -436,11 +436,29 @@ FirstStepExecutionResult RelAlgExecutor::executeRelAlgQuerySingleStep(
       if (sort->collationCount() || node_is_aggregate(source)) {
         auto temp_seq = RaExecutionSequence(std::make_unique<RaExecutionDesc>(source));
         CHECK_EQ(temp_seq.size(), size_t(1));
+        ExecutionOptions eo_copy = {
+            eo.output_columnar_hint,
+            eo.allow_multifrag,
+            eo.just_explain,
+            eo.allow_loop_joins,
+            eo.with_watchdog,
+            eo.jit_debug,
+            eo.just_validate || sort->isEmptyResult(),
+            eo.with_dynamic_watchdog,
+            eo.dynamic_watchdog_time_limit,
+            eo.find_push_down_candidates,
+            eo.just_calcite_explain,
+            eo.gpu_input_mem_limit_percent,
+            eo.allow_runtime_query_interrupt,
+            eo.runtime_query_interrupt_frequency,
+            eo.executor_type,
+        };
         // Use subseq to avoid clearing existing temporary tables
-        return {executeRelAlgSubSeq(temp_seq, std::make_pair(0, 1), co, eo, nullptr, 0),
-                merge_type(source),
-                source->getId(),
-                false};
+        return {
+            executeRelAlgSubSeq(temp_seq, std::make_pair(0, 1), co, eo_copy, nullptr, 0),
+            merge_type(source),
+            source->getId(),
+            false};
       }
     }
   }

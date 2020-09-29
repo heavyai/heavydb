@@ -1432,6 +1432,13 @@ TEST(Select, LimitAndOffset) {
     }
     {
       const auto rows = run_multiple_agg(
+          "SELECT str FROM (SELECT str, SUM(y) as total_y FROM test GROUP BY str ORDER "
+          "BY total_y DESC, str LIMIT 0);",
+          dt);
+      ASSERT_EQ(size_t(0), rows->rowCount());
+    }
+    {
+      const auto rows = run_multiple_agg(
           "SELECT * FROM ( SELECT * FROM test_inner LIMIT 3 ) t0 LIMIT 2", dt);
       ASSERT_EQ(size_t(2), rows->rowCount());
     }
