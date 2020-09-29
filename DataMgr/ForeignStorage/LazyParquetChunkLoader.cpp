@@ -24,14 +24,15 @@
 #include <parquet/platform.h>
 #include <parquet/types.h>
 
-#include "ParquetArrayEncoder.h"
 #include "ParquetDateInSecondsEncoder.h"
 #include "ParquetDecimalEncoder.h"
+#include "ParquetFixedLengthArrayEncoder.h"
 #include "ParquetFixedLengthEncoder.h"
 #include "ParquetStringEncoder.h"
 #include "ParquetStringNoneEncoder.h"
 #include "ParquetTimeEncoder.h"
 #include "ParquetTimestampEncoder.h"
+#include "ParquetVariableLengthArrayEncoder.h"
 
 namespace foreign_storage {
 
@@ -355,9 +356,9 @@ std::shared_ptr<ParquetEncoder> create_parquet_string_encoder(
   return {};
 }
 
-// forward declare `create_parquet_array_encoder`:
-// `create_parquet_encoder` and `create_parquet_array_encoder` each make use of
-// each other, so one of the two functions must have a forward declaration
+// forward declare `create_parquet_array_encoder`: `create_parquet_encoder` and
+// `create_parquet_array_encoder` each make use of each other, so
+// one of the two functions must have a forward declaration
 std::shared_ptr<ParquetEncoder> create_parquet_array_encoder(
     const ColumnDescriptor* omnisci_column,
     const parquet::ColumnDescriptor* parquet_column,
@@ -415,8 +416,7 @@ std::shared_ptr<ParquetEncoder> create_parquet_array_encoder(
     StringDictionary* string_dictionary,
     std::shared_ptr<ChunkMetadata>& chunk_metadata) {
   bool is_valid_parquet_list = is_valid_parquet_list_column(parquet_column);
-  if (!is_valid_parquet_list || !omnisci_column->columnType.is_array() ||
-      omnisci_column->columnType.is_fixlen_array()) {
+  if (!is_valid_parquet_list || !omnisci_column->columnType.is_array()) {
     return {};
   }
   std::unique_ptr<ColumnDescriptor> omnisci_column_sub_type_column =
@@ -430,8 +430,14 @@ std::shared_ptr<ParquetEncoder> create_parquet_array_encoder(
 
   auto scalar_encoder = std::dynamic_pointer_cast<ParquetScalarEncoder>(encoder);
   CHECK(scalar_encoder);
-  encoder = std::make_shared<ParquetArrayEncoder>(
-      chunk.getBuffer(), chunk.getIndexBuf(), scalar_encoder, omnisci_column);
+
+  if (omnisci_column->columnType.is_fixlen_array()) {
+    encoder = std::make_shared<ParquetFixedLengthArrayEncoder>(
+        chunk.getBuffer(), scalar_encoder, omnisci_column);
+  } else {
+    encoder = std::make_shared<ParquetVariableLengthArrayEncoder>(
+        chunk.getBuffer(), chunk.getIndexBuf(), scalar_encoder, omnisci_column);
+  }
 
   return encoder;
 }
@@ -700,8 +706,7 @@ bool validate_string_mapping(const ColumnDescriptor* omnisci_column,
 bool validate_array_mapping(const ColumnDescriptor* omnisci_column,
                             const parquet::ColumnDescriptor* parquet_column) {
   if (is_valid_parquet_list_column(parquet_column) &&
-      omnisci_column->columnType.is_array() &&
-      !omnisci_column->columnType.is_fixlen_array()) {
+      omnisci_column->columnType.is_array()) {
     auto omnisci_column_sub_type_column = get_sub_type_column_descriptor(omnisci_column);
     return LazyParquetChunkLoader::isColumnMappingSupported(
         omnisci_column_sub_type_column.get(), parquet_column);

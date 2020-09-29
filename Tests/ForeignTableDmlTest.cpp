@@ -2305,6 +2305,76 @@ TEST_F(SelectQueryTest, ParquetArrayDateTimeTypes) {
   // clang-format on
 }
 
+TEST_F(SelectQueryTest, DISABLED_ParquetFixedLengthArrayMalformed) {
+  // TODO: to fix this test, remove the catch clause in BufferMgr::getBuffer
+  // that aborts and does not thrown an exception. Alternatively, write the
+  // test to expect an abort.
+  const auto& query = getCreateForeignTableQuery(
+      "(bigint_array BIGINT[3])", "array_fixed_len_malformed", "parquet");
+  sql(query);
+  TQueryResult result;
+  queryAndAssertException(
+      "SELECT * FROM test_foreign_table;",
+      "Detected a row with 2 elements being loaded into  OmniSci column 'bigint_array' "
+      "which has type fixed length array, expecting 3 elements");
+}
+
+TEST_F(SelectQueryTest, ParquetFixedLengthArrayDateTimeTypes) {
+  const auto& query = getCreateForeignTableQuery(
+      "(index INT, time_milli_array TIME[2], time_micro_array TIME[2],"
+      " time_nano_array TIME[2], timestamp_milli1_array TIMESTAMP[2],"
+      " timestamp_micro1_array TIMESTAMP[2], timestamp_milli2_array TIMESTAMP(3)[2],"
+      " timestamp_micro2_array TIMESTAMP(6)[2], date_array DATE[2])",
+      "array_fixed_len_datetime_types",
+      "parquet");
+  sql(query);
+
+  TQueryResult result;
+  sql(result, "SELECT * FROM test_foreign_table ORDER BY index;");
+
+  // clang-format off
+  assertResultSetEqual(
+      {
+          {
+            i(1),array({}), array({}), array({}), array({}), array({}), array({}),
+            array({}), array({})
+          },
+          {
+            i(2),array({"23:59:59", "00:59:59"}),
+            array({"23:59:59", "00:59:59"}),
+            array({"23:59:59", "00:59:59"}),
+            array({"1871-07-06 23:59:59", "1931-03-01 00:59:59"}),
+            array({"1871-07-06 23:59:59", "1931-03-01 00:59:59"}),
+            array({"1871-07-06 23:59:59.123", "1931-03-01 00:59:59.123"}),
+            array({"1871-07-06 23:59:59.123456", "1931-03-01 00:59:59.123456"}),
+            array({"1871-07-06", "1931-03-01"})
+          },
+          {
+            i(3),array({"10:10:10", i(NULL_BIGINT)}), array({"10:10:10", i(NULL_BIGINT)}),
+            array({"10:10:10", i(NULL_BIGINT)}),
+            array({"2020-11-10 10:10:10", i(NULL_BIGINT)}),
+            array({"2020-11-10 10:10:10", i(NULL_BIGINT)}),
+            array({"2020-11-10 10:10:10.123", i(NULL_BIGINT)}),
+            array({"2020-11-10 10:10:10.123456", i(NULL_BIGINT)}),
+            array({"2020-11-10", i(NULL_BIGINT)})
+          },
+          {
+            i(4),array({}), array({}), array({}),
+            array({}), array({}), array({}), array({}), array({})
+          },
+          {
+            i(5),array({"00:00:01", "12:00:00"}),
+            array({"00:00:01", "12:00:00"}), array({"00:00:01", "12:00:00"}),
+            array({"2200-01-01 00:00:01", "1900-12-29 12:00:00"}),
+            array({"2200-01-01 00:00:01", "1900-12-29 12:00:00"}),
+            array({"2200-01-01 00:00:01.123", "1900-12-29 12:00:00.123"}),
+            array({"2200-01-01 00:00:01.123456", "1900-12-29 12:00:00.123456"}),
+            array({"2200-01-01", "1900-12-29"})
+          },
+      }, result);
+  // clang-format on
+}
+
 TEST_F(SelectQueryTest, ParquetArrayUnsignedIntegerTypes) {
   const auto& query = getCreateForeignTableQuery(
       "( index INT, utinyint_array SMALLINT[], usmallint_array INT[],"
@@ -2333,6 +2403,39 @@ TEST_F(SelectQueryTest, ParquetArrayUnsignedIntegerTypes) {
         },
         {
           i(5),array({i(7)}),array({i(7)}),array({i(7)})
+        }
+      }, result);
+  // clang-format on
+}
+
+TEST_F(SelectQueryTest, ParquetFixedLengthArrayUnsignedIntegerTypes) {
+  const auto& query = getCreateForeignTableQuery(
+      "( index INT, utinyint_array SMALLINT[2], usmallint_array INT[2],"
+      " uint_array BIGINT[2] )",
+      "array_fixed_len_unsigned_types",
+      "parquet");
+  sql(query);
+
+  TQueryResult result;
+  sql(result, "SELECT * FROM test_foreign_table ORDER BY index;");
+
+  // clang-format off
+  assertResultSetEqual( {
+        {
+          i(1),array({i(1),i(2)}),array({i(1),i(2)}),array({i(1),i(2)})
+        },
+        {
+          i(2),array({i(3),i(4)}),array({i(3),i(4)}),array({i(3),i(4)})
+        },
+        {
+          i(3),array({i(6),i(NULL_SMALLINT)}),
+          array({i(6),i(NULL_INT)}),array({i(6),i(NULL_BIGINT)})
+        },
+        {
+          i(4),array({}),array({}),array({}),array({})
+        },
+        {
+          i(5),array({i(7),i(8)}),array({i(7),i(8)}),array({i(7),i(8)})
         }
       }, result);
   // clang-format on
@@ -2380,6 +2483,50 @@ TEST_P(DataTypeFragmentSizeAndDataWrapperTest, ArrayTypes) {
     result);
   // clang-format on
 }
+
+TEST_P(DataTypeFragmentSizeAndDataWrapperTest, FixedLengthArrayTypes) {
+  auto& param = GetParam();
+  int fragment_size = param.fragment_size;
+  std::string data_wrapper_type = param.wrapper;
+  std::string extension = param.extension;
+  const auto& query = getCreateForeignTableQuery(
+      "(index INT, b BOOLEAN[2], t TINYINT[2], s SMALLINT[2], i INTEGER[2], bi BIGINT[2],"
+      " f FLOAT[2], tm TIME[2], tp TIMESTAMP[2], d DATE[2], txt TEXT[2],"
+      " fixedpoint DECIMAL(10,5)[2])",
+      {{"fragment_size", std::to_string(fragment_size)}},
+      "array_fixed_len_types",
+      data_wrapper_type,
+      0,
+      default_table_name,
+      extension);
+  sql(query);
+
+  TQueryResult result;
+  sql(result, "SELECT * FROM test_foreign_table ORDER BY index;");
+
+  // clang-format off
+  assertResultSetEqual({
+    {
+      i(1), array({True,False}), array({i(50), i(100)}), array({i(30000), i(20000)}), array({i(2000000000),i(-100000)}),
+      array({i(9000000000000000000),i(-9000000000000000000)}), array({10.1f, 11.1f}), array({"00:00:10","01:00:10"}),
+      array({"1/1/2000 00:00:59", "1/1/2010 00:00:59"}), array({"1/1/2000", "2/2/2000"}),
+      array({"text_1","text_2"}),array({1.23,2.34})
+    },
+    {
+      i(2), array({False, True}), array({i(110),i(101)}), array({i(30500),i(10001)}), array({i(2000500000),i(-23233)}),
+      array({i(9000000050000000000),i(-9200000000000000000)}), array({100.12f,2.22f}), array({"00:10:00", "00:20:00"}),
+      array({"6/15/2020 00:59:59","8/22/2020 00:00:59"}), array({"6/15/2020","8/22/2020"}),
+      array({"text_3", "text_4"}),array({3.456,4.5})
+    },
+    {
+      i(3), array({True,True}), array({i(120),i(44)}), array({i(31000),i(8123)}), array({i(2100000000), i(200000000)}),
+      array({i(9100000000000000000), i(9200000000000000000)}), array({1000.123f,1392.22f}), array({"10:00:00","20:00:00"}),
+      array({"12/31/2500 23:59:59","1/1/2500 23:59:59"}), array({"12/31/2500","1/1/2500"}),
+      array({"text_5","text_6"}),array({6.78,5.6})
+    }},
+    result);
+}
+
 
 TEST_P(DataTypeFragmentSizeAndDataWrapperTest, GeoTypes) {
   auto& param = GetParam();

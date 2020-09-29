@@ -23,16 +23,15 @@ namespace foreign_storage {
 class ParquetArrayEncoder : public ParquetEncoder {
  public:
   ParquetArrayEncoder(Data_Namespace::AbstractBuffer* data_buffer,
-                      Data_Namespace::AbstractBuffer* index_buffer,
                       std::shared_ptr<ParquetScalarEncoder> scalar_encoder,
                       const ColumnDescriptor* column_desciptor)
       : ParquetEncoder(data_buffer)
-      , index_buffer_(index_buffer)
       , omnisci_data_type_byte_size_(
             column_desciptor->columnType.get_elem_type().get_size())
       , scalar_encoder_(scalar_encoder)
       , has_assembly_started_(false)
-      , is_null_array_(false) {}
+      , is_null_array_(false)
+      , num_elements_in_array_(0) {}
 
   void appendData(const int16_t* def_levels,
                   const int16_t* rep_levels,
@@ -42,15 +41,15 @@ class ParquetArrayEncoder : public ParquetEncoder {
                   int8_t* values) override {
     CHECK(levels_read > 0);
 
-    setFirstOffsetForBuffer(def_levels[0]);
-    // Encode all values in the temporary in-memory `encode_buffer_`, doing
+    // encode all values in the temporary in-memory `encode_buffer_`, doing
     // this encoding as a batch rather than element-wise exposes opportunities
     // for performance optimization for certain scalar types
     encodeAllValues(values, values_read);
 
     for (int64_t i = 0, j = 0; i < levels_read; ++i) {
       if (isNewArray(rep_levels[i])) {
-        appendArrayOffsets();
+        processLastArray();
+        resetLastArrayMetadata();
       }
       processArrayItem(def_levels[i], j);
     }
@@ -60,47 +59,56 @@ class ParquetArrayEncoder : public ParquetEncoder {
     }
   }
 
+ protected:
+  virtual void processLastArray() = 0;
+
+  virtual void appendArrayToBuffer() {
+    buffer_->append(data_buffer_bytes_.data(), data_buffer_bytes_.size());
+    data_buffer_bytes_.clear();
+  }
+
+  bool isLastArrayNull() const { return is_null_array_; }
+
+  size_t sizeOfLastArray() const { return num_elements_in_array_; }
+
+  size_t omnisci_data_type_byte_size_;
+  std::shared_ptr<ParquetScalarEncoder> scalar_encoder_;
+  std::vector<int8_t> data_buffer_bytes_;
+
+  // constants used during Dremel encoding assembly
+  const static int16_t non_null_def_level = 3;
+  const static int16_t item_null_def_level = 2;
+  const static int16_t list_null_def_level = 0;
+
  private:
   void finalizeRowGroup() {
-    appendArrayOffsets();
+    processLastArray();
+    resetLastArrayMetadata();
     appendArrayToBuffer();
     has_assembly_started_ = false;
   }
 
-  bool isNewArray(const int16_t rep_level) {
+  void resetLastArrayMetadata() {
+    is_null_array_ = false;
+    num_elements_in_array_ = 0;
+  }
+
+  bool isNewArray(const int16_t rep_level) const {
     return rep_level == 0 && has_assembly_started_;
   }
 
   void processArrayItem(const int16_t def_level, int64_t& encoded_index) {
     has_assembly_started_ = true;
     if (def_level == non_null_def_level) {
-      // push back the element to in-mem data buffer
+      // push back a scalar element to in-memory data buffer
       appendArrayItem(encoded_index++);
     } else if (def_level == item_null_def_level) {
-      // push back a null to in-mem data buffer
+      // push back a scalar null to in-memory data buffer
       appendNullArrayItem();
     } else if (def_level == list_null_def_level) {
       markArrayAsNull();
     } else {
       UNREACHABLE();
-    }
-  }
-
-  void setFirstOffsetForBuffer(const int16_t def_level) {
-    if (data_buffer_bytes_.size() == 0 && buffer_->size() == 0) {  // first  element
-      if (def_level == list_null_def_level) {
-        // OmniSci variable array types have a special encoding for chunks in
-        // which the first array is null: the first 8 bytes of the chunk are
-        // filled and the offset is set appropriately.  Ostensibly, this is
-        // done to allow marking a null array by negating a non-zero value;
-        // however, the choice of 8 appears arbitrary.
-        offsets_.push_back(8);
-        std::vector<int8_t> zero_bytes(8, 0);
-        data_buffer_bytes_.insert(
-            data_buffer_bytes_.end(), zero_bytes.begin(), zero_bytes.end());
-      } else {
-        offsets_.push_back(0);
-      }
     }
   }
 
@@ -118,6 +126,7 @@ class ParquetArrayEncoder : public ParquetEncoder {
     scalar_encoder_->copy(
         encode_buffer_.data() + (encoded_index)*omnisci_data_type_byte_size_,
         omnisci_data_ptr);
+    num_elements_in_array_++;
   }
 
   void appendNullArrayItem() {
@@ -125,42 +134,12 @@ class ParquetArrayEncoder : public ParquetEncoder {
     data_buffer_bytes_.resize(current_data_byte_size + omnisci_data_type_byte_size_);
     auto omnisci_data_ptr = data_buffer_bytes_.data() + current_data_byte_size;
     scalar_encoder_->setNull(omnisci_data_ptr);
+    num_elements_in_array_++;
   }
-
-  void appendArrayOffsets() {
-    int64_t last_offset = buffer_->size() + data_buffer_bytes_.size();
-    if (!is_null_array_) {
-      // append array data offset
-      offsets_.push_back(last_offset);
-    } else {
-      // append a null array offset
-      offsets_.push_back(-last_offset);
-      is_null_array_ = false;
-    }
-  }
-
-  void appendArrayToBuffer() {
-    index_buffer_->append(reinterpret_cast<int8_t*>(offsets_.data()),
-                          offsets_.size() * sizeof(ArrayOffsetT));
-    buffer_->append(data_buffer_bytes_.data(), data_buffer_bytes_.size());
-    data_buffer_bytes_.clear();
-    offsets_.clear();
-  }
-
-  Data_Namespace::AbstractBuffer* index_buffer_;
-  size_t omnisci_data_type_byte_size_;
-  std::shared_ptr<ParquetScalarEncoder> scalar_encoder_;
 
   std::vector<int8_t> encode_buffer_;
   bool has_assembly_started_;
   bool is_null_array_;
-
-  std::vector<int8_t> data_buffer_bytes_;
-  std::vector<ArrayOffsetT> offsets_;
-
-  // constants used during Dremel encoding assembly
-  const static int16_t non_null_def_level = 3;
-  const static int16_t item_null_def_level = 2;
-  const static int16_t list_null_def_level = 0;
+  size_t num_elements_in_array_;
 };
 }  // namespace foreign_storage
