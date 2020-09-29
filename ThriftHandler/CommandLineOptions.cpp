@@ -40,6 +40,7 @@ extern bool g_cache_string_hash;
 
 extern int64_t g_large_ndv_threshold;
 extern size_t g_large_ndv_multiplier;
+extern int64_t g_bitmap_memory_limit;
 
 unsigned connect_timeout{20000};
 unsigned recv_timeout{300000};
@@ -611,6 +612,13 @@ void CommandLineOptions::fillAdvancedOptions() {
   developer_desc.add_options()(
       "large-ndv-multiplier",
       po::value<size_t>(&g_large_ndv_multiplier)->default_value(g_large_ndv_multiplier));
+  developer_desc.add_options()(
+      "bitmap-memory-limit",
+      po::value<int64_t>(&g_bitmap_memory_limit)->default_value(g_bitmap_memory_limit),
+      "Limit for count distinct bitmap memory use. The limit is computed by taking the "
+      "size of the group by buffer (entry count in Query Memory Descriptor) and "
+      "multiplying it by the number of count distinct expression and the size of bitmap "
+      "required for each. For approx_count_distinct this is typically 8192 bytes.");
   developer_desc.add_options()(
       "enable-filter-function",
       po::value<bool>(&g_enable_filter_function)

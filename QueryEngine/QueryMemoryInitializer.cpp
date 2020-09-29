@@ -26,35 +26,35 @@
 
 #include <Shared/checked_alloc.h>
 
+// 8 GB, the limit of perfect hash group by under normal conditions
+int64_t g_bitmap_memory_limit{8 * 1000 * 1000 * 1000L};
+
 namespace {
 
 inline void check_total_bitmap_memory(const QueryMemoryDescriptor& query_mem_desc) {
   const int32_t groups_buffer_entry_count = query_mem_desc.getEntryCount();
-  if (g_enable_watchdog) {
-    checked_int64_t total_bytes_per_group = 0;
-    const size_t num_count_distinct_descs =
-        query_mem_desc.getCountDistinctDescriptorsSize();
-    for (size_t i = 0; i < num_count_distinct_descs; i++) {
-      const auto count_distinct_desc = query_mem_desc.getCountDistinctDescriptor(i);
-      if (count_distinct_desc.impl_type_ != CountDistinctImplType::Bitmap) {
-        continue;
-      }
-      total_bytes_per_group += count_distinct_desc.bitmapPaddedSizeBytes();
+  checked_int64_t total_bytes_per_group = 0;
+  const size_t num_count_distinct_descs =
+      query_mem_desc.getCountDistinctDescriptorsSize();
+  for (size_t i = 0; i < num_count_distinct_descs; i++) {
+    const auto count_distinct_desc = query_mem_desc.getCountDistinctDescriptor(i);
+    if (count_distinct_desc.impl_type_ != CountDistinctImplType::Bitmap) {
+      continue;
     }
-    int64_t total_bytes{0};
-    // Using OutOfHostMemory until we can verify that SlabTooBig would also be properly
-    // caught
-    try {
-      total_bytes =
-          static_cast<int64_t>(total_bytes_per_group * groups_buffer_entry_count);
-    } catch (...) {
-      // Absurd amount of memory, merely computing the number of bits overflows int64_t.
-      // Don't bother to report the real amount, this is unlikely to ever happen.
-      throw OutOfHostMemory(std::numeric_limits<int64_t>::max() / 8);
-    }
-    if (total_bytes >= 2 * 1000 * 1000 * 1000L) {
-      throw OutOfHostMemory(total_bytes);
-    }
+    total_bytes_per_group += count_distinct_desc.bitmapPaddedSizeBytes();
+  }
+  int64_t total_bytes{0};
+  // Using OutOfHostMemory until we can verify that SlabTooBig would also be properly
+  // caught
+  try {
+    total_bytes = static_cast<int64_t>(total_bytes_per_group * groups_buffer_entry_count);
+  } catch (...) {
+    // Absurd amount of memory, merely computing the number of bits overflows int64_t.
+    // Don't bother to report the real amount, this is unlikely to ever happen.
+    throw OutOfHostMemory(std::numeric_limits<int64_t>::max() / 8);
+  }
+  if (total_bytes >= g_bitmap_memory_limit) {
+    throw OutOfHostMemory(total_bytes);
   }
 }
 
