@@ -231,6 +231,10 @@ else()
   add_dependencies(QueryEngine QueryEngineFunctionsTargets)
 endif()
 
+target_precompile_headers(QueryEngine PRIVATE
+  [["QueryEngine/Execute.h"]]
+)
+
 set(QUERY_ENGINE_LIBS
   OSDependent
   Analyzer
