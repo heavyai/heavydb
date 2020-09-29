@@ -24,8 +24,8 @@
 
 namespace foreign_storage {
 
-class ForeignServer;
-class UserMapping;
+struct ForeignServer;
+struct UserMapping;
 
 // Archive reader for csv archives
 // Supports an initial full scan with calls to read()
