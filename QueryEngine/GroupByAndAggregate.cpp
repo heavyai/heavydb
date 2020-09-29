@@ -194,16 +194,40 @@ ColRangeInfo GroupByAndAggregate::getColRangeInfo() {
   const auto& groupby_expr_ti = ra_exe_unit_.groupby_exprs.front()->get_type_info();
   if (groupby_expr_ti.is_string() && !col_range_info.bucket) {
     CHECK(groupby_expr_ti.get_compression() == kENCODING_DICT);
-    if (!ra_exe_unit_.sort_info.order_entries.empty()) {
-      // use original col range for sort
-      // TODO(adb): allow some sorts to pass through this block by centralizing sort
-      // algorithm decision making
-      return col_range_info;
-    }
-    if ((!ra_exe_unit_.quals.empty() || !ra_exe_unit_.simple_quals.empty()) &&
+
+    const bool has_filters =
+        !ra_exe_unit_.quals.empty() || !ra_exe_unit_.simple_quals.empty();
+    if (has_filters &&
         is_column_range_too_big_for_perfect_hash(col_range_info, max_entry_count)) {
-      // if filters are present and the filtered range is less than the cardinality of the
-      // column, consider baseline hash
+      // if filters are present, we can use the filter to narrow the cardinality of the
+      // group by in the case of ranges too big for perfect hash. Otherwise, we are better
+      // off attempting perfect hash (since we know the range will be made of
+      // monotonically increasing numbers from min to max for dictionary encoded strings)
+      // and failing later due to excessive memory use.
+      // Check the conditions where baseline hash can provide a performance increase and
+      // return baseline hash (potentially forcing an estimator query) as the range type.
+      // Otherwise, return col_range_info which will likely be perfect hash, though could
+      // be baseline from a previous call of this function prior to the estimator query.
+      if (!ra_exe_unit_.sort_info.order_entries.empty()) {
+        // TODO(adb): allow some sorts to pass through this block by centralizing sort
+        // algorithm decision making
+        if (has_count_distinct(ra_exe_unit_) &&
+            is_column_range_too_big_for_perfect_hash(col_range_info, max_entry_count)) {
+          // always use baseline hash for column range too big for perfect hash with count
+          // distinct descriptors. We will need 8GB of CPU memory minimum for the perfect
+          // hash group by in this case.
+          return {QueryDescriptionType::GroupByBaselineHash,
+                  col_range_info.min,
+                  col_range_info.max,
+                  0,
+                  col_range_info.has_nulls};
+        } else {
+          // use original col range for sort
+          return col_range_info;
+        }
+      }
+      // if filters are present and the filtered range is less than the cardinality of
+      // the column, consider baseline hash
       if (!group_cardinality_estimation_ ||
           cardinality_estimate_less_than_column_range(*group_cardinality_estimation_,
                                                       col_range_info)) {
