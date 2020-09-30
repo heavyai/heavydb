@@ -75,6 +75,18 @@ class TableArchiver;
   (SPIMAP_MAGIC1 + (unsigned)(SPIMAP_MAGIC2 * ((c) + 1) + (i)))
 
 namespace Catalog_Namespace {
+struct TableEpochInfo {
+  int32_t table_id, table_epoch, leaf_index{-1};
+
+  TableEpochInfo(const int32_t table_id_param, const int32_t table_epoch_param)
+      : table_id(table_id_param), table_epoch(table_epoch_param) {}
+  TableEpochInfo(const int32_t table_id_param,
+                 const int32_t table_epoch_param,
+                 const size_t leaf_index_param)
+      : table_id(table_id_param)
+      , table_epoch(table_epoch_param)
+      , leaf_index(leaf_index_param) {}
+};
 
 /**
  * @type Catalog
@@ -220,6 +232,12 @@ class Catalog final {
 
   int32_t getTableEpoch(const int32_t db_id, const int32_t table_id) const;
   void setTableEpoch(const int db_id, const int table_id, const int new_epoch);
+
+  std::vector<TableEpochInfo> getTableEpochs(const int32_t db_id,
+                                             const int32_t table_id) const;
+  void setTableEpochs(const int32_t db_id,
+                      const std::vector<TableEpochInfo>& table_epochs);
+
   int getDatabaseId() const { return currentDB_.dbId; }
   SqliteConnector& getSqliteConnector() { return sqliteConnector_; }
   void roll(const bool forward);

@@ -259,6 +259,14 @@ class DBHandler : public OmniSciIf {
                           const int32_t table_id) override;
   int32_t get_table_epoch_by_name(const TSessionId& session,
                                   const std::string& table_name) override;
+  void get_table_epochs(std::vector<TTableEpochInfo>& _return,
+                        const TSessionId& session,
+                        const int32_t db_id,
+                        const int32_t table_id) override;
+  void set_table_epochs(const TSessionId& session,
+                        const int32_t db_id,
+                        const std::vector<TTableEpochInfo>& table_epochs) override;
+
   void get_session_info(TSessionInfo& _return, const TSessionId& session) override;
   // query, render
   void sql_execute(TQueryResult& _return,

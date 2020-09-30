@@ -506,6 +506,12 @@ struct TGeoFileLayerInfo {
   2: TGeoFileLayerContents contents;
 }
 
+struct TTableEpochInfo {
+  1: i32 table_id;
+  2: i32 table_epoch;
+  3: i32 leaf_index;
+}
+
 service OmniSci {
   # connection, admin
   TSessionId connect(1: string user, 2: string passwd, 3: string dbname) throws (1: TOmniSciException e)
@@ -535,6 +541,8 @@ service OmniSci {
   void set_table_epoch_by_name (1: TSessionId session 2: string table_name 3: i32 new_epoch) throws (1: TOmniSciException e)
   i32 get_table_epoch (1: TSessionId session 2: i32 db_id 3: i32 table_id);
   i32 get_table_epoch_by_name (1: TSessionId session 2: string table_name);
+  list<TTableEpochInfo> get_table_epochs(1: TSessionId session 2: i32 db_id 3: i32 table_id);
+  void set_table_epochs(1: TSessionId session 2: i32 db_id 3: list<TTableEpochInfo> table_epochs);
   TSessionInfo get_session_info(1: TSessionId session) throws (1: TOmniSciException e)
   # query, render
   TQueryResult sql_execute(1: TSessionId session, 2: string query 3: bool column_format, 4: string nonce, 5: i32 first_n = -1, 6: i32 at_most_n = -1) throws (1: TOmniSciException e)

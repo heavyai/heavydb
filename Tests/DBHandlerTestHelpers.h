@@ -28,6 +28,8 @@ constexpr int64_t False = 0;
 constexpr void* Null = nullptr;
 constexpr int64_t Null_i = NULL_INT;
 
+extern size_t g_leaf_count;
+
 /**
  * Helper class for asserting equality between a result set represented as a boost variant
  * and a thrift result set (TRowSet).

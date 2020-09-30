@@ -2710,30 +2710,46 @@ int32_t Catalog::getTableEpoch(const int32_t db_id, const int32_t table_id) cons
     // check all shards have same checkpoint
     const auto physicalTables = physicalTableIt->second;
     CHECK(!physicalTables.empty());
-    size_t curr_epoch = 0;
+    size_t curr_epoch{0}, first_epoch{0};
+    int32_t first_table_id{0};
+    bool are_epochs_inconsistent{false};
     for (size_t i = 0; i < physicalTables.size(); i++) {
       int32_t physical_tb_id = physicalTables[i];
       const TableDescriptor* phys_td = getMetadataForTable(physical_tb_id);
       CHECK(phys_td);
+
+      curr_epoch = dataMgr_->getTableEpoch(db_id, physical_tb_id);
+      LOG(INFO) << "Got sharded table epoch for db id: " << db_id
+                << ", table id: " << physical_tb_id << ", epoch: " << curr_epoch;
       if (i == 0) {
-        curr_epoch = dataMgr_->getTableEpoch(db_id, physical_tb_id);
-      } else {
-        if (curr_epoch != dataMgr_->getTableEpoch(db_id, physical_tb_id)) {
-          // oh dear the leaves do not agree on the epoch for this table
-          LOG(ERROR) << "Epochs on shards do not all agree on table id " << table_id
-                     << " db id  " << db_id << " epoch " << curr_epoch << " leaf_epoch "
-                     << dataMgr_->getTableEpoch(db_id, physical_tb_id);
-          return -1;
-        }
+        first_epoch = curr_epoch;
+        first_table_id = physical_tb_id;
+      } else if (first_epoch != curr_epoch) {
+        are_epochs_inconsistent = true;
+        LOG(ERROR) << "Epochs on shards do not all agree on table id: " << table_id
+                   << ", db id: " << db_id
+                   << ". First table (table id: " << first_table_id
+                   << ") has epoch: " << first_epoch << ". Table id: " << physical_tb_id
+                   << ", has inconsistent epoch: " << curr_epoch
+                   << ". See previous INFO logs for all epochs and their table ids.";
       }
+    }
+    if (are_epochs_inconsistent) {
+      // oh dear the shards do not agree on the epoch for this table
+      return -1;
     }
     return curr_epoch;
   } else {
-    return dataMgr_->getTableEpoch(db_id, table_id);
+    auto epoch = dataMgr_->getTableEpoch(db_id, table_id);
+    LOG(INFO) << "Got table epoch for db id: " << db_id << ", table id: " << table_id
+              << ", epoch: " << epoch;
+    return epoch;
   }
 }
 
 void Catalog::setTableEpoch(const int db_id, const int table_id, int new_epoch) {
+  CHECK_GE(new_epoch, 0);
+
   cat_read_lock read_lock(this);
   LOG(INFO) << "Set table epoch db:" << db_id << " Table ID  " << table_id
             << " back to new epoch " << new_epoch;
@@ -2754,6 +2770,48 @@ void Catalog::setTableEpoch(const int db_id, const int table_id, int new_epoch) 
       removeChunks(physical_tb_id);
       dataMgr_->setTableEpoch(db_id, physical_tb_id, new_epoch);
     }
+  }
+}
+
+std::vector<TableEpochInfo> Catalog::getTableEpochs(const int32_t db_id,
+                                                    const int32_t table_id) const {
+  cat_read_lock read_lock(this);
+  std::vector<TableEpochInfo> table_epochs;
+  const auto physical_table_it = logicalToPhysicalTableMapById_.find(table_id);
+  if (physical_table_it != logicalToPhysicalTableMapById_.end()) {
+    const auto physical_tables = physical_table_it->second;
+    CHECK(!physical_tables.empty());
+
+    for (const auto physical_tb_id : physical_tables) {
+      const auto phys_td = getMetadataForTableImpl(physical_tb_id, false);
+      CHECK(phys_td);
+
+      auto table_id = phys_td->tableId;
+      auto epoch = dataMgr_->getTableEpoch(db_id, phys_td->tableId);
+      table_epochs.emplace_back(table_id, epoch);
+      LOG(INFO) << "Got sharded table epoch for db id: " << db_id
+                << ", table id:  " << table_id << ", epoch: " << epoch;
+    }
+  } else {
+    auto epoch = dataMgr_->getTableEpoch(db_id, table_id);
+    LOG(INFO) << "Got table epoch for db id: " << db_id << ", table id:  " << table_id
+              << ", epoch: " << epoch;
+    table_epochs.emplace_back(table_id, epoch);
+  }
+  return table_epochs;
+}
+
+void Catalog::setTableEpochs(const int32_t db_id,
+                             const std::vector<TableEpochInfo>& table_epochs) {
+  cat_read_lock read_lock(this);
+  for (const auto& table_epoch_info : table_epochs) {
+    CHECK_GE(table_epoch_info.table_epoch, 0);
+    removeChunks(table_epoch_info.table_id);
+    dataMgr_->setTableEpoch(
+        db_id, table_epoch_info.table_id, table_epoch_info.table_epoch);
+    LOG(INFO) << "Set table epoch for db id: " << db_id
+              << ", table id: " << table_epoch_info.table_id
+              << ", back to epoch: " << table_epoch_info.table_epoch;
   }
 }
 

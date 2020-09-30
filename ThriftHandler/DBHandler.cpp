@@ -5857,6 +5857,59 @@ int32_t DBHandler::get_table_epoch_by_name(const TSessionId& session,
   return cat.getTableEpoch(db_id, td->tableId);
 }
 
+void DBHandler::get_table_epochs(std::vector<TTableEpochInfo>& _return,
+                                 const TSessionId& session,
+                                 const int32_t db_id,
+                                 const int32_t table_id) {
+  auto stdlog = STDLOG(get_session_ptr(session));
+  stdlog.appendNameValuePairs("client", getConnectionInfo().toString());
+  auto session_ptr = stdlog.getConstSessionInfo();
+  auto const& cat = session_ptr->getCatalog();
+
+  std::vector<Catalog_Namespace::TableEpochInfo> table_epochs;
+  if (leaf_aggregator_.leafCount() > 0) {
+    table_epochs = leaf_aggregator_.get_leaf_table_epochs(*session_ptr, db_id, table_id);
+  } else {
+    table_epochs = cat.getTableEpochs(db_id, table_id);
+  }
+  CHECK(!table_epochs.empty());
+
+  for (const auto& table_epoch : table_epochs) {
+    TTableEpochInfo table_epoch_info;
+    table_epoch_info.table_id = table_epoch.table_id;
+    table_epoch_info.table_epoch = table_epoch.table_epoch;
+    table_epoch_info.leaf_index = table_epoch.leaf_index;
+    _return.emplace_back(table_epoch_info);
+  }
+}
+
+void DBHandler::set_table_epochs(const TSessionId& session,
+                                 const int32_t db_id,
+                                 const std::vector<TTableEpochInfo>& table_epochs) {
+  auto stdlog = STDLOG(get_session_ptr(session));
+  stdlog.appendNameValuePairs("client", getConnectionInfo().toString());
+  auto session_ptr = stdlog.getConstSessionInfo();
+
+  // Only super users are allowed to call this API on a single node instance
+  // or aggregator (for distributed mode)
+  if (!g_cluster || leaf_aggregator_.leafCount() > 0) {
+    if (!session_ptr->get_currentUser().isSuper) {
+      throw std::runtime_error("Only super users can set table epochs");
+    }
+  }
+  std::vector<Catalog_Namespace::TableEpochInfo> table_epochs_vector;
+  for (const auto& table_epoch : table_epochs) {
+    table_epochs_vector.emplace_back(
+        table_epoch.table_id, table_epoch.table_epoch, table_epoch.leaf_index);
+  }
+  if (leaf_aggregator_.leafCount() > 0) {
+    leaf_aggregator_.set_leaf_table_epochs(*session_ptr, db_id, table_epochs_vector);
+  } else {
+    auto& cat = session_ptr->getCatalog();
+    cat.setTableEpochs(db_id, table_epochs_vector);
+  }
+}
+
 void DBHandler::set_license_key(TLicenseInfo& _return,
                                 const TSessionId& session,
                                 const std::string& key,

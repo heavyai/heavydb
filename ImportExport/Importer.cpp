@@ -3265,11 +3265,12 @@ void Importer::load(const std::vector<std::unique_ptr<TypedImportBuffer>>& impor
   }
 }
 
-void Importer::checkpoint(const int32_t start_epoch) {
+void Importer::checkpoint(
+    const std::vector<Catalog_Namespace::TableEpochInfo>& table_epochs) {
   if (loader->getTableDesc()->storageType != StorageType::FOREIGN_TABLE) {
     if (load_failed) {
       // rollback to starting epoch - undo all the added records
-      loader->setTableEpoch(start_epoch);
+      loader->setTableEpochs(table_epochs);
     } else {
       loader->checkpoint();
     }
@@ -3624,7 +3625,8 @@ void Importer::import_local_parquet(const std::string& file_path) {
 
 void DataStreamSink::import_parquet(std::vector<std::string>& file_paths) {
   auto importer = dynamic_cast<Importer*>(this);
-  auto start_epoch = importer ? importer->getLoader()->getTableEpoch() : 0;
+  auto table_epochs = importer ? importer->getLoader()->getTableEpochs()
+                               : std::vector<Catalog_Namespace::TableEpochInfo>{};
   try {
     std::exception_ptr teptr;
     // file_paths may contain one local file path, a list of local file paths
@@ -3689,7 +3691,7 @@ void DataStreamSink::import_parquet(std::vector<std::string>& file_paths) {
   }
 
   if (importer) {
-    importer->checkpoint(start_epoch);
+    importer->checkpoint(table_epochs);
   }
 }
 #endif  // ENABLE_IMPORT_PARQUET
@@ -4008,7 +4010,7 @@ ImportStatus Importer::importDelimited(const std::string& file_path,
 
   ChunkKey chunkKey = {loader->getCatalog().getCurrentDB().dbId,
                        loader->getTableDesc()->tableId};
-  auto start_epoch = loader->getTableEpoch();
+  auto table_epochs = loader->getTableEpochs();
   {
     std::list<std::future<ImportStatus>> threads;
 
@@ -4142,7 +4144,7 @@ ImportStatus Importer::importDelimited(const std::string& file_path,
     }
   }
 
-  checkpoint(start_epoch);
+  checkpoint(table_epochs);
 
   // must set import_status.load_truncated before closing this end of pipe
   // otherwise, the thread on the other end would throw an unwanted 'write()'
@@ -4162,14 +4164,14 @@ void Loader::checkpoint() {
   }
 }
 
-int32_t Loader::getTableEpoch() {
-  return getCatalog().getTableEpoch(getCatalog().getCurrentDB().dbId,
-                                    getTableDesc()->tableId);
+std::vector<Catalog_Namespace::TableEpochInfo> Loader::getTableEpochs() const {
+  return getCatalog().getTableEpochs(getCatalog().getCurrentDB().dbId,
+                                     getTableDesc()->tableId);
 }
 
-void Loader::setTableEpoch(const int32_t start_epoch) {
-  getCatalog().setTableEpoch(
-      getCatalog().getCurrentDB().dbId, getTableDesc()->tableId, start_epoch);
+void Loader::setTableEpochs(
+    const std::vector<Catalog_Namespace::TableEpochInfo>& table_epochs) {
+  getCatalog().setTableEpochs(getCatalog().getCurrentDB().dbId, table_epochs);
 }
 
 /* static */
@@ -4816,7 +4818,7 @@ ImportStatus Importer::importGDAL(
 #endif
 
   // checkpoint the table
-  auto start_epoch = loader->getTableEpoch();
+  auto table_epochs = loader->getTableEpochs();
 
   // reset the layer
   layer.ResetReading();
@@ -4948,7 +4950,7 @@ ImportStatus Importer::importGDAL(
   }
 #endif
 
-  checkpoint(start_epoch);
+  checkpoint(table_epochs);
 
   // must set import_status.load_truncated before closing this end of pipe
   // otherwise, the thread on the other end would throw an unwanted 'write()'

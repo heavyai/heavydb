@@ -536,7 +536,7 @@ class Loader {
 
   virtual ~Loader() {}
 
-  Catalog_Namespace::Catalog& getCatalog() { return catalog_; }
+  Catalog_Namespace::Catalog& getCatalog() const { return catalog_; }
   const TableDescriptor* getTableDesc() const { return table_desc_; }
   const std::list<const ColumnDescriptor*>& get_column_descs() const {
     return column_descs_;
@@ -558,8 +558,9 @@ class Loader {
       const std::vector<std::unique_ptr<TypedImportBuffer>>& import_buffers,
       const size_t row_count);
   virtual void checkpoint();
-  virtual int32_t getTableEpoch();
-  virtual void setTableEpoch(const int32_t new_epoch);
+  virtual std::vector<Catalog_Namespace::TableEpochInfo> getTableEpochs() const;
+  virtual void setTableEpochs(
+      const std::vector<Catalog_Namespace::TableEpochInfo>& table_epochs);
 
   void setReplicating(const bool replicating) { replicating_ = replicating; }
   bool getReplicating() const { return replicating_; }
@@ -805,7 +806,7 @@ class Importer : public DataStreamSink {
       std::vector<std::vector<int>>& poly_rings_column,
       int render_group,
       const int64_t replicate_count = 0);
-  void checkpoint(const int32_t start_epoch);
+  void checkpoint(const std::vector<Catalog_Namespace::TableEpochInfo>& table_epochs);
   auto getLoader() const { return loader.get(); }
 
  private:
