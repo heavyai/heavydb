@@ -239,6 +239,11 @@ class ArrowResultSetConverter {
   int32_t top_n_;
   ArrowTransport transport_method_;
 
+  // Here we hold temporary buffers for arrow arrays when
+  // array builders are not used.
+  mutable std::vector<std::unique_ptr<int8_t[]>> values_;
+  mutable std::vector<std::unique_ptr<uint8_t[]>> is_valid_;
+
   friend class ArrowResultSet;
 };
 
