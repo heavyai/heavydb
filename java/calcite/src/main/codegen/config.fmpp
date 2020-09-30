@@ -36,6 +36,8 @@ data: {
         "com.mapd.parser.extension.ddl.SqlDropUserMapping"
         "com.mapd.parser.extension.ddl.SqlShowUserSessions"
         "com.mapd.parser.extension.ddl.SqlShowForeignServers"
+        "com.mapd.parser.extension.ddl.SqlShowQueries"
+        "com.mapd.parser.extension.ddl.SqlKillQuery"
         "com.mapd.parser.extension.ddl.omnisql.*"
         "java.util.Map"
         "java.util.HashMap"
@@ -61,6 +63,9 @@ data: {
         "MAPPING"
         "OWNER"
         "RENAME"
+        "KILL"
+        "QUERY"
+        "QUERIES"
       ]
 
       # List of keywords from "keywords" section that are not reserved.
@@ -407,6 +412,8 @@ data: {
         "SqlShowForeignServers(span())"
         "SqlAlterServer(span())"
         "SqlRefreshForeignTables(span())"
+        "SqlShowQueries(span())"
+        "SqlKillQuery(span())"
       ]
 
       # List of methods for parsing custom literals.
@@ -465,6 +472,7 @@ data: {
         "foreignTableParser.ftl"
         "showCommandsParser.ftl"
         "userMappingParser.ftl"
+        "interruptQueryParser.ftl"
       ]
 
       includePosixOperators: false

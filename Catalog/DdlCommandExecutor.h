@@ -185,6 +185,21 @@ class DdlCommandExecutor {
    */
   bool isShowUserSessions();
 
+  /**
+   * Returns true if this command is SHOW QUERIES
+   */
+  bool isShowQueries();
+
+  /**
+   * Returns true if this command is KILL QUERY
+   */
+  bool isKillQuery();
+
+  /**
+   * Returns target query session if this command is KILL QUERY
+   */
+  const std::string getTargetQuerySessionToKill();
+
  private:
   rapidjson::Document ddl_query_;
   std::shared_ptr<Catalog_Namespace::SessionInfo const> session_ptr_;

@@ -57,3 +57,19 @@ SqlDdl SqlShowDatabases(Span s) :
         return new SqlShowDatabases(s.end(this));
     }
 }
+
+/*
+ * Show query info using the following syntax:
+ *
+ * SHOW QUERIES
+ */
+
+SqlDdl SqlShowQueries(Span s) :
+{
+}
+{
+    <SHOW> <QUERIES>
+    {
+        return new SqlShowQueries(s.end(this));
+    }
+}

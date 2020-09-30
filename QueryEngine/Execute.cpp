@@ -3544,6 +3544,9 @@ void Executor::setCurrentQuerySession(const std::string& query_session,
   if (current_query_session_ == "") {
     // only set the query session if it currently has an invalid session
     current_query_session_ = query_session;
+    if (queries_session_map_.count(query_session)) {
+      queries_session_map_.at(query_session).setQueryStatusAsRunning();
+    }
   }
 }
 
@@ -3562,13 +3565,18 @@ bool Executor::checkCurrentQuerySession(const std::string& candidate_query_sessi
 }
 
 template <>
-void Executor::invalidateQuerySession(mapd_unique_lock<mapd_shared_mutex>& write_lock) {
+void Executor::invalidateRunningQuerySession(
+    mapd_unique_lock<mapd_shared_mutex>& write_lock) {
   current_query_session_ = "";
 }
 
 template <>
 bool Executor::addToQuerySessionList(const std::string& query_session,
+                                     const std::string& query_str,
                                      mapd_unique_lock<mapd_shared_mutex>& write_lock) {
+  queries_session_map_.emplace(
+      query_session,
+      QuerySessionStatus(query_session, query_str, std::chrono::system_clock::now()));
   return queries_interrupt_flag_.emplace(query_session, false).second;
 }
 
@@ -3576,6 +3584,7 @@ template <>
 bool Executor::removeFromQuerySessionList(
     const std::string& query_session,
     mapd_unique_lock<mapd_shared_mutex>& write_lock) {
+  queries_session_map_.erase(query_session);
   return queries_interrupt_flag_.erase(query_session);
 }
 
@@ -3583,7 +3592,9 @@ template <>
 void Executor::setQuerySessionAsInterrupted(
     const std::string& query_session,
     mapd_unique_lock<mapd_shared_mutex>& write_lock) {
-  queries_interrupt_flag_[query_session] = true;
+  if (queries_interrupt_flag_.find(query_session) != queries_interrupt_flag_.end()) {
+    queries_interrupt_flag_[query_session] = true;
+  }
 }
 
 template <>
@@ -3622,11 +3633,27 @@ Executor::CachedCardinality Executor::getCachedCardinality(const std::string& ca
   return {false, -1};
 }
 
+std::optional<QuerySessionStatus> Executor::getQuerySessionInfo(
+    const std::string& query_session,
+    mapd_shared_lock<mapd_shared_mutex>& read_lock) {
+  if (!queries_session_map_.empty() && queries_session_map_.count(query_session)) {
+    auto& query_info = queries_session_map_.at(query_session);
+    const std::string query_status =
+        getCurrentQuerySession(read_lock) == query_session ? "Running" : "Pending";
+    return QuerySessionStatus(query_session,
+                              query_info.getQueryStr(),
+                              query_info.getQuerySubmittedTime(),
+                              query_status);
+  }
+  return std::nullopt;
+}
+
 std::map<int, std::shared_ptr<Executor>> Executor::executors_;
 
 std::atomic_flag Executor::execute_spin_lock_ = ATOMIC_FLAG_INIT;
 std::string Executor::current_query_session_{""};
 InterruptFlagMap Executor::queries_interrupt_flag_;
+QuerySessionMap Executor::queries_session_map_;
 mapd_shared_mutex Executor::executor_session_mutex_;
 
 mapd_shared_mutex Executor::execute_mutex_;

@@ -6115,6 +6115,115 @@ void DBHandler::getUserSessions(const Catalog_Namespace::SessionInfo& session_in
   }
 }
 
+void DBHandler::getQueries(const Catalog_Namespace::SessionInfo& session_info,
+                           TQueryResult& _return) {
+  if (!session_info.get_currentUser().isSuper) {
+    throw std::runtime_error(
+        "SHOW QUERIES failed, because it can only be executed by super user.");
+  } else if (!g_enable_runtime_query_interrupt) {
+    throw std::runtime_error(
+        "SHOW QUERIES failed, because runtime query interrupt is disabled.");
+  } else {
+    mapd_lock_guard<mapd_shared_mutex> read_lock(sessions_mutex_);
+    const std::vector<std::string> col_names{"query_session_id",
+                                             "current_status",
+                                             "submitted",
+                                             "query_str",
+                                             "login_name",
+                                             "client_address",
+                                             "db_name",
+                                             "exec_device_type"};
+
+    // Make columns for TQueryResult
+    TRowDescriptor row_desc;
+    for (const auto& col : col_names) {
+      TColumnType columnType;
+      columnType.col_name = col;
+      columnType.col_type.type = TDatumType::STR;
+      row_desc.push_back(columnType);
+      _return.row_set.columns.emplace_back(TColumn());
+    }
+    _return.row_set.row_desc = row_desc;
+    _return.row_set.is_columnar = true;
+
+    if (!sessions_.empty()) {
+      for (auto sessions = sessions_.begin(); sessions_.end() != sessions; sessions++) {
+        const auto id = sessions->first;
+        const auto query_session_ptr = sessions->second;
+
+        auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID,
+                                              jit_debug_ ? "/tmp" : "",
+                                              jit_debug_ ? "mapdquery" : "",
+                                              system_parameters_);
+        CHECK(executor);
+        mapd_shared_lock<mapd_shared_mutex> session_read_lock(executor->getSessionLock());
+        auto query_info = executor->getQuerySessionInfo(
+            query_session_ptr->get_session_id(), session_read_lock);
+        session_read_lock.unlock();
+        // if there exists query info fired from this session we report it to user
+        if (query_info.has_value()) {
+          int col_num = 0;
+          _return.row_set.columns[col_num++].data.str_col.emplace_back(
+              query_session_ptr->get_public_session_id());
+          _return.row_set.columns[col_num++].data.str_col.emplace_back(
+              query_info->getQueryStatus());
+          std::time_t t =
+              std::chrono::system_clock::to_time_t(query_info->getQuerySubmittedTime());
+          std::stringstream tss;
+          tss << std::put_time(std::localtime(&t), "%F %T");
+          _return.row_set.columns[col_num++].data.str_col.emplace_back(tss.str());
+          _return.row_set.columns[col_num++].data.str_col.emplace_back(
+              query_info->getQueryStr());
+          _return.row_set.columns[col_num++].data.str_col.emplace_back(
+              query_session_ptr->get_currentUser().userName);
+          _return.row_set.columns[col_num++].data.str_col.emplace_back(
+              query_session_ptr->get_connection_info());
+          _return.row_set.columns[col_num++].data.str_col.emplace_back(
+              query_session_ptr->getCatalog().getCurrentDB().dbName);
+          std::string exec_device_type =
+              query_session_ptr->get_executor_device_type() == ExecutorDeviceType::GPU
+                  ? "GPU"
+                  : "CPU";
+          _return.row_set.columns[col_num++].data.str_col.emplace_back(exec_device_type);
+
+          for (auto& col : _return.row_set.columns) {
+            col.nulls.push_back(false);
+          }
+        }
+      }
+    }
+  }
+}
+
+void DBHandler::interruptQuery(const Catalog_Namespace::SessionInfo& session_info,
+                               const std::string& target_session) {
+  if (!g_enable_runtime_query_interrupt) {
+    // todo(yoonmin): change this to allow per-query interruptability
+    throw std::runtime_error(
+        "KILL QUERY failed because runtime query interrupt is disabled.");
+  }
+  if (!session_info.get_currentUser().isSuper.load()) {
+    throw std::runtime_error(
+        "Only super user can interrupt the query via KILL QUERY command.");
+  }
+  CHECK_EQ(target_session.length(), (unsigned long)8);
+  for (auto& kv : sessions_) {
+    if (kv.second->get_public_session_id() == target_session) {
+      auto target_query_session = kv.second->get_session_id();
+      auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID,
+                                            jit_debug_ ? "/tmp" : "",
+                                            jit_debug_ ? "mapdquery" : "",
+                                            system_parameters_);
+      CHECK(executor);
+      if (leaf_aggregator_.leafCount() > 0) {
+        leaf_aggregator_.interrupt(target_query_session, session_info.get_session_id());
+      }
+      executor->interrupt(target_query_session, session_info.get_session_id());
+      break;
+    }
+  }
+}
+
 void DBHandler::executeDdl(
     TQueryResult& _return,
     const std::string& query_ra,
@@ -6122,6 +6231,10 @@ void DBHandler::executeDdl(
   DdlCommandExecutor executor = DdlCommandExecutor(query_ra, session_ptr);
   if (executor.isShowUserSessions()) {
     getUserSessions(*session_ptr, _return);
+  } else if (executor.isShowQueries()) {
+    getQueries(*session_ptr, _return);
+  } else if (executor.isKillQuery()) {
+    interruptQuery(*session_ptr, executor.getTargetQuerySessionToKill());
   } else {
     executor.execute(_return);
   }

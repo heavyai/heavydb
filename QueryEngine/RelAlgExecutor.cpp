@@ -199,6 +199,7 @@ ExecutionResult RelAlgExecutor::executeRelAlgQueryNoRetry(const CompilationOptio
     executor_->resetInterrupt();
   }
   std::string query_session = "";
+  std::string query_str = "N/A";
   if (eo.allow_runtime_query_interrupt || g_enable_runtime_query_interrupt) {
     // a request of query execution without session id can happen, i.e., test query
     // if so, we turn back to the original way: a runtime query interrupt
@@ -207,15 +208,17 @@ ExecutionResult RelAlgExecutor::executeRelAlgQueryNoRetry(const CompilationOptio
         executor_->executor_session_mutex_);
     if (query_state_ != nullptr && query_state_->getConstSessionInfo() != nullptr) {
       query_session = query_state_->getConstSessionInfo()->get_session_id();
+      query_str = query_state_->getQueryStr();
     } else if (executor_->getCurrentQuerySession(session_read_lock) != query_session) {
       query_session = executor_->getCurrentQuerySession(session_read_lock);
     }
+
     session_read_lock.unlock();
     if (query_session != "") {
       // if session is valid, then we allow per-session runtime query interrupt
       mapd_unique_lock<mapd_shared_mutex> session_write_lock(
           executor_->executor_session_mutex_);
-      executor_->addToQuerySessionList(query_session, session_write_lock);
+      executor_->addToQuerySessionList(query_session, query_str, session_write_lock);
       session_write_lock.unlock();
       // hybrid spinlock.  if it fails to acquire a lock, then
       // it sleeps {g_runtime_query_interrupt_frequency} millisecond.
@@ -265,7 +268,7 @@ ExecutionResult RelAlgExecutor::executeRelAlgQueryNoRetry(const CompilationOptio
       mapd_unique_lock<mapd_shared_mutex> session_write_lock(
           executor_->executor_session_mutex_);
       executor_->removeFromQuerySessionList(curSession, session_write_lock);
-      executor_->invalidateQuerySession(session_write_lock);
+      executor_->invalidateRunningQuerySession(session_write_lock);
       executor_->execute_spin_lock_.clear(std::memory_order_release);
       session_write_lock.unlock();
       executor_->resetInterrupt();
@@ -294,7 +297,7 @@ ExecutionResult RelAlgExecutor::executeRelAlgQueryNoRetry(const CompilationOptio
     // make sure to set the running session ID
     mapd_unique_lock<mapd_shared_mutex> session_write_lock(
         executor_->executor_session_mutex_);
-    executor_->invalidateQuerySession(session_write_lock);
+    executor_->invalidateRunningQuerySession(session_write_lock);
     executor_->setCurrentQuerySession(query_session, session_write_lock);
     session_write_lock.unlock();
   }

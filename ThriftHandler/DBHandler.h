@@ -865,4 +865,13 @@ class DBHandler : public OmniSciIf {
 
   void getUserSessions(const Catalog_Namespace::SessionInfo& session_info,
                        TQueryResult& _return);
+
+  // this function returns a set of queries queued in the DB
+  // that belongs to the same DB in the caller's session
+  void getQueries(const Catalog_Namespace::SessionInfo& session_info,
+                  TQueryResult& _return);
+
+  // this function passes the interrupt request to the DB executor
+  void interruptQuery(const Catalog_Namespace::SessionInfo& session_info,
+                      const std::string& target_session);
 };

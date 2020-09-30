@@ -91,6 +91,16 @@ void DdlCommandExecutor::execute(TQueryResult& _return) {
     AlterForeignServerCommand{payload, session_ptr_}.execute(_return);
   } else if (ddl_command == "REFRESH_FOREIGN_TABLES") {
     RefreshForeignTablesCommand{payload, session_ptr_}.execute(_return);
+  } else if (ddl_command == "SHOW_QUERIES") {
+    std::cout << "SHOW QUERIES DDL is not ready yet!\n";
+  } else if (ddl_command == "KILL_QUERY") {
+    CHECK(payload.HasMember("querySession"));
+    const std::string& querySessionPayload = payload["querySession"].GetString();
+    auto querySession = querySessionPayload.substr(1, 8);
+    CHECK_EQ(querySession.length(),
+             (unsigned long)8);  // public_session_id's length + two quotes
+    std::cout << "TRY TO KILL QUERY " << querySession
+              << " BUT KILL QUERY DDL is not ready yet!\n";
   } else {
     throw std::runtime_error("Unsupported DDL command");
   }
@@ -100,6 +110,35 @@ bool DdlCommandExecutor::isShowUserSessions() {
   const auto& payload = ddl_query_["payload"].GetObject();
   const auto& ddl_command = std::string_view(payload["command"].GetString());
   return (ddl_command == "SHOW_USER_SESSIONS");
+}
+
+bool DdlCommandExecutor::isShowQueries() {
+  const auto& payload = ddl_query_["payload"].GetObject();
+  const auto& ddl_command = std::string_view(payload["command"].GetString());
+  return (ddl_command == "SHOW_QUERIES");
+}
+
+bool DdlCommandExecutor::isKillQuery() {
+  const auto& payload = ddl_query_["payload"].GetObject();
+  const auto& ddl_command = std::string_view(payload["command"].GetString());
+  return (ddl_command == "KILL_QUERY");
+}
+
+const std::string DdlCommandExecutor::getTargetQuerySessionToKill() {
+  // caller should check whether DDL indicates KillQuery request
+  // i.e., use isKillQuery() before calling this function
+  const auto& payload = ddl_query_["payload"].GetObject();
+  CHECK(isKillQuery());
+  CHECK(payload.HasMember("querySession"));
+  const std::string& query_session = payload["querySession"].GetString();
+  // regex matcher for public_session: start_time{3}-session_id{4} (Example:819-4RDo)
+  boost::regex session_id_regex{R"([0-9]{3}-[a-zA-Z0-9]{4})",
+                                boost::regex::extended | boost::regex::icase};
+  if (!boost::regex_match(query_session, session_id_regex)) {
+    throw std::runtime_error(
+        "Please provide the correct session ID of the query that you want to interrupt.");
+  }
+  return query_session;
 }
 
 CreateForeignServerCommand::CreateForeignServerCommand(

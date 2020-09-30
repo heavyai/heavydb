@@ -40,7 +40,8 @@ const std::vector<std::string> ParserWrapper::ddl_cmd = {"ARCHIVE",
                                                          "RESTORE",
                                                          "REVOKE",
                                                          "SHOW",
-                                                         "TRUNCATE"};
+                                                         "TRUNCATE",
+                                                         "KILL"};
 
 const std::vector<std::string> ParserWrapper::update_dml_cmd = {
     "INSERT",
@@ -166,8 +167,12 @@ ParserWrapper::ParserWrapper(std::string query_string) {
           is_legacy_ddl_ = false;
           return;
         }
+      } else if (ddl == "KILL") {
+        query_type_ = QueryType::Unknown;
+        is_calcite_ddl_ = true;
+        is_legacy_ddl_ = false;
+        return;
       }
-
       is_legacy_ddl_ = !is_calcite_ddl_;
       return;
     }

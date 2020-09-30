@@ -208,7 +208,7 @@ void Executor::resetInterrupt() {
     if (curSession != "" || sessionLeft) {
       mapd_unique_lock<mapd_shared_mutex> session_write_lock(executor_session_mutex_);
       removeFromQuerySessionList(curSession, session_write_lock);
-      invalidateQuerySession(session_write_lock);
+      invalidateRunningQuerySession(session_write_lock);
       session_write_lock.unlock();
     }
   }

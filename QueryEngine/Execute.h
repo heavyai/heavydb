@@ -75,7 +75,41 @@ using QueryCompilationDescriptorOwned = std::unique_ptr<QueryCompilationDescript
 class QueryMemoryDescriptor;
 using QueryMemoryDescriptorOwned = std::unique_ptr<QueryMemoryDescriptor>;
 using InterruptFlagMap = std::map<std::string, bool>;
+class QuerySessionStatus {
+ public:
+  QuerySessionStatus(
+      const std::string& query_session,
+      const std::string& query_str,
+      const std::chrono::time_point<std::chrono::system_clock> submitted_time)
+      : query_session_(query_session)
+      , query_str_(query_str)
+      , submitted_time_(submitted_time)
+      , query_status_("Pending") {}
+  QuerySessionStatus(
+      const std::string& query_session,
+      const std::string& query_str,
+      const std::chrono::time_point<std::chrono::system_clock> submitted_time,
+      const std::string& query_status)
+      : query_session_(query_session)
+      , query_str_(query_str)
+      , submitted_time_(submitted_time)
+      , query_status_(query_status) {}
 
+  const std::string getQuerySession() { return query_session_; }
+  const std::string getQueryStr() { return query_str_; }
+  const std::chrono::time_point<std::chrono::system_clock> getQuerySubmittedTime() {
+    return submitted_time_;
+  }
+  const std::string getQueryStatus() { return query_status_; }
+  void setQueryStatusAsRunning() { query_status_ = "Running"; }
+
+ private:
+  const std::string query_session_;
+  const std::string query_str_;
+  const std::chrono::time_point<std::chrono::system_clock> submitted_time_;
+  std::string query_status_;
+};
+using QuerySessionMap = std::map<const std::string, QuerySessionStatus>;
 extern void read_udf_gpu_module(const std::string& udf_ir_filename);
 extern void read_udf_cpu_module(const std::string& udf_ir_filename);
 extern bool is_udf_module_present(bool cpu_only = false);
@@ -822,9 +856,10 @@ class Executor {
   bool checkCurrentQuerySession(const std::string& candidate_query_session,
                                 SESSION_MAP_LOCK& read_lock);
   template <typename SESSION_MAP_LOCK>
-  void invalidateQuerySession(SESSION_MAP_LOCK& write_lock);
+  void invalidateRunningQuerySession(SESSION_MAP_LOCK& write_lock);
   template <typename SESSION_MAP_LOCK>
   bool addToQuerySessionList(const std::string& query_session,
+                             const std::string& query_str,
                              SESSION_MAP_LOCK& write_lock);
   template <typename SESSION_MAP_LOCK>
   bool removeFromQuerySessionList(const std::string& query_session,
@@ -835,6 +870,9 @@ class Executor {
   template <typename SESSION_MAP_LOCK>
   bool checkIsQuerySessionInterrupted(const std::string& query_session,
                                       SESSION_MAP_LOCK& read_lock);
+  std::optional<QuerySessionStatus> getQuerySessionInfo(
+      const std::string& query_session,
+      mapd_shared_lock<mapd_shared_mutex>& read_lock);
   mapd_shared_mutex& getSessionLock();
 
   // true when we have matched cardinality, and false otherwise
@@ -923,6 +961,8 @@ class Executor {
   static std::string current_query_session_;
   // a pair of <query_session, interrupted_flag>
   static InterruptFlagMap queries_interrupt_flag_;
+  // a pair of <query_session, query_session_status>
+  static QuerySessionMap queries_session_map_;
 
   static std::map<int, std::shared_ptr<Executor>> executors_;
   static std::atomic_flag execute_spin_lock_;
