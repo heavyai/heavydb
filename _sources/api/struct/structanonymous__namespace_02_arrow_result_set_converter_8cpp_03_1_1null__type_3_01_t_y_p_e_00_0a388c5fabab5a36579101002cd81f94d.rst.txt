@@ -1,0 +1,9 @@
+Struct anonymous_namespace{ArrowResultSetConverter.cpp}::null_type< TYPE, std::enable_if_t< std::is_floating_point< TYPE >::value > >
+=====================================================================================================================================
+
+.. doxygenstruct:: anonymous_namespace{ArrowResultSetConverter.cpp}::null_type< TYPE, std::enable_if_t< std::is_floating_point< TYPE >::value > >
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

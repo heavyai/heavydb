@@ -1,0 +1,9 @@
+Class anonymous_namespace{ArrowResultSetConverter.cpp}::null_type
+=================================================================
+
+.. doxygenclass:: anonymous_namespace{ArrowResultSetConverter.cpp}::null_type
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:
