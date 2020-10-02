@@ -17,13 +17,9 @@
 
 #include "sqltypes.h"
 
-#include <boost/regex.hpp>
-
 #include <optional>
 #include <ostream>
 #include <string_view>
-#include <unordered_map>
-#include <vector>
 
 template <SQLTypes SQL_TYPE>
 int64_t dateTimeParse(std::string_view, unsigned const dim);
@@ -37,15 +33,18 @@ int64_t dateTimeParse<kTIME>(std::string_view, unsigned const dim);
 template <>
 int64_t dateTimeParse<kTIMESTAMP>(std::string_view, unsigned const dim);
 
-// Set format and parse date/time/timestamp strings into (s,ms,us,ns) since the epoch
-// based on given dim in (0,3,6,9) respectively.  Basic idea is to transform given format
-// ("%Y-%m-%d") into a regular expression with capturing groups corresponding to each
-// %-field.  The regex is then matched to the string and the DateTime dt_ struct is set,
-// from which the final epoch-based int64_t value is calculated.
+/**
+ * Set format_type_ and parse date/time/timestamp strings into (s,ms,us,ns) since the
+ * epoch based on given dim in (0,3,6,9) respectively.  Basic idea is to parse given
+ * string by matching to formats ("%Y-%m-%d", "%m/%d/%Y", ...) until a valid parse is
+ * found.  Save parsed values into a DateTime dt_ struct from which the final
+ * epoch-based int64_t value is calculated.
+ */
 class DateTimeParser {
  public:
-  void setFormat(std::string_view const&);
+  enum class FormatType { Date, Time, Timezone };
   std::optional<int64_t> parse(std::string_view const&, unsigned dim);
+  void setFormatType(FormatType);
   std::string_view unparsed() const;
 
   struct DateTime {
@@ -64,15 +63,11 @@ class DateTimeParser {
   };
 
  private:
-  std::vector<char> fields_;
-  boost::regex regex_;
-  std::string_view unparsed_;
   DateTime dt_;
+  FormatType format_type_;
+  std::string_view unparsed_;
 
-  static const boost::regex field_regex;
-  static const std::unordered_map<char, char const*> field_to_regex;
-  static const std::unordered_map<int, unsigned> month_name_lookup;
-
+  bool parseWithFormat(std::string_view format, std::string_view& str);
   void resetDateTime();
-  void updateDateTime(char field, std::string_view const&);
+  bool updateDateTimeAndStr(char const field, std::string_view&);
 };

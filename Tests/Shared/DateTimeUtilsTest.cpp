@@ -81,11 +81,7 @@ TEST(TIME, IllegalParseTimeString) {
       "22-28-48"s, "2228.48"s, "22.28.48"s, "22"s};
 
   for (const auto& val : values) {
-    if (val == "2228.48") {
-      ASSERT_NO_THROW(dateTimeParse<kTIME>(val, 0));  // Parsed as 22:02:08.48.
-    } else {
-      ASSERT_THROW(dateTimeParse<kTIME>(val, 0), std::runtime_error) << val;
-    }
+    ASSERT_THROW(dateTimeParse<kTIME>(val, 0), std::runtime_error) << val;
   }
 }
 

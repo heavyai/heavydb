@@ -17,23 +17,48 @@
 #include "DateTimeParser.h"
 #include "StringTransform.h"
 
+#include <boost/algorithm/string/predicate.hpp>
+
 #include <algorithm>
+#include <array>
 #include <cctype>
 #include <charconv>
+#include <limits>
 #include <sstream>
+#include <vector>
 
 namespace {
+
+constexpr std::array<int, 12> month_prefixes{{int('j') << 16 | int('a') << 8 | int('n'),
+                                              int('f') << 16 | int('e') << 8 | int('b'),
+                                              int('m') << 16 | int('a') << 8 | int('r'),
+                                              int('a') << 16 | int('p') << 8 | int('r'),
+                                              int('m') << 16 | int('a') << 8 | int('y'),
+                                              int('j') << 16 | int('u') << 8 | int('n'),
+                                              int('j') << 16 | int('u') << 8 | int('l'),
+                                              int('a') << 16 | int('u') << 8 | int('g'),
+                                              int('s') << 16 | int('e') << 8 | int('p'),
+                                              int('o') << 16 | int('c') << 8 | int('t'),
+                                              int('n') << 16 | int('o') << 8 | int('v'),
+                                              int('d') << 16 | int('e') << 8 | int('c')}};
+
+constexpr std::array<std::string_view, 13> month_suffixes{
+    {""
+     "uary",
+     "ruary",
+     "ch",
+     "il",
+     "",
+     "e",
+     "y",
+     "ust",
+     "tember",
+     "ober",
+     "ember",
+     "ember"}};
+
 constexpr unsigned
     pow_10[10]{1, 10, 100, 1000, 10000, 100000, 1000000, 10000000, 100000000, 1000000000};
-constexpr std::array<char const*, 5> date_formats{
-    {"%Y-%m-%d", "%m/%d/%Y", "%Y/%m/%d", "%d-%b-%y", "%d/%b/%Y"}};
-constexpr std::array<char const*, 7> time_formats{{"%I:%M:%S %p",
-                                                   "%H:%M:%S",
-                                                   "%I:%M %p",
-                                                   "%H:%M",
-                                                   "%H%M%S",
-                                                   "%I %p",
-                                                   "%I . %M . %S %p"}};
 
 // Return y-m-d minus 1970-01-01 in days according to Gregorian calendar.
 // Credit: http://howardhinnant.github.io/date_algorithms.html#days_from_civil
@@ -46,9 +71,54 @@ int64_t daysFromCivil(int64_t y, unsigned const m, unsigned const d) {
   return era * 146097 + static_cast<int64_t>(doe) - 719468;
 }
 
+// Order of entries correspond to enum class FormatType { Date, Time, Timezone }.
+std::vector<std::vector<std::string_view>> formatViews() {
+  return {{{"%Y-%m-%d", "%m/%d/%Y", "%Y/%m/%d", "%d-%b-%y", "%d/%b/%Y"},
+           {"%I:%M:%S %p",
+            "%H:%M:%S",
+            "%I:%M %p",
+            "%H:%M",
+            "%H%M%S",
+            "%I %p",
+            "%I . %M . %S %p"},
+           {"%z"}}};
+}
+
+// Optionally eat month name after first 3 letters.  Assume first 3 letters are correct.
+void eatMonth(unsigned const month, std::string_view& str) {
+  str.remove_prefix(3);
+  std::string_view const& suffix = month_suffixes[month];
+  if (boost::algorithm::istarts_with(str, suffix)) {
+    str.remove_prefix(suffix.size());
+  }
+}
+
+void eatSpace(std::string_view& str) {
+  while (!str.empty() && isspace(str.front())) {
+    str.remove_prefix(1);
+  }
+}
+
+// Parse str as a number of maxlen and type T.
+// Return value and consume from str on success,
+// otherwise return std::nullopt and do not change str.
+template <typename T>
+std::optional<T> fromChars(std::string_view& str,
+                           size_t maxlen = std::numeric_limits<size_t>::max()) {
+  T retval;
+  maxlen = std::min(maxlen, str.size());
+  auto const result = std::from_chars(str.data(), str.data() + maxlen, retval);
+  if (result.ec == std::errc()) {
+    str.remove_prefix(result.ptr - str.data());
+    return retval;
+  } else {
+    return std::nullopt;
+  }
+}
+
 // Parse str into int64_t or throw exception.
 int64_t unixTime(std::string_view const& str) {
-  int64_t time;
+  int64_t time{0};
   auto const result = std::from_chars(str.data(), str.data() + str.size(), time);
   if (result.ec == std::errc()) {
     return time;
@@ -58,27 +128,22 @@ int64_t unixTime(std::string_view const& str) {
 }
 }  // namespace
 
-// Interpret str according to first matched pattern in time_formats.
+// Interpret str according to DateTimeParser::FormatType::Time.
 // Return number of (s,ms,us,ns) since midnight based on dim in (0,3,6,9) resp.
 template <>
 int64_t dateTimeParse<kTIME>(std::string_view str, unsigned const dim) {
-  if (str.front() == 'T') {
+  if (!str.empty() && str.front() == 'T') {
     str.remove_prefix(1);
   }
   DateTimeParser parser;
-  std::optional<int64_t> time;
-  for (char const* time_format : time_formats) {
-    parser.setFormat(time_format);
-    if ((time = parser.parse(str, dim))) {
-      break;
-    }
-  }
+  parser.setFormatType(DateTimeParser::FormatType::Time);
+  std::optional<int64_t> time = parser.parse(str, dim);
   if (!time) {
     throw std::runtime_error(cat("Invalid TIME string (", str, ')'));
   }
   // Parse optional timezone
   std::string_view timezone = parser.unparsed();
-  parser.setFormat("%z");
+  parser.setFormatType(DateTimeParser::FormatType::Timezone);
   std::optional<int64_t> tz = parser.parse(timezone, dim);
   if (!parser.unparsed().empty()) {
     throw std::runtime_error(cat("Invalid TIME string (", str, ')'));
@@ -86,22 +151,17 @@ int64_t dateTimeParse<kTIME>(std::string_view str, unsigned const dim) {
   return *time + tz.value_or(0);
 }
 
-// Interpret str according to first matched pattern in date_formats and time_formats.
+// Interpret str according to DateTimeParser::FormatType::Date and Time.
 // Return number of (s,ms,us,ns) since epoch based on dim in (0,3,6,9) resp.
 template <>
 int64_t dateTimeParse<kTIMESTAMP>(std::string_view str, unsigned const dim) {
-  if (str.front() == 'T') {
+  if (!str.empty() && str.front() == 'T') {
     str.remove_prefix(1);
   }
   DateTimeParser parser;
   // Parse date
-  std::optional<int64_t> date;
-  for (char const* date_format : date_formats) {
-    parser.setFormat(date_format);
-    if ((date = parser.parse(str, dim))) {
-      break;
-    }
-  }
+  parser.setFormatType(DateTimeParser::FormatType::Date);
+  std::optional<int64_t> date = parser.parse(str, dim);
   if (!date) {
     return unixTime(str);
   }
@@ -109,43 +169,32 @@ int64_t dateTimeParse<kTIMESTAMP>(std::string_view str, unsigned const dim) {
   std::string_view time_of_day = parser.unparsed();
   if (time_of_day.empty()) {
     throw std::runtime_error(cat("TIMESTAMP requires a time-of-day (", str, ')'));
-  }
-  if (time_of_day.front() == 'T' || time_of_day.front() == ':') {
+  } else if (time_of_day.front() == 'T' || time_of_day.front() == ':') {
     time_of_day.remove_prefix(1);
   }
-  std::optional<int64_t> time;
-  for (char const* time_format : time_formats) {
-    parser.setFormat(time_format);
-    if ((time = parser.parse(time_of_day, dim))) {
-      break;
-    }
-  }
+  parser.setFormatType(DateTimeParser::FormatType::Time);
+  std::optional<int64_t> time = parser.parse(time_of_day, dim);
   // Parse optional timezone
   std::string_view timezone = parser.unparsed();
-  parser.setFormat("%z");
+  parser.setFormatType(DateTimeParser::FormatType::Timezone);
   std::optional<int64_t> tz = parser.parse(timezone, dim);
   return *date + time.value_or(0) + tz.value_or(0);
 }
 
-// Interpret str according to first matched pattern in date_formats.
+// Interpret str according to DateTimeParser::FormatType::Date.
 // Return number of (s,ms,us,ns) since epoch based on dim in (0,3,6,9) resp.
 template <>
 int64_t dateTimeParse<kDATE>(std::string_view str, unsigned const dim) {
   DateTimeParser parser;
   // Parse date
-  std::optional<int64_t> date;
-  for (char const* date_format : date_formats) {
-    parser.setFormat(date_format);
-    if ((date = parser.parse(str, dim))) {
-      break;
-    }
-  }
+  parser.setFormatType(DateTimeParser::FormatType::Date);
+  std::optional<int64_t> date = parser.parse(str, dim);
   if (!date) {
     return unixTime(str);
   }
   // Parse optional timezone
   std::string_view timezone = parser.unparsed();
-  parser.setFormat("%z");
+  parser.setFormatType(DateTimeParser::FormatType::Timezone);
   std::optional<int64_t> tz = parser.parse(timezone, dim);
   return *date + tz.value_or(0);
 }
@@ -159,48 +208,42 @@ int64_t DateTimeParser::DateTime::getTime(unsigned const dim) const {
   return (24 * 3600 * days + seconds) * pow_10[dim] + n / pow_10[9 - dim];
 }
 
-// Translate given format into regex and save in regex_.
-// Save format character (e.g. 'Y' for "%Y") into fields_.
-// Characters in fields_ will correspond to capturing groups in regex_.
-void DateTimeParser::setFormat(std::string_view const& format) {
-  resetDateTime();
-  fields_.clear();
-  std::ostringstream oss;
-  oss << '^';
-  std::ostream_iterator<char, char> oitr(oss);
-  boost::regex_replace(
-      oitr, format.begin(), format.end(), field_regex, [this](boost::cmatch const& md) {
-        if (*md[0].first == '%') {  // matched /%(.)/
-          auto itr = field_to_regex.find(*md[1].first);
-          if (itr == field_to_regex.end()) {
-            throw std::runtime_error(cat("Unrecognized format: %", *md[1].first));
-          }
-          if (itr->first != '%') {
-            fields_.push_back(itr->first);
-          }
-          return itr->second;
-        } else if (*md[0].first == '.') {  // matched /\./
-          return "\\.";                    // escape regex wilcard character.
-        } else {                           // matched /\s+/
-          // whitespace "matches zero or more whitespace characters in the input string."
-          return "\\s*";
-        }
-      });
-  regex_.assign(oss.str(), boost::regex::icase);
+// Return true if successful parse, false otherwise.  Update dt_ and str.
+// OK to be destructive to str on failed match.
+bool DateTimeParser::parseWithFormat(std::string_view format, std::string_view& str) {
+  while (!format.empty()) {
+    if (format.front() == '%') {
+      eatSpace(str);
+      if (!updateDateTimeAndStr(format[1], str)) {
+        return false;
+      }
+      format.remove_prefix(2);
+    } else if (isspace(format.front())) {
+      eatSpace(format);
+      eatSpace(str);
+    } else if (!str.empty() && format.front() == str.front()) {
+      format.remove_prefix(1);
+      str.remove_prefix(1);
+    } else {
+      return false;
+    }
+  }
+  return true;
 }
 
-// Parse given str and update dt_ based on current values of regex_ and fields_.
+// Update dt_ based on given str and current value of format_type_.
 // Return number of (s,ms,us,ns) since epoch based on dim in (0,3,6,9) resp.
-// or std::nullopt if regex_ does not match str.
+// or std::nullopt if no format matches str.
 // In either case, update unparsed_ to the remaining part of str that was not matched.
 std::optional<int64_t> DateTimeParser::parse(std::string_view const& str, unsigned dim) {
-  boost::cmatch md;
-  if (boost::regex_search(str.begin(), str.end(), md, regex_)) {
-    for (unsigned i = 1; i < md.size(); ++i) {
-      updateDateTime(fields_[i - 1], std::string_view(md[i].first, md[i].length()));
+  static std::vector<std::vector<std::string_view>> const& format_views = formatViews();
+  auto const& formats = format_views.at(static_cast<int>(format_type_));
+  for (std::string_view const& format : formats) {
+    std::string_view str_unparsed = str;
+    if (parseWithFormat(format, str_unparsed)) {
+      unparsed_ = str_unparsed;
+      return dt_.getTime(dim);
     }
-    unparsed_ = str.substr(md[0].length());
-    return dt_.getTime(dim);
   }
   unparsed_ = str;
   return std::nullopt;
@@ -210,106 +253,136 @@ void DateTimeParser::resetDateTime() {
   dt_ = DateTime();
 }
 
+void DateTimeParser::setFormatType(FormatType format_type) {
+  resetDateTime();
+  format_type_ = format_type;
+}
+
 std::string_view DateTimeParser::unparsed() const {
   return unparsed_;
 }
 
-// Update dt_ based on given field and matched str.
-// It is assumed that str matches the capture group in field_to_regex[field].
-void DateTimeParser::updateDateTime(char const field, std::string_view const& str) {
+// Return true if successful parse, false otherwise.  Update dt_ and str on success.
+// OK to be destructive to str on failed parse.
+bool DateTimeParser::updateDateTimeAndStr(char const field, std::string_view& str) {
   switch (field) {
     case 'Y':
-      std::from_chars(str.data(), str.data() + str.size(), dt_.Y);
-      break;
-    case 'y':
-      std::from_chars(str.data(), str.data() + str.size(), dt_.Y);
-      dt_.Y += dt_.Y < 69 ? 2000 : 1900;
-      break;
-    case 'm':
-      std::from_chars(str.data(), str.data() + str.size(), dt_.m);
-      break;
-    case 'b': {
-      int const key =
-          std::tolower(str[0]) << 16 | std::tolower(str[1]) << 8 | std::tolower(str[2]);
-      dt_.m = month_name_lookup.at(key);
-    }
-    case 'd':
-      std::from_chars(str.data(), str.data() + str.size(), dt_.d);
-      break;
-    case 'H':
-    case 'I':
-      std::from_chars(str.data(), str.data() + str.size(), dt_.H);
-      break;
-    case 'M':
-      std::from_chars(str.data(), str.data() + str.size(), dt_.M);
-      break;
-    case 'S': {
-      size_t const radix_pos = str.find('.');
-      if (radix_pos == std::string_view::npos) {
-        std::from_chars(str.data(), str.data() + str.size(), dt_.S);
-      } else {
-        char const* const radix = &str[radix_pos];
-        std::from_chars(str.data(), radix, dt_.S);
-        size_t const frac_len = std::min(size_t(9), str.size() - (radix_pos + 1));
-        char const* const end = radix + (frac_len + 1);
-        std::from_chars(radix + 1, end, dt_.n);
-        dt_.n *= pow_10[9 - frac_len];
+      if (auto const year = fromChars<int64_t>(str)) {
+        dt_.Y = *year;
+        return true;
       }
-    } break;
-    case 'z': {
-      char const* sep = &str[3];
-      int hours, minutes;
-      std::from_chars(str.data() + 1, sep, hours);
-      sep += str.size() == 6;  // if str has a colon, increment sep to next char.
-      std::from_chars(sep, sep + 2, minutes);
-      dt_.z = (str.front() == '-' ? -60 : 60) * (60 * hours + minutes);
-    } break;
+      return false;
+    case 'y':
+      if (2 <= str.size() && isdigit(str[0]) && isdigit(str[1])) {
+        if (auto const year = fromChars<unsigned>(str, 2)) {
+          dt_.Y = (*year < 69 ? 2000 : 1900) + *year;
+          return true;
+        }
+      }
+      return false;
+    case 'm':
+      if (auto const month = fromChars<unsigned>(str, 2)) {
+        if (1 <= *month && *month <= 12) {
+          dt_.m = *month;
+          return true;
+        }
+      }
+      return false;
+    case 'b':
+      if (3 <= str.size()) {
+        int const key =
+            std::tolower(str[0]) << 16 | std::tolower(str[1]) << 8 | std::tolower(str[2]);
+        constexpr auto end = month_prefixes.data() + month_prefixes.size();
+        // This is faster than a lookup into a std::unordered_map.
+        auto const ptr = std::find(month_prefixes.data(), end, key);
+        if (ptr != end) {
+          dt_.m = ptr - month_prefixes.data() + 1;
+          eatMonth(dt_.m, str);
+          return true;
+        }
+      }
+      return false;
+    case 'd':
+      if (auto const day = fromChars<unsigned>(str, 2)) {
+        if (1 <= *day && *day <= 31) {
+          dt_.d = *day;
+          return true;
+        }
+      }
+      return false;
+    case 'H':
+      if (auto const hour = fromChars<unsigned>(str, 2)) {
+        if (*hour <= 23) {
+          dt_.H = *hour;
+          return true;
+        }
+      }
+      return false;
+    case 'I':
+      if (auto const hour = fromChars<unsigned>(str, 2)) {
+        if (1 <= *hour && *hour <= 12) {
+          dt_.H = *hour;
+          return true;
+        }
+      }
+      return false;
+    case 'M':
+      if (auto const minute = fromChars<unsigned>(str, 2)) {
+        if (*minute <= 59) {
+          dt_.M = *minute;
+          return true;
+        }
+      }
+      return false;
+    case 'S':
+      if (auto const second = fromChars<unsigned>(str, 2)) {
+        if (*second <= 61) {
+          dt_.S = *second;
+          if (!str.empty() && str.front() == '.') {
+            str.remove_prefix(1);
+            size_t len = str.size();
+            if (auto const ns = fromChars<unsigned>(str, 9)) {
+              len -= str.size();
+              dt_.n = *ns * pow_10[9 - len];
+            } else {
+              return false;  // Reject period not followed by a digit
+            }
+          }
+          return true;
+        }
+      }
+      return false;
+    case 'z':
+      // [-+]\d\d:?\d\d
+      if (5 <= str.size() && (str.front() == '-' || str.front() == '+') &&
+          isdigit(str[1]) && isdigit(str[2]) && isdigit(str[4]) &&
+          (str[3] == ':' ? 6 <= str.size() && isdigit(str[5]) : isdigit(str[3]))) {
+        char const* sep = &str[3];
+        int hours{0}, minutes{0};
+        std::from_chars(str.data() + 1, sep, hours);
+        sep += *sep == ':';
+        std::from_chars(sep, sep + 2, minutes);
+        dt_.z = (str.front() == '-' ? -60 : 60) * (60 * hours + minutes);
+        str.remove_prefix(sep - str.data() + 2);
+        return true;
+      }
+      return false;
     case 'p':
-      dt_.p = str.empty() ? std::nullopt
-                          : std::optional<bool>(std::tolower(str.front()) == 'p');
-      break;
+      // %p implies optional, so never return false
+      if (boost::algorithm::istarts_with(str, "am") ||
+          boost::algorithm::istarts_with(str, "pm") ||
+          boost::algorithm::istarts_with(str, "a.m.") ||
+          boost::algorithm::istarts_with(str, "p.m.")) {
+        dt_.p = std::tolower(str.front()) == 'p';
+        str.remove_prefix(std::tolower(str[1]) == 'm' ? 2 : 4);
+      } else {
+        dt_.p.reset();
+      }
+      return true;
     default:
       throw std::runtime_error(cat("Unrecognized format: %", field));
   }
 }
-
-// Used to search and replace the strings in date_formats and time_formats to
-// transform them into regular expressions:
-// %(.) -> string value in field_to_regex.
-// \.   -> match period in regex
-// \s+  -> match \s* in regex (0 or more whitespace). This matches strptime rules.
-const boost::regex DateTimeParser::field_regex("%(.)|\\.|\\s+");
-
-// Whitespace may always precede a token, but not proceed it, unless it's in the input.
-const std::unordered_map<char, char const*> DateTimeParser::field_to_regex{
-    {'Y', "\\s*(-?\\d+)"},
-    {'y', "\\s*(\\d\\d)"},
-    {'m', "\\s*(1[012]|0?[1-9])"},
-    {'b',
-     "\\s*(jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|june?|july?"
-     "|aug(?:ust)?|sep(?:tember)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)"},
-    {'d', "\\s*(3[01]|[12]\\d|0?[1-9])"},
-    {'I', "\\s*(1[012]|0?[1-9])"},
-    {'H', "\\s*(2[0-3]|1\\d|0?\\d)"},
-    {'M', "\\s*([1-5]\\d|0?\\d)"},
-    {'S', "\\s*((?:6[01]|[1-5]\\d|0?\\d)(?:\\.\\d*)?)"},
-    {'z', "\\s*([-+]\\d\\d:?\\d\\d)"},
-    {'p', "\\s*([ap]\\.?m\\.?|)"},
-    {'%', "%"}};
-
-const std::unordered_map<int, unsigned> DateTimeParser::month_name_lookup{
-    {int('j') << 16 | int('a') << 8 | int('n'), 1},
-    {int('f') << 16 | int('e') << 8 | int('b'), 2},
-    {int('m') << 16 | int('a') << 8 | int('r'), 3},
-    {int('a') << 16 | int('p') << 8 | int('r'), 4},
-    {int('m') << 16 | int('a') << 8 | int('y'), 5},
-    {int('j') << 16 | int('u') << 8 | int('n'), 6},
-    {int('j') << 16 | int('u') << 8 | int('l'), 7},
-    {int('a') << 16 | int('u') << 8 | int('g'), 8},
-    {int('s') << 16 | int('e') << 8 | int('p'), 9},
-    {int('o') << 16 | int('c') << 8 | int('t'), 10},
-    {int('n') << 16 | int('o') << 8 | int('v'), 11},
-    {int('d') << 16 | int('e') << 8 | int('c'), 12}};
 
 std::ostream& operator<<(std::ostream& out, DateTimeParser::DateTime const& dt) {
   return out << dt.Y << '-' << dt.m << '-' << dt.d << ' ' << dt.H << ':' << dt.M << ':'
