@@ -241,7 +241,7 @@ llvm::Value* CodeGenerator::codegen(const Analyzer::DatetruncExpr* datetrunc_exp
   }
   char const* const fname = datetrunc_fname_lookup.at(field);
   auto ret = cgen_state_->emitExternalCall(
-      fname, get_int_type(64, cgen_state_->context_), {{from_expr}});
+      fname, get_int_type(64, cgen_state_->context_), {from_expr});
   if (is_nullable) {
     ret = nullcheck_codegen->finalize(ll_int(NULL_BIGINT, cgen_state_->context_), ret);
   }
@@ -338,7 +338,7 @@ llvm::Value* CodeGenerator::codegenDateTruncHighPrecisionTimestamps(
   }
   char const* const fname = datetrunc_fname_lookup.at(field);
   ts_lv = cgen_state_->emitExternalCall(
-      fname, get_int_type(64, cgen_state_->context_), {{ts_lv}});
+      fname, get_int_type(64, cgen_state_->context_), {ts_lv});
   if (is_nullable) {
     ts_lv =
         nullcheck_codegen->finalize(ll_int(NULL_BIGINT, cgen_state_->context_), ts_lv);

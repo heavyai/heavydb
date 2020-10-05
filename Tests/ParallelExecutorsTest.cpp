@@ -416,7 +416,7 @@ TEST_F(UpdateDeleteTestEnv, Update_OneTable) {
         for (size_t j = 0; j < 4; j++) {
           worker_threads.push_back(std::async(
               std::launch::async,
-              [i, j](const std::string& table_name, const ExecutorDeviceType dt) {
+              [j](const std::string& table_name, const ExecutorDeviceType dt) {
                 if (j == 0) {
                   // run insert, then delete
                   QR::get()->runSQL(

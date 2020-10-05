@@ -2001,6 +2001,7 @@ bool is_gpu_shared_mem_supported(const QueryMemoryDescriptor* query_mem_desc_ptr
   return false;
 }
 
+#ifndef NDEBUG
 std::string serialize_llvm_metadata_footnotes(llvm::Function* query_func,
                                               CgenState* cgen_state) {
   std::string llvm_ir;
@@ -2067,6 +2068,7 @@ std::string serialize_llvm_metadata_footnotes(llvm::Function* query_func,
 
   return llvm_ir;
 }
+#endif  // NDEBUG
 
 }  // namespace
 

@@ -145,7 +145,7 @@ llvm::Value* CodeGenerator::codegenCastTimestampToDate(llvm::Value* ts_lv,
                                            "cast_timestamp_nullcheck");
   }
   auto ret = cgen_state_->emitExternalCall(
-      "datetrunc_day", get_int_type(64, cgen_state_->context_), {{ts_lv}});
+      "datetrunc_day", get_int_type(64, cgen_state_->context_), {ts_lv});
   if (nullcheck_codegen) {
     ret = nullcheck_codegen->finalize(ll_int(NULL_BIGINT, cgen_state_->context_), ret);
   }
