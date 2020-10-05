@@ -54,20 +54,15 @@ set(glbinding_INCLUDE_DIRS ${glbinding_INCLUDE_DIR} ${glbinding-aux_INCLUDE_DIR}
 set(glbinding_LIBRARIES ${glbinding_LIBRARY} ${glbinding-aux_LIBRARY})
 
 include(FindPackageHandleStandardArgs)
-find_package_handle_standard_args(glbinding
+find_package_handle_standard_args(GLBinding
                                   REQUIRED_VARS glbinding_INCLUDE_DIR glbinding_LIBRARY)
 
-find_package_handle_standard_args(glbinding-aux
-                                  REQUIRED_VARS glbinding-aux_INCLUDE_DIR glbinding-aux_LIBRARY)
-
-if(glbinding_FOUND AND NOT TARGET glbinding::glbinding)
+if(GLBinding_FOUND AND NOT TARGET glbinding::glbinding)
   add_library(glbinding::glbinding UNKNOWN IMPORTED)
   set_target_properties(glbinding::glbinding PROPERTIES
     IMPORTED_LOCATION "${glbinding_LIBRARY}"
     INTERFACE_INCLUDE_DIRECTORIES "${glbinding_INCLUDE_DIRS}")
-endif()
 
-if(glbinding-aux_FOUND AND NOT TARGET glbinding::glbinding-aux)
   add_library(glbinding::glbinding-aux UNKNOWN IMPORTED)
   set_target_properties(glbinding::glbinding-aux PROPERTIES
     IMPORTED_LOCATION "${glbinding-aux_LIBRARY}"
