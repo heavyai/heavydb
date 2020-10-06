@@ -146,7 +146,10 @@ size_t DataMgr::getTotalSystemMemory() {
   sysctl(mib, 2, &physical_memory, &length, NULL, 0);
   return physical_memory;
 #elif defined(_MSC_VER)
-  return 0;  // TODO
+  MEMORYSTATUSEX status;
+  status.dwLength = sizeof(status);
+  GlobalMemoryStatusEx(&status);
+  return status.ullTotalPhys;
 #else  // Linux
   long pages = sysconf(_SC_PHYS_PAGES);
   long page_size = sysconf(_SC_PAGE_SIZE);
