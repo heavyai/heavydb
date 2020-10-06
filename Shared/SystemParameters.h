@@ -39,13 +39,17 @@ struct SystemParameters {
   size_t cpu_buffer_mem_bytes = 0;  // max size of memory reserved for CPU buffers [bytes]
   size_t gpu_buffer_mem_bytes = 0;  // max size of memory reserved for GPU buffers [bytes]
   size_t min_cpu_slab_size =
-      1L << 28;  // min size of CPU buffer pool memory allocations [bytes], default=256MB
+      size_t(1)
+      << 28;  // min size of CPU buffer pool memory allocations [bytes], default=256MB
   size_t min_gpu_slab_size =
-      1L << 28;  // min size of GPU buffer pool memory allocations [bytes], default=256MB
+      size_t(1)
+      << 28;  // min size of GPU buffer pool memory allocations [bytes], default=256MB
   size_t max_cpu_slab_size =
-      1L << 32;  // max size of CPU buffer pool memory allocations [bytes], default=4GB
+      size_t(1)
+      << 32;  // max size of CPU buffer pool memory allocations [bytes], default=4GB
   size_t max_gpu_slab_size =
-      1L << 32;  // max size of CPU buffer pool memory allocations [bytes], default=4GB
+      size_t(1)
+      << 32;  // max size of CPU buffer pool memory allocations [bytes], default=4GB
   double gpu_input_mem_limit = 0.9;  // Punt query to CPU if input mem exceeds % GPU mem
   std::string config_file = "";
   std::string ssl_cert_file = "";    // file path to server's certified PKI certificate
