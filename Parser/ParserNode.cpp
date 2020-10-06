@@ -4092,6 +4092,10 @@ static std::pair<AccessPrivileges, DBObjectType> parseStringPrivs(
            {AccessPrivileges::DROP_SERVER, ServerDBObjectType}},
           {{"DROP"s, ServerDBObjectType},
            {AccessPrivileges::DROP_SERVER, ServerDBObjectType}},
+          {{"ALTER SERVER"s, DatabaseDBObjectType},
+           {AccessPrivileges::ALTER_SERVER, ServerDBObjectType}},
+          {{"ALTER"s, ServerDBObjectType},
+           {AccessPrivileges::ALTER_SERVER, ServerDBObjectType}},
 
           {{"VIEW SQL EDITOR"s, DatabaseDBObjectType},
            {AccessPrivileges::VIEW_SQL_EDITOR, DatabaseDBObjectType}},

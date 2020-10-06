@@ -1530,6 +1530,17 @@ TEST_F(ServerObject, AccessWithGrantRevokeAllCompound) {
   EXPECT_EQ(sys_cat.checkPrivileges("Juventus", privObjects), true);
   EXPECT_EQ(sys_cat.checkPrivileges("Bayern", privObjects), true);
 
+  // All users should still have ALTER_SERVER privileges, check that this is true
+  server_priv.reset();
+  ASSERT_NO_THROW(server_priv.add(AccessPrivileges::ALTER_SERVER));
+  ASSERT_NO_THROW(server_object.setPrivileges(server_priv));
+  privObjects.clear();
+  privObjects.push_back(server_object);
+  EXPECT_EQ(sys_cat.checkPrivileges("Chelsea", privObjects), true);
+  EXPECT_EQ(sys_cat.checkPrivileges("Arsenal", privObjects), true);
+  EXPECT_EQ(sys_cat.checkPrivileges("Juventus", privObjects), true);
+  EXPECT_EQ(sys_cat.checkPrivileges("Bayern", privObjects), true);
+
   // Revoke ALL_SERVER privileges
   server_priv.reset();
   ASSERT_NO_THROW(server_priv.add(AccessPrivileges::ALL_SERVER));
@@ -1544,6 +1555,17 @@ TEST_F(ServerObject, AccessWithGrantRevokeAllCompound) {
   // have the DROP_SERVER privilege (except super-users)
   server_priv.reset();
   ASSERT_NO_THROW(server_priv.add(AccessPrivileges::DROP_SERVER));
+  ASSERT_NO_THROW(server_object.setPrivileges(server_priv));
+  privObjects.clear();
+  privObjects.push_back(server_object);
+  EXPECT_EQ(sys_cat.checkPrivileges("Chelsea", privObjects), true);
+  EXPECT_EQ(sys_cat.checkPrivileges("Arsenal", privObjects), false);
+  EXPECT_EQ(sys_cat.checkPrivileges("Juventus", privObjects), false);
+  EXPECT_EQ(sys_cat.checkPrivileges("Bayern", privObjects), false);
+
+  // users no longer have the ALTER_SERVER privileges, check that this is true
+  server_priv.reset();
+  ASSERT_NO_THROW(server_priv.add(AccessPrivileges::ALTER_SERVER));
   ASSERT_NO_THROW(server_object.setPrivileges(server_priv));
   privObjects.clear();
   privObjects.push_back(server_object);
