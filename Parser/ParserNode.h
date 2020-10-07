@@ -74,6 +74,10 @@ class SQLType : public Node, public ddl_utils::SqlType {
   explicit SQLType(SQLTypes t) : ddl_utils::SqlType(t, -1, 0, false, -1) {}
   SQLType(SQLTypes t, int p1) : ddl_utils::SqlType(t, p1, 0, false, -1) {}
   SQLType(SQLTypes t, int p1, int p2, bool a) : ddl_utils::SqlType(t, p1, p2, a, -1) {}
+  SQLType(SQLTypes t, int p1, int p2, bool a, int array_size)
+      : ddl_utils::SqlType(t, p1, p2, a, array_size) {}
+  SQLType(SQLTypes t, bool a, int array_size)
+      : ddl_utils::SqlType(t, -1, 0, a, array_size) {}
 };
 
 /*
@@ -970,6 +974,9 @@ class CreateTableStmt : public CreateTableBaseStmt {
       delete s;
     }
   }
+
+  CreateTableStmt(const rapidjson::Value& payload);
+
   const std::string* get_table() const override { return table_.get(); }
   const std::list<std::unique_ptr<TableElement>>& get_table_element_list()
       const override {
@@ -1844,14 +1851,17 @@ class CreateViewStmt : public DDLStmt {
       : view_name_(view_name)
       , select_query_(select_query)
       , if_not_exists_(if_not_exists) {}
+
+  CreateViewStmt(const rapidjson::Value& payload);
+
   const std::string& get_view_name() const { return view_name_; }
   const std::string& get_select_query() const { return select_query_; }
   void execute(const Catalog_Namespace::SessionInfo& session) override;
 
  private:
-  const std::string view_name_;
-  const std::string select_query_;
-  const bool if_not_exists_;
+  std::string view_name_;
+  std::string select_query_;
+  bool if_not_exists_;
 };
 
 /*
@@ -2128,6 +2138,16 @@ template <>
 struct ShouldInvalidateSessionsByDB<RenameDatabaseStmt> : public std::true_type {};
 template <>
 struct ShouldInvalidateSessionsByUser<RenameUserStmt> : public std::true_type {};
+
+/**
+ * A helper function for parsing the DDL returned from calcite as part of the plan result
+ * to a parser node in this class. Currently only used in
+ * QueryRunner/DistributedQueryRunner, where we do not want to link in the thrift
+ * dependencies wich DdlCommandExecutor currently brings along.
+ */
+void execute_calcite_ddl(
+    const std::string& plan_result,
+    std::shared_ptr<Catalog_Namespace::SessionInfo const> session_ptr);
 
 }  // namespace Parser
 

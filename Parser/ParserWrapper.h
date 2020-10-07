@@ -114,6 +114,8 @@ class ParserWrapper {
 
   bool isCalciteDdl() const { return is_calcite_ddl_; }
 
+  bool isDistributedDdl() const { return is_distributed_calcite_ddl_; }
+
  private:
   DMLType dml_type_ = DMLType::NotDML;
   ExplainType explain_type_ = ExplainType::None;
@@ -130,4 +132,5 @@ class ParserWrapper {
 
   bool is_legacy_ddl_ = false;
   bool is_calcite_ddl_ = false;
+  bool is_distributed_calcite_ddl_ = false;
 };

@@ -59,6 +59,7 @@ DdlCommandExecutor::DdlCommandExecutor(
     std::shared_ptr<Catalog_Namespace::SessionInfo const> session_ptr)
     : session_ptr_(session_ptr) {
   CHECK(!ddl_statement.empty());
+  VLOG(2) << "Parsing JSON DDL from Calcite: " << ddl_statement;
   ddl_query_.Parse(ddl_statement);
   CHECK(ddl_query_.IsObject());
   CHECK(ddl_query_.HasMember("payload"));
@@ -71,6 +72,25 @@ DdlCommandExecutor::DdlCommandExecutor(
 void DdlCommandExecutor::execute(TQueryResult& _return) {
   const auto& payload = ddl_query_["payload"].GetObject();
   const auto& ddl_command = std::string_view(payload["command"].GetString());
+
+  // the following commands use parser node locking to ensure safe concurrent access
+  if (ddl_command == "CREATE_TABLE") {
+    auto create_table_stmt = Parser::CreateTableStmt(payload);
+    create_table_stmt.execute(*session_ptr_);
+    return;
+  } else if (ddl_command == "CREATE_VIEW") {
+    auto create_view_stmt = Parser::CreateViewStmt(payload);
+    create_view_stmt.execute(*session_ptr_);
+    return;
+  }
+
+  // the following commands require a global unique lock until proper table locking has
+  // been implemented and/or verified
+  auto execute_write_lock = mapd_unique_lock<mapd_shared_mutex>(
+      *legacylockmgr::LockMgr<mapd_shared_mutex, bool>::getMutex(
+          legacylockmgr::ExecutorOuterLock, true));
+  // TODO(vancouver): add appropriate table locking
+
   if (ddl_command == "CREATE_SERVER") {
     CreateForeignServerCommand{payload, session_ptr_}.execute(_return);
   } else if (ddl_command == "DROP_SERVER") {
@@ -92,15 +112,15 @@ void DdlCommandExecutor::execute(TQueryResult& _return) {
   } else if (ddl_command == "REFRESH_FOREIGN_TABLES") {
     RefreshForeignTablesCommand{payload, session_ptr_}.execute(_return);
   } else if (ddl_command == "SHOW_QUERIES") {
-    std::cout << "SHOW QUERIES DDL is not ready yet!\n";
+    LOG(ERROR) << "SHOW QUERIES DDL is not ready yet!\n";
   } else if (ddl_command == "KILL_QUERY") {
     CHECK(payload.HasMember("querySession"));
     const std::string& querySessionPayload = payload["querySession"].GetString();
     auto querySession = querySessionPayload.substr(1, 8);
     CHECK_EQ(querySession.length(),
              (unsigned long)8);  // public_session_id's length + two quotes
-    std::cout << "TRY TO KILL QUERY " << querySession
-              << " BUT KILL QUERY DDL is not ready yet!\n";
+    LOG(ERROR) << "TRY TO KILL QUERY " << querySession
+               << " BUT KILL QUERY DDL is not ready yet!\n";
   } else {
     throw std::runtime_error("Unsupported DDL command");
   }
@@ -775,7 +795,7 @@ void RefreshForeignTablesCommand::execute(TQueryResult& _return) {
   foreign_storage::OptionsContainer opt;
   if (ddl_payload_.HasMember("options") && !ddl_payload_["options"].IsNull()) {
     opt.populateOptionsMap(ddl_payload_["options"]);
-    for (const auto entry : opt.options) {
+    for (const auto& entry : opt.options) {
       if (entry.first != "EVICT") {
         throw std::runtime_error{
             "Invalid option \"" + entry.first +

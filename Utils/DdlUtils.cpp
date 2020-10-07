@@ -238,18 +238,19 @@ void set_default_encoding(ColumnDescriptor& cd) {
 void validate_and_set_fixed_encoding(ColumnDescriptor& cd,
                                      int encoding_size,
                                      const SqlType* column_type) {
-  if (!cd.columnType.is_integer() && !cd.columnType.is_time() &&
-      !cd.columnType.is_decimal()) {
-    throw std::runtime_error(
-        cd.columnName +
-        ": Fixed encoding is only supported for integer or time columns.");
-  }
-
   auto type = cd.columnType.get_type();
   // fixed-bits encoding
   if (type == kARRAY) {
     type = cd.columnType.get_subtype();
   }
+
+  if (!IS_INTEGER(type) && !is_datetime(type) &&
+      !(type == kDECIMAL || type == kNUMERIC)) {
+    throw std::runtime_error(
+        cd.columnName +
+        ": Fixed encoding is only supported for integer or time columns.");
+  }
+
   switch (type) {
     case kSMALLINT:
       if (encoding_size != 8) {

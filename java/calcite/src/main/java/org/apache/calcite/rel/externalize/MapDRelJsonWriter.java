@@ -25,23 +25,11 @@ import org.apache.calcite.rel.hint.RelHint;
 import org.apache.calcite.rel.logical.*;
 import org.apache.calcite.rel.type.RelDataType;
 import org.apache.calcite.sql.SqlExplainLevel;
-import org.apache.calcite.util.JsonBuilder;
+import org.apache.calcite.util.EscapedStringJsonBuilder;
 import org.apache.calcite.util.Pair;
-import org.apache.commons.text.StringEscapeUtils;
 
 import java.util.*;
 import java.util.stream.Collectors;
-
-final class EscapedStringJsonBuilder extends JsonBuilder {
-  @Override
-  public void append(StringBuilder buf, int indent, Object o) {
-    if (o instanceof String) {
-      buf.append('"').append(StringEscapeUtils.escapeJson((String) o)).append('"');
-    } else {
-      super.append(buf, indent, o);
-    }
-  }
-}
 
 /**
  * Callback for a relational expression to dump itself as JSON.
@@ -49,7 +37,7 @@ final class EscapedStringJsonBuilder extends JsonBuilder {
  * @see RelJsonReader
  */
 public class MapDRelJsonWriter implements RelWriter {
-  //~ Instance fields ----------------------------------------------------------
+  // ~ Instance fields ----------------------------------------------------------
 
   private final EscapedStringJsonBuilder jsonBuilder;
   private final MapDRelJson relJson;
@@ -58,7 +46,7 @@ public class MapDRelJsonWriter implements RelWriter {
   private final List<Pair<String, Object>> values = new ArrayList<Pair<String, Object>>();
   private String previousId;
 
-  //~ Constructors -------------------------------------------------------------
+  // ~ Constructors -------------------------------------------------------------
 
   public MapDRelJsonWriter() {
     jsonBuilder = new EscapedStringJsonBuilder();
@@ -66,7 +54,7 @@ public class MapDRelJsonWriter implements RelWriter {
     relJson = new MapDRelJson(jsonBuilder);
   }
 
-  //~ Methods ------------------------------------------------------------------
+  // ~ Methods ------------------------------------------------------------------
 
   protected void explain_(RelNode rel, List<Pair<String, Object>> values) {
     final Map<String, Object> map = jsonBuilder.map();
@@ -82,7 +70,7 @@ public class MapDRelJsonWriter implements RelWriter {
       map.put("fields", rel.getRowType().getFieldNames());
     }
     if (rel instanceof LogicalTableModify) {
-      // FIX-ME:  What goes here?
+      // FIX-ME: What goes here?
     }
 
     // handle hints

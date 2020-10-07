@@ -5106,6 +5106,20 @@ void DBHandler::sql_execute_impl(TQueryResult& _return,
     }
   }
   if (pw.isCalcitePathPermissable(read_only_)) {
+    // run DDL before the locks as DDL statements should handle their own locking
+    if (pw.isCalciteDdl()) {
+      std::string query_ra;
+      _return.execution_time_ms += measure<>::execution([&]() {
+        TPlanResult result;
+        std::tie(result, locks) =
+            parse_to_ra(query_state_proxy, query_str, {}, false, system_parameters_);
+        query_ra = result.plan_result;
+      });
+
+      executeDdl(_return, query_ra, session_ptr);
+      return;
+    }
+
     executeReadLock = mapd_shared_lock<mapd_shared_mutex>(
         *legacylockmgr::LockMgr<mapd_shared_mutex, bool>::getMutex(
             legacylockmgr::ExecutorOuterLock, true));
@@ -5132,9 +5146,6 @@ void DBHandler::sql_execute_impl(TQueryResult& _return,
       query_ra_calcite_explain =
           parse_to_ra(query_state_proxy, temp_query_str, {}, false, system_parameters_)
               .first.plan_result;
-    } else if (pw.isCalciteDdl()) {
-      executeDdl(_return, query_ra, session_ptr);
-      return;
     }
     const auto explain_info = pw.getExplainInfo();
     std::vector<PushedDownFilterInfo> filter_push_down_requests;
