@@ -39,12 +39,8 @@ class ParquetStringNoneEncoder : public ParquetEncoder {
                   const int64_t levels_read,
                   const bool is_last_batch,
                   int8_t* values) override {
-    if (!buffer_->size()) {
-      CHECK(levels_read > 0);
-      // write the initial starting offset
-      StringOffsetT zero = 0;
-      index_buffer_->append(reinterpret_cast<int8_t*>(&zero), sizeof(StringOffsetT));
-    }
+    CHECK(levels_read > 0);
+    writeInitialOffsetIfApplicable();
 
     auto parquet_data_ptr = reinterpret_cast<const parquet::ByteArray*>(values);
     auto offsets = reinterpret_cast<StringOffsetT*>(encode_buffer_.data());
@@ -76,6 +72,14 @@ class ParquetStringNoneEncoder : public ParquetEncoder {
   }
 
  private:
+  void writeInitialOffsetIfApplicable() {
+    if (!index_buffer_->size()) {
+      // write the initial starting offset
+      StringOffsetT zero = 0;
+      index_buffer_->append(reinterpret_cast<int8_t*>(&zero), sizeof(StringOffsetT));
+    }
+  }
+
   Data_Namespace::AbstractBuffer* index_buffer_;
   std::vector<int8_t> encode_buffer_;
 };

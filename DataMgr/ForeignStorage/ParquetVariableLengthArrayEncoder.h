@@ -42,11 +42,11 @@ class ParquetVariableLengthArrayEncoder : public ParquetArrayEncoder {
   }
 
  protected:
-  void appendArrayToBuffer() override {
+  void appendArraysToBuffer() override {
     index_buffer_->append(reinterpret_cast<int8_t*>(offsets_.data()),
                           offsets_.size() * sizeof(ArrayOffsetT));
     offsets_.clear();
-    ParquetArrayEncoder::appendArrayToBuffer();
+    ParquetArrayEncoder::appendArraysToBuffer();
   }
 
   void processLastArray() override { appendLastArrayOffset(); }

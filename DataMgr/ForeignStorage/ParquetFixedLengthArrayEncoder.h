@@ -31,26 +31,24 @@ class ParquetFixedLengthArrayEncoder : public ParquetArrayEncoder {
                                  const ColumnDescriptor* column_desciptor)
       : ParquetArrayEncoder(data_buffer, scalar_encoder, column_desciptor)
       , column_desciptor_(*column_desciptor)
-      , array_size_(column_desciptor->columnType.get_size()) {
-    CHECK(array_size_ % omnisci_data_type_byte_size_ == 0);
+      , array_element_count_(column_desciptor->columnType.get_size() /
+                             omnisci_data_type_byte_size_) {
+    CHECK(column_desciptor->columnType.get_size() % omnisci_data_type_byte_size_ == 0);
   }
 
  protected:
   void processLastArray() override { appendNullArrayOrCheckArraySize(); }
 
  private:
-  void appendNullArray() {
-    auto current_data_byte_size = data_buffer_bytes_.size();
-    data_buffer_bytes_.resize(current_data_byte_size + array_size_);
-    auto omnisci_data_ptr = data_buffer_bytes_.data() + current_data_byte_size;
-    setNullArraySentinel(omnisci_data_ptr);
-    size_t array_count = array_size_ / omnisci_data_type_byte_size_;
-    for (size_t i = 1; i < array_count; ++i) {
+  void appendNullFixedLengthArray() {
+    auto omnisci_data_ptr = resizeArrayDataBytes(array_element_count_);
+    setNullFixedLengthArraySentinel(omnisci_data_ptr);
+    for (size_t i = 1; i < array_element_count_; ++i) {
       scalar_encoder_->setNull(omnisci_data_ptr + i * omnisci_data_type_byte_size_);
     }
   }
 
-  void setNullArraySentinel(int8_t* omnisci_data_bytes) {
+  void setNullFixedLengthArraySentinel(int8_t* omnisci_data_bytes) {
     auto ti = column_desciptor_.columnType.get_elem_type();
     if (ti.is_string()) {
       // TODO: after investigation as to why fixed length arrays with
@@ -113,24 +111,24 @@ class ParquetFixedLengthArrayEncoder : public ParquetArrayEncoder {
   void appendNullArrayOrCheckArraySize() {
     auto size_of_last_array = sizeOfLastArray();
     if (!isLastArrayNull()) {
-      if (size_of_last_array * omnisci_data_type_byte_size_ != array_size_) {
-        throw std::runtime_error(
-            "Detected a row with " + std::to_string(size_of_last_array) +
-            " elements being loaded into"
-            " OmniSci column '" +
-            column_desciptor_.columnName +
-            "' which has a fixed length array type,"
-            " expecting " +
-            std::to_string(array_size_ / omnisci_data_type_byte_size_) + " elements.");
+      if (size_of_last_array != array_element_count_) {
+        throw std::runtime_error("Detected a row with " +
+                                 std::to_string(size_of_last_array) +
+                                 " elements being loaded into"
+                                 " OmniSci column '" +
+                                 column_desciptor_.columnName +
+                                 "' which has a fixed length array type,"
+                                 " expecting " +
+                                 std::to_string(array_element_count_) + " elements.");
       }
     } else {
       // append a null array sentinel
       CHECK(size_of_last_array == 0);
-      appendNullArray();
+      appendNullFixedLengthArray();
     }
   }
 
   const ColumnDescriptor column_desciptor_;
-  size_t array_size_;
+  size_t array_element_count_;
 };
 }  // namespace foreign_storage

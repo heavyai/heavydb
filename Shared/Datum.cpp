@@ -213,6 +213,10 @@ bool DatumEqual(const Datum a, const Datum b, const SQLTypeInfo& ti) {
     case kTEXT:
     case kVARCHAR:
     case kCHAR:
+    case kPOINT:
+    case kLINESTRING:
+    case kPOLYGON:
+    case kMULTIPOLYGON:
       if (ti.get_compression() == kENCODING_DICT) {
         return a.intval == b.intval;
       }

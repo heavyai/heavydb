@@ -62,7 +62,7 @@ class ParquetArrayEncoder : public ParquetEncoder {
  protected:
   virtual void processLastArray() = 0;
 
-  virtual void appendArrayToBuffer() {
+  virtual void appendArraysToBuffer() {
     buffer_->append(data_buffer_bytes_.data(), data_buffer_bytes_.size());
     data_buffer_bytes_.clear();
   }
@@ -70,6 +70,13 @@ class ParquetArrayEncoder : public ParquetEncoder {
   bool isLastArrayNull() const { return is_null_array_; }
 
   size_t sizeOfLastArray() const { return num_elements_in_array_; }
+
+  int8_t* resizeArrayDataBytes(const size_t additional_num_elements) {
+    auto current_data_byte_size = data_buffer_bytes_.size();
+    data_buffer_bytes_.resize(current_data_byte_size +
+                              additional_num_elements * omnisci_data_type_byte_size_);
+    return data_buffer_bytes_.data() + current_data_byte_size;
+  }
 
   size_t omnisci_data_type_byte_size_;
   std::shared_ptr<ParquetScalarEncoder> scalar_encoder_;
@@ -84,7 +91,7 @@ class ParquetArrayEncoder : public ParquetEncoder {
   void finalizeRowGroup() {
     processLastArray();
     resetLastArrayMetadata();
-    appendArrayToBuffer();
+    appendArraysToBuffer();
     has_assembly_started_ = false;
   }
 
@@ -120,9 +127,7 @@ class ParquetArrayEncoder : public ParquetEncoder {
   void markArrayAsNull() { is_null_array_ = true; }
 
   void appendArrayItem(const int64_t encoded_index) {
-    auto current_data_byte_size = data_buffer_bytes_.size();
-    data_buffer_bytes_.resize(current_data_byte_size + omnisci_data_type_byte_size_);
-    auto omnisci_data_ptr = data_buffer_bytes_.data() + current_data_byte_size;
+    auto omnisci_data_ptr = resizeArrayDataBytes(1);
     scalar_encoder_->copy(
         encode_buffer_.data() + (encoded_index)*omnisci_data_type_byte_size_,
         omnisci_data_ptr);
@@ -130,10 +135,7 @@ class ParquetArrayEncoder : public ParquetEncoder {
   }
 
   void appendNullArrayItem() {
-    auto current_data_byte_size = data_buffer_bytes_.size();
-    data_buffer_bytes_.resize(current_data_byte_size + omnisci_data_type_byte_size_);
-    auto omnisci_data_ptr = data_buffer_bytes_.data() + current_data_byte_size;
-    scalar_encoder_->setNull(omnisci_data_ptr);
+    scalar_encoder_->setNull(resizeArrayDataBytes(1));
     num_elements_in_array_++;
   }
 

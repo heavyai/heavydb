@@ -145,6 +145,125 @@ class SelectQueryTest : public ForeignTableTest {
     ForeignTableTest::TearDown();
   }
 
+  template <typename T>
+  inline static std::unique_ptr<ChunkMetadata> createChunkMetadata(
+      const int column_id,
+      const size_t num_bytes,
+      const size_t num_elements,
+      const T& min,
+      const T& max,
+      bool has_nulls,
+      const std::string& table_name) {
+    auto chunk_metadata =
+        createChunkMetadata(column_id, num_bytes, num_elements, has_nulls, table_name);
+    if (chunk_metadata->sqlType.is_array()) {
+      auto saved_sql_type = chunk_metadata->sqlType;
+      chunk_metadata->sqlType = saved_sql_type.get_elem_type();
+      chunk_metadata->fillChunkStats(min, max, has_nulls);
+      chunk_metadata->sqlType = saved_sql_type;
+    } else {
+      chunk_metadata->fillChunkStats(min, max, has_nulls);
+    }
+    return chunk_metadata;
+  }
+
+  template <typename T>
+  inline static std::unique_ptr<ChunkMetadata> createChunkMetadata(
+      const int column_id,
+      const size_t num_bytes,
+      const size_t num_elements,
+      const T& min,
+      const T& max,
+      bool has_nulls) {
+    return createChunkMetadata(
+        column_id, num_bytes, num_elements, min, max, has_nulls, "test_foreign_table");
+  }
+
+  inline static std::unique_ptr<ChunkMetadata> createChunkMetadata(
+      const int column_id,
+      const size_t num_bytes,
+      const size_t num_elements,
+      bool has_nulls,
+      const std::string& table_name) {
+    auto& cat = getCatalog();
+    auto foreign_table = cat.getMetadataForTable(table_name);
+    auto column_descriptor = cat.getMetadataForColumn(foreign_table->tableId, column_id);
+    auto chunk_metadata = std::make_unique<ChunkMetadata>();
+    chunk_metadata->sqlType = column_descriptor->columnType;
+    chunk_metadata->numElements = num_elements;
+    chunk_metadata->numBytes = num_bytes;
+    chunk_metadata->chunkStats.has_nulls = has_nulls;
+    chunk_metadata->chunkStats.min.stringval = nullptr;
+    chunk_metadata->chunkStats.max.stringval = nullptr;
+    return chunk_metadata;
+  }
+
+  inline static std::unique_ptr<ChunkMetadata> createChunkMetadata(
+      const int column_id,
+      const size_t num_bytes,
+      const size_t num_elements,
+      bool has_nulls) {
+    return createChunkMetadata(
+        column_id, num_bytes, num_elements, has_nulls, "test_foreign_table");
+  }
+
+  void assertExpectedChunkMetadata(
+      const std::map<std::pair<int, int>, std::unique_ptr<ChunkMetadata>>&
+          expected_metadata) const {
+    assertExpectedChunkMetadata(expected_metadata, "test_foreign_table");
+  }
+
+  void assertExpectedChunkMetadata(
+      const std::map<std::pair<int, int>, std::unique_ptr<ChunkMetadata>>&
+          expected_metadata,
+      const std::string& table_name) const {
+    auto& cat = getCatalog();
+    auto foreign_table = cat.getMetadataForTable(table_name);
+    if (!foreign_table) {
+      throw std::runtime_error("Could not find foreign table: " + table_name);
+    }
+    auto fragmenter = foreign_table->fragmenter;
+    if (!fragmenter) {
+      throw std::runtime_error("Fragmenter does not exist for foreign table: " +
+                               table_name);
+    }
+    std::map<std::pair<int, int>, bool> expected_metadata_found;
+    for (auto& [k, v] : expected_metadata) {
+      expected_metadata_found[k] = false;
+    }
+
+    auto query_info = fragmenter->getFragmentsForQuery();
+    for (const auto& fragment : query_info.fragments) {
+      auto& chunk_metadata_map = fragment.getChunkMetadataMapPhysical();
+      for (auto& [col_id, chunk_metadata] : chunk_metadata_map) {
+        auto fragment_id = fragment.fragmentId;
+        auto column_id = col_id;
+        auto fragment_column_ids = std::make_pair(fragment_id, column_id);
+        auto expected_metadata_iter = expected_metadata.find(fragment_column_ids);
+        ASSERT_NE(expected_metadata_iter, expected_metadata.end())
+            << boost::format(
+                   "Foreign table chunk metadata not found in expected metadata: "
+                   "fragment_id: %d, column_id: %d") %
+                   fragment_id % column_id;
+        expected_metadata_found[fragment_column_ids] = true;
+        ASSERT_EQ(*chunk_metadata, *expected_metadata_iter->second)
+            << boost::format("At fragment_id: %d, column_id: %d") % fragment_id %
+                   column_id;
+      }
+    }
+
+    for (auto& [k, v] : expected_metadata_found) {
+      auto fragment_id = k.first;
+      auto column_id = k.second;
+      if (!v) {
+        ASSERT_TRUE(false) << boost::format(
+                                  "Expected chunk metadata not found in foreign table "
+                                  "metadata: fragment_id: %d, column_id: %d") %
+                                  fragment_id % column_id;
+      }
+    }
+  }
+
   inline static size_t max_buffer_resize_ =
       import_export::delimited_parser::get_max_buffer_resize();
 };
@@ -435,32 +554,6 @@ TEST_P(CacheControllingSelectQueryTest, MultipleDataBlocksPerFragment) {
     sql(result, "SELECT * FROM test_foreign_table  WHERE i < 128 ORDER BY i;");
     assertResultSetEqual(expected_result_set, result);
   }
-}
-
-// TODO: Re-enable after fixing issue with malformed/null geo columns
-TEST_P(CacheControllingSelectQueryTest, DISABLED_ParquetGeoTypesMalformed) {
-  const auto& query = getCreateForeignTableQuery(
-      "(p POINT, l LINESTRING, poly POLYGON, multipoly MULTIPOLYGON)",
-      "geo_types.malformed",
-      "parquet");
-  sql(query);
-
-  queryAndAssertException("SELECT * FROM test_foreign_table;",
-                          "Exception: Failure to import geo column 'l' in table "
-                          "'test_foreign_table' for row group 0 and row 1.");
-}
-
-// TODO: Re-enable after fixing issue with malformed/null geo columns
-TEST_P(CacheControllingSelectQueryTest, DISABLED_ParquetGeoTypesNull) {
-  const auto& query = getCreateForeignTableQuery(
-      "(p POINT, l LINESTRING, poly POLYGON, multipoly MULTIPOLYGON)",
-      "geo_types.null",
-      "parquet");
-  sql(query);
-
-  queryAndAssertException("SELECT * FROM test_foreign_table;",
-                          "Exception: Failure to import geo column 'l' in table "
-                          "'test_foreign_table' for row group 0 and row 1.");
 }
 
 TEST_P(CacheControllingSelectQueryTest, ParquetNullRowgroups) {
@@ -2373,6 +2466,162 @@ TEST_F(SelectQueryTest, ParquetFixedLengthArrayDateTimeTypes) {
           },
       }, result);
   // clang-format on
+}
+
+TEST_F(SelectQueryTest, ParquetNullCompressedGeoTypes) {
+  const auto& query = getCreateForeignTableQuery(
+      "( index INT, p GEOMETRY(POINT,4326) ENCODING COMPRESSED(32), l "
+      "GEOMETRY(LINESTRING,4326) ENCODING COMPRESSED(32), poly GEOMETRY(POLYGON,4326) "
+      "ENCODING COMPRESSED(32), mpoly GEOMETRY(MULTIPOLYGON,4326) ENCODING "
+      "COMPRESSED(32) )",
+      "geo_types_with_nulls",
+      "parquet");
+  sql(query);
+
+  TQueryResult result;
+  sql(result, "SELECT * FROM test_foreign_table ORDER BY index;");
+
+  // clang-format off
+  assertResultSetEqual(
+  {
+      {
+        i(1),
+        "POINT (0 0)",
+        "LINESTRING (0 0,0 0)",
+        "POLYGON ((0 0,0.999999940861017 0.0,0.0 0.999999982770532,0.999999940861017 "
+        "0.999999982770532,0 0))",
+        "MULTIPOLYGON (((0 0,0.999999940861017 0.0,0.0 0.999999982770532,0 0)))"},
+      {
+        i(2), "NULL", "NULL", "NULL", "NULL"
+      },
+      {
+        i(3),
+        "POINT (0.999999940861017 0.999999982770532)",
+        "LINESTRING (0.999999940861017 0.999999982770532,1.99999996554106 "
+        "1.99999996554106,2.99999999022111 2.99999999022111)",
+        "POLYGON ((4.99999995576218 3.99999997299165,6.99999992130324 "
+        "3.99999997299165,5.99999998044223 4.99999999767169,4.99999995576218 "
+        "3.99999997299165))",
+        "MULTIPOLYGON (((0 0,0.999999940861017 0.0,0.0 0.999999982770532,0 0)),((0 "
+        "0,1.99999996554106 0.0,0.0 1.99999996554106,0 0)))",
+      },
+      {
+        i(4),
+        "POINT (1.99999996554106 1.99999996554106)",
+        "LINESTRING (1.99999996554106 1.99999996554106,2.99999999022111 "
+        "2.99999999022111)",
+        "POLYGON ((0.999999940861017 0.999999982770532,2.99999999022111 "
+        "0.999999982770532,1.99999996554106 2.99999999022111,0.999999940861017 "
+        "0.999999982770532))",
+        "MULTIPOLYGON (((0 0,2.99999999022111 0.0,0.0 2.99999999022111,0 0)),((0 "
+        "0,0.999999940861017 0.0,0.0 0.999999982770532,0 0)),((0 0,1.99999996554106 "
+        "0.0,0.0 1.99999996554106,0 0)))",
+      },
+      {
+        i(5), "NULL", "NULL", "NULL", "NULL",
+      },
+  },
+  result);
+  // clang-format on
+}
+
+TEST_F(SelectQueryTest, ParquetNullGeoTypes) {
+  const auto& query = getCreateForeignTableQuery(
+      "( index INT, p POINT, l LINESTRING, poly POLYGON, mpoly MULTIPOLYGON )",
+      "geo_types_with_nulls",
+      "parquet");
+  sql(query);
+
+  TQueryResult result;
+  sql(result, "SELECT * FROM test_foreign_table ORDER BY index;");
+
+  // clang-format off
+  assertResultSetEqual({
+    {
+      i(1), "POINT (0 0)", "LINESTRING (0 0,0 0)", "POLYGON ((0 0,1 0,0 1,1 1,0 0))",
+      "MULTIPOLYGON (((0 0,1 0,0 1,0 0)))"
+    },
+    {
+      i(2), "NULL", "NULL", "NULL", "NULL"
+    },
+    {
+      i(3), "POINT (1 1)", "LINESTRING (1 1,2 2,3 3)", "POLYGON ((5 4,7 4,6 5,5 4))",
+      "MULTIPOLYGON (((0 0,1 0,0 1,0 0)),((0 0,2 0,0 2,0 0)))"
+    },
+    {
+      i(4), "POINT (2 2)", "LINESTRING (2 2,3 3)", "POLYGON ((1 1,3 1,2 3,1 1))",
+      "MULTIPOLYGON (((0 0,3 0,0 3,0 0)),((0 0,1 0,0 1,0 0)),((0 0,2 0,0 2,0 0)))"
+    },
+    {
+      i(5), "NULL", "NULL", "NULL", "NULL"
+    }},
+    result);
+  // clang-format on
+}
+
+TEST_F(SelectQueryTest, ParquetGeoTypesMetadata) {
+  const auto& query = getCreateForeignTableQuery(
+      "( index INT, p POINT, l LINESTRING, poly POLYGON, mpoly MULTIPOLYGON )",
+      "geo_types",
+      "parquet");
+  sql(query);
+
+  TQueryResult result;
+  sql(result, "SELECT * FROM test_foreign_table ORDER BY index;");
+
+  std::map<std::pair<int, int>, std::unique_ptr<ChunkMetadata>> test_chunk_metadata_map;
+  test_chunk_metadata_map[{0, 1}] = createChunkMetadata<int32_t>(1, 12, 3, 1, 3, false);
+  test_chunk_metadata_map[{0, 2}] = createChunkMetadata(2, 0, 3, false);
+  test_chunk_metadata_map[{0, 3}] = createChunkMetadata<int8_t>(3, 48, 3, -16, 64, false);
+  test_chunk_metadata_map[{0, 4}] = createChunkMetadata(4, 0, 3, false);
+  test_chunk_metadata_map[{0, 5}] =
+      createChunkMetadata<int8_t>(5, 112, 3, -16, 64, false);
+  test_chunk_metadata_map[{0, 6}] =
+      createChunkMetadata<double>(6, 96, 3, 0.000000, 3.000000, false);
+  test_chunk_metadata_map[{0, 7}] = createChunkMetadata(7, 0, 3, false);
+  test_chunk_metadata_map[{0, 8}] =
+      createChunkMetadata<int8_t>(8, 160, 3, -16, 64, false);
+  test_chunk_metadata_map[{0, 9}] = createChunkMetadata<int32_t>(9, 12, 3, 3, 4, false);
+  test_chunk_metadata_map[{0, 10}] =
+      createChunkMetadata<double>(10, 96, 3, 0.000000, 7.000000, false);
+  test_chunk_metadata_map[{0, 11}] = createChunkMetadata<int32_t>(11, 12, 3, 0, 0, false);
+  test_chunk_metadata_map[{0, 12}] = createChunkMetadata(12, 0, 3, false);
+  test_chunk_metadata_map[{0, 13}] =
+      createChunkMetadata<int8_t>(13, 288, 3, -16, 64, false);
+  test_chunk_metadata_map[{0, 14}] = createChunkMetadata<int32_t>(14, 24, 3, 3, 3, false);
+  test_chunk_metadata_map[{0, 15}] = createChunkMetadata<int32_t>(15, 24, 3, 1, 1, false);
+  test_chunk_metadata_map[{0, 16}] =
+      createChunkMetadata<double>(16, 96, 3, 0.000000, 3.000000, false);
+  test_chunk_metadata_map[{0, 17}] = createChunkMetadata<int32_t>(17, 12, 3, 0, 0, false);
+  assertExpectedChunkMetadata(test_chunk_metadata_map);
+}
+
+TEST_F(SelectQueryTest, DISABLED_ParquetMalformedGeoPoint) {
+  // TODO: to fix this test, remove the catch clause in BufferMgr::getBuffer
+  // that aborts and does not thrown an exception. Alternatively, write the
+  // test to expect an abort.
+  const auto& query =
+      getCreateForeignTableQuery("( p POINT )", "geo_point_malformed", "parquet");
+  sql(query);
+
+  TQueryResult result;
+  queryAndAssertException("SELECT * FROM test_foreign_table;",
+                          "Failed to extract valid geometry from row 0 for OmniSci "
+                          "column p importing from parquet column point");
+}
+
+TEST_F(SelectQueryTest, DISABLED_ParquetWrongGeoType) {
+  // TODO: to fix this test, remove the catch clause in BufferMgr::getBuffer
+  // that aborts and does not thrown an exception. Alternatively, write the
+  // test to expect an abort.
+  const auto& query =
+      getCreateForeignTableQuery("( p LINESTRING )", "geo_point", "parquet");
+  sql(query);
+
+  TQueryResult result;
+  queryAndAssertException("SELECT * FROM test_foreign_table;",
+                          "Imported geometry from parquet column point doesn't match the "
+                          "geospatial type of OmniSci column p");
 }
 
 TEST_F(SelectQueryTest, ParquetArrayUnsignedIntegerTypes) {

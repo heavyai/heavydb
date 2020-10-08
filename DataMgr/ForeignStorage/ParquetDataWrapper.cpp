@@ -508,7 +508,9 @@ void ParquetDataWrapper::loadBuffersUsingLazyParquetChunkLoader(
       schema_->getColumnDescriptor(logical_column_id);
   auto parquet_column_index = schema_->getParquetColumnIndex(logical_column_id);
 
-  const Interval<ColumnType> column_interval = {logical_column_id, logical_column_id};
+  const Interval<ColumnType> column_interval = {
+      logical_column_id,
+      logical_column_id + logical_column->columnType.get_physical_cols()};
   initializeChunkBuffers(fragment_id, column_interval, required_buffers, true);
 
   const auto& row_group_intervals = fragment_to_row_group_interval_map_[fragment_id];
@@ -526,55 +528,59 @@ void ParquetDataWrapper::loadBuffersUsingLazyParquetChunkLoader(
     string_dictionary = dict_descriptor->stringDict.get();
   }
 
-  Chunk_NS::Chunk chunk{logical_column};
-  if (logical_column->columnType.is_varlen_indeed()) {
-    ChunkKey data_chunk_key = {
-        db_id_, foreign_table_->tableId, logical_column_id, fragment_id, 1};
-    auto buffer = required_buffers[data_chunk_key];
-    CHECK(buffer);
-    chunk.setBuffer(buffer);
-    ChunkKey index_chunk_key = {
-        db_id_, foreign_table_->tableId, logical_column_id, fragment_id, 2};
-    CHECK(required_buffers.find(index_chunk_key) != required_buffers.end());
-    chunk.setIndexBuffer(required_buffers[index_chunk_key]);
-  } else {
-    ChunkKey chunk_key = {
-        db_id_, foreign_table_->tableId, logical_column_id, fragment_id};
-    auto buffer = required_buffers[chunk_key];
-    CHECK(buffer);
-    chunk.setBuffer(buffer);
+  std::list<Chunk_NS::Chunk> chunks;
+  for (int column_id = column_interval.start; column_id <= column_interval.end;
+       ++column_id) {
+    auto column_descriptor = schema_->getColumnDescriptor(column_id);
+    Chunk_NS::Chunk chunk{column_descriptor};
+    if (column_descriptor->columnType.is_varlen_indeed()) {
+      ChunkKey data_chunk_key = {
+          db_id_, foreign_table_->tableId, column_id, fragment_id, 1};
+      auto buffer = required_buffers[data_chunk_key];
+      CHECK(buffer);
+      chunk.setBuffer(buffer);
+      ChunkKey index_chunk_key = {
+          db_id_, foreign_table_->tableId, column_id, fragment_id, 2};
+      auto index_buffer = required_buffers[index_chunk_key];
+      CHECK(index_buffer);
+      chunk.setIndexBuffer(index_buffer);
+    } else {
+      ChunkKey chunk_key = {db_id_, foreign_table_->tableId, column_id, fragment_id};
+      auto buffer = required_buffers[chunk_key];
+      CHECK(buffer);
+      chunk.setBuffer(buffer);
+    }
+    chunks.emplace_back(chunk);
   }
 
   LazyParquetChunkLoader chunk_loader(file_system_);
   auto metadata = chunk_loader.loadChunk(
-      row_group_intervals, parquet_column_index, chunk, string_dictionary);
-  if (is_dictionary_encoded_string_column) {  // update metadata for dictionary encoded
-                                              // column
-    CHECK(metadata.get());
-    auto fragmenter = foreign_table_->fragmenter;
-    if (fragmenter) {
-      ChunkKey data_chunk_key = {
-          db_id_, foreign_table_->tableId, logical_column_id, fragment_id};
-      if (logical_column->columnType.is_varlen_indeed()) {
+      row_group_intervals, parquet_column_index, chunks, string_dictionary);
+  auto fragmenter = foreign_table_->fragmenter;
+  if (fragmenter) {
+    auto metadata_iter = metadata.begin();
+    for (int column_id = column_interval.start; column_id <= column_interval.end;
+         ++column_id, ++metadata_iter) {
+      auto column = schema_->getColumnDescriptor(column_id);
+      ChunkKey data_chunk_key = {db_id_, foreign_table_->tableId, column_id, fragment_id};
+      if (column->columnType.is_varlen_indeed()) {
         data_chunk_key.emplace_back(1);
       }
       CHECK(chunk_metadata_map_.find(data_chunk_key) != chunk_metadata_map_.end());
       auto cached_metadata = chunk_metadata_map_[data_chunk_key];
-      cached_metadata->chunkStats.max = metadata->chunkStats.max;
-      cached_metadata->chunkStats.min = metadata->chunkStats.min;
-      cached_metadata->numBytes = chunk.getBuffer()->size();
-      fragmenter->updateColumnChunkMetadata(logical_column, fragment_id, cached_metadata);
-    }
-  } else if (logical_column->columnType
-                 .is_varlen_indeed()) {  // update metadata for variable length column
-    auto fragmenter = foreign_table_->fragmenter;
-    if (fragmenter) {
-      ChunkKey data_chunk_key = {
-          db_id_, foreign_table_->tableId, logical_column_id, fragment_id, 1};
-      CHECK(chunk_metadata_map_.find(data_chunk_key) != chunk_metadata_map_.end());
-      auto cached_metadata = chunk_metadata_map_[data_chunk_key];
-      cached_metadata->numBytes = chunk.getBuffer()->size();
-      fragmenter->updateColumnChunkMetadata(logical_column, fragment_id, cached_metadata);
+      auto updated_metadata = std::make_shared<ChunkMetadata>();
+      *updated_metadata = *cached_metadata;
+      // for certain types, update the metadata statistics
+      if (is_dictionary_encoded_string_column ||
+          logical_column->columnType.is_geometry()) {
+        CHECK(metadata_iter != metadata.end());
+        auto& chunk_metadata_ptr = *metadata_iter;
+        updated_metadata->chunkStats.max = chunk_metadata_ptr->chunkStats.max;
+        updated_metadata->chunkStats.min = chunk_metadata_ptr->chunkStats.min;
+      }
+      CHECK(required_buffers.find(data_chunk_key) != required_buffers.end());
+      updated_metadata->numBytes = required_buffers[data_chunk_key]->size();
+      fragmenter->updateColumnChunkMetadata(column, fragment_id, updated_metadata);
     }
   }
 }

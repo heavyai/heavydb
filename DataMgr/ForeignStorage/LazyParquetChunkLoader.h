@@ -44,23 +44,26 @@ class LazyParquetChunkLoader {
    * groups to load
    * @param parquet_column_index - the logical column index in the parquet file (and
    * omnisci db) of column to load
-   * @param chunk - the chunk to load
+   * @param chunks - a list containing the chunks to load
    * @param string_dictionary - a string dictionary for the column corresponding to the
    * column, if applicable
    *
-   * @return An empty ChunkMetadata pointer when no metadata update is
-   * applicable, otherwise a ChunkMetadata pointer with which to update the
-   * column chunk metadata. NOTE: Only ChunkMetadata.sqlType and the min & max
-   * values of the ChunkMetadata.chunkStats are valid, other values are not
-   * set.
+   * @return An empty list when no metadata update is applicable, otherwise a
+   * list of ChunkMetadata shared pointers with which to update the
+   * corresponding column chunk metadata.  NOTE: Only ChunkMetadata.sqlType and
+   * the min & max values of the ChunkMetadata.chunkStats are valid, other
+   * values are not set.
    *
-   * This function expects the chunk buffer to have enough space allocated to hold the
-   * contents of the loaded data.
+   * NOTE: if more than one chunk is supplied, the first chunk is required to
+   * be the chunk corresponding to the logical column, while the remaining
+   * chunks correspond to physical columns (in ascending order of column id.)
+   * Similarly, if a metada update is expected, the list of ChunkMetadata
+   * shared pointers returned will correspond directly to the list `chunks`.
    */
-  std::shared_ptr<ChunkMetadata> loadChunk(
+  std::list<std::unique_ptr<ChunkMetadata>> loadChunk(
       const std::vector<RowGroupInterval>& row_group_intervals,
       const int parquet_column_index,
-      Chunk_NS::Chunk& chunk,
+      std::list<Chunk_NS::Chunk>& chunks,
       StringDictionary* string_dictionary = nullptr);
 
   /**

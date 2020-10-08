@@ -123,8 +123,12 @@ struct ChunkMetadata {
   bool operator==(const ChunkMetadata& that) const {
     return sqlType == that.sqlType && numBytes == that.numBytes &&
            numElements == that.numElements &&
-           DatumEqual(chunkStats.min, that.chunkStats.min, sqlType) &&
-           DatumEqual(chunkStats.max, that.chunkStats.max, sqlType) &&
+           DatumEqual(chunkStats.min,
+                      that.chunkStats.min,
+                      sqlType.is_array() ? sqlType.get_elem_type() : sqlType) &&
+           DatumEqual(chunkStats.max,
+                      that.chunkStats.max,
+                      sqlType.is_array() ? sqlType.get_elem_type() : sqlType) &&
            chunkStats.has_nulls == that.chunkStats.has_nulls;
   }
 };

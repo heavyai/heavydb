@@ -30,7 +30,7 @@ class ParquetStringEncoder : public TypedParquetInPlaceEncoder<V, V> {
  public:
   ParquetStringEncoder(Data_Namespace::AbstractBuffer* buffer,
                        StringDictionary* string_dictionary,
-                       const std::shared_ptr<ChunkMetadata>& chunk_metadata)
+                       std::unique_ptr<ChunkMetadata>& chunk_metadata)
       : TypedParquetInPlaceEncoder<V, V>(buffer, sizeof(V), sizeof(V))
       , string_dictionary_(string_dictionary)
       , chunk_metadata_(chunk_metadata)
@@ -89,7 +89,7 @@ class ParquetStringEncoder : public TypedParquetInPlaceEncoder<V, V> {
   }
 
   StringDictionary* string_dictionary_;
-  std::shared_ptr<ChunkMetadata> chunk_metadata_;
+  std::unique_ptr<ChunkMetadata>& chunk_metadata_;
   std::vector<int8_t> encode_buffer_;
 
   V min_, max_;

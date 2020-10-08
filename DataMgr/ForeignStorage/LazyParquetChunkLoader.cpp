@@ -28,6 +28,7 @@
 #include "ParquetDecimalEncoder.h"
 #include "ParquetFixedLengthArrayEncoder.h"
 #include "ParquetFixedLengthEncoder.h"
+#include "ParquetGeospatialEncoder.h"
 #include "ParquetStringEncoder.h"
 #include "ParquetStringNoneEncoder.h"
 #include "ParquetTimeEncoder.h"
@@ -325,7 +326,7 @@ std::shared_ptr<ParquetEncoder> create_parquet_string_encoder(
     const parquet::ColumnDescriptor* parquet_column,
     Chunk_NS::Chunk& chunk,
     StringDictionary* string_dictionary,
-    std::shared_ptr<ChunkMetadata>& chunk_metadata) {
+    std::list<std::unique_ptr<ChunkMetadata>>& chunk_metadata) {
   auto column_type = omnisci_column->columnType;
   if (!is_valid_parquet_string(parquet_column)) {
     return {};
@@ -334,19 +335,20 @@ std::shared_ptr<ParquetEncoder> create_parquet_string_encoder(
     return std::make_shared<ParquetStringNoneEncoder>(chunk.getBuffer(),
                                                       chunk.getIndexBuf());
   } else if (column_type.get_compression() == kENCODING_DICT) {
-    chunk_metadata = std::make_shared<ChunkMetadata>();
-    chunk_metadata->sqlType = omnisci_column->columnType;
+    chunk_metadata.emplace_back(std::make_unique<ChunkMetadata>());
+    auto& logical_chunk_metadata = chunk_metadata.back();
+    logical_chunk_metadata->sqlType = omnisci_column->columnType;
     CHECK(string_dictionary);
     switch (column_type.get_size()) {
       case 1:
         return std::make_shared<ParquetStringEncoder<uint8_t>>(
-            chunk.getBuffer(), string_dictionary, chunk_metadata);
+            chunk.getBuffer(), string_dictionary, logical_chunk_metadata);
       case 2:
         return std::make_shared<ParquetStringEncoder<uint16_t>>(
-            chunk.getBuffer(), string_dictionary, chunk_metadata);
+            chunk.getBuffer(), string_dictionary, logical_chunk_metadata);
       case 4:
         return std::make_shared<ParquetStringEncoder<int32_t>>(
-            chunk.getBuffer(), string_dictionary, chunk_metadata);
+            chunk.getBuffer(), string_dictionary, logical_chunk_metadata);
       default:
         UNREACHABLE();
     }
@@ -356,25 +358,49 @@ std::shared_ptr<ParquetEncoder> create_parquet_string_encoder(
   return {};
 }
 
+std::shared_ptr<ParquetEncoder> create_parquet_geospatial_encoder(
+    const ColumnDescriptor* omnisci_column,
+    const parquet::ColumnDescriptor* parquet_column,
+    std::list<Chunk_NS::Chunk>& chunks,
+    std::list<std::unique_ptr<ChunkMetadata>>& chunk_metadata) {
+  auto column_type = chunks.begin()->getColumnDesc()->columnType;
+  if (!is_valid_parquet_string(parquet_column) || !column_type.is_geometry()) {
+    return {};
+  }
+  for (auto chunks_iter = chunks.begin(); chunks_iter != chunks.end(); ++chunks_iter) {
+    chunk_metadata.emplace_back(std::make_unique<ChunkMetadata>());
+    auto& chunk_metadata_ptr = chunk_metadata.back();
+    chunk_metadata_ptr->sqlType = chunks_iter->getColumnDesc()->columnType;
+  }
+  return std::make_shared<ParquetGeospatialEncoder>(
+      parquet_column, chunks, chunk_metadata);
+}
+
 // forward declare `create_parquet_array_encoder`: `create_parquet_encoder` and
 // `create_parquet_array_encoder` each make use of each other, so
 // one of the two functions must have a forward declaration
 std::shared_ptr<ParquetEncoder> create_parquet_array_encoder(
     const ColumnDescriptor* omnisci_column,
     const parquet::ColumnDescriptor* parquet_column,
-    Chunk_NS::Chunk& chunk,
+    std::list<Chunk_NS::Chunk>& chunks,
     StringDictionary* string_dictionary,
-    std::shared_ptr<ChunkMetadata>& chunk_metadata);
+    std::list<std::unique_ptr<ChunkMetadata>>& chunk_metadata);
 
 std::shared_ptr<ParquetEncoder> create_parquet_encoder(
     const ColumnDescriptor* omnisci_column,
     const parquet::ColumnDescriptor* parquet_column,
-    Chunk_NS::Chunk& chunk,
+    std::list<Chunk_NS::Chunk>& chunks,
     StringDictionary* string_dictionary,
-    std::shared_ptr<ChunkMetadata>& chunk_metadata) {
+    std::list<std::unique_ptr<ChunkMetadata>>& chunk_metadata) {
+  CHECK(!chunks.empty());
+  auto& chunk = *chunks.begin();
   auto buffer = chunk.getBuffer();
+  if (auto encoder = create_parquet_geospatial_encoder(
+          omnisci_column, parquet_column, chunks, chunk_metadata)) {
+    return encoder;
+  }
   if (auto encoder = create_parquet_array_encoder(
-          omnisci_column, parquet_column, chunk, string_dictionary, chunk_metadata)) {
+          omnisci_column, parquet_column, chunks, string_dictionary, chunk_metadata)) {
     return encoder;
   }
   if (auto encoder =
@@ -412,9 +438,9 @@ std::shared_ptr<ParquetEncoder> create_parquet_encoder(
 std::shared_ptr<ParquetEncoder> create_parquet_array_encoder(
     const ColumnDescriptor* omnisci_column,
     const parquet::ColumnDescriptor* parquet_column,
-    Chunk_NS::Chunk& chunk,
+    std::list<Chunk_NS::Chunk>& chunks,
     StringDictionary* string_dictionary,
-    std::shared_ptr<ChunkMetadata>& chunk_metadata) {
+    std::list<std::unique_ptr<ChunkMetadata>>& chunk_metadata) {
   bool is_valid_parquet_list = is_valid_parquet_list_column(parquet_column);
   if (!is_valid_parquet_list || !omnisci_column->columnType.is_array()) {
     return {};
@@ -423,14 +449,13 @@ std::shared_ptr<ParquetEncoder> create_parquet_array_encoder(
       get_sub_type_column_descriptor(omnisci_column);
   auto encoder = create_parquet_encoder(omnisci_column_sub_type_column.get(),
                                         parquet_column,
-                                        chunk,
+                                        chunks,
                                         string_dictionary,
                                         chunk_metadata);
   CHECK(encoder.get());
-
   auto scalar_encoder = std::dynamic_pointer_cast<ParquetScalarEncoder>(encoder);
   CHECK(scalar_encoder);
-
+  auto& chunk = *chunks.begin();
   if (omnisci_column->columnType.is_fixlen_array()) {
     encoder = std::make_shared<ParquetFixedLengthArrayEncoder>(
         chunk.getBuffer(), scalar_encoder, omnisci_column);
@@ -438,30 +463,44 @@ std::shared_ptr<ParquetEncoder> create_parquet_array_encoder(
     encoder = std::make_shared<ParquetVariableLengthArrayEncoder>(
         chunk.getBuffer(), chunk.getIndexBuf(), scalar_encoder, omnisci_column);
   }
-
   return encoder;
 }
 
-void validate_max_repetition_level(
+void validate_max_repetition_and_definition_level(
+    const ColumnDescriptor* omnisci_column_descriptor,
     const parquet::ColumnDescriptor* parquet_column_descriptor) {
   bool is_valid_parquet_list = is_valid_parquet_list_column(parquet_column_descriptor);
+  if (is_valid_parquet_list && !omnisci_column_descriptor->columnType.is_array()) {
+    throw std::runtime_error(
+        "Unsupported mapping detected. Column '" + parquet_column_descriptor->name() +
+        "' detected to be a parquet list but OmniSci mapped column '" +
+        omnisci_column_descriptor->columnName + "' is not an array.");
+  }
   if (is_valid_parquet_list) {
-    if (parquet_column_descriptor->max_repetition_level() != 1) {
+    if (parquet_column_descriptor->max_repetition_level() != 1 ||
+        parquet_column_descriptor->max_definition_level() != 3) {
       throw std::runtime_error(
           "Incorrect schema max repetition level detected in column '" +
           parquet_column_descriptor->name() +
-          "'. Expected a max repetition level of 1 for list column but column has a max "
+          "'. Expected a max repetition level of 1 and max definition level of 3 for "
+          "list column but column has a max "
           "repetition level of " +
-          std::to_string(parquet_column_descriptor->max_repetition_level()) + ".");
+          std::to_string(parquet_column_descriptor->max_repetition_level()) +
+          " and a max definition level of " +
+          std::to_string(parquet_column_descriptor->max_definition_level()) + ".");
     }
   } else {
-    if (parquet_column_descriptor->max_repetition_level() != 0) {
+    if (parquet_column_descriptor->max_repetition_level() != 0 ||
+        parquet_column_descriptor->max_definition_level() != 1) {
       throw std::runtime_error(
           "Incorrect schema max repetition level detected in column '" +
           parquet_column_descriptor->name() +
-          "'. Expected a max repetition level of 0 for flat column but column has a max "
+          "'. Expected a max repetition level of 0 and max definition level of 1 for "
+          "flat column but column has a max "
           "repetition level of " +
-          std::to_string(parquet_column_descriptor->max_repetition_level()) + ".");
+          std::to_string(parquet_column_descriptor->max_repetition_level()) +
+          " and a max definition level of " +
+          std::to_string(parquet_column_descriptor->max_definition_level()) + ".");
     }
   }
 }
@@ -477,14 +516,14 @@ void resize_values_buffer(const ColumnDescriptor* omnisci_column,
   values.resize(values_size);
 }
 
-std::shared_ptr<ChunkMetadata> append_row_groups(
+std::list<std::unique_ptr<ChunkMetadata>> append_row_groups(
     const std::vector<RowGroupInterval>& row_group_intervals,
     const int parquet_column_index,
     const ColumnDescriptor* column_descriptor,
-    Chunk_NS::Chunk& chunk,
+    std::list<Chunk_NS::Chunk>& chunks,
     StringDictionary* string_dictionary,
     std::shared_ptr<arrow::fs::FileSystem> file_system) {
-  std::shared_ptr<ChunkMetadata> chunk_metadata;
+  std::list<std::unique_ptr<ChunkMetadata>> chunk_metadata;
   // `def_levels` and `rep_levels` below are used to store the read definition
   // and repetition levels of the Dremel encoding implemented by the Parquet
   // format
@@ -501,7 +540,7 @@ std::shared_ptr<ChunkMetadata> append_row_groups(
   resize_values_buffer(column_descriptor, first_parquet_column_descriptor, values);
   auto encoder = create_parquet_encoder(column_descriptor,
                                         first_parquet_column_descriptor,
-                                        chunk,
+                                        chunks,
                                         string_dictionary,
                                         chunk_metadata);
   CHECK(encoder.get());
@@ -524,7 +563,8 @@ std::shared_ptr<ChunkMetadata> append_row_groups(
                                      first_file_path,
                                      row_group_interval.file_path);
 
-    validate_max_repetition_level(parquet_column_descriptor);
+    validate_max_repetition_and_definition_level(column_descriptor,
+                                                 parquet_column_descriptor);
     int64_t values_read = 0;
     for (int row_group_index = row_group_interval.start_index;
          row_group_index <= row_group_interval.end_index;
@@ -714,11 +754,20 @@ bool validate_array_mapping(const ColumnDescriptor* omnisci_column,
   return false;
 }
 
+bool validate_geospatial_mapping(const ColumnDescriptor* omnisci_column,
+                                 const parquet::ColumnDescriptor* parquet_column) {
+  return is_valid_parquet_string(parquet_column) &&
+         omnisci_column->columnType.is_geometry();
+}
+
 }  // namespace
 
 bool LazyParquetChunkLoader::isColumnMappingSupported(
     const ColumnDescriptor* omnisci_column,
     const parquet::ColumnDescriptor* parquet_column) {
+  if (validate_geospatial_mapping(omnisci_column, parquet_column)) {
+    return true;
+  }
   if (validate_array_mapping(omnisci_column, parquet_column)) {
     return true;
   }
@@ -750,11 +799,13 @@ LazyParquetChunkLoader::LazyParquetChunkLoader(
     std::shared_ptr<arrow::fs::FileSystem> file_system)
     : file_system_(file_system) {}
 
-std::shared_ptr<ChunkMetadata> LazyParquetChunkLoader::loadChunk(
+std::list<std::unique_ptr<ChunkMetadata>> LazyParquetChunkLoader::loadChunk(
     const std::vector<RowGroupInterval>& row_group_intervals,
     const int parquet_column_index,
-    Chunk_NS::Chunk& chunk,
+    std::list<Chunk_NS::Chunk>& chunks,
     StringDictionary* string_dictionary) {
+  CHECK(!chunks.empty());
+  auto const& chunk = *chunks.begin();
   auto column_descriptor = chunk.getColumnDesc();
   auto buffer = chunk.getBuffer();
   CHECK(buffer);
@@ -762,7 +813,7 @@ std::shared_ptr<ChunkMetadata> LazyParquetChunkLoader::loadChunk(
   auto metadata = append_row_groups(row_group_intervals,
                                     parquet_column_index,
                                     column_descriptor,
-                                    chunk,
+                                    chunks,
                                     string_dictionary,
                                     file_system_);
   return metadata;
