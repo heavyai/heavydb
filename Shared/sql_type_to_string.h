@@ -74,6 +74,12 @@ inline std::string sql_type_to_str(const SQLTypes& type) {
       return "GEOGRAPHY";
     case kEVAL_CONTEXT_TYPE:
       return "UNEVALUATED ANY";
+    case kVOID:
+      return "VOID";
+    case kCURSOR:
+      return "CURSOR";
+    case kCOLUMN:
+      return "COLUMN";
     default:
       return "INVALID";
   }

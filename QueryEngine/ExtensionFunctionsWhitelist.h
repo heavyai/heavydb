@@ -78,12 +78,14 @@ class ExtensionFunction {
                     const ExtArgumentType ret)
       : name_(name), args_(args), ret_(ret) {}
 
-  const std::string& getName() const { return name_; }
+  const std::string getName(bool keep_suffix = true) const;
 
   const std::vector<ExtArgumentType>& getArgs() const { return args_; }
+  const std::vector<ExtArgumentType>& getInputArgs() const { return args_; }
 
   const ExtArgumentType getRet() const { return ret_; }
   std::string toString() const;
+  std::string toStringSQL() const;
 
  private:
   const std::string name_;
@@ -117,7 +119,9 @@ class ExtensionFunctionsWhitelist {
                               std::string tab = "");
   static std::string toString(const std::vector<SQLTypeInfo>& arg_types);
   static std::string toString(const std::vector<ExtArgumentType>& sig_types);
+  static std::string toStringSQL(const std::vector<ExtArgumentType>& sig_types);
   static std::string toString(const ExtArgumentType& sig_type);
+  static std::string toStringSQL(const ExtArgumentType& sig_type);
 
   static std::vector<std::string> getLLVMDeclarations(
       const std::unordered_set<std::string>& udf_decls);
@@ -134,5 +138,7 @@ class ExtensionFunctionsWhitelist {
   static std::unordered_map<std::string, std::vector<ExtensionFunction>>
       rt_udf_functions_;
 };
+
+std::string toString(const ExtArgumentType& sig_type);
 
 #endif  // QUERYENGINE_EXTENSIONFUNCTIONSWHITELIST_H

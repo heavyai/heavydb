@@ -88,8 +88,22 @@ void TableFunctionsFactory::add(const std::string& name,
                                 const std::vector<ExtArgumentType>& input_args,
                                 const std::vector<ExtArgumentType>& output_args,
                                 bool is_runtime) {
-  functions_.insert(std::make_pair(
-      name, TableFunction(name, sizer, input_args, output_args, is_runtime)));
+  for (auto it = functions_.begin(); it != functions_.end();) {
+    if (it->second.getName() == name) {
+      if (it->second.isRuntime()) {
+        VLOG(1) << "Overriding existing run-time table function (reset not called?): "
+                << name;
+        it = functions_.erase(it);
+      } else {
+        throw std::runtime_error("Will not override existing load-time table function: " +
+                                 name);
+      }
+    } else {
+      ++it;
+    }
+  }
+  auto tf = TableFunction(name, sizer, input_args, output_args, is_runtime);
+  functions_.emplace(name, tf);
 }
 
 std::once_flag init_flag;
@@ -108,15 +122,45 @@ void TableFunctionsFactory::init() {
   });
 }
 
-const TableFunction& TableFunctionsFactory::get(const std::string& name) {
-  auto func_name = name;
-  boost::algorithm::to_lower(func_name);
-  auto itr = functions_.find(func_name);
-  if (itr == functions_.end()) {
-    throw std::runtime_error("Failed to find registered table function with name " +
-                             name);
+// removes existing runtime table functions
+void TableFunctionsFactory::reset() {
+  if (!g_enable_table_functions) {
+    return;
   }
-  return itr->second;
+  for (auto it = functions_.begin(); it != functions_.end();) {
+    if (it->second.isRuntime()) {
+      it = functions_.erase(it);
+    } else {
+      ++it;
+    }
+  }
+}
+
+namespace {
+
+std::string drop_suffix(const std::string& str) {
+  const auto idx = str.find("__");
+  if (idx == std::string::npos) {
+    return str;
+  }
+  CHECK_GT(idx, std::string::size_type(0));
+  return str.substr(0, idx);
+}
+
+}  // namespace
+
+std::vector<TableFunction> TableFunctionsFactory::get_table_funcs(
+    const std::string& name) {
+  std::vector<TableFunction> table_funcs;
+  auto table_func_name = name;
+  boost::algorithm::to_lower(table_func_name);
+  for (const auto& pair : functions_) {
+    auto fname = drop_suffix(pair.first);
+    if (fname == table_func_name) {
+      table_funcs.push_back(pair.second);
+    }
+  }
+  return table_funcs;
 }
 
 std::unordered_map<std::string, TableFunction> TableFunctionsFactory::functions_;

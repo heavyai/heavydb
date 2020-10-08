@@ -384,9 +384,10 @@ class SQLTypeInfo {
     }
     if (type == kCOLUMN) {
       auto elem_ti = get_elem_type();
-      auto num_elems = (size > 0) ? std::to_string(size / elem_ti.get_size()) : "";
+      auto num_elems =
+          (size > 0) ? "[" + std::to_string(size / elem_ti.get_size()) + "]" : "";
       CHECK_LT(static_cast<int>(subtype), kSQLTYPE_LAST);
-      return "Column" + type_name[static_cast<int>(subtype)] + ps + "[" + num_elems + "]";
+      return "COLUMN<" + type_name[static_cast<int>(subtype)] + ps + ">" + num_elems;
     }
     return type_name[static_cast<int>(type)] + ps;
   }

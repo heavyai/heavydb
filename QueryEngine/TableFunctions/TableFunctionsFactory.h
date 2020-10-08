@@ -53,10 +53,13 @@ class TableFunction {
     args.insert(args.end(), output_args_.begin(), output_args_.end());
     return args;
   }
+  const std::vector<ExtArgumentType>& getInputArgs() const { return input_args_; }
+  const ExtArgumentType getRet() const { return ExtArgumentType::Int32; }
 
   SQLTypeInfo getInputSQLType(const size_t idx) const;
   SQLTypeInfo getOutputSQLType(const size_t idx) const;
 
+  auto getInputsSize() const { return input_args_.size(); }
   auto getOutputsSize() const { return output_args_.size(); }
 
   auto getName() const { return name_; }
@@ -79,6 +82,15 @@ class TableFunction {
     return result;
   }
 
+  std::string toStringSQL() const {
+    auto result = name_ + "(";
+    result += ExtensionFunctionsWhitelist::toStringSQL(input_args_);
+    result += ") -> (";
+    result += ExtensionFunctionsWhitelist::toStringSQL(output_args_);
+    result += ")";
+    return result;
+  }
+
  private:
   const std::string name_;
   const TableFunctionOutputRowSizer output_sizer_;
@@ -95,9 +107,9 @@ class TableFunctionsFactory {
                   const std::vector<ExtArgumentType>& output_args,
                   bool is_runtime = false);
 
-  static const TableFunction& get(const std::string& name);
-
+  static std::vector<TableFunction> get_table_funcs(const std::string& name);
   static void init();
+  static void reset();
 
  private:
   static std::unordered_map<std::string, TableFunction> functions_;

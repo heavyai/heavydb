@@ -15,9 +15,8 @@
  */
 
 #include "ExtensionFunctionsBinding.h"
-#include "ExternalExecutor.h"
-
 #include <algorithm>
+#include "ExternalExecutor.h"
 
 // A rather crude function binding logic based on the types of the arguments.
 // We want it to be possible to write specialized versions of functions to be
@@ -33,6 +32,28 @@
  */
 
 namespace {
+
+ExtArgumentType get_column_arg_elem_type(const ExtArgumentType ext_arg_column_type) {
+  switch (ext_arg_column_type) {
+    case ExtArgumentType::ColumnInt8:
+      return ExtArgumentType::Int8;
+    case ExtArgumentType::ColumnInt16:
+      return ExtArgumentType::Int16;
+    case ExtArgumentType::ColumnInt32:
+      return ExtArgumentType::Int32;
+    case ExtArgumentType::ColumnInt64:
+      return ExtArgumentType::Int64;
+    case ExtArgumentType::ColumnFloat:
+      return ExtArgumentType::Float;
+    case ExtArgumentType::ColumnDouble:
+      return ExtArgumentType::Double;
+    case ExtArgumentType::ColumnBool:
+      return ExtArgumentType::Bool;
+    default:
+      UNREACHABLE();
+  }
+  return ExtArgumentType{};
+}
 
 ExtArgumentType get_array_arg_elem_type(const ExtArgumentType ext_arg_array_type) {
   switch (ext_arg_array_type) {
@@ -84,7 +105,6 @@ static int match_arguments(const SQLTypeInfo& arg_type,
    */
   auto stype = sig_types[sig_pos];
   int max_pos = sig_types.size() - 1;
-
   switch (arg_type.get_type()) {
     case kBOOLEAN:
       if (stype == ExtArgumentType::Bool) {
@@ -264,6 +284,23 @@ static int match_arguments(const SQLTypeInfo& arg_type,
         return 2;
       }
       break;
+    case kCOLUMN:
+      if (is_ext_arg_type_column(stype)) {
+        // column arguments must match exactly
+        CHECK(arg_type.is_column());
+        const auto stype_ti = ext_arg_type_to_type_info(get_column_arg_elem_type(stype));
+        if (arg_type.get_elem_type() == kBOOLEAN && stype_ti.get_type() == kTINYINT) {
+          /* Boolean column has the same low-level structure as Int8 column. */
+          penalty_score += 1000;
+          return 1;
+        } else if (arg_type.get_elem_type().get_type() == stype_ti.get_type()) {
+          penalty_score += 1000;
+          return 1;
+        } else {
+          return -1;
+        }
+      }
+      break;
       /* Not implemented types:
          kCHAR
          kVARCHAR
@@ -292,12 +329,19 @@ static int match_arguments(const SQLTypeInfo& arg_type,
 
 }  // namespace
 
-ExtensionFunction bind_function(std::string name,
-                                Analyzer::ExpressionPtrVector func_args,
-                                const std::vector<ExtensionFunction>& ext_funcs) {
-  // worker function
+template <typename T>
+T bind_function(std::string name,
+                Analyzer::ExpressionPtrVector func_args,
+                const std::vector<T>& ext_funcs) {
+  /* worker function
+
+     Template type T must implement the following methods:
+
+       std::vector<ExtArgumentType> getInputArgs()
+   */
   /*
-    Return extension function that has the following properties
+    Return extension function/table function that has the following
+    properties
 
     1. each argument type in `arg_types` matches with extension
        function argument types.
@@ -322,9 +366,22 @@ ExtensionFunction bind_function(std::string name,
   int minimal_score = std::numeric_limits<int>::max();
   int index = -1;
   int optimal = -1;
+
+  std::vector<SQLTypeInfo> type_infos;
+  for (auto atype : func_args) {
+    if constexpr (std::is_same_v<T, table_functions::TableFunction>) {
+      if (dynamic_cast<const Analyzer::ColumnVar*>(atype.get())) {
+        auto ti = SQLTypeInfo(kCOLUMN, false);
+        ti.set_subtype(atype->get_type_info().get_type());
+        type_infos.push_back(ti);
+        continue;
+      }
+    }
+    type_infos.push_back(atype->get_type_info());
+  }
   for (auto ext_func : ext_funcs) {
     index++;
-    auto ext_func_args = ext_func.getArgs();
+    auto ext_func_args = ext_func.getInputArgs();
     /* In general, `arg_types.size() <= ext_func_args.size()` because
        non-scalar arguments (such as arrays and geo-objects) are
        mapped to multiple `ext_func` arguments. */
@@ -333,9 +390,8 @@ ExtensionFunction bind_function(std::string name,
          argument type, reject signature if not */
       int penalty_score = 0;
       int pos = 0;
-      for (auto atype : func_args) {
-        int offset =
-            match_arguments(atype->get_type_info(), pos, ext_func_args, penalty_score);
+      for (auto ti : type_infos) {
+        int offset = match_arguments(ti, pos, ext_func_args, penalty_score);
         if (offset < 0) {
           // atype does not match with ext_func argument
           pos = -1;
@@ -357,21 +413,27 @@ ExtensionFunction bind_function(std::string name,
   if (optimal == -1) {
     /* no extension function found that argument types would match
        with types in `arg_types` */
-    std::vector<SQLTypeInfo> arg_types;
-    for (size_t i = 0; i < func_args.size(); ++i) {
-      arg_types.push_back(func_args[i]->get_type_info());
-    }
-    auto sarg_types = ExtensionFunctionsWhitelist::toString(arg_types);
+    auto sarg_types = ExtensionFunctionsWhitelist::toString(type_infos);
     if (!ext_funcs.size()) {
       throw NativeExecutionError("Function " + name + "(" + sarg_types +
                                  ") not supported.");
     }
-    auto choices = ExtensionFunctionsWhitelist::toString(ext_funcs, "    ");
+    std::string choices;
+    for (const auto& ext_func : ext_funcs) {
+      choices += "\n    " + ext_func.toStringSQL();
+    }
     throw std::runtime_error(
         "Function " + name + "(" + sarg_types +
-        ") not supported.\n  Existing extension function implementations:\n" + choices);
+        ") not supported.\n  Existing extension function implementations:" + choices);
   }
   return ext_funcs[optimal];
+}
+
+const table_functions::TableFunction bind_table_function(
+    std::string name,
+    Analyzer::ExpressionPtrVector input_args,
+    const std::vector<table_functions::TableFunction>& table_funcs) {
+  return bind_function<table_functions::TableFunction>(name, input_args, table_funcs);
 }
 
 ExtensionFunction bind_function(std::string name,
@@ -379,17 +441,26 @@ ExtensionFunction bind_function(std::string name,
   // used in RelAlgTranslator.cpp
   std::vector<ExtensionFunction> ext_funcs =
       ExtensionFunctionsWhitelist::get_ext_funcs(name);
-  return bind_function(name, func_args, ext_funcs);
+  return bind_function<ExtensionFunction>(name, func_args, ext_funcs);
 }
 
 ExtensionFunction bind_function(const Analyzer::FunctionOper* function_oper) {
-  // used in ExtensionIR.cpp
+  // used in ExtensionsIR.cpp
   auto name = function_oper->getName();
   Analyzer::ExpressionPtrVector func_args = {};
   for (size_t i = 0; i < function_oper->getArity(); ++i) {
     func_args.push_back(function_oper->getOwnArg(i));
   }
   return bind_function(name, func_args);
+}
+
+const table_functions::TableFunction bind_table_function(
+    std::string name,
+    Analyzer::ExpressionPtrVector input_args) {
+  // used in RelAlgExecutor.cpp
+  std::vector<table_functions::TableFunction> table_funcs =
+      table_functions::TableFunctionsFactory::get_table_funcs(name);
+  return bind_table_function(name, input_args, table_funcs);
 }
 
 bool is_ext_arg_type_array(const ExtArgumentType ext_arg_type) {
@@ -401,6 +472,22 @@ bool is_ext_arg_type_array(const ExtArgumentType ext_arg_type) {
     case ExtArgumentType::ArrayFloat:
     case ExtArgumentType::ArrayDouble:
     case ExtArgumentType::ArrayBool:
+      return true;
+
+    default:
+      return false;
+  }
+}
+
+bool is_ext_arg_type_column(const ExtArgumentType ext_arg_type) {
+  switch (ext_arg_type) {
+    case ExtArgumentType::ColumnInt8:
+    case ExtArgumentType::ColumnInt16:
+    case ExtArgumentType::ColumnInt32:
+    case ExtArgumentType::ColumnInt64:
+    case ExtArgumentType::ColumnFloat:
+    case ExtArgumentType::ColumnDouble:
+    case ExtArgumentType::ColumnBool:
       return true;
 
     default:

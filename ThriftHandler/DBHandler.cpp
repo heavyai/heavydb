@@ -6101,6 +6101,8 @@ void DBHandler::register_runtime_extension_functions(
 
   VLOG(1) << "Registering runtime UDTFs:\n";
 
+  table_functions::TableFunctionsFactory::reset();
+
   for (auto it = udtfs.begin(); it != udtfs.end(); it++) {
     VLOG(1) << "UDTF name=" << it->name << std::endl;
     table_functions::TableFunctionsFactory::add(

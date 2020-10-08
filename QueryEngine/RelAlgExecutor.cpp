@@ -22,6 +22,7 @@
 #include "QueryEngine/EquiJoinCondition.h"
 #include "QueryEngine/ErrorHandling.h"
 #include "QueryEngine/ExpressionRewrite.h"
+#include "QueryEngine/ExtensionFunctionsBinding.h"
 #include "QueryEngine/ExternalExecutor.h"
 #include "QueryEngine/FromTableReordering.h"
 #include "QueryEngine/QueryPhysicalInputsCollector.h"
@@ -29,7 +30,6 @@
 #include "QueryEngine/RelAlgDagBuilder.h"
 #include "QueryEngine/RelAlgTranslator.h"
 #include "QueryEngine/RexVisitor.h"
-#include "QueryEngine/TableFunctions/TableFunctionsFactory.h"
 #include "QueryEngine/WindowContext.h"
 #include "Shared/TypedDataAccessors.h"
 #include "Shared/measure.h"
@@ -3800,8 +3800,8 @@ RelAlgExecutor::TableFunctionWorkUnit RelAlgExecutor::createTableFunctionWorkUni
       target_exprs_owned_.end(), input_exprs_owned.begin(), input_exprs_owned.end());
   const auto input_exprs = get_exprs_not_owned(input_exprs_owned);
 
-  const auto& table_function_impl =
-      table_functions::TableFunctionsFactory::get(table_func->getFunctionName());
+  const auto table_function_impl =
+      bind_table_function(table_func->getFunctionName(), input_exprs_owned);
 
   std::optional<size_t> output_row_multiplier;
   if (table_function_impl.hasUserSpecifiedOutputMultiplier()) {
@@ -3849,7 +3849,7 @@ RelAlgExecutor::TableFunctionWorkUnit RelAlgExecutor::createTableFunctionWorkUni
       input_col_exprs,        // table function column inputs (duplicates w/ above)
       table_func_outputs,     // table function projected exprs
       output_row_multiplier,  // output buffer multiplier
-      table_func->getFunctionName()};
+      table_function_impl.getName()};
   const auto targets_meta = get_targets_meta(table_func, exe_unit.target_exprs);
   table_func->setOutputMetainfo(targets_meta);
   return {exe_unit, table_func};

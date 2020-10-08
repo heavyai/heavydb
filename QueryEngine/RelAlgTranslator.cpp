@@ -1603,7 +1603,7 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateFunction(
     }
   }
   auto ret_ti = ext_arg_type_to_type_info(ext_func_sig.getRet());
-  // By defualt, the extension function type will not allow nulls. If one of the arguments
+  // By default, the extension function type will not allow nulls. If one of the arguments
   // is nullable, the extension function must also explicitly allow nulls.
   bool arguments_not_null = true;
   for (const auto& arg_expr : arg_expr_list) {

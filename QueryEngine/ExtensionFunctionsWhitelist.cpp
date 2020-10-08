@@ -192,6 +192,15 @@ std::string serialize_type(const ExtArgumentType type) {
   return "";
 }
 
+std::string drop_suffix(const std::string& str) {
+  const auto idx = str.find("__");
+  if (idx == std::string::npos) {
+    return str;
+  }
+  CHECK_GT(idx, std::string::size_type(0));
+  return str.substr(0, idx);
+}
+
 }  // namespace
 
 SQLTypeInfo ext_arg_type_to_type_info(const ExtArgumentType ext_arg_type) {
@@ -297,13 +306,112 @@ std::string ExtensionFunctionsWhitelist::toString(
   return r;
 }
 
+std::string ExtensionFunctionsWhitelist::toStringSQL(
+    const std::vector<ExtArgumentType>& sig_types) {
+  std::string r = "";
+  for (auto t = sig_types.begin(); t != sig_types.end();) {
+    r += ExtensionFunctionsWhitelist::toStringSQL(*t);
+    t++;
+    if (t != sig_types.end()) {
+      r += ", ";
+    }
+  }
+  return r;
+}
+
 std::string ExtensionFunctionsWhitelist::toString(const ExtArgumentType& sig_type) {
   return serialize_type(sig_type);
 }
 
+std::string ExtensionFunctionsWhitelist::toStringSQL(const ExtArgumentType& sig_type) {
+  switch (sig_type) {
+    case ExtArgumentType::Int8:
+      return "TINYINT";
+    case ExtArgumentType::Int16:
+      return "SMALLINT";
+    case ExtArgumentType::Int32:
+      return "INTEGER";
+    case ExtArgumentType::Int64:
+      return "BIGINT";
+    case ExtArgumentType::Float:
+      return "FLOAT";
+    case ExtArgumentType::Double:
+      return "DOUBLE";
+    case ExtArgumentType::Bool:
+      return "BOOLEAN";
+    case ExtArgumentType::PInt8:
+      return "TINYINT[]";
+    case ExtArgumentType::PInt16:
+      return "SMALLINT[]";
+    case ExtArgumentType::PInt32:
+      return "INT[]";
+    case ExtArgumentType::PInt64:
+      return "BIGINT[]";
+    case ExtArgumentType::PFloat:
+      return "FLOAT[]";
+    case ExtArgumentType::PDouble:
+      return "DOUBLE[]";
+    case ExtArgumentType::PBool:
+      return "BOOLEAN[]";
+    case ExtArgumentType::ArrayInt8:
+      return "ARRAY<TINYINT>";
+    case ExtArgumentType::ArrayInt16:
+      return "ARRAY<SMALLINT>";
+    case ExtArgumentType::ArrayInt32:
+      return "ARRAY<INT>";
+    case ExtArgumentType::ArrayInt64:
+      return "ARRAY<BIGINT>";
+    case ExtArgumentType::ArrayFloat:
+      return "ARRAY<FLOAT>";
+    case ExtArgumentType::ArrayDouble:
+      return "ARRAY<DOUBLE>";
+    case ExtArgumentType::ArrayBool:
+      return "ARRAY<BOOLEAN>";
+    case ExtArgumentType::ColumnInt8:
+      return "COLUMN<TINYINT>";
+    case ExtArgumentType::ColumnInt16:
+      return "COLUMN<SMALLINT>";
+    case ExtArgumentType::ColumnInt32:
+      return "COLUMN<INT>";
+    case ExtArgumentType::ColumnInt64:
+      return "COLUMN<BIGINT>";
+    case ExtArgumentType::ColumnFloat:
+      return "COLUMN<FLOAT>";
+    case ExtArgumentType::ColumnDouble:
+      return "COLUMN<DOUBLE>";
+    case ExtArgumentType::ColumnBool:
+      return "COLUMN<BOOLEAN>";
+    case ExtArgumentType::Cursor:
+      return "CURSOR";
+    case ExtArgumentType::GeoPoint:
+      return "POINT";
+    case ExtArgumentType::GeoLineString:
+      return "LINESTRING";
+    case ExtArgumentType::GeoPolygon:
+      return "POLYGON";
+    case ExtArgumentType::GeoMultiPolygon:
+      return "MULTIPOLYGON";
+    case ExtArgumentType::Void:
+      return "VOID";
+    default:
+      UNREACHABLE();
+  }
+  return "";
+}
+
+const std::string ExtensionFunction::getName(bool keep_suffix) const {
+  return (keep_suffix ? name_ : drop_suffix(name_));
+}
+
 std::string ExtensionFunction::toString() const {
-  return getName() + "(" + ExtensionFunctionsWhitelist::toString(getArgs()) + ") -> " +
-         serialize_type(getRet());
+  return getName() + "(" + ExtensionFunctionsWhitelist::toString(args_) + ") -> " +
+         serialize_type(ret_);
+}
+
+std::string ExtensionFunction::toStringSQL() const {
+  return getName(/* keep_suffix = */ false) + "(" +
+         ExtensionFunctionsWhitelist::toStringSQL(args_) + ") -> " +
+         ExtensionFunctionsWhitelist::toStringSQL(ret_);
 }
 
 // Converts the extension function signatures to their LLVM representation.
@@ -464,15 +572,6 @@ ExtArgumentType deserialize_type(const std::string& type_name) {
   return ExtArgumentType::Int16;
 }
 
-std::string drop_suffix(const std::string& str) {
-  const auto idx = str.find("__");
-  if (idx == std::string::npos) {
-    return str;
-  }
-  CHECK_GT(idx, std::string::size_type(0));
-  return str.substr(0, idx);
-}
-
 }  // namespace
 
 using SignatureMap = std::unordered_map<std::string, std::vector<ExtensionFunction>>;
@@ -543,3 +642,7 @@ std::unordered_map<std::string, std::vector<ExtensionFunction>>
 
 std::unordered_map<std::string, std::vector<ExtensionFunction>>
     ExtensionFunctionsWhitelist::rt_udf_functions_;
+
+std::string toString(const ExtArgumentType& sig_type) {
+  return ExtensionFunctionsWhitelist::toString(sig_type);
+}
