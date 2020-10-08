@@ -28,6 +28,8 @@
 #define BASE_PATH "./tmp"
 #endif
 
+extern bool g_enable_fsi;
+
 class ShowUserSessionsTest : public DBHandlerTestFixture {
  public:
   void SetUp() override {
@@ -702,6 +704,7 @@ class ShowCreateTableTest : public DBHandlerTestFixture {
     sql("DROP TABLE IF EXISTS showcreatetabletest1;");
     sql("DROP TABLE IF EXISTS showcreatetabletest2;");
     sql("DROP VIEW IF EXISTS showcreateviewtest;");
+    sql("DROP FOREIGN TABLE IF EXISTS test_foreign_table;");
   }
 
   void TearDown() override {
@@ -709,7 +712,13 @@ class ShowCreateTableTest : public DBHandlerTestFixture {
     sql("DROP TABLE IF EXISTS showcreatetabletest1;");
     sql("DROP TABLE IF EXISTS showcreatetabletest2;");
     sql("DROP VIEW IF EXISTS showcreateviewtest;");
+    sql("DROP FOREIGN TABLE IF EXISTS test_foreign_table;");
     DBHandlerTestFixture::TearDown();
+  }
+
+  std::string getTestFilePath() {
+    return boost::filesystem::canonical("../../Tests/FsiDataFiles/example_1.csv")
+        .string();
   }
 };
 
@@ -797,7 +806,93 @@ TEST_F(ShowCreateTableTest, TextArray) {
                         "DICT(32),\n  t2 TEXT[5] ENCODING DICT(32));"}});
 }
 
+TEST_F(ShowCreateTableTest, ForeignTable_Defaults) {
+  sql("CREATE FOREIGN TABLE test_foreign_table(b BOOLEAN, bint BIGINT, i INTEGER, sint "
+      "SMALLINT, tint TINYINT, f FLOAT, d DOUBLE, dc DECIMAL(5, 2), t TEXT, tm TIME, "
+      "tstamp "
+      "TIMESTAMP, dt DATE, i_array INTEGER[], t_array TEXT[5], p POINT, l LINESTRING, "
+      "poly POLYGON, mpoly MULTIPOLYGON) "
+      "SERVER omnisci_local_csv "
+      "WITH (file_path = '" +
+      getTestFilePath() + "');");
+  sqlAndCompareResult(
+      "SHOW CREATE TABLE test_foreign_table;",
+      {{"CREATE FOREIGN TABLE test_foreign_table (\n  b BOOLEAN,\n  bint BIGINT,\n  i "
+        "INTEGER,\n  sint SMALLINT,\n  tint TINYINT,\n  f FLOAT,\n  d DOUBLE,\n  dc "
+        "DECIMAL(5,2) ENCODING FIXED(32),\n  t TEXT ENCODING DICT(32),\n  tm TIME,\n  "
+        "tstamp TIMESTAMP(0),\n  dt DATE ENCODING DAYS(32),\n  i_array INTEGER[],\n  "
+        "t_array TEXT[5] ENCODING DICT(32),\n  p GEOMETRY(POINT) ENCODING NONE,\n  l "
+        "GEOMETRY(LINESTRING) ENCODING NONE,\n  poly GEOMETRY(POLYGON) ENCODING "
+        "NONE,\n  mpoly GEOMETRY(MULTIPOLYGON) ENCODING NONE)"
+        "\nSERVER omnisci_local_csv"
+        "\nWITH (FILE_PATH='" +
+        getTestFilePath() +
+        "', REFRESH_TIMING_TYPE='MANUAL', REFRESH_UPDATE_TYPE='ALL');"}});
+}
+
+TEST_F(ShowCreateTableTest, ForeignTable_WithEncodings) {
+  sql("CREATE FOREIGN TABLE test_foreign_table(bint BIGINT ENCODING FIXED(16), i INTEGER "
+      "ENCODING FIXED(8), sint SMALLINT ENCODING FIXED(8), t1 TEXT ENCODING DICT(16), t2 "
+      "TEXT ENCODING NONE, tm TIME ENCODING FIXED(32), tstamp TIMESTAMP(3), tstamp2 "
+      "TIMESTAMP ENCODING FIXED(32), dt DATE ENCODING DAYS(16), p GEOMETRY(POINT, 4326), "
+      "l GEOMETRY(LINESTRING, 4326) ENCODING COMPRESSED(32), "
+      "poly GEOMETRY(POLYGON, 4326) ENCODING NONE, "
+      "mpoly GEOMETRY(MULTIPOLYGON, 900913)) "
+      "SERVER omnisci_local_csv "
+      "WITH (file_path = '" +
+      getTestFilePath() + "');");
+  sqlAndCompareResult(
+      "SHOW CREATE TABLE test_foreign_table;",
+      {{"CREATE FOREIGN TABLE test_foreign_table (\n  bint BIGINT ENCODING FIXED(16),\n  "
+        "i INTEGER ENCODING FIXED(8),\n  sint SMALLINT ENCODING FIXED(8),\n  t1 TEXT "
+        "ENCODING DICT(16),\n  t2 TEXT ENCODING NONE,\n  tm TIME ENCODING FIXED(32),\n  "
+        "tstamp TIMESTAMP(3),\n  tstamp2 TIMESTAMP(0) ENCODING FIXED(32),\n  dt DATE "
+        "ENCODING DAYS(16),\n  p GEOMETRY(POINT, 4326) ENCODING COMPRESSED(32),\n  l "
+        "GEOMETRY(LINESTRING, 4326) ENCODING COMPRESSED(32),\n  poly GEOMETRY(POLYGON, "
+        "4326) ENCODING NONE,\n  mpoly GEOMETRY(MULTIPOLYGON, 900913) ENCODING NONE)"
+        "\nSERVER omnisci_local_csv"
+        "\nWITH (FILE_PATH='" +
+        getTestFilePath() +
+        "', REFRESH_TIMING_TYPE='MANUAL', REFRESH_UPDATE_TYPE='ALL');"}});
+}
+
+TEST_F(ShowCreateTableTest, ForeignTable_AllOptions) {
+  std::time_t timestamp = std::time(0) + (60 * 60);
+  std::tm* gmt_time = std::gmtime(&timestamp);
+  constexpr int buffer_size = 256;
+  char buffer[buffer_size];
+  std::strftime(buffer, buffer_size, "%Y-%m-%d %H:%M:%S", gmt_time);
+  std::string start_date_time = buffer;
+
+  sql("CREATE FOREIGN TABLE test_foreign_table(i INTEGER) "
+      "SERVER omnisci_local_csv "
+      "WITH (file_path = '" +
+      getTestFilePath() +
+      "', fragment_size = 50, refresh_update_type = 'append', refresh_timing_type = "
+      "'scheduled', refresh_start_date_time = '" +
+      start_date_time +
+      "', refresh_interval= '5H', array_delimiter = '_', array_marker = '[]', "
+      "buffer_size = '100', delimiter = '|', escape = '\\', header = 'false', "
+      "line_delimiter = '.', lonlat = 'false', nulls = 'NIL', "
+      "quote = '`', quoted = 'false');");
+  sqlAndCompareResult("SHOW CREATE TABLE test_foreign_table;",
+                      {{"CREATE FOREIGN TABLE test_foreign_table (\n  i INTEGER)"
+                        "\nSERVER omnisci_local_csv"
+                        "\nWITH (ARRAY_DELIMITER='_', ARRAY_MARKER='[]', "
+                        "BUFFER_SIZE='100', DELIMITER='|', ESCAPE='\\', "
+                        "FILE_PATH='" +
+                        getTestFilePath() +
+                        "', FRAGMENT_SIZE='50', HEADER='false', LINE_DELIMITER='.', "
+                        "LONLAT='false', NULLS='NIL', QUOTE='`', QUOTED='false', "
+                        "REFRESH_INTERVAL='5H', "
+                        "REFRESH_START_DATE_TIME='" +
+                        start_date_time +
+                        "', REFRESH_TIMING_TYPE='SCHEDULED', "
+                        "REFRESH_UPDATE_TYPE='APPEND', FRAGMENT_SIZE=50);"}});
+}
+
 int main(int argc, char** argv) {
+  g_enable_fsi = true;
   TestHelpers::init_logger_stderr_only(argc, argv);
   testing::InitGoogleTest(&argc, argv);
   DBHandlerTestFixture::initTestArgs(argc, argv);
@@ -809,5 +904,6 @@ int main(int argc, char** argv) {
     LOG(ERROR) << e.what();
   }
 
+  g_enable_fsi = false;
   return err;
 }

@@ -4140,9 +4140,12 @@ std::string Catalog::dumpCreateTable(const TableDescriptor* td,
                                      bool dump_defaults) const {
   cat_read_lock read_lock(this);
 
+  auto foreign_table = dynamic_cast<const foreign_storage::ForeignTable*>(td);
   std::ostringstream os;
 
-  if (!td->isView) {
+  if (foreign_table) {
+    os << "CREATE FOREIGN TABLE " << td->tableName << " (";
+  } else if (!td->isView) {
     os << "CREATE ";
     if (td->persistenceLevel == Data_Namespace::MemoryLevel::CPU_LEVEL) {
       os << "TEMPORARY ";
@@ -4231,39 +4234,54 @@ std::string Catalog::dumpCreateTable(const TableDescriptor* td,
     os << comma;
     os << boost::algorithm::join(shared_dicts, comma);
   }
-  // gather WITH options ...
+  os << ")";
+
   std::vector<std::string> with_options;
+  if (foreign_table) {
+    if (multiline_formatting) {
+      os << "\n";
+    } else {
+      os << " ";
+    }
+    os << "SERVER " << foreign_table->foreign_server->name;
+
+    // gather WITH options ...
+    for (const auto& [option, value] : foreign_table->options) {
+      with_options.emplace_back(option + "='" + value + "'");
+    }
+  }
+
   if (dump_defaults || td->maxFragRows != DEFAULT_FRAGMENT_ROWS) {
     with_options.push_back("FRAGMENT_SIZE=" + std::to_string(td->maxFragRows));
   }
-  if (dump_defaults || td->maxChunkSize != DEFAULT_MAX_CHUNK_SIZE) {
+  if (!foreign_table && (dump_defaults || td->maxChunkSize != DEFAULT_MAX_CHUNK_SIZE)) {
     with_options.push_back("MAX_CHUNK_SIZE=" + std::to_string(td->maxChunkSize));
   }
-  if (dump_defaults || td->fragPageSize != DEFAULT_PAGE_SIZE) {
+  if (!foreign_table && (dump_defaults || td->fragPageSize != DEFAULT_PAGE_SIZE)) {
     with_options.push_back("PAGE_SIZE=" + std::to_string(td->fragPageSize));
   }
-  if (dump_defaults || td->maxRows != DEFAULT_MAX_ROWS) {
+  if (!foreign_table && (dump_defaults || td->maxRows != DEFAULT_MAX_ROWS)) {
     with_options.push_back("MAX_ROWS=" + std::to_string(td->maxRows));
   }
-  if (dump_defaults || !td->hasDeletedCol) {
+  if (!foreign_table && (dump_defaults || !td->hasDeletedCol)) {
     with_options.push_back(td->hasDeletedCol ? "VACUUM='DELAYED'" : "VACUUM='IMMEDIATE'");
   }
-  if (!td->partitions.empty()) {
+  if (!foreign_table && !td->partitions.empty()) {
     with_options.push_back("PARTITIONS='" + td->partitions + "'");
   }
-  if (td->nShards > 0) {
+  if (!foreign_table && td->nShards > 0) {
     const auto shard_cd = getMetadataForColumn(td->tableId, td->shardedColumnId);
     CHECK(shard_cd);
     with_options.push_back(
         "SHARD_COUNT=" +
         std::to_string(td->nShards * std::max(g_leaf_count, static_cast<size_t>(1))));
   }
-  if (td->sortedColumnId > 0) {
+  if (!foreign_table && td->sortedColumnId > 0) {
     const auto sort_cd = getMetadataForColumn(td->tableId, td->sortedColumnId);
     CHECK(sort_cd);
     with_options.push_back("SORT_COLUMN='" + sort_cd->columnName + "'");
   }
-  os << ")";
+
   if (!with_options.empty()) {
     if (!multiline_formatting) {
       os << " ";

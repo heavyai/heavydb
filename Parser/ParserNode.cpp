@@ -4328,7 +4328,7 @@ void ShowCreateTableStmt::execute(const Catalog_Namespace::SessionInfo& session)
           legacylockmgr::ExecutorOuterLock, true));
 
   auto& catalog = session.getCatalog();
-  const TableDescriptor* td = catalog.getMetadataForTable(*table_);
+  const TableDescriptor* td = catalog.getMetadataForTable(*table_, false);
   if (!td) {
     throw std::runtime_error("Table/View " + *table_ + " does not exist.");
   }
