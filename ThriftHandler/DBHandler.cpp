@@ -5894,7 +5894,7 @@ void DBHandler::set_table_epochs(const TSessionId& session,
   // or aggregator (for distributed mode)
   if (!g_cluster || leaf_aggregator_.leafCount() > 0) {
     if (!session_ptr->get_currentUser().isSuper) {
-      throw std::runtime_error("Only super users can set table epochs");
+      THROW_MAPD_EXCEPTION("Only super users can set table epochs");
     }
   }
   std::vector<Catalog_Namespace::TableEpochInfo> table_epochs_vector;
