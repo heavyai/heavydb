@@ -145,16 +145,15 @@ class ForeignStorageCacheUnitTest : public testing::Test {
 
   static void reinitializeCache(std::unique_ptr<ForeignStorageCache>& cache,
                                 GlobalFileMgr*& gfm,
-                                const std::string cache_path = cache_path_,
-                                const size_t cds = cache_default_size) {
-    cache = std::make_unique<ForeignStorageCache>(cache_path_, 0, cds);
+                                const DiskCacheConfig& config) {
+    cache = std::make_unique<ForeignStorageCache>(config);
     gfm = cache->getGlobalFileMgr();
   }
 
   static void SetUpTestSuite() {
     cache_path_ = "./tmp/mapd_data/test_foreign_data_cache";
     boost::filesystem::remove_all(cache_path_);
-    reinitializeCache(cache_, gfm_);
+    reinitializeCache(cache_, gfm_, {cache_path_, DiskCacheLevel::fsi});
   }
 
   static void TearDownTestSuite() { boost::filesystem::remove_all(cache_path_); }
@@ -395,7 +394,7 @@ class CacheDiskStorageTest : public ForeignStorageCacheUnitTest {
   static void TearDownTestSuite() {}
   void SetUp() override {
     boost::filesystem::remove_all(cache_path_);
-    reinitializeCache(cache_, gfm_);
+    reinitializeCache(cache_, gfm_, {cache_path_, DiskCacheLevel::fsi});
   }
   void TearDown() override { boost::filesystem::remove_all(cache_path_); }
 };
@@ -423,7 +422,7 @@ TEST_F(CacheDiskStorageTest, CacheChunk_VerifyChunkFileCreated) {
 TEST_F(CacheDiskStorageTest, RecoverCache_Metadata) {
   ChunkWrapper<int32_t> chunk_wrapper1{kINT, {1, 2, 3, 4}};
   chunk_wrapper1.cacheMetadata(chunk_key1);
-  reinitializeCache(cache_, gfm_);
+  reinitializeCache(cache_, gfm_, {cache_path_, DiskCacheLevel::fsi});
   ASSERT_EQ(cache_->getNumCachedMetadata(), 0U);
   ChunkMetadataVector metadata_vec_cached{};
   cache_->recoverCacheForTable(metadata_vec_cached, table_prefix1);
@@ -437,7 +436,7 @@ TEST_F(CacheDiskStorageTest, RecoverCache_UpdatedMetadata) {
   chunk_wrapper1.cacheMetadata(chunk_key1);
   ChunkWrapper<int32_t> chunk_wrapper2{kINT, {5, 6}};
   chunk_wrapper2.cacheMetadata(chunk_key1);
-  reinitializeCache(cache_, gfm_);
+  reinitializeCache(cache_, gfm_, {cache_path_, DiskCacheLevel::fsi});
   ChunkMetadataVector metadata_vec_cached{};
   cache_->recoverCacheForTable(metadata_vec_cached, table_prefix1);
   ASSERT_EQ(cache_->getNumCachedMetadata(), 1U);
@@ -447,7 +446,7 @@ TEST_F(CacheDiskStorageTest, RecoverCache_UpdatedMetadata) {
 TEST_F(CacheDiskStorageTest, RecoverCache_SingleChunk) {
   ChunkWrapper<int32_t> chunk_wrapper1{kINT, {1, 2, 3, 4}};
   chunk_wrapper1.cacheMetadataThenChunk(chunk_key1);
-  reinitializeCache(cache_, gfm_);
+  reinitializeCache(cache_, gfm_, {cache_path_, DiskCacheLevel::fsi});
   ASSERT_EQ(cache_->getNumCachedChunks(), 0U);
   ChunkMetadataVector metadata_vec_cached{};
   cache_->recoverCacheForTable(metadata_vec_cached, table_prefix1);
@@ -476,7 +475,7 @@ TEST_F(CacheDiskStorageTest, RecoverCache_EvictBeforeRecovery) {
   // size_t chunk_size = 32000000 * sizeof(int32_t);
   { CacheLimitScope scope{cache_minimum_size}; }
 
-  reinitializeCache(cache_, gfm_);
+  reinitializeCache(cache_, gfm_, {cache_path_, DiskCacheLevel::fsi});
   ChunkMetadataVector metadata_vec_cached{};
   cache_->recoverCacheForTable(metadata_vec_cached, table_prefix1);
   ASSERT_EQ(cache_->getNumCachedChunks(), 4U);
@@ -545,7 +544,7 @@ TEST_F(ForeignStorageCacheFileTest, FileCreation) {
   cache_path_ = "./test_foreign_data_cache";
   boost::filesystem::remove_all(cache_path_);
   {
-    ForeignStorageCache cache{cache_path_, 0, cache_default_size};
+    ForeignStorageCache cache{{cache_path_, DiskCacheLevel::fsi}};
     GlobalFileMgr* gfm = cache.getGlobalFileMgr();
     ASSERT_TRUE(boost::filesystem::exists(cache_path_));
     ASSERT_FALSE(boost::filesystem::exists(cache_path_ + "/table_1_1"));
@@ -570,23 +569,20 @@ TEST_F(ForeignStorageCacheFileTest, FileCreation) {
 
 TEST_F(ForeignStorageCacheFileTest, CustomPath) {
   cache_path_ = "./test_foreign_data_cache";
-  DiskCacheConfig disk_cache_config{cache_path_, true};
-  PersistentStorageMgr psm(data_path, 0, disk_cache_config);
+  PersistentStorageMgr psm(data_path, 0, {cache_path_, DiskCacheLevel::fsi});
   ASSERT_EQ(psm.getDiskCache()->getGlobalFileMgr()->getBasePath(), cache_path_ + "/");
 }
 
 TEST_F(ForeignStorageCacheFileTest, InitializeSansCache) {
   cache_path_ = "./test_foreign_data_cache";
-  DiskCacheConfig disk_cache_config{cache_path_, false};
-  PersistentStorageMgr psm(data_path, 0, disk_cache_config);
-  ASSERT_EQ(psm.getForeignStorageMgr()->getForeignStorageCache(), nullptr);
+  PersistentStorageMgr psm(data_path, 0, {cache_path_});
+  ASSERT_EQ(psm.getDiskCache(), nullptr);
 }
 
 TEST_F(ForeignStorageCacheFileTest, EnableCache) {
   cache_path_ = "./test_foreign_data_cache";
-  DiskCacheConfig disk_cache_config{cache_path_, true};
-  PersistentStorageMgr psm(data_path, 0, disk_cache_config);
-  ASSERT_NE(psm.getForeignStorageMgr()->getForeignStorageCache(), nullptr);
+  PersistentStorageMgr psm(data_path, 0, {cache_path_, DiskCacheLevel::fsi});
+  ASSERT_NE(psm.getDiskCache(), nullptr);
 }
 
 TEST_F(ForeignStorageCacheFileTest, FileBlocksPath) {
@@ -597,7 +593,7 @@ TEST_F(ForeignStorageCacheFileTest, FileBlocksPath) {
   tmp_file << "1";
   tmp_file.close();
   try {
-    ForeignStorageCache cache{cache_path_, 0, cache_default_size};
+    ForeignStorageCache cache{{cache_path_, DiskCacheLevel::fsi}};
     FAIL() << "An exception should have been thrown for this testcase";
   } catch (std::runtime_error& e) {
     ASSERT_EQ(e.what(),
@@ -611,7 +607,7 @@ TEST_F(ForeignStorageCacheFileTest, ExistingDir) {
   cache_path_ = "./test_foreign_data_cache";
   boost::filesystem::remove_all(cache_path_);
   boost::filesystem::create_directory(cache_path_);
-  ForeignStorageCache cache{cache_path_, 0, cache_default_size};
+  ForeignStorageCache cache{{cache_path_, DiskCacheLevel::fsi}};
 }
 
 int main(int argc, char** argv) {

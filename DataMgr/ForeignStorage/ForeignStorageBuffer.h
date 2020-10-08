@@ -51,7 +51,7 @@ class ForeignStorageBuffer : public AbstractBuffer {
   MemoryLevel getType() const override;
 
  private:
-  std::unique_ptr<int8_t[]> buffer;
-  size_t reserved_byte_count;
+  std::unique_ptr<int8_t[]> buffer_;
+  size_t reserved_byte_count_;
 };
 }  // namespace foreign_storage

@@ -311,7 +311,7 @@ void InsertOrderFragmenter::updateChunkStats(
       auto buf = chunk->getBuffer();
       CHECK(buf);
       if (!buf->hasEncoder()) {
-        throw std::runtime_error("No encoder for chunk " + showChunk(chunk_key));
+        throw std::runtime_error("No encoder for chunk " + show_chunk(chunk_key));
       }
       auto encoder = buf->getEncoder();
 
@@ -327,7 +327,7 @@ void InsertOrderFragmenter::updateChunkStats(
                                   ? SQLTypeInfo(kBIGINT)
                                   : get_logical_type_info(cd->columnType);
       if (!didResetStats) {
-        VLOG(3) << "Skipping chunk stats reset for " << showChunk(chunk_key);
+        VLOG(3) << "Skipping chunk stats reset for " << show_chunk(chunk_key);
         VLOG(3) << "Max: " << DatumToString(old_chunk_stats.max, logical_ti) << " -> "
                 << DatumToString(chunk_stats.max, logical_ti);
         VLOG(3) << "Min: " << DatumToString(old_chunk_stats.min, logical_ti) << " -> "
@@ -336,7 +336,7 @@ void InsertOrderFragmenter::updateChunkStats(
         continue;  // move to next fragment
       }
 
-      VLOG(2) << "Resetting chunk stats for " << showChunk(chunk_key);
+      VLOG(2) << "Resetting chunk stats for " << show_chunk(chunk_key);
       VLOG(2) << "Max: " << DatumToString(old_chunk_stats.max, logical_ti) << " -> "
               << DatumToString(chunk_stats.max, logical_ti);
       VLOG(2) << "Min: " << DatumToString(old_chunk_stats.min, logical_ti) << " -> "

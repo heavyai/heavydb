@@ -268,27 +268,30 @@ class SelectQueryTest : public ForeignTableTest {
       import_export::delimited_parser::get_max_buffer_resize();
 };
 
-class CacheControllingSelectQueryTest : public SelectQueryTest,
-                                        public ::testing::WithParamInterface<bool> {
+class CacheControllingSelectQueryTest
+    : public SelectQueryTest,
+      public ::testing::WithParamInterface<DiskCacheLevel> {
  public:
   inline static std::string cache_path_ = to_string(BASE_PATH) + "/omnisci_disk_cache/";
-  bool starting_cache_state_;
+  DiskCacheLevel starting_cache_level_;
 
  protected:
-  void resetPersistentStorageMgr(bool cache_enabled) {
+  void resetPersistentStorageMgr(DiskCacheLevel cache_level) {
     for (auto table_it : getCatalog().getAllTableMetadata()) {
       getCatalog().removeFragmenterForTable(table_it->tableId);
     }
     getCatalog().getDataMgr().resetPersistentStorage(
-        {cache_path_, cache_enabled}, 0, getSystemParameters());
+        {cache_path_, cache_level}, 0, getSystemParameters());
   }
 
   void SetUp() override {
     // Disable/enable the cache as test param requires
-    starting_cache_state_ =
-        (getCatalog().getDataMgr().getForeignStorageMgr()->getForeignStorageCache() !=
-         nullptr);
-    if (starting_cache_state_ != GetParam()) {
+    starting_cache_level_ = getCatalog()
+                                .getDataMgr()
+                                .getPersistentStorageMgr()
+                                ->getDiskCacheConfig()
+                                .enabled_level;
+    if (starting_cache_level_ != GetParam()) {
       resetPersistentStorageMgr(GetParam());
     }
     SelectQueryTest::SetUp();
@@ -297,8 +300,8 @@ class CacheControllingSelectQueryTest : public SelectQueryTest,
   void TearDown() override {
     SelectQueryTest::TearDown();
     // Reset cache to pre-test conditions
-    if (starting_cache_state_ != GetParam()) {
-      resetPersistentStorageMgr(starting_cache_state_);
+    if (starting_cache_level_ != GetParam()) {
+      resetPersistentStorageMgr(starting_cache_level_);
     }
   }
 };
@@ -334,21 +337,29 @@ bool compare_json_files(const std::string& generated,
 class RecoverCacheQueryTest : public ForeignTableTest {
  public:
   inline static std::string cache_path_ = to_string(BASE_PATH) + "/omnisci_disk_cache/";
-  bool starting_cache_state_;
+  Catalog_Namespace::Catalog* cat_;
+  PersistentStorageMgr* psm_;
+  foreign_storage::ForeignStorageCache* cache_;
 
  protected:
-  void resetPersistentStorageMgr(bool cache_enabled) {
-    for (auto table_it : getCatalog().getAllTableMetadata()) {
-      getCatalog().removeFragmenterForTable(table_it->tableId);
+  void resetPersistentStorageMgr(DiskCacheLevel cache_level) {
+    for (auto table_it : cat_->getAllTableMetadata()) {
+      cat_->removeFragmenterForTable(table_it->tableId);
     }
-    getCatalog().getDataMgr().resetPersistentStorage(
-        {cache_path_, cache_enabled}, 0, getSystemParameters());
+    cat_->getDataMgr().resetPersistentStorage(
+        {cache_path_, cache_level}, 0, getSystemParameters());
+    psm_ = cat_->getDataMgr().getPersistentStorageMgr();
+    cache_ = psm_->getDiskCache();
   }
+
   bool isTableDatawrapperRestored(const std::string& name) {
     auto td = getCatalog().getMetadataForTable(name);
     ChunkKey table_key{getCatalog().getCurrentDB().dbId, td->tableId};
-    return getCatalog().getDataMgr().getForeignStorageMgr()->isDatawrapperRestored(
-        table_key);
+    return getCatalog()
+        .getDataMgr()
+        .getPersistentStorageMgr()
+        ->getForeignStorageMgr()
+        ->isDatawrapperRestored(table_key);
   }
 
   bool isTableDatawrapperDataOnDisk(const std::string& name) {
@@ -356,8 +367,8 @@ class RecoverCacheQueryTest : public ForeignTableTest {
     ChunkKey table_key{getCatalog().getCurrentDB().dbId, td->tableId};
     return bf::exists(getCatalog()
                           .getDataMgr()
-                          .getForeignStorageMgr()
-                          ->getForeignStorageCache()
+                          .getPersistentStorageMgr()
+                          ->getDiskCache()
                           ->getCacheDirectoryForTablePrefix(table_key) +
                       "/wrapper_metadata.json");
   }
@@ -368,8 +379,8 @@ class RecoverCacheQueryTest : public ForeignTableTest {
     ChunkKey table_key{getCatalog().getCurrentDB().dbId, td->tableId};
     return compare_json_files(getCatalog()
                                       .getDataMgr()
-                                      .getForeignStorageMgr()
-                                      ->getForeignStorageCache()
+                                      .getPersistentStorageMgr()
+                                      ->getDiskCache()
                                       ->getCacheDirectoryForTablePrefix(table_key) +
                                   "/wrapper_metadata.json",
                               filepath,
@@ -377,14 +388,18 @@ class RecoverCacheQueryTest : public ForeignTableTest {
   }
 
   void resetStorageManagerAndClearTableMemory(const ChunkKey& table_key) {
-    auto cat = &getCatalog();
     // Reset cache and clear memory representations.
-    resetPersistentStorageMgr(true);
-    cat->getDataMgr().deleteChunksWithPrefix(table_key, MemoryLevel::CPU_LEVEL);
-    cat->getDataMgr().deleteChunksWithPrefix(table_key, MemoryLevel::GPU_LEVEL);
+    resetPersistentStorageMgr(DiskCacheLevel::fsi);
+    cat_->getDataMgr().deleteChunksWithPrefix(table_key, MemoryLevel::CPU_LEVEL);
+    cat_->getDataMgr().deleteChunksWithPrefix(table_key, MemoryLevel::GPU_LEVEL);
   }
 
-  void SetUp() override { DBHandlerTestFixture::SetUp(); }
+  void SetUp() override {
+    DBHandlerTestFixture::SetUp();
+    cat_ = &getCatalog();
+    psm_ = cat_->getDataMgr().getPersistentStorageMgr();
+    cache_ = psm_->getDiskCache();
+  }
   void TearDown() override { DBHandlerTestFixture::TearDown(); }
   static void SetUpTestSuite() {}
   static void TearDownTestSuite() {}
@@ -463,6 +478,16 @@ struct PrintToStringParamName {
   std::string operator()(const ::testing::TestParamInfo<TExecuteMode::type>& info) const {
     std::stringstream ss;
     ss << ((info.param == TExecuteMode::GPU) ? "GPU" : "CPU");
+    return ss.str();
+  }
+  std::string operator()(const ::testing::TestParamInfo<DiskCacheLevel>& info) const {
+    std::stringstream ss;
+    // clang-format off
+    if (info.param == DiskCacheLevel::none) ss << "NoCache";
+    if (info.param == DiskCacheLevel::fsi) ss << "FsiCache";
+    if (info.param == DiskCacheLevel::non_fsi) ss << "NonFsiCache";
+    if (info.param == DiskCacheLevel::all) ss << "AllCache";
+    // clang-format on
     return ss.str();
   }
 };
@@ -570,6 +595,36 @@ TEST_P(CacheControllingSelectQueryTest, ParquetNullRowgroups) {
                         {i(NULL_SMALLINT),i(NULL_SMALLINT)}},
                        result);
   // clang-format on
+}
+
+TEST_P(CacheControllingSelectQueryTest, CacheExists) {
+  auto cache = getCatalog().getDataMgr().getPersistentStorageMgr()->getDiskCache();
+  if (GetParam() == DiskCacheLevel::none) {
+    ASSERT_EQ(cache, nullptr);
+  } else {
+    ASSERT_NE(cache, nullptr);
+  }
+}
+
+TEST_P(CacheControllingSelectQueryTest, RefreshDisabledCache) {
+  std::string temp_file{getDataFilesPath() + "/.tmp.csv"};
+  bf::copy_file(
+      getDataFilesPath() + "0.csv", temp_file, bf::copy_option::overwrite_if_exists);
+  std::string query = "CREATE FOREIGN TABLE test_foreign_table (i INTEGER) "s +
+                      "SERVER omnisci_local_csv WITH (file_path = '" + temp_file + "');";
+  sql(query);
+  TQueryResult pre_refresh_result;
+  sql(pre_refresh_result, "SELECT * FROM test_foreign_table;");
+  assertResultSetEqual({{i(0)}}, pre_refresh_result);
+  bf::copy_file(getDataFilesPath() + "two_row_3_4.csv",
+                temp_file,
+                bf::copy_option::overwrite_if_exists);
+
+  sql("REFRESH FOREIGN TABLES test_foreign_table;");
+  TQueryResult post_refresh_result;
+  sql(post_refresh_result, "SELECT * FROM test_foreign_table;");
+  assertResultSetEqual({{i(3)}, {i(4)}}, post_refresh_result);
+  bf::remove_all(temp_file);
 }
 
 TEST_F(SelectQueryTest, ParquetStringsAllNullPlacementPermutations) {
@@ -901,14 +956,9 @@ TEST_F(SelectQueryTest, DirectoryWithDifferentSchema_DifferentNumberOfColumns) {
           "different_parquet_schemas_2/two_col_1_2.parquet\" has 2 columns.");
 }
 
-TEST_P(CacheControllingSelectQueryTest, CacheExists) {
-  auto cache = getCatalog().getDataMgr().getForeignStorageMgr()->getForeignStorageCache();
-  ASSERT_EQ((cache != nullptr), GetParam());
-}
-
 INSTANTIATE_TEST_SUITE_P(CachOnOffSelectQueryTests,
                          CacheControllingSelectQueryTest,
-                         ::testing::Values(true, false),
+                         ::testing::Values(DiskCacheLevel::none, DiskCacheLevel::fsi),
                          PrintToStringParamName());
 
 INSTANTIATE_TEST_SUITE_P(DataWrapperParameterizedTests,
@@ -1330,7 +1380,7 @@ class RefreshForeignTableTest : public ForeignTableTest {
   void SetUp() override {
     ForeignTableTest::SetUp();
     cat = &getCatalog();
-    cache = cat->getDataMgr().getForeignStorageMgr()->getForeignStorageCache();
+    cache = cat->getDataMgr().getPersistentStorageMgr()->getDiskCache();
     cache->clear();
   }
 
@@ -1363,8 +1413,9 @@ class RefreshTests : public ForeignTableTest {
   void SetUp() override {
     ForeignTableTest::SetUp();
     cat = &getCatalog();
-    cache = cat->getDataMgr().getForeignStorageMgr()->getForeignStorageCache();
+    cache = cat->getDataMgr().getPersistentStorageMgr()->getDiskCache();
     cache->clear();
+    sql("DROP FOREIGN TABLE IF EXISTS " + default_name + ";");
   }
 
   void TearDown() override {
@@ -1456,7 +1507,7 @@ bool does_cache_contain_chunks(Catalog_Namespace::Catalog* cat,
   // subkey is chunkey without db, table ids
   auto td = cat->getMetadataForTable(table_name);
   ChunkKey table_key{cat->getCurrentDB().dbId, td->tableId};
-  auto cache = cat->getDataMgr().getForeignStorageMgr()->getForeignStorageCache();
+  auto cache = cat->getDataMgr().getPersistentStorageMgr()->getDiskCache();
 
   for (const auto& subkey : subkeys) {
     auto chunk_key = table_key;
@@ -1472,7 +1523,7 @@ bool does_cache_contain_chunks(Catalog_Namespace::Catalog* cat,
 TEST_F(RefreshTests, BulkUpdateCacheUpdate) {
   int fragment_size = 1;
   std::string filename = "single_file.csv";
-  auto cache = getCatalog().getDataMgr().getForeignStorageMgr()->getForeignStorageCache();
+  auto cache = getCatalog().getDataMgr().getPersistentStorageMgr()->getDiskCache();
   // Create initial files and tables
   bf::remove_all(getDataFilesPath() + "append_tmp");
 
@@ -2095,11 +2146,10 @@ TEST_P(CsvAppendTest, AppendFragsCSV) {
 
   if (param.recover_cache) {
     // Reset cache
-    resetPersistentStorageMgr(true);
+    resetPersistentStorageMgr(DiskCacheLevel::fsi);
   }
-  auto cache = getCatalog().getDataMgr().getForeignStorageMgr()->getForeignStorageCache();
-  size_t mdata_count = cache->getNumMetadataAdded();
-  size_t chunk_count = cache->getNumChunksAdded();
+  size_t mdata_count = cache_->getNumMetadataAdded();
+  size_t chunk_count = cache_->getNumChunksAdded();
   // Refresh command
   sql("REFRESH FOREIGN TABLES " + default_name + ";");
 
@@ -2107,9 +2157,9 @@ TEST_P(CsvAppendTest, AppendFragsCSV) {
   size_t final_chunks = std::ceil(double(5) / fragment_size);
   // All new chunks + last original chunk will be updated
   size_t update_count = final_chunks - original_chunks + 1;
-  ASSERT_EQ(update_count, cache->getNumMetadataAdded() - mdata_count);
+  ASSERT_EQ(update_count, cache_->getNumMetadataAdded() - mdata_count);
   // Only last original chunk is recached
-  ASSERT_EQ(1U, cache->getNumChunksAdded() - chunk_count);
+  ASSERT_EQ(1U, cache_->getNumChunksAdded() - chunk_count);
 
   // cache contains all original chunks
   {
@@ -2123,9 +2173,9 @@ TEST_P(CsvAppendTest, AppendFragsCSV) {
   sqlAndCompareResult("SELECT COUNT(*) FROM "s + default_name + ";", {{i(5)}});
 
   sqlAndCompareResult(select, {{i(1)}, {i(2)}, {i(3)}, {i(4)}, {i(5)}});
-  ASSERT_EQ(update_count, cache->getNumMetadataAdded() - mdata_count);
+  ASSERT_EQ(update_count, cache_->getNumMetadataAdded() - mdata_count);
   // Now all new chunks are cached
-  ASSERT_EQ(update_count, cache->getNumChunksAdded() - chunk_count);
+  ASSERT_EQ(update_count, cache_->getNumChunksAdded() - chunk_count);
   ASSERT_EQ(param.recover_cache, isTableDatawrapperRestored(default_name));
 
   // cache contains all original+new chunks
@@ -2157,25 +2207,24 @@ TEST_P(CsvAppendTest, AppendNothing) {
 
   if (param.recover_cache) {
     // Reset cache
-    resetPersistentStorageMgr(true);
+    resetPersistentStorageMgr(DiskCacheLevel::fsi);
   }
-  auto cache = getCatalog().getDataMgr().getForeignStorageMgr()->getForeignStorageCache();
-  size_t mdata_count = cache->getNumMetadataAdded();
-  size_t chunk_count = cache->getNumChunksAdded();
+  size_t mdata_count = cache_->getNumMetadataAdded();
+  size_t chunk_count = cache_->getNumChunksAdded();
   // Refresh command
   sql("REFRESH FOREIGN TABLES " + default_name + ";");
 
   // Only last original chunk is recached
-  ASSERT_EQ(1U, cache->getNumMetadataAdded() - mdata_count);
-  ASSERT_EQ(1U, cache->getNumChunksAdded() - chunk_count);
+  ASSERT_EQ(1U, cache_->getNumMetadataAdded() - mdata_count);
+  ASSERT_EQ(1U, cache_->getNumChunksAdded() - chunk_count);
   // Read from table
   sqlAndCompareResult(select, {{i(1)}, {i(2)}});
 
   ASSERT_EQ(param.recover_cache, isTableDatawrapperRestored(default_name));
 
   // no updates to the cache
-  ASSERT_EQ(1U, cache->getNumMetadataAdded() - mdata_count);
-  ASSERT_EQ(1U, cache->getNumChunksAdded() - chunk_count);
+  ASSERT_EQ(1U, cache_->getNumMetadataAdded() - mdata_count);
+  ASSERT_EQ(1U, cache_->getNumChunksAdded() - chunk_count);
 }
 
 TEST_F(CsvAppendTest, MissingRows) {
@@ -2956,7 +3005,7 @@ class ForeignStorageCacheQueryTest : public ForeignTableTest {
   static void SetUpTestSuite() {
     DBHandlerTestFixture::SetUpTestSuite();
     cat = &getCatalog();
-    cache = cat->getDataMgr().getForeignStorageMgr()->getForeignStorageCache();
+    cache = cat->getDataMgr().getPersistentStorageMgr()->getDiskCache();
     gfm = cache->getGlobalFileMgr();
     sqlDropForeignTable();
   }
@@ -3033,76 +3082,74 @@ TEST_F(ForeignStorageCacheQueryTest, WideLogicalColumns) {
   sqlDropForeignTable();
 }
 
+TEST_F(ForeignStorageCacheQueryTest, CacheWithLimitCachesWholeChunks) {
+  sqlDropForeignTable();
+  sqlCreateForeignTable(
+      "(i INTEGER,  txt TEXT, txt_2 TEXT ENCODING NONE)", "0_255", "csv");
+  sqlAndCompareResult("SELECT SUM(i) FROM (SELECT i FROM " + default_table_name +
+                          " ORDER BY i LIMIT 10);",
+                      {{i(45)}});
+  sqlAndCompareResult("SELECT SUM(i) FROM " + default_table_name + ";", {{i(32640)}});
+}
+
 class CacheDefaultTest : public DBHandlerTestFixture {};
 TEST_F(CacheDefaultTest, Path) {
   auto cat = &getCatalog();
-  auto cache = cat->getDataMgr().getForeignStorageMgr()->getForeignStorageCache();
+  auto cache = cat->getDataMgr().getPersistentStorageMgr()->getDiskCache();
   ASSERT_EQ(cache->getGlobalFileMgr()->getBasePath(),
             to_string(BASE_PATH) + "/omnisci_disk_cache/");
 }
 
 TEST_F(RecoverCacheQueryTest, RecoverWithoutWrappers) {
-  auto cat = &getCatalog();
-  auto fsm = cat->getDataMgr().getForeignStorageMgr();
-  auto cache = fsm->getForeignStorageCache();
-
   sqlDropForeignTable();
   sqlCreateForeignTable("(col1 INTEGER)", "1", "csv");
 
-  auto td = cat->getMetadataForTable(default_table_name);
-  ChunkKey key{cat->getCurrentDB().dbId, td->tableId, 1, 0};
-  ChunkKey table_key{cat->getCurrentDB().dbId, td->tableId};
+  auto td = cat_->getMetadataForTable(default_table_name);
+  ChunkKey key{cat_->getCurrentDB().dbId, td->tableId, 1, 0};
+  ChunkKey table_key{cat_->getCurrentDB().dbId, td->tableId};
 
   sqlAndCompareResult("SELECT * FROM " + default_table_name + ";", {{i(1)}});
   // Cache is now populated.
 
   // Reset cache and clear memory representations.
   resetStorageManagerAndClearTableMemory(table_key);
-  fsm = cat->getDataMgr().getForeignStorageMgr();
-  cache = fsm->getForeignStorageCache();
 
   // Cache should be empty until query prompts recovery from disk
-  ASSERT_EQ(cache->getNumCachedMetadata(), 0U);
-  ASSERT_EQ(cache->getNumCachedChunks(), 0U);
+  ASSERT_EQ(cache_->getNumCachedMetadata(), 0U);
+  ASSERT_EQ(cache_->getNumCachedChunks(), 0U);
 
   // This query should hit recovered disk data and not need to create datawrappers.
   sqlAndCompareResult("SELECT * FROM " + default_table_name + ";", {{i(1)}});
 
-  ASSERT_EQ(cache->getNumCachedMetadata(), 1U);
-  ASSERT_EQ(cache->getNumCachedChunks(), 1U);
+  ASSERT_EQ(cache_->getNumCachedMetadata(), 1U);
+  ASSERT_EQ(cache_->getNumCachedChunks(), 1U);
 
   // Datawrapper should not have been created.
-  ASSERT_FALSE(fsm->hasDataWrapperForChunk(key));
+  ASSERT_FALSE(psm_->getForeignStorageMgr()->hasDataWrapperForChunk(key));
 
   sqlDropForeignTable();
 }
 
 TEST_F(RecoverCacheQueryTest, RecoverThenPopulateDataWrappersOnDemand) {
-  auto cat = &getCatalog();
-  auto fsm = cat->getDataMgr().getForeignStorageMgr();
-  auto cache = fsm->getForeignStorageCache();
-
   sqlDropForeignTable();
   sqlCreateForeignTable("(col1 INTEGER)", "1", "csv");
 
-  auto td = cat->getMetadataForTable(default_table_name);
-  ChunkKey key{cat->getCurrentDB().dbId, td->tableId, 1, 0};
-  ChunkKey table_key{cat->getCurrentDB().dbId, td->tableId};
+  auto td = cat_->getMetadataForTable(default_table_name);
+  ChunkKey key{cat_->getCurrentDB().dbId, td->tableId, 1, 0};
+  ChunkKey table_key{cat_->getCurrentDB().dbId, td->tableId};
 
   sqlAndCompareResult("SELECT COUNT(*) FROM " + default_table_name + ";", {{i(1)}});
   // Cache now has metadata only.
-  ASSERT_EQ(cache->getNumCachedMetadata(), 1U);
-  ASSERT_EQ(cache->getNumCachedChunks(), 0U);
-  ASSERT_TRUE(fsm->hasDataWrapperForChunk(key));
+  ASSERT_EQ(cache_->getNumCachedMetadata(), 1U);
+  ASSERT_EQ(cache_->getNumCachedChunks(), 0U);
+  ASSERT_TRUE(psm_->getForeignStorageMgr()->hasDataWrapperForChunk(key));
 
   // Reset cache and clear memory representations.
   resetStorageManagerAndClearTableMemory(table_key);
-  fsm = cat->getDataMgr().getForeignStorageMgr();
-  cache = fsm->getForeignStorageCache();
 
   // Cache should be empty until query prompts recovery from disk
-  ASSERT_EQ(cache->getNumCachedMetadata(), 0U);
-  ASSERT_EQ(cache->getNumCachedChunks(), 0U);
+  ASSERT_EQ(cache_->getNumCachedMetadata(), 0U);
+  ASSERT_EQ(cache_->getNumCachedChunks(), 0U);
 
   ASSERT_TRUE(isTableDatawrapperDataOnDisk(default_table_name));
   ASSERT_TRUE(compareTableDatawrapperMetadataToFile(
@@ -3111,43 +3158,37 @@ TEST_F(RecoverCacheQueryTest, RecoverThenPopulateDataWrappersOnDemand) {
   // This query should hit recovered disk data and not need to create datawrappers.
   sqlAndCompareResult("SELECT COUNT(*) FROM " + default_table_name + ";", {{i(1)}});
 
-  ASSERT_EQ(cache->getNumCachedMetadata(), 1U);
-  ASSERT_EQ(cache->getNumCachedChunks(), 0U);
-  ASSERT_FALSE(fsm->hasDataWrapperForChunk(key));
+  ASSERT_EQ(cache_->getNumCachedMetadata(), 1U);
+  ASSERT_EQ(cache_->getNumCachedChunks(), 0U);
+  ASSERT_FALSE(psm_->getForeignStorageMgr()->hasDataWrapperForChunk(key));
 
   sqlAndCompareResult("SELECT * FROM " + default_table_name + ";", {{i(1)}});
-  ASSERT_EQ(cache->getNumCachedChunks(), 1U);
-  ASSERT_TRUE(fsm->hasDataWrapperForChunk(key));
+  ASSERT_EQ(cache_->getNumCachedChunks(), 1U);
+  ASSERT_TRUE(psm_->getForeignStorageMgr()->hasDataWrapperForChunk(key));
 
   sqlDropForeignTable();
 }
 
 TEST_F(RecoverCacheQueryTest, RecoverThenPopulateDataWrappersOnDemandVarLen) {
-  auto cat = &getCatalog();
-  auto fsm = cat->getDataMgr().getForeignStorageMgr();
-  auto cache = fsm->getForeignStorageCache();
-
   sqlDropForeignTable();
   std::string query = "CREATE FOREIGN TABLE " + default_table_name +
                       " (t TEXT, i INTEGER[]) "s +
                       "SERVER omnisci_local_csv WITH (file_path = '" +
                       getDataFilesPath() + "/" + "example_1_dir_archives/');";
   sql(query);
-  auto td = cat->getMetadataForTable(default_table_name);
-  ChunkKey key{cat->getCurrentDB().dbId, td->tableId, 1, 0};
-  ChunkKey table_key{cat->getCurrentDB().dbId, td->tableId};
+  auto td = cat_->getMetadataForTable(default_table_name);
+  ChunkKey key{cat_->getCurrentDB().dbId, td->tableId, 1, 0};
+  ChunkKey table_key{cat_->getCurrentDB().dbId, td->tableId};
 
   sqlAndCompareResult("SELECT COUNT(*) FROM " + default_table_name + ";", {{i(3)}});
   ASSERT_FALSE(isTableDatawrapperRestored(default_table_name));
 
   // Reset cache and clear memory representations.
   resetStorageManagerAndClearTableMemory(table_key);
-  fsm = cat->getDataMgr().getForeignStorageMgr();
-  cache = fsm->getForeignStorageCache();
 
   // Cache should be empty until query prompts recovery from disk
-  ASSERT_EQ(cache->getNumCachedMetadata(), 0U);
-  ASSERT_EQ(cache->getNumCachedChunks(), 0U);
+  ASSERT_EQ(cache_->getNumCachedMetadata(), 0U);
+  ASSERT_EQ(cache_->getNumCachedChunks(), 0U);
 
   ASSERT_TRUE(isTableDatawrapperDataOnDisk(default_table_name));
   ASSERT_TRUE(compareTableDatawrapperMetadataToFile(
@@ -3159,9 +3200,9 @@ TEST_F(RecoverCacheQueryTest, RecoverThenPopulateDataWrappersOnDemandVarLen) {
                        {"aaa", array({i(3), Null_i, i(3)})}});
 
   // 2 data + 1 index chunk
-  ASSERT_EQ(cache->getNumCachedChunks(), 3U);
+  ASSERT_EQ(cache_->getNumCachedChunks(), 3U);
   // Only 2 metadata
-  ASSERT_EQ(cache->getNumCachedMetadata(), 2U);
+  ASSERT_EQ(cache_->getNumCachedMetadata(), 2U);
 
   ASSERT_TRUE(isTableDatawrapperRestored(default_table_name));
   sqlDropForeignTable();
@@ -3170,19 +3211,15 @@ TEST_F(RecoverCacheQueryTest, RecoverThenPopulateDataWrappersOnDemandVarLen) {
 // Check that csv datawrapper metadata is generated and restored correctly for CSV
 // Archives
 TEST_F(RecoverCacheQueryTest, RecoverThenPopulateDataWrappersOnDemandFromCsvArchive) {
-  auto cat = &getCatalog();
-  auto fsm = cat->getDataMgr().getForeignStorageMgr();
-  auto cache = fsm->getForeignStorageCache();
-
   sqlDropForeignTable();
   std::string query = "CREATE FOREIGN TABLE " + default_table_name +
                       " (t TEXT, i INTEGER[]) "s +
                       "SERVER omnisci_local_csv WITH (file_path = '" +
                       getDataFilesPath() + "/" + "example_1_multilevel.zip');";
   sql(query);
-  auto td = cat->getMetadataForTable(default_table_name);
-  ChunkKey key{cat->getCurrentDB().dbId, td->tableId, 1, 0};
-  ChunkKey table_key{cat->getCurrentDB().dbId, td->tableId};
+  auto td = cat_->getMetadataForTable(default_table_name);
+  ChunkKey key{cat_->getCurrentDB().dbId, td->tableId, 1, 0};
+  ChunkKey table_key{cat_->getCurrentDB().dbId, td->tableId};
 
   sqlAndCompareResult("SELECT COUNT(*) FROM " + default_table_name + ";", {{i(3)}});
 
@@ -3194,21 +3231,19 @@ TEST_F(RecoverCacheQueryTest, RecoverThenPopulateDataWrappersOnDemandFromCsvArch
 
   // Reset cache and clear memory representations.
   resetStorageManagerAndClearTableMemory(table_key);
-  fsm = cat->getDataMgr().getForeignStorageMgr();
-  cache = fsm->getForeignStorageCache();
 
   // Cache should be empty until query prompts recovery from disk
-  ASSERT_EQ(cache->getNumCachedMetadata(), 0U);
-  ASSERT_EQ(cache->getNumCachedChunks(), 0U);
+  ASSERT_EQ(cache_->getNumCachedMetadata(), 0U);
+  ASSERT_EQ(cache_->getNumCachedChunks(), 0U);
 
   sqlAndCompareResult("SELECT * FROM " + default_table_name + "  ORDER BY t;",
                       {{"a", array({i(1), i(1), i(1)})},
                        {"aa", array({Null_i, i(2), i(2)})},
                        {"aaa", array({i(3), Null_i, i(3)})}});
   // 2 columns
-  ASSERT_EQ(cache->getNumCachedMetadata(), 2U);
+  ASSERT_EQ(cache_->getNumCachedMetadata(), 2U);
   // extra chunk for varlen
-  ASSERT_EQ(cache->getNumCachedChunks(), 3U);
+  ASSERT_EQ(cache_->getNumCachedChunks(), 3U);
 
   ASSERT_TRUE(isTableDatawrapperRestored(default_table_name));
   sqlDropForeignTable();
@@ -3217,9 +3252,6 @@ TEST_F(RecoverCacheQueryTest, RecoverThenPopulateDataWrappersOnDemandFromCsvArch
 // Check that csv datawrapper metadata is generated and restored correctly when appending
 // data
 TEST_F(RecoverCacheQueryTest, AppendData) {
-  auto cat = &getCatalog();
-  auto fsm = cat->getDataMgr().getForeignStorageMgr();
-  auto cache = fsm->getForeignStorageCache();
   int fragment_size = 2;
   std::string filename = "dir_file_multi";
   sqlDropForeignTable();
@@ -3236,9 +3268,9 @@ TEST_F(RecoverCacheQueryTest, AppendData) {
                       "', REFRESH_UPDATE_TYPE = 'APPEND');";
   sql(query);
 
-  auto td = cat->getMetadataForTable(default_table_name);
-  ChunkKey key{cat->getCurrentDB().dbId, td->tableId, 1, 0};
-  ChunkKey table_key{cat->getCurrentDB().dbId, td->tableId};
+  auto td = cat_->getMetadataForTable(default_table_name);
+  ChunkKey key{cat_->getCurrentDB().dbId, td->tableId, 1, 0};
+  ChunkKey table_key{cat_->getCurrentDB().dbId, td->tableId};
 
   std::string select = "SELECT * FROM "s + default_table_name + " ORDER BY i;";
   // Read from table
@@ -3250,12 +3282,10 @@ TEST_F(RecoverCacheQueryTest, AppendData) {
 
   // Reset cache and clear memory representations.
   resetStorageManagerAndClearTableMemory(table_key);
-  fsm = cat->getDataMgr().getForeignStorageMgr();
-  cache = fsm->getForeignStorageCache();
 
   // Cache should be empty until query prompts recovery from disk
-  ASSERT_EQ(cache->getNumCachedMetadata(), 0U);
-  ASSERT_EQ(cache->getNumCachedChunks(), 0U);
+  ASSERT_EQ(cache_->getNumCachedMetadata(), 0U);
+  ASSERT_EQ(cache_->getNumCachedChunks(), 0U);
 
   // Modify tables on disk
   bf::remove_all(getDataFilesPath() + "append_tmp");
@@ -3590,10 +3620,12 @@ TEST_F(ScheduledRefreshTest, DISABLED_PreEvictionError) {
   setTestFile("0.csv");
   auto query = getCreateScheduledRefreshTableQuery("1S");
   sql(query);
+
   sqlAndCompareResult("SELECT * FROM test_foreign_table;", {{i(0)}});
 
   auto& catalog = getCatalog();
-  auto foreign_storage_mgr = catalog.getDataMgr().getForeignStorageMgr();
+  auto foreign_storage_mgr =
+      catalog.getDataMgr().getPersistentStorageMgr()->getForeignStorageMgr();
   auto table = catalog.getMetadataForTable("test_foreign_table", false);
 
   auto mock_data_wrapper = std::make_shared<MockDataWrapper>();
@@ -3620,7 +3652,8 @@ TEST_F(ScheduledRefreshTest, DISABLED_PostEvictionError) {
   sqlAndCompareResult("SELECT * FROM test_foreign_table;", {{i(0)}});
 
   auto& catalog = getCatalog();
-  auto foreign_storage_mgr = catalog.getDataMgr().getForeignStorageMgr();
+  auto foreign_storage_mgr =
+      catalog.getDataMgr().getPersistentStorageMgr()->getForeignStorageMgr();
   auto table = catalog.getMetadataForTable("test_foreign_table", false);
 
   auto mock_data_wrapper = std::make_shared<MockDataWrapper>();

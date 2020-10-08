@@ -118,7 +118,6 @@ class GlobalFileMgr : public AbstractBufferMgr {  // implements
 
   void init();
 
-  void getChunkMetadataVec(ChunkMetadataVector& chunkMetadataVec) override;
   void getChunkMetadataVecForKeyPrefix(ChunkMetadataVector& chunkMetadataVec,
                                        const ChunkKey& keyPrefix) override {
     return getFileMgr(keyPrefix)->getChunkMetadataVecForKeyPrefix(chunkMetadataVec,

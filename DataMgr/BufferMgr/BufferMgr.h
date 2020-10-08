@@ -167,7 +167,6 @@ class BufferMgr : public AbstractBufferMgr {  // implements
 
   BufferList::iterator reserveBuffer(BufferList::iterator& seg_it,
                                      const size_t num_bytes);
-  void getChunkMetadataVec(ChunkMetadataVector& chunk_metadata_vec) override;
   void getChunkMetadataVecForKeyPrefix(ChunkMetadataVector& chunk_metadata_vec,
                                        const ChunkKey& key_prefix) override;
 

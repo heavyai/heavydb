@@ -174,7 +174,7 @@ class DBHandlerTestFixture : public testing::Test {
 
   static void TearDownTestSuite() {}
 
-  static void createDBHandler(bool disk_cache_enabled = true) {
+  static void createDBHandler(DiskCacheLevel cache_level = DiskCacheLevel::fsi) {
     if (!db_handler_) {
       // Based on default values observed from starting up an OmniSci DB server.
       const bool cpu_only{false};
@@ -202,7 +202,7 @@ class DBHandlerTestFixture : public testing::Test {
       system_parameters_.calcite_port = 3280;
 
       DiskCacheConfig disk_cache_config{std::string(BASE_PATH) + "/omnisci_disk_cache",
-                                        disk_cache_enabled};
+                                        cache_level};
       db_handler_ = std::make_unique<DBHandler>(db_leaves_,
                                                 string_leaves_,
                                                 BASE_PATH,

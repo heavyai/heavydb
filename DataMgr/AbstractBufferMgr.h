@@ -80,7 +80,6 @@ class AbstractBufferMgr {
   virtual AbstractBuffer* putBuffer(const ChunkKey& key,
                                     AbstractBuffer* srcBuffer,
                                     const size_t numBytes = 0) = 0;
-  virtual void getChunkMetadataVec(ChunkMetadataVector& chunkMetadata) = 0;
   virtual void getChunkMetadataVecForKeyPrefix(ChunkMetadataVector& chunkMetadataVec,
                                                const ChunkKey& keyPrefix) = 0;
 

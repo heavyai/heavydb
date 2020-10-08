@@ -638,7 +638,7 @@ FileBuffer* FileMgr::createBufferUnlocked(const ChunkKey& key,
   // FileBuffer yet)
 
   if (chunkIndex_.find(key) != chunkIndex_.end()) {
-    LOG(FATAL) << "Chunk already exists for key: " << showChunk(key);
+    LOG(FATAL) << "Chunk already exists for key: " << show_chunk(key);
   }
   chunkIndex_[key] = new FileBuffer(this, actualPageSize, key, numBytes);
   return (chunkIndex_[key]);
@@ -654,7 +654,7 @@ void FileMgr::deleteBuffer(const ChunkKey& key, const bool purge) {
   auto chunkIt = chunkIndex_.find(key);
   // ensure the Chunk exists
   if (chunkIt == chunkIndex_.end()) {
-    LOG(FATAL) << "Chunk does not exist for key: " << showChunk(key);
+    LOG(FATAL) << "Chunk does not exist for key: " << show_chunk(key);
   }
   chunkIndexWriteLock.unlock();
   // chunkIt->second->writeMetadata(-1); // writes -1 as epoch - signifies deleted
@@ -696,9 +696,8 @@ void FileMgr::deleteBuffersWithPrefix(const ChunkKey& keyPrefix, const bool purg
 FileBuffer* FileMgr::getBuffer(const ChunkKey& key, const size_t numBytes) {
   mapd_shared_lock<mapd_shared_mutex> chunkIndexReadLock(chunkIndexMutex_);
   auto chunkIt = chunkIndex_.find(key);
-  if (chunkIt == chunkIndex_.end()) {
-    LOG(FATAL) << "Chunk does not exist for key: " << showChunk(key);
-  }
+  CHECK(chunkIt != chunkIndex_.end())
+      << "Chunk does not exist for key: " << show_chunk(key);
   return chunkIt->second;
 }
 
@@ -710,12 +709,12 @@ void FileMgr::fetchBuffer(const ChunkKey& key,
   if (destBuffer->isDirty()) {
     LOG(FATAL)
         << "Aborting attempt to fetch a chunk marked dirty. Chunk inconsistency for key: "
-        << showChunk(key);
+        << show_chunk(key);
   }
   mapd_shared_lock<mapd_shared_mutex> chunkIndexReadLock(chunkIndexMutex_);
   auto chunkIt = chunkIndex_.find(key);
   if (chunkIt == chunkIndex_.end()) {
-    LOG(FATAL) << "Chunk does not exist for key: " << showChunk(key);
+    LOG(FATAL) << "Chunk does not exist for key: " << show_chunk(key);
   }
   chunkIndexReadLock.unlock();
 
@@ -723,7 +722,7 @@ void FileMgr::fetchBuffer(const ChunkKey& key,
   // chunk's size is either specified in function call with numBytes or we
   // just look at pageSize * numPages in FileBuffer
   if (numBytes > 0 && numBytes > chunk->size()) {
-    LOG(FATAL) << "Chunk retrieved for key `" << showChunk(key) << "` is smaller ("
+    LOG(FATAL) << "Chunk retrieved for key `" << show_chunk(key) << "` is smaller ("
                << chunk->size() << ") than number of bytes requested (" << numBytes
                << ")";
   }
@@ -754,7 +753,7 @@ FileBuffer* FileMgr::putBuffer(const ChunkKey& key,
     if (srcBuffer->isUpdated() && chunk->isUpdated()) {
       LOG(FATAL) << "Aborting attempt to write a chunk marked dirty. Chunk inconsistency "
                     "for key: "
-                 << showChunk(key);
+                 << show_chunk(key);
     }
   }
   if (srcBuffer->isUpdated()) {
@@ -918,26 +917,6 @@ FileInfo* FileMgr::createFile(const size_t pageSize, const size_t numPages) {
 FILE* FileMgr::getFileForFileId(const int fileId) {
   CHECK(fileId >= 0 && static_cast<size_t>(fileId) < files_.size());
   return files_[fileId]->f;
-}
-/*
-void FileMgr::getAllChunkMetaInfo(std::vector<std::pair<ChunkKey, int64_t> > &metadata) {
-    metadata.reserve(chunkIndex_.size());
-    for (auto chunkIt = chunkIndex_.begin(); chunkIt != chunkIndex_.end(); ++chunkIt) {
-        metadata.push_back(std::make_pair(chunkIt->first,
-chunkIt->second->encoder->numElems));
-    }
-}
-*/
-void FileMgr::getChunkMetadataVec(ChunkMetadataVector& chunkMetadataVec) {
-  mapd_unique_lock<mapd_shared_mutex> chunkIndexWriteLock(chunkIndexMutex_);
-  chunkMetadataVec.reserve(chunkIndex_.size());
-  for (auto chunkIt = chunkIndex_.begin(); chunkIt != chunkIndex_.end(); ++chunkIt) {
-    if (chunkIt->second->hasEncoder()) {
-      auto chunk_metadata = std::make_shared<ChunkMetadata>();
-      chunkIt->second->encoder_->getMetadata(chunk_metadata);
-      chunkMetadataVec.emplace_back(chunkIt->first, chunk_metadata);
-    }
-  }
 }
 
 void FileMgr::getChunkMetadataVecForKeyPrefix(ChunkMetadataVector& chunkMetadataVec,

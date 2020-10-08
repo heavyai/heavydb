@@ -316,14 +316,15 @@ void CommandLineOptions::fillOptions() {
   help_desc.add_options()("encryption-key-store",
                           po::value<std::string>(&encryption_key_store_path),
                           "Path to directory where encryption related keys will reside.");
+  help_desc.add_options()("disk-cache-level",
+                          po::value<std::string>(&(disk_cache_level))
+                              ->default_value("fsi")
+                              ->implicit_value("fsi"),
+                          "Specify level of disk cache.  Valid options are 'fsi', "
+                          "'non_fsi, 'none', and 'all'.");
   help_desc.add_options()("disk-cache-path",
                           po::value<std::string>(&disk_cache_config.path),
                           "Specify the path for the disk cache.");
-  help_desc.add_options()("enable-disk-cache",
-                          po::value<bool>(&(disk_cache_config.is_enabled))
-                              ->default_value(true)
-                              ->implicit_value(true),
-                          "Enable caching of table data on disk.");
   help_desc.add_options()(
       "disk-cache-size-limit",
       po::value<std::size_t>(&(disk_cache_config.size_limit)),
@@ -758,12 +759,33 @@ void CommandLineOptions::validate() {
   ddl_utils::FilePathBlacklist::addToBlacklist(base_path + "/mapd_data");
   ddl_utils::FilePathBlacklist::addToBlacklist(base_path + "/mapd_log");
 
-  if (g_enable_fsi) {
-    if (disk_cache_config.path.empty()) {
-      disk_cache_config.path = base_path + "/omnisci_disk_cache";
+  if (disk_cache_level == "fsi") {
+    if (g_enable_fsi) {
+      disk_cache_config.enabled_level = DiskCacheLevel::fsi;
+      LOG(INFO) << "Disk cache enabled for foreign tables only";
+    } else {
+      LOG(INFO) << "Cannot enable disk cache for fsi when fsi is disabled.  Defaulted to "
+                   "disk cache disabled";
     }
-    ddl_utils::FilePathBlacklist::addToBlacklist(disk_cache_config.path);
+  } else if (disk_cache_level == "all") {
+    disk_cache_config.enabled_level = DiskCacheLevel::all;
+    LOG(INFO) << "Disk cache enabled for all tables";
+  } else if (disk_cache_level == "non_fsi") {
+    disk_cache_config.enabled_level = DiskCacheLevel::non_fsi;
+    LOG(INFO) << "Disk cache enabled for non-FSI tables";
+  } else if (disk_cache_level == "none") {
+    disk_cache_config.enabled_level = DiskCacheLevel::none;
+    LOG(INFO) << "Disk cache disabled";
+  } else {
+    disk_cache_config.enabled_level = DiskCacheLevel::none;
+    LOG(INFO) << "Non-recognized value for disk-cache-level {" << disk_cache_level
+              << "}.  Defaulted to disk cache disabled";
   }
+
+  if (disk_cache_config.path.empty()) {
+    disk_cache_config.path = base_path + "/omnisci_disk_cache";
+  }
+  ddl_utils::FilePathBlacklist::addToBlacklist(disk_cache_config.path);
 
   ddl_utils::FilePathBlacklist::addToBlacklist("/etc/passwd");
   ddl_utils::FilePathBlacklist::addToBlacklist("/etc/shadow");

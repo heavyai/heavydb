@@ -107,7 +107,7 @@ FileBuffer::FileBuffer(FileMgr* fm,
       if (curPageId != lastPageId) {
         // protect from bad data on disk, and give diagnostics
         if (curPageId != lastPageId + 1) {
-          LOG(FATAL) << "Failure reading DB file " << showChunk(chunkKey)
+          LOG(FATAL) << "Failure reading DB file " << show_chunk(chunkKey)
                      << " Current page " << curPageId << " last page " << lastPageId
                      << " epoch " << vecIt->versionEpoch;
         }

@@ -151,8 +151,6 @@ class ForeignStorageBufferMgr : public Data_Namespace::AbstractBufferMgr {
     return nullptr;
   }
 
-  void getChunkMetadataVec(ChunkMetadataVector& chunkMetadata) override { CHECK(false); }
-
   bool isBufferOnDevice(const ChunkKey& key) override {
     CHECK(false);
     return false;

@@ -14,6 +14,7 @@ set(datamgr_source_files
     FileMgr/FileInfo.cpp
     ForeignStorage/ArrowCsvForeignStorage.cpp
     ForeignStorage/CsvDataWrapper.cpp
+    ForeignStorage/CachingForeignStorageMgr.cpp
     ForeignStorage/DummyForeignStorage.cpp
     ForeignStorage/ForeignStorageInterface.cpp
     ForeignStorage/ForeignStorageBuffer.cpp
@@ -28,10 +29,8 @@ set(datamgr_source_files
     BufferMgr/CpuBufferMgr/CpuBuffer.cpp
     BufferMgr/BufferMgr.cpp
     BufferMgr/Buffer.cpp
-    ForeignStorage/ForeignStorageBuffer.cpp
-    ForeignStorage/ForeignStorageMgr.cpp
-    ForeignStorage/CsvDataWrapper.cpp
     ForeignStorage/ParquetDataWrapper.cpp
+    PersistentStorageMgr/MutableCachePersistentStorageMgr.cpp
     PersistentStorageMgr/PersistentStorageMgr.cpp
     ForeignStorage/LazyParquetImporter.cpp
     ForeignStorage/LazyParquetChunkLoader.cpp

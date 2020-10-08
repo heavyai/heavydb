@@ -179,6 +179,8 @@ class Catalog final {
   const LinkDescriptor* getMetadataForLink(const std::string& link) const;
   const LinkDescriptor* getMetadataForLink(int linkId) const;
 
+  const foreign_storage::ForeignTable* getForeignTableUnlocked(int tableId) const;
+
   /**
    * @brief Returns a list of pointers to constant ColumnDescriptor structs for all the
    * columns from a particular table specified by table id

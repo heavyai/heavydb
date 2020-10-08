@@ -41,36 +41,36 @@ using ChunkKey = std::vector<int>;
 #define CHUNK_KEY_COLUMN_IDX 2
 #define CHUNK_KEY_FRAGMENT_IDX 3
 
-inline bool hasTableKey(const ChunkKey& key) {
-  return key.size() >= 2;
-}
-
-inline ChunkKey getTableKey(const ChunkKey& key) {
-  CHECK(hasTableKey(key));
-  return ChunkKey{key[CHUNK_KEY_DB_IDX], key[CHUNK_KEY_TABLE_IDX]};
-}
-
-inline bool isTableKey(const ChunkKey& key) {
+inline bool is_table_key(const ChunkKey& key) {
   return key.size() == 2;
 }
 
-inline bool isColumnKey(const ChunkKey& key) {
+inline bool has_table_prefix(const ChunkKey& key) {
+  return key.size() >= 2;
+}
+
+inline ChunkKey get_table_key(const ChunkKey& key) {
+  CHECK(has_table_prefix(key));
+  return ChunkKey{key[CHUNK_KEY_DB_IDX], key[CHUNK_KEY_TABLE_IDX]};
+}
+
+inline bool is_column_key(const ChunkKey& key) {
   return key.size() == 3;
 }
 
-inline bool isVarLenKey(const ChunkKey& key) {
+inline bool is_varlen_key(const ChunkKey& key) {
   return key.size() == 5;
 }
 
-inline bool isVarLenDataKey(const ChunkKey& key) {
+inline bool is_varlen_data_key(const ChunkKey& key) {
   return key.size() == 5 && key[4] == 1;
 }
 
-inline bool isVarLenIndexKey(const ChunkKey& key) {
+inline bool is_varlen_index_key(const ChunkKey& key) {
   return key.size() == 5 && key[4] == 2;
 }
 
-inline std::string showChunk(const ChunkKey& key) {
+inline std::string show_chunk(const ChunkKey& key) {
   std::ostringstream tss;
   for (auto vecIt = key.begin(); vecIt != key.end(); ++vecIt) {
     tss << *vecIt << ",";

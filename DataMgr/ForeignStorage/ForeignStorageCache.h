@@ -38,11 +38,20 @@ class CacheTooSmallException : public std::runtime_error {
   CacheTooSmallException(const std::string& msg) : std::runtime_error(msg) {}
 };
 
+enum class DiskCacheLevel { none, fsi, non_fsi, all };
 struct DiskCacheConfig {
   std::string path;
-  bool is_enabled = false;
+  DiskCacheLevel enabled_level = DiskCacheLevel::none;
   uint64_t size_limit = 21474836480;  // 20GB default
   size_t num_reader_threads = 0;
+  inline bool isEnabledForMutableTables() const {
+    return enabled_level == DiskCacheLevel::non_fsi ||
+           enabled_level == DiskCacheLevel::all;
+  }
+  inline bool isEnabledForFSI() const {
+    return enabled_level == DiskCacheLevel::fsi || enabled_level == DiskCacheLevel::all;
+  }
+  inline bool isEnabled() const { return enabled_level != DiskCacheLevel::none; }
 };
 
 using namespace Data_Namespace;
@@ -58,9 +67,7 @@ struct TableEvictionTracker {
 
 class ForeignStorageCache {
  public:
-  ForeignStorageCache(const std::string& cache_dir,
-                      const size_t num_reader_threads,
-                      const uint64_t limit);
+  ForeignStorageCache(const DiskCacheConfig& config);
 
   /**
    * Caches the chunks for the given chunk keys. Chunk buffers
@@ -71,6 +78,7 @@ class ForeignStorageCache {
    * @param chunk_keys - keys of chunks to be cached
    */
   void cacheTableChunks(const std::vector<ChunkKey>& chunk_keys);
+  void cacheChunk(const ChunkKey&, AbstractBuffer*);
 
   AbstractBuffer* getCachedChunkIfExists(const ChunkKey&);
   bool isMetadataCached(const ChunkKey&) const;
@@ -84,6 +92,7 @@ class ForeignStorageCache {
   bool recoverCacheForTable(ChunkMetadataVector&, const ChunkKey&);
   std::map<ChunkKey, AbstractBuffer*> getChunkBuffersForCaching(
       const std::vector<ChunkKey>& chunk_keys) const;
+  void deleteBufferIfExists(const ChunkKey& chunk_key);
 
   // Exists for testing purposes.
   inline uint64_t getLimit() const {
@@ -103,7 +112,10 @@ class ForeignStorageCache {
     return global_file_mgr_.get();
   }
 
-  std::string getCacheDirectoryForTablePrefix(const ChunkKey&);
+  std::string getCacheDirectoryForTablePrefix(const ChunkKey&) const;
+  void cacheMetadataWithFragIdGreaterOrEqualTo(const ChunkMetadataVector& metadata_vec,
+                                               const int frag_id);
+  void evictThenEraseChunk(const ChunkKey&);
 
  private:
   // These methods are private and assume locks are already acquired when called.
@@ -111,9 +123,9 @@ class ForeignStorageCache {
   void eraseChunk(const ChunkKey&, TableEvictionTracker& tracker);
   std::set<ChunkKey>::iterator eraseChunkByIterator(
       const std::set<ChunkKey>::iterator& chunk_it);
-  void evictThenEraseChunk(const ChunkKey&);
+  void evictThenEraseChunkUnlocked(const ChunkKey&);
   void validatePath(const std::string&) const;
-  void cacheChunk(const ChunkKey&);
+  bool insertChunkIntoEvictionAlg(const ChunkKey&, const size_t);
   void createTrackerMapEntryIfNoneExists(const ChunkKey& chunk_key);
 
   std::map<const ChunkKey, TableEvictionTracker> eviction_tracker_map_;

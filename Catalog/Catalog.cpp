@@ -1673,6 +1673,15 @@ const LinkDescriptor* Catalog::getMetadataForLink(int linkId) const {
   return linkDescIt->second;
 }
 
+const foreign_storage::ForeignTable* Catalog::getForeignTableUnlocked(
+    int table_id) const {
+  auto table = getMetadataForTableImpl(table_id, false);
+  CHECK(table);
+  auto foreign_table = dynamic_cast<const foreign_storage::ForeignTable*>(table);
+  CHECK(foreign_table);
+  return foreign_table;
+}
+
 void Catalog::getAllColumnMetadataForTableImpl(
     const TableDescriptor* td,
     list<const ColumnDescriptor*>& columnDescriptors,

@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 #include "DBHandlerTestHelpers.h"
+#include "DataMgr/PersistentStorageMgr/MutableCachePersistentStorageMgr.h"
 #include "DataMgr/PersistentStorageMgr/PersistentStorageMgr.h"
 #include "DataMgrTestHelpers.h"
 #include "TestHelpers.h"
@@ -36,15 +37,18 @@ class PersistentStorageMgrTest : public testing::Test {
 };
 
 TEST_F(PersistentStorageMgrTest, DiskCache_CustomPath) {
-  DiskCacheConfig disk_cache_config{cache_path_, true};
-  PersistentStorageMgr psm(data_path, 0, disk_cache_config);
+  PersistentStorageMgr psm(data_path, 0, {cache_path_, DiskCacheLevel::fsi});
   ASSERT_EQ(psm.getDiskCache()->getGlobalFileMgr()->getBasePath(), cache_path_ + "/");
 }
 
 TEST_F(PersistentStorageMgrTest, DiskCache_InitializeWithoutCache) {
-  DiskCacheConfig disk_cache_config;
-  PersistentStorageMgr psm(data_path, 0, disk_cache_config);
-  ASSERT_EQ(psm.getForeignStorageMgr()->getForeignStorageCache(), nullptr);
+  PersistentStorageMgr psm(data_path, 0, {});
+  ASSERT_EQ(psm.getDiskCache(), nullptr);
+}
+
+TEST_F(PersistentStorageMgrTest, MutableDiskCache_CustomPath) {
+  MutableCachePersistentStorageMgr psm(data_path, 0, {cache_path_, DiskCacheLevel::all});
+  ASSERT_EQ(psm.getDiskCache()->getGlobalFileMgr()->getBasePath(), cache_path_ + "/");
 }
 
 int main(int argc, char** argv) {

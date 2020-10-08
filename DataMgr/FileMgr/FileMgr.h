@@ -182,7 +182,6 @@ class FileMgr : public AbstractBufferMgr {  // implements
                         std::vector<Page>& pages,
                         const bool isMetadata);
 
-  void getChunkMetadataVec(ChunkMetadataVector& chunkMetadataVec) override;
   void getChunkMetadataVecForKeyPrefix(ChunkMetadataVector& chunkMetadataVec,
                                        const ChunkKey& keyPrefix) override;
 

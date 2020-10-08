@@ -1,3 +1,4 @@
+
 /*
  * Copyright 2020 OmniSci, Inc.
  *
@@ -20,12 +21,10 @@
 
 #include "DataMgr/AbstractBufferMgr.h"
 #include "ForeignDataWrapper.h"
-#include "ForeignStorageCache.h"
 #include "Shared/mapd_shared_mutex.h"
 
 using namespace Data_Namespace;
 
-namespace foreign_storage {
 class PostEvictionRefreshException : public std::runtime_error {
  public:
   PostEvictionRefreshException() = delete;
@@ -40,6 +39,8 @@ class PostEvictionRefreshException : public std::runtime_error {
   std::runtime_error original_exception_;
 };
 
+namespace foreign_storage {
+
 // For testing purposes only
 class MockForeignDataWrapper : public ForeignDataWrapper {
  public:
@@ -49,7 +50,7 @@ class MockForeignDataWrapper : public ForeignDataWrapper {
 
 class ForeignStorageMgr : public AbstractBufferMgr {
  public:
-  ForeignStorageMgr(ForeignStorageCache* fsc = nullptr);
+  ForeignStorageMgr();
 
   AbstractBuffer* createBuffer(const ChunkKey& chunk_key,
                                const size_t page_size,
@@ -65,12 +66,7 @@ class ForeignStorageMgr : public AbstractBufferMgr {
                             AbstractBuffer* source_buffer,
                             const size_t num_bytes) override;
   /*
-    Obtains (and caches) chunk-metadata for all existing data wrappers, but will not
-    create new ones.
-   */
-  void getChunkMetadataVec(ChunkMetadataVector& chunk_metadata) override;
-  /*
-    Obtains and caches chunk-metadata relating to a prefix.  Will create and use new
+    Obtains chunk-metadata relating to a prefix.  Will create and use new
     datawrappers if none are found for the given prefix.
    */
   void getChunkMetadataVecForKeyPrefix(ChunkMetadataVector& chunk_metadata,
@@ -90,39 +86,35 @@ class ForeignStorageMgr : public AbstractBufferMgr {
   std::string getStringMgrType() override;
   size_t getNumChunks() override;
   void removeTableRelatedDS(const int db_id, const int table_id) override;
-  ForeignStorageCache* getForeignStorageCache() const;
-  void refreshTable(const ChunkKey& table_key, const bool evict_cached_entries);
   bool hasDataWrapperForChunk(const ChunkKey& chunk_key);
 
   // For testing, is datawrapper state recovered from disk
   bool isDatawrapperRestored(const ChunkKey& chunk_key);
-
-  // For testing purposes only
   void setDataWrapper(const ChunkKey& table_key,
                       std::shared_ptr<MockForeignDataWrapper> data_wrapper);
 
- private:
+  virtual void refreshTable(const ChunkKey& table_key, const bool evict_cached_entries);
+
+ protected:
   bool createDataWrapperIfNotExists(const ChunkKey& chunk_key);
-  bool recoverDataWrapperFromDisk(const ChunkKey& chunk_key);
   std::shared_ptr<ForeignDataWrapper> getDataWrapper(const ChunkKey& chunk_key);
-  std::map<ChunkKey, AbstractBuffer*> getChunkBuffersToPopulate(
-      const ChunkKey& chunk_key,
-      AbstractBuffer* destination_buffer,
-      std::vector<ChunkKey>& chunk_keys);
-  void refreshTableInCache(const ChunkKey& table_key);
-  void evictTableFromCache(const ChunkKey& table_key);
+  bool fetchBufferIfTempBufferMapEntryExists(const ChunkKey& chunk_key,
+                                             AbstractBuffer* destination_buffer,
+                                             const size_t num_bytes);
+  void createAndPopulateDataWrapperIfNotExists(const ChunkKey& chunk_key);
+  std::map<ChunkKey, AbstractBuffer*> allocateTempBuffersForChunks(
+      const std::set<ChunkKey>& chunk_keys);
   void clearTempChunkBufferMapEntriesForTable(const ChunkKey& table_key);
 
   std::shared_mutex data_wrapper_mutex_;
-
   std::map<ChunkKey, std::shared_ptr<ForeignDataWrapper>> data_wrapper_map_;
 
   // TODO: Remove below map, which is used to temporarily hold chunk buffers,
   // when buffer mgr interface is updated to accept multiple buffers in one call
   std::map<ChunkKey, std::unique_ptr<AbstractBuffer>> temp_chunk_buffer_map_;
   std::shared_mutex temp_chunk_buffer_map_mutex_;
-
-  ForeignStorageCache* foreign_storage_cache_;
-  bool is_cache_enabled_;
 };
+
+std::vector<ChunkKey> get_keys_vec_from_table(const ChunkKey& destination_chunk_key);
+std::set<ChunkKey> get_keys_set_from_table(const ChunkKey& destination_chunk_key);
 }  // namespace foreign_storage

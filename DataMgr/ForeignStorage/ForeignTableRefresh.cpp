@@ -23,8 +23,6 @@ void refresh_foreign_table(Catalog_Namespace::Catalog& catalog,
                            const std::string& table_name,
                            const bool evict_cached_entries) {
   auto& data_mgr = catalog.getDataMgr();
-  auto foreign_storage_mgr = data_mgr.getForeignStorageMgr();
-
   auto table_lock =
       std::make_unique<lockmgr::TableSchemaLockContainer<lockmgr::WriteLock>>(
           lockmgr::TableSchemaLockContainer<lockmgr::WriteLock>::acquireTableDescriptor(
@@ -36,13 +34,15 @@ void refresh_foreign_table(Catalog_Namespace::Catalog& catalog,
         table_name +
         " is not a foreign table. Refreshes are applicable to only foreign tables."};
   }
+
   catalog.removeFragmenterForTable(td->tableId);
   ChunkKey table_key{catalog.getCurrentDB().dbId, td->tableId};
   data_mgr.deleteChunksWithPrefix(table_key, MemoryLevel::CPU_LEVEL);
   data_mgr.deleteChunksWithPrefix(table_key, MemoryLevel::GPU_LEVEL);
 
   try {
-    foreign_storage_mgr->refreshTable(table_key, evict_cached_entries);
+    data_mgr.getPersistentStorageMgr()->getForeignStorageMgr()->refreshTable(
+        table_key, evict_cached_entries);
     catalog.updateForeignTableRefreshTimes(td->tableId);
   } catch (PostEvictionRefreshException& e) {
     catalog.updateForeignTableRefreshTimes(td->tableId);

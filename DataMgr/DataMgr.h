@@ -27,8 +27,8 @@
 #include "AbstractBufferMgr.h"
 #include "BufferMgr/Buffer.h"
 #include "BufferMgr/BufferMgr.h"
-#include "ForeignStorage/ForeignStorageMgr.h"
 #include "MemoryLevel.h"
+#include "PersistentStorageMgr/PersistentStorageMgr.h"
 
 #include <iomanip>
 #include <iostream>
@@ -198,7 +198,6 @@ class DataMgr {
   const std::map<ChunkKey, File_Namespace::FileBuffer*>& getChunkMap();
   void checkpoint(const int db_id,
                   const int tb_id);  // checkpoint for individual table of DB
-  void getChunkMetadataVec(ChunkMetadataVector& chunkMetadataVec);
   void getChunkMetadataVecForKeyPrefix(ChunkMetadataVector& chunkMetadataVec,
                                        const ChunkKey& keyPrefix);
   inline bool gpusPresent() { return hasGpus_; }
@@ -225,7 +224,7 @@ class DataMgr {
   SystemMemoryUsage getSystemMemoryUsage() const;
   static size_t getTotalSystemMemory();
 
-  foreign_storage::ForeignStorageMgr* getForeignStorageMgr() const;
+  PersistentStorageMgr* getPersistentStorageMgr() const;
   void resetPersistentStorage(const DiskCacheConfig& cache_config,
                               const size_t num_reader_threads,
                               const SystemParameters& sys_params);

@@ -79,6 +79,7 @@ class CommandLineOptions {
   bool use_estimator_result_cache = true;
   unsigned runtime_query_interrupt_frequency = 1000;  // in milliseconds
   unsigned dynamic_watchdog_time_limit = 10000;
+  std::string disk_cache_level = "";
 
   /**
    * Can be used to override the number of gpus detected on the system

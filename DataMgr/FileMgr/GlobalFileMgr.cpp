@@ -107,20 +107,6 @@ void GlobalFileMgr::deleteBuffersWithPrefix(const ChunkKey& keyPrefix, const boo
   }
 }
 
-void GlobalFileMgr::getChunkMetadataVec(ChunkMetadataVector& chunkMetadataVec) {
-  mapd_shared_lock<mapd_shared_mutex> read_lock(fileMgrs_mutex_);
-  ChunkMetadataVector chunkMetadataVecForFileMgr;
-  for (auto fileMgrsIt = allFileMgrs_.begin(); fileMgrsIt != allFileMgrs_.end();
-       ++fileMgrsIt) {
-    fileMgrsIt->second->getChunkMetadataVec(chunkMetadataVecForFileMgr);
-    while (!chunkMetadataVecForFileMgr.empty()) {
-      // norair - order of elements is reversed, consider optimising this later if needed
-      chunkMetadataVec.push_back(chunkMetadataVecForFileMgr.back());
-      chunkMetadataVecForFileMgr.pop_back();
-    }
-  }
-}
-
 AbstractBufferMgr* GlobalFileMgr::findFileMgr(const int db_id, const int tb_id) {
   // NOTE: only call this private function after locking is already in place
   AbstractBufferMgr* fm = nullptr;

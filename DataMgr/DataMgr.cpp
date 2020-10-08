@@ -178,13 +178,9 @@ void DataMgr::populateMgrs(const SystemParameters& system_parameters,
                            const DiskCacheConfig& cache_config) {
   // no need for locking, as this is only called in the constructor
   bufferMgrs_.resize(2);
-  if (g_enable_fsi) {
-    bufferMgrs_[0].push_back(
-        new PersistentStorageMgr(dataDir_, userSpecifiedNumReaderThreads, cache_config));
-  } else {
-    bufferMgrs_[0].push_back(
-        new GlobalFileMgr(0, dataDir_, userSpecifiedNumReaderThreads));
-  }
+  bufferMgrs_[0].push_back(PersistentStorageMgr::createPersistentStorageMgr(
+      dataDir_, userSpecifiedNumReaderThreads, cache_config));
+
   levelSizes_.push_back(1);
   size_t page_size{512};
   size_t cpuBufferSize = system_parameters.cpu_buffer_mem_bytes;
@@ -269,11 +265,8 @@ void DataMgr::convertDB(const std::string basePath) {
   }
 
   GlobalFileMgr* gfm;
-  if (g_enable_fsi) {
-    gfm = dynamic_cast<PersistentStorageMgr*>(bufferMgrs_[0][0])->getGlobalFileMgr();
-  } else {
-    gfm = dynamic_cast<GlobalFileMgr*>(bufferMgrs_[0][0]);
-  }
+  gfm = dynamic_cast<PersistentStorageMgr*>(bufferMgrs_[0][0])->getGlobalFileMgr();
+
   size_t defaultPageSize = gfm->getDefaultPageSize();
   LOG(INFO) << "Database conversion started.";
   FileMgr* fm_base_db =
@@ -294,11 +287,8 @@ void DataMgr::createTopLevelMetadata()
   chunkKey[1] = 0;  // top level tb_id
 
   GlobalFileMgr* gfm;
-  if (g_enable_fsi) {
-    gfm = dynamic_cast<PersistentStorageMgr*>(bufferMgrs_[0][0])->getGlobalFileMgr();
-  } else {
-    gfm = dynamic_cast<GlobalFileMgr*>(bufferMgrs_[0][0]);
-  }
+  gfm = dynamic_cast<PersistentStorageMgr*>(bufferMgrs_[0][0])->getGlobalFileMgr();
+
   auto fm_top = gfm->getFileMgr(chunkKey);
   if (dynamic_cast<File_Namespace::FileMgr*>(fm_top)) {
     static_cast<File_Namespace::FileMgr*>(fm_top)->createTopLevelMetadata();
@@ -410,13 +400,6 @@ bool DataMgr::isBufferOnDevice(const ChunkKey& key,
   return bufferMgrs_[memLevel][deviceId]->isBufferOnDevice(key);
 }
 
-void DataMgr::getChunkMetadataVec(ChunkMetadataVector& chunkMetadataVec) {
-  // Can we always assume this will just be at the disklevel bc we just
-  // started?
-  // access to this object is locked by the file mgr
-  bufferMgrs_[0][0]->getChunkMetadataVec(chunkMetadataVec);
-}
-
 void DataMgr::getChunkMetadataVecForKeyPrefix(ChunkMetadataVector& chunkMetadataVec,
                                               const ChunkKey& keyPrefix) {
   bufferMgrs_[0][0]->getChunkMetadataVecForKeyPrefix(chunkMetadataVec, keyPrefix);
@@ -522,32 +505,20 @@ void DataMgr::removeTableRelatedDS(const int db_id, const int tb_id) {
 
 void DataMgr::setTableEpoch(const int db_id, const int tb_id, const int start_epoch) {
   GlobalFileMgr* gfm;
-  if (g_enable_fsi) {
-    gfm = dynamic_cast<PersistentStorageMgr*>(bufferMgrs_[0][0])->getGlobalFileMgr();
-  } else {
-    gfm = dynamic_cast<GlobalFileMgr*>(bufferMgrs_[0][0]);
-  }
+  gfm = dynamic_cast<PersistentStorageMgr*>(bufferMgrs_[0][0])->getGlobalFileMgr();
   gfm->setTableEpoch(db_id, tb_id, start_epoch);
 }
 
 size_t DataMgr::getTableEpoch(const int db_id, const int tb_id) {
   GlobalFileMgr* gfm;
-  if (g_enable_fsi) {
-    gfm = dynamic_cast<PersistentStorageMgr*>(bufferMgrs_[0][0])->getGlobalFileMgr();
-  } else {
-    gfm = dynamic_cast<GlobalFileMgr*>(bufferMgrs_[0][0]);
-  }
+  gfm = dynamic_cast<PersistentStorageMgr*>(bufferMgrs_[0][0])->getGlobalFileMgr();
   return gfm->getTableEpoch(db_id, tb_id);
 }
 
 GlobalFileMgr* DataMgr::getGlobalFileMgr() const {
   GlobalFileMgr* global_file_mgr;
-  if (g_enable_fsi) {
-    global_file_mgr =
-        dynamic_cast<PersistentStorageMgr*>(bufferMgrs_[0][0])->getGlobalFileMgr();
-  } else {
-    global_file_mgr = dynamic_cast<GlobalFileMgr*>(bufferMgrs_[0][0]);
-  }
+  global_file_mgr =
+      dynamic_cast<PersistentStorageMgr*>(bufferMgrs_[0][0])->getGlobalFileMgr();
   CHECK(global_file_mgr);
   return global_file_mgr;
 }
@@ -567,11 +538,8 @@ std::ostream& operator<<(std::ostream& os, const DataMgr::SystemMemoryUsage& mem
   return os;
 }
 
-foreign_storage::ForeignStorageMgr* DataMgr::getForeignStorageMgr() const {
-  if (g_enable_fsi) {
-    return dynamic_cast<PersistentStorageMgr*>(bufferMgrs_[0][0])->getForeignStorageMgr();
-  }
-  return nullptr;
+PersistentStorageMgr* DataMgr::getPersistentStorageMgr() const {
+  return dynamic_cast<PersistentStorageMgr*>(bufferMgrs_[0][0]);
 }
 
 }  // namespace Data_Namespace

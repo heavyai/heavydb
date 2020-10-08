@@ -18,11 +18,18 @@
 
 #include "DataMgr/AbstractBufferMgr.h"
 #include "DataMgr/FileMgr/GlobalFileMgr.h"
+#include "DataMgr/ForeignStorage/ForeignStorageCache.h"
 #include "DataMgr/ForeignStorage/ForeignStorageMgr.h"
 
 using namespace Data_Namespace;
+
 class PersistentStorageMgr : public AbstractBufferMgr {
  public:
+  static PersistentStorageMgr* createPersistentStorageMgr(
+      const std::string& data_dir,
+      const size_t num_reader_threads,
+      const DiskCacheConfig& disk_cache_config);
+
   PersistentStorageMgr(const std::string& data_dir,
                        const size_t num_reader_threads,
                        const DiskCacheConfig& disk_cache_config);
@@ -40,7 +47,6 @@ class PersistentStorageMgr : public AbstractBufferMgr {
   AbstractBuffer* putBuffer(const ChunkKey& chunk_key,
                             AbstractBuffer* source_buffer,
                             const size_t num_bytes) override;
-  void getChunkMetadataVec(ChunkMetadataVector& chunk_metadata) override;
   void getChunkMetadataVecForKeyPrefix(ChunkMetadataVector& chunk_metadata,
                                        const ChunkKey& chunk_key_prefix) override;
   bool isBufferOnDevice(const ChunkKey& chunk_key) override;
@@ -58,15 +64,20 @@ class PersistentStorageMgr : public AbstractBufferMgr {
   std::string getStringMgrType() override;
   size_t getNumChunks() override;
   void removeTableRelatedDS(const int db_id, const int table_id) override;
-  File_Namespace::GlobalFileMgr* getGlobalFileMgr();
+
+  File_Namespace::GlobalFileMgr* getGlobalFileMgr() const;
   foreign_storage::ForeignStorageMgr* getForeignStorageMgr() const;
   foreign_storage::ForeignStorageCache* getDiskCache() const;
+  inline const DiskCacheConfig getDiskCacheConfig() const { return disk_cache_config_; }
 
- private:
+ protected:
   bool isForeignStorage(const ChunkKey& chunk_key) const;
   AbstractBufferMgr* getStorageMgrForTableKey(const ChunkKey& table_key) const;
+  bool isChunkPrefixCacheable(const ChunkKey& chunk_prefix) const;
+  int recoverDataWrapperIfCachedAndGetHighestFragId(const ChunkKey& table_key);
 
   std::unique_ptr<File_Namespace::GlobalFileMgr> global_file_mgr_;
   std::unique_ptr<foreign_storage::ForeignStorageMgr> foreign_storage_mgr_;
   std::unique_ptr<foreign_storage::ForeignStorageCache> disk_cache_;
+  DiskCacheConfig disk_cache_config_;
 };

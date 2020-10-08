@@ -56,7 +56,7 @@ void LRUEvictionAlgorithm::removeChunk(const ChunkKey& key) {
 std::string LRUEvictionAlgorithm::dumpEvictionQueue() {
   std::string ret = "Eviction queue:\n{";
   for (auto chunk : cache_items_list_)
-    ret += showChunk(chunk) + ", ";
+    ret += show_chunk(chunk) + ", ";
   ret += "}\n";
   return ret;
 }

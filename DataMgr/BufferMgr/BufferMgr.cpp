@@ -814,6 +814,8 @@ AbstractBuffer* BufferMgr::putBuffer(const ChunkKey& key,
                    new_buffer_size - old_buffer_size,
                    src_buffer->getType(),
                    src_buffer->getDeviceId());
+  } else {
+    UNREACHABLE();
   }
   src_buffer->clearDirtyBits();
   buffer->syncEncoder(src_buffer);
@@ -856,10 +858,6 @@ size_t BufferMgr::getMaxBufferSize() {
 
 size_t BufferMgr::getMaxSlabSize() {
   return max_slab_size_;
-}
-
-void BufferMgr::getChunkMetadataVec(ChunkMetadataVector& chunk_metadata_vec) {
-  LOG(FATAL) << "getChunkMetadataVec not supported for BufferMgr.";
 }
 
 void BufferMgr::getChunkMetadataVecForKeyPrefix(ChunkMetadataVector& chunk_metadata_vec,
