@@ -4013,7 +4013,8 @@ std::string Catalog::dumpSchema(const TableDescriptor* td) const {
         os << " " << ti.get_type_name();
       }
       os << (ti.get_notnull() ? " NOT NULL" : "");
-      if (ti.is_string()) {
+      if (ti.is_string() || (ti.is_array() && ti.get_subtype() == kTEXT)) {
+        auto size = ti.is_array() ? ti.get_logical_size() : ti.get_size();
         if (ti.get_compression() == kENCODING_DICT) {
           // if foreign reference, get referenced tab.col
           const auto dict_id = ti.get_comp_param();
@@ -4025,8 +4026,7 @@ std::string Catalog::dumpSchema(const TableDescriptor* td) const {
           // and the first cd of a dict will become root of the dict
           if (dict_root_cds.end() == dict_root_cds.find(dict_name)) {
             dict_root_cds[dict_name] = cd;
-            os << " ENCODING " << ti.get_compression_name() << "(" << (ti.get_size() * 8)
-               << ")";
+            os << " ENCODING " << ti.get_compression_name() << "(" << (size * 8) << ")";
           } else {
             const auto dict_root_cd = dict_root_cds[dict_name];
             shared_dicts.push_back("SHARED DICTIONARY (" + cd->columnName +
@@ -4198,10 +4198,10 @@ std::string Catalog::dumpCreateTable(const TableDescriptor* td,
           shared_dict_column_names.end()) {
         // avoids "Exception: Column ... shouldn't specify an encoding, it borrows it from
         // the referenced column"
-        if (ti.is_string()) {
+        if (ti.is_string() || (ti.is_array() && ti.get_subtype() == kTEXT)) {
+          auto size = ti.is_array() ? ti.get_logical_size() : ti.get_size();
           if (ti.get_compression() == kENCODING_DICT) {
-            os << " ENCODING " << ti.get_compression_name() << "(" << (ti.get_size() * 8)
-               << ")";
+            os << " ENCODING " << ti.get_compression_name() << "(" << (size * 8) << ")";
           } else {
             os << " ENCODING NONE";
           }

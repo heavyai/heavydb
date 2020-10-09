@@ -238,7 +238,7 @@ TEST_UNSHARDED_AND_SHARDED(DumpRestoreTest, DumpMigrate_Rollback)
 TEST_UNSHARDED_AND_SHARDED(DumpRestoreTest, DumpMigrate_Altered)
 TEST_UNSHARDED_AND_SHARDED(DumpRestoreTest, DumpMigrate_Altered_Rollback)
 
-class GeoDumpRestoreTest : public ::testing::Test {
+class DumpAndRestoreTest : public ::testing::Test {
  protected:
   void SetUp() override {
     boost::filesystem::remove_all(tar_ball_path);
@@ -254,7 +254,7 @@ class GeoDumpRestoreTest : public ::testing::Test {
   }
 
   void sqlAndCompareResult(const std::string& sql,
-                           std::vector<std::string> expected_result) {
+                           const std::vector<std::string>& expected_result) {
     auto result = run_multiple_agg(sql);
     ASSERT_EQ(expected_result.size(), result->colCount());
     auto row = result->getNextRow(true, true);
@@ -265,9 +265,29 @@ class GeoDumpRestoreTest : public ::testing::Test {
       EXPECT_EQ(expected_result[i], str);
     }
   }
+
+  void sqlAndCompareArrayResult(
+      const std::string& sql,
+      const std::vector<std::vector<std::string>>& expected_result) {
+    auto result = run_multiple_agg(sql);
+    ASSERT_EQ(expected_result.size(), result->colCount());
+    auto row = result->getNextRow(true, true);
+    for (size_t i = 0; i < expected_result.size(); i++) {
+      auto& expected_array = expected_result[i];
+      auto& target_value_vector = boost::get<ArrayTargetValue>(row[i]).get();
+      ASSERT_EQ(expected_array.size(), target_value_vector.size());
+      size_t j = 0;
+      for (const auto& target_value : target_value_vector) {
+        auto& nullable_str = boost::get<NullableString>(target_value);
+        auto& str = boost::get<std::string>(nullable_str);
+        EXPECT_EQ(expected_array[j], str);
+        j++;
+      }
+    }
+  }
 };
 
-TEST_F(GeoDumpRestoreTest, DifferentEncodings) {
+TEST_F(DumpAndRestoreTest, Geo_DifferentEncodings) {
   run_ddl_statement(
       "CREATE TABLE test_table ("
       "p1 GEOMETRY(POINT, 4326) ENCODING COMPRESSED(32), p2 GEOMETRY(POINT, 4326) "
@@ -303,7 +323,7 @@ TEST_F(GeoDumpRestoreTest, DifferentEncodings) {
   sqlAndCompareResult("SELECT * FROM test_table_2;", expected_result);
 }
 
-TEST_F(GeoDumpRestoreTest, DifferentSRIDs) {
+TEST_F(DumpAndRestoreTest, Geo_DifferentSRIDs) {
   run_ddl_statement(
       "CREATE TABLE test_table ("
       "p1 POINT, p2 GEOMETRY(POINT, 4326), p3 GEOMETRY(POINT, 900913), "
@@ -341,6 +361,19 @@ TEST_F(GeoDumpRestoreTest, DifferentSRIDs) {
   run_ddl_statement("DUMP TABLE test_table TO '" + tar_ball_path + "';");
   run_ddl_statement("RESTORE TABLE test_table_2 FROM '" + tar_ball_path + "';");
   sqlAndCompareResult("SELECT * FROM test_table_2;", expected_result);
+}
+
+TEST_F(DumpAndRestoreTest, TextArray) {
+  run_ddl_statement("CREATE TABLE test_table (t1 TEXT[], t2 TEXT[5]);");
+  run_multiple_agg(
+      "INSERT INTO test_table VALUES({'a', 'b'}, {'a', 'b', 'c', 'd', 'e'});");
+
+  std::vector<std::vector<std::string>> expected_result{{"a", "b"},
+                                                        {"a", "b", "c", "d", "e"}};
+  sqlAndCompareArrayResult("SELECT * FROM test_table;", expected_result);
+  run_ddl_statement("DUMP TABLE test_table TO '" + tar_ball_path + "';");
+  run_ddl_statement("RESTORE TABLE test_table_2 FROM '" + tar_ball_path + "';");
+  sqlAndCompareArrayResult("SELECT * FROM test_table_2;", expected_result);
 }
 
 int main(int argc, char** argv) {

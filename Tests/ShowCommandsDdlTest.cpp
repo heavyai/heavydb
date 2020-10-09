@@ -790,6 +790,13 @@ TEST_F(ShowCreateTableTest, Other) {
   }
 }
 
+TEST_F(ShowCreateTableTest, TextArray) {
+  sql("CREATE TABLE showcreatetabletest (t1 TEXT[], t2 TEXT[5]);");
+  sqlAndCompareResult("SHOW CREATE TABLE showcreatetabletest;",
+                      {{"CREATE TABLE showcreatetabletest (\n  t1 TEXT[] ENCODING "
+                        "DICT(32),\n  t2 TEXT[5] ENCODING DICT(32));"}});
+}
+
 int main(int argc, char** argv) {
   TestHelpers::init_logger_stderr_only(argc, argv);
   testing::InitGoogleTest(&argc, argv);
