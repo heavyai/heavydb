@@ -658,8 +658,7 @@ add_custom_command(
     OUTPUT
         ${CMAKE_SOURCE_DIR}/java/thrift/src/gen/com/omnisci/thrift/server/OmniSci.java
         ${CMAKE_SOURCE_DIR}/java/thrift/src/gen/com/omnisci/thrift/server/TRow.java
-    COMMAND mkdir
-    ARGS -p ${CMAKE_SOURCE_DIR}/java/thrift/src/gen
+    COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_SOURCE_DIR}/java/thrift/src/gen
     COMMAND ${Thrift_EXECUTABLE}
     ARGS -gen java -r -out ${CMAKE_SOURCE_DIR}/java/thrift/src/gen/ ${CMAKE_SOURCE_DIR}/omnisci.thrift)
 
@@ -667,8 +666,7 @@ add_custom_command(
     DEPENDS ${CMAKE_SOURCE_DIR}/common.thrift
     OUTPUT
         ${CMAKE_SOURCE_DIR}/java/thrift/src/gen/com/omnisci/thrift/server/common.java
-    COMMAND mkdir
-    ARGS -p ${CMAKE_SOURCE_DIR}/java/thrift/src/gen
+    COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_SOURCE_DIR}/java/thrift/src/gen
     COMMAND ${Thrift_EXECUTABLE}
     ARGS -gen java -r -out ${CMAKE_SOURCE_DIR}/java/thrift/src/gen/ ${CMAKE_SOURCE_DIR}/common.thrift)
 
@@ -676,16 +674,14 @@ add_custom_command(
     DEPENDS ${CMAKE_SOURCE_DIR}/QueryEngine/serialized_result_set.thrift
     OUTPUT
         ${CMAKE_SOURCE_DIR}/java/thrift/src/gen/com/omnisci/thrift/server/serialized_result_set.java
-    COMMAND mkdir
-    ARGS -p ${CMAKE_SOURCE_DIR}/java/thrift/src/gen
+    COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_SOURCE_DIR}/java/thrift/src/gen
     COMMAND ${Thrift_EXECUTABLE}
     ARGS -gen java -r -out ${CMAKE_SOURCE_DIR}/java/thrift/src/gen/ ${CMAKE_SOURCE_DIR}/QueryEngine/serialized_result_set.thrift)
 
 add_custom_command(
     DEPENDS ${CMAKE_SOURCE_DIR}/java/thrift/calciteserver.thrift ${CMAKE_SOURCE_DIR}/completion_hints.thrift ${CMAKE_SOURCE_DIR}/QueryEngine/extension_functions.thrift
     OUTPUT ${CMAKE_SOURCE_DIR}/java/thrift/src/gen/com/omnisci/thrift/calciteserver/CalciteServer.java
-    COMMAND mkdir
-    ARGS -p ${CMAKE_SOURCE_DIR}/java/thrift/src/gen
+    COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_SOURCE_DIR}/java/thrift/src/gen
     COMMAND ${Thrift_EXECUTABLE}
     ARGS -gen java -r -I ${CMAKE_SOURCE_DIR} -out ${CMAKE_SOURCE_DIR}/java/thrift/src/gen/ ${CMAKE_SOURCE_DIR}/java/thrift/calciteserver.thrift)
 
@@ -835,12 +831,19 @@ endif()
 
 set (OMNISCI_JDBC_JAR "omnisci-jdbc-${OMNISCI_JAR_RELEASE_VERSION}.jar")
 
+set(MVN_PATH_COMMAND "")
+if(MSVC) 
+    set(MVN_PATH_COMMAND set "MVNPATH=${CMAKE_SOURCE_DIR}/java" &&)
+else()
+    set(MVN_PATH_COMMAND "MVNPATH=${CMAKE_SOURCE_DIR}/java")
+endif()
+
 add_custom_command(
   OUTPUT
     ${CMAKE_BINARY_DIR}/bin/mapd-1.0-SNAPSHOT-jar-with-dependencies.jar
     ${CMAKE_BINARY_DIR}/bin/${OMNISCI_JDBC_JAR}
     ${CMAKE_BINARY_DIR}/bin/calcite-1.0-SNAPSHOT-jar-with-dependencies.jar
-    COMMAND MVNPATH=${CMAKE_SOURCE_DIR}/java ${MVN_EXECUTABLE} -q clean install -Dthrift.version="${Thrift_VERSION}" -Domnisci.release.version="${OMNISCI_JAR_RELEASE_VERSION}"
+    COMMAND ${MVN_PATH_COMMAND} ${MVN_EXECUTABLE} -q clean install -Dthrift.version="${Thrift_VERSION}" -Domnisci.release.version="${OMNISCI_JAR_RELEASE_VERSION}"
     COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_SOURCE_DIR}/java/mapd/target/mapd-1.0-SNAPSHOT-jar-with-dependencies.jar ${CMAKE_BINARY_DIR}/bin
     COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_SOURCE_DIR}/java/omniscijdbc/target/${OMNISCI_JDBC_JAR} ${CMAKE_BINARY_DIR}/bin
     COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_SOURCE_DIR}/java/calcite/target/calcite-1.0-SNAPSHOT-jar-with-dependencies.jar ${CMAKE_BINARY_DIR}/bin
@@ -858,7 +861,7 @@ add_custom_target(mapd_java_components ALL DEPENDS
   ${CMAKE_BINARY_DIR}/bin/${OMNISCI_JDBC_JAR}
   ${CMAKE_BINARY_DIR}/bin/calcite-1.0-SNAPSHOT-jar-with-dependencies.jar)
 add_custom_target(mapd_java_clean
-  COMMAND MVNPATH=${CMAKE_SOURCE_DIR}/java ${MVN_EXECUTABLE} -q clean -Domnisci.release.version="${OMNISCI_JAR_RELEASE_VERSION}"
+  COMMAND ${MVN_PATH_COMMAND} ${MVN_EXECUTABLE} -q clean -Domnisci.release.version="${OMNISCI_JAR_RELEASE_VERSION}"
   WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/java
   )
 add_dependencies(clean-all mapd_java_clean)
