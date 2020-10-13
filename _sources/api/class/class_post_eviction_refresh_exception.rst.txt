@@ -1,0 +1,9 @@
+Class PostEvictionRefreshException
+==================================
+
+.. doxygenclass:: PostEvictionRefreshException
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

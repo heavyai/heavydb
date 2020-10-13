@@ -1,0 +1,9 @@
+Class QuerySessionStatus
+========================
+
+.. doxygenclass:: QuerySessionStatus
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:
