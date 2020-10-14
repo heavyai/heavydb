@@ -711,13 +711,12 @@ TEST_P(CreateTableTest, ArrayTypes) {
                           "d DOUBLE[], d2 DOUBLE[1], dc DECIMAL(18,6)[], dc2 "
                           "DECIMAL(18,6)[1], b BOOLEAN[], b2 BOOLEAN[1],"
                           "dt DATE[], dt2 DATE[1], tm TIME[], tm2 TIME[1], tp "
-                          "TIMESTAMP[], tp2 TIMESTAMP[1], p POINT[],"
-                          "ls LINESTRING[], poly POLYGON[], mpoly MULTIPOLYGON[])");
+                          "TIMESTAMP[], tp2 TIMESTAMP[1])");
   sql(query);
 
   auto& catalog = getCatalog();
   auto table = catalog.getMetadataForTable("test_table", false);
-  assertTableDetails(table, GetParam(), "test_table", 26);
+  assertTableDetails(table, GetParam(), "test_table", 22);
 
   auto columns = catalog.getAllColumnMetadataForTable(table->tableId, true, true, true);
   auto it = columns.begin();
@@ -911,38 +910,6 @@ TEST_P(CreateTableTest, ArrayTypes) {
   expected_attributes.size = 8;
   expected_attributes.type = kARRAY;
   expected_attributes.sub_type = kTIMESTAMP;
-  assertColumnDetails(expected_attributes, column);
-
-  std::advance(it, 1);
-  column = *it;
-  expected_attributes = {};
-  expected_attributes.column_name = "p";
-  expected_attributes.type = kARRAY;
-  expected_attributes.sub_type = kGEOMETRY;
-  assertColumnDetails(expected_attributes, column);
-
-  std::advance(it, 1);
-  column = *it;
-  expected_attributes = {};
-  expected_attributes.column_name = "ls";
-  expected_attributes.type = kARRAY;
-  expected_attributes.sub_type = kGEOMETRY;
-  assertColumnDetails(expected_attributes, column);
-
-  std::advance(it, 1);
-  column = *it;
-  expected_attributes = {};
-  expected_attributes.column_name = "poly";
-  expected_attributes.type = kARRAY;
-  expected_attributes.sub_type = kGEOMETRY;
-  assertColumnDetails(expected_attributes, column);
-
-  std::advance(it, 1);
-  column = *it;
-  expected_attributes = {};
-  expected_attributes.column_name = "mpoly";
-  expected_attributes.type = kARRAY;
-  expected_attributes.sub_type = kGEOMETRY;
   assertColumnDetails(expected_attributes, column);
 }
 
