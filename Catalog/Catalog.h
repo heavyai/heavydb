@@ -240,6 +240,9 @@ class Catalog final {
   void setTableEpochs(const int32_t db_id,
                       const std::vector<TableEpochInfo>& table_epochs);
 
+  void setTableEpochsLogExceptions(const int32_t db_id,
+                                   const std::vector<TableEpochInfo>& table_epochs);
+
   int getDatabaseId() const { return currentDB_.dbId; }
   SqliteConnector& getSqliteConnector() { return sqliteConnector_; }
   void roll(const bool forward);
@@ -268,6 +271,7 @@ class Catalog final {
   void setDeletedColumnUnlocked(const TableDescriptor* td, const ColumnDescriptor* cd);
   int getLogicalTableId(const int physicalTableId) const;
   void checkpoint(const int logicalTableId) const;
+  void checkpointWithAutoRollback(const int logical_table_id);
   std::string name() const { return getCurrentDB().dbName; }
   void eraseDBData();
   void eraseTablePhysicalData(const TableDescriptor* td);

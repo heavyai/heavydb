@@ -55,8 +55,8 @@ class EpochConsistencyTest : public DBHandlerTestFixture {
   }
 };
 
-class ImportLoaderFailureTest : public EpochConsistencyTest,
-                                public testing::WithParamInterface<std::string> {
+class EpochRollbackTest : public EpochConsistencyTest,
+                          public testing::WithParamInterface<std::string> {
  protected:
   static void SetUpTestSuite() { EpochConsistencyTest::SetUpTestSuite(); }
 
@@ -83,48 +83,49 @@ class ImportLoaderFailureTest : public EpochConsistencyTest,
       EXPECT_EQ(expected_table_epochs[i], table_epochs[i].table_epoch);
     }
   }
+
+  void setUpTestTableWithInconsistentEpochs() {
+    login(GetParam(), "HyperInteractive");
+
+    sql("create table test_table(a int, b tinyint, c text encoding none, shard key(a)) "
+        "with (shard_count = 2);");
+    sql("copy test_table from '" + getGoodFilePath() + "';");
+    assertTableEpochs({1, 1});
+
+    // clang-format off
+    sqlAndCompareResult("select * from test_table order by a, b;",
+                        {{i(1), i(1), "test_1"},
+                         {i(1), i(10), "test_10"},
+                         {i(2), i(2), "test_2"},
+                         {i(2), i(20), "test_20"}});
+    // clang-format on
+
+    // The following insert query should result in the epochs getting out of sync
+    sql("insert into test_table values (1, 100, 'test_100');");
+    assertTableEpochs({1, 2});
+    assertInitialInsertResultSet();
+  }
+
+  // Asserts that the result set is equal to the expected value after the initial insert
+  void assertInitialInsertResultSet() {
+    // clang-format off
+    sqlAndCompareResult("select * from test_table order by a, b;",
+                        {{i(1), i(1), "test_1"},
+                         {i(1), i(10), "test_10"},
+                         {i(1), i(100), "test_100"},
+                         {i(2), i(2), "test_2"},
+                         {i(2), i(20), "test_20"}});
+    // clang-format on
+  }
 };
 
-TEST_P(ImportLoaderFailureTest, ShardedTableWithInconsistentEpochs) {
-  login(GetParam(), "HyperInteractive");
-
-  sql("create table test_table(a int, b int, shard key(a)) with (shard_count = 2);");
-  sql("copy test_table from '" + getGoodFilePath() + "';");
-  assertTableEpochs({1, 1});
-
-  // clang-format off
-  sqlAndCompareResult("select * from test_table order by a, b;",
-                      {{i(1), i(1)},
-                       {i(1), i(10)},
-                       {i(2), i(2)},
-                       {i(2), i(20)}});
-  // clang-format on
-
-  // The following insert query should result in the epochs getting out of sync
-  sql("insert into test_table values (1, 1000);");
-  assertTableEpochs({1, 2});
-
-  // clang-format off
-  sqlAndCompareResult("select * from test_table order by a, b;",
-                      {{i(1), i(1)},
-                       {i(1), i(10)},
-                       {i(1), i(1000)},
-                       {i(2), i(2)},
-                       {i(2), i(20)}});
-  // clang-format on
+TEST_P(EpochRollbackTest, Import) {
+  setUpTestTableWithInconsistentEpochs();
 
   // The following copy from query should result in an error and rollback
   sql("copy test_table from '" + getBadFilePath() + "' with (max_reject = 0);");
   assertTableEpochs({1, 2});
-
-  // clang-format off
-  sqlAndCompareResult("select * from test_table order by a, b;",
-                      {{i(1), i(1)},
-                       {i(1), i(10)},
-                       {i(1), i(1000)},
-                       {i(2), i(2)},
-                       {i(2), i(20)}});
-  // clang-format on
+  assertInitialInsertResultSet();
 
   // Ensure that a subsequent import still works as expected
   sql("copy test_table from '" + getGoodFilePath() + "';");
@@ -132,20 +133,138 @@ TEST_P(ImportLoaderFailureTest, ShardedTableWithInconsistentEpochs) {
 
   // clang-format off
   sqlAndCompareResult("select * from test_table order by a, b;",
-                      {{i(1), i(1)},
-                       {i(1), i(1)},
-                       {i(1), i(10)},
-                       {i(1), i(10)},
-                       {i(1), i(1000)},
-                       {i(2), i(2)},
-                       {i(2), i(2)},
-                       {i(2), i(20)},
-                       {i(2), i(20)}});
+                      {{i(1), i(1), "test_1"},
+                       {i(1), i(1), "test_1"},
+                       {i(1), i(10), "test_10"},
+                       {i(1), i(10), "test_10"},
+                       {i(1), i(100), "test_100"},
+                       {i(2), i(2), "test_2"},
+                       {i(2), i(2), "test_2"},
+                       {i(2), i(20), "test_20"},
+                       {i(2), i(20), "test_20"}});
   // clang-format on
 }
 
-INSTANTIATE_TEST_SUITE_P(ImportLoaderFailureTest,
-                         ImportLoaderFailureTest,
+TEST_P(EpochRollbackTest, Insert) {
+  setUpTestTableWithInconsistentEpochs();
+
+  // The following insert query should result in an error and rollback
+  EXPECT_ANY_THROW(sql("insert into test_table values (1, 10000, 'test_10000');"));
+  assertTableEpochs({1, 2});
+  assertInitialInsertResultSet();
+
+  // Ensure that a subsequent insert query still works as expected
+  sql("insert into test_table values (1, 110, 'test_110');");
+  assertTableEpochs({1, 3});
+
+  // clang-format off
+  sqlAndCompareResult("select * from test_table order by a, b;",
+                      {{i(1), i(1), "test_1"},
+                       {i(1), i(10), "test_10"},
+                       {i(1), i(100), "test_100"},
+                       {i(1), i(110), "test_110"},
+                       {i(2), i(2), "test_2"},
+                       {i(2), i(20), "test_20"}});
+  // clang-format on
+}
+
+TEST_P(EpochRollbackTest, Update) {
+  setUpTestTableWithInconsistentEpochs();
+
+  // The following update query should result in an error and rollback
+  EXPECT_ANY_THROW(
+      sql("update test_table set b = case when b = 100 then 10000 else b + 1 end;"));
+  assertTableEpochs({1, 2});
+  assertInitialInsertResultSet();
+
+  // Ensure that a subsequent update query still works as expected
+  sql("update test_table set b = 110 where b = 100;");
+  assertTableEpochs({2, 3});
+
+  // clang-format off
+  sqlAndCompareResult("select * from test_table order by a, b;",
+                      {{i(1), i(1), "test_1"},
+                       {i(1), i(10), "test_10"},
+                       {i(1), i(110), "test_100"},
+                       {i(2), i(2), "test_2"},
+                       {i(2), i(20), "test_20"}});
+  // clang-format on
+}
+
+// Updates execute different code paths when variable length columns are updated
+TEST_P(EpochRollbackTest, Update_Varlen) {
+  setUpTestTableWithInconsistentEpochs();
+
+  // The following update query should result in an error and rollback
+  EXPECT_ANY_THROW(
+      sql("update test_table set b = case when b = 100 then 10000 else b + 1 end, c = "
+          "'test';"));
+  assertTableEpochs({1, 2});
+  assertInitialInsertResultSet();
+
+  // Ensure that a subsequent update query still works as expected
+  sql("update test_table set b = 110, c = 'test_110' where b = 100;");
+  assertTableEpochs({2, 3});
+
+  // clang-format off
+  sqlAndCompareResult("select * from test_table order by a, b;",
+                      {{i(1), i(1), "test_1"},
+                       {i(1), i(10), "test_10"},
+                       {i(1), i(110), "test_110"},
+                       {i(2), i(2), "test_2"},
+                       {i(2), i(20), "test_20"}});
+  // clang-format on
+}
+
+TEST_P(EpochRollbackTest, Delete) {
+  setUpTestTableWithInconsistentEpochs();
+
+  // The following delete query should result in an error and rollback
+  EXPECT_ANY_THROW(sql("delete from test_table where b = 2 or b = 10/0;"));
+  assertTableEpochs({1, 2});
+  assertInitialInsertResultSet();
+
+  // Ensure that a delete query still works as expected
+  sql("delete from test_table where b = 100;");
+  assertTableEpochs({2, 3});
+
+  // clang-format off
+  sqlAndCompareResult("select * from test_table order by a, b;",
+                      {{i(1), i(1), "test_1"},
+                       {i(1), i(10), "test_10"},
+                       {i(2), i(2), "test_2"},
+                       {i(2), i(20), "test_20"}});
+  // clang-format on
+}
+
+TEST_P(EpochRollbackTest, InsertTableAsSelect) {
+  setUpTestTableWithInconsistentEpochs();
+
+  // The following ITAS query should result in an error and rollback
+  EXPECT_ANY_THROW(
+      sql("insert into test_table (select a, case when b = 100 then 10000 else b + 1 "
+          "end, c from test_table);"));
+  assertTableEpochs({1, 2});
+  assertInitialInsertResultSet();
+
+  // Ensure that a subsequent ITAS query still works as expected
+  sql("insert into test_table (select * from test_table where b = 1 or b = 20);");
+  assertTableEpochs({2, 3});
+
+  // clang-format off
+  sqlAndCompareResult("select * from test_table order by a, b;",
+                      {{i(1), i(1), "test_1"},
+                       {i(1), i(1), "test_1"},
+                       {i(1), i(10), "test_10"},
+                       {i(1), i(100), "test_100"},
+                       {i(2), i(2), "test_2"},
+                       {i(2), i(20), "test_20"},
+                       {i(2), i(20), "test_20"}});
+  // clang-format on
+}
+
+INSTANTIATE_TEST_SUITE_P(EpochRollbackTest,
+                         EpochRollbackTest,
                          testing::Values("admin", "non_super_user"),
                          [](const auto& param_info) { return param_info.param; });
 

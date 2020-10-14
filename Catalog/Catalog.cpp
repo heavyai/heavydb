@@ -2821,6 +2821,36 @@ void Catalog::setTableEpochs(const int32_t db_id,
   }
 }
 
+namespace {
+std::string table_epochs_to_string(const std::vector<TableEpochInfo>& table_epochs) {
+  std::string table_epochs_str{"["};
+  bool first_entry{true};
+  for (const auto& table_epoch : table_epochs) {
+    if (first_entry) {
+      first_entry = false;
+    } else {
+      table_epochs_str += ", ";
+    }
+    table_epochs_str += "(table_id: " + std::to_string(table_epoch.table_id) +
+                        ", epoch: " + std::to_string(table_epoch.table_epoch) + ")";
+  }
+  table_epochs_str += "]";
+  return table_epochs_str;
+}
+}  // namespace
+
+void Catalog::setTableEpochsLogExceptions(
+    const int32_t db_id,
+    const std::vector<TableEpochInfo>& table_epochs) {
+  try {
+    setTableEpochs(db_id, table_epochs);
+  } catch (std::exception& e) {
+    LOG(ERROR) << "An error occurred when attempting to set table epochs. DB id: "
+               << db_id << ", Table epochs: " << table_epochs_to_string(table_epochs)
+               << ", Error: " << e.what();
+  }
+}
+
 const ColumnDescriptor* Catalog::getDeletedColumn(const TableDescriptor* td) const {
   cat_read_lock read_lock(this);
   const auto it = deletedColumnPerTable_.find(td);
@@ -3695,6 +3725,16 @@ void Catalog::checkpoint(const int logicalTableId) const {
   const auto shards = getPhysicalTablesDescriptors(td);
   for (const auto shard : shards) {
     getDataMgr().checkpoint(getCurrentDB().dbId, shard->tableId);
+  }
+}
+
+void Catalog::checkpointWithAutoRollback(const int logical_table_id) {
+  auto table_epochs = getTableEpochs(getDatabaseId(), logical_table_id);
+  try {
+    checkpoint(logical_table_id);
+  } catch (...) {
+    setTableEpochsLogExceptions(getDatabaseId(), table_epochs);
+    throw;
   }
 }
 

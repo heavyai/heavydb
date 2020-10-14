@@ -4160,7 +4160,7 @@ ImportStatus Importer::importDelimited(const std::string& file_path,
 void Loader::checkpoint() {
   if (getTableDesc()->persistenceLevel ==
       Data_Namespace::MemoryLevel::DISK_LEVEL) {  // only checkpoint disk-resident tables
-    getCatalog().checkpoint(getTableDesc()->tableId);
+    getCatalog().checkpointWithAutoRollback(getTableDesc()->tableId);
   }
 }
 

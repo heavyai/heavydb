@@ -1294,8 +1294,19 @@ void UpdelRoll::commitUpdate() {
 
   // checkpoint all shards regardless, or epoch becomes out of sync
   if (td->persistenceLevel == Data_Namespace::MemoryLevel::DISK_LEVEL) {
-    catalog->checkpoint(logicalTableId);
+    auto table_epochs = catalog->getTableEpochs(catalog->getDatabaseId(), logicalTableId);
+    try {
+      // `checkpointWithAutoRollback` is not called here because, if a failure occurs,
+      // `dirtyChunks` has to be cleared before resetting epochs
+      catalog->checkpoint(logicalTableId);
+    } catch (...) {
+      dirtyChunks.clear();
+      const_cast<Catalog_Namespace::Catalog*>(catalog)->setTableEpochsLogExceptions(
+          catalog->getDatabaseId(), table_epochs);
+      throw;
+    }
   }
+
   // for each dirty fragment
   for (auto& cm : chunkMetadata) {
     cm.first.first->fragmenter->updateMetadata(catalog, cm.first, *this);
@@ -1320,11 +1331,11 @@ void UpdelRoll::cancelUpdate() {
   const auto table_lock = lockmgr::TableDataLockMgr::getWriteLockForTable(chunk_key);
   if (is_varlen_update) {
     int databaseId = catalog->getDatabaseId();
-    int32_t tableEpoch = catalog->getTableEpoch(databaseId, logicalTableId);
+    auto table_epochs = catalog->getTableEpochs(databaseId, logicalTableId);
 
     dirtyChunks.clear();
-    const_cast<Catalog_Namespace::Catalog*>(catalog)->setTableEpoch(
-        databaseId, logicalTableId, tableEpoch);
+    const_cast<Catalog_Namespace::Catalog*>(catalog)->setTableEpochs(databaseId,
+                                                                     table_epochs);
   } else {
     const auto td = catalog->getMetadataForTable(logicalTableId);
     CHECK(td);
