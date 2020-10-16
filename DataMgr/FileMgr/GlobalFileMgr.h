@@ -36,6 +36,8 @@
 #include "../AbstractBufferMgr.h"
 #include "FileMgr.h"
 
+class ForeignStorageInterface;
+
 using namespace Data_Namespace;
 
 namespace File_Namespace {
@@ -57,6 +59,7 @@ class GlobalFileMgr : public AbstractBufferMgr {  // implements
  public:
   /// Constructor
   GlobalFileMgr(const int32_t deviceId,
+                std::shared_ptr<ForeignStorageInterface> fsi,
                 std::string basePath = ".",
                 const size_t num_reader_threads = 0,
                 const size_t defaultPageSize = DEFAULT_PAGE_SIZE);

@@ -369,7 +369,8 @@ int startMapdServer(CommandLineOptions& prog_config_opts, bool start_http_server
 #ifdef ENABLE_GEOS
                                      prog_config_opts.libgeos_so_filename,
 #endif
-                                     prog_config_opts.disk_cache_config);
+                                     prog_config_opts.disk_cache_config,
+                                     false);
   } catch (const std::exception& e) {
     LOG(FATAL) << "Failed to initialize service handler: " << e.what();
   }
@@ -473,7 +474,6 @@ int startMapdServer(CommandLineOptions& prog_config_opts, bool start_http_server
   g_running = false;
   file_delete_thread.join();
   heartbeat_thread.join();
-  ForeignStorageInterface::destroy();
 
   if (g_enable_fsi) {
     foreign_storage::ForeignTableRefreshScheduler::stop();

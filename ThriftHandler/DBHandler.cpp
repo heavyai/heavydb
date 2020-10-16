@@ -244,7 +244,8 @@ DBHandler::DBHandler(const std::vector<LeafHostInfo>& db_leaves,
 #ifdef ENABLE_GEOS
                      const std::string& libgeos_so_filename,
 #endif
-                     const DiskCacheConfig& disk_cache_config)
+                     const DiskCacheConfig& disk_cache_config,
+                     std::shared_ptr<ForeignStorageInterface> fsi)
     : leaf_aggregator_(db_leaves)
     , db_leaves_(db_leaves)
     , string_leaves_(string_leaves)
@@ -422,6 +423,7 @@ void DBHandler::initialize() {
 
   try {
     SysCatalog::instance().init(base_data_path_,
+                                fsi_,
                                 data_mgr_,
                                 authMetadata_,
                                 calcite_,

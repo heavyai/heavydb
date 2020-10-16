@@ -105,7 +105,7 @@ void check_tables(const std::string& query, const std::string& query_expects) {
   }
 }
 
-const char* trips_table_ddl = R"( 
+const char* trips_table_ddl = R"(
 CREATE TEMPORARY TABLE trips (
 trip_id BIGINT,
 vendor_id TEXT ENCODING NONE,
@@ -567,8 +567,9 @@ int main(int argc, char** argv) {
 
   logger::init(log_options);
 
-  QR::init(BASE_PATH);
-  registerArrowCsvForeignStorage();
+  auto fsi = std::make_shared<ForeignStorageInterface>();
+  QR::init(BASE_PATH, fsi, {}, {});
+  registerArrowCsvForeignStorage(fsi);
   int err{0};
   try {
     err = RUN_ALL_TESTS();

@@ -22,6 +22,7 @@
 
 #include "Catalog/Catalog.h"
 #include "Logger/Logger.h"
+#include "DataMgr/ForeignStorage/ForeignStorageInterface.h"
 #include "MigrationMgr/MigrationMgr.h"
 #include "QueryRunner/QueryRunner.h"
 #include "Shared/scope.h"
@@ -391,7 +392,9 @@ int main(int argc, char** argv) {
   // that metadata is not automatically updated for other
   // tests that do and assert metadata updates.
   g_enable_auto_metadata_update = false;
+  auto fsi = std::make_shared<ForeignStorageInterface>();
   QR::init(BASE_PATH,
+           fsi,
            std::string{OMNISCI_ROOT_USER},
            "HyperInteractive",
            "migration_mgr_db",

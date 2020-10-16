@@ -109,6 +109,7 @@ class Catalog final {
    * metadata - expects for this directory to already exist
    */
   Catalog(const std::string& basePath,
+          std::shared_ptr<ForeignStorageInterface> fsi,
           const DBMetadata& curDB,
           std::shared_ptr<Data_Namespace::DataMgr> dataMgr,
           const std::vector<LeafHostInfo>& string_dict_hosts,
@@ -555,6 +556,7 @@ class Catalog final {
   SqliteConnector sqliteConnector_;
   const DBMetadata currentDB_;
   std::shared_ptr<Data_Namespace::DataMgr> dataMgr_;
+  std::shared_ptr<ForeignStorageInterface> fsi_;
 
   const std::vector<LeafHostInfo> string_dict_hosts_;
   std::shared_ptr<Calcite> calciteMgr_;

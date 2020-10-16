@@ -145,6 +145,29 @@ void ForeignStorageBufferMgr::getChunkMetadataVecForKeyPrefix(
   }
 }
 
+ForeignStorageInterface::ForeignStorageInterface() {
+  // We always should have only single instance of ForeignStorageInterface
+  // but cannot use a singleton due to issues with a static lifetime when
+  // used in embedded engine in Python. When we use embedded engine from
+  // Python we might import arrow tables created by pyarrow. In this case
+  // we might use zero-copy import and have references to arrow data in
+  // FSI structures. When program finishes, it's not guaranteed that
+  // destructor is called for Python engine object and therefore we don't
+  // clean-up FSI structures. But if FSI object has a static lifetime then
+  // it's still destroyed and might trigger destruction of arrow data
+  // allocated by pyarrow. This deallocation might try to capture Python
+  // GIL which is destroyed by that moment. With dynamic FSI object we
+  // avoid FSI destruction if destructor for embedded engine is not called.
+  // To make sure we still have a single FSI object, an object counter is
+  // used.
+  auto prev_cnt = object_cnt_.fetch_add(1);
+  CHECK_EQ(prev_cnt, 0);
+}
+
+ForeignStorageInterface::~ForeignStorageInterface() {
+  object_cnt_.fetch_add(-1);
+}
+
 Data_Namespace::AbstractBufferMgr* ForeignStorageInterface::lookupBufferManager(
     const int db_id,
     const int table_id) {
@@ -222,15 +245,4 @@ void ForeignStorageInterface::registerTable(Catalog_Namespace::Catalog* catalog,
                                      lookupBufferManager(db_id, table_id));
 }
 
-void ForeignStorageInterface::destroy() {
-  persistent_storage_interfaces_.clear();
-  managers_map_.clear();
-}
-
-std::unordered_map<std::string, std::unique_ptr<PersistentForeignStorageInterface>>
-    ForeignStorageInterface::persistent_storage_interfaces_;
-std::map<std::pair<int, int>, PersistentForeignStorageInterface*>
-    ForeignStorageInterface::table_persistent_storage_interface_map_;
-std::map<std::pair<int, int>, std::unique_ptr<ForeignStorageBufferMgr>>
-    ForeignStorageInterface::managers_map_;
-std::mutex ForeignStorageInterface::persistent_storage_interfaces_mutex_;
+std::atomic<int> ForeignStorageInterface::object_cnt_ = 0;

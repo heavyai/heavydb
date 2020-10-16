@@ -56,7 +56,8 @@ namespace foreign_storage {
 
 class ForeignStorageCache {
  public:
-  ForeignStorageCache(const DiskCacheConfig& config);
+  ForeignStorageCache(const DiskCacheConfig& config,
+                      std::shared_ptr<ForeignStorageInterface> fsi);
 
   /**
    * Caches the chunks for the given chunk keys. Chunk buffers

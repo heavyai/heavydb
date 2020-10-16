@@ -75,6 +75,7 @@ std::string hash_with_bcrypt(const std::string& pwd) {
 namespace Catalog_Namespace {
 
 thread_local bool SysCatalog::thread_holds_read_lock = false;
+std::unique_ptr<SysCatalog> SysCatalog::instance_;
 
 using sys_read_lock = read_lock<SysCatalog>;
 using sys_write_lock = write_lock<SysCatalog>;
@@ -116,6 +117,7 @@ auto CommonFileOperations::duplicateAndRenameCatalog(std::string const& current_
 };
 
 void SysCatalog::init(const std::string& basePath,
+                      std::shared_ptr<ForeignStorageInterface> fsi,
                       std::shared_ptr<Data_Namespace::DataMgr> dataMgr,
                       const AuthMetadata& authMetadata,
                       std::shared_ptr<Calcite> calcite,
@@ -127,6 +129,7 @@ void SysCatalog::init(const std::string& basePath,
     sys_sqlite_lock sqlite_lock(this);
 
     basePath_ = basePath;
+    fsi_ = fsi;
     dataMgr_ = dataMgr;
     authMetadata_ = &authMetadata;
     pki_server_.reset(new PkiServer(*authMetadata_));
@@ -758,7 +761,7 @@ std::shared_ptr<Catalog> SysCatalog::login(std::string& dbname,
   }
   Catalog_Namespace::DBMetadata db_meta;
   getMetadataWithDefaultDB(dbname, username, db_meta, user_meta);
-  return getCatalog(basePath_, db_meta, dataMgr_, string_dict_hosts_, calciteMgr_, false);
+  return getCatalog(basePath_, db_meta, dataMgr_, string_dict_hosts_, calciteMgr_, fsi_, false);
 }
 
 // loginImpl() with no EE code and no SAML code
@@ -780,7 +783,7 @@ std::shared_ptr<Catalog> SysCatalog::switchDatabase(std::string& dbname,
   // NOTE(max): register database in Catalog that early to allow ldap
   // and saml create default user and role privileges on databases
   auto cat =
-      getCatalog(basePath_, db_meta, dataMgr_, string_dict_hosts_, calciteMgr_, false);
+      getCatalog(basePath_, db_meta, dataMgr_, string_dict_hosts_, calciteMgr_, fsi_, false);
 
   DBObject dbObject(dbname, DatabaseDBObjectType);
   dbObject.loadKey();
@@ -886,7 +889,7 @@ std::vector<std::shared_ptr<Catalog>> SysCatalog::getCatalogsForAllDbs() {
   const auto& db_metadata_list = getAllDBMetadata();
   for (const auto& db_metadata : db_metadata_list) {
     catalogs.emplace_back(getCatalog(
-        basePath_, db_metadata, dataMgr_, string_dict_hosts_, calciteMgr_, false));
+        basePath_, db_metadata, dataMgr_, string_dict_hosts_, calciteMgr_, fsi_, false));
   }
   return catalogs;
 }
@@ -1148,7 +1151,7 @@ void SysCatalog::createDatabase(const string& name, int owner) {
         name);
     CHECK(getMetadataForDB(name, db));
 
-    cat = getCatalog(basePath_, db, dataMgr_, string_dict_hosts_, calciteMgr_, true);
+    cat = getCatalog(basePath_, db, dataMgr_, string_dict_hosts_, calciteMgr_, fsi_, true);
 
     if (owner != OMNISCI_ROOT_USER_ID) {
       DBObject object(name, DBObjectType::DatabaseDBObjectType);
@@ -1181,7 +1184,7 @@ void SysCatalog::createDatabase(const string& name, int owner) {
 void SysCatalog::dropDatabase(const DBMetadata& db) {
   sys_write_lock write_lock(this);
   sys_sqlite_lock sqlite_lock(this);
-  auto cat = getCatalog(basePath_, db, dataMgr_, string_dict_hosts_, calciteMgr_, false);
+  auto cat = getCatalog(basePath_, db, dataMgr_, string_dict_hosts_, calciteMgr_, fsi_, false);
   sqliteConnector_->query("BEGIN TRANSACTION");
   try {
     // remove this database ID from any users that have it set as their default database
@@ -2478,6 +2481,7 @@ std::shared_ptr<Catalog> SysCatalog::getCatalog(
     std::shared_ptr<Data_Namespace::DataMgr> dataMgr,
     const std::vector<LeafHostInfo>& string_dict_hosts,
     std::shared_ptr<Calcite> calcite,
+    std::shared_ptr<ForeignStorageInterface> fsi,
     bool is_new_db) {
   auto cat = getCatalog(curDB.dbName);
   if (cat) {
@@ -2487,7 +2491,7 @@ std::shared_ptr<Catalog> SysCatalog::getCatalog(
   // Catalog doesnt exist
   // has to be made outside of lock as migration uses cat
   cat = std::make_shared<Catalog>(
-      basePath, curDB, dataMgr, string_dict_hosts, calcite, is_new_db);
+      basePath, fsi, curDB, dataMgr, string_dict_hosts, calcite, is_new_db);
 
   dbid_to_cat_map::accessor cata;
 

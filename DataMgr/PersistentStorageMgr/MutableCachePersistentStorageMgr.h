@@ -24,6 +24,7 @@
 class MutableCachePersistentStorageMgr : public PersistentStorageMgr {
  public:
   MutableCachePersistentStorageMgr(const std::string& data_dir,
+                                   std::shared_ptr<ForeignStorageInterface> fsi,
                                    const size_t num_reader_threads,
                                    const DiskCacheConfig& disk_cache_config);
   AbstractBuffer* createBuffer(const ChunkKey& chunk_key,

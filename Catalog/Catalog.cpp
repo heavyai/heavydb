@@ -160,6 +160,7 @@ inline auto table_json_filepath(const std::string& base_path,
 }  // namespace
 
 Catalog::Catalog(const string& basePath,
+                 std::shared_ptr<ForeignStorageInterface> fsi,
                  const DBMetadata& curDB,
                  std::shared_ptr<Data_Namespace::DataMgr> dataMgr,
                  const std::vector<LeafHostInfo>& string_dict_hosts,
@@ -169,6 +170,7 @@ Catalog::Catalog(const string& basePath,
     , sqliteConnector_(curDB.dbName, basePath + "/mapd_catalogs/")
     , currentDB_(curDB)
     , dataMgr_(dataMgr)
+    , fsi_(fsi)
     , string_dict_hosts_(string_dict_hosts)
     , calciteMgr_(calcite)
     , nextTempTableId_(MAPD_TEMP_TABLE_START_ID)
@@ -2161,7 +2163,7 @@ void Catalog::createTable(
     if (td.persistenceLevel == Data_Namespace::MemoryLevel::DISK_LEVEL) {
       throw std::runtime_error("Only temporary tables can be backed by foreign storage.");
     }
-    ForeignStorageInterface::prepareTable(getCurrentDB().dbId, td, cds);
+    fsi_->prepareTable(getCurrentDB().dbId, td, cds);
   }
 
   for (auto cd : cds) {
@@ -2352,7 +2354,7 @@ void Catalog::createTable(
     addTableToMap(&td, cds, dds);
     calciteMgr_->updateMetadata(currentDB_.dbName, td.tableName);
     if (!td.storageType.empty() && td.storageType != StorageType::FOREIGN_TABLE) {
-      ForeignStorageInterface::registerTable(this, td, cds);
+      fsi_->registerTable(this, td, cds);
     }
   } catch (std::exception& e) {
     sqliteConnector_.query("ROLLBACK TRANSACTION");

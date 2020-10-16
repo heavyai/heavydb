@@ -28,6 +28,8 @@
 #include "ImportExport/Importer.h"
 #include "Logger/Logger.h"
 #include "OSDependent/omnisci_path.h"
+#include "DataMgr/ForeignStorage/ForeignStorageInterface.h"
+#include "Import/Importer.h"
 #include "QueryRunner/QueryRunner.h"
 
 #define CALCITEPORT 3279
@@ -143,12 +145,12 @@ int main(int argc, char* argv[]) {
 
   try {
     SystemParameters sys_parms;
-    auto dummy = std::make_shared<Data_Namespace::DataMgr>(
-        data_path, sys_parms, nullptr, false, 0);
-    auto calcite =
-        std::make_shared<Calcite>(-1, CALCITEPORT, base_path, 1024, 5000, true, "");
+    auto fsi = std::make_shared<ForeignStorageInterface>();
+    auto dummy =
+        std::make_shared<Data_Namespace::DataMgr>(data_path, fsi, sys_parms, nullptr, false, 0);
+    auto calcite = std::make_shared<Calcite>(-1, CALCITEPORT, base_path, 1024, 5000, true, "");
     auto& sys_cat = Catalog_Namespace::SysCatalog::instance();
-    sys_cat.init(base_path, dummy, {}, calcite, true, false, {});
+    sys_cat.init(base_path, fsi, dummy, {}, calcite, true, false, {});
 
     if (!skip_geo) {
       // Add geo samples to the system database using the root user
@@ -156,7 +158,7 @@ int main(int argc, char* argv[]) {
       const std::string db_name(OMNISCI_DEFAULT_DB);
       CHECK(sys_cat.getMetadataForDB(db_name, cur_db));
       auto cat = sys_cat.getCatalog(
-          base_path, cur_db, dummy, std::vector<LeafHostInfo>(), calcite, false);
+          base_path, cur_db, dummy, std::vector<LeafHostInfo>(), calcite, fsi, false);
       Catalog_Namespace::UserMetadata user;
       CHECK(sys_cat.getMetadataForUser(OMNISCI_ROOT_USER, user));
 
