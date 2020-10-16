@@ -348,9 +348,10 @@ public class SQLImporter {
         run_init(conn);
       }
 
-      // set autocommit off to allow postgress to not load all results
       try {
-        conn.setAutoCommit(false);
+        if (vendor_types.isAutoCommitDisabledRequired()) {
+          conn.setAutoCommit(false);
+        }
       } catch (SQLException se) {
         LOGGER.warn(
                 "SQLException when attempting to setAutoCommit to false, jdbc driver probably doesnt support it.  Error is "

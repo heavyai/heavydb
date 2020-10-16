@@ -23,6 +23,7 @@ abstract public class Db_vendor_types {
     public int srid;
   };
 
+  public abstract boolean isAutoCommitDisabledRequired();
   public abstract GisType find_gis_type(
           Connection conn, ResultSetMetaData metadata, int column_number)
           throws SQLException;
@@ -34,7 +35,7 @@ abstract public class Db_vendor_types {
       return new com.mapd.utility.db_vendors.PostGis_types();
     else if (connection_str.toLowerCase().contains("omnisci"))
       return new com.mapd.utility.db_vendors.OmniSciGeo_types();
-    return null;
+    return new com.mapd.utility.db_vendors.Other_types();
   }
   public static String gis_type_to_str(GisType type) {
     StringBuffer column_sql_definition = new StringBuffer();
@@ -52,9 +53,28 @@ abstract public class Db_vendor_types {
   }
 }
 
+class Other_types extends com.mapd.utility.db_vendors.Db_vendor_types {
+  protected Other_types() {}
+  public boolean isAutoCommitDisabledRequired() {
+    return false;
+  }
+  public GisType find_gis_type(
+          Connection conn, ResultSetMetaData metadata, int column_number)
+          throws SQLException {
+    throw new SQLException("GEO types not supported");
+  }
+  public String get_wkt(ResultSet rs, int column_number, String gis_type_name)
+          throws SQLException {
+    throw new SQLException("GEO types not supported");
+  }
+}
+
 class OmniSciGeo_types extends com.mapd.utility.db_vendors.Db_vendor_types {
   protected OmniSciGeo_types() {}
 
+  public boolean isAutoCommitDisabledRequired() {
+    return false;
+  }
   private static final HashSet<String> geo_types =
           new HashSet<>(Arrays.asList("point", "linestring", "polygon", "multipolygon"));
 
@@ -98,6 +118,9 @@ class OmniSciGeo_types extends com.mapd.utility.db_vendors.Db_vendor_types {
 
 class PostGis_types extends com.mapd.utility.db_vendors.Db_vendor_types {
   protected PostGis_types() {}
+  public boolean isAutoCommitDisabledRequired() {
+    return true;
+  }
 
   // Map postgis geom types to OmniSci geom types
   static private Hashtable<String, String> extra_types = new Hashtable() {
