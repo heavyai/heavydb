@@ -180,11 +180,6 @@ void process_geo_column(
                                                           ring_sizes,
                                                           poly_rings,
                                                           render_group);
-
-  // skip remaining physical columns
-  for (int i = 0; i < cd->columnType.get_physical_cols(); ++i) {
-    ++cd_it;
-  }
 }
 
 std::map<int, DataBlockPtr> convert_import_buffers_to_data_blocks(
@@ -195,6 +190,8 @@ std::map<int, DataBlockPtr> convert_import_buffers_to_data_blocks(
       encoded_data_block_ptrs_futures;
   // make all async calls to string dictionary here and then continue execution
   for (const auto& import_buffer : import_buffers) {
+    if (import_buffer == nullptr)
+      continue;
     DataBlockPtr p;
     if (import_buffer->getTypeInfo().is_number() ||
         import_buffer->getTypeInfo().is_time() ||
@@ -268,6 +265,10 @@ struct ParseBufferResult {
   std::vector<size_t> row_offsets;
 };
 
+bool skip_column_import(ParseBufferRequest& request, int column_idx) {
+  return request.import_buffers[column_idx] == nullptr;
+}
+
 /**
  * Parses a given CSV file buffer and returns data blocks for each column in the
  * file along with metadata related to rows and row offsets within the buffer.
@@ -325,19 +326,36 @@ ParseBufferResult parse_buffer(ParseBufferRequest& request) {
         bool is_null = is_null_datum(row[import_idx], cd, request.copy_params.null_str);
 
         if (col_ti.is_geometry()) {
-          process_geo_column(request.import_buffers,
-                             col_idx,
-                             request.copy_params,
-                             cd_it,
-                             row,
-                             import_idx,
-                             is_null,
-                             request.first_row_index,
-                             row_index_plus_one,
-                             request.catalog);
+          if (!skip_column_import(request, col_idx)) {
+            process_geo_column(request.import_buffers,
+                               col_idx,
+                               request.copy_params,
+                               cd_it,
+                               row,
+                               import_idx,
+                               is_null,
+                               request.first_row_index,
+                               row_index_plus_one,
+                               request.catalog);
+          } else {
+            // update import/col idx according to types
+            if (!is_null && cd->columnType == kPOINT &&
+                is_coordinate_scalar(row[import_idx])) {
+              ++import_idx;
+            }
+            ++import_idx;
+            ++col_idx;
+            col_idx += col_ti.get_physical_cols();
+          }
+          // skip remaining physical columns
+          for (int i = 0; i < cd->columnType.get_physical_cols(); ++i) {
+            ++cd_it;
+          }
         } else {
-          request.import_buffers[col_idx]->add_value(
-              cd, row[import_idx], is_null, request.copy_params);
+          if (!skip_column_import(request, col_idx)) {
+            request.import_buffers[col_idx]->add_value(
+                cd, row[import_idx], is_null, request.copy_params);
+          }
           ++import_idx;
           ++col_idx;
         }

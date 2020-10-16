@@ -371,11 +371,13 @@ size_t get_thread_count(const import_export::CopyParams& copy_params,
 
 /**
  * Initializes import buffers for each of the provided columns.
+ * If column_id_to_chunk_map is provided, only initialize buffers with valid entries
  */
 void initialize_import_buffers(
     const std::list<const ColumnDescriptor*>& columns,
     std::shared_ptr<Catalog_Namespace::Catalog> catalog,
-    std::vector<std::unique_ptr<import_export::TypedImportBuffer>>& import_buffers) {
+    std::vector<std::unique_ptr<import_export::TypedImportBuffer>>& import_buffers,
+    const std::set<int>& column_filter_set = {}) {
   for (const auto column : columns) {
     StringDictionary* string_dictionary = nullptr;
     if (column->columnType.is_dict_encoded_string() ||
@@ -385,11 +387,15 @@ void initialize_import_buffers(
           catalog->getMetadataForDictUnlocked(column->columnType.get_comp_param(), true);
       string_dictionary = dict_descriptor->stringDict.get();
     }
-    import_buffers.emplace_back(
-        std::make_unique<import_export::TypedImportBuffer>(column, string_dictionary));
+    if (column_filter_set.size() == 0 ||
+        column_filter_set.find(column->columnId) != column_filter_set.end()) {
+      import_buffers.emplace_back(
+          std::make_unique<import_export::TypedImportBuffer>(column, string_dictionary));
+    } else {
+      import_buffers.emplace_back(nullptr);
+    }
   }
 }
-
 void CsvDataWrapper::populateChunks(
     std::map<int, Chunk_NS::Chunk>& column_id_to_chunk_map,
     int fragment_id) {
@@ -410,7 +416,10 @@ void CsvDataWrapper::populateChunks(
   std::vector<csv_file_buffer_parser::ParseBufferRequest> parse_file_requests{};
   parse_file_requests.reserve(thread_count);
   std::vector<std::future<ParseFileRegionResult>> futures{};
-
+  std::set<int> column_filter_set;
+  for (const auto& pair : column_id_to_chunk_map) {
+    column_filter_set.insert(pair.first);
+  }
   for (size_t i = 0; i < file_regions.size(); i += batch_size) {
     parse_file_requests.emplace_back();
     csv_file_buffer_parser::ParseBufferRequest& parse_file_request =
@@ -421,7 +430,8 @@ void CsvDataWrapper::populateChunks(
     parse_file_request.copy_params = copy_params;
     parse_file_request.columns = columns;
     parse_file_request.catalog = catalog;
-    initialize_import_buffers(columns, catalog, parse_file_request.import_buffers);
+    initialize_import_buffers(
+        columns, catalog, parse_file_request.import_buffers, column_filter_set);
 
     auto start_index = i;
     auto end_index =
