@@ -2757,8 +2757,6 @@ int32_t Catalog::getTableEpoch(const int32_t db_id, const int32_t table_id) cons
 }
 
 void Catalog::setTableEpoch(const int db_id, const int table_id, int new_epoch) {
-  CHECK_GE(new_epoch, 0);
-
   cat_read_lock read_lock(this);
   LOG(INFO) << "Set table epoch db:" << db_id << " Table ID  " << table_id
             << " back to new epoch " << new_epoch;
@@ -2814,7 +2812,6 @@ void Catalog::setTableEpochs(const int32_t db_id,
                              const std::vector<TableEpochInfo>& table_epochs) {
   cat_read_lock read_lock(this);
   for (const auto& table_epoch_info : table_epochs) {
-    CHECK_GE(table_epoch_info.table_epoch, 0);
     removeChunks(table_epoch_info.table_id);
     dataMgr_->setTableEpoch(
         db_id, table_epoch_info.table_id, table_epoch_info.table_epoch);

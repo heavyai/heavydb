@@ -506,8 +506,7 @@ void FileMgr::createEpochFile(const std::string& epochFileName) {
   epochFile_ = create(epochFilePath, sizeof(int));
   // Write out current epoch to file - which if this
   // function is being called should be 0
-  write(epochFile_, 0, sizeof(int), (int8_t*)&epoch_);
-  epoch_++;
+  writeAndSyncEpochToDisk();
 }
 
 void FileMgr::openEpochFile(const std::string& epochFileName) {
