@@ -1505,8 +1505,10 @@ void fold_filters(std::vector<std::shared_ptr<RelAlgNode>>& nodes) noexcept {
 
   if (!nodes.empty()) {
     auto sink = nodes.back();
-    for (auto node_it = std::next(nodes.rend()); !sink && node_it != nodes.rbegin();
-         ++node_it) {
+    for (auto node_it = std::next(nodes.rbegin()); node_it != nodes.rend(); ++node_it) {
+      if (sink) {
+        break;
+      }
       sink = *node_it;
     }
     CHECK(sink);
