@@ -65,7 +65,7 @@
             
             
               <div class="version">
-                5.5.0dev 467d548
+                5.5.0dev f632821
               </div>
             
           
@@ -957,6 +957,7 @@
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1utility_1_1db__vendors_1_1_db__vendor__types.html">Class com::mapd::utility::db_vendors::Db_vendor_types</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1utility_1_1db__vendors_1_1_db__vendor__types_1_1_gis_type.html">Class com::mapd::utility::db_vendors::Db_vendor_types::GisType</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1utility_1_1db__vendors_1_1_omni_sci_geo__types.html">Class com::mapd::utility::db_vendors::OmniSciGeo_types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1utility_1_1db__vendors_1_1_other__types.html">Class com::mapd::utility::db_vendors::Other_types</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1utility_1_1db__vendors_1_1_post_gis__types.html">Class com::mapd::utility::db_vendors::PostGis_types</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1omnisci_1_1jdbc_1_1_key_loader.html">Class com::omnisci::jdbc::KeyLoader</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1omnisci_1_1jdbc_1_1_key_loader_1_1_s__struct.html">Class com::omnisci::jdbc::KeyLoader::S_struct</a></li>
@@ -1587,6 +1588,36 @@
 </p>
 </dd></dl>
 
+<dl class="function">
+<dt id="_CPPv4NK15foreign_storage18ParquetDataWrapper29serializeDataWrapperInternalsERKNSt6stringE">
+<span id="_CPPv3NK15foreign_storage18ParquetDataWrapper29serializeDataWrapperInternalsERKNSt6stringE"></span><span id="_CPPv2NK15foreign_storage18ParquetDataWrapper29serializeDataWrapperInternalsERKNSt6stringE"></span><span id="foreign_storage::ParquetDataWrapper::serializeDataWrapperInternals__ssCRC"></span><span class="target" id="classforeign__storage_1_1_parquet_data_wrapper_1a5b999fcb93bd5d8b650e0ea554515f9c"></span>void <code class="sig-name descname">serializeDataWrapperInternals</code><span class="sig-paren">(</span><em class="property">const</em> std::string &amp;<em>file_path</em><span class="sig-paren">)</span> <em class="property">const</em><a class="headerlink" href="#_CPPv4NK15foreign_storage18ParquetDataWrapper29serializeDataWrapperInternalsERKNSt6stringE" title="Permalink to this definition">¶</a><br /></dt>
+<dd><p>Serialize internal state of wrapper into file at given path if implemented <dl class="simple">
+<dt><strong>Parameters</strong></dt><dd><ul class="breatheparameterlist simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">file_path</span></code>: - location to save file to </p></li>
+</ul>
+</dd>
+</dl>
+</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="_CPPv4N15foreign_storage18ParquetDataWrapper27restoreDataWrapperInternalsERKNSt6stringERK19ChunkMetadataVector">
+<span id="_CPPv3N15foreign_storage18ParquetDataWrapper27restoreDataWrapperInternalsERKNSt6stringERK19ChunkMetadataVector"></span><span id="_CPPv2N15foreign_storage18ParquetDataWrapper27restoreDataWrapperInternalsERKNSt6stringERK19ChunkMetadataVector"></span><span id="foreign_storage::ParquetDataWrapper::restoreDataWrapperInternals__ssCR.ChunkMetadataVectorCR"></span><span class="target" id="classforeign__storage_1_1_parquet_data_wrapper_1a574dcd6bf5cba31374bdd40206abfd43"></span>void <code class="sig-name descname">restoreDataWrapperInternals</code><span class="sig-paren">(</span><em class="property">const</em> std::string &amp;<em>file_path</em>, <em class="property">const</em> ChunkMetadataVector &amp;<em>chunk_metadata</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N15foreign_storage18ParquetDataWrapper27restoreDataWrapperInternalsERKNSt6stringERK19ChunkMetadataVector" title="Permalink to this definition">¶</a><br /></dt>
+<dd><p>Restore internal state of datawrapper <dl class="simple">
+<dt><strong>Parameters</strong></dt><dd><ul class="breatheparameterlist simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">file_path</span></code>: - location of file created by serializeMetadata </p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">chunk_metadata_vector</span></code>: - vector of chunk metadata recovered from disk </p></li>
+</ul>
+</dd>
+</dl>
+</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="_CPPv4NK15foreign_storage18ParquetDataWrapper10isRestoredEv">
+<span id="_CPPv3NK15foreign_storage18ParquetDataWrapper10isRestoredEv"></span><span id="_CPPv2NK15foreign_storage18ParquetDataWrapper10isRestoredEv"></span><span id="foreign_storage::ParquetDataWrapper::isRestoredC"></span><span class="target" id="classforeign__storage_1_1_parquet_data_wrapper_1af793bb6400c370b5f8ba78cbff61a322"></span>bool <code class="sig-name descname">isRestored</code><span class="sig-paren">(</span><span class="sig-paren">)</span> <em class="property">const</em><a class="headerlink" href="#_CPPv4NK15foreign_storage18ParquetDataWrapper10isRestoredEv" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
 </div>
 <div class="breathe-sectiondef docutils container">
 <p class="breathe-sectiondef-title rubric">Public Static Functions</p>
@@ -1639,8 +1670,18 @@
 <dd></dd></dl>
 
 <dl class="function">
-<dt id="_CPPv4NK15foreign_storage18ParquetDataWrapper11getFilePathEv">
-<span id="_CPPv3NK15foreign_storage18ParquetDataWrapper11getFilePathEv"></span><span id="_CPPv2NK15foreign_storage18ParquetDataWrapper11getFilePathEv"></span><span id="foreign_storage::ParquetDataWrapper::getFilePathC"></span><span class="target" id="classforeign__storage_1_1_parquet_data_wrapper_1ab39fa776236411353a317ada3453ffe5"></span>std::string <code class="sig-name descname">getFilePath</code><span class="sig-paren">(</span><span class="sig-paren">)</span> <em class="property">const</em><a class="headerlink" href="#_CPPv4NK15foreign_storage18ParquetDataWrapper11getFilePathEv" title="Permalink to this definition">¶</a><br /></dt>
+<dt id="_CPPv4NK15foreign_storage18ParquetDataWrapper21getConfiguredFilePathEv">
+<span id="_CPPv3NK15foreign_storage18ParquetDataWrapper21getConfiguredFilePathEv"></span><span id="_CPPv2NK15foreign_storage18ParquetDataWrapper21getConfiguredFilePathEv"></span><span id="foreign_storage::ParquetDataWrapper::getConfiguredFilePathC"></span><span class="target" id="classforeign__storage_1_1_parquet_data_wrapper_1a597b127319c818d223c1cc47c19b94c0"></span>std::string <code class="sig-name descname">getConfiguredFilePath</code><span class="sig-paren">(</span><span class="sig-paren">)</span> <em class="property">const</em><a class="headerlink" href="#_CPPv4NK15foreign_storage18ParquetDataWrapper21getConfiguredFilePathEv" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="_CPPv4N15foreign_storage18ParquetDataWrapper21getProcessedFilePathsEv">
+<span id="_CPPv3N15foreign_storage18ParquetDataWrapper21getProcessedFilePathsEv"></span><span id="_CPPv2N15foreign_storage18ParquetDataWrapper21getProcessedFilePathsEv"></span><span id="foreign_storage::ParquetDataWrapper::getProcessedFilePaths"></span><span class="target" id="classforeign__storage_1_1_parquet_data_wrapper_1a47268a89b59c34cd5c995cf33aeb54de"></span>std::set&lt;std::string&gt; <code class="sig-name descname">getProcessedFilePaths</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N15foreign_storage18ParquetDataWrapper21getProcessedFilePathsEv" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="_CPPv4N15foreign_storage18ParquetDataWrapper15getAllFilePathsEv">
+<span id="_CPPv3N15foreign_storage18ParquetDataWrapper15getAllFilePathsEv"></span><span id="_CPPv2N15foreign_storage18ParquetDataWrapper15getAllFilePathsEv"></span><span id="foreign_storage::ParquetDataWrapper::getAllFilePaths"></span><span class="target" id="classforeign__storage_1_1_parquet_data_wrapper_1a6f73fabcc854f8060e55c244703a328a"></span>std::set&lt;std::string&gt; <code class="sig-name descname">getAllFilePaths</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N15foreign_storage18ParquetDataWrapper15getAllFilePathsEv" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 <dl class="function">
@@ -1753,8 +1794,18 @@
 <dd></dd></dl>
 
 <dl class="member">
+<dt id="_CPPv4N15foreign_storage18ParquetDataWrapper16total_row_count_E">
+<span id="_CPPv3N15foreign_storage18ParquetDataWrapper16total_row_count_E"></span><span id="_CPPv2N15foreign_storage18ParquetDataWrapper16total_row_count_E"></span><span id="foreign_storage::ParquetDataWrapper::total_row_count___s"></span><span class="target" id="classforeign__storage_1_1_parquet_data_wrapper_1aa431b34c8e548b5a52682b7673133736"></span>size_t <code class="sig-name descname">total_row_count_</code><a class="headerlink" href="#_CPPv4N15foreign_storage18ParquetDataWrapper16total_row_count_E" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="member">
 <dt id="_CPPv4N15foreign_storage18ParquetDataWrapper15last_row_group_E">
 <span id="_CPPv3N15foreign_storage18ParquetDataWrapper15last_row_group_E"></span><span id="_CPPv2N15foreign_storage18ParquetDataWrapper15last_row_group_E"></span><span id="foreign_storage::ParquetDataWrapper::last_row_group___i"></span><span class="target" id="classforeign__storage_1_1_parquet_data_wrapper_1ab4f8252ffa4f6526060c27fba3871f33"></span>int <code class="sig-name descname">last_row_group_</code><a class="headerlink" href="#_CPPv4N15foreign_storage18ParquetDataWrapper15last_row_group_E" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="member">
+<dt id="_CPPv4N15foreign_storage18ParquetDataWrapper12is_restored_E">
+<span id="_CPPv3N15foreign_storage18ParquetDataWrapper12is_restored_E"></span><span id="_CPPv2N15foreign_storage18ParquetDataWrapper12is_restored_E"></span><span id="foreign_storage::ParquetDataWrapper::is_restored___b"></span><span class="target" id="classforeign__storage_1_1_parquet_data_wrapper_1a192a95c23e3b0379c59924d7bbe1a76e"></span>bool <code class="sig-name descname">is_restored_</code><a class="headerlink" href="#_CPPv4N15foreign_storage18ParquetDataWrapper12is_restored_E" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 <dl class="member">
