@@ -196,6 +196,53 @@ inline std::vector<TargetMetaInfo> target_meta_infos_from_thrift(
   return target_meta_infos;
 }
 
+inline void fixup_geo_column_descriptor(TColumnType& col_type,
+                                        const SQLTypes subtype,
+                                        const int output_srid) {
+  col_type.col_type.precision = static_cast<int>(subtype);
+  col_type.col_type.scale = output_srid;
+}
+
+inline TColumnType target_meta_info_to_thrift(const TargetMetaInfo& target,
+                                              const size_t idx) {
+  TColumnType proj_info;
+  proj_info.col_name = target.get_resname();
+  if (proj_info.col_name.empty()) {
+    proj_info.col_name = "result_" + std::to_string(idx + 1);
+  }
+  const auto& target_ti = target.get_type_info();
+  proj_info.col_type.type = type_to_thrift(target_ti);
+  proj_info.col_type.encoding = encoding_to_thrift(target_ti);
+  proj_info.col_type.nullable = !target_ti.get_notnull();
+  proj_info.col_type.is_array = target_ti.get_type() == kARRAY;
+  if (IS_GEO(target_ti.get_type())) {
+    fixup_geo_column_descriptor(
+        proj_info, target_ti.get_subtype(), target_ti.get_output_srid());
+  } else {
+    proj_info.col_type.precision = target_ti.get_precision();
+    proj_info.col_type.scale = target_ti.get_scale();
+  }
+  if (target_ti.get_type() == kDATE) {
+    proj_info.col_type.size = target_ti.get_size();
+  }
+  proj_info.col_type.comp_param =
+      (target_ti.is_date_in_days() && target_ti.get_comp_param() == 0)
+          ? 32
+          : target_ti.get_comp_param();
+  return proj_info;
+}
+
+inline TRowDescriptor target_meta_infos_to_thift(
+    const std::vector<TargetMetaInfo>& targets) {
+  TRowDescriptor row_desc;
+  size_t i = 0;
+  for (const auto& target : targets) {
+    row_desc.push_back(target_meta_info_to_thrift(target, i));
+    ++i;
+  }
+  return row_desc;
+}
+
 inline TTargetInfo target_info_to_thrift(const TargetInfo& target_info) {
   TTargetInfo thrift_target_info;
   thrift_target_info.is_agg = target_info.is_agg;

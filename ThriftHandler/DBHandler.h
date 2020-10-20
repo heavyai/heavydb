@@ -714,11 +714,10 @@ class DBHandler : public OmniSciIf {
                       const ResultSet& results,
                       const bool column_format) const;
 
-  template <class R>
   void convert_rows(TQueryResult& _return,
                     QueryStateProxy query_state_proxy,
                     const std::vector<TargetMetaInfo>& targets,
-                    const R& results,
+                    const ResultSet& results,
                     const bool column_format,
                     const int32_t first_n,
                     const int32_t at_most_n) const;
@@ -736,12 +735,6 @@ class DBHandler : public OmniSciIf {
 
   std::vector<std::string> getTargetNames(
       const std::vector<std::shared_ptr<Analyzer::TargetEntry>>& targets) const;
-
-  TColumnType convert_target_metainfo(const TargetMetaInfo& target,
-                                      const size_t idx) const;
-
-  TRowDescriptor convert_target_metainfo(
-      const std::vector<TargetMetaInfo>& targets) const;
 
   void get_completion_hints_unsorted(std::vector<TCompletionHint>& hints,
                                      std::vector<std::string>& visible_tables,

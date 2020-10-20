@@ -1880,17 +1880,6 @@ void DBHandler::get_result_row_for_pixel(
   }
 }
 
-namespace {
-
-inline void fixup_geo_column_descriptor(TColumnType& col_type,
-                                        const SQLTypes subtype,
-                                        const int output_srid) {
-  col_type.col_type.precision = static_cast<int>(subtype);
-  col_type.col_type.scale = output_srid;
-}
-
-}  // namespace
-
 TColumnType DBHandler::populateThriftColumnType(const Catalog* cat,
                                                 const ColumnDescriptor* cd) {
   TColumnType col_type;
@@ -1905,7 +1894,7 @@ TColumnType DBHandler::populateThriftColumnType(const Catalog* cat,
     col_type.col_type.size = cd->columnType.get_size();  // only for arrays and dates
   }
   if (IS_GEO(cd->columnType.get_type())) {
-    fixup_geo_column_descriptor(
+    ThriftSerializers::fixup_geo_column_descriptor(
         col_type, cd->columnType.get_subtype(), cd->columnType.get_output_srid());
   } else {
     col_type.col_type.precision = cd->columnType.get_precision();
@@ -4905,56 +4894,15 @@ std::vector<std::string> DBHandler::getTargetNames(
   return names;
 }
 
-TColumnType DBHandler::convert_target_metainfo(const TargetMetaInfo& target,
-                                               const size_t idx) const {
-  TColumnType proj_info;
-  proj_info.col_name = target.get_resname();
-  if (proj_info.col_name.empty()) {
-    proj_info.col_name = "result_" + std::to_string(idx + 1);
-  }
-  const auto& target_ti = target.get_type_info();
-  proj_info.col_type.type = type_to_thrift(target_ti);
-  proj_info.col_type.encoding = encoding_to_thrift(target_ti);
-  proj_info.col_type.nullable = !target_ti.get_notnull();
-  proj_info.col_type.is_array = target_ti.get_type() == kARRAY;
-  if (IS_GEO(target_ti.get_type())) {
-    fixup_geo_column_descriptor(
-        proj_info, target_ti.get_subtype(), target_ti.get_output_srid());
-  } else {
-    proj_info.col_type.precision = target_ti.get_precision();
-    proj_info.col_type.scale = target_ti.get_scale();
-  }
-  if (target_ti.get_type() == kDATE) {
-    proj_info.col_type.size = target_ti.get_size();
-  }
-  proj_info.col_type.comp_param =
-      (target_ti.is_date_in_days() && target_ti.get_comp_param() == 0)
-          ? 32
-          : target_ti.get_comp_param();
-  return proj_info;
-}
-
-TRowDescriptor DBHandler::convert_target_metainfo(
-    const std::vector<TargetMetaInfo>& targets) const {
-  TRowDescriptor row_desc;
-  size_t i = 0;
-  for (const auto& target : targets) {
-    row_desc.push_back(convert_target_metainfo(target, i));
-    ++i;
-  }
-  return row_desc;
-}
-
-template <class R>
 void DBHandler::convert_rows(TQueryResult& _return,
                              QueryStateProxy query_state_proxy,
                              const std::vector<TargetMetaInfo>& targets,
-                             const R& results,
+                             const ResultSet& results,
                              const bool column_format,
                              const int32_t first_n,
                              const int32_t at_most_n) const {
   query_state::Timer timer = query_state_proxy.createTimer(__func__);
-  _return.row_set.row_desc = convert_target_metainfo(targets);
+  _return.row_set.row_desc = ThriftSerializers::target_meta_infos_to_thift(targets);
   int32_t fetched{0};
   if (column_format) {
     _return.row_set.is_columnar = true;
