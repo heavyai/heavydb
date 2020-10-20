@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 
-#include "MapDServer.h"
 #include "DataMgr/ForeignStorage/ForeignStorageInterface.h"
 #include "ThriftHandler/DBHandler.h"
 

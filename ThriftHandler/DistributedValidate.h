@@ -21,7 +21,6 @@
 #include "Logger/Logger.h"
 
 #include "LeafAggregator.h"
-#include "MapDServer.h"
 #include "QueryState.h"
 
 class DBHandler;

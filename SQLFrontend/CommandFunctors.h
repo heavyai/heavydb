@@ -31,7 +31,6 @@
 #include <type_traits>
 
 #include "Fragmenter/InsertOrderFragmenter.h"
-#include "MapDServer.h"
 
 #include <boost/algorithm/string.hpp>
 #include <boost/algorithm/string/join.hpp>
@@ -39,6 +38,7 @@
 #include <boost/algorithm/string/trim.hpp>
 #include <boost/preprocessor/facilities/overload.hpp>
 
+#include "Shared/ThriftTypesConvert.h"
 #include "Shared/base64.h"
 
 template <typename CONTEXT_OP_POLICY>

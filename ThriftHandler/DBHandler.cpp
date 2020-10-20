@@ -23,7 +23,6 @@
 
 #include "DBHandler.h"
 #include "DistributedLoader.h"
-#include "MapDServer.h"
 #include "QueryEngine/UDFCompiler.h"
 #include "TokenCompletionHints.h"
 

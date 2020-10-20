@@ -25,12 +25,14 @@
 
 #include "gen-cpp/serialized_result_set_types.h"
 
-#include "CompilationOptions.h"
-#include "Descriptors/CountDistinctDescriptor.h"
-#include "Descriptors/Types.h"
-
-#include <Shared/ThriftTypesConvert.h>
 #include "Logger/Logger.h"
+#include "QueryEngine/AggregatedColRange.h"
+#include "QueryEngine/CompilationOptions.h"
+#include "QueryEngine/Descriptors/CountDistinctDescriptor.h"
+#include "QueryEngine/Descriptors/Types.h"
+#include "QueryEngine/StringDictionaryGenerations.h"
+#include "QueryEngine/TargetMetaInfo.h"
+#include "Shared/ThriftTypesConvert.h"
 
 namespace ThriftSerializers {
 
@@ -112,6 +114,56 @@ inline SQLAgg agg_kind_from_thrift(const TAggKind::type agg) {
 
 #undef UNTHRIFT_AGGKIND_CASE
 
+inline AggregatedColRange column_ranges_from_thrift(
+    const std::vector<TColumnRange>& thrift_column_ranges) {
+  AggregatedColRange column_ranges;
+  for (const auto& thrift_column_range : thrift_column_ranges) {
+    PhysicalInput phys_input{thrift_column_range.col_id, thrift_column_range.table_id};
+    switch (thrift_column_range.type) {
+      case TExpressionRangeType::INTEGER:
+        column_ranges.setColRange(
+            phys_input,
+            ExpressionRange::makeIntRange(thrift_column_range.int_min,
+                                          thrift_column_range.int_max,
+                                          thrift_column_range.bucket,
+                                          thrift_column_range.has_nulls));
+        break;
+      case TExpressionRangeType::FLOAT:
+        column_ranges.setColRange(
+            phys_input,
+            ExpressionRange::makeFloatRange(thrift_column_range.fp_min,
+                                            thrift_column_range.fp_max,
+                                            thrift_column_range.has_nulls));
+        break;
+      case TExpressionRangeType::DOUBLE:
+        column_ranges.setColRange(
+            phys_input,
+            ExpressionRange::makeDoubleRange(thrift_column_range.fp_min,
+                                             thrift_column_range.fp_max,
+                                             thrift_column_range.has_nulls));
+        break;
+      case TExpressionRangeType::INVALID:
+        column_ranges.setColRange(phys_input, ExpressionRange::makeInvalidRange());
+        break;
+      default:
+        CHECK(false);
+    }
+  }
+  return column_ranges;
+}
+
+inline StringDictionaryGenerations string_dictionary_generations_from_thrift(
+    const std::vector<TDictionaryGeneration>& thrift_string_dictionary_generations) {
+  StringDictionaryGenerations string_dictionary_generations;
+  for (const auto& thrift_string_dictionary_generation :
+       thrift_string_dictionary_generations) {
+    string_dictionary_generations.setGeneration(
+        thrift_string_dictionary_generation.dict_id,
+        thrift_string_dictionary_generation.entry_count);
+  }
+  return string_dictionary_generations;
+}
+
 inline TTypeInfo type_info_to_thrift(const SQLTypeInfo& ti) {
   TTypeInfo thrift_ti;
   thrift_ti.type =
@@ -133,6 +185,15 @@ inline TTypeInfo type_info_to_thrift(const SQLTypeInfo& ti) {
 inline bool takes_arg(const TargetInfo& target_info) {
   return target_info.is_agg &&
          (target_info.agg_kind != kCOUNT || is_distinct_target(target_info));
+}
+
+inline std::vector<TargetMetaInfo> target_meta_infos_from_thrift(
+    const TRowDescriptor& row_desc) {
+  std::vector<TargetMetaInfo> target_meta_infos;
+  for (const auto& col : row_desc) {
+    target_meta_infos.emplace_back(col.col_name, type_info_from_thrift(col.col_type));
+  }
+  return target_meta_infos;
 }
 
 inline TTargetInfo target_info_to_thrift(const TargetInfo& target_info) {
