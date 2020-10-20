@@ -816,6 +816,27 @@ boost::optional<int> CommandLineOptions::parse_command_line(
               vm);
     po::notify(vm);
 
+    if (vm.count("help")) {
+      std::cerr << "Usage: omnisci_server <data directory path> [-p <port number>] "
+                   "[--http-port <http port number>] [--flush-log] [--version|-v]"
+                << std::endl
+                << std::endl;
+      std::cout << help_desc << std::endl;
+      return 0;
+    }
+    if (vm.count("dev-options")) {
+      std::cout << "Usage: omnisci_server <data directory path> [-p <port number>] "
+                   "[--http-port <http port number>] [--flush-log] [--version|-v]"
+                << std::endl
+                << std::endl;
+      std::cout << developer_desc << std::endl;
+      return 0;
+    }
+    if (vm.count("version")) {
+      std::cout << "OmniSci Version: " << MAPD_RELEASE << std::endl;
+      return 0;
+    }
+
     if (vm.count("config")) {
       std::ifstream settings_file(system_parameters.config_file);
 
@@ -847,27 +868,6 @@ boost::optional<int> CommandLineOptions::parse_command_line(
     }
     if (!trim_and_check_file_exists(system_parameters.ssl_trust_ca_file, "ssl ca file")) {
       return 1;
-    }
-
-    if (vm.count("help")) {
-      std::cerr << "Usage: omnisci_server <data directory path> [-p <port number>] "
-                   "[--http-port <http port number>] [--flush-log] [--version|-v]"
-                << std::endl
-                << std::endl;
-      std::cout << help_desc << std::endl;
-      return 0;
-    }
-    if (vm.count("dev-options")) {
-      std::cout << "Usage: omnisci_server <data directory path> [-p <port number>] "
-                   "[--http-port <http port number>] [--flush-log] [--version|-v]"
-                << std::endl
-                << std::endl;
-      std::cout << developer_desc << std::endl;
-      return 0;
-    }
-    if (vm.count("version")) {
-      std::cout << "OmniSci Version: " << MAPD_RELEASE << std::endl;
-      return 0;
     }
 
     g_enable_watchdog = enable_watchdog;
