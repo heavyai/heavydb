@@ -39,7 +39,8 @@ class LeafAggregator {
 
   AggregatedResult execute(const Catalog_Namespace::SessionInfo& parent_session_info,
                            const std::string& query_ra,
-                           const ExecutionOptions& eo) {
+                           const ExecutionOptions& eo,
+                           const bool is_update_delete) {
     CHECK(false);
     return {nullptr, {}};
   }

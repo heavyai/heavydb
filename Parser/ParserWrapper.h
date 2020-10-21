@@ -78,6 +78,10 @@ class ParserWrapper {
 
   QueryType getQueryType() const { return query_type_; }
 
+  bool isUpdateDelete() const {
+    return dml_type_ == DMLType::Update || dml_type_ == DMLType::Delete;
+  }
+
   bool isCalciteExplain() const { return explain_type_ == ExplainType::Calcite; }
 
   bool isPlanExplain() const { return explain_type_ == ExplainType::ExecutionPlan; }
