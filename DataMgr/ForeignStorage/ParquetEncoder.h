@@ -18,6 +18,10 @@
 
 #include "Catalog/ColumnDescriptor.h"
 #include "DataMgr/AbstractBuffer.h"
+#include "ForeignStorageBuffer.h"
+#include "ParquetShared.h"
+
+#include <parquet/metadata.h>
 
 namespace foreign_storage {
 
@@ -33,8 +37,33 @@ class ParquetEncoder {
                           const bool is_last_batch,
                           int8_t* values) = 0;
 
+  virtual std::shared_ptr<ChunkMetadata> getRowGroupMetadata(
+      const parquet::RowGroupMetaData* group_metadata,
+      const int parquet_column_index,
+      const SQLTypeInfo& column_type) {
+    // update statistics
+    auto column_metadata = group_metadata->ColumnChunk(parquet_column_index);
+    auto stats = validate_and_get_column_metadata_statistics(column_metadata.get());
+    auto metadata = createMetadata(column_type);
+    metadata->chunkStats.has_nulls = stats->null_count() > 0;
+    // update sizing
+    metadata->numElements = group_metadata->num_rows();
+    return metadata;
+  }
+
  protected:
   Data_Namespace::AbstractBuffer* buffer_;
+
+  static std::shared_ptr<ChunkMetadata> createMetadata(const SQLTypeInfo& column_type) {
+    auto metadata = std::make_shared<ChunkMetadata>();
+    ForeignStorageBuffer buffer;
+    buffer.initEncoder(column_type.is_array() ? column_type.get_elem_type()
+                                              : column_type);
+    auto encoder = buffer.getEncoder();
+    encoder->getMetadata(metadata);
+    metadata->sqlType = column_type;
+    return metadata;
+  }
 };
 
 class ParquetScalarEncoder : public ParquetEncoder {

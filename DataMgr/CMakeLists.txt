@@ -32,7 +32,6 @@ set(datamgr_source_files
     ForeignStorage/ParquetDataWrapper.cpp
     PersistentStorageMgr/MutableCachePersistentStorageMgr.cpp
     PersistentStorageMgr/PersistentStorageMgr.cpp
-    ForeignStorage/LazyParquetImporter.cpp
     ForeignStorage/LazyParquetChunkLoader.cpp
     ForeignStorage/ParquetShared.cpp
     ForeignStorage/ForeignTableRefresh.cpp

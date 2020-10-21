@@ -17,11 +17,13 @@
 #pragma once
 
 #include "ParquetEncoder.h"
+#include "ParquetShared.h"
 
 #include <parquet/schema.h>
 #include <parquet/types.h>
 
 #include "Catalog/ColumnDescriptor.h"
+#include "ForeignStorageBuffer.h"
 
 namespace foreign_storage {
 
@@ -205,8 +207,93 @@ class TypedParquetInPlaceEncoder : public ParquetInPlaceEncoder {
     omnisci_data_value_destination = omnisci_data_value_source;
   }
 
+  std::shared_ptr<ChunkMetadata> getRowGroupMetadata(
+      const parquet::RowGroupMetaData* group_metadata,
+      const int parquet_column_index,
+      const SQLTypeInfo& column_type) override {
+    auto metadata = ParquetEncoder::createMetadata(column_type);
+
+    // update statistics
+    auto column_metadata = group_metadata->ColumnChunk(parquet_column_index);
+    auto parquet_column_descriptor =
+        group_metadata->schema()->Column(parquet_column_index);
+    auto stats = validate_and_get_column_metadata_statistics(column_metadata.get());
+    if (stats->HasMinMax()) {
+      auto [stats_min, stats_max] = getEncodedStats(parquet_column_descriptor, stats);
+      auto updated_chunk_stats = getUpdatedStats(stats_min, stats_max, column_type);
+      metadata->fillChunkStats(updated_chunk_stats.min,
+                               updated_chunk_stats.max,
+                               metadata->chunkStats.has_nulls);
+    }
+    metadata->chunkStats.has_nulls = stats->null_count() > 0;
+
+    // update sizing
+    metadata->numBytes = omnisci_data_type_byte_size_ * column_metadata->num_values();
+    metadata->numElements = group_metadata->num_rows();
+
+    return metadata;
+  }
+
  protected:
   virtual bool encodingIsIdentityForSameTypes() const { return false; }
+
+ private:
+  static ChunkStats getUpdatedStats(V& stats_min,
+                                    V& stats_max,
+                                    const SQLTypeInfo& column_type) {
+    ForeignStorageBuffer buffer;
+    buffer.initEncoder(column_type);
+    auto encoder = buffer.getEncoder();
+
+    if (column_type.is_array()) {
+      ArrayDatum min_datum(
+          sizeof(V), reinterpret_cast<int8_t*>(&stats_min), false, DoNothingDeleter());
+      ArrayDatum max_datum(
+          sizeof(V), reinterpret_cast<int8_t*>(&stats_max), false, DoNothingDeleter());
+      std::vector<ArrayDatum> min_max_datums{min_datum, max_datum};
+      encoder->updateStats(&min_max_datums, 0, 1);
+    } else {
+      encoder->updateStats(reinterpret_cast<int8_t*>(&stats_min), 1);
+      encoder->updateStats(reinterpret_cast<int8_t*>(&stats_max), 1);
+    }
+    auto updated_chunk_stats_metadata = std::make_shared<ChunkMetadata>();
+    encoder->getMetadata(updated_chunk_stats_metadata);
+    return updated_chunk_stats_metadata->chunkStats;
+  }
+
+  std::pair<V, V> getEncodedStats(
+      const parquet::ColumnDescriptor* parquet_column_descriptor,
+      std::shared_ptr<parquet::Statistics> stats) {
+    V stats_min, stats_max;
+    auto min_string = stats->EncodeMin();
+    auto max_string = stats->EncodeMax();
+    if (parquet_column_descriptor->physical_type() ==
+        parquet::Type::FIXED_LEN_BYTE_ARRAY) {
+      parquet::FixedLenByteArray min_byte_array, max_byte_array;
+      min_byte_array.ptr = reinterpret_cast<const uint8_t*>(min_string.data());
+      max_byte_array.ptr = reinterpret_cast<const uint8_t*>(max_string.data());
+      encodeAndCopy(reinterpret_cast<int8_t*>(&min_byte_array),
+                    reinterpret_cast<int8_t*>(&stats_min));
+      encodeAndCopy(reinterpret_cast<int8_t*>(&max_byte_array),
+                    reinterpret_cast<int8_t*>(&stats_max));
+    } else if (parquet_column_descriptor->physical_type() == parquet::Type::BYTE_ARRAY) {
+      parquet::ByteArray min_byte_array, max_byte_array;
+      min_byte_array.ptr = reinterpret_cast<const uint8_t*>(min_string.data());
+      min_byte_array.len = min_string.length();
+      max_byte_array.ptr = reinterpret_cast<const uint8_t*>(max_string.data());
+      max_byte_array.len = max_string.length();
+      encodeAndCopy(reinterpret_cast<int8_t*>(&min_byte_array),
+                    reinterpret_cast<int8_t*>(&stats_min));
+      encodeAndCopy(reinterpret_cast<int8_t*>(&max_byte_array),
+                    reinterpret_cast<int8_t*>(&stats_max));
+    } else {
+      encodeAndCopy(reinterpret_cast<int8_t*>(min_string.data()),
+                    reinterpret_cast<int8_t*>(&stats_min));
+      encodeAndCopy(reinterpret_cast<int8_t*>(max_string.data()),
+                    reinterpret_cast<int8_t*>(&stats_max));
+    }
+    return {stats_min, stats_max};
+  }
 };
 
 }  // namespace foreign_storage

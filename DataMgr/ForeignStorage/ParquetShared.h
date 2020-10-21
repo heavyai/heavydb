@@ -20,15 +20,23 @@
 #include <arrow/filesystem/filesystem.h>
 #include <arrow/io/api.h>
 #include <parquet/arrow/reader.h>
+#include <parquet/statistics.h>
 #include <parquet/types.h>
 
 #include "Catalog/ColumnDescriptor.h"
+#include "DataMgr/ChunkMetadata.h"
 
 namespace foreign_storage {
 
 struct RowGroupInterval {
   std::string file_path;
   int start_index{-1}, end_index{-1};
+};
+
+struct RowGroupMetadata {
+  std::string file_path;
+  int row_group_index;
+  std::list<std::shared_ptr<ChunkMetadata>> column_chunk_metadata;
 };
 
 void open_parquet_table(const std::string& file_path,
@@ -50,5 +58,8 @@ void validate_equal_column_descriptor(
 
 std::unique_ptr<ColumnDescriptor> get_sub_type_column_descriptor(
     const ColumnDescriptor* column);
+
+std::shared_ptr<parquet::Statistics> validate_and_get_column_metadata_statistics(
+    const parquet::ColumnChunkMetaData* column_metadata);
 
 }  // namespace foreign_storage

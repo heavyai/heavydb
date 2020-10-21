@@ -20,8 +20,9 @@
 #include <parquet/schema.h>
 
 #include "DataMgr/Chunk/Chunk.h"
-#include "ImportExport/Importer.h"
+#include "ForeignTableSchema.h"
 #include "Interval.h"
+#include "ParquetEncoder.h"
 #include "ParquetShared.h"
 
 namespace foreign_storage {
@@ -65,6 +66,17 @@ class LazyParquetChunkLoader {
       const int parquet_column_index,
       std::list<Chunk_NS::Chunk>& chunks,
       StringDictionary* string_dictionary = nullptr);
+
+  /**
+   * @brief Perform a metadata scan for the paths specified
+   *
+   * @param file_paths -  (ordered) files of the metadata scan
+   * @param schema - schema of the foreign table to perform metadata scan for
+   *
+   * @return a list of the row group metadata extracted from `file_paths`
+   */
+  std::list<RowGroupMetadata> metadataScan(const std::set<std::string>& file_paths,
+                                           const ForeignTableSchema& schema);
 
   /**
    * Determine if a Parquet to OmniSci column mapping is supported.

@@ -27,7 +27,7 @@
 #include "ForeignTableSchema.h"
 #include "ImportExport/Importer.h"
 #include "Interval.h"
-#include "LazyParquetImporter.h"
+#include "LazyParquetChunkLoader.h"
 
 namespace foreign_storage {
 class ParquetDataWrapper : public ForeignDataWrapper {
@@ -62,10 +62,6 @@ class ParquetDataWrapper : public ForeignDataWrapper {
                               std::map<ChunkKey, AbstractBuffer*>& required_buffers,
                               const bool reserve_buffers_and_set_stats = false);
   void fetchChunkMetadata();
-  void loadBuffersUsingLazyParquetImporter(
-      const int logical_column_id,
-      const int fragment_id,
-      std::map<ChunkKey, AbstractBuffer*>& required_buffers);
   void loadBuffersUsingLazyParquetChunkLoader(
       const int logical_column_id,
       const int fragment_id,
@@ -101,35 +97,7 @@ class ParquetDataWrapper : public ForeignDataWrapper {
 
   void resetParquetMetadata();
 
-  void updateStatsForEncoder(Encoder* encoder,
-                             const SQLTypeInfo type_info,
-                             const DataBlockPtr& data_block,
-                             const size_t import_count);
-
-  void loadMetadataChunk(const ColumnDescriptor* column,
-                         const ChunkKey& chunk_key,
-                         DataBlockPtr& data_block,
-                         const size_t import_count,
-                         const bool has_nulls,
-                         const bool is_all_nulls,
-                         const ArrayMetadataStats& array_stats);
-
-  void loadChunk(const ColumnDescriptor* column,
-                 const ChunkKey& chunk_key,
-                 DataBlockPtr& data_block,
-                 const size_t import_count,
-                 std::map<ChunkKey, AbstractBuffer*>& required_buffers);
-
-  import_export::Loader* getMetadataLoader(
-      Catalog_Namespace::Catalog& catalog,
-      const ParquetLoaderMetadata& parquet_loader_metadata);
-
-  import_export::Loader* getChunkLoader(
-      Catalog_Namespace::Catalog& catalog,
-      const Interval<ColumnType>& column_interval,
-      const int db_id,
-      const int fragment_index,
-      std::map<ChunkKey, AbstractBuffer*>& required_buffers);
+  void metadataScanFiles(const std::set<std::string>& file_paths);
 
   std::map<int, std::vector<RowGroupInterval>> fragment_to_row_group_interval_map_;
   std::map<ChunkKey, std::shared_ptr<ChunkMetadata>> chunk_metadata_map_;
@@ -143,9 +111,7 @@ class ParquetDataWrapper : public ForeignDataWrapper {
   std::unique_ptr<ForeignTableSchema> schema_;
   std::shared_ptr<arrow::fs::FileSystem> file_system_;
 
-  static constexpr std::array<char const*, 4> supported_options_{"BASE_PATH",
-                                                                 "FILE_PATH",
-                                                                 "ARRAY_DELIMITER",
-                                                                 "ARRAY_MARKER"};
+  static constexpr std::array<char const*, 2> supported_options_{"BASE_PATH",
+                                                                 "FILE_PATH"};
 };
 }  // namespace foreign_storage

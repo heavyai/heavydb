@@ -44,6 +44,8 @@ inline ArrayDatum encode_as_array_datum(const std::vector<T>& data) {
 
 class ParquetGeospatialEncoder : public ParquetEncoder {
  public:
+  ParquetGeospatialEncoder() : ParquetEncoder(nullptr) {}
+
   ParquetGeospatialEncoder(const parquet::ColumnDescriptor* parquet_column_descriptor,
                            std::list<Chunk_NS::Chunk>& chunks,
                            std::list<std::unique_ptr<ChunkMetadata>>& chunk_metadata)

@@ -532,7 +532,7 @@ TEST_P(CacheControllingSelectQueryTest, DefaultLocalCsvServer) {
 
 TEST_P(CacheControllingSelectQueryTest, DefaultLocalParquetServer) {
   std::string query =
-      "CREATE FOREIGN TABLE test_foreign_table (t TEXT, i INTEGER, f DOUBLE) "s +
+      "CREATE FOREIGN TABLE test_foreign_table (t TEXT, i BIGINT, f DOUBLE) "s +
       "SERVER omnisci_local_parquet WITH (file_path = '" + getDataFilesPath() +
       "/example_2.parquet');";
   sql(query);
@@ -951,7 +951,7 @@ TEST_F(SelectQueryTest, DirectoryWithDifferentSchema_SameNumberOfColumns) {
 }
 
 TEST_F(SelectQueryTest, DirectoryWithDifferentSchema_DifferentNumberOfColumns) {
-  std::string query = "CREATE FOREIGN TABLE test_foreign_table (i INTEGER) "s +
+  std::string query = "CREATE FOREIGN TABLE test_foreign_table (i BIGINT) "s +
                       "SERVER omnisci_local_parquet WITH (file_path = '" +
                       getDataFilesPath() + "/different_parquet_schemas_2');";
   sql(query);
@@ -978,8 +978,8 @@ INSTANTIATE_TEST_SUITE_P(DataWrapperParameterizedTests,
                          PrintToStringParamName());
 
 TEST_P(DataWrapperSelectQueryTest, AggregateAndGroupBy) {
-  const auto& query = getCreateForeignTableQuery(
-      "(t TEXT, i INTEGER, f DOUBLE)", "example_2", GetParam());
+  const auto& query =
+      getCreateForeignTableQuery("(t TEXT, i BIGINT, f DOUBLE)", "example_2", GetParam());
   sql(query);
 
   TQueryResult result;
@@ -1015,8 +1015,8 @@ TEST_P(CacheControllingSelectQueryTest, Join) {
 }
 
 TEST_P(DataWrapperSelectQueryTest, Filter) {
-  const auto& query = getCreateForeignTableQuery(
-      "(t TEXT, i INTEGER, f DOUBLE)", "example_2", GetParam());
+  const auto& query =
+      getCreateForeignTableQuery("(t TEXT, i BIGINT, f DOUBLE)", "example_2", GetParam());
   sql(query);
 
   TQueryResult result;
@@ -1044,8 +1044,8 @@ TEST_P(CacheControllingSelectQueryTest, Sort) {
 }
 
 TEST_P(DataWrapperSelectQueryTest, Update) {
-  const auto& query = getCreateForeignTableQuery(
-      "(t TEXT, i INTEGER, f DOUBLE)", "example_2", GetParam());
+  const auto& query =
+      getCreateForeignTableQuery("(t TEXT, i BIGINT, f DOUBLE)", "example_2", GetParam());
   sql(query);
   queryAndAssertException("UPDATE test_foreign_table SET t = 'abc';",
                           "Exception: DELETE, INSERT, OR UPDATE commands are not "
@@ -1053,8 +1053,8 @@ TEST_P(DataWrapperSelectQueryTest, Update) {
 }
 
 TEST_P(DataWrapperSelectQueryTest, Insert) {
-  const auto& query = getCreateForeignTableQuery(
-      "(t TEXT, i INTEGER, f DOUBLE)", "example_2", GetParam());
+  const auto& query =
+      getCreateForeignTableQuery("(t TEXT, i BIGINT, f DOUBLE)", "example_2", GetParam());
   sql(query);
   queryAndAssertException("INSERT INTO test_foreign_table VALUES('abc', null, null);",
                           "Exception: DELETE, INSERT, OR UPDATE commands are not "
@@ -1062,8 +1062,8 @@ TEST_P(DataWrapperSelectQueryTest, Insert) {
 }
 
 TEST_P(DataWrapperSelectQueryTest, InsertIntoSelect) {
-  const auto& query = getCreateForeignTableQuery(
-      "(t TEXT, i INTEGER, f DOUBLE)", "example_2", GetParam());
+  const auto& query =
+      getCreateForeignTableQuery("(t TEXT, i BIGINT, f DOUBLE)", "example_2", GetParam());
   sql(query);
   queryAndAssertException(
       "INSERT INTO test_foreign_table SELECT * FROM test_foreign_table;",
@@ -1073,8 +1073,8 @@ TEST_P(DataWrapperSelectQueryTest, InsertIntoSelect) {
 }
 
 TEST_P(DataWrapperSelectQueryTest, Delete) {
-  const auto& query = getCreateForeignTableQuery(
-      "(t TEXT, i INTEGER, f DOUBLE)", "example_2", GetParam());
+  const auto& query =
+      getCreateForeignTableQuery("(t TEXT, i BIGINT, f DOUBLE)", "example_2", GetParam());
   sql(query);
   queryAndAssertException("DELETE FROM test_foreign_table WHERE t = 'a';",
                           "Exception: DELETE, INSERT, OR UPDATE commands are not "
@@ -1312,7 +1312,7 @@ TEST_P(CacheControllingSelectQueryTest, ReverseLongitudeAndLatitude) {
 
 TEST_F(SelectQueryTest, UnsupportedColumnMapping) {
   const auto& query = getCreateForeignTableQuery(
-      "(t TEXT, i INTEGER, f INTEGER)", {}, "example_2", "parquet");
+      "(t TEXT, i BIGINT, f INTEGER)", {}, "example_2", "parquet");
   sql(query);
   queryAndAssertException(
       "SELECT * FROM test_foreign_table;",
@@ -1332,11 +1332,10 @@ TEST_F(SelectQueryTest, NoStatistics) {
 }
 
 TEST_F(SelectQueryTest, RowGroupSizeLargerThanFragmentSize) {
-  const auto& query =
-      getCreateForeignTableQuery("(a INTEGER, b INTEGER, c INTEGER, d DOUBLE)",
-                                 {{"fragment_size", "1"}},
-                                 "row_group_size_2",
-                                 "parquet");
+  const auto& query = getCreateForeignTableQuery("(a BIGINT, b BIGINT, c TEXT, d DOUBLE)",
+                                                 {{"fragment_size", "1"}},
+                                                 "row_group_size_2",
+                                                 "parquet");
   sql(query);
   queryAndAssertException(
       "SELECT * FROM test_foreign_table;",
@@ -1450,7 +1449,7 @@ class RefreshTests : public ForeignTableTest {
 
   void createFilesAndTables(
       const std::vector<std::string>& file_names,
-      const std::string& column_schema = "(i INTEGER)",
+      const std::string& column_schema = "(i BIGINT)",
       const std::map<std::string, std::string>& table_options = {}) {
     for (size_t i = 0; i < file_names.size(); ++i) {
       tmp_file_names.emplace_back(default_name + std::to_string(i));
@@ -1791,7 +1790,7 @@ TEST_P(RefreshParamTests, EvictTrue) {
 
 TEST_P(RefreshParamTests, TwoColumn) {
   // Create initial files and tables
-  createFilesAndTables({"two_col_1_2"}, "(i INTEGER, i2 INTEGER)");
+  createFilesAndTables({"two_col_1_2"}, "(i BIGINT, i2 BIGINT)");
 
   // Read from table to populate cache.
   sqlAndCompareResult("SELECT * FROM " + table_names[0] + ";", {{i(1), i(2)}});
@@ -1848,7 +1847,7 @@ TEST_P(RefreshParamTests, ChangeSchema) {
 
 TEST_P(RefreshParamTests, AddFrags) {
   // Create initial files and tables
-  createFilesAndTables({"two_row_1_2"}, "(i INTEGER)", {{"fragment_size", "1"}});
+  createFilesAndTables({"two_row_1_2"}, "(i BIGINT)", {{"fragment_size", "1"}});
 
   // Read from table to populate cache.
   sqlAndCompareResult("SELECT * FROM " + table_names[0] + ";", {{i(1)}, {i(2)}});
@@ -1881,7 +1880,7 @@ TEST_P(RefreshParamTests, AddFrags) {
 
 TEST_P(RefreshParamTests, SubFrags) {
   // Create initial files and tables
-  createFilesAndTables({"three_row_3_4_5"}, "(i INTEGER)", {{"fragment_size", "1"}});
+  createFilesAndTables({"three_row_3_4_5"}, "(i BIGINT)", {{"fragment_size", "1"}});
 
   // Read from table to populate cache.
   sqlAndCompareResult("SELECT * FROM " + table_names[0] + ";", {{i(3)}, {i(4)}, {i(5)}});
@@ -1916,7 +1915,7 @@ TEST_P(RefreshParamTests, SubFrags) {
 
 TEST_P(RefreshParamTests, TwoFrags) {
   // Create initial files and tables
-  createFilesAndTables({"two_row_1_2"}, "(i INTEGER)", {{"fragment_size", "1"}});
+  createFilesAndTables({"two_row_1_2"}, "(i BIGINT)", {{"fragment_size", "1"}});
 
   // Read from table to populate cache.
   sqlAndCompareResult("SELECT * FROM " + table_names[0] + ";", {{i(1)}, {i(2)}});
@@ -2256,7 +2255,7 @@ TEST_P(FragmentSizesAppendRefreshTest, AppendFrags) {
   std::string file_path =
       getDataFilesPath() + "append_tmp/" + "single_file." + param.wrapper;
 
-  std::string query = "CREATE FOREIGN TABLE " + default_name + " (i INTEGER) "s +
+  std::string query = "CREATE FOREIGN TABLE " + default_name + " (i BIGINT) "s +
                       "SERVER omnisci_local_" + param.wrapper + " WITH (file_path = '" +
                       getDataFilesPath() + "append_tmp/" + filename +
                       "', fragment_size = '" + std::to_string(fragment_size) +
@@ -2339,7 +2338,7 @@ TEST_P(DataWrapperAppendRefreshTest, AppendNothing) {
   int fragment_size = 1;
   std::string filename = "single_file." + param.wrapper;
 
-  std::string query = "CREATE FOREIGN TABLE " + default_name + " (i INTEGER) "s +
+  std::string query = "CREATE FOREIGN TABLE " + default_name + " (i BIGINT) "s +
                       "SERVER omnisci_local_" + param.wrapper + " WITH (file_path = '" +
                       getDataFilesPath() + "append_before/" + filename +
                       "', fragment_size = '" + std::to_string(fragment_size) +
@@ -2379,7 +2378,7 @@ TEST_P(DataWrapperAppendRefreshTest, MissingRows) {
   bf::remove_all(getDataFilesPath() + "append_tmp");
   recursive_copy(getDataFilesPath() + "append_before", getDataFilesPath() + "append_tmp");
 
-  std::string query = "CREATE FOREIGN TABLE " + default_name + " (i INTEGER) "s +
+  std::string query = "CREATE FOREIGN TABLE " + default_name + " (i BIGINT) "s +
                       "SERVER omnisci_local_" + wrapper + " WITH (file_path = '" +
                       getDataFilesPath() + "append_tmp/" + filename +
                       "', fragment_size = '" + std::to_string(fragment_size) +
@@ -2415,7 +2414,7 @@ TEST_P(DataWrapperAppendRefreshTest, MissingFile) {
   recursive_copy(getDataFilesPath() + "append_before", getDataFilesPath() + "append_tmp");
   std::string file_path = getDataFilesPath() + "append_tmp/" + "single_file." + wrapper;
 
-  std::string query = "CREATE FOREIGN TABLE " + default_name + " (i INTEGER) "s +
+  std::string query = "CREATE FOREIGN TABLE " + default_name + " (i BIGINT) "s +
                       "SERVER omnisci_local_" + wrapper + " WITH (file_path = '" +
                       getDataFilesPath() + "append_tmp/" + filename +
                       "', fragment_size = '" + std::to_string(fragment_size) +
@@ -2452,7 +2451,7 @@ TEST_P(DataWrapperAppendRefreshTest, MultifileAppendtoFile) {
   recursive_copy(getDataFilesPath() + "append_before", getDataFilesPath() + "append_tmp");
   std::string file_path = getDataFilesPath() + "append_tmp/" + "single_file." + wrapper;
 
-  std::string query = "CREATE FOREIGN TABLE " + default_name + " (i INTEGER) "s +
+  std::string query = "CREATE FOREIGN TABLE " + default_name + " (i BIGINT) "s +
                       "SERVER omnisci_local_" + wrapper + " WITH (file_path = '" +
                       getDataFilesPath() + "append_tmp/" + filename +
                       "', fragment_size = '" + std::to_string(fragment_size) +
@@ -3030,7 +3029,7 @@ TEST_P(RowGroupAndFragmentSizeSelectQueryTest, MetadataOnlyCount) {
   std::stringstream filename_stream;
   filename_stream << "example_row_group_size." << row_group_size;
   const auto& query =
-      getCreateForeignTableQuery("(a INTEGER, b INTEGER, c INTEGER, d DOUBLE)",
+      getCreateForeignTableQuery("(a BIGINT, b BIGINT, c BIGINT, d DOUBLE)",
                                  {{"fragment_size", std::to_string(fragment_size)}},
                                  filename_stream.str(),
                                  "parquet");
@@ -3048,7 +3047,7 @@ TEST_P(RowGroupAndFragmentSizeSelectQueryTest, MetadataOnlyFilter) {
   std::stringstream filename_stream;
   filename_stream << "example_row_group_size." << row_group_size;
   const auto& query =
-      getCreateForeignTableQuery("(a INTEGER, b INTEGER, c INTEGER, d DOUBLE)",
+      getCreateForeignTableQuery("(a BIGINT, b BIGINT, c BIGINT, d DOUBLE)",
                                  {{"fragment_size", std::to_string(fragment_size)}},
                                  filename_stream.str(),
                                  "parquet");
@@ -3074,13 +3073,13 @@ TEST_P(RowGroupAndFragmentSizeSelectQueryTest, Join) {
   std::stringstream filename_stream;
   filename_stream << "example_row_group_size." << row_group_size;
   auto query =
-      getCreateForeignTableQuery("(a INTEGER, b INTEGER, c INTEGER, d DOUBLE)",
+      getCreateForeignTableQuery("(a BIGINT, b BIGINT, c BIGINT, d DOUBLE)",
                                  {{"fragment_size", std::to_string(fragment_size)}},
                                  filename_stream.str(),
                                  "parquet");
   sql(query);
   query = getCreateForeignTableQuery(
-      "(t TEXT, i INTEGER, d DOUBLE)", "example_2", "parquet", 2);
+      "(t TEXT, i BIGINT, d DOUBLE)", "example_2", "parquet", 2);
   sql(query);
 
   TQueryResult result;
@@ -3105,7 +3104,7 @@ TEST_P(RowGroupAndFragmentSizeSelectQueryTest, Select) {
   std::stringstream filename_stream;
   filename_stream << "example_row_group_size." << row_group_size;
   const auto& query =
-      getCreateForeignTableQuery("(a INTEGER, b INTEGER, c INTEGER, d DOUBLE)",
+      getCreateForeignTableQuery("(a BIGINT, b BIGINT, c BIGINT, d DOUBLE)",
                                  {{"fragment_size", std::to_string(fragment_size)}},
                                  filename_stream.str(),
                                  "parquet");
@@ -3129,7 +3128,7 @@ TEST_P(RowGroupAndFragmentSizeSelectQueryTest, Filter) {
   std::stringstream filename_stream;
   filename_stream << "example_row_group_size." << row_group_size;
   const auto& query =
-      getCreateForeignTableQuery("(a INTEGER, b INTEGER, c INTEGER, d DOUBLE)",
+      getCreateForeignTableQuery("(a BIGINT, b BIGINT, c BIGINT, d DOUBLE)",
                                  {{"fragment_size", std::to_string(fragment_size)}},
                                  filename_stream.str(),
                                  "parquet");
@@ -3286,7 +3285,7 @@ TEST_F(RecoverCacheQueryTest, RecoverWithoutWrappers) {
 TEST_F(RecoverCacheQueryTest, RecoverThenPopulateDataWrappersOnDemandVarLen) {
   sqlDropForeignTable();
   std::string query = "CREATE FOREIGN TABLE " + default_table_name +
-                      " (t TEXT, i INTEGER[]) "s +
+                      " (t TEXT, i BIGINT[]) "s +
                       "SERVER omnisci_local_csv WITH (file_path = '" +
                       getDataFilesPath() + "/" + "example_1_dir_archives/');";
   sql(query);
@@ -3310,8 +3309,8 @@ TEST_F(RecoverCacheQueryTest, RecoverThenPopulateDataWrappersOnDemandVarLen) {
 
   sqlAndCompareResult("SELECT * FROM " + default_table_name + "  ORDER BY t;",
                       {{"a", array({i(1), i(1), i(1)})},
-                       {"aa", array({Null_i, i(2), i(2)})},
-                       {"aaa", array({i(3), Null_i, i(3)})}});
+                       {"aa", array({NULL_BIGINT, i(2), i(2)})},
+                       {"aaa", array({i(3), NULL_BIGINT, i(3)})}});
 
   // 2 data + 1 index chunk
   ASSERT_EQ(cache_->getNumCachedChunks(), 3U);
@@ -3370,7 +3369,7 @@ TEST_P(DataWrapperRecoverCacheQueryTest, RecoverThenPopulateDataWrappersOnDemand
   auto wrapper = GetParam();
 
   sqlDropForeignTable();
-  sqlCreateForeignTable("(col1 INTEGER)", "1", wrapper);
+  sqlCreateForeignTable("(col1 BIGINT)", "1", wrapper);
 
   auto td = cat_->getMetadataForTable(default_table_name);
   ChunkKey key{cat_->getCurrentDB().dbId, td->tableId, 1, 0};
@@ -3420,7 +3419,7 @@ TEST_P(DataWrapperRecoverCacheQueryTest, AppendData) {
   recursive_copy(getDataFilesPath() + "append_before", getDataFilesPath() + "append_tmp");
   std::string file_path = getDataFilesPath() + "append_tmp/" + "single_file." + wrapper;
 
-  std::string query = "CREATE FOREIGN TABLE " + default_table_name + " (i INTEGER) "s +
+  std::string query = "CREATE FOREIGN TABLE " + default_table_name + " (i BIGINT) "s +
                       "SERVER omnisci_local_" + wrapper + " WITH (file_path = '" +
                       getDataFilesPath() + "append_tmp/" + filename +
                       "', fragment_size = '" + std::to_string(fragment_size) +

@@ -56,6 +56,7 @@ class ParquetStringEncoder : public TypedParquetInPlaceEncoder<V, V> {
   void encodeAndCopyContiguous(const int8_t* parquet_data_bytes,
                                int8_t* omnisci_data_bytes,
                                const size_t num_elements) override {
+    CHECK(string_dictionary_);
     auto parquet_data_ptr =
         reinterpret_cast<const parquet::ByteArray*>(parquet_data_bytes);
     auto omnisci_data_ptr = reinterpret_cast<V*>(omnisci_data_bytes);
@@ -73,6 +74,18 @@ class ParquetStringEncoder : public TypedParquetInPlaceEncoder<V, V> {
   void encodeAndCopy(const int8_t* parquet_data_bytes,
                      int8_t* omnisci_data_bytes) override {
     TypedParquetInPlaceEncoder<V, V>::copy(parquet_data_bytes, omnisci_data_bytes);
+  }
+
+  std::shared_ptr<ChunkMetadata> getRowGroupMetadata(
+      const parquet::RowGroupMetaData* group_metadata,
+      const int parquet_column_index,
+      const SQLTypeInfo& column_type) override {
+    auto metadata = ParquetEncoder::getRowGroupMetadata(
+        group_metadata, parquet_column_index, column_type);
+    auto column_metadata = group_metadata->ColumnChunk(parquet_column_index);
+    metadata->numBytes = ParquetInPlaceEncoder::omnisci_data_type_byte_size_ *
+                         column_metadata->num_values();
+    return metadata;
   }
 
  protected:

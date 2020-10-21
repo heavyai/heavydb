@@ -83,4 +83,13 @@ std::unique_ptr<ColumnDescriptor> get_sub_type_column_descriptor(
       column->tableId, column->columnId, column->columnName, column_type);
 }
 
+std::shared_ptr<parquet::Statistics> validate_and_get_column_metadata_statistics(
+    const parquet::ColumnChunkMetaData* column_metadata) {
+  CHECK(column_metadata->is_stats_set());
+  std::shared_ptr<parquet::Statistics> stats = column_metadata->statistics();
+  bool is_all_nulls = stats->null_count() == column_metadata->num_values();
+  CHECK(is_all_nulls || stats->HasMinMax());
+  return stats;
+}
+
 }  // namespace foreign_storage
