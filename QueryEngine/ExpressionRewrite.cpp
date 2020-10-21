@@ -968,3 +968,25 @@ std::shared_ptr<Analyzer::Expr> fold_expr(const Analyzer::Expr* expr) {
   }
   return rewritten_expr;
 }
+
+bool self_join_not_covered_by_left_deep_tree(const Analyzer::ColumnVar* key_side,
+                                             const Analyzer::ColumnVar* val_side,
+                                             const int max_rte_covered) {
+  if (key_side->get_table_id() == val_side->get_table_id() &&
+      key_side->get_rte_idx() == val_side->get_rte_idx() &&
+      key_side->get_rte_idx() > max_rte_covered) {
+    return true;
+  }
+  return false;
+}
+
+const int get_max_rte_scan_table(
+    std::unordered_map<int, llvm::Value*>& scan_idx_to_hash_pos) {
+  int ret = INT32_MIN;
+  for (auto& kv : scan_idx_to_hash_pos) {
+    if (kv.first > ret) {
+      ret = kv.first;
+    }
+  }
+  return ret;
+}

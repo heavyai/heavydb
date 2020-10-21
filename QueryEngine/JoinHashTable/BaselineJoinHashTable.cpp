@@ -1168,6 +1168,21 @@ llvm::Value* BaselineJoinHashTable::codegenKey(const CompilationOptions& co) {
     const auto key_comp_dest_lv = LL_BUILDER.CreateGEP(key_buff_lv, LL_INT(i));
     const auto& inner_outer_pair = inner_outer_pairs_[i];
     const auto outer_col = inner_outer_pair.second;
+    const auto key_col_var = dynamic_cast<const Analyzer::ColumnVar*>(outer_col);
+    const auto val_col_var =
+        dynamic_cast<const Analyzer::ColumnVar*>(inner_outer_pair.first);
+    if (key_col_var && val_col_var &&
+        self_join_not_covered_by_left_deep_tree(
+            key_col_var,
+            val_col_var,
+            get_max_rte_scan_table(executor_->cgen_state_->scan_idx_to_hash_pos_))) {
+      throw std::runtime_error(
+          "Query execution fails because the query contains not supported self-join "
+          "pattern. We suspect the query requires multiple left-deep join tree due to "
+          "the join condition of the self-join and is not supported for now. Please "
+          "consider rewriting table order in "
+          "FROM clause.");
+    }
     const auto col_lvs = code_generator.codegen(outer_col, true, co);
     CHECK_EQ(size_t(1), col_lvs.size());
     const auto col_lv = LL_BUILDER.CreateSExt(

@@ -1331,6 +1331,20 @@ HashJoinMatchingSet JoinHashTable::codegenMatchingSet(const CompilationOptions& 
   auto pos_ptr = codegenHashTableLoad(index);
   CHECK(pos_ptr);
   const int shard_count = shardCount();
+  const auto key_col_var = dynamic_cast<const Analyzer::ColumnVar*>(key_col);
+  const auto val_col_var = dynamic_cast<const Analyzer::ColumnVar*>(val_col);
+  if (key_col_var && val_col_var &&
+      self_join_not_covered_by_left_deep_tree(
+          key_col_var,
+          val_col_var,
+          get_max_rte_scan_table(executor_->cgen_state_->scan_idx_to_hash_pos_))) {
+    throw std::runtime_error(
+        "Query execution fails because the query contains not supported self-join "
+        "pattern. We suspect the query requires multiple left-deep join tree due to the "
+        "join condition of the self-join and is not supported for now. Please consider "
+        "rewriting table order in "
+        "FROM clause.");
+  }
   auto hash_join_idx_args = getHashJoinArgs(pos_ptr, key_col, shard_count, co);
   const int64_t sub_buff_size = getComponentBufferSize();
   const auto& key_col_ti = key_col->get_type_info();
@@ -1533,6 +1547,20 @@ llvm::Value* JoinHashTable::codegenSlot(const CompilationOptions& co,
   auto val_col = cols.first;
   CHECK(val_col);
   CodeGenerator code_generator(executor_);
+  const auto key_col_var = dynamic_cast<const Analyzer::ColumnVar*>(key_col);
+  const auto val_col_var = dynamic_cast<const Analyzer::ColumnVar*>(val_col);
+  if (key_col_var && val_col_var &&
+      self_join_not_covered_by_left_deep_tree(
+          key_col_var,
+          val_col_var,
+          get_max_rte_scan_table(executor_->cgen_state_->scan_idx_to_hash_pos_))) {
+    throw std::runtime_error(
+        "Query execution fails because the query contains not supported self-join "
+        "pattern. We suspect the query requires multiple left-deep join tree due to the "
+        "join condition of the self-join and is not supported for now. Please consider "
+        "rewriting table order in "
+        "FROM clause.");
+  }
   const auto key_lvs = code_generator.codegen(key_col, true, co);
   CHECK_EQ(size_t(1), key_lvs.size());
   auto hash_ptr = codegenHashTableLoad(index);

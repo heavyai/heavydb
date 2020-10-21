@@ -7928,6 +7928,25 @@ TEST(Select, Joins_EmptyTable) {
   }
 }
 
+TEST(Select, Joins_Fragmented_SelfJoin_And_LoopJoin) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    EXPECT_THROW(
+        run_multiple_agg("SELECT COUNT(*) FROM test a, test b WHERE b.x = b.x;", dt),
+        std::runtime_error);
+    EXPECT_THROW(run_multiple_agg(
+                     "SELECT COUNT(*) FROM test a, test b, test c WHERE b.x = b.x;", dt),
+                 std::runtime_error);
+    EXPECT_THROW(run_multiple_agg(
+                     "SELECT COUNT(*) FROM test a, test b, test c WHERE c.x = c.x;", dt),
+                 std::runtime_error);
+    EXPECT_THROW(
+        run_multiple_agg(
+            "SELECT COUNT(*) FROM test a, test b WHERE b.x = b.x AND b.y = b.y;", dt),
+        std::runtime_error);
+  }
+}
+
 TEST(Select, Joins_ImplicitJoins) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();

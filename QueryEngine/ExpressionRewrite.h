@@ -17,6 +17,7 @@
 #ifndef QUERYENGINE_EXPRESSIONREWRITE_H
 #define QUERYENGINE_EXPRESSIONREWRITE_H
 
+#include <llvm/IR/Value.h>
 #include <boost/optional.hpp>
 #include <list>
 #include <memory>
@@ -56,5 +57,12 @@ std::list<std::shared_ptr<Analyzer::Expr>> strip_join_covered_filter_quals(
     const JoinQualsPerNestingLevel& join_quals);
 
 std::shared_ptr<Analyzer::Expr> fold_expr(const Analyzer::Expr*);
+
+bool self_join_not_covered_by_left_deep_tree(const Analyzer::ColumnVar* lhs,
+                                             const Analyzer::ColumnVar* rhs,
+                                             const int max_rte_covered);
+
+const int get_max_rte_scan_table(
+    std::unordered_map<int, llvm::Value*>& scan_idx_to_hash_pos);
 
 #endif  // QUERYENGINE_EXPRESSIONREWRITE_H
