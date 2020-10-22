@@ -54,7 +54,7 @@ struct TResultSetBufferDescriptor {
 }
 
 enum TAggKind {
-  AVG, MIN, MAX, SUM, COUNT, APPROX_COUNT_DISTINCT, SAMPLE
+  AVG, MIN, MAX, SUM, COUNT, APPROX_COUNT_DISTINCT, SAMPLE, SINGLE_VALUE
 }
 
 struct TTargetInfo {
