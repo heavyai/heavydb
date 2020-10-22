@@ -192,7 +192,7 @@ A [`.clang-tidy`](https://clang.llvm.org/extra/clang-tidy/) configuration is pro
 
 `clang-tidy` requires all generated files to exist before running. The easiest way to accomplish this is to simply run a full build before running `clang-tidy`. A build target which runs `clang-tidy` is provided. To use:
 
-    make clang-tidy
+    make run-clang-tidy
 
 Note: `clang-tidy` may make invalid or overly verbose changes to the source code. It is recommended to first commit your changes, then run `clang-tidy` and review its recommended changes before amending them to your commit.
 
