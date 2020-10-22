@@ -1,0 +1,15 @@
+files: ^python/
+repos:
+    - repo: https://github.com/psf/black
+      rev: 19.10b0
+      hooks:
+        - id: black
+          types:
+            - python
+
+    - repo: https://gitlab.com/pycqa/flake8
+      rev: 3.7.9
+      hooks:
+        - id: flake8
+          types:
+            - python

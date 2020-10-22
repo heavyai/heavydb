@@ -1,0 +1,10 @@
+thrift==0.13.0
+sqlalchemy
+numpy
+numpydoc
+coverage
+flake8
+pre-commit
+pytest
+pytest-cov
+pytest-mock

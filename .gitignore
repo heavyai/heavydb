@@ -88,3 +88,6 @@ data/
 # IntelliJ/CLion settings files
 .idea
 *.iml
+
+# Python
+*.egg-info/

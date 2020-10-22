@@ -1,0 +1,20 @@
+[tool.black]
+line-length = 79
+skip-string-normalization = true
+target-version = ["py36", "py37", "py38"]
+exclude = '''
+(
+  /(
+      tests/test_data
+    | omnisci/common
+    | omnisci/completion_hints
+    | omnisci/extension_functions
+    | omnisci/serialized_result_set
+    | omnisci/thrift
+    | docs
+    | benchmarks
+    | scripts
+    | .eggs
+  )/
+)
+'''
