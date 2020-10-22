@@ -1,0 +1,9 @@
+Class omnisci::thrift::ttypes::TDashboard
+=========================================
+
+.. doxygenclass:: omnisci::thrift::ttypes::TDashboard
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

@@ -1,0 +1,9 @@
+Class omnisci::thrift::ttypes::TDataBlockPtr
+============================================
+
+.. doxygenclass:: omnisci::thrift::ttypes::TDataBlockPtr
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

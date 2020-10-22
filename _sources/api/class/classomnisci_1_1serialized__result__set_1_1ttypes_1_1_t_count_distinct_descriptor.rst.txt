@@ -1,0 +1,9 @@
+Class omnisci::serialized_result_set::ttypes::TCountDistinctDescriptor
+======================================================================
+
+.. doxygenclass:: omnisci::serialized_result_set::ttypes::TCountDistinctDescriptor
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

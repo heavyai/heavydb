@@ -1,0 +1,9 @@
+Class omnisci::serialized_result_set::ttypes::TCountDistinctImplType
+====================================================================
+
+.. doxygenclass:: omnisci::serialized_result_set::ttypes::TCountDistinctImplType
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

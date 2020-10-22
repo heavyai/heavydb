@@ -1,0 +1,9 @@
+Class omnisci::thrift::OmniSci::krb5_connect_args
+=================================================
+
+.. doxygenclass:: omnisci::thrift::OmniSci::krb5_connect_args
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

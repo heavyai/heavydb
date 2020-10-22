@@ -1,0 +1,9 @@
+Class omnisci::thrift::ttypes::TGeoFileLayerInfo
+================================================
+
+.. doxygenclass:: omnisci::thrift::ttypes::TGeoFileLayerInfo
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

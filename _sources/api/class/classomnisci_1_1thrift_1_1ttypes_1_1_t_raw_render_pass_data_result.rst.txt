@@ -1,0 +1,9 @@
+Class omnisci::thrift::ttypes::TRawRenderPassDataResult
+=======================================================
+
+.. doxygenclass:: omnisci::thrift::ttypes::TRawRenderPassDataResult
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

@@ -1,0 +1,9 @@
+Class omnisci::thrift::ttypes::TOmniSciException
+================================================
+
+.. doxygenclass:: omnisci::thrift::ttypes::TOmniSciException
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

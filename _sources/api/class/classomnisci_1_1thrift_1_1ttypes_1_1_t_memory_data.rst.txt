@@ -1,0 +1,9 @@
+Class omnisci::thrift::ttypes::TMemoryData
+==========================================
+
+.. doxygenclass:: omnisci::thrift::ttypes::TMemoryData
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

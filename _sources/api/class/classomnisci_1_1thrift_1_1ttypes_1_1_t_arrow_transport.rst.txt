@@ -1,0 +1,9 @@
+Class omnisci::thrift::ttypes::TArrowTransport
+==============================================
+
+.. doxygenclass:: omnisci::thrift::ttypes::TArrowTransport
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

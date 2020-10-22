@@ -1,0 +1,9 @@
+Class omnisci::thrift::ttypes::TDataFrame
+=========================================
+
+.. doxygenclass:: omnisci::thrift::ttypes::TDataFrame
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

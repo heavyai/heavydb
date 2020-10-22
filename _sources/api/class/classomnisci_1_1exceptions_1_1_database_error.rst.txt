@@ -1,0 +1,9 @@
+Class omnisci::exceptions::DatabaseError
+========================================
+
+.. doxygenclass:: omnisci::exceptions::DatabaseError
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

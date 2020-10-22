@@ -1,0 +1,9 @@
+Class omnisci::thrift::ttypes::TQueryResult
+===========================================
+
+.. doxygenclass:: omnisci::thrift::ttypes::TQueryResult
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

@@ -1,0 +1,9 @@
+Class omnisci::serialized_result_set::ttypes::TSlotSize
+=======================================================
+
+.. doxygenclass:: omnisci::serialized_result_set::ttypes::TSlotSize
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

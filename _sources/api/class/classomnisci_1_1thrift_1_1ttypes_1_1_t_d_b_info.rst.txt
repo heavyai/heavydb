@@ -1,0 +1,9 @@
+Class omnisci::thrift::ttypes::TDBInfo
+======================================
+
+.. doxygenclass:: omnisci::thrift::ttypes::TDBInfo
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

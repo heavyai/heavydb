@@ -1,0 +1,9 @@
+Class omnisci::thrift::OmniSci::import_table_status_args
+========================================================
+
+.. doxygenclass:: omnisci::thrift::OmniSci::import_table_status_args
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

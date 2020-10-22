@@ -1,0 +1,9 @@
+Class omnisci::exceptions::OperationalError
+===========================================
+
+.. doxygenclass:: omnisci::exceptions::OperationalError
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

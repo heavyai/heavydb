@@ -1,0 +1,9 @@
+Class omnisci::thrift::ttypes::TStepResult
+==========================================
+
+.. doxygenclass:: omnisci::thrift::ttypes::TStepResult
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

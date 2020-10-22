@@ -1,0 +1,9 @@
+Class omnisci::thrift::ttypes::THardwareInfo
+============================================
+
+.. doxygenclass:: omnisci::thrift::ttypes::THardwareInfo
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

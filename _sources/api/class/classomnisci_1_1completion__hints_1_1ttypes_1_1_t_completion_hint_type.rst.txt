@@ -1,0 +1,9 @@
+Class omnisci::completion_hints::ttypes::TCompletionHintType
+============================================================
+
+.. doxygenclass:: omnisci::completion_hints::ttypes::TCompletionHintType
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

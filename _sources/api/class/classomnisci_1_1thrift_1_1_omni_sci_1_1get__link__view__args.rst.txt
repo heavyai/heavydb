@@ -1,0 +1,9 @@
+Class omnisci::thrift::OmniSci::get_link_view_args
+==================================================
+
+.. doxygenclass:: omnisci::thrift::OmniSci::get_link_view_args
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

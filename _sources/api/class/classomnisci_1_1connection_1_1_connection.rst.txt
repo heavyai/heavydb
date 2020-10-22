@@ -1,0 +1,9 @@
+Class omnisci::connection::Connection
+=====================================
+
+.. doxygenclass:: omnisci::connection::Connection
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

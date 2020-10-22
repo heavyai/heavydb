@@ -1,0 +1,9 @@
+Class omnisci::thrift::ttypes::TVarLen
+======================================
+
+.. doxygenclass:: omnisci::thrift::ttypes::TVarLen
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

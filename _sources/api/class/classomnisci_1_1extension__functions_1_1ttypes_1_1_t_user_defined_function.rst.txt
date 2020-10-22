@@ -1,0 +1,9 @@
+Class omnisci::extension_functions::ttypes::TUserDefinedFunction
+================================================================
+
+.. doxygenclass:: omnisci::extension_functions::ttypes::TUserDefinedFunction
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

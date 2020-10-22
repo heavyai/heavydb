@@ -1,0 +1,9 @@
+Class omnisci::thrift::ttypes::TNodeMemoryInfo
+==============================================
+
+.. doxygenclass:: omnisci::thrift::ttypes::TNodeMemoryInfo
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

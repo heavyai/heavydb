@@ -1,0 +1,9 @@
+Class omnisci::thrift::OmniSci::query_get_outer_fragment_count_args
+===================================================================
+
+.. doxygenclass:: omnisci::thrift::OmniSci::query_get_outer_fragment_count_args
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

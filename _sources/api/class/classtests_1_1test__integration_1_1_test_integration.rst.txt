@@ -1,0 +1,9 @@
+Class tests::test_integration::TestIntegration
+==============================================
+
+.. doxygenclass:: tests::test_integration::TestIntegration
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

@@ -1,0 +1,9 @@
+Class omnisci::thrift::ttypes::TPixelTableRowResult
+===================================================
+
+.. doxygenclass:: omnisci::thrift::ttypes::TPixelTableRowResult
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

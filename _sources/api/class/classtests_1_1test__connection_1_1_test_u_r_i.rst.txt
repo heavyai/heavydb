@@ -1,0 +1,9 @@
+Class tests::test_connection::TestURI
+=====================================
+
+.. doxygenclass:: tests::test_connection::TestURI
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

@@ -1,0 +1,9 @@
+Class omnisci::thrift::ttypes::TImportStatus
+============================================
+
+.. doxygenclass:: omnisci::thrift::ttypes::TImportStatus
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

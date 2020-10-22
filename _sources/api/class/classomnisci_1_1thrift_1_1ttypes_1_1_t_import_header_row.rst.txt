@@ -1,0 +1,9 @@
+Class omnisci::thrift::ttypes::TImportHeaderRow
+===============================================
+
+.. doxygenclass:: omnisci::thrift::ttypes::TImportHeaderRow
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

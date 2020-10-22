@@ -1,0 +1,9 @@
+Class omnisci::thrift::OmniSci::Client
+======================================
+
+.. doxygenclass:: omnisci::thrift::OmniSci::Client
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

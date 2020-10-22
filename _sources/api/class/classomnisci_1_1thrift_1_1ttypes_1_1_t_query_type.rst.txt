@@ -1,0 +1,9 @@
+Class omnisci::thrift::ttypes::TQueryType
+=========================================
+
+.. doxygenclass:: omnisci::thrift::ttypes::TQueryType
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

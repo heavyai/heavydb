@@ -1,0 +1,9 @@
+Class omnisci::serialized_result_set::ttypes::TSerializedRows
+=============================================================
+
+.. doxygenclass:: omnisci::serialized_result_set::ttypes::TSerializedRows
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

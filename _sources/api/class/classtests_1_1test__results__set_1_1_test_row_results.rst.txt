@@ -1,0 +1,9 @@
+Class tests::test_results_set::TestRowResults
+=============================================
+
+.. doxygenclass:: tests::test_results_set::TestRowResults
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

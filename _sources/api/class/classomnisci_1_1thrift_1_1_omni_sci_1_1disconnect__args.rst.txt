@@ -1,0 +1,9 @@
+Class omnisci::thrift::OmniSci::disconnect_args
+===============================================
+
+.. doxygenclass:: omnisci::thrift::OmniSci::disconnect_args
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

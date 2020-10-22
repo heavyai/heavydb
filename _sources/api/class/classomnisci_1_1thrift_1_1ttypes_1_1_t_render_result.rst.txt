@@ -1,0 +1,9 @@
+Class omnisci::thrift::ttypes::TRenderResult
+============================================
+
+.. doxygenclass:: omnisci::thrift::ttypes::TRenderResult
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

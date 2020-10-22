@@ -1,0 +1,9 @@
+Class omnisci::thrift::OmniSci::start_query_args
+================================================
+
+.. doxygenclass:: omnisci::thrift::OmniSci::start_query_args
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

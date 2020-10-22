@@ -1,0 +1,9 @@
+Class omnisci::thrift::ttypes::TDatumVal
+========================================
+
+.. doxygenclass:: omnisci::thrift::ttypes::TDatumVal
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

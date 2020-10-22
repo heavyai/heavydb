@@ -1,0 +1,9 @@
+Class tests::test_runtime_udf::TestRuntimeUDF
+=============================================
+
+.. doxygenclass:: tests::test_runtime_udf::TestRuntimeUDF
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

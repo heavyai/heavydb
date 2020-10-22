@@ -1,0 +1,9 @@
+Class omnisci::thrift::ttypes::TExpressionRangeType
+===================================================
+
+.. doxygenclass:: omnisci::thrift::ttypes::TExpressionRangeType
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

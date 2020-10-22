@@ -1,0 +1,9 @@
+Class omnisci::serialized_result_set::ttypes::TResultSetLayout
+==============================================================
+
+.. doxygenclass:: omnisci::serialized_result_set::ttypes::TResultSetLayout
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

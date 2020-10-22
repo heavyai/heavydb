@@ -1,0 +1,9 @@
+Class omnisci::serialized_result_set::ttypes::TTargetInfo
+=========================================================
+
+.. doxygenclass:: omnisci::serialized_result_set::ttypes::TTargetInfo
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

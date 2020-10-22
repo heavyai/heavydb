@@ -1,0 +1,9 @@
+Class omnisci::thrift::ttypes::TFrontendView
+============================================
+
+.. doxygenclass:: omnisci::thrift::ttypes::TFrontendView
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

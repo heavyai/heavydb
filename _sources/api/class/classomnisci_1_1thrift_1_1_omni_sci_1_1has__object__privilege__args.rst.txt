@@ -1,0 +1,9 @@
+Class omnisci::thrift::OmniSci::has_object_privilege_args
+=========================================================
+
+.. doxygenclass:: omnisci::thrift::OmniSci::has_object_privilege_args
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

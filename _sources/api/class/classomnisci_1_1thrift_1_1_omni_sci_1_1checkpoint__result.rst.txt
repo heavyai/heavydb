@@ -1,0 +1,9 @@
+Class omnisci::thrift::OmniSci::checkpoint_result
+=================================================
+
+.. doxygenclass:: omnisci::thrift::OmniSci::checkpoint_result
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

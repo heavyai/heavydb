@@ -1,0 +1,9 @@
+Class omnisci::common::ttypes::TDatumType
+=========================================
+
+.. doxygenclass:: omnisci::common::ttypes::TDatumType
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

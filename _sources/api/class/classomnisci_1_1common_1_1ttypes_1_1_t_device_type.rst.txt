@@ -1,0 +1,9 @@
+Class omnisci::common::ttypes::TDeviceType
+==========================================
+
+.. doxygenclass:: omnisci::common::ttypes::TDeviceType
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

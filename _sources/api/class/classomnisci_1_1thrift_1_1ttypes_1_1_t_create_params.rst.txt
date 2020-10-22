@@ -1,0 +1,9 @@
+Class omnisci::thrift::ttypes::TCreateParams
+============================================
+
+.. doxygenclass:: omnisci::thrift::ttypes::TCreateParams
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

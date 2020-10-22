@@ -1,0 +1,9 @@
+Class omnisci::thrift::OmniSci::get_databases_args
+==================================================
+
+.. doxygenclass:: omnisci::thrift::OmniSci::get_databases_args
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

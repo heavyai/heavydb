@@ -1,0 +1,9 @@
+Class omnisci::cursor::Cursor
+=============================
+
+.. doxygenclass:: omnisci::cursor::Cursor
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

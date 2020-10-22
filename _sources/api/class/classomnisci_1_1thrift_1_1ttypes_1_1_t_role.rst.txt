@@ -1,0 +1,9 @@
+Class omnisci::thrift::ttypes::TRole
+====================================
+
+.. doxygenclass:: omnisci::thrift::ttypes::TRole
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

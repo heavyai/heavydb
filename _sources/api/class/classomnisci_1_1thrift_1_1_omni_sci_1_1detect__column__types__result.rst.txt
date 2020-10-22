@@ -1,0 +1,9 @@
+Class omnisci::thrift::OmniSci::detect_column_types_result
+==========================================================
+
+.. doxygenclass:: omnisci::thrift::OmniSci::detect_column_types_result
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

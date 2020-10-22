@@ -1,0 +1,9 @@
+Class omnisci::thrift::ttypes::TFileType
+========================================
+
+.. doxygenclass:: omnisci::thrift::ttypes::TFileType
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

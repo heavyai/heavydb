@@ -1,0 +1,9 @@
+Class omnisci::thrift::OmniSci::get_hardware_info_args
+======================================================
+
+.. doxygenclass:: omnisci::thrift::OmniSci::get_hardware_info_args
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

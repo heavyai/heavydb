@@ -1,0 +1,9 @@
+Class omnisci::thrift::ttypes::TPendingQuery
+============================================
+
+.. doxygenclass:: omnisci::thrift::ttypes::TPendingQuery
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

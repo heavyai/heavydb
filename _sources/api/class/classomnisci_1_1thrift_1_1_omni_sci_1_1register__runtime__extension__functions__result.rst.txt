@@ -1,0 +1,9 @@
+Class omnisci::thrift::OmniSci::register_runtime_extension_functions_result
+===========================================================================
+
+.. doxygenclass:: omnisci::thrift::OmniSci::register_runtime_extension_functions_result
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

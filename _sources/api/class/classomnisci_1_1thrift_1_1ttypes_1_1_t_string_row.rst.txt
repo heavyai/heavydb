@@ -1,0 +1,9 @@
+Class omnisci::thrift::ttypes::TStringRow
+=========================================
+
+.. doxygenclass:: omnisci::thrift::ttypes::TStringRow
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

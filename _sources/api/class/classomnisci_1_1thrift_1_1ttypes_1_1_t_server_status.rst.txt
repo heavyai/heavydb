@@ -1,0 +1,9 @@
+Class omnisci::thrift::ttypes::TServerStatus
+============================================
+
+.. doxygenclass:: omnisci::thrift::ttypes::TServerStatus
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

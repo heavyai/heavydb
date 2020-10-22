@@ -1,0 +1,9 @@
+Class omnisci::thrift::OmniSci::broadcast_serialized_rows_args
+==============================================================
+
+.. doxygenclass:: omnisci::thrift::OmniSci::broadcast_serialized_rows_args
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

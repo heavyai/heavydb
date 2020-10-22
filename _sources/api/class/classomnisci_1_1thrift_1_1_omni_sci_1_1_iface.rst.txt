@@ -1,0 +1,9 @@
+Class omnisci::thrift::OmniSci::Iface
+=====================================
+
+.. doxygenclass:: omnisci::thrift::OmniSci::Iface
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

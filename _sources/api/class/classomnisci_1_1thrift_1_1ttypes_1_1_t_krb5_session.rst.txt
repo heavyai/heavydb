@@ -1,0 +1,9 @@
+Class omnisci::thrift::ttypes::TKrb5Session
+===========================================
+
+.. doxygenclass:: omnisci::thrift::ttypes::TKrb5Session
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

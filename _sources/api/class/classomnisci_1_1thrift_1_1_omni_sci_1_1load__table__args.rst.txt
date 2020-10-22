@@ -1,0 +1,9 @@
+Class omnisci::thrift::OmniSci::load_table_args
+===============================================
+
+.. doxygenclass:: omnisci::thrift::OmniSci::load_table_args
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

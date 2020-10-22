@@ -1,0 +1,9 @@
+Class omnisci::thrift::ttypes::TDictionaryGeneration
+====================================================
+
+.. doxygenclass:: omnisci::thrift::ttypes::TDictionaryGeneration
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

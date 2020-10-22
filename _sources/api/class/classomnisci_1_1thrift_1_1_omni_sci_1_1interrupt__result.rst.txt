@@ -1,0 +1,9 @@
+Class omnisci::thrift::OmniSci::interrupt_result
+================================================
+
+.. doxygenclass:: omnisci::thrift::OmniSci::interrupt_result
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

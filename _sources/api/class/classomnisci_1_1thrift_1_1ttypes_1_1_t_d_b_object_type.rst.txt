@@ -1,0 +1,9 @@
+Class omnisci::thrift::ttypes::TDBObjectType
+============================================
+
+.. doxygenclass:: omnisci::thrift::ttypes::TDBObjectType
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

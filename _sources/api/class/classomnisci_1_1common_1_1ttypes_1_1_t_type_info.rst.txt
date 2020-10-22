@@ -1,0 +1,9 @@
+Class omnisci::common::ttypes::TTypeInfo
+========================================
+
+.. doxygenclass:: omnisci::common::ttypes::TTypeInfo
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

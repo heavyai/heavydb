@@ -1,0 +1,9 @@
+Class omnisci::thrift::OmniSci::Processor
+=========================================
+
+.. doxygenclass:: omnisci::thrift::OmniSci::Processor
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

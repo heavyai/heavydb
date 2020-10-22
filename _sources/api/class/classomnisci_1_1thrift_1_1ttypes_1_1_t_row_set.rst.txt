@@ -1,0 +1,9 @@
+Class omnisci::thrift::ttypes::TRowSet
+======================================
+
+.. doxygenclass:: omnisci::thrift::ttypes::TRowSet
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

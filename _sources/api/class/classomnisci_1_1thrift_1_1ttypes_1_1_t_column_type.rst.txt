@@ -1,0 +1,9 @@
+Class omnisci::thrift::ttypes::TColumnType
+==========================================
+
+.. doxygenclass:: omnisci::thrift::ttypes::TColumnType
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

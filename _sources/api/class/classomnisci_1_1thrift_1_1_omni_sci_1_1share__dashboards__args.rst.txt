@@ -1,0 +1,9 @@
+Class omnisci::thrift::OmniSci::share_dashboards_args
+=====================================================
+
+.. doxygenclass:: omnisci::thrift::OmniSci::share_dashboards_args
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

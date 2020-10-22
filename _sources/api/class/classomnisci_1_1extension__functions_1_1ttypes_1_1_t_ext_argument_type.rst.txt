@@ -1,0 +1,9 @@
+Class omnisci::extension_functions::ttypes::TExtArgumentType
+============================================================
+
+.. doxygenclass:: omnisci::extension_functions::ttypes::TExtArgumentType
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

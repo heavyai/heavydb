@@ -1,0 +1,9 @@
+Class omnisci::exceptions::IntegrityError
+=========================================
+
+.. doxygenclass:: omnisci::exceptions::IntegrityError
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

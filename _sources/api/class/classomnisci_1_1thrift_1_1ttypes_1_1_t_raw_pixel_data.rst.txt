@@ -1,0 +1,9 @@
+Class omnisci::thrift::ttypes::TRawPixelData
+============================================
+
+.. doxygenclass:: omnisci::thrift::ttypes::TRawPixelData
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

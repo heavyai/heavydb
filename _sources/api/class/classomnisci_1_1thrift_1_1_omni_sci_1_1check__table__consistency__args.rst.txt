@@ -1,0 +1,9 @@
+Class omnisci::thrift::OmniSci::check_table_consistency_args
+============================================================
+
+.. doxygenclass:: omnisci::thrift::OmniSci::check_table_consistency_args
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

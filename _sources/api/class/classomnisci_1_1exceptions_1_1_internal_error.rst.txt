@@ -1,0 +1,9 @@
+Class omnisci::exceptions::InternalError
+========================================
+
+.. doxygenclass:: omnisci::exceptions::InternalError
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:
