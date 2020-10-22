@@ -1,5 +1,23 @@
+/*
+ * Copyright 2020 OmniSci, Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 #pragma once
 
+#include "DataMgr/ForeignStorage/ForeignDataWrapperShared.h"
+#include "DataMgr/ForeignStorage/ForeignTableSchema.h"
 #include "Geospatial/Types.h"
 #include "ImportExport/DelimitedParserUtils.h"
 #include "Shared/misc.h"
@@ -33,15 +51,11 @@ void set_array_flags_and_geo_columns_count(
 
 void validate_expected_column_count(std::vector<std::string_view>& row,
                                     size_t num_cols,
-                                    int point_cols) {
+                                    int point_cols,
+                                    const std::string& file_name) {
   // Each POINT could consume two separate coords instead of a single WKT
   if (row.size() < num_cols || (num_cols + point_cols) < row.size()) {
-    std::stringstream string_stream;
-    string_stream << "Mismatched number of logical columns: (expected " << num_cols
-                  << " columns, has " << row.size()
-                  << "): " << shared::printContainer(row);
-    LOG(ERROR) << string_stream.str();
-    throw std::runtime_error{string_stream.str()};
+    throw_number_of_columns_mismatch_error(num_cols, row.size(), file_name);
   }
 }
 
@@ -237,25 +251,72 @@ std::map<int, DataBlockPtr> convert_import_buffers_to_data_blocks(
 }
 
 struct ParseBufferRequest {
-  ParseBufferRequest() {}
-  ParseBufferRequest(const ParseBufferRequest& request) { UNREACHABLE(); }
+  ParseBufferRequest(const ParseBufferRequest& request) = delete;
   ParseBufferRequest(ParseBufferRequest&& request) = default;
+  ParseBufferRequest(size_t buffer_size,
+                     const import_export::CopyParams& copy_params,
+                     int db_id,
+                     const ForeignTable* foreign_table)
+      : buffer(std::make_unique<char[]>(buffer_size))
+      , buffer_size(buffer_size)
+      , buffer_alloc_size(buffer_size)
+      , copy_params(copy_params)
+      , db_id(db_id)
+      , foreign_table_schema(std::make_unique<ForeignTableSchema>(db_id, foreign_table)) {
+    // initialize import buffers from columns.
+    for (const auto column : getColumns()) {
+      StringDictionary* string_dictionary = nullptr;
+      if (column->columnType.is_dict_encoded_string() ||
+          (column->columnType.is_array() && IS_STRING(column->columnType.get_subtype()) &&
+           column->columnType.get_compression() == kENCODING_DICT)) {
+        auto dict_descriptor = getCatalog()->getMetadataForDictUnlocked(
+            column->columnType.get_comp_param(), true);
+        string_dictionary = dict_descriptor->stringDict.get();
+      }
+      import_buffers.emplace_back(
+          std::make_unique<import_export::TypedImportBuffer>(column, string_dictionary));
+    }
+  }
 
+  inline std::shared_ptr<Catalog_Namespace::Catalog> getCatalog() const {
+    return Catalog_Namespace::Catalog::checkedGet(db_id);
+  }
+
+  inline std::list<const ColumnDescriptor*> getColumns() const {
+    return foreign_table_schema->getLogicalAndPhysicalColumns();
+  }
+
+  inline int32_t getTableId() const {
+    return foreign_table_schema->getForeignTable()->tableId;
+  }
+
+  inline std::string getTableName() const {
+    return foreign_table_schema->getForeignTable()->tableName;
+  }
+
+  inline size_t getMaxFragRows() const {
+    return foreign_table_schema->getForeignTable()->maxFragRows;
+  }
+
+  inline std::string getFilePath() const {
+    return foreign_table_schema->getForeignTable()->getFilePath();
+  }
+
+  // These must be initialized at construction (before parsing).
   std::unique_ptr<char[]> buffer;
   size_t buffer_size;
   size_t buffer_alloc_size;
+  const import_export::CopyParams copy_params;
+  const int db_id;
+  std::unique_ptr<ForeignTableSchema> foreign_table_schema;
+  std::vector<std::unique_ptr<import_export::TypedImportBuffer>> import_buffers;
+
+  // These are set during parsing.
   size_t buffer_row_count;
   size_t begin_pos;
   size_t end_pos;
   size_t first_row_index;
   size_t file_offset;
-  import_export::CopyParams copy_params;
-  std::list<const ColumnDescriptor*> columns;
-  std::vector<std::unique_ptr<import_export::TypedImportBuffer>> import_buffers;
-  std::shared_ptr<Catalog_Namespace::Catalog> catalog;
-  int db_id;
-  int32_t table_id;
-  size_t max_fragment_rows;
   size_t process_row_count;
 };
 
@@ -290,8 +351,8 @@ ParseBufferResult parse_buffer(ParseBufferRequest& request) {
   std::unique_ptr<bool[]> array_flags;
 
   set_array_flags_and_geo_columns_count(
-      array_flags, phys_cols, point_cols, request.columns);
-  auto num_cols = request.columns.size() - phys_cols;
+      array_flags, phys_cols, point_cols, request.getColumns());
+  auto num_cols = request.getColumns().size() - phys_cols;
 
   size_t row_count = 0;
   size_t remaining_row_count = request.process_row_count;
@@ -314,13 +375,13 @@ ParseBufferResult parse_buffer(ParseBufferRequest& request) {
                                                  try_single_thread);
 
     row_index_plus_one++;
-    validate_expected_column_count(row, num_cols, point_cols);
+    validate_expected_column_count(row, num_cols, point_cols, request.getFilePath());
 
     size_t import_idx = 0;
     size_t col_idx = 0;
     try {
-      for (auto cd_it = request.columns.begin(); cd_it != request.columns.end();
-           cd_it++) {
+      auto columns = request.getColumns();
+      for (auto cd_it = columns.begin(); cd_it != columns.end(); cd_it++) {
         auto cd = *cd_it;
         const auto& col_ti = cd->columnType;
         bool is_null = is_null_datum(row[import_idx], cd, request.copy_params.null_str);
@@ -336,7 +397,7 @@ ParseBufferResult parse_buffer(ParseBufferRequest& request) {
                                is_null,
                                request.first_row_index,
                                row_index_plus_one,
-                               request.catalog);
+                               request.getCatalog());
           } else {
             // update import/col idx according to types
             if (!is_null && cd->columnType == kPOINT &&
@@ -378,5 +439,6 @@ ParseBufferResult parse_buffer(ParseBufferRequest& request) {
       convert_import_buffers_to_data_blocks(request.import_buffers);
   return result;
 }
+
 }  // namespace csv_file_buffer_parser
 }  // namespace foreign_storage

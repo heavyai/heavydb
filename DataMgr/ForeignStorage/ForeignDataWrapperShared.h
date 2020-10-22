@@ -32,4 +32,12 @@ inline void throw_removed_file_error(const std::string& file_path) {
       "file \"" +
       file_path + "\" was removed."};
 }
+inline void throw_number_of_columns_mismatch_error(size_t num_table_cols,
+                                                   size_t num_file_cols,
+                                                   const std::string& file_path) {
+  throw std::runtime_error{"Mismatched number of logical columns: (expected " +
+                           std::to_string(num_table_cols) + " columns, has " +
+                           std::to_string(num_file_cols) + "): in file '" + file_path +
+                           "'"};
+}
 }  // namespace foreign_storage

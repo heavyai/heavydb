@@ -45,6 +45,17 @@ struct FileRegion {
   // Size of file region in bytes
   size_t region_size;
 
+  FileRegion(std::string name,
+             size_t first_row_offset,
+             size_t first_row_idx,
+             size_t row_cnt,
+             size_t region_sz)
+      : filename(name)
+      , first_row_file_offset(first_row_offset)
+      , first_row_index(first_row_idx)
+      , row_count(row_cnt)
+      , region_size(region_sz) {}
+  FileRegion() {}
   bool operator<(const FileRegion& other) const {
     return first_row_file_offset < other.first_row_file_offset;
   }

@@ -19,17 +19,17 @@
 #include <algorithm>
 #include <condition_variable>
 #include <mutex>
-#include <regex>
 
 #include <rapidjson/document.h>
 #include <boost/filesystem.hpp>
 
 #include "DataMgr/ForeignStorage/CsvFileBufferParser.h"
 #include "DataMgr/ForeignStorage/CsvReader.h"
-#include "FsiJsonUtils.h"
+#include "DataMgr/ForeignStorage/ForeignTableSchema.h"
 #include "ImportExport/DelimitedParserUtils.h"
 #include "ImportExport/Importer.h"
 #include "Utils/DdlUtils.h"
+#include "FsiJsonUtils.h"
 
 namespace foreign_storage {
 CsvDataWrapper::CsvDataWrapper(const int db_id, const ForeignTable* foreign_table)
@@ -49,35 +49,11 @@ std::vector<std::string_view> CsvDataWrapper::getSupportedOptions() {
                                        supported_options_.end()};
 }
 
-std::string CsvDataWrapper::getFilePath() {
-  auto& server_options = foreign_table_->foreign_server->options;
-  auto file_path_entry = foreign_table_->options.find("FILE_PATH");
-  std::string file_path{};
-  if (file_path_entry != foreign_table_->options.end()) {
-    file_path = file_path_entry->second;
-  }
-  std::string base_path{};
-  if (server_options.find(ForeignServer::STORAGE_TYPE_KEY)->second ==
-      ForeignServer::LOCAL_FILE_STORAGE_TYPE) {
-    auto base_path_entry = server_options.find(ForeignServer::BASE_PATH_KEY);
-    if (base_path_entry == server_options.end()) {
-      throw std::runtime_error{"No base path found in foreign server options."};
-    }
-    base_path = base_path_entry->second;
-    const std::string separator{boost::filesystem::path::preferred_separator};
-    return std::regex_replace(
-        base_path + separator + file_path, std::regex{separator + "{2,}"}, separator);
-  } else {
-    // Just return the file path as a prefix
-    return file_path;
-  }
-}
-
 void CsvDataWrapper::validateFilePath() {
   auto& server_options = foreign_table_->foreign_server->options;
   if (server_options.find(ForeignServer::STORAGE_TYPE_KEY)->second ==
       ForeignServer::LOCAL_FILE_STORAGE_TYPE) {
-    ddl_utils::validate_allowed_file_path(getFilePath(),
+    ddl_utils::validate_allowed_file_path(foreign_table_->getFilePath(),
                                           ddl_utils::DataTransferType::IMPORT);
   }
 }
@@ -369,33 +345,6 @@ size_t get_thread_count(const import_export::CopyParams& copy_params,
   return thread_count;
 }
 
-/**
- * Initializes import buffers for each of the provided columns.
- * If column_id_to_chunk_map is provided, only initialize buffers with valid entries
- */
-void initialize_import_buffers(
-    const std::list<const ColumnDescriptor*>& columns,
-    std::shared_ptr<Catalog_Namespace::Catalog> catalog,
-    std::vector<std::unique_ptr<import_export::TypedImportBuffer>>& import_buffers,
-    const std::set<int>& column_filter_set = {}) {
-  for (const auto column : columns) {
-    StringDictionary* string_dictionary = nullptr;
-    if (column->columnType.is_dict_encoded_string() ||
-        (column->columnType.is_array() && IS_STRING(column->columnType.get_subtype()) &&
-         column->columnType.get_compression() == kENCODING_DICT)) {
-      auto dict_descriptor =
-          catalog->getMetadataForDictUnlocked(column->columnType.get_comp_param(), true);
-      string_dictionary = dict_descriptor->stringDict.get();
-    }
-    if (column_filter_set.size() == 0 ||
-        column_filter_set.find(column->columnId) != column_filter_set.end()) {
-      import_buffers.emplace_back(
-          std::make_unique<import_export::TypedImportBuffer>(column, string_dictionary));
-    } else {
-      import_buffers.emplace_back(nullptr);
-    }
-  }
-}
 void CsvDataWrapper::populateChunks(
     std::map<int, Chunk_NS::Chunk>& column_id_to_chunk_map,
     int fragment_id) {
@@ -408,9 +357,6 @@ void CsvDataWrapper::populateChunks(
   const auto buffer_size = get_buffer_size(file_regions);
   const auto thread_count = get_thread_count(copy_params, file_regions);
 
-  auto catalog = Catalog_Namespace::Catalog::checkedGet(db_id_);
-  auto columns = catalog->getAllColumnMetadataForTableUnlocked(
-      foreign_table_->tableId, false, false, true);
   const int batch_size = (file_regions.size() + thread_count - 1) / thread_count;
 
   std::vector<csv_file_buffer_parser::ParseBufferRequest> parse_file_requests{};
@@ -421,18 +367,7 @@ void CsvDataWrapper::populateChunks(
     column_filter_set.insert(pair.first);
   }
   for (size_t i = 0; i < file_regions.size(); i += batch_size) {
-    parse_file_requests.emplace_back();
-    csv_file_buffer_parser::ParseBufferRequest& parse_file_request =
-        parse_file_requests.back();
-    parse_file_request.buffer = std::make_unique<char[]>(buffer_size);
-    parse_file_request.buffer_size = buffer_size;
-    parse_file_request.buffer_alloc_size = buffer_size;
-    parse_file_request.copy_params = copy_params;
-    parse_file_request.columns = columns;
-    parse_file_request.catalog = catalog;
-    initialize_import_buffers(
-        columns, catalog, parse_file_request.import_buffers, column_filter_set);
-
+    parse_file_requests.emplace_back(buffer_size, copy_params, db_id_, foreign_table_);
     auto start_index = i;
     auto end_index =
         std::min<size_t>(start_index + batch_size - 1, file_regions.size() - 1);
@@ -443,7 +378,7 @@ void CsvDataWrapper::populateChunks(
                                     end_index,
                                     std::ref((*csv_reader_)),
                                     std::ref(file_access_mutex_),
-                                    std::ref(parse_file_request),
+                                    std::ref(parse_file_requests.back()),
                                     std::ref(column_id_to_chunk_map)));
   }
 
@@ -546,17 +481,15 @@ void add_file_region(std::map<int, FileRegions>& fragment_id_to_file_regions_map
                      std::mutex& file_region_mutex,
                      int fragment_id,
                      size_t first_row_index,
-                     const csv_file_buffer_parser::ParseBufferResult& result) {
-  FileRegion file_region;
-  file_region.first_row_file_offset = result.row_offsets.front();
-  file_region.region_size = result.row_offsets.back() - file_region.first_row_file_offset;
-  file_region.first_row_index = first_row_index;
-  file_region.row_count = result.row_count;
-
-  {
-    std::lock_guard<std::mutex> lock(file_region_mutex);
-    fragment_id_to_file_regions_map[fragment_id].emplace_back(file_region);
-  }
+                     const csv_file_buffer_parser::ParseBufferResult& result,
+                     const std::string& file_path) {
+  std::lock_guard<std::mutex> lock(file_region_mutex);
+  fragment_id_to_file_regions_map[fragment_id].emplace_back(
+      FileRegion(file_path,
+                 result.row_offsets.front(),
+                 first_row_index,
+                 result.row_count,
+                 result.row_offsets.back() - result.row_offsets.front()));
 }
 
 /**
@@ -608,7 +541,7 @@ void update_metadata(MetadataScanMultiThreadingParams& multi_threading_params,
                      const csv_file_buffer_parser::ParseBufferResult& result,
                      std::map<int, const ColumnDescriptor*>& column_by_id) {
   for (auto& [column_id, data_block] : result.column_id_to_data_blocks_map) {
-    ChunkKey chunk_key{request.db_id, request.table_id, column_id, fragment_id};
+    ChunkKey chunk_key{request.db_id, request.getTableId(), column_id, fragment_id};
     const auto column = column_by_id[column_id];
     size_t byte_count;
     if (column->columnType.is_varlen_indeed()) {
@@ -675,12 +608,12 @@ void scan_metadata(MetadataScanMultiThreadingParams& multi_threading_params,
     }
     auto& request = request_opt.value();
     if (column_by_id.empty()) {
-      for (const auto column : request.columns) {
+      for (const auto column : request.getColumns()) {
         column_by_id[column->columnId] = column;
       }
     }
     auto partitions = partition_by_fragment(
-        request.first_row_index, request.max_fragment_rows, request.buffer_row_count);
+        request.first_row_index, request.getMaxFragRows(), request.buffer_row_count);
     request.begin_pos = 0;
     size_t row_index = request.first_row_index;
     for (const auto partition : partitions) {
@@ -689,12 +622,13 @@ void scan_metadata(MetadataScanMultiThreadingParams& multi_threading_params,
         import_buffer->clear();
       }
       auto result = parse_buffer(request);
-      int fragment_id = row_index / request.max_fragment_rows;
+      int fragment_id = row_index / request.getMaxFragRows();
       add_file_region(fragment_id_to_file_regions_map,
                       file_region_mutex,
                       fragment_id,
                       request.first_row_index,
-                      result);
+                      result,
+                      request.getFilePath());
       update_metadata(multi_threading_params, fragment_id, request, result, column_by_id);
       row_index += result.row_count;
       request.begin_pos = result.row_offsets.back() - request.file_offset;
@@ -727,10 +661,11 @@ csv_file_buffer_parser::ParseBufferRequest get_request_from_pool(
 void dispatch_metadata_scan_request(
     MetadataScanMultiThreadingParams& multi_threading_params,
     csv_file_buffer_parser::ParseBufferRequest& request) {
-  std::unique_lock<std::mutex> pending_requests_lock(
-      multi_threading_params.pending_requests_mutex);
-  multi_threading_params.pending_requests.emplace(std::move(request));
-  pending_requests_lock.unlock();
+  {
+    std::unique_lock<std::mutex> pending_requests_lock(
+        multi_threading_params.pending_requests_mutex);
+    multi_threading_params.pending_requests.emplace(std::move(request));
+  }
   multi_threading_params.pending_requests_condition.notify_all();
 }
 
@@ -844,7 +779,7 @@ void CsvDataWrapper::populateChunkMetadata(ChunkMetadataVector& chunk_metadata_v
   chunk_metadata_map_.clear();
 
   const auto copy_params = validateAndGetCopyParams();
-  const auto file_path = getFilePath();
+  const auto file_path = foreign_table_->getFilePath();
   auto catalog = Catalog_Namespace::Catalog::checkedGet(db_id_);
   auto& server_options = foreign_table_->foreign_server->options;
   if (foreign_table_->isAppendMode() && csv_reader_ != nullptr) {
@@ -892,25 +827,14 @@ void CsvDataWrapper::populateChunkMetadata(ChunkMetadataVector& chunk_metadata_v
 
     std::vector<std::future<void>> futures{};
     for (size_t i = 0; i < thread_count; i++) {
+      multi_threading_params.request_pool.emplace(
+          buffer_size, copy_params, db_id_, foreign_table_);
+
       futures.emplace_back(std::async(std::launch::async,
                                       scan_metadata,
                                       std::ref(multi_threading_params),
                                       std::ref(fragment_id_to_file_regions_map_),
                                       std::ref(file_regions_mutex_)));
-
-      multi_threading_params.request_pool.emplace();
-      csv_file_buffer_parser::ParseBufferRequest& parse_buffer_request =
-          multi_threading_params.request_pool.back();
-      initialize_import_buffers(columns, catalog, parse_buffer_request.import_buffers);
-      parse_buffer_request.copy_params = copy_params;
-      parse_buffer_request.columns = columns;
-      parse_buffer_request.catalog = catalog;
-      parse_buffer_request.db_id = db_id_;
-      parse_buffer_request.table_id = foreign_table_->tableId;
-      parse_buffer_request.max_fragment_rows = foreign_table_->maxFragRows;
-      parse_buffer_request.buffer = std::make_unique<char[]>(buffer_size);
-      parse_buffer_request.buffer_size = buffer_size;
-      parse_buffer_request.buffer_alloc_size = buffer_size;
     }
 
     try {
@@ -1017,7 +941,7 @@ void CsvDataWrapper::restoreDataWrapperInternals(
   // Construct csv_reader with metadta
   CHECK(d.HasMember("reader_metadata"));
   const auto copy_params = validateAndGetCopyParams();
-  const auto csv_file_path = getFilePath();
+  const auto csv_file_path = foreign_table_->getFilePath();
   auto& server_options = foreign_table_->foreign_server->options;
   if (server_options.find(ForeignServer::STORAGE_TYPE_KEY)->second ==
       ForeignServer::LOCAL_FILE_STORAGE_TYPE) {

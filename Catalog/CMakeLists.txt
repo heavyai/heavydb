@@ -9,6 +9,7 @@ set(catalog_source_files
     SysCatalog.cpp
     SysCatalog.h
     ForeignServer.h
+    ForeignTable.cpp
     DdlCommandExecutor.cpp
     DdlCommandExecutor.h
 )

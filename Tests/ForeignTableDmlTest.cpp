@@ -43,6 +43,7 @@ namespace bf = boost::filesystem;
 using path = bf::path;
 
 static const std::string default_table_name = "test_foreign_table";
+static const std::string default_file_name = "temp_file";
 
 /**
  * Helper class for creating foreign tables
@@ -66,7 +67,8 @@ class ForeignTableTest : public DBHandlerTestFixture {
       const std::string& data_wrapper_type,
       const int table_number = 0,
       const std::string& table_name = default_table_name,
-      const std::string extension = "") {
+      const std::string extension = "",
+      const std::string& source_dir = getDataFilesPath()) {
     std::string query{"CREATE FOREIGN TABLE " + table_name};
     if (table_number) {
       query += "_" + std::to_string(table_number);
@@ -82,7 +84,7 @@ class ForeignTableTest : public DBHandlerTestFixture {
     }
 
     query += " " + columns + " SERVER omnisci_local_" + data_wrapper_type +
-             " WITH (file_path = '" + getDataFilesPath() + filename + "'";
+             " WITH (file_path = '" + source_dir + filename + "'";
     for (auto& [key, value] : options) {
       query += ", " + key + " = '" + value + "'";
     }
@@ -1176,7 +1178,8 @@ TEST_P(CacheControllingSelectQueryTest, CsvArchiveInvalidFile) {
   sql(query);
   queryAndAssertException("SELECT * FROM test_foreign_table  ORDER BY t;",
                           "Exception: Mismatched number of logical columns: (expected 2 "
-                          "columns, has 1): (random text)");
+                          "columns, has 1): in file '" +
+                              getDataFilesPath() + "example_1_invalid_file.zip'");
 }
 
 TEST_P(CacheControllingSelectQueryTest, CSV_CustomLineDelimiters) {
@@ -3836,6 +3839,87 @@ TEST_F(ScheduledRefreshTest, DISABLED_PostEvictionError) {
 
   // Assert that new data is fetched
   sqlAndCompareResult("SELECT * FROM test_foreign_table;", {{i(1)}});
+}
+
+class SchemaMismatchTest : public ForeignTableTest,
+                           public ::testing::WithParamInterface<std::string> {
+ public:
+  void setTestFile(const std::string& file_name, const std::string& ext) {
+    bf::copy_file(getDataFilesPath() + file_name + "." + ext,
+                  TEMP_DIR + TEMP_FILE + "." + ext,
+                  bf::copy_option::overwrite_if_exists);
+  }
+
+  void SetUp() override {
+    ForeignTableTest::SetUp();
+    sql("DROP FOREIGN TABLE IF EXISTS test_foreign_table;");
+    boost::filesystem::remove_all(TEMP_DIR);
+    boost::filesystem::create_directory(TEMP_DIR);
+  }
+
+  void TearDown() override {
+    sql("DROP FOREIGN TABLE IF EXISTS test_foreign_table;");
+    boost::filesystem::remove_all(TEMP_DIR);
+    ForeignTableTest::TearDown();
+  }
+
+  static void SetUpTestSuite() { TEMP_DIR = test_binary_file_path + "/fsi_tmp_dir/"; }
+
+  void sqlCreateTempForeignTable(const std::string& values, const std::string& ext) {
+    sqlDropForeignTable();
+    sql(getCreateForeignTableQuery(
+        values, {}, TEMP_FILE, ext, 0, "test_foreign_table", "", TEMP_DIR));
+  }
+
+  inline static std::string TEMP_DIR;
+  inline static const std::string TEMP_FILE{default_file_name};
+};
+
+INSTANTIATE_TEST_SUITE_P(DataWrapperParameterization,
+                         SchemaMismatchTest,
+                         ::testing::Values("csv", "parquet"),
+                         PrintToStringParamName());
+
+TEST_P(SchemaMismatchTest, FileHasTooManyColumns_Create) {
+  auto ext = GetParam();
+  sqlCreateForeignTable("(i BIGINT)", "two_col_1_2", ext);
+  queryAndAssertException("SELECT COUNT(*) FROM " + default_table_name + ";",
+                          "Exception: Mismatched number of logical columns: (expected 1 "
+                          "columns, has 2): in file '" +
+                              getDataFilesPath() + "two_col_1_2." + ext + "'");
+}
+
+TEST_P(SchemaMismatchTest, FileHasTooFewColumns_Create) {
+  auto ext = GetParam();
+  sqlCreateForeignTable("(i BIGINT, i2 BIGINT)", "0", ext);
+  queryAndAssertException("SELECT COUNT(*) FROM " + default_table_name + ";",
+                          "Exception: Mismatched number of logical columns: (expected 2 "
+                          "columns, has 1): in file '" +
+                              getDataFilesPath() + "0." + ext + "'");
+}
+
+TEST_P(SchemaMismatchTest, FileHasTooManyColumns_Refresh) {
+  auto ext = GetParam();
+  setTestFile("0", ext);
+  sqlCreateTempForeignTable("(i BIGINT)", ext);
+  sql("SELECT COUNT(*) FROM " + default_table_name + ";");
+  setTestFile("two_col_1_2", GetParam());
+  queryAndAssertException("REFRESH FOREIGN TABLES " + default_table_name + ";",
+                          "Exception: Mismatched number of logical columns: (expected 1 "
+                          "columns, has 2): in file '" +
+                              TEMP_DIR + TEMP_FILE + "." + ext + "'");
+}
+
+TEST_P(SchemaMismatchTest, FileHasTooFewColumns_Refresh) {
+  auto ext = GetParam();
+  setTestFile("two_col_1_2", ext);
+  sqlCreateTempForeignTable("(i BIGINT, i2 BIGINT)", GetParam());
+  sql("SELECT COUNT(*) FROM " + default_table_name + ";");
+  setTestFile("0", GetParam());
+  queryAndAssertException("REFRESH FOREIGN TABLES " + default_table_name + ";",
+                          "Exception: Mismatched number of logical columns: (expected 2 "
+                          "columns, has 1): in file '" +
+                              TEMP_DIR + TEMP_FILE + "." + ext + "'");
 }
 
 int main(int argc, char** argv) {

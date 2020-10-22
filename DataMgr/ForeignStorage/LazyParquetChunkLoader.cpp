@@ -25,6 +25,7 @@
 #include <parquet/statistics.h>
 #include <parquet/types.h>
 
+#include "ForeignDataWrapperShared.h"
 #include "ParquetDateInSecondsEncoder.h"
 #include "ParquetDecimalEncoder.h"
 #include "ParquetFixedLengthArrayEncoder.h"
@@ -921,24 +922,13 @@ void validate_allowed_mapping(const parquet::ColumnDescriptor* parquet_column,
   }
 }
 
-void throw_mismatched_column_number_error(
-    const std::shared_ptr<parquet::FileMetaData>& file_metadata,
-    const std::string& file_path,
-    const ForeignTableSchema& schema) {
-  std::stringstream error_msg;
-  error_msg << "Mismatched number of logical columns in table '"
-            << schema.getForeignTable()->tableName << "' (" << schema.numLogicalColumns()
-            << " columns) with parquet file '" << file_path << "' ("
-            << file_metadata->num_columns() << " columns.)";
-  throw std::runtime_error(error_msg.str());
-}
-
 void validate_number_of_columns(
     const std::shared_ptr<parquet::FileMetaData>& file_metadata,
     const std::string& file_path,
     const ForeignTableSchema& schema) {
   if (schema.numLogicalColumns() != file_metadata->num_columns()) {
-    throw_mismatched_column_number_error(file_metadata, file_path, schema);
+    throw_number_of_columns_mismatch_error(
+        schema.numLogicalColumns(), file_metadata->num_columns(), file_path);
   }
 }
 
