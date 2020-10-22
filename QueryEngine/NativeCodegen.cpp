@@ -76,6 +76,10 @@ std::unique_ptr<llvm::Module> rt_udf_cpu_module;
 
 extern std::unique_ptr<llvm::Module> g_rt_module;
 
+#ifdef HAVE_CUDA
+extern std::unique_ptr<llvm::Module> g_rt_libdevice_module;
+#endif
+
 #ifdef ENABLE_GEOS
 extern std::unique_ptr<llvm::Module> g_rt_geos_module;
 
@@ -141,6 +145,38 @@ void eliminate_dead_self_recursive_funcs(
   }
   for (auto pFn : dead_funcs) {
     pFn->eraseFromParent();
+  }
+}
+
+// check if linking with libdevice is required
+// libdevice functions have a __nv_* prefix
+bool check_module_requires_libdevice(llvm::Module* module) {
+  for (llvm::Function& F : *module) {
+    if (F.hasName() && F.getName().startswith("__nv_")) {
+      LOG(INFO) << "Module requires linking with libdevice: " << std::string(F.getName());
+      return true;
+    }
+  }
+  LOG(INFO) << "module does not require linking against libdevice";
+  return false;
+}
+
+// Adds the missing intrinsics declarations to the given module
+void add_intrinsics_to_module(llvm::Module* module) {
+  for (llvm::Function& F : *module) {
+    for (llvm::Instruction& I : instructions(F)) {
+      if (llvm::IntrinsicInst* ii = llvm::dyn_cast<llvm::IntrinsicInst>(&I)) {
+        if (llvm::Intrinsic::isOverloaded(ii->getIntrinsicID())) {
+          llvm::Type* Tys[] = {ii->getFunctionType()->getReturnType()};
+          llvm::Function& decl_fn =
+              *llvm::Intrinsic::getDeclaration(module, ii->getIntrinsicID(), Tys);
+          ii->setCalledFunction(&decl_fn);
+        } else {
+          // inserts the declaration into the module if not present
+          llvm::Intrinsic::getDeclaration(module, ii->getIntrinsicID());
+        }
+      }
+    }
   }
 }
 
@@ -768,14 +804,29 @@ std::shared_ptr<GpuCompilationContext> CodeGenerator::generateNativeGPUCode(
   module->setTargetTriple("nvptx64-nvidia-cuda");
   CHECK(gpu_target.nvptx_target_machine);
   auto pass_manager_builder = llvm::PassManagerBuilder();
-  // add nvvm reflect pass replacing any NVVM conditionals with constants
-  gpu_target.nvptx_target_machine->adjustPassManager(pass_manager_builder);
-  pass_manager_builder.OptLevel = 0;
 
-  llvm::legacy::PassManager pass_manager;
-  pass_manager_builder.populateModulePassManager(pass_manager);
+  pass_manager_builder.OptLevel = 0;
+  llvm::legacy::PassManager module_pass_manager;
+  pass_manager_builder.populateModulePassManager(module_pass_manager);
+
+  bool requires_libdevice = check_module_requires_libdevice(module);
+
+  if (requires_libdevice) {
+    // add nvvm reflect pass replacing any NVVM conditionals with constants
+    gpu_target.nvptx_target_machine->adjustPassManager(pass_manager_builder);
+    llvm::legacy::FunctionPassManager FPM(module);
+    pass_manager_builder.populateFunctionPassManager(FPM);
+
+    // Run the NVVMReflectPass here rather than inside optimize_ir
+    FPM.doInitialization();
+    for (auto& F : *module) {
+      FPM.run(F);
+    }
+    FPM.doFinalization();
+  }
+
   // run optimizations
-  optimize_ir(func, module, pass_manager, live_funcs, co);
+  optimize_ir(func, module, module_pass_manager, live_funcs, co);
   legalize_nvvm_ir(func);
 
   std::stringstream ss;
@@ -808,7 +859,6 @@ std::shared_ptr<GpuCompilationContext> CodeGenerator::generateNativeGPUCode(
   }
 
   // Prevent the udf function(s) from being removed the way the runtime functions are
-
   std::unordered_set<std::string> udf_declarations;
   if (is_udf_module_present()) {
     for (auto& f : udf_gpu_module->getFunctionList()) {
@@ -853,6 +903,11 @@ std::shared_ptr<GpuCompilationContext> CodeGenerator::generateNativeGPUCode(
   for (auto& pFn : rt_funcs) {
     pFn->removeFromParent();
   }
+
+  if (requires_libdevice) {
+    add_intrinsics_to_module(module);
+  }
+
   module->print(os, nullptr);
   os.flush();
 
@@ -943,6 +998,27 @@ std::shared_ptr<CompilationContext> Executor::optimizeAndCodegenGPU(
                                       cgen_state_.get(),
                                       row_func_not_inlined};
   std::shared_ptr<GpuCompilationContext> compilation_context;
+
+  if (check_module_requires_libdevice(module)) {
+    if (g_rt_libdevice_module == nullptr) {
+      // raise error
+      throw std::runtime_error(
+          "libdevice library is not available but required by the UDF module");
+    }
+
+    // Bind libdevice it to the current module
+    CodeGenerator::link_udf_module(g_rt_libdevice_module,
+                                   *module,
+                                   cgen_state_.get(),
+                                   llvm::Linker::Flags::OverrideFromSrc);
+
+    // activate nvvm-reflect-ftz flag on the module
+    module->addModuleFlag(llvm::Module::Override, "nvvm-reflect-ftz", (int)1);
+    for (llvm::Function& fn : *module) {
+      fn.addFnAttr("nvptx-f32ftz", "true");
+    }
+  }
+
   try {
     compilation_context = CodeGenerator::generateNativeGPUCode(
         query_func, multifrag_query_func, live_funcs, co, gpu_target);
@@ -1068,6 +1144,43 @@ llvm::Module* read_template_module(llvm::LLVMContext& context) {
 
   return module;
 }
+
+#ifdef HAVE_CUDA
+llvm::Module* read_libdevice_module(llvm::LLVMContext& context) {
+  llvm::SMDiagnostic err;
+
+  const char* CUDA_DEFAULT_PATH = "/usr/local/cuda";
+  const char* env = nullptr;
+
+  if (!(env = getenv("CUDA_HOME")) && !(env = getenv("CUDA_DIR"))) {
+    // check if the default CUDA directory exists: /usr/local/cuda
+    if (boost::filesystem::exists(boost::filesystem::path(CUDA_DEFAULT_PATH)))
+      env = CUDA_DEFAULT_PATH;
+  }
+
+  if (env == nullptr) {
+    LOG(WARNING) << "Could not find CUDA installation path: environment variables "
+                    "CUDA_HOME or CUDA_DIR are not defined";
+    return nullptr;
+  }
+
+  boost::filesystem::path cuda_path{env};
+  cuda_path /= "nvvm";
+  cuda_path /= "libdevice";
+  cuda_path /= "libdevice.10.bc";
+
+  auto buffer_or_error = llvm::MemoryBuffer::getFile(cuda_path.c_str());
+  CHECK(!buffer_or_error.getError());
+  llvm::MemoryBuffer* buffer = buffer_or_error.get().get();
+
+  auto owner = llvm::parseBitcodeFile(buffer->getMemBufferRef(), context);
+  CHECK(!owner.takeError());
+  auto module = owner.get().release();
+  CHECK(module);
+
+  return module;
+}
+#endif
 
 #ifdef ENABLE_GEOS
 llvm::Module* read_geos_module(llvm::LLVMContext& context) {
@@ -1358,6 +1471,11 @@ std::unique_ptr<llvm::Module> g_rt_module(read_template_module(getGlobalLLVMCont
 
 #ifdef ENABLE_GEOS
 std::unique_ptr<llvm::Module> g_rt_geos_module(read_geos_module(getGlobalLLVMContext()));
+#endif
+
+#ifdef HAVE_CUDA
+std::unique_ptr<llvm::Module> g_rt_libdevice_module(
+    read_libdevice_module(getGlobalLLVMContext()));
 #endif
 
 bool is_udf_module_present(bool cpu_only) {
