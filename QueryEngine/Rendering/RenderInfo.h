@@ -42,7 +42,7 @@ class RenderInfo {
 
   RenderInfo(
       const std::shared_ptr<const ::QueryRenderer::RenderSession> in_render_session,
-      RenderQueryOptions in_render_query_opts,
+      std::optional<RenderQueryOptions> in_render_query_opts,
       const bool force_non_in_situ_data = false);
 
   const Catalog_Namespace::SessionInfo& getSessionInfo() const;
@@ -63,12 +63,12 @@ class RenderInfo {
   void setQuerySsboLayout(
       const std::shared_ptr<QueryRenderer::QueryDataLayout>& ssbo_layout);
 
-  const RenderQueryOptions* getRenderQueryOptsPtr() const;
-  const RenderQueryOptions& getRenderQueryOpts() const;
+  const RenderQueryOptions* getRenderQueryOptions() const;
+  const std::optional<RenderQueryOptions>& getOptionalRenderQueryOptions() const;
 
   bool setInSituDataIfUnset(const bool is_in_situ_data);
 
-  void reset(RenderQueryOptions in_query_opts,
+  void reset(std::optional<RenderQueryOptions> in_query_opts,
              const bool in_force_non_in_situ_data,
              const bool in_disallow_in_situ_only_if_final_ED_is_aggregate);
 
@@ -90,7 +90,7 @@ class RenderInfo {
 
   std::shared_ptr<QueryRenderer::QueryDataLayout> query_vbo_layout;
   std::shared_ptr<QueryRenderer::QueryDataLayout> query_ssbo_layout;
-  RenderQueryOptions render_query_opts_;
+  std::optional<RenderQueryOptions> render_query_opts_;
 };
 
 #endif  // QUERYENGINE_RENDERINFO_H
