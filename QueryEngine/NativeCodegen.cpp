@@ -1169,6 +1169,12 @@ llvm::Module* read_libdevice_module(llvm::LLVMContext& context) {
   cuda_path /= "libdevice";
   cuda_path /= "libdevice.10.bc";
 
+  if (!boost::filesystem::exists(cuda_path)) {
+    LOG(WARNING) << "Could not find CUDA libdevice; support for some UDF "
+                    "functions might not be available.";
+    return nullptr;
+  }
+
   auto buffer_or_error = llvm::MemoryBuffer::getFile(cuda_path.c_str());
   CHECK(!buffer_or_error.getError());
   llvm::MemoryBuffer* buffer = buffer_or_error.get().get();
