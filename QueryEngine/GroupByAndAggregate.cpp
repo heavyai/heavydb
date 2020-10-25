@@ -434,7 +434,7 @@ std::unique_ptr<QueryMemoryDescriptor> GroupByAndAggregate::initQueryMemoryDescr
 
   const auto count_distinct_descriptors = initCountDistinctDescriptors();
 
-  auto group_col_widths = get_col_byte_widths(ra_exe_unit_.groupby_exprs, {});
+  auto group_col_widths = get_col_byte_widths(ra_exe_unit_.groupby_exprs);
 
   const bool is_group_by{!ra_exe_unit_.groupby_exprs.empty()};
 

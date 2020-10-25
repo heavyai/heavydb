@@ -196,7 +196,7 @@ std::unique_ptr<QueryMemoryDescriptor> QueryMemoryDescriptor::init(
     const bool must_use_baseline_sort,
     const bool output_columnar_hint,
     const bool streaming_top_n_hint) {
-  auto group_col_widths = get_col_byte_widths(ra_exe_unit.groupby_exprs, {});
+  auto group_col_widths = get_col_byte_widths(ra_exe_unit.groupby_exprs);
   const bool is_group_by{!group_col_widths.empty()};
 
   auto col_slot_context = ColSlotContext(ra_exe_unit.target_exprs, {});
@@ -717,7 +717,7 @@ int8_t QueryMemoryDescriptor::pick_target_compact_width(
                : crt_min_byte_width;
   } else {
     // TODO(miyu): relax this condition to allow more cases just w/o padding
-    for (auto wid : get_col_byte_widths(ra_exe_unit.target_exprs, {})) {
+    for (auto wid : get_col_byte_widths(ra_exe_unit.target_exprs)) {
       compact_width = std::max(compact_width, wid);
     }
     return compact_width;
