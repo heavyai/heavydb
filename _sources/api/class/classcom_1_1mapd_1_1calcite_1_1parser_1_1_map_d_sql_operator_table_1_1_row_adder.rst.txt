@@ -1,0 +1,9 @@
+Class com::mapd::calcite::parser::MapDSqlOperatorTable::RowAdder
+================================================================
+
+.. doxygenclass:: com::mapd::calcite::parser::MapDSqlOperatorTable::RowAdder
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

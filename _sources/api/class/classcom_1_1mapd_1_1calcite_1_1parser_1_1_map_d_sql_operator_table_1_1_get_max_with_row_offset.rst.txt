@@ -1,0 +1,9 @@
+Class com::mapd::calcite::parser::MapDSqlOperatorTable::GetMaxWithRowOffset
+===========================================================================
+
+.. doxygenclass:: com::mapd::calcite::parser::MapDSqlOperatorTable::GetMaxWithRowOffset
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:
