@@ -6046,12 +6046,12 @@ ExtArgumentType mapfrom(const TExtArgumentType::type& t) {
 
 table_functions::OutputBufferSizeType mapfrom(const TOutputBufferSizeType::type& t) {
   switch (t) {
+    case TOutputBufferSizeType::kConstant:
+      return table_functions::OutputBufferSizeType::kConstant;
     case TOutputBufferSizeType::kUserSpecifiedConstantParameter:
       return table_functions::OutputBufferSizeType::kUserSpecifiedConstantParameter;
     case TOutputBufferSizeType::kUserSpecifiedRowMultiplier:
       return table_functions::OutputBufferSizeType::kUserSpecifiedRowMultiplier;
-    case TOutputBufferSizeType::kConstant:
-      return table_functions::OutputBufferSizeType::kConstant;
   }
   UNREACHABLE();
   return table_functions::OutputBufferSizeType{};

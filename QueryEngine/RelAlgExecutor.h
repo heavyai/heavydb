@@ -333,7 +333,8 @@ class RelAlgExecutor : private StorageIOFacility<RelAlgExecutorTraits> {
                                const ExecutionOptions& eo);
 
   TableFunctionWorkUnit createTableFunctionWorkUnit(const RelTableFunction* table_func,
-                                                    const bool just_explain);
+                                                    const bool just_explain,
+                                                    const bool is_gpu);
 
   void addTemporaryTable(const int table_id, const ResultSetPtr& result) {
     CHECK_LT(size_t(0), result->colCount());

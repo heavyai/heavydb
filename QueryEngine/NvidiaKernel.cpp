@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+#include <sstream>
+
 #include "NvidiaKernel.h"
 
 #include "Logger/Logger.h"
@@ -84,6 +86,19 @@ void nvidia_jit_warmup() {
   checkCudaErrors(cuLinkDestroy(link_state)) << std::string(error_log);
 }
 
+std::string add_line_numbers(const std::string& text) {
+  std::stringstream iss(text);
+  std::string result;
+  size_t count = 1;
+  while (iss.good()) {
+    std::string line;
+    std::getline(iss, line, '\n');
+    result += std::to_string(count) + ": " + line + "\n";
+    count++;
+  }
+  return result;
+}
+
 CubinResult ptx_to_cubin(const std::string& ptx,
                          const unsigned block_size,
                          const CudaMgr_Namespace::CudaMgr* cuda_mgr) {
@@ -115,7 +130,6 @@ CubinResult ptx_to_cubin(const std::string& ptx,
       << std::string(error_log);
   VLOG(1) << "CUDA JIT time to add RT fatbinary: "
           << *reinterpret_cast<float*>(&option_values[2]);
-
   checkCudaErrors(cuLinkAddData(link_state,
                                 CU_JIT_INPUT_PTX,
                                 static_cast<void*>(const_cast<char*>(ptx.c_str())),
@@ -124,7 +138,8 @@ CubinResult ptx_to_cubin(const std::string& ptx,
                                 0,
                                 nullptr,
                                 nullptr))
-      << std::string(error_log);
+      << std::string(error_log) << "\nPTX:\n"
+      << add_line_numbers(ptx) << "\nEOF PTX";
   VLOG(1) << "CUDA JIT time to add generated code: "
           << *reinterpret_cast<float*>(&option_values[2]);
   void* cubin{nullptr};

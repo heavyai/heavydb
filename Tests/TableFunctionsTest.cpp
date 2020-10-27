@@ -56,15 +56,16 @@ bool skip_tests(const ExecutorDeviceType device_type) {
     continue;                                                \
   }
 
-class RowCopierTableFunction : public ::testing::Test {
+class TableFunctions : public ::testing::Test {
   void SetUp() override {
     run_ddl_statement("DROP TABLE IF EXISTS tf_test;");
-    run_ddl_statement("CREATE TABLE tf_test (x INT, d DOUBLE) WITH (FRAGMENT_SIZE=2);");
+    run_ddl_statement(
+        "CREATE TABLE tf_test (x INT, d DOUBLE, d2 DOUBLE) WITH (FRAGMENT_SIZE=2);");
 
     TestHelpers::ValuesGenerator gen("tf_test");
 
     for (int i = 0; i < 5; i++) {
-      const auto insert_query = gen(i, i * 1.1);
+      const auto insert_query = gen(i, i * 1.1, 1.0 - i * 2.2);
       run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
     }
   }
@@ -72,71 +73,122 @@ class RowCopierTableFunction : public ::testing::Test {
   void TearDown() override { run_ddl_statement("DROP TABLE IF EXISTS tf_test;"); }
 };
 
-TEST_F(RowCopierTableFunction, BasicProjection) {
+TEST_F(TableFunctions, BasicProjection) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
     {
       const auto rows = run_multiple_agg(
-          "SELECT d FROM TABLE(row_copier(cursor(SELECT d FROM tf_test), 1)) ORDER BY d;",
+          "SELECT out0 FROM TABLE(row_copier(cursor(SELECT d FROM tf_test), 1)) ORDER BY "
+          "out0;",
           dt);
       ASSERT_EQ(rows->rowCount(), size_t(5));
     }
     {
       const auto rows = run_multiple_agg(
-          "SELECT d FROM TABLE(row_copier(cursor(SELECT d FROM tf_test), 2)) ORDER BY d;",
+          "SELECT out0 FROM TABLE(row_copier(cursor(SELECT d FROM tf_test), 2)) ORDER BY "
+          "out0;",
           dt);
       ASSERT_EQ(rows->rowCount(), size_t(10));
     }
     {
       const auto rows = run_multiple_agg(
-          "SELECT d FROM TABLE(row_copier(cursor(SELECT d FROM tf_test), 3)) ORDER BY d;",
+          "SELECT out0 FROM TABLE(row_copier(cursor(SELECT d FROM tf_test), 3)) ORDER BY "
+          "out0;",
           dt);
       ASSERT_EQ(rows->rowCount(), size_t(15));
     }
     {
       const auto rows = run_multiple_agg(
-          "SELECT d FROM TABLE(row_copier(cursor(SELECT d FROM tf_test), 4)) ORDER BY d;",
+          "SELECT out0 FROM TABLE(row_copier(cursor(SELECT d FROM tf_test), 4)) ORDER BY "
+          "out0;",
+          dt);
+      ASSERT_EQ(rows->rowCount(), size_t(20));
+    }
+    {
+      const auto rows = run_multiple_agg(
+          "SELECT out_add FROM TABLE(row_adder(1, cursor(SELECT d, d2 FROM tf_test)));",
+          dt);
+      ASSERT_EQ(rows->rowCount(), size_t(5));
+    }
+    {
+      const auto rows = run_multiple_agg(
+          "SELECT out_add FROM TABLE(row_adder(4, cursor(SELECT d, d2 FROM tf_test)));",
+          dt);
+      ASSERT_EQ(rows->rowCount(), size_t(20));
+    }
+    {
+      const auto rows = run_multiple_agg(
+          "SELECT out_add, out_sub FROM TABLE(row_addsub(1, cursor(SELECT d, d2 FROM "
+          "tf_test)));",
+          dt);
+      ASSERT_EQ(rows->rowCount(), size_t(5));
+    }
+    // Constant (kConstant) size tests with get_max_with_row_offset
+    {
+      const auto rows = run_multiple_agg(
+          "SELECT out0 FROM TABLE(get_max_with_row_offset(cursor(SELECT x FROM "
+          "tf_test)));",
+          dt);
+      ASSERT_EQ(rows->rowCount(), size_t(1));
+      auto crt_row = rows->getNextRow(false, false);
+      ASSERT_EQ(TestHelpers::v<int64_t>(crt_row[0]),
+                static_cast<int64_t>(4));  // max value of x
+    }
+    {
+      // swap output column order
+      const auto rows = run_multiple_agg(
+          "SELECT out1, out0 FROM TABLE(get_max_with_row_offset(cursor(SELECT x FROM "
+          "tf_test)));",
+          dt);
+      ASSERT_EQ(rows->rowCount(), size_t(1));
+      auto crt_row = rows->getNextRow(false, false);
+      ASSERT_EQ(TestHelpers::v<int64_t>(crt_row[0]),
+                static_cast<int64_t>(4));  // row offset of max x
+      ASSERT_EQ(TestHelpers::v<int64_t>(crt_row[1]),
+                static_cast<int64_t>(4));  // max value of x
+    }
+  }
+}
+
+TEST_F(TableFunctions, GroupByIn) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    {
+      const auto rows = run_multiple_agg(
+          "SELECT out0 FROM TABLE(row_copier(cursor(SELECT d FROM tf_test GROUP BY d), "
+          "1)) "
+          "ORDER BY out0;",
+          dt);
+      ASSERT_EQ(rows->rowCount(), size_t(5));
+    }
+    {
+      const auto rows = run_multiple_agg(
+          "SELECT out0 FROM TABLE(row_copier(cursor(SELECT d FROM tf_test GROUP BY d), "
+          "2)) "
+          "ORDER BY out0;",
+          dt);
+      ASSERT_EQ(rows->rowCount(), size_t(10));
+    }
+    {
+      const auto rows = run_multiple_agg(
+          "SELECT out0 FROM TABLE(row_copier(cursor(SELECT d FROM tf_test GROUP BY d), "
+          "3)) "
+          "ORDER BY out0;",
+          dt);
+      ASSERT_EQ(rows->rowCount(), size_t(15));
+    }
+    {
+      const auto rows = run_multiple_agg(
+          "SELECT out0 FROM TABLE(row_copier(cursor(SELECT d FROM tf_test GROUP BY d), "
+          "4)) "
+          "ORDER BY out0;",
           dt);
       ASSERT_EQ(rows->rowCount(), size_t(20));
     }
   }
 }
 
-TEST_F(RowCopierTableFunction, GroupByIn) {
-  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
-    SKIP_NO_GPU();
-    {
-      const auto rows = run_multiple_agg(
-          "SELECT d FROM TABLE(row_copier(cursor(SELECT d FROM tf_test GROUP BY d), 1)) "
-          "ORDER BY d;",
-          dt);
-      ASSERT_EQ(rows->rowCount(), size_t(5));
-    }
-    {
-      const auto rows = run_multiple_agg(
-          "SELECT d FROM TABLE(row_copier(cursor(SELECT d FROM tf_test GROUP BY d), 2)) "
-          "ORDER BY d;",
-          dt);
-      ASSERT_EQ(rows->rowCount(), size_t(10));
-    }
-    {
-      const auto rows = run_multiple_agg(
-          "SELECT d FROM TABLE(row_copier(cursor(SELECT d FROM tf_test GROUP BY d), 3)) "
-          "ORDER BY d;",
-          dt);
-      ASSERT_EQ(rows->rowCount(), size_t(15));
-    }
-    {
-      const auto rows = run_multiple_agg(
-          "SELECT d FROM TABLE(row_copier(cursor(SELECT d FROM tf_test GROUP BY d), 4)) "
-          "ORDER BY d;",
-          dt);
-      ASSERT_EQ(rows->rowCount(), size_t(20));
-    }
-  }
-}
-
-TEST_F(RowCopierTableFunction, GroupByInAndOut) {
+TEST_F(TableFunctions, GroupByInAndOut) {
   auto check_result = [](const auto rows, const size_t copies) {
     ASSERT_EQ(rows->rowCount(), size_t(5));
     for (size_t i = 0; i < 5; i++) {
@@ -149,36 +201,40 @@ TEST_F(RowCopierTableFunction, GroupByInAndOut) {
     SKIP_NO_GPU();
     {
       const auto rows = run_multiple_agg(
-          "SELECT d, count(*) FROM TABLE(row_copier(cursor(SELECT d FROM tf_test), 1)) "
-          "GROUP BY d ORDER BY d;",
+          "SELECT out0, count(*) FROM TABLE(row_copier(cursor(SELECT d FROM tf_test), "
+          "1)) "
+          "GROUP BY out0 ORDER BY out0;",
           dt);
       check_result(rows, 1);
     }
     {
       const auto rows = run_multiple_agg(
-          "SELECT d, count(*) FROM TABLE(row_copier(cursor(SELECT d FROM tf_test), 2)) "
-          "GROUP BY d ORDER BY d;",
+          "SELECT out0, count(*) FROM TABLE(row_copier(cursor(SELECT d FROM tf_test), "
+          "2)) "
+          "GROUP BY out0 ORDER BY out0;",
           dt);
       check_result(rows, 2);
     }
     {
       const auto rows = run_multiple_agg(
-          "SELECT d, count(*) FROM TABLE(row_copier(cursor(SELECT d FROM tf_test), 3)) "
-          "GROUP BY d ORDER BY d;",
+          "SELECT out0, count(*) FROM TABLE(row_copier(cursor(SELECT d FROM tf_test), "
+          "3)) "
+          "GROUP BY out0 ORDER BY out0;",
           dt);
       check_result(rows, 3);
     }
     {
       const auto rows = run_multiple_agg(
-          "SELECT d, count(*) FROM TABLE(row_copier(cursor(SELECT d FROM tf_test), 4)) "
-          "GROUP BY d ORDER BY d;",
+          "SELECT out0, count(*) FROM TABLE(row_copier(cursor(SELECT d FROM tf_test), "
+          "4)) "
+          "GROUP BY out0 ORDER BY out0;",
           dt);
       check_result(rows, 4);
     }
   }
 }
 
-TEST_F(RowCopierTableFunction, Unsupported) {
+TEST_F(TableFunctions, Unsupported) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
 
@@ -189,11 +245,11 @@ TEST_F(RowCopierTableFunction, Unsupported) {
   }
 }
 
-TEST_F(RowCopierTableFunction, CallFailure) {
+TEST_F(TableFunctions, CallFailure) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
 
-    EXPECT_THROW(run_multiple_agg("SELECT d FROM TABLE(row_copier(cursor("
+    EXPECT_THROW(run_multiple_agg("SELECT out0 FROM TABLE(row_copier(cursor("
                                   "SELECT d FROM tf_test),101));",
                                   dt),
                  std::runtime_error);

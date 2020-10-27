@@ -25,6 +25,7 @@
 
 extern std::unique_ptr<llvm::Module> g_rt_module;
 extern std::unique_ptr<llvm::Module> rt_udf_cpu_module;
+extern std::unique_ptr<llvm::Module> rt_udf_gpu_module;
 
 namespace {
 
@@ -91,7 +92,8 @@ llvm::Value* alloc_column(std::string col_name,
                           llvm::Value* data_ptr,
                           llvm::Value* data_size,
                           llvm::LLVMContext& ctx,
-                          llvm::IRBuilder<>& ir_builder) {
+                          llvm::IRBuilder<>& ir_builder,
+                          bool byval) {
   /*
     Creates a new Column instance of given element type and initialize
     its data ptr and sz members. If data ptr or sz are unspecified
@@ -137,7 +139,15 @@ llvm::Value* alloc_column(std::string col_name,
     auto const_minus1 = llvm::ConstantInt::get(llvm::Type::getInt64Ty(ctx), -1, true);
     ir_builder.CreateStore(const_minus1, col_sz_ptr);
   }
-  return col;
+
+  if (byval) {
+    return ir_builder.CreateLoad(col);
+  } else {
+    auto col_ptr = ir_builder.CreatePointerCast(
+        col_ptr_ptr, llvm::PointerType::get(llvm::Type::getInt8Ty(ctx), 0));
+    col_ptr->setName(col_name + "_ptr");
+    return col_ptr;
+  }
 }
 
 }  // namespace
@@ -191,6 +201,9 @@ void TableFunctionCompilationContext::generateEntryPoint(
       exe_unit.input_exprs.size(), input_cols_arg, cgen_state->ir_builder_, ctx);
   CHECK_EQ(exe_unit.input_exprs.size(), col_heads.size());
 
+  // The column arguments of C++ UDTFs processed by clang must be
+  // passed by reference, see rbc issue 200.
+  auto pass_column_by_value = exe_unit.table_func.isRuntime();
   std::vector<llvm::Value*> func_args;
   for (size_t i = 0; i < exe_unit.input_exprs.size(); i++) {
     const auto& expr = exe_unit.input_exprs[i];
@@ -209,8 +222,9 @@ void TableFunctionCompilationContext::generateEntryPoint(
                               col_heads[i],
                               input_row_count,
                               ctx,
-                              cgen_state_->ir_builder_);
-      func_args.push_back(cgen_state->ir_builder_.CreateLoad(col));
+                              cgen_state_->ir_builder_,
+                              pass_column_by_value);
+      func_args.push_back(col);
     } else {
       throw std::runtime_error(
           "Only integer and floating point columns or scalars are supported as inputs to "
@@ -218,7 +232,6 @@ void TableFunctionCompilationContext::generateEntryPoint(
           "functions.");
     }
   }
-
   std::vector<llvm::Value*> output_col_args;
   for (size_t i = 0; i < exe_unit.target_exprs.size(); i++) {
     auto output_load = cgen_state->ir_builder_.CreateLoad(
@@ -240,16 +253,16 @@ void TableFunctionCompilationContext::generateEntryPoint(
                               output_load,
                               output_row_count_ptr,
                               ctx,
-                              cgen_state_->ir_builder_);
-      func_args.push_back(cgen_state->ir_builder_.CreateLoad(col));
+                              cgen_state_->ir_builder_,
+                              pass_column_by_value);
+      func_args.push_back(col);
     } else {
       throw std::runtime_error(
           "Only integer and floating point columns are supported as outputs to table "
           "functions.");
     }
   }
-
-  auto func_name = exe_unit.table_func_name;
+  auto func_name = exe_unit.table_func.getName();
   boost::algorithm::to_lower(func_name);
   const auto table_func_return =
       cgen_state->emitExternalCall(func_name, get_int_type(32, ctx), func_args);
@@ -327,11 +340,17 @@ void TableFunctionCompilationContext::generateGpuKernel() {
 
 void TableFunctionCompilationContext::finalize(const CompilationOptions& co,
                                                Executor* executor) {
-  if (rt_udf_cpu_module != nullptr) {
-    /*
-      TODO 1: eliminate need for OverrideFromSrc
-      TODO 2: detect and link only the udf's that are needed
-     */
+  /*
+    TODO 1: eliminate need for OverrideFromSrc
+    TODO 2: detect and link only the udf's that are needed
+  */
+  if (co.device_type == ExecutorDeviceType::GPU && rt_udf_gpu_module != nullptr) {
+    CodeGenerator::link_udf_module(rt_udf_gpu_module,
+                                   *module_,
+                                   cgen_state_.get(),
+                                   llvm::Linker::Flags::OverrideFromSrc);
+  }
+  if (co.device_type == ExecutorDeviceType::CPU && rt_udf_cpu_module != nullptr) {
     CodeGenerator::link_udf_module(rt_udf_cpu_module,
                                    *module_,
                                    cgen_state_.get(),

@@ -51,12 +51,20 @@ const int8_t* create_literal_buffer(T literal,
 size_t get_output_row_count(const TableFunctionExecutionUnit& exe_unit,
                             size_t input_element_count) {
   size_t allocated_output_row_count = 0;
-  if (*exe_unit.output_buffer_multiplier) {
-    allocated_output_row_count = *exe_unit.output_buffer_multiplier * input_element_count;
-  } else {
-    throw std::runtime_error(
-        "Only row multiplier output buffer configuration is supported for table "
-        "functions.");
+  switch (exe_unit.table_func.getOutputRowSizeType()) {
+    case table_functions::OutputBufferSizeType::kConstant:
+    case table_functions::OutputBufferSizeType::kUserSpecifiedConstantParameter: {
+      allocated_output_row_count = exe_unit.output_buffer_size_param;
+      break;
+    }
+    case table_functions::OutputBufferSizeType::kUserSpecifiedRowMultiplier: {
+      allocated_output_row_count =
+          exe_unit.output_buffer_size_param * input_element_count;
+      break;
+    }
+    default: {
+      UNREACHABLE();
+    }
   }
   return allocated_output_row_count;
 }
@@ -217,7 +225,7 @@ ResultSetPtr TableFunctionExecutionContext::launchCpuCode(
       executor);
 
   // setup the output
-  int64_t output_row_count = -1;
+  int64_t output_row_count = allocated_output_row_count;
   auto group_by_buffers_ptr = query_buffers->getGroupByBuffersPtr();
   CHECK(group_by_buffers_ptr);
 
@@ -236,10 +244,18 @@ ResultSetPtr TableFunctionExecutionContext::launchCpuCode(
   if (err) {
     throw std::runtime_error("Error executing table function: " + std::to_string(err));
   }
-  if (output_row_count < 0 || (size_t)output_row_count > allocated_output_row_count) {
-    output_row_count = allocated_output_row_count;
+  if (exe_unit.table_func.hasNonUserSpecifiedOutputSizeConstant()) {
+    if (static_cast<size_t>(output_row_count) != allocated_output_row_count) {
+      throw std::runtime_error(
+          "Table function with constant sizing parameter must return " +
+          std::to_string(allocated_output_row_count) + " (got " +
+          std::to_string(output_row_count) + ")");
+    }
+  } else {
+    if (output_row_count < 0 || (size_t)output_row_count > allocated_output_row_count) {
+      output_row_count = allocated_output_row_count;
+    }
   }
-
   // Update entry count, it may differ from allocated mem size
   query_buffers->getResultSet(0)->updateStorageEntryCount(output_row_count);
 
@@ -320,7 +336,7 @@ ResultSetPtr TableFunctionExecutionContext::launchGpuCode(
       executor);
 
   // setup the output
-  int64_t output_row_count = -1;
+  int64_t output_row_count = allocated_output_row_count;
 
   kernel_params[OUTPUT_ROW_COUNT] =
       reinterpret_cast<CUdeviceptr>(gpu_allocator->alloc(sizeof(int64_t*)));
@@ -373,8 +389,17 @@ ResultSetPtr TableFunctionExecutionContext::launchGpuCode(
       reinterpret_cast<int8_t*>(&output_row_count),
       reinterpret_cast<int8_t*>(kernel_params[OUTPUT_ROW_COUNT]),
       sizeof(int64_t));
-  if (output_row_count < 0 || (size_t)output_row_count > allocated_output_row_count) {
-    output_row_count = allocated_output_row_count;
+  if (exe_unit.table_func.hasNonUserSpecifiedOutputSizeConstant()) {
+    if (static_cast<size_t>(output_row_count) != allocated_output_row_count) {
+      throw std::runtime_error(
+          "Table function with constant sizing parameter must return " +
+          std::to_string(allocated_output_row_count) + " (got " +
+          std::to_string(output_row_count) + ")");
+    }
+  } else {
+    if (output_row_count < 0 || (size_t)output_row_count > allocated_output_row_count) {
+      output_row_count = allocated_output_row_count;
+    }
   }
 
   // Update entry count, it may differ from allocated mem size

@@ -30,7 +30,8 @@
 #include <unordered_set>
 #include <vector>
 
-#include "../Shared/sqltypes.h"
+#include "Shared/sqltypes.h"
+#include "Shared/toString.h"
 
 enum class ExtArgumentType {
   Int8,

@@ -36,6 +36,7 @@
 #include "QueryEngine/TypePunning.h"
 #include "Shared/sql_type_to_string.h"
 #include "Shared/sql_window_function_to_string.h"
+#include "Shared/toString.h"
 #include "Utils/FsiUtils.h"
 
 using ColumnNameList = std::vector<std::string>;

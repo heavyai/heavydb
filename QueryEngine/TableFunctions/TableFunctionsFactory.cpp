@@ -119,6 +119,28 @@ void TableFunctionsFactory::init() {
         std::vector<ExtArgumentType>{ExtArgumentType::ColumnDouble,
                                      ExtArgumentType::Int32},
         std::vector<ExtArgumentType>{ExtArgumentType::ColumnDouble});
+    TableFunctionsFactory::add(
+        "row_adder",
+        TableFunctionOutputRowSizer{OutputBufferSizeType::kUserSpecifiedRowMultiplier, 1},
+        std::vector<ExtArgumentType>{ExtArgumentType::Int32,
+                                     ExtArgumentType::ColumnDouble,
+                                     ExtArgumentType::ColumnDouble},
+        std::vector<ExtArgumentType>{ExtArgumentType::ColumnDouble});
+    TableFunctionsFactory::add(
+        "row_addsub",
+        TableFunctionOutputRowSizer{OutputBufferSizeType::kUserSpecifiedRowMultiplier, 1},
+        std::vector<ExtArgumentType>{ExtArgumentType::Int32,
+                                     ExtArgumentType::ColumnDouble,
+                                     ExtArgumentType::ColumnDouble},
+        std::vector<ExtArgumentType>{ExtArgumentType::ColumnDouble,
+                                     ExtArgumentType::ColumnDouble});
+    TableFunctionsFactory::add(
+        "get_max_with_row_offset",
+        TableFunctionOutputRowSizer{OutputBufferSizeType::kConstant, 1},
+        std::vector<ExtArgumentType>{ExtArgumentType::ColumnInt32},
+        // ExtArgumentType::Int32},
+        std::vector<ExtArgumentType>{ExtArgumentType::ColumnInt32,
+                                     ExtArgumentType::ColumnInt32});
   });
 }
 
@@ -149,14 +171,15 @@ std::string drop_suffix(const std::string& str) {
 
 }  // namespace
 
-std::vector<TableFunction> TableFunctionsFactory::get_table_funcs(
-    const std::string& name) {
+std::vector<TableFunction> TableFunctionsFactory::get_table_funcs(const std::string& name,
+                                                                  const bool is_gpu) {
   std::vector<TableFunction> table_funcs;
   auto table_func_name = name;
   boost::algorithm::to_lower(table_func_name);
   for (const auto& pair : functions_) {
     auto fname = drop_suffix(pair.first);
-    if (fname == table_func_name) {
+    if (fname == table_func_name &&
+        (is_gpu ? pair.second.isGPU() : pair.second.isCPU())) {
       table_funcs.push_back(pair.second);
     }
   }

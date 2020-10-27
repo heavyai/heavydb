@@ -44,7 +44,8 @@ ExtensionFunction bind_function(const Analyzer::FunctionOper* function_oper);
 
 const table_functions::TableFunction bind_table_function(
     std::string name,
-    Analyzer::ExpressionPtrVector input_args);
+    Analyzer::ExpressionPtrVector input_args,
+    const bool is_gpu);
 
 bool is_ext_arg_type_column(const ExtArgumentType ext_arg_type);
 bool is_ext_arg_type_array(const ExtArgumentType ext_arg_type);

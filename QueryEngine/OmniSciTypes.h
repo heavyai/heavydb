@@ -147,4 +147,16 @@ template <typename T>
 struct Column {
   T* ptr;      // row data
   int64_t sz;  // row count
+
+  DEVICE T& operator[](const unsigned int index) const { return ptr[index]; }
+  DEVICE int64_t getSize() const { return sz; }
+  DEVICE void setSize(int64_t size) { this->sz = size; }
+
+#ifdef HAVE_TOSTRING
+
+  std::string toString() const {
+    return ::typeName(this) + "(ptr=" + ::toString((void*)ptr) +
+           ", sz=" + std::to_string(sz) + ")";
+  }
+#endif
 };

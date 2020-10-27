@@ -456,10 +456,11 @@ ExtensionFunction bind_function(const Analyzer::FunctionOper* function_oper) {
 
 const table_functions::TableFunction bind_table_function(
     std::string name,
-    Analyzer::ExpressionPtrVector input_args) {
+    Analyzer::ExpressionPtrVector input_args,
+    const bool is_gpu) {
   // used in RelAlgExecutor.cpp
   std::vector<table_functions::TableFunction> table_funcs =
-      table_functions::TableFunctionsFactory::get_table_funcs(name);
+      table_functions::TableFunctionsFactory::get_table_funcs(name, is_gpu);
   return bind_table_function(name, input_args, table_funcs);
 }
 

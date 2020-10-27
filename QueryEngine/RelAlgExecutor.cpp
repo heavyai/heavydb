@@ -1348,6 +1348,7 @@ std::vector<TargetMetaInfo> get_targets_meta(
     const RA* ra_node,
     const std::vector<Analyzer::Expr*>& target_exprs) {
   std::vector<TargetMetaInfo> targets_meta;
+  CHECK_EQ(ra_node->size(), target_exprs.size());
   for (size_t i = 0; i < ra_node->size(); ++i) {
     CHECK(target_exprs[i]);
     // TODO(alex): remove the count distinct type fixup.
@@ -1663,8 +1664,10 @@ ExecutionResult RelAlgExecutor::executeTableFunction(const RelTableFunction* tab
   if (!g_enable_table_functions) {
     throw std::runtime_error("Table function support is disabled");
   }
-
-  auto table_func_work_unit = createTableFunctionWorkUnit(table_func, eo.just_explain);
+  auto table_func_work_unit = createTableFunctionWorkUnit(
+      table_func,
+      eo.just_explain,
+      /*is_gpu = */ co.device_type == ExecutorDeviceType::GPU);
   const auto body = table_func_work_unit.body;
   CHECK(body);
 
@@ -3784,14 +3787,14 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createUnionWorkUnit(
 
 RelAlgExecutor::TableFunctionWorkUnit RelAlgExecutor::createTableFunctionWorkUnit(
     const RelTableFunction* table_func,
-    const bool just_explain) {
+    const bool just_explain,
+    const bool is_gpu) {
   std::vector<InputDescriptor> input_descs;
   std::list<std::shared_ptr<const InputColDescriptor>> input_col_descs;
   auto input_to_nest_level = get_input_nest_levels(table_func, {});
   std::tie(input_descs, input_col_descs, std::ignore) =
       get_input_desc(table_func, input_to_nest_level, {}, cat_);
   const auto query_infos = get_table_infos(input_descs, executor_);
-
   RelAlgTranslator translator(
       cat_, query_state_, executor_, input_to_nest_level, {}, now_, just_explain);
   const auto input_exprs_owned =
@@ -3801,27 +3804,32 @@ RelAlgExecutor::TableFunctionWorkUnit RelAlgExecutor::createTableFunctionWorkUni
   const auto input_exprs = get_exprs_not_owned(input_exprs_owned);
 
   const auto table_function_impl =
-      bind_table_function(table_func->getFunctionName(), input_exprs_owned);
+      bind_table_function(table_func->getFunctionName(), input_exprs_owned, is_gpu);
 
-  std::optional<size_t> output_row_multiplier;
-  if (table_function_impl.hasUserSpecifiedOutputMultiplier()) {
-    const auto parameter_index = table_function_impl.getOutputRowParameter();
+  size_t output_row_sizing_param = 0;
+  if (table_function_impl.hasUserSpecifiedOutputSizeMultiplier() ||
+      table_function_impl.hasUserSpecifiedOutputSizeConstant()) {
+    const auto parameter_index = table_function_impl.getOutputRowSizeParameter();
     CHECK_GT(parameter_index, size_t(0));
     const auto parameter_expr = table_func->getTableFuncInputAt(parameter_index - 1);
     const auto parameter_expr_literal = dynamic_cast<const RexLiteral*>(parameter_expr);
     if (!parameter_expr_literal) {
       throw std::runtime_error(
-          "Provided output buffer multiplier parameter is not a literal. Only literal "
-          "values are supported with output buffer multiplier configured table "
+          "Provided output buffer sizing parameter is not a literal. Only literal "
+          "values are supported with output buffer sizing configured table "
           "functions.");
     }
     int64_t literal_val = parameter_expr_literal->getVal<int64_t>();
     if (literal_val < 0) {
-      throw std::runtime_error("Provided output row multiplier " +
+      throw std::runtime_error("Provided output sizing parameter " +
                                std::to_string(literal_val) +
-                               " is not valid for table functions.");
+                               " must be positive integer.");
     }
-    output_row_multiplier = static_cast<size_t>(literal_val);
+    output_row_sizing_param = static_cast<size_t>(literal_val);
+  } else if (table_function_impl.hasNonUserSpecifiedOutputSizeConstant()) {
+    output_row_sizing_param = table_function_impl.getOutputRowSizeParameter();
+  } else {
+    UNREACHABLE();
   }
 
   std::vector<Analyzer::ColumnVar*> input_col_exprs;
@@ -3834,22 +3842,20 @@ RelAlgExecutor::TableFunctionWorkUnit RelAlgExecutor::createTableFunctionWorkUni
     index++;
   }
   CHECK_EQ(input_col_exprs.size(), table_func->getColInputsSize());
-
   std::vector<Analyzer::Expr*> table_func_outputs;
   for (size_t i = 0; i < table_function_impl.getOutputsSize(); i++) {
     const auto ti = table_function_impl.getOutputSQLType(i);
     target_exprs_owned_.push_back(std::make_shared<Analyzer::ColumnVar>(ti, 0, i, -1));
     table_func_outputs.push_back(target_exprs_owned_.back().get());
   }
-
   const TableFunctionExecutionUnit exe_unit = {
       input_descs,
       input_col_descs,
-      input_exprs,            // table function inputs
-      input_col_exprs,        // table function column inputs (duplicates w/ above)
-      table_func_outputs,     // table function projected exprs
-      output_row_multiplier,  // output buffer multiplier
-      table_function_impl.getName()};
+      input_exprs,              // table function inputs
+      input_col_exprs,          // table function column inputs (duplicates w/ above)
+      table_func_outputs,       // table function projected exprs
+      output_row_sizing_param,  // output buffer sizing param
+      table_function_impl};
   const auto targets_meta = get_targets_meta(table_func, exe_unit.target_exprs);
   table_func->setOutputMetainfo(targets_meta);
   return {exe_unit, table_func};

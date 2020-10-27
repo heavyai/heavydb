@@ -26,8 +26,11 @@
 #ifndef QUERYENGINE_RELALGEXECUTIONUNIT_H
 #define QUERYENGINE_RELALGEXECUTIONUNIT_H
 
-#include "../Shared/sqldefs.h"
 #include "Descriptors/InputDescriptors.h"
+#include "Shared/sqldefs.h"
+#include "Shared/toString.h"
+#include "TableFunctions/TableFunctionOutputBufferSizeType.h"
+#include "TableFunctions/TableFunctionsFactory.h"
 #include "ThriftHandler/QueryState.h"
 
 #include <list>
@@ -85,16 +88,16 @@ struct TableFunctionExecutionUnit {
   std::vector<Analyzer::Expr*> input_exprs;
   std::vector<Analyzer::ColumnVar*> table_func_inputs;
   std::vector<Analyzer::Expr*> target_exprs;
-  const std::optional<size_t> output_buffer_multiplier;
-  const std::string table_func_name;
+  const size_t output_buffer_size_param;
+  const table_functions::TableFunction table_func;
 
  public:
   std::string toString() const {
     return typeName(this) + "(" + "input_exprs=" + ::toString(input_exprs) +
            ", table_func_inputs=" + ::toString(table_func_inputs) +
            ", target_exprs=" + ::toString(target_exprs) +
-           ", output_buffer_multiplier=" + ::toString(output_buffer_multiplier) +
-           ", table_func_name=" + ::toString(table_func_name) + ")";
+           ", output_buffer_size_param=" + ::toString(output_buffer_size_param) +
+           ", table_func=" + ::toString(table_func) + ")";
   }
 };
 

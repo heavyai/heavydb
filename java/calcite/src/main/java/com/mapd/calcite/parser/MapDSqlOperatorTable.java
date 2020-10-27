@@ -162,7 +162,13 @@ public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
     // using reflection when we are deserializing from JSON.
     // opTab.addOperator(new RampFunction());
     // opTab.addOperator(new DedupFunction());
-    opTab.addOperator(new RowCopier()); // UDTF prototype
+    opTab.addOperator(new RowCopier()); // UDTF prototype, copy column to output column
+    opTab.addOperator(new RowAdder()); // UDTF prototype, add two columns to output column
+    opTab.addOperator(
+            new RowAddSub()); // UDTF prototype, add two columns to output column
+    opTab.addOperator(new GetMaxWithRowOffset()); // UDTF prototype, constant sized with 1
+                                                  // output row, get max of column along
+                                                  // with row offset as two columns
     opTab.addOperator(new MyUDFFunction());
     opTab.addOperator(new PgUnnest());
     opTab.addOperator(new Any());
@@ -244,10 +250,12 @@ public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
     HashSet<String> demangledNames = new HashSet<String>();
     for (Map.Entry<String, ExtensionFunction> extSig : extSigs.entrySet()) {
       final String demangledName = dropSuffix(extSig.getKey());
-      if (demangledNames.contains(demangledName)) {
+      final String demangledNameArity =
+              String.format("%s-%d", demangledName, extSig.getValue().getArgs().size());
+      if (demangledNames.contains(demangledNameArity)) {
         continue;
       }
-      demangledNames.add(demangledName);
+      demangledNames.add(demangledNameArity);
       opTab.addOperator(new ExtFunction(demangledName, extSig.getValue()));
     }
   }
@@ -357,14 +365,109 @@ public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
 
     @Override
     public RelDataType inferReturnType(SqlOperatorBinding opBinding) {
-      assert opBinding.getOperandCount() == 2;
-      return opBinding.getCursorOperand(0);
+      final RelDataTypeFactory typeFactory = opBinding.getTypeFactory();
+      java.util.List<RelDataType> typeList = new java.util.ArrayList<RelDataType>();
+      java.util.List<java.lang.String> fieldNameList =
+              new java.util.ArrayList<java.lang.String>();
+      fieldNameList.add("out0");
+      typeList.add(typeFactory.createSqlType(SqlTypeName.DOUBLE));
+      return typeFactory.createStructType(typeList, fieldNameList);
     }
 
     private static java.util.List<SqlTypeFamily> signature() {
       java.util.List<SqlTypeFamily> sig_family = new java.util.ArrayList<SqlTypeFamily>();
       sig_family.add(SqlTypeFamily.CURSOR);
       sig_family.add(SqlTypeFamily.ANY);
+      return sig_family;
+    }
+  }
+
+  public static class RowAdder extends SqlFunction {
+    public RowAdder() {
+      super("ROW_ADDER",
+              SqlKind.OTHER_FUNCTION,
+              null,
+              null,
+              OperandTypes.family(signature()),
+              SqlFunctionCategory.USER_DEFINED_TABLE_FUNCTION);
+    }
+
+    @Override
+    public RelDataType inferReturnType(SqlOperatorBinding opBinding) {
+      final RelDataTypeFactory typeFactory = opBinding.getTypeFactory();
+      java.util.List<RelDataType> typeList = new java.util.ArrayList<RelDataType>();
+      java.util.List<java.lang.String> fieldNameList =
+              new java.util.ArrayList<java.lang.String>();
+      fieldNameList.add("out_add");
+      typeList.add(typeFactory.createSqlType(SqlTypeName.DOUBLE));
+      return typeFactory.createStructType(typeList, fieldNameList);
+    }
+
+    private static java.util.List<SqlTypeFamily> signature() {
+      java.util.List<SqlTypeFamily> sig_family = new java.util.ArrayList<SqlTypeFamily>();
+      sig_family.add(SqlTypeFamily.INTEGER);
+      sig_family.add(SqlTypeFamily.CURSOR);
+      return sig_family;
+    }
+  }
+
+  public static class RowAddSub extends SqlFunction {
+    public RowAddSub() {
+      super("ROW_ADDSUB",
+              SqlKind.OTHER_FUNCTION,
+              null,
+              null,
+              OperandTypes.family(signature()),
+              SqlFunctionCategory.USER_DEFINED_TABLE_FUNCTION);
+    }
+
+    @Override
+    public RelDataType inferReturnType(SqlOperatorBinding opBinding) {
+      final RelDataTypeFactory typeFactory = opBinding.getTypeFactory();
+      java.util.List<RelDataType> typeList = new java.util.ArrayList<RelDataType>();
+      java.util.List<java.lang.String> fieldNameList =
+              new java.util.ArrayList<java.lang.String>();
+      fieldNameList.add("out_add");
+      fieldNameList.add("out_sub");
+      typeList.add(typeFactory.createSqlType(SqlTypeName.DOUBLE));
+      typeList.add(typeFactory.createSqlType(SqlTypeName.DOUBLE));
+      return typeFactory.createStructType(typeList, fieldNameList);
+    }
+
+    private static java.util.List<SqlTypeFamily> signature() {
+      java.util.List<SqlTypeFamily> sig_family = new java.util.ArrayList<SqlTypeFamily>();
+      sig_family.add(SqlTypeFamily.INTEGER);
+      sig_family.add(SqlTypeFamily.CURSOR);
+      return sig_family;
+    }
+  }
+
+  public static class GetMaxWithRowOffset extends SqlFunction {
+    public GetMaxWithRowOffset() {
+      super("GET_MAX_WITH_ROW_OFFSET",
+              SqlKind.OTHER_FUNCTION,
+              null,
+              null,
+              OperandTypes.family(signature()),
+              SqlFunctionCategory.USER_DEFINED_TABLE_FUNCTION);
+    }
+
+    @Override
+    public RelDataType inferReturnType(SqlOperatorBinding opBinding) {
+      final RelDataTypeFactory typeFactory = opBinding.getTypeFactory();
+      java.util.List<RelDataType> typeList = new java.util.ArrayList<RelDataType>();
+      java.util.List<java.lang.String> fieldNameList =
+              new java.util.ArrayList<java.lang.String>();
+      fieldNameList.add("out0");
+      fieldNameList.add("out1");
+      typeList.add(typeFactory.createSqlType(SqlTypeName.INTEGER));
+      typeList.add(typeFactory.createSqlType(SqlTypeName.INTEGER));
+      return typeFactory.createStructType(typeList, fieldNameList);
+    }
+
+    private static java.util.List<SqlTypeFamily> signature() {
+      java.util.List<SqlTypeFamily> sig_family = new java.util.ArrayList<SqlTypeFamily>();
+      sig_family.add(SqlTypeFamily.CURSOR);
       return sig_family;
     }
   }

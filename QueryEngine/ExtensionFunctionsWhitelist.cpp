@@ -115,7 +115,7 @@ std::vector<ExtensionFunction> ExtensionFunctionsWhitelist::get_ext_funcs(
 namespace {
 
 // Returns the LLVM name for `type`.
-std::string serialize_type(const ExtArgumentType type) {
+std::string serialize_type(const ExtArgumentType type, bool byval = true) {
   switch (type) {
     case ExtArgumentType::Bool:
       return "i8";  // clang converts bool to i8
@@ -172,19 +172,19 @@ std::string serialize_type(const ExtArgumentType type) {
     case ExtArgumentType::Cursor:
       return "cursor";
     case ExtArgumentType::ColumnInt8:
-      return "{i8*, i64}";
+      return (byval ? "{i8*, i64}" : "i8*");
     case ExtArgumentType::ColumnInt16:
-      return "{i16*, i64}";
+      return (byval ? "{i16*, i64}" : "i8*");
     case ExtArgumentType::ColumnInt32:
-      return "{i32*, i64}";
+      return (byval ? "{i32*, i64}" : "i8*");
     case ExtArgumentType::ColumnInt64:
-      return "{i64*, i64}";
+      return (byval ? "{i64*, i64}" : "i8*");
     case ExtArgumentType::ColumnFloat:
-      return "{float*, i64}";
+      return (byval ? "{float*, i64}" : "i8*");
     case ExtArgumentType::ColumnDouble:
-      return "{double*, i64}";
+      return (byval ? "{double*, i64}" : "i8*");
     case ExtArgumentType::ColumnBool:
-      return "{i1*, i64}";
+      return (byval ? "{i1*, i64}" : "i8*");
     default:
       CHECK(false);
   }
@@ -455,7 +455,7 @@ std::vector<std::string> ExtensionFunctionsWhitelist::getLLVMDeclarations(
                             kv.first};
     std::vector<std::string> arg_strs;
     for (const auto arg : kv.second.getArgs()) {
-      arg_strs.push_back(serialize_type(arg));
+      arg_strs.push_back(serialize_type(arg, /* byval= */ kv.second.isRuntime()));
     }
     declarations.push_back(decl_prefix + "(" + boost::algorithm::join(arg_strs, ", ") +
                            ");");

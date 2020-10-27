@@ -122,6 +122,35 @@ void load_geos_dynamic_library() {
 
 namespace {
 
+/* SHOW_DEFINED(<llvm::Module instance>) prints the function names
+   that are defined in the given LLVM Module instance. Useful for
+   debugging.
+*/
+
+#define SHOW_DEFINED(MODULE)                                         \
+  {                                                                  \
+    std::cout << __func__ << "#" << __LINE__ << ": " #MODULE << " "; \
+    ::show_defined(MODULE);                                          \
+  }
+
+static void show_defined(llvm::Module& module) {
+  std::cout << "defines: ";
+  for (auto& f : module.getFunctionList()) {
+    if (!f.isDeclaration()) {
+      std::cout << f.getName().str() << ", ";
+    }
+  }
+  std::cout << std::endl;
+}
+
+static void show_defined(llvm::Module* module) {
+  show_defined(*module);
+}
+
+static void show_defined(std::unique_ptr<llvm::Module>& module) {
+  show_defined(module.get());
+}
+
 #if defined(HAVE_CUDA) || !defined(WITH_JIT_DEBUG)
 void eliminate_dead_self_recursive_funcs(
     llvm::Module& M,
@@ -796,6 +825,27 @@ std::shared_ptr<GpuCompilationContext> CodeGenerator::generateNativeGPUCode(
     const GPUTarget& gpu_target) {
 #ifdef HAVE_CUDA
   auto module = func->getParent();
+  /*
+    `func` is one of the following generated functions:
+    - `call_table_function(i8** %input_col_buffers, i64*
+      %input_row_count, i64** %output_buffers, i64* %output_row_count)`
+      that wraps the user-defined table function.
+    - `multifrag_query`
+    - `multifrag_query_hoisted_literals`
+    - ...
+
+    `wrapper_func` is table_func_kernel(i32*, i8**, i64*, i64**,
+    i64*) that wraps `call_table_function`.
+
+    `module` is from `build/QueryEngine/RuntimeFunctions.bc` and it
+    contains `func` and `wrapper_func`.  `module` should also contain
+    the definitions of user-defined table functions.
+
+    `live_funcs` contains table_func_kernel and call_table_function
+
+    `gpu_target.cgen_state->module_` appears to be the same as `module`
+   */
+  CHECK(gpu_target.cgen_state->module_ == module);
   module->setDataLayout(
       "e-p:64:64:64-i1:8:8-i8:8:8-"
       "i16:16:16-i32:32:32-i64:64:64-"

@@ -16,6 +16,7 @@
 
 #include <type_traits>
 #include "../Shared/StringTransform.h"
+#include "../Shared/toString.h"
 #include "TestHelpers.h"
 
 #include <gtest/gtest.h>

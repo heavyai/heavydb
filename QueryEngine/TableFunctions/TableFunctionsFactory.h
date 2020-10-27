@@ -20,18 +20,27 @@
 #include <vector>
 
 #include "QueryEngine/ExtensionFunctionsWhitelist.h"
+#include "Shared/toString.h"
+#include "TableFunctionOutputBufferSizeType.h"
 
 namespace table_functions {
-
-enum class OutputBufferSizeType {
-  kUserSpecifiedConstantParameter,
-  kUserSpecifiedRowMultiplier,
-  kConstant
-};
 
 struct TableFunctionOutputRowSizer {
   OutputBufferSizeType type{OutputBufferSizeType::kConstant};
   const size_t val{0};
+
+ public:
+  std::string toString() const {
+    switch (type) {
+      case OutputBufferSizeType::kUserSpecifiedConstantParameter:
+        return "kUserSpecifiedConstantParameter[" + std::to_string(val) + "]";
+      case OutputBufferSizeType::kUserSpecifiedRowMultiplier:
+        return "kUserSpecifiedRowMultiplier[" + std::to_string(val) + "]";
+      case OutputBufferSizeType::kConstant:
+        return "kConstant[" + std::to_string(val) + "]";
+    }
+    return "";
+  }
 };
 
 class TableFunction {
@@ -64,13 +73,27 @@ class TableFunction {
 
   auto getName() const { return name_; }
 
-  bool hasUserSpecifiedOutputMultiplier() const {
+  bool hasNonUserSpecifiedOutputSizeConstant() const {
+    return output_sizer_.type == OutputBufferSizeType::kConstant;
+  }
+
+  bool hasUserSpecifiedOutputSizeConstant() const {
+    return output_sizer_.type == OutputBufferSizeType::kUserSpecifiedConstantParameter;
+  }
+
+  bool hasUserSpecifiedOutputSizeMultiplier() const {
     return output_sizer_.type == OutputBufferSizeType::kUserSpecifiedRowMultiplier;
   }
 
-  size_t getOutputRowParameter() const { return output_sizer_.val; }
+  OutputBufferSizeType getOutputRowSizeType() const { return output_sizer_.type; }
+
+  size_t getOutputRowSizeParameter() const { return output_sizer_.val; }
 
   bool isRuntime() const { return is_runtime_; }
+
+  bool isGPU() const { return (name_.find("_cpu_") == std::string::npos); }
+
+  bool isCPU() const { return (name_.find("_gpu_") == std::string::npos); }
 
   std::string toString() const {
     auto result = "TableFunction(" + name_ + ", [";
@@ -78,6 +101,7 @@ class TableFunction {
     result += "], [";
     result += ExtensionFunctionsWhitelist::toString(output_args_);
     result += "], is_runtime=" + std::string((is_runtime_ ? "true" : "false"));
+    result += ", sizer=" + ::toString(output_sizer_);
     result += ")";
     return result;
   }
@@ -107,7 +131,8 @@ class TableFunctionsFactory {
                   const std::vector<ExtArgumentType>& output_args,
                   bool is_runtime = false);
 
-  static std::vector<TableFunction> get_table_funcs(const std::string& name);
+  static std::vector<TableFunction> get_table_funcs(const std::string& name,
+                                                    const bool is_gpu);
   static void init();
   static void reset();
 

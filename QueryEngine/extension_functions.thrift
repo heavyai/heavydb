@@ -41,9 +41,9 @@ enum TExtArgumentType {
 
 /* See QueryEngine/TableFunctions/TableFunctionsFactory.h for required values */
 enum TOutputBufferSizeType {
+  kConstant,
   kUserSpecifiedConstantParameter,
   kUserSpecifiedRowMultiplier,
-  kConstant
 }
 
 struct TUserDefinedFunction {
