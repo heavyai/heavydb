@@ -3,6 +3,16 @@
 declare -A descs
 declare -A vars
 
+while (( $# )); do
+  case "$1" in
+    --non-interactive)
+      NON_INTERACTIVE=true ;;
+    *)
+      break ;;
+  esac
+  shift
+done
+
 OMNISCI_TMP=$(mktemp -d)
 
 descs["OMNISCI_PATH"]="OmniSci install directory"
@@ -16,14 +26,16 @@ vars["OMNISCI_USER"]=${OMNISCI_USER:=$(id --user --name)}
 descs["OMNISCI_GROUP"]="group OmniSci will be run as"
 vars["OMNISCI_GROUP"]=${OMNISCI_GROUP:=$(id --group --name)}
 
-for v in OMNISCI_PATH OMNISCI_STORAGE OMNISCI_USER OMNISCI_GROUP ; do
-  echo "$v: ${descs["$v"]}"
-  read -p "[${vars[$v]}]: "
-  if [ ! -z "$REPLY" ]; then
-    vars[$v]=$REPLY
-  fi
-  echo
-done
+if [ ! "$NON_INTERACTIVE" = true ]; then
+  for v in OMNISCI_PATH OMNISCI_STORAGE OMNISCI_USER OMNISCI_GROUP ; do
+    echo "$v: ${descs["$v"]}"
+    read -p "[${vars[$v]}]: "
+    if [ ! -z "$REPLY" ]; then
+      vars[$v]=$REPLY
+    fi
+    echo
+  done
+fi
 
 for v in OMNISCI_PATH OMNISCI_STORAGE OMNISCI_USER OMNISCI_GROUP ; do
   echo -e "$v:\t${vars[$v]}"
