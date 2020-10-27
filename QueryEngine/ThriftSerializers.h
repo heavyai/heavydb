@@ -234,7 +234,7 @@ inline TColumnType target_meta_info_to_thrift(const TargetMetaInfo& target,
   return proj_info;
 }
 
-inline TRowDescriptor target_meta_infos_to_thift(
+inline TRowDescriptor target_meta_infos_to_thrift(
     const std::vector<TargetMetaInfo>& targets) {
   TRowDescriptor row_desc;
   size_t i = 0;

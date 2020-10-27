@@ -20122,8 +20122,48 @@ TEST(Select, SampleRatio) {
   }
 }
 
-namespace {
+class SubqueryTestEnv : public ::testing::Test {
+ protected:
+  void SetUp() override {
+    ASSERT_NO_THROW(run_ddl_statement("DROP TABLE IF EXISTS R;"));
+    g_sqlite_comparator.query("DROP TABLE IF EXISTS R;");
 
+    ASSERT_NO_THROW(run_ddl_statement("CREATE TABLE R (r1 int, r2 int, r3 int);"));
+    g_sqlite_comparator.query("CREATE TABLE R (r1 int, r2 int, r3 int);");
+    run_multiple_agg("INSERT INTO R VALUES (1,2,3);", ExecutorDeviceType::CPU);
+    g_sqlite_comparator.query("INSERT INTO R VALUES (1,2,3);");
+    run_multiple_agg("INSERT INTO R VALUES (2,3,4);", ExecutorDeviceType::CPU);
+    g_sqlite_comparator.query("INSERT INTO R VALUES (2,3,4);");
+    run_multiple_agg("INSERT INTO R VALUES (3,4,5);", ExecutorDeviceType::CPU);
+    g_sqlite_comparator.query("INSERT INTO R VALUES (3,4,5);");
+    run_multiple_agg("INSERT INTO R VALUES (4,5,6);", ExecutorDeviceType::CPU);
+    g_sqlite_comparator.query("INSERT INTO R VALUES (4,5,6);");
+    run_multiple_agg("INSERT INTO R VALUES (1,3,4);", ExecutorDeviceType::CPU);
+    g_sqlite_comparator.query("INSERT INTO R VALUES (1,3,4);");
+  }
+
+  void TearDown() override {
+    if (!g_keep_test_data) {
+      ASSERT_NO_THROW(run_ddl_statement("DROP TABLE IF EXISTS R;"));
+      g_sqlite_comparator.query("DROP TABLE IF EXISTS R;");
+    }
+  }
+};
+
+TEST_F(SubqueryTestEnv, SubqueryTest) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+
+    c("select t1.r1, t1.r2, t1.r3 from R t1 where t1.r1 in (select t2.r1 from R t2 join "
+      "(select * from R) t3 on t2.r1 = t3.r1) order by 1, 2;",
+      dt);
+    c("select t1.r1, t1.r2, t1.r3 from R t1 where t1.r3 in (select t2.r3 from R t2 join "
+      "(select * from R) t3 on t2.r1 = t3.r1) order by 1, 2",
+      dt);
+  }
+}
+
+namespace {
 int create_sharded_join_table(const std::string& table_name,
                               size_t fragment_size,
                               size_t num_rows,
@@ -20307,13 +20347,17 @@ int create_and_populate_datetime_overflow_table() {
     g_sqlite_comparator.query(create_stmt);
 
     const std::string insert_valid_1{
-        "INSERT INTO ts_overflow_underflow VALUES('2273-01-01 23:12:12', '2273-01-01');"};
+        "INSERT INTO ts_overflow_underflow VALUES('2273-01-01 23:12:12', "
+        "'2273-01-01');"};
     const std::string insert_valid_2{
-        "INSERT INTO ts_overflow_underflow VALUES('2263-01-01 00:00:00', '2263-01-01');"};
+        "INSERT INTO ts_overflow_underflow VALUES('2263-01-01 00:00:00', "
+        "'2263-01-01');"};
     const std::string insert_valid_3{
-        "INSERT INTO ts_overflow_underflow VALUES('09/21/1676 00:12:43', '09/21/1676');"};
+        "INSERT INTO ts_overflow_underflow VALUES('09/21/1676 00:12:43', "
+        "'09/21/1676');"};
     const std::string insert_valid_4{
-        "INSERT INTO ts_overflow_underflow VALUES('09/21/1677 00:00:43', '09/21/1677');"};
+        "INSERT INTO ts_overflow_underflow VALUES('09/21/1677 00:00:43', "
+        "'09/21/1677');"};
     const std::string insert_null{
         "INSERT INTO ts_overflow_underflow VALUES(null, null);"};
 
@@ -20517,7 +20561,8 @@ int create_and_populate_tables(const bool use_temporary_tables,
           "int)");
     }
     g_sqlite_comparator.query(
-        "CREATE TABLE outer_join_bar2 (d int, e int, f int, g int, h int, i int, j int)");
+        "CREATE TABLE outer_join_bar2 (d int, e int, f int, g int, h int, i int, j "
+        "int)");
   } catch (...) {
     LOG(ERROR) << "Failed to (re-)create table 'outer_join_bar2'";
     return -EEXIST;
@@ -20712,7 +20757,8 @@ int create_and_populate_tables(const bool use_temporary_tables,
     run_ddl_statement(drop_old_test);
     g_sqlite_comparator.query(drop_old_test);
     std::string columns_definition{
-        "x int not null, w tinyint, y int, z smallint, t bigint, b boolean, f float, ff "
+        "x int not null, w tinyint, y int, z smallint, t bigint, b boolean, f float, "
+        "ff "
         "float, fn "
         "float, d double, dn double, str "
         "varchar(10), null_str text encoding dict, fixed_str text encoding dict(16), "
@@ -20785,7 +20831,8 @@ int create_and_populate_tables(const bool use_temporary_tables,
   }
   for (size_t i = 0; i < g_num_rows / 2; ++i) {
     const std::string insert_query{
-        "INSERT INTO test VALUES(7, -7, 43, 102, 1002, null, 1.3, 1000.3, -1000.3, 2.6, "
+        "INSERT INTO test VALUES(7, -7, 43, 102, 1002, null, 1.3, 1000.3, -1000.3, "
+        "2.6, "
         "-220.6, 'baz', null, null, null, "
         "'real_baz', 'baz', '2014-12-14 22:23:15', '2014-12-14 22:23:15.750', "
         "'2014-12-14 22:23:15.437321', "
@@ -20802,7 +20849,8 @@ int create_and_populate_tables(const bool use_temporary_tables,
     run_ddl_statement(drop_old_test);
     g_sqlite_comparator.query(drop_old_test);
     std::string columns_definition{
-        "x int not null, w tinyint, y int, z smallint, t bigint, b boolean, f float, ff "
+        "x int not null, w tinyint, y int, z smallint, t bigint, b boolean, f float, "
+        "ff "
         "float, fn "
         "float, d double, dn double, str "
         "varchar(10), null_str text encoding dict, fixed_str text encoding dict(16), "
@@ -20824,7 +20872,8 @@ int create_and_populate_tables(const bool use_temporary_tables,
         g_aggregator);
     run_ddl_statement(create_test);
     g_sqlite_comparator.query(
-        "CREATE TABLE test_empty(x int not null, w tinyint, y int, z smallint, t bigint, "
+        "CREATE TABLE test_empty(x int not null, w tinyint, y int, z smallint, t "
+        "bigint, "
         "b "
         "boolean, "
         "f "
@@ -20846,7 +20895,8 @@ int create_and_populate_tables(const bool use_temporary_tables,
     run_ddl_statement(drop_old_test);
     g_sqlite_comparator.query(drop_old_test);
     std::string columns_definition{
-        "x int not null, w tinyint, y int, z smallint, t bigint, b boolean, f float, ff "
+        "x int not null, w tinyint, y int, z smallint, t bigint, b boolean, f float, "
+        "ff "
         "float, fn "
         "float, d double, dn double, str "
         "varchar(10), null_str text encoding dict, fixed_str text encoding dict(16), "
@@ -20887,7 +20937,8 @@ int create_and_populate_tables(const bool use_temporary_tables,
   }
   {
     const std::string insert_query{
-        "INSERT INTO test_one_row VALUES(8, -8, 43, -78, 1002, 'f', 1.2, 101.2, -101.2, "
+        "INSERT INTO test_one_row VALUES(8, -8, 43, -78, 1002, 'f', 1.2, 101.2, "
+        "-101.2, "
         "2.4, "
         "-2002.4, 'bar', null, 'bar', null, "
         "'real_bar', NULL, '2014-12-13 22:23:15', "

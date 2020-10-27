@@ -543,6 +543,7 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateInOper(
   CHECK(rex_subquery);
   auto ti = lhs->get_type_info();
   auto result = rex_subquery->getExecutionResult();
+  CHECK(result);
   auto& row_set = result->getRows();
   CHECK_EQ(size_t(1), row_set->colCount());
   const auto& rhs_ti = row_set->getColType(0);

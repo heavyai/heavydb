@@ -777,6 +777,12 @@ class RelAlgNode {
 
   static void resetRelAlgFirstId() noexcept;
 
+  /**
+   * Clears the ptr to the result for this descriptor. Is only used for overriding step
+   * results in distributed mode.
+   */
+  void clearContextData() const { context_data_ = nullptr; }
+
  protected:
   RelAlgInputs inputs_;
   const unsigned id_;

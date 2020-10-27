@@ -443,10 +443,12 @@ class DBHandler : public OmniSciIf {
                    const bool just_explain,
                    const std::vector<int64_t>& outer_fragment_indices) override;
   void execute_query_step(TStepResult& _return,
-                          const TPendingQuery& pending_query) override;
+                          const TPendingQuery& pending_query,
+                          const TSubqueryId subquery_id) override;
   void broadcast_serialized_rows(const TSerializedRows& serialized_rows,
                                  const TRowDescriptor& row_desc,
-                                 const TQueryId query_id) override;
+                                 const TQueryId query_id,
+                                 const TSubqueryId subquery_id) override;
 
   void start_render_query(TPendingRenderQuery& _return,
                           const TSessionId& session,

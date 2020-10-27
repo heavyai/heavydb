@@ -336,6 +336,15 @@ ExecutionResult RelAlgExecutor::executeRelAlgQueryNoRetry(const CompilationOptio
         }
       }
     }
+    const auto& subqueries = getSubqueries();
+    if (!subqueries.empty()) {
+      ss << "Subqueries: "
+         << "\n";
+      for (const auto& subquery : subqueries) {
+        const auto ra = subquery->getRelAlg();
+        ss << "\t" << ra->toString() << "\n";
+      }
+    }
     auto rs = std::make_shared<ResultSet>(ss.str());
     return {rs, {}};
   }
@@ -412,7 +421,7 @@ inline void check_sort_node_source_constraint(const RelSort* sort) {
 
 }  // namespace
 
-FirstStepExecutionResult RelAlgExecutor::executeRelAlgQuerySingleStep(
+QueryStepExecutionResult RelAlgExecutor::executeRelAlgQuerySingleStep(
     const RaExecutionSequence& seq,
     const size_t step_idx,
     const CompilationOptions& co,

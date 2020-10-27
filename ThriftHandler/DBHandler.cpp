@@ -4902,7 +4902,7 @@ void DBHandler::convert_rows(TQueryResult& _return,
                              const int32_t first_n,
                              const int32_t at_most_n) const {
   query_state::Timer timer = query_state_proxy.createTimer(__func__);
-  _return.row_set.row_desc = ThriftSerializers::target_meta_infos_to_thift(targets);
+  _return.row_set.row_desc = ThriftSerializers::target_meta_infos_to_thrift(targets);
   int32_t fetched{0};
   if (column_format) {
     _return.row_set.is_columnar = true;
@@ -5560,14 +5560,15 @@ void DBHandler::start_query(TPendingQuery& _return,
 }
 
 void DBHandler::execute_query_step(TStepResult& _return,
-                                   const TPendingQuery& pending_query) {
+                                   const TPendingQuery& pending_query,
+                                   const TSubqueryId subquery_id) {
   if (!leaf_handler_) {
     THROW_MAPD_EXCEPTION("Distributed support is disabled.");
   }
   LOG(INFO) << "execute_query_step :  id:" << pending_query.id;
   auto time_ms = measure<>::execution([&]() {
     try {
-      leaf_handler_->execute_query_step(_return, pending_query);
+      leaf_handler_->execute_query_step(_return, pending_query, subquery_id);
     } catch (std::exception& e) {
       THROW_MAPD_EXCEPTION(std::string("Exception: ") + e.what());
     }
@@ -5577,14 +5578,16 @@ void DBHandler::execute_query_step(TStepResult& _return,
 
 void DBHandler::broadcast_serialized_rows(const TSerializedRows& serialized_rows,
                                           const TRowDescriptor& row_desc,
-                                          const TQueryId query_id) {
+                                          const TQueryId query_id,
+                                          const TSubqueryId subquery_id) {
   if (!leaf_handler_) {
     THROW_MAPD_EXCEPTION("Distributed support is disabled.");
   }
   LOG(INFO) << "BROADCAST-SERIALIZED-ROWS  id:" << query_id;
   auto time_ms = measure<>::execution([&]() {
     try {
-      leaf_handler_->broadcast_serialized_rows(serialized_rows, row_desc, query_id);
+      leaf_handler_->broadcast_serialized_rows(
+          serialized_rows, row_desc, query_id, subquery_id);
     } catch (std::exception& e) {
       THROW_MAPD_EXCEPTION(std::string("Exception: ") + e.what());
     }

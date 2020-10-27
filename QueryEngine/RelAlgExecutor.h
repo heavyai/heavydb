@@ -38,7 +38,7 @@ extern bool g_skip_intermediate_count;
 
 enum class MergeType { Union, Reduce };
 
-struct FirstStepExecutionResult {
+struct QueryStepExecutionResult {
   ExecutionResult result;
   const MergeType merge_type;
   const unsigned node_id;
@@ -121,7 +121,7 @@ class RelAlgExecutor : private StorageIOFacility<RelAlgExecutorTraits> {
                                       RenderInfo* render_info,
                                       const int64_t queue_time_ms);
 
-  FirstStepExecutionResult executeRelAlgQuerySingleStep(const RaExecutionSequence& seq,
+  QueryStepExecutionResult executeRelAlgQuerySingleStep(const RaExecutionSequence& seq,
                                                         const size_t step_idx,
                                                         const CompilationOptions& co,
                                                         const ExecutionOptions& eo,
