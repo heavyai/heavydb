@@ -159,6 +159,20 @@ AbstractBufferMgr* GlobalFileMgr::getFileMgr(const int db_id, const int tb_id) {
   }
 }
 
+// For testing purposes only
+std::shared_ptr<FileMgr> GlobalFileMgr::getSharedFileMgr(const int db_id,
+                                                         const int table_id) {
+  return ownedFileMgrs_[{db_id, table_id}];
+}
+
+// For testing purposes only
+void GlobalFileMgr::setFileMgr(const int db_id,
+                               const int table_id,
+                               std::shared_ptr<FileMgr> file_mgr) {
+  allFileMgrs_[{db_id, table_id}] = file_mgr.get();
+  ownedFileMgrs_[{db_id, table_id}] = file_mgr;
+}
+
 void GlobalFileMgr::writeFileMgrData(
     FileMgr* fileMgr) {  // this function is not used, keep it for now for future needs
   mapd_shared_lock<mapd_shared_mutex> read_lock(fileMgrs_mutex_);

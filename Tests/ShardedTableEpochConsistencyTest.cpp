@@ -55,8 +55,70 @@ class EpochConsistencyTest : public DBHandlerTestFixture {
   }
 };
 
-class EpochRollbackTest : public EpochConsistencyTest,
-                          public testing::WithParamInterface<std::string> {
+/**
+ * Class that provides an interface for checkpoint failure mocking
+ */
+class CheckpointFailureMock {
+ public:
+  CheckpointFailureMock() : throw_on_checkpoint_(false) {}
+  virtual ~CheckpointFailureMock() = default;
+
+  void throwOnCheckpoint(bool throw_on_checkpoint) {
+    throw_on_checkpoint_ = throw_on_checkpoint;
+  }
+
+ protected:
+  bool throw_on_checkpoint_;
+};
+
+/**
+ * Mock file mgr class mainly used for testing checkpoint failure.
+ * However, in addition to the `checkpoint` method, calls to
+ * `putBuffer` and `fetchBuffer` are proxied to the original/parent
+ * file mgr, since these methods are called as part of checkpoint
+ * calls that originate from CPU buffers.
+ */
+class MockFileMgr : public CheckpointFailureMock, public File_Namespace::FileMgr {
+ public:
+  MockFileMgr(std::shared_ptr<File_Namespace::FileMgr> file_mgr)
+      : File_Namespace::FileMgr(file_mgr->epoch()), parent_file_mgr_(file_mgr) {
+    CHECK(parent_file_mgr_);
+  }
+
+  File_Namespace::FileBuffer* putBuffer(const ChunkKey& chunk_key,
+                                        AbstractBuffer* buffer,
+                                        const size_t num_bytes) override {
+    return parent_file_mgr_->putBuffer(chunk_key, buffer, num_bytes);
+  }
+
+  void fetchBuffer(const ChunkKey& chunk_key,
+                   AbstractBuffer* dest_buffer,
+                   const size_t num_bytes) override {
+    parent_file_mgr_->fetchBuffer(chunk_key, dest_buffer, num_bytes);
+  }
+
+  void checkpoint() override {
+    if (throw_on_checkpoint_) {
+      throw std::runtime_error{"Mock checkpoint exception"};
+    } else {
+      parent_file_mgr_->checkpoint();
+    }
+  }
+
+ private:
+  std::shared_ptr<File_Namespace::FileMgr> parent_file_mgr_;
+};
+
+class EpochRollbackTest
+    : public EpochConsistencyTest,
+      public testing::WithParamInterface<std::tuple<std::string, bool>> {
+ public:
+  static std::string testParamsToString(
+      const testing::TestParamInfo<std::tuple<std::string, bool>>& param_info) {
+    auto& [user, is_checkpoint_error] = param_info.param;
+    return user + (is_checkpoint_error ? "_checkpoint_error" : "_query_error");
+  }
+
  protected:
   static void SetUpTestSuite() { EpochConsistencyTest::SetUpTestSuite(); }
 
@@ -69,6 +131,10 @@ class EpochRollbackTest : public EpochConsistencyTest,
   std::string getBadFilePath() {
     return "../../Tests/Import/datafiles/sharded_example_2.csv";
   }
+
+  std::string getUser() { return std::get<0>(GetParam()); }
+
+  bool isCheckpointError() { return std::get<1>(GetParam()); }
 
   void assertTableEpochs(const std::vector<int32_t>& expected_table_epochs) {
     auto [db_handler, session_id] = getDbHandlerAndSessionId();
@@ -85,7 +151,7 @@ class EpochRollbackTest : public EpochConsistencyTest,
   }
 
   void setUpTestTableWithInconsistentEpochs() {
-    login(GetParam(), "HyperInteractive");
+    login(getUser(), "HyperInteractive");
 
     sql("create table test_table(a int, b tinyint, c text encoding none, shard key(a)) "
         "with (shard_count = 2);");
@@ -117,15 +183,128 @@ class EpochRollbackTest : public EpochConsistencyTest,
                          {i(2), i(20), "test_20"}});
     // clang-format on
   }
+
+  void assertInitialTableState() {
+    assertTableEpochs({1, 2});
+    assertInitialInsertResultSet();
+  }
+
+  void sendFailedImportQuery() {
+    if (isCheckpointError()) {
+      queryAndAssertCheckpointError("copy test_table from '" + getGoodFilePath() + "';");
+    } else {
+      sql("copy test_table from '" + getBadFilePath() + "' with (max_reject = 0);");
+    }
+  }
+
+  void sendFailedInsertQuery() {
+    if (isCheckpointError()) {
+      queryAndAssertCheckpointError(
+          "insert into test_table values (1, 110, 'test_110');");
+    } else {
+      EXPECT_ANY_THROW(sql("insert into test_table values (1, 10000, 'test_10000');"));
+    }
+  }
+
+  void sendFailedUpdateQuery() {
+    if (isCheckpointError()) {
+      queryAndAssertCheckpointError(
+          "update test_table set b = b + 1 where b = 100 or b = 20;");
+    } else {
+      EXPECT_ANY_THROW(
+          sql("update test_table set b = case when b = 100 then 10000 else b + 1 end;"));
+    }
+  }
+
+  void sendFailedVarlenUpdateQuery() {
+    if (isCheckpointError()) {
+      queryAndAssertCheckpointError(
+          "update test_table set b = 110, c = 'test_110' where b = 100;");
+    } else {
+      EXPECT_ANY_THROW(sql(
+          "update test_table set b = case when b = 100 then 10000 else b + 1 end, c = "
+          "'test';"));
+    }
+  }
+
+  void sendFailedDeleteQuery() {
+    if (isCheckpointError()) {
+      queryAndAssertCheckpointError("delete from test_table where b = 100 or b = 20;");
+    } else {
+      EXPECT_ANY_THROW(sql("delete from test_table where b = 2 or b = 10/0;"));
+    }
+  }
+
+  void sendFailedItasQuery() {
+    if (isCheckpointError()) {
+      queryAndAssertCheckpointError(
+          "insert into test_table (select * from test_table where b = 1 or b = 20);");
+    } else {
+      EXPECT_ANY_THROW(
+          sql("insert into test_table (select a, case when b = 100 then 10000 else b + 1 "
+              "end, c from test_table);"));
+    }
+  }
+
+  void queryAndAssertCheckpointError(const std::string& query) {
+    initializeCheckpointFailureMock();
+    queryAndAssertException(query, "Exception: Mock checkpoint exception");
+    resetCheckpointFailureMock();
+  }
+
+  void initializeCheckpointFailureMock() {
+    const auto& catalog = getCatalog();
+    auto global_file_mgr = catalog.getDataMgr().getGlobalFileMgr();
+    auto physical_tables = getPhysicalTestTables();
+    auto file_mgr = getFileMgr();
+    CHECK(file_mgr);
+
+    auto mock_file_mgr = std::make_shared<MockFileMgr>(file_mgr);
+    global_file_mgr->setFileMgr(
+        catalog.getDatabaseId(), physical_tables.back()->tableId, mock_file_mgr);
+    checkpoint_failure_mock_ = mock_file_mgr.get();
+    ASSERT_EQ(checkpoint_failure_mock_, dynamic_cast<MockFileMgr*>(getFileMgr().get()));
+    checkpoint_failure_mock_->throwOnCheckpoint(true);
+  }
+
+  void resetCheckpointFailureMock() {
+    if (isDistributedMode()) {
+      checkpoint_failure_mock_->throwOnCheckpoint(false);
+    } else {
+      // GlobalFileMgr resets the file mgr for the table on rollback
+      // and so the assertion here is to ensure that the mock file
+      // mgr is no longer used.
+      ASSERT_EQ(dynamic_cast<MockFileMgr*>(getFileMgr().get()), nullptr);
+      checkpoint_failure_mock_ = nullptr;
+    }
+  }
+
+  std::vector<const TableDescriptor*> getPhysicalTestTables() {
+    const auto& catalog = getCatalog();
+    auto logical_table = catalog.getMetadataForTable("test_table", false);
+    CHECK_GT(logical_table->nShards, 0);
+
+    auto physical_tables = catalog.getPhysicalTablesDescriptors(logical_table);
+    CHECK_EQ(physical_tables.size(), static_cast<size_t>(logical_table->nShards));
+    return physical_tables;
+  }
+
+  std::shared_ptr<File_Namespace::FileMgr> getFileMgr() {
+    const auto& catalog = getCatalog();
+    auto global_file_mgr = catalog.getDataMgr().getGlobalFileMgr();
+    auto physical_tables = getPhysicalTestTables();
+    return global_file_mgr->getSharedFileMgr(catalog.getDatabaseId(),
+                                             physical_tables.back()->tableId);
+  }
+
+  CheckpointFailureMock* checkpoint_failure_mock_;
 };
 
 TEST_P(EpochRollbackTest, Import) {
   setUpTestTableWithInconsistentEpochs();
 
-  // The following copy from query should result in an error and rollback
-  sql("copy test_table from '" + getBadFilePath() + "' with (max_reject = 0);");
-  assertTableEpochs({1, 2});
-  assertInitialInsertResultSet();
+  sendFailedImportQuery();
+  assertInitialTableState();
 
   // Ensure that a subsequent import still works as expected
   sql("copy test_table from '" + getGoodFilePath() + "';");
@@ -146,12 +325,20 @@ TEST_P(EpochRollbackTest, Import) {
 }
 
 TEST_P(EpochRollbackTest, Insert) {
+  // In distributed mode, for insert queries, checkpoint
+  // happens as part of the `sql_execute` Thrift request
+  // to leaf nodes, and so, a checkpoint error is handled
+  // in the same way as a query error (which also throws
+  // a Thrift exception from that API). Skipping since
+  // the same test path is covered by the query error
+  // test case/param.
+  if (isDistributedMode() && isCheckpointError()) {
+    GTEST_SKIP();
+  }
   setUpTestTableWithInconsistentEpochs();
 
-  // The following insert query should result in an error and rollback
-  EXPECT_ANY_THROW(sql("insert into test_table values (1, 10000, 'test_10000');"));
-  assertTableEpochs({1, 2});
-  assertInitialInsertResultSet();
+  sendFailedInsertQuery();
+  assertInitialTableState();
 
   // Ensure that a subsequent insert query still works as expected
   sql("insert into test_table values (1, 110, 'test_110');");
@@ -169,38 +356,52 @@ TEST_P(EpochRollbackTest, Insert) {
 }
 
 TEST_P(EpochRollbackTest, Update) {
+  // In distributed mode, for update queries, checkpoint
+  // happens as part of the `execute_query_step` Thrift
+  // request to leaf nodes, and so, a checkpoint error
+  // is handled in the same way as a query error (which
+  // also throws a Thrift exception from that API).
+  // Skipping since the same test path is covered by
+  // the query error test case/param.
+  if (isDistributedMode() && isCheckpointError()) {
+    GTEST_SKIP();
+  }
   setUpTestTableWithInconsistentEpochs();
 
-  // The following update query should result in an error and rollback
-  EXPECT_ANY_THROW(
-      sql("update test_table set b = case when b = 100 then 10000 else b + 1 end;"));
-  assertTableEpochs({1, 2});
-  assertInitialInsertResultSet();
+  sendFailedUpdateQuery();
+  assertInitialTableState();
 
   // Ensure that a subsequent update query still works as expected
-  sql("update test_table set b = 110 where b = 100;");
+  sql("update test_table set b = b + 1 where b = 100 or b = 20;");
   assertTableEpochs({2, 3});
 
   // clang-format off
   sqlAndCompareResult("select * from test_table order by a, b;",
                       {{i(1), i(1), "test_1"},
                        {i(1), i(10), "test_10"},
-                       {i(1), i(110), "test_100"},
+                       {i(1), i(101), "test_100"},
                        {i(2), i(2), "test_2"},
-                       {i(2), i(20), "test_20"}});
+                       {i(2), i(21), "test_20"}});
   // clang-format on
 }
 
 // Updates execute different code paths when variable length columns are updated
-TEST_P(EpochRollbackTest, Update_Varlen) {
+TEST_P(EpochRollbackTest, VarlenUpdate) {
+  // In distributed mode, for update queries involving
+  // variable length column types, checkpoint happens
+  // as part of the `execute_query_step` Thrift request
+  // to leaf nodes, and so, a checkpoint error is
+  // handled in the same way as a query error (which
+  // also throws a Thrift exception from that API).
+  // Skipping since the same test path is covered by
+  // the query error test case/param.
+  if (isDistributedMode() && isCheckpointError()) {
+    GTEST_SKIP();
+  }
   setUpTestTableWithInconsistentEpochs();
 
-  // The following update query should result in an error and rollback
-  EXPECT_ANY_THROW(
-      sql("update test_table set b = case when b = 100 then 10000 else b + 1 end, c = "
-          "'test';"));
-  assertTableEpochs({1, 2});
-  assertInitialInsertResultSet();
+  sendFailedVarlenUpdateQuery();
+  assertInitialTableState();
 
   // Ensure that a subsequent update query still works as expected
   sql("update test_table set b = 110, c = 'test_110' where b = 100;");
@@ -217,35 +418,38 @@ TEST_P(EpochRollbackTest, Update_Varlen) {
 }
 
 TEST_P(EpochRollbackTest, Delete) {
+  // In distributed mode, for delete queries, checkpoint
+  // happens as part of the `execute_query_step` Thrift
+  // request to leaf nodes, and so, a checkpoint error
+  // is handled in the same way as a query error (which
+  // also throws a Thrift exception from that API).
+  // Skipping since the same test path is covered by
+  // the query error test case/param.
+  if (isDistributedMode() && isCheckpointError()) {
+    GTEST_SKIP();
+  }
   setUpTestTableWithInconsistentEpochs();
 
-  // The following delete query should result in an error and rollback
-  EXPECT_ANY_THROW(sql("delete from test_table where b = 2 or b = 10/0;"));
-  assertTableEpochs({1, 2});
-  assertInitialInsertResultSet();
+  sendFailedDeleteQuery();
+  assertInitialTableState();
 
   // Ensure that a delete query still works as expected
-  sql("delete from test_table where b = 100;");
+  sql("delete from test_table where b = 100 or b = 20;");
   assertTableEpochs({2, 3});
 
   // clang-format off
   sqlAndCompareResult("select * from test_table order by a, b;",
                       {{i(1), i(1), "test_1"},
                        {i(1), i(10), "test_10"},
-                       {i(2), i(2), "test_2"},
-                       {i(2), i(20), "test_20"}});
+                       {i(2), i(2), "test_2"}});
   // clang-format on
 }
 
 TEST_P(EpochRollbackTest, InsertTableAsSelect) {
   setUpTestTableWithInconsistentEpochs();
 
-  // The following ITAS query should result in an error and rollback
-  EXPECT_ANY_THROW(
-      sql("insert into test_table (select a, case when b = 100 then 10000 else b + 1 "
-          "end, c from test_table);"));
-  assertTableEpochs({1, 2});
-  assertInitialInsertResultSet();
+  sendFailedItasQuery();
+  assertInitialTableState();
 
   // Ensure that a subsequent ITAS query still works as expected
   sql("insert into test_table (select * from test_table where b = 1 or b = 20);");
@@ -265,8 +469,9 @@ TEST_P(EpochRollbackTest, InsertTableAsSelect) {
 
 INSTANTIATE_TEST_SUITE_P(EpochRollbackTest,
                          EpochRollbackTest,
-                         testing::Values("admin", "non_super_user"),
-                         [](const auto& param_info) { return param_info.param; });
+                         testing::Combine(testing::Values("admin", "non_super_user"),
+                                          testing::Values(true, false)),
+                         EpochRollbackTest::testParamsToString);
 
 class SetTableEpochsTest : public EpochConsistencyTest {
  protected:

@@ -389,14 +389,13 @@ void InsertOrderFragmenter::insertData(InsertData& insertDataStruct) {
           chunkKeyPrefix_[1]);  // need to checkpoint here to remove window for corruption
     }
   } catch (...) {
-    int32_t tableEpoch =
-        catalog_->getTableEpoch(insertDataStruct.databaseId, insertDataStruct.tableId);
+    auto table_epochs =
+        catalog_->getTableEpochs(insertDataStruct.databaseId, insertDataStruct.tableId);
 
     // the statement below deletes *this* object!
     // relying on exception propagation at this stage
     // until we can sort this out in a cleaner fashion
-    catalog_->setTableEpoch(
-        insertDataStruct.databaseId, insertDataStruct.tableId, tableEpoch);
+    catalog_->setTableEpochs(insertDataStruct.databaseId, table_epochs);
     throw;
   }
 }

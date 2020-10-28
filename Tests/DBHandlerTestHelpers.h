@@ -307,6 +307,8 @@ class DBHandlerTestFixture : public testing::Test {
     }
   }
 
+  static const std::vector<LeafHostInfo>& getDbLeaves() { return db_leaves_; }
+
   template <typename Lambda>
   void executeLambdaAndAssertException(Lambda lambda, const std::string& error_message) {
     try {

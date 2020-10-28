@@ -71,9 +71,10 @@ class LeafAggregator {
     CHECK(false);
   }
 
-  void checkpointLeaf(const Catalog_Namespace::SessionInfo& parent_session_info,
-                      const int32_t db_id,
-                      const int32_t table_id) {
+  void checkpointLeafShardsWithAutoRollback(
+      const Catalog_Namespace::SessionInfo& parent_session_info,
+      const int32_t db_id,
+      const int32_t table_id) {
     CHECK(false);
   }
 
@@ -91,7 +92,7 @@ class LeafAggregator {
     CHECK(false);
   }
 
-  std::vector<Catalog_Namespace::TableEpochInfo> get_leaf_table_epochs(
+  std::vector<Catalog_Namespace::TableEpochInfo> getLeafTableEpochs(
       const Catalog_Namespace::SessionInfo& parent_session_info,
       const int32_t db_id,
       const int32_t table_id) {
@@ -99,7 +100,7 @@ class LeafAggregator {
     return {};
   }
 
-  void set_leaf_table_epochs(
+  void setLeafTableEpochs(
       const Catalog_Namespace::SessionInfo& parent_session_info,
       const int32_t db_id,
       const std::vector<Catalog_Namespace::TableEpochInfo>& table_epochs) {

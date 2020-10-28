@@ -110,6 +110,9 @@ FileMgr::FileMgr(GlobalFileMgr* gfm, const size_t defaultPageSize, std::string b
   init(basePath);
 }
 
+// For testing purposes only
+FileMgr::FileMgr(const int epoch) : AbstractBufferMgr(-1), epoch_(epoch) {}
+
 FileMgr::~FileMgr() {
   // checkpoint();
   // free memory used by FileInfo objects

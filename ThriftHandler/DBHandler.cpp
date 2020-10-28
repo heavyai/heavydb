@@ -5819,7 +5819,7 @@ void DBHandler::get_table_epochs(std::vector<TTableEpochInfo>& _return,
 
   std::vector<Catalog_Namespace::TableEpochInfo> table_epochs;
   if (leaf_aggregator_.leafCount() > 0) {
-    table_epochs = leaf_aggregator_.get_leaf_table_epochs(*session_ptr, db_id, table_id);
+    table_epochs = leaf_aggregator_.getLeafTableEpochs(*session_ptr, db_id, table_id);
   } else {
     table_epochs = cat.getTableEpochs(db_id, table_id);
   }
@@ -5854,7 +5854,7 @@ void DBHandler::set_table_epochs(const TSessionId& session,
         table_epoch.table_id, table_epoch.table_epoch, table_epoch.leaf_index);
   }
   if (leaf_aggregator_.leafCount() > 0) {
-    leaf_aggregator_.set_leaf_table_epochs(*session_ptr, db_id, table_epochs_vector);
+    leaf_aggregator_.setLeafTableEpochs(*session_ptr, db_id, table_epochs_vector);
   } else {
     auto& cat = session_ptr->getCatalog();
     cat.setTableEpochs(db_id, table_epochs_vector);

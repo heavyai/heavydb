@@ -232,6 +232,10 @@ class FileMgr : public AbstractBufferMgr {  // implements
   void free_page(std::pair<FileInfo*, int>&& page);
   const std::pair<const int, const int> get_fileMgrKey() const { return fileMgrKey_; }
 
+ protected:
+  // For testing purposes only
+  FileMgr(const int epoch);
+
  private:
   GlobalFileMgr* gfm_;  /// Global FileMgr
   std::pair<const int, const int> fileMgrKey_;
