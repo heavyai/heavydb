@@ -17,6 +17,7 @@
 #include "QueryFragmentDescriptor.h"
 
 #include "Catalog/ColumnDescriptor.h"
+#include "Catalog/TableDescriptor.h"
 #include "DataMgr/DataMgr.h"
 #include "QueryEngine/Execute.h"
 #include "Shared/misc.h"
@@ -108,6 +109,7 @@ void QueryFragmentDescriptor::buildFragmentPerKernelForTable(
     const TableFragments* fragments,
     const RelAlgExecutionUnit& ra_exe_unit,
     const InputDescriptor& table_desc,
+    const bool is_temporary_table,
     const std::vector<uint64_t>& frag_offsets,
     const int device_count,
     const size_t num_bytes_for_row,
@@ -115,14 +117,17 @@ void QueryFragmentDescriptor::buildFragmentPerKernelForTable(
     const std::optional<size_t> table_desc_offset,
     const ExecutorDeviceType& device_type,
     Executor* executor) {
-  auto get_fragment_tuple_count =
-      [&deleted_chunk_metadata_vec](const auto& fragment) -> std::optional<size_t> {
+  auto get_fragment_tuple_count = [&deleted_chunk_metadata_vec, &is_temporary_table](
+                                      const auto& fragment) -> std::optional<size_t> {
     // returning std::nullopt disables execution dispatch optimizations based on tuple
     // counts as it signals to the dispatch mechanism that a reliable tuple count cannot
     // be obtained. This is the case for fragments which have deleted rows, temporary
     // table fragments, or fragments in a UNION query.
-    if (deleted_chunk_metadata_vec.empty()) {
+    if (is_temporary_table) {
       return std::nullopt;
+    }
+    if (deleted_chunk_metadata_vec.empty()) {
+      return fragment.getNumTuples();
     }
     const auto fragment_id = fragment.fragmentId;
     CHECK_GE(fragment_id, 0);
@@ -224,20 +229,32 @@ void QueryFragmentDescriptor::buildFragmentPerKernelMapForUnion(
 
     auto& data_mgr = catalog->getDataMgr();
     ChunkMetadataVector deleted_chunk_metadata_vec;
+
+    bool is_temporary_table = false;
     if (table_id > 0) {
       // Temporary tables will not have a table descriptor and not have deleted rows.
-      const auto deleted_cd = executor->plan_state_->getDeletedColForTable(table_id);
-      if (deleted_cd) {
-        ChunkKey chunk_key_prefix = {
-            catalog->getCurrentDB().dbId, table_id, deleted_cd->columnId};
-        data_mgr.getChunkMetadataVecForKeyPrefix(deleted_chunk_metadata_vec,
-                                                 chunk_key_prefix);
+      const auto td = catalog->getMetadataForTable(table_id);
+      CHECK(td);
+      if (table_is_temporary(td)) {
+        // for temporary tables, we won't have delete column metadata available. However,
+        // we know the table fits in memory as it is a temporary table, so signal to the
+        // lower layers that we can disregard the early out select * optimization
+        is_temporary_table = true;
+      } else {
+        const auto deleted_cd = executor->plan_state_->getDeletedColForTable(table_id);
+        if (deleted_cd) {
+          ChunkKey chunk_key_prefix = {
+              catalog->getCurrentDB().dbId, table_id, deleted_cd->columnId};
+          data_mgr.getChunkMetadataVecForKeyPrefix(deleted_chunk_metadata_vec,
+                                                   chunk_key_prefix);
+        }
       }
     }
 
     buildFragmentPerKernelForTable(fragments,
                                    ra_exe_unit,
                                    table_desc,
+                                   is_temporary_table,
                                    frag_offsets,
                                    device_count,
                                    num_bytes_for_row,
@@ -280,20 +297,32 @@ void QueryFragmentDescriptor::buildFragmentPerKernelMap(
   auto& data_mgr = catalog->getDataMgr();
   ChunkMetadataVector deleted_chunk_metadata_vec;
 
+  bool is_temporary_table = false;
   if (outer_table_id > 0) {
     // Temporary tables will not have a table descriptor and not have deleted rows.
-    const auto deleted_cd = executor->plan_state_->getDeletedColForTable(outer_table_id);
-    if (deleted_cd) {
-      ChunkKey chunk_key_prefix = {
-          catalog->getCurrentDB().dbId, outer_table_id, deleted_cd->columnId};
-      data_mgr.getChunkMetadataVecForKeyPrefix(deleted_chunk_metadata_vec,
-                                               chunk_key_prefix);
+    const auto td = catalog->getMetadataForTable(outer_table_id);
+    CHECK(td);
+    if (table_is_temporary(td)) {
+      // for temporary tables, we won't have delete column metadata available. However, we
+      // know the table fits in memory as it is a temporary table, so signal to the lower
+      // layers that we can disregard the early out select * optimization
+      is_temporary_table = true;
+    } else {
+      const auto deleted_cd =
+          executor->plan_state_->getDeletedColForTable(outer_table_id);
+      if (deleted_cd) {
+        ChunkKey chunk_key_prefix = {
+            catalog->getCurrentDB().dbId, outer_table_id, deleted_cd->columnId};
+        data_mgr.getChunkMetadataVecForKeyPrefix(deleted_chunk_metadata_vec,
+                                                 chunk_key_prefix);
+      }
     }
   }
 
   buildFragmentPerKernelForTable(outer_fragments,
                                  ra_exe_unit,
                                  outer_table_desc,
+                                 is_temporary_table,
                                  frag_offsets,
                                  device_count,
                                  num_bytes_for_row,

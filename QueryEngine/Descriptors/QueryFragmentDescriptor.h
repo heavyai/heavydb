@@ -181,6 +181,7 @@ class QueryFragmentDescriptor {
       const TableFragments* fragments,
       const RelAlgExecutionUnit& ra_exe_unit,
       const InputDescriptor& table_desc,
+      const bool is_temporary_table,
       const std::vector<uint64_t>& frag_offsets,
       const int device_count,
       const size_t num_bytes_for_row,
