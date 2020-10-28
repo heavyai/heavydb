@@ -18184,6 +18184,25 @@ TEST(Select, GeoSpatial_Geos) {
                                  "'POINT(2 -1)'), 'POINT(2 0.1)');",
                                  dt)),
         static_cast<double>(0.00001));
+    // ST_IsValid: geos validation of SRID-carrying geometries
+    ASSERT_EQ(static_cast<int64_t>(1),
+              v<int64_t>(run_simple_agg(
+                  "SELECT ST_IsValid(gpoly4326) FROM geospatial_test limit 1;", dt)));
+    // geos runtime doesn't yet support input geo transforms
+    EXPECT_THROW(run_simple_agg("SELECT ST_IsEmpty(ST_Transform(gpoly4326, 900913)) "
+                                "FROM geospatial_test limit 1;",
+                                dt),
+                 std::runtime_error);
+    EXPECT_THROW(run_simple_agg("SELECT ST_Buffer(ST_Transform(gpoly4326, 900913), 1) "
+                                "FROM geospatial_test limit 1;",
+                                dt),
+                 std::runtime_error);
+    // geos runtime doesn't yet support output geo transforms
+    EXPECT_THROW(
+        run_simple_agg("SELECT ST_Area(ST_Transform(ST_Buffer(gpoly4326, 0), 900913)) "
+                       "FROM geospatial_test limit 1;",
+                       dt),
+        std::runtime_error);
 #else
     // geos disabled, expect throws
     EXPECT_THROW(

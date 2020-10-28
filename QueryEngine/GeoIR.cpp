@@ -41,9 +41,14 @@ std::vector<llvm::Value*> CodeGenerator::codegenGeoUOper(
   // Basic set of arguments is currently common to all Geos_* func invocations:
   // op kind, type of the first geo arg0, geo arg0 components
   std::string func = "Geos_Wkb"s;
-  if (geo_expr->getTypeInfo0().get_output_srid() !=
-      geo_expr->get_type_info().get_output_srid()) {
-    throw std::runtime_error("GEOS runtime doesn't support geometry transforms.");
+  if (geo_expr->getTypeInfo0().transforms()) {
+    throw std::runtime_error(
+        "GEOS runtime does not support transforms on geometry inputs.");
+  }
+  // Catch transforms applied to geometry construction only
+  if (geo_expr->get_type_info().transforms()) {
+    throw std::runtime_error(
+        "GEOS runtime does not support transforms on geometry outputs.");
   }
   // Prepend arg0 geo SQLType
   argument_list.insert(
@@ -94,9 +99,13 @@ std::vector<llvm::Value*> CodeGenerator::codegenGeoBinOper(
   // Basic set of arguments is currently common to all Geos_* func invocations:
   // op kind, type of the first geo arg0, geo arg0 components
   std::string func = "Geos_Wkb"s;
-  if (geo_expr->getTypeInfo0().get_output_srid() !=
-      geo_expr->get_type_info().get_output_srid()) {
-    throw std::runtime_error("GEOS runtime doesn't support geometry transforms.");
+  if (geo_expr->getTypeInfo0().transforms() || geo_expr->getTypeInfo1().transforms()) {
+    throw std::runtime_error(
+        "GEOS runtime does not support transforms on geometry inputs.");
+  }
+  if (geo_expr->get_type_info().transforms()) {
+    throw std::runtime_error(
+        "GEOS runtime does not support transforms on geometry outputs.");
   }
   // Prepend arg0 geo SQLType
   argument_list.insert(
@@ -127,10 +136,6 @@ std::vector<llvm::Value*> CodeGenerator::codegenGeoBinOper(
       geo_expr->getOp() == Geospatial::GeoBase::GeoOp::kINTERSECTION ||
       geo_expr->getOp() == Geospatial::GeoBase::GeoOp::kUNION) {
     func += "_Wkb"s;
-    if (geo_expr->getTypeInfo1().get_output_srid() !=
-        geo_expr->get_type_info().get_output_srid()) {
-      throw std::runtime_error("GEOS runtime doesn't support geometry transforms.");
-    }
     // Prepend arg1 geo SQLType
     arg1_list.insert(
         arg1_list.begin(),

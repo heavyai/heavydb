@@ -429,6 +429,10 @@ class SQLTypeInfo {
   inline bool is_geometry() const { return IS_GEO(type); }
   inline bool is_column() const { return type == kCOLUMN; }
 
+  inline bool transforms() const {
+    return IS_GEO(type) && get_output_srid() != get_input_srid();
+  }
+
   inline bool is_varlen() const {  // TODO: logically this should ignore fixlen arrays
     return (IS_STRING(type) && compression != kENCODING_DICT) || type == kARRAY ||
            IS_GEO(type);
