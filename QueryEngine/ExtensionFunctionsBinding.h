@@ -38,9 +38,14 @@ class FunctionOper;
 }  // namespace Analyzer
 
 ExtensionFunction bind_function(std::string name,
+                                Analyzer::ExpressionPtrVector func_args,
+                                const bool is_gpu);
+
+ExtensionFunction bind_function(std::string name,
                                 Analyzer::ExpressionPtrVector func_args);
 
-ExtensionFunction bind_function(const Analyzer::FunctionOper* function_oper);
+ExtensionFunction bind_function(const Analyzer::FunctionOper* function_oper,
+                                const bool is_gpu);
 
 const table_functions::TableFunction bind_table_function(
     std::string name,

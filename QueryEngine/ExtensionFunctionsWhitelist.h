@@ -88,6 +88,9 @@ class ExtensionFunction {
   std::string toString() const;
   std::string toStringSQL() const;
 
+  bool isGPU() const { return (name_.find("_cpu_") == std::string::npos); }
+  bool isCPU() const { return (name_.find("_gpu_") == std::string::npos); }
+
  private:
   const std::string name_;
   const std::vector<ExtArgumentType> args_;
@@ -107,7 +110,8 @@ class ExtensionFunctionsWhitelist {
 
   static std::vector<ExtensionFunction>* get_udf(const std::string& name);
 
-  static std::vector<ExtensionFunction> get_ext_funcs(const std::string& name);
+  static std::vector<ExtensionFunction> get_ext_funcs(const std::string& name,
+                                                      const bool is_gpu);
 
   static std::vector<ExtensionFunction> get_ext_funcs(const std::string& name,
                                                       size_t arity);

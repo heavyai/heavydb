@@ -216,12 +216,29 @@ llvm::Value* CodeGenerator::codegenFunctionOper(
     const Analyzer::FunctionOper* function_oper,
     const CompilationOptions& co) {
   AUTOMATIC_IR_METADATA(cgen_state_);
-  auto ext_func_sig = bind_function(function_oper);
+
+  ExtensionFunction ext_func_sig = [=]() {
+    if (co.device_type == ExecutorDeviceType::GPU) {
+      try {
+        return bind_function(function_oper, /* is_gpu= */ true);
+      } catch (std::runtime_error& e) {
+        LOG(WARNING) << "codegenFunctionOper[GPU]: " << e.what() << " Redirecting "
+                     << function_oper->getName() << " to run on CPU.";
+        throw QueryMustRunOnCpu();
+      }
+    } else {
+      return bind_function(function_oper, /* is_gpu= */ false);
+    }
+  }();
 
   const auto& ret_ti = function_oper->get_type_info();
   CHECK(ret_ti.is_integer() || ret_ti.is_fp() || ret_ti.is_boolean() ||
         ret_ti.is_array());
   if (ret_ti.is_array() && co.device_type == ExecutorDeviceType::GPU) {
+    // TODO: This is not necessary for runtime UDFs because RBC does
+    // not generated GPU LLVM IR when the UDF is using Array objects.
+    // However, we cannot remove it until C++ UDFs can be defined for
+    // different devices independently.
     throw QueryMustRunOnCpu();
   }
   auto ret_ty = ext_arg_type_to_llvm_type(ext_func_sig.getRet(), cgen_state_->context_);

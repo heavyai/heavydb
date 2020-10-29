@@ -43,7 +43,8 @@ std::vector<ExtensionFunction>* ExtensionFunctionsWhitelist::get_udf(
 }
 
 std::vector<ExtensionFunction> ExtensionFunctionsWhitelist::get_ext_funcs(
-    const std::string& name) {
+    const std::string& name,
+    const bool is_gpu) {
   std::vector<ExtensionFunction> ext_funcs = {};
   const auto collections = {&functions_, &udf_functions_, &rt_udf_functions_};
   const auto uname = to_upper(name);
@@ -53,7 +54,10 @@ std::vector<ExtensionFunction> ExtensionFunctionsWhitelist::get_ext_funcs(
       continue;
     }
     auto ext_func_sigs = it->second;
-    std::copy(ext_func_sigs.begin(), ext_func_sigs.end(), std::back_inserter(ext_funcs));
+    std::copy_if(ext_func_sigs.begin(),
+                 ext_func_sigs.end(),
+                 std::back_inserter(ext_funcs),
+                 [is_gpu](auto sig) { return (is_gpu ? sig.isGPU() : sig.isCPU()); });
   }
   return ext_funcs;
 }

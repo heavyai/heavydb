@@ -438,20 +438,32 @@ const table_functions::TableFunction bind_table_function(
 
 ExtensionFunction bind_function(std::string name,
                                 Analyzer::ExpressionPtrVector func_args) {
-  // used in RelAlgTranslator.cpp
-  std::vector<ExtensionFunction> ext_funcs =
-      ExtensionFunctionsWhitelist::get_ext_funcs(name);
+  // used in RelAlgTranslator.cpp, first try GPU UDFs, then fall back
+  // to CPU UDFs.
+  auto ext_funcs = ExtensionFunctionsWhitelist::get_ext_funcs(name, /* is_gpu= */ true);
+  if (ext_funcs.size() == 0)
+    ext_funcs = ExtensionFunctionsWhitelist::get_ext_funcs(name, /* is_gpu */ false);
   return bind_function<ExtensionFunction>(name, func_args, ext_funcs);
 }
 
-ExtensionFunction bind_function(const Analyzer::FunctionOper* function_oper) {
+ExtensionFunction bind_function(std::string name,
+                                Analyzer::ExpressionPtrVector func_args,
+                                const bool is_gpu) {
+  // used below
+  std::vector<ExtensionFunction> ext_funcs =
+      ExtensionFunctionsWhitelist::get_ext_funcs(name, is_gpu);
+  return bind_function<ExtensionFunction>(name, func_args, ext_funcs);
+}
+
+ExtensionFunction bind_function(const Analyzer::FunctionOper* function_oper,
+                                const bool is_gpu) {
   // used in ExtensionsIR.cpp
   auto name = function_oper->getName();
   Analyzer::ExpressionPtrVector func_args = {};
   for (size_t i = 0; i < function_oper->getArity(); ++i) {
     func_args.push_back(function_oper->getOwnArg(i));
   }
-  return bind_function(name, func_args);
+  return bind_function(name, func_args, is_gpu);
 }
 
 const table_functions::TableFunction bind_table_function(
