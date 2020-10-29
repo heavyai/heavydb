@@ -39,6 +39,7 @@ class SharedKernelContext {
   const std::vector<uint64_t>& getFragOffsets();
 
   void addDeviceResults(ResultSetPtr&& device_results,
+                        int outer_table_id,
                         std::vector<size_t> outer_table_fragment_ids);
 
   std::vector<std::pair<ResultSetPtr, std::vector<size_t>>>& getFragmentResults();
