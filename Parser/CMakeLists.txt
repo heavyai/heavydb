@@ -9,7 +9,7 @@ add_custom_command(
     OUTPUT
       ${BisonppOutput}
       ${CMAKE_CURRENT_BINARY_DIR}/parser.h
-    COMMAND ${BISONPP_EXECUTABLE}
+    COMMAND ${Bisonpp_EXECUTABLE}
     -d
     -h${CMAKE_CURRENT_BINARY_DIR}/parser.h
         -o${BisonppOutput}
@@ -22,7 +22,7 @@ set(FlexppOutput ${CMAKE_CURRENT_BINARY_DIR}/Scanner_with_register.cpp)
 
 add_custom_command(
     OUTPUT ${FlexppOutput}
-    COMMAND ${FLEXPP_EXECUTABLE}
+    COMMAND ${Flexpp_EXECUTABLE}
         -d
         -i
         -o${FlexppOutput}
@@ -31,7 +31,7 @@ add_custom_command(
     COMMENT "Generating Scanner.cpp"
 )
 
-# C++17 removes the 'register' keyword and it is no longer allowed to 
+# C++17 removes the 'register' keyword and it is no longer allowed to
 # suppress the warning, so patch the generated scanner and parser files
 # to remove the register keyword, and also patch embedded filename strings
 # so they match the final file
@@ -40,9 +40,9 @@ set(ScannerPatched ${CMAKE_CURRENT_BINARY_DIR}/Scanner.cpp)
 
 add_custom_command(
     OUTPUT ${ParserPatched}
-    COMMAND sed 
-        -e "s/register //g" 
-        -e "s/Parser_with_register/Parser/g" 
+    COMMAND sed
+        -e "s/register //g"
+        -e "s/Parser_with_register/Parser/g"
         ${BisonppOutput} > ${ParserPatched}
     DEPENDS ${BisonppOutput}
     COMMENT "Patching Parser.cpp to remove register keyword"
@@ -50,16 +50,16 @@ add_custom_command(
 
 add_custom_command(
     OUTPUT ${ScannerPatched}
-    COMMAND sed 
-      -e "s/register //g" 
-      -e "s/Scanner_with_register/Scanner/g" 
+    COMMAND sed
+      -e "s/register //g"
+      -e "s/Scanner_with_register/Scanner/g"
       ${FlexppOutput} > ${ScannerPatched}
     DEPENDS ${FlexppOutput}
     COMMENT "Patching Scanner.cpp to remove register keyword"
 )
 
 add_custom_target(ParserFiles DEPENDS ${BisonppOutput})
-add_custom_target(ScannerFiles DEPENDS ${FlexppOutput})	
+add_custom_target(ScannerFiles DEPENDS ${FlexppOutput})
 
 add_custom_target(PatchParser DEPENDS ${ParserPatched})
 add_custom_target(PatchScanner DEPENDS ${ScannerPatched})
