@@ -35,10 +35,10 @@
 #include "Shared/measure.h"
 
 struct Frag {
-  int first_chunk;         // index of the first chunk assigned to the fragment
-  int first_chunk_offset;  // offset from the begining of the first chunk
-  int last_chunk;          // index of the last chunk
-  int last_chunk_size;     // number of elements in the last chunk
+  size_t first_chunk;         // index of the first chunk assigned to the fragment
+  size_t first_chunk_offset;  // offset from the begining of the first chunk
+  size_t last_chunk;          // index of the last chunk
+  size_t last_chunk_size;     // number of elements in the last chunk
 };
 
 struct ArrowFragment {
@@ -280,18 +280,19 @@ int64_t ArrowForeignStorageBase::makeFragment(
 std::vector<Frag> calculateFragmentsOffsets(const arrow::ChunkedArray& array,
                                             size_t maxFragRows) {
   std::vector<Frag> fragments;
-  int64_t sz = 0;
-  int64_t offset = 0;
+  size_t sz = 0;
+  size_t offset = 0;
   fragments.push_back({0, 0, 0, 0});
-  for (int i = 0; i < array.num_chunks();) {
+  size_t num_chunks = (size_t)array.num_chunks();
+  for (size_t i = 0; i < num_chunks;) {
     auto& chunk = *array.chunk(i);
     auto& frag = *fragments.rbegin();
     if (maxFragRows - sz > chunk.length() - offset) {
       sz += chunk.length() - offset;
-      if (i == array.num_chunks() - 1) {
-        fragments.rbegin()->last_chunk = array.num_chunks() - 1;
+      if (i == num_chunks - 1) {
+        fragments.rbegin()->last_chunk = num_chunks - 1;
         fragments.rbegin()->last_chunk_size =
-            array.chunk(array.num_chunks() - 1)->length() - offset;
+            array.chunk((int)num_chunks - 1)->length() - offset;
       }
       offset = 0;
       i++;
@@ -300,7 +301,7 @@ std::vector<Frag> calculateFragmentsOffsets(const arrow::ChunkedArray& array,
       frag.last_chunk_size = maxFragRows - sz;
       offset += maxFragRows - sz;
       sz = 0;
-      fragments.push_back({i, static_cast<int>(offset), 0, 0});
+      fragments.push_back({i, offset, 0, 0});
     }
   }
   if (fragments.rbegin()->first_chunk == fragments.rbegin()->first_chunk &&
@@ -333,7 +334,7 @@ void ArrowForeignStorageBase::parseArrowTable(Catalog_Namespace::Catalog* catalo
   tbb::task_group tg;
 
   tbb::parallel_for(
-      tbb::blocked_range(0UL, cols.size()),
+      tbb::blocked_range(0, (int)cols.size()),
       [this, &tg, catalog, &table_key, &td, mgr, &table, &cols, &dictionaries](
           auto range) {
         auto columnIter = std::next(cols.begin(), range.begin());
@@ -563,16 +564,16 @@ ArrowForeignStorageBase::createDictionaryEncodedColumn(
   // calculate offsets for every fragment in bulk
   size_t bulk_size = 0;
   std::vector<int> offsets(arr_col_chunked_array->num_chunks());
-  for (size_t i = 0; i < arr_col_chunked_array->num_chunks(); i++) {
+  for (int i = 0; i < arr_col_chunked_array->num_chunks(); i++) {
     offsets[i] = bulk_size;
     bulk_size += arr_col_chunked_array->chunk(i)->length();
   }
 
   std::vector<std::string_view> bulk(bulk_size);
 
-  tbb::parallel_for(tbb::blocked_range<size_t>(0, arr_col_chunked_array->num_chunks()),
+  tbb::parallel_for(tbb::blocked_range<int>(0, arr_col_chunked_array->num_chunks()),
                     [this, &bulk, &arr_col_chunked_array, &offsets](
-                        const tbb::blocked_range<size_t>& r) {
+                        const tbb::blocked_range<int>& r) {
                       for (int i = r.begin(); i < r.end(); i++) {
                         auto chunk = std::static_pointer_cast<arrow::StringArray>(
                             arr_col_chunked_array->chunk(i));
@@ -637,7 +638,7 @@ std::shared_ptr<arrow::ChunkedArray> ArrowForeignStorageBase::createDecimalColum
     std::shared_ptr<arrow::ChunkedArray> arr_col_chunked_array) {
   size_t column_size = 0;
   std::vector<int> offsets(arr_col_chunked_array->num_chunks());
-  for (size_t i = 0; i < arr_col_chunked_array->num_chunks(); i++) {
+  for (int i = 0; i < arr_col_chunked_array->num_chunks(); i++) {
     offsets[i] = column_size;
     column_size += arr_col_chunked_array->chunk(i)->length();
   }
@@ -652,7 +653,7 @@ std::shared_ptr<arrow::ChunkedArray> ArrowForeignStorageBase::createDecimalColum
       tbb::blocked_range(0, arr_col_chunked_array->num_chunks()),
       [buffer_data, &offsets, arr_col_chunked_array, &result_buffer, &c, this](
           auto& range) {
-        for (size_t chunk_idx = range.begin(); chunk_idx < range.end(); chunk_idx++) {
+        for (int chunk_idx = range.begin(); chunk_idx < range.end(); chunk_idx++) {
           auto offset = offsets[chunk_idx];
           T* chunk_buffer = buffer_data + offset;
 
