@@ -119,6 +119,35 @@ class NoneEncoder : public Encoder {
     }
   }
 
+  void updateStatsEncoded(const int8_t* const dst_data,
+                          const size_t num_elements) override {
+    const T* data = reinterpret_cast<const T*>(dst_data);
+
+    std::tie(dataMin, dataMax, has_nulls) = tbb::parallel_reduce(
+        tbb::blocked_range(0UL, num_elements),
+        std::tuple(dataMin, dataMax, has_nulls),
+        [&](const auto& range, auto init) {
+          auto [min, max, nulls] = init;
+          for (size_t i = range.begin(); i < range.end(); i++) {
+            if (data[i] != none_encoded_null_value<T>()) {
+              decimal_overflow_validator_.validate(data[i]);
+              min = std::min(min, data[i]);
+              max = std::max(max, data[i]);
+            } else {
+              nulls = true;
+            }
+          }
+          return std::tuple(min, max, nulls);
+        },
+        [&](auto lhs, auto rhs) {
+          const auto [lhs_min, lhs_max, lhs_nulls] = lhs;
+          const auto [rhs_min, rhs_max, rhs_nulls] = rhs;
+          return std::tuple(std::min(lhs_min, rhs_min),
+                            std::max(lhs_max, rhs_max),
+                            lhs_nulls || rhs_nulls);
+        });
+  }
+
   void updateStats(const std::vector<std::string>* const src_data,
                    const size_t start_idx,
                    const size_t num_elements) override {
