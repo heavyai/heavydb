@@ -649,8 +649,27 @@ std::shared_ptr<arrow::RecordBatch> ArrowResultSetConverter::getArrowBatch(
   std::vector<ColumnBuilder> builders(col_count);
 
   // Create array builders
-  for (size_t i = 0; i < col_count; ++i) {
-    initializeColumnBuilder(builders[i], results_->getColType(i), schema->field(i));
+  {
+    auto timer = DEBUG_TIMER("initialize column builders");
+    std::vector<std::future<void>> child_threads;
+    for (size_t i = 0; i < col_count; ++i) {
+      auto col_type = results_->getColType(i);
+      if (col_type.is_dict_encoded_string()) {
+        child_threads.push_back(
+            std::async(std::launch::async,
+                       &ArrowResultSetConverter::initializeColumnBuilder,
+                       this,
+                       std::ref(builders[i]),
+                       col_type,
+                       schema->field(i)));
+      } else {
+        initializeColumnBuilder(builders[i], col_type, schema->field(i));
+      }
+    }
+
+    for (auto& child : child_threads) {
+      child.wait();
+    }
   }
 
   // TODO(miyu): speed up for columnar buffers
