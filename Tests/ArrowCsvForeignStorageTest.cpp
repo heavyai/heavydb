@@ -464,19 +464,17 @@ TEST(DataframeOptionsTest, HeaderlessTest) {
 
 TEST(NullValuesTest, NullDifferentTypes) {
   run_ddl_statement(
-      "CREATE DATAFRAME fsi_nulls (int4 INTEGER, int8 BIGINT, fp4 FLOAT, fp8 DOUBLE) "
+      "CREATE DATAFRAME fsi_nulls (int4 INTEGER, int8 BIGINT, fp4 FLOAT, fp8 DOUBLE, ts TIMESTAMP) "
       "from 'CSV:../../Tests/Import/datafiles/null_values_numeric.csv';");
-  CHECK_EQ(12,
-           v<int64_t>(run_simple_agg("SELECT int4 FROM fsi_nulls WHERE fp8 IS NULL;")));
+  check_query<int64_t>("SELECT int4 FROM fsi_nulls WHERE fp8 IS NULL;", {12});
 
-  CHECK_EQ(65,
-           v<int64_t>(run_simple_agg("SELECT int8 FROM fsi_nulls WHERE int4 IS NULL;")));
+  check_query<int64_t>("SELECT int8 FROM fsi_nulls WHERE int4 IS NULL;", {65});
 
-  EXPECT_FLOAT_EQ(
-      34.2, v<float>(run_simple_agg("SELECT fp4 FROM fsi_nulls WHERE int8 IS NULL;")));
+  check_query<float>("SELECT fp4 FROM fsi_nulls WHERE int8 IS NULL;", {34.2});
 
-  EXPECT_DOUBLE_EQ(
-      76.2, v<double>(run_simple_agg("SELECT fp8 FROM fsi_nulls WHERE fp4 IS NULL;")));
+  check_query<double>("SELECT fp8 FROM fsi_nulls WHERE fp4 IS NULL;", {76.2});
+
+  check_query<int64_t>("SELECT int4 FROM fsi_nulls WHERE ts IS NULL;", {12});
 }
 
 TEST(NullValuesTest, NullFullColumn) {
@@ -499,22 +497,6 @@ TEST(NullValuesTest, NullFullColumn) {
   CHECK_EQ(0,
            v<int64_t>(run_simple_agg(
                "SELECT COUNT(fp8) FROM fsi_nulls_full WHERE fp8 IS NOT NULL;")));
-}
-
-TEST(NullValuesTest, NullFragmentedColumn) {
-  run_ddl_statement(
-      "CREATE DATAFRAME fsi_nulls_frag (int4 INTEGER, int8 BIGINT, fp4 FLOAT, fp8 "
-      "DOUBLE) "
-      "from 'CSV:../../Tests/Import/datafiles/null_values_fragments.csv' WITH "
-      "(fragment_size=50);");
-  CHECK_EQ(45, v<int64_t>(run_simple_agg("SELECT SUM(int4) FROM fsi_nulls_frag;")));
-
-  CHECK_EQ(45, v<int64_t>(run_simple_agg("SELECT SUM(int8) FROM fsi_nulls_frag;")));
-
-  EXPECT_FLOAT_EQ(45.f, v<float>(run_simple_agg("SELECT SUM(fp4) FROM fsi_nulls_frag;")));
-
-  EXPECT_DOUBLE_EQ(45.,
-                   v<double>(run_simple_agg("SELECT SUM(fp8) FROM fsi_nulls_frag;")));
 }
 
 TEST(NullValuesTest, NullTextColumn) {
