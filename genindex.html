@@ -64,7 +64,7 @@
             
             
               <div class="version">
-                5.5.0dev dfae7c3
+                5.5.0dev b325450
               </div>
             
           
@@ -653,6 +653,9 @@
 <li class="toctree-l2"><a class="reference internal" href="api/class/class_render_info.html">Class RenderInfo</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/class_rest_server.html">Class RestServer</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/class_result_set.html">Class ResultSet</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/class/class_result_set_builder.html">Class ResultSetBuilder</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/class/class_result_set_default_builder.html">Class ResultSetDefaultBuilder</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/class/class_result_set_logical_values_builder.html">Class ResultSetLogicalValuesBuilder</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/class_result_set_manager.html">Class ResultSetManager</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/class_result_set_reduction_j_i_t.html">Class ResultSetReductionJIT</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/class_result_set_row_iterator.html">Class ResultSetRowIterator</a></li>
@@ -8323,10 +8326,10 @@
 </li>
       <li><a href="api/class/class_executor.html#_CPPv4N8Executor10ExecutorIdE">Executor::ExecutorId (C++ type)</a>
 </li>
-  </ul></td>
-  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="api/class/class_executor.html#_CPPv4N8Executor10executors_E">Executor::executors_ (C++ member)</a>
 </li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="api/class/class_executor.html#_CPPv4N8Executor22executors_cache_mutex_E">Executor::executors_cache_mutex_ (C++ member)</a>
 </li>
       <li><a href="api/class/class_executor.html#_CPPv4N8Executor16FetchCacheAnchorE">Executor::FetchCacheAnchor (C++ class)</a>, <a href="api/class/class_executor_1_1_fetch_cache_anchor.html#_CPPv4N8Executor16FetchCacheAnchorE">[1]</a>
@@ -8641,6 +8644,10 @@
 </li>
       <li><a href="api/class/class_extension_function.html#_CPPv4NK17ExtensionFunction6getRetEv">ExtensionFunction::getRet (C++ function)</a>
 </li>
+      <li><a href="api/class/class_extension_function.html#_CPPv4NK17ExtensionFunction5isCPUEv">ExtensionFunction::isCPU (C++ function)</a>
+</li>
+      <li><a href="api/class/class_extension_function.html#_CPPv4NK17ExtensionFunction5isGPUEv">ExtensionFunction::isGPU (C++ function)</a>
+</li>
       <li><a href="api/class/class_extension_function.html#_CPPv4N17ExtensionFunction5name_E">ExtensionFunction::name_ (C++ member)</a>
 </li>
       <li><a href="api/class/class_extension_function.html#_CPPv4N17ExtensionFunction4ret_E">ExtensionFunction::ret_ (C++ member)</a>
@@ -8665,7 +8672,7 @@
 </li>
       <li><a href="api/class/class_extension_functions_whitelist.html#_CPPv4N27ExtensionFunctionsWhitelist3getERKNSt6stringE">ExtensionFunctionsWhitelist::get (C++ function)</a>
 </li>
-      <li><a href="api/class/class_extension_functions_whitelist.html#_CPPv4N27ExtensionFunctionsWhitelist13get_ext_funcsERKNSt6stringE">ExtensionFunctionsWhitelist::get_ext_funcs (C++ function)</a>, <a href="api/class/class_extension_functions_whitelist.html#_CPPv4N27ExtensionFunctionsWhitelist13get_ext_funcsERKNSt6stringE6size_t">[1]</a>, <a href="api/class/class_extension_functions_whitelist.html#_CPPv4N27ExtensionFunctionsWhitelist13get_ext_funcsERKNSt6stringE6size_tRK11SQLTypeInfo">[2]</a>
+      <li><a href="api/class/class_extension_functions_whitelist.html#_CPPv4N27ExtensionFunctionsWhitelist13get_ext_funcsERKNSt6stringE6size_t">ExtensionFunctionsWhitelist::get_ext_funcs (C++ function)</a>, <a href="api/class/class_extension_functions_whitelist.html#_CPPv4N27ExtensionFunctionsWhitelist13get_ext_funcsERKNSt6stringE6size_tRK11SQLTypeInfo">[1]</a>, <a href="api/class/class_extension_functions_whitelist.html#_CPPv4N27ExtensionFunctionsWhitelist13get_ext_funcsERKNSt6stringEKb">[2]</a>
 </li>
       <li><a href="api/class/class_extension_functions_whitelist.html#_CPPv4N27ExtensionFunctionsWhitelist7get_udfERKNSt6stringE">ExtensionFunctionsWhitelist::get_udf (C++ function)</a>
 </li>
@@ -16695,7 +16702,7 @@
 </li>
       <li><a href="api/class/class_query_fragment_descriptor.html#_CPPv4N23QueryFragmentDescriptor22buildFragmentKernelMapERK19RelAlgExecutionUnitRKNSt6vectorI8uint64_tEEKiRK18ExecutorDeviceTypeKbKbP8Executor">QueryFragmentDescriptor::buildFragmentKernelMap (C++ function)</a>
 </li>
-      <li><a href="api/class/class_query_fragment_descriptor.html#_CPPv4N23QueryFragmentDescriptor30buildFragmentPerKernelForTableEPK14TableFragmentsRK19RelAlgExecutionUnitRK15InputDescriptorRKNSt6vectorI8uint64_tEEKiK6size_tRK19ChunkMetadataVectorKNSt8optionalI6size_tEERK18ExecutorDeviceTypeP8Executor">QueryFragmentDescriptor::buildFragmentPerKernelForTable (C++ function)</a>
+      <li><a href="api/class/class_query_fragment_descriptor.html#_CPPv4N23QueryFragmentDescriptor30buildFragmentPerKernelForTableEPK14TableFragmentsRK19RelAlgExecutionUnitRK15InputDescriptorKbRKNSt6vectorI8uint64_tEEKiK6size_tRK19ChunkMetadataVectorKNSt8optionalI6size_tEERK18ExecutorDeviceTypeP8Executor">QueryFragmentDescriptor::buildFragmentPerKernelForTable (C++ function)</a>
 </li>
       <li><a href="api/class/class_query_fragment_descriptor.html#_CPPv4N23QueryFragmentDescriptor25buildFragmentPerKernelMapERK19RelAlgExecutionUnitRKNSt6vectorI8uint64_tEEKiK6size_tRK18ExecutorDeviceTypeP8Executor">QueryFragmentDescriptor::buildFragmentPerKernelMap (C++ function)</a>
 </li>
@@ -18293,8 +18300,6 @@
 </li>
       <li><a href="api/class/class_render_info.html#_CPPv4NK10RenderInfo18getQuerySsboLayoutEv">RenderInfo::getQuerySsboLayout (C++ function)</a>
 </li>
-  </ul></td>
-  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="api/class/class_render_info.html#_CPPv4NK10RenderInfo17getQueryVboLayoutEv">RenderInfo::getQueryVboLayout (C++ function)</a>
 </li>
       <li><a href="api/class/class_render_info.html#_CPPv4NK10RenderInfo21getRenderQueryOptionsEv">RenderInfo::getRenderQueryOptions (C++ function)</a>
@@ -18313,6 +18318,8 @@
 </li>
       <li><a href="api/class/class_render_info.html#_CPPv4N10RenderInfo10IS_IN_SITUE">RenderInfo::IS_IN_SITU (C++ enumerator)</a>
 </li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="api/class/class_render_info.html#_CPPv4N10RenderInfo14IS_NOT_IN_SITUE">RenderInfo::IS_NOT_IN_SITU (C++ enumerator)</a>
 </li>
       <li><a href="api/class/class_render_info.html#_CPPv4NK10RenderInfo21isInSituDataFlagUnsetEv">RenderInfo::isInSituDataFlagUnset (C++ function)</a>
@@ -18766,6 +18773,40 @@
       <li><a href="api/class/class_result_set.html#_CPPv4N9ResultSet9WktStringE">ResultSet::WktString (C++ enumerator)</a>
 </li>
       <li><a href="api/class/class_result_set.html#_CPPv4N9ResultSetD0Ev">ResultSet::~ResultSet (C++ function)</a>
+</li>
+      <li><a href="api/class/class_result_set_builder.html#_CPPv416ResultSetBuilder">ResultSetBuilder (C++ class)</a>
+</li>
+      <li><a href="api/class/class_result_set_builder.html#_CPPv4N16ResultSetBuilder5buildEv">ResultSetBuilder::build (C++ function)</a>
+</li>
+      <li><a href="api/class/class_result_set_builder.html#_CPPv4N16ResultSetBuilder13makeResultSetERKNSt6vectorI10TargetInfoEEK18ExecutorDeviceTypeRK21QueryMemoryDescriptorKNSt10shared_ptrI17RowSetMemoryOwnerEEPK8Executor">ResultSetBuilder::makeResultSet (C++ function)</a>
+</li>
+      <li><a href="api/class/class_result_set_default_builder.html#_CPPv423ResultSetDefaultBuilder">ResultSetDefaultBuilder (C++ class)</a>
+</li>
+      <li><a href="api/class/class_result_set_default_builder.html#_CPPv4N23ResultSetDefaultBuilder5buildEv">ResultSetDefaultBuilder::build (C++ function)</a>
+</li>
+      <li><a href="api/class/class_result_set_default_builder.html#_CPPv4N23ResultSetDefaultBuilder14query_mem_descE">ResultSetDefaultBuilder::query_mem_desc (C++ member)</a>
+</li>
+      <li><a href="api/class/class_result_set_default_builder.html#_CPPv4N23ResultSetDefaultBuilder23ResultSetDefaultBuilderERK21QueryMemoryDescriptorKNSt10shared_ptrI17RowSetMemoryOwnerEE">ResultSetDefaultBuilder::ResultSetDefaultBuilder (C++ function)</a>
+</li>
+      <li><a href="api/class/class_result_set_default_builder.html#_CPPv4N23ResultSetDefaultBuilder17row_set_mem_ownerE">ResultSetDefaultBuilder::row_set_mem_owner (C++ member)</a>
+</li>
+      <li><a href="api/class/class_result_set_logical_values_builder.html#_CPPv429ResultSetLogicalValuesBuilder">ResultSetLogicalValuesBuilder (C++ class)</a>
+</li>
+      <li><a href="api/class/class_result_set_logical_values_builder.html#_CPPv4N29ResultSetLogicalValuesBuilder5buildEv">ResultSetLogicalValuesBuilder::build (C++ function)</a>
+</li>
+      <li><a href="api/class/class_result_set_logical_values_builder.html#_CPPv4N29ResultSetLogicalValuesBuilder11device_typeE">ResultSetLogicalValuesBuilder::device_type (C++ member)</a>
+</li>
+      <li><a href="api/class/class_result_set_logical_values_builder.html#_CPPv4N29ResultSetLogicalValuesBuilder8executorE">ResultSetLogicalValuesBuilder::executor (C++ member)</a>
+</li>
+      <li><a href="api/class/class_result_set_logical_values_builder.html#_CPPv4N29ResultSetLogicalValuesBuilder14logical_valuesE">ResultSetLogicalValuesBuilder::logical_values (C++ member)</a>
+</li>
+      <li><a href="api/class/class_result_set_logical_values_builder.html#_CPPv4N29ResultSetLogicalValuesBuilder14query_mem_descE">ResultSetLogicalValuesBuilder::query_mem_desc (C++ member)</a>
+</li>
+      <li><a href="api/class/class_result_set_logical_values_builder.html#_CPPv4N29ResultSetLogicalValuesBuilder29ResultSetLogicalValuesBuilderEPK16RelLogicalValuesRKNSt6vectorI10TargetInfoEEK18ExecutorDeviceTypeRK21QueryMemoryDescriptorKNSt10shared_ptrI17RowSetMemoryOwnerEEPK8Executor">ResultSetLogicalValuesBuilder::ResultSetLogicalValuesBuilder (C++ function)</a>, <a href="api/class/class_result_set_logical_values_builder.html#_CPPv4N29ResultSetLogicalValuesBuilder29ResultSetLogicalValuesBuilderERKNSt6vectorI10TargetInfoEERK21QueryMemoryDescriptorKNSt10shared_ptrI17RowSetMemoryOwnerEE">[1]</a>
+</li>
+      <li><a href="api/class/class_result_set_logical_values_builder.html#_CPPv4N29ResultSetLogicalValuesBuilder17row_set_mem_ownerE">ResultSetLogicalValuesBuilder::row_set_mem_owner (C++ member)</a>
+</li>
+      <li><a href="api/class/class_result_set_logical_values_builder.html#_CPPv4N29ResultSetLogicalValuesBuilder7targetsE">ResultSetLogicalValuesBuilder::targets (C++ member)</a>
 </li>
       <li><a href="api/class/class_result_set_manager.html#_CPPv416ResultSetManager">ResultSetManager (C++ class)</a>
 </li>
@@ -19980,6 +20021,8 @@
       <li><a href="api/class/class_s_q_l_type_info.html#_CPPv4N11SQLTypeInfo7subtypeE">SQLTypeInfo::subtype (C++ member)</a>
 </li>
       <li><a href="api/class/class_s_q_l_type_info.html#_CPPv4NK11SQLTypeInfo9to_stringEv">SQLTypeInfo::to_string (C++ function)</a>
+</li>
+      <li><a href="api/class/class_s_q_l_type_info.html#_CPPv4NK11SQLTypeInfo10transformsEv">SQLTypeInfo::transforms (C++ function)</a>
 </li>
       <li><a href="api/class/class_s_q_l_type_info.html#_CPPv4N11SQLTypeInfo4typeE">SQLTypeInfo::type (C++ member)</a>
 </li>

@@ -65,7 +65,7 @@
             
             
               <div class="version">
-                5.5.0dev dfae7c3
+                5.5.0dev b325450
               </div>
             
           
@@ -654,6 +654,9 @@
 <li class="toctree-l2"><a class="reference internal" href="class_render_info.html">Class RenderInfo</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_rest_server.html">Class RestServer</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_result_set.html">Class ResultSet</a></li>
+<li class="toctree-l2"><a class="reference internal" href="class_result_set_builder.html">Class ResultSetBuilder</a></li>
+<li class="toctree-l2"><a class="reference internal" href="class_result_set_default_builder.html">Class ResultSetDefaultBuilder</a></li>
+<li class="toctree-l2"><a class="reference internal" href="class_result_set_logical_values_builder.html">Class ResultSetLogicalValuesBuilder</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_result_set_manager.html">Class ResultSetManager</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_result_set_reduction_j_i_t.html">Class ResultSetReductionJIT</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_result_set_row_iterator.html">Class ResultSetRowIterator</a></li>
@@ -1828,11 +1831,6 @@
 <dd><div class="breathe-sectiondef docutils container">
 <p class="breathe-sectiondef-title rubric">Public Functions</p>
 <dl class="function">
-<dt id="_CPPv4N16ResultSetStorage16ResultSetStorageERKNSt6vectorI10TargetInfoEERK21QueryMemoryDescriptorP6int8_tKb">
-<span id="_CPPv3N16ResultSetStorage16ResultSetStorageERKNSt6vectorI10TargetInfoEERK21QueryMemoryDescriptorP6int8_tKb"></span><span id="_CPPv2N16ResultSetStorage16ResultSetStorageERKNSt6vectorI10TargetInfoEERK21QueryMemoryDescriptorP6int8_tKb"></span><span id="ResultSetStorage::ResultSetStorage__std::vector:TargetInfo:CR.QueryMemoryDescriptorCR.int8_tP.bC"></span><span class="target" id="class_result_set_storage_1a3994bf5e9cf4703a5f7dc9a000def27c"></span><code class="sig-name descname">ResultSetStorage</code><span class="sig-paren">(</span><em class="property">const</em> std::vector&lt;<a class="reference internal" href="../struct/struct_target_info.html#_CPPv410TargetInfo" title="TargetInfo">TargetInfo</a>&gt; &amp;<em>targets</em>, <em class="property">const</em> <a class="reference internal" href="class_query_memory_descriptor.html#_CPPv421QueryMemoryDescriptor" title="QueryMemoryDescriptor">QueryMemoryDescriptor</a> &amp;<em>query_mem_desc</em>, int8_t *<em>buff</em>, <em class="property">const</em> bool <em>buff_is_provided</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N16ResultSetStorage16ResultSetStorageERKNSt6vectorI10TargetInfoEERK21QueryMemoryDescriptorP6int8_tKb" title="Permalink to this definition">¶</a><br /></dt>
-<dd></dd></dl>
-
-<dl class="function">
 <dt id="_CPPv4NK16ResultSetStorage6reduceERK16ResultSetStorageRKNSt6vectorINSt6stringEEERK13ReductionCode">
 <span id="_CPPv3NK16ResultSetStorage6reduceERK16ResultSetStorageRKNSt6vectorINSt6stringEEERK13ReductionCode"></span><span id="_CPPv2NK16ResultSetStorage6reduceERK16ResultSetStorageRKNSt6vectorINSt6stringEEERK13ReductionCode"></span><span id="ResultSetStorage::reduce__ResultSetStorageCR.std::vector:ss:CR.ReductionCodeCRC"></span><span class="target" id="class_result_set_storage_1a20f3ad65bbe4e34ea7ba26673d59d94a"></span>void <code class="sig-name descname">reduce</code><span class="sig-paren">(</span><em class="property">const</em> <a class="reference internal" href="#_CPPv416ResultSetStorage" title="ResultSetStorage">ResultSetStorage</a> &amp;<em>that</em>, <em class="property">const</em> std::vector&lt;std::string&gt; &amp;<em>serialized_varlen_buffer</em>, <em class="property">const</em> <a class="reference internal" href="../struct/struct_reduction_code.html#_CPPv413ReductionCode" title="ReductionCode">ReductionCode</a> &amp;<em>reduction_code</em><span class="sig-paren">)</span> <em class="property">const</em><a class="headerlink" href="#_CPPv4NK16ResultSetStorage6reduceERK16ResultSetStorageRKNSt6vectorINSt6stringEEERK13ReductionCode" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
@@ -1878,6 +1876,11 @@
 </div>
 <div class="breathe-sectiondef docutils container">
 <p class="breathe-sectiondef-title rubric">Private Functions</p>
+<dl class="function">
+<dt id="_CPPv4N16ResultSetStorage16ResultSetStorageERKNSt6vectorI10TargetInfoEERK21QueryMemoryDescriptorP6int8_tKb">
+<span id="_CPPv3N16ResultSetStorage16ResultSetStorageERKNSt6vectorI10TargetInfoEERK21QueryMemoryDescriptorP6int8_tKb"></span><span id="_CPPv2N16ResultSetStorage16ResultSetStorageERKNSt6vectorI10TargetInfoEERK21QueryMemoryDescriptorP6int8_tKb"></span><span id="ResultSetStorage::ResultSetStorage__std::vector:TargetInfo:CR.QueryMemoryDescriptorCR.int8_tP.bC"></span><span class="target" id="class_result_set_storage_1a3994bf5e9cf4703a5f7dc9a000def27c"></span><code class="sig-name descname">ResultSetStorage</code><span class="sig-paren">(</span><em class="property">const</em> std::vector&lt;<a class="reference internal" href="../struct/struct_target_info.html#_CPPv410TargetInfo" title="TargetInfo">TargetInfo</a>&gt; &amp;<em>targets</em>, <em class="property">const</em> <a class="reference internal" href="class_query_memory_descriptor.html#_CPPv421QueryMemoryDescriptor" title="QueryMemoryDescriptor">QueryMemoryDescriptor</a> &amp;<em>query_mem_desc</em>, int8_t *<em>buff</em>, <em class="property">const</em> bool <em>buff_is_provided</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N16ResultSetStorage16ResultSetStorageERKNSt6vectorI10TargetInfoEERK21QueryMemoryDescriptorP6int8_tKb" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
 <dl class="function">
 <dt id="_CPPv4NK16ResultSetStorage32reduceEntriesNoCollisionsColWiseEP6int8_tPK6int8_tRK16ResultSetStorageK6size_tK6size_tRKNSt6vectorINSt6stringEEE">
 <span id="_CPPv3NK16ResultSetStorage32reduceEntriesNoCollisionsColWiseEP6int8_tPK6int8_tRK16ResultSetStorageK6size_tK6size_tRKNSt6vectorINSt6stringEEE"></span><span id="_CPPv2NK16ResultSetStorage32reduceEntriesNoCollisionsColWiseEP6int8_tPK6int8_tRK16ResultSetStorageK6size_tK6size_tRKNSt6vectorINSt6stringEEE"></span><span id="ResultSetStorage::reduceEntriesNoCollisionsColWise__int8_tP.int8_tCP.ResultSetStorageCR.sC.sC.std::vector:ss:CRC"></span><span class="target" id="class_result_set_storage_1a297bcc7515c7301fc4a9b09d1649b59f"></span>void <code class="sig-name descname">reduceEntriesNoCollisionsColWise</code><span class="sig-paren">(</span>int8_t *<em>this_buff</em>, <em class="property">const</em> int8_t *<em>that_buff</em>, <em class="property">const</em> <a class="reference internal" href="#_CPPv416ResultSetStorage" title="ResultSetStorage">ResultSetStorage</a> &amp;<em>that</em>, <em class="property">const</em> size_t <em>start_index</em>, <em class="property">const</em> size_t <em>end_index</em>, <em class="property">const</em> std::vector&lt;std::string&gt; &amp;<em>serialized_varlen_buffer</em><span class="sig-paren">)</span> <em class="property">const</em><a class="headerlink" href="#_CPPv4NK16ResultSetStorage32reduceEntriesNoCollisionsColWiseEP6int8_tPK6int8_tRK16ResultSetStorageK6size_tK6size_tRKNSt6vectorINSt6stringEEE" title="Permalink to this definition">¶</a><br /></dt>
