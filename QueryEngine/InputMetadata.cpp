@@ -135,7 +135,8 @@ void collect_table_infos(std::vector<InputTableInfo>& table_infos,
 ChunkMetadataMap synthesize_metadata(const ResultSet* rows) {
   rows->moveToBegin();
   std::vector<std::vector<std::unique_ptr<Encoder>>> dummy_encoders;
-  const size_t worker_count = use_parallel_algorithms(*rows) ? cpu_threads() : 1;
+  const size_t worker_count =
+      result_set::use_parallel_algorithms(*rows) ? cpu_threads() : 1;
   for (size_t worker_idx = 0; worker_idx < worker_count; ++worker_idx) {
     dummy_encoders.emplace_back();
     for (size_t i = 0; i < rows->colCount(); ++i) {
@@ -179,7 +180,7 @@ ChunkMetadataMap synthesize_metadata(const ResultSet* rows) {
       }
     }
   };
-  if (use_parallel_algorithms(*rows)) {
+  if (result_set::use_parallel_algorithms(*rows)) {
     const size_t worker_count = cpu_threads();
     std::vector<std::future<void>> compute_stats_threads;
     const auto entry_count = rows->entryCount();

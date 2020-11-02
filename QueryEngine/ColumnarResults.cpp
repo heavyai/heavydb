@@ -46,12 +46,14 @@ ColumnarResults::ColumnarResults(std::shared_ptr<RowSetMemoryOwner> row_set_mem_
                                  const std::vector<SQLTypeInfo>& target_types,
                                  const bool is_parallel_execution_enforced)
     : column_buffers_(num_columns)
-    , num_rows_(use_parallel_algorithms(rows) || rows.isDirectColumnarConversionPossible()
+    , num_rows_(result_set::use_parallel_algorithms(rows) ||
+                        rows.isDirectColumnarConversionPossible()
                     ? rows.entryCount()
                     : rows.rowCount())
     , target_types_(target_types)
-    , parallel_conversion_(is_parallel_execution_enforced ? true
-                                                          : use_parallel_algorithms(rows))
+    , parallel_conversion_(is_parallel_execution_enforced
+                               ? true
+                               : result_set::use_parallel_algorithms(rows))
     , direct_columnar_conversion_(rows.isDirectColumnarConversionPossible()) {
   auto timer = DEBUG_TIMER(__func__);
   column_buffers_.resize(num_columns);
@@ -418,7 +420,8 @@ void ColumnarResults::materializeAllLazyColumns(
   // parallelized by assigning a chunk of rows to each thread)
   const bool skip_non_lazy_columns = rows.isPermutationBufferEmpty();
   if (contains_lazy_fetched_column(lazy_fetch_info)) {
-    const size_t worker_count = use_parallel_algorithms(rows) ? cpu_threads() : 1;
+    const size_t worker_count =
+        result_set::use_parallel_algorithms(rows) ? cpu_threads() : 1;
     std::vector<std::future<void>> conversion_threads;
     std::vector<bool> targets_to_skip;
     if (skip_non_lazy_columns) {

@@ -108,8 +108,8 @@ const int8_t* advance_col_buff_to_slot(const int8_t* buff,
 
 // Gets the byte offset, starting from the beginning of the row targets buffer, of
 // the value in position slot_idx (only makes sense for row-wise representation).
-size_t get_byteoff_of_slot(const size_t slot_idx,
-                           const QueryMemoryDescriptor& query_mem_desc) {
+size_t result_set::get_byteoff_of_slot(const size_t slot_idx,
+                                       const QueryMemoryDescriptor& query_mem_desc) {
   return query_mem_desc.getPaddedColWidthForRange(0, slot_idx);
 }
 
@@ -682,7 +682,7 @@ int64_t ResultSet::lazyReadInt(const int64_t ival,
         std::string fetched_str(reinterpret_cast<char*>(vd.pointer), vd.length);
         return reinterpret_cast<int64_t>(row_set_mem_owner_->addString(fetched_str));
       }
-      return lazy_decode(col_lazy_fetch, frag_col_buffer, ival_copy);
+      return result_set::lazy_decode(col_lazy_fetch, frag_col_buffer, ival_copy);
     }
   }
   return ival;
@@ -757,68 +757,6 @@ size_t ResultSet::entryCount() const {
 size_t ResultSet::getBufferSizeBytes(const ExecutorDeviceType device_type) const {
   CHECK(storage_);
   return storage_->query_mem_desc_.getBufferSizeBytes(device_type);
-}
-
-int64_t lazy_decode(const ColumnLazyFetchInfo& col_lazy_fetch,
-                    const int8_t* byte_stream,
-                    const int64_t pos) {
-  CHECK(col_lazy_fetch.is_lazily_fetched);
-  const auto& type_info =
-      (col_lazy_fetch.type.is_column() ? col_lazy_fetch.type.get_elem_type()
-                                       : col_lazy_fetch.type);
-  if (type_info.is_fp()) {
-    if (type_info.get_type() == kFLOAT) {
-      double fval = fixed_width_float_decode_noinline(byte_stream, pos);
-      return *reinterpret_cast<const int64_t*>(may_alias_ptr(&fval));
-    } else {
-      double fval = fixed_width_double_decode_noinline(byte_stream, pos);
-      return *reinterpret_cast<const int64_t*>(may_alias_ptr(&fval));
-    }
-  }
-  CHECK(type_info.is_integer() || type_info.is_decimal() || type_info.is_time() ||
-        type_info.is_timeinterval() || type_info.is_boolean() || type_info.is_string() ||
-        type_info.is_array());
-  size_t type_bitwidth = get_bit_width(type_info);
-  if (type_info.get_compression() == kENCODING_FIXED) {
-    type_bitwidth = type_info.get_comp_param();
-  } else if (type_info.get_compression() == kENCODING_DICT) {
-    type_bitwidth = 8 * type_info.get_size();
-  }
-  CHECK_EQ(size_t(0), type_bitwidth % 8);
-  int64_t val;
-  if (type_info.is_date_in_days()) {
-    val = type_info.get_comp_param() == 16
-              ? fixed_width_small_date_decode_noinline(
-                    byte_stream, 2, NULL_SMALLINT, NULL_BIGINT, pos)
-              : fixed_width_small_date_decode_noinline(
-                    byte_stream, 4, NULL_INT, NULL_BIGINT, pos);
-  } else {
-    val = (type_info.get_compression() == kENCODING_DICT &&
-           type_info.get_size() < type_info.get_logical_size() &&
-           type_info.get_comp_param())
-              ? fixed_width_unsigned_decode_noinline(byte_stream, type_bitwidth / 8, pos)
-              : fixed_width_int_decode_noinline(byte_stream, type_bitwidth / 8, pos);
-  }
-  if (type_info.get_compression() != kENCODING_NONE &&
-      type_info.get_compression() != kENCODING_DATE_IN_DAYS) {
-    CHECK(type_info.get_compression() == kENCODING_FIXED ||
-          type_info.get_compression() == kENCODING_DICT);
-    auto encoding = type_info.get_compression();
-    if (encoding == kENCODING_FIXED) {
-      encoding = kENCODING_NONE;
-    }
-    SQLTypeInfo col_logical_ti(type_info.get_type(),
-                               type_info.get_dimension(),
-                               type_info.get_scale(),
-                               false,
-                               encoding,
-                               0,
-                               type_info.get_subtype());
-    if (val == inline_fixed_encoding_null_val(type_info)) {
-      return inline_int_null_val(col_logical_ti);
-    }
-  }
-  return val;
 }
 
 namespace {
@@ -1828,7 +1766,7 @@ TargetValue ResultSet::makeTargetValue(const int8_t* ptr,
       CHECK_LT(storage_idx.first, col_buffers_.size());
       auto& frag_col_buffers = getColumnFrag(storage_idx.first, target_logical_idx, ival);
       CHECK_LT(size_t(col_lazy_fetch.local_col_id), frag_col_buffers.size());
-      ival = lazy_decode(
+      ival = result_set::lazy_decode(
           col_lazy_fetch, frag_col_buffers[col_lazy_fetch.local_col_id], ival);
       if (chosen_type.is_fp()) {
         const auto dval = *reinterpret_cast<const double*>(may_alias_ptr(&ival));
@@ -2101,8 +2039,8 @@ bool ResultSetStorage::isEmptyEntry(const size_t entry_idx, const int8_t* buff) 
     CHECK_LT(static_cast<size_t>(query_mem_desc_.getTargetIdxForKey()),
              target_init_vals_.size());
     const auto rowwise_target_ptr = row_ptr_rowwise(buff, query_mem_desc_, entry_idx);
-    const auto target_slot_off =
-        get_byteoff_of_slot(query_mem_desc_.getTargetIdxForKey(), query_mem_desc_);
+    const auto target_slot_off = result_set::get_byteoff_of_slot(
+        query_mem_desc_.getTargetIdxForKey(), query_mem_desc_);
     return read_int_from_buff(rowwise_target_ptr + target_slot_off,
                               query_mem_desc_.getPaddedSlotWidthBytes(
                                   query_mem_desc_.getTargetIdxForKey())) ==

@@ -29,6 +29,7 @@
 #include "QueryEngine/RangeTableIndexVisitor.h"
 #include "QueryEngine/RelAlgDagBuilder.h"
 #include "QueryEngine/RelAlgTranslator.h"
+#include "QueryEngine/ResultSetBuilder.h"
 #include "QueryEngine/RexVisitor.h"
 #include "QueryEngine/WindowContext.h"
 #include "Shared/TypedDataAccessors.h"
@@ -1931,49 +1932,16 @@ ExecutionResult RelAlgExecutor::executeLogicalValues(
                                          false,
                                          false});
   }
-  auto rs = std::make_shared<ResultSet>(target_infos,
-                                        ExecutorDeviceType::CPU,
-                                        query_mem_desc,
-                                        executor_->getRowSetMemoryOwner(),
-                                        executor_);
 
-  if (logical_values->hasRows()) {
-    CHECK_EQ(logical_values->getRowsSize(), logical_values->size());
+  std::shared_ptr<ResultSet> rs{
+      ResultSetLogicalValuesBuilder{logical_values,
+                                    target_infos,
+                                    ExecutorDeviceType::CPU,
+                                    query_mem_desc,
+                                    executor_->getRowSetMemoryOwner(),
+                                    executor_}
+          .build()};
 
-    auto storage = rs->allocateStorage();
-    auto buff = storage->getUnderlyingBuffer();
-
-    for (size_t i = 0; i < logical_values->getNumRows(); i++) {
-      std::vector<std::shared_ptr<Analyzer::Expr>> row_literals;
-      int8_t* ptr = buff + i * query_mem_desc.getRowSize();
-
-      for (size_t j = 0; j < logical_values->getRowsSize(); j++) {
-        auto rex_literal =
-            dynamic_cast<const RexLiteral*>(logical_values->getValueAt(i, j));
-        CHECK(rex_literal);
-        const auto expr = RelAlgTranslator::translateLiteral(rex_literal);
-        const auto constant = std::dynamic_pointer_cast<Analyzer::Constant>(expr);
-        CHECK(constant);
-
-        if (constant->get_is_null()) {
-          CHECK(!target_infos[j].sql_type.is_varlen());
-          *reinterpret_cast<int64_t*>(ptr) =
-              inline_int_null_val(target_infos[j].sql_type);
-        } else {
-          const auto ti = constant->get_type_info();
-          const auto datum = constant->get_constval();
-
-          // Initialize the entire 8-byte slot
-          *reinterpret_cast<int64_t*>(ptr) = EMPTY_KEY_64;
-
-          const auto sz = ti.get_size();
-          CHECK_GE(sz, int(0));
-          std::memcpy(ptr, &datum, sz);
-        }
-        ptr += 8;
-      }
-    }
-  }
   return {rs, tuple_type};
 }
 

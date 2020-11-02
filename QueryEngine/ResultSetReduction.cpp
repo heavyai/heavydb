@@ -180,7 +180,9 @@ void run_reduction_code(const ReductionCode& reduction_code,
 
 }  // namespace
 
-void fill_empty_key(void* key_ptr, const size_t key_count, const size_t key_width) {
+void result_set::fill_empty_key(void* key_ptr,
+                                const size_t key_count,
+                                const size_t key_width) {
   switch (key_width) {
     case 4: {
       auto key_ptr_i32 = reinterpret_cast<int32_t*>(key_ptr);
@@ -731,16 +733,17 @@ inline GroupValueInfo get_matching_group_value_reduction(
 
 }  // namespace
 
-GroupValueInfo get_group_value_reduction(int64_t* groups_buffer,
-                                         const uint32_t groups_buffer_entry_count,
-                                         const int64_t* key,
-                                         const uint32_t key_count,
-                                         const size_t key_width,
-                                         const QueryMemoryDescriptor& query_mem_desc,
-                                         const int64_t* that_buff_i64,
-                                         const size_t that_entry_idx,
-                                         const size_t that_entry_count,
-                                         const uint32_t row_size_quad) {
+GroupValueInfo result_set::get_group_value_reduction(
+    int64_t* groups_buffer,
+    const uint32_t groups_buffer_entry_count,
+    const int64_t* key,
+    const uint32_t key_count,
+    const size_t key_width,
+    const QueryMemoryDescriptor& query_mem_desc,
+    const int64_t* that_buff_i64,
+    const size_t that_entry_idx,
+    const size_t that_entry_count,
+    const uint32_t row_size_quad) {
   uint32_t h = key_hash(key, key_count, key_width) % groups_buffer_entry_count;
   auto matching_gvi = get_matching_group_value_reduction(groups_buffer,
                                                          h,
@@ -1343,9 +1346,9 @@ void ResultSetStorage::initializeBaselineValueSlots(int64_t* entry_slots) const 
     }                                                                             \
   } while (0)
 
-int8_t get_width_for_slot(const size_t target_slot_idx,
-                          const bool float_argument_input,
-                          const QueryMemoryDescriptor& query_mem_desc) {
+int8_t result_set::get_width_for_slot(const size_t target_slot_idx,
+                                      const bool float_argument_input,
+                                      const QueryMemoryDescriptor& query_mem_desc) {
   if (float_argument_input) {
     return sizeof(float);
   }
@@ -1358,8 +1361,8 @@ void ResultSetStorage::reduceOneSlotSingleValue(int8_t* this_ptr1,
                                                 const size_t init_agg_val_idx,
                                                 const int8_t* that_ptr1) const {
   const bool float_argument_input = takes_float_argument(target_info);
-  const auto chosen_bytes =
-      get_width_for_slot(target_slot_idx, float_argument_input, query_mem_desc_);
+  const auto chosen_bytes = result_set::get_width_for_slot(
+      target_slot_idx, float_argument_input, query_mem_desc_);
   auto init_val = target_init_vals_[init_agg_val_idx];
 
   auto reduce = [&](auto const& size_tag) {
@@ -1419,8 +1422,8 @@ void ResultSetStorage::reduceOneSlot(
   }
   CHECK_LT(init_agg_val_idx, target_init_vals_.size());
   const bool float_argument_input = takes_float_argument(target_info);
-  const auto chosen_bytes =
-      get_width_for_slot(target_slot_idx, float_argument_input, query_mem_desc_);
+  const auto chosen_bytes = result_set::get_width_for_slot(
+      target_slot_idx, float_argument_input, query_mem_desc_);
   auto init_val = target_init_vals_[init_agg_val_idx];
 
   if (target_info.is_agg && target_info.agg_kind == kSINGLE_VALUE) {

@@ -467,16 +467,17 @@ extern "C" void get_group_value_reduction_rt(int8_t* groups_buffer,
                                              int64_t** buff_out,
                                              uint8_t* empty) {
   const auto& this_qmd = *reinterpret_cast<const QueryMemoryDescriptor*>(this_qmd_handle);
-  const auto gvi = get_group_value_reduction(reinterpret_cast<int64_t*>(groups_buffer),
-                                             this_qmd.getEntryCount(),
-                                             reinterpret_cast<const int64_t*>(key),
-                                             key_count,
-                                             this_qmd.getEffectiveKeyWidth(),
-                                             this_qmd,
-                                             reinterpret_cast<const int64_t*>(that_buff),
-                                             that_entry_idx,
-                                             that_entry_count,
-                                             row_size_bytes >> 3);
+  const auto gvi =
+      result_set::get_group_value_reduction(reinterpret_cast<int64_t*>(groups_buffer),
+                                            this_qmd.getEntryCount(),
+                                            reinterpret_cast<const int64_t*>(key),
+                                            key_count,
+                                            this_qmd.getEffectiveKeyWidth(),
+                                            this_qmd,
+                                            reinterpret_cast<const int64_t*>(that_buff),
+                                            that_entry_idx,
+                                            that_entry_count,
+                                            row_size_bytes >> 3);
   *buff_out = gvi.first;
   *empty = gvi.second;
 }
@@ -629,8 +630,8 @@ void ResultSetReductionJIT::isEmpty(const ReductionCode& reduction_code) const {
     CHECK_GE(query_mem_desc_.getTargetIdxForKey(), 0);
     CHECK_LT(static_cast<size_t>(query_mem_desc_.getTargetIdxForKey()),
              target_init_vals_.size());
-    const int64_t target_slot_off =
-        get_byteoff_of_slot(query_mem_desc_.getTargetIdxForKey(), query_mem_desc_);
+    const int64_t target_slot_off = result_set::get_byteoff_of_slot(
+        query_mem_desc_.getTargetIdxForKey(), query_mem_desc_);
     const auto slot_ptr = ir_is_empty->add<GetElementPtr>(
         keys_ptr,
         ir_is_empty->addConstant<ConstantInt>(target_slot_off, Type::Int32),
@@ -1047,8 +1048,8 @@ void ResultSetReductionJIT::reduceOneSlot(Value* this_ptr1,
     }
   }
   const bool float_argument_input = takes_float_argument(target_info);
-  const auto chosen_bytes =
-      get_width_for_slot(target_slot_idx, float_argument_input, query_mem_desc_);
+  const auto chosen_bytes = result_set::get_width_for_slot(
+      target_slot_idx, float_argument_input, query_mem_desc_);
   CHECK_LT(init_agg_val_idx, target_init_vals_.size());
   auto init_val = target_init_vals_[init_agg_val_idx];
   if (target_info.is_agg &&

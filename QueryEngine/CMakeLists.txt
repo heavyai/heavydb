@@ -80,12 +80,14 @@ set(query_engine_source_files
     RelAlgTranslatorGeo.cpp
     RelAlgOptimizer.cpp
     ResultSet.cpp
+    ResultSetBuilder.cpp
     ResultSetIteration.cpp
     ResultSetReduction.cpp
     ResultSetReductionCodegen.cpp
     ResultSetReductionInterpreter.cpp
     ResultSetReductionInterpreterStubs.cpp
     ResultSetReductionJIT.cpp
+    ResultSetStorage.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/LoopControlFlow/JoinLoop.cpp
     ResultSetSort.cpp
     RuntimeFunctions.cpp

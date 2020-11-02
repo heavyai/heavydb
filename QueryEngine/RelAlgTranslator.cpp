@@ -462,7 +462,7 @@ namespace {
 
 std::shared_ptr<Analyzer::Expr> get_in_values_expr(std::shared_ptr<Analyzer::Expr> arg,
                                                    const ResultSet& val_set) {
-  if (!can_use_parallel_algorithms(val_set)) {
+  if (!result_set::can_use_parallel_algorithms(val_set)) {
     return nullptr;
   }
   if (val_set.rowCount() > 5000000 && g_enable_watchdog) {
@@ -753,7 +753,7 @@ void fill_dictionary_encoded_in_vals(
 std::shared_ptr<Analyzer::Expr> RelAlgTranslator::getInIntegerSetExpr(
     std::shared_ptr<Analyzer::Expr> arg,
     const ResultSet& val_set) const {
-  if (!can_use_parallel_algorithms(val_set)) {
+  if (!result_set::can_use_parallel_algorithms(val_set)) {
     return nullptr;
   }
   std::vector<int64_t> value_exprs;
