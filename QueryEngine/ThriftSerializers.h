@@ -47,7 +47,7 @@ inline TResultSetLayout::type layout_to_thrift(const QueryDescriptionType layout
     THRIFT_LAYOUT_CASE(Projection)
     THRIFT_LAYOUT_CASE(NonGroupedAggregate)
     default:
-      CHECK(false);
+      CHECK(false) << static_cast<int>(layout);
   }
   abort();
 }
@@ -65,7 +65,7 @@ inline QueryDescriptionType layout_from_thrift(const TResultSetLayout::type layo
     UNTHRIFT_LAYOUT_CASE(Projection)
     UNTHRIFT_LAYOUT_CASE(NonGroupedAggregate)
     default:
-      CHECK(false);
+      CHECK(false) << static_cast<int>(layout);
   }
   abort();
 }
@@ -109,7 +109,7 @@ inline SQLAgg agg_kind_from_thrift(const TAggKind::type agg) {
     UNTHRIFT_AGGKIND_CASE(SAMPLE)
     UNTHRIFT_AGGKIND_CASE(SINGLE_VALUE)
     default:
-      CHECK(false);
+      CHECK(false) << static_cast<int>(agg);
   }
   abort();
 }
