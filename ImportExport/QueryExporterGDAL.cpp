@@ -24,8 +24,8 @@
 
 #include <ogrsf_frmts.h>
 
+#include "Geospatial/GDAL.h"
 #include "Geospatial/Types.h"
-#include "ImportExport/GDAL.h"
 #include "QueryEngine/GroupByAndAggregate.h"
 #include "QueryEngine/ResultSet.h"
 #include "Shared/misc.h"
@@ -167,7 +167,7 @@ void QueryExporterGDAL::beginExport(const std::string& file_path,
                          file_type_valid_extensions[SCI(file_type_)]);
 
   // lazy init GDAL
-  GDAL::init();
+  Geospatial::GDAL::init();
 
   // capture these
   copy_params_ = copy_params;

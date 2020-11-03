@@ -18,7 +18,7 @@
 
 #include <mutex>
 
-namespace import_export {
+namespace Geospatial {
 
 class GDAL {
  public:
@@ -31,4 +31,4 @@ class GDAL {
   static std::mutex init_mutex_;
 };
 
-}  // namespace import_export
+}  // namespace Geospatial

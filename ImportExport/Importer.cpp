@@ -54,10 +54,10 @@
 #include "Archive/S3Archive.h"
 #include "ArrowImporter.h"
 #include "Geospatial/Compression.h"
+#include "Geospatial/GDAL.h"
 #include "Geospatial/Transforms.h"
 #include "Geospatial/Types.h"
 #include "ImportExport/DelimitedParserUtils.h"
-#include "ImportExport/GDAL.h"
 #include "Logger/Logger.h"
 #include "OSDependent/omnisci_glob.h"
 #include "QueryEngine/TypePunning.h"
@@ -4248,7 +4248,7 @@ void Importer::setGDALAuthorizationTokens(const CopyParams& copy_params) {
 OGRDataSource* Importer::openGDALDataset(const std::string& file_name,
                                          const CopyParams& copy_params) {
   // lazy init GDAL
-  GDAL::init();
+  Geospatial::GDAL::init();
 
   // set authorization tokens
   setGDALAuthorizationTokens(copy_params);
@@ -4529,7 +4529,7 @@ bool Importer::gdalStatInternal(const std::string& path,
                                 const CopyParams& copy_params,
                                 bool also_dir) {
   // lazy init GDAL
-  GDAL::init();
+  Geospatial::GDAL::init();
 
   // set authorization tokens
   setGDALAuthorizationTokens(copy_params);
@@ -4639,7 +4639,7 @@ std::vector<std::string> Importer::gdalGetAllFilesInArchive(
     const std::string& archive_path,
     const CopyParams& copy_params) {
   // lazy init GDAL
-  GDAL::init();
+  Geospatial::GDAL::init();
 
   // set authorization tokens
   setGDALAuthorizationTokens(copy_params);
@@ -4664,7 +4664,7 @@ std::vector<Importer::GeoFileLayerInfo> Importer::gdalGetLayersInGeoFile(
     const std::string& file_name,
     const CopyParams& copy_params) {
   // lazy init GDAL
-  GDAL::init();
+  Geospatial::GDAL::init();
 
   // set authorization tokens
   setGDALAuthorizationTokens(copy_params);

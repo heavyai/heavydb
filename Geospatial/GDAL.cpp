@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include <ImportExport/GDAL.h>
+#include <Geospatial/GDAL.h>
 
 #include <array>
 #include <string>
@@ -25,7 +25,7 @@
 #include <Logger/Logger.h>
 #include <OSDependent/omnisci_path.h>
 
-namespace import_export {
+namespace Geospatial {
 
 namespace {
 
@@ -107,4 +107,4 @@ bool GDAL::supportsDriver(const char* driver_name) {
   return GetGDALDriverManager()->GetDriverByName(driver_name) != nullptr;
 }
 
-}  // namespace import_export
+}  // namespace Geospatial

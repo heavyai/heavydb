@@ -22,6 +22,7 @@
 #include <ogr_geometry.h>
 #include <ogrsf_frmts.h>
 
+#include "Geospatial/GDAL.h"
 #include "Logger/Logger.h"
 #include "Shared/sqltypes.h"
 
@@ -339,6 +340,9 @@ bool GeoBase::transform(int32_t srid0, int32_t srid1) {
 #endif
     return true;
   };
+
+  // lazy init GDAL
+  GDAL::init();
 
   OGRSpatialReference sr0;
   if (!setSpatialReference(&sr0, srid0)) {

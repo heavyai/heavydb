@@ -44,9 +44,9 @@
 #include "DataMgr/ForeignStorage/ForeignStorageInterface.h"
 #include "DistributedHandler.h"
 #include "Fragmenter/InsertOrderFragmenter.h"
+#include "Geospatial/GDAL.h"
 #include "Geospatial/Transforms.h"
 #include "Geospatial/Types.h"
-#include "ImportExport/GDAL.h"
 #include "ImportExport/Importer.h"
 #include "LockMgr/LockMgr.h"
 #include "OSDependent/omnisci_hostname.h"
@@ -2972,7 +2972,7 @@ TCopyParams DBHandler::copyparams_to_thrift(const import_export::CopyParams& cp)
 namespace {
 void add_vsi_network_prefix(std::string& path) {
   // do we support network file access?
-  bool gdal_network = import_export::GDAL::supportsNetworkFileAccess();
+  bool gdal_network = Geospatial::GDAL::supportsNetworkFileAccess();
 
   // modify head of filename based on source location
   if (boost::istarts_with(path, "http://") || boost::istarts_with(path, "https://")) {

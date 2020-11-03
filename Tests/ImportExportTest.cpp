@@ -33,9 +33,9 @@
 
 #include "Archive/PosixFileArchive.h"
 #include "Catalog/Catalog.h"
+#include "Geospatial/GDAL.h"
 #include "Geospatial/Types.h"
 #include "ImportExport/DelimitedParserUtils.h"
-#include "ImportExport/GDAL.h"
 #include "ImportExport/Importer.h"
 #include "Parser/parser.h"
 #include "QueryEngine/ResultSet.h"
@@ -1663,7 +1663,7 @@ TEST_F(ImportTestGDAL, Geodatabase_Simple) {
 
 TEST_F(ImportTestGDAL, KML_Simple) {
   SKIP_ALL_ON_AGGREGATOR();
-  if (!import_export::GDAL::supportsDriver("libkml")) {
+  if (!Geospatial::GDAL::supportsDriver("libkml")) {
     LOG(ERROR) << "Test requires LibKML support in GDAL";
   } else {
     const auto file_path = boost::filesystem::path("KML/test.kml");
