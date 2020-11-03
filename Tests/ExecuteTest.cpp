@@ -20174,15 +20174,20 @@ TEST_F(SubqueryTestEnv, SubqueryTest) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
 
+    // multi-step subquery
     c(R"(select t1.r1, t1.r2, t1.r3 from R1 t1 where t1.r1 in (select t2.r1 from R1 t2 join (select * from R1) t3 on t2.r1 = t3.r1) order by 1, 2;)",
       dt);
     c(R"(select t1.r1, t1.r2, t1.r3 from R1 t1 where t1.r3 in (select t2.r3 from R1 t2 join (select * from R1) t3 on t2.r1 = t3.r1) order by 1, 2)",
       dt);
+    // multi-step subquery different tables
     c(R"(select t1.r1, t1.r2, t1.r3 from R2 t1 where t1.r1 in (select t2.r1 from R1 t2 join (select * from R1) t3 on t2.r1 = t3.r1) order by 1, 2;)",
       dt);
     c(R"(select t1.r1, t1.r2, t1.r3 from R1 t1 where t1.r1 in (select t2.r1 from R2 t2 join (select * from R1) t3 on t2.r1 = t3.r1) order by 1, 2;)",
       dt);
     c(R"(select t1.r1, t1.r2, t1.r3 from R1 t1 where t1.r1 in (select t2.r1 from R2 t2 join (select * from R3) t3 on t2.r1 = t3.r1) order by 1, 2;)",
+      dt);
+    // multi-step multi-subquery
+    c(R"(select t1.r1, t1.r2, t1.r3 from R1 t1 where t1.r1 > (SELECT min(t2.r1) FROM R1 t2 where t2.r2 < 3) and t1.r2 >= (SELECT max(t3.r2) FROM R1 t3 where t3.r3 > (SELECT avg(t4.r3) FROM R1 t4 where t4.r1 < 2)) order by 1, 2;)",
       dt);
   }
 }
