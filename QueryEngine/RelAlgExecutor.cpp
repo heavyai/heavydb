@@ -3771,8 +3771,22 @@ RelAlgExecutor::TableFunctionWorkUnit RelAlgExecutor::createTableFunctionWorkUni
       target_exprs_owned_.end(), input_exprs_owned.begin(), input_exprs_owned.end());
   const auto input_exprs = get_exprs_not_owned(input_exprs_owned);
 
-  const auto table_function_impl =
-      bind_table_function(table_func->getFunctionName(), input_exprs_owned, is_gpu);
+  const auto table_function_impl = [=]() {
+    if (is_gpu) {
+      try {
+        return bind_table_function(
+            table_func->getFunctionName(), input_exprs_owned, is_gpu);
+      } catch (std::runtime_error& e) {
+        LOG(WARNING) << "createTableFunctionWorkUnit[GPU]: " << e.what()
+                     << " Redirecting " << table_func->getFunctionName()
+                     << " to run on CPU.";
+        throw QueryMustRunOnCpu();
+      }
+    } else {
+      return bind_table_function(
+          table_func->getFunctionName(), input_exprs_owned, is_gpu);
+    }
+  }();
 
   size_t output_row_sizing_param = 0;
   if (table_function_impl.hasUserSpecifiedOutputSizeMultiplier() ||
