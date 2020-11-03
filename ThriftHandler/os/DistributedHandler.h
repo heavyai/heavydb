@@ -82,7 +82,8 @@ class MapDLeafHandler {
   void broadcast_serialized_rows(const TSerializedRows& serialized_rows,
                                  const TRowDescriptor& row_desc,
                                  const TQueryId query_id,
-                                 const TSubqueryId subquery_id) {
+                                 const TSubqueryId subquery_id,
+                                 const bool is_final_subquery_result) {
     CHECK(false);
   }
 

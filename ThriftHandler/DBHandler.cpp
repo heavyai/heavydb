@@ -5579,7 +5579,8 @@ void DBHandler::execute_query_step(TStepResult& _return,
 void DBHandler::broadcast_serialized_rows(const TSerializedRows& serialized_rows,
                                           const TRowDescriptor& row_desc,
                                           const TQueryId query_id,
-                                          const TSubqueryId subquery_id) {
+                                          const TSubqueryId subquery_id,
+                                          const bool is_final_subquery_result) {
   if (!leaf_handler_) {
     THROW_MAPD_EXCEPTION("Distributed support is disabled.");
   }
@@ -5587,7 +5588,7 @@ void DBHandler::broadcast_serialized_rows(const TSerializedRows& serialized_rows
   auto time_ms = measure<>::execution([&]() {
     try {
       leaf_handler_->broadcast_serialized_rows(
-          serialized_rows, row_desc, query_id, subquery_id);
+          serialized_rows, row_desc, query_id, subquery_id, is_final_subquery_result);
     } catch (std::exception& e) {
       THROW_MAPD_EXCEPTION(std::string("Exception: ") + e.what());
     }

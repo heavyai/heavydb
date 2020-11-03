@@ -1760,11 +1760,11 @@ TEST(Select, Arrays) {
     compare_array(run_simple_agg("SELECT arr6_bool FROM array_test WHERE x = 8;", dt),
                   std::vector<int64_t>({1, 0, 1, 0, 1, 0}));
 
-    SKIP_ON_AGGREGATOR(
-        compare_array(
-            run_simple_agg(
-                "SELECT ARRAY[1,2,3,5] from array_test WHERE x = 8 limit 8675309;", dt),
-            std::vector<int64_t>({1, 2, 3, 5})););
+    // requires punt to CPU
+    SKIP_ON_AGGREGATOR(compare_array(
+        run_simple_agg("SELECT ARRAY[1,2,3,5] from array_test WHERE x = 8 limit 8675309;",
+                       dt),
+        std::vector<int64_t>({1, 2, 3, 5})));
     SKIP_ON_AGGREGATOR(compare_array(
         run_simple_agg("SELECT ARRAY[2*arr3_i32[1],2*arr3_i32[2],2*arr3_i32[3]] FROM "
                        "array_test a WHERE x = 8 limit 31337;",
@@ -8152,6 +8152,7 @@ TEST(Select, Joins_InnerJoin_TwoTables) {
     const auto watchdog_state = g_enable_watchdog;
     ScopeGuard reset = [watchdog_state] { g_enable_watchdog = watchdog_state; };
     g_enable_watchdog = false;
+    // TODO: crashes with transient_int_to_str_.end() failure in StringDictionaryProxy
     SKIP_ON_AGGREGATOR(
         c("SELECT str FROM test JOIN (SELECT 'foo' AS val, 12345 AS cnt) subq ON "
           "test.str = "
@@ -9309,12 +9310,11 @@ TEST(Select, Joins_CoalesceColumns) {
       "ON t0.dn = t1.dn AND t0.y = t1.y AND t0.tz = t1.tz AND t0.x = t1.x INNER JOIN "
       "coalesce_cols_test_2 t2 ON t0.d = t2.d AND t0.tz = t1.tz AND t0.x = t1.x;",
       dt);
-    SKIP_ON_AGGREGATOR(c(
-        "SELECT COUNT(*) FROM coalesce_cols_test_0 t0 INNER JOIN coalesce_cols_test_1 t1 "
-        "ON t0.dn = t1.dn AND t0.str = t1.str AND t0.tz = t1.tz AND t0.x = t1.x INNER "
-        "JOIN "
-        "coalesce_cols_test_2 t2 ON t0.y = t2.y AND t0.tz = t1.tz AND t0.x = t1.x;",
-        dt));
+    c("SELECT COUNT(*) FROM coalesce_cols_test_0 t0 INNER JOIN coalesce_cols_test_1 t1 "
+      "ON t0.dn = t1.dn AND t0.str = t1.str AND t0.tz = t1.tz AND t0.x = t1.x INNER "
+      "JOIN "
+      "coalesce_cols_test_2 t2 ON t0.y = t2.y AND t0.tz = t1.tz AND t0.x = t1.x;",
+      dt);
     if (dt == ExecutorDeviceType::CPU) {
       // Clear CPU memory and hash table caches
       QR::get()->clearCpuMemory();
@@ -16189,7 +16189,7 @@ TEST(Delete, Joins_ImplicitJoins) {
     c("SELECT COUNT(*) FROM test, test_inner WHERE test.x = test_inner.x;", dt);
     c("SELECT COUNT(*) FROM test, hash_join_test WHERE test.t = hash_join_test.t;", dt);
     c("SELECT COUNT(*) FROM test, test_inner WHERE test.x < test_inner.x + 1;", dt);
-    SKIP_ON_AGGREGATOR(
+    THROW_ON_AGGREGATOR(
         c("SELECT COUNT(*) FROM test, test_inner WHERE test.real_str = test_inner.str;",
           dt));
     c("SELECT test_inner.x, COUNT(*) AS n FROM test, test_inner WHERE test.x = "
@@ -16226,9 +16226,9 @@ TEST(Delete, Joins_ImplicitJoins) {
       "b.x AND a.x = c.x AND c.str = "
       "'foo';",
       dt);
-    SKIP_ON_AGGREGATOR(
+    THROW_ON_AGGREGATOR(
         c("SELECT COUNT(*) FROM test a, test b WHERE a.x = b.x AND a.y = b.y;", dt));
-    SKIP_ON_AGGREGATOR(
+    THROW_ON_AGGREGATOR(
         c("SELECT COUNT(*) FROM test a, test b WHERE a.x = b.x AND a.str = b.str;", dt));
     c("SELECT COUNT(*) FROM test, test_inner WHERE (test.x = test_inner.x AND test.y = "
       "42 AND test_inner.str = 'foo') "
@@ -16605,16 +16605,16 @@ TEST(Select, GeoSpatial_Projection) {
         GeoMultiPolyTargetValue({0., 0., 2., 0., 0., 2.}, {3}, {1}));
 
     // Sample() version of above
-    SKIP_ON_AGGREGATOR(compare_geo_target(
+    THROW_ON_AGGREGATOR(compare_geo_target(
         run_simple_agg("SELECT SAMPLE(p) FROM geospatial_test WHERE id = 1;", dt),
         GeoPointTargetValue({1., 1.})));
-    SKIP_ON_AGGREGATOR(compare_geo_target(
+    THROW_ON_AGGREGATOR(compare_geo_target(
         run_simple_agg("SELECT SAMPLE(l) FROM geospatial_test WHERE id = 1;", dt),
         GeoLineStringTargetValue({1., 0., 2., 2., 3., 3.})));
-    SKIP_ON_AGGREGATOR(compare_geo_target(
+    THROW_ON_AGGREGATOR(compare_geo_target(
         run_simple_agg("SELECT SAMPLE(poly) FROM geospatial_test WHERE id = 1;", dt),
         GeoPolyTargetValue({0., 0., 2., 0., 0., 2.}, {3})));
-    SKIP_ON_AGGREGATOR(compare_geo_target(
+    THROW_ON_AGGREGATOR(compare_geo_target(
         run_simple_agg("SELECT SAMPLE(mpoly) FROM geospatial_test WHERE id = 1;", dt),
         GeoMultiPolyTargetValue({0., 0., 2., 0., 0., 2.}, {3}, {1})));
 
@@ -16784,6 +16784,7 @@ TEST(Select, GeoSpatial_Projection) {
         "POINT (2 2)",
         boost::get<std::string>(v<NullableString>(run_simple_agg(
             "SELECT ST_Point(2,2) FROM geospatial_test WHERE id = 2;", dt, false))));
+    // requires punt to CPU
     SKIP_ON_AGGREGATOR(ASSERT_EQ(
         "POINT (2 2)",
         boost::get<std::string>(v<NullableString>(run_simple_agg(
@@ -18496,7 +18497,7 @@ TEST(Select, Sample) {
               boost::get<std::string>(v<NullableString>(run_simple_agg(
                   "SELECT SAMPLE(CASE WHEN x IN (9) THEN str ELSE 'else' END) FROM test;",
                   dt))));
-    SKIP_ON_AGGREGATOR({
+    THROW_ON_AGGREGATOR({
       const auto rows = run_multiple_agg(
           "SELECT SAMPLE(real_str), COUNT(*) FROM test WHERE x > 8;", dt);
       const auto crt_row = rows->getNextRow(true, true);
@@ -18508,7 +18509,7 @@ TEST(Select, Sample) {
       const auto empty_row = rows->getNextRow(true, true);
       ASSERT_EQ(size_t(0), empty_row.size());
     });
-    SKIP_ON_AGGREGATOR({
+    THROW_ON_AGGREGATOR({
       const auto rows = run_multiple_agg(
           "SELECT SAMPLE(real_str), COUNT(*) FROM test WHERE x > 7;", dt);
       const auto crt_row = rows->getNextRow(true, true);
@@ -18534,7 +18535,7 @@ TEST(Select, Sample) {
       const auto empty_row = rows->getNextRow(true, true);
       ASSERT_EQ(size_t(0), empty_row.size());
     }
-    SKIP_ON_AGGREGATOR({
+    THROW_ON_AGGREGATOR({
       const auto rows = run_multiple_agg(
           "SELECT SAMPLE(arr_i64), COUNT(*) FROM array_test WHERE x = 8;", dt);
       const auto crt_row = rows->getNextRow(true, true);
@@ -18570,7 +18571,7 @@ TEST(Select, Sample) {
       const auto empty_row = rows->getNextRow(true, true);
       ASSERT_EQ(size_t(0), empty_row.size());
     }
-    SKIP_ON_AGGREGATOR({
+    THROW_ON_AGGREGATOR({
       const auto rows = run_multiple_agg(
           "SELECT SAMPLE(arr3_i64), COUNT(*) FROM array_test WHERE x = 8;", dt);
       const auto crt_row = rows->getNextRow(true, true);
@@ -20125,27 +20126,46 @@ TEST(Select, SampleRatio) {
 class SubqueryTestEnv : public ::testing::Test {
  protected:
   void SetUp() override {
-    ASSERT_NO_THROW(run_ddl_statement("DROP TABLE IF EXISTS R;"));
-    g_sqlite_comparator.query("DROP TABLE IF EXISTS R;");
+    auto create_test_table = [](const std::string& table_name) {
+      ASSERT_NO_THROW(run_ddl_statement("DROP TABLE IF EXISTS " + table_name + ";"));
+      g_sqlite_comparator.query("DROP TABLE IF EXISTS " + table_name + ";");
 
-    ASSERT_NO_THROW(run_ddl_statement("CREATE TABLE R (r1 int, r2 int, r3 int);"));
-    g_sqlite_comparator.query("CREATE TABLE R (r1 int, r2 int, r3 int);");
-    run_multiple_agg("INSERT INTO R VALUES (1,2,3);", ExecutorDeviceType::CPU);
-    g_sqlite_comparator.query("INSERT INTO R VALUES (1,2,3);");
-    run_multiple_agg("INSERT INTO R VALUES (2,3,4);", ExecutorDeviceType::CPU);
-    g_sqlite_comparator.query("INSERT INTO R VALUES (2,3,4);");
-    run_multiple_agg("INSERT INTO R VALUES (3,4,5);", ExecutorDeviceType::CPU);
-    g_sqlite_comparator.query("INSERT INTO R VALUES (3,4,5);");
-    run_multiple_agg("INSERT INTO R VALUES (4,5,6);", ExecutorDeviceType::CPU);
-    g_sqlite_comparator.query("INSERT INTO R VALUES (4,5,6);");
-    run_multiple_agg("INSERT INTO R VALUES (1,3,4);", ExecutorDeviceType::CPU);
-    g_sqlite_comparator.query("INSERT INTO R VALUES (1,3,4);");
+      ASSERT_NO_THROW(
+          run_ddl_statement("CREATE TABLE " + table_name + " (r1 int, r2 int, r3 int);"));
+      g_sqlite_comparator.query("CREATE TABLE " + table_name +
+                                " (r1 int, r2 int, r3 int);");
+      run_multiple_agg("INSERT INTO " + table_name + " VALUES (1,2,3);",
+                       ExecutorDeviceType::CPU);
+      g_sqlite_comparator.query("INSERT INTO " + table_name + " VALUES (1,2,3);");
+      run_multiple_agg("INSERT INTO " + table_name + " VALUES (2,3,4);",
+                       ExecutorDeviceType::CPU);
+      g_sqlite_comparator.query("INSERT INTO " + table_name + " VALUES (2,3,4);");
+      run_multiple_agg("INSERT INTO " + table_name + " VALUES (3,4,5);",
+                       ExecutorDeviceType::CPU);
+      g_sqlite_comparator.query("INSERT INTO " + table_name + " VALUES (3,4,5);");
+      run_multiple_agg("INSERT INTO " + table_name + " VALUES (4,5,6);",
+                       ExecutorDeviceType::CPU);
+      g_sqlite_comparator.query("INSERT INTO " + table_name + " VALUES (4,5,6);");
+      run_multiple_agg("INSERT INTO " + table_name + " VALUES (1,3,4);",
+                       ExecutorDeviceType::CPU);
+      g_sqlite_comparator.query("INSERT INTO " + table_name + " VALUES (1,3,4);");
+    };
+
+    create_test_table("R1");
+    create_test_table("R2");
+    create_test_table("R3");
   }
 
   void TearDown() override {
     if (!g_keep_test_data) {
-      ASSERT_NO_THROW(run_ddl_statement("DROP TABLE IF EXISTS R;"));
-      g_sqlite_comparator.query("DROP TABLE IF EXISTS R;");
+      auto drop_table = [](const std::string& table_name) {
+        ASSERT_NO_THROW(run_ddl_statement("DROP TABLE IF EXISTS " + table_name + ";"));
+        g_sqlite_comparator.query("DROP TABLE IF EXISTS " + table_name + ";");
+      };
+
+      drop_table("R1");
+      drop_table("R2");
+      drop_table("R3");
     }
   }
 };
@@ -20154,11 +20174,15 @@ TEST_F(SubqueryTestEnv, SubqueryTest) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
 
-    c("select t1.r1, t1.r2, t1.r3 from R t1 where t1.r1 in (select t2.r1 from R t2 join "
-      "(select * from R) t3 on t2.r1 = t3.r1) order by 1, 2;",
+    c(R"(select t1.r1, t1.r2, t1.r3 from R1 t1 where t1.r1 in (select t2.r1 from R1 t2 join (select * from R1) t3 on t2.r1 = t3.r1) order by 1, 2;)",
       dt);
-    c("select t1.r1, t1.r2, t1.r3 from R t1 where t1.r3 in (select t2.r3 from R t2 join "
-      "(select * from R) t3 on t2.r1 = t3.r1) order by 1, 2",
+    c(R"(select t1.r1, t1.r2, t1.r3 from R1 t1 where t1.r3 in (select t2.r3 from R1 t2 join (select * from R1) t3 on t2.r1 = t3.r1) order by 1, 2)",
+      dt);
+    c(R"(select t1.r1, t1.r2, t1.r3 from R2 t1 where t1.r1 in (select t2.r1 from R1 t2 join (select * from R1) t3 on t2.r1 = t3.r1) order by 1, 2;)",
+      dt);
+    c(R"(select t1.r1, t1.r2, t1.r3 from R1 t1 where t1.r1 in (select t2.r1 from R2 t2 join (select * from R1) t3 on t2.r1 = t3.r1) order by 1, 2;)",
+      dt);
+    c(R"(select t1.r1, t1.r2, t1.r3 from R1 t1 where t1.r1 in (select t2.r1 from R2 t2 join (select * from R3) t3 on t2.r1 = t3.r1) order by 1, 2;)",
       dt);
   }
 }

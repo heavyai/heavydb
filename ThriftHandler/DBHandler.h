@@ -448,7 +448,8 @@ class DBHandler : public OmniSciIf {
   void broadcast_serialized_rows(const TSerializedRows& serialized_rows,
                                  const TRowDescriptor& row_desc,
                                  const TQueryId query_id,
-                                 const TSubqueryId subquery_id) override;
+                                 const TSubqueryId subquery_id,
+                                 const bool is_final_subquery_result) override;
 
   void start_render_query(TPendingRenderQuery& _return,
                           const TSessionId& session,

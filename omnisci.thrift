@@ -589,7 +589,7 @@ service OmniSci {
   TTableMeta check_table_consistency(1: TSessionId session, 2: i32 table_id) throws (1: TOmniSciException e)
   TPendingQuery start_query(1: TSessionId leaf_session, 2: TSessionId parent_session, 3: string query_ra, 4: bool just_explain, 5: list<i64> outer_fragment_indices) throws (1: TOmniSciException e)
   TStepResult execute_query_step(1: TPendingQuery pending_query, 2: TSubqueryId subquery_id) throws (1: TOmniSciException e)
-  void broadcast_serialized_rows(1: serialized_result_set.TSerializedRows serialized_rows, 2: TRowDescriptor row_desc, 3: TQueryId query_id, 4: TSubqueryId subquery_id) throws (1: TOmniSciException e)
+  void broadcast_serialized_rows(1: serialized_result_set.TSerializedRows serialized_rows, 2: TRowDescriptor row_desc, 3: TQueryId query_id, 4: TSubqueryId subquery_id, 5: bool is_final_subquery_result) throws (1: TOmniSciException e)
   TPendingRenderQuery start_render_query(1: TSessionId session, 2: i64 widget_id, 3: i16 node_idx, 4: string vega_json) throws (1: TOmniSciException e)
   TRenderStepResult execute_next_render_step(1: TPendingRenderQuery pending_render, 2: TRenderAggDataMap merged_data) throws (1: TOmniSciException e)
   void insert_data(1: TSessionId session, 2: TInsertData insert_data) throws (1: TOmniSciException e)
