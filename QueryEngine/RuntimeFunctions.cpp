@@ -930,8 +930,8 @@ extern "C" GPU_RT_STUB int64_t get_block_index() {
 
 #undef GPU_RT_STUB
 
-extern "C" ALWAYS_INLINE int32_t record_error_code(const int32_t err_code,
-                                                   int32_t* error_codes) {
+extern "C" ALWAYS_INLINE void record_error_code(const int32_t err_code,
+                                                int32_t* error_codes) {
   // NB: never override persistent error codes (with code greater than zero).
   // On GPU, a projection query with a limit can run out of slots without it
   // being an actual error if the limit has been hit. If a persistent error
@@ -941,7 +941,6 @@ extern "C" ALWAYS_INLINE int32_t record_error_code(const int32_t err_code,
   if (err_code && error_codes[pos_start_impl(nullptr)] <= 0) {
     error_codes[pos_start_impl(nullptr)] = err_code;
   }
-  return err_code;
 }
 
 extern "C" ALWAYS_INLINE int32_t get_error_code(int32_t* error_codes) {

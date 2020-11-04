@@ -1710,6 +1710,7 @@ void Executor::createErrorCheckControlFlow(llvm::Function* query_func,
         auto& br_instr = bb_it->back();
         llvm::IRBuilder<> ir_builder(&br_instr);
         llvm::Value* err_lv = &*inst_it;
+        llvm::Value* err_lv_returned_from_row_func = nullptr;
         if (run_with_dynamic_watchdog) {
           CHECK(pos);
           llvm::Value* call_watchdog_lv = nullptr;
@@ -1820,24 +1821,16 @@ void Executor::createErrorCheckControlFlow(llvm::Function* query_func,
           unified_err_lv->addIncoming(err_lv, &*bb_it);
           err_lv = unified_err_lv;
         }
-        const auto error_code_arg = get_arg_by_name(query_func, "error_code");
-        err_lv =
-            ir_builder.CreateCall(cgen_state_->module_->getFunction("record_error_code"),
-                                  std::vector<llvm::Value*>{err_lv, error_code_arg});
-        if (device_type == ExecutorDeviceType::GPU) {
+        if (!err_lv_returned_from_row_func) {
+          err_lv_returned_from_row_func = err_lv;
+        }
+        if (device_type == ExecutorDeviceType::GPU && g_enable_dynamic_watchdog) {
           // let kernel execution finish as expected, regardless of the observed error,
           // unless it is from the dynamic watchdog where all threads within that block
           // return together.
-          if (run_with_allowing_runtime_interrupt) {
-            err_lv = ir_builder.CreateICmp(llvm::ICmpInst::ICMP_EQ,
-                                           err_lv,
-                                           cgen_state_->llInt(Executor::ERR_INTERRUPTED));
-          } else {
-            err_lv = ir_builder.CreateICmp(llvm::ICmpInst::ICMP_EQ,
-                                           err_lv,
-                                           cgen_state_->llInt(Executor::ERR_OUT_OF_TIME));
-          }
-
+          err_lv = ir_builder.CreateICmp(llvm::ICmpInst::ICMP_EQ,
+                                         err_lv,
+                                         cgen_state_->llInt(Executor::ERR_OUT_OF_TIME));
         } else {
           err_lv = ir_builder.CreateICmp(llvm::ICmpInst::ICMP_NE,
                                          err_lv,
@@ -1845,6 +1838,12 @@ void Executor::createErrorCheckControlFlow(llvm::Function* query_func,
         }
         auto error_bb = llvm::BasicBlock::Create(
             cgen_state_->context_, ".error_exit", query_func, new_bb);
+        const auto error_code_arg = get_arg_by_name(query_func, "error_code");
+        llvm::CallInst::Create(
+            cgen_state_->module_->getFunction("record_error_code"),
+            std::vector<llvm::Value*>{err_lv_returned_from_row_func, error_code_arg},
+            "",
+            error_bb);
         llvm::ReturnInst::Create(cgen_state_->context_, error_bb);
         llvm::ReplaceInstWithInst(&br_instr,
                                   llvm::BranchInst::Create(error_bb, new_bb, err_lv));
@@ -2663,10 +2662,8 @@ void Executor::insertErrorCodeChecker(llvm::Function* query_func, bool hoist_lit
         auto& br_instr = bb_it->back();
         llvm::IRBuilder<> ir_builder(&br_instr);
         llvm::Value* err_lv = &*inst_it;
-
         auto error_check_bb =
             bb_it->splitBasicBlock(llvm::BasicBlock::iterator(br_instr), ".error_check");
-
         llvm::Value* error_code_arg = nullptr;
         auto arg_cnt = 0;
         for (auto arg_it = query_func->arg_begin(); arg_it != query_func->arg_end();
@@ -2688,6 +2685,7 @@ void Executor::insertErrorCodeChecker(llvm::Function* query_func, bool hoist_lit
         CHECK(error_code_arg);
         llvm::Value* err_code = nullptr;
         if (g_enable_runtime_query_interrupt) {
+          // decide the final error code with a consideration of interrupt status
           auto& check_interrupt_br_instr = bb_it->back();
           auto interrupt_check_bb = llvm::BasicBlock::Create(
               cgen_state_->context_, ".interrupt_check", query_func, error_check_bb);
@@ -2706,12 +2704,12 @@ void Executor::insertErrorCodeChecker(llvm::Function* query_func, bool hoist_lit
                                     llvm::BranchInst::Create(interrupt_check_bb));
           ir_builder.SetInsertPoint(&br_instr);
         } else {
+          // uses error code returned from row_func and skip to check interrupt status
           ir_builder.SetInsertPoint(&br_instr);
           err_code =
               ir_builder.CreateCall(cgen_state_->module_->getFunction("get_error_code"),
                                     std::vector<llvm::Value*>{error_code_arg});
         }
-
         err_lv = ir_builder.CreateICmp(
             llvm::ICmpInst::ICMP_NE, err_code, cgen_state_->llInt(0));
         auto error_bb = llvm::BasicBlock::Create(
