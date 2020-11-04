@@ -763,6 +763,8 @@ class Executor {
                                    bool run_with_allowing_runtime_interrupt,
                                    ExecutorDeviceType device_type);
 
+  void insertErrorCodeChecker(llvm::Function* query_func, bool hoist_literals);
+
   void preloadFragOffsets(const std::vector<InputDescriptor>& input_descs,
                           const std::vector<InputTableInfo>& query_infos);
 

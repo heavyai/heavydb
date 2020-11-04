@@ -944,6 +944,10 @@ extern "C" ALWAYS_INLINE int32_t record_error_code(const int32_t err_code,
   return err_code;
 }
 
+extern "C" ALWAYS_INLINE int32_t get_error_code(int32_t* error_codes) {
+  return error_codes[pos_start_impl(nullptr)];
+}
+
 // group by helpers
 
 extern "C" __attribute__((noinline)) const int64_t* init_shared_mem_nop(
