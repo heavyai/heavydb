@@ -77,7 +77,8 @@ class CommandLineOptions {
   bool enable_dynamic_watchdog = false;
   bool enable_runtime_query_interrupt = false;
   bool use_estimator_result_cache = true;
-  unsigned runtime_query_interrupt_frequency = 1000;  // in milliseconds
+  double running_query_interrupt_freq = 0.5;     // 0.0 ~ 1.0
+  unsigned pending_query_interrupt_freq = 1000;  // in milliseconds
   unsigned dynamic_watchdog_time_limit = 10000;
   std::string disk_cache_level = "";
 
@@ -171,7 +172,8 @@ extern size_t g_max_memory_allocation_size;
 extern double g_bump_allocator_step_reduction;
 extern bool g_enable_direct_columnarization;
 extern bool g_enable_runtime_query_interrupt;
-extern unsigned g_runtime_query_interrupt_frequency;
+extern unsigned g_pending_query_interrupt_freq;
+extern double g_running_query_interrupt_freq;
 extern size_t g_gpu_smem_threshold;
 extern bool g_enable_smem_non_grouped_agg;
 extern bool g_enable_smem_grouped_non_count_agg;

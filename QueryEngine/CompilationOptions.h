@@ -79,7 +79,7 @@ struct ExecutionOptions {
   const bool just_calcite_explain;
   const double gpu_input_mem_limit_percent;  // punt to CPU if input memory exceeds this
   const bool allow_runtime_query_interrupt;
-  const unsigned runtime_query_interrupt_frequency;
+  const unsigned pending_query_interrupt_freq;
   ExecutorType executor_type = ExecutorType::Native;
   const std::vector<size_t> outer_fragment_indices{};
 

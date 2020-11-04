@@ -222,7 +222,7 @@ ExecutionResult RelAlgExecutor::executeRelAlgQueryNoRetry(const CompilationOptio
       executor_->addToQuerySessionList(query_session, query_str, session_write_lock);
       session_write_lock.unlock();
       // hybrid spinlock.  if it fails to acquire a lock, then
-      // it sleeps {g_runtime_query_interrupt_frequency} millisecond.
+      // it sleeps {g_pending_query_interrupt_freq} millisecond.
       while (executor_->execute_spin_lock_.test_and_set(std::memory_order_acquire)) {
         // failed to get the spinlock: check whether query is interrupted
         mapd_shared_lock<mapd_shared_mutex> session_read_lock(
@@ -240,7 +240,7 @@ ExecutionResult RelAlgExecutor::executeRelAlgQueryNoRetry(const CompilationOptio
         }
         // here it fails to acquire the lock
         std::this_thread::sleep_for(
-            std::chrono::milliseconds(g_runtime_query_interrupt_frequency));
+            std::chrono::milliseconds(g_pending_query_interrupt_freq));
       };
     }
     // currently, atomic_flag does not provide a way to get its current status,
@@ -463,7 +463,7 @@ QueryStepExecutionResult RelAlgExecutor::executeRelAlgQuerySingleStep(
             eo.just_calcite_explain,
             eo.gpu_input_mem_limit_percent,
             eo.allow_runtime_query_interrupt,
-            eo.runtime_query_interrupt_frequency,
+            eo.pending_query_interrupt_freq,
             eo.executor_type,
         };
         // Use subseq to avoid clearing existing temporary tables
@@ -613,7 +613,7 @@ void RelAlgExecutor::executeRelAlgStep(const RaExecutionSequence& seq,
       eo.just_calcite_explain,
       eo.gpu_input_mem_limit_percent,
       eo.allow_runtime_query_interrupt,
-      eo.runtime_query_interrupt_frequency,
+      eo.pending_query_interrupt_freq,
       eo.executor_type,
       step_idx == 0 ? eo.outer_fragment_indices : std::vector<size_t>()};
 
@@ -2401,7 +2401,7 @@ ExecutionResult RelAlgExecutor::executeSort(const RelSort* sort,
         eo.just_calcite_explain,
         eo.gpu_input_mem_limit_percent,
         eo.allow_runtime_query_interrupt,
-        eo.runtime_query_interrupt_frequency,
+        eo.pending_query_interrupt_freq,
         eo.executor_type,
     };
 
@@ -2936,7 +2936,7 @@ ExecutionResult RelAlgExecutor::handleOutOfMemoryRetry(
                                    false,
                                    eo.gpu_input_mem_limit_percent,
                                    false,
-                                   eo.runtime_query_interrupt_frequency,
+                                   eo.pending_query_interrupt_freq,
                                    eo.executor_type,
                                    eo.outer_fragment_indices};
 

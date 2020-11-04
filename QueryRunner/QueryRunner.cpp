@@ -329,7 +329,8 @@ std::shared_ptr<ResultSet> QueryRunner::runSQLWithAllowingInterrupt(
     std::shared_ptr<Executor> executor,
     const std::string& session_id,
     const ExecutorDeviceType device_type,
-    const unsigned interrupt_check_freq) {
+    const double running_query_check_freq,
+    const unsigned pending_query_check_freq) {
   CHECK(session_info_);
   CHECK(!Catalog_Namespace::SysCatalog::instance().isAggregator());
   auto session_info =
@@ -355,7 +356,7 @@ std::shared_ptr<ResultSet> QueryRunner::runSQLWithAllowingInterrupt(
                          false,
                          g_gpu_mem_limit_percent,
                          true,
-                         interrupt_check_freq};
+                         pending_query_check_freq};
   std::string query_ra{""};
   {
     // async query initiation for interrupt test

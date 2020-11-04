@@ -4753,7 +4753,7 @@ std::vector<PushedDownFilterInfo> DBHandler::execute_rel_alg(
                          explain_info.justCalciteExplain(),
                          system_parameters_.gpu_input_mem_limit,
                          g_enable_runtime_query_interrupt,
-                         g_runtime_query_interrupt_frequency};
+                         g_pending_query_interrupt_freq};
   ExecutionResult result{std::make_shared<ResultSet>(std::vector<TargetInfo>{},
                                                      ExecutorDeviceType::CPU,
                                                      QueryMemoryDescriptor(),
@@ -4825,7 +4825,7 @@ void DBHandler::execute_rel_alg_df(TDataFrame& _return,
                          false,
                          system_parameters_.gpu_input_mem_limit,
                          g_enable_runtime_query_interrupt,
-                         g_runtime_query_interrupt_frequency};
+                         g_pending_query_interrupt_freq};
   ExecutionResult result{std::make_shared<ResultSet>(std::vector<TargetInfo>{},
                                                      ExecutorDeviceType::CPU,
                                                      QueryMemoryDescriptor(),

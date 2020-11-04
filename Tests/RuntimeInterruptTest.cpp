@@ -31,7 +31,8 @@
 #include "Shared/StringTransform.h"
 
 using QR = QueryRunner::QueryRunner;
-unsigned INTERRUPT_CHECK_FREQ = 10;
+unsigned PENDING_QUERY_INTERRUPT_CHECK_FREQ = 10;
+double RUNNING_QUERY_INTERRUPT_CHECK_FREQ = 0.9;
 
 #ifndef BASE_PATH
 #define BASE_PATH "./tmp"
@@ -67,7 +68,7 @@ std::shared_ptr<ResultSet> run_query(const std::string& query_str,
     LOG(ERROR) << "Incorrect or missing session info.";
   }
   return QR::get()->runSQLWithAllowingInterrupt(
-      query_str, executor, session_id, device_type, INTERRUPT_CHECK_FREQ);
+      query_str, executor, session_id, device_type, PENDING_QUERY_INTERRUPT_CHECK_FREQ);
 }
 
 inline void run_ddl_statement(const std::string& create_table_stmt) {
@@ -185,7 +186,8 @@ TEST(Interrupt, Kill_RunningQuery) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     auto executor = QR::get()->getExecutor();
     bool startQueryExec = false;
-    executor->enableRuntimeQueryInterrupt(INTERRUPT_CHECK_FREQ);
+    executor->enableRuntimeQueryInterrupt(RUNNING_QUERY_INTERRUPT_CHECK_FREQ,
+                                          PENDING_QUERY_INTERRUPT_CHECK_FREQ);
     std::shared_ptr<ResultSet> res1 = nullptr;
     std::exception_ptr exception_ptr = nullptr;
     try {
@@ -242,7 +244,8 @@ TEST(Interrupt, Kill_PendingQuery) {
     std::future<std::shared_ptr<ResultSet>> query_thread1;
     std::future<std::shared_ptr<ResultSet>> query_thread2;
     auto executor = QR::get()->getExecutor();
-    executor->enableRuntimeQueryInterrupt(INTERRUPT_CHECK_FREQ);
+    executor->enableRuntimeQueryInterrupt(RUNNING_QUERY_INTERRUPT_CHECK_FREQ,
+                                          PENDING_QUERY_INTERRUPT_CHECK_FREQ);
     bool startQueryExec = false;
     std::exception_ptr exception_ptr1 = nullptr;
     std::exception_ptr exception_ptr2 = nullptr;
@@ -319,7 +322,8 @@ TEST(Interrupt, Make_PendingQuery_Run) {
     std::future<std::shared_ptr<ResultSet>> query_thread1;
     std::future<std::shared_ptr<ResultSet>> query_thread2;
     auto executor = QR::get()->getExecutor();
-    executor->enableRuntimeQueryInterrupt(INTERRUPT_CHECK_FREQ);
+    executor->enableRuntimeQueryInterrupt(RUNNING_QUERY_INTERRUPT_CHECK_FREQ,
+                                          PENDING_QUERY_INTERRUPT_CHECK_FREQ);
     bool startQueryExec = false;
     std::exception_ptr exception_ptr1 = nullptr;
     std::exception_ptr exception_ptr2 = nullptr;

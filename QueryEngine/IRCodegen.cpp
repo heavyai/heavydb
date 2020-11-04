@@ -688,7 +688,8 @@ void Executor::codegenJoinLoops(const std::vector<JoinLoop>& join_loops,
           createErrorCheckControlFlow(query_func,
                                       eo.with_dynamic_watchdog,
                                       eo.allow_runtime_query_interrupt,
-                                      co.device_type);
+                                      co.device_type,
+                                      group_by_and_aggregate.query_infos_);
         }
         return loop_body_bb;
       },

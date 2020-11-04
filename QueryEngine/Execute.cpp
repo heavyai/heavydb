@@ -107,7 +107,8 @@ bool g_enable_direct_columnarization{true};
 extern bool g_enable_experimental_string_functions;
 bool g_enable_runtime_query_interrupt{false};
 bool g_use_estimator_result_cache{true};
-unsigned g_runtime_query_interrupt_frequency{1000};
+unsigned g_pending_query_interrupt_freq{1000};
+double g_running_query_interrupt_freq{0.5};
 size_t g_gpu_smem_threshold{
     4096};  // GPU shared memory threshold (in bytes), if larger
             // buffer sizes are required we do not use GPU shared
@@ -3605,13 +3606,19 @@ bool Executor::checkIsQuerySessionInterrupted(
   return flag_it != queries_interrupt_flag_.end() && flag_it->second;
 }
 
-void Executor::enableRuntimeQueryInterrupt(const unsigned interrupt_freq) const {
+void Executor::enableRuntimeQueryInterrupt(
+    const double runtime_query_check_freq,
+    const unsigned pending_query_check_freq) const {
   // The only one scenario that we intentionally call this function is
   // to allow runtime query interrupt in QueryRunner for test cases.
   // Because test machine's default setting does not allow runtime query interrupt,
   // so we have to turn it on within test code if necessary.
   g_enable_runtime_query_interrupt = true;
-  g_runtime_query_interrupt_frequency = interrupt_freq;
+  g_pending_query_interrupt_freq = pending_query_check_freq;
+  g_running_query_interrupt_freq = runtime_query_check_freq;
+  if (g_running_query_interrupt_freq) {
+    g_running_query_interrupt_freq = 0.5;
+  }
 }
 
 void Executor::addToCardinalityCache(const std::string& cache_key,

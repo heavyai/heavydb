@@ -403,7 +403,8 @@ class Executor {
   void resetInterrupt();
 
   // only for testing usage
-  void enableRuntimeQueryInterrupt(const unsigned interrupt_freq) const;
+  void enableRuntimeQueryInterrupt(const double runtime_query_check_freq,
+                                   const unsigned pending_query_check_freq) const;
 
   static const size_t high_scan_limit{32000000};
 
@@ -761,7 +762,8 @@ class Executor {
   void createErrorCheckControlFlow(llvm::Function* query_func,
                                    bool run_with_dynamic_watchdog,
                                    bool run_with_allowing_runtime_interrupt,
-                                   ExecutorDeviceType device_type);
+                                   ExecutorDeviceType device_type,
+                                   const std::vector<InputTableInfo>& input_table_infos);
 
   void insertErrorCodeChecker(llvm::Function* query_func, bool hoist_literals);
 

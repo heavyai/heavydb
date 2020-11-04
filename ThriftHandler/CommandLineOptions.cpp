@@ -155,12 +155,19 @@ void CommandLineOptions::fillOptions() {
                               ->default_value(enable_runtime_query_interrupt)
                               ->implicit_value(true),
                           "Enable runtime query interrupt.");
-  help_desc.add_options()("runtime-query-interrupt-frequency",
-                          po::value<unsigned>(&runtime_query_interrupt_frequency)
-                              ->default_value(runtime_query_interrupt_frequency)
+  help_desc.add_options()("pending-query-interrupt-freq",
+                          po::value<unsigned>(&pending_query_interrupt_freq)
+                              ->default_value(pending_query_interrupt_freq)
                               ->implicit_value(1000),
-                          "A frequency of checking the request of runtime query "
+                          "A frequency of checking the request of pending query "
                           "interrupt from user (in millisecond).");
+  help_desc.add_options()(
+      "running-query-interrupt-freq",
+      po::value<double>(&running_query_interrupt_freq)
+          ->default_value(running_query_interrupt_freq)
+          ->implicit_value(0.5),
+      "A frequency of checking the request of running query "
+      "interrupt from user (0.0 (less frequent) ~ (more frequent) 1.0).");
   help_desc.add_options()("use-estimator-result-cache",
                           po::value<bool>(&use_estimator_result_cache)
                               ->default_value(use_estimator_result_cache)
@@ -743,8 +750,10 @@ void CommandLineOptions::validate() {
   }
   LOG(INFO) << " Runtime query interrupt is set to " << enable_runtime_query_interrupt;
   if (enable_runtime_query_interrupt) {
-    LOG(INFO) << " A frequency of checking runtime query interrupt request is set to "
-              << runtime_query_interrupt_frequency << " (in ms.)";
+    LOG(INFO) << " A frequency of checking pending query interrupt request is set to "
+              << pending_query_interrupt_freq << " (in ms.)";
+    LOG(INFO) << " A frequency of checking running query interrupt request is set to "
+              << running_query_interrupt_freq << " (0.0 ~ 1.0)";
   }
 
   LOG(INFO) << " Debug Timer is set to " << g_enable_debug_timer;
@@ -874,7 +883,8 @@ boost::optional<int> CommandLineOptions::parse_command_line(
     g_enable_dynamic_watchdog = enable_dynamic_watchdog;
     g_dynamic_watchdog_time_limit = dynamic_watchdog_time_limit;
     g_enable_runtime_query_interrupt = enable_runtime_query_interrupt;
-    g_runtime_query_interrupt_frequency = runtime_query_interrupt_frequency;
+    g_pending_query_interrupt_freq = pending_query_interrupt_freq;
+    g_running_query_interrupt_freq = running_query_interrupt_freq;
     g_use_estimator_result_cache = use_estimator_result_cache;
   } catch (po::error& e) {
     std::cerr << "Usage Error: " << e.what() << std::endl;

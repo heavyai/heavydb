@@ -139,7 +139,8 @@ class QueryRunner {
       std::shared_ptr<Executor> executor,
       const std::string& session_id,
       const ExecutorDeviceType device_type,
-      const unsigned interrupt_check_freq = 1000);
+      const double running_query_check_freq = 0.9,
+      const unsigned pending_query_check_freq = 1000);
   virtual std::vector<std::shared_ptr<ResultSet>> runMultipleStatements(
       const std::string&,
       const ExecutorDeviceType);
