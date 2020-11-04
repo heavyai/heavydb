@@ -206,14 +206,6 @@ class BaselineJoinHashTable : public JoinHashTableInterface {
 
   virtual void reifyWithLayout(const JoinHashTableInterface::HashType layout);
 
-  struct ColumnsForDevice {
-    const std::vector<JoinColumn> join_columns;
-    const std::vector<JoinColumnTypeInfo> join_column_types;
-    const std::vector<std::shared_ptr<Chunk_NS::Chunk>> chunks_owner;
-    std::vector<JoinBucketInfo> join_buckets;
-    const std::vector<std::shared_ptr<void>> malloc_owner;
-  };
-
   virtual ColumnsForDevice fetchColumnsForDevice(
       const std::vector<Fragmenter_Namespace::FragmentInfo>& fragments,
       const int device_id,

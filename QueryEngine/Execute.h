@@ -365,6 +365,15 @@ class Executor {
    */
   const TemporaryTables* getTemporaryTables() { return temporary_tables_; }
 
+  /**
+   * Returns a string dictionary proxy using the currently active row set memory owner.
+   */
+  StringDictionaryProxy* getStringDictionaryProxy(const int dict_id,
+                                                  const bool with_generation) const {
+    CHECK(row_set_mem_owner_);
+    return getStringDictionaryProxy(dict_id, row_set_mem_owner_, with_generation);
+  }
+
   StringDictionaryProxy* getStringDictionaryProxy(
       const int dictId,
       const std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,

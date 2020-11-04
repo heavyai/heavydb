@@ -150,7 +150,7 @@ class QueryRunner {
   virtual std::unique_ptr<import_export::Loader> getLoader(
       const TableDescriptor* td) const;
 
-  const std::shared_ptr<std::vector<int32_t>>& getCachedJoinHashTable(size_t idx);
+  const int32_t* getCachedJoinHashTable(size_t idx);
   const int8_t* getCachedBaselineHashTable(size_t idx);
   size_t getEntryCntCachedBaselineHashTable(size_t idx);
   uint64_t getNumberOfCachedJoinHashTables();

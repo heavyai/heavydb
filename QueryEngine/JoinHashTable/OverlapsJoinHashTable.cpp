@@ -121,7 +121,7 @@ void OverlapsJoinHashTable::reifyWithLayout(
   if (query_info.fragments.empty()) {
     return;
   }
-  std::vector<BaselineJoinHashTable::ColumnsForDevice> columns_per_device;
+  std::vector<ColumnsForDevice> columns_per_device;
   auto& data_mgr = catalog_->getDataMgr();
   std::vector<std::unique_ptr<CudaAllocator>> dev_buff_owners;
   if (memory_level_ == Data_Namespace::MemoryLevel::GPU_LEVEL) {
@@ -240,7 +240,7 @@ void OverlapsJoinHashTable::reifyWithLayout(
 std::pair<size_t, size_t> OverlapsJoinHashTable::calculateCounts(
     size_t shard_count,
     const Fragmenter_Namespace::TableInfo& query_info,
-    std::vector<BaselineJoinHashTable::ColumnsForDevice>& columns_per_device) {
+    std::vector<ColumnsForDevice>& columns_per_device) {
   // re-compute bucket counts per device based on global bucket size
   CHECK_EQ(columns_per_device.size(), size_t(device_count_));
   for (int device_id = 0; device_id < device_count_; ++device_id) {
@@ -271,7 +271,7 @@ size_t OverlapsJoinHashTable::calculateHashTableSize(size_t number_of_dimensions
   return hash_table_size;
 }
 
-BaselineJoinHashTable::ColumnsForDevice OverlapsJoinHashTable::fetchColumnsForDevice(
+ColumnsForDevice OverlapsJoinHashTable::fetchColumnsForDevice(
     const std::vector<Fragmenter_Namespace::FragmentInfo>& fragments,
     const int device_id,
     DeviceAllocator* dev_buff_owner) {

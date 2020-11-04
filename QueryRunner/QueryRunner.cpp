@@ -589,9 +589,10 @@ std::shared_ptr<ExecutionResult> QueryRunner::runSelectQuery(
   return result;
 }
 
-const std::shared_ptr<std::vector<int32_t>>& QueryRunner::getCachedJoinHashTable(
-    size_t idx) {
-  return JoinHashTable::getCachedHashTable(idx);
+const int32_t* QueryRunner::getCachedJoinHashTable(size_t idx) {
+  auto hash_table = JoinHashTable::getCachedHashTable(idx);
+  CHECK(hash_table);
+  return hash_table->data();
 };
 
 const int8_t* QueryRunner::getCachedBaselineHashTable(size_t idx) {

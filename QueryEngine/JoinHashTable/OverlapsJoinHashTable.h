@@ -79,7 +79,7 @@ class OverlapsJoinHashTable : public BaselineJoinHashTable {
   std::pair<size_t, size_t> calculateCounts(
       size_t shard_count,
       const Fragmenter_Namespace::TableInfo& query_info,
-      std::vector<BaselineJoinHashTable::ColumnsForDevice>& columns_per_device);
+      std::vector<ColumnsForDevice>& columns_per_device);
 
   size_t calculateHashTableSize(size_t number_of_dimensions,
                                 size_t emitted_keys_count,

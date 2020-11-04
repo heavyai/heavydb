@@ -34,6 +34,7 @@
 #include "QueryEngine/ExpressionRange.h"
 #include "QueryEngine/InputMetadata.h"
 #include "QueryEngine/JoinHashTable/JoinHashTableInterface.h"
+#include "QueryEngine/JoinHashTable/PerfectHashTable.h"
 
 #include <llvm/IR/Value.h>
 
@@ -45,11 +46,12 @@
 #include <mutex>
 #include <stdexcept>
 
-class Executor;
 struct HashEntryInfo;
 
 class JoinHashTable : public JoinHashTableInterface {
  public:
+  using HashTableCacheValue = std::shared_ptr<PerfectHashTable>;
+
   //! Make hash table from an in-flight SQL query's parse tree etc.
   static std::shared_ptr<JoinHashTable> getInstance(
       const std::shared_ptr<Analyzer::BinOper> qual_bin_oper,
@@ -120,7 +122,7 @@ class JoinHashTable : public JoinHashTableInterface {
     };
   }
 
-  static const std::shared_ptr<std::vector<int32_t>>& getCachedHashTable(size_t idx) {
+  static HashTableCacheValue getCachedHashTable(size_t idx) {
     std::lock_guard<std::mutex> guard(join_hash_table_cache_mutex_);
     CHECK(!join_hash_table_cache_.empty());
     CHECK_LT(idx, join_hash_table_cache_.size());
@@ -132,9 +134,34 @@ class JoinHashTable : public JoinHashTableInterface {
     return join_hash_table_cache_.size();
   }
 
-  virtual ~JoinHashTable();
+  virtual ~JoinHashTable() {}
 
  private:
+  // Equijoin API
+  ColumnsForDevice fetchColumnsForDevice(
+      const std::vector<Fragmenter_Namespace::FragmentInfo>& fragments,
+      const int device_id,
+      DeviceAllocator* dev_buff_owner);
+
+  void reifyForDevice(const ChunkKey& hash_table_key,
+                      const ColumnsForDevice& columns_for_device,
+                      const JoinHashTableInterface::HashType layout,
+                      const int device_id,
+                      const logger::ThreadId parent_thread_id);
+
+  int initHashTableForDevice(const ChunkKey& chunk_key,
+                             const JoinColumn& join_column,
+                             const InnerOuter& cols,
+                             const JoinHashTableInterface::HashType layout,
+                             const Data_Namespace::MemoryLevel effective_memory_level,
+                             const int device_id);
+
+  Data_Namespace::MemoryLevel getEffectiveMemoryLevel(
+      const std::vector<InnerOuter>& inner_outer_pairs) const;
+
+  std::vector<InnerOuter> inner_outer_pairs_;
+  Catalog_Namespace::Catalog* catalog_;
+
   JoinHashTable(const std::shared_ptr<Analyzer::BinOper> qual_bin_oper,
                 const Analyzer::ColumnVar* col_var,
                 const std::vector<InputTableInfo>& query_infos,
@@ -156,6 +183,7 @@ class JoinHashTable : public JoinHashTableInterface {
       , device_count_(device_count) {
     CHECK(col_range.getType() == ExpressionRangeType::Integer);
     CHECK_GT(device_count_, 0);
+    hash_tables_for_device_.resize(device_count_);
   }
 
   ChunkKey genHashTableKey(
@@ -164,45 +192,14 @@ class JoinHashTable : public JoinHashTableInterface {
       const Analyzer::ColumnVar* inner_col) const;
 
   void reify();
-  void reifyOneToOneForDevice(
-      const std::vector<Fragmenter_Namespace::FragmentInfo>& fragments,
-      const int device_id,
-      const logger::ThreadId parent_thread_id);
-  void reifyOneToManyForDevice(
-      const std::vector<Fragmenter_Namespace::FragmentInfo>& fragments,
-      const int device_id,
-      const logger::ThreadId parent_thread_id);
   void checkHashJoinReplicationConstraint(const int table_id) const;
-  void initOneToOneHashTable(
-      const ChunkKey& chunk_key,
-      const JoinColumn& join_column,
-      const std::pair<const Analyzer::ColumnVar*, const Analyzer::Expr*>& cols,
-      const Data_Namespace::MemoryLevel effective_memory_level,
-      const int device_id);
-  void initOneToManyHashTable(
-      const ChunkKey& chunk_key,
-      const JoinColumn& join_column,
-      const std::pair<const Analyzer::ColumnVar*, const Analyzer::Expr*>& cols,
-      const Data_Namespace::MemoryLevel effective_memory_level,
-      const int device_id);
-  void initHashTableOnCpuFromCache(
-      const ChunkKey& chunk_key,
-      const size_t num_elements,
-      const std::pair<const Analyzer::ColumnVar*, const Analyzer::Expr*>& cols);
-  void putHashTableOnCpuToCache(
-      const ChunkKey& chunk_key,
-      const size_t num_elements,
-      const std::pair<const Analyzer::ColumnVar*, const Analyzer::Expr*>& cols);
-  void initOneToOneHashTableOnCpu(
-      const JoinColumn& join_column,
-      const std::pair<const Analyzer::ColumnVar*, const Analyzer::Expr*>& cols,
-      const HashEntryInfo hash_entry_info,
-      const int32_t hash_join_invalid_val);
-  void initOneToManyHashTableOnCpu(
-      const JoinColumn& join_column,
-      const std::pair<const Analyzer::ColumnVar*, const Analyzer::Expr*>& cols,
-      const HashEntryInfo hash_entry_info,
-      const int32_t hash_join_invalid_val);
+  std::shared_ptr<PerfectHashTable> initHashTableOnCpuFromCache(const ChunkKey& chunk_key,
+                                                                const size_t num_elements,
+                                                                const InnerOuter& cols);
+  void putHashTableOnCpuToCache(const ChunkKey& chunk_key,
+                                const size_t num_elements,
+                                HashTableCacheValue hash_table,
+                                const InnerOuter& cols);
 
   const InputTableInfo& getInnerQueryInfo(const Analyzer::ColumnVar* inner_col) const;
 
@@ -218,8 +215,6 @@ class JoinHashTable : public JoinHashTableInterface {
   bool isBitwiseEq() const;
 
   void freeHashBufferMemory();
-  void freeHashBufferGpuMemory();
-  void freeHashBufferCpuMemory();
 
   size_t getComponentBufferSize() const noexcept;
 
@@ -229,12 +224,9 @@ class JoinHashTable : public JoinHashTableInterface {
   const Data_Namespace::MemoryLevel memory_level_;
   HashType hash_type_;
   size_t hash_entry_count_;
-  std::shared_ptr<std::vector<int32_t>> cpu_hash_table_buff_;
+
+  std::vector<std::shared_ptr<PerfectHashTable>> hash_tables_for_device_;
   std::mutex cpu_hash_table_buff_mutex_;
-#ifdef HAVE_CUDA
-  std::vector<Data_Namespace::AbstractBuffer*> gpu_hash_table_buff_;
-  std::vector<Data_Namespace::AbstractBuffer*> gpu_hash_table_err_buff_;
-#endif
   ExpressionRange col_range_;
   Executor* executor_;
   ColumnCacheMap& column_cache_;
@@ -254,9 +246,7 @@ class JoinHashTable : public JoinHashTableInterface {
              chunk_key == that.chunk_key && optype == that.optype;
     }
   };
-
-  static std::vector<
-      std::pair<JoinHashTableCacheKey, std::shared_ptr<std::vector<int32_t>>>>
+  static std::vector<std::pair<JoinHashTableCacheKey, HashTableCacheValue>>
       join_hash_table_cache_;
   static std::mutex join_hash_table_cache_mutex_;
 };

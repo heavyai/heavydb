@@ -127,9 +127,8 @@ HashtableInfo get_join_hashtable_info(std::vector<int32_t>& inserted_keys) {
 // in those hashtables.
 // currently this function only supports a hashtable for integer type
 // and assume a table is not sharded.
-bool check_one_to_one_join_hashtable(
-    std::vector<int32_t>& inserted_keys,
-    const std::shared_ptr<std::vector<int32_t>>& cached_hashtable) {
+bool check_one_to_one_join_hashtable(std::vector<int32_t>& inserted_keys,
+                                     const int32_t* cached_hashtable) {
   auto hashtable_info = get_join_hashtable_info(inserted_keys);
   int32_t min = hashtable_info.get_min_val();
   int32_t max = hashtable_info.get_max_val();
@@ -138,7 +137,7 @@ bool check_one_to_one_join_hashtable(
     int32_t offset = v - min;
     CHECK_GE(offset, 0);
     CHECK_LE(offset, max);
-    if ((*cached_hashtable)[offset] != rowID) {
+    if (cached_hashtable[offset] != rowID) {
       return false;
     }
     ++rowID;
@@ -218,9 +217,8 @@ bool check_one_to_many_baseline_hashtable(std::vector<std::vector<int32_t>>& ins
   return true;
 }
 
-bool check_one_to_many_join_hashtable(
-    std::vector<int32_t>& inserted_keys,
-    const std::shared_ptr<std::vector<int32_t>>& cached_hashtable) {
+bool check_one_to_many_join_hashtable(std::vector<int32_t>& inserted_keys,
+                                      const int32_t* cached_hashtable) {
   auto hashtable_info = get_join_hashtable_info(inserted_keys);
   int32_t min = hashtable_info.get_min_val();
   int32_t hash_entry_count = hashtable_info.get_hash_entry_count();
@@ -235,13 +233,13 @@ bool check_one_to_many_join_hashtable(
     int32_t offset = v - min;
     CHECK_GE(offset, 0);
     CHECK_LT(offset, hashtable_size);
-    int32_t PSV = (*cached_hashtable)[offset];  // Prefix Sum Value
+    int32_t PSV = cached_hashtable[offset];  // Prefix Sum Value
     if (PSV != -1) {
-      int32_t CV = (*cached_hashtable)[count_buff_start_offset + offset];
+      int32_t CV = cached_hashtable[count_buff_start_offset + offset];
       CHECK_GE(CV, 1);  // Count Value
       bool found_matching_key = false;
       for (int32_t idx = 0; idx < CV; idx++) {
-        if ((*cached_hashtable)[rowID_buff_start_offset + PSV + idx] == rowID) {
+        if (cached_hashtable[rowID_buff_start_offset + PSV + idx] == rowID) {
           found_matching_key = true;
           break;
         }

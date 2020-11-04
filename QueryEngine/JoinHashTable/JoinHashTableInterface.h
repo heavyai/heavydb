@@ -48,6 +48,11 @@ class HashJoinFail : public std::runtime_error {
   HashJoinFail(const std::string& reason) : std::runtime_error(reason) {}
 };
 
+class NeedsOneToManyHash : public HashJoinFail {
+ public:
+  NeedsOneToManyHash() : HashJoinFail("Needs one to many hash") {}
+};
+
 class FailedToFetchColumn : public HashJoinFail {
  public:
   FailedToFetchColumn()
@@ -57,6 +62,14 @@ class FailedToFetchColumn : public HashJoinFail {
 class FailedToJoinOnVirtualColumn : public HashJoinFail {
  public:
   FailedToJoinOnVirtualColumn() : HashJoinFail("Cannot join on rowid") {}
+};
+
+struct ColumnsForDevice {
+  const std::vector<JoinColumn> join_columns;
+  const std::vector<JoinColumnTypeInfo> join_column_types;
+  const std::vector<std::shared_ptr<Chunk_NS::Chunk>> chunks_owner;
+  std::vector<JoinBucketInfo> join_buckets;
+  const std::vector<std::shared_ptr<void>> malloc_owner;
 };
 
 struct HashJoinMatchingSet {
@@ -89,9 +102,11 @@ class JoinHashTableInterface {
   virtual int64_t getJoinHashBuffer(const ExecutorDeviceType device_type,
                                     const int device_id = 0) const noexcept = 0;
 
+  /**
+   * Returns the size of the hash table buffer in bytes
+   */
   virtual size_t getJoinHashBufferSize(const ExecutorDeviceType device_type,
-                                       const int device_id = 0) const
-      noexcept = 0;  // bytes
+                                       const int device_id = 0) const noexcept = 0;
 
   virtual std::string toString(const ExecutorDeviceType device_type,
                                const int device_id = 0,

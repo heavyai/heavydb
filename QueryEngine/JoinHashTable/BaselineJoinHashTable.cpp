@@ -340,7 +340,7 @@ void BaselineJoinHashTable::reifyWithLayout(
       dev_buff_owners.emplace_back(std::make_unique<CudaAllocator>(&data_mgr, device_id));
     }
   }
-  std::vector<BaselineJoinHashTable::ColumnsForDevice> columns_per_device;
+  std::vector<ColumnsForDevice> columns_per_device;
   const auto shard_count = shardCount();
   for (int device_id = 0; device_id < device_count_; ++device_id) {
     const auto fragments =
@@ -501,7 +501,7 @@ std::pair<size_t, size_t> BaselineJoinHashTable::approximateTupleCount(
 #endif  // HAVE_CUDA
 }
 
-BaselineJoinHashTable::ColumnsForDevice BaselineJoinHashTable::fetchColumnsForDevice(
+ColumnsForDevice BaselineJoinHashTable::fetchColumnsForDevice(
     const std::vector<Fragmenter_Namespace::FragmentInfo>& fragments,
     const int device_id,
     DeviceAllocator* dev_buff_owner) {
