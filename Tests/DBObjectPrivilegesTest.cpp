@@ -1,4 +1,5 @@
 #include <gtest/gtest.h>
+#include <boost/filesystem.hpp>
 #include <boost/filesystem/operations.hpp>
 #include <csignal>
 #include <thread>
@@ -26,6 +27,7 @@ using namespace TestHelpers;
 using QR = QueryRunner::QueryRunner;
 extern size_t g_leaf_count;
 extern bool g_enable_fsi;
+std::string g_test_binary_file_path;
 
 namespace {
 
@@ -2853,6 +2855,452 @@ TEST(DefaultUser, RoleList) {
   EXPECT_TRUE(grantee->getRoles().empty());
 }
 
+class TablePermissionsTest : public DBHandlerTestFixture {
+ protected:
+  static void SetUpTestSuite() {
+    g_enable_fsi = true;
+    createDBHandler();
+    switchToAdmin();
+    createTestUser();
+  }
+
+  void runSelectQueryAsUser(const std::string& query,
+                            const std::string& username,
+                            const std::string& password) {
+    Catalog_Namespace::UserMetadata user_meta;
+    std::string db_name = "omnisci";
+    std::string username_local = username;
+    ASSERT_NO_THROW(sys_cat.login(db_name, username_local, password, user_meta, false));
+    auto user_qr = get_qr_for_user(db_name, user_meta);
+    user_qr->runSQL(query, ExecutorDeviceType::CPU);
+  }
+
+  void runSelectQueryAsTestUser(const std::string& query) {
+    runSelectQueryAsUser(query, "test_user", "test_pass");
+  }
+
+  void runSelectQueryAsTestUserAndAssertException(const std::string& query,
+                                                  const std::string& exception) {
+    executeLambdaAndAssertException([&, this]() { runSelectQueryAsTestUser(query); },
+                                    exception);
+  }
+
+  static void TearDownTestSuite() {
+    dropTestUser();
+    g_enable_fsi = false;
+  }
+
+  void SetUp() override { DBHandlerTestFixture::SetUp(); }
+
+  void TearDown() override {
+    tearDownTable();
+    DBHandlerTestFixture::TearDown();
+  }
+
+  void runQuery(const std::string& query) {
+    std::string first_query_term = query.substr(0, query.find(" "));
+    if (to_upper(first_query_term) == "SELECT") {
+      // SELECT statements require a different code path due to a conflict with
+      // QueryRunner
+      runSelectQueryAsTestUser(query);
+    } else {
+      sql(query);
+    }
+  }
+
+  void runQueryAndAssertException(const std::string& query,
+                                  const std::string& exception) {
+    std::string first_query_term = query.substr(0, query.find(" "));
+    if (to_upper(first_query_term) == "SELECT") {
+      // SELECT statements require a different code path due to a conflict with
+      // QueryRunner
+      runSelectQueryAsTestUserAndAssertException(query, exception);
+    } else {
+      queryAndAssertException(query, exception);
+    }
+  }
+
+  void queryAsTestUserWithNoPrivilegeAndAssertException(const std::string& query,
+                                                        const std::string& exception) {
+    login("test_user", "test_pass");
+    runQueryAndAssertException(query, exception);
+  }
+
+  void queryAsTestUserWithPrivilege(const std::string& query,
+                                    const std::string& privilege) {
+    switchToAdmin();
+    sql("GRANT " + privilege + " ON TABLE test_table TO test_user;");
+    login("test_user", "test_pass");
+    runQuery(query);
+  }
+
+  void queryAsTestUserWithPrivilegeAndAssertException(const std::string& query,
+                                                      const std::string& privilege,
+                                                      const std::string& exception) {
+    switchToAdmin();
+    sql("GRANT " + privilege + " ON TABLE test_table TO test_user;");
+    login("test_user", "test_pass");
+    runQueryAndAssertException(query, exception);
+  }
+
+  void grantThenRevokePrivilegeToTestUser(const std::string& privilege) {
+    switchToAdmin();
+    sql("GRANT " + privilege + " ON TABLE test_table TO test_user;");
+    sql("REVOKE " + privilege + " ON TABLE test_table FROM test_user;");
+  }
+
+  static void createTestUser() {
+    sql("CREATE USER test_user (password = 'test_pass');");
+    sql("GRANT ACCESS ON DATABASE omnisci TO test_user;");
+  }
+
+  void createTestForeignTable() {
+    sql("DROP FOREIGN TABLE IF EXISTS test_table;");
+    std::string query{
+        "CREATE FOREIGN TABLE test_table (i BIGINT) SERVER omnisci_local_csv WITH "
+        "(file_path = '" +
+        getDataFilesPath() + "1.csv');"};
+    sql(query);
+    is_foreign_table_ = true;
+  }
+
+  void createTestTable() {
+    sql("DROP TABLE IF EXISTS test_table;");
+    std::string query{"CREATE TABLE test_table (i BIGINT);"};
+    sql(query);
+    sql("INSERT INTO test_table VALUES (1);");
+    is_foreign_table_ = false;
+  }
+
+  void tearDownTable() {
+    loginAdmin();
+    if (is_foreign_table_) {
+      sql("DROP FOREIGN TABLE IF EXISTS test_table;");
+    } else {
+      sql("DROP TABLE IF EXISTS test_table;");
+    }
+  }
+
+  static void dropTestUser() {
+    try {
+      sql("DROP USER test_user;");
+    } catch (const std::exception& e) {
+      // Swallow and log exceptions that may occur, since there is no "IF EXISTS" option.
+      LOG(WARNING) << e.what();
+    }
+  }
+
+ private:
+  bool is_foreign_table_;
+
+  static std::string getDataFilesPath() {
+    return boost::filesystem::canonical(g_test_binary_file_path +
+                                        "/../../Tests/FsiDataFiles")
+               .string() +
+           "/";
+  }
+};
+
+class ForeignTableAndTablePermissionsTest
+    : public TablePermissionsTest,
+      public testing::WithParamInterface<ddl_utils::TableType> {
+ protected:
+  void SetUp() override {
+    TablePermissionsTest::SetUp();
+    if (g_aggregator && GetParam() == ddl_utils::TableType::FOREIGN_TABLE) {
+      LOG(INFO) << "Test fixture not supported in distributed mode.";
+      return;
+    }
+    switch (GetParam()) {
+      case ddl_utils::TableType::FOREIGN_TABLE:
+        createTestForeignTable();
+        break;
+      case ddl_utils::TableType::TABLE:
+        createTestTable();
+        break;
+      default:
+        UNREACHABLE();
+    }
+  }
+};
+
+INSTANTIATE_TEST_SUITE_P(ForeignTableAndTablePermissionsTest,
+                         ForeignTableAndTablePermissionsTest,
+                         ::testing::Values(ddl_utils::TableType::FOREIGN_TABLE,
+                                           ddl_utils::TableType::TABLE));
+
+TEST_F(TablePermissionsTest, ForeignTableGrantRevokeDropPrivilege) {
+  if (g_aggregator) {
+    LOG(INFO) << "Test not supported in distributed mode.";
+    return;
+  }
+  std::string privilege{"DROP"};
+  std::string query{"DROP FOREIGN TABLE test_table;"};
+  std::string no_privilege_exception{
+      "Exception: Foreign table \"test_table\" will not be dropped. User has no DROP "
+      "TABLE privileges."};
+  createTestForeignTable();
+  queryAsTestUserWithNoPrivilegeAndAssertException(query, no_privilege_exception);
+  grantThenRevokePrivilegeToTestUser(privilege);
+  queryAsTestUserWithNoPrivilegeAndAssertException(query, no_privilege_exception);
+  queryAsTestUserWithPrivilege(query, privilege);
+}
+
+TEST_F(TablePermissionsTest, TableGrantRevokeDropPrivilege) {
+  std::string privilege{"DROP"};
+  std::string query{"DROP TABLE test_table;"};
+  std::string no_privilege_exception{
+      "Exception: Table test_table will not be dropped. User has no proper privileges."};
+  createTestTable();
+  queryAsTestUserWithNoPrivilegeAndAssertException(query, no_privilege_exception);
+  grantThenRevokePrivilegeToTestUser(privilege);
+  queryAsTestUserWithNoPrivilegeAndAssertException(query, no_privilege_exception);
+  queryAsTestUserWithPrivilege(query, privilege);
+}
+
+TEST_P(ForeignTableAndTablePermissionsTest, GrantRevokeSelectPrivilege) {
+  if (g_aggregator) {
+    // TODO: select queries as a user currently do not work in distributed
+    // mode for regular tables (DistributedQueryRunner::init can not be run
+    // more than once.)
+    LOG(INFO) << "Test not supported in distributed mode.";
+    return;
+  }
+  std::string privilege{"SELECT"};
+  std::string query{"SELECT * FROM test_table;"};
+  std::string no_privilege_exception{
+      "Violation of access privileges: user test_user has no proper privileges for "
+      "object test_table"};
+  queryAsTestUserWithNoPrivilegeAndAssertException(query, no_privilege_exception);
+  grantThenRevokePrivilegeToTestUser(privilege);
+  queryAsTestUserWithNoPrivilegeAndAssertException(query, no_privilege_exception);
+  queryAsTestUserWithPrivilege(query, privilege);
+}
+
+TEST_F(TablePermissionsTest, ForeignTableGrantRevokeDeletePrivilege) {
+  if (g_aggregator) {
+    LOG(INFO) << "Test not supported in distributed mode.";
+    return;
+  }
+  std::string privilege{"DELETE"};
+  std::string query{"DELETE FROM test_table WHERE i = 1;"};
+  std::string no_privilege_exception{
+      "Exception: Violation of access privileges: user test_user has no proper "
+      "privileges for "
+      "object test_table"};
+  std::string query_exception{
+      "Exception: DELETE, INSERT, TRUNCATE, OR UPDATE commands are not "
+      "supported for foreign tables."};
+  createTestForeignTable();
+  queryAsTestUserWithNoPrivilegeAndAssertException(query, no_privilege_exception);
+  grantThenRevokePrivilegeToTestUser(privilege);
+  queryAsTestUserWithNoPrivilegeAndAssertException(query, no_privilege_exception);
+  queryAsTestUserWithPrivilegeAndAssertException(query, privilege, query_exception);
+}
+
+TEST_F(TablePermissionsTest, TableGrantRevokeDeletePrivilege) {
+  std::string privilege{"DELETE"};
+  std::string query{"DELETE FROM test_table WHERE i = 1;"};
+  std::string no_privilege_exception{
+      "Exception: Violation of access privileges: user test_user has no proper "
+      "privileges for "
+      "object test_table"};
+  createTestTable();
+  queryAsTestUserWithNoPrivilegeAndAssertException(query, no_privilege_exception);
+  grantThenRevokePrivilegeToTestUser(privilege);
+  queryAsTestUserWithNoPrivilegeAndAssertException(query, no_privilege_exception);
+  queryAsTestUserWithPrivilege(query, privilege);
+}
+
+TEST_F(TablePermissionsTest, ForeignTableGrantRevokeInsertPrivilege) {
+  if (g_aggregator) {
+    LOG(INFO) << "Test not supported in distributed mode.";
+    return;
+  }
+  std::string privilege{"INSERT"};
+  std::string query{"INSERT INTO test_table VALUES (2);"};
+  std::string no_privilege_exception{
+      "Exception: User has no insert privileges on test_table."};
+  std::string query_exception{
+      "Exception: DELETE, INSERT, TRUNCATE, OR UPDATE commands are not "
+      "supported for foreign tables."};
+  createTestForeignTable();
+  queryAsTestUserWithNoPrivilegeAndAssertException(query, no_privilege_exception);
+  grantThenRevokePrivilegeToTestUser(privilege);
+  queryAsTestUserWithNoPrivilegeAndAssertException(query, no_privilege_exception);
+  queryAsTestUserWithPrivilegeAndAssertException(query, privilege, query_exception);
+}
+
+TEST_F(TablePermissionsTest, TableGrantRevokeInsertPrivilege) {
+  std::string privilege{"INSERT"};
+  std::string query{"INSERT INTO test_table VALUES (2);"};
+  std::string no_privilege_exception{
+      "Exception: User has no insert privileges on test_table."};
+  createTestTable();
+  queryAsTestUserWithNoPrivilegeAndAssertException(query, no_privilege_exception);
+  grantThenRevokePrivilegeToTestUser(privilege);
+  queryAsTestUserWithNoPrivilegeAndAssertException(query, no_privilege_exception);
+  queryAsTestUserWithPrivilege(query, privilege);
+}
+
+TEST_F(TablePermissionsTest, ForeignTableGrantRevokeTruncatePrivilege) {
+  if (g_aggregator) {
+    LOG(INFO) << "Test not supported in distributed mode.";
+    return;
+  }
+  std::string privilege{"TRUNCATE"};
+  std::string query{"TRUNCATE TABLE test_table;"};
+  std::string no_privilege_exception{
+      "Exception: Table test_table will not be truncated. User test_user has no proper "
+      "privileges."};
+  std::string query_exception{
+      "Exception: DELETE, INSERT, TRUNCATE, OR UPDATE commands are not "
+      "supported for foreign tables."};
+  createTestForeignTable();
+  queryAsTestUserWithNoPrivilegeAndAssertException(query, no_privilege_exception);
+  grantThenRevokePrivilegeToTestUser(privilege);
+  queryAsTestUserWithNoPrivilegeAndAssertException(query, no_privilege_exception);
+  queryAsTestUserWithPrivilegeAndAssertException(query, privilege, query_exception);
+}
+
+TEST_F(TablePermissionsTest, TableGrantRevokeTruncatePrivilege) {
+  std::string privilege{"TRUNCATE"};
+  std::string query{"TRUNCATE TABLE test_table;"};
+  std::string no_privilege_exception{
+      "Exception: Table test_table will not be truncated. User test_user has no proper "
+      "privileges."};
+  createTestTable();
+  queryAsTestUserWithNoPrivilegeAndAssertException(query, no_privilege_exception);
+  grantThenRevokePrivilegeToTestUser(privilege);
+  queryAsTestUserWithNoPrivilegeAndAssertException(query, no_privilege_exception);
+  queryAsTestUserWithPrivilege(query, privilege);
+}
+
+TEST_F(TablePermissionsTest, ForeignTableGrantRevokeUpdatePrivilege) {
+  if (g_aggregator) {
+    LOG(INFO) << "Test not supported in distributed mode.";
+    return;
+  }
+  std::string privilege{"UPDATE"};
+  std::string query{"UPDATE test_table SET i = 2 WHERE i = 1;"};
+  std::string no_privilege_exception{
+      "Exception: Violation of access privileges: user test_user has no proper "
+      "privileges for "
+      "object test_table"};
+  std::string query_exception{
+      "Exception: DELETE, INSERT, TRUNCATE, OR UPDATE commands are not "
+      "supported for foreign tables."};
+  createTestForeignTable();
+  queryAsTestUserWithNoPrivilegeAndAssertException(query, no_privilege_exception);
+  grantThenRevokePrivilegeToTestUser(privilege);
+  queryAsTestUserWithNoPrivilegeAndAssertException(query, no_privilege_exception);
+  queryAsTestUserWithPrivilegeAndAssertException(query, privilege, query_exception);
+}
+
+TEST_F(TablePermissionsTest, TableGrantRevokeUpdatePrivilege) {
+  if (g_aggregator) {
+    LOG(INFO) << "Test not supported in distributed mode.";
+    return;
+  }
+  std::string privilege{"UPDATE"};
+  std::string query{"UPDATE test_table SET i = 2 WHERE i = 1;"};
+  std::string no_privilege_exception{
+      "Exception: Violation of access privileges: user test_user has no proper "
+      "privileges for "
+      "object test_table"};
+  createTestTable();
+  queryAsTestUserWithNoPrivilegeAndAssertException(query, no_privilege_exception);
+  grantThenRevokePrivilegeToTestUser(privilege);
+  queryAsTestUserWithNoPrivilegeAndAssertException(query, no_privilege_exception);
+  queryAsTestUserWithPrivilege(query, privilege);
+}
+
+TEST_P(ForeignTableAndTablePermissionsTest, GrantRevokeShowCreateTablePrivilege) {
+  if (g_aggregator && GetParam() == ddl_utils::TableType::FOREIGN_TABLE) {
+    LOG(INFO) << "Test not supported in distributed mode.";
+    return;
+  }
+  std::string privilege{"DROP"};
+  std::string query{"SHOW CREATE TABLE test_table;"};
+  std::string no_privilege_exception{"Exception: Table/View test_table does not exist."};
+  queryAsTestUserWithNoPrivilegeAndAssertException(query, no_privilege_exception);
+  grantThenRevokePrivilegeToTestUser(privilege);
+  queryAsTestUserWithNoPrivilegeAndAssertException(query, no_privilege_exception);
+  queryAsTestUserWithPrivilege(query, privilege);
+}
+
+TEST_F(TablePermissionsTest, TableGrantRevokeAlterTablePrivilege) {
+  std::string privilege{"ALTER"};
+  std::string query{"ALTER TABLE test_table RENAME COLUMN i TO j;"};
+  std::string no_privilege_exception{
+      "Exception: Current user does not have the privilege to alter table: test_table"};
+  createTestTable();
+  queryAsTestUserWithNoPrivilegeAndAssertException(query, no_privilege_exception);
+  grantThenRevokePrivilegeToTestUser(privilege);
+  queryAsTestUserWithNoPrivilegeAndAssertException(query, no_privilege_exception);
+  queryAsTestUserWithPrivilege(query, privilege);
+}
+
+TEST_F(TablePermissionsTest, ForeignTableAllPrivileges) {
+  if (g_aggregator) {
+    LOG(INFO) << "Test not supported in distributed mode.";
+    return;
+  }
+  createTestForeignTable();
+  sql("GRANT ALL ON TABLE test_table TO test_user;");
+  login("test_user", "test_pass");
+  runQuery("SHOW CREATE TABLE test_table;");
+  runQuery("SELECT * FROM test_table;");
+  runQuery("DROP FOREIGN TABLE test_table;");
+}
+
+TEST_F(TablePermissionsTest, TableAllPrivileges) {
+  createTestTable();
+  sql("GRANT ALL ON TABLE test_table TO test_user;");
+  login("test_user", "test_pass");
+  runQuery("SHOW CREATE TABLE test_table;");
+  runQuery("UPDATE test_table SET i = 2 WHERE i = 1;");
+  runQuery("TRUNCATE TABLE test_table;");
+  runQuery("INSERT INTO test_table VALUES (2);");
+  runQuery("DELETE FROM test_table WHERE i = 2;");
+  if (!g_aggregator) {
+    // TODO: select queries as a user currently do not work in distributed
+    // mode for regular tables (DistributedQueryRunner::init can not be run
+    // more than once.)
+    runQuery("SELECT * FROM test_table;");
+  }
+  runQuery("ALTER TABLE test_table RENAME COLUMN i TO j;");
+  runQuery("DROP TABLE test_table;");
+}
+
+TEST_F(TablePermissionsTest, ForeignTableGrantRevokeCreateTablePrivilege) {
+  if (g_aggregator) {
+    LOG(INFO) << "Test not supported in distributed mode.";
+    return;
+  }
+  login("test_user", "test_pass");
+  executeLambdaAndAssertException([this] { createTestForeignTable(); },
+                                  "Exception: Foreign table \"test_table\" will not be "
+                                  "created. User has no CREATE TABLE privileges.");
+
+  switchToAdmin();
+  sql("GRANT CREATE TABLE ON DATABASE omnisci TO test_user;");
+  sql("REVOKE CREATE TABLE ON DATABASE omnisci FROM test_user;");
+  login("test_user", "test_pass");
+  executeLambdaAndAssertException([this] { createTestForeignTable(); },
+                                  "Exception: Foreign table \"test_table\" will not be "
+                                  "created. User has no CREATE TABLE privileges.");
+
+  switchToAdmin();
+  sql("GRANT CREATE TABLE ON DATABASE omnisci TO test_user;");
+  login("test_user", "test_pass");
+  createTestForeignTable();
+
+  // clean up permissions
+  switchToAdmin();
+  sql("REVOKE CREATE TABLE ON DATABASE omnisci FROM test_user;");
+}
+
 int main(int argc, char* argv[]) {
   g_enable_fsi = true;
   testing::InitGoogleTest(&argc, argv);
@@ -2888,6 +3336,9 @@ int main(int argc, char* argv[]) {
   QR::init(BASE_PATH);
 
   g_calcite = QR::get()->getCatalog()->getCalciteMgr();
+
+  // get dirname of test binary
+  g_test_binary_file_path = boost::filesystem::canonical(argv[0]).parent_path().string();
 
   int err{0};
   try {

@@ -22,7 +22,8 @@ namespace foreign_storage {
 void inline validate_non_foreign_table_write(const TableDescriptor* table_descriptor) {
   if (table_descriptor && table_descriptor->storageType == StorageType::FOREIGN_TABLE) {
     throw std::runtime_error{
-        "DELETE, INSERT, OR UPDATE commands are not supported for foreign tables."};
+        "DELETE, INSERT, TRUNCATE, OR UPDATE commands are not supported for foreign "
+        "tables."};
   }
 }
 }  // namespace foreign_storage

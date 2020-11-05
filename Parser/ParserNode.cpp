@@ -3172,6 +3172,7 @@ void TruncateTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   if (td->isView) {
     throw std::runtime_error(*table + " is a view.  Cannot Truncate.");
   }
+  foreign_storage::validate_non_foreign_table_write(td);
   auto table_data_write_lock =
       lockmgr::TableDataLockMgr::getWriteLockForTable(catalog, *table);
   catalog.truncateTable(td);

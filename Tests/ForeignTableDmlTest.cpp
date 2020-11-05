@@ -1049,18 +1049,20 @@ TEST_P(DataWrapperSelectQueryTest, Update) {
   const auto& query =
       getCreateForeignTableQuery("(t TEXT, i BIGINT, f DOUBLE)", "example_2", GetParam());
   sql(query);
-  queryAndAssertException("UPDATE test_foreign_table SET t = 'abc';",
-                          "Exception: DELETE, INSERT, OR UPDATE commands are not "
-                          "supported for foreign tables.");
+  queryAndAssertException(
+      "UPDATE test_foreign_table SET t = 'abc';",
+      "Exception: DELETE, INSERT, TRUNCATE, OR UPDATE commands are not "
+      "supported for foreign tables.");
 }
 
 TEST_P(DataWrapperSelectQueryTest, Insert) {
   const auto& query =
       getCreateForeignTableQuery("(t TEXT, i BIGINT, f DOUBLE)", "example_2", GetParam());
   sql(query);
-  queryAndAssertException("INSERT INTO test_foreign_table VALUES('abc', null, null);",
-                          "Exception: DELETE, INSERT, OR UPDATE commands are not "
-                          "supported for foreign tables.");
+  queryAndAssertException(
+      "INSERT INTO test_foreign_table VALUES('abc', null, null);",
+      "Exception: DELETE, INSERT, TRUNCATE, OR UPDATE commands are not "
+      "supported for foreign tables.");
 }
 
 TEST_P(DataWrapperSelectQueryTest, InsertIntoSelect) {
@@ -1069,7 +1071,7 @@ TEST_P(DataWrapperSelectQueryTest, InsertIntoSelect) {
   sql(query);
   queryAndAssertException(
       "INSERT INTO test_foreign_table SELECT * FROM test_foreign_table;",
-      "Exception: DELETE, INSERT, OR UPDATE commands are not supported for "
+      "Exception: DELETE, INSERT, TRUNCATE, OR UPDATE commands are not supported for "
       "foreign "
       "tables.");
 }
@@ -1078,9 +1080,10 @@ TEST_P(DataWrapperSelectQueryTest, Delete) {
   const auto& query =
       getCreateForeignTableQuery("(t TEXT, i BIGINT, f DOUBLE)", "example_2", GetParam());
   sql(query);
-  queryAndAssertException("DELETE FROM test_foreign_table WHERE t = 'a';",
-                          "Exception: DELETE, INSERT, OR UPDATE commands are not "
-                          "supported for foreign tables.");
+  queryAndAssertException(
+      "DELETE FROM test_foreign_table WHERE t = 'a';",
+      "Exception: DELETE, INSERT, TRUNCATE, OR UPDATE commands are not "
+      "supported for foreign tables.");
 }
 
 TEST_P(CacheControllingSelectQueryTest, CSV_CustomDelimiters) {
