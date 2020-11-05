@@ -59,9 +59,7 @@
 #include "ThriftHandler/QueryState.h"
 #include "ThriftHandler/RenderHandler.h"
 
-#include <sys/time.h>
 #include <sys/types.h>
-#include <sys/wait.h>
 #include <thrift/server/TServer.h>
 #include <thrift/transport/THttpTransport.h>
 #include <thrift/transport/TSocket.h>
