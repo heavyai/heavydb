@@ -459,9 +459,7 @@ class DBHandler : public OmniSciIf {
                                 const TRenderAggDataMap& merged_data) override;
 
   void insert_data(const TSessionId& session, const TInsertData& insert_data) override;
-  void checkpoint(const TSessionId& session,
-                  const int32_t db_id,
-                  const int32_t table_id) override;
+  void checkpoint(const TSessionId& session, const int32_t table_id) override;
   // DB Object Privileges
   void get_roles(std::vector<std::string>& _return, const TSessionId& session) override;
   bool has_role(const TSessionId& sessionId,

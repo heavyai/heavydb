@@ -593,7 +593,7 @@ service OmniSci {
   TPendingRenderQuery start_render_query(1: TSessionId session, 2: i64 widget_id, 3: i16 node_idx, 4: string vega_json) throws (1: TOmniSciException e)
   TRenderStepResult execute_next_render_step(1: TPendingRenderQuery pending_render, 2: TRenderAggDataMap merged_data) throws (1: TOmniSciException e)
   void insert_data(1: TSessionId session, 2: TInsertData insert_data) throws (1: TOmniSciException e)
-  void checkpoint(1: TSessionId session, 2: i32 db_id, 3: i32 table_id) throws (1: TOmniSciException e)
+  void checkpoint(1: TSessionId session, 2: i32 table_id) throws (1: TOmniSciException e)
   # object privileges
   list<string> get_roles(1: TSessionId session) throws (1: TOmniSciException e)
   list<TDBObject> get_db_objects_for_grantee(1: TSessionId session 2: string roleName) throws (1: TOmniSciException e)

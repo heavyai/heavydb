@@ -5728,13 +5728,11 @@ void DBHandler::execute_next_render_step(TRenderStepResult& _return,
             << ", time: " << time_ms << "ms ";
 }
 
-void DBHandler::checkpoint(const TSessionId& session,
-                           const int32_t db_id,
-                           const int32_t table_id) {
+void DBHandler::checkpoint(const TSessionId& session, const int32_t table_id) {
   auto stdlog = STDLOG(get_session_ptr(session));
   auto session_ptr = stdlog.getConstSessionInfo();
   auto& cat = session_ptr->getCatalog();
-  cat.getDataMgr().checkpoint(db_id, table_id);
+  cat.checkpoint(table_id);
 }
 
 // check and reset epoch if a request has been made
