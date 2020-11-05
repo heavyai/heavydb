@@ -23,14 +23,13 @@
 #include "BufferMgr/CpuBufferMgr/CpuBufferMgr.h"
 #include "BufferMgr/GpuCudaBufferMgr/GpuCudaBufferMgr.h"
 #include "CudaMgr/CudaMgr.h"
+#include "DataMgr/ForeignStorage/ForeignStorageCache.h"
 #include "FileMgr/GlobalFileMgr.h"
 #include "PersistentStorageMgr/PersistentStorageMgr.h"
 
 #ifdef __APPLE__
 #include <sys/sysctl.h>
 #include <sys/types.h>
-#else
-#include <unistd.h>
 #endif
 
 #include <boost/filesystem.hpp>
@@ -38,15 +37,11 @@
 #include <algorithm>
 #include <limits>
 
-using namespace std;
-using namespace Buffer_Namespace;
-using namespace File_Namespace;
-
 extern bool g_enable_fsi;
 
 namespace Data_Namespace {
 
-DataMgr::DataMgr(const string& dataDir,
+DataMgr::DataMgr(const std::string& dataDir,
                  const SystemParameters& system_parameters,
                  const bool useGpus,
                  const int numGpus,
@@ -150,7 +145,8 @@ size_t DataMgr::getTotalSystemMemory() {
   length = sizeof(size_t);
   sysctl(mib, 2, &physical_memory, &length, NULL, 0);
   return physical_memory;
-
+#elif defined(_MSC_VER)
+  return 0;  // TODO
 #else  // Linux
   long pages = sysconf(_SC_PHYS_PAGES);
   long page_size = sysconf(_SC_PAGE_SIZE);
@@ -203,13 +199,13 @@ void DataMgr::populateMgrs(const SystemParameters& system_parameters,
     LOG(INFO) << "Reserved GPU memory is " << (float)reservedGpuMem_ / (1024 * 1024)
               << "MB includes render buffer allocation";
     bufferMgrs_.resize(3);
-    bufferMgrs_[1].push_back(new CpuBufferMgr(0,
-                                              cpuBufferSize,
-                                              cudaMgr_.get(),
-                                              minCpuSlabSize,
-                                              maxCpuSlabSize,
-                                              page_size,
-                                              bufferMgrs_[0][0]));
+    bufferMgrs_[1].push_back(new Buffer_Namespace::CpuBufferMgr(0,
+                                                                cpuBufferSize,
+                                                                cudaMgr_.get(),
+                                                                minCpuSlabSize,
+                                                                maxCpuSlabSize,
+                                                                page_size,
+                                                                bufferMgrs_[0][0]));
     levelSizes_.push_back(1);
     int numGpus = cudaMgr_->getDeviceCount();
     for (int gpuNum = 0; gpuNum < numGpus; ++gpuNum) {
@@ -229,23 +225,23 @@ void DataMgr::populateMgrs(const SystemParameters& system_parameters,
                 << (float)maxGpuSlabSize / (1024 * 1024) << "MB";
       LOG(INFO) << "Max memory pool size for GPU " << gpuNum << " is "
                 << (float)gpuMaxMemSize / (1024 * 1024) << "MB";
-      bufferMgrs_[2].push_back(new GpuCudaBufferMgr(gpuNum,
-                                                    gpuMaxMemSize,
-                                                    cudaMgr_.get(),
-                                                    minGpuSlabSize,
-                                                    maxGpuSlabSize,
-                                                    page_size,
-                                                    bufferMgrs_[1][0]));
+      bufferMgrs_[2].push_back(new Buffer_Namespace::GpuCudaBufferMgr(gpuNum,
+                                                                      gpuMaxMemSize,
+                                                                      cudaMgr_.get(),
+                                                                      minGpuSlabSize,
+                                                                      maxGpuSlabSize,
+                                                                      page_size,
+                                                                      bufferMgrs_[1][0]));
     }
     levelSizes_.push_back(numGpus);
   } else {
-    bufferMgrs_[1].push_back(new CpuBufferMgr(0,
-                                              cpuBufferSize,
-                                              cudaMgr_.get(),
-                                              minCpuSlabSize,
-                                              maxCpuSlabSize,
-                                              page_size,
-                                              bufferMgrs_[0][0]));
+    bufferMgrs_[1].push_back(new Buffer_Namespace::CpuBufferMgr(0,
+                                                                cpuBufferSize,
+                                                                cudaMgr_.get(),
+                                                                minCpuSlabSize,
+                                                                maxCpuSlabSize,
+                                                                page_size,
+                                                                bufferMgrs_[0][0]));
     levelSizes_.push_back(1);
   }
 }
@@ -264,15 +260,16 @@ void DataMgr::convertDB(const std::string basePath) {
     LOG(FATAL) << "Path to directory mapd_data to convert DB does not exist.";
   }
 
-  GlobalFileMgr* gfm;
+  File_Namespace::GlobalFileMgr* gfm{nullptr};
   gfm = dynamic_cast<PersistentStorageMgr*>(bufferMgrs_[0][0])->getGlobalFileMgr();
+  CHECK(gfm);
 
   size_t defaultPageSize = gfm->getDefaultPageSize();
   LOG(INFO) << "Database conversion started.";
-  FileMgr* fm_base_db =
-      new FileMgr(gfm,
-                  defaultPageSize,
-                  basePath);  // this call also copies data into new DB structure
+  File_Namespace::FileMgr* fm_base_db = new File_Namespace::FileMgr(
+      gfm,
+      defaultPageSize,
+      basePath);  // this call also copies data into new DB structure
   delete fm_base_db;
 
   /* write content of DB into newly created/converted DB structure & location */
@@ -286,8 +283,9 @@ void DataMgr::createTopLevelMetadata()
   chunkKey[0] = 0;  // top level db_id
   chunkKey[1] = 0;  // top level tb_id
 
-  GlobalFileMgr* gfm;
+  File_Namespace::GlobalFileMgr* gfm{nullptr};
   gfm = dynamic_cast<PersistentStorageMgr*>(bufferMgrs_[0][0])->getGlobalFileMgr();
+  CHECK(gfm);
 
   auto fm_top = gfm->getFileMgr(chunkKey);
   if (dynamic_cast<File_Namespace::FileMgr*>(fm_top)) {
@@ -300,8 +298,9 @@ std::vector<MemoryInfo> DataMgr::getMemoryInfo(const MemoryLevel memLevel) {
 
   std::vector<MemoryInfo> mem_info;
   if (memLevel == MemoryLevel::CPU_LEVEL) {
-    CpuBufferMgr* cpu_buffer =
-        dynamic_cast<CpuBufferMgr*>(bufferMgrs_[MemoryLevel::CPU_LEVEL][0]);
+    Buffer_Namespace::CpuBufferMgr* cpu_buffer =
+        dynamic_cast<Buffer_Namespace::CpuBufferMgr*>(
+            bufferMgrs_[MemoryLevel::CPU_LEVEL][0]);
     CHECK(cpu_buffer);
     MemoryInfo mi;
 
@@ -328,8 +327,9 @@ std::vector<MemoryInfo> DataMgr::getMemoryInfo(const MemoryLevel memLevel) {
   } else if (hasGpus_) {
     int numGpus = cudaMgr_->getDeviceCount();
     for (int gpuNum = 0; gpuNum < numGpus; ++gpuNum) {
-      GpuCudaBufferMgr* gpu_buffer =
-          dynamic_cast<GpuCudaBufferMgr*>(bufferMgrs_[MemoryLevel::GPU_LEVEL][gpuNum]);
+      Buffer_Namespace::GpuCudaBufferMgr* gpu_buffer =
+          dynamic_cast<Buffer_Namespace::GpuCudaBufferMgr*>(
+              bufferMgrs_[MemoryLevel::GPU_LEVEL][gpuNum]);
       CHECK(gpu_buffer);
       MemoryInfo mi;
 
@@ -504,19 +504,21 @@ void DataMgr::removeTableRelatedDS(const int db_id, const int tb_id) {
 }
 
 void DataMgr::setTableEpoch(const int db_id, const int tb_id, const int start_epoch) {
-  GlobalFileMgr* gfm;
+  File_Namespace::GlobalFileMgr* gfm{nullptr};
   gfm = dynamic_cast<PersistentStorageMgr*>(bufferMgrs_[0][0])->getGlobalFileMgr();
+  CHECK(gfm);
   gfm->setTableEpoch(db_id, tb_id, start_epoch);
 }
 
 size_t DataMgr::getTableEpoch(const int db_id, const int tb_id) {
-  GlobalFileMgr* gfm;
+  File_Namespace::GlobalFileMgr* gfm{nullptr};
   gfm = dynamic_cast<PersistentStorageMgr*>(bufferMgrs_[0][0])->getGlobalFileMgr();
+  CHECK(gfm);
   return gfm->getTableEpoch(db_id, tb_id);
 }
 
-GlobalFileMgr* DataMgr::getGlobalFileMgr() const {
-  GlobalFileMgr* global_file_mgr;
+File_Namespace::GlobalFileMgr* DataMgr::getGlobalFileMgr() const {
+  File_Namespace::GlobalFileMgr* global_file_mgr{nullptr};
   global_file_mgr =
       dynamic_cast<PersistentStorageMgr*>(bufferMgrs_[0][0])->getGlobalFileMgr();
   CHECK(global_file_mgr);

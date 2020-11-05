@@ -71,6 +71,13 @@ void close(const int fd) {
   _close(fd);
 }
 
+::FILE* fopen(const char* filename, const char* mode) {
+  FILE* f;
+  const auto err = fopen_s(&f, filename, mode);
+  CHECK(!err);
+  return f;
+}
+
 int get_page_size() {
   return 4096;  // TODO: reasonable guess for now
 }

@@ -14,16 +14,19 @@
  * limitations under the License.
  */
 
-#include <Geospatial/GDAL.h>
-
+#include "Geospatial/GDAL.h"
 #include <array>
 #include <string>
 
 #include <gdal.h>
 #include <gdal_priv.h>
 
-#include <Logger/Logger.h>
-#include <OSDependent/omnisci_path.h>
+#include "Logger/Logger.h"
+#include "OSDependent/omnisci_path.h"
+
+#ifdef _MSC_VER
+#include <Windows.h>
+#endif
 
 namespace Geospatial {
 
@@ -60,10 +63,18 @@ void GDAL::init() {
   // init under mutex
   if (!initialized_) {
     // FIXME(andrewseidl): investigate if CPLPushFinderLocation can be public
+#ifdef _MSC_VER
+    SetEnvironmentVariable(
+        L"GDAL_DATA",
+        reinterpret_cast<LPCWSTR>(
+            std::string(omnisci::get_root_abs_path() + "/ThirdParty/gdal-data").c_str()));
+#else
     setenv("GDAL_DATA",
            std::string(omnisci::get_root_abs_path() + "/ThirdParty/gdal-data").c_str(),
            true);
+#endif
 
+#ifndef _MSC_VER  // TODO
     // configure SSL certificate path (per S3Archive::init_for_read)
     // in a production build, GDAL and Curl will have been built on
     // CentOS, so the baked-in system path will be wrong for Ubuntu
@@ -85,6 +96,7 @@ void GDAL::init() {
         break;
       }
     }
+#endif
 
     GDALAllRegister();
     OGRRegisterAll();

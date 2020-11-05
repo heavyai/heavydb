@@ -23,7 +23,6 @@
 #include "DataMgr/FileMgr/FileMgr.h"
 
 #include <fcntl.h>
-#include <unistd.h>
 #include <algorithm>
 #include <future>
 #include <string>

@@ -23,7 +23,6 @@
 #include "DataMgr/FileMgr/GlobalFileMgr.h"
 
 #include <fcntl.h>
-#include <unistd.h>
 #include <algorithm>
 #include <boost/filesystem.hpp>
 #include <boost/lexical_cast.hpp>

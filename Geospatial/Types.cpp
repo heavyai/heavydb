@@ -810,7 +810,9 @@ struct HexDigitToDecimalTable {
   constexpr uint8_t operator[](const char& hex_digit) const {
     return (hex_digit < 0) ? 0 : table_[static_cast<int>(hex_digit)];
   }
-} constexpr hex_digit_to_decimal_table;
+};
+
+constexpr HexDigitToDecimalTable hex_digit_to_decimal_table;
 
 inline uint8_t hex_to_binary(const char& usb, const char& lsb) {
   return (hex_digit_to_decimal_table[usb] << 4) | hex_digit_to_decimal_table[lsb];

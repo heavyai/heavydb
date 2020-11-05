@@ -21,10 +21,12 @@
 #include <arrow/io/file.h>
 #include <arrow/util/bit_util.h>
 #include <arrow/util/decimal.h>
+#include <tbb/blocked_range.h>
 #include <tbb/parallel_for.h>
 #include <tbb/task_group.h>
 #include <array>
 #include <future>
+#include <string_view>
 
 #include "Catalog/DataframeTableDescriptor.h"
 #include "DataMgr/ForeignStorage/ForeignStorageInterface.h"
@@ -252,7 +254,7 @@ static std::shared_ptr<arrow::DataType> getArrowImportType(const SQLTypeInfo typ
   }
   switch (ktype) {
     case kBOOLEAN:
-      return boolean();
+      return arrow::boolean();
     case kFLOAT:
       return float32();
     case kDOUBLE:
@@ -325,99 +327,94 @@ void ArrowCsvForeignStorage::createDictionaryEncodedColumn(
     Data_Namespace::AbstractBufferMgr* mgr) {
   tg.run([dict, &c, &col, arr_col_chunked_array, &tg, &fragments, k = key, mgr]() {
     auto key = k;
-    auto full_time = measure<>::execution([&]() {
-      // calculate offsets for every fragment in bulk
-      size_t bulk_size = 0;
-      std::vector<int> offsets(fragments.size() + 1);
-      for (size_t f = 0; f < fragments.size(); f++) {
-        offsets[f] = bulk_size;
+
+    // calculate offsets for every fragment in bulk
+    size_t bulk_size = 0;
+    std::vector<int> offsets(fragments.size() + 1);
+    for (size_t f = 0; f < fragments.size(); f++) {
+      offsets[f] = bulk_size;
+      for (int i = fragments[f].first_chunk, e = fragments[f].last_chunk; i <= e; i++) {
+        int size, offset;
+        getSizeAndOffset(fragments[f], arr_col_chunked_array->chunk(i), i, size, offset);
+        bulk_size += size;
+      }
+    }
+    offsets[fragments.size()] = bulk_size;
+    std::vector<std::string_view> bulk(bulk_size);
+
+    tbb::parallel_for(
+        tbb::blocked_range<size_t>(0, fragments.size()),
+        [&bulk, &fragments, arr_col_chunked_array, &offsets](
+            const tbb::blocked_range<size_t>& r) {
+          for (auto f = r.begin(); f != r.end(); ++f) {
+            auto bulk_offset = offsets[f];
+
+            size_t current_ind = 0;
+            for (int i = fragments[f].first_chunk, e = fragments[f].last_chunk; i <= e;
+                 i++) {
+              int size, offset;
+              getSizeAndOffset(
+                  fragments[f], arr_col_chunked_array->chunk(i), i, size, offset);
+
+              auto stringArray = std::static_pointer_cast<arrow::StringArray>(
+                  arr_col_chunked_array->chunk(i));
+              for (int i = offset; i < offset + size; i++) {
+                auto view = stringArray->GetView(i);
+                bulk[bulk_offset + current_ind] =
+                    std::string_view(view.data(), view.length());
+                current_ind++;
+              }
+            }
+          }
+        });
+
+    std::shared_ptr<arrow::Buffer> indices_buf;
+    ARROW_ASSIGN_OR_THROW(indices_buf,
+                          arrow::AllocateBuffer(bulk_size * sizeof(int32_t)));
+    auto raw_data = reinterpret_cast<int*>(indices_buf->mutable_data());
+    auto time = measure<>::execution([&]() { dict->getOrAddBulk(bulk, raw_data); });
+
+    VLOG(1) << "FSI dictionary for column created in: " << time
+            << "ms, strings count: " << bulk_size
+            << ", unique_count: " << dict->storageEntryCount();
+
+    for (size_t f = 0; f < fragments.size(); f++) {
+      auto bulk_offset = offsets[f];
+      tg.run([k = key,
+              f,
+              &col,
+              mgr,
+              &c,
+              arr_col_chunked_array,
+              bulk_offset,
+              indices_buf,
+              &fragments]() {
+        auto key = k;
+        key[3] = f;
+        auto& frag = col[f];
+        frag.chunks.resize(fragments[f].last_chunk - fragments[f].first_chunk + 1);
+        auto b = mgr->createBuffer(key);
+        b->initEncoder(c.columnType);
+        size_t current_ind = 0;
         for (int i = fragments[f].first_chunk, e = fragments[f].last_chunk; i <= e; i++) {
           int size, offset;
           getSizeAndOffset(
               fragments[f], arr_col_chunked_array->chunk(i), i, size, offset);
-          bulk_size += size;
+          auto indexArray = std::make_shared<arrow::Int32Array>(
+              size, indices_buf, nullptr, -1, bulk_offset + current_ind);
+          frag.chunks[i - fragments[f].first_chunk] = indexArray->data();
+          frag.sz += size;
+          current_ind += size;
+          frag.offset = 0;
+          auto len = frag.chunks[i - fragments[f].first_chunk]->length;
+          auto data = frag.chunks[i - fragments[f].first_chunk]->GetValues<int32_t>(1);
+          b->getEncoder()->updateStats((const int8_t*)data, len);
         }
-      }
-      offsets[fragments.size()] = bulk_size;
-      std::vector<std::string_view> bulk(bulk_size);
 
-      tbb::parallel_for(
-          tbb::blocked_range<size_t>(0, fragments.size()),
-          [&bulk, &fragments, arr_col_chunked_array, &offsets](
-              const tbb::blocked_range<size_t>& r) {
-            for (auto f = r.begin(); f != r.end(); ++f) {
-              auto bulk_offset = offsets[f];
-
-              size_t current_ind = 0;
-              for (int i = fragments[f].first_chunk, e = fragments[f].last_chunk; i <= e;
-                   i++) {
-                int size, offset;
-                getSizeAndOffset(
-                    fragments[f], arr_col_chunked_array->chunk(i), i, size, offset);
-
-                auto stringArray = std::static_pointer_cast<arrow::StringArray>(
-                    arr_col_chunked_array->chunk(i));
-                for (int i = offset; i < offset + size; i++) {
-                  auto view = stringArray->GetView(i);
-                  bulk[bulk_offset + current_ind] =
-                      std::string_view(view.data(), view.length());
-                  current_ind++;
-                }
-              }
-            }
-          });
-
-      std::shared_ptr<arrow::Buffer> indices_buf;
-      ARROW_ASSIGN_OR_THROW(indices_buf,
-                            arrow::AllocateBuffer(bulk_size * sizeof(int32_t)));
-      auto raw_data = reinterpret_cast<int*>(indices_buf->mutable_data());
-      auto time = measure<>::execution([&]() { dict->getOrAddBulk(bulk, raw_data); });
-
-      VLOG(1) << "FSI dictionary for column created in: " << time
-              << "ms, strings count: " << bulk_size
-              << ", unique_count: " << dict->storageEntryCount();
-
-      for (size_t f = 0; f < fragments.size(); f++) {
-        auto bulk_offset = offsets[f];
-        tg.run([k = key,
-                f,
-                &col,
-                mgr,
-                &c,
-                arr_col_chunked_array,
-                bulk_offset,
-                indices_buf,
-                &fragments]() {
-          auto key = k;
-          key[3] = f;
-          auto& frag = col[f];
-          frag.chunks.resize(fragments[f].last_chunk - fragments[f].first_chunk + 1);
-          auto b = mgr->createBuffer(key);
-          b->initEncoder(c.columnType);
-          size_t current_ind = 0;
-          for (int i = fragments[f].first_chunk, e = fragments[f].last_chunk; i <= e;
-               i++) {
-            int size, offset;
-            getSizeAndOffset(
-                fragments[f], arr_col_chunked_array->chunk(i), i, size, offset);
-            auto indexArray = std::make_shared<arrow::Int32Array>(
-                size, indices_buf, nullptr, -1, bulk_offset + current_ind);
-            frag.chunks[i - fragments[f].first_chunk] = indexArray->data();
-            frag.sz += size;
-            current_ind += size;
-            frag.offset = 0;
-            auto len = frag.chunks[i - fragments[f].first_chunk]->length;
-            auto data = frag.chunks[i - fragments[f].first_chunk]->GetValues<int32_t>(1);
-            b->getEncoder()->updateStats((const int8_t*)data, len);
-          }
-
-          b->setSize(frag.sz * b->getSqlType().get_size());
-          b->getEncoder()->setNumElems(frag.sz);
-        });
-      }
-    });
-    VLOG(1) << "FSI: createDictionaryEncodedColumn time: " << full_time << "ms"
-            << std::endl;
+        b->setSize(frag.sz * b->getSqlType().get_size());
+        b->getEncoder()->setNumElems(frag.sz);
+      });
+    }
   });
 }
 
@@ -452,7 +449,7 @@ void ArrowCsvForeignStorage::createDecimalColumn(
 
   T* buffer_data = reinterpret_cast<T*>(result_buffer->mutable_data());
   tbb::parallel_for(
-      tbb::blocked_range(0UL, fragments.size()),
+      tbb::blocked_range(size_t(0), fragments.size()),
       [k,
        buffer_data,
        &offsets,

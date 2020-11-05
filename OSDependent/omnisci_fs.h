@@ -17,6 +17,7 @@
 #pragma once
 
 #include <stddef.h>
+#include <stdio.h>
 
 namespace omnisci {
 
@@ -33,6 +34,8 @@ int fsync(int fd);
 int open(const char* path, int flags, int mode);
 
 void close(const int fd);
+
+::FILE* fopen(const char* filename, const char* mode);
 
 int get_page_size();
 

@@ -33,6 +33,7 @@
 #include <string>
 
 #include "Logger/Logger.h"
+#include "OSDependent/omnisci_fs.h"
 
 namespace File_Namespace {
 
@@ -48,7 +49,7 @@ FILE* create(const std::string& basePath,
                << "', Number of pages and page size must be positive integers. numPages "
                << numPages << " pageSize " << pageSize;
   }
-  FILE* f = fopen(path.c_str(), "w+b");
+  FILE* f = omnisci::fopen(path.c_str(), "w+b");
   if (f == nullptr) {
     LOG(FATAL) << "Error trying to create file '" << path
                << "', the error was: " << std::strerror(errno);
@@ -67,7 +68,7 @@ FILE* create(const std::string& basePath,
 }
 
 FILE* create(const std::string& fullPath, const size_t requestedFileSize) {
-  FILE* f = fopen(fullPath.c_str(), "w+b");
+  FILE* f = omnisci::fopen(fullPath.c_str(), "w+b");
   if (f == nullptr) {
     LOG(FATAL) << "Error trying to create file '" << fullPath
                << "', the error was:  " << std::strerror(errno);
@@ -86,7 +87,7 @@ FILE* create(const std::string& fullPath, const size_t requestedFileSize) {
 
 FILE* open(int fileId) {
   std::string s(std::to_string(fileId) + std::string(MAPD_FILE_EXT));
-  FILE* f = fopen(s.c_str(), "r+b");  // opens existing file for updates
+  FILE* f = omnisci::fopen(s.c_str(), "r+b");  // opens existing file for updates
   if (f == nullptr) {
     LOG(FATAL) << "Error trying to open file '" << s
                << "', the error was: " << std::strerror(errno);
@@ -95,7 +96,7 @@ FILE* open(int fileId) {
 }
 
 FILE* open(const std::string& path) {
-  FILE* f = fopen(path.c_str(), "r+b");  // opens existing file for updates
+  FILE* f = omnisci::fopen(path.c_str(), "r+b");  // opens existing file for updates
   if (f == nullptr) {
     LOG(FATAL) << "Error trying to open file '" << path
                << "', the errno was: " << std::strerror(errno);

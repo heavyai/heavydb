@@ -69,4 +69,8 @@ void close(const int fd) {
   ::close(fd);
 }
 
+::FILE* fopen(const char* filename, const char* mode) {
+  return ::fopen(filename, mode);
+}
+
 }  // namespace omnisci

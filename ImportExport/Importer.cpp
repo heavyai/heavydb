@@ -26,7 +26,6 @@
 #include <arrow/io/api.h>
 #include <gdal.h>
 #include <ogrsf_frmts.h>
-#include <unistd.h>
 #include <boost/algorithm/string.hpp>
 #include <boost/dynamic_bitset.hpp>
 #include <boost/filesystem.hpp>
@@ -3697,6 +3696,9 @@ void DataStreamSink::import_parquet(std::vector<std::string>& file_paths) {
 #endif  // ENABLE_IMPORT_PARQUET
 
 void DataStreamSink::import_compressed(std::vector<std::string>& file_paths) {
+#ifdef _MSC_VER
+  throw std::runtime_error("CSV Import not yet supported on Windows.");
+#else
   // a new requirement is to have one single input stream into
   // Importer::importDelimited, so need to move pipe related
   // stuff to the outmost block.
@@ -3783,7 +3785,7 @@ void DataStreamSink::import_compressed(std::vector<std::string>& file_paths) {
           throw std::runtime_error("AWS S3 support not available");
 #endif  // HAVE_AWS_S3
         }
-#if 0  // TODO(ppan): implement and enable any other archive class
+#if 0   // TODO(ppan): implement and enable any other archive class
         else
         if ("hdfs" == url_parts[2])
           uarch.reset(new HdfsArchive(file_path));
@@ -3940,6 +3942,7 @@ void DataStreamSink::import_compressed(std::vector<std::string>& file_paths) {
   if (teptr) {
     std::rethrow_exception(teptr);
   }
+#endif
 }
 
 ImportStatus Importer::import() {

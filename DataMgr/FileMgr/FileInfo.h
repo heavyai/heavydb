@@ -17,14 +17,19 @@
 #ifndef FILEINFO_H
 #define FILEINFO_H
 
-#include <fcntl.h>
 #include <cstdio>
 #include <cstring>
 #include <mutex>
 #include <set>
 #include <vector>
+
+#ifdef __APPLE__
+#include <fcntl.h>
+#endif
+
 #include "../../Shared/types.h"
 #include "Logger/Logger.h"
+#include "OSDependent/omnisci_fs.h"
 #include "Page.h"
 
 namespace File_Namespace {
@@ -96,7 +101,7 @@ struct FileInfo {
 #ifdef __APPLE__
     return fcntl(fileno(f), 51);
 #else
-    return fsync(fileno(f));
+    return omnisci::fsync(fileno(f));
 #endif
   }
 
