@@ -3562,18 +3562,21 @@ class ScheduledRefreshTest : public RefreshTests {
                   bf::copy_option::overwrite_if_exists);
   }
 
-  std::string getCreateScheduledRefreshTableQuery(
-      const std::string& refresh_interval,
-      const std::string& update_type = "all",
-      int sec_from_now = 1,
-      const std::string& timing_type = "scheduled") {
-    std::time_t timestamp = getCurrentTime() + sec_from_now;
+  std::string getCurrentTimeString(int32_t delay) {
+    std::time_t timestamp = getCurrentTime() + delay;
     std::tm* gmt_time = std::gmtime(&timestamp);
     constexpr int buffer_size = 256;
     char buffer[buffer_size];
     std::strftime(buffer, buffer_size, "%Y-%m-%d %H:%M:%S", gmt_time);
-    std::string start_date_time = buffer;
+    return std::string{buffer};
+  }
 
+  std::string getCreateScheduledRefreshTableQuery(
+      const std::string& refresh_interval,
+      const std::string& update_type = "all",
+      int32_t sec_from_now = 1,
+      const std::string& timing_type = "scheduled") {
+    auto start_date_time = getCurrentTimeString(sec_from_now);
     auto test_file_path = boost::filesystem::canonical(REFRESH_TEST_DIR) / "test.csv";
     std::string query =
         "CREATE FOREIGN TABLE test_foreign_table (i INTEGER) server "
@@ -3770,7 +3773,7 @@ TEST_F(ScheduledRefreshTest, InvalidStartDateTime) {
       "refresh_timing_type = 'scheduled', refresh_start_date_time = "
       "'invalid_date_time');";
   queryAndAssertException(query,
-                          "Exception: Invalid DATE/TIMESTAMP string (invalid_date_time)");
+                          "Exception: Invalid DATE/TIMESTAMP string (INVALID_DATE_TIME)");
 }
 
 TEST_F(ScheduledRefreshTest, SchedulerStop) {
@@ -3923,6 +3926,358 @@ TEST_P(SchemaMismatchTest, FileHasTooFewColumns_Refresh) {
                           "Exception: Mismatched number of logical columns: (expected 2 "
                           "columns, has 1): in file '" +
                               TEMP_DIR + TEMP_FILE + "." + ext + "'");
+}
+
+class AlterForeignTableTest : public ScheduledRefreshTest {
+ protected:
+  void createScheduledTable(const std::string& timing_type = "",
+                            const std::string& refresh_interval = "",
+                            const std::string& update_type = "",
+                            int32_t sec_from_now = 0) {
+    setTestFile("1.csv");
+    auto start_date_time = getCurrentTimeString(sec_from_now);
+    auto test_file_path = boost::filesystem::canonical(REFRESH_TEST_DIR) / "test.csv";
+    std::string query =
+        "CREATE FOREIGN TABLE test_foreign_table (i INTEGER) server "
+        "omnisci_local_csv with (file_path = '" +
+        test_file_path.string() + "'";
+    if (!update_type.empty()) {
+      query += ", refresh_update_type = '" + update_type + "'";
+    }
+    if (!timing_type.empty()) {
+      query += ", refresh_timing_type = '" + timing_type + "'";
+    }
+    if (sec_from_now != 0) {
+      query += ", refresh_start_date_time = '" + start_date_time + "'";
+    }
+    if (!refresh_interval.empty()) {
+      query += ", refresh_interval = '" + refresh_interval + "'";
+    }
+    query += ");";
+    sql(query);
+    cat_ = &getCatalog();
+    auto table = getCatalog().getMetadataForTable("test_foreign_table", false);
+    CHECK(table);
+    foreign_table_ = dynamic_cast<const foreign_storage::ForeignTable*>(table);
+  }
+
+  void sqlAlterTable(const std::string& option_name, const std::string& option_value) {
+    sql("ALTER FOREIGN TABLE test_foreign_table WITH (" + option_name + " = '" +
+        option_value + "');");
+  }
+
+  void queryAndAssertExceptionSubstr(const std::string& query,
+                                     const std::string_view error_substr) {
+    try {
+      sql(query);
+      FAIL() << "Expected exception starting with " << error_substr << "\n";
+    } catch (std::exception& e) {
+      ASSERT_NE(std::string(e.what()).find(error_substr), std::string::npos);
+    }
+  }
+
+  void assertOptionEquals(const ForeignTable* table,
+                          const std::string& key,
+                          const std::string& value) {
+    if (const auto& opt_it = table->options.find(key); opt_it != table->options.end()) {
+      ASSERT_EQ(opt_it->second, value);
+    } else {
+      FAIL() << "Expected value for option " << key;
+    }
+  }
+
+  void assertOptionNotEquals(const ForeignTable* table,
+                             const std::string& key,
+                             const std::string& value) {
+    if (const auto& opt_it = table->options.find(key); opt_it != table->options.end()) {
+      ASSERT_NE(opt_it->second, value);
+    } else {
+      FAIL() << "Expected value for option " << key;
+    }
+  }
+
+  // Asserts option is as expected for in-memory table then again in catalog storage.
+  void assertOptionEquals(const std::string& key, const std::string& value) {
+    assertOptionEquals(foreign_table_, key, value);
+    assertOptionEquals(
+        getCatalog().getForeignTableFromStorage(foreign_table_->tableId).get(),
+        key,
+        value);
+  }
+
+  void assertOptionNotEquals(const std::string& key, const std::string& value) {
+    assertOptionNotEquals(foreign_table_, key, value);
+    assertOptionNotEquals(
+        getCatalog().getForeignTableFromStorage(foreign_table_->tableId).get(),
+        key,
+        value);
+  }
+
+  inline static const Catalog_Namespace::Catalog* cat_;
+  inline static const ForeignTable* foreign_table_;
+};
+
+TEST_F(AlterForeignTableTest, RefreshUpdateTypeAllToAppend) {
+  createScheduledTable("scheduled", "1S", "all", 1);
+  assertOptionEquals("REFRESH_UPDATE_TYPE", "ALL");
+  sqlAlterTable("refresh_update_type", "append");
+  assertOptionEquals("REFRESH_UPDATE_TYPE", "APPEND");
+}
+TEST_F(AlterForeignTableTest, RefreshUpdateTypeAppendToAll) {
+  createScheduledTable("scheduled", "1S", "append", 1);
+  assertOptionEquals("REFRESH_UPDATE_TYPE", "APPEND");
+  sqlAlterTable("REFRESH_UPDATE_TYPE", "all");
+  assertOptionEquals("REFRESH_UPDATE_TYPE", "ALL");
+}
+
+TEST_F(AlterForeignTableTest, RefreshIntervalDaysToSeconds) {
+  createScheduledTable("scheduled", "1D", "all", 1);
+  assertOptionEquals("REFRESH_INTERVAL", "1D");
+  sqlAlterTable("REFRESH_INTERVAL", "1S");
+  assertOptionEquals("REFRESH_INTERVAL", "1S");
+}
+TEST_F(AlterForeignTableTest, RefreshIntervalSecondsToHoursLowerCase) {
+  createScheduledTable("scheduled", "1S", "all", 1);
+  assertOptionEquals("REFRESH_INTERVAL", "1S");
+  sqlAlterTable("REFRESH_INTERVAL", "2d");
+  assertOptionEquals("REFRESH_INTERVAL", "2D");
+}
+TEST_F(AlterForeignTableTest, RefreshIntervalSecondsToInvalid) {
+  createScheduledTable("scheduled", "1S", "all", 1);
+  assertOptionEquals("REFRESH_INTERVAL", "1S");
+  queryAndAssertException(
+      "ALTER FOREIGN TABLE test_foreign_table WITH (REFRESH_INTERVAL = 'SCHEDULED');",
+      "Exception: Invalid value provided for the REFRESH_INTERVAL option.");
+  assertOptionEquals("REFRESH_INTERVAL", "1S");
+}
+
+TEST_F(AlterForeignTableTest, RefreshTimingTypeManualToScheduledNoStartDateError) {
+  createScheduledTable("manual");
+  assertOptionEquals("REFRESH_TIMING_TYPE", "MANUAL");
+  queryAndAssertException(
+      "ALTER FOREIGN TABLE test_foreign_table WITH (REFRESH_TIMING_TYPE = 'SCHEDULED')",
+      "Exception: REFRESH_START_DATE_TIME option must be provided "
+      "for scheduled refreshes.");
+  assertOptionEquals("REFRESH_TIMING_TYPE", "MANUAL");
+}
+TEST_F(AlterForeignTableTest, RefreshTimingType_ManualToScheduled_StartDate) {
+  createScheduledTable("manual");
+  assertOptionEquals("REFRESH_TIMING_TYPE", "MANUAL");
+  auto start_time = getCurrentTimeString(1);
+  sql("ALTER FOREIGN TABLE test_foreign_table WITH (REFRESH_TIMING_TYPE = 'SCHEDULED', "
+      "REFRESH_START_DATE_TIME = '" +
+      start_time + "')");
+  assertOptionEquals("REFRESH_TIMING_TYPE", "SCHEDULED");
+  assertOptionEquals("REFRESH_START_DATE_TIME", start_time);
+}
+TEST_F(AlterForeignTableTest, RefreshTimingTypeScheduledToManual) {
+  createScheduledTable("scheduled", "1S", "all", 1);
+  sqlAndCompareResult("SELECT * FROM test_foreign_table;", {{i(1)}});
+  assertOptionEquals("REFRESH_TIMING_TYPE", "SCHEDULED");
+  sqlAlterTable("REFRESH_TIMING_TYPE", "MANUAL");
+  assertOptionEquals("REFRESH_TIMING_TYPE", "MANUAL");
+}
+TEST_F(AlterForeignTableTest, RefreshTimingTypeScheduledToManualLowerCase) {
+  createScheduledTable("scheduled", "1S", "all", 1);
+  assertOptionEquals("REFRESH_TIMING_TYPE", "SCHEDULED");
+  sqlAlterTable("REFRESH_TIMING_TYPE", "manual");
+  assertOptionEquals("REFRESH_TIMING_TYPE", "MANUAL");
+}
+TEST_F(AlterForeignTableTest, RefreshTimingTypeScheduledToInvalid) {
+  createScheduledTable("scheduled", "1S", "all", 1);
+  assertOptionEquals("REFRESH_TIMING_TYPE", "SCHEDULED");
+  queryAndAssertException(
+      "ALTER FOREIGN TABLE test_foreign_table WITH (REFRESH_TIMING_TYPE = '2D');",
+      "Exception: Invalid value provided for the REFRESH_TIMING_TYPE "
+      "option. Value must be \"MANUAL\" or \"SCHEDULED\".");
+  assertOptionEquals("REFRESH_TIMING_TYPE", "SCHEDULED");
+}
+
+TEST_F(AlterForeignTableTest, RefreshStartDateTime) {
+  createScheduledTable("scheduled", "1S", "all", 4);
+  auto start_time = getCurrentTimeString(1);
+  sqlAlterTable("REFRESH_START_DATE_TIME", start_time);
+  assertOptionEquals("REFRESH_START_DATE_TIME", start_time);
+}
+TEST_F(AlterForeignTableTest, RefreshStartDateTimeLowerCase) {
+  createScheduledTable("scheduled", "1S", "all", 4);
+  auto start_time = getCurrentTimeString(1);
+  boost::algorithm::to_lower(start_time);
+  sqlAlterTable("REFRESH_START_DATE_TIME", start_time);
+  assertOptionEquals("REFRESH_START_DATE_TIME", start_time);
+}
+TEST_F(AlterForeignTableTest, RefreshStartDateTimeScheduledInPastError) {
+  createScheduledTable("scheduled", "1S", "all", 1);
+  auto start_time = getCurrentTimeString(-10);
+  queryAndAssertException(
+      "ALTER FOREIGN TABLE test_foreign_table WITH (REFRESH_START_DATE_TIME = '" +
+          start_time + "');",
+      "Exception: REFRESH_START_DATE_TIME cannot be a past date time.");
+  assertOptionNotEquals("REFRESH_START_DATE_TIME", start_time);
+}
+
+// TODO(Misiu): Implement these skeleton tests for full alter foreign table support.
+TEST_F(AlterForeignTableTest, FilePath) {
+  createScheduledTable("manual");
+  queryAndAssertException(
+      "ALTER FOREIGN TABLE test_foreign_table WITH (file_path = '/');",
+      "Exception: Altering foreign table option \"FILE_PATH\" is not currently "
+      "supported.");
+}
+
+TEST_F(AlterForeignTableTest, FragmentSize) {
+  createScheduledTable("manual");
+  queryAndAssertException(
+      "ALTER FOREIGN TABLE test_foreign_table WITH (fragment_size = 10);",
+      "Exception: Altering foreign table option \"FRAGMENT_SIZE\" is not currently "
+      "supported.");
+}
+
+TEST_F(AlterForeignTableTest, DataWrapperOption) {
+  createScheduledTable("manual");
+  queryAndAssertException(
+      "ALTER FOREIGN TABLE test_foreign_table WITH (base_path = '/');",
+      "Exception: Invalid foreign table option \"BASE_PATH\".");
+}
+
+TEST_F(AlterForeignTableTest, NonExistantOption) {
+  createScheduledTable("manual");
+  queryAndAssertException("ALTER FOREIGN TABLE test_foreign_table WITH (foo = '/');",
+                          "Exception: Invalid foreign table option \"FOO\".");
+}
+
+TEST_F(AlterForeignTableTest, TableName) {
+  createScheduledTable("manual");
+  queryAndAssertExceptionSubstr(
+      "ALTER FOREIGN TABLE test_foreign_table RENAME TO renamed_table;",
+      "Encountered \"RENAME\"");
+}
+
+TEST_F(AlterForeignTableTest, Owner) {
+  createScheduledTable("manual");
+  queryAndAssertExceptionSubstr(
+      "ALTER FOREIGN TABLE test_foreign_table OWNER TO test_user;",
+      "Encountered \"OWNER\"");
+}
+
+TEST_F(AlterForeignTableTest, Column) {
+  createScheduledTable("manual");
+  queryAndAssertExceptionSubstr(
+      "ALTER FOREIGN TABLE test_foreign_table RENAME COLUMN i TO renamed_column;",
+      "Encountered \"RENAME\"");
+}
+
+TEST_F(AlterForeignTableTest, Add) {
+  createScheduledTable("manual");
+  queryAndAssertExceptionSubstr("ALTER FOREIGN TABLE test_foreign_table ADD a;",
+                                "Encountered \"ADD\"");
+}
+
+TEST_F(AlterForeignTableTest, AddColumn) {
+  createScheduledTable("manual");
+  queryAndAssertExceptionSubstr("ALTER FOREIGN TABLE test_foreign_table ADD COLUMN a;",
+                                "Encountered \"ADD\"");
+}
+
+TEST_F(AlterForeignTableTest, Drop) {
+  createScheduledTable("manual");
+  queryAndAssertExceptionSubstr("ALTER FOREIGN TABLE test_foreign_table DROP i;",
+                                "Encountered \"DROP\"");
+}
+
+TEST_F(AlterForeignTableTest, DropColumn) {
+  createScheduledTable("manual");
+  queryAndAssertExceptionSubstr("ALTER FOREIGN TABLE test_foreign_table DROP COLUMN i;",
+                                "Encountered \"DROP\"");
+}
+
+TEST_F(AlterForeignTableTest, DropIfExists) {
+  createScheduledTable("manual");
+  queryAndAssertExceptionSubstr(
+      "ALTER FOREIGN TABLE test_foreign_table DROP IF EXISTS i;", "Encountered \"DROP\"");
+}
+
+TEST_F(AlterForeignTableTest, AlterType) {
+  createScheduledTable("manual");
+  queryAndAssertExceptionSubstr(
+      "ALTER FOREIGN TABLE test_foreign_table ALTER i TYPE float;",
+      "Encountered \"ALTER\"");
+}
+
+TEST_F(AlterForeignTableTest, AlterColumnType) {
+  createScheduledTable("manual");
+  queryAndAssertExceptionSubstr(
+      "ALTER FOREIGN TABLE test_foreign_table ALTER COLUMN i TYPE float;",
+      "Encountered \"ALTER\"");
+}
+
+TEST_F(AlterForeignTableTest, AlterSetDataType) {
+  createScheduledTable("manual");
+  queryAndAssertExceptionSubstr(
+      "ALTER FOREIGN TABLE test_foreign_table ALTER i SET DATA TYPE float;",
+      "Encountered \"ALTER\"");
+}
+
+TEST_F(AlterForeignTableTest, AlterTypeSetNotNull) {
+  createScheduledTable("manual");
+  queryAndAssertExceptionSubstr(
+      "ALTER FOREIGN TABLE test_foreign_table ALTER i TYPE float SET NOT NULL;",
+      "Encountered \"ALTER\"");
+}
+
+TEST_F(AlterForeignTableTest, AlterTypeDropNotNull) {
+  createScheduledTable("manual");
+  queryAndAssertExceptionSubstr(
+      "ALTER FOREIGN TABLE test_foreign_table ALTER i TYPE float DROP NOT NULL;",
+      "Encountered \"ALTER\"");
+}
+
+TEST_F(AlterForeignTableTest, AlterTypeSetEncoding) {
+  createScheduledTable("manual");
+  queryAndAssertExceptionSubstr(
+      "ALTER FOREIGN TABLE test_foreign_table ALTER i TYPE text SET ENCODING DICT(32);",
+      "Encountered \"ALTER\"");
+}
+
+TEST_F(AlterForeignTableTest, AlterTypeDropEncoding) {
+  createScheduledTable("manual");
+  queryAndAssertExceptionSubstr(
+      "ALTER FOREIGN TABLE test_foreign_table ALTER i TYPE text DROP ENCODING DICT(32);",
+      "Encountered \"ALTER\"");
+}
+
+class AlterForeignTablePermissionTest : public AlterForeignTableTest {
+  void SetUp() override {
+    loginAdmin();
+    AlterForeignTableTest::SetUp();
+    dropTestUserIfExists();
+  }
+  void TearDown() override {
+    loginAdmin();
+    dropTestUserIfExists();
+    AlterForeignTableTest::TearDown();
+  }
+  void dropTestUserIfExists() {
+    try {
+      sql("DROP USER test_user;");
+    } catch (const std::exception& e) {
+      // Swallow and log exceptions that may occur, since there is no "IF EXISTS" option.
+      LOG(WARNING) << e.what();
+    }
+  }
+};
+
+TEST_F(AlterForeignTablePermissionTest, NoPermission) {
+  createScheduledTable("scheduled", "1S", "all", 1);
+  sql("CREATE USER test_user (password = 'test_pass');");
+  sql("GRANT ACCESS ON DATABASE omnisci TO test_user;");
+  login("test_user", "test_pass");
+  queryAndAssertException(
+      "ALTER FOREIGN TABLE test_foreign_table WITH (REFRESH_TIMING_TYPE = "
+      "'SCHEDULED')",
+      "Exception: Foreign table \"test_foreign_table\" will not be altered. User has no "
+      "ALTER TABLE "
+      "privileges.");
 }
 
 int main(int argc, char** argv) {

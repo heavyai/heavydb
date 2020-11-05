@@ -111,7 +111,6 @@ class ParquetDataWrapper : public ForeignDataWrapper {
   std::unique_ptr<ForeignTableSchema> schema_;
   std::shared_ptr<arrow::fs::FileSystem> file_system_;
 
-  static constexpr std::array<char const*, 2> supported_options_{"BASE_PATH",
-                                                                 "FILE_PATH"};
+  static constexpr std::array<char const*, 0> supported_options_{};
 };
 }  // namespace foreign_storage

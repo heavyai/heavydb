@@ -340,6 +340,18 @@ class Catalog final {
       const std::string& server_name);
 
   /**
+   * Gets a pointer to a struct containing foreign table details fetched from storage.
+   * This is mainly used for testing when asserting that expected catalog data is
+   * persisted.
+   *
+   * @param table_name - Name of foreign table whose details will be fetched
+   * @return pointer to a struct containing foreign table details. nullptr is returned if
+   * no foreign table exists with the given name
+   */
+  const std::unique_ptr<const foreign_storage::ForeignTable> getForeignTableFromStorage(
+      int table_id);
+
+  /**
    * Change the owner of a Foreign Server to a new owner.
    *
    * @param server_name - Name of the foreign server whose owner to change
@@ -428,6 +440,16 @@ class Catalog final {
    * @param table_id - id of table to apply updates to
    */
   void updateForeignTableRefreshTimes(const int32_t table_id);
+
+  /**
+   * Set the options of a Foreign Table.
+   *
+   * @param table_name - Name of the foreign table whose options will be set
+   * @param options - Options to set
+   */
+  void setForeignTableOptions(const std::string& table_name,
+                              foreign_storage::OptionsMap& options_map,
+                              bool clear_existing_options = true);
 
  protected:
   void CheckAndExecuteMigrations();
@@ -547,6 +569,10 @@ class Catalog final {
                                 const std::string& property,
                                 const std::string& value);
 
+  void setForeignTableProperty(const foreign_storage::ForeignTable* table,
+                               const std::string& property,
+                               const std::string& value);
+
   /**
    * Same as createForeignServer() but without acquiring locks. This should only be called
    * from within a function/code block that already acquires appropriate locks.
@@ -554,6 +580,9 @@ class Catalog final {
   void createForeignServerNoLocks(
       std::unique_ptr<foreign_storage::ForeignServer> foreign_server,
       bool if_not_exists);
+
+  foreign_storage::ForeignTable* getForeignTableUnlocked(
+      const std::string& tableName) const;
 
  public:
   mutable std::mutex sqliteMutex_;

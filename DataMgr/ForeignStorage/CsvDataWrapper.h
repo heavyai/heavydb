@@ -147,9 +147,7 @@ class CsvDataWrapper : public ForeignDataWrapper {
   size_t append_start_offset_;
   // Is this datawrapper restored from disk
   bool is_restored_;
-  static constexpr std::array<char const*, 13> supported_options_{"BASE_PATH",
-                                                                  "FILE_PATH",
-                                                                  "ARRAY_DELIMITER",
+  static constexpr std::array<char const*, 11> supported_options_{"ARRAY_DELIMITER",
                                                                   "ARRAY_MARKER",
                                                                   "BUFFER_SIZE",
                                                                   "DELIMITER",

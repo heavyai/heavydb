@@ -20,9 +20,7 @@
 
 #include "Catalog/Catalog.h"
 #include "Catalog/SysCatalog.h"
-#include "DataMgr/ForeignStorage/CsvDataWrapper.h"
 #include "DataMgr/ForeignStorage/ForeignTableRefresh.h"
-#include "DataMgr/ForeignStorage/ParquetDataWrapper.h"
 #include "LockMgr/LockMgr.h"
 #include "Parser/ParserNode.h"
 #include "Shared/StringTransform.h"
@@ -89,6 +87,8 @@ void DdlCommandExecutor::execute(TQueryResult& _return) {
     ShowForeignServersCommand{payload, session_ptr_}.execute(_return);
   } else if (ddl_command == "ALTER_SERVER") {
     AlterForeignServerCommand{payload, session_ptr_}.execute(_return);
+  } else if (ddl_command == "ALTER_FOREIGN_TABLE") {
+    AlterForeignTableCommand{payload, session_ptr_}.execute(_return);
   } else if (ddl_command == "REFRESH_FOREIGN_TABLES") {
     RefreshForeignTablesCommand{payload, session_ptr_}.execute(_return);
   } else if (ddl_command == "SHOW_QUERIES") {
@@ -579,50 +579,12 @@ void CreateForeignTableCommand::setTableDetails(const std::string& table_name,
 
   if (ddl_payload_.HasMember("options") && !ddl_payload_["options"].IsNull()) {
     CHECK(ddl_payload_["options"].IsObject());
-    foreign_table.populateOptionsMap(ddl_payload_["options"]);
-    setRefreshOptions(foreign_table);
-
-    std::vector<std::string_view> supported_data_wrapper_options;
-    if (foreign_table.foreign_server->data_wrapper_type ==
-        foreign_storage::DataWrapperType::CSV) {
-      foreign_storage::CsvDataWrapper::validateOptions(&foreign_table);
-      supported_data_wrapper_options =
-          foreign_storage::CsvDataWrapper::getSupportedOptions();
-    } else if (foreign_table.foreign_server->data_wrapper_type ==
-               foreign_storage::DataWrapperType::PARQUET) {
-      foreign_storage::ParquetDataWrapper::validateOptions(&foreign_table);
-      supported_data_wrapper_options =
-          foreign_storage::ParquetDataWrapper::getSupportedOptions();
-    }
-    foreign_table.validate(supported_data_wrapper_options);
+    foreign_table.initializeOptions(ddl_payload_["options"]);
   }
 
   if (const auto it = foreign_table.options.find("FRAGMENT_SIZE");
       it != foreign_table.options.end()) {
     foreign_table.maxFragRows = std::stoi(it->second);
-  }
-}
-
-void CreateForeignTableCommand::setRefreshOptions(
-    foreign_storage::ForeignTable& foreign_table) {
-  auto refresh_timing_entry =
-      foreign_table.options.find(foreign_storage::ForeignTable::REFRESH_TIMING_TYPE_KEY);
-  if (refresh_timing_entry == foreign_table.options.end()) {
-    foreign_table.options[foreign_storage::ForeignTable::REFRESH_TIMING_TYPE_KEY] =
-        foreign_storage::ForeignTable::MANUAL_REFRESH_TIMING_TYPE;
-  } else {
-    foreign_table.options[foreign_storage::ForeignTable::REFRESH_TIMING_TYPE_KEY] =
-        to_upper(refresh_timing_entry->second);
-  }
-
-  auto update_type_entry =
-      foreign_table.options.find(foreign_storage::ForeignTable::REFRESH_UPDATE_TYPE_KEY);
-  if (update_type_entry == foreign_table.options.end()) {
-    foreign_table.options[foreign_storage::ForeignTable::REFRESH_UPDATE_TYPE_KEY] =
-        foreign_storage::ForeignTable::ALL_REFRESH_UPDATE_TYPE;
-  } else {
-    foreign_table.options[foreign_storage::ForeignTable::REFRESH_UPDATE_TYPE_KEY] =
-        to_upper(update_type_entry->second);
   }
 }
 
@@ -678,6 +640,7 @@ void DropForeignTableCommand::execute(TQueryResult& _return) {
         std::make_unique<lockmgr::TableSchemaLockContainer<lockmgr::WriteLock>>(
             lockmgr::TableSchemaLockContainer<lockmgr::WriteLock>::acquireTableDescriptor(
                 catalog, table_name, false));
+    CHECK(td_with_lock);
     td = (*td_with_lock)();
   } catch (const std::runtime_error& e) {
     if (ddl_payload_["ifExists"].GetBool()) {
@@ -688,7 +651,6 @@ void DropForeignTableCommand::execute(TQueryResult& _return) {
   }
 
   CHECK(td);
-  CHECK(td_with_lock);
 
   if (!session_ptr_->checkDBAccessPrivileges(
           DBObjectType::TableDBObjectType, AccessPrivileges::DROP_TABLE, table_name)) {
@@ -697,7 +659,7 @@ void DropForeignTableCommand::execute(TQueryResult& _return) {
         "\" will not be dropped. User has no DROP TABLE privileges.");
   }
 
-  ddl_utils::validate_drop_table_type(td, ddl_utils::TableType::FOREIGN_TABLE);
+  ddl_utils::validate_table_type(td, ddl_utils::TableType::FOREIGN_TABLE, "DROP");
   auto table_data_write_lock =
       lockmgr::TableDataLockMgr::getWriteLockForTable(catalog, table_name);
   catalog.dropTable(td);
@@ -839,4 +801,47 @@ void RefreshForeignTablesCommand::execute(TQueryResult& _return) {
     std::string table_name = table_name_json.GetString();
     foreign_storage::refresh_foreign_table(cat, table_name, evict_cached_entries);
   }
+}
+
+AlterForeignTableCommand::AlterForeignTableCommand(
+    const rapidjson::Value& ddl_payload,
+    std::shared_ptr<const Catalog_Namespace::SessionInfo> session_ptr)
+    : DdlCommand(ddl_payload, session_ptr) {
+  CHECK(ddl_payload.HasMember("tableName"));
+  CHECK(ddl_payload["tableName"].IsString());
+  CHECK(ddl_payload.HasMember("options"));
+  CHECK(ddl_payload["options"].IsObject());
+}
+
+void AlterForeignTableCommand::execute(TQueryResult& _return) {
+  auto& catalog = session_ptr_->getCatalog();
+  const std::string& table_name = ddl_payload_["tableName"].GetString();
+  const TableDescriptor* td{nullptr};
+  std::unique_ptr<lockmgr::TableSchemaLockContainer<lockmgr::WriteLock>> td_with_lock;
+
+  td_with_lock = std::make_unique<lockmgr::TableSchemaLockContainer<lockmgr::WriteLock>>(
+      lockmgr::TableSchemaLockContainer<lockmgr::WriteLock>::acquireTableDescriptor(
+          catalog, table_name, false));
+  CHECK(td_with_lock);
+  td = (*td_with_lock)();
+  CHECK(td);
+
+  ddl_utils::validate_table_type(td, ddl_utils::TableType::FOREIGN_TABLE, "ALTER");
+
+  if (!session_ptr_->checkDBAccessPrivileges(
+          DBObjectType::TableDBObjectType, AccessPrivileges::ALTER_TABLE, table_name)) {
+    throw std::runtime_error(
+        "Current user does not have the privilege to alter foreign table: " + table_name);
+  }
+
+  auto table_data_write_lock =
+      lockmgr::TableDataLockMgr::getWriteLockForTable(catalog, table_name);
+
+  auto new_options_map =
+      foreign_storage::ForeignTable::create_options_map(ddl_payload_["options"]);
+  auto table = dynamic_cast<const foreign_storage::ForeignTable*>(td);
+  CHECK(table);
+  table->validateSupportedOptions(new_options_map);
+  foreign_storage::ForeignTable::validate_alter_options(new_options_map);
+  catalog.setForeignTableOptions(table_name, new_options_map, false);
 }

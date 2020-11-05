@@ -3130,7 +3130,7 @@ void DropTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
                              " will not be dropped. User has no proper privileges.");
   }
 
-  ddl_utils::validate_drop_table_type(td, ddl_utils::TableType::TABLE);
+  ddl_utils::validate_table_type(td, ddl_utils::TableType::TABLE, "DROP");
 
   auto table_data_write_lock =
       lockmgr::TableDataLockMgr::getWriteLockForTable(catalog, *table);
@@ -4665,7 +4665,7 @@ void DropViewStmt::execute(const Catalog_Namespace::SessionInfo& session) {
                              " will not be dropped. User has no drop view privileges.");
   }
 
-  ddl_utils::validate_drop_table_type(td, ddl_utils::TableType::VIEW);
+  ddl_utils::validate_table_type(td, ddl_utils::TableType::VIEW, "DROP");
   catalog.dropTable(td);
 }
 

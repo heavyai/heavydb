@@ -1,0 +1,10 @@
+{
+  "payload": {
+    "command": "ALTER_FOREIGN_TABLE",
+    "options": {
+      "base_path": "/home/my_user/data/new-csv/"
+    },
+    "tableName": "test_table"
+  },
+  "statementType": "DDL"
+}

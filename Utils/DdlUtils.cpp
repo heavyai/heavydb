@@ -534,19 +534,20 @@ void validate_non_reserved_keyword(const std::string& column_name) {
   }
 }
 
-void validate_drop_table_type(const TableDescriptor* td,
-                              const TableType expected_table_type) {
+void validate_table_type(const TableDescriptor* td,
+                         const TableType expected_table_type,
+                         const std::string& command) {
   if (td->isView) {
     if (expected_table_type != TableType::VIEW) {
-      throw std::runtime_error(td->tableName + " is a view. Use DROP VIEW.");
+      throw std::runtime_error(td->tableName + " is a view. Use " + command + " VIEW.");
     }
   } else if (td->storageType == StorageType::FOREIGN_TABLE) {
     if (expected_table_type != TableType::FOREIGN_TABLE) {
-      throw std::runtime_error(td->tableName +
-                               " is a foreign table. Use DROP FOREIGN TABLE.");
+      throw std::runtime_error(td->tableName + " is a foreign table. Use " + command +
+                               " FOREIGN TABLE.");
     }
   } else if (expected_table_type != TableType::TABLE) {
-    throw std::runtime_error(td->tableName + " is a table. Use DROP TABLE.");
+    throw std::runtime_error(td->tableName + " is a table. Use " + command + " TABLE.");
   }
 }
 

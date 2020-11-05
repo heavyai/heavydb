@@ -123,7 +123,6 @@ class CreateForeignTableCommand : public DdlCommand {
                        TableDescriptor& td,
                        const size_t column_count);
   void setColumnDetails(std::list<ColumnDescriptor>& columns);
-  void setRefreshOptions(foreign_storage::ForeignTable& foreign_table);
 };
 
 class DropForeignTableCommand : public DdlCommand {
@@ -132,6 +131,17 @@ class DropForeignTableCommand : public DdlCommand {
       const rapidjson::Value& ddl_payload,
       std::shared_ptr<Catalog_Namespace::SessionInfo const> session_ptr);
   void execute(TQueryResult& _return) override;
+};
+
+class AlterForeignTableCommand : public DdlCommand {
+ public:
+  AlterForeignTableCommand(
+      const rapidjson::Value& ddl_payload,
+      std::shared_ptr<Catalog_Namespace::SessionInfo const> session_ptr);
+  void execute(TQueryResult& _return) override;
+
+ private:
+  void setForeignTableOptions();
 };
 
 class ShowForeignServersCommand : public DdlCommand {

@@ -1408,6 +1408,15 @@ void Catalog::instantiateFragmenter(TableDescriptor* td) const {
             << time_ms << "ms";
 }
 
+foreign_storage::ForeignTable* Catalog::getForeignTableUnlocked(
+    const std::string& tableName) const {
+  auto tableDescIt = tableDescriptorMap_.find(to_upper(tableName));
+  if (tableDescIt == tableDescriptorMap_.end()) {  // check to make sure table exists
+    return nullptr;
+  }
+  return dynamic_cast<foreign_storage::ForeignTable*>(tableDescIt->second);
+};
+
 const TableDescriptor* Catalog::getMetadataForTable(const string& tableName,
                                                     const bool populateFragmenter) const {
   // we give option not to populate fragmenter (default true/yes) as it can be heavy for
@@ -2522,6 +2531,27 @@ Catalog::getForeignServerFromStorage(const std::string& server_name) {
   return foreign_server;
 }
 
+const std::unique_ptr<const foreign_storage::ForeignTable>
+Catalog::getForeignTableFromStorage(int table_id) {
+  std::unique_ptr<foreign_storage::ForeignTable> foreign_table = nullptr;
+  cat_sqlite_lock sqlite_lock(this);
+  sqliteConnector_.query_with_text_params(
+      "SELECT table_id, server_id, options, last_refresh_time, next_refresh_time from "
+      "omnisci_foreign_tables WHERE table_id = ?",
+      std::vector<std::string>{to_string(table_id)});
+  auto num_rows = sqliteConnector_.getNumRows();
+  if (num_rows > 0) {
+    CHECK_EQ(size_t(1), num_rows);
+    foreign_table = std::make_unique<foreign_storage::ForeignTable>(
+        sqliteConnector_.getData<int>(0, 0),
+        foreignServerMapById_[sqliteConnector_.getData<int32_t>(0, 1)].get(),
+        sqliteConnector_.getData<std::string>(0, 2),
+        sqliteConnector_.getData<int>(0, 3),
+        sqliteConnector_.getData<int>(0, 4));
+  }
+  return foreign_table;
+}
+
 void Catalog::changeForeignServerOwner(const std::string& server_name,
                                        const int new_owner_id) {
   cat_write_lock write_lock(this);
@@ -2561,14 +2591,14 @@ void Catalog::setForeignServerOptions(const std::string& server_name,
   foreign_storage::ForeignServer* foreign_server =
       foreignServerMap_.find(server_name)->second.get();
   CHECK(foreign_server);
-  std::string saved_options_string = foreign_server->getOptionsAsJsonString();
+  auto saved_options = foreign_server->options;
   foreign_server->populateOptionsMap(options, true);
   try {
     foreign_server->validate();
   } catch (const std::exception& e) {
     // validation did not succeed:
     // revert to saved options & throw exception
-    foreign_server->populateOptionsMap(saved_options_string, true);
+    foreign_server->options = saved_options;
     throw;
   }
   setForeignServerProperty(server_name, "options", options);
@@ -4387,5 +4417,47 @@ void Catalog::updateForeignTableRefreshTimes(const int32_t table_id) {
                                std::to_string(foreign_table->tableId)});
   foreign_table->last_refresh_time = last_refresh_time;
   foreign_table->next_refresh_time = next_refresh_time;
+}
+
+// TODO(Misiu): This function should be merged with setForeignServerOptions via
+// inheritance rather than replication similar functions.
+void Catalog::setForeignTableOptions(const std::string& table_name,
+                                     foreign_storage::OptionsMap& options_map,
+                                     bool clear_existing_options) {
+  cat_write_lock write_lock(this);
+  // update in-memory table
+  auto foreign_table = getForeignTableUnlocked(table_name);
+  auto saved_options = foreign_table->options;
+  foreign_table->populateOptionsMap(std::move(options_map), clear_existing_options);
+  try {
+    foreign_table->validateOptions();
+  } catch (const std::exception& e) {
+    // validation did not succeed:
+    // revert to saved options & throw exception
+    foreign_table->options = saved_options;
+    throw;
+  }
+  setForeignTableProperty(
+      foreign_table, "options", foreign_table->getOptionsAsJsonString());
+}
+
+void Catalog::setForeignTableProperty(const foreign_storage::ForeignTable* table,
+                                      const std::string& property,
+                                      const std::string& value) {
+  cat_sqlite_lock sqlite_lock(this);
+  sqliteConnector_.query_with_text_params(
+      "SELECT table_id from omnisci_foreign_tables where table_id = ?",
+      std::vector<std::string>{std::to_string(table->tableId)});
+  auto num_rows = sqliteConnector_.getNumRows();
+  if (num_rows > 0) {
+    CHECK_EQ(size_t(1), num_rows);
+    sqliteConnector_.query_with_text_params(
+        "UPDATE omnisci_foreign_tables SET " + property + " = ? WHERE table_id = ?",
+        std::vector<std::string>{value, std::to_string(table->tableId)});
+  } else {
+    throw std::runtime_error{"Can not change property \"" + property +
+                             "\" for foreign table." + " Foreign table \"" +
+                             table->tableName + "\" is not found."};
+  }
 }
 }  // namespace Catalog_Namespace

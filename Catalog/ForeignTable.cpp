@@ -17,58 +17,30 @@
 #include "ForeignTable.h"
 #include <boost/algorithm/string/predicate.hpp>
 #include <regex>
+#include "DataMgr/ForeignStorage/CsvDataWrapper.h"
+#include "DataMgr/ForeignStorage/ParquetDataWrapper.h"
 #include "Shared/DateTimeParser.h"
 
 namespace foreign_storage {
-void ForeignTable::validate(
-    const std::vector<std::string_view>& supported_data_wrapper_options) {
-  auto update_type_entry =
-      options.find(foreign_storage::ForeignTable::REFRESH_UPDATE_TYPE_KEY);
-  CHECK(update_type_entry != options.end());
-  if (update_type_entry->second != ALL_REFRESH_UPDATE_TYPE &&
-      update_type_entry->second != APPEND_REFRESH_UPDATE_TYPE) {
-    std::string error_message = "Invalid value \"" + update_type_entry->second +
-                                "\" for " + REFRESH_UPDATE_TYPE_KEY + " option." +
-                                " Value must be \"" +
-                                std::string{APPEND_REFRESH_UPDATE_TYPE} + "\" or \"" +
-                                std::string{ALL_REFRESH_UPDATE_TYPE} + "\".";
-    throw std::runtime_error{error_message};
-  }
+ForeignTable::ForeignTable()
+    : OptionsContainer({{foreign_storage::ForeignTable::REFRESH_TIMING_TYPE_KEY,
+                         foreign_storage::ForeignTable::MANUAL_REFRESH_TIMING_TYPE},
+                        {foreign_storage::ForeignTable::REFRESH_UPDATE_TYPE_KEY,
+                         foreign_storage::ForeignTable::ALL_REFRESH_UPDATE_TYPE}}) {}
 
-  auto refresh_timing_entry =
-      options.find(foreign_storage::ForeignTable::REFRESH_TIMING_TYPE_KEY);
-  CHECK(refresh_timing_entry != options.end());
-  if (refresh_timing_entry->second == SCHEDULE_REFRESH_TIMING_TYPE) {
-    auto start_date_entry = options.find(REFRESH_START_DATE_TIME_KEY);
-    if (start_date_entry == options.end()) {
-      throw std::runtime_error{std::string{REFRESH_START_DATE_TIME_KEY} +
-                               " option must be provided for scheduled refreshes."};
-    }
-    auto start_date_time = dateTimeParse<kTIMESTAMP>(start_date_entry->second, 0);
-    int64_t current_time = std::chrono::duration_cast<std::chrono::seconds>(
-                               std::chrono::system_clock::now().time_since_epoch())
-                               .count();
-    if (start_date_time < current_time) {
-      throw std::runtime_error{std::string{REFRESH_START_DATE_TIME_KEY} +
-                               " cannot be a past date time."};
-    }
-
-    auto interval_entry = options.find(REFRESH_INTERVAL_KEY);
-    if (interval_entry != options.end()) {
-      boost::regex interval_regex{"^\\d{1,}[SHD]$",
-                                  boost::regex::extended | boost::regex::icase};
-      if (!boost::regex_match(interval_entry->second, interval_regex)) {
-        throw std::runtime_error{"Invalid value provided for the " +
-                                 std::string{REFRESH_INTERVAL_KEY} + " option."};
-      }
-    }
-  } else if (refresh_timing_entry->second != MANUAL_REFRESH_TIMING_TYPE) {
-    throw std::runtime_error{"Invalid value provided for the " +
-                             std::string{REFRESH_TIMING_TYPE_KEY} +
-                             " option. Value must be \"" + MANUAL_REFRESH_TIMING_TYPE +
-                             "\" or \"" + SCHEDULE_REFRESH_TIMING_TYPE + "\"."};
+std::vector<std::string_view> ForeignTable::getSupportedDataWrapperOptions() const {
+  if (foreign_server->data_wrapper_type == foreign_storage::DataWrapperType::CSV) {
+    return foreign_storage::CsvDataWrapper::getSupportedOptions();
+  } else if (foreign_server->data_wrapper_type ==
+             foreign_storage::DataWrapperType::PARQUET) {
+    return foreign_storage::ParquetDataWrapper::getSupportedOptions();
   }
-  validateRecognizedOption(supported_data_wrapper_options);
+  return {};
+}
+
+void ForeignTable::validateOptions() const {
+  validateDataWrapperOptions();
+  validateRefreshOptions();
 }
 
 bool ForeignTable::isAppendMode() const {
@@ -101,17 +73,108 @@ std::string ForeignTable::getFilePath() const {
   }
 }
 
-void ForeignTable::validateRecognizedOption(
-    const std::vector<std::string_view>& supported_data_wrapper_options) {
-  for (const auto& entry : options) {
-    if (std::find(supported_options.begin(), supported_options.end(), entry.first) ==
-            supported_options.end() &&
-        std::find(supported_data_wrapper_options.begin(),
-                  supported_data_wrapper_options.end(),
-                  entry.first) == supported_data_wrapper_options.end()) {
-      std::string error_message = "Invalid foreign table option \"" + entry.first + "\".";
-      throw std::runtime_error{error_message};
+void ForeignTable::initializeOptions(const rapidjson::Value& options) {
+  // Create the options map first because the json version is not guaranteed to be
+  // upper-case, which we need to compare reliably with alterable_options.
+  auto options_map = create_options_map(options);
+  validateSupportedOptions(options_map);
+  populateOptionsMap(std::move(options_map));
+  validateOptions();
+}
+
+// This function can't be static because it needs to know the data wrapper type.
+void ForeignTable::validateSupportedOptions(const OptionsMap& options_map) const {
+  const auto data_wrapper_options = getSupportedDataWrapperOptions();
+  for (const auto& [key, value] : options_map) {
+    if (!contains(supported_options, key) && !contains(data_wrapper_options, key)) {
+      throw std::runtime_error{"Invalid foreign table option \"" + key + "\"."};
     }
   }
 }
+
+void ForeignTable::validateRefreshOptions() const {
+  auto update_type_entry =
+      options.find(foreign_storage::ForeignTable::REFRESH_UPDATE_TYPE_KEY);
+  CHECK(update_type_entry != options.end());
+  auto update_type_value = update_type_entry->second;
+  if (update_type_value != ALL_REFRESH_UPDATE_TYPE &&
+      update_type_value != APPEND_REFRESH_UPDATE_TYPE) {
+    std::string error_message =
+        "Invalid value \"" + update_type_value + "\" for " + REFRESH_UPDATE_TYPE_KEY +
+        " option." + " Value must be \"" + std::string{APPEND_REFRESH_UPDATE_TYPE} +
+        "\" or \"" + std::string{ALL_REFRESH_UPDATE_TYPE} + "\".";
+    throw std::runtime_error{error_message};
+  }
+
+  auto refresh_timing_entry =
+      options.find(foreign_storage::ForeignTable::REFRESH_TIMING_TYPE_KEY);
+  CHECK(refresh_timing_entry != options.end());
+  if (auto refresh_timing_value = refresh_timing_entry->second;
+      refresh_timing_value == SCHEDULE_REFRESH_TIMING_TYPE) {
+    auto start_date_entry = options.find(REFRESH_START_DATE_TIME_KEY);
+    if (start_date_entry == options.end()) {
+      throw std::runtime_error{std::string{REFRESH_START_DATE_TIME_KEY} +
+                               " option must be provided for scheduled refreshes."};
+    }
+    auto start_date_time = dateTimeParse<kTIMESTAMP>(start_date_entry->second, 0);
+    int64_t current_time = std::chrono::duration_cast<std::chrono::seconds>(
+                               std::chrono::system_clock::now().time_since_epoch())
+                               .count();
+    if (start_date_time < current_time) {
+      throw std::runtime_error{std::string{REFRESH_START_DATE_TIME_KEY} +
+                               " cannot be a past date time."};
+    }
+
+    auto interval_entry = options.find(REFRESH_INTERVAL_KEY);
+    if (interval_entry != options.end()) {
+      boost::regex interval_regex{"^\\d{1,}[SHD]$",
+                                  boost::regex::extended | boost::regex::icase};
+      if (!boost::regex_match(interval_entry->second, interval_regex)) {
+        throw std::runtime_error{"Invalid value provided for the " +
+                                 std::string{REFRESH_INTERVAL_KEY} + " option."};
+      }
+    }
+  } else if (refresh_timing_value != MANUAL_REFRESH_TIMING_TYPE) {
+    throw std::runtime_error{"Invalid value provided for the " +
+                             std::string{REFRESH_TIMING_TYPE_KEY} +
+                             " option. Value must be \"" + MANUAL_REFRESH_TIMING_TYPE +
+                             "\" or \"" + SCHEDULE_REFRESH_TIMING_TYPE + "\"."};
+  }
+}
+
+void ForeignTable::validateDataWrapperOptions() const {
+  const auto wrapper_type = foreign_server->data_wrapper_type;
+  if (wrapper_type == foreign_storage::DataWrapperType::CSV) {
+    foreign_storage::CsvDataWrapper::validateOptions(this);
+  } else if (wrapper_type == foreign_storage::DataWrapperType::PARQUET) {
+    foreign_storage::ParquetDataWrapper::validateOptions(this);
+  } else {
+    UNREACHABLE() << "Unknown data wrapper type";
+  }
+}
+
+OptionsMap ForeignTable::create_options_map(const rapidjson::Value& json_options) {
+  OptionsMap options_map;
+  CHECK(json_options.IsObject());
+  for (const auto& member : json_options.GetObject()) {
+    auto key = to_upper(member.name.GetString());
+    if (std::find(upper_case_options.begin(), upper_case_options.end(), key) !=
+        upper_case_options.end()) {
+      options_map[key] = to_upper(member.value.GetString());
+    } else {
+      options_map[key] = member.value.GetString();
+    }
+  }
+  return options_map;
+}
+
+void ForeignTable::validate_alter_options(const OptionsMap& options_map) {
+  for (const auto& [key, value] : options_map) {
+    if (!contains(alterable_options, key)) {
+      throw std::runtime_error{std::string("Altering foreign table option \"") + key +
+                               "\" is not currently supported."};
+    }
+  }
+}
+
 }  // namespace foreign_storage

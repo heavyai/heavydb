@@ -27,30 +27,40 @@
 #include "Shared/StringTransform.h"
 
 namespace foreign_storage {
+using OptionsMap = std::map<std::string, std::string, std::less<>>;
 struct OptionsContainer {
-  std::map<std::string, std::string, std::less<>> options;
+  OptionsMap options;
 
   OptionsContainer() {}
 
-  OptionsContainer(const std::map<std::string, std::string, std::less<>>& options)
-      : options(options) {}
+  OptionsContainer(const OptionsMap& options) : options(options) {}
 
   OptionsContainer(const std::string& options_str) { populateOptionsMap(options_str); }
 
-  void populateOptionsMap(const rapidjson::Value& ddl_options) {
+  void populateOptionsMap(OptionsMap&& options_map, bool clear = false) {
+    if (clear) {
+      options = options_map;
+    } else {
+      // The merge order here is to make sure we overwrite duplicates in options.  If we
+      // used options.merge(options_map) we would preserve existing entries.
+      options_map.merge(options);
+      options = options_map;
+    }
+  }
+
+  void populateOptionsMap(const rapidjson::Value& ddl_options, bool clear = false) {
     CHECK(ddl_options.IsObject());
+    if (clear) {
+      options.clear();
+    }
     for (const auto& member : ddl_options.GetObject()) {
       std::string key = to_upper(member.name.GetString());
-      std::string value = member.value.GetString();
-      options[key] = value;
+      options[key] = member.value.GetString();
     }
   }
 
   void populateOptionsMap(const std::string& options_json, bool clear = false) {
     CHECK(!options_json.empty());
-    if (clear) {
-      options.clear();
-    }
     rapidjson::Document options;
     options.Parse(options_json);
     populateOptionsMap(options);

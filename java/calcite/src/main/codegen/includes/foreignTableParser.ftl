@@ -336,3 +336,27 @@ SqlDdl SqlRefreshForeignTables(Span s) : {
   [ optionsMap = WithOptions() ]
   { return new SqlRefreshForeignTables(s.end(this), tableNames, optionsMap); }
 }
+
+/**
+ * ALTER FOREIGN TABLE DDL syntax variants:
+ *
+ * ALTER FOREIGN TABLE <table> [ WITH (<option> = <value> [, ... ] ) ]
+ */
+SqlDdl SqlAlterForeignTable(Span s) :
+{
+    SqlAlterForeignTable.Builder sqlAlterForeignTableBuilder =
+        new SqlAlterForeignTable.Builder();
+    SqlIdentifier tableName;
+    OmniSqlOptionsMap optionsMap = null;
+}
+{
+    <ALTER> <FOREIGN> <TABLE>
+    tableName=CompoundIdentifier()
+    { sqlAlterForeignTableBuilder.setTableName(tableName.toString()); }
+    optionsMap = WithOptions()
+    { sqlAlterForeignTableBuilder.setOptions(optionsMap); }
+    {
+        sqlAlterForeignTableBuilder.setPos(s.end(this));
+        return sqlAlterForeignTableBuilder.build();
+    }
+}

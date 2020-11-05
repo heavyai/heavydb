@@ -143,8 +143,9 @@ void validate_non_duplicate_column(const std::string& column_name,
 
 void validate_non_reserved_keyword(const std::string& column_name);
 
-void validate_drop_table_type(const TableDescriptor* td,
-                              const TableType expected_table_type);
+void validate_table_type(const TableDescriptor* td,
+                         const TableType expected_table_type,
+                         const std::string& command);
 
 std::string table_type_enum_to_string(const TableType table_type);
 
