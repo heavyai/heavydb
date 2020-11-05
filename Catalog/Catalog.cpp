@@ -22,10 +22,7 @@
  * Copyright (c) 2014 MapD Technologies, Inc.  All rights reserved.
  **/
 
-#include "Catalog.h"
-#include "SysCatalog.h"
-
-#include <sys/wait.h>
+#include "Catalog/Catalog.h"
 
 #include <algorithm>
 #include <boost/algorithm/string/predicate.hpp>
@@ -43,6 +40,7 @@
 #include <random>
 #include <regex>
 #include <sstream>
+
 #if BOOST_VERSION >= 106600
 #include <boost/uuid/detail/sha1.hpp>
 #else
@@ -52,6 +50,8 @@
 #include <rapidjson/istreamwrapper.h>
 #include <rapidjson/ostreamwrapper.h>
 #include <rapidjson/writer.h>
+
+#include "Catalog/SysCatalog.h"
 
 #include "QueryEngine/Execute.h"
 #include "QueryEngine/TableOptimizer.h"
@@ -2408,7 +2408,7 @@ void Catalog::serializeTableJsonUnlocked(const TableDescriptor* td,
   d.AddMember(StringRef(td->tableName.c_str()), table, d.GetAllocator());
 
   // Overwrite the existing file
-  std::ofstream writer(file_path.string(), writer.trunc | writer.out);
+  std::ofstream writer(file_path.string(), std::ios::trunc | std::ios::out);
   CHECK(writer.is_open());
   OStreamWrapper json_wrapper(writer);
 
@@ -2440,7 +2440,7 @@ void Catalog::dropTableFromJsonUnlocked(const std::string& table_name) const {
   CHECK(d.RemoveMember(table_name_ref));
 
   // Overwrite the existing file
-  std::ofstream writer(file_path.string(), writer.trunc | writer.out);
+  std::ofstream writer(file_path.string(), std::ios::trunc | std::ios::out);
   CHECK(writer.is_open());
   OStreamWrapper json_wrapper(writer);
 
