@@ -37,6 +37,10 @@
 #include <thrift/transport/TTransportUtils.h>
 #include <type_traits>
 
+#ifdef _MSC_VER
+#include <process.h>
+#endif
+
 #include "gen-cpp/CalciteServer.h"
 
 #include "rapidjson/document.h"
@@ -108,9 +112,68 @@ static void start_calcite_server_as_daemon(const int db_port,
 
   // If a config file hasn't been supplied then put the password in the params
   // otherwise send an empty string and Calcite should get it from the config file.
-  std::string key_store_password = (db_config_file == "") ? ssl_keystore_password_X : "";
-  std::string trust_store_password = (db_config_file == "") ? ssl_trust_password_X : "";
-
+  std::string key_store_password = (db_config_file == "") ? ssl_keystore_password_X : " ";
+  std::string trust_store_password = (db_config_file == "") ? ssl_trust_password_X : " ";
+#ifdef _MSC_VER
+  // TODO: enable UDF support
+  std::vector<std::string> args_vec;
+  args_vec.push_back("java");
+  args_vec.push_back(xDebug);
+  args_vec.push_back(remoteDebug);
+  args_vec.push_back(xmxP);
+  args_vec.push_back(logDirectory);
+  args_vec.push_back(jarP);
+  args_vec.push_back(jarD);
+  args_vec.push_back(extensionsP);
+  args_vec.push_back(extensionsD);
+  args_vec.push_back(dataP);
+  args_vec.push_back(dataD);
+  args_vec.push_back(localPortP);
+  args_vec.push_back(localPortD);
+  args_vec.push_back(dbPortP);
+  args_vec.push_back(dbPortD);
+  if (!ssl_trust_store.empty()) {
+    args_vec.push_back(TrustStoreP);
+    args_vec.push_back(ssl_trust_store);
+  }
+  if (!trust_store_password.empty()) {
+    args_vec.push_back(TrustPasswdP);
+    args_vec.push_back(trust_store_password);
+  }
+  if (!ssl_keystore.empty()) {
+    args_vec.push_back(KeyStoreP);
+    args_vec.push_back(ssl_keystore);
+  }
+  if (!key_store_password.empty()) {
+    args_vec.push_back(KeyStorePasswdP);
+    args_vec.push_back(key_store_password);
+  }
+  if (!db_config_file.empty()) {
+    args_vec.push_back(ConfigFileP);
+    args_vec.push_back(db_config_file);
+  }
+  std::string args{boost::algorithm::join(args_vec, " ")};
+  STARTUPINFO startup_info;
+  PROCESS_INFORMATION proc_info;
+  ZeroMemory(&startup_info, sizeof(startup_info));
+  startup_info.cb = sizeof(startup_info);
+  ZeroMemory(&proc_info, sizeof(proc_info));
+  LOG(INFO) << "Startup command: " << args;
+  std::wstring wargs = std::wstring(args.begin(), args.end());
+  const auto ret = CreateProcess(NULL,
+                                 (LPWSTR)wargs.c_str(),
+                                 NULL,
+                                 NULL,
+                                 false,
+                                 0,
+                                 NULL,
+                                 NULL,
+                                 &startup_info,
+                                 &proc_info);
+  if (ret == 0) {
+    LOG(FATAL) << "Failed to start Calcite server " << GetLastError();
+  }
+#else
   int pid = fork();
   if (pid == 0) {
     int i;
@@ -181,6 +244,7 @@ static void start_calcite_server_as_daemon(const int db_port,
       LOG(INFO) << "Successfully started Calcite server";
     }
   }
+#endif
 }
 
 std::pair<mapd::shared_ptr<CalciteServerClient>, mapd::shared_ptr<TTransport>>
