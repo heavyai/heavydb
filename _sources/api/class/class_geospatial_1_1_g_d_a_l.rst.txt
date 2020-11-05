@@ -1,0 +1,9 @@
+Class Geospatial::GDAL
+======================
+
+.. doxygenclass:: Geospatial::GDAL
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

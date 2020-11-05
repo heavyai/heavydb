@@ -64,7 +64,7 @@
             
             
               <div class="version">
-                5.5.0dev b325450
+                5.5.0dev d97d253
               </div>
             
           
@@ -448,6 +448,7 @@
 <li class="toctree-l2"><a class="reference internal" href="api/class/class_fragmenter___namespace_1_1_sorted_order_fragmenter.html">Class Fragmenter_Namespace::SortedOrderFragmenter</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/class_fragmenter___namespace_1_1_table_info.html">Class Fragmenter_Namespace::TableInfo</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/class_function.html">Class Function</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/class/class_geospatial_1_1_g_d_a_l.html">Class Geospatial::GDAL</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/class_geospatial_1_1_geo_base.html">Class Geospatial::GeoBase</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/class_geospatial_1_1_geo_geometry.html">Class Geospatial::GeoGeometry</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/class_geospatial_1_1_geo_geometry_collection.html">Class Geospatial::GeoGeometryCollection</a></li>
@@ -1038,7 +1039,6 @@
 <li class="toctree-l2"><a class="reference internal" href="api/class/classforeign__storage_1_1_typed_parquet_in_place_encoder.html">Class foreign_storage::TypedParquetInPlaceEncoder</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/classimport__export_1_1_data_stream_sink.html">Class import_export::DataStreamSink</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/classimport__export_1_1_detector.html">Class import_export::Detector</a></li>
-<li class="toctree-l2"><a class="reference internal" href="api/class/classimport__export_1_1_g_d_a_l.html">Class import_export::GDAL</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/classimport__export_1_1_importer.html">Class import_export::Importer</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/classimport__export_1_1_importer_utils.html">Class import_export::ImporterUtils</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/classimport__export_1_1_loader.html">Class import_export::Loader</a></li>
@@ -1464,7 +1464,6 @@
 <li class="toctree-l2"><a class="reference internal" href="api/struct/struct_file___namespace_1_1_page.html">Struct File_Namespace::Page</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/struct/struct_file___namespace_1_1read_thread_d_s.html">Struct File_Namespace::readThreadDS</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/struct/struct_filter_selectivity.html">Struct FilterSelectivity</a></li>
-<li class="toctree-l2"><a class="reference internal" href="api/struct/struct_first_step_execution_result.html">Struct FirstStepExecutionResult</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/struct/struct_foreign_storage_column_buffer.html">Struct ForeignStorageColumnBuffer</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/struct/struct_frag.html">Struct Frag</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/struct/struct_fragmenter___namespace_1_1_array_chunk_converter.html">Struct Fragmenter_Namespace::ArrayChunkConverter</a></li>
@@ -1579,6 +1578,7 @@
 <li class="toctree-l2"><a class="reference internal" href="api/struct/struct_query_execution_properties.html">Struct QueryExecutionProperties</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/struct/struct_query_hint.html">Struct QueryHint</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/struct/struct_query_info.html">Struct QueryInfo</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/struct/struct_query_step_execution_result.html">Struct QueryStepExecutionResult</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/struct/struct_reduction_code.html">Struct ReductionCode</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/struct/struct_rel_alg_execution_unit.html">Struct RelAlgExecutionUnit</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/struct/struct_rel_alg_executor_1_1_table_function_work_unit.html">Struct RelAlgExecutor::TableFunctionWorkUnit</a></li>
@@ -6142,6 +6142,8 @@
 </li>
       <li><a href="api/class/class_command_line_options.html#_CPPv4N18CommandLineOptions18parse_command_lineEiPPCKcKb">CommandLineOptions::parse_command_line (C++ function)</a>
 </li>
+      <li><a href="api/class/class_command_line_options.html#_CPPv4N18CommandLineOptions28pending_query_interrupt_freqE">CommandLineOptions::pending_query_interrupt_freq (C++ member)</a>
+</li>
       <li><a href="api/class/class_command_line_options.html#_CPPv4N18CommandLineOptions18positional_optionsE">CommandLineOptions::positional_options (C++ member)</a>
 </li>
       <li><a href="api/class/class_command_line_options.html#_CPPv4N18CommandLineOptions9read_onlyE">CommandLineOptions::read_only (C++ member)</a>
@@ -6156,7 +6158,7 @@
 </li>
       <li><a href="api/class/class_command_line_options.html#_CPPv4N18CommandLineOptions16reserved_gpu_memE">CommandLineOptions::reserved_gpu_mem (C++ member)</a>
 </li>
-      <li><a href="api/class/class_command_line_options.html#_CPPv4N18CommandLineOptions33runtime_query_interrupt_frequencyE">CommandLineOptions::runtime_query_interrupt_frequency (C++ member)</a>
+      <li><a href="api/class/class_command_line_options.html#_CPPv4N18CommandLineOptions28running_query_interrupt_freqE">CommandLineOptions::running_query_interrupt_freq (C++ member)</a>
 </li>
       <li><a href="api/class/class_command_line_options.html#_CPPv4N18CommandLineOptions9start_gpuE">CommandLineOptions::start_gpu (C++ member)</a>
 </li>
@@ -6988,7 +6990,7 @@
 </li>
       <li><a href="api/class/class_d_b_handler.html#_CPPv4N9DBHandler15base_data_path_E">DBHandler::base_data_path_ (C++ member)</a>
 </li>
-      <li><a href="api/class/class_d_b_handler.html#_CPPv4N9DBHandler25broadcast_serialized_rowsERK15TSerializedRowsRK14TRowDescriptorK8TQueryId">DBHandler::broadcast_serialized_rows (C++ function)</a>
+      <li><a href="api/class/class_d_b_handler.html#_CPPv4N9DBHandler25broadcast_serialized_rowsERK15TSerializedRowsRK14TRowDescriptorK8TQueryIdK11TSubqueryIdKb">DBHandler::broadcast_serialized_rows (C++ function)</a>
 </li>
       <li><a href="api/class/class_d_b_handler.html#_CPPv4N9DBHandler8calcite_E">DBHandler::calcite_ (C++ member)</a>
 </li>
@@ -7020,9 +7022,7 @@
 </li>
       <li><a href="api/class/class_d_b_handler.html#_CPPv4NK9DBHandler14convert_resultER12TQueryResultRK9ResultSetKb">DBHandler::convert_result (C++ function)</a>
 </li>
-      <li><a href="api/class/class_d_b_handler.html#_CPPv4I0ENK9DBHandler12convert_rowsEvR12TQueryResult15QueryStateProxyRKNSt6vectorI14TargetMetaInfoEERK1RKbK7int32_tK7int32_t">DBHandler::convert_rows (C++ function)</a>
-</li>
-      <li><a href="api/class/class_d_b_handler.html#_CPPv4NK9DBHandler23convert_target_metainfoERK14TargetMetaInfoK6size_t">DBHandler::convert_target_metainfo (C++ function)</a>, <a href="api/class/class_d_b_handler.html#_CPPv4NK9DBHandler23convert_target_metainfoERKNSt6vectorI14TargetMetaInfoEE">[1]</a>
+      <li><a href="api/class/class_d_b_handler.html#_CPPv4NK9DBHandler12convert_rowsER12TQueryResult15QueryStateProxyRKNSt6vectorI14TargetMetaInfoEERK9ResultSetKbK7int32_tK7int32_t">DBHandler::convert_rows (C++ function)</a>
 </li>
       <li><a href="api/class/class_d_b_handler.html#_CPPv4N9DBHandler20copyparams_to_thriftERKN13import_export10CopyParamsE">DBHandler::copyparams_to_thrift (C++ function)</a>
 </li>
@@ -7068,7 +7068,7 @@
 </li>
       <li><a href="api/class/class_d_b_handler.html#_CPPv4N9DBHandler24execute_next_render_stepER17TRenderStepResultRK19TPendingRenderQueryRK17TRenderAggDataMap">DBHandler::execute_next_render_step (C++ function)</a>
 </li>
-      <li><a href="api/class/class_d_b_handler.html#_CPPv4N9DBHandler18execute_query_stepER11TStepResultRK13TPendingQuery">DBHandler::execute_query_step (C++ function)</a>
+      <li><a href="api/class/class_d_b_handler.html#_CPPv4N9DBHandler18execute_query_stepER11TStepResultRK13TPendingQueryK11TSubqueryId">DBHandler::execute_query_step (C++ function)</a>
 </li>
       <li><a href="api/class/class_d_b_handler.html#_CPPv4NK9DBHandler15execute_rel_algER12TQueryResult15QueryStateProxyRKNSt6stringEKbK18ExecutorDeviceTypeK7int32_tK7int32_tKbKbRK11ExplainInfoKNSt8optionalI6size_tEE">DBHandler::execute_rel_alg (C++ function)</a>
 </li>
@@ -8110,7 +8110,7 @@
 </li>
       <li><a href="api/struct/struct_execution_options.html#_CPPv4N16ExecutionOptions20output_columnar_hintE">ExecutionOptions::output_columnar_hint (C++ member)</a>
 </li>
-      <li><a href="api/struct/struct_execution_options.html#_CPPv4N16ExecutionOptions33runtime_query_interrupt_frequencyE">ExecutionOptions::runtime_query_interrupt_frequency (C++ member)</a>
+      <li><a href="api/struct/struct_execution_options.html#_CPPv4N16ExecutionOptions28pending_query_interrupt_freqE">ExecutionOptions::pending_query_interrupt_freq (C++ member)</a>
 </li>
       <li><a href="api/struct/struct_execution_options.html#_CPPv4N16ExecutionOptions21with_dynamic_watchdogE">ExecutionOptions::with_dynamic_watchdog (C++ member)</a>
 </li>
@@ -8250,7 +8250,7 @@
 </li>
       <li><a href="api/class/class_executor.html#_CPPv4N8Executor15cpu_code_cache_E">Executor::cpu_code_cache_ (C++ member)</a>
 </li>
-      <li><a href="api/class/class_executor.html#_CPPv4N8Executor27createErrorCheckControlFlowEPN4llvm8FunctionEbb18ExecutorDeviceType">Executor::createErrorCheckControlFlow (C++ function)</a>
+      <li><a href="api/class/class_executor.html#_CPPv4N8Executor27createErrorCheckControlFlowEPN4llvm8FunctionEbb18ExecutorDeviceTypeRKNSt6vectorI14InputTableInfoEE">Executor::createErrorCheckControlFlow (C++ function)</a>
 </li>
       <li><a href="api/class/class_executor.html#_CPPv4N8Executor13createKernelsER19SharedKernelContextRK19RelAlgExecutionUnitR13ColumnFetcherRKNSt6vectorI14InputTableInfoEERK16ExecutionOptionsKbKbK6size_tRK26QueryCompilationDescriptorRK21QueryMemoryDescriptorP10RenderInfoRNSt13unordered_setIiEERi">Executor::createKernels (C++ function)</a>
 </li>
@@ -8266,7 +8266,7 @@
 </li>
       <li><a href="api/class/class_executor.html#_CPPv4NK8Executor12deviceCyclesEi">Executor::deviceCycles (C++ function)</a>
 </li>
-      <li><a href="api/class/class_executor.html#_CPPv4NK8Executor27enableRuntimeQueryInterruptEKj">Executor::enableRuntimeQueryInterrupt (C++ function)</a>
+      <li><a href="api/class/class_executor.html#_CPPv4NK8Executor27enableRuntimeQueryInterruptEKdKj">Executor::enableRuntimeQueryInterrupt (C++ function)</a>
 </li>
       <li><a href="api/class/class_executor.html#_CPPv4N8Executor37ERR_COLUMNAR_CONVERSION_NOT_SUPPORTEDE">Executor::ERR_COLUMNAR_CONVERSION_NOT_SUPPORTED (C++ member)</a>
 </li>
@@ -8328,10 +8328,10 @@
 </li>
       <li><a href="api/class/class_executor.html#_CPPv4N8Executor10executors_E">Executor::executors_ (C++ member)</a>
 </li>
-  </ul></td>
-  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="api/class/class_executor.html#_CPPv4N8Executor22executors_cache_mutex_E">Executor::executors_cache_mutex_ (C++ member)</a>
 </li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="api/class/class_executor.html#_CPPv4N8Executor16FetchCacheAnchorE">Executor::FetchCacheAnchor (C++ class)</a>, <a href="api/class/class_executor_1_1_fetch_cache_anchor.html#_CPPv4N8Executor16FetchCacheAnchorE">[1]</a>
 </li>
       <li><a href="api/class/class_executor.html#_CPPv4N8Executor16FetchCacheAnchor11cgen_state_E">Executor::FetchCacheAnchor::cgen_state_ (C++ member)</a>, <a href="api/class/class_executor_1_1_fetch_cache_anchor.html#_CPPv4N8Executor16FetchCacheAnchor11cgen_state_E">[1]</a>
@@ -8425,6 +8425,8 @@
       <li><a href="api/class/class_executor.html#_CPPv4N8Executor21inlineHoistedLiteralsEv">Executor::inlineHoistedLiterals (C++ function)</a>
 </li>
       <li><a href="api/class/class_executor.html#_CPPv4N8Executor23input_table_info_cache_E">Executor::input_table_info_cache_ (C++ member)</a>
+</li>
+      <li><a href="api/class/class_executor.html#_CPPv4N8Executor22insertErrorCodeCheckerEPN4llvm8FunctionEb">Executor::insertErrorCodeChecker (C++ function)</a>
 </li>
       <li><a href="api/class/class_executor.html#_CPPv4N8Executor9interruptERKNSt6stringERKNSt6stringE">Executor::interrupt (C++ function)</a>
 </li>
@@ -9208,16 +9210,6 @@
 </li>
       <li><a href="api/struct/struct_filter_selectivity.html#_CPPv4N17FilterSelectivity22total_rows_upper_boundE">FilterSelectivity::total_rows_upper_bound (C++ member)</a>
 </li>
-      <li><a href="api/struct/struct_first_step_execution_result.html#_CPPv424FirstStepExecutionResult">FirstStepExecutionResult (C++ class)</a>
-</li>
-      <li><a href="api/struct/struct_first_step_execution_result.html#_CPPv4N24FirstStepExecutionResult18is_outermost_queryE">FirstStepExecutionResult::is_outermost_query (C++ member)</a>
-</li>
-      <li><a href="api/struct/struct_first_step_execution_result.html#_CPPv4N24FirstStepExecutionResult10merge_typeE">FirstStepExecutionResult::merge_type (C++ member)</a>
-</li>
-      <li><a href="api/struct/struct_first_step_execution_result.html#_CPPv4N24FirstStepExecutionResult7node_idE">FirstStepExecutionResult::node_id (C++ member)</a>
-</li>
-      <li><a href="api/struct/struct_first_step_execution_result.html#_CPPv4N24FirstStepExecutionResult6resultE">FirstStepExecutionResult::result (C++ member)</a>
-</li>
       <li><a href="api/class/class_first_try.html#_CPPv48FirstTry">FirstTry (C++ class)</a>
 </li>
       <li><a href="api/class/class_fixed_length_array_none_encoder.html#_CPPv427FixedLengthArrayNoneEncoder">FixedLengthArrayNoneEncoder (C++ class)</a>
@@ -9942,14 +9934,14 @@
 </li>
       <li><a href="api/class/classforeign__storage_1_1_foreign_table_schema.html#_CPPv4NK15foreign_storage18ForeignTableSchema21getParquetColumnIndexEKi">foreign_storage::ForeignTableSchema::getParquetColumnIndex (C++ function)</a>
 </li>
-  </ul></td>
-  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="api/class/classforeign__storage_1_1_foreign_table_schema.html#_CPPv4N15foreign_storage18ForeignTableSchema29logical_and_physical_columns_E">foreign_storage::ForeignTableSchema::logical_and_physical_columns_ (C++ member)</a>
 </li>
       <li><a href="api/class/classforeign__storage_1_1_foreign_table_schema.html#_CPPv4N15foreign_storage18ForeignTableSchema19logical_column_ids_E">foreign_storage::ForeignTableSchema::logical_column_ids_ (C++ member)</a>
 </li>
       <li><a href="api/class/classforeign__storage_1_1_foreign_table_schema.html#_CPPv4N15foreign_storage18ForeignTableSchema16logical_columns_E">foreign_storage::ForeignTableSchema::logical_columns_ (C++ member)</a>
 </li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="api/class/classforeign__storage_1_1_foreign_table_schema.html#_CPPv4NK15foreign_storage18ForeignTableSchema28numLogicalAndPhysicalColumnsEv">foreign_storage::ForeignTableSchema::numLogicalAndPhysicalColumns (C++ function)</a>
 </li>
       <li><a href="api/class/classforeign__storage_1_1_foreign_table_schema.html#_CPPv4NK15foreign_storage18ForeignTableSchema17numLogicalColumnsEv">foreign_storage::ForeignTableSchema::numLogicalColumns (C++ function)</a>
@@ -11394,6 +11386,18 @@
 </li>
       <li><a href="api/struct/struct_geo_return_type_traits_3_01_result_set_1_1_geo_return_type_1_1_wkt_string_00_01_g_e_o___s_o_u_r_c_e___t_y_p_e_01_4.html#_CPPv4IEN19GeoReturnTypeTraitsIN9ResultSet13GeoReturnType9WktStringE15GEO_SOURCE_TYPEE17GeoSerializerTypeE">GeoReturnTypeTraits&lt;ResultSet::GeoReturnType::WktString, GEO_SOURCE_TYPE&gt;::GeoSerializerType (C++ type)</a>
 </li>
+      <li><a href="api/class/class_geospatial_1_1_g_d_a_l.html#_CPPv4N10Geospatial4GDALE">Geospatial::GDAL (C++ class)</a>
+</li>
+      <li><a href="api/class/class_geospatial_1_1_g_d_a_l.html#_CPPv4N10Geospatial4GDAL4initEv">Geospatial::GDAL::init (C++ function)</a>
+</li>
+      <li><a href="api/class/class_geospatial_1_1_g_d_a_l.html#_CPPv4N10Geospatial4GDAL11init_mutex_E">Geospatial::GDAL::init_mutex_ (C++ member)</a>
+</li>
+      <li><a href="api/class/class_geospatial_1_1_g_d_a_l.html#_CPPv4N10Geospatial4GDAL12initialized_E">Geospatial::GDAL::initialized_ (C++ member)</a>
+</li>
+      <li><a href="api/class/class_geospatial_1_1_g_d_a_l.html#_CPPv4N10Geospatial4GDAL14supportsDriverEPKc">Geospatial::GDAL::supportsDriver (C++ function)</a>
+</li>
+      <li><a href="api/class/class_geospatial_1_1_g_d_a_l.html#_CPPv4N10Geospatial4GDAL25supportsNetworkFileAccessEv">Geospatial::GDAL::supportsNetworkFileAccess (C++ function)</a>
+</li>
       <li><a href="api/class/class_geospatial_1_1_geo_base.html#_CPPv4N10Geospatial7GeoBaseE">Geospatial::GeoBase (C++ class)</a>
 </li>
       <li><a href="api/class/class_geospatial_1_1_geo_base.html#_CPPv4N10Geospatial7GeoBase13createFromWkbERKNSt6vectorI7uint8_tEEPP11OGRGeometry">Geospatial::GeoBase::createFromWkb (C++ function)</a>
@@ -11470,14 +11474,14 @@
 </li>
       <li><a href="api/class/class_geospatial_1_1_geo_geometry_collection.html#_CPPv4N10Geospatial21GeoGeometryCollection21GeoGeometryCollectionEP11OGRGeometryKb">Geospatial::GeoGeometryCollection::GeoGeometryCollection (C++ function)</a>, <a href="api/class/class_geospatial_1_1_geo_geometry_collection.html#_CPPv4N10Geospatial21GeoGeometryCollection21GeoGeometryCollectionERKNSt6stringE">[1]</a>, <a href="api/class/class_geospatial_1_1_geo_geometry_collection.html#_CPPv4N10Geospatial21GeoGeometryCollection21GeoGeometryCollectionERKNSt6vectorIdEERKNSt6vectorI7int32_tEERKNSt6vectorI7int32_tEERKNSt6vectorI7int32_tEE">[2]</a>
 </li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="api/class/class_geospatial_1_1_geo_geometry_collection.html#_CPPv4NK10Geospatial21GeoGeometryCollection10getColumnsERNSt6vectorIdEERNSt6vectorI7int32_tEERNSt6vectorI7int32_tEERNSt6vectorI7int32_tEERNSt6vectorIdEE">Geospatial::GeoGeometryCollection::getColumns (C++ function)</a>
 </li>
       <li><a href="api/class/class_geospatial_1_1_geo_geometry_collection.html#_CPPv4NK10Geospatial21GeoGeometryCollection7getTypeEv">Geospatial::GeoGeometryCollection::getType (C++ function)</a>
 </li>
       <li><a href="api/class/class_geospatial_1_1_geo_line_string.html#_CPPv4N10Geospatial13GeoLineStringE">Geospatial::GeoLineString (C++ class)</a>
 </li>
-  </ul></td>
-  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="api/class/class_geospatial_1_1_geo_line_string.html#_CPPv4N10Geospatial13GeoLineString13GeoLineStringEP11OGRGeometryKb">Geospatial::GeoLineString::GeoLineString (C++ function)</a>
 </li>
       <li><a href="api/class/class_geospatial_1_1_geo_line_string.html#_CPPv4NK10Geospatial13GeoLineString7getTypeEv">Geospatial::GeoLineString::getType (C++ function)</a>
@@ -12112,18 +12116,6 @@
 </li>
       <li><a href="api/class/classimport__export_1_1_detector.html#_CPPv4N13import_export8Detector7timeoutE">import_export::Detector::timeout (C++ member)</a>
 </li>
-      <li><a href="api/class/classimport__export_1_1_g_d_a_l.html#_CPPv4N13import_export4GDALE">import_export::GDAL (C++ class)</a>
-</li>
-      <li><a href="api/class/classimport__export_1_1_g_d_a_l.html#_CPPv4N13import_export4GDAL4initEv">import_export::GDAL::init (C++ function)</a>
-</li>
-      <li><a href="api/class/classimport__export_1_1_g_d_a_l.html#_CPPv4N13import_export4GDAL11init_mutex_E">import_export::GDAL::init_mutex_ (C++ member)</a>
-</li>
-      <li><a href="api/class/classimport__export_1_1_g_d_a_l.html#_CPPv4N13import_export4GDAL12initialized_E">import_export::GDAL::initialized_ (C++ member)</a>
-</li>
-      <li><a href="api/class/classimport__export_1_1_g_d_a_l.html#_CPPv4N13import_export4GDAL14supportsDriverEPKc">import_export::GDAL::supportsDriver (C++ function)</a>
-</li>
-      <li><a href="api/class/classimport__export_1_1_g_d_a_l.html#_CPPv4N13import_export4GDAL25supportsNetworkFileAccessEv">import_export::GDAL::supportsNetworkFileAccess (C++ function)</a>
-</li>
       <li><a href="api/struct/structimport__export_1_1_geo_import_exception.html#_CPPv4N13import_export18GeoImportExceptionE">import_export::GeoImportException (C++ class)</a>
 </li>
       <li><a href="api/class/classimport__export_1_1_importer.html#_CPPv4N13import_export8ImporterE">import_export::Importer (C++ class)</a>
@@ -12346,14 +12338,14 @@
 </li>
       <li><a href="api/class/classimport__export_1_1_query_exporter.html#_CPPv4NK13import_export13QueryExporter22validateFileExtensionsERKNSt6stringERKNSt6stringERKNSt13unordered_setINSt6stringEEE">import_export::QueryExporter::validateFileExtensions (C++ function)</a>
 </li>
-  </ul></td>
-  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="api/class/classimport__export_1_1_query_exporter.html#_CPPv4N13import_export13QueryExporterD0Ev">import_export::QueryExporter::~QueryExporter (C++ function)</a>
 </li>
       <li><a href="api/class/classimport__export_1_1_query_exporter_c_s_v.html#_CPPv4N13import_export16QueryExporterCSVE">import_export::QueryExporterCSV (C++ class)</a>
 </li>
       <li><a href="api/class/classimport__export_1_1_query_exporter_c_s_v.html#_CPPv4N13import_export16QueryExporterCSV11beginExportERKNSt6stringERKNSt6stringERK10CopyParamsRKNSt6vectorI14TargetMetaInfoEEK15FileCompressionK17ArrayNullHandling">import_export::QueryExporterCSV::beginExport (C++ function)</a>
 </li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="api/class/classimport__export_1_1_query_exporter_c_s_v.html#_CPPv4N13import_export16QueryExporterCSV12copy_params_E">import_export::QueryExporterCSV::copy_params_ (C++ member)</a>
 </li>
       <li><a href="api/class/classimport__export_1_1_query_exporter_c_s_v.html#_CPPv4N13import_export16QueryExporterCSV9endExportEv">import_export::QueryExporterCSV::endExport (C++ function)</a>
@@ -13248,7 +13240,7 @@
 </li>
       <li><a href="api/class/class_leaf_aggregator.html#_CPPv4N14LeafAggregator10disconnectEK10TSessionId">LeafAggregator::disconnect (C++ function)</a>
 </li>
-      <li><a href="api/class/class_leaf_aggregator.html#_CPPv4N14LeafAggregator7executeERKN17Catalog_Namespace11SessionInfoERKNSt6stringERK16ExecutionOptions">LeafAggregator::execute (C++ function)</a>
+      <li><a href="api/class/class_leaf_aggregator.html#_CPPv4N14LeafAggregator7executeERKN17Catalog_Namespace11SessionInfoERKNSt6stringERK16ExecutionOptionsKb">LeafAggregator::execute (C++ function)</a>
 </li>
       <li><a href="api/class/class_leaf_aggregator.html#_CPPv4N14LeafAggregator18forwardQueryToLeafERKN17Catalog_Namespace11SessionInfoERKNSt6stringEK6size_t">LeafAggregator::forwardQueryToLeaf (C++ function)</a>
 </li>
@@ -13696,11 +13688,11 @@
 </li>
       <li><a href="api/class/class_map_d_leaf_handler.html#_CPPv415MapDLeafHandler">MapDLeafHandler (C++ class)</a>
 </li>
-      <li><a href="api/class/class_map_d_leaf_handler.html#_CPPv4N15MapDLeafHandler25broadcast_serialized_rowsERK15TSerializedRowsRK14TRowDescriptorK8TQueryId">MapDLeafHandler::broadcast_serialized_rows (C++ function)</a>
+      <li><a href="api/class/class_map_d_leaf_handler.html#_CPPv4N15MapDLeafHandler25broadcast_serialized_rowsERK15TSerializedRowsRK14TRowDescriptorK8TQueryIdK11TSubqueryIdKb">MapDLeafHandler::broadcast_serialized_rows (C++ function)</a>
 </li>
       <li><a href="api/class/class_map_d_leaf_handler.html#_CPPv4N15MapDLeafHandler23check_table_consistencyER10TTableMetaRK10TSessionIdK7int32_t">MapDLeafHandler::check_table_consistency (C++ function)</a>
 </li>
-      <li><a href="api/class/class_map_d_leaf_handler.html#_CPPv4N15MapDLeafHandler18execute_query_stepER11TStepResultRK13TPendingQuery">MapDLeafHandler::execute_query_step (C++ function)</a>
+      <li><a href="api/class/class_map_d_leaf_handler.html#_CPPv4N15MapDLeafHandler18execute_query_stepER11TStepResultRK13TPendingQueryK11TSubqueryId">MapDLeafHandler::execute_query_step (C++ function)</a>
 </li>
       <li><a href="api/class/class_map_d_leaf_handler.html#_CPPv4N15MapDLeafHandler11flush_queueEv">MapDLeafHandler::flush_queue (C++ function)</a>
 </li>
@@ -15560,10 +15552,10 @@
 </li>
       <li><a href="api/class/class_parser_1_1_name_value_assign.html#_CPPv4NK6Parser15NameValueAssign8get_nameEv">Parser::NameValueAssign::get_name (C++ function)</a>
 </li>
-  </ul></td>
-  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="api/class/class_parser_1_1_name_value_assign.html#_CPPv4NK6Parser15NameValueAssign9get_valueEv">Parser::NameValueAssign::get_value (C++ function)</a>
 </li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="api/class/class_parser_1_1_name_value_assign.html#_CPPv4N6Parser15NameValueAssign4nameE">Parser::NameValueAssign::name (C++ member)</a>
 </li>
       <li><a href="api/class/class_parser_1_1_name_value_assign.html#_CPPv4N6Parser15NameValueAssign15NameValueAssignEPNSt6stringEP7Literal">Parser::NameValueAssign::NameValueAssign (C++ function)</a>
@@ -16167,6 +16159,8 @@
       <li><a href="api/class/class_parser_wrapper.html#_CPPv4NK13ParserWrapper13isPlanExplainEv">ParserWrapper::isPlanExplain (C++ function)</a>
 </li>
       <li><a href="api/class/class_parser_wrapper.html#_CPPv4NK13ParserWrapper15isSelectExplainEv">ParserWrapper::isSelectExplain (C++ function)</a>
+</li>
+      <li><a href="api/class/class_parser_wrapper.html#_CPPv4NK13ParserWrapper14isUpdateDeleteEv">ParserWrapper::isUpdateDelete (C++ function)</a>
 </li>
       <li><a href="api/class/class_parser_wrapper.html#_CPPv4N13ParserWrapper4NoneE">ParserWrapper::None (C++ enumerator)</a>
 </li>
@@ -16792,14 +16786,14 @@
 </li>
       <li><a href="api/class/class_query_memory_descriptor.html#_CPPv4NK21QueryMemoryDescriptor17getColSlotContextEv">QueryMemoryDescriptor::getColSlotContext (C++ function)</a>
 </li>
-  </ul></td>
-  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="api/class/class_query_memory_descriptor.html#_CPPv4NK21QueryMemoryDescriptor11getColsSizeEv">QueryMemoryDescriptor::getColsSize (C++ function)</a>
 </li>
       <li><a href="api/class/class_query_memory_descriptor.html#_CPPv4NK21QueryMemoryDescriptor19getCompactByteWidthEv">QueryMemoryDescriptor::getCompactByteWidth (C++ function)</a>
 </li>
       <li><a href="api/class/class_query_memory_descriptor.html#_CPPv4NK21QueryMemoryDescriptor26getCountDistinctDescriptorEK6size_t">QueryMemoryDescriptor::getCountDistinctDescriptor (C++ function)</a>
 </li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="api/class/class_query_memory_descriptor.html#_CPPv4NK21QueryMemoryDescriptor31getCountDistinctDescriptorsSizeEv">QueryMemoryDescriptor::getCountDistinctDescriptorsSize (C++ function)</a>
 </li>
       <li><a href="api/class/class_query_memory_descriptor.html#_CPPv4NK21QueryMemoryDescriptor20getEffectiveKeyWidthEv">QueryMemoryDescriptor::getEffectiveKeyWidth (C++ function)</a>
@@ -17134,7 +17128,7 @@
 </li>
       <li><a href="api/class/class_query_runner_1_1_query_runner.html#_CPPv4N11QueryRunner11QueryRunner6runSQLERKNSt6stringEK18ExecutorDeviceTypeKbKb">QueryRunner::QueryRunner::runSQL (C++ function)</a>
 </li>
-      <li><a href="api/class/class_query_runner_1_1_query_runner.html#_CPPv4N11QueryRunner11QueryRunner27runSQLWithAllowingInterruptERKNSt6stringENSt10shared_ptrI8ExecutorEERKNSt6stringEK18ExecutorDeviceTypeKj">QueryRunner::QueryRunner::runSQLWithAllowingInterrupt (C++ function)</a>
+      <li><a href="api/class/class_query_runner_1_1_query_runner.html#_CPPv4N11QueryRunner11QueryRunner27runSQLWithAllowingInterruptERKNSt6stringENSt10shared_ptrI8ExecutorEERKNSt6stringEK18ExecutorDeviceTypeKdKj">QueryRunner::QueryRunner::runSQLWithAllowingInterrupt (C++ function)</a>
 </li>
       <li><a href="api/class/class_query_runner_1_1_query_runner.html#_CPPv4N11QueryRunner11QueryRunner13session_info_E">QueryRunner::QueryRunner::session_info_ (C++ member)</a>
 </li>
@@ -17161,6 +17155,16 @@
       <li><a href="api/class/class_query_session_status.html#_CPPv4N18QuerySessionStatus23setQueryStatusAsRunningEv">QuerySessionStatus::setQueryStatusAsRunning (C++ function)</a>
 </li>
       <li><a href="api/class/class_query_session_status.html#_CPPv4N18QuerySessionStatus15submitted_time_E">QuerySessionStatus::submitted_time_ (C++ member)</a>
+</li>
+      <li><a href="api/struct/struct_query_step_execution_result.html#_CPPv424QueryStepExecutionResult">QueryStepExecutionResult (C++ class)</a>
+</li>
+      <li><a href="api/struct/struct_query_step_execution_result.html#_CPPv4N24QueryStepExecutionResult18is_outermost_queryE">QueryStepExecutionResult::is_outermost_query (C++ member)</a>
+</li>
+      <li><a href="api/struct/struct_query_step_execution_result.html#_CPPv4N24QueryStepExecutionResult10merge_typeE">QueryStepExecutionResult::merge_type (C++ member)</a>
+</li>
+      <li><a href="api/struct/struct_query_step_execution_result.html#_CPPv4N24QueryStepExecutionResult7node_idE">QueryStepExecutionResult::node_id (C++ member)</a>
+</li>
+      <li><a href="api/struct/struct_query_step_execution_result.html#_CPPv4N24QueryStepExecutionResult6resultE">QueryStepExecutionResult::result (C++ member)</a>
 </li>
   </ul></td>
 </tr></table>
@@ -17583,6 +17587,8 @@
       <li><a href="api/class/class_rel_alg_node.html#_CPPv410RelAlgNode">RelAlgNode (C++ class)</a>
 </li>
       <li><a href="api/class/class_rel_alg_node.html#_CPPv4N10RelAlgNode15addManagedInputENSt10shared_ptrIK10RelAlgNodeEE">RelAlgNode::addManagedInput (C++ function)</a>
+</li>
+      <li><a href="api/class/class_rel_alg_node.html#_CPPv4NK10RelAlgNode16clearContextDataEv">RelAlgNode::clearContextData (C++ function)</a>
 </li>
       <li><a href="api/class/class_rel_alg_node.html#_CPPv4N10RelAlgNode13context_data_E">RelAlgNode::context_data_ (C++ member)</a>
 </li>
@@ -18316,10 +18322,10 @@
 </li>
       <li><a href="api/class/class_render_info.html#_CPPv4N10RenderInfo11InSituStateE">RenderInfo::InSituState (C++ enum)</a>
 </li>
-      <li><a href="api/class/class_render_info.html#_CPPv4N10RenderInfo10IS_IN_SITUE">RenderInfo::IS_IN_SITU (C++ enumerator)</a>
-</li>
   </ul></td>
   <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="api/class/class_render_info.html#_CPPv4N10RenderInfo10IS_IN_SITUE">RenderInfo::IS_IN_SITU (C++ enumerator)</a>
+</li>
       <li><a href="api/class/class_render_info.html#_CPPv4N10RenderInfo14IS_NOT_IN_SITUE">RenderInfo::IS_NOT_IN_SITU (C++ enumerator)</a>
 </li>
       <li><a href="api/class/class_render_info.html#_CPPv4NK10RenderInfo21isInSituDataFlagUnsetEv">RenderInfo::isInSituDataFlagUnset (C++ function)</a>

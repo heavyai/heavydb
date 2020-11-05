@@ -65,7 +65,7 @@
             
             
               <div class="version">
-                5.5.0dev b325450
+                5.5.0dev d97d253
               </div>
             
           
@@ -449,6 +449,7 @@
 <li class="toctree-l2"><a class="reference internal" href="class_fragmenter___namespace_1_1_sorted_order_fragmenter.html">Class Fragmenter_Namespace::SortedOrderFragmenter</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_fragmenter___namespace_1_1_table_info.html">Class Fragmenter_Namespace::TableInfo</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_function.html">Class Function</a></li>
+<li class="toctree-l2"><a class="reference internal" href="class_geospatial_1_1_g_d_a_l.html">Class Geospatial::GDAL</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_geospatial_1_1_geo_base.html">Class Geospatial::GeoBase</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_geospatial_1_1_geo_geometry.html">Class Geospatial::GeoGeometry</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_geospatial_1_1_geo_geometry_collection.html">Class Geospatial::GeoGeometryCollection</a></li>
@@ -1039,7 +1040,6 @@
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_typed_parquet_in_place_encoder.html">Class foreign_storage::TypedParquetInPlaceEncoder</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classimport__export_1_1_data_stream_sink.html">Class import_export::DataStreamSink</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classimport__export_1_1_detector.html">Class import_export::Detector</a></li>
-<li class="toctree-l2"><a class="reference internal" href="classimport__export_1_1_g_d_a_l.html">Class import_export::GDAL</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classimport__export_1_1_importer.html">Class import_export::Importer</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classimport__export_1_1_importer_utils.html">Class import_export::ImporterUtils</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classimport__export_1_1_loader.html">Class import_export::Loader</a></li>
@@ -1465,7 +1465,6 @@
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_file___namespace_1_1_page.html">Struct File_Namespace::Page</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_file___namespace_1_1read_thread_d_s.html">Struct File_Namespace::readThreadDS</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_filter_selectivity.html">Struct FilterSelectivity</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../struct/struct_first_step_execution_result.html">Struct FirstStepExecutionResult</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_foreign_storage_column_buffer.html">Struct ForeignStorageColumnBuffer</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_frag.html">Struct Frag</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_fragmenter___namespace_1_1_array_chunk_converter.html">Struct Fragmenter_Namespace::ArrayChunkConverter</a></li>
@@ -1580,6 +1579,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_query_execution_properties.html">Struct QueryExecutionProperties</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_query_hint.html">Struct QueryHint</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_query_info.html">Struct QueryInfo</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/struct_query_step_execution_result.html">Struct QueryStepExecutionResult</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_reduction_code.html">Struct ReductionCode</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_rel_alg_execution_unit.html">Struct RelAlgExecutionUnit</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_rel_alg_executor_1_1_table_function_work_unit.html">Struct RelAlgExecutor::TableFunctionWorkUnit</a></li>
@@ -1944,8 +1944,8 @@
 <dd></dd></dl>
 
 <dl class="function">
-<dt id="_CPPv4NK8Executor27enableRuntimeQueryInterruptEKj">
-<span id="_CPPv3NK8Executor27enableRuntimeQueryInterruptEKj"></span><span id="_CPPv2NK8Executor27enableRuntimeQueryInterruptEKj"></span><span id="Executor::enableRuntimeQueryInterrupt__unsignedCC"></span><span class="target" id="class_executor_1a206d59e7e118321b06c43126918a6ab4"></span>void <code class="sig-name descname">enableRuntimeQueryInterrupt</code><span class="sig-paren">(</span><em class="property">const</em> unsigned <em>interrupt_freq</em><span class="sig-paren">)</span> <em class="property">const</em><a class="headerlink" href="#_CPPv4NK8Executor27enableRuntimeQueryInterruptEKj" title="Permalink to this definition">¶</a><br /></dt>
+<dt id="_CPPv4NK8Executor27enableRuntimeQueryInterruptEKdKj">
+<span id="_CPPv3NK8Executor27enableRuntimeQueryInterruptEKdKj"></span><span id="_CPPv2NK8Executor27enableRuntimeQueryInterruptEKdKj"></span><span id="Executor::enableRuntimeQueryInterrupt__doubleC.unsignedCC"></span><span class="target" id="class_executor_1a371847216194c17533a9d2d1519d9ec5"></span>void <code class="sig-name descname">enableRuntimeQueryInterrupt</code><span class="sig-paren">(</span><em class="property">const</em> double <em>runtime_query_check_freq</em>, <em class="property">const</em> unsigned <em>pending_query_check_freq</em><span class="sig-paren">)</span> <em class="property">const</em><a class="headerlink" href="#_CPPv4NK8Executor27enableRuntimeQueryInterruptEKdKj" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 <dl class="function">
@@ -2485,8 +2485,13 @@
 <dd></dd></dl>
 
 <dl class="function">
-<dt id="_CPPv4N8Executor27createErrorCheckControlFlowEPN4llvm8FunctionEbb18ExecutorDeviceType">
-<span id="_CPPv3N8Executor27createErrorCheckControlFlowEPN4llvm8FunctionEbb18ExecutorDeviceType"></span><span id="_CPPv2N8Executor27createErrorCheckControlFlowEPN4llvm8FunctionEbb18ExecutorDeviceType"></span><span id="Executor::createErrorCheckControlFlow__llvm::FunctionP.b.b.ExecutorDeviceType"></span><span class="target" id="class_executor_1a32cb958d39505bfba51a6e694942761a"></span>void <code class="sig-name descname">createErrorCheckControlFlow</code><span class="sig-paren">(</span>llvm::Function *<em>query_func</em>, bool <em>run_with_dynamic_watchdog</em>, bool <em>run_with_allowing_runtime_interrupt</em>, ExecutorDeviceType <em>device_type</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N8Executor27createErrorCheckControlFlowEPN4llvm8FunctionEbb18ExecutorDeviceType" title="Permalink to this definition">¶</a><br /></dt>
+<dt id="_CPPv4N8Executor27createErrorCheckControlFlowEPN4llvm8FunctionEbb18ExecutorDeviceTypeRKNSt6vectorI14InputTableInfoEE">
+<span id="_CPPv3N8Executor27createErrorCheckControlFlowEPN4llvm8FunctionEbb18ExecutorDeviceTypeRKNSt6vectorI14InputTableInfoEE"></span><span id="_CPPv2N8Executor27createErrorCheckControlFlowEPN4llvm8FunctionEbb18ExecutorDeviceTypeRKNSt6vectorI14InputTableInfoEE"></span><span id="Executor::createErrorCheckControlFlow__llvm::FunctionP.b.b.ExecutorDeviceType.std::vector:InputTableInfo:CR"></span><span class="target" id="class_executor_1ab6b0d39e18f4a4fed2e2cdef1483399e"></span>void <code class="sig-name descname">createErrorCheckControlFlow</code><span class="sig-paren">(</span>llvm::Function *<em>query_func</em>, bool <em>run_with_dynamic_watchdog</em>, bool <em>run_with_allowing_runtime_interrupt</em>, ExecutorDeviceType <em>device_type</em>, <em class="property">const</em> std::vector&lt;<a class="reference internal" href="../struct/struct_input_table_info.html#_CPPv414InputTableInfo" title="InputTableInfo">InputTableInfo</a>&gt; &amp;<em>input_table_infos</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N8Executor27createErrorCheckControlFlowEPN4llvm8FunctionEbb18ExecutorDeviceTypeRKNSt6vectorI14InputTableInfoEE" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="_CPPv4N8Executor22insertErrorCodeCheckerEPN4llvm8FunctionEb">
+<span id="_CPPv3N8Executor22insertErrorCodeCheckerEPN4llvm8FunctionEb"></span><span id="_CPPv2N8Executor22insertErrorCodeCheckerEPN4llvm8FunctionEb"></span><span id="Executor::insertErrorCodeChecker__llvm::FunctionP.b"></span><span class="target" id="class_executor_1a9598e1794c26105f8ce65c54e84a2c10"></span>void <code class="sig-name descname">insertErrorCodeChecker</code><span class="sig-paren">(</span>llvm::Function *<em>query_func</em>, bool <em>hoist_literals</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N8Executor22insertErrorCodeCheckerEPN4llvm8FunctionEb" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 <dl class="function">

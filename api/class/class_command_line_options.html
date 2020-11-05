@@ -65,7 +65,7 @@
             
             
               <div class="version">
-                5.5.0dev b325450
+                5.5.0dev d97d253
               </div>
             
           
@@ -449,6 +449,7 @@
 <li class="toctree-l2"><a class="reference internal" href="class_fragmenter___namespace_1_1_sorted_order_fragmenter.html">Class Fragmenter_Namespace::SortedOrderFragmenter</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_fragmenter___namespace_1_1_table_info.html">Class Fragmenter_Namespace::TableInfo</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_function.html">Class Function</a></li>
+<li class="toctree-l2"><a class="reference internal" href="class_geospatial_1_1_g_d_a_l.html">Class Geospatial::GDAL</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_geospatial_1_1_geo_base.html">Class Geospatial::GeoBase</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_geospatial_1_1_geo_geometry.html">Class Geospatial::GeoGeometry</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_geospatial_1_1_geo_geometry_collection.html">Class Geospatial::GeoGeometryCollection</a></li>
@@ -1039,7 +1040,6 @@
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_typed_parquet_in_place_encoder.html">Class foreign_storage::TypedParquetInPlaceEncoder</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classimport__export_1_1_data_stream_sink.html">Class import_export::DataStreamSink</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classimport__export_1_1_detector.html">Class import_export::Detector</a></li>
-<li class="toctree-l2"><a class="reference internal" href="classimport__export_1_1_g_d_a_l.html">Class import_export::GDAL</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classimport__export_1_1_importer.html">Class import_export::Importer</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classimport__export_1_1_importer_utils.html">Class import_export::ImporterUtils</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classimport__export_1_1_loader.html">Class import_export::Loader</a></li>
@@ -1465,7 +1465,6 @@
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_file___namespace_1_1_page.html">Struct File_Namespace::Page</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_file___namespace_1_1read_thread_d_s.html">Struct File_Namespace::readThreadDS</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_filter_selectivity.html">Struct FilterSelectivity</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../struct/struct_first_step_execution_result.html">Struct FirstStepExecutionResult</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_foreign_storage_column_buffer.html">Struct ForeignStorageColumnBuffer</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_frag.html">Struct Frag</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_fragmenter___namespace_1_1_array_chunk_converter.html">Struct Fragmenter_Namespace::ArrayChunkConverter</a></li>
@@ -1580,6 +1579,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_query_execution_properties.html">Struct QueryExecutionProperties</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_query_hint.html">Struct QueryHint</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_query_info.html">Struct QueryInfo</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/struct_query_step_execution_result.html">Struct QueryStepExecutionResult</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_reduction_code.html">Struct ReductionCode</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_rel_alg_execution_unit.html">Struct RelAlgExecutionUnit</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_rel_alg_executor_1_1_table_function_work_unit.html">Struct RelAlgExecutor::TableFunctionWorkUnit</a></li>
@@ -2034,8 +2034,13 @@
 <dd></dd></dl>
 
 <dl class="member">
-<dt id="_CPPv4N18CommandLineOptions33runtime_query_interrupt_frequencyE">
-<span id="_CPPv3N18CommandLineOptions33runtime_query_interrupt_frequencyE"></span><span id="_CPPv2N18CommandLineOptions33runtime_query_interrupt_frequencyE"></span><span id="CommandLineOptions::runtime_query_interrupt_frequency__unsigned"></span><span class="target" id="class_command_line_options_1abee1c8297a89cd6e669a58973791fff9"></span>unsigned <code class="sig-name descname">runtime_query_interrupt_frequency</code> = 1000<a class="headerlink" href="#_CPPv4N18CommandLineOptions33runtime_query_interrupt_frequencyE" title="Permalink to this definition">¶</a><br /></dt>
+<dt id="_CPPv4N18CommandLineOptions28running_query_interrupt_freqE">
+<span id="_CPPv3N18CommandLineOptions28running_query_interrupt_freqE"></span><span id="_CPPv2N18CommandLineOptions28running_query_interrupt_freqE"></span><span id="CommandLineOptions::running_query_interrupt_freq__double"></span><span class="target" id="class_command_line_options_1ad3b10feb3c8f21d9a7e3aa9dce68be8b"></span>double <code class="sig-name descname">running_query_interrupt_freq</code> = 0.5<a class="headerlink" href="#_CPPv4N18CommandLineOptions28running_query_interrupt_freqE" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="member">
+<dt id="_CPPv4N18CommandLineOptions28pending_query_interrupt_freqE">
+<span id="_CPPv3N18CommandLineOptions28pending_query_interrupt_freqE"></span><span id="_CPPv2N18CommandLineOptions28pending_query_interrupt_freqE"></span><span id="CommandLineOptions::pending_query_interrupt_freq__unsigned"></span><span class="target" id="class_command_line_options_1a66c3b1e0275bd7fba0521b5300409e07"></span>unsigned <code class="sig-name descname">pending_query_interrupt_freq</code> = 1000<a class="headerlink" href="#_CPPv4N18CommandLineOptions28pending_query_interrupt_freqE" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 <dl class="member">

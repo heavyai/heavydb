@@ -65,7 +65,7 @@
             
             
               <div class="version">
-                5.5.0dev b325450
+                5.5.0dev d97d253
               </div>
             
           
@@ -449,6 +449,7 @@
 <li class="toctree-l2"><a class="reference internal" href="class_fragmenter___namespace_1_1_sorted_order_fragmenter.html">Class Fragmenter_Namespace::SortedOrderFragmenter</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_fragmenter___namespace_1_1_table_info.html">Class Fragmenter_Namespace::TableInfo</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_function.html">Class Function</a></li>
+<li class="toctree-l2"><a class="reference internal" href="class_geospatial_1_1_g_d_a_l.html">Class Geospatial::GDAL</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_geospatial_1_1_geo_base.html">Class Geospatial::GeoBase</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_geospatial_1_1_geo_geometry.html">Class Geospatial::GeoGeometry</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_geospatial_1_1_geo_geometry_collection.html">Class Geospatial::GeoGeometryCollection</a></li>
@@ -1039,7 +1040,6 @@
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_typed_parquet_in_place_encoder.html">Class foreign_storage::TypedParquetInPlaceEncoder</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classimport__export_1_1_data_stream_sink.html">Class import_export::DataStreamSink</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classimport__export_1_1_detector.html">Class import_export::Detector</a></li>
-<li class="toctree-l2"><a class="reference internal" href="classimport__export_1_1_g_d_a_l.html">Class import_export::GDAL</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classimport__export_1_1_importer.html">Class import_export::Importer</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classimport__export_1_1_importer_utils.html">Class import_export::ImporterUtils</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classimport__export_1_1_loader.html">Class import_export::Loader</a></li>
@@ -1465,7 +1465,6 @@
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_file___namespace_1_1_page.html">Struct File_Namespace::Page</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_file___namespace_1_1read_thread_d_s.html">Struct File_Namespace::readThreadDS</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_filter_selectivity.html">Struct FilterSelectivity</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../struct/struct_first_step_execution_result.html">Struct FirstStepExecutionResult</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_foreign_storage_column_buffer.html">Struct ForeignStorageColumnBuffer</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_frag.html">Struct Frag</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_fragmenter___namespace_1_1_array_chunk_converter.html">Struct Fragmenter_Namespace::ArrayChunkConverter</a></li>
@@ -1580,6 +1579,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_query_execution_properties.html">Struct QueryExecutionProperties</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_query_hint.html">Struct QueryHint</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_query_info.html">Struct QueryInfo</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/struct_query_step_execution_result.html">Struct QueryStepExecutionResult</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_reduction_code.html">Struct ReductionCode</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_rel_alg_execution_unit.html">Struct RelAlgExecutionUnit</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_rel_alg_executor_1_1_table_function_work_unit.html">Struct RelAlgExecutor::TableFunctionWorkUnit</a></li>
@@ -2191,13 +2191,13 @@
 <dd></dd></dl>
 
 <dl class="function">
-<dt id="_CPPv4N9DBHandler18execute_query_stepER11TStepResultRK13TPendingQuery">
-<span id="_CPPv3N9DBHandler18execute_query_stepER11TStepResultRK13TPendingQuery"></span><span id="_CPPv2N9DBHandler18execute_query_stepER11TStepResultRK13TPendingQuery"></span><span id="DBHandler::execute_query_step__TStepResultR.TPendingQueryCR"></span><span class="target" id="class_d_b_handler_1a59379708d632d1413b22a6661bfcabea"></span>void <code class="sig-name descname">execute_query_step</code><span class="sig-paren">(</span>TStepResult &amp;<em>_return</em>, <em class="property">const</em> TPendingQuery &amp;<em>pending_query</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N9DBHandler18execute_query_stepER11TStepResultRK13TPendingQuery" title="Permalink to this definition">¶</a><br /></dt>
+<dt id="_CPPv4N9DBHandler18execute_query_stepER11TStepResultRK13TPendingQueryK11TSubqueryId">
+<span id="_CPPv3N9DBHandler18execute_query_stepER11TStepResultRK13TPendingQueryK11TSubqueryId"></span><span id="_CPPv2N9DBHandler18execute_query_stepER11TStepResultRK13TPendingQueryK11TSubqueryId"></span><span id="DBHandler::execute_query_step__TStepResultR.TPendingQueryCR.TSubqueryIdC"></span><span class="target" id="class_d_b_handler_1a62f1c22b13e53ea3272dcc18ac0374f9"></span>void <code class="sig-name descname">execute_query_step</code><span class="sig-paren">(</span>TStepResult &amp;<em>_return</em>, <em class="property">const</em> TPendingQuery &amp;<em>pending_query</em>, <em class="property">const</em> TSubqueryId <em>subquery_id</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N9DBHandler18execute_query_stepER11TStepResultRK13TPendingQueryK11TSubqueryId" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 <dl class="function">
-<dt id="_CPPv4N9DBHandler25broadcast_serialized_rowsERK15TSerializedRowsRK14TRowDescriptorK8TQueryId">
-<span id="_CPPv3N9DBHandler25broadcast_serialized_rowsERK15TSerializedRowsRK14TRowDescriptorK8TQueryId"></span><span id="_CPPv2N9DBHandler25broadcast_serialized_rowsERK15TSerializedRowsRK14TRowDescriptorK8TQueryId"></span><span id="DBHandler::broadcast_serialized_rows__TSerializedRowsCR.TRowDescriptorCR.TQueryIdC"></span><span class="target" id="class_d_b_handler_1a27894f218762d44a72425278654f1a62"></span>void <code class="sig-name descname">broadcast_serialized_rows</code><span class="sig-paren">(</span><em class="property">const</em> TSerializedRows &amp;<em>serialized_rows</em>, <em class="property">const</em> TRowDescriptor &amp;<em>row_desc</em>, <em class="property">const</em> TQueryId <em>query_id</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N9DBHandler25broadcast_serialized_rowsERK15TSerializedRowsRK14TRowDescriptorK8TQueryId" title="Permalink to this definition">¶</a><br /></dt>
+<dt id="_CPPv4N9DBHandler25broadcast_serialized_rowsERK15TSerializedRowsRK14TRowDescriptorK8TQueryIdK11TSubqueryIdKb">
+<span id="_CPPv3N9DBHandler25broadcast_serialized_rowsERK15TSerializedRowsRK14TRowDescriptorK8TQueryIdK11TSubqueryIdKb"></span><span id="_CPPv2N9DBHandler25broadcast_serialized_rowsERK15TSerializedRowsRK14TRowDescriptorK8TQueryIdK11TSubqueryIdKb"></span><span id="DBHandler::broadcast_serialized_rows__TSerializedRowsCR.TRowDescriptorCR.TQueryIdC.TSubqueryIdC.bC"></span><span class="target" id="class_d_b_handler_1a1a6d45c6fa7297208f515bebf95d7567"></span>void <code class="sig-name descname">broadcast_serialized_rows</code><span class="sig-paren">(</span><em class="property">const</em> TSerializedRows &amp;<em>serialized_rows</em>, <em class="property">const</em> TRowDescriptor &amp;<em>row_desc</em>, <em class="property">const</em> TQueryId <em>query_id</em>, <em class="property">const</em> TSubqueryId <em>subquery_id</em>, <em class="property">const</em> bool <em>is_final_subquery_result</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N9DBHandler25broadcast_serialized_rowsERK15TSerializedRowsRK14TRowDescriptorK8TQueryIdK11TSubqueryIdKb" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 <dl class="function">
@@ -2645,8 +2645,8 @@
 <dd></dd></dl>
 
 <dl class="function">
-<dt id="_CPPv4I0ENK9DBHandler12convert_rowsEvR12TQueryResult15QueryStateProxyRKNSt6vectorI14TargetMetaInfoEERK1RKbK7int32_tK7int32_t">
-<span id="_CPPv3I0ENK9DBHandler12convert_rowsER12TQueryResult15QueryStateProxyRKNSt6vectorI14TargetMetaInfoEERK1RKbK7int32_tK7int32_t"></span><span id="_CPPv2I0ENK9DBHandler12convert_rowsER12TQueryResult15QueryStateProxyRKNSt6vectorI14TargetMetaInfoEERK1RKbK7int32_tK7int32_t"></span><span class="target" id="class_d_b_handler_1aee46a85336d266a0fbf4238ec6f546a2"></span>template&lt;class <code class="sig-name descname">R</code>&gt;<br />void <code class="sig-name descname">convert_rows</code><span class="sig-paren">(</span>TQueryResult &amp;<em>_return</em>, QueryStateProxy <em>query_state_proxy</em>, <em class="property">const</em> std::vector&lt;<a class="reference internal" href="class_target_meta_info.html#_CPPv414TargetMetaInfo" title="TargetMetaInfo">TargetMetaInfo</a>&gt; &amp;<em>targets</em>, <em class="property">const</em> <a class="reference internal" href="#_CPPv4I0ENK9DBHandler12convert_rowsEvR12TQueryResult15QueryStateProxyRKNSt6vectorI14TargetMetaInfoEERK1RKbK7int32_tK7int32_t" title="DBHandler::convert_rows::R">R</a> &amp;<em>results</em>, <em class="property">const</em> bool <em>column_format</em>, <em class="property">const</em> int32_t <em>first_n</em>, <em class="property">const</em> int32_t <em>at_most_n</em><span class="sig-paren">)</span> <em class="property">const</em><a class="headerlink" href="#_CPPv4I0ENK9DBHandler12convert_rowsEvR12TQueryResult15QueryStateProxyRKNSt6vectorI14TargetMetaInfoEERK1RKbK7int32_tK7int32_t" title="Permalink to this definition">¶</a><br /></dt>
+<dt id="_CPPv4NK9DBHandler12convert_rowsER12TQueryResult15QueryStateProxyRKNSt6vectorI14TargetMetaInfoEERK9ResultSetKbK7int32_tK7int32_t">
+<span id="_CPPv3NK9DBHandler12convert_rowsER12TQueryResult15QueryStateProxyRKNSt6vectorI14TargetMetaInfoEERK9ResultSetKbK7int32_tK7int32_t"></span><span id="_CPPv2NK9DBHandler12convert_rowsER12TQueryResult15QueryStateProxyRKNSt6vectorI14TargetMetaInfoEERK9ResultSetKbK7int32_tK7int32_t"></span><span id="DBHandler::convert_rows__TQueryResultR.QueryStateProxy.std::vector:TargetMetaInfo:CR.ResultSetCR.bC.int32_tC.int32_tCC"></span><span class="target" id="class_d_b_handler_1a43e2f8b66522d9b95250ec1fa167f812"></span>void <code class="sig-name descname">convert_rows</code><span class="sig-paren">(</span>TQueryResult &amp;<em>_return</em>, QueryStateProxy <em>query_state_proxy</em>, <em class="property">const</em> std::vector&lt;<a class="reference internal" href="class_target_meta_info.html#_CPPv414TargetMetaInfo" title="TargetMetaInfo">TargetMetaInfo</a>&gt; &amp;<em>targets</em>, <em class="property">const</em> <a class="reference internal" href="class_result_set.html#_CPPv49ResultSet" title="ResultSet">ResultSet</a> &amp;<em>results</em>, <em class="property">const</em> bool <em>column_format</em>, <em class="property">const</em> int32_t <em>first_n</em>, <em class="property">const</em> int32_t <em>at_most_n</em><span class="sig-paren">)</span> <em class="property">const</em><a class="headerlink" href="#_CPPv4NK9DBHandler12convert_rowsER12TQueryResult15QueryStateProxyRKNSt6vectorI14TargetMetaInfoEERK9ResultSetKbK7int32_tK7int32_t" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 <dl class="function">
@@ -2667,16 +2667,6 @@
 <dl class="function">
 <dt id="_CPPv4NK9DBHandler14getTargetNamesERKNSt6vectorINSt10shared_ptrIN8Analyzer11TargetEntryEEEEE">
 <span id="_CPPv3NK9DBHandler14getTargetNamesERKNSt6vectorINSt10shared_ptrIN8Analyzer11TargetEntryEEEEE"></span><span id="_CPPv2NK9DBHandler14getTargetNamesERKNSt6vectorINSt10shared_ptrIN8Analyzer11TargetEntryEEEEE"></span><span id="DBHandler::getTargetNames__std::vector:std::shared_ptr:Analyzer::TargetEntry::CRC"></span><span class="target" id="class_d_b_handler_1a8b7efc45a70c4c76caf8bc313c7a7c5a"></span>std::vector&lt;std::string&gt; <code class="sig-name descname">getTargetNames</code><span class="sig-paren">(</span><em class="property">const</em> std::vector&lt;std::shared_ptr&lt;Analyzer::<a class="reference internal" href="class_analyzer_1_1_target_entry.html#_CPPv4N8Analyzer11TargetEntryE" title="Analyzer::TargetEntry">TargetEntry</a>&gt;&gt; &amp;<em>targets</em><span class="sig-paren">)</span> <em class="property">const</em><a class="headerlink" href="#_CPPv4NK9DBHandler14getTargetNamesERKNSt6vectorINSt10shared_ptrIN8Analyzer11TargetEntryEEEEE" title="Permalink to this definition">¶</a><br /></dt>
-<dd></dd></dl>
-
-<dl class="function">
-<dt id="_CPPv4NK9DBHandler23convert_target_metainfoERK14TargetMetaInfoK6size_t">
-<span id="_CPPv3NK9DBHandler23convert_target_metainfoERK14TargetMetaInfoK6size_t"></span><span id="_CPPv2NK9DBHandler23convert_target_metainfoERK14TargetMetaInfoK6size_t"></span><span id="DBHandler::convert_target_metainfo__TargetMetaInfoCR.sCC"></span><span class="target" id="class_d_b_handler_1a3723bc2714350cdd7e9f49ad52213efa"></span>TColumnType <code class="sig-name descname">convert_target_metainfo</code><span class="sig-paren">(</span><em class="property">const</em> <a class="reference internal" href="class_target_meta_info.html#_CPPv414TargetMetaInfo" title="TargetMetaInfo">TargetMetaInfo</a> &amp;<em>target</em>, <em class="property">const</em> size_t <em>idx</em><span class="sig-paren">)</span> <em class="property">const</em><a class="headerlink" href="#_CPPv4NK9DBHandler23convert_target_metainfoERK14TargetMetaInfoK6size_t" title="Permalink to this definition">¶</a><br /></dt>
-<dd></dd></dl>
-
-<dl class="function">
-<dt id="_CPPv4NK9DBHandler23convert_target_metainfoERKNSt6vectorI14TargetMetaInfoEE">
-<span id="_CPPv3NK9DBHandler23convert_target_metainfoERKNSt6vectorI14TargetMetaInfoEE"></span><span id="_CPPv2NK9DBHandler23convert_target_metainfoERKNSt6vectorI14TargetMetaInfoEE"></span><span id="DBHandler::convert_target_metainfo__std::vector:TargetMetaInfo:CRC"></span><span class="target" id="class_d_b_handler_1a2ac73cf3ae7db37362092d063b0f0bc9"></span>TRowDescriptor <code class="sig-name descname">convert_target_metainfo</code><span class="sig-paren">(</span><em class="property">const</em> std::vector&lt;<a class="reference internal" href="class_target_meta_info.html#_CPPv414TargetMetaInfo" title="TargetMetaInfo">TargetMetaInfo</a>&gt; &amp;<em>targets</em><span class="sig-paren">)</span> <em class="property">const</em><a class="headerlink" href="#_CPPv4NK9DBHandler23convert_target_metainfoERKNSt6vectorI14TargetMetaInfoEE" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 <dl class="function">
