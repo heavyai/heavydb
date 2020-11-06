@@ -977,7 +977,7 @@ bool GeoTypesFactory::getGeoColumns(const std::vector<std::string>* wkt_or_wkb_h
       std::vector<int> ring_sizes;
       std::vector<int> poly_rings;
 
-      SQLTypeInfo row_ti;
+      SQLTypeInfo row_ti{ti};
       getGeoColumns(wkt_or_wkb_hex,
                     row_ti,
                     coords,

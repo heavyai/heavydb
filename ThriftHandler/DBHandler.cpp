@@ -2720,15 +2720,16 @@ void DBHandler::load_table(const TSessionId& session,
             std::vector<double> coords, bounds;
             std::vector<int> ring_sizes, poly_rings;
             int render_group = 0;
-            SQLTypeInfo ti;
-            if (row.cols[import_idx].is_null ||
-                !Geospatial::GeoTypesFactory::getGeoColumns(row.cols[import_idx].str_val,
-                                                            ti,
-                                                            coords,
-                                                            bounds,
-                                                            ring_sizes,
-                                                            poly_rings,
-                                                            false)) {
+            SQLTypeInfo ti{cd->columnType};
+            if (!Geospatial::GeoTypesFactory::getGeoColumns(
+                    !row.cols[import_idx].is_null ? row.cols[import_idx].str_val
+                                                  : std::string(),
+                    ti,
+                    coords,
+                    bounds,
+                    ring_sizes,
+                    poly_rings,
+                    false)) {
               throw std::runtime_error("Invalid geometry");
             }
             if (cd->columnType.get_type() != ti.get_type()) {
