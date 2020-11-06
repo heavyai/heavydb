@@ -112,8 +112,8 @@ static void start_calcite_server_as_daemon(const int db_port,
 
   // If a config file hasn't been supplied then put the password in the params
   // otherwise send an empty string and Calcite should get it from the config file.
-  std::string key_store_password = (db_config_file == "") ? ssl_keystore_password_X : " ";
-  std::string trust_store_password = (db_config_file == "") ? ssl_trust_password_X : " ";
+  std::string key_store_password = (db_config_file == "") ? ssl_keystore_password_X : "";
+  std::string trust_store_password = (db_config_file == "") ? ssl_trust_password_X : "";
 #ifdef _MSC_VER
   // TODO: enable UDF support
   std::vector<std::string> args_vec;
