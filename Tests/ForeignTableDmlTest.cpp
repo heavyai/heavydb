@@ -4246,40 +4246,6 @@ TEST_F(AlterForeignTableTest, AlterTypeDropEncoding) {
       "Encountered \"ALTER\"");
 }
 
-class AlterForeignTablePermissionTest : public AlterForeignTableTest {
-  void SetUp() override {
-    loginAdmin();
-    AlterForeignTableTest::SetUp();
-    dropTestUserIfExists();
-  }
-  void TearDown() override {
-    loginAdmin();
-    dropTestUserIfExists();
-    AlterForeignTableTest::TearDown();
-  }
-  void dropTestUserIfExists() {
-    try {
-      sql("DROP USER test_user;");
-    } catch (const std::exception& e) {
-      // Swallow and log exceptions that may occur, since there is no "IF EXISTS" option.
-      LOG(WARNING) << e.what();
-    }
-  }
-};
-
-TEST_F(AlterForeignTablePermissionTest, NoPermission) {
-  createScheduledTable("scheduled", "1S", "all", 1);
-  sql("CREATE USER test_user (password = 'test_pass');");
-  sql("GRANT ACCESS ON DATABASE omnisci TO test_user;");
-  login("test_user", "test_pass");
-  queryAndAssertException(
-      "ALTER FOREIGN TABLE test_foreign_table WITH (REFRESH_TIMING_TYPE = "
-      "'SCHEDULED')",
-      "Exception: Foreign table \"test_foreign_table\" will not be altered. User has no "
-      "ALTER TABLE "
-      "privileges.");
-}
-
 int main(int argc, char** argv) {
   g_enable_fsi = true;
   TestHelpers::init_logger_stderr_only(argc, argv);

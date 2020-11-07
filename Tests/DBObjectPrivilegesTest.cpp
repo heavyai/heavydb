@@ -3241,6 +3241,24 @@ TEST_F(TablePermissionsTest, TableGrantRevokeAlterTablePrivilege) {
   queryAsTestUserWithPrivilege(query, privilege);
 }
 
+TEST_F(TablePermissionsTest, TableGrantRevokeAlterForeignTablePrivilege) {
+  if (g_aggregator) {
+    LOG(INFO) << "Test not supported in distributed mode.";
+    return;
+  }
+  std::string privilege{"ALTER"};
+  std::string query{
+      "ALTER FOREIGN TABLE test_table WITH (refresh_update_type = 'append');"};
+  std::string no_privilege_exception{
+      "Exception: Current user does not have the privilege to alter foreign table: "
+      "test_table"};
+  createTestForeignTable();
+  queryAsTestUserWithNoPrivilegeAndAssertException(query, no_privilege_exception);
+  grantThenRevokePrivilegeToTestUser(privilege);
+  queryAsTestUserWithNoPrivilegeAndAssertException(query, no_privilege_exception);
+  queryAsTestUserWithPrivilege(query, privilege);
+}
+
 TEST_F(TablePermissionsTest, ForeignTableAllPrivileges) {
   if (g_aggregator) {
     LOG(INFO) << "Test not supported in distributed mode.";
@@ -3251,6 +3269,7 @@ TEST_F(TablePermissionsTest, ForeignTableAllPrivileges) {
   login("test_user", "test_pass");
   runQuery("SHOW CREATE TABLE test_table;");
   runQuery("SELECT * FROM test_table;");
+  runQuery("ALTER FOREIGN TABLE test_table WITH (refresh_update_type = 'append');");
   runQuery("DROP FOREIGN TABLE test_table;");
 }
 
