@@ -3202,6 +3202,8 @@ void Catalog::doTruncateTable(const TableDescriptor* td) {
 void Catalog::removeFragmenterForTable(const int table_id) {
   cat_write_lock write_lock(this);
   auto td = getMetadataForTable(table_id, false);
+  CHECK(td);
+  
   if (td->fragmenter != nullptr) {
     auto tableDescIt = tableDescriptorMapById_.find(table_id);
     CHECK(tableDescIt != tableDescriptorMapById_.end());
@@ -3213,6 +3215,7 @@ void Catalog::removeFragmenterForTable(const int table_id) {
 // used by rollback_table_epoch to clean up in memory artifacts after a rollback
 void Catalog::removeChunks(const int table_id) {
   auto td = getMetadataForTable(table_id);
+  CHECK(td);
 
   if (td->fragmenter != nullptr) {
     cat_sqlite_lock sqlite_lock(this);

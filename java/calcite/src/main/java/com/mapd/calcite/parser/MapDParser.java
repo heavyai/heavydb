@@ -70,6 +70,7 @@ import org.apache.calcite.sql.SqlBasicCall;
 import org.apache.calcite.sql.SqlBasicTypeNameSpec;
 import org.apache.calcite.sql.SqlCall;
 import org.apache.calcite.sql.SqlDataTypeSpec;
+import org.apache.calcite.sql.SqlDdl;
 import org.apache.calcite.sql.SqlDelete;
 import org.apache.calcite.sql.SqlDialect;
 import org.apache.calcite.sql.SqlFunctionCategory;
@@ -392,6 +393,10 @@ public final class MapDParser {
 
     if (sqlNode instanceof JsonSerializableDdl) {
       return ((JsonSerializableDdl) sqlNode).toJsonString();
+    }
+
+    if (sqlNode instanceof SqlDdl) {
+      return sqlNode.toString();
     }
 
     final MapDPlanner planner = getPlanner(true, true);

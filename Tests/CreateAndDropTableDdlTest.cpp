@@ -33,6 +33,7 @@
 #endif
 
 extern bool g_enable_fsi;
+extern bool g_enable_calcite_ddl_parser;
 
 namespace {
 struct ColumnAttributes {
@@ -916,9 +917,13 @@ TEST_P(CreateTableTest, ArrayTypes) {
 TEST_P(CreateTableTest, FixedEncodingForNonNumberOrTimeType) {
   std::string query =
       getCreateTableQuery(GetParam(), "test_table", "(col1 POINT ENCODING FIXED(8))");
-  queryAndAssertException(
-      query,
-      "Exception: col1: Fixed encoding is only supported for integer or time columns.");
+  if (g_enable_calcite_ddl_parser) {
+    EXPECT_ANY_THROW(sql(query));
+  } else {
+    queryAndAssertException(
+        query,
+        "Exception: col1: Fixed encoding is only supported for integer or time columns.");
+  }
 }
 
 TEST_P(CreateTableTest, DictEncodingNonTextType) {
@@ -962,7 +967,11 @@ TEST_P(CreateTableTest, NonEncodedDictArray) {
 TEST_P(CreateTableTest, FixedLengthArrayOfVarLengthType) {
   std::string query =
       getCreateTableQuery(GetParam(), "test_table", "(col1 LINESTRING[5])");
-  queryAndAssertException(query, "Exception: col1: Unexpected fixed length array size");
+  if (g_enable_calcite_ddl_parser) {
+    EXPECT_ANY_THROW(sql(query));
+  } else {
+    queryAndAssertException(query, "Exception: col1: Unexpected fixed length array size");
+  }
 }
 
 TEST_P(CreateTableTest, UnsupportedTimestampPrecision) {
@@ -1089,7 +1098,9 @@ TEST_P(NegativePrecisionOrDimensionTest, NegativePrecisionOrDimension) {
     if (table_type == ddl_utils::TableType::FOREIGN_TABLE) {
       ASSERT_TRUE(e.error_msg.find("Exception: Parse failed") != std::string::npos);
     } else {
-      ASSERT_EQ("Exception: No negative number in type definition.", e.error_msg);
+      if (!g_enable_calcite_ddl_parser) {
+        ASSERT_EQ("Exception: No negative number in type definition.", e.error_msg);
+      }
     }
   }
 }
@@ -1205,7 +1216,8 @@ TEST_F(CreateForeignTableTest, FsiDisabled) {
   g_enable_fsi = false;
   std::string query = getCreateTableQuery(
       ddl_utils::TableType::FOREIGN_TABLE, "test_foreign_table", "(col1 INTEGER)");
-  queryAndAssertException(query, "Exception: Syntax error at: FOREIGN");
+  // Exception differs depending on which parser is enabled
+  EXPECT_ANY_THROW(sql(query));
 }
 
 class DropTableTest : public CreateAndDropTableDdlTest,
@@ -1279,7 +1291,9 @@ TEST_P(CreateTableTest, InvalidSyntax) {
     if (GetParam() == ddl_utils::TableType::FOREIGN_TABLE) {
       ASSERT_TRUE(e.error_msg.find("Exception: Parse failed") != std::string::npos);
     } else {
-      ASSERT_EQ("Exception: Syntax error at: INTEGER", e.error_msg);
+      if (!g_enable_calcite_ddl_parser) {
+        ASSERT_EQ("Exception: Syntax error at: INTEGER", e.error_msg);
+      }
     }
   }
 }

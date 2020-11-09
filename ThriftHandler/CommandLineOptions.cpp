@@ -41,6 +41,7 @@ extern bool g_cache_string_hash;
 extern int64_t g_large_ndv_threshold;
 extern size_t g_large_ndv_multiplier;
 extern int64_t g_bitmap_memory_limit;
+extern bool g_enable_calcite_ddl_parser;
 
 unsigned connect_timeout{20000};
 unsigned recv_timeout{300000};

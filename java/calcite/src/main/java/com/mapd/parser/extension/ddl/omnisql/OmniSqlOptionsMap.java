@@ -1,3 +1,4 @@
+
 package com.mapd.parser.extension.ddl.omnisql;
 
 import java.util.TreeMap;

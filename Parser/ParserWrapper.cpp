@@ -58,6 +58,7 @@ const std::string ParserWrapper::optimize_str = {"optimize"};
 const std::string ParserWrapper::validate_str = {"validate"};
 
 extern bool g_enable_fsi;
+extern bool g_enable_calcite_ddl_parser;
 
 ParserWrapper::ParserWrapper(std::string query_string) {
   query_type_ = QueryType::SchemaRead;
@@ -145,6 +146,19 @@ ParserWrapper::ParserWrapper(std::string query_string) {
                                 boost::regex::extended | boost::regex::icase};
         if (boost::regex_match(query_string, ctas_regex)) {
           is_ctas = true;
+        } else {
+          boost::regex create_table_regex{R"(CREATE\s+TABLE.*)",
+                                          boost::regex::extended | boost::regex::icase};
+          boost::regex create_view_regex{R"(CREATE\s+VIEW.*)",
+                                         boost::regex::extended | boost::regex::icase};
+          if (g_enable_calcite_ddl_parser &&
+              (boost::regex_match(query_string, create_table_regex) ||
+               boost::regex_match(query_string, create_view_regex))) {
+            is_calcite_ddl_ = true;
+            is_legacy_ddl_ = false;
+            is_distributed_calcite_ddl_ = true;
+            return;
+          }
         }
       } else if (ddl == "COPY") {
         is_copy = true;

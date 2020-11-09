@@ -25,6 +25,13 @@ data: {
         "org.apache.calcite.sql.SqlDdl"
         "org.apache.calcite.sql.SqlCreate"
         "org.apache.calcite.sql.SqlDrop"
+        "org.apache.calcite.sql.SqlIdentifier"
+        "org.apache.calcite.sql.SqlNodeList"
+        "org.apache.calcite.schema.ColumnStrategy"
+        "com.mapd.parser.extension.ddl.omnisci.*"
+        "com.mapd.parser.extension.ddl.SqlDdlNodes"
+        "com.mapd.parser.extension.ddl.SqlCreateTable"
+        "com.mapd.parser.extension.ddl.SqlCreateView"
         "com.mapd.parser.extension.ddl.SqlCreateServer"
         "com.mapd.parser.extension.ddl.SqlDropServer"
         "com.mapd.parser.extension.ddl.SqlShowTables"
@@ -66,6 +73,12 @@ data: {
         "KILL"
         "QUERY"
         "QUERIES"
+        "VIRTUAL"
+        "STORED"
+        "GEOGRAPHY"
+        "SHARD"
+        "SHARED"
+        "DICTIONARY"
       ]
 
       # List of keywords from "keywords" section that are not reserved.
@@ -288,6 +301,7 @@ data: {
         "SERVER_NAME"
         "SESSION"
         "SETS"
+        "SHARD"
         "SIMPLE"
         "SIZE"
         "SOURCE"
@@ -444,6 +458,8 @@ data: {
         "SqlCreateServer"
         "SqlCreateForeignTable"
         "SqlCreateUserMapping"
+        "SqlCreateTable"
+        "SqlCreateView"
       ]
 
       # List of methods for parsing extensions to "DROP" calls.
@@ -473,6 +489,7 @@ data: {
         "showCommandsParser.ftl"
         "userMappingParser.ftl"
         "interruptQueryParser.ftl"
+        "ddlParser.ftl"
       ]
 
       includePosixOperators: false

@@ -37,6 +37,7 @@
 #include <cmath>
 #include <limits>
 #include <random>
+#include <regex>
 #include <stdexcept>
 #include <type_traits>
 #include <typeinfo>
@@ -53,8 +54,10 @@
 #include "ImportExport/Importer.h"
 #include "LockMgr/LockMgr.h"
 #include "QueryEngine/CalciteAdapter.h"
+#include "QueryEngine/CalciteDeserializerUtils.h"
 #include "QueryEngine/Execute.h"
 #include "QueryEngine/ExtensionFunctionsWhitelist.h"
+#include "QueryEngine/JsonAccessors.h"
 #include "QueryEngine/RelAlgExecutor.h"
 #include "ReservedKeywords.h"
 #include "Shared/StringTransform.h"
@@ -62,8 +65,11 @@
 #include "Shared/shard_key.h"
 #include "TableArchiver/TableArchiver.h"
 #include "Utils/FsiUtils.h"
+
 #include "gen-cpp/CalciteServer.h"
 #include "parser.h"
+
+bool g_enable_calcite_ddl_parser{true};
 
 size_t g_leaf_count{0};
 bool g_test_drop_column_rollback{false};
@@ -2182,6 +2188,165 @@ void get_dataframe_definitions(DataframeTableDescriptor& df_td,
 
 }  // namespace
 
+CreateTableStmt::CreateTableStmt(const rapidjson::Value& payload) {
+  CHECK(payload.HasMember("name"));
+  table_ = std::make_unique<std::string>(json_str(payload["name"]));
+  CHECK(payload.HasMember("elements"));
+  CHECK(payload["elements"].IsArray());
+
+  // TODO: support temporary tables
+  is_temporary_ = false;
+
+  if_not_exists_ = false;
+  if (payload.HasMember("ifNotExists")) {
+    if_not_exists_ = json_bool(payload["ifNotExists"]);
+  }
+
+  const auto elements = payload["elements"].GetArray();
+  for (const auto& element : elements) {
+    CHECK(element.IsObject());
+    CHECK(element.HasMember("type"));
+    if (json_str(element["type"]) == "SQL_COLUMN_DECLARATION") {
+      CHECK(element.HasMember("name"));
+      auto col_name = std::make_unique<std::string>(json_str(element["name"]));
+      CHECK(element.HasMember("sqltype"));
+      const auto sql_types = to_sql_type(json_str(element["sqltype"]));
+
+      // decimal / numeric precision / scale
+      int precision = -1;
+      int scale = -1;
+      if (element.HasMember("precision")) {
+        precision = json_i64(element["precision"]);
+      }
+      if (element.HasMember("scale")) {
+        scale = json_i64(element["scale"]);
+      }
+
+      std::optional<int64_t> array_size;
+      if (element.HasMember("arraySize")) {
+        // We do not yet support geo arrays
+        array_size = json_i64(element["arraySize"]);
+      }
+      std::unique_ptr<SQLType> sql_type;
+      if (element.HasMember("subtype")) {
+        CHECK(element.HasMember("coordinateSystem"));
+        const auto subtype_sql_types = to_sql_type(json_str(element["subtype"]));
+        sql_type = std::make_unique<SQLType>(
+            subtype_sql_types,
+            static_cast<int>(sql_types),
+            static_cast<int>(json_i64(element["coordinateSystem"])),
+            false);
+      } else if (precision > 0 && scale > 0) {
+        sql_type = std::make_unique<SQLType>(sql_types,
+                                             precision,
+                                             scale,
+                                             /*is_array=*/array_size.has_value(),
+                                             array_size ? *array_size : -1);
+      } else if (precision > 0) {
+        sql_type = std::make_unique<SQLType>(sql_types,
+                                             precision,
+                                             0,
+                                             /*is_array=*/array_size.has_value(),
+                                             array_size ? *array_size : -1);
+      } else {
+        sql_type = std::make_unique<SQLType>(sql_types,
+                                             /*is_array=*/array_size.has_value(),
+                                             array_size ? *array_size : -1);
+      }
+      CHECK(sql_type);
+
+      CHECK(element.HasMember("nullable"));
+      const auto nullable = json_bool(element["nullable"]);
+      std::unique_ptr<ColumnConstraintDef> constraint_def;
+      if (!nullable) {
+        constraint_def = std::make_unique<ColumnConstraintDef>(/*notnull=*/true,
+                                                               /*unique=*/false,
+                                                               /*primarykey=*/false,
+                                                               /*defaultval=*/nullptr);
+      }
+      std::unique_ptr<CompressDef> compress_def;
+      if (element.HasMember("encodingType") && !element["encodingType"].IsNull()) {
+        std::string encoding_type = json_str(element["encodingType"]);
+        CHECK(element.HasMember("encodingSize"));
+        auto encoding_name =
+            std::make_unique<std::string>(json_str(element["encodingType"]));
+        compress_def = std::make_unique<CompressDef>(encoding_name.release(),
+                                                     json_i64(element["encodingSize"]));
+      }
+      auto col_def = std::make_unique<ColumnDef>(
+          col_name.release(),
+          sql_type.release(),
+          compress_def ? compress_def.release() : nullptr,
+          constraint_def ? constraint_def.release() : nullptr);
+      table_element_list_.emplace_back(std::move(col_def));
+    } else if (json_str(element["type"]) == "SQL_COLUMN_CONSTRAINT") {
+      CHECK(element.HasMember("name"));
+      if (json_str(element["name"]) == "SHARD_KEY") {
+        CHECK(element.HasMember("columns"));
+        CHECK(element["columns"].IsArray());
+        const auto& columns = element["columns"].GetArray();
+        if (columns.Size() != size_t(1)) {
+          throw std::runtime_error("Only one shard column is currently supported.");
+        }
+        auto shard_key_def = std::make_unique<ShardKeyDef>(json_str(columns[0]));
+        table_element_list_.emplace_back(std::move(shard_key_def));
+      } else if (json_str(element["name"]) == "SHARED_DICT") {
+        CHECK(element.HasMember("columns"));
+        CHECK(element["columns"].IsArray());
+        const auto& columns = element["columns"].GetArray();
+        if (columns.Size() != size_t(1)) {
+          throw std::runtime_error(
+              R"(Only one column per shared dictionary entry is currently supported. Use multiple SHARED DICT statements to share dictionaries from multiple columns.)");
+        }
+        CHECK(element.HasMember("references") && element["references"].IsObject());
+        const auto& references = element["references"].GetObject();
+        std::string references_table_name;
+        if (references.HasMember("table")) {
+          references_table_name = json_str(references["table"]);
+        } else {
+          references_table_name = *table_;
+        }
+        CHECK(references.HasMember("column"));
+
+        auto shared_dict_def = std::make_unique<SharedDictionaryDef>(
+            json_str(columns[0]), references_table_name, json_str(references["column"]));
+        table_element_list_.emplace_back(std::move(shared_dict_def));
+
+      } else {
+        LOG(FATAL) << "Unsupported type for SQL_COLUMN_CONSTRAINT: "
+                   << json_str(element["name"]);
+      }
+    } else {
+      LOG(FATAL) << "Unsupported element type for CREATE TABLE: "
+                 << element["type"].GetString();
+    }
+  }
+
+  CHECK(payload.HasMember("options"));
+  if (payload["options"].IsObject()) {
+    for (const auto& option : payload["options"].GetObject()) {
+      auto option_name = std::make_unique<std::string>(json_str(option.name));
+      std::unique_ptr<Literal> literal_value;
+      if (option.value.IsString()) {
+        auto literal_string = std::make_unique<std::string>(json_str(option.value));
+        literal_value = std::make_unique<StringLiteral>(literal_string.release());
+      } else if (option.value.IsInt() || option.value.IsInt64()) {
+        literal_value = std::make_unique<IntLiteral>(json_i64(option.value));
+      } else if (option.value.IsNull()) {
+        literal_value = std::make_unique<NullLiteral>();
+      } else {
+        throw std::runtime_error("Unable to handle literal for " + *option_name);
+      }
+      CHECK(literal_value);
+
+      storage_options_.emplace_back(std::make_unique<NameValueAssign>(
+          option_name.release(), literal_value.release()));
+    }
+  } else {
+    CHECK(payload["options"].IsNull());
+  }
+}
+
 void CreateTableStmt::executeDryRun(const Catalog_Namespace::SessionInfo& session,
                                     TableDescriptor& td,
                                     std::list<ColumnDescriptor>& columns,
@@ -3143,8 +3308,8 @@ void DropTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
 void TruncateTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   auto& catalog = session.getCatalog();
 
-  // TODO: Removal of the FileMgr is not thread safe. Take a global system write lock when
-  // truncating a table
+  // TODO: Removal of the FileMgr is not thread safe. Take a global system write lock
+  // when truncating a table
   const auto execute_write_lock = mapd_unique_lock<mapd_shared_mutex>(
       *legacylockmgr::LockMgr<mapd_shared_mutex, bool>::getMutex(
           legacylockmgr::ExecutorOuterLock, true));
@@ -4332,8 +4497,8 @@ void ShowCreateTableStmt::execute(const Catalog_Namespace::SessionInfo& session)
   }
   if (td->isView && !session.get_currentUser().isSuper) {
     // TODO: we need to run a validate query to ensure the user has access to the
-    // underlying table, but we do not have any of the machinery in here. Disable for now,
-    // unless the current user is a super user.
+    // underlying table, but we do not have any of the machinery in here. Disable for
+    // now, unless the current user is a super user.
     throw std::runtime_error("SHOW CREATE TABLE not yet supported for views");
   }
 
@@ -4578,6 +4743,25 @@ void ExportQueryStmt::parseOptions(
         throw std::runtime_error("Invalid option for COPY: " + *p->get_name());
       }
     }
+  }
+}
+
+CreateViewStmt::CreateViewStmt(const rapidjson::Value& payload) {
+  CHECK(payload.HasMember("name"));
+  view_name_ = json_str(payload["name"]);
+
+  if_not_exists_ = false;
+  if (payload.HasMember("ifNotExists")) {
+    if_not_exists_ = json_bool(payload["ifNotExists"]);
+  }
+
+  CHECK(payload.HasMember("query"));
+  select_query_ = json_str(payload["query"]);
+  std::regex newline_re("\\n");
+  select_query_ = std::regex_replace(select_query_, newline_re, " ");
+  // ensure a trailing semicolon is present on the select query
+  if (select_query_.back() != ';') {
+    select_query_.push_back(';');
   }
 }
 
@@ -4880,6 +5064,32 @@ void RestoreTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
     }
     TableArchiver table_archiver(&catalog);
     table_archiver.restoreTable(session, *table, *path, compression);
+  }
+}
+
+void execute_calcite_ddl(
+    const std::string& ddl_statement,
+    std::shared_ptr<Catalog_Namespace::SessionInfo const> session_ptr) {
+  CHECK(!ddl_statement.empty());
+  VLOG(2) << "Parsing JSON DDL from Calcite: " << ddl_statement;
+  rapidjson::Document ddl_query;
+  ddl_query.Parse(ddl_statement);
+  CHECK(ddl_query.IsObject());
+  CHECK(ddl_query.HasMember("payload"));
+  CHECK(ddl_query["payload"].IsObject());
+  const auto& payload = ddl_query["payload"].GetObject();
+  CHECK(payload.HasMember("command"));
+  CHECK(payload["command"].IsString());
+
+  const auto& ddl_command = std::string_view(payload["command"].GetString());
+  if (ddl_command == "CREATE_TABLE") {
+    auto create_table_stmt = Parser::CreateTableStmt(payload);
+    create_table_stmt.execute(*session_ptr);
+  } else if (ddl_command == "CREATE_VIEW") {
+    auto create_view_stmt = Parser::CreateViewStmt(payload);
+    create_view_stmt.execute(*session_ptr);
+  } else {
+    throw std::runtime_error("Unsupported DDL command");
   }
 }
 
