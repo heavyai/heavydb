@@ -33,7 +33,7 @@
 #include "Shared/SystemParameters.h"
 #include "Shared/import_helpers.h"
 #include "TestProcessSignalHandler.h"
-#include "bcrypt.h"
+#include "ThirdParty/include/bcrypt.h"
 #include "gen-cpp/CalciteServer.h"
 
 #include <boost/filesystem/operations.hpp>

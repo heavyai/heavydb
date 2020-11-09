@@ -13,7 +13,7 @@ set(bcrypt_src
 )
 
 set(bcrypt_hdr
-    bcrypt.h
+    include/bcrypt.h
 )
 
 add_library(bcrypt ${bcrypt_src} ${bcrypt_hdr})
