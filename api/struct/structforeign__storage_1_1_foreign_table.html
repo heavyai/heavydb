@@ -65,7 +65,7 @@
             
             
               <div class="version">
-                5.5.0dev 70db1e5
+                5.5.0dev 9026e69
               </div>
             
           
@@ -283,6 +283,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../class/class_alloca.html">Class Alloca</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/class_allocator.html">Class Allocator</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/class_alter_foreign_server_command.html">Class AlterForeignServerCommand</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../class/class_alter_foreign_table_command.html">Class AlterForeignTableCommand</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/class_analyzer_1_1_agg_expr.html">Class Analyzer::AggExpr</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/class_analyzer_1_1_array_expr.html">Class Analyzer::ArrayExpr</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/class_analyzer_1_1_bin_oper.html">Class Analyzer::BinOper</a></li>
@@ -899,6 +900,8 @@
 <li class="toctree-l2"><a class="reference internal" href="../class/classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_foreign_table_test.html">Class com::mapd::parser::extension::ddl::ForeignTableTest</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_interrupt_command_test.html">Class com::mapd::parser::extension::ddl::InterruptCommandTest</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_show_command_test.html">Class com::mapd::parser::extension::ddl::ShowCommandTest</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../class/classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_alter_foreign_table.html">Class com::mapd::parser::extension::ddl::SqlAlterForeignTable</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../class/classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_alter_foreign_table_1_1_builder.html">Class com::mapd::parser::extension::ddl::SqlAlterForeignTable::Builder</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_alter_server.html">Class com::mapd::parser::extension::ddl::SqlAlterServer</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_alter_server_1_1_builder.html">Class com::mapd::parser::extension::ddl::SqlAlterServer::Builder</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_create_foreign_table.html">Class com::mapd::parser::extension::ddl::SqlCreateForeignTable</a></li>
@@ -1831,8 +1834,33 @@
 <dd><div class="breathe-sectiondef docutils container">
 <p class="breathe-sectiondef-title rubric">Public Functions</p>
 <dl class="function">
-<dt id="_CPPv4N15foreign_storage12ForeignTable8validateERKNSt6vectorINSt11string_viewEEE">
-<span id="_CPPv3N15foreign_storage12ForeignTable8validateERKNSt6vectorINSt11string_viewEEE"></span><span id="_CPPv2N15foreign_storage12ForeignTable8validateERKNSt6vectorINSt11string_viewEEE"></span><span id="foreign_storage::ForeignTable::validate__std::vector:std::string_view:CR"></span><span class="target" id="structforeign__storage_1_1_foreign_table_1a61c8f3d44d8e0758a050a7cd013cd942"></span>void <code class="sig-name descname">validate</code><span class="sig-paren">(</span><em class="property">const</em> std::vector&lt;std::string_view&gt; &amp;<em>supported_data_wrapper_options</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N15foreign_storage12ForeignTable8validateERKNSt6vectorINSt11string_viewEEE" title="Permalink to this definition">¶</a><br /></dt>
+<dt id="_CPPv4N15foreign_storage12ForeignTable12ForeignTableEv">
+<span id="_CPPv3N15foreign_storage12ForeignTable12ForeignTableEv"></span><span id="_CPPv2N15foreign_storage12ForeignTable12ForeignTableEv"></span><span id="foreign_storage::ForeignTable::ForeignTable"></span><span class="target" id="structforeign__storage_1_1_foreign_table_1acf5f74c785104988080c9d89531503a8"></span><code class="sig-name descname">ForeignTable</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N15foreign_storage12ForeignTable12ForeignTableEv" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="_CPPv4N15foreign_storage12ForeignTable12ForeignTableEK7int32_tPK13ForeignServerRKNSt6stringEK7int64_tK7int64_t">
+<span id="_CPPv3N15foreign_storage12ForeignTable12ForeignTableEK7int32_tPK13ForeignServerRKNSt6stringEK7int64_tK7int64_t"></span><span id="_CPPv2N15foreign_storage12ForeignTable12ForeignTableEK7int32_tPK13ForeignServerRKNSt6stringEK7int64_tK7int64_t"></span><span id="foreign_storage::ForeignTable::ForeignTable__int32_tC.ForeignServerCP.ssCR.int64_tC.int64_tC"></span><span class="target" id="structforeign__storage_1_1_foreign_table_1ab0483e580790716c8a307a4423edb1b2"></span><code class="sig-name descname">ForeignTable</code><span class="sig-paren">(</span><em class="property">const</em> int32_t <em>id</em>, <em class="property">const</em> <a class="reference internal" href="structforeign__storage_1_1_foreign_server.html#_CPPv4N15foreign_storage13ForeignServerE" title="foreign_storage::ForeignServer">ForeignServer</a> *<em>server</em>, <em class="property">const</em> std::string &amp;<em>options_str</em>, <em class="property">const</em> int64_t <em>last_refresh</em>, <em class="property">const</em> int64_t <em>next_refresh</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N15foreign_storage12ForeignTable12ForeignTableEK7int32_tPK13ForeignServerRKNSt6stringEK7int64_tK7int64_t" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="_CPPv4NK15foreign_storage12ForeignTable15validateOptionsEv">
+<span id="_CPPv3NK15foreign_storage12ForeignTable15validateOptionsEv"></span><span id="_CPPv2NK15foreign_storage12ForeignTable15validateOptionsEv"></span><span id="foreign_storage::ForeignTable::validateOptionsC"></span><span class="target" id="structforeign__storage_1_1_foreign_table_1a221e40efe2adf64be661f884b2e18645"></span>void <code class="sig-name descname">validateOptions</code><span class="sig-paren">(</span><span class="sig-paren">)</span> <em class="property">const</em><a class="headerlink" href="#_CPPv4NK15foreign_storage12ForeignTable15validateOptionsEv" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="_CPPv4N15foreign_storage12ForeignTable17initializeOptionsERKN9rapidjson5ValueE">
+<span id="_CPPv3N15foreign_storage12ForeignTable17initializeOptionsERKN9rapidjson5ValueE"></span><span id="_CPPv2N15foreign_storage12ForeignTable17initializeOptionsERKN9rapidjson5ValueE"></span><span id="foreign_storage::ForeignTable::initializeOptions__rapidjson::ValueCR"></span><span class="target" id="structforeign__storage_1_1_foreign_table_1a64520a8385cfb0190cfd35d819d2b62a"></span>void <code class="sig-name descname">initializeOptions</code><span class="sig-paren">(</span><em class="property">const</em> rapidjson::Value &amp;<em>options</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N15foreign_storage12ForeignTable17initializeOptionsERKN9rapidjson5ValueE" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="_CPPv4NK15foreign_storage12ForeignTable30getSupportedDataWrapperOptionsEv">
+<span id="_CPPv3NK15foreign_storage12ForeignTable30getSupportedDataWrapperOptionsEv"></span><span id="_CPPv2NK15foreign_storage12ForeignTable30getSupportedDataWrapperOptionsEv"></span><span id="foreign_storage::ForeignTable::getSupportedDataWrapperOptionsC"></span><span class="target" id="structforeign__storage_1_1_foreign_table_1a8e82186ae35c9c5ee1255f0d97ef7e4b"></span>std::vector&lt;std::string_view&gt; <code class="sig-name descname">getSupportedDataWrapperOptions</code><span class="sig-paren">(</span><span class="sig-paren">)</span> <em class="property">const</em><a class="headerlink" href="#_CPPv4NK15foreign_storage12ForeignTable30getSupportedDataWrapperOptionsEv" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="_CPPv4NK15foreign_storage12ForeignTable24validateSupportedOptionsERK10OptionsMap">
+<span id="_CPPv3NK15foreign_storage12ForeignTable24validateSupportedOptionsERK10OptionsMap"></span><span id="_CPPv2NK15foreign_storage12ForeignTable24validateSupportedOptionsERK10OptionsMap"></span><span id="foreign_storage::ForeignTable::validateSupportedOptions__OptionsMapCRC"></span><span class="target" id="structforeign__storage_1_1_foreign_table_1a1d0fe74d6affae12470399fdc973a3cc"></span>void <code class="sig-name descname">validateSupportedOptions</code><span class="sig-paren">(</span><em class="property">const</em> OptionsMap &amp;<em>options_map</em><span class="sig-paren">)</span> <em class="property">const</em><a class="headerlink" href="#_CPPv4NK15foreign_storage12ForeignTable24validateSupportedOptionsERK10OptionsMap" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 <dl class="function">
@@ -1865,7 +1893,25 @@
 
 </div>
 <div class="breathe-sectiondef docutils container">
+<p class="breathe-sectiondef-title rubric">Public Static Functions</p>
+<dl class="function">
+<dt id="_CPPv4N15foreign_storage12ForeignTable18create_options_mapERKN9rapidjson5ValueE">
+<span id="_CPPv3N15foreign_storage12ForeignTable18create_options_mapERKN9rapidjson5ValueE"></span><span id="_CPPv2N15foreign_storage12ForeignTable18create_options_mapERKN9rapidjson5ValueE"></span><span id="foreign_storage::ForeignTable::create_options_map__rapidjson::ValueCR"></span><span class="target" id="structforeign__storage_1_1_foreign_table_1a2c7c77fc326042f9f05b0d7ab844503e"></span><em class="property">static</em> OptionsMap <code class="sig-name descname">create_options_map</code><span class="sig-paren">(</span><em class="property">const</em> rapidjson::Value &amp;<em>json_options</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N15foreign_storage12ForeignTable18create_options_mapERKN9rapidjson5ValueE" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="_CPPv4N15foreign_storage12ForeignTable22validate_alter_optionsERK10OptionsMap">
+<span id="_CPPv3N15foreign_storage12ForeignTable22validate_alter_optionsERK10OptionsMap"></span><span id="_CPPv2N15foreign_storage12ForeignTable22validate_alter_optionsERK10OptionsMap"></span><span id="foreign_storage::ForeignTable::validate_alter_options__OptionsMapCR"></span><span class="target" id="structforeign__storage_1_1_foreign_table_1a195069cdd8b8703ef97dd88daa5905a8"></span><em class="property">static</em> void <code class="sig-name descname">validate_alter_options</code><span class="sig-paren">(</span><em class="property">const</em> OptionsMap &amp;<em>options_map</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N15foreign_storage12ForeignTable22validate_alter_optionsERK10OptionsMap" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+</div>
+<div class="breathe-sectiondef docutils container">
 <p class="breathe-sectiondef-title rubric">Public Static Attributes</p>
+<dl class="member">
+<dt id="_CPPv4N15foreign_storage12ForeignTable13FILE_PATH_KEYE">
+<span id="_CPPv3N15foreign_storage12ForeignTable13FILE_PATH_KEYE"></span><span id="_CPPv2N15foreign_storage12ForeignTable13FILE_PATH_KEYE"></span><span id="foreign_storage::ForeignTable::FILE_PATH_KEY__cCP"></span><span class="target" id="structforeign__storage_1_1_foreign_table_1a533af3e51950b395520672a8eceaa894"></span><em class="property">constexpr</em> <em class="property">const</em> char *<code class="sig-name descname">FILE_PATH_KEY</code> = &quot;FILE_PATH&quot;<a class="headerlink" href="#_CPPv4N15foreign_storage12ForeignTable13FILE_PATH_KEYE" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
 <dl class="member">
 <dt id="_CPPv4N15foreign_storage12ForeignTable17FRAGMENT_SIZE_KEYE">
 <span id="_CPPv3N15foreign_storage12ForeignTable17FRAGMENT_SIZE_KEYE"></span><span id="_CPPv2N15foreign_storage12ForeignTable17FRAGMENT_SIZE_KEYE"></span><span id="foreign_storage::ForeignTable::FRAGMENT_SIZE_KEY__cCP"></span><span class="target" id="structforeign__storage_1_1_foreign_table_1a34d510da896523b0a691d16141e07f31"></span><em class="property">constexpr</em> <em class="property">const</em> char *<code class="sig-name descname">FRAGMENT_SIZE_KEY</code> = &quot;FRAGMENT_SIZE&quot;<a class="headerlink" href="#_CPPv4N15foreign_storage12ForeignTable17FRAGMENT_SIZE_KEYE" title="Permalink to this definition">¶</a><br /></dt>
@@ -1918,15 +1964,30 @@
 
 <dl class="member">
 <dt id="_CPPv4N15foreign_storage12ForeignTable17supported_optionsE">
-<span id="_CPPv3N15foreign_storage12ForeignTable17supported_optionsE"></span><span id="_CPPv2N15foreign_storage12ForeignTable17supported_optionsE"></span><span id="foreign_storage::ForeignTable::supported_options__std::array:cCP.5:"></span><span class="target" id="structforeign__storage_1_1_foreign_table_1a760e93ad70784d1733feebad8948800d"></span><em class="property">constexpr</em> std::array&lt;<em class="property">const</em> char *, 5&gt; <code class="sig-name descname">supported_options</code>{<a class="reference internal" href="#_CPPv4N15foreign_storage12ForeignTable17FRAGMENT_SIZE_KEYE" title="foreign_storage::ForeignTable::FRAGMENT_SIZE_KEY">FRAGMENT_SIZE_KEY</a>, , , , }<a class="headerlink" href="#_CPPv4N15foreign_storage12ForeignTable17supported_optionsE" title="Permalink to this definition">¶</a><br /></dt>
+<span id="_CPPv3N15foreign_storage12ForeignTable17supported_optionsE"></span><span id="_CPPv2N15foreign_storage12ForeignTable17supported_optionsE"></span><span id="foreign_storage::ForeignTable::supported_options__std::set:cCP:C"></span><span class="target" id="structforeign__storage_1_1_foreign_table_1a2614425997f201c5e82d16782681e1ad"></span><em class="property">const</em> std::set&lt;<em class="property">const</em> char *&gt; <code class="sig-name descname">supported_options</code> = {<a class="reference internal" href="#_CPPv4N15foreign_storage12ForeignTable13FILE_PATH_KEYE" title="foreign_storage::ForeignTable::FILE_PATH_KEY">FILE_PATH_KEY</a>, , , , , }<a class="headerlink" href="#_CPPv4N15foreign_storage12ForeignTable17supported_optionsE" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="member">
+<dt id="_CPPv4N15foreign_storage12ForeignTable18upper_case_optionsE">
+<span id="_CPPv3N15foreign_storage12ForeignTable18upper_case_optionsE"></span><span id="_CPPv2N15foreign_storage12ForeignTable18upper_case_optionsE"></span><span id="foreign_storage::ForeignTable::upper_case_options__std::set:cCP:C"></span><span class="target" id="structforeign__storage_1_1_foreign_table_1ac8fb05bbc52e2b31de27a3445bbbf462"></span><em class="property">const</em> std::set&lt;<em class="property">const</em> char *&gt; <code class="sig-name descname">upper_case_options</code>{<a class="reference internal" href="#_CPPv4N15foreign_storage12ForeignTable23REFRESH_TIMING_TYPE_KEYE" title="foreign_storage::ForeignTable::REFRESH_TIMING_TYPE_KEY">REFRESH_TIMING_TYPE_KEY</a>, , , }<a class="headerlink" href="#_CPPv4N15foreign_storage12ForeignTable18upper_case_optionsE" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="member">
+<dt id="_CPPv4N15foreign_storage12ForeignTable17alterable_optionsE">
+<span id="_CPPv3N15foreign_storage12ForeignTable17alterable_optionsE"></span><span id="_CPPv2N15foreign_storage12ForeignTable17alterable_optionsE"></span><span id="foreign_storage::ForeignTable::alterable_options__std::set:cCP:C"></span><span class="target" id="structforeign__storage_1_1_foreign_table_1a85079f7c7b23cb3cf01f7879ac50c2fa"></span><em class="property">const</em> std::set&lt;<em class="property">const</em> char *&gt; <code class="sig-name descname">alterable_options</code> = {<a class="reference internal" href="#_CPPv4N15foreign_storage12ForeignTable23REFRESH_TIMING_TYPE_KEYE" title="foreign_storage::ForeignTable::REFRESH_TIMING_TYPE_KEY">REFRESH_TIMING_TYPE_KEY</a>, , , }<a class="headerlink" href="#_CPPv4N15foreign_storage12ForeignTable17alterable_optionsE" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 </div>
 <div class="breathe-sectiondef docutils container">
 <p class="breathe-sectiondef-title rubric">Private Functions</p>
 <dl class="function">
-<dt id="_CPPv4N15foreign_storage12ForeignTable24validateRecognizedOptionERKNSt6vectorINSt11string_viewEEE">
-<span id="_CPPv3N15foreign_storage12ForeignTable24validateRecognizedOptionERKNSt6vectorINSt11string_viewEEE"></span><span id="_CPPv2N15foreign_storage12ForeignTable24validateRecognizedOptionERKNSt6vectorINSt11string_viewEEE"></span><span id="foreign_storage::ForeignTable::validateRecognizedOption__std::vector:std::string_view:CR"></span><span class="target" id="structforeign__storage_1_1_foreign_table_1af134e94533924cc660ad84028051fa6e"></span>void <code class="sig-name descname">validateRecognizedOption</code><span class="sig-paren">(</span><em class="property">const</em> std::vector&lt;std::string_view&gt; &amp;<em>supported_data_wrapper_options</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N15foreign_storage12ForeignTable24validateRecognizedOptionERKNSt6vectorINSt11string_viewEEE" title="Permalink to this definition">¶</a><br /></dt>
+<dt id="_CPPv4NK15foreign_storage12ForeignTable26validateDataWrapperOptionsEv">
+<span id="_CPPv3NK15foreign_storage12ForeignTable26validateDataWrapperOptionsEv"></span><span id="_CPPv2NK15foreign_storage12ForeignTable26validateDataWrapperOptionsEv"></span><span id="foreign_storage::ForeignTable::validateDataWrapperOptionsC"></span><span class="target" id="structforeign__storage_1_1_foreign_table_1a480640365c6c5f1bf760e7867f38e170"></span>void <code class="sig-name descname">validateDataWrapperOptions</code><span class="sig-paren">(</span><span class="sig-paren">)</span> <em class="property">const</em><a class="headerlink" href="#_CPPv4NK15foreign_storage12ForeignTable26validateDataWrapperOptionsEv" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="_CPPv4NK15foreign_storage12ForeignTable22validateRefreshOptionsEv">
+<span id="_CPPv3NK15foreign_storage12ForeignTable22validateRefreshOptionsEv"></span><span id="_CPPv2NK15foreign_storage12ForeignTable22validateRefreshOptionsEv"></span><span id="foreign_storage::ForeignTable::validateRefreshOptionsC"></span><span class="target" id="structforeign__storage_1_1_foreign_table_1a58c8db33327033ae956aee4189f61c21"></span>void <code class="sig-name descname">validateRefreshOptions</code><span class="sig-paren">(</span><span class="sig-paren">)</span> <em class="property">const</em><a class="headerlink" href="#_CPPv4NK15foreign_storage12ForeignTable22validateRefreshOptionsEv" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 </div>

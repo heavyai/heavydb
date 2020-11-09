@@ -64,7 +64,7 @@
             
             
               <div class="version">
-                5.5.0dev 70db1e5
+                5.5.0dev 9026e69
               </div>
             
           
@@ -282,6 +282,7 @@
 <li class="toctree-l2"><a class="reference internal" href="api/class/class_alloca.html">Class Alloca</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/class_allocator.html">Class Allocator</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/class_alter_foreign_server_command.html">Class AlterForeignServerCommand</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/class/class_alter_foreign_table_command.html">Class AlterForeignTableCommand</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/class_analyzer_1_1_agg_expr.html">Class Analyzer::AggExpr</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/class_analyzer_1_1_array_expr.html">Class Analyzer::ArrayExpr</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/class_analyzer_1_1_bin_oper.html">Class Analyzer::BinOper</a></li>
@@ -898,6 +899,8 @@
 <li class="toctree-l2"><a class="reference internal" href="api/class/classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_foreign_table_test.html">Class com::mapd::parser::extension::ddl::ForeignTableTest</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_interrupt_command_test.html">Class com::mapd::parser::extension::ddl::InterruptCommandTest</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_show_command_test.html">Class com::mapd::parser::extension::ddl::ShowCommandTest</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/class/classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_alter_foreign_table.html">Class com::mapd::parser::extension::ddl::SqlAlterForeignTable</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/class/classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_alter_foreign_table_1_1_builder.html">Class com::mapd::parser::extension::ddl::SqlAlterForeignTable::Builder</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_alter_server.html">Class com::mapd::parser::extension::ddl::SqlAlterServer</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_alter_server_1_1_builder.html">Class com::mapd::parser::extension::ddl::SqlAlterServer::Builder</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_create_foreign_table.html">Class com::mapd::parser::extension::ddl::SqlCreateForeignTable</a></li>
@@ -2002,6 +2005,14 @@
 </li>
       <li><a href="api/class/class_alter_foreign_server_command.html#_CPPv4N25AlterForeignServerCommand23setForeignServerOptionsEv">AlterForeignServerCommand::setForeignServerOptions (C++ function)</a>
 </li>
+      <li><a href="api/class/class_alter_foreign_table_command.html#_CPPv424AlterForeignTableCommand">AlterForeignTableCommand (C++ class)</a>
+</li>
+      <li><a href="api/class/class_alter_foreign_table_command.html#_CPPv4N24AlterForeignTableCommand24AlterForeignTableCommandERKN9rapidjson5ValueENSt10shared_ptrIKN17Catalog_Namespace11SessionInfoEEE">AlterForeignTableCommand::AlterForeignTableCommand (C++ function)</a>
+</li>
+      <li><a href="api/class/class_alter_foreign_table_command.html#_CPPv4N24AlterForeignTableCommand7executeER12TQueryResult">AlterForeignTableCommand::execute (C++ function)</a>
+</li>
+      <li><a href="api/class/class_alter_foreign_table_command.html#_CPPv4N24AlterForeignTableCommand22setForeignTableOptionsEv">AlterForeignTableCommand::setForeignTableOptions (C++ function)</a>
+</li>
       <li><a href="api/class/classanalyze__benchmark_1_1_bench_analyzer.html#_CPPv4N17analyze_benchmark13BenchAnalyzerE">analyze_benchmark::BenchAnalyzer (C++ class)</a>
 </li>
       <li><a href="api/class/classanalyze__benchmark_1_1_benchmark_loader.html#_CPPv4N17analyze_benchmark15BenchmarkLoaderE">analyze_benchmark::BenchmarkLoader (C++ class)</a>
@@ -2708,12 +2719,12 @@
 </li>
       <li><a href="api/class/class_analyzer_1_1_like_expr.html#_CPPv4N8Analyzer8LikeExpr9is_simpleE">Analyzer::LikeExpr::is_simple (C++ member)</a>
 </li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="api/class/class_analyzer_1_1_like_expr.html#_CPPv4N8Analyzer8LikeExpr9like_exprE">Analyzer::LikeExpr::like_expr (C++ member)</a>
 </li>
       <li><a href="api/class/class_analyzer_1_1_like_expr.html#_CPPv4N8Analyzer8LikeExpr8LikeExprENSt10shared_ptrIN8Analyzer4ExprEEENSt10shared_ptrIN8Analyzer4ExprEEENSt10shared_ptrIN8Analyzer4ExprEEEbb">Analyzer::LikeExpr::LikeExpr (C++ function)</a>
 </li>
-  </ul></td>
-  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="api/class/class_analyzer_1_1_like_expr.html#_CPPv4NK8Analyzer8LikeExpreqERK4Expr">Analyzer::LikeExpr::operator== (C++ function)</a>
 </li>
       <li><a href="api/class/class_analyzer_1_1_like_expr.html#_CPPv4NK8Analyzer8LikeExpr18rewrite_agg_to_varERKNSt6vectorINSt10shared_ptrI11TargetEntryEEEE">Analyzer::LikeExpr::rewrite_agg_to_var (C++ function)</a>
@@ -4464,9 +4475,11 @@
 </li>
       <li><a href="api/class/class_catalog___namespace_1_1_catalog.html#_CPPv4N17Catalog_Namespace7Catalog24getForeignServersForUserEPKN9rapidjson5ValueERK12UserMetadataRNSt6vectorIPKN15foreign_storage13ForeignServerEEE">Catalog_Namespace::Catalog::getForeignServersForUser (C++ function)</a>
 </li>
+      <li><a href="api/class/class_catalog___namespace_1_1_catalog.html#_CPPv4N17Catalog_Namespace7Catalog26getForeignTableFromStorageEi">Catalog_Namespace::Catalog::getForeignTableFromStorage (C++ function)</a>
+</li>
       <li><a href="api/class/class_catalog___namespace_1_1_catalog.html#_CPPv4N17Catalog_Namespace7Catalog21getForeignTableSchemaEb">Catalog_Namespace::Catalog::getForeignTableSchema (C++ function)</a>
 </li>
-      <li><a href="api/class/class_catalog___namespace_1_1_catalog.html#_CPPv4NK17Catalog_Namespace7Catalog23getForeignTableUnlockedEi">Catalog_Namespace::Catalog::getForeignTableUnlocked (C++ function)</a>
+      <li><a href="api/class/class_catalog___namespace_1_1_catalog.html#_CPPv4NK17Catalog_Namespace7Catalog23getForeignTableUnlockedERKNSt6stringE">Catalog_Namespace::Catalog::getForeignTableUnlocked (C++ function)</a>, <a href="api/class/class_catalog___namespace_1_1_catalog.html#_CPPv4NK17Catalog_Namespace7Catalog23getForeignTableUnlockedEi">[1]</a>
 </li>
       <li><a href="api/class/class_catalog___namespace_1_1_catalog.html#_CPPv4NK17Catalog_Namespace7Catalog17getLogicalTableIdEKi">Catalog_Namespace::Catalog::getLogicalTableId (C++ function)</a>
 </li>
@@ -4567,6 +4580,10 @@
       <li><a href="api/class/class_catalog___namespace_1_1_catalog.html#_CPPv4N17Catalog_Namespace7Catalog23setForeignServerOptionsERKNSt6stringERKNSt6stringE">Catalog_Namespace::Catalog::setForeignServerOptions (C++ function)</a>
 </li>
       <li><a href="api/class/class_catalog___namespace_1_1_catalog.html#_CPPv4N17Catalog_Namespace7Catalog24setForeignServerPropertyERKNSt6stringERKNSt6stringERKNSt6stringE">Catalog_Namespace::Catalog::setForeignServerProperty (C++ function)</a>
+</li>
+      <li><a href="api/class/class_catalog___namespace_1_1_catalog.html#_CPPv4N17Catalog_Namespace7Catalog22setForeignTableOptionsERKNSt6stringERN15foreign_storage10OptionsMapEb">Catalog_Namespace::Catalog::setForeignTableOptions (C++ function)</a>
+</li>
+      <li><a href="api/class/class_catalog___namespace_1_1_catalog.html#_CPPv4N17Catalog_Namespace7Catalog23setForeignTablePropertyEPKN15foreign_storage12ForeignTableERKNSt6stringERKNSt6stringE">Catalog_Namespace::Catalog::setForeignTableProperty (C++ function)</a>
 </li>
       <li><a href="api/class/class_catalog___namespace_1_1_catalog.html#_CPPv4N17Catalog_Namespace7Catalog12setForReloadEK7int32_t">Catalog_Namespace::Catalog::setForReload (C++ function)</a>
 </li>
@@ -5306,12 +5323,12 @@
 </li>
       <li><a href="api/class/class_code_generator.html#_CPPv4N13CodeGenerator15codegenDictLikeEKNSt10shared_ptrIN8Analyzer4ExprEEEPKN8Analyzer8ConstantEKbKbKcRK18CompilationOptions">CodeGenerator::codegenDictLike (C++ function)</a>
 </li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="api/class/class_code_generator.html#_CPPv4N13CodeGenerator17codegenDictRegexpEKNSt10shared_ptrIN8Analyzer4ExprEEEPKN8Analyzer8ConstantEKcRK18CompilationOptions">CodeGenerator::codegenDictRegexp (C++ function)</a>
 </li>
       <li><a href="api/class/class_code_generator.html#_CPPv4N13CodeGenerator17codegenDictStrCmpEKNSt10shared_ptrIN8Analyzer4ExprEEEKNSt10shared_ptrIN8Analyzer4ExprEEEK6SQLOpsRK18CompilationOptions">CodeGenerator::codegenDictStrCmp (C++ function)</a>
 </li>
-  </ul></td>
-  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="api/class/class_code_generator.html#_CPPv4N13CodeGenerator10codegenDivEPN4llvm5ValueEPN4llvm5ValueERKNSt6stringERKNSt6stringERK11SQLTypeInfob">CodeGenerator::codegenDiv (C++ function)</a>
 </li>
       <li><a href="api/class/class_code_generator.html#_CPPv4N13CodeGenerator13CodeGeneratorEP8Executor">CodeGenerator::CodeGenerator (C++ function)</a>, <a href="api/class/class_code_generator.html#_CPPv4N13CodeGenerator13CodeGeneratorEP9CgenStateP9PlanState">[1]</a>
@@ -6358,8 +6375,6 @@
 </li>
       <li><a href="api/class/class_create_foreign_table_command.html#_CPPv4N25CreateForeignTableCommand16setColumnDetailsERNSt4listI16ColumnDescriptorEE">CreateForeignTableCommand::setColumnDetails (C++ function)</a>
 </li>
-      <li><a href="api/class/class_create_foreign_table_command.html#_CPPv4N25CreateForeignTableCommand17setRefreshOptionsERN15foreign_storage12ForeignTableE">CreateForeignTableCommand::setRefreshOptions (C++ function)</a>
-</li>
       <li><a href="api/class/class_create_foreign_table_command.html#_CPPv4N25CreateForeignTableCommand15setTableDetailsERKNSt6stringER15TableDescriptorK6size_t">CreateForeignTableCommand::setTableDetails (C++ function)</a>
 </li>
       <li><a href="api/struct/struct_cubin_result.html#_CPPv411CubinResult">CubinResult (C++ class)</a>
@@ -7006,7 +7021,7 @@
 </li>
       <li><a href="api/class/class_d_b_handler.html#_CPPv4N9DBHandler27check_table_load_privilegesERK10TSessionIdRKNSt6stringE">DBHandler::check_table_load_privileges (C++ function)</a>, <a href="api/class/class_d_b_handler.html#_CPPv4N9DBHandler27check_table_load_privilegesERKN17Catalog_Namespace11SessionInfoERKNSt6stringE">[1]</a>
 </li>
-      <li><a href="api/class/class_d_b_handler.html#_CPPv4N9DBHandler10checkpointERK10TSessionIdK7int32_tK7int32_t">DBHandler::checkpoint (C++ function)</a>
+      <li><a href="api/class/class_d_b_handler.html#_CPPv4N9DBHandler10checkpointERK10TSessionIdK7int32_t">DBHandler::checkpoint (C++ function)</a>
 </li>
       <li><a href="api/class/class_d_b_handler.html#_CPPv4N9DBHandler16clear_cpu_memoryERK10TSessionId">DBHandler::clear_cpu_memory (C++ function)</a>
 </li>
@@ -8956,7 +8971,7 @@
 </li>
       <li><a href="api/class/class_file___namespace_1_1_file_mgr.html#_CPPv4N14File_Namespace7FileMgr10fileIndex_E">File_Namespace::FileMgr::fileIndex_ (C++ member)</a>
 </li>
-      <li><a href="api/class/class_file___namespace_1_1_file_mgr.html#_CPPv4N14File_Namespace7FileMgr7FileMgrEKiP13GlobalFileMgrKNSt4pairIKiKiEEK6size_tKiK6size_t">File_Namespace::FileMgr::FileMgr (C++ function)</a>, <a href="api/class/class_file___namespace_1_1_file_mgr.html#_CPPv4N14File_Namespace7FileMgr7FileMgrEKiP13GlobalFileMgrKNSt4pairIKiKiEEKb">[1]</a>, <a href="api/class/class_file___namespace_1_1_file_mgr.html#_CPPv4N14File_Namespace7FileMgr7FileMgrEP13GlobalFileMgrK6size_tNSt6stringE">[2]</a>
+      <li><a href="api/class/class_file___namespace_1_1_file_mgr.html#_CPPv4N14File_Namespace7FileMgr7FileMgrEKi">File_Namespace::FileMgr::FileMgr (C++ function)</a>, <a href="api/class/class_file___namespace_1_1_file_mgr.html#_CPPv4N14File_Namespace7FileMgr7FileMgrEKiP13GlobalFileMgrKNSt4pairIKiKiEEK6size_tKiK6size_t">[1]</a>, <a href="api/class/class_file___namespace_1_1_file_mgr.html#_CPPv4N14File_Namespace7FileMgr7FileMgrEKiP13GlobalFileMgrKNSt4pairIKiKiEEKb">[2]</a>, <a href="api/class/class_file___namespace_1_1_file_mgr.html#_CPPv4N14File_Namespace7FileMgr7FileMgrEP13GlobalFileMgrK6size_tNSt6stringE">[3]</a>
 </li>
       <li><a href="api/class/class_file___namespace_1_1_file_mgr.html#_CPPv4N14File_Namespace7FileMgr16fileMgrBasePath_E">File_Namespace::FileMgr::fileMgrBasePath_ (C++ member)</a>
 </li>
@@ -9104,6 +9119,8 @@
 </li>
       <li><a href="api/class/class_file___namespace_1_1_global_file_mgr.html#_CPPv4N14File_Namespace13GlobalFileMgr19getNumReaderThreadsEv">File_Namespace::GlobalFileMgr::getNumReaderThreads (C++ function)</a>
 </li>
+      <li><a href="api/class/class_file___namespace_1_1_global_file_mgr.html#_CPPv4N14File_Namespace13GlobalFileMgr16getSharedFileMgrEKiKi">File_Namespace::GlobalFileMgr::getSharedFileMgr (C++ function)</a>
+</li>
       <li><a href="api/class/class_file___namespace_1_1_global_file_mgr.html#_CPPv4N14File_Namespace13GlobalFileMgr16getStringMgrTypeEv">File_Namespace::GlobalFileMgr::getStringMgrType (C++ function)</a>
 </li>
       <li><a href="api/class/class_file___namespace_1_1_global_file_mgr.html#_CPPv4N14File_Namespace13GlobalFileMgr13getTableEpochEKiKi">File_Namespace::GlobalFileMgr::getTableEpoch (C++ function)</a>
@@ -9129,6 +9146,8 @@
       <li><a href="api/class/class_file___namespace_1_1_global_file_mgr.html#_CPPv4N14File_Namespace13GlobalFileMgr20removeTableRelatedDSEKiKi">File_Namespace::GlobalFileMgr::removeTableRelatedDS (C++ function)</a>
 </li>
       <li><a href="api/class/class_file___namespace_1_1_global_file_mgr.html#_CPPv4N14File_Namespace13GlobalFileMgr12setDBConvertEb">File_Namespace::GlobalFileMgr::setDBConvert (C++ function)</a>
+</li>
+      <li><a href="api/class/class_file___namespace_1_1_global_file_mgr.html#_CPPv4N14File_Namespace13GlobalFileMgr10setFileMgrEKiKiNSt10shared_ptrI7FileMgrEE">File_Namespace::GlobalFileMgr::setFileMgr (C++ function)</a>
 </li>
       <li><a href="api/class/class_file___namespace_1_1_global_file_mgr.html#_CPPv4N14File_Namespace13GlobalFileMgr13setTableEpochEKiKiKi">File_Namespace::GlobalFileMgr::setTableEpoch (C++ function)</a>
 </li>
@@ -9856,13 +9875,25 @@
 </li>
       <li><a href="api/struct/structforeign__storage_1_1_foreign_table.html#_CPPv4N15foreign_storage12ForeignTable23ALL_REFRESH_UPDATE_TYPEE">foreign_storage::ForeignTable::ALL_REFRESH_UPDATE_TYPE (C++ member)</a>
 </li>
+      <li><a href="api/struct/structforeign__storage_1_1_foreign_table.html#_CPPv4N15foreign_storage12ForeignTable17alterable_optionsE">foreign_storage::ForeignTable::alterable_options (C++ member)</a>
+</li>
       <li><a href="api/struct/structforeign__storage_1_1_foreign_table.html#_CPPv4N15foreign_storage12ForeignTable26APPEND_REFRESH_UPDATE_TYPEE">foreign_storage::ForeignTable::APPEND_REFRESH_UPDATE_TYPE (C++ member)</a>
 </li>
+      <li><a href="api/struct/structforeign__storage_1_1_foreign_table.html#_CPPv4N15foreign_storage12ForeignTable18create_options_mapERKN9rapidjson5ValueE">foreign_storage::ForeignTable::create_options_map (C++ function)</a>
+</li>
+      <li><a href="api/struct/structforeign__storage_1_1_foreign_table.html#_CPPv4N15foreign_storage12ForeignTable13FILE_PATH_KEYE">foreign_storage::ForeignTable::FILE_PATH_KEY (C++ member)</a>
+</li>
       <li><a href="api/struct/structforeign__storage_1_1_foreign_table.html#_CPPv4N15foreign_storage12ForeignTable14foreign_serverE">foreign_storage::ForeignTable::foreign_server (C++ member)</a>
+</li>
+      <li><a href="api/struct/structforeign__storage_1_1_foreign_table.html#_CPPv4N15foreign_storage12ForeignTable12ForeignTableEK7int32_tPK13ForeignServerRKNSt6stringEK7int64_tK7int64_t">foreign_storage::ForeignTable::ForeignTable (C++ function)</a>, <a href="api/struct/structforeign__storage_1_1_foreign_table.html#_CPPv4N15foreign_storage12ForeignTable12ForeignTableEv">[1]</a>
 </li>
       <li><a href="api/struct/structforeign__storage_1_1_foreign_table.html#_CPPv4N15foreign_storage12ForeignTable17FRAGMENT_SIZE_KEYE">foreign_storage::ForeignTable::FRAGMENT_SIZE_KEY (C++ member)</a>
 </li>
       <li><a href="api/struct/structforeign__storage_1_1_foreign_table.html#_CPPv4NK15foreign_storage12ForeignTable11getFilePathEv">foreign_storage::ForeignTable::getFilePath (C++ function)</a>
+</li>
+      <li><a href="api/struct/structforeign__storage_1_1_foreign_table.html#_CPPv4NK15foreign_storage12ForeignTable30getSupportedDataWrapperOptionsEv">foreign_storage::ForeignTable::getSupportedDataWrapperOptions (C++ function)</a>
+</li>
+      <li><a href="api/struct/structforeign__storage_1_1_foreign_table.html#_CPPv4N15foreign_storage12ForeignTable17initializeOptionsERKN9rapidjson5ValueE">foreign_storage::ForeignTable::initializeOptions (C++ function)</a>
 </li>
       <li><a href="api/struct/structforeign__storage_1_1_foreign_table.html#_CPPv4NK15foreign_storage12ForeignTable12isAppendModeEv">foreign_storage::ForeignTable::isAppendMode (C++ function)</a>
 </li>
@@ -9886,9 +9917,17 @@
 </li>
       <li><a href="api/struct/structforeign__storage_1_1_foreign_table.html#_CPPv4N15foreign_storage12ForeignTable17supported_optionsE">foreign_storage::ForeignTable::supported_options (C++ member)</a>
 </li>
-      <li><a href="api/struct/structforeign__storage_1_1_foreign_table.html#_CPPv4N15foreign_storage12ForeignTable8validateERKNSt6vectorINSt11string_viewEEE">foreign_storage::ForeignTable::validate (C++ function)</a>
+      <li><a href="api/struct/structforeign__storage_1_1_foreign_table.html#_CPPv4N15foreign_storage12ForeignTable18upper_case_optionsE">foreign_storage::ForeignTable::upper_case_options (C++ member)</a>
 </li>
-      <li><a href="api/struct/structforeign__storage_1_1_foreign_table.html#_CPPv4N15foreign_storage12ForeignTable24validateRecognizedOptionERKNSt6vectorINSt11string_viewEEE">foreign_storage::ForeignTable::validateRecognizedOption (C++ function)</a>
+      <li><a href="api/struct/structforeign__storage_1_1_foreign_table.html#_CPPv4N15foreign_storage12ForeignTable22validate_alter_optionsERK10OptionsMap">foreign_storage::ForeignTable::validate_alter_options (C++ function)</a>
+</li>
+      <li><a href="api/struct/structforeign__storage_1_1_foreign_table.html#_CPPv4NK15foreign_storage12ForeignTable26validateDataWrapperOptionsEv">foreign_storage::ForeignTable::validateDataWrapperOptions (C++ function)</a>
+</li>
+      <li><a href="api/struct/structforeign__storage_1_1_foreign_table.html#_CPPv4NK15foreign_storage12ForeignTable15validateOptionsEv">foreign_storage::ForeignTable::validateOptions (C++ function)</a>
+</li>
+      <li><a href="api/struct/structforeign__storage_1_1_foreign_table.html#_CPPv4NK15foreign_storage12ForeignTable22validateRefreshOptionsEv">foreign_storage::ForeignTable::validateRefreshOptions (C++ function)</a>
+</li>
+      <li><a href="api/struct/structforeign__storage_1_1_foreign_table.html#_CPPv4NK15foreign_storage12ForeignTable24validateSupportedOptionsERK10OptionsMap">foreign_storage::ForeignTable::validateSupportedOptions (C++ function)</a>
 </li>
       <li><a href="api/class/classforeign__storage_1_1_foreign_table_refresh_scheduler.html#_CPPv4N15foreign_storage28ForeignTableRefreshSchedulerE">foreign_storage::ForeignTableRefreshScheduler (C++ class)</a>
 </li>
@@ -9928,6 +9967,8 @@
 </li>
       <li><a href="api/class/classforeign__storage_1_1_foreign_table_schema.html#_CPPv4NK15foreign_storage18ForeignTableSchema16getLogicalColumnEKi">foreign_storage::ForeignTableSchema::getLogicalColumn (C++ function)</a>
 </li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="api/class/classforeign__storage_1_1_foreign_table_schema.html#_CPPv4NK15foreign_storage18ForeignTableSchema26getLogicalColumnIdIteratorEKi">foreign_storage::ForeignTableSchema::getLogicalColumnIdIterator (C++ function)</a>
 </li>
       <li><a href="api/class/classforeign__storage_1_1_foreign_table_schema.html#_CPPv4NK15foreign_storage18ForeignTableSchema17getLogicalColumnsEv">foreign_storage::ForeignTableSchema::getLogicalColumns (C++ function)</a>
@@ -9940,8 +9981,6 @@
 </li>
       <li><a href="api/class/classforeign__storage_1_1_foreign_table_schema.html#_CPPv4N15foreign_storage18ForeignTableSchema16logical_columns_E">foreign_storage::ForeignTableSchema::logical_columns_ (C++ member)</a>
 </li>
-  </ul></td>
-  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="api/class/classforeign__storage_1_1_foreign_table_schema.html#_CPPv4NK15foreign_storage18ForeignTableSchema28numLogicalAndPhysicalColumnsEv">foreign_storage::ForeignTableSchema::numLogicalAndPhysicalColumns (C++ function)</a>
 </li>
       <li><a href="api/class/classforeign__storage_1_1_foreign_table_schema.html#_CPPv4NK15foreign_storage18ForeignTableSchema17numLogicalColumnsEv">foreign_storage::ForeignTableSchema::numLogicalColumns (C++ function)</a>
@@ -10056,9 +10095,9 @@
 </li>
       <li><a href="api/struct/structforeign__storage_1_1_options_container.html#_CPPv4N15foreign_storage16OptionsContainer7optionsE">foreign_storage::OptionsContainer::options (C++ member)</a>
 </li>
-      <li><a href="api/struct/structforeign__storage_1_1_options_container.html#_CPPv4N15foreign_storage16OptionsContainer16OptionsContainerERKNSt3mapINSt6stringENSt6stringENSt4lessIEEEE">foreign_storage::OptionsContainer::OptionsContainer (C++ function)</a>, <a href="api/struct/structforeign__storage_1_1_options_container.html#_CPPv4N15foreign_storage16OptionsContainer16OptionsContainerERKNSt6stringE">[1]</a>, <a href="api/struct/structforeign__storage_1_1_options_container.html#_CPPv4N15foreign_storage16OptionsContainer16OptionsContainerEv">[2]</a>
+      <li><a href="api/struct/structforeign__storage_1_1_options_container.html#_CPPv4N15foreign_storage16OptionsContainer16OptionsContainerERK10OptionsMap">foreign_storage::OptionsContainer::OptionsContainer (C++ function)</a>, <a href="api/struct/structforeign__storage_1_1_options_container.html#_CPPv4N15foreign_storage16OptionsContainer16OptionsContainerERKNSt6stringE">[1]</a>, <a href="api/struct/structforeign__storage_1_1_options_container.html#_CPPv4N15foreign_storage16OptionsContainer16OptionsContainerEv">[2]</a>
 </li>
-      <li><a href="api/struct/structforeign__storage_1_1_options_container.html#_CPPv4N15foreign_storage16OptionsContainer18populateOptionsMapERKN9rapidjson5ValueE">foreign_storage::OptionsContainer::populateOptionsMap (C++ function)</a>, <a href="api/struct/structforeign__storage_1_1_options_container.html#_CPPv4N15foreign_storage16OptionsContainer18populateOptionsMapERKNSt6stringEb">[1]</a>
+      <li><a href="api/struct/structforeign__storage_1_1_options_container.html#_CPPv4N15foreign_storage16OptionsContainer18populateOptionsMapERKN9rapidjson5ValueEb">foreign_storage::OptionsContainer::populateOptionsMap (C++ function)</a>, <a href="api/struct/structforeign__storage_1_1_options_container.html#_CPPv4N15foreign_storage16OptionsContainer18populateOptionsMapERKNSt6stringEb">[1]</a>, <a href="api/struct/structforeign__storage_1_1_options_container.html#_CPPv4N15foreign_storage16OptionsContainer18populateOptionsMapERR10OptionsMapb">[2]</a>
 </li>
       <li><a href="api/class/classforeign__storage_1_1_parquet_array_encoder.html#_CPPv4N15foreign_storage19ParquetArrayEncoderE">foreign_storage::ParquetArrayEncoder (C++ class)</a>
 </li>
@@ -13228,7 +13267,7 @@
 </li>
       <li><a href="api/class/class_leaf_aggregator.html#_CPPv414LeafAggregator">LeafAggregator (C++ class)</a>
 </li>
-      <li><a href="api/class/class_leaf_aggregator.html#_CPPv4N14LeafAggregator14checkpointLeafERKN17Catalog_Namespace11SessionInfoEK7int32_tK7int32_t">LeafAggregator::checkpointLeaf (C++ function)</a>
+      <li><a href="api/class/class_leaf_aggregator.html#_CPPv4N14LeafAggregator36checkpointLeafShardsWithAutoRollbackERKN17Catalog_Namespace11SessionInfoEK7int32_tK7int32_t">LeafAggregator::checkpointLeafShardsWithAutoRollback (C++ function)</a>
 </li>
       <li><a href="api/class/class_leaf_aggregator.html#_CPPv4N14LeafAggregator21clear_leaf_cpu_memoryEK10TSessionId">LeafAggregator::clear_leaf_cpu_memory (C++ function)</a>
 </li>
@@ -13246,8 +13285,6 @@
 </li>
       <li><a href="api/class/class_leaf_aggregator.html#_CPPv4N14LeafAggregator20forwardQueryToLeavesERKN17Catalog_Namespace11SessionInfoERKNSt6stringE">LeafAggregator::forwardQueryToLeaves (C++ function)</a>
 </li>
-      <li><a href="api/class/class_leaf_aggregator.html#_CPPv4N14LeafAggregator21get_leaf_table_epochsERKN17Catalog_Namespace11SessionInfoEK7int32_tK7int32_t">LeafAggregator::get_leaf_table_epochs (C++ function)</a>
-</li>
       <li><a href="api/class/class_leaf_aggregator.html#_CPPv4N14LeafAggregator19get_table_epochLeafERKN17Catalog_Namespace11SessionInfoEK7int32_tK7int32_t">LeafAggregator::get_table_epochLeaf (C++ function)</a>
 </li>
       <li><a href="api/class/class_leaf_aggregator.html#_CPPv4N14LeafAggregator15getHardwareInfoE10TSessionId">LeafAggregator::getHardwareInfo (C++ function)</a>
@@ -13255,6 +13292,8 @@
       <li><a href="api/class/class_leaf_aggregator.html#_CPPv4N14LeafAggregator17getLeafMemoryInfoE10TSessionIdN14Data_Namespace11MemoryLevelE">LeafAggregator::getLeafMemoryInfo (C++ function)</a>
 </li>
       <li><a href="api/class/class_leaf_aggregator.html#_CPPv4N14LeafAggregator13getLeafStatusE10TSessionId">LeafAggregator::getLeafStatus (C++ function)</a>
+</li>
+      <li><a href="api/class/class_leaf_aggregator.html#_CPPv4N14LeafAggregator18getLeafTableEpochsERKN17Catalog_Namespace11SessionInfoEK7int32_tK7int32_t">LeafAggregator::getLeafTableEpochs (C++ function)</a>
 </li>
       <li><a href="api/class/class_leaf_aggregator.html#_CPPv4N14LeafAggregator16insertDataToLeafERKN17Catalog_Namespace11SessionInfoEK6size_tRK11TInsertData">LeafAggregator::insertDataToLeaf (C++ function)</a>
 </li>
@@ -13270,9 +13309,9 @@
 </li>
       <li><a href="api/class/class_leaf_aggregator.html#_CPPv4N14LeafAggregator18set_execution_modeEK10TSessionIdKN12TExecuteMode4typeE">LeafAggregator::set_execution_mode (C++ function)</a>
 </li>
-      <li><a href="api/class/class_leaf_aggregator.html#_CPPv4N14LeafAggregator21set_leaf_table_epochsERKN17Catalog_Namespace11SessionInfoEK7int32_tRKNSt6vectorIN17Catalog_Namespace14TableEpochInfoEEE">LeafAggregator::set_leaf_table_epochs (C++ function)</a>
-</li>
       <li><a href="api/class/class_leaf_aggregator.html#_CPPv4N14LeafAggregator19set_table_epochLeafERKN17Catalog_Namespace11SessionInfoEK7int32_tK7int32_tK7int32_t">LeafAggregator::set_table_epochLeaf (C++ function)</a>
+</li>
+      <li><a href="api/class/class_leaf_aggregator.html#_CPPv4N14LeafAggregator18setLeafTableEpochsERKN17Catalog_Namespace11SessionInfoEK7int32_tRKNSt6vectorIN17Catalog_Namespace14TableEpochInfoEEE">LeafAggregator::setLeafTableEpochs (C++ function)</a>
 </li>
       <li><a href="api/class/class_leaf_aggregator.html#_CPPv4N14LeafAggregator15switch_databaseEK10TSessionIdRKNSt6stringE">LeafAggregator::switch_database (C++ function)</a>
 </li>

@@ -1,0 +1,9 @@
+Class AlterForeignTableCommand
+==============================
+
+.. doxygenclass:: AlterForeignTableCommand
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

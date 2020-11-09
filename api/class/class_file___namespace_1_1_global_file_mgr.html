@@ -65,7 +65,7 @@
             
             
               <div class="version">
-                5.5.0dev 70db1e5
+                5.5.0dev 9026e69
               </div>
             
           
@@ -283,6 +283,7 @@
 <li class="toctree-l2"><a class="reference internal" href="class_alloca.html">Class Alloca</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_allocator.html">Class Allocator</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_alter_foreign_server_command.html">Class AlterForeignServerCommand</a></li>
+<li class="toctree-l2"><a class="reference internal" href="class_alter_foreign_table_command.html">Class AlterForeignTableCommand</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_analyzer_1_1_agg_expr.html">Class Analyzer::AggExpr</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_analyzer_1_1_array_expr.html">Class Analyzer::ArrayExpr</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_analyzer_1_1_bin_oper.html">Class Analyzer::BinOper</a></li>
@@ -899,6 +900,8 @@
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_foreign_table_test.html">Class com::mapd::parser::extension::ddl::ForeignTableTest</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_interrupt_command_test.html">Class com::mapd::parser::extension::ddl::InterruptCommandTest</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_show_command_test.html">Class com::mapd::parser::extension::ddl::ShowCommandTest</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_alter_foreign_table.html">Class com::mapd::parser::extension::ddl::SqlAlterForeignTable</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_alter_foreign_table_1_1_builder.html">Class com::mapd::parser::extension::ddl::SqlAlterForeignTable::Builder</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_alter_server.html">Class com::mapd::parser::extension::ddl::SqlAlterServer</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_alter_server_1_1_builder.html">Class com::mapd::parser::extension::ddl::SqlAlterServer::Builder</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_create_foreign_table.html">Class com::mapd::parser::extension::ddl::SqlCreateForeignTable</a></li>
@@ -2020,6 +2023,16 @@
 <dl class="function">
 <dt id="_CPPv4N14File_Namespace13GlobalFileMgr13getTableEpochEKiKi">
 <span id="_CPPv3N14File_Namespace13GlobalFileMgr13getTableEpochEKiKi"></span><span id="_CPPv2N14File_Namespace13GlobalFileMgr13getTableEpochEKiKi"></span><span id="File_Namespace::GlobalFileMgr::getTableEpoch__iC.iC"></span><span class="target" id="class_file___namespace_1_1_global_file_mgr_1ad3a3790dcfc46a7642064b9148aa7cda"></span>size_t <code class="sig-name descname">getTableEpoch</code><span class="sig-paren">(</span><em class="property">const</em> int <em>db_id</em>, <em class="property">const</em> int <em>tb_id</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N14File_Namespace13GlobalFileMgr13getTableEpochEKiKi" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="_CPPv4N14File_Namespace13GlobalFileMgr16getSharedFileMgrEKiKi">
+<span id="_CPPv3N14File_Namespace13GlobalFileMgr16getSharedFileMgrEKiKi"></span><span id="_CPPv2N14File_Namespace13GlobalFileMgr16getSharedFileMgrEKiKi"></span><span id="File_Namespace::GlobalFileMgr::getSharedFileMgr__iC.iC"></span><span class="target" id="class_file___namespace_1_1_global_file_mgr_1a3a0d0b12b7cb6a8bf8d88e19ad78d663"></span>std::shared_ptr&lt;<a class="reference internal" href="class_file___namespace_1_1_file_mgr.html#_CPPv4N14File_Namespace7FileMgrE" title="File_Namespace::FileMgr">FileMgr</a>&gt; <code class="sig-name descname">getSharedFileMgr</code><span class="sig-paren">(</span><em class="property">const</em> int <em>db_id</em>, <em class="property">const</em> int <em>table_id</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N14File_Namespace13GlobalFileMgr16getSharedFileMgrEKiKi" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="_CPPv4N14File_Namespace13GlobalFileMgr10setFileMgrEKiKiNSt10shared_ptrI7FileMgrEE">
+<span id="_CPPv3N14File_Namespace13GlobalFileMgr10setFileMgrEKiKiNSt10shared_ptrI7FileMgrEE"></span><span id="_CPPv2N14File_Namespace13GlobalFileMgr10setFileMgrEKiKiNSt10shared_ptrI7FileMgrEE"></span><span id="File_Namespace::GlobalFileMgr::setFileMgr__iC.iC.std::shared_ptr:FileMgr:"></span><span class="target" id="class_file___namespace_1_1_global_file_mgr_1af8cfc99711e45fc4209123695282882c"></span>void <code class="sig-name descname">setFileMgr</code><span class="sig-paren">(</span><em class="property">const</em> int <em>db_id</em>, <em class="property">const</em> int <em>table_id</em>, std::shared_ptr&lt;<a class="reference internal" href="class_file___namespace_1_1_file_mgr.html#_CPPv4N14File_Namespace7FileMgrE" title="File_Namespace::FileMgr">FileMgr</a>&gt; <em>file_mgr</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N14File_Namespace13GlobalFileMgr10setFileMgrEKiKiNSt10shared_ptrI7FileMgrEE" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 </div>

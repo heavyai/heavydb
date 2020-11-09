@@ -65,7 +65,7 @@
             
             
               <div class="version">
-                5.5.0dev 70db1e5
+                5.5.0dev 9026e69
               </div>
             
           
@@ -283,6 +283,7 @@
 <li class="toctree-l2"><a class="reference internal" href="class_alloca.html">Class Alloca</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_allocator.html">Class Allocator</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_alter_foreign_server_command.html">Class AlterForeignServerCommand</a></li>
+<li class="toctree-l2"><a class="reference internal" href="class_alter_foreign_table_command.html">Class AlterForeignTableCommand</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_analyzer_1_1_agg_expr.html">Class Analyzer::AggExpr</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_analyzer_1_1_array_expr.html">Class Analyzer::ArrayExpr</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_analyzer_1_1_bin_oper.html">Class Analyzer::BinOper</a></li>
@@ -899,6 +900,8 @@
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_foreign_table_test.html">Class com::mapd::parser::extension::ddl::ForeignTableTest</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_interrupt_command_test.html">Class com::mapd::parser::extension::ddl::InterruptCommandTest</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_show_command_test.html">Class com::mapd::parser::extension::ddl::ShowCommandTest</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_alter_foreign_table.html">Class com::mapd::parser::extension::ddl::SqlAlterForeignTable</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_alter_foreign_table_1_1_builder.html">Class com::mapd::parser::extension::ddl::SqlAlterForeignTable::Builder</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_alter_server.html">Class com::mapd::parser::extension::ddl::SqlAlterServer</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_alter_server_1_1_builder.html">Class com::mapd::parser::extension::ddl::SqlAlterServer::Builder</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_create_foreign_table.html">Class com::mapd::parser::extension::ddl::SqlCreateForeignTable</a></li>
@@ -2290,6 +2293,21 @@
 </dd></dl>
 
 <dl class="function">
+<dt id="_CPPv4N17Catalog_Namespace7Catalog26getForeignTableFromStorageEi">
+<span id="_CPPv3N17Catalog_Namespace7Catalog26getForeignTableFromStorageEi"></span><span id="_CPPv2N17Catalog_Namespace7Catalog26getForeignTableFromStorageEi"></span><span id="Catalog_Namespace::Catalog::getForeignTableFromStorage__i"></span><span class="target" id="class_catalog___namespace_1_1_catalog_1a01e6c1e36efcd56052810cc2107d6484"></span><em class="property">const</em> std::unique_ptr&lt;<em class="property">const</em> foreign_storage::<a class="reference internal" href="../struct/structforeign__storage_1_1_foreign_table.html#_CPPv4N15foreign_storage12ForeignTableE" title="foreign_storage::ForeignTable">ForeignTable</a>&gt; <code class="sig-name descname">getForeignTableFromStorage</code><span class="sig-paren">(</span>int <em>table_id</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N17Catalog_Namespace7Catalog26getForeignTableFromStorageEi" title="Permalink to this definition">¶</a><br /></dt>
+<dd><p>Gets a pointer to a struct containing foreign table details fetched from storage. This is mainly used for testing when asserting that expected catalog data is persisted.</p>
+<p><dl class="simple">
+<dt><strong>Return</strong></dt><dd><p>pointer to a struct containing foreign table details. nullptr is returned if no foreign table exists with the given name </p>
+</dd>
+<dt><strong>Parameters</strong></dt><dd><ul class="breatheparameterlist simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">table_name</span></code>: - Name of foreign table whose details will be fetched </p></li>
+</ul>
+</dd>
+</dl>
+</p>
+</dd></dl>
+
+<dl class="function">
 <dt id="_CPPv4N17Catalog_Namespace7Catalog24changeForeignServerOwnerERKNSt6stringEKi">
 <span id="_CPPv3N17Catalog_Namespace7Catalog24changeForeignServerOwnerERKNSt6stringEKi"></span><span id="_CPPv2N17Catalog_Namespace7Catalog24changeForeignServerOwnerERKNSt6stringEKi"></span><span id="Catalog_Namespace::Catalog::changeForeignServerOwner__ssCR.iC"></span><span class="target" id="class_catalog___namespace_1_1_catalog_1a16cee5b2eaf598b9716a894542f0a8ad"></span>void <code class="sig-name descname">changeForeignServerOwner</code><span class="sig-paren">(</span><em class="property">const</em> std::string &amp;<em>server_name</em>, <em class="property">const</em> int <em>new_owner_id</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N17Catalog_Namespace7Catalog24changeForeignServerOwnerERKNSt6stringEKi" title="Permalink to this definition">¶</a><br /></dt>
 <dd><p>Change the owner of a Foreign Server to a new owner.</p>
@@ -2413,6 +2431,20 @@
 <p><dl class="simple">
 <dt><strong>Parameters</strong></dt><dd><ul class="breatheparameterlist simple">
 <li><p><code class="docutils literal notranslate"><span class="pre">table_id</span></code>: - id of table to apply updates to </p></li>
+</ul>
+</dd>
+</dl>
+</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="_CPPv4N17Catalog_Namespace7Catalog22setForeignTableOptionsERKNSt6stringERN15foreign_storage10OptionsMapEb">
+<span id="_CPPv3N17Catalog_Namespace7Catalog22setForeignTableOptionsERKNSt6stringERN15foreign_storage10OptionsMapEb"></span><span id="_CPPv2N17Catalog_Namespace7Catalog22setForeignTableOptionsERKNSt6stringERN15foreign_storage10OptionsMapEb"></span><span id="Catalog_Namespace::Catalog::setForeignTableOptions__ssCR.foreign_storage::OptionsMapR.b"></span><span class="target" id="class_catalog___namespace_1_1_catalog_1aca6f1242f7d2759e509ad4438ff2d3dc"></span>void <code class="sig-name descname">setForeignTableOptions</code><span class="sig-paren">(</span><em class="property">const</em> std::string &amp;<em>table_name</em>, foreign_storage::OptionsMap &amp;<em>options_map</em>, bool <em>clear_existing_options</em> = true<span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N17Catalog_Namespace7Catalog22setForeignTableOptionsERKNSt6stringERN15foreign_storage10OptionsMapEb" title="Permalink to this definition">¶</a><br /></dt>
+<dd><p>Set the options of a Foreign Table.</p>
+<p><dl class="simple">
+<dt><strong>Parameters</strong></dt><dd><ul class="breatheparameterlist simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">table_name</span></code>: - Name of the foreign table whose options will be set </p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">options</span></code>: - Options to set </p></li>
 </ul>
 </dd>
 </dl>
@@ -2879,10 +2911,20 @@
 <dd></dd></dl>
 
 <dl class="function">
+<dt id="_CPPv4N17Catalog_Namespace7Catalog23setForeignTablePropertyEPKN15foreign_storage12ForeignTableERKNSt6stringERKNSt6stringE">
+<span id="_CPPv3N17Catalog_Namespace7Catalog23setForeignTablePropertyEPKN15foreign_storage12ForeignTableERKNSt6stringERKNSt6stringE"></span><span id="_CPPv2N17Catalog_Namespace7Catalog23setForeignTablePropertyEPKN15foreign_storage12ForeignTableERKNSt6stringERKNSt6stringE"></span><span id="Catalog_Namespace::Catalog::setForeignTableProperty__foreign_storage::ForeignTableCP.ssCR.ssCR"></span><span class="target" id="class_catalog___namespace_1_1_catalog_1a260f2ef93d451af79b2b0de6d55c892a"></span>void <code class="sig-name descname">setForeignTableProperty</code><span class="sig-paren">(</span><em class="property">const</em> foreign_storage::<a class="reference internal" href="../struct/structforeign__storage_1_1_foreign_table.html#_CPPv4N15foreign_storage12ForeignTableE" title="foreign_storage::ForeignTable">ForeignTable</a> *<em>table</em>, <em class="property">const</em> std::string &amp;<em>property</em>, <em class="property">const</em> std::string &amp;<em>value</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N17Catalog_Namespace7Catalog23setForeignTablePropertyEPKN15foreign_storage12ForeignTableERKNSt6stringERKNSt6stringE" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="function">
 <dt id="_CPPv4N17Catalog_Namespace7Catalog26createForeignServerNoLocksENSt10unique_ptrIN15foreign_storage13ForeignServerEEEb">
 <span id="_CPPv3N17Catalog_Namespace7Catalog26createForeignServerNoLocksENSt10unique_ptrIN15foreign_storage13ForeignServerEEEb"></span><span id="_CPPv2N17Catalog_Namespace7Catalog26createForeignServerNoLocksENSt10unique_ptrIN15foreign_storage13ForeignServerEEEb"></span><span id="Catalog_Namespace::Catalog::createForeignServerNoLocks__std::unique_ptr:foreign_storage::ForeignServer:.b"></span><span class="target" id="class_catalog___namespace_1_1_catalog_1af05e27d67691c09a06115729e5905af5"></span>void <code class="sig-name descname">createForeignServerNoLocks</code><span class="sig-paren">(</span>std::unique_ptr&lt;foreign_storage::<a class="reference internal" href="../struct/structforeign__storage_1_1_foreign_server.html#_CPPv4N15foreign_storage13ForeignServerE" title="foreign_storage::ForeignServer">ForeignServer</a>&gt; <em>foreign_server</em>, bool <em>if_not_exists</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N17Catalog_Namespace7Catalog26createForeignServerNoLocksENSt10unique_ptrIN15foreign_storage13ForeignServerEEEb" title="Permalink to this definition">¶</a><br /></dt>
 <dd><p>Same as <a class="reference internal" href="#class_catalog___namespace_1_1_catalog_1a6188fa85342645021044f900a8f719c1"><span class="std std-ref">createForeignServer()</span></a> but without acquiring locks. This should only be called from within a function/code block that already acquires appropriate locks. </p>
 </dd></dl>
+
+<dl class="function">
+<dt id="_CPPv4NK17Catalog_Namespace7Catalog23getForeignTableUnlockedERKNSt6stringE">
+<span id="_CPPv3NK17Catalog_Namespace7Catalog23getForeignTableUnlockedERKNSt6stringE"></span><span id="_CPPv2NK17Catalog_Namespace7Catalog23getForeignTableUnlockedERKNSt6stringE"></span><span id="Catalog_Namespace::Catalog::getForeignTableUnlocked__ssCRC"></span><span class="target" id="class_catalog___namespace_1_1_catalog_1a251f31f2d0c2c81c57bb77f1369c1544"></span>foreign_storage::<a class="reference internal" href="../struct/structforeign__storage_1_1_foreign_table.html#_CPPv4N15foreign_storage12ForeignTableE" title="foreign_storage::ForeignTable">ForeignTable</a> *<code class="sig-name descname">getForeignTableUnlocked</code><span class="sig-paren">(</span><em class="property">const</em> std::string &amp;<em>tableName</em><span class="sig-paren">)</span> <em class="property">const</em><a class="headerlink" href="#_CPPv4NK17Catalog_Namespace7Catalog23getForeignTableUnlockedERKNSt6stringE" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
 
 </div>
 <div class="breathe-sectiondef docutils container">

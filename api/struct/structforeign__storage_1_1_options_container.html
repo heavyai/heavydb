@@ -65,7 +65,7 @@
             
             
               <div class="version">
-                5.5.0dev 70db1e5
+                5.5.0dev 9026e69
               </div>
             
           
@@ -283,6 +283,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../class/class_alloca.html">Class Alloca</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/class_allocator.html">Class Allocator</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/class_alter_foreign_server_command.html">Class AlterForeignServerCommand</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../class/class_alter_foreign_table_command.html">Class AlterForeignTableCommand</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/class_analyzer_1_1_agg_expr.html">Class Analyzer::AggExpr</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/class_analyzer_1_1_array_expr.html">Class Analyzer::ArrayExpr</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/class_analyzer_1_1_bin_oper.html">Class Analyzer::BinOper</a></li>
@@ -899,6 +900,8 @@
 <li class="toctree-l2"><a class="reference internal" href="../class/classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_foreign_table_test.html">Class com::mapd::parser::extension::ddl::ForeignTableTest</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_interrupt_command_test.html">Class com::mapd::parser::extension::ddl::InterruptCommandTest</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_show_command_test.html">Class com::mapd::parser::extension::ddl::ShowCommandTest</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../class/classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_alter_foreign_table.html">Class com::mapd::parser::extension::ddl::SqlAlterForeignTable</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../class/classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_alter_foreign_table_1_1_builder.html">Class com::mapd::parser::extension::ddl::SqlAlterForeignTable::Builder</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_alter_server.html">Class com::mapd::parser::extension::ddl::SqlAlterServer</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_alter_server_1_1_builder.html">Class com::mapd::parser::extension::ddl::SqlAlterServer::Builder</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_create_foreign_table.html">Class com::mapd::parser::extension::ddl::SqlCreateForeignTable</a></li>
@@ -1837,8 +1840,8 @@
 <dd></dd></dl>
 
 <dl class="function">
-<dt id="_CPPv4N15foreign_storage16OptionsContainer16OptionsContainerERKNSt3mapINSt6stringENSt6stringENSt4lessIEEEE">
-<span id="_CPPv3N15foreign_storage16OptionsContainer16OptionsContainerERKNSt3mapINSt6stringENSt6stringENSt4lessIEEEE"></span><span id="_CPPv2N15foreign_storage16OptionsContainer16OptionsContainerERKNSt3mapINSt6stringENSt6stringENSt4lessIEEEE"></span><span id="foreign_storage::OptionsContainer::OptionsContainer__std::map:ss.ss.std::less:::CR"></span><span class="target" id="structforeign__storage_1_1_options_container_1a5a2ce5aa1872aab06277df7815552533"></span><code class="sig-name descname">OptionsContainer</code><span class="sig-paren">(</span><em class="property">const</em> std::map&lt;std::string, std::string, std::less&lt;&gt;&gt; &amp;<em>options</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N15foreign_storage16OptionsContainer16OptionsContainerERKNSt3mapINSt6stringENSt6stringENSt4lessIEEEE" title="Permalink to this definition">¶</a><br /></dt>
+<dt id="_CPPv4N15foreign_storage16OptionsContainer16OptionsContainerERK10OptionsMap">
+<span id="_CPPv3N15foreign_storage16OptionsContainer16OptionsContainerERK10OptionsMap"></span><span id="_CPPv2N15foreign_storage16OptionsContainer16OptionsContainerERK10OptionsMap"></span><span id="foreign_storage::OptionsContainer::OptionsContainer__OptionsMapCR"></span><span class="target" id="structforeign__storage_1_1_options_container_1a28377e22e36851fcca974b04f5e6e510"></span><code class="sig-name descname">OptionsContainer</code><span class="sig-paren">(</span><em class="property">const</em> OptionsMap &amp;<em>options</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N15foreign_storage16OptionsContainer16OptionsContainerERK10OptionsMap" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 <dl class="function">
@@ -1847,8 +1850,13 @@
 <dd></dd></dl>
 
 <dl class="function">
-<dt id="_CPPv4N15foreign_storage16OptionsContainer18populateOptionsMapERKN9rapidjson5ValueE">
-<span id="_CPPv3N15foreign_storage16OptionsContainer18populateOptionsMapERKN9rapidjson5ValueE"></span><span id="_CPPv2N15foreign_storage16OptionsContainer18populateOptionsMapERKN9rapidjson5ValueE"></span><span id="foreign_storage::OptionsContainer::populateOptionsMap__rapidjson::ValueCR"></span><span class="target" id="structforeign__storage_1_1_options_container_1a367e224dbcf5a60b439887a277c4637b"></span>void <code class="sig-name descname">populateOptionsMap</code><span class="sig-paren">(</span><em class="property">const</em> rapidjson::Value &amp;<em>ddl_options</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N15foreign_storage16OptionsContainer18populateOptionsMapERKN9rapidjson5ValueE" title="Permalink to this definition">¶</a><br /></dt>
+<dt id="_CPPv4N15foreign_storage16OptionsContainer18populateOptionsMapERR10OptionsMapb">
+<span id="_CPPv3N15foreign_storage16OptionsContainer18populateOptionsMapERR10OptionsMapb"></span><span id="_CPPv2N15foreign_storage16OptionsContainer18populateOptionsMapERR10OptionsMapb"></span><span id="foreign_storage::OptionsContainer::populateOptionsMap__OptionsMapRR.b"></span><span class="target" id="structforeign__storage_1_1_options_container_1a45d44c7a40b58c5b0a266bdd3cc8358d"></span>void <code class="sig-name descname">populateOptionsMap</code><span class="sig-paren">(</span>OptionsMap &amp;&amp;<em>options_map</em>, bool <em>clear</em> = false<span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N15foreign_storage16OptionsContainer18populateOptionsMapERR10OptionsMapb" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="_CPPv4N15foreign_storage16OptionsContainer18populateOptionsMapERKN9rapidjson5ValueEb">
+<span id="_CPPv3N15foreign_storage16OptionsContainer18populateOptionsMapERKN9rapidjson5ValueEb"></span><span id="_CPPv2N15foreign_storage16OptionsContainer18populateOptionsMapERKN9rapidjson5ValueEb"></span><span id="foreign_storage::OptionsContainer::populateOptionsMap__rapidjson::ValueCR.b"></span><span class="target" id="structforeign__storage_1_1_options_container_1a2cb27071b0c6f1ec02dcad58ae07dbe8"></span>void <code class="sig-name descname">populateOptionsMap</code><span class="sig-paren">(</span><em class="property">const</em> rapidjson::Value &amp;<em>ddl_options</em>, bool <em>clear</em> = false<span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N15foreign_storage16OptionsContainer18populateOptionsMapERKN9rapidjson5ValueEb" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 <dl class="function">
@@ -1866,7 +1874,7 @@
 <p class="breathe-sectiondef-title rubric">Public Members</p>
 <dl class="member">
 <dt id="_CPPv4N15foreign_storage16OptionsContainer7optionsE">
-<span id="_CPPv3N15foreign_storage16OptionsContainer7optionsE"></span><span id="_CPPv2N15foreign_storage16OptionsContainer7optionsE"></span><span id="foreign_storage::OptionsContainer::options__std::map:ss.ss.std::less:::"></span><span class="target" id="structforeign__storage_1_1_options_container_1a56e7f2d2bfbdac703aa9349749dafa86"></span>std::map&lt;std::string, std::string, std::less&lt;&gt;&gt; <code class="sig-name descname">options</code><a class="headerlink" href="#_CPPv4N15foreign_storage16OptionsContainer7optionsE" title="Permalink to this definition">¶</a><br /></dt>
+<span id="_CPPv3N15foreign_storage16OptionsContainer7optionsE"></span><span id="_CPPv2N15foreign_storage16OptionsContainer7optionsE"></span><span id="foreign_storage::OptionsContainer::options__OptionsMap"></span><span class="target" id="structforeign__storage_1_1_options_container_1abe77ff60b1d58d9858663a72c7d2bd83"></span>OptionsMap <code class="sig-name descname">options</code><a class="headerlink" href="#_CPPv4N15foreign_storage16OptionsContainer7optionsE" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 </div>
