@@ -1,40 +1,52 @@
 /*
- * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The ASF licenses this file to you under the Apache License, Version 2.0
- * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
+ * Licensed to the Apache Software Foundation (ASF) under one or more contributor license
+ * agreements. See the NOTICE file distributed with this work for additional information regarding
+ * copyright ownership. The ASF licenses this file to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance with the License. You may obtain a
+ * copy of the License at
  *
  * http://www.apache.org/licenses/LICENSE-2.0
  *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Unless required by applicable law or agreed to in writing, software distributed under the License
+ * is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express
+ * or implied. See the License for the specific language governing permissions and limitations under
+ * the License.
  */
 package org.apache.calcite.prepare;
 
+import com.google.common.collect.ImmutableList;
 import com.mapd.calcite.parser.MapDParserOptions;
-
+import com.mapd.calcite.parser.MapDSchema;
+import com.mapd.calcite.parser.ProjectProjectRemoveRule;
 import org.apache.calcite.config.CalciteConnectionConfig;
 import org.apache.calcite.config.CalciteConnectionConfigImpl;
 import org.apache.calcite.config.CalciteConnectionProperty;
 import org.apache.calcite.jdbc.CalciteSchema;
 import org.apache.calcite.linq4j.function.Functions;
 import org.apache.calcite.plan.Context;
+import org.apache.calcite.plan.RelOptCluster;
 import org.apache.calcite.plan.RelOptCostImpl;
+import org.apache.calcite.plan.RelOptLattice;
+import org.apache.calcite.plan.RelOptMaterialization;
+import org.apache.calcite.plan.RelOptUtil;
 import org.apache.calcite.plan.hep.HepPlanner;
 import org.apache.calcite.plan.hep.HepProgram;
+import org.apache.calcite.plan.volcano.VolcanoPlanner;
 import org.apache.calcite.rel.RelNode;
 import org.apache.calcite.rel.RelRoot;
 import org.apache.calcite.rel.core.RelFactories;
+import org.apache.calcite.rel.externalize.MapDRelJsonReader;
+import org.apache.calcite.rel.metadata.DefaultRelMetadataProvider;
 import org.apache.calcite.rel.rules.DynamicFilterJoinRule;
 import org.apache.calcite.rel.rules.FilterJoinRule;
+import org.apache.calcite.rel.rules.FilterMergeRule;
+import org.apache.calcite.rel.rules.FilterProjectTransposeRule;
 import org.apache.calcite.rel.rules.OuterJoinOptViaNullRejectionRule;
+import org.apache.calcite.rel.rules.ProjectMergeRule;
 import org.apache.calcite.rel.rules.QueryOptimizationRules;
+import org.apache.calcite.rex.RexBuilder;
 import org.apache.calcite.schema.SchemaPlus;
+import org.apache.calcite.sql.SqlKind;
 import org.apache.calcite.sql.SqlNode;
 import org.apache.calcite.sql.advise.SqlAdvisor;
 import org.apache.calcite.sql.advise.SqlAdvisorValidator;
@@ -44,8 +56,11 @@ import org.apache.calcite.sql.validate.SqlConformanceEnum;
 import org.apache.calcite.sql.validate.SqlMoniker;
 import org.apache.calcite.sql.validate.SqlValidator;
 import org.apache.calcite.tools.FrameworkConfig;
+import org.apache.calcite.tools.Program;
+import org.apache.calcite.tools.Programs;
 import org.apache.calcite.tools.RelConversionException;
 
+import java.io.IOException;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
@@ -190,6 +205,33 @@ public class MapDPlanner extends PlannerImpl {
     prePlanner.setRoot(root.rel);
     final RelNode rootRelNode = prePlanner.findBestExp();
     return root.withRel(rootRelNode);
+  }
+
+  public RelRoot optimizeRaQuery(String query, MapDSchema schema) throws IOException {
+    ready();
+    RexBuilder builder = new RexBuilder(getTypeFactory());
+    RelOptCluster cluster = RelOptCluster.create(new VolcanoPlanner(), builder);
+    CalciteCatalogReader catalogReader = createCatalogReader();
+    MapDRelJsonReader reader = new MapDRelJsonReader(cluster, catalogReader, schema);
+
+    RelRoot relR = RelRoot.of(reader.read(query), SqlKind.SELECT);
+    applyQueryOptimizationRules(relR);
+    applyFilterPushdown(relR);
+
+    ProjectMergeRule projectMergeRule = new ProjectMergeRule(true, RelFactories.LOGICAL_BUILDER);
+    final Program program = Programs.hep(ImmutableList.of(FilterProjectTransposeRule.INSTANCE, projectMergeRule,
+        ProjectProjectRemoveRule.INSTANCE, FilterMergeRule.INSTANCE), true, DefaultRelMetadataProvider.INSTANCE);
+    RelNode oldRel;
+    RelNode newRel = relR.project();
+
+    do {
+      oldRel = newRel;
+      newRel = program.run(null, oldRel, null, ImmutableList.<RelOptMaterialization>of(),
+          ImmutableList.<RelOptLattice>of());
+      // there must be a better way to compare these
+    } while (!RelOptUtil.toString(oldRel).equals(RelOptUtil.toString(newRel)));
+
+    return RelRoot.of(newRel, relR.kind);
   }
 
   public void setFilterPushDownInfo(

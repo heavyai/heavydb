@@ -16,8 +16,11 @@
 
 package org.apache.calcite.rel.externalize;
 
+import com.fasterxml.jackson.databind.type.TypeFactory;
 import com.google.common.collect.ImmutableList;
+import com.mapd.calcite.parser.MapDSqlOperatorTable;
 
+import org.apache.calcite.avatica.AvaticaUtils;
 import org.apache.calcite.avatica.util.TimeUnitRange;
 import org.apache.calcite.plan.RelOptCluster;
 import org.apache.calcite.plan.RelTraitSet;
@@ -50,7 +53,11 @@ import org.apache.calcite.rex.RexWindowBound;
 import org.apache.calcite.sql.JoinType;
 import org.apache.calcite.sql.SqlAggFunction;
 import org.apache.calcite.sql.SqlFunction;
+import org.apache.calcite.sql.SqlIdentifier;
+import org.apache.calcite.sql.SqlKind;
 import org.apache.calcite.sql.SqlOperator;
+import org.apache.calcite.sql.SqlOperatorTable;
+import org.apache.calcite.sql.SqlSyntax;
 import org.apache.calcite.sql.fun.SqlStdOperatorTable;
 import org.apache.calcite.sql.type.SqlTypeName;
 import org.apache.calcite.util.ImmutableBitSet;
@@ -458,7 +465,33 @@ public class MapDRelJson {
         if (literal == null) {
           return rexBuilder.makeNullLiteral(sqlTypeName);
         }
-        return toRex(relInput, literal);
+
+        // omnisci serializes numeric literals differently, we need more data
+        // then the number. So, we need to have a special case for that.
+        if (literal instanceof Number) {
+          final SqlTypeName targetTypeName =
+                  Util.enumVal(SqlTypeName.class, (String) map.get("target_type"));
+          final long scale = ((Number) map.get("scale")).longValue();
+          final long precision = ((Number) map.get("precision")).longValue();
+          final long typeScale = ((Number) map.get("type_scale")).longValue();
+          final long typePrecision = ((Number) map.get("type_precision")).longValue();
+          RelDataTypeFactory typeFactory = cluster.getTypeFactory();
+
+          BigDecimal value =
+                  BigDecimal.valueOf(((Number) literal).longValue(), (int) scale);
+
+          if (typeScale != 0 && typeScale != -2147483648) {
+            return rexBuilder.makeLiteral(value,
+                    typeFactory.createSqlType(
+                            SqlTypeName.DECIMAL, (int) typePrecision, (int) typeScale),
+                    false);
+          } else {
+            return rexBuilder.makeLiteral(
+                    value, typeFactory.createSqlType(targetTypeName), false);
+          }
+        } else {
+          return toRex(relInput, literal);
+        }
       }
       throw new UnsupportedOperationException("cannot convert to rex " + o);
     } else if (o instanceof Boolean) {
@@ -485,11 +518,17 @@ public class MapDRelJson {
     return list;
   }
 
+  private SqlOperator toOp(String op) {
+    return toOp(op, new HashMap<>());
+  }
+
   private SqlOperator toOp(String op, Map<String, Object> map) {
     // TODO: build a map, for more efficient lookup
     // TODO: look up based on SqlKind
-    final List<SqlOperator> operatorList =
-            SqlStdOperatorTable.instance().getOperatorList();
+    MapDSqlOperatorTable operatorTable =
+            new MapDSqlOperatorTable(SqlStdOperatorTable.instance());
+    MapDSqlOperatorTable.addUDF(operatorTable, null);
+    final List<SqlOperator> operatorList = operatorTable.getOperatorList();
     for (SqlOperator operator : operatorList) {
       if (operator.getName().equals(op)) {
         return operator;
@@ -507,11 +546,36 @@ public class MapDRelJson {
         throw new RuntimeException(e);
       }
     }
-    return null;
+    throw new RuntimeException("Operator " + op + " does not supported");
   }
 
-  SqlAggFunction toAggregation(String agg, Map<String, Object> map) {
-    return (SqlAggFunction) toOp(agg, map);
+  SqlOperator toOp(RelInput relInput, String name) {
+    // in case different operator has the same kind, check with both name and kind.
+    String kind = name;
+    String syntax = "FUNCTION";
+    SqlKind sqlKind = SqlKind.valueOf(kind);
+    SqlSyntax sqlSyntax = SqlSyntax.valueOf(syntax);
+    MapDSqlOperatorTable operatorTable =
+            new MapDSqlOperatorTable(SqlStdOperatorTable.instance());
+    MapDSqlOperatorTable.addUDF(operatorTable, null);
+    final List<SqlOperator> operators = operatorTable.getOperatorList();
+    List<String> names = new ArrayList<>();
+    for (SqlOperator operator : operators) {
+      names.add(operator.toString());
+      if (operator.getName().equals(name)) {
+        return operator;
+      }
+    }
+    throw new RuntimeException("Aggregation function with name " + name
+            + " not found, search in " + names.toString());
+  }
+
+  SqlAggFunction toAggregation(String agg) {
+    return (SqlAggFunction) toOp(agg);
+  }
+
+  SqlAggFunction toAggregation(RelInput relInput, String agg) {
+    return (SqlAggFunction) toOp(relInput, agg);
   }
 
   private String toJson(SqlOperator operator) {
