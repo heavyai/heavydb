@@ -53,6 +53,11 @@
 #include <sstream>
 #include <thread>
 
+// TODO: see if we can exclude the library causing this conflict through msvc compiler commands
+#ifdef ERROR
+#undef ERROR
+#endif 
+
 extern bool g_enable_debug_timer;
 
 namespace logger {
