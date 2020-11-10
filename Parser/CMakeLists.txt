@@ -1,5 +1,9 @@
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_SOURCE_DIR}/cmake/Modules/")
 
+if(MSVC) 
+
+else()
+
 find_package(Bisonpp REQUIRED)
 find_package(Flexpp REQUIRED)
 
@@ -66,12 +70,23 @@ add_custom_target(PatchScanner DEPENDS ${ScannerPatched})
 
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-write-strings -Wno-unused-function -Wno-unused-label -Wno-sign-compare")
 
+endif()
+
 set(parser_source_files
     ParserNode.cpp
     ParserNode.h
     ParserWrapper.cpp
     ParserWrapper.h
 )
+
+if(MSVC)
+
+file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/LegacyParserSkeleton.h DESTINATION ${CMAKE_CURRENT_BINARY_DIR}/parser.h)
+add_library(Parser ${CMAKE_CURRENT_BINARY_DIR}/parser.h ${parser_source_files})
+
+target_link_libraries(Parser QueryState ImportExport Shared Analyzer QueryEngine Catalog TableArchiver DataMgr LockMgr)
+
+else()
 
 add_library(ParserGenerated ${ParserPatched} ${ScannerPatched})
 add_library(Parser ${CMAKE_CURRENT_BINARY_DIR}/parser.h ${parser_source_files})
@@ -82,4 +97,7 @@ add_dependencies(PatchScanner ScannerFiles)
 add_dependencies(Parser PatchParser PatchScanner)
 
 target_link_libraries(Parser ParserGenerated QueryState ImportExport Shared Analyzer QueryEngine Catalog TableArchiver DataMgr LockMgr)
+
+endif()
+
 include_directories(${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_BINARY_DIR})
