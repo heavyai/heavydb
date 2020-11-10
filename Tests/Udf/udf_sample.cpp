@@ -83,6 +83,11 @@ int8_t array_at_int64_is_null(Array<int64_t> arr, std::size_t idx) {
   return (int8_t)(array_at_int64(arr, idx) == arr.null_value());
 }
 
+#if defined(__clang__)
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wreturn-type-c-linkage"
+#endif
+
 EXTENSION_NOINLINE
 Array<double> array_ret_udf(const Array<int32_t> arr, double multiplier) {
   Array<double> ret(arr.getSize());
@@ -95,6 +100,10 @@ Array<double> array_ret_udf(const Array<int32_t> arr, double multiplier) {
   }
   return ret;
 }
+
+#if defined(__clang__)
+#pragma clang diagnostic pop
+#endif
 
 EXTENSION_NOINLINE
 int32_t udf_diff(const int32_t x, const int32_t y) {

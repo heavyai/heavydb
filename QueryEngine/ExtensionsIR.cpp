@@ -16,14 +16,10 @@
 
 #include "CodeGenerator.h"
 #include "Execute.h"
+#include "ExtensionFunctions.hpp"
 #include "ExtensionFunctionsBinding.h"
 #include "ExtensionFunctionsWhitelist.h"
-
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wreturn-type-c-linkage"
-#include "ExtensionFunctions.hpp"
 #include "TableFunctions/TableFunctions.hpp"
-#pragma GCC diagnostic pop
 
 #include <tuple>
 

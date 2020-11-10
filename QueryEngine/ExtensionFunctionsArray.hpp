@@ -1,5 +1,10 @@
 #include <cassert>
 
+#if defined(__clang__)
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wreturn-type-c-linkage"
+#endif
+
 #ifndef __CUDACC__
 
 namespace {
@@ -91,3 +96,7 @@ EXTENSION_NOINLINE Array<bool> barray_append(const Array<bool> in_arr, const boo
   return Array<bool>(0, true);
 #endif
 }
+
+#if defined(__clang__)
+#pragma clang diagnostic pop
+#endif
