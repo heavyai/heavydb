@@ -367,7 +367,8 @@ void CsvDataWrapper::populateChunks(
     column_filter_set.insert(pair.first);
   }
   for (size_t i = 0; i < file_regions.size(); i += batch_size) {
-    parse_file_requests.emplace_back(buffer_size, copy_params, db_id_, foreign_table_);
+    parse_file_requests.emplace_back(
+        buffer_size, copy_params, db_id_, foreign_table_, column_filter_set);
     auto start_index = i;
     auto end_index =
         std::min<size_t>(start_index + batch_size - 1, file_regions.size() - 1);

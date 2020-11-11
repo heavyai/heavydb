@@ -256,7 +256,8 @@ struct ParseBufferRequest {
   ParseBufferRequest(size_t buffer_size,
                      const import_export::CopyParams& copy_params,
                      int db_id,
-                     const ForeignTable* foreign_table)
+                     const ForeignTable* foreign_table,
+                     std::set<int> column_filter_set = {})
       : buffer(std::make_unique<char[]>(buffer_size))
       , buffer_size(buffer_size)
       , buffer_alloc_size(buffer_size)
@@ -265,16 +266,22 @@ struct ParseBufferRequest {
       , foreign_table_schema(std::make_unique<ForeignTableSchema>(db_id, foreign_table)) {
     // initialize import buffers from columns.
     for (const auto column : getColumns()) {
-      StringDictionary* string_dictionary = nullptr;
-      if (column->columnType.is_dict_encoded_string() ||
-          (column->columnType.is_array() && IS_STRING(column->columnType.get_subtype()) &&
-           column->columnType.get_compression() == kENCODING_DICT)) {
-        auto dict_descriptor = getCatalog()->getMetadataForDictUnlocked(
-            column->columnType.get_comp_param(), true);
-        string_dictionary = dict_descriptor->stringDict.get();
+      if (column_filter_set.size() &&
+          column_filter_set.find(column->columnId) == column_filter_set.end()) {
+        import_buffers.emplace_back(nullptr);
+      } else {
+        StringDictionary* string_dictionary = nullptr;
+        if (column->columnType.is_dict_encoded_string() ||
+            (column->columnType.is_array() &&
+             IS_STRING(column->columnType.get_subtype()) &&
+             column->columnType.get_compression() == kENCODING_DICT)) {
+          auto dict_descriptor = getCatalog()->getMetadataForDictUnlocked(
+              column->columnType.get_comp_param(), true);
+          string_dictionary = dict_descriptor->stringDict.get();
+        }
+        import_buffers.emplace_back(std::make_unique<import_export::TypedImportBuffer>(
+            column, string_dictionary));
       }
-      import_buffers.emplace_back(
-          std::make_unique<import_export::TypedImportBuffer>(column, string_dictionary));
     }
   }
 
@@ -359,6 +366,7 @@ ParseBufferResult parse_buffer(ParseBufferRequest& request) {
   std::vector<size_t> row_offsets{};
   row_offsets.emplace_back(request.file_offset + (p - request.buffer.get()));
 
+  std::string file_path = request.getFilePath();
   for (; p < thread_buf_end && remaining_row_count > 0; p++, remaining_row_count--) {
     row.clear();
     row_count++;
@@ -375,7 +383,7 @@ ParseBufferResult parse_buffer(ParseBufferRequest& request) {
                                                  try_single_thread);
 
     row_index_plus_one++;
-    validate_expected_column_count(row, num_cols, point_cols, request.getFilePath());
+    validate_expected_column_count(row, num_cols, point_cols, file_path);
 
     size_t import_idx = 0;
     size_t col_idx = 0;
