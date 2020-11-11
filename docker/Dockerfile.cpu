@@ -16,6 +16,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         bsdmainutils \
         wget \
         curl \
+        libgeos-dev \
         default-jre-headless && \
     apt-get remove --purge -y && \
     rm -rf /var/lib/apt/lists/*

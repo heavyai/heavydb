@@ -22,6 +22,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         libvulkan1 \
         clang-9 \
         liblz4-tool \
+        libgeos-dev \
         default-jre-headless && \
     apt-get remove --purge -y && \
     rm -rf /var/lib/apt/lists/*
