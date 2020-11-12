@@ -60,8 +60,7 @@ import java.util.Objects;
  */
 public class MapDRelJsonReader {
   private static final TypeReference<LinkedHashMap<String, Object>> TYPE_REF =
-      new TypeReference<LinkedHashMap<String, Object>>() {
-      };
+          new TypeReference<LinkedHashMap<String, Object>>() {};
 
   private final RelOptCluster cluster;
   private final RelOptSchema relOptSchema;
@@ -69,8 +68,8 @@ public class MapDRelJsonReader {
   private final Map<String, RelNode> relMap = new LinkedHashMap<>();
   private RelNode lastRel;
 
-  public MapDRelJsonReader(RelOptCluster cluster, RelOptSchema relOptSchema,
-      Schema schema) {
+  public MapDRelJsonReader(
+          RelOptCluster cluster, RelOptSchema relOptSchema, Schema schema) {
     this.cluster = cluster;
     this.relOptSchema = relOptSchema;
     Util.discard(schema);
@@ -79,9 +78,9 @@ public class MapDRelJsonReader {
   public RelNode read(String s) throws IOException {
     lastRel = null;
     final ObjectMapper mapper = new ObjectMapper();
-    Map<String, Object> o = mapper
-        .configure(DeserializationFeature.USE_BIG_DECIMAL_FOR_FLOATS, true)
-        .readValue(s, TYPE_REF);
+    Map<String, Object> o =
+            mapper.configure(DeserializationFeature.USE_BIG_DECIMAL_FOR_FLOATS, true)
+                    .readValue(s, TYPE_REF);
     @SuppressWarnings("unchecked")
     final List<Map<String, Object>> rels = (List) o.get("rels");
     readRels(rels);
@@ -98,7 +97,7 @@ public class MapDRelJsonReader {
     String id = (String) jsonRel.get("id");
     String type = (String) jsonRel.get("relOp");
     Constructor constructor = null;
-    if(!type.equalsIgnoreCase("EnumerableTableScan")) {
+    if (!type.equalsIgnoreCase("EnumerableTableScan")) {
       constructor = relJson.getConstructor(type);
     }
     RelInput input = new RelInput() {
@@ -146,8 +145,7 @@ public class MapDRelJsonReader {
         if (list == null) {
           return null;
         }
-        final ImmutableList.Builder<ImmutableBitSet> builder =
-            ImmutableList.builder();
+        final ImmutableList.Builder<ImmutableBitSet> builder = ImmutableList.builder();
         for (List<Integer> integers : list) {
           builder.add(ImmutableBitSet.of(integers));
         }
@@ -155,17 +153,17 @@ public class MapDRelJsonReader {
       }
 
       public List<String> getStringList(String tag) {
-        //noinspection unchecked
+        // noinspection unchecked
         return (List<String>) jsonRel.get(tag);
       }
 
       public List<Integer> getIntegerList(String tag) {
-        //noinspection unchecked
+        // noinspection unchecked
         return (List<Integer>) jsonRel.get(tag);
       }
 
       public List<List<Integer>> getIntegerListList(String tag) {
-        //noinspection unchecked
+        // noinspection unchecked
         return (List<List<Integer>>) jsonRel.get(tag);
       }
 
@@ -197,8 +195,7 @@ public class MapDRelJsonReader {
       }
 
       public <E extends Enum<E>> E getEnum(String tag, Class<E> enumClass) {
-        return Util.enumVal(enumClass,
-            getString(tag).toUpperCase(Locale.ROOT));
+        return Util.enumVal(enumClass, getString(tag).toUpperCase(Locale.ROOT));
       }
 
       public List<RexNode> getExpressionList(String tag) {
@@ -218,23 +215,24 @@ public class MapDRelJsonReader {
 
       public RelDataType getRowType(String expressionsTag, String fieldsTag) {
         final List<RexNode> expressionList = getExpressionList(expressionsTag);
-        @SuppressWarnings("unchecked") final List<String> names =
-            (List<String>) get(fieldsTag);
+        @SuppressWarnings("unchecked")
+        final List<String> names = (List<String>) get(fieldsTag);
         return cluster.getTypeFactory().createStructType(
-            new AbstractList<Map.Entry<String, RelDataType>>() {
-              @Override public Map.Entry<String, RelDataType> get(int index) {
-                return Pair.of(names.get(index),
-                    expressionList.get(index).getType());
-              }
+                new AbstractList<Map.Entry<String, RelDataType>>() {
+                  @Override
+                  public Map.Entry<String, RelDataType> get(int index) {
+                    return Pair.of(names.get(index), expressionList.get(index).getType());
+                  }
 
-              @Override public int size() {
-                return names.size();
-              }
-            });
+                  @Override
+                  public int size() {
+                    return names.size();
+                  }
+                });
       }
 
       public RelCollation getCollation() {
-        //noinspection unchecked
+        // noinspection unchecked
         return relJson.toCollation((List) get("collation"));
       }
 
@@ -243,10 +241,10 @@ public class MapDRelJsonReader {
       }
 
       public ImmutableList<ImmutableList<RexLiteral>> getTuples(String tag) {
-        //noinspection unchecked
+        // noinspection unchecked
         final List<List> jsonTuples = (List) get(tag);
         final ImmutableList.Builder<ImmutableList<RexLiteral>> builder =
-            ImmutableList.builder();
+                ImmutableList.builder();
         for (List jsonTuple : jsonTuples) {
           builder.add(getTuple(jsonTuple));
         }
@@ -254,8 +252,7 @@ public class MapDRelJsonReader {
       }
 
       public ImmutableList<RexLiteral> getTuple(List jsonTuple) {
-        final ImmutableList.Builder<RexLiteral> builder =
-            ImmutableList.builder();
+        final ImmutableList.Builder<RexLiteral> builder = ImmutableList.builder();
         for (Object jsonValue : jsonTuple) {
           builder.add((RexLiteral) relJson.toRex(this, jsonValue));
         }
@@ -265,15 +262,17 @@ public class MapDRelJsonReader {
     try {
       RelNode rel;
 
-      if(!type.equalsIgnoreCase("EnumerableTableScan")) {
+      if (!type.equalsIgnoreCase("EnumerableTableScan")) {
         rel = (RelNode) constructor.newInstance(input);
       } else {
         Objects.requireNonNull(cluster);
         Objects.requireNonNull(relOptSchema);
         Objects.requireNonNull(jsonRel);
         Objects.requireNonNull(jsonRel.get("table"));
-        Objects.requireNonNull(relOptSchema.getTableForMember((List<String>)jsonRel.get("table")));
-        rel = EnumerableTableScan.create(cluster, relOptSchema.getTableForMember((List<String>)jsonRel.get("table")));
+        Objects.requireNonNull(
+                relOptSchema.getTableForMember((List<String>) jsonRel.get("table")));
+        rel = EnumerableTableScan.create(cluster,
+                relOptSchema.getTableForMember((List<String>) jsonRel.get("table")));
       }
       relMap.put(id, rel);
       lastRel = rel;
@@ -282,7 +281,7 @@ public class MapDRelJsonReader {
     } catch (InvocationTargetException e) {
       final Throwable e2 = e.getCause();
       if (e2 instanceof RuntimeException) {
-        throw (RuntimeException) e2;
+        throw(RuntimeException) e2;
       }
       throw new RuntimeException(e2);
     }
@@ -290,25 +289,30 @@ public class MapDRelJsonReader {
 
   private AggregateCall toAggCall(RelInput relInput, Map<String, Object> jsonAggCall) {
     final SqlAggFunction aggregation =
-        relJson.toAggregation(relInput, (String) jsonAggCall.get("agg"));
+            relJson.toAggregation(relInput, (String) jsonAggCall.get("agg"));
     final Boolean distinct = (Boolean) jsonAggCall.get("distinct");
     @SuppressWarnings("unchecked")
     final List<Integer> operands = (List<Integer>) jsonAggCall.get("operands");
     final Integer filterOperand = (Integer) jsonAggCall.get("filter");
     final RelDataType type =
-        relJson.toType(cluster.getTypeFactory(), jsonAggCall.get("type"));
+            relJson.toType(cluster.getTypeFactory(), jsonAggCall.get("type"));
     final String name = (String) jsonAggCall.get("name");
-    return AggregateCall.create(aggregation, distinct, false, false, operands,
-        filterOperand == null ? -1 : filterOperand,
-        RelCollations.EMPTY,
-        type, name);
+    return AggregateCall.create(aggregation,
+            distinct,
+            false,
+            false,
+            operands,
+            filterOperand == null ? -1 : filterOperand,
+            RelCollations.EMPTY,
+            type,
+            name);
   }
 
   private RelNode lookupInput(String jsonInput) {
     RelNode node = relMap.get(jsonInput);
     if (node == null) {
-      throw new RuntimeException("unknown id " + jsonInput
-          + " for relational expression");
+      throw new RuntimeException(
+              "unknown id " + jsonInput + " for relational expression");
     }
     return node;
   }

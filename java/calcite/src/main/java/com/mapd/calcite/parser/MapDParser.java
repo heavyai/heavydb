@@ -302,11 +302,11 @@ public final class MapDParser {
 
             if (null != select) {
               if (null != select.getFetch() || null != select.getOffset()
-                    || (null != select.getOrderList()
-                          && select.getOrderList().size() != 0)) {
+                      || (null != select.getOrderList()
+                              && select.getOrderList().size() != 0)) {
                 throw new CalciteException(
                         "Correlated sub-queries with ordering not supported.", null);
-           }
+              }
             }
             return true;
           }
@@ -372,8 +372,9 @@ public final class MapDParser {
     this.mapdUser = mapdUser;
   }
 
-  public Pair<String, SqlIdentifierCapturer> process(String sql, final MapDParserOptions parserOptions)
-      throws SqlParseException, ValidationException, RelConversionException {
+  public Pair<String, SqlIdentifierCapturer> process(
+          String sql, final MapDParserOptions parserOptions)
+          throws SqlParseException, ValidationException, RelConversionException {
     final MapDPlanner planner = getPlanner(true, true);
     final SqlNode sqlNode = parseSql(sql, parserOptions.isLegacySyntax(), planner);
     String res = processSql(sqlNode, parserOptions);
@@ -383,7 +384,8 @@ public final class MapDParser {
   }
 
   public String optimizeRAQuery(String query) throws IOException {
-    MapDSchema schema = new MapDSchema(dataDir, this, mapdPort, mapdUser, sock_transport_properties);
+    MapDSchema schema =
+            new MapDSchema(dataDir, this, mapdPort, mapdUser, sock_transport_properties);
     MapDPlanner planner = getPlanner(true, true);
     RelRoot optRel = planner.optimizeRaQuery(query, schema);
     optRel = replaceIsTrue(planner.getTypeFactory(), optRel);
@@ -391,7 +393,7 @@ public final class MapDParser {
   }
 
   public String processSql(String sql, final MapDParserOptions parserOptions)
-      throws SqlParseException, ValidationException, RelConversionException {
+          throws SqlParseException, ValidationException, RelConversionException {
     callCount++;
 
     final MapDPlanner planner = getPlanner(true, true);
@@ -401,7 +403,7 @@ public final class MapDParser {
   }
 
   public String processSql(final SqlNode sqlNode, final MapDParserOptions parserOptions)
-      throws SqlParseException, ValidationException, RelConversionException {
+          throws SqlParseException, ValidationException, RelConversionException {
     callCount++;
 
     if (sqlNode instanceof JsonSerializableDdl) {
@@ -423,11 +425,11 @@ public final class MapDParser {
     return res;
   }
 
-  public MapDPlanner.CompletionResult getCompletionHints(String sql, int cursor,
-      List<String> visible_tables) {
+  public MapDPlanner.CompletionResult getCompletionHints(
+          String sql, int cursor, List<String> visible_tables) {
     return getPlanner().getCompletionHints(sql, cursor, visible_tables);
   }
-  
+
   public Set<String> resolveSelectIdentifiers(SqlIdentifierCapturer capturer) {
     MapDSchema schema =
             new MapDSchema(dataDir, this, mapdPort, mapdUser, sock_transport_properties);
