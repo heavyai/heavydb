@@ -2293,9 +2293,16 @@ ExecutionResult RelAlgExecutor::executeSimpleInsert(const Analyzer::Query& query
   }
   insert_data.numRows = 1;
   if (shard) {
-    shard->fragmenter->insertData(insert_data);
+    shard->fragmenter->insertDataNoCheckpoint(insert_data);
   } else {
-    table_descriptor->fragmenter->insertData(insert_data);
+    table_descriptor->fragmenter->insertDataNoCheckpoint(insert_data);
+  }
+
+  // Ensure checkpoint happens across all shards, if not in distributed
+  // mode (aggregator handles checkpointing in distributed mode)
+  if (!g_cluster &&
+      table_descriptor->persistenceLevel == Data_Namespace::MemoryLevel::DISK_LEVEL) {
+    const_cast<Catalog_Namespace::Catalog&>(cat_).checkpointWithAutoRollback(table_id);
   }
 
   auto rs = std::make_shared<ResultSet>(TargetInfoList{},

@@ -162,7 +162,11 @@ AbstractBufferMgr* GlobalFileMgr::getFileMgr(const int db_id, const int tb_id) {
 // For testing purposes only
 std::shared_ptr<FileMgr> GlobalFileMgr::getSharedFileMgr(const int db_id,
                                                          const int table_id) {
-  return ownedFileMgrs_[{db_id, table_id}];
+  const auto table_key = std::make_pair(db_id, table_id);
+  if (ownedFileMgrs_.find(table_key) == ownedFileMgrs_.end()) {
+    return nullptr;
+  }
+  return ownedFileMgrs_[table_key];
 }
 
 // For testing purposes only

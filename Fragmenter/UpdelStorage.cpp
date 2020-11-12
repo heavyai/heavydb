@@ -1292,8 +1292,9 @@ void UpdelRoll::commitUpdate() {
   ChunkKey chunk_key{catalog->getDatabaseId(), td->tableId};
   const auto table_lock = lockmgr::TableDataLockMgr::getWriteLockForTable(chunk_key);
 
-  // checkpoint all shards regardless, or epoch becomes out of sync
-  if (td->persistenceLevel == Data_Namespace::MemoryLevel::DISK_LEVEL) {
+  // Checkpoint all shards. Otherwise, epochs can go out of sync. Also, for distributed
+  // mode, do not checkpoint here, since the aggregator handles checkpointing.
+  if (!g_cluster && td->persistenceLevel == Data_Namespace::MemoryLevel::DISK_LEVEL) {
     auto table_epochs = catalog->getTableEpochs(catalog->getDatabaseId(), logicalTableId);
     try {
       // `checkpointWithAutoRollback` is not called here because, if a failure occurs,
