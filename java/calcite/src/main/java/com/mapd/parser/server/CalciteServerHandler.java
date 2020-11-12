@@ -173,18 +173,18 @@ public class CalciteServerHandler implements CalciteServer.Iface {
     TAccessedQueryObjects primaryAccessedObjects = new TAccessedQueryObjects();
     TAccessedQueryObjects resolvedAccessedObjects = new TAccessedQueryObjects();
     try {
-      final List<MapDParserOptions.FilterPushDownInfo> filterPushDownInfo =
-              new ArrayList<>();
-      for (final TFilterPushDownInfo req : thriftFilterPushDownInfo) {
-        filterPushDownInfo.add(new MapDParserOptions.FilterPushDownInfo(
-                req.input_prev, req.input_start, req.input_next));
-      }
-      Pair<String, SqlIdentifierCapturer> res;
-      SqlNode node;
-      try {
-        if (!isRAQuery) {
-          MapDParserOptions parserOptions = new MapDParserOptions(filterPushDownInfo, legacySyntax, isExplain,
-              isViewOptimize);
+      if (!isRAQuery) {
+        final List<MapDParserOptions.FilterPushDownInfo> filterPushDownInfo =
+                new ArrayList<>();
+        for (final TFilterPushDownInfo req : thriftFilterPushDownInfo) {
+          filterPushDownInfo.add(new MapDParserOptions.FilterPushDownInfo(
+                  req.input_prev, req.input_start, req.input_next));
+        }
+        Pair<String, SqlIdentifierCapturer> res;
+        SqlNode node;
+        try {
+          MapDParserOptions parserOptions = new MapDParserOptions(
+                  filterPushDownInfo, legacySyntax, isExplain, isViewOptimize);
           res = parser.process(queryText, parserOptions);
           jsonResult = res.left;
           capturer = res.right;
@@ -197,22 +197,23 @@ public class CalciteServerHandler implements CalciteServer.Iface {
           // also resolve all the views in the select part
           // resolution of the other parts is not
           // necessary as these cannot be views
-          resolvedAccessedObjects.tables_selected_from = new ArrayList<>(parser.resolveSelectIdentifiers(capturer));
-          resolvedAccessedObjects.tables_inserted_into = new ArrayList<>(capturer.inserts);
+          resolvedAccessedObjects.tables_selected_from =
+                  new ArrayList<>(parser.resolveSelectIdentifiers(capturer));
+          resolvedAccessedObjects.tables_inserted_into =
+                  new ArrayList<>(capturer.inserts);
           resolvedAccessedObjects.tables_updated_in = new ArrayList<>(capturer.updates);
           resolvedAccessedObjects.tables_deleted_from = new ArrayList<>(capturer.deletes);
-
-        } else {
-          jsonResult = parser.optimizeRAQuery(queryText);
+        } catch (ValidationException ex) {
+          String msg = "Validation: " + ex.getMessage();
+          MAPDLOGGER.error(msg, ex);
+          throw ex;
+        } catch (RelConversionException ex) {
+          String msg = " RelConversion failed: " + ex.getMessage();
+          MAPDLOGGER.error(msg, ex);
+          throw ex;
         }
-      } catch (ValidationException ex) {
-        String msg = "Validation: " + ex.getMessage();
-        MAPDLOGGER.error(msg, ex);
-        throw ex;
-      } catch (RelConversionException ex) {
-        String msg = " RelConversion failed: " + ex.getMessage();
-        MAPDLOGGER.error(msg, ex);
-        throw ex;
+      } else {
+        jsonResult = parser.optimizeRAQuery(queryText);
       }
     } catch (SqlParseException ex) {
       String msg = "Parse failed: " + ex.getMessage();
