@@ -56,10 +56,8 @@ llvm::Function* generate_entry_point(const CgenState* cgen_state) {
   return func;
 }
 
-inline llvm::Type* get_llvm_type_from_sql_column_type(const SQLTypeInfo ti,
+inline llvm::Type* get_llvm_type_from_sql_column_type(const SQLTypeInfo elem_ti,
                                                       llvm::LLVMContext& ctx) {
-  CHECK(ti.is_column());
-  const auto& elem_ti = ti.get_elem_type();
   if (elem_ti.is_fp()) {
     switch (elem_ti.get_size()) {
       case 4:
@@ -82,8 +80,8 @@ inline llvm::Type* get_llvm_type_from_sql_column_type(const SQLTypeInfo ti,
     case 8:
       return llvm::Type::getInt64PtrTy(ctx);
   }
-
-  UNREACHABLE();
+  LOG(FATAL) << "get_llvm_type_from_sql_column_type: not implemented for "
+             << ::toString(elem_ti);
   return nullptr;
 }
 
@@ -218,7 +216,7 @@ void TableFunctionCompilationContext::generateEntryPoint(
       func_args.push_back(cgen_state->ir_builder_.CreateLoad(r));
     } else if (ti.is_column()) {
       auto col = alloc_column(std::string("input_col.") + std::to_string(i),
-                              ti,
+                              ti.get_elem_type(),
                               col_heads[i],
                               input_row_count,
                               ctx,
@@ -229,7 +227,8 @@ void TableFunctionCompilationContext::generateEntryPoint(
       throw std::runtime_error(
           "Only integer and floating point columns or scalars are supported as inputs to "
           "table "
-          "functions.");
+          "functions, got " +
+          ti.get_type_name());
     }
   }
   std::vector<llvm::Value*> output_col_args;
@@ -238,29 +237,15 @@ void TableFunctionCompilationContext::generateEntryPoint(
         cgen_state->ir_builder_.CreateGEP(output_buffers_arg, cgen_state_->llInt(i)));
     const auto& expr = exe_unit.target_exprs[i];
     const auto& ti = expr->get_type_info();
-    /*
-      How to specify output scalars in C++ code?
-     */
-    if (ti.is_fp()) {
-      func_args.push_back(cgen_state->ir_builder_.CreateBitCast(
-          output_load, llvm::PointerType::get(get_fp_type(get_bit_width(ti), ctx), 0)));
-    } else if (ti.is_integer()) {
-      func_args.push_back(cgen_state->ir_builder_.CreateBitCast(
-          output_load, llvm::PointerType::get(get_int_type(get_bit_width(ti), ctx), 0)));
-    } else if (ti.is_column()) {
-      auto col = alloc_column(std::string("output_col.") + std::to_string(i),
-                              ti,
-                              output_load,
-                              output_row_count_ptr,
-                              ctx,
-                              cgen_state_->ir_builder_,
-                              pass_column_by_value);
-      func_args.push_back(col);
-    } else {
-      throw std::runtime_error(
-          "Only integer and floating point columns are supported as outputs to table "
-          "functions.");
-    }
+    CHECK(!ti.is_column());  // UDTF output column type is its data type
+    auto col = alloc_column(std::string("output_col.") + std::to_string(i),
+                            ti,
+                            output_load,
+                            output_row_count_ptr,
+                            ctx,
+                            cgen_state_->ir_builder_,
+                            pass_column_by_value);
+    func_args.push_back(col);
   }
   auto func_name = exe_unit.table_func.getName();
   boost::algorithm::to_lower(func_name);

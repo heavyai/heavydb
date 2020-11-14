@@ -103,7 +103,6 @@ public class ExtensionFunction {
     assert this.isTableUdf();
     List<SqlTypeName> sql_outs = new ArrayList<SqlTypeName>();
     for (final ExtArgumentType otype : this.getOuts()) {
-      assert isColumnType(otype);
       sql_outs.add(toSqlTypeName(getValueType(otype)));
     }
     return sql_outs;
@@ -242,7 +241,6 @@ public class ExtensionFunction {
           ++arg_idx;
         }
       } else {
-        assert isColumnType(arg_type);
         sql_sig.add(toSqlTypeName(arg_type).getFamily());
       }
     }
@@ -267,24 +265,31 @@ public class ExtensionFunction {
     switch (type) {
       case PInt8:
       case ColumnInt8:
+      case Int8:
         return ExtArgumentType.Int8;
       case ColumnInt16:
       case PInt16:
+      case Int16:
         return ExtArgumentType.Int16;
       case PInt32:
       case ColumnInt32:
+      case Int32:
         return ExtArgumentType.Int32;
       case PInt64:
       case ColumnInt64:
+      case Int64:
         return ExtArgumentType.Int64;
       case PFloat:
       case ColumnFloat:
+      case Float:
         return ExtArgumentType.Float;
       case PDouble:
       case ColumnDouble:
+      case Double:
         return ExtArgumentType.Double;
       case PBool:
       case ColumnBool:
+      case Bool:
         return ExtArgumentType.Bool;
     }
     MAPDLOGGER.error("getValueType: no value for type " + type);

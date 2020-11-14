@@ -52,7 +52,6 @@
 #include "Shared/misc.h"
 #include "Shared/scope.h"
 #include "Shared/shard_key.h"
-#include "Shared/sql_type_to_string.h"
 #include "Shared/threadpool.h"
 
 #include "AggregatedColRange.h"
@@ -1235,7 +1234,7 @@ std::string ra_exec_unit_desc_for_caching(const RelAlgExecutionUnit& ra_exe_unit
       os << expr->toString() << ",";
     }
   }
-  os << bool_to_string(ra_exe_unit.estimator == nullptr);
+  os << ::toString(ra_exe_unit.estimator == nullptr);
   os << std::to_string(ra_exe_unit.scan_limit);
   return os.str();
 }
@@ -1272,7 +1271,7 @@ std::ostream& operator<<(std::ostream& os, const RelAlgExecutionUnit& ra_exe_uni
   }
   os << "\n\tProjected targets: "
      << boost::algorithm::join(expr_container_to_string(ra_exe_unit.target_exprs), ", ");
-  os << "\n\tHas Estimator: " << bool_to_string(ra_exe_unit.estimator == nullptr);
+  os << "\n\tHas Estimator: " << ::toString(ra_exe_unit.estimator == nullptr);
   os << "\n\tSort Info: ";
   const auto& sort_info = ra_exe_unit.sort_info;
   os << "\n\t  Order Entries: "
@@ -1281,7 +1280,7 @@ std::ostream& operator<<(std::ostream& os, const RelAlgExecutionUnit& ra_exe_uni
   os << "\n\t  Limit: " << std::to_string(sort_info.limit);
   os << "\n\t  Offset: " << std::to_string(sort_info.offset);
   os << "\n\tScan Limit: " << std::to_string(ra_exe_unit.scan_limit);
-  os << "\n\tBump Allocator: " << bool_to_string(ra_exe_unit.use_bump_allocator);
+  os << "\n\tBump Allocator: " << ::toString(ra_exe_unit.use_bump_allocator);
   if (ra_exe_unit.union_all) {
     os << "\n\tUnion: " << std::string(*ra_exe_unit.union_all ? "UNION ALL" : "UNION");
   }

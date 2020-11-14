@@ -50,9 +50,10 @@ TargetValue make_avg_target_value(const int8_t* ptr1,
   CHECK(target_info.agg_kind == kAVG);
   const bool float_argument_input = takes_float_argument(target_info);
   const auto actual_compact_sz1 = float_argument_input ? sizeof(float) : compact_sz1;
-  if (target_info.agg_arg_type.is_integer() || target_info.agg_arg_type.is_decimal()) {
+  const auto& agg_ti = target_info.agg_arg_type;
+  if (agg_ti.is_integer() || agg_ti.is_decimal()) {
     sum = read_int_from_buff(ptr1, actual_compact_sz1);
-  } else if (target_info.agg_arg_type.is_fp()) {
+  } else if (agg_ti.is_fp()) {
     switch (actual_compact_sz1) {
       case 8: {
         double d = *reinterpret_cast<const double*>(ptr1);
@@ -435,9 +436,7 @@ InternalTargetValue ResultSet::RowWiseTargetAccessor::getColumnInternal(
 
   const auto& offsets_for_target = offsets_for_storage_[storage_idx][target_logical_idx];
   const auto& agg_info = result_set_->storage_->targets_[target_logical_idx];
-  const auto& type_info =
-      (agg_info.sql_type.is_column() ? agg_info.sql_type.get_elem_type()
-                                     : agg_info.sql_type);
+  const auto& type_info = agg_info.sql_type;
 
   keys_ptr = get_rowwise_ptr(buff, entry_idx);
   rowwise_target_ptr = keys_ptr + key_bytes_with_padding_;
@@ -562,9 +561,7 @@ InternalTargetValue ResultSet::ColumnWiseTargetAccessor::getColumnInternal(
 
   const auto& offsets_for_target = offsets_for_storage_[storage_idx][target_logical_idx];
   const auto& agg_info = result_set_->storage_->targets_[target_logical_idx];
-  const auto& type_info =
-      (agg_info.sql_type.is_column() ? agg_info.sql_type.get_elem_type()
-                                     : agg_info.sql_type);
+  const auto& type_info = agg_info.sql_type;
   auto ptr1 = offsets_for_target.ptr1;
   if (result_set_->query_mem_desc_.targetGroupbyIndicesSize() > 0) {
     if (result_set_->query_mem_desc_.getTargetGroupbyIndex(target_logical_idx) >= 0) {
@@ -1726,9 +1723,7 @@ TargetValue ResultSet::makeTargetValue(const int8_t* ptr,
                                        const bool decimal_to_double,
                                        const size_t entry_buff_idx) const {
   auto actual_compact_sz = compact_sz;
-  const auto& type_info =
-      (target_info.sql_type.is_column() ? target_info.sql_type.get_elem_type()
-                                        : target_info.sql_type);
+  const auto& type_info = target_info.sql_type;
   if (type_info.get_type() == kFLOAT && !query_mem_desc_.forceFourByteFloat()) {
     if (query_mem_desc_.isLogicalSizedColumnsAllowed()) {
       actual_compact_sz = sizeof(float);
@@ -2163,16 +2158,15 @@ bool ResultSetStorage::isEmptyEntry(const size_t entry_idx) const {
 bool ResultSet::isNull(const SQLTypeInfo& ti,
                        const InternalTargetValue& val,
                        const bool float_argument_input) {
-  const auto& ti_ = (ti.is_column() ? ti.get_elem_type() : ti);
-  if (ti_.get_notnull()) {
+  if (ti.get_notnull()) {
     return false;
   }
   if (val.isInt()) {
-    return val.i1 == null_val_bit_pattern(ti_, float_argument_input);
+    return val.i1 == null_val_bit_pattern(ti, float_argument_input);
   }
   if (val.isPair()) {
     return !val.i2 ||
-           pair_to_double({val.i1, val.i2}, ti_, float_argument_input) == NULL_DOUBLE;
+           pair_to_double({val.i1, val.i2}, ti, float_argument_input) == NULL_DOUBLE;
   }
   if (val.isStr()) {
     return !val.i1;

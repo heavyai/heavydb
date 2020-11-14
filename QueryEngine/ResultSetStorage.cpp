@@ -81,11 +81,7 @@ std::vector<int64_t> result_set::initialize_target_values_for_storage(
       target_init_vals.push_back(0);
       continue;
     }
-    if (target_info.sql_type.is_column()) {
-      int64_t init_val = null_val_bit_pattern(target_info.sql_type.get_subtype(),
-                                              takes_float_argument(target_info));
-      target_init_vals.push_back(target_info.is_agg ? init_val : 0);
-    } else if (!target_info.sql_type.get_notnull()) {
+    if (!target_info.sql_type.get_notnull()) {
       int64_t init_val =
           null_val_bit_pattern(target_info.sql_type, takes_float_argument(target_info));
       target_init_vals.push_back(target_info.is_agg ? init_val : 0);
@@ -109,9 +105,7 @@ int64_t result_set::lazy_decode(const ColumnLazyFetchInfo& col_lazy_fetch,
                                 const int8_t* byte_stream,
                                 const int64_t pos) {
   CHECK(col_lazy_fetch.is_lazily_fetched);
-  const auto& type_info =
-      (col_lazy_fetch.type.is_column() ? col_lazy_fetch.type.get_elem_type()
-                                       : col_lazy_fetch.type);
+  const auto& type_info = col_lazy_fetch.type;
   if (type_info.is_fp()) {
     if (type_info.get_type() == kFLOAT) {
       double fval = fixed_width_float_decode_noinline(byte_stream, pos);

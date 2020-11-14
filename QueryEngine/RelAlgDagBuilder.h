@@ -34,8 +34,6 @@
 #include "QueryEngine/Rendering/RenderInfo.h"
 #include "QueryEngine/TargetMetaInfo.h"
 #include "QueryEngine/TypePunning.h"
-#include "Shared/sql_type_to_string.h"
-#include "Shared/sql_window_function_to_string.h"
 #include "Shared/toString.h"
 #include "Utils/FsiUtils.h"
 
@@ -171,9 +169,9 @@ class RexLiteral : public RexScalar {
                "(",
                boost::lexical_cast<std::string>(literal_),
                ", type=",
-               (type_ == kNULLT ? "null" : sql_type_to_str(type_)),
+               (type_ == kNULLT ? "null" : ::toString(type_)),
                ", target_type=",
-               (target_type_ == kNULLT ? "null" : sql_type_to_str(target_type_)),
+               (target_type_ == kNULLT ? "null" : ::toString(target_type_)),
                ")");
   }
 
@@ -483,7 +481,7 @@ class RexWindowFunctionOperator : public RexFunctionOperator {
                             const RexWindowBound& upper_bound,
                             const bool is_rows,
                             const SQLTypeInfo& ti)
-      : RexFunctionOperator(sql_window_function_to_str(kind), operands, ti)
+      : RexFunctionOperator(::toString(kind), operands, ti)
       , kind_(kind)
       , partition_keys_(std::move(partition_keys))
       , order_keys_(std::move(order_keys))

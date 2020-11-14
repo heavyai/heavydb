@@ -89,17 +89,19 @@ llvm::Type* ext_arg_type_to_llvm_type(const ExtArgumentType ext_arg_type,
     case ExtArgumentType::Double:
       return llvm::Type::getDoubleTy(ctx);
     case ExtArgumentType::ArrayInt64:
-      return llvm::Type::getVoidTy(ctx);
     case ExtArgumentType::ArrayInt32:
-      return llvm::Type::getVoidTy(ctx);
     case ExtArgumentType::ArrayInt16:
-      return llvm::Type::getVoidTy(ctx);
-    case ExtArgumentType::ArrayBool:  // pass thru to Array<Int8>
+    case ExtArgumentType::ArrayBool:
     case ExtArgumentType::ArrayInt8:
-      return llvm::Type::getVoidTy(ctx);
     case ExtArgumentType::ArrayDouble:
-      return llvm::Type::getVoidTy(ctx);
     case ExtArgumentType::ArrayFloat:
+    case ExtArgumentType::ColumnInt64:
+    case ExtArgumentType::ColumnInt32:
+    case ExtArgumentType::ColumnInt16:
+    case ExtArgumentType::ColumnBool:
+    case ExtArgumentType::ColumnInt8:
+    case ExtArgumentType::ColumnDouble:
+    case ExtArgumentType::ColumnFloat:
       return llvm::Type::getVoidTy(ctx);
     default:
       CHECK(false);
@@ -198,8 +200,6 @@ bool ext_func_call_requires_nullcheck(const Analyzer::FunctionOper* function_ope
 }
 
 }  // namespace
-
-#include "../Shared/sql_type_to_string.h"
 
 extern "C" void register_buffer_with_executor_rsm(int64_t exec, int8_t* buffer) {
   Executor* exec_ptr = reinterpret_cast<Executor*>(exec);

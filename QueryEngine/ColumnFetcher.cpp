@@ -144,7 +144,6 @@ JoinColumn ColumnFetcher::makeJoinColumn(
     ++num_chunks;
   }
 
-  CHECK(!hash_col.get_type_info().is_column());
   int elem_sz = hash_col.get_type_info().get_size();
   CHECK_GT(elem_sz, 0);
 
@@ -319,8 +318,7 @@ const int8_t* ColumnFetcher::transferColumnIfNeeded(
   const auto& col_buffers = columnar_results->getColumnBuffers();
   CHECK_LT(static_cast<size_t>(col_id), col_buffers.size());
   if (memory_level == Data_Namespace::GPU_LEVEL) {
-    const auto& col_ti_ = columnar_results->getColumnType(col_id);
-    const auto& col_ti = (col_ti_.is_column() ? col_ti_.get_elem_type() : col_ti_);
+    const auto& col_ti = columnar_results->getColumnType(col_id);
     const auto num_bytes = columnar_results->size() * col_ti.get_size();
     CHECK(device_allocator);
     auto gpu_col_buffer = device_allocator->alloc(num_bytes);

@@ -23,6 +23,74 @@
 #include "Shared/toString.h"
 #include "TableFunctionOutputBufferSizeType.h"
 
+/*
+
+  TableFunction represents a User-Defined Table Function (UDTF) and it
+  holds the following information:
+
+  - the name of a table function that corresponds to its
+    implementation. The name must match the following pattern:
+
+    \w[\w\d_]*([_][_](gpu_|cpu_|)\d*|)
+
+    where the first part left to the double underscore is the
+    so-called SQL name of table function that is used in SQL query
+    context, and the right part determines a particular implementation
+    of the table function. One can define many implementations for the
+    same SQL table function with specializations to
+
+    + different argument types (overloading support)
+
+    + different execution context, CPU or GPU. When gpu or cpu is not
+      present, the implementation is assumed to be valid for both CPU
+      and GPU contexts.
+
+  - the output sizer parameter <sizer> that determines the allocated
+    size of the output columns:
+
+    + UserSpecifiedRowMultiplier - the allocated column size will be
+
+        <sizer value> * <size of the input columns>
+
+      where <sizer value> is user-specified integer value as specified
+      in the <sizer> argument position of the table function call.
+
+    + UserSpecifiedConstantParameter - the allocated column size will
+      be user-specified integer value as specified in the <sizer>
+      argument position of the table function call.
+
+    + Constant - the allocated output column size will be <sizer>. The
+      table function
+
+    The actual size of the output column is returned by the table
+    function implementation that must be equal or smaller to the
+    allocated output column size.
+
+  - the list of input argument types. The input argument type can be a
+    scalar or a column type (that is `Column<scalar>`). Supported
+    scalar types are int8, ..., int64, double, float, bool.
+
+  - the list of output argument types. The output types of table
+    functions is always some column type. Hence, the output argument
+    types are stored as scalar types that correspond to the data type
+    of the output columns.
+
+  - a boolean flag specifying the table function is a load-time or
+    run-time function. Run-time functions can be overwitten or removed
+    by users. Load-time functions cannot be redefined in run-time.
+
+  Future notes:
+
+  - introduce a list of output column names. Currently, the names of
+    output columns match the pattern
+
+      out\d+
+
+    but for better UX it would be nice to enable user-defined names
+    for output columns.
+
+ */
+
 namespace table_functions {
 
 struct TableFunctionOutputRowSizer {
@@ -43,6 +111,27 @@ struct TableFunctionOutputRowSizer {
   }
 };
 
+inline ExtArgumentType ext_arg_type_ensure_column(const ExtArgumentType ext_arg_type) {
+  switch (ext_arg_type) {
+    case ExtArgumentType::Int8:
+      return ExtArgumentType::ColumnInt8;
+    case ExtArgumentType::Int16:
+      return ExtArgumentType::ColumnInt16;
+    case ExtArgumentType::Int32:
+      return ExtArgumentType::ColumnInt32;
+    case ExtArgumentType::Int64:
+      return ExtArgumentType::ColumnInt64;
+    case ExtArgumentType::Float:
+      return ExtArgumentType::ColumnFloat;
+    case ExtArgumentType::Double:
+      return ExtArgumentType::ColumnDouble;
+    case ExtArgumentType::Bool:
+      return ExtArgumentType::ColumnBool;
+    default:
+      return ext_arg_type;
+  }
+}
+
 class TableFunction {
  public:
   TableFunction(const std::string& name,
@@ -56,10 +145,17 @@ class TableFunction {
       , output_args_(output_args)
       , is_runtime_(is_runtime) {}
 
-  std::vector<ExtArgumentType> getArgs() const {
+  std::vector<ExtArgumentType> getArgs(const bool ensure_column = false) const {
     std::vector<ExtArgumentType> args;
     args.insert(args.end(), input_args_.begin(), input_args_.end());
-    args.insert(args.end(), output_args_.begin(), output_args_.end());
+    if (ensure_column) {
+      // map row dtype to column type
+      std::for_each(output_args_.begin(), output_args_.end(), [&args](auto t) {
+        args.push_back(ext_arg_type_ensure_column(t));
+      });
+    } else {
+      args.insert(args.end(), output_args_.begin(), output_args_.end());
+    }
     return args;
   }
   const std::vector<ExtArgumentType>& getInputArgs() const { return input_args_; }

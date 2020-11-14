@@ -70,6 +70,77 @@ enum SQLTypes {
   kSQLTYPE_LAST = 29
 };
 
+#ifndef __CUDACC__
+
+inline std::string toString(const SQLTypes& type) {
+  switch (type) {
+    case kNULLT:
+      return "NULL";
+    case kBOOLEAN:
+      return "BOOL";
+    case kCHAR:
+      return "CHAR";
+    case kVARCHAR:
+      return "VARCHAR";
+    case kNUMERIC:
+      return "NUMERIC";
+    case kDECIMAL:
+      return "DECIMAL";
+    case kINT:
+      return "INT";
+    case kSMALLINT:
+      return "SMALLINT";
+    case kFLOAT:
+      return "FLOAT";
+    case kDOUBLE:
+      return "DOUBLE";
+    case kTIME:
+      return "TIME";
+    case kTIMESTAMP:
+      return "TIMESTAMP";
+    case kBIGINT:
+      return "BIGINT";
+    case kTEXT:
+      return "TEXT";
+    case kDATE:
+      return "DATE";
+    case kARRAY:
+      return "ARRAY";
+    case kINTERVAL_DAY_TIME:
+      return "DAY TIME INTERVAL";
+    case kINTERVAL_YEAR_MONTH:
+      return "YEAR MONTH INTERVAL";
+    case kPOINT:
+      return "POINT";
+    case kLINESTRING:
+      return "LINESTRING";
+    case kPOLYGON:
+      return "POLYGON";
+    case kMULTIPOLYGON:
+      return "MULTIPOLYGON";
+    case kTINYINT:
+      return "TINYINT";
+    case kGEOMETRY:
+      return "GEOMETRY";
+    case kGEOGRAPHY:
+      return "GEOGRAPHY";
+    case kEVAL_CONTEXT_TYPE:
+      return "UNEVALUATED ANY";
+    case kVOID:
+      return "VOID";
+    case kCURSOR:
+      return "CURSOR";
+    case kCOLUMN:
+      return "COLUMN";
+    case kSQLTYPE_LAST:
+      break;
+  }
+  LOG(FATAL) << "Invalid SQL type: " << type;
+  return "";
+}
+
+#endif
+
 struct VarlenDatum {
   size_t length;
   int8_t* pointer;

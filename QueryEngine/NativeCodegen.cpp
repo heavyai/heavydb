@@ -133,7 +133,8 @@ namespace {
     ::show_defined(MODULE);                                          \
   }
 
-static void show_defined(llvm::Module& module) {
+template <typename T = void>
+void show_defined(llvm::Module& module) {
   std::cout << "defines: ";
   for (auto& f : module.getFunctionList()) {
     if (!f.isDeclaration()) {
@@ -143,11 +144,13 @@ static void show_defined(llvm::Module& module) {
   std::cout << std::endl;
 }
 
-static void show_defined(llvm::Module* module) {
+template <typename T = void>
+void show_defined(llvm::Module* module) {
   show_defined(*module);
 }
 
-static void show_defined(std::unique_ptr<llvm::Module>& module) {
+template <typename T = void>
+void show_defined(std::unique_ptr<llvm::Module>& module) {
   show_defined(module.get());
 }
 
@@ -176,6 +179,8 @@ void eliminate_dead_self_recursive_funcs(
     pFn->eraseFromParent();
   }
 }
+
+#ifdef HAVE_CUDA
 
 // check if linking with libdevice is required
 // libdevice functions have a __nv_* prefix
@@ -208,6 +213,8 @@ void add_intrinsics_to_module(llvm::Module* module) {
     }
   }
 }
+
+#endif
 
 void optimize_ir(llvm::Function* query_func,
                  llvm::Module* module,
@@ -269,8 +276,11 @@ ExecutionEngineWrapper& ExecutionEngineWrapper::operator=(
 void verify_function_ir(const llvm::Function* func) {
   std::stringstream err_ss;
   llvm::raw_os_ostream err_os(err_ss);
+  err_os << "\n-----\n";
   if (llvm::verifyFunction(*func, &err_os)) {
-    func->print(llvm::outs());
+    err_os << "\n-----\n";
+    func->print(err_os, nullptr);
+    err_os << "\n-----\n";
     LOG(FATAL) << err_ss.str();
   }
 }

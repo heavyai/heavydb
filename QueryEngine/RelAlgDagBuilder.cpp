@@ -15,7 +15,6 @@
  */
 
 #include "RelAlgDagBuilder.h"
-#include "../Shared/sqldefs.h"
 #include "CalciteDeserializerUtils.h"
 #include "Catalog/Catalog.h"
 #include "Descriptors/RelAlgExecutionDescriptor.h"
@@ -24,6 +23,7 @@
 #include "RelLeftDeepInnerJoin.h"
 #include "Rendering/RenderRelAlgUtils.h"
 #include "RexVisitor.h"
+#include "Shared/sqldefs.h"
 
 #include <rapidjson/error/en.h>
 #include <rapidjson/error/error.h>

@@ -25,7 +25,6 @@
 #include "QueryEngine/RuntimeFunctions.h"
 #include "QueryEngine/TypePunning.h"
 #include "Shared/checked_alloc.h"
-#include "Shared/sql_window_function_to_string.h"
 
 WindowFunctionContext::WindowFunctionContext(
     const Analyzer::WindowFunction* window_func,
@@ -728,7 +727,7 @@ void WindowFunctionContext::computePartition(
     }
     default: {
       throw std::runtime_error("Window function not supported yet: " +
-                               sql_window_function_to_str(window_func->getKind()));
+                               ::toString(window_func->getKind()));
     }
   }
 }

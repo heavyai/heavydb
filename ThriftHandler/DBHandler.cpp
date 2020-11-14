@@ -779,8 +779,6 @@ void DBHandler::value_to_thrift_column(const TargetValue& tv,
     }
     column.data.arr_col.push_back(tColumn);
     column.nulls.push_back(is_null && !ti.get_notnull());
-  } else if (ti.is_column()) {
-    value_to_thrift_column(tv, ti.get_elem_type(), column);
   } else if (ti.is_geometry()) {
     const auto scalar_tv = boost::get<ScalarTargetValue>(&tv);
     if (scalar_tv) {
@@ -814,6 +812,7 @@ void DBHandler::value_to_thrift_column(const TargetValue& tv,
       }
     }
   } else {
+    CHECK(!ti.is_column());
     const auto scalar_tv = boost::get<ScalarTargetValue>(&tv);
     CHECK(scalar_tv);
     if (boost::get<int64_t>(scalar_tv)) {

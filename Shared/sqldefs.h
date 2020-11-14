@@ -106,4 +106,130 @@ enum ViewRefreshOption { kMANUAL = 0, kAUTO = 1, kIMMEDIATE = 2 };
 
 enum class JoinType { INNER, LEFT, INVALID };
 
+#ifndef __CUDACC__
+
+#include <string>
+#include "Logger/Logger.h"
+
+inline std::string toString(const SQLAgg& kind) {
+  switch (kind) {
+    case kAVG:
+      return "AVG";
+    case kMIN:
+      return "MIN";
+    case kMAX:
+      return "MAX";
+    case kSUM:
+      return "SUM";
+    case kCOUNT:
+      return "COUNT";
+    case kAPPROX_COUNT_DISTINCT:
+      return "APPROX_COUNT_DISTINCT";
+    case kSAMPLE:
+      return "SAMPLE";
+    case kSINGLE_VALUE:
+      return "SINGLE_VALUE";
+  }
+  LOG(FATAL) << "Invalid aggregate kind: " << kind;
+  return "";
+}
+
+inline std::string toString(const SQLOps& op) {
+  switch (op) {
+    case kEQ:
+      return "EQ";
+    case kBW_EQ:
+      return "BW_EQ";
+    case kNE:
+      return "NE";
+    case kLT:
+      return "LT";
+    case kGT:
+      return "GT";
+    case kLE:
+      return "LE";
+    case kGE:
+      return "GE";
+    case kAND:
+      return "AND";
+    case kOR:
+      return "OR";
+    case kNOT:
+      return "NOT";
+    case kMINUS:
+      return "MINUS";
+    case kPLUS:
+      return "PLUS";
+    case kMULTIPLY:
+      return "MULTIPLY";
+    case kDIVIDE:
+      return "DIVIDE";
+    case kMODULO:
+      return "MODULO";
+    case kUMINUS:
+      return "UMINUS";
+    case kISNULL:
+      return "ISNULL";
+    case kISNOTNULL:
+      return "ISNOTNULL";
+    case kEXISTS:
+      return "EXISTS";
+    case kCAST:
+      return "CAST";
+    case kARRAY_AT:
+      return "ARRAY_AT";
+    case kUNNEST:
+      return "UNNEST";
+    case kFUNCTION:
+      return "FUNCTION";
+    case kIN:
+      return "IN";
+    case kOVERLAPS:
+      return "OVERLAPS";
+  }
+  LOG(FATAL) << "Invalid operation kind: " << op;
+  return "";
+}
+
+inline std::string toString(const SqlWindowFunctionKind& kind) {
+  switch (kind) {
+    case SqlWindowFunctionKind::ROW_NUMBER:
+      return "ROW_NUMBER";
+    case SqlWindowFunctionKind::RANK:
+      return "RANK";
+    case SqlWindowFunctionKind::DENSE_RANK:
+      return "DENSE_RANK";
+    case SqlWindowFunctionKind::PERCENT_RANK:
+      return "PERCENT_RANK";
+    case SqlWindowFunctionKind::CUME_DIST:
+      return "CUME_DIST";
+    case SqlWindowFunctionKind::NTILE:
+      return "NTILE";
+    case SqlWindowFunctionKind::LAG:
+      return "LAG";
+    case SqlWindowFunctionKind::LEAD:
+      return "LEAD";
+    case SqlWindowFunctionKind::FIRST_VALUE:
+      return "FIRST_VALUE";
+    case SqlWindowFunctionKind::LAST_VALUE:
+      return "LAST_VALUE";
+    case SqlWindowFunctionKind::AVG:
+      return "AVG";
+    case SqlWindowFunctionKind::MIN:
+      return "MIN";
+    case SqlWindowFunctionKind::MAX:
+      return "MAX";
+    case SqlWindowFunctionKind::SUM:
+      return "SUM";
+    case SqlWindowFunctionKind::COUNT:
+      return "COUNT";
+    case SqlWindowFunctionKind::SUM_INTERNAL:
+      return "SUM_INTERNAL";
+  }
+  LOG(FATAL) << "Invalid window function kind.";
+  return "";
+}
+
+#endif
+
 #endif  // SQLDEFS_H

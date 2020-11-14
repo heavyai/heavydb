@@ -17,8 +17,6 @@
 #include "SerializeToSql.h"
 #include "ExternalExecutor.h"
 
-#include "Shared/sql_window_function_to_string.h"
-
 ScalarExprToSql::ScalarExprToSql(const RelAlgExecutionUnit* ra_exe_unit,
                                  const Catalog_Namespace::Catalog* catalog)
     : ra_exe_unit_(ra_exe_unit), catalog_(catalog) {}
@@ -118,33 +116,11 @@ std::string ScalarExprToSql::visitCaseExpr(const Analyzer::CaseExpr* case_) cons
 
 namespace {
 
-std::string agg_type_to_string(const SQLAgg agg_type) {
-  switch (agg_type) {
-    case kAVG:
-      return "AVG";
-    case kMIN:
-      return "MIN";
-    case kMAX:
-      return "MAX";
-    case kSUM:
-      return "SUM";
-    case kCOUNT:
-      return "COUNT";
-    case kAPPROX_COUNT_DISTINCT:
-      return "APPROX_COUNT_DISTINCT";
-    case kSAMPLE:
-      return "SAMPLE";
-    default:
-      LOG(FATAL) << "Invalid aggregate type: " << agg_type;
-      return "";
-  }
-}
-
 std::string agg_to_string(const Analyzer::AggExpr* agg_expr,
                           const RelAlgExecutionUnit* ra_exe_unit,
                           const Catalog_Namespace::Catalog* catalog) {
   ScalarExprToSql scalar_expr_to_sql(ra_exe_unit, catalog);
-  const auto agg_type = agg_type_to_string(agg_expr->get_aggtype());
+  const auto agg_type = ::toString(agg_expr->get_aggtype());
   const auto arg =
       agg_expr->get_arg() ? scalar_expr_to_sql.visit(agg_expr->get_arg()) : "*";
   const auto distinct = agg_expr->get_is_distinct() ? "DISTINCT " : "";
@@ -172,7 +148,7 @@ std::string ScalarExprToSql::visitFunctionOper(
 
 std::string ScalarExprToSql::visitWindowFunction(
     const Analyzer::WindowFunction* window_func) const {
-  std::string result = sql_window_function_to_str(window_func->getKind());
+  std::string result = ::toString(window_func->getKind());
   {
     const auto arg_strs = visitList(window_func->getArgs());
     result += "(" + boost::algorithm::join(arg_strs, ",") + ")";

@@ -287,7 +287,6 @@ static int match_arguments(const SQLTypeInfo& arg_type,
     case kCOLUMN:
       if (is_ext_arg_type_column(stype)) {
         // column arguments must match exactly
-        CHECK(arg_type.is_column());
         const auto stype_ti = ext_arg_type_to_type_info(get_column_arg_elem_type(stype));
         if (arg_type.get_elem_type() == kBOOLEAN && stype_ti.get_type() == kTINYINT) {
           /* Boolean column has the same low-level structure as Int8 column. */
@@ -371,8 +370,8 @@ T bind_function(std::string name,
   for (auto atype : func_args) {
     if constexpr (std::is_same_v<T, table_functions::TableFunction>) {
       if (dynamic_cast<const Analyzer::ColumnVar*>(atype.get())) {
-        auto ti = SQLTypeInfo(kCOLUMN, false);
-        ti.set_subtype(atype->get_type_info().get_type());
+        auto ti = SQLTypeInfo(
+            kCOLUMN, 0, 0, false, kENCODING_NONE, 0, atype->get_type_info().get_type());
         type_infos.push_back(ti);
         continue;
       }

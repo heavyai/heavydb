@@ -23,13 +23,11 @@
  **/
 
 #include "Analyzer.h"
-#include "../Catalog/Catalog.h"
-#include "../QueryEngine/DateTimeUtils.h"
-#include "../Shared/DateConverters.h"
-#include "../Shared/sql_type_to_string.h"
-#include "../Shared/sql_window_function_to_string.h"
-#include "../Shared/sqltypes.h"
+#include "Catalog/Catalog.h"
+#include "QueryEngine/DateTimeUtils.h"
 #include "RangeTableEntry.h"
+#include "Shared/DateConverters.h"
+#include "Shared/sqltypes.h"
 
 #include <algorithm>
 #include <cstring>
@@ -2428,8 +2426,7 @@ std::string Constant::toString() const {
     str += "NULL";
   } else if (type_info.is_array()) {
     const auto& elem_ti = type_info.get_elem_type();
-    str += sql_type_to_str(type_info.get_type()) + ": " +
-           sql_type_to_str(elem_ti.get_type());
+    str += ::toString(type_info.get_type()) + ": " + ::toString(elem_ti.get_type());
   } else {
     str += DatumToString(constval, type_info);
   }
@@ -2715,7 +2712,7 @@ std::string OffsetInFragment::toString() const {
 }
 
 std::string WindowFunction::toString() const {
-  std::string result = "WindowFunction(" + sql_window_function_to_str(kind_);
+  std::string result = "WindowFunction(" + ::toString(kind_);
   for (const auto& arg : args_) {
     result += " " + arg->toString();
   }

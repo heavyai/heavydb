@@ -458,7 +458,7 @@ std::vector<std::string> ExtensionFunctionsWhitelist::getLLVMDeclarations(
     std::string decl_prefix{"declare " + serialize_type(ExtArgumentType::Int32) + " @" +
                             kv.first};
     std::vector<std::string> arg_strs;
-    for (const auto arg : kv.second.getArgs()) {
+    for (const auto arg : kv.second.getArgs(/* ensure_column = */ true)) {
       arg_strs.push_back(serialize_type(arg, /* byval= */ kv.second.isRuntime()));
     }
     declarations.push_back(decl_prefix + "(" + boost::algorithm::join(arg_strs, ", ") +

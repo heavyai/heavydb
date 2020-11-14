@@ -29,11 +29,10 @@
 
 #include <future>
 
-#include "../Analyzer/Analyzer.h"
-#include "../Parser/ParserNode.h"
-#include "../Shared/likely.h"
-#include "../Shared/sql_type_to_string.h"
-#include "../Shared/thread_count.h"
+#include "Analyzer/Analyzer.h"
+#include "Parser/ParserNode.h"
+#include "Shared/likely.h"
+#include "Shared/thread_count.h"
 
 extern bool g_enable_watchdog;
 
