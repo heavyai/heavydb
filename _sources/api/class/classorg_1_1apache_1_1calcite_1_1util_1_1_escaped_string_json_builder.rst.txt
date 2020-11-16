@@ -1,0 +1,9 @@
+Class org::apache::calcite::util::EscapedStringJsonBuilder
+==========================================================
+
+.. doxygenclass:: org::apache::calcite::util::EscapedStringJsonBuilder
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

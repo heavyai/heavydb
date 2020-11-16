@@ -41,7 +41,7 @@
     <link rel="index" title="Index" href="../../genindex.html" />
     <link rel="search" title="Search" href="../../search.html" />
     <link rel="next" title="Struct Buffer_Namespace::BufferSeg" href="struct_buffer___namespace_1_1_buffer_seg.html" />
-    <link rel="prev" title="Struct BaselineJoinHashTable::HashTableCacheValue" href="struct_baseline_join_hash_table_1_1_hash_table_cache_value.html" /> 
+    <link rel="prev" title="Struct BaselineJoinHashTable::ColumnsForDevice" href="struct_baseline_join_hash_table_1_1_columns_for_device.html" /> 
 </head>
 
 <body class="wy-body-for-nav">
@@ -65,7 +65,7 @@
             
             
               <div class="version">
-                5.5.0dev 9026e69
+                5.5.0dev ff0aa8c
               </div>
             
           
@@ -330,7 +330,9 @@
 <li class="toctree-l2"><a class="reference internal" href="../class/class_arrow_result_set_converter.html">Class ArrowResultSetConverter</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/class_arrow_result_set_row_iterator.html">Class ArrowResultSetRowIterator</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/class_automatic_i_r_metadata_guard.html">Class AutomaticIRMetadataGuard</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../class/class_baseline_hash_table.html">Class BaselineHashTable</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/class_baseline_join_hash_table.html">Class BaselineJoinHashTable</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../class/class_baseline_join_hash_table_builder.html">Class BaselineJoinHashTableBuilder</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/class_binary_operator.html">Class BinaryOperator</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/class_blosc_compressor.html">Class BloscCompressor</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/class_buffer___namespace_1_1_buffer.html">Class Buffer_Namespace::Buffer</a></li>
@@ -904,15 +906,22 @@
 <li class="toctree-l2"><a class="reference internal" href="../class/classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_alter_foreign_table_1_1_builder.html">Class com::mapd::parser::extension::ddl::SqlAlterForeignTable::Builder</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_alter_server.html">Class com::mapd::parser::extension::ddl::SqlAlterServer</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_alter_server_1_1_builder.html">Class com::mapd::parser::extension::ddl::SqlAlterServer::Builder</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../class/classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_attribute_definition.html">Class com::mapd::parser::extension::ddl::SqlAttributeDefinition</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../class/classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_check_constraint.html">Class com::mapd::parser::extension::ddl::SqlCheckConstraint</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../class/classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_column_declaration.html">Class com::mapd::parser::extension::ddl::SqlColumnDeclaration</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_create_foreign_table.html">Class com::mapd::parser::extension::ddl::SqlCreateForeignTable</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_create_server.html">Class com::mapd::parser::extension::ddl::SqlCreateServer</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_create_server_1_1_builder.html">Class com::mapd::parser::extension::ddl::SqlCreateServer::Builder</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../class/classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_create_table.html">Class com::mapd::parser::extension::ddl::SqlCreateTable</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_create_user_mapping.html">Class com::mapd::parser::extension::ddl::SqlCreateUserMapping</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_create_user_mapping_1_1_builder.html">Class com::mapd::parser::extension::ddl::SqlCreateUserMapping::Builder</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../class/classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_create_view.html">Class com::mapd::parser::extension::ddl::SqlCreateView</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../class/classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_ddl_nodes.html">Class com::mapd::parser::extension::ddl::SqlDdlNodes</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_drop_foreign_table.html">Class com::mapd::parser::extension::ddl::SqlDropForeignTable</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_drop_server.html">Class com::mapd::parser::extension::ddl::SqlDropServer</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_drop_user_mapping.html">Class com::mapd::parser::extension::ddl::SqlDropUserMapping</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_filter.html">Class com::mapd::parser::extension::ddl::SqlFilter</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../class/classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_key_constraint.html">Class com::mapd::parser::extension::ddl::SqlKeyConstraint</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_kill_query.html">Class com::mapd::parser::extension::ddl::SqlKillQuery</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_options_builder.html">Class com::mapd::parser::extension::ddl::SqlOptionsBuilder</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_refresh_foreign_tables.html">Class com::mapd::parser::extension::ddl::SqlRefreshForeignTables</a></li>
@@ -924,6 +933,10 @@
 <li class="toctree-l2"><a class="reference internal" href="../class/classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_show_tables.html">Class com::mapd::parser::extension::ddl::SqlShowTables</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_show_user_sessions.html">Class com::mapd::parser::extension::ddl::SqlShowUserSessions</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_user_mapping_test.html">Class com::mapd::parser::extension::ddl::UserMappingTest</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../class/classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1omnisci_1_1_omni_sci_geo_type_name_spec.html">Class com::mapd::parser::extension::ddl::omnisci::OmniSciGeoTypeNameSpec</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../class/classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1omnisci_1_1_omni_sci_options_map.html">Class com::mapd::parser::extension::ddl::omnisci::OmniSciOptionsMap</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../class/classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1omnisci_1_1_omni_sci_sql_data_type_spec.html">Class com::mapd::parser::extension::ddl::omnisci::OmniSciSqlDataTypeSpec</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../class/classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1omnisci_1_1_omni_sci_type_name_spec.html">Class com::mapd::parser::extension::ddl::omnisci::OmniSciTypeNameSpec</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1omnisql_1_1_omni_sql_array.html">Class com::mapd::parser::extension::ddl::omnisql::OmniSqlArray</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1omnisql_1_1_omni_sql_column.html">Class com::mapd::parser::extension::ddl::omnisql::OmniSqlColumn</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1omnisql_1_1_omni_sql_data_type.html">Class com::mapd::parser::extension::ddl::omnisql::OmniSqlDataType</a></li>
@@ -1352,7 +1365,6 @@
 <li class="toctree-l2"><a class="reference internal" href="../class/classorg_1_1apache_1_1calcite_1_1prepare_1_1_map_d_sql_advisor.html">Class org::apache::calcite::prepare::MapDSqlAdvisor</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/classorg_1_1apache_1_1calcite_1_1prepare_1_1_map_d_sql_advisor_validator.html">Class org::apache::calcite::prepare::MapDSqlAdvisorValidator</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/classorg_1_1apache_1_1calcite_1_1prepare_1_1_sql_identifier_capturer.html">Class org::apache::calcite::prepare::SqlIdentifierCapturer</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../class/classorg_1_1apache_1_1calcite_1_1rel_1_1externalize_1_1_escaped_string_json_builder.html">Class org::apache::calcite::rel::externalize::EscapedStringJsonBuilder</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/classorg_1_1apache_1_1calcite_1_1rel_1_1externalize_1_1_map_d_rel_json.html">Class org::apache::calcite::rel::externalize::MapDRelJson</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/classorg_1_1apache_1_1calcite_1_1rel_1_1externalize_1_1_map_d_rel_json_writer.html">Class org::apache::calcite::rel::externalize::MapDRelJsonWriter</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/classorg_1_1apache_1_1calcite_1_1rel_1_1rules_1_1_dynamic_filter_join_rule.html">Class org::apache::calcite::rel::rules::DynamicFilterJoinRule</a></li>
@@ -1363,6 +1375,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../class/classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1_1_deferred_lookup.html">Class org::apache::calcite::sql2rel::SqlToRelConverter::DeferredLookup</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1_1_no_op_sub_query_converter.html">Class org::apache::calcite::sql2rel::SqlToRelConverter::NoOpSubQueryConverter</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1_1_rex_access_shuttle.html">Class org::apache::calcite::sql2rel::SqlToRelConverter::RexAccessShuttle</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../class/classorg_1_1apache_1_1calcite_1_1util_1_1_escaped_string_json_builder.html">Class org::apache::calcite::util::EscapedStringJsonBuilder</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/classquery__state_1_1_query_state.html">Class query_state::QueryState</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/classquery__state_1_1_query_state_proxy.html">Class query_state::QueryStateProxy</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/classquery__state_1_1_query_states.html">Class query_state::QueryStates</a></li>
@@ -1402,9 +1415,6 @@
 <li class="toctree-l2"><a class="reference internal" href="struct_auth_metadata.html">Struct AuthMetadata</a></li>
 <li class="toctree-l2"><a class="reference internal" href="struct_automatic_i_r_metadata_guard_1_1_instruction_info.html">Struct AutomaticIRMetadataGuard::InstructionInfo</a></li>
 <li class="toctree-l2"><a class="reference internal" href="struct_baseline_join_hash_table_1_1_columns_for_device.html">Struct BaselineJoinHashTable::ColumnsForDevice</a></li>
-<li class="toctree-l2"><a class="reference internal" href="struct_baseline_join_hash_table_1_1_composite_key_info.html">Struct BaselineJoinHashTable::CompositeKeyInfo</a></li>
-<li class="toctree-l2"><a class="reference internal" href="struct_baseline_join_hash_table_1_1_hash_table_cache_key.html">Struct BaselineJoinHashTable::HashTableCacheKey</a></li>
-<li class="toctree-l2"><a class="reference internal" href="struct_baseline_join_hash_table_1_1_hash_table_cache_value.html">Struct BaselineJoinHashTable::HashTableCacheValue</a></li>
 <li class="toctree-l2 current"><a class="current reference internal" href="#">Struct Bounds</a></li>
 <li class="toctree-l2"><a class="reference internal" href="struct_buffer___namespace_1_1_buffer_seg.html">Struct Buffer_Namespace::BufferSeg</a></li>
 <li class="toctree-l2"><a class="reference internal" href="struct_buffer_range.html">Struct BufferRange</a></li>
@@ -1429,6 +1439,7 @@
 <li class="toctree-l2"><a class="reference internal" href="struct_column_lazy_fetch_info.html">Struct ColumnLazyFetchInfo</a></li>
 <li class="toctree-l2"><a class="reference internal" href="struct_compilation_options.html">Struct CompilationOptions</a></li>
 <li class="toctree-l2"><a class="reference internal" href="struct_compilation_result.html">Struct CompilationResult</a></li>
+<li class="toctree-l2"><a class="reference internal" href="struct_composite_key_info.html">Struct CompositeKeyInfo</a></li>
 <li class="toctree-l2"><a class="reference internal" href="struct_connection_info.html">Struct ConnectionInfo</a></li>
 <li class="toctree-l2"><a class="reference internal" href="struct_converter_create_parameter.html">Struct ConverterCreateParameter</a></li>
 <li class="toctree-l2"><a class="reference internal" href="struct_count_distinct_descriptor.html">Struct CountDistinctDescriptor</a></li>
@@ -1527,6 +1538,7 @@
 <li class="toctree-l2"><a class="reference internal" href="struct_group_by_buffer_layout_info.html">Struct GroupByBufferLayoutInfo</a></li>
 <li class="toctree-l2"><a class="reference internal" href="struct_hash_entry_info.html">Struct HashEntryInfo</a></li>
 <li class="toctree-l2"><a class="reference internal" href="struct_hash_join_matching_set.html">Struct HashJoinMatchingSet</a></li>
+<li class="toctree-l2"><a class="reference internal" href="struct_hash_table_cache_key.html">Struct HashTableCacheKey</a></li>
 <li class="toctree-l2"><a class="reference internal" href="struct_hit_test_types.html">Struct HitTestTypes</a></li>
 <li class="toctree-l2"><a class="reference internal" href="struct_host_array_datum.html">Struct HostArrayDatum</a></li>
 <li class="toctree-l2"><a class="reference internal" href="struct_inject_timer.html">Struct InjectTimer</a></li>
@@ -1869,7 +1881,7 @@
         <a href="struct_buffer___namespace_1_1_buffer_seg.html" class="btn btn-neutral float-right" title="Struct Buffer_Namespace::BufferSeg" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right"></span></a>
       
       
-        <a href="struct_baseline_join_hash_table_1_1_hash_table_cache_value.html" class="btn btn-neutral float-left" title="Struct BaselineJoinHashTable::HashTableCacheValue" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left"></span> Previous</a>
+        <a href="struct_baseline_join_hash_table_1_1_columns_for_device.html" class="btn btn-neutral float-left" title="Struct BaselineJoinHashTable::ColumnsForDevice" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left"></span> Previous</a>
       
     </div>
   

@@ -1,0 +1,9 @@
+Class com::mapd::parser::extension::ddl::SqlDdlNodes
+====================================================
+
+.. doxygenclass:: com::mapd::parser::extension::ddl::SqlDdlNodes
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:
