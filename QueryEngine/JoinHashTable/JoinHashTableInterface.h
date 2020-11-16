@@ -151,7 +151,6 @@ class JoinHashTableInterface {
       Executor* executor,
       ColumnCacheMap* column_cache);
 
- public:
   //! Decode hash table into a std::set for easy inspection and validation.
   static DecodedJoinHashBufferSet toSet(
       size_t key_component_count,  // number of key parts
