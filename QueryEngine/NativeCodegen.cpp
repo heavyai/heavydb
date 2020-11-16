@@ -26,8 +26,8 @@
 #include "Shared/MathUtils.h"
 #include "StreamingTopN.h"
 
-#if LLVM_VERSION_MAJOR < 4
-static_assert(false, "LLVM Version >= 4 is required.");
+#if LLVM_VERSION_MAJOR < 9
+static_assert(false, "LLVM Version >= 9 is required.");
 #endif
 
 #include <llvm/Bitcode/BitcodeReader.h>
@@ -36,6 +36,8 @@ static_assert(false, "LLVM Version >= 4 is required.");
 #include <llvm/IR/Attributes.h>
 #include <llvm/IR/GlobalValue.h>
 #include <llvm/IR/InstIterator.h>
+#include <llvm/IR/IntrinsicInst.h>
+#include <llvm/IR/Intrinsics.h>
 #include <llvm/IR/LegacyPassManager.h>
 #include <llvm/IR/Verifier.h>
 #include <llvm/IRReader/IRReader.h>
@@ -55,15 +57,10 @@ static_assert(false, "LLVM Version >= 4 is required.");
 #include <llvm/Transforms/InstCombine/InstCombine.h>
 #include <llvm/Transforms/Instrumentation.h>
 #include <llvm/Transforms/Scalar.h>
-#include <llvm/Transforms/Utils/BasicBlockUtils.h>
-#include <llvm/Transforms/Utils/Cloning.h>
-#include "llvm/IR/IntrinsicInst.h"
-#include "llvm/IR/Intrinsics.h"
-
-#if LLVM_VERSION_MAJOR >= 7
 #include <llvm/Transforms/Scalar/InstSimplifyPass.h>
 #include <llvm/Transforms/Utils.h>
-#endif
+#include <llvm/Transforms/Utils/BasicBlockUtils.h>
+#include <llvm/Transforms/Utils/Cloning.h>
 
 #if LLVM_VERSION_MAJOR >= 11
 #include <llvm/Support/Host.h>
@@ -225,11 +222,7 @@ void optimize_ir(llvm::Function* query_func,
                  const CompilationOptions& co) {
   pass_manager.add(llvm::createAlwaysInlinerLegacyPass());
   pass_manager.add(llvm::createPromoteMemoryToRegisterPass());
-#if LLVM_VERSION_MAJOR >= 7
   pass_manager.add(llvm::createInstSimplifyLegacyPass());
-#else
-  pass_manager.add(llvm::createInstructionSimplifierPass());
-#endif
   pass_manager.add(llvm::createInstructionCombiningPass());
   pass_manager.add(llvm::createGlobalOptimizerPass());
 
@@ -319,12 +312,9 @@ std::string assemblyForCPU(ExecutionEngineWrapper& execution_engine,
 #if LLVM_VERSION_MAJOR >= 10
   cpu_target_machine->addPassesToEmitFile(
       pass_manager, os, nullptr, llvm::CGFT_AssemblyFile);
-#elif LLVM_VERSION_MAJOR >= 7
-  cpu_target_machine->addPassesToEmitFile(
-      pass_manager, os, nullptr, llvm::TargetMachine::CGFT_AssemblyFile);
 #else
   cpu_target_machine->addPassesToEmitFile(
-      pass_manager, os, llvm::TargetMachine::CGFT_AssemblyFile);
+      pass_manager, os, nullptr, llvm::TargetMachine::CGFT_AssemblyFile);
 #endif
   pass_manager.run(*module);
   return "Assembly for the CPU:\n" + std::string(code_str.str()) + "\nEnd of assembly";
@@ -396,13 +386,7 @@ std::shared_ptr<CompilationContext> Executor::optimizeAndCodegenCPU(
 
     // Read geos runtime module and bind GEOS API function references to GEOS library
     auto rt_geos_module_copy = llvm::CloneModule(
-#if LLVM_VERSION_MAJOR >= 7
-        *g_rt_geos_module.get(),
-#else
-        g_rt_geos_module.get(),
-#endif
-        cgen_state_->vmap_,
-        [](const llvm::GlobalValue* gv) {
+        *g_rt_geos_module.get(), cgen_state_->vmap_, [](const llvm::GlobalValue* gv) {
           auto func = llvm::dyn_cast<llvm::Function>(gv);
           if (!func) {
             return true;
@@ -454,13 +438,7 @@ void CodeGenerator::link_udf_module(const std::unique_ptr<llvm::Module>& udf_mod
 
   std::unique_ptr<llvm::Module> udf_module_copy;
 
-  udf_module_copy = llvm::CloneModule(
-#if LLVM_VERSION_MAJOR >= 7
-      *udf_module.get(),
-#else
-      udf_module.get(),
-#endif
-      cgen_state->vmap_);
+  udf_module_copy = llvm::CloneModule(*udf_module.get(), cgen_state->vmap_);
 
   udf_module_copy->setDataLayout(module.getDataLayout());
   udf_module_copy->setTargetTriple(module.getTargetTriple());
@@ -1135,12 +1113,9 @@ std::string CodeGenerator::generatePTX(const std::string& cuda_llir,
 #if LLVM_VERSION_MAJOR >= 10
     nvptx_target_machine->addPassesToEmitFile(
         ptxgen_pm, formatted_os, nullptr, llvm::CGFT_AssemblyFile);
-#elif LLVM_VERSION_MAJOR >= 7
-    nvptx_target_machine->addPassesToEmitFile(
-        ptxgen_pm, formatted_os, nullptr, llvm::TargetMachine::CGFT_AssemblyFile);
 #else
     nvptx_target_machine->addPassesToEmitFile(
-        ptxgen_pm, formatted_os, llvm::TargetMachine::CGFT_AssemblyFile);
+        ptxgen_pm, formatted_os, nullptr, llvm::TargetMachine::CGFT_AssemblyFile);
 #endif
     ptxgen_pm.run(*module);
   }
@@ -2399,13 +2374,7 @@ Executor::compileWorkUnit(const std::vector<InputTableInfo>& query_infos,
   // by binding the stream position functions to the right implementation:
   // stride access for GPU, contiguous for CPU
   auto rt_module_copy = llvm::CloneModule(
-#if LLVM_VERSION_MAJOR >= 7
-      *g_rt_module.get(),
-#else
-      g_rt_module.get(),
-#endif
-      cgen_state_->vmap_,
-      [](const llvm::GlobalValue* gv) {
+      *g_rt_module.get(), cgen_state_->vmap_, [](const llvm::GlobalValue* gv) {
         auto func = llvm::dyn_cast<llvm::Function>(gv);
         if (!func) {
           return true;
@@ -2929,13 +2898,7 @@ bool Executor::compileBody(const RelAlgExecutionUnit& ra_exe_unit,
 
 std::unique_ptr<llvm::Module> runtime_module_shallow_copy(CgenState* cgen_state) {
   return llvm::CloneModule(
-#if LLVM_VERSION_MAJOR >= 7
-      *g_rt_module.get(),
-#else
-      g_rt_module.get(),
-#endif
-      cgen_state->vmap_,
-      [](const llvm::GlobalValue* gv) {
+      *g_rt_module.get(), cgen_state->vmap_, [](const llvm::GlobalValue* gv) {
         auto func = llvm::dyn_cast<llvm::Function>(gv);
         if (!func) {
           return true;

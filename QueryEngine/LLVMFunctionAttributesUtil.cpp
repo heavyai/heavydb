@@ -16,7 +16,6 @@
 
 #include "LLVMFunctionAttributesUtil.h"
 
-#if LLVM_VERSION_MAJOR >= 6
 void mark_function_always_inline(llvm::Function* func) {
   func->addAttribute(llvm::AttributeList::AttrIndex::FunctionIndex,
                      llvm::Attribute::AlwaysInline);
@@ -32,21 +31,3 @@ void clear_function_attributes(llvm::Function* func) {
   llvm::AttributeList no_attributes;
   func->setAttributes(no_attributes);
 }
-#else
-void mark_function_always_inline(llvm::Function* func) {
-  func->addAttribute(llvm::AttributeSet::AttrIndex::FunctionIndex,
-                     llvm::Attribute::AlwaysInline);
-}
-
-void mark_function_never_inline(llvm::Function* func) {
-  llvm::AttributeSet no_inline_attrs;
-  no_inline_attrs =
-      no_inline_attrs.addAttribute(func->getContext(), 0, llvm::Attribute::NoInline);
-  func->setAttributes(no_inline_attrs);
-}
-
-void clear_function_attributes(llvm::Function* func) {
-  llvm::AttributeSet no_attributes;
-  func->setAttributes(no_attributes);
-}
-#endif

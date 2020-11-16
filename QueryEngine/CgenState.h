@@ -244,11 +244,7 @@ struct CgenState {
 
     auto func_p = module_->getOrInsertFunction(fname, func_ty, attrs);
     CHECK(func_p);
-#if LLVM_VERSION_MAJOR > 8
     auto callee = func_p.getCallee();
-#else
-    auto callee = func_p;
-#endif
     llvm::Function* func{nullptr};
     if (auto callee_cast = llvm::dyn_cast<llvm::ConstantExpr>(callee)) {
       // Get or insert function automatically adds a ConstantExpr cast if the return type
@@ -260,11 +256,7 @@ struct CgenState {
       func = llvm::dyn_cast<llvm::Function>(callee);
     }
     CHECK(func);
-#if LLVM_VERSION_MAJOR > 8
     llvm::FunctionType* func_type = func_p.getFunctionType();
-#else
-    llvm::FunctionType* func_type = func->getFunctionType();
-#endif
     CHECK(func_type);
     if (has_struct_return) {
       const auto arg_ti = func_type->getParamType(0);
@@ -280,11 +272,7 @@ struct CgenState {
       if (arg_ti->isPointerTy() && arg_ti->getPointerElementType()->isStructTy()) {
         auto attr_list = func->getAttributes();
         llvm::AttrBuilder arr_arg_builder(attr_list.getParamAttributes(i));
-#if LLVM_VERSION_MAJOR > 8
         arr_arg_builder.addByValAttr(arg_ti->getPointerElementType());
-#else
-        arr_arg_builder.addAttribute(llvm::Attribute::ByVal);
-#endif
         func->addParamAttrs(i, arr_arg_builder);
       }
     }
