@@ -1298,6 +1298,22 @@ TEST_P(CreateTableTest, InvalidSyntax) {
   }
 }
 
+TEST_P(CreateTableTest, RealAlias) {
+  // TODO(vancouver: support for FSI)
+  if (GetParam() == ddl_utils::TableType::FOREIGN_TABLE) {
+    LOG(ERROR) << "REAL alias not yet supported for FSI.";
+    return;
+  }
+
+  std::string query = getCreateTableQuery(GetParam(), "test_table", "(f REAL)");
+  sql(query);
+  auto td = getCatalog().getMetadataForTable("test_table", false);
+  ASSERT_TRUE(td);
+  auto cd = getCatalog().getMetadataForColumn(td->tableId, "f");
+  ASSERT_TRUE(cd);
+  ASSERT_EQ(cd->columnType.get_type(), kFLOAT);
+}
+
 INSTANTIATE_TEST_SUITE_P(CreateAndDropTableDdlTest,
                          DropTableTest,
                          testing::Values(ddl_utils::TableType::TABLE,

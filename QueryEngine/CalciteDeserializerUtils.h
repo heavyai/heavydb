@@ -135,6 +135,9 @@ inline SQLTypes to_sql_type(const std::string& type_name) {
   if (type_name == std::string("FLOAT")) {
     return kFLOAT;
   }
+  if (type_name == std::string("REAL")) {
+    return kFLOAT;
+  }
   if (type_name == std::string("DOUBLE")) {
     return kDOUBLE;
   }
