@@ -146,14 +146,13 @@ function install_awscpp() {
     popd
 }
 
-LLVM_VERSION=9.0.1
+LLVM_VERSION=11.0.0
 
 function install_llvm() {
     VERS=${LLVM_VERSION}
     download ${HTTP_DEPS}/llvm/$VERS/llvm-$VERS.src.tar.xz
     download ${HTTP_DEPS}/llvm/$VERS/clang-$VERS.src.tar.xz
     download ${HTTP_DEPS}/llvm/$VERS/compiler-rt-$VERS.src.tar.xz
-    download ${HTTP_DEPS}/llvm/$VERS/lldb-$VERS.src.tar.xz
     download ${HTTP_DEPS}/llvm/$VERS/lld-$VERS.src.tar.xz
     download ${HTTP_DEPS}/llvm/$VERS/libcxx-$VERS.src.tar.xz
     download ${HTTP_DEPS}/llvm/$VERS/libcxxabi-$VERS.src.tar.xz
@@ -163,24 +162,16 @@ function install_llvm() {
     extract clang-$VERS.src.tar.xz
     extract compiler-rt-$VERS.src.tar.xz
     extract lld-$VERS.src.tar.xz
-    extract lldb-$VERS.src.tar.xz
     extract libcxx-$VERS.src.tar.xz
     extract libcxxabi-$VERS.src.tar.xz
     extract clang-tools-extra-$VERS.src.tar.xz
     mv clang-$VERS.src llvm-$VERS.src/tools/clang
     mv compiler-rt-$VERS.src llvm-$VERS.src/projects/compiler-rt
     mv lld-$VERS.src llvm-$VERS.src/tools/lld
-    mv lldb-$VERS.src llvm-$VERS.src/tools/lldb
     mv libcxx-$VERS.src llvm-$VERS.src/projects/libcxx
     mv libcxxabi-$VERS.src llvm-$VERS.src/projects/libcxxabi
     mkdir -p llvm-$VERS.src/tools/clang/tools
     mv clang-tools-extra-$VERS.src llvm-$VERS.src/tools/clang/tools/extra
-
-    # Patch llvm 9 for glibc 2.31+ support
-    # from: https://bugs.gentoo.org/708430
-    pushd llvm-$VERS.src/projects/
-    patch -p0 < $SCRIPTS_DIR/llvm-9-glibc-2.31-708430.patch
-    popd
 
     rm -rf build.llvm-$VERS
     mkdir build.llvm-$VERS
@@ -191,7 +182,7 @@ function install_llvm() {
       LLVM_SHARED="-DLLVM_BUILD_LLVM_DYLIB=ON -DLLVM_LINK_LLVM_DYLIB=ON"
     fi
 
-    cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=$PREFIX -DLLVM_ENABLE_RTTI=on -DLLVM_USE_INTEL_JITEVENTS=on $LLVM_SHARED ../llvm-$VERS.src
+    cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=$PREFIX -DLLVM_ENABLE_RTTI=on -DLLVM_USE_INTEL_JITEVENTS=on -DLLDB_ENABLE_LZMA=off $LLVM_SHARED ../llvm-$VERS.src
     makej
     make install
     popd

@@ -39,6 +39,7 @@ static_assert(false, "LLVM Version >= 4 is required.");
 #include <llvm/IR/LegacyPassManager.h>
 #include <llvm/IR/Verifier.h>
 #include <llvm/IRReader/IRReader.h>
+#include <llvm/Linker/Linker.h>
 #include <llvm/Support/Casting.h>
 #include <llvm/Support/FileSystem.h>
 #include <llvm/Support/FormattedStream.h>
@@ -47,6 +48,7 @@ static_assert(false, "LLVM Version >= 4 is required.");
 #include <llvm/Support/TargetRegistry.h>
 #include <llvm/Support/TargetSelect.h>
 #include <llvm/Support/raw_os_ostream.h>
+#include <llvm/Support/raw_ostream.h>
 #include <llvm/Transforms/IPO.h>
 #include <llvm/Transforms/IPO/AlwaysInliner.h>
 #include <llvm/Transforms/IPO/PassManagerBuilder.h>
@@ -62,10 +64,10 @@ static_assert(false, "LLVM Version >= 4 is required.");
 #include <llvm/Transforms/Scalar/InstSimplifyPass.h>
 #include <llvm/Transforms/Utils.h>
 #endif
-#include <llvm/IRReader/IRReader.h>
-#include <llvm/Linker/Linker.h>
-#include <llvm/Support/SourceMgr.h>
-#include <llvm/Support/raw_ostream.h>
+
+#if LLVM_VERSION_MAJOR >= 11
+#include <llvm/Support/Host.h>
+#endif
 
 float g_fraction_code_cache_to_evict = 0.2;
 
@@ -982,7 +984,7 @@ std::shared_ptr<GpuCompilationContext> CodeGenerator::generateNativeGPUCode(
   }
   module->eraseNamedMetadata(md);
 
-  auto cuda_llir = cuda_rt_decls + extension_function_decls(udf_declarations) + ss.str();
+  auto cuda_llir = ss.str() + cuda_rt_decls + extension_function_decls(udf_declarations);
   const auto ptx = generatePTX(
       cuda_llir, gpu_target.nvptx_target_machine, gpu_target.cgen_state->context_);
 
@@ -1143,7 +1145,11 @@ std::string CodeGenerator::generatePTX(const std::string& cuda_llir,
     ptxgen_pm.run(*module);
   }
 
+#if LLVM_VERSION_MAJOR >= 11
+  return std::string(code_str);
+#else
   return code_str.str();
+#endif
 }
 
 std::unique_ptr<llvm::TargetMachine> CodeGenerator::initializeNVPTXBackend(

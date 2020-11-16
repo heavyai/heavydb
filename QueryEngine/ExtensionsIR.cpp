@@ -976,7 +976,7 @@ std::vector<llvm::Value*> CodeGenerator::codegenFunctionOperCastArgs(
         j++;
       } else {
         auto array_buf_arg = castArrayPointer(ptr_lv, elem_ti);
-        auto builder = cgen_state_->ir_builder_;
+        auto& builder = cgen_state_->ir_builder_;
         auto array_size_arg =
             builder.CreateZExt(len_lv, get_int_type(64, cgen_state_->context_));
         auto array_null_arg =
@@ -1042,7 +1042,7 @@ std::vector<llvm::Value*> CodeGenerator::codegenFunctionOperCastArgs(
       if (is_ext_arg_type_geo(ext_func_args[i])) {
         if (arg_ti.get_type() == kPOINT || arg_ti.get_type() == kLINESTRING) {
           auto array_buf_arg = castArrayPointer(ptr_lv, elem_ti);
-          auto builder = cgen_state_->ir_builder_;
+          auto& builder = cgen_state_->ir_builder_;
           auto array_size_arg =
               builder.CreateZExt(len_lv, get_int_type(64, cgen_state_->context_));
           auto compression_val = codegenCompression(arg_ti);
@@ -1083,7 +1083,7 @@ std::vector<llvm::Value*> CodeGenerator::codegenFunctionOperCastArgs(
         case kPOLYGON: {
           if (ext_func_args[i] == ExtArgumentType::GeoPolygon) {
             auto array_buf_arg = castArrayPointer(ptr_lv, elem_ti);
-            auto builder = cgen_state_->ir_builder_;
+            auto& builder = cgen_state_->ir_builder_;
             auto array_size_arg =
                 builder.CreateZExt(len_lv, get_int_type(64, cgen_state_->context_));
             auto compression_val = codegenCompression(arg_ti);
@@ -1122,7 +1122,7 @@ std::vector<llvm::Value*> CodeGenerator::codegenFunctionOperCastArgs(
         case kMULTIPOLYGON: {
           if (ext_func_args[i] == ExtArgumentType::GeoMultiPolygon) {
             auto array_buf_arg = castArrayPointer(ptr_lv, elem_ti);
-            auto builder = cgen_state_->ir_builder_;
+            auto& builder = cgen_state_->ir_builder_;
             auto array_size_arg =
                 builder.CreateZExt(len_lv, get_int_type(64, cgen_state_->context_));
             auto compression_val = codegenCompression(arg_ti);

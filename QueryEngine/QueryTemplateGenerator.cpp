@@ -29,6 +29,15 @@
 
 namespace {
 
+inline llvm::Type* get_pointer_element_type(llvm::Value* value) {
+  CHECK(value);
+  auto type = value->getType();
+  CHECK(type && type->isPointerTy());
+  auto pointer_type = llvm::dyn_cast<llvm::PointerType>(type);
+  CHECK(pointer_type);
+  return pointer_type->getElementType();
+}
+
 template <class Attributes>
 llvm::Function* default_func_builder(llvm::Module* mod, const std::string& name) {
   using namespace llvm;
@@ -338,7 +347,11 @@ std::tuple<llvm::Function*, llvm::CallInst*> query_template_impl(
     }
   }
 
-  LoadInst* row_count = new LoadInst(row_count_ptr, "row_count", false, bb_entry);
+  LoadInst* row_count = new LoadInst(get_pointer_element_type(row_count_ptr),
+                                     row_count_ptr,
+                                     "row_count",
+                                     false,
+                                     bb_entry);
   row_count->setAlignment(LLVM_ALIGN(8));
   row_count->setName("row_count");
   std::vector<Value*> agg_init_val_vec;
@@ -347,7 +360,8 @@ std::tuple<llvm::Function*, llvm::CallInst*> query_template_impl(
       auto idx_lv = ConstantInt::get(i32_type, i);
       auto agg_init_gep =
           GetElementPtrInst::CreateInBounds(agg_init_val, idx_lv, "", bb_entry);
-      auto agg_init_val = new LoadInst(agg_init_gep, "", false, bb_entry);
+      auto agg_init_val = new LoadInst(
+          get_pointer_element_type(agg_init_gep), agg_init_gep, "", false, bb_entry);
       agg_init_val->setAlignment(LLVM_ALIGN(8));
       agg_init_val_vec.push_back(agg_init_val);
       auto init_val_st = new StoreInst(agg_init_val, result_ptr_vec[i], false, bb_entry);
@@ -395,7 +409,8 @@ std::tuple<llvm::Function*, llvm::CallInst*> query_template_impl(
   row_process_params.insert(
       row_process_params.end(), result_ptr_vec.begin(), result_ptr_vec.end());
   if (is_estimate_query) {
-    row_process_params.push_back(new LoadInst(out, "", false, bb_forbody));
+    row_process_params.push_back(
+        new LoadInst(get_pointer_element_type(out), out, "", false, bb_forbody));
   }
   row_process_params.push_back(agg_init_val);
   row_process_params.push_back(pos);
@@ -422,7 +437,11 @@ std::tuple<llvm::Function*, llvm::CallInst*> query_template_impl(
   std::vector<Instruction*> result_vec_pre;
   if (!is_estimate_query) {
     for (size_t i = 0; i < aggr_col_count; ++i) {
-      auto result = new LoadInst(result_ptr_vec[i], ".pre.result", false, bb_crit_edge);
+      auto result = new LoadInst(get_pointer_element_type(result_ptr_vec[i]),
+                                 result_ptr_vec[i],
+                                 ".pre.result",
+                                 false,
+                                 bb_crit_edge);
       result->setAlignment(LLVM_ALIGN(8));
       result_vec_pre.push_back(result);
     }
@@ -465,7 +484,8 @@ std::tuple<llvm::Function*, llvm::CallInst*> query_template_impl(
             agg_func, std::vector<llvm::Value*>{target_addr, result_vec[i]}, "", bb_exit);
       } else {
         auto out_gep = GetElementPtrInst::CreateInBounds(out, col_idx, "", bb_exit);
-        auto col_buffer = new LoadInst(out_gep, "", false, bb_exit);
+        auto col_buffer =
+            new LoadInst(get_pointer_element_type(out_gep), out_gep, "", false, bb_exit);
         col_buffer->setAlignment(LLVM_ALIGN(8));
         auto slot_idx = BinaryOperator::CreateAdd(
             group_buff_idx,
@@ -491,8 +511,11 @@ std::tuple<llvm::Function*, llvm::CallInst*> query_template_impl(
       for (size_t i = 0; i < aggr_col_count; i++) {
         auto out_gep = GetElementPtrInst::CreateInBounds(
             out, ConstantInt::get(i32_type, i), "", bb_exit);
-        auto gmem_output_buffer = new LoadInst(
-            out_gep, "gmem_output_buffer_" + std::to_string(i), false, bb_exit);
+        auto gmem_output_buffer = new LoadInst(get_pointer_element_type(out_gep),
+                                               out_gep,
+                                               "gmem_output_buffer_" + std::to_string(i),
+                                               false,
+                                               bb_exit);
         CallInst::Create(
             reduce_smem_to_gmem_func,
             std::vector<llvm::Value*>{
@@ -671,11 +694,13 @@ std::tuple<llvm::Function*, llvm::CallInst*> query_group_by_template_impl(
   auto bb_exit = BasicBlock::Create(mod->getContext(), ".exit", query_func_ptr, 0);
 
   // Block  .entry
-  LoadInst* row_count = new LoadInst(row_count_ptr, "", false, bb_entry);
+  LoadInst* row_count = new LoadInst(
+      get_pointer_element_type(row_count_ptr), row_count_ptr, "", false, bb_entry);
   row_count->setAlignment(LLVM_ALIGN(8));
   row_count->setName("row_count");
 
-  LoadInst* max_matched = new LoadInst(max_matched_ptr, "", false, bb_entry);
+  LoadInst* max_matched = new LoadInst(
+      get_pointer_element_type(max_matched_ptr), max_matched_ptr, "", false, bb_entry);
   max_matched->setAlignment(LLVM_ALIGN(8));
 
   auto crt_matched_ptr = new AllocaInst(i32_type, 0, "crt_matched", bb_entry);
@@ -703,7 +728,11 @@ std::tuple<llvm::Function*, llvm::CallInst*> query_group_by_template_impl(
   CHECK(Ty);
   GetElementPtrInst* group_by_buffers_gep = GetElementPtrInst::Create(
       Ty->getElementType(), group_by_buffers, group_buff_idx, "", bb_entry);
-  LoadInst* col_buffer = new LoadInst(group_by_buffers_gep, "", false, bb_entry);
+  LoadInst* col_buffer = new LoadInst(get_pointer_element_type(group_by_buffers_gep),
+                                      group_by_buffers_gep,
+                                      "",
+                                      false,
+                                      bb_entry);
   col_buffer->setName("col_buffer");
   col_buffer->setAlignment(LLVM_ALIGN(8));
 
@@ -769,11 +798,19 @@ std::tuple<llvm::Function*, llvm::CallInst*> query_group_by_template_impl(
   ICmpInst* loop_or_exit =
       new ICmpInst(*bb_forbody, ICmpInst::ICMP_SLT, pos_inc, row_count, "");
   if (check_scan_limit) {
-    auto crt_matched = new LoadInst(crt_matched_ptr, "crt_matched", false, bb_forbody);
+    auto crt_matched = new LoadInst(get_pointer_element_type(crt_matched_ptr),
+                                    crt_matched_ptr,
+                                    "crt_matched",
+                                    false,
+                                    bb_forbody);
     auto filter_match = BasicBlock::Create(
         mod->getContext(), "filter_match", query_func_ptr, bb_crit_edge);
     llvm::Value* new_total_matched =
-        new LoadInst(old_total_matched_ptr, "", false, filter_match);
+        new LoadInst(get_pointer_element_type(old_total_matched_ptr),
+                     old_total_matched_ptr,
+                     "",
+                     false,
+                     filter_match);
     new_total_matched =
         BinaryOperator::CreateAdd(new_total_matched, crt_matched, "", filter_match);
     CHECK(new_total_matched);

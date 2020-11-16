@@ -33,6 +33,10 @@
 #include <iterator>
 #include <memory>
 
+#if LLVM_VERSION_MAJOR >= 11
+#include <llvm/Support/Host.h>
+#endif
+
 #include "Execute.h"
 #include "Logger/Logger.h"
 
