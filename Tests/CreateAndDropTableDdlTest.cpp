@@ -1378,6 +1378,30 @@ TEST_F(DropForeignTableTest, FsiDisabled) {
       "Exception: test_foreign_table is a foreign table. Use DROP FOREIGN TABLE.");
 }
 
+class CreateViewUnsupportedTest : public CreateAndDropTableDdlTest {
+ protected:
+  void SetUp() override {
+    CreateAndDropTableDdlTest::SetUp();
+    sql(getDropTableQuery(ddl_utils::TableType::TABLE, "test_table", true));
+    dropTestUser();
+  }
+
+  void TearDown() override {
+    g_enable_fsi = true;
+    sql(getDropTableQuery(ddl_utils::TableType::TABLE, "test_table", true));
+    dropTestUser();
+    CreateAndDropTableDdlTest::TearDown();
+  }
+};
+
+TEST_F(CreateViewUnsupportedTest, Basics) {
+  sql(getCreateTableQuery(
+      ddl_utils::TableType::TABLE, "test_table", "(col1 INTEGER, col2 FLOAT)"));
+  queryAndAssertException(
+      "CREATE VIEW showcreateviewtest (c1, c2) AS SELECT * FROM showcreatetabletest;",
+      "Exception: Parse failed: Column list aliases in views are not yet supported.");
+}
+
 int main(int argc, char** argv) {
   g_enable_fsi = true;
   TestHelpers::init_logger_stderr_only(argc, argv);

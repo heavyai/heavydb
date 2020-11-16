@@ -453,6 +453,9 @@ SqlCreate SqlCreateView(Span s, boolean replace) :
     <VIEW> ifNotExists = IfNotExistsOpt() id = CompoundIdentifier()
     [ columnList = ParenthesizedSimpleIdentifierList() ]
     <AS> query = OrderedQueryOrExpr(ExprContext.ACCEPT_QUERY) {
+        if (columnList != null && columnList.size() > 0) {
+            throw new ParseException("Column list aliases in views are not yet supported.");
+        }
         return SqlDdlNodes.createView(s.end(this), replace, ifNotExists, id, columnList,
             query);
     }
