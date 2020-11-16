@@ -360,6 +360,11 @@ class Executor {
 
   static size_t getArenaBlockSize();
 
+  /**
+   * Returns pointer to the intermediate tables vector currently stored by this executor.
+   */
+  const TemporaryTables* getTemporaryTables() { return temporary_tables_; }
+
   StringDictionaryProxy* getStringDictionaryProxy(
       const int dictId,
       const std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
