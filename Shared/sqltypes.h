@@ -441,8 +441,7 @@ class SQLTypeInfo {
              type_name[static_cast<int>(type)] + srid_string + ")";
     }
     std::string ps = "";
-    if (type == kDECIMAL || type == kNUMERIC || subtype == kDECIMAL ||
-        subtype == kNUMERIC) {
+    if (type == kDECIMAL || type == kNUMERIC) {
       ps = "(" + std::to_string(dimension) + "," + std::to_string(scale) + ")";
     } else if (type == kTIMESTAMP) {
       ps = "(" + std::to_string(dimension) + ")";
@@ -451,7 +450,7 @@ class SQLTypeInfo {
       auto elem_ti = get_elem_type();
       auto num_elems = (size > 0) ? std::to_string(size / elem_ti.get_size()) : "";
       CHECK_LT(static_cast<int>(subtype), kSQLTYPE_LAST);
-      return type_name[static_cast<int>(subtype)] + ps + "[" + num_elems + "]";
+      return elem_ti.get_type_name() + ps + "[" + num_elems + "]";
     }
     if (type == kCOLUMN) {
       auto elem_ti = get_elem_type();

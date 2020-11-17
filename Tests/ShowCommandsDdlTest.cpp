@@ -806,6 +806,27 @@ TEST_F(ShowCreateTableTest, TextArray) {
                         "DICT(32),\n  t2 TEXT[5] ENCODING DICT(32));"}});
 }
 
+TEST_F(ShowCreateTableTest, TimestampArray) {
+  sql("CREATE TABLE showcreatetabletest (tp TIMESTAMP, tpe TIMESTAMP ENCODING "
+      "FIXED(32), "
+      "tp1 TIMESTAMP(3), tp2 "
+      "TIMESTAMP(6)[], tp3 TIMESTAMP(9)[2]);");
+  sqlAndCompareResult("SHOW CREATE TABLE showcreatetabletest;",
+                      {{"CREATE TABLE showcreatetabletest (\n  tp TIMESTAMP(0),\n  tpe "
+                        "TIMESTAMP(0) ENCODING FIXED(32),\n  tp1 TIMESTAMP(3),\n  "
+                        "tp2 TIMESTAMP(6)[],\n  tp3 TIMESTAMP(9)[2]);"}});
+}
+
+TEST_F(ShowCreateTableTest, TimestampEncoding) {
+  // Timestamp encoding accepts a shorthand syntax (see above). Ensure the output of the
+  // SHOW CREATE TABLE command using the short hand syntax can be passed back in as input.
+  sql("CREATE TABLE showcreatetabletest (tp TIMESTAMP(0), tpe TIMESTAMP(0) ENCODING "
+      "FIXED(32));");
+  sqlAndCompareResult("SHOW CREATE TABLE showcreatetabletest;",
+                      {{"CREATE TABLE showcreatetabletest (\n  tp TIMESTAMP(0),\n  tpe "
+                        "TIMESTAMP(0) ENCODING FIXED(32));"}});
+}
+
 TEST_F(ShowCreateTableTest, ForeignTable_Defaults) {
   sql("CREATE FOREIGN TABLE test_foreign_table(b BOOLEAN, bint BIGINT, i INTEGER, sint "
       "SMALLINT, tint TINYINT, f FLOAT, d DOUBLE, dc DECIMAL(5, 2), t TEXT, tm TIME, "
