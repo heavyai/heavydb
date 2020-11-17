@@ -702,22 +702,16 @@ TEST_P(CreateTableTest, GeoTypes) {
 }
 
 TEST_P(CreateTableTest, ArrayTypes) {
-  std::string query =
-      getCreateTableQuery(GetParam(),
-                          "test_table",
-                          "(t TINYINT[], t2 TINYINT[1], i INTEGER[], i2 INTEGER[1], bint "
-                          "BIGINT[], bint2 BIGINT[1], "
-                          "txt TEXT[] ENCODING DICT(32), txt2 TEXT[1] ENCODING DICT(32), "
-                          "f FLOAT[], f2 FLOAT[1], "
-                          "d DOUBLE[], d2 DOUBLE[1], dc DECIMAL(18,6)[], dc2 "
-                          "DECIMAL(18,6)[1], b BOOLEAN[], b2 BOOLEAN[1],"
-                          "dt DATE[], dt2 DATE[1], tm TIME[], tm2 TIME[1], tp "
-                          "TIMESTAMP[], tp2 TIMESTAMP[1])");
+  std::string query = getCreateTableQuery(
+      GetParam(),
+      "test_table",
+      R"((t TINYINT[], t2 TINYINT[1], i INTEGER[], i2 INTEGER[1], bint BIGINT[], bint2 BIGINT[1], 
+      txt TEXT[] ENCODING DICT(32), txt2 TEXT[1] ENCODING DICT(32), f FLOAT[], f2 FLOAT[1], d DOUBLE[], d2 DOUBLE[1], dc DECIMAL(18,6)[], dc2 DECIMAL(18,6)[1], b BOOLEAN[], b2 BOOLEAN[1], dt DATE[], dt2 DATE[1], tm TIME[], tm2 TIME[1], tp TIMESTAMP[], tp2 TIMESTAMP[1], tp3 TIMESTAMP(3)[], tp4 TIMESTAMP(9)[1]))");
   sql(query);
 
   auto& catalog = getCatalog();
   auto table = catalog.getMetadataForTable("test_table", false);
-  assertTableDetails(table, GetParam(), "test_table", 22);
+  assertTableDetails(table, GetParam(), "test_table", 24);
 
   auto columns = catalog.getAllColumnMetadataForTable(table->tableId, true, true, true);
   auto it = columns.begin();
@@ -911,6 +905,26 @@ TEST_P(CreateTableTest, ArrayTypes) {
   expected_attributes.size = 8;
   expected_attributes.type = kARRAY;
   expected_attributes.sub_type = kTIMESTAMP;
+  assertColumnDetails(expected_attributes, column);
+
+  std::advance(it, 1);
+  column = *it;
+  expected_attributes = {};
+  expected_attributes.column_name = "tp3";
+  expected_attributes.size = -1;
+  expected_attributes.type = kARRAY;
+  expected_attributes.sub_type = kTIMESTAMP;
+  expected_attributes.precision = 3;
+  assertColumnDetails(expected_attributes, column);
+
+  std::advance(it, 1);
+  column = *it;
+  expected_attributes = {};
+  expected_attributes.column_name = "tp4";
+  expected_attributes.size = 8;
+  expected_attributes.type = kARRAY;
+  expected_attributes.sub_type = kTIMESTAMP;
+  expected_attributes.precision = 9;
   assertColumnDetails(expected_attributes, column);
 }
 

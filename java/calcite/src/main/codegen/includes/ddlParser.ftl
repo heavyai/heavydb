@@ -87,8 +87,6 @@ SqlTypeNameSpec OmniSciArrayTypeName(Span s) :
         <DATE> { sqlTypeName = SqlTypeName.DATE; }
     |
         <TIME> { sqlTypeName = SqlTypeName.TIME; }
-    |
-        <TIMESTAMP> { sqlTypeName = SqlTypeName.TIMESTAMP; }
     )
      <LBRACKET>
     (
@@ -102,7 +100,7 @@ SqlTypeNameSpec OmniSciArrayTypeName(Span s) :
     }
 }
 
-// Parse sql type name that allow arrays
+// Parse DECIMAL that allows arrays
 SqlTypeNameSpec OmniSciDecimalArrayTypeName(Span s) :
 {
     final SqlTypeName sqlTypeName;
@@ -121,6 +119,33 @@ SqlTypeNameSpec OmniSciDecimalArrayTypeName(Span s) :
         ]
         <RPAREN>
     )
+     <LBRACKET>
+    (
+        size = UnsignedIntLiteral()
+        <RBRACKET>
+    |
+        <RBRACKET>
+    )
+    {
+        return new OmniSciTypeNameSpec(sqlTypeName, false, size, precision, scale, s.end(this));
+    }
+}
+
+// Parse sql TIMESTAMP that allow arrays 
+SqlTypeNameSpec OmniSciTimestampArrayTypeName(Span s) :
+{
+    final SqlTypeName sqlTypeName;
+    Integer size = -1;
+    Integer precision = -1;
+    final Integer scale = -1;
+}
+{
+    <TIMESTAMP> { sqlTypeName = SqlTypeName.TIMESTAMP; }
+    [
+        <LPAREN>
+        precision = UnsignedIntLiteral()
+        <RPAREN>
+    ]
      <LBRACKET>
     (
         size = UnsignedIntLiteral()
@@ -212,6 +237,9 @@ SqlTypeNameSpec OmniSciTypeName() :
 <#-- put custom data types in front of Calcite core data types -->
         LOOKAHEAD(2)
         typeNameSpec = OmniSciArrayTypeName(s)
+    |
+        LOOKAHEAD(5)
+        typeNameSpec = OmniSciTimestampArrayTypeName(s)
     |
         LOOKAHEAD(7)
         typeNameSpec = OmniSciDecimalArrayTypeName(s)
