@@ -132,7 +132,7 @@ public class CalciteServerHandler implements CalciteServer.Iface {
   public TPlanResult process(String user,
           String session,
           String catalog,
-          String sqlText,
+          String queryText,
           java.util.List<TFilterPushDownInfo> thriftFilterPushDownInfo,
           boolean legacySyntax,
           boolean isExplain,
@@ -151,59 +151,70 @@ public class CalciteServerHandler implements CalciteServer.Iface {
     }
     MapDUser mapDUser = new MapDUser(user, session, catalog, mapdPort);
     MAPDLOGGER.debug("process was called User: " + user + " Catalog: " + catalog
-            + " sql: " + sqlText);
+            + " sql: " + queryText);
     parser.setUser(mapDUser);
     CURRENT_PARSER.set(parser);
 
     // need to trim the sql string as it seems it is not trimed prior to here
-    sqlText = sqlText.trim();
+    boolean isRAQuery = false;
+
+    if (queryText.startsWith("execute calcite")) {
+      queryText = queryText.replaceFirst("execute calcite", "");
+      isRAQuery = true;
+    }
+
+    queryText = queryText.trim();
     // remove last charcter if it is a ;
-    if (sqlText.length() > 0 && sqlText.charAt(sqlText.length() - 1) == ';') {
-      sqlText = sqlText.substring(0, sqlText.length() - 1);
+    if (queryText.length() > 0 && queryText.charAt(queryText.length() - 1) == ';') {
+      queryText = queryText.substring(0, queryText.length() - 1);
     }
     String jsonResult;
     SqlIdentifierCapturer capturer;
     TAccessedQueryObjects primaryAccessedObjects = new TAccessedQueryObjects();
     TAccessedQueryObjects resolvedAccessedObjects = new TAccessedQueryObjects();
     try {
-      final List<MapDParserOptions.FilterPushDownInfo> filterPushDownInfo =
-              new ArrayList<>();
-      for (final TFilterPushDownInfo req : thriftFilterPushDownInfo) {
-        filterPushDownInfo.add(new MapDParserOptions.FilterPushDownInfo(
-                req.input_prev, req.input_start, req.input_next));
+      if (!isRAQuery) {
+        final List<MapDParserOptions.FilterPushDownInfo> filterPushDownInfo =
+                new ArrayList<>();
+        for (final TFilterPushDownInfo req : thriftFilterPushDownInfo) {
+          filterPushDownInfo.add(new MapDParserOptions.FilterPushDownInfo(
+                  req.input_prev, req.input_start, req.input_next));
+        }
+        Pair<String, SqlIdentifierCapturer> res;
+        SqlNode node;
+        try {
+          MapDParserOptions parserOptions = new MapDParserOptions(
+                  filterPushDownInfo, legacySyntax, isExplain, isViewOptimize);
+          res = parser.process(queryText, parserOptions);
+          jsonResult = res.left;
+          capturer = res.right;
+
+          primaryAccessedObjects.tables_selected_from = new ArrayList<>(capturer.selects);
+          primaryAccessedObjects.tables_inserted_into = new ArrayList<>(capturer.inserts);
+          primaryAccessedObjects.tables_updated_in = new ArrayList<>(capturer.updates);
+          primaryAccessedObjects.tables_deleted_from = new ArrayList<>(capturer.deletes);
+
+          // also resolve all the views in the select part
+          // resolution of the other parts is not
+          // necessary as these cannot be views
+          resolvedAccessedObjects.tables_selected_from =
+                  new ArrayList<>(parser.resolveSelectIdentifiers(capturer));
+          resolvedAccessedObjects.tables_inserted_into =
+                  new ArrayList<>(capturer.inserts);
+          resolvedAccessedObjects.tables_updated_in = new ArrayList<>(capturer.updates);
+          resolvedAccessedObjects.tables_deleted_from = new ArrayList<>(capturer.deletes);
+        } catch (ValidationException ex) {
+          String msg = "Validation: " + ex.getMessage();
+          MAPDLOGGER.error(msg, ex);
+          throw ex;
+        } catch (RelConversionException ex) {
+          String msg = " RelConversion failed: " + ex.getMessage();
+          MAPDLOGGER.error(msg, ex);
+          throw ex;
+        }
+      } else {
+        jsonResult = parser.optimizeRAQuery(queryText);
       }
-      Pair<String, SqlIdentifierCapturer> res;
-      SqlNode node;
-      try {
-        MapDParserOptions parserOptions = new MapDParserOptions(
-                filterPushDownInfo, legacySyntax, isExplain, isViewOptimize);
-        res = parser.process(sqlText, parserOptions);
-        jsonResult = res.left;
-      } catch (ValidationException ex) {
-        String msg = "Validation: " + ex.getMessage();
-        MAPDLOGGER.error(msg, ex);
-        throw ex;
-      } catch (RelConversionException ex) {
-        String msg = " RelConversion failed: " + ex.getMessage();
-        MAPDLOGGER.error(msg, ex);
-        throw ex;
-      }
-      capturer = res.right;
-
-      primaryAccessedObjects.tables_selected_from = new ArrayList<>(capturer.selects);
-      primaryAccessedObjects.tables_inserted_into = new ArrayList<>(capturer.inserts);
-      primaryAccessedObjects.tables_updated_in = new ArrayList<>(capturer.updates);
-      primaryAccessedObjects.tables_deleted_from = new ArrayList<>(capturer.deletes);
-
-      // also resolve all the views in the select part
-      // resolution of the other parts is not
-      // necessary as these cannot be views
-      resolvedAccessedObjects.tables_selected_from =
-              new ArrayList<>(parser.resolveSelectIdentifiers(capturer));
-      resolvedAccessedObjects.tables_inserted_into = new ArrayList<>(capturer.inserts);
-      resolvedAccessedObjects.tables_updated_in = new ArrayList<>(capturer.updates);
-      resolvedAccessedObjects.tables_deleted_from = new ArrayList<>(capturer.deletes);
-
     } catch (SqlParseException ex) {
       String msg = "Parse failed: " + ex.getMessage();
       MAPDLOGGER.error(msg, ex);
