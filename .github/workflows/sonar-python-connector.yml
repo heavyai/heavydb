@@ -1,0 +1,29 @@
+name: Build
+on:
+  push:
+    branches:
+      - master
+    paths:
+      - 'python/**'
+  pull_request:
+    types: [opened, synchronize, reopened]
+    paths:
+      - 'python/**'
+jobs:
+  sonarcloudomniscidbpython:
+    name: SonarCloudOmniSciDBPython
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          fetch-depth: 0  # Shallow clones should be disabled for a better relevancy of analysis
+      - name: SonarCloud Scan OmniSciDB Python Connector
+        uses: SonarSource/sonarcloud-github-action@master
+        with:
+          projectBaseDir: python
+          args: >
+            -Dsonar.organization=omnisci
+            -Dsonar.projectKey=omniscidb-internal_python-omnisci-connector
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}  # Needed to get PR information, if any
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
