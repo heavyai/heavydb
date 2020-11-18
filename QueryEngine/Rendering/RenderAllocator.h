@@ -104,13 +104,4 @@ class RenderAllocatorMap {
  private:
   ::QueryRenderer::QueryRenderManager* render_manager_;
   std::vector<RenderAllocator> render_allocator_map_;
-
-  // NOTE(adb): Duplicating the CheckedAllocDeleter here since this header is included in
-  // multiple Cuda files. Including the checked_alloc header is currently problematic for
-  // nvcc.
-  struct HostBufferDeleter {
-    void operator()(void* p) { free(p); }
-  };
-  using HostBufPtrType = std::unique_ptr<int8_t, HostBufferDeleter>;
-  HostBufPtrType host_render_buffer_;
 };
