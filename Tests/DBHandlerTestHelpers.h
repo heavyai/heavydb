@@ -197,6 +197,12 @@ class DBHandlerTestFixture : public testing::Test {
                                                 string_leaves_,
                                                 BASE_PATH,
                                                 cpu_only,
+                                                false,
+                                                "",
+#ifdef HAVE_DCPMM
+                                                false,
+                                                "",
+#endif /* HAVE_DCPMM */
                                                 allow_multifrag,
                                                 jit_debug,
                                                 intel_jit_profile,

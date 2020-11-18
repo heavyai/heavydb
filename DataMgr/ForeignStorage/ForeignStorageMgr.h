@@ -27,14 +27,21 @@ namespace foreign_storage {
 class ForeignStorageMgr : public AbstractBufferMgr {
  public:
   ForeignStorageMgr();
-
-  AbstractBuffer* createBuffer(const ChunkKey& chunk_key,
+#ifdef HAVE_DCPMM
+  AbstractBuffer* createBuffer(BufferProperty bufProp,
+                               const ChunkKey& key,
+                               const size_t maxRows,
+                               const int sqlTypeSize,
+                               const size_t page_size) override;
+#endif /* HAVE_DCPMM */
+  AbstractBuffer* createBuffer(BufferProperty bufProp,
+                               const ChunkKey& chunk_key,
                                const size_t page_size,
                                const size_t initial_size) override;
   void deleteBuffer(const ChunkKey& chunk_key, const bool purge) override;
   void deleteBuffersWithPrefix(const ChunkKey& chunk_key_prefix,
                                const bool purge) override;
-  AbstractBuffer* getBuffer(const ChunkKey& chunk_key, const size_t num_bytes) override;
+  AbstractBuffer* getBuffer(BufferProperty bufProp, const ChunkKey& chunk_key, const size_t num_bytes) override;
   void fetchBuffer(const ChunkKey& chunk_key,
                    AbstractBuffer* destination_buffer,
                    const size_t num_bytes) override;
@@ -44,6 +51,9 @@ class ForeignStorageMgr : public AbstractBufferMgr {
   void getChunkMetadataVec(ChunkMetadataVector& chunk_metadata) override;
   void getChunkMetadataVecForKeyPrefix(ChunkMetadataVector& chunk_metadata,
                                        const ChunkKey& chunk_key_prefix) override;
+#ifdef HAVE_DCPMM
+  bool isBufferInPersistentMemory(const ChunkKey& chunk_key) override;
+#endif /* HAVE_DCPMM */
   bool isBufferOnDevice(const ChunkKey& chunk_key) override;
   std::string printSlabs() override;
   void clearSlabs() override;

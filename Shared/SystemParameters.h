@@ -53,5 +53,8 @@ struct SystemParameters {
       true;  // allow calcite to optimize the relalgebra for a view query
   size_t calcite_timeout =
       5000;  // calcite send/receive timeout (connect timeout hard coded to 2s)
+  size_t pmm_buffer_mem_bytes = 0;  // max size of Intel(R) Optane DCPMM memory reserved for CPU buffers [bytes]
+  int prof_scale_factor = 1;        // workload profile scale factor
+
   SystemParameters() : cuda_block_size(0), cuda_grid_size(0), calcite_max_mem(1024) {}
 };

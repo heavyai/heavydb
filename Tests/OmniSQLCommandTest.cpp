@@ -60,6 +60,8 @@ class CoreMockClient {
   MockMethod(get_dashboards)
   MockMethod(get_session_info)
   MockMethod(get_dashboard)
+  MockMethod(start_profiling)
+  MockMethod(stop_profiling)
 };
 // clang-format on
 

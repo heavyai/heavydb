@@ -32,6 +32,9 @@ JoinColumn JoinHashTableInterface::fetchJoinColumn(
     const std::vector<Fragmenter_Namespace::FragmentInfo>& fragment_info,
     const Data_Namespace::MemoryLevel effective_memory_level,
     const int device_id,
+#ifdef HAVE_DCPMM
+    const ExecutionOptions& eo,
+#endif /* HAVE_DCPMM */
     std::vector<std::shared_ptr<Chunk_NS::Chunk>>& chunks_owner,
     ThrustAllocator& dev_buff_owner,
     std::vector<std::shared_ptr<void>>& malloc_owner,
@@ -48,6 +51,9 @@ JoinColumn JoinHashTableInterface::fetchJoinColumn(
                                                              fragment_info,
                                                              effective_memory_level,
                                                              device_id,
+#ifdef HAVE_DCPMM
+							     eo,
+#endif /* HAVE_DCPMM */
                                                              chunks_owner,
                                                              malloc_owner,
                                                              *column_cache);
@@ -476,6 +482,9 @@ std::shared_ptr<JoinHashTableInterface> JoinHashTableInterface::getInstance(
     const Data_Namespace::MemoryLevel memory_level,
     const HashType preferred_hash_type,
     const int device_count,
+#ifdef HAVE_DCPMM
+    const ExecutionOptions& eo,
+#endif /* HAVE_DCPMM */
     ColumnCacheMap& column_cache,
     Executor* executor) {
   auto timer = DEBUG_TIMER(__func__);
@@ -488,7 +497,11 @@ std::shared_ptr<JoinHashTableInterface> JoinHashTableInterface::getInstance(
   if (qual_bin_oper->is_overlaps_oper()) {
     VLOG(1) << "Trying to build geo hash table:";
     join_hash_table = OverlapsJoinHashTable::getInstance(
+#ifdef HAVE_DCPMM
+        qual_bin_oper, query_infos, memory_level, device_count, eo, column_cache, executor);
+#else /* HAVE_DCPMM */
         qual_bin_oper, query_infos, memory_level, device_count, column_cache, executor);
+#endif /* HAVE_DCPMM */
   } else if (dynamic_cast<const Analyzer::ExpressionTuple*>(
                  qual_bin_oper->get_left_operand())) {
     VLOG(1) << "Trying to build keyed hash table:";
@@ -497,6 +510,9 @@ std::shared_ptr<JoinHashTableInterface> JoinHashTableInterface::getInstance(
                                                          memory_level,
                                                          preferred_hash_type,
                                                          device_count,
+#ifdef HAVE_DCPMM
+                                                         eo,
+#endif /* HAVE_DCPMM */
                                                          column_cache,
                                                          executor);
   } else {
@@ -507,6 +523,9 @@ std::shared_ptr<JoinHashTableInterface> JoinHashTableInterface::getInstance(
                                                    memory_level,
                                                    preferred_hash_type,
                                                    device_count,
+#ifdef HAVE_DCPMM
+                                                   eo,
+#endif /* HAVE_DCPMM */
                                                    column_cache,
                                                    executor);
     } catch (TooManyHashEntries&) {
@@ -520,6 +539,9 @@ std::shared_ptr<JoinHashTableInterface> JoinHashTableInterface::getInstance(
                                                            memory_level,
                                                            preferred_hash_type,
                                                            device_count,
+#ifdef HAVE_DCPMM
+                                                           eo,
+#endif /* HAVE_DCPMM */
                                                            column_cache,
                                                            executor);
     }
@@ -665,6 +687,9 @@ std::shared_ptr<JoinHashTableInterface> JoinHashTableInterface::getSyntheticInst
     const Data_Namespace::MemoryLevel memory_level,
     const HashType preferred_hash_type,
     const int device_count,
+#ifdef HAVE_DCPMM
+    const ExecutionOptions& eo,
+#endif /* HAVE_DCPMM */
     ColumnCacheMap& column_cache,
     Executor* executor) {
   auto a1 = getSyntheticColumnVar(table1, column1, 0, executor);
@@ -682,6 +707,9 @@ std::shared_ptr<JoinHashTableInterface> JoinHashTableInterface::getSyntheticInst
                                                         memory_level,
                                                         preferred_hash_type,
                                                         device_count,
+#ifdef HAVE_DCPMM
+                                                        eo,
+#endif /* HAVE_DCPMM */
                                                         column_cache,
                                                         executor);
   return hash_table;
@@ -693,6 +721,9 @@ std::shared_ptr<JoinHashTableInterface> JoinHashTableInterface::getSyntheticInst
     const Data_Namespace::MemoryLevel memory_level,
     const HashType preferred_hash_type,
     const int device_count,
+#ifdef HAVE_DCPMM
+    const ExecutionOptions& eo,
+#endif /* HAVE_DCPMM */
     ColumnCacheMap& column_cache,
     Executor* executor) {
   std::set<const Analyzer::ColumnVar*> cvs =
@@ -705,6 +736,9 @@ std::shared_ptr<JoinHashTableInterface> JoinHashTableInterface::getSyntheticInst
                                                         memory_level,
                                                         preferred_hash_type,
                                                         device_count,
+#ifdef HAVE_DCPMM
+                                                        eo,
+#endif /* HAVE_DCPMM */
                                                         column_cache,
                                                         executor);
   return hash_table;

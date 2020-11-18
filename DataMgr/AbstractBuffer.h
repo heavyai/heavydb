@@ -49,12 +49,18 @@ class AbstractBuffer {
   AbstractBuffer(const int device_id)
       : has_encoder(false)
       , size_(0)
+#ifdef HAVE_DCPMM
+      , max_rows_(0)
+#endif /* HAVE_DCPMM */
       , is_dirty_(false)
       , is_appended_(false)
       , is_updated_(false)
       , device_id_(device_id) {}
   AbstractBuffer(const int device_id, const SQLTypeInfo sql_type)
       : size_(0)
+#ifdef HAVE_DCPMM
+      , max_rows_(0)
+#endif /* HAVE_DCPMM */
       , is_dirty_(false)
       , is_appended_(false)
       , is_updated_(false)
@@ -122,6 +128,12 @@ class AbstractBuffer {
         << "Failed to create encoder for SQL Type " << sql_type.get_type_name();
   }
 
+#ifdef HAVE_DCPMM
+  void setMaxRows(const size_t maxRows) { max_rows_ = maxRows; }
+  size_t getMaxRows(void) { return max_rows_; }
+  int getSQLTypeSize(void) { return sql_type.get_size(); }
+#endif /* HAVE_DCPMM */
+
   void syncEncoder(const AbstractBuffer* src_buffer) {
     has_encoder = src_buffer->has_encoder;
     if (has_encoder) {
@@ -138,6 +150,9 @@ class AbstractBuffer {
 
  protected:
   size_t size_;
+#ifdef HAVE_DCPMM
+  size_t max_rows_;      // max number rows this buffer can have.
+#endif /* HAVE_DCPMM */
   bool is_dirty_;
   bool is_appended_;
   bool is_updated_;

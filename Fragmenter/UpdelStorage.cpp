@@ -112,6 +112,10 @@ static int get_chunks(const Catalog_Namespace::Catalog* catalog,
                                                chunk_key,
                                                memory_level,
                                                0,
+#ifdef HAVE_DCPMM
+					       //TODO: get real query_id
+                                               0,
+#endif /* HAVE_DCPMM */
                                                chunk_meta_it->second->numBytes,
                                                chunk_meta_it->second->numElements);
         chunks.push_back(chunk);
@@ -626,6 +630,10 @@ void InsertOrderFragmenter::updateColumn(const Catalog_Namespace::Catalog* catal
                                          chunk_key,
                                          Data_Namespace::CPU_LEVEL,
                                          0,
+#ifdef HAVE_DCPMM
+                                         //TODO: get real query_id
+                                         0,
+#endif /* HAVE_DCPMM */
                                          chunk_meta_it->second->numBytes,
                                          chunk_meta_it->second->numElements);
 
@@ -1014,6 +1022,10 @@ auto InsertOrderFragmenter::getChunksForAllColumns(
                                                chunk_key,
                                                memory_level,
                                                0,
+#ifdef HAVE_DCPMM
+                                               //TODO: get real query_id
+                                               0,
+#endif /* HAVE_DCPMM */
                                                chunk_meta_it->second->numBytes,
                                                chunk_meta_it->second->numElements);
         chunks.push_back(chunk);

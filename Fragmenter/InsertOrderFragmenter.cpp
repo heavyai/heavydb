@@ -271,6 +271,10 @@ void InsertOrderFragmenter::updateChunkStats(
                                              chunk_key,
                                              defaultInsertLevel_,
                                              0,
+#ifdef HAVE_DCPMM
+                                             //TODO: get real query_id
+                                             0,
+#endif /* HAVE_DCPMM */
                                              chunk_meta_it->second->numBytes,
                                              chunk_meta_it->second->numElements);
       auto buf = chunk->getBuffer();
@@ -408,6 +412,10 @@ void InsertOrderFragmenter::replicateData(const InsertData& insertDataStruct) {
           dataMgr_,
           chunkKey,
           defaultInsertLevel_,
+#ifdef HAVE_DCPMM
+          maxFragmentRows_,
+          colDesc->columnType.get_size(),
+#endif /* HAVE_DCPMM */
           fragmentInfo->deviceIds[static_cast<int>(defaultInsertLevel_)]);
       chunk.initEncoder();
 
@@ -681,6 +689,10 @@ FragmentInfo* InsertOrderFragmenter::createNewFragment(
         dataMgr_,
         chunkKey,
         memoryLevel,
+#ifdef HAVE_DCPMM
+        maxFragmentRows_,
+        colMapIt->second.getColumnDesc()->columnType.get_size(),
+#endif /* HAVE_DCPMM */
         newFragmentInfo->deviceIds[static_cast<int>(memoryLevel)],
         pageSize_);
     colMapIt->second.initEncoder();

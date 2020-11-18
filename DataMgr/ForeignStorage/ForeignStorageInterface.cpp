@@ -62,6 +62,7 @@ void ForeignStorageBufferMgr::checkpoint() {
 }
 
 Data_Namespace::AbstractBuffer* ForeignStorageBufferMgr::createBuffer(
+    BufferProperty bufProp,
     const ChunkKey& key,
     const size_t pageSize,
     const size_t initialSize) {
@@ -74,6 +75,7 @@ Data_Namespace::AbstractBuffer* ForeignStorageBufferMgr::createBuffer(
 }
 
 Data_Namespace::AbstractBuffer* ForeignStorageBufferMgr::getBuffer(
+    BufferProperty bufProp,
     const ChunkKey& key,
     const size_t numBytes) {
   mapd_shared_lock<mapd_shared_mutex> chunk_index_write_lock(chunk_index_mutex_);
@@ -87,7 +89,7 @@ void ForeignStorageBufferMgr::fetchBuffer(const ChunkKey& key,
                                           const size_t numBytes) {
   CHECK(numBytes);
   destBuffer->reserve(numBytes);
-  auto file_buffer = getBuffer(key, numBytes);
+  auto file_buffer = getBuffer(BufferProperty::CAPACITY, key, numBytes);
   file_buffer->read(destBuffer->getMemoryPtr(), numBytes);
   destBuffer->setSize(numBytes);
   destBuffer->syncEncoder(file_buffer);

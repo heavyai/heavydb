@@ -4,11 +4,13 @@ set(datamgr_source_files
     Chunk/Chunk.cpp
     DataMgr.cpp
     Encoder.cpp
+    Pmem.cpp
     StringNoneEncoder.cpp
     FileMgr/GlobalFileMgr.cpp
     FileMgr/FileMgr.cpp
     FileMgr/FileBuffer.cpp
     FileMgr/FileInfo.cpp
+    FileMgr/PmmPersistentBufferMgr.cpp
     ForeignStorage/ArrowCsvForeignStorage.cpp
     ForeignStorage/DummyForeignStorage.cpp
     ForeignStorage/ForeignStorageInterface.cpp
@@ -16,6 +18,8 @@ set(datamgr_source_files
     BufferMgr/GpuCudaBufferMgr/GpuCudaBuffer.cpp
     BufferMgr/CpuBufferMgr/CpuBufferMgr.cpp
     BufferMgr/CpuBufferMgr/CpuBuffer.cpp
+    BufferMgr/CpuBufferMgr/CpuHeteroBufferMgr.cpp
+    BufferMgr/CpuBufferMgr/CpuHeteroBuffer.cpp
     BufferMgr/BufferMgr.cpp
     BufferMgr/Buffer.cpp
     ForeignStorage/ForeignStorageBuffer.cpp
@@ -26,7 +30,7 @@ set(datamgr_source_files
 
 add_library(DataMgr ${datamgr_source_files})
 
-target_link_libraries(DataMgr CudaMgr Shared ${Boost_THREAD_LIBRARY})
+target_link_libraries(DataMgr CudaMgr Shared ${Boost_THREAD_LIBRARY} ${TBB_LIBS})
 
 option(ENABLE_CRASH_CORRUPTION_TEST "Enable crash using SIGUSR2 during page deletion to faster and affirmative test/repro db corruption" OFF)
 if(ENABLE_CRASH_CORRUPTION_TEST)

@@ -79,9 +79,13 @@ struct ExecutionOptions {
   const bool just_calcite_explain;
   const double gpu_input_mem_limit_percent;  // punt to CPU if input memory exceeds this
   const bool allow_runtime_query_interrupt;
+#ifdef HAVE_DCPMM
+  const unsigned long query_id;
+#endif /* HAVE_DCPMM */
   const unsigned runtime_query_interrupt_frequency;
   ExecutorType executor_type = ExecutorType::Native;
   const std::vector<size_t> outer_fragment_indices{};
+  bool multifrag_result = false;
 
   static ExecutionOptions defaults() {
     return ExecutionOptions{false,
@@ -97,7 +101,16 @@ struct ExecutionOptions {
                             false,
                             1.0,
                             false,
+#ifdef HAVE_DCPMM
+                            0, 
+#endif /* HAVE_DCPMM */
                             1000};
+  }
+
+  ExecutionOptions with_multifrag_result(bool enable = true) const {
+    ExecutionOptions eo = *this;
+    eo.multifrag_result = enable;
+    return eo;
   }
 };
 

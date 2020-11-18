@@ -18,10 +18,10 @@
 
 #include "Catalog/Catalog.h"
 
-AbstractBuffer* PersistentStorageMgr::createBuffer(const ChunkKey& chunk_key,
+AbstractBuffer* PersistentStorageMgr::createBuffer(BufferProperty bufProp, const ChunkKey& chunk_key,
                                                    const size_t page_size,
                                                    const size_t initial_size) {
-  return global_file_mgr->createBuffer(chunk_key, page_size, initial_size);
+  return global_file_mgr->createBuffer(bufProp, chunk_key, page_size, initial_size);
 }
 
 void PersistentStorageMgr::deleteBuffer(const ChunkKey& chunk_key, const bool purge) {
@@ -33,12 +33,12 @@ void PersistentStorageMgr::deleteBuffersWithPrefix(const ChunkKey& chunk_key_pre
   global_file_mgr->deleteBuffersWithPrefix(chunk_key_prefix, purge);
 }
 
-AbstractBuffer* PersistentStorageMgr::getBuffer(const ChunkKey& chunk_key,
+AbstractBuffer* PersistentStorageMgr::getBuffer(BufferProperty bufProp, const ChunkKey& chunk_key,
                                                 const size_t num_bytes) {
   if (isForeignStorage(chunk_key)) {
-    return foreign_storage_mgr->getBuffer(chunk_key, num_bytes);
+    return foreign_storage_mgr->getBuffer(bufProp, chunk_key, num_bytes);
   } else {
-    return global_file_mgr->getBuffer(chunk_key, num_bytes);
+    return global_file_mgr->getBuffer(bufProp, chunk_key, num_bytes);
   }
 }
 
@@ -72,6 +72,12 @@ void PersistentStorageMgr::getChunkMetadataVecForKeyPrefix(
     global_file_mgr->getChunkMetadataVecForKeyPrefix(chunk_metadata, keyPrefix);
   }
 }
+
+#ifdef HAVE_DCPMM
+bool PersistentStorageMgr::isBufferInPersistentMemory(const ChunkKey& chunk_key) {
+  return global_file_mgr->isBufferInPersistentMemory(chunk_key);
+}
+#endif /* HAVE_DCPMM */
 
 bool PersistentStorageMgr::isBufferOnDevice(const ChunkKey& chunk_key) {
   return global_file_mgr->isBufferOnDevice(chunk_key);

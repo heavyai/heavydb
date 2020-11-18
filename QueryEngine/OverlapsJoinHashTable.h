@@ -48,8 +48,12 @@ class OverlapsJoinHashTable : public BaselineJoinHashTable {
       const std::vector<InputTableInfo>& query_infos,
       const Data_Namespace::MemoryLevel memory_level,
       const int device_count,
+#ifdef HAVE_DCPMM
+      const ExecutionOptions& eo,
+#endif /* HAVE_DCPMM */
       ColumnCacheMap& column_cache,
       Executor* executor);
+
 
   static auto yieldCacheInvalidator() -> std::function<void()> {
     VLOG(1) << "Invalidate " << auto_tuner_cache_.size() << " cached overlaps hashtable.";
@@ -60,11 +64,18 @@ class OverlapsJoinHashTable : public BaselineJoinHashTable {
   }
 
  protected:
+#ifdef HAVE_DCPMM
+  void reifyWithLayout(const ExecutionOptions& eo, const JoinHashTableInterface::HashType layout) override;
+#else /* HAVE_DCPMM */
   void reifyWithLayout(const JoinHashTableInterface::HashType layout) override;
+#endif /* HAVE_DCPMM */
 
   std::pair<size_t, size_t> calculateCounts(
       size_t shard_count,
       const Fragmenter_Namespace::TableInfo& query_info,
+#ifdef HAVE_DCPMM
+      const ExecutionOptions& eo,
+#endif /* HAVE_DCPMM */
       std::vector<BaselineJoinHashTable::ColumnsForDevice>& columns_per_device);
 
   size_t calculateHashTableSize(size_t number_of_dimensions,
@@ -74,6 +85,9 @@ class OverlapsJoinHashTable : public BaselineJoinHashTable {
   ColumnsForDevice fetchColumnsForDevice(
       const std::vector<Fragmenter_Namespace::FragmentInfo>& fragments,
       const int device_id,
+#ifdef HAVE_DCPMM
+      const ExecutionOptions& eo,
+#endif /* HAVE_DCPMM */
       ThrustAllocator& dev_buff_owner) override;
 
   std::pair<size_t, size_t> approximateTupleCount(

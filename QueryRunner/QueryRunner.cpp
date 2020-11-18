@@ -157,7 +157,11 @@ QueryRunner::QueryRunner(const char* db_path,
   mapd_params.aggregator = !leaf_servers.empty();
 
   auto data_mgr = std::make_shared<Data_Namespace::DataMgr>(
-      data_dir.string(), mapd_params, uses_gpus, -1, 0, reserved_gpu_mem);
+      data_dir.string(), mapd_params, false, "",
+#ifdef HAVE_DCPMM
+      false, "",
+#endif /* HAVE_DCPMM */
+      uses_gpus, -1, 0, reserved_gpu_mem);
 
   auto& sys_cat = Catalog_Namespace::SysCatalog::instance();
 

@@ -85,6 +85,27 @@ class StringNoneEncoder : public Encoder {
 
   void reduceStats(const Encoder&) override { CHECK(false); }
 
+#ifdef HAVE_DCPMM
+  void writeMetadata(char *addr) override {
+    // assumes pointer is already in right place
+    char *p;
+
+    p = addr;
+    *(size_t *)p = num_elems_;
+    p = p + sizeof(size_t);
+    *(bool *)p = has_nulls;
+  }
+
+  void readMetadata(char *addr) override {
+    // assumes pointer is already in right place
+    char *p = addr;
+
+    num_elems_ = *(size_t *)p;
+    p = p + sizeof(size_t);
+    has_nulls = *(bool *)p;
+  }
+#endif /* HAVE_DCPMM */
+
   void writeMetadata(FILE* f) override {
     // assumes pointer is already in right place
     fwrite((int8_t*)&num_elems_, sizeof(size_t), 1, f);

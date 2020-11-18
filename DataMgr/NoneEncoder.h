@@ -22,6 +22,10 @@
 
 #include <Shared/DatumFetchers.h>
 
+#include <tbb/parallel_for.h>
+#include <tbb/parallel_reduce.h>
+#include <tuple>
+
 template <typename T>
 T none_encoded_null_value() {
   return std::is_integral<T>::value ? inline_int_null_value<T>()
@@ -116,17 +120,31 @@ class NoneEncoder : public Encoder {
   }
 
   void updateStats(const int8_t* const dst, const size_t numElements) override {
-    const T* unencodedData = reinterpret_cast<const T*>(dst);
-    for (size_t i = 0; i < numElements; ++i) {
-      T data = unencodedData[i];
-      if (data != none_encoded_null_value<T>()) {
-        decimal_overflow_validator_.validate(data);
-        dataMin = std::min(dataMin, data);
-        dataMax = std::max(dataMax, data);
-      } else {
-        has_nulls = true;
-      }
-    }
+    const T* data = reinterpret_cast<const T*>(dst);
+
+    std::tie(dataMin, dataMax, has_nulls) = tbb::parallel_reduce(
+        tbb::blocked_range(0UL, numElements),
+        std::tuple(dataMin, dataMax, has_nulls),
+        [&](const auto& range, auto init) {
+          auto [min, max, nulls] = init;
+          for (size_t i = range.begin(); i < range.end(); i++) {
+            if (data[i] != none_encoded_null_value<T>()) {
+              decimal_overflow_validator_.validate(data[i]);
+              min = std::min(min, data[i]);
+              max = std::max(max, data[i]);
+            } else {
+              nulls = true;
+            }
+          }
+          return std::tuple(min, max, nulls);
+        },
+        [&](auto lhs, auto rhs) {
+          const auto [lhs_min, lhs_max, lhs_nulls] = lhs;
+          const auto [rhs_min, rhs_max, rhs_nulls] = rhs;
+          return std::tuple(std::min(lhs_min, rhs_min),
+                            std::max(lhs_max, rhs_max),
+                            lhs_nulls || rhs_nulls);
+        });
   }
 
   // Only called from the executor for synthesized meta-information.
@@ -139,6 +157,34 @@ class NoneEncoder : public Encoder {
     dataMax = std::max(dataMax, that_typed.dataMax);
   }
 
+#ifdef HAVE_DCPMM
+  void writeMetadata(char *addr) override {
+    // assumes pointer is already in right place
+    char *p;
+
+    p = addr;
+    *(size_t *)p = num_elems_;
+    p = p + sizeof(size_t);
+    *(T *)p = dataMin;
+    p = p + sizeof(T);
+     *(T *)p = dataMax;
+    p = p + sizeof(T);
+    *(bool *)p = has_nulls;
+  }
+
+  void readMetadata(char *addr) override {
+    // assumes pointer is already in right place
+    char *p = addr;
+
+    num_elems_ = *(size_t *)p;
+    p = p + sizeof(size_t);
+    dataMin = *(T *)p;
+    p = p + sizeof(T);
+    dataMax = *(T *)p;
+    p = p + sizeof(T);
+    has_nulls = *(bool *)p;
+  }
+#endif /* HAVE_DCPMM */
   void writeMetadata(FILE* f) override {
     // assumes pointer is already in right place
     fwrite((int8_t*)&num_elems_, sizeof(size_t), 1, f);

@@ -340,6 +340,9 @@ std::shared_ptr<JoinHashTable> JoinHashTable::getInstance(
     const Data_Namespace::MemoryLevel memory_level,
     const HashType preferred_hash_type,
     const int device_count,
+#ifdef HAVE_DCPMM
+    const ExecutionOptions& eo,
+#endif /* HAVE_DCPMM */
     ColumnCacheMap& column_cache,
     Executor* executor) {
   decltype(std::chrono::steady_clock::now()) ts1, ts2;
@@ -394,6 +397,17 @@ std::shared_ptr<JoinHashTable> JoinHashTable::getInstance(
     throw TooManyHashEntries();
   }
 
+  // We don't want to build huge and very sparse tables
+  // to consume lots of memory.
+  if (bucketized_entry_count > 1000000) {
+    const auto& query_info =
+        get_inner_query_info(inner_col->get_table_id(), query_infos).info;
+    if (query_info.getNumTuplesUpperBound() * 100 <
+        huge_join_hash_min_load_ * bucketized_entry_count) {
+      throw TooManyHashEntries();
+    }
+  }
+
   if (qual_bin_oper->get_optype() == kBW_EQ &&
       col_range.getIntMax() >= std::numeric_limits<int64_t>::max()) {
     throw HashJoinFail("Cannot translate null value for kBW_EQ");
@@ -409,7 +423,11 @@ std::shared_ptr<JoinHashTable> JoinHashTable::getInstance(
                                                        executor,
                                                        device_count));
   try {
+#ifdef HAVE_DCPMM
+    join_hash_table->reify(eo);
+#else /* HAVE_DCPMM */
     join_hash_table->reify();
+#endif /* HAVE_DCPMM */
   } catch (const TableMustBeReplicated& e) {
     // Throw a runtime error to abort the query
     join_hash_table->freeHashBufferMemory();
@@ -489,7 +507,11 @@ std::vector<Fragmenter_Namespace::FragmentInfo> only_shards_for_device(
   return shards_for_device;
 }
 
+#ifdef HAVE_DCPMM
+void JoinHashTable::reify(const ExecutionOptions& eo) {
+#else /* HAVE_DCPMM */
 void JoinHashTable::reify() {
+#endif /* HAVE_DCPMM */
   auto timer = DEBUG_TIMER(__func__);
   CHECK_LT(0, device_count_);
   const auto& catalog = *executor_->getCatalog();
@@ -525,6 +547,9 @@ void JoinHashTable::reify() {
                      this,
                      fragments,
                      device_id,
+#ifdef HAVE_DCPMM
+		                 eo,
+#endif /* HAVE_DCPMM */
                      logger::thread_id()));
     }
     for (auto& init_thread : init_threads) {
@@ -549,6 +574,9 @@ void JoinHashTable::reify() {
                                         this,
                                         fragments,
                                         device_id,
+#ifdef HAVE_DCPMM
+		                        eo,
+#endif /* HAVE_DCPMM */
                                         logger::thread_id()));
     }
     for (auto& init_thread : init_threads) {
@@ -588,6 +616,9 @@ ChunkKey JoinHashTable::genHashTableKey(
 void JoinHashTable::reifyOneToOneForDevice(
     const std::vector<Fragmenter_Namespace::FragmentInfo>& fragments,
     const int device_id,
+#ifdef HAVE_DCPMM
+    const ExecutionOptions& eo,
+#endif /* HAVE_DCPMM */
     const logger::ThreadId parent_thread_id) {
   DEBUG_TIMER_NEW_THREAD(parent_thread_id);
   const auto& catalog = *executor_->getCatalog();
@@ -627,6 +658,9 @@ void JoinHashTable::reifyOneToOneForDevice(
                                            fragments,
                                            effective_memory_level,
                                            device_id,
+#ifdef HAVE_DCPMM
+                                           eo,
+#endif /* HAVE_DCPMM */
                                            chunks_owner,
                                            dev_buff_owner,
                                            malloc_owner,
@@ -643,6 +677,9 @@ void JoinHashTable::reifyOneToOneForDevice(
 void JoinHashTable::reifyOneToManyForDevice(
     const std::vector<Fragmenter_Namespace::FragmentInfo>& fragments,
     const int device_id,
+#ifdef HAVE_DCPMM
+    const ExecutionOptions& eo,
+#endif /* HAVE_DCPMM */
     const logger::ThreadId parent_thread_id) {
   DEBUG_TIMER_NEW_THREAD(parent_thread_id);
   const auto& catalog = *executor_->getCatalog();
@@ -680,6 +717,9 @@ void JoinHashTable::reifyOneToManyForDevice(
                                            fragments,
                                            effective_memory_level,
                                            device_id,
+#ifdef HAVE_DCPMM
+                                           eo,
+#endif /* HAVE_DCPMM */
                                            chunks_owner,
                                            dev_buff_owner,
                                            malloc_owner,

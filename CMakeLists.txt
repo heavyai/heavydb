@@ -11,6 +11,8 @@ if("${CMAKE_VERSION}" VERSION_GREATER 3.11.999)
   cmake_policy(SET CMP0074 NEW)
 endif()
 
+link_libraries(z) # workaround to fix linking error with libz
+
 find_program(CCACHE_EXE ccache)
 if(CCACHE_EXE)
   set_property(GLOBAL PROPERTY RULE_LAUNCH_COMPILE "${CCACHE_EXE}")
@@ -92,6 +94,14 @@ set(Boost_NO_BOOST_CMAKE 1)
 option(ENABLE_JAVA_REMOTE_DEBUG "Enable Java Remote Debug" OFF )
 if(ENABLE_JAVA_REMOTE_DEBUG)
   add_definitions("-DENABLE_JAVA_REMOTE_DEBUG")
+endif()
+
+option(ENABLE_DCPMM "Enable DCPMM support" OFF)
+if(ENABLE_DCPMM)
+  add_definitions("-DHAVE_DCPMM")
+  set(MEMKIND_REQUIRED_VERSION 1.8.0)
+  find_package(PkgConfig QUIET)
+  pkg_check_modules(memkind REQUIRED memkind>=${MEMKIND_REQUIRED_VERSION})
 endif()
 
 option(ENABLE_CUDA "Enable CUDA support" ON)
@@ -496,6 +506,7 @@ add_subdirectory(QueryRunner)
 add_subdirectory(SQLFrontend)
 add_subdirectory(TableArchiver)
 add_subdirectory(ThriftHandler)
+add_subdirectory(HeteroMem)
 
 add_subdirectory(Distributed)
 
@@ -508,7 +519,7 @@ if(ENABLE_ODBC)
   add_subdirectory(ODBC)
 endif()
 
-set(MAPD_LIBRARIES Shared Catalog SqliteConnector MigrationMgr TableArchiver Parser Analyzer CsvImport QueryRunner QueryEngine QueryState LockMgr DataMgr Fragmenter)
+set(MAPD_LIBRARIES Shared Catalog SqliteConnector MigrationMgr TableArchiver Parser Analyzer CsvImport QueryRunner QueryEngine QueryState LockMgr DataMgr Fragmenter HeteroMem)
 
 if("${MAPD_EDITION_LOWER}" STREQUAL "ee")
   list(APPEND MAPD_LIBRARIES Distributed)
@@ -618,9 +629,9 @@ add_custom_target(rerun_cmake ALL
   )
 add_dependencies(omnisci_server rerun_cmake)
 
-target_link_libraries(omnisci_server mapd_thrift thrift_handler ${MAPD_LIBRARIES} ${Boost_LIBRARIES} ${CMAKE_DL_LIBS} ${CUDA_LIBRARIES} ${PROFILER_LIBS} ${ZLIB_LIBRARIES} ${LOCALE_LINK_FLAG})
+target_link_libraries(omnisci_server mapd_thrift thrift_handler ${MAPD_LIBRARIES} ${Boost_LIBRARIES} ${CMAKE_DL_LIBS} ${CUDA_LIBRARIES} ${PROFILER_LIBS} ${ZLIB_LIBRARIES} ${LOCALE_LINK_FLAG} ${memkind_LIBRARIES})
 
-target_link_libraries(initdb mapd_thrift DataMgr ${MAPD_LIBRARIES} ${Boost_LIBRARIES} ${CMAKE_DL_LIBS} ${CUDA_LIBRARIES} ${ZLIB_LIBRARIES})
+target_link_libraries(initdb mapd_thrift DataMgr ${MAPD_LIBRARIES} ${Boost_LIBRARIES} ${CMAKE_DL_LIBS} ${CUDA_LIBRARIES} ${ZLIB_LIBRARIES} ${memkind_LIBRARIES})
 
 macro(set_dpkg_arch arch_in arch_out)
   if("${arch_in}" STREQUAL "x86_64")

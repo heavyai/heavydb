@@ -189,6 +189,10 @@ StorageIOFacility<EXECUTOR_TRAITS, FRAGMENT_UPDATER>::yieldUpdateCallback(
                                              chunk_key,
                                              Data_Namespace::MemoryLevel::CPU_LEVEL,
                                              0,
+#ifdef HAVE_DCPMM
+                                             //TODO: get real query_id
+                                             0,
+#endif /* HAVE_DCPMM */
                                              chunk_metadata->second->numBytes,
                                              chunk_metadata->second->numElements);
       CHECK(chunk);
@@ -390,6 +394,10 @@ StorageIOFacility<EXECUTOR_TRAITS, FRAGMENT_UPDATER>::yieldDeleteCallback(
                                              chunk_key,
                                              Data_Namespace::MemoryLevel::CPU_LEVEL,
                                              0,
+#ifdef HAVE_DCPMM
+                                             //TODO: get the real query_id
+                                             0,
+#endif /* HAVE_DCPMM */
                                              chunk_metadata->second->numBytes,
                                              chunk_metadata->second->numElements);
       CHECK(chunk);

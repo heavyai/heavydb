@@ -117,6 +117,38 @@ class FixedLengthArrayNoneEncoder : public Encoder {
     CHECK(false);
   }
 
+#ifdef HAVE_DCPMM
+  void writeMetadata(char *addr) override {
+    // assumes pointer is already in right place
+    char *p;
+
+    p = addr;
+    *(size_t *)p = num_elems_;
+    p = p + sizeof(size_t);
+    *(Datum *)p = elem_min;
+    p = p + sizeof(Datum);
+     *(Datum *)p = elem_max;
+    p = p + sizeof(Datum);
+    *(bool *)p = has_nulls;
+    p = p + sizeof(bool);
+    *(bool *)p = initialized;
+  }
+
+  void readMetadata(char *addr) override {
+    // assumes pointer is already in right place
+    char *p = addr;
+
+    num_elems_ = *(size_t *)p;
+    p = p + sizeof(size_t);
+    elem_min = *(Datum *)p;
+    p = p + sizeof(Datum);
+    elem_max = *(Datum *)p;
+    p = p + sizeof(Datum);
+    has_nulls = *(bool *)p;
+    p = p + sizeof(bool);
+    initialized = *(bool *)p;
+  }
+#endif /* HAVE_DCPMM */
   void writeMetadata(FILE* f) override {
     // assumes pointer is already in right place
     fwrite((int8_t*)&num_elems_, sizeof(size_t), 1, f);

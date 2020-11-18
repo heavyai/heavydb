@@ -82,6 +82,7 @@ extern size_t g_min_memory_allocation_size;
 extern bool g_enable_experimental_string_functions;
 extern bool g_enable_table_functions;
 extern bool g_enable_fsi;
+extern bool g_enable_lazy_fetch;
 extern bool g_enable_interop;
 extern bool g_enable_union;
 extern bool g_use_tbb_pool;
@@ -284,6 +285,12 @@ class MapDProgramOptions {
   std::string cluster_topology_file = {"cluster_topology.conf"};
   std::string license_path = {""};
   bool cpu_only = false;
+  std::string pmm_path = {""};  // DCPMM for cold columns
+  bool pmm = false;
+#ifdef HAVE_DCPMM
+  std::string pmm_store_path = {""};    // DCPMM for storage
+  bool pmm_store = false;
+#endif /* HAVE_DCPMM */
   bool verbose_logging = false;
   bool jit_debug = false;
   bool intel_jit_profile = false;
@@ -410,6 +417,19 @@ void MapDProgramOptions::fillOptions() {
                           po::value<size_t>(&mapd_parameters.cpu_buffer_mem_bytes)
                               ->default_value(mapd_parameters.cpu_buffer_mem_bytes),
                           "Size of memory reserved for CPU buffers, in bytes.");
+#ifdef HAVE_DCPMM
+  help_desc.add_options()("pmm-store",
+                          po::value<std::string>(&pmm_store_path),
+                          "Path to file containing Intel(R) DCPMM mount points for storage");
+#endif /* HAVE_DCPMM */
+  help_desc.add_options()("pmm",
+                          po::value<std::string>(&pmm_path),
+                          "Path to directory containing Intel(R) DCPMM mount points for cold columns");
+  help_desc.add_options()("profile-scale-factor",
+                          po::value<int>(&mapd_parameters.prof_scale_factor)
+                              ->default_value(mapd_parameters.prof_scale_factor),
+                          "Workload profile scale factor");
+
   help_desc.add_options()(
       "cpu-only",
       po::value<bool>(&cpu_only)->default_value(cpu_only)->implicit_value(true),
@@ -834,11 +854,22 @@ void MapDProgramOptions::fillAdvancedOptions() {
       po::value<std::string>(&udf_file_name),
       "Load user defined extension functions from this file at startup. The file is "
       "expected to be a C/C++ file with extension .cpp.");
+  developer_desc.add_options()("enable-lazy-fetch",
+                               po::value<bool>(&g_enable_lazy_fetch)
+                                   ->default_value(g_enable_lazy_fetch)
+                                   ->implicit_value(true),
+                               "Enable lazy fetch columns in ResultSets");
 
   developer_desc.add_options()(
       "udf-compiler-path",
       po::value<std::string>(&udf_compiler_path),
       "Provide absolute path to clang++ used in udf compilation.");
+
+  developer_desc.add_options()("enable-multifrag-rs",
+                               po::value<bool>(&g_enable_multifrag_rs)
+                                   ->default_value(g_enable_multifrag_rs)
+                                   ->implicit_value(true),
+                               "Enable multifragment intermediate result sets");
 
   developer_desc.add_options()(
       "udf-compiler-options",
@@ -1039,6 +1070,26 @@ boost::optional<int> MapDProgramOptions::parse_command_line(
     return 1;
   }
 
+  boost::algorithm::trim_if(pmm_path, boost::is_any_of("\"'"));
+  if (pmm_path.length() > 0) {
+    if (!boost::filesystem::exists(pmm_path)) {
+      LOG(FATAL) << "File " <<  pmm_path << " does not exist" << std::endl;
+      return 1;
+    }
+
+    pmm = true;
+  }
+#ifdef HAVE_DCPMM
+  boost::algorithm::trim_if(pmm_store_path, boost::is_any_of("\"'"));
+  if (pmm_store_path.length() >0) {
+    if (!boost::filesystem::exists(pmm_store_path)) {
+      LOG(FATAL) << "File " <<  pmm_store_path << " does not exist" << std::endl;
+      return 1;
+    }
+    pmm_store = true;
+  }
+#endif /* HAVE_DCPMM */
+
   if (!g_from_table_reordering) {
     LOG(INFO) << " From clause table reordering is disabled";
   }
@@ -1212,6 +1263,12 @@ int startMapdServer(MapDProgramOptions& prog_config_opts, bool start_http_server
                                      prog_config_opts.string_leaves,
                                      prog_config_opts.base_path,
                                      prog_config_opts.cpu_only,
+                                     prog_config_opts.pmm,
+                                     prog_config_opts.pmm_path,
+#ifdef HAVE_DCPMM
+                                     prog_config_opts.pmm_store,
+                                     prog_config_opts.pmm_store_path,
+#endif /* HAVE_DCPMM */
                                      prog_config_opts.allow_multifrag,
                                      prog_config_opts.jit_debug,
                                      prog_config_opts.intel_jit_profile,

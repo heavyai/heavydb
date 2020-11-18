@@ -236,6 +236,9 @@ std::vector<JoinLoop> Executor::buildJoinLoops(
         buildCurrentLevelHashTable(current_level_join_conditions,
                                    ra_exe_unit,
                                    co,
+#ifdef HAVE_DCPMM
+                                   eo,
+#endif /* HAVE_DCPMM */
                                    query_infos,
                                    column_cache,
                                    fail_reasons);
@@ -404,6 +407,9 @@ std::shared_ptr<JoinHashTableInterface> Executor::buildCurrentLevelHashTable(
     const JoinCondition& current_level_join_conditions,
     RelAlgExecutionUnit& ra_exe_unit,
     const CompilationOptions& co,
+#ifdef HAVE_DCPMM
+    const ExecutionOptions& eo,
+#endif /* HAVE_DCPMM */
     const std::vector<InputTableInfo>& query_infos,
     ColumnCacheMap& column_cache,
     std::vector<std::string>& fail_reasons) {
@@ -429,6 +435,9 @@ std::shared_ptr<JoinHashTableInterface> Executor::buildCurrentLevelHashTable(
           query_infos,
           co.device_type == ExecutorDeviceType::GPU ? MemoryLevel::GPU_LEVEL
                                                     : MemoryLevel::CPU_LEVEL,
+#ifdef HAVE_DCPMM
+          eo,
+#endif /* HAVE_DCPMM */
           JoinHashTableInterface::HashType::OneToOne,
           column_cache);
       current_level_hash_table = hash_table_or_error.hash_table;

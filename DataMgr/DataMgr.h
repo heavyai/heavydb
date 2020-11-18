@@ -95,12 +95,30 @@ class ProcMeminfoParser {
   auto end() { return items_.end(); }
 };
 
+
+struct BufferDescriptor {
+  enum Hotness {
+    Cold,
+    SoftHot,
+    Hot
+  };
+
+  Hotness hotness_;
+  bool isIndex;
+};
+
 class DataMgr {
   friend class GlobalFileMgr;
 
  public:
   DataMgr(const std::string& dataDir,
           const SystemParameters& system_parameters,
+          const bool pmm,
+          const std::string& pmm_path,
+#ifdef HAVE_DCPMM
+          const bool pmm_store,
+          const std::string& pmm_store_path,
+#endif /* HAVE_DCPMM */
           const bool useGpus,
           const int numGpus,
           const int startGpu = 0,
@@ -108,11 +126,28 @@ class DataMgr {
           const size_t numReaderThreads =
               0); /* 0 means use default for # of reader threads */
   ~DataMgr();
-  AbstractBuffer* createChunkBuffer(const ChunkKey& key,
+#ifdef HAVE_DCPMM
+  AbstractBuffer* createChunkBuffer(BufferDescriptor bd,
+                                    const ChunkKey& key,
+                                    const MemoryLevel memoryLevel,
+                                    const size_t maxRows,
+                                    const size_t sqlTypeSize,
+                                    const int deviceId,
+                                    const size_t page_size);
+  AbstractBuffer* getChunkBuffer(BufferDescriptor bd,
+                                 const ChunkKey& key,
+                                 const MemoryLevel memoryLevel,
+                                 const unsigned long query_id,
+                                 const int deviceId,
+                                 const size_t numBytes);
+#endif /* HAVE_DCPMM */
+  AbstractBuffer* createChunkBuffer(BufferDescriptor bd,
+                                    const ChunkKey& key,
                                     const MemoryLevel memoryLevel,
                                     const int deviceId = 0,
                                     const size_t page_size = 0);
-  AbstractBuffer* getChunkBuffer(const ChunkKey& key,
+  AbstractBuffer* getChunkBuffer(BufferDescriptor bd,
+                                 const ChunkKey& key,
                                  const MemoryLevel memoryLevel,
                                  const int deviceId = 0,
                                  const size_t numBytes = 0);
@@ -125,6 +160,11 @@ class DataMgr {
   void freeAllBuffers();
   // copies one buffer to another
   void copy(AbstractBuffer* destBuffer, AbstractBuffer* srcBuffer);
+#ifdef HAVE_DCPMM
+  bool isBufferInPersistentMemory(const ChunkKey& key,
+                                  const MemoryLevel memLevel,
+                                  const int deviceId);
+#endif /* HAVE_DCPMM */
   bool isBufferOnDevice(const ChunkKey& key,
                         const MemoryLevel memLevel,
                         const int deviceId);
@@ -147,6 +187,17 @@ class DataMgr {
   CudaMgr_Namespace::CudaMgr* getCudaMgr() const { return cudaMgr_.get(); }
   File_Namespace::GlobalFileMgr* getGlobalFileMgr() const;
 
+
+  int getProfileScaleFactor(void) { return profSF_; }
+  size_t getPeakVmSize(void);
+  void startCollectingStatistics(void);
+  void stopCollectingStatistics(std::map<unsigned long, long>& _query_time);
+  size_t estimateDramRecommended(int percentDramPerf);
+  inline bool pmmPresent(void) { return hasPmm_; }
+#ifdef HAVE_DCPMM
+  inline bool pmmStorePresent(void) { return hasPmmStore_; }
+#endif /* HAVE_DCPMM */
+
   // database_id, table_id, column_id, fragment_id
   std::vector<int> levelSizes_;
 
@@ -164,6 +215,10 @@ class DataMgr {
 
  private:
   void populateMgrs(const SystemParameters& system_parameters,
+                    const std::string& pmm_path,
+#ifdef HAVE_DCPMM
+                    const std::string& pmm_store_path,
+#endif /* HAVE_DCPMM */
                     const size_t userSpecifiedNumReaderThreads);
   void convertDB(const std::string basePath);
   void checkpoint();  // checkpoint for whole DB, called from convertDB proc only
@@ -176,6 +231,16 @@ class DataMgr {
   size_t reservedGpuMem_;
   std::map<ChunkKey, std::shared_ptr<mapd_shared_mutex>> chunkMutexMap_;
   mapd_shared_mutex chunkMutexMapMutex_;
+  bool hasPmm_;
+  int profSF_;
+  std::map<unsigned long, std::map<ChunkKey, size_t>> chunkFetchStats_; // how many times each chunk fetched in each query
+  std::map<unsigned long, std::map<ChunkKey, size_t>> chunkFetchDataSizeStats_; // how much data of each chunk fetched in each query
+  std::mutex chunkFetchStatsMutex_;
+  bool statisticsOn_;
+#ifdef HAVE_DCPMM
+  bool hasPmmStore_;
+  
+#endif /* HAVE_DCPMM */
 };
 
 std::ostream& operator<<(std::ostream& os, const DataMgr::SystemMemoryUsage&);
