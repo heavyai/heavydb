@@ -64,6 +64,9 @@ ChunkAccessorTable getChunkAccessorTable(const Catalog_Namespace::Catalog& cat,
                                     chunkKey,
                                     Data_Namespace::CPU_LEVEL,
                                     0,
+#ifdef HAVE_DCPMM
+                                    0,
+#endif /* HAVE_DCPMM */
                                     chunkMetaIt->second->numBytes,
                                     chunkMetaIt->second->numElements);
       CHECK(chunk);

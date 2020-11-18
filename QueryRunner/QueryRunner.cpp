@@ -150,6 +150,10 @@ QueryRunner::QueryRunner(const char* db_path,
 
   auto data_mgr = std::make_shared<Data_Namespace::DataMgr>(data_dir.string(),
                                                             mapd_params,
+                                                            false, "",
+#ifdef HAVE_DCPMM
+      false, "",
+#endif /* HAVE_DCPMM */
                                                             uses_gpus,
                                                             -1,
                                                             0,

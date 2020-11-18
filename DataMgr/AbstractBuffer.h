@@ -50,13 +50,20 @@ class AbstractBuffer {
       : encoder_(nullptr)
       , size_(0)
       , device_id_(device_id)
+#ifdef HAVE_DCPMM
+      , max_rows_(0)
+#endif /* HAVE_DCPMM */
       , is_dirty_(false)
       , is_appended_(false)
-      , is_updated_(false) {}
+      , is_updated_(false) {
+  }
 
   AbstractBuffer(const int device_id, const SQLTypeInfo sql_type)
       : size_(0)
       , device_id_(device_id)
+#ifdef HAVE_DCPMM
+      , max_rows_(0)
+#endif /* HAVE_DCPMM */
       , is_dirty_(false)
       , is_appended_(false)
       , is_updated_(false) {
@@ -128,6 +135,11 @@ class AbstractBuffer {
   void copyTo(AbstractBuffer* destination_buffer, const size_t num_bytes = 0);
   void resetToEmpty();
 
+#ifdef HAVE_DCPMM void setMaxRows(const size_t maxRows){max_rows_ = maxRows; }
+  size_t getMaxRows(void) { return max_rows_; }
+  int getSQLTypeSize(void) { return sql_type.get_size(); }
+#endif /* HAVE_DCPMM */
+
  protected:
   std::unique_ptr<Encoder> encoder_;
   SQLTypeInfo sql_type_;
@@ -135,6 +147,9 @@ class AbstractBuffer {
   int device_id_;
 
  private:
+#ifdef HAVE_DCPMM
+  size_t max_rows_;  // max number rows this buffer can have.
+#endif               /* HAVE_DCPMM */
   bool is_dirty_;
   bool is_appended_;
   bool is_updated_;

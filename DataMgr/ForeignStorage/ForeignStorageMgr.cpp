@@ -24,7 +24,8 @@
 namespace foreign_storage {
 ForeignStorageMgr::ForeignStorageMgr() : AbstractBufferMgr(0), data_wrapper_map_({}) {}
 
-AbstractBuffer* ForeignStorageMgr::getBuffer(const ChunkKey& chunk_key,
+AbstractBuffer* ForeignStorageMgr::getBuffer(BufferProperty bufProp,
+                                             const ChunkKey& chunk_key,
                                              const size_t num_bytes) {
   UNREACHABLE();
   return nullptr;  // Added to avoid "no return statement" compiler warning
@@ -180,6 +181,13 @@ void ForeignStorageMgr::deleteBuffersWithPrefix(const ChunkKey& chunk_key_prefix
   UNREACHABLE();
 }
 
+#ifdef HAVE_DCPMM
+bool ForeignStorageMgr::isBufferInPersistentMemory(const ChunkKey& chunk_key) {
+  UNREACHABLE();
+  return false;  // Added to avoid "no return statement" compiler warning
+}
+#endif /* HAVE_DCPMM */
+
 bool ForeignStorageMgr::isBufferOnDevice(const ChunkKey& chunk_key) {
   UNREACHABLE();
   return false;  // Added to avoid "no return statement" compiler warning
@@ -190,7 +198,19 @@ size_t ForeignStorageMgr::getNumChunks() {
   return 0;  // Added to avoid "no return statement" compiler warning
 }
 
-AbstractBuffer* ForeignStorageMgr::createBuffer(const ChunkKey& chunk_key,
+#ifdef HAVE_DCPMM
+AbstractBuffer* ForeignStorageMgr::createBuffer(BufferProperty bufProp,
+                                                const ChunkKey& key,
+                                                const size_t maxRows,
+                                                const int sqlTypeSize,
+                                                const size_t page_size) {
+  UNREACHABLE();
+  return nullptr;  // Added to avoid "no return statement" compiler warning
+}
+#endif /* HAVE_DCPMM */
+
+AbstractBuffer* ForeignStorageMgr::createBuffer(BufferProperty bufProp,
+                                                const ChunkKey& chunk_key,
                                                 const size_t page_size,
                                                 const size_t initial_size) {
   UNREACHABLE();

@@ -39,6 +39,9 @@ std::shared_ptr<BaselineJoinHashTable> BaselineJoinHashTable::getInstance(
     const Data_Namespace::MemoryLevel memory_level,
     const HashType preferred_hash_type,
     const int device_count,
+#ifdef HAVE_DCPMM
+    const ExecutionOptions& eo,
+#endif /* HAVE_DCPMM */
     ColumnCacheMap& column_cache,
     Executor* executor) {
   decltype(std::chrono::steady_clock::now()) ts1, ts2;
@@ -74,7 +77,11 @@ std::shared_ptr<BaselineJoinHashTable> BaselineJoinHashTable::getInstance(
                                                                        device_count));
   join_hash_table->checkHashJoinReplicationConstraint(getInnerTableId(inner_outer_pairs));
   try {
+#ifdef HAVE_DCPMM
+    join_hash_table->reify(preferred_hash_type, eo);
+#else /* HAVE_DCPMM */
     join_hash_table->reify(preferred_hash_type);
+#endif /* HAVE_DCPMM */
   } catch (const TableMustBeReplicated& e) {
     // Throw a runtime error to abort the query
     join_hash_table->freeHashBufferMemory();
@@ -289,8 +296,13 @@ CompositeKeyInfo BaselineJoinHashTable::getCompositeKeyInfo() const {
   return {sd_inner_proxy_per_key, sd_outer_proxy_per_key, cache_key_chunks};
 }
 
+#ifdef HAVE_DCPMM
+void BaselineJoinHashTable::reify(const JoinHashTableInterface::HashType preferred_layout,
+                                  const ExecutionOptions& eo) {
+#else /* HAVE_DCPMM */
 void BaselineJoinHashTable::reify(
     const JoinHashTableInterface::HashType preferred_layout) {
+#endif /* HAVE_DCPMM */
   auto timer = DEBUG_TIMER(__func__);
   CHECK_LT(0, device_count_);
   const auto composite_key_info = getCompositeKeyInfo();
@@ -307,7 +319,11 @@ void BaselineJoinHashTable::reify(
       layout = JoinHashTableInterface::HashType::OneToMany;
     }
     try {
+#ifdef HAVE_DCPMM
+      reifyWithLayout(eo, layout);
+#else /* HAVE_DCPMM */
       reifyWithLayout(layout);
+#endif /* HAVE_DCPMM */
       return;
     } catch (const std::exception& e) {
       VLOG(1) << "Caught exception while building overlaps baseline hash table: "
@@ -317,17 +333,28 @@ void BaselineJoinHashTable::reify(
   }
 
   try {
+#ifdef HAVE_DCPMM
+    reifyWithLayout(eo, layout);
+#else /* HAVE_DCPMM */
     reifyWithLayout(layout);
+#endif /* HAVE_DCPMM */
   } catch (const std::exception& e) {
     VLOG(1) << "Caught exception while building baseline hash table: " << e.what();
     freeHashBufferMemory();
     HashTypeCache::set(composite_key_info.cache_key_chunks,
                        JoinHashTableInterface::HashType::OneToMany);
+#ifdef HAVE_DCPMM
+    reifyWithLayout(eo, JoinHashTableInterface::HashType::OneToMany);
+#else /* HAVE_DCPMM */
     reifyWithLayout(JoinHashTableInterface::HashType::OneToMany);
+#endif /* HAVE_DCPMM */
   }
 }
 
 void BaselineJoinHashTable::reifyWithLayout(
+#ifdef HAVE_DCPMM
+    const ExecutionOptions& eo,
+#endif /* HAVE_DCPMM */
     const JoinHashTableInterface::HashType layout) {
   const auto& query_info = get_inner_query_info(getInnerTableId(), query_infos_).info;
   if (query_info.fragments.empty()) {
@@ -348,11 +375,20 @@ void BaselineJoinHashTable::reifyWithLayout(
             ? only_shards_for_device(query_info.fragments, device_id, device_count_)
             : query_info.fragments;
     const auto columns_for_device =
+#ifdef HAVE_DCPMM
+        fetchColumnsForDevice(fragments,
+                              device_id,
+                              eo,
+                              memory_level_ == Data_Namespace::MemoryLevel::GPU_LEVEL
+                                  ? dev_buff_owners[device_id].get()
+                                  : nullptr);
+#else
         fetchColumnsForDevice(fragments,
                               device_id,
                               memory_level_ == Data_Namespace::MemoryLevel::GPU_LEVEL
                                   ? dev_buff_owners[device_id].get()
                                   : nullptr);
+#endif
     columns_per_device.push_back(columns_for_device);
   }
   if (layout == JoinHashTableInterface::HashType::OneToMany) {
@@ -504,6 +540,9 @@ std::pair<size_t, size_t> BaselineJoinHashTable::approximateTupleCount(
 BaselineJoinHashTable::ColumnsForDevice BaselineJoinHashTable::fetchColumnsForDevice(
     const std::vector<Fragmenter_Namespace::FragmentInfo>& fragments,
     const int device_id,
+#ifdef HAVE_DCPMM
+    const ExecutionOptions& eo,
+#endif /* HAVE_DCPMM */
     DeviceAllocator* dev_buff_owner) {
   const auto effective_memory_level = getEffectiveMemoryLevel(inner_outer_pairs_);
 
@@ -523,6 +562,9 @@ BaselineJoinHashTable::ColumnsForDevice BaselineJoinHashTable::fetchColumnsForDe
                                               fragments,
                                               effective_memory_level,
                                               device_id,
+#ifdef HAVE_DCPMM
+                                              eo,
+#endif /* HAVE_DCPMM */
                                               chunks_owner,
                                               dev_buff_owner,
                                               malloc_owner,
@@ -861,7 +903,8 @@ llvm::Value* BaselineJoinHashTable::codegenKey(const CompilationOptions& co) {
             get_max_rte_scan_table(executor_->cgen_state_->scan_idx_to_hash_pos_))) {
       throw std::runtime_error(
           "Query execution fails because the query contains not supported self-join "
-          "pattern. We suspect the query requires multiple left-deep join tree due to "
+          "pattern. We suspect the query requires multiple left-deep join tree due "
+          "to "
           "the join condition of the self-join and is not supported for now. Please "
           "consider rewriting table order in "
           "FROM clause.");

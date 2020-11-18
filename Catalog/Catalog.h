@@ -145,6 +145,12 @@ class Catalog final {
 
   const std::map<int, const ColumnDescriptor*> getDictionaryToColumnMapping();
 
+  void setSoftHotColumns(int sf);
+  void setColumnHot(const TableDescriptor *td, ColumnDescriptor *cd);
+  void setColumnCold(const TableDescriptor *td, ColumnDescriptor *cd);
+  void storeDataMgrStatistics(int tableId, int colId, size_t chunksFetched, size_t uniqueChunksFetched, size_t chunkDataFetched);
+  void clearDataMgrStatistics(void);
+
   /**
    * @brief Returns a pointer to a const TableDescriptor struct matching
    * the provided tableName

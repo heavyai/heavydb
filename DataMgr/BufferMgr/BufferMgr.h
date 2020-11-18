@@ -128,9 +128,29 @@ class BufferMgr : public AbstractBufferMgr {  // implements
   const std::vector<BufferList>& getSlabSegments();
 
   /// Creates a chunk with the specified key and page size.
-  AbstractBuffer* createBuffer(const ChunkKey& key,
+  AbstractBuffer* createBuffer(BufferProperty bufProp,
+                               const ChunkKey& key,
                                const size_t page_size = 0,
                                const size_t initial_size = 0) override;
+
+#ifdef HAVE_DCPMM
+  // back fill max_buffer_size_ and max_num_pages_
+  void setMaxBufferSizeAndNumOfPages(size_t max_buffer_size) {
+        max_buffer_size_ = max_buffer_size;
+        max_num_pages_ = max_buffer_size_ / page_size_;
+  }
+
+  AbstractBuffer* createBuffer(BufferProperty bufProp,
+                               const ChunkKey& key,
+                               const size_t maxRows,
+                               const int sqlTypeSize,
+                               const size_t page_size
+                              ) override {
+                                AbstractBuffer *buffer = createBuffer(bufProp, key, page_size, maxRows * sqlTypeSize);
+                                buffer->setMaxRows(maxRows);
+			        return buffer;
+                              }
+#endif /* HAVE_DCPMM */
 
   /// Deletes the chunk with the specified key
   void deleteBuffer(const ChunkKey& key, const bool purge = true) override;
@@ -138,8 +158,11 @@ class BufferMgr : public AbstractBufferMgr {  // implements
                                const bool purge = true) override;
 
   /// Returns the a pointer to the chunk with the specified key.
-  AbstractBuffer* getBuffer(const ChunkKey& key, const size_t num_bytes = 0) override;
+  AbstractBuffer* getBuffer(BufferProperty bufProp, const ChunkKey& key, const size_t num_bytes = 0) override;
 
+#ifdef HAVE_DCPMM
+  bool isBufferInPersistentMemory(const ChunkKey& key) override { return false; }
+#endif /* HAVE_DCOMM */
   /**
    * @brief Puts the contents of d into the Buffer with ChunkKey key.
    * @param key - Unique identifier for a Chunk.

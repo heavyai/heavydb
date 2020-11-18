@@ -143,6 +143,35 @@ class FixedLengthEncoder : public Encoder {
     has_nulls = castedEncoder->has_nulls;
   }
 
+#ifdef HAVE_DCPMM
+  void writeMetadata(char *addr) override {
+    // assumes pointer is already in right place
+    char *p;
+
+    p = addr;
+    *(size_t *)p = num_elems_;
+    p = p + sizeof(size_t);
+    *(T *)p = dataMin;
+    p = p + sizeof(T);
+     *(T *)p = dataMax;
+    p = p + sizeof(T);
+    *(bool *)p = has_nulls;
+  }
+
+  void readMetadata(char *addr) override {
+    // assumes pointer is already in right place
+    char *p = addr;
+
+    num_elems_ = *(size_t *)p;
+    p = p + sizeof(size_t);
+    dataMin = *(T *)p;
+    p = p + sizeof(T);
+    dataMax = *(T *)p;
+    p = p + sizeof(T);
+    has_nulls = *(bool *)p;
+  }
+#endif /* HAVE_DCPMM */
+
   void writeMetadata(FILE* f) override {
     // assumes pointer is already in right place
     fwrite((int8_t*)&num_elems_, sizeof(size_t), 1, f);

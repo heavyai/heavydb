@@ -27,20 +27,27 @@ class PersistentStorageMgr : public AbstractBufferMgr {
  public:
   static PersistentStorageMgr* createPersistentStorageMgr(
       const std::string& data_dir,
+      const bool pmm_store,
+      const std::string& pmm_store_path,
       const size_t num_reader_threads,
       const DiskCacheConfig& disk_cache_config);
 
   PersistentStorageMgr(const std::string& data_dir,
+                       const bool pmm_store,
+                       const std::string& pmm_store_path,
                        const size_t num_reader_threads,
                        const DiskCacheConfig& disk_cache_config);
 
-  AbstractBuffer* createBuffer(const ChunkKey& chunk_key,
+  AbstractBuffer* createBuffer(BufferProperty bufProp,
+                               const ChunkKey& chunk_key,
                                const size_t page_size,
                                const size_t initial_size) override;
   void deleteBuffer(const ChunkKey& chunk_key, const bool purge) override;
   void deleteBuffersWithPrefix(const ChunkKey& chunk_key_prefix,
                                const bool purge) override;
-  AbstractBuffer* getBuffer(const ChunkKey& chunk_key, const size_t num_bytes) override;
+  AbstractBuffer* getBuffer(BufferProperty bufProp,
+                            const ChunkKey& chunk_key,
+                            const size_t num_bytes) override;
   void fetchBuffer(const ChunkKey& chunk_key,
                    AbstractBuffer* destination_buffer,
                    const size_t num_bytes) override;
@@ -49,6 +56,9 @@ class PersistentStorageMgr : public AbstractBufferMgr {
                             const size_t num_bytes) override;
   void getChunkMetadataVecForKeyPrefix(ChunkMetadataVector& chunk_metadata,
                                        const ChunkKey& chunk_key_prefix) override;
+#ifdef HAVE_DCPMM
+  bool isBufferInPersistentMemory(const ChunkKey& chunk_key) override;
+#endif /* HAVE_DCPMM */
   bool isBufferOnDevice(const ChunkKey& chunk_key) override;
   std::string printSlabs() override;
   void clearSlabs() override;

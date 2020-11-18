@@ -108,6 +108,9 @@ std::shared_ptr<JoinHashTableInterface> buildPerfect(std::string_view table1,
       memory_level,
       JoinHashTableInterface::HashType::OneToOne,
       device_count,
+#ifdef HAVE_DCPMM
+      ExecutionOptions::defaults(),
+#endif /* HAVE_DCPMM */
       column_cache,
       executor.get());
 }
@@ -134,6 +137,9 @@ std::shared_ptr<JoinHashTableInterface> buildKeyed(
       memory_level,
       JoinHashTableInterface::HashType::OneToOne,
       device_count,
+#ifdef HAVE_DCPMM
+      ExecutionOptions::defaults(),
+#endif /* HAVE_DCPMM */
       column_cache,
       executor.get());
 }
@@ -520,6 +526,9 @@ TEST(Build, GeoOneToMany1) {
         memory_level,
         JoinHashTableInterface::HashType::OneToMany,
         device_count,
+#ifdef HAVE_DCPMM
+        ExecutionOptions::defaults(),
+#endif /* HAVE_DCPMM */
         column_cache,
         executor.get());
 
@@ -589,6 +598,9 @@ TEST(Build, GeoOneToMany2) {
         memory_level,
         JoinHashTableInterface::HashType::OneToMany,
         device_count,
+#ifdef HAVE_DCPMM
+        ExecutionOptions::defaults(),
+#endif /* HAVE_DCPMM */
         column_cache,
         executor.get());
 

@@ -160,6 +160,12 @@ class DBHandler : public OmniSciIf {
             const std::vector<LeafHostInfo>& string_leaves,
             const std::string& base_data_path,
             const bool cpu_only,
+            const bool pmm,
+            const std::string& pmm_path,
+#ifdef HAVE_DCPMM
+            const bool pmm_store,
+            const std::string& pmm_store_path,
+#endif /* HAVE_DCPMM */
             const bool allow_multifrag,
             const bool jit_debug,
             const bool intel_jit_profile,
@@ -513,6 +519,17 @@ class DBHandler : public OmniSciIf {
 
   // end of sync block for HAHandler and mapd.thrift
 
+  bool heat_column(const TSessionId& session,
+                   const std::string& table_name,
+                   const std::string& column_name) override;
+  bool cool_column(const TSessionId& session,
+                   const std::string& table_name,
+                   const std::string& column_name) override;
+  void start_profiling(const TSessionId& session) override;
+  void stop_profiling(const TSessionId& session) override;
+  int64_t estimate_dram_size(const TSessionId& session,
+                             const int32_t perf_bar) override;
+
   void shutdown();
   void emergency_shutdown();
 
@@ -657,7 +674,7 @@ class DBHandler : public OmniSciIf {
       const bool just_validate,
       const bool find_push_down_candidates,
       const ExplainInfo& explain_info,
-      const std::optional<size_t> executor_index = std::nullopt) const;
+      const std::optional<size_t> executor_index = std::nullopt);
 
   void execute_rel_alg_with_filter_push_down(
       TQueryResult& _return,
@@ -780,6 +797,9 @@ class DBHandler : public OmniSciIf {
   const int max_session_duration_;   // max duration of session
 
   const bool runtime_udf_registration_enabled_;
+
+  std::map<unsigned long, long> query_time;
+
 
   struct GeoCopyFromState {
     std::string geo_copy_from_table;

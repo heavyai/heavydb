@@ -613,6 +613,9 @@ void RelAlgExecutor::executeRelAlgStep(const RaExecutionSequence& seq,
       eo.just_calcite_explain,
       eo.gpu_input_mem_limit_percent,
       eo.allow_runtime_query_interrupt,
+#ifdef HAVE_DCPMM
+      eo.query_id,
+#endif /* HAVE_DCPMM */
       eo.pending_query_interrupt_freq,
       eo.executor_type,
       step_idx == 0 ? eo.outer_fragment_indices : std::vector<size_t>()};
@@ -669,16 +672,25 @@ void RelAlgExecutor::executeRelAlgStep(const RaExecutionSequence& seq,
           }
         }
       }
-      exec_desc.setResult(executeProject(
-          project, co, eo_work_unit, render_info, queue_time_ms, prev_count));
+      // For intermediate results we want to keep the result fragmented
+      // to have higher parallelism on next steps.
+      bool multifrag_result = g_enable_multifrag_rs && (step_idx != seq.size() - 1) &&
+                              !seq.hasTableFunctions();
+      exec_desc.setResult(
+          executeProject(project,
+                         co,
+                         eo_work_unit.with_multifrag_result(multifrag_result),
+                         render_info,
+                         queue_time_ms,
+                         prev_count));
       VLOG(3) << "Returned from executeProject(), addTemporaryTable("
               << static_cast<int>(-project->getId()) << ", ...)"
-              << " exec_desc.getResult().getDataPtr()->rowCount()="
-              << exec_desc.getResult().getDataPtr()->rowCount();
+              << " exec_desc.getResult().getTable().rowCount()="
+              << exec_desc.getResult().getTable().rowCount();
       if (exec_desc.getResult().isFilterPushDownEnabled()) {
         return;
       }
-      addTemporaryTable(-project->getId(), exec_desc.getResult().getDataPtr());
+      addTemporaryTable(-project->getId(), exec_desc.getResult().getTable());
     }
     return;
   }
@@ -742,10 +754,12 @@ void RelAlgExecutor::handleNop(RaExecutionDesc& ed) {
   body->setOutputMetainfo(input->getOutputMetainfo());
   const auto it = temporary_tables_.find(-input->getId());
   CHECK(it != temporary_tables_.end());
+
+  CHECK_EQ(it->second.getFragCount(), 1);
+  ed.setResult({it->second.getResultSet(0), input->getOutputMetainfo()});
+
   // set up temp table as it could be used by the outer query or next step
   addTemporaryTable(-body->getId(), it->second);
-
-  ed.setResult({it->second, input->getOutputMetainfo()});
 }
 
 namespace {
@@ -1483,8 +1497,7 @@ void RelAlgExecutor::executeUpdate(const RelAlgNode* node,
       if (dynamic_cast<const RelSort*>(input_ra)) {
         const auto& input_table =
             get_temporary_table(&temporary_tables_, -input_ra->getId());
-        CHECK(input_table);
-        work_unit.exe_unit.scan_limit = input_table->rowCount();
+        work_unit.exe_unit.scan_limit = input_table.rowCount();
       }
     }
 
@@ -1569,8 +1582,7 @@ void RelAlgExecutor::executeDelete(const RelAlgNode* node,
       if (dynamic_cast<const RelSort*>(input_ra)) {
         const auto& input_table =
             get_temporary_table(&temporary_tables_, -input_ra->getId());
-        CHECK(input_table);
-        work_unit.exe_unit.scan_limit = input_table->rowCount();
+        work_unit.exe_unit.scan_limit = input_table.rowCount();
       }
     }
     execute_delete_for_node(project, work_unit, false);
@@ -1644,9 +1656,8 @@ ExecutionResult RelAlgExecutor::executeProject(
       co_project.device_type = ExecutorDeviceType::CPU;
       const auto& input_table =
           get_temporary_table(&temporary_tables_, -input_ra->getId());
-      CHECK(input_table);
       work_unit.exe_unit.scan_limit =
-          std::min(input_table->getLimit(), input_table->rowCount());
+          std::min(input_table.getLimit(), input_table.rowCount());
     }
   }
   return executeWorkUnit(work_unit,
@@ -1777,6 +1788,9 @@ void RelAlgExecutor::computeWindow(const RelAlgExecutionUnit& ra_exe_unit,
                                                ra_exe_unit,
                                                query_infos,
                                                co,
+#ifdef HAVE_DCPMM
+                                               eo,
+#endif /* HAVE_DCPMM */
                                                column_cache_map,
                                                executor_->getRowSetMemoryOwner());
     context->compute();
@@ -1791,6 +1805,9 @@ std::unique_ptr<WindowFunctionContext> RelAlgExecutor::createWindowFunctionConte
     const RelAlgExecutionUnit& ra_exe_unit,
     const std::vector<InputTableInfo>& query_infos,
     const CompilationOptions& co,
+#ifdef HAVE_DCPMM
+    const ExecutionOptions& eo,
+#endif /* HAVE_DCPMM */
     ColumnCacheMap& column_cache_map,
     std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner) {
   const auto memory_level = co.device_type == ExecutorDeviceType::GPU
@@ -1800,6 +1817,9 @@ std::unique_ptr<WindowFunctionContext> RelAlgExecutor::createWindowFunctionConte
       executor_->buildHashTableForQualifier(partition_key_cond,
                                             query_infos,
                                             memory_level,
+#ifdef HAVE_DCPMM
+                                            eo,
+#endif /* HAVE_DCPMM */
                                             JoinHashTableInterface::HashType::OneToMany,
                                             column_cache_map);
   if (!join_table_or_err.fail_reason.empty()) {
@@ -1828,6 +1848,9 @@ std::unique_ptr<WindowFunctionContext> RelAlgExecutor::createWindowFunctionConte
                                             *order_col,
                                             query_infos.front().info.fragments.front(),
                                             memory_level,
+#ifdef HAVE_DCPMM
+                                            eo.query_id,
+#endif /* HAVE_DCPMM */
                                             0,
                                             nullptr,
                                             chunks_owner,
@@ -2401,6 +2424,9 @@ ExecutionResult RelAlgExecutor::executeSort(const RelSort* sort,
         eo.just_calcite_explain,
         eo.gpu_input_mem_limit_percent,
         eo.allow_runtime_query_interrupt,
+#ifdef HAVE_DCPMM
+        eo.query_id,
+#endif /* HAVE_DCPMM */
         eo.pending_query_interrupt_freq,
         eo.executor_type,
     };
@@ -2833,7 +2859,7 @@ std::optional<size_t> RelAlgExecutor::getFilteredCountAll(const WorkUnit& work_u
   const auto count_all_exe_unit =
       create_count_all_execution_unit(work_unit.exe_unit, count);
   size_t one{1};
-  ResultSetPtr count_all_result;
+  TemporaryTable count_all_result;
   try {
     ColumnCacheMap column_cache;
     count_all_result =
@@ -2851,7 +2877,8 @@ std::optional<size_t> RelAlgExecutor::getFilteredCountAll(const WorkUnit& work_u
     LOG(WARNING) << "Failed to run pre-flight filtered count with error " << e.what();
     return std::nullopt;
   }
-  const auto count_row = count_all_result->getNextRow(false, false);
+  CHECK_EQ(count_all_result.getFragCount(), 1);
+  const auto count_row = count_all_result[0]->getNextRow(false, false);
   CHECK_EQ(size_t(1), count_row.size());
   const auto& count_tv = count_row.front();
   const auto count_scalar_tv = boost::get<ScalarTargetValue>(&count_tv);

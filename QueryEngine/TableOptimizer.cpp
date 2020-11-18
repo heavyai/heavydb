@@ -107,7 +107,11 @@ inline CompilationOptions get_compilation_options(const ExecutorDeviceType& devi
 
 inline ExecutionOptions get_execution_options() {
   return ExecutionOptions{
+#ifdef HAVE_DCPMM
+      false, false, false, false, false, false, false, false, 0, false, false, 0, false, 0};
+#else /* HAVE_DCPMM */
       false, false, false, false, false, false, false, false, 0, false, false, 0, false};
+#endif /* HAVE_DCPMM */
 }
 
 }  // namespace

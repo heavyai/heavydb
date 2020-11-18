@@ -82,6 +82,13 @@ class CommandLineOptions {
   unsigned dynamic_watchdog_time_limit = 10000;
   std::string disk_cache_level = "";
 
+  std::string pmm_path = {""};  // DCPMM for cold columns
+  bool pmm = false;
+#ifdef HAVE_DCPMM
+  std::string pmm_store_path = {""};  // DCPMM for storage
+  bool pmm_store = false;
+#endif /* HAVE_DCPMM */
+
   /**
    * Can be used to override the number of gpus detected on the system
    * -1 means do not override

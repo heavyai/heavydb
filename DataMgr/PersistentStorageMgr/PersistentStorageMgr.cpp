@@ -22,21 +22,28 @@
 
 PersistentStorageMgr* PersistentStorageMgr::createPersistentStorageMgr(
     const std::string& data_dir,
+    const bool pmm_store,
+    const std::string& pmm_store_path,
     const size_t num_reader_threads,
     const DiskCacheConfig& config) {
   if (config.isEnabledForMutableTables()) {
     return new MutableCachePersistentStorageMgr(data_dir, num_reader_threads, config);
   } else {
-    return new PersistentStorageMgr(data_dir, num_reader_threads, config);
+    return new PersistentStorageMgr(
+        data_dir, pmm_store, pmm_store_path, num_reader_threads, config);
   }
 }
 
 PersistentStorageMgr::PersistentStorageMgr(const std::string& data_dir,
+                                           const bool pmm_store,
+                                           const std::string& pmm_store_path,
                                            const size_t num_reader_threads,
                                            const DiskCacheConfig& disk_cache_config)
     : AbstractBufferMgr(0)
     , global_file_mgr_(
           std::make_unique<File_Namespace::GlobalFileMgr>(0,
+                                                          pmm_store,
+                                                          pmm_store_path,
                                                           data_dir,
                                                           num_reader_threads))
     , disk_cache_config_(disk_cache_config) {
@@ -50,11 +57,12 @@ PersistentStorageMgr::PersistentStorageMgr(const std::string& data_dir,
           : std::make_unique<foreign_storage::ForeignStorageMgr>();
 }
 
-AbstractBuffer* PersistentStorageMgr::createBuffer(const ChunkKey& chunk_key,
+AbstractBuffer* PersistentStorageMgr::createBuffer(BufferProperty bufProp,
+                                                   const ChunkKey& chunk_key,
                                                    const size_t page_size,
                                                    const size_t initial_size) {
   return getStorageMgrForTableKey(chunk_key)->createBuffer(
-      chunk_key, page_size, initial_size);
+      bufProp, chunk_key, page_size, initial_size);
 }
 
 void PersistentStorageMgr::deleteBuffer(const ChunkKey& chunk_key, const bool purge) {
@@ -67,9 +75,10 @@ void PersistentStorageMgr::deleteBuffersWithPrefix(const ChunkKey& chunk_key_pre
       ->deleteBuffersWithPrefix(chunk_key_prefix, purge);
 }
 
-AbstractBuffer* PersistentStorageMgr::getBuffer(const ChunkKey& chunk_key,
+AbstractBuffer* PersistentStorageMgr::getBuffer(BufferProperty bufProp,
+                                                const ChunkKey& chunk_key,
                                                 const size_t num_bytes) {
-  return getStorageMgrForTableKey(chunk_key)->getBuffer(chunk_key, num_bytes);
+  return getStorageMgrForTableKey(chunk_key)->getBuffer(bufProp, chunk_key, num_bytes);
 }
 
 void PersistentStorageMgr::fetchBuffer(const ChunkKey& chunk_key,
@@ -126,6 +135,12 @@ void PersistentStorageMgr::getChunkMetadataVecForKeyPrefix(
                                                                          keyPrefix);
   }
 }
+
+#ifdef HAVE_DCPMM
+bool PersistentStorageMgr::isBufferInPersistentMemory(const ChunkKey& chunk_key) {
+  return global_file_mgr->isBufferInPersistentMemory(chunk_key);
+}
+#endif /* HAVE_DCPMM */
 
 bool PersistentStorageMgr::isBufferOnDevice(const ChunkKey& chunk_key) {
   return global_file_mgr_->isBufferOnDevice(chunk_key);

@@ -188,8 +188,8 @@ inline const ColumnDescriptor* get_column_descriptor_maybe(
   return table_id > 0 ? get_column_descriptor(col_id, table_id, cat) : nullptr;
 }
 
-inline const ResultSetPtr& get_temporary_table(const TemporaryTables* temporary_tables,
-                                               const int table_id) {
+inline const TemporaryTable& get_temporary_table(const TemporaryTables* temporary_tables,
+                                                 const int table_id) {
   CHECK_LT(table_id, 0);
   const auto it = temporary_tables->find(table_id);
   CHECK(it != temporary_tables->end());
@@ -207,7 +207,7 @@ inline const SQLTypeInfo get_column_type(const int col_id,
     return cd->columnType;
   }
   const auto& temp = get_temporary_table(temporary_tables, table_id);
-  return temp->getColType(col_id);
+  return temp.getColType(col_id);
 }
 
 template <typename PtrTy>
@@ -237,7 +237,6 @@ inline const ColumnarResults* columnarize_result(
     const ResultSetPtr& result,
     const int frag_id) {
   INJECT_TIMER(columnarize_result);
-  CHECK_EQ(0, frag_id);
   return rows_to_columnar_results(row_set_mem_owner, result, result->colCount());
 }
 
@@ -576,6 +575,9 @@ class Executor {
   FetchResult fetchChunks(const ColumnFetcher&,
                           const RelAlgExecutionUnit& ra_exe_unit,
                           const int device_id,
+#ifdef HAVE_DCPMM
+                          const unsigned long query_id,
+#endif /* HAVE_DCPMM */
                           const Data_Namespace::MemoryLevel,
                           const std::map<int, const TableFragments*>&,
                           const FragmentsList& selected_fragments,
@@ -587,6 +589,9 @@ class Executor {
   FetchResult fetchUnionChunks(const ColumnFetcher&,
                                const RelAlgExecutionUnit& ra_exe_unit,
                                const int device_id,
+#ifdef HAVE_DCPMM
+                               const unsigned long query_id,
+#endif /* HAVE_DCPMM */
                                const Data_Namespace::MemoryLevel,
                                const std::map<int, const TableFragments*>&,
                                const FragmentsList& selected_fragments,
@@ -670,8 +675,8 @@ class Executor {
                              CodeCache&);
 
  private:
-  ResultSetPtr resultsUnion(SharedKernelContext& shared_context,
-                            const RelAlgExecutionUnit& ra_exe_unit);
+  TemporaryTable resultsUnion(SharedKernelContext& shared_context,  const RelAlgExecutionUnit& ra_exe_unit, bool merge = true);
+
   std::vector<int64_t> getJoinHashTablePtrs(const ExecutorDeviceType device_type,
                                             const int device_id);
   ResultSetPtr reduceMultiDeviceResults(
@@ -689,18 +694,18 @@ class Executor {
       std::shared_ptr<RowSetMemoryOwner>,
       const QueryMemoryDescriptor&) const;
 
-  ResultSetPtr executeWorkUnitImpl(size_t& max_groups_buffer_entry_guess,
-                                   const bool is_agg,
-                                   const bool allow_single_frag_table_opt,
-                                   const std::vector<InputTableInfo>&,
-                                   const RelAlgExecutionUnit&,
-                                   const CompilationOptions&,
-                                   const ExecutionOptions& options,
-                                   const Catalog_Namespace::Catalog&,
-                                   std::shared_ptr<RowSetMemoryOwner>,
-                                   RenderInfo* render_info,
-                                   const bool has_cardinality_estimation,
-                                   ColumnCacheMap& column_cache);
+  TemporaryTable executeWorkUnitImpl(size_t& max_groups_buffer_entry_guess,
+                                     const bool is_agg,
+                                     const bool allow_single_frag_table_opt,
+                                     const std::vector<InputTableInfo>&,
+                                     const RelAlgExecutionUnit&,
+                                     const CompilationOptions&,
+                                     const ExecutionOptions& options,
+                                     const Catalog_Namespace::Catalog&,
+                                     std::shared_ptr<RowSetMemoryOwner>,
+                                     RenderInfo* render_info,
+                                     const bool has_cardinality_estimation,
+                                     ColumnCacheMap& column_cache);
 
   std::vector<llvm::Value*> inlineHoistedLiterals();
 
@@ -739,6 +744,9 @@ class Executor {
       const JoinCondition& current_level_join_conditions,
       RelAlgExecutionUnit& ra_exe_unit,
       const CompilationOptions& co,
+#ifdef HAVE_DCPMM
+      const ExecutionOptions& eo,
+#endif /* HAVE_DCPMM */
       const std::vector<InputTableInfo>& query_infos,
       ColumnCacheMap& column_cache,
       std::vector<std::string>& fail_reasons);
@@ -779,6 +787,9 @@ class Executor {
       const std::shared_ptr<Analyzer::BinOper>& qual_bin_oper,
       const std::vector<InputTableInfo>& query_infos,
       const MemoryLevel memory_level,
+#ifdef HAVE_DCPMM
+      const ExecutionOptions& eo,
+#endif /* HAVE_DCPMM */
       const JoinHashTableInterface::HashType preferred_hash_type,
       ColumnCacheMap& column_cache);
   void nukeOldState(const bool allow_lazy_fetch,

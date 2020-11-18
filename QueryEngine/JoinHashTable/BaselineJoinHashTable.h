@@ -106,6 +106,9 @@ class BaselineJoinHashTable : public JoinHashTableInterface {
       const Data_Namespace::MemoryLevel memory_level,
       const HashType preferred_hash_type,
       const int device_count,
+#ifdef HAVE_DCPMM
+      const ExecutionOptions& eo,
+#endif /* HAVE_DCPMM */
       ColumnCacheMap& column_cache,
       Executor* executor);
 
@@ -204,7 +207,12 @@ class BaselineJoinHashTable : public JoinHashTableInterface {
 
   static int getInnerTableId(const std::vector<InnerOuter>& inner_outer_pairs);
 
+#ifdef HAVE_DCPMM
+  virtual void reifyWithLayout(const ExecutionOptions& eo,
+                               const JoinHashTableInterface::HashType layout);
+#else /* HAVE_DCPMM */
   virtual void reifyWithLayout(const JoinHashTableInterface::HashType layout);
+#endif /* HAVE_DCPMM */
 
   struct ColumnsForDevice {
     const std::vector<JoinColumn> join_columns;
@@ -217,6 +225,9 @@ class BaselineJoinHashTable : public JoinHashTableInterface {
   virtual ColumnsForDevice fetchColumnsForDevice(
       const std::vector<Fragmenter_Namespace::FragmentInfo>& fragments,
       const int device_id,
+#ifdef HAVE_DCPMM
+      const ExecutionOptions& eo,
+#endif /* HAVE_DCPMM */
       DeviceAllocator* dev_buff_owner);
 
   virtual std::pair<size_t, size_t> approximateTupleCount(
@@ -235,7 +246,12 @@ class BaselineJoinHashTable : public JoinHashTableInterface {
 
   CompositeKeyInfo getCompositeKeyInfo() const;
 
+#ifdef HAVE_DCPMM
+  void reify(const JoinHashTableInterface::HashType preferred_layout,
+             const ExecutionOptions& eo);
+#else /* !HAVE_DCPMM */
   void reify(const JoinHashTableInterface::HashType preferred_layout);
+#endif /* HAVE_DCPMM */
 
   virtual void reifyForDevice(const ColumnsForDevice& columns_for_device,
                               const JoinHashTableInterface::HashType layout,

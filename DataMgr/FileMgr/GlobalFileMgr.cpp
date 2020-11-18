@@ -38,6 +38,22 @@ using namespace std;
 
 namespace File_Namespace {
 
+#ifdef HAVE_DCPMM
+GlobalFileMgr::GlobalFileMgr(const int deviceId,
+                             const bool pmm_store,
+                             const std::string& pmm_store_path,
+                             std::string basePath,
+                             const size_t num_reader_threads,
+                             const size_t defaultPageSize)
+    : AbstractBufferMgr(deviceId)
+    , basePath_(basePath)
+    , num_reader_threads_(num_reader_threads)
+    , epoch_(-1)
+    ,  // set the default epoch for all tables corresponding to the time of
+       // last checkpoint
+    defaultPageSize_(defaultPageSize)
+    , pmmBufferMgr_(pmm_store, pmm_store_path, defaultPageSize) {
+#else /* HAVE_DCPMM */
 GlobalFileMgr::GlobalFileMgr(const int deviceId,
                              std::string basePath,
                              const size_t num_reader_threads,
@@ -49,9 +65,14 @@ GlobalFileMgr::GlobalFileMgr(const int deviceId,
     ,  // set the default epoch for all tables corresponding to the time of
        // last checkpoint
     defaultPageSize_(defaultPageSize) {
+#endif /* HAVE_DCPMM */
   mapd_db_version_ =
       1;  // DS changes triggered by individual FileMgr per table project (release 2.1.0)
   dbConvert_ = false;
+#ifdef HAVE_DCPMM
+  pmmStore_ = pmm_store;
+  pmmStorePath_ = pmm_store_path;
+#endif /* HAVE_DCPMM */
   init();
 }
 
@@ -233,4 +254,36 @@ size_t GlobalFileMgr::getTableEpoch(const int db_id, const int tb_id) {
   return fm->epoch_;
 }
 
+#ifdef HAVE_DCPMM
+void
+GlobalFileMgr::constructPersistentBuffers(FileMgr *fm)
+{
+  pmmBufferMgr_.constructPersistentBuffers(fm->get_fileMgrKey().first, fm->get_fileMgrKey().second, fm);
+}
+
+int8_t *
+GlobalFileMgr::allocatePersistentBuffer(ChunkKey key, size_t numBytes, PersistentBufferDescriptor **desc)
+{
+  return pmmBufferMgr_.allocatePersistentBuffer(key, numBytes, desc);
+}
+
+void
+GlobalFileMgr::deletePersistentBuffer(PersistentBufferDescriptor *desc, int8_t *addr)
+{
+  pmmBufferMgr_.freePersistentBuffer(desc, addr);
+}
+
+void
+GlobalFileMgr::shrinkPersistentBuffer(PersistentBufferDescriptor *desc, int8_t *addr)
+{
+  pmmBufferMgr_.shrinkPersistentBuffer(desc, addr);
+}
+
+int8_t *
+GlobalFileMgr::reallocatePersistentBuffer(ChunkKey key, int8_t *addr, size_t numBytes, PersistentBufferDescriptor **desc)
+{
+  return pmmBufferMgr_.reallocatePersistentBuffer(key, addr, numBytes, desc);
+}
+
+#endif /* HAVE_DCPMM */
 }  // namespace File_Namespace

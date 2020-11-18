@@ -78,6 +78,10 @@ class Chunk {
   void createChunkBuffer(DataMgr* data_mgr,
                          const ChunkKey& key,
                          const MemoryLevel mem_level,
+#ifdef HAVE_DCPMM
+                         const size_t maxRows,
+                         const int sqlTypeSize,
+#endif /* HAVE_DCPMM */
                          const int deviceId = 0,
                          const size_t page_size = 0);
 
@@ -86,8 +90,13 @@ class Chunk {
                       const MemoryLevel mem_level,
                       const int deviceId = 0,
                       const size_t num_bytes = 0,
+#ifdef HAVE_DCPMM
+                      const size_t num_elems = 0,
+                      const unsigned long query_id = 0);
+#else /* HAVE_DCPMM */
                       const size_t num_elems = 0);
 
+#endif /* HAVE_DCPMM */
   static std::shared_ptr<Chunk> getChunk(const ColumnDescriptor* cd,
                                          DataMgr* data_mgr,
                                          const ChunkKey& key,
@@ -95,7 +104,16 @@ class Chunk {
                                          const int deviceId,
                                          const size_t num_bytes,
                                          const size_t num_elems);
-
+#ifdef HAVE_DCPMM
+  static std::shared_ptr<Chunk> getChunk(const ColumnDescriptor* cd,
+                                         DataMgr* data_mgr,
+                                         const ChunkKey& key,
+                                         const MemoryLevel mem_level,
+                                         const int deviceId,
+                                         const unsigned long query_id,
+                                         const size_t num_bytes,
+                                         const size_t num_elems);
+#endif /* HAVE_DCPMM */
   bool isChunkOnDevice(DataMgr* data_mgr,
                        const ChunkKey& key,
                        const MemoryLevel mem_level,

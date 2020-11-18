@@ -200,6 +200,10 @@ class Encoder {
 
   virtual void reduceStats(const Encoder&) = 0;
   virtual void copyMetadata(const Encoder* copyFromEncoder) = 0;
+#ifdef HAVE_DCPMM
+  virtual void writeMetadata(char *addr /*, const size_t offset*/) = 0;
+  virtual void readMetadata(char *addr /*, const size_t offset*/) = 0;
+#endif /* HAVE_DCPMM */
   virtual void writeMetadata(FILE* f /*, const size_t offset*/) = 0;
   virtual void readMetadata(FILE* f /*, const size_t offset*/) = 0;
 

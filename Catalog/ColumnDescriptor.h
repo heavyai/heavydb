@@ -38,9 +38,15 @@ struct ColumnDescriptor {
   bool isVirtualCol;
   std::string virtualExpr;
   bool isDeletedCol;
+  bool isHotCol;
+  bool isSoftHotCol;
+  size_t chunkBufsFetched;
+  size_t uniqueChunksFetched;
+  size_t chunkDataFetched;
   bool isGeoPhyCol{false};
 
-  ColumnDescriptor() : isSystemCol(false), isVirtualCol(false), isDeletedCol(false) {}
+  ColumnDescriptor() : isSystemCol(false), isVirtualCol(false), isDeletedCol(false), isHotCol(false), isSoftHotCol(false), chunkBufsFetched(0), uniqueChunksFetched(0), chunkDataFetched(0) {}
+
   ColumnDescriptor(const int tableId,
                    const int columnId,
                    const std::string& columnName,
@@ -52,7 +58,14 @@ struct ColumnDescriptor {
       , columnType(columnType)
       , isSystemCol(false)
       , isVirtualCol(false)
-      , isDeletedCol(false) {}
+      , isDeletedCol(false)
+      , isHotCol(false)
+      , isSoftHotCol(false)
+      , chunkBufsFetched(0)
+      , uniqueChunksFetched(0)
+      , chunkDataFetched(0)
+        {}
+
   ColumnDescriptor(const bool isGeoPhyCol) : ColumnDescriptor() {
     this->isGeoPhyCol = isGeoPhyCol;
   }

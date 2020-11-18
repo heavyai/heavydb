@@ -103,7 +103,11 @@ size_t g_min_memory_allocation_size{
 bool g_enable_bump_allocator{false};
 double g_bump_allocator_step_reduction{0.75};
 bool g_enable_direct_columnarization{true};
+extern bool g_enable_lazy_fetch{true};
+extern bool g_enable_multifrag_rs{false};
 extern bool g_enable_experimental_string_functions;
+bool g_enable_lazy_fetch{true};
+bool g_enable_multifrag_rs{false};
 bool g_enable_runtime_query_interrupt{false};
 bool g_use_estimator_result_cache{true};
 unsigned g_pending_query_interrupt_freq{1000};
@@ -826,7 +830,7 @@ std::pair<int64_t, int32_t> Executor::reduceResults(const SQLAgg agg,
 
 namespace {
 
-ResultSetPtr get_merged_result(
+TemporaryTable get_merged_result(
     std::vector<std::pair<ResultSetPtr, std::vector<size_t>>>& results_per_device) {
   auto& first = results_per_device.front().first;
   CHECK(first);
@@ -835,13 +839,24 @@ ResultSetPtr get_merged_result(
     CHECK(next);
     first->append(*next);
   }
-  return std::move(first);
+  return TemporaryTable(std::move(first));
+}
+
+TemporaryTable get_separate_results(
+    std::vector<std::pair<ResultSetPtr, std::vector<size_t>>>& results_per_device) {
+  std::vector<ResultSetPtr> results;
+  results.reserve(results_per_device.size());
+  for (auto& r : results_per_device) {
+    results.emplace_back(r.first);
+  }
+  return TemporaryTable(std::move(results));
 }
 
 }  // namespace
 
-ResultSetPtr Executor::resultsUnion(SharedKernelContext& shared_context,
-                                    const RelAlgExecutionUnit& ra_exe_unit) {
+TemporaryTable Executor::resultsUnion(SharedKernelContext& shared_context,
+                                      const RelAlgExecutionUnit& ra_exe_unit,
+                                      bool merge) {
   auto& results_per_device = shared_context.getFragmentResults();
   if (results_per_device.empty()) {
     std::vector<TargetInfo> targets;
@@ -854,16 +869,19 @@ ResultSetPtr Executor::resultsUnion(SharedKernelContext& shared_context,
                                        row_set_mem_owner_,
                                        this);
   }
-  using IndexedResultSet = std::pair<ResultSetPtr, std::vector<size_t>>;
-  std::sort(results_per_device.begin(),
-            results_per_device.end(),
-            [](const IndexedResultSet& lhs, const IndexedResultSet& rhs) {
-              CHECK_GE(lhs.second.size(), size_t(1));
-              CHECK_GE(rhs.second.size(), size_t(1));
-              return lhs.second.front() < rhs.second.front();
-            });
+  if (merge) {
+    using IndexedResultSet = std::pair<ResultSetPtr, std::vector<size_t>>;
+    std::sort(results_per_device.begin(),
+              results_per_device.end(),
+              [](const IndexedResultSet& lhs, const IndexedResultSet& rhs) {
+                CHECK_GE(lhs.second.size(), size_t(1));
+                CHECK_GE(rhs.second.size(), size_t(1));
+                return lhs.second.front() < rhs.second.front();
+              });
 
-  return get_merged_result(results_per_device);
+    return {get_merged_result(results_per_device)};
+  }
+  return get_separate_results(results_per_device);
 }
 
 ResultSetPtr Executor::reduceMultiDeviceResults(
@@ -1308,16 +1326,16 @@ RelAlgExecutionUnit replace_scan_limit(const RelAlgExecutionUnit& ra_exe_unit_in
 
 }  // namespace
 
-ResultSetPtr Executor::executeWorkUnit(size_t& max_groups_buffer_entry_guess,
-                                       const bool is_agg,
-                                       const std::vector<InputTableInfo>& query_infos,
-                                       const RelAlgExecutionUnit& ra_exe_unit_in,
-                                       const CompilationOptions& co,
-                                       const ExecutionOptions& eo,
-                                       const Catalog_Namespace::Catalog& cat,
-                                       RenderInfo* render_info,
-                                       const bool has_cardinality_estimation,
-                                       ColumnCacheMap& column_cache) {
+TemporaryTable Executor::executeWorkUnit(size_t& max_groups_buffer_entry_guess,
+                                         const bool is_agg,
+                                         const std::vector<InputTableInfo>& query_infos,
+                                         const RelAlgExecutionUnit& ra_exe_unit_in,
+                                         const CompilationOptions& co,
+                                         const ExecutionOptions& eo,
+                                         const Catalog_Namespace::Catalog& cat,
+                                         RenderInfo* render_info,
+                                         const bool has_cardinality_estimation,
+                                         ColumnCacheMap& column_cache) {
   VLOG(1) << "Executor " << executor_id_ << " is executing work unit:" << ra_exe_unit_in;
 
   ScopeGuard cleanup_post_execution = [this] {
@@ -1369,7 +1387,7 @@ ResultSetPtr Executor::executeWorkUnit(size_t& max_groups_buffer_entry_guess,
   }
 }
 
-ResultSetPtr Executor::executeWorkUnitImpl(
+TemporaryTable Executor::executeWorkUnitImpl(
     size_t& max_groups_buffer_entry_guess,
     const bool is_agg,
     const bool allow_single_frag_table_opt,
@@ -1440,7 +1458,7 @@ ResultSetPtr Executor::executeWorkUnitImpl(
           new QueryMemoryDescriptor(this, 0, QueryDescriptionType::Projection, false));
     }
     if (eo.just_explain) {
-      return executeExplain(*query_comp_desc_owned);
+      return {executeExplain(*query_comp_desc_owned)};
     }
 
     for (const auto target_expr : ra_exe_unit.target_exprs) {
@@ -1513,7 +1531,7 @@ ResultSetPtr Executor::executeWorkUnitImpl(
         continue;
       }
     }
-    return resultsUnion(shared_context, ra_exe_unit);
+    return resultsUnion(shared_context, ra_exe_unit, !eo.multifrag_result);
 
   } while (static_cast<size_t>(crt_min_byte_width) <= sizeof(int64_t));
 
@@ -1612,8 +1630,15 @@ ResultSetPtr Executor::executeTableFunction(
   compilation_context.compile(exe_unit, co, this);
 
   TableFunctionExecutionContext exe_context(getRowSetMemoryOwner());
-  return exe_context.execute(
-      exe_unit, table_infos, &compilation_context, column_fetcher, co.device_type, this);
+  return exe_context.execute(exe_unit,
+#ifdef HAVE_DCPMM
+                             eo,
+#endif /* HAVE_DCPMM */
+                             table_infos,
+                             &compilation_context,
+                             column_fetcher,
+                             co.device_type,
+                             this);
 }
 
 ResultSetPtr Executor::executeExplain(const QueryCompilationDescriptor& query_comp_desc) {
@@ -2278,9 +2303,7 @@ bool Executor::needFetchAllFragments(const InputColDescriptor& inner_col_desc,
                                      const FragmentsList& selected_fragments) const {
   const auto& input_descs = ra_exe_unit.input_descs;
   const int nest_level = inner_col_desc.getScanDesc().getNestLevel();
-  if (nest_level < 1 ||
-      inner_col_desc.getScanDesc().getSourceType() != InputSourceType::TABLE ||
-      ra_exe_unit.join_quals.empty() || input_descs.size() < 2 ||
+  if (nest_level < 1 || ra_exe_unit.join_quals.empty() || input_descs.size() < 2 ||
       (ra_exe_unit.join_quals.empty() &&
        plan_state_->isLazyFetchColumn(inner_col_desc))) {
     return false;
@@ -2302,6 +2325,9 @@ FetchResult Executor::fetchChunks(
     const ColumnFetcher& column_fetcher,
     const RelAlgExecutionUnit& ra_exe_unit,
     const int device_id,
+#ifdef HAVE_DCPMM
+    const unsigned long query_id,
+#endif /* HAVE_DCPMM */
     const Data_Namespace::MemoryLevel memory_level,
     const std::map<int, const TableFragments*>& all_tables_fragments,
     const FragmentsList& selected_fragments,
@@ -2362,37 +2388,49 @@ FetchResult Executor::fetchChunks(
           plan_state_->columns_to_fetch_.end()) {
         memory_level_for_column = Data_Namespace::CPU_LEVEL;
       }
+      /*
       if (col_id->getScanDesc().getSourceType() == InputSourceType::RESULT) {
         frag_col_buffers[it->second] = column_fetcher.getResultSetColumn(
             col_id.get(), memory_level_for_column, device_id, device_allocator);
       } else {
-        if (needFetchAllFragments(*col_id, ra_exe_unit, selected_fragments)) {
-          frag_col_buffers[it->second] =
-              column_fetcher.getAllTableColumnFragments(table_id,
-                                                        col_id->getColId(),
-                                                        all_tables_fragments,
-                                                        memory_level_for_column,
-                                                        device_id,
-                                                        device_allocator);
-        } else {
-          frag_col_buffers[it->second] =
-              column_fetcher.getOneTableColumnFragment(table_id,
-                                                       frag_id,
-                                                       col_id->getColId(),
-                                                       all_tables_fragments,
-                                                       chunks,
-                                                       chunk_iterators,
-                                                       memory_level_for_column,
-                                                       device_id,
-                                                       device_allocator);
-        }
+        */
+      if (needFetchAllFragments(*col_id, ra_exe_unit, selected_fragments)) {
+        frag_col_buffers[it->second] =
+            column_fetcher.getAllTableColumnFragments(table_id,
+                                                      col_id->getColId(),
+                                                      all_tables_fragments,
+                                                      memory_level_for_column,
+#ifdef HAVE_DCPMM
+                                                      query_id,
+#endif /* HAVE_DCPMM */
+                                                      device_id,
+                                                      device_allocator);
+      } else {
+        frag_col_buffers[it->second] =
+            column_fetcher.getOneTableColumnFragment(table_id,
+                                                     frag_id,
+                                                     col_id->getColId(),
+                                                     all_tables_fragments,
+                                                     chunks,
+                                                     chunk_iterators,
+                                                     memory_level_for_column,
+#ifdef HAVE_DCPMM
+                                                     query_id,
+#endif /* HAVE_DCPMM */
+                                                     device_id,
+                                                     device_allocator);
       }
     }
-    all_frag_col_buffers.push_back(frag_col_buffers);
+    //}
   }
-  std::tie(all_num_rows, all_frag_offsets) = getRowCountAndOffsetForAllFrags(
-      ra_exe_unit, frag_ids_crossjoin, ra_exe_unit.input_descs, all_tables_fragments);
-  return {all_frag_col_buffers, all_num_rows, all_frag_offsets};
+  all_frag_col_buffers.push_back(frag_col_buffers);
+}
+std::tie(all_num_rows,
+         all_frag_offsets) = getRowCountAndOffsetForAllFrags(ra_exe_unit,
+                                                             frag_ids_crossjoin,
+                                                             ra_exe_unit.input_descs,
+                                                             all_tables_fragments);
+return {all_frag_col_buffers, all_num_rows, all_frag_offsets};
 }
 
 // fetchChunks() is written under the assumption that multiple inputs implies a JOIN.
@@ -2401,6 +2439,9 @@ FetchResult Executor::fetchUnionChunks(
     const ColumnFetcher& column_fetcher,
     const RelAlgExecutionUnit& ra_exe_unit,
     const int device_id,
+#ifdef HAVE_DCPMM
+    const unsigned long query_id,
+#endif /* HAVE_DCPMM */
     const Data_Namespace::MemoryLevel memory_level,
     const std::map<int, const TableFragments*>& all_tables_fragments,
     const FragmentsList& selected_fragments,
@@ -2503,6 +2544,9 @@ FetchResult Executor::fetchUnionChunks(
                                                           col_id->getColId(),
                                                           all_tables_fragments,
                                                           memory_level_for_column,
+#ifdef HAVE_DCPMM
+                                                          query_id,
+#endif
                                                           device_id,
                                                           device_allocator);
           } else {
@@ -2514,6 +2558,9 @@ FetchResult Executor::fetchUnionChunks(
                                                          chunks,
                                                          chunk_iterators,
                                                          memory_level_for_column,
+#ifdef HAVE_DCPMM
+                                                         query_id,
+#endif
                                                          device_id,
                                                          device_allocator);
           }
@@ -3070,6 +3117,9 @@ Executor::JoinHashTableOrError Executor::buildHashTableForQualifier(
     const std::shared_ptr<Analyzer::BinOper>& qual_bin_oper,
     const std::vector<InputTableInfo>& query_infos,
     const MemoryLevel memory_level,
+#ifdef HAVE_DCPMM
+    const ExecutionOptions& eo,
+#endif /* HAVE_DCPMM */
     const JoinHashTableInterface::HashType preferred_hash_type,
     ColumnCacheMap& column_cache) {
   if (!g_enable_overlaps_hashjoin && qual_bin_oper->is_overlaps_oper()) {
@@ -3088,6 +3138,9 @@ Executor::JoinHashTableOrError Executor::buildHashTableForQualifier(
                                             memory_level,
                                             preferred_hash_type,
                                             deviceCountForMemoryLevel(memory_level),
+#ifdef HAVE_DCPMM
+                                            eo,
+#endif /* HAVE_DCPMM */
                                             column_cache,
                                             this);
     return {tbl, ""};

@@ -88,7 +88,6 @@ ColumnarResults::ColumnarResults(std::shared_ptr<RowSetMemoryOwner> row_set_mem_
     , target_types_{target_type}
     , parallel_conversion_(false)
     , direct_columnar_conversion_(false) {
-  auto timer = DEBUG_TIMER(__func__);
   const bool is_varlen =
       target_type.is_array() ||
       (target_type.is_string() && target_type.get_compression() == kENCODING_NONE) ||
@@ -359,26 +358,39 @@ void ColumnarResults::copyAllNonLazyColumns(
     }
   };
 
-  // parallelized by assigning each column to a thread
-  std::vector<std::future<void>> direct_copy_threads;
-  for (size_t col_idx = 0; col_idx < num_columns; col_idx++) {
-    if (rows.isZeroCopyColumnarConversionPossible(col_idx)) {
-      CHECK(!column_buffers_[col_idx]);
-      column_buffers_[col_idx] = const_cast<int8_t*>(rows.getColumnarBuffer(col_idx));
-    } else if (is_column_non_lazily_fetched(col_idx)) {
-      direct_copy_threads.push_back(std::async(
-          std::launch::async,
-          [&rows, this](const size_t column_index) {
-            const size_t column_size = num_rows_ * target_types_[column_index].get_size();
-            rows.copyColumnIntoBuffer(
-                column_index, column_buffers_[column_index], column_size);
-          },
-          col_idx));
+  if (num_rows_ > 1000000) {
+    // parallelized by assigning each column to a thread
+    std::vector<std::future<void>> direct_copy_threads;
+    for (size_t col_idx = 0; col_idx < num_columns; col_idx++) {
+      if (rows.isZeroCopyColumnarConversionPossible(col_idx)) {
+        CHECK(!column_buffers_[col_idx]);
+        column_buffers_[col_idx] = const_cast<int8_t*>(rows.getColumnarBuffer(col_idx));
+      } else if (is_column_non_lazily_fetched(col_idx)) {
+        direct_copy_threads.push_back(std::async(
+            std::launch::async,
+            [&rows, this](const size_t column_index) {
+              const size_t column_size =
+                  num_rows_ * target_types_[column_index].get_size();
+              rows.copyColumnIntoBuffer(
+                  column_index, column_buffers_[column_index], column_size);
+            },
+            col_idx));
+      }
     }
-  }
 
-  for (auto& child : direct_copy_threads) {
-    child.wait();
+    for (auto& child : direct_copy_threads) {
+      child.wait();
+    }
+  } else {
+    for (size_t col_idx = 0; col_idx < num_columns; col_idx++) {
+      if (rows.isZeroCopyColumnarConversionPossible(col_idx)) {
+        CHECK(!column_buffers_[col_idx]);
+        column_buffers_[col_idx] = const_cast<int8_t*>(rows.getColumnarBuffer(col_idx));
+      } else if (is_column_non_lazily_fetched(col_idx)) {
+        const size_t column_size = num_rows_ * target_types_[col_idx].get_size();
+        rows.copyColumnIntoBuffer(col_idx, column_buffers_[col_idx], column_size);
+      }
+    }
   }
 }
 
@@ -388,8 +400,8 @@ void ColumnarResults::copyAllNonLazyColumns(
  *
  * This function is parallelized through dividing total rows among all existing threads.
  * Since there's no invalid element in the result set (e.g., columnar projections), the
- * output buffer will have as many rows as there are in the result set, removing the need
- * for atomicly incrementing the output buffer position.
+ * output buffer will have as many rows as there are in the result set, removing the
+ * need for atomicly incrementing the output buffer position.
  */
 void ColumnarResults::materializeAllLazyColumns(
     const std::vector<ColumnLazyFetchInfo>& lazy_fetch_info,
@@ -455,8 +467,8 @@ void ColumnarResults::materializeAllLazyColumns(
 /**
  * This function is to directly columnarize a result set for group by queries.
  * Its main difference with the traditional alternative is that it directly reads
- * non-empty entries from the result set, and then writes them into output column buffers,
- * rather than using the result set's iterators.
+ * non-empty entries from the result set, and then writes them into output column
+ * buffers, rather than using the result set's iterators.
  */
 void ColumnarResults::materializeAllColumnsGroupBy(const ResultSet& rows,
                                                    const size_t num_columns) {
@@ -532,9 +544,9 @@ void ColumnarResults::locateAndCountEntries(const ResultSet& rows,
 }
 
 /**
- * This function goes through all non-empty elements marked in the bitmap data structure,
- * and store them back into output column buffers. The output column buffers are compacted
- * without any holes in it.
+ * This function goes through all non-empty elements marked in the bitmap data
+ * structure, and store them back into output column buffers. The output column buffers
+ * are compacted without any holes in it.
  *
  * TODO(Saman): if necessary, we can look into the distribution of non-empty entries
  * and choose a different load-balanced strategy (assigning equal number of non-empties
@@ -754,8 +766,8 @@ void ColumnarResults::compactAndCopyEntriesWithoutTargetSkipping(
 
 /**
  * Initialize a set of write functions per target (i.e., column). Target types' logical
- * size are used to categorize the correct write function per target. These functions are
- * then used for every row in the result set.
+ * size are used to categorize the correct write function per target. These functions
+ * are then used for every row in the result set.
  */
 std::vector<ColumnarResults::WriteFunction> ColumnarResults::initWriteFunctions(
     const ResultSet& rows,
@@ -939,10 +951,10 @@ int64_t read_double_func(const ResultSet& rows,
 }  // namespace
 
 /**
- * Initializes a set of read funtions to properly access the contents of the result set's
- * storage buffer. Each particular read function is chosen based on the data type and data
- * size used to store that target in the result set's storage buffer. These functions are
- * then used for each row in the result set.
+ * Initializes a set of read funtions to properly access the contents of the result
+ * set's storage buffer. Each particular read function is chosen based on the data type
+ * and data size used to store that target in the result set's storage buffer. These
+ * functions are then used for each row in the result set.
  */
 template <QueryDescriptionType QUERY_TYPE, bool COLUMNAR_OUTPUT>
 std::vector<ColumnarResults::ReadFunction> ColumnarResults::initReadFunctions(
@@ -979,8 +991,8 @@ std::vector<ColumnarResults::ReadFunction> ColumnarResults::initReadFunctions(
               read_functions.emplace_back(read_double_func<QUERY_TYPE, COLUMNAR_OUTPUT>);
               break;
             default:
-              UNREACHABLE()
-                  << "Invalid data type encountered (BaselineHash, floating point key).";
+              UNREACHABLE() << "Invalid data type encountered (BaselineHash, floating "
+                               "point key).";
               break;
           }
         } else {

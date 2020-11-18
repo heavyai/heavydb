@@ -37,6 +37,10 @@ using namespace Data_Namespace;
 
 namespace File_Namespace {
 
+#ifdef HAVE_DCPMM
+struct PersistentBufferDescriptor;  // forward declaration
+#endif                              /* HAVE_DCPMM */
+
 class FileMgr;  // forward declaration
 
 /**
@@ -74,6 +78,14 @@ class FileBuffer : public AbstractBuffer {
              /* const size_t pageSize,*/ const ChunkKey& chunkKey,
              const std::vector<HeaderInfo>::const_iterator& headerStartIt,
              const std::vector<HeaderInfo>::const_iterator& headerEndIt);
+
+#ifdef HAVE_DCPMM
+  FileBuffer(FileMgr* fm,
+             ChunkKey key,
+             int8_t* pmmAddr,
+             PersistentBufferDescriptor* p,
+             bool existed);
+#endif /* HAVE_DCPMM */
 
   /// Destructor
   ~FileBuffer() override;
@@ -118,6 +130,11 @@ class FileBuffer : public AbstractBuffer {
 
   /// Not implemented for FileMgr -- throws a runtime_error
   int8_t* getMemoryPtr() override {
+#ifdef HAVE_DCPMM
+    if (pmmMem_) {
+      return pmmMem_;
+    }
+#endif /* HAVE_DCPMM */
     LOG(FATAL) << "Operation not supported.";
     return nullptr;  // satisfy return-type warning
   }
@@ -141,8 +158,9 @@ class FileBuffer : public AbstractBuffer {
   /// Returns the total number of bytes allocated for the FileBuffer.
   inline size_t reservedSize() const override { return multiPages_.size() * pageSize_; }
 
-  /// Returns the total number of used bytes in the FileBuffer.
-  // inline virtual size_t used() const {
+#ifdef HAVE_DCPMM
+  void constructPersistentBuffer(int8_t* addr, PersistentBufferDescriptor* p);
+#endif /* HAVE_DCPMM */
 
  private:
   // FileBuffer(const FileBuffer&);      // private copy constructor
@@ -157,6 +175,9 @@ class FileBuffer : public AbstractBuffer {
                    const int epoch,
                    const bool writeMetadata = false);
   void writeMetadata(const int epoch);
+#ifdef HAVE_DCPMM
+  void readMetadata(void);
+#endif /* HAVE_DCPMM */
   void readMetadata(const Page& page);
   void calcHeaderBuffer();
 
@@ -168,6 +189,10 @@ class FileBuffer : public AbstractBuffer {
   size_t pageSize_;
   size_t pageDataSize_;
   size_t reservedHeaderSize_;  // lets make this a constant now for simplicity - 128 bytes
+#ifdef HAVE_DCPMM
+  int8_t* pmmMem_;  // in DCPMM
+  PersistentBufferDescriptor* pmmBufferDescriptor_;
+#endif /* HAVE_DCPMM */
   ChunkKey chunkKey_;
 };
 

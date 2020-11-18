@@ -30,9 +30,13 @@ class CpuBuffer : public Buffer {
             const int device_id,
             CudaMgr_Namespace::CudaMgr* cuda_mgr,
             const size_t page_size = 512,
-            const size_t num_bytes = 0);
+            const size_t num_bytes = 0)
+    : Buffer(bm, segment_iter, device_id, page_size, num_bytes), cuda_mgr_(cuda_mgr)
+      {}
 
-  inline Data_Namespace::MemoryLevel getType() const override { return CPU_LEVEL; }
+  inline Data_Namespace::MemoryLevel getType() const override { 
+    return CPU_LEVEL;
+  }
 
  private:
   void readData(int8_t* const dst,

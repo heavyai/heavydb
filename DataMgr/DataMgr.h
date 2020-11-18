@@ -155,97 +155,157 @@ class ProcBuddyinfoParser {
   auto end() { return orders_.end(); }
   auto getFragmentationPercent() { return fragmentationPercent_; }
   auto getInputText() { return inputText_; }
-};
 
-class DataMgr {
-  friend class GlobalFileMgr;
+  struct BufferDescriptor {
+    enum Hotness { Cold, SoftHot, Hot };
 
- public:
-  DataMgr(
-      const std::string& dataDir,
-      const SystemParameters& system_parameters,
-      const bool useGpus,
-      const int numGpus,
-      const int startGpu = 0,
-      const size_t reservedGpuMem = (1 << 27),
-      const size_t numReaderThreads = 0, /* 0 means use default for # of reader threads */
-      const DiskCacheConfig cacheConfig = DiskCacheConfig());
-
-  ~DataMgr();
-  AbstractBuffer* createChunkBuffer(const ChunkKey& key,
-                                    const MemoryLevel memoryLevel,
-                                    const int deviceId = 0,
-                                    const size_t page_size = 0);
-  AbstractBuffer* getChunkBuffer(const ChunkKey& key,
-                                 const MemoryLevel memoryLevel,
-                                 const int deviceId = 0,
-                                 const size_t numBytes = 0);
-  void deleteChunksWithPrefix(const ChunkKey& keyPrefix);
-  void deleteChunksWithPrefix(const ChunkKey& keyPrefix, const MemoryLevel memLevel);
-  AbstractBuffer* alloc(const MemoryLevel memoryLevel,
-                        const int deviceId,
-                        const size_t numBytes);
-  void free(AbstractBuffer* buffer);
-  // copies one buffer to another
-  void copy(AbstractBuffer* destBuffer, AbstractBuffer* srcBuffer);
-  bool isBufferOnDevice(const ChunkKey& key,
-                        const MemoryLevel memLevel,
-                        const int deviceId);
-  std::vector<MemoryInfo> getMemoryInfo(const MemoryLevel memLevel);
-  std::string dumpLevel(const MemoryLevel memLevel);
-  void clearMemory(const MemoryLevel memLevel);
-
-  const std::map<ChunkKey, File_Namespace::FileBuffer*>& getChunkMap();
-  void checkpoint(const int db_id,
-                  const int tb_id);  // checkpoint for individual table of DB
-  void getChunkMetadataVecForKeyPrefix(ChunkMetadataVector& chunkMetadataVec,
-                                       const ChunkKey& keyPrefix);
-  inline bool gpusPresent() { return hasGpus_; }
-  void removeTableRelatedDS(const int db_id, const int tb_id);
-  void setTableEpoch(const int db_id, const int tb_id, const int start_epoch);
-  size_t getTableEpoch(const int db_id, const int tb_id);
-
-  CudaMgr_Namespace::CudaMgr* getCudaMgr() const { return cudaMgr_.get(); }
-  File_Namespace::GlobalFileMgr* getGlobalFileMgr() const;
-
-  // database_id, table_id, column_id, fragment_id
-  std::vector<int> levelSizes_;
-
-  struct SystemMemoryUsage {
-    size_t free;      // available CPU RAM memory in bytes
-    size_t total;     // total CPU RAM memory in bytes
-    size_t resident;  // resident process memory in bytes
-    size_t vtotal;    // total process virtual memory in bytes
-    size_t regular;   // process bytes non-shared
-    size_t shared;    // process bytes shared (file maps + shmem)
-    size_t frag;      // fragmentation percent
+    Hotness hotness_;
+    bool isIndex;
   };
 
-  SystemMemoryUsage getSystemMemoryUsage() const;
-  static size_t getTotalSystemMemory();
+  class DataMgr {
+    friend class GlobalFileMgr;
 
-  PersistentStorageMgr* getPersistentStorageMgr() const;
-  void resetPersistentStorage(const DiskCacheConfig& cache_config,
-                              const size_t num_reader_threads,
-                              const SystemParameters& sys_params);
+   public:
+    DataMgr(const std::string& dataDir,
+            const SystemParameters& system_parameters,
+            const bool pmm,
+            const std::string& pmm_path,
+#ifdef HAVE_DCPMM
+            const bool pmm_store,
+            const std::string& pmm_store_path,
+#endif /* HAVE_DCPMM */
+            const bool useGpus,
+            const int numGpus,
+            const int startGpu = 0,
+            const size_t reservedGpuMem = (1 << 27),
+            const size_t numReaderThreads =
+                0, /* 0 means use default for # of reader threads */
+            const DiskCacheConfig cacheConfig = DiskCacheConfig());
 
- private:
-  void populateMgrs(const SystemParameters& system_parameters,
-                    const size_t userSpecifiedNumReaderThreads,
-                    const DiskCacheConfig& cache_config);
-  void convertDB(const std::string basePath);
-  void checkpoint();  // checkpoint for whole DB, called from convertDB proc only
-  void createTopLevelMetadata() const;
+    ~DataMgr();
+#ifdef HAVE_DCPMM
+    AbstractBuffer* createChunkBuffer(BufferDescriptor bd,
+                                      const ChunkKey& key,
+                                      const MemoryLevel memoryLevel,
+                                      const size_t maxRows,
+                                      const size_t sqlTypeSize,
+                                      const int deviceId,
+                                      const size_t page_size);
+    AbstractBuffer* getChunkBuffer(BufferDescriptor bd,
+                                   const ChunkKey& key,
+                                   const MemoryLevel memoryLevel,
+                                   const unsigned long query_id,
+                                   const int deviceId,
+                                   const size_t numBytes);
+#endif /* HAVE_DCPMM */
+    AbstractBuffer* createChunkBuffer(BufferDescriptor bd,
+                                      const ChunkKey& key,
+                                      const MemoryLevel memoryLevel,
+                                      const int deviceId = 0,
+                                      const size_t page_size = 0);
+    AbstractBuffer* getChunkBuffer(BufferDescriptor bd,
+                                   const ChunkKey& key,
+                                   const MemoryLevel memoryLevel,
+                                   const int deviceId = 0,
+                                   const size_t numBytes = 0);
+    void deleteChunksWithPrefix(const ChunkKey& keyPrefix);
+    void deleteChunksWithPrefix(const ChunkKey& keyPrefix, const MemoryLevel memLevel);
+    AbstractBuffer* alloc(const MemoryLevel memoryLevel,
+                          const int deviceId,
+                          const size_t numBytes);
+    void free(AbstractBuffer* buffer);
+    // copies one buffer to another
+    void copy(AbstractBuffer* destBuffer, AbstractBuffer* srcBuffer);
+#ifdef HAVE_DCPMM
+    bool isBufferInPersistentMemory(const ChunkKey& key,
+                                    const MemoryLevel memLevel,
+                                    const int deviceId);
+#endif /* HAVE_DCPMM */
+    bool isBufferOnDevice(const ChunkKey& key,
+                          const MemoryLevel memLevel,
+                          const int deviceId);
+    std::vector<MemoryInfo> getMemoryInfo(const MemoryLevel memLevel);
+    std::string dumpLevel(const MemoryLevel memLevel);
+    void clearMemory(const MemoryLevel memLevel);
 
-  std::vector<std::vector<AbstractBufferMgr*>> bufferMgrs_;
-  std::unique_ptr<CudaMgr_Namespace::CudaMgr> cudaMgr_;
-  std::string dataDir_;
-  bool hasGpus_;
-  size_t reservedGpuMem_;
-  std::mutex buffer_access_mutex_;
-};
+    const std::map<ChunkKey, File_Namespace::FileBuffer*>& getChunkMap();
+    void checkpoint(const int db_id,
+                    const int tb_id);  // checkpoint for individual table of DB
+    void getChunkMetadataVecForKeyPrefix(ChunkMetadataVector& chunkMetadataVec,
+                                         const ChunkKey& keyPrefix);
+    inline bool gpusPresent() { return hasGpus_; }
+    void removeTableRelatedDS(const int db_id, const int tb_id);
+    void setTableEpoch(const int db_id, const int tb_id, const int start_epoch);
+    size_t getTableEpoch(const int db_id, const int tb_id);
 
-std::ostream& operator<<(std::ostream& os, const DataMgr::SystemMemoryUsage&);
+    CudaMgr_Namespace::CudaMgr* getCudaMgr() const { return cudaMgr_.get(); }
+    File_Namespace::GlobalFileMgr* getGlobalFileMgr() const;
+
+    int getProfileScaleFactor(void) { return profSF_; }
+    size_t getPeakVmSize(void);
+    void startCollectingStatistics(void);
+    void stopCollectingStatistics(std::map<unsigned long, long>& _query_time);
+    size_t estimateDramRecommended(int percentDramPerf);
+    inline bool pmmPresent(void) { return hasPmm_; }
+#ifdef HAVE_DCPMM
+    inline bool pmmStorePresent(void) { return hasPmmStore_; }
+#endif /* HAVE_DCPMM */
+
+    // database_id, table_id, column_id, fragment_id
+    std::vector<int> levelSizes_;
+
+    struct SystemMemoryUsage {
+      size_t free;      // available CPU RAM memory in bytes
+      size_t total;     // total CPU RAM memory in bytes
+      size_t resident;  // resident process memory in bytes
+      size_t vtotal;    // total process virtual memory in bytes
+      size_t regular;   // process bytes non-shared
+      size_t shared;    // process bytes shared (file maps + shmem)
+      size_t frag;      // fragmentation percent
+    };
+
+    SystemMemoryUsage getSystemMemoryUsage() const;
+    static size_t getTotalSystemMemory();
+
+    PersistentStorageMgr* getPersistentStorageMgr() const;
+    void resetPersistentStorage(const DiskCacheConfig& cache_config,
+                                const size_t num_reader_threads,
+                                const SystemParameters& sys_params);
+
+   private:
+    void populateMgrs(const SystemParameters& system_parameters,
+                      const std::string& pmm_path,
+#ifdef HAVE_DCPMM
+                      const std::string& pmm_store_path,
+#endif /* HAVE_DCPMM */
+                      const size_t userSpecifiedNumReaderThreads,
+                      const DiskCacheConfig& cache_config);
+    void convertDB(const std::string basePath);
+    void checkpoint();  // checkpoint for whole DB, called from convertDB proc only
+    void createTopLevelMetadata() const;
+
+    std::vector<std::vector<AbstractBufferMgr*>> bufferMgrs_;
+    std::unique_ptr<CudaMgr_Namespace::CudaMgr> cudaMgr_;
+    std::string dataDir_;
+    bool hasGpus_;
+    size_t reservedGpuMem_;
+    std::mutex buffer_access_mutex_;
+
+    std::map<unsigned long, std::map<ChunkKey, size_t>>
+        chunkFetchStats_;  // how many times each chunk fetched in each query
+    std::map<unsigned long, std::map<ChunkKey, size_t>>
+        chunkFetchDataSizeStats_;  // how much data of each chunk fetched in each query
+    std::mutex chunkFetchStatsMutex_;
+    bool statisticsOn_;
+    bool hasPmm_;
+    int profSF_;
+#ifdef HAVE_DCPMM
+    bool hasPmmStore_;
+#endif /* HAVE_DCPMM */
+  };
+
+  std::ostream& operator<<(std::ostream& os, const DataMgr::SystemMemoryUsage&);
 
 }  // namespace Data_Namespace
 

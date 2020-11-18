@@ -42,10 +42,15 @@
   }
 
 DEFINE_ENUM_WITH_STRING_CONVERSIONS(MgrType,
-                                    (FILE_MGR)(CPU_MGR)(GPU_MGR)(GLOBAL_FILE_MGR)(
-                                        PERSISTENT_STORAGE_MGR)(FOREIGN_STORAGE_MGR))
+                                    (FILE_MGR)(CPU_MGR)(GPU_MGR)(GLOBAL_FILE_MGR)(PERSISTENT_STORAGE_MGR)(FOREIGN_STORAGE_MGR)(CPU_HETERO_MGR))
 
 namespace Data_Namespace {
+
+enum BufferProperty {
+  CAPACITY,
+  HIGH_BDWTH,
+  LOW_LATENCY
+};
 
 /**
  * @class   AbstractBufferMgr
@@ -65,7 +70,15 @@ class AbstractBufferMgr {
   AbstractBufferMgr(const int deviceId) : device_id_(deviceId) {}
 
   // Chunk API
-  virtual AbstractBuffer* createBuffer(const ChunkKey& key,
+#ifdef HAVE_DCPMM
+  virtual AbstractBuffer* createBuffer(BufferProperty bufProp,
+                                       const ChunkKey& key,
+                                       const size_t maxRows,
+                                       const int sqlTypeSize,
+                                       const size_t pageSize) = 0;
+#endif /* HAVE_DCPMM */
+  virtual AbstractBuffer* createBuffer(BufferProperty bufProp,
+                                       const ChunkKey& key,
                                        const size_t pageSize = 0,
                                        const size_t initialSize = 0) = 0;
   virtual void deleteBuffer(
@@ -73,7 +86,7 @@ class AbstractBufferMgr {
       const bool purge = true) = 0;  // purge param only used in FileMgr
   virtual void deleteBuffersWithPrefix(const ChunkKey& keyPrefix,
                                        const bool purge = true) = 0;
-  virtual AbstractBuffer* getBuffer(const ChunkKey& key, const size_t numBytes = 0) = 0;
+  virtual AbstractBuffer* getBuffer(BufferProperty bufProp, const ChunkKey& key, const size_t numBytes = 0) = 0;
   virtual void fetchBuffer(const ChunkKey& key,
                            AbstractBuffer* destBuffer,
                            const size_t numBytes = 0) = 0;
@@ -84,6 +97,9 @@ class AbstractBufferMgr {
                                                const ChunkKey& keyPrefix) = 0;
 
   virtual bool isBufferOnDevice(const ChunkKey& key) = 0;
+#ifdef HAVE_DCPMM
+  virtual bool isBufferInPersistentMemory(const ChunkKey& key) = 0;
+#endif /* HAVE_DCPMM */
   virtual std::string printSlabs() = 0;
   virtual void clearSlabs() = 0;
   virtual size_t getMaxSize() = 0;

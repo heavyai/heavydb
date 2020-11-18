@@ -7,11 +7,13 @@ set(datamgr_source_files
     Chunk/Chunk.cpp
     DataMgr.cpp
     Encoder.cpp
+    Pmem.cpp
     StringNoneEncoder.cpp
     FileMgr/GlobalFileMgr.cpp
     FileMgr/FileMgr.cpp
     FileMgr/FileBuffer.cpp
     FileMgr/FileInfo.cpp
+    FileMgr/PmmPersistentBufferMgr.cpp
     ForeignStorage/ArrowCsvForeignStorage.cpp
     ForeignStorage/CsvDataWrapper.cpp
     ForeignStorage/CachingForeignStorageMgr.cpp
@@ -27,6 +29,8 @@ set(datamgr_source_files
     BufferMgr/GpuCudaBufferMgr/GpuCudaBuffer.cpp
     BufferMgr/CpuBufferMgr/CpuBufferMgr.cpp
     BufferMgr/CpuBufferMgr/CpuBuffer.cpp
+    BufferMgr/CpuBufferMgr/CpuHeteroBufferMgr.cpp
+    BufferMgr/CpuBufferMgr/CpuHeteroBuffer.cpp
     BufferMgr/BufferMgr.cpp
     BufferMgr/Buffer.cpp
     ForeignStorage/ParquetDataWrapper.cpp

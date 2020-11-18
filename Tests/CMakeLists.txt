@@ -107,7 +107,7 @@ endif()
 # Tests + Microbenchmarks
 add_executable(TableUpdateDeleteBenchmark TableUpdateDeleteBenchmark.cpp)
 
-set(EXECUTE_TEST_LIBS gtest mapd_thrift QueryRunner ${MAPD_LIBRARIES} ${CMAKE_DL_LIBS} ${CUDA_LIBRARIES} ${Boost_LIBRARIES} ${ZLIB_LIBRARIES} ${PROFILER_LIBS})
+set(EXECUTE_TEST_LIBS gtest mapd_thrift QueryRunner ${MAPD_LIBRARIES} ${CMAKE_DL_LIBS} ${CUDA_LIBRARIES} ${Boost_LIBRARIES} ${ZLIB_LIBRARIES} ${PROFILER_LIBS} ${memkind_LIBRARIES})
 set(THRIFT_HANDLER_TEST_LIBRARIES thrift_handler ${EXECUTE_TEST_LIBS})
 
 # Replace Licensing library with TestLicensing library

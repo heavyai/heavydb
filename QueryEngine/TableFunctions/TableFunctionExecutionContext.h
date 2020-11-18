@@ -36,6 +36,9 @@ class TableFunctionExecutionContext {
 
   ResultSetPtr execute(const TableFunctionExecutionUnit& exe_unit,
                        const std::vector<InputTableInfo>& table_infos,
+#ifdef HAVE_DCPMM
+                       const ExecutionOptions& eo,
+#endif /* HAVE_DCPMM */
                        const TableFunctionCompilationContext* compilation_context,
                        const ColumnFetcher& column_fetcher,
                        const ExecutorDeviceType device_type,

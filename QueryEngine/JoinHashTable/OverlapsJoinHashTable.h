@@ -47,6 +47,9 @@ class OverlapsJoinHashTable : public BaselineJoinHashTable {
       const std::vector<InputTableInfo>& query_infos,
       const Data_Namespace::MemoryLevel memory_level,
       const int device_count,
+#ifdef HAVE_DCPMM
+      const ExecutionOptions& eo,
+#endif /* HAVE_DCPMM */
       ColumnCacheMap& column_cache,
       Executor* executor);
 
@@ -65,6 +68,7 @@ class OverlapsJoinHashTable : public BaselineJoinHashTable {
                              const JoinHashTableInterface::HashType layout,
                              const Data_Namespace::MemoryLevel effective_memory_level,
                              const int device_id) override;
+
   virtual void reifyForDevice(const ColumnsForDevice& columns_for_device,
                               const JoinHashTableInterface::HashType layout,
                               const int device_id,
@@ -74,11 +78,19 @@ class OverlapsJoinHashTable : public BaselineJoinHashTable {
   std::vector<Data_Namespace::AbstractBuffer*> gpu_hash_table_buff_;
 #endif
 
+#ifdef HAVE_DCPMM
+  void reifyWithLayout(const ExecutionOptions& eo,
+                       const JoinHashTableInterface::HashType layout) override;
+#else /* HAVE_DCPMM */
   void reifyWithLayout(const JoinHashTableInterface::HashType layout) override;
+#endif /* HAVE_DCPMM */
 
   std::pair<size_t, size_t> calculateCounts(
       size_t shard_count,
       const Fragmenter_Namespace::TableInfo& query_info,
+#ifdef HAVE_DCPMM
+      const ExecutionOptions& eo,
+#endif /* HAVE_DCPMM */
       std::vector<BaselineJoinHashTable::ColumnsForDevice>& columns_per_device);
 
   size_t calculateHashTableSize(size_t number_of_dimensions,

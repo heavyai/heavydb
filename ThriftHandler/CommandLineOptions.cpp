@@ -372,6 +372,21 @@ void CommandLineOptions::fillOptions() {
                               ->implicit_value(true),
                           "Lookup the origin of inbound connections by IP address/DNS "
                           "name, and print this information as part of stdlog.");
+#ifdef HAVE_DCPMM
+  help_desc.add_options()(
+      "pmm-store",
+      po::value<std::string>(&pmm_store_path),
+      "Path to file containing Intel(R) DCPMM mount points for storage");
+#endif /* HAVE_DCPMM */
+  help_desc.add_options()(
+      "pmm",
+      po::value<std::string>(&pmm_path),
+      "Path to directory containing Intel(R) DCPMM mount points for cold columns");
+  help_desc.add_options()("profile-scale-factor",
+                          po::value<int>(&system_parameters.prof_scale_factor)
+                              ->default_value(system_parameters.prof_scale_factor),
+                          "Workload profile scale factor");
+
   help_desc.add(log_options_.get_options());
 }
 
@@ -641,6 +656,16 @@ void CommandLineOptions::fillAdvancedOptions() {
           ->default_value(g_enable_calcite_ddl_parser)
           ->implicit_value(true),
       "Enable using Calcite for supported DDL parsing when available.");
+  developer_desc.add_options()("enable-lazy-fetch",
+                               po::value<bool>(&g_enable_lazy_fetch)
+                                   ->default_value(g_enable_lazy_fetch)
+                                   ->implicit_value(true),
+                               "Enable lazy fetch columns in ResultSets");
+  developer_desc.add_options()("enable-multifrag-rs",
+                               po::value<bool>(&g_enable_multifrag_rs)
+                                   ->default_value(g_enable_multifrag_rs)
+                                   ->implicit_value(true),
+                               "Enable multifragment intermediate result sets");
 }
 
 namespace {
@@ -815,6 +840,26 @@ void CommandLineOptions::validate() {
   addOptionalFileToBlacklist(system_parameters.ssl_key_file);
   addOptionalFileToBlacklist(system_parameters.ssl_trust_ca_file);
   addOptionalFileToBlacklist(cluster_file);
+
+  boost::algorithm::trim_if(pmm_path, boost::is_any_of("\"'"));
+  if (pmm_path.length() > 0) {
+    if (!boost::filesystem::exists(pmm_path)) {
+      LOG(FATAL) << "File " << pmm_path << " does not exist" << std::endl;
+      return 1;
+    }
+
+    pmm = true;
+  }
+#ifdef HAVE_DCPMM
+  boost::algorithm::trim_if(pmm_store_path, boost::is_any_of("\"'"));
+  if (pmm_store_path.length() > 0) {
+    if (!boost::filesystem::exists(pmm_store_path)) {
+      LOG(FATAL) << "File " << pmm_store_path << " does not exist" << std::endl;
+      return 1;
+    }
+    pmm_store = true;
+  }
+#endif /* HAVE_DCPMM */
 }
 
 boost::optional<int> CommandLineOptions::parse_command_line(
@@ -873,7 +918,8 @@ boost::optional<int> CommandLineOptions::parse_command_line(
     if (!trim_and_check_file_exists(authMetadata.ca_file_name, "ca file name")) {
       return 1;
     }
-    if (!trim_and_check_file_exists(system_parameters.ssl_trust_store, "ssl trust store")) {
+    if (!trim_and_check_file_exists(system_parameters.ssl_trust_store,
+                                    "ssl trust store")) {
       return 1;
     }
     if (!trim_and_check_file_exists(system_parameters.ssl_keystore, "ssl key store")) {

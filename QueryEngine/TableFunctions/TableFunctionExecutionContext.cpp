@@ -74,6 +74,9 @@ size_t get_output_row_count(const TableFunctionExecutionUnit& exe_unit,
 ResultSetPtr TableFunctionExecutionContext::execute(
     const TableFunctionExecutionUnit& exe_unit,
     const std::vector<InputTableInfo>& table_infos,
+#ifdef HAVE_DCPMM
+    const ExecutionOptions& eo,
+#endif /* HAVE_DCPMM */
     const TableFunctionCompilationContext* compilation_context,
     const ColumnFetcher& column_fetcher,
     const ExecutorDeviceType device_type,
@@ -106,6 +109,9 @@ ResultSetPtr TableFunctionExecutionContext::execute(
                                                  : Data_Namespace::MemoryLevel::GPU_LEVEL,
           device_id,
           device_allocator.get(),
+#ifdef HAVE_DCPMM
+          eo.query_id,
+#endif /* HAVE_DCPMM */
           chunks_owner,
           column_fetcher.columnarized_table_cache_);
       if (!element_count) {
