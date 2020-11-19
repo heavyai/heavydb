@@ -817,6 +817,22 @@ void RefreshForeignTablesCommand::execute(TQueryResult& _return) {
   }
 
   auto& cat = session_ptr_->getCatalog();
+  const auto& current_user = session_ptr_->get_currentUser();
+  /* verify object ownership if not suser */
+  if (!current_user.isSuper) {
+    for (const auto& table_name_json : ddl_payload_["tableNames"].GetArray()) {
+      std::string table_name = table_name_json.GetString();
+      if (!Catalog_Namespace::SysCatalog::instance().verifyDBObjectOwnership(
+              current_user, DBObject(table_name, TableDBObjectType), cat)) {
+        throw std::runtime_error(
+            std::string("REFRESH FOREIGN TABLES failed on table \"") + table_name +
+            "\". It can only be executed by super user or "
+            "owner of the "
+            "object.");
+      }
+    }
+  }
+
   for (const auto& table_name_json : ddl_payload_["tableNames"].GetArray()) {
     std::string table_name = table_name_json.GetString();
     foreign_storage::refresh_foreign_table(cat, table_name, evict_cached_entries);

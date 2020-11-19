@@ -3009,6 +3009,7 @@ class ForeignTableAndTablePermissionsTest
     TablePermissionsTest::SetUp();
     if (g_aggregator && GetParam() == ddl_utils::TableType::FOREIGN_TABLE) {
       LOG(INFO) << "Test fixture not supported in distributed mode.";
+      GTEST_SKIP();
       return;
     }
     switch (GetParam()) {
@@ -3024,16 +3025,23 @@ class ForeignTableAndTablePermissionsTest
   }
 };
 
+class ForeignTablePermissionsTest : public TablePermissionsTest {
+ protected:
+  void SetUp() override {
+    TablePermissionsTest::SetUp();
+    if (g_aggregator) {
+      LOG(INFO) << "Test not supported in distributed mode.";
+      GTEST_SKIP();
+    }
+  }
+};
+
 INSTANTIATE_TEST_SUITE_P(ForeignTableAndTablePermissionsTest,
                          ForeignTableAndTablePermissionsTest,
                          ::testing::Values(ddl_utils::TableType::FOREIGN_TABLE,
                                            ddl_utils::TableType::TABLE));
 
-TEST_F(TablePermissionsTest, ForeignTableGrantRevokeDropPrivilege) {
-  if (g_aggregator) {
-    LOG(INFO) << "Test not supported in distributed mode.";
-    return;
-  }
+TEST_F(ForeignTablePermissionsTest, ForeignTableGrantRevokeDropPrivilege) {
   std::string privilege{"DROP"};
   std::string query{"DROP FOREIGN TABLE test_table;"};
   std::string no_privilege_exception{
@@ -3064,7 +3072,7 @@ TEST_P(ForeignTableAndTablePermissionsTest, GrantRevokeSelectPrivilege) {
     // mode for regular tables (DistributedQueryRunner::init can not be run
     // more than once.)
     LOG(INFO) << "Test not supported in distributed mode.";
-    return;
+    GTEST_SKIP();
   }
   std::string privilege{"SELECT"};
   std::string query{"SELECT * FROM test_table;"};
@@ -3077,11 +3085,7 @@ TEST_P(ForeignTableAndTablePermissionsTest, GrantRevokeSelectPrivilege) {
   queryAsTestUserWithPrivilege(query, privilege);
 }
 
-TEST_F(TablePermissionsTest, ForeignTableGrantRevokeDeletePrivilege) {
-  if (g_aggregator) {
-    LOG(INFO) << "Test not supported in distributed mode.";
-    return;
-  }
+TEST_F(ForeignTablePermissionsTest, ForeignTableGrantRevokeDeletePrivilege) {
   std::string privilege{"DELETE"};
   std::string query{"DELETE FROM test_table WHERE i = 1;"};
   std::string no_privilege_exception{
@@ -3112,11 +3116,7 @@ TEST_F(TablePermissionsTest, TableGrantRevokeDeletePrivilege) {
   queryAsTestUserWithPrivilege(query, privilege);
 }
 
-TEST_F(TablePermissionsTest, ForeignTableGrantRevokeInsertPrivilege) {
-  if (g_aggregator) {
-    LOG(INFO) << "Test not supported in distributed mode.";
-    return;
-  }
+TEST_F(ForeignTablePermissionsTest, ForeignTableGrantRevokeInsertPrivilege) {
   std::string privilege{"INSERT"};
   std::string query{"INSERT INTO test_table VALUES (2);"};
   std::string no_privilege_exception{
@@ -3143,11 +3143,7 @@ TEST_F(TablePermissionsTest, TableGrantRevokeInsertPrivilege) {
   queryAsTestUserWithPrivilege(query, privilege);
 }
 
-TEST_F(TablePermissionsTest, ForeignTableGrantRevokeTruncatePrivilege) {
-  if (g_aggregator) {
-    LOG(INFO) << "Test not supported in distributed mode.";
-    return;
-  }
+TEST_F(ForeignTablePermissionsTest, ForeignTableGrantRevokeTruncatePrivilege) {
   std::string privilege{"TRUNCATE"};
   std::string query{"TRUNCATE TABLE test_table;"};
   std::string no_privilege_exception{
@@ -3176,11 +3172,7 @@ TEST_F(TablePermissionsTest, TableGrantRevokeTruncatePrivilege) {
   queryAsTestUserWithPrivilege(query, privilege);
 }
 
-TEST_F(TablePermissionsTest, ForeignTableGrantRevokeUpdatePrivilege) {
-  if (g_aggregator) {
-    LOG(INFO) << "Test not supported in distributed mode.";
-    return;
-  }
+TEST_F(ForeignTablePermissionsTest, ForeignTableGrantRevokeUpdatePrivilege) {
   std::string privilege{"UPDATE"};
   std::string query{"UPDATE test_table SET i = 2 WHERE i = 1;"};
   std::string no_privilege_exception{
@@ -3198,10 +3190,6 @@ TEST_F(TablePermissionsTest, ForeignTableGrantRevokeUpdatePrivilege) {
 }
 
 TEST_F(TablePermissionsTest, TableGrantRevokeUpdatePrivilege) {
-  if (g_aggregator) {
-    LOG(INFO) << "Test not supported in distributed mode.";
-    return;
-  }
   std::string privilege{"UPDATE"};
   std::string query{"UPDATE test_table SET i = 2 WHERE i = 1;"};
   std::string no_privilege_exception{
@@ -3241,11 +3229,7 @@ TEST_F(TablePermissionsTest, TableGrantRevokeAlterTablePrivilege) {
   queryAsTestUserWithPrivilege(query, privilege);
 }
 
-TEST_F(TablePermissionsTest, TableGrantRevokeAlterForeignTablePrivilege) {
-  if (g_aggregator) {
-    LOG(INFO) << "Test not supported in distributed mode.";
-    return;
-  }
+TEST_F(ForeignTablePermissionsTest, TableGrantRevokeAlterForeignTablePrivilege) {
   std::string privilege{"ALTER"};
   std::string query{
       "ALTER FOREIGN TABLE test_table WITH (refresh_update_type = 'append');"};
@@ -3259,11 +3243,7 @@ TEST_F(TablePermissionsTest, TableGrantRevokeAlterForeignTablePrivilege) {
   queryAsTestUserWithPrivilege(query, privilege);
 }
 
-TEST_F(TablePermissionsTest, ForeignTableAllPrivileges) {
-  if (g_aggregator) {
-    LOG(INFO) << "Test not supported in distributed mode.";
-    return;
-  }
+TEST_F(ForeignTablePermissionsTest, ForeignTableAllPrivileges) {
   createTestForeignTable();
   sql("GRANT ALL ON TABLE test_table TO test_user;");
   login("test_user", "test_pass");
@@ -3292,11 +3272,7 @@ TEST_F(TablePermissionsTest, TableAllPrivileges) {
   runQuery("DROP TABLE test_table;");
 }
 
-TEST_F(TablePermissionsTest, ForeignTableGrantRevokeCreateTablePrivilege) {
-  if (g_aggregator) {
-    LOG(INFO) << "Test not supported in distributed mode.";
-    return;
-  }
+TEST_F(ForeignTablePermissionsTest, ForeignTableGrantRevokeCreateTablePrivilege) {
   login("test_user", "test_pass");
   executeLambdaAndAssertException([this] { createTestForeignTable(); },
                                   "Exception: Foreign table \"test_table\" will not be "
@@ -3318,6 +3294,36 @@ TEST_F(TablePermissionsTest, ForeignTableGrantRevokeCreateTablePrivilege) {
   // clean up permissions
   switchToAdmin();
   sql("REVOKE CREATE TABLE ON DATABASE omnisci FROM test_user;");
+}
+
+TEST_F(ForeignTablePermissionsTest, ForeignTableRefreshOwner) {
+  sql("GRANT CREATE TABLE ON DATABASE omnisci TO test_user;");
+  login("test_user", "test_pass");
+  createTestForeignTable();
+  runQuery("REFRESH FOREIGN TABLES test_table;");
+  // clean up permissions
+  switchToAdmin();
+  sql("REVOKE CREATE TABLE ON DATABASE omnisci FROM test_user;");
+}
+
+TEST_F(ForeignTablePermissionsTest, ForeignTableRefreshSuperUser) {
+  sql("GRANT CREATE TABLE ON DATABASE omnisci TO test_user;");
+  login("test_user", "test_pass");
+  createTestForeignTable();
+  switchToAdmin();
+  runQuery("REFRESH FOREIGN TABLES test_table;");
+  // clean up permissions
+  sql("REVOKE CREATE TABLE ON DATABASE omnisci FROM test_user;");
+}
+
+TEST_F(ForeignTablePermissionsTest, ForeignTableRefreshNonOwner) {
+  createTestForeignTable();
+  sql("GRANT ALL ON TABLE test_table TO test_user;");
+  login("test_user", "test_pass");
+  runQueryAndAssertException(
+      "REFRESH FOREIGN TABLES test_table;",
+      "Exception: REFRESH FOREIGN TABLES failed on table \"test_table\". It can only be "
+      "executed by super user or owner of the object.");
 }
 
 int main(int argc, char* argv[]) {
