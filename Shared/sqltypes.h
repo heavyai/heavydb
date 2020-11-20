@@ -519,6 +519,11 @@ class SQLTypeInfo {
     return is_string() && compression == kENCODING_DICT;
   }
 
+  inline bool is_dict_encoded_type() const {
+    return is_dict_encoded_string() ||
+           (is_array() && get_elem_type().is_dict_encoded_string());
+  }
+
   HOST DEVICE inline bool operator!=(const SQLTypeInfo& rhs) const {
     return type != rhs.get_type() || subtype != rhs.get_subtype() ||
            dimension != rhs.get_dimension() || scale != rhs.get_scale() ||

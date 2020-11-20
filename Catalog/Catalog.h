@@ -181,6 +181,8 @@ class Catalog final {
 
   const foreign_storage::ForeignTable* getForeignTableUnlocked(int tableId) const;
 
+  const foreign_storage::ForeignTable* getForeignTable(int table_id) const;
+
   /**
    * @brief Returns a list of pointers to constant ColumnDescriptor structs for all the
    * columns from a particular table specified by table id

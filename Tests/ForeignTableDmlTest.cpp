@@ -682,36 +682,13 @@ TEST_F(SelectQueryTest, ParquetStringsAllNullPlacementPermutations) {
   // clang-format on
 }
 
-TEST_F(SelectQueryTest, DISABLED_ParquetStringDictionaryEncodedMetadataTest) {
-  // TODO: This test fails, it highlights a major issue with loading
-  // dictionaries for dict encoded strings upon chunk load time: only an empty
-  // dictionary exists during the first query, thus any comparisons to fixed
-  // string literals will fail until the dictionary exits.
-
+TEST_F(SelectQueryTest, ParquetStringDictionaryEncodedMetadataTest) {
   const auto& query = getCreateForeignTableQuery("(txt TEXT ENCODING DICT (32) )",
                                                  {{"fragment_size", "4"}},
                                                  "strings_repeating",
                                                  "parquet");
   sql(query);
 
-  TQueryResult result;
-  sql(result, "SELECT count(txt) from test_foreign_table WHERE txt = 'a';");
-  assertResultSetEqual({{
-                           i(5),
-                       }},
-                       result);
-}
-
-TEST_F(SelectQueryTest, ParquetStringDictionaryEncodedMetadataTestAfterChunkLoad) {
-  const auto& query = getCreateForeignTableQuery("(txt TEXT ENCODING DICT (32) )",
-                                                 {{"fragment_size", "4"}},
-                                                 "strings_repeating",
-                                                 "parquet");
-  sql(query);
-
-  // Update the metadata of the string dictionary encoded column with the first
-  // query
-  sql("SELECT count(txt) from test_foreign_table WHERE txt = 'a';");
   TQueryResult result;
   sql(result, "SELECT count(txt) from test_foreign_table WHERE txt = 'a';");
   assertResultSetEqual({{
@@ -994,7 +971,6 @@ TEST_P(DataWrapperSelectQueryTest, AggregateAndGroupBy) {
   // clang-format on
 }
 
-// TODO: implement for parquet when kARRAY support implemented for parquet
 TEST_P(CacheControllingSelectQueryTest, Join) {
   auto query = getCreateForeignTableQuery("(t TEXT, i INTEGER[])", "example_1", "csv");
   sql(query);
@@ -2320,6 +2296,126 @@ TEST_P(FragmentSizesAppendRefreshTest, AppendFrags) {
   bf::remove_all(getDataFilesPath() + "append_tmp");
 }
 
+// Test that string dictionaries are populated correctly after an append
+class StringDictAppendTest : public AppendRefreshTest {};
+
+INSTANTIATE_TEST_SUITE_P(
+    StringDictAppendParamaterizedTests,
+    StringDictAppendTest,
+    ::testing::Values(
+        AppendRefreshTestParam{32000000,  // Fragment is modified during append
+                               "parquet",
+                               "parquet_string_dir",
+                               "parquet_string_dir",
+                               false},
+        AppendRefreshTestParam{2,  // Fragments are created during the append
+                               "parquet",
+                               "parquet_string_dir",
+                               "parquet_string_dir",
+                               false}));
+
+TEST_P(StringDictAppendTest, AppendStringDictFilter) {
+  // Create initial files and tables
+  bf::remove_all(getDataFilesPath() + "append_tmp");
+  recursive_copy(getDataFilesPath() + "append_before", getDataFilesPath() + "append_tmp");
+  auto& param = GetParam();
+  int fragment_size = param.fragment_size;
+  std::string filename = param.filename;
+  std::string query =
+      "CREATE FOREIGN TABLE " + default_name + " (txt TEXT ENCODING DICT (32) ) "s +
+      "SERVER omnisci_local_" + param.wrapper + " WITH (file_path = '" +
+      getDataFilesPath() + "append_tmp/" + filename + "', fragment_size = '" +
+      std::to_string(fragment_size) + "', REFRESH_UPDATE_TYPE = 'APPEND');";
+
+  sql(query);
+  {
+    TQueryResult result;
+
+    sql(result, "SELECT count(txt) from " + default_name + " WHERE txt = 'a';");
+    assertResultSetEqual({{
+                             i(1),
+                         }},
+                         result);
+  }
+
+  if (param.recover_cache) {
+    // Reset cache
+    resetPersistentStorageMgr(DiskCacheLevel::fsi);
+  }
+  // Modify files
+  bf::remove_all(getDataFilesPath() + "append_tmp");
+  recursive_copy(getDataFilesPath() + "append_after", getDataFilesPath() + "append_tmp");
+
+  // Refresh command
+  sql("REFRESH FOREIGN TABLES " + default_name + ";");
+  {
+    TQueryResult result;
+    sql(result, "SELECT count(txt) from " + default_name + " WHERE txt = 'aaaa';");
+    assertResultSetEqual({{
+                             i(1),
+                         }},
+                         result);
+  }
+
+  bf::remove_all(getDataFilesPath() + "append_tmp");
+}
+
+TEST_P(StringDictAppendTest, AppendStringDictJoin) {
+  // Create initial files and tables
+  bf::remove_all(getDataFilesPath() + "append_tmp");
+  recursive_copy(getDataFilesPath() + "append_before", getDataFilesPath() + "append_tmp");
+  auto& param = GetParam();
+  int fragment_size = param.fragment_size;
+  std::string name_1 = default_name + "_1";
+  std::string name_2 = default_name + "_2";
+  std::string filename = param.filename;
+  sql("DROP FOREIGN TABLE IF EXISTS " + name_1 + ";");
+  sql("DROP FOREIGN TABLE IF EXISTS " + name_2 + ";");
+  for (auto const& name : {name_1, name_2}) {
+    sql("CREATE FOREIGN TABLE " + name + " (txt TEXT ENCODING DICT (32) ) "s +
+        "SERVER omnisci_local_" + param.wrapper + " WITH (file_path = '" +
+        getDataFilesPath() + "append_tmp/" + filename + "', fragment_size = '" +
+        std::to_string(fragment_size) + "', REFRESH_UPDATE_TYPE = 'APPEND');");
+  }
+
+  std::string join = "SELECT t1.txt, t2.txt FROM " + name_1 + " AS t1 JOIN " + name_2 +
+                     " AS t2 ON t1.txt = t2.txt ORDER BY t1.txt;";
+
+  {
+    TQueryResult result;
+    sql(result, join);
+    assertResultSetEqual({{"a", "a"}, {"aa", "aa"}, {"aaa", "aaa"}}, result);
+  }
+
+  if (param.recover_cache) {
+    // Reset cache
+    resetPersistentStorageMgr(DiskCacheLevel::fsi);
+  }
+
+  // Modify files
+  bf::remove_all(getDataFilesPath() + "append_tmp");
+  recursive_copy(getDataFilesPath() + "append_after", getDataFilesPath() + "append_tmp");
+
+  // Refresh command
+  sql("REFRESH FOREIGN TABLES " + name_1 + "  WITH (evict = true) ;");
+  sql("REFRESH FOREIGN TABLES " + name_2 + " WITH (evict = true);");
+
+  {
+    TQueryResult result;
+    sql(result, join);
+    assertResultSetEqual({{"a", "a"},
+                          {"aa", "aa"},
+                          {"aaa", "aaa"},
+                          {"aaaa", "aaaa"},
+                          {"aaaaa", "aaaaa"},
+                          {"aaaaaa", "aaaaaa"}},
+                         result);
+  }
+  sql("DROP FOREIGN TABLE IF EXISTS " + name_1 + ";");
+  sql("DROP FOREIGN TABLE IF EXISTS " + name_2 + ";");
+  bf::remove_all(getDataFilesPath() + "append_tmp");
+}
+
 class DataWrapperAppendRefreshTest : public AppendRefreshTest {};
 
 INSTANTIATE_TEST_SUITE_P(
@@ -3077,9 +3173,9 @@ TEST_P(RowGroupAndFragmentSizeSelectQueryTest, Join) {
   int64_t row_group_size = param.first;
   int64_t fragment_size = param.second;
   std::stringstream filename_stream;
-  filename_stream << "example_row_group_size." << row_group_size;
+  filename_stream << "example_1_row_group_size." << row_group_size;
   auto query =
-      getCreateForeignTableQuery("(a BIGINT, b BIGINT, c BIGINT, d DOUBLE)",
+      getCreateForeignTableQuery("(t TEXT, i INTEGER)",
                                  {{"fragment_size", std::to_string(fragment_size)}},
                                  filename_stream.str(),
                                  "parquet");
@@ -3090,16 +3186,14 @@ TEST_P(RowGroupAndFragmentSizeSelectQueryTest, Join) {
 
   TQueryResult result;
   sql(result,
-      "SELECT t1.a, t1.b, t1.c, t1.d, t2.i, t2.d FROM "
-      "test_foreign_table AS t1 JOIN "
-      "test_foreign_table_2 AS t2 ON t1.a = t2.i ORDER BY t1.a;");
-
-  assertResultSetEqual({{i(1), i(3), i(6), 7.1, i(1), 1.1},
-                        {i(1), i(3), i(6), 7.1, i(1), 1.1},
-                        {i(1), i(3), i(6), 7.1, i(1), 1.1},
-                        {i(2), i(4), i(7), 0.000591, i(2), 2.2},
-                        {i(2), i(4), i(7), 0.000591, i(2), 2.2},
-                        {i(3), i(5), i(8), 1.1, i(3), 3.3}},
+      "SELECT t1.t, t1.i, t2.i, t2.d FROM test_foreign_table AS t1 JOIN "
+      "test_foreign_table_2 AS t2 ON t1.t = t2.t;");
+  assertResultSetEqual({{"a", i(1), i(1), 1.1},
+                        {"aa", Null_i, i(1), 1.1},
+                        {"aa", Null_i, i(2), 2.2},
+                        {"aaa", i(1), i(1), 1.1},
+                        {"aaa", i(1), i(2), 2.2},
+                        {"aaa", i(1), i(3), 3.3}},
                        result);
 }
 

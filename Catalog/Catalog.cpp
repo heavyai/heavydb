@@ -1691,6 +1691,11 @@ const foreign_storage::ForeignTable* Catalog::getForeignTableUnlocked(
   return foreign_table;
 }
 
+const foreign_storage::ForeignTable* Catalog::getForeignTable(int table_id) const {
+  cat_read_lock read_lock(this);
+  return getForeignTableUnlocked(table_id);
+}
+
 void Catalog::getAllColumnMetadataForTableImpl(
     const TableDescriptor* td,
     list<const ColumnDescriptor*>& columnDescriptors,
