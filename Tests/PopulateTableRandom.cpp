@@ -286,6 +286,7 @@ std::vector<size_t> populate_table_random(const std::string& table_name,
   insert_data.tableId = td->tableId;
   for (const auto& cd : cds) {
     insert_data.columnIds.push_back(cd->columnId);
+    insert_data.is_default.push_back(false);
   }
   insert_data.numRows = num_rows;
   std::vector<std::vector<int8_t>> numbers_vec;

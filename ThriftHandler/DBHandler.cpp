@@ -5978,11 +5978,15 @@ void DBHandler::insert_data(const TSessionId& session,
     auto stdlog = STDLOG(get_session_ptr(session));
     auto session_ptr = stdlog.getConstSessionInfo();
     CHECK_EQ(thrift_insert_data.column_ids.size(), thrift_insert_data.data.size());
+    CHECK(thrift_insert_data.is_default.size() == 0 ||
+          thrift_insert_data.is_default.size() == thrift_insert_data.column_ids.size());
     auto const& cat = session_ptr->getCatalog();
     Fragmenter_Namespace::InsertData insert_data;
     insert_data.databaseId = thrift_insert_data.db_id;
     insert_data.tableId = thrift_insert_data.table_id;
     insert_data.columnIds = thrift_insert_data.column_ids;
+    insert_data.is_default = thrift_insert_data.is_default;
+    insert_data.numRows = thrift_insert_data.num_rows;
     std::vector<std::unique_ptr<std::vector<std::string>>> none_encoded_string_columns;
     std::vector<std::unique_ptr<std::vector<ArrayDatum>>> array_columns;
     for (size_t col_idx = 0; col_idx < insert_data.columnIds.size(); ++col_idx) {
@@ -5991,6 +5995,10 @@ void DBHandler::insert_data(const TSessionId& session,
       const auto cd = cat.getMetadataForColumn(insert_data.tableId, column_id);
       CHECK(cd);
       const auto& ti = cd->columnType;
+      size_t rows_expected =
+          !insert_data.is_default.empty() && insert_data.is_default[col_idx]
+              ? 1ul
+              : insert_data.numRows;
       if (ti.is_number() || ti.is_time() || ti.is_boolean()) {
         p.numbersPtr = (int8_t*)thrift_insert_data.data[col_idx].fixed_len_data.data();
       } else if (ti.is_string()) {
@@ -6000,8 +6008,8 @@ void DBHandler::insert_data(const TSessionId& session,
           CHECK_EQ(kENCODING_NONE, ti.get_compression());
           none_encoded_string_columns.emplace_back(new std::vector<std::string>());
           auto& none_encoded_strings = none_encoded_string_columns.back();
-          CHECK_EQ(static_cast<size_t>(thrift_insert_data.num_rows),
-                   thrift_insert_data.data[col_idx].var_len_data.size());
+
+          CHECK_EQ(rows_expected, thrift_insert_data.data[col_idx].var_len_data.size());
           for (const auto& varlen_str : thrift_insert_data.data[col_idx].var_len_data) {
             none_encoded_strings->push_back(varlen_str.payload);
           }
@@ -6010,8 +6018,7 @@ void DBHandler::insert_data(const TSessionId& session,
       } else if (ti.is_geometry()) {
         none_encoded_string_columns.emplace_back(new std::vector<std::string>());
         auto& none_encoded_strings = none_encoded_string_columns.back();
-        CHECK_EQ(static_cast<size_t>(thrift_insert_data.num_rows),
-                 thrift_insert_data.data[col_idx].var_len_data.size());
+        CHECK_EQ(rows_expected, thrift_insert_data.data[col_idx].var_len_data.size());
         for (const auto& varlen_str : thrift_insert_data.data[col_idx].var_len_data) {
           none_encoded_strings->push_back(varlen_str.payload);
         }
@@ -6020,8 +6027,7 @@ void DBHandler::insert_data(const TSessionId& session,
         CHECK(ti.is_array());
         array_columns.emplace_back(new std::vector<ArrayDatum>());
         auto& array_column = array_columns.back();
-        CHECK_EQ(static_cast<size_t>(thrift_insert_data.num_rows),
-                 thrift_insert_data.data[col_idx].var_len_data.size());
+        CHECK_EQ(rows_expected, thrift_insert_data.data[col_idx].var_len_data.size());
         for (const auto& t_arr_datum : thrift_insert_data.data[col_idx].var_len_data) {
           if (t_arr_datum.is_null) {
             if (ti.get_size() > 0 && !ti.get_elem_type().is_string()) {
@@ -6045,7 +6051,6 @@ void DBHandler::insert_data(const TSessionId& session,
       }
       insert_data.data.push_back(p);
     }
-    insert_data.numRows = thrift_insert_data.num_rows;
     const auto td_with_lock =
         lockmgr::TableSchemaLockContainer<lockmgr::ReadLock>::acquireTableDescriptor(
             cat, insert_data.tableId);
@@ -6055,6 +6060,7 @@ void DBHandler::insert_data(const TSessionId& session,
     // this should have the same lock seq as COPY FROM
     ChunkKey chunkKey = {insert_data.databaseId, insert_data.tableId};
     auto insert_data_lock = lockmgr::InsertDataLockMgr::getWriteLockForTable(chunkKey);
+    auto data_memory_holder = import_export::fill_missing_columns(&cat, insert_data);
     td->fragmenter->insertDataNoCheckpoint(insert_data);
   } catch (const std::exception& e) {
     THROW_MAPD_EXCEPTION("Exception: " + std::string(e.what()));

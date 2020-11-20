@@ -516,9 +516,7 @@ void TypedImportBuffer::addDictEncodedString(const std::vector<std::string>& str
 void TypedImportBuffer::add_value(const ColumnDescriptor* cd,
                                   const std::string_view val,
                                   const bool is_null,
-                                  const CopyParams& copy_params,
-                                  const int64_t replicate_count) {
-  set_replicate_count(replicate_count);
+                                  const CopyParams& copy_params) {
   const auto type = cd->columnType.get_type();
   switch (type) {
     case kBOOLEAN: {
@@ -1287,9 +1285,7 @@ size_t TypedImportBuffer::add_values(const ColumnDescriptor* cd, const TColumn& 
 
 void TypedImportBuffer::add_value(const ColumnDescriptor* cd,
                                   const TDatum& datum,
-                                  const bool is_null,
-                                  const int64_t replicate_count) {
-  set_replicate_count(replicate_count);
+                                  const bool is_null) {
   const auto type = cd->columnType.is_decimal() ? decimal_to_int_type(cd->columnType)
                                                 : cd->columnType.get_type();
   switch (type) {
@@ -1453,8 +1449,7 @@ void Importer::set_geo_physical_import_buffer(
     std::vector<double>& bounds,
     std::vector<int>& ring_sizes,
     std::vector<int>& poly_rings,
-    int render_group,
-    const int64_t replicate_count) {
+    int render_group) {
   const auto col_ti = cd->columnType;
   const auto col_type = col_ti.get_type();
   auto columnId = cd->columnId;
@@ -1489,7 +1484,7 @@ void Importer::set_geo_physical_import_buffer(
     }
   }
   tdd_coords.is_null = is_null_geo;
-  import_buffers[col_idx++]->add_value(cd_coords, tdd_coords, false, replicate_count);
+  import_buffers[col_idx++]->add_value(cd_coords, tdd_coords, false);
 
   if (col_type == kPOLYGON || col_type == kMULTIPOLYGON) {
     // Create ring_sizes array value and add it to the physical column
@@ -1503,8 +1498,7 @@ void Importer::set_geo_physical_import_buffer(
       }
     }
     tdd_ring_sizes.is_null = is_null_geo;
-    import_buffers[col_idx++]->add_value(
-        cd_ring_sizes, tdd_ring_sizes, false, replicate_count);
+    import_buffers[col_idx++]->add_value(cd_ring_sizes, tdd_ring_sizes, false);
   }
 
   if (col_type == kMULTIPOLYGON) {
@@ -1519,8 +1513,7 @@ void Importer::set_geo_physical_import_buffer(
       }
     }
     tdd_poly_rings.is_null = is_null_geo;
-    import_buffers[col_idx++]->add_value(
-        cd_poly_rings, tdd_poly_rings, false, replicate_count);
+    import_buffers[col_idx++]->add_value(cd_poly_rings, tdd_poly_rings, false);
   }
 
   if (col_type == kLINESTRING || col_type == kPOLYGON || col_type == kMULTIPOLYGON) {
@@ -1534,7 +1527,7 @@ void Importer::set_geo_physical_import_buffer(
       }
     }
     tdd_bounds.is_null = is_null_geo;
-    import_buffers[col_idx++]->add_value(cd_bounds, tdd_bounds, false, replicate_count);
+    import_buffers[col_idx++]->add_value(cd_bounds, tdd_bounds, false);
   }
 
   if (col_type == kPOLYGON || col_type == kMULTIPOLYGON) {
@@ -1543,8 +1536,7 @@ void Importer::set_geo_physical_import_buffer(
     TDatum td_render_group;
     td_render_group.val.int_val = render_group;
     td_render_group.is_null = is_null_geo;
-    import_buffers[col_idx++]->add_value(
-        cd_render_group, td_render_group, false, replicate_count);
+    import_buffers[col_idx++]->add_value(cd_render_group, td_render_group, false);
   }
 }
 
@@ -1557,8 +1549,7 @@ void Importer::set_geo_physical_import_buffer_columnar(
     std::vector<std::vector<double>>& bounds_column,
     std::vector<std::vector<int>>& ring_sizes_column,
     std::vector<std::vector<int>>& poly_rings_column,
-    int render_group,
-    const int64_t replicate_count) {
+    int render_group) {
   const auto col_ti = cd->columnType;
   const auto col_type = col_ti.get_type();
   auto columnId = cd->columnId;
@@ -1596,7 +1587,7 @@ void Importer::set_geo_physical_import_buffer_columnar(
     TDatum tdd_coords;
     tdd_coords.val.arr_val = td_coords_data;
     tdd_coords.is_null = is_null_geo;
-    import_buffers[col_idx]->add_value(cd_coords, tdd_coords, false, replicate_count);
+    import_buffers[col_idx]->add_value(cd_coords, tdd_coords, false);
   }
   col_idx++;
 
@@ -1621,8 +1612,7 @@ void Importer::set_geo_physical_import_buffer_columnar(
       TDatum tdd_ring_sizes;
       tdd_ring_sizes.val.arr_val = td_ring_sizes;
       tdd_ring_sizes.is_null = is_null_geo;
-      import_buffers[col_idx]->add_value(
-          cd_ring_sizes, tdd_ring_sizes, false, replicate_count);
+      import_buffers[col_idx]->add_value(cd_ring_sizes, tdd_ring_sizes, false);
     }
     col_idx++;
   }
@@ -1648,8 +1638,7 @@ void Importer::set_geo_physical_import_buffer_columnar(
       TDatum tdd_poly_rings;
       tdd_poly_rings.val.arr_val = td_poly_rings;
       tdd_poly_rings.is_null = is_null_geo;
-      import_buffers[col_idx]->add_value(
-          cd_poly_rings, tdd_poly_rings, false, replicate_count);
+      import_buffers[col_idx]->add_value(cd_poly_rings, tdd_poly_rings, false);
     }
     col_idx++;
   }
@@ -1674,7 +1663,7 @@ void Importer::set_geo_physical_import_buffer_columnar(
       TDatum tdd_bounds;
       tdd_bounds.val.arr_val = td_bounds_data;
       tdd_bounds.is_null = is_null_geo;
-      import_buffers[col_idx]->add_value(cd_bounds, tdd_bounds, false, replicate_count);
+      import_buffers[col_idx]->add_value(cd_bounds, tdd_bounds, false);
     }
     col_idx++;
   }
@@ -1686,8 +1675,7 @@ void Importer::set_geo_physical_import_buffer_columnar(
     td_render_group.val.int_val = render_group;
     td_render_group.is_null = false;
     for (decltype(coords_row_count) i = 0; i < coords_row_count; i++) {
-      import_buffers[col_idx]->add_value(
-          cd_render_group, td_render_group, false, replicate_count);
+      import_buffers[col_idx]->add_value(cd_render_group, td_render_group, false);
     }
     col_idx++;
   }
@@ -2620,22 +2608,85 @@ double double_value_at(const TypedImportBuffer& import_buffer, const size_t inde
 
 }  // namespace
 
-void Loader::distributeToShards(std::vector<OneShardBuffers>& all_shard_import_buffers,
-                                std::vector<size_t>& all_shard_row_counts,
-                                const OneShardBuffers& import_buffers,
-                                const size_t row_count,
-                                const size_t shard_count,
-                                const Catalog_Namespace::SessionInfo* session_info) {
-  all_shard_row_counts.resize(shard_count);
-  for (size_t shard_idx = 0; shard_idx < shard_count; ++shard_idx) {
-    all_shard_import_buffers.emplace_back();
-    for (const auto& typed_import_buffer : import_buffers) {
-      all_shard_import_buffers.back().emplace_back(
-          new TypedImportBuffer(typed_import_buffer->getColumnDesc(),
-                                typed_import_buffer->getStringDictionary()));
+void Loader::fillShardRow(const size_t row_index,
+                          OneShardBuffers& shard_output_buffers,
+                          const OneShardBuffers& import_buffers) {
+  for (size_t col_idx = 0; col_idx < import_buffers.size(); ++col_idx) {
+    const auto& input_buffer = import_buffers[col_idx];
+    const auto& col_ti = input_buffer->getTypeInfo();
+    const auto type =
+        col_ti.is_decimal() ? decimal_to_int_type(col_ti) : col_ti.get_type();
+
+    switch (type) {
+      case kBOOLEAN:
+        shard_output_buffers[col_idx]->addBoolean(int_value_at(*input_buffer, row_index));
+        break;
+      case kTINYINT:
+        shard_output_buffers[col_idx]->addTinyint(int_value_at(*input_buffer, row_index));
+        break;
+      case kSMALLINT:
+        shard_output_buffers[col_idx]->addSmallint(
+            int_value_at(*input_buffer, row_index));
+        break;
+      case kINT:
+        shard_output_buffers[col_idx]->addInt(int_value_at(*input_buffer, row_index));
+        break;
+      case kBIGINT:
+        shard_output_buffers[col_idx]->addBigint(int_value_at(*input_buffer, row_index));
+        break;
+      case kFLOAT:
+        shard_output_buffers[col_idx]->addFloat(float_value_at(*input_buffer, row_index));
+        break;
+      case kDOUBLE:
+        shard_output_buffers[col_idx]->addDouble(
+            double_value_at(*input_buffer, row_index));
+        break;
+      case kTEXT:
+      case kVARCHAR:
+      case kCHAR: {
+        CHECK_LT(row_index, input_buffer->getStringBuffer()->size());
+        shard_output_buffers[col_idx]->addString(
+            (*input_buffer->getStringBuffer())[row_index]);
+        break;
+      }
+      case kTIME:
+      case kTIMESTAMP:
+      case kDATE:
+        shard_output_buffers[col_idx]->addBigint(int_value_at(*input_buffer, row_index));
+        break;
+      case kARRAY:
+        if (IS_STRING(col_ti.get_subtype())) {
+          CHECK(input_buffer->getStringArrayBuffer());
+          CHECK_LT(row_index, input_buffer->getStringArrayBuffer()->size());
+          const auto& input_arr = (*(input_buffer->getStringArrayBuffer()))[row_index];
+          shard_output_buffers[col_idx]->addStringArray(input_arr);
+        } else {
+          shard_output_buffers[col_idx]->addArray(
+              (*input_buffer->getArrayBuffer())[row_index]);
+        }
+        break;
+      case kPOINT:
+      case kLINESTRING:
+      case kPOLYGON:
+      case kMULTIPOLYGON: {
+        CHECK_LT(row_index, input_buffer->getGeoStringBuffer()->size());
+        shard_output_buffers[col_idx]->addGeoString(
+            (*input_buffer->getGeoStringBuffer())[row_index]);
+        break;
+      }
+      default:
+        CHECK(false);
     }
   }
-  CHECK_GT(table_desc_->shardedColumnId, 0);
+}
+
+void Loader::distributeToShardsExistingColumns(
+    std::vector<OneShardBuffers>& all_shard_import_buffers,
+    std::vector<size_t>& all_shard_row_counts,
+    const OneShardBuffers& import_buffers,
+    const size_t row_count,
+    const size_t shard_count,
+    const Catalog_Namespace::SessionInfo* session_info) {
   int col_idx{0};
   const ColumnDescriptor* shard_col_desc{nullptr};
   for (const auto col_desc : column_descs_) {
@@ -2658,119 +2709,75 @@ void Loader::distributeToShards(std::vector<OneShardBuffers>& all_shard_import_b
     shard_column_input_buffer->addDictEncodedString(*payloads_ptr);
   }
 
-  // for each replicated (alter added) columns, number of rows in a shard is
-  // inferred from that of the sharding column, not simply evenly distributed.
-  const auto shard_tds = catalog_.getPhysicalTablesDescriptors(table_desc_);
-  // Here the loop count is overloaded. For normal imports, we loop thru all
-  // input values (rows), so the loop count is the number of input rows.
-  // For ALTER ADD COLUMN, we replicate one default value to existing rows in
-  // all shards, so the loop count is the number of shards.
-  const auto loop_count = getReplicating() ? table_desc_->nShards : row_count;
   Executor* executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID).get();
   auto query_session = session_info ? session_info->get_session_id() : "";
-  for (size_t i = 0; i < loop_count; ++i) {
+  for (size_t i = 0; i < row_count; ++i) {
     if (UNLIKELY(checkInterrupt(query_session, executor))) {
       throw QueryExecutionError(Executor::ERR_INTERRUPTED);
     }
     const size_t shard =
-        getReplicating()
-            ? i
-            : SHARD_FOR_KEY(int_value_at(*shard_column_input_buffer, i), shard_count);
+        SHARD_FOR_KEY(int_value_at(*shard_column_input_buffer, i), shard_count);
     auto& shard_output_buffers = all_shard_import_buffers[shard];
-
-    // when replicate a column, populate 'rows' to all shards only once
-    // and its value is fetch from the first and the single row
-    const auto row_index = getReplicating() ? 0 : i;
-
-    for (size_t col_idx = 0; col_idx < import_buffers.size(); ++col_idx) {
-      const auto& input_buffer = import_buffers[col_idx];
-      const auto& col_ti = input_buffer->getTypeInfo();
-      const auto type =
-          col_ti.is_decimal() ? decimal_to_int_type(col_ti) : col_ti.get_type();
-
-      // for a replicated (added) column, populate rows_per_shard as per-shard replicate
-      // count. and, bypass non-replicated column.
-      if (getReplicating()) {
-        if (input_buffer->get_replicate_count() > 0) {
-          shard_output_buffers[col_idx]->set_replicate_count(
-              shard_tds[shard]->fragmenter->getNumRows());
-        } else {
-          continue;
-        }
-      }
-
-      switch (type) {
-        case kBOOLEAN:
-          shard_output_buffers[col_idx]->addBoolean(
-              int_value_at(*input_buffer, row_index));
-          break;
-        case kTINYINT:
-          shard_output_buffers[col_idx]->addTinyint(
-              int_value_at(*input_buffer, row_index));
-          break;
-        case kSMALLINT:
-          shard_output_buffers[col_idx]->addSmallint(
-              int_value_at(*input_buffer, row_index));
-          break;
-        case kINT:
-          shard_output_buffers[col_idx]->addInt(int_value_at(*input_buffer, row_index));
-          break;
-        case kBIGINT:
-          shard_output_buffers[col_idx]->addBigint(
-              int_value_at(*input_buffer, row_index));
-          break;
-        case kFLOAT:
-          shard_output_buffers[col_idx]->addFloat(
-              float_value_at(*input_buffer, row_index));
-          break;
-        case kDOUBLE:
-          shard_output_buffers[col_idx]->addDouble(
-              double_value_at(*input_buffer, row_index));
-          break;
-        case kTEXT:
-        case kVARCHAR:
-        case kCHAR: {
-          CHECK_LT(row_index, input_buffer->getStringBuffer()->size());
-          shard_output_buffers[col_idx]->addString(
-              (*input_buffer->getStringBuffer())[row_index]);
-          break;
-        }
-        case kTIME:
-        case kTIMESTAMP:
-        case kDATE:
-          shard_output_buffers[col_idx]->addBigint(
-              int_value_at(*input_buffer, row_index));
-          break;
-        case kARRAY:
-          if (IS_STRING(col_ti.get_subtype())) {
-            CHECK(input_buffer->getStringArrayBuffer());
-            CHECK_LT(row_index, input_buffer->getStringArrayBuffer()->size());
-            const auto& input_arr = (*(input_buffer->getStringArrayBuffer()))[row_index];
-            shard_output_buffers[col_idx]->addStringArray(input_arr);
-          } else {
-            shard_output_buffers[col_idx]->addArray(
-                (*input_buffer->getArrayBuffer())[row_index]);
-          }
-          break;
-        case kPOINT:
-        case kLINESTRING:
-        case kPOLYGON:
-        case kMULTIPOLYGON: {
-          CHECK_LT(row_index, input_buffer->getGeoStringBuffer()->size());
-          shard_output_buffers[col_idx]->addGeoString(
-              (*input_buffer->getGeoStringBuffer())[row_index]);
-          break;
-        }
-        default:
-          CHECK(false);
-      }
-    }
+    fillShardRow(i, shard_output_buffers, import_buffers);
     ++all_shard_row_counts[shard];
+  }
+}
+
+void Loader::distributeToShardsNewColumns(
+    std::vector<OneShardBuffers>& all_shard_import_buffers,
+    std::vector<size_t>& all_shard_row_counts,
+    const OneShardBuffers& import_buffers,
+    const size_t row_count,
+    const size_t shard_count,
+    const Catalog_Namespace::SessionInfo* session_info) {
+  const auto shard_tds = catalog_.getPhysicalTablesDescriptors(table_desc_);
+  CHECK(shard_tds.size() == shard_count);
+  Executor* executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID).get();
+  auto query_session = session_info ? session_info->get_session_id() : "";
+  for (size_t shard = 0; shard < shard_count; ++shard) {
+    if (UNLIKELY(checkInterrupt(query_session, executor))) {
+      throw QueryExecutionError(Executor::ERR_INTERRUPTED);
+    }
+    auto& shard_output_buffers = all_shard_import_buffers[shard];
+    if (row_count != 0) {
+      fillShardRow(0, shard_output_buffers, import_buffers);
+    }
     // when replicating a column, row count of a shard == replicate count of the column on
     // the shard
-    if (getReplicating()) {
-      all_shard_row_counts[shard] = shard_tds[shard]->fragmenter->getNumRows();
+    all_shard_row_counts[shard] = shard_tds[shard]->fragmenter->getNumRows();
+  }
+}
+
+void Loader::distributeToShards(std::vector<OneShardBuffers>& all_shard_import_buffers,
+                                std::vector<size_t>& all_shard_row_counts,
+                                const OneShardBuffers& import_buffers,
+                                const size_t row_count,
+                                const size_t shard_count,
+                                const Catalog_Namespace::SessionInfo* session_info) {
+  all_shard_row_counts.resize(shard_count);
+  for (size_t shard_idx = 0; shard_idx < shard_count; ++shard_idx) {
+    all_shard_import_buffers.emplace_back();
+    for (const auto& typed_import_buffer : import_buffers) {
+      all_shard_import_buffers.back().emplace_back(
+          new TypedImportBuffer(typed_import_buffer->getColumnDesc(),
+                                typed_import_buffer->getStringDictionary()));
     }
+  }
+  CHECK_GT(table_desc_->shardedColumnId, 0);
+  if (isAddingColumns()) {
+    distributeToShardsNewColumns(all_shard_import_buffers,
+                                 all_shard_row_counts,
+                                 import_buffers,
+                                 row_count,
+                                 shard_count,
+                                 session_info);
+  } else {
+    distributeToShardsExistingColumns(all_shard_import_buffers,
+                                      all_shard_row_counts,
+                                      import_buffers,
+                                      row_count,
+                                      shard_count,
+                                      session_info);
   }
 }
 
@@ -2780,7 +2787,7 @@ bool Loader::loadImpl(
     bool checkpoint,
     const Catalog_Namespace::SessionInfo* session_info) {
   if (load_callback_) {
-    auto data_blocks = get_data_block_pointers(import_buffers);
+    auto data_blocks = TypedImportBuffer::get_data_block_pointers(import_buffers);
     return load_callback_(import_buffers, data_blocks, row_count);
   }
   if (table_desc_->nShards) {
@@ -2795,9 +2802,6 @@ bool Loader::loadImpl(
                        session_info);
     bool success = true;
     for (size_t shard_idx = 0; shard_idx < shard_tables.size(); ++shard_idx) {
-      if (!all_shard_row_counts[shard_idx]) {
-        continue;
-      }
       success = success && loadToShard(all_shard_import_buffers[shard_idx],
                                        all_shard_row_counts[shard_idx],
                                        shard_tables[shard_idx],
@@ -2809,7 +2813,7 @@ bool Loader::loadImpl(
   return loadToShard(import_buffers, row_count, table_desc_, checkpoint, session_info);
 }
 
-std::vector<DataBlockPtr> Loader::get_data_block_pointers(
+std::vector<DataBlockPtr> TypedImportBuffer::get_data_block_pointers(
     const std::vector<std::unique_ptr<TypedImportBuffer>>& import_buffers) {
   std::vector<DataBlockPtr> result(import_buffers.size());
   std::vector<std::pair<const size_t, std::future<int8_t*>>>
@@ -2877,27 +2881,24 @@ bool Loader::loadToShard(
     bool checkpoint,
     const Catalog_Namespace::SessionInfo* session_info) {
   std::unique_lock<std::mutex> loader_lock(loader_mutex_);
-  // patch insert_data with new column
-  if (this->getReplicating()) {
-    for (const auto& import_buff : import_buffers) {
-      insert_data_.replicate_count = import_buff->get_replicate_count();
-    }
-  }
-
   Fragmenter_Namespace::InsertData ins_data(insert_data_);
   ins_data.numRows = row_count;
-  bool success = true;
-
-  ins_data.data = get_data_block_pointers(import_buffers);
-
-  for (const auto& import_buffer : import_buffers) {
-    ins_data.bypass.push_back(0 == import_buffer->get_replicate_count());
+  ins_data.data = TypedImportBuffer::get_data_block_pointers(import_buffers);
+  if (isAddingColumns()) {
+    // when Adding columns we omit any columns except the ones being added
+    ins_data.columnIds.clear();
+    ins_data.is_default.clear();
+    for (auto& buffer : import_buffers) {
+      ins_data.columnIds.push_back(buffer->getColumnDesc()->columnId);
+      ins_data.is_default.push_back(true);
+    }
+  } else {
+    ins_data.is_default.resize(ins_data.columnIds.size(), false);
   }
-
   // release loader_lock so that in InsertOrderFragmenter::insertDat
   // we can have multiple threads sort/shuffle InsertData
   loader_lock.unlock();
-
+  bool success = true;
   {
     try {
       if (checkpoint) {
@@ -5341,6 +5342,77 @@ std::vector<std::unique_ptr<TypedImportBuffer>> setup_column_loaders(
   }
 
   return import_buffers;
+}
+
+[[nodiscard]] std::vector<std::unique_ptr<TypedImportBuffer>> fill_missing_columns(
+    const Catalog_Namespace::Catalog* cat,
+    Fragmenter_Namespace::InsertData& insert_data) {
+  std::vector<std::unique_ptr<import_export::TypedImportBuffer>> defaults_buffers;
+  if (insert_data.is_default.size() == 0) {
+    insert_data.is_default.resize(insert_data.columnIds.size(), false);
+  }
+  CHECK(insert_data.is_default.size() == insert_data.is_default.size());
+  auto cds = cat->getAllColumnMetadataForTable(insert_data.tableId, false, false, true);
+  if (cds.size() == insert_data.columnIds.size()) {
+    // all columns specified
+    return defaults_buffers;
+  }
+  for (auto cd : cds) {
+    if (std::find(insert_data.columnIds.begin(),
+                  insert_data.columnIds.end(),
+                  cd->columnId) == insert_data.columnIds.end()) {
+      StringDictionary* dict = nullptr;
+      if (cd->columnType.get_type() == kARRAY &&
+          IS_STRING(cd->columnType.get_subtype())) {
+        throw std::runtime_error("Cannot omit column \"" + cd->columnName +
+                                 "\": omitting TEXT arrays is not supported yet");
+      }
+      if (cd->columnType.is_string() &&
+          cd->columnType.get_compression() == kENCODING_DICT) {
+        dict = cat->getMetadataForDict(cd->columnType.get_comp_param())->stringDict.get();
+      }
+      defaults_buffers.emplace_back(std::make_unique<TypedImportBuffer>(cd, dict));
+    }
+  }
+  // put buffers in order to fill geo sub-columns properly
+  std::sort(defaults_buffers.begin(),
+            defaults_buffers.end(),
+            [](decltype(defaults_buffers[0])& a, decltype(defaults_buffers[0])& b) {
+              return a->getColumnDesc()->columnId < b->getColumnDesc()->columnId;
+            });
+  for (size_t i = 0; i < defaults_buffers.size(); ++i) {
+    auto cd = defaults_buffers[i]->getColumnDesc();
+    defaults_buffers[i]->add_value(cd, "NULL", true, import_export::CopyParams());
+    if (cd->columnType.is_geometry()) {
+      std::vector<double> coords, bounds;
+      std::vector<int> ring_sizes, poly_rings;
+      int render_group = 0;
+      SQLTypeInfo tinfo{cd->columnType};
+      CHECK(Geospatial::GeoTypesFactory::getGeoColumns(
+          "NULL", tinfo, coords, bounds, ring_sizes, poly_rings, false));
+      // set physical columns starting with the following ID
+      auto next_col = i + 1;
+      import_export::Importer::set_geo_physical_import_buffer(*cat,
+                                                              cd,
+                                                              defaults_buffers,
+                                                              next_col,
+                                                              coords,
+                                                              bounds,
+                                                              ring_sizes,
+                                                              poly_rings,
+                                                              render_group);
+      // skip physical columns filled with the call above
+      i += cd->columnType.get_physical_cols();
+    }
+  }
+  auto data = import_export::TypedImportBuffer::get_data_block_pointers(defaults_buffers);
+  CHECK(data.size() == defaults_buffers.size());
+  for (size_t i = 0; i < defaults_buffers.size(); ++i) {
+    insert_data.data.push_back(data[i]);
+    insert_data.columnIds.push_back(defaults_buffers[i]->getColumnDesc()->columnId);
+    insert_data.is_default.push_back(true);
+  }
+  return defaults_buffers;
 }
 
 }  // namespace import_export

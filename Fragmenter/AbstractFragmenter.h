@@ -45,11 +45,11 @@ class Chunk;
 namespace Data_Namespace {
 class AbstractBuffer;
 class AbstractDataMgr;
-};  // namespace Data_Namespace
+}  // namespace Data_Namespace
 
 namespace import_export {
 class TypedImportBuffer;
-};
+}
 
 namespace Catalog_Namespace {
 class Catalog;
@@ -130,14 +130,14 @@ class AbstractFragmenter {
    * inserts it into the correct partitions
    * with locks and checkpoints
    */
-  virtual void insertData(InsertData& insertDataStruct) = 0;
+  virtual void insertData(InsertData& insert_data_struct) = 0;
 
   /**
    * @brief Given data wrapped in an InsertData struct,
    * inserts it into the correct partitions
    * No locks and checkpoints taken needs to be managed externally
    */
-  virtual void insertDataNoCheckpoint(InsertData& insertDataStruct) = 0;
+  virtual void insertDataNoCheckpoint(InsertData& insert_data_struct) = 0;
 
   /**
    * @brief Will truncate table to less than maxRows by dropping

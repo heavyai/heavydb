@@ -370,6 +370,7 @@ struct TInsertData {
   3: list<i32> column_ids
   4: list<TDataBlockPtr> data
   5: i64 num_rows
+  6: list<bool> is_default
 }
 
 struct TPendingRenderQuery {

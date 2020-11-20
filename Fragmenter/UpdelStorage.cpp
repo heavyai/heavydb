@@ -550,6 +550,7 @@ void InsertOrderFragmenter::updateColumns(
   }
 
   insert_data.numRows = num_rows;
+  insert_data.is_default.resize(insert_data.columnIds.size(), false);
   insertDataNoCheckpoint(insert_data);
 
   // update metdata

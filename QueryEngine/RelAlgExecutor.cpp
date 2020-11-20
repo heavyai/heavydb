@@ -2109,6 +2109,68 @@ ExecutionResult RelAlgExecutor::executeModify(const RelModify* modify,
   return {rs, empty_targets};
 }
 
+namespace {
+int64_t int_value_from_numbers_ptr(const SQLTypeInfo& type_info, const int8_t* data) {
+  size_t sz = 0;
+  switch (type_info.get_type()) {
+    case kTINYINT:
+    case kSMALLINT:
+    case kINT:
+    case kBIGINT:
+    case kTIMESTAMP:
+    case kTIME:
+    case kDATE:
+      sz = type_info.get_logical_size();
+      break;
+    case kTEXT:
+    case kVARCHAR:
+    case kCHAR:
+      CHECK(type_info.get_compression() == kENCODING_DICT);
+      sz = type_info.get_size();
+      break;
+    default:
+      CHECK(false) << "Unexpected sharding key datatype";
+  }
+
+  switch (sz) {
+    case 1:
+      return *(reinterpret_cast<const int8_t*>(data));
+    case 2:
+      return *(reinterpret_cast<const int16_t*>(data));
+    case 4:
+      return *(reinterpret_cast<const int32_t*>(data));
+    case 8:
+      return *(reinterpret_cast<const int64_t*>(data));
+    default:
+      CHECK(false);
+      return 0;
+  }
+}
+
+const TableDescriptor* get_shard_for_key(const TableDescriptor* td,
+                                         const Catalog_Namespace::Catalog& cat,
+                                         const Fragmenter_Namespace::InsertData& data) {
+  auto shard_column_md = cat.getShardColumnMetadataForTable(td);
+  CHECK(shard_column_md);
+  auto sharded_column_id = shard_column_md->columnId;
+  const TableDescriptor* shard{nullptr};
+  for (size_t i = 0; i < data.columnIds.size(); ++i) {
+    if (data.columnIds[i] == sharded_column_id) {
+      const auto shard_tables = cat.getPhysicalTablesDescriptors(td);
+      const auto shard_count = shard_tables.size();
+      CHECK(data.data[i].numbersPtr);
+      auto value = int_value_from_numbers_ptr(shard_column_md->columnType,
+                                              data.data[i].numbersPtr);
+      const size_t shard_idx = SHARD_FOR_KEY(value, shard_count);
+      shard = shard_tables[shard_idx];
+      break;
+    }
+  }
+  return shard;
+}
+
+}  // namespace
+
 ExecutionResult RelAlgExecutor::executeSimpleInsert(const Analyzer::Query& query) {
   // Note: We currently obtain an executor for this method, but we do not need it.
   // Therefore, we skip the executor state setup in the regular execution path. In the
@@ -2124,11 +2186,6 @@ ExecutionResult RelAlgExecutor::executeSimpleInsert(const Analyzer::Query& query
   std::unordered_map<int, std::unique_ptr<uint8_t[]>> col_buffers;
   std::unordered_map<int, std::vector<std::string>> str_col_buffers;
   std::unordered_map<int, std::vector<ArrayDatum>> arr_col_buffers;
-
-  const auto table_descriptor = cat_.getMetadataForTable(table_id);
-  CHECK(table_descriptor);
-  const auto shard_tables = cat_.getPhysicalTablesDescriptors(table_descriptor);
-  const TableDescriptor* shard{nullptr};
 
   for (const int col_id : col_id_list) {
     const auto cd = get_column_descriptor(col_id, table_id, cat_);
@@ -2175,7 +2232,6 @@ ExecutionResult RelAlgExecutor::executeSimpleInsert(const Analyzer::Query& query
   Fragmenter_Namespace::InsertData insert_data;
   insert_data.databaseId = cat_.getCurrentDB().dbId;
   insert_data.tableId = table_id;
-  int64_t int_col_val{0};
   for (auto target_entry : targets) {
     auto col_cv = dynamic_cast<const Analyzer::Constant*>(target_entry->get_expr());
     if (!col_cv) {
@@ -2207,21 +2263,18 @@ ExecutionResult RelAlgExecutor::executeSimpleInsert(const Analyzer::Query& query
         auto col_data = reinterpret_cast<int8_t*>(col_data_bytes);
         *col_data = col_cv->get_is_null() ? inline_fixed_encoding_null_val(cd->columnType)
                                           : col_datum.tinyintval;
-        int_col_val = col_datum.tinyintval;
         break;
       }
       case kSMALLINT: {
         auto col_data = reinterpret_cast<int16_t*>(col_data_bytes);
         *col_data = col_cv->get_is_null() ? inline_fixed_encoding_null_val(cd->columnType)
                                           : col_datum.smallintval;
-        int_col_val = col_datum.smallintval;
         break;
       }
       case kINT: {
         auto col_data = reinterpret_cast<int32_t*>(col_data_bytes);
         *col_data = col_cv->get_is_null() ? inline_fixed_encoding_null_val(cd->columnType)
                                           : col_datum.intval;
-        int_col_val = col_datum.intval;
         break;
       }
       case kBIGINT:
@@ -2230,7 +2283,6 @@ ExecutionResult RelAlgExecutor::executeSimpleInsert(const Analyzer::Query& query
         auto col_data = reinterpret_cast<int64_t*>(col_data_bytes);
         *col_data = col_cv->get_is_null() ? inline_fixed_encoding_null_val(cd->columnType)
                                           : col_datum.bigintval;
-        int_col_val = col_datum.bigintval;
         break;
       }
       case kFLOAT: {
@@ -2254,15 +2306,15 @@ ExecutionResult RelAlgExecutor::executeSimpleInsert(const Analyzer::Query& query
           case kENCODING_DICT: {
             switch (cd->columnType.get_size()) {
               case 1:
-                int_col_val = insert_one_dict_str(
+                insert_one_dict_str(
                     reinterpret_cast<uint8_t*>(col_data_bytes), cd, col_cv, cat_);
                 break;
               case 2:
-                int_col_val = insert_one_dict_str(
+                insert_one_dict_str(
                     reinterpret_cast<uint16_t*>(col_data_bytes), cd, col_cv, cat_);
                 break;
               case 4:
-                int_col_val = insert_one_dict_str(
+                insert_one_dict_str(
                     reinterpret_cast<int32_t*>(col_data_bytes), cd, col_cv, cat_);
                 break;
               default:
@@ -2326,10 +2378,7 @@ ExecutionResult RelAlgExecutor::executeSimpleInsert(const Analyzer::Query& query
           for (auto& e : l) {
             auto c = std::dynamic_pointer_cast<Analyzer::Constant>(e);
             CHECK(c);
-
-            int_col_val = insert_one_dict_str(
-                &p[elemIndex], cd->columnName, elem_ti, c.get(), cat_);
-
+            insert_one_dict_str(&p[elemIndex], cd->columnName, elem_ti, c.get(), cat_);
             elemIndex++;
           }
           arr_col_buffers[col_ids[col_idx]].push_back(ArrayDatum(len, buf, is_null));
@@ -2357,11 +2406,6 @@ ExecutionResult RelAlgExecutor::executeSimpleInsert(const Analyzer::Query& query
         CHECK(false);
     }
     ++col_idx;
-    if (col_idx == static_cast<size_t>(table_descriptor->shardedColumnId)) {
-      const auto shard_count = shard_tables.size();
-      const size_t shard_idx = SHARD_FOR_KEY(int_col_val, shard_count);
-      shard = shard_tables[shard_idx];
-    }
   }
   for (const auto& kv : col_buffers) {
     insert_data.columnIds.push_back(kv.first);
@@ -2382,7 +2426,12 @@ ExecutionResult RelAlgExecutor::executeSimpleInsert(const Analyzer::Query& query
     insert_data.data.push_back(p);
   }
   insert_data.numRows = 1;
-  if (shard) {
+  auto data_memory_holder = import_export::fill_missing_columns(&cat_, insert_data);
+  const auto table_descriptor = cat_.getMetadataForTable(table_id);
+  CHECK(table_descriptor);
+  if (table_descriptor->nShards > 0) {
+    auto shard = get_shard_for_key(table_descriptor, cat_, insert_data);
+    CHECK(shard);
     shard->fragmenter->insertDataNoCheckpoint(insert_data);
   } else {
     table_descriptor->fragmenter->insertDataNoCheckpoint(insert_data);

@@ -155,6 +155,61 @@ inline std::string convert(const std::string& t) {
   return t;
 }
 
+bool is_null_tv(const TargetValue& tv, const SQLTypeInfo& ti) {
+  if (ti.get_notnull()) {
+    return false;
+  }
+  const auto scalar_tv = boost::get<ScalarTargetValue>(&tv);
+  if (!scalar_tv) {
+    CHECK(ti.is_array());
+    const auto array_tv = boost::get<ArrayTargetValue>(&tv);
+    CHECK(array_tv);
+    return !array_tv->is_initialized();
+  }
+  if (boost::get<int64_t>(scalar_tv)) {
+    int64_t data = *(boost::get<int64_t>(scalar_tv));
+    switch (ti.get_type()) {
+      case kBOOLEAN:
+        return data == NULL_BOOLEAN;
+      case kTINYINT:
+        return data == NULL_TINYINT;
+      case kSMALLINT:
+        return data == NULL_SMALLINT;
+      case kINT:
+        return data == NULL_INT;
+      case kDECIMAL:
+      case kNUMERIC:
+      case kBIGINT:
+        return data == NULL_BIGINT;
+      case kTIME:
+      case kTIMESTAMP:
+      case kDATE:
+      case kINTERVAL_DAY_TIME:
+      case kINTERVAL_YEAR_MONTH:
+        return data == NULL_BIGINT;
+      default:
+        CHECK(false);
+    }
+  } else if (boost::get<double>(scalar_tv)) {
+    double data = *(boost::get<double>(scalar_tv));
+    if (ti.get_type() == kFLOAT) {
+      return data == NULL_FLOAT;
+    } else {
+      return data == NULL_DOUBLE;
+    }
+  } else if (boost::get<float>(scalar_tv)) {
+    CHECK_EQ(kFLOAT, ti.get_type());
+    float data = *(boost::get<float>(scalar_tv));
+    return data == NULL_FLOAT;
+  } else if (boost::get<NullableString>(scalar_tv)) {
+    auto s_n = boost::get<NullableString>(scalar_tv);
+    auto s = boost::get<std::string>(s_n);
+    return !s;
+  }
+  CHECK(false);
+  return false;
+}
+
 struct ValuesGenerator {
   ValuesGenerator(const std::string& table_name) : table_name_(table_name) {}
 

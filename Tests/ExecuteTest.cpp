@@ -830,6 +830,122 @@ TEST(Insert, DictBoundary) {
   }
 }
 
+namespace {
+void simple_insert_test_omitting_columns(const std::string& table_name,
+                                         ExecutorDeviceType dt) {
+  std::vector<std::pair<std::string, std::string>> columns = {
+      // Also there is an 'i' column, but this one is not optional and cannot be
+      // ommited. It just has integer values from 1 to N.
+      {"id", "61"},
+      {"ia", "ARRAY[1, 2, 3, 2, 1]"},
+      {"b", "False"},
+      {"dt", "Dict str"},
+      {"t", "Str"},
+      {"ls", "LINESTRING (1 1,2 15)"}};
+  for (size_t i = 0; i < columns.size(); ++i) {
+    std::string value =
+        (i == 0 || i == 1 ? columns[i].second : "'" + columns[i].second + "'");
+    EXPECT_NO_THROW(run_multiple_agg("INSERT INTO " + table_name + "(i, " +
+                                         columns[i].first + ") VALUES(" +
+                                         std::to_string(i) + ", " + value + ");",
+                                     dt));
+  }
+  // omitting NOT NULL column
+  EXPECT_THROW(run_multiple_agg("INSERT INTO " + table_name + " (id) VALUES(1);", dt),
+               std::runtime_error);
+  // check the stored data
+  for (size_t i = 0; i < columns.size(); ++i) {
+    ASSERT_EQ(1,
+              v<int64_t>(run_simple_agg("SELECT count(*) FROM " + table_name + " WHERE " +
+                                            columns[i].first + " IS NOT NULL;",
+                                        dt)));
+    std::string eq_cmp = "";
+    if (i == 0) {
+      eq_cmp += columns[i].first + "=" + columns[i].second;
+    } else if (i == 1) {
+      eq_cmp += columns[i].first + "[4]=2";
+    } else if (i == 5) {
+      eq_cmp += "ST_DISTANCE(" + columns[i].first + ", '" + columns[i].second + "') = 0";
+    } else {
+      eq_cmp += columns[i].first + "='" + columns[i].second + "'";
+    }
+    ASSERT_EQ(static_cast<int64_t>(i),
+              v<int64_t>(run_simple_agg(
+                  "SELECT i FROM " + table_name + " WHERE " + eq_cmp + ";", dt)));
+  }
+}
+}  // namespace
+
+TEST(Insert, OmitColumnsWithNulls) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    run_ddl_statement("DROP TABLE IF EXISTS not_sharded_simple_inserts_table;");
+    EXPECT_NO_THROW(run_ddl_statement(
+        "create table not_sharded_simple_inserts_table(id integer, i integer not null, "
+        "b boolean, dt text encoding dict, t text encoding none, ls linestring, "
+        "ia int[]);"));
+    simple_insert_test_omitting_columns("not_sharded_simple_inserts_table", dt);
+  }
+}
+
+TEST(Insert, OmitColumnsWithNullsSharded) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    run_ddl_statement("DROP TABLE IF EXISTS sharded_simple_inserts_table;");
+    EXPECT_NO_THROW(run_ddl_statement(
+        "create table sharded_simple_inserts_table(id integer, i integer not null, "
+        "b boolean, dt text encoding dict, t text encoding none, ls linestring, "
+        "ia int[], SHARD KEY (id)) WITH (shard_count = 2);"));
+    simple_insert_test_omitting_columns("sharded_simple_inserts_table", dt);
+  }
+}
+
+namespace {
+void recreate_inserts_test_table() {
+  run_ddl_statement("DROP TABLE IF EXISTS inserts_test_table;");
+  EXPECT_NO_THROW(run_ddl_statement(
+      "CREATE TABLE inserts_test_table(i INTEGER, t TEXT ENCODING NONE, b BOOLEAN)"));
+}
+}  // namespace
+
+TEST(Insert, LessColumnsThanValues) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    recreate_inserts_test_table();
+    EXPECT_THROW(run_multiple_agg("INSERT INTO inserts_test_table (i, t) "
+                                  "VALUES(1, 'One', 'False');",
+                                  dt),
+                 std::runtime_error);
+    recreate_inserts_test_table();
+    EXPECT_THROW(run_multiple_agg("INSERT INTO inserts_test_table (i, t, b) "
+                                  "VALUES(1, 'One', 'False', 156);",
+                                  dt),
+                 std::runtime_error);
+  }
+}
+
+TEST(Insert, MoreColumnsThanValues) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    recreate_inserts_test_table();
+    EXPECT_THROW(run_multiple_agg("INSERT INTO inserts_test_table (i, t, b) "
+                                  "VALUES(1, 'One');",
+                                  dt),
+                 std::runtime_error);
+  }
+}
+
+TEST(Insert, InvalidColumnName) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    recreate_inserts_test_table();
+    EXPECT_THROW(run_multiple_agg("INSERT INTO inserts_test_table (i, tx, b) "
+                                  "VALUES(1, 'One', 'False');",
+                                  dt),
+                 std::runtime_error);
+  }
+}
+
 TEST(KeyForString, KeyForString) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();

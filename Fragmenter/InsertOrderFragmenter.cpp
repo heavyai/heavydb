@@ -1,4 +1,4 @@
-/*
+﻿/*
  * Copyright 2020 OmniSci, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -393,15 +393,31 @@ FragmentInfo* InsertOrderFragmenter::getFragmentInfo(const int fragment_id) cons
   return fragment_it->get();
 }
 
-void InsertOrderFragmenter::insertData(InsertData& insertDataStruct) {
+bool InsertOrderFragmenter::isAddingNewColumns(const InsertData& insert_data) const {
+  bool all_columns_already_exist = true, all_columns_are_new = true;
+  for (const auto column_id : insert_data.columnIds) {
+    if (columnMap_.find(column_id) == columnMap_.end()) {
+      all_columns_already_exist = false;
+    } else {
+      all_columns_are_new = false;
+    }
+  }
+  // only one should be TRUE
+  bool either_all_exist_or_all_new = all_columns_already_exist ^ all_columns_are_new;
+  CHECK(either_all_exist_or_all_new);
+  return all_columns_are_new;
+}
+
+void InsertOrderFragmenter::insertData(InsertData& insert_data_struct) {
   // TODO: this local lock will need to be centralized when ALTER COLUMN is added, bc
   try {
-    mapd_unique_lock<mapd_shared_mutex> insertLock(
-        insertMutex_);  // prevent two threads from trying to insert into the same table
-                        // simultaneously
-
-    insertDataImpl(insertDataStruct);
-
+    // prevent two threads from trying to insert into the same table simultaneously
+    mapd_unique_lock<mapd_shared_mutex> insertLock(insertMutex_);
+    if (!isAddingNewColumns(insert_data_struct)) {
+      insertDataImpl(insert_data_struct);
+    } else {
+      addColumns(insert_data_struct);
+    }
     if (defaultInsertLevel_ ==
         Data_Namespace::DISK_LEVEL) {  // only checkpoint if data is resident on disk
       dataMgr_->checkpoint(
@@ -409,96 +425,109 @@ void InsertOrderFragmenter::insertData(InsertData& insertDataStruct) {
           chunkKeyPrefix_[1]);  // need to checkpoint here to remove window for corruption
     }
   } catch (...) {
-    auto table_epochs =
-        catalog_->getTableEpochs(insertDataStruct.databaseId, insertDataStruct.tableId);
-
+    auto table_epochs = catalog_->getTableEpochs(insert_data_struct.databaseId,
+                                                 insert_data_struct.tableId);
     // the statement below deletes *this* object!
     // relying on exception propagation at this stage
     // until we can sort this out in a cleaner fashion
-    catalog_->setTableEpochs(insertDataStruct.databaseId, table_epochs);
+    catalog_->setTableEpochs(insert_data_struct.databaseId, table_epochs);
     throw;
   }
 }
 
-void InsertOrderFragmenter::insertDataNoCheckpoint(InsertData& insertDataStruct) {
+void InsertOrderFragmenter::insertDataNoCheckpoint(InsertData& insert_data_struct) {
   // TODO: this local lock will need to be centralized when ALTER COLUMN is added, bc
   mapd_unique_lock<mapd_shared_mutex> insertLock(
       insertMutex_);  // prevent two threads from trying to insert into the same table
                       // simultaneously
-  insertDataImpl(insertDataStruct);
+  if (!isAddingNewColumns(insert_data_struct)) {
+    insertDataImpl(insert_data_struct);
+  } else {
+    addColumns(insert_data_struct);
+  }
 }
 
-void InsertOrderFragmenter::replicateData(const InsertData& insertDataStruct) {
+void InsertOrderFragmenter::addColumns(const InsertData& insertDataStruct) {
   // synchronize concurrent accesses to fragmentInfoVec_
   mapd_unique_lock<mapd_shared_mutex> writeLock(fragmentInfoMutex_);
   size_t numRowsLeft = insertDataStruct.numRows;
-  for (auto const& fragmentInfo : fragmentInfoVec_) {
-    fragmentInfo->shadowChunkMetadataMap = fragmentInfo->getChunkMetadataMapPhysical();
-    auto numRowsToInsert = fragmentInfo->getPhysicalNumTuples();  // not getNumTuples()
-    size_t numRowsCanBeInserted;
-    for (size_t i = 0; i < insertDataStruct.columnIds.size(); i++) {
-      if (insertDataStruct.bypass[i]) {
-        continue;
-      }
-      auto columnId = insertDataStruct.columnIds[i];
-      auto colDesc = catalog_->getMetadataForColumn(physicalTableId_, columnId);
-      CHECK(colDesc);
-      CHECK(columnMap_.find(columnId) != columnMap_.end());
-
-      ChunkKey chunkKey = chunkKeyPrefix_;
-      chunkKey.push_back(columnId);
-      chunkKey.push_back(fragmentInfo->fragmentId);
-
-      auto colMapIt = columnMap_.find(columnId);
-      auto& chunk = colMapIt->second;
-      if (chunk.isChunkOnDevice(
-              dataMgr_,
-              chunkKey,
-              defaultInsertLevel_,
-              fragmentInfo->deviceIds[static_cast<int>(defaultInsertLevel_)])) {
-        dataMgr_->deleteChunksWithPrefix(chunkKey);
-      }
-      chunk.createChunkBuffer(
-          dataMgr_,
-          chunkKey,
-          defaultInsertLevel_,
-          fragmentInfo->deviceIds[static_cast<int>(defaultInsertLevel_)]);
-      chunk.initEncoder();
-
-      try {
-        DataBlockPtr dataCopy = insertDataStruct.data[i];
-        auto size = colDesc->columnType.get_size();
-        if (0 > size) {
-          std::unique_lock<std::mutex> lck(*mutex_access_inmem_states);
-          varLenColInfo_[columnId] = 0;
-          numRowsCanBeInserted = chunk.getNumElemsForBytesInsertData(
-              dataCopy, numRowsToInsert, 0, maxChunkSize_, true);
-        } else {
-          numRowsCanBeInserted = maxChunkSize_ / size;
-        }
-
-        // FIXME: abort a case in which new column is wider than existing columns
-        if (numRowsCanBeInserted < numRowsToInsert) {
-          throw std::runtime_error("new column '" + colDesc->columnName +
-                                   "' wider than existing columns is not supported");
-        }
-
-        auto chunkMetadata = chunk.appendData(dataCopy, numRowsToInsert, 0, true);
-        fragmentInfo->shadowChunkMetadataMap[columnId] = chunkMetadata;
-
-        // update total size of var-len column in (actually the last) fragment
-        if (0 > size) {
-          std::unique_lock<std::mutex> lck(*mutex_access_inmem_states);
-          varLenColInfo_[columnId] = chunk.getBuffer()->size();
-        }
-      } catch (...) {
-        dataMgr_->deleteChunksWithPrefix(chunkKey);
-        throw;
-      }
-    }
-    numRowsLeft -= numRowsToInsert;
+  for (const auto columnId : insertDataStruct.columnIds) {
+    CHECK(columnMap_.end() == columnMap_.find(columnId));
+    const auto columnDesc = catalog_->getMetadataForColumn(physicalTableId_, columnId);
+    CHECK(columnDesc);
+    columnMap_.emplace(columnId, Chunk_NS::Chunk(columnDesc));
   }
-  CHECK(0 == numRowsLeft);
+  try {
+    for (auto const& fragmentInfo : fragmentInfoVec_) {
+      fragmentInfo->shadowChunkMetadataMap = fragmentInfo->getChunkMetadataMapPhysical();
+      auto numRowsToInsert = fragmentInfo->getPhysicalNumTuples();  // not getNumTuples()
+      size_t numRowsCanBeInserted;
+      for (size_t i = 0; i < insertDataStruct.columnIds.size(); i++) {
+        auto columnId = insertDataStruct.columnIds[i];
+        auto colDesc = catalog_->getMetadataForColumn(physicalTableId_, columnId);
+        CHECK(colDesc);
+        CHECK(columnMap_.find(columnId) != columnMap_.end());
+
+        ChunkKey chunkKey = chunkKeyPrefix_;
+        chunkKey.push_back(columnId);
+        chunkKey.push_back(fragmentInfo->fragmentId);
+
+        auto colMapIt = columnMap_.find(columnId);
+        auto& chunk = colMapIt->second;
+        if (chunk.isChunkOnDevice(
+                dataMgr_,
+                chunkKey,
+                defaultInsertLevel_,
+                fragmentInfo->deviceIds[static_cast<int>(defaultInsertLevel_)])) {
+          dataMgr_->deleteChunksWithPrefix(chunkKey);
+        }
+        chunk.createChunkBuffer(
+            dataMgr_,
+            chunkKey,
+            defaultInsertLevel_,
+            fragmentInfo->deviceIds[static_cast<int>(defaultInsertLevel_)]);
+        chunk.initEncoder();
+
+        try {
+          DataBlockPtr dataCopy = insertDataStruct.data[i];
+          auto size = colDesc->columnType.get_size();
+          if (0 > size) {
+            std::unique_lock<std::mutex> lck(*mutex_access_inmem_states);
+            varLenColInfo_[columnId] = 0;
+            numRowsCanBeInserted = chunk.getNumElemsForBytesInsertData(
+                dataCopy, numRowsToInsert, 0, maxChunkSize_, true);
+          } else {
+            numRowsCanBeInserted = maxChunkSize_ / size;
+          }
+
+          // FIXME: abort a case in which new column is wider than existing columns
+          if (numRowsCanBeInserted < numRowsToInsert) {
+            throw std::runtime_error("new column '" + colDesc->columnName +
+                                     "' wider than existing columns is not supported");
+          }
+
+          auto chunkMetadata = chunk.appendData(dataCopy, numRowsToInsert, 0, true);
+          fragmentInfo->shadowChunkMetadataMap[columnId] = chunkMetadata;
+
+          // update total size of var-len column in (actually the last) fragment
+          if (0 > size) {
+            std::unique_lock<std::mutex> lck(*mutex_access_inmem_states);
+            varLenColInfo_[columnId] = chunk.getBuffer()->size();
+          }
+        } catch (...) {
+          dataMgr_->deleteChunksWithPrefix(chunkKey);
+          throw;
+        }
+      }
+      numRowsLeft -= numRowsToInsert;
+    }
+    CHECK(0 == numRowsLeft);
+  } catch (const std::exception& e) {
+    for (const auto columnId : insertDataStruct.columnIds) {
+      columnMap_.erase(columnId);
+    }
+    throw e;
+  }
 
   for (auto const& fragmentInfo : fragmentInfoVec_) {
     fragmentInfo->setChunkMetadataMap(fragmentInfo->shadowChunkMetadataMap);
@@ -550,50 +579,31 @@ bool InsertOrderFragmenter::hasDeletedRows(const int delete_column_id) {
   return false;
 }
 
-void InsertOrderFragmenter::insertDataImpl(InsertData& insertDataStruct) {
-  // populate deleted system column if it should exists, as it will not come from client
-  // Do not add this magical column in the replicate ALTER TABLE ADD route as
-  // it is not needed and will cause issues
+void InsertOrderFragmenter::insertDataImpl(InsertData& insert_data) {
+  // populate deleted system column if it should exist, as it will not come from client
   std::unique_ptr<int8_t[]> data_for_deleted_column;
   for (const auto& cit : columnMap_) {
-    if (cit.second.getColumnDesc()->isDeletedCol &&
-        insertDataStruct.replicate_count == 0) {
-      data_for_deleted_column.reset(new int8_t[insertDataStruct.numRows]);
-      memset(data_for_deleted_column.get(), 0, insertDataStruct.numRows);
-      insertDataStruct.data.emplace_back(DataBlockPtr{data_for_deleted_column.get()});
-      insertDataStruct.columnIds.push_back(cit.second.getColumnDesc()->columnId);
+    if (cit.second.getColumnDesc()->isDeletedCol) {
+      data_for_deleted_column.reset(new int8_t[insert_data.numRows]);
+      memset(data_for_deleted_column.get(), 0, insert_data.numRows);
+      insert_data.data.emplace_back(DataBlockPtr{data_for_deleted_column.get()});
+      insert_data.columnIds.push_back(cit.second.getColumnDesc()->columnId);
+      insert_data.is_default.push_back(false);
       break;
     }
   }
-  // MAT we need to add a removal of the empty column we pushed onto here
-  // for upstream safety.  Should not be a problem but need to fix.
-
-  // insert column to columnMap_ if not yet (ALTER ADD COLUMN)
-  for (const auto columnId : insertDataStruct.columnIds) {
-    const auto columnDesc = catalog_->getMetadataForColumn(physicalTableId_, columnId);
-    CHECK(columnDesc);
-    if (columnMap_.end() == columnMap_.find(columnId)) {
-      columnMap_.emplace(columnId, Chunk_NS::Chunk(columnDesc));
-    }
-  }
-
-  // when replicate (add) column(s), this path seems wont work; go separate route...
-  if (insertDataStruct.replicate_count > 0) {
-    replicateData(insertDataStruct);
-    return;
-  }
-
+  CHECK(insert_data.is_default.size() == insert_data.columnIds.size());
   std::unordered_map<int, int> inverseInsertDataColIdMap;
-  for (size_t insertId = 0; insertId < insertDataStruct.columnIds.size(); ++insertId) {
+  for (size_t insertId = 0; insertId < insert_data.columnIds.size(); ++insertId) {
     inverseInsertDataColIdMap.insert(
-        std::make_pair(insertDataStruct.columnIds[insertId], insertId));
+        std::make_pair(insert_data.columnIds[insertId], insertId));
   }
 
-  size_t numRowsLeft = insertDataStruct.numRows;
+  size_t numRowsLeft = insert_data.numRows;
   size_t numRowsInserted = 0;
   vector<DataBlockPtr> dataCopy =
-      insertDataStruct.data;  // bc append data will move ptr forward and this violates
-                              // constness of InsertData
+      insert_data.data;  // bc append data will move ptr forward and this violates
+                         // constness of InsertData
   if (numRowsLeft <= 0) {
     return;
   }
@@ -622,12 +632,13 @@ void InsertOrderFragmenter::insertDataImpl(InsertData& insertDataStruct) {
         auto insertIdIt = inverseInsertDataColIdMap.find(varLenColInfoIt.first);
         if (insertIdIt != inverseInsertDataColIdMap.end()) {
           auto colMapIt = columnMap_.find(varLenColInfoIt.first);
-          numRowsToInsert = std::min(
-              numRowsToInsert,
-              colMapIt->second.getNumElemsForBytesInsertData(dataCopy[insertIdIt->second],
-                                                             numRowsToInsert,
-                                                             numRowsInserted,
-                                                             bytesLeft));
+          numRowsToInsert = std::min(numRowsToInsert,
+                                     colMapIt->second.getNumElemsForBytesInsertData(
+                                         dataCopy[insertIdIt->second],
+                                         numRowsToInsert,
+                                         numRowsInserted,
+                                         bytesLeft,
+                                         insert_data.is_default[insertIdIt->second]));
         }
       }
     }
@@ -648,12 +659,13 @@ void InsertOrderFragmenter::insertDataImpl(InsertData& insertDataStruct) {
         auto insertIdIt = inverseInsertDataColIdMap.find(varLenColInfoIt.first);
         if (insertIdIt != inverseInsertDataColIdMap.end()) {
           auto colMapIt = columnMap_.find(varLenColInfoIt.first);
-          numRowsToInsert = std::min(
-              numRowsToInsert,
-              colMapIt->second.getNumElemsForBytesInsertData(dataCopy[insertIdIt->second],
-                                                             numRowsToInsert,
-                                                             numRowsInserted,
-                                                             bytesLeft));
+          numRowsToInsert = std::min(numRowsToInsert,
+                                     colMapIt->second.getNumElemsForBytesInsertData(
+                                         dataCopy[insertIdIt->second],
+                                         numRowsToInsert,
+                                         numRowsInserted,
+                                         bytesLeft,
+                                         insert_data.is_default[insertIdIt->second]));
         }
       }
     }
@@ -663,14 +675,13 @@ void InsertOrderFragmenter::insertDataImpl(InsertData& insertDataStruct) {
 
     {
       mapd_unique_lock<mapd_shared_mutex> writeLock(fragmentInfoMutex_);
-
       // for each column, append the data in the appropriate insert buffer
-      for (size_t i = 0; i < insertDataStruct.columnIds.size(); ++i) {
-        int columnId = insertDataStruct.columnIds[i];
+      for (size_t i = 0; i < insert_data.columnIds.size(); ++i) {
+        int columnId = insert_data.columnIds[i];
         auto colMapIt = columnMap_.find(columnId);
         CHECK(colMapIt != columnMap_.end());
-        currentFragment->shadowChunkMetadataMap[columnId] =
-            colMapIt->second.appendData(dataCopy[i], numRowsToInsert, numRowsInserted);
+        currentFragment->shadowChunkMetadataMap[columnId] = colMapIt->second.appendData(
+            dataCopy[i], numRowsToInsert, numRowsInserted, insert_data.is_default[i]);
         auto varLenColInfoIt = varLenColInfo_.find(columnId);
         if (varLenColInfoIt != varLenColInfo_.end()) {
           varLenColInfoIt->second = colMapIt->second.getBuffer()->size();
@@ -703,7 +714,7 @@ void InsertOrderFragmenter::insertDataImpl(InsertData& insertDataStruct) {
       }
     }
   }
-  numTuples_ += insertDataStruct.numRows;
+  numTuples_ += insert_data.numRows;
   dropFragmentsToSize(maxRows_);
 }
 
@@ -777,9 +788,9 @@ TableInfo InsertOrderFragmenter::getFragmentsForQuery() {
     while (partIt != queryInfo.fragments.end()) {
       if (partIt->getPhysicalNumTuples() == 0) {
         // this means that a concurrent insert query inserted tuples into a new fragment
-        // but when the query came in we didn't have this fragment. To make sure we don't
-        // mess up the executor we delete this fragment from the metadatamap (fixes
-        // earlier bug found 2015-05-08)
+        // but when the query came in we didn't have this fragment. To make sure we
+        // don't mess up the executor we delete this fragment from the metadatamap
+        // (fixes earlier bug found 2015-05-08)
         partIt = queryInfo.fragments.erase(partIt);
       } else {
         queryInfo.setPhysicalNumTuples(queryInfo.getPhysicalNumTuples() +

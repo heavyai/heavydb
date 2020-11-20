@@ -1553,10 +1553,6 @@ void InsertStmt::analyze(const Catalog_Namespace::Catalog& catalog,
         }
       }
     }
-    if (catalog.getAllColumnMetadataForTable(td->tableId, false, false, true).size() !=
-        result_col_list.size()) {
-      throw std::runtime_error("Insert into a subset of columns is not supported yet.");
-    }
   }
   query.set_result_col_list(result_col_list);
 }
@@ -1586,6 +1582,8 @@ size_t InsertValuesStmt::determineLeafIndex(const Catalog_Namespace::Catalog& ca
   size_t indexOfShardColumn = 0;
   const ColumnDescriptor* shardColumn = catalog.getShardColumnMetadataForTable(td);
   CHECK(shardColumn);
+  auto shard_count = td->nShards * num_leafs;
+  int64_t shardId = 0;
 
   if (column_list.empty()) {
     auto all_cols =
@@ -1602,7 +1600,9 @@ size_t InsertValuesStmt::determineLeafIndex(const Catalog_Namespace::Catalog& ca
     }
 
     if (indexOfShardColumn == column_list.size()) {
-      throw std::runtime_error("No value defined for shard column.");
+      shardId = SHARD_FOR_KEY(inline_fixed_encoding_null_val(shardColumn->columnType),
+                              shard_count);
+      return shardId / td->nShards;
     }
   }
 
@@ -1625,10 +1625,6 @@ size_t InsertValuesStmt::determineLeafIndex(const Catalog_Namespace::Catalog& ca
   CHECK(con);
 
   Datum d = con->get_constval();
-
-  auto shard_count = td->nShards * num_leafs;
-  int64_t shardId = 0;
-
   if (con->get_is_null()) {
     shardId = SHARD_FOR_KEY(inline_fixed_encoding_null_val(shardColumn->columnType),
                             shard_count);
@@ -1678,10 +1674,20 @@ void InsertValuesStmt::analyze(const Catalog_Namespace::Catalog& catalog,
   std::vector<std::shared_ptr<Analyzer::TargetEntry>>& tlist =
       query.get_targetlist_nonconst();
   const auto tableId = query.get_result_table_id();
-  const std::list<const ColumnDescriptor*> non_phys_cols =
-      catalog.getAllColumnMetadataForTable(tableId, false, false, false);
-  if (non_phys_cols.size() != value_list.size()) {
-    throw std::runtime_error("Insert has more target columns than expressions.");
+  if (!column_list.empty()) {
+    if (value_list.size() != column_list.size()) {
+      throw std::runtime_error(
+          "Numbers of columns and values don't match for the "
+          "insert.");
+    }
+  } else {
+    const std::list<const ColumnDescriptor*> non_phys_cols =
+        catalog.getAllColumnMetadataForTable(tableId, false, false, false);
+    if (non_phys_cols.size() != value_list.size()) {
+      throw std::runtime_error(
+          "Number of columns in table does not match the list of values given in the "
+          "insert.");
+    }
   }
   std::list<int>::const_iterator it = query.get_result_col_list().begin();
   for (auto& v : value_list) {
@@ -1902,9 +1908,11 @@ void InsertValuesStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   const auto td_with_lock =
       lockmgr::TableSchemaLockContainer<lockmgr::WriteLock>::acquireTableDescriptor(
           catalog, result_table_id);
+  // NOTE(max): we do the same checks as below just a few calls earlier in analyze().
+  // Do we keep those intentionally to make sure nothing changed in between w/o
+  // catalog locks or is it just a duplicate work?
   auto td = td_with_lock();
   CHECK(td);
-
   if (td->isView) {
     throw std::runtime_error("Singleton inserts on views is not supported.");
   }
@@ -2802,7 +2810,6 @@ void InsertIntoTableAsSelectStmt::populateData(QueryStateProxy query_state_proxy
     if (column_list_.empty()) {
       auto list = catalog.getAllColumnMetadataForTable(td->tableId, false, false, false);
       target_column_descriptors = {std::begin(list), std::end(list)};
-
     } else {
       for (auto& c : column_list_) {
         const ColumnDescriptor* cd = catalog.getMetadataForColumn(td->tableId, *c);
@@ -2840,10 +2847,6 @@ void InsertIntoTableAsSelectStmt::populateData(QueryStateProxy query_state_proxy
 
     std::vector<const ColumnDescriptor*> target_column_descriptors =
         get_target_column_descriptors(td);
-    if (catalog.getAllColumnMetadataForTable(td->tableId, false, false, false).size() !=
-        target_column_descriptors.size()) {
-      throw std::runtime_error("Insert into a subset of columns is not supported yet.");
-    }
 
     if (source_column_descriptors.size() != target_column_descriptors.size()) {
       throw std::runtime_error("The number of source and target columns does not match.");
@@ -3225,6 +3228,8 @@ void InsertIntoTableAsSelectStmt::populateData(QueryStateProxy query_state_proxy
           total_target_value_translate_time_ms += timer_stop(translate_clock_begin);
 
           const auto data_load_clock_begin = timer_start();
+          auto data_memory_holder =
+              import_export::fill_missing_columns(&catalog, insert_data);
           insertDataLoader.insertData(*session, insert_data);
           total_data_load_time_ms += timer_stop(data_load_clock_begin);
 
@@ -3791,8 +3796,12 @@ void AddColumnStmt::execute(const Catalog_Namespace::SessionInfo& session) {
     }
 
     std::unique_ptr<import_export::Loader> loader(new import_export::Loader(catalog, td));
-    auto import_buffers = import_export::setup_column_loaders(td, loader.get());
-    loader->setReplicating(true);
+    std::vector<std::unique_ptr<import_export::TypedImportBuffer>> import_buffers;
+    for (const auto& cd : cds) {
+      import_buffers.emplace_back(std::make_unique<import_export::TypedImportBuffer>(
+          &cd.second, loader->getStringDict(&cd.second)));
+    }
+    loader->setAddingColumns(true);
 
     // set_geo_physical_import_buffer below needs a sorted import_buffers
     std::sort(import_buffers.begin(),
@@ -3841,7 +3850,7 @@ void AddColumnStmt::execute(const Catalog_Namespace::SessionInfo& session) {
             if (coldef != nullptr ||
                 skip_physical_cols-- <= 0) {  // skip non-null phy col
               import_buffer->add_value(
-                  cd, defaultval, isnull, import_export::CopyParams(), nrows);
+                  cd, defaultval, isnull, import_export::CopyParams());
               if (cd->columnType.is_geometry()) {
                 std::vector<double> coords, bounds;
                 std::vector<int> ring_sizes, poly_rings;
@@ -3865,8 +3874,7 @@ void AddColumnStmt::execute(const Catalog_Namespace::SessionInfo& session) {
                                                                         bounds,
                                                                         ring_sizes,
                                                                         poly_rings,
-                                                                        render_group,
-                                                                        nrows);
+                                                                        render_group);
                 // skip following phy cols
                 skip_physical_cols = cd->columnType.get_physical_cols();
               }

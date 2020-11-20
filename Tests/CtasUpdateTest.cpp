@@ -1057,84 +1057,71 @@ TEST_P(Ctas, CreateTableAsSelectWithZeroLimit) {
   int num_rows_to_check = 0;
   runCtasTest(columnDescriptors, create_ctas_sql, num_rows, num_rows_to_check);
 }
+namespace {
+void itas_syntax_check(const std::string& sql,
+                       const std::string& create_src_ddl,
+                       const std::string& create_dst_ddl,
+                       bool throws) {
+  std::string drop_src_ddl = "DROP TABLE IF EXISTS ITAS_SOURCE;";
+  std::string drop_target_ddl = "DROP TABLE IF EXISTS ITAS_TARGET;";
+  run_ddl_statement(drop_src_ddl);
+  run_ddl_statement(drop_target_ddl);
+  run_ddl_statement(create_src_ddl);
+  run_ddl_statement(create_dst_ddl);
+  if (throws) {
+    EXPECT_THROW(run_ddl_statement(sql), std::runtime_error);
+  } else {
+    EXPECT_NO_THROW(run_ddl_statement(sql));
+  }
+}
+}  // namespace
 
 TEST(Itas, SyntaxCheck) {
-  std::string ddl = "DROP TABLE IF EXISTS ITAS_SOURCE;";
-  run_ddl_statement(ddl);
-  ddl = "DROP TABLE IF EXISTS ITAS_TARGET;";
-  run_ddl_statement(ddl);
-
-  run_ddl_statement("CREATE TABLE ITAS_SOURCE (id int, val int);");
-  run_ddl_statement("CREATE TABLE ITAS_TARGET (id int);");
-
-  ddl = "INSERT INTO ITAS_TARGET SELECT * FROM ITAS_SOURCE;";
-  EXPECT_THROW(run_ddl_statement(ddl), std::runtime_error);
-
-  ddl = "DROP TABLE IF EXISTS ITAS_SOURCE;";
-  run_ddl_statement(ddl);
-  ddl = "DROP TABLE IF EXISTS ITAS_TARGET;";
-  run_ddl_statement(ddl);
-
-  run_ddl_statement("CREATE TABLE ITAS_SOURCE (id int);");
-  run_ddl_statement("CREATE TABLE ITAS_TARGET (id int, val int);");
-
-  ddl = "INSERT INTO ITAS_TARGET SELECT * FROM ITAS_SOURCE;";
-  EXPECT_THROW(run_ddl_statement(ddl), std::runtime_error);
-
-  ddl = "DROP TABLE IF EXISTS ITAS_SOURCE;";
-  run_ddl_statement(ddl);
-  ddl = "DROP TABLE IF EXISTS ITAS_TARGET;";
-  run_ddl_statement(ddl);
-
-  run_ddl_statement("CREATE TABLE ITAS_SOURCE (id int);");
-  run_ddl_statement("CREATE TABLE ITAS_TARGET (id int encoding FIXED(8));");
-
-  ddl = "INSERT INTO ITAS_TARGET SELECT * FROM ITAS_SOURCE;";
-  EXPECT_NO_THROW(run_ddl_statement(ddl));
-
-  ddl = "DROP TABLE IF EXISTS ITAS_SOURCE;";
-  run_ddl_statement(ddl);
-  ddl = "DROP TABLE IF EXISTS ITAS_TARGET;";
-  run_ddl_statement(ddl);
-
-  run_ddl_statement("CREATE TABLE ITAS_SOURCE (id int encoding FIXED(8));");
-  run_ddl_statement("CREATE TABLE ITAS_TARGET (id int);");
-
-  ddl = "INSERT INTO ITAS_TARGET SELECT * FROM ITAS_SOURCE;";
-  EXPECT_NO_THROW(run_ddl_statement(ddl));
-
-  ddl = "DROP TABLE IF EXISTS ITAS_SOURCE;";
-  run_ddl_statement(ddl);
-  ddl = "DROP TABLE IF EXISTS ITAS_TARGET;";
-  run_ddl_statement(ddl);
-
-  run_ddl_statement("CREATE TABLE ITAS_SOURCE (id int, val timestamp(0));");
-  run_ddl_statement("CREATE TABLE ITAS_TARGET (id int, val timestamp(3));");
-
-  ddl = "INSERT INTO ITAS_TARGET SELECT * FROM ITAS_SOURCE;";
-  EXPECT_THROW(run_ddl_statement(ddl), std::runtime_error);
-
-  ddl = "DROP TABLE IF EXISTS ITAS_SOURCE;";
-  run_ddl_statement(ddl);
-  ddl = "DROP TABLE IF EXISTS ITAS_TARGET;";
-  run_ddl_statement(ddl);
-
-  run_ddl_statement("CREATE TABLE ITAS_SOURCE (id int, val text encoding none);");
-  run_ddl_statement("CREATE TABLE ITAS_TARGET (id int, val text);");
-
-  ddl = "INSERT INTO ITAS_TARGET SELECT * FROM ITAS_SOURCE;";
-  EXPECT_THROW(run_ddl_statement(ddl), std::runtime_error);
-
-  ddl = "DROP TABLE IF EXISTS ITAS_SOURCE;";
-  run_ddl_statement(ddl);
-  ddl = "DROP TABLE IF EXISTS ITAS_TARGET;";
-  run_ddl_statement(ddl);
-
-  run_ddl_statement("CREATE TABLE ITAS_SOURCE (id int, val decimal(10,2));");
-  run_ddl_statement("CREATE TABLE ITAS_TARGET (id int, val decimal(10,3));");
-
-  ddl = "INSERT INTO ITAS_TARGET SELECT * FROM ITAS_SOURCE;";
-  EXPECT_THROW(run_ddl_statement(ddl), std::runtime_error);
+  std::string select_star_sql = "INSERT INTO ITAS_TARGET SELECT * FROM ITAS_SOURCE;";
+  itas_syntax_check(select_star_sql,
+                    "CREATE TABLE ITAS_SOURCE (id int, val int);",
+                    "CREATE TABLE ITAS_TARGET (id int);",
+                    true);
+  itas_syntax_check(select_star_sql,
+                    "CREATE TABLE ITAS_SOURCE (id int);",
+                    "CREATE TABLE ITAS_TARGET (id int, val int);",
+                    true);
+  itas_syntax_check(select_star_sql,
+                    "CREATE TABLE ITAS_SOURCE (id int);",
+                    "CREATE TABLE ITAS_TARGET (id int encoding FIXED(8));",
+                    false);
+  itas_syntax_check(select_star_sql,
+                    "CREATE TABLE ITAS_SOURCE (id int encoding FIXED(8));",
+                    "CREATE TABLE ITAS_TARGET (id int);",
+                    false);
+  itas_syntax_check(select_star_sql,
+                    "CREATE TABLE ITAS_SOURCE (id int, val timestamp(0));",
+                    "CREATE TABLE ITAS_TARGET (id int, val timestamp(3));",
+                    true);
+  itas_syntax_check(select_star_sql,
+                    "CREATE TABLE ITAS_SOURCE (id int, val text encoding none);",
+                    "CREATE TABLE ITAS_TARGET (id int, val text);",
+                    true);
+  itas_syntax_check(select_star_sql,
+                    "CREATE TABLE ITAS_SOURCE (id int, val decimal(10,2));",
+                    "CREATE TABLE ITAS_TARGET (id int, val decimal(10,3));",
+                    true);
+  itas_syntax_check("INSERT INTO ITAS_TARGET SELECT id FROM ITAS_SOURCE;",
+                    "CREATE TABLE ITAS_SOURCE (id int, val int);",
+                    "CREATE TABLE ITAS_TARGET (id int);",
+                    false);
+  itas_syntax_check("INSERT INTO ITAS_TARGET(id) SELECT id FROM ITAS_SOURCE;",
+                    "CREATE TABLE ITAS_SOURCE (id int);",
+                    "CREATE TABLE ITAS_TARGET (id int, val int);",
+                    false);
+  itas_syntax_check("INSERT INTO ITAS_TARGET(id2) SELECT id FROM ITAS_SOURCE;",
+                    "CREATE TABLE ITAS_SOURCE (id int);",
+                    "CREATE TABLE ITAS_TARGET (id2 int, val int);",
+                    false);
+  itas_syntax_check(select_star_sql,
+                    "CREATE TABLE ITAS_SOURCE (id int);",
+                    "CREATE TABLE ITAS_TARGET (id2 int);",
+                    false);
 }
 
 TEST(Itas, DifferentColumnNames) {
@@ -1390,10 +1377,12 @@ TEST(Itas, UnsupportedDateTime) {
   run_ddl_statement("DROP TABLE ITAS_SOURCE;");
 }
 
-void itasTestBody(std::vector<std::shared_ptr<TestColumnDescriptor>>& columnDescriptors,
-                  std::string sourcePartitionScheme = ")",
-                  std::string targetPartitionScheme = ")",
-                  std::string targetTempTable = "") {
+void create_itas_tables(
+    std::vector<std::shared_ptr<TestColumnDescriptor>>& columnDescriptors,
+    std::string sourcePartitionScheme,
+    std::string targetPartitionScheme,
+    std::string targetTempTable,
+    size_t n_rows) {
   run_ddl_statement("DROP TABLE IF EXISTS ITAS_SOURCE;");
   run_ddl_statement("DROP TABLE IF EXISTS ITAS_TARGET;");
 
@@ -1421,10 +1410,8 @@ void itasTestBody(std::vector<std::shared_ptr<TestColumnDescriptor>>& columnDesc
   run_ddl_statement(create_source_sql);
   run_ddl_statement(create_target_sql);
 
-  size_t num_rows = 25;
-
   // fill source table
-  for (unsigned int row = 0; row < num_rows; row++) {
+  for (unsigned int row = 0; row < n_rows; row++) {
     std::string insert_sql = "INSERT INTO ITAS_SOURCE VALUES (" + std::to_string(row);
     for (unsigned int col = 0; col < columnDescriptors.size(); col++) {
       auto tcd = columnDescriptors[col];
@@ -1434,6 +1421,18 @@ void itasTestBody(std::vector<std::shared_ptr<TestColumnDescriptor>>& columnDesc
 
     run_multiple_agg(insert_sql, ExecutorDeviceType::CPU);
   }
+}
+
+void itasTestBody(std::vector<std::shared_ptr<TestColumnDescriptor>>& columnDescriptors,
+                  std::string sourcePartitionScheme = ")",
+                  std::string targetPartitionScheme = ")",
+                  std::string targetTempTable = "") {
+  size_t num_rows = 25;
+  create_itas_tables(columnDescriptors,
+                     sourcePartitionScheme,
+                     targetPartitionScheme,
+                     targetTempTable,
+                     num_rows);
 
   // execute CTAS
   std::string insert_itas_sql = "INSERT INTO ITAS_TARGET SELECT * FROM ITAS_SOURCE;";
@@ -1535,6 +1534,176 @@ TEST_P(Itas, InsertIntoShardedTableFromSelectReplicated) {
   itasTestBody(columnDescriptors,
                ", SHARD KEY (id)) WITH (shard_count = 4, partitions='SHARDED')",
                ") WITH (partitions='REPLICATED')");
+}
+
+namespace {
+void create_partial_itas_tables(const std::string& target_partitioning) {
+  run_ddl_statement("DROP TABLE IF EXISTS ITAS_SOURCE;");
+  run_ddl_statement("DROP TABLE IF EXISTS ITAS_TARGET;");
+  std::string create_source_sql =
+      "CREATE TABLE itas_source (id int, "
+      "not_nullable_col int NOT NULL,"
+      "nullable_col int,"
+      "text_array text[])";
+  std::string create_target_sql =
+      "CREATE TABLE itas_target (id int, "
+      "not_nullable_col int NOT NULL,"
+      "nullable_col int,"
+      "text_array text[]" +
+      target_partitioning;
+  run_ddl_statement(create_source_sql);
+  run_ddl_statement(create_target_sql);
+  run_multiple_agg("INSERT INTO itas_source VALUES(1, 10, 100, ARRAY['A', 'B']);",
+                   ExecutorDeviceType::CPU);
+  run_multiple_agg("INSERT INTO itas_source VALUES(2, 20, 200, ARRAY['Aa', 'Bb']);",
+                   ExecutorDeviceType::CPU);
+  run_multiple_agg("INSERT INTO itas_source VALUES(3, 30, 300, ARRAY['Aaa', 'Bbb']);",
+                   ExecutorDeviceType::CPU);
+  run_multiple_agg("INSERT INTO itas_source VALUES(4, 40, 400, ARRAY['Aaaa', 'Bbbb']);",
+                   ExecutorDeviceType::CPU);
+  run_multiple_agg("INSERT INTO itas_source VALUES(5, 50, 500, ARRAY['Aaaaa', 'Bbbbb']);",
+                   ExecutorDeviceType::CPU);
+}
+}  // namespace
+
+TEST(Itas, OmitNotNullableColumn) {
+  std::vector<std::string> partitioning_schemes = {
+      ")", ", SHARD KEY (id)) WITH (shard_count = 4, partitions='SHARDED')"};
+  for (auto target_partitioning : partitioning_schemes) {
+    create_partial_itas_tables(target_partitioning);
+    std::string itas_omitting_nullable_column =
+        "INSERT INTO ITAS_TARGET(id, not_nullable_col, text_array) "
+        "SELECT id, not_nullable_col, text_array FROM ITAS_SOURCE";
+    std::string itas_omitting_not_nullable_column =
+        "INSERT INTO ITAS_TARGET(id, nullable_col, text_array) "
+        "SELECT id, nullable_col, text_array FROM ITAS_SOURCE";
+    EXPECT_NO_THROW(run_ddl_statement(itas_omitting_nullable_column));
+    EXPECT_THROW(run_ddl_statement(itas_omitting_not_nullable_column),
+                 std::runtime_error);
+  }
+}
+
+TEST(Itas, OmitShardingColumn) {
+  create_partial_itas_tables(
+      ", SHARD KEY (id)) WITH (shard_count = 4, partitions='SHARDED')");
+  std::string itas_omitting_nullable_column =
+      "INSERT INTO ITAS_TARGET(id, not_nullable_col, text_array) "
+      "SELECT id, not_nullable_col, text_array FROM ITAS_SOURCE";
+  std::string itas_omitting_sharding_column =
+      "INSERT INTO ITAS_TARGET(not_nullable_col, nullable_col, text_array) "
+      "SELECT not_nullable_col, nullable_col, text_array FROM ITAS_SOURCE";
+  EXPECT_NO_THROW(run_ddl_statement(itas_omitting_nullable_column));
+  EXPECT_NO_THROW(run_ddl_statement(itas_omitting_sharding_column));
+}
+
+TEST(Itas, OmitDictionaryEncodedArrayColumn) {
+  std::vector<std::string> partitioning_schemes = {
+      ")", ", SHARD KEY (id)) WITH (shard_count = 4, partitions='SHARDED')"};
+  for (auto target_partitioning : partitioning_schemes) {
+    create_partial_itas_tables(target_partitioning);
+    std::string itas_omitting_nullable_column =
+        "INSERT INTO ITAS_TARGET(id, not_nullable_col, text_array) "
+        "SELECT id, not_nullable_col, text_array FROM ITAS_SOURCE";
+    std::string itas_omitting_array_column =
+        "INSERT INTO ITAS_TARGET(id, not_nullable_col, nullable_col) "
+        "SELECT id, not_nullable_col, nullable_col FROM ITAS_SOURCE";
+    EXPECT_NO_THROW(run_ddl_statement(itas_omitting_nullable_column));
+    EXPECT_THROW(run_ddl_statement(itas_omitting_array_column), std::runtime_error);
+  }
+}
+
+namespace {
+void populate_partial_itas_target(std::vector<bool> column_is_used) {
+  run_ddl_statement("TRUNCATE TABLE itas_target;");
+  std::string insert_itas_sql = "INSERT INTO itas_target(id";
+  std::string select_from_sql = "SELECT id";
+  for (size_t i = 0; i < column_is_used.size(); ++i) {
+    if (column_is_used[i]) {
+      std::string append_str = ", col_" + std::to_string(i);
+      insert_itas_sql += append_str;
+      select_from_sql += append_str;
+    } else {
+      // else we omit the column
+    }
+  }
+  select_from_sql += " FROM itas_source";
+  insert_itas_sql += ") " + select_from_sql + ";";
+  LOG(INFO) << insert_itas_sql;
+  run_ddl_statement(insert_itas_sql);
+}
+
+void validate_partial_itas_results(
+    std::vector<bool> column_is_used,
+    std::vector<std::shared_ptr<TestColumnDescriptor>>& cds,
+    size_t num_rows) {
+  // compare source against CTAS
+  std::string select_sql = "SELECT * FROM itas_source ORDER BY id;";
+  std::string select_itas_sql = "SELECT * FROM itas_target ORDER BY id;";
+  LOG(INFO) << select_sql;
+  auto select_result = run_multiple_agg(select_sql, ExecutorDeviceType::CPU);
+  LOG(INFO) << select_itas_sql;
+  auto select_itas_result = run_multiple_agg(select_itas_sql, ExecutorDeviceType::CPU);
+  ASSERT_EQ(num_rows, select_result->rowCount());
+  ASSERT_EQ(num_rows, select_itas_result->rowCount());
+
+  for (unsigned int row = 0; row < num_rows; row++) {
+    const auto select_crt_row = select_result->getNextRow(true, false);
+    const auto select_itas_crt_row = select_itas_result->getNextRow(true, false);
+
+    for (unsigned int i = 0; i < column_is_used.size(); i++) {
+      auto tcd = cds[i];
+      if (!column_is_used[i]) {
+        ASSERT_EQ(
+            true,
+            is_null_tv(select_itas_crt_row[i + 1], select_result->getColType(i + 1)));
+      } else {
+        {
+          const auto mapd_variant = select_crt_row[i + 1];
+          auto mapd_ti = select_result->getColType(i + 1);
+          ASSERT_EQ(true, tcd->check_column_value(row, mapd_ti, &mapd_variant));
+        }
+        {
+          const auto mapd_variant = select_itas_crt_row[i + 1];
+          auto mapd_ti = select_itas_result->getColType(i + 1);
+          ASSERT_EQ(true, tcd->check_column_value(row, mapd_ti, &mapd_variant));
+        }
+      }
+    }
+  }
+}
+
+void test_partial_columns(std::vector<bool> column_is_used,
+                          std::vector<std::shared_ptr<TestColumnDescriptor>>& cds,
+                          size_t num_rows) {
+  populate_partial_itas_target(column_is_used);
+  validate_partial_itas_results(column_is_used, cds, num_rows);
+}
+}  // namespace
+
+void partial_itas_test_body(
+    std::vector<std::shared_ptr<TestColumnDescriptor>>& columnDescriptors,
+    std::string sourcePartitionScheme = ")",
+    std::string targetPartitionScheme = ")",
+    std::string targetTempTable = "") {
+  size_t num_rows = 25;
+  create_itas_tables(columnDescriptors,
+                     sourcePartitionScheme,
+                     targetPartitionScheme,
+                     targetTempTable,
+                     num_rows);
+
+  std::vector<bool> use_even_columns, use_odd_columns;
+  use_even_columns.resize(columnDescriptors.size(), false);
+  use_odd_columns.resize(columnDescriptors.size(), false);
+  for (size_t c = 0; c < columnDescriptors.size(); ++c) {
+    if (c % 2 == 0) {
+      use_even_columns[c] = true;
+    } else {
+      use_odd_columns[c] = true;
+    }
+  }
+  test_partial_columns(use_even_columns, columnDescriptors, num_rows);
+  test_partial_columns(use_odd_columns, columnDescriptors, num_rows);
 }
 
 void exportTestBody(std::string sourcePartitionScheme = ")") {
@@ -1890,6 +2059,7 @@ ARRAY_COLUMN_TEST(SMALLINT, "SMALLINT");
 NUMBER_COLUMN_TEST(INTEGER, int64_t, "INTEGER", kINT, NULL_INT);
 NUMBER_COLUMN_TEST(INTEGER_8, int64_t, "INTEGER ENCODING FIXED(8)", kINT, NULL_INT);
 NUMBER_COLUMN_TEST(INTEGER_16, int64_t, "INTEGER ENCODING FIXED(16)", kINT, NULL_INT);
+NUMBER_COLUMN_TEST(NOT_NULL_INTEGER, int64_t, "INTEGER NOT NULL", kINT, NULL_INT);
 ARRAY_COLUMN_TEST(INTEGER, "INTEGER");
 
 NUMBER_COLUMN_TEST(BIGINT, int64_t, "BIGINT", kBIGINT, NULL_BIGINT);
@@ -2095,6 +2265,93 @@ TEST(Itas, InsertIntoTempTableFromSelect) {
   };
 
   itasTestBody(columnDescriptors, ")", ")", "TEMPORARY");
+}
+
+namespace {
+std::vector<std::shared_ptr<TestColumnDescriptor>> partialDescriptors = {
+    STRING_NONE_BASE,
+    BOOLEAN,
+    TINYINT,
+    BIGINT,
+    BIGINT_ARRAY,
+    FLOAT,
+    DECIMAL,
+    TEXT_NONE,
+    TEXT_DICT,
+    // TODO(max): TypedImportBuffers don't work with NULL text arrays yet
+    // TEXT_ARRAY,
+    TIME,
+    DATE,
+    TIMESTAMP,
+    GEO_POINT,
+    GEO_LINESTRING,
+    GEO_POLYGON,
+    GEO_MULTI_POLYGON};
+}  // namespace
+
+TEST(Itas, PartialInsertIntoTableFromSelect) {
+  partial_itas_test_body(partialDescriptors, ")", ")");
+}
+
+TEST(Itas, PartialInsertIntoTableFromSelectFragments) {
+  partial_itas_test_body(partialDescriptors, ") WITH (FRAGMENT_SIZE=3)", ")");
+}
+
+TEST(Itas, PartialInsertIntoFragmentsTableFromSelect) {
+  partial_itas_test_body(partialDescriptors, ")", ") WITH (FRAGMENT_SIZE=3)");
+}
+
+TEST(Itas, PartialInsertIntoFragmentsTableFromSelectFragments) {
+  partial_itas_test_body(
+      partialDescriptors, ") WITH (FRAGMENT_SIZE=3)", ") WITH (FRAGMENT_SIZE=3)");
+}
+
+TEST(Itas, PartialInsertIntoTableFromSelectReplicated) {
+  partial_itas_test_body(
+      partialDescriptors, ") WITH (FRAGMENT_SIZE=3, partitions='REPLICATED')", ")");
+}
+
+TEST(Itas, PartialInsertIntoTableFromSelectSharded) {
+  partial_itas_test_body(
+      partialDescriptors,
+      ", SHARD KEY (id)) WITH (FRAGMENT_SIZE=3, shard_count = 4, partitions='SHARDED')",
+      ")");
+}
+
+TEST(Itas, PartialInsertIntoReplicatedTableFromSelect) {
+  partial_itas_test_body(partialDescriptors, ")", ") WITH (partitions='REPLICATED')");
+}
+
+TEST(Itas, PartialInsertIntoShardedTableFromSelect) {
+  partial_itas_test_body(
+      partialDescriptors,
+      ")",
+      ", SHARD KEY (id)) WITH (shard_count = 4, partitions='SHARDED')");
+}
+
+TEST(Itas, PartialInsertIntoReplicatedTableFromSelectReplicated) {
+  partial_itas_test_body(partialDescriptors,
+                         ") WITH (partitions='REPLICATED')",
+                         ") WITH (partitions='REPLICATED')");
+}
+
+TEST(Itas, PartialInsertIntoReplicatedTableFromSelectSharded) {
+  itasTestBody(partialDescriptors,
+               ") WITH (partitions='REPLICATED')",
+               ", SHARD KEY (id)) WITH (shard_count = 4, partitions='SHARDED')");
+}
+
+TEST(Itas, PartialInsertIntoShardedTableFromSelectSharded) {
+  partial_itas_test_body(
+      partialDescriptors,
+      ", SHARD KEY (id)) WITH (shard_count = 4, partitions='SHARDED')",
+      ", SHARD KEY (id)) WITH (shard_count = 4, partitions='SHARDED')");
+}
+
+TEST(Itas, PartialInsertIntoShardedTableFromSelectReplicated) {
+  partial_itas_test_body(partialDescriptors,
+                         ", SHARD KEY (id)) WITH (shard_count = 4, partitions='SHARDED')",
+                         ") WITH (partitions='REPLICATED')");
 }
 
 int main(int argc, char* argv[]) {

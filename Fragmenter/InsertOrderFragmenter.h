@@ -24,6 +24,7 @@
 #include <map>
 #include <mutex>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 #include "DataMgr/Chunk/Chunk.h"
@@ -84,9 +85,9 @@ class InsertOrderFragmenter : public AbstractFragmenter {
    * @todo be able to fill up current fragment in
    * multi-row insert before creating new fragment
    */
-  void insertData(InsertData& insertDataStruct) override;
+  void insertData(InsertData& insert_data_struct) override;
 
-  void insertDataNoCheckpoint(InsertData& insertDataStruct) override;
+  void insertDataNoCheckpoint(InsertData& insert_data_struct) override;
 
   void dropFragmentsToSize(const size_t maxRows) override;
 
@@ -220,8 +221,8 @@ class InsertOrderFragmenter : public AbstractFragmenter {
   void getChunkMetadata();
 
   void lockInsertCheckpointData(const InsertData& insertDataStruct);
-  void insertDataImpl(InsertData& insertDataStruct);
-  void replicateData(const InsertData& insertDataStruct);
+  void insertDataImpl(InsertData& insert_data);
+  void addColumns(const InsertData& insertDataStruct);
 
   InsertOrderFragmenter(const InsertOrderFragmenter&);
   InsertOrderFragmenter& operator=(const InsertOrderFragmenter&);
@@ -236,6 +237,9 @@ class InsertOrderFragmenter : public AbstractFragmenter {
   auto vacuum_varlen_rows(const FragmentInfo& fragment,
                           const std::shared_ptr<Chunk_NS::Chunk>& chunk,
                           const std::vector<uint64_t>& frag_offsets);
+
+ private:
+  bool isAddingNewColumns(const InsertData& insert_data) const;
 };
 
 }  // namespace Fragmenter_Namespace
