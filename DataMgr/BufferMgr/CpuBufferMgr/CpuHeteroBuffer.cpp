@@ -14,10 +14,10 @@
  * limitations under the License.
  */
 
-#include "CudaMgr/CudaMgr.h"
 #include "DataMgr/BufferMgr/CpuBufferMgr/CpuHeteroBuffer.h"
 
-#include "Shared/Logger.h"
+#include "CudaMgr/CudaMgr.h"
+#include "Logger/Logger.h"
 
 namespace Buffer_Namespace {
 
@@ -26,12 +26,12 @@ CpuHeteroBuffer::CpuHeteroBuffer(const int device_id,
                                  CudaMgr_Namespace::CudaMgr* cuda_mgr,
                                  const size_t page_size,
                                  const size_t num_bytes)
-                : AbstractBuffer(device_id)
-                , page_size_(page_size)
-                , num_pages_(0)
-                , pin_count_(0)
-                , buffer_(mem_resource)
-                , cuda_mgr_(cuda_mgr) {
+    : AbstractBuffer(device_id)
+    , page_size_(page_size)
+    , num_pages_(0)
+    , pin_count_(0)
+    , buffer_(mem_resource)
+    , cuda_mgr_(cuda_mgr) {
   pin();
   if (num_bytes > 0) {
     reserve(num_bytes);
@@ -71,12 +71,12 @@ void CpuHeteroBuffer::write(int8_t* src,
   writeData(src, num_bytes, offset, src_buffer_type, src_device_id);
 
   // update dirty flags for buffer and each affected page
-  is_dirty_ = true;
+  setDirty();
   if (offset < size_) {
-    is_updated_ = true;
+    setUpdated();
   }
   if (offset + num_bytes > size_) {
-    is_appended_ = true;
+    setAppended();
     size_ = offset + num_bytes;
   }
 
@@ -100,8 +100,8 @@ void CpuHeteroBuffer::append(int8_t* src,
                              const size_t num_bytes,
                              const MemoryLevel src_buffer_type,
                              const int src_device_id) {
-  is_dirty_ = true;
-  is_appended_ = true;
+  // will set is_dirty_ too
+  setAppended();
 
   if (num_bytes + size_ > reservedSize()) {
     reserve(num_bytes + size_);
@@ -146,4 +146,4 @@ void CpuHeteroBuffer::writeData(int8_t* const src,
   }
 }
 
-} // namespace Buffer_Namespace
+}  // namespace Buffer_Namespace

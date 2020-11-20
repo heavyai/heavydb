@@ -16,10 +16,10 @@
 
 #pragma once
 
-#include "DataMgr/AbstractBuffer.h"
+#include <memory_resource>
 #include <mutex>
 #include <vector>
-#include <memory_resource>
+#include "DataMgr/AbstractBuffer.h"
 
 namespace CudaMgr_Namespace {
 class CudaMgr;
@@ -29,7 +29,7 @@ using namespace Data_Namespace;
 
 namespace Buffer_Namespace {
 class CpuHeteroBuffer : public AbstractBuffer {
-public:
+ public:
   CpuHeteroBuffer(const int device_id,
                   std::pmr::memory_resource* mem_resource,
                   CudaMgr_Namespace::CudaMgr* cuda_mgr,
@@ -91,8 +91,6 @@ public:
   /// Returns the size in bytes of each page in the buffer.
   inline size_t pageSize() const override { return page_size_; }
 
-  inline size_t size() const override { return size_; }
-
   /// Returns the total number of bytes allocated for the buffer.
   inline size_t reservedSize() const override { return buffer_.size(); }
 
@@ -112,7 +110,8 @@ public:
     std::lock_guard<pin_mutex_type> pin_lock(pin_mutex_);
     return (pin_count_);
   }
-private:
+
+ private:
   void readData(int8_t* const dst,
                 const size_t num_bytes,
                 const size_t offset = 0,
@@ -125,14 +124,13 @@ private:
                  const MemoryLevel src_buffer_type = CPU_LEVEL,
                  const int src_device_id = -1);
 
-
   using pin_mutex_type = std::mutex;
   using vector_type = std::pmr::vector<int8_t>;
 
   size_t page_size_;  /// the size of each page in the buffer
   size_t num_pages_;
   int epoch_;  /// indicates when the buffer was last flushed
-  
+
   // TODO: Should we use the same allocator as for the buffer_?
   std::vector<bool> page_dirty_flags_;
   int pin_count_;

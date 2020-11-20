@@ -135,7 +135,8 @@ class AbstractBuffer {
   void copyTo(AbstractBuffer* destination_buffer, const size_t num_bytes = 0);
   void resetToEmpty();
 
-#ifdef HAVE_DCPMM void setMaxRows(const size_t maxRows){max_rows_ = maxRows; }
+#ifdef HAVE_DCPMM
+  void setMaxRows(const size_t maxRows) { max_rows_ = maxRows; }
   size_t getMaxRows(void) { return max_rows_; }
   int getSQLTypeSize(void) { return sql_type.get_size(); }
 #endif /* HAVE_DCPMM */

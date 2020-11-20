@@ -78,9 +78,8 @@ class ColumnFetcher {
       ColumnCacheMap& column_cache);
 
   const int8_t* getOneTableColumnFragment(
-      const int table_id,
+      const InputColDescriptor* col_desc,
       const int frag_id,
-      const int col_id,
       const std::map<int, const TableFragments*>& all_tables_fragments,
       std::list<std::shared_ptr<Chunk_NS::Chunk>>& chunk_holder,
       std::list<ChunkIter>& chunk_iter_holder,
@@ -88,7 +87,8 @@ class ColumnFetcher {
 #ifdef HAVE_DCPMM
       const unsigned long query_id,
 #endif /* HAVE_DCPMM */
-      const int device_id, DeviceAllocator* device_allocator) const;
+      const int device_id,
+      DeviceAllocator* device_allocator) const;
 
   const int8_t* getAllTableColumnFragments(
       const int table_id,
@@ -98,11 +98,11 @@ class ColumnFetcher {
 #ifdef HAVE_DCPMM
       const unsigned long query_id,
 #endif /* HAVE_DCPMM */
-      const int device_id, DeviceAllocator* device_allocator) const;
+      const int device_id,
+      DeviceAllocator* device_allocator) const;
 
-  const int8_t* getResultSetColumn(const int table_id,
+  const int8_t* getResultSetColumn(const InputColDescriptor* col_desc,
                                    const int frag_id,
-                                   const int col_id,
                                    const Data_Namespace::MemoryLevel memory_level,
                                    const int device_id,
                                    DeviceAllocator* device_allocator) const;

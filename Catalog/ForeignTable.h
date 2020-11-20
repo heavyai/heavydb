@@ -88,7 +88,8 @@ struct ForeignTable : public TableDescriptor, public OptionsContainer {
   bool isAppendMode() const;
   std::string getFilePath() const;
 
-  static OptionsMap create_options_map(const rapidjson::Value& json_options);
+  static ::foreign_storage::OptionsMap create_options_map(
+      const rapidjson::Value& json_options);
   static void validate_alter_options(const OptionsMap& options_map);
 
  private:

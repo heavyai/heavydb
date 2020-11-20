@@ -21,10 +21,10 @@
 
 #include "HeteroMem/MemResourceProvider.h"
 
-#include "Shared/ArenaAllocator.h"
+#include "DataMgr/Allocators/ArenaAllocator.h"
 
-#include <memory>
 #include <map>
+#include <memory>
 #include <mutex>
 
 namespace CudaMgr_Namespace {
@@ -33,18 +33,14 @@ class CudaMgr;
 
 namespace Buffer_Namespace {
 class CpuHeteroBufferMgr : public AbstractBufferMgr {
-public:
+ public:
   CpuHeteroBufferMgr(const int device_id,
                      const size_t max_buffer_size,
                      const std::string& pmm_path,
                      CudaMgr_Namespace::CudaMgr* cuda_mgr,
-                     const size_t page_size = 512,
-                     AbstractBufferMgr* parent_mgr = nullptr);
-
-  CpuHeteroBufferMgr(const int device_id,
-                     const size_t max_buffer_size,
-                     CudaMgr_Namespace::CudaMgr* cuda_mgr,
-                     const size_t page_size = 512,
+                     const size_t min_slab_size,
+                     const size_t max_slab_size,
+                     const size_t page_size,
                      AbstractBufferMgr* parent_mgr = nullptr);
 
   ~CpuHeteroBufferMgr() override;
@@ -63,23 +59,24 @@ public:
                                const size_t page_size = 0,
                                const size_t initial_size = 0) override;
 
-  void deleteBuffer(const ChunkKey& key,
-                    const bool purge = true) override;  // purge param only used in FileMgr
+  void deleteBuffer(
+      const ChunkKey& key,
+      const bool purge = true) override;  // purge param only used in FileMgr
 
   void deleteBuffersWithPrefix(const ChunkKey& keyPrefix,
                                const bool purge = true) override;
 
-  AbstractBuffer* getBuffer(BufferProperty bufProp, const ChunkKey& key, const size_t numBytes = 0) override;
+  AbstractBuffer* getBuffer(BufferProperty bufProp,
+                            const ChunkKey& key,
+                            const size_t numBytes = 0) override;
 
   void fetchBuffer(const ChunkKey& key,
                    AbstractBuffer* destBuffer,
                    const size_t numBytes = 0) override;
-  
+
   AbstractBuffer* putBuffer(const ChunkKey& key,
                             AbstractBuffer* srcBuffer,
                             const size_t numBytes = 0) override;
-
-  void getChunkMetadataVec(ChunkMetadataVector& chunkMetadata) override;
 
   void getChunkMetadataVecForKeyPrefix(ChunkMetadataVector& chunkMetadataVec,
                                        const ChunkKey& keyPrefix) override;
@@ -108,23 +105,25 @@ public:
   inline std::string getStringMgrType() override { return ToString(CPU_HETERO_MGR); }
   size_t getNumChunks();
 
-private:
+ private:
   using HeteroBuffer = CpuHeteroBuffer;
   using global_mutex_type = std::mutex;
   using chunk_index_mutex_type = std::mutex;
-  using chunk_index_type= std::map<ChunkKey, HeteroBuffer*>;
+  using chunk_index_type = std::map<ChunkKey, HeteroBuffer*>;
 
   void clear();
 
   using chunk_index_iterator = typename chunk_index_type::iterator;
   void checkpoint(chunk_index_iterator first, chunk_index_iterator last);
-  
+
   AbstractBufferMgr* parent_mgr_;
   CudaMgr_Namespace::CudaMgr* cuda_mgr_;
-  
+
   MemoryResourceProvider mem_resource_provider_;
   // std::unique_ptr<Arena> sys_allocator_;
-  
+
+  const size_t min_slab_size_;
+  const size_t max_slab_size_;
   const size_t page_size_;
 
   global_mutex_type global_mutex_;
@@ -133,4 +132,4 @@ private:
 
   size_t buffer_epoch_;
 };
-} // namespace Buffer_Namespace
+}  // namespace Buffer_Namespace

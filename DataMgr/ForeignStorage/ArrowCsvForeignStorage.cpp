@@ -393,7 +393,7 @@ void ArrowCsvForeignStorage::createDictionaryEncodedColumn(
         key[3] = f;
         auto& frag = col[f];
         frag.chunks.resize(fragments[f].last_chunk - fragments[f].first_chunk + 1);
-        auto b = mgr->createBuffer(key);
+        auto b = mgr->createBuffer(BufferProperty::CAPACITY, key);
         b->initEncoder(c.columnType);
         size_t current_ind = 0;
         for (int i = fragments[f].first_chunk, e = fragments[f].last_chunk; i <= e; i++) {
@@ -499,7 +499,7 @@ void ArrowCsvForeignStorage::createDecimalColumn(
             chunk_offset += size;
           }
 
-          auto b = mgr->createBuffer(key);
+          auto b = mgr->createBuffer(BufferProperty::CAPACITY, key);
           b->setSize(frag.sz * b->getSqlType().get_size());
           b->initEncoder(c.columnType);
           if (!empty) {
@@ -699,18 +699,18 @@ void ArrowCsvForeignStorage::registerTable(Catalog_Namespace::Catalog* catalog,
           auto k = key;
           k.push_back(1);
           {
-            auto b = mgr->createBuffer(k);
+            auto b = mgr->createBuffer(BufferProperty::CAPACITY, k);
             b->setSize(varlen);
             b->initEncoder(c.columnType);
           }
           k[4] = 2;
           {
-            auto b = mgr->createBuffer(k);
+            auto b = mgr->createBuffer(BufferProperty::CAPACITY, k);
             b->setSqlType(SQLTypeInfo(kINT, false));
             b->setSize(frag.sz * b->getSqlType().get_size());
           }
         } else {
-          auto b = mgr->createBuffer(key);
+          auto b = mgr->createBuffer(BufferProperty::CAPACITY, key);
           b->initEncoder(c.columnType);
           b->setSize(frag.sz * b->getSqlType().get_size());
           if (!empty) {

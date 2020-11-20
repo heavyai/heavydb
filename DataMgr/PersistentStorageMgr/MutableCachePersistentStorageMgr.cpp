@@ -20,16 +20,18 @@ MutableCachePersistentStorageMgr::MutableCachePersistentStorageMgr(
     const std::string& data_dir,
     const size_t num_reader_threads,
     const DiskCacheConfig& disk_cache_config)
-    : PersistentStorageMgr(data_dir, num_reader_threads, disk_cache_config) {
+    : PersistentStorageMgr(data_dir, false, "", num_reader_threads, disk_cache_config) {
   CHECK(disk_cache_);
   CHECK(disk_cache_config_.isEnabledForMutableTables());
 }
 
 AbstractBuffer* MutableCachePersistentStorageMgr::createBuffer(
+    BufferProperty bufProp,
     const ChunkKey& chunk_key,
     const size_t page_size,
     const size_t initial_size) {
-  auto buf = PersistentStorageMgr::createBuffer(chunk_key, page_size, initial_size);
+  auto buf =
+      PersistentStorageMgr::createBuffer(bufProp, chunk_key, page_size, initial_size);
   if (isChunkPrefixCacheable(chunk_key)) {
     cached_buffer_map_.emplace(chunk_key, buf);
   }

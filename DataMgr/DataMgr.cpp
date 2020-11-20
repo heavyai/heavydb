@@ -86,7 +86,7 @@ DataMgr::DataMgr(const std::string& dataDir,
   }
   populateMgrs(
       system_parameters, pmm_path, pmm_store_path, numReaderThreads, cache_config);
-#else /* HAVE_DCPMM */
+#else  /* HAVE_DCPMM */
   populateMgrs(system_parameters, pmm_path, numReaderThreads, cache_config);
 #endif /* HAVE_DCPMM */
   createTopLevelMetadata();
@@ -95,7 +95,7 @@ DataMgr::DataMgr(const std::string& dataDir,
 void DataMgr::startCollectingStatistics(void) {
   std::unique_lock<std::mutex> chunkFetchStatsLock(chunkFetchStatsMutex_);
   // reset current database or all databases?
-  SysCatalog::instance().clearDataMgrStatistics(hasPmm_);
+  Catalog_Namespace::SysCatalog::instance().clearDataMgrStatistics(hasPmm_);
   statisticsOn_ = true;
   chunkFetchStatsLock.unlock();
 
@@ -201,15 +201,16 @@ void DataMgr::stopCollectingStatistics(std::map<unsigned long, long>& query_time
       // peakWorkVmSize -= bufferMgrs_[MemoryLevel::PMM_LEVEL][0]->getMaxSize();
     }
 
-    SysCatalog::instance().storeDataMgrStatistics(hasPmm_,
-                                                  peakWorkVmSize,
-                                                  query_time,
-                                                  queryColumnFetchStats,
-                                                  queryColumnChunkStats,
-                                                  queryColumnFetchDataSizeStats,
-                                                  columnFetchStats,
-                                                  columnChunkStats,
-                                                  columnFetchDataSizeStats);
+    Catalog_Namespace::SysCatalog::instance().storeDataMgrStatistics(
+        hasPmm_,
+        peakWorkVmSize,
+        query_time,
+        queryColumnFetchStats,
+        queryColumnChunkStats,
+        queryColumnFetchDataSizeStats,
+        columnFetchStats,
+        columnChunkStats,
+        columnFetchDataSizeStats);
 
 #if 0
     for (auto it2 = columnFetchStats.cbegin(); it2 != columnFetchStats.cend(); ++it2) {
@@ -259,18 +260,19 @@ size_t DataMgr::estimateDramRecommended(int percentDramPerf) {
     return 0;
   }
 
-  if (SysCatalog::instance().loadDataMgrStatistics(profSF_,
-                                                   peakWorkVmSize,
-                                                   query_pmem_time,
-                                                   query_dram_time,
-                                                   query_id_diff,
-                                                   query_time_diff,
-                                                   queryColumnFetchStats2,
-                                                   queryColumnChunkStats2,
-                                                   queryColumnFetchDataSizeStats2,
-                                                   columnFetchStats2,
-                                                   columnChunkStats2,
-                                                   columnFetchDataSizeStats2)) {
+  if (Catalog_Namespace::SysCatalog::instance().loadDataMgrStatistics(
+          profSF_,
+          peakWorkVmSize,
+          query_pmem_time,
+          query_dram_time,
+          query_id_diff,
+          query_time_diff,
+          queryColumnFetchStats2,
+          queryColumnChunkStats2,
+          queryColumnFetchDataSizeStats2,
+          columnFetchStats2,
+          columnChunkStats2,
+          columnFetchDataSizeStats2)) {
     LOG(INFO) << "query_pmem_time and query_dram_time do not have the same query ids"
               << std::endl;
     return 0;
@@ -467,7 +469,12 @@ void DataMgr::resetPersistentStorage(const DiskCacheConfig& cache_config,
     }
   }
   bufferMgrs_.clear();
-  populateMgrs(sys_params, num_reader_threads, cache_config);
+  // TODO: add optane support
+#ifdef HAVE_DCPMM
+  populateMgrs(sys_params, "", "", num_reader_threads, cache_config);
+#else
+  populateMgrs(sys_params, "", num_reader_threads, cache_config);
+#endif
   createTopLevelMetadata();
 }
 
@@ -482,8 +489,13 @@ void DataMgr::populateMgrs(const SystemParameters& system_parameters,
   bufferMgrs_.resize(2);
   bufferMgrs_[DISK_LEVEL].push_back(
       PersistentStorageMgr::createPersistentStorageMgr(dataDir_,
+#ifdef HAVE_DCPMM
                                                        hasPmmStore_,
                                                        pmm_store_path,
+#else
+                                                       "",
+                                                       "",
+#endif
                                                        userSpecifiedNumReaderThreads,
                                                        cache_config));
   levelSizes_.push_back(1);
@@ -511,22 +523,23 @@ void DataMgr::populateMgrs(const SystemParameters& system_parameters,
 
     AbstractBufferMgr* cpuMgr = nullptr;
     if (hasPmm_) {
-      cpuMgr = new CpuHeteroBufferMgr(0,
-                                      cpuBufferSize,
-                                      pmm_path,
-                                      cudaMgr_.get(),
-                                      minCpuSlabSize,
-                                      maxCpuSlabSize,
-                                      page_size,
-                                      bufferMgrs_[0][0]);
+      cpuMgr = new Buffer_Namespace::CpuHeteroBufferMgr(0,
+                                                        cpuBufferSize,
+                                                        pmm_path,
+                                                        cudaMgr_.get(),
+                                                        minCpuSlabSize,
+                                                        maxCpuSlabSize,
+                                                        page_size,
+                                                        bufferMgrs_[0][0]);
     } else {
-      cpuMgr = new CpuHeteroBufferMgr(0,
-                                      cpuBufferSize,
-                                      cudaMgr_.get(),
-                                      minCpuSlabSize,
-                                      maxCpuSlabSize,
-                                      page_size,
-                                      bufferMgrs_[0][0]);
+      cpuMgr = new Buffer_Namespace::CpuHeteroBufferMgr(0,
+                                                        cpuBufferSize,
+                                                        "",
+                                                        cudaMgr_.get(),
+                                                        minCpuSlabSize,
+                                                        maxCpuSlabSize,
+                                                        page_size,
+                                                        bufferMgrs_[0][0]);
     }
     bufferMgrs_[CPU_LEVEL].push_back(cpuMgr);
     levelSizes_.push_back(1);
@@ -561,22 +574,23 @@ void DataMgr::populateMgrs(const SystemParameters& system_parameters,
   } else {
     AbstractBufferMgr* cpuMgr = nullptr;
     if (hasPmm_) {
-      cpuMgr = new CpuHeteroBufferMgr(0,
-                                      cpuBufferSize,
-                                      pmm_path,
-                                      cudaMgr_.get(),
-                                      minCpuSlabSize,
-                                      maxCpuSlabSize,
-                                      page_size,
-                                      bufferMgrs_[0][0]);
+      cpuMgr = new Buffer_Namespace::CpuHeteroBufferMgr(0,
+                                                        cpuBufferSize,
+                                                        pmm_path,
+                                                        cudaMgr_.get(),
+                                                        minCpuSlabSize,
+                                                        maxCpuSlabSize,
+                                                        page_size,
+                                                        bufferMgrs_[0][0]);
     } else {
-      cpuMgr = new CpuHeteroBufferMgr(0,
-                                      cpuBufferSize,
-                                      cudaMgr_.get(),
-                                      minCpuSlabSize,
-                                      maxCpuSlabSize,
-                                      page_size,
-                                      bufferMgrs_[0][0]);
+      cpuMgr = new Buffer_Namespace::CpuHeteroBufferMgr(0,
+                                                        cpuBufferSize,
+                                                        "",
+                                                        cudaMgr_.get(),
+                                                        minCpuSlabSize,
+                                                        maxCpuSlabSize,
+                                                        page_size,
+                                                        bufferMgrs_[0][0]);
     }
     bufferMgrs_[CPU_LEVEL].push_back(cpuMgr);
     levelSizes_.push_back(1);

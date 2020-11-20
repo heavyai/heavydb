@@ -44,8 +44,8 @@ using namespace Data_Namespace;
 namespace File_Namespace {
 
 #ifdef HAVE_DCPMM
-struct PersistentBufferDescriptor;              // forward declaration
-#endif /* HAVE_DCPMM */
+struct PersistentBufferDescriptor;  // forward declaration
+#endif                              /* HAVE_DCPMM */
 
 class GlobalFileMgr;  // forward declaration
 /**
@@ -111,21 +111,20 @@ class FileMgr : public AbstractBufferMgr {  // implements
 
   /// Creates a chunk with the specified key and page size.
   FileBuffer* createBuffer(BufferProperty bufProp,
-                               const ChunkKey& key,
-                               size_t pageSize = 0,
-                               const size_t numBytes = 0) override;
+                           const ChunkKey& key,
+                           size_t pageSize = 0,
+                           const size_t numBytes = 0) override;
 
 #ifdef HAVE_DCPMM
   FileBuffer* createBuffer(BufferProperty bufProp,
-                               const ChunkKey& key,
-                               const size_t maxRows,
-                               const int sqlTypeSize,
-                               const size_t pageSize
-                              ) override {
-                                AbstractBuffer *buffer = createBuffer(bufProp, key, pageSize, maxRows * sqlTypeSize);
-                                buffer->setMaxRows(maxRows);
-			        return buffer;
-			      }
+                           const ChunkKey& key,
+                           const size_t maxRows,
+                           const int sqlTypeSize,
+                           const size_t pageSize) override {
+    AbstractBuffer* buffer = createBuffer(bufProp, key, pageSize, maxRows * sqlTypeSize);
+    buffer->setMaxRows(maxRows);
+    return buffer;
+  }
   bool isBufferInPersistentMemory(const ChunkKey& key) override;
 #endif /* HAVE_DCPMM */
 
@@ -140,7 +139,9 @@ class FileMgr : public AbstractBufferMgr {  // implements
                                const bool purge = true) override;
 
   /// Returns the a pointer to the chunk with the specified key.
-  FileBuffer* getBuffer(BufferProperty bufProp, const ChunkKey& key, const size_t numBytes = 0) override;
+  FileBuffer* getBuffer(BufferProperty bufProp,
+                        const ChunkKey& key,
+                        const size_t numBytes = 0) override;
 
   void fetchBuffer(const ChunkKey& key,
                    AbstractBuffer* destBuffer,
@@ -252,10 +253,17 @@ class FileMgr : public AbstractBufferMgr {  // implements
   const std::pair<const int, const int> get_fileMgrKey() const { return fileMgrKey_; }
 
 #ifdef HAVE_DCPMM
-  void constructPersistentBuffer(ChunkKey key, PersistentBufferDescriptor *p, int8_t *addr);
-  int8_t *reallocatePersistentBuffer(ChunkKey key, int8_t *addr, size_t numBytes, PersistentBufferDescriptor **desc);
-  int8_t *allocatePersistentBuffer(ChunkKey key, size_t numBytes, PersistentBufferDescriptor **desc);
-  void shrinkPersistentBuffer(PersistentBufferDescriptor *p, int8_t *addr);
+  void constructPersistentBuffer(ChunkKey key,
+                                 PersistentBufferDescriptor* p,
+                                 int8_t* addr);
+  int8_t* reallocatePersistentBuffer(ChunkKey key,
+                                     int8_t* addr,
+                                     size_t numBytes,
+                                     PersistentBufferDescriptor** desc);
+  int8_t* allocatePersistentBuffer(ChunkKey key,
+                                   size_t numBytes,
+                                   PersistentBufferDescriptor** desc);
+  void shrinkPersistentBuffer(PersistentBufferDescriptor* p, int8_t* addr);
   bool isPersistentMemoryPresent(void);
   size_t getPersistentBufferPageSize(void);
 #endif /* HAVE_DCPMM */
@@ -318,7 +326,8 @@ class FileMgr : public AbstractBufferMgr {  // implements
   void setEpoch(int epoch);  // resets current value of epoch at startup
   void processFileFutures(std::vector<std::future<std::vector<HeaderInfo>>>& file_futures,
                           std::vector<HeaderInfo>& headerVec);
-  FileBuffer* createBufferUnlocked(const ChunkKey& key,
+  FileBuffer* createBufferUnlocked(BufferProperty bufProp,
+                                   const ChunkKey& key,
                                    size_t pageSize = 0,
                                    const size_t numBytes = 0);
 };

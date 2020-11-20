@@ -26,7 +26,8 @@ class MutableCachePersistentStorageMgr : public PersistentStorageMgr {
   MutableCachePersistentStorageMgr(const std::string& data_dir,
                                    const size_t num_reader_threads,
                                    const DiskCacheConfig& disk_cache_config);
-  AbstractBuffer* createBuffer(const ChunkKey& chunk_key,
+  AbstractBuffer* createBuffer(BufferProperty bufProp,
+                               const ChunkKey& chunk_key,
                                const size_t page_size,
                                const size_t initial_size) override;
   void deleteBuffer(const ChunkKey& chunk_key, const bool purge) override;

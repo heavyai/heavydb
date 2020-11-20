@@ -103,7 +103,6 @@ size_t g_min_memory_allocation_size{
 bool g_enable_bump_allocator{false};
 double g_bump_allocator_step_reduction{0.75};
 bool g_enable_direct_columnarization{true};
-extern bool g_enable_lazy_fetch{true};
 extern bool g_enable_multifrag_rs{false};
 extern bool g_enable_experimental_string_functions;
 bool g_enable_lazy_fetch{true};

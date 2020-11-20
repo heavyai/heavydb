@@ -173,9 +173,8 @@ JoinColumn ColumnFetcher::makeJoinColumn(
 }
 
 const int8_t* ColumnFetcher::getOneTableColumnFragment(
-    const int table_id,
+    const InputColDescriptor* col_desc,
     const int frag_id,
-    const int col_id,
     const std::map<int, const TableFragments*>& all_tables_fragments,
     std::list<std::shared_ptr<Chunk_NS::Chunk>>& chunk_holder,
     std::list<ChunkIter>& chunk_iter_holder,
@@ -185,9 +184,12 @@ const int8_t* ColumnFetcher::getOneTableColumnFragment(
 #endif /* HAVE_DCPMM */
     const int device_id,
     DeviceAllocator* allocator) const {
+  CHECK(col_desc);
+  auto table_id = col_desc->getScanDesc().getTableId();
   if (table_id < 0) {
-    return getResultSetColumn(table_id, frag_id, col_id, memory_level, device_id);
+    return getResultSetColumn(col_desc, frag_id, memory_level, device_id, allocator);
   }
+  auto col_id = col_desc->getColId();
 
   static std::mutex varlen_chunk_mutex;  // TODO(alex): remove
   static std::mutex chunk_list_mutex;
@@ -290,9 +292,8 @@ const int8_t* ColumnFetcher::getAllTableColumnFragments(
         }
         auto chunk_meta_it = fragment.getChunkMetadataMap().find(col_id);
         CHECK(chunk_meta_it != fragment.getChunkMetadataMap().end());
-        auto col_buffer = getOneTableColumnFragment(table_id,
+        auto col_buffer = getOneTableColumnFragment(&col_desc,
                                                     static_cast<int>(frag_id),
-                                                    col_id,
                                                     all_tables_fragments,
                                                     chunk_holder,
                                                     chunk_iter_holder,
@@ -326,9 +327,8 @@ const int8_t* ColumnFetcher::getAllTableColumnFragments(
 }
 
 const int8_t* ColumnFetcher::getResultSetColumn(
-    const int table_id,
+    const InputColDescriptor* col_desc,
     const int frag_id,
-    const int col_id,
     const Data_Namespace::MemoryLevel memory_level,
     const int device_id,
     DeviceAllocator* device_allocator) const {
@@ -337,6 +337,7 @@ const int8_t* ColumnFetcher::getResultSetColumn(
   return getResultSetColumn(
       get_temporary_table(executor_->temporary_tables_, table_id).getResultSet(frag_id),
       table_id,
+      frag_id,
       col_desc->getColId(),
       memory_level,
       device_id,

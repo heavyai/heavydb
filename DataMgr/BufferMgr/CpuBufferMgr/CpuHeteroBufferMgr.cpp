@@ -36,18 +36,18 @@ CpuHeteroBufferMgr::CpuHeteroBufferMgr(const int device_id,
                                        const size_t max_buffer_size,
                                        const std::string& pmm_path,
                                        CudaMgr_Namespace::CudaMgr* cuda_mgr,
+                                       const size_t min_slab_size,
+                                       const size_t max_slab_size,
                                        const size_t page_size,
                                        AbstractBufferMgr* parent_mgr)
-    : AbstractBufferMgr(device_id), parent_mgr_(parent_mgr), cuda_mgr_(cuda_mgr), mem_resource_provider_(pmm_path), page_size_(page_size), buffer_epoch_(0) {
-}
-
-CpuHeteroBufferMgr::CpuHeteroBufferMgr(const int device_id,
-                                       const size_t max_buffer_size,
-                                       CudaMgr_Namespace::CudaMgr* cuda_mgr,
-                                       const size_t page_size,
-                                       AbstractBufferMgr* parent_mgr)
-    : AbstractBufferMgr(device_id), parent_mgr_(parent_mgr), cuda_mgr_(cuda_mgr), page_size_(page_size), buffer_epoch_(0) {
-}
+    : AbstractBufferMgr(device_id)
+    , parent_mgr_(parent_mgr)
+    , cuda_mgr_(cuda_mgr)
+    , mem_resource_provider_(pmm_path)
+    , min_slab_size_(min_slab_size)
+    , max_slab_size_(max_slab_size)
+    , page_size_(page_size)
+    , buffer_epoch_(0) {}
 
 CpuHeteroBufferMgr::~CpuHeteroBufferMgr() {
   clear();
@@ -59,7 +59,7 @@ AbstractBuffer* CpuHeteroBufferMgr::createBuffer(BufferProperty bufProp,
                                                  const size_t maxRows,
                                                  const int sqlTypeSize,
                                                  const size_t pageSize) {
-  AbstractBuffer *buffer = createBuffer(bufProp, key, pageSize, maxRows * sqlTypeSize);
+  AbstractBuffer* buffer = createBuffer(bufProp, key, pageSize, maxRows * sqlTypeSize);
   buffer->setMaxRows(maxRows);
   return buffer;
 }
@@ -87,11 +87,16 @@ AbstractBuffer* CpuHeteroBufferMgr::createBuffer(BufferProperty bufProp,
   std::lock_guard<chunk_index_mutex_type> index_lock(chunk_index_mutex_);
   CHECK(chunk_index_.find(chunk_key) == chunk_index_.end());
 
-  HeteroBuffer* buffer = new HeteroBuffer(device_id_, mem_resource_provider_.get(get_mem_characteristics(bufProp)), cuda_mgr_, chunk_page_size, initial_size);
+  HeteroBuffer* buffer =
+      new HeteroBuffer(device_id_,
+                       mem_resource_provider_.get(get_mem_characteristics(bufProp)),
+                       cuda_mgr_,
+                       chunk_page_size,
+                       initial_size);
 
   auto res = chunk_index_.emplace(chunk_key, buffer);
   CHECK(res.second);
-  
+
   return buffer;
 }
 
@@ -113,11 +118,14 @@ void CpuHeteroBufferMgr::deleteBuffersWithPrefix(const ChunkKey& keyPrefix, cons
   while (first != last) {
     auto buff = first->second;
     delete buff;
-    chunk_index_.erase(first);;
+    chunk_index_.erase(first);
+    ;
   }
 }
 
-AbstractBuffer* CpuHeteroBufferMgr::getBuffer(BufferProperty bufProp, const ChunkKey& key, const size_t numBytes) {
+AbstractBuffer* CpuHeteroBufferMgr::getBuffer(BufferProperty bufProp,
+                                              const ChunkKey& key,
+                                              const size_t numBytes) {
   std::lock_guard<global_mutex_type> lock(global_mutex_);  // granular lock
   std::unique_lock<chunk_index_mutex_type> index_lock(chunk_index_mutex_);
   auto chunk_it = chunk_index_.find(key);
@@ -127,7 +135,7 @@ AbstractBuffer* CpuHeteroBufferMgr::getBuffer(BufferProperty bufProp, const Chun
     AbstractBuffer* buffer = chunk_it->second;
     buffer->pin();
     index_lock.unlock();
-    
+
     // TODO: update last touched
     buffer_epoch_++;
 
@@ -139,8 +147,7 @@ AbstractBuffer* CpuHeteroBufferMgr::getBuffer(BufferProperty bufProp, const Chun
     index_lock.unlock();
     AbstractBuffer* buffer = createBuffer(bufProp, key, page_size_, numBytes);
     try {
-      parent_mgr_->fetchBuffer(
-          key, buffer, numBytes);
+      parent_mgr_->fetchBuffer(key, buffer, numBytes);
     } catch (std::runtime_error& error) {
       LOG(FATAL) << "Get chunk - Could not find chunk " << keyToString(key)
                  << " in buffer pool or parent buffer pools. Error was " << error.what();
@@ -173,7 +180,7 @@ void CpuHeteroBufferMgr::fetchBuffer(const ChunkKey& key,
   destBuffer->syncEncoder(buffer);
   buffer->unPin();
 }
-  
+
 AbstractBuffer* CpuHeteroBufferMgr::putBuffer(const ChunkKey& key,
                                               AbstractBuffer* srcBuffer,
                                               const size_t numBytes) {
@@ -212,10 +219,6 @@ AbstractBuffer* CpuHeteroBufferMgr::putBuffer(const ChunkKey& key,
   return buffer;
 }
 
-void CpuHeteroBufferMgr::getChunkMetadataVec(ChunkMetadataVector&) {
-  LOG(FATAL) << "getChunkMetadataVec not supported for BufferMgr.";
-}
-
 void CpuHeteroBufferMgr::getChunkMetadataVecForKeyPrefix(ChunkMetadataVector&,
                                                          const ChunkKey&) {
   LOG(FATAL) << "getChunkMetadataVecForPrefix not supported for BufferMgr.";
@@ -232,9 +235,9 @@ bool CpuHeteroBufferMgr::isBufferOnDevice(const ChunkKey& key) {
 
 void CpuHeteroBufferMgr::clearSlabs() {
   std::lock_guard<chunk_index_mutex_type> index_lock(chunk_index_mutex_);
-  for(auto chunk_it = chunk_index_.begin(); chunk_it != chunk_index_.end(); ++chunk_it) {
+  for (auto chunk_it = chunk_index_.begin(); chunk_it != chunk_index_.end(); ++chunk_it) {
     auto buffer = chunk_it->second;
-    if(buffer->getPinCount() < 1) {
+    if (buffer->getPinCount() < 1) {
       delete buffer;
       chunk_index_.erase(chunk_it);
     }
@@ -249,7 +252,7 @@ size_t CpuHeteroBufferMgr::getMaxSize() {
 size_t CpuHeteroBufferMgr::getInUseSize() {
   size_t in_use = 0;
   std::lock_guard<std::mutex> chunk_index_lock(chunk_index_mutex_);
-  
+
   for (auto& index_it : chunk_index_) {
     in_use += index_it.second->reservedSize();
   }
@@ -269,7 +272,7 @@ bool CpuHeteroBufferMgr::isAllocationCapped() {
 
 void CpuHeteroBufferMgr::checkpoint() {
   std::lock_guard<global_mutex_type> lock(global_mutex_);  // granular lock
-  std::lock_guard<chunk_index_mutex_type> chunk_index_lock(chunk_index_mutex_); 
+  std::lock_guard<chunk_index_mutex_type> chunk_index_lock(chunk_index_mutex_);
 
   checkpoint(chunk_index_.begin(), chunk_index_.end());
 }
@@ -280,16 +283,17 @@ void CpuHeteroBufferMgr::checkpoint(const int db_id, const int tb_id) {
   key_prefix.push_back(tb_id);
 
   std::lock_guard<global_mutex_type> lock(global_mutex_);  // granular lock
-  std::lock_guard<std::mutex> chunk_index_lock(chunk_index_mutex_); 
+  std::lock_guard<std::mutex> chunk_index_lock(chunk_index_mutex_);
   auto first = chunk_index_.lower_bound(key_prefix);
   auto last = chunk_index_.upper_bound(key_prefix);
 
   checkpoint(first, last);
 }
 
-void CpuHeteroBufferMgr::checkpoint(chunk_index_iterator first, chunk_index_iterator last) {
+void CpuHeteroBufferMgr::checkpoint(chunk_index_iterator first,
+                                    chunk_index_iterator last) {
   for (; first != last; ++first) {
-    const ChunkKey &chunk_key = first->first;
+    const ChunkKey& chunk_key = first->first;
     HeteroBuffer* buffer = first->second;
     // checks that buffer is actual chunk (not just buffer) and is dirty
     if (chunk_key[0] != -1 && buffer->isDirty()) {
@@ -316,14 +320,14 @@ AbstractBuffer* CpuHeteroBufferMgr::alloc(const size_t num_bytes) {
 
 void CpuHeteroBufferMgr::free(AbstractBuffer* buffer) {
 #if 1
-  LOG(FATAL) << "Operation not supported"; 
+  LOG(FATAL) << "Operation not supported";
 #else
   HeteroBuffer* casted_buffer = dynamic_cast<HeteroBuffer*>(buffer);
   if (casted_buffer == 0) {
     LOG(FATAL) << "Wrong buffer type - expects base class pointer to HeteroBuffer type.";
   }
   // TODO
-  //deleteBuffer(casted_buffer->seg_it_->chunk_key);
+  // deleteBuffer(casted_buffer->seg_it_->chunk_key);
 #endif
 }
 
@@ -334,11 +338,11 @@ size_t CpuHeteroBufferMgr::getNumChunks() {
 
 void CpuHeteroBufferMgr::clear() {
   std::lock_guard<chunk_index_mutex_type> index_lock(chunk_index_mutex_);
-  for(auto& chunk : chunk_index_) {
+  for (auto& chunk : chunk_index_) {
     auto buffer = chunk.second;
     delete buffer;
   }
   chunk_index_.clear();
   buffer_epoch_ = 0;
 }
-} // namespace Buffer_Namespace
+}  // namespace Buffer_Namespace
