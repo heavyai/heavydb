@@ -42,6 +42,8 @@ extern int64_t g_large_ndv_threshold;
 extern size_t g_large_ndv_multiplier;
 extern int64_t g_bitmap_memory_limit;
 extern bool g_enable_calcite_ddl_parser;
+extern bool g_enable_lazy_fetch;
+extern bool g_enable_multifrag_rs;
 
 unsigned connect_timeout{20000};
 unsigned recv_timeout{300000};
@@ -844,8 +846,7 @@ void CommandLineOptions::validate() {
   boost::algorithm::trim_if(pmm_path, boost::is_any_of("\"'"));
   if (pmm_path.length() > 0) {
     if (!boost::filesystem::exists(pmm_path)) {
-      LOG(FATAL) << "File " << pmm_path << " does not exist" << std::endl;
-      return 1;
+      throw std::runtime_error("File " + pmm_path + " does not exist");
     }
 
     pmm = true;
@@ -854,8 +855,7 @@ void CommandLineOptions::validate() {
   boost::algorithm::trim_if(pmm_store_path, boost::is_any_of("\"'"));
   if (pmm_store_path.length() > 0) {
     if (!boost::filesystem::exists(pmm_store_path)) {
-      LOG(FATAL) << "File " << pmm_store_path << " does not exist" << std::endl;
-      return 1;
+      throw std::runtime_error("File " + pmm_store_path + " does not exist");
     }
     pmm_store = true;
   }

@@ -46,6 +46,7 @@
 
 bool g_skip_intermediate_count{true};
 extern bool g_enable_bump_allocator;
+extern bool g_enable_multifrag_rs;
 bool g_enable_interop{false};
 bool g_enable_union{false};
 

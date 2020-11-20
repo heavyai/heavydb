@@ -103,7 +103,6 @@ size_t g_min_memory_allocation_size{
 bool g_enable_bump_allocator{false};
 double g_bump_allocator_step_reduction{0.75};
 bool g_enable_direct_columnarization{true};
-extern bool g_enable_multifrag_rs{false};
 extern bool g_enable_experimental_string_functions;
 bool g_enable_lazy_fetch{true};
 bool g_enable_multifrag_rs{false};
@@ -1359,9 +1358,10 @@ TemporaryTable Executor::executeWorkUnit(size_t& max_groups_buffer_entry_guess,
                                       render_info,
                                       has_cardinality_estimation,
                                       column_cache);
-    if (result) {
-      result->setKernelQueueTime(kernel_queue_time_ms_);
-      result->addCompilationQueueTime(compilation_queue_time_ms_);
+    if (!result.empty()) {
+      // TODO: handle multi-frag results
+      result[0]->setKernelQueueTime(kernel_queue_time_ms_);
+      result[0]->addCompilationQueueTime(compilation_queue_time_ms_);
     }
     return result;
   } catch (const CompilationRetryNewScanLimit& e) {
@@ -1378,9 +1378,9 @@ TemporaryTable Executor::executeWorkUnit(size_t& max_groups_buffer_entry_guess,
                             render_info,
                             has_cardinality_estimation,
                             column_cache);
-    if (result) {
-      result->setKernelQueueTime(kernel_queue_time_ms_);
-      result->addCompilationQueueTime(compilation_queue_time_ms_);
+    if (!result.empty()) {
+      result[0]->setKernelQueueTime(kernel_queue_time_ms_);
+      result[0]->addCompilationQueueTime(compilation_queue_time_ms_);
     }
     return result;
   }
@@ -2406,9 +2406,8 @@ FetchResult Executor::fetchChunks(
                                                       device_allocator);
       } else {
         frag_col_buffers[it->second] =
-            column_fetcher.getOneTableColumnFragment(table_id,
+            column_fetcher.getOneTableColumnFragment(col_id.get(),
                                                      frag_id,
-                                                     col_id->getColId(),
                                                      all_tables_fragments,
                                                      chunks,
                                                      chunk_iterators,
@@ -2421,15 +2420,11 @@ FetchResult Executor::fetchChunks(
       }
     }
     //}
+    all_frag_col_buffers.push_back(frag_col_buffers);
   }
-  all_frag_col_buffers.push_back(frag_col_buffers);
-}
-std::tie(all_num_rows,
-         all_frag_offsets) = getRowCountAndOffsetForAllFrags(ra_exe_unit,
-                                                             frag_ids_crossjoin,
-                                                             ra_exe_unit.input_descs,
-                                                             all_tables_fragments);
-return {all_frag_col_buffers, all_num_rows, all_frag_offsets};
+  std::tie(all_num_rows, all_frag_offsets) = getRowCountAndOffsetForAllFrags(
+      ra_exe_unit, frag_ids_crossjoin, ra_exe_unit.input_descs, all_tables_fragments);
+  return {all_frag_col_buffers, all_num_rows, all_frag_offsets};
 }
 
 // fetchChunks() is written under the assumption that multiple inputs implies a JOIN.
@@ -2534,8 +2529,9 @@ FetchResult Executor::fetchUnionChunks(
           memory_level_for_column = Data_Namespace::CPU_LEVEL;
         }
         if (col_id->getScanDesc().getSourceType() == InputSourceType::RESULT) {
-          frag_col_buffers[it->second] = column_fetcher.getResultSetColumn(
-              col_id.get(), memory_level_for_column, device_id, device_allocator);
+          CHECK(false) << "TODO";
+          /*frag_col_buffers[it->second] = column_fetcher.getResultSetColumn(
+              col_id.get(), memory_level_for_column, device_id, device_allocator);*/
         } else {
           if (needFetchAllFragments(*col_id, ra_exe_unit, selected_fragments)) {
             frag_col_buffers[it->second] =
@@ -2550,9 +2546,8 @@ FetchResult Executor::fetchUnionChunks(
                                                           device_allocator);
           } else {
             frag_col_buffers[it->second] =
-                column_fetcher.getOneTableColumnFragment(table_id,
+                column_fetcher.getOneTableColumnFragment(col_id.get(),
                                                          frag_id,
-                                                         col_id->getColId(),
                                                          all_tables_fragments,
                                                          chunks,
                                                          chunk_iterators,

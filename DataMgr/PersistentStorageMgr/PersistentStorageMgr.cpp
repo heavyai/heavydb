@@ -42,8 +42,10 @@ PersistentStorageMgr::PersistentStorageMgr(const std::string& data_dir,
     : AbstractBufferMgr(0)
     , global_file_mgr_(
           std::make_unique<File_Namespace::GlobalFileMgr>(0,
+#ifdef HAVE_DCPMM
                                                           pmm_store,
                                                           pmm_store_path,
+#endif
                                                           data_dir,
                                                           num_reader_threads))
     , disk_cache_config_(disk_cache_config) {

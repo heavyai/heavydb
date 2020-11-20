@@ -4772,17 +4772,10 @@ std::vector<PushedDownFilterInfo> DBHandler::execute_rel_alg(
                          system_parameters_.gpu_input_mem_limit,
                          g_enable_runtime_query_interrupt,
 #ifdef HAVE_DCPMM
-			                   query_id,
+                         query_id,
 #endif /* HAVE_DCPMM */
                          g_pending_query_interrupt_freq};
-  auto executor = Executor::getExecutor(cat.getCurrentDB().dbId,
-                                        jit_debug_ ? "/tmp" : "",
-                                        jit_debug_ ? "mapdquery" : "",
-                                        mapd_parameters_);
-  RelAlgExecutor ra_executor(executor.get(),
-                             cat,
-                             query_ra,
-                             query_state_proxy.getQueryState().shared_from_this());
+
   ExecutionResult result{std::make_shared<ResultSet>(std::vector<TargetInfo>{},
                                                      ExecutorDeviceType::CPU,
                                                      QueryMemoryDescriptor(),
@@ -4865,17 +4858,10 @@ void DBHandler::execute_rel_alg_df(TDataFrame& _return,
                          system_parameters_.gpu_input_mem_limit,
                          g_enable_runtime_query_interrupt,
 #ifdef HAVE_DCPMM
-			                   query_id,
+                         query_id,
 #endif /* HAVE_DCPMM */
                          g_pending_query_interrupt_freq};
-  auto executor = Executor::getExecutor(cat.getCurrentDB().dbId,
-                                        jit_debug_ ? "/tmp" : "",
-                                        jit_debug_ ? "mapdquery" : "",
-                                        mapd_parameters_);
-  RelAlgExecutor ra_executor(executor.get(),
-                             cat,
-                             query_ra,
-                             query_state_proxy.getQueryState().shared_from_this());
+
   ExecutionResult result{std::make_shared<ResultSet>(std::vector<TargetInfo>{},
                                                      ExecutorDeviceType::CPU,
                                                      QueryMemoryDescriptor(),
@@ -5938,24 +5924,26 @@ void DBHandler::get_license_claims(TLicenseInfo& _return,
   _return.claims.emplace_back("");
 }
 
-
 bool DBHandler::heat_column(const TSessionId& session,
                             const std::string& table_name,
                             const std::string& column_name) {
   auto session_info = get_session_copy(session);
   auto& cat = session_info.getCatalog();
-  auto td = cat.getMetadataForTable(table_name, false);  // don't populate fragmenter on this call since we only want metadata
+  auto td = cat.getMetadataForTable(
+      table_name,
+      false);  // don't populate fragmenter on this call since we only want metadata
   if (!td) {
     THROW_MAPD_EXCEPTION("Table " + table_name + " doesn't exist");
   }
   try {
     if (hasTableAccessPrivileges(td, session_info)) {
-      ColumnDescriptor *cd = (ColumnDescriptor *)(cat.getMetadataForColumn(td->tableId, column_name));
+      ColumnDescriptor* cd =
+          (ColumnDescriptor*)(cat.getMetadataForColumn(td->tableId, column_name));
       if (cd) {
         cat.setColumnHot(td, cd);
-      }
-      else {
-        THROW_MAPD_EXCEPTION("Column " + column_name + " doesn't exist in table " + table_name);
+      } else {
+        THROW_MAPD_EXCEPTION("Column " + column_name + " doesn't exist in table " +
+                             table_name);
       }
     } else {
       THROW_MAPD_EXCEPTION("User has no access privileges to table " + table_name);
@@ -5972,18 +5960,21 @@ bool DBHandler::cool_column(const TSessionId& session,
                             const std::string& column_name) {
   auto session_info = get_session_copy(session);
   auto& cat = session_info.getCatalog();
-  auto td = cat.getMetadataForTable(table_name, false);  // don't populate fragmenter on this call since we only want metadata
+  auto td = cat.getMetadataForTable(
+      table_name,
+      false);  // don't populate fragmenter on this call since we only want metadata
   if (!td) {
     THROW_MAPD_EXCEPTION("Table " + table_name + " doesn't exist");
   }
   try {
     if (hasTableAccessPrivileges(td, session_info)) {
-      ColumnDescriptor *cd = (ColumnDescriptor *)(cat.getMetadataForColumn(td->tableId, column_name));
+      ColumnDescriptor* cd =
+          (ColumnDescriptor*)(cat.getMetadataForColumn(td->tableId, column_name));
       if (cd) {
         cat.setColumnCold(td, cd);
-      }
-      else {
-        THROW_MAPD_EXCEPTION("Column " + column_name + " doesn't exist in table " + table_name);
+      } else {
+        THROW_MAPD_EXCEPTION("Column " + column_name + " doesn't exist in table " +
+                             table_name);
       }
     } else {
       THROW_MAPD_EXCEPTION("User has no access privileges to table " + table_name);
@@ -5997,8 +5988,8 @@ bool DBHandler::cool_column(const TSessionId& session,
 void DBHandler::start_profiling(const TSessionId& session) {
   query_time.clear();
 #ifdef HAVE_DCPMM
-  qid = 0;  //reset global query identifier
-#endif /* HAVE_DCPMM */
+  qid = 0;  // reset global query identifier
+#endif      /* HAVE_DCPMM */
   auto session_info = get_session_copy(session);
   auto& cat = session_info.getCatalog();
   cat.getDataMgr().startCollectingStatistics();

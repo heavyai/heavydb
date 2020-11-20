@@ -413,16 +413,16 @@ class Executor {
   unsigned blockSize() const;
   size_t maxGpuSlabSize() const;
 
-  ResultSetPtr executeWorkUnit(size_t& max_groups_buffer_entry_guess,
-                               const bool is_agg,
-                               const std::vector<InputTableInfo>&,
-                               const RelAlgExecutionUnit&,
-                               const CompilationOptions&,
-                               const ExecutionOptions& options,
-                               const Catalog_Namespace::Catalog&,
-                               RenderInfo* render_info,
-                               const bool has_cardinality_estimation,
-                               ColumnCacheMap& column_cache);
+  TemporaryTable executeWorkUnit(size_t& max_groups_buffer_entry_guess,
+                                 const bool is_agg,
+                                 const std::vector<InputTableInfo>&,
+                                 const RelAlgExecutionUnit&,
+                                 const CompilationOptions&,
+                                 const ExecutionOptions& options,
+                                 const Catalog_Namespace::Catalog&,
+                                 RenderInfo* render_info,
+                                 const bool has_cardinality_estimation,
+                                 ColumnCacheMap& column_cache);
 
   void executeUpdate(const RelAlgExecutionUnit& ra_exe_unit,
                      const std::vector<InputTableInfo>& table_infos,
@@ -675,7 +675,9 @@ class Executor {
                              CodeCache&);
 
  private:
-  TemporaryTable resultsUnion(SharedKernelContext& shared_context,  const RelAlgExecutionUnit& ra_exe_unit, bool merge = true);
+  TemporaryTable resultsUnion(SharedKernelContext& shared_context,
+                              const RelAlgExecutionUnit& ra_exe_unit,
+                              bool merge = true);
 
   std::vector<int64_t> getJoinHashTablePtrs(const ExecutorDeviceType device_type,
                                             const int device_id);
