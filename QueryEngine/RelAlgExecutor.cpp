@@ -80,7 +80,7 @@ void prepare_foreign_table_for_execution(const RelAlgNode& ra_node, int database
   // Iterate through ra_node inputs for types that need to be loaded pre-execution
   // If they do not have valid metadata, load them into CPU memory to generate
   // the metadata and leave them ready to be used by the query
-  auto catalog = Catalog_Namespace::Catalog::checkedGet((database_id));
+  auto catalog = Catalog_Namespace::SysCatalog::instance().checkedGetCatalog(database_id);
 
   // provide ForeignStorageMgr with all columns needed for this node
   std::map<ChunkKey, std::vector<int>> columns_per_table;

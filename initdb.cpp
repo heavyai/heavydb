@@ -155,7 +155,7 @@ int main(int argc, char* argv[]) {
       Catalog_Namespace::DBMetadata cur_db;
       const std::string db_name(OMNISCI_DEFAULT_DB);
       CHECK(sys_cat.getMetadataForDB(db_name, cur_db));
-      auto cat = Catalog_Namespace::Catalog::get(
+      auto cat = sys_cat.getCatalog(
           base_path, cur_db, dummy, std::vector<LeafHostInfo>(), calcite, false);
       Catalog_Namespace::UserMetadata user;
       CHECK(sys_cat.getMetadataForUser(OMNISCI_ROOT_USER, user));

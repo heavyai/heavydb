@@ -135,12 +135,12 @@ class DBEngineImpl : public DBEngine {
         std::cerr << "SqliteConnector is null " << std::endl;
       } else {
         sys_cat.getMetadataForDB(OMNISCI_DEFAULT_DB, database_);  // TODO: Check
-        auto catalog = Catalog_Namespace::Catalog::get(base_path_,
-                                                       database_,
-                                                       data_mgr_,
-                                                       std::vector<LeafHostInfo>(),
-                                                       calcite,
-                                                       false);
+        auto catalog = sys_cat.getCatalog(base_path_,
+                                          database_,
+                                          data_mgr_,
+                                          std::vector<LeafHostInfo>(),
+                                          calcite,
+                                          false);
         sys_cat.getMetadataForUser(OMNISCI_ROOT_USER, user_);
         auto session = std::make_unique<Catalog_Namespace::SessionInfo>(
             catalog, user_, ExecutorDeviceType::CPU, "");

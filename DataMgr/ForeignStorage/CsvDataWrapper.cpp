@@ -215,7 +215,7 @@ void CsvDataWrapper::populateChunkBuffers(
     std::map<ChunkKey, AbstractBuffer*>& required_buffers,
     std::map<ChunkKey, AbstractBuffer*>& optional_buffers) {
   auto timer = DEBUG_TIMER(__func__);
-  auto catalog = Catalog_Namespace::Catalog::checkedGet(db_id_);
+  auto catalog = Catalog_Namespace::SysCatalog::instance().checkedGetCatalog(db_id_);
   CHECK(!required_buffers.empty());
 
   auto fragment_id = required_buffers.begin()->first[CHUNK_KEY_FRAGMENT_IDX];
@@ -246,7 +246,7 @@ void CsvDataWrapper::updateMetadata(
     int fragment_id) {
   auto fragmenter = foreign_table_->fragmenter;
   if (fragmenter) {
-    auto catalog = Catalog_Namespace::Catalog::checkedGet(db_id_);
+    auto catalog = Catalog_Namespace::SysCatalog::instance().checkedGetCatalog(db_id_);
     for (auto& entry : column_id_to_chunk_map) {
       const auto& column =
           catalog->getMetadataForColumnUnlocked(foreign_table_->tableId, entry.first);
@@ -587,7 +587,8 @@ void cache_blocks(std::map<ChunkKey, Chunk_NS::Chunk>& cached_chunks,
                   const ColumnDescriptor* column,
                   bool is_first_block,
                   bool is_last_block) {
-  auto catalog = Catalog_Namespace::Catalog::checkedGet(chunk_key[CHUNK_KEY_DB_IDX]);
+  auto catalog = Catalog_Namespace::SysCatalog::instance().checkedGetCatalog(
+      chunk_key[CHUNK_KEY_DB_IDX]);
   auto cache = get_cache_if_enabled(catalog);
   if (cache) {
     ChunkKey index_key = {chunk_key[CHUNK_KEY_DB_IDX],
@@ -945,7 +946,7 @@ void CsvDataWrapper::populateChunkMetadata(ChunkMetadataVector& chunk_metadata_v
 
   const auto copy_params = validateAndGetCopyParams();
   const auto file_path = foreign_table_->getFullFilePath();
-  auto catalog = Catalog_Namespace::Catalog::checkedGet(db_id_);
+  auto catalog = Catalog_Namespace::SysCatalog::instance().checkedGetCatalog(db_id_);
   auto& server_options = foreign_table_->foreign_server->options;
   if (foreign_table_->isAppendMode() && csv_reader_ != nullptr) {
     if (server_options.find(ForeignServer::STORAGE_TYPE_KEY)->second ==

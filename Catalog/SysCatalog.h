@@ -41,6 +41,8 @@
 #include <utility>
 #include <vector>
 
+#include "tbb/concurrent_hash_map.h"
+
 #include "Grantee.h"
 #include "ObjectRoleDescriptor.h"
 #include "PkiServer.h"
@@ -300,6 +302,20 @@ class SysCatalog : private CommonFileOperations {
   void check_for_session_encryption(const std::string& pki_cert, std::string& session);
   std::vector<std::shared_ptr<Catalog>> getCatalogsForAllDbs();
 
+  std::shared_ptr<Catalog> getDummyCatalog() { return dummyCatalog_; }
+
+  std::shared_ptr<Catalog> getCatalog(const std::string& dbName);
+  std::shared_ptr<Catalog> getCatalog(const int32_t db_id);
+  std::shared_ptr<Catalog> checkedGetCatalog(const int32_t db_id);
+  std::shared_ptr<Catalog> getCatalog(const std::string& basePath,
+                                      const DBMetadata& curDB,
+                                      std::shared_ptr<Data_Namespace::DataMgr> dataMgr,
+                                      const std::vector<LeafHostInfo>& string_dict_hosts,
+                                      std::shared_ptr<Calcite> calcite,
+                                      bool is_new_db);
+
+  void removeCatalog(const std::string& dbName);
+
  private:
   using GranteeMap = std::map<std::string, Grantee*>;
   using ObjectRoleDescriptorMap = std::multimap<std::string, ObjectRoleDescriptor*>;
@@ -310,7 +326,8 @@ class SysCatalog : private CommonFileOperations {
       , sqliteMutex_()
       , sharedMutex_()
       , thread_holding_sqlite_lock(std::thread::id())
-      , thread_holding_write_lock(std::thread::id()) {}
+      , thread_holding_write_lock(std::thread::id())
+      , dummyCatalog_(std::make_shared<Catalog>()) {}
   virtual ~SysCatalog();
 
   void initDB();
@@ -397,12 +414,20 @@ class SysCatalog : private CommonFileOperations {
   bool aggregator_;
   auto yieldTransactionStreamer();
 
+  // contains a map of all the catalog within this system
+  // it is lazy loaded
+  // std::map<std::string, std::shared_ptr<Catalog>> cat_map_;
+  using dbid_to_cat_map = tbb::concurrent_hash_map<std::string, std::shared_ptr<Catalog>>;
+  dbid_to_cat_map cat_map_;
+
  public:
   mutable std::mutex sqliteMutex_;
   mutable mapd_shared_mutex sharedMutex_;
   mutable std::atomic<std::thread::id> thread_holding_sqlite_lock;
   mutable std::atomic<std::thread::id> thread_holding_write_lock;
   static thread_local bool thread_holds_read_lock;
+  // used by catalog when initially creating a catalog instance
+  std::shared_ptr<Catalog> dummyCatalog_;
 };
 
 }  // namespace Catalog_Namespace

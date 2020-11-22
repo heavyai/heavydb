@@ -34,7 +34,7 @@ namespace {
 std::shared_ptr<Calcite> g_calcite;
 bool g_aggregator{false};
 
-Catalog_Namespace::UserMetadata user;
+Catalog_Namespace::UserMetadata g_user;
 std::vector<DBObject> privObjects;
 
 auto& sys_cat = Catalog_Namespace::SysCatalog::instance();
@@ -52,39 +52,39 @@ inline auto sql(std::string_view sql_stmts) {
 
 struct Users {
   void setup_users() {
-    if (!sys_cat.getMetadataForUser("Chelsea", user)) {
+    if (!sys_cat.getMetadataForUser("Chelsea", g_user)) {
       sys_cat.createUser("Chelsea", "password", true, "", true);
-      CHECK(sys_cat.getMetadataForUser("Chelsea", user));
+      CHECK(sys_cat.getMetadataForUser("Chelsea", g_user));
     }
-    if (!sys_cat.getMetadataForUser("Arsenal", user)) {
+    if (!sys_cat.getMetadataForUser("Arsenal", g_user)) {
       sys_cat.createUser("Arsenal", "password", false, "", true);
-      CHECK(sys_cat.getMetadataForUser("Arsenal", user));
+      CHECK(sys_cat.getMetadataForUser("Arsenal", g_user));
     }
-    if (!sys_cat.getMetadataForUser("Juventus", user)) {
+    if (!sys_cat.getMetadataForUser("Juventus", g_user)) {
       sys_cat.createUser("Juventus", "password", false, "", true);
-      CHECK(sys_cat.getMetadataForUser("Juventus", user));
+      CHECK(sys_cat.getMetadataForUser("Juventus", g_user));
     }
-    if (!sys_cat.getMetadataForUser("Bayern", user)) {
+    if (!sys_cat.getMetadataForUser("Bayern", g_user)) {
       sys_cat.createUser("Bayern", "password", false, "", true);
-      CHECK(sys_cat.getMetadataForUser("Bayern", user));
+      CHECK(sys_cat.getMetadataForUser("Bayern", g_user));
     }
   }
   void drop_users() {
-    if (sys_cat.getMetadataForUser("Chelsea", user)) {
+    if (sys_cat.getMetadataForUser("Chelsea", g_user)) {
       sys_cat.dropUser("Chelsea");
-      CHECK(!sys_cat.getMetadataForUser("Chelsea", user));
+      CHECK(!sys_cat.getMetadataForUser("Chelsea", g_user));
     }
-    if (sys_cat.getMetadataForUser("Arsenal", user)) {
+    if (sys_cat.getMetadataForUser("Arsenal", g_user)) {
       sys_cat.dropUser("Arsenal");
-      CHECK(!sys_cat.getMetadataForUser("Arsenal", user));
+      CHECK(!sys_cat.getMetadataForUser("Arsenal", g_user));
     }
-    if (sys_cat.getMetadataForUser("Juventus", user)) {
+    if (sys_cat.getMetadataForUser("Juventus", g_user)) {
       sys_cat.dropUser("Juventus");
-      CHECK(!sys_cat.getMetadataForUser("Juventus", user));
+      CHECK(!sys_cat.getMetadataForUser("Juventus", g_user));
     }
-    if (sys_cat.getMetadataForUser("Bayern", user)) {
+    if (sys_cat.getMetadataForUser("Bayern", g_user)) {
       sys_cat.dropUser("Bayern");
-      CHECK(!sys_cat.getMetadataForUser("Bayern", user));
+      CHECK(!sys_cat.getMetadataForUser("Bayern", g_user));
     }
   }
   Users() { setup_users(); }
@@ -561,7 +561,7 @@ TEST(Roles, RecursiveRoleCheckTest) {
 }
 
 TEST_F(DatabaseObject, AccessDefaultsTest) {
-  auto cat_mapd = Catalog_Namespace::Catalog::get(OMNISCI_DEFAULT_DB);
+  auto cat_mapd = sys_cat.getCatalog(OMNISCI_DEFAULT_DB);
   DBObject mapd_object(OMNISCI_DEFAULT_DB, DBObjectType::DatabaseDBObjectType);
   privObjects.clear();
   mapd_object.loadKey(*cat_mapd);
@@ -578,11 +578,8 @@ TEST_F(DatabaseObject, SqlEditorAccessTest) {
 
   CHECK(sys_cat.getMetadataForDB(OMNISCI_DEFAULT_DB, db_meta));
   CHECK(sys_cat.getMetadataForUser("Juventus", user_meta));
-  session_juve.reset(
-      new Catalog_Namespace::SessionInfo(Catalog_Namespace::Catalog::get(db_meta.dbName),
-                                         user_meta,
-                                         ExecutorDeviceType::GPU,
-                                         ""));
+  session_juve.reset(new Catalog_Namespace::SessionInfo(
+      sys_cat.getCatalog(db_meta.dbName), user_meta, ExecutorDeviceType::GPU, ""));
   auto& cat_mapd = session_juve->getCatalog();
   DBObject mapd_object(OMNISCI_DEFAULT_DB, DBObjectType::DatabaseDBObjectType);
   privObjects.clear();
@@ -628,11 +625,8 @@ TEST_F(DatabaseObject, DBLoginAccessTest) {
 
   CHECK(sys_cat.getMetadataForDB(OMNISCI_DEFAULT_DB, db_meta));
   CHECK(sys_cat.getMetadataForUser("Bayern", user_meta));
-  session_juve.reset(
-      new Catalog_Namespace::SessionInfo(Catalog_Namespace::Catalog::get(db_meta.dbName),
-                                         user_meta,
-                                         ExecutorDeviceType::GPU,
-                                         ""));
+  session_juve.reset(new Catalog_Namespace::SessionInfo(
+      sys_cat.getCatalog(db_meta.dbName), user_meta, ExecutorDeviceType::GPU, ""));
   auto& cat_mapd = session_juve->getCatalog();
   DBObject mapd_object(OMNISCI_DEFAULT_DB, DBObjectType::DatabaseDBObjectType);
   privObjects.clear();
@@ -677,11 +671,8 @@ TEST_F(DatabaseObject, TableAccessTest) {
 
   CHECK(sys_cat.getMetadataForDB(OMNISCI_DEFAULT_DB, db_meta));
   CHECK(sys_cat.getMetadataForUser("Arsenal", user_meta));
-  session_ars.reset(
-      new Catalog_Namespace::SessionInfo(Catalog_Namespace::Catalog::get(db_meta.dbName),
-                                         user_meta,
-                                         ExecutorDeviceType::GPU,
-                                         ""));
+  session_ars.reset(new Catalog_Namespace::SessionInfo(
+      sys_cat.getCatalog(db_meta.dbName), user_meta, ExecutorDeviceType::GPU, ""));
   auto& cat_mapd = session_ars->getCatalog();
   AccessPrivileges arsenal_privs;
   AccessPrivileges bayern_privs;
@@ -735,11 +726,8 @@ TEST_F(DatabaseObject, ViewAccessTest) {
   std::unique_ptr<Catalog_Namespace::SessionInfo> session_ars;
   CHECK(sys_cat.getMetadataForDB(OMNISCI_DEFAULT_DB, db_meta));
   CHECK(sys_cat.getMetadataForUser("Arsenal", user_meta));
-  session_ars.reset(
-      new Catalog_Namespace::SessionInfo(Catalog_Namespace::Catalog::get(db_meta.dbName),
-                                         user_meta,
-                                         ExecutorDeviceType::GPU,
-                                         ""));
+  session_ars.reset(new Catalog_Namespace::SessionInfo(
+      sys_cat.getCatalog(db_meta.dbName), user_meta, ExecutorDeviceType::GPU, ""));
   auto& cat_mapd = session_ars->getCatalog();
   AccessPrivileges arsenal_privs;
   ASSERT_NO_THROW(arsenal_privs.add(AccessPrivileges::ALL_VIEW));
@@ -784,11 +772,8 @@ TEST_F(DatabaseObject, DashboardAccessTest) {
   std::unique_ptr<Catalog_Namespace::SessionInfo> session_ars;
   CHECK(sys_cat.getMetadataForDB(OMNISCI_DEFAULT_DB, db_meta));
   CHECK(sys_cat.getMetadataForUser("Arsenal", user_meta));
-  session_ars.reset(
-      new Catalog_Namespace::SessionInfo(Catalog_Namespace::Catalog::get(db_meta.dbName),
-                                         user_meta,
-                                         ExecutorDeviceType::GPU,
-                                         ""));
+  session_ars.reset(new Catalog_Namespace::SessionInfo(
+      sys_cat.getCatalog(db_meta.dbName), user_meta, ExecutorDeviceType::GPU, ""));
   auto& cat_mapd = session_ars->getCatalog();
   AccessPrivileges arsenal_privs;
   ASSERT_NO_THROW(arsenal_privs.add(AccessPrivileges::ALL_DASHBOARD));
@@ -833,11 +818,8 @@ TEST_F(DatabaseObject, DatabaseAllTest) {
 
   CHECK(sys_cat.getMetadataForDB(OMNISCI_DEFAULT_DB, db_meta));
   CHECK(sys_cat.getMetadataForUser("Arsenal", user_meta));
-  session_ars.reset(
-      new Catalog_Namespace::SessionInfo(Catalog_Namespace::Catalog::get(db_meta.dbName),
-                                         user_meta,
-                                         ExecutorDeviceType::GPU,
-                                         ""));
+  session_ars.reset(new Catalog_Namespace::SessionInfo(
+      sys_cat.getCatalog(db_meta.dbName), user_meta, ExecutorDeviceType::GPU, ""));
   auto& cat_mapd = session_ars->getCatalog();
   AccessPrivileges arsenal_privs;
   ASSERT_NO_THROW(arsenal_privs.add(AccessPrivileges::ALL_DATABASE));
@@ -1780,7 +1762,7 @@ TEST(DBObject, LoadKey) {
                     tbname + ";");
 
   // test the LoadKey() function
-  auto cat = Catalog_Namespace::Catalog::get(OMNISCI_DEFAULT_DB);
+  auto cat = sys_cat.getCatalog(OMNISCI_DEFAULT_DB);
 
   DBObject dbo1(OMNISCI_DEFAULT_DB, DBObjectType::DatabaseDBObjectType);
   DBObject dbo2(tbname, DBObjectType::TableDBObjectType);
@@ -1860,10 +1842,7 @@ std::unique_ptr<QR> get_qr_for_user(
     const std::string& user_name,
     const Catalog_Namespace::UserMetadata& user_metadata) {
   auto session = std::make_unique<Catalog_Namespace::SessionInfo>(
-      Catalog_Namespace::Catalog::get(user_name),
-      user_metadata,
-      ExecutorDeviceType::CPU,
-      "");
+      sys_cat.getCatalog(user_name), user_metadata, ExecutorDeviceType::CPU, "");
   return std::make_unique<QR>(std::move(session));
 }
 
@@ -1974,7 +1953,7 @@ TEST(SysCatalog, RenameUser_ReloginWithOldName) {
       sys_cat.login(database_out, username_out, "password"s, user_meta2, false));
 
   auto chuck_session = std::make_unique<Catalog_Namespace::SessionInfo>(
-      Catalog_Namespace::Catalog::get("nydb"s), user_meta2, ExecutorDeviceType::CPU, "");
+      sys_cat.getCatalog("nydb"s), user_meta2, ExecutorDeviceType::CPU, "");
   auto chuck_qr = std::make_unique<QR>(std::move(chuck_session));
   EXPECT_NO_THROW(chuck_qr->runDDLStatement("create table chaos ( x integer );"));
   EXPECT_NO_THROW(
@@ -2032,10 +2011,7 @@ TEST(SysCatalog, RenameUser_CheckPrivilegeTransfer) {
       sys_cat.login(database_out, username_out, "password"s, user_meta2, false));
 
   auto rom_session = std::make_unique<Catalog_Namespace::SessionInfo>(
-      Catalog_Namespace::Catalog::get("Ferengi"s),
-      user_meta2,
-      ExecutorDeviceType::CPU,
-      "");
+      sys_cat.getCatalog("Ferengi"s), user_meta2, ExecutorDeviceType::CPU, "");
   auto rom_qr = std::make_unique<QR>(std::move(rom_session));
 
   EXPECT_NO_THROW(
@@ -2060,10 +2036,7 @@ TEST(SysCatalog, RenameUser_CheckPrivilegeTransfer) {
       sys_cat.login(database_out, username_out, "password"s, user_meta3, false));
 
   auto renamed_quark_session = std::make_unique<Catalog_Namespace::SessionInfo>(
-      Catalog_Namespace::Catalog::get("Ferengi"s),
-      user_meta3,
-      ExecutorDeviceType::CPU,
-      "");
+      sys_cat.getCatalog("Ferengi"s), user_meta3, ExecutorDeviceType::CPU, "");
   auto renamed_quark_qr = std::make_unique<QR>(std::move(renamed_quark_session));
 
   EXPECT_NO_THROW(renamed_quark_qr->runSQL("select * from bank_account;", dt));
@@ -2103,10 +2076,7 @@ TEST(SysCatalog, RenameUser_SuperUserRenameCheck) {
       sys_cat.login(database_out, username_out, "password"s, user_meta2, false));
 
   auto rom_session = std::make_unique<Catalog_Namespace::SessionInfo>(
-      Catalog_Namespace::Catalog::get("Ferengi"s),
-      user_meta2,
-      ExecutorDeviceType::CPU,
-      "");
+      sys_cat.getCatalog("Ferengi"s), user_meta2, ExecutorDeviceType::CPU, "");
   auto rom_qr = std::make_unique<QR>(std::move(rom_session));
   EXPECT_THROW(rom_qr->runDDLStatement("ALTER USER quark RENAME TO renamed_quark;"),
                std::runtime_error);

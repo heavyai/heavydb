@@ -114,6 +114,11 @@ class Catalog final {
           const std::vector<LeafHostInfo>& string_dict_hosts,
           std::shared_ptr<Calcite> calcite,
           bool is_new_db);
+  /**
+   * @brief Constructor builds a hollow catalog
+   * used during constructor of other catalogs
+   */
+  Catalog();
 
   /**
    * @brief Destructor - deletes all
@@ -277,18 +282,6 @@ class Catalog final {
   void delDictionary(const ColumnDescriptor& cd);
   void getDictionary(const ColumnDescriptor& cd,
                      std::map<int, StringDictionary*>& stringDicts);
-
-  static void set(const std::string& dbName, std::shared_ptr<Catalog> cat);
-  static std::shared_ptr<Catalog> get(const std::string& dbName);
-  static std::shared_ptr<Catalog> get(const int32_t db_id);
-  static std::shared_ptr<Catalog> checkedGet(const int32_t db_id);
-  static std::shared_ptr<Catalog> get(const std::string& basePath,
-                                      const DBMetadata& curDB,
-                                      std::shared_ptr<Data_Namespace::DataMgr> dataMgr,
-                                      const std::vector<LeafHostInfo>& string_dict_hosts,
-                                      std::shared_ptr<Calcite> calcite,
-                                      bool is_new_db);
-  static void remove(const std::string& dbName);
 
   const bool checkMetadataForDeletedRecs(const TableDescriptor* td, int column_id) const;
   const ColumnDescriptor* getDeletedColumn(const TableDescriptor* td) const;
@@ -478,6 +471,8 @@ class Catalog final {
                               foreign_storage::OptionsMap& options_map,
                               bool clear_existing_options = true);
 
+  void updateLeaf(const LeafHostInfo& string_dict_host);
+
  protected:
   void CheckAndExecuteMigrations();
   void CheckAndExecuteMigrationsPostBuildMaps();
@@ -581,7 +576,6 @@ class Catalog final {
   ColumnDescriptorsForRoll columnDescriptorsForRoll;
 
  private:
-  static std::map<std::string, std::shared_ptr<Catalog>> mapd_cat_map_;
   DeletedColumnPerTableMap deletedColumnPerTable_;
   void adjustAlteredTableFiles(
       const std::string& temp_data_dir,
@@ -623,6 +617,8 @@ class Catalog final {
   foreign_storage::ForeignTable* getForeignTableUnlocked(
       const std::string& tableName) const;
 
+  const Catalog* getObjForLock();
+
  public:
   mutable std::mutex sqliteMutex_;
   mutable mapd_shared_mutex sharedMutex_;
@@ -630,6 +626,7 @@ class Catalog final {
   mutable std::atomic<std::thread::id> thread_holding_write_lock;
   // assuming that you never call into a catalog from another catalog via the same thread
   static thread_local bool thread_holds_read_lock;
+  bool initialized_ = false;
 };
 
 }  // namespace Catalog_Namespace

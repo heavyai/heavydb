@@ -160,7 +160,7 @@ class QueryRunner {
 
   QueryRunner(std::unique_ptr<Catalog_Namespace::SessionInfo> session);
 
-  virtual ~QueryRunner() = default;
+  virtual ~QueryRunner();
 
   static query_state::QueryStates query_states_;
 

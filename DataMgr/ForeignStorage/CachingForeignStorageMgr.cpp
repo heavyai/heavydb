@@ -47,7 +47,8 @@ void CachingForeignStorageMgr::fetchBuffer(const ChunkKey& chunk_key,
   std::map<ChunkKey, AbstractBuffer*> optional_buffers;
 
   // Use hints to prefetch other chunks in fragment into cache
-  auto catalog = Catalog_Namespace::Catalog::checkedGet(chunk_key[CHUNK_KEY_DB_IDX]);
+  auto catalog = Catalog_Namespace::SysCatalog::instance().checkedGetCatalog(
+      chunk_key[CHUNK_KEY_DB_IDX]);
   auto foreign_table = catalog->getForeignTableUnlocked(chunk_key[CHUNK_KEY_TABLE_IDX]);
   if (foreign_table->foreign_server->data_wrapper_type ==
       foreign_storage::DataWrapperType::CSV)  // optimization only useful for column based
@@ -120,7 +121,8 @@ void CachingForeignStorageMgr::refreshTableInCache(const ChunkKey& table_key) {
   std::vector<ChunkKey> old_chunk_keys =
       disk_cache_->getCachedChunksForKeyPrefix(table_key);
 
-  bool append_mode = Catalog_Namespace::Catalog::checkedGet(table_key[CHUNK_KEY_DB_IDX])
+  bool append_mode = Catalog_Namespace::SysCatalog::instance()
+                         .checkedGetCatalog(table_key[CHUNK_KEY_DB_IDX])
                          ->getForeignTableUnlocked(table_key[CHUNK_KEY_TABLE_IDX])
                          ->isAppendMode();
 

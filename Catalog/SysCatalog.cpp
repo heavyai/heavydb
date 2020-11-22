@@ -156,6 +156,8 @@ SysCatalog::~SysCatalog() {
     delete eraseIt->second;
   }
   objectDescriptorMap_.clear();
+
+  cat_map_.clear();
 }
 
 void SysCatalog::initDB() {
@@ -749,8 +751,7 @@ std::shared_ptr<Catalog> SysCatalog::login(std::string& dbname,
   }
   Catalog_Namespace::DBMetadata db_meta;
   getMetadataWithDefaultDB(dbname, username, db_meta, user_meta);
-  return Catalog::get(
-      basePath_, db_meta, dataMgr_, string_dict_hosts_, calciteMgr_, false);
+  return getCatalog(basePath_, db_meta, dataMgr_, string_dict_hosts_, calciteMgr_, false);
 }
 
 // loginImpl() with no EE code and no SAML code
@@ -772,7 +773,7 @@ std::shared_ptr<Catalog> SysCatalog::switchDatabase(std::string& dbname,
   // NOTE(max): register database in Catalog that early to allow ldap
   // and saml create default user and role privileges on databases
   auto cat =
-      Catalog::get(basePath_, db_meta, dataMgr_, string_dict_hosts_, calciteMgr_, false);
+      getCatalog(basePath_, db_meta, dataMgr_, string_dict_hosts_, calciteMgr_, false);
 
   DBObject dbObject(dbname, DatabaseDBObjectType);
   dbObject.loadKey();
@@ -875,7 +876,7 @@ std::vector<std::shared_ptr<Catalog>> SysCatalog::getCatalogsForAllDbs() {
   std::vector<std::shared_ptr<Catalog>> catalogs{};
   const auto& db_metadata_list = getAllDBMetadata();
   for (const auto& db_metadata : db_metadata_list) {
-    catalogs.emplace_back(Catalog::get(
+    catalogs.emplace_back(getCatalog(
         basePath_, db_metadata, dataMgr_, string_dict_hosts_, calciteMgr_, false));
   }
   return catalogs;
@@ -1025,7 +1026,7 @@ void SysCatalog::renameDatabase(std::string const& old_name,
     throw std::runtime_error("Database " + old_name + " does not exists.");
   }
 
-  Catalog::remove(old_db.dbName);
+  removeCatalog(old_db.dbName);
 
   std::string old_catalog_path, new_catalog_path;
   std::tie(old_catalog_path, new_catalog_path) =
@@ -1135,7 +1136,9 @@ void SysCatalog::createDatabase(const string& name, int owner) {
             ")",
         name);
     CHECK(getMetadataForDB(name, db));
-    cat = Catalog::get(basePath_, db, dataMgr_, string_dict_hosts_, calciteMgr_, true);
+
+    cat = getCatalog(basePath_, db, dataMgr_, string_dict_hosts_, calciteMgr_, true);
+
     if (owner != OMNISCI_ROOT_USER_ID) {
       DBObject object(name, DBObjectType::DatabaseDBObjectType);
       object.loadKey(*cat);
@@ -1163,8 +1166,7 @@ void SysCatalog::createDatabase(const string& name, int owner) {
 void SysCatalog::dropDatabase(const DBMetadata& db) {
   sys_write_lock write_lock(this);
   sys_sqlite_lock sqlite_lock(this);
-  auto cat =
-      Catalog::get(basePath_, db, dataMgr_, string_dict_hosts_, calciteMgr_, false);
+  auto cat = getCatalog(basePath_, db, dataMgr_, string_dict_hosts_, calciteMgr_, false);
   sqliteConnector_->query("BEGIN TRANSACTION");
   try {
     // remove this database ID from any users that have it set as their default database
@@ -1195,7 +1197,7 @@ void SysCatalog::dropDatabase(const DBMetadata& db) {
     sqliteConnector_->query_with_text_param("DELETE FROM mapd_databases WHERE dbid = ?",
                                             std::to_string(db.dbId));
     cat->eraseDBData();
-    Catalog::remove(db.dbName);
+    removeCatalog(db.dbName);
   } catch (const std::exception&) {
     sqliteConnector_->query("ROLLBACK TRANSACTION");
     throw;
@@ -2420,6 +2422,65 @@ SysCatalog::getGranteesOfSharedDashboards(const std::vector<std::string>& dashbo
   }
   sqliteConnector_->query("END TRANSACTION");
   return active_grantees;
+}
+
+std::shared_ptr<Catalog> SysCatalog::getCatalog(const std::string& dbName) {
+  dbid_to_cat_map::const_accessor cata;
+  if (cat_map_.find(cata, dbName)) {
+    return cata->second;
+  } else {
+    return nullptr;
+  }
+}
+
+std::shared_ptr<Catalog> SysCatalog::getCatalog(const int32_t db_id) {
+  dbid_to_cat_map::const_accessor cata;
+  for (dbid_to_cat_map::iterator cat_it = cat_map_.begin(); cat_it != cat_map_.end();
+       ++cat_it) {
+    if (cat_it->second->getDatabaseId() == db_id) {
+      return cat_it->second;
+    }
+  }
+  return nullptr;
+}
+
+std::shared_ptr<Catalog> SysCatalog::checkedGetCatalog(const int32_t db_id) {
+  auto catalog = getCatalog(db_id);
+  CHECK(catalog);
+  return catalog;
+}
+
+std::shared_ptr<Catalog> SysCatalog::getCatalog(
+    const string& basePath,
+    const DBMetadata& curDB,
+    std::shared_ptr<Data_Namespace::DataMgr> dataMgr,
+    const std::vector<LeafHostInfo>& string_dict_hosts,
+    std::shared_ptr<Calcite> calcite,
+    bool is_new_db) {
+  auto cat = getCatalog(curDB.dbName);
+  if (cat) {
+    return cat;
+  }
+
+  // Catalog doesnt exist
+  // has to be made outside of lock as migration uses cat
+  cat = std::make_shared<Catalog>(
+      basePath, curDB, dataMgr, string_dict_hosts, calcite, is_new_db);
+
+  dbid_to_cat_map::accessor cata;
+
+  if (cat_map_.find(cata, curDB.dbName)) {
+    return cata->second;
+  }
+
+  cat_map_.insert(cata, curDB.dbName);
+  cata->second = cat;
+
+  return cat;
+}
+
+void SysCatalog::removeCatalog(const std::string& dbName) {
+  cat_map_.erase(dbName);
 }
 
 }  // namespace Catalog_Namespace

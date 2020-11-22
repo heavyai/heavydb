@@ -199,7 +199,7 @@ bool PersistentStorageMgr::isForeignStorage(const ChunkKey& chunk_key) const {
   CHECK(has_table_prefix(chunk_key));
   auto db_id = chunk_key[CHUNK_KEY_DB_IDX];
   auto table_id = chunk_key[CHUNK_KEY_TABLE_IDX];
-  auto catalog = Catalog_Namespace::Catalog::checkedGet(db_id);
+  auto catalog = Catalog_Namespace::SysCatalog::instance().checkedGetCatalog(db_id);
 
   auto table = catalog->getMetadataForTableImpl(table_id, false);
   CHECK(table);

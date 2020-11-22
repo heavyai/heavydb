@@ -59,7 +59,7 @@ std::unique_ptr<QR> get_qr_for_user(
     const std::string& user_name,
     const Catalog_Namespace::UserMetadata& user_metadata) {
   auto session = std::make_unique<Catalog_Namespace::SessionInfo>(
-      Catalog_Namespace::Catalog::get(user_name),
+      Catalog_Namespace::SysCatalog::instance().getCatalog(user_name),
       user_metadata,
       ExecutorDeviceType::CPU,
       "");

@@ -272,7 +272,8 @@ class DBHandlerTestFixture : public testing::Test {
 
   static void resetCatalog() {
     auto& catalog = getCatalog();
-    catalog.remove(catalog.getCurrentDB().dbName);
+    Catalog_Namespace::SysCatalog::instance().removeCatalog(
+        catalog.getCurrentDB().dbName);
   }
 
   static void loginAdmin() {

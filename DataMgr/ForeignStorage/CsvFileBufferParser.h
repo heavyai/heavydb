@@ -285,7 +285,7 @@ struct ParseBufferRequest {
   }
 
   inline std::shared_ptr<Catalog_Namespace::Catalog> getCatalog() const {
-    return Catalog_Namespace::Catalog::checkedGet(db_id);
+    return Catalog_Namespace::SysCatalog::instance().checkedGetCatalog(db_id);
   }
 
   inline std::list<const ColumnDescriptor*> getColumns() const {
