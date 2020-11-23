@@ -20,7 +20,6 @@
  */
 
 #include "ExtractFromTime.h"
-#include "../Shared/funcannotations.h"
 
 #ifndef __CUDACC__
 #include <cstdlib>  // abort()
@@ -28,12 +27,19 @@
 
 namespace {
 
-// Return day-of-era of the Monday of ISO 8601 week 1 in the given yoe.
-// Week 1 always contains Jan 4.
-DEVICE unsigned iso_week_start_from_yoe(unsigned const yoe) {
+// Number of days until Wednesday (because 2000-03-01 is a Wednesday.)
+constexpr unsigned MONDAY = 2;
+constexpr unsigned SUNDAY = 3;
+constexpr unsigned SATURDAY = 4;
+
+// If OFFSET=MONDAY,
+// then return day-of-era of the Monday of ISO 8601 week 1 in the given year-of-era.
+// Similarly for SUNDAY and SATURDAY. In all cases, week 1 always contains Jan 4.
+template <unsigned OFFSET>
+DEVICE unsigned week_start_from_yoe(unsigned const yoe) {
   unsigned const march1 = yoe * 365 + yoe / 4 - yoe / 100;
-  unsigned const jan4 = march1 + (31 + 30 + 31 + 30 + 31 + 31 + 30 + 31 + 30 + 31 + 3);
-  unsigned const jan4dow = (jan4 + 2) % 7;  // 2000-03-01 is Wed so + 2 to get Mon = 0.
+  unsigned const jan4 = march1 + (MARJAN + 3);
+  unsigned const jan4dow = (jan4 + OFFSET) % 7;
   return jan4 - jan4dow;
 }
 
@@ -170,19 +176,33 @@ extern "C" ALWAYS_INLINE DEVICE int64_t extract_day_of_year(const int64_t timeva
                              : 1 - MARJAN);
 }
 
-extern "C" ALWAYS_INLINE DEVICE int64_t extract_week(const int64_t timeval) {
+template <unsigned OFFSET>
+ALWAYS_INLINE DEVICE int64_t extract_week(const int64_t timeval) {
   int64_t const day = floor_div(timeval, kSecsPerDay);
   unsigned const doe = unsigned_mod(day - kEpochAdjustedDays, kDaysPer400Years);
   unsigned const yoe = (doe - doe / 1460 + doe / 36524 - (doe == 146096)) / 365;
-  unsigned iso_week_start = iso_week_start_from_yoe(yoe);
-  if (doe < iso_week_start) {
+  unsigned week_start = week_start_from_yoe<OFFSET>(yoe);
+  if (doe < week_start) {
     if (yoe == 0) {
-      return (doe + 2) / 7 + 9;  // 2000-03-01 is +2 days from Mon, week +9.
+      // 2000-03-01 is OFFSET days from start of week, week + 9.
+      return (doe + OFFSET) / 7 + 9;
     } else {
-      iso_week_start = iso_week_start_from_yoe(yoe - 1);
+      week_start = week_start_from_yoe<OFFSET>(yoe - 1);
     }
   }
-  return (doe - iso_week_start) / 7 + 1;
+  return (doe - week_start) / 7 + 1;
+}
+
+extern "C" ALWAYS_INLINE DEVICE int64_t extract_week_monday(const int64_t timeval) {
+  return extract_week<MONDAY>(timeval);
+}
+
+extern "C" ALWAYS_INLINE DEVICE int64_t extract_week_sunday(const int64_t timeval) {
+  return extract_week<SUNDAY>(timeval);
+}
+
+extern "C" ALWAYS_INLINE DEVICE int64_t extract_week_saturday(const int64_t timeval) {
+  return extract_week<SATURDAY>(timeval);
 }
 
 extern "C" ALWAYS_INLINE DEVICE int64_t extract_month(const int64_t timeval) {
@@ -252,7 +272,11 @@ DEVICE int64_t ExtractFromTime(ExtractField field, const int64_t timeval) {
     case kDAY:
       return extract_day(timeval);
     case kWEEK:
-      return extract_week(timeval);
+      return extract_week_monday(timeval);
+    case kWEEK_SUNDAY:
+      return extract_week_sunday(timeval);
+    case kWEEK_SATURDAY:
+      return extract_week_saturday(timeval);
     case kDOY:
       return extract_day_of_year(timeval);
     case kMONTH:

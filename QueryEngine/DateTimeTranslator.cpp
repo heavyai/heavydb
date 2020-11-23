@@ -54,6 +54,10 @@ std::string from_extract_field(const ExtractField& fieldno) {
       return "quarterday";
     case kWEEK:
       return "week";
+    case kWEEK_SUNDAY:
+      return "week_sunday";
+    case kWEEK_SATURDAY:
+      return "week_saturday";
     case kDATEEPOCH:
       return "dateepoch";
     default:
@@ -94,6 +98,10 @@ std::string from_datetrunc_field(const DatetruncField& fieldno) {
       return "nanosecond";
     case dtWEEK:
       return "week";
+    case dtWEEK_SUNDAY:
+      return "week_sunday";
+    case dtWEEK_SATURDAY:
+      return "week_saturday";
     case dtINVALID:
     default:
       UNREACHABLE();
@@ -137,6 +145,10 @@ ExtractField ExtractExpr::to_extract_field(const std::string& field) {
     fieldno = kEPOCH;
   } else if (boost::iequals(field, "week")) {
     fieldno = kWEEK;
+  } else if (boost::iequals(field, "week_sunday")) {
+    fieldno = kWEEK_SUNDAY;
+  } else if (boost::iequals(field, "week_saturday")) {
+    fieldno = kWEEK_SATURDAY;
   } else if (boost::iequals(field, "dateepoch")) {
     fieldno = kDATEEPOCH;
   } else {
@@ -214,6 +226,10 @@ DatetruncField DateTruncExpr::to_datetrunc_field(const std::string& field) {
     fieldno = dtNANOSECOND;
   } else if (boost::iequals(field, "week")) {
     fieldno = dtWEEK;
+  } else if (boost::iequals(field, "week_sunday")) {
+    fieldno = dtWEEK_SUNDAY;
+  } else if (boost::iequals(field, "week_saturday")) {
+    fieldno = dtWEEK_SATURDAY;
   } else {
     throw std::runtime_error("Invalid field in DATE_TRUNC function " + field);
   }

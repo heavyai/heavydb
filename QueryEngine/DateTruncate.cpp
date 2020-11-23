@@ -46,9 +46,29 @@ extern "C" ALWAYS_INLINE DEVICE int64_t datetrunc_day(int64_t timeval) {
   return timeval - unsigned_mod(timeval, kSecsPerDay);
 }
 
-extern "C" ALWAYS_INLINE DEVICE int64_t datetrunc_week(int64_t timeval) {
-  // Truncate to Monday. 1 Jan 1970 is a Thursday (+3*kSecsPerDay).
-  return timeval - unsigned_mod(timeval + 3 * kSecsPerDay, 7 * kSecsPerDay);
+namespace {
+// Days before Thursday (since 1 Jan 1970 is a Thursday.)
+constexpr unsigned dtMONDAY = 3;
+constexpr unsigned dtSUNDAY = 4;
+constexpr unsigned dtSATURDAY = 5;
+}  // namespace
+
+template <unsigned OFFSET>
+ALWAYS_INLINE DEVICE int64_t datetrunc_week(int64_t timeval) {
+  // Truncate to OFFSET.
+  return timeval - unsigned_mod(timeval + OFFSET * kSecsPerDay, 7 * kSecsPerDay);
+}
+
+extern "C" ALWAYS_INLINE DEVICE int64_t datetrunc_week_monday(int64_t timeval) {
+  return datetrunc_week<dtMONDAY>(timeval);
+}
+
+extern "C" ALWAYS_INLINE DEVICE int64_t datetrunc_week_sunday(int64_t timeval) {
+  return datetrunc_week<dtSUNDAY>(timeval);
+}
+
+extern "C" ALWAYS_INLINE DEVICE int64_t datetrunc_week_saturday(int64_t timeval) {
+  return datetrunc_week<dtSATURDAY>(timeval);
 }
 
 extern "C" ALWAYS_INLINE DEVICE int64_t datetrunc_month(int64_t timeval) {
@@ -227,7 +247,11 @@ int64_t DateTruncate(DatetruncField field, const int64_t timeval) {
     case dtDAY:
       return datetrunc_day(timeval);
     case dtWEEK:
-      return datetrunc_week(timeval);
+      return datetrunc_week_monday(timeval);
+    case dtWEEK_SUNDAY:
+      return datetrunc_week_sunday(timeval);
+    case dtWEEK_SATURDAY:
+      return datetrunc_week_saturday(timeval);
     case dtMONTH:
       return datetrunc_month(timeval);
     case dtQUARTER:
@@ -383,6 +407,8 @@ extern "C" DEVICE int64_t DateDiff(const DatetruncField datepart,
     case dtDAY:
       return (enddate - startdate) / kSecsPerDay;
     case dtWEEK:
+    case dtWEEK_SUNDAY:
+    case dtWEEK_SATURDAY:
       return (enddate - startdate) / (7 * kSecsPerDay);
     default:
       return (EraTime::make(enddate) - EraTime::make(startdate)).count(datepart);

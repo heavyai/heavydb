@@ -3494,15 +3494,34 @@ TEST(Select, Time) {
     ASSERT_EQ(936835200L,
               v<int64_t>(run_simple_agg(
                   "SELECT MAX(EXTRACT(DATEEPOCH FROM o)) FROM test;", dt)));
-    // PostgreSQL: SELECT EXTRACT(WEEK FROM TIMESTAMP '2012-01-01 20:15:12') -> 52
     ASSERT_EQ(52L,
               v<int64_t>(run_simple_agg("SELECT MAX(EXTRACT(WEEK FROM CAST('2012-01-01 "
                                         "20:15:12' AS TIMESTAMP))) FROM test limit 1;",
                                         dt)));
+    ASSERT_EQ(
+        1L,
+        v<int64_t>(run_simple_agg("SELECT MAX(EXTRACT(WEEK_SUNDAY FROM CAST('2012-01-01 "
+                                  "20:15:12' AS TIMESTAMP))) FROM test limit 1;",
+                                  dt)));
+    ASSERT_EQ(1L,
+              v<int64_t>(
+                  run_simple_agg("SELECT MAX(EXTRACT(WEEK_SATURDAY FROM CAST('2012-01-01 "
+                                 "20:15:12' AS TIMESTAMP))) FROM test limit 1;",
+                                 dt)));
     ASSERT_EQ(10L,
               v<int64_t>(run_simple_agg("SELECT MAX(EXTRACT(WEEK FROM CAST('2008-03-03 "
                                         "20:15:12' AS TIMESTAMP))) FROM test limit 1;",
                                         dt)));
+    ASSERT_EQ(
+        10L,
+        v<int64_t>(run_simple_agg("SELECT MAX(EXTRACT(WEEK_SUNDAY FROM CAST('2008-03-03 "
+                                  "20:15:12' AS TIMESTAMP))) FROM test limit 1;",
+                                  dt)));
+    ASSERT_EQ(10L,
+              v<int64_t>(
+                  run_simple_agg("SELECT MAX(EXTRACT(WEEK_SATURDAY FROM CAST('2008-03-03 "
+                                 "20:15:12' AS TIMESTAMP))) FROM test limit 1;",
+                                 dt)));
     // Monday
     ASSERT_EQ(1L,
               v<int64_t>(run_simple_agg("SELECT EXTRACT(DOW FROM CAST('2008-03-03 "
@@ -4097,7 +4116,6 @@ TEST(Select, Time) {
               v<int64_t>(run_simple_agg("SELECT DATEADD('week', 1, o) = TIMESTAMP "
                                         "'1999-09-16 00:00:00' from test limit 1;",
                                         dt)));
-
     ASSERT_EQ(
         1,
         v<int64_t>(run_simple_agg("SELECT TIMESTAMPADD(DAY, 1, TIMESTAMP '2009-03-02 "
@@ -4341,6 +4359,16 @@ TEST(Select, Time) {
               v<int64_t>(run_simple_agg("SELECT TIMESTAMPDIFF(week, DATE '2018-01-02', "
                                         "DATE '2019-03-04') FROM TEST LIMIT 1;",
                                         dt)));
+    ASSERT_EQ(
+        60,
+        v<int64_t>(run_simple_agg("SELECT TIMESTAMPDIFF(week_sunday, DATE '2018-01-02', "
+                                  "DATE '2019-03-04') FROM TEST LIMIT 1;",
+                                  dt)));
+    ASSERT_EQ(
+        60,
+        v<int64_t>(run_simple_agg("SELECT TIMESTAMPDIFF(week_saturday, DATE "
+                                  "'2018-01-02', DATE '2019-03-04') FROM TEST LIMIT 1;",
+                                  dt)));
     ASSERT_EQ(613440,
               v<int64_t>(run_simple_agg("SELECT TIMESTAMPDIFF(minute, DATE '2018-01-02', "
                                         "DATE '2019-03-04') FROM TEST LIMIT 1;",
@@ -4388,6 +4416,7 @@ TEST(Select, Time) {
                                         "EXTRACT(DOW from TIMESTAMPADD(HOUR, -5, "
                                         "TIMESTAMP '2017-05-31 1:11:11')) = 2;",
                                         dt)));
+
     std::vector<std::tuple<std::string, int64_t, int64_t>> date_trunc_queries{
         /*TIMESTAMP(0) */
         std::make_tuple("year, m", 1388534400L, 20),
@@ -4400,6 +4429,8 @@ TEST(Select, Time) {
         std::make_tuple("century, m", 978307200L, 20),
         std::make_tuple("decade, m", 1262304000L, 20),
         std::make_tuple("week, m", 1417996800L, 20),
+        std::make_tuple("week_sunday, m", 1417910400L, 15),
+        std::make_tuple("week_saturday, m", 1418428800L, 20),
         std::make_tuple("nanosecond, m", 1418509395L, 15),
         std::make_tuple("microsecond, m", 1418509395L, 15),
         std::make_tuple("millisecond, m", 1418509395L, 15),
@@ -4414,6 +4445,8 @@ TEST(Select, Time) {
         std::make_tuple("century, m_3", 978307200000L, 20),
         std::make_tuple("decade, m_3", 1262304000000L, 20),
         std::make_tuple("week, m_3", 1417996800000L, 20),
+        std::make_tuple("week_sunday, m_3", 1417910400000L, 15),
+        std::make_tuple("week_saturday, m_3", 1418428800000L, 20),
         std::make_tuple("nanosecond, m_3", 1418509395323L, 15),
         std::make_tuple("microsecond, m_3", 1418509395323L, 15),
         std::make_tuple("millisecond, m_3", 1418509395323L, 15),
@@ -4429,6 +4462,8 @@ TEST(Select, Time) {
         std::make_tuple("century, m_6", -2177452800000000L, 10),
         std::make_tuple("decade, m_6", 631152000000000L, 10),
         std::make_tuple("week, m_6", 931132800000000L, 10),
+        std::make_tuple("week_sunday, m_6", 931651200000000L, 10),
+        std::make_tuple("week_saturday, m_6", 931564800000000L, 10),
         std::make_tuple("nanosecond, m_6", 931701773874533L, 10),
         std::make_tuple("microsecond, m_6", 931701773874533L, 10),
         std::make_tuple("millisecond, m_6", 931701773874000L, 10),
@@ -4444,6 +4479,8 @@ TEST(Select, Time) {
         std::make_tuple("century, m_9", 978307200000000000L, 20),
         std::make_tuple("decade, m_9", 946684800000000000L, 10),
         std::make_tuple("week, m_9", 1145836800000000000L, 10),
+        std::make_tuple("week_sunday, m_9", 1145750400000000000L, 10),
+        std::make_tuple("week_saturday, m_9", 1145664000000000000L, 10),
         std::make_tuple("nanosecond, m_9", 1146023344607435125L, 10),
         std::make_tuple("microsecond, m_9", 1146023344607435000L, 10),
         std::make_tuple("millisecond, m_9", 1146023344607000000L, 10)};
@@ -4721,7 +4758,16 @@ TEST(Select, DateTruncate) {
               v<int64_t>(run_simple_agg(
                   R"(SELECT DATE_TRUNC(week, CAST('2012-05-08 20:15:12' AS TIMESTAMP));)",
                   dt)));
-
+    ASSERT_EQ(
+        1336348800L - 24 * 3600,
+        v<int64_t>(run_simple_agg(
+            R"(SELECT DATE_TRUNC(week_sunday, CAST('2012-05-08 20:15:12' AS TIMESTAMP));)",
+            dt)));
+    ASSERT_EQ(
+        1336348800L - 48 * 3600,
+        v<int64_t>(run_simple_agg(
+            R"(SELECT DATE_TRUNC(week_saturday, CAST('2012-05-08 20:15:12' AS TIMESTAMP));)",
+            dt)));
     ASSERT_EQ(-2114380800L,
               v<int64_t>(run_simple_agg(
                   R"(SELECT DATE_TRUNC(year, CAST('1903-05-08 20:15:12' AS TIMESTAMP));)",
@@ -4773,7 +4819,16 @@ TEST(Select, DateTruncate) {
               v<int64_t>(run_simple_agg(
                   R"(SELECT DATE_TRUNC(week, CAST('1903-05-08 20:15:12' AS TIMESTAMP));)",
                   dt)));
-
+    ASSERT_EQ(
+        -2103753600L - 24 * 3600,
+        v<int64_t>(run_simple_agg(
+            R"(SELECT DATE_TRUNC(week_sunday, CAST('1903-05-08 20:15:12' AS TIMESTAMP));)",
+            dt)));
+    ASSERT_EQ(
+        -2103753600L - 48 * 3600,
+        v<int64_t>(run_simple_agg(
+            R"(SELECT DATE_TRUNC(week_saturday, CAST('1903-05-08 20:15:12' AS TIMESTAMP));)",
+            dt)));
     ASSERT_EQ(
         0L,
         v<int64_t>(run_simple_agg(
@@ -4891,6 +4946,16 @@ TEST(Select, DateTruncate) {
             R"(SELECT EXTRACT('epoch' FROM date_trunc('week', dt)) FROM test_date_time ORDER BY dt;)",
             dt),
         {-210124800, -53481600, -259200, 343872000});
+    check_epoch_result(
+        run_multiple_agg(
+            R"(SELECT EXTRACT('epoch' FROM date_trunc('week_sunday', dt)) FROM test_date_time ORDER BY dt;)",
+            dt),
+        {-210211200, -53568000, -345600, 343785600});
+    check_epoch_result(
+        run_multiple_agg(
+            R"(SELECT EXTRACT('epoch' FROM date_trunc('week_saturday', dt)) FROM test_date_time ORDER BY dt;)",
+            dt),
+        {-210297600, -53654400, -432000, 343699200});
     check_epoch_result(
         run_multiple_agg(
             R"(SELECT EXTRACT('epoch' FROM date_trunc('quarter', dt)) FROM test_date_time ORDER BY dt;)",
@@ -5012,6 +5077,42 @@ TEST(Select, DateTruncate2) {
     ASSERT_EQ("3900-01-01 00:00:00", date_trunc("WEEK", "3900-01-07 23:59:59", dt));
     ASSERT_EQ("3900-01-08 00:00:00", date_trunc("WEEK", "3900-01-08 00:00:00", dt));
     ASSERT_EQ("3900-01-08 00:00:00", date_trunc("WEEK", "3900-01-14 23:59:59", dt));
+
+    // 1899-12-31 is a Sunday (= start of "WEEK_SUNDAY").
+    ASSERT_EQ("1899-12-31 00:00:00",
+              date_trunc("WEEK_SUNDAY", "1899-12-31 00:00:00", dt));
+    ASSERT_EQ("1899-12-31 00:00:00",
+              date_trunc("WEEK_SUNDAY", "1900-01-06 23:59:59", dt));
+    ASSERT_EQ("1900-01-07 00:00:00",
+              date_trunc("WEEK_SUNDAY", "1900-01-07 00:00:00", dt));
+    ASSERT_EQ("1900-01-07 00:00:00",
+              date_trunc("WEEK_SUNDAY", "1900-01-13 23:59:59", dt));
+    ASSERT_EQ("3899-12-31 00:00:00",
+              date_trunc("WEEK_SUNDAY", "3899-12-31 00:00:00", dt));
+    ASSERT_EQ("3899-12-31 00:00:00",
+              date_trunc("WEEK_SUNDAY", "3900-01-06 23:59:59", dt));
+    ASSERT_EQ("3900-01-07 00:00:00",
+              date_trunc("WEEK_SUNDAY", "3900-01-07 00:00:00", dt));
+    ASSERT_EQ("3900-01-07 00:00:00",
+              date_trunc("WEEK_SUNDAY", "3900-01-13 23:59:59", dt));
+
+    // 1899-12-30 is a Saturday (= start of "WEEK_SATURDAY").
+    ASSERT_EQ("1899-12-30 00:00:00",
+              date_trunc("WEEK_SATURDAY", "1899-12-30 00:00:00", dt));
+    ASSERT_EQ("1899-12-30 00:00:00",
+              date_trunc("WEEK_SATURDAY", "1900-01-05 23:59:59", dt));
+    ASSERT_EQ("1900-01-06 00:00:00",
+              date_trunc("WEEK_SATURDAY", "1900-01-06 00:00:00", dt));
+    ASSERT_EQ("1900-01-06 00:00:00",
+              date_trunc("WEEK_SATURDAY", "1900-01-12 23:59:59", dt));
+    ASSERT_EQ("3899-12-30 00:00:00",
+              date_trunc("WEEK_SATURDAY", "3899-12-30 00:00:00", dt));
+    ASSERT_EQ("3899-12-30 00:00:00",
+              date_trunc("WEEK_SATURDAY", "3900-01-05 23:59:59", dt));
+    ASSERT_EQ("3900-01-06 00:00:00",
+              date_trunc("WEEK_SATURDAY", "3900-01-06 00:00:00", dt));
+    ASSERT_EQ("3900-01-06 00:00:00",
+              date_trunc("WEEK_SATURDAY", "3900-01-12 23:59:59", dt));
 
     ASSERT_EQ("1900-01-01 00:00:00", date_trunc("MONTH", "1900-01-01 00:00:00", dt));
     ASSERT_EQ("1900-01-01 00:00:00", date_trunc("MONTH", "1900-01-31 23:59:59", dt));
@@ -10721,6 +10822,12 @@ TEST(Select, TimestampPrecision) {
     ASSERT_EQ(1417996800000L,
               v<int64_t>(
                   run_simple_agg("SELECT DATE_TRUNC(week, m_3) FROM test limit 1;", dt)));
+    ASSERT_EQ(1417910400000L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT DATE_TRUNC(week_sunday, m_3) FROM test limit 1;", dt)));
+    ASSERT_EQ(1418428800000L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT DATE_TRUNC(week_saturday, m_3) FROM test limit 1;", dt)));
     ASSERT_EQ(
         1418428800000L,
         v<int64_t>(run_simple_agg("SELECT DATE_TRUNC(day, m_3) FROM test limit 1;", dt)));
@@ -10760,6 +10867,12 @@ TEST(Select, TimestampPrecision) {
     ASSERT_EQ(931132800000000L,
               v<int64_t>(
                   run_simple_agg("SELECT DATE_TRUNC(week, m_6) FROM test limit 1;", dt)));
+    ASSERT_EQ(931651200000000L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT DATE_TRUNC(week_sunday, m_6) FROM test limit 1;", dt)));
+    ASSERT_EQ(931564800000000L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT DATE_TRUNC(week_saturday, m_6) FROM test limit 1;", dt)));
     ASSERT_EQ(
         931651200000000L,
         v<int64_t>(run_simple_agg("SELECT DATE_TRUNC(day, m_6) FROM test limit 1;", dt)));
@@ -10799,6 +10912,12 @@ TEST(Select, TimestampPrecision) {
     ASSERT_EQ(1145836800000000000L,
               v<int64_t>(
                   run_simple_agg("SELECT DATE_TRUNC(week, m_9) FROM test limit 1;", dt)));
+    ASSERT_EQ(1145750400000000000L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT DATE_TRUNC(week_sunday, m_9) FROM test limit 1;", dt)));
+    ASSERT_EQ(1145664000000000000L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT DATE_TRUNC(week_saturday, m_9) FROM test limit 1;", dt)));
     ASSERT_EQ(
         1146009600000000000L,
         v<int64_t>(run_simple_agg("SELECT DATE_TRUNC(day, m_9) FROM test limit 1;", dt)));
@@ -10854,6 +10973,12 @@ TEST(Select, TimestampPrecision) {
     ASSERT_EQ(17L,
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(week from m_9) FROM test limit 1;", dt)));
+    ASSERT_EQ(17L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT EXTRACT(week_sunday from m_9) FROM test limit 1;", dt)));
+    ASSERT_EQ(17L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT EXTRACT(week_saturday from m_9) FROM test limit 1;", dt)));
     ASSERT_EQ(26L,
               v<int64_t>(
                   run_simple_agg("SELECT EXTRACT(day from m_9) FROM test limit 1;", dt)));
@@ -10902,10 +11027,15 @@ TEST(Select, TimestampPrecision) {
     ASSERT_EQ(7L,
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(isodow from m_6) FROM test limit 1;", dt)));
-    // PostgreSQL: SELECT EXTRACT(week from TIMESTAMP '1999-07-11 14:02:53.874533') -> 27
     ASSERT_EQ(27L,
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(week from m_6) FROM test limit 1;", dt)));
+    ASSERT_EQ(28L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT EXTRACT(week_sunday from m_6) FROM test limit 1;", dt)));
+    ASSERT_EQ(28L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT EXTRACT(week_saturday from m_6) FROM test limit 1;", dt)));
     ASSERT_EQ(11L,
               v<int64_t>(
                   run_simple_agg("SELECT EXTRACT(day from m_6) FROM test limit 1;", dt)));
@@ -10957,6 +11087,12 @@ TEST(Select, TimestampPrecision) {
     ASSERT_EQ(50L,
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(week from m_3) FROM test limit 1;", dt)));
+    ASSERT_EQ(50L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT EXTRACT(week_sunday from m_3) FROM test limit 1;", dt)));
+    ASSERT_EQ(50L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT EXTRACT(week_saturday from m_3) FROM test limit 1;", dt)));
     ASSERT_EQ(13L,
               v<int64_t>(
                   run_simple_agg("SELECT EXTRACT(day from m_3) FROM test limit 1;", dt)));
@@ -13285,6 +13421,14 @@ TEST(Select, ExtractFromNegativeTimes) {
     ASSERT_EQ(50L,
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(WEEK FROM TIMESTAMP '1913-12-11 10:09:08');", dt)));
+    ASSERT_EQ(
+        50L,
+        v<int64_t>(run_simple_agg(
+            "SELECT EXTRACT(WEEK_SUNDAY FROM TIMESTAMP '1913-12-11 10:09:08');", dt)));
+    ASSERT_EQ(
+        49L,
+        v<int64_t>(run_simple_agg(
+            "SELECT EXTRACT(WEEK_SATURDAY FROM TIMESTAMP '1913-12-11 10:09:08');", dt)));
     ASSERT_EQ(1913L,
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(YEAR FROM TIMESTAMP '1913-12-11 10:09:08');", dt)));
@@ -13329,6 +13473,14 @@ TEST(Select, ExtractFromNegativeTimes) {
     ASSERT_EQ(50L,
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(WEEK FROM TIMESTAMP '1913-12-11 10:09:00');", dt)));
+    ASSERT_EQ(
+        50L,
+        v<int64_t>(run_simple_agg(
+            "SELECT EXTRACT(WEEK_SUNDAY FROM TIMESTAMP '1913-12-11 10:09:00');", dt)));
+    ASSERT_EQ(
+        49L,
+        v<int64_t>(run_simple_agg(
+            "SELECT EXTRACT(WEEK_SATURDAY FROM TIMESTAMP '1913-12-11 10:09:00');", dt)));
     ASSERT_EQ(1913L,
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(YEAR FROM TIMESTAMP '1913-12-11 10:09:00');", dt)));
@@ -13373,6 +13525,14 @@ TEST(Select, ExtractFromNegativeTimes) {
     ASSERT_EQ(50L,
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(WEEK FROM TIMESTAMP '1913-12-11 10:00:00');", dt)));
+    ASSERT_EQ(
+        50L,
+        v<int64_t>(run_simple_agg(
+            "SELECT EXTRACT(WEEK_SUNDAY FROM TIMESTAMP '1913-12-11 10:00:00');", dt)));
+    ASSERT_EQ(
+        49L,
+        v<int64_t>(run_simple_agg(
+            "SELECT EXTRACT(WEEK_SATURDAY FROM TIMESTAMP '1913-12-11 10:00:00');", dt)));
     ASSERT_EQ(1913L,
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(YEAR FROM TIMESTAMP '1913-12-11 10:00:00');", dt)));
@@ -13417,6 +13577,14 @@ TEST(Select, ExtractFromNegativeTimes) {
     ASSERT_EQ(50L,
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(WEEK FROM TIMESTAMP '1913-12-11 00:00:00');", dt)));
+    ASSERT_EQ(
+        50L,
+        v<int64_t>(run_simple_agg(
+            "SELECT EXTRACT(WEEK_SUNDAY FROM TIMESTAMP '1913-12-11 00:00:00');", dt)));
+    ASSERT_EQ(
+        49L,
+        v<int64_t>(run_simple_agg(
+            "SELECT EXTRACT(WEEK_SATURDAY FROM TIMESTAMP '1913-12-11 00:00:00');", dt)));
     ASSERT_EQ(1913L,
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(YEAR FROM TIMESTAMP '1913-12-11 00:00:00');", dt)));
@@ -13461,6 +13629,14 @@ TEST(Select, ExtractFromNegativeTimes) {
     ASSERT_EQ(49L,
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(WEEK FROM TIMESTAMP '1913-12-01 00:00:00');", dt)));
+    ASSERT_EQ(
+        49L,
+        v<int64_t>(run_simple_agg(
+            "SELECT EXTRACT(WEEK_SUNDAY FROM TIMESTAMP '1913-12-01 00:00:00');", dt)));
+    ASSERT_EQ(
+        48L,
+        v<int64_t>(run_simple_agg(
+            "SELECT EXTRACT(WEEK_SATURDAY FROM TIMESTAMP '1913-12-01 00:00:00');", dt)));
     ASSERT_EQ(1913L,
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(YEAR FROM TIMESTAMP '1913-12-01 00:00:00');", dt)));
@@ -13505,6 +13681,14 @@ TEST(Select, ExtractFromNegativeTimes) {
     ASSERT_EQ(1L,
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(WEEK FROM TIMESTAMP '1913-01-01 00:00:00');", dt)));
+    ASSERT_EQ(
+        1L,
+        v<int64_t>(run_simple_agg(
+            "SELECT EXTRACT(WEEK_SUNDAY FROM TIMESTAMP '1913-01-01 00:00:00');", dt)));
+    ASSERT_EQ(
+        53L,
+        v<int64_t>(run_simple_agg(
+            "SELECT EXTRACT(WEEK_SATURDAY FROM TIMESTAMP '1913-01-01 00:00:00');", dt)));
     ASSERT_EQ(1913L,
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(YEAR FROM TIMESTAMP '1913-01-01 00:00:00');", dt)));
@@ -13549,6 +13733,14 @@ TEST(Select, ExtractFromNegativeTimes) {
     ASSERT_EQ(1L,
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(WEEK FROM TIMESTAMP '1970-01-01 00:00:00');", dt)));
+    ASSERT_EQ(
+        53L,
+        v<int64_t>(run_simple_agg(
+            "SELECT EXTRACT(WEEK_SUNDAY FROM TIMESTAMP '1970-01-01 00:00:00');", dt)));
+    ASSERT_EQ(
+        52L,
+        v<int64_t>(run_simple_agg(
+            "SELECT EXTRACT(WEEK_SATURDAY FROM TIMESTAMP '1970-01-01 00:00:00');", dt)));
     ASSERT_EQ(1970L,
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(YEAR FROM TIMESTAMP '1970-01-01 00:00:00');", dt)));
@@ -13593,6 +13785,14 @@ TEST(Select, ExtractFromNegativeTimes) {
     ASSERT_EQ(50L,
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(WEEK FROM TIMESTAMP '2013-12-11 10:09:08');", dt)));
+    ASSERT_EQ(
+        50L,
+        v<int64_t>(run_simple_agg(
+            "SELECT EXTRACT(WEEK_SUNDAY FROM TIMESTAMP '2013-12-11 10:09:08');", dt)));
+    ASSERT_EQ(
+        50L,
+        v<int64_t>(run_simple_agg(
+            "SELECT EXTRACT(WEEK_SATURDAY FROM TIMESTAMP '2013-12-11 10:09:08');", dt)));
     ASSERT_EQ(2013L,
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(YEAR FROM TIMESTAMP '2013-12-11 10:09:08');", dt)));
@@ -13637,6 +13837,14 @@ TEST(Select, ExtractFromNegativeTimes) {
     ASSERT_EQ(50L,
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(WEEK FROM TIMESTAMP '2013-12-11 10:09:00');", dt)));
+    ASSERT_EQ(
+        50L,
+        v<int64_t>(run_simple_agg(
+            "SELECT EXTRACT(WEEK_SUNDAY FROM TIMESTAMP '2013-12-11 10:09:00');", dt)));
+    ASSERT_EQ(
+        50L,
+        v<int64_t>(run_simple_agg(
+            "SELECT EXTRACT(WEEK_SATURDAY FROM TIMESTAMP '2013-12-11 10:09:00');", dt)));
     ASSERT_EQ(2013L,
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(YEAR FROM TIMESTAMP '2013-12-11 10:09:00');", dt)));
@@ -13681,6 +13889,14 @@ TEST(Select, ExtractFromNegativeTimes) {
     ASSERT_EQ(50L,
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(WEEK FROM TIMESTAMP '2013-12-11 10:00:00');", dt)));
+    ASSERT_EQ(
+        50L,
+        v<int64_t>(run_simple_agg(
+            "SELECT EXTRACT(WEEK_SUNDAY FROM TIMESTAMP '2013-12-11 10:00:00');", dt)));
+    ASSERT_EQ(
+        50L,
+        v<int64_t>(run_simple_agg(
+            "SELECT EXTRACT(WEEK_SATURDAY FROM TIMESTAMP '2013-12-11 10:00:00');", dt)));
     ASSERT_EQ(2013L,
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(YEAR FROM TIMESTAMP '2013-12-11 10:00:00');", dt)));
@@ -13725,6 +13941,14 @@ TEST(Select, ExtractFromNegativeTimes) {
     ASSERT_EQ(50L,
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(WEEK FROM TIMESTAMP '2013-12-11 00:00:00');", dt)));
+    ASSERT_EQ(
+        50L,
+        v<int64_t>(run_simple_agg(
+            "SELECT EXTRACT(WEEK_SUNDAY FROM TIMESTAMP '2013-12-11 00:00:00');", dt)));
+    ASSERT_EQ(
+        50L,
+        v<int64_t>(run_simple_agg(
+            "SELECT EXTRACT(WEEK_SATURDAY FROM TIMESTAMP '2013-12-11 00:00:00');", dt)));
     ASSERT_EQ(2013L,
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(YEAR FROM TIMESTAMP '2013-12-11 00:00:00');", dt)));
@@ -13769,6 +13993,14 @@ TEST(Select, ExtractFromNegativeTimes) {
     ASSERT_EQ(48L,
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(WEEK FROM TIMESTAMP '2013-12-01 00:00:00');", dt)));
+    ASSERT_EQ(
+        49L,
+        v<int64_t>(run_simple_agg(
+            "SELECT EXTRACT(WEEK_SUNDAY FROM TIMESTAMP '2013-12-01 00:00:00');", dt)));
+    ASSERT_EQ(
+        49L,
+        v<int64_t>(run_simple_agg(
+            "SELECT EXTRACT(WEEK_SATURDAY FROM TIMESTAMP '2013-12-01 00:00:00');", dt)));
     ASSERT_EQ(2013L,
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(YEAR FROM TIMESTAMP '2013-12-01 00:00:00');", dt)));
@@ -13813,9 +14045,346 @@ TEST(Select, ExtractFromNegativeTimes) {
     ASSERT_EQ(1L,
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(WEEK FROM TIMESTAMP '2013-01-01 00:00:00');", dt)));
+    ASSERT_EQ(
+        1L,
+        v<int64_t>(run_simple_agg(
+            "SELECT EXTRACT(WEEK_SUNDAY FROM TIMESTAMP '2013-01-01 00:00:00');", dt)));
+    ASSERT_EQ(
+        1L,
+        v<int64_t>(run_simple_agg(
+            "SELECT EXTRACT(WEEK_SATURDAY FROM TIMESTAMP '2013-01-01 00:00:00');", dt)));
     ASSERT_EQ(2013L,
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(YEAR FROM TIMESTAMP '2013-01-01 00:00:00');", dt)));
+  }
+}
+
+// Week 1 always includes Jan 4. There are 3*4*7 = 84 tests below:
+//  * 3 for WEEK, WEEK_SUNDAY, WEEK_SATURDAY
+//  * 4 for:
+//     * Last second before week 1
+//     * First second of week 1
+//     * Last second of week 1
+//     * First second of week 2
+//  * 7 years for which Jan 4 falls on a different day of the week.
+TEST(Select, WeekOne) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    // 2009 Jan 4 is a Sunday
+    EXPECT_EQ(52L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT EXTRACT(WEEK FROM TIMESTAMP '2008-12-28 23:59:59');", dt)));
+    EXPECT_EQ(1L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT EXTRACT(WEEK FROM TIMESTAMP '2008-12-29 00:00:00');", dt)));
+    EXPECT_EQ(1L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT EXTRACT(WEEK FROM TIMESTAMP '2009-01-04 23:59:59');", dt)));
+    EXPECT_EQ(2L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT EXTRACT(WEEK FROM TIMESTAMP '2009-01-05 00:00:00');", dt)));
+    EXPECT_EQ(
+        53L,
+        v<int64_t>(run_simple_agg(
+            "SELECT EXTRACT(WEEK_SUNDAY FROM TIMESTAMP '2009-01-03 23:59:59');", dt)));
+    EXPECT_EQ(
+        1L,
+        v<int64_t>(run_simple_agg(
+            "SELECT EXTRACT(WEEK_SUNDAY FROM TIMESTAMP '2009-01-04 00:00:00');", dt)));
+    EXPECT_EQ(
+        1L,
+        v<int64_t>(run_simple_agg(
+            "SELECT EXTRACT(WEEK_SUNDAY FROM TIMESTAMP '2009-01-10 23:59:59');", dt)));
+    EXPECT_EQ(
+        2L,
+        v<int64_t>(run_simple_agg(
+            "SELECT EXTRACT(WEEK_SUNDAY FROM TIMESTAMP '2009-01-11 00:00:00');", dt)));
+    EXPECT_EQ(
+        53L,
+        v<int64_t>(run_simple_agg(
+            "SELECT EXTRACT(WEEK_SATURDAY FROM TIMESTAMP '2009-01-02 23:59:59');", dt)));
+    EXPECT_EQ(
+        1L,
+        v<int64_t>(run_simple_agg(
+            "SELECT EXTRACT(WEEK_SATURDAY FROM TIMESTAMP '2009-01-03 00:00:00');", dt)));
+    EXPECT_EQ(
+        1L,
+        v<int64_t>(run_simple_agg(
+            "SELECT EXTRACT(WEEK_SATURDAY FROM TIMESTAMP '2009-01-09 23:59:59');", dt)));
+    EXPECT_EQ(
+        2L,
+        v<int64_t>(run_simple_agg(
+            "SELECT EXTRACT(WEEK_SATURDAY FROM TIMESTAMP '2009-01-10 00:00:00');", dt)));
+    // 2010 Jan 4 is a Monday
+    EXPECT_EQ(53L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT EXTRACT(WEEK FROM TIMESTAMP '2010-01-03 23:59:59');", dt)));
+    EXPECT_EQ(1L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT EXTRACT(WEEK FROM TIMESTAMP '2010-01-04 00:00:00');", dt)));
+    EXPECT_EQ(1L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT EXTRACT(WEEK FROM TIMESTAMP '2010-01-10 23:59:59');", dt)));
+    EXPECT_EQ(2L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT EXTRACT(WEEK FROM TIMESTAMP '2010-01-11 00:00:00');", dt)));
+    EXPECT_EQ(
+        52L,
+        v<int64_t>(run_simple_agg(
+            "SELECT EXTRACT(WEEK_SUNDAY FROM TIMESTAMP '2010-01-02 23:59:59');", dt)));
+    EXPECT_EQ(
+        1L,
+        v<int64_t>(run_simple_agg(
+            "SELECT EXTRACT(WEEK_SUNDAY FROM TIMESTAMP '2010-01-03 00:00:00');", dt)));
+    EXPECT_EQ(
+        1L,
+        v<int64_t>(run_simple_agg(
+            "SELECT EXTRACT(WEEK_SUNDAY FROM TIMESTAMP '2010-01-09 23:59:59');", dt)));
+    EXPECT_EQ(
+        2L,
+        v<int64_t>(run_simple_agg(
+            "SELECT EXTRACT(WEEK_SUNDAY FROM TIMESTAMP '2010-01-10 00:00:00');", dt)));
+    EXPECT_EQ(
+        52L,
+        v<int64_t>(run_simple_agg(
+            "SELECT EXTRACT(WEEK_SATURDAY FROM TIMESTAMP '2010-01-01 23:59:59');", dt)));
+    EXPECT_EQ(
+        1L,
+        v<int64_t>(run_simple_agg(
+            "SELECT EXTRACT(WEEK_SATURDAY FROM TIMESTAMP '2010-01-02 00:00:00');", dt)));
+    EXPECT_EQ(
+        1L,
+        v<int64_t>(run_simple_agg(
+            "SELECT EXTRACT(WEEK_SATURDAY FROM TIMESTAMP '2010-01-08 23:59:59');", dt)));
+    EXPECT_EQ(
+        2L,
+        v<int64_t>(run_simple_agg(
+            "SELECT EXTRACT(WEEK_SATURDAY FROM TIMESTAMP '2010-01-09 00:00:00');", dt)));
+    // 2005 Jan 4 is a Tuesday
+    EXPECT_EQ(53L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT EXTRACT(WEEK FROM TIMESTAMP '2005-01-02 23:59:59');", dt)));
+    EXPECT_EQ(1L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT EXTRACT(WEEK FROM TIMESTAMP '2005-01-03 00:00:00');", dt)));
+    EXPECT_EQ(1L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT EXTRACT(WEEK FROM TIMESTAMP '2005-01-09 23:59:59');", dt)));
+    EXPECT_EQ(2L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT EXTRACT(WEEK FROM TIMESTAMP '2005-01-10 00:00:00');", dt)));
+    EXPECT_EQ(
+        52L,
+        v<int64_t>(run_simple_agg(
+            "SELECT EXTRACT(WEEK_SUNDAY FROM TIMESTAMP '2005-01-01 23:59:59');", dt)));
+    EXPECT_EQ(
+        1L,
+        v<int64_t>(run_simple_agg(
+            "SELECT EXTRACT(WEEK_SUNDAY FROM TIMESTAMP '2005-01-02 00:00:00');", dt)));
+    EXPECT_EQ(
+        1L,
+        v<int64_t>(run_simple_agg(
+            "SELECT EXTRACT(WEEK_SUNDAY FROM TIMESTAMP '2005-01-08 23:59:59');", dt)));
+    EXPECT_EQ(
+        2L,
+        v<int64_t>(run_simple_agg(
+            "SELECT EXTRACT(WEEK_SUNDAY FROM TIMESTAMP '2005-01-09 00:00:00');", dt)));
+    EXPECT_EQ(
+        52L,
+        v<int64_t>(run_simple_agg(
+            "SELECT EXTRACT(WEEK_SATURDAY FROM TIMESTAMP '2004-12-31 23:59:59');", dt)));
+    EXPECT_EQ(
+        1L,
+        v<int64_t>(run_simple_agg(
+            "SELECT EXTRACT(WEEK_SATURDAY FROM TIMESTAMP '2005-01-01 00:00:00');", dt)));
+    EXPECT_EQ(
+        1L,
+        v<int64_t>(run_simple_agg(
+            "SELECT EXTRACT(WEEK_SATURDAY FROM TIMESTAMP '2005-01-07 23:59:59');", dt)));
+    EXPECT_EQ(
+        2L,
+        v<int64_t>(run_simple_agg(
+            "SELECT EXTRACT(WEEK_SATURDAY FROM TIMESTAMP '2005-01-08 00:00:00');", dt)));
+    // 2012 Jan 4 is a Wednesday
+    EXPECT_EQ(52L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT EXTRACT(WEEK FROM TIMESTAMP '2012-01-01 23:59:59');", dt)));
+    EXPECT_EQ(1L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT EXTRACT(WEEK FROM TIMESTAMP '2012-01-02 00:00:00');", dt)));
+    EXPECT_EQ(1L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT EXTRACT(WEEK FROM TIMESTAMP '2012-01-08 23:59:59');", dt)));
+    EXPECT_EQ(2L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT EXTRACT(WEEK FROM TIMESTAMP '2012-01-09 00:00:00');", dt)));
+    EXPECT_EQ(
+        52L,
+        v<int64_t>(run_simple_agg(
+            "SELECT EXTRACT(WEEK_SUNDAY FROM TIMESTAMP '2011-12-31 23:59:59');", dt)));
+    EXPECT_EQ(
+        1L,
+        v<int64_t>(run_simple_agg(
+            "SELECT EXTRACT(WEEK_SUNDAY FROM TIMESTAMP '2012-01-01 00:00:00');", dt)));
+    EXPECT_EQ(
+        1L,
+        v<int64_t>(run_simple_agg(
+            "SELECT EXTRACT(WEEK_SUNDAY FROM TIMESTAMP '2012-01-07 23:59:59');", dt)));
+    EXPECT_EQ(
+        2L,
+        v<int64_t>(run_simple_agg(
+            "SELECT EXTRACT(WEEK_SUNDAY FROM TIMESTAMP '2012-01-08 00:00:00');", dt)));
+    EXPECT_EQ(
+        52L,
+        v<int64_t>(run_simple_agg(
+            "SELECT EXTRACT(WEEK_SATURDAY FROM TIMESTAMP '2011-12-30 23:59:59');", dt)));
+    EXPECT_EQ(
+        1L,
+        v<int64_t>(run_simple_agg(
+            "SELECT EXTRACT(WEEK_SATURDAY FROM TIMESTAMP '2011-12-31 00:00:00');", dt)));
+    EXPECT_EQ(
+        1L,
+        v<int64_t>(run_simple_agg(
+            "SELECT EXTRACT(WEEK_SATURDAY FROM TIMESTAMP '2012-01-06 23:59:59');", dt)));
+    EXPECT_EQ(
+        2L,
+        v<int64_t>(run_simple_agg(
+            "SELECT EXTRACT(WEEK_SATURDAY FROM TIMESTAMP '2012-01-07 00:00:00');", dt)));
+    // 2007 Jan 4 is a Thursday
+    EXPECT_EQ(52L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT EXTRACT(WEEK FROM TIMESTAMP '2006-12-31 23:59:59');", dt)));
+    EXPECT_EQ(1L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT EXTRACT(WEEK FROM TIMESTAMP '2007-01-01 00:00:00');", dt)));
+    EXPECT_EQ(1L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT EXTRACT(WEEK FROM TIMESTAMP '2007-01-07 23:59:59');", dt)));
+    EXPECT_EQ(2L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT EXTRACT(WEEK FROM TIMESTAMP '2007-01-08 00:00:00');", dt)));
+    EXPECT_EQ(
+        52L,
+        v<int64_t>(run_simple_agg(
+            "SELECT EXTRACT(WEEK_SUNDAY FROM TIMESTAMP '2006-12-30 23:59:59');", dt)));
+    EXPECT_EQ(
+        1L,
+        v<int64_t>(run_simple_agg(
+            "SELECT EXTRACT(WEEK_SUNDAY FROM TIMESTAMP '2006-12-31 00:00:00');", dt)));
+    EXPECT_EQ(
+        1L,
+        v<int64_t>(run_simple_agg(
+            "SELECT EXTRACT(WEEK_SUNDAY FROM TIMESTAMP '2007-01-06 23:59:59');", dt)));
+    EXPECT_EQ(
+        2L,
+        v<int64_t>(run_simple_agg(
+            "SELECT EXTRACT(WEEK_SUNDAY FROM TIMESTAMP '2007-01-07 00:00:00');", dt)));
+    EXPECT_EQ(
+        52L,
+        v<int64_t>(run_simple_agg(
+            "SELECT EXTRACT(WEEK_SATURDAY FROM TIMESTAMP '2006-12-29 23:59:59');", dt)));
+    EXPECT_EQ(
+        1L,
+        v<int64_t>(run_simple_agg(
+            "SELECT EXTRACT(WEEK_SATURDAY FROM TIMESTAMP '2006-12-30 00:00:00');", dt)));
+    EXPECT_EQ(
+        1L,
+        v<int64_t>(run_simple_agg(
+            "SELECT EXTRACT(WEEK_SATURDAY FROM TIMESTAMP '2007-01-05 23:59:59');", dt)));
+    EXPECT_EQ(
+        2L,
+        v<int64_t>(run_simple_agg(
+            "SELECT EXTRACT(WEEK_SATURDAY FROM TIMESTAMP '2007-01-06 00:00:00');", dt)));
+    // 2008 Jan 4 is a Friday
+    EXPECT_EQ(52L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT EXTRACT(WEEK FROM TIMESTAMP '2007-12-30 23:59:59');", dt)));
+    EXPECT_EQ(1L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT EXTRACT(WEEK FROM TIMESTAMP '2007-12-31 00:00:00');", dt)));
+    EXPECT_EQ(1L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT EXTRACT(WEEK FROM TIMESTAMP '2008-01-06 23:59:59');", dt)));
+    EXPECT_EQ(2L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT EXTRACT(WEEK FROM TIMESTAMP '2008-01-07 00:00:00');", dt)));
+    EXPECT_EQ(
+        52L,
+        v<int64_t>(run_simple_agg(
+            "SELECT EXTRACT(WEEK_SUNDAY FROM TIMESTAMP '2007-12-29 23:59:59');", dt)));
+    EXPECT_EQ(
+        1L,
+        v<int64_t>(run_simple_agg(
+            "SELECT EXTRACT(WEEK_SUNDAY FROM TIMESTAMP '2007-12-30 00:00:00');", dt)));
+    EXPECT_EQ(
+        1L,
+        v<int64_t>(run_simple_agg(
+            "SELECT EXTRACT(WEEK_SUNDAY FROM TIMESTAMP '2008-01-05 23:59:59');", dt)));
+    EXPECT_EQ(
+        2L,
+        v<int64_t>(run_simple_agg(
+            "SELECT EXTRACT(WEEK_SUNDAY FROM TIMESTAMP '2008-01-06 00:00:00');", dt)));
+    EXPECT_EQ(
+        52L,
+        v<int64_t>(run_simple_agg(
+            "SELECT EXTRACT(WEEK_SATURDAY FROM TIMESTAMP '2007-12-28 23:59:59');", dt)));
+    EXPECT_EQ(
+        1L,
+        v<int64_t>(run_simple_agg(
+            "SELECT EXTRACT(WEEK_SATURDAY FROM TIMESTAMP '2007-12-29 00:00:00');", dt)));
+    EXPECT_EQ(
+        1L,
+        v<int64_t>(run_simple_agg(
+            "SELECT EXTRACT(WEEK_SATURDAY FROM TIMESTAMP '2008-01-04 23:59:59');", dt)));
+    EXPECT_EQ(
+        2L,
+        v<int64_t>(run_simple_agg(
+            "SELECT EXTRACT(WEEK_SATURDAY FROM TIMESTAMP '2008-01-05 00:00:00');", dt)));
+    // 2003 Jan 4 is a Saturday
+    EXPECT_EQ(52L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT EXTRACT(WEEK FROM TIMESTAMP '2002-12-29 23:59:59');", dt)));
+    EXPECT_EQ(1L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT EXTRACT(WEEK FROM TIMESTAMP '2002-12-30 00:00:00');", dt)));
+    EXPECT_EQ(1L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT EXTRACT(WEEK FROM TIMESTAMP '2003-01-05 23:59:59');", dt)));
+    EXPECT_EQ(2L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT EXTRACT(WEEK FROM TIMESTAMP '2003-01-06 00:00:00');", dt)));
+    EXPECT_EQ(
+        52L,
+        v<int64_t>(run_simple_agg(
+            "SELECT EXTRACT(WEEK_SUNDAY FROM TIMESTAMP '2002-12-28 23:59:59');", dt)));
+    EXPECT_EQ(
+        1L,
+        v<int64_t>(run_simple_agg(
+            "SELECT EXTRACT(WEEK_SUNDAY FROM TIMESTAMP '2002-12-29 00:00:00');", dt)));
+    EXPECT_EQ(
+        1L,
+        v<int64_t>(run_simple_agg(
+            "SELECT EXTRACT(WEEK_SUNDAY FROM TIMESTAMP '2003-01-04 23:59:59');", dt)));
+    EXPECT_EQ(
+        2L,
+        v<int64_t>(run_simple_agg(
+            "SELECT EXTRACT(WEEK_SUNDAY FROM TIMESTAMP '2003-01-05 00:00:00');", dt)));
+    EXPECT_EQ(
+        53L,
+        v<int64_t>(run_simple_agg(
+            "SELECT EXTRACT(WEEK_SATURDAY FROM TIMESTAMP '2003-01-03 23:59:59');", dt)));
+    EXPECT_EQ(
+        1L,
+        v<int64_t>(run_simple_agg(
+            "SELECT EXTRACT(WEEK_SATURDAY FROM TIMESTAMP '2003-01-04 00:00:00');", dt)));
+    EXPECT_EQ(
+        1L,
+        v<int64_t>(run_simple_agg(
+            "SELECT EXTRACT(WEEK_SATURDAY FROM TIMESTAMP '2003-01-10 23:59:59');", dt)));
+    EXPECT_EQ(
+        2L,
+        v<int64_t>(run_simple_agg(
+            "SELECT EXTRACT(WEEK_SATURDAY FROM TIMESTAMP '2003-01-11 00:00:00');", dt)));
   }
 }
 

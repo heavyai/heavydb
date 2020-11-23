@@ -50,7 +50,11 @@ const char* get_extract_function_name(ExtractField field) {
     case kDAY:
       return "extract_day";
     case kWEEK:
-      return "extract_week";
+      return "extract_week_monday";
+    case kWEEK_SUNDAY:
+      return "extract_week_sunday";
+    case kWEEK_SATURDAY:
+      return "extract_week_saturday";
     case kDOY:
       return "extract_day_of_year";
     case kMONTH:
