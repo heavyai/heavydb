@@ -983,7 +983,7 @@ void Catalog::buildMaps() {
     td->fragType =
         (Fragmenter_Namespace::FragmenterType)sqliteConnector_.getData<int>(r, 5);
     td->maxFragRows = sqliteConnector_.getData<int>(r, 6);
-    td->maxChunkSize = sqliteConnector_.getData<int>(r, 7);
+    td->maxChunkSize = sqliteConnector_.getData<int64_t>(r, 7);
     td->fragPageSize = sqliteConnector_.getData<int>(r, 8);
     td->maxRows = sqliteConnector_.getData<int64_t>(r, 9);
     td->partitions = sqliteConnector_.getData<string>(r, 10);
