@@ -12,7 +12,7 @@ set(datamgr_source_files
     FileMgr/FileMgr.cpp
     FileMgr/FileBuffer.cpp
     FileMgr/FileInfo.cpp
-    ForeignStorage/ArrowCsvForeignStorage.cpp
+    ForeignStorage/ArrowForeignStorage.cpp
     ForeignStorage/CsvDataWrapper.cpp
     ForeignStorage/CachingForeignStorageMgr.cpp
     ForeignStorage/DummyForeignStorage.cpp

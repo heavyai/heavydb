@@ -177,6 +177,17 @@ class Encoder {
   virtual void updateStats(const int8_t* const src_data, const size_t num_elements) = 0;
 
   /**
+   * Update statistics for encoded data without appending.
+   *
+   * @param dst_data - the data with which to update statistics
+   * @param num_elements - the number of elements to scan in the data
+   */
+  virtual void updateStatsEncoded(const int8_t* const dst_data,
+                                  const size_t num_elements) {
+    UNREACHABLE();
+  }
+
+  /**
    * Update statistics for string data without appending.
    *
    * @param src_data - the string data with which to update statistics

@@ -26,7 +26,7 @@
 
 #include "Archive/PosixFileArchive.h"
 #include "Catalog/Catalog.h"
-#include "DataMgr/ForeignStorage/ArrowCsvForeignStorage.h"
+#include "DataMgr/ForeignStorage/ArrowForeignStorage.h"
 #include "Geospatial/Types.h"
 #include "ImportExport/Importer.h"
 #include "Parser/parser.h"
@@ -386,7 +386,7 @@ class DecimalTest : public ::testing::Test {
   }
 };
 
-TEST_F(DecimalTest, DISABLED_DifferentSizesOfDecimal) {
+TEST_F(DecimalTest, DifferentSizesOfDecimal) {
   run_ddl_statement(
       "CREATE DATAFRAME fsi_decimal (decimal2 DECIMAL(4,1), decimal4 NUMERIC(9,2), "
       "decimal8 DECIMAL(18,5)) from "
@@ -398,7 +398,7 @@ TEST_F(DecimalTest, DISABLED_DifferentSizesOfDecimal) {
        {999.9, 9384612.78, 2947583746581.92748}});
 }
 
-TEST_F(DecimalTest, DISABLED_GoupByDecimal) {
+TEST_F(DecimalTest, GoupByDecimal) {
   check_tables<double>(
       "SELECT var_101 FROM decimal_dataframe WHERE var_190>=0 GROUP BY var_101 ORDER BY "
       "var_101;",
@@ -417,7 +417,7 @@ TEST_F(DecimalTest, DISABLED_GoupByDecimal) {
       "var_1;");
 }
 
-TEST_F(DecimalTest, DISABLED_FragmentsTableDecimal) {
+TEST_F(DecimalTest, FragmentsTableDecimal) {
   ASSERT_NO_THROW(run_ddl_statement("CREATE DATAFRAME decimal_dataframe_frag100" +
                                     decimal_table_format +
                                     " FROM "
