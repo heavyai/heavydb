@@ -36,6 +36,17 @@ class ParquetFixedLengthArrayEncoder : public ParquetArrayEncoder {
     CHECK(column_desciptor->columnType.get_size() % omnisci_data_type_byte_size_ == 0);
   }
 
+  std::shared_ptr<ChunkMetadata> getRowGroupMetadata(
+      const parquet::RowGroupMetaData* group_metadata,
+      const int parquet_column_index,
+      const SQLTypeInfo& column_type) override {
+    auto metadata = ParquetArrayEncoder::getRowGroupMetadata(
+        group_metadata, parquet_column_index, column_type);
+    metadata->numBytes =
+        omnisci_data_type_byte_size_ * group_metadata->num_rows() * array_element_count_;
+    return metadata;
+  }
+
  protected:
   void processLastArray() override { appendNullArrayOrCheckArraySize(); }
 

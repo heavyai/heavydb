@@ -59,6 +59,14 @@ class ParquetArrayEncoder : public ParquetEncoder {
     }
   }
 
+  std::shared_ptr<ChunkMetadata> getRowGroupMetadata(
+      const parquet::RowGroupMetaData* group_metadata,
+      const int parquet_column_index,
+      const SQLTypeInfo& column_type) override {
+    return scalar_encoder_->getRowGroupMetadata(
+        group_metadata, parquet_column_index, column_type);
+  }
+
  protected:
   virtual void processLastArray() = 0;
 

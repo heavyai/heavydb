@@ -180,108 +180,215 @@ std::shared_ptr<ParquetEncoder> create_parquet_decimal_encoder(
   return {};
 }
 
+/**
+ * @brief Create a signed or unsigned integral parquet encoder using types.
+ *
+ * @param buffer - buffer used within the encoder
+ * @param omnisci_data_type_byte_size - size in number of bytes of OmniSci type
+ * @param parquet_data_type_byte_size - size in number of bytes of Parquet physical type
+ * @param is_signed - flag indicating if Parquet column is signed
+ *
+ * @return a std::shared_ptr to an integral encoder
+ *
+ * See the documentation for ParquetFixedLengthEncoder and
+ * ParquetUnsignedFixedLengthEncoder for a description of the semantics of the
+ * templated types `V`, `T`, and `U`.
+ */
+template <typename V, typename T, typename U>
+std::shared_ptr<ParquetEncoder>
+create_parquet_signed_or_unsigned_integral_encoder_with_types(
+    AbstractBuffer* buffer,
+    const size_t omnisci_data_type_byte_size,
+    const size_t parquet_data_type_byte_size,
+    const bool is_signed) {
+  if (is_signed) {
+    return std::make_shared<ParquetFixedLengthEncoder<V, T>>(
+        buffer, omnisci_data_type_byte_size, parquet_data_type_byte_size);
+  } else {
+    return std::make_shared<ParquetUnsignedFixedLengthEncoder<V, T, U>>(
+        buffer, omnisci_data_type_byte_size, parquet_data_type_byte_size);
+  }
+}
+
+/**
+ * @brief Create a integral parquet encoder using types.
+ *
+ * @param buffer - buffer used within the encoder
+ * @param omnisci_data_type_byte_size - size in number of bytes of OmniSci type
+ * @param parquet_data_type_byte_size - size in number of bytes of Parquet physical type
+ * @param bit_width - bit width specified for the Parquet column
+ * @param is_signed - flag indicating if Parquet column is signed
+ *
+ * @return a std::shared_ptr to an integral encoder
+ *
+ * See the documentation for ParquetFixedLengthEncoder and
+ * ParquetUnsignedFixedLengthEncoder for a description of the semantics of the
+ * templated type `V`.
+ *
+ * Note, this function determines the appropriate bit depth integral encoder to
+ * create, while `create_parquet_signed_or_unsigned_integral_encoder_with_types`
+ * determines whether to create a signed or unsigned integral encoder.
+ */
+template <typename V>
+std::shared_ptr<ParquetEncoder> create_parquet_integral_encoder_with_omnisci_type(
+    AbstractBuffer* buffer,
+    const size_t omnisci_data_type_byte_size,
+    const size_t parquet_data_type_byte_size,
+    const int bit_width,
+    const bool is_signed) {
+  switch (bit_width) {
+    case 8:
+      return create_parquet_signed_or_unsigned_integral_encoder_with_types<V,
+                                                                           int32_t,
+                                                                           uint8_t>(
+          buffer, omnisci_data_type_byte_size, parquet_data_type_byte_size, is_signed);
+    case 16:
+      return create_parquet_signed_or_unsigned_integral_encoder_with_types<V,
+                                                                           int32_t,
+                                                                           uint16_t>(
+          buffer, omnisci_data_type_byte_size, parquet_data_type_byte_size, is_signed);
+    case 32:
+      return create_parquet_signed_or_unsigned_integral_encoder_with_types<V,
+                                                                           int32_t,
+                                                                           uint32_t>(
+          buffer, omnisci_data_type_byte_size, parquet_data_type_byte_size, is_signed);
+    case 64:
+      return create_parquet_signed_or_unsigned_integral_encoder_with_types<V,
+                                                                           int64_t,
+                                                                           uint64_t>(
+          buffer, omnisci_data_type_byte_size, parquet_data_type_byte_size, is_signed);
+    default:
+      UNREACHABLE();
+  }
+  return {};
+}
+
 std::shared_ptr<ParquetEncoder> create_parquet_integral_encoder(
     const ColumnDescriptor* omnisci_column,
     const parquet::ColumnDescriptor* parquet_column,
     AbstractBuffer* buffer,
     const bool is_metadata_scan) {
   auto column_type = omnisci_column->columnType;
+  auto physical_type = parquet_column->physical_type();
+
+  int bit_width = -1;
+  int is_signed = false;
+  // handle the integral case with no Parquet annotation
+  if (parquet_column->logical_type()->is_none() && column_type.is_integer()) {
+    if (physical_type == parquet::Type::INT32) {
+      bit_width = 32;
+    } else if (physical_type == parquet::Type::INT64) {
+      bit_width = 64;
+    } else {
+      UNREACHABLE();
+    }
+    is_signed = true;
+  }
+  // handle the integral case with Parquet annotation
   if (auto int_logical_column = dynamic_cast<const parquet::IntLogicalType*>(
           parquet_column->logical_type().get())) {
-    if (int_logical_column->is_signed()) {  // signed
-      switch (column_type.get_size()) {
-        case 8:
-          CHECK(column_type.get_compression() == kENCODING_NONE);
-          return std::make_shared<ParquetFixedLengthEncoder<int64_t, int64_t>>(
-              buffer, omnisci_column, parquet_column);
-        case 4:
-          if (is_metadata_scan && column_type.get_type() == kBIGINT) {
-            return std::make_shared<ParquetFixedLengthEncoder<int64_t, int32_t>>(
-                buffer, omnisci_column, parquet_column);
-          }
-          return std::make_shared<ParquetFixedLengthEncoder<int32_t, int32_t>>(
-              buffer, omnisci_column, parquet_column);
-        case 2:
-          if (is_metadata_scan) {
-            switch (column_type.get_type()) {
-              case kBIGINT:
-                return std::make_shared<ParquetFixedLengthEncoder<int64_t, int32_t>>(
-                    buffer, omnisci_column, parquet_column);
-              case kINT:
-                return std::make_shared<ParquetFixedLengthEncoder<int32_t, int32_t>>(
-                    buffer, omnisci_column, parquet_column);
-              case kSMALLINT:
-                break;
-              default:
-                UNREACHABLE();
-            }
-          }
-          return std::make_shared<ParquetFixedLengthEncoder<int16_t, int32_t>>(
-              buffer, omnisci_column, parquet_column);
-        case 1:
-          if (is_metadata_scan) {
-            switch (column_type.get_type()) {
-              case kBIGINT:
-                return std::make_shared<ParquetFixedLengthEncoder<int64_t, int32_t>>(
-                    buffer, omnisci_column, parquet_column);
-              case kINT:
-                return std::make_shared<ParquetFixedLengthEncoder<int32_t, int32_t>>(
-                    buffer, omnisci_column, parquet_column);
-              case kSMALLINT:
-                return std::make_shared<ParquetFixedLengthEncoder<int16_t, int32_t>>(
-                    buffer, omnisci_column, parquet_column);
-              case kTINYINT:
-                break;
-              default:
-                UNREACHABLE();
-            }
-          }
-          return std::make_shared<ParquetFixedLengthEncoder<int8_t, int32_t>>(
-              buffer, omnisci_column, parquet_column);
-        default:
-          UNREACHABLE();
+    bit_width = int_logical_column->bit_width();
+    is_signed = int_logical_column->is_signed();
+  }
+
+  if (bit_width == -1) {  // no valid logical type (with or without annotation) found
+    return {};
+  }
+
+  const size_t omnisci_data_type_byte_size = column_type.get_size();
+  const size_t parquet_data_type_byte_size = parquet::GetTypeByteSize(physical_type);
+
+  switch (omnisci_data_type_byte_size) {
+    case 8:
+      CHECK(column_type.get_compression() == kENCODING_NONE);
+      return create_parquet_integral_encoder_with_omnisci_type<int64_t>(
+          buffer,
+          omnisci_data_type_byte_size,
+          parquet_data_type_byte_size,
+          bit_width,
+          is_signed);
+    case 4:
+      if (is_metadata_scan && column_type.get_type() == kBIGINT) {
+        return create_parquet_integral_encoder_with_omnisci_type<int64_t>(
+            buffer,
+            omnisci_data_type_byte_size,
+            parquet_data_type_byte_size,
+            bit_width,
+            is_signed);
       }
-    } else {  // unsigned, requires using a larger bit depth signed integer within omnisci
-              // to prevent the possibility of loss of information
-      switch (column_type.get_size()) {
-        case 8:
-          CHECK(column_type.get_compression() == kENCODING_NONE);
-          return std::make_shared<
-              ParquetUnsignedFixedLengthEncoder<int64_t, int32_t, uint32_t>>(
-              buffer, omnisci_column, parquet_column);
-        case 4:
-          if (is_metadata_scan && column_type.get_type() == kBIGINT) {
-            return std::make_shared<
-                ParquetUnsignedFixedLengthEncoder<int64_t, int32_t, uint16_t>>(
-                buffer, omnisci_column, parquet_column);
-          }
-          return std::make_shared<
-              ParquetUnsignedFixedLengthEncoder<int32_t, int32_t, uint16_t>>(
-              buffer, omnisci_column, parquet_column);
-        case 2:
-          if (is_metadata_scan) {
-            switch (column_type.get_type()) {
-              case kBIGINT:
-                return std::make_shared<
-                    ParquetUnsignedFixedLengthEncoder<int64_t, int32_t, uint8_t>>(
-                    buffer, omnisci_column, parquet_column);
-              case kINT:
-                return std::make_shared<
-                    ParquetUnsignedFixedLengthEncoder<int32_t, int32_t, uint8_t>>(
-                    buffer, omnisci_column, parquet_column);
-              case kSMALLINT:
-                break;
-              default:
-                UNREACHABLE();
-            }
-          }
-          return std::make_shared<
-              ParquetUnsignedFixedLengthEncoder<int16_t, int32_t, uint8_t>>(
-              buffer, omnisci_column, parquet_column);
-        default:
-          UNREACHABLE();
+      return create_parquet_integral_encoder_with_omnisci_type<int32_t>(
+          buffer,
+          omnisci_data_type_byte_size,
+          parquet_data_type_byte_size,
+          bit_width,
+          is_signed);
+    case 2:
+      if (is_metadata_scan) {
+        switch (column_type.get_type()) {
+          case kBIGINT:
+            return create_parquet_integral_encoder_with_omnisci_type<int64_t>(
+                buffer,
+                omnisci_data_type_byte_size,
+                parquet_data_type_byte_size,
+                bit_width,
+                is_signed);
+          case kINT:
+            return create_parquet_integral_encoder_with_omnisci_type<int32_t>(
+                buffer,
+                omnisci_data_type_byte_size,
+                parquet_data_type_byte_size,
+                bit_width,
+                is_signed);
+          case kSMALLINT:
+            break;
+          default:
+            UNREACHABLE();
+        }
       }
-    }
+      return create_parquet_integral_encoder_with_omnisci_type<int16_t>(
+          buffer,
+          omnisci_data_type_byte_size,
+          parquet_data_type_byte_size,
+          bit_width,
+          is_signed);
+    case 1:
+      if (is_metadata_scan) {
+        switch (column_type.get_type()) {
+          case kBIGINT:
+            return create_parquet_integral_encoder_with_omnisci_type<int64_t>(
+                buffer,
+                omnisci_data_type_byte_size,
+                parquet_data_type_byte_size,
+                bit_width,
+                is_signed);
+          case kINT:
+            return create_parquet_integral_encoder_with_omnisci_type<int32_t>(
+                buffer,
+                omnisci_data_type_byte_size,
+                parquet_data_type_byte_size,
+                bit_width,
+                is_signed);
+          case kSMALLINT:
+            return create_parquet_integral_encoder_with_omnisci_type<int16_t>(
+                buffer,
+                omnisci_data_type_byte_size,
+                parquet_data_type_byte_size,
+                bit_width,
+                is_signed);
+          case kTINYINT:
+            break;
+          default:
+            UNREACHABLE();
+        }
+      }
+      return create_parquet_integral_encoder_with_omnisci_type<int8_t>(
+          buffer,
+          omnisci_data_type_byte_size,
+          parquet_data_type_byte_size,
+          bit_width,
+          is_signed);
+    default:
+      UNREACHABLE();
   }
   return {};
 }
@@ -295,12 +402,6 @@ std::shared_ptr<ParquetEncoder> create_parquet_none_type_encoder(
       !omnisci_column->columnType.is_string()) {  // boolean, int32, int64, float & double
     if (column_type.get_compression() == kENCODING_NONE) {
       switch (column_type.get_type()) {
-        case kBIGINT:
-          return std::make_shared<ParquetFixedLengthEncoder<int64_t, int64_t>>(
-              buffer, omnisci_column, parquet_column);
-        case kINT:
-          return std::make_shared<ParquetFixedLengthEncoder<int32_t, int32_t>>(
-              buffer, omnisci_column, parquet_column);
         case kBOOLEAN:
           return std::make_shared<ParquetFixedLengthEncoder<int8_t, bool>>(
               buffer, omnisci_column, parquet_column);
@@ -714,72 +815,42 @@ bool validate_decimal_mapping(const ColumnDescriptor* omnisci_column,
 
 bool validate_integral_mapping(const ColumnDescriptor* omnisci_column,
                                const parquet::ColumnDescriptor* parquet_column) {
+  if (!omnisci_column->columnType.is_integer()) {
+    return false;
+  }
   if (auto int_logical_column = dynamic_cast<const parquet::IntLogicalType*>(
           parquet_column->logical_type().get())) {
-    if (int_logical_column->is_signed()) {  // signed
-      if (omnisci_column->columnType.get_compression() == kENCODING_NONE) {
-        switch (int_logical_column->bit_width()) {
-          case 64:
-            return omnisci_column->columnType.get_type() == kBIGINT;
-          case 32:
-            return omnisci_column->columnType.get_type() == kINT;
-          case 16:
-            return omnisci_column->columnType.get_type() == kSMALLINT;
-          case 8:
-            return omnisci_column->columnType.get_type() == kTINYINT;
-          default:
-            UNREACHABLE();
-        }
-      } else if (omnisci_column->columnType.get_compression() == kENCODING_FIXED) {
-        return omnisci_column->columnType.get_comp_param() ==
-               int_logical_column->bit_width();
-      }
-    } else {  // unsigned
-      if (omnisci_column->columnType.get_compression() == kENCODING_NONE) {
-        switch (int_logical_column->bit_width()) {
-          case 64:
-            return false;
-          case 32:
-            return omnisci_column->columnType.get_type() == kBIGINT;
-          case 16:
-            return omnisci_column->columnType.get_type() == kINT;
-          case 8:
-            return omnisci_column->columnType.get_type() == kSMALLINT;
-          default:
-            UNREACHABLE();
-        }
-      } else if (omnisci_column->columnType.get_compression() == kENCODING_FIXED) {
-        switch (int_logical_column->bit_width()) {
-          case 64:
-          case 32:
-            return false;
-          case 16:
-            return omnisci_column->columnType.get_comp_param() == 32;
-          case 8:
-            return omnisci_column->columnType.get_comp_param() == 16;
-          default:
-            UNREACHABLE();
-        }
-      }
-    }
+    CHECK(omnisci_column->columnType.get_compression() == kENCODING_NONE ||
+          omnisci_column->columnType.get_compression() == kENCODING_FIXED);
+    const int bits_per_byte = 8;
+    // unsigned types are permitted to map to a wider integral type in order to avoid
+    // precision loss
+    const int bit_widening_factor = int_logical_column->is_signed() ? 1 : 2;
+    return omnisci_column->columnType.get_size() * bits_per_byte <=
+           int_logical_column->bit_width() * bit_widening_factor;
+  }
+  // check if mapping is a valid coerced or non-coerced integral mapping with no
+  // annotation
+  if ((omnisci_column->columnType.get_compression() == kENCODING_NONE ||
+       omnisci_column->columnType.get_compression() == kENCODING_FIXED)) {
+    return (parquet_column->physical_type() == parquet::Type::INT64) ||
+           (parquet_column->physical_type() == parquet::Type::INT32 &&
+            omnisci_column->columnType.get_size() <= 4);
   }
   return false;
 }
 
 bool validate_none_type_mapping(const ColumnDescriptor* omnisci_column,
                                 const parquet::ColumnDescriptor* parquet_column) {
-  return parquet_column->logical_type()->is_none() &&
-         omnisci_column->columnType.get_compression() == kENCODING_NONE &&
-         ((parquet_column->physical_type() == parquet::Type::BOOLEAN &&
-           omnisci_column->columnType.get_type() == kBOOLEAN) ||
-          (parquet_column->physical_type() == parquet::Type::INT32 &&
-           omnisci_column->columnType.get_type() == kINT) ||
-          (parquet_column->physical_type() == parquet::Type::INT64 &&
-           omnisci_column->columnType.get_type() == kBIGINT) ||
-          (parquet_column->physical_type() == parquet::Type::FLOAT &&
-           omnisci_column->columnType.get_type() == kFLOAT) ||
-          (parquet_column->physical_type() == parquet::Type::DOUBLE &&
-           omnisci_column->columnType.get_type() == kDOUBLE));
+  bool is_none_encoded_mapping =
+      omnisci_column->columnType.get_compression() == kENCODING_NONE &&
+      ((parquet_column->physical_type() == parquet::Type::BOOLEAN &&
+        omnisci_column->columnType.get_type() == kBOOLEAN) ||
+       (parquet_column->physical_type() == parquet::Type::FLOAT &&
+        omnisci_column->columnType.get_type() == kFLOAT) ||
+       (parquet_column->physical_type() == parquet::Type::DOUBLE &&
+        omnisci_column->columnType.get_type() == kDOUBLE));
+  return parquet_column->logical_type()->is_none() && is_none_encoded_mapping;
 }
 
 bool validate_timestamp_mapping(const ColumnDescriptor* omnisci_column,
@@ -1034,9 +1105,16 @@ void metadata_scan_rowgroup_interval(
       auto encoder_map_iter =
           encoder_map.find(schema.getLogicalColumn(column_id)->columnId);
       CHECK(encoder_map_iter != encoder_map.end());
-      auto metadata = encoder_map_iter->second->getRowGroupMetadata(
-          group_metadata.get(), parquet_column_index, column_descriptor->columnType);
-      row_group_metadata_item.column_chunk_metadata.emplace_back(metadata);
+      try {
+        auto metadata = encoder_map_iter->second->getRowGroupMetadata(
+            group_metadata.get(), parquet_column_index, column_descriptor->columnType);
+        row_group_metadata_item.column_chunk_metadata.emplace_back(metadata);
+      } catch (const std::exception& e) {
+        std::stringstream error_message;
+        error_message << e.what() << " in row group " << row_group << " of Parquet file '"
+                      << row_group_interval.file_path << "'.";
+        throw std::runtime_error(error_message.str());
+      }
     }
   }
 }

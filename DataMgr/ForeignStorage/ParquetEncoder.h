@@ -81,4 +81,12 @@ class ParquetScalarEncoder : public ParquetEncoder {
                                        const size_t num_elements) = 0;
 };
 
+class ParquetMetadataValidator {
+ public:
+  virtual ~ParquetMetadataValidator() = default;
+
+  virtual void validate(std::shared_ptr<parquet::Statistics> stats,
+                        const SQLTypeInfo& column_type) const = 0;
+};
+
 }  // namespace foreign_storage

@@ -4340,6 +4340,439 @@ TEST_F(AlterForeignTableTest, AlterTypeDropEncoding) {
       "Encountered \"ALTER\"");
 }
 
+class ParquetCoercionTest : public SelectQueryTest {
+ protected:
+  void createForeignTableWithCoercion(const std::string& coerced_type,
+                                      const std::string& base_file_name) {
+    const auto& query = getCreateForeignTableQuery(
+        "( coerced " + coerced_type + " )", base_file_name, "parquet");
+    sql(query);
+  }
+
+  std::string getCoercionException(const std::string& min_allowed_value,
+                                   const std::string& max_allowed_value,
+                                   const std::string& encountered_value,
+                                   const std::string& base_file_name) {
+    const std::string file_name = getDataFilesPath() + base_file_name + ".parquet";
+    return "Exception: Parquet column contains values that are outside the range of the "
+           "OmniSci "
+           "column type. Consider using a wider column type. Min allowed value: " +
+           min_allowed_value +
+           ". Max allowed "
+           "value: " +
+           max_allowed_value + ". Encountered value: " + encountered_value +
+           ". Error validating statistics of Parquet column "
+           "'value' in row group 0 of Parquet file "
+           "'" +
+           file_name + "'.";
+  }
+};
+
+class ParquetCoercionTestOptionalAnnotation
+    : public ParquetCoercionTest,
+      public ::testing::WithParamInterface<std::string> {};
+
+INSTANTIATE_TEST_SUITE_P(OptionalAnnotationParameterizedTests,
+                         ParquetCoercionTestOptionalAnnotation,
+                         ::testing::Values("", "_no_annotation"));
+
+TEST_P(ParquetCoercionTestOptionalAnnotation, Int64ToInt) {
+  createForeignTableWithCoercion("INT",
+                                 "ParquetCoercionTypes/coercible_int64" + GetParam());
+  sqlAndCompareResult("SELECT * FROM test_foreign_table;", {{i(127)}});
+}
+
+TEST_P(ParquetCoercionTestOptionalAnnotation, Int64ToIntInformationLoss) {
+  const std::string base_file_name =
+      "ParquetCoercionTypes/non_coercible_int64" + GetParam();
+  createForeignTableWithCoercion("INT", base_file_name);
+  queryAndAssertException(
+      "SELECT * FROM test_foreign_table",
+      getCoercionException(
+          "-2147483647", "2147483647", "9223372036854775807", base_file_name));
+}
+
+TEST_P(ParquetCoercionTestOptionalAnnotation, Int64ToSmallInt) {
+  createForeignTableWithCoercion("SMALLINT",
+                                 "ParquetCoercionTypes/coercible_int64" + GetParam());
+  sqlAndCompareResult("SELECT * FROM test_foreign_table;", {{i(127)}});
+}
+
+TEST_P(ParquetCoercionTestOptionalAnnotation, Int64ToSmallIntInformationLoss) {
+  const std::string base_file_name =
+      "ParquetCoercionTypes/non_coercible_int64" + GetParam();
+  createForeignTableWithCoercion("SMALLINT", base_file_name);
+  queryAndAssertException(
+      "SELECT * FROM test_foreign_table",
+      getCoercionException("-32767", "32767", "9223372036854775807", base_file_name));
+}
+
+TEST_P(ParquetCoercionTestOptionalAnnotation, Int64ToTinyInt) {
+  createForeignTableWithCoercion("TINYINT",
+                                 "ParquetCoercionTypes/coercible_int64" + GetParam());
+  sqlAndCompareResult("SELECT * FROM test_foreign_table;", {{i(127)}});
+}
+
+TEST_P(ParquetCoercionTestOptionalAnnotation, Int64ToTinyIntInformationLoss) {
+  const std::string base_file_name =
+      "ParquetCoercionTypes/non_coercible_int64" + GetParam();
+  createForeignTableWithCoercion("TINYINT", base_file_name);
+  queryAndAssertException(
+      "SELECT * FROM test_foreign_table",
+      getCoercionException("-127", "127", "9223372036854775807", base_file_name));
+}
+
+TEST_P(ParquetCoercionTestOptionalAnnotation, Int64ToBigIntFixedLengthEncoded32) {
+  createForeignTableWithCoercion("BIGINT ENCODING FIXED (32)",
+                                 "ParquetCoercionTypes/coercible_int64" + GetParam());
+  sqlAndCompareResult("SELECT * FROM test_foreign_table;", {{i(127)}});
+}
+
+TEST_P(ParquetCoercionTestOptionalAnnotation,
+       Int64ToBigIntFixedLengthEncoded32InformationLoss) {
+  const std::string base_file_name =
+      "ParquetCoercionTypes/non_coercible_int64" + GetParam();
+  createForeignTableWithCoercion("BIGINT ENCODING FIXED (32)", base_file_name);
+  queryAndAssertException(
+      "SELECT * FROM test_foreign_table",
+      getCoercionException(
+          "-2147483647", "2147483647", "9223372036854775807", base_file_name));
+}
+
+TEST_P(ParquetCoercionTestOptionalAnnotation, Int64ToBigIntFixedLengthEncoded16) {
+  createForeignTableWithCoercion("BIGINT ENCODING FIXED (16)",
+                                 "ParquetCoercionTypes/coercible_int64" + GetParam());
+  sqlAndCompareResult("SELECT * FROM test_foreign_table;", {{i(127)}});
+}
+
+TEST_P(ParquetCoercionTestOptionalAnnotation,
+       Int64ToBigIntFixedLengthEncoded16InformationLoss) {
+  const std::string base_file_name =
+      "ParquetCoercionTypes/non_coercible_int64" + GetParam();
+  createForeignTableWithCoercion("BIGINT ENCODING FIXED (16)", base_file_name);
+  queryAndAssertException(
+      "SELECT * FROM test_foreign_table",
+      getCoercionException("-32767", "32767", "9223372036854775807", base_file_name));
+}
+
+TEST_P(ParquetCoercionTestOptionalAnnotation, Int64ToBigIntFixedLengthEncoded8) {
+  createForeignTableWithCoercion("BIGINT ENCODING FIXED (8)",
+                                 "ParquetCoercionTypes/coercible_int64" + GetParam());
+  sqlAndCompareResult("SELECT * FROM test_foreign_table;", {{i(127)}});
+}
+
+TEST_P(ParquetCoercionTestOptionalAnnotation,
+       Int64ToBigIntFixedLengthEncoded8InformationLoss) {
+  const std::string base_file_name =
+      "ParquetCoercionTypes/non_coercible_int64" + GetParam();
+  createForeignTableWithCoercion("BIGINT ENCODING FIXED (8)", base_file_name);
+  queryAndAssertException(
+      "SELECT * FROM test_foreign_table",
+      getCoercionException("-127", "127", "9223372036854775807", base_file_name));
+}
+
+TEST_P(ParquetCoercionTestOptionalAnnotation, Int32ToSmallInt) {
+  createForeignTableWithCoercion("SMALLINT",
+                                 "ParquetCoercionTypes/coercible_int32" + GetParam());
+  sqlAndCompareResult("SELECT * FROM test_foreign_table;", {{i(127)}});
+}
+
+TEST_P(ParquetCoercionTestOptionalAnnotation, Int32ToSmallIntInformationLoss) {
+  const std::string base_file_name =
+      "ParquetCoercionTypes/non_coercible_int32" + GetParam();
+  createForeignTableWithCoercion("SMALLINT", base_file_name);
+  queryAndAssertException(
+      "SELECT * FROM test_foreign_table",
+      getCoercionException("-32767", "32767", "2147483647", base_file_name));
+}
+
+TEST_P(ParquetCoercionTestOptionalAnnotation, Int32ToTinyInt) {
+  createForeignTableWithCoercion("TINYINT",
+                                 "ParquetCoercionTypes/coercible_int32" + GetParam());
+  sqlAndCompareResult("SELECT * FROM test_foreign_table;", {{i(127)}});
+}
+
+TEST_P(ParquetCoercionTestOptionalAnnotation, Int32ToTinyIntInformationLoss) {
+  const std::string base_file_name =
+      "ParquetCoercionTypes/non_coercible_int32" + GetParam();
+  createForeignTableWithCoercion("TINYINT", base_file_name);
+  queryAndAssertException(
+      "SELECT * FROM test_foreign_table",
+      getCoercionException("-127", "127", "2147483647", base_file_name));
+}
+
+TEST_P(ParquetCoercionTestOptionalAnnotation, Int32ToIntFixedLengthEncoded16) {
+  createForeignTableWithCoercion("INT ENCODING FIXED (16)",
+                                 "ParquetCoercionTypes/coercible_int32" + GetParam());
+  sqlAndCompareResult("SELECT * FROM test_foreign_table;", {{i(127)}});
+}
+
+TEST_P(ParquetCoercionTestOptionalAnnotation,
+       Int32ToIntFixedLengthEncoded16InformationLoss) {
+  const std::string base_file_name =
+      "ParquetCoercionTypes/non_coercible_int32" + GetParam();
+  createForeignTableWithCoercion("INT ENCODING FIXED (16)", base_file_name);
+  queryAndAssertException(
+      "SELECT * FROM test_foreign_table",
+      getCoercionException("-32767", "32767", "2147483647", base_file_name));
+}
+
+TEST_P(ParquetCoercionTestOptionalAnnotation, Int32ToIntFixedLengthEncoded8) {
+  createForeignTableWithCoercion("INT ENCODING FIXED (8)",
+                                 "ParquetCoercionTypes/coercible_int32" + GetParam());
+  sqlAndCompareResult("SELECT * FROM test_foreign_table;", {{i(127)}});
+}
+
+TEST_P(ParquetCoercionTestOptionalAnnotation,
+       Int32ToIntFixedLengthEncoded8InformationLoss) {
+  const std::string base_file_name =
+      "ParquetCoercionTypes/non_coercible_int32" + GetParam();
+  createForeignTableWithCoercion("INT ENCODING FIXED (8)", base_file_name);
+  queryAndAssertException(
+      "SELECT * FROM test_foreign_table",
+      getCoercionException("-127", "127", "2147483647", base_file_name));
+}
+
+TEST_F(ParquetCoercionTest, Int16ToTinyInt) {
+  createForeignTableWithCoercion("TINYINT", "ParquetCoercionTypes/coercible_int16");
+  sqlAndCompareResult("SELECT * FROM test_foreign_table;", {{i(127)}});
+}
+
+TEST_F(ParquetCoercionTest, Int16ToTinyIntInformationLoss) {
+  const std::string base_file_name = "ParquetCoercionTypes/non_coercible_int16";
+  createForeignTableWithCoercion("TINYINT", base_file_name);
+  queryAndAssertException("SELECT * FROM test_foreign_table",
+                          getCoercionException("-127", "127", "32767", base_file_name));
+}
+
+TEST_F(ParquetCoercionTest, Int16ToSmallIntFixedLengthEncoded8) {
+  createForeignTableWithCoercion("SMALLINT ENCODING FIXED (8)",
+                                 "ParquetCoercionTypes/coercible_int16");
+  sqlAndCompareResult("SELECT * FROM test_foreign_table;", {{i(127)}});
+}
+
+TEST_F(ParquetCoercionTest, Int16ToSmallIntFixedLengthEncoded8InformationLoss) {
+  const std::string base_file_name = "ParquetCoercionTypes/non_coercible_int16";
+  createForeignTableWithCoercion("SMALLINT ENCODING FIXED (8)", base_file_name);
+  queryAndAssertException("SELECT * FROM test_foreign_table",
+                          getCoercionException("-127", "127", "32767", base_file_name));
+}
+
+TEST_F(ParquetCoercionTest, UnsignedInt64ToBigInt) {
+  createForeignTableWithCoercion("BIGINT", "ParquetCoercionTypes/coercible_uint64");
+  sqlAndCompareResult("SELECT * FROM test_foreign_table;", {{i(127)}});
+}
+
+TEST_F(ParquetCoercionTest, UnsignedInt64ToBigIntInformationLoss) {
+  const std::string base_file_name = "ParquetCoercionTypes/non_coercible_uint64";
+  createForeignTableWithCoercion("BIGINT", base_file_name);
+  queryAndAssertException("SELECT * FROM test_foreign_table",
+                          getCoercionException("-9223372036854775807",
+                                               "9223372036854775807",
+                                               "18446744073709551615",
+                                               base_file_name));
+}
+
+TEST_F(ParquetCoercionTest, UnsignedInt64ToInt) {
+  createForeignTableWithCoercion("INT", "ParquetCoercionTypes/coercible_uint64");
+  sqlAndCompareResult("SELECT * FROM test_foreign_table;", {{i(127)}});
+}
+
+TEST_F(ParquetCoercionTest, UnsignedInt64ToIntInformationLoss) {
+  const std::string base_file_name = "ParquetCoercionTypes/non_coercible_uint64";
+  createForeignTableWithCoercion("INT", base_file_name);
+  queryAndAssertException(
+      "SELECT * FROM test_foreign_table",
+      getCoercionException(
+          "-2147483647", "2147483647", "18446744073709551615", base_file_name));
+}
+
+TEST_F(ParquetCoercionTest, UnsignedInt64ToSmallInt) {
+  createForeignTableWithCoercion("SMALLINT", "ParquetCoercionTypes/coercible_uint64");
+  sqlAndCompareResult("SELECT * FROM test_foreign_table;", {{i(127)}});
+}
+
+TEST_F(ParquetCoercionTest, UnsignedInt64ToSmallIntInformationLoss) {
+  const std::string base_file_name = "ParquetCoercionTypes/non_coercible_uint64";
+  createForeignTableWithCoercion("SMALLINT", base_file_name);
+  queryAndAssertException(
+      "SELECT * FROM test_foreign_table",
+      getCoercionException("-32767", "32767", "18446744073709551615", base_file_name));
+}
+
+TEST_F(ParquetCoercionTest, UnsignedInt64ToTinyInt) {
+  createForeignTableWithCoercion("TINYINT", "ParquetCoercionTypes/coercible_uint64");
+  sqlAndCompareResult("SELECT * FROM test_foreign_table;", {{i(127)}});
+}
+
+TEST_F(ParquetCoercionTest, UnsignedInt64ToTinyIntInformationLoss) {
+  const std::string base_file_name = "ParquetCoercionTypes/non_coercible_uint64";
+  createForeignTableWithCoercion("TINYINT", base_file_name);
+  queryAndAssertException(
+      "SELECT * FROM test_foreign_table",
+      getCoercionException("-127", "127", "18446744073709551615", base_file_name));
+}
+
+TEST_F(ParquetCoercionTest, UnsignedInt64ToBigIntFixedLengthEncoded32) {
+  createForeignTableWithCoercion("BIGINT ENCODING FIXED (32)",
+                                 "ParquetCoercionTypes/coercible_uint64");
+  sqlAndCompareResult("SELECT * FROM test_foreign_table;", {{i(127)}});
+}
+
+TEST_F(ParquetCoercionTest, UnsignedInt64ToBigIntFixedLengthEncoded32InformationLoss) {
+  const std::string base_file_name = "ParquetCoercionTypes/non_coercible_uint64";
+  createForeignTableWithCoercion("BIGINT ENCODING FIXED (32)", base_file_name);
+  queryAndAssertException(
+      "SELECT * FROM test_foreign_table",
+      getCoercionException(
+          "-2147483647", "2147483647", "18446744073709551615", base_file_name));
+}
+
+TEST_F(ParquetCoercionTest, UnsignedInt64ToBigIntFixedLengthEncoded16) {
+  createForeignTableWithCoercion("BIGINT ENCODING FIXED (16)",
+                                 "ParquetCoercionTypes/coercible_uint64");
+  sqlAndCompareResult("SELECT * FROM test_foreign_table;", {{i(127)}});
+}
+
+TEST_F(ParquetCoercionTest, UnsignedInt64ToBigIntFixedLengthEncoded16InformationLoss) {
+  const std::string base_file_name = "ParquetCoercionTypes/non_coercible_uint64";
+  createForeignTableWithCoercion("BIGINT ENCODING FIXED (16)", base_file_name);
+  queryAndAssertException(
+      "SELECT * FROM test_foreign_table",
+      getCoercionException("-32767", "32767", "18446744073709551615", base_file_name));
+}
+
+TEST_F(ParquetCoercionTest, UnsignedInt64ToBigIntFixedLengthEncoded8) {
+  createForeignTableWithCoercion("BIGINT ENCODING FIXED (8)",
+                                 "ParquetCoercionTypes/coercible_uint64");
+  sqlAndCompareResult("SELECT * FROM test_foreign_table;", {{i(127)}});
+}
+
+TEST_F(ParquetCoercionTest, UnsignedInt64ToBigIntFixedLengthEncoded8InformationLoss) {
+  const std::string base_file_name = "ParquetCoercionTypes/non_coercible_uint64";
+  createForeignTableWithCoercion("BIGINT ENCODING FIXED (8)", base_file_name);
+  queryAndAssertException(
+      "SELECT * FROM test_foreign_table",
+      getCoercionException("-127", "127", "18446744073709551615", base_file_name));
+}
+
+TEST_F(ParquetCoercionTest, UnsignedInt32ToInt) {
+  createForeignTableWithCoercion("INT", "ParquetCoercionTypes/coercible_uint32");
+  sqlAndCompareResult("SELECT * FROM test_foreign_table;", {{i(127)}});
+}
+
+TEST_F(ParquetCoercionTest, UnsignedInt32ToIntInformationLoss) {
+  const std::string base_file_name = "ParquetCoercionTypes/non_coercible_uint32";
+  createForeignTableWithCoercion("INT", base_file_name);
+  queryAndAssertException(
+      "SELECT * FROM test_foreign_table",
+      getCoercionException("-2147483647", "2147483647", "4294967295", base_file_name));
+}
+
+TEST_F(ParquetCoercionTest, UnsignedInt32ToSmallInt) {
+  createForeignTableWithCoercion("SMALLINT", "ParquetCoercionTypes/coercible_uint32");
+  sqlAndCompareResult("SELECT * FROM test_foreign_table;", {{i(127)}});
+}
+
+TEST_F(ParquetCoercionTest, UnsignedInt32ToSmallIntInformationLoss) {
+  const std::string base_file_name = "ParquetCoercionTypes/non_coercible_uint32";
+  createForeignTableWithCoercion("SMALLINT", base_file_name);
+  queryAndAssertException(
+      "SELECT * FROM test_foreign_table",
+      getCoercionException("-32767", "32767", "4294967295", base_file_name));
+}
+
+TEST_F(ParquetCoercionTest, UnsignedInt32ToTinyInt) {
+  createForeignTableWithCoercion("TINYINT", "ParquetCoercionTypes/coercible_uint32");
+  sqlAndCompareResult("SELECT * FROM test_foreign_table;", {{i(127)}});
+}
+
+TEST_F(ParquetCoercionTest, UnsignedInt32ToTinyIntInformationLoss) {
+  const std::string base_file_name = "ParquetCoercionTypes/non_coercible_uint32";
+  createForeignTableWithCoercion("TINYINT", base_file_name);
+  queryAndAssertException(
+      "SELECT * FROM test_foreign_table",
+      getCoercionException("-127", "127", "4294967295", base_file_name));
+}
+
+TEST_F(ParquetCoercionTest, UnsignedInt32ToIntFixedLengthEncoded16) {
+  createForeignTableWithCoercion("INT ENCODING FIXED (16)",
+                                 "ParquetCoercionTypes/coercible_uint32");
+  sqlAndCompareResult("SELECT * FROM test_foreign_table;", {{i(127)}});
+}
+
+TEST_F(ParquetCoercionTest, UnsignedInt32ToIntFixedLengthEncoded16InformationLoss) {
+  const std::string base_file_name = "ParquetCoercionTypes/non_coercible_uint32";
+  createForeignTableWithCoercion("INT ENCODING FIXED (16)", base_file_name);
+  queryAndAssertException(
+      "SELECT * FROM test_foreign_table",
+      getCoercionException("-32767", "32767", "4294967295", base_file_name));
+}
+
+TEST_F(ParquetCoercionTest, UnsignedInt32ToIntFixedLengthEncoded8) {
+  createForeignTableWithCoercion("INT ENCODING FIXED (8)",
+                                 "ParquetCoercionTypes/coercible_uint32");
+  sqlAndCompareResult("SELECT * FROM test_foreign_table;", {{i(127)}});
+}
+
+TEST_F(ParquetCoercionTest, UnsignedInt32ToIntFixedLengthEncoded8InformationLoss) {
+  const std::string base_file_name = "ParquetCoercionTypes/non_coercible_uint32";
+  createForeignTableWithCoercion("INT ENCODING FIXED (8)", base_file_name);
+  queryAndAssertException(
+      "SELECT * FROM test_foreign_table",
+      getCoercionException("-127", "127", "4294967295", base_file_name));
+}
+
+TEST_F(ParquetCoercionTest, UnsignedInt16ToSmallInt) {
+  createForeignTableWithCoercion("SMALLINT", "ParquetCoercionTypes/coercible_uint16");
+  sqlAndCompareResult("SELECT * FROM test_foreign_table;", {{i(127)}});
+}
+
+TEST_F(ParquetCoercionTest, UnsignedInt16ToSmallIntInformationLoss) {
+  const std::string base_file_name = "ParquetCoercionTypes/non_coercible_uint16";
+  createForeignTableWithCoercion("SMALLINT", base_file_name);
+  queryAndAssertException(
+      "SELECT * FROM test_foreign_table",
+      getCoercionException("-32767", "32767", "65535", base_file_name));
+}
+
+TEST_F(ParquetCoercionTest, UnsignedInt16ToTinyInt) {
+  createForeignTableWithCoercion("TINYINT", "ParquetCoercionTypes/coercible_uint16");
+  sqlAndCompareResult("SELECT * FROM test_foreign_table;", {{i(127)}});
+}
+
+TEST_F(ParquetCoercionTest, UnsignedInt16ToTinyIntInformationLoss) {
+  const std::string base_file_name = "ParquetCoercionTypes/non_coercible_uint16";
+  createForeignTableWithCoercion("TINYINT", base_file_name);
+  queryAndAssertException("SELECT * FROM test_foreign_table",
+                          getCoercionException("-127", "127", "65535", base_file_name));
+}
+
+TEST_F(ParquetCoercionTest, UnsignedInt16ToSmallIntFixedLengthEncoded8) {
+  createForeignTableWithCoercion("SMALLINT ENCODING FIXED (8)",
+                                 "ParquetCoercionTypes/coercible_uint16");
+  sqlAndCompareResult("SELECT * FROM test_foreign_table;", {{i(127)}});
+}
+
+TEST_F(ParquetCoercionTest, UnsignedInt16ToSmallIntFixedLengthEncoded8InformationLoss) {
+  const std::string base_file_name = "ParquetCoercionTypes/non_coercible_uint16";
+  createForeignTableWithCoercion("SMALLINT ENCODING FIXED (8)", base_file_name);
+  queryAndAssertException("SELECT * FROM test_foreign_table",
+                          getCoercionException("-127", "127", "65535", base_file_name));
+}
+
+TEST_F(ParquetCoercionTest, UnsignedInt8ToTinyIntInformationLoss) {
+  const std::string base_file_name = "ParquetCoercionTypes/non_coercible_uint8";
+  createForeignTableWithCoercion("TINYINT", base_file_name);
+  queryAndAssertException("SELECT * FROM test_foreign_table",
+                          getCoercionException("-127", "127", "255", base_file_name));
+}
+
+TEST_F(ParquetCoercionTest, UnsignedInt8ToTinyInt) {
+  createForeignTableWithCoercion("TINYINT", "ParquetCoercionTypes/coercible_uint8");
+  sqlAndCompareResult("SELECT * FROM test_foreign_table;", {{i(127)}});
+}
+
 int main(int argc, char** argv) {
   g_enable_fsi = true;
   TestHelpers::init_logger_stderr_only(argc, argv);

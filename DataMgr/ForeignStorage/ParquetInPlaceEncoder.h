@@ -212,13 +212,26 @@ class TypedParquetInPlaceEncoder : public ParquetInPlaceEncoder {
       const int parquet_column_index,
       const SQLTypeInfo& column_type) override {
     auto metadata = ParquetEncoder::createMetadata(column_type);
+    auto column_metadata = group_metadata->ColumnChunk(parquet_column_index);
 
     // update statistics
-    auto column_metadata = group_metadata->ColumnChunk(parquet_column_index);
     auto parquet_column_descriptor =
         group_metadata->schema()->Column(parquet_column_index);
     auto stats = validate_and_get_column_metadata_statistics(column_metadata.get());
     if (stats->HasMinMax()) {
+      // validate statistics if validation applicable as part of encoding
+      if (auto parquet_scalar_validator = dynamic_cast<ParquetMetadataValidator*>(this)) {
+        try {
+          parquet_scalar_validator->validate(stats, column_type);
+        } catch (const std::exception& e) {
+          std::stringstream error_message;
+          error_message << e.what() << " Error validating statistics of Parquet column '"
+                        << group_metadata->schema()->Column(parquet_column_index)->name()
+                        << "'";
+          throw std::runtime_error(error_message.str());
+        }
+      }
+
       auto [stats_min, stats_max] = getEncodedStats(parquet_column_descriptor, stats);
       auto updated_chunk_stats = getUpdatedStats(stats_min, stats_max, column_type);
       metadata->fillChunkStats(updated_chunk_stats.min,
@@ -236,6 +249,12 @@ class TypedParquetInPlaceEncoder : public ParquetInPlaceEncoder {
 
  protected:
   virtual bool encodingIsIdentityForSameTypes() const { return false; }
+
+  std::pair<T, T> getUnencodedStats(std::shared_ptr<parquet::Statistics> stats) const {
+    T stats_min = reinterpret_cast<T*>(stats->EncodeMin().data())[0];
+    T stats_max = reinterpret_cast<T*>(stats->EncodeMax().data())[0];
+    return {stats_min, stats_max};
+  }
 
  private:
   static ChunkStats getUpdatedStats(V& stats_min,
