@@ -2736,37 +2736,6 @@ void Catalog::getForeignServersForUser(
   }
 }
 
-std::vector<File_Namespace::BasicStorageStats> Catalog::getBasicStorageStats(
-    const int32_t db_id,
-    const int32_t table_id) const {
-  cat_read_lock read_lock(this);
-  const auto td = getMetadataForTable(table_id, false);
-  if (!td) {
-    std::stringstream table_not_found_error_message;
-    table_not_found_error_message << "Table (" << db_id << "," << table_id
-                                  << ") not found";
-    throw std::runtime_error(table_not_found_error_message.str());
-  }
-  std::vector<File_Namespace::BasicStorageStats> basicStorageStatsPerShard;
-  const auto physicalTableIt = logicalToPhysicalTableMapById_.find(table_id);
-  if (physicalTableIt != logicalToPhysicalTableMapById_.end()) {
-    // check all shards have same checkpoint
-    const auto physicalTables = physicalTableIt->second;
-    CHECK(!physicalTables.empty());
-    for (size_t i = 0; i < physicalTables.size(); i++) {
-      int32_t physical_tb_id = physicalTables[i];
-      const TableDescriptor* phys_td = getMetadataForTable(physical_tb_id);
-      CHECK(phys_td);
-      basicStorageStatsPerShard.emplace_back(
-          dataMgr_->getGlobalFileMgr()->getBasicStorageStats(db_id, physical_tb_id));
-    }
-  } else {
-    basicStorageStatsPerShard.emplace_back(
-        dataMgr_->getGlobalFileMgr()->getBasicStorageStats(db_id, table_id));
-  }
-  return basicStorageStatsPerShard;
-}
-
 // returns the table epoch or -1 if there is something wrong with the shared epoch
 int32_t Catalog::getTableEpoch(const int32_t db_id, const int32_t table_id) const {
   cat_read_lock read_lock(this);
@@ -3915,8 +3884,7 @@ std::vector<std::string> Catalog::getTableNamesForUser(
 std::vector<TableMetadata> Catalog::getTablesMetadataForUser(
     const UserMetadata& user_metadata,
     const GetTablesType get_tables_type,
-    const std::string& filter_table_name,
-    const bool get_storage_stats) const {
+    const std::string& filter_table_name) const {
   sys_read_lock syscat_read_lock(&SysCatalog::instance());
   cat_read_lock read_lock(this);
 
@@ -3931,40 +3899,6 @@ std::vector<TableMetadata> Catalog::getTablesMetadataForUser(
       }
       TableMetadata table_metadata(td);  // Makes a copy, not safe to access raw table
                                          // descriptor outside catalog lock
-      if (get_storage_stats) {
-        std::vector<File_Namespace::BasicStorageStats> basicStorageStatsPerShard =
-            getBasicStorageStats(getCurrentDB().dbId, td->tableId);
-        CHECK_GE(basicStorageStatsPerShard.size(), static_cast<size_t>(1));
-        table_metadata.min_epoch = basicStorageStatsPerShard.front().epoch;
-        table_metadata.max_epoch = basicStorageStatsPerShard.front().epoch;
-        table_metadata.min_epoch_floor = basicStorageStatsPerShard.front().epoch_floor;
-        table_metadata.max_epoch_floor = basicStorageStatsPerShard.front().epoch_floor;
-        table_metadata.num_bytes =
-            static_cast<int64_t>(basicStorageStatsPerShard.front().num_bytes);
-        table_metadata.num_files =
-            static_cast<int64_t>(basicStorageStatsPerShard.front().num_files);
-        table_metadata.num_pages =
-            static_cast<int64_t>(basicStorageStatsPerShard.front().num_pages);
-        for (size_t shard_idx = 1; shard_idx < basicStorageStatsPerShard.size();
-             ++shard_idx) {
-          table_metadata.min_epoch = std::min(table_metadata.min_epoch,
-                                              basicStorageStatsPerShard[shard_idx].epoch);
-          table_metadata.max_epoch = std::max(table_metadata.max_epoch,
-                                              basicStorageStatsPerShard[shard_idx].epoch);
-          table_metadata.min_epoch_floor =
-              std::min(table_metadata.min_epoch_floor,
-                       basicStorageStatsPerShard[shard_idx].epoch_floor);
-          table_metadata.max_epoch_floor =
-              std::max(table_metadata.max_epoch_floor,
-                       basicStorageStatsPerShard[shard_idx].epoch_floor);
-          table_metadata.num_bytes +=
-              static_cast<int64_t>(basicStorageStatsPerShard[shard_idx].num_bytes);
-          table_metadata.num_files +=
-              static_cast<int64_t>(basicStorageStatsPerShard[shard_idx].num_files);
-          table_metadata.num_pages +=
-              static_cast<int64_t>(basicStorageStatsPerShard[shard_idx].num_pages);
-        }
-      }
       tables_metadata.emplace_back(table_metadata);
     }
   }

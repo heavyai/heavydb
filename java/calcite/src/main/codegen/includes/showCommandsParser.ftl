@@ -94,3 +94,35 @@ SqlDdl SqlShowDiskCacheUsage(Span s) : {
         { return new SqlShowDiskCacheUsage(s.end(this)); }
     )
 }
+
+/*
+ * Show table details using the following syntax:
+ *
+ * SHOW TABLE DETAILS [FOR <table_name>, <table_name>, ...]
+ */
+SqlDdl SqlShowTableDetails(Span s) :
+{
+    SqlIdentifier tableName = null;
+    List<String> tableNames = null;
+}
+{
+    <SHOW> <TABLE> <DETAILS>
+    [
+        <FOR>
+        tableName = CompoundIdentifier()
+        {
+            tableNames = new ArrayList<String>();
+            tableNames.add(tableName.toString());
+        }
+        (
+            <COMMA>
+            tableName = CompoundIdentifier()
+            {
+                tableNames.add(tableName.toString());
+            }
+        )*
+    ]
+    {
+        return new SqlShowTableDetails(s.end(this), tableNames);
+    }
+}

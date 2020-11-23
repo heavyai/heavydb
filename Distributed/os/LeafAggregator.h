@@ -50,7 +50,7 @@ class LeafAggregator {
     CHECK(false);
   }
 
-  std::vector<TQueryResult> forwardQueryToLeaves(
+  std::map<size_t, TQueryResult> forwardQueryToLeaves(
       const Catalog_Namespace::SessionInfo& parent_session_info,
       const std::string& query_str) {
     CHECK(false);

@@ -926,17 +926,20 @@ TEST_F(ShowCreateTableTest, ForeignTable_AllOptions) {
                         "REFRESH_UPDATE_TYPE='APPEND', FRAGMENT_SIZE=50);"}});
 }
 
+namespace {
+constexpr int64_t DEFAULT_DATA_FILE_SIZE{DEFAULT_PAGE_SIZE * MAX_FILE_N_PAGES};
+constexpr int64_t DEFAULT_METADATA_FILE_SIZE{METADATA_PAGE_SIZE *
+                                             MAX_FILE_N_METADATA_PAGES};
+}  // namespace
+
 class ShowDiskCacheUsageTest : public ShowTest {
  public:
-  static inline constexpr int64_t page_size{2097152};
-  static inline constexpr int64_t meta_page_size{4096};
-  static inline constexpr int64_t data_file_size{page_size * MAX_FILE_N_PAGES};
-  static inline constexpr int64_t meta_file_size{meta_page_size *
-                                                 MAX_FILE_N_METADATA_PAGES};
   static inline constexpr int64_t epoch_file_size{2 * sizeof(int64_t)};
   static inline constexpr int64_t empty_mgr_size{0};
-  static inline constexpr int64_t meta_only_size{epoch_file_size + meta_file_size};
-  static inline constexpr int64_t minimum_total_size{data_file_size + meta_only_size};
+  static inline constexpr int64_t meta_only_size{epoch_file_size +
+                                                 DEFAULT_METADATA_FILE_SIZE};
+  static inline constexpr int64_t minimum_total_size{DEFAULT_DATA_FILE_SIZE +
+                                                     meta_only_size};
   // TODO(Misiu): These can be made constexpr once c++20 is supported.
   static inline std::string cache_path_ = to_string(BASE_PATH) + "/omnisci_disk_cache/";
   static inline std::string foreign_table1{"foreign_table1"};
@@ -1138,6 +1141,446 @@ TEST_F(ShowDiskCacheUsageForNormalTableTest, NormalTableMinimum) {
   sqlAndCompareResult(
       "SHOW DISK CACHE USAGE;",
       {{foreign_table1, minimum_total_size}, {table1, minimum_total_size}});
+}
+
+class ShowTableDetailsTest : public ShowTest {
+ protected:
+  void SetUp() override {
+    DBHandlerTestFixture::SetUp();
+    login("admin", "HyperInteractive", "test_db");
+    dropTestTables();
+  }
+
+  void TearDown() override {
+    login("admin", "HyperInteractive", "test_db");
+    dropTestTables();
+    DBHandlerTestFixture::TearDown();
+  }
+
+  static void SetUpTestSuite() {
+    DBHandlerTestFixture::SetUpTestSuite();
+    switchToAdmin();
+    sql("DROP DATABASE IF EXISTS test_db;");
+    sql("CREATE DATABASE test_db;");
+    createTestUser();
+  }
+
+  static void TearDownTestSuite() {
+    switchToAdmin();
+    dropTestUser();
+    sql("DROP DATABASE IF EXISTS test_db;");
+    DBHandlerTestFixture::TearDownTestSuite();
+  }
+
+  static void createTestUser() {
+    sql("CREATE USER test_user (password = 'test_pass');");
+    sql("GRANT ACCESS ON DATABASE test_db TO test_user;");
+  }
+
+  static void dropTestUser() { dropUserIfExists("test_user"); }
+
+  void loginTestUser() { login("test_user", "test_pass", "test_db"); }
+
+  void dropTestTables() {
+    sql("DROP TABLE IF EXISTS test_table_1;");
+    sql("DROP TABLE IF EXISTS test_table_2;");
+    sql("DROP TABLE IF EXISTS test_table_3;");
+    sql("DROP TABLE IF EXISTS test_table_4;");
+    sql("DROP FOREIGN TABLE IF EXISTS test_foreign_table;");
+    sql("DROP TABLE IF EXISTS test_temp_table;");
+    sql("DROP TABLE IF EXISTS test_arrow_table;");
+    sql("DROP VIEW IF EXISTS test_view;");
+  }
+
+  void assertExpectedHeaders(const TQueryResult& result) {
+    std::vector<std::string> headers{"table_id",
+                                     "table_name",
+                                     "column_count",
+                                     "is_sharded_table",
+                                     "shard_count",
+                                     "max_rows",
+                                     "fragment_size",
+                                     "max_rollback_epochs",
+                                     "min_epoch",
+                                     "max_epoch",
+                                     "min_epoch_floor",
+                                     "max_epoch_floor",
+                                     "metadata_file_count",
+                                     "total_metadata_file_size",
+                                     "total_metadata_page_count",
+                                     "total_free_metadata_page_count",
+                                     "data_file_count",
+                                     "total_data_file_size",
+                                     "total_data_page_count",
+                                     "total_free_data_page_count"};
+    if (isDistributedMode()) {
+      headers.insert(headers.begin(), "leaf_index");
+    }
+    for (size_t i = 0; i < headers.size(); i++) {
+      EXPECT_EQ(headers[i], result.row_set.row_desc[i].col_name);
+    }
+  }
+
+  void assertMaxRollbackUpdateResult(int max_rollback_epochs,
+                                     int used_metadata_pages,
+                                     int used_data_pages,
+                                     int epoch,
+                                     int epoch_floor) {
+    TQueryResult result;
+    sql(result, "show table details;");
+    assertExpectedHeaders(result);
+
+    // clang-format off
+    if (isDistributedMode()) {
+      assertResultSetEqual({{i(0), i(1), "test_table_1", i(4), False, i(0), i(DEFAULT_MAX_ROWS),
+                             i(DEFAULT_FRAGMENT_ROWS), i(max_rollback_epochs), i(epoch), i(epoch),
+                             i(epoch_floor), i(epoch_floor), i(1), i(DEFAULT_METADATA_FILE_SIZE),
+                             i(MAX_FILE_N_METADATA_PAGES), i(MAX_FILE_N_METADATA_PAGES - used_metadata_pages),
+                             i(1), i(DEFAULT_DATA_FILE_SIZE), i(MAX_FILE_N_PAGES),
+                             i(MAX_FILE_N_PAGES - used_data_pages)},
+                            {i(1), i(1), "test_table_1", i(4), False, i(0), i(DEFAULT_MAX_ROWS),
+                             i(DEFAULT_FRAGMENT_ROWS), i(max_rollback_epochs), i(epoch), i(epoch),
+                             i(epoch_floor), i(epoch_floor), i(1), i(DEFAULT_METADATA_FILE_SIZE),
+                             i(MAX_FILE_N_METADATA_PAGES), i(MAX_FILE_N_METADATA_PAGES - used_metadata_pages),
+                             i(1), i(DEFAULT_DATA_FILE_SIZE), i(MAX_FILE_N_PAGES),
+                             i(MAX_FILE_N_PAGES - used_data_pages)}},
+                           result);
+    } else {
+      assertResultSetEqual({{i(1), "test_table_1", i(4), False, i(0), i(DEFAULT_MAX_ROWS),
+                             i(DEFAULT_FRAGMENT_ROWS), i(max_rollback_epochs), i(epoch), i(epoch),
+                             i(epoch_floor), i(epoch_floor), i(1), i(DEFAULT_METADATA_FILE_SIZE),
+                             i(MAX_FILE_N_METADATA_PAGES), i(MAX_FILE_N_METADATA_PAGES - used_metadata_pages),
+                             i(1), i(DEFAULT_DATA_FILE_SIZE), i(MAX_FILE_N_PAGES),
+                             i(MAX_FILE_N_PAGES - used_data_pages)}},
+                           result);
+    }
+    // clang-format on
+  }
+};
+
+TEST_F(ShowTableDetailsTest, EmptyTables) {
+  sql("create table test_table_1 (c1 int, c2 text);");
+  sql("create table test_table_2 (c1 int, c2 text, c3 double, shard key(c1)) with "
+      "(shard_count = 2, max_rows = 10);");
+  sql("create table test_table_3 (c1 int) with (partitions = 'REPLICATED', fragment_size "
+      "= 5);");
+
+  TQueryResult result;
+  sql(result, "show table details;");
+  assertExpectedHeaders(result);
+
+  // clang-format off
+  if (isDistributedMode()) {
+    assertResultSetEqual({{i(0), i(1), "test_table_1", i(4), False, i(0), i(DEFAULT_MAX_ROWS),
+                           i(DEFAULT_FRAGMENT_ROWS), i(DEFAULT_MAX_ROLLBACK_EPOCHS), i(0), i(0),
+                           i(0), i(0), i(0), i(0), i(0), i(NULL_BIGINT), i(0), i(0), i(0),
+                           i(NULL_BIGINT)},
+                          {i(0), i(2), "test_table_2", i(5), True, i(1), i(10),
+                           i(DEFAULT_FRAGMENT_ROWS), i(DEFAULT_MAX_ROLLBACK_EPOCHS), i(0), i(0),
+                           i(0), i(0), i(0), i(0), i(0), i(NULL_BIGINT), i(0), i(0), i(0),
+                           i(NULL_BIGINT)},
+                          {i(0), i(4), "test_table_3", i(3), False, i(0), i(DEFAULT_MAX_ROWS),
+                           i(5), i(DEFAULT_MAX_ROLLBACK_EPOCHS), i(0), i(0), i(0), i(0), i(0),
+                           i(0), i(0), i(NULL_BIGINT), i(0), i(0), i(0), i(NULL_BIGINT)},
+                          {i(1), i(1), "test_table_1", i(4), False, i(0), i(DEFAULT_MAX_ROWS),
+                           i(DEFAULT_FRAGMENT_ROWS), i(DEFAULT_MAX_ROLLBACK_EPOCHS), i(0), i(0),
+                           i(0), i(0), i(0), i(0), i(0), i(NULL_BIGINT), i(0), i(0), i(0),
+                           i(NULL_BIGINT)},
+                          {i(1), i(2), "test_table_2", i(5), True, i(1), i(10),
+                           i(DEFAULT_FRAGMENT_ROWS), i(DEFAULT_MAX_ROLLBACK_EPOCHS), i(0), i(0),
+                           i(0), i(0), i(0), i(0), i(0), i(NULL_BIGINT), i(0), i(0), i(0),
+                           i(NULL_BIGINT)},
+                          {i(1), i(4), "test_table_3", i(3), False, i(0), i(DEFAULT_MAX_ROWS),
+                           i(5), i(DEFAULT_MAX_ROLLBACK_EPOCHS), i(0), i(0), i(0), i(0), i(0),
+                           i(0), i(0), i(NULL_BIGINT), i(0), i(0), i(0), i(NULL_BIGINT)}},
+                         result);
+  } else {
+    assertResultSetEqual({{i(1), "test_table_1", i(4), False, i(0), i(DEFAULT_MAX_ROWS),
+                           i(DEFAULT_FRAGMENT_ROWS), i(DEFAULT_MAX_ROLLBACK_EPOCHS), i(0), i(0),
+                           i(0), i(0), i(0), i(0), i(0), i(NULL_BIGINT), i(0), i(0), i(0),
+                           i(NULL_BIGINT)},
+                          {i(2), "test_table_2", i(5), True, i(2), i(10),
+                           i(DEFAULT_FRAGMENT_ROWS), i(DEFAULT_MAX_ROLLBACK_EPOCHS), i(0), i(0),
+                           i(0), i(0), i(0), i(0), i(0), i(NULL_BIGINT), i(0), i(0), i(0),
+                           i(NULL_BIGINT)},
+                          {i(5), "test_table_3", i(3), False, i(0), i(DEFAULT_MAX_ROWS),
+                           i(5), i(DEFAULT_MAX_ROLLBACK_EPOCHS), i(0), i(0), i(0), i(0), i(0),
+                           i(0), i(0), i(NULL_BIGINT), i(0), i(0), i(0), i(NULL_BIGINT)}},
+                         result);
+  }
+  // clang-format on
+}
+
+TEST_F(ShowTableDetailsTest, TablesWithContent) {
+  sql("create table test_table_1 (c1 int, c2 text);");
+
+  // Inserts for non-sharded tables are non-deterministic in distributed mode
+  if (!isDistributedMode()) {
+    sql("insert into test_table_1 values (10, 'abc');");
+  }
+
+  sql("create table test_table_2 (c1 int, c2 text, c3 double, shard key(c1)) with "
+      "(shard_count = 2);");
+  sql("insert into test_table_2 values (20, 'efgh', 1.23);");
+
+  sql("create table test_table_3 (c1 int) with (partitions = 'REPLICATED');");
+  sql("insert into test_table_3 values (50);");
+
+  TQueryResult result;
+  sql(result, "show table details;");
+  assertExpectedHeaders(result);
+
+  // clang-format off
+  if (isDistributedMode()) {
+    assertResultSetEqual({{i(0), i(1), "test_table_1", i(4), False, i(0), i(DEFAULT_MAX_ROWS),
+                           i(DEFAULT_FRAGMENT_ROWS), i(DEFAULT_MAX_ROLLBACK_EPOCHS), i(0), i(0),
+                           i(0), i(0), i(0), i(0), i(0), i(NULL_BIGINT), i(0), i(0), i(0),
+                           i(NULL_BIGINT)},
+                          {i(0), i(2), "test_table_2", i(5), True, i(1), i(DEFAULT_MAX_ROWS),
+                           i(DEFAULT_FRAGMENT_ROWS), i(DEFAULT_MAX_ROLLBACK_EPOCHS), i(1), i(1),
+                           i(0), i(0), i(1), i(DEFAULT_METADATA_FILE_SIZE),
+                           i(MAX_FILE_N_METADATA_PAGES), i(MAX_FILE_N_METADATA_PAGES - 4), i(1),
+                           i(DEFAULT_DATA_FILE_SIZE), i(MAX_FILE_N_PAGES),
+                           i(MAX_FILE_N_PAGES - 4)},
+                          {i(0), i(4), "test_table_3", i(3), False, i(0), i(DEFAULT_MAX_ROWS),
+                           i(DEFAULT_FRAGMENT_ROWS), i(DEFAULT_MAX_ROLLBACK_EPOCHS), i(1), i(1),
+                           i(0), i(0), i(1), i(DEFAULT_METADATA_FILE_SIZE),
+                           i(MAX_FILE_N_METADATA_PAGES), i(MAX_FILE_N_METADATA_PAGES - 2), i(1),
+                           i(DEFAULT_DATA_FILE_SIZE), i(MAX_FILE_N_PAGES),
+                           i(MAX_FILE_N_PAGES - 2)},
+                          {i(1), i(1), "test_table_1", i(4), False, i(0), i(DEFAULT_MAX_ROWS),
+                           i(DEFAULT_FRAGMENT_ROWS), i(DEFAULT_MAX_ROLLBACK_EPOCHS), i(0), i(0),
+                           i(0), i(0), i(0), i(0), i(0), i(NULL_BIGINT), i(0), i(0), i(0),
+                           i(NULL_BIGINT)},
+                          {i(1), i(2), "test_table_2", i(5), True, i(1), i(DEFAULT_MAX_ROWS),
+                           i(DEFAULT_FRAGMENT_ROWS), i(DEFAULT_MAX_ROLLBACK_EPOCHS), i(1), i(1),
+                           i(0), i(0), i(0), i(0), i(0), i(NULL_BIGINT), i(0), i(0), i(0),
+                           i(NULL_BIGINT)},
+                          {i(1), i(4), "test_table_3", i(3), False, i(0), i(DEFAULT_MAX_ROWS),
+                           i(DEFAULT_FRAGMENT_ROWS), i(DEFAULT_MAX_ROLLBACK_EPOCHS), i(1), i(1),
+                           i(0), i(0), i(1), i(DEFAULT_METADATA_FILE_SIZE),
+                           i(MAX_FILE_N_METADATA_PAGES), i(MAX_FILE_N_METADATA_PAGES - 2), i(1),
+                           i(DEFAULT_DATA_FILE_SIZE), i(MAX_FILE_N_PAGES),
+                           i(MAX_FILE_N_PAGES - 2)}},
+                         result);
+  } else {
+    assertResultSetEqual({{i(1), "test_table_1", i(4), False, i(0), i(DEFAULT_MAX_ROWS),
+                           i(DEFAULT_FRAGMENT_ROWS), i(DEFAULT_MAX_ROLLBACK_EPOCHS), i(1), i(1),
+                           i(0), i(0), i(1), i(DEFAULT_METADATA_FILE_SIZE),
+                           i(MAX_FILE_N_METADATA_PAGES), i(MAX_FILE_N_METADATA_PAGES - 3), i(1),
+                           i(DEFAULT_DATA_FILE_SIZE), i(MAX_FILE_N_PAGES),
+                           i(MAX_FILE_N_PAGES - 3)},
+                          {i(2), "test_table_2", i(5), True, i(2), i(DEFAULT_MAX_ROWS),
+                           i(DEFAULT_FRAGMENT_ROWS), i(DEFAULT_MAX_ROLLBACK_EPOCHS), i(1), i(1),
+                           i(0), i(0), i(1), i(DEFAULT_METADATA_FILE_SIZE),
+                           i(MAX_FILE_N_METADATA_PAGES), i(MAX_FILE_N_METADATA_PAGES - 4), i(1),
+                           i(DEFAULT_DATA_FILE_SIZE), i(MAX_FILE_N_PAGES),
+                           i(MAX_FILE_N_PAGES - 4)},
+                          {i(5), "test_table_3", i(3), False, i(0), i(DEFAULT_MAX_ROWS),
+                           i(DEFAULT_FRAGMENT_ROWS), i(DEFAULT_MAX_ROLLBACK_EPOCHS), i(1), i(1),
+                           i(0), i(0), i(1), i(DEFAULT_METADATA_FILE_SIZE),
+                           i(MAX_FILE_N_METADATA_PAGES), i(MAX_FILE_N_METADATA_PAGES - 2), i(1),
+                           i(DEFAULT_DATA_FILE_SIZE), i(MAX_FILE_N_PAGES),
+                           i(MAX_FILE_N_PAGES - 2)}},
+                         result);
+  }
+  // clang-format on
+}
+
+TEST_F(ShowTableDetailsTest, MaxRollbackEpochsUpdates) {
+  // For distributed mode, a replicated table is used in this test case
+  // in order to simplify table storage assertions (since all tables
+  // will have the same content)
+  sql("create table test_table_1 (c1 int, c2 int) with (max_rollback_epochs = 15, "
+      "partitions = 'REPLICATED');");
+  sql("insert into test_table_1 values (1, 2);");
+  sql("insert into test_table_1 values (10, 20);");
+  for (int i = 0; i < 2; i++) {
+    sql("update test_table_1 set c1 = c1 + 1 where c1 >= 10;");
+  }
+  assertMaxRollbackUpdateResult(15, 8, 5, 4, 0);
+
+  sql("alter table test_table_1 set max_rollback_epochs = 1;");
+  assertMaxRollbackUpdateResult(1, 4, 4, 5, 3);
+}
+
+TEST_F(ShowTableDetailsTest, CommandWithTableNames) {
+  sql("create table test_table_1 (c1 int, c2 text);");
+  sql("create table test_table_2 (c1 int, c2 text, c3 double, shard key(c1)) with "
+      "(shard_count = 2);");
+  sql("create table test_table_3 (c1 int) with (partitions = 'REPLICATED');");
+
+  TQueryResult result;
+  sql(result, "show table details for test_table_1, test_table_3;");
+  assertExpectedHeaders(result);
+
+  // clang-format off
+  if (isDistributedMode()) {
+    assertResultSetEqual({{i(0), i(1), "test_table_1", i(4), False, i(0), i(DEFAULT_MAX_ROWS),
+                           i(DEFAULT_FRAGMENT_ROWS), i(DEFAULT_MAX_ROLLBACK_EPOCHS), i(0), i(0),
+                           i(0), i(0), i(0), i(0), i(0), i(NULL_BIGINT), i(0), i(0), i(0),
+                           i(NULL_BIGINT)},
+                          {i(0), i(4), "test_table_3", i(3), False, i(0), i(DEFAULT_MAX_ROWS),
+                           i(DEFAULT_FRAGMENT_ROWS), i(DEFAULT_MAX_ROLLBACK_EPOCHS), i(0), i(0),
+                           i(0), i(0), i(0), i(0), i(0), i(NULL_BIGINT), i(0), i(0), i(0),
+                           i(NULL_BIGINT)},
+                          {i(1), i(1), "test_table_1", i(4), False, i(0), i(DEFAULT_MAX_ROWS),
+                           i(DEFAULT_FRAGMENT_ROWS), i(DEFAULT_MAX_ROLLBACK_EPOCHS), i(0), i(0),
+                           i(0), i(0), i(0), i(0), i(0), i(NULL_BIGINT), i(0), i(0), i(0),
+                           i(NULL_BIGINT)},
+                          {i(1), i(4), "test_table_3", i(3), False, i(0), i(DEFAULT_MAX_ROWS),
+                           i(DEFAULT_FRAGMENT_ROWS), i(DEFAULT_MAX_ROLLBACK_EPOCHS), i(0), i(0),
+                           i(0), i(0), i(0), i(0), i(0), i(NULL_BIGINT), i(0), i(0), i(0),
+                           i(NULL_BIGINT)}},
+                         result);
+  } else {
+    assertResultSetEqual({{i(1), "test_table_1", i(4), False, i(0), i(DEFAULT_MAX_ROWS),
+                           i(DEFAULT_FRAGMENT_ROWS), i(DEFAULT_MAX_ROLLBACK_EPOCHS), i(0), i(0),
+                           i(0), i(0), i(0), i(0), i(0), i(NULL_BIGINT), i(0), i(0), i(0),
+                           i(NULL_BIGINT)},
+                          {i(5), "test_table_3", i(3), False, i(0), i(DEFAULT_MAX_ROWS),
+                           i(DEFAULT_FRAGMENT_ROWS), i(DEFAULT_MAX_ROLLBACK_EPOCHS), i(0), i(0),
+                           i(0), i(0), i(0), i(0), i(0), i(NULL_BIGINT), i(0), i(0), i(0),
+                           i(NULL_BIGINT)}},
+                         result);
+  }
+  // clang-format on
+}
+
+TEST_F(ShowTableDetailsTest, UserSpecificTables) {
+  sql("create table test_table_1 (c1 int, c2 text);");
+  sql("create table test_table_2 (c1 int, c2 text, c3 double, shard key(c1)) with "
+      "(shard_count = 2);");
+  sql("create table test_table_3 (c1 int) with (partitions = 'REPLICATED');");
+  sql("GRANT SELECT ON TABLE test_table_3 TO test_user;");
+
+  loginTestUser();
+
+  TQueryResult result;
+  sql(result, "show table details;");
+  assertExpectedHeaders(result);
+
+  // clang-format off
+  if (isDistributedMode()) {
+    assertResultSetEqual({{i(0), i(4), "test_table_3", i(3), False, i(0), i(DEFAULT_MAX_ROWS),
+                           i(DEFAULT_FRAGMENT_ROWS), i(DEFAULT_MAX_ROLLBACK_EPOCHS), i(0), i(0),
+                           i(0), i(0), i(0), i(0), i(0), i(NULL_BIGINT), i(0), i(0), i(0),
+                           i(NULL_BIGINT)},
+                          {i(1), i(4), "test_table_3", i(3), False, i(0), i(DEFAULT_MAX_ROWS),
+                           i(DEFAULT_FRAGMENT_ROWS), i(DEFAULT_MAX_ROLLBACK_EPOCHS), i(0), i(0),
+                           i(0), i(0), i(0), i(0), i(0), i(NULL_BIGINT), i(0), i(0), i(0),
+                           i(NULL_BIGINT)}},
+                         result);
+  } else {
+    assertResultSetEqual({{i(5), "test_table_3", i(3), False, i(0), i(DEFAULT_MAX_ROWS),
+                           i(DEFAULT_FRAGMENT_ROWS), i(DEFAULT_MAX_ROLLBACK_EPOCHS), i(0), i(0),
+                           i(0), i(0), i(0), i(0), i(0), i(NULL_BIGINT), i(0), i(0), i(0),
+                           i(NULL_BIGINT)}},
+                         result);
+  }
+  // clang-format on
+}
+
+TEST_F(ShowTableDetailsTest, InaccessibleTable) {
+  sql("create table test_table_1 (c1 int, c2 text);");
+  sql("create table test_table_2 (c1 int, c2 text, c3 double, shard key(c1)) with "
+      "(shard_count = 2);");
+  sql("create table test_table_3 (c1 int) with (partitions = 'REPLICATED');");
+
+  loginTestUser();
+  queryAndAssertException("show table details for test_table_1;",
+                          "Exception: Unable to show table details for table: "
+                          "test_table_1. Table does not exist.");
+}
+
+TEST_F(ShowTableDetailsTest, NonExistentTable) {
+  sql("create table test_table_1 (c1 int, c2 text);");
+  sql("create table test_table_2 (c1 int, c2 text, c3 double, shard key(c1)) with "
+      "(shard_count = 2);");
+  sql("create table test_table_3 (c1 int) with (partitions = 'REPLICATED');");
+
+  queryAndAssertException("show table details for test_table_4;",
+                          "Exception: Unable to show table details for table: "
+                          "test_table_4. Table does not exist.");
+}
+
+TEST_F(ShowTableDetailsTest, UnsupportedTableTypes) {
+  sql("create table test_table_1 (c1 int, c2 text);");
+  sql("create temporary table test_temp_table (c1 int, c2 text);");
+  sql("create dataframe test_arrow_table (c1 int) from 'CSV:" +
+      boost::filesystem::canonical("../../Tests/FsiDataFiles/0.csv").string() + "';");
+  sql("create view test_view as select * from test_table_1;");
+
+  if (!isDistributedMode()) {
+    sql("CREATE FOREIGN TABLE test_foreign_table(i INTEGER) SERVER omnisci_local_csv "
+        "WITH "
+        "(file_path = '" +
+        boost::filesystem::canonical("../../Tests/FsiDataFiles/0.csv").string() + "');");
+  }
+
+  TQueryResult result;
+  sql(result, "show table details;");
+  assertExpectedHeaders(result);
+
+  // clang-format off
+  if (isDistributedMode()) {
+    assertResultSetEqual({{i(0), i(1), "test_table_1", i(4), False, i(0), i(DEFAULT_MAX_ROWS),
+                           i(DEFAULT_FRAGMENT_ROWS), i(DEFAULT_MAX_ROLLBACK_EPOCHS), i(0), i(0),
+                           i(0), i(0), i(0), i(0), i(0), i(NULL_BIGINT), i(0), i(0), i(0),
+                           i(NULL_BIGINT)},
+                          {i(1), i(1), "test_table_1", i(4), False, i(0), i(DEFAULT_MAX_ROWS),
+                           i(DEFAULT_FRAGMENT_ROWS), i(DEFAULT_MAX_ROLLBACK_EPOCHS), i(0), i(0),
+                           i(0), i(0), i(0), i(0), i(0), i(NULL_BIGINT), i(0), i(0), i(0),
+                           i(NULL_BIGINT)}},
+                         result);
+  } else {
+    assertResultSetEqual({{i(1), "test_table_1", i(4), False, i(0), i(DEFAULT_MAX_ROWS),
+                           i(DEFAULT_FRAGMENT_ROWS), i(DEFAULT_MAX_ROLLBACK_EPOCHS), i(0), i(0),
+                           i(0), i(0), i(0), i(0), i(0), i(NULL_BIGINT), i(0), i(0), i(0),
+                           i(NULL_BIGINT)}},
+                         result);
+  }
+  // clang-format on
+}
+
+TEST_F(ShowTableDetailsTest, FsiTableSpecified) {
+  if (isDistributedMode()) {
+    GTEST_SKIP() << "Foreign tables are currently not supported in distributed mode";
+  }
+
+  sql("CREATE FOREIGN TABLE test_foreign_table(i INTEGER) SERVER omnisci_local_csv WITH "
+      "(file_path = '" +
+      boost::filesystem::canonical("../../Tests/FsiDataFiles/0.csv").string() + "');");
+
+  queryAndAssertException("show table details for test_foreign_table;",
+                          "Exception: SHOW TABLE DETAILS is not supported for foreign "
+                          "tables. Table name: test_foreign_table.");
+}
+
+TEST_F(ShowTableDetailsTest, TemporaryTableSpecified) {
+  sql("create temporary table test_temp_table (c1 int, c2 text);");
+
+  queryAndAssertException("show table details for test_temp_table;",
+                          "Exception: SHOW TABLE DETAILS is not supported for temporary "
+                          "tables. Table name: test_temp_table.");
+}
+
+TEST_F(ShowTableDetailsTest, ArrowFsiTableSpecified) {
+  sql("create dataframe test_arrow_table (c1 int) from 'CSV:" +
+      boost::filesystem::canonical("../../Tests/FsiDataFiles/0.csv").string() + "';");
+
+  queryAndAssertException("show table details for test_arrow_table;",
+                          "Exception: SHOW TABLE DETAILS is not supported for temporary "
+                          "tables. Table name: test_arrow_table.");
+}
+
+TEST_F(ShowTableDetailsTest, ViewSpecified) {
+  sql("create table test_table_1 (c1 int, c2 text);");
+  sql("create view test_view as select * from test_table_1;");
+
+  queryAndAssertException("show table details for test_view;",
+                          "Exception: Unable to show table details for table: "
+                          "test_view. Table does not exist.");
 }
 
 int main(int argc, char** argv) {

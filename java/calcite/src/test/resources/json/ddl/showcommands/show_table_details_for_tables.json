@@ -1,0 +1,10 @@
+{
+  "statementType": "DDL",
+  "payload": {
+    "command": "SHOW_TABLE_DETAILS",
+    "tableNames": [
+      "test_table_1",
+      "test_table_2"
+    ]
+  }
+}

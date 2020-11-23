@@ -35,6 +35,7 @@ data: {
         "com.mapd.parser.extension.ddl.SqlCreateServer"
         "com.mapd.parser.extension.ddl.SqlDropServer"
         "com.mapd.parser.extension.ddl.SqlShowTables"
+        "com.mapd.parser.extension.ddl.SqlShowTableDetails"
         "com.mapd.parser.extension.ddl.SqlAlterServer"
         "com.mapd.parser.extension.ddl.SqlAlterForeignTable"
         "com.mapd.parser.extension.ddl.SqlCreateForeignTable"
@@ -70,6 +71,7 @@ data: {
         "SHARD"
         "SHARED"
         "DICTIONARY"
+        
         # Non-reserved keywords (keywords that do not start a command and may therefore be used as regular text elsewhere in the parser. must add to nonReservedKeywordsToAdd below)
         "CACHE"
         "DATABASES"
@@ -84,6 +86,7 @@ data: {
         "STORED" 
         "TABLES"
         "VIRTUAL"
+        "DETAILS"
       ]
 
       # List of keywords from "keywords" section that are not reserved.
@@ -424,6 +427,7 @@ data: {
         "STORED" 
         "TABLES"
         "VIRTUAL"
+        "DETAILS"
       ]
 
       # List of non-reserved keywords to remove;
@@ -440,6 +444,7 @@ data: {
       statementParserMethods: [
         "SqlShowUserSessions(span())"
         "SqlShowTables(span())"
+        "SqlShowTableDetails(span())"
         "SqlShowDatabases(span())"
         "SqlShowForeignServers(span())"
         "SqlAlterServer(span())"

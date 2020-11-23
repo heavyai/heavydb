@@ -174,7 +174,7 @@ class GlobalFileMgr : public AbstractBufferMgr {  // implements
   void removeTableRelatedDS(const int32_t db_id, const int32_t tb_id) override;
   void setTableEpoch(const int32_t db_id, const int32_t tb_id, const int32_t start_epoch);
   size_t getTableEpoch(const int32_t db_id, const int32_t tb_id);
-  BasicStorageStats getBasicStorageStats(const int32_t db_id, const int32_t tb_id);
+  StorageStats getStorageStats(const int32_t db_id, const int32_t tb_id);
 
   // For testing purposes only
   std::shared_ptr<FileMgr> getSharedFileMgr(const int db_id, const int table_id);

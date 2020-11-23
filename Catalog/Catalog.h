@@ -257,12 +257,8 @@ class Catalog final {
   std::vector<TableMetadata> getTablesMetadataForUser(
       const UserMetadata& user_metadata,
       const GetTablesType get_tables_type,
-      const std::string& filter_table_name,
-      const bool get_storage_stats) const;
+      const std::string& filter_table_name) const;
 
-  std::vector<File_Namespace::BasicStorageStats> getBasicStorageStats(
-      const int32_t db_id,
-      const int32_t table_id) const;
   int32_t getTableEpoch(const int32_t db_id, const int32_t table_id) const;
   void setTableEpoch(const int db_id, const int table_id, const int new_epoch);
   void setMaxRollbackEpochs(const int32_t table_id, const int32_t max_rollback_epochs);

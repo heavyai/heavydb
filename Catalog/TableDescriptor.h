@@ -91,7 +91,12 @@ struct TableDescriptor {
       , mutex_(std::make_shared<std::mutex>()) {}
 
   virtual ~TableDescriptor() = default;
+
   inline bool isForeignTable() const { return storageType == StorageType::FOREIGN_TABLE; }
+
+  inline bool isTemporaryTable() const {
+    return persistenceLevel == Data_Namespace::MemoryLevel::CPU_LEVEL;
+  }
 };
 
 inline bool table_is_replicated(const TableDescriptor* td) {

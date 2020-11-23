@@ -32,6 +32,9 @@ bool DdlCommand::isDefaultServer(const std::string& server_name) {
 }
 
 namespace {
+
+// TODO: Update the following functions to use the result set builder when it
+// is available
 void set_headers(TQueryResult& _return, const std::vector<std::string>& headers) {
   TRowDescriptor row_descriptor;
   for (const auto& header : headers) {
@@ -40,6 +43,29 @@ void set_headers(TQueryResult& _return, const std::vector<std::string>& headers)
     column_type.col_type.type = TDatumType::type::STR;
     row_descriptor.push_back(column_type);
 
+    _return.row_set.columns.emplace_back();
+  }
+  _return.row_set.row_desc = row_descriptor;
+  _return.row_set.is_columnar = true;
+}
+
+void set_headers_with_type(TQueryResult& _return,
+                           const std::vector<std::pair<std::string, SQLTypes>>& headers) {
+  TRowDescriptor row_descriptor;
+  for (const auto& header : headers) {
+    TColumnType column_type{};
+    column_type.col_name = header.first;
+    if (header.second == kBIGINT) {
+      column_type.col_type.type = TDatumType::type::BIGINT;
+    } else if (header.second == kTEXT) {
+      column_type.col_type.type = TDatumType::type::STR;
+    } else if (header.second == kBOOLEAN) {
+      column_type.col_type.type = TDatumType::type::BOOL;
+    } else {
+      UNREACHABLE() << "Unsupported type provided for header. SQL type: "
+                    << to_string(header.second);
+    }
+    row_descriptor.push_back(column_type);
     _return.row_set.columns.emplace_back();
   }
   _return.row_set.row_desc = row_descriptor;
@@ -68,6 +94,128 @@ get_table_descriptor_with_lock(const Catalog_Namespace::Catalog& cat,
   td = (*td_with_lock)();
   CHECK(td);
   return std::make_tuple(td, std::move(td_with_lock));
+}
+
+struct AggregratedStorageStats : public File_Namespace::StorageStats {
+  int32_t min_epoch;
+  int32_t max_epoch;
+  int32_t min_epoch_floor;
+  int32_t max_epoch_floor;
+
+  AggregratedStorageStats(const File_Namespace::StorageStats& storage_stats)
+      : File_Namespace::StorageStats(storage_stats)
+      , min_epoch(storage_stats.epoch)
+      , max_epoch(storage_stats.epoch)
+      , min_epoch_floor(storage_stats.epoch_floor)
+      , max_epoch_floor(storage_stats.epoch_floor) {}
+
+  void aggregate(const File_Namespace::StorageStats& storage_stats) {
+    metadata_file_count += storage_stats.metadata_file_count;
+    total_metadata_file_size += storage_stats.total_metadata_file_size;
+    total_metadata_page_count += storage_stats.total_metadata_page_count;
+    if (storage_stats.total_free_metadata_page_count) {
+      if (total_free_metadata_page_count) {
+        total_free_metadata_page_count.value() +=
+            storage_stats.total_free_metadata_page_count.value();
+      } else {
+        total_free_metadata_page_count = storage_stats.total_free_metadata_page_count;
+      }
+    }
+    data_file_count += storage_stats.data_file_count;
+    total_data_file_size += storage_stats.total_data_file_size;
+    total_data_page_count += storage_stats.total_data_page_count;
+    if (storage_stats.total_free_data_page_count) {
+      if (total_free_data_page_count) {
+        total_free_data_page_count.value() +=
+            storage_stats.total_free_data_page_count.value();
+      } else {
+        total_free_data_page_count = storage_stats.total_free_data_page_count;
+      }
+    }
+    min_epoch = std::min(min_epoch, storage_stats.epoch);
+    max_epoch = std::max(max_epoch, storage_stats.epoch);
+    min_epoch_floor = std::min(min_epoch_floor, storage_stats.epoch_floor);
+    max_epoch_floor = std::max(max_epoch_floor, storage_stats.epoch_floor);
+  }
+};
+
+AggregratedStorageStats get_agg_storage_stats(const TableDescriptor* td,
+                                              const Catalog_Namespace::Catalog* catalog) {
+  const auto global_file_mgr = catalog->getDataMgr().getGlobalFileMgr();
+  std::optional<AggregratedStorageStats> agg_storage_stats;
+  if (td->nShards > 0) {
+    const auto physical_tables = catalog->getPhysicalTablesDescriptors(td);
+    CHECK_EQ(static_cast<size_t>(td->nShards), physical_tables.size());
+
+    for (const auto physical_table : physical_tables) {
+      auto storage_stats = global_file_mgr->getStorageStats(catalog->getDatabaseId(),
+                                                            physical_table->tableId);
+      if (agg_storage_stats) {
+        agg_storage_stats.value().aggregate(storage_stats);
+      } else {
+        agg_storage_stats = storage_stats;
+      }
+    }
+  } else {
+    agg_storage_stats =
+        global_file_mgr->getStorageStats(catalog->getDatabaseId(), td->tableId);
+  }
+  CHECK(agg_storage_stats.has_value());
+  return agg_storage_stats.value();
+}
+
+void add_table_details(TQueryResult& _return,
+                       const TableDescriptor* logical_table,
+                       const AggregratedStorageStats& agg_storage_stats) {
+  CHECK_EQ(static_cast<size_t>(20), _return.row_set.columns.size());
+  for (auto& column : _return.row_set.columns) {
+    column.nulls.emplace_back(false);
+  }
+
+  bool is_sharded_table = (logical_table->nShards > 0);
+  _return.row_set.columns[0].data.int_col.emplace_back(logical_table->tableId);
+  _return.row_set.columns[1].data.str_col.emplace_back(logical_table->tableName);
+  _return.row_set.columns[2].data.int_col.emplace_back(logical_table->nColumns);
+  _return.row_set.columns[3].data.int_col.emplace_back(is_sharded_table);
+  _return.row_set.columns[4].data.int_col.emplace_back(logical_table->nShards);
+  _return.row_set.columns[5].data.int_col.emplace_back(logical_table->maxRows);
+  _return.row_set.columns[6].data.int_col.emplace_back(logical_table->maxFragRows);
+  _return.row_set.columns[7].data.int_col.emplace_back(logical_table->maxRollbackEpochs);
+  _return.row_set.columns[8].data.int_col.emplace_back(agg_storage_stats.min_epoch);
+  _return.row_set.columns[9].data.int_col.emplace_back(agg_storage_stats.max_epoch);
+  _return.row_set.columns[10].data.int_col.emplace_back(
+      agg_storage_stats.min_epoch_floor);
+  _return.row_set.columns[11].data.int_col.emplace_back(
+      agg_storage_stats.max_epoch_floor);
+  _return.row_set.columns[12].data.int_col.emplace_back(
+      agg_storage_stats.metadata_file_count);
+  _return.row_set.columns[13].data.int_col.emplace_back(
+      agg_storage_stats.total_metadata_file_size);
+  _return.row_set.columns[14].data.int_col.emplace_back(
+      agg_storage_stats.total_metadata_page_count);
+
+  if (agg_storage_stats.total_free_metadata_page_count) {
+    _return.row_set.columns[15].data.int_col.emplace_back(
+        agg_storage_stats.total_free_metadata_page_count.value());
+  } else {
+    _return.row_set.columns[15].data.int_col.emplace_back(NULL_BIGINT);
+    _return.row_set.columns[15].nulls.back() = true;
+  }
+
+  _return.row_set.columns[16].data.int_col.emplace_back(
+      agg_storage_stats.data_file_count);
+  _return.row_set.columns[17].data.int_col.emplace_back(
+      agg_storage_stats.total_data_file_size);
+  _return.row_set.columns[18].data.int_col.emplace_back(
+      agg_storage_stats.total_data_page_count);
+
+  if (agg_storage_stats.total_free_data_page_count) {
+    _return.row_set.columns[19].data.int_col.emplace_back(
+        agg_storage_stats.total_free_data_page_count.value());
+  } else {
+    _return.row_set.columns[19].data.int_col.emplace_back(NULL_BIGINT);
+    _return.row_set.columns[19].nulls.back() = true;
+  }
 }
 }  // namespace
 
@@ -118,6 +266,8 @@ void DdlCommandExecutor::execute(TQueryResult& _return) {
     DropForeignTableCommand{payload, session_ptr_}.execute(_return);
   } else if (ddl_command == "SHOW_TABLES") {
     ShowTablesCommand{payload, session_ptr_}.execute(_return);
+  } else if (ddl_command == "SHOW_TABLE_DETAILS") {
+    ShowTableDetailsCommand{payload, session_ptr_}.execute(_return);
   } else if (ddl_command == "SHOW_DATABASES") {
     ShowDatabasesCommand{payload, session_ptr_}.execute(_return);
   } else if (ddl_command == "SHOW_SERVERS") {
@@ -161,6 +311,23 @@ bool DdlCommandExecutor::isKillQuery() {
   const auto& payload = ddl_query_["payload"].GetObject();
   const auto& ddl_command = std::string_view(payload["command"].GetString());
   return (ddl_command == "KILL_QUERY");
+}
+
+DistributedExecutionDetails DdlCommandExecutor::getDistributedExecutionDetails() {
+  const auto& payload = ddl_query_["payload"].GetObject();
+  const auto& ddl_command = std::string_view(payload["command"].GetString());
+  DistributedExecutionDetails execution_details;
+  if (ddl_command == "CREATE_TABLE" || ddl_command == "CREATE_VIEW") {
+    execution_details.execution_location = ExecutionLocation::ALL_NODES;
+    execution_details.aggregation_type = AggregationType::NONE;
+  } else if (ddl_command == "SHOW_TABLE_DETAILS") {
+    execution_details.execution_location = ExecutionLocation::LEAVES_ONLY;
+    execution_details.aggregation_type = AggregationType::UNION;
+  } else {
+    execution_details.execution_location = ExecutionLocation::AGGREGATOR_ONLY;
+    execution_details.aggregation_type = AggregationType::NONE;
+  }
+  return execution_details;
 }
 
 const std::string DdlCommandExecutor::getTargetQuerySessionToKill() {
@@ -728,6 +895,91 @@ void ShowTablesCommand::execute(TQueryResult& _return) {
   for (auto& table_name : table_names) {
     add_row(_return, std::vector<std::string>{table_name});
   }
+}
+
+ShowTableDetailsCommand::ShowTableDetailsCommand(
+    const rapidjson::Value& ddl_payload,
+    std::shared_ptr<Catalog_Namespace::SessionInfo const> session_ptr)
+    : DdlCommand(ddl_payload, session_ptr) {
+  if (ddl_payload.HasMember("tableNames")) {
+    CHECK(ddl_payload["tableNames"].IsArray());
+    for (const auto& table_name : ddl_payload["tableNames"].GetArray()) {
+      CHECK(table_name.IsString());
+    }
+  }
+}
+
+void ShowTableDetailsCommand::execute(TQueryResult& _return) {
+  const auto catalog = session_ptr_->get_catalog_ptr();
+  std::vector<std::string> filtered_table_names = getFilteredTableNames();
+  set_headers_with_type(_return,
+                        {{"table_id", kBIGINT},
+                         {"table_name", kTEXT},
+                         {"column_count", kBIGINT},
+                         {"is_sharded_table", kBOOLEAN},
+                         {"shard_count", kBIGINT},
+                         {"max_rows", kBIGINT},
+                         {"fragment_size", kBIGINT},
+                         {"max_rollback_epochs", kBIGINT},
+                         {"min_epoch", kBIGINT},
+                         {"max_epoch", kBIGINT},
+                         {"min_epoch_floor", kBIGINT},
+                         {"max_epoch_floor", kBIGINT},
+                         {"metadata_file_count", kBIGINT},
+                         {"total_metadata_file_size", kBIGINT},
+                         {"total_metadata_page_count", kBIGINT},
+                         {"total_free_metadata_page_count", kBIGINT},
+                         {"data_file_count", kBIGINT},
+                         {"total_data_file_size", kBIGINT},
+                         {"total_data_page_count", kBIGINT},
+                         {"total_free_data_page_count", kBIGINT}});
+  for (const auto& table_name : filtered_table_names) {
+    auto [td, td_with_lock] =
+        get_table_descriptor_with_lock<lockmgr::ReadLock>(*catalog, table_name, false);
+    auto agg_storage_stats = get_agg_storage_stats(td, catalog.get());
+    add_table_details(_return, td, agg_storage_stats);
+  }
+}
+
+std::vector<std::string> ShowTableDetailsCommand::getFilteredTableNames() {
+  const auto catalog = session_ptr_->get_catalog_ptr();
+  auto all_table_names =
+      catalog->getTableNamesForUser(session_ptr_->get_currentUser(), GET_PHYSICAL_TABLES);
+  std::vector<std::string> filtered_table_names;
+  if (ddl_payload_.HasMember("tableNames")) {
+    std::set<std::string> all_table_names_set(all_table_names.begin(),
+                                              all_table_names.end());
+    for (const auto& table_name_json : ddl_payload_["tableNames"].GetArray()) {
+      std::string table_name = table_name_json.GetString();
+      if (all_table_names_set.find(table_name) == all_table_names_set.end()) {
+        throw std::runtime_error{"Unable to show table details for table: " + table_name +
+                                 ". Table does not exist."};
+      }
+      auto [td, td_with_lock] =
+          get_table_descriptor_with_lock<lockmgr::ReadLock>(*catalog, table_name, false);
+      if (td->isForeignTable()) {
+        throw std::runtime_error{
+            "SHOW TABLE DETAILS is not supported for foreign tables. Table name: " +
+            table_name + "."};
+      }
+      if (td->isTemporaryTable()) {
+        throw std::runtime_error{
+            "SHOW TABLE DETAILS is not supported for temporary tables. Table name: " +
+            table_name + "."};
+      }
+      filtered_table_names.emplace_back(table_name);
+    }
+  } else {
+    for (const auto& table_name : all_table_names) {
+      auto [td, td_with_lock] =
+          get_table_descriptor_with_lock<lockmgr::ReadLock>(*catalog, table_name, false);
+      if (td->isForeignTable() || td->isTemporaryTable()) {
+        continue;
+      }
+      filtered_table_names.emplace_back(table_name);
+    }
+  }
+  return filtered_table_names;
 }
 
 ShowDatabasesCommand::ShowDatabasesCommand(

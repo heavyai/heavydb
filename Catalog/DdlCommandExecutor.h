@@ -162,6 +162,18 @@ class ShowTablesCommand : public DdlCommand {
   void execute(TQueryResult& _return) override;
 };
 
+class ShowTableDetailsCommand : public DdlCommand {
+ public:
+  ShowTableDetailsCommand(
+      const rapidjson::Value& ddl_payload,
+      std::shared_ptr<Catalog_Namespace::SessionInfo const> session_ptr);
+
+  void execute(TQueryResult& _return) override;
+
+ private:
+  std::vector<std::string> getFilteredTableNames();
+};
+
 class ShowDatabasesCommand : public DdlCommand {
  public:
   ShowDatabasesCommand(const rapidjson::Value& ddl_payload,
@@ -189,6 +201,14 @@ class RefreshForeignTablesCommand : public DdlCommand {
       std::shared_ptr<Catalog_Namespace::SessionInfo const> session_ptr);
 
   void execute(TQueryResult& _return) override;
+};
+
+enum class ExecutionLocation { ALL_NODES, AGGREGATOR_ONLY, LEAVES_ONLY };
+enum class AggregationType { NONE, UNION };
+
+struct DistributedExecutionDetails {
+  ExecutionLocation execution_location;
+  AggregationType aggregation_type;
 };
 
 class DdlCommandExecutor {
@@ -223,6 +243,13 @@ class DdlCommandExecutor {
    * Returns target query session if this command is KILL QUERY
    */
   const std::string getTargetQuerySessionToKill();
+
+  /**
+   * Returns an object indicating where command execution should
+   * take place and how results should be aggregated for
+   * distributed setups.
+   */
+  DistributedExecutionDetails getDistributedExecutionDetails();
 
  private:
   rapidjson::Document ddl_query_;

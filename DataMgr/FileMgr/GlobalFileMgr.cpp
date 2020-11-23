@@ -294,17 +294,16 @@ size_t GlobalFileMgr::getTableEpoch(const int32_t db_id, const int32_t tb_id) {
   return epoch;
 }
 
-BasicStorageStats GlobalFileMgr::getBasicStorageStats(const int32_t db_id,
-                                                      const int32_t tb_id) {
+StorageStats GlobalFileMgr::getStorageStats(const int32_t db_id, const int32_t tb_id) {
   mapd_shared_lock<mapd_shared_mutex> read_lock(fileMgrs_mutex_);
   AbstractBufferMgr* opened_fm = findFileMgr(db_id, tb_id);
   if (opened_fm) {
-    return dynamic_cast<FileMgr*>(opened_fm)->getBasicStorageStats();
+    return dynamic_cast<FileMgr*>(opened_fm)->getStorageStats();
   }
   // Do not do full init of table just to get storage stats, just check file instead
   const auto file_mgr_key = std::make_pair(db_id, tb_id);
   auto u = std::make_unique<FileMgr>(0, this, file_mgr_key, defaultPageSize_, true);
-  const auto basic_storage_stats = u->getBasicStorageStats();
+  const auto basic_storage_stats = u->getStorageStats();
   u.reset();
   return basic_storage_stats;
 }

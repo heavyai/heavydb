@@ -156,7 +156,6 @@ ParserWrapper::ParserWrapper(std::string query_string) {
                boost::regex_match(query_string, create_view_regex))) {
             is_calcite_ddl_ = true;
             is_legacy_ddl_ = false;
-            is_distributed_calcite_ddl_ = true;
             return;
           }
         }

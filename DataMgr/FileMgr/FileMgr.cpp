@@ -316,44 +316,76 @@ void FileMgr::init(const size_t num_reader_threads, const int32_t epochOverride)
   isFullyInitted_ = true;
 }
 
-BasicStorageStats FileMgr::getBasicStorageStats() {
-  BasicStorageStats basicStorageStats;
-  basicStorageStats.epoch = lastCheckpointedEpoch();
-  basicStorageStats.epoch_floor = epochFloor();
-  basicStorageStats.data_page_size = defaultPageSize_;
-  basicStorageStats.metadata_page_size = METADATA_PAGE_SIZE;
-
+StorageStats FileMgr::getStorageStats() {
+  StorageStats storage_stats;
   mapd_shared_lock<mapd_shared_mutex> read_lock(files_rw_mutex_);
   if (!isFullyInitted_) {
     CHECK(!fileMgrBasePath_.empty());
     boost::filesystem::path path(fileMgrBasePath_);
     if (boost::filesystem::exists(path)) {
       if (!boost::filesystem::is_directory(path)) {
-        LOG(FATAL) << "getBasicStorageStats: Specified path '" << fileMgrBasePath_
+        LOG(FATAL) << "getStorageStats: Specified path '" << fileMgrBasePath_
                    << "' for table data is not a directory.";
       }
-    }
 
-    boost::filesystem::directory_iterator
-        endItr;  // default construction yields past-the-end
-    for (boost::filesystem::directory_iterator fileIt(path); fileIt != endItr; ++fileIt) {
-      FileMetadata fileMetadata = getMetadataForFile(fileIt);
-      if (fileMetadata.is_data_file) {
-        basicStorageStats.num_files++;
-        basicStorageStats.num_bytes += fileMetadata.file_size;
-        basicStorageStats.num_pages += fileMetadata.num_pages;
+      storage_stats.epoch = lastCheckpointedEpoch();
+      storage_stats.epoch_floor = epochFloor();
+      boost::filesystem::directory_iterator
+          endItr;  // default construction yields past-the-end
+      for (boost::filesystem::directory_iterator fileIt(path); fileIt != endItr;
+           ++fileIt) {
+        FileMetadata file_metadata = getMetadataForFile(fileIt);
+        if (file_metadata.is_data_file) {
+          if (file_metadata.page_size == METADATA_PAGE_SIZE) {
+            storage_stats.metadata_file_count++;
+            storage_stats.total_metadata_file_size += file_metadata.file_size;
+            storage_stats.total_metadata_page_count += file_metadata.num_pages;
+          } else if (file_metadata.page_size == defaultPageSize_) {
+            storage_stats.data_file_count++;
+            storage_stats.total_data_file_size += file_metadata.file_size;
+            storage_stats.total_data_page_count += file_metadata.num_pages;
+          } else {
+            UNREACHABLE() << "Found file with unexpected page size. Page size: "
+                          << file_metadata.page_size
+                          << ", file path: " << file_metadata.file_path;
+          }
+        }
       }
     }
   } else {
+    storage_stats.epoch = lastCheckpointedEpoch();
+    storage_stats.epoch_floor = epochFloor();
+
     // We already initialized this table so take the faster path of walking through the
     // FileInfo objects and getting metadata from there
-    for (const auto& fileInfo : files_) {
-      basicStorageStats.num_files++;
-      basicStorageStats.num_bytes += fileInfo->numPages * fileInfo->pageSize;
-      basicStorageStats.num_pages += fileInfo->numPages;
+    for (const auto& file_info : files_) {
+      if (file_info->pageSize == METADATA_PAGE_SIZE) {
+        storage_stats.metadata_file_count++;
+        storage_stats.total_metadata_file_size +=
+            file_info->pageSize * file_info->numPages;
+        storage_stats.total_metadata_page_count += file_info->numPages;
+        if (storage_stats.total_free_metadata_page_count) {
+          storage_stats.total_free_metadata_page_count.value() +=
+              file_info->freePages.size();
+        } else {
+          storage_stats.total_free_metadata_page_count = file_info->freePages.size();
+        }
+      } else if (file_info->pageSize == defaultPageSize_) {
+        storage_stats.data_file_count++;
+        storage_stats.total_data_file_size += file_info->pageSize * file_info->numPages;
+        storage_stats.total_data_page_count += file_info->numPages;
+        if (storage_stats.total_free_data_page_count) {
+          storage_stats.total_free_data_page_count.value() += file_info->freePages.size();
+        } else {
+          storage_stats.total_free_data_page_count = file_info->freePages.size();
+        }
+      } else {
+        UNREACHABLE() << "Found file with unexpected page size. Page size: "
+                      << file_info->pageSize;
+      }
     }
   }
-  return basicStorageStats;
+  return storage_stats;
 }
 
 void FileMgr::processFileFutures(

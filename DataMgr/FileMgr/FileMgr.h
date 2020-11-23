@@ -90,23 +90,21 @@ struct FileMetadata {
   bool is_data_file;
 };
 
-struct BasicStorageStats {
-  size_t num_files;
-  size_t num_bytes;
-  size_t num_pages;
-  size_t data_page_size;
-  size_t metadata_page_size;
-  int32_t epoch;
-  int32_t epoch_floor;
+struct StorageStats {
+  int32_t epoch{0};
+  int32_t epoch_floor{0};
+  uint64_t metadata_file_count{0};
+  uint64_t total_metadata_file_size{0};
+  uint64_t total_metadata_page_count{0};
+  std::optional<uint64_t> total_free_metadata_page_count{};
+  uint64_t data_file_count{0};
+  uint64_t total_data_file_size{0};
+  uint64_t total_data_page_count{0};
+  std::optional<uint64_t> total_free_data_page_count{};
 
-  BasicStorageStats()
-      : num_files(0)
-      , num_bytes(0)
-      , num_pages(0)
-      , data_page_size(0)
-      , metadata_page_size(0)
-      , epoch(0)
-      , epoch_floor(0) {}
+  StorageStats() = default;
+  StorageStats(const StorageStats& storage_stats) = default;
+  virtual ~StorageStats() = default;
 };
 
 /**
@@ -138,7 +136,7 @@ class FileMgr : public AbstractBufferMgr {  // implements
   /// Destructor
   ~FileMgr() override;
 
-  BasicStorageStats getBasicStorageStats();
+  StorageStats getStorageStats();
   /// Creates a chunk with the specified key and page size.
   FileBuffer* createBuffer(const ChunkKey& key,
                            size_t pageSize = 0,
