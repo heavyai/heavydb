@@ -161,16 +161,14 @@ class DataMgr {
   friend class GlobalFileMgr;
 
  public:
-  DataMgr(
+  explicit DataMgr(
       const std::string& dataDir,
       const SystemParameters& system_parameters,
+      std::unique_ptr<CudaMgr_Namespace::CudaMgr> cudaMgr,
       const bool useGpus,
-      const int numGpus,
-      const int startGpu = 0,
       const size_t reservedGpuMem = (1 << 27),
       const size_t numReaderThreads = 0, /* 0 means use default for # of reader threads */
       const DiskCacheConfig cacheConfig = DiskCacheConfig());
-
   ~DataMgr();
   AbstractBuffer* createChunkBuffer(const ChunkKey& key,
                                     const MemoryLevel memoryLevel,

@@ -141,7 +141,12 @@ QueryRunner::QueryRunner(const char* db_path,
 
   table_functions::TableFunctionsFactory::init();
 
-#ifndef HAVE_CUDA
+  std::unique_ptr<CudaMgr_Namespace::CudaMgr> cuda_mgr;
+#ifdef HAVE_CUDA
+  if (uses_gpus) {
+    cuda_mgr = std::make_unique<CudaMgr_Namespace::CudaMgr>(-1, 0);
+  }
+#else
   uses_gpus = false;
 #endif
   SystemParameters mapd_params;
@@ -150,9 +155,8 @@ QueryRunner::QueryRunner(const char* db_path,
 
   auto data_mgr = std::make_shared<Data_Namespace::DataMgr>(data_dir.string(),
                                                             mapd_params,
+                                                            std::move(cuda_mgr),
                                                             uses_gpus,
-                                                            -1,
-                                                            0,
                                                             reserved_gpu_mem,
                                                             0,
                                                             disk_cache_config);

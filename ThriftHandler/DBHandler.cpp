@@ -257,12 +257,25 @@ DBHandler::DBHandler(const std::vector<LeafHostInfo>& db_leaves,
     total_reserved += render_mem_bytes;
   }
 
+  std::unique_ptr<CudaMgr_Namespace::CudaMgr> cuda_mgr;
+#ifdef HAVE_CUDA
+  if (!cpu_mode_only_ || is_rendering_enabled) {
+    try {
+      cuda_mgr = std::make_unique<CudaMgr_Namespace::CudaMgr>(num_gpus, start_gpu);
+    } catch (const std::exception& e) {
+      LOG(ERROR) << "Unable to instantiate CudaMgr, falling back to CPU-only mode. "
+                 << e.what();
+      cpu_mode_only_ = true;
+      is_rendering_enabled = false;
+    }
+  }
+#endif  // HAVE_CUDA
+
   try {
     data_mgr_.reset(new Data_Namespace::DataMgr(data_path.string(),
                                                 system_parameters,
+                                                std::move(cuda_mgr),
                                                 !cpu_mode_only_,
-                                                num_gpus,
-                                                start_gpu,
                                                 total_reserved,
                                                 num_reader_threads,
                                                 disk_cache_config));

@@ -36,9 +36,13 @@ int8_t* ThrustAllocator::allocate(std::ptrdiff_t num_bytes) {
     CHECK_EQ(CUDA_SUCCESS, err);
     return reinterpret_cast<int8_t*>(ptr);
   }
-#endif  // HAVE_CUDA
   Data_Namespace::AbstractBuffer* ab =
       CudaAllocator::allocGpuAbstractBuffer(data_mgr_, num_bytes, device_id_);
+#else
+  Data_Namespace::AbstractBuffer* ab =
+      data_mgr_->alloc(MemoryLevel::CPU_LEVEL, device_id_, num_bytes);
+  CHECK_EQ(ab->getPinCount(), 1);
+#endif  // HAVE_CUDA
   int8_t* raw_ptr = reinterpret_cast<int8_t*>(ab->getMemoryPtr());
   CHECK(!raw_to_ab_ptr_.count(raw_ptr));
   raw_to_ab_ptr_.insert(std::make_pair(raw_ptr, ab));
@@ -68,9 +72,13 @@ int8_t* ThrustAllocator::allocateScopedBuffer(std::ptrdiff_t num_bytes) {
     default_alloc_scoped_buffers_.push_back(reinterpret_cast<int8_t*>(ptr));
     return reinterpret_cast<int8_t*>(ptr);
   }
-#endif  // HAVE_CUDA
   Data_Namespace::AbstractBuffer* ab =
       CudaAllocator::allocGpuAbstractBuffer(data_mgr_, num_bytes, device_id_);
+#else
+  Data_Namespace::AbstractBuffer* ab =
+      data_mgr_->alloc(MemoryLevel::CPU_LEVEL, device_id_, num_bytes);
+  CHECK_EQ(ab->getPinCount(), 1);
+#endif  // HAVE_CUDA
   scoped_buffers_.push_back(ab);
   return reinterpret_cast<int8_t*>(ab->getMemoryPtr());
 }
