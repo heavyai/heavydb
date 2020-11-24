@@ -270,6 +270,15 @@ function install_ninja() {
   mv ninja $PREFIX/bin/
 }
 
+MAVEN_VERSION=3.6.3
+
+function install_maven() {
+    download ${HTTP_DEPS}/apache-maven-${MAVEN_VERSION}-bin.tar.gz
+    extract apache-maven-${MAVEN_VERSION}-bin.tar.gz
+    rm -rf $PREFIX/maven || true
+    mv apache-maven-${MAVEN_VERSION} $PREFIX/maven
+}
+
 TBB_VERSION=2020.2
 
 function install_tbb() {

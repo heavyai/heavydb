@@ -44,11 +44,11 @@ sudo yum groupinstall -y "Development Tools"
 sudo yum install -y \
     zlib-devel \
     epel-release \
+    which \
     libssh \
     openssl-devel \
     ncurses-devel \
     git \
-    maven \
     java-1.8.0-openjdk-devel \
     java-1.8.0-openjdk-headless \
     gperftools \
@@ -104,6 +104,8 @@ export CC=$PREFIX/bin/gcc
 export CXX=$PREFIX/bin/g++
 
 install_ninja
+
+install_maven
 
 install_cmake
 

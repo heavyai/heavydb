@@ -164,6 +164,7 @@ elif [ "$ID" == "centos" ] ; then
   sudo yum install -y \
     zlib-devel \
     epel-release \
+    which \
     libssh \
     openssl-devel \
     ncurses-devel \

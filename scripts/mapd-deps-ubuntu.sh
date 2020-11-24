@@ -64,7 +64,6 @@ DEBIAN_FRONTEND=noninteractive sudo apt install -y \
     default-jre-headless \
     default-jdk \
     default-jdk-headless \
-    maven \
     libncurses5-dev \
     libldap2-dev \
     binutils-dev \
@@ -111,6 +110,8 @@ export PKG_CONFIG_PATH=$PREFIX/lib/pkgconfig:$PREFIX/lib64/pkgconfig:$PKG_CONFIG
 export PATH=$PREFIX/bin:$PATH
 
 install_ninja
+
+install_maven
 
 install_cmake
 
@@ -275,6 +276,7 @@ LD_LIBRARY_PATH=\$PREFIX/lib64:\$LD_LIBRARY_PATH
 
 PATH=/usr/local/cuda/bin:\$PATH
 PATH=\$PREFIX/go/bin:\$PATH
+PATH=\$PREFIX/maven/bin:\$PATH
 PATH=\$PREFIX/bin:\$PATH
 
 VULKAN_SDK=\$PREFIX
