@@ -1,0 +1,9 @@
+Struct ArrowFragment
+====================
+
+.. doxygenstruct:: ArrowFragment
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

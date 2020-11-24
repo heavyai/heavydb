@@ -40,7 +40,7 @@
   <link rel="stylesheet" href="../../_static/theme_overrides.css" type="text/css" />
     <link rel="index" title="Index" href="../../genindex.html" />
     <link rel="search" title="Search" href="../../search.html" />
-    <link rel="next" title="Class ArrowResultSet" href="class_arrow_result_set.html" />
+    <link rel="next" title="Class ArrowForeignStorage" href="class_arrow_foreign_storage.html" />
     <link rel="prev" title="Class ArrayNoneEncoder" href="class_array_none_encoder.html" /> 
 </head>
 
@@ -65,7 +65,7 @@
             
             
               <div class="version">
-                5.5.0dev a7179b2
+                5.5.0dev 340b00d
               </div>
             
           
@@ -326,6 +326,8 @@
 <li class="toctree-l2"><a class="reference internal" href="class_argument.html">Class Argument</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_array_none_encoder.html">Class ArrayNoneEncoder</a></li>
 <li class="toctree-l2 current"><a class="current reference internal" href="#">Class ArrowCsvForeignStorage</a></li>
+<li class="toctree-l2"><a class="reference internal" href="class_arrow_foreign_storage.html">Class ArrowForeignStorage</a></li>
+<li class="toctree-l2"><a class="reference internal" href="class_arrow_foreign_storage_base.html">Class ArrowForeignStorageBase</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_arrow_result_set.html">Class ArrowResultSet</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_arrow_result_set_converter.html">Class ArrowResultSetConverter</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_arrow_result_set_row_iterator.html">Class ArrowResultSetRowIterator</a></li>
@@ -1030,6 +1032,7 @@
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_foreign_storage_mgr.html">Class foreign_storage::ForeignStorageMgr</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_foreign_table_refresh_scheduler.html">Class foreign_storage::ForeignTableRefreshScheduler</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_foreign_table_schema.html">Class foreign_storage::ForeignTableSchema</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_integral_fixed_length_bounds_validator.html">Class foreign_storage::IntegralFixedLengthBoundsValidator</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_lazy_parquet_chunk_loader.html">Class foreign_storage::LazyParquetChunkLoader</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_local_multi_file_reader.html">Class foreign_storage::LocalMultiFileReader</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_mock_foreign_data_wrapper.html">Class foreign_storage::MockForeignDataWrapper</a></li>
@@ -1044,6 +1047,7 @@
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_parquet_fixed_length_encoder.html">Class foreign_storage::ParquetFixedLengthEncoder</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_parquet_geospatial_encoder.html">Class foreign_storage::ParquetGeospatialEncoder</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_parquet_in_place_encoder.html">Class foreign_storage::ParquetInPlaceEncoder</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_parquet_metadata_validator.html">Class foreign_storage::ParquetMetadataValidator</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_parquet_s3_file_system.html">Class foreign_storage::ParquetS3FileSystem</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_parquet_scalar_encoder.html">Class foreign_storage::ParquetScalarEncoder</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_parquet_string_encoder.html">Class foreign_storage::ParquetStringEncoder</a></li>
@@ -1408,7 +1412,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_array_converter_factory.html">Struct ArrayConverterFactory</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_array_value_converter.html">Struct ArrayValueConverter</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_arrays_converter_factory.html">Struct ArraysConverterFactory</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../struct/struct_arrow_csv_foreign_storage_1_1_arrow_fragment.html">Struct ArrowCsvForeignStorage::ArrowFragment</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/struct_arrow_fragment.html">Struct ArrowFragment</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_arrow_importer_exception.html">Struct ArrowImporterException</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_arrow_result.html">Struct ArrowResult</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_arrow_result_set_converter_1_1_column_builder.html">Struct ArrowResultSetConverter::ColumnBuilder</a></li>
@@ -1842,22 +1846,12 @@
 <h1>Class ArrowCsvForeignStorage<a class="headerlink" href="#class-arrowcsvforeignstorage" title="Permalink to this headline">¶</a></h1>
 <dl class="class">
 <dt id="_CPPv422ArrowCsvForeignStorage">
-<span id="_CPPv322ArrowCsvForeignStorage"></span><span id="_CPPv222ArrowCsvForeignStorage"></span><span id="ArrowCsvForeignStorage"></span><span class="target" id="class_arrow_csv_foreign_storage"></span><em class="property">class </em><code class="sig-name descname">ArrowCsvForeignStorage</code> : <em class="property">public</em> <a class="reference internal" href="class_persistent_foreign_storage_interface.html#_CPPv433PersistentForeignStorageInterface" title="PersistentForeignStorageInterface">PersistentForeignStorageInterface</a><a class="headerlink" href="#_CPPv422ArrowCsvForeignStorage" title="Permalink to this definition">¶</a><br /></dt>
+<span id="_CPPv322ArrowCsvForeignStorage"></span><span id="_CPPv222ArrowCsvForeignStorage"></span><span id="ArrowCsvForeignStorage"></span><span class="target" id="class_arrow_csv_foreign_storage"></span><em class="property">class </em><code class="sig-name descname">ArrowCsvForeignStorage</code> : <em class="property">public</em> <a class="reference internal" href="class_arrow_foreign_storage_base.html#_CPPv423ArrowForeignStorageBase" title="ArrowForeignStorageBase">ArrowForeignStorageBase</a><a class="headerlink" href="#_CPPv422ArrowCsvForeignStorage" title="Permalink to this definition">¶</a><br /></dt>
 <dd><div class="breathe-sectiondef docutils container">
 <p class="breathe-sectiondef-title rubric">Public Functions</p>
 <dl class="function">
 <dt id="_CPPv4N22ArrowCsvForeignStorage22ArrowCsvForeignStorageEv">
 <span id="_CPPv3N22ArrowCsvForeignStorage22ArrowCsvForeignStorageEv"></span><span id="_CPPv2N22ArrowCsvForeignStorage22ArrowCsvForeignStorageEv"></span><span id="ArrowCsvForeignStorage::ArrowCsvForeignStorage"></span><span class="target" id="class_arrow_csv_foreign_storage_1a757d1116fa9b744aa126851de39fae39"></span><code class="sig-name descname">ArrowCsvForeignStorage</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N22ArrowCsvForeignStorage22ArrowCsvForeignStorageEv" title="Permalink to this definition">¶</a><br /></dt>
-<dd></dd></dl>
-
-<dl class="function">
-<dt id="_CPPv4N22ArrowCsvForeignStorage6appendERKNSt6vectorI26ForeignStorageColumnBufferEE">
-<span id="_CPPv3N22ArrowCsvForeignStorage6appendERKNSt6vectorI26ForeignStorageColumnBufferEE"></span><span id="_CPPv2N22ArrowCsvForeignStorage6appendERKNSt6vectorI26ForeignStorageColumnBufferEE"></span><span id="ArrowCsvForeignStorage::append__std::vector:ForeignStorageColumnBuffer:CR"></span><span class="target" id="class_arrow_csv_foreign_storage_1a9ea8eaf62be55d95e0d410b58acdc055"></span>void <code class="sig-name descname">append</code><span class="sig-paren">(</span><em class="property">const</em> std::vector&lt;<a class="reference internal" href="../struct/struct_foreign_storage_column_buffer.html#_CPPv426ForeignStorageColumnBuffer" title="ForeignStorageColumnBuffer">ForeignStorageColumnBuffer</a>&gt; &amp;<em>column_buffers</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N22ArrowCsvForeignStorage6appendERKNSt6vectorI26ForeignStorageColumnBufferEE" title="Permalink to this definition">¶</a><br /></dt>
-<dd></dd></dl>
-
-<dl class="function">
-<dt id="_CPPv4N22ArrowCsvForeignStorage4readERK8ChunkKeyRK11SQLTypeInfoP6int8_tK6size_t">
-<span id="_CPPv3N22ArrowCsvForeignStorage4readERK8ChunkKeyRK11SQLTypeInfoP6int8_tK6size_t"></span><span id="_CPPv2N22ArrowCsvForeignStorage4readERK8ChunkKeyRK11SQLTypeInfoP6int8_tK6size_t"></span><span id="ArrowCsvForeignStorage::read__ChunkKeyCR.SQLTypeInfoCR.int8_tP.sC"></span><span class="target" id="class_arrow_csv_foreign_storage_1a43b23e8d3cd5b345b9a8e7dffb4ae693"></span>void <code class="sig-name descname">read</code><span class="sig-paren">(</span><em class="property">const</em> ChunkKey &amp;<em>chunk_key</em>, <em class="property">const</em> <a class="reference internal" href="class_s_q_l_type_info.html#_CPPv411SQLTypeInfo" title="SQLTypeInfo">SQLTypeInfo</a> &amp;<em>sql_type</em>, int8_t *<em>dest</em>, <em class="property">const</em> size_t <em>numBytes</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N22ArrowCsvForeignStorage4readERK8ChunkKeyRK11SQLTypeInfoP6int8_tK6size_t" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 <dl class="function">
@@ -1875,48 +1869,7 @@
 <span id="_CPPv3NK22ArrowCsvForeignStorage7getTypeEv"></span><span id="_CPPv2NK22ArrowCsvForeignStorage7getTypeEv"></span><span id="ArrowCsvForeignStorage::getTypeC"></span><span class="target" id="class_arrow_csv_foreign_storage_1ab1f0842da879aa1483dd52504d3221ab"></span>std::string <code class="sig-name descname">getType</code><span class="sig-paren">(</span><span class="sig-paren">)</span> <em class="property">const</em><a class="headerlink" href="#_CPPv4NK22ArrowCsvForeignStorage7getTypeEv" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
-<dl class="function">
-<dt id="_CPPv4N22ArrowCsvForeignStorage29createDictionaryEncodedColumnEP16StringDictionaryRK16ColumnDescriptorRNSt6vectorI13ArrowFragmentEEPN5arrow12ChunkedArrayERN3tbb10task_groupERKNSt6vectorI4FragEE8ChunkKeyPN14Data_Namespace17AbstractBufferMgrE">
-<span id="_CPPv3N22ArrowCsvForeignStorage29createDictionaryEncodedColumnEP16StringDictionaryRK16ColumnDescriptorRNSt6vectorI13ArrowFragmentEEPN5arrow12ChunkedArrayERN3tbb10task_groupERKNSt6vectorI4FragEE8ChunkKeyPN14Data_Namespace17AbstractBufferMgrE"></span><span id="_CPPv2N22ArrowCsvForeignStorage29createDictionaryEncodedColumnEP16StringDictionaryRK16ColumnDescriptorRNSt6vectorI13ArrowFragmentEEPN5arrow12ChunkedArrayERN3tbb10task_groupERKNSt6vectorI4FragEE8ChunkKeyPN14Data_Namespace17AbstractBufferMgrE"></span><span id="ArrowCsvForeignStorage::createDictionaryEncodedColumn__StringDictionaryP.ColumnDescriptorCR.std::vector:ArrowFragment:R.arrow::ChunkedArrayP.tbb::task_groupR.std::vector:Frag:CR.ChunkKey.Data_Namespace::AbstractBufferMgrP"></span><span class="target" id="class_arrow_csv_foreign_storage_1ae08236be3a9d9c3aec49cc6897c02256"></span>void <code class="sig-name descname">createDictionaryEncodedColumn</code><span class="sig-paren">(</span><a class="reference internal" href="class_string_dictionary.html#_CPPv416StringDictionary" title="StringDictionary">StringDictionary</a> *<em>dict</em>, <em class="property">const</em> <a class="reference internal" href="../struct/struct_column_descriptor.html#_CPPv416ColumnDescriptor" title="ColumnDescriptor">ColumnDescriptor</a> &amp;<em>c</em>, std::vector&lt;<a class="reference internal" href="#_CPPv4N22ArrowCsvForeignStorage13ArrowFragmentE" title="ArrowCsvForeignStorage::ArrowFragment">ArrowFragment</a>&gt; &amp;<em>col</em>, arrow::ChunkedArray *<em>arr_col_chunked_array</em>, tbb::task_group &amp;<em>tg</em>, <em class="property">const</em> std::vector&lt;<a class="reference internal" href="../struct/struct_frag.html#_CPPv44Frag" title="Frag">Frag</a>&gt; &amp;<em>fragments</em>, ChunkKey <em>key</em>, Data_Namespace::AbstractBufferMgr *<em>mgr</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N22ArrowCsvForeignStorage29createDictionaryEncodedColumnEP16StringDictionaryRK16ColumnDescriptorRNSt6vectorI13ArrowFragmentEEPN5arrow12ChunkedArrayERN3tbb10task_groupERKNSt6vectorI4FragEE8ChunkKeyPN14Data_Namespace17AbstractBufferMgrE" title="Permalink to this definition">¶</a><br /></dt>
-<dd></dd></dl>
-
-<dl class="function">
-<dt id="_CPPv4I00EN22ArrowCsvForeignStorage19createDecimalColumnEvRK16ColumnDescriptorRNSt6vectorI13ArrowFragmentEEPN5arrow12ChunkedArrayERN3tbb10task_groupERKNSt6vectorI4FragEE8ChunkKeyPN14Data_Namespace17AbstractBufferMgrE">
-<span id="_CPPv3I00EN22ArrowCsvForeignStorage19createDecimalColumnERK16ColumnDescriptorRNSt6vectorI13ArrowFragmentEEPN5arrow12ChunkedArrayERN3tbb10task_groupERKNSt6vectorI4FragEE8ChunkKeyPN14Data_Namespace17AbstractBufferMgrE"></span><span id="_CPPv2I00EN22ArrowCsvForeignStorage19createDecimalColumnERK16ColumnDescriptorRNSt6vectorI13ArrowFragmentEEPN5arrow12ChunkedArrayERN3tbb10task_groupERKNSt6vectorI4FragEE8ChunkKeyPN14Data_Namespace17AbstractBufferMgrE"></span><span class="target" id="class_arrow_csv_foreign_storage_1a58671931d2e0fbef73db7745d3113c06"></span>template&lt;typename <code class="sig-name descname">T</code>, typename <code class="sig-name descname">ChunkType</code>&gt;<br />void <code class="sig-name descname">createDecimalColumn</code><span class="sig-paren">(</span><em class="property">const</em> <a class="reference internal" href="../struct/struct_column_descriptor.html#_CPPv416ColumnDescriptor" title="ColumnDescriptor">ColumnDescriptor</a> &amp;<em>c</em>, std::vector&lt;<a class="reference internal" href="#_CPPv4N22ArrowCsvForeignStorage13ArrowFragmentE" title="ArrowCsvForeignStorage::ArrowFragment">ArrowFragment</a>&gt; &amp;<em>col</em>, arrow::ChunkedArray *<em>arr_col_chunked_array</em>, tbb::task_group &amp;<em>tg</em>, <em class="property">const</em> std::vector&lt;<a class="reference internal" href="../struct/struct_frag.html#_CPPv44Frag" title="Frag">Frag</a>&gt; &amp;<em>fragments</em>, ChunkKey <em>key</em>, Data_Namespace::AbstractBufferMgr *<em>mgr</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4I00EN22ArrowCsvForeignStorage19createDecimalColumnEvRK16ColumnDescriptorRNSt6vectorI13ArrowFragmentEEPN5arrow12ChunkedArrayERN3tbb10task_groupERKNSt6vectorI4FragEE8ChunkKeyPN14Data_Namespace17AbstractBufferMgrE" title="Permalink to this definition">¶</a><br /></dt>
-<dd></dd></dl>
-
 </div>
-<div class="breathe-sectiondef docutils container">
-<p class="breathe-sectiondef-title rubric">Public Members</p>
-<dl class="member">
-<dt id="_CPPv4N22ArrowCsvForeignStorage9m_columnsE">
-<span id="_CPPv3N22ArrowCsvForeignStorage9m_columnsE"></span><span id="_CPPv2N22ArrowCsvForeignStorage9m_columnsE"></span><span id="ArrowCsvForeignStorage::m_columns__std::map:std::array:i.3:.std::vector:ArrowFragment::"></span><span class="target" id="class_arrow_csv_foreign_storage_1af7d24c1c8d152d67d726786f41f59785"></span>std::map&lt;std::array&lt;int, 3&gt;, std::vector&lt;<a class="reference internal" href="#_CPPv4N22ArrowCsvForeignStorage13ArrowFragmentE" title="ArrowCsvForeignStorage::ArrowFragment">ArrowFragment</a>&gt;&gt; <code class="sig-name descname">m_columns</code><a class="headerlink" href="#_CPPv4N22ArrowCsvForeignStorage9m_columnsE" title="Permalink to this definition">¶</a><br /></dt>
-<dd></dd></dl>
-
-</div>
-<dl class="class">
-<dt id="_CPPv4N22ArrowCsvForeignStorage13ArrowFragmentE">
-<span id="_CPPv3N22ArrowCsvForeignStorage13ArrowFragmentE"></span><span id="_CPPv2N22ArrowCsvForeignStorage13ArrowFragmentE"></span><span id="ArrowCsvForeignStorage::ArrowFragment"></span><span class="target" id="struct_arrow_csv_foreign_storage_1_1_arrow_fragment"></span><em class="property">struct </em><code class="sig-name descname">ArrowFragment</code><a class="headerlink" href="#_CPPv4N22ArrowCsvForeignStorage13ArrowFragmentE" title="Permalink to this definition">¶</a><br /></dt>
-<dd><div class="breathe-sectiondef docutils container">
-<p class="breathe-sectiondef-title rubric">Public Members</p>
-<dl class="member">
-<dt id="_CPPv4N22ArrowCsvForeignStorage13ArrowFragment6offsetE">
-<span id="_CPPv3N22ArrowCsvForeignStorage13ArrowFragment6offsetE"></span><span id="_CPPv2N22ArrowCsvForeignStorage13ArrowFragment6offsetE"></span><span id="ArrowCsvForeignStorage::ArrowFragment::offset__int64_t"></span><span class="target" id="struct_arrow_csv_foreign_storage_1_1_arrow_fragment_1a4fda5b2bc23d4de583b3ad4b23f2e478"></span>int64_t <code class="sig-name descname">offset</code><a class="headerlink" href="#_CPPv4N22ArrowCsvForeignStorage13ArrowFragment6offsetE" title="Permalink to this definition">¶</a><br /></dt>
-<dd></dd></dl>
-
-<dl class="member">
-<dt id="_CPPv4N22ArrowCsvForeignStorage13ArrowFragment2szE">
-<span id="_CPPv3N22ArrowCsvForeignStorage13ArrowFragment2szE"></span><span id="_CPPv2N22ArrowCsvForeignStorage13ArrowFragment2szE"></span><span id="ArrowCsvForeignStorage::ArrowFragment::sz__int64_t"></span><span class="target" id="struct_arrow_csv_foreign_storage_1_1_arrow_fragment_1afb2bafea4801826e0a92f516bdfbb28a"></span>int64_t <code class="sig-name descname">sz</code><a class="headerlink" href="#_CPPv4N22ArrowCsvForeignStorage13ArrowFragment2szE" title="Permalink to this definition">¶</a><br /></dt>
-<dd></dd></dl>
-
-<dl class="member">
-<dt id="_CPPv4N22ArrowCsvForeignStorage13ArrowFragment6chunksE">
-<span id="_CPPv3N22ArrowCsvForeignStorage13ArrowFragment6chunksE"></span><span id="_CPPv2N22ArrowCsvForeignStorage13ArrowFragment6chunksE"></span><span id="ArrowCsvForeignStorage::ArrowFragment::chunks__std::vector:std::shared_ptr:arrow::ArrayData::"></span><span class="target" id="struct_arrow_csv_foreign_storage_1_1_arrow_fragment_1ab9f550bb855f1f799b066175e7b88cf8"></span>std::vector&lt;std::shared_ptr&lt;arrow::ArrayData&gt;&gt; <code class="sig-name descname">chunks</code><a class="headerlink" href="#_CPPv4N22ArrowCsvForeignStorage13ArrowFragment6chunksE" title="Permalink to this definition">¶</a><br /></dt>
-<dd></dd></dl>
-
-</div>
-</dd></dl>
-
 </dd></dl>
 
 </div>
@@ -1929,7 +1882,7 @@
   
     <div class="rst-footer-buttons" role="navigation" aria-label="footer navigation">
       
-        <a href="class_arrow_result_set.html" class="btn btn-neutral float-right" title="Class ArrowResultSet" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right"></span></a>
+        <a href="class_arrow_foreign_storage.html" class="btn btn-neutral float-right" title="Class ArrowForeignStorage" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right"></span></a>
       
       
         <a href="class_array_none_encoder.html" class="btn btn-neutral float-left" title="Class ArrayNoneEncoder" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left"></span> Previous</a>

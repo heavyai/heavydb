@@ -65,7 +65,7 @@
             
             
               <div class="version">
-                5.5.0dev a7179b2
+                5.5.0dev 340b00d
               </div>
             
           
@@ -326,6 +326,8 @@
 <li class="toctree-l2"><a class="reference internal" href="class_argument.html">Class Argument</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_array_none_encoder.html">Class ArrayNoneEncoder</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_arrow_csv_foreign_storage.html">Class ArrowCsvForeignStorage</a></li>
+<li class="toctree-l2"><a class="reference internal" href="class_arrow_foreign_storage.html">Class ArrowForeignStorage</a></li>
+<li class="toctree-l2"><a class="reference internal" href="class_arrow_foreign_storage_base.html">Class ArrowForeignStorageBase</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_arrow_result_set.html">Class ArrowResultSet</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_arrow_result_set_converter.html">Class ArrowResultSetConverter</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_arrow_result_set_row_iterator.html">Class ArrowResultSetRowIterator</a></li>
@@ -1030,6 +1032,7 @@
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_foreign_storage_mgr.html">Class foreign_storage::ForeignStorageMgr</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_foreign_table_refresh_scheduler.html">Class foreign_storage::ForeignTableRefreshScheduler</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_foreign_table_schema.html">Class foreign_storage::ForeignTableSchema</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_integral_fixed_length_bounds_validator.html">Class foreign_storage::IntegralFixedLengthBoundsValidator</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_lazy_parquet_chunk_loader.html">Class foreign_storage::LazyParquetChunkLoader</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_local_multi_file_reader.html">Class foreign_storage::LocalMultiFileReader</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_mock_foreign_data_wrapper.html">Class foreign_storage::MockForeignDataWrapper</a></li>
@@ -1044,6 +1047,7 @@
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_parquet_fixed_length_encoder.html">Class foreign_storage::ParquetFixedLengthEncoder</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_parquet_geospatial_encoder.html">Class foreign_storage::ParquetGeospatialEncoder</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_parquet_in_place_encoder.html">Class foreign_storage::ParquetInPlaceEncoder</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_parquet_metadata_validator.html">Class foreign_storage::ParquetMetadataValidator</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_parquet_s3_file_system.html">Class foreign_storage::ParquetS3FileSystem</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_parquet_scalar_encoder.html">Class foreign_storage::ParquetScalarEncoder</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_parquet_string_encoder.html">Class foreign_storage::ParquetStringEncoder</a></li>
@@ -1408,7 +1412,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_array_converter_factory.html">Struct ArrayConverterFactory</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_array_value_converter.html">Struct ArrayValueConverter</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_arrays_converter_factory.html">Struct ArraysConverterFactory</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../struct/struct_arrow_csv_foreign_storage_1_1_arrow_fragment.html">Struct ArrowCsvForeignStorage::ArrowFragment</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/struct_arrow_fragment.html">Struct ArrowFragment</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_arrow_importer_exception.html">Struct ArrowImporterException</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_arrow_result.html">Struct ArrowResult</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_arrow_result_set_converter_1_1_column_builder.html">Struct ArrowResultSetConverter::ColumnBuilder</a></li>
@@ -1893,6 +1897,20 @@
 <p><dl class="simple">
 <dt><strong>Parameters</strong></dt><dd><ul class="breatheparameterlist simple">
 <li><p><code class="docutils literal notranslate"><span class="pre">src_data</span></code>: - the data with which to update statistics </p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">num_elements</span></code>: - the number of elements to scan in the data </p></li>
+</ul>
+</dd>
+</dl>
+</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="_CPPv4N18FixedLengthEncoder18updateStatsEncodedEPCK6int8_tK6size_t">
+<span id="_CPPv3N18FixedLengthEncoder18updateStatsEncodedEPCK6int8_tK6size_t"></span><span id="_CPPv2N18FixedLengthEncoder18updateStatsEncodedEPCK6int8_tK6size_t"></span><span id="FixedLengthEncoder::updateStatsEncoded__int8_tCPC.sC"></span><span class="target" id="class_fixed_length_encoder_1a9038e9aa47ff83065ed03175eda0e36a"></span>void <code class="sig-name descname">updateStatsEncoded</code><span class="sig-paren">(</span><em class="property">const</em> int8_t *<em class="property">const</em> <em>dst_data</em>, <em class="property">const</em> size_t <em>num_elements</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N18FixedLengthEncoder18updateStatsEncodedEPCK6int8_tK6size_t" title="Permalink to this definition">¶</a><br /></dt>
+<dd><p>Update statistics for encoded data without appending.</p>
+<p><dl class="simple">
+<dt><strong>Parameters</strong></dt><dd><ul class="breatheparameterlist simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">dst_data</span></code>: - the data with which to update statistics </p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">num_elements</span></code>: - the number of elements to scan in the data </p></li>
 </ul>
 </dd>

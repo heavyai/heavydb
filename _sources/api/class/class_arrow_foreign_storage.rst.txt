@@ -1,0 +1,9 @@
+Class ArrowForeignStorage
+=========================
+
+.. doxygenclass:: ArrowForeignStorage
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

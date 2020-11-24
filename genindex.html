@@ -64,7 +64,7 @@
             
             
               <div class="version">
-                5.5.0dev a7179b2
+                5.5.0dev 340b00d
               </div>
             
           
@@ -325,6 +325,8 @@
 <li class="toctree-l2"><a class="reference internal" href="api/class/class_argument.html">Class Argument</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/class_array_none_encoder.html">Class ArrayNoneEncoder</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/class_arrow_csv_foreign_storage.html">Class ArrowCsvForeignStorage</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/class/class_arrow_foreign_storage.html">Class ArrowForeignStorage</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/class/class_arrow_foreign_storage_base.html">Class ArrowForeignStorageBase</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/class_arrow_result_set.html">Class ArrowResultSet</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/class_arrow_result_set_converter.html">Class ArrowResultSetConverter</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/class_arrow_result_set_row_iterator.html">Class ArrowResultSetRowIterator</a></li>
@@ -1029,6 +1031,7 @@
 <li class="toctree-l2"><a class="reference internal" href="api/class/classforeign__storage_1_1_foreign_storage_mgr.html">Class foreign_storage::ForeignStorageMgr</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/classforeign__storage_1_1_foreign_table_refresh_scheduler.html">Class foreign_storage::ForeignTableRefreshScheduler</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/classforeign__storage_1_1_foreign_table_schema.html">Class foreign_storage::ForeignTableSchema</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/class/classforeign__storage_1_1_integral_fixed_length_bounds_validator.html">Class foreign_storage::IntegralFixedLengthBoundsValidator</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/classforeign__storage_1_1_lazy_parquet_chunk_loader.html">Class foreign_storage::LazyParquetChunkLoader</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/classforeign__storage_1_1_local_multi_file_reader.html">Class foreign_storage::LocalMultiFileReader</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/classforeign__storage_1_1_mock_foreign_data_wrapper.html">Class foreign_storage::MockForeignDataWrapper</a></li>
@@ -1043,6 +1046,7 @@
 <li class="toctree-l2"><a class="reference internal" href="api/class/classforeign__storage_1_1_parquet_fixed_length_encoder.html">Class foreign_storage::ParquetFixedLengthEncoder</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/classforeign__storage_1_1_parquet_geospatial_encoder.html">Class foreign_storage::ParquetGeospatialEncoder</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/classforeign__storage_1_1_parquet_in_place_encoder.html">Class foreign_storage::ParquetInPlaceEncoder</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/class/classforeign__storage_1_1_parquet_metadata_validator.html">Class foreign_storage::ParquetMetadataValidator</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/classforeign__storage_1_1_parquet_s3_file_system.html">Class foreign_storage::ParquetS3FileSystem</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/classforeign__storage_1_1_parquet_scalar_encoder.html">Class foreign_storage::ParquetScalarEncoder</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/classforeign__storage_1_1_parquet_string_encoder.html">Class foreign_storage::ParquetStringEncoder</a></li>
@@ -1407,7 +1411,7 @@
 <li class="toctree-l2"><a class="reference internal" href="api/struct/struct_array_converter_factory.html">Struct ArrayConverterFactory</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/struct/struct_array_value_converter.html">Struct ArrayValueConverter</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/struct/struct_arrays_converter_factory.html">Struct ArraysConverterFactory</a></li>
-<li class="toctree-l2"><a class="reference internal" href="api/struct/struct_arrow_csv_foreign_storage_1_1_arrow_fragment.html">Struct ArrowCsvForeignStorage::ArrowFragment</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/struct/struct_arrow_fragment.html">Struct ArrowFragment</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/struct/struct_arrow_importer_exception.html">Struct ArrowImporterException</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/struct/struct_arrow_result.html">Struct ArrowResult</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/struct/struct_arrow_result_set_converter_1_1_column_builder.html">Struct ArrowResultSetConverter::ColumnBuilder</a></li>
@@ -2731,8 +2735,6 @@
 </li>
       <li><a href="api/class/class_analyzer_1_1_like_expr.html#_CPPv4N8Analyzer8LikeExpr9is_simpleE">Analyzer::LikeExpr::is_simple (C++ member)</a>
 </li>
-  </ul></td>
-  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="api/class/class_analyzer_1_1_like_expr.html#_CPPv4N8Analyzer8LikeExpr9like_exprE">Analyzer::LikeExpr::like_expr (C++ member)</a>
 </li>
       <li><a href="api/class/class_analyzer_1_1_like_expr.html#_CPPv4N8Analyzer8LikeExpr8LikeExprENSt10shared_ptrIN8Analyzer4ExprEEENSt10shared_ptrIN8Analyzer4ExprEEENSt10shared_ptrIN8Analyzer4ExprEEEbb">Analyzer::LikeExpr::LikeExpr (C++ function)</a>
@@ -2749,6 +2751,8 @@
 </li>
       <li><a href="api/class/class_analyzer_1_1_likelihood_expr.html#_CPPv4N8Analyzer14LikelihoodExprE">Analyzer::LikelihoodExpr (C++ class)</a>
 </li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="api/class/class_analyzer_1_1_likelihood_expr.html#_CPPv4N8Analyzer14LikelihoodExpr3argE">Analyzer::LikelihoodExpr::arg (C++ member)</a>
 </li>
       <li><a href="api/class/class_analyzer_1_1_likelihood_expr.html#_CPPv4NK8Analyzer14LikelihoodExpr18collect_column_varERNSt3setIPK9ColumnVarXbool(*colvar_set)(const  ColumnVar  *, const  ColumnVar  *)EEEb">Analyzer::LikelihoodExpr::collect_column_var (C++ function)</a>
@@ -3373,31 +3377,63 @@
 </li>
       <li><a href="api/class/class_arrow_csv_foreign_storage.html#_CPPv422ArrowCsvForeignStorage">ArrowCsvForeignStorage (C++ class)</a>
 </li>
-      <li><a href="api/class/class_arrow_csv_foreign_storage.html#_CPPv4N22ArrowCsvForeignStorage6appendERKNSt6vectorI26ForeignStorageColumnBufferEE">ArrowCsvForeignStorage::append (C++ function)</a>
-</li>
       <li><a href="api/class/class_arrow_csv_foreign_storage.html#_CPPv4N22ArrowCsvForeignStorage22ArrowCsvForeignStorageEv">ArrowCsvForeignStorage::ArrowCsvForeignStorage (C++ function)</a>
-</li>
-      <li><a href="api/class/class_arrow_csv_foreign_storage.html#_CPPv4N22ArrowCsvForeignStorage13ArrowFragmentE">ArrowCsvForeignStorage::ArrowFragment (C++ class)</a>, <a href="api/struct/struct_arrow_csv_foreign_storage_1_1_arrow_fragment.html#_CPPv4N22ArrowCsvForeignStorage13ArrowFragmentE">[1]</a>
-</li>
-      <li><a href="api/class/class_arrow_csv_foreign_storage.html#_CPPv4N22ArrowCsvForeignStorage13ArrowFragment6chunksE">ArrowCsvForeignStorage::ArrowFragment::chunks (C++ member)</a>, <a href="api/struct/struct_arrow_csv_foreign_storage_1_1_arrow_fragment.html#_CPPv4N22ArrowCsvForeignStorage13ArrowFragment6chunksE">[1]</a>
-</li>
-      <li><a href="api/class/class_arrow_csv_foreign_storage.html#_CPPv4N22ArrowCsvForeignStorage13ArrowFragment6offsetE">ArrowCsvForeignStorage::ArrowFragment::offset (C++ member)</a>, <a href="api/struct/struct_arrow_csv_foreign_storage_1_1_arrow_fragment.html#_CPPv4N22ArrowCsvForeignStorage13ArrowFragment6offsetE">[1]</a>
-</li>
-      <li><a href="api/class/class_arrow_csv_foreign_storage.html#_CPPv4N22ArrowCsvForeignStorage13ArrowFragment2szE">ArrowCsvForeignStorage::ArrowFragment::sz (C++ member)</a>, <a href="api/struct/struct_arrow_csv_foreign_storage_1_1_arrow_fragment.html#_CPPv4N22ArrowCsvForeignStorage13ArrowFragment2szE">[1]</a>
-</li>
-      <li><a href="api/class/class_arrow_csv_foreign_storage.html#_CPPv4I00EN22ArrowCsvForeignStorage19createDecimalColumnEvRK16ColumnDescriptorRNSt6vectorI13ArrowFragmentEEPN5arrow12ChunkedArrayERN3tbb10task_groupERKNSt6vectorI4FragEE8ChunkKeyPN14Data_Namespace17AbstractBufferMgrE">ArrowCsvForeignStorage::createDecimalColumn (C++ function)</a>
-</li>
-      <li><a href="api/class/class_arrow_csv_foreign_storage.html#_CPPv4N22ArrowCsvForeignStorage29createDictionaryEncodedColumnEP16StringDictionaryRK16ColumnDescriptorRNSt6vectorI13ArrowFragmentEEPN5arrow12ChunkedArrayERN3tbb10task_groupERKNSt6vectorI4FragEE8ChunkKeyPN14Data_Namespace17AbstractBufferMgrE">ArrowCsvForeignStorage::createDictionaryEncodedColumn (C++ function)</a>
 </li>
       <li><a href="api/class/class_arrow_csv_foreign_storage.html#_CPPv4NK22ArrowCsvForeignStorage7getTypeEv">ArrowCsvForeignStorage::getType (C++ function)</a>
 </li>
-      <li><a href="api/class/class_arrow_csv_foreign_storage.html#_CPPv4N22ArrowCsvForeignStorage9m_columnsE">ArrowCsvForeignStorage::m_columns (C++ member)</a>
-</li>
       <li><a href="api/class/class_arrow_csv_foreign_storage.html#_CPPv4N22ArrowCsvForeignStorage12prepareTableEKiRKNSt6stringER15TableDescriptorRNSt4listI16ColumnDescriptorEE">ArrowCsvForeignStorage::prepareTable (C++ function)</a>
 </li>
-      <li><a href="api/class/class_arrow_csv_foreign_storage.html#_CPPv4N22ArrowCsvForeignStorage4readERK8ChunkKeyRK11SQLTypeInfoP6int8_tK6size_t">ArrowCsvForeignStorage::read (C++ function)</a>
-</li>
       <li><a href="api/class/class_arrow_csv_foreign_storage.html#_CPPv4N22ArrowCsvForeignStorage13registerTableEPN17Catalog_Namespace7CatalogENSt4pairIiiEERKNSt6stringERK15TableDescriptorRKNSt4listI16ColumnDescriptorEEPN14Data_Namespace17AbstractBufferMgrE">ArrowCsvForeignStorage::registerTable (C++ function)</a>
+</li>
+      <li><a href="api/class/class_arrow_foreign_storage.html#_CPPv419ArrowForeignStorage">ArrowForeignStorage (C++ class)</a>
+</li>
+      <li><a href="api/class/class_arrow_foreign_storage.html#_CPPv4N19ArrowForeignStorage19ArrowForeignStorageEv">ArrowForeignStorage::ArrowForeignStorage (C++ function)</a>
+</li>
+      <li><a href="api/class/class_arrow_foreign_storage.html#_CPPv4NK19ArrowForeignStorage7getTypeEv">ArrowForeignStorage::getType (C++ function)</a>
+</li>
+      <li><a href="api/class/class_arrow_foreign_storage.html#_CPPv4N19ArrowForeignStorage4nameE">ArrowForeignStorage::name (C++ member)</a>
+</li>
+      <li><a href="api/class/class_arrow_foreign_storage.html#_CPPv4N19ArrowForeignStorage12prepareTableEKiRKNSt6stringER15TableDescriptorRNSt4listI16ColumnDescriptorEE">ArrowForeignStorage::prepareTable (C++ function)</a>
+</li>
+      <li><a href="api/class/class_arrow_foreign_storage.html#_CPPv4N19ArrowForeignStorage13registerTableEPN17Catalog_Namespace7CatalogENSt4pairIiiEERKNSt6stringERK15TableDescriptorRKNSt4listI16ColumnDescriptorEEPN14Data_Namespace17AbstractBufferMgrE">ArrowForeignStorage::registerTable (C++ function)</a>
+</li>
+      <li><a href="api/class/class_arrow_foreign_storage.html#_CPPv4N19ArrowForeignStorage6tablesE">ArrowForeignStorage::tables (C++ member)</a>
+</li>
+      <li><a href="api/class/class_arrow_foreign_storage_base.html#_CPPv423ArrowForeignStorageBase">ArrowForeignStorageBase (C++ class)</a>
+</li>
+      <li><a href="api/class/class_arrow_foreign_storage_base.html#_CPPv4N23ArrowForeignStorageBase6appendERKNSt6vectorI26ForeignStorageColumnBufferEE">ArrowForeignStorageBase::append (C++ function)</a>
+</li>
+      <li><a href="api/class/class_arrow_foreign_storage_base.html#_CPPv4N23ArrowForeignStorageBase22convertArrowDictionaryEP16StringDictionaryRK16ColumnDescriptorNSt10shared_ptrIN5arrow12ChunkedArrayEEE">ArrowForeignStorageBase::convertArrowDictionary (C++ function)</a>
+</li>
+      <li><a href="api/class/class_arrow_foreign_storage_base.html#_CPPv4I00EN23ArrowForeignStorageBase19createDecimalColumnENSt10shared_ptrIN5arrow12ChunkedArrayEEERK16ColumnDescriptorNSt10shared_ptrIN5arrow12ChunkedArrayEEE">ArrowForeignStorageBase::createDecimalColumn (C++ function)</a>
+</li>
+      <li><a href="api/class/class_arrow_foreign_storage_base.html#_CPPv4N23ArrowForeignStorageBase29createDictionaryEncodedColumnEP16StringDictionaryRK16ColumnDescriptorNSt10shared_ptrIN5arrow12ChunkedArrayEEE">ArrowForeignStorageBase::createDictionaryEncodedColumn (C++ function)</a>
+</li>
+      <li><a href="api/class/class_arrow_foreign_storage_base.html#_CPPv4N23ArrowForeignStorageBase18generateNullValuesERKNSt6vectorI4FragEENSt10shared_ptrIN5arrow12ChunkedArrayEEERK11SQLTypeInfo">ArrowForeignStorageBase::generateNullValues (C++ function)</a>
+</li>
+      <li><a href="api/class/class_arrow_foreign_storage_base.html#_CPPv4N23ArrowForeignStorageBase22generateSentinelValuesEP6int8_tRK11SQLTypeInfo6size_t">ArrowForeignStorageBase::generateSentinelValues (C++ function)</a>
+</li>
+      <li><a href="api/class/class_arrow_foreign_storage_base.html#_CPPv4N23ArrowForeignStorageBase16getSizeAndOffsetERK4FragRKNSt10shared_ptrIN5arrow5ArrayEEE6size_tRiRi">ArrowForeignStorageBase::getSizeAndOffset (C++ function)</a>
+</li>
+      <li><a href="api/class/class_arrow_foreign_storage_base.html#_CPPv4N23ArrowForeignStorageBase9m_columnsE">ArrowForeignStorageBase::m_columns (C++ member)</a>
+</li>
+      <li><a href="api/class/class_arrow_foreign_storage_base.html#_CPPv4N23ArrowForeignStorageBase12makeFragmentERK4FragR13ArrowFragmentRKNSt6vectorINSt10shared_ptrIN5arrow5ArrayEEEEEbb">ArrowForeignStorageBase::makeFragment (C++ function)</a>
+</li>
+      <li><a href="api/class/class_arrow_foreign_storage_base.html#_CPPv4N23ArrowForeignStorageBase15parseArrowTableEPN17Catalog_Namespace7CatalogENSt4pairIiiEERKNSt6stringERK15TableDescriptorRKNSt4listI16ColumnDescriptorEEPN14Data_Namespace17AbstractBufferMgrERKN5arrow5TableE">ArrowForeignStorageBase::parseArrowTable (C++ function)</a>
+</li>
+      <li><a href="api/class/class_arrow_foreign_storage_base.html#_CPPv4N23ArrowForeignStorageBase4readERK8ChunkKeyRK11SQLTypeInfoP6int8_tK6size_t">ArrowForeignStorageBase::read (C++ function)</a>
+</li>
+      <li><a href="api/class/class_arrow_foreign_storage_base.html#_CPPv4I0EN23ArrowForeignStorageBase8setNullsEvP6int8_ti">ArrowForeignStorageBase::setNulls (C++ function)</a>
+</li>
+      <li><a href="api/class/class_arrow_foreign_storage_base.html#_CPPv4I0EN23ArrowForeignStorageBase13setNullValuesEvRKNSt6vectorI4FragEENSt10shared_ptrIN5arrow12ChunkedArrayEEE">ArrowForeignStorageBase::setNullValues (C++ function)</a>
+</li>
+      <li><a href="api/struct/struct_arrow_fragment.html#_CPPv413ArrowFragment">ArrowFragment (C++ class)</a>
+</li>
+      <li><a href="api/struct/struct_arrow_fragment.html#_CPPv4N13ArrowFragment6chunksE">ArrowFragment::chunks (C++ member)</a>
+</li>
+      <li><a href="api/struct/struct_arrow_fragment.html#_CPPv4N13ArrowFragment6offsetE">ArrowFragment::offset (C++ member)</a>
+</li>
+      <li><a href="api/struct/struct_arrow_fragment.html#_CPPv4N13ArrowFragment2szE">ArrowFragment::sz (C++ member)</a>
 </li>
       <li><a href="api/struct/struct_arrow_importer_exception.html#_CPPv422ArrowImporterException">ArrowImporterException (C++ class)</a>
 </li>
@@ -4498,6 +4534,8 @@
       <li><a href="api/class/class_catalog___namespace_1_1_catalog.html#_CPPv4N17Catalog_Namespace7Catalog22getForeignServerSchemaEb">Catalog_Namespace::Catalog::getForeignServerSchema (C++ function)</a>
 </li>
       <li><a href="api/class/class_catalog___namespace_1_1_catalog.html#_CPPv4N17Catalog_Namespace7Catalog24getForeignServersForUserEPKN9rapidjson5ValueERK12UserMetadataRNSt6vectorIPKN15foreign_storage13ForeignServerEEE">Catalog_Namespace::Catalog::getForeignServersForUser (C++ function)</a>
+</li>
+      <li><a href="api/class/class_catalog___namespace_1_1_catalog.html#_CPPv4NK17Catalog_Namespace7Catalog15getForeignTableEi">Catalog_Namespace::Catalog::getForeignTable (C++ function)</a>
 </li>
       <li><a href="api/class/class_catalog___namespace_1_1_catalog.html#_CPPv4N17Catalog_Namespace7Catalog26getForeignTableFromStorageEi">Catalog_Namespace::Catalog::getForeignTableFromStorage (C++ function)</a>
 </li>
@@ -6731,7 +6769,7 @@
 </li>
       <li><a href="api/class/class_data___namespace_1_1_data_mgr.html#_CPPv4N14Data_Namespace7DataMgr8dataDir_E">Data_Namespace::DataMgr::dataDir_ (C++ member)</a>
 </li>
-      <li><a href="api/class/class_data___namespace_1_1_data_mgr.html#_CPPv4N14Data_Namespace7DataMgr7DataMgrERKNSt6stringERK16SystemParametersKbKiKiK6size_tK6size_tK15DiskCacheConfig">Data_Namespace::DataMgr::DataMgr (C++ function)</a>
+      <li><a href="api/class/class_data___namespace_1_1_data_mgr.html#_CPPv4N14Data_Namespace7DataMgr7DataMgrERKNSt6stringERK16SystemParametersNSt10unique_ptrIN17CudaMgr_Namespace7CudaMgrEEEKbK6size_tK6size_tK15DiskCacheConfig">Data_Namespace::DataMgr::DataMgr (C++ function)</a>
 </li>
       <li><a href="api/class/class_data___namespace_1_1_data_mgr.html#_CPPv4N14Data_Namespace7DataMgr22deleteChunksWithPrefixERK8ChunkKey">Data_Namespace::DataMgr::deleteChunksWithPrefix (C++ function)</a>, <a href="api/class/class_data___namespace_1_1_data_mgr.html#_CPPv4N14Data_Namespace7DataMgr22deleteChunksWithPrefixERK8ChunkKeyK11MemoryLevel">[1]</a>
 </li>
@@ -6907,7 +6945,7 @@
 </li>
       <li><a href="api/struct/struct_dataframe_table_descriptor.html#_CPPv424DataframeTableDescriptor">DataframeTableDescriptor (C++ class)</a>
 </li>
-      <li><a href="api/struct/struct_dataframe_table_descriptor.html#_CPPv4N24DataframeTableDescriptor24DataframeTableDescriptorEv">DataframeTableDescriptor::DataframeTableDescriptor (C++ function)</a>
+      <li><a href="api/struct/struct_dataframe_table_descriptor.html#_CPPv4N24DataframeTableDescriptor24DataframeTableDescriptorERK15TableDescriptor">DataframeTableDescriptor::DataframeTableDescriptor (C++ function)</a>, <a href="api/struct/struct_dataframe_table_descriptor.html#_CPPv4N24DataframeTableDescriptor24DataframeTableDescriptorEv">[1]</a>
 </li>
       <li><a href="api/struct/struct_dataframe_table_descriptor.html#_CPPv4N24DataframeTableDescriptor9delimiterE">DataframeTableDescriptor::delimiter (C++ member)</a>
 </li>
@@ -8087,6 +8125,8 @@
 </li>
       <li><a href="api/class/class_encoder.html#_CPPv4N7Encoder11updateStatsEK7int64_tKb">Encoder::updateStats (C++ function)</a>, <a href="api/class/class_encoder.html#_CPPv4N7Encoder11updateStatsEKdKb">[1]</a>, <a href="api/class/class_encoder.html#_CPPv4N7Encoder11updateStatsEPCK6int8_tK6size_t">[2]</a>, <a href="api/class/class_encoder.html#_CPPv4N7Encoder11updateStatsEPCKNSt6vectorI10ArrayDatumEEK6size_tK6size_t">[3]</a>, <a href="api/class/class_encoder.html#_CPPv4N7Encoder11updateStatsEPCKNSt6vectorINSt6stringEEEK6size_tK6size_t">[4]</a>
 </li>
+      <li><a href="api/class/class_encoder.html#_CPPv4N7Encoder18updateStatsEncodedEPCK6int8_tK6size_t">Encoder::updateStatsEncoded (C++ function)</a>
+</li>
       <li><a href="api/class/class_encoder.html#_CPPv4N7Encoder13writeMetadataEP4FILE">Encoder::writeMetadata (C++ function)</a>
 </li>
       <li><a href="api/class/class_encoder.html#_CPPv4N7EncoderD0Ev">Encoder::~Encoder (C++ function)</a>
@@ -8399,10 +8439,10 @@
 </li>
       <li><a href="api/class/class_executor.html#_CPPv4N8Executor10executors_E">Executor::executors_ (C++ member)</a>
 </li>
-      <li><a href="api/class/class_executor.html#_CPPv4N8Executor22executors_cache_mutex_E">Executor::executors_cache_mutex_ (C++ member)</a>
-</li>
   </ul></td>
   <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="api/class/class_executor.html#_CPPv4N8Executor22executors_cache_mutex_E">Executor::executors_cache_mutex_ (C++ member)</a>
+</li>
       <li><a href="api/class/class_executor.html#_CPPv4N8Executor16FetchCacheAnchorE">Executor::FetchCacheAnchor (C++ class)</a>, <a href="api/class/class_executor_1_1_fetch_cache_anchor.html#_CPPv4N8Executor16FetchCacheAnchorE">[1]</a>
 </li>
       <li><a href="api/class/class_executor.html#_CPPv4N8Executor16FetchCacheAnchor11cgen_state_E">Executor::FetchCacheAnchor::cgen_state_ (C++ member)</a>, <a href="api/class/class_executor_1_1_fetch_cache_anchor.html#_CPPv4N8Executor16FetchCacheAnchor11cgen_state_E">[1]</a>
@@ -9351,6 +9391,8 @@
 </li>
       <li><a href="api/class/class_fixed_length_encoder.html#_CPPv4N18FixedLengthEncoder11updateStatsEK7int64_tKb">FixedLengthEncoder::updateStats (C++ function)</a>, <a href="api/class/class_fixed_length_encoder.html#_CPPv4N18FixedLengthEncoder11updateStatsEKdKb">[1]</a>, <a href="api/class/class_fixed_length_encoder.html#_CPPv4N18FixedLengthEncoder11updateStatsEPCK6int8_tK6size_t">[2]</a>, <a href="api/class/class_fixed_length_encoder.html#_CPPv4N18FixedLengthEncoder11updateStatsEPCKNSt6vectorI10ArrayDatumEEK6size_tK6size_t">[3]</a>, <a href="api/class/class_fixed_length_encoder.html#_CPPv4N18FixedLengthEncoder11updateStatsEPCKNSt6vectorINSt6stringEEEK6size_tK6size_t">[4]</a>
 </li>
+      <li><a href="api/class/class_fixed_length_encoder.html#_CPPv4N18FixedLengthEncoder18updateStatsEncodedEPCK6int8_tK6size_t">FixedLengthEncoder::updateStatsEncoded (C++ function)</a>
+</li>
       <li><a href="api/class/class_fixed_length_encoder.html#_CPPv4N18FixedLengthEncoder13writeMetadataEP4FILE">FixedLengthEncoder::writeMetadata (C++ function)</a>
 </li>
       <li><a href="api/class/class_fixed_width_int.html#_CPPv413FixedWidthInt">FixedWidthInt (C++ class)</a>
@@ -10023,8 +10065,6 @@
 </li>
       <li><a href="api/class/classforeign__storage_1_1_foreign_table_schema.html#_CPPv4NK15foreign_storage18ForeignTableSchema16getLogicalColumnEKi">foreign_storage::ForeignTableSchema::getLogicalColumn (C++ function)</a>
 </li>
-  </ul></td>
-  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="api/class/classforeign__storage_1_1_foreign_table_schema.html#_CPPv4NK15foreign_storage18ForeignTableSchema26getLogicalColumnIdIteratorEKi">foreign_storage::ForeignTableSchema::getLogicalColumnIdIterator (C++ function)</a>
 </li>
       <li><a href="api/class/classforeign__storage_1_1_foreign_table_schema.html#_CPPv4NK15foreign_storage18ForeignTableSchema17getLogicalColumnsEv">foreign_storage::ForeignTableSchema::getLogicalColumns (C++ function)</a>
@@ -10039,9 +10079,21 @@
 </li>
       <li><a href="api/class/classforeign__storage_1_1_foreign_table_schema.html#_CPPv4NK15foreign_storage18ForeignTableSchema28numLogicalAndPhysicalColumnsEv">foreign_storage::ForeignTableSchema::numLogicalAndPhysicalColumns (C++ function)</a>
 </li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="api/class/classforeign__storage_1_1_foreign_table_schema.html#_CPPv4NK15foreign_storage18ForeignTableSchema17numLogicalColumnsEv">foreign_storage::ForeignTableSchema::numLogicalColumns (C++ function)</a>
 </li>
       <li><a href="api/struct/structforeign__storage_1_1_fragment_type.html#_CPPv4N15foreign_storage12FragmentTypeE">foreign_storage::FragmentType (C++ class)</a>
+</li>
+      <li><a href="api/class/classforeign__storage_1_1_integral_fixed_length_bounds_validator.html#_CPPv4I0EN15foreign_storage34IntegralFixedLengthBoundsValidatorE">foreign_storage::IntegralFixedLengthBoundsValidator (C++ class)</a>
+</li>
+      <li><a href="api/class/classforeign__storage_1_1_integral_fixed_length_bounds_validator.html#_CPPv4I00_NSt11enable_if_tINSt9is_signedI2TTE5valueEiEEEN15foreign_storage34IntegralFixedLengthBoundsValidator11checkBoundsEbRK1T">foreign_storage::IntegralFixedLengthBoundsValidator::checkBounds (C++ function)</a>, <a href="api/class/classforeign__storage_1_1_integral_fixed_length_bounds_validator.html#_CPPv4I00_NSt11enable_if_tIXntNSt9is_signedI2TTE5valueEEiEEEN15foreign_storage34IntegralFixedLengthBoundsValidator11checkBoundsEbRK1T">[1]</a>
+</li>
+      <li><a href="api/class/classforeign__storage_1_1_integral_fixed_length_bounds_validator.html#_CPPv4I0EN15foreign_storage34IntegralFixedLengthBoundsValidator15getMinMaxBoundsENSt4pairI1D1DEEv">foreign_storage::IntegralFixedLengthBoundsValidator::getMinMaxBounds (C++ function)</a>
+</li>
+      <li><a href="api/class/classforeign__storage_1_1_integral_fixed_length_bounds_validator.html#_CPPv4I0EN15foreign_storage34IntegralFixedLengthBoundsValidator24getMinMaxBoundsAsStringsENSt4pairINSt6stringENSt6stringEEEv">foreign_storage::IntegralFixedLengthBoundsValidator::getMinMaxBoundsAsStrings (C++ function)</a>, <a href="api/class/classforeign__storage_1_1_integral_fixed_length_bounds_validator.html#_CPPv4N15foreign_storage34IntegralFixedLengthBoundsValidator24getMinMaxBoundsAsStringsERK11SQLTypeInfo">[1]</a>
+</li>
+      <li><a href="api/class/classforeign__storage_1_1_integral_fixed_length_bounds_validator.html#_CPPv4N15foreign_storage34IntegralFixedLengthBoundsValidator17valueWithinBoundsERK1TRK11SQLTypeInfo">foreign_storage::IntegralFixedLengthBoundsValidator::valueWithinBounds (C++ function)</a>
 </li>
       <li><a href="api/struct/structforeign__storage_1_1_interval.html#_CPPv4I0EN15foreign_storage8IntervalE">foreign_storage::Interval (C++ class)</a>
 </li>
@@ -10172,6 +10224,8 @@
       <li><a href="api/class/classforeign__storage_1_1_parquet_array_encoder.html#_CPPv4N15foreign_storage19ParquetArrayEncoder15encodeAllValuesEPK6int8_tK7int64_t">foreign_storage::ParquetArrayEncoder::encodeAllValues (C++ function)</a>
 </li>
       <li><a href="api/class/classforeign__storage_1_1_parquet_array_encoder.html#_CPPv4N15foreign_storage19ParquetArrayEncoder16finalizeRowGroupEv">foreign_storage::ParquetArrayEncoder::finalizeRowGroup (C++ function)</a>
+</li>
+      <li><a href="api/class/classforeign__storage_1_1_parquet_array_encoder.html#_CPPv4N15foreign_storage19ParquetArrayEncoder19getRowGroupMetadataEPKN7parquet16RowGroupMetaDataEKiRK11SQLTypeInfo">foreign_storage::ParquetArrayEncoder::getRowGroupMetadata (C++ function)</a>
 </li>
       <li><a href="api/class/classforeign__storage_1_1_parquet_array_encoder.html#_CPPv4N15foreign_storage19ParquetArrayEncoder21has_assembly_started_E">foreign_storage::ParquetArrayEncoder::has_assembly_started_ (C++ member)</a>
 </li>
@@ -10325,6 +10379,8 @@
 </li>
       <li><a href="api/class/classforeign__storage_1_1_parquet_fixed_length_array_encoder.html#_CPPv4N15foreign_storage30ParquetFixedLengthArrayEncoder17column_desciptor_E">foreign_storage::ParquetFixedLengthArrayEncoder::column_desciptor_ (C++ member)</a>
 </li>
+      <li><a href="api/class/classforeign__storage_1_1_parquet_fixed_length_array_encoder.html#_CPPv4N15foreign_storage30ParquetFixedLengthArrayEncoder19getRowGroupMetadataEPKN7parquet16RowGroupMetaDataEKiRK11SQLTypeInfo">foreign_storage::ParquetFixedLengthArrayEncoder::getRowGroupMetadata (C++ function)</a>
+</li>
       <li><a href="api/class/classforeign__storage_1_1_parquet_fixed_length_array_encoder.html#_CPPv4N15foreign_storage30ParquetFixedLengthArrayEncoder30ParquetFixedLengthArrayEncoderEPN14Data_Namespace14AbstractBufferENSt10shared_ptrI20ParquetScalarEncoderEEPK16ColumnDescriptor">foreign_storage::ParquetFixedLengthArrayEncoder::ParquetFixedLengthArrayEncoder (C++ function)</a>
 </li>
       <li><a href="api/class/classforeign__storage_1_1_parquet_fixed_length_array_encoder.html#_CPPv4N15foreign_storage30ParquetFixedLengthArrayEncoder16processLastArrayEv">foreign_storage::ParquetFixedLengthArrayEncoder::processLastArray (C++ function)</a>
@@ -10337,7 +10393,11 @@
 </li>
       <li><a href="api/class/classforeign__storage_1_1_parquet_fixed_length_encoder.html#_CPPv4NK15foreign_storage25ParquetFixedLengthEncoder30encodingIsIdentityForSameTypesEv">foreign_storage::ParquetFixedLengthEncoder::encodingIsIdentityForSameTypes (C++ function)</a>
 </li>
-      <li><a href="api/class/classforeign__storage_1_1_parquet_fixed_length_encoder.html#_CPPv4N15foreign_storage25ParquetFixedLengthEncoder25ParquetFixedLengthEncoderEPN14Data_Namespace14AbstractBufferEPK16ColumnDescriptorPKN7parquet16ColumnDescriptorE">foreign_storage::ParquetFixedLengthEncoder::ParquetFixedLengthEncoder (C++ function)</a>
+      <li><a href="api/class/classforeign__storage_1_1_parquet_fixed_length_encoder.html#_CPPv4N15foreign_storage25ParquetFixedLengthEncoder25ParquetFixedLengthEncoderEPN14Data_Namespace14AbstractBufferEK6size_tK6size_t">foreign_storage::ParquetFixedLengthEncoder::ParquetFixedLengthEncoder (C++ function)</a>, <a href="api/class/classforeign__storage_1_1_parquet_fixed_length_encoder.html#_CPPv4N15foreign_storage25ParquetFixedLengthEncoder25ParquetFixedLengthEncoderEPN14Data_Namespace14AbstractBufferEPK16ColumnDescriptorPKN7parquet16ColumnDescriptorE">[1]</a>
+</li>
+      <li><a href="api/class/classforeign__storage_1_1_parquet_fixed_length_encoder.html#_CPPv4NK15foreign_storage25ParquetFixedLengthEncoder8validateENSt10shared_ptrIN7parquet10StatisticsEEERK11SQLTypeInfo">foreign_storage::ParquetFixedLengthEncoder::validate (C++ function)</a>
+</li>
+      <li><a href="api/class/classforeign__storage_1_1_parquet_fixed_length_encoder.html#_CPPv4NK15foreign_storage25ParquetFixedLengthEncoder13validateValueERK1TRK11SQLTypeInfo">foreign_storage::ParquetFixedLengthEncoder::validateValue (C++ function)</a>
 </li>
       <li><a href="api/class/classforeign__storage_1_1_parquet_geospatial_encoder.html#_CPPv4N15foreign_storage24ParquetGeospatialEncoderE">foreign_storage::ParquetGeospatialEncoder (C++ class)</a>
 </li>
@@ -10451,6 +10511,12 @@
 </li>
       <li><a href="api/class/classforeign__storage_1_1_parquet_in_place_encoder.html#_CPPv4N15foreign_storage21ParquetInPlaceEncoder21ParquetInPlaceEncoderEPN14Data_Namespace14AbstractBufferEK6size_tK6size_t">foreign_storage::ParquetInPlaceEncoder::ParquetInPlaceEncoder (C++ function)</a>
 </li>
+      <li><a href="api/class/classforeign__storage_1_1_parquet_metadata_validator.html#_CPPv4N15foreign_storage24ParquetMetadataValidatorE">foreign_storage::ParquetMetadataValidator (C++ class)</a>
+</li>
+      <li><a href="api/class/classforeign__storage_1_1_parquet_metadata_validator.html#_CPPv4NK15foreign_storage24ParquetMetadataValidator8validateENSt10shared_ptrIN7parquet10StatisticsEEERK11SQLTypeInfo">foreign_storage::ParquetMetadataValidator::validate (C++ function)</a>
+</li>
+      <li><a href="api/class/classforeign__storage_1_1_parquet_metadata_validator.html#_CPPv4N15foreign_storage24ParquetMetadataValidatorD0Ev">foreign_storage::ParquetMetadataValidator::~ParquetMetadataValidator (C++ function)</a>
+</li>
       <li><a href="api/class/classforeign__storage_1_1_parquet_s3_file_system.html#_CPPv4N15foreign_storage19ParquetS3FileSystemE">foreign_storage::ParquetS3FileSystem (C++ class)</a>
 </li>
       <li><a href="api/class/classforeign__storage_1_1_parquet_s3_file_system.html#_CPPv4N15foreign_storage19ParquetS3FileSystem6createEPK13ForeignServerPK11UserMapping">foreign_storage::ParquetS3FileSystem::create (C++ function)</a>
@@ -10527,7 +10593,11 @@
 </li>
       <li><a href="api/class/classforeign__storage_1_1_parquet_unsigned_fixed_length_encoder.html#_CPPv4N15foreign_storage33ParquetUnsignedFixedLengthEncoder13encodeAndCopyEPK6int8_tP6int8_t">foreign_storage::ParquetUnsignedFixedLengthEncoder::encodeAndCopy (C++ function)</a>
 </li>
-      <li><a href="api/class/classforeign__storage_1_1_parquet_unsigned_fixed_length_encoder.html#_CPPv4N15foreign_storage33ParquetUnsignedFixedLengthEncoder33ParquetUnsignedFixedLengthEncoderEPN14Data_Namespace14AbstractBufferEPK16ColumnDescriptorPKN7parquet16ColumnDescriptorE">foreign_storage::ParquetUnsignedFixedLengthEncoder::ParquetUnsignedFixedLengthEncoder (C++ function)</a>
+      <li><a href="api/class/classforeign__storage_1_1_parquet_unsigned_fixed_length_encoder.html#_CPPv4N15foreign_storage33ParquetUnsignedFixedLengthEncoder33ParquetUnsignedFixedLengthEncoderEPN14Data_Namespace14AbstractBufferEK6size_tK6size_t">foreign_storage::ParquetUnsignedFixedLengthEncoder::ParquetUnsignedFixedLengthEncoder (C++ function)</a>, <a href="api/class/classforeign__storage_1_1_parquet_unsigned_fixed_length_encoder.html#_CPPv4N15foreign_storage33ParquetUnsignedFixedLengthEncoder33ParquetUnsignedFixedLengthEncoderEPN14Data_Namespace14AbstractBufferEPK16ColumnDescriptorPKN7parquet16ColumnDescriptorE">[1]</a>
+</li>
+      <li><a href="api/class/classforeign__storage_1_1_parquet_unsigned_fixed_length_encoder.html#_CPPv4NK15foreign_storage33ParquetUnsignedFixedLengthEncoder8validateENSt10shared_ptrIN7parquet10StatisticsEEERK11SQLTypeInfo">foreign_storage::ParquetUnsignedFixedLengthEncoder::validate (C++ function)</a>
+</li>
+      <li><a href="api/class/classforeign__storage_1_1_parquet_unsigned_fixed_length_encoder.html#_CPPv4NK15foreign_storage33ParquetUnsignedFixedLengthEncoder13validateValueERK1TRK11SQLTypeInfo">foreign_storage::ParquetUnsignedFixedLengthEncoder::validateValue (C++ function)</a>
 </li>
       <li><a href="api/class/classforeign__storage_1_1_parquet_variable_length_array_encoder.html#_CPPv4N15foreign_storage33ParquetVariableLengthArrayEncoderE">foreign_storage::ParquetVariableLengthArrayEncoder (C++ class)</a>
 </li>
@@ -10624,6 +10694,8 @@
       <li><a href="api/class/classforeign__storage_1_1_typed_parquet_in_place_encoder.html#_CPPv4N15foreign_storage26TypedParquetInPlaceEncoder15getEncodedStatsEPKN7parquet16ColumnDescriptorENSt10shared_ptrIN7parquet10StatisticsEEE">foreign_storage::TypedParquetInPlaceEncoder::getEncodedStats (C++ function)</a>
 </li>
       <li><a href="api/class/classforeign__storage_1_1_typed_parquet_in_place_encoder.html#_CPPv4N15foreign_storage26TypedParquetInPlaceEncoder19getRowGroupMetadataEPKN7parquet16RowGroupMetaDataEKiRK11SQLTypeInfo">foreign_storage::TypedParquetInPlaceEncoder::getRowGroupMetadata (C++ function)</a>
+</li>
+      <li><a href="api/class/classforeign__storage_1_1_typed_parquet_in_place_encoder.html#_CPPv4NK15foreign_storage26TypedParquetInPlaceEncoder17getUnencodedStatsENSt10shared_ptrIN7parquet10StatisticsEEE">foreign_storage::TypedParquetInPlaceEncoder::getUnencodedStats (C++ function)</a>
 </li>
       <li><a href="api/class/classforeign__storage_1_1_typed_parquet_in_place_encoder.html#_CPPv4N15foreign_storage26TypedParquetInPlaceEncoder15getUpdatedStatsER1VR1VRK11SQLTypeInfo">foreign_storage::TypedParquetInPlaceEncoder::getUpdatedStats (C++ function)</a>
 </li>
@@ -14012,6 +14084,8 @@
       <li><a href="api/class/class_none_encoder.html#_CPPv4N11NoneEncoder15resetChunkStatsERK10ChunkStats">NoneEncoder::resetChunkStats (C++ function)</a>
 </li>
       <li><a href="api/class/class_none_encoder.html#_CPPv4N11NoneEncoder11updateStatsEK7int64_tKb">NoneEncoder::updateStats (C++ function)</a>, <a href="api/class/class_none_encoder.html#_CPPv4N11NoneEncoder11updateStatsEKdKb">[1]</a>, <a href="api/class/class_none_encoder.html#_CPPv4N11NoneEncoder11updateStatsEPCK6int8_tK6size_t">[2]</a>, <a href="api/class/class_none_encoder.html#_CPPv4N11NoneEncoder11updateStatsEPCKNSt6vectorI10ArrayDatumEEK6size_tK6size_t">[3]</a>, <a href="api/class/class_none_encoder.html#_CPPv4N11NoneEncoder11updateStatsEPCKNSt6vectorINSt6stringEEEK6size_tK6size_t">[4]</a>
+</li>
+      <li><a href="api/class/class_none_encoder.html#_CPPv4N11NoneEncoder18updateStatsEncodedEPCK6int8_tK6size_t">NoneEncoder::updateStatsEncoded (C++ function)</a>
 </li>
       <li><a href="api/class/class_none_encoder.html#_CPPv4N11NoneEncoder26validateDataAndUpdateStatsERK1T">NoneEncoder::validateDataAndUpdateStats (C++ function)</a>
 </li>
@@ -20077,6 +20151,8 @@
 </li>
       <li><a href="api/class/class_s_q_l_type_info.html#_CPPv4NK11SQLTypeInfo22is_dict_encoded_stringEv">SQLTypeInfo::is_dict_encoded_string (C++ function)</a>
 </li>
+      <li><a href="api/class/class_s_q_l_type_info.html#_CPPv4NK11SQLTypeInfo20is_dict_encoded_typeEv">SQLTypeInfo::is_dict_encoded_type (C++ function)</a>
+</li>
       <li><a href="api/class/class_s_q_l_type_info.html#_CPPv4NK11SQLTypeInfo15is_fixlen_arrayEv">SQLTypeInfo::is_fixlen_array (C++ function)</a>
 </li>
       <li><a href="api/class/class_s_q_l_type_info.html#_CPPv4NK11SQLTypeInfo5is_fpEv">SQLTypeInfo::is_fp (C++ function)</a>
@@ -20149,10 +20225,10 @@
 </li>
       <li><a href="api/struct/structstd_1_1equal__to_3_01shared__ptr_3_01const_01_input_col_descriptor_01_4_01_4.html#_CPPv4NKSt8equal_toclERK10shared_ptrIK18InputColDescriptorERK10shared_ptrIK18InputColDescriptorE">std::equal_to::operator() (C++ function)</a>
 </li>
-      <li><a href="api/struct/structstd_1_1equal__to_3_01shared__ptr_3_01const_01_input_col_descriptor_01_4_01_4.html#_CPPv4IENSt8equal_toI10shared_ptrIK18InputColDescriptorEEE">std::equal_to&lt;shared_ptr&lt;const InputColDescriptor&gt;&gt; (C++ class)</a>
-</li>
   </ul></td>
   <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="api/struct/structstd_1_1equal__to_3_01shared__ptr_3_01const_01_input_col_descriptor_01_4_01_4.html#_CPPv4IENSt8equal_toI10shared_ptrIK18InputColDescriptorEEE">std::equal_to&lt;shared_ptr&lt;const InputColDescriptor&gt;&gt; (C++ class)</a>
+</li>
       <li><a href="api/struct/structstd_1_1hash_3_01_input_col_descriptor_01_4.html#_CPPv4NKSt4hashclERK18InputColDescriptor">std::hash::operator() (C++ function)</a>, <a href="api/struct/structstd_1_1hash_3_01_input_descriptor_01_4.html#_CPPv4NKSt4hashclERK15InputDescriptor">[1]</a>, <a href="api/struct/structstd_1_1hash_3_01_physical_input_01_4.html#_CPPv4NKSt4hashclERK13PhysicalInput">[2]</a>, <a href="api/struct/structstd_1_1hash_3_01_rex_input_01_4.html#_CPPv4NKSt4hashclERK8RexInput">[3]</a>, <a href="api/struct/structstd_1_1hash_3_01const_01_input_col_descriptor_01_5_01_4.html#_CPPv4NKSt4hashclEPK18InputColDescriptor">[4]</a>, <a href="api/struct/structstd_1_1hash_3_01std_1_1pair_3_01const_01_rel_alg_node_01_5_00_01int_01_4_01_4.html#_CPPv4NKSt4hashclERKNSt4pairIPK10RelAlgNodeiEE">[5]</a>, <a href="api/struct/structstd_1_1hash_3_01std_1_1pair_3_01int_00_01int_01_4_01_4.html#_CPPv4NKSt4hashclERKNSt4pairIiiEE">[6]</a>, <a href="api/struct/structstd_1_1hash_3_01std_1_1vector_3_01int_01_4_01_4.html#_CPPv4NKSt4hashclERKNSt6vectorIiEE">[7]</a>
 </li>
       <li><a href="api/struct/structstd_1_1hash_3_01const_01_input_col_descriptor_01_5_01_4.html#_CPPv4IENSt4hashIPK18InputColDescriptorEE">std::hash&lt;const InputColDescriptor *&gt; (C++ class)</a>
