@@ -177,6 +177,61 @@ void TableFunctionsFactory::init() {
         std::vector<ExtArgumentType>{ExtArgumentType::ColumnInt32},
         // ExtArgumentType::Int32},
         std::vector<ExtArgumentType>{ExtArgumentType::Int32, ExtArgumentType::Int32});
+    TableFunctionsFactory::add(
+        "k_means",
+        TableFunctionOutputRowSizer{OutputBufferSizeType::kUserSpecifiedRowMultiplier, 1},
+        std::vector<ExtArgumentType>{ExtArgumentType::ColumnFloat,  // 0
+                                     ExtArgumentType::ColumnFloat,  // 1
+                                     ExtArgumentType::ColumnFloat,  // 2
+                                     ExtArgumentType::ColumnFloat,  // 3
+                                     ExtArgumentType::ColumnFloat,  // 4
+                                     ExtArgumentType::ColumnFloat,  // 5
+                                     ExtArgumentType::ColumnFloat,  // 6
+                                     ExtArgumentType::ColumnFloat,  // 7
+                                     ExtArgumentType::ColumnFloat,  // 8
+                                     ExtArgumentType::ColumnFloat,  // 9
+                                     ExtArgumentType::ColumnFloat,  // 10
+                                     ExtArgumentType::ColumnFloat,  // 11
+                                     ExtArgumentType::ColumnFloat,  // 12
+                                     ExtArgumentType::ColumnFloat,  // 13
+                                     ExtArgumentType::ColumnFloat,  // 14
+                                     ExtArgumentType::ColumnFloat,  // 15
+                                     ExtArgumentType::ColumnFloat,  // 16
+                                     ExtArgumentType::ColumnFloat,  // 17
+                                     ExtArgumentType::ColumnFloat,  // 18
+                                     ExtArgumentType::ColumnFloat,  // 19
+                                     ExtArgumentType::Int32,       ExtArgumentType::Int32,
+                                     ExtArgumentType::Int32},
+        std::vector<ExtArgumentType>{ExtArgumentType::Float,  // 0
+                                     ExtArgumentType::Float,  // 1
+                                     ExtArgumentType::Float,  // 2
+                                     ExtArgumentType::Float,  // 3
+                                     ExtArgumentType::Float,  // 4
+                                     ExtArgumentType::Float,  // 5
+                                     ExtArgumentType::Float,  // 6
+                                     ExtArgumentType::Float,  // 7
+                                     ExtArgumentType::Float,  // 8
+                                     ExtArgumentType::Float,  // 9
+                                     ExtArgumentType::Float,  // 10
+                                     ExtArgumentType::Float,  // 11
+                                     ExtArgumentType::Float,  // 12
+                                     ExtArgumentType::Float,  // 13
+                                     ExtArgumentType::Float,  // 14
+                                     ExtArgumentType::Float,  // 15
+                                     ExtArgumentType::Float,  // 16
+                                     ExtArgumentType::Float,  // 17
+                                     ExtArgumentType::Float,  // 18
+                                     ExtArgumentType::Float,  // 19
+                                     ExtArgumentType::Int32});
+    // TableFunctionsFactory::add(
+    //     "db_scan",
+    //     TableFunctionOutputRowSizer{OutputBufferSizeType::kUserSpecifiedRowMultiplier,
+    //     4}, std::vector<ExtArgumentType>{ExtArgumentType::ColumnDouble,
+    //                                  ExtArgumentType::ColumnDouble,
+    //                                  ExtArgumentType::Float,
+    //                                  ExtArgumentType::Int32},
+    //     std::vector<ExtArgumentType>{ExtArgumentType::Double, ExtArgumentType::Double,
+    //     ExtArgumentType::Int32});
   });
 }
 
