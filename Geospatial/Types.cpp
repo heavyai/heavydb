@@ -301,34 +301,38 @@ int32_t GeoBase::getBestPlanarSRID() const {
 
 bool GeoBase::transform(int32_t srid0, int32_t srid1) {
   auto setSpatialReference = [&](OGRSpatialReference* sr, int32_t srid) -> bool {
+    OGRErr status = OGRERR_NONE;
     if (srid == 4326) {
-      sr->importFromEPSG(4326);
+      status = sr->importFromEPSG(4326);
     } else if (srid == SRID_NORTH_LAMBERT) {
       // +proj=laea +lat_0=90 +lon_0=-40 +x_0=0 +y_0=0 +ellps=WGS84 +datum=WGS84 +units=m
       // +no_defs
-      sr->importFromEPSG(3574);
+      status = sr->importFromEPSG(3574);
     } else if (srid == SRID_SOUTH_LAMBERT) {
       // +proj=laea +lat_0=-90 +lon_0=0 +x_0=0 +y_0=0 +ellps=WGS84 +datum=WGS84 +units=m
       // +no_defs
-      sr->importFromEPSG(3409);
+      status = sr->importFromEPSG(3409);
     } else if (SRID_SOUTH_UTM_START <= srid && srid <= SRID_SOUTH_UTM_END) {
       // +proj=utm +zone=%d +south +ellps=WGS84 +datum=WGS84 +units=m +no_defs
       int32_t zone = srid - SRID_SOUTH_UTM_START;
-      sr->importFromEPSG(32701 + zone);
+      status = sr->importFromEPSG(32701 + zone);
     } else if (SRID_NORTH_UTM_START <= srid && srid <= SRID_NORTH_UTM_END) {
       // +proj=utm +zone=%d +ellps=WGS84 +datum=WGS84 +units=m +no_defs"
       int32_t zone = srid - SRID_NORTH_UTM_START;
-      sr->importFromEPSG(32601 + zone);
+      status = sr->importFromEPSG(32601 + zone);
     } else if (SRID_LAEA_START <= srid && srid <= SRID_LAEA_END) {
       // TODO: add support and coordinate operations for custom Lambert zones,
       // need to calculate lat/lon for the zone, SetCoordinateOperation in options.
       // +proj=laea +ellps=WGS84 +datum=WGS84 +lat_0=%g +lon_0=%g +units=m +no_defs
       // Go with Mercator for now
-      sr->importFromEPSG(3395);
+      status = sr->importFromEPSG(3395);
     } else if (srid == SRID_WORLD_MERCATOR) {
       // +proj=merc +lon_0=0 +k=1 +x_0=0 +y_0=0 +ellps=WGS84 +datum=WGS84 +units=m
       // +no_defs
-      sr->importFromEPSG(3395);
+      status = sr->importFromEPSG(3395);
+    } else if (srid > 0) {
+      // Attempt to import from srid directly
+      status = sr->importFromEPSG(srid);
     } else {
       return false;
     }
@@ -336,9 +340,11 @@ bool GeoBase::transform(int32_t srid0, int32_t srid1) {
     // GDAL 3.x (really Proj.4 6.x) now enforces lat, lon order
     // this results in X and Y being transposed for angle-based
     // coordinate systems. This restores the previous behavior.
-    sr->SetAxisMappingStrategy(OAMS_TRADITIONAL_GIS_ORDER);
+    if (status == OGRERR_NONE) {
+      sr->SetAxisMappingStrategy(OAMS_TRADITIONAL_GIS_ORDER);
+    }
 #endif
-    return true;
+    return (status == OGRERR_NONE);
   };
 
   // lazy init GDAL
@@ -363,6 +369,19 @@ bool GeoBase::transform(int32_t srid0, int32_t srid1) {
   }
   auto ogr_status = geom_->transform(coordinate_transformation.get());
   return (ogr_status == OGRERR_NONE);
+}
+
+bool GeoBase::transform(SQLTypeInfo& ti) {
+  auto srid1 = ti.get_output_srid();
+  if (srid1 == 4326) {
+    auto srid0 = ti.get_input_srid();
+    if (srid0 > 0 && srid0 != 4326) {
+      if (!transform(srid0, srid1)) {
+        return false;
+      }
+    }
+  }
+  return true;
 }
 
 // Run a specific geo operation on this and other geometries
@@ -883,9 +902,9 @@ bool GeoTypesFactory::getGeoColumns(const std::string& wkt_or_wkb_hex,
 
     const auto geospatial_base = GeoTypesFactory::createGeoType(wkt_or_wkb_hex);
 
-    int srid = 0;
-    ti.set_input_srid(srid);
-    ti.set_output_srid(srid);
+    if (!geospatial_base || !geospatial_base->transform(ti)) {
+      return false;
+    }
 
     getGeoColumnsImpl(geospatial_base,
                       ti,
@@ -913,9 +932,9 @@ bool GeoTypesFactory::getGeoColumns(const std::vector<uint8_t>& wkb,
   try {
     const auto geospatial_base = GeoTypesFactory::createGeoType(wkb);
 
-    int srid = 0;
-    ti.set_input_srid(srid);
-    ti.set_output_srid(srid);
+    if (!geospatial_base || !geospatial_base->transform(ti)) {
+      return false;
+    }
 
     getGeoColumnsImpl(geospatial_base,
                       ti,
@@ -943,9 +962,9 @@ bool GeoTypesFactory::getGeoColumns(OGRGeometry* geom,
   try {
     const auto geospatial_base = GeoTypesFactory::createGeoType(geom);
 
-    int srid = 0;
-    ti.set_input_srid(srid);
-    ti.set_output_srid(srid);
+    if (!geospatial_base || !geospatial_base->transform(ti)) {
+      return false;
+    }
 
     getGeoColumnsImpl(geospatial_base,
                       ti,

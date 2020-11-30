@@ -70,6 +70,7 @@ class GeoBase {
 
   int32_t getBestPlanarSRID() const;
   bool transform(int32_t srid0, int32_t srid1);
+  bool transform(SQLTypeInfo& ti);
 
   virtual bool operator==(const GeoBase& other) const;
 
