@@ -192,6 +192,7 @@ EXTENSION_NOINLINE int32_t k_means(const Column<float>& input_col0,
                                    const Column<float>& output_col19,
                                    const Column<int>& output_cluster) {
   using namespace daal;
+  using namespace daal::algorithms;
   using namespace daal::data_management;
 
   // Data dimensions
@@ -199,21 +200,21 @@ EXTENSION_NOINLINE int32_t k_means(const Column<float>& input_col0,
   constexpr size_t num_columns = 20;
 
   // Arrays to handle parameters in the easy way
-  const Column<float>& inputs[num_columns] = {
-      input_col0,  input_col1,  input_col2,  input_col3,  input_col4,
-      input_col5,  input_col6,  input_col7,  input_col8,  input_col9,
-      input_col10, input_col11, input_col12, input_col13, input_col14,
-      input_col15, input_col16, input_col17, input_col18, input_col19};
-  Column<float>& outputs[num_columns] = {
-      output_col0,  output_col1,  output_col2,  output_col3,  output_col4,
-      output_col5,  output_col6,  output_col7,  output_col8,  output_col9,
-      output_col10, output_col11, output_col12, output_col13, output_col14,
-      output_col15, output_col16, output_col17, output_col18, output_col19};
+  const Column<float>* const inputs[num_columns] = {
+      &input_col0,  &input_col1,  &input_col2,  &input_col3,  &input_col4,
+      &input_col5,  &input_col6,  &input_col7,  &input_col8,  &input_col9,
+      &input_col10, &input_col11, &input_col12, &input_col13, &input_col14,
+      &input_col15, &input_col16, &input_col17, &input_col18, &input_col19};
+  Column<float>* const outputs[num_columns] = {
+      &output_col0,  &output_col1,  &output_col2,  &output_col3,  &output_col4,
+      &output_col5,  &output_col6,  &output_col7,  &output_col8,  &output_col9,
+      &output_col10, &output_col11, &output_col12, &output_col13, &output_col14,
+      &output_col15, &output_col16, &output_col17, &output_col18, &output_col19};
 
   // Prepare input data as structure of arrays (SOA) as columnar format
   SOANumericTablePtr dataTable = SOANumericTable::create(num_columns, num_rows);
   for (size_t i = 0; i < num_columns; ++i) {
-    dataTable->setArray<float>(inputs[i].ptr, i);
+    dataTable->setArray<float>(inputs[i]->ptr, i);
   }
 
   // Initialization phase of K-Means
@@ -236,7 +237,7 @@ EXTENSION_NOINLINE int32_t k_means(const Column<float>& input_col0,
   const auto assignmentsPtr = assignmentsBlock.getBlockPtr();
   for (size_t i = 0; i < num_rows; ++i) {
     for (size_t j = 0; j < num_columns; ++j) {
-      outputs[j] = inputs[j];
+      (*(outputs[j]))[i] = (*(inputs[j]))[i];
     }
     output_cluster[i] = assignmentsPtr[i];
   }
