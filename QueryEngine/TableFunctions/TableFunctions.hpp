@@ -205,7 +205,7 @@ EXTENSION_NOINLINE int32_t k_means(const Column<float>& input_col0,
       &input_col5,  &input_col6,  &input_col7,  &input_col8,  &input_col9,
       &input_col10, &input_col11, &input_col12, &input_col13, &input_col14,
       &input_col15, &input_col16, &input_col17, &input_col18, &input_col19};
-  Column<float>* const outputs[num_columns] = {
+  const Column<float>* const outputs[num_columns] = {
       &output_col0,  &output_col1,  &output_col2,  &output_col3,  &output_col4,
       &output_col5,  &output_col6,  &output_col7,  &output_col8,  &output_col9,
       &output_col10, &output_col11, &output_col12, &output_col13, &output_col14,
