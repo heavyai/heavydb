@@ -33,7 +33,6 @@
 #include <cstdio>
 #include <cstring>
 #include <thread>
-#include <tuple>
 
 // decoder implementations
 

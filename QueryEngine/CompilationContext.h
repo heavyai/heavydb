@@ -16,9 +16,7 @@
 
 #pragma once
 
-#include <llvm/ExecutionEngine/ExecutionEngine.h>
-#include <llvm/ExecutionEngine/JITEventListener.h>
-#include <llvm/IR/Module.h>
+#include "QueryEngine/ExecutionEngineWrapper.h"
 
 #include <memory>
 
@@ -27,44 +25,13 @@ class CompilationContext {
   virtual ~CompilationContext() {}
 };
 
-struct CompilationOptions;
-
-class ExecutionEngineWrapper {
- public:
-  ExecutionEngineWrapper();
-  ExecutionEngineWrapper(llvm::ExecutionEngine* execution_engine);
-  ExecutionEngineWrapper(llvm::ExecutionEngine* execution_engine,
-                         const CompilationOptions& co);
-
-  ExecutionEngineWrapper(const ExecutionEngineWrapper& other) = delete;
-  ExecutionEngineWrapper(ExecutionEngineWrapper&& other) = default;
-
-  ExecutionEngineWrapper& operator=(const ExecutionEngineWrapper& other) = delete;
-  ExecutionEngineWrapper& operator=(ExecutionEngineWrapper&& other) = default;
-
-  ExecutionEngineWrapper& operator=(llvm::ExecutionEngine* execution_engine);
-
-  llvm::ExecutionEngine* get() { return execution_engine_.get(); }
-  const llvm::ExecutionEngine* get() const { return execution_engine_.get(); }
-
-  llvm::ExecutionEngine& operator*() { return *execution_engine_; }
-  const llvm::ExecutionEngine& operator*() const { return *execution_engine_; }
-
-  llvm::ExecutionEngine* operator->() { return execution_engine_.get(); }
-  const llvm::ExecutionEngine* operator->() const { return execution_engine_.get(); }
-
- private:
-  std::unique_ptr<llvm::ExecutionEngine> execution_engine_;
-  std::unique_ptr<llvm::JITEventListener> intel_jit_listener_;
-};
-
 class CpuCompilationContext : public CompilationContext {
  public:
   CpuCompilationContext(ExecutionEngineWrapper&& execution_engine)
       : execution_engine_(std::move(execution_engine)) {}
 
   void setFunctionPointer(llvm::Function* function) {
-    func_ = execution_engine_->getPointerToFunction(function);
+    func_ = execution_engine_.getPointerToFunction(function);
     CHECK(func_);
     execution_engine_->removeModule(function->getParent());
   }

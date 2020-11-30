@@ -24,7 +24,15 @@ static_assert(false, "LLVM Version >= 9 is required.");
 #include <llvm/Analysis/TypeBasedAliasAnalysis.h>
 #include <llvm/Bitcode/BitcodeReader.h>
 #include <llvm/Bitcode/BitcodeWriter.h>
+
+#ifdef ENABLE_ORCJIT
+#include <llvm/ExecutionEngine/Orc/ExecutionUtils.h>
+#include <llvm/ExecutionEngine/Orc/LLJIT.h>
+#include <llvm/ExecutionEngine/Orc/ThreadSafeModule.h>
+#else
 #include <llvm/ExecutionEngine/MCJIT.h>
+#endif
+
 #include <llvm/IR/Attributes.h>
 #include <llvm/IR/GlobalValue.h>
 #include <llvm/IR/InstIterator.h>
@@ -314,13 +322,15 @@ void optimize_ir(llvm::Function* query_func,
 
 }  // namespace
 
-ExecutionEngineWrapper::ExecutionEngineWrapper() {}
+#ifdef ENABLE_ORCJIT
+ORCJITExecutionEngineWrapper::ORCJITExecutionEngineWrapper() {}
 
-ExecutionEngineWrapper::ExecutionEngineWrapper(llvm::ExecutionEngine* execution_engine)
-    : execution_engine_(execution_engine) {}
+#else  // MCJIT
+MCJITExecutionEngineWrapper::MCJITExecutionEngineWrapper() {}
 
-ExecutionEngineWrapper::ExecutionEngineWrapper(llvm::ExecutionEngine* execution_engine,
-                                               const CompilationOptions& co)
+MCJITExecutionEngineWrapper::MCJITExecutionEngineWrapper(
+    llvm::ExecutionEngine* execution_engine,
+    const CompilationOptions& co)
     : execution_engine_(execution_engine) {
   if (execution_engine_) {
     if (co.register_intel_jit_listener) {
@@ -337,12 +347,13 @@ ExecutionEngineWrapper::ExecutionEngineWrapper(llvm::ExecutionEngine* execution_
   }
 }
 
-ExecutionEngineWrapper& ExecutionEngineWrapper::operator=(
+MCJITExecutionEngineWrapper& MCJITExecutionEngineWrapper::operator=(
     llvm::ExecutionEngine* execution_engine) {
   execution_engine_.reset(execution_engine);
   intel_jit_listener_ = nullptr;
   return *this;
 }
+#endif
 
 void verify_function_ir(const llvm::Function* func) {
   std::stringstream err_ss;
@@ -374,6 +385,10 @@ std::string assemblyForCPU(ExecutionEngineWrapper& execution_engine,
 #endif
   pass_manager.run(*llvm_module);
   return "Assembly for the CPU:\n" + std::string(code_str.str()) + "\nEnd of assembly";
+#else  // ORCJIT
+  LOG(FATAL) << "Assembly logger not yet supported for ORCJIT.";
+  return "";
+#endif  // !ENABLE_ORCJIT
 }
 
 ExecutionEngineWrapper create_execution_engine(llvm::Module* llvm_module,
@@ -415,23 +430,83 @@ ExecutionEngineWrapper CodeGenerator::generateNativeCPUCode(
   auto init_err = llvm::InitializeNativeTarget();
   CHECK(!init_err);
 
+#ifndef ENABLE_ORCJIT
   llvm::InitializeAllTargetMCs();
+#endif
   llvm::InitializeNativeTargetAsmPrinter();
   llvm::InitializeNativeTargetAsmParser();
 
   std::string err_str;
   std::unique_ptr<llvm::Module> owner(llvm_module);
+
+  llvm::TargetOptions to;
+  to.EnableFastISel = true;
+
+#ifdef ENABLE_ORCJIT
+
+  auto llvm_err_to_str = [](const llvm::Error& err) {
+    std::string msg;
+    llvm::raw_string_ostream os(msg);
+    os << err;
+    return msg;
+  };
+
+  auto target_machine_builder_or_err = llvm::orc::JITTargetMachineBuilder::detectHost();
+  if (!target_machine_builder_or_err) {
+    LOG(FATAL) << "Failed to initialize JIT Target Machine: "
+               << llvm_err_to_str(target_machine_builder_or_err.takeError());
+  }
+
+  auto target_machine_builder = *target_machine_builder_or_err;
+  target_machine_builder.setOptions(to);
+  if (co.opt_level == ExecutorOptLevel::ReductionJIT) {
+    target_machine_builder.setCodeGenOptLevel(llvm::CodeGenOpt::None);
+  }
+
+  auto data_layout_or_err = target_machine_builder.getDefaultDataLayoutForTarget();
+  if (!data_layout_or_err) {
+    LOG(FATAL) << "Failed to initialize data layout: "
+               << llvm_err_to_str(data_layout_or_err.takeError());
+  }
+  auto data_layout = *data_layout_or_err;
+
+  auto jit_builder = llvm::orc::LLJITBuilder();
+  jit_builder.setJITTargetMachineBuilder(target_machine_builder);
+  auto jit_or_error = jit_builder.create();
+  if (!jit_or_error) {
+    LOG(FATAL) << "Failed to initialize ORCJIT: "
+               << llvm_err_to_str(jit_or_error.takeError());
+  }
+  auto jit = std::move(*jit_or_error);
+  CHECK(jit);
+
+  module->setDataLayout(data_layout);
+  auto err = jit->addIRModule(
+      llvm::orc::ThreadSafeModule(std::move(owner), getGlobalLLVMThreadSafeContext()));
+  if (err) {
+    LOG(FATAL) << "Failed to add the module to the JIT : " << llvm_err_to_str(err);
+  }
+
+  // Get the main JITDylib and add the local processes symbols
+  auto& dylib = jit->getMainJITDylib();
+  dylib.addGenerator(
+      llvm::cantFail(llvm::orc::DynamicLibrarySearchGenerator::GetForCurrentProcess(
+          data_layout.getGlobalPrefix())));
+
+  ExecutionEngineWrapper execution_engine(std::move(jit));
+  return execution_engine;
+#else
+
   llvm::EngineBuilder eb(std::move(owner));
   eb.setErrorStr(&err_str);
   eb.setEngineKind(llvm::EngineKind::JIT);
-  llvm::TargetOptions to;
-  to.EnableFastISel = true;
   eb.setTargetOptions(to);
   if (co.opt_level == ExecutorOptLevel::ReductionJIT) {
     eb.setOptLevel(llvm::CodeGenOpt::None);
   }
 
   return create_execution_engine(llvm_module, eb, co);
+#endif
 }
 
 std::shared_ptr<CompilationContext> Executor::optimizeAndCodegenCPU(
@@ -1373,7 +1448,9 @@ std::unique_ptr<llvm::TargetMachine> CodeGenerator::initializeNVPTXBackend(
     const CudaMgr_Namespace::NvidiaDeviceArch arch) {
   auto timer = DEBUG_TIMER(__func__);
   llvm::InitializeAllTargets();
+#ifndef ENABLE_ORCJIT
   llvm::InitializeAllTargetMCs();
+#endif
   llvm::InitializeAllAsmPrinters();
   std::string err;
   auto target = llvm::TargetRegistry::lookupTarget("nvptx64", err);

@@ -285,6 +285,11 @@ if (ENABLE_JIT_DEBUG)
   add_definitions("-DWITH_JIT_DEBUG")
 endif()
 
+option(ENABLE_ORCJIT "Enable LLVM ORCJIT in place of MCJIT" OFF)
+if(ENABLE_ORCJIT)
+  add_definitions("-DENABLE_ORCJIT")
+endif()
+
 if(XCODE)
   if(ENABLE_CUDA)
     set(CMAKE_EXE_LINKER_FLAGS "-F/Library/Frameworks -framework CUDA")
@@ -477,7 +482,7 @@ find_library(CLANG_LIB clang-cpp)
 find_library(LLVM_LIB LLVM)
 # Deps builds use separate libs for each clang component, while some distros now bundle into a single lib
 if (${CMAKE_SYSTEM_NAME} STREQUAL "Darwin" OR NOT LLVM_LIB)
-  set(LLVM_COMPONENTS support mcjit core irreader option linker)
+  set(LLVM_COMPONENTS support mcjit orcjit core irreader option linker)
 
   if(ENABLE_INTEL_JIT_LISTENER)
     list(APPEND LLVM_COMPONENTS inteljitevents)
