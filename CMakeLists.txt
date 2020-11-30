@@ -725,9 +725,9 @@ add_custom_target(rerun_cmake ALL
 add_dependencies(omnisci_server rerun_cmake)
 
 # DAAL
-list(APPEND DAAL_LIBS "/home/ubuntu/anaconda3/envs/rbc_master/lib/libdaal_core.so")
-list(APPEND DAAL_LIBS "/home/ubuntu/anaconda3/envs/rbc_master/lib/libdaal_sequential.so")
-list(APPEND DAAL_LIBS "/home/ubuntu/anaconda3/envs/rbc_master/lib/libdaal_thread.so")
+list(APPEND DAAL_LIBS "/home/ubuntu/onedal_lib/libdaal_core.so")
+list(APPEND DAAL_LIBS "/home/ubuntu/onedal_lib/libdaal_sequential.so")
+list(APPEND DAAL_LIBS "/home/ubuntu/onedal_lib/libdaal_thread.so")
 include_directories("/home/ubuntu/onedal/include")
 
 target_link_libraries(omnisci_server mapd_thrift thrift_handler ${MAPD_LIBRARIES} ${Boost_LIBRARIES} ${CMAKE_DL_LIBS} ${CUDA_LIBRARIES} ${PROFILER_LIBS} ${ZLIB_LIBRARIES} ${DAAL_LIBS} ${LOCALE_LINK_FLAG})
