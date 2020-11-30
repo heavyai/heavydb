@@ -1,5 +1,11 @@
 cmake_minimum_required(VERSION 3.16)
 
+# DAAL
+list(APPEND DAAL_LIBS "/home/ubuntu/onedal_lib/libdaal_core.so")
+list(APPEND DAAL_LIBS "/home/ubuntu/onedal_lib/libdaal_sequential.so")
+list(APPEND DAAL_LIBS "/home/ubuntu/onedal_lib/libdaal_thread.so")
+include_directories("/home/ubuntu/onedal/include")
+
 # Required for LLVM / JIT, alternative to setting CMP0065 to OLD
 set(CMAKE_ENABLE_EXPORTS True)
 
@@ -723,12 +729,6 @@ add_custom_target(rerun_cmake ALL
   WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
   )
 add_dependencies(omnisci_server rerun_cmake)
-
-# DAAL
-list(APPEND DAAL_LIBS "/home/ubuntu/onedal_lib/libdaal_core.so")
-list(APPEND DAAL_LIBS "/home/ubuntu/onedal_lib/libdaal_sequential.so")
-list(APPEND DAAL_LIBS "/home/ubuntu/onedal_lib/libdaal_thread.so")
-include_directories("/home/ubuntu/onedal/include")
 
 target_link_libraries(omnisci_server mapd_thrift thrift_handler ${MAPD_LIBRARIES} ${Boost_LIBRARIES} ${CMAKE_DL_LIBS} ${CUDA_LIBRARIES} ${PROFILER_LIBS} ${ZLIB_LIBRARIES} ${DAAL_LIBS} ${LOCALE_LINK_FLAG})
 
