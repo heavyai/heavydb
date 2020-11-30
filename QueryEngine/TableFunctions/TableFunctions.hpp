@@ -14,9 +14,9 @@
  * limitations under the License.
  */
 
-#include <daal.h>
 #include "../../QueryEngine/OmniSciTypes.h"
 #include "../../Shared/funcannotations.h"
+#include "daal.h"
 
 #define EXTENSION_INLINE extern "C" ALWAYS_INLINE DEVICE
 #define EXTENSION_NOINLINE extern "C" NEVER_INLINE DEVICE
