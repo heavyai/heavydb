@@ -190,6 +190,7 @@ struct TCopyParams {
   22: string s3_endpoint
   23: bool geo_assign_render_groups=true
   24: bool geo_explode_collections=false
+  25: i32 source_srid=0
 }
 
 struct TCreateParams {

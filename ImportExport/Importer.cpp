@@ -1405,13 +1405,21 @@ void TypedImportBuffer::add_value(const ColumnDescriptor* cd,
   }
 }
 
-bool importGeoFromLonLat(double lon, double lat, std::vector<double>& coords) {
+bool importGeoFromLonLat(double lon,
+                         double lat,
+                         std::vector<double>& coords,
+                         SQLTypeInfo& ti) {
   if (std::isinf(lat) || std::isnan(lat) || std::isinf(lon) || std::isnan(lon)) {
     return false;
   }
-  // we don't need to do any coordinate-system transformation
-  // here (yet) so we don't need to use any OGR API or types
-  // just use the values directly (assumed to be in 4326)
+  if (ti.transforms()) {
+    Geospatial::GeoPoint pt{std::vector<double>{lon, lat}};
+    if (!pt.transform(ti)) {
+      return false;
+    }
+    pt.getColumns(coords);
+    return true;
+  }
   coords.push_back(lon);
   coords.push_back(lat);
   return true;
@@ -1955,7 +1963,16 @@ static ImportStatus import_thread_delimited(
                 //  throw std::runtime_error("POINT column " + cd->columnName + " is
                 //  not WGS84, cannot insert lon/lat");
                 // }
-                if (!importGeoFromLonLat(lon, lat, coords)) {
+                SQLTypeInfo import_ti{col_ti};
+                if (copy_params.file_type == FileType::DELIMITED &&
+                    import_ti.get_output_srid() == 4326) {
+                  auto srid0 = copy_params.source_srid;
+                  if (srid0 > 0) {
+                    // srid0 -> 4326 transform is requested on import
+                    import_ti.set_input_srid(srid0);
+                  }
+                }
+                if (!importGeoFromLonLat(lon, lat, coords, import_ti)) {
                   throw std::runtime_error(
                       "Cannot read lon/lat to insert into POINT column " +
                       cd->columnName);
@@ -1963,6 +1980,14 @@ static ImportStatus import_thread_delimited(
               } else {
                 // import it
                 SQLTypeInfo import_ti{col_ti};
+                if (copy_params.file_type == FileType::DELIMITED &&
+                    import_ti.get_output_srid() == 4326) {
+                  auto srid0 = copy_params.source_srid;
+                  if (srid0 > 0) {
+                    // srid0 -> 4326 transform is requested on import
+                    import_ti.set_input_srid(srid0);
+                  }
+                }
                 if (is_null) {
                   if (col_ti.get_notnull()) {
                     throw std::runtime_error("NULL geo for column " + cd->columnName);

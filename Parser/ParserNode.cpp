@@ -4108,6 +4108,17 @@ void CopyTableStmt::execute(const Catalog_Namespace::SessionInfo& session,
           throw std::runtime_error("geo_explode_collections option must be a boolean.");
         }
         copy_params.geo_explode_collections = bool_from_string_literal(str_literal);
+      } else if (boost::iequals(*p->get_name(), "source_srid")) {
+        const IntLiteral* int_literal = dynamic_cast<const IntLiteral*>(p->get_value());
+        if (int_literal == nullptr) {
+          throw std::runtime_error("'source_srid' option must be an integer");
+        }
+        const int srid = int_literal->get_intval();
+        if (copy_params.file_type == import_export::FileType::DELIMITED) {
+          copy_params.source_srid = srid;
+        } else {
+          throw std::runtime_error("'source_srid' option can only be used on csv files");
+        }
       } else {
         throw std::runtime_error("Invalid option for COPY: " + *p->get_name());
       }

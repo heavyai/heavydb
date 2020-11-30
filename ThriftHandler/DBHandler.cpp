@@ -3093,6 +3093,7 @@ import_export::CopyParams DBHandler::thrift_to_copyparams(const TCopyParams& cp)
   copy_params.geo_layer_name = cp.geo_layer_name;
   copy_params.geo_assign_render_groups = cp.geo_assign_render_groups;
   copy_params.geo_explode_collections = cp.geo_explode_collections;
+  copy_params.source_srid = cp.source_srid;
   return copy_params;
 }
 
@@ -3159,6 +3160,7 @@ TCopyParams DBHandler::copyparams_to_thrift(const import_export::CopyParams& cp)
   copy_params.geo_layer_name = cp.geo_layer_name;
   copy_params.geo_assign_render_groups = cp.geo_assign_render_groups;
   copy_params.geo_explode_collections = cp.geo_explode_collections;
+  copy_params.source_srid = cp.source_srid;
   return copy_params;
 }
 
