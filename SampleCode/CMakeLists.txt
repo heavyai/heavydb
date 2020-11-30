@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 2.8)
+cmake_minimum_required(VERSION 3.16)
 set(RUNTIME_OUTPUT_PATH ${CMAKE_CURRENT_BINARY_DIR})
 
 find_package(Boost COMPONENTS system program_options regex REQUIRED QUIET)
