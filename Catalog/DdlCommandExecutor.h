@@ -141,7 +141,9 @@ class AlterForeignTableCommand : public DdlCommand {
   void execute(TQueryResult& _return) override;
 
  private:
-  void setForeignTableOptions();
+  void alterOptions(const foreign_storage::ForeignTable* foreign_table);
+  void renameTable(const foreign_storage::ForeignTable* foreign_table);
+  void renameColumn(const foreign_storage::ForeignTable* foreign_table);
 };
 
 class ShowForeignServersCommand : public DdlCommand {

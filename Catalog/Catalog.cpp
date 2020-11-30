@@ -1417,6 +1417,12 @@ foreign_storage::ForeignTable* Catalog::getForeignTableUnlocked(
   return dynamic_cast<foreign_storage::ForeignTable*>(tableDescIt->second);
 };
 
+const foreign_storage::ForeignTable* Catalog::getForeignTable(
+    const std::string& tableName) const {
+  cat_read_lock read_lock(this);
+  return getForeignTableUnlocked(tableName);
+};
+
 const TableDescriptor* Catalog::getMetadataForTable(const string& tableName,
                                                     const bool populateFragmenter) const {
   // we give option not to populate fragmenter (default true/yes) as it can be heavy for
@@ -2510,6 +2516,7 @@ const foreign_storage::ForeignServer* Catalog::getForeignServer(
     const std::string& server_name) const {
   foreign_storage::ForeignServer* foreign_server = nullptr;
   cat_read_lock read_lock(this);
+
   if (foreignServerMap_.find(server_name) != foreignServerMap_.end()) {
     foreign_server = foreignServerMap_.find(server_name)->second.get();
   }

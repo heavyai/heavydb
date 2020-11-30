@@ -1542,7 +1542,7 @@ size_t InsertValuesStmt::determineLeafIndex(const Catalog_Namespace::Catalog& ca
   if (td->isView) {
     throw std::runtime_error("Insert to views is not supported yet.");
   }
-
+  foreign_storage::validate_non_foreign_table_write(td);
   if (td->partitions == "REPLICATED") {
     throw std::runtime_error("Cannot determine leaf on replicated table.");
   }
@@ -1876,6 +1876,7 @@ void InsertValuesStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   if (td->isView) {
     throw std::runtime_error("Singleton inserts on views is not supported.");
   }
+  foreign_storage::validate_non_foreign_table_write(td);
 
   auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID);
   RelAlgExecutor ra_executor(executor.get(), catalog);
@@ -3409,6 +3410,7 @@ void RenameTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
           catalog, *table, false);
   const auto td = td_with_lock();
   CHECK(td);
+  validate_table_type(td, ddl_utils::TableType::TABLE, "ALTER");
 
   check_alter_table_privilege(session, td);
   if (catalog.getMetadataForTable(*new_table_name) != nullptr) {
@@ -3441,6 +3443,7 @@ void AddColumnStmt::check_executable(const Catalog_Namespace::SessionInfo& sessi
     if (td->isView) {
       throw std::runtime_error("Adding columns to a view is not supported.");
     }
+    validate_table_type(td, ddl_utils::TableType::TABLE, "ALTER");
     if (table_is_temporary(td)) {
       throw std::runtime_error(
           "Adding columns to temporary tables is not yet supported.");
@@ -3626,6 +3629,7 @@ void DropColumnStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   if (!td) {
     throw std::runtime_error("Table " + *table + " does not exist.");
   }
+  validate_table_type(td, ddl_utils::TableType::TABLE, "ALTER");
   if (td->isView) {
     throw std::runtime_error("Dropping a column from a view is not supported.");
   }
@@ -3696,6 +3700,7 @@ void RenameColumnStmt::execute(const Catalog_Namespace::SessionInfo& session) {
           catalog, *table, false);
   const auto td = td_with_lock();
   CHECK(td);
+  validate_table_type(td, ddl_utils::TableType::TABLE, "ALTER");
 
   check_alter_table_privilege(session, td);
   const ColumnDescriptor* cd = catalog.getMetadataForColumn(td->tableId, *column);

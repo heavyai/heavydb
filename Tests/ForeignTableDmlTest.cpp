@@ -4107,6 +4107,11 @@ class AlterForeignTableTest : public ScheduledRefreshTest {
         value);
   }
 
+  void TearDown() override {
+    sql("DROP FOREIGN TABLE IF EXISTS renamed_table;");
+    ScheduledRefreshTest::TearDown();
+  }
+
   inline static const Catalog_Namespace::Catalog* cat_;
   inline static const ForeignTable* foreign_table_;
 };
@@ -4240,11 +4245,27 @@ TEST_F(AlterForeignTableTest, NonExistantOption) {
                           "Exception: Invalid foreign table option \"FOO\".");
 }
 
-TEST_F(AlterForeignTableTest, TableName) {
-  createScheduledTable("manual");
-  queryAndAssertExceptionSubstr(
+TEST_F(AlterForeignTableTest, TableDoesNotExist) {
+  queryAndAssertException(
       "ALTER FOREIGN TABLE test_foreign_table RENAME TO renamed_table;",
-      "Encountered \"RENAME\"");
+      "Exception: Table/View test_foreign_table does not exist.");
+}
+
+TEST_F(AlterForeignTableTest, Table) {
+  createScheduledTable("manual");
+  sql("ALTER FOREIGN TABLE test_foreign_table RENAME TO renamed_table;");
+  sqlAndCompareResult("SELECT * FROM renamed_table;", {{i(1)}});
+  queryAndAssertExceptionSubstr("SELECT * FROM test_foreign_table;",
+                                "Object 'test_foreign_table' not found");
+}
+
+TEST_F(AlterForeignTableTest, TableAlreadyExists) {
+  createScheduledTable("manual");
+  sqlCreateForeignTable("(i INTEGER)", "0", "csv", {}, 0, "renamed_table");
+  queryAndAssertException(
+      "ALTER FOREIGN TABLE test_foreign_table RENAME TO renamed_table;",
+      "Exception: Foreign table with name \"test_foreign_table\" can not be renamed to "
+      "\"renamed_table\". A different table with name \"renamed_table\" already exists.");
 }
 
 TEST_F(AlterForeignTableTest, Owner) {
@@ -4254,11 +4275,29 @@ TEST_F(AlterForeignTableTest, Owner) {
       "Encountered \"OWNER\"");
 }
 
+TEST_F(AlterForeignTableTest, ColumnDoesNotExist) {
+  createScheduledTable("manual");
+  queryAndAssertException(
+      "ALTER FOREIGN TABLE test_foreign_table RENAME COLUMN b TO renamed_column;",
+      "Exception: Column with name \"b\" can not be renamed to \"renamed_column\". "
+      "Column with name \"b\" does not exist.");
+}
+
 TEST_F(AlterForeignTableTest, Column) {
   createScheduledTable("manual");
-  queryAndAssertExceptionSubstr(
-      "ALTER FOREIGN TABLE test_foreign_table RENAME COLUMN i TO renamed_column;",
-      "Encountered \"RENAME\"");
+  sql("ALTER FOREIGN TABLE test_foreign_table RENAME COLUMN i TO renamed_column;");
+  sqlAndCompareResult("SELECT renamed_column FROM test_foreign_table;", {{i(1)}});
+  queryAndAssertExceptionSubstr("SELECT i FROM test_foreign_table;",
+                                "Column 'i' not found in any table");
+}
+
+TEST_F(AlterForeignTableTest, ColumnAlreadyExists) {
+  sqlCreateForeignTable(
+      "(t TEXT, i INTEGER[])", "example_1", "csv", {}, 0, "test_foreign_table");
+  queryAndAssertException(
+      "ALTER FOREIGN TABLE test_foreign_table RENAME COLUMN i TO t;",
+      "Exception: Column with name \"i\" can not be renamed to \"t\". "
+      "A column with name \"t\" already exists.");
 }
 
 TEST_F(AlterForeignTableTest, Add) {
@@ -4338,6 +4377,87 @@ TEST_F(AlterForeignTableTest, AlterTypeDropEncoding) {
   queryAndAssertExceptionSubstr(
       "ALTER FOREIGN TABLE test_foreign_table ALTER i TYPE text DROP ENCODING DICT(32);",
       "Encountered \"ALTER\"");
+}
+
+TEST_F(AlterForeignTableTest, RenameRegularTable) {
+  createScheduledTable("manual");
+  queryAndAssertException("ALTER TABLE test_foreign_table RENAME to renamed_table;",
+                          "Exception: test_foreign_table is a foreign table. Use "
+                          "ALTER FOREIGN TABLE.");
+}
+
+TEST_F(AlterForeignTableTest, RenameRegularTableColumn) {
+  createScheduledTable("manual");
+  queryAndAssertException("ALTER TABLE test_foreign_table RENAME COLUMN i to a;",
+                          "Exception: test_foreign_table is a foreign table. Use "
+                          "ALTER FOREIGN TABLE.");
+}
+
+TEST_F(AlterForeignTableTest, AddColumnRegularTable) {
+  createScheduledTable("manual");
+  queryAndAssertException("ALTER TABLE test_foreign_table ADD COLUMN t TEXT;",
+                          "Exception: test_foreign_table is a foreign table. Use "
+                          "ALTER FOREIGN TABLE.");
+}
+
+TEST_F(AlterForeignTableTest, DropColumnRegularTable) {
+  createScheduledTable("manual");
+  queryAndAssertException("ALTER TABLE test_foreign_table DROP COLUMN t;",
+                          "Exception: test_foreign_table is a foreign table. Use "
+                          "ALTER FOREIGN TABLE.");
+}
+
+class AlterForeignTableRegularTableTest : public DBHandlerTestFixture {
+ protected:
+  void SetUp() override {
+    DBHandlerTestFixture::SetUp();
+    sql("DROP TABLE IF EXISTS test_table");
+    sql("DROP TABLE IF EXISTS renamed_table");
+  }
+  void TearDown() override {
+    sql("DROP TABLE IF EXISTS test_table");
+    sql("DROP TABLE IF EXISTS renamed_table");
+    DBHandlerTestFixture::TearDown();
+  }
+};
+
+TEST_F(AlterForeignTableRegularTableTest, RenameRegularTable) {
+  sql("CREATE TABLE test_table (i INTEGER);");
+  queryAndAssertException("ALTER FOREIGN TABLE test_table RENAME to renamed_table;",
+                          "Exception: test_table is a table. Use ALTER TABLE.");
+}
+
+class AlterForeignTablePermissionTest : public AlterForeignTableTest {
+  void SetUp() override {
+    loginAdmin();
+    AlterForeignTableTest::SetUp();
+    dropTestUserIfExists();
+  }
+  void TearDown() override {
+    loginAdmin();
+    dropTestUserIfExists();
+    AlterForeignTableTest::TearDown();
+  }
+  void dropTestUserIfExists() {
+    try {
+      sql("DROP USER test_user;");
+    } catch (const std::exception& e) {
+      // Swallow and log exceptions that may occur, since there is no "IF EXISTS" option.
+      LOG(WARNING) << e.what();
+    }
+  }
+};
+
+TEST_F(AlterForeignTablePermissionTest, NoPermission) {
+  createScheduledTable("scheduled", "1S", "all", 1);
+  sql("CREATE USER test_user (password = 'test_pass');");
+  sql("GRANT ACCESS ON DATABASE omnisci TO test_user;");
+  login("test_user", "test_pass");
+  queryAndAssertException(
+      "ALTER FOREIGN TABLE test_foreign_table WITH (REFRESH_TIMING_TYPE = "
+      "'SCHEDULED')",
+      "Exception: Current user does not have the privilege to alter foreign table: "
+      "test_foreign_table");
 }
 
 class ParquetCoercionTest : public SelectQueryTest {

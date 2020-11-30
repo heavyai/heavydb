@@ -482,4 +482,26 @@ public class ForeignTableTest extends DDLTest {
             gson.fromJson(result.plan_result, JsonObject.class);
     assertEquals(expectedJsonObject, actualJsonObject);
   }
+
+  @Test
+  public void alterForeignTableRenameTable() throws Exception {
+    final JsonObject expectedJsonObject =
+            getJsonFromFile("alter_foreign_table_rename_table.json");
+    final TPlanResult result =
+            processDdlCommand("ALTER FOREIGN TABLE test_table RENAME TO new_test_table;");
+    final JsonObject actualJsonObject =
+            gson.fromJson(result.plan_result, JsonObject.class);
+    assertEquals(expectedJsonObject, actualJsonObject);
+  }
+
+  @Test
+  public void alterForeignTableRenameColumn() throws Exception {
+    final JsonObject expectedJsonObject =
+            getJsonFromFile("alter_foreign_table_rename_column.json");
+    final TPlanResult result = processDdlCommand(
+            "ALTER FOREIGN TABLE test_table RENAME COLUMN old_column TO new_column;");
+    final JsonObject actualJsonObject =
+            gson.fromJson(result.plan_result, JsonObject.class);
+    assertEquals(expectedJsonObject, actualJsonObject);
+  }
 }

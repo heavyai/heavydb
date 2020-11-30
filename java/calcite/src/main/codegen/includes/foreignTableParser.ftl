@@ -341,20 +341,43 @@ SqlDdl SqlRefreshForeignTables(Span s) : {
  * ALTER FOREIGN TABLE DDL syntax variants:
  *
  * ALTER FOREIGN TABLE <table> [ WITH (<option> = <value> [, ... ] ) ]
+ * ALTER FOREIGN TABLE <table> RENAME TO <new_table>
+ * ALTER FOREIGN TABLE <table> RENAME COLUMN <old_column> TO <new_column>
  */
 SqlDdl SqlAlterForeignTable(Span s) :
 {
     SqlAlterForeignTable.Builder sqlAlterForeignTableBuilder =
         new SqlAlterForeignTable.Builder();
     SqlIdentifier tableName;
+    SqlIdentifier newTableName;
+    SqlIdentifier oldColumnName;
+    SqlIdentifier newColumnName;
     OmniSqlOptionsMap optionsMap = null;
 }
 {
     <ALTER> <FOREIGN> <TABLE>
     tableName=CompoundIdentifier()
     { sqlAlterForeignTableBuilder.setTableName(tableName.toString()); }
-    optionsMap = WithOptions()
-    { sqlAlterForeignTableBuilder.setOptions(optionsMap); }
+    (
+        <RENAME>
+        (
+            <TO>
+            newTableName=CompoundIdentifier()
+            { sqlAlterForeignTableBuilder.alterTableName(newTableName.toString()); }
+        |
+            <COLUMN>
+            oldColumnName=CompoundIdentifier()
+            <TO>
+            newColumnName=CompoundIdentifier()
+            {
+                sqlAlterForeignTableBuilder.alterColumnName(oldColumnName.toString(),
+                                                            newColumnName.toString());
+            }
+        )
+    |
+        optionsMap = WithOptions()
+        { sqlAlterForeignTableBuilder.alterOptions(optionsMap); }
+    )
     {
         sqlAlterForeignTableBuilder.setPos(s.end(this));
         return sqlAlterForeignTableBuilder.build();

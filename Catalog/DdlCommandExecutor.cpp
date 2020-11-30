@@ -374,7 +374,7 @@ void DropForeignServerCommand::execute(TQueryResult& _return) {
       return;
     } else {
       throw std::runtime_error{"Foreign server with name \"" + server_name +
-                               "\" does not exist."};
+                               "\" can not be dropped. Server does not exist."};
     }
   }
   // check access privileges
@@ -593,8 +593,10 @@ void CreateForeignTableCommand::setTableDetails(const std::string& table_name,
   const std::string server_name = ddl_payload_["serverName"].GetString();
   foreign_table.foreign_server = session_ptr_->getCatalog().getForeignServer(server_name);
   if (!foreign_table.foreign_server) {
-    throw std::runtime_error{"Foreign server with name \"" + server_name +
-                             "\" does not exist."};
+    throw std::runtime_error{
+        "Foreign Table with name \"" + table_name +
+        "\" can not be created. Associated foreign server with name \"" + server_name +
+        "\" does not exist."};
   }
 
   if (ddl_payload_.HasMember("options") && !ddl_payload_["options"].IsNull()) {

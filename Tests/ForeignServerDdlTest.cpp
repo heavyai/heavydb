@@ -207,9 +207,9 @@ TEST_F(DropForeignServerTest, NonExistingServerWithIfExists) {
 }
 
 TEST_F(DropForeignServerTest, NonExistingServerWithoutIfExists) {
-  queryAndAssertException(
-      "DROP SERVER test_server_2;",
-      "Exception: Foreign server with name \"test_server_2\" does not exist.");
+  queryAndAssertException("DROP SERVER test_server_2;",
+                          "Exception: Foreign server with name \"test_server_2\" can not "
+                          "be dropped. Server does not exist.");
 }
 
 TEST_F(DropForeignServerTest, DefaultServers) {

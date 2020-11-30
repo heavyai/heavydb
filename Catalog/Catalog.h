@@ -180,6 +180,8 @@ class Catalog final {
   const LinkDescriptor* getMetadataForLink(int linkId) const;
 
   const foreign_storage::ForeignTable* getForeignTableUnlocked(int tableId) const;
+  const foreign_storage::ForeignTable* getForeignTable(
+      const std::string& tableName) const;
 
   const foreign_storage::ForeignTable* getForeignTable(int table_id) const;
 

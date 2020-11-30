@@ -1181,7 +1181,8 @@ TEST_F(CreateForeignTableTest, NonExistentServer) {
       "non_existent_server;"};
   queryAndAssertException(
       query,
-      "Exception: Foreign server with name \"non_existent_server\" does not exist.");
+      "Exception: Foreign Table with name \"test_foreign_table\" can not be created. "
+      "Associated foreign server with name \"non_existent_server\" does not exist.");
 }
 
 TEST_F(CreateForeignTableTest, DefaultCsvFileServerName) {
