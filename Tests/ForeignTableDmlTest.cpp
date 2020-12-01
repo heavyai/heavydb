@@ -1327,15 +1327,6 @@ TEST_F(SelectQueryTest, RowGroupSizeLargerThanFragmentSize) {
           getDataFilesPath() + "row_group_size_2.parquet");
 }
 
-TEST_F(SelectQueryTest, NonUtcTimestamp) {
-  const auto& query = getCreateForeignTableQuery(
-      "(tstamp TIMESTAMP)", {}, "non_utc_timestamp", "parquet");
-  sql(query);
-  queryAndAssertException("SELECT * FROM test_foreign_table;",
-                          "Exception: Non-UTC timezone specified in Parquet file for "
-                          "column \"tstamp\". Only UTC timezone is currently supported.");
-}
-
 TEST_F(SelectQueryTest, DecimalIntEncoding) {
   const auto& query = getCreateForeignTableQuery(
       "(decimal_int_32 DECIMAL(9, 5), decimal_int_64 DECIMAL(15, 10))",

@@ -861,9 +861,6 @@ bool validate_timestamp_mapping(const ColumnDescriptor* omnisci_column,
   }
   if (auto timestamp_logical_column = dynamic_cast<const parquet::TimestampLogicalType*>(
           parquet_column->logical_type().get())) {
-    if (!timestamp_logical_column->is_adjusted_to_utc()) {
-      return false;
-    }
     return omnisci_column->columnType.get_dimension() == 0 ||
            ((omnisci_column->columnType.get_dimension() == 9 &&
              timestamp_logical_column->time_unit() ==
@@ -888,9 +885,6 @@ bool validate_time_mapping(const ColumnDescriptor* omnisci_column,
   }
   if (auto time_logical_column = dynamic_cast<const parquet::TimeLogicalType*>(
           parquet_column->logical_type().get())) {
-    if (!time_logical_column->is_adjusted_to_utc()) {
-      return false;
-    }
     return omnisci_column->columnType.get_compression() == kENCODING_NONE ||
            time_logical_column->time_unit() == parquet::LogicalType::TimeUnit::MILLIS;
   }
@@ -975,9 +969,9 @@ void validate_allowed_mapping(const parquet::ColumnDescriptor* parquet_column,
       CHECK(timestamp_type);
 
       if (!timestamp_type->is_adjusted_to_utc()) {
-        throw std::runtime_error{
-            "Non-UTC timezone specified in Parquet file for column \"" +
-            omnisci_column->columnName + "\". Only UTC timezone is currently supported."};
+        LOG(WARNING) << "Non-UTC timezone specified in Parquet file for column \""
+                     << omnisci_column->columnName
+                     << "\". Only UTC timezone is currently supported.";
       }
     }
     std::string parquet_type;
