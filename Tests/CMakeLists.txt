@@ -1,6 +1,10 @@
 set(EXECUTABLE_OUTPUT_PATH ${CMAKE_CURRENT_BINARY_DIR})
 include_directories(${CMAKE_CURRENT_BINARY_DIR})
 
+# DAAL
+list(APPEND DAAL_LIBS "/home/ubuntu/onedal_lib/libdaal_core.so")
+list(APPEND DAAL_LIBS "/home/ubuntu/onedal_lib/libdaal_thread.so")
+
 set(TEST_BASE_PATH "./tmp")
 add_definitions("-DBASE_PATH=\"${TEST_BASE_PATH}\"")
 
@@ -188,7 +192,7 @@ target_link_libraries(DiskCacheQueryTest ${THRIFT_HANDLER_TEST_LIBRARIES})
 target_link_libraries(LoadTableTest ${THRIFT_HANDLER_TEST_LIBRARIES})
 
 if(NOT ${CMAKE_SYSTEM_NAME} STREQUAL "Darwin")
-  target_link_libraries(UdfTest gtest ${EXECUTE_TEST_LIBS})
+  target_link_libraries(UdfTest gtest ${EXECUTE_TEST_LIBS} ${DAAL_LIBS})
 endif()
 
 target_link_libraries(TableUpdateDeleteBenchmark benchmark ${EXECUTE_TEST_LIBS})

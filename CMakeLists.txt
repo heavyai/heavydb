@@ -2,7 +2,6 @@ cmake_minimum_required(VERSION 3.16)
 
 # DAAL
 list(APPEND DAAL_LIBS "/home/ubuntu/onedal_lib/libdaal_core.so")
-list(APPEND DAAL_LIBS "/home/ubuntu/onedal_lib/libdaal_sequential.so")
 list(APPEND DAAL_LIBS "/home/ubuntu/onedal_lib/libdaal_thread.so")
 include_directories("/home/ubuntu/onedal/include")
 
