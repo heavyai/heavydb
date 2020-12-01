@@ -195,7 +195,7 @@ if(NOT ${CMAKE_SYSTEM_NAME} STREQUAL "Darwin")
   target_link_libraries(UdfTest gtest ${EXECUTE_TEST_LIBS} ${DAAL_LIBS})
 endif()
 
-target_link_libraries(TableUpdateDeleteBenchmark benchmark ${EXECUTE_TEST_LIBS})
+target_link_libraries(TableUpdateDeleteBenchmark benchmark ${EXECUTE_TEST_LIBS} ${DAAL_LIBS})
 if(ENABLE_CUDA)
   target_link_libraries(GpuSharedMemoryTest ${EXECUTE_TEST_LIBS})
 endif()
