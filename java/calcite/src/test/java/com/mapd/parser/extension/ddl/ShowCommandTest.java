@@ -49,4 +49,24 @@ public class ShowCommandTest extends DDLTest {
             gson.fromJson(result.plan_result, JsonObject.class);
     assertEquals(expectedJsonObject, actualJsonObject);
   }
+
+  @Test
+  public void showDiskCacheUsage() throws Exception {
+    final JsonObject expectedJsonObject = getJsonFromFile("show_disk_cache_usage.json");
+    final TPlanResult result = processDdlCommand("SHOW DISK CACHE USAGE;");
+    final JsonObject actualJsonObject =
+            gson.fromJson(result.plan_result, JsonObject.class);
+    assertEquals(expectedJsonObject, actualJsonObject);
+  }
+
+  @Test
+  public void showDiskCacheUsageFor() throws Exception {
+    final JsonObject expectedJsonObject =
+            getJsonFromFile("show_disk_cache_usage_for.json");
+    final TPlanResult result =
+            processDdlCommand("SHOW DISK CACHE USAGE FOR table1, table2;");
+    final JsonObject actualJsonObject =
+            gson.fromJson(result.plan_result, JsonObject.class);
+    assertEquals(expectedJsonObject, actualJsonObject);
+  }
 }

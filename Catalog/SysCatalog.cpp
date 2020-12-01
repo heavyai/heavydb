@@ -853,7 +853,7 @@ void SysCatalog::dropUser(const string& name) {
   try {
     UserMetadata user;
     if (!getMetadataForUser(name, user)) {
-      throw runtime_error("User " + name + " does not exist.");
+      throw runtime_error("Cannot drop user. User " + name + " does not exist.");
     }
     dropRole_unsafe(name);
     deleteObjectDescriptorMap(name);
@@ -1447,7 +1447,8 @@ void SysCatalog::createDBObject(const UserMetadata& user,
       grantDBObjectPrivileges_unsafe(user.userName, object, catalog);
       auto* grantee = instance().getUserGrantee(user.userName);
       if (!grantee) {
-        throw runtime_error("User " + user.userName + "  does not exist.");
+        throw runtime_error("Cannot create DBObject. User " + user.userName +
+                            " does not exist.");
       }
       grantee->grantPrivileges(object);
     }
@@ -1953,7 +1954,8 @@ bool SysCatalog::hasAnyPrivileges(const UserMetadata& user,
   }
   auto* user_rl = instance().getUserGrantee(user.userName);
   if (!user_rl) {
-    throw runtime_error("User " + user.userName + "  does not exist.");
+    throw runtime_error("Cannot check privileges. User " + user.userName +
+                        "  does not exist.");
   }
   for (std::vector<DBObject>::iterator objectIt = privObjects.begin();
        objectIt != privObjects.end();
@@ -1974,7 +1976,8 @@ bool SysCatalog::checkPrivileges(const UserMetadata& user,
 
   auto* user_rl = instance().getUserGrantee(user.userName);
   if (!user_rl) {
-    throw runtime_error("User " + user.userName + "  does not exist.");
+    throw runtime_error("Cannot check privileges. User " + user.userName +
+                        "  does not exist.");
   }
   for (auto& object : privObjects) {
     if (!user_rl->checkPrivileges(object)) {

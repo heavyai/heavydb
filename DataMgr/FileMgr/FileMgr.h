@@ -154,6 +154,7 @@ class FileMgr : public AbstractBufferMgr {  // implements
 
   inline FileInfo* getFileInfoForFileId(const int fileId) { return files_[fileId]; }
 
+  uint64_t getTotalFileSize() const;
   void init(const size_t num_reader_threads);
   void init(const std::string dataPathToConvertFrom);
 

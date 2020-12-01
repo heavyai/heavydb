@@ -91,7 +91,7 @@ struct FileInfo {
   void print(bool pagesummary);
 
   /// Returns the number of bytes used by the file
-  inline size_t size() { return pageSize * numPages; }
+  inline size_t size() const { return pageSize * numPages; }
 
   inline int syncToDisk() {
     if (fflush(f) != 0) {

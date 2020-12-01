@@ -170,6 +170,18 @@ class ShowDatabasesCommand : public DdlCommand {
   void execute(TQueryResult& _return) override;
 };
 
+class ShowDiskCacheUsageCommand : public DdlCommand {
+ public:
+  ShowDiskCacheUsageCommand(
+      const rapidjson::Value& ddl_payload,
+      std::shared_ptr<Catalog_Namespace::SessionInfo const> session_ptr);
+
+  void execute(TQueryResult& _return) override;
+
+ private:
+  std::vector<std::string> getFilteredTableNames();
+};
+
 class RefreshForeignTablesCommand : public DdlCommand {
  public:
   RefreshForeignTablesCommand(

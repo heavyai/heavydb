@@ -106,7 +106,7 @@ void GlobalFileMgr::deleteBuffersWithPrefix(const ChunkKey& keyPrefix, const boo
   }
 }
 
-AbstractBufferMgr* GlobalFileMgr::findFileMgr(const int db_id, const int tb_id) {
+AbstractBufferMgr* GlobalFileMgr::findFileMgrUnlocked(const int db_id, const int tb_id) {
   // NOTE: only call this private function after locking is already in place
   AbstractBufferMgr* fm = nullptr;
   const auto file_mgr_key = std::make_pair(db_id, tb_id);
@@ -130,7 +130,7 @@ void GlobalFileMgr::deleteFileMgr(const int db_id, const int tb_id) {
 AbstractBufferMgr* GlobalFileMgr::getFileMgr(const int db_id, const int tb_id) {
   {  // check if FileMgr already exists for (db_id, tb_id)
     mapd_shared_lock<mapd_shared_mutex> read_lock(fileMgrs_mutex_);
-    AbstractBufferMgr* fm = findFileMgr(db_id, tb_id);
+    AbstractBufferMgr* fm = findFileMgrUnlocked(db_id, tb_id);
     if (fm) {
       return fm;
     }
@@ -138,7 +138,7 @@ AbstractBufferMgr* GlobalFileMgr::getFileMgr(const int db_id, const int tb_id) {
 
   {  // create new FileMgr for (db_id, tb_id)
     mapd_unique_lock<mapd_shared_mutex> write_lock(fileMgrs_mutex_);
-    AbstractBufferMgr* fm = findFileMgr(db_id, tb_id);
+    AbstractBufferMgr* fm = findFileMgrUnlocked(db_id, tb_id);
     if (fm) {
       return fm;  // mgr was added between the read lock and the write lock
     }
@@ -198,7 +198,7 @@ void GlobalFileMgr::writeFileMgrData(
 
 void GlobalFileMgr::removeTableRelatedDS(const int db_id, const int tb_id) {
   mapd_unique_lock<mapd_shared_mutex> write_lock(fileMgrs_mutex_);
-  auto fm = dynamic_cast<File_Namespace::FileMgr*>(findFileMgr(db_id, tb_id));
+  auto fm = dynamic_cast<File_Namespace::FileMgr*>(findFileMgrUnlocked(db_id, tb_id));
   if (fm) {
     fm->closeRemovePhysical();
   } else {

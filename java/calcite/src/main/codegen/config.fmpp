@@ -45,6 +45,7 @@ data: {
         "com.mapd.parser.extension.ddl.SqlShowUserSessions"
         "com.mapd.parser.extension.ddl.SqlShowForeignServers"
         "com.mapd.parser.extension.ddl.SqlShowQueries"
+        "com.mapd.parser.extension.ddl.SqlShowDiskCacheUsage"
         "com.mapd.parser.extension.ddl.SqlKillQuery"
         "com.mapd.parser.extension.ddl.omnisql.*"
         "java.util.Map"
@@ -80,6 +81,8 @@ data: {
         "SHARD"
         "SHARED"
         "DICTIONARY"
+        "DISK"
+        "CACHE"
       ]
 
       # List of keywords from "keywords" section that are not reserved.
@@ -429,6 +432,7 @@ data: {
         "SqlAlterForeignTable(span())"
         "SqlRefreshForeignTables(span())"
         "SqlShowQueries(span())"
+        "SqlShowDiskCacheUsage(span())"
         "SqlKillQuery(span())"
       ]
 

@@ -52,6 +52,23 @@ void add_row(TQueryResult& _return, const std::vector<std::string>& row) {
     _return.row_set.columns[i].nulls.emplace_back(false);
   }
 }
+
+template <class LockType>
+std::tuple<const TableDescriptor*,
+           std::unique_ptr<lockmgr::TableSchemaLockContainer<LockType>>>
+get_table_descriptor_with_lock(const Catalog_Namespace::Catalog& cat,
+                               const std::string& table_name,
+                               const bool populate_fragmenter) {
+  const TableDescriptor* td{nullptr};
+  std::unique_ptr<lockmgr::TableSchemaLockContainer<LockType>> td_with_lock =
+      std::make_unique<lockmgr::TableSchemaLockContainer<LockType>>(
+          lockmgr::TableSchemaLockContainer<LockType>::acquireTableDescriptor(
+              cat, table_name, populate_fragmenter));
+  CHECK(td_with_lock);
+  td = (*td_with_lock)();
+  CHECK(td);
+  return std::make_tuple(td, std::move(td_with_lock));
+}
 }  // namespace
 
 DdlCommandExecutor::DdlCommandExecutor(
@@ -113,6 +130,8 @@ void DdlCommandExecutor::execute(TQueryResult& _return) {
     RefreshForeignTablesCommand{payload, session_ptr_}.execute(_return);
   } else if (ddl_command == "SHOW_QUERIES") {
     LOG(ERROR) << "SHOW QUERIES DDL is not ready yet!\n";
+  } else if (ddl_command == "SHOW_DISK_CACHE_USAGE") {
+    ShowDiskCacheUsageCommand{payload, session_ptr_}.execute(_return);
   } else if (ddl_command == "KILL_QUERY") {
     CHECK(payload.HasMember("querySession"));
     const std::string& querySessionPayload = payload["querySession"].GetString();
@@ -665,6 +684,8 @@ void DropForeignTableCommand::execute(TQueryResult& _return) {
     CHECK(td_with_lock);
     td = (*td_with_lock)();
   } catch (const std::runtime_error& e) {
+    // TODO(Misiu): This should not just swallow any exception, it should only catch
+    // exceptions that stem from the table not existing.
     if (ddl_payload_["ifExists"].GetBool()) {
       return;
     } else {
@@ -882,4 +903,80 @@ void AlterForeignTableCommand::execute(TQueryResult& _return) {
   table->validateSupportedOptions(new_options_map);
   foreign_storage::ForeignTable::validate_alter_options(new_options_map);
   catalog.setForeignTableOptions(table_name, new_options_map, false);
+}
+
+ShowDiskCacheUsageCommand::ShowDiskCacheUsageCommand(
+    const rapidjson::Value& ddl_payload,
+    std::shared_ptr<Catalog_Namespace::SessionInfo const> session_ptr)
+    : DdlCommand(ddl_payload, session_ptr) {
+  if (ddl_payload.HasMember("tableNames")) {
+    CHECK(ddl_payload["tableNames"].IsArray());
+    for (auto const& tablename_def : ddl_payload["tableNames"].GetArray()) {
+      CHECK(tablename_def.IsString());
+    }
+  }
+}
+
+std::vector<std::string> ShowDiskCacheUsageCommand::getFilteredTableNames() {
+  auto table_names = session_ptr_->get_catalog_ptr()->getTableNamesForUser(
+      session_ptr_->get_currentUser(), GET_PHYSICAL_TABLES);
+
+  if (ddl_payload_.HasMember("tableNames")) {
+    std::vector<std::string> filtered_names;
+    for (const auto& tablename_def : ddl_payload_["tableNames"].GetArray()) {
+      std::string filter_name = tablename_def.GetString();
+      if (std::find(table_names.begin(), table_names.end(), filter_name) !=
+          table_names.end()) {
+        filtered_names.emplace_back(filter_name);
+      } else {
+        throw std::runtime_error("Can not show disk cache usage for table: " +
+                                 filter_name + ". Table does not exist.");
+      }
+    }
+    return filtered_names;
+  } else {
+    return table_names;
+  }
+}
+
+ExecutionResult ShowDiskCacheUsageCommand::execute() {
+  auto cat_ptr = session_ptr_->get_catalog_ptr();
+  auto table_names = getFilteredTableNames();
+
+  const auto disk_cache = cat_ptr->getDataMgr().getPersistentStorageMgr()->getDiskCache();
+  if (!disk_cache) {
+    throw std::runtime_error{"Disk cache not enabled.  Cannot show disk cache usage."};
+  }
+
+  // label_infos -> column labels
+  std::vector<std::string> labels{"table name", "current cache size"};
+  std::vector<TargetMetaInfo> label_infos;
+  label_infos.emplace_back(labels[0], SQLTypeInfo(kTEXT, true));
+  label_infos.emplace_back(labels[1], SQLTypeInfo(kBIGINT, true));
+
+  std::vector<RelLogicalValues::RowValues> logical_values;
+
+  for (auto& table_name : table_names) {
+    auto [td, td_with_lock] =
+        get_table_descriptor_with_lock<lockmgr::ReadLock>(*cat_ptr, table_name, false);
+
+    const auto mgr = dynamic_cast<File_Namespace::FileMgr*>(
+        disk_cache->getGlobalFileMgr()->findFileMgr(cat_ptr->getDatabaseId(),
+                                                    td->tableId));
+
+    // NOTE: This size does not include datawrapper metadata that is on disk.
+    // If a mgr does not exist it means a cache is not enabled/created for the given
+    // table.
+    auto table_cache_size = mgr ? mgr->getTotalFileSize() : 0;
+
+    // logical_values -> table data
+    logical_values.emplace_back(RelLogicalValues::RowValues{});
+    logical_values.back().emplace_back(genLiteralStr(table_name));
+    logical_values.back().emplace_back(genLiteralBigInt(table_cache_size));
+  }
+
+  std::shared_ptr<ResultSet> rSet = std::shared_ptr<ResultSet>(
+      ResultSetLogicalValuesBuilder::create(label_infos, logical_values));
+
+  return ExecutionResult(rSet, label_infos);
 }

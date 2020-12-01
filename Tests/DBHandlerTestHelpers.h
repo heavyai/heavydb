@@ -295,7 +295,6 @@ class DBHandlerTestFixture : public testing::Test {
 
   // Login and return the session id to logout later
   static void login(const std::string& user,
-
                     const std::string& pass,
                     const std::string& db,
                     TSessionId& result_id) {

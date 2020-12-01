@@ -140,10 +140,14 @@ class GlobalFileMgr : public AbstractBufferMgr {  // implements
   size_t getNumChunks() override;
 
  private:
-  AbstractBufferMgr* findFileMgr(const int db_id, const int tb_id);
+  AbstractBufferMgr* findFileMgrUnlocked(const int db_id, const int tb_id);
   void deleteFileMgr(const int db_id, const int tb_id);
 
  public:
+  AbstractBufferMgr* findFileMgr(const int db_id, const int tb_id) {
+    mapd_shared_lock<mapd_shared_mutex> read_lock(fileMgrs_mutex_);
+    return findFileMgrUnlocked(db_id, tb_id);
+  }
   AbstractBufferMgr* getFileMgr(const int db_id, const int tb_id);
   AbstractBufferMgr* getFileMgr(const ChunkKey& key) {
     return getFileMgr(key[0], key[1]);

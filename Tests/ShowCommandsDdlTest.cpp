@@ -22,6 +22,7 @@
 #include <gtest/gtest.h>
 
 #include "DBHandlerTestHelpers.h"
+#include "Shared/File.h"
 #include "TestHelpers.h"
 
 #ifndef BASE_PATH
@@ -383,16 +384,31 @@ TEST_F(ShowUserSessionsTest, PRIVILEGES_NONSUPERUSER) {
   logout(usersession);
 }
 
-class ShowTableDdlTest : public DBHandlerTestFixture {
+class ShowTest : public DBHandlerTestFixture {
+ public:
+  static void dropUserIfExists(const std::string& user_name) {
+    switchToAdmin();
+    try {
+      sql("DROP USER " + user_name + ";");
+    } catch (const std::exception& e) {
+      ASSERT_NE(std::string(e.what()).find("Cannot drop user. User " + user_name +
+                                           " does not exist."),
+                std::string::npos);
+    }
+  }
+};
+
+class ShowTableDdlTest : public ShowTest {
  protected:
   void SetUp() override {
     DBHandlerTestFixture::SetUp();
     switchToAdmin();
+    sql("DROP TABLE IF EXISTS test_table;");
   }
 
   void TearDown() override {
     switchToAdmin();
-    dropTestTable();
+    sql("DROP TABLE IF EXISTS test_table;");
     DBHandlerTestFixture::TearDown();
   }
 
@@ -450,8 +466,6 @@ class ShowTableDdlTest : public DBHandlerTestFixture {
   }
 
   static void createTestTable() { sql("CREATE TABLE test_table ( test_val int );"); }
-
-  static void dropTestTable() { sql("DROP TABLE IF EXISTS test_table;"); }
 };
 
 TEST_F(ShowTableDdlTest, CreateTestTable) {
@@ -471,7 +485,7 @@ TEST_F(ShowTableDdlTest, CreateTwoTestTablesDropOne) {
     sql(result, "SHOW TABLES;");
     assertExpectedQuery(result, expected_result);
   }
-  dropTestTable();
+  sql("DROP TABLE IF EXISTS test_table;");
   {
     TQueryResult result;
     std::vector<std::string> expected_result{"test_table2"};
@@ -492,7 +506,7 @@ TEST_F(ShowTableDdlTest, TestUserSeesNoTables) {
 
 TEST_F(ShowTableDdlTest, CreateTestTableDropTestTable) {
   createTestTable();
-  dropTestTable();
+  sql("DROP TABLE IF EXISTS test_table;");
   TQueryResult result;
   std::vector<std::string> expected_missing_result{"test_table"};
   sql(result, "SHOW TABLES;");
@@ -910,6 +924,229 @@ TEST_F(ShowCreateTableTest, ForeignTable_AllOptions) {
                         start_date_time +
                         "', REFRESH_TIMING_TYPE='SCHEDULED', "
                         "REFRESH_UPDATE_TYPE='APPEND', FRAGMENT_SIZE=50);"}});
+}
+
+class ShowDiskCacheUsageTest : public ShowTest {
+ public:
+  static inline constexpr int64_t page_size{2097152};
+  static inline constexpr int64_t meta_page_size{4096};
+  static inline constexpr int64_t data_file_size{page_size * MAX_FILE_N_PAGES};
+  static inline constexpr int64_t meta_file_size{meta_page_size *
+                                                 MAX_FILE_N_METADATA_PAGES};
+  static inline constexpr int64_t epoch_file_size{sizeof(int)};
+  static inline constexpr int64_t empty_mgr_size{0};
+  static inline constexpr int64_t meta_only_size{epoch_file_size + meta_file_size};
+  static inline constexpr int64_t minimum_total_size{data_file_size + meta_only_size};
+  static inline constexpr int64_t default_cache_size{21474836480};
+  // TODO(Misiu): These can be made constexpr once c++20 is supported.
+  static inline std::string cache_path_ = to_string(BASE_PATH) + "/omnisci_disk_cache/";
+  static inline std::string foreign_table1{"foreign_table1"};
+  static inline std::string foreign_table2{"foreign_table2"};
+  static inline std::string foreign_table3{"foreign_table3"};
+  static inline std::string table1{"table1"};
+
+  static void SetUpTestSuite() {
+    DBHandlerTestFixture::SetUpTestSuite();
+    loginAdmin();
+    sql("DROP DATABASE IF EXISTS test_db;");
+    sql("CREATE DATABASE test_db;");
+    login("admin", "HyperInteractive", "test_db");
+  }
+
+  static void TearDownTestSuite() {
+    sql("DROP DATABASE IF EXISTS test_db;");
+    dropUserIfExists("test_user");
+    DBHandlerTestFixture::TearDownTestSuite();
+  }
+
+  void SetUp() override {
+    if (isDistributedMode()) {
+      GTEST_SKIP() << "Test not supported in distributed mode.";
+    }
+    DBHandlerTestFixture::SetUp();
+    login("admin", "HyperInteractive", "test_db");
+    sql("DROP FOREIGN TABLE IF EXISTS " + foreign_table1 + ";");
+    sql("DROP FOREIGN TABLE IF EXISTS " + foreign_table2 + ";");
+    sql("DROP FOREIGN TABLE IF EXISTS " + foreign_table3 + ";");
+    sql("DROP TABLE IF EXISTS " + table1 + ";");
+  }
+
+  void TearDown() override {
+    sql("DROP FOREIGN TABLE IF EXISTS " + foreign_table1 + ";");
+    sql("DROP FOREIGN TABLE IF EXISTS " + foreign_table2 + ";");
+    sql("DROP FOREIGN TABLE IF EXISTS " + foreign_table3 + ";");
+    sql("DROP TABLE IF EXISTS " + table1 + ";");
+    DBHandlerTestFixture::TearDown();
+  }
+
+  void sqlCreateBasicForeignTable(std::string& table_name) {
+    sql("CREATE FOREIGN TABLE " + table_name +
+        " (i INTEGER) SERVER omnisci_local_csv WITH "
+        "(file_path = '" +
+        boost::filesystem::canonical("../../Tests/FsiDataFiles/0.csv").string() + "');");
+  }
+};
+
+TEST_F(ShowDiskCacheUsageTest, SingleTable) {
+  sqlCreateBasicForeignTable(foreign_table1);
+
+  sqlAndCompareResult("SHOW DISK CACHE USAGE;",
+                      {{foreign_table1, empty_mgr_size, default_cache_size}});
+}
+
+TEST_F(ShowDiskCacheUsageTest, SingleTableInUse) {
+  sqlCreateBasicForeignTable(foreign_table1);
+
+  sql("SELECT * FROM " + foreign_table1 + ";");
+  sqlAndCompareResult("SHOW DISK CACHE USAGE;",
+                      {{foreign_table1, minimum_total_size, default_cache_size}});
+}
+
+TEST_F(ShowDiskCacheUsageTest, MultipleTables) {
+  sqlCreateBasicForeignTable(foreign_table1);
+  sqlCreateBasicForeignTable(foreign_table2);
+  sqlCreateBasicForeignTable(foreign_table3);
+
+  sql("SELECT * FROM " + foreign_table1 + ";");
+  sql("SELECT * FROM " + foreign_table2 + ";");
+
+  sqlAndCompareResult("SHOW DISK CACHE USAGE;",
+                      {{foreign_table1, minimum_total_size, default_cache_size},
+                       {foreign_table2, minimum_total_size, default_cache_size},
+                       {foreign_table3, empty_mgr_size, default_cache_size}});
+}
+
+TEST_F(ShowDiskCacheUsageTest, NoTables) {
+  sqlAndCompareResult("SHOW DISK CACHE USAGE;", {});
+}
+
+TEST_F(ShowDiskCacheUsageTest, NoTablesFiltered) {
+  queryAndAssertException("SHOW DISK CACHE USAGE FOR foreign_table;",
+                          "Exception: Can not show disk cache usage for table: "
+                          "foreign_table. Table does not exist.");
+}
+
+TEST_F(ShowDiskCacheUsageTest, MultipleTablesFiltered) {
+  sqlCreateBasicForeignTable(foreign_table1);
+  sqlCreateBasicForeignTable(foreign_table2);
+  sqlCreateBasicForeignTable(foreign_table3);
+
+  sql("SELECT * FROM " + foreign_table1 + ";");
+  sql("SELECT * FROM " + foreign_table2 + ";");
+
+  sqlAndCompareResult(
+      "SHOW DISK CACHE USAGE FOR " + foreign_table1 + ", " + foreign_table3 + ";",
+      {{foreign_table1, minimum_total_size, default_cache_size},
+       {foreign_table3, empty_mgr_size, default_cache_size}});
+}
+
+TEST_F(ShowDiskCacheUsageTest, SingleTableDropped) {
+  sqlCreateBasicForeignTable(foreign_table1);
+
+  sql("SELECT * FROM " + foreign_table1 + ";");
+  sql("DROP FOREIGN TABLE " + foreign_table1 + ";");
+
+  sqlAndCompareResult("SHOW DISK CACHE USAGE;", {});
+}
+
+TEST_F(ShowDiskCacheUsageTest, SingleTableEvicted) {
+  sqlCreateBasicForeignTable(foreign_table1);
+
+  sql("SELECT * FROM " + foreign_table1 + ";");
+  sql("REFRESH FOREIGN TABLES " + foreign_table1 + " WITH (evict=true);");
+
+  sqlAndCompareResult("SHOW DISK CACHE USAGE;",
+                      {{foreign_table1, empty_mgr_size, default_cache_size}});
+}
+
+TEST_F(ShowDiskCacheUsageTest, SingleTableRefreshed) {
+  sqlCreateBasicForeignTable(foreign_table1);
+
+  sql("SELECT * FROM " + foreign_table1 + ";");
+  sql("REFRESH FOREIGN TABLES " + foreign_table1 + ";");
+
+  sqlAndCompareResult("SHOW DISK CACHE USAGE;",
+                      {{foreign_table1, minimum_total_size, default_cache_size}});
+}
+
+TEST_F(ShowDiskCacheUsageTest, SingleTableMetadataOnly) {
+  sqlCreateBasicForeignTable(foreign_table1);
+
+  sql("SELECT COUNT(*) FROM " + foreign_table1 + ";");
+
+  sqlAndCompareResult("SHOW DISK CACHE USAGE;",
+                      {{foreign_table1, meta_only_size, default_cache_size}});
+}
+
+TEST_F(ShowDiskCacheUsageTest, ForeignAndNormalTable) {
+  sqlCreateBasicForeignTable(foreign_table1);
+  sql("CREATE TABLE " + table1 + " (s TEXT);");
+
+  sql("SELECT * FROM " + foreign_table1 + ";");
+  sql("SELECT * FROM " + table1 + ";");
+
+  sqlAndCompareResult("SHOW DISK CACHE USAGE;",
+                      {{foreign_table1, minimum_total_size, default_cache_size},
+                       {table1, i(0), default_cache_size}});
+}
+
+class ShowDiskCacheUsageForNormalTableTest : public ShowDiskCacheUsageTest {
+ public:
+  static void SetUpTestSuite() {
+    ShowDiskCacheUsageTest::SetUpTestSuite();
+    resetPersistentStorageMgr(DiskCacheLevel::all);
+  }
+
+  static void TearDownTestSuite() {
+    resetPersistentStorageMgr(DiskCacheLevel::fsi);
+    ShowDiskCacheUsageTest::TearDownTestSuite();
+  }
+
+  static void resetPersistentStorageMgr(DiskCacheLevel cache_level) {
+    for (auto table_it : getCatalog().getAllTableMetadata()) {
+      getCatalog().removeFragmenterForTable(table_it->tableId);
+    }
+    getCatalog().getDataMgr().resetPersistentStorage(
+        {cache_path_, cache_level}, 0, getSystemParameters());
+  }
+};
+
+TEST_F(ShowDiskCacheUsageForNormalTableTest, NormalTableEmptyUninitialized) {
+  sqlCreateBasicForeignTable(foreign_table1);
+  sql("CREATE TABLE " + table1 + " (s TEXT);");
+
+  sql("SELECT * FROM " + foreign_table1 + ";");
+
+  sqlAndCompareResult("SHOW DISK CACHE USAGE;",
+                      {{foreign_table1, minimum_total_size, default_cache_size},
+                       {table1, empty_mgr_size, default_cache_size}});
+}
+
+// If a table is initialized, but empty (it has a fileMgr, but no content), it will have
+// created an epoch file, so it returns the size of that file only.  This is different
+// from the case where no manager is found which returns 0.
+TEST_F(ShowDiskCacheUsageForNormalTableTest, NormalTableEmptyInitialized) {
+  sqlCreateBasicForeignTable(foreign_table1);
+  sql("CREATE TABLE " + table1 + " (s TEXT);");
+
+  sql("SELECT * FROM " + foreign_table1 + ";");
+  sql("SELECT * FROM " + table1 + ";");
+
+  sqlAndCompareResult("SHOW DISK CACHE USAGE;",
+                      {{foreign_table1, minimum_total_size, default_cache_size},
+                       {table1, epoch_file_size, default_cache_size}});
+}
+
+TEST_F(ShowDiskCacheUsageForNormalTableTest, NormalTableMinimum) {
+  sqlCreateBasicForeignTable(foreign_table1);
+  sql("CREATE TABLE " + table1 + " (s TEXT);");
+
+  sql("SELECT * FROM " + foreign_table1 + ";");
+  sql("INSERT INTO " + table1 + " VALUES('1');");
+
+  sqlAndCompareResult("SHOW DISK CACHE USAGE;",
+                      {{foreign_table1, minimum_total_size, default_cache_size},
+                       {table1, minimum_total_size, default_cache_size}});
 }
 
 int main(int argc, char** argv) {

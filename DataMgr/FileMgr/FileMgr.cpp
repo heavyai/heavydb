@@ -976,4 +976,18 @@ void FileMgr::free_page(std::pair<FileInfo*, int>&& page) {
 void FileMgr::removeTableRelatedDS(const int db_id, const int table_id) {
   UNREACHABLE();
 }
+
+uint64_t FileMgr::getTotalFileSize() const {
+  uint64_t total_size = 0;
+  for (const auto& file : files_) {
+    total_size += file->size();
+  }
+  if (epochFile_) {
+    total_size += fileSize(epochFile_);
+  }
+  if (DBMetaFile_) {
+    total_size += fileSize(DBMetaFile_);
+  }
+  return total_size;
+}
 }  // namespace File_Namespace
