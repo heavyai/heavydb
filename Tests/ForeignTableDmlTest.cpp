@@ -3294,6 +3294,32 @@ class ForeignStorageCacheQueryTest : public ForeignTableTest {
     sqlDropForeignTable();
     ForeignTableTest::TearDown();
   }
+
+  static std::shared_ptr<ChunkMetadata> createMetadata(const SQLTypeInfo type,
+                                                       const size_t num_bytes,
+                                                       const size_t num_elements,
+                                                       const std::string& s_min,
+                                                       const std::string& s_max,
+                                                       const bool has_nulls) {
+    auto elem_type = type.is_array() ? type.get_elem_type() : type;
+    Datum min, max;
+    if (elem_type.is_string()) {
+      CHECK(elem_type.get_compression() == kENCODING_DICT);
+      min.intval = std::stoi(s_min);
+      max.intval = std::stoi(s_max);
+    } else {
+      min = StringToDatum(s_min, elem_type);
+      max = StringToDatum(s_max, elem_type);
+    }
+    return std::make_shared<ChunkMetadata>(
+        type, num_bytes, num_elements, ChunkStats{min, max, has_nulls});
+  }
+
+  static void assertMetadataEqual(const std::shared_ptr<ChunkMetadata> left_metadata,
+                                  const std::shared_ptr<ChunkMetadata> right_metadata) {
+    ASSERT_EQ(*left_metadata, *right_metadata) << left_metadata->dump() << "\n"
+                                               << right_metadata->dump() << "\n";
+  }
 };
 
 TEST_F(ForeignStorageCacheQueryTest, CreatePopulateMetadata) {
@@ -3342,6 +3368,80 @@ TEST_F(ForeignStorageCacheQueryTest, CacheWithLimitCachesWholeChunks) {
                           " ORDER BY i LIMIT 10);",
                       {{i(45)}});
   sqlAndCompareResult("SELECT SUM(i) FROM " + default_table_name + ";", {{i(32640)}});
+}
+
+TEST_F(ForeignStorageCacheQueryTest, ArrayTypes) {
+  sqlDropForeignTable();
+  const auto& query = getCreateForeignTableQuery(
+      "(index int, b BOOLEAN[], t TINYINT[], s SMALLINT[], i INTEGER[], bi BIGINT[], f "
+      "FLOAT[], "
+      "tm "
+      "TIME[], tp TIMESTAMP[], "
+      "d DATE[], txt TEXT[], fixedpoint DECIMAL(10,5)[])",
+      {},
+      "array_types",
+      "csv",
+      0,
+      default_table_name,
+      "csv");
+  sql(query);
+  sql("SELECT COUNT(*) FROM " + default_table_name + ";");
+
+  auto td = cat->getMetadataForTable(default_table_name);
+  ChunkMetadataVector metadata_vec{};
+  cache->getCachedMetadataVecForKeyPrefix(metadata_vec,
+                                          {cat->getCurrentDB().dbId, td->tableId});
+
+  // clang-format off
+  assertMetadataEqual(metadata_vec[0].second,
+                      createMetadata(kINT, 12, 3, "1", "3", false));
+  assertMetadataEqual(
+      metadata_vec[1].second,
+      createMetadata(SQLTypeInfo(kARRAY, 0, 0, false, kENCODING_NONE, 0, kBOOLEAN),
+                     4, 3, "false", "true", false));
+  assertMetadataEqual(
+      metadata_vec[2].second,
+      createMetadata(SQLTypeInfo(kARRAY, 0, 0, false, kENCODING_NONE, 0, kTINYINT),
+                     4, 3, "50", "120", false));
+  assertMetadataEqual(
+      metadata_vec[3].second,
+      createMetadata(SQLTypeInfo(kARRAY, 0, 0, false, kENCODING_NONE, 0, kSMALLINT),
+                     8, 3, "20000", "31000", false));
+  assertMetadataEqual(
+      metadata_vec[4].second,
+      createMetadata(SQLTypeInfo(kARRAY, 0, 0, false, kENCODING_NONE, 0, kINT),
+                     16, 3, "200000000", "2100000000", false));
+  assertMetadataEqual(
+      metadata_vec[5].second,
+      createMetadata(SQLTypeInfo(kARRAY, 0, 0, false, kENCODING_NONE, 0, kBIGINT),
+                     32, 3, "9000000000000000000", "9200000000000000000", false));
+  assertMetadataEqual(
+      metadata_vec[6].second,
+      createMetadata(SQLTypeInfo(kARRAY, 0, 0, false, kENCODING_NONE, 0, kFLOAT),
+                     16, 3, "10.100000", "1000.122986", false));
+  assertMetadataEqual(
+      metadata_vec[7].second,
+      createMetadata(SQLTypeInfo(kARRAY, 0, 0, false, kENCODING_NONE, 0, kTIME),
+                     32, 3, "00:00:10", "10:00:00", false));
+  assertMetadataEqual(
+      metadata_vec[8].second,
+      createMetadata(SQLTypeInfo(kARRAY, 0, 0, false, kENCODING_NONE, 0, kTIMESTAMP),
+                     32, 3, "2000-01-01 00:00:59", "2500-12-31 23:59:59", false));
+  assertMetadataEqual(
+      metadata_vec[9].second,
+      createMetadata(SQLTypeInfo(kARRAY, 0, 0, false, kENCODING_NONE, 0, kDATE),
+                     32, 3, "2000-01-01", "2500-12-31", false));
+  assertMetadataEqual(
+      metadata_vec[10].second,
+      createMetadata(SQLTypeInfo(kARRAY, 0, 0, false, kENCODING_DICT,
+                                 metadata_vec[10].second->sqlType.get_comp_param(),
+                                 kTEXT),
+                     16, 3, "0", "3", false));
+  assertMetadataEqual(
+      metadata_vec[11].second,
+      createMetadata(SQLTypeInfo(kARRAY, 10, 5, false, kENCODING_NONE, 0, kDECIMAL),
+                     48, 3, "1.23000", "6.78000", false));
+  // clang-format on
 }
 
 class CacheDefaultTest : public DBHandlerTestFixture {};

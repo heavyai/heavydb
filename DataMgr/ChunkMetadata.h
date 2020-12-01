@@ -35,10 +35,25 @@ struct ChunkMetadata {
   ChunkStats chunkStats;
 
   std::string dump() {
-    return "numBytes: " + to_string(numBytes) + " numElements " + to_string(numElements) +
-           " min: " + DatumToString(chunkStats.min, sqlType) +
-           " max: " + DatumToString(chunkStats.max, sqlType) +
-           " has_nulls: " + to_string(chunkStats.has_nulls);
+    auto type = sqlType.is_array() ? sqlType.get_elem_type() : sqlType;
+    // Unencoded strings have no min/max.
+    if (type.is_string() && type.get_compression() == kENCODING_NONE) {
+      return "type: " + sqlType.get_type_name() + " numBytes: " + to_string(numBytes) +
+             " numElements " + to_string(numElements) + " min: <invalid>" +
+             " max: <invalid>" + " has_nulls: " + to_string(chunkStats.has_nulls);
+    } else if (type.is_string()) {
+      return "type: " + sqlType.get_type_name() + " numBytes: " + to_string(numBytes) +
+             " numElements " + to_string(numElements) +
+             " min: " + to_string(chunkStats.min.intval) +
+             " max: " + to_string(chunkStats.max.intval) +
+             " has_nulls: " + to_string(chunkStats.has_nulls);
+    } else {
+      return "type: " + sqlType.get_type_name() + " numBytes: " + to_string(numBytes) +
+             " numElements " + to_string(numElements) +
+             " min: " + DatumToString(chunkStats.min, type) +
+             " max: " + DatumToString(chunkStats.max, type) +
+             " has_nulls: " + to_string(chunkStats.has_nulls);
+    }
   }
 
   ChunkMetadata(const SQLTypeInfo& sql_type,

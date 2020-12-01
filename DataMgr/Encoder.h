@@ -220,7 +220,10 @@ class Encoder {
    * otherwise. Default false if metadata update is unsupported. Only reset chunk stats if
    * the incoming stats differ from the current stats.
    */
-  virtual bool resetChunkStats(const ChunkStats&) { return false; }
+  virtual bool resetChunkStats(const ChunkStats&) {
+    UNREACHABLE() << "Attempting to reset stats for unsupported type.";
+    return false;
+  }
 
   size_t getNumElems() const { return num_elems_; }
   void setNumElems(const size_t num_elems) { num_elems_ = num_elems; }

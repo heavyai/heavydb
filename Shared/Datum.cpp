@@ -175,7 +175,8 @@ Datum StringToDatum(std::string_view s, SQLTypeInfo& ti) {
       case kMULTIPOLYGON:
         throw std::runtime_error("Internal error: geometry type in StringToDatum.");
       default:
-        throw std::runtime_error("Internal error: invalid type in StringToDatum.");
+        throw std::runtime_error("Internal error: invalid type in StringToDatum: " +
+                                 ti.get_type_name());
     }
   } catch (const std::invalid_argument&) {
     throw std::runtime_error("Invalid conversion from string to " + ti.get_type_name());

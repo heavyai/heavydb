@@ -115,6 +115,14 @@ class StringNoneEncoder : public Encoder {
   AbstractBuffer* getIndexBuf() const { return index_buf; }
   void setIndexBuffer(AbstractBuffer* buf) { index_buf = buf; }
 
+  bool resetChunkStats(const ChunkStats& stats) override {
+    if (has_nulls == stats.has_nulls) {
+      return false;
+    }
+    has_nulls = stats.has_nulls;
+    return true;
+  }
+
  private:
   AbstractBuffer* index_buf;
   StringOffsetT last_offset;
