@@ -1296,10 +1296,12 @@ TEST_F(SelectQueryTest, UnsupportedColumnMapping) {
   const auto& query = getCreateForeignTableQuery(
       "(t TEXT, i BIGINT, f INTEGER)", {}, "example_2", "parquet");
   sql(query);
-  queryAndAssertException(
-      "SELECT * FROM test_foreign_table;",
-      "Exception: Conversion from Parquet type \"DOUBLE\" to OmniSci type \"INTEGER\" is "
-      "not allowed. Please use an appropriate column type.");
+  queryAndAssertException("SELECT * FROM test_foreign_table;",
+                          "Exception: Conversion from Parquet type "
+                          "\"DOUBLE\" to OmniSci type \"INTEGER\" is "
+                          "not allowed. Please use an appropriate column type. Parquet "
+                          "column: double, OmniSci column: f, Parquet file: " +
+                              getDataFilesPath() + +"example_2.parquet.");
 }
 
 TEST_F(SelectQueryTest, NoStatistics) {

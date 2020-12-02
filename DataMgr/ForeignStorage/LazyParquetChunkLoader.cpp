@@ -1027,7 +1027,15 @@ void validate_column_mapping_and_row_group_metadata(
   auto column_it = schema.getLogicalColumns().begin();
   for (int i = 0; i < file_metadata->num_columns(); ++i, ++column_it) {
     const parquet::ColumnDescriptor* descr = file_metadata->schema()->Column(i);
-    validate_allowed_mapping(descr, *column_it);
+    try {
+      validate_allowed_mapping(descr, *column_it);
+    } catch (std::runtime_error& e) {
+      std::stringstream error_message;
+      error_message << e.what() << " Parquet column: " << descr->name()
+                    << ", OmniSci column: " << (*column_it)->columnName
+                    << ", Parquet file: " << file_path << ".";
+      throw std::runtime_error(error_message.str());
+    }
 
     auto fragment_size = schema.getForeignTable()->maxFragRows;
     int64_t max_row_group_size = 0;
