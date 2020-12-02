@@ -127,7 +127,7 @@ class OmniSciDatabaseMetaData implements DatabaseMetaData {
   @Override
   public String getDatabaseProductName() throws SQLException {
     MAPDLOGGER.debug("Entered");
-    return "MapD DB";
+    return "OmniSciDB";
   }
 
   @Override
@@ -140,14 +140,13 @@ class OmniSciDatabaseMetaData implements DatabaseMetaData {
   @Override
   public String getDriverName() throws SQLException {
     MAPDLOGGER.debug("Entered");
-    return "MapD Basic JDBC Driver";
+    return "OmniSciDB JDBC Driver";
   }
 
   @Override
   public String getDriverVersion() throws SQLException { // logger.debug("Entered");
     MAPDLOGGER.debug("Entered");
-    return Integer.toString(OmniSciDriver.DriverMajorVersion) + "."
-            + Integer.toString(OmniSciDriver.DriverMinorVersion);
+    return OmniSciDriver.DriverVersion;
   }
 
   @Override
@@ -273,13 +272,13 @@ class OmniSciDatabaseMetaData implements DatabaseMetaData {
   @Override
   public boolean supportsAlterTableWithAddColumn() throws SQLException {
     MAPDLOGGER.debug("Entered");
-    return false;
+    return true;
   }
 
   @Override
   public boolean supportsAlterTableWithDropColumn() throws SQLException {
     MAPDLOGGER.debug("Entered");
-    return false;
+    return true;
   }
 
   @Override
@@ -309,19 +308,19 @@ class OmniSciDatabaseMetaData implements DatabaseMetaData {
   @Override
   public boolean supportsTableCorrelationNames() throws SQLException {
     MAPDLOGGER.debug("Entered");
-    return false;
+    return true;
   }
 
   @Override
   public boolean supportsDifferentTableCorrelationNames() throws SQLException {
     MAPDLOGGER.debug("Entered");
-    return false;
+    return true;
   }
 
   @Override
   public boolean supportsExpressionsInOrderBy() throws SQLException {
     MAPDLOGGER.debug("Entered");
-    return false;
+    return true;
   }
 
   @Override
