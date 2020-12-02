@@ -20,13 +20,13 @@
 
 #include "Analyzer/Analyzer.h"
 #include "QueryEngine/Descriptors/InputDescriptors.h"
-#include "QueryEngine/JoinHashTable/JoinHashTableInterface.h"
+#include "QueryEngine/JoinHashTable/HashJoin.h"
 
 class Executor;
 
 struct JoinInfo {
   JoinInfo(const std::vector<std::shared_ptr<Analyzer::BinOper>>& equi_join_tautologies,
-           const std::vector<std::shared_ptr<JoinHashTableInterface>>& join_hash_tables)
+           const std::vector<std::shared_ptr<HashJoin>>& join_hash_tables)
       : equi_join_tautologies_(equi_join_tautologies)
       , join_hash_tables_(join_hash_tables) {}
 
@@ -34,7 +34,7 @@ struct JoinInfo {
       equi_join_tautologies_;  // expressions we equi-join on are true by
                                // definition when using a hash join; we'll
                                // fold them to true during code generation
-  std::vector<std::shared_ptr<JoinHashTableInterface>> join_hash_tables_;
+  std::vector<std::shared_ptr<HashJoin>> join_hash_tables_;
   std::unordered_set<size_t> sharded_range_table_indices_;
 };
 

@@ -26,7 +26,7 @@ class PerfectJoinHashTableBuilder {
       : hash_table_(std::make_unique<PerfectHashTable>(catalog)) {}
 
   void allocateDeviceMemory(const JoinColumn& join_column,
-                            const JoinHashTableInterface::HashType layout,
+                            const HashJoin::HashType layout,
                             HashEntryInfo& hash_entry_info,
                             const size_t shard_count,
                             const int device_id,
@@ -40,7 +40,7 @@ class PerfectJoinHashTableBuilder {
       hash_entry_info.hash_entry_count = entries_per_shard * shards_per_device;
     }
     const size_t total_count =
-        layout == JoinHashTableInterface::HashType::OneToOne
+        layout == HashJoin::HashType::OneToOne
             ? hash_entry_info.getNormalizedHashEntryCount()
             : 2 * hash_entry_info.getNormalizedHashEntryCount() + join_column.num_elems;
     CHECK(hash_table_);
@@ -56,7 +56,7 @@ class PerfectJoinHashTableBuilder {
                           const ExpressionRange& col_range,
                           const bool is_bitwise_eq,
                           const InnerOuter& cols,
-                          const JoinHashTableInterface::HashType layout,
+                          const HashJoin::HashType layout,
                           const HashEntryInfo hash_entry_info,
                           const size_t shard_count,
                           const int32_t hash_join_invalid_val,
@@ -107,7 +107,7 @@ class PerfectJoinHashTableBuilder {
       CHECK_GT(device_count, 0);
       for (size_t shard = device_id; shard < shard_count; shard += device_count) {
         ShardInfo shard_info{shard, entries_per_shard, shard_count, device_count};
-        if (layout == JoinHashTableInterface::HashType::OneToOne) {
+        if (layout == HashJoin::HashType::OneToOne) {
           fill_hash_join_buff_on_device_sharded_bucketized(
               reinterpret_cast<int32_t*>(gpu_hash_table_buff),
               hash_join_invalid_val,
@@ -131,7 +131,7 @@ class PerfectJoinHashTableBuilder {
         }
       }
     } else {
-      if (layout == JoinHashTableInterface::HashType::OneToOne) {
+      if (layout == HashJoin::HashType::OneToOne) {
         fill_hash_join_buff_on_device_bucketized(
             reinterpret_cast<int32_t*>(gpu_hash_table_buff),
             hash_join_invalid_val,
@@ -165,7 +165,7 @@ class PerfectJoinHashTableBuilder {
     }
     copy_from_gpu(&data_mgr, &err, dev_err_buff, sizeof(err), device_id);
     if (err) {
-      if (layout == JoinHashTableInterface::HashType::OneToOne) {
+      if (layout == HashJoin::HashType::OneToOne) {
         throw NeedsOneToManyHash();
       } else {
         throw std::runtime_error("Unexpected error when building perfect hash table: " +

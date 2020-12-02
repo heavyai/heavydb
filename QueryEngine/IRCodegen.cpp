@@ -487,7 +487,7 @@ Executor::buildIsDeletedCb(const RelAlgExecutionUnit& ra_exe_unit,
   };
 }
 
-std::shared_ptr<JoinHashTableInterface> Executor::buildCurrentLevelHashTable(
+std::shared_ptr<HashJoin> Executor::buildCurrentLevelHashTable(
     const JoinCondition& current_level_join_conditions,
     RelAlgExecutionUnit& ra_exe_unit,
     const CompilationOptions& co,
@@ -500,7 +500,7 @@ std::shared_ptr<JoinHashTableInterface> Executor::buildCurrentLevelHashTable(
     fail_reasons.emplace_back("No equijoin expression found for outer join");
     return nullptr;
   }
-  std::shared_ptr<JoinHashTableInterface> current_level_hash_table;
+  std::shared_ptr<HashJoin> current_level_hash_table;
   for (const auto& join_qual : current_level_join_conditions.quals) {
     auto qual_bin_oper = std::dynamic_pointer_cast<Analyzer::BinOper>(join_qual);
     if (!qual_bin_oper || !IS_EQUIVALENCE(qual_bin_oper->get_optype())) {
@@ -517,7 +517,7 @@ std::shared_ptr<JoinHashTableInterface> Executor::buildCurrentLevelHashTable(
           query_infos,
           co.device_type == ExecutorDeviceType::GPU ? MemoryLevel::GPU_LEVEL
                                                     : MemoryLevel::CPU_LEVEL,
-          JoinHashTableInterface::HashType::OneToOne,
+          HashJoin::HashType::OneToOne,
           column_cache);
       current_level_hash_table = hash_table_or_error.hash_table;
     }

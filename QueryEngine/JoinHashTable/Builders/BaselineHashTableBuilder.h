@@ -245,16 +245,15 @@ class BaselineJoinHashTableBuilder {
                          const std::vector<JoinBucketInfo>& join_bucket_info,
                          const size_t keyspace_entry_count,
                          const size_t keys_for_all_rows,
-                         const JoinHashTableInterface::HashType layout,
+                         const HashJoin::HashType layout,
                          const size_t key_component_width,
                          const size_t key_component_count) {
     auto timer = DEBUG_TIMER(__func__);
     const auto entry_size =
-        (key_component_count +
-         (layout == JoinHashTableInterface::HashType::OneToOne ? 1 : 0)) *
+        (key_component_count + (layout == HashJoin::HashType::OneToOne ? 1 : 0)) *
         key_component_width;
     const size_t one_to_many_hash_entries =
-        JoinHashTableInterface::layoutRequiresAdditionalBuffers(layout)
+        HashJoin::layoutRequiresAdditionalBuffers(layout)
             ? 2 * keyspace_entry_count + keys_for_all_rows
             : 0;
     const size_t hash_table_size =
@@ -278,40 +277,38 @@ class BaselineJoinHashTableBuilder {
     int thread_count = cpu_threads();
     std::vector<std::future<void>> init_cpu_buff_threads;
     for (int thread_idx = 0; thread_idx < thread_count; ++thread_idx) {
-      init_cpu_buff_threads.emplace_back(
-          std::async(std::launch::async,
-                     [keyspace_entry_count,
-                      key_component_count,
-                      key_component_width,
-                      thread_idx,
-                      thread_count,
-                      cpu_hash_table_ptr,
-                      layout] {
-                       switch (key_component_width) {
-                         case 4:
-                           init_baseline_hash_join_buff_32(
-                               cpu_hash_table_ptr,
-                               keyspace_entry_count,
-                               key_component_count,
-                               layout == JoinHashTableInterface::HashType::OneToOne,
-                               -1,
-                               thread_idx,
-                               thread_count);
-                           break;
-                         case 8:
-                           init_baseline_hash_join_buff_64(
-                               cpu_hash_table_ptr,
-                               keyspace_entry_count,
-                               key_component_count,
-                               layout == JoinHashTableInterface::HashType::OneToOne,
-                               -1,
-                               thread_idx,
-                               thread_count);
-                           break;
-                         default:
-                           CHECK(false);
-                       }
-                     }));
+      init_cpu_buff_threads.emplace_back(std::async(
+          std::launch::async,
+          [keyspace_entry_count,
+           key_component_count,
+           key_component_width,
+           thread_idx,
+           thread_count,
+           cpu_hash_table_ptr,
+           layout] {
+            switch (key_component_width) {
+              case 4:
+                init_baseline_hash_join_buff_32(cpu_hash_table_ptr,
+                                                keyspace_entry_count,
+                                                key_component_count,
+                                                layout == HashJoin::HashType::OneToOne,
+                                                -1,
+                                                thread_idx,
+                                                thread_count);
+                break;
+              case 8:
+                init_baseline_hash_join_buff_64(cpu_hash_table_ptr,
+                                                keyspace_entry_count,
+                                                key_component_count,
+                                                layout == HashJoin::HashType::OneToOne,
+                                                -1,
+                                                thread_idx,
+                                                thread_count);
+                break;
+              default:
+                CHECK(false);
+            }
+          }));
     }
     for (auto& child : init_cpu_buff_threads) {
       child.get();
@@ -336,7 +333,7 @@ class BaselineJoinHashTableBuilder {
                                keyspace_entry_count,
                                -1,
                                key_component_count,
-                               layout == JoinHashTableInterface::HashType::OneToOne,
+                               layout == HashJoin::HashType::OneToOne,
                                key_handler,
                                join_columns[0].num_elems,
                                thread_idx,
@@ -349,7 +346,7 @@ class BaselineJoinHashTableBuilder {
                                keyspace_entry_count,
                                -1,
                                key_component_count,
-                               layout == JoinHashTableInterface::HashType::OneToOne,
+                               layout == HashJoin::HashType::OneToOne,
                                key_handler,
                                join_columns[0].num_elems,
                                thread_idx,
@@ -372,7 +369,7 @@ class BaselineJoinHashTableBuilder {
     if (err) {
       return err;
     }
-    if (JoinHashTableInterface::layoutRequiresAdditionalBuffers(layout)) {
+    if (HashJoin::layoutRequiresAdditionalBuffers(layout)) {
       auto one_to_many_buff = reinterpret_cast<int32_t*>(
           cpu_hash_table_ptr + keyspace_entry_count * entry_size);
       init_hash_join_buff(one_to_many_buff, keyspace_entry_count, -1, 0, 1);
@@ -416,7 +413,7 @@ class BaselineJoinHashTableBuilder {
     return err;
   }
 
-  void allocateDeviceMemory(const JoinHashTableInterface::HashType layout,
+  void allocateDeviceMemory(const HashJoin::HashType layout,
                             const size_t key_component_width,
                             const size_t key_component_count,
                             const size_t keyspace_entry_count,
@@ -424,11 +421,10 @@ class BaselineJoinHashTableBuilder {
                             const int device_id) {
 #ifdef HAVE_CUDA
     const auto entry_size =
-        (key_component_count +
-         (layout == JoinHashTableInterface::HashType::OneToOne ? 1 : 0)) *
+        (key_component_count + (layout == HashJoin::HashType::OneToOne ? 1 : 0)) *
         key_component_width;
     const size_t one_to_many_hash_entries =
-        JoinHashTableInterface::layoutRequiresAdditionalBuffers(layout)
+        HashJoin::layoutRequiresAdditionalBuffers(layout)
             ? 2 * keyspace_entry_count + emitted_keys_count
             : 0;
     const size_t hash_table_size =
@@ -460,7 +456,7 @@ class BaselineJoinHashTableBuilder {
   template <class KEY_HANDLER>
   int initHashTableOnGpu(KEY_HANDLER* key_handler,
                          const std::vector<JoinColumn>& join_columns,
-                         const JoinHashTableInterface::HashType layout,
+                         const HashJoin::HashType layout,
                          const size_t key_component_width,
                          const size_t key_component_count,
                          const size_t keyspace_entry_count,
@@ -487,24 +483,22 @@ class BaselineJoinHashTableBuilder {
 
     switch (key_component_width) {
       case 4:
-        init_baseline_hash_join_buff_on_device_32(
-            hash_buff,
-            keyspace_entry_count,
-            key_component_count,
-            layout == JoinHashTableInterface::HashType::OneToOne,
-            -1,
-            block_size,
-            grid_size);
+        init_baseline_hash_join_buff_on_device_32(hash_buff,
+                                                  keyspace_entry_count,
+                                                  key_component_count,
+                                                  layout == HashJoin::HashType::OneToOne,
+                                                  -1,
+                                                  block_size,
+                                                  grid_size);
         break;
       case 8:
-        init_baseline_hash_join_buff_on_device_64(
-            hash_buff,
-            keyspace_entry_count,
-            key_component_count,
-            layout == JoinHashTableInterface::HashType::OneToOne,
-            -1,
-            block_size,
-            grid_size);
+        init_baseline_hash_join_buff_on_device_64(hash_buff,
+                                                  keyspace_entry_count,
+                                                  key_component_count,
+                                                  layout == HashJoin::HashType::OneToOne,
+                                                  -1,
+                                                  block_size,
+                                                  grid_size);
         break;
       default:
         UNREACHABLE();
@@ -517,7 +511,7 @@ class BaselineJoinHashTableBuilder {
             keyspace_entry_count,
             -1,
             key_component_count,
-            layout == JoinHashTableInterface::HashType::OneToOne,
+            layout == HashJoin::HashType::OneToOne,
             reinterpret_cast<int*>(dev_err_buff),
             key_handler_gpu,
             join_columns.front().num_elems,
@@ -532,7 +526,7 @@ class BaselineJoinHashTableBuilder {
             keyspace_entry_count,
             -1,
             key_component_count,
-            layout == JoinHashTableInterface::HashType::OneToOne,
+            layout == HashJoin::HashType::OneToOne,
             reinterpret_cast<int*>(dev_err_buff),
             key_handler_gpu,
             join_columns.front().num_elems,
@@ -547,7 +541,7 @@ class BaselineJoinHashTableBuilder {
     if (err) {
       return err;
     }
-    if (JoinHashTableInterface::layoutRequiresAdditionalBuffers(layout)) {
+    if (HashJoin::layoutRequiresAdditionalBuffers(layout)) {
       const auto entry_size = key_component_count * key_component_width;
       auto one_to_many_buff =
           reinterpret_cast<int32_t*>(hash_buff + keyspace_entry_count * entry_size);

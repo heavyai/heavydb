@@ -749,7 +749,7 @@ class Executor {
                    const CompilationOptions& co);
   // Builds a join hash table for the provided conditions on the current level.
   // Returns null iff on failure and provides the reasons in `fail_reasons`.
-  std::shared_ptr<JoinHashTableInterface> buildCurrentLevelHashTable(
+  std::shared_ptr<HashJoin> buildCurrentLevelHashTable(
       const JoinCondition& current_level_join_conditions,
       RelAlgExecutionUnit& ra_exe_unit,
       const CompilationOptions& co,
@@ -785,7 +785,7 @@ class Executor {
                           const std::vector<InputTableInfo>& query_infos);
 
   struct JoinHashTableOrError {
-    std::shared_ptr<JoinHashTableInterface> hash_table;
+    std::shared_ptr<HashJoin> hash_table;
     std::string fail_reason;
   };
 
@@ -793,7 +793,7 @@ class Executor {
       const std::shared_ptr<Analyzer::BinOper>& qual_bin_oper,
       const std::vector<InputTableInfo>& query_infos,
       const MemoryLevel memory_level,
-      const JoinHashTableInterface::HashType preferred_hash_type,
+      const HashJoin::HashType preferred_hash_type,
       ColumnCacheMap& column_cache);
   void nukeOldState(const bool allow_lazy_fetch,
                     const std::vector<InputTableInfo>& query_infos,

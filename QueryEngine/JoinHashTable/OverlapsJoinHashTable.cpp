@@ -20,7 +20,7 @@
 #include "QueryEngine/Execute.h"
 #include "QueryEngine/ExpressionRewrite.h"
 #include "QueryEngine/JoinHashTable/Builders/BaselineHashTableBuilder.h"
-#include "QueryEngine/JoinHashTable/JoinHashTableInterface.h"
+#include "QueryEngine/JoinHashTable/HashJoin.h"
 #include "QueryEngine/JoinHashTable/Runtime/HashJoinKeyHandlers.h"
 #include "QueryEngine/JoinHashTable/Runtime/JoinHashTableGpuUtils.h"
 
@@ -39,15 +39,15 @@ std::shared_ptr<OverlapsJoinHashTable> OverlapsJoinHashTable::getInstance(
   auto inner_outer_pairs = normalize_column_pairs(
       condition.get(), *executor->getCatalog(), executor->getTemporaryTables());
 
-  const auto getHashTableType = [](const std::shared_ptr<Analyzer::BinOper> condition,
-                                   const std::vector<InnerOuter>& inner_outer_pairs)
-      -> JoinHashTableInterface::HashType {
-    JoinHashTableInterface::HashType layout = JoinHashTableInterface::HashType::OneToMany;
+  const auto getHashTableType =
+      [](const std::shared_ptr<Analyzer::BinOper> condition,
+         const std::vector<InnerOuter>& inner_outer_pairs) -> HashJoin::HashType {
+    HashJoin::HashType layout = HashJoin::HashType::OneToMany;
     if (condition->is_overlaps_oper()) {
       CHECK_EQ(inner_outer_pairs.size(), size_t(1));
       if (inner_outer_pairs[0].first->get_type_info().is_array() &&
           inner_outer_pairs[0].second->get_type_info().is_array()) {
-        layout = JoinHashTableInterface::HashType::ManyToMany;
+        layout = HashJoin::HashType::ManyToMany;
       }
     }
     return layout;
@@ -111,8 +111,7 @@ std::shared_ptr<OverlapsJoinHashTable> OverlapsJoinHashTable::getInstance(
   return join_hash_table;
 }
 
-void OverlapsJoinHashTable::reifyWithLayout(
-    const JoinHashTableInterface::HashType layout) {
+void OverlapsJoinHashTable::reifyWithLayout(const HashJoin::HashType layout) {
   auto timer = DEBUG_TIMER(__func__);
   CHECK(layoutRequiresAdditionalBuffers(layout));
   const auto& query_info = get_inner_query_info(getInnerTableId(), query_infos_).info;
@@ -502,7 +501,7 @@ size_t OverlapsJoinHashTable::getKeyComponentCount() const {
 }
 
 void OverlapsJoinHashTable::reifyForDevice(const ColumnsForDevice& columns_for_device,
-                                           const JoinHashTableInterface::HashType layout,
+                                           const HashJoin::HashType layout,
                                            const int device_id,
                                            const logger::ThreadId parent_thread_id) {
   DEBUG_TIMER_NEW_THREAD(parent_thread_id);
@@ -531,7 +530,7 @@ int OverlapsJoinHashTable::initHashTableForDevice(
     const std::vector<JoinColumn>& join_columns,
     const std::vector<JoinColumnTypeInfo>& join_column_types,
     const std::vector<JoinBucketInfo>& join_buckets,
-    const JoinHashTableInterface::HashType layout,
+    const HashJoin::HashType layout,
     const Data_Namespace::MemoryLevel effective_memory_level,
     const int device_id) {
   auto timer = DEBUG_TIMER(__func__);
@@ -582,7 +581,7 @@ int OverlapsJoinHashTable::initHashTableOnCpu(
     const std::vector<JoinColumn>& join_columns,
     const std::vector<JoinColumnTypeInfo>& join_column_types,
     const std::vector<JoinBucketInfo>& join_bucket_info,
-    const JoinHashTableInterface::HashType layout) {
+    const HashJoin::HashType layout) {
   auto timer = DEBUG_TIMER(__func__);
   const auto composite_key_info = getCompositeKeyInfo();
   CHECK(!join_columns.empty());
@@ -595,10 +594,10 @@ int OverlapsJoinHashTable::initHashTableOnCpu(
   if (auto hash_table = initHashTableOnCpuFromCache(cache_key)) {
     // See if a hash table of a different layout was returned.
     // If it was OneToMany, we can reuse it on ManyToMany.
-    if (layout == JoinHashTableInterface::HashType::ManyToMany &&
-        hash_table->getLayout() == JoinHashTableInterface::HashType::OneToMany) {
+    if (layout == HashJoin::HashType::ManyToMany &&
+        hash_table->getLayout() == HashJoin::HashType::OneToMany) {
       // use the cached hash table
-      layout_override_ = JoinHashTableInterface::HashType::ManyToMany;
+      layout_override_ = HashJoin::HashType::ManyToMany;
       CHECK_GT(hash_tables_for_device_.size(), size_t(0));
       hash_tables_for_device_[0] = hash_table;
       return 0;
@@ -717,7 +716,7 @@ std::vector<llvm::Value*> OverlapsJoinHashTable::codegenManyKey(
   CHECK(key_component_width == 4 || key_component_width == 8);
   auto hash_table = getHashTableForDevice(size_t(0));
   CHECK(hash_table);
-  CHECK(getHashType() == JoinHashTableInterface::HashType::ManyToMany);
+  CHECK(getHashType() == HashJoin::HashType::ManyToMany);
 
   VLOG(1) << "Performing codgen for ManyToMany";
   const auto& inner_outer_pair = inner_outer_pairs_[0];
@@ -760,7 +759,7 @@ HashJoinMatchingSet OverlapsJoinHashTable::codegenMatchingSet(
     const CompilationOptions& co,
     const size_t index) {
   AUTOMATIC_IR_METADATA(executor_->cgen_state_.get());
-  if (getHashType() == JoinHashTableInterface::HashType::ManyToMany) {
+  if (getHashType() == HashJoin::HashType::ManyToMany) {
     VLOG(1) << "Building codegenMatchingSet for ManyToMany";
     const auto key_component_width = getKeyComponentWidth();
     CHECK(key_component_width == 4 || key_component_width == 8);

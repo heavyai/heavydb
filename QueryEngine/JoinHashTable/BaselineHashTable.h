@@ -20,13 +20,13 @@
 #include "DataMgr/AbstractBuffer.h"
 #include "DataMgr/Allocators/CudaAllocator.h"
 #include "QueryEngine/CompilationOptions.h"
-#include "QueryEngine/JoinHashTable/JoinHashTableInterface.h"
+#include "QueryEngine/JoinHashTable/HashJoin.h"
 
 class BaselineHashTable {
  public:
   // CPU constructor
   BaselineHashTable(const Catalog_Namespace::Catalog* catalog,
-                    JoinHashTableInterface::HashType layout,
+                    HashJoin::HashType layout,
                     const size_t entry_count,
                     const size_t emitted_keys_count,
                     const size_t hash_table_size)
@@ -40,7 +40,7 @@ class BaselineHashTable {
 
   // GPU constructor
   BaselineHashTable(const Catalog_Namespace::Catalog* catalog,
-                    JoinHashTableInterface::HashType layout,
+                    HashJoin::HashType layout,
                     const size_t entry_count,
                     const size_t emitted_keys_count,
                     const size_t hash_table_size,
@@ -97,7 +97,7 @@ class BaselineHashTable {
   // TODO: only required for cuda
   const Catalog_Namespace::Catalog* catalog_;
 
-  JoinHashTableInterface::HashType layout_;
+  HashJoin::HashType layout_;
   // size_t key_component_count_;
   // size_t key_component_width_;
   size_t entry_count_;         // number of keys in the hash table

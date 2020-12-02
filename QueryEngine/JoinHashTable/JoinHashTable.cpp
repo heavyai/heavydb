@@ -545,7 +545,7 @@ void JoinHashTable::reify() {
     }
 
   } catch (const NeedsOneToManyHash& e) {
-    hash_type_ = JoinHashTableInterface::HashType::OneToMany;
+    hash_type_ = HashJoin::HashType::OneToMany;
     freeHashBufferMemory();
     init_threads.clear();
     if (memory_level_ == Data_Namespace::MemoryLevel::GPU_LEVEL) {
@@ -629,7 +629,7 @@ ColumnsForDevice JoinHashTable::fetchColumnsForDevice(
 
 void JoinHashTable::reifyForDevice(const ChunkKey& hash_table_key,
                                    const ColumnsForDevice& columns_for_device,
-                                   const JoinHashTableInterface::HashType layout,
+                                   const HashJoin::HashType layout,
                                    const int device_id,
                                    const logger::ThreadId parent_thread_id) {
   DEBUG_TIMER_NEW_THREAD(parent_thread_id);
@@ -638,12 +638,12 @@ void JoinHashTable::reifyForDevice(const ChunkKey& hash_table_key,
   CHECK_EQ(columns_for_device.join_columns.size(), size_t(1));
   CHECK_EQ(inner_outer_pairs_.size(), size_t(1));
   auto& join_column = columns_for_device.join_columns.front();
-  if (layout == JoinHashTableInterface::HashType::OneToOne) {
+  if (layout == HashJoin::HashType::OneToOne) {
     // TODO: check ret value
     const auto err = initHashTableForDevice(hash_table_key,
                                             join_column,
                                             inner_outer_pairs_.front(),
-                                            JoinHashTableInterface::HashType::OneToOne,
+                                            HashJoin::HashType::OneToOne,
                                             effective_memory_level,
                                             device_id);
     if (err) {
@@ -653,7 +653,7 @@ void JoinHashTable::reifyForDevice(const ChunkKey& hash_table_key,
     const auto err = initHashTableForDevice(hash_table_key,
                                             join_column,
                                             inner_outer_pairs_.front(),
-                                            JoinHashTableInterface::HashType::OneToMany,
+                                            HashJoin::HashType::OneToMany,
                                             effective_memory_level,
                                             device_id);
     if (err) {
@@ -667,7 +667,7 @@ int JoinHashTable::initHashTableForDevice(
     const ChunkKey& chunk_key,
     const JoinColumn& join_column,
     const InnerOuter& cols,
-    const JoinHashTableInterface::HashType layout,
+    const HashJoin::HashType layout,
     const Data_Namespace::MemoryLevel effective_memory_level,
     const int device_id) {
   auto timer = DEBUG_TIMER(__func__);
@@ -676,7 +676,7 @@ int JoinHashTable::initHashTableForDevice(
 
   auto hash_entry_info = get_bucketized_hash_entry_info(
       inner_col->get_type_info(), col_range_, isBitwiseEq());
-  if (!hash_entry_info && layout == JoinHashTableInterface::HashType::OneToOne) {
+  if (!hash_entry_info && layout == HashJoin::HashType::OneToOne) {
     // TODO: what is this for?
     return 0;
   }
@@ -708,7 +708,7 @@ int JoinHashTable::initHashTableForDevice(
     {
       std::lock_guard<std::mutex> cpu_hash_table_buff_lock(cpu_hash_table_buff_mutex_);
       if (!hash_table) {
-        if (layout == JoinHashTableInterface::HashType::OneToOne) {
+        if (layout == HashJoin::HashType::OneToOne) {
           builder.initOneToOneHashTableOnCpu(join_column,
                                              col_range_,
                                              isBitwiseEq(),
@@ -728,7 +728,7 @@ int JoinHashTable::initHashTableForDevice(
           hash_table = builder.getHashTable();
         }
       } else {
-        if (layout == JoinHashTableInterface::HashType::OneToOne &&
+        if (layout == HashJoin::HashType::OneToOne &&
             hash_table->size() > hash_entry_info.getNormalizedHashEntryCount()) {
           // Too many hash entries, need to retry with a 1:many table
           throw NeedsOneToManyHash();
@@ -1083,7 +1083,7 @@ size_t JoinHashTable::payloadBufferOff() const noexcept {
 }
 
 size_t JoinHashTable::getComponentBufferSize() const noexcept {
-  if (hash_type_ == JoinHashTableInterface::HashType::OneToMany) {
+  if (hash_type_ == HashJoin::HashType::OneToMany) {
     return hash_entry_count_ * sizeof(int32_t);
   } else {
     return 0;
@@ -1162,17 +1162,17 @@ std::string JoinHashTable::toString(const ExecutorDeviceType device_type,
   auto ptr2 = ptr1 + offsetBufferOff();
   auto ptr3 = ptr1 + countBufferOff();
   auto ptr4 = ptr1 + payloadBufferOff();
-  return JoinHashTableInterface::toString("perfect",
-                                          getHashTypeString(hash_type_),
-                                          0,
-                                          0,
-                                          hash_entry_count_,
-                                          ptr1,
-                                          ptr2,
-                                          ptr3,
-                                          ptr4,
-                                          buffer_size,
-                                          raw);
+  return HashJoin::toString("perfect",
+                            getHashTypeString(hash_type_),
+                            0,
+                            0,
+                            hash_entry_count_,
+                            ptr1,
+                            ptr2,
+                            ptr3,
+                            ptr4,
+                            buffer_size,
+                            raw);
 }
 
 std::set<DecodedJoinHashBufferEntry> JoinHashTable::toSet(
@@ -1198,8 +1198,7 @@ std::set<DecodedJoinHashBufferEntry> JoinHashTable::toSet(
   auto ptr2 = ptr1 + offsetBufferOff();
   auto ptr3 = ptr1 + countBufferOff();
   auto ptr4 = ptr1 + payloadBufferOff();
-  return JoinHashTableInterface::toSet(
-      0, 0, hash_entry_count_, ptr1, ptr2, ptr3, ptr4, buffer_size);
+  return HashJoin::toSet(0, 0, hash_entry_count_, ptr1, ptr2, ptr3, ptr4, buffer_size);
 }
 
 llvm::Value* JoinHashTable::codegenSlot(const CompilationOptions& co,
@@ -1207,7 +1206,7 @@ llvm::Value* JoinHashTable::codegenSlot(const CompilationOptions& co,
   AUTOMATIC_IR_METADATA(executor_->cgen_state_.get());
   using namespace std::string_literals;
 
-  CHECK(getHashType() == JoinHashTableInterface::HashType::OneToOne);
+  CHECK(getHashType() == HashJoin::HashType::OneToOne);
   const auto cols = get_cols(
       qual_bin_oper_.get(), *executor_->getCatalog(), executor_->temporary_tables_);
   auto key_col = cols.second;

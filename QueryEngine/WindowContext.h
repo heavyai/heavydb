@@ -18,7 +18,7 @@
 
 #include "Analyzer/Analyzer.h"
 #include "DataMgr/Chunk/Chunk.h"
-#include "QueryEngine/JoinHashTable/JoinHashTableInterface.h"
+#include "QueryEngine/JoinHashTable/HashJoin.h"
 
 #include <functional>
 #include <unordered_map>
@@ -66,7 +66,7 @@ class Executor;
 class WindowFunctionContext {
  public:
   WindowFunctionContext(const Analyzer::WindowFunction* window_func,
-                        const std::shared_ptr<JoinHashTableInterface>& partitions,
+                        const std::shared_ptr<HashJoin>& partitions,
                         const size_t elem_count,
                         const ExecutorDeviceType device_type,
                         std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner);
@@ -156,7 +156,7 @@ class WindowFunctionContext {
   // Order column buffers.
   std::vector<const int8_t*> order_columns_;
   // Hash table which contains the partitions specified by the window.
-  std::shared_ptr<JoinHashTableInterface> partitions_;
+  std::shared_ptr<HashJoin> partitions_;
   // The number of elements in the table.
   size_t elem_count_;
   // The output of the window function.

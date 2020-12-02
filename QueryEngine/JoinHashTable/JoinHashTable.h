@@ -33,7 +33,7 @@
 #include "QueryEngine/Descriptors/RowSetMemoryOwner.h"
 #include "QueryEngine/ExpressionRange.h"
 #include "QueryEngine/InputMetadata.h"
-#include "QueryEngine/JoinHashTable/JoinHashTableInterface.h"
+#include "QueryEngine/JoinHashTable/HashJoin.h"
 #include "QueryEngine/JoinHashTable/PerfectHashTable.h"
 
 #include <llvm/IR/Value.h>
@@ -48,7 +48,7 @@
 
 struct HashEntryInfo;
 
-class JoinHashTable : public JoinHashTableInterface {
+class JoinHashTable : public HashJoin {
  public:
   using HashTableCacheValue = std::shared_ptr<PerfectHashTable>;
 
@@ -145,14 +145,14 @@ class JoinHashTable : public JoinHashTableInterface {
 
   void reifyForDevice(const ChunkKey& hash_table_key,
                       const ColumnsForDevice& columns_for_device,
-                      const JoinHashTableInterface::HashType layout,
+                      const HashJoin::HashType layout,
                       const int device_id,
                       const logger::ThreadId parent_thread_id);
 
   int initHashTableForDevice(const ChunkKey& chunk_key,
                              const JoinColumn& join_column,
                              const InnerOuter& cols,
-                             const JoinHashTableInterface::HashType layout,
+                             const HashJoin::HashType layout,
                              const Data_Namespace::MemoryLevel effective_memory_level,
                              const int device_id);
 

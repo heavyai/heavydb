@@ -32,7 +32,7 @@
 #include "QueryEngine/Descriptors/RowSetMemoryOwner.h"
 #include "QueryEngine/InputMetadata.h"
 #include "QueryEngine/JoinHashTable/BaselineHashTable.h"
-#include "QueryEngine/JoinHashTable/JoinHashTableInterface.h"
+#include "QueryEngine/JoinHashTable/HashJoin.h"
 #include "QueryEngine/JoinHashTable/Runtime/HashJoinRuntime.h"
 
 class Executor;
@@ -79,17 +79,14 @@ struct HashTableCacheKey {
 
 class HashTypeCache {
  public:
-  static void set(const std::vector<ChunkKey>& key,
-                  const JoinHashTableInterface::HashType hash_type);
+  static void set(const std::vector<ChunkKey>& key, const HashJoin::HashType hash_type);
 
-  static std::pair<JoinHashTableInterface::HashType, bool> get(
-      const std::vector<ChunkKey>& key);
+  static std::pair<HashJoin::HashType, bool> get(const std::vector<ChunkKey>& key);
 
   static void clear();
 
  private:
-  static std::map<std::vector<ChunkKey>, JoinHashTableInterface::HashType>
-      hash_type_cache_;
+  static std::map<std::vector<ChunkKey>, HashJoin::HashType> hash_type_cache_;
   static std::mutex hash_type_cache_mutex_;
 };
 
@@ -97,7 +94,7 @@ class HashTypeCache {
 // hash with a fill rate of 50%. It is used for equi-joins on multiple columns and
 // on single sparse columns (with very wide range), typically big integer. As of
 // now, such tuples must be unique within the inner table.
-class BaselineJoinHashTable : public JoinHashTableInterface {
+class BaselineJoinHashTable : public HashJoin {
  public:
   //! Make hash table from an in-flight SQL query's parse tree etc.
   static std::shared_ptr<BaselineJoinHashTable> getInstance(
@@ -140,7 +137,7 @@ class BaselineJoinHashTable : public JoinHashTableInterface {
 
   int getInnerTableRteIdx() const noexcept override;
 
-  JoinHashTableInterface::HashType getHashType() const noexcept override;
+  HashJoin::HashType getHashType() const noexcept override;
 
   Data_Namespace::MemoryLevel getMemoryLevel() const noexcept override {
     return memory_level_;
@@ -204,7 +201,7 @@ class BaselineJoinHashTable : public JoinHashTableInterface {
 
   static int getInnerTableId(const std::vector<InnerOuter>& inner_outer_pairs);
 
-  virtual void reifyWithLayout(const JoinHashTableInterface::HashType layout);
+  virtual void reifyWithLayout(const HashJoin::HashType layout);
 
   virtual ColumnsForDevice fetchColumnsForDevice(
       const std::vector<Fragmenter_Namespace::FragmentInfo>& fragments,
@@ -227,10 +224,10 @@ class BaselineJoinHashTable : public JoinHashTableInterface {
 
   CompositeKeyInfo getCompositeKeyInfo() const;
 
-  void reify(const JoinHashTableInterface::HashType preferred_layout);
+  void reify(const HashJoin::HashType preferred_layout);
 
   virtual void reifyForDevice(const ColumnsForDevice& columns_for_device,
-                              const JoinHashTableInterface::HashType layout,
+                              const HashJoin::HashType layout,
                               const int device_id,
                               const logger::ThreadId parent_thread_id);
 
@@ -240,7 +237,7 @@ class BaselineJoinHashTable : public JoinHashTableInterface {
       const std::vector<JoinColumn>& join_columns,
       const std::vector<JoinColumnTypeInfo>& join_column_types,
       const std::vector<JoinBucketInfo>& join_buckets,
-      const JoinHashTableInterface::HashType layout,
+      const HashJoin::HashType layout,
       const Data_Namespace::MemoryLevel effective_memory_level,
       const int device_id);
 
@@ -280,7 +277,7 @@ class BaselineJoinHashTable : public JoinHashTableInterface {
   unsigned block_size_;
   unsigned grid_size_;
 
-  std::optional<JoinHashTableInterface::HashType>
+  std::optional<HashJoin::HashType>
       layout_override_;  // allows us to use a 1:many hash table for many:many
 
   using HashTableCacheValue = std::shared_ptr<BaselineHashTable>;

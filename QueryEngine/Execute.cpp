@@ -3070,7 +3070,7 @@ Executor::JoinHashTableOrError Executor::buildHashTableForQualifier(
     const std::shared_ptr<Analyzer::BinOper>& qual_bin_oper,
     const std::vector<InputTableInfo>& query_infos,
     const MemoryLevel memory_level,
-    const JoinHashTableInterface::HashType preferred_hash_type,
+    const HashJoin::HashType preferred_hash_type,
     ColumnCacheMap& column_cache) {
   if (!g_enable_overlaps_hashjoin && qual_bin_oper->is_overlaps_oper()) {
     return {nullptr, "Overlaps hash join disabled, attempting to fall back to loop join"};
@@ -3082,14 +3082,13 @@ Executor::JoinHashTableOrError Executor::buildHashTableForQualifier(
     throw QueryExecutionError(ERR_INTERRUPTED);
   }
   try {
-    auto tbl =
-        JoinHashTableInterface::getInstance(qual_bin_oper,
-                                            query_infos,
-                                            memory_level,
-                                            preferred_hash_type,
-                                            deviceCountForMemoryLevel(memory_level),
-                                            column_cache,
-                                            this);
+    auto tbl = HashJoin::getInstance(qual_bin_oper,
+                                     query_infos,
+                                     memory_level,
+                                     preferred_hash_type,
+                                     deviceCountForMemoryLevel(memory_level),
+                                     column_cache,
+                                     this);
     return {tbl, ""};
   } catch (const HashJoinFail& e) {
     return {nullptr, e.what()};

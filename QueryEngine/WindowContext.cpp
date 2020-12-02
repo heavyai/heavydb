@@ -28,7 +28,7 @@
 
 WindowFunctionContext::WindowFunctionContext(
     const Analyzer::WindowFunction* window_func,
-    const std::shared_ptr<JoinHashTableInterface>& partitions,
+    const std::shared_ptr<HashJoin>& partitions,
     const size_t elem_count,
     const ExecutorDeviceType device_type,
     std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner)
