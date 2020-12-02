@@ -244,6 +244,7 @@ public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
     opTab.addOperator(new is_point_size_in_view());
     opTab.addOperator(new usTimestamp());
     opTab.addOperator(new nsTimestamp());
+    opTab.addOperator(new KMeans());
     if (extSigs == null) {
       return;
     }
