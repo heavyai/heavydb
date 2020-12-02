@@ -200,7 +200,10 @@ void TableFunctionsFactory::init() {
                                      ExtArgumentType::ColumnFloat,  // 17
                                      ExtArgumentType::ColumnFloat,  // 18
                                      ExtArgumentType::ColumnFloat,  // 19
-                                     ExtArgumentType::Int32,       ExtArgumentType::Int32,
+                                     ExtArgumentType::Float,
+                                     ExtArgumentType::Float,
+                                     // ExtArgumentType::Int32,
+                                     // ExtArgumentType::Int32,
                                      ExtArgumentType::Int32},
         std::vector<ExtArgumentType>{ExtArgumentType::Float,  // 0
                                      ExtArgumentType::Float,  // 1
