@@ -105,7 +105,7 @@ std::shared_ptr<HashJoin> buildPerfect(std::string_view table1,
                                         table2,
                                         column2,
                                         memory_level,
-                                        HashJoin::HashType::OneToOne,
+                                        HashType::OneToOne,
                                         device_count,
                                         column_cache,
                                         executor.get());
@@ -127,12 +127,8 @@ std::shared_ptr<HashJoin> buildKeyed(std::shared_ptr<Analyzer::BinOper> op) {
 
   ColumnCacheMap column_cache;
 
-  return HashJoin::getSyntheticInstance(op,
-                                        memory_level,
-                                        HashJoin::HashType::OneToOne,
-                                        device_count,
-                                        column_cache,
-                                        executor.get());
+  return HashJoin::getSyntheticInstance(
+      op, memory_level, HashType::OneToOne, device_count, column_cache, executor.get());
 }
 
 TEST(Build, PerfectOneToOne1) {
@@ -177,7 +173,7 @@ TEST(Build, PerfectOneToOne1) {
     )");
 
     auto hash_table = buildPerfect("table1", "nums1", "table2", "nums2");
-    EXPECT_EQ(hash_table->getHashType(), HashJoin::HashType::OneToOne);
+    EXPECT_EQ(hash_table->getHashType(), HashType::OneToOne);
 
     auto s2 = hash_table->toSet(g_device_type, 0);
 
@@ -228,7 +224,7 @@ TEST(Build, PerfectOneToOne2) {
     )");
 
     auto hash_table = buildPerfect("table1", "nums1", "table2", "nums2");
-    EXPECT_EQ(hash_table->getHashType(), HashJoin::HashType::OneToOne);
+    EXPECT_EQ(hash_table->getHashType(), HashType::OneToOne);
 
     auto s2 = hash_table->toSet(g_device_type, 0);
 
@@ -276,7 +272,7 @@ TEST(Build, PerfectOneToMany1) {
     )");
 
     auto hash_table = buildPerfect("table1", "nums1", "table2", "nums2");
-    EXPECT_EQ(hash_table->getHashType(), HashJoin::HashType::OneToMany);
+    EXPECT_EQ(hash_table->getHashType(), HashType::OneToMany);
 
     auto s2 = hash_table->toSet(g_device_type, 0);
 
@@ -322,7 +318,7 @@ TEST(Build, PerfectOneToMany2) {
     )");
 
     auto hash_table = buildPerfect("table1", "nums1", "table2", "nums2");
-    EXPECT_EQ(hash_table->getHashType(), HashJoin::HashType::OneToMany);
+    EXPECT_EQ(hash_table->getHashType(), HashType::OneToMany);
 
     auto s2 = hash_table->toSet(g_device_type, 0);
 
@@ -381,7 +377,7 @@ TEST(Build, KeyedOneToOne) {
     auto op = std::make_shared<Analyzer::BinOper>(kBOOLEAN, kEQ, kONE, et1, et2);
     auto hash_table = buildKeyed(op);
 
-    EXPECT_EQ(hash_table->getHashType(), HashJoin::HashType::OneToOne);
+    EXPECT_EQ(hash_table->getHashType(), HashType::OneToOne);
 
     auto s2 = hash_table->toSet(g_device_type, 0);
 
@@ -442,7 +438,7 @@ TEST(Build, KeyedOneToMany) {
     auto op = std::make_shared<Analyzer::BinOper>(kBOOLEAN, kEQ, kONE, et1, et2);
     auto hash_table = buildKeyed(op);
 
-    EXPECT_EQ(hash_table->getHashType(), HashJoin::HashType::OneToMany);
+    EXPECT_EQ(hash_table->getHashType(), HashType::OneToMany);
 
     auto s2 = hash_table->toSet(g_device_type, 0);
 
@@ -514,12 +510,12 @@ TEST(Build, GeoOneToMany1) {
 
     auto hash_table = HashJoin::getSyntheticInstance(op,
                                                      memory_level,
-                                                     HashJoin::HashType::OneToMany,
+                                                     HashType::OneToMany,
                                                      device_count,
                                                      column_cache,
                                                      executor.get());
 
-    EXPECT_EQ(hash_table->getHashType(), HashJoin::HashType::OneToMany);
+    EXPECT_EQ(hash_table->getHashType(), HashType::OneToMany);
 
     auto s2 = hash_table->toSet(g_device_type, 0);
 
@@ -582,12 +578,12 @@ TEST(Build, GeoOneToMany2) {
 
     auto hash_table = HashJoin::getSyntheticInstance(op,
                                                      memory_level,
-                                                     HashJoin::HashType::OneToMany,
+                                                     HashType::OneToMany,
                                                      device_count,
                                                      column_cache,
                                                      executor.get());
 
-    EXPECT_EQ(hash_table->getHashType(), HashJoin::HashType::OneToMany);
+    EXPECT_EQ(hash_table->getHashType(), HashType::OneToMany);
 
     auto s2 = hash_table->toSet(g_device_type, 0);
 
@@ -652,10 +648,10 @@ TEST(MultiFragment, PerfectOneToOne) {
     )");
 
     auto hash_table1 = buildPerfect("table1", "nums1", "table2", "nums2");
-    EXPECT_EQ(hash_table1->getHashType(), HashJoin::HashType::OneToOne);
+    EXPECT_EQ(hash_table1->getHashType(), HashType::OneToOne);
 
     auto hash_table2 = buildPerfect("table3", "nums3", "table4", "nums4");
-    EXPECT_EQ(hash_table2->getHashType(), HashJoin::HashType::OneToOne);
+    EXPECT_EQ(hash_table2->getHashType(), HashType::OneToOne);
 
     // | perfect one-to-one | payloads 0 1 2 3 4 5 6 7 8 9 |
     auto s1 = hash_table1->toSet(g_device_type, 0);
@@ -725,10 +721,10 @@ TEST(MultiFragment, PerfectOneToMany) {
     )");
 
     auto hash_table1 = buildPerfect("table1", "nums1", "table2", "nums2");
-    EXPECT_EQ(hash_table1->getHashType(), HashJoin::HashType::OneToMany);
+    EXPECT_EQ(hash_table1->getHashType(), HashType::OneToMany);
 
     auto hash_table2 = buildPerfect("table3", "nums3", "table4", "nums4");
-    EXPECT_EQ(hash_table2->getHashType(), HashJoin::HashType::OneToMany);
+    EXPECT_EQ(hash_table2->getHashType(), HashType::OneToMany);
 
     // | perfect one-to-many | offsets 0 1 2 3 4 5 6 7 8 9 | counts 1 1 1 1 1 1 1 1 1 2 |
     // payloads 0 1 2 3 4 5 6 7 8 9 10 |
@@ -789,7 +785,7 @@ TEST(MultiFragment, KeyedOneToOne) {
     auto hash_table1 = buildKeyed(op);
     auto baseline = std::dynamic_pointer_cast<BaselineJoinHashTable>(hash_table1);
     CHECK(baseline);
-    EXPECT_EQ(hash_table1->getHashType(), HashJoin::HashType::OneToOne);
+    EXPECT_EQ(hash_table1->getHashType(), HashType::OneToOne);
 
     sql(R"(
       drop table if exists table3;
@@ -818,7 +814,7 @@ TEST(MultiFragment, KeyedOneToOne) {
     // a1 = b and a2 = b
     op = std::make_shared<Analyzer::BinOper>(kBOOLEAN, kEQ, kONE, et1, et2);
     auto hash_table2 = buildKeyed(op);
-    EXPECT_EQ(hash_table2->getHashType(), HashJoin::HashType::OneToOne);
+    EXPECT_EQ(hash_table2->getHashType(), HashType::OneToOne);
 
     //
     auto s1 = hash_table1->toSet(g_device_type, 0);
@@ -878,7 +874,7 @@ TEST(MultiFragment, KeyedOneToMany) {
     // a1 = b and a2 = b
     auto op = std::make_shared<Analyzer::BinOper>(kBOOLEAN, kEQ, kONE, et1, et2);
     auto hash_table1 = buildKeyed(op);
-    EXPECT_EQ(hash_table1->getHashType(), HashJoin::HashType::OneToMany);
+    EXPECT_EQ(hash_table1->getHashType(), HashType::OneToMany);
 
     sql(R"(
       drop table if exists table3;
@@ -909,7 +905,7 @@ TEST(MultiFragment, KeyedOneToMany) {
     // a1 = b and a2 = b
     op = std::make_shared<Analyzer::BinOper>(kBOOLEAN, kEQ, kONE, et1, et2);
     auto hash_table2 = buildKeyed(op);
-    EXPECT_EQ(hash_table2->getHashType(), HashJoin::HashType::OneToMany);
+    EXPECT_EQ(hash_table2->getHashType(), HashType::OneToMany);
 
     //
     auto s1 = hash_table1->toSet(g_device_type, 0);

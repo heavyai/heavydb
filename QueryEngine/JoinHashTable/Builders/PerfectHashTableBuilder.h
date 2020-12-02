@@ -23,10 +23,10 @@
 class PerfectJoinHashTableBuilder {
  public:
   PerfectJoinHashTableBuilder(const Catalog_Namespace::Catalog* catalog)
-      : hash_table_(std::make_unique<PerfectHashTable>(catalog)) {}
+      : catalog_(catalog) {}
 
   void allocateDeviceMemory(const JoinColumn& join_column,
-                            const HashJoin::HashType layout,
+                            const HashType layout,
                             HashEntryInfo& hash_entry_info,
                             const size_t shard_count,
                             const int device_id,
@@ -40,10 +40,16 @@ class PerfectJoinHashTableBuilder {
       hash_entry_info.hash_entry_count = entries_per_shard * shards_per_device;
     }
     const size_t total_count =
-        layout == HashJoin::HashType::OneToOne
+        layout == HashType::OneToOne
             ? hash_entry_info.getNormalizedHashEntryCount()
             : 2 * hash_entry_info.getNormalizedHashEntryCount() + join_column.num_elems;
-    CHECK(hash_table_);
+    CHECK(!hash_table_);
+    hash_table_ =
+        std::make_unique<PerfectHashTable>(catalog_,
+                                           layout,
+                                           ExecutorDeviceType::GPU,
+                                           hash_entry_info.getNormalizedHashEntryCount(),
+                                           join_column.num_elems);
     hash_table_->allocateGpuMemory(total_count, device_id);
 #else
     UNREACHABLE();
@@ -56,7 +62,7 @@ class PerfectJoinHashTableBuilder {
                           const ExpressionRange& col_range,
                           const bool is_bitwise_eq,
                           const InnerOuter& cols,
-                          const HashJoin::HashType layout,
+                          const HashType layout,
                           const HashEntryInfo hash_entry_info,
                           const size_t shard_count,
                           const int32_t hash_join_invalid_val,
@@ -77,7 +83,7 @@ class PerfectJoinHashTableBuilder {
     copy_to_gpu(&data_mgr, dev_err_buff, &err, sizeof(err), device_id);
 
     CHECK(hash_table_);
-    auto gpu_hash_table_buff = hash_table_->gpuBufferPtr();
+    auto gpu_hash_table_buff = hash_table_->getGpuBuffer();
 
     init_hash_join_buff_on_device(reinterpret_cast<int32_t*>(gpu_hash_table_buff),
                                   hash_entry_info.getNormalizedHashEntryCount(),
@@ -85,10 +91,10 @@ class PerfectJoinHashTableBuilder {
                                   executor->blockSize(),
                                   executor->gridSize());
     if (chunk_key.empty()) {
-      return;  // TODO(?) maybe this is ok since we init an empty table?
+      return;
     }
 
-    // TODO: maybe was pass this in? duplicated in JoinHashTable currently
+    // TODO: pass this in? duplicated in JoinHashTable currently
     const auto inner_col = cols.first;
     CHECK(inner_col);
     const auto& ti = inner_col->get_type_info();
@@ -107,7 +113,7 @@ class PerfectJoinHashTableBuilder {
       CHECK_GT(device_count, 0);
       for (size_t shard = device_id; shard < shard_count; shard += device_count) {
         ShardInfo shard_info{shard, entries_per_shard, shard_count, device_count};
-        if (layout == HashJoin::HashType::OneToOne) {
+        if (layout == HashType::OneToOne) {
           fill_hash_join_buff_on_device_sharded_bucketized(
               reinterpret_cast<int32_t*>(gpu_hash_table_buff),
               hash_join_invalid_val,
@@ -131,7 +137,7 @@ class PerfectJoinHashTableBuilder {
         }
       }
     } else {
-      if (layout == HashJoin::HashType::OneToOne) {
+      if (layout == HashType::OneToOne) {
         fill_hash_join_buff_on_device_bucketized(
             reinterpret_cast<int32_t*>(gpu_hash_table_buff),
             hash_join_invalid_val,
@@ -165,7 +171,7 @@ class PerfectJoinHashTableBuilder {
     }
     copy_from_gpu(&data_mgr, &err, dev_err_buff, sizeof(err), device_id);
     if (err) {
-      if (layout == HashJoin::HashType::OneToOne) {
+      if (layout == HashType::OneToOne) {
         throw NeedsOneToManyHash();
       } else {
         throw std::runtime_error("Unexpected error when building perfect hash table: " +
@@ -187,8 +193,15 @@ class PerfectJoinHashTableBuilder {
     CHECK(inner_col);
     const auto& ti = inner_col->get_type_info();
 
-    auto cpu_hash_table_buff = std::make_shared<std::vector<int32_t>>(
-        hash_entry_info.getNormalizedHashEntryCount());
+    CHECK(!hash_table_);
+    hash_table_ =
+        std::make_unique<PerfectHashTable>(catalog_,
+                                           HashType::OneToOne,
+                                           ExecutorDeviceType::CPU,
+                                           hash_entry_info.getNormalizedHashEntryCount(),
+                                           0);
+
+    auto cpu_hash_table_buff = reinterpret_cast<int32_t*>(hash_table_->getCpuBuffer());
     const StringDictionaryProxy* sd_inner_proxy{nullptr};
     const StringDictionaryProxy* sd_outer_proxy{nullptr};
     const auto outer_col = dynamic_cast<const Analyzer::ColumnVar*>(cols.second);
@@ -211,8 +224,8 @@ class PerfectJoinHashTableBuilder {
                                           hash_join_invalid_val,
                                           thread_idx,
                                           thread_count,
-                                          &cpu_hash_table_buff] {
-        init_hash_join_buff(cpu_hash_table_buff->data(),
+                                          cpu_hash_table_buff] {
+        init_hash_join_buff(cpu_hash_table_buff,
                             hash_entry_info.getNormalizedHashEntryCount(),
                             hash_join_invalid_val,
                             thread_idx,
@@ -236,10 +249,10 @@ class PerfectJoinHashTableBuilder {
                                           &err,
                                           &col_range,
                                           &is_bitwise_eq,
-                                          &cpu_hash_table_buff,
+                                          cpu_hash_table_buff,
                                           hash_entry_info] {
         int partial_err =
-            fill_hash_join_buff_bucketized(cpu_hash_table_buff->data(),
+            fill_hash_join_buff_bucketized(cpu_hash_table_buff,
                                            hash_join_invalid_val,
                                            join_column,
                                            {static_cast<size_t>(ti.get_size()),
@@ -262,12 +275,10 @@ class PerfectJoinHashTableBuilder {
       t.join();
     }
     if (err) {
-      // cpu_hash_table_buff.data().reset();
       // Too many hash entries, need to retry with a 1:many table
+      hash_table_ = nullptr;  // clear the hash table buffer
       throw NeedsOneToManyHash();
     }
-    CHECK(hash_table_);
-    hash_table_->setHashTableBuffer(cpu_hash_table_buff);
   }
 
   void initOneToManyHashTableOnCpu(
@@ -283,8 +294,15 @@ class PerfectJoinHashTableBuilder {
     CHECK(inner_col);
     const auto& ti = inner_col->get_type_info();
 
-    auto cpu_hash_table_buff = std::make_shared<std::vector<int32_t>>(
-        2 * hash_entry_info.getNormalizedHashEntryCount() + join_column.num_elems);
+    CHECK(!hash_table_);
+    hash_table_ =
+        std::make_unique<PerfectHashTable>(catalog_,
+                                           HashType::OneToMany,
+                                           ExecutorDeviceType::CPU,
+                                           hash_entry_info.getNormalizedHashEntryCount(),
+                                           join_column.num_elems);
+
+    auto cpu_hash_table_buff = reinterpret_cast<int32_t*>(hash_table_->getCpuBuffer());
     const StringDictionaryProxy* sd_inner_proxy{nullptr};
     const StringDictionaryProxy* sd_outer_proxy{nullptr};
     if (ti.is_string()) {
@@ -303,7 +321,7 @@ class PerfectJoinHashTableBuilder {
     for (int thread_idx = 0; thread_idx < thread_count; ++thread_idx) {
       init_threads.emplace_back(std::async(std::launch::async,
                                            init_hash_join_buff,
-                                           cpu_hash_table_buff->data(),
+                                           cpu_hash_table_buff,
                                            hash_entry_info.getNormalizedHashEntryCount(),
                                            hash_join_invalid_val,
                                            thread_idx,
@@ -317,7 +335,7 @@ class PerfectJoinHashTableBuilder {
     }
 
     if (ti.get_type() == kDATE) {
-      fill_one_to_many_hash_table_bucketized(cpu_hash_table_buff->data(),
+      fill_one_to_many_hash_table_bucketized(cpu_hash_table_buff,
                                              hash_entry_info,
                                              hash_join_invalid_val,
                                              join_column,
@@ -332,7 +350,7 @@ class PerfectJoinHashTableBuilder {
                                              sd_outer_proxy,
                                              thread_count);
     } else {
-      fill_one_to_many_hash_table(cpu_hash_table_buff->data(),
+      fill_one_to_many_hash_table(cpu_hash_table_buff,
                                   hash_entry_info,
                                   hash_join_invalid_val,
                                   join_column,
@@ -347,9 +365,6 @@ class PerfectJoinHashTableBuilder {
                                   sd_outer_proxy,
                                   thread_count);
     }
-
-    CHECK(hash_table_);
-    hash_table_->setHashTableBuffer(cpu_hash_table_buff);
   }
 
   std::unique_ptr<PerfectHashTable> getHashTable() { return std::move(hash_table_); }
@@ -361,5 +376,7 @@ class PerfectJoinHashTableBuilder {
   }
 
  private:
+  const Catalog_Namespace::Catalog* catalog_;
+
   std::unique_ptr<PerfectHashTable> hash_table_;
 };

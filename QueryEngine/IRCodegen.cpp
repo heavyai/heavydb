@@ -326,7 +326,7 @@ std::vector<JoinLoop> Executor::buildJoinLoops(
           return left_join_cond;
         };
     if (current_level_hash_table) {
-      if (current_level_hash_table->getHashType() == JoinHashTable::HashType::OneToOne) {
+      if (current_level_hash_table->getHashType() == HashType::OneToOne) {
         join_loops.emplace_back(
             /*kind=*/JoinLoopKind::Singleton,
             /*type=*/current_level_join_conditions.type,
@@ -517,7 +517,7 @@ std::shared_ptr<HashJoin> Executor::buildCurrentLevelHashTable(
           query_infos,
           co.device_type == ExecutorDeviceType::GPU ? MemoryLevel::GPU_LEVEL
                                                     : MemoryLevel::CPU_LEVEL,
-          HashJoin::HashType::OneToOne,
+          HashType::OneToOne,
           column_cache);
       current_level_hash_table = hash_table_or_error.hash_table;
     }

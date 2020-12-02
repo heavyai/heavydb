@@ -153,8 +153,8 @@ class QueryRunner {
   const int32_t* getCachedJoinHashTable(size_t idx);
   const int8_t* getCachedBaselineHashTable(size_t idx);
   size_t getEntryCntCachedBaselineHashTable(size_t idx);
-  uint64_t getNumberOfCachedJoinHashTables();
-  uint64_t getNumberOfCachedBaselineJoinHashTables();
+  size_t getNumberOfCachedJoinHashTables();
+  size_t getNumberOfCachedBaselineJoinHashTables();
 
   void resizeDispatchQueue(const size_t num_executors);
 

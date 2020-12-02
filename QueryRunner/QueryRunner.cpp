@@ -590,25 +590,39 @@ std::shared_ptr<ExecutionResult> QueryRunner::runSelectQuery(
 }
 
 const int32_t* QueryRunner::getCachedJoinHashTable(size_t idx) {
-  auto hash_table = JoinHashTable::getCachedHashTable(idx);
+  auto hash_table_cache = JoinHashTable::getHashTableCache();
+  CHECK(hash_table_cache);
+  auto hash_table = hash_table_cache->getCachedHashTable(idx);
   CHECK(hash_table);
-  return hash_table->data();
+  return reinterpret_cast<int32_t*>(hash_table->getCpuBuffer());
 };
 
 const int8_t* QueryRunner::getCachedBaselineHashTable(size_t idx) {
-  return BaselineJoinHashTable::getCachedHashTable(idx);
+  auto hash_table_cache = BaselineJoinHashTable::getHashTableCache();
+  CHECK(hash_table_cache);
+  auto hash_table = hash_table_cache->getCachedHashTable(idx);
+  CHECK(hash_table);
+  return hash_table->getCpuBuffer();
 };
 
 size_t QueryRunner::getEntryCntCachedBaselineHashTable(size_t idx) {
-  return BaselineJoinHashTable::getEntryCntCachedHashTable(idx);
+  auto hash_table_cache = BaselineJoinHashTable::getHashTableCache();
+  CHECK(hash_table_cache);
+  auto hash_table = hash_table_cache->getCachedHashTable(idx);
+  CHECK(hash_table);
+  return hash_table->getEntryCount();
 }
 
-uint64_t QueryRunner::getNumberOfCachedJoinHashTables() {
-  return JoinHashTable::getNumberOfCachedHashTables();
+size_t QueryRunner::getNumberOfCachedJoinHashTables() {
+  auto hash_table_cache = JoinHashTable::getHashTableCache();
+  CHECK(hash_table_cache);
+  return hash_table_cache->getNumberOfCachedHashTables();
 };
 
-uint64_t QueryRunner::getNumberOfCachedBaselineJoinHashTables() {
-  return BaselineJoinHashTable::getNumberOfCachedHashTables();
+size_t QueryRunner::getNumberOfCachedBaselineJoinHashTables() {
+  auto hash_table_cache = BaselineJoinHashTable::getHashTableCache();
+  CHECK(hash_table_cache);
+  return hash_table_cache->getNumberOfCachedHashTables();
 };
 
 void QueryRunner::reset() {

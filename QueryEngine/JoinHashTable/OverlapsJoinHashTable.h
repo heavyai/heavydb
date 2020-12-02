@@ -24,7 +24,7 @@ class OverlapsJoinHashTable : public BaselineJoinHashTable {
   OverlapsJoinHashTable(const std::shared_ptr<Analyzer::BinOper> condition,
                         const std::vector<InputTableInfo>& query_infos,
                         const Data_Namespace::MemoryLevel memory_level,
-                        HashJoin::HashType hash_layout_type,
+                        HashType hash_layout_type,
                         const size_t entry_count,
                         ColumnCacheMap& column_cache,
                         Executor* executor,
@@ -50,7 +50,7 @@ class OverlapsJoinHashTable : public BaselineJoinHashTable {
       ColumnCacheMap& column_cache,
       Executor* executor);
 
-  static auto yieldCacheInvalidator() -> std::function<void()> {
+  static auto getCacheInvalidator() -> std::function<void()> {
     VLOG(1) << "Invalidate " << auto_tuner_cache_.size() << " cached overlaps hashtable.";
     return []() -> void {
       std::lock_guard<std::mutex> guard(auto_tuner_cache_mutex_);
@@ -62,11 +62,11 @@ class OverlapsJoinHashTable : public BaselineJoinHashTable {
   int initHashTableForDevice(const std::vector<JoinColumn>& join_columns,
                              const std::vector<JoinColumnTypeInfo>& join_column_types,
                              const std::vector<JoinBucketInfo>& join_buckets,
-                             const HashJoin::HashType layout,
+                             const HashType layout,
                              const Data_Namespace::MemoryLevel effective_memory_level,
                              const int device_id) override;
   virtual void reifyForDevice(const ColumnsForDevice& columns_for_device,
-                              const HashJoin::HashType layout,
+                              const HashType layout,
                               const int device_id,
                               const logger::ThreadId parent_thread_id) override;
   // TODO(adb): remove
@@ -74,7 +74,7 @@ class OverlapsJoinHashTable : public BaselineJoinHashTable {
   std::vector<Data_Namespace::AbstractBuffer*> gpu_hash_table_buff_;
 #endif
 
-  void reifyWithLayout(const HashJoin::HashType layout) override;
+  void reifyWithLayout(const HashType layout) override;
 
   std::pair<size_t, size_t> calculateCounts(
       size_t shard_count,
@@ -105,7 +105,7 @@ class OverlapsJoinHashTable : public BaselineJoinHashTable {
   int initHashTableOnCpu(const std::vector<JoinColumn>& join_columns,
                          const std::vector<JoinColumnTypeInfo>& join_column_types,
                          const std::vector<JoinBucketInfo>& join_bucket_info,
-                         const HashJoin::HashType layout);
+                         const HashType layout);
 
   HashJoinMatchingSet codegenMatchingSet(const CompilationOptions&,
                                          const size_t) override;

@@ -34,6 +34,7 @@
 #include "QueryEngine/ExpressionRange.h"
 #include "QueryEngine/InputMetadata.h"
 #include "QueryEngine/JoinHashTable/HashJoin.h"
+#include "QueryEngine/JoinHashTable/HashTableCache.h"
 #include "QueryEngine/JoinHashTable/PerfectHashTable.h"
 
 #include <llvm/IR/Value.h>
@@ -113,25 +114,11 @@ class JoinHashTable : public HashJoin {
 
   static llvm::Value* codegenHashTableLoad(const size_t table_idx, Executor* executor);
 
-  static auto yieldCacheInvalidator() -> std::function<void()> {
-    VLOG(1) << "Invalidate " << join_hash_table_cache_.size()
-            << " cached baseline hashtable.";
-    return []() -> void {
-      std::lock_guard<std::mutex> guard(join_hash_table_cache_mutex_);
-      join_hash_table_cache_.clear();
-    };
-  }
+  static auto getHashTableCache() { return hash_table_cache_.get(); }
 
-  static HashTableCacheValue getCachedHashTable(size_t idx) {
-    std::lock_guard<std::mutex> guard(join_hash_table_cache_mutex_);
-    CHECK(!join_hash_table_cache_.empty());
-    CHECK_LT(idx, join_hash_table_cache_.size());
-    return join_hash_table_cache_.at(idx).second;
-  }
-
-  static uint64_t getNumberOfCachedHashTables() {
-    std::lock_guard<std::mutex> guard(join_hash_table_cache_mutex_);
-    return join_hash_table_cache_.size();
+  static auto getCacheInvalidator() -> std::function<void()> {
+    CHECK(hash_table_cache_);
+    return hash_table_cache_->getCacheInvalidator();
   }
 
   virtual ~JoinHashTable() {}
@@ -145,14 +132,14 @@ class JoinHashTable : public HashJoin {
 
   void reifyForDevice(const ChunkKey& hash_table_key,
                       const ColumnsForDevice& columns_for_device,
-                      const HashJoin::HashType layout,
+                      const HashType layout,
                       const int device_id,
                       const logger::ThreadId parent_thread_id);
 
   int initHashTableForDevice(const ChunkKey& chunk_key,
                              const JoinColumn& join_column,
                              const InnerOuter& cols,
-                             const HashJoin::HashType layout,
+                             const HashType layout,
                              const Data_Namespace::MemoryLevel effective_memory_level,
                              const int device_id);
 
@@ -214,8 +201,6 @@ class JoinHashTable : public HashJoin {
 
   bool isBitwiseEq() const;
 
-  void freeHashBufferMemory();
-
   size_t getComponentBufferSize() const noexcept;
 
   std::shared_ptr<Analyzer::BinOper> qual_bin_oper_;
@@ -225,7 +210,6 @@ class JoinHashTable : public HashJoin {
   HashType hash_type_;
   size_t hash_entry_count_;
 
-  std::vector<std::shared_ptr<PerfectHashTable>> hash_tables_for_device_;
   std::mutex cpu_hash_table_buff_mutex_;
   ExpressionRange col_range_;
   Executor* executor_;
@@ -246,9 +230,9 @@ class JoinHashTable : public HashJoin {
              chunk_key == that.chunk_key && optype == that.optype;
     }
   };
-  static std::vector<std::pair<JoinHashTableCacheKey, HashTableCacheValue>>
-      join_hash_table_cache_;
-  static std::mutex join_hash_table_cache_mutex_;
+
+  static std::unique_ptr<HashTableCache<JoinHashTableCacheKey, HashTableCacheValue>>
+      hash_table_cache_;
 };
 
 // TODO(alex): Functions below need to be moved to a separate translation unit, they don't

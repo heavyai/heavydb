@@ -19,36 +19,33 @@
 #include <memory>
 #include <vector>
 
-class PerfectHashTable {
+#include "QueryEngine/JoinHashTable/HashTable.h"
+
+class PerfectHashTable : public HashTable {
  public:
-  PerfectHashTable(const Catalog_Namespace::Catalog* catalog) : catalog_(catalog) {}
-
-  size_t size() const {
-    CHECK(cpu_hash_table_buff_);
-    return cpu_hash_table_buff_->size();
+  // CPU + GPU constructor
+  PerfectHashTable(const Catalog_Namespace::Catalog* catalog,
+                   const HashType layout,
+                   const ExecutorDeviceType device_type,
+                   const size_t entry_count,
+                   const size_t emitted_keys_count)
+      : catalog_(catalog)
+      , layout_(layout)
+      , entry_count_(entry_count)
+      , emitted_keys_count_(emitted_keys_count) {
+    if (device_type == ExecutorDeviceType::CPU) {
+      cpu_hash_table_buff_.resize(layout_ == HashType::OneToOne
+                                      ? entry_count_
+                                      : 2 * entry_count_ + emitted_keys_count_);
+    }
   }
 
-  int32_t* data() const {
-    CHECK(cpu_hash_table_buff_);
-    return cpu_hash_table_buff_->data();
-  }
-
-  constexpr size_t elementSize() const {
-    return sizeof(decltype(cpu_hash_table_buff_)::element_type::value_type);
-  }
-
-#ifdef HAVE_CUDA
   ~PerfectHashTable() {
     CHECK(catalog_);
     auto& data_mgr = catalog_->getDataMgr();
     if (gpu_hash_table_buff_) {
       data_mgr.free(gpu_hash_table_buff_);
     }
-  }
-
-  int8_t* gpuBufferPtr() const {
-    CHECK(gpu_hash_table_buff_);
-    return gpu_hash_table_buff_->getMemoryPtr();
   }
 
   size_t gpuReservedSize() const {
@@ -64,17 +61,37 @@ class PerfectHashTable {
     gpu_hash_table_buff_ = CudaAllocator::allocGpuAbstractBuffer(
         &data_mgr, entries * sizeof(int32_t), device_id);
   }
-#endif
 
-  void setHashTableBuffer(std::shared_ptr<std::vector<int32_t>> hash_table_buff) {
-    cpu_hash_table_buff_ = hash_table_buff;
+  size_t getHashTableBufferSize(const ExecutorDeviceType device_type) const override {
+    if (device_type == ExecutorDeviceType::CPU) {
+      return cpu_hash_table_buff_.size() *
+             sizeof(decltype(cpu_hash_table_buff_)::value_type);
+    } else {
+      return gpu_hash_table_buff_ ? gpu_hash_table_buff_->reservedSize() : 0;
+    }
   }
 
+  HashType getLayout() const override { return layout_; }
+
+  int8_t* getCpuBuffer() override {
+    return reinterpret_cast<int8_t*>(cpu_hash_table_buff_.data());
+  }
+
+  int8_t* getGpuBuffer() const override {
+    return gpu_hash_table_buff_ ? gpu_hash_table_buff_->getMemoryPtr() : nullptr;
+  }
+
+  size_t getEntryCount() const override { return entry_count_; }
+
+  size_t getEmittedKeysCount() const override { return emitted_keys_count_; }
+
  private:
-#ifdef HAVE_CUDA
   Data_Namespace::AbstractBuffer* gpu_hash_table_buff_{nullptr};
-#endif  // HAVE_CUDA
   const Catalog_Namespace::Catalog* catalog_;
-  std::shared_ptr<std::vector<int32_t>> cpu_hash_table_buff_;
+  std::vector<int32_t> cpu_hash_table_buff_;
   const size_t device_id_{0};
+
+  HashType layout_;
+  size_t entry_count_;         // number of keys in the hash table
+  size_t emitted_keys_count_;  // number of keys emitted across all rows
 };

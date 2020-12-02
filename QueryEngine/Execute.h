@@ -793,7 +793,7 @@ class Executor {
       const std::shared_ptr<Analyzer::BinOper>& qual_bin_oper,
       const std::vector<InputTableInfo>& query_infos,
       const MemoryLevel memory_level,
-      const HashJoin::HashType preferred_hash_type,
+      const HashType preferred_hash_type,
       ColumnCacheMap& column_cache);
   void nukeOldState(const bool allow_lazy_fetch,
                     const std::vector<InputTableInfo>& query_infos,

@@ -3070,7 +3070,7 @@ Executor::JoinHashTableOrError Executor::buildHashTableForQualifier(
     const std::shared_ptr<Analyzer::BinOper>& qual_bin_oper,
     const std::vector<InputTableInfo>& query_infos,
     const MemoryLevel memory_level,
-    const HashJoin::HashType preferred_hash_type,
+    const HashType preferred_hash_type,
     ColumnCacheMap& column_cache) {
   if (!g_enable_overlaps_hashjoin && qual_bin_oper->is_overlaps_oper()) {
     return {nullptr, "Overlaps hash join disabled, attempting to fall back to loop join"};

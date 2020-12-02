@@ -28,14 +28,14 @@ class CacheInvalidator {
 
   template <typename CACHE_HOLDING_TYPE>
   static void internalInvalidateCache() {
-    CACHE_HOLDING_TYPE::yieldCacheInvalidator()();
+    CACHE_HOLDING_TYPE::getCacheInvalidator()();
   }
 
   template <typename FIRST_CACHE_HOLDING_TYPE,
             typename SECOND_CACHE_HOLDING_TYPE,
             typename... REMAINING_CACHE_HOLDING_TYPES>
   static void internalInvalidateCache() {
-    FIRST_CACHE_HOLDING_TYPE::yieldCacheInvalidator()();
+    FIRST_CACHE_HOLDING_TYPE::getCacheInvalidator()();
     internalInvalidateCache<SECOND_CACHE_HOLDING_TYPE,
                             REMAINING_CACHE_HOLDING_TYPES...>();
   }
