@@ -203,8 +203,10 @@ class PostGis_types extends com.mapd.utility.db_vendors.Db_vendor_types {
     String select = "select type, srid from " + ref_table_name + "  where "
             + ref_column_name + " = '" + column_name + "'";
     ResultSet rs = detail_st.executeQuery(select);
-    String ps_column_type = null;
-    int ps_srid = 0;
+    GisType result = new GisType();
+    result.subtype = "GEOMETRY";
+    result.type = null;
+    result.srid = 0;
     // The select statment above, can return multiple values qualified by schema/table.
     // Unfortunately at this stage only the original postgres column name is known.  If
     // get mulitple returns with the same column name, but different types we will not be
@@ -213,22 +215,19 @@ class PostGis_types extends com.mapd.utility.db_vendors.Db_vendor_types {
     while (rs.next()) {
       String type = rs.getString(1);
       int srid = rs.getInt(2);
-      // If multiple rows are returned with different geo types for a single coulmn name
-      // then throw.
-      if (ps_column_type != null
-              && (ps_column_type.equalsIgnoreCase(type) || srid != ps_srid)) {
-        throw new SQLException("multiple column definitions [" + ps_column_type + ":"
-                + type + "] found for column_name [" + column_name + "]");
+      if (result.type == null) {
+        result.type = type;
+        result.srid = srid;
+      } else {
+        if (!result.type.equalsIgnoreCase(type) || srid != result.srid) {
+          throw new SQLException("multiple column definitions [" + result.type + ":"
+                  + type + "] found for column_name [" + column_name + "]");
+        }
       }
-      ps_column_type = type;
-      ps_srid = srid;
     }
-    if (!extra_types.containsKey(ps_column_type.toLowerCase()))
+    if (!extra_types.containsKey(result.type.toLowerCase()))
       throw new SQLException("type not supported");
-    GisType result = new GisType();
-    result.subtype = "GEOMETRY";
-    result.srid = ps_srid;
-    result.type = extra_types.get(ps_column_type.toLowerCase()).toUpperCase();
+    result.type = extra_types.get(result.type.toLowerCase()).toUpperCase();
     return result;
   }
 }
