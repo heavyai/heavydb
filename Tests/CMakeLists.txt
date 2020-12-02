@@ -170,7 +170,7 @@ target_link_libraries(CachedHashTableTest ${EXECUTE_TEST_LIBS})
 target_link_libraries(RuntimeInterruptTest ${EXECUTE_TEST_LIBS})
 target_link_libraries(EncoderTest gtest DataMgr Logger)
 target_link_libraries(CommandLineTest gtest Logger Shared ${Boost_LIBRARIES})
-# Requires thrift_handler for DBHandler test fixture
+#Requires thrift_handler for DBHandler test fixture
 target_link_libraries(DBObjectPrivilegesTest ${THRIFT_HANDLER_TEST_LIBRARIES})
 target_link_libraries(ForeignServerDdlTest ${THRIFT_HANDLER_TEST_LIBRARIES})
 target_link_libraries(CatalogMigrationTest ${THRIFT_HANDLER_TEST_LIBRARIES})
@@ -280,7 +280,7 @@ add_executable(ArrowIpcIntegrationTest ArrowIpcIntegrationTest.cpp)
 target_link_libraries(ArrowIpcIntegrationTest gtest ThriftClient mapd_thrift Logger Shared ${CUDA_LIBRARIES} ${Arrow_LIBRARIES})
 add_test(ArrowIpcIntegrationTest ArrowIpcIntegrationTest ${TEST_ARGS})
 
-# parse s3 credentials
+#parse s3 credentials
 file(READ aws/s3client.conf S3CLIENT_CONF)
 if("${S3CLIENT_CONF}" MATCHES "AWS_ACCESS_KEY_ID=([^\n]+)")
   set(AWS_ACCESS_KEY_ID "${CMAKE_MATCH_1}")

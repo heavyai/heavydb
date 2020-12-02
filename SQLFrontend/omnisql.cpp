@@ -143,7 +143,7 @@ void copy_table(char const* filepath, char const* table, ClientContext& context)
       input_rows.push_back(row);
       if (input_rows.size() >= LOAD_PATCH_SIZE) {
         try {
-          context.client.load_table(context.session, table, input_rows);
+          context.client.load_table(context.session, table, input_rows, {});
         } catch (TOmniSciException& e) {
           std::cerr << e.error_msg << std::endl;
         }
@@ -151,7 +151,7 @@ void copy_table(char const* filepath, char const* table, ClientContext& context)
       }
     }
     if (input_rows.size() > 0) {
-      context.client.load_table(context.session, table, input_rows);
+      context.client.load_table(context.session, table, input_rows, {});
     }
   } catch (TOmniSciException& e) {
     std::cerr << e.error_msg << std::endl;

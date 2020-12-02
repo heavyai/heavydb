@@ -84,7 +84,7 @@ void stream_insert(OmniSciClient& client,
     input_rows.push_back(row);
     if (input_rows.size() >= INSERT_BATCH_SIZE) {
       try {
-        client.load_table(session, table_name, input_rows);
+        client.load_table(session, table_name, input_rows, {});
       } catch (TOmniSciException& e) {
         std::cerr << e.error_msg << std::endl;
       }
@@ -93,7 +93,7 @@ void stream_insert(OmniSciClient& client,
   }
   // load remaining rowset if any
   if (input_rows.size() > 0) {
-    client.load_table(session, table_name, input_rows);
+    client.load_table(session, table_name, input_rows, {});
   }
 }
 }  // namespace

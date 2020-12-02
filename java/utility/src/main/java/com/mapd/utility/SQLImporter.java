@@ -402,7 +402,7 @@ public class SQLImporter {
           bufferCount = 0;
           // send the buffer to mapD
           client.load_table_binary_columnar(
-                  session, cmd.getOptionValue("targetTable"), cols); // old
+                  session, cmd.getOptionValue("targetTable"), cols, null); // old
           // recreate columnar store for use
           for (int i = 1; i <= md.getColumnCount(); i++) {
             resetBinaryColumn(i, md, bufferSize, cols.get(i - 1));
@@ -416,7 +416,7 @@ public class SQLImporter {
       if (bufferCount > 0) {
         // send the LAST buffer to mapD
         client.load_table_binary_columnar(
-                session, cmd.getOptionValue("targetTable"), cols);
+                session, cmd.getOptionValue("targetTable"), cols, null);
         bufferCount = 0;
       }
       LOGGER.info("result set count is " + resultCount + " read time is "

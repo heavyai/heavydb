@@ -152,7 +152,7 @@ void do_load(int& nrows,
   for (size_t tries = 0; tries < copy_params.retry_count;
        tries++) {  // allow for retries in case of insert failure
     try {
-      client->load_table(session, table_name, input_rows);
+      client->load_table(session, table_name, input_rows, {});
       nrows += input_rows.size();
       std::cout << nrows << " Rows Inserted, " << nskipped << " rows skipped."
                 << std::endl;

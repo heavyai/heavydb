@@ -373,7 +373,8 @@ class DBHandler : public OmniSciIf {
   // import
   void load_table_binary(const TSessionId& session,
                          const std::string& table_name,
-                         const std::vector<TRow>& rows) override;
+                         const std::vector<TRow>& rows,
+                         const std::vector<std::string>& column_names) override;
 
   std::unique_ptr<lockmgr::AbstractLockContainer<const TableDescriptor*>>
   prepare_columnar_loader(
@@ -381,18 +382,22 @@ class DBHandler : public OmniSciIf {
       const std::string& table_name,
       size_t num_cols,
       std::unique_ptr<import_export::Loader>* loader,
-      std::vector<std::unique_ptr<import_export::TypedImportBuffer>>* import_buffers);
+      std::vector<std::unique_ptr<import_export::TypedImportBuffer>>* import_buffers,
+      const std::vector<std::string>& column_names);
 
   void load_table_binary_columnar(const TSessionId& session,
                                   const std::string& table_name,
-                                  const std::vector<TColumn>& cols) override;
+                                  const std::vector<TColumn>& cols,
+                                  const std::vector<std::string>& column_names) override;
   void load_table_binary_arrow(const TSessionId& session,
                                const std::string& table_name,
-                               const std::string& arrow_stream) override;
+                               const std::string& arrow_stream,
+                               const bool use_column_names) override;
 
   void load_table(const TSessionId& session,
                   const std::string& table_name,
-                  const std::vector<TStringRow>& rows) override;
+                  const std::vector<TStringRow>& rows,
+                  const std::vector<std::string>& column_names) override;
   void detect_column_types(TDetectResult& _return,
                            const TSessionId& session,
                            const std::string& file_name,

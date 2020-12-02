@@ -70,7 +70,7 @@ class OmniSciPreparedStatement implements PreparedStatement {
   private String brokenSQL[];
   private String parmRep[];
   private boolean parmIsNull[];
-  private int fieldsOrder[];
+  private String listOfFields[];
   private int repCount;
   private String session;
   private OmniSci.Client client;
@@ -371,14 +371,13 @@ class OmniSciPreparedStatement implements PreparedStatement {
         // check for columns names
         Matcher matcher = REGEX_LOF_PATTERN.matcher(currentSQL);
         if (matcher.find()) {
-          String listOfFields[] = matcher.group(1).trim().split("\\s*,+\\s*,*\\s*");
+          listOfFields = matcher.group(1).trim().split("\\s*,+\\s*,*\\s*");
           if (listOfFields.length != parmCount) {
             throw new SQLException("Too many or too few values");
           } else if (Arrays.stream(listOfFields).distinct().toArray().length
                   != listOfFields.length) {
             throw new SQLException("Duplicated column name");
           }
-          fieldsOrder = new int[listOfFields.length];
           List<String> listOfColumns = new ArrayList<String>();
           try {
             TTableDetails tableDetails =
@@ -389,11 +388,10 @@ class OmniSciPreparedStatement implements PreparedStatement {
           } catch (TException ex) {
             throw new SQLException(ex.toString());
           }
-          for (int i = 0; i < fieldsOrder.length; i++) {
-            fieldsOrder[i] = listOfColumns.indexOf(listOfFields[i].toLowerCase());
-            if (fieldsOrder[i] == -1) {
+          for (String paramName : listOfFields) {
+            if (listOfColumns.indexOf(paramName) == -1) {
               throw new SQLException(
-                      "Column " + listOfFields[i].toLowerCase() + " does not exist");
+                      "Column " + paramName.toLowerCase() + " does not exist");
             }
           }
         }
@@ -406,11 +404,10 @@ class OmniSciPreparedStatement implements PreparedStatement {
       for (int i = 0; i < parmCount; i++) {
         // place string in rows array
         TStringValue tsv = new TStringValue();
-        int colID = fieldsOrder == null ? i : fieldsOrder[i];
-        if (parmIsNull[colID]) {
+        if (parmIsNull[i]) {
           tsv.is_null = true;
         } else {
-          tsv.str_val = this.parmRep[colID];
+          tsv.str_val = this.parmRep[i];
           tsv.is_null = false;
         }
         tsr.addToCols(tsv);
@@ -951,7 +948,7 @@ class OmniSciPreparedStatement implements PreparedStatement {
       MAPDLOGGER.debug("executeBatch, rows=" + rows.size());
       try {
         // send the batch
-        client.load_table(session, insertTableName, rows);
+        client.load_table(session, insertTableName, rows, Arrays.asList(listOfFields));
       } catch (TOmniSciException ex) {
         throw new SQLException("executeBatch failed: " + ex.getError_msg());
       } catch (TException ex) {

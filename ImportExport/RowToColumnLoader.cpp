@@ -411,7 +411,7 @@ void RowToColumnLoader::do_load(int& nrows,
   for (size_t tries = 0; tries < copy_params.retry_count;
        tries++) {  // allow for retries in case of insert failure
     try {
-      client_->load_table_binary_columnar(session_, table_name_, input_columns_);
+      client_->load_table_binary_columnar(session_, table_name_, input_columns_, {});
       //      client->load_table(session, table_name, input_rows);
       nrows += input_columns_[0].nulls.size();
       std::cout << nrows << " Rows Inserted, " << nskipped << " rows skipped."

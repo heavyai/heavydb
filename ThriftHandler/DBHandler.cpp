@@ -2370,11 +2370,74 @@ void check_table_not_sharded(const TableDescriptor* td) {
   }
 }
 
+void check_valid_column_names(const std::list<const ColumnDescriptor*>& descs,
+                              const std::vector<std::string>& column_names) {
+  std::unordered_set<std::string> unique_names;
+  for (const auto& name : column_names) {
+    auto lower_name = to_lower(name);
+    if (unique_names.find(lower_name) != unique_names.end()) {
+      THROW_MAPD_EXCEPTION("Column " + name + " is mentioned multiple times");
+    } else {
+      unique_names.insert(lower_name);
+    }
+  }
+  for (const auto& cd : descs) {
+    auto iter = unique_names.find(to_lower(cd->columnName));
+    if (iter != unique_names.end()) {
+      unique_names.erase(iter);
+    }
+  }
+  if (!unique_names.empty()) {
+    THROW_MAPD_EXCEPTION("Column " + *unique_names.begin() + " does not exist");
+  }
+}
+
+// Return vector of IDs mapping column descriptors to the list of comumn names.
+// The size of the vector is the number of actual columns (geophisical columns excluded).
+// ID is either a position in column_names matching the descriptor, or -1 if the column
+// is missing from the column_names
+std::vector<int> column_ids_by_names(const std::list<const ColumnDescriptor*>& descs,
+                                     const std::vector<std::string>& column_names) {
+  std::vector<int> desc_to_column_ids;
+  if (column_names.empty()) {
+    int col_idx = 0;
+    for (const auto& cd : descs) {
+      if (!cd->isGeoPhyCol) {
+        desc_to_column_ids.push_back(col_idx);
+        ++col_idx;
+      }
+    }
+  } else {
+    for (const auto& cd : descs) {
+      if (!cd->isGeoPhyCol) {
+        bool found = false;
+        for (size_t j = 0; j < column_names.size(); ++j) {
+          if (to_lower(cd->columnName) == to_lower(column_names[j])) {
+            found = true;
+            desc_to_column_ids.push_back(j);
+            break;
+          }
+        }
+        if (!found) {
+          if (!cd->columnType.get_notnull()) {
+            desc_to_column_ids.push_back(-1);
+          } else {
+            THROW_MAPD_EXCEPTION("Column '" + cd->columnName +
+                                 "' cannot be omitted due to NOT NULL constraint");
+          }
+        }
+      }
+    }
+  }
+  return desc_to_column_ids;
+}
+
 }  // namespace
 
 void DBHandler::load_table_binary(const TSessionId& session,
                                   const std::string& table_name,
-                                  const std::vector<TRow>& rows) {
+                                  const std::vector<TRow>& rows,
+                                  const std::vector<std::string>& column_names) {
   try {
     auto stdlog = STDLOG(get_session_ptr(session), "table_name", table_name);
     stdlog.appendNameValuePairs("client", getConnectionInfo().toString());
@@ -2392,7 +2455,7 @@ void DBHandler::load_table_binary(const TSessionId& session,
     }
     check_table_load_privileges(*session_ptr, table_name);
     if (rows.empty()) {
-      return;
+      THROW_MAPD_EXCEPTION("No rows to insert");
     }
     std::unique_ptr<import_export::Loader> loader;
     if (leaf_aggregator_.leafCount() > 0) {
@@ -2400,26 +2463,44 @@ void DBHandler::load_table_binary(const TSessionId& session,
     } else {
       loader.reset(new import_export::Loader(cat, td));
     }
+    auto col_descs = loader->get_column_descs();
+    auto desc_id_to_column_id = column_ids_by_names(col_descs, column_names);
+    check_valid_column_names(col_descs, column_names);
     // TODO(andrew): nColumns should be number of non-virtual/non-system columns.
     //               Subtracting 1 (rowid) until TableDescriptor is updated.
-    if (rows.front().cols.size() !=
-        static_cast<size_t>(td->nColumns) - (td->hasDeletedCol ? 2 : 1)) {
+    if (column_names.empty() &&
+        rows.front().cols.size() !=
+            static_cast<size_t>(td->nColumns) - (td->hasDeletedCol ? 2 : 1)) {
       THROW_MAPD_EXCEPTION("Wrong number of columns to load into Table " + table_name);
+    } else if (!column_names.empty() && rows.front().cols.size() != column_names.size()) {
+      THROW_MAPD_EXCEPTION(
+          "Number of columns specified does not match the "
+          "number of columns given (" +
+          std::to_string(rows.front().cols.size()) + " vs " +
+          std::to_string(column_names.size()) + ")");
     }
-    auto col_descs = loader->get_column_descs();
     std::vector<std::unique_ptr<import_export::TypedImportBuffer>> import_buffers;
     for (auto cd : col_descs) {
       import_buffers.push_back(std::unique_ptr<import_export::TypedImportBuffer>(
           new import_export::TypedImportBuffer(cd, loader->getStringDict(cd))));
     }
+    TDatum empty_value;
+    empty_value.is_null = true;
+    size_t rows_completed = 0;
     for (auto const& row : rows) {
       size_t col_idx = 0;
       try {
         for (auto cd : col_descs) {
-          import_buffers[col_idx]->add_value(
-              cd, row.cols[col_idx], row.cols[col_idx].is_null);
+          int mapped_idx = desc_id_to_column_id[col_idx];
+          if (mapped_idx != -1) {
+            import_buffers[col_idx]->add_value(
+                cd, row.cols[mapped_idx], row.cols[mapped_idx].is_null);
+          } else {
+            import_buffers[col_idx]->add_value(cd, empty_value, true);
+          }
           col_idx++;
         }
+        rows_completed++;
       } catch (const std::exception& e) {
         for (size_t col_idx_to_pop = 0; col_idx_to_pop < col_idx; ++col_idx_to_pop) {
           import_buffers[col_idx_to_pop]->pop_value();
@@ -2431,7 +2512,7 @@ void DBHandler::load_table_binary(const TSessionId& session,
     }
     auto insert_data_lock = lockmgr::InsertDataLockMgr::getWriteLockForTable(
         session_ptr->getCatalog(), table_name);
-    loader->load(import_buffers, rows.size());
+    loader->load(import_buffers, rows_completed);
   } catch (const std::exception& e) {
     THROW_MAPD_EXCEPTION("Exception: " + std::string(e.what()));
   }
@@ -2443,7 +2524,11 @@ DBHandler::prepare_columnar_loader(
     const std::string& table_name,
     size_t num_cols,
     std::unique_ptr<import_export::Loader>* loader,
-    std::vector<std::unique_ptr<import_export::TypedImportBuffer>>* import_buffers) {
+    std::vector<std::unique_ptr<import_export::TypedImportBuffer>>* import_buffers,
+    const std::vector<std::string>& column_names) {
+  if (num_cols == 0) {
+    THROW_MAPD_EXCEPTION("No columns to insert");
+  }
   auto& cat = session_info.getCatalog();
   auto td_with_lock =
       std::make_unique<lockmgr::TableSchemaLockContainer<lockmgr::ReadLock>>(
@@ -2462,43 +2547,73 @@ DBHandler::prepare_columnar_loader(
   } else {
     loader->reset(new import_export::Loader(cat, td));
   }
-
-  // TODO(andrew): nColumns should be number of non-virtual/non-system columns.
-  //               Subtracting 1 (rowid) until TableDescriptor is updated.
   auto col_descs = (*loader)->get_column_descs();
-  const auto geo_physical_cols = std::count_if(
-      col_descs.begin(), col_descs.end(), [](auto cd) { return cd->isGeoPhyCol; });
-  const auto num_table_cols =
-      static_cast<size_t>(td->nColumns) - geo_physical_cols - (td->hasDeletedCol ? 2 : 1);
-  if (num_cols != num_table_cols) {
-    throw std::runtime_error("Number of columns to load (" + std::to_string(num_cols) +
-                             ") does not match number of columns in table " +
-                             td->tableName + " (" + std::to_string(num_table_cols) + ")");
+  check_valid_column_names(col_descs, column_names);
+  if (column_names.empty()) {
+    // TODO(andrew): nColumns should be number of non-virtual/non-system columns.
+    //               Subtracting 1 (rowid) until TableDescriptor is updated.
+    auto geo_physical_cols = std::count_if(
+        col_descs.begin(), col_descs.end(), [](auto cd) { return cd->isGeoPhyCol; });
+    const auto num_table_cols = static_cast<size_t>(td->nColumns) - geo_physical_cols -
+                                (td->hasDeletedCol ? 2 : 1);
+    if (num_cols != num_table_cols) {
+      throw std::runtime_error("Number of columns to load (" + std::to_string(num_cols) +
+                               ") does not match number of columns in table " +
+                               td->tableName + " (" + std::to_string(num_table_cols) +
+                               ")");
+    }
+  } else if (num_cols != column_names.size()) {
+    THROW_MAPD_EXCEPTION(
+        "Number of columns specified does not match the "
+        "number of columns given (" +
+        std::to_string(num_cols) + " vs " + std::to_string(column_names.size()) + ")");
   }
-
   *import_buffers = import_export::setup_column_loaders(td, loader->get());
   return std::move(td_with_lock);
 }
 
+namespace {
+
+size_t get_column_size(const TColumn& column) {
+  if (!column.nulls.empty()) {
+    return column.nulls.size();
+  } else {
+    // it is a very bold estimate but later we check it against REAL data
+    // and if this function returns a wrong result (e.g. both int and string
+    // vectors are filled with values), we get an error
+    return column.data.int_col.size() + column.data.arr_col.size() +
+           column.data.real_col.size() + column.data.str_col.size();
+  }
+}
+
+}  // namespace
+
 void DBHandler::load_table_binary_columnar(const TSessionId& session,
                                            const std::string& table_name,
-                                           const std::vector<TColumn>& cols) {
+                                           const std::vector<TColumn>& cols,
+                                           const std::vector<std::string>& column_names) {
   auto stdlog = STDLOG(get_session_ptr(session), "table_name", table_name);
   stdlog.appendNameValuePairs("client", getConnectionInfo().toString());
   auto session_ptr = stdlog.getConstSessionInfo();
   check_read_only("load_table_binary_columnar");
   auto const& cat = session_ptr->getCatalog();
-
   std::unique_ptr<import_export::Loader> loader;
   std::vector<std::unique_ptr<import_export::TypedImportBuffer>> import_buffers;
   auto read_lock = prepare_columnar_loader(
-      *session_ptr, table_name, cols.size(), &loader, &import_buffers);
+      *session_ptr, table_name, cols.size(), &loader, &import_buffers, column_names);
   auto insert_data_lock = lockmgr::InsertDataLockMgr::getWriteLockForTable(
       session_ptr->getCatalog(), table_name);
-
-  size_t numRows = 0;
+  auto desc_id_to_column_id =
+      column_ids_by_names(loader->get_column_descs(), column_names);
+  size_t num_rows = get_column_size(cols.front());
   size_t import_idx = 0;  // index into the TColumn vector being loaded
   size_t col_idx = 0;     // index into column description vector
+  TColumn empty_column;
+  empty_column.nulls.resize(num_rows, true);
+  empty_column.data.arr_col.resize(num_rows);
+  empty_column.data.int_col.resize(num_rows);
+  empty_column.data.str_col.resize(num_rows);
+  empty_column.data.real_col.resize(num_rows);
   try {
     size_t skip_physical_cols = 0;
     for (auto cd : loader->get_column_descs()) {
@@ -2509,14 +2624,14 @@ void DBHandler::load_table_binary_columnar(const TSessionId& session,
         skip_physical_cols--;
         continue;
       }
-      size_t colRows = import_buffers[col_idx]->add_values(cd, cols[import_idx]);
-      if (col_idx == 0) {
-        numRows = colRows;
-      } else if (colRows != numRows) {
+      int mapped_idx = desc_id_to_column_id[import_idx];
+      const TColumn& value = mapped_idx == -1 ? empty_column : cols[mapped_idx];
+      size_t col_rows = import_buffers[col_idx]->add_values(cd, value);
+      if (col_rows != num_rows) {
         std::ostringstream oss;
         oss << "load_table_binary_columnar: Inconsistent number of rows in column "
-            << cd->columnName << " ,  expecting " << numRows << " rows, column "
-            << col_idx << " has " << colRows << " rows";
+            << cd->columnName << " ,  expecting " << num_rows << " rows, column "
+            << col_idx << " has " << col_rows << " rows";
         THROW_MAPD_EXCEPTION(oss.str());
       }
       // Advance to the next column in the table
@@ -2531,7 +2646,7 @@ void DBHandler::load_table_binary_columnar(const TSessionId& session,
         std::vector<std::vector<int>> ring_sizes_column, poly_rings_column;
         int render_group = 0;
         SQLTypeInfo ti = cd->columnType;
-        if (numRows != wkt_or_wkb_hex_column->size() ||
+        if (num_rows != wkt_or_wkb_hex_column->size() ||
             !Geospatial::GeoTypesFactory::getGeoColumns(wkt_or_wkb_hex_column,
                                                         ti,
                                                         coords_column,
@@ -2566,7 +2681,7 @@ void DBHandler::load_table_binary_columnar(const TSessionId& session,
         << ". Issue at column : " << (col_idx + 1) << ". Import aborted";
     THROW_MAPD_EXCEPTION(oss.str());
   }
-  loader->load(import_buffers, numRows);
+  loader->load(import_buffers, num_rows);
 }
 
 using RecordBatchVector = std::vector<std::shared_ptr<arrow::RecordBatch>>;
@@ -2616,38 +2731,59 @@ RecordBatchVector loadArrowStream(const std::string& stream) {
 
 void DBHandler::load_table_binary_arrow(const TSessionId& session,
                                         const std::string& table_name,
-                                        const std::string& arrow_stream) {
+                                        const std::string& arrow_stream,
+                                        const bool use_column_names) {
   auto stdlog = STDLOG(get_session_ptr(session), "table_name", table_name);
   auto session_ptr = stdlog.getConstSessionInfo();
   check_read_only("load_table_binary_arrow");
-
   RecordBatchVector batches = loadArrowStream(arrow_stream);
-
   // Assuming have one batch for now
   if (batches.size() != 1) {
     THROW_MAPD_EXCEPTION("Expected a single Arrow record batch. Import aborted");
   }
-
   std::shared_ptr<arrow::RecordBatch> batch = batches[0];
-
   std::unique_ptr<import_export::Loader> loader;
   std::vector<std::unique_ptr<import_export::TypedImportBuffer>> import_buffers;
+  std::vector<std::string> column_names;
+  if (use_column_names) {
+    column_names = batch->schema()->field_names();
+  }
   auto read_lock = prepare_columnar_loader(*session_ptr,
                                            table_name,
                                            static_cast<size_t>(batch->num_columns()),
                                            &loader,
-                                           &import_buffers);
+                                           &import_buffers,
+                                           column_names);
   auto insert_data_lock = lockmgr::InsertDataLockMgr::getWriteLockForTable(
       session_ptr->getCatalog(), table_name);
-
-  size_t numRows = 0;
+  auto desc_id_to_column_id =
+      column_ids_by_names(loader->get_column_descs(), column_names);
+  size_t num_rows = 0;
   size_t col_idx = 0;
+  std::shared_ptr<arrow::Array> empty_array;
+  {
+    arrow::BooleanBuilder builder;
+    builder.Resize(batch->num_rows());
+    builder.AppendNulls(batch->num_rows());
+    auto status = builder.Finish(&empty_array);
+    if (!status.ok()) {
+      THROW_MAPD_EXCEPTION("Failed to load data: " + status.message());
+    }
+  }
+
   try {
     for (auto cd : loader->get_column_descs()) {
-      auto& array = *batch->column(col_idx);
-      import_export::ArraySliceRange row_slice(0, array.length());
-      numRows =
-          import_buffers[col_idx]->add_arrow_values(cd, array, true, row_slice, nullptr);
+      int mapped_idx = desc_id_to_column_id[col_idx];
+      if (mapped_idx != -1) {
+        auto& array = *batch->column(mapped_idx);
+        import_export::ArraySliceRange row_slice(0, array.length());
+        num_rows = import_buffers[col_idx]->add_arrow_values(
+            cd, array, true, row_slice, nullptr);
+      } else {
+        import_export::ArraySliceRange row_slice(0, empty_array->length());
+        num_rows = import_buffers[col_idx]->add_arrow_values(
+            cd, *empty_array, false, row_slice, nullptr);
+      }
       col_idx++;
     }
   } catch (const std::exception& e) {
@@ -2657,12 +2793,13 @@ void DBHandler::load_table_binary_arrow(const TSessionId& session,
     // other import paths
     THROW_MAPD_EXCEPTION(std::string("Exception: ") + e.what());
   }
-  loader->load(import_buffers, numRows);
+  loader->load(import_buffers, num_rows);
 }
 
 void DBHandler::load_table(const TSessionId& session,
                            const std::string& table_name,
-                           const std::vector<TStringRow>& rows) {
+                           const std::vector<TStringRow>& rows,
+                           const std::vector<std::string>& column_names) {
   try {
     auto stdlog = STDLOG(get_session_ptr(session), "table_name", table_name);
     stdlog.appendNameValuePairs("client", getConnectionInfo().toString());
@@ -2681,7 +2818,7 @@ void DBHandler::load_table(const TSessionId& session,
     }
     check_table_load_privileges(*session_ptr, table_name);
     if (rows.empty()) {
-      return;
+      THROW_MAPD_EXCEPTION("No rows to insert");
     }
     std::unique_ptr<import_export::Loader> loader;
     if (leaf_aggregator_.leafCount() > 0) {
@@ -2690,16 +2827,30 @@ void DBHandler::load_table(const TSessionId& session,
       loader.reset(new import_export::Loader(cat, td));
     }
     auto col_descs = loader->get_column_descs();
-    auto geo_physical_cols = std::count_if(
-        col_descs.begin(), col_descs.end(), [](auto cd) { return cd->isGeoPhyCol; });
-    // TODO(andrew): nColumns should be number of non-virtual/non-system columns.
-    //               Subtracting 1 (rowid) until TableDescriptor is updated.
-    if (rows.front().cols.size() != static_cast<size_t>(td->nColumns) -
-                                        geo_physical_cols - (td->hasDeletedCol ? 2 : 1)) {
-      THROW_MAPD_EXCEPTION("Wrong number of columns to load into Table " + table_name +
-                           " (" + std::to_string(rows.front().cols.size()) + " vs " +
-                           std::to_string(td->nColumns - geo_physical_cols - 1) + ")");
+    auto desc_id_to_column_id = column_ids_by_names(col_descs, column_names);
+    check_valid_column_names(col_descs, column_names);
+    if (column_names.empty()) {
+      auto geo_physical_cols = std::count_if(
+          col_descs.begin(), col_descs.end(), [](auto cd) { return cd->isGeoPhyCol; });
+      // TODO(andrew): nColumns should be number of non-virtual/non-system columns.
+      //               Subtracting 1 (rowid) until TableDescriptor is updated.
+      if (rows.front().cols.size() != static_cast<size_t>(td->nColumns) -
+                                          geo_physical_cols -
+                                          (td->hasDeletedCol ? 2 : 1)) {
+        THROW_MAPD_EXCEPTION("Wrong number of columns to load into Table " + table_name +
+                             " (" + std::to_string(rows.front().cols.size()) + " vs " +
+                             std::to_string(td->nColumns - geo_physical_cols - 1) + ")");
+      }
+    } else {
+      if (rows.front().cols.size() != column_names.size()) {
+        THROW_MAPD_EXCEPTION(
+            "Number of columns specified does not match the "
+            "number of columns given (" +
+            std::to_string(rows.front().cols.size()) + " vs " +
+            std::to_string(column_names.size()) + ")");
+      }
     }
+
     std::vector<std::unique_ptr<import_export::TypedImportBuffer>> import_buffers;
     for (auto cd : col_descs) {
       import_buffers.push_back(std::unique_ptr<import_export::TypedImportBuffer>(
@@ -2720,10 +2871,12 @@ void DBHandler::load_table(const TSessionId& session,
             skip_physical_cols--;
             continue;
           }
-          import_buffers[col_idx]->add_value(cd,
-                                             row.cols[import_idx].str_val,
-                                             row.cols[import_idx].is_null,
-                                             copy_params);
+          const std::string empty_val = "";
+          int mapped_idx = desc_id_to_column_id[import_idx];
+          const std::string& value =
+              mapped_idx == -1 ? empty_val : row.cols[mapped_idx].str_val;
+          bool is_null = mapped_idx == -1 || row.cols[mapped_idx].is_null;
+          import_buffers[col_idx]->add_value(cd, value, is_null, copy_params);
           // Advance to the next column within the table
           col_idx++;
 
@@ -2734,8 +2887,7 @@ void DBHandler::load_table(const TSessionId& session,
             int render_group = 0;
             SQLTypeInfo ti{cd->columnType};
             if (!Geospatial::GeoTypesFactory::getGeoColumns(
-                    !row.cols[import_idx].is_null ? row.cols[import_idx].str_val
-                                                  : std::string(),
+                    !is_null ? value : std::string(),
                     ti,
                     coords,
                     bounds,
