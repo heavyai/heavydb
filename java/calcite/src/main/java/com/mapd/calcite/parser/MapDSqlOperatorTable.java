@@ -2150,26 +2150,26 @@ public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
       fieldNameList.add("out18");
       fieldNameList.add("out19");
       fieldNameList.add("out20");
-      typeList.add(typeFactory.createSqlType(SqlTypeName.DOUBLE)); // 0
-      typeList.add(typeFactory.createSqlType(SqlTypeName.DOUBLE)); // 1
-      typeList.add(typeFactory.createSqlType(SqlTypeName.DOUBLE)); // 2
-      typeList.add(typeFactory.createSqlType(SqlTypeName.DOUBLE)); // 3
-      typeList.add(typeFactory.createSqlType(SqlTypeName.DOUBLE)); // 4
-      typeList.add(typeFactory.createSqlType(SqlTypeName.DOUBLE)); // 5
-      typeList.add(typeFactory.createSqlType(SqlTypeName.DOUBLE)); // 6
-      typeList.add(typeFactory.createSqlType(SqlTypeName.DOUBLE)); // 7
-      typeList.add(typeFactory.createSqlType(SqlTypeName.DOUBLE)); // 8
-      typeList.add(typeFactory.createSqlType(SqlTypeName.DOUBLE)); // 9
-      typeList.add(typeFactory.createSqlType(SqlTypeName.DOUBLE)); // 10
-      typeList.add(typeFactory.createSqlType(SqlTypeName.DOUBLE)); // 11
-      typeList.add(typeFactory.createSqlType(SqlTypeName.DOUBLE)); // 12
-      typeList.add(typeFactory.createSqlType(SqlTypeName.DOUBLE)); // 13
-      typeList.add(typeFactory.createSqlType(SqlTypeName.DOUBLE)); // 14
-      typeList.add(typeFactory.createSqlType(SqlTypeName.DOUBLE)); // 15
-      typeList.add(typeFactory.createSqlType(SqlTypeName.DOUBLE)); // 16
-      typeList.add(typeFactory.createSqlType(SqlTypeName.DOUBLE)); // 17
-      typeList.add(typeFactory.createSqlType(SqlTypeName.DOUBLE)); // 18
-      typeList.add(typeFactory.createSqlType(SqlTypeName.DOUBLE)); // 19
+      typeList.add(typeFactory.createSqlType(SqlTypeName.FLOAT)); // 0
+      typeList.add(typeFactory.createSqlType(SqlTypeName.FLOAT)); // 1
+      typeList.add(typeFactory.createSqlType(SqlTypeName.FLOAT)); // 2
+      typeList.add(typeFactory.createSqlType(SqlTypeName.FLOAT)); // 3
+      typeList.add(typeFactory.createSqlType(SqlTypeName.FLOAT)); // 4
+      typeList.add(typeFactory.createSqlType(SqlTypeName.FLOAT)); // 5
+      typeList.add(typeFactory.createSqlType(SqlTypeName.FLOAT)); // 6
+      typeList.add(typeFactory.createSqlType(SqlTypeName.FLOAT)); // 7
+      typeList.add(typeFactory.createSqlType(SqlTypeName.FLOAT)); // 8
+      typeList.add(typeFactory.createSqlType(SqlTypeName.FLOAT)); // 9
+      typeList.add(typeFactory.createSqlType(SqlTypeName.FLOAT)); // 10
+      typeList.add(typeFactory.createSqlType(SqlTypeName.FLOAT)); // 11
+      typeList.add(typeFactory.createSqlType(SqlTypeName.FLOAT)); // 12
+      typeList.add(typeFactory.createSqlType(SqlTypeName.FLOAT)); // 13
+      typeList.add(typeFactory.createSqlType(SqlTypeName.FLOAT)); // 14
+      typeList.add(typeFactory.createSqlType(SqlTypeName.FLOAT)); // 15
+      typeList.add(typeFactory.createSqlType(SqlTypeName.FLOAT)); // 16
+      typeList.add(typeFactory.createSqlType(SqlTypeName.FLOAT)); // 17
+      typeList.add(typeFactory.createSqlType(SqlTypeName.FLOAT)); // 18
+      typeList.add(typeFactory.createSqlType(SqlTypeName.FLOAT)); // 19
       typeList.add(typeFactory.createSqlType(SqlTypeName.INTEGER));
       return typeFactory.createStructType(typeList, fieldNameList);
     }
