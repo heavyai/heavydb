@@ -2177,7 +2177,7 @@ public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
     private static java.util.List<SqlTypeFamily> signature() {
       java.util.List<SqlTypeFamily> sig_family = new java.util.ArrayList<SqlTypeFamily>();
       sig_family.add(SqlTypeFamily.CURSOR);
-      sig_family.add(SqlTypeFamily.NUMERIC);
+      // sig_family.add(SqlTypeFamily.NUMERIC);
       sig_family.add(SqlTypeFamily.INTEGER);
       return sig_family;
     }
