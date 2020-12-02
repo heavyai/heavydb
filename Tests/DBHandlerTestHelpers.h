@@ -30,6 +30,7 @@ constexpr void* Null = nullptr;
 constexpr int64_t Null_i = NULL_INT;
 
 extern size_t g_leaf_count;
+extern bool g_cluster;
 
 /**
  * Helper class for asserting equality between a result set represented as a boost variant

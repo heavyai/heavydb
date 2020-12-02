@@ -439,6 +439,10 @@ validate_system_statement:
 		{
 			$<nodeval>$ = TrackedPtr<Node>::make(lexer.parsed_node_tokens_, new ValidateStmt(($<stringval>2)->release(), reinterpret_cast<std::list<NameValueAssign*>*>(($<listval>3)->release())));
 		}
+		| VALIDATE
+		{
+			$<nodeval>$ = TrackedPtr<Node>::make(lexer.parsed_node_tokens_, new ValidateStmt(new std::string(), nullptr));
+		}
 		;
 
 base_table_element_commalist:

@@ -55,9 +55,9 @@
 #include "Shared/scope.h"
 #include "StringDictionary/StringDictionaryClient.h"
 #include "ThriftHandler/ConnectionInfo.h"
-#include "ThriftHandler/DistributedValidate.h"
 #include "ThriftHandler/QueryState.h"
 #include "ThriftHandler/RenderHandler.h"
+#include "ThriftHandler/SystemValidator.h"
 
 #include <sys/types.h>
 #include <thrift/server/TServer.h>

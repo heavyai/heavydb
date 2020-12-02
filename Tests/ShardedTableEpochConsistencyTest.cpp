@@ -23,6 +23,8 @@
 #define BASE_PATH "./tmp"
 #endif
 
+extern bool g_enable_fsi;
+
 class EpochConsistencyTest : public DBHandlerTestFixture {
  protected:
   static void SetUpTestSuite() {
@@ -43,6 +45,8 @@ class EpochConsistencyTest : public DBHandlerTestFixture {
       LOG(WARNING) << e.what();
     }
   }
+
+  static void loginTestUser() { login("non_super_user", "HyperInteractive"); }
 
   void SetUp() override {
     DBHandlerTestFixture::SetUp();
@@ -74,6 +78,60 @@ class EpochConsistencyTest : public DBHandlerTestFixture {
     for (size_t i = 0; i < expected_table_epochs.size(); i++) {
       EXPECT_EQ(expected_table_epochs[i], table_epochs[i].table_epoch);
     }
+  }
+
+  void setUpTestTableWithInconsistentEpochs(const std::string& db_name = {}) {
+    sql("create table test_table(a int, b tinyint, c text encoding none, shard key(a)) "
+        "with (shard_count = 2);");
+    sql("copy test_table from '" + getGoodFilePath() + "';");
+    assertTableEpochs({1, 1});
+    assertInitialImportResultSet();
+
+    // Inconsistent epochs have to be set manually, since all write queries now level
+    // epochs
+    setTableEpochs({1, 2}, db_name);
+    assertTableEpochs({1, 2});
+    assertInitialImportResultSet();
+  }
+
+  // Asserts that the result set is equal to the expected value after the initial import
+  void assertInitialImportResultSet() {
+    // clang-format off
+    sqlAndCompareResult("select * from test_table order by a, b;",
+                        {{i(1), i(1), "test_1"},
+                         {i(1), i(10), "test_10"},
+                         {i(2), i(2), "test_2"},
+                         {i(2), i(20), "test_20"}});
+    // clang-format on
+  }
+
+  // Sets table epochs across shards and leaves as indicated by the flattened epoch
+  // vector. For instance, in order to set the epochs for a table with 3 shards on
+  // a distributed setup with 2 leaves, the epochs vector will contain epochs for
+  // corresponding shards/leaves in the form: { shard_1_leaf_1, shard_2_leaf_1,
+  // shard_3_leaf_1, shard_1_leaf_2, shard_2_leaf_2, shard_3_leaf_2 }
+  void setTableEpochs(const std::vector<int32_t>& table_epochs,
+                      const std::string& db_name = {}) {
+    auto [db_handler, session_id] = getDbHandlerAndSessionId();
+    const auto& catalog = getCatalog();
+    auto logical_table = catalog.getMetadataForTable("test_table", false);
+    auto physical_tables = catalog.getPhysicalTablesDescriptors(logical_table);
+    std::vector<TTableEpochInfo> table_epoch_info_vector;
+    for (size_t i = 0; i < table_epochs.size(); i++) {
+      TTableEpochInfo table_epoch_info;
+      auto table_index = i % physical_tables.size();
+      table_epoch_info.table_id = physical_tables[table_index]->tableId;
+      table_epoch_info.table_epoch = table_epochs[i];
+      table_epoch_info.leaf_index = i / physical_tables.size();
+      table_epoch_info_vector.emplace_back(table_epoch_info);
+    }
+    if (db_name.empty()) {
+      switchToAdmin();
+    } else {
+      login("admin", "HyperInteractive", db_name);
+    }
+    db_handler->set_table_epochs(
+        session_id, catalog.getDatabaseId(), table_epoch_info_vector);
   }
 };
 
@@ -145,28 +203,12 @@ class EpochRollbackTest : public EpochConsistencyTest,
 
   static void TearDownTestSuite() { EpochConsistencyTest::TearDownTestSuite(); }
 
-  static void loginTestUser() { login("non_super_user", "HyperInteractive"); }
-
   void SetUp() override {
     EpochConsistencyTest::SetUp();
     loginTestUser();
   }
 
   bool isCheckpointError() { return GetParam(); }
-
-  void setUpTestTableWithInconsistentEpochs() {
-    sql("create table test_table(a int, b tinyint, c text encoding none, shard key(a)) "
-        "with (shard_count = 2);");
-    sql("copy test_table from '" + getGoodFilePath() + "';");
-    assertTableEpochs({1, 1});
-    assertInitialImportResultSet();
-
-    // Inconsistent epochs have to be set manually, since all write queries now level
-    // epochs
-    setTableEpochs({1, 2});
-    assertTableEpochs({1, 2});
-    assertInitialImportResultSet();
-  }
 
   void setUpReplicatedTestTableWithInconsistentEpochs() {
     sql("create table test_table(a int, b tinyint, c text encoding none) "
@@ -181,42 +223,6 @@ class EpochRollbackTest : public EpochConsistencyTest,
     setTableEpochs({2});
     assertTableEpochs({2});
     assertInitialImportResultSet();
-  }
-
-  // Sets table epochs across shards and leaves as indicated by the flattened epoch
-  // vector. For instance, in order to set the epochs for a table with 3 shards on
-  // a distributed setup with 2 leaves, the epochs vector will contain epochs for
-  // corresponding shards/leaves in the form: { shard_1_leaf_1, shard_2_leaf_1,
-  // shard_3_leaf_1, shard_1_leaf_2, shard_2_leaf_2, shard_3_leaf_2 }
-  void setTableEpochs(const std::vector<int32_t>& table_epochs) {
-    auto [db_handler, session_id] = getDbHandlerAndSessionId();
-    const auto& catalog = getCatalog();
-    auto logical_table = catalog.getMetadataForTable("test_table", false);
-    auto physical_tables = catalog.getPhysicalTablesDescriptors(logical_table);
-    std::vector<TTableEpochInfo> table_epoch_info_vector;
-    for (size_t i = 0; i < table_epochs.size(); i++) {
-      TTableEpochInfo table_epoch_info;
-      auto table_index = i % physical_tables.size();
-      table_epoch_info.table_id = physical_tables[table_index]->tableId;
-      table_epoch_info.table_epoch = table_epochs[i];
-      table_epoch_info.leaf_index = i / physical_tables.size();
-      table_epoch_info_vector.emplace_back(table_epoch_info);
-    }
-    switchToAdmin();
-    db_handler->set_table_epochs(
-        session_id, catalog.getDatabaseId(), table_epoch_info_vector);
-    loginTestUser();
-  }
-
-  // Asserts that the result set is equal to the expected value after the initial import
-  void assertInitialImportResultSet() {
-    // clang-format off
-    sqlAndCompareResult("select * from test_table order by a, b;",
-                        {{i(1), i(1), "test_1"},
-                         {i(1), i(10), "test_10"},
-                         {i(2), i(2), "test_2"},
-                         {i(2), i(20), "test_20"}});
-    // clang-format on
   }
 
   void assertInitialTableState() {
@@ -339,6 +345,7 @@ class EpochRollbackTest : public EpochConsistencyTest,
 
 TEST_P(EpochRollbackTest, Import) {
   setUpTestTableWithInconsistentEpochs();
+  loginTestUser();
 
   sendFailedImportQuery();
   assertInitialTableState();
@@ -362,6 +369,7 @@ TEST_P(EpochRollbackTest, Import) {
 
 TEST_P(EpochRollbackTest, Insert) {
   setUpTestTableWithInconsistentEpochs();
+  loginTestUser();
 
   sendFailedInsertQuery();
   assertInitialTableState();
@@ -382,6 +390,7 @@ TEST_P(EpochRollbackTest, Insert) {
 
 TEST_P(EpochRollbackTest, InsertOnReplicatedTable) {
   setUpReplicatedTestTableWithInconsistentEpochs();
+  loginTestUser();
 
   sendReplicatedTableFailedInsertQuery();
   assertTableEpochs({2});
@@ -403,6 +412,7 @@ TEST_P(EpochRollbackTest, InsertOnReplicatedTable) {
 
 TEST_P(EpochRollbackTest, Update) {
   setUpTestTableWithInconsistentEpochs();
+  loginTestUser();
 
   sendFailedUpdateQuery();
   assertInitialTableState();
@@ -423,6 +433,7 @@ TEST_P(EpochRollbackTest, Update) {
 // Updates execute different code paths when variable length columns are updated
 TEST_P(EpochRollbackTest, VarlenUpdate) {
   setUpTestTableWithInconsistentEpochs();
+  loginTestUser();
 
   sendFailedVarlenUpdateQuery();
   assertInitialTableState();
@@ -442,6 +453,7 @@ TEST_P(EpochRollbackTest, VarlenUpdate) {
 
 TEST_P(EpochRollbackTest, Delete) {
   setUpTestTableWithInconsistentEpochs();
+  loginTestUser();
 
   sendFailedDeleteQuery();
   assertInitialTableState();
@@ -459,6 +471,7 @@ TEST_P(EpochRollbackTest, Delete) {
 
 TEST_P(EpochRollbackTest, InsertTableAsSelect) {
   setUpTestTableWithInconsistentEpochs();
+  loginTestUser();
 
   sendFailedItasQuery();
   assertInitialTableState();
@@ -714,6 +727,156 @@ TEST_F(SetTableEpochsTest, CappedAlter) {
 
   sqlAndCompareResult("select count(*) from test_table;", {{i(16)}});
   assertTableEpochs({16, 16});
+}
+
+class EpochValidationTest : public EpochConsistencyTest {
+ protected:
+  static void SetUpTestSuite() {
+    g_enable_fsi = true;
+    DBHandlerTestFixture::SetUpTestSuite();
+    switchToAdmin();
+    sql("DROP DATABASE IF EXISTS test_db;");
+    sql("CREATE DATABASE test_db;");
+  }
+
+  static void TearDownTestSuite() {
+    switchToAdmin();
+    sql("DROP DATABASE IF EXISTS test_db;");
+    DBHandlerTestFixture::TearDownTestSuite();
+  }
+
+  void SetUp() override {
+    DBHandlerTestFixture::SetUp();
+    login("admin", "HyperInteractive", "test_db");
+    dropTestTables();
+  }
+
+  void TearDown() override {
+    dropTestTables();
+    DBHandlerTestFixture::TearDown();
+  }
+
+  void dropTestTables() {
+    sql("DROP TABLE IF EXISTS test_table;");
+    sql("DROP TABLE IF EXISTS test_temp_table;");
+    sql("DROP TABLE IF EXISTS test_arrow_table;");
+    sql("DROP VIEW IF EXISTS test_view;");
+    if (!isDistributedMode()) {
+      sql("DROP FOREIGN TABLE IF EXISTS test_foreign_table;");
+    }
+  }
+
+  std::string getValidateStatement() {
+    if (isDistributedMode()) {
+      return "VALIDATE CLUSTER;";
+    } else {
+      return "VALIDATE;";
+    }
+  }
+
+  std::string getWrongValidateStatement() {
+    if (isDistributedMode()) {
+      return "VALIDATE;";
+    } else {
+      return "VALIDATE CLUSTER;";
+    }
+  }
+
+  std::string getSuccessfulValidationResult() {
+    if (isDistributedMode()) {
+      return "Cluster OK";
+    } else {
+      return "Instance OK";
+    }
+  }
+
+  std::string getInconsistentEpochsValidationResult() {
+    if (isDistributedMode()) {
+      return "\nEpoch values for table \"test_table\" are inconsistent:"
+             "\nNode      Table Id  Epoch     "
+             "\n========= ========= ========= "
+             "\nLeaf 0    2         1         "
+             "\nLeaf 1    2         2         "
+             "\n";
+    } else {
+      return "\nEpoch values for table \"test_table\" are inconsistent:"
+             "\nTable Id  Epoch     "
+             "\n========= ========= "
+             "\n2         1         "
+             "\n3         2         "
+             "\n";
+    }
+  }
+
+  std::string getNegativeInconsistentEpochsValidationResult() {
+    if (isDistributedMode()) {
+      return "\nEpoch values for table \"test_table\" are inconsistent:"
+             "\nNode      Table Id  Epoch     "
+             "\n========= ========= ========= "
+             "\nLeaf 0    2         -1        "
+             "\nLeaf 1    2         -2        "
+             "\n";
+    } else {
+      return "\nEpoch values for table \"test_table\" are inconsistent:"
+             "\nTable Id  Epoch     "
+             "\n========= ========= "
+             "\n2         -1        "
+             "\n3         -2        "
+             "\n";
+    }
+  }
+};
+
+TEST_F(EpochValidationTest, ValidInstance) {
+  sql("create table test_table(a int, b text, shard key(a)) with (shard_count = 2);");
+  sql("insert into test_table values(10, 'abc');");
+  sqlAndCompareResult(getValidateStatement(), {{getSuccessfulValidationResult()}});
+}
+
+TEST_F(EpochValidationTest, InconsistentEpochs) {
+  setUpTestTableWithInconsistentEpochs("test_db");
+  sqlAndCompareResult(getValidateStatement(),
+                      {{getInconsistentEpochsValidationResult()}});
+}
+
+// TODO: Investigate simulating the negative epoch state via mocking or remove
+// test case if this is not feasible
+TEST_F(EpochValidationTest, DISABLED_NegativeEpochs) {
+  sql("create table test_table(a int, b text, shard key(a)) with (shard_count = 2);");
+  setTableEpochs({-10, -10}, "test_db");
+  sqlAndCompareResult(
+      getValidateStatement(),
+      {{"\nNegative epoch value found for table \"test_table\". Epoch: -10."}});
+}
+
+// TODO: Investigate simulating the negative epoch state via mocking or remove
+// test case if this is not feasible
+TEST_F(EpochValidationTest, DISABLED_NegativeAndInconsistentEpochs) {
+  sql("create table test_table(a int, b text, shard key(a)) with (shard_count = 2);");
+  setTableEpochs({-1, -2}, "test_db");
+  sqlAndCompareResult(getValidateStatement(),
+                      {{getNegativeInconsistentEpochsValidationResult()}});
+}
+
+TEST_F(EpochValidationTest, WrongValidationType) {
+  queryAndAssertException(getWrongValidateStatement(),
+                          "Exception: Unexpected validation type specified. Only the \"" +
+                              getValidateStatement() +
+                              "\" command is currently supported.");
+}
+
+TEST_F(EpochValidationTest, DifferentTableTypes) {
+  sql("create table test_table(a int, b text, shard key(a)) with (shard_count = 2);");
+  sql("create temporary table test_temp_table (a int, b text);");
+  sql("create dataframe test_arrow_table (a int) from 'CSV:" +
+      boost::filesystem::canonical("../../Tests/FsiDataFiles/0.csv").string() + "';");
+  sql("create view test_view as select * from test_table;");
+  if (!isDistributedMode()) {
+    sql("create foreign table test_foreign_table(a int) server omnisci_local_csv "
+        "with (file_path = '" +
+        boost::filesystem::canonical("../../Tests/FsiDataFiles/0.csv").string() + "');");
+  }
+  sqlAndCompareResult(getValidateStatement(), {{getSuccessfulValidationResult()}});
 }
 
 int main(int argc, char** argv) {

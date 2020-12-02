@@ -5470,18 +5470,27 @@ void DBHandler::sql_execute_impl(TQueryResult& _return,
               legacylockmgr::ExecutorOuterLock, true));
 
       std::string output{"Result for validate"};
-      if (g_cluster && leaf_aggregator_.leafCount()) {
-        _return.execution_time_ms += measure<>::execution([&]() {
-          const DistributedValidate validator(validate_stmt->getType(),
-                                              validate_stmt->isRepairTypeRemove(),
-                                              cat,  // tables may be dropped here
-                                              leaf_aggregator_,
-                                              *session_ptr,
-                                              *this);
-          output = validator.validate(query_state_proxy);
-        });
+      if (g_cluster) {
+        if (leaf_aggregator_.leafCount()) {
+          _return.execution_time_ms += measure<>::execution([&]() {
+            const system_validator::DistributedValidate validator(
+                validate_stmt->getType(),
+                validate_stmt->isRepairTypeRemove(),
+                cat,  // tables may be dropped here
+                leaf_aggregator_,
+                *session_ptr,
+                *this);
+            output = validator.validate(query_state_proxy);
+          });
+        } else {
+          THROW_MAPD_EXCEPTION("Validate command should be executed on the aggregator.");
+        }
       } else {
-        output = "Not running on a cluster nothing to validate";
+        _return.execution_time_ms += measure<>::execution([&]() {
+          const system_validator::SingleNodeValidator validator(validate_stmt->getType(),
+                                                                cat);
+          output = validator.validate();
+        });
       }
       convert_result(_return, ResultSet(output), true);
       return;
