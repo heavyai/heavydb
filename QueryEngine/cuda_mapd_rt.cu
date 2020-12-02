@@ -325,7 +325,7 @@ extern "C" __device__ int64_t* get_matching_group_value_columnar(
 }
 
 #include "GroupByRuntime.cpp"
-#include "JoinHashTable/JoinHashTableQueryRuntime.cpp"
+#include "JoinHashTable/Runtime/JoinHashTableQueryRuntime.cpp"
 #include "MurmurHash.cpp"
 #include "TopKRuntime.cpp"
 

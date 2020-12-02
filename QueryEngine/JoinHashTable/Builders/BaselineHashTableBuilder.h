@@ -19,8 +19,8 @@
 #include "DataMgr/Allocators/CudaAllocator.h"
 #include "QueryEngine/JoinHashTable/BaselineHashTable.h"
 #include "QueryEngine/JoinHashTable/BaselineJoinHashTable.h"
-#include "QueryEngine/JoinHashTable/HashJoinKeyHandlers.h"
-#include "QueryEngine/JoinHashTable/JoinHashTableGpuUtils.h"
+#include "QueryEngine/JoinHashTable/Runtime/HashJoinKeyHandlers.h"
+#include "QueryEngine/JoinHashTable/Runtime/JoinHashTableGpuUtils.h"
 #include "Shared/thread_count.h"
 
 template <typename SIZE,

@@ -25,8 +25,8 @@
 #define QUERYENGINE_GROUPBYFASTIMPL_H
 
 #include <cstdint>
-#include "../../Shared/funcannotations.h"
-#include "../../Shared/shard_key.h"
+#include "../../../Shared/funcannotations.h"
+#include "../../../Shared/shard_key.h"
 
 extern "C" ALWAYS_INLINE DEVICE int32_t* SUFFIX(get_bucketized_hash_slot)(
     int32_t* buff,

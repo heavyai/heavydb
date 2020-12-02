@@ -27,15 +27,15 @@
 #include <cstddef>
 #include <cstdint>
 #include <vector>
-#include "../../Shared/SqlTypesLayout.h"
-#include "../../Shared/sqltypes.h"
+#include "../../../Shared/SqlTypesLayout.h"
+#include "../../../Shared/sqltypes.h"
 
 #ifdef __CUDACC__
-#include "../DecodersImpl.h"
+#include "../../DecodersImpl.h"
 #else
-#include "../RuntimeFunctions.h"
+#include "../../RuntimeFunctions.h"
 #endif
-#include "../../Shared/funcannotations.h"
+#include "../../../Shared/funcannotations.h"
 
 struct GenericKeyHandler;
 struct OverlapsKeyHandler;

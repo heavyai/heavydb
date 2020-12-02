@@ -17,12 +17,12 @@
 #ifndef QUERYENGINE_HASHJOINKEYHANDLERS_H
 #define QUERYENGINE_HASHJOINKEYHANDLERS_H
 
-#include "../../Shared/SqlTypesLayout.h"
-#include "HashJoinRuntime.h"
-#include "JoinColumnIterator.h"
+#include "QueryEngine/JoinHashTable/Runtime/HashJoinRuntime.h"
+#include "QueryEngine/JoinHashTable/Runtime/JoinColumnIterator.h"
+#include "Shared/SqlTypesLayout.h"
 
 #ifdef __CUDACC__
-#include "../DecodersImpl.h"
+#include "QueryEngine/DecodersImpl.h"
 #else
 #include "Logger/Logger.h"
 #include "QueryEngine/RuntimeFunctions.h"
@@ -32,7 +32,7 @@
 
 #include <cmath>
 
-#include "../../Shared/funcannotations.h"
+#include "Shared/funcannotations.h"
 
 struct GenericKeyHandler {
   GenericKeyHandler(const size_t key_component_count,

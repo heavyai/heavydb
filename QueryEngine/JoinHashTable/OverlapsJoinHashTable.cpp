@@ -19,10 +19,10 @@
 #include "QueryEngine/CodeGenerator.h"
 #include "QueryEngine/Execute.h"
 #include "QueryEngine/ExpressionRewrite.h"
-#include "QueryEngine/JoinHashTable/BaselineHashTableBuilder.h"
-#include "QueryEngine/JoinHashTable/HashJoinKeyHandlers.h"
-#include "QueryEngine/JoinHashTable/JoinHashTableGpuUtils.h"
+#include "QueryEngine/JoinHashTable/Builders/BaselineHashTableBuilder.h"
 #include "QueryEngine/JoinHashTable/JoinHashTableInterface.h"
+#include "QueryEngine/JoinHashTable/Runtime/HashJoinKeyHandlers.h"
+#include "QueryEngine/JoinHashTable/Runtime/JoinHashTableGpuUtils.h"
 
 std::map<HashTableCacheKey, double> OverlapsJoinHashTable::auto_tuner_cache_;
 std::mutex OverlapsJoinHashTable::auto_tuner_cache_mutex_;

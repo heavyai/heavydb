@@ -16,16 +16,16 @@
 
 #include "HashJoinRuntime.h"
 
-#include "../../Shared/shard_key.h"
-#include "../CompareKeysInl.h"
-#include "../HyperLogLogRank.h"
-#include "../JoinHashTable/HashJoinKeyHandlers.h"
-#include "../JoinHashTable/JoinColumnIterator.h"
-#include "../MurmurHash1Inl.h"
+#include "QueryEngine/CompareKeysInl.h"
+#include "QueryEngine/HyperLogLogRank.h"
+#include "QueryEngine/JoinHashTable/Runtime/HashJoinKeyHandlers.h"
+#include "QueryEngine/JoinHashTable/Runtime/JoinColumnIterator.h"
+#include "QueryEngine/MurmurHash1Inl.h"
+#include "Shared/shard_key.h"
 #ifdef __CUDACC__
-#include "../DecodersImpl.h"
-#include "../GpuRtConstants.h"
-#include "../JoinHashTable/JoinHashImpl.h"
+#include "QueryEngine/DecodersImpl.h"
+#include "QueryEngine/GpuRtConstants.h"
+#include "QueryEngine/JoinHashTable/Runtime/JoinHashImpl.h"
 #else
 #include "Logger/Logger.h"
 
@@ -40,7 +40,7 @@
 #if HAVE_CUDA
 #include <thrust/scan.h>
 #endif
-#include "../../Shared/funcannotations.h"
+#include "Shared/funcannotations.h"
 
 #include <cmath>
 #include <numeric>

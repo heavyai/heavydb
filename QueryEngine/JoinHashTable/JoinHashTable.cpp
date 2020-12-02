@@ -26,8 +26,8 @@
 #include "QueryEngine/ColumnFetcher.h"
 #include "QueryEngine/Execute.h"
 #include "QueryEngine/ExpressionRewrite.h"
-#include "QueryEngine/JoinHashTable/HashJoinRuntime.h"
-#include "QueryEngine/JoinHashTable/PerfectHashTableBuilder.h"
+#include "QueryEngine/JoinHashTable/Builders/PerfectHashTableBuilder.h"
+#include "QueryEngine/JoinHashTable/Runtime/HashJoinRuntime.h"
 #include "QueryEngine/RangeTableIndexVisitor.h"
 #include "QueryEngine/RuntimeFunctions.h"
 

@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include "JoinHashTable/JoinHashImpl.h"
+#include "JoinHashTable/Runtime/JoinHashImpl.h"
 #include "MurmurHash.h"
 
 extern "C" ALWAYS_INLINE DEVICE uint32_t key_hash(const int64_t* key,

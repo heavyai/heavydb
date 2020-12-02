@@ -32,8 +32,8 @@
 #include "QueryEngine/Descriptors/RowSetMemoryOwner.h"
 #include "QueryEngine/InputMetadata.h"
 #include "QueryEngine/JoinHashTable/BaselineHashTable.h"
-#include "QueryEngine/JoinHashTable/HashJoinRuntime.h"
 #include "QueryEngine/JoinHashTable/JoinHashTableInterface.h"
+#include "QueryEngine/JoinHashTable/Runtime/HashJoinRuntime.h"
 
 class Executor;
 

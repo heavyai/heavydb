@@ -19,7 +19,7 @@
 #include "DataMgr/Allocators/DeviceAllocator.h"
 #include "QueryEngine/ColumnarResults.h"
 #include "QueryEngine/Descriptors/QueryFragmentDescriptor.h"
-#include "QueryEngine/JoinHashTable/HashJoinRuntime.h"
+#include "QueryEngine/JoinHashTable/Runtime/HashJoinRuntime.h"
 
 namespace std {
 template <>

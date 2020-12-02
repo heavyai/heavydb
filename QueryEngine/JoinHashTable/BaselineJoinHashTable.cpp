@@ -24,9 +24,9 @@
 #include "QueryEngine/Execute.h"
 #include "QueryEngine/ExpressionRewrite.h"
 #include "QueryEngine/JoinHashTable/BaselineHashTable.h"
-#include "QueryEngine/JoinHashTable/BaselineHashTableBuilder.h"
-#include "QueryEngine/JoinHashTable/HashJoinKeyHandlers.h"
-#include "QueryEngine/JoinHashTable/JoinHashTableGpuUtils.h"
+#include "QueryEngine/JoinHashTable/Builders/BaselineHashTableBuilder.h"
+#include "QueryEngine/JoinHashTable/Runtime/HashJoinKeyHandlers.h"
+#include "QueryEngine/JoinHashTable/Runtime/JoinHashTableGpuUtils.h"
 
 std::vector<std::pair<HashTableCacheKey, BaselineJoinHashTable::HashTableCacheValue>>
     BaselineJoinHashTable::hash_table_cache_;

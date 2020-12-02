@@ -26,7 +26,7 @@
 #include "QueryEngine/ColumnarResults.h"
 #include "QueryEngine/CompilationOptions.h"
 #include "QueryEngine/Descriptors/RowSetMemoryOwner.h"
-#include "QueryEngine/JoinHashTable/HashJoinRuntime.h"
+#include "QueryEngine/JoinHashTable/Runtime/HashJoinRuntime.h"
 
 class TooManyHashEntries : public std::runtime_error {
  public:
