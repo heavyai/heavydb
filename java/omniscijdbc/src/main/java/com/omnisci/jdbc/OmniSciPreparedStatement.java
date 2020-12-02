@@ -89,12 +89,12 @@ class OmniSciPreparedStatement implements PreparedStatement {
                   Pattern.CASE_INSENSITIVE | Pattern.MULTILINE);
   private boolean isClosed = false;
 
-  OmniSciPreparedStatement(String sql, String session, OmniSci.Client client) {
+  OmniSciPreparedStatement(String sql, String session, OmniSciConnection connection) {
     MAPDLOGGER.debug("Entered");
     currentSQL = sql;
-    this.client = client;
+    this.client = connection.client;
     this.session = session;
-    this.stmt = new OmniSciStatement(session, client);
+    this.stmt = new OmniSciStatement(session, connection);
     MAPDLOGGER.debug("Prepared statement is " + currentSQL);
     // TODO in real life this needs to check if the ? is inside quotes before we assume it
     // a parameter
@@ -479,7 +479,8 @@ class OmniSciPreparedStatement implements PreparedStatement {
     }
     PreparedStatement ps = null;
     try {
-      ps = new OmniSciPreparedStatement(currentSQL, session, client);
+      ps = new OmniSciPreparedStatement(
+              currentSQL, session, (OmniSciConnection) getConnection());
       ps.setMaxRows(0);
       for (int i = 1; i <= this.parmCount; ++i) {
         ps.setNull(i, Types.NULL);
@@ -968,10 +969,7 @@ class OmniSciPreparedStatement implements PreparedStatement {
   @Override
   public Connection getConnection() throws SQLException {
     MAPDLOGGER.debug("Entered");
-    throw new UnsupportedOperationException("Not supported yet,"
-            + " line:" + new Throwable().getStackTrace()[0].getLineNumber()
-            + " class:" + new Throwable().getStackTrace()[0].getClassName()
-            + " method:" + new Throwable().getStackTrace()[0].getMethodName());
+    return stmt.getConnection();
   }
 
   @Override

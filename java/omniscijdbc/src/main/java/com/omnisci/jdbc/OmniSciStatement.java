@@ -43,7 +43,7 @@ public class OmniSciStatement implements java.sql.Statement {
   private OmniSciConnection connection;
   private ResultSet currentRS = null;
   private TQueryResult sqlResult = null;
-  private int maxRows = 100000; // add limit to unlimited queries
+  private int maxRows; // add limit to unlimited queries
   private boolean escapeProcessing = false;
   private boolean isClosed = false;
 
@@ -51,11 +51,7 @@ public class OmniSciStatement implements java.sql.Statement {
     session = tsession;
     connection = tconnection;
     client = connection.client;
-  }
-
-  OmniSciStatement(String tsession, OmniSci.Client tclient) {
-    session = tsession;
-    client = tclient;
+    maxRows = (Integer) (connection.cP.get(Connection_enums.max_rows));
   }
 
   static Pattern top_pattern =
@@ -65,6 +61,8 @@ public class OmniSciStatement implements java.sql.Statement {
   public ResultSet executeQuery(String sql)
           throws SQLException { // logger.debug("Entered");
     checkClosed();
+    // @TODO: we can and probably should use "first_n" parameter of the sql_execute()
+    // endpoint to force the limit on the query, instead of rewriting it here.
     if (maxRows >= 0) {
       // add limit to sql call if it doesn't already have one and is a select
       String[] tokens = sql.toLowerCase().split(" ", 3);
@@ -341,10 +339,7 @@ public class OmniSciStatement implements java.sql.Statement {
 
   @Override
   public Connection getConnection() throws SQLException { // logger.debug("Entered");
-    throw new UnsupportedOperationException("Not supported yet,"
-            + " line:" + new Throwable().getStackTrace()[0].getLineNumber()
-            + " class:" + new Throwable().getStackTrace()[0].getClassName()
-            + " method:" + new Throwable().getStackTrace()[0].getMethodName());
+    return connection;
   }
 
   @Override

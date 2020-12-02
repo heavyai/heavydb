@@ -89,7 +89,8 @@ enum Connection_enums {
   sslkey,
   sslkey_password,
   user,
-  user_passwd
+  user_passwd,
+  max_rows
 }
 
 class KeyLoader {
@@ -163,8 +164,10 @@ public class OmniSciConnection implements java.sql.Connection, Cloneable {
                 put(Connection_enums.sslkey, new Param_pair("sslkey", 9));
                 put(Connection_enums.sslkey_password,
                         new Param_pair("sslkey_password", 10));
+
                 put(Connection_enums.user, new Param_pair("user", 100));
                 put(Connection_enums.user_passwd, new Param_pair("password", 101));
+                put(Connection_enums.max_rows, new Param_pair("max_rows", 102));
               }
             };
     protected boolean parm_warning = false;
@@ -240,6 +243,11 @@ public class OmniSciConnection implements java.sql.Connection, Cloneable {
         logger.warn("server trust store password specified without a keystore file");
         parm_warning = true;
       }
+      Integer max_rows = 100000;
+      if (this.containsKey(Connection_enums.max_rows)) {
+        max_rows = Integer.parseInt((String) (this.get(Connection_enums.max_rows)));
+      }
+      this.put(Connection_enums.max_rows, max_rows);
     }
 
     boolean isHttpProtocol() {
@@ -431,7 +439,7 @@ public class OmniSciConnection implements java.sql.Connection, Cloneable {
   @Override
   public PreparedStatement prepareStatement(String sql)
           throws SQLException { // logger.debug("Entered");
-    return new OmniSciPreparedStatement(sql, session, client);
+    return new OmniSciPreparedStatement(sql, session, this);
   }
 
   @Override
@@ -579,7 +587,7 @@ public class OmniSciConnection implements java.sql.Connection, Cloneable {
   public PreparedStatement prepareStatement(
           String sql, int resultSetType, int resultSetConcurrency)
           throws SQLException { // logger.debug("Entered");
-    return new OmniSciPreparedStatement(sql, session, client);
+    return new OmniSciPreparedStatement(sql, session, this);
   }
 
   @Override
