@@ -21,6 +21,8 @@
 #include "DataMgr/ForeignStorage/ParquetDataWrapper.h"
 #include "Shared/DateTimeParser.h"
 
+bool g_enable_seconds_refresh{false};
+
 namespace foreign_storage {
 ForeignTable::ForeignTable()
     : OptionsContainer({{foreign_storage::ForeignTable::REFRESH_TIMING_TYPE_KEY,
@@ -127,7 +129,11 @@ void ForeignTable::validateRefreshOptions() const {
 
     auto interval_entry = options.find(REFRESH_INTERVAL_KEY);
     if (interval_entry != options.end()) {
-      boost::regex interval_regex{"^\\d{1,}[SHD]$",
+      std::string interval_types{"HD"};
+      if (g_enable_seconds_refresh) {
+        interval_types += "S";
+      }
+      boost::regex interval_regex{"^\\d{1,}[" + interval_types + "]$",
                                   boost::regex::extended | boost::regex::icase};
       if (!boost::regex_match(interval_entry->second, interval_regex)) {
         throw std::runtime_error{"Invalid value provided for the " +

@@ -36,6 +36,8 @@
 #endif
 
 extern bool g_enable_fsi;
+extern bool g_enable_seconds_refresh;
+
 std::string test_binary_file_path;
 
 namespace bp = boost::process;
@@ -3730,6 +3732,7 @@ class ScheduledRefreshTest : public RefreshTests {
   }
 
   void SetUp() override {
+    g_enable_seconds_refresh = true;
     ForeignTableTest::SetUp();
     boost::filesystem::create_directory(REFRESH_TEST_DIR);
     sql("DROP FOREIGN TABLE IF EXISTS test_foreign_table;");
@@ -4034,6 +4037,14 @@ TEST_F(ScheduledRefreshTest, DISABLED_PostEvictionError) {
   sqlAndCompareResult("SELECT * FROM test_foreign_table;", {{i(1)}});
 }
 
+TEST_F(ScheduledRefreshTest, SecondsIntervalDisabled) {
+  g_enable_seconds_refresh = false;
+  setTestFile("0.csv");
+  auto query = getCreateScheduledRefreshTableQuery("10S");
+  queryAndAssertException(
+      query, "Exception: Invalid value provided for the REFRESH_INTERVAL option.");
+}
+
 class SchemaMismatchTest : public ForeignTableTest,
                            public ::testing::WithParamInterface<std::string> {
  public:
@@ -4200,6 +4211,11 @@ class AlterForeignTableTest : public ScheduledRefreshTest {
         value);
   }
 
+  void SetUp() override {
+    g_enable_seconds_refresh = true;
+    ScheduledRefreshTest::SetUp();
+  }
+
   void TearDown() override {
     sql("DROP FOREIGN TABLE IF EXISTS renamed_table;");
     ScheduledRefreshTest::TearDown();
@@ -4228,6 +4244,16 @@ TEST_F(AlterForeignTableTest, RefreshIntervalDaysToSeconds) {
   sqlAlterTable("REFRESH_INTERVAL", "1S");
   assertOptionEquals("REFRESH_INTERVAL", "1S");
 }
+
+TEST_F(AlterForeignTableTest, RefreshIntervalDaysToSecondsWithIntervalDisabled) {
+  g_enable_seconds_refresh = false;
+  createScheduledTable("scheduled", "1D", "all", 1);
+  assertOptionEquals("REFRESH_INTERVAL", "1D");
+  queryAndAssertException(
+      "ALTER FOREIGN TABLE test_foreign_table WITH (REFRESH_INTERVAL = '1S');",
+      "Exception: Invalid value provided for the REFRESH_INTERVAL option.");
+}
+
 TEST_F(AlterForeignTableTest, RefreshIntervalSecondsToHoursLowerCase) {
   createScheduledTable("scheduled", "1S", "all", 1);
   assertOptionEquals("REFRESH_INTERVAL", "1S");
