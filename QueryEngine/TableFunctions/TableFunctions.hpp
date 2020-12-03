@@ -191,7 +191,6 @@ EXTENSION_NOINLINE int32_t k_means(const Column<float>& input_col0,
                                    const Column<float>& output_col18,
                                    const Column<float>& output_col19,
                                    const Column<int>& output_cluster) {
-  using namespace daal;
   using namespace daal::algorithms;
   using namespace daal::data_management;
 
@@ -211,8 +210,8 @@ EXTENSION_NOINLINE int32_t k_means(const Column<float>& input_col0,
       &output_col10, &output_col11, &output_col12, &output_col13, &output_col14,
       &output_col15, &output_col16, &output_col17, &output_col18, &output_col19};
 
-  // Prepare input data as structure of arrays (SOA) as columnar format
-  SOANumericTablePtr dataTable = SOANumericTable::create(num_columns, num_rows);
+  // Prepare input data as structure of arrays (SOA) as columnar format (zero-copy)
+  const auto dataTable = SOANumericTable::create(num_columns, num_rows);
   for (size_t i = 0; i < num_columns; ++i) {
     dataTable->setArray<float>(inputs[i]->ptr, i);
   }
@@ -223,25 +222,30 @@ EXTENSION_NOINLINE int32_t k_means(const Column<float>& input_col0,
   init.compute();
   const NumericTablePtr centroids = init.getResult()->get(kmeans::init::centroids);
 
+  // Prepare output data as homogeneous numeric table to allow zero-copy for assignments
+  const auto assignmentsTable =
+      HomogenNumericTable<int>::create(output_cluster.ptr, 1, num_rows);
+  const kmeans::ResultPtr result(new kmeans::Result);
+  result->set(kmeans::assignments, assignmentsTable);
+  result->set(kmeans::objectiveFunction,
+              HomogenNumericTable<float>::create(1, 1, NumericTable::doAllocate));
+  result->set(kmeans::nIterations,
+              HomogenNumericTable<int>::create(1, 1, NumericTable::doAllocate));
+
   // Clustering phase of K-Means
   kmeans::Batch<> algorithm(num_clusters, num_iterations);
   algorithm.input.set(kmeans::data, dataTable);
   algorithm.input.set(kmeans::inputCentroids, centroids);
   algorithm.parameter().resultsToEvaluate = kmeans::computeAssignments;
+  algorithm.setResult(result);
   algorithm.compute();
-  const NumericTablePtr assignments = algorithm.getResult()->get(kmeans::assignments);
 
-  // Assign output columns and cluster assignments
-  BlockDescriptor<int> assignmentsBlock;
-  assignments->getBlockOfColumnValues(0, 0, num_rows, readOnly, assignmentsBlock);
-  const auto assignmentsPtr = assignmentsBlock.getBlockPtr();
+  // Assign output columns
   for (size_t i = 0; i < num_rows; ++i) {
     for (size_t j = 0; j < num_columns; ++j) {
       (*(outputs[j]))[i] = (*(inputs[j]))[i];
     }
-    output_cluster[i] = assignmentsPtr[i];
   }
-  assignments->releaseBlockOfColumnValues(assignmentsBlock);
 
   return num_rows;
 }
