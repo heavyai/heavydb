@@ -3326,6 +3326,220 @@ TEST_F(ForeignTablePermissionsTest, ForeignTableRefreshNonOwner) {
       "executed by super user or owner of the object.");
 }
 
+class ServerPrivApiTest : public DBHandlerTestFixture {
+ protected:
+  static void SetUpTestSuite() {
+    createDBHandler();
+    switchToAdmin();
+    createTestUser("test_user");
+    createTestUser("test_user_2");
+  }
+
+  static void TearDownTestSuite() {
+    dropTestUser("test_user");
+    dropTestUser("test_user_2");
+  }
+
+  void SetUp() override {
+    if (g_aggregator) {
+      LOG(INFO) << "Test fixture not supported in distributed mode.";
+      GTEST_SKIP();
+      return;
+    }
+    g_enable_fsi = true;
+    DBHandlerTestFixture::SetUp();
+    loginAdmin();
+    dropServer();
+    createTestServer();
+  }
+
+  void TearDown() override {
+    g_enable_fsi = true;
+    loginAdmin();
+    dropServer();
+    revokeTestUserServerPrivileges("test_user");
+    revokeTestUserServerPrivileges("test_user_2");
+  }
+  static void createTestUser(std::string name) {
+    sql("CREATE USER  " + name + " (password = 'test_pass');");
+    sql("GRANT ACCESS ON DATABASE omnisci TO  " + name + ";");
+  }
+
+  static void dropTestUser(std::string name) {
+    try {
+      sql("DROP USER " + name + ";");
+    } catch (const std::exception& e) {
+      // Swallow and log exceptions that may occur, since there is no "IF EXISTS" option.
+      LOG(WARNING) << e.what();
+    }
+  }
+
+  void revokeTestUserServerPrivileges(std::string name) {
+    sql("REVOKE ALL ON DATABASE omnisci FROM " + name + ";");
+    sql("GRANT ACCESS ON DATABASE omnisci TO " + name + ";");
+  }
+  void createTestServer() {
+    sql("CREATE SERVER test_server FOREIGN DATA WRAPPER omnisci_csv "
+        "WITH (storage_type = 'LOCAL_FILE', base_path = '/test_path/');");
+  }
+
+  void dropServer() { sql("DROP SERVER IF EXISTS test_server;"); }
+
+  void assertExpectedDBObj(std::vector<TDBObject>& db_objs,
+                           std::string name,
+                           TDBObjectType::type obj_type,
+                           std::vector<bool> privs,
+                           std::string grantee_name,
+                           TDBObjectType::type priv_type) {
+    bool obj_found = false;
+    for (const auto& db_obj : db_objs) {
+      if ((db_obj.objectName == name) && (db_obj.objectType == obj_type) &&
+          (db_obj.privs == privs) && (db_obj.grantee == grantee_name) &&
+          (db_obj.privilegeObjectType == priv_type)) {
+        obj_found = true;
+        break;
+      };
+    }
+    ASSERT_TRUE(obj_found);
+  }
+
+  void assertDBAccessObj(std::vector<TDBObject>& db_objs) {
+    assertExpectedDBObj(db_objs,
+                        "omnisci",
+                        TDBObjectType::DatabaseDBObjectType,
+                        {0, 0, 0, 1},
+                        "test_user",
+                        TDBObjectType::DatabaseDBObjectType);
+  }
+  void assertSuperAccessObj(std::vector<TDBObject>& db_objs) {
+    assertExpectedDBObj(db_objs,
+                        "super",
+                        TDBObjectType::AbstractDBObjectType,
+                        {1, 1, 1},
+                        "admin",
+                        TDBObjectType::ServerDBObjectType);
+  }
+};
+
+TEST_F(ServerPrivApiTest, CreateForGrantee) {
+  const auto& [db_handler, session_id] = getDbHandlerAndSessionId();
+  sql("GRANT CREATE SERVER ON DATABASE omnisci TO test_user;");
+  std::vector<TDBObject> priv_objs;
+  db_handler->get_db_objects_for_grantee(priv_objs, session_id, "test_user");
+  ASSERT_EQ(priv_objs.size(), 2);
+  assertDBAccessObj(priv_objs);
+  assertExpectedDBObj(priv_objs,
+                      "omnisci",
+                      TDBObjectType::DatabaseDBObjectType,
+                      {1, 0, 0},
+                      "test_user",
+                      TDBObjectType::ServerDBObjectType);
+}
+
+TEST_F(ServerPrivApiTest, DropForGrantee) {
+  const auto& [db_handler, session_id] = getDbHandlerAndSessionId();
+  sql("GRANT DROP SERVER ON DATABASE omnisci TO test_user;");
+  std::vector<TDBObject> priv_objs;
+  db_handler->get_db_objects_for_grantee(priv_objs, session_id, "test_user");
+  ASSERT_EQ(priv_objs.size(), 2);
+  assertDBAccessObj(priv_objs);
+  assertExpectedDBObj(priv_objs,
+                      "omnisci",
+                      TDBObjectType::DatabaseDBObjectType,
+                      {0, 1, 0},
+                      "test_user",
+                      TDBObjectType::ServerDBObjectType);
+}
+
+TEST_F(ServerPrivApiTest, AlterForGrantee) {
+  const auto& [db_handler, session_id] = getDbHandlerAndSessionId();
+  sql("GRANT ALTER SERVER ON DATABASE omnisci TO test_user;");
+  std::vector<TDBObject> priv_objs;
+  db_handler->get_db_objects_for_grantee(priv_objs, session_id, "test_user");
+  ASSERT_EQ(priv_objs.size(), 2);
+  assertDBAccessObj(priv_objs);
+  assertExpectedDBObj(priv_objs,
+                      "omnisci",
+                      TDBObjectType::DatabaseDBObjectType,
+                      {0, 0, 1},
+                      "test_user",
+                      TDBObjectType::ServerDBObjectType);
+}
+
+TEST_F(ServerPrivApiTest, AlterOnServerGrantee) {
+  const auto& [db_handler, session_id] = getDbHandlerAndSessionId();
+  sql("GRANT ALTER ON SERVER test_server TO test_user;");
+  std::vector<TDBObject> priv_objs;
+  db_handler->get_db_objects_for_grantee(priv_objs, session_id, "test_user");
+  ASSERT_EQ(priv_objs.size(), 2);
+  assertDBAccessObj(priv_objs);
+  assertExpectedDBObj(priv_objs,
+                      "test_server",
+                      TDBObjectType::ServerDBObjectType,
+                      {0, 0, 1},
+                      "test_user",
+                      TDBObjectType::ServerDBObjectType);
+}
+
+TEST_F(ServerPrivApiTest, GetDBObjNonSuser) {
+  const auto& [db_handler, session_id] = getDbHandlerAndSessionId();
+  sql("GRANT CREATE SERVER ON DATABASE omnisci TO test_user;");
+  login("test_user", "test_pass");
+  std::vector<TDBObject> priv_objs;
+  db_handler->get_db_objects_for_grantee(priv_objs, session_id, "test_user");
+  ASSERT_EQ(priv_objs.size(), 2);
+  assertDBAccessObj(priv_objs);
+  assertExpectedDBObj(priv_objs,
+                      "omnisci",
+                      TDBObjectType::DatabaseDBObjectType,
+                      {1, 0, 0},
+                      "test_user",
+                      TDBObjectType::ServerDBObjectType);
+}
+
+TEST_F(ServerPrivApiTest, GetDBObjNoAccess) {
+  const auto& [db_handler, session_id] = getDbHandlerAndSessionId();
+  sql("GRANT CREATE SERVER ON DATABASE omnisci TO test_user_2;");
+  login("test_user", "test_pass");
+  std::vector<TDBObject> priv_objs;
+  db_handler->get_db_objects_for_grantee(priv_objs, session_id, "test_user_2");
+  // no privs returned
+  ASSERT_EQ(priv_objs.size(), 0);
+}
+
+TEST_F(ServerPrivApiTest, AlterOnServerObjectPrivs) {
+  sql("GRANT ALTER ON SERVER test_server TO test_user;");
+  std::vector<TDBObject> priv_objs;
+  login("test_user", "test_pass");
+  const auto& [db_handler, session_id] = getDbHandlerAndSessionId();
+  db_handler->get_db_object_privs(
+      priv_objs, session_id, "test_server", TDBObjectType::ServerDBObjectType);
+  ASSERT_EQ(priv_objs.size(), 1);
+  assertExpectedDBObj(priv_objs,
+                      "test_server",
+                      TDBObjectType::ServerDBObjectType,
+                      {0, 0, 1},
+                      "test_user",
+                      TDBObjectType::ServerDBObjectType);
+}
+
+TEST_F(ServerPrivApiTest, AlterOnServerObjectPrivsSuper) {
+  const auto& [db_handler, session_id] = getDbHandlerAndSessionId();
+  sql("GRANT ALTER ON SERVER test_server TO test_user;");
+  std::vector<TDBObject> priv_objs;
+  db_handler->get_db_object_privs(
+      priv_objs, session_id, "test_server", TDBObjectType::ServerDBObjectType);
+  ASSERT_EQ(priv_objs.size(), 2);
+  // Suser access obj returned when calling as suser
+  assertSuperAccessObj(priv_objs);
+  assertExpectedDBObj(priv_objs,
+                      "test_server",
+                      TDBObjectType::ServerDBObjectType,
+                      {0, 0, 1},
+                      "test_user",
+                      TDBObjectType::ServerDBObjectType);
+}
+
 int main(int argc, char* argv[]) {
   g_enable_fsi = true;
   testing::InitGoogleTest(&argc, argv);

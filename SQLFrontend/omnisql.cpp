@@ -852,7 +852,8 @@ static std::vector<std::string> stringify_privs(const std::vector<bool>& priv_ma
           {TDBObjectType::DashboardDBObjectType,
            {"create"s, "delete"s, "view"s, "edit"s}},
           {TDBObjectType::ViewDBObjectType,
-           {"create"s, "drop"s, "select"s, "insert"s, "update"s, "delete"s}}};
+           {"create"s, "drop"s, "select"s, "insert"s, "update"s, "delete"s}},
+          {TDBObjectType::ServerDBObjectType, {"create"s, "drop"s, "alter"s}}};
 
   const auto privilege_names = privilege_names_lookup.find(type);
 
@@ -917,10 +918,11 @@ void get_db_objects_for_grantee(ClientContext& context) {
     std::cout << tss.str() << std::endl;
   };
 
-  const std::string object_names[4] = {"database", "table", "dashboard", "view"};
+  const std::string object_names[5] = {
+      "database", "table", "dashboard", "view", "server"};
   auto type_to_string = [&](TDBObjectType::type type) -> std::string {
     const int type_val = static_cast<int>(type);
-    CHECK(type_val > 0 && type_val < 5);
+    CHECK(type_val > 0 && type_val < 6);
     return object_names[type_val - 1];
   };
 
@@ -1466,8 +1468,12 @@ int main(int argc, char** argv) {
         } else if (args[1] == "table") {
           context.object_type = TDBObjectType::TableDBObjectType;
           get_db_object_privs(context);
+        } else if (args[1] == "server") {
+          context.object_type = TDBObjectType::ServerDBObjectType;
+          get_db_object_privs(context);
         } else {
-          std::cerr << "Object type should be on in { database, table }" << std::endl;
+          std::cerr << "Object type should be one of { database, table, server }"
+                    << std::endl;
         }
       } else {
         std::cerr << "Command object_privileges failed. It requires two parameters: "

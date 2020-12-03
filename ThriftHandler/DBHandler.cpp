@@ -1552,11 +1552,18 @@ static TDBObject serialize_db_object(const std::string& roleName,
       outObject.privs.push_back(ap.hasPermission(ViewPrivileges::DELETE_FROM_VIEW));
 
       break;
+    case ServerDBObjectType:
+      outObject.privilegeObjectType = TDBObjectType::ServerDBObjectType;
+      outObject.privs.push_back(ap.hasPermission(ServerPrivileges::CREATE_SERVER));
+      outObject.privs.push_back(ap.hasPermission(ServerPrivileges::DROP_SERVER));
+      outObject.privs.push_back(ap.hasPermission(ServerPrivileges::ALTER_SERVER));
+
+      break;
     default:
       CHECK(false);
   }
   const int type_val = static_cast<int>(inObject.getType());
-  CHECK(type_val >= 0 && type_val < 5);
+  CHECK(type_val >= 0 && type_val < 6);
   outObject.objectType = static_cast<TDBObjectType::type>(type_val);
   return outObject;
 }
@@ -1632,6 +1639,19 @@ bool DBHandler::has_view_permission(const AccessPrivileges& privs,
   }
 }
 
+bool DBHandler::has_server_permission(const AccessPrivileges& privs,
+                                      const TDBObjectPermissions& permissions) {
+  CHECK(permissions.__isset.server_permissions_);
+  auto perms = permissions.server_permissions_;
+  if ((perms.create_ && !privs.hasPermission(ServerPrivileges::CREATE_SERVER)) ||
+      (perms.drop_ && !privs.hasPermission(ServerPrivileges::DROP_SERVER)) ||
+      (perms.alter_ && !privs.hasPermission(ServerPrivileges::ALTER_SERVER))) {
+    return false;
+  } else {
+    return true;
+  }
+}
+
 bool DBHandler::has_object_privilege(const TSessionId& sessionId,
                                      const std::string& granteeName,
                                      const std::string& objectName,
@@ -1675,6 +1695,10 @@ bool DBHandler::has_object_privilege(const TSessionId& sessionId,
     case TDBObjectType::ViewDBObjectType:
       type = DBObjectType::ViewDBObjectType;
       func_name = "view";
+      break;
+    case TDBObjectType::ServerDBObjectType:
+      type = DBObjectType::ServerDBObjectType;
+      func_name = "server";
       break;
     default:
       THROW_MAPD_EXCEPTION("Invalid object type (" + std::to_string(objectType) + ").");
@@ -1738,6 +1762,9 @@ void DBHandler::get_db_object_privs(std::vector<TDBObject>& TDBObjects,
       break;
     case TDBObjectType::ViewDBObjectType:
       object_type = DBObjectType::ViewDBObjectType;
+      break;
+    case TDBObjectType::ServerDBObjectType:
+      object_type = DBObjectType::ServerDBObjectType;
       break;
     default:
       THROW_MAPD_EXCEPTION("Failed to get object privileges for " + objectName +

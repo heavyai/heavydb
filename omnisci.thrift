@@ -462,11 +462,18 @@ struct TViewPermissions {
   6: bool delete_;
 }
 
+struct TServerPermissions {
+  1: bool create_;
+  2: bool drop_;
+  3: bool alter_;
+}
+
 union TDBObjectPermissions {
   1: TDatabasePermissions database_permissions_
   2: TTablePermissions table_permissions_
   3: TDashboardPermissions dashboard_permissions_
   4: TViewPermissions view_permissions_
+  5: TServerPermissions server_permissions_
 }
 
 enum TDBObjectType {
@@ -474,7 +481,8 @@ enum TDBObjectType {
   DatabaseDBObjectType,
   TableDBObjectType,
   DashboardDBObjectType
-  ViewDBObjectType
+  ViewDBObjectType,
+  ServerDBObjectType
 }
 
 struct TDBObject {
