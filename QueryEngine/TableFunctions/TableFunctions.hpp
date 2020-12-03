@@ -167,10 +167,8 @@ EXTENSION_NOINLINE int32_t k_means(const Column<float>& input_col0,
                                    const Column<float>& input_col17,
                                    const Column<float>& input_col18,
                                    const Column<float>& input_col19,
-                                   // const int num_clusters,
-                                   const float num_clusters_float,
-                                   // const int num_iterations,
-                                   const float num_iterations_float,
+                                   const int num_clusters,
+                                   const int num_iterations,
                                    const int output_multiplier,
                                    const Column<float>& output_col0,
                                    const Column<float>& output_col1,
@@ -196,10 +194,6 @@ EXTENSION_NOINLINE int32_t k_means(const Column<float>& input_col0,
   using namespace daal;
   using namespace daal::algorithms;
   using namespace daal::data_management;
-
-  // Temporary workaround
-  const auto num_clusters = static_cast<int>(num_clusters_float + 0.5);
-  const auto num_iterations = static_cast<int>(num_iterations_float + 0.5);
 
   // Data dimensions
   const size_t num_rows = input_col0.getSize();
