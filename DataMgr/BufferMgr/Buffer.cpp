@@ -142,4 +142,8 @@ void Buffer::append(int8_t* src,
 int8_t* Buffer::getMemoryPtr() {
   return mem_;
 }
+
+void Buffer::setMemoryPtr(int8_t* new_ptr) {
+  mem_ = new_ptr;
+}
 }  // namespace Buffer_Namespace
