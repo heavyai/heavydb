@@ -43,7 +43,7 @@ class ParquetTimeEncoder : public TypedParquetInPlaceEncoder<V, T> {
   }
 
  private:
-  V conversion_denominator_;
+  T conversion_denominator_;
 };
 
 }  // namespace foreign_storage

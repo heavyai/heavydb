@@ -17,6 +17,7 @@
 #pragma once
 
 #include "ParquetEncoder.h"
+#include "ParquetMetadataValidator.h"
 #include "ParquetShared.h"
 
 #include <parquet/schema.h>
@@ -44,16 +45,6 @@ inline int64_t get_time_conversion_denominator(
       UNREACHABLE();
   }
   return conversion_denominator;
-}
-
-template <typename V, std::enable_if_t<std::is_integral<V>::value, int> = 0>
-inline V get_null_value() {
-  return inline_int_null_value<V>();
-}
-
-template <typename V, std::enable_if_t<std::is_floating_point<V>::value, int> = 0>
-inline V get_null_value() {
-  return inline_fp_null_value<V>();
 }
 
 class ParquetInPlaceEncoder : public ParquetScalarEncoder {
@@ -222,7 +213,8 @@ class TypedParquetInPlaceEncoder : public ParquetInPlaceEncoder {
       // validate statistics if validation applicable as part of encoding
       if (auto parquet_scalar_validator = dynamic_cast<ParquetMetadataValidator*>(this)) {
         try {
-          parquet_scalar_validator->validate(stats, column_type);
+          parquet_scalar_validator->validate(
+              stats, column_type.is_array() ? column_type.get_elem_type() : column_type);
         } catch (const std::exception& e) {
           std::stringstream error_message;
           error_message << e.what() << " Error validating statistics of Parquet column '"

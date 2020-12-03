@@ -4986,6 +4986,201 @@ TEST_F(ParquetCoercionTest, UnsignedInt8ToTinyInt) {
   sqlAndCompareResult("SELECT * FROM test_foreign_table;", {{i(127)}});
 }
 
+TEST_F(ParquetCoercionTest, TimestampMilliToTimestampFixedLengthEncoded32) {
+  createForeignTableWithCoercion("TIMESTAMP (0) ENCODING FIXED (32)",
+                                 "ParquetCoercionTypes/coercible_timestamp_milli");
+  sqlAndCompareResult("SELECT * FROM test_foreign_table;", {{"01/01/1970 00:00:00"}});
+}
+
+TEST_F(ParquetCoercionTest,
+       TimestampMilliToTimestampFixedLengthEncoded32InformationLoss) {
+  const std::string base_file_name = "ParquetCoercionTypes/non_coercible_timestamp_milli";
+  createForeignTableWithCoercion("TIMESTAMP (0) ENCODING FIXED (32)", base_file_name);
+  queryAndAssertException("SELECT * FROM test_foreign_table",
+                          getCoercionException("1901-12-13 20:45:53",
+                                               "2038-01-19 03:14:07",
+                                               "2038-01-19 03:14:08",
+                                               base_file_name));
+}
+
+TEST_F(ParquetCoercionTest, TimestampMicroToTimestampFixedLengthEncoded32) {
+  createForeignTableWithCoercion("TIMESTAMP (0) ENCODING FIXED (32)",
+                                 "ParquetCoercionTypes/coercible_timestamp_micro");
+  sqlAndCompareResult("SELECT * FROM test_foreign_table;", {{"01/01/1970 00:00:00"}});
+}
+
+TEST_F(ParquetCoercionTest,
+       TimestampMicroToTimestampFixedLengthEncoded32InformationLoss) {
+  const std::string base_file_name = "ParquetCoercionTypes/non_coercible_timestamp_micro";
+  createForeignTableWithCoercion("TIMESTAMP (0) ENCODING FIXED (32)", base_file_name);
+  queryAndAssertException("SELECT * FROM test_foreign_table",
+                          getCoercionException("1901-12-13 20:45:53",
+                                               "2038-01-19 03:14:07",
+                                               "2038-01-19 03:14:08",
+                                               base_file_name));
+}
+
+TEST_F(ParquetCoercionTest, TimestampNanoToTimestampFixedLengthEncoded32) {
+  createForeignTableWithCoercion("TIMESTAMP (0) ENCODING FIXED (32)",
+                                 "ParquetCoercionTypes/coercible_timestamp_nano");
+  sqlAndCompareResult("SELECT * FROM test_foreign_table;", {{"01/01/1970 00:00:00"}});
+}
+
+TEST_F(ParquetCoercionTest, TimestampNanoToTimestampFixedLengthEncoded32InformationLoss) {
+  const std::string base_file_name = "ParquetCoercionTypes/non_coercible_timestamp_nano";
+  createForeignTableWithCoercion("TIMESTAMP (0) ENCODING FIXED (32)", base_file_name);
+  queryAndAssertException("SELECT * FROM test_foreign_table",
+                          getCoercionException("1901-12-13 20:45:53",
+                                               "2038-01-19 03:14:07",
+                                               "2038-01-19 03:14:08",
+                                               base_file_name));
+}
+
+TEST_F(ParquetCoercionTest, Int64NoAnnotationToTimestampSeconds) {
+  const std::string base_file_name = "ParquetCoercionTypes/coercible_int64_no_annotation";
+  createForeignTableWithCoercion("TIMESTAMP (0)", base_file_name);
+  sqlAndCompareResult("SELECT * FROM test_foreign_table;", {{"01/01/1970 00:02:07"}});
+}
+
+TEST_F(ParquetCoercionTest, Int64NoAnnotationToTimestampMilliseconds) {
+  const std::string base_file_name = "ParquetCoercionTypes/coercible_int64_no_annotation";
+  createForeignTableWithCoercion("TIMESTAMP (3)", base_file_name);
+  sqlAndCompareResult("SELECT * FROM test_foreign_table;", {{"01/01/1970 00:00:00.127"}});
+}
+
+TEST_F(ParquetCoercionTest, Int64NoAnnotationToTimestampMicroseconds) {
+  const std::string base_file_name = "ParquetCoercionTypes/coercible_int64_no_annotation";
+  createForeignTableWithCoercion("TIMESTAMP (6)", base_file_name);
+  sqlAndCompareResult("SELECT * FROM test_foreign_table;",
+                      {{"01/01/1970 00:00:00.000127"}});
+}
+
+TEST_F(ParquetCoercionTest, Int64NoAnnotationToTimestampNanoseconds) {
+  const std::string base_file_name = "ParquetCoercionTypes/coercible_int64_no_annotation";
+  createForeignTableWithCoercion("TIMESTAMP (9)", base_file_name);
+  sqlAndCompareResult("SELECT * FROM test_foreign_table;",
+                      {{"01/01/1970 00:00:00.000000127"}});
+}
+
+TEST_F(ParquetCoercionTest, Int64NoAnnotationToTimestampFixedLengthEncoded32) {
+  createForeignTableWithCoercion("TIMESTAMP (0) ENCODING FIXED (32)",
+                                 "ParquetCoercionTypes/coercible_int64_no_annotation");
+  sqlAndCompareResult("SELECT * FROM test_foreign_table;", {{"01/01/1970 00:02:07"}});
+}
+
+TEST_F(ParquetCoercionTest,
+       Int64NoAnnotationToTimestampFixedLengthEncoded32InformationLoss) {
+  const std::string base_file_name =
+      "ParquetCoercionTypes/non_coercible_int64_no_annotation";
+  createForeignTableWithCoercion("TIMESTAMP (0) ENCODING FIXED (32)", base_file_name);
+  queryAndAssertException("SELECT * FROM test_foreign_table",
+                          getCoercionException("1901-12-13 20:45:53",
+                                               "2038-01-19 03:14:07",
+                                               "292277026596-12-04 15:30:07",
+                                               base_file_name));
+}
+
+TEST_F(ParquetCoercionTest, Int32NoAnnotationToTimestampFixedLengthEncoded32) {
+  createForeignTableWithCoercion("TIMESTAMP (0) ENCODING FIXED (32)",
+                                 "ParquetCoercionTypes/coercible_int32_no_annotation");
+  sqlAndCompareResult("SELECT * FROM test_foreign_table;", {{"01/01/1970 00:02:07"}});
+}
+
+TEST_F(ParquetCoercionTest, TimeMilliToTimeFixedLengthEncoded32) {
+  createForeignTableWithCoercion("TIME ENCODING FIXED (32)",
+                                 "ParquetCoercionTypes/coercible_time_milli");
+  sqlAndCompareResult("SELECT * FROM test_foreign_table;", {{"23:59:59"}});
+}
+
+TEST_F(ParquetCoercionTest, TimeMicroToTimeFixedLengthEncoded32) {
+  createForeignTableWithCoercion("TIME ENCODING FIXED (32)",
+                                 "ParquetCoercionTypes/coercible_time_micro");
+  sqlAndCompareResult("SELECT * FROM test_foreign_table;", {{"23:59:59"}});
+}
+
+TEST_F(ParquetCoercionTest, TimeNanoToTimeFixedLengthEncoded32) {
+  createForeignTableWithCoercion("TIME ENCODING FIXED (32)",
+                                 "ParquetCoercionTypes/coercible_time_nano");
+  sqlAndCompareResult("SELECT * FROM test_foreign_table;", {{"23:59:59"}});
+}
+
+TEST_F(ParquetCoercionTest, DateToDateFixedLengthEncoded16) {
+  createForeignTableWithCoercion("DATE ENCODING DAYS (16)",
+                                 "ParquetCoercionTypes/coercible_date");
+  sqlAndCompareResult("SELECT * FROM test_foreign_table;", {{"05/08/1970"}});
+}
+
+TEST_F(ParquetCoercionTest, DateToDateFixedLengthEncoded16InformationLoss) {
+  const std::string base_file_name = "ParquetCoercionTypes/non_coercible_date";
+  createForeignTableWithCoercion("DATE ENCODING DAYS (16)", base_file_name);
+  queryAndAssertException(
+      "SELECT * FROM test_foreign_table",
+      getCoercionException("1880-04-15", "2059-09-18", "2149-06-06", base_file_name));
+}
+
+TEST_F(ParquetCoercionTest, TimestampMilliToDateFixedLengthEncoded16) {
+  createForeignTableWithCoercion("DATE ENCODING DAYS (16)",
+                                 "ParquetCoercionTypes/coercible_timestamp_milli");
+  sqlAndCompareResult("SELECT * FROM test_foreign_table;", {{"01/01/1970"}});
+}
+
+TEST_F(ParquetCoercionTest, TimestampMicroToDateFixedLengthEncoded16) {
+  createForeignTableWithCoercion("DATE ENCODING DAYS (16)",
+                                 "ParquetCoercionTypes/coercible_timestamp_micro");
+  sqlAndCompareResult("SELECT * FROM test_foreign_table;", {{"01/01/1970"}});
+}
+
+TEST_F(ParquetCoercionTest, TimestampNanoToDateFixedLengthEncoded16) {
+  createForeignTableWithCoercion("DATE ENCODING DAYS (16)",
+                                 "ParquetCoercionTypes/coercible_timestamp_nano");
+  sqlAndCompareResult("SELECT * FROM test_foreign_table;", {{"01/01/1970"}});
+}
+
+TEST_F(ParquetCoercionTest, TimestampMilliToDateFixedLengthEncoded32) {
+  createForeignTableWithCoercion("DATE ENCODING DAYS (32)",
+                                 "ParquetCoercionTypes/coercible_timestamp_milli");
+  sqlAndCompareResult("SELECT * FROM test_foreign_table;", {{"01/01/1970"}});
+}
+
+TEST_F(ParquetCoercionTest, TimestampMicroToDateFixedLengthEncoded32) {
+  createForeignTableWithCoercion("DATE ENCODING DAYS (32)",
+                                 "ParquetCoercionTypes/coercible_timestamp_micro");
+  sqlAndCompareResult("SELECT * FROM test_foreign_table;", {{"01/01/1970"}});
+}
+
+TEST_F(ParquetCoercionTest, TimestampNanoToDateFixedLengthEncoded32) {
+  createForeignTableWithCoercion("DATE ENCODING DAYS (32)",
+                                 "ParquetCoercionTypes/coercible_timestamp_nano");
+  sqlAndCompareResult("SELECT * FROM test_foreign_table;", {{"01/01/1970"}});
+}
+
+TEST_F(ParquetCoercionTest, TimestampMilliToDateFixedLengthEncoded16InformationLoss) {
+  const std::string base_file_name =
+      "ParquetCoercionTypes/non_coercible_date16_as_timestamp_milli";
+  createForeignTableWithCoercion("DATE ENCODING DAYS (16)", base_file_name);
+  queryAndAssertException(
+      "SELECT * FROM test_foreign_table",
+      getCoercionException("1880-04-15", "2059-09-18", "2149-06-06", base_file_name));
+}
+
+TEST_F(ParquetCoercionTest, TimestampMicroToDateFixedLengthEncoded16InformationLoss) {
+  const std::string base_file_name =
+      "ParquetCoercionTypes/non_coercible_date16_as_timestamp_micro";
+  createForeignTableWithCoercion("DATE ENCODING DAYS (16)", base_file_name);
+  queryAndAssertException(
+      "SELECT * FROM test_foreign_table",
+      getCoercionException("1880-04-15", "2059-09-18", "2149-06-06", base_file_name));
+}
+
+TEST_F(ParquetCoercionTest, TimestampNanoToDateFixedLengthEncoded16InformationLoss) {
+  const std::string base_file_name =
+      "ParquetCoercionTypes/non_coercible_date16_as_timestamp_nano";
+  createForeignTableWithCoercion("DATE ENCODING DAYS (16)", base_file_name);
+  queryAndAssertException(
+      "SELECT * FROM test_foreign_table",
+      getCoercionException("1880-04-15", "2059-09-18", "2149-06-06", base_file_name));
+}
+
 int main(int argc, char** argv) {
   g_enable_fsi = true;
   TestHelpers::init_logger_stderr_only(argc, argv);

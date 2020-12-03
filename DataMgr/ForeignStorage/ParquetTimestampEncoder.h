@@ -19,8 +19,10 @@
 #include "ParquetInPlaceEncoder.h"
 
 namespace foreign_storage {
+
 template <typename V, typename T>
-class ParquetTimestampEncoder : public TypedParquetInPlaceEncoder<V, T> {
+class ParquetTimestampEncoder : public TypedParquetInPlaceEncoder<V, T>,
+                                public ParquetMetadataValidator {
  public:
   ParquetTimestampEncoder(Data_Namespace::AbstractBuffer* buffer,
                           const ColumnDescriptor* column_desciptor,
@@ -42,14 +44,33 @@ class ParquetTimestampEncoder : public TypedParquetInPlaceEncoder<V, T> {
     omnisci_data_value = convert(parquet_data_value);
   }
 
+  void validate(std::shared_ptr<parquet::Statistics> stats,
+                const SQLTypeInfo& column_type) const override {
+    CHECK(column_type.is_timestamp() || column_type.is_date());
+    auto [unencoded_stats_min, unencoded_stats_max] =
+        TypedParquetInPlaceEncoder<V, T>::getUnencodedStats(stats);
+    if (column_type.is_timestamp()) {
+      TimestampBoundsValidator<T>::validateValue(
+          unencoded_stats_max, convert(unencoded_stats_max), column_type);
+      TimestampBoundsValidator<T>::validateValue(
+          unencoded_stats_min, convert(unencoded_stats_min), column_type);
+    } else if (column_type.is_date()) {
+      DateInSecondsBoundsValidator<T>::validateValue(convert(unencoded_stats_max),
+                                                     column_type);
+      DateInSecondsBoundsValidator<T>::validateValue(convert(unencoded_stats_min),
+                                                     column_type);
+    }
+  }
+
+ protected:
+  T conversion_denominator_;
+
  private:
-  T convert(const T& value) {
+  T convert(const T& value) const {
     return value < 0 && (value % conversion_denominator_ != 0)
                ? value / conversion_denominator_ - 1
                : value / conversion_denominator_;
   }
-
-  V conversion_denominator_;
 };
 
 }  // namespace foreign_storage
