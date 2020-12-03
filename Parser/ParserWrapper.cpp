@@ -142,7 +142,7 @@ ParserWrapper::ParserWrapper(std::string query_string) {
         }
       }
       if (ddl == "CREATE") {
-        boost::regex ctas_regex{R"(CREATE\s+TABLE.*AS.*SELECT.*)",
+        boost::regex ctas_regex{R"(CREATE\s+TABLE.*(\"|\s)AS(\(|\s)+(SELECT|WITH).*)",
                                 boost::regex::extended | boost::regex::icase};
         if (boost::regex_match(query_string, ctas_regex)) {
           is_ctas = true;
@@ -205,7 +205,7 @@ ParserWrapper::ParserWrapper(std::string query_string) {
     boost::regex insert_regex{R"(INSERT\s+INTO.*VALUES\s*\(.*)",
                               boost::regex::extended | boost::regex::icase};
     if (!boost::regex_match(query_string, insert_regex)) {
-      boost::regex itas_regex{R"(INSERT\s+INTO.*SELECT.*)",
+      boost::regex itas_regex{R"(INSERT\s+INTO.*(\s|\(|\")+SELECT.*)",
                               boost::regex::extended | boost::regex::icase};
       if (boost::regex_match(query_string, itas_regex)) {
         is_itas = true;
