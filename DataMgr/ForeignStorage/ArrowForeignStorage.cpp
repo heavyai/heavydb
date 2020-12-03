@@ -56,6 +56,10 @@ class ArrowForeignStorageBase : public PersistentForeignStorageInterface {
             int8_t* dest,
             const size_t numBytes) override;
 
+  int8_t* tryZeroCopy(const ChunkKey& chunk_key,
+                      const SQLTypeInfo& sql_type,
+                      const size_t numBytes) override;
+
   void parseArrowTable(Catalog_Namespace::Catalog* catalog,
                        std::pair<int, int> table_key,
                        const std::string& type,
@@ -553,6 +557,62 @@ void ArrowForeignStorageBase::read(const ChunkKey& chunk_key,
     copied += sz;
   }
   CHECK_EQ(numBytes, size_t(copied));
+}
+
+int8_t* ArrowForeignStorageBase::tryZeroCopy(const ChunkKey& chunk_key,
+                                             const SQLTypeInfo& sql_type,
+                                             const size_t numBytes) {
+  std::array<int, 3> col_key{chunk_key[0], chunk_key[1], chunk_key[2]};
+  auto& frag = m_columns.at(col_key).at(chunk_key[3]);
+
+  // fragment should be continious to allow zero copy
+  if (frag.chunks.size() != 1) {
+    return nullptr;
+  }
+
+  auto& array_data = frag.chunks[0];
+  int offset = frag.offset;
+
+  arrow::Buffer* bp = nullptr;
+  if (sql_type.is_dict_encoded_string()) {
+    // array_data->buffers[1] stores dictionary indexes
+    bp = array_data->buffers[1].get();
+  } else if (sql_type.get_type() == kTEXT) {
+    CHECK_GE(array_data->buffers.size(), 3UL);
+    // array_data->buffers[2] stores string array
+    bp = array_data->buffers[2].get();
+  } else if (array_data->null_count != array_data->length) {
+    // any type except strings (none encoded strings offsets go here as well)
+    CHECK_GE(array_data->buffers.size(), 2UL);
+    bp = array_data->buffers[1].get();
+  }
+
+  // arrow buffer is empty, it means we should fill fragment with null's in read function
+  if (!bp) {
+    return nullptr;
+  }
+
+  auto data = reinterpret_cast<int8_t*>(const_cast<uint8_t*>(bp->data()));
+
+  // if buffer is null encoded string index buffer
+  if (chunk_key.size() == 5 && chunk_key[4] == 2) {
+    // if offset != 0 we need to recalculate index buffer by adding  offset to each index
+    if (offset != 0) {
+      return nullptr;
+    } else {
+      return data;
+    }
+  }
+
+  auto fixed_type = dynamic_cast<arrow::FixedWidthType*>(array_data->type.get());
+  if (fixed_type) {
+    return data + (array_data->offset + offset) * (fixed_type->bit_width() / 8);
+  }
+  // if buffer is none encoded string data buffer
+  // then we should find it's offset in offset buffer
+  auto offsets_buffer = reinterpret_cast<const uint32_t*>(array_data->buffers[1]->data());
+  auto string_buffer_offset = offsets_buffer[offset + array_data->offset];
+  return data + string_buffer_offset;
 }
 
 std::shared_ptr<arrow::ChunkedArray>
