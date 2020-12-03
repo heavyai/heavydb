@@ -36,6 +36,11 @@ class PersistentForeignStorageInterface {
                     const SQLTypeInfo& sql_type,
                     int8_t* dest,
                     const size_t num_bytes) = 0;
+  virtual int8_t* tryZeroCopy(const ChunkKey& chunk_key,
+                              const SQLTypeInfo& sql_type,
+                              const size_t num_bytes) {
+    return nullptr;
+  }
   virtual void prepareTable(const int /*db_id*/,
                             const std::string& type,
                             TableDescriptor& /*td*/,
@@ -100,6 +105,8 @@ class ForeignStorageBuffer : public Data_Namespace::AbstractBuffer {
     CHECK(false);
     return 0;
   }
+
+  int8_t* tryZeroCopy(const size_t numBytes);
 
  private:
   const ChunkKey chunk_key_;
