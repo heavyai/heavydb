@@ -65,24 +65,25 @@ data: {
         "MULTIPOLYGON"
         "TEXT"
         "REFRESH"
-        "SESSIONS"
-        "TABLES"
-        "DATABASES"
-        "SERVERS"
-        "MAPPING"
-        "OWNER"
-        "RENAME"
         "KILL"
-        "QUERY"
-        "QUERIES"
-        "VIRTUAL"
-        "STORED"
         "GEOGRAPHY"
         "SHARD"
         "SHARED"
         "DICTIONARY"
-        "DISK"
+        # Non-reserved keywords (keywords that do not start a command and may therefore be used as regular text elsewhere in the parser. must add to nonReservedKeywordsToAdd below)
         "CACHE"
+        "DATABASES"
+        "DISK"
+        "MAPPING"
+        "OWNER"
+        "QUERY"
+        "QUERIES"
+        "RENAME"
+        "SERVERS"
+        "SESSIONS"
+        "STORED" 
+        "TABLES"
+        "VIRTUAL"
       ]
 
       # List of keywords from "keywords" section that are not reserved.
@@ -410,6 +411,19 @@ data: {
       # List of non-reserved keywords to add;
       # items in this list become non-reserved
       nonReservedKeywordsToAdd: [
+        "CACHE"
+        "DATABASES"
+        "DISK"
+        "MAPPING"
+        "OWNER"
+        "QUERY"
+        "QUERIES"
+        "RENAME"
+        "SERVERS"
+        "SESSIONS"
+        "STORED" 
+        "TABLES"
+        "VIRTUAL"
       ]
 
       # List of non-reserved keywords to remove;

@@ -1433,6 +1433,42 @@ TEST_F(CreateViewUnsupportedTest, Basics) {
       "Exception: Parse failed: Column list aliases in views are not yet supported.");
 }
 
+class CreateNonReservedKeywordsTest : public CreateAndDropTableDdlTest {
+ protected:
+  void SetUp() override {
+    CreateAndDropTableDdlTest::SetUp();
+    sql(getDropTableQuery(ddl_utils::TableType::TABLE, "test_table", true));
+    dropTestUser();
+  }
+
+  void TearDown() override {
+    g_enable_fsi = true;
+    sql(getDropTableQuery(ddl_utils::TableType::TABLE, "test_table", true));
+    dropTestUser();
+    CreateAndDropTableDdlTest::TearDown();
+  }
+};
+
+TEST_F(CreateNonReservedKeywordsTest, NonReservedKeywords) {
+  sql(getCreateTableQuery(
+      ddl_utils::TableType::TABLE,
+      "test_table",
+      R"((QUERY text, QUERIES text, SESSIONS int[], TABLES text[], databases DECIMAL(6, 2), servers int, mapping int, owner float, rename double, disk point, cache polygon, stored date))"));
+  sql("SELECT query FROM test_table LIMIT 1");
+}
+
+TEST_F(CreateNonReservedKeywordsTest, NonReservedAndReserved) {
+  EXPECT_ANY_THROW(sql(getCreateTableQuery(
+      ddl_utils::TableType::TABLE,
+      "test_table",
+      R"((POLYGON INT, QUERY text, QUERIES text, SESSIONS int[], TABLES text[], databases DECIMAL(6, 2), servers int, mapping int, owner float, rename double, disk point, cache polygon))")));
+}
+
+TEST_F(CreateNonReservedKeywordsTest, NonReservedRename) {
+  sql(getCreateTableQuery(ddl_utils::TableType::TABLE, "test_table", R"((QUERY text))"));
+  sql("ALTER TABLE test_table RENAME COLUMN QUERY to virtual;");
+}
+
 int main(int argc, char** argv) {
   g_enable_fsi = true;
   TestHelpers::init_logger_stderr_only(argc, argv);
