@@ -477,7 +477,7 @@ public class ForeignTableTest extends DDLTest {
     final JsonObject expectedJsonObject =
             getJsonFromFile("alter_foreign_table_set_options.json");
     final TPlanResult result = processDdlCommand(
-            "ALTER FOREIGN TABLE test_table WITH (base_path = '/home/my_user/data/new-csv/');");
+            "ALTER FOREIGN TABLE test_table SET (base_path = '/home/my_user/data/new-csv/');");
     final JsonObject actualJsonObject =
             gson.fromJson(result.plan_result, JsonObject.class);
     assertEquals(expectedJsonObject, actualJsonObject);

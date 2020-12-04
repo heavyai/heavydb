@@ -989,7 +989,7 @@ TEST_F(AlterForeignServerTest, SetDataWrapper) {
 
 TEST_F(AlterForeignServerTest, ModifyOption) {
   createTestServer();
-  sql("ALTER SERVER test_server WITH ( base_path = '/new_path/' );");
+  sql("ALTER SERVER test_server SET ( base_path = '/new_path/' );");
   assertExpectedForeignServer(
       createExpectedForeignServer("test_server",
                                   "omnisci_csv",
@@ -1121,7 +1121,7 @@ TEST_F(AlterForeignServerTest, RenameServerToOmniSciPrefix) {
 
 TEST_F(AlterForeignServerTest, InvalidOption) {
   createTestServer();
-  std::string query{"ALTER SERVER test_server WITH (invalid_key = 'value');"};
+  std::string query{"ALTER SERVER test_server SET (invalid_key = 'value');"};
   std::string error_message{
       "Exception: Invalid option \"INVALID_KEY\". "
       "Option must be one of the following: STORAGE_TYPE, BASE_PATH."};
@@ -1133,7 +1133,7 @@ TEST_F(AlterForeignServerTest, InvalidOption) {
 TEST_F(AlterForeignServerTest, InvalidStorageType) {
   createTestServer();
   std::string query{
-      "ALTER SERVER test_server WITH "
+      "ALTER SERVER test_server SET "
       "(storage_type = 'INVALID_TYPE', base_path = '/test_path/');"};
   std::string error_message{
       "Exception: Invalid storage type value. Value must be one of the following: "

@@ -32,7 +32,7 @@ public class ForeignServerTest extends DDLTest {
     final JsonObject expectedJsonObject =
             getJsonFromFile("alter_foreign_server_set_options.json");
     final TPlanResult result = processDdlCommand(
-            "ALTER SERVER my_csv_server WITH (base_path = '/home/my_user/data/new-csv/');");
+            "ALTER SERVER my_csv_server SET (base_path = '/home/my_user/data/new-csv/');");
     final JsonObject actualJsonObject =
             gson.fromJson(result.plan_result, JsonObject.class);
 

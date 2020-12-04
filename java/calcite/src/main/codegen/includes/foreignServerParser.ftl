@@ -42,7 +42,10 @@ SqlCreate SqlCreateServer(Span s, boolean replace) :
     {
         sqlCreateServerBuilder.setDataWrapper(sqlIdentifier.toString());
     }
-    [ Options(sqlCreateServerBuilder) ]
+    [
+        <WITH>
+        Options(sqlCreateServerBuilder)
+    ]
     {
         sqlCreateServerBuilder.setPos(s.end(this));
         return sqlCreateServerBuilder.build();
@@ -53,7 +56,7 @@ SqlCreate SqlCreateServer(Span s, boolean replace) :
  * Alter an existing foreign server using one of four variants with the
  * following syntax:
  *
- * ALTER SERVER <server_name> [ WITH (<param> = <value> [, ... ] ) ]
+ * ALTER SERVER <server_name> [ SET (<param> = <value> [, ... ] ) ]
  * ALTER SERVER <server_name> OWNER TO <new_owner>
  * ALTER SERVER <server_name> RENAME TO <new_server_name>
  * ALTER SERVER <server_name> SET FOREIGN DATA WRAPPER <foreign_data_wrapper_name>
@@ -85,17 +88,20 @@ SqlDdl SqlAlterServer(Span s) :
             sqlAlterServerBuilder.setAlterType(SqlAlterServer.AlterType.RENAME_SERVER);
         }
     |
-        <SET> <FOREIGN> <DATA> <WRAPPER>
-        sqlIdentifier=CompoundIdentifier()
-        {
-            sqlAlterServerBuilder.setDataWrapper(sqlIdentifier.toString());
-            sqlAlterServerBuilder.setAlterType(SqlAlterServer.AlterType.SET_DATA_WRAPPER);
-        }
-    |
-        Options(sqlAlterServerBuilder) 
-        {
-            sqlAlterServerBuilder.setAlterType(SqlAlterServer.AlterType.SET_OPTIONS);
-        }
+        <SET>
+        (
+            <FOREIGN> <DATA> <WRAPPER>
+            sqlIdentifier=CompoundIdentifier()
+            {
+                sqlAlterServerBuilder.setDataWrapper(sqlIdentifier.toString());
+                sqlAlterServerBuilder.setAlterType(SqlAlterServer.AlterType.SET_DATA_WRAPPER);
+            }
+        |
+            Options(sqlAlterServerBuilder)
+            {
+                sqlAlterServerBuilder.setAlterType(SqlAlterServer.AlterType.SET_OPTIONS);
+            }
+        )
     )
     {
         sqlAlterServerBuilder.setPos(s.end(this));
@@ -171,13 +177,13 @@ boolean IfExistsOpt() :
 /*
  * Parse Server options.
  *
- * WITH ( <option> = <value> [, ... ] )
+ * ( <option> = <value> [, ... ] )
  */
 void Options(SqlOptionsBuilder sqlOptionsBuilder) :
 {
 }
 {
-    <WITH> <LPAREN>
+    <LPAREN>
     Option(sqlOptionsBuilder)
     (
         <COMMA>

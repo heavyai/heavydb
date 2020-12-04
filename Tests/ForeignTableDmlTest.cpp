@@ -4160,7 +4160,7 @@ class AlterForeignTableTest : public ScheduledRefreshTest {
   }
 
   void sqlAlterTable(const std::string& option_name, const std::string& option_value) {
-    sql("ALTER FOREIGN TABLE test_foreign_table WITH (" + option_name + " = '" +
+    sql("ALTER FOREIGN TABLE test_foreign_table SET (" + option_name + " = '" +
         option_value + "');");
   }
 
@@ -4250,7 +4250,7 @@ TEST_F(AlterForeignTableTest, RefreshIntervalDaysToSecondsWithIntervalDisabled) 
   createScheduledTable("scheduled", "1D", "all", 1);
   assertOptionEquals("REFRESH_INTERVAL", "1D");
   queryAndAssertException(
-      "ALTER FOREIGN TABLE test_foreign_table WITH (REFRESH_INTERVAL = '1S');",
+      "ALTER FOREIGN TABLE test_foreign_table SET (REFRESH_INTERVAL = '1S');",
       "Exception: Invalid value provided for the REFRESH_INTERVAL option.");
 }
 
@@ -4264,7 +4264,7 @@ TEST_F(AlterForeignTableTest, RefreshIntervalSecondsToInvalid) {
   createScheduledTable("scheduled", "1S", "all", 1);
   assertOptionEquals("REFRESH_INTERVAL", "1S");
   queryAndAssertException(
-      "ALTER FOREIGN TABLE test_foreign_table WITH (REFRESH_INTERVAL = 'SCHEDULED');",
+      "ALTER FOREIGN TABLE test_foreign_table SET (REFRESH_INTERVAL = 'SCHEDULED');",
       "Exception: Invalid value provided for the REFRESH_INTERVAL option.");
   assertOptionEquals("REFRESH_INTERVAL", "1S");
 }
@@ -4273,7 +4273,7 @@ TEST_F(AlterForeignTableTest, RefreshTimingTypeManualToScheduledNoStartDateError
   createScheduledTable("manual");
   assertOptionEquals("REFRESH_TIMING_TYPE", "MANUAL");
   queryAndAssertException(
-      "ALTER FOREIGN TABLE test_foreign_table WITH (REFRESH_TIMING_TYPE = 'SCHEDULED')",
+      "ALTER FOREIGN TABLE test_foreign_table SET (REFRESH_TIMING_TYPE = 'SCHEDULED')",
       "Exception: REFRESH_START_DATE_TIME option must be provided "
       "for scheduled refreshes.");
   assertOptionEquals("REFRESH_TIMING_TYPE", "MANUAL");
@@ -4282,7 +4282,7 @@ TEST_F(AlterForeignTableTest, RefreshTimingType_ManualToScheduled_StartDate) {
   createScheduledTable("manual");
   assertOptionEquals("REFRESH_TIMING_TYPE", "MANUAL");
   auto start_time = getCurrentTimeString(1);
-  sql("ALTER FOREIGN TABLE test_foreign_table WITH (REFRESH_TIMING_TYPE = 'SCHEDULED', "
+  sql("ALTER FOREIGN TABLE test_foreign_table SET (REFRESH_TIMING_TYPE = 'SCHEDULED', "
       "REFRESH_START_DATE_TIME = '" +
       start_time + "')");
   assertOptionEquals("REFRESH_TIMING_TYPE", "SCHEDULED");
@@ -4305,7 +4305,7 @@ TEST_F(AlterForeignTableTest, RefreshTimingTypeScheduledToInvalid) {
   createScheduledTable("scheduled", "1S", "all", 1);
   assertOptionEquals("REFRESH_TIMING_TYPE", "SCHEDULED");
   queryAndAssertException(
-      "ALTER FOREIGN TABLE test_foreign_table WITH (REFRESH_TIMING_TYPE = '2D');",
+      "ALTER FOREIGN TABLE test_foreign_table SET (REFRESH_TIMING_TYPE = '2D');",
       "Exception: Invalid value provided for the REFRESH_TIMING_TYPE "
       "option. Value must be \"MANUAL\" or \"SCHEDULED\".");
   assertOptionEquals("REFRESH_TIMING_TYPE", "SCHEDULED");
@@ -4328,7 +4328,7 @@ TEST_F(AlterForeignTableTest, RefreshStartDateTimeScheduledInPastError) {
   createScheduledTable("scheduled", "1S", "all", 1);
   auto start_time = getCurrentTimeString(-10);
   queryAndAssertException(
-      "ALTER FOREIGN TABLE test_foreign_table WITH (REFRESH_START_DATE_TIME = '" +
+      "ALTER FOREIGN TABLE test_foreign_table SET (REFRESH_START_DATE_TIME = '" +
           start_time + "');",
       "Exception: REFRESH_START_DATE_TIME cannot be a past date time.");
   assertOptionNotEquals("REFRESH_START_DATE_TIME", start_time);
@@ -4338,7 +4338,7 @@ TEST_F(AlterForeignTableTest, RefreshStartDateTimeScheduledInPastError) {
 TEST_F(AlterForeignTableTest, FilePath) {
   createScheduledTable("manual");
   queryAndAssertException(
-      "ALTER FOREIGN TABLE test_foreign_table WITH (file_path = '/');",
+      "ALTER FOREIGN TABLE test_foreign_table SET (file_path = '/');",
       "Exception: Altering foreign table option \"FILE_PATH\" is not currently "
       "supported.");
 }
@@ -4346,21 +4346,20 @@ TEST_F(AlterForeignTableTest, FilePath) {
 TEST_F(AlterForeignTableTest, FragmentSize) {
   createScheduledTable("manual");
   queryAndAssertException(
-      "ALTER FOREIGN TABLE test_foreign_table WITH (fragment_size = 10);",
+      "ALTER FOREIGN TABLE test_foreign_table SET (fragment_size = 10);",
       "Exception: Altering foreign table option \"FRAGMENT_SIZE\" is not currently "
       "supported.");
 }
 
 TEST_F(AlterForeignTableTest, DataWrapperOption) {
   createScheduledTable("manual");
-  queryAndAssertException(
-      "ALTER FOREIGN TABLE test_foreign_table WITH (base_path = '/');",
-      "Exception: Invalid foreign table option \"BASE_PATH\".");
+  queryAndAssertException("ALTER FOREIGN TABLE test_foreign_table SET (base_path = '/');",
+                          "Exception: Invalid foreign table option \"BASE_PATH\".");
 }
 
 TEST_F(AlterForeignTableTest, NonExistantOption) {
   createScheduledTable("manual");
-  queryAndAssertException("ALTER FOREIGN TABLE test_foreign_table WITH (foo = '/');",
+  queryAndAssertException("ALTER FOREIGN TABLE test_foreign_table SET (foo = '/');",
                           "Exception: Invalid foreign table option \"FOO\".");
 }
 
@@ -4573,7 +4572,7 @@ TEST_F(AlterForeignTablePermissionTest, NoPermission) {
   sql("GRANT ACCESS ON DATABASE omnisci TO test_user;");
   login("test_user", "test_pass");
   queryAndAssertException(
-      "ALTER FOREIGN TABLE test_foreign_table WITH (REFRESH_TIMING_TYPE = "
+      "ALTER FOREIGN TABLE test_foreign_table SET (REFRESH_TIMING_TYPE = "
       "'SCHEDULED')",
       "Exception: Current user does not have the privilege to alter foreign table: "
       "test_foreign_table");
