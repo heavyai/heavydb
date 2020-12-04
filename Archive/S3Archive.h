@@ -99,7 +99,13 @@ class S3Archive : public Archive {
 #endif  // HAVE_AWS_S3
   }
 
+#ifdef HAVE_AWS_S3
   void init_for_read() override;
+#else
+  void init_for_read() override {
+    throw std::runtime_error("AWS S3 support not available");
+  }
+#endif
   const std::vector<std::string>& get_objkeys() { return objkeys; }
 #ifdef HAVE_AWS_S3
   const std::string land(const std::string& objkey,
@@ -150,8 +156,6 @@ class S3ParquetArchive : public S3Archive {
                    const bool plain_text)
       : S3Archive(url, s3_access_key, s3_secret_key, s3_region, s3_endpoint, plain_text) {
   }
-
- private:
 };
 
 #endif /* ARCHIVE_S3ARCHIVE_H_ */
