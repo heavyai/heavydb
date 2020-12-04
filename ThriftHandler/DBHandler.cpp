@@ -584,6 +584,7 @@ void DBHandler::disconnect(const TSessionId& session) {
   LOG(INFO) << "User " << session_it->second->get_currentUser().userName
             << " disconnected from database " << dbname
             << " with public_session_id: " << session_it->second->get_public_session_id();
+
   disconnect_impl(session_it, write_lock);
 }
 
@@ -5396,6 +5397,19 @@ void DBHandler::sql_execute_impl(TQueryResult& _return,
           }
         });
     CHECK(dispatch_queue_);
+    {
+      auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID);
+      mapd_unique_lock<mapd_shared_mutex> session_write_lock(executor->getSessionLock());
+      auto submitted_time = std::chrono::system_clock::now();
+      query_state_proxy.getQueryState().setQuerySubmittedTime(submitted_time);
+      executor->addToQuerySessionList(session_ptr->get_session_id(),
+                                      query_str,
+                                      submitted_time,
+                                      Executor::UNITARY_EXECUTOR_ID,
+                                      "PENDING_QUEUE",
+                                      session_write_lock);
+      session_write_lock.unlock();
+    }
     dispatch_queue_->submit(execute_rel_alg_task,
                             pw.getDMLType() == ParserWrapper::DMLType::Update ||
                                 pw.getDMLType() == ParserWrapper::DMLType::Delete);
@@ -6334,6 +6348,7 @@ void DBHandler::getQueries(const Catalog_Namespace::SessionInfo& session_info,
     mapd_lock_guard<mapd_shared_mutex> read_lock(sessions_mutex_);
     const std::vector<std::string> col_names{"query_session_id",
                                              "current_status",
+                                             "executor_id",
                                              "submitted",
                                              "query_str",
                                              "login_name",
@@ -6364,23 +6379,25 @@ void DBHandler::getQueries(const Catalog_Namespace::SessionInfo& session_info,
                                               system_parameters_);
         CHECK(executor);
         mapd_shared_lock<mapd_shared_mutex> session_read_lock(executor->getSessionLock());
-        auto query_info = executor->getQuerySessionInfo(
+        auto query_infos = executor->getQuerySessionInfo(
             query_session_ptr->get_session_id(), session_read_lock);
         session_read_lock.unlock();
         // if there exists query info fired from this session we report it to user
-        if (query_info.has_value()) {
+        for (QuerySessionStatus& query_info : query_infos) {
           int col_num = 0;
           _return.row_set.columns[col_num++].data.str_col.emplace_back(
               query_session_ptr->get_public_session_id());
           _return.row_set.columns[col_num++].data.str_col.emplace_back(
-              query_info->getQueryStatus());
+              query_info.getQueryStatus());
           std::time_t t =
-              std::chrono::system_clock::to_time_t(query_info->getQuerySubmittedTime());
+              std::chrono::system_clock::to_time_t(query_info.getQuerySubmittedTime());
+          _return.row_set.columns[col_num++].data.str_col.emplace_back(
+              ::toString(query_info.getExecutorId()));
           std::stringstream tss;
           tss << std::put_time(std::localtime(&t), "%F %T");
           _return.row_set.columns[col_num++].data.str_col.emplace_back(tss.str());
           _return.row_set.columns[col_num++].data.str_col.emplace_back(
-              query_info->getQueryStr());
+              query_info.getQueryStr());
           _return.row_set.columns[col_num++].data.str_col.emplace_back(
               query_session_ptr->get_currentUser().userName);
           _return.row_set.columns[col_num++].data.str_col.emplace_back(

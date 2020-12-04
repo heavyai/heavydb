@@ -96,7 +96,6 @@ class QueryDispatchQueue {
         lock.unlock();
         CHECK(task);
         (*task)(worker_idx);
-
         // wait for signal
         lock.lock();
       }

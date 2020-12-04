@@ -40,6 +40,7 @@
 #define HAVE_TOSTRING
 
 #include <cxxabi.h>
+#include <chrono>
 #include <iostream>
 #include <sstream>
 #include <type_traits>
@@ -169,6 +170,13 @@ std::string toString(const T& v) {
     std::ostringstream ss;
     ss << std::hex << (uintptr_t)v;
     return "0x" + ss.str();
+  } else if constexpr (std::is_same_v<
+                           T,
+                           std::chrono::time_point<std::chrono::system_clock>>) {
+    std::string s(30, '\0');
+    std::time_t ts = std::chrono::system_clock::to_time_t(v);
+    std::strftime(&s[0], s.size(), "%Y-%m-%d %H:%M:%S", std::localtime(&ts));
+    return s;
   } else if constexpr (std::is_pointer_v<T>) {
     return (v == NULL ? "NULL" : "&" + toString(*v));
   } else {

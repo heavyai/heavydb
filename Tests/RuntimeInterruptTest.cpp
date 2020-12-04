@@ -232,8 +232,8 @@ TEST(Interrupt, Kill_RunningQuery) {
       }
     } catch (const std::runtime_error& e) {
       std::string received_err_msg = e.what();
-      CHECK((pending_query_interrupted_msg == received_err_msg) ||
-            (running_query_interrupted_msg == received_err_msg))
+      CHECK((pending_query_interrupted_msg.compare(received_err_msg) == 0) ||
+            (running_query_interrupted_msg.compare(received_err_msg) == 0))
           << received_err_msg;
     }
   }
@@ -305,8 +305,8 @@ TEST(Interrupt, Kill_PendingQuery) {
       // and compare thrown message to confirm that
       // this exception comes from our interrupt request
       std::string received_err_msg = e.what();
-      CHECK((pending_query_interrupted_msg == received_err_msg) ||
-            (running_query_interrupted_msg == received_err_msg))
+      CHECK((pending_query_interrupted_msg.compare(received_err_msg) == 0) ||
+            (running_query_interrupted_msg.compare(received_err_msg) == 0))
           << received_err_msg;
     }
     // check running query's result
@@ -385,8 +385,8 @@ TEST(Interrupt, Make_PendingQuery_Run) {
       // and compare thrown message to confirm that
       // this exception comes from our interrupt request
       std::string received_err_msg = e.what();
-      CHECK((pending_query_interrupted_msg == received_err_msg) ||
-            (running_query_interrupted_msg == received_err_msg))
+      CHECK((pending_query_interrupted_msg.compare(received_err_msg) == 0) ||
+            (running_query_interrupted_msg.compare(received_err_msg) == 0))
           << received_err_msg;
     }
     // check running query's result
@@ -395,6 +395,169 @@ TEST(Interrupt, Make_PendingQuery_Run) {
     auto ret_val = v<int64_t>(crt_row[0]);
     CHECK_EQ((int64_t)1000 * 1000, ret_val);
   }
+}
+
+TEST(Interrupt, Interrupt_Session_Running_Multiple_Queries) {
+  // Session1 fires four queries under four parallel executors
+  // Session2 submits a single query
+  // Let say Session1's query Q1 runs, then remaining queries (Q2~Q4) become pending query
+  // and they are waiting to get the executor lock that is held by 1
+  // At this time, Q5 of Session2 is waiting at the dispatch queue since
+  // there is no available executor at the dispatch queue
+  // Here, if we interrupt Session1 and let Q5 runs, we have to get the expected
+  // query result of Q5 and we also can see that Q1~Q4 are interrupted
+  auto dt = ExecutorDeviceType::CPU;
+  std::future<std::shared_ptr<ResultSet>> query_thread1;
+  std::future<std::shared_ptr<ResultSet>> query_thread2;
+  std::future<std::shared_ptr<ResultSet>> query_thread3;
+  std::future<std::shared_ptr<ResultSet>> query_thread4;
+  std::future<std::shared_ptr<ResultSet>> query_thread5;
+  QR::get()->resizeDispatchQueue(4);
+  auto executor = QR::get()->getExecutor();
+  executor->enableRuntimeQueryInterrupt(RUNNING_QUERY_INTERRUPT_CHECK_FREQ,
+                                        PENDING_QUERY_INTERRUPT_CHECK_FREQ);
+  bool startQueryExec = false;
+  bool catchInterruption = false;
+  std::exception_ptr exception_ptr1 = nullptr;
+  std::exception_ptr exception_ptr2 = nullptr;
+  std::exception_ptr exception_ptr3 = nullptr;
+  std::exception_ptr exception_ptr4 = nullptr;
+  std::exception_ptr exception_ptr5 = nullptr;
+  std::shared_ptr<ResultSet> res1 = nullptr;
+  std::shared_ptr<ResultSet> res2 = nullptr;
+  std::shared_ptr<ResultSet> res3 = nullptr;
+  std::shared_ptr<ResultSet> res4 = nullptr;
+  std::shared_ptr<ResultSet> res5 = nullptr;
+  try {
+    std::string session1 = generate_random_string(32);
+    std::string session2 = generate_random_string(32);
+    // we first run the query as async function call
+    query_thread1 = std::async(std::launch::async, [&] {
+      std::shared_ptr<ResultSet> res = nullptr;
+      try {
+        res = run_query(test_query_large, executor, dt, session1);
+      } catch (...) {
+        exception_ptr1 = std::current_exception();
+      }
+      return res;
+    });
+    // make sure our server recognizes a session for running query correctly
+    std::string curRunningSession = "";
+    while (!startQueryExec) {
+      mapd_shared_lock<mapd_shared_mutex> session_read_lock(executor->getSessionLock());
+      curRunningSession = executor->getCurrentQuerySession(session_read_lock);
+      if (curRunningSession.compare(session1) == 0) {
+        startQueryExec = true;
+      }
+      session_read_lock.unlock();
+    }
+    std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+    query_thread2 = std::async(std::launch::async, [&] {
+      std::shared_ptr<ResultSet> res = nullptr;
+      try {
+        // run pending query as async call
+        res = run_query(test_query_large, executor, dt, session1);
+      } catch (...) {
+        exception_ptr2 = std::current_exception();
+      }
+      return res;
+    });
+    std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+    query_thread3 = std::async(std::launch::async, [&] {
+      std::shared_ptr<ResultSet> res = nullptr;
+      try {
+        // run pending query as async call
+        res = run_query(test_query_large, executor, dt, session1);
+      } catch (...) {
+        exception_ptr3 = std::current_exception();
+      }
+      return res;
+    });
+    std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+    query_thread4 = std::async(std::launch::async, [&] {
+      std::shared_ptr<ResultSet> res = nullptr;
+      try {
+        // run pending query as async call
+        res = run_query(test_query_large, executor, dt, session1);
+      } catch (...) {
+        exception_ptr4 = std::current_exception();
+      }
+      return res;
+    });
+    std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+    query_thread5 = std::async(std::launch::async, [&] {
+      std::shared_ptr<ResultSet> res = nullptr;
+      try {
+        // run pending query as async call
+        res = run_query(test_query_small, executor, dt, session2);
+      } catch (...) {
+        exception_ptr5 = std::current_exception();
+      }
+      return res;
+    });
+    // then, we try to interrupt the running query
+    // by providing the interrupt signal with the running query's session info
+    // so we can expect that running query session releases all H/W resources and locks,
+    // and so pending query takes them for its query execution (becomes running query)
+    {
+      mapd_shared_lock<mapd_shared_mutex> session_read_lock(executor->getSessionLock());
+      bool ready_to_interrupt = false;
+      while (!ready_to_interrupt && startQueryExec) {
+        // check all Q1~Q4 of Session1 are enrolled in the session map
+        if (executor->getQuerySessionInfo(session1, session_read_lock).size() == 4) {
+          ready_to_interrupt = true;
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+      }
+      session_read_lock.unlock();
+    }
+    executor->interrupt(session1, session1);
+    res5 = query_thread5.get();
+    res1 = query_thread1.get();
+    res2 = query_thread2.get();
+    res3 = query_thread3.get();
+    res4 = query_thread4.get();
+    if (exception_ptr1 != nullptr) {
+      std::rethrow_exception(exception_ptr1);
+    }
+    if (exception_ptr2 != nullptr) {
+      std::rethrow_exception(exception_ptr2);
+    }
+    if (exception_ptr3 != nullptr) {
+      std::rethrow_exception(exception_ptr3);
+    }
+    if (exception_ptr4 != nullptr) {
+      std::rethrow_exception(exception_ptr4);
+    }
+    if (exception_ptr5 != nullptr) {
+      // pending query should never return the runtime exception
+      // because it is executed after running query is interrupted
+      CHECK(false);
+    }
+  } catch (const std::runtime_error& e) {
+    // catch exception due to runtime query interrupt
+    // and compare thrown message to confirm that
+    // this exception comes from our interrupt request
+    std::string received_err_msg = e.what();
+    CHECK((pending_query_interrupted_msg.compare(received_err_msg) == 0) ||
+          (running_query_interrupted_msg.compare(received_err_msg) == 0))
+        << received_err_msg;
+    catchInterruption = true;
+  }
+  // check running query's result; Q1~Q4 by Session1 are all interrupted
+  // so Q5 of Session2 is only executed
+  CHECK_EQ(1, (int64_t)res5.get()->rowCount());
+  auto crt_row = res5.get()->getNextRow(false, false);
+  auto ret_val = v<int64_t>(crt_row[0]);
+  CHECK_EQ((int64_t)1000 * 1000, ret_val);
+
+  // make sure we interrupt the query correctly
+  CHECK(catchInterruption);
+  // if a query is interrupted, its resultset ptr should be nullptr
+  CHECK(!res1);  // for Q1 of Session1
+  CHECK(!res2);  // for Q2 of Session1
+  CHECK(!res3);  // for Q3 of Session1
+  CHECK(!res4);  // for Q4 of Session1
 }
 
 int main(int argc, char* argv[]) {

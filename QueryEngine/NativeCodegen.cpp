@@ -1772,8 +1772,8 @@ void Executor::createErrorCheckControlFlow(
             // some CUDA threads cannot enter the interrupt checking block depending on
             // the fragment size --> a thread may not take care of 64 threads if an outer
             // table is not sufficiently large, and so cannot be interrupted
-            int32_t num_shift_by_gridDim = getExpOfTwo(gridSize());
-            int32_t num_shift_by_blockDim = getExpOfTwo(blockSize());
+            int32_t num_shift_by_gridDim = shared::getExpOfTwo(gridSize());
+            int32_t num_shift_by_blockDim = shared::getExpOfTwo(blockSize());
             int total_num_shift = num_shift_by_gridDim + num_shift_by_blockDim;
             uint64_t interrupt_checking_freq = 32;
             auto freq_control_knob = g_running_query_interrupt_freq;
@@ -1803,7 +1803,8 @@ void Executor::createErrorCheckControlFlow(
                 auto max_inc = uint64_t(
                     floor(num_outer_table_tuples / (gridSize() * blockSize() * 2)));
                 auto calibrated_inc = uint64_t(floor(max_inc * (1 - freq_control_knob)));
-                interrupt_checking_freq = uint64_t(pow(2, getExpOfTwo(calibrated_inc)));
+                interrupt_checking_freq =
+                    uint64_t(pow(2, shared::getExpOfTwo(calibrated_inc)));
                 if (interrupt_checking_freq < 4) {
                   interrupt_checking_freq = 4;
                 }

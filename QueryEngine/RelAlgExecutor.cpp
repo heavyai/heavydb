@@ -267,7 +267,16 @@ ExecutionResult RelAlgExecutor::executeRelAlgQueryNoRetry(const CompilationOptio
       // if session is valid, then we allow per-session runtime query interrupt
       mapd_unique_lock<mapd_shared_mutex> session_write_lock(
           executor_->executor_session_mutex_);
-      executor_->addToQuerySessionList(query_session, query_str, session_write_lock);
+      executor_->updateQuerySessionStatus(
+          query_state_->getConstSessionInfo()->get_session_id(),
+          query_state_->getQuerySubmittedTime(),
+          "PENDING_EXECUTOR",
+          session_write_lock);
+      executor_->updateQuerySessionExecutorAssignment(
+          query_state_->getConstSessionInfo()->get_session_id(),
+          query_state_->getQuerySubmittedTime(),
+          executor_->executor_id_,
+          session_write_lock);
       session_write_lock.unlock();
       // hybrid spinlock.  if it fails to acquire a lock, then
       // it sleeps {g_pending_query_interrupt_freq} millisecond.
@@ -316,8 +325,8 @@ ExecutionResult RelAlgExecutor::executeRelAlgQueryNoRetry(const CompilationOptio
       session_read_lock.unlock();
       mapd_unique_lock<mapd_shared_mutex> session_write_lock(
           executor_->executor_session_mutex_);
-      executor_->removeFromQuerySessionList(curSession, session_write_lock);
       executor_->invalidateRunningQuerySession(session_write_lock);
+      executor_->removeFromQuerySessionList(curSession, session_write_lock);
       executor_->execute_spin_lock_.clear(std::memory_order_release);
       session_write_lock.unlock();
       executor_->resetInterrupt();
@@ -348,6 +357,11 @@ ExecutionResult RelAlgExecutor::executeRelAlgQueryNoRetry(const CompilationOptio
         executor_->executor_session_mutex_);
     executor_->invalidateRunningQuerySession(session_write_lock);
     executor_->setCurrentQuerySession(query_session, session_write_lock);
+    executor_->updateQuerySessionStatus(
+        query_state_->getConstSessionInfo()->get_session_id(),
+        query_state_->getQuerySubmittedTime(),
+        "RUNNING",
+        session_write_lock);
     session_write_lock.unlock();
   }
 

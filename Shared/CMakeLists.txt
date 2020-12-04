@@ -7,7 +7,7 @@ set(shared_source_files
     base64.cpp
     misc.cpp
     thread_count.cpp
-)
+    MathUtils.cpp)
 include_directories(${CMAKE_SOURCE_DIR})
 if("${MAPD_EDITION_LOWER}" STREQUAL "ee")
   list(APPEND shared_source_files ee/Encryption.cpp)

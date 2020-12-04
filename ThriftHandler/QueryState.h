@@ -129,6 +129,7 @@ class QueryState : public std::enable_shared_from_this<QueryState> {
   Events events_;
   mutable std::mutex events_mutex_;
   std::atomic<bool> logged_;
+  std::chrono::time_point<std::chrono::system_clock> submitted_;
   void logCallStack(std::stringstream&, unsigned const depth, Events::iterator parent);
 
   // Only shared_ptr instances are allowed due to call to shared_from_this().
@@ -155,6 +156,14 @@ class QueryState : public std::enable_shared_from_this<QueryState> {
   boost::optional<SessionData> const& getSessionData() const { return session_data_; }
   inline bool isLogged() const { return logged_.load(); }
   void logCallStack(std::stringstream&);
+  inline void setQuerySubmittedTime(
+      const std::chrono::time_point<std::chrono::system_clock> t) {
+    submitted_ = t;
+  }
+  inline const std::chrono::time_point<std::chrono::system_clock> getQuerySubmittedTime()
+      const {
+    return submitted_;
+  }
   inline void setLogged(bool logged) { logged_.store(logged); }
   friend class QueryStates;
 };
