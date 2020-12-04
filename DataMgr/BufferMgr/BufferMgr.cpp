@@ -738,7 +738,7 @@ AbstractBuffer* BufferMgr::getBuffer(const ChunkKey& key, const size_t num_bytes
     try {
       parent_mgr_->fetchBuffer(
           key, buffer, num_bytes);  // this should put buffer in a BufferSegment
-    } catch (std::runtime_error& error) {
+    } catch (const std::exception& error) {
       LOG(FATAL) << "Get chunk - Could not find chunk " << keyToString(key)
                  << " in buffer pool or parent buffer pools. Error was " << error.what();
     }
