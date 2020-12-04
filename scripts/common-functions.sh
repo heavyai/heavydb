@@ -63,7 +63,7 @@ function install_cmake() {
   CXXFLAGS="-pthread" CFLAGS="-pthread" download_make_install ${HTTP_DEPS}/cmake-${CMAKE_VERSION}.tar.gz
 }
 
-ARROW_VERSION=apache-arrow-1.0.0
+ARROW_VERSION=apache-arrow-1.0.1
 
 function install_arrow() {
   download https://github.com/apache/arrow/archive/$ARROW_VERSION.tar.gz
