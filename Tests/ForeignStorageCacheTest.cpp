@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 
-#include "DBHandlerTestHelpers.h"
 #include "DataMgr/ForeignStorage/ForeignStorageCache.h"
 #include "DataMgr/ForeignStorage/ForeignStorageMgr.h"
 #include "DataMgr/PersistentStorageMgr/PersistentStorageMgr.h"
