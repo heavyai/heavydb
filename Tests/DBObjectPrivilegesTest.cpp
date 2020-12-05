@@ -3426,7 +3426,7 @@ TEST_F(ServerPrivApiTest, CreateForGrantee) {
   sql("GRANT CREATE SERVER ON DATABASE omnisci TO test_user;");
   std::vector<TDBObject> priv_objs;
   db_handler->get_db_objects_for_grantee(priv_objs, session_id, "test_user");
-  ASSERT_EQ(priv_objs.size(), 2);
+  ASSERT_EQ(priv_objs.size(), 2u);
   assertDBAccessObj(priv_objs);
   assertExpectedDBObj(priv_objs,
                       "omnisci",
@@ -3441,7 +3441,7 @@ TEST_F(ServerPrivApiTest, DropForGrantee) {
   sql("GRANT DROP SERVER ON DATABASE omnisci TO test_user;");
   std::vector<TDBObject> priv_objs;
   db_handler->get_db_objects_for_grantee(priv_objs, session_id, "test_user");
-  ASSERT_EQ(priv_objs.size(), 2);
+  ASSERT_EQ(priv_objs.size(), 2u);
   assertDBAccessObj(priv_objs);
   assertExpectedDBObj(priv_objs,
                       "omnisci",
@@ -3456,7 +3456,7 @@ TEST_F(ServerPrivApiTest, AlterForGrantee) {
   sql("GRANT ALTER SERVER ON DATABASE omnisci TO test_user;");
   std::vector<TDBObject> priv_objs;
   db_handler->get_db_objects_for_grantee(priv_objs, session_id, "test_user");
-  ASSERT_EQ(priv_objs.size(), 2);
+  ASSERT_EQ(priv_objs.size(), 2u);
   assertDBAccessObj(priv_objs);
   assertExpectedDBObj(priv_objs,
                       "omnisci",
@@ -3471,7 +3471,7 @@ TEST_F(ServerPrivApiTest, AlterOnServerGrantee) {
   sql("GRANT ALTER ON SERVER test_server TO test_user;");
   std::vector<TDBObject> priv_objs;
   db_handler->get_db_objects_for_grantee(priv_objs, session_id, "test_user");
-  ASSERT_EQ(priv_objs.size(), 2);
+  ASSERT_EQ(priv_objs.size(), 2u);
   assertDBAccessObj(priv_objs);
   assertExpectedDBObj(priv_objs,
                       "test_server",
@@ -3487,7 +3487,7 @@ TEST_F(ServerPrivApiTest, GetDBObjNonSuser) {
   login("test_user", "test_pass");
   std::vector<TDBObject> priv_objs;
   db_handler->get_db_objects_for_grantee(priv_objs, session_id, "test_user");
-  ASSERT_EQ(priv_objs.size(), 2);
+  ASSERT_EQ(priv_objs.size(), 2u);
   assertDBAccessObj(priv_objs);
   assertExpectedDBObj(priv_objs,
                       "omnisci",
@@ -3504,7 +3504,7 @@ TEST_F(ServerPrivApiTest, GetDBObjNoAccess) {
   std::vector<TDBObject> priv_objs;
   db_handler->get_db_objects_for_grantee(priv_objs, session_id, "test_user_2");
   // no privs returned
-  ASSERT_EQ(priv_objs.size(), 0);
+  ASSERT_EQ(priv_objs.size(), 0u);
 }
 
 TEST_F(ServerPrivApiTest, AlterOnServerObjectPrivs) {
@@ -3514,7 +3514,7 @@ TEST_F(ServerPrivApiTest, AlterOnServerObjectPrivs) {
   const auto& [db_handler, session_id] = getDbHandlerAndSessionId();
   db_handler->get_db_object_privs(
       priv_objs, session_id, "test_server", TDBObjectType::ServerDBObjectType);
-  ASSERT_EQ(priv_objs.size(), 1);
+  ASSERT_EQ(priv_objs.size(), 1u);
   assertExpectedDBObj(priv_objs,
                       "test_server",
                       TDBObjectType::ServerDBObjectType,
@@ -3529,7 +3529,7 @@ TEST_F(ServerPrivApiTest, AlterOnServerObjectPrivsSuper) {
   std::vector<TDBObject> priv_objs;
   db_handler->get_db_object_privs(
       priv_objs, session_id, "test_server", TDBObjectType::ServerDBObjectType);
-  ASSERT_EQ(priv_objs.size(), 2);
+  ASSERT_EQ(priv_objs.size(), 2u);
   // Suser access obj returned when calling as suser
   assertSuperAccessObj(priv_objs);
   assertExpectedDBObj(priv_objs,
