@@ -111,7 +111,7 @@ class TableTest : public DBHandlerTestFixture {
   }
 };
 
-TEST_F(TableTest, InsertWithCache) {
+TEST_F(TableTest, DISABLED_InsertWithCache) {
   sqlCreateTable("(i INTEGER) WITH (fragment_size = 1)");
   const ChunkKey key1 = getChunkKeyFromTable(*cat_, default_table_name, {1, 0});
   const ChunkKey key2 = getChunkKeyFromTable(*cat_, default_table_name, {1, 1});
