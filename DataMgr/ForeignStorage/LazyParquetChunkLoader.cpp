@@ -1053,8 +1053,7 @@ bool validate_time_mapping(const ColumnDescriptor* omnisci_column,
           omnisci_column->columnType.get_comp_param() == 32)))) {
     return false;
   }
-  if (auto time_logical_column = dynamic_cast<const parquet::TimeLogicalType*>(
-          parquet_column->logical_type().get())) {
+  if (parquet_column->logical_type()->is_time()) {
     return true;
   }
   return false;
