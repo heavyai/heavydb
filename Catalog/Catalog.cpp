@@ -3073,12 +3073,13 @@ void Catalog::createShardedTable(
   TableDescriptor* tdl = &td;
   createTable(*tdl, cols, shared_dict_defs, true);  // create logical table
   int32_t logical_tb_id = tdl->tableId;
+  std::string logical_table_name = tdl->tableName;
 
   /* create physical tables and link them to the logical table */
   std::vector<int32_t> physicalTables;
   for (int32_t i = 1; i <= td.nShards; i++) {
     TableDescriptor* tdp = &td;
-    tdp->tableName = generatePhysicalTableName(tdp->tableName, i);
+    tdp->tableName = generatePhysicalTableName(logical_table_name, i);
     tdp->shard = i - 1;
     createTable(*tdp, cols, shared_dict_defs, false);  // create physical table
     int32_t physical_tb_id = tdp->tableId;

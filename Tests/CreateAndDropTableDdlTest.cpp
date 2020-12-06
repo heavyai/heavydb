@@ -1469,6 +1469,42 @@ TEST_F(CreateNonReservedKeywordsTest, NonReservedRename) {
   sql("ALTER TABLE test_table RENAME COLUMN QUERY to virtual;");
 }
 
+class CreateShardedTableTest : public CreateAndDropTableDdlTest {
+  void SetUp() override {
+    CreateAndDropTableDdlTest::SetUp();
+    sql("DROP TABLE IF EXISTS test_table;");
+  }
+
+  void TearDown() override {
+    sql("DROP TABLE IF EXISTS test_table;");
+    CreateAndDropTableDdlTest::TearDown();
+  }
+};
+
+TEST_F(CreateShardedTableTest, ShardedTableName) {
+  sql("CREATE TABLE test_table (i INT, SHARD KEY(i)) WITH (shard_count = 2);");
+
+  auto& catalog = getCatalog();
+  auto logical_table = catalog.getMetadataForTable("test_table", false);
+  ASSERT_NE(logical_table, nullptr);
+  ASSERT_EQ(2, logical_table->nShards);
+  ASSERT_EQ(-1, logical_table->shard);
+  ASSERT_EQ("test_table", logical_table->tableName);
+
+  auto physical_tables = catalog.getPhysicalTablesDescriptors(logical_table);
+  ASSERT_EQ(static_cast<size_t>(2), physical_tables.size());
+
+  ASSERT_NE(physical_tables[0], nullptr);
+  ASSERT_EQ(2, physical_tables[0]->nShards);
+  ASSERT_EQ(0, physical_tables[0]->shard);
+  ASSERT_EQ("test_table_shard_#1", physical_tables[0]->tableName);
+
+  ASSERT_NE(physical_tables[1], nullptr);
+  ASSERT_EQ(2, physical_tables[1]->nShards);
+  ASSERT_EQ(1, physical_tables[1]->shard);
+  ASSERT_EQ("test_table_shard_#2", physical_tables[1]->tableName);
+}
+
 int main(int argc, char** argv) {
   g_enable_fsi = true;
   TestHelpers::init_logger_stderr_only(argc, argv);
