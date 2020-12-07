@@ -1285,6 +1285,13 @@ const char* create_table_geo = R"(
     ) WITH (FRAGMENT_SIZE=65000000);
   )";
 
+const char* create_table_geo_transform = R"(
+    CREATE TABLE geospatial_transform (
+      pt0 GEOMETRY(POINT, 4326),
+      pt1 GEOMETRY(POINT)
+    ) WITH (FRAGMENT_SIZE=65000000);
+  )";
+
 void check_geo_import() {
   auto rows = run_query(R"(
       SELECT p1, l, poly, mpoly, p2, p3, p4, trip_distance
@@ -1385,11 +1392,14 @@ class ImportTestGeo : public ::testing::Test {
     import_export::delimited_parser::set_max_buffer_resize(max_buffer_resize_);
     ASSERT_NO_THROW(run_ddl_statement("drop table if exists geospatial;"););
     ASSERT_NO_THROW(run_ddl_statement(create_table_geo););
+    ASSERT_NO_THROW(run_ddl_statement("drop table if exists geospatial_transform;"););
+    ASSERT_NO_THROW(run_ddl_statement(create_table_geo_transform););
   }
 
   void TearDown() override {
     ASSERT_NO_THROW(run_ddl_statement("drop table geospatial;"););
     ASSERT_NO_THROW(run_ddl_statement("drop table if exists geospatial;"););
+    ASSERT_NO_THROW(run_ddl_statement("drop table if exists geospatial_transform;"););
   }
 
   inline static size_t max_buffer_resize_ =
@@ -1458,6 +1468,36 @@ TEST_F(ImportTestGeo, CSV_Import_Degenerate) {
   check_geo_import();
   check_geo_num_rows("p1, l, poly, mpoly, p2, p3, p4, trip_distance",
                      6);  // we expect it to drop the 4 rows containing degenerate polys
+}
+
+TEST_F(ImportTestGeo, CSV_Import_Transform_Point_2263) {
+  const auto file_path = boost::filesystem::path(
+      "../../Tests/Import/datafiles/geospatial_transform/point_2263.csv");
+  run_ddl_statement("COPY geospatial_transform FROM '" + file_path.string() +
+                    "' WITH (source_srid=2263);");
+  auto rows = run_query(R"(
+      SELECT count(*) FROM geospatial_transform
+        WHERE ST_Distance(pt0, ST_SetSRID(pt1,4326))<0.00000000001;
+    )");
+  auto crt_row = rows->getNextRow(true, true);
+  CHECK_EQ(size_t(1), crt_row.size());
+  const auto r_cnt = v<int64_t>(crt_row[0]);
+  ASSERT_EQ(7, r_cnt);
+}
+
+TEST_F(ImportTestGeo, CSV_Import_Transform_Point_Coords_2263) {
+  const auto file_path = boost::filesystem::path(
+      "../../Tests/Import/datafiles/geospatial_transform/point_coords_2263.csv");
+  run_ddl_statement("COPY geospatial_transform FROM '" + file_path.string() +
+                    "' WITH (source_srid=2263);");
+  auto rows = run_query(R"(
+      SELECT count(*) FROM geospatial_transform
+        WHERE ST_Distance(pt0, ST_SetSRID(pt1,4326))<0.00000000001;
+    )");
+  auto crt_row = rows->getNextRow(true, true);
+  CHECK_EQ(size_t(1), crt_row.size());
+  const auto r_cnt = v<int64_t>(crt_row[0]);
+  ASSERT_EQ(7, r_cnt);
 }
 
 // the remaining tests in this group are incomplete but leave them as placeholders
