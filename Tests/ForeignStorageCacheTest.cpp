@@ -234,12 +234,12 @@ TEST_F(ForeignStorageCacheUnitTest, UpdateMetadata_ClearsChunk) {
   ASSERT_EQ(cache_->getCachedChunkIfExists(chunk_key1), nullptr);
 }
 
-TEST_F(ForeignStorageCacheUnitTest, UpdateMetadata_ClearsChunkWithSameMeta) {
+TEST_F(ForeignStorageCacheUnitTest, UpdateMetadata_KeepChunkWithSameMeta) {
   ChunkWrapper<int32_t> chunk_wrapper1{kINT, {1, 2, 1}};
   ChunkWrapper<int32_t> chunk_wrapper2{kINT, {1, 2, 2}};
   chunk_wrapper1.cacheMetadataThenChunk(chunk_key1);
   chunk_wrapper2.cacheMetadata(chunk_key1);
-  ASSERT_EQ(cache_->getCachedChunkIfExists(chunk_key1), nullptr);
+  ASSERT_NE(cache_->getCachedChunkIfExists(chunk_key1), nullptr);
 }
 
 TEST_F(ForeignStorageCacheUnitTest, UpdateMetadata_UpdatesMetadata) {

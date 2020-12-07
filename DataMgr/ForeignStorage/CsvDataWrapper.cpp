@@ -30,6 +30,7 @@
 #include "ImportExport/DelimitedParserUtils.h"
 #include "ImportExport/Importer.h"
 #include "Utils/DdlUtils.h"
+#include "Shared/sqltypes.h"
 
 namespace foreign_storage {
 CsvDataWrapper::CsvDataWrapper(const int db_id, const ForeignTable* foreign_table)
@@ -157,6 +158,12 @@ std::set<const ColumnDescriptor*> get_columns(
 }
 }  // namespace
 
+namespace {
+bool skip_metadata_scan(const ColumnDescriptor* column) {
+  return column->columnType.is_dict_encoded_type();
+}
+}  // namespace
+
 void CsvDataWrapper::populateChunkMapForColumns(
     const std::set<const ColumnDescriptor*>& columns,
     const int fragment_id,
@@ -177,7 +184,6 @@ void CsvDataWrapper::populateChunkMapForColumns(
 
       data_buffer = buffers.find(data_chunk_key)->second;
       index_buffer = buffers.find(index_chunk_key)->second;
-
       CHECK_EQ(data_buffer->size(), static_cast<size_t>(0));
       CHECK_EQ(index_buffer->size(), static_cast<size_t>(0));
 
@@ -227,10 +233,39 @@ void CsvDataWrapper::populateChunkBuffers(
         optional_columns, fragment_id, optional_buffers, column_id_to_chunk_map);
   }
   populateChunks(column_id_to_chunk_map, fragment_id);
-
+  updateMetadata(column_id_to_chunk_map, fragment_id);
   for (auto& entry : column_id_to_chunk_map) {
     entry.second.setBuffer(nullptr);
     entry.second.setIndexBuffer(nullptr);
+  }
+}
+
+// if column was skipped during scan, update metadata now
+void CsvDataWrapper::updateMetadata(
+    std::map<int, Chunk_NS::Chunk>& column_id_to_chunk_map,
+    int fragment_id) {
+  auto fragmenter = foreign_table_->fragmenter;
+  if (fragmenter) {
+    auto catalog = Catalog_Namespace::Catalog::checkedGet(db_id_);
+    for (auto& entry : column_id_to_chunk_map) {
+      const auto& column =
+          catalog->getMetadataForColumnUnlocked(foreign_table_->tableId, entry.first);
+      if (skip_metadata_scan(column)) {
+        ChunkKey data_chunk_key = {
+            db_id_, foreign_table_->tableId, column->columnId, fragment_id};
+        if (column->columnType.is_varlen_indeed()) {
+          data_chunk_key.emplace_back(1);
+        }
+        CHECK(chunk_metadata_map_.find(data_chunk_key) != chunk_metadata_map_.end());
+        auto cached_metadata = chunk_metadata_map_[data_chunk_key];
+        auto chunk_metadata =
+            entry.second.getBuffer()->getEncoder()->getMetadata(column->columnType);
+        cached_metadata->chunkStats.max = chunk_metadata->chunkStats.max;
+        cached_metadata->chunkStats.min = chunk_metadata->chunkStats.min;
+        cached_metadata->numBytes = entry.second.getBuffer()->size();
+        fragmenter->updateColumnChunkMetadata(column, fragment_id, cached_metadata);
+      }
+    }
   }
 }
 
@@ -383,10 +418,10 @@ void CsvDataWrapper::populateChunks(
                                     std::ref(column_id_to_chunk_map)));
   }
 
-  std::set<ParseFileRegionResult> load_file_region_results{};
+  std::vector<ParseFileRegionResult> load_file_region_results{};
   for (auto& future : futures) {
     future.wait();
-    load_file_region_results.emplace(future.get());
+    load_file_region_results.emplace_back(future.get());
   }
 
   for (auto result : load_file_region_results) {
@@ -446,6 +481,7 @@ struct MetadataScanMultiThreadingParams {
   std::condition_variable request_pool_condition;
   bool continue_processing;
   std::map<ChunkKey, std::unique_ptr<ForeignStorageBuffer>> chunk_encoder_buffers;
+  std::map<ChunkKey, Chunk_NS::Chunk> cached_chunks;
   std::mutex chunk_encoder_buffers_mutex;
   std::map<ChunkKey, size_t> chunk_byte_count;
   std::mutex chunk_byte_count_mutex;
@@ -479,12 +515,10 @@ std::optional<csv_file_buffer_parser::ParseBufferRequest> get_next_metadata_scan
  * adds the new region to the fragment id to file regions map.
  */
 void add_file_region(std::map<int, FileRegions>& fragment_id_to_file_regions_map,
-                     std::mutex& file_region_mutex,
                      int fragment_id,
                      size_t first_row_index,
                      const csv_file_buffer_parser::ParseBufferResult& result,
                      const std::string& file_path) {
-  std::lock_guard<std::mutex> lock(file_region_mutex);
   fragment_id_to_file_regions_map[fragment_id].emplace_back(
       FileRegion(file_path,
                  result.row_offsets.front(),
@@ -531,16 +565,81 @@ void update_stats(Encoder* encoder,
     encoder->updateStats(data_block.stringsPtr, 0, row_count);
   }
 }
+namespace {
+foreign_storage::ForeignStorageCache* get_cache_if_enabled(
+    std::shared_ptr<Catalog_Namespace::Catalog>& catalog) {
+  if (catalog->getDataMgr()
+          .getPersistentStorageMgr()
+          ->getDiskCacheConfig()
+          .isEnabledForFSI()) {
+    return catalog->getDataMgr().getPersistentStorageMgr()->getDiskCache();
+  } else {
+    return nullptr;
+  }
+}
+}  // namespace
+
+// If cache is enabled, populate cached_chunks buffers with data blocks
+void cache_blocks(std::map<ChunkKey, Chunk_NS::Chunk>& cached_chunks,
+                  DataBlockPtr data_block,
+                  size_t row_count,
+                  ChunkKey& chunk_key,
+                  const ColumnDescriptor* column,
+                  bool is_first_block,
+                  bool is_last_block) {
+  auto catalog = Catalog_Namespace::Catalog::checkedGet(chunk_key[CHUNK_KEY_DB_IDX]);
+  auto cache = get_cache_if_enabled(catalog);
+  if (cache) {
+    ChunkKey index_key = {chunk_key[CHUNK_KEY_DB_IDX],
+                          chunk_key[CHUNK_KEY_TABLE_IDX],
+                          chunk_key[CHUNK_KEY_COLUMN_IDX],
+                          chunk_key[CHUNK_KEY_FRAGMENT_IDX],
+                          2};
+    // Create actual data chunks to prepopulate cache
+    if (cached_chunks.find(chunk_key) == cached_chunks.end()) {
+      cached_chunks[chunk_key] = Chunk_NS::Chunk{column};
+      cached_chunks[chunk_key].setBuffer(
+          cache->getChunkBufferForPrecaching(chunk_key, is_first_block));
+      if (column->columnType.is_varlen_indeed()) {
+        cached_chunks[chunk_key].setIndexBuffer(
+            cache->getChunkBufferForPrecaching(index_key, is_first_block));
+      }
+      if (is_first_block) {
+        cached_chunks[chunk_key].initEncoder();
+      }
+    }
+    cached_chunks[chunk_key].appendData(data_block, row_count, 0);
+
+    if (is_last_block) {
+      // cache the chunks now so they are tracked by eviction algorithm
+      std::vector<ChunkKey> key_to_cache{chunk_key};
+      if (column->columnType.is_varlen_indeed()) {
+        key_to_cache.push_back(index_key);
+      }
+      cache->cacheTableChunks(key_to_cache);
+    }
+  }
+}
 
 /**
  * Updates metadata encapsulated in encoders for all table columns given
  * new data blocks gotten from parsing a new set of rows in a CSV file buffer.
+ * If cache is available, also append the data_blocks to chunks in the cache
  */
-void update_metadata(MetadataScanMultiThreadingParams& multi_threading_params,
-                     int fragment_id,
-                     const csv_file_buffer_parser::ParseBufferRequest& request,
-                     const csv_file_buffer_parser::ParseBufferResult& result,
-                     std::map<int, const ColumnDescriptor*>& column_by_id) {
+void process_data_blocks(MetadataScanMultiThreadingParams& multi_threading_params,
+                         int fragment_id,
+                         const csv_file_buffer_parser::ParseBufferRequest& request,
+                         csv_file_buffer_parser::ParseBufferResult& result,
+                         std::map<int, const ColumnDescriptor*>& column_by_id,
+                         std::map<int, FileRegions>& fragment_id_to_file_regions_map) {
+  std::lock_guard<std::mutex> lock(multi_threading_params.chunk_encoder_buffers_mutex);
+  // File regions should be added in same order as appendData
+  add_file_region(fragment_id_to_file_regions_map,
+                  fragment_id,
+                  request.first_row_index,
+                  result,
+                  request.getFilePath());
+
   for (auto& [column_id, data_block] : result.column_id_to_data_blocks_map) {
     ChunkKey chunk_key{request.db_id, request.getTableId(), column_id, fragment_id};
     const auto column = column_by_id[column_id];
@@ -557,27 +656,32 @@ void update_metadata(MetadataScanMultiThreadingParams& multi_threading_params,
       multi_threading_params.chunk_byte_count[chunk_key] += byte_count;
     }
 
-    {
-      std::lock_guard<std::mutex> lock(
-          multi_threading_params.chunk_encoder_buffers_mutex);
-      if (multi_threading_params.chunk_encoder_buffers.find(chunk_key) ==
-          multi_threading_params.chunk_encoder_buffers.end()) {
-        multi_threading_params.chunk_encoder_buffers[chunk_key] =
-            std::make_unique<ForeignStorageBuffer>();
-        multi_threading_params.chunk_encoder_buffers[chunk_key]->initEncoder(
-            column->columnType);
-      }
-      update_stats(multi_threading_params.chunk_encoder_buffers[chunk_key]->getEncoder(),
-                   column->columnType,
-                   data_block,
-                   result.row_count);
-      size_t num_elements = multi_threading_params.chunk_encoder_buffers[chunk_key]
-                                ->getEncoder()
-                                ->getNumElems() +
-                            result.row_count;
-      multi_threading_params.chunk_encoder_buffers[chunk_key]->getEncoder()->setNumElems(
-          num_elements);
+    if (multi_threading_params.chunk_encoder_buffers.find(chunk_key) ==
+        multi_threading_params.chunk_encoder_buffers.end()) {
+      multi_threading_params.chunk_encoder_buffers[chunk_key] =
+          std::make_unique<ForeignStorageBuffer>();
+      multi_threading_params.chunk_encoder_buffers[chunk_key]->initEncoder(
+          column->columnType);
     }
+    update_stats(multi_threading_params.chunk_encoder_buffers[chunk_key]->getEncoder(),
+                 column->columnType,
+                 data_block,
+                 result.row_count);
+    size_t num_elements = multi_threading_params.chunk_encoder_buffers[chunk_key]
+                              ->getEncoder()
+                              ->getNumElems() +
+                          result.row_count;
+    multi_threading_params.chunk_encoder_buffers[chunk_key]->getEncoder()->setNumElems(
+        num_elements);
+    cache_blocks(
+        multi_threading_params.cached_chunks,
+        data_block,
+        result.row_count,
+        chunk_key,
+        column,
+        (num_elements - result.row_count) == 0,  // Is the first block added to this chunk
+        num_elements == request.getMaxFragRows()  // Is the last block for this chunk
+    );
   }
 }
 
@@ -599,8 +703,7 @@ void add_request_to_pool(MetadataScanMultiThreadingParams& multi_threading_param
  * and updates existing metadata objects based on newly scanned metadata.
  */
 void scan_metadata(MetadataScanMultiThreadingParams& multi_threading_params,
-                   std::map<int, FileRegions>& fragment_id_to_file_regions_map,
-                   std::mutex& file_region_mutex) {
+                   std::map<int, FileRegions>& fragment_id_to_file_regions_map) {
   std::map<int, const ColumnDescriptor*> column_by_id{};
   while (true) {
     auto request_opt = get_next_metadata_scan_request(multi_threading_params);
@@ -620,17 +723,18 @@ void scan_metadata(MetadataScanMultiThreadingParams& multi_threading_params,
     for (const auto partition : partitions) {
       request.process_row_count = partition;
       for (const auto& import_buffer : request.import_buffers) {
-        import_buffer->clear();
+        if (import_buffer != nullptr) {
+          import_buffer->clear();
+        }
       }
       auto result = parse_buffer(request);
       int fragment_id = row_index / request.getMaxFragRows();
-      add_file_region(fragment_id_to_file_regions_map,
-                      file_region_mutex,
-                      fragment_id,
-                      request.first_row_index,
-                      result,
-                      request.getFilePath());
-      update_metadata(multi_threading_params, fragment_id, request, result, column_by_id);
+      process_data_blocks(multi_threading_params,
+                          fragment_id,
+                          request,
+                          result,
+                          column_by_id,
+                          fragment_id_to_file_regions_map);
       row_index += result.row_count;
       request.begin_pos = result.row_offsets.back() - request.file_offset;
     }
@@ -763,6 +867,48 @@ void dispatch_metadata_scan_requests(
   multi_threading_params.pending_requests_condition.notify_all();
 }
 
+namespace {
+// Create metadata for unscanned columns
+// Any fragments with any updated rows between start_row and num_rows will be updated
+// Chunks prior to start_row will be restored from  (ie for append
+// workflows)
+void add_placeholder_metadata(
+    const ColumnDescriptor* column,
+    const ForeignTable* foreign_table,
+    const int db_id,
+    const size_t start_row,
+    const size_t num_rows,
+    std::map<ChunkKey, std::shared_ptr<ChunkMetadata>>& chunk_metadata_map) {
+  ChunkKey chunk_key = {db_id, foreign_table->tableId, column->columnId, 0};
+  if (column->columnType.is_varlen_indeed()) {
+    chunk_key.emplace_back(1);
+  }
+
+  // Check for row == 0 so we create at least one fragment needed by the fragmenter
+  for (size_t row = start_row; (row < num_rows) || (row == 0 && num_rows == 0);
+       row += foreign_table->maxFragRows) {
+    int fragment_id = row / foreign_table->maxFragRows;
+    size_t num_elements =
+        (static_cast<size_t>(foreign_table->maxFragRows * (fragment_id + 1)) > num_rows)
+            ? num_rows % foreign_table->maxFragRows
+            : foreign_table->maxFragRows;
+
+    ForeignStorageBuffer empty_buffer;
+    // Use default encoder metadata as in parquet wrapper
+    empty_buffer.initEncoder(column->columnType);
+    auto chunk_metadata = empty_buffer.getEncoder()->getMetadata(column->columnType);
+    chunk_metadata->numElements = num_elements;
+    // signal to query engine populate, not set by default for arrays
+    chunk_metadata->chunkStats.min.intval = std::numeric_limits<int32_t>::max();
+    chunk_metadata->chunkStats.max.intval = std::numeric_limits<int32_t>::lowest();
+
+    chunk_key[CHUNK_KEY_FRAGMENT_IDX] = fragment_id;
+    chunk_metadata_map[chunk_key] = chunk_metadata;
+  }
+}
+
+}  // namespace
+
 /**
  * Populates provided chunk metadata vector with metadata for table specified in given
  * chunk key. Metadata scan for CSV file(s) configured for foreign table occurs in
@@ -777,7 +923,6 @@ void dispatch_metadata_scan_requests(
  */
 void CsvDataWrapper::populateChunkMetadata(ChunkMetadataVector& chunk_metadata_vector) {
   auto timer = DEBUG_TIMER(__func__);
-  chunk_metadata_map_.clear();
 
   const auto copy_params = validateAndGetCopyParams();
   const auto file_path = foreign_table_->getFilePath();
@@ -791,6 +936,7 @@ void CsvDataWrapper::populateChunkMetadata(ChunkMetadataVector& chunk_metadata_v
       UNREACHABLE();
     }
   } else {
+    chunk_metadata_map_.clear();
     fragment_id_to_file_regions_map_.clear();
     if (server_options.find(ForeignServer::STORAGE_TYPE_KEY)->second ==
         ForeignServer::LOCAL_FILE_STORAGE_TYPE) {
@@ -816,6 +962,14 @@ void CsvDataWrapper::populateChunkMetadata(ChunkMetadataVector& chunk_metadata_v
     multi_threading_params.chunk_encoder_buffers = std::move(chunk_encoder_buffers_);
   }
 
+  std::set<int> columns_to_scan;
+  for (auto column : columns) {
+    if (!skip_metadata_scan(column)) {
+      columns_to_scan.insert(column->columnId);
+    }
+  }
+  // Track where scan started for appends
+  int start_row = num_rows_;
   if (!csv_reader_->isScanFinished()) {
     auto buffer_size = get_buffer_size(copy_params,
                                        csv_reader_->isRemainingSizeKnown(),
@@ -829,13 +983,12 @@ void CsvDataWrapper::populateChunkMetadata(ChunkMetadataVector& chunk_metadata_v
     std::vector<std::future<void>> futures{};
     for (size_t i = 0; i < thread_count; i++) {
       multi_threading_params.request_pool.emplace(
-          buffer_size, copy_params, db_id_, foreign_table_);
+          buffer_size, copy_params, db_id_, foreign_table_, columns_to_scan);
 
       futures.emplace_back(std::async(std::launch::async,
                                       scan_metadata,
                                       std::ref(multi_threading_params),
-                                      std::ref(fragment_id_to_file_regions_map_),
-                                      std::ref(file_regions_mutex_)));
+                                      std::ref(fragment_id_to_file_regions_map_)));
     }
 
     try {
@@ -867,8 +1020,18 @@ void CsvDataWrapper::populateChunkMetadata(ChunkMetadataVector& chunk_metadata_v
         buffer->getEncoder()->getMetadata(column_by_id[chunk_key[2]]->columnType);
     chunk_metadata->numElements = buffer->getEncoder()->getNumElems();
     chunk_metadata->numBytes = multi_threading_params.chunk_byte_count[chunk_key];
-    chunk_metadata_vector.emplace_back(chunk_key, chunk_metadata);
     chunk_metadata_map_[chunk_key] = chunk_metadata;
+  }
+
+  for (auto column : columns) {
+    if (skip_metadata_scan(column)) {
+      add_placeholder_metadata(
+          column, foreign_table_, db_id_, start_row, num_rows_, chunk_metadata_map_);
+    }
+  }
+
+  for (auto& [chunk_key, chunk_metadata] : chunk_metadata_map_) {
+    chunk_metadata_vector.emplace_back(chunk_key, chunk_metadata);
   }
 
   // Save chunk data
@@ -877,8 +1040,27 @@ void CsvDataWrapper::populateChunkMetadata(ChunkMetadataVector& chunk_metadata_v
     chunk_encoder_buffers_ = std::move(multi_threading_params.chunk_encoder_buffers);
   }
 
-  for (auto& entry : fragment_id_to_file_regions_map_) {
-    std::sort(entry.second.begin(), entry.second.end());
+  // Any incomplete chunks should be cached now
+  auto cache = get_cache_if_enabled(catalog);
+  if (cache) {
+    std::vector<ChunkKey> to_cache;
+    for (auto& [chunk_key, buffer] : multi_threading_params.cached_chunks) {
+      if (buffer.getBuffer()->getEncoder()->getNumElems() !=
+          static_cast<size_t>(foreign_table_->maxFragRows)) {
+        if (column_by_id[chunk_key[CHUNK_KEY_COLUMN_IDX]]
+                ->columnType.is_varlen_indeed()) {
+          ChunkKey index_chunk_key = chunk_key;
+          index_chunk_key[4] = 2;
+          to_cache.push_back(chunk_key);
+          to_cache.push_back(index_chunk_key);
+        } else {
+          to_cache.push_back(chunk_key);
+        }
+      }
+    }
+    if (to_cache.size() > 0) {
+      cache->cacheTableChunks(to_cache);
+    }
   }
 }
 

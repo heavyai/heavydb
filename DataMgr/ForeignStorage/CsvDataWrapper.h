@@ -128,6 +128,9 @@ class CsvDataWrapper : public ForeignDataWrapper {
                                   const std::map<ChunkKey, AbstractBuffer*>& buffers,
                                   std::map<int, Chunk_NS::Chunk>& column_id_to_chunk_map);
 
+  void updateMetadata(std::map<int, Chunk_NS::Chunk>& column_id_to_chunk_map,
+                      int fragment_id);
+
   std::map<ChunkKey, std::shared_ptr<ChunkMetadata>> chunk_metadata_map_;
   std::map<int, FileRegions> fragment_id_to_file_regions_map_;
 
@@ -136,7 +139,6 @@ class CsvDataWrapper : public ForeignDataWrapper {
   const int db_id_;
   const ForeignTable* foreign_table_;
   std::mutex file_access_mutex_;
-  std::mutex file_regions_mutex_;
 
   // Data needed for append workflow
   std::map<ChunkKey, std::unique_ptr<ForeignStorageBuffer>> chunk_encoder_buffers_;

@@ -149,6 +149,21 @@ bool ForeignStorageCache::recoverCacheForTable(ChunkMetadataVector& meta_vec,
     if (const auto& buf = global_file_mgr_->getBuffer(chunk_key); buf->pageCount() > 0) {
       insertChunkIntoEvictionAlg(chunk_key, buf->size());
     }
+
+    if (is_varlen_key(chunk_key)) {
+      // Metadata is only available for the data chunk, but look for the index as well
+      CHECK(is_varlen_data_key(chunk_key));
+      ChunkKey index_chunk_key = {chunk_key[CHUNK_KEY_DB_IDX],
+                                  chunk_key[CHUNK_KEY_TABLE_IDX],
+                                  chunk_key[CHUNK_KEY_COLUMN_IDX],
+                                  chunk_key[CHUNK_KEY_FRAGMENT_IDX],
+                                  2};
+
+      if (const auto& buf = global_file_mgr_->getBuffer(index_chunk_key);
+          buf->pageCount() > 0) {
+        insertChunkIntoEvictionAlg(index_chunk_key, buf->size());
+      }
+    }
   }
   return (meta_vec.size() > 0);
 }
@@ -185,7 +200,7 @@ void ForeignStorageCache::cacheMetadataVec(const ChunkMetadataVector& metadata_v
                          chunk_key[CHUNK_KEY_FRAGMENT_IDX],
                          2};
     }
-
+    bool chunk_in_cache = false;
     if (!global_file_mgr_->isBufferOnDevice(chunk_key)) {
       buf = global_file_mgr_->createBuffer(chunk_key);
 
@@ -202,15 +217,26 @@ void ForeignStorageCache::cacheMetadataVec(const ChunkMetadataVector& metadata_v
         index_buffer = global_file_mgr_->getBuffer(index_chunk_key);
         CHECK(index_buffer);
       }
+
+      // We should have already cleared the data unless we are appending
+      // If the buffer metadata has changed, we need to remove this chunk
+      if (buf->getEncoder() != nullptr) {
+        const std::shared_ptr<ChunkMetadata> buf_metadata =
+            std::make_shared<ChunkMetadata>();
+        buf->getEncoder()->getMetadata(buf_metadata);
+        chunk_in_cache = *metadata.get() == *buf_metadata;
+      }
     }
 
-    set_metadata_for_buffer(buf, metadata.get());
-    evictThenEraseChunkUnlocked(chunk_key);
+    if (!chunk_in_cache) {
+      set_metadata_for_buffer(buf, metadata.get());
+      evictThenEraseChunkUnlocked(chunk_key);
 
-    if (!index_chunk_key.empty()) {
-      CHECK(index_buffer);
-      index_buffer->setUpdated();
-      evictThenEraseChunkUnlocked(index_chunk_key);
+      if (!index_chunk_key.empty()) {
+        CHECK(index_buffer);
+        index_buffer->setUpdated();
+        evictThenEraseChunkUnlocked(index_chunk_key);
+      }
     }
     num_metadata_added_++;
   }
@@ -466,6 +492,18 @@ void ForeignStorageCache::cacheMetadataWithFragIdGreaterOrEqualTo(
     }
   }
   cacheMetadataVec(new_metadata_vec);
+}
+
+AbstractBuffer* ForeignStorageCache::getChunkBufferForPrecaching(
+    const ChunkKey& chunk_key,
+    bool is_new_buffer) {
+  if (!is_new_buffer) {
+    CHECK(getGlobalFileMgr()->isBufferOnDevice(chunk_key));
+    return getGlobalFileMgr()->getBuffer(chunk_key);
+  } else {
+    CHECK(!getGlobalFileMgr()->isBufferOnDevice(chunk_key));
+    return getGlobalFileMgr()->createBuffer(chunk_key);
+  }
 }
 
 }  // namespace foreign_storage

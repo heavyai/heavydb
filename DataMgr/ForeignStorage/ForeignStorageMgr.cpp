@@ -54,7 +54,7 @@ void ForeignStorageMgr::fetchBuffer(const ChunkKey& chunk_key,
 bool ForeignStorageMgr::fetchBufferIfTempBufferMapEntryExists(
     const ChunkKey& chunk_key,
     AbstractBuffer* destination_buffer,
-    const size_t num_bytes) {
+    size_t num_bytes) {
   AbstractBuffer* buffer{nullptr};
   {
     std::shared_lock temp_chunk_buffer_map_lock(temp_chunk_buffer_map_mutex_);
@@ -62,6 +62,12 @@ bool ForeignStorageMgr::fetchBufferIfTempBufferMapEntryExists(
       return false;
     }
     buffer = temp_chunk_buffer_map_[chunk_key].get();
+  }
+  // For the index key, calls with size 0 get 1 added as
+  // empty index buffers start with one entry
+  // Set to 0 here to copy entire buffer
+  if (is_varlen_index_key(chunk_key) && (num_bytes == sizeof(StringOffsetT))) {
+    num_bytes = 0;
   }
   CHECK(buffer);
   buffer->copyTo(destination_buffer, num_bytes);
@@ -328,6 +334,7 @@ std::map<ChunkKey, AbstractBuffer*> ForeignStorageMgr::allocateTempBuffersForChu
   for (const auto& chunk_key : chunk_keys) {
     temp_chunk_buffer_map_[chunk_key] = std::make_unique<ForeignStorageBuffer>();
     chunk_buffer_map[chunk_key] = temp_chunk_buffer_map_[chunk_key].get();
+    chunk_buffer_map[chunk_key]->resetToEmpty();
   }
   return chunk_buffer_map;
 }

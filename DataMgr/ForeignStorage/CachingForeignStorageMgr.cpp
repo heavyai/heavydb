@@ -136,13 +136,10 @@ void CachingForeignStorageMgr::refreshNonAppendTableInCache(
     const ChunkKey& table_key,
     const std::vector<ChunkKey>& old_chunk_keys) {
   CHECK(is_table_key(table_key));
-  // Getting metadata from (foreign) storage could throw if we have lost our connnection.
-  // Therefore we only want clear the cache and refresh after we have confirmed that we
-  // can get new data from storage, if we can't reach storage then throwing here will
-  // leave the cache unchanged.
   ChunkMetadataVector storage_metadata;
-  getChunkMetadataVecForKeyPrefix(storage_metadata, table_key);
   disk_cache_->clearForTablePrefix(table_key);
+  getChunkMetadataVecForKeyPrefix(storage_metadata, table_key);
+
   try {
     disk_cache_->cacheMetadataVec(storage_metadata);
     refreshChunksInCacheByFragment(old_chunk_keys, 0);
@@ -196,18 +193,21 @@ void CachingForeignStorageMgr::refreshChunksInCacheByFragment(
         }
         fragment_id = chunk_key[CHUNK_KEY_FRAGMENT_IDX];
       }
-      if (is_varlen_key(chunk_key)) {
-        CHECK(is_varlen_data_key(chunk_key));
-        ChunkKey index_chunk_key{chunk_key[CHUNK_KEY_DB_IDX],
-                                 chunk_key[CHUNK_KEY_TABLE_IDX],
-                                 chunk_key[CHUNK_KEY_COLUMN_IDX],
-                                 chunk_key[CHUNK_KEY_FRAGMENT_IDX],
-                                 2};
-        chunk_keys_in_fragment.emplace_back(index_chunk_key);
-        chunk_keys_to_be_cached.emplace_back(index_chunk_key);
+      // Key may have been cached during scan
+      if (disk_cache_->getCachedChunkIfExists(chunk_key) == nullptr) {
+        if (is_varlen_key(chunk_key)) {
+          CHECK(is_varlen_data_key(chunk_key));
+          ChunkKey index_chunk_key{chunk_key[CHUNK_KEY_DB_IDX],
+                                   chunk_key[CHUNK_KEY_TABLE_IDX],
+                                   chunk_key[CHUNK_KEY_COLUMN_IDX],
+                                   chunk_key[CHUNK_KEY_FRAGMENT_IDX],
+                                   2};
+          chunk_keys_in_fragment.emplace_back(index_chunk_key);
+          chunk_keys_to_be_cached.emplace_back(index_chunk_key);
+        }
+        chunk_keys_in_fragment.emplace_back(chunk_key);
+        chunk_keys_to_be_cached.emplace_back(chunk_key);
       }
-      chunk_keys_in_fragment.emplace_back(chunk_key);
-      chunk_keys_to_be_cached.emplace_back(chunk_key);
     }
   }
   if (chunk_keys_in_fragment.size() > 0) {
@@ -215,7 +215,9 @@ void CachingForeignStorageMgr::refreshChunksInCacheByFragment(
         disk_cache_->getChunkBuffersForCaching(chunk_keys_in_fragment);
     getDataWrapper(table_key)->populateChunkBuffers(required_buffers, optional_buffers);
   }
-  disk_cache_->cacheTableChunks(chunk_keys_to_be_cached);
+  if (chunk_keys_to_be_cached.size() > 0) {
+    disk_cache_->cacheTableChunks(chunk_keys_to_be_cached);
+  }
 }
 
 void CachingForeignStorageMgr::createOrRecoverDataWrapperIfNotExists(

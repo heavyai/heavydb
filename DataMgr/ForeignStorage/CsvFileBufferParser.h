@@ -257,7 +257,7 @@ struct ParseBufferRequest {
                      const import_export::CopyParams& copy_params,
                      int db_id,
                      const ForeignTable* foreign_table,
-                     std::set<int> column_filter_set = {})
+                     std::set<int> column_filter_set)
       : buffer(std::make_unique<char[]>(buffer_size))
       , buffer_size(buffer_size)
       , buffer_alloc_size(buffer_size)
@@ -266,8 +266,7 @@ struct ParseBufferRequest {
       , foreign_table_schema(std::make_unique<ForeignTableSchema>(db_id, foreign_table)) {
     // initialize import buffers from columns.
     for (const auto column : getColumns()) {
-      if (column_filter_set.size() &&
-          column_filter_set.find(column->columnId) == column_filter_set.end()) {
+      if (column_filter_set.find(column->columnId) == column_filter_set.end()) {
         import_buffers.emplace_back(nullptr);
       } else {
         StringDictionary* string_dictionary = nullptr;

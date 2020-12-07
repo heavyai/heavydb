@@ -981,9 +981,10 @@ class ShowDiskCacheUsageTest : public ShowTest {
 
   void sqlCreateBasicForeignTable(std::string& table_name) {
     sql("CREATE FOREIGN TABLE " + table_name +
-        " (i INTEGER) SERVER omnisci_local_csv WITH "
+        " (i INTEGER) SERVER omnisci_local_parquet WITH "
         "(file_path = '" +
-        boost::filesystem::canonical("../../Tests/FsiDataFiles/0.csv").string() + "');");
+        boost::filesystem::canonical("../../Tests/FsiDataFiles/0.parquet").string() +
+        "');");
   }
 };
 
