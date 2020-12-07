@@ -65,6 +65,7 @@ class HashTableCache {
 
   // makes a copy
   V get(const K& key) {
+    std::lock_guard<std::mutex> guard(mutex_);
     for (const auto& kv : contents_) {
       if (kv.first == key) {
         return kv.second;

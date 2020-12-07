@@ -876,6 +876,7 @@ void JoinHashTable::putHashTableOnCpuToCache(const ChunkKey& chunk_key,
                                   chunk_key,
                                   qual_bin_oper_->get_optype()};
   CHECK(hash_table_cache_);
+  CHECK(hash_table && !hash_table->getGpuBuffer());
   hash_table_cache_->insert(cache_key, hash_table);
 }
 
