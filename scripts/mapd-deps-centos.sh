@@ -57,6 +57,7 @@ sudo yum install -y \
     python-devel \
     wget \
     curl \
+    python3 \
     openldap-devel
 sudo yum install -y \
     jq \
