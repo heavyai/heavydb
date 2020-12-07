@@ -63,12 +63,6 @@ class JoinHashTable : public HashJoin {
       ColumnCacheMap& column_cache,
       Executor* executor);
 
-  int64_t getJoinHashBuffer(const ExecutorDeviceType device_type,
-                            const int device_id) const noexcept override;
-
-  size_t getJoinHashBufferSize(const ExecutorDeviceType device_type,
-                               const int device_id) const noexcept override;
-
   std::string toString(const ExecutorDeviceType device_type,
                        const int device_id = 0,
                        bool raw = false) const override;
@@ -102,6 +96,8 @@ class JoinHashTable : public HashJoin {
   size_t countBufferOff() const noexcept override;
 
   size_t payloadBufferOff() const noexcept override;
+
+  std::string getHashJoinType() const final { return "Perfect"; }
 
   static HashJoinMatchingSet codegenMatchingSet(
       const std::vector<llvm::Value*>& hash_join_idx_args_in,
@@ -179,7 +175,6 @@ class JoinHashTable : public HashJoin {
       const Analyzer::ColumnVar* inner_col) const;
 
   void reify();
-  void checkHashJoinReplicationConstraint(const int table_id) const;
   std::shared_ptr<PerfectHashTable> initHashTableOnCpuFromCache(const ChunkKey& chunk_key,
                                                                 const size_t num_elements,
                                                                 const InnerOuter& cols);
@@ -201,7 +196,7 @@ class JoinHashTable : public HashJoin {
 
   bool isBitwiseEq() const;
 
-  size_t getComponentBufferSize() const noexcept;
+  size_t getComponentBufferSize() const noexcept override;
 
   std::shared_ptr<Analyzer::BinOper> qual_bin_oper_;
   std::shared_ptr<Analyzer::ColumnVar> col_var_;
@@ -234,15 +229,6 @@ class JoinHashTable : public HashJoin {
   static std::unique_ptr<HashTableCache<JoinHashTableCacheKey, HashTableCacheValue>>
       hash_table_cache_;
 };
-
-// TODO(alex): Functions below need to be moved to a separate translation unit, they don't
-// belong here.
-
-size_t get_shard_count(const Analyzer::BinOper* join_condition, const Executor* executor);
-
-size_t get_shard_count(
-    std::pair<const Analyzer::ColumnVar*, const Analyzer::Expr*> equi_pair,
-    const Executor* executor);
 
 bool needs_dictionary_translation(const Analyzer::ColumnVar* inner_col,
                                   const Analyzer::Expr* outer_col,

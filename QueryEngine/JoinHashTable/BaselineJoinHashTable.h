@@ -38,12 +38,6 @@
 
 class Executor;
 
-struct CompositeKeyInfo {
-  std::vector<const void*> sd_inner_proxy_per_key;
-  std::vector<const void*> sd_outer_proxy_per_key;
-  std::vector<ChunkKey> cache_key_chunks;  // used for the cache key
-};
-
 struct HashTableCacheKey {
   const size_t num_elements;
   const std::vector<ChunkKey> chunk_keys;
@@ -112,16 +106,6 @@ class BaselineJoinHashTable : public HashJoin {
       const Executor* executor,
       const std::vector<InnerOuter>& inner_outer_pairs);
 
-  int64_t getJoinHashBuffer(const ExecutorDeviceType device_type,
-                            const int device_id) const noexcept override;
-
-  size_t getJoinHashBufferSize(const ExecutorDeviceType device_type,
-                               const int device_id) const noexcept override {
-    auto hash_table = getHashTableForDevice(device_id);
-    CHECK(hash_table);
-    return hash_table->getHashTableBufferSize(device_type);
-  }
-
   std::string toString(const ExecutorDeviceType device_type,
                        const int device_id = 0,
                        bool raw = false) const override;
@@ -152,6 +136,8 @@ class BaselineJoinHashTable : public HashJoin {
 
   size_t payloadBufferOff() const noexcept override;
 
+  std::string getHashJoinType() const final { return "Baseline"; }
+
   static auto getCacheInvalidator() -> std::function<void()> {
     return []() -> void {
       // TODO: make hash type cache part of the main cache
@@ -168,10 +154,6 @@ class BaselineJoinHashTable : public HashJoin {
 
   virtual ~BaselineJoinHashTable() {}
 
- private:
-  size_t getKeyBufferSize() const noexcept;
-  size_t getComponentBufferSize() const noexcept;
-
  protected:
   BaselineJoinHashTable(const std::shared_ptr<Analyzer::BinOper> condition,
                         const std::vector<InputTableInfo>& query_infos,
@@ -181,6 +163,10 @@ class BaselineJoinHashTable : public HashJoin {
                         Executor* executor,
                         const std::vector<InnerOuter>& inner_outer_pairs,
                         const int device_count);
+
+  size_t getComponentBufferSize() const noexcept override;
+
+  size_t getKeyBufferSize() const noexcept;
 
   static int getInnerTableId(const std::vector<InnerOuter>& inner_outer_pairs);
 
@@ -205,16 +191,12 @@ class BaselineJoinHashTable : public HashJoin {
   Data_Namespace::MemoryLevel getEffectiveMemoryLevel(
       const std::vector<InnerOuter>& inner_outer_pairs) const;
 
-  CompositeKeyInfo getCompositeKeyInfo() const;
-
   void reify(const HashType preferred_layout);
 
   virtual void reifyForDevice(const ColumnsForDevice& columns_for_device,
                               const HashType layout,
                               const int device_id,
                               const logger::ThreadId parent_thread_id);
-
-  void checkHashJoinReplicationConstraint(const int table_id) const;
 
   virtual int initHashTableForDevice(
       const std::vector<JoinColumn>& join_columns,
@@ -257,7 +239,4 @@ class BaselineJoinHashTable : public HashJoin {
   using HashTableCacheValue = std::shared_ptr<HashTable>;
   static std::unique_ptr<HashTableCache<HashTableCacheKey, HashTableCacheValue>>
       hash_table_cache_;
-
-  static const int ERR_FAILED_TO_FETCH_COLUMN{-3};
-  static const int ERR_FAILED_TO_JOIN_ON_VIRTUAL_COLUMN{-4};
 };

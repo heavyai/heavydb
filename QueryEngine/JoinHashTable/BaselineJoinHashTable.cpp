@@ -73,7 +73,6 @@ std::shared_ptr<BaselineJoinHashTable> BaselineJoinHashTable::getInstance(
                                                                        executor,
                                                                        inner_outer_pairs,
                                                                        device_count));
-  join_hash_table->checkHashJoinReplicationConstraint(getInnerTableId(inner_outer_pairs));
   try {
     join_hash_table->reify(preferred_hash_type);
   } catch (const TableMustBeReplicated& e) {
@@ -151,29 +150,6 @@ size_t BaselineJoinHashTable::getShardCountForCondition(
   return 0;
 }
 
-int64_t BaselineJoinHashTable::getJoinHashBuffer(const ExecutorDeviceType device_type,
-                                                 const int device_id) const noexcept {
-  // TODO: just make device_id a size_t
-  CHECK_LT(size_t(device_id), hash_tables_for_device_.size());
-  if (device_type == ExecutorDeviceType::CPU && !hash_tables_for_device_[device_id]) {
-    return 0;
-  }
-  CHECK(hash_tables_for_device_[device_id]);
-  auto hash_table = hash_tables_for_device_[device_id].get();
-#ifdef HAVE_CUDA
-  if (device_type == ExecutorDeviceType::CPU) {
-    return reinterpret_cast<int64_t>(hash_table->getCpuBuffer());
-  } else {
-    CHECK(hash_table);
-    const auto gpu_buff = hash_table->getGpuBuffer();
-    return reinterpret_cast<CUdeviceptr>(gpu_buff);
-  }
-#else
-  CHECK(device_type == ExecutorDeviceType::CPU);
-  return reinterpret_cast<int64_t>(hash_table->getCpuBuffer());
-#endif
-}
-
 std::string BaselineJoinHashTable::toString(const ExecutorDeviceType device_type,
                                             const int device_id,
                                             bool raw) const {
@@ -203,7 +179,7 @@ std::string BaselineJoinHashTable::toString(const ExecutorDeviceType device_type
   CHECK(hash_table);
   const auto layout = getHashType();
   return HashTable::toString(
-      !condition_->is_overlaps_oper() ? "keyed" : "geo",
+      "keyed",
       getHashTypeString(layout),
       getKeyComponentCount() + (layout == HashType::OneToOne ? 1 : 0),
       getKeyComponentWidth(),
@@ -252,46 +228,19 @@ std::set<DecodedJoinHashBufferEntry> BaselineJoinHashTable::toSet(
                           buffer_size);
 }
 
-CompositeKeyInfo BaselineJoinHashTable::getCompositeKeyInfo() const {
-  std::vector<const void*> sd_inner_proxy_per_key;
-  std::vector<const void*> sd_outer_proxy_per_key;
-  std::vector<ChunkKey> cache_key_chunks;  // used for the cache key
-  for (const auto& inner_outer_pair : inner_outer_pairs_) {
-    const auto inner_col = inner_outer_pair.first;
-    const auto outer_col = inner_outer_pair.second;
-    const auto& inner_ti = inner_col->get_type_info();
-    const auto& outer_ti = outer_col->get_type_info();
-    ChunkKey cache_key_chunks_for_column{catalog_->getCurrentDB().dbId,
-                                         inner_col->get_table_id(),
-                                         inner_col->get_column_id()};
-    if (inner_ti.is_string() &&
-        !(inner_ti.get_comp_param() == outer_ti.get_comp_param())) {
-      CHECK(outer_ti.is_string());
-      CHECK(inner_ti.get_compression() == kENCODING_DICT &&
-            outer_ti.get_compression() == kENCODING_DICT);
-      const auto sd_inner_proxy = executor_->getStringDictionaryProxy(
-          inner_ti.get_comp_param(), executor_->getRowSetMemoryOwner(), true);
-      const auto sd_outer_proxy = executor_->getStringDictionaryProxy(
-          outer_ti.get_comp_param(), executor_->getRowSetMemoryOwner(), true);
-      CHECK(sd_inner_proxy && sd_outer_proxy);
-      sd_inner_proxy_per_key.push_back(sd_inner_proxy);
-      sd_outer_proxy_per_key.push_back(sd_outer_proxy);
-      cache_key_chunks_for_column.push_back(sd_outer_proxy->getGeneration());
-    } else {
-      sd_inner_proxy_per_key.emplace_back();
-      sd_outer_proxy_per_key.emplace_back();
-    }
-    cache_key_chunks.push_back(cache_key_chunks_for_column);
-  }
-  return {sd_inner_proxy_per_key, sd_outer_proxy_per_key, cache_key_chunks};
-}
-
 void BaselineJoinHashTable::reify(const HashType preferred_layout) {
   auto timer = DEBUG_TIMER(__func__);
   CHECK_LT(0, device_count_);
-  const auto composite_key_info = getCompositeKeyInfo();
+  const auto composite_key_info =
+      HashJoin::getCompositeKeyInfo(inner_outer_pairs_, executor_);
   const auto type_and_found = HashTypeCache::get(composite_key_info.cache_key_chunks);
   const auto layout = type_and_found.second ? type_and_found.first : preferred_layout;
+
+  HashJoin::checkHashJoinReplicationConstraint(
+      getInnerTableId(inner_outer_pairs_),
+      BaselineJoinHashTable::getShardCountForCondition(
+          condition_.get(), executor_, inner_outer_pairs_),
+      executor_);
 
   if (condition_->is_overlaps_oper()) {
     CHECK_EQ(inner_outer_pairs_.size(), size_t(1));
@@ -398,7 +347,8 @@ std::pair<size_t, size_t> BaselineJoinHashTable::approximateTupleCount(
   CHECK(!columns_per_device.empty() && !columns_per_device.front().join_columns.empty());
 
   if (effective_memory_level == Data_Namespace::MemoryLevel::CPU_LEVEL) {
-    const auto composite_key_info = getCompositeKeyInfo();
+    const auto composite_key_info =
+        HashJoin::getCompositeKeyInfo(inner_outer_pairs_, executor_);
     HashTableCacheKey cache_key{columns_per_device.front().join_columns.front().num_elems,
                                 composite_key_info.cache_key_chunks,
                                 condition_->get_optype()};
@@ -547,16 +497,9 @@ void BaselineJoinHashTable::reifyForDevice(const ColumnsForDevice& columns_for_d
                                           effective_memory_level,
                                           device_id);
   if (err) {
-    switch (err) {
-      case ERR_FAILED_TO_FETCH_COLUMN:
-        throw FailedToFetchColumn();
-      case ERR_FAILED_TO_JOIN_ON_VIRTUAL_COLUMN:
-        throw FailedToJoinOnVirtualColumn();
-      default:
-        throw HashJoinFail(
-            std::string("Unrecognized error when initializing baseline hash table (") +
-            std::to_string(err) + std::string(")"));
-    }
+    throw HashJoinFail(
+        std::string("Unrecognized error when initializing baseline hash table (") +
+        std::to_string(err) + std::string(")"));
   }
 }
 
@@ -609,7 +552,8 @@ int BaselineJoinHashTable::initHashTableForDevice(
   if (effective_memory_level == Data_Namespace::CPU_LEVEL) {
     std::lock_guard<std::mutex> cpu_hash_table_buff_lock(cpu_hash_table_buff_mutex_);
 
-    const auto composite_key_info = getCompositeKeyInfo();
+    const auto composite_key_info =
+        HashJoin::getCompositeKeyInfo(inner_outer_pairs_, executor_);
 
     CHECK(!join_columns.empty());
     HashTableCacheKey cache_key{join_columns.front().num_elems,
@@ -913,20 +857,6 @@ int BaselineJoinHashTable::getInnerTableId(
   CHECK(!inner_outer_pairs.empty());
   const auto first_inner_col = inner_outer_pairs.front().first;
   return first_inner_col->get_table_id();
-}
-
-void BaselineJoinHashTable::checkHashJoinReplicationConstraint(const int table_id) const {
-  if (!g_cluster) {
-    return;
-  }
-  if (table_id >= 0) {
-    const auto inner_td = catalog_->getMetadataForTable(table_id);
-    CHECK(inner_td);
-    const auto shard_count = shardCount();
-    if (!shard_count && !table_is_replicated(inner_td)) {
-      throw TableMustBeReplicated(inner_td->tableName);
-    }
-  }
 }
 
 std::shared_ptr<HashTable> BaselineJoinHashTable::initHashTableOnCpuFromCache(

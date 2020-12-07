@@ -81,19 +81,16 @@ struct HashJoinMatchingSet {
 
 using InnerOuter = std::pair<const Analyzer::ColumnVar*, const Analyzer::Expr*>;
 
+struct CompositeKeyInfo {
+  std::vector<const void*> sd_inner_proxy_per_key;
+  std::vector<const void*> sd_outer_proxy_per_key;
+  std::vector<ChunkKey> cache_key_chunks;  // used for the cache key
+};
+
 class DeviceAllocator;
 
 class HashJoin {
  public:
-  virtual int64_t getJoinHashBuffer(const ExecutorDeviceType device_type,
-                                    const int device_id = 0) const noexcept = 0;
-
-  /**
-   * Returns the size of the hash table buffer in bytes
-   */
-  virtual size_t getJoinHashBufferSize(const ExecutorDeviceType device_type,
-                                       const int device_id = 0) const noexcept = 0;
-
   virtual std::string toString(const ExecutorDeviceType device_type,
                                const int device_id = 0,
                                bool raw = false) const = 0;
@@ -137,6 +134,8 @@ class HashJoin {
 
   virtual size_t payloadBufferOff() const noexcept = 0;
 
+  virtual std::string getHashJoinType() const = 0;
+
   JoinColumn fetchJoinColumn(
       const Analyzer::ColumnVar* hash_col,
       const std::vector<Fragmenter_Namespace::FragmentInfo>& fragment_info,
@@ -179,9 +178,56 @@ class HashJoin {
       ColumnCacheMap& column_cache,
       Executor* executor);
 
+  static int getInnerTableId(const std::vector<InnerOuter>& inner_outer_pairs) {
+    CHECK(!inner_outer_pairs.empty());
+    const auto first_inner_col = inner_outer_pairs.front().first;
+    return first_inner_col->get_table_id();
+  }
+
+  static void checkHashJoinReplicationConstraint(const int table_id,
+                                                 const size_t shard_count,
+                                                 const Executor* executor);
+
   HashTable* getHashTableForDevice(const size_t device_id) const {
     CHECK_LT(device_id, hash_tables_for_device_.size());
     return hash_tables_for_device_[device_id].get();
+  }
+
+  size_t getJoinHashBufferSize(const ExecutorDeviceType device_type) {
+    CHECK(device_type == ExecutorDeviceType::CPU);
+    return getJoinHashBufferSize(device_type, 0);
+  }
+
+  size_t getJoinHashBufferSize(const ExecutorDeviceType device_type,
+                               const int device_id) const {
+    auto hash_table = getHashTableForDevice(device_id);
+    if (!hash_table) {
+      return 0;
+    }
+    return hash_table->getHashTableBufferSize(device_type);
+  }
+
+  int64_t getJoinHashBuffer(const ExecutorDeviceType device_type,
+                            const int device_id) const {
+    // TODO: just make device_id a size_t
+    CHECK_LT(size_t(device_id), hash_tables_for_device_.size());
+    if (!hash_tables_for_device_[device_id]) {
+      return 0;
+    }
+    CHECK(hash_tables_for_device_[device_id]);
+    auto hash_table = hash_tables_for_device_[device_id].get();
+#ifdef HAVE_CUDA
+    if (device_type == ExecutorDeviceType::CPU) {
+      return reinterpret_cast<int64_t>(hash_table->getCpuBuffer());
+    } else {
+      CHECK(hash_table);
+      const auto gpu_buff = hash_table->getGpuBuffer();
+      return reinterpret_cast<CUdeviceptr>(gpu_buff);
+    }
+#else
+    CHECK(device_type == ExecutorDeviceType::CPU);
+    return reinterpret_cast<int64_t>(hash_table->getCpuBuffer());
+#endif
   }
 
   void freeHashBufferMemory() {
@@ -190,7 +236,13 @@ class HashJoin {
     hash_tables_for_device_.swap(empty_hash_tables);
   }
 
+  static CompositeKeyInfo getCompositeKeyInfo(
+      const std::vector<InnerOuter>& inner_outer_pairs,
+      const Executor* executor);
+
  protected:
+  virtual size_t getComponentBufferSize() const noexcept = 0;
+
   std::vector<std::shared_ptr<HashTable>> hash_tables_for_device_;
 };
 
@@ -202,3 +254,9 @@ std::shared_ptr<Analyzer::ColumnVar> getSyntheticColumnVar(std::string_view tabl
                                                            std::string_view column,
                                                            int rte_idx,
                                                            Executor* executor);
+
+size_t get_shard_count(const Analyzer::BinOper* join_condition, const Executor* executor);
+
+size_t get_shard_count(
+    std::pair<const Analyzer::ColumnVar*, const Analyzer::Expr*> equi_pair,
+    const Executor* executor);

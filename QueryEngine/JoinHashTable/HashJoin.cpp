@@ -218,6 +218,43 @@ std::shared_ptr<HashJoin> HashJoin::getInstance(
   return join_hash_table;
 }
 
+CompositeKeyInfo HashJoin::getCompositeKeyInfo(
+    const std::vector<InnerOuter>& inner_outer_pairs,
+    const Executor* executor) {
+  CHECK(executor);
+  std::vector<const void*> sd_inner_proxy_per_key;
+  std::vector<const void*> sd_outer_proxy_per_key;
+  std::vector<ChunkKey> cache_key_chunks;  // used for the cache key
+  const auto db_id = executor->getCatalog()->getCurrentDB().dbId;
+  for (const auto& inner_outer_pair : inner_outer_pairs) {
+    const auto inner_col = inner_outer_pair.first;
+    const auto outer_col = inner_outer_pair.second;
+    const auto& inner_ti = inner_col->get_type_info();
+    const auto& outer_ti = outer_col->get_type_info();
+    ChunkKey cache_key_chunks_for_column{
+        db_id, inner_col->get_table_id(), inner_col->get_column_id()};
+    if (inner_ti.is_string() &&
+        !(inner_ti.get_comp_param() == outer_ti.get_comp_param())) {
+      CHECK(outer_ti.is_string());
+      CHECK(inner_ti.get_compression() == kENCODING_DICT &&
+            outer_ti.get_compression() == kENCODING_DICT);
+      const auto sd_inner_proxy = executor->getStringDictionaryProxy(
+          inner_ti.get_comp_param(), executor->getRowSetMemoryOwner(), true);
+      const auto sd_outer_proxy = executor->getStringDictionaryProxy(
+          outer_ti.get_comp_param(), executor->getRowSetMemoryOwner(), true);
+      CHECK(sd_inner_proxy && sd_outer_proxy);
+      sd_inner_proxy_per_key.push_back(sd_inner_proxy);
+      sd_outer_proxy_per_key.push_back(sd_outer_proxy);
+      cache_key_chunks_for_column.push_back(sd_outer_proxy->getGeneration());
+    } else {
+      sd_inner_proxy_per_key.emplace_back();
+      sd_outer_proxy_per_key.emplace_back();
+    }
+    cache_key_chunks.push_back(cache_key_chunks_for_column);
+  }
+  return {sd_inner_proxy_per_key, sd_outer_proxy_per_key, cache_key_chunks};
+}
+
 std::shared_ptr<Analyzer::ColumnVar> getSyntheticColumnVar(std::string_view table,
                                                            std::string_view column,
                                                            int rte_idx,
@@ -381,4 +418,49 @@ std::shared_ptr<HashJoin> HashJoin::getSyntheticInstance(
                                           column_cache,
                                           executor);
   return hash_table;
+}
+
+void HashJoin::checkHashJoinReplicationConstraint(const int table_id,
+                                                  const size_t shard_count,
+                                                  const Executor* executor) {
+  if (!g_cluster) {
+    return;
+  }
+  if (table_id >= 0) {
+    CHECK(executor);
+    const auto inner_td = executor->getCatalog()->getMetadataForTable(table_id);
+    CHECK(inner_td);
+    if (!shard_count && !table_is_replicated(inner_td)) {
+      throw TableMustBeReplicated(inner_td->tableName);
+    }
+  }
+}
+
+namespace {
+
+InnerOuter get_cols(const Analyzer::BinOper* qual_bin_oper,
+                    const Catalog_Namespace::Catalog& cat,
+                    const TemporaryTables* temporary_tables) {
+  const auto lhs = qual_bin_oper->get_left_operand();
+  const auto rhs = qual_bin_oper->get_right_operand();
+  return normalize_column_pair(lhs, rhs, cat, temporary_tables);
+}
+
+}  // namespace
+
+size_t get_shard_count(const Analyzer::BinOper* join_condition,
+                       const Executor* executor) {
+  const Analyzer::ColumnVar* inner_col{nullptr};
+  const Analyzer::Expr* outer_col{nullptr};
+  std::shared_ptr<Analyzer::BinOper> redirected_bin_oper;
+  try {
+    std::tie(inner_col, outer_col) =
+        get_cols(join_condition, *executor->getCatalog(), executor->getTemporaryTables());
+  } catch (...) {
+    return 0;
+  }
+  if (!inner_col || !outer_col) {
+    return 0;
+  }
+  return get_shard_count({inner_col, outer_col}, executor);
 }

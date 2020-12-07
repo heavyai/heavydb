@@ -254,23 +254,6 @@ size_t get_hash_entry_count(const ExpressionRange& col_range, const bool is_bw_e
 
 }  // namespace
 
-size_t get_shard_count(const Analyzer::BinOper* join_condition,
-                       const Executor* executor) {
-  const Analyzer::ColumnVar* inner_col{nullptr};
-  const Analyzer::Expr* outer_col{nullptr};
-  std::shared_ptr<Analyzer::BinOper> redirected_bin_oper;
-  try {
-    std::tie(inner_col, outer_col) =
-        get_cols(join_condition, *executor->getCatalog(), executor->getTemporaryTables());
-  } catch (...) {
-    return 0;
-  }
-  if (!inner_col || !outer_col) {
-    return 0;
-  }
-  return get_shard_count({inner_col, outer_col}, executor);
-}
-
 namespace {
 
 bool shard_count_less_or_equal_device_count(const int inner_table_id,
@@ -490,7 +473,10 @@ void JoinHashTable::reify() {
   const auto cols =
       get_cols(qual_bin_oper_.get(), *catalog_, executor_->temporary_tables_);
   const auto inner_col = cols.first;
-  checkHashJoinReplicationConstraint(inner_col->get_table_id());
+  HashJoin::checkHashJoinReplicationConstraint(
+      inner_col->get_table_id(),
+      get_shard_count(qual_bin_oper_.get(), executor_),
+      executor_);
   const auto& query_info = getInnerQueryInfo(inner_col).info;
   if (query_info.fragments.empty()) {
     return;
@@ -824,21 +810,6 @@ ChunkKey JoinHashTable::genHashTableKey(
   return hash_table_key;
 }
 
-void JoinHashTable::checkHashJoinReplicationConstraint(const int table_id) const {
-  if (!g_cluster) {
-    return;
-  }
-  if (table_id >= 0) {
-    const auto inner_td = executor_->getCatalog()->getMetadataForTable(table_id);
-    CHECK(inner_td);
-    size_t shard_count{0};
-    shard_count = get_shard_count(qual_bin_oper_.get(), executor_);
-    if (!shard_count && !table_is_replicated(inner_td)) {
-      throw TableMustBeReplicated(inner_td->tableName);
-    }
-  }
-}
-
 std::shared_ptr<PerfectHashTable> JoinHashTable::initHashTableOnCpuFromCache(
     const ChunkKey& chunk_key,
     const size_t num_elements,
@@ -1076,55 +1047,6 @@ size_t JoinHashTable::getComponentBufferSize() const noexcept {
   }
 }
 
-int64_t JoinHashTable::getJoinHashBuffer(const ExecutorDeviceType device_type,
-                                         const int device_id) const noexcept {
-  CHECK(!hash_tables_for_device_.empty());
-  if (device_type == ExecutorDeviceType::CPU && !hash_tables_for_device_.front()) {
-    return 0;
-  }
-#ifdef HAVE_CUDA
-  CHECK_LT(static_cast<size_t>(device_id), hash_tables_for_device_.size());
-  if (device_type == ExecutorDeviceType::CPU) {
-    CHECK(hash_tables_for_device_.front());
-    return reinterpret_cast<int64_t>(hash_tables_for_device_.front()->getCpuBuffer());
-  } else {
-    return hash_tables_for_device_[device_id]
-               ? reinterpret_cast<CUdeviceptr>(
-                     hash_tables_for_device_[device_id]->getGpuBuffer())
-               : reinterpret_cast<CUdeviceptr>(nullptr);
-  }
-#else
-  CHECK(device_type == ExecutorDeviceType::CPU);
-  CHECK(hash_tables_for_device_.front());
-  return reinterpret_cast<int64_t>(hash_tables_for_device_.front()->getCpuBuffer());
-#endif
-}
-
-size_t JoinHashTable::getJoinHashBufferSize(const ExecutorDeviceType device_type,
-                                            const int device_id) const noexcept {
-  CHECK(!hash_tables_for_device_.empty());
-  if (device_type == ExecutorDeviceType::CPU && !hash_tables_for_device_.front()) {
-    return 0;
-  }
-#ifdef HAVE_CUDA
-  CHECK_LT(static_cast<size_t>(device_id), hash_tables_for_device_.size());
-  if (device_type == ExecutorDeviceType::CPU) {
-    CHECK(hash_tables_for_device_.front());
-    return hash_tables_for_device_.front()->getHashTableBufferSize(
-        ExecutorDeviceType::CPU);
-  } else {
-    return hash_tables_for_device_[device_id]
-               ? hash_tables_for_device_[device_id]->getHashTableBufferSize(
-                     ExecutorDeviceType::GPU)
-               : 0;
-  }
-#else
-  CHECK(device_type == ExecutorDeviceType::CPU);
-  CHECK(hash_tables_for_device_.front());
-  return hash_tables_for_device_.front()->getHashTableBufferSize(ExecutorDeviceType::CPU);
-#endif
-}
-
 std::string JoinHashTable::toString(const ExecutorDeviceType device_type,
                                     const int device_id,
                                     bool raw) const {
@@ -1273,7 +1195,6 @@ size_t get_entries_per_device(const size_t total_entries,
   return entries_per_device;
 }
 
-// TODO(adb): unify with BaselineJoinHashTable
 size_t JoinHashTable::shardCount() const {
   return memory_level_ == Data_Namespace::GPU_LEVEL
              ? get_shard_count(qual_bin_oper_.get(), executor_)
