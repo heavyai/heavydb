@@ -95,6 +95,8 @@ class ForeignStorageMgr : public AbstractBufferMgr {
 
   virtual void refreshTable(const ChunkKey& table_key, const bool evict_cached_entries);
 
+  void setColumnHints(std::map<ChunkKey, std::vector<int>>& columns_per_table);
+
  protected:
   bool createDataWrapperIfNotExists(const ChunkKey& chunk_key);
   std::shared_ptr<ForeignDataWrapper> getDataWrapper(const ChunkKey& chunk_key);
@@ -105,6 +107,11 @@ class ForeignStorageMgr : public AbstractBufferMgr {
   std::map<ChunkKey, AbstractBuffer*> allocateTempBuffersForChunks(
       const std::set<ChunkKey>& chunk_keys);
   void clearTempChunkBufferMapEntriesForTable(const ChunkKey& table_key);
+  void clearTempChunkBufferMapEntriesForTableUnlocked(const ChunkKey& table_key);
+
+  void getOptionalChunkKeySet(std::set<ChunkKey>& optional_chunk_keys,
+                              const ChunkKey& chunk_key,
+                              const std::set<ChunkKey>& required_chunk_keys);
 
   std::shared_mutex data_wrapper_mutex_;
   std::map<ChunkKey, std::shared_ptr<ForeignDataWrapper>> data_wrapper_map_;
@@ -113,6 +120,9 @@ class ForeignStorageMgr : public AbstractBufferMgr {
   // when buffer mgr interface is updated to accept multiple buffers in one call
   std::map<ChunkKey, std::unique_ptr<AbstractBuffer>> temp_chunk_buffer_map_;
   std::shared_mutex temp_chunk_buffer_map_mutex_;
+
+  std::shared_mutex columns_hints_mutex_;
+  std::map<ChunkKey, std::vector<int>> columns_hints_per_table_;
 };
 
 std::vector<ChunkKey> get_keys_vec_from_table(const ChunkKey& destination_chunk_key);

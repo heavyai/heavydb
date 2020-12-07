@@ -43,12 +43,38 @@ void CachingForeignStorageMgr::fetchBuffer(const ChunkKey& chunk_key,
 
   // TODO: Populate optional buffers as part of CSV performance improvement
   std::vector<ChunkKey> chunk_keys = get_keys_vec_from_table(chunk_key);
+  std::vector<ChunkKey> optional_chunk_keys;
   std::map<ChunkKey, AbstractBuffer*> optional_buffers;
+
+  // Use hints to prefetch other chunks in fragment into cache
+  auto catalog = Catalog_Namespace::Catalog::checkedGet(chunk_key[CHUNK_KEY_DB_IDX]);
+  auto foreign_table = catalog->getForeignTableUnlocked(chunk_key[CHUNK_KEY_TABLE_IDX]);
+  if (foreign_table->foreign_server->data_wrapper_type ==
+      foreign_storage::DataWrapperType::CSV)  // optimization only useful for column based
+                                              // formats
+  {
+    std::set<ChunkKey> optional_chunk_key_set;
+    getOptionalChunkKeySet(
+        optional_chunk_key_set, chunk_key, get_keys_set_from_table(chunk_key));
+    for (const auto& key : optional_chunk_key_set) {
+      if (disk_cache_->getCachedChunkIfExists(key) == nullptr) {
+        optional_chunk_keys.emplace_back(key);
+      }
+    }
+
+    if (optional_chunk_keys.size()) {
+      optional_buffers = disk_cache_->getChunkBuffersForCaching(optional_chunk_keys);
+    }
+  }
+
   std::map<ChunkKey, AbstractBuffer*> required_buffers =
       disk_cache_->getChunkBuffersForCaching(chunk_keys);
   CHECK(required_buffers.find(chunk_key) != required_buffers.end());
   getDataWrapper(chunk_key)->populateChunkBuffers(required_buffers, optional_buffers);
   disk_cache_->cacheTableChunks(chunk_keys);
+  if (optional_chunk_keys.size()) {
+    disk_cache_->cacheTableChunks(optional_chunk_keys);
+  }
 
   AbstractBuffer* buffer = required_buffers.at(chunk_key);
   CHECK(buffer);
