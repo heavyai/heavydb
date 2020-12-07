@@ -532,7 +532,10 @@ LocalMultiFileReader::LocalMultiFileReader(const std::string& file_path,
   std::set<std::string> file_locations;
   if (boost::filesystem::is_directory(file_path)) {
     // Find all files in this directory
-    for (boost::filesystem::recursive_directory_iterator it(file_path), eit; it != eit;
+    for (boost::filesystem::recursive_directory_iterator
+             it(file_path, boost::filesystem::symlink_option::recurse),
+         eit;
+         it != eit;
          ++it) {
       if (!boost::filesystem::is_directory(it->path())) {
         file_locations.insert(it->path().string());
@@ -610,7 +613,10 @@ void LocalMultiFileReader::checkForMoreRows(size_t file_offset,
   if (boost::filesystem::is_directory(file_path_)) {
     // Find all files in this directory
     std::set<std::string> all_file_paths;
-    for (boost::filesystem::recursive_directory_iterator it(file_path_), eit; it != eit;
+    for (boost::filesystem::recursive_directory_iterator
+             it(file_path_, boost::filesystem::symlink_option::recurse),
+         eit;
+         it != eit;
          ++it) {
       bool new_file =
           std::find(file_locations_.begin(), file_locations_.end(), it->path()) ==
