@@ -5207,6 +5207,43 @@ TEST_F(ParquetCoercionTest, TimestampNanoToDateFixedLengthEncoded16InformationLo
       getCoercionException("1880-04-15", "2059-09-18", "2149-06-06", base_file_name));
 }
 
+TEST_F(SelectQueryTest, ParquetNotNullWithoutNullOutOfRange) {
+  const auto& query = getCreateForeignTableQuery(
+      "( int8 TINYINT NOT NULL )", "tinyint_without_null_out_of_range", "parquet");
+  sql(query);
+  queryAndAssertException(
+      "SELECT * FROM test_foreign_table",
+      "Exception: Parquet column contains values that are outside the range of the "
+      "OmniSci "
+      "column type. Consider using a wider column type. Min allowed value: -127"
+      ". Max allowed "
+      "value: 127. Encountered value: -128"
+      ". Error validating statistics of Parquet column "
+      "'tinyint' in row group 1 of Parquet file "
+      "'" +
+          getDataFilesPath() + "tinyint_without_null_out_of_range.parquet'.");
+}
+
+TEST_F(SelectQueryTest, ParquetNotNullWithoutNull) {
+  const auto& query = getCreateForeignTableQuery(
+      "( int8 TINYINT NOT NULL )", "tinyint_without_null", "parquet");
+  sql(query);
+  sqlAndCompareResult("SELECT * FROM test_foreign_table;", {{i(127)}, {i(-127)}});
+}
+
+TEST_F(SelectQueryTest, ParquetNotNullWithNull) {
+  const std::string base_file_name = "tinyint_with_null";
+  const std::string file_name = getDataFilesPath() + base_file_name + ".parquet";
+  const auto& query =
+      getCreateForeignTableQuery("( int8 TINYINT NOT NULL )", base_file_name, "parquet");
+  sql(query);
+  queryAndAssertException(
+      "SELECT * FROM test_foreign_table;",
+      "Exception: A null value was detected in Parquet column 'tinyint' but OmniSci "
+      "column is set to not null in row group 1 of Parquet file '" +
+          file_name + "'.");
+}
+
 int main(int argc, char** argv) {
   g_enable_fsi = true;
   TestHelpers::init_logger_stderr_only(argc, argv);

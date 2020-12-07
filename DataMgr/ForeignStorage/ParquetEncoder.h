@@ -45,7 +45,13 @@ class ParquetEncoder {
     auto column_metadata = group_metadata->ColumnChunk(parquet_column_index);
     auto stats = validate_and_get_column_metadata_statistics(column_metadata.get());
     auto metadata = createMetadata(column_type);
-    metadata->chunkStats.has_nulls = stats->null_count() > 0;
+
+    auto null_count = stats->null_count();
+    validateNullCount(group_metadata->schema()->Column(parquet_column_index)->name(),
+                      null_count,
+                      column_type);
+    metadata->chunkStats.has_nulls = null_count > 0;
+
     // update sizing
     metadata->numElements = group_metadata->num_rows();
     return metadata;
@@ -63,6 +69,22 @@ class ParquetEncoder {
     encoder->getMetadata(metadata);
     metadata->sqlType = column_type;
     return metadata;
+  }
+
+  static void throwNotNullViolation(const std::string& parquet_column_name) {
+    std::stringstream error_message;
+    error_message << "A null value was detected in Parquet column '"
+                  << parquet_column_name << "' but OmniSci column is set to not null";
+    throw std::runtime_error(error_message.str());
+  }
+
+  static void validateNullCount(const std::string& parquet_column_name,
+                                int64_t null_count,
+                                const SQLTypeInfo& column_type) {
+    bool has_nulls = null_count > 0;
+    if (has_nulls && column_type.get_notnull()) {
+      throwNotNullViolation(parquet_column_name);
+    }
   }
 };
 

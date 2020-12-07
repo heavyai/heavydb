@@ -230,7 +230,11 @@ class TypedParquetInPlaceEncoder : public ParquetInPlaceEncoder {
                                updated_chunk_stats.max,
                                metadata->chunkStats.has_nulls);
     }
-    metadata->chunkStats.has_nulls = stats->null_count() > 0;
+    auto null_count = stats->null_count();
+    validateNullCount(group_metadata->schema()->Column(parquet_column_index)->name(),
+                      null_count,
+                      column_type);
+    metadata->chunkStats.has_nulls = null_count > 0;
 
     // update sizing
     metadata->numBytes = omnisci_data_type_byte_size_ * column_metadata->num_values();
