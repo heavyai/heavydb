@@ -29,8 +29,8 @@
 #include "FsiJsonUtils.h"
 #include "ImportExport/DelimitedParserUtils.h"
 #include "ImportExport/Importer.h"
-#include "Utils/DdlUtils.h"
 #include "Shared/sqltypes.h"
+#include "Utils/DdlUtils.h"
 
 namespace foreign_storage {
 CsvDataWrapper::CsvDataWrapper(const int db_id, const ForeignTable* foreign_table)
@@ -711,32 +711,43 @@ void scan_metadata(MetadataScanMultiThreadingParams& multi_threading_params,
       break;
     }
     auto& request = request_opt.value();
-    if (column_by_id.empty()) {
-      for (const auto column : request.getColumns()) {
-        column_by_id[column->columnId] = column;
-      }
-    }
-    auto partitions = partition_by_fragment(
-        request.first_row_index, request.getMaxFragRows(), request.buffer_row_count);
-    request.begin_pos = 0;
-    size_t row_index = request.first_row_index;
-    for (const auto partition : partitions) {
-      request.process_row_count = partition;
-      for (const auto& import_buffer : request.import_buffers) {
-        if (import_buffer != nullptr) {
-          import_buffer->clear();
+    try {
+      if (column_by_id.empty()) {
+        for (const auto column : request.getColumns()) {
+          column_by_id[column->columnId] = column;
         }
       }
-      auto result = parse_buffer(request);
-      int fragment_id = row_index / request.getMaxFragRows();
-      process_data_blocks(multi_threading_params,
-                          fragment_id,
-                          request,
-                          result,
-                          column_by_id,
-                          fragment_id_to_file_regions_map);
-      row_index += result.row_count;
-      request.begin_pos = result.row_offsets.back() - request.file_offset;
+      auto partitions = partition_by_fragment(
+          request.first_row_index, request.getMaxFragRows(), request.buffer_row_count);
+      request.begin_pos = 0;
+      size_t row_index = request.first_row_index;
+      for (const auto partition : partitions) {
+        request.process_row_count = partition;
+        for (const auto& import_buffer : request.import_buffers) {
+          if (import_buffer != nullptr) {
+            import_buffer->clear();
+          }
+        }
+        auto result = parse_buffer(request);
+        int fragment_id = row_index / request.getMaxFragRows();
+        process_data_blocks(multi_threading_params,
+                            fragment_id,
+                            request,
+                            result,
+                            column_by_id,
+                            fragment_id_to_file_regions_map);
+        row_index += result.row_count;
+        request.begin_pos = result.row_offsets.back() - request.file_offset;
+      }
+    } catch (...) {
+      // Re-add request to pool so we dont block any other threads
+      {
+        std::lock_guard<std::mutex> pending_requests_lock(
+            multi_threading_params.pending_requests_mutex);
+        multi_threading_params.continue_processing = false;
+      }
+      add_request_to_pool(multi_threading_params, request);
+      throw;
     }
     add_request_to_pool(multi_threading_params, request);
   }
@@ -806,6 +817,13 @@ void dispatch_metadata_scan_requests(
   size_t residual_buffer_alloc_size = alloc_size;
 
   while (!csv_reader.isScanFinished()) {
+    {
+      std::lock_guard<std::mutex> pending_requests_lock(
+          multi_threading_params.pending_requests_mutex);
+      if (!multi_threading_params.continue_processing) {
+        break;
+      }
+    }
     auto request = get_request_from_pool(multi_threading_params);
     resize_buffer_if_needed(request.buffer, request.buffer_alloc_size, alloc_size);
 
@@ -860,7 +878,8 @@ void dispatch_metadata_scan_requests(
       multi_threading_params.pending_requests_mutex);
   multi_threading_params.pending_requests_condition.wait(
       pending_requests_queue_lock, [&multi_threading_params] {
-        return multi_threading_params.pending_requests.empty();
+        return multi_threading_params.pending_requests.empty() ||
+               (multi_threading_params.continue_processing == false);
       });
   multi_threading_params.continue_processing = false;
   pending_requests_queue_lock.unlock();

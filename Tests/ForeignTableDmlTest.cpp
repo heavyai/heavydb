@@ -948,6 +948,19 @@ TEST_F(SelectQueryTest, DirectoryWithDifferentSchema_DifferentNumberOfColumns) {
           "different_parquet_schemas_2/two_col_1_2.parquet\" has 2 columns.");
 }
 
+TEST_F(SelectQueryTest, SchemaMismatch_CSV_Multithreaded) {
+  const auto& query = getCreateForeignTableQuery(
+      "(i INTEGER,  txt TEXT, txt_2 TEXT ENCODING NONE, txt_3 TEXT)",
+      {{"buffer_size", "25"}},
+      "0_255",
+      "csv");
+  sql(query);
+  queryAndAssertException("SELECT * FROM test_foreign_table ORDER BY i;",
+                          "Exception: Mismatched number of logical columns: (expected 4 "
+                          "columns, has 3): in file '" +
+                              getDataFilesPath() + "0_255.csv'");
+}
+
 INSTANTIATE_TEST_SUITE_P(CachOnOffSelectQueryTests,
                          CacheControllingSelectQueryTest,
                          ::testing::Values(DiskCacheLevel::none, DiskCacheLevel::fsi),
