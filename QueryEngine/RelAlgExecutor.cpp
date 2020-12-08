@@ -15,6 +15,7 @@
  */
 
 #include "RelAlgExecutor.h"
+#include "DataMgr/ForeignStorage/ForeignStorageException.h"
 #include "Parser/ParserNode.h"
 #include "QueryEngine/CalciteDeserializerUtils.h"
 #include "QueryEngine/CardinalityEstimator.h"
@@ -2942,6 +2943,8 @@ std::optional<size_t> RelAlgExecutor::getFilteredCountAll(const WorkUnit& work_u
                                    nullptr,
                                    false,
                                    column_cache);
+  } catch (const foreign_storage::ForeignStorageException& error) {
+    throw error;
   } catch (const std::exception& e) {
     LOG(WARNING) << "Failed to run pre-flight filtered count with error " << e.what();
     return std::nullopt;

@@ -26,6 +26,7 @@
 #include <limits>
 
 #include "DataMgr/BufferMgr/Buffer.h"
+#include "DataMgr/ForeignStorage/ForeignStorageException.h"
 #include "Logger/Logger.h"
 #include "Shared/measure.h"
 
@@ -738,6 +739,11 @@ AbstractBuffer* BufferMgr::getBuffer(const ChunkKey& key, const size_t num_bytes
     try {
       parent_mgr_->fetchBuffer(
           key, buffer, num_bytes);  // this should put buffer in a BufferSegment
+    } catch (const foreign_storage::ForeignStorageException& error) {
+      deleteBuffer(key);  // buffer failed to load, ensure it is cleaned up
+      LOG(WARNING) << "Get chunk - Could not load chunk " << keyToString(key)
+                   << " from foreign storage. Error was " << error.what();
+      throw error;
     } catch (const std::exception& error) {
       LOG(FATAL) << "Get chunk - Could not find chunk " << keyToString(key)
                  << " in buffer pool or parent buffer pools. Error was " << error.what();

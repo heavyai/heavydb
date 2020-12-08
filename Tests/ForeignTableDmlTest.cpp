@@ -2737,18 +2737,32 @@ TEST_F(SelectQueryTest, ParquetArrayDateTimeTypes) {
   // clang-format on
 }
 
-TEST_F(SelectQueryTest, DISABLED_ParquetFixedLengthArrayMalformed) {
-  // TODO: to fix this test, remove the catch clause in BufferMgr::getBuffer
-  // that aborts and does not thrown an exception. Alternatively, write the
-  // test to expect an abort.
+TEST_F(SelectQueryTest, ParquetFixedLengthArrayMalformed) {
   const auto& query = getCreateForeignTableQuery(
       "(bigint_array BIGINT[3])", "array_fixed_len_malformed", "parquet");
   sql(query);
   TQueryResult result;
   queryAndAssertException(
       "SELECT * FROM test_foreign_table;",
-      "Detected a row with 2 elements being loaded into  OmniSci column 'bigint_array' "
-      "which has type fixed length array, expecting 3 elements");
+      "Exception: Detected a row with 2 elements being loaded into OmniSci column "
+      "'bigint_array' which has a fixed length array type, expecting 3 elements. Row "
+      "group: 2, Parquet column: 'i64.list.item', Parquet file: '" +
+          getDataFilesPath() + "array_fixed_len_malformed.parquet'");
+}
+
+TEST_F(SelectQueryTest, ParquetFixedLengthStringArrayWithNullArray) {
+  const auto& query = getCreateForeignTableQuery(
+      "(text_array TEXT[3])", "fixed_length_string_array_with_null_array", "parquet");
+  sql(query);
+  TQueryResult result;
+  queryAndAssertException(
+      "SELECT * FROM test_foreign_table;",
+      "Exception: Detected a null array being imported into OmniSci 'text_array' "
+      "column which has a fixed length array type of dictionary encoded text. Currently "
+      "null arrays for this type of column are not allowed. Row group: 0, Parquet "
+      "column: "
+      "'string_array.list.item', Parquet file: '" +
+          getDataFilesPath() + "fixed_length_string_array_with_null_array.parquet'");
 }
 
 TEST_F(SelectQueryTest, ParquetFixedLengthArrayDateTimeTypes) {
@@ -2935,32 +2949,30 @@ TEST_F(SelectQueryTest, ParquetGeoTypesMetadata) {
   assertExpectedChunkMetadata(test_chunk_metadata_map);
 }
 
-TEST_F(SelectQueryTest, DISABLED_ParquetMalformedGeoPoint) {
-  // TODO: to fix this test, remove the catch clause in BufferMgr::getBuffer
-  // that aborts and does not thrown an exception. Alternatively, write the
-  // test to expect an abort.
+TEST_F(SelectQueryTest, ParquetMalformedGeoPoint) {
   const auto& query =
       getCreateForeignTableQuery("( p POINT )", "geo_point_malformed", "parquet");
   sql(query);
 
   TQueryResult result;
-  queryAndAssertException("SELECT * FROM test_foreign_table;",
-                          "Failed to extract valid geometry from row 0 for OmniSci "
-                          "column p importing from parquet column point");
+  queryAndAssertException(
+      "SELECT * FROM test_foreign_table;",
+      "Exception: Failed to extract valid geometry in row 0 of OmniSci column 'p'. Row "
+      "group: 0, Parquet column: 'point', Parquet file: '" +
+          getDataFilesPath() + "geo_point_malformed.parquet'");
 }
 
-TEST_F(SelectQueryTest, DISABLED_ParquetWrongGeoType) {
-  // TODO: to fix this test, remove the catch clause in BufferMgr::getBuffer
-  // that aborts and does not thrown an exception. Alternatively, write the
-  // test to expect an abort.
+TEST_F(SelectQueryTest, ParquetWrongGeoType) {
   const auto& query =
       getCreateForeignTableQuery("( p LINESTRING )", "geo_point", "parquet");
   sql(query);
 
   TQueryResult result;
-  queryAndAssertException("SELECT * FROM test_foreign_table;",
-                          "Imported geometry from parquet column point doesn't match the "
-                          "geospatial type of OmniSci column p");
+  queryAndAssertException(
+      "SELECT * FROM test_foreign_table;",
+      "Exception: Imported geometry doesn't match the geospatial type of OmniSci column "
+      "'p'. Row group: 0, Parquet column: 'point', Parquet file: '" +
+          getDataFilesPath() + "geo_point.parquet'");
 }
 
 TEST_F(SelectQueryTest, ParquetArrayUnsignedIntegerTypes) {

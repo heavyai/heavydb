@@ -909,20 +909,27 @@ std::list<std::unique_ptr<ChunkMetadata>> append_row_groups(
       std::shared_ptr<parquet::ColumnReader> col_reader =
           group_reader->Column(parquet_column_index);
 
-      while (col_reader->HasNext()) {
-        int64_t levels_read =
-            parquet::ScanAllValues(LazyParquetChunkLoader::batch_reader_num_elements,
-                                   def_levels.data(),
-                                   rep_levels.data(),
-                                   reinterpret_cast<uint8_t*>(values.data()),
-                                   &values_read,
-                                   col_reader.get());
-        encoder->appendData(def_levels.data(),
-                            rep_levels.data(),
-                            values_read,
-                            levels_read,
-                            !col_reader->HasNext(),
-                            values.data());
+      try {
+        while (col_reader->HasNext()) {
+          int64_t levels_read =
+              parquet::ScanAllValues(LazyParquetChunkLoader::batch_reader_num_elements,
+                                     def_levels.data(),
+                                     rep_levels.data(),
+                                     reinterpret_cast<uint8_t*>(values.data()),
+                                     &values_read,
+                                     col_reader.get());
+          encoder->appendData(def_levels.data(),
+                              rep_levels.data(),
+                              values_read,
+                              levels_read,
+                              !col_reader->HasNext(),
+                              values.data());
+        }
+      } catch (const std::exception& error) {
+        throw ForeignStorageException(
+            std::string(error.what()) + " Row group: " + std::to_string(row_group_index) +
+            ", Parquet column: '" + col_reader->descr()->path()->ToDotString() +
+            "', Parquet file: '" + row_group_interval.file_path + "'");
       }
     }
   }
@@ -1358,13 +1365,19 @@ std::list<std::unique_ptr<ChunkMetadata>> LazyParquetChunkLoader::loadChunk(
   auto buffer = chunk.getBuffer();
   CHECK(buffer);
 
-  auto metadata = append_row_groups(row_group_intervals,
-                                    parquet_column_index,
-                                    column_descriptor,
-                                    chunks,
-                                    string_dictionary,
-                                    file_system_);
-  return metadata;
+  try {
+    auto metadata = append_row_groups(row_group_intervals,
+                                      parquet_column_index,
+                                      column_descriptor,
+                                      chunks,
+                                      string_dictionary,
+                                      file_system_);
+    return metadata;
+  } catch (const std::exception& error) {
+    throw ForeignStorageException(error.what());
+  }
+
+  return {};
 }
 
 std::list<RowGroupMetadata> LazyParquetChunkLoader::metadataScan(

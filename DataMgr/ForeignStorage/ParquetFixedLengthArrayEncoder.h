@@ -19,6 +19,7 @@
 #include <stdexcept>
 
 #include <parquet/types.h>
+#include "DataMgr/ForeignStorage/ForeignStorageException.h"
 #include "ParquetArrayEncoder.h"
 #include "Shared/InlineNullValues.h"
 
@@ -65,11 +66,7 @@ class ParquetFixedLengthArrayEncoder : public ParquetArrayEncoder {
       // TODO: after investigation as to why fixed length arrays with
       // strings can not represent null arrays, either fix this error
       // or erase this comment.
-      throw std::runtime_error("Detected a null array being imported into OmniSci '" +
-                               column_desciptor_.columnName +
-                               "' column which has a fixed length array type of "
-                               "dictionary encoded text. Currently "
-                               "null arrays for this type of column are not allowed.");
+      throwNullInDictionaryEncodedColumn(column_desciptor_.columnName);
     }
     const auto type = ti.get_type();
     switch (type) {
@@ -123,20 +120,35 @@ class ParquetFixedLengthArrayEncoder : public ParquetArrayEncoder {
     auto size_of_last_array = sizeOfLastArray();
     if (!isLastArrayNull()) {
       if (size_of_last_array != array_element_count_) {
-        throw std::runtime_error("Detected a row with " +
-                                 std::to_string(size_of_last_array) +
-                                 " elements being loaded into"
-                                 " OmniSci column '" +
-                                 column_desciptor_.columnName +
-                                 "' which has a fixed length array type,"
-                                 " expecting " +
-                                 std::to_string(array_element_count_) + " elements.");
+        throwWrongSizeArray(
+            size_of_last_array, array_element_count_, column_desciptor_.columnName);
       }
     } else {
       // append a null array sentinel
       CHECK(size_of_last_array == 0);
       appendNullFixedLengthArray();
     }
+  }
+
+  void throwWrongSizeArray(const size_t size_of_last_array,
+                           const size_t array_element_count,
+                           const std::string& omnisci_column_name) {
+    throw ForeignStorageException("Detected a row with " +
+                                  std::to_string(size_of_last_array) +
+                                  " elements being loaded into"
+                                  " OmniSci column '" +
+                                  omnisci_column_name +
+                                  "' which has a fixed length array type,"
+                                  " expecting " +
+                                  std::to_string(array_element_count) + " elements.");
+  }
+
+  void throwNullInDictionaryEncodedColumn(const std::string& omnisci_column_name) {
+    throw ForeignStorageException("Detected a null array being imported into OmniSci '" +
+                                  omnisci_column_name +
+                                  "' column which has a fixed length array type of "
+                                  "dictionary encoded text. Currently "
+                                  "null arrays for this type of column are not allowed.");
   }
 
   const ColumnDescriptor column_desciptor_;

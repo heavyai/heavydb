@@ -27,6 +27,7 @@
 
 #include "DataMgr/ArrayNoneEncoder.h"
 #include "DataMgr/FixedLengthArrayNoneEncoder.h"
+#include "DataMgr/ForeignStorage/ForeignStorageException.h"
 #include "DataMgr/StringNoneEncoder.h"
 
 #include <parquet/schema.h>
@@ -223,11 +224,7 @@ class ParquetGeospatialEncoder : public ParquetEncoder {
                                                     ring_sizes_parse_buffer_,
                                                     poly_rings_parse_buffer_,
                                                     PROMOTE_POLYGON_TO_MULTIPOLYGON)) {
-      std::string error_message =
-          "Failed to extract valid geometry from row " + std::to_string(row_count_) +
-          " for OmniSci column " + geo_column_descriptor_->columnName +
-          " importing from parquet column " + parquet_column_name_;
-      throw std::runtime_error(error_message);
+      throwMalformedGeoElement(row_count_, geo_column_descriptor_->columnName);
     }
 
     // validate types
@@ -235,10 +232,7 @@ class ParquetGeospatialEncoder : public ParquetEncoder {
       if (!PROMOTE_POLYGON_TO_MULTIPOLYGON ||
           !(import_ti.get_type() == SQLTypes::kPOLYGON &&
             geo_column_descriptor_->columnType.get_type() == SQLTypes::kMULTIPOLYGON)) {
-        throw std::runtime_error("Imported geometry from parquet column " +
-                                 parquet_column_name_ +
-                                 " doesn't match the geospatial type of OmniSci column " +
-                                 geo_column_descriptor_->columnName);
+        throwMismatchedGeoElement(geo_column_descriptor_->columnName);
       }
     }
 
@@ -398,6 +392,21 @@ class ParquetGeospatialEncoder : public ParquetEncoder {
         getIteratorForGeoColumnType(chunk_metadata, sql_type, geo_column_type)->get();
     auto column_descriptor = chunk->getColumnDesc();
     return {encoder, metadata, column_descriptor};
+  }
+
+  static void throwMalformedGeoElement(const size_t row_count,
+                                       const std::string& omnisci_column_name) {
+    std::string error_message = "Failed to extract valid geometry in row " +
+                                std::to_string(row_count) + " of OmniSci column '" +
+                                omnisci_column_name + "'.";
+    throw foreign_storage::ForeignStorageException(error_message);
+  }
+
+  static void throwMismatchedGeoElement(const std::string& omnisci_column_name) {
+    throw foreign_storage::ForeignStorageException(
+        "Imported geometry"
+        " doesn't match the geospatial type of OmniSci column '" +
+        omnisci_column_name + "'.");
   }
 
   const ColumnDescriptor* geo_column_descriptor_;
