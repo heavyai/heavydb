@@ -35,6 +35,8 @@
 extern bool g_enable_fsi;
 extern bool g_enable_calcite_ddl_parser;
 
+namespace bf = boost::filesystem;
+
 namespace {
 struct ColumnAttributes {
   std::string column_name;
@@ -117,8 +119,7 @@ class CreateAndDropTableDdlTest : public DBHandlerTestFixture {
   }
 
   std::string getTestFilePath() {
-    return boost::filesystem::canonical("../../Tests/FsiDataFiles/example_1.csv")
-        .string();
+    return bf::canonical("../../Tests/FsiDataFiles/example_1.csv").string();
   }
 
   void createTestUser() {
@@ -1171,6 +1172,7 @@ class CreateForeignTableTest : public CreateAndDropTableDdlTest {
   void TearDown() override {
     g_enable_fsi = true;
     sql("DROP FOREIGN TABLE IF EXISTS test_foreign_table;");
+    sql("DROP SERVER IF EXISTS test_server;");
     CreateAndDropTableDdlTest::TearDown();
   }
 };
@@ -1210,7 +1212,8 @@ TEST_F(CreateForeignTableTest, InvalidTableOption) {
 TEST_F(CreateForeignTableTest, WrongTableOptionCharacterSize) {
   std::string query{
       "CREATE FOREIGN TABLE test_foreign_table(col1 INTEGER) "
-      "SERVER omnisci_local_csv WITH (delimiter = ',,');"};
+      "SERVER omnisci_local_csv WITH (delimiter = ',,', file_path = '" +
+      getTestFilePath() + "');"};
   queryAndAssertException(query,
                           "Exception: Value of \"DELIMITER\" foreign table option has "
                           "the wrong number of characters. "
@@ -1220,7 +1223,8 @@ TEST_F(CreateForeignTableTest, WrongTableOptionCharacterSize) {
 TEST_F(CreateForeignTableTest, InvalidTableOptionBooleanValue) {
   std::string query{
       "CREATE FOREIGN TABLE test_foreign_table(col1 INTEGER) "
-      "SERVER omnisci_local_csv WITH (header = 'value');"};
+      "SERVER omnisci_local_csv WITH (header = 'value', file_path = '" +
+      getTestFilePath() + "');"};
   queryAndAssertException(
       query,
       "Exception: Invalid boolean value specified for \"HEADER\" foreign table option. "
@@ -1233,6 +1237,67 @@ TEST_F(CreateForeignTableTest, FsiDisabled) {
       ddl_utils::TableType::FOREIGN_TABLE, "test_foreign_table", "(col1 INTEGER)");
   // Exception differs depending on which parser is enabled
   EXPECT_ANY_THROW(sql(query));
+}
+
+TEST_F(CreateForeignTableTest, DefaultServerWrapperPathMissingCsv) {
+  queryAndAssertException(
+      "CREATE FOREIGN TABLE test_foreign_table(col1 INTEGER) "
+      "SERVER omnisci_local_csv;",
+      "Exception: No file_path found for Foreign Table \"test_foreign_table\". "
+      "Table must have either set a \"FILE_PATH\" "
+      "option, or its parent server must have set a \"BASE_PATH\" option.");
+}
+
+TEST_F(CreateForeignTableTest, DefaultServerWrapperPathMissingParquet) {
+  queryAndAssertException(
+      "CREATE FOREIGN TABLE test_foreign_table(col1 INTEGER) "
+      "SERVER omnisci_local_parquet;",
+      "Exception: No file_path found for Foreign Table \"test_foreign_table\". "
+      "Table must have either set a \"FILE_PATH\" "
+      "option, or its parent server must have set a \"BASE_PATH\" option.");
+}
+
+TEST_F(CreateForeignTableTest, ServerPathPresentWrapperPathMissing) {
+  sql("CREATE SERVER test_server FOREIGN DATA WRAPPER omnisci_csv WITH (storage_type = "
+      "'LOCAL_FILE', base_path = '" +
+      bf::canonical("../../Tests/FsiDataFiles/example_1_dir").string() + "');");
+  sql("CREATE FOREIGN TABLE test_foreign_table(t TEXT, i INTEGER[]) "
+      "SERVER test_server;");
+  sql("SELECT * FROM test_foreign_table;");
+}
+
+TEST_F(CreateForeignTableTest, ServerPathPresentWrapperPathEmpty) {
+  sql("CREATE SERVER test_server FOREIGN DATA WRAPPER omnisci_csv WITH (storage_type = "
+      "'LOCAL_FILE', base_path = '" +
+      bf::canonical("../../Tests/FsiDataFiles/example_1_dir").string() + "');");
+  sql("CREATE FOREIGN TABLE test_foreign_table(t TEXT, i INTEGER[]) "
+      "SERVER test_server WITH (file_path = '');");
+  sql("SELECT * FROM test_foreign_table;");
+}
+
+TEST_F(CreateForeignTableTest, ServerPathMissingWrapperPathMissing) {
+  sql("CREATE SERVER test_server FOREIGN DATA WRAPPER omnisci_csv WITH (storage_type = "
+      "'LOCAL_FILE');");
+  queryAndAssertException(
+      "CREATE FOREIGN TABLE test_foreign_table(t TEXT, i INTEGER[]) "
+      "SERVER test_server;",
+      "Exception: No file_path found for Foreign Table \"test_foreign_table\". "
+      "Table must have either set a \"FILE_PATH\" "
+      "option, or its parent server must have set a \"BASE_PATH\" option.");
+}
+
+TEST_F(CreateForeignTableTest, UnsupportedOption) {
+  queryAndAssertException(
+      "CREATE FOREIGN TABLE test_foreign_table(col1 INTEGER) "
+      "SERVER omnisci_local_csv WITH (file_path = '" +
+          getTestFilePath() + "', shard_count = 4);",
+      "Exception: Invalid foreign table option \"SHARD_COUNT\".");
+}
+
+TEST_F(CreateForeignTableTest, ServerPathMissingWrapperPathRelative) {
+  sql("CREATE FOREIGN TABLE test_foreign_table(col1 INTEGER) "
+      "SERVER omnisci_local_csv WITH (file_path = '../../Tests/FsiDataFiles/0.csv');");
+  sql("SELECT * FROM test_foreign_table;");
 }
 
 class DropTableTest : public CreateAndDropTableDdlTest,

@@ -118,8 +118,7 @@ TEST_F(CreateForeignServerTest, MissingBasePath) {
   std::string query{
       "CREATE SERVER test_server FOREIGN DATA WRAPPER omnisci_csv WITH "
       "(storage_type = 'LOCAL_FILE');"};
-  queryAndAssertException(
-      query, "Exception: Foreign server options must contain \"BASE_PATH\".");
+  sql(query);
 }
 
 TEST_F(CreateForeignServerTest, InvalidOption) {
@@ -609,16 +608,14 @@ class ShowForeignServerTest : public DBHandlerTestFixture {
     ASSERT_EQ(num_matches, 1);
   }
   void assertServerLocalCSVFound(const TQueryResult& result) {
-    assertServerResultFound(result,
-                            "omnisci_local_csv",
-                            "OMNISCI_CSV",
-                            "{\"BASE_PATH\":\"/\",\"STORAGE_TYPE\":\"LOCAL_FILE\"}");
+    assertServerResultFound(
+        result, "omnisci_local_csv", "OMNISCI_CSV", "{\"STORAGE_TYPE\":\"LOCAL_FILE\"}");
   }
   void assertServerLocalParquetFound(const TQueryResult& result) {
     assertServerResultFound(result,
                             "omnisci_local_parquet",
                             "OMNISCI_PARQUET",
-                            "{\"BASE_PATH\":\"/\",\"STORAGE_TYPE\":\"LOCAL_FILE\"}");
+                            "{\"STORAGE_TYPE\":\"LOCAL_FILE\"}");
   }
 
   void assertNumResults(const TQueryResult& result, size_t num_results) {

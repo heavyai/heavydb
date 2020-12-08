@@ -121,7 +121,7 @@ void ParquetDataWrapper::validateFilePath() const {
   auto& server_options = foreign_table_->foreign_server->options;
   if (server_options.find(ForeignServer::STORAGE_TYPE_KEY)->second ==
       ForeignServer::LOCAL_FILE_STORAGE_TYPE) {
-    ddl_utils::validate_allowed_file_path(getConfiguredFilePath(),
+    ddl_utils::validate_allowed_file_path(foreign_table_->getFullFilePath(),
                                           ddl_utils::DataTransferType::IMPORT);
   }
 }
@@ -296,30 +296,6 @@ void ParquetDataWrapper::fetchChunkMetadata() {
   }
 }
 
-std::string ParquetDataWrapper::getConfiguredFilePath() const {
-  auto& server_options = foreign_table_->foreign_server->options;
-  std::string base_path;
-  if (server_options.find(ForeignServer::STORAGE_TYPE_KEY)->second ==
-      ForeignServer::LOCAL_FILE_STORAGE_TYPE) {
-    auto base_path_entry = server_options.find(ForeignServer::BASE_PATH_KEY);
-    if (base_path_entry == server_options.end()) {
-      throw std::runtime_error{"No base path found in foreign server options."};
-    }
-    base_path = base_path_entry->second;
-  } else {
-    UNREACHABLE();
-  }
-
-  auto file_path_entry = foreign_table_->options.find("FILE_PATH");
-  std::string file_path{};
-  if (file_path_entry != foreign_table_->options.end()) {
-    file_path = file_path_entry->second;
-  }
-  const std::string separator{boost::filesystem::path::preferred_separator};
-  return std::regex_replace(
-      base_path + separator + file_path, std::regex{separator + "{2,}"}, separator);
-}
-
 std::set<std::string> ParquetDataWrapper::getProcessedFilePaths() {
   std::set<std::string> file_paths;
   for (const auto& entry : fragment_to_row_group_interval_map_) {
@@ -334,7 +310,7 @@ std::set<std::string> ParquetDataWrapper::getAllFilePaths() {
   auto timer = DEBUG_TIMER(__func__);
   std::set<std::string> file_paths;
   arrow::fs::FileSelector file_selector{};
-  std::string base_path = getConfiguredFilePath();
+  std::string base_path = foreign_table_->getFullFilePath();
   file_selector.base_dir = base_path;
   file_selector.recursive = true;
 

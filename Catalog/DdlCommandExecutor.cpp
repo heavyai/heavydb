@@ -621,6 +621,11 @@ void CreateForeignTableCommand::setTableDetails(const std::string& table_name,
   if (ddl_payload_.HasMember("options") && !ddl_payload_["options"].IsNull()) {
     CHECK(ddl_payload_["options"].IsObject());
     foreign_table.initializeOptions(ddl_payload_["options"]);
+  } else {
+    // Initialize options even if none were provided to verify a legal state.
+    // This is necessary because some options (like "file_path") are optional only if a
+    // paired option ("base_path") exists in the server.
+    foreign_table.initializeOptions();
   }
 
   if (const auto it = foreign_table.options.find("FRAGMENT_SIZE");
@@ -958,7 +963,7 @@ void AlterForeignTableCommand::alterOptions(
   auto& cat = session_ptr_->getCatalog();
   auto new_options_map =
       foreign_storage::ForeignTable::create_options_map(ddl_payload_["options"]);
-  foreign_table->validateSupportedOptions(new_options_map);
+  foreign_table->validateSupportedOptionKeys(new_options_map);
   foreign_storage::ForeignTable::validate_alter_options(new_options_map);
   cat.setForeignTableOptions(table_name, new_options_map, false);
 }

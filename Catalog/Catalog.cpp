@@ -3938,8 +3938,6 @@ void Catalog::createDefaultServersIfNotExists() {
   std::map<std::string, std::string, std::less<>> options;
   options[std::string{ForeignServer::STORAGE_TYPE_KEY}] =
       ForeignServer::LOCAL_FILE_STORAGE_TYPE;
-  options[std::string{ForeignServer::BASE_PATH_KEY}] =
-      boost::filesystem::path::preferred_separator;
 
   auto local_csv_server =
       std::make_unique<ForeignServer>("omnisci_local_csv",
@@ -4390,7 +4388,7 @@ void Catalog::setForeignTableOptions(const std::string& table_name,
   auto saved_options = foreign_table->options;
   foreign_table->populateOptionsMap(std::move(options_map), clear_existing_options);
   try {
-    foreign_table->validateOptions();
+    foreign_table->validateOptionValues();
   } catch (const std::exception& e) {
     // validation did not succeed:
     // revert to saved options & throw exception

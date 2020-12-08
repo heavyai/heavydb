@@ -89,11 +89,8 @@ class FsiSchemaTest : public testing::Test {
             ->second);
 
     ASSERT_TRUE(
-        foreign_server->options.find(foreign_storage::ForeignServer::BASE_PATH_KEY) !=
+        foreign_server->options.find(foreign_storage::ForeignServer::BASE_PATH_KEY) ==
         foreign_server->options.end());
-    ASSERT_EQ("/",
-              foreign_server->options.find(foreign_storage::ForeignServer::BASE_PATH_KEY)
-                  ->second);
   }
 
   void assertFsiTablesExist() {

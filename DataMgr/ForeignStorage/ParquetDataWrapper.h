@@ -68,7 +68,6 @@ class ParquetDataWrapper : public ForeignDataWrapper {
       std::map<ChunkKey, AbstractBuffer*>& required_buffers);
 
   void validateFilePath() const;
-  std::string getConfiguredFilePath() const;
   std::set<std::string> getProcessedFilePaths();
   std::set<std::string> getAllFilePaths();
 

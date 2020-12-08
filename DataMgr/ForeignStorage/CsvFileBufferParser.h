@@ -305,7 +305,7 @@ struct ParseBufferRequest {
   }
 
   inline std::string getFilePath() const {
-    return foreign_table_schema->getForeignTable()->getFilePath();
+    return foreign_table_schema->getForeignTable()->getFullFilePath();
   }
 
   // These must be initialized at construction (before parsing).

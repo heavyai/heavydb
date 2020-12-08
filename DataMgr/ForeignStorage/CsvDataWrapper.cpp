@@ -54,7 +54,7 @@ void CsvDataWrapper::validateFilePath() {
   auto& server_options = foreign_table_->foreign_server->options;
   if (server_options.find(ForeignServer::STORAGE_TYPE_KEY)->second ==
       ForeignServer::LOCAL_FILE_STORAGE_TYPE) {
-    ddl_utils::validate_allowed_file_path(foreign_table_->getFilePath(),
+    ddl_utils::validate_allowed_file_path(foreign_table_->getFullFilePath(),
                                           ddl_utils::DataTransferType::IMPORT);
   }
 }
@@ -944,7 +944,7 @@ void CsvDataWrapper::populateChunkMetadata(ChunkMetadataVector& chunk_metadata_v
   auto timer = DEBUG_TIMER(__func__);
 
   const auto copy_params = validateAndGetCopyParams();
-  const auto file_path = foreign_table_->getFilePath();
+  const auto file_path = foreign_table_->getFullFilePath();
   auto catalog = Catalog_Namespace::Catalog::checkedGet(db_id_);
   auto& server_options = foreign_table_->foreign_server->options;
   if (foreign_table_->isAppendMode() && csv_reader_ != nullptr) {
@@ -1143,7 +1143,7 @@ void CsvDataWrapper::restoreDataWrapperInternals(
   // Construct csv_reader with metadta
   CHECK(d.HasMember("reader_metadata"));
   const auto copy_params = validateAndGetCopyParams();
-  const auto csv_file_path = foreign_table_->getFilePath();
+  const auto csv_file_path = foreign_table_->getFullFilePath();
   auto& server_options = foreign_table_->foreign_server->options;
   if (server_options.find(ForeignServer::STORAGE_TYPE_KEY)->second ==
       ForeignServer::LOCAL_FILE_STORAGE_TYPE) {

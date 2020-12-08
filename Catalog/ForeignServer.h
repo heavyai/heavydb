@@ -110,14 +110,6 @@ struct ForeignServer : public OptionsContainer {
           join(supported_storage_types, ", ") + ".";
       throw std::runtime_error{error_message};
     }
-
-    if (options.find(STORAGE_TYPE_KEY)->second == LOCAL_FILE_STORAGE_TYPE) {
-      if (options.find(BASE_PATH_KEY) == options.end()) {
-        throw std::runtime_error{"Foreign server options must contain \"BASE_PATH\"."};
-      }
-    } else {
-      UNREACHABLE();
-    }
   }
 
   void validateRecognizedOption() {

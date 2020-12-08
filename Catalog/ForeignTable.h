@@ -81,18 +81,66 @@ struct ForeignTable : public TableDescriptor, public OptionsContainer {
                                                               REFRESH_INTERVAL_KEY,
                                                               REFRESH_UPDATE_TYPE_KEY};
 
-  void validateOptions() const;
-  void initializeOptions(const rapidjson::Value& options);
-  std::vector<std::string_view> getSupportedDataWrapperOptions() const;
-  void validateSupportedOptions(const OptionsMap& options_map) const;
-  bool isAppendMode() const;
-  std::string getFilePath() const;
+  /**
+    @brief Verifies the values for mapped options are valid.
+   */
+  void validateOptionValues() const;
 
+  /**
+    @brief Creates an empty option map for the table.  Verifies that the required
+    option keys are present and that they contain legal values (as far as they can be
+    checked statically).  This is necessary even on a set of empty options because some
+    options may be required based on the options set in the server (e.g. file_path is
+    needed if the server has no base_path).
+  */
+  void initializeOptions();
+
+  /**
+    @brief Creates an option map from the given json options.  Verifies that the required
+    option keys are present and that they contain legal values (as far as they can be
+    checked statically).
+  */
+  void initializeOptions(const rapidjson::Value& options);
+
+  /**
+    @brief Returns the list of required data wrapper options based on the type of data
+    wrapper.
+   */
+  std::vector<std::string_view> getSupportedDataWrapperOptions() const;
+
+  /**
+    @brief Verifies that the options_map contains the keys required by a foreign table;
+    including those specified by the table's data wrapper.
+   */
+  void validateSupportedOptionKeys(const OptionsMap& options_map) const;
+
+  /**
+    @brief Checks if the table is in append mode.
+  */
+  bool isAppendMode() const;
+
+  /**
+    @brief Returns the path to the source file/dir of the table.  Depending on options
+    this may result from a concatenation of server and table path options.
+  */
+  std::string getFullFilePath() const;
+
+  /**
+    @brief Creates an options map from given options.  Converts options that must be upper
+    case appropriately.
+   */
   static OptionsMap create_options_map(const rapidjson::Value& json_options);
+
+  /**
+    @brief Verifies that the given options map only contains options that can be legally
+    altered.
+   */
   static void validate_alter_options(const OptionsMap& options_map);
 
  private:
   void validateDataWrapperOptions() const;
-  void validateRefreshOptions() const;
+  void validateRefreshOptionValues() const;
+  void validateFilePathOptionKey() const;
+  void throwFilePathError(const std::string_view& missing_path) const;
 };
 }  // namespace foreign_storage
