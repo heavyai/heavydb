@@ -483,6 +483,16 @@ class SQLTypeInfo {
                   get_elem_type().get_size(),
                   ")");
   }
+  inline std::string get_buffer_name() const {
+    if (is_array())
+      return "Array";
+    if (is_bytes())
+      return "Bytes";
+    if (is_column())
+      return "Column";
+    assert(false);
+    return "";
+  }
 #endif
   inline bool is_string() const { return IS_STRING(type); }
   inline bool is_string_array() const { return (type == kARRAY) && IS_STRING(subtype); }
@@ -492,13 +502,16 @@ class SQLTypeInfo {
   inline bool is_number() const { return IS_NUMBER(type); }
   inline bool is_time() const { return is_datetime(type); }
   inline bool is_boolean() const { return type == kBOOLEAN; }
-  inline bool is_array() const { return type == kARRAY; }
+  inline bool is_array() const { return type == kARRAY; }  // rbc Array
   inline bool is_varlen_array() const { return type == kARRAY && size <= 0; }
   inline bool is_fixlen_array() const { return type == kARRAY && size > 0; }
   inline bool is_timeinterval() const { return IS_INTERVAL(type); }
   inline bool is_geometry() const { return IS_GEO(type); }
-  inline bool is_column() const { return type == kCOLUMN; }
-
+  inline bool is_column() const { return type == kCOLUMN; }  // rbc Column
+  inline bool is_bytes() const {
+    return type == kTEXT && get_compression() == kENCODING_NONE;
+  }  // rbc Bytes
+  inline bool is_buffer() const { return is_array() || is_column() || is_bytes(); }
   inline bool transforms() const {
     return IS_GEO(type) && get_output_srid() != get_input_srid();
   }

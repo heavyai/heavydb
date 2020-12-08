@@ -60,7 +60,7 @@ int32_t get_agg_count(const std::vector<Analyzer::Expr*>& target_exprs) {
     if (!agg_expr || agg_expr->get_aggtype() == kSAMPLE) {
       const auto& ti = target_expr->get_type_info();
       // TODO(pavan): or if is_geometry()
-      if (ti.is_array() || (ti.is_string() && ti.get_compression() == kENCODING_NONE)) {
+      if (ti.is_buffer()) {
         agg_count += 2;
       } else if (ti.is_geometry()) {
         agg_count += ti.get_physical_coord_cols() * 2;
@@ -323,12 +323,12 @@ GroupByAndAggregate::GroupByAndAggregate(
       continue;
     }
     const auto& groupby_ti = groupby_expr->get_type_info();
-    if (groupby_ti.is_string() && groupby_ti.get_compression() != kENCODING_DICT) {
+    if (groupby_ti.is_bytes()) {
       throw std::runtime_error(
           "Cannot group by string columns which are not dictionary encoded.");
     }
-    if (groupby_ti.is_array()) {
-      throw std::runtime_error("Group by array not supported");
+    if (groupby_ti.is_buffer()) {
+      throw std::runtime_error("Group by buffer not supported");
     }
     if (groupby_ti.is_geometry()) {
       throw std::runtime_error("Group by geometry not supported");
@@ -610,11 +610,11 @@ CountDistinctDescriptors GroupByAndAggregate::initCountDistinctDescriptors() {
       CHECK(agg_info.agg_kind == kCOUNT || agg_info.agg_kind == kAPPROX_COUNT_DISTINCT);
       const auto agg_expr = static_cast<const Analyzer::AggExpr*>(target_expr);
       const auto& arg_ti = agg_expr->get_arg()->get_type_info();
-      if (arg_ti.is_string() && arg_ti.get_compression() != kENCODING_DICT) {
+      if (arg_ti.is_bytes()) {
         throw std::runtime_error(
             "Strings must be dictionary-encoded for COUNT(DISTINCT).");
       }
-      if (agg_info.agg_kind == kAPPROX_COUNT_DISTINCT && arg_ti.is_array()) {
+      if (agg_info.agg_kind == kAPPROX_COUNT_DISTINCT && arg_ti.is_buffer()) {
         throw std::runtime_error("APPROX_COUNT_DISTINCT on arrays not supported yet");
       }
       if (agg_info.agg_kind == kAPPROX_COUNT_DISTINCT && arg_ti.is_geometry()) {
@@ -650,8 +650,8 @@ CountDistinctDescriptors GroupByAndAggregate::initCountDistinctDescriptors() {
         continue;
       }
       if (arg_range_info.hash_type_ == QueryDescriptionType::GroupByPerfectHash &&
-          !(arg_ti.is_array() || arg_ti.is_geometry())) {  // TODO(alex): allow bitmap
-                                                           // implementation for arrays
+          !(arg_ti.is_buffer() || arg_ti.is_geometry())) {  // TODO(alex): allow bitmap
+                                                            // implementation for arrays
         count_distinct_impl_type = CountDistinctImplType::Bitmap;
         if (agg_info.agg_kind == kCOUNT) {
           bitmap_sz_bits = arg_range_info.max - arg_range_info.min + 1;
@@ -770,7 +770,7 @@ KeylessInfo GroupByAndAggregate::getKeylessInfo(
         case kMIN: {
           CHECK(agg_expr && agg_expr->get_arg());
           const auto& arg_ti = agg_expr->get_arg()->get_type_info();
-          if (arg_ti.is_string() || arg_ti.is_array()) {
+          if (arg_ti.is_string() || arg_ti.is_buffer()) {
             break;
           }
           auto expr_range_info =
@@ -802,7 +802,7 @@ KeylessInfo GroupByAndAggregate::getKeylessInfo(
         case kMAX: {
           CHECK(agg_expr && agg_expr->get_arg());
           const auto& arg_ti = agg_expr->get_arg()->get_type_info();
-          if (arg_ti.is_string() || arg_ti.is_array()) {
+          if (arg_ti.is_string() || arg_ti.is_buffer()) {
             break;
           }
           auto expr_range_info =
@@ -891,7 +891,7 @@ bool GroupByAndAggregate::gpuCanHandleOrderEntries(
       }
     }
     const auto& target_ti = target_expr->get_type_info();
-    CHECK(!target_ti.is_array());
+    CHECK(!target_ti.is_buffer());
     if (!target_ti.is_integer()) {
       return false;
     }
@@ -1819,7 +1819,8 @@ std::vector<llvm::Value*> GroupByAndAggregate::codegenAggArg(
   CodeGenerator code_generator(executor_);
   if (target_expr) {
     const auto& target_ti = target_expr->get_type_info();
-    if (target_ti.is_array() && !executor_->plan_state_->isLazyFetchColumn(target_expr)) {
+    if (target_ti.is_buffer() &&
+        !executor_->plan_state_->isLazyFetchColumn(target_expr)) {
       const auto target_lvs =
           agg_expr ? code_generator.codegen(agg_expr->get_arg(), true, co)
                    : code_generator.codegen(
@@ -1827,6 +1828,11 @@ std::vector<llvm::Value*> GroupByAndAggregate::codegenAggArg(
       if (!func_expr && !arr_expr) {
         // Something with the chunk transport is code that was generated from a source
         // other than an ARRAY[] expression
+        if (target_ti.is_bytes()) {
+          CHECK_EQ(size_t(3), target_lvs.size());
+          return {target_lvs[1], target_lvs[2]};
+        }
+        CHECK(target_ti.is_array());
         CHECK_EQ(size_t(1), target_lvs.size());
         CHECK(!agg_expr || agg_expr->get_aggtype() == kSAMPLE);
         const auto i32_ty = get_int_type(32, executor_->cgen_state_->context_);
@@ -1853,9 +1859,9 @@ std::vector<llvm::Value*> GroupByAndAggregate::codegenAggArg(
         CHECK(func_expr || arr_expr);
         if (dynamic_cast<const Analyzer::FunctionOper*>(target_expr)) {
           CHECK_EQ(size_t(1), target_lvs.size());
-
+          const auto prefix = target_ti.get_buffer_name();
+          CHECK(target_ti.is_array() || target_ti.is_bytes());
           const auto target_lv = LL_BUILDER.CreateLoad(target_lvs[0]);
-
           // const auto target_lv_type = target_lvs[0]->getType();
           // CHECK(target_lv_type->isStructTy());
           // CHECK_EQ(target_lv_type->getNumContainedTypes(), 3u);
@@ -1865,11 +1871,10 @@ std::vector<llvm::Value*> GroupByAndAggregate::codegenAggArg(
               LL_BUILDER.CreateExtractValue(target_lv, 0), i8p_ty);
           const auto size = LL_BUILDER.CreateExtractValue(target_lv, 1);
           const auto null_flag = LL_BUILDER.CreateExtractValue(target_lv, 2);
-
           const auto nullcheck_ok_bb =
-              llvm::BasicBlock::Create(LL_CONTEXT, "arr_nullcheck_ok_bb", CUR_FUNC);
-          const auto nullcheck_fail_bb =
-              llvm::BasicBlock::Create(LL_CONTEXT, "arr_nullcheck_fail_bb", CUR_FUNC);
+              llvm::BasicBlock::Create(LL_CONTEXT, prefix + "_nullcheck_ok_bb", CUR_FUNC);
+          const auto nullcheck_fail_bb = llvm::BasicBlock::Create(
+              LL_CONTEXT, prefix + "_nullcheck_fail_bb", CUR_FUNC);
 
           // TODO(adb): probably better to zext the bool
           const auto nullcheck = LL_BUILDER.CreateICmpEQ(
@@ -1877,27 +1882,23 @@ std::vector<llvm::Value*> GroupByAndAggregate::codegenAggArg(
           LL_BUILDER.CreateCondBr(nullcheck, nullcheck_fail_bb, nullcheck_ok_bb);
 
           const auto ret_bb =
-              llvm::BasicBlock::Create(LL_CONTEXT, "arr_return", CUR_FUNC);
+              llvm::BasicBlock::Create(LL_CONTEXT, prefix + "_return", CUR_FUNC);
           LL_BUILDER.SetInsertPoint(ret_bb);
-          auto result_phi = LL_BUILDER.CreatePHI(i8p_ty, 2, "array_ptr_return");
+          auto result_phi = LL_BUILDER.CreatePHI(i8p_ty, 2, prefix + "_ptr_return");
           result_phi->addIncoming(ptr, nullcheck_ok_bb);
-
           const auto null_arr_sentinel = LL_BUILDER.CreateIntToPtr(
               executor_->cgen_state_->llInt(static_cast<int8_t>(0)), i8p_ty);
           result_phi->addIncoming(null_arr_sentinel, nullcheck_fail_bb);
-
           LL_BUILDER.SetInsertPoint(nullcheck_ok_bb);
           executor_->cgen_state_->emitExternalCall(
               "register_buffer_with_executor_rsm",
               llvm::Type::getVoidTy(executor_->cgen_state_->context_),
               {executor_->cgen_state_->llInt(reinterpret_cast<int64_t>(executor_)), ptr});
           LL_BUILDER.CreateBr(ret_bb);
-
           LL_BUILDER.SetInsertPoint(nullcheck_fail_bb);
           LL_BUILDER.CreateBr(ret_bb);
 
           LL_BUILDER.SetInsertPoint(ret_bb);
-
           return {result_phi, size};
         }
         CHECK_EQ(size_t(2), target_lvs.size());

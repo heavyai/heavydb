@@ -21,7 +21,9 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
+import java.util.EnumSet;
 import java.util.List;
+import java.util.Set;
 
 /**
  *
@@ -64,7 +66,11 @@ public class ExtensionFunction {
     GeoLineString,
     Cursor,
     GeoPolygon,
-    GeoMultiPolygon
+    GeoMultiPolygon,
+    TextEncodingNone,
+    TextEncodingDict8,
+    TextEncodingDict16,
+    TextEncodingDict32
   }
   ;
 
@@ -215,6 +221,14 @@ public class ExtensionFunction {
         return "geo_polygon";
       case GeoMultiPolygon:
         return "geo_multi_polygon";
+      case TextEncodingNone:
+        return "text_encoding_none";
+      case TextEncodingDict8:
+        return "text_encoding_dict8";
+      case TextEncodingDict16:
+        return "text_encoding_dict16";
+      case TextEncodingDict32:
+        return "text_encoding_dict32";
     }
     MAPDLOGGER.info("Extensionfunction::typeName: unknown type=`" + type + "`");
     assert false;
@@ -335,8 +349,16 @@ public class ExtensionFunction {
         return SqlTypeName.GEOMETRY;
       case Cursor:
         return SqlTypeName.CURSOR;
+      case TextEncodingNone:
+        return SqlTypeName.VARCHAR;
+      case TextEncodingDict8:
+      case TextEncodingDict16:
+      case TextEncodingDict32:
+        return SqlTypeName.VARCHAR; // ?
     }
-    MAPDLOGGER.error("toSqlTypeName: unknown type " + type);
+    Set<SqlTypeName> allSqlTypeNames = EnumSet.allOf(SqlTypeName.class);
+    MAPDLOGGER.error("toSqlTypeName: unknown type " + type + " to be mapped to {"
+            + allSqlTypeNames + "}");
     assert false;
     return null;
   }

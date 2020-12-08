@@ -189,6 +189,14 @@ std::string serialize_type(const ExtArgumentType type, bool byval = true) {
       return (byval ? "{double*, i64}" : "i8*");
     case ExtArgumentType::ColumnBool:
       return (byval ? "{i1*, i64}" : "i8*");
+    case ExtArgumentType::TextEncodingNone:
+      return "text_encoding_node";
+    case ExtArgumentType::TextEncodingDict8:
+      return "text_encoding_dict8";
+    case ExtArgumentType::TextEncodingDict16:
+      return "text_encoding_dict16";
+    case ExtArgumentType::TextEncodingDict32:
+      return "text_encoding_dict32";
     default:
       CHECK(false);
   }
@@ -267,9 +275,15 @@ SQLTypeInfo ext_arg_type_to_type_info(const ExtArgumentType ext_arg_type) {
       return generate_column_type(kDOUBLE);
     case ExtArgumentType::ColumnBool:
       return generate_column_type(kBOOLEAN);
+    case ExtArgumentType::TextEncodingNone:
+      return SQLTypeInfo(kTEXT, false, kENCODING_NONE);
+    case ExtArgumentType::TextEncodingDict8:
+    case ExtArgumentType::TextEncodingDict16:
+    case ExtArgumentType::TextEncodingDict32:
+      return SQLTypeInfo(kTEXT, false, kENCODING_DICT);
     default:
-      LOG(WARNING) << "ExtArgumentType `" << serialize_type(ext_arg_type)
-                   << "` cannot be converted to SQLTypeInfo. Returning nulltype.";
+      LOG(FATAL) << "ExtArgumentType `" << serialize_type(ext_arg_type)
+                 << "` cannot be converted to SQLTypeInfo. Returning nulltype.";
   }
   return SQLTypeInfo(kNULLT, false);
 }
@@ -397,6 +411,14 @@ std::string ExtensionFunctionsWhitelist::toStringSQL(const ExtArgumentType& sig_
       return "MULTIPOLYGON";
     case ExtArgumentType::Void:
       return "VOID";
+    case ExtArgumentType::TextEncodingNone:
+      return "TEXT ENCODING NONE";
+    case ExtArgumentType::TextEncodingDict8:
+      return "TEXT ENCODING DICT(8)";
+    case ExtArgumentType::TextEncodingDict16:
+      return "TEXT ENCODING DICT(16)";
+    case ExtArgumentType::TextEncodingDict32:
+      return "TEXT ENCODING DICT(32)";
     default:
       UNREACHABLE();
   }
@@ -571,6 +593,18 @@ ExtArgumentType deserialize_type(const std::string& type_name) {
   }
   if (type_name == "{i1*, i64}" || type_name == "{bool*, i64}") {
     return ExtArgumentType::ColumnBool;
+  }
+  if (type_name == "text_encoding_none") {
+    return ExtArgumentType::TextEncodingNone;
+  }
+  if (type_name == "text_encoding_dict8") {
+    return ExtArgumentType::TextEncodingDict8;
+  }
+  if (type_name == "text_encoding_dict16") {
+    return ExtArgumentType::TextEncodingDict16;
+  }
+  if (type_name == "text_encoding_dict32") {
+    return ExtArgumentType::TextEncodingDict32;
   }
   CHECK(false);
   return ExtArgumentType::Int16;

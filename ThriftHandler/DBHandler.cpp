@@ -6221,6 +6221,14 @@ ExtArgumentType mapfrom(const TExtArgumentType::type& t) {
       return ExtArgumentType::ColumnDouble;
     case TExtArgumentType::ColumnBool:
       return ExtArgumentType::ColumnBool;
+    case TExtArgumentType::TextEncodingNone:
+      return ExtArgumentType::TextEncodingNone;
+    case TExtArgumentType::TextEncodingDict8:
+      return ExtArgumentType::TextEncodingDict8;
+    case TExtArgumentType::TextEncodingDict16:
+      return ExtArgumentType::TextEncodingDict16;
+    case TExtArgumentType::TextEncodingDict32:
+      return ExtArgumentType::TextEncodingDict32;
   }
   UNREACHABLE();
   return ExtArgumentType{};

@@ -149,6 +149,11 @@ std::string toString(const T& v) {
     llvm::raw_string_ostream rso(type_str);
     v.print(rso);
     return "(" + rso.str() + ")";
+  } else if constexpr (std::is_same_v<T, llvm::Type>) {
+    std::string type_str;
+    llvm::raw_string_ostream rso(type_str);
+    v.print(rso);
+    return "(" + rso.str() + ")";
 #endif
   } else if constexpr (std::is_same_v<T, bool>) {
     return v ? "True" : "False";

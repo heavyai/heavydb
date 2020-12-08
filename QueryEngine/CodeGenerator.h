@@ -456,12 +456,12 @@ class CodeGenerator {
                                                          SQLTypes array_type,
                                                          bool cast_and_extend);
 
-  void codegenArrayArgs(const std::string& udf_func_name,
-                        size_t param_num,
-                        llvm::Value* array_buf,
-                        llvm::Value* array_size,
-                        llvm::Value* array_is_null,
-                        std::vector<llvm::Value*>& output_args);
+  void codegenBufferArgs(const std::string& udf_func_name,
+                         size_t param_num,
+                         llvm::Value* buffer_buf,
+                         llvm::Value* buffer_size,
+                         llvm::Value* buffer_is_null,
+                         std::vector<llvm::Value*>& output_args);
 
   llvm::StructType* createPointStructType(const std::string& udf_func_name,
                                           size_t param_num);
@@ -521,6 +521,7 @@ class CodeGenerator {
       const Analyzer::FunctionOper*,
       const ExtensionFunction*,
       const std::vector<llvm::Value*>&,
+      const std::vector<size_t>&,
       const std::unordered_map<llvm::Value*, llvm::Value*>&,
       const CompilationOptions&);
 

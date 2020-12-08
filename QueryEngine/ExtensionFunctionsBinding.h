@@ -55,4 +55,6 @@ const table_functions::TableFunction bind_table_function(
 bool is_ext_arg_type_column(const ExtArgumentType ext_arg_type);
 bool is_ext_arg_type_array(const ExtArgumentType ext_arg_type);
 bool is_ext_arg_type_geo(const ExtArgumentType ext_arg_type);
+bool is_ext_arg_type_pointer(const ExtArgumentType ext_arg_type);
+bool is_ext_arg_type_scalar(const ExtArgumentType ext_arg_type);
 #endif  // QUERYENGINE_EXTENSIONFUNCTIONSBINDING_H

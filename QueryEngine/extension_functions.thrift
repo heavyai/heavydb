@@ -36,7 +36,11 @@ enum TExtArgumentType {
   ColumnInt64,
   ColumnFloat,
   ColumnDouble,
-  ColumnBool
+  ColumnBool,
+  TextEncodingNone,
+  TextEncodingDict8,
+  TextEncodingDict16,
+  TextEncodingDict32
 }
 
 /* See QueryEngine/TableFunctions/TableFunctionsFactory.h for required values */

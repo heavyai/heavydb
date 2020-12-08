@@ -486,6 +486,14 @@ public class CalciteServerHandler implements CalciteServer.Iface {
         return ExtensionFunction.ExtArgumentType.GeoPolygon;
       case GeoMultiPolygon:
         return ExtensionFunction.ExtArgumentType.GeoMultiPolygon;
+      case TextEncodingNone:
+        return ExtensionFunction.ExtArgumentType.TextEncodingNone;
+      case TextEncodingDict8:
+        return ExtensionFunction.ExtArgumentType.TextEncodingDict8;
+      case TextEncodingDict16:
+        return ExtensionFunction.ExtArgumentType.TextEncodingDict16;
+      case TextEncodingDict32:
+        return ExtensionFunction.ExtArgumentType.TextEncodingDict32;
       default:
         MAPDLOGGER.error("toExtArgumentType: unknown type " + type);
         return null;

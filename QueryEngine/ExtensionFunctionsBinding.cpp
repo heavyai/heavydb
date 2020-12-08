@@ -300,12 +300,27 @@ static int match_arguments(const SQLTypeInfo& arg_type,
         }
       }
       break;
+    case kTEXT:
+      switch (arg_type.get_compression()) {
+        case kENCODING_NONE:
+          if (stype == ExtArgumentType::TextEncodingNone) {
+            penalty_score += 1000;
+            return 1;
+          }
+          return -1;
+        case kENCODING_DICT:
+          if (stype == ExtArgumentType::TextEncodingDict32) {
+            penalty_score += 1000;
+            return 1;
+          }
+        default:;
+          // todo: dict(8) and dict(16) encodings
+      }
       /* Not implemented types:
          kCHAR
          kVARCHAR
          kTIME
          kTIMESTAMP
-         kTEXT
          kDATE
          kINTERVAL_DAY_TIME
          kINTERVAL_YEAR_MONTH
@@ -513,6 +528,38 @@ bool is_ext_arg_type_geo(const ExtArgumentType ext_arg_type) {
     case ExtArgumentType::GeoLineString:
     case ExtArgumentType::GeoPolygon:
     case ExtArgumentType::GeoMultiPolygon:
+      return true;
+
+    default:
+      return false;
+  }
+}
+
+bool is_ext_arg_type_pointer(const ExtArgumentType ext_arg_type) {
+  switch (ext_arg_type) {
+    case ExtArgumentType::PInt8:
+    case ExtArgumentType::PInt16:
+    case ExtArgumentType::PInt32:
+    case ExtArgumentType::PInt64:
+    case ExtArgumentType::PFloat:
+    case ExtArgumentType::PDouble:
+    case ExtArgumentType::PBool:
+      return true;
+
+    default:
+      return false;
+  }
+}
+
+bool is_ext_arg_type_scalar(const ExtArgumentType ext_arg_type) {
+  switch (ext_arg_type) {
+    case ExtArgumentType::Int8:
+    case ExtArgumentType::Int16:
+    case ExtArgumentType::Int32:
+    case ExtArgumentType::Int64:
+    case ExtArgumentType::Float:
+    case ExtArgumentType::Double:
+    case ExtArgumentType::Bool:
       return true;
 
     default:
