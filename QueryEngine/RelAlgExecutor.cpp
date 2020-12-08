@@ -263,7 +263,8 @@ ExecutionResult RelAlgExecutor::executeRelAlgQueryNoRetry(const CompilationOptio
   }
   std::string query_session = "";
   std::string query_str = "N/A";
-  if (eo.allow_runtime_query_interrupt || g_enable_runtime_query_interrupt) {
+  if (!render_info &&
+      (eo.allow_runtime_query_interrupt || g_enable_runtime_query_interrupt)) {
     // a request of query execution without session id can happen, i.e., test query
     // if so, we turn back to the original way: a runtime query interrupt
     // without per-session management (as similar to dynamic watchdog)
@@ -278,20 +279,22 @@ ExecutionResult RelAlgExecutor::executeRelAlgQueryNoRetry(const CompilationOptio
 
     session_read_lock.unlock();
     if (query_session != "") {
-      // if session is valid, then we allow per-session runtime query interrupt
-      mapd_unique_lock<mapd_shared_mutex> session_write_lock(
-          executor_->executor_session_mutex_);
-      executor_->updateQuerySessionStatus(
-          query_state_->getConstSessionInfo()->get_session_id(),
-          query_state_->getQuerySubmittedTime(),
-          "PENDING_EXECUTOR",
-          session_write_lock);
-      executor_->updateQuerySessionExecutorAssignment(
-          query_state_->getConstSessionInfo()->get_session_id(),
-          query_state_->getQuerySubmittedTime(),
-          executor_->executor_id_,
-          session_write_lock);
-      session_write_lock.unlock();
+      if (query_state_) {
+        // if session is valid, then we allow per-session runtime query interrupt
+        mapd_unique_lock<mapd_shared_mutex> session_write_lock(
+            executor_->executor_session_mutex_);
+        executor_->updateQuerySessionStatus(
+            query_state_->getConstSessionInfo()->get_session_id(),
+            query_state_->getQuerySubmittedTime(),
+            "PENDING_EXECUTOR",
+            session_write_lock);
+        executor_->updateQuerySessionExecutorAssignment(
+            query_state_->getConstSessionInfo()->get_session_id(),
+            query_state_->getQuerySubmittedTime(),
+            executor_->executor_id_,
+            session_write_lock);
+        session_write_lock.unlock();
+      }
       // hybrid spinlock.  if it fails to acquire a lock, then
       // it sleeps {g_pending_query_interrupt_freq} millisecond.
       while (executor_->execute_spin_lock_.test_and_set(std::memory_order_acquire)) {
@@ -330,9 +333,10 @@ ExecutionResult RelAlgExecutor::executeRelAlgQueryNoRetry(const CompilationOptio
     return ret;
   };
   auto lock = aquire_execute_mutex(executor_);
-  ScopeGuard clearRuntimeInterruptStatus = [this] {
+  ScopeGuard clearRuntimeInterruptStatus = [this, &render_info, &eo] {
     // reset the runtime query interrupt status
-    if (g_enable_runtime_query_interrupt) {
+    if (!render_info &&
+        (g_enable_runtime_query_interrupt || eo.allow_runtime_query_interrupt)) {
       mapd_shared_lock<mapd_shared_mutex> session_read_lock(
           executor_->executor_session_mutex_);
       std::string curSession = executor_->getCurrentQuerySession(session_read_lock);
@@ -348,7 +352,8 @@ ExecutionResult RelAlgExecutor::executeRelAlgQueryNoRetry(const CompilationOptio
     }
   };
 
-  if (g_enable_runtime_query_interrupt) {
+  if (!render_info &&
+      (g_enable_runtime_query_interrupt || eo.allow_runtime_query_interrupt)) {
     // check whether this query session is already interrupted
     // this case occurs when there is very short gap between being interrupted and
     // taking the execute lock
@@ -371,11 +376,13 @@ ExecutionResult RelAlgExecutor::executeRelAlgQueryNoRetry(const CompilationOptio
         executor_->executor_session_mutex_);
     executor_->invalidateRunningQuerySession(session_write_lock);
     executor_->setCurrentQuerySession(query_session, session_write_lock);
-    executor_->updateQuerySessionStatus(
-        query_state_->getConstSessionInfo()->get_session_id(),
-        query_state_->getQuerySubmittedTime(),
-        "RUNNING",
-        session_write_lock);
+    if (query_state_) {
+      executor_->updateQuerySessionStatus(
+          query_state_->getConstSessionInfo()->get_session_id(),
+          query_state_->getQuerySubmittedTime(),
+          "RUNNING",
+          session_write_lock);
+    }
     session_write_lock.unlock();
   }
 
