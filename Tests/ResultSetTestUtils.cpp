@@ -424,8 +424,7 @@ void fill_storage_buffer_baseline_rowwise(int8_t* buff,
                                        &key[0],
                                        key.size(),
                                        sizeof(int64_t),
-                                       key_component_count + target_slot_count,
-                                       nullptr);
+                                       key_component_count + target_slot_count);
     CHECK(value_slots);
     fill_one_entry_baseline(value_slots, v, target_infos);
   }

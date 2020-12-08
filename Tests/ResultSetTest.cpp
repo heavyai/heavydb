@@ -554,8 +554,7 @@ void ResultSetEmulator::rse_fill_storage_buffer_baseline_rowwise(
                                          &key[0],
                                          key.size(),
                                          sizeof(int64_t),
-                                         key_component_count + target_slot_count,
-                                         nullptr);
+                                         key_component_count + target_slot_count);
       CHECK(value_slots);
       if ((rs_flow == 2) &&
           (i >= rs_entry_count - 4)) {  // null_val test-cases: last four rows

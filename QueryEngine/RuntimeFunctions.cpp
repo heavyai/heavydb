@@ -1033,8 +1033,7 @@ extern "C" ALWAYS_INLINE int64_t* get_matching_group_value(int64_t* groups_buffe
                                                            const int64_t* key,
                                                            const uint32_t key_count,
                                                            const uint32_t key_width,
-                                                           const uint32_t row_size_quad,
-                                                           const int64_t* init_vals) {
+                                                           const uint32_t row_size_quad) {
   switch (key_width) {
     case 4:
       return get_matching_group_value(groups_buffer,

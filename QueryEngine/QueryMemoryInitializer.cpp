@@ -612,7 +612,7 @@ std::vector<int64_t> QueryMemoryInitializer::allocateCountDistinctBuffers(
             (agg_info.agg_kind == kCOUNT || agg_info.agg_kind == kAPPROX_COUNT_DISTINCT));
       CHECK(!agg_info.sql_type.is_varlen());
 
-      const auto agg_col_idx = query_mem_desc.getSlotIndexForSingleSlotCol(target_idx);
+      const size_t agg_col_idx = query_mem_desc.getSlotIndexForSingleSlotCol(target_idx);
       CHECK_LT(static_cast<size_t>(agg_col_idx), agg_col_count);
 
       CHECK_EQ(static_cast<size_t>(query_mem_desc.getLogicalSlotWidthBytes(agg_col_idx)),

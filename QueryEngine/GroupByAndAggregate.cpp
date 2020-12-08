@@ -1382,13 +1382,6 @@ GroupByAndAggregate::codegenMultiColumnBaselineHash(
     const size_t key_width,
     const int32_t row_size_quad) {
   AUTOMATIC_IR_METADATA(executor_->cgen_state_.get());
-  auto arg_it = ROW_FUNC->arg_begin();  // groups_buffer
-  ++arg_it;                             // current match count
-  ++arg_it;                             // total match count
-  ++arg_it;                             // old match count
-  ++arg_it;                             // output buffer slots count
-  ++arg_it;                             // aggregate init values
-  CHECK(arg_it->getName() == "agg_init_val");
   if (group_key->getType() != llvm::Type::getInt64PtrTy(LL_CONTEXT)) {
     CHECK(key_width == sizeof(int32_t));
     group_key =
@@ -1405,7 +1398,6 @@ GroupByAndAggregate::codegenMultiColumnBaselineHash(
     func_name += "_columnar_slot";
   } else {
     func_args.push_back(LL_INT(row_size_quad));
-    func_args.push_back(&*arg_it);
   }
   if (co.with_dynamic_watchdog) {
     func_name += "_with_watchdog";

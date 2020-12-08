@@ -1002,8 +1002,7 @@ void ResultSetStorage::moveOneEntryToBuffer(const size_t entry_index,
                                       &src_buff[key_off],
                                       key_count,
                                       key_byte_width,
-                                      row_qw_count,
-                                      nullptr);
+                                      row_qw_count);
   }
   CHECK(new_entries_ptr);
   fill_slots(new_entries_ptr,

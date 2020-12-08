@@ -521,8 +521,8 @@ declare i64* @declare_dynamic_shared_memory();
 declare void @write_back_nop(i64*, i64*, i32);
 declare void @write_back_non_grouped_agg(i64*, i64*, i32);
 declare void @init_group_by_buffer_gpu(i64*, i64*, i32, i32, i32, i1, i8);
-declare i64* @get_group_value(i64*, i32, i64*, i32, i32, i32, i64*);
-declare i64* @get_group_value_with_watchdog(i64*, i32, i64*, i32, i32, i32, i64*);
+declare i64* @get_group_value(i64*, i32, i64*, i32, i32, i32);
+declare i64* @get_group_value_with_watchdog(i64*, i32, i64*, i32, i32, i32);
 declare i32 @get_group_value_columnar_slot(i64*, i32, i64*, i32, i32);
 declare i32 @get_group_value_columnar_slot_with_watchdog(i64*, i32, i64*, i32, i32);
 declare i64* @get_group_value_fast(i64*, i64, i64, i64, i32);
@@ -1398,6 +1398,7 @@ llvm::Function* create_row_function(const size_t in_col_count,
   return row_func;
 }
 
+// Iterate through multifrag_query_func, replacing calls to query_fname with query_func.
 void bind_query(llvm::Function* query_func,
                 const std::string& query_fname,
                 llvm::Function* multifrag_query_func,
