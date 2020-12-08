@@ -27,8 +27,6 @@
 
 #include <gtest/gtest.h>
 #include "../Shared/mapd_shared_mutex.h"
-#include "CacheEvictionAlgorithms/CacheEvictionAlgorithm.h"
-#include "CacheEvictionAlgorithms/LRUEvictionAlgorithm.h"
 #include "DataMgr/AbstractBufferMgr.h"
 #include "DataMgr/FileMgr/GlobalFileMgr.h"
 #include "ForeignDataWrapper.h"
@@ -42,7 +40,6 @@ enum class DiskCacheLevel { none, fsi, non_fsi, all };
 struct DiskCacheConfig {
   std::string path;
   DiskCacheLevel enabled_level = DiskCacheLevel::none;
-  uint64_t size_limit = 21474836480;  // 20GB default
   size_t num_reader_threads = 0;
   inline bool isEnabledForMutableTables() const {
     return enabled_level == DiskCacheLevel::non_fsi ||
@@ -57,13 +54,6 @@ struct DiskCacheConfig {
 using namespace Data_Namespace;
 
 namespace foreign_storage {
-
-struct TableEvictionTracker {
-  // We can swap out different eviction algorithms here.
-  std::unique_ptr<CacheEvictionAlgorithm> eviction_alg_ =
-      std::make_unique<LRUEvictionAlgorithm>();
-  size_t num_pages_ = 0;
-};
 
 class ForeignStorageCache {
  public:
@@ -87,7 +77,6 @@ class ForeignStorageCache {
   bool hasCachedMetadataForKeyPrefix(const ChunkKey&) const;
   void clearForTablePrefix(const ChunkKey&);
   void clear();
-  void setLimit(uint64_t limit);
   std::vector<ChunkKey> getCachedChunksForKeyPrefix(const ChunkKey&) const;
   bool recoverCacheForTable(ChunkMetadataVector&, const ChunkKey&);
   std::map<ChunkKey, AbstractBuffer*> getChunkBuffersForCaching(
@@ -99,10 +88,6 @@ class ForeignStorageCache {
 
   void deleteBufferIfExists(const ChunkKey& chunk_key);
 
-  // Exists for testing purposes.
-  inline uint64_t getLimit() const {
-    return max_pages_per_table_ * global_file_mgr_->getDefaultPageSize();
-  }
   inline size_t getNumCachedChunks() const { return cached_chunks_.size(); }
   inline size_t getNumCachedMetadata() const { return cached_metadata_.size(); }
   size_t getNumChunksAdded() const { return num_chunks_added_; }
@@ -111,7 +96,6 @@ class ForeignStorageCache {
   // Useful for debugging.
   std::string dumpCachedChunkEntries() const;
   std::string dumpCachedMetadataEntries() const;
-  std::string dumpEvictionQueue() const;
 
   inline File_Namespace::GlobalFileMgr* getGlobalFileMgr() const {
     return global_file_mgr_.get();
@@ -125,16 +109,11 @@ class ForeignStorageCache {
  private:
   // These methods are private and assume locks are already acquired when called.
   std::set<ChunkKey>::iterator eraseChunk(const std::set<ChunkKey>::iterator&);
-  void eraseChunk(const ChunkKey&, TableEvictionTracker& tracker);
-  std::set<ChunkKey>::iterator eraseChunkByIterator(
+  void eraseChunk(const ChunkKey& chunk_key);
+  std::set<ChunkKey>::iterator evictChunkByIterator(
       const std::set<ChunkKey>::iterator& chunk_it);
   void evictThenEraseChunkUnlocked(const ChunkKey&);
   void validatePath(const std::string&) const;
-  bool insertChunkIntoEvictionAlg(const ChunkKey&, const size_t);
-  void createTrackerMapEntryIfNoneExists(const ChunkKey& chunk_key);
-
-  std::map<const ChunkKey, TableEvictionTracker> eviction_tracker_map_;
-  uint64_t max_pages_per_table_;
 
   // Underlying storage is handled by a GlobalFileMgr unique to the cache.
   std::unique_ptr<File_Namespace::GlobalFileMgr> global_file_mgr_;
@@ -150,8 +129,5 @@ class ForeignStorageCache {
   // Separate mutexes for chunks/metadata.
   mutable mapd_shared_mutex chunks_mutex_;
   mutable mapd_shared_mutex metadata_mutex_;
-
-  // Maximum number of chunk bytes that can be in the cache before eviction.
-  uint64_t max_cached_bytes_;
 };  // ForeignStorageCache
 }  // namespace foreign_storage

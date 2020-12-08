@@ -120,18 +120,10 @@ TEST_F(TableTest, DISABLED_InsertWithCache) {
 
   sqlAndCompareResult("SELECT * FROM " + default_table_name + ";", {});
   sql("INSERT INTO " + default_table_name + " VALUES(1);");
-  // ASSERT_EQ(cache_->getCachedChunkIfExists(key1), nullptr);
-  // ASSERT_EQ(cache_->getCachedChunkIfExists(key2), nullptr);
-
-  // sqlAndCompareResult("SELECT * FROM " + default_table_name + ";", {{i(1)}});
   ASSERT_NE(cache_->getCachedChunkIfExists(key1), nullptr);
   ASSERT_EQ(cache_->getCachedChunkIfExists(key2), nullptr);
 
   sql("INSERT INTO " + default_table_name + " VALUES(2);");
-  // ASSERT_NE(cache_->getCachedChunkIfExists(key1), nullptr);
-  // ASSERT_EQ(cache_->getCachedChunkIfExists(key2), nullptr);
-
-  // sqlAndCompareResult("SELECT * FROM " + default_table_name + ";", {{i(1)}, {i(2)}});
   ASSERT_NE(cache_->getCachedChunkIfExists(key1), nullptr);
   ASSERT_NE(cache_->getCachedChunkIfExists(key2), nullptr);
 

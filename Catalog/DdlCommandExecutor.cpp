@@ -1006,17 +1006,13 @@ void ShowDiskCacheUsageCommand::execute(TQueryResult& _return) {
   auto cat_ptr = session_ptr_->get_catalog_ptr();
   auto table_names = getFilteredTableNames();
 
-  set_headers(
-      _return,
-      std::vector<std::string>{"table name", "current cache size", "max cache size"});
+  set_headers(_return, std::vector<std::string>{"table name", "current cache size"});
   _return.row_set.row_desc[1].col_type.type = TDatumType::type::BIGINT;
-  _return.row_set.row_desc[2].col_type.type = TDatumType::type::BIGINT;
 
   const auto disk_cache = cat_ptr->getDataMgr().getPersistentStorageMgr()->getDiskCache();
   if (!disk_cache) {
     throw std::runtime_error{"Disk cache not enabled.  Cannot show disk cache usage."};
   }
-  const auto max_cache_size = disk_cache->getLimit();
   for (auto& table_name : table_names) {
     auto [td, td_with_lock] =
         get_table_descriptor_with_lock<lockmgr::ReadLock>(*cat_ptr, table_name, false);
@@ -1031,7 +1027,6 @@ void ShowDiskCacheUsageCommand::execute(TQueryResult& _return) {
 
     _return.row_set.columns[0].data.str_col.emplace_back(table_name);
     _return.row_set.columns[1].data.int_col.emplace_back(table_cache_size);
-    _return.row_set.columns[2].data.int_col.emplace_back(max_cache_size);
 
     for (size_t i = 0; i < _return.row_set.columns.size(); i++)
       _return.row_set.columns[i].nulls.emplace_back(false);

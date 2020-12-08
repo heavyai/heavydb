@@ -324,10 +324,6 @@ void CommandLineOptions::fillOptions() {
   help_desc.add_options()("disk-cache-path",
                           po::value<std::string>(&disk_cache_config.path),
                           "Specify the path for the disk cache.");
-  help_desc.add_options()(
-      "disk-cache-size-limit",
-      po::value<uint64_t>(&(disk_cache_config.size_limit)),
-      "Specify the maximum size of the the disk cache per table in bytes.");
 
 #ifdef ENABLE_GENERAL_DISK_CACHE
   help_desc.add_options()(

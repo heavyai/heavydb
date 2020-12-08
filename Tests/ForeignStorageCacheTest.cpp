@@ -31,8 +31,6 @@ using namespace File_Namespace;
 using namespace TestHelpers;
 
 static const std::string data_path = "./tmp/mapd_data";
-static const size_t cache_default_size = 21474836480;
-static const size_t cache_minimum_size = 536870912;
 static const std::string test_table_name = "test_cache_table";
 static const std::string test_server_name = "test_cache_server";
 static const std::string test_first_col_name = "col1";
@@ -109,15 +107,6 @@ class ForeignStorageCacheUnitTest : public testing::Test {
     return datums;
   }
 
-  struct CacheLimitScope {
-    uint64_t old_limit;
-    CacheLimitScope(const uint64_t limit) {
-      old_limit = cache_->getLimit();
-      cache_->setLimit(limit);
-    }
-    ~CacheLimitScope() { cache_->setLimit(old_limit); }
-  };
-
   std::shared_ptr<ChunkMetadata> createMetadata(const size_t num_bytes,
                                                 const size_t num_elements,
                                                 const int32_t in_min,
@@ -134,12 +123,6 @@ class ForeignStorageCacheUnitTest : public testing::Test {
                                   const std::shared_ptr<ChunkMetadata> right_metadata) {
     ASSERT_EQ(*left_metadata, *right_metadata) << left_metadata->dump() << "\n"
                                                << right_metadata->dump() << "\n";
-  }
-
-  void evictChunksKeepMetadata() {
-    size_t old_limit = cache_->getLimit();
-    cache_->setLimit(0);
-    cache_->setLimit(old_limit);
   }
 
   static void reinitializeCache(std::unique_ptr<ForeignStorageCache>& cache,
@@ -261,30 +244,6 @@ TEST_F(ForeignStorageCacheUnitTest, UpdateMetadataUsingChunk) {
   assertMetadataEqual(metadata_vec_cached[0].second, createMetadata(4, 1, 2, 2, false));
 }
 
-TEST_F(ForeignStorageCacheUnitTest, CacheChunk_CacheFull) {
-  CacheLimitScope scope{cache_minimum_size};
-  std::vector<int32_t> full_frag_vec(32000000);
-  for (size_t i = 0; i < full_frag_vec.size(); ++i) {
-    full_frag_vec[i] = i;
-  }
-  ChunkWrapper<int32_t> chunk_wrapper1{kINT, full_frag_vec};
-  chunk_wrapper1.cacheMetadataThenChunk(chunk_key1);
-  ChunkWrapper<int32_t> chunk_wrapper2{kINT, full_frag_vec};
-  chunk_wrapper2.cacheMetadataThenChunk(chunk_key2);
-  ChunkWrapper<int32_t> chunk_wrapper3{kINT, full_frag_vec};
-  chunk_wrapper3.cacheMetadataThenChunk(chunk_key3);
-  ChunkWrapper<int32_t> chunk_wrapper4{kINT, full_frag_vec};
-  chunk_wrapper4.cacheMetadataThenChunk(chunk_key4);
-  ChunkWrapper<int32_t> chunk_wrapper5{kINT, full_frag_vec};
-  chunk_wrapper5.cacheMetadataThenChunk(chunk_key5);
-  ASSERT_EQ(cache_->getNumCachedChunks(), 4U);
-  ASSERT_EQ(cache_->getCachedChunkIfExists(chunk_key1), nullptr);
-  ASSERT_NE(cache_->getCachedChunkIfExists(chunk_key2), nullptr);
-  ASSERT_NE(cache_->getCachedChunkIfExists(chunk_key3), nullptr);
-  ASSERT_NE(cache_->getCachedChunkIfExists(chunk_key4), nullptr);
-  ASSERT_NE(cache_->getCachedChunkIfExists(chunk_key5), nullptr);
-}
-
 TEST_F(ForeignStorageCacheUnitTest, HasCachedMetadataForKeyPrefix) {
   ASSERT_FALSE(cache_->hasCachedMetadataForKeyPrefix(table_prefix1));
   ASSERT_FALSE(cache_->hasCachedMetadataForKeyPrefix(table_prefix2));
@@ -345,44 +304,6 @@ TEST_F(ForeignStorageCacheUnitTest, Clear) {
   ASSERT_FALSE(gfm_->isBufferOnDevice(chunk_key1));
   ASSERT_FALSE(gfm_->isBufferOnDevice(chunk_key2));
   ASSERT_FALSE(gfm_->isBufferOnDevice(chunk_key_table2));
-}
-
-TEST_F(ForeignStorageCacheUnitTest, SetLimit) {
-  std::vector<int32_t> full_frag_vec(32000000);
-  for (size_t i = 0; i < full_frag_vec.size(); ++i) {
-    full_frag_vec[i] = i;
-  }
-  ChunkWrapper<int32_t> chunk_wrapper1{kINT, full_frag_vec};
-  chunk_wrapper1.cacheMetadataThenChunk(chunk_key1);
-  ChunkWrapper<int32_t> chunk_wrapper2{kINT, full_frag_vec};
-  chunk_wrapper2.cacheMetadataThenChunk(chunk_key2);
-  ChunkWrapper<int32_t> chunk_wrapper3{kINT, full_frag_vec};
-  chunk_wrapper3.cacheMetadataThenChunk(chunk_key3);
-  ChunkWrapper<int32_t> chunk_wrapper4{kINT, full_frag_vec};
-  chunk_wrapper4.cacheMetadataThenChunk(chunk_key4);
-  ChunkWrapper<int32_t> chunk_wrapper5{kINT, full_frag_vec};
-  chunk_wrapper5.cacheMetadataThenChunk(chunk_key5);
-  ASSERT_EQ(cache_->getNumCachedChunks(), 5U);
-  ASSERT_EQ(cache_->getLimit(), 21474836480UL);
-  CacheLimitScope scope{cache_minimum_size};
-  ASSERT_EQ(cache_->getNumCachedChunks(), 4U);
-  ASSERT_EQ(cache_->getLimit(), 536870912UL);
-}
-
-TEST_F(ForeignStorageCacheUnitTest, CacheTooSmall) {
-  ASSERT_THROW(CacheLimitScope scope{1}, CacheTooSmallException);
-}
-
-TEST_F(ForeignStorageCacheUnitTest, ChunkTooBigForCache) {
-  CacheLimitScope scope{cache_minimum_size};
-  std::vector<int32_t> full_frag_vec(32000000 * 5);
-  for (size_t i = 0; i < full_frag_vec.size(); ++i) {
-    full_frag_vec[i] = i;
-  }
-  ChunkWrapper<int32_t> chunk_wrapper1{kINT, full_frag_vec};
-  chunk_wrapper1.cacheMetadataThenChunk(chunk_key1);
-  ASSERT_EQ(cache_->getNumCachedChunks(), 0U);
-  ASSERT_EQ(cache_->getNumCachedMetadata(), 1U);
 }
 
 class CacheDiskStorageTest : public ForeignStorageCacheUnitTest {
@@ -453,84 +374,6 @@ TEST_F(CacheDiskStorageTest, RecoverCache_SingleChunk) {
   AbstractBuffer* cached_buf = cache_->getCachedChunkIfExists(chunk_key1);
   ASSERT_NE(cached_buf, nullptr);
   ASSERT_TRUE(chunk_wrapper1.test_buf->compare(cached_buf, 16));
-}
-
-TEST_F(CacheDiskStorageTest, RecoverCache_EvictBeforeRecovery) {
-  std::vector<int32_t> full_frag_vec(32000000);
-  for (size_t i = 0; i < full_frag_vec.size(); ++i) {
-    full_frag_vec[i] = i;
-  }
-  ChunkWrapper<int32_t> chunk_wrapper1{kINT, full_frag_vec};
-  chunk_wrapper1.cacheMetadataThenChunk(chunk_key1);
-  ChunkWrapper<int32_t> chunk_wrapper2{kINT, full_frag_vec};
-  chunk_wrapper2.cacheMetadataThenChunk(chunk_key2);
-  ChunkWrapper<int32_t> chunk_wrapper3{kINT, full_frag_vec};
-  chunk_wrapper3.cacheMetadataThenChunk(chunk_key3);
-  ChunkWrapper<int32_t> chunk_wrapper4{kINT, full_frag_vec};
-  chunk_wrapper4.cacheMetadataThenChunk(chunk_key4);
-  ChunkWrapper<int32_t> chunk_wrapper5{kINT, full_frag_vec};
-  chunk_wrapper5.cacheMetadataThenChunk(chunk_key5);
-
-  // size_t chunk_size = 32000000 * sizeof(int32_t);
-  { CacheLimitScope scope{cache_minimum_size}; }
-
-  reinitializeCache(cache_, gfm_, {cache_path_, DiskCacheLevel::fsi});
-  ChunkMetadataVector metadata_vec_cached{};
-  cache_->recoverCacheForTable(metadata_vec_cached, table_prefix1);
-  ASSERT_EQ(cache_->getNumCachedChunks(), 4U);
-  AbstractBuffer* cached_buf = cache_->getCachedChunkIfExists(chunk_key5);
-  ASSERT_NE(cached_buf, nullptr);
-  ASSERT_NE(chunk_wrapper5.test_buf, nullptr);
-}
-
-class ForeignStorageCacheLRUTest : public testing::Test {};
-TEST_F(ForeignStorageCacheLRUTest, Basic) {
-  LRUEvictionAlgorithm lru_alg{};
-  lru_alg.touchChunk(chunk_key1);
-  lru_alg.touchChunk(chunk_key2);
-  lru_alg.touchChunk(chunk_key3);
-  ASSERT_EQ(lru_alg.evictNextChunk(), chunk_key1);
-  ASSERT_EQ(lru_alg.evictNextChunk(), chunk_key2);
-  ASSERT_EQ(lru_alg.evictNextChunk(), chunk_key3);
-  ASSERT_THROW(lru_alg.evictNextChunk(), NoEntryFoundException);
-}
-
-TEST_F(ForeignStorageCacheLRUTest, AfterEvict) {
-  LRUEvictionAlgorithm lru_alg{};
-  lru_alg.touchChunk(chunk_key1);
-  lru_alg.touchChunk(chunk_key2);
-  lru_alg.touchChunk(chunk_key3);
-  ASSERT_EQ(lru_alg.evictNextChunk(), chunk_key1);
-  ASSERT_EQ(lru_alg.evictNextChunk(), chunk_key2);
-  lru_alg.touchChunk(chunk_key2);
-  ASSERT_EQ(lru_alg.evictNextChunk(), chunk_key3);
-  ASSERT_EQ(lru_alg.evictNextChunk(), chunk_key2);
-  ASSERT_THROW(lru_alg.evictNextChunk(), NoEntryFoundException);
-}
-
-TEST_F(ForeignStorageCacheLRUTest, RemoveChunk) {
-  LRUEvictionAlgorithm lru_alg{};
-  lru_alg.touchChunk(chunk_key1);
-  lru_alg.touchChunk(chunk_key2);
-  lru_alg.touchChunk(chunk_key3);
-  lru_alg.removeChunk(chunk_key2);
-  ASSERT_EQ(lru_alg.evictNextChunk(), chunk_key1);
-  ASSERT_EQ(lru_alg.evictNextChunk(), chunk_key3);
-  ASSERT_THROW(lru_alg.evictNextChunk(), NoEntryFoundException);
-}
-
-TEST_F(ForeignStorageCacheLRUTest, Reorder) {
-  LRUEvictionAlgorithm lru_alg{};
-  lru_alg.touchChunk(chunk_key1);
-  lru_alg.touchChunk(chunk_key2);
-  lru_alg.touchChunk(chunk_key3);
-  lru_alg.touchChunk(chunk_key1);
-  lru_alg.touchChunk(chunk_key2);
-  lru_alg.touchChunk(chunk_key1);
-  ASSERT_EQ(lru_alg.evictNextChunk(), chunk_key3);
-  ASSERT_EQ(lru_alg.evictNextChunk(), chunk_key2);
-  ASSERT_EQ(lru_alg.evictNextChunk(), chunk_key1);
-  ASSERT_THROW(lru_alg.evictNextChunk(), NoEntryFoundException);
 }
 
 class ForeignStorageCacheFileTest : public testing::Test {

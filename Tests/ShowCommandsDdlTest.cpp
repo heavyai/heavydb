@@ -937,7 +937,6 @@ class ShowDiskCacheUsageTest : public ShowTest {
   static inline constexpr int64_t empty_mgr_size{0};
   static inline constexpr int64_t meta_only_size{epoch_file_size + meta_file_size};
   static inline constexpr int64_t minimum_total_size{data_file_size + meta_only_size};
-  static inline constexpr int64_t default_cache_size{21474836480};
   // TODO(Misiu): These can be made constexpr once c++20 is supported.
   static inline std::string cache_path_ = to_string(BASE_PATH) + "/omnisci_disk_cache/";
   static inline std::string foreign_table1{"foreign_table1"};
@@ -991,16 +990,14 @@ class ShowDiskCacheUsageTest : public ShowTest {
 TEST_F(ShowDiskCacheUsageTest, SingleTable) {
   sqlCreateBasicForeignTable(foreign_table1);
 
-  sqlAndCompareResult("SHOW DISK CACHE USAGE;",
-                      {{foreign_table1, empty_mgr_size, default_cache_size}});
+  sqlAndCompareResult("SHOW DISK CACHE USAGE;", {{foreign_table1, empty_mgr_size}});
 }
 
 TEST_F(ShowDiskCacheUsageTest, SingleTableInUse) {
   sqlCreateBasicForeignTable(foreign_table1);
 
   sql("SELECT * FROM " + foreign_table1 + ";");
-  sqlAndCompareResult("SHOW DISK CACHE USAGE;",
-                      {{foreign_table1, minimum_total_size, default_cache_size}});
+  sqlAndCompareResult("SHOW DISK CACHE USAGE;", {{foreign_table1, minimum_total_size}});
 }
 
 TEST_F(ShowDiskCacheUsageTest, MultipleTables) {
@@ -1012,9 +1009,9 @@ TEST_F(ShowDiskCacheUsageTest, MultipleTables) {
   sql("SELECT * FROM " + foreign_table2 + ";");
 
   sqlAndCompareResult("SHOW DISK CACHE USAGE;",
-                      {{foreign_table1, minimum_total_size, default_cache_size},
-                       {foreign_table2, minimum_total_size, default_cache_size},
-                       {foreign_table3, empty_mgr_size, default_cache_size}});
+                      {{foreign_table1, minimum_total_size},
+                       {foreign_table2, minimum_total_size},
+                       {foreign_table3, empty_mgr_size}});
 }
 
 TEST_F(ShowDiskCacheUsageTest, NoTables) {
@@ -1037,8 +1034,7 @@ TEST_F(ShowDiskCacheUsageTest, MultipleTablesFiltered) {
 
   sqlAndCompareResult(
       "SHOW DISK CACHE USAGE FOR " + foreign_table1 + ", " + foreign_table3 + ";",
-      {{foreign_table1, minimum_total_size, default_cache_size},
-       {foreign_table3, empty_mgr_size, default_cache_size}});
+      {{foreign_table1, minimum_total_size}, {foreign_table3, empty_mgr_size}});
 }
 
 TEST_F(ShowDiskCacheUsageTest, SingleTableDropped) {
@@ -1056,8 +1052,7 @@ TEST_F(ShowDiskCacheUsageTest, SingleTableEvicted) {
   sql("SELECT * FROM " + foreign_table1 + ";");
   sql("REFRESH FOREIGN TABLES " + foreign_table1 + " WITH (evict=true);");
 
-  sqlAndCompareResult("SHOW DISK CACHE USAGE;",
-                      {{foreign_table1, empty_mgr_size, default_cache_size}});
+  sqlAndCompareResult("SHOW DISK CACHE USAGE;", {{foreign_table1, empty_mgr_size}});
 }
 
 TEST_F(ShowDiskCacheUsageTest, SingleTableRefreshed) {
@@ -1066,8 +1061,7 @@ TEST_F(ShowDiskCacheUsageTest, SingleTableRefreshed) {
   sql("SELECT * FROM " + foreign_table1 + ";");
   sql("REFRESH FOREIGN TABLES " + foreign_table1 + ";");
 
-  sqlAndCompareResult("SHOW DISK CACHE USAGE;",
-                      {{foreign_table1, minimum_total_size, default_cache_size}});
+  sqlAndCompareResult("SHOW DISK CACHE USAGE;", {{foreign_table1, minimum_total_size}});
 }
 
 TEST_F(ShowDiskCacheUsageTest, SingleTableMetadataOnly) {
@@ -1075,8 +1069,7 @@ TEST_F(ShowDiskCacheUsageTest, SingleTableMetadataOnly) {
 
   sql("SELECT COUNT(*) FROM " + foreign_table1 + ";");
 
-  sqlAndCompareResult("SHOW DISK CACHE USAGE;",
-                      {{foreign_table1, meta_only_size, default_cache_size}});
+  sqlAndCompareResult("SHOW DISK CACHE USAGE;", {{foreign_table1, meta_only_size}});
 }
 
 TEST_F(ShowDiskCacheUsageTest, ForeignAndNormalTable) {
@@ -1087,8 +1080,7 @@ TEST_F(ShowDiskCacheUsageTest, ForeignAndNormalTable) {
   sql("SELECT * FROM " + table1 + ";");
 
   sqlAndCompareResult("SHOW DISK CACHE USAGE;",
-                      {{foreign_table1, minimum_total_size, default_cache_size},
-                       {table1, i(0), default_cache_size}});
+                      {{foreign_table1, minimum_total_size}, {table1, i(0)}});
 }
 
 class ShowDiskCacheUsageForNormalTableTest : public ShowDiskCacheUsageTest {
@@ -1119,8 +1111,7 @@ TEST_F(ShowDiskCacheUsageForNormalTableTest, NormalTableEmptyUninitialized) {
   sql("SELECT * FROM " + foreign_table1 + ";");
 
   sqlAndCompareResult("SHOW DISK CACHE USAGE;",
-                      {{foreign_table1, minimum_total_size, default_cache_size},
-                       {table1, empty_mgr_size, default_cache_size}});
+                      {{foreign_table1, minimum_total_size}, {table1, empty_mgr_size}});
 }
 
 // If a table is initialized, but empty (it has a fileMgr, but no content), it will have
@@ -1134,8 +1125,7 @@ TEST_F(ShowDiskCacheUsageForNormalTableTest, NormalTableEmptyInitialized) {
   sql("SELECT * FROM " + table1 + ";");
 
   sqlAndCompareResult("SHOW DISK CACHE USAGE;",
-                      {{foreign_table1, minimum_total_size, default_cache_size},
-                       {table1, epoch_file_size, default_cache_size}});
+                      {{foreign_table1, minimum_total_size}, {table1, epoch_file_size}});
 }
 
 TEST_F(ShowDiskCacheUsageForNormalTableTest, NormalTableMinimum) {
@@ -1145,9 +1135,9 @@ TEST_F(ShowDiskCacheUsageForNormalTableTest, NormalTableMinimum) {
   sql("SELECT * FROM " + foreign_table1 + ";");
   sql("INSERT INTO " + table1 + " VALUES('1');");
 
-  sqlAndCompareResult("SHOW DISK CACHE USAGE;",
-                      {{foreign_table1, minimum_total_size, default_cache_size},
-                       {table1, minimum_total_size, default_cache_size}});
+  sqlAndCompareResult(
+      "SHOW DISK CACHE USAGE;",
+      {{foreign_table1, minimum_total_size}, {table1, minimum_total_size}});
 }
 
 int main(int argc, char** argv) {
