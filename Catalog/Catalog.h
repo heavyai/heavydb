@@ -494,7 +494,7 @@ class Catalog final {
   void updatePageSize();
   void updateDeletedColumnIndicator();
   void updateFrontendViewsToDashboards();
-  void createFsiSchemasAndDefaultServers();
+  void createFsiSchemas();
   void dropFsiSchemasAndTables();
   void recordOwnershipOfObjectsInObjectPermissions();
   void checkDateInDaysColumnMigration();

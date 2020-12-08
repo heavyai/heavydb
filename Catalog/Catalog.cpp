@@ -612,12 +612,11 @@ void Catalog::updateDictionarySchema() {
   sqliteConnector_.query("END TRANSACTION");
 }
 
-void Catalog::createFsiSchemasAndDefaultServers() {
+void Catalog::createFsiSchemas() {
   cat_sqlite_lock sqlite_lock(this);
   sqliteConnector_.query("BEGIN TRANSACTION");
   try {
     sqliteConnector_.query(getForeignServerSchema(true));
-    createDefaultServersIfNotExists();
     sqliteConnector_.query(getForeignTableSchema(true));
   } catch (std::exception& e) {
     sqliteConnector_.query("ROLLBACK TRANSACTION");
@@ -858,7 +857,7 @@ void Catalog::CheckAndExecuteMigrations() {
   updateFrontendViewsToDashboards();
   recordOwnershipOfObjectsInObjectPermissions();
   if (g_enable_fsi) {
-    createFsiSchemasAndDefaultServers();
+    createFsiSchemas();
   }
 }
 
@@ -958,6 +957,7 @@ void Catalog::buildMaps() {
 
   if (g_enable_fsi) {
     buildForeignServerMap();
+    createDefaultServersIfNotExists();
     addForeignTableDetails();
   }
 
@@ -2463,15 +2463,17 @@ void Catalog::createForeignServerNoLocks(
         std::vector<std::string>{foreign_server->name});
     CHECK_EQ(sqliteConnector_.getNumRows(), size_t(1));
     foreign_server->id = sqliteConnector_.getData<int32_t>(0, 0);
+    std::shared_ptr<foreign_storage::ForeignServer> foreign_server_shared =
+        std::move(foreign_server);
+    CHECK(foreignServerMap_.find(foreign_server_shared->name) == foreignServerMap_.end())
+        << "Attempting to insert a foreign server into foreign server map that already "
+           "exists.";
+    foreignServerMap_[foreign_server_shared->name] = foreign_server_shared;
+    foreignServerMapById_[foreign_server_shared->id] = foreign_server_shared;
   } else if (!if_not_exists) {
     throw std::runtime_error{"A foreign server with name \"" + foreign_server->name +
                              "\" already exists."};
   }
-
-  std::shared_ptr<foreign_storage::ForeignServer> foreign_server_shared =
-      std::move(foreign_server);
-  foreignServerMap_[foreign_server_shared->name] = foreign_server_shared;
-  foreignServerMapById_[foreign_server_shared->id] = foreign_server_shared;
 }
 
 const foreign_storage::ForeignServer* Catalog::getForeignServer(

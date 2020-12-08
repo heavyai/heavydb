@@ -91,6 +91,27 @@ class FsiSchemaTest : public testing::Test {
     ASSERT_TRUE(
         foreign_server->options.find(foreign_storage::ForeignServer::BASE_PATH_KEY) ==
         foreign_server->options.end());
+
+    // check that server loaded from storage matches that in memory
+    auto foreign_server_in_memory = catalog->getForeignServer(server_name);
+
+    ASSERT_EQ(foreign_server->id, foreign_server_in_memory->id);
+    ASSERT_EQ(foreign_server_in_memory->name, foreign_server->name);
+    ASSERT_EQ(foreign_server_in_memory->data_wrapper_type,
+              foreign_server->data_wrapper_type);
+    ASSERT_EQ(foreign_server_in_memory->user_id, foreign_server->user_id);
+
+    ASSERT_TRUE(foreign_server_in_memory->options.find(
+                    foreign_storage::ForeignServer::STORAGE_TYPE_KEY) !=
+                foreign_server_in_memory->options.end());
+    ASSERT_EQ(foreign_storage::ForeignServer::LOCAL_FILE_STORAGE_TYPE,
+              foreign_server_in_memory->options
+                  .find(foreign_storage::ForeignServer::STORAGE_TYPE_KEY)
+                  ->second);
+
+    ASSERT_TRUE(foreign_server_in_memory->options.find(
+                    foreign_storage::ForeignServer::BASE_PATH_KEY) ==
+                foreign_server_in_memory->options.end());
   }
 
   void assertFsiTablesExist() {
