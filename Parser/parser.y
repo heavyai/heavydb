@@ -140,6 +140,7 @@ sql:		/* schema {	$<nodeval>$ = $<nodeval>1; } */
 	| rename_column_statement { $<nodeval>$ = $<nodeval>1; }
 	| add_column_statement { $<nodeval>$ = $<nodeval>1; }
 	| drop_column_statement { $<nodeval>$ = $<nodeval>1; }
+	| alter_table_param_statement { $<nodeval>$ = $<nodeval>1; }
 	| copy_table_statement { $<nodeval>$ = $<nodeval>1; }
 	| create_database_statement { $<nodeval>$ = $<nodeval>1; }
 	| drop_database_statement { $<nodeval>$ = $<nodeval>1; }
@@ -349,6 +350,13 @@ drop_columns:
 		
 drop_column:
 		DROP opt_column column { $<stringval>$ = $<stringval>3; }
+
+alter_table_param_statement:
+	ALTER TABLE table SET name_eq_value 
+	{
+		$<nodeval>$ = TrackedPtr<Node>::make(lexer.parsed_node_tokens_, new AlterTableParamStmt(($<stringval>3)->release(), reinterpret_cast<NameValueAssign*>(($<nodeval>5)->release())));
+	}
+	;
 
 copy_table_statement:
 	COPY table FROM STRING opt_with_option_list

@@ -219,6 +219,7 @@ class InsertOrderFragmenter : public AbstractFragmenter {
       const Data_Namespace::MemoryLevel memory_level = Data_Namespace::DISK_LEVEL);
   void deleteFragments(const std::vector<int>& dropFragIds);
 
+  void conditionallyInstantiateFileMgrWithParams();
   void getChunkMetadata();
 
   void lockInsertCheckpointData(const InsertData& insertDataStruct);

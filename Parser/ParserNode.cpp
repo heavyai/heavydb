@@ -2129,6 +2129,19 @@ decltype(auto) get_sort_column_def(TableDescriptor& td,
   });
 }
 
+decltype(auto) get_max_rollback_epochs_def(TableDescriptor& td,
+                                           const NameValueAssign* p,
+                                           const std::list<ColumnDescriptor>& columns) {
+  auto assignment = [&td](const auto val) {
+    td.maxRollbackEpochs =
+        val < 0 ? -1 : val;  // Anything < 0 means unlimited rollbacks. Note that 0
+                             // still means keeping a shadow copy of data/metdata
+                             // between epochs so bad writes can be rolled back
+  };
+  return get_property_value<IntLiteral, decltype(assignment), PositiveOrZeroValidate>(
+      p, assignment);
+}
+
 static const std::map<const std::string, const TableDefFuncPtr> tableDefFuncMap = {
     {"fragment_size"s, get_frag_size_def},
     {"max_chunk_size"s, get_max_chunk_size_def},
@@ -2138,7 +2151,8 @@ static const std::map<const std::string, const TableDefFuncPtr> tableDefFuncMap 
     {"shard_count"s, get_shard_count_def},
     {"vacuum"s, get_vacuum_def},
     {"sort_column"s, get_sort_column_def},
-    {"storage_type"s, get_storage_type}};
+    {"storage_type"s, get_storage_type},
+    {"max_rollback_epochs", get_max_rollback_epochs_def}};
 
 void get_table_definitions(TableDescriptor& td,
                            const std::unique_ptr<NameValueAssign>& p,
@@ -2147,8 +2161,9 @@ void get_table_definitions(TableDescriptor& td,
   if (it == tableDefFuncMap.end()) {
     throw std::runtime_error(
         "Invalid CREATE TABLE option " + *p->get_name() +
-        ". Should be FRAGMENT_SIZE, MAX_CHUNK_SIZE, PAGE_SIZE, MAX_ROWS, "
-        "PARTITIONS, SHARD_COUNT, VACUUM, SORT_COLUMN, or STORAGE_TYPE.");
+        ". Should be FRAGMENT_SIZE, MAX_CHUNK_SIZE, PAGE_SIZE, MAX_ROLLBACK_EPOCHS, "
+        "MAX_ROWS, "
+        "PARTITIONS, SHARD_COUNT, VACUUM, SORT_COLUMN, STORAGE_TYPE.");
   }
   return it->second(td, p.get(), columns);
 }
@@ -2160,7 +2175,8 @@ void get_table_definitions_for_ctas(TableDescriptor& td,
   if (it == tableDefFuncMap.end()) {
     throw std::runtime_error(
         "Invalid CREATE TABLE AS option " + *p->get_name() +
-        ". Should be FRAGMENT_SIZE, MAX_CHUNK_SIZE, PAGE_SIZE, MAX_ROWS, "
+        ". Should be FRAGMENT_SIZE, MAX_CHUNK_SIZE, PAGE_SIZE, MAX_ROLLBACK_EPOCHS, "
+        "MAX_ROWS, "
         "PARTITIONS, SHARD_COUNT, VACUUM, SORT_COLUMN, STORAGE_TYPE or "
         "USE_SHARED_DICTIONARIES.");
   }
@@ -3181,6 +3197,7 @@ void CreateTableAsSelectStmt::execute(const Catalog_Namespace::SessionInfo& sess
     td.maxChunkSize = DEFAULT_MAX_CHUNK_SIZE;
     td.fragPageSize = DEFAULT_PAGE_SIZE;
     td.maxRows = DEFAULT_MAX_ROWS;
+    td.maxRollbackEpochs = DEFAULT_MAX_ROLLBACK_EPOCHS;
     if (is_temporary_) {
       td.persistenceLevel = Data_Namespace::MemoryLevel::CPU_LEVEL;
     } else {
@@ -3711,6 +3728,57 @@ void RenameColumnStmt::execute(const Catalog_Namespace::SessionInfo& session) {
     throw std::runtime_error("Column " + *new_column_name + " already exists.");
   }
   catalog.renameColumn(td, cd, *new_column_name);
+}
+
+void AlterTableParamStmt::execute(const Catalog_Namespace::SessionInfo& session) {
+  enum TableParamType { MaxRollbackEpochs, Epoch };
+  static const std::unordered_map<std::string, TableParamType> param_map = {
+      {"max_rollback_epochs", TableParamType::MaxRollbackEpochs},
+      {"epoch", TableParamType::Epoch}};
+  // Below is to ensure that executor is not currently executing on table when we might be
+  // changing it's storage. Question: will/should catalog write lock take care of this?
+  const auto execute_write_lock = mapd_unique_lock<mapd_shared_mutex>(
+      *legacylockmgr::LockMgr<mapd_shared_mutex, bool>::getMutex(
+          legacylockmgr::ExecutorOuterLock, true));
+  auto& catalog = session.getCatalog();
+  const auto td_with_lock =
+      lockmgr::TableSchemaLockContainer<lockmgr::WriteLock>::acquireTableDescriptor(
+          catalog, *table, false);
+  const auto td = td_with_lock();
+  if (!td) {
+    throw std::runtime_error("Table " + *table + " does not exist.");
+  }
+  if (td->isView) {
+    throw std::runtime_error("Setting parameters for a view is not supported.");
+  }
+  if (table_is_temporary(td)) {
+    throw std::runtime_error(
+        "Setting parameters for a temporary table is not yet supported.");
+  }
+  check_alter_table_privilege(session, td);
+
+  // Only allow max_rollback_epochs for now
+  std::string param_name(*param->get_name());
+  boost::algorithm::to_lower(param_name);
+  const IntLiteral* val_int_literal = dynamic_cast<const IntLiteral*>(param->get_value());
+  if (val_int_literal == nullptr) {
+    throw std::runtime_error("Table parameters should be integers.");
+  }
+  const int32_t param_val = val_int_literal->get_intval();
+
+  const auto param_it = param_map.find(param_name);
+  if (param_it == param_map.end()) {
+    throw std::runtime_error(param_name + " is not a settable table parameter.");
+  }
+  switch (param_it->second) {
+    case MaxRollbackEpochs: {
+      catalog.setMaxRollbackEpochs(td->tableId, param_val);
+      break;
+    }
+    case Epoch: {
+      catalog.setTableEpoch(catalog.getDatabaseId(), td->tableId, param_val);
+    }
+  }
 }
 
 void CopyTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {

@@ -28,6 +28,7 @@
 
 #include "DataMgr/AbstractBuffer.h"
 #include "DataMgr/DataMgr.h"
+#include "DataMgr/FileMgr/GlobalFileMgr.h"
 #include "LockMgr/LockMgr.h"
 #include "Logger/Logger.h"
 #include "Shared/checked_alloc.h"
@@ -86,6 +87,7 @@ InsertOrderFragmenter::InsertOrderFragmenter(
       rowIdColId_ = columnId;
     }
   }
+  conditionallyInstantiateFileMgrWithParams();
   getChunkMetadata();
 }
 
@@ -108,6 +110,22 @@ int compute_device_for_fragment(const int table_id,
 }
 
 }  // namespace
+
+void InsertOrderFragmenter::conditionallyInstantiateFileMgrWithParams() {
+  // Somewhat awkward to do this in Fragmenter, but FileMgrs are not instantiated until
+  // first use by Fragmenter, and until maxRollbackEpochs param, no options were set in
+  // storage per table
+  if (defaultInsertLevel_ == Data_Namespace::MemoryLevel::DISK_LEVEL) {
+    const TableDescriptor* td =
+        catalog_->getMetadataForTable(physicalTableId_, false /*populateFragmenter*/);
+    if (td->maxRollbackEpochs != DEFAULT_MAX_ROLLBACK_EPOCHS) {
+      File_Namespace::FileMgrParams fileMgrParams;
+      fileMgrParams.max_rollback_epochs = td->maxRollbackEpochs;
+      dataMgr_->getGlobalFileMgr()->setFileMgrParams(
+          chunkKeyPrefix_[0], chunkKeyPrefix_[1], fileMgrParams);
+    }
+  }
+}
 
 void InsertOrderFragmenter::getChunkMetadata() {
   if (uses_foreign_storage_ ||

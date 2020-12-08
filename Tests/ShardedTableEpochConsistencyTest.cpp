@@ -103,7 +103,8 @@ class CheckpointFailureMock {
 class MockFileMgr : public CheckpointFailureMock, public File_Namespace::FileMgr {
  public:
   MockFileMgr(std::shared_ptr<File_Namespace::FileMgr> file_mgr)
-      : File_Namespace::FileMgr(file_mgr->epoch()), parent_file_mgr_(file_mgr) {
+      : File_Namespace::FileMgr(file_mgr->lastCheckpointedEpoch())
+      , parent_file_mgr_(file_mgr) {
     CHECK(parent_file_mgr_);
   }
 
@@ -623,6 +624,96 @@ TEST_F(SetTableEpochsTest, NonSuperUser) {
         db_handler->set_table_epochs(session_id, db_id, epoch_vector);
       },
       "Only super users can set table epochs");
+}
+
+TEST_F(SetTableEpochsTest, Capped) {
+  loginAdmin();
+
+  const int row_count = 20;
+  sql("create table test_table(a int, shard key(a)) with (max_rollback_epochs = 5, "
+      "shard_count =2);");
+
+  for (int i = 0; i < row_count; i++) {
+    sql("insert into test_table values (" + std::to_string(i) + ");");
+  }
+  assertTableEpochs({row_count, row_count});
+  sqlAndCompareResult("select count(*) from test_table;", {{i(row_count)}});
+
+  auto [db_handler, session_id] = getDbHandlerAndSessionId();
+  auto [db_id, not_good_to_use] = getDbIdAndTableEpochs();
+
+  std::vector<TTableEpochInfo> epochs_vector;
+  const auto& catalog = getCatalog();
+  auto table_id = catalog.getMetadataForTable("test_table", false)->tableId;
+  db_handler->get_table_epochs(epochs_vector, session_id, db_id, table_id);
+
+  for (auto& tei : epochs_vector) {
+    CHECK_EQ(tei.table_epoch, row_count);
+    tei.table_epoch = 10;
+  }
+
+  // This should fail as we are attempting to rollback too far
+  EXPECT_ANY_THROW(db_handler->set_table_epochs(session_id, db_id, epochs_vector));
+
+  for (auto& tei : epochs_vector) {
+    tei.table_epoch = 15;
+  }
+  db_handler->set_table_epochs(session_id, db_id, epochs_vector);
+
+  sqlAndCompareResult("select count(*) from test_table;", {{i(15)}});
+  assertTableEpochs({15, 15});
+}
+
+TEST_F(SetTableEpochsTest, CappedAlter) {
+  loginAdmin();
+  int row_count = 20;
+  auto doInserts = [&row_count]() {
+    for (int i = 0; i < row_count; i++) {
+      sql("insert into test_table values (" + std::to_string(i) + ");");
+    }
+  };
+
+  sql("create table test_table(a int, shard key(a)) with (shard_count =2);");
+
+  doInserts();
+  assertTableEpochs({row_count, row_count});
+  sqlAndCompareResult("select count(*) from test_table;", {{i(row_count)}});
+
+  auto [db_handler, session_id] = getDbHandlerAndSessionId();
+  auto [db_id, not_good_to_use] = getDbIdAndTableEpochs();
+
+  std::vector<TTableEpochInfo> epochs_vector;
+  const auto& catalog = getCatalog();
+  auto table_id = catalog.getMetadataForTable("test_table", false)->tableId;
+  db_handler->get_table_epochs(epochs_vector, session_id, db_id, table_id);
+
+  // rollback to zero
+  for (auto& tei : epochs_vector) {
+    CHECK_EQ(tei.table_epoch, row_count);
+    tei.table_epoch = 0;
+  }
+
+  db_handler->set_table_epochs(session_id, db_id, epochs_vector);
+  assertTableEpochs({0, 0});
+
+  // insert another 21 rows
+  row_count = 21;
+  doInserts();
+  assertTableEpochs({row_count, row_count});
+  sqlAndCompareResult("select count(*) from test_table;", {{i(row_count)}});
+
+  sql("alter table test_table set max_rollback_epochs = 5;");
+
+  for (auto& tei : epochs_vector) {
+    tei.table_epoch = 12;
+  }
+  // This should fail as we are attempting to rollback too far
+  EXPECT_ANY_THROW(db_handler->set_table_epochs(session_id, db_id, epochs_vector));
+
+  sql("alter table test_table set epoch = 16;");
+
+  sqlAndCompareResult("select count(*) from test_table;", {{i(16)}});
+  assertTableEpochs({16, 16});
 }
 
 int main(int argc, char** argv) {

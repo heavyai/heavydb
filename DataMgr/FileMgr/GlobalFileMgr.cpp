@@ -38,7 +38,7 @@ using namespace std;
 
 namespace File_Namespace {
 
-GlobalFileMgr::GlobalFileMgr(const int deviceId,
+GlobalFileMgr::GlobalFileMgr(const int32_t deviceId,
                              std::string basePath,
                              const size_t num_reader_threads,
                              const size_t defaultPageSize)
@@ -49,8 +49,8 @@ GlobalFileMgr::GlobalFileMgr(const int deviceId,
     ,  // set the default epoch for all tables corresponding to the time of
        // last checkpoint
     defaultPageSize_(defaultPageSize) {
-  mapd_db_version_ =
-      1;  // DS changes triggered by individual FileMgr per table project (release 2.1.0)
+  omnisci_db_version_ = 2;
+  // DS changes also triggered by individual FileMgr per table project (release 2.1.0)
   dbConvert_ = false;
   init();
 }
@@ -80,7 +80,7 @@ void GlobalFileMgr::checkpoint() {
   }
 }
 
-void GlobalFileMgr::checkpoint(const int db_id, const int tb_id) {
+void GlobalFileMgr::checkpoint(const int32_t db_id, const int32_t tb_id) {
   getFileMgr(db_id, tb_id)->checkpoint();
 }
 
@@ -106,7 +106,8 @@ void GlobalFileMgr::deleteBuffersWithPrefix(const ChunkKey& keyPrefix, const boo
   }
 }
 
-AbstractBufferMgr* GlobalFileMgr::findFileMgrUnlocked(const int db_id, const int tb_id) {
+AbstractBufferMgr* GlobalFileMgr::findFileMgrUnlocked(const int32_t db_id,
+                                                      const int32_t tb_id) {
   // NOTE: only call this private function after locking is already in place
   AbstractBufferMgr* fm = nullptr;
   const auto file_mgr_key = std::make_pair(db_id, tb_id);
@@ -116,7 +117,7 @@ AbstractBufferMgr* GlobalFileMgr::findFileMgrUnlocked(const int db_id, const int
   return fm;
 }
 
-void GlobalFileMgr::deleteFileMgr(const int db_id, const int tb_id) {
+void GlobalFileMgr::deleteFileMgr(const int32_t db_id, const int32_t tb_id) {
   // NOTE: only call this private function after locking is already in place
   const auto file_mgr_key = std::make_pair(db_id, tb_id);
   if (auto it = ownedFileMgrs_.find(file_mgr_key); it != ownedFileMgrs_.end()) {
@@ -127,7 +128,48 @@ void GlobalFileMgr::deleteFileMgr(const int db_id, const int tb_id) {
   }
 }
 
-AbstractBufferMgr* GlobalFileMgr::getFileMgr(const int db_id, const int tb_id) {
+void GlobalFileMgr::closeFileMgr(const int32_t db_id, const int32_t tb_id) {
+  mapd_unique_lock<mapd_shared_mutex> write_lock(fileMgrs_mutex_);
+  deleteFileMgr(db_id, tb_id);
+}
+
+bool GlobalFileMgr::existsDiffBetweenFileMgrParamsAndFileMgr(
+    FileMgr* file_mgr,
+    const FileMgrParams& file_mgr_params) const {
+  if (file_mgr_params.epoch != -1 &&
+      file_mgr_params.epoch != file_mgr->lastCheckpointedEpoch()) {
+    return true;
+  }
+  if (file_mgr_params.max_rollback_epochs != -1 &&
+      file_mgr_params.max_rollback_epochs != file_mgr->maxRollbackEpochs()) {
+    return true;
+  }
+  return false;
+}
+
+void GlobalFileMgr::setFileMgrParams(const int32_t db_id,
+                                     const int32_t tb_id,
+                                     const FileMgrParams& file_mgr_params) {
+  auto fm = dynamic_cast<File_Namespace::FileMgr*>(findFileMgr(db_id, tb_id));
+  mapd_unique_lock<mapd_shared_mutex> write_lock(fileMgrs_mutex_);
+  if (fm) {
+    deleteFileMgr(db_id, tb_id);
+  }
+  const auto file_mgr_key = std::make_pair(db_id, tb_id);
+  auto s = std::make_shared<FileMgr>(
+      0,
+      this,
+      file_mgr_key,
+      file_mgr_params.max_rollback_epochs >= 0 ? file_mgr_params.max_rollback_epochs : -1,
+      num_reader_threads_,
+      file_mgr_params.epoch != -1 ? file_mgr_params.epoch : epoch_,
+      defaultPageSize_);
+  CHECK(ownedFileMgrs_.insert(std::make_pair(file_mgr_key, s)).second);
+  CHECK(allFileMgrs_.insert(std::make_pair(file_mgr_key, s.get())).second);
+  return;
+}
+
+AbstractBufferMgr* GlobalFileMgr::getFileMgr(const int32_t db_id, const int32_t tb_id) {
   {  // check if FileMgr already exists for (db_id, tb_id)
     mapd_shared_lock<mapd_shared_mutex> read_lock(fileMgrs_mutex_);
     AbstractBufferMgr* fm = findFileMgrUnlocked(db_id, tb_id);
@@ -150,8 +192,13 @@ AbstractBufferMgr* GlobalFileMgr::getFileMgr(const int db_id, const int tb_id) {
                 .second);
       return foreign_buffer_manager;
     } else {
-      auto s = std::make_shared<FileMgr>(
-          0, this, file_mgr_key, num_reader_threads_, epoch_, defaultPageSize_);
+      auto s = std::make_shared<FileMgr>(0,
+                                         this,
+                                         file_mgr_key,
+                                         -1 /*DEFAULT_MAX_ROLLBACK_EPOCHS*/,
+                                         num_reader_threads_,
+                                         epoch_,
+                                         defaultPageSize_);
       CHECK(ownedFileMgrs_.insert(std::make_pair(file_mgr_key, s)).second);
       CHECK(allFileMgrs_.insert(std::make_pair(file_mgr_key, s.get())).second);
       return s.get();
@@ -190,13 +237,11 @@ void GlobalFileMgr::writeFileMgrData(
     for (auto chunkIt = fm->chunkIndex_.begin(); chunkIt != fm->chunkIndex_.end();
          chunkIt++) {
       chunkIt->second->write((int8_t*)chunkIt->second, chunkIt->second->size(), 0);
-      // chunkIt->second->write((int8_t*)chunkIt->second, chunkIt->second->size(), 0,
-      // CPU_LEVEL, -1);
     }
   }
 }
 
-void GlobalFileMgr::removeTableRelatedDS(const int db_id, const int tb_id) {
+void GlobalFileMgr::removeTableRelatedDS(const int32_t db_id, const int32_t tb_id) {
   mapd_unique_lock<mapd_shared_mutex> write_lock(fileMgrs_mutex_);
   auto fm = dynamic_cast<File_Namespace::FileMgr*>(findFileMgrUnlocked(db_id, tb_id));
   if (fm) {
@@ -206,7 +251,7 @@ void GlobalFileMgr::removeTableRelatedDS(const int db_id, const int tb_id) {
     // spend the time initializing
     // initialize just enough to have to rename
     const auto file_mgr_key = std::make_pair(db_id, tb_id);
-    auto u = std::make_unique<FileMgr>(0, this, file_mgr_key, true);
+    auto u = std::make_unique<FileMgr>(0, this, file_mgr_key, defaultPageSize_, true);
     u->closeRemovePhysical();
   }
   // remove table related in-memory DS only if directory was removed successfully
@@ -214,27 +259,54 @@ void GlobalFileMgr::removeTableRelatedDS(const int db_id, const int tb_id) {
   deleteFileMgr(db_id, tb_id);
 }
 
-void GlobalFileMgr::setTableEpoch(const int db_id,
-                                  const int tb_id,
-                                  const int start_epoch) {
-  mapd_unique_lock<mapd_shared_mutex> write_lock(fileMgrs_mutex_);
+void GlobalFileMgr::setTableEpoch(const int32_t db_id,
+                                  const int32_t tb_id,
+                                  const int32_t start_epoch) {
+  AbstractBufferMgr* opened_fm = findFileMgr(db_id, tb_id);
+  if (opened_fm) {
+    // Delete this FileMgr to ensure epoch change occurs in constructor with other
+    // reads/writes locked out
+    deleteFileMgr(db_id, tb_id);
+  }
   const auto file_mgr_key = std::make_pair(db_id, tb_id);
   // this is where the real rollback of any data ahead of the currently set epoch is
   // performed
+  // Will call set_epoch with start_epoch internally
   auto u = std::make_unique<FileMgr>(
-      0, this, file_mgr_key, num_reader_threads_, start_epoch, defaultPageSize_);
-  u->setEpoch(start_epoch - 1);
+      0, this, file_mgr_key, -1, num_reader_threads_, start_epoch, defaultPageSize_);
   // remove the dummy one we built
   u.reset();
-
-  // see if one exists currently, and remove it
-  deleteFileMgr(db_id, tb_id);
 }
 
-size_t GlobalFileMgr::getTableEpoch(const int db_id, const int tb_id) {
-  auto fm = dynamic_cast<FileMgr*>(getFileMgr(db_id, tb_id));
-  CHECK(fm);
-  return fm->epoch_;
+size_t GlobalFileMgr::getTableEpoch(const int32_t db_id, const int32_t tb_id) {
+  // UX change was made to this function Oct 2020 to return checkpointed epoch. In turn,
+  // setTableEpoch was changed to set the epoch at the user's input, instead of input - 1
+  mapd_shared_lock<mapd_shared_mutex> read_lock(fileMgrs_mutex_);
+  AbstractBufferMgr* opened_fm = findFileMgr(db_id, tb_id);
+  if (opened_fm) {
+    return dynamic_cast<FileMgr*>(opened_fm)->lastCheckpointedEpoch();
+  }
+  // Do not do full init of table just to get table epoch, just check file instead
+  const auto file_mgr_key = std::make_pair(db_id, tb_id);
+  auto u = std::make_unique<FileMgr>(0, this, file_mgr_key, defaultPageSize_, true);
+  const auto epoch = u->lastCheckpointedEpoch();
+  u.reset();
+  return epoch;
+}
+
+BasicStorageStats GlobalFileMgr::getBasicStorageStats(const int32_t db_id,
+                                                      const int32_t tb_id) {
+  mapd_shared_lock<mapd_shared_mutex> read_lock(fileMgrs_mutex_);
+  AbstractBufferMgr* opened_fm = findFileMgr(db_id, tb_id);
+  if (opened_fm) {
+    return dynamic_cast<FileMgr*>(opened_fm)->getBasicStorageStats();
+  }
+  // Do not do full init of table just to get storage stats, just check file instead
+  const auto file_mgr_key = std::make_pair(db_id, tb_id);
+  auto u = std::make_unique<FileMgr>(0, this, file_mgr_key, defaultPageSize_, true);
+  const auto basic_storage_stats = u->getBasicStorageStats();
+  u.reset();
+  return basic_storage_stats;
 }
 
 }  // namespace File_Namespace

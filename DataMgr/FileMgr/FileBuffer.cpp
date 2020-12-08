@@ -25,12 +25,11 @@
 #include <future>
 #include <map>
 #include <thread>
+#include <utility>  // std::pair
 
 #include "DataMgr/FileMgr/FileMgr.h"
 #include "Shared/File.h"
 #include "Shared/checked_alloc.h"
-
-#define METADATA_PAGE_SIZE 4096
 
 using namespace std;
 
@@ -56,7 +55,7 @@ FileBuffer::FileBuffer(FileMgr* fm,
   if (initalSize > 0) {
       // should expand to initialSize bytes
       size_t initialNumPages = (initalSize + pageSize_ -1) / pageSize_;
-      int epoch = fm_->epoch();
+      int32_t epoch = fm_->epoch();
       for (size_t pageNum = 0; pageNum < initialNumPages; ++pageNum) {
           Page page = addNewMultiPage(epoch);
           writeHeader(page,pageNum,epoch);
@@ -93,16 +92,14 @@ FileBuffer::FileBuffer(FileMgr* fm,
 
   CHECK(fm_);
   calcHeaderBuffer();
-  // MultiPage multiPage(pageSize_); // why was this here?
-  int lastPageId = -1;
+  int32_t lastPageId = -1;
   // Page lastMetadataPage;
   for (auto vecIt = headerStartIt; vecIt != headerEndIt; ++vecIt) {
-    int curPageId = vecIt->pageId;
+    int32_t curPageId = vecIt->pageId;
 
     // We only want to read last metadata page
     if (curPageId == -1) {  // stats page
-      metadataPages_.epochs.push_back(vecIt->versionEpoch);
-      metadataPages_.pageVersions.push_back(vecIt->page);
+      metadataPages_.push(vecIt->page, vecIt->versionEpoch);
     } else {
       if (curPageId != lastPageId) {
         // protect from bad data on disk, and give diagnostics
@@ -113,24 +110,21 @@ FileBuffer::FileBuffer(FileMgr* fm,
         }
         if (lastPageId == -1) {
           // If we are on first real page
-          CHECK(metadataPages_.pageVersions.back().fileId != -1);  // was initialized
-          readMetadata(metadataPages_.pageVersions.back());
+          CHECK(metadataPages_.current().page.fileId != -1);  // was initialized
+          readMetadata(metadataPages_.current().page);
           pageDataSize_ = pageSize_ - reservedHeaderSize_;
         }
         MultiPage multiPage(pageSize_);
         multiPages_.push_back(multiPage);
         lastPageId = curPageId;
       }
-      multiPages_.back().epochs.push_back(vecIt->versionEpoch);
-      multiPages_.back().pageVersions.push_back(vecIt->page);
+      multiPages_.back().push(vecIt->page, vecIt->versionEpoch);
     }
     if (curPageId == -1) {  // meaning there was only a metadata page
-      readMetadata(metadataPages_.pageVersions.back());
+      readMetadata(metadataPages_.current().page);
       pageDataSize_ = pageSize_ - reservedHeaderSize_;
     }
   }
-  // auto lastHeaderIt = std::prev(headerEndIt);
-  // size_ = lastHeaderIt->chunkSize;
 }
 
 FileBuffer::~FileBuffer() {
@@ -141,7 +135,7 @@ FileBuffer::~FileBuffer() {
 void FileBuffer::reserve(const size_t numBytes) {
   size_t numPagesRequested = (numBytes + pageSize_ - 1) / pageSize_;
   size_t numCurrentPages = multiPages_.size();
-  int epoch = fm_->epoch();
+  int32_t epoch = fm_->epoch();
 
   for (size_t pageNum = numCurrentPages; pageNum < numPagesRequested; ++pageNum) {
     Page page = addNewMultiPage(epoch);
@@ -150,23 +144,25 @@ void FileBuffer::reserve(const size_t numBytes) {
 }
 
 void FileBuffer::calcHeaderBuffer() {
-  // 3 * sizeof(int) is for headerSize, for pageId and versionEpoch
+  // 3 * sizeof(int32_t) is for headerSize, for pageId and versionEpoch
   // sizeof(size_t) is for chunkSize
-  // reservedHeaderSize_ = (chunkKey_.size() + 3) * sizeof(int) + sizeof(size_t);
-  reservedHeaderSize_ = (chunkKey_.size() + 3) * sizeof(int);
+  reservedHeaderSize_ = (chunkKey_.size() + 3) * sizeof(int32_t);
   size_t headerMod = reservedHeaderSize_ % headerBufferOffset_;
   if (headerMod > 0) {
     reservedHeaderSize_ += headerBufferOffset_ - headerMod;
   }
-  // pageDataSize_ = pageSize_-reservedHeaderSize_;
+}
+
+void FileBuffer::freePage(const Page& page, const bool isRolloff) {
+  FileInfo* fileInfo = fm_->getFileInfoForFileId(page.fileId);
+  fileInfo->freePage(page.pageNum, isRolloff);
 }
 
 void FileBuffer::freeMetadataPages() {
   for (auto metaPageIt = metadataPages_.pageVersions.begin();
        metaPageIt != metadataPages_.pageVersions.end();
        ++metaPageIt) {
-    FileInfo* fileInfo = fm_->getFileInfoForFileId(metaPageIt->fileId);
-    fileInfo->freePage(metaPageIt->pageNum);
+    freePage(metaPageIt->page, false /* isRolloff */);
   }
   while (metadataPages_.pageVersions.size() > 0) {
     metadataPages_.pop();
@@ -180,8 +176,7 @@ size_t FileBuffer::freeChunkPages() {
     for (auto pageIt = multiPageIt->pageVersions.begin();
          pageIt != multiPageIt->pageVersions.end();
          ++pageIt) {
-      FileInfo* fileInfo = fm_->getFileInfoForFileId(pageIt->fileId);
-      fileInfo->freePage(pageIt->pageNum);
+      freePage(pageIt->page, false /* isRolloff */);
     }
   }
   multiPages_.clear();
@@ -191,6 +186,28 @@ size_t FileBuffer::freeChunkPages() {
 void FileBuffer::freePages() {
   freeMetadataPages();
   freeChunkPages();
+}
+
+void FileBuffer::freePagesBeforeEpochForMultiPage(MultiPage& multiPage,
+                                                  const int32_t targetEpoch,
+                                                  const int32_t currentEpoch) {
+  std::vector<EpochedPage> epochedPagesToFree =
+      multiPage.freePagesBeforeEpoch(targetEpoch, currentEpoch);
+  for (const auto& epochedPageToFree : epochedPagesToFree) {
+    freePage(epochedPageToFree.page, true /* isRolloff */);
+  }
+}
+
+void FileBuffer::freePagesBeforeEpoch(const int32_t targetEpoch) {
+  // This method is only safe to be called within a checkpoint, after the sync and epoch
+  // increment where a failure at any point32_t in the process would lead to a safe
+  // rollback
+  const int32_t currentEpoch = fm_->epoch();
+  CHECK_LE(targetEpoch, currentEpoch);
+  freePagesBeforeEpochForMultiPage(metadataPages_, targetEpoch, currentEpoch);
+  for (auto& multiPage : multiPages_) {
+    freePagesBeforeEpochForMultiPage(multiPage, targetEpoch, currentEpoch);
+  }
 }
 
 struct readThreadDS {
@@ -215,7 +232,7 @@ static size_t readForThread(FileBuffer* fileBuffer, const readThreadDS threadDS)
   // Traverse the logical pages
   for (size_t pageNum = startPage; pageNum < endPage; ++pageNum) {
     CHECK(threadDS.multiPages[pageNum].pageSize == fileBuffer->pageSize());
-    Page page = threadDS.multiPages[pageNum].current();
+    Page page = threadDS.multiPages[pageNum].current().page;
 
     FileInfo* fileInfo = threadDS.t_fm->getFileInfoForFileId(page.fileId);
     CHECK(fileInfo);
@@ -249,7 +266,7 @@ void FileBuffer::read(int8_t* const dst,
                       const size_t numBytes,
                       const size_t offset,
                       const MemoryLevel dstBufferType,
-                      const int deviceId) {
+                      const int32_t deviceId) {
   if (dstBufferType != CPU_LEVEL) {
     LOG(FATAL) << "Unsupported Buffer type";
   }
@@ -368,32 +385,31 @@ void FileBuffer::copyPage(Page& srcPage,
   free(buffer);
 }
 
-Page FileBuffer::addNewMultiPage(const int epoch) {
+Page FileBuffer::addNewMultiPage(const int32_t epoch) {
   Page page = fm_->requestFreePage(pageSize_, false);
   MultiPage multiPage(pageSize_);
-  multiPage.epochs.push_back(epoch);
-  multiPage.pageVersions.push_back(page);
-  multiPages_.push_back(multiPage);
+  multiPage.push(page, epoch);
+  multiPages_.emplace_back(multiPage);
   return page;
 }
 
 void FileBuffer::writeHeader(Page& page,
-                             const int pageId,
-                             const int epoch,
+                             const int32_t pageId,
+                             const int32_t epoch,
                              const bool writeMetadata) {
-  int intHeaderSize = chunkKey_.size() + 3;  // does not include chunkSize
-  vector<int> header(intHeaderSize);
+  int32_t intHeaderSize = chunkKey_.size() + 3;  // does not include chunkSize
+  vector<int32_t> header(intHeaderSize);
   // in addition to chunkkey we need size of header, pageId, version
   header[0] =
-      (intHeaderSize - 1) * sizeof(int);  // don't need to include size of headerSize
-                                          // value - sizeof(size_t) is for chunkSize
+      (intHeaderSize - 1) * sizeof(int32_t);  // don't need to include size of headerSize
+                                              // value - sizeof(size_t) is for chunkSize
   std::copy(chunkKey_.begin(), chunkKey_.end(), header.begin() + 1);
   header[intHeaderSize - 2] = pageId;
   header[intHeaderSize - 1] = epoch;
   FileInfo* fileInfo = fm_->getFileInfoForFileId(page.fileId);
   size_t pageSize = writeMetadata ? METADATA_PAGE_SIZE : pageSize_;
   fileInfo->write(
-      page.pageNum * pageSize, (intHeaderSize) * sizeof(int), (int8_t*)&header[0]);
+      page.pageNum * pageSize, (intHeaderSize) * sizeof(int32_t), (int8_t*)&header[0]);
 }
 
 void FileBuffer::readMetadata(const Page& page) {
@@ -401,10 +417,11 @@ void FileBuffer::readMetadata(const Page& page) {
   fseek(f, page.pageNum * METADATA_PAGE_SIZE + reservedHeaderSize_, SEEK_SET);
   fread((int8_t*)&pageSize_, sizeof(size_t), 1, f);
   fread((int8_t*)&size_, sizeof(size_t), 1, f);
-  vector<int> typeData(NUM_METADATA);  // assumes we will encode hasEncoder, bufferType,
-                                       // encodingType, encodingBits all as int
-  fread((int8_t*)&(typeData[0]), sizeof(int), typeData.size(), f);
-  int version = typeData[0];
+  vector<int32_t> typeData(
+      NUM_METADATA);  // assumes we will encode hasEncoder, bufferType,
+                      // encodingType, encodingBits all as int
+  fread((int8_t*)&(typeData[0]), sizeof(int32_t), typeData.size(), f);
+  int32_t version = typeData[0];
   CHECK(version == METADATA_VERSION);  // add backward compatibility code here
   bool has_encoder = static_cast<bool>(typeData[1]);
   if (has_encoder) {
@@ -421,7 +438,7 @@ void FileBuffer::readMetadata(const Page& page) {
   }
 }
 
-void FileBuffer::writeMetadata(const int epoch) {
+void FileBuffer::writeMetadata(const int32_t epoch) {
   // Right now stats page is size_ (in bytes), bufferType, encodingType,
   // encodingDataType, numElements
   Page page = fm_->requestFreePage(METADATA_PAGE_SIZE, true);
@@ -430,32 +447,32 @@ void FileBuffer::writeMetadata(const int epoch) {
   fseek(f, page.pageNum * METADATA_PAGE_SIZE + reservedHeaderSize_, SEEK_SET);
   fwrite((int8_t*)&pageSize_, sizeof(size_t), 1, f);
   fwrite((int8_t*)&size_, sizeof(size_t), 1, f);
-  vector<int> typeData(NUM_METADATA);  // assumes we will encode hasEncoder, bufferType,
-                                       // encodingType, encodingBits all as int
+  vector<int32_t> typeData(
+      NUM_METADATA);  // assumes we will encode hasEncoder, bufferType,
+                      // encodingType, encodingBits all as int32_t
   typeData[0] = METADATA_VERSION;
-  typeData[1] = static_cast<int>(hasEncoder());
+  typeData[1] = static_cast<int32_t>(hasEncoder());
   if (hasEncoder()) {
-    typeData[2] = static_cast<int>(sql_type_.get_type());
-    typeData[3] = static_cast<int>(sql_type_.get_subtype());
+    typeData[2] = static_cast<int32_t>(sql_type_.get_type());
+    typeData[3] = static_cast<int32_t>(sql_type_.get_subtype());
     typeData[4] = sql_type_.get_dimension();
     typeData[5] = sql_type_.get_scale();
-    typeData[6] = static_cast<int>(sql_type_.get_notnull());
-    typeData[7] = static_cast<int>(sql_type_.get_compression());
+    typeData[6] = static_cast<int32_t>(sql_type_.get_notnull());
+    typeData[7] = static_cast<int32_t>(sql_type_.get_compression());
     typeData[8] = sql_type_.get_comp_param();
     typeData[9] = sql_type_.get_size();
   }
-  fwrite((int8_t*)&(typeData[0]), sizeof(int), typeData.size(), f);
+  fwrite((int8_t*)&(typeData[0]), sizeof(int32_t), typeData.size(), f);
   if (hasEncoder()) {  // redundant
     encoder_->writeMetadata(f);
   }
-  metadataPages_.epochs.push_back(epoch);
-  metadataPages_.pageVersions.push_back(page);
+  metadataPages_.push(page, epoch);
 }
 
 void FileBuffer::append(int8_t* src,
                         const size_t numBytes,
                         const MemoryLevel srcBufferType,
-                        const int deviceId) {
+                        const int32_t deviceId) {
   setAppended();
 
   size_t startPage = size_ / pageDataSize_;
@@ -466,7 +483,7 @@ void FileBuffer::append(int8_t* src,
   int8_t* curPtr = src;  // a pointer to the current location in dst being written to
   size_t initialNumPages = multiPages_.size();
   size_ = size_ + numBytes;
-  int epoch = fm_->epoch();
+  int32_t epoch = fm_->epoch();
   for (size_t pageNum = startPage; pageNum < startPage + numPagesToWrite; ++pageNum) {
     Page page;
     if (pageNum >= initialNumPages) {
@@ -475,7 +492,7 @@ void FileBuffer::append(int8_t* src,
     } else {
       // we already have a new page at current
       // epoch for this page - just grab this page
-      page = multiPages_[pageNum].current();
+      page = multiPages_[pageNum].current().page;
     }
     CHECK(page.fileId >= 0);  // make sure page was initialized
     FileInfo* fileInfo = fm_->getFileInfoForFileId(page.fileId);
@@ -500,7 +517,7 @@ void FileBuffer::write(int8_t* src,
                        const size_t numBytes,
                        const size_t offset,
                        const MemoryLevel srcBufferType,
-                       const int deviceId) {
+                       const int32_t deviceId) {
   if (srcBufferType != CPU_LEVEL) {
     LOG(FATAL) << "Unsupported Buffer type";
   }
@@ -524,7 +541,7 @@ void FileBuffer::write(int8_t* src,
   size_t bytesLeft = numBytes;
   int8_t* curPtr = src;  // a pointer to the current location in dst being written to
   size_t initialNumPages = multiPages_.size();
-  int epoch = fm_->epoch();
+  int32_t epoch = fm_->epoch();
 
   if (startPage >
       initialNumPages) {  // means there is a gap we need to allocate pages for
@@ -538,14 +555,13 @@ void FileBuffer::write(int8_t* src,
     if (pageNum >= initialNumPages) {
       page = addNewMultiPage(epoch);
       writeHeader(page, pageNum, epoch);
-    } else if (multiPages_[pageNum].epochs.back() <
+    } else if (multiPages_[pageNum].current().epoch <
                epoch) {  // need to create new page b/c this current one lags epoch and we
                          // can't overwrite it also need to copy if we are on first or
                          // last page
-      Page lastPage = multiPages_[pageNum].current();
+      Page lastPage = multiPages_[pageNum].current().page;
       page = fm_->requestFreePage(pageSize_, false);
-      multiPages_[pageNum].epochs.push_back(epoch);
-      multiPages_[pageNum].pageVersions.push_back(page);
+      multiPages_[pageNum].push(page, epoch);
       if (pageNum == startPage && startPageOffset > 0) {
         // copyPage takes care of header offset so don't worry
         // about it
@@ -563,7 +579,7 @@ void FileBuffer::write(int8_t* src,
     } else {
       // we already have a new page at current
       // epoch for this page - just grab this page
-      page = multiPages_[pageNum].current();
+      page = multiPages_[pageNum].current().page;
     }
     CHECK(page.fileId >= 0);  // make sure page was initialized
     FileInfo* fileInfo = fm_->getFileInfoForFileId(page.fileId);
@@ -583,7 +599,7 @@ void FileBuffer::write(int8_t* src,
     if (tempIsAppended && pageNum == startPage + numPagesToWrite - 1) {  // if last page
       //@todo below can lead to undefined - we're overwriting num
       // bytes valid at checkpoint
-      writeHeader(page, 0, multiPages_[0].epochs.back(), true);
+      writeHeader(page, 0, multiPages_[0].current().epoch, true);
     }
   }
   CHECK(bytesLeft == 0);

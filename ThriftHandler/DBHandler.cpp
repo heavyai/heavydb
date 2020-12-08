@@ -5968,7 +5968,11 @@ void DBHandler::set_table_epoch(const TSessionId& session,
   if (leaf_aggregator_.leafCount() > 0) {
     return leaf_aggregator_.set_table_epochLeaf(*session_ptr, db_id, table_id, new_epoch);
   }
-  cat.setTableEpoch(db_id, table_id, new_epoch);
+  try {
+    cat.setTableEpoch(db_id, table_id, new_epoch);
+  } catch (const std::runtime_error& e) {
+    THROW_MAPD_EXCEPTION("Exception: " + std::string(e.what()));
+  }
 }
 
 // check and reset epoch if a request has been made
@@ -5990,7 +5994,11 @@ void DBHandler::set_table_epoch_by_name(const TSessionId& session,
     return leaf_aggregator_.set_table_epochLeaf(
         *session_ptr, db_id, td->tableId, new_epoch);
   }
-  cat.setTableEpoch(db_id, td->tableId, new_epoch);
+  try {
+    cat.setTableEpoch(db_id, td->tableId, new_epoch);
+  } catch (const std::runtime_error& e) {
+    THROW_MAPD_EXCEPTION("Exception: " + std::string(e.what()));
+  }
 }
 
 int32_t DBHandler::get_table_epoch(const TSessionId& session,
@@ -6004,7 +6012,11 @@ int32_t DBHandler::get_table_epoch(const TSessionId& session,
   if (leaf_aggregator_.leafCount() > 0) {
     return leaf_aggregator_.get_table_epochLeaf(*session_ptr, db_id, table_id);
   }
-  return cat.getTableEpoch(db_id, table_id);
+  try {
+    return cat.getTableEpoch(db_id, table_id);
+  } catch (const std::runtime_error& e) {
+    THROW_MAPD_EXCEPTION("Exception: " + std::string(e.what()));
+  }
 }
 
 int32_t DBHandler::get_table_epoch_by_name(const TSessionId& session,
@@ -6020,7 +6032,11 @@ int32_t DBHandler::get_table_epoch_by_name(const TSessionId& session,
   if (leaf_aggregator_.leafCount() > 0) {
     return leaf_aggregator_.get_table_epochLeaf(*session_ptr, db_id, td->tableId);
   }
-  return cat.getTableEpoch(db_id, td->tableId);
+  try {
+    return cat.getTableEpoch(db_id, td->tableId);
+  } catch (const std::runtime_error& e) {
+    THROW_MAPD_EXCEPTION("Exception: " + std::string(e.what()));
+  }
 }
 
 void DBHandler::get_table_epochs(std::vector<TTableEpochInfo>& _return,

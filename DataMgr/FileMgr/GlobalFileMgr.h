@@ -40,6 +40,12 @@ using namespace Data_Namespace;
 
 namespace File_Namespace {
 
+struct FileMgrParams {
+  FileMgrParams() : epoch(-1), max_rollback_epochs(-1) {}
+  int32_t epoch;
+  int32_t max_rollback_epochs;
+};
+
 /**
  * @class   GlobalFileMgr
  * @brief
@@ -48,10 +54,10 @@ class GlobalFileMgr : public AbstractBufferMgr {  // implements
 
  public:
   /// Constructor
-  GlobalFileMgr(const int deviceId,
+  GlobalFileMgr(const int32_t deviceId,
                 std::string basePath = ".",
                 const size_t num_reader_threads = 0,
-                const size_t defaultPageSize = 2097152);
+                const size_t defaultPageSize = DEFAULT_PAGE_SIZE);
 
   /// Creates a chunk with the specified key and page size.
   AbstractBuffer* createBuffer(const ChunkKey& key,
@@ -129,7 +135,7 @@ class GlobalFileMgr : public AbstractBufferMgr {  // implements
    * fsyncs that
    */
   void checkpoint() override;
-  void checkpoint(const int db_id, const int tb_id) override;
+  void checkpoint(const int32_t db_id, const int32_t tb_id) override;
 
   /**
    * @brief Returns number of threads defined by parameter num-reader-threads
@@ -140,15 +146,18 @@ class GlobalFileMgr : public AbstractBufferMgr {  // implements
   size_t getNumChunks() override;
 
  private:
-  AbstractBufferMgr* findFileMgrUnlocked(const int db_id, const int tb_id);
-  void deleteFileMgr(const int db_id, const int tb_id);
+  AbstractBufferMgr* findFileMgrUnlocked(const int32_t db_id, const int32_t tb_id);
+  void deleteFileMgr(const int32_t db_id, const int32_t tb_id);
 
  public:
-  AbstractBufferMgr* findFileMgr(const int db_id, const int tb_id) {
+  AbstractBufferMgr* findFileMgr(const int32_t db_id, const int32_t tb_id) {
     mapd_shared_lock<mapd_shared_mutex> read_lock(fileMgrs_mutex_);
     return findFileMgrUnlocked(db_id, tb_id);
   }
-  AbstractBufferMgr* getFileMgr(const int db_id, const int tb_id);
+  void setFileMgrParams(const int32_t db_id,
+                        const int32_t tb_id,
+                        const FileMgrParams& file_mgr_params);
+  AbstractBufferMgr* getFileMgr(const int32_t db_id, const int32_t tb_id);
   AbstractBufferMgr* getFileMgr(const ChunkKey& key) {
     return getFileMgr(key[0], key[1]);
   }
@@ -158,41 +167,49 @@ class GlobalFileMgr : public AbstractBufferMgr {  // implements
 
   void writeFileMgrData(FileMgr* fileMgr = 0);
 
-  inline int getDBVersion() const { return mapd_db_version_; }
+  inline int32_t getDBVersion() const { return omnisci_db_version_; }
   inline bool getDBConvert() const { return dbConvert_; }
   inline void setDBConvert(bool val) { dbConvert_ = val; }
 
-  void removeTableRelatedDS(const int db_id, const int tb_id) override;
-  void setTableEpoch(const int db_id, const int tb_id, const int start_epoch);
-  size_t getTableEpoch(const int db_id, const int tb_id);
+  void removeTableRelatedDS(const int32_t db_id, const int32_t tb_id) override;
+  void setTableEpoch(const int32_t db_id, const int32_t tb_id, const int32_t start_epoch);
+  size_t getTableEpoch(const int32_t db_id, const int32_t tb_id);
+  BasicStorageStats getBasicStorageStats(const int32_t db_id, const int32_t tb_id);
 
   // For testing purposes only
   std::shared_ptr<FileMgr> getSharedFileMgr(const int db_id, const int table_id);
 
   // For testing purposes only
   void setFileMgr(const int db_id, const int table_id, std::shared_ptr<FileMgr> file_mgr);
+  void closeFileMgr(const int32_t db_id,
+                    const int32_t tb_id);  // A locked public wrapper for deleteFileMgr,
+                                           // for now for unit testing
 
  private:
+  bool existsDiffBetweenFileMgrParamsAndFileMgr(
+      FileMgr* file_mgr,
+      const FileMgrParams& file_mgr_params) const;
   std::string basePath_;       /// The OS file system path containing the files.
   size_t num_reader_threads_;  /// number of threads used when loading data
-  int epoch_; /* the current epoch (time of last checkpoint) will be used for all
+  int32_t
+      epoch_; /* the current epoch (time of last checkpoint) will be used for all
                * tables except of the one for which the value of the epoch has been reset
                * using --start-epoch option at start up to rollback this table's updates.
                */
   size_t defaultPageSize_;  /// default page size, used to set FileMgr defaultPageSize_
   // bool isDirty_;               /// true if metadata changed since last writeState()
 
-  int mapd_db_version_;  /// DB version for DataMgr DS and corresponding file buffer
-                         /// read/write code
-  /* In future mapd_db_version_ may be added to AbstractBufferMgr class.
+  int32_t omnisci_db_version_;  /// DB version for DataMgr DS and corresponding file
+                                /// buffer read/write code
+  /* In future omnisci_db_version_ may be added to AbstractBufferMgr class.
    * This will allow support of different dbVersions for different tables, so
    * original tables can be generated by different versions of mapd software.
    */
   bool dbConvert_;  /// true if conversion should be done between different
-                    /// "mapd_db_version_"
+                    /// "omnisci_db_version_"
 
-  std::map<std::pair<int, int>, std::shared_ptr<FileMgr>> ownedFileMgrs_;
-  std::map<std::pair<int, int>, AbstractBufferMgr*> allFileMgrs_;
+  std::map<std::pair<int32_t, int32_t>, std::shared_ptr<FileMgr>> ownedFileMgrs_;
+  std::map<std::pair<int32_t, int32_t>, AbstractBufferMgr*> allFileMgrs_;
 
   mapd_shared_mutex fileMgrs_mutex_;
 };

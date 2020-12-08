@@ -628,7 +628,7 @@ void BufferMgr::deleteBuffersWithPrefix(const ChunkKey& key_prefix, const bool) 
     auto seg_it = buffer_it->second;
     if (seg_it->buffer) {
       delete seg_it->buffer;  // Delete Buffer for segment
-      seg_it->buffer = 0;
+      seg_it->buffer = nullptr;
     }
     removeSegment(seg_it);
     chunk_index_.erase(buffer_it++);

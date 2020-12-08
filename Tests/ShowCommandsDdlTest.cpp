@@ -933,7 +933,7 @@ class ShowDiskCacheUsageTest : public ShowTest {
   static inline constexpr int64_t data_file_size{page_size * MAX_FILE_N_PAGES};
   static inline constexpr int64_t meta_file_size{meta_page_size *
                                                  MAX_FILE_N_METADATA_PAGES};
-  static inline constexpr int64_t epoch_file_size{sizeof(int)};
+  static inline constexpr int64_t epoch_file_size{2 * sizeof(int64_t)};
   static inline constexpr int64_t empty_mgr_size{0};
   static inline constexpr int64_t meta_only_size{epoch_file_size + meta_file_size};
   static inline constexpr int64_t minimum_total_size{data_file_size + meta_only_size};

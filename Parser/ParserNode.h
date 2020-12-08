@@ -1333,6 +1333,16 @@ class DropColumnStmt : public DDLStmt {
   std::list<std::unique_ptr<std::string>> columns;
 };
 
+class AlterTableParamStmt : public DDLStmt {
+ public:
+  AlterTableParamStmt(std::string* tab, NameValueAssign* p) : table(tab), param(p) {}
+  void execute(const Catalog_Namespace::SessionInfo& session) override;
+
+ private:
+  std::unique_ptr<std::string> table;
+  std::unique_ptr<NameValueAssign> param;
+};
+
 /*
  * @type DumpTableStmt
  * @brief DUMP TABLE table TO archive_file_path
@@ -2100,6 +2110,21 @@ struct DefaultValidate<IntLiteral> {
     const auto val = static_cast<const IntLiteral*>(t->get_value())->get_intval();
     if (val <= 0) {
       throw std::runtime_error(property_name + " must be a positive number.");
+    }
+    return val;
+  }
+};
+
+struct PositiveOrZeroValidate {
+  template <typename T>
+  decltype(auto) operator()(T t) {
+    const std::string property_name(boost::to_upper_copy<std::string>(*t->get_name()));
+    if (!dynamic_cast<const IntLiteral*>(t->get_value())) {
+      throw std::runtime_error(property_name + " must be an integer literal.");
+    }
+    const auto val = static_cast<const IntLiteral*>(t->get_value())->get_intval();
+    if (val < 0) {
+      throw std::runtime_error(property_name + " must be greater than or equal to 0.");
     }
     return val;
   }

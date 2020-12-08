@@ -39,6 +39,7 @@ struct StorageType {
  *
  */
 
+#define DEFAULT_MAX_ROLLBACK_EPOCHS -1
 struct TableDescriptor {
   int32_t tableId; /**< tableId starts at 0 for valid tables. */
   int32_t shard;
@@ -73,6 +74,8 @@ struct TableDescriptor {
   std::vector<int> columnIdBySpi_;  // spi = 1,2,3,...
   std::string storageType;          // foreign/local storage
 
+  int32_t maxRollbackEpochs;
+
   // write mutex, only to be used inside catalog package
   std::shared_ptr<std::mutex> mutex_;
 
@@ -84,6 +87,7 @@ struct TableDescriptor {
       , sortedColumnId(0)
       , persistenceLevel(Data_Namespace::MemoryLevel::DISK_LEVEL)
       , hasDeletedCol(true)
+      , maxRollbackEpochs(-1)
       , mutex_(std::make_shared<std::mutex>()) {}
 
   virtual ~TableDescriptor() = default;
@@ -102,5 +106,19 @@ inline bool compare_td_id(const TableDescriptor* first, const TableDescriptor* s
 inline bool table_is_temporary(const TableDescriptor* const td) {
   return td->persistenceLevel == Data_Namespace::MemoryLevel::CPU_LEVEL;
 }
+
+struct TableDescriptorUpdateParams {
+  int32_t maxRollbackEpochs;
+
+  TableDescriptorUpdateParams(const TableDescriptor* td)
+      : maxRollbackEpochs(td->maxRollbackEpochs) {}
+  bool operator==(const TableDescriptor* td) {
+    if (maxRollbackEpochs != td->maxRollbackEpochs) {
+      return false;
+    }
+    // Add more tests for additional params as needed
+    return true;
+  }
+};
 
 #endif  // TABLE_DESCRIPTOR

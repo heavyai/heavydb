@@ -44,11 +44,11 @@ namespace File_Namespace {
  * size. The page size is determined by the containing file.
  */
 struct Page {
-  int fileId;      /// unique identifier of the owning file
+  int32_t fileId;  /// unique identifier of the owning file
   size_t pageNum;  /// page number
 
   /// Constructor
-  Page(int fileId, size_t pageNum) : fileId(fileId), pageNum(pageNum) {}
+  Page(int32_t fileId, size_t pageNum) : fileId(fileId), pageNum(pageNum) {}
   Page() : fileId(-1), pageNum(0) {}
 
   inline bool isValid() { return fileId >= 0; }
@@ -63,13 +63,15 @@ struct Page {
  * Associated with each version of a page is an "epoch" value, which is a temporal
  * reference.
  *
- *
- * Note that it should always be the case that version.size() == epoch.size().
  */
+struct EpochedPage {
+  Page page;
+  int32_t epoch;
+};
+
 struct MultiPage {
   size_t pageSize;
-  std::deque<Page> pageVersions;
-  std::deque<int> epochs;
+  std::deque<EpochedPage> pageVersions;
 
   /// Constructor
   MultiPage(size_t pageSizeIn) : pageSize(pageSizeIn) {}
@@ -81,23 +83,17 @@ struct MultiPage {
     }
   }
 
-  /// Returns a reference to the most recent version of the page (optionally, the epoch
-  /// is returned via the parameter "epoch").
-  inline Page current(int* epoch = NULL) const {
+  /// Returns a reference to the most recent version of the page
+  inline EpochedPage current() const {
     if (pageVersions.size() < 1) {
       LOG(FATAL) << "No current version of the page exists in this MultiPage.";
-    }
-    if (epoch != NULL) {
-      *epoch = this->epochs.back();
     }
     return pageVersions.back();
   }
 
   /// Pushes a new page with epoch value
-  inline void push(Page& page, const int epoch) {
-    pageVersions.push_back(page);
-    epochs.push_back(epoch);
-    CHECK_EQ(pageVersions.size(), epochs.size());
+  inline void push(const Page& page, const int epoch) {
+    pageVersions.push_back({page, epoch});
   }
 
   /// Purges the oldest Page
@@ -106,8 +102,25 @@ struct MultiPage {
       LOG(FATAL) << "No page to pop.";
     }
     pageVersions.pop_front();
-    epochs.pop_front();
-    CHECK_EQ(pageVersions.size(), epochs.size());
+  }
+
+  std::vector<EpochedPage> freePagesBeforeEpoch(const int32_t target_epoch,
+                                                const int32_t current_epoch) {
+    std::vector<EpochedPage> pagesBeforeEpoch;
+    int32_t next_page_epoch = current_epoch + 1;
+    for (auto pageIt = pageVersions.rbegin(); pageIt != pageVersions.rend(); ++pageIt) {
+      const int32_t epoch_ceiling = next_page_epoch - 1;
+      CHECK_LE(pageIt->epoch, epoch_ceiling);
+      if (epoch_ceiling < target_epoch) {
+        pagesBeforeEpoch.emplace_back(*pageIt);
+      }
+      next_page_epoch = pageIt->epoch;
+    }
+    if (!pagesBeforeEpoch.empty()) {
+      pageVersions.erase(pageVersions.begin(),
+                         pageVersions.begin() + pagesBeforeEpoch.size());
+    }
+    return pagesBeforeEpoch;
   }
 };
 
@@ -117,16 +130,15 @@ struct MultiPage {
  * a Page struct itself (File id and Page num)
  */
 
-// typedef std::pair<std::pair<std::vector<int>,std::vector<int> >, Page > HeaderInfo;
 struct HeaderInfo {
   ChunkKey chunkKey;  // a vector of ints
-  int pageId;
-  int versionEpoch;
+  int32_t pageId;
+  int32_t versionEpoch;
   Page page;
 
   HeaderInfo(const ChunkKey& chunkKey,
-             const int pageId,
-             const int versionEpoch,
+             const int32_t pageId,
+             const int32_t versionEpoch,
              const Page& page)
       : chunkKey(chunkKey), pageId(pageId), versionEpoch(versionEpoch), page(page) {}
 };

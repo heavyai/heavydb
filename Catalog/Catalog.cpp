@@ -262,6 +262,12 @@ void Catalog::updateTableDescriptorSchema() {
       string queryString("ALTER TABLE mapd_tables ADD storage_type TEXT DEFAULT ''");
       sqliteConnector_.query(queryString);
     }
+    if (std::find(cols.begin(), cols.end(), std::string("max_rollback_epochs")) ==
+        cols.end()) {
+      string queryString("ALTER TABLE mapd_tables ADD max_rollback_epochs INT DEFAULT " +
+                         std::to_string(-1));
+      sqliteConnector_.query(queryString);
+    }
   } catch (std::exception& e) {
     sqliteConnector_.query("ROLLBACK TRANSACTION");
     throw;
@@ -898,7 +904,7 @@ void Catalog::buildMaps() {
       "SELECT tableid, name, ncolumns, isview, fragments, frag_type, max_frag_rows, "
       "max_chunk_size, frag_page_size, "
       "max_rows, partitions, shard_column_id, shard, num_shards, key_metainfo, userid, "
-      "sort_column_id, storage_type "
+      "sort_column_id, storage_type, max_rollback_epochs "
       "from mapd_tables");
   sqliteConnector_.query(tableQuery);
   numRows = sqliteConnector_.getNumRows();
@@ -943,6 +949,7 @@ void Catalog::buildMaps() {
     if (!td->isView) {
       td->fragmenter = nullptr;
     }
+    td->maxRollbackEpochs = sqliteConnector_.getData<int>(r, 18);
     td->hasDeletedCol = false;
 
     tableDescriptorMap_[to_upper(td->tableName)] = td;
@@ -1413,6 +1420,14 @@ const DictDescriptor* Catalog::getMetadataForDict(const int dict_id,
                                                   const bool load_dict) const {
   cat_read_lock read_lock(this);
   return getMetadataForDictUnlocked(dict_id, load_dict);
+}
+
+TableDescriptor* Catalog::getMutableMetadataForTableUnlocked(int tableId) {
+  auto tableDescIt = tableDescriptorMapById_.find(tableId);
+  if (tableDescIt == tableDescriptorMapById_.end()) {  // check to make sure table exists
+    return nullptr;
+  }
+  return tableDescIt->second;
 }
 
 const DictDescriptor* Catalog::getMetadataForDictUnlocked(const int dictId,
@@ -2168,7 +2183,7 @@ void Catalog::createTable(
   if (td.persistenceLevel == Data_Namespace::MemoryLevel::DISK_LEVEL) {
     try {
       sqliteConnector_.query_with_text_params(
-          R"(INSERT INTO mapd_tables (name, userid, ncolumns, isview, fragments, frag_type, max_frag_rows, max_chunk_size, frag_page_size, max_rows, partitions, shard_column_id, shard, num_shards, sort_column_id, storage_type, key_metainfo) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?))",
+          R"(INSERT INTO mapd_tables (name, userid, ncolumns, isview, fragments, frag_type, max_frag_rows, max_chunk_size, frag_page_size, max_rows, partitions, shard_column_id, shard, num_shards, sort_column_id, storage_type, max_rollback_epochs, key_metainfo) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?))",
           std::vector<std::string>{td.tableName,
                                    std::to_string(td.userId),
                                    std::to_string(td.nColumns),
@@ -2185,6 +2200,7 @@ void Catalog::createTable(
                                    std::to_string(td.nShards),
                                    std::to_string(td.sortedColumnId),
                                    td.storageType,
+                                   std::to_string(td.maxRollbackEpochs),
                                    td.keyMetainfo});
 
       // now get the auto generated tableid
@@ -2699,9 +2715,47 @@ void Catalog::getForeignServersForUser(
   }
 }
 
+std::vector<File_Namespace::BasicStorageStats> Catalog::getBasicStorageStats(
+    const int32_t db_id,
+    const int32_t table_id) const {
+  cat_read_lock read_lock(this);
+  const auto td = getMetadataForTable(table_id, false);
+  if (!td) {
+    std::stringstream table_not_found_error_message;
+    table_not_found_error_message << "Table (" << db_id << "," << table_id
+                                  << ") not found";
+    throw std::runtime_error(table_not_found_error_message.str());
+  }
+  std::vector<File_Namespace::BasicStorageStats> basicStorageStatsPerShard;
+  const auto physicalTableIt = logicalToPhysicalTableMapById_.find(table_id);
+  if (physicalTableIt != logicalToPhysicalTableMapById_.end()) {
+    // check all shards have same checkpoint
+    const auto physicalTables = physicalTableIt->second;
+    CHECK(!physicalTables.empty());
+    for (size_t i = 0; i < physicalTables.size(); i++) {
+      int32_t physical_tb_id = physicalTables[i];
+      const TableDescriptor* phys_td = getMetadataForTable(physical_tb_id);
+      CHECK(phys_td);
+      basicStorageStatsPerShard.emplace_back(
+          dataMgr_->getGlobalFileMgr()->getBasicStorageStats(db_id, physical_tb_id));
+    }
+  } else {
+    basicStorageStatsPerShard.emplace_back(
+        dataMgr_->getGlobalFileMgr()->getBasicStorageStats(db_id, table_id));
+  }
+  return basicStorageStatsPerShard;
+}
+
 // returns the table epoch or -1 if there is something wrong with the shared epoch
 int32_t Catalog::getTableEpoch(const int32_t db_id, const int32_t table_id) const {
   cat_read_lock read_lock(this);
+  const auto td = getMetadataForTable(table_id, false);
+  if (!td) {
+    std::stringstream table_not_found_error_message;
+    table_not_found_error_message << "Table (" << db_id << "," << table_id
+                                  << ") not found";
+    throw std::runtime_error(table_not_found_error_message.str());
+  }
   const auto physicalTableIt = logicalToPhysicalTableMapById_.find(table_id);
   if (physicalTableIt != logicalToPhysicalTableMapById_.end()) {
     // check all shards have same checkpoint
@@ -2748,23 +2802,152 @@ void Catalog::setTableEpoch(const int db_id, const int table_id, int new_epoch) 
   cat_read_lock read_lock(this);
   LOG(INFO) << "Set table epoch db:" << db_id << " Table ID  " << table_id
             << " back to new epoch " << new_epoch;
-  removeChunks(table_id);
-  dataMgr_->setTableEpoch(db_id, table_id, new_epoch);
+  const auto td = getMetadataForTable(table_id, false);
+  if (!td) {
+    std::stringstream table_not_found_error_message;
+    table_not_found_error_message << "Table (" << db_id << "," << table_id
+                                  << ") not found";
+    throw std::runtime_error(table_not_found_error_message.str());
+  }
+  if (td->persistenceLevel != Data_Namespace::MemoryLevel::DISK_LEVEL) {
+    std::stringstream is_temp_table_error_message;
+    is_temp_table_error_message << "Cannot set epoch on temporary table";
+    throw std::runtime_error(is_temp_table_error_message.str());
+  }
+  File_Namespace::FileMgrParams file_mgr_params;
+  file_mgr_params.epoch = new_epoch;
+  file_mgr_params.max_rollback_epochs = td->maxRollbackEpochs;
 
-  // check if sharded
   const auto physicalTableIt = logicalToPhysicalTableMapById_.find(table_id);
   if (physicalTableIt != logicalToPhysicalTableMapById_.end()) {
     const auto physicalTables = physicalTableIt->second;
     CHECK(!physicalTables.empty());
     for (size_t i = 0; i < physicalTables.size(); i++) {
-      int32_t physical_tb_id = physicalTables[i];
+      const int32_t physical_tb_id = physicalTables[i];
       const TableDescriptor* phys_td = getMetadataForTable(physical_tb_id);
       CHECK(phys_td);
       LOG(INFO) << "Set sharded table epoch db:" << db_id << " Table ID  "
                 << physical_tb_id << " back to new epoch " << new_epoch;
+      // Should have table lock from caller so safe to do this after, avoids
+      // having to repopulate data on error
       removeChunks(physical_tb_id);
-      dataMgr_->setTableEpoch(db_id, physical_tb_id, new_epoch);
+      dataMgr_->getGlobalFileMgr()->setFileMgrParams(
+          db_id, physical_tb_id, file_mgr_params);
     }
+  } else {  // not shared
+    // Should have table lock from caller so safe to do this after, avoids
+    // having to repopulate data on error
+    removeChunks(table_id);
+    dataMgr_->getGlobalFileMgr()->setFileMgrParams(db_id, table_id, file_mgr_params);
+  }
+}
+
+void Catalog::alterPhysicalTableMetadata(
+    const TableDescriptor* td,
+    const TableDescriptorUpdateParams& table_update_params) {
+  // Only called from parent alterTableParamMetadata, expect already to have catalog and
+  // sqlite write locks
+
+  // Sqlite transaction should have already been begun in parent alterTableCatalogMetadata
+
+  TableDescriptor* mutable_td = getMutableMetadataForTableUnlocked(td->tableId);
+  CHECK(mutable_td);
+  if (td->maxRollbackEpochs != table_update_params.maxRollbackEpochs) {
+    sqliteConnector_.query_with_text_params(
+        "UPDATE mapd_tables SET max_rollback_epochs = ? WHERE tableid = ?",
+        std::vector<std::string>{std::to_string(table_update_params.maxRollbackEpochs),
+                                 std::to_string(td->tableId)});
+    mutable_td->maxRollbackEpochs = table_update_params.maxRollbackEpochs;
+  }
+}
+
+void Catalog::alterTableMetadata(const TableDescriptor* td,
+                                 const TableDescriptorUpdateParams& table_update_params) {
+  cat_write_lock write_lock(this);
+  cat_sqlite_lock sqlite_lock(this);
+  sqliteConnector_.query("BEGIN TRANSACTION");
+  try {
+    const auto physical_table_it = logicalToPhysicalTableMapById_.find(td->tableId);
+    if (physical_table_it != logicalToPhysicalTableMapById_.end()) {
+      const auto physical_tables = physical_table_it->second;
+      CHECK(!physical_tables.empty());
+      for (size_t i = 0; i < physical_tables.size(); i++) {
+        int32_t physical_tb_id = physical_tables[i];
+        const TableDescriptor* phys_td = getMetadataForTable(physical_tb_id, false);
+        CHECK(phys_td);
+        alterPhysicalTableMetadata(phys_td, table_update_params);
+      }
+    }
+    alterPhysicalTableMetadata(td, table_update_params);
+  } catch (std::exception& e) {
+    sqliteConnector_.query("ROLLBACK TRANSACTION");
+    LOG(FATAL) << "Table '" << td->tableName << "' catalog update failed";
+  }
+  sqliteConnector_.query("END TRANSACTION");
+}
+
+void Catalog::setMaxRollbackEpochs(const int32_t table_id,
+                                   const int32_t max_rollback_epochs) {
+  // Must be called from AlterTableParamStmt or other method that takes executor and
+  // TableSchema locks
+  cat_write_lock write_lock(this);  // Consider only taking read lock for potentially
+                                    // heavy table storage metadata rolloff operations
+  if (max_rollback_epochs <= -1) {
+    throw std::runtime_error("Cannot set max_rollback_epochs < 0.");
+  }
+  const auto td = getMetadataForTable(
+      table_id, false);  // Deep copy as there will be gap between read and write locks
+  CHECK(td);             // Existence should have already been checked in
+                         // ParserNode::AlterTableParmStmt
+  TableDescriptorUpdateParams table_update_params(td);
+  table_update_params.maxRollbackEpochs = max_rollback_epochs;
+  if (table_update_params == td) {  // Operator is overloaded to test for equality
+    LOG(INFO) << "Setting max_rollback_epochs for table " << table_id
+              << " to existing value, skipping operation";
+    return;
+  }
+  File_Namespace::FileMgrParams file_mgr_params;
+  file_mgr_params.epoch = -1;  // Use existing epoch
+  file_mgr_params.max_rollback_epochs = max_rollback_epochs;
+  setTableFileMgrParams(table_id, file_mgr_params);
+  // Unlock as alterTableCatalogMetadata will take write lock, and Catalog locks are not
+  // upgradeable Should be safe as we have schema lock on this table
+  /// read_lock.unlock();
+  alterTableMetadata(td, table_update_params);
+}
+
+void Catalog::setTableFileMgrParams(
+    const int table_id,
+    const File_Namespace::FileMgrParams& file_mgr_params) {
+  // Expects parent to have write lock
+  const auto td = getMetadataForTable(table_id, false);
+  const auto db_id = this->getDatabaseId();
+  if (!td) {
+    std::stringstream table_not_found_error_message;
+    table_not_found_error_message << "Table (" << db_id << "," << table_id
+                                  << ") not found";
+    throw std::runtime_error(table_not_found_error_message.str());
+  }
+  if (td->persistenceLevel != Data_Namespace::MemoryLevel::DISK_LEVEL) {
+    std::stringstream is_temp_table_error_message;
+    is_temp_table_error_message << "Cannot set storage params on temporary table";
+    throw std::runtime_error(is_temp_table_error_message.str());
+  }
+  const auto physical_table_it = logicalToPhysicalTableMapById_.find(table_id);
+  if (physical_table_it != logicalToPhysicalTableMapById_.end()) {
+    const auto physical_tables = physical_table_it->second;
+    CHECK(!physical_tables.empty());
+    for (size_t i = 0; i < physical_tables.size(); i++) {
+      const int32_t physical_tb_id = physical_tables[i];
+      const TableDescriptor* phys_td = getMetadataForTable(physical_tb_id);
+      CHECK(phys_td);
+      removeChunks(physical_tb_id);
+      dataMgr_->getGlobalFileMgr()->setFileMgrParams(
+          db_id, physical_tb_id, file_mgr_params);
+    }
+  } else {  // not shared
+    removeChunks(table_id);
+    dataMgr_->getGlobalFileMgr()->setFileMgrParams(db_id, table_id, file_mgr_params);
   }
 }
 
@@ -2798,11 +2981,17 @@ std::vector<TableEpochInfo> Catalog::getTableEpochs(const int32_t db_id,
 
 void Catalog::setTableEpochs(const int32_t db_id,
                              const std::vector<TableEpochInfo>& table_epochs) {
+  const auto td = getMetadataForTable(table_epochs[0].table_id, false);
+  CHECK(td);
+  File_Namespace::FileMgrParams file_mgr_params;
+  file_mgr_params.max_rollback_epochs = td->maxRollbackEpochs;
+
   cat_read_lock read_lock(this);
   for (const auto& table_epoch_info : table_epochs) {
     removeChunks(table_epoch_info.table_id);
-    dataMgr_->setTableEpoch(
-        db_id, table_epoch_info.table_id, table_epoch_info.table_epoch);
+    file_mgr_params.epoch = table_epoch_info.table_epoch;
+    dataMgr_->getGlobalFileMgr()->setFileMgrParams(
+        db_id, table_epoch_info.table_id, file_mgr_params);
     LOG(INFO) << "Set table epoch for db id: " << db_id
               << ", table id: " << table_epoch_info.table_id
               << ", back to epoch: " << table_epoch_info.table_epoch;
@@ -3205,7 +3394,6 @@ void Catalog::removeChunks(const int table_id) {
   CHECK(td);
 
   if (td->fragmenter != nullptr) {
-    cat_sqlite_lock sqlite_lock(this);
     if (td->fragmenter != nullptr) {
       auto tableDescIt = tableDescriptorMapById_.find(table_id);
       CHECK(tableDescIt != tableDescriptorMapById_.end());
@@ -3656,6 +3844,39 @@ const std::map<int, const ColumnDescriptor*> Catalog::getDictionaryToColumnMappi
   return mapping;
 }
 
+bool Catalog::filterTableByTypeAndUser(const TableDescriptor* td,
+                                       const UserMetadata& user_metadata,
+                                       const GetTablesType get_tables_type) const {
+  if (td->shard >= 0) {
+    // skip shards, they're not standalone tables
+    return false;
+  }
+  switch (get_tables_type) {
+    case GET_PHYSICAL_TABLES: {
+      if (td->isView) {
+        return false;
+      }
+      break;
+    }
+    case GET_VIEWS: {
+      if (!td->isView) {
+        return false;
+      }
+      break;
+    }
+    default:
+      break;
+  }
+  DBObject dbObject(td->tableName, td->isView ? ViewDBObjectType : TableDBObjectType);
+  dbObject.loadKey(*this);
+  std::vector<DBObject> privObjects = {dbObject};
+  if (!SysCatalog::instance().hasAnyPrivileges(user_metadata, privObjects)) {
+    // skip table, as there are no privileges to access it
+    return false;
+  }
+  return true;
+}
+
 std::vector<std::string> Catalog::getTableNamesForUser(
     const UserMetadata& user_metadata,
     const GetTablesType get_tables_type) const {
@@ -3665,35 +3886,70 @@ std::vector<std::string> Catalog::getTableNamesForUser(
   std::vector<std::string> table_names;
   const auto tables = getAllTableMetadata();
   for (const auto td : tables) {
-    if (td->shard >= 0) {
-      // skip shards, they're not standalone tables
-      continue;
+    if (filterTableByTypeAndUser(td, user_metadata, get_tables_type)) {
+      table_names.push_back(td->tableName);
     }
-    switch (get_tables_type) {
-      case GET_PHYSICAL_TABLES: {
-        if (td->isView) {
-          continue;
-        }
-        break;
-      }
-      case GET_VIEWS: {
-        if (!td->isView) {
-          continue;
-        }
-      }
-      default:
-        break;
-    }
-    DBObject dbObject(td->tableName, td->isView ? ViewDBObjectType : TableDBObjectType);
-    dbObject.loadKey(*this);
-    std::vector<DBObject> privObjects = {dbObject};
-    if (!SysCatalog::instance().hasAnyPrivileges(user_metadata, privObjects)) {
-      // skip table, as there are no privileges to access it
-      continue;
-    }
-    table_names.push_back(td->tableName);
   }
   return table_names;
+}
+
+std::vector<TableMetadata> Catalog::getTablesMetadataForUser(
+    const UserMetadata& user_metadata,
+    const GetTablesType get_tables_type,
+    const std::string& filter_table_name,
+    const bool get_storage_stats) const {
+  sys_read_lock syscat_read_lock(&SysCatalog::instance());
+  cat_read_lock read_lock(this);
+
+  std::vector<TableMetadata> tables_metadata;
+  const auto tables = getAllTableMetadata();
+  for (const auto td : tables) {
+    if (filterTableByTypeAndUser(td, user_metadata, get_tables_type)) {
+      if (!filter_table_name.empty()) {
+        if (td->tableName != filter_table_name) {
+          continue;
+        }
+      }
+      TableMetadata table_metadata(td);  // Makes a copy, not safe to access raw table
+                                         // descriptor outside catalog lock
+      if (get_storage_stats) {
+        std::vector<File_Namespace::BasicStorageStats> basicStorageStatsPerShard =
+            getBasicStorageStats(getCurrentDB().dbId, td->tableId);
+        CHECK_GE(basicStorageStatsPerShard.size(), static_cast<size_t>(1));
+        table_metadata.min_epoch = basicStorageStatsPerShard.front().epoch;
+        table_metadata.max_epoch = basicStorageStatsPerShard.front().epoch;
+        table_metadata.min_epoch_floor = basicStorageStatsPerShard.front().epoch_floor;
+        table_metadata.max_epoch_floor = basicStorageStatsPerShard.front().epoch_floor;
+        table_metadata.num_bytes =
+            static_cast<int64_t>(basicStorageStatsPerShard.front().num_bytes);
+        table_metadata.num_files =
+            static_cast<int64_t>(basicStorageStatsPerShard.front().num_files);
+        table_metadata.num_pages =
+            static_cast<int64_t>(basicStorageStatsPerShard.front().num_pages);
+        for (size_t shard_idx = 1; shard_idx < basicStorageStatsPerShard.size();
+             ++shard_idx) {
+          table_metadata.min_epoch = std::min(table_metadata.min_epoch,
+                                              basicStorageStatsPerShard[shard_idx].epoch);
+          table_metadata.max_epoch = std::max(table_metadata.max_epoch,
+                                              basicStorageStatsPerShard[shard_idx].epoch);
+          table_metadata.min_epoch_floor =
+              std::min(table_metadata.min_epoch_floor,
+                       basicStorageStatsPerShard[shard_idx].epoch_floor);
+          table_metadata.max_epoch_floor =
+              std::max(table_metadata.max_epoch_floor,
+                       basicStorageStatsPerShard[shard_idx].epoch_floor);
+          table_metadata.num_bytes +=
+              static_cast<int64_t>(basicStorageStatsPerShard[shard_idx].num_bytes);
+          table_metadata.num_files +=
+              static_cast<int64_t>(basicStorageStatsPerShard[shard_idx].num_files);
+          table_metadata.num_pages +=
+              static_cast<int64_t>(basicStorageStatsPerShard[shard_idx].num_pages);
+        }
+      }
+      tables_metadata.emplace_back(table_metadata);
+    }
+  }
+  return tables_metadata;
 }
 
 int Catalog::getLogicalTableId(const int physicalTableId) const {
@@ -4104,6 +4360,10 @@ std::string Catalog::dumpSchema(const TableDescriptor* td) const {
     CHECK(sort_cd);
     with_options.push_back("SORT_COLUMN='" + sort_cd->columnName + "'");
   }
+  if (td->maxRollbackEpochs >= 0) {
+    with_options.push_back("MAX_ROLLBACK_EPOCHS=" +
+                           std::to_string(td->maxRollbackEpochs));
+  }
   os << ") WITH (" + boost::algorithm::join(with_options, ", ") + ");";
   return os.str();
 }
@@ -4287,6 +4547,10 @@ std::string Catalog::dumpCreateTable(const TableDescriptor* td,
   }
   if (!foreign_table && (dump_defaults || td->maxRows != DEFAULT_MAX_ROWS)) {
     with_options.push_back("MAX_ROWS=" + std::to_string(td->maxRows));
+  }
+  if (dump_defaults || td->maxRollbackEpochs != DEFAULT_MAX_ROLLBACK_EPOCHS) {
+    with_options.push_back("MAX_ROLLBACK_EPOCHS=" +
+                           std::to_string(td->maxRollbackEpochs));
   }
   if (!foreign_table && (dump_defaults || !td->hasDeletedCol)) {
     with_options.push_back(td->hasDeletedCol ? "VACUUM='DELAYED'" : "VACUUM='IMMEDIATE'");

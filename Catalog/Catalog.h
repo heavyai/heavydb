@@ -49,6 +49,7 @@
 #include "Catalog/SessionInfo.h"
 #include "Catalog/SysCatalog.h"
 #include "Catalog/TableDescriptor.h"
+#include "Catalog/TableMetadata.h"
 #include "Catalog/Types.h"
 #include "DataMgr/DataMgr.h"
 #include "QueryEngine/CompilationOptions.h"
@@ -74,6 +75,9 @@ class TableArchiver;
 #define SPIMAP_GEO_PHYSICAL_INPUT(c, i) \
   (SPIMAP_MAGIC1 + (unsigned)(SPIMAP_MAGIC2 * ((c) + 1) + (i)))
 
+namespace File_Namespace {
+struct FileMgrParams;
+}
 namespace Catalog_Namespace {
 struct TableEpochInfo {
   int32_t table_id, table_epoch, leaf_index{-1};
@@ -236,8 +240,27 @@ class Catalog final {
       const UserMetadata& user,
       const GetTablesType get_tables_type) const;
 
+  /**
+   * Get table descriptors of all tables accessible to user.
+   *
+   * @param user - user to retrieve table descriptors for
+   * @param get_tables_type - enum indicating if tables, views or tables & views
+   * should be returned
+   * @return table_descriptors - vector of table descriptors accessible by user
+   */
+
+  std::vector<TableMetadata> getTablesMetadataForUser(
+      const UserMetadata& user_metadata,
+      const GetTablesType get_tables_type,
+      const std::string& filter_table_name,
+      const bool get_storage_stats) const;
+
+  std::vector<File_Namespace::BasicStorageStats> getBasicStorageStats(
+      const int32_t db_id,
+      const int32_t table_id) const;
   int32_t getTableEpoch(const int32_t db_id, const int32_t table_id) const;
   void setTableEpoch(const int db_id, const int table_id, const int new_epoch);
+  void setMaxRollbackEpochs(const int32_t table_id, const int32_t max_rollback_epochs);
 
   std::vector<TableEpochInfo> getTableEpochs(const int32_t db_id,
                                              const int32_t table_id) const;
@@ -576,6 +599,18 @@ class Catalog final {
   void setForeignTableProperty(const foreign_storage::ForeignTable* table,
                                const std::string& property,
                                const std::string& value);
+
+  void alterPhysicalTableMetadata(const TableDescriptor* td,
+                                  const TableDescriptorUpdateParams& table_update_params);
+  void alterTableMetadata(const TableDescriptor* td,
+                          const TableDescriptorUpdateParams& table_update_params);
+  void setTableFileMgrParams(const int table_id,
+                             const File_Namespace::FileMgrParams& file_mgr_params);
+  bool filterTableByTypeAndUser(const TableDescriptor* td,
+                                const UserMetadata& user_metadata,
+                                const GetTablesType get_tables_type) const;
+
+  TableDescriptor* getMutableMetadataForTableUnlocked(int tableId);
 
   /**
    * Same as createForeignServer() but without acquiring locks. This should only be called

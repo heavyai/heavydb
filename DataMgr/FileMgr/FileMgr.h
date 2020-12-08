@@ -34,6 +34,7 @@
 
 #include "DataMgr/AbstractBuffer.h"
 #include "DataMgr/AbstractBufferMgr.h"
+#include "DataMgr/FileMgr/Epoch.h"
 #include "DataMgr/FileMgr/FileBuffer.h"
 #include "DataMgr/FileMgr/FileInfo.h"
 #include "DataMgr/FileMgr/Page.h"
@@ -42,6 +43,8 @@
 using namespace Data_Namespace;
 
 namespace File_Namespace {
+
+#define DEFAULT_PAGE_SIZE 2097152
 
 class GlobalFileMgr;  // forward declaration
 /**
@@ -52,7 +55,7 @@ class GlobalFileMgr;  // forward declaration
  * A multimap is used to associate the key (page size) with values (file identifiers of
  * files having the matching page size).
  */
-using PageSizeFileMMap = std::multimap<size_t, int>;
+using PageSizeFileMMap = std::multimap<size_t, int32_t>;
 
 /**
  * @type Chunk
@@ -78,6 +81,34 @@ using Chunk = FileBuffer;
  */
 using ChunkKeyToChunkMap = std::map<ChunkKey, FileBuffer*>;
 
+struct FileMetadata {
+  int32_t file_id;
+  std::string file_path;
+  size_t page_size;
+  size_t file_size;
+  size_t num_pages;
+  bool is_data_file;
+};
+
+struct BasicStorageStats {
+  size_t num_files;
+  size_t num_bytes;
+  size_t num_pages;
+  size_t data_page_size;
+  size_t metadata_page_size;
+  int32_t epoch;
+  int32_t epoch_floor;
+
+  BasicStorageStats()
+      : num_files(0)
+      , num_bytes(0)
+      , num_pages(0)
+      , data_page_size(0)
+      , metadata_page_size(0)
+      , epoch(0)
+      , epoch_floor(0) {}
+};
+
 /**
  * @class   FileMgr
  * @brief
@@ -87,24 +118,27 @@ class FileMgr : public AbstractBufferMgr {  // implements
 
  public:
   /// Constructor
-  FileMgr(const int deviceId,
+  FileMgr(const int32_t deviceId,
           GlobalFileMgr* gfm,
-          const std::pair<const int, const int> fileMgrKey,
+          const std::pair<const int32_t, const int32_t> fileMgrKey,
+          const int32_t max_rollback_epochs = -1,
           const size_t num_reader_threads = 0,
-          const int epoch = -1,
-          const size_t defaultPageSize = 2097152);
+          const int32_t epoch = -1,
+          const size_t defaultPageSize = DEFAULT_PAGE_SIZE);
 
-  // used only to initialize enough to drop
-  FileMgr(const int deviceId,
+  // used only to initialize enough to drop or to get basic metadata
+  FileMgr(const int32_t deviceId,
           GlobalFileMgr* gfm,
-          const std::pair<const int, const int> fileMgrKey,
-          const bool initOnly);
+          const std::pair<const int32_t, const int32_t> fileMgrKey,
+          const size_t defaultPageSize,
+          const bool runCoreInit);
 
   FileMgr(GlobalFileMgr* gfm, const size_t defaultPageSize, std::string basePath);
 
   /// Destructor
   ~FileMgr() override;
 
+  BasicStorageStats getBasicStorageStats();
   /// Creates a chunk with the specified key and page size.
   FileBuffer* createBuffer(const ChunkKey& key,
                            size_t pageSize = 0,
@@ -152,11 +186,22 @@ class FileMgr : public AbstractBufferMgr {  // implements
   inline size_t getAllocated() override { return 0; }
   inline bool isAllocationCapped() override { return false; }
 
-  inline FileInfo* getFileInfoForFileId(const int fileId) { return files_[fileId]; }
+  inline FileInfo* getFileInfoForFileId(const int32_t fileId) { return files_[fileId]; }
 
   uint64_t getTotalFileSize() const;
-  void init(const size_t num_reader_threads);
-  void init(const std::string dataPathToConvertFrom);
+  FileMetadata getMetadataForFile(
+      const boost::filesystem::directory_iterator& fileIterator);
+
+  void init(const size_t num_reader_threads, const int32_t epochOverride);
+  void init(const std::string& dataPathToConvertFrom, const int32_t epochOverride);
+
+  /**
+   * @brief Determines file path, and if exists, runs file migration and opens and reads
+   * epoch file
+   * @return a boolean representing whether the directory path existed
+   */
+
+  bool coreInit();
 
   void copyPage(Page& srcPage,
                 FileMgr* destFileMgr,
@@ -192,14 +237,41 @@ class FileMgr : public AbstractBufferMgr {  // implements
    */
 
   void checkpoint() override;
-  void checkpoint(const int db_id, const int tb_id) override {
+  void checkpoint(const int32_t db_id, const int32_t tb_id) override {
     LOG(FATAL) << "Operation not supported, api checkpoint() should be used instead";
   }
   /**
    * @brief Returns current value of epoch - should be
    * one greater than recorded at last checkpoint
    */
-  inline int epoch() { return epoch_; }
+  inline int32_t epoch() { return static_cast<int32_t>(epoch_.ceiling()); }
+
+  inline int32_t epochFloor() { return static_cast<int32_t>(epoch_.floor()); }
+
+  inline int32_t incrementEpoch() {
+    int32_t newEpoch = epoch_.increment();
+    epochIsCheckpointed_ = false;
+    // We test for error here instead of in Epoch::increment so we can log FileMgr
+    // metadata
+    if (newEpoch > Epoch::max_allowable_epoch()) {
+      LOG(FATAL) << "Epoch for table (" << fileMgrKey_.first << ", " << fileMgrKey_.second
+                 << ") greater than maximum allowed value of "
+                 << Epoch::max_allowable_epoch() << ".";
+    }
+    return newEpoch;
+  }
+
+  /**
+   * @brief Returns value of epoch at last checkpoint
+   */
+  inline int32_t lastCheckpointedEpoch() {
+    return epoch() - (epochIsCheckpointed_ ? 0 : 1);
+  }
+
+  /**
+   * @brief Returns value max_rollback_epochs
+   */
+  inline int32_t maxRollbackEpochs() { return maxRollbackEpochs_; }
 
   /**
    * @brief Returns number of threads defined by parameter num-reader-threads
@@ -214,24 +286,30 @@ class FileMgr : public AbstractBufferMgr {  // implements
    * @see FileBuffer
    */
 
-  FILE* getFileForFileId(const int fileId);
+  FILE* getFileForFileId(const int32_t fileId);
 
   inline size_t getNumChunks() override {
-    // @todo should be locked - but this is more for testing now
+    mapd_shared_lock<mapd_shared_mutex> read_lock(chunkIndexMutex_);
     return chunkIndex_.size();
   }
+  size_t getNumUsedPages() const;
+  size_t getNumUsedMetadataPages() const;
+  size_t getNumUsedMetadataPagesForChunkKey(const ChunkKey& chunkKey) const;
+
   ChunkKeyToChunkMap chunkIndex_;  /// Index for looking up chunks
                                    // #TM Not sure if we need this below
-  int getDBVersion() const;
+  int32_t getDBVersion() const;
   bool getDBConvert() const;
   void createTopLevelMetadata();  // create metadata shared by all tables of all DBs
   std::string getFileMgrBasePath() const { return fileMgrBasePath_; }
   void closeRemovePhysical();
 
-  void removeTableRelatedDS(const int db_id, const int table_id) override;
+  void removeTableRelatedDS(const int32_t db_id, const int32_t table_id) override;
 
-  void free_page(std::pair<FileInfo*, int>&& page);
-  const std::pair<const int, const int> get_fileMgrKey() const { return fileMgrKey_; }
+  void free_page(std::pair<FileInfo*, int32_t>&& page);
+  const std::pair<const int32_t, const int32_t> get_fileMgrKey() const {
+    return fileMgrKey_;
+  }
 
  protected:
   // For testing purposes only
@@ -239,7 +317,8 @@ class FileMgr : public AbstractBufferMgr {  // implements
 
  private:
   GlobalFileMgr* gfm_;  /// Global FileMgr
-  std::pair<const int, const int> fileMgrKey_;
+  std::pair<const int32_t, const int32_t> fileMgrKey_;
+  int32_t maxRollbackEpochs_;
   std::string fileMgrBasePath_;   /// The OS file system path containing files related to
                                   /// this FileMgr
   std::vector<FileInfo*> files_;  /// A vector of files accessible via a file identifier.
@@ -247,18 +326,24 @@ class FileMgr : public AbstractBufferMgr {  // implements
   size_t num_reader_threads_;     /// number of threads used when loading data
   size_t defaultPageSize_;
   unsigned nextFileId_;  /// the index of the next file id
-  int epoch_;            /// the current epoch (time of last checkpoint)
+  Epoch epoch_;
+  bool epochIsCheckpointed_ = true;
+  // int64_t epoch_;        /// the current epoch (time of last checkpoint)
+  // int64_t epochFloor_;   /// the minimum epoch we can roll back to
   FILE* epochFile_ = nullptr;
-  int db_version_;              /// DB version from dbmeta file, should be compatible with
-                                /// GlobalFileMgr::mapd_db_version_
+  int32_t db_version_;  /// DB version from dbmeta file, should be compatible with
+                        /// GlobalFileMgr::omnisci_db_version_
+  int32_t fileMgrVersion_;
+  const int32_t latestFileMgrVersion_{1};
   FILE* DBMetaFile_ = nullptr;  /// pointer to DB level metadata
   // bool isDirty_;      /// true if metadata changed since last writeState()
   std::mutex getPageMutex_;
   mutable mapd_shared_mutex chunkIndexMutex_;
   mutable mapd_shared_mutex files_rw_mutex_;
 
-  mutable mapd_shared_mutex mutex_free_page;
-  std::vector<std::pair<FileInfo*, int>> free_pages;
+  mutable mapd_shared_mutex mutex_free_page_;
+  std::vector<std::pair<FileInfo*, int32_t>> free_pages_;
+  bool isFullyInitted_{false};
 
   /**
    * @brief Adds a file to the file manager repository.
@@ -268,7 +353,7 @@ class FileMgr : public AbstractBufferMgr {  // implements
    * pre-allocated.
    *
    * A pointer to the FileInfo object is returned, which itself has a file pointer (FILE*)
-   * and a file identifier (int fileId).
+   * and a file identifier (int32_t fileId).
    *
    * @param fileName The name given to the file in physical storage.
    * @param pageSize The logical page size for the pages in the file.
@@ -278,22 +363,33 @@ class FileMgr : public AbstractBufferMgr {  // implements
 
   FileInfo* createFile(const size_t pageSize, const size_t numPages);
   FileInfo* openExistingFile(const std::string& path,
-                             const int fileId,
+                             const int32_t fileId,
                              const size_t pageSize,
                              const size_t numPages,
                              std::vector<HeaderInfo>& headerVec);
   void createEpochFile(const std::string& epochFileName);
-  void openEpochFile(const std::string& epochFileName);
+  int32_t openAndReadLegacyEpochFile(const std::string& epochFileName);
+  void openAndReadEpochFile(const std::string& epochFileName);
   void writeAndSyncEpochToDisk();
-  void createDBMetaFile(const std::string& DBMetaFileName);
-  bool openDBMetaFile(const std::string& DBMetaFileName);
-  void writeAndSyncDBMetaToDisk();
-  void setEpoch(int epoch);  // resets current value of epoch at startup
+  void setEpoch(const int32_t newEpoch);  // resets current value of epoch at startup
+  void freePagesBeforeEpoch(const int32_t minRollbackEpoch);
+
+  void rollOffOldData(const int32_t epochCeiling, const bool shouldCheckpoint);
+  // int32_t checkEpochFloor(const std::string& epochFloorFilePath) const;
+  // void setEpochFloor(const std::string& epochFloorFilePath, const int32_t epochFloor);
+
+  int32_t readVersionFromDisk(const std::string& versionFileName) const;
+  void writeAndSyncVersionToDisk(const std::string& versionFileName,
+                                 const int32_t version);
   void processFileFutures(std::vector<std::future<std::vector<HeaderInfo>>>& file_futures,
                           std::vector<HeaderInfo>& headerVec);
   FileBuffer* createBufferUnlocked(const ChunkKey& key,
                                    size_t pageSize = 0,
                                    const size_t numBytes = 0);
+
+  // Migration functions
+  void migrateToLatestFileMgrVersion();
+  void migrateEpochFileV0();
 };
 
 }  // namespace File_Namespace
