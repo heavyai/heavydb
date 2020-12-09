@@ -17,6 +17,7 @@
 
 #include <csignal>
 #include <cstdlib>
+#include <iostream>
 
 #include "Logger/Logger.h"
 
@@ -35,7 +36,7 @@ void TestProcessSignalHandler::addShutdownCallback(
 }
 
 void TestProcessSignalHandler::shutdownSubsystemsAndExit(int signal_number) {
-  LOG(ERROR) << "Interrupt signal (" << signal_number << ") received.";
+  std::cerr << "Interrupt signal (" << signal_number << ") received." << std::endl;
 
   // Perform additional shutdowns
   for (auto& callback : shutdown_callbacks_) {
