@@ -51,6 +51,8 @@ if len(sys.argv) <= 1 or sys.argv[1] == '--help':
     print('  void set_table_epoch_by_name(TSessionId session, string table_name, i32 new_epoch)')
     print('  i32 get_table_epoch(TSessionId session, i32 db_id, i32 table_id)')
     print('  i32 get_table_epoch_by_name(TSessionId session, string table_name)')
+    print('   get_table_epochs(TSessionId session, i32 db_id, i32 table_id)')
+    print('  void set_table_epochs(TSessionId session, i32 db_id,  table_epochs)')
     print('  TSessionInfo get_session_info(TSessionId session)')
     print('  TQueryResult sql_execute(TSessionId session, string query, bool column_format, string nonce, i32 first_n, i32 at_most_n)')
     print('  TDataFrame sql_execute_df(TSessionId session, string query, TDeviceType device_type, i32 device_id, i32 first_n, TArrowTransport transport_method)')
@@ -75,10 +77,10 @@ if len(sys.argv) <= 1 or sys.argv[1] == '--help':
     print('   get_dashboard_grantees(TSessionId session, i32 dashboard_id)')
     print('  TFrontendView get_link_view(TSessionId session, string link)')
     print('  string create_link(TSessionId session, string view_state, string view_metadata)')
-    print('  void load_table_binary(TSessionId session, string table_name,  rows)')
-    print('  void load_table_binary_columnar(TSessionId session, string table_name,  cols)')
-    print('  void load_table_binary_arrow(TSessionId session, string table_name, string arrow_stream)')
-    print('  void load_table(TSessionId session, string table_name,  rows)')
+    print('  void load_table_binary(TSessionId session, string table_name,  rows,  column_names)')
+    print('  void load_table_binary_columnar(TSessionId session, string table_name,  cols,  column_names)')
+    print('  void load_table_binary_arrow(TSessionId session, string table_name, string arrow_stream, bool use_column_names)')
+    print('  void load_table(TSessionId session, string table_name,  rows,  column_names)')
     print('  TDetectResult detect_column_types(TSessionId session, string file_name, TCopyParams copy_params)')
     print('  void create_table(TSessionId session, string table_name, TRowDescriptor row_desc, TFileType file_type, TCreateParams create_params)')
     print('  void import_table(TSessionId session, string table_name, string file_name, TCopyParams copy_params)')
@@ -90,12 +92,12 @@ if len(sys.argv) <= 1 or sys.argv[1] == '--help':
     print('  i64 query_get_outer_fragment_count(TSessionId session, string query)')
     print('  TTableMeta check_table_consistency(TSessionId session, i32 table_id)')
     print('  TPendingQuery start_query(TSessionId leaf_session, TSessionId parent_session, string query_ra, bool just_explain,  outer_fragment_indices)')
-    print('  TStepResult execute_query_step(TPendingQuery pending_query)')
-    print('  void broadcast_serialized_rows(TSerializedRows serialized_rows, TRowDescriptor row_desc, TQueryId query_id)')
+    print('  TStepResult execute_query_step(TPendingQuery pending_query, TSubqueryId subquery_id)')
+    print('  void broadcast_serialized_rows(TSerializedRows serialized_rows, TRowDescriptor row_desc, TQueryId query_id, TSubqueryId subquery_id, bool is_final_subquery_result)')
     print('  TPendingRenderQuery start_render_query(TSessionId session, i64 widget_id, i16 node_idx, string vega_json)')
     print('  TRenderStepResult execute_next_render_step(TPendingRenderQuery pending_render, TRenderAggDataMap merged_data)')
     print('  void insert_data(TSessionId session, TInsertData insert_data)')
-    print('  void checkpoint(TSessionId session, i32 db_id, i32 table_id)')
+    print('  void checkpoint(TSessionId session, i32 table_id)')
     print('   get_roles(TSessionId session)')
     print('   get_db_objects_for_grantee(TSessionId session, string roleName)')
     print('   get_db_object_privs(TSessionId session, string objectName, TDBObjectType type)')
@@ -347,6 +349,18 @@ elif cmd == 'get_table_epoch_by_name':
         sys.exit(1)
     pp.pprint(client.get_table_epoch_by_name(eval(args[0]), args[1],))
 
+elif cmd == 'get_table_epochs':
+    if len(args) != 3:
+        print('get_table_epochs requires 3 args')
+        sys.exit(1)
+    pp.pprint(client.get_table_epochs(eval(args[0]), eval(args[1]), eval(args[2]),))
+
+elif cmd == 'set_table_epochs':
+    if len(args) != 3:
+        print('set_table_epochs requires 3 args')
+        sys.exit(1)
+    pp.pprint(client.set_table_epochs(eval(args[0]), eval(args[1]), eval(args[2]),))
+
 elif cmd == 'get_session_info':
     if len(args) != 1:
         print('get_session_info requires 1 args')
@@ -492,28 +506,28 @@ elif cmd == 'create_link':
     pp.pprint(client.create_link(eval(args[0]), args[1], args[2],))
 
 elif cmd == 'load_table_binary':
-    if len(args) != 3:
-        print('load_table_binary requires 3 args')
+    if len(args) != 4:
+        print('load_table_binary requires 4 args')
         sys.exit(1)
-    pp.pprint(client.load_table_binary(eval(args[0]), args[1], eval(args[2]),))
+    pp.pprint(client.load_table_binary(eval(args[0]), args[1], eval(args[2]), eval(args[3]),))
 
 elif cmd == 'load_table_binary_columnar':
-    if len(args) != 3:
-        print('load_table_binary_columnar requires 3 args')
+    if len(args) != 4:
+        print('load_table_binary_columnar requires 4 args')
         sys.exit(1)
-    pp.pprint(client.load_table_binary_columnar(eval(args[0]), args[1], eval(args[2]),))
+    pp.pprint(client.load_table_binary_columnar(eval(args[0]), args[1], eval(args[2]), eval(args[3]),))
 
 elif cmd == 'load_table_binary_arrow':
-    if len(args) != 3:
-        print('load_table_binary_arrow requires 3 args')
+    if len(args) != 4:
+        print('load_table_binary_arrow requires 4 args')
         sys.exit(1)
-    pp.pprint(client.load_table_binary_arrow(eval(args[0]), args[1], args[2],))
+    pp.pprint(client.load_table_binary_arrow(eval(args[0]), args[1], args[2], eval(args[3]),))
 
 elif cmd == 'load_table':
-    if len(args) != 3:
-        print('load_table requires 3 args')
+    if len(args) != 4:
+        print('load_table requires 4 args')
         sys.exit(1)
-    pp.pprint(client.load_table(eval(args[0]), args[1], eval(args[2]),))
+    pp.pprint(client.load_table(eval(args[0]), args[1], eval(args[2]), eval(args[3]),))
 
 elif cmd == 'detect_column_types':
     if len(args) != 3:
@@ -582,16 +596,16 @@ elif cmd == 'start_query':
     pp.pprint(client.start_query(eval(args[0]), eval(args[1]), args[2], eval(args[3]), eval(args[4]),))
 
 elif cmd == 'execute_query_step':
-    if len(args) != 1:
-        print('execute_query_step requires 1 args')
+    if len(args) != 2:
+        print('execute_query_step requires 2 args')
         sys.exit(1)
-    pp.pprint(client.execute_query_step(eval(args[0]),))
+    pp.pprint(client.execute_query_step(eval(args[0]), eval(args[1]),))
 
 elif cmd == 'broadcast_serialized_rows':
-    if len(args) != 3:
-        print('broadcast_serialized_rows requires 3 args')
+    if len(args) != 5:
+        print('broadcast_serialized_rows requires 5 args')
         sys.exit(1)
-    pp.pprint(client.broadcast_serialized_rows(eval(args[0]), eval(args[1]), eval(args[2]),))
+    pp.pprint(client.broadcast_serialized_rows(eval(args[0]), eval(args[1]), eval(args[2]), eval(args[3]), eval(args[4]),))
 
 elif cmd == 'start_render_query':
     if len(args) != 4:
@@ -612,10 +626,10 @@ elif cmd == 'insert_data':
     pp.pprint(client.insert_data(eval(args[0]), eval(args[1]),))
 
 elif cmd == 'checkpoint':
-    if len(args) != 3:
-        print('checkpoint requires 3 args')
+    if len(args) != 2:
+        print('checkpoint requires 2 args')
         sys.exit(1)
-    pp.pprint(client.checkpoint(eval(args[0]), eval(args[1]), eval(args[2]),))
+    pp.pprint(client.checkpoint(eval(args[0]), eval(args[1]),))
 
 elif cmd == 'get_roles':
     if len(args) != 1:

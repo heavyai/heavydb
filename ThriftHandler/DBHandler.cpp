@@ -3543,23 +3543,7 @@ void DBHandler::get_dashboard(TDashboard& dashboard,
   }
   user_meta.userName = "";
   SysCatalog::instance().getMetadataForUserById(dash->userId, user_meta);
-  auto objects_list = SysCatalog::instance().getMetadataForObject(
-      cat.getCurrentDB().dbId,
-      static_cast<int>(DBObjectType::DashboardDBObjectType),
-      dashboard_id);
-  dashboard.dashboard_name = dash->dashboardName;
-  dashboard.dashboard_state = dash->dashboardState;
-  dashboard.image_hash = dash->imageHash;
-  dashboard.update_time = dash->updateTime;
-  dashboard.dashboard_metadata = dash->dashboardMetadata;
-  dashboard.dashboard_owner = dash->user;
-  dashboard.dashboard_id = dash->dashboardId;
-  if (objects_list.empty() ||
-      (objects_list.size() == 1 && objects_list[0]->roleName == user_meta.userName)) {
-    dashboard.is_dash_shared = false;
-  } else {
-    dashboard.is_dash_shared = true;
-  }
+  dashboard = get_dashboard_impl(session_ptr, user_meta, dash);
 }
 
 void DBHandler::get_dashboards(std::vector<TDashboard>& dashboards,
@@ -3571,33 +3555,74 @@ void DBHandler::get_dashboards(std::vector<TDashboard>& dashboards,
   Catalog_Namespace::UserMetadata user_meta;
   const auto dashes = cat.getAllDashboardsMetadata();
   user_meta.userName = "";
-  for (const auto d : dashes) {
-    SysCatalog::instance().getMetadataForUserById(d->userId, user_meta);
+  for (const auto dash : dashes) {
     if (is_allowed_on_dashboard(
-            *session_ptr, d->dashboardId, AccessPrivileges::VIEW_DASHBOARD)) {
-      auto objects_list = SysCatalog::instance().getMetadataForObject(
-          cat.getCurrentDB().dbId,
-          static_cast<int>(DBObjectType::DashboardDBObjectType),
-          d->dashboardId);
-      TDashboard dash;
-      dash.dashboard_name = d->dashboardName;
-      dash.image_hash = d->imageHash;
-      dash.update_time = d->updateTime;
-      dash.dashboard_metadata = d->dashboardMetadata;
-      dash.dashboard_id = d->dashboardId;
-      dash.dashboard_owner = d->user;
+            *session_ptr, dash->dashboardId, AccessPrivileges::VIEW_DASHBOARD)) {
       // dashboardState is intentionally not populated here
       // for payload reasons
       // use get_dashboard call to get state
-      if (objects_list.empty() ||
-          (objects_list.size() == 1 && objects_list[0]->roleName == user_meta.userName)) {
-        dash.is_dash_shared = false;
-      } else {
-        dash.is_dash_shared = true;
-      }
-      dashboards.push_back(dash);
+      dashboards.push_back(get_dashboard_impl(session_ptr, user_meta, dash, false));
     }
   }
+}
+
+TDashboard DBHandler::get_dashboard_impl(
+    const std::shared_ptr<Catalog_Namespace::SessionInfo const>& session_ptr,
+    Catalog_Namespace::UserMetadata& user_meta,
+    const DashboardDescriptor* dash,
+    const bool populate_state) {
+  auto const& cat = session_ptr->getCatalog();
+  SysCatalog::instance().getMetadataForUserById(dash->userId, user_meta);
+  auto objects_list = SysCatalog::instance().getMetadataForObject(
+      cat.getCurrentDB().dbId,
+      static_cast<int>(DBObjectType::DashboardDBObjectType),
+      dash->dashboardId);
+  TDashboard dashboard;
+  dashboard.dashboard_name = dash->dashboardName;
+  if (populate_state)
+    dashboard.dashboard_state = dash->dashboardState;
+  dashboard.image_hash = dash->imageHash;
+  dashboard.update_time = dash->updateTime;
+  dashboard.dashboard_metadata = dash->dashboardMetadata;
+  dashboard.dashboard_id = dash->dashboardId;
+  dashboard.dashboard_owner = dash->user;
+  TDashboardPermissions perms;
+  // Super user has all permissions.
+  if (session_ptr->get_currentUser().isSuper) {
+    perms.create_ = true;
+    perms.delete_ = true;
+    perms.edit_ = true;
+    perms.view_ = true;
+  } else {
+    // Collect all grants on current user
+    // add them to the permissions.
+    auto obj_to_find =
+        DBObject(dashboard.dashboard_id, DBObjectType::DashboardDBObjectType);
+    obj_to_find.loadKey(session_ptr->getCatalog());
+    std::vector<std::string> grantees =
+        SysCatalog::instance().getRoles(true,
+                                        session_ptr->get_currentUser().isSuper,
+                                        session_ptr->get_currentUser().userName);
+    for (const auto& grantee : grantees) {
+      DBObject* object_found;
+      auto* gr = SysCatalog::instance().getGrantee(grantee);
+      if (gr && (object_found = gr->findDbObject(obj_to_find.getObjectKey(), true))) {
+        const auto obj_privs = object_found->getPrivileges();
+        perms.create_ |= obj_privs.hasPermission(DashboardPrivileges::CREATE_DASHBOARD);
+        perms.delete_ |= obj_privs.hasPermission(DashboardPrivileges::DELETE_DASHBOARD);
+        perms.edit_ |= obj_privs.hasPermission(DashboardPrivileges::EDIT_DASHBOARD);
+        perms.view_ |= obj_privs.hasPermission(DashboardPrivileges::VIEW_DASHBOARD);
+      }
+    }
+  }
+  dashboard.dashboard_permissions = perms;
+  if (objects_list.empty() ||
+      (objects_list.size() == 1 && objects_list[0]->roleName == user_meta.userName)) {
+    dashboard.is_dash_shared = false;
+  } else {
+    dashboard.is_dash_shared = true;
+  }
+  return dashboard;
 }
 
 int32_t DBHandler::create_dashboard(const TSessionId& session,

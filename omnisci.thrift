@@ -216,17 +216,6 @@ struct TFrontendView {
   5: string view_metadata
 }
 
-struct TDashboard {
-  1: string dashboard_name
-  2: string dashboard_state
-  3: string image_hash
-  4: string update_time
-  5: string dashboard_metadata
-  6: i32 dashboard_id
-  7: string dashboard_owner
-  8: bool is_dash_shared
-}
-
 struct TServerStatus {
   1: bool read_only
   2: string version
@@ -497,6 +486,18 @@ struct TDashboardGrantees {
   1: string name;
   2: bool is_user;
   3: TDashboardPermissions permissions;
+}
+
+struct TDashboard {
+  1: string dashboard_name
+  2: string dashboard_state
+  3: string image_hash
+  4: string update_time
+  5: string dashboard_metadata
+  6: i32 dashboard_id
+  7: string dashboard_owner
+  8: bool is_dash_shared
+  9: TDashboardPermissions dashboard_permissions
 }
 
 struct TLicenseInfo {

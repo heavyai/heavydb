@@ -4,11 +4,11 @@ on:
     branches:
       - master
     paths:
-      - 'python/**'
+      - 'python/*'
   pull_request:
     types: [opened, synchronize, reopened]
     paths:
-      - 'python/**'
+      - 'python/*'
 jobs:
   sonarcloudomniscidbpython:
     name: SonarCloudOmniSciDBPython
@@ -24,6 +24,7 @@ jobs:
           args: >
             -Dsonar.organization=omnisci
             -Dsonar.projectKey=omniscidb-internal_python-omnisci-connector
+            -Dsonar.inclusions=*.py
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}  # Needed to get PR information, if any
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}

@@ -103,6 +103,162 @@ TEST_F(DashboardBasicTest, CreateReplaceDelete) {
   ASSERT_EQ(getNumDashboards(), size_t(0));
 }
 
+struct TestPermissions {
+  TDashboardPermissions permissions;
+  std::map<std::string, AccessPrivileges> privileges;
+  std::map<std::string, AccessPrivileges> all_privileges;
+
+  TestPermissions(bool create_permission,
+                  bool delete_permission,
+                  bool edit_permission,
+                  bool view_permission) {
+    permissions.create_ = create_permission;
+    permissions.delete_ = delete_permission;
+    permissions.edit_ = edit_permission;
+    permissions.view_ = view_permission;
+    if (create_permission) {
+      privileges.insert({"CREATE_DASHBOARD", AccessPrivileges::CREATE_DASHBOARD});
+    }
+    if (delete_permission) {
+      privileges.insert({"DELETE_DASHBOARD", AccessPrivileges::DELETE_DASHBOARD});
+    }
+    if (edit_permission) {
+      privileges.insert({"EDIT_DASHBOARD", AccessPrivileges::EDIT_DASHBOARD});
+    }
+    if (view_permission) {
+      privileges.insert({"VIEW_DASHBOARD", AccessPrivileges::VIEW_DASHBOARD});
+    }
+    all_privileges.insert({"CREATE_DASHBOARD", AccessPrivileges::CREATE_DASHBOARD});
+    all_privileges.insert({"DELETE_DASHBOARD", AccessPrivileges::DELETE_DASHBOARD});
+    all_privileges.insert({"EDIT_DASHBOARD", AccessPrivileges::EDIT_DASHBOARD});
+    all_privileges.insert({"VIEW_DASHBOARD", AccessPrivileges::VIEW_DASHBOARD});
+  }
+
+  TestPermissions getComplement() {
+    return TestPermissions{!permissions.create_,
+                           !permissions.delete_,
+                           !permissions.edit_,
+                           !permissions.view_};
+  }
+
+  AccessPrivileges getPrivileges() {
+    AccessPrivileges priv;
+    if (permissions.create_) {
+      priv.add(AccessPrivileges::CREATE_DASHBOARD);
+    }
+    if (permissions.delete_) {
+      priv.add(AccessPrivileges::DELETE_DASHBOARD);
+    }
+    if (permissions.edit_) {
+      priv.add(AccessPrivileges::EDIT_DASHBOARD);
+    }
+    if (permissions.view_) {
+      priv.add(AccessPrivileges::VIEW_DASHBOARD);
+    }
+    return priv;
+  }
+};
+
+class GetDashboardTest : public DBHandlerTestFixture {
+ public:
+  static void SetUpTestSuite() {
+    createDBHandler();
+    test_user_1_id = createTestUser("test_user_1", "test_pass");
+  }
+
+  static void TearDownTestSuite() {
+    loginAdmin();
+    dropTestUser("test_user_1");
+  }
+
+  size_t getNumDashboards() {
+    const auto& [db_handler, session_id] = getDbHandlerAndSessionId();
+    std::vector<TDashboard> dashboards;
+    db_handler->get_dashboards(dashboards, session_id);
+    return dashboards.size();
+  }
+
+ protected:
+  void SetUp() override {
+    DBHandlerTestFixture::SetUp();
+    const auto& [db_handler, session_id] = getDbHandlerAndSessionId();
+    // Remove any dashboards that may be left by previous tests
+    std::vector<TDashboard> dashboards;
+    db_handler->get_dashboards(dashboards, session_id);
+    if (dashboards.size()) {
+      std::vector<int32_t> db_ids;
+      for (const auto& dashboard : dashboards) {
+        db_ids.push_back(dashboard.dashboard_id);
+      }
+      db_handler->delete_dashboards(session_id, db_ids);
+    }
+  }
+  void TearDown() override { DBHandlerTestFixture::TearDown(); }
+
+  static int32_t createTestUser(const std::string& user_name, const std::string& pass) {
+    sql("CREATE USER " + user_name + " (password = '" + pass + "');");
+    sql("GRANT ACCESS ON DATABASE omnisci TO " + user_name + ";");
+    Catalog_Namespace::UserMetadata user_metadata{};
+    Catalog_Namespace::SysCatalog::instance().getMetadataForUser(user_name,
+                                                                 user_metadata);
+    return user_metadata.userId;
+  }
+
+  static void dropTestUser(const std::string& user_name) {
+    try {
+      sql("DROP USER " + user_name + ";");
+    } catch (const std::exception& e) {
+      // Swallow and log exceptions that may occur, since there is no "IF EXISTS" option.
+      LOG(WARNING) << e.what();
+    }
+  }
+
+  inline static int32_t test_user_1_id;
+};
+
+TEST_F(GetDashboardTest, AsAdmin) {
+  const auto& [db_handler, session_id] = getDbHandlerAndSessionId();
+  const auto test_dashboard_id = db_handler->create_dashboard(
+      session_id, OMNISCI_DEFAULT_DB, "state", "image", "metadata");
+  ASSERT_EQ(getNumDashboards(), size_t(1));
+
+  TDashboard db;
+  TDashboardPermissions admin_perms = TestPermissions(true, true, true, true).permissions;
+  db_handler->get_dashboard(db, session_id, test_dashboard_id);
+  ASSERT_EQ(admin_perms, db.dashboard_permissions);
+
+  std::vector<TDashboard> dashboards;
+  db_handler->get_dashboards(dashboards, session_id);
+  ASSERT_EQ(admin_perms, dashboards[0].dashboard_permissions);
+  db_handler->delete_dashboard(session_id, test_dashboard_id);
+}
+
+TEST_F(GetDashboardTest, AsUser) {
+  const auto& [db_handler, session_id] = getDbHandlerAndSessionId();
+
+  const auto test_dashboard_id = db_handler->create_dashboard(
+      session_id, OMNISCI_DEFAULT_DB, "state", "image", "metadata");
+
+  DBObject object(test_dashboard_id, DBObjectType::DashboardDBObjectType);
+  TestPermissions usr_privs(false, false, true, true);
+  TDashboardPermissions usr_perms = usr_privs.permissions;
+  object.setPrivileges(usr_privs.getPrivileges());
+
+  Catalog_Namespace::SysCatalog::instance().grantDBObjectPrivilegesBatch(
+      {"test_user_1"}, {object}, getCatalog());
+
+  TDashboard db;
+  std::vector<TDashboard> dashboards;
+  TSessionId usr_session;
+  login("test_user_1", "test_pass", OMNISCI_DEFAULT_DB, usr_session);
+  db_handler->get_dashboard(db, usr_session, test_dashboard_id);
+  ASSERT_EQ(usr_perms, db.dashboard_permissions);
+  db_handler->get_dashboards(dashboards, usr_session);
+  ASSERT_EQ(usr_perms, dashboards[0].dashboard_permissions);
+  logout(usr_session);
+  db_handler->delete_dashboard(session_id, test_dashboard_id);
+}
+
 class ShareDashboardsTest : public DBHandlerTestFixture {
  public:
   static void SetUpTestSuite() {
@@ -132,62 +288,6 @@ class ShareDashboardsTest : public DBHandlerTestFixture {
     }
     return ids;
   }
-
-  struct TestPermissions {
-    TDashboardPermissions permissions;
-    std::map<std::string, AccessPrivileges> privileges;
-    std::map<std::string, AccessPrivileges> all_privileges;
-
-    TestPermissions(bool create_permission,
-                    bool delete_permission,
-                    bool edit_permission,
-                    bool view_permission) {
-      permissions.create_ = create_permission;
-      permissions.delete_ = delete_permission;
-      permissions.edit_ = edit_permission;
-      permissions.view_ = view_permission;
-      if (create_permission) {
-        privileges.insert({"CREATE_DASHBOARD", AccessPrivileges::CREATE_DASHBOARD});
-      }
-      if (delete_permission) {
-        privileges.insert({"DELETE_DASHBOARD", AccessPrivileges::DELETE_DASHBOARD});
-      }
-      if (edit_permission) {
-        privileges.insert({"EDIT_DASHBOARD", AccessPrivileges::EDIT_DASHBOARD});
-      }
-      if (view_permission) {
-        privileges.insert({"VIEW_DASHBOARD", AccessPrivileges::VIEW_DASHBOARD});
-      }
-      all_privileges.insert({"CREATE_DASHBOARD", AccessPrivileges::CREATE_DASHBOARD});
-      all_privileges.insert({"DELETE_DASHBOARD", AccessPrivileges::DELETE_DASHBOARD});
-      all_privileges.insert({"EDIT_DASHBOARD", AccessPrivileges::EDIT_DASHBOARD});
-      all_privileges.insert({"VIEW_DASHBOARD", AccessPrivileges::VIEW_DASHBOARD});
-    }
-
-    TestPermissions getComplement() {
-      return TestPermissions{!permissions.create_,
-                             !permissions.delete_,
-                             !permissions.edit_,
-                             !permissions.view_};
-    }
-
-    AccessPrivileges getPrivileges() {
-      AccessPrivileges priv;
-      if (permissions.create_) {
-        priv.add(AccessPrivileges::CREATE_DASHBOARD);
-      }
-      if (permissions.delete_) {
-        priv.add(AccessPrivileges::DELETE_DASHBOARD);
-      }
-      if (permissions.edit_) {
-        priv.add(AccessPrivileges::EDIT_DASHBOARD);
-      }
-      if (permissions.view_) {
-        priv.add(AccessPrivileges::VIEW_DASHBOARD);
-      }
-      return priv;
-    }
-  };
 
   void shareOrUnshareDashboards(const TestPermissions& test_permissions,
                                 const std::vector<std::string>& groups,

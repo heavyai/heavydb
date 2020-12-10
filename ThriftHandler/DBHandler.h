@@ -757,6 +757,12 @@ class DBHandler : public OmniSciIf {
 
   ConnectionInfo getConnectionInfo() const;
 
+  TDashboard get_dashboard_impl(
+      const std::shared_ptr<Catalog_Namespace::SessionInfo const>& session_ptr,
+      Catalog_Namespace::UserMetadata& user_meta,
+      const DashboardDescriptor* dash,
+      const bool populate_state = true);
+
   static bool has_database_permission(const AccessPrivileges& privs,
                                       const TDBObjectPermissions& permissions);
   static bool has_table_permission(const AccessPrivileges& privs,

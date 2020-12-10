@@ -64,6 +64,7 @@ class TAggKind(object):
     COUNT = 4
     APPROX_COUNT_DISTINCT = 5
     SAMPLE = 6
+    SINGLE_VALUE = 7
 
     _VALUES_TO_NAMES = {
         0: "AVG",
@@ -73,6 +74,7 @@ class TAggKind(object):
         4: "COUNT",
         5: "APPROX_COUNT_DISTINCT",
         6: "SAMPLE",
+        7: "SINGLE_VALUE",
     }
 
     _NAMES_TO_VALUES = {
@@ -83,6 +85,7 @@ class TAggKind(object):
         "COUNT": 4,
         "APPROX_COUNT_DISTINCT": 5,
         "SAMPLE": 6,
+        "SINGLE_VALUE": 7,
     }
 
 

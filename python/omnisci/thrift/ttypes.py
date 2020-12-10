@@ -215,6 +215,7 @@ class TDBObjectType(object):
     TableDBObjectType = 2
     DashboardDBObjectType = 3
     ViewDBObjectType = 4
+    ServerDBObjectType = 5
 
     _VALUES_TO_NAMES = {
         0: "AbstractDBObjectType",
@@ -222,6 +223,7 @@ class TDBObjectType(object):
         2: "TableDBObjectType",
         3: "DashboardDBObjectType",
         4: "ViewDBObjectType",
+        5: "ServerDBObjectType",
     }
 
     _NAMES_TO_VALUES = {
@@ -230,6 +232,7 @@ class TDBObjectType(object):
         "TableDBObjectType": 2,
         "DashboardDBObjectType": 3,
         "ViewDBObjectType": 4,
+        "ServerDBObjectType": 5,
     }
 
 
@@ -2216,140 +2219,6 @@ class TFrontendView(object):
         if self.view_metadata is not None:
             oprot.writeFieldBegin('view_metadata', TType.STRING, 5)
             oprot.writeString(self.view_metadata.encode('utf-8') if sys.version_info[0] == 2 else self.view_metadata)
-            oprot.writeFieldEnd()
-        oprot.writeFieldStop()
-        oprot.writeStructEnd()
-
-    def validate(self):
-        return
-
-    def __repr__(self):
-        L = ['%s=%r' % (key, value)
-             for key, value in self.__dict__.items()]
-        return '%s(%s)' % (self.__class__.__name__, ', '.join(L))
-
-    def __eq__(self, other):
-        return isinstance(other, self.__class__) and self.__dict__ == other.__dict__
-
-    def __ne__(self, other):
-        return not (self == other)
-
-
-class TDashboard(object):
-    """
-    Attributes:
-     - dashboard_name
-     - dashboard_state
-     - image_hash
-     - update_time
-     - dashboard_metadata
-     - dashboard_id
-     - dashboard_owner
-     - is_dash_shared
-
-    """
-
-
-    def __init__(self, dashboard_name=None, dashboard_state=None, image_hash=None, update_time=None, dashboard_metadata=None, dashboard_id=None, dashboard_owner=None, is_dash_shared=None,):
-        self.dashboard_name = dashboard_name
-        self.dashboard_state = dashboard_state
-        self.image_hash = image_hash
-        self.update_time = update_time
-        self.dashboard_metadata = dashboard_metadata
-        self.dashboard_id = dashboard_id
-        self.dashboard_owner = dashboard_owner
-        self.is_dash_shared = is_dash_shared
-
-    def read(self, iprot):
-        if iprot._fast_decode is not None and isinstance(iprot.trans, TTransport.CReadableTransport) and self.thrift_spec is not None:
-            iprot._fast_decode(self, iprot, [self.__class__, self.thrift_spec])
-            return
-        iprot.readStructBegin()
-        while True:
-            (fname, ftype, fid) = iprot.readFieldBegin()
-            if ftype == TType.STOP:
-                break
-            if fid == 1:
-                if ftype == TType.STRING:
-                    self.dashboard_name = iprot.readString().decode('utf-8') if sys.version_info[0] == 2 else iprot.readString()
-                else:
-                    iprot.skip(ftype)
-            elif fid == 2:
-                if ftype == TType.STRING:
-                    self.dashboard_state = iprot.readString().decode('utf-8') if sys.version_info[0] == 2 else iprot.readString()
-                else:
-                    iprot.skip(ftype)
-            elif fid == 3:
-                if ftype == TType.STRING:
-                    self.image_hash = iprot.readString().decode('utf-8') if sys.version_info[0] == 2 else iprot.readString()
-                else:
-                    iprot.skip(ftype)
-            elif fid == 4:
-                if ftype == TType.STRING:
-                    self.update_time = iprot.readString().decode('utf-8') if sys.version_info[0] == 2 else iprot.readString()
-                else:
-                    iprot.skip(ftype)
-            elif fid == 5:
-                if ftype == TType.STRING:
-                    self.dashboard_metadata = iprot.readString().decode('utf-8') if sys.version_info[0] == 2 else iprot.readString()
-                else:
-                    iprot.skip(ftype)
-            elif fid == 6:
-                if ftype == TType.I32:
-                    self.dashboard_id = iprot.readI32()
-                else:
-                    iprot.skip(ftype)
-            elif fid == 7:
-                if ftype == TType.STRING:
-                    self.dashboard_owner = iprot.readString().decode('utf-8') if sys.version_info[0] == 2 else iprot.readString()
-                else:
-                    iprot.skip(ftype)
-            elif fid == 8:
-                if ftype == TType.BOOL:
-                    self.is_dash_shared = iprot.readBool()
-                else:
-                    iprot.skip(ftype)
-            else:
-                iprot.skip(ftype)
-            iprot.readFieldEnd()
-        iprot.readStructEnd()
-
-    def write(self, oprot):
-        if oprot._fast_encode is not None and self.thrift_spec is not None:
-            oprot.trans.write(oprot._fast_encode(self, [self.__class__, self.thrift_spec]))
-            return
-        oprot.writeStructBegin('TDashboard')
-        if self.dashboard_name is not None:
-            oprot.writeFieldBegin('dashboard_name', TType.STRING, 1)
-            oprot.writeString(self.dashboard_name.encode('utf-8') if sys.version_info[0] == 2 else self.dashboard_name)
-            oprot.writeFieldEnd()
-        if self.dashboard_state is not None:
-            oprot.writeFieldBegin('dashboard_state', TType.STRING, 2)
-            oprot.writeString(self.dashboard_state.encode('utf-8') if sys.version_info[0] == 2 else self.dashboard_state)
-            oprot.writeFieldEnd()
-        if self.image_hash is not None:
-            oprot.writeFieldBegin('image_hash', TType.STRING, 3)
-            oprot.writeString(self.image_hash.encode('utf-8') if sys.version_info[0] == 2 else self.image_hash)
-            oprot.writeFieldEnd()
-        if self.update_time is not None:
-            oprot.writeFieldBegin('update_time', TType.STRING, 4)
-            oprot.writeString(self.update_time.encode('utf-8') if sys.version_info[0] == 2 else self.update_time)
-            oprot.writeFieldEnd()
-        if self.dashboard_metadata is not None:
-            oprot.writeFieldBegin('dashboard_metadata', TType.STRING, 5)
-            oprot.writeString(self.dashboard_metadata.encode('utf-8') if sys.version_info[0] == 2 else self.dashboard_metadata)
-            oprot.writeFieldEnd()
-        if self.dashboard_id is not None:
-            oprot.writeFieldBegin('dashboard_id', TType.I32, 6)
-            oprot.writeI32(self.dashboard_id)
-            oprot.writeFieldEnd()
-        if self.dashboard_owner is not None:
-            oprot.writeFieldBegin('dashboard_owner', TType.STRING, 7)
-            oprot.writeString(self.dashboard_owner.encode('utf-8') if sys.version_info[0] == 2 else self.dashboard_owner)
-            oprot.writeFieldEnd()
-        if self.is_dash_shared is not None:
-            oprot.writeFieldBegin('is_dash_shared', TType.BOOL, 8)
-            oprot.writeBool(self.is_dash_shared)
             oprot.writeFieldEnd()
         oprot.writeFieldStop()
         oprot.writeStructEnd()
@@ -5401,6 +5270,85 @@ class TViewPermissions(object):
         return not (self == other)
 
 
+class TServerPermissions(object):
+    """
+    Attributes:
+     - create_
+     - drop_
+     - alter_
+
+    """
+
+
+    def __init__(self, create_=None, drop_=None, alter_=None,):
+        self.create_ = create_
+        self.drop_ = drop_
+        self.alter_ = alter_
+
+    def read(self, iprot):
+        if iprot._fast_decode is not None and isinstance(iprot.trans, TTransport.CReadableTransport) and self.thrift_spec is not None:
+            iprot._fast_decode(self, iprot, [self.__class__, self.thrift_spec])
+            return
+        iprot.readStructBegin()
+        while True:
+            (fname, ftype, fid) = iprot.readFieldBegin()
+            if ftype == TType.STOP:
+                break
+            if fid == 1:
+                if ftype == TType.BOOL:
+                    self.create_ = iprot.readBool()
+                else:
+                    iprot.skip(ftype)
+            elif fid == 2:
+                if ftype == TType.BOOL:
+                    self.drop_ = iprot.readBool()
+                else:
+                    iprot.skip(ftype)
+            elif fid == 3:
+                if ftype == TType.BOOL:
+                    self.alter_ = iprot.readBool()
+                else:
+                    iprot.skip(ftype)
+            else:
+                iprot.skip(ftype)
+            iprot.readFieldEnd()
+        iprot.readStructEnd()
+
+    def write(self, oprot):
+        if oprot._fast_encode is not None and self.thrift_spec is not None:
+            oprot.trans.write(oprot._fast_encode(self, [self.__class__, self.thrift_spec]))
+            return
+        oprot.writeStructBegin('TServerPermissions')
+        if self.create_ is not None:
+            oprot.writeFieldBegin('create_', TType.BOOL, 1)
+            oprot.writeBool(self.create_)
+            oprot.writeFieldEnd()
+        if self.drop_ is not None:
+            oprot.writeFieldBegin('drop_', TType.BOOL, 2)
+            oprot.writeBool(self.drop_)
+            oprot.writeFieldEnd()
+        if self.alter_ is not None:
+            oprot.writeFieldBegin('alter_', TType.BOOL, 3)
+            oprot.writeBool(self.alter_)
+            oprot.writeFieldEnd()
+        oprot.writeFieldStop()
+        oprot.writeStructEnd()
+
+    def validate(self):
+        return
+
+    def __repr__(self):
+        L = ['%s=%r' % (key, value)
+             for key, value in self.__dict__.items()]
+        return '%s(%s)' % (self.__class__.__name__, ', '.join(L))
+
+    def __eq__(self, other):
+        return isinstance(other, self.__class__) and self.__dict__ == other.__dict__
+
+    def __ne__(self, other):
+        return not (self == other)
+
+
 class TDBObjectPermissions(object):
     """
     Attributes:
@@ -5408,15 +5356,17 @@ class TDBObjectPermissions(object):
      - table_permissions_
      - dashboard_permissions_
      - view_permissions_
+     - server_permissions_
 
     """
 
 
-    def __init__(self, database_permissions_=None, table_permissions_=None, dashboard_permissions_=None, view_permissions_=None,):
+    def __init__(self, database_permissions_=None, table_permissions_=None, dashboard_permissions_=None, view_permissions_=None, server_permissions_=None,):
         self.database_permissions_ = database_permissions_
         self.table_permissions_ = table_permissions_
         self.dashboard_permissions_ = dashboard_permissions_
         self.view_permissions_ = view_permissions_
+        self.server_permissions_ = server_permissions_
 
     def read(self, iprot):
         if iprot._fast_decode is not None and isinstance(iprot.trans, TTransport.CReadableTransport) and self.thrift_spec is not None:
@@ -5451,6 +5401,12 @@ class TDBObjectPermissions(object):
                     self.view_permissions_.read(iprot)
                 else:
                     iprot.skip(ftype)
+            elif fid == 5:
+                if ftype == TType.STRUCT:
+                    self.server_permissions_ = TServerPermissions()
+                    self.server_permissions_.read(iprot)
+                else:
+                    iprot.skip(ftype)
             else:
                 iprot.skip(ftype)
             iprot.readFieldEnd()
@@ -5476,6 +5432,10 @@ class TDBObjectPermissions(object):
         if self.view_permissions_ is not None:
             oprot.writeFieldBegin('view_permissions_', TType.STRUCT, 4)
             self.view_permissions_.write(oprot)
+            oprot.writeFieldEnd()
+        if self.server_permissions_ is not None:
+            oprot.writeFieldBegin('server_permissions_', TType.STRUCT, 5)
+            self.server_permissions_.write(oprot)
             oprot.writeFieldEnd()
         oprot.writeFieldStop()
         oprot.writeStructEnd()
@@ -5665,6 +5625,152 @@ class TDashboardGrantees(object):
         if self.permissions is not None:
             oprot.writeFieldBegin('permissions', TType.STRUCT, 3)
             self.permissions.write(oprot)
+            oprot.writeFieldEnd()
+        oprot.writeFieldStop()
+        oprot.writeStructEnd()
+
+    def validate(self):
+        return
+
+    def __repr__(self):
+        L = ['%s=%r' % (key, value)
+             for key, value in self.__dict__.items()]
+        return '%s(%s)' % (self.__class__.__name__, ', '.join(L))
+
+    def __eq__(self, other):
+        return isinstance(other, self.__class__) and self.__dict__ == other.__dict__
+
+    def __ne__(self, other):
+        return not (self == other)
+
+
+class TDashboard(object):
+    """
+    Attributes:
+     - dashboard_name
+     - dashboard_state
+     - image_hash
+     - update_time
+     - dashboard_metadata
+     - dashboard_id
+     - dashboard_owner
+     - is_dash_shared
+     - dashboard_permissions
+
+    """
+
+
+    def __init__(self, dashboard_name=None, dashboard_state=None, image_hash=None, update_time=None, dashboard_metadata=None, dashboard_id=None, dashboard_owner=None, is_dash_shared=None, dashboard_permissions=None,):
+        self.dashboard_name = dashboard_name
+        self.dashboard_state = dashboard_state
+        self.image_hash = image_hash
+        self.update_time = update_time
+        self.dashboard_metadata = dashboard_metadata
+        self.dashboard_id = dashboard_id
+        self.dashboard_owner = dashboard_owner
+        self.is_dash_shared = is_dash_shared
+        self.dashboard_permissions = dashboard_permissions
+
+    def read(self, iprot):
+        if iprot._fast_decode is not None and isinstance(iprot.trans, TTransport.CReadableTransport) and self.thrift_spec is not None:
+            iprot._fast_decode(self, iprot, [self.__class__, self.thrift_spec])
+            return
+        iprot.readStructBegin()
+        while True:
+            (fname, ftype, fid) = iprot.readFieldBegin()
+            if ftype == TType.STOP:
+                break
+            if fid == 1:
+                if ftype == TType.STRING:
+                    self.dashboard_name = iprot.readString().decode('utf-8') if sys.version_info[0] == 2 else iprot.readString()
+                else:
+                    iprot.skip(ftype)
+            elif fid == 2:
+                if ftype == TType.STRING:
+                    self.dashboard_state = iprot.readString().decode('utf-8') if sys.version_info[0] == 2 else iprot.readString()
+                else:
+                    iprot.skip(ftype)
+            elif fid == 3:
+                if ftype == TType.STRING:
+                    self.image_hash = iprot.readString().decode('utf-8') if sys.version_info[0] == 2 else iprot.readString()
+                else:
+                    iprot.skip(ftype)
+            elif fid == 4:
+                if ftype == TType.STRING:
+                    self.update_time = iprot.readString().decode('utf-8') if sys.version_info[0] == 2 else iprot.readString()
+                else:
+                    iprot.skip(ftype)
+            elif fid == 5:
+                if ftype == TType.STRING:
+                    self.dashboard_metadata = iprot.readString().decode('utf-8') if sys.version_info[0] == 2 else iprot.readString()
+                else:
+                    iprot.skip(ftype)
+            elif fid == 6:
+                if ftype == TType.I32:
+                    self.dashboard_id = iprot.readI32()
+                else:
+                    iprot.skip(ftype)
+            elif fid == 7:
+                if ftype == TType.STRING:
+                    self.dashboard_owner = iprot.readString().decode('utf-8') if sys.version_info[0] == 2 else iprot.readString()
+                else:
+                    iprot.skip(ftype)
+            elif fid == 8:
+                if ftype == TType.BOOL:
+                    self.is_dash_shared = iprot.readBool()
+                else:
+                    iprot.skip(ftype)
+            elif fid == 9:
+                if ftype == TType.STRUCT:
+                    self.dashboard_permissions = TDashboardPermissions()
+                    self.dashboard_permissions.read(iprot)
+                else:
+                    iprot.skip(ftype)
+            else:
+                iprot.skip(ftype)
+            iprot.readFieldEnd()
+        iprot.readStructEnd()
+
+    def write(self, oprot):
+        if oprot._fast_encode is not None and self.thrift_spec is not None:
+            oprot.trans.write(oprot._fast_encode(self, [self.__class__, self.thrift_spec]))
+            return
+        oprot.writeStructBegin('TDashboard')
+        if self.dashboard_name is not None:
+            oprot.writeFieldBegin('dashboard_name', TType.STRING, 1)
+            oprot.writeString(self.dashboard_name.encode('utf-8') if sys.version_info[0] == 2 else self.dashboard_name)
+            oprot.writeFieldEnd()
+        if self.dashboard_state is not None:
+            oprot.writeFieldBegin('dashboard_state', TType.STRING, 2)
+            oprot.writeString(self.dashboard_state.encode('utf-8') if sys.version_info[0] == 2 else self.dashboard_state)
+            oprot.writeFieldEnd()
+        if self.image_hash is not None:
+            oprot.writeFieldBegin('image_hash', TType.STRING, 3)
+            oprot.writeString(self.image_hash.encode('utf-8') if sys.version_info[0] == 2 else self.image_hash)
+            oprot.writeFieldEnd()
+        if self.update_time is not None:
+            oprot.writeFieldBegin('update_time', TType.STRING, 4)
+            oprot.writeString(self.update_time.encode('utf-8') if sys.version_info[0] == 2 else self.update_time)
+            oprot.writeFieldEnd()
+        if self.dashboard_metadata is not None:
+            oprot.writeFieldBegin('dashboard_metadata', TType.STRING, 5)
+            oprot.writeString(self.dashboard_metadata.encode('utf-8') if sys.version_info[0] == 2 else self.dashboard_metadata)
+            oprot.writeFieldEnd()
+        if self.dashboard_id is not None:
+            oprot.writeFieldBegin('dashboard_id', TType.I32, 6)
+            oprot.writeI32(self.dashboard_id)
+            oprot.writeFieldEnd()
+        if self.dashboard_owner is not None:
+            oprot.writeFieldBegin('dashboard_owner', TType.STRING, 7)
+            oprot.writeString(self.dashboard_owner.encode('utf-8') if sys.version_info[0] == 2 else self.dashboard_owner)
+            oprot.writeFieldEnd()
+        if self.is_dash_shared is not None:
+            oprot.writeFieldBegin('is_dash_shared', TType.BOOL, 8)
+            oprot.writeBool(self.is_dash_shared)
+            oprot.writeFieldEnd()
+        if self.dashboard_permissions is not None:
+            oprot.writeFieldBegin('dashboard_permissions', TType.STRUCT, 9)
+            self.dashboard_permissions.write(oprot)
             oprot.writeFieldEnd()
         oprot.writeFieldStop()
         oprot.writeStructEnd()
@@ -5905,6 +6011,85 @@ class TGeoFileLayerInfo(object):
 
     def __ne__(self, other):
         return not (self == other)
+
+
+class TTableEpochInfo(object):
+    """
+    Attributes:
+     - table_id
+     - table_epoch
+     - leaf_index
+
+    """
+
+
+    def __init__(self, table_id=None, table_epoch=None, leaf_index=None,):
+        self.table_id = table_id
+        self.table_epoch = table_epoch
+        self.leaf_index = leaf_index
+
+    def read(self, iprot):
+        if iprot._fast_decode is not None and isinstance(iprot.trans, TTransport.CReadableTransport) and self.thrift_spec is not None:
+            iprot._fast_decode(self, iprot, [self.__class__, self.thrift_spec])
+            return
+        iprot.readStructBegin()
+        while True:
+            (fname, ftype, fid) = iprot.readFieldBegin()
+            if ftype == TType.STOP:
+                break
+            if fid == 1:
+                if ftype == TType.I32:
+                    self.table_id = iprot.readI32()
+                else:
+                    iprot.skip(ftype)
+            elif fid == 2:
+                if ftype == TType.I32:
+                    self.table_epoch = iprot.readI32()
+                else:
+                    iprot.skip(ftype)
+            elif fid == 3:
+                if ftype == TType.I32:
+                    self.leaf_index = iprot.readI32()
+                else:
+                    iprot.skip(ftype)
+            else:
+                iprot.skip(ftype)
+            iprot.readFieldEnd()
+        iprot.readStructEnd()
+
+    def write(self, oprot):
+        if oprot._fast_encode is not None and self.thrift_spec is not None:
+            oprot.trans.write(oprot._fast_encode(self, [self.__class__, self.thrift_spec]))
+            return
+        oprot.writeStructBegin('TTableEpochInfo')
+        if self.table_id is not None:
+            oprot.writeFieldBegin('table_id', TType.I32, 1)
+            oprot.writeI32(self.table_id)
+            oprot.writeFieldEnd()
+        if self.table_epoch is not None:
+            oprot.writeFieldBegin('table_epoch', TType.I32, 2)
+            oprot.writeI32(self.table_epoch)
+            oprot.writeFieldEnd()
+        if self.leaf_index is not None:
+            oprot.writeFieldBegin('leaf_index', TType.I32, 3)
+            oprot.writeI32(self.leaf_index)
+            oprot.writeFieldEnd()
+        oprot.writeFieldStop()
+        oprot.writeStructEnd()
+
+    def validate(self):
+        return
+
+    def __repr__(self):
+        L = ['%s=%r' % (key, value)
+             for key, value in self.__dict__.items()]
+        return '%s(%s)' % (self.__class__.__name__, ', '.join(L))
+
+    def __eq__(self, other):
+        return isinstance(other, self.__class__) and self.__dict__ == other.__dict__
+
+    def __ne__(self, other):
+        return not (self == other)
 all_structs.append(TDatumVal)
 TDatumVal.thrift_spec = (
     None,  # 0
@@ -6072,18 +6257,6 @@ TFrontendView.thrift_spec = (
     (3, TType.STRING, 'image_hash', 'UTF8', None, ),  # 3
     (4, TType.STRING, 'update_time', 'UTF8', None, ),  # 4
     (5, TType.STRING, 'view_metadata', 'UTF8', None, ),  # 5
-)
-all_structs.append(TDashboard)
-TDashboard.thrift_spec = (
-    None,  # 0
-    (1, TType.STRING, 'dashboard_name', 'UTF8', None, ),  # 1
-    (2, TType.STRING, 'dashboard_state', 'UTF8', None, ),  # 2
-    (3, TType.STRING, 'image_hash', 'UTF8', None, ),  # 3
-    (4, TType.STRING, 'update_time', 'UTF8', None, ),  # 4
-    (5, TType.STRING, 'dashboard_metadata', 'UTF8', None, ),  # 5
-    (6, TType.I32, 'dashboard_id', None, None, ),  # 6
-    (7, TType.STRING, 'dashboard_owner', 'UTF8', None, ),  # 7
-    (8, TType.BOOL, 'is_dash_shared', None, None, ),  # 8
 )
 all_structs.append(TServerStatus)
 TServerStatus.thrift_spec = (
@@ -6339,6 +6512,13 @@ TViewPermissions.thrift_spec = (
     (5, TType.BOOL, 'update_', None, None, ),  # 5
     (6, TType.BOOL, 'delete_', None, None, ),  # 6
 )
+all_structs.append(TServerPermissions)
+TServerPermissions.thrift_spec = (
+    None,  # 0
+    (1, TType.BOOL, 'create_', None, None, ),  # 1
+    (2, TType.BOOL, 'drop_', None, None, ),  # 2
+    (3, TType.BOOL, 'alter_', None, None, ),  # 3
+)
 all_structs.append(TDBObjectPermissions)
 TDBObjectPermissions.thrift_spec = (
     None,  # 0
@@ -6346,6 +6526,7 @@ TDBObjectPermissions.thrift_spec = (
     (2, TType.STRUCT, 'table_permissions_', [TTablePermissions, None], None, ),  # 2
     (3, TType.STRUCT, 'dashboard_permissions_', [TDashboardPermissions, None], None, ),  # 3
     (4, TType.STRUCT, 'view_permissions_', [TViewPermissions, None], None, ),  # 4
+    (5, TType.STRUCT, 'server_permissions_', [TServerPermissions, None], None, ),  # 5
 )
 all_structs.append(TDBObject)
 TDBObject.thrift_spec = (
@@ -6362,6 +6543,19 @@ TDashboardGrantees.thrift_spec = (
     (1, TType.STRING, 'name', 'UTF8', None, ),  # 1
     (2, TType.BOOL, 'is_user', None, None, ),  # 2
     (3, TType.STRUCT, 'permissions', [TDashboardPermissions, None], None, ),  # 3
+)
+all_structs.append(TDashboard)
+TDashboard.thrift_spec = (
+    None,  # 0
+    (1, TType.STRING, 'dashboard_name', 'UTF8', None, ),  # 1
+    (2, TType.STRING, 'dashboard_state', 'UTF8', None, ),  # 2
+    (3, TType.STRING, 'image_hash', 'UTF8', None, ),  # 3
+    (4, TType.STRING, 'update_time', 'UTF8', None, ),  # 4
+    (5, TType.STRING, 'dashboard_metadata', 'UTF8', None, ),  # 5
+    (6, TType.I32, 'dashboard_id', None, None, ),  # 6
+    (7, TType.STRING, 'dashboard_owner', 'UTF8', None, ),  # 7
+    (8, TType.BOOL, 'is_dash_shared', None, None, ),  # 8
+    (9, TType.STRUCT, 'dashboard_permissions', [TDashboardPermissions, None], None, ),  # 9
 )
 all_structs.append(TLicenseInfo)
 TLicenseInfo.thrift_spec = (
@@ -6381,6 +6575,13 @@ TGeoFileLayerInfo.thrift_spec = (
     None,  # 0
     (1, TType.STRING, 'name', 'UTF8', None, ),  # 1
     (2, TType.I32, 'contents', None, None, ),  # 2
+)
+all_structs.append(TTableEpochInfo)
+TTableEpochInfo.thrift_spec = (
+    None,  # 0
+    (1, TType.I32, 'table_id', None, None, ),  # 1
+    (2, TType.I32, 'table_epoch', None, None, ),  # 2
+    (3, TType.I32, 'leaf_index', None, None, ),  # 3
 )
 fix_spec(all_structs)
 del all_structs
