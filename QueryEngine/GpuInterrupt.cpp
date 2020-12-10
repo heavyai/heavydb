@@ -213,21 +213,21 @@ void Executor::resetInterrupt() {
   }
 
   if (g_cluster) {
-    bool sessionLeft = false;
+    bool interrupted_session = false;
     mapd_shared_lock<mapd_shared_mutex> session_read_lock(executor_session_mutex_);
-    std::string curSession = getCurrentQuerySession(session_read_lock);
-    sessionLeft = checkIsQuerySessionInterrupted(curSession, session_read_lock);
+    std::string cur_session = getCurrentQuerySession(session_read_lock);
+    interrupted_session = checkIsQuerySessionInterrupted(cur_session, session_read_lock);
     session_read_lock.unlock();
-    if (curSession != "" || sessionLeft) {
+    if (!cur_session.empty() || interrupted_session) {
       mapd_unique_lock<mapd_shared_mutex> session_write_lock(executor_session_mutex_);
-      removeFromQuerySessionList(curSession, session_write_lock);
+      removeFromQuerySessionList(cur_session, session_write_lock);
       invalidateRunningQuerySession(session_write_lock);
       session_write_lock.unlock();
     }
   }
 
   if (interrupted_.load()) {
+    VLOG(1) << "RESET Executor " << this << " that had previously been interrupted";
     interrupted_.store(false);
   }
-  VLOG(1) << "RESET Executor " << this << " that had previously been interrupted";
 }

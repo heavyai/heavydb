@@ -6447,13 +6447,10 @@ void DBHandler::getQueries(const Catalog_Namespace::SessionInfo& session_info,
               query_session_ptr->get_public_session_id());
           _return.row_set.columns[col_num++].data.str_col.emplace_back(
               query_info.getQueryStatus());
-          std::time_t t =
-              std::chrono::system_clock::to_time_t(query_info.getQuerySubmittedTime());
           _return.row_set.columns[col_num++].data.str_col.emplace_back(
               ::toString(query_info.getExecutorId()));
-          std::stringstream tss;
-          tss << std::put_time(std::localtime(&t), "%F %T");
-          _return.row_set.columns[col_num++].data.str_col.emplace_back(tss.str());
+          _return.row_set.columns[col_num++].data.str_col.emplace_back(
+              ::toString(query_info.getQuerySubmittedTime()));
           _return.row_set.columns[col_num++].data.str_col.emplace_back(
               query_info.getQueryStr());
           _return.row_set.columns[col_num++].data.str_col.emplace_back(

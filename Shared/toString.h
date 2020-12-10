@@ -179,9 +179,11 @@ std::string toString(const T& v) {
                            T,
                            std::chrono::time_point<std::chrono::system_clock>>) {
     std::string s(30, '\0');
+    auto converted_v = (std::chrono::time_point<std::chrono::system_clock>)v;
     std::time_t ts = std::chrono::system_clock::to_time_t(v);
     std::strftime(&s[0], s.size(), "%Y-%m-%d %H:%M:%S", std::localtime(&ts));
-    return s;
+    return s + "." +
+           std::to_string((converted_v.time_since_epoch().count() / 1000) % 1000000);
   } else if constexpr (std::is_pointer_v<T>) {
     return (v == NULL ? "NULL" : "&" + toString(*v));
   } else {
