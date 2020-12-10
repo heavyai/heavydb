@@ -22,15 +22,12 @@
 
 #pragma once
 
-#include "Logger/Logger.h"
+#include "../Logger/Logger.h"
 #include "StringTransform.h"
 #include "funcannotations.h"
 
 #include <cassert>
-#include <cfloat>
-#include <cstdint>
 #include <ctime>
-#include <limits>
 #include <memory>
 #include <string>
 #include <type_traits>
@@ -248,23 +245,7 @@ enum EncodingType {
 #define IS_DECIMAL(T) ((T) == kNUMERIC || (T) == kDECIMAL)
 #define IS_GEO_POLY(T) (((T) == kPOLYGON) || ((T) == kMULTIPOLYGON))
 
-#define NULL_BOOLEAN INT8_MIN
-#define NULL_TINYINT INT8_MIN
-#define NULL_SMALLINT INT16_MIN
-#define NULL_INT INT32_MIN
-#define NULL_BIGINT INT64_MIN
-#define NULL_FLOAT FLT_MIN
-#define NULL_DOUBLE DBL_MIN
-
-#define NULL_ARRAY_BOOLEAN (INT8_MIN + 1)
-#define NULL_ARRAY_TINYINT (INT8_MIN + 1)
-#define NULL_ARRAY_SMALLINT (INT16_MIN + 1)
-#define NULL_ARRAY_INT (INT32_MIN + 1)
-#define NULL_ARRAY_BIGINT (INT64_MIN + 1)
-#define NULL_ARRAY_FLOAT (FLT_MIN * 2.0)
-#define NULL_ARRAY_DOUBLE (DBL_MIN * 2.0)
-
-#define NULL_ARRAY_COMPRESSED_32 0x80000000U
+#include "InlineNullValues.h"
 
 #define TRANSIENT_DICT_ID 0
 #define TRANSIENT_DICT(ID) (-(ID))
@@ -934,28 +915,6 @@ inline SQLTypeInfo get_nullable_logical_type_info(const SQLTypeInfo& type_info) 
   SQLTypeInfo nullable_type_info = get_logical_type_info(type_info);
   return get_nullable_type_info(nullable_type_info);
 }
-
-template <class T>
-constexpr inline int64_t inline_int_null_value() {
-  return std::is_signed<T>::value ? std::numeric_limits<T>::min()
-                                  : std::numeric_limits<T>::max();
-}
-
-template <class T>
-constexpr inline int64_t inline_int_null_array_value() {
-  return std::is_signed<T>::value ? std::numeric_limits<T>::min() + 1
-                                  : std::numeric_limits<T>::max() - 1;
-  // TODO: null_array values in signed types would step on max valid value
-  // in fixlen unsigned arrays, the max valid value may need to be lowered.
-}
-
-template <class T>
-constexpr inline int64_t max_valid_int_value() {
-  return std::is_signed<T>::value ? std::numeric_limits<T>::max()
-                                  : std::numeric_limits<T>::max() - 1;
-}
-
-#include "InlineNullValues.h"
 
 using StringOffsetT = int32_t;
 using ArrayOffsetT = int32_t;

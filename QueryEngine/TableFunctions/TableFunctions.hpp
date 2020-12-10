@@ -76,7 +76,11 @@ EXTENSION_NOINLINE int32_t row_adder(const int copy_multiplier,
   auto stride = input_col1.getSize();
   for (auto i = start; i < stop; i += step) {
     for (int c = 0; c < copy_multiplier; c++) {
-      output_col[i + (c * stride)] = input_col1[i] + input_col2[i];
+      if (input_col1.isNull(i) || input_col2.isNull(i)) {
+        output_col.setNull(i + (c * stride));
+      } else {
+        output_col[i + (c * stride)] = input_col1[i] + input_col2[i];
+      }
     }
   }
 

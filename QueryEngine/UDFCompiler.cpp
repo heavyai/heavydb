@@ -255,8 +255,14 @@ int UdfCompiler::compileFromCommandLine(const std::vector<std::string>& command_
 int UdfCompiler::compileToGpuByteCode(const char* udf_file_name, bool cpu_mode) {
   std::string gpu_out_filename(genGpuIrFilename(udf_file_name));
 
-  std::vector<std::string> command_line{
-      clang_path_, "-c", "-O2", "-emit-llvm", "-o", gpu_out_filename, "-std=c++14"};
+  std::vector<std::string> command_line{clang_path_,
+                                        "-c",
+                                        "-O2",
+                                        "-emit-llvm",
+                                        "-o",
+                                        gpu_out_filename,
+                                        "-std=c++14",
+                                        "-DNO_BOOST"};
 
   // If we are not compiling for cpu mode, then target the gpu
   // Otherwise assume we can generic ir that will
@@ -298,6 +304,7 @@ int UdfCompiler::compileToCpuByteCode(const char* udf_file_name) {
                                         "-o",
                                         cpu_out_filename,
                                         "-std=c++14",
+                                        "-DNO_BOOST",
                                         udf_file_name};
   return compileFromCommandLine(command_line);
 }
@@ -312,6 +319,7 @@ int UdfCompiler::parseToAst(const char* file_name) {
   arg_vector.emplace_back("astparser");
   arg_vector.emplace_back(file_name);
   arg_vector.emplace_back("--");
+  arg_vector.emplace_back("-DNO_BOOST");
   arg_vector.emplace_back(include_option);
 
   if (clang_options_.size() > 0) {
