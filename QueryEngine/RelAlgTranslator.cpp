@@ -1590,19 +1590,29 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateFunction(
   // wrong in the case of multiple implementations of UDF functions
   // that have different return types but Calcite specifies the return
   // type according to the first implementation.
-  auto ext_func_sig = bind_function(rex_function->getName(), arg_expr_list);
-  auto ext_func_args = ext_func_sig.getArgs();
-  CHECK_EQ(arg_expr_list.size(), ext_func_args.size());
-  for (size_t i = 0; i < arg_expr_list.size(); i++) {
-    // fold casts on constants
-    if (auto constant = std::dynamic_pointer_cast<Analyzer::Constant>(arg_expr_list[i])) {
-      auto ext_func_arg_ti = ext_arg_type_to_type_info(ext_func_args[i]);
-      if (ext_func_arg_ti != arg_expr_list[i]->get_type_info()) {
-        arg_expr_list[i] = constant->add_cast(ext_func_arg_ti);
+  SQLTypeInfo ret_ti;
+  try {
+    auto ext_func_sig = bind_function(rex_function->getName(), arg_expr_list);
+
+    auto ext_func_args = ext_func_sig.getArgs();
+    CHECK_EQ(arg_expr_list.size(), ext_func_args.size());
+    for (size_t i = 0; i < arg_expr_list.size(); i++) {
+      // fold casts on constants
+      if (auto constant =
+              std::dynamic_pointer_cast<Analyzer::Constant>(arg_expr_list[i])) {
+        auto ext_func_arg_ti = ext_arg_type_to_type_info(ext_func_args[i]);
+        if (ext_func_arg_ti != arg_expr_list[i]->get_type_info()) {
+          arg_expr_list[i] = constant->add_cast(ext_func_arg_ti);
+        }
       }
     }
+
+    ret_ti = ext_arg_type_to_type_info(ext_func_sig.getRet());
+  } catch (ExtensionFunctionBindingError& e) {
+    LOG(WARNING) << "RelAlgTranslator::translateFunction: " << e.what();
+    throw;
   }
-  auto ret_ti = ext_arg_type_to_type_info(ext_func_sig.getRet());
+
   // By default, the extension function type will not allow nulls. If one of the arguments
   // is nullable, the extension function must also explicitly allow nulls.
   bool arguments_not_null = true;

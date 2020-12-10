@@ -169,6 +169,10 @@ public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
     opTab.addOperator(new GetMaxWithRowOffset()); // UDTF prototype, constant sized with 1
                                                   // output row, get max of column along
                                                   // with row offset as two columns
+    opTab.addOperator(new DeviceSelectionUdtfAny());
+    opTab.addOperator(new DeviceSelectionUdtfCpu());
+    opTab.addOperator(new DeviceSelectionUdtfGpu());
+    opTab.addOperator(new DeviceSelectionUdtfBoth());
     opTab.addOperator(new MyUDFFunction());
     opTab.addOperator(new PgUnnest());
     opTab.addOperator(new Any());
@@ -461,6 +465,118 @@ public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
       fieldNameList.add("out0");
       fieldNameList.add("out1");
       typeList.add(typeFactory.createSqlType(SqlTypeName.INTEGER));
+      typeList.add(typeFactory.createSqlType(SqlTypeName.INTEGER));
+      return typeFactory.createStructType(typeList, fieldNameList);
+    }
+
+    private static java.util.List<SqlTypeFamily> signature() {
+      java.util.List<SqlTypeFamily> sig_family = new java.util.ArrayList<SqlTypeFamily>();
+      sig_family.add(SqlTypeFamily.CURSOR);
+      return sig_family;
+    }
+  }
+
+  public static class DeviceSelectionUdtfAny extends SqlFunction {
+    public DeviceSelectionUdtfAny() {
+      super("CT_DEVICE_SELECTION_UDTF_ANY",
+              SqlKind.OTHER_FUNCTION,
+              null,
+              null,
+              OperandTypes.family(signature()),
+              SqlFunctionCategory.USER_DEFINED_TABLE_FUNCTION);
+    }
+
+    @Override
+    public RelDataType inferReturnType(SqlOperatorBinding opBinding) {
+      final RelDataTypeFactory typeFactory = opBinding.getTypeFactory();
+      java.util.List<RelDataType> typeList = new java.util.ArrayList<RelDataType>();
+      java.util.List<java.lang.String> fieldNameList =
+              new java.util.ArrayList<java.lang.String>();
+      fieldNameList.add("out0");
+      typeList.add(typeFactory.createSqlType(SqlTypeName.INTEGER));
+      return typeFactory.createStructType(typeList, fieldNameList);
+    }
+
+    private static java.util.List<SqlTypeFamily> signature() {
+      java.util.List<SqlTypeFamily> sig_family = new java.util.ArrayList<SqlTypeFamily>();
+      sig_family.add(SqlTypeFamily.CURSOR);
+      return sig_family;
+    }
+  }
+
+  public static class DeviceSelectionUdtfCpu extends SqlFunction {
+    public DeviceSelectionUdtfCpu() {
+      super("CT_DEVICE_SELECTION_UDTF_CPU",
+              SqlKind.OTHER_FUNCTION,
+              null,
+              null,
+              OperandTypes.family(signature()),
+              SqlFunctionCategory.USER_DEFINED_TABLE_FUNCTION);
+    }
+
+    @Override
+    public RelDataType inferReturnType(SqlOperatorBinding opBinding) {
+      final RelDataTypeFactory typeFactory = opBinding.getTypeFactory();
+      java.util.List<RelDataType> typeList = new java.util.ArrayList<RelDataType>();
+      java.util.List<java.lang.String> fieldNameList =
+              new java.util.ArrayList<java.lang.String>();
+      fieldNameList.add("out0");
+      typeList.add(typeFactory.createSqlType(SqlTypeName.INTEGER));
+      return typeFactory.createStructType(typeList, fieldNameList);
+    }
+
+    private static java.util.List<SqlTypeFamily> signature() {
+      java.util.List<SqlTypeFamily> sig_family = new java.util.ArrayList<SqlTypeFamily>();
+      sig_family.add(SqlTypeFamily.CURSOR);
+      return sig_family;
+    }
+  }
+
+  public static class DeviceSelectionUdtfGpu extends SqlFunction {
+    public DeviceSelectionUdtfGpu() {
+      super("CT_DEVICE_SELECTION_UDTF_GPU",
+              SqlKind.OTHER_FUNCTION,
+              null,
+              null,
+              OperandTypes.family(signature()),
+              SqlFunctionCategory.USER_DEFINED_TABLE_FUNCTION);
+    }
+
+    @Override
+    public RelDataType inferReturnType(SqlOperatorBinding opBinding) {
+      final RelDataTypeFactory typeFactory = opBinding.getTypeFactory();
+      java.util.List<RelDataType> typeList = new java.util.ArrayList<RelDataType>();
+      java.util.List<java.lang.String> fieldNameList =
+              new java.util.ArrayList<java.lang.String>();
+      fieldNameList.add("out0");
+      typeList.add(typeFactory.createSqlType(SqlTypeName.INTEGER));
+      return typeFactory.createStructType(typeList, fieldNameList);
+    }
+
+    private static java.util.List<SqlTypeFamily> signature() {
+      java.util.List<SqlTypeFamily> sig_family = new java.util.ArrayList<SqlTypeFamily>();
+      sig_family.add(SqlTypeFamily.CURSOR);
+      return sig_family;
+    }
+  }
+
+  public static class DeviceSelectionUdtfBoth extends SqlFunction {
+    public DeviceSelectionUdtfBoth() {
+      super("CT_DEVICE_SELECTION_UDTF_BOTH",
+              SqlKind.OTHER_FUNCTION,
+              null,
+              null,
+              OperandTypes.family(signature()),
+              SqlFunctionCategory.USER_DEFINED_TABLE_FUNCTION);
+    }
+
+    @Override
+    public RelDataType inferReturnType(SqlOperatorBinding opBinding) {
+      final RelDataTypeFactory typeFactory = opBinding.getTypeFactory();
+      java.util.List<RelDataType> typeList = new java.util.ArrayList<RelDataType>();
+      java.util.List<java.lang.String> fieldNameList =
+              new java.util.ArrayList<java.lang.String>();
+      fieldNameList.add("out0");
       typeList.add(typeFactory.createSqlType(SqlTypeName.INTEGER));
       return typeFactory.createStructType(typeList, fieldNameList);
     }

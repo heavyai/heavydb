@@ -187,9 +187,13 @@ class TableFunction {
 
   bool isRuntime() const { return is_runtime_; }
 
-  bool isGPU() const { return (name_.find("_cpu_") == std::string::npos); }
+  inline bool isGPU() const {
+    return (name_.find("_cpu_", name_.find("__")) == std::string::npos);
+  }
 
-  bool isCPU() const { return (name_.find("_gpu_") == std::string::npos); }
+  inline bool isCPU() const {
+    return (name_.find("_gpu_", name_.find("__")) == std::string::npos);
+  }
 
   std::string toString() const {
     auto result = "TableFunction(" + name_ + ", [";

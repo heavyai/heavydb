@@ -341,12 +341,31 @@ static int match_arguments(const SQLTypeInfo& arg_type,
   return -1;
 }
 
+bool is_valid_identifier(std::string str) {
+  if (!str.size()) {
+    return false;
+  }
+
+  if (!(std::isalpha(str[0]) || str[0] == '_')) {
+    return false;
+  }
+
+  for (size_t i = 1; i < str.size(); i++) {
+    if (!(std::isalnum(str[i]) || str[i] == '_')) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
 }  // namespace
 
 template <typename T>
 T bind_function(std::string name,
                 Analyzer::ExpressionPtrVector func_args,
-                const std::vector<T>& ext_funcs) {
+                const std::vector<T>& ext_funcs,
+                const std::string processor) {
   /* worker function
 
      Template type T must implement the following methods:
@@ -377,6 +396,12 @@ T bind_function(std::string name,
     It is assumed that function_oper and extension functions in
     ext_funcs have the same name.
    */
+
+  if (!is_valid_identifier(name)) {
+    throw NativeExecutionError(
+        "Cannot bind function with invalid UDF/UDTF function name: " + name);
+  }
+
   int minimal_score = std::numeric_limits<int>::max();
   int index = -1;
   int optimal = -1;
@@ -393,6 +418,7 @@ T bind_function(std::string name,
     }
     type_infos.push_back(atype->get_type_info());
   }
+
   for (auto ext_func : ext_funcs) {
     index++;
     auto ext_func_args = ext_func.getInputArgs();
@@ -428,17 +454,27 @@ T bind_function(std::string name,
     /* no extension function found that argument types would match
        with types in `arg_types` */
     auto sarg_types = ExtensionFunctionsWhitelist::toString(type_infos);
+    std::string message;
     if (!ext_funcs.size()) {
-      throw NativeExecutionError("Function " + name + "(" + sarg_types +
-                                 ") not supported.");
+      message = "Function " + name + "(" + sarg_types + ") not supported.";
+      throw ExtensionFunctionBindingError(message);
+    } else {
+      if constexpr (std::is_same_v<T, table_functions::TableFunction>) {
+        message = "Could not bind " + name + "(" + sarg_types + ") to any " + processor +
+                  " UDTF implementation.";
+      } else if constexpr (std::is_same_v<T, ExtensionFunction>) {
+        message = "Could not bind " + name + "(" + sarg_types + ") to any " + processor +
+                  " UDF implementation.";
+      } else {
+        LOG(FATAL) << "bind_function: unknown extension function type "
+                   << typeid(T).name();
+      }
+      message += "\n  Existing extension function implementations:";
+      for (const auto& ext_func : ext_funcs) {
+        message += "\n    " + ext_func.toStringSQL();
+      }
     }
-    std::string choices;
-    for (const auto& ext_func : ext_funcs) {
-      choices += "\n    " + ext_func.toStringSQL();
-    }
-    throw std::runtime_error(
-        "Function " + name + "(" + sarg_types +
-        ") not supported.\n  Existing extension function implementations:" + choices);
+    throw ExtensionFunctionBindingError(message);
   }
   return ext_funcs[optimal];
 }
@@ -446,18 +482,37 @@ T bind_function(std::string name,
 const table_functions::TableFunction bind_table_function(
     std::string name,
     Analyzer::ExpressionPtrVector input_args,
-    const std::vector<table_functions::TableFunction>& table_funcs) {
-  return bind_function<table_functions::TableFunction>(name, input_args, table_funcs);
+    const std::vector<table_functions::TableFunction>& table_funcs,
+    const bool is_gpu) {
+  std::string processor = (is_gpu ? "GPU" : "CPU");
+  return bind_function<table_functions::TableFunction>(
+      name, input_args, table_funcs, processor);
 }
 
 ExtensionFunction bind_function(std::string name,
                                 Analyzer::ExpressionPtrVector func_args) {
   // used in RelAlgTranslator.cpp, first try GPU UDFs, then fall back
   // to CPU UDFs.
-  auto ext_funcs = ExtensionFunctionsWhitelist::get_ext_funcs(name, /* is_gpu= */ true);
-  if (ext_funcs.size() == 0)
-    ext_funcs = ExtensionFunctionsWhitelist::get_ext_funcs(name, /* is_gpu */ false);
-  return bind_function<ExtensionFunction>(name, func_args, ext_funcs);
+  bool is_gpu = true;
+  std::string processor = "GPU";
+  auto ext_funcs = ExtensionFunctionsWhitelist::get_ext_funcs(name, is_gpu);
+  if (!ext_funcs.size()) {
+    is_gpu = false;
+    processor = "CPU";
+    ext_funcs = ExtensionFunctionsWhitelist::get_ext_funcs(name, is_gpu);
+  }
+  try {
+    return bind_function<ExtensionFunction>(name, func_args, ext_funcs, processor);
+  } catch (ExtensionFunctionBindingError& e) {
+    if (is_gpu) {
+      is_gpu = false;
+      processor = "GPU|CPU";
+      ext_funcs = ExtensionFunctionsWhitelist::get_ext_funcs(name, is_gpu);
+      return bind_function<ExtensionFunction>(name, func_args, ext_funcs, processor);
+    } else {
+      throw;
+    }
+  }
 }
 
 ExtensionFunction bind_function(std::string name,
@@ -466,7 +521,8 @@ ExtensionFunction bind_function(std::string name,
   // used below
   std::vector<ExtensionFunction> ext_funcs =
       ExtensionFunctionsWhitelist::get_ext_funcs(name, is_gpu);
-  return bind_function<ExtensionFunction>(name, func_args, ext_funcs);
+  std::string processor = (is_gpu ? "GPU" : "CPU");
+  return bind_function<ExtensionFunction>(name, func_args, ext_funcs, processor);
 }
 
 ExtensionFunction bind_function(const Analyzer::FunctionOper* function_oper,
@@ -487,7 +543,7 @@ const table_functions::TableFunction bind_table_function(
   // used in RelAlgExecutor.cpp
   std::vector<table_functions::TableFunction> table_funcs =
       table_functions::TableFunctionsFactory::get_table_funcs(name, is_gpu);
-  return bind_table_function(name, input_args, table_funcs);
+  return bind_table_function(name, input_args, table_funcs, is_gpu);
 }
 
 bool is_ext_arg_type_array(const ExtArgumentType ext_arg_type) {

@@ -175,8 +175,32 @@ void TableFunctionsFactory::init() {
         "get_max_with_row_offset",
         TableFunctionOutputRowSizer{OutputBufferSizeType::kConstant, 1},
         std::vector<ExtArgumentType>{ExtArgumentType::ColumnInt32},
-        // ExtArgumentType::Int32},
         std::vector<ExtArgumentType>{ExtArgumentType::Int32, ExtArgumentType::Int32});
+    TableFunctionsFactory::add(
+        "ct_device_selection_udtf_any",
+        TableFunctionOutputRowSizer{OutputBufferSizeType::kConstant, 1},
+        std::vector<ExtArgumentType>{ExtArgumentType::ColumnInt32},
+        std::vector<ExtArgumentType>{ExtArgumentType::Int32});
+    TableFunctionsFactory::add(
+        "ct_device_selection_udtf_cpu__cpu_",
+        TableFunctionOutputRowSizer{OutputBufferSizeType::kConstant, 1},
+        std::vector<ExtArgumentType>{ExtArgumentType::ColumnInt32},
+        std::vector<ExtArgumentType>{ExtArgumentType::Int32});
+    TableFunctionsFactory::add(
+        "ct_device_selection_udtf_gpu__gpu_",
+        TableFunctionOutputRowSizer{OutputBufferSizeType::kConstant, 1},
+        std::vector<ExtArgumentType>{ExtArgumentType::ColumnInt32},
+        std::vector<ExtArgumentType>{ExtArgumentType::Int32});
+    TableFunctionsFactory::add(
+        "ct_device_selection_udtf_both__cpu_",
+        TableFunctionOutputRowSizer{OutputBufferSizeType::kConstant, 1},
+        std::vector<ExtArgumentType>{ExtArgumentType::ColumnInt32},
+        std::vector<ExtArgumentType>{ExtArgumentType::Int32});
+    TableFunctionsFactory::add(
+        "ct_device_selection_udtf_both__gpu_",
+        TableFunctionOutputRowSizer{OutputBufferSizeType::kConstant, 1},
+        std::vector<ExtArgumentType>{ExtArgumentType::ColumnInt32},
+        std::vector<ExtArgumentType>{ExtArgumentType::Int32});
   });
 }
 

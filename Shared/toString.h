@@ -42,7 +42,9 @@
 #include <cxxabi.h>
 #include <chrono>
 #include <iostream>
+#include <set>
 #include <sstream>
+#include <tuple>
 #include <type_traits>
 #include <unordered_map>
 #include <unordered_set>
@@ -154,6 +156,8 @@ std::string toString(const T& v) {
     llvm::raw_string_ostream rso(type_str);
     v.print(rso);
     return "(" + rso.str() + ")";
+  } else if constexpr (std::is_same_v<T, llvm::Triple>) {
+    return v.str();
 #endif
   } else if constexpr (std::is_same_v<T, bool>) {
     return v ? "True" : "False";
@@ -237,6 +241,28 @@ std::string toString(const std::unordered_set<T>& v) {
   }
   result += "}";
   return result;
+}
+
+template <typename T>
+std::string toString(const std::set<T>& v) {
+  auto result = std::string("{");
+  size_t i = 0;
+  for (const auto& p : v) {
+    if (i) {
+      result += ", ";
+    }
+    result += toString(p);
+    i++;
+  }
+  result += "}";
+  return result;
+}
+
+template <typename T>
+std::string toString(const std::tuple<T, T>& v) {
+  T left, right;
+  std::tie(left, right) = v;
+  return std::string("(") + toString(left) + ", " + toString(right) + ")";
 }
 
 #endif  //  __cplusplus >= 201703L

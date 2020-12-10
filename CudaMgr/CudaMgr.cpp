@@ -401,3 +401,31 @@ void CudaMgr::checkError(CUresult status) const {
 }
 
 }  // namespace CudaMgr_Namespace
+
+std::string get_cuda_home(void) {
+  static const char* CUDA_DEFAULT_PATH = "/usr/local/cuda";
+  const char* env = nullptr;
+
+  if (!(env = getenv("CUDA_HOME")) && !(env = getenv("CUDA_DIR"))) {
+    // check if the default CUDA directory exists: /usr/local/cuda
+    if (boost::filesystem::exists(boost::filesystem::path(CUDA_DEFAULT_PATH)))
+      env = CUDA_DEFAULT_PATH;
+  }
+
+  if (env == nullptr) {
+    LOG(WARNING) << "Could not find CUDA installation path: environment variables "
+                    "CUDA_HOME or CUDA_DIR are not defined";
+    return "";
+  }
+
+  // check if the CUDA directory is sensible:
+  auto cuda_include_dir = env + std::string("/include");
+  auto cuda_h_file = cuda_include_dir + "/cuda.h";
+  if (!boost::filesystem::exists(boost::filesystem::path(cuda_h_file))) {
+    LOG(WARNING) << "cuda.h does not exist in `" << cuda_include_dir << "`. Discarding `"
+                 << env << "` as CUDA installation path.";
+    return "";
+  }
+
+  return std::string(env);
+}

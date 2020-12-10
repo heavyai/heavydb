@@ -283,7 +283,7 @@ SQLTypeInfo ext_arg_type_to_type_info(const ExtArgumentType ext_arg_type) {
       return SQLTypeInfo(kTEXT, false, kENCODING_DICT);
     default:
       LOG(FATAL) << "ExtArgumentType `" << serialize_type(ext_arg_type)
-                 << "` cannot be converted to SQLTypeInfo. Returning nulltype.";
+                 << "` cannot be converted to SQLTypeInfo.";
   }
   return SQLTypeInfo(kNULLT, false);
 }

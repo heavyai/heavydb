@@ -307,6 +307,11 @@ class QueryMustRunOnCpu : public std::runtime_error {
   QueryMustRunOnCpu() : std::runtime_error("Query must run in cpu mode.") {}
 };
 
+class ParseIRError : public std::runtime_error {
+ public:
+  ParseIRError(const std::string message) : std::runtime_error(message) {}
+};
+
 class SringConstInResultSet : public std::runtime_error {
  public:
   SringConstInResultSet()

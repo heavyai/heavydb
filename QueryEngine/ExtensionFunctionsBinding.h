@@ -37,6 +37,12 @@ namespace Analyzer {
 class FunctionOper;
 }  // namespace Analyzer
 
+class ExtensionFunctionBindingError : public std::runtime_error {
+ public:
+  ExtensionFunctionBindingError(const std::string message)
+      : std::runtime_error(message) {}
+};
+
 ExtensionFunction bind_function(std::string name,
                                 Analyzer::ExpressionPtrVector func_args,
                                 const bool is_gpu);

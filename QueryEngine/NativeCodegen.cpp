@@ -22,6 +22,7 @@
 #include "OutputBufferInitialization.h"
 #include "QueryTemplateGenerator.h"
 
+#include "CudaMgr/CudaMgr.h"
 #include "OSDependent/omnisci_path.h"
 #include "Shared/MathUtils.h"
 #include "StreamingTopN.h"
@@ -121,15 +122,35 @@ void load_geos_dynamic_library() {
 
 namespace {
 
+void throw_parseIR_error(const llvm::SMDiagnostic& parse_error,
+                         std::string src = "",
+                         const bool is_gpu = false) {
+  std::string excname = (is_gpu ? "NVVM IR ParseError: " : "LLVM IR ParseError: ");
+  llvm::raw_string_ostream ss(excname);
+  parse_error.print(src.c_str(), ss, false, false);
+  throw ParseIRError(ss.str());
+}
+
 /* SHOW_DEFINED(<llvm::Module instance>) prints the function names
-   that are defined in the given LLVM Module instance. Useful for
-   debugging.
+   that are defined in the given LLVM Module instance.
+
+   SHOW_FUNCTIONS(<llvm::Module instance>) prints the function names
+   of all used functions in the given LLVM Module
+   instance. Declarations are marked with `[decl]` as a name suffix.
+
+   Useful for debugging.
 */
 
 #define SHOW_DEFINED(MODULE)                                         \
   {                                                                  \
     std::cout << __func__ << "#" << __LINE__ << ": " #MODULE << " "; \
     ::show_defined(MODULE);                                          \
+  }
+
+#define SHOW_FUNCTIONS(MODULE)                                       \
+  {                                                                  \
+    std::cout << __func__ << "#" << __LINE__ << ": " #MODULE << " "; \
+    ::show_functions(MODULE);                                        \
   }
 
 template <typename T = void>
@@ -145,12 +166,81 @@ void show_defined(llvm::Module& module) {
 
 template <typename T = void>
 void show_defined(llvm::Module* module) {
-  show_defined(*module);
+  if (module == nullptr) {
+    std::cout << "is null" << std::endl;
+  } else {
+    show_defined(*module);
+  }
 }
 
 template <typename T = void>
 void show_defined(std::unique_ptr<llvm::Module>& module) {
   show_defined(module.get());
+}
+
+/*
+  scan_function_calls(module, defined, undefined, ignored) computes
+  defined and undefined sets of function names:
+
+  - defined functions are those that are defined in the given module
+
+  - undefined functions are those that are called by defined functions
+    but that are not defined in the given module
+
+  - ignored functions are functions that may be undefined but will not
+    be listed in the set of undefined functions.
+
+   Useful for debugging.
+*/
+template <typename T = void>
+void scan_function_calls(llvm::Function& F,
+                         std::unordered_set<std::string>& defined,
+                         std::unordered_set<std::string>& undefined,
+                         const std::unordered_set<std::string>& ignored) {
+  for (llvm::inst_iterator I = llvm::inst_begin(F), E = llvm::inst_end(F); I != E; ++I) {
+    if (auto* CI = llvm::dyn_cast<llvm::CallInst>(&*I)) {
+      auto* F2 = CI->getCalledFunction();
+      if (F2 != nullptr) {
+        auto F2name = F2->getName().str();
+        if (F2->isDeclaration()) {
+          if (F2name.rfind("__", 0) !=
+                  0  // assume symbols with double underscore are defined
+              && F2name.rfind("llvm.", 0) !=
+                     0  // TODO: this may give false positive for NVVM intrinsics
+              && ignored.find(F2name) == ignored.end()  // not in ignored list
+          ) {
+            undefined.emplace(F2name);
+          }
+        } else {
+          if (defined.find(F2name) == defined.end()) {
+            defined.emplace(F2name);
+            scan_function_calls(*F2, defined, undefined, ignored);
+          }
+        }
+      }
+    }
+  }
+}
+
+template <typename T = void>
+void scan_function_calls(llvm::Module& module,
+                         std::unordered_set<std::string>& defined,
+                         std::unordered_set<std::string>& undefined,
+                         const std::unordered_set<std::string>& ignored) {
+  for (auto& F : module) {
+    if (!F.isDeclaration()) {
+      scan_function_calls(F, defined, undefined, ignored);
+    }
+  }
+}
+
+template <typename T = void>
+std::tuple<std::unordered_set<std::string>, std::unordered_set<std::string>>
+scan_function_calls(llvm::Module& module,
+                    const std::unordered_set<std::string>& ignored = {}) {
+  std::unordered_set<std::string> defined, undefined;
+  scan_function_calls(module, defined, undefined, ignored);
+  return std::make_tuple(defined, undefined);
 }
 
 #if defined(HAVE_CUDA) || !defined(WITH_JIT_DEBUG)
@@ -357,7 +447,6 @@ ExecutionEngineWrapper CodeGenerator::generateNativeCPUCode(
   LOG(ASM) << assemblyForCPU(execution_engine, module);
 
   execution_engine->finalizeObject();
-
   return execution_engine;
 }
 
@@ -784,6 +873,11 @@ std::map<std::string, std::string> get_device_parameters(bool cpu_only) {
     result.insert(std::make_pair("cpu_features", features_str));
   }
 
+  result.insert(std::make_pair("llvm_version",
+                               std::to_string(LLVM_VERSION_MAJOR) + "." +
+                                   std::to_string(LLVM_VERSION_MINOR) + "." +
+                                   std::to_string(LLVM_VERSION_PATCH)));
+
 #ifdef HAVE_CUDA
   if (!cpu_only) {
     int device_count = 0;
@@ -967,9 +1061,15 @@ std::shared_ptr<GpuCompilationContext> CodeGenerator::generateNativeGPUCode(
   module->eraseNamedMetadata(md);
 
   auto cuda_llir = ss.str() + cuda_rt_decls + extension_function_decls(udf_declarations);
-  const auto ptx = generatePTX(
-      cuda_llir, gpu_target.nvptx_target_machine, gpu_target.cgen_state->context_);
-
+  std::string ptx;
+  try {
+    ptx = generatePTX(
+        cuda_llir, gpu_target.nvptx_target_machine, gpu_target.cgen_state->context_);
+  } catch (ParseIRError& e) {
+    LOG(WARNING) << "Failed to generate PTX: " << e.what()
+                 << ". Switching to CPU execution target.";
+    throw QueryMustRunOnCpu();
+  }
   LOG(PTX) << "PTX for the GPU:\n" << ptx << "\nEnd of PTX";
 
   auto cubin_result = ptx_to_cubin(ptx, gpu_target.block_size, gpu_target.cuda_mgr);
@@ -1009,6 +1109,7 @@ std::shared_ptr<CompilationContext> Executor::optimizeAndCodegenGPU(
     const CompilationOptions& co) {
 #ifdef HAVE_CUDA
   auto module = multifrag_query_func->getParent();
+
   CHECK(cuda_mgr);
   CodeCacheKey key{serialize_llvm_object(query_func),
                    serialize_llvm_object(cgen_state_->row_func_)};
@@ -1100,11 +1201,12 @@ std::string CodeGenerator::generatePTX(const std::string& cuda_llir,
                                        llvm::LLVMContext& context) {
   auto mem_buff = llvm::MemoryBuffer::getMemBuffer(cuda_llir, "", false);
 
-  llvm::SMDiagnostic err;
+  llvm::SMDiagnostic parse_error;
 
-  auto module = llvm::parseIR(mem_buff->getMemBufferRef(), err, context);
+  auto module = llvm::parseIR(mem_buff->getMemBufferRef(), parse_error, context);
   if (!module) {
-    LOG(FATAL) << err.getMessage().str();
+    LOG(IR) << "CodeGenerator::generatePTX:NVVM IR:\n" << cuda_llir << "\nEnd of NNVM IR";
+    throw_parseIR_error(parse_error, "generatePTX", /* is_gpu= */ true);
   }
 
   llvm::SmallString<256> code_str;
@@ -1199,21 +1301,7 @@ llvm::Module* read_template_module(llvm::LLVMContext& context) {
 #ifdef HAVE_CUDA
 llvm::Module* read_libdevice_module(llvm::LLVMContext& context) {
   llvm::SMDiagnostic err;
-
-  const char* CUDA_DEFAULT_PATH = "/usr/local/cuda";
-  const char* env = nullptr;
-
-  if (!(env = getenv("CUDA_HOME")) && !(env = getenv("CUDA_DIR"))) {
-    // check if the default CUDA directory exists: /usr/local/cuda
-    if (boost::filesystem::exists(boost::filesystem::path(CUDA_DEFAULT_PATH)))
-      env = CUDA_DEFAULT_PATH;
-  }
-
-  if (env == nullptr) {
-    LOG(WARNING) << "Could not find CUDA installation path: environment variables "
-                    "CUDA_HOME or CUDA_DIR are not defined";
-    return nullptr;
-  }
+  const auto env = get_cuda_home();
 
   boost::filesystem::path cuda_path{env};
   cuda_path /= "nvvm";
@@ -1544,21 +1632,22 @@ bool is_rt_udf_module_present(bool cpu_only) {
   return (cpu_only || rt_udf_gpu_module != nullptr) && (rt_udf_cpu_module != nullptr);
 }
 
-void throw_parseIR_error(const llvm::SMDiagnostic& parse_error, std::string src = "") {
-  std::string excname = "LLVM IR ParseError: ";
-  llvm::raw_string_ostream ss(excname);
-  parse_error.print(src.c_str(), ss, false, false);
-  throw std::runtime_error(ss.str());
-}
-
 void read_udf_gpu_module(const std::string& udf_ir_filename) {
   llvm::SMDiagnostic parse_error;
 
   llvm::StringRef file_name_arg(udf_ir_filename);
-
   udf_gpu_module = llvm::parseIRFile(file_name_arg, parse_error, getGlobalLLVMContext());
+
   if (!udf_gpu_module) {
-    throw_parseIR_error(parse_error, udf_ir_filename);
+    throw_parseIR_error(parse_error, udf_ir_filename, /* is_gpu= */ true);
+  }
+
+  llvm::Triple gpu_triple(udf_gpu_module->getTargetTriple());
+  if (!gpu_triple.isNVPTX()) {
+    LOG(WARNING)
+        << "Expected triple nvptx64-nvidia-cuda for NVVM IR of loadtime UDFs but got "
+        << gpu_triple.str() << ". Disabling the NVVM IR module.";
+    udf_gpu_module = nullptr;
   }
 }
 
@@ -1581,7 +1670,18 @@ void read_rt_udf_gpu_module(const std::string& udf_ir_string) {
 
   rt_udf_gpu_module = llvm::parseIR(*buf, parse_error, getGlobalLLVMContext());
   if (!rt_udf_gpu_module) {
-    throw_parseIR_error(parse_error);
+    LOG(IR) << "read_rt_udf_gpu_module:NVVM IR:\n" << udf_ir_string << "\nEnd of NNVM IR";
+    throw_parseIR_error(parse_error, "", /* is_gpu= */ true);
+  }
+
+  llvm::Triple gpu_triple(rt_udf_gpu_module->getTargetTriple());
+  if (!gpu_triple.isNVPTX()) {
+    LOG(IR) << "read_rt_udf_gpu_module:NVVM IR:\n" << udf_ir_string << "\nEnd of NNVM IR";
+    LOG(WARNING) << "Expected triple nvptx64-nvidia-cuda for NVVM IR but got "
+                 << gpu_triple.str()
+                 << ". Executing runtime UDFs on GPU will be disabled.";
+    rt_udf_gpu_module = nullptr;
+    return;
   }
 }
 
@@ -1593,6 +1693,7 @@ void read_rt_udf_cpu_module(const std::string& udf_ir_string) {
 
   rt_udf_cpu_module = llvm::parseIR(*buf, parse_error, getGlobalLLVMContext());
   if (!rt_udf_cpu_module) {
+    LOG(IR) << "read_rt_udf_cpu_module:LLVM IR:\n" << udf_ir_string << "\nEnd of LLVM IR";
     throw_parseIR_error(parse_error);
   }
 }
@@ -2389,7 +2490,6 @@ Executor::compileWorkUnit(const std::vector<InputTableInfo>& query_infos,
                 func->getLinkage() == llvm::GlobalValue::LinkageTypes::InternalLinkage ||
                 CodeGenerator::alwaysCloneRuntimeFunction(func));
       });
-
   if (co.device_type == ExecutorDeviceType::CPU) {
     if (is_udf_module_present(true)) {
       CodeGenerator::link_udf_module(udf_cpu_module, *rt_module_copy, cgen_state_.get());
@@ -2401,14 +2501,7 @@ Executor::compileWorkUnit(const std::vector<InputTableInfo>& query_infos,
   } else {
     rt_module_copy->setDataLayout(get_gpu_data_layout());
     rt_module_copy->setTargetTriple(get_gpu_target_triple_string());
-
     if (is_udf_module_present()) {
-      llvm::Triple gpu_triple(udf_gpu_module->getTargetTriple());
-
-      if (!gpu_triple.isNVPTX()) {
-        throw QueryMustRunOnCpu();
-      }
-
       CodeGenerator::link_udf_module(udf_gpu_module, *rt_module_copy, cgen_state_.get());
     }
     if (is_rt_udf_module_present()) {

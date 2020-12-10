@@ -145,3 +145,5 @@ EXTENSION_NOINLINE int32_t get_max_with_row_offset(const Column<int>& input_col,
   output_max_row_col[0] = curr_max_row;
   return 1;
 }
+
+#include "TableFunctionsTesting.hpp"

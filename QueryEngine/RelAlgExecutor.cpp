@@ -3883,15 +3883,20 @@ RelAlgExecutor::TableFunctionWorkUnit RelAlgExecutor::createTableFunctionWorkUni
       try {
         return bind_table_function(
             table_func->getFunctionName(), input_exprs_owned, is_gpu);
-      } catch (std::runtime_error& e) {
+      } catch (ExtensionFunctionBindingError& e) {
         LOG(WARNING) << "createTableFunctionWorkUnit[GPU]: " << e.what()
                      << " Redirecting " << table_func->getFunctionName()
                      << " to run on CPU.";
         throw QueryMustRunOnCpu();
       }
     } else {
-      return bind_table_function(
-          table_func->getFunctionName(), input_exprs_owned, is_gpu);
+      try {
+        return bind_table_function(
+            table_func->getFunctionName(), input_exprs_owned, is_gpu);
+      } catch (ExtensionFunctionBindingError& e) {
+        LOG(WARNING) << "createTableFunctionWorkUnit[CPU]: " << e.what();
+        throw;
+      }
     }
   }();
 

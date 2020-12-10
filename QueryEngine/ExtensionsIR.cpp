@@ -229,13 +229,18 @@ llvm::Value* CodeGenerator::codegenFunctionOper(
     if (co.device_type == ExecutorDeviceType::GPU) {
       try {
         return bind_function(function_oper, /* is_gpu= */ true);
-      } catch (std::runtime_error& e) {
+      } catch (ExtensionFunctionBindingError& e) {
         LOG(WARNING) << "codegenFunctionOper[GPU]: " << e.what() << " Redirecting "
                      << function_oper->getName() << " to run on CPU.";
         throw QueryMustRunOnCpu();
       }
     } else {
-      return bind_function(function_oper, /* is_gpu= */ false);
+      try {
+        return bind_function(function_oper, /* is_gpu= */ false);
+      } catch (ExtensionFunctionBindingError& e) {
+        LOG(WARNING) << "codegenFunctionOper[CPU]: " << e.what();
+        throw;
+      }
     }
   }();
 
@@ -669,25 +674,43 @@ void CodeGenerator::codegenBufferArgs(const std::string& ext_func_name,
 
 llvm::StructType* CodeGenerator::createPointStructType(const std::string& udf_func_name,
                                                        size_t param_num) {
-  llvm::Function* udf_func = cgen_state_->module_->getFunction(udf_func_name);
   llvm::Module* module_for_lookup = cgen_state_->module_;
+  llvm::Function* udf_func = module_for_lookup->getFunction(udf_func_name);
 
-  CHECK(udf_func);
+  llvm::StructType* generated_struct_type =
+      llvm::StructType::get(cgen_state_->context_,
+                            {llvm::Type::getInt8PtrTy(cgen_state_->context_),
+                             llvm::Type::getInt64Ty(cgen_state_->context_),
+                             llvm::Type::getInt32Ty(cgen_state_->context_),
+                             llvm::Type::getInt32Ty(cgen_state_->context_),
+                             llvm::Type::getInt32Ty(cgen_state_->context_)},
+                            false);
 
-  llvm::FunctionType* udf_func_type = udf_func->getFunctionType();
-  CHECK(param_num < udf_func_type->getNumParams());
-  llvm::Type* param_type = udf_func_type->getParamType(param_num);
-  CHECK(param_type->isPointerTy());
-  llvm::Type* struct_type = param_type->getPointerElementType();
-  CHECK(struct_type->isStructTy());
-  CHECK(struct_type->getStructNumElements() == 5);
+  if (udf_func) {
+    llvm::FunctionType* udf_func_type = udf_func->getFunctionType();
+    CHECK(param_num < udf_func_type->getNumParams());
+    llvm::Type* param_pointer_type = udf_func_type->getParamType(param_num);
+    CHECK(param_pointer_type->isPointerTy());
+    llvm::Type* param_type = param_pointer_type->getPointerElementType();
+    CHECK(param_type->isStructTy());
+    llvm::StructType* struct_type = llvm::cast<llvm::StructType>(param_type);
+    CHECK(struct_type->getStructNumElements() == 5) << serialize_llvm_object(struct_type);
+    const auto expected_elems = generated_struct_type->elements();
+    const auto current_elems = struct_type->elements();
+    for (size_t i = 0; i < expected_elems.size(); i++) {
+      CHECK_EQ(expected_elems[i], current_elems[i]);
+    }
+    if (struct_type->isLiteral()) {
+      return struct_type;
+    }
 
-  llvm::StringRef struct_name = struct_type->getStructName();
+    llvm::StringRef struct_name = struct_type->getStructName();
+    llvm::StructType* point_type = module_for_lookup->getTypeByName(struct_name);
+    CHECK(point_type);
 
-  llvm::StructType* point_type = module_for_lookup->getTypeByName(struct_name);
-  CHECK(point_type);
-
-  return (point_type);
+    return (point_type);
+  }
+  return generated_struct_type;
 }
 
 void CodeGenerator::codegenGeoPointArgs(const std::string& udf_func_name,
@@ -734,25 +757,45 @@ void CodeGenerator::codegenGeoPointArgs(const std::string& udf_func_name,
 llvm::StructType* CodeGenerator::createLineStringStructType(
     const std::string& udf_func_name,
     size_t param_num) {
-  llvm::Function* udf_func = cgen_state_->module_->getFunction(udf_func_name);
   llvm::Module* module_for_lookup = cgen_state_->module_;
+  llvm::Function* udf_func = module_for_lookup->getFunction(udf_func_name);
 
-  CHECK(udf_func);
+  llvm::StructType* generated_struct_type =
+      llvm::StructType::get(cgen_state_->context_,
+                            {llvm::Type::getInt8PtrTy(cgen_state_->context_),
+                             llvm::Type::getInt64Ty(cgen_state_->context_),
+                             llvm::Type::getInt32Ty(cgen_state_->context_),
+                             llvm::Type::getInt32Ty(cgen_state_->context_),
+                             llvm::Type::getInt32Ty(cgen_state_->context_)},
+                            false);
 
-  llvm::FunctionType* udf_func_type = udf_func->getFunctionType();
-  CHECK(param_num < udf_func_type->getNumParams());
-  llvm::Type* param_type = udf_func_type->getParamType(param_num);
-  CHECK(param_type->isPointerTy());
-  llvm::Type* struct_type = param_type->getPointerElementType();
-  CHECK(struct_type->isStructTy());
-  CHECK(struct_type->getStructNumElements() == 5);
+  if (udf_func) {
+    llvm::FunctionType* udf_func_type = udf_func->getFunctionType();
+    CHECK(param_num < udf_func_type->getNumParams());
+    llvm::Type* param_pointer_type = udf_func_type->getParamType(param_num);
+    CHECK(param_pointer_type->isPointerTy());
+    llvm::Type* param_type = param_pointer_type->getPointerElementType();
+    CHECK(param_type->isStructTy());
+    llvm::StructType* struct_type = llvm::cast<llvm::StructType>(param_type);
+    CHECK(struct_type->isStructTy());
+    CHECK(struct_type->getStructNumElements() == 5);
 
-  llvm::StringRef struct_name = struct_type->getStructName();
+    const auto expected_elems = generated_struct_type->elements();
+    const auto current_elems = struct_type->elements();
+    for (size_t i = 0; i < expected_elems.size(); i++) {
+      CHECK_EQ(expected_elems[i], current_elems[i]);
+    }
+    if (struct_type->isLiteral()) {
+      return struct_type;
+    }
 
-  llvm::StructType* line_string_type = module_for_lookup->getTypeByName(struct_name);
-  CHECK(line_string_type);
+    llvm::StringRef struct_name = struct_type->getStructName();
+    llvm::StructType* line_string_type = module_for_lookup->getTypeByName(struct_name);
+    CHECK(line_string_type);
 
-  return (line_string_type);
+    return (line_string_type);
+  }
+  return generated_struct_type;
 }
 
 void CodeGenerator::codegenGeoLineStringArgs(const std::string& udf_func_name,
@@ -799,25 +842,49 @@ void CodeGenerator::codegenGeoLineStringArgs(const std::string& udf_func_name,
 
 llvm::StructType* CodeGenerator::createPolygonStructType(const std::string& udf_func_name,
                                                          size_t param_num) {
-  llvm::Function* udf_func = cgen_state_->module_->getFunction(udf_func_name);
   llvm::Module* module_for_lookup = cgen_state_->module_;
+  llvm::Function* udf_func = module_for_lookup->getFunction(udf_func_name);
 
-  CHECK(udf_func);
+  llvm::StructType* generated_struct_type =
+      llvm::StructType::get(cgen_state_->context_,
+                            {llvm::Type::getInt8PtrTy(cgen_state_->context_),
+                             llvm::Type::getInt64Ty(cgen_state_->context_),
+                             llvm::Type::getInt32PtrTy(cgen_state_->context_),
+                             llvm::Type::getInt64Ty(cgen_state_->context_),
+                             llvm::Type::getInt32Ty(cgen_state_->context_),
+                             llvm::Type::getInt32Ty(cgen_state_->context_),
+                             llvm::Type::getInt32Ty(cgen_state_->context_)},
+                            false);
 
-  llvm::FunctionType* udf_func_type = udf_func->getFunctionType();
-  CHECK(param_num < udf_func_type->getNumParams());
-  llvm::Type* param_type = udf_func_type->getParamType(param_num);
-  CHECK(param_type->isPointerTy());
-  llvm::Type* struct_type = param_type->getPointerElementType();
-  CHECK(struct_type->isStructTy());
-  CHECK(struct_type->getStructNumElements() == 7);
+  if (udf_func) {
+    llvm::FunctionType* udf_func_type = udf_func->getFunctionType();
+    CHECK(param_num < udf_func_type->getNumParams());
+    llvm::Type* param_pointer_type = udf_func_type->getParamType(param_num);
+    CHECK(param_pointer_type->isPointerTy());
+    llvm::Type* param_type = param_pointer_type->getPointerElementType();
+    CHECK(param_type->isStructTy());
+    llvm::StructType* struct_type = llvm::cast<llvm::StructType>(param_type);
 
-  llvm::StringRef struct_name = struct_type->getStructName();
+    CHECK(struct_type->isStructTy());
+    CHECK(struct_type->getStructNumElements() == 7);
 
-  llvm::StructType* polygon_type = module_for_lookup->getTypeByName(struct_name);
-  CHECK(polygon_type);
+    const auto expected_elems = generated_struct_type->elements();
+    const auto current_elems = struct_type->elements();
+    for (size_t i = 0; i < expected_elems.size(); i++) {
+      CHECK_EQ(expected_elems[i], current_elems[i]);
+    }
+    if (struct_type->isLiteral()) {
+      return struct_type;
+    }
 
-  return (polygon_type);
+    llvm::StringRef struct_name = struct_type->getStructName();
+
+    llvm::StructType* polygon_type = module_for_lookup->getTypeByName(struct_name);
+    CHECK(polygon_type);
+
+    return (polygon_type);
+  }
+  return generated_struct_type;
 }
 
 void CodeGenerator::codegenGeoPolygonArgs(const std::string& udf_func_name,
@@ -879,22 +946,45 @@ llvm::StructType* CodeGenerator::createMultiPolygonStructType(
   llvm::Function* udf_func = cgen_state_->module_->getFunction(udf_func_name);
   llvm::Module* module_for_lookup = cgen_state_->module_;
 
-  CHECK(udf_func);
+  llvm::StructType* generated_struct_type =
+      llvm::StructType::get(cgen_state_->context_,
+                            {llvm::Type::getInt8PtrTy(cgen_state_->context_),
+                             llvm::Type::getInt64Ty(cgen_state_->context_),
+                             llvm::Type::getInt32PtrTy(cgen_state_->context_),
+                             llvm::Type::getInt64Ty(cgen_state_->context_),
+                             llvm::Type::getInt32PtrTy(cgen_state_->context_),
+                             llvm::Type::getInt64Ty(cgen_state_->context_),
+                             llvm::Type::getInt32Ty(cgen_state_->context_),
+                             llvm::Type::getInt32Ty(cgen_state_->context_),
+                             llvm::Type::getInt32Ty(cgen_state_->context_)},
+                            false);
 
-  llvm::FunctionType* udf_func_type = udf_func->getFunctionType();
-  CHECK(param_num < udf_func_type->getNumParams());
-  llvm::Type* param_type = udf_func_type->getParamType(param_num);
-  CHECK(param_type->isPointerTy());
-  llvm::Type* struct_type = param_type->getPointerElementType();
-  CHECK(struct_type->isStructTy());
-  CHECK(struct_type->getStructNumElements() == 9);
+  if (udf_func) {
+    llvm::FunctionType* udf_func_type = udf_func->getFunctionType();
+    CHECK(param_num < udf_func_type->getNumParams());
+    llvm::Type* param_pointer_type = udf_func_type->getParamType(param_num);
+    CHECK(param_pointer_type->isPointerTy());
+    llvm::Type* param_type = param_pointer_type->getPointerElementType();
+    CHECK(param_type->isStructTy());
+    llvm::StructType* struct_type = llvm::cast<llvm::StructType>(param_type);
+    CHECK(struct_type->isStructTy());
+    CHECK(struct_type->getStructNumElements() == 9);
+    const auto expected_elems = generated_struct_type->elements();
+    const auto current_elems = struct_type->elements();
+    for (size_t i = 0; i < expected_elems.size(); i++) {
+      CHECK_EQ(expected_elems[i], current_elems[i]);
+    }
+    if (struct_type->isLiteral()) {
+      return struct_type;
+    }
+    llvm::StringRef struct_name = struct_type->getStructName();
 
-  llvm::StringRef struct_name = struct_type->getStructName();
+    llvm::StructType* polygon_type = module_for_lookup->getTypeByName(struct_name);
+    CHECK(polygon_type);
 
-  llvm::StructType* polygon_type = module_for_lookup->getTypeByName(struct_name);
-  CHECK(polygon_type);
-
-  return (polygon_type);
+    return (polygon_type);
+  }
+  return generated_struct_type;
 }
 
 void CodeGenerator::codegenGeoMultiPolygonArgs(const std::string& udf_func_name,

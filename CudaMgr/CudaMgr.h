@@ -245,3 +245,5 @@ class CudaMgr {
 };
 
 }  // Namespace CudaMgr_Namespace
+
+extern std::string get_cuda_home(void);

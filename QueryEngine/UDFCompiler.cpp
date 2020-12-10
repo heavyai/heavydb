@@ -15,6 +15,7 @@
  */
 
 #include "UDFCompiler.h"
+#include "CudaMgr/CudaMgr.h"
 
 #include <clang/AST/AST.h>
 #include <clang/AST/ASTConsumer.h>
@@ -240,7 +241,6 @@ int UdfCompiler::compileFromCommandLine(const std::vector<std::string>& command_
 
   llvm::SmallVector<std::pair<int, const driver::Command*>, 10> failing_commands;
   int res = the_driver->ExecuteCompilation(*compilation, failing_commands);
-
   if (res < 0) {
     for (const std::pair<int, const driver::Command*>& p : failing_commands) {
       if (p.first) {
@@ -261,16 +261,31 @@ int UdfCompiler::compileToGpuByteCode(const char* udf_file_name, bool cpu_mode) 
   // If we are not compiling for cpu mode, then target the gpu
   // Otherwise assume we can generic ir that will
   // be translated to gpu code during target code generation
+#ifdef HAVE_CUDA
   if (!cpu_mode) {
     command_line.emplace_back("--cuda-gpu-arch=" +
                               CudaMgr_Namespace::CudaMgr::deviceArchToSM(target_arch_));
     command_line.emplace_back("--cuda-device-only");
     command_line.emplace_back("-xcuda");
+    command_line.emplace_back("--no-cuda-version-check");
+    const auto cuda_path = get_cuda_home();
+    if (cuda_path != "") {
+      command_line.emplace_back("--cuda-path=" + cuda_path);
+    }
   }
+#endif
 
   command_line.emplace_back(udf_file_name);
 
-  return compileFromCommandLine(command_line);
+  // clean up from previous runs
+  boost::filesystem::remove(gpu_out_filename);
+  auto status = compileFromCommandLine(command_line);
+  // make sure that compilation actually succeeded by checking the
+  // output file:
+  if (!status && !boost::filesystem::exists(gpu_out_filename)) {
+    status = 2;
+  }
+  return status;
 }
 
 int UdfCompiler::compileToCpuByteCode(const char* udf_file_name) {
@@ -284,7 +299,6 @@ int UdfCompiler::compileToCpuByteCode(const char* udf_file_name) {
                                         cpu_out_filename,
                                         "-std=c++14",
                                         udf_file_name};
-
   return compileFromCommandLine(command_line);
 }
 
@@ -402,6 +416,13 @@ int UdfCompiler::compileForGpu() {
   // If gpu compilation fails but cpu compilation has succeeded, try compiling
   // for the cpu with the assumption the user does not have the CUDA toolkit
   // installed
+  //
+  // Update: while this approach may work for some cases, it will not
+  // work in general as evidenced by the current UdfTest using arrays:
+  // generation of PTX will fail. Hence, read_udf_gpu_module is now
+  // rejecting LLVM IR with a non-nvptx target triple. However, we
+  // will still try cpu compilation but with the aim of detecting any
+  // code errors.
   if (gpu_compile_result != 0) {
     gpu_compile_result = compileToGpuByteCode(udf_file_name_.c_str(), true);
   }
@@ -430,7 +451,6 @@ int UdfCompiler::compileUdf() {
       readCpuCompiledModule();
 #ifdef HAVE_CUDA
       gpu_compile_result = compileForGpu();
-
       if (gpu_compile_result == 0) {
         readGpuCompiledModule();
       } else {
