@@ -83,9 +83,20 @@ The following `cmake`/`ccmake` options can enable/disable different features:
 - `-DENABLE_TESTS=on` - Build unit tests. Default is `on`.
 - `-DENABLE_TSAN=off` - Enable thread sanitizer. Default is `off`.
 - `-DENABLE_CODE_COVERAGE=off` - Enable code coverage symbols (clang only). Default is `off`.
+- `-DENABLE_DBE=on` - Enable embedded engine build. Default is `off`.
 - `-DMAPD_DOCS_DOWNLOAD=on` - Download the latest master build of the documentation / `docs.mapd.com`. Default is `off`.
                               **Note:** this is a >50MB download.
 - `-DPREFER_STATIC_LIBS=off` - Static link dependencies, if available. Default is `off`.
+
+# Building in conda environment
+
+`conda env create -f scripts/mapd-deps-conda-dev-env.yml --force`
+`conda activate omnisci-dev`
+`bash scripts/conda/build-install-all.sh`
+
+By default, tests are not included in the build. To include tests use:
+
+`RUN_TESTS=1 bash scripts/conda/build-install-all.sh`
 
 # Testing
 
@@ -94,6 +105,10 @@ OmniSciDB uses [Google Test](https://github.com/google/googletest) as its main t
 The `sanity_tests` target runs the most common tests. If using Makefiles to build, the tests may be run using:
 
     make sanity_tests
+
+Unit tests can be run with (requires tests to be enabled):
+
+`cd build && make all_tests`
 
 ## AddressSanitizer
 
