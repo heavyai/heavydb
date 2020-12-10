@@ -19,6 +19,8 @@
 #include <limits>
 #include <type_traits>
 
+/* `../` is required for UDFCompiler */
+#include "../Shared/InlineNullValues.h"
 #include "../Shared/funcannotations.h"
 
 #define EXTENSION_INLINE extern "C" ALWAYS_INLINE DEVICE
@@ -151,6 +153,9 @@ struct Column {
   DEVICE T& operator[](const unsigned int index) const { return ptr[index]; }
   DEVICE int64_t getSize() const { return sz; }
   DEVICE void setSize(int64_t size) { this->sz = size; }
+
+  DEVICE bool isNull(int64_t index) const { return is_null(ptr[index]); }
+  DEVICE void setNull(int64_t index) { set_null(ptr[index]); }
 
 #ifdef HAVE_TOSTRING
 

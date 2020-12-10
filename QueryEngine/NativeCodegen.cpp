@@ -24,6 +24,7 @@
 
 #include "CudaMgr/CudaMgr.h"
 #include "OSDependent/omnisci_path.h"
+#include "Shared/InlineNullValues.h"
 #include "Shared/MathUtils.h"
 #include "StreamingTopN.h"
 
@@ -864,6 +865,36 @@ std::map<std::string, std::string> get_device_parameters(bool cpu_only) {
   result.insert(
       std::make_pair("cpu_cores", std::to_string(llvm::sys::getHostNumPhysicalCores())));
   result.insert(std::make_pair("cpu_threads", std::to_string(cpu_threads())));
+
+  std::string null_values;
+  null_values += "boolean1:" + std::to_string(serialized_null_value<bool>()) + ";";
+  null_values += "boolean8:" + std::to_string(serialized_null_value<int8_t>()) + ";";
+  null_values += "int8:" + std::to_string(serialized_null_value<int8_t>()) + ";";
+  null_values += "int16:" + std::to_string(serialized_null_value<int16_t>()) + ";";
+  null_values += "int32:" + std::to_string(serialized_null_value<int32_t>()) + ";";
+  null_values += "int64:" + std::to_string(serialized_null_value<int64_t>()) + ";";
+  null_values += "uint8:" + std::to_string(serialized_null_value<uint8_t>()) + ";";
+  null_values += "uint16:" + std::to_string(serialized_null_value<uint16_t>()) + ";";
+  null_values += "uint32:" + std::to_string(serialized_null_value<uint32_t>()) + ";";
+  null_values += "uint64:" + std::to_string(serialized_null_value<uint64_t>()) + ";";
+  null_values += "float32:" + std::to_string(serialized_null_value<float>()) + ";";
+  null_values += "float64:" + std::to_string(serialized_null_value<double>()) + ";";
+  null_values +=
+      "Array<boolean8>:" + std::to_string(serialized_null_value<int8_t, true>()) + ";";
+  null_values +=
+      "Array<int8>:" + std::to_string(serialized_null_value<int8_t, true>()) + ";";
+  null_values +=
+      "Array<int16>:" + std::to_string(serialized_null_value<int16_t, true>()) + ";";
+  null_values +=
+      "Array<int32>:" + std::to_string(serialized_null_value<int32_t, true>()) + ";";
+  null_values +=
+      "Array<int64>:" + std::to_string(serialized_null_value<int64_t, true>()) + ";";
+  null_values +=
+      "Array<float32>:" + std::to_string(serialized_null_value<float, true>()) + ";";
+  null_values +=
+      "Array<float64>:" + std::to_string(serialized_null_value<double, true>()) + ";";
+
+  result.insert(std::make_pair("null_values", null_values));
 
   llvm::StringMap<bool> cpu_features;
   if (llvm::sys::getHostCPUFeatures(cpu_features)) {

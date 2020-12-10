@@ -17,11 +17,64 @@
 #ifndef INLINENULLVALUES_H
 #define INLINENULLVALUES_H
 
-#include "Logger/Logger.h"
+#include "../Logger/Logger.h"
+#include "funcannotations.h"
+
+#include <cfloat>
+#include <cstdint>
+#include <limits>
+
+#define NULL_BOOLEAN INT8_MIN
+#define NULL_TINYINT INT8_MIN
+#define NULL_SMALLINT INT16_MIN
+#define NULL_INT INT32_MIN
+#define NULL_BIGINT INT64_MIN
+#define NULL_FLOAT FLT_MIN
+#define NULL_DOUBLE DBL_MIN
+
+#define NULL_ARRAY_BOOLEAN (INT8_MIN + 1)
+#define NULL_ARRAY_TINYINT (INT8_MIN + 1)
+#define NULL_ARRAY_SMALLINT (INT16_MIN + 1)
+#define NULL_ARRAY_INT (INT32_MIN + 1)
+#define NULL_ARRAY_BIGINT (INT64_MIN + 1)
+#define NULL_ARRAY_FLOAT (FLT_MIN * 2.0)
+#define NULL_ARRAY_DOUBLE (DBL_MIN * 2.0)
+
+#define NULL_ARRAY_COMPRESSED_32 0x80000000U
+
+#if !(defined(__CUDACC__) || defined(NO_BOOST))
+#define CONSTEXPR constexpr
+#else
+#define CONSTEXPR
+#endif
+
+template <class T>
+constexpr inline int64_t inline_int_null_value() {
+  return std::is_signed<T>::value ? std::numeric_limits<T>::min()
+                                  : std::numeric_limits<T>::max();
+}
+
+template <class T>
+constexpr inline int64_t inline_int_null_array_value() {
+  return std::is_signed<T>::value ? std::numeric_limits<T>::min() + 1
+                                  : std::numeric_limits<T>::max() - 1;
+  // TODO: null_array values in signed types would step on max valid value
+  // in fixlen unsigned arrays, the max valid value may need to be lowered.
+}
+
+template <class T>
+constexpr inline int64_t max_valid_int_value() {
+  return std::is_signed<T>::value ? std::numeric_limits<T>::max()
+                                  : std::numeric_limits<T>::max() - 1;
+}
 
 template <typename T>
 constexpr inline T inline_fp_null_value() {
+#if !(defined(__CUDACC__) || defined(NO_BOOST))
   LOG(FATAL) << "Only float or double overloads should be called.";
+#else
+  LOG(FATAL);
+#endif
   return T{};
 }
 
@@ -37,7 +90,11 @@ constexpr inline double inline_fp_null_value<double>() {
 
 template <typename T>
 T inline_fp_null_array_value() {
+#if !(defined(__CUDACC__) || defined(NO_BOOST))
   LOG(FATAL) << "Only float or double overloads should be called.";
+#else
+  LOG(FATAL);
+#endif
   return T{};
 }
 
@@ -51,6 +108,7 @@ constexpr inline double inline_fp_null_array_value<double>() {
   return NULL_ARRAY_DOUBLE;
 }
 
+#ifndef NO_BOOST
 template <typename SQL_TYPE_INFO>
 inline int64_t inline_int_null_val(const SQL_TYPE_INFO& ti) {
   auto type = ti.get_type();
@@ -237,6 +295,73 @@ inline int64_t inline_fixed_encoding_null_array_val(const SQL_TYPE_INFO& ti) {
   //   -(1L << (ti.get_comp_param() - 1))
   // NULL_ARRAY sentinel would have to be the value just above NULL:
   return -(1L << (ti.get_comp_param() - 1)) + 1;
+}
+
+#endif  // NO_BOOST
+
+#include <type_traits>
+
+namespace serialize_detail {
+template <int overload>
+struct IntType;
+template <>
+struct IntType<1> {
+  using type = uint8_t;
+};
+template <>
+struct IntType<2> {
+  using type = uint16_t;
+};
+template <>
+struct IntType<4> {
+  using type = uint32_t;
+};
+template <>
+struct IntType<8> {
+  using type = uint64_t;
+};
+}  // namespace serialize_detail
+
+template <typename T, bool array = false>
+CONSTEXPR DEVICE inline typename serialize_detail::IntType<sizeof(T)>::type
+serialized_null_value() {
+  using TT = typename serialize_detail::IntType<sizeof(T)>::type;
+  T nv = 0;
+  if
+    CONSTEXPR(std::is_floating_point<T>::value) {
+      if
+        CONSTEXPR(array) { nv = inline_fp_null_array_value<T>(); }
+      else {
+        nv = inline_fp_null_value<T>();
+      }
+    }
+  else if
+    CONSTEXPR(std::is_integral<T>::value) {
+      if
+        CONSTEXPR(array) { nv = inline_int_null_array_value<T>(); }
+      else {
+        nv = inline_int_null_value<T>();
+      }
+    }
+#if !(defined(__CUDACC__) || defined(NO_BOOST))
+  else {
+    CHECK(false) << "Serializing null values of floating point or integral types only is "
+                    "supported.";
+  }
+#endif
+  return *(TT*)(&nv);
+}
+
+template <typename T, bool array = false>
+CONSTEXPR DEVICE inline bool is_null(const T& value) {
+  using TT = typename serialize_detail::IntType<sizeof(T)>::type;
+  return serialized_null_value<T, array>() == *(TT*)(&value);
+}
+
+template <typename T, bool array = false>
+CONSTEXPR DEVICE inline void set_null(T& value) {
+  using TT = typename serialize_detail::IntType<sizeof(T)>::type;
+  *(TT*)(&value) = serialized_null_value<T, array>();
 }
 
 #endif

@@ -37,7 +37,7 @@
 #ifndef SHARED_LOGGER_H
 #define SHARED_LOGGER_H
 
-#ifndef __CUDACC__
+#if !(defined(__CUDACC__) || defined(NO_BOOST))
 
 #include <boost/config.hpp>
 #include <boost/filesystem.hpp>
@@ -98,7 +98,7 @@ static_assert(Severity::_NSEVERITIES == SeverityNames.size(),
 static_assert(Severity::_NSEVERITIES == SeveritySymbols.size(),
               "Size of SeveritySymbols must equal number of Severity levels.");
 
-#ifndef __CUDACC__
+#if !(defined(__CUDACC__) || defined(NO_BOOST))
 
 using Channels = std::set<Channel>;
 
