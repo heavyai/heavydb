@@ -36,7 +36,8 @@ void TestProcessSignalHandler::addShutdownCallback(
 }
 
 void TestProcessSignalHandler::shutdownSubsystemsAndExit(int signal_number) {
-  std::cerr << "Interrupt signal (" << signal_number << ") received." << std::endl;
+  std::cerr << __func__ << ": Interrupt signal (" << signal_number << ") received."
+            << std::endl;
 
   // Perform additional shutdowns
   for (auto& callback : shutdown_callbacks_) {
@@ -47,11 +48,13 @@ void TestProcessSignalHandler::shutdownSubsystemsAndExit(int signal_number) {
   logger::shutdown();
 
   // Terminate program
-  if (signal_number == SIGTERM) {
-    std::exit(EXIT_SUCCESS);
-  } else {
-    std::exit(signal_number);
-  }
+  // TODO: Why convert SIGTERM to EXIT_SUCCESS?
+  int const exit_code = signal_number == SIGTERM ? EXIT_SUCCESS : signal_number;
+#ifdef __APPLE__
+  std::exit(exit_code);
+#else
+  std::quick_exit(exit_code);
+#endif
 }
 
 bool TestProcessSignalHandler::has_registered_signal_handler_{false};
