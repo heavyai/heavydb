@@ -24,6 +24,7 @@
 #include "Shared/sqltypes.h"
 
 class OGRGeometry;
+class OGRCoordinateTransformation;
 
 namespace Geospatial {
 
@@ -71,6 +72,8 @@ class GeoBase {
   int32_t getBestPlanarSRID() const;
   bool transform(int32_t srid0, int32_t srid1);
   bool transform(SQLTypeInfo& ti);
+  static std::shared_ptr<OGRCoordinateTransformation> getTransformation(int32_t srid0,
+                                                                        int32_t srid1);
 
   virtual bool operator==(const GeoBase& other) const;
 

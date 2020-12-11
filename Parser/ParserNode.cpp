@@ -4117,7 +4117,8 @@ void CopyTableStmt::execute(const Catalog_Namespace::SessionInfo& session,
         if (copy_params.file_type == import_export::FileType::DELIMITED) {
           copy_params.source_srid = srid;
         } else {
-          throw std::runtime_error("'source_srid' option can only be used on csv files");
+          throw std::runtime_error(
+              "'source_srid' option can only be used on csv/tsv files");
         }
       } else {
         throw std::runtime_error("Invalid option for COPY: " + *p->get_name());

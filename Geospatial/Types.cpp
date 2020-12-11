@@ -17,6 +17,7 @@
 #include "Geospatial/Types.h"
 
 #include <limits>
+#include <mutex>
 
 #include <gdal.h>
 #include <ogr_geometry.h>
@@ -109,6 +110,10 @@ int process_poly_ring(OGRLinearRing* ring,
 }  // namespace
 
 namespace Geospatial {
+
+std::mutex transformation_map_mutex_;
+std::map<std::tuple<int32_t, int32_t>, std::shared_ptr<OGRCoordinateTransformation>>
+    transformation_map_;
 
 std::string GeoTypesError::OGRErrorToStr(const int ogr_err) {
   switch (ogr_err) {
@@ -299,7 +304,14 @@ int32_t GeoBase::getBestPlanarSRID() const {
   return SRID_WORLD_MERCATOR;
 }
 
-bool GeoBase::transform(int32_t srid0, int32_t srid1) {
+std::shared_ptr<OGRCoordinateTransformation> GeoBase::getTransformation(int32_t srid0,
+                                                                        int32_t srid1) {
+  std::lock_guard<std::mutex> guard(transformation_map_mutex_);
+  std::tuple<int32_t, int32_t> key{srid0, srid1};
+  auto it = transformation_map_.find(key);
+  if (it != transformation_map_.end()) {
+    return it->second;
+  }
   auto setSpatialReference = [&](OGRSpatialReference* sr, int32_t srid) -> bool {
     OGRErr status = OGRERR_NONE;
     if (srid == 4326) {
@@ -352,19 +364,25 @@ bool GeoBase::transform(int32_t srid0, int32_t srid1) {
 
   OGRSpatialReference sr0;
   if (!setSpatialReference(&sr0, srid0)) {
-    return false;
+    return nullptr;
   }
   OGRSpatialReference sr1;
   if (!setSpatialReference(&sr1, srid1)) {
-    return false;
+    return nullptr;
   }
   // GDAL 3 allows specification of advanced transformations in
   // OGRCoordinateTransformationOptions, including multi-step pipelines.
   // GDAL 3 would be required to handle Lambert zone proj4 strings.
   // Using a simple transform for now.
-  std::unique_ptr<OGRCoordinateTransformation> coordinate_transformation(
-      OGRCreateCoordinateTransformation(&sr0, &sr1));
-  if (coordinate_transformation == nullptr) {
+  std::shared_ptr<OGRCoordinateTransformation> new_transformation;
+  new_transformation.reset(OGRCreateCoordinateTransformation(&sr0, &sr1));
+  transformation_map_[key] = new_transformation;
+  return new_transformation;
+}
+
+bool GeoBase::transform(int32_t srid0, int32_t srid1) {
+  auto coordinate_transformation = getTransformation(srid0, srid1);
+  if (!coordinate_transformation) {
     return false;
   }
   auto ogr_status = geom_->transform(coordinate_transformation.get());
