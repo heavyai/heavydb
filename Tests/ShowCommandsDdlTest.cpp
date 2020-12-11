@@ -1022,7 +1022,7 @@ TEST_F(ShowDiskCacheUsageTest, NoTables) {
 }
 
 TEST_F(ShowDiskCacheUsageTest, NoTablesFiltered) {
-  queryAndAssertException("SHOW DISK CACHE USAGE FOR foreign_table;",
+  queryAndAssertException("SHOW DISK CACHE USAGE foreign_table;",
                           "Exception: Can not show disk cache usage for table: "
                           "foreign_table. Table does not exist.");
 }
@@ -1036,7 +1036,7 @@ TEST_F(ShowDiskCacheUsageTest, MultipleTablesFiltered) {
   sql("SELECT * FROM " + foreign_table2 + ";");
 
   sqlAndCompareResult(
-      "SHOW DISK CACHE USAGE FOR " + foreign_table1 + ", " + foreign_table3 + ";",
+      "SHOW DISK CACHE USAGE " + foreign_table1 + ", " + foreign_table3 + ";",
       {{foreign_table1, minimum_total_size}, {foreign_table3, empty_mgr_size}});
 }
 
@@ -1411,7 +1411,7 @@ TEST_F(ShowTableDetailsTest, CommandWithTableNames) {
   sql("create table test_table_3 (c1 int) with (partitions = 'REPLICATED');");
 
   TQueryResult result;
-  sql(result, "show table details for test_table_1, test_table_3;");
+  sql(result, "show table details test_table_1, test_table_3;");
   assertExpectedHeaders(result);
 
   // clang-format off
@@ -1488,7 +1488,7 @@ TEST_F(ShowTableDetailsTest, InaccessibleTable) {
   sql("create table test_table_3 (c1 int) with (partitions = 'REPLICATED');");
 
   loginTestUser();
-  queryAndAssertException("show table details for test_table_1;",
+  queryAndAssertException("show table details test_table_1;",
                           "Exception: Unable to show table details for table: "
                           "test_table_1. Table does not exist.");
 }
@@ -1499,7 +1499,7 @@ TEST_F(ShowTableDetailsTest, NonExistentTable) {
       "(shard_count = 2);");
   sql("create table test_table_3 (c1 int) with (partitions = 'REPLICATED');");
 
-  queryAndAssertException("show table details for test_table_4;",
+  queryAndAssertException("show table details test_table_4;",
                           "Exception: Unable to show table details for table: "
                           "test_table_4. Table does not exist.");
 }
@@ -1552,7 +1552,7 @@ TEST_F(ShowTableDetailsTest, FsiTableSpecified) {
       "(file_path = '" +
       boost::filesystem::canonical("../../Tests/FsiDataFiles/0.csv").string() + "');");
 
-  queryAndAssertException("show table details for test_foreign_table;",
+  queryAndAssertException("show table details test_foreign_table;",
                           "Exception: SHOW TABLE DETAILS is not supported for foreign "
                           "tables. Table name: test_foreign_table.");
 }
@@ -1560,7 +1560,7 @@ TEST_F(ShowTableDetailsTest, FsiTableSpecified) {
 TEST_F(ShowTableDetailsTest, TemporaryTableSpecified) {
   sql("create temporary table test_temp_table (c1 int, c2 text);");
 
-  queryAndAssertException("show table details for test_temp_table;",
+  queryAndAssertException("show table details test_temp_table;",
                           "Exception: SHOW TABLE DETAILS is not supported for temporary "
                           "tables. Table name: test_temp_table.");
 }
@@ -1569,7 +1569,7 @@ TEST_F(ShowTableDetailsTest, ArrowFsiTableSpecified) {
   sql("create dataframe test_arrow_table (c1 int) from 'CSV:" +
       boost::filesystem::canonical("../../Tests/FsiDataFiles/0.csv").string() + "';");
 
-  queryAndAssertException("show table details for test_arrow_table;",
+  queryAndAssertException("show table details test_arrow_table;",
                           "Exception: SHOW TABLE DETAILS is not supported for temporary "
                           "tables. Table name: test_arrow_table.");
 }
@@ -1578,7 +1578,7 @@ TEST_F(ShowTableDetailsTest, ViewSpecified) {
   sql("create table test_table_1 (c1 int, c2 text);");
   sql("create view test_view as select * from test_table_1;");
 
-  queryAndAssertException("show table details for test_view;",
+  queryAndAssertException("show table details test_view;",
                           "Exception: Unable to show table details for table: "
                           "test_view. Table does not exist.");
 }

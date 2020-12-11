@@ -63,7 +63,7 @@ public class ShowCommandTest extends DDLTest {
     final JsonObject expectedJsonObject =
             getJsonFromFile("show_table_details_for_tables.json");
     final TPlanResult result =
-            processDdlCommand("SHOW TABLE DETAILS FOR test_table_1, test_table_2;");
+            processDdlCommand("SHOW TABLE DETAILS test_table_1, test_table_2;");
     final JsonObject actualJsonObject =
             gson.fromJson(result.plan_result, JsonObject.class);
     assertEquals(expectedJsonObject, actualJsonObject);
@@ -82,8 +82,7 @@ public class ShowCommandTest extends DDLTest {
   public void showDiskCacheUsageFor() throws Exception {
     final JsonObject expectedJsonObject =
             getJsonFromFile("show_disk_cache_usage_for.json");
-    final TPlanResult result =
-            processDdlCommand("SHOW DISK CACHE USAGE FOR table1, table2;");
+    final TPlanResult result = processDdlCommand("SHOW DISK CACHE USAGE table1, table2;");
     final JsonObject actualJsonObject =
             gson.fromJson(result.plan_result, JsonObject.class);
     assertEquals(expectedJsonObject, actualJsonObject);
