@@ -316,7 +316,7 @@ ParseFileRegionResult parse_file_regions(
     parse_file_request.file_offset = file_regions[i].first_row_file_offset;
     parse_file_request.process_row_count = file_regions[i].row_count;
 
-    result = parse_buffer(parse_file_request);
+    result = parse_buffer(parse_file_request, i == end_index);
     CHECK_EQ(file_regions[i].row_count, result.row_count);
     load_file_region_result.row_count += result.row_count;
   }
@@ -729,7 +729,7 @@ void scan_metadata(MetadataScanMultiThreadingParams& multi_threading_params,
             import_buffer->clear();
           }
         }
-        auto result = parse_buffer(request);
+        auto result = parse_buffer(request, true);
         int fragment_id = row_index / request.getMaxFragRows();
         process_data_blocks(multi_threading_params,
                             fragment_id,

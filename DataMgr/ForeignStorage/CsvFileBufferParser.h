@@ -340,7 +340,7 @@ bool skip_column_import(ParseBufferRequest& request, int column_idx) {
  * Parses a given CSV file buffer and returns data blocks for each column in the
  * file along with metadata related to rows and row offsets within the buffer.
  */
-ParseBufferResult parse_buffer(ParseBufferRequest& request) {
+ParseBufferResult parse_buffer(ParseBufferRequest& request, bool convert_data_blocks) {
   CHECK(request.buffer);
   size_t begin = import_export::delimited_parser::find_beginning(
       request.buffer.get(), request.begin_pos, request.end_pos, request.copy_params);
@@ -442,8 +442,10 @@ ParseBufferResult parse_buffer(ParseBufferRequest& request) {
   ParseBufferResult result{};
   result.row_offsets = row_offsets;
   result.row_count = row_count;
-  result.column_id_to_data_blocks_map =
-      convert_import_buffers_to_data_blocks(request.import_buffers);
+  if (convert_data_blocks) {
+    result.column_id_to_data_blocks_map =
+        convert_import_buffers_to_data_blocks(request.import_buffers);
+  }
   return result;
 }
 

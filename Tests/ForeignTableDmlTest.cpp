@@ -554,19 +554,21 @@ TEST_P(CacheControllingSelectQueryTest, DefaultLocalParquetServer) {
 // Create table with multiple fragments with file buffers less than size of a
 // fragment Includes both fixed and variable length data
 TEST_P(CacheControllingSelectQueryTest, MultipleDataBlocksPerFragment) {
-  const auto& query =
-      getCreateForeignTableQuery("(i INTEGER,  txt TEXT, txt_2 TEXT ENCODING NONE)",
-                                 {{"buffer_size", "25"}, {"fragment_size", "64"}},
-                                 "0_255",
-                                 "csv");
+  const auto& query = getCreateForeignTableQuery(
+      "(i INTEGER,  txt TEXT, txt_2 TEXT ENCODING NONE, txt_arr TEXT[])",
+      {{"buffer_size", "25"}, {"fragment_size", "64"}},
+      "0_255",
+      "csv");
   sql(query);
 
   // Check that data is correct
   {
     std::vector<std::vector<TargetValue>> expected_result_set;
     for (int number = 0; number < 256; number++) {
-      expected_result_set.push_back(
-          {i(number), std::to_string(number), std::to_string(number)});
+      expected_result_set.push_back({i(number),
+                                     std::to_string(number),
+                                     std::to_string(number),
+                                     array({std::to_string(number)})});
     }
     TQueryResult result;
     sql(result, "SELECT * FROM test_foreign_table ORDER BY i;");
@@ -577,8 +579,10 @@ TEST_P(CacheControllingSelectQueryTest, MultipleDataBlocksPerFragment) {
   {
     std::vector<std::vector<TargetValue>> expected_result_set;
     for (int number = 128; number < 256; number++) {
-      expected_result_set.push_back(
-          {i(number), std::to_string(number), std::to_string(number)});
+      expected_result_set.push_back({i(number),
+                                     std::to_string(number),
+                                     std::to_string(number),
+                                     array({std::to_string(number)})});
     }
     TQueryResult result;
     sql(result, "SELECT * FROM test_foreign_table  WHERE i >= 128 ORDER BY i;");
@@ -587,8 +591,10 @@ TEST_P(CacheControllingSelectQueryTest, MultipleDataBlocksPerFragment) {
   {
     std::vector<std::vector<TargetValue>> expected_result_set;
     for (int number = 0; number < 128; number++) {
-      expected_result_set.push_back(
-          {i(number), std::to_string(number), std::to_string(number)});
+      expected_result_set.push_back({i(number),
+                                     std::to_string(number),
+                                     std::to_string(number),
+                                     array({std::to_string(number)})});
     }
     TQueryResult result;
     sql(result, "SELECT * FROM test_foreign_table  WHERE i < 128 ORDER BY i;");
@@ -950,14 +956,14 @@ TEST_F(SelectQueryTest, DirectoryWithDifferentSchema_DifferentNumberOfColumns) {
 
 TEST_F(SelectQueryTest, SchemaMismatch_CSV_Multithreaded) {
   const auto& query = getCreateForeignTableQuery(
-      "(i INTEGER,  txt TEXT, txt_2 TEXT ENCODING NONE, txt_3 TEXT)",
+      "(i INTEGER,  txt TEXT, txt_2 TEXT ENCODING NONE, txt_arr TEXT[], txt_3 TEXT)",
       {{"buffer_size", "25"}},
       "0_255",
       "csv");
   sql(query);
   queryAndAssertException("SELECT * FROM test_foreign_table ORDER BY i;",
-                          "Exception: Mismatched number of logical columns: (expected 4 "
-                          "columns, has 3): in file '" +
+                          "Exception: Mismatched number of logical columns: (expected 5 "
+                          "columns, has 4): in file '" +
                               getDataFilesPath() + "0_255.csv'");
 }
 
@@ -3411,7 +3417,7 @@ TEST_F(ForeignStorageCacheQueryTest, WideLogicalColumns) {
 TEST_F(ForeignStorageCacheQueryTest, CacheWithLimitCachesWholeChunks) {
   sqlDropForeignTable();
   sqlCreateForeignTable(
-      "(i INTEGER,  txt TEXT, txt_2 TEXT ENCODING NONE)", "0_255", "csv");
+      "(i INTEGER,  txt TEXT, txt_2 TEXT ENCODING NONE, txt_arr TEXT[])", "0_255", "csv");
   sqlAndCompareResult("SELECT SUM(i) FROM (SELECT i FROM " + default_table_name +
                           " ORDER BY i LIMIT 10);",
                       {{i(45)}});
