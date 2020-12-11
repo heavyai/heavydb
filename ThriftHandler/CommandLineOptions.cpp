@@ -317,28 +317,32 @@ void CommandLineOptions::fillOptions() {
                               ->default_value(g_enable_experimental_string_functions)
                               ->implicit_value(true),
                           "Enable experimental string functions.");
-#ifdef ENABLE_FSI
   help_desc.add_options()(
       "enable-fsi",
       po::value<bool>(&g_enable_fsi)->default_value(g_enable_fsi)->implicit_value(true),
       "Enable foreign storage interface.");
-  help_desc.add_options()("encryption-key-store",
-                          po::value<std::string>(&encryption_key_store_path),
-                          "Path to directory where encryption related keys will reside.");
-  help_desc.add_options()("disk-cache-level",
-                          po::value<std::string>(&(disk_cache_level))
-                              ->default_value("fsi")
-                              ->implicit_value("fsi"),
-                          "Specify level of disk cache.  Valid options are 'fsi', "
-                          "'non_fsi, 'none', and 'all'.");
   help_desc.add_options()("disk-cache-path",
                           po::value<std::string>(&disk_cache_config.path),
                           "Specify the path for the disk cache.");
   help_desc.add_options()(
       "disk-cache-size-limit",
-      po::value<std::size_t>(&(disk_cache_config.size_limit)),
+      po::value<uint64_t>(&(disk_cache_config.size_limit)),
       "Specify the maximum size of the the disk cache per table in bytes.");
-#endif  // ENABLE_FSI
+
+#ifdef ENABLE_GENERAL_DISK_CACHE
+  help_desc.add_options()(
+      "disk-cache-level",
+      po::value<std::string>(&(disk_cache_level))->default_value("foreign_tables"),
+      "Specify level of disk cache. Valid options are 'foreign_tables', "
+      "'local_tables', 'none', and 'all'.");
+#else
+  help_desc.add_options()(
+      "disk-cache-level",
+      po::value<std::string>(&(disk_cache_level))->default_value("foreign_tables"),
+      "Specify level of disk cache. Valid options are 'foreign_tables' "
+      "and 'none'.");
+#endif  // ENABLE_GENERAL_DISK_CACHE
+
   help_desc.add_options()(
       "enable-interoperability",
       po::value<bool>(&g_enable_interop)
@@ -782,7 +786,7 @@ void CommandLineOptions::validate() {
   ddl_utils::FilePathBlacklist::addToBlacklist(base_path + "/mapd_data");
   ddl_utils::FilePathBlacklist::addToBlacklist(base_path + "/mapd_log");
 
-  if (disk_cache_level == "fsi") {
+  if (disk_cache_level == "foreign_tables") {
     if (g_enable_fsi) {
       disk_cache_config.enabled_level = DiskCacheLevel::fsi;
       LOG(INFO) << "Disk cache enabled for foreign tables only";
@@ -790,19 +794,29 @@ void CommandLineOptions::validate() {
       LOG(INFO) << "Cannot enable disk cache for fsi when fsi is disabled.  Defaulted to "
                    "disk cache disabled";
     }
+#ifdef ENABLE_GENERAL_DISK_CACHE
   } else if (disk_cache_level == "all") {
     disk_cache_config.enabled_level = DiskCacheLevel::all;
     LOG(INFO) << "Disk cache enabled for all tables";
-  } else if (disk_cache_level == "non_fsi") {
+  } else if (disk_cache_level == "local_tables") {
     disk_cache_config.enabled_level = DiskCacheLevel::non_fsi;
     LOG(INFO) << "Disk cache enabled for non-FSI tables";
+#endif  // ENABLE_GENERAL_DISK_CACHE
   } else if (disk_cache_level == "none") {
     disk_cache_config.enabled_level = DiskCacheLevel::none;
     LOG(INFO) << "Disk cache disabled";
   } else {
-    disk_cache_config.enabled_level = DiskCacheLevel::none;
-    LOG(INFO) << "Non-recognized value for disk-cache-level {" << disk_cache_level
-              << "}.  Defaulted to disk cache disabled";
+#ifdef ENABLE_GENERAL_DISK_CACHE
+    throw std::runtime_error{
+        "Unexpected \"disk-cache-level\" value: " + disk_cache_level +
+        ". Valid options are 'foreign_tables', "
+        "'local_tables', 'none', and 'all'."};
+#else
+    throw std::runtime_error{
+        "Unexpected \"disk-cache-level\" value: " + disk_cache_level +
+        ". Valid options are 'foreign_tables' and "
+        "'none'."};
+#endif  // ENABLE_GENERAL_DISK_CACHE
   }
 
   if (disk_cache_config.path.empty()) {

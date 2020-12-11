@@ -16,6 +16,7 @@
 
 #pragma once
 
+#if defined(HAVE_AWS_S3) && defined(ENABLE_S3_FSI)
 #include <map>
 
 #include <arrow/filesystem/filesystem.h>
@@ -68,3 +69,4 @@ class ParquetS3FileSystem {
   }
 };
 }  // namespace foreign_storage
+#endif  //  defined(HAVE_AWS_S3) && defined(ENABLE_S3_FSI)

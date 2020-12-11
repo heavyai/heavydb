@@ -16,6 +16,7 @@
 
 #pragma once
 
+#if defined(HAVE_AWS_S3) && defined(ENABLE_S3_FSI)
 #include <aws/core/Aws.h>
 #include <aws/s3/S3Client.h>
 
@@ -102,3 +103,4 @@ class CsvReaderS3 : public CsvReader {
 };
 
 }  // namespace foreign_storage
+#endif  //  defined(HAVE_AWS_S3) && defined(ENABLE_S3_FSI)

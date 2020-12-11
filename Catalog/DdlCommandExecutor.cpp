@@ -868,22 +868,30 @@ AlterForeignTableCommand::AlterForeignTableCommand(
     : DdlCommand(ddl_payload, session_ptr) {
   CHECK(ddl_payload.HasMember("tableName"));
   CHECK(ddl_payload["tableName"].IsString());
-  CHECK(ddl_payload.HasMember("options"));
-  CHECK(ddl_payload["options"].IsObject());
+  CHECK(ddl_payload.HasMember("alterType"));
+  CHECK(ddl_payload["alterType"].IsString());
+  if (ddl_payload["alterType"] == "RENAME_TABLE") {
+    CHECK(ddl_payload.HasMember("newTableName"));
+    CHECK(ddl_payload["newTableName"].IsString());
+  } else if (ddl_payload["alterType"] == "RENAME_COLUMN") {
+    CHECK(ddl_payload.HasMember("oldColumnName"));
+    CHECK(ddl_payload["oldColumnName"].IsString());
+    CHECK(ddl_payload.HasMember("newColumnName"));
+    CHECK(ddl_payload["newColumnName"].IsString());
+  } else if (ddl_payload["alterType"] == "ALTER_OPTIONS") {
+    CHECK(ddl_payload.HasMember("options"));
+    CHECK(ddl_payload["options"].IsObject());
+  } else {
+    UNREACHABLE() << "Not a valid alter foreign table command: "
+                  << ddl_payload["alterType"].GetString();
+  }
 }
 
 void AlterForeignTableCommand::execute(TQueryResult& _return) {
   auto& catalog = session_ptr_->getCatalog();
   const std::string& table_name = ddl_payload_["tableName"].GetString();
-  const TableDescriptor* td{nullptr};
-  std::unique_ptr<lockmgr::TableSchemaLockContainer<lockmgr::WriteLock>> td_with_lock;
-
-  td_with_lock = std::make_unique<lockmgr::TableSchemaLockContainer<lockmgr::WriteLock>>(
-      lockmgr::TableSchemaLockContainer<lockmgr::WriteLock>::acquireTableDescriptor(
-          catalog, table_name, false));
-  CHECK(td_with_lock);
-  td = (*td_with_lock)();
-  CHECK(td);
+  auto [td, td_with_lock] =
+      get_table_descriptor_with_lock<lockmgr::WriteLock>(catalog, table_name, false);
 
   ddl_utils::validate_table_type(td, ddl_utils::TableType::FOREIGN_TABLE, "ALTER");
 
@@ -895,14 +903,64 @@ void AlterForeignTableCommand::execute(TQueryResult& _return) {
 
   auto table_data_write_lock =
       lockmgr::TableDataLockMgr::getWriteLockForTable(catalog, table_name);
+  auto foreign_table = dynamic_cast<const foreign_storage::ForeignTable*>(td);
+  CHECK(foreign_table);
 
+  std::string alter_type = ddl_payload_["alterType"].GetString();
+  if (alter_type == "RENAME_TABLE") {
+    renameTable(foreign_table);
+  } else if (alter_type == "RENAME_COLUMN") {
+    renameColumn(foreign_table);
+  } else if (alter_type == "ALTER_OPTIONS") {
+    alterOptions(foreign_table);
+  }
+}
+
+void AlterForeignTableCommand::renameTable(
+    const foreign_storage::ForeignTable* foreign_table) {
+  auto& cat = session_ptr_->getCatalog();
+  const std::string& table_name = ddl_payload_["tableName"].GetString();
+  const std::string& new_table_name = ddl_payload_["newTableName"].GetString();
+  if (cat.getForeignTable(new_table_name)) {
+    throw std::runtime_error("Foreign table with name \"" + table_name +
+                             "\" can not be renamed to \"" + new_table_name + "\". " +
+                             "A different table with name \"" + new_table_name +
+                             "\" already exists.");
+  }
+  cat.renameTable(foreign_table, new_table_name);
+}
+
+void AlterForeignTableCommand::renameColumn(
+    const foreign_storage::ForeignTable* foreign_table) {
+  auto& cat = session_ptr_->getCatalog();
+  const std::string& table_name = ddl_payload_["tableName"].GetString();
+  const std::string& old_column_name = ddl_payload_["oldColumnName"].GetString();
+  const std::string& new_column_name = ddl_payload_["newColumnName"].GetString();
+  auto column = cat.getMetadataForColumn(foreign_table->tableId, old_column_name);
+  if (!column) {
+    throw std::runtime_error("Column with name \"" + old_column_name +
+                             "\" can not be renamed to \"" + new_column_name + "\". " +
+                             "Column with name \"" + old_column_name +
+                             "\" does not exist.");
+  }
+  if (cat.getMetadataForColumn(foreign_table->tableId, new_column_name)) {
+    throw std::runtime_error("Column with name \"" + old_column_name +
+                             "\" can not be renamed to \"" + new_column_name + "\". " +
+                             "A column with name \"" + new_column_name +
+                             "\" already exists.");
+  }
+  cat.renameColumn(foreign_table, column, new_column_name);
+}
+
+void AlterForeignTableCommand::alterOptions(
+    const foreign_storage::ForeignTable* foreign_table) {
+  const std::string& table_name = ddl_payload_["tableName"].GetString();
+  auto& cat = session_ptr_->getCatalog();
   auto new_options_map =
       foreign_storage::ForeignTable::create_options_map(ddl_payload_["options"]);
-  auto table = dynamic_cast<const foreign_storage::ForeignTable*>(td);
-  CHECK(table);
-  table->validateSupportedOptions(new_options_map);
+  foreign_table->validateSupportedOptions(new_options_map);
   foreign_storage::ForeignTable::validate_alter_options(new_options_map);
-  catalog.setForeignTableOptions(table_name, new_options_map, false);
+  cat.setForeignTableOptions(table_name, new_options_map, false);
 }
 
 ShowDiskCacheUsageCommand::ShowDiskCacheUsageCommand(
@@ -939,23 +997,21 @@ std::vector<std::string> ShowDiskCacheUsageCommand::getFilteredTableNames() {
   }
 }
 
-ExecutionResult ShowDiskCacheUsageCommand::execute() {
+void ShowDiskCacheUsageCommand::execute(TQueryResult& _return) {
   auto cat_ptr = session_ptr_->get_catalog_ptr();
   auto table_names = getFilteredTableNames();
+
+  set_headers(
+      _return,
+      std::vector<std::string>{"table name", "current cache size", "max cache size"});
+  _return.row_set.row_desc[1].col_type.type = TDatumType::type::BIGINT;
+  _return.row_set.row_desc[2].col_type.type = TDatumType::type::BIGINT;
 
   const auto disk_cache = cat_ptr->getDataMgr().getPersistentStorageMgr()->getDiskCache();
   if (!disk_cache) {
     throw std::runtime_error{"Disk cache not enabled.  Cannot show disk cache usage."};
   }
-
-  // label_infos -> column labels
-  std::vector<std::string> labels{"table name", "current cache size"};
-  std::vector<TargetMetaInfo> label_infos;
-  label_infos.emplace_back(labels[0], SQLTypeInfo(kTEXT, true));
-  label_infos.emplace_back(labels[1], SQLTypeInfo(kBIGINT, true));
-
-  std::vector<RelLogicalValues::RowValues> logical_values;
-
+  const auto max_cache_size = disk_cache->getLimit();
   for (auto& table_name : table_names) {
     auto [td, td_with_lock] =
         get_table_descriptor_with_lock<lockmgr::ReadLock>(*cat_ptr, table_name, false);
@@ -963,20 +1019,16 @@ ExecutionResult ShowDiskCacheUsageCommand::execute() {
     const auto mgr = dynamic_cast<File_Namespace::FileMgr*>(
         disk_cache->getGlobalFileMgr()->findFileMgr(cat_ptr->getDatabaseId(),
                                                     td->tableId));
-
     // NOTE: This size does not include datawrapper metadata that is on disk.
     // If a mgr does not exist it means a cache is not enabled/created for the given
     // table.
     auto table_cache_size = mgr ? mgr->getTotalFileSize() : 0;
 
-    // logical_values -> table data
-    logical_values.emplace_back(RelLogicalValues::RowValues{});
-    logical_values.back().emplace_back(genLiteralStr(table_name));
-    logical_values.back().emplace_back(genLiteralBigInt(table_cache_size));
+    _return.row_set.columns[0].data.str_col.emplace_back(table_name);
+    _return.row_set.columns[1].data.int_col.emplace_back(table_cache_size);
+    _return.row_set.columns[2].data.int_col.emplace_back(max_cache_size);
+
+    for (size_t i = 0; i < _return.row_set.columns.size(); i++)
+      _return.row_set.columns[i].nulls.emplace_back(false);
   }
-
-  std::shared_ptr<ResultSet> rSet = std::shared_ptr<ResultSet>(
-      ResultSetLogicalValuesBuilder::create(label_infos, logical_values));
-
-  return ExecutionResult(rSet, label_infos);
 }

@@ -620,56 +620,6 @@ void Catalog::createFsiSchemasAndDefaultServers() {
   sqliteConnector_.query("END TRANSACTION");
 }
 
-void Catalog::dropFsiSchemasAndTables() {
-  std::vector<foreign_storage::ForeignTable> foreign_tables{};
-  {
-    cat_sqlite_lock sqlite_lock(this);
-    sqliteConnector_.query("BEGIN TRANSACTION");
-    try {
-      sqliteConnector_.query(
-          "SELECT name FROM sqlite_master WHERE type='table' AND "
-          "name IN ('omnisci_foreign_servers', 'omnisci_foreign_tables', "
-          "'omnisci_user_mappings')");
-      if (sqliteConnector_.getNumRows() > 0) {
-        sqliteConnector_.query(
-            "SELECT tableid, name, isview, storage_type FROM mapd_tables "
-            "WHERE storage_type = 'FOREIGN_TABLE'");
-        auto num_rows = sqliteConnector_.getNumRows();
-        for (size_t r = 0; r < num_rows; r++) {
-          foreign_storage::ForeignTable foreign_table{};
-          foreign_table.tableId = sqliteConnector_.getData<int>(r, 0);
-          foreign_table.tableName = sqliteConnector_.getData<std::string>(r, 1);
-          foreign_table.isView = sqliteConnector_.getData<bool>(r, 2);
-          foreign_table.storageType = sqliteConnector_.getData<std::string>(r, 3);
-          foreign_tables.emplace_back(foreign_table);
-        }
-        for (auto& foreign_table : foreign_tables) {
-          tableDescriptorMap_[to_upper(foreign_table.tableName)] = &foreign_table;
-          tableDescriptorMapById_[foreign_table.tableId] = &foreign_table;
-          executeDropTableSqliteQueries(&foreign_table);
-        }
-        sqliteConnector_.query("SELECT COUNT(*) FROM omnisci_foreign_tables");
-        CHECK_EQ(size_t(1), sqliteConnector_.getNumRows());
-        CHECK_EQ(0, sqliteConnector_.getData<int>(0, 0));
-
-        sqliteConnector_.query("DROP TABLE omnisci_foreign_tables");
-        sqliteConnector_.query("DROP TABLE omnisci_foreign_servers");
-      }
-    } catch (std::exception& e) {
-      sqliteConnector_.query("ROLLBACK TRANSACTION");
-      throw;
-    }
-    sqliteConnector_.query("END TRANSACTION");
-  }
-
-  for (auto& foreign_table : foreign_tables) {
-    SysCatalog::instance().revokeDBObjectPrivilegesFromAll(
-        DBObject(foreign_table.tableName, TableDBObjectType), this);
-    tableDescriptorMap_.erase(to_upper(foreign_table.tableName));
-    tableDescriptorMapById_.erase(foreign_table.tableId);
-  }
-}
-
 const std::string Catalog::getForeignServerSchema(bool if_not_exists) {
   return "CREATE TABLE " + (if_not_exists ? std::string{"IF NOT EXISTS "} : "") +
          "omnisci_foreign_servers(id integer primary key, name text unique, " +
@@ -901,11 +851,8 @@ void Catalog::CheckAndExecuteMigrations() {
   updateDeletedColumnIndicator();
   updateFrontendViewsToDashboards();
   recordOwnershipOfObjectsInObjectPermissions();
-
   if (g_enable_fsi) {
     createFsiSchemasAndDefaultServers();
-  } else {
-    dropFsiSchemasAndTables();
   }
 }
 
@@ -958,8 +905,7 @@ void Catalog::buildMaps() {
   for (size_t r = 0; r < numRows; ++r) {
     TableDescriptor* td;
     const auto& storage_type = sqliteConnector_.getData<string>(r, 17);
-    if (!storage_type.empty() &&
-        (!g_enable_fsi || storage_type != StorageType::FOREIGN_TABLE)) {
+    if (!storage_type.empty() && storage_type != StorageType::FOREIGN_TABLE) {
       const auto table_id = sqliteConnector_.getData<int>(r, 0);
       const auto& table_name = sqliteConnector_.getData<string>(r, 1);
       LOG(FATAL) << "Unable to read Catalog metadata: storage type is currently not a "

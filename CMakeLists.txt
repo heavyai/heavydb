@@ -576,9 +576,14 @@ else()
   set(PROFILER_LIBS "")
 endif()
 
-option(ENABLE_FSI "Enable Foreign Storage Interface" OFF)
-if(ENABLE_FSI)
-  add_definitions("-DENABLE_FSI")
+option(ENABLE_S3_FSI "Enable Foreign Storage Interface for S3 Use Cases" OFF)
+if(ENABLE_S3_FSI)
+  add_definitions("-DENABLE_S3_FSI")
+endif()
+
+option(ENABLE_GENERAL_DISK_CACHE "Enable use of disk cache for persisted tables" OFF)
+if(ENABLE_GENERAL_DISK_CACHE)
+  add_definitions("-DENABLE_GENERAL_DISK_CACHE")
 endif()
 
 add_subdirectory(SqliteConnector)

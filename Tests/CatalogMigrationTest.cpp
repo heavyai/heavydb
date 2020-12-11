@@ -136,7 +136,7 @@ TEST_F(FsiSchemaTest, FsiTablesAreCreatedWhenFsiIsEnabled) {
   assertFsiTablesExist();
 }
 
-TEST_F(FsiSchemaTest, FsiTablesAreDroppedWhenFsiIsDisabled) {
+TEST_F(FsiSchemaTest, FsiTablesAreNotDroppedWhenFsiIsDisabled) {
   assertFsiTablesDoNotExist();
 
   g_enable_fsi = true;
@@ -145,7 +145,7 @@ TEST_F(FsiSchemaTest, FsiTablesAreDroppedWhenFsiIsDisabled) {
 
   g_enable_fsi = false;
   initCatalog();
-  assertFsiTablesDoNotExist();
+  assertFsiTablesExist();
 }
 
 class ForeignTablesTest : public DBHandlerTestFixture {
@@ -180,7 +180,7 @@ class ForeignTablesTest : public DBHandlerTestFixture {
   }
 };
 
-TEST_F(ForeignTablesTest, ForeignTablesAreDroppedWhenFsiIsDisabled) {
+TEST_F(ForeignTablesTest, ForeignTablesAreNotDroppedWhenFsiIsDisabled) {
   const auto file_path =
       boost::filesystem::canonical("../../Tests/FsiDataFiles/example_1.csv").string();
   sql("CREATE FOREIGN TABLE test_foreign_table (c1 int) SERVER omnisci_local_csv "
@@ -197,7 +197,7 @@ TEST_F(ForeignTablesTest, ForeignTablesAreDroppedWhenFsiIsDisabled) {
   resetCatalog();
   loginAdmin();
 
-  ASSERT_EQ(nullptr, getCatalog().getMetadataForTable("test_foreign_table", false));
+  ASSERT_NE(nullptr, getCatalog().getMetadataForTable("test_foreign_table", false));
   ASSERT_NE(nullptr, getCatalog().getMetadataForTable("test_table", false));
   ASSERT_NE(nullptr, getCatalog().getMetadataForTable("test_view", false));
 }

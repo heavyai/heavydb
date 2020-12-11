@@ -13,6 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+#if defined(HAVE_AWS_S3) && defined(ENABLE_S3_FSI)
 #include <aws/core/auth/AWSCredentialsProvider.h>
 #include <aws/s3/model/GetObjectRequest.h>
 #include <aws/s3/model/ListObjectsV2Request.h>
@@ -357,3 +358,4 @@ void MultiS3Reader::checkForMoreRows(size_t file_offset,
 }
 
 }  // namespace foreign_storage
+#endif  //  defined(HAVE_AWS_S3) && defined(ENABLE_S3_FSI)
