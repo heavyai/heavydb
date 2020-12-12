@@ -224,8 +224,13 @@ void SortBaselineIntegersTestImpl(const bool desc) {
       std::make_shared<RowSetMemoryOwner>(Executor::getArenaBlockSize());
   const int64_t upper_bound = 200;
   const int64_t lower_bound = 1;
-  std::unique_ptr<ResultSet> rs(new ResultSet(
-      target_infos, ExecutorDeviceType::CPU, query_mem_desc, row_set_mem_owner, nullptr));
+  std::unique_ptr<ResultSet> rs(new ResultSet(target_infos,
+                                              ExecutorDeviceType::CPU,
+                                              query_mem_desc,
+                                              row_set_mem_owner,
+                                              nullptr,
+                                              0,
+                                              0));
   auto storage = rs->allocateStorage();
   fill_storage_buffer_baseline_sort_int<K>(storage->getUnderlyingBuffer(),
                                            target_infos,
@@ -235,7 +240,7 @@ void SortBaselineIntegersTestImpl(const bool desc) {
   std::list<Analyzer::OrderEntry> order_entries;
   order_entries.emplace_back(3, desc, false);
   const size_t top_n = 5;
-  rs->sort(order_entries, top_n);
+  rs->sort(order_entries, top_n, nullptr);
   check_sorted<int64_t>(*rs, desc ? upper_bound : lower_bound, top_n, desc);
 }
 
@@ -265,7 +270,9 @@ TEST(SortBaseline, Floats) {
                                                   ExecutorDeviceType::CPU,
                                                   query_mem_desc,
                                                   row_set_mem_owner,
-                                                  nullptr));
+                                                  nullptr,
+                                                  0,
+                                                  0));
       auto storage = rs->allocateStorage();
       fill_storage_buffer_baseline_sort_fp(storage->getUnderlyingBuffer(),
                                            target_infos,
@@ -275,7 +282,7 @@ TEST(SortBaseline, Floats) {
       std::list<Analyzer::OrderEntry> order_entries;
       order_entries.emplace_back(tle_no, desc, false);
       const size_t top_n = 5;
-      rs->sort(order_entries, top_n);
+      rs->sort(order_entries, top_n, nullptr);
       check_sorted<float>(*rs, desc ? upper_bound : 1, top_n, desc);
     }
   }
@@ -293,7 +300,9 @@ TEST(SortBaseline, FloatsNotNull) {
                                                   ExecutorDeviceType::CPU,
                                                   query_mem_desc,
                                                   row_set_mem_owner,
-                                                  nullptr));
+                                                  nullptr,
+                                                  0,
+                                                  0));
       auto storage = rs->allocateStorage();
       fill_storage_buffer_baseline_sort_fp(storage->getUnderlyingBuffer(),
                                            target_infos,
@@ -303,7 +312,7 @@ TEST(SortBaseline, FloatsNotNull) {
       std::list<Analyzer::OrderEntry> order_entries;
       order_entries.emplace_back(tle_no, desc, false);
       const size_t top_n = 5;
-      rs->sort(order_entries, top_n);
+      rs->sort(order_entries, top_n, nullptr);
       check_sorted<float>(*rs, desc ? upper_bound : 1, top_n, desc);
     }
   }

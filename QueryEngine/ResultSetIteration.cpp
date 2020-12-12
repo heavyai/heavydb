@@ -794,7 +794,7 @@ TargetValue build_string_array_target_value(
     const int dict_id,
     const bool translate_strings,
     std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
-    const Executor* executor) {
+    const Catalog_Namespace::Catalog* catalog) {
   std::vector<ScalarTargetValue> values;
   CHECK_EQ(size_t(0), buff_sz % sizeof(int32_t));
   const size_t num_elems = buff_sz / sizeof(int32_t);
@@ -810,7 +810,8 @@ TargetValue build_string_array_target_value(
           values.emplace_back(sdp->getString(string_id));
         } else {
           values.emplace_back(NullableString(
-              executor->getStringDictionaryProxy(dict_id, row_set_mem_owner, false)
+              row_set_mem_owner
+                  ->getOrAddStringDictProxy(dict_id, /*with_generation=*/false, catalog)
                   ->getString(string_id)));
         }
       }
@@ -828,7 +829,7 @@ TargetValue build_array_target_value(const SQLTypeInfo& array_ti,
                                      const size_t buff_sz,
                                      const bool translate_strings,
                                      std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
-                                     const Executor* executor) {
+                                     const Catalog_Namespace::Catalog* catalog) {
   CHECK(array_ti.is_array());
   const auto& elem_ti = array_ti.get_elem_type();
   if (elem_ti.is_string()) {
@@ -837,7 +838,7 @@ TargetValue build_array_target_value(const SQLTypeInfo& array_ti,
                                            elem_ti.get_comp_param(),
                                            translate_strings,
                                            row_set_mem_owner,
-                                           executor);
+                                           catalog);
   }
   switch (elem_ti.get_size()) {
     case 1:
@@ -1327,7 +1328,7 @@ TargetValue ResultSet::makeVarlenTargetValue(const int8_t* ptr1,
           varlen_buffer[varlen_ptr].size(),
           translate_strings,
           row_set_mem_owner_,
-          executor_);
+          catalog_);
     } else {
       CHECK(false);
     }
@@ -1378,7 +1379,7 @@ TargetValue ResultSet::makeVarlenTargetValue(const int8_t* ptr1,
                                         ad.length,
                                         translate_strings,
                                         row_set_mem_owner_,
-                                        executor_);
+                                        catalog_);
       }
     }
   }
@@ -1412,7 +1413,7 @@ TargetValue ResultSet::makeVarlenTargetValue(const int8_t* ptr1,
                                     length,
                                     translate_strings,
                                     row_set_mem_owner_,
-                                    executor_);
+                                    catalog_);
   }
   return std::string(reinterpret_cast<char*>(varlen_ptr), length);
 }
@@ -1813,10 +1814,11 @@ TargetValue ResultSet::makeTargetValue(const int8_t* ptr,
       if (!chosen_type.get_comp_param()) {
         sdp = row_set_mem_owner_->getLiteralStringDictProxy();
       } else {
-        sdp = executor_
-                  ? executor_->getStringDictionaryProxy(
-                        chosen_type.get_comp_param(), row_set_mem_owner_, false)
-                  : row_set_mem_owner_->getStringDictProxy(chosen_type.get_comp_param());
+        sdp = catalog_
+                  ? row_set_mem_owner_->getOrAddStringDictProxy(
+                        chosen_type.get_comp_param(), /*with_generation=*/false, catalog_)
+                  : row_set_mem_owner_->getStringDictProxy(
+                        chosen_type.get_comp_param());  // unit tests bypass the catalog
       }
       return NullableString(sdp->getString(ival));
     } else {

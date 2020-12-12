@@ -1314,7 +1314,7 @@ TEST(Reduction, Baseline) {
   std::vector<std::unique_ptr<ResultSet>> results;
   for (size_t i = 0; i < result_count; ++i) {
     auto rs = std::make_unique<ResultSet>(
-        target_infos, device_type, query_mem_desc, row_set_mem_owner, nullptr);
+        target_infos, device_type, query_mem_desc, row_set_mem_owner, nullptr, 0, 0);
     rs->allocateStorage();
     results.push_back(std::move(rs));
   }
@@ -1579,7 +1579,7 @@ TEST(Reduction, PerfectHash) {
   std::vector<std::unique_ptr<ResultSet>> results;
   for (size_t i = 0; i < result_count; ++i) {
     auto rs = std::make_unique<ResultSet>(
-        target_infos, device_type, query_mem_desc, row_set_mem_owner, nullptr);
+        target_infos, device_type, query_mem_desc, row_set_mem_owner, nullptr, 0, 0);
     rs->allocateStorage();
     results.push_back(std::move(rs));
   }

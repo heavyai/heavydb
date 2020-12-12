@@ -57,7 +57,9 @@ ResultSet::ResultSet(const std::vector<TargetInfo>& targets,
                      const ExecutorDeviceType device_type,
                      const QueryMemoryDescriptor& query_mem_desc,
                      const std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
-                     const Executor* executor)
+                     const Catalog_Namespace::Catalog* catalog,
+                     const unsigned block_size,
+                     const unsigned grid_size)
     : targets_(targets)
     , device_type_(device_type)
     , device_id_(-1)
@@ -67,7 +69,9 @@ ResultSet::ResultSet(const std::vector<TargetInfo>& targets,
     , drop_first_(0)
     , keep_first_(0)
     , row_set_mem_owner_(row_set_mem_owner)
-    , executor_(executor)
+    , catalog_(catalog)
+    , block_size_(block_size)
+    , grid_size_(grid_size)
     , data_mgr_(nullptr)
     , separate_varlen_storage_valid_(false)
     , just_explain_(false)
@@ -83,7 +87,9 @@ ResultSet::ResultSet(const std::vector<TargetInfo>& targets,
                      const int device_id,
                      const QueryMemoryDescriptor& query_mem_desc,
                      const std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
-                     const Executor* executor)
+                     const Catalog_Namespace::Catalog* catalog,
+                     const unsigned block_size,
+                     const unsigned grid_size)
     : targets_(targets)
     , device_type_(device_type)
     , device_id_(device_id)
@@ -93,7 +99,9 @@ ResultSet::ResultSet(const std::vector<TargetInfo>& targets,
     , drop_first_(0)
     , keep_first_(0)
     , row_set_mem_owner_(row_set_mem_owner)
-    , executor_(executor)
+    , catalog_(catalog)
+    , block_size_(block_size)
+    , grid_size_(grid_size)
     , lazy_fetch_info_(lazy_fetch_info)
     , col_buffers_{col_buffers}
     , frag_offsets_{frag_offsets}
@@ -471,7 +479,8 @@ QueryMemoryDescriptor ResultSet::fixupQueryMemoryDescriptor(
 }
 
 void ResultSet::sort(const std::list<Analyzer::OrderEntry>& order_entries,
-                     const size_t top_n) {
+                     const size_t top_n,
+                     const Executor* executor) {
   auto timer = DEBUG_TIMER(__func__);
 
   if (!storage_) {
@@ -481,7 +490,7 @@ void ResultSet::sort(const std::list<Analyzer::OrderEntry>& order_entries,
   CHECK(!targets_.empty());
 #ifdef HAVE_CUDA
   if (canUseFastBaselineSort(order_entries, top_n)) {
-    baselineSort(order_entries, top_n);
+    baselineSort(order_entries, top_n, executor);
     return;
   }
 #endif  // HAVE_CUDA
@@ -509,7 +518,7 @@ void ResultSet::sort(const std::list<Analyzer::OrderEntry>& order_entries,
     if (g_enable_watchdog && (entryCount() > 20000000)) {
       throw WatchdogException("Sorting the result would be too slow");
     }
-    parallelTop(order_entries, top_n);
+    parallelTop(order_entries, top_n, executor);
     return;
   }
 
@@ -519,7 +528,7 @@ void ResultSet::sort(const std::list<Analyzer::OrderEntry>& order_entries,
 
   permutation_ = initPermutationBuffer(0, 1);
 
-  auto compare = createComparator(order_entries, use_heap);
+  auto compare = createComparator(order_entries, use_heap, executor);
 
   if (use_heap) {
     topPermutation(permutation_, top_n, compare);
@@ -530,17 +539,18 @@ void ResultSet::sort(const std::list<Analyzer::OrderEntry>& order_entries,
 
 #ifdef HAVE_CUDA
 void ResultSet::baselineSort(const std::list<Analyzer::OrderEntry>& order_entries,
-                             const size_t top_n) {
+                             const size_t top_n,
+                             const Executor* executor) {
   auto timer = DEBUG_TIMER(__func__);
   // If we only have on GPU, it's usually faster to do multi-threaded radix sort on CPU
   if (getGpuCount() > 1) {
     try {
-      doBaselineSort(ExecutorDeviceType::GPU, order_entries, top_n);
+      doBaselineSort(ExecutorDeviceType::GPU, order_entries, top_n, executor);
     } catch (...) {
-      doBaselineSort(ExecutorDeviceType::CPU, order_entries, top_n);
+      doBaselineSort(ExecutorDeviceType::CPU, order_entries, top_n, executor);
     }
   } else {
-    doBaselineSort(ExecutorDeviceType::CPU, order_entries, top_n);
+    doBaselineSort(ExecutorDeviceType::CPU, order_entries, top_n, executor);
   }
 }
 #endif  // HAVE_CUDA
@@ -569,7 +579,8 @@ const std::vector<uint32_t>& ResultSet::getPermutationBuffer() const {
 }
 
 void ResultSet::parallelTop(const std::list<Analyzer::OrderEntry>& order_entries,
-                            const size_t top_n) {
+                            const size_t top_n,
+                            const Executor* executor) {
   auto timer = DEBUG_TIMER(__func__);
   const size_t step = cpu_threads();
   std::vector<std::vector<uint32_t>> strided_permutations(step);
@@ -586,7 +597,7 @@ void ResultSet::parallelTop(const std::list<Analyzer::OrderEntry>& order_entries
   for (auto& init_future : init_futures) {
     init_future.get();
   }
-  auto compare = createComparator(order_entries, true);
+  auto compare = createComparator(order_entries, true, executor);
   std::vector<std::future<void>> top_futures;
   for (auto& strided_permutation : strided_permutations) {
     top_futures.emplace_back(
@@ -775,7 +786,8 @@ bool ResultSet::ResultSetComparator<BUFFER_ITERATOR_TYPE>::operator()(
       if (UNLIKELY(entry_ti.is_string() &&
                    entry_ti.get_compression() == kENCODING_DICT)) {
         CHECK_EQ(4, entry_ti.get_logical_size());
-        const auto string_dict_proxy = result_set_->executor_->getStringDictionaryProxy(
+        CHECK(executor_);
+        const auto string_dict_proxy = executor_->getStringDictionaryProxy(
             entry_ti.get_comp_param(), result_set_->row_set_mem_owner_, false);
         auto lhs_str = string_dict_proxy->getString(lhs_v.i1);
         auto rhs_str = string_dict_proxy->getString(rhs_v.i1);
@@ -852,17 +864,19 @@ void ResultSet::sortPermutation(
 void ResultSet::radixSortOnGpu(
     const std::list<Analyzer::OrderEntry>& order_entries) const {
   auto timer = DEBUG_TIMER(__func__);
-  auto data_mgr = &executor_->catalog_->getDataMgr();
+  auto data_mgr = &catalog_->getDataMgr();
   const int device_id{0};
   CudaAllocator cuda_allocator(data_mgr, device_id);
-  std::vector<int64_t*> group_by_buffers(executor_->blockSize());
+  CHECK_GT(block_size_, 0);
+  CHECK_GT(grid_size_, 0);
+  std::vector<int64_t*> group_by_buffers(block_size_);
   group_by_buffers[0] = reinterpret_cast<int64_t*>(storage_->getUnderlyingBuffer());
   auto dev_group_by_buffers =
       create_dev_group_by_buffers(&cuda_allocator,
                                   group_by_buffers,
                                   query_mem_desc_,
-                                  executor_->blockSize(),
-                                  executor_->gridSize(),
+                                  block_size_,
+                                  grid_size_,
                                   device_id,
                                   ExecutorDispatchMode::KernelPerFragment,
                                   -1,
@@ -878,8 +892,8 @@ void ResultSet::radixSortOnGpu(
       query_mem_desc_.getBufferSizeBytes(ExecutorDeviceType::GPU),
       dev_group_by_buffers.second,
       query_mem_desc_,
-      executor_->blockSize(),
-      executor_->gridSize(),
+      block_size_,
+      grid_size_,
       device_id,
       false);
 }
@@ -930,9 +944,9 @@ size_t ResultSet::getLimit() const {
 
 std::shared_ptr<const std::vector<std::string>> ResultSet::getStringDictionaryPayloadCopy(
     const int dict_id) const {
-  CHECK(executor_);
-  const auto sdp =
-      executor_->getStringDictionaryProxy(dict_id, row_set_mem_owner_, false);
+  const auto sdp = row_set_mem_owner_->getOrAddStringDictProxy(
+      dict_id, /*with_generation=*/false, catalog_);
+  CHECK(sdp);
   return sdp->getDictionary()->copyStrings();
 }
 

@@ -24,10 +24,12 @@
 #include <unordered_map>
 #include <vector>
 
+#include "Catalog/Catalog.h"
 #include "DataMgr/AbstractBuffer.h"
 #include "DataMgr/Allocators/ArenaAllocator.h"
 #include "DataMgr/DataMgr.h"
 #include "Logger/Logger.h"
+#include "QueryEngine/StringDictionaryGenerations.h"
 #include "StringDictionary/StringDictionaryProxy.h"
 
 class ResultSet;
@@ -127,6 +129,11 @@ class RowSetMemoryOwner : boost::noncopyable {
     return it->second.get();
   }
 
+  StringDictionaryProxy* getOrAddStringDictProxy(
+      const int dict_id_in,
+      const bool with_generation,
+      const Catalog_Namespace::Catalog* catalog);
+
   void addLiteralStringDictProxy(
       std::shared_ptr<StringDictionaryProxy> lit_str_dict_proxy) {
     std::lock_guard<std::mutex> lock(state_mutex_);
@@ -169,6 +176,14 @@ class RowSetMemoryOwner : boost::noncopyable {
     return rtn;
   }
 
+  void setDictionaryGenerations(StringDictionaryGenerations generations) {
+    string_dictionary_generations_ = generations;
+  }
+
+  StringDictionaryGenerations& getStringDictionaryGenerations() {
+    return string_dictionary_generations_;
+  }
+
  private:
   struct CountDistinctBitmapBuffer {
     int8_t* ptr;
@@ -184,6 +199,7 @@ class RowSetMemoryOwner : boost::noncopyable {
   std::list<std::vector<int64_t>> arrays_;
   std::unordered_map<int, std::shared_ptr<StringDictionaryProxy>> str_dict_proxy_owned_;
   std::shared_ptr<StringDictionaryProxy> lit_str_dict_proxy_;
+  StringDictionaryGenerations string_dictionary_generations_;
   std::vector<void*> col_buffers_;
   std::vector<Data_Namespace::AbstractBuffer*> varlen_input_buffers_;
 

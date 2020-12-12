@@ -598,7 +598,6 @@ void GroupByAndAggregate::addTransientStringLiterals(
           target_expr, executor, row_set_mem_owner);
     }
   }
-  row_set_mem_owner->addLiteralStringDictProxy(executor->lit_str_dict_proxy_);
 }
 
 CountDistinctDescriptors GroupByAndAggregate::initCountDistinctDescriptors() {

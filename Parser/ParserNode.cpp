@@ -2577,7 +2577,9 @@ std::shared_ptr<ResultSet> getResultSet(QueryStateProxy query_state_proxy,
                                                      ExecutorDeviceType::CPU,
                                                      QueryMemoryDescriptor(),
                                                      nullptr,
-                                                     nullptr),
+                                                     nullptr,
+                                                     0,
+                                                     0),
                          {}};
   result = ra_executor.executeRelAlgQuery(co, eo, false, nullptr);
   targets = result.getTargetsMeta();

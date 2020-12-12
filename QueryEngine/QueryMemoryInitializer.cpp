@@ -285,7 +285,9 @@ QueryMemoryInitializer::QueryMemoryInitializer(
                       device_id,
                       ResultSet::fixupQueryMemoryDescriptor(query_mem_desc),
                       row_set_mem_owner_,
-                      executor));
+                      executor->getCatalog(),
+                      executor->blockSize(),
+                      executor->gridSize()));
     result_sets_.back()->allocateStorage(reinterpret_cast<int8_t*>(group_by_buffer),
                                          executor->plan_state_->init_agg_vals_);
     for (size_t j = 1; j < step; ++j) {
@@ -357,7 +359,9 @@ QueryMemoryInitializer::QueryMemoryInitializer(
                     device_id,
                     ResultSet::fixupQueryMemoryDescriptor(query_mem_desc),
                     row_set_mem_owner_,
-                    executor));
+                    executor->getCatalog(),
+                    executor->blockSize(),
+                    executor->gridSize()));
   result_sets_.back()->allocateStorage(reinterpret_cast<int8_t*>(group_by_buffer),
                                        init_agg_vals_);
 }

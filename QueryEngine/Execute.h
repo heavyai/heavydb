@@ -990,7 +990,6 @@ class Executor {
   static void* gpu_active_modules_[max_gpu_count];
   static std::atomic<bool> interrupted_;
 
-  mutable std::shared_ptr<StringDictionaryProxy> lit_str_dict_proxy_;
   mutable std::mutex str_dict_mutex_;
 
   mutable std::unique_ptr<llvm::TargetMachine> nvptx_target_machine_;
@@ -1023,7 +1022,6 @@ class Executor {
 
   mutable InputTableInfoCache input_table_info_cache_;
   AggregatedColRange agg_col_range_cache_;
-  StringDictionaryGenerations string_dictionary_generations_;
   TableGenerations table_generations_;
   static mapd_shared_mutex executor_session_mutex_;
   static std::string current_query_session_;

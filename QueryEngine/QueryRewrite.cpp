@@ -284,14 +284,16 @@ RelAlgExecutionUnit QueryRewriter::rewriteColumnarUpdate(
                                          new_string_datum);
 
         // Roll the string dict generation forward, as we have added a string
-        if (executor_->string_dictionary_generations_.getGeneration(dict_id) > -1) {
-          executor_->string_dictionary_generations_.updateGeneration(
-              dict_id, string_dict->storageEntryCount());
+        auto row_set_mem_owner = executor_->getRowSetMemoryOwner();
+        CHECK(row_set_mem_owner);
+        auto& str_dict_generations = row_set_mem_owner->getStringDictionaryGenerations();
+        if (str_dict_generations.getGeneration(dict_id) > -1) {
+          str_dict_generations.updateGeneration(dict_id,
+                                                string_dict->storageEntryCount());
         } else {
           // Simple update with no filters does not use a CASE, and therefore does not add
           // a valid generation
-          executor_->string_dictionary_generations_.setGeneration(
-              dict_id, string_dict->storageEntryCount());
+          str_dict_generations.setGeneration(dict_id, string_dict->storageEntryCount());
         }
       }
     }

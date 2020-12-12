@@ -425,7 +425,9 @@ std::unique_ptr<ResultSet> SqliteMemDatabase::runSelect(
                                         ExecutorDeviceType::CPU,
                                         query_mem_desc,
                                         output_spec.executor->getRowSetMemoryOwner(),
-                                        nullptr);
+                                        nullptr,
+                                        0,
+                                        0);
   const auto storage = rs->allocateStorage();
   auto output_buffer = storage->getUnderlyingBuffer();
   CHECK(!num_rows || output_buffer);

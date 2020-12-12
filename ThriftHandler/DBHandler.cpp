@@ -4978,7 +4978,9 @@ std::vector<PushedDownFilterInfo> DBHandler::execute_rel_alg(
                                                      ExecutorDeviceType::CPU,
                                                      QueryMemoryDescriptor(),
                                                      nullptr,
-                                                     nullptr),
+                                                     nullptr,
+                                                     0,
+                                                     0),
                          {}};
   _return.execution_time_ms += measure<>::execution([&]() {
     result = ra_executor.executeRelAlgQuery(co, eo, explain_info.explain_plan, nullptr);
@@ -5050,7 +5052,9 @@ void DBHandler::execute_rel_alg_df(TDataFrame& _return,
                                                      ExecutorDeviceType::CPU,
                                                      QueryMemoryDescriptor(),
                                                      nullptr,
-                                                     nullptr),
+                                                     nullptr,
+                                                     0,
+                                                     0),
                          {}};
   _return.execution_time_ms += measure<>::execution(
       [&]() { result = ra_executor.executeRelAlgQuery(co, eo, false, nullptr); });

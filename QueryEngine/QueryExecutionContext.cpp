@@ -91,7 +91,9 @@ ResultSetPtr QueryExecutionContext::groupBufferToDeinterleavedResults(
                                   -1,
                                   deinterleaved_query_mem_desc,
                                   row_set_mem_owner_,
-                                  executor_);
+                                  executor_->getCatalog(),
+                                  executor_->blockSize(),
+                                  executor_->gridSize());
   auto deinterleaved_storage =
       deinterleaved_result_set->allocateStorage(executor_->plan_state_->init_agg_vals_);
   auto deinterleaved_buffer =

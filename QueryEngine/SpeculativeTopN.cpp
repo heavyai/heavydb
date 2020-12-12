@@ -131,7 +131,9 @@ std::shared_ptr<ResultSet> SpeculativeTopNMap::asRows(
       ExecutorDeviceType::CPU,
       query_mem_desc_rs,
       row_set_mem_owner,
-      executor);
+      executor->getCatalog(),
+      executor->blockSize(),
+      executor->gridSize());
   auto rs_storage = rs->allocateStorage();
   auto rs_buff = reinterpret_cast<int64_t*>(rs_storage->getUnderlyingBuffer());
   const bool count_first =

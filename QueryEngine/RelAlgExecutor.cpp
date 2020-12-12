@@ -493,7 +493,6 @@ Executor* RelAlgExecutor::getExecutor() const {
 void RelAlgExecutor::cleanupPostExecution() {
   CHECK(executor_);
   executor_->row_set_mem_owner_ = nullptr;
-  executor_->lit_str_dict_proxy_ = nullptr;
 }
 
 namespace {
@@ -585,9 +584,9 @@ void RelAlgExecutor::prepareLeafExecution(
   queue_time_ms_ = timer_stop(clock_begin);
   executor_->row_set_mem_owner_ =
       std::make_shared<RowSetMemoryOwner>(Executor::getArenaBlockSize());
+  executor_->row_set_mem_owner_->setDictionaryGenerations(string_dictionary_generations);
   executor_->table_generations_ = table_generations;
   executor_->agg_col_range_cache_ = agg_col_range;
-  executor_->string_dictionary_generations_ = string_dictionary_generations;
 }
 
 ExecutionResult RelAlgExecutor::executeRelAlgSeq(const RaExecutionSequence& seq,
@@ -1778,7 +1777,9 @@ ExecutionResult RelAlgExecutor::executeTableFunction(const RelTableFunction* tab
                                                      co.device_type,
                                                      QueryMemoryDescriptor(),
                                                      nullptr,
-                                                     executor_),
+                                                     executor_->getCatalog(),
+                                                     executor_->blockSize(),
+                                                     executor_->gridSize()),
                          {}};
 
   try {
@@ -2102,7 +2103,9 @@ ExecutionResult RelAlgExecutor::executeModify(const RelModify* modify,
                                         ExecutorDeviceType::CPU,
                                         QueryMemoryDescriptor(),
                                         executor_->getRowSetMemoryOwner(),
-                                        executor_);
+                                        executor_->getCatalog(),
+                                        executor_->blockSize(),
+                                        executor_->gridSize());
 
   std::vector<TargetMetaInfo> empty_targets;
   return {rs, empty_targets};
@@ -2398,7 +2401,9 @@ ExecutionResult RelAlgExecutor::executeSimpleInsert(const Analyzer::Query& query
                                         ExecutorDeviceType::CPU,
                                         QueryMemoryDescriptor(),
                                         executor_->getRowSetMemoryOwner(),
-                                        executor_);
+                                        nullptr,
+                                        0,
+                                        0);
   std::vector<TargetMetaInfo> empty_targets;
   return {rs, empty_targets};
 }
@@ -2456,7 +2461,7 @@ ExecutionResult RelAlgExecutor::executeSort(const RelSort* sort,
     const auto order_entries = get_order_entries(sort);
     if (limit || offset) {
       if (!order_entries.empty()) {
-        result_rows->sort(order_entries, limit + offset);
+        result_rows->sort(order_entries, limit + offset, executor_);
       }
       result_rows->dropFirstN(offset);
       if (limit) {
@@ -2524,8 +2529,8 @@ ExecutionResult RelAlgExecutor::executeSort(const RelSort* sort,
     if (sort->collationCount() != 0 && !rows_to_sort->definitelyHasNoRows() &&
         !use_speculative_top_n(source_work_unit.exe_unit,
                                rows_to_sort->getQueryMemDesc())) {
-      rows_to_sort->sort(source_work_unit.exe_unit.sort_info.order_entries,
-                         limit + offset);
+      rows_to_sort->sort(
+          source_work_unit.exe_unit.sort_info.order_entries, limit + offset, executor_);
     }
     if (limit || offset) {
       if (g_cluster && sort->collationCount() == 0) {
@@ -2834,7 +2839,9 @@ ExecutionResult RelAlgExecutor::executeWorkUnit(
                                                      co.device_type,
                                                      QueryMemoryDescriptor(),
                                                      nullptr,
-                                                     executor_),
+                                                     executor_->getCatalog(),
+                                                     executor_->blockSize(),
+                                                     executor_->gridSize()),
                          {}};
 
   auto execute_and_handle_errors =
@@ -3016,7 +3023,9 @@ ExecutionResult RelAlgExecutor::handleOutOfMemoryRetry(
                                                             co.device_type,
                                                             QueryMemoryDescriptor(),
                                                             nullptr,
-                                                            executor_),
+                                                            executor_->getCatalog(),
+                                                            executor_->blockSize(),
+                                                            executor_->gridSize()),
                                 {}};
 
   const auto table_infos = get_table_infos(ra_exe_unit_in, executor_);

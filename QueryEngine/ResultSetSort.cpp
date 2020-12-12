@@ -49,7 +49,8 @@ void set_cuda_context(Data_Namespace::DataMgr* data_mgr, const int device_id) {
 
 void ResultSet::doBaselineSort(const ExecutorDeviceType device_type,
                                const std::list<Analyzer::OrderEntry>& order_entries,
-                               const size_t top_n) {
+                               const size_t top_n,
+                               const Executor* executor) {
   CHECK_EQ(size_t(1), order_entries.size());
   CHECK(!query_mem_desc_.didOutputColumnar());
   const auto& oe = order_entries.front();
@@ -137,7 +138,7 @@ void ResultSet::doBaselineSort(const ExecutorDeviceType device_type,
       permutation_.insert(
           permutation_.end(), strided_permutation.begin(), strided_permutation.end());
     }
-    auto compare = createComparator(order_entries, true);
+    auto compare = createComparator(order_entries, true, executor);
     topPermutation(permutation_, top_n, compare);
     return;
   } else {
@@ -171,9 +172,8 @@ bool ResultSet::canUseFastBaselineSort(
 }
 
 Data_Namespace::DataMgr* ResultSet::getDataManager() const {
-  if (executor_) {
-    CHECK(executor_->catalog_);
-    return &executor_->catalog_->getDataMgr();
+  if (catalog_) {
+    return &catalog_->getDataMgr();
   }
   return nullptr;
 }

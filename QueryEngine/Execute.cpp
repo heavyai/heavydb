@@ -205,17 +205,26 @@ StringDictionaryProxy* Executor::getStringDictionaryProxy(
     const int dict_id_in,
     std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
     const bool with_generation) const {
+  CHECK(row_set_mem_owner);
+  std::lock_guard<std::mutex> lock(
+      str_dict_mutex_);  // TODO: can we use RowSetMemOwner state mutex here?
+  return row_set_mem_owner->getOrAddStringDictProxy(
+      dict_id_in, with_generation, catalog_);
+}
+
+StringDictionaryProxy* RowSetMemoryOwner::getOrAddStringDictProxy(
+    const int dict_id_in,
+    const bool with_generation,
+    const Catalog_Namespace::Catalog* catalog) {
   const int dict_id{dict_id_in < 0 ? REGULAR_DICT(dict_id_in) : dict_id_in};
-  CHECK(catalog_);
-  const auto dd = catalog_->getMetadataForDict(dict_id);
-  std::lock_guard<std::mutex> lock(str_dict_mutex_);
+  CHECK(catalog);
+  const auto dd = catalog->getMetadataForDict(dict_id);
   if (dd) {
     CHECK(dd->stringDict);
     CHECK_LE(dd->dictNBits, 32);
-    CHECK(row_set_mem_owner);
     const int64_t generation =
         with_generation ? string_dictionary_generations_.getGeneration(dict_id) : -1;
-    return row_set_mem_owner->addStringDict(dd->stringDict, dict_id, generation);
+    return addStringDict(dd->stringDict, dict_id, generation);
   }
   CHECK_EQ(0, dict_id);
   if (!lit_str_dict_proxy_) {
@@ -350,7 +359,6 @@ std::vector<ColumnLazyFetchInfo> Executor::getColLazyFetchInfo(
 void Executor::clearMetaInfoCache() {
   input_table_info_cache_.clear();
   agg_col_range_cache_.clear();
-  string_dictionary_generations_.clear();
   table_generations_.clear();
 }
 
@@ -855,7 +863,9 @@ ResultSetPtr Executor::resultsUnion(SharedKernelContext& shared_context,
                                        ExecutorDeviceType::CPU,
                                        QueryMemoryDescriptor(),
                                        row_set_mem_owner_,
-                                       this);
+                                       catalog_,
+                                       blockSize(),
+                                       gridSize());
   }
   using IndexedResultSet = std::pair<ResultSetPtr, std::vector<size_t>>;
   std::sort(results_per_device.begin(),
@@ -884,8 +894,13 @@ ResultSetPtr Executor::reduceMultiDeviceResults(
     for (const auto target_expr : ra_exe_unit.target_exprs) {
       targets.push_back(get_target_info(target_expr, g_bigint_count));
     }
-    return std::make_shared<ResultSet>(
-        targets, ExecutorDeviceType::CPU, QueryMemoryDescriptor(), nullptr, this);
+    return std::make_shared<ResultSet>(targets,
+                                       ExecutorDeviceType::CPU,
+                                       QueryMemoryDescriptor(),
+                                       nullptr,
+                                       catalog_,
+                                       blockSize(),
+                                       gridSize());
   }
 
   return reduceMultiDeviceResultSets(
@@ -938,7 +953,9 @@ ResultSetPtr Executor::reduceMultiDeviceResultSets(
                                                   ExecutorDeviceType::CPU,
                                                   query_mem_desc,
                                                   row_set_mem_owner,
-                                                  this);
+                                                  catalog_,
+                                                  blockSize(),
+                                                  gridSize());
     auto result_storage = reduced_results->allocateStorage(plan_state_->init_agg_vals_);
     reduced_results->initializeStorage();
     switch (query_mem_desc.getEffectiveKeyWidth()) {
@@ -1524,7 +1541,9 @@ ResultSetPtr Executor::executeWorkUnitImpl(
                                      ExecutorDeviceType::CPU,
                                      QueryMemoryDescriptor(),
                                      nullptr,
-                                     this);
+                                     catalog_,
+                                     blockSize(),
+                                     gridSize());
 }
 
 void Executor::executeWorkUnitPerFragment(const RelAlgExecutionUnit& ra_exe_unit_in,
@@ -1741,8 +1760,13 @@ ResultSetPtr build_row_for_empty_input(
   CHECK(executor);
   auto row_set_mem_owner = executor->getRowSetMemoryOwner();
   CHECK(row_set_mem_owner);
-  auto rs = std::make_shared<ResultSet>(
-      target_infos, device_type, query_mem_desc, row_set_mem_owner, executor);
+  auto rs = std::make_shared<ResultSet>(target_infos,
+                                        device_type,
+                                        query_mem_desc,
+                                        row_set_mem_owner,
+                                        executor->getCatalog(),
+                                        executor->blockSize(),
+                                        executor->gridSize());
   rs->allocateStorage();
   rs->fillOneEntry(entry);
   return rs;
@@ -1878,7 +1902,7 @@ ResultSetPtr Executor::collectAllDeviceShardedTopResults(
   for (auto& result : result_per_device) {
     const auto result_set = result.first;
     CHECK(result_set);
-    result_set->sort(ra_exe_unit.sort_info.order_entries, top_n);
+    result_set->sort(ra_exe_unit.sort_info.order_entries, top_n, this);
     size_t new_entry_cnt = top_query_mem_desc.getEntryCount() + result_set->rowCount();
     top_query_mem_desc.setEntryCount(new_entry_cnt);
   }
@@ -1886,7 +1910,9 @@ ResultSetPtr Executor::collectAllDeviceShardedTopResults(
                                                     first_result_set->getDeviceType(),
                                                     top_query_mem_desc,
                                                     first_result_set->getRowSetMemOwner(),
-                                                    this);
+                                                    catalog_,
+                                                    blockSize(),
+                                                    gridSize());
   auto top_storage = top_result_set->allocateStorage();
   size_t top_output_row_idx{0};
   for (auto& result : result_per_device) {
@@ -3110,7 +3136,9 @@ int8_t Executor::warpSize() const {
 unsigned Executor::gridSize() const {
   CHECK(catalog_);
   const auto cuda_mgr = catalog_->getDataMgr().getCudaMgr();
-  CHECK(cuda_mgr);
+  if (!cuda_mgr) {
+    return 0;
+  }
   return grid_size_x_ ? grid_size_x_ : 2 * cuda_mgr->getMinNumMPsForAllDevices();
 }
 
@@ -3125,7 +3153,9 @@ unsigned Executor::numBlocksPerMP() const {
 unsigned Executor::blockSize() const {
   CHECK(catalog_);
   const auto cuda_mgr = catalog_->getDataMgr().getCudaMgr();
-  CHECK(cuda_mgr);
+  if (!cuda_mgr) {
+    return 0;
+  }
   const auto& dev_props = cuda_mgr->getAllDeviceProperties();
   return block_size_x_ ? block_size_x_ : dev_props.front().maxThreadsPerBlock;
 }
@@ -3531,8 +3561,9 @@ void Executor::setupCaching(const std::unordered_set<PhysicalInput>& phys_inputs
                             const std::unordered_set<int>& phys_table_ids) {
   CHECK(catalog_);
   row_set_mem_owner_ = std::make_shared<RowSetMemoryOwner>(Executor::getArenaBlockSize());
+  row_set_mem_owner_->setDictionaryGenerations(
+      computeStringDictionaryGenerations(phys_inputs));
   agg_col_range_cache_ = computeColRangesCache(phys_inputs);
-  string_dictionary_generations_ = computeStringDictionaryGenerations(phys_inputs);
   table_generations_ = computeTableGenerations(phys_table_ids);
 }
 

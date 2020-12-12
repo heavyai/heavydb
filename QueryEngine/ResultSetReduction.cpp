@@ -1034,9 +1034,9 @@ ResultSet* ResultSetManager::reduce(std::vector<ResultSet*>& result_sets) {
   for (const auto result_set : result_sets) {
     CHECK_EQ(row_set_mem_owner, result_set->row_set_mem_owner_);
   }
-  const auto executor = result_rs->executor_;
+  const auto catalog = result_rs->catalog_;
   for (const auto result_set : result_sets) {
-    CHECK_EQ(executor, result_set->executor_);
+    CHECK_EQ(catalog, result_set->catalog_);
   }
   if (first_result.query_mem_desc_.getQueryDescriptionType() ==
       QueryDescriptionType::GroupByBaselineHash) {
@@ -1054,7 +1054,9 @@ ResultSet* ResultSetManager::reduce(std::vector<ResultSet*>& result_sets) {
                             ExecutorDeviceType::CPU,
                             query_mem_desc,
                             row_set_mem_owner,
-                            executor));
+                            catalog,
+                            0,
+                            0));
     auto result_storage = rs_->allocateStorage(first_result.target_init_vals_);
     rs_->initializeStorage();
     switch (query_mem_desc.getEffectiveKeyWidth()) {

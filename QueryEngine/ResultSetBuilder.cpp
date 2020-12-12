@@ -31,7 +31,13 @@ ResultSet* ResultSetBuilder::makeResultSet(
     const QueryMemoryDescriptor& query_mem_desc,
     const std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
     const Executor* executor) {
-  return new ResultSet(targets, device_type, query_mem_desc, row_set_mem_owner, executor);
+  return new ResultSet(targets,
+                       device_type,
+                       query_mem_desc,
+                       row_set_mem_owner,
+                       executor->getCatalog(),
+                       executor->blockSize(),
+                       executor->gridSize());
 }
 
 ResultSetDefaultBuilder::ResultSetDefaultBuilder(

@@ -77,7 +77,9 @@ class RaExecutionDesc {
                                             ExecutorDeviceType::CPU,
                                             QueryMemoryDescriptor(),
                                             nullptr,
-                                            nullptr),
+                                            nullptr,
+                                            0,
+                                            0),
                 {}) {}
 
   const ExecutionResult& getResult() const { return result_; }

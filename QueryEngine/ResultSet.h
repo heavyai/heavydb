@@ -158,7 +158,9 @@ class ResultSet {
             const ExecutorDeviceType device_type,
             const QueryMemoryDescriptor& query_mem_desc,
             const std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
-            const Executor* executor);
+            const Catalog_Namespace::Catalog* catalog,
+            const unsigned block_size,
+            const unsigned grid_size);
 
   ResultSet(const std::vector<TargetInfo>& targets,
             const std::vector<ColumnLazyFetchInfo>& lazy_fetch_info,
@@ -169,7 +171,9 @@ class ResultSet {
             const int device_id,
             const QueryMemoryDescriptor& query_mem_desc,
             const std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
-            const Executor* executor);
+            const Catalog_Namespace::Catalog* catalog,
+            const unsigned block_size,
+            const unsigned grid_size);
 
   ResultSet(const std::shared_ptr<const Analyzer::Estimator>,
             const ExecutorDeviceType device_type,
@@ -242,7 +246,9 @@ class ResultSet {
 
   bool isRowAtEmpty(const size_t index) const;
 
-  void sort(const std::list<Analyzer::OrderEntry>& order_entries, const size_t top_n);
+  void sort(const std::list<Analyzer::OrderEntry>& order_entries,
+            const size_t top_n,
+            const Executor* executor);
 
   void keepFirstN(const size_t n);
 
@@ -599,11 +605,13 @@ class ResultSet {
 
     ResultSetComparator(const std::list<Analyzer::OrderEntry>& order_entries,
                         const bool use_heap,
-                        const ResultSet* result_set)
+                        const ResultSet* result_set,
+                        const Executor* executor)
         : order_entries_(order_entries)
         , use_heap_(use_heap)
         , result_set_(result_set)
-        , buffer_itr_(result_set) {
+        , buffer_itr_(result_set)
+        , executor_(executor) {
       materializeCountDistinctColumns();
     }
 
@@ -619,23 +627,25 @@ class ResultSet {
     const bool use_heap_;
     const ResultSet* result_set_;
     const BufferIteratorType buffer_itr_;
+    const Executor* executor_;
     std::vector<std::vector<int64_t>> count_distinct_materialized_buffers_;
   };
 
   std::function<bool(const uint32_t, const uint32_t)> createComparator(
       const std::list<Analyzer::OrderEntry>& order_entries,
-      const bool use_heap) {
+      const bool use_heap,
+      const Executor* executor) {
     auto timer = DEBUG_TIMER(__func__);
     if (query_mem_desc_.didOutputColumnar()) {
       column_wise_comparator_ =
           std::make_unique<ResultSetComparator<ColumnWiseTargetAccessor>>(
-              order_entries, use_heap, this);
+              order_entries, use_heap, this, executor);
       return [this](const uint32_t lhs, const uint32_t rhs) -> bool {
         return (*this->column_wise_comparator_)(lhs, rhs);
       };
     } else {
       row_wise_comparator_ = std::make_unique<ResultSetComparator<RowWiseTargetAccessor>>(
-          order_entries, use_heap, this);
+          order_entries, use_heap, this, executor);
       return [this](const uint32_t lhs, const uint32_t rhs) -> bool {
         return (*this->row_wise_comparator_)(lhs, rhs);
       };
@@ -652,14 +662,17 @@ class ResultSet {
   std::vector<uint32_t> initPermutationBuffer(const size_t start, const size_t step);
 
   void parallelTop(const std::list<Analyzer::OrderEntry>& order_entries,
-                   const size_t top_n);
+                   const size_t top_n,
+                   const Executor* executor);
 
   void baselineSort(const std::list<Analyzer::OrderEntry>& order_entries,
-                    const size_t top_n);
+                    const size_t top_n,
+                    const Executor* executor);
 
   void doBaselineSort(const ExecutorDeviceType device_type,
                       const std::list<Analyzer::OrderEntry>& order_entries,
-                      const size_t top_n);
+                      const size_t top_n,
+                      const Executor* executor);
 
   bool canUseFastBaselineSort(const std::list<Analyzer::OrderEntry>& order_entries,
                               const size_t top_n);
@@ -697,8 +710,10 @@ class ResultSet {
   std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner_;
   std::vector<uint32_t> permutation_;
 
+  const Catalog_Namespace::Catalog* catalog_;
+  unsigned block_size_{0};
+  unsigned grid_size_{0};
   QueryExecutionTimings timings_;
-  const Executor* executor_;  // TODO(alex): remove
 
   std::list<std::shared_ptr<Chunk_NS::Chunk>> chunks_;
   std::vector<std::shared_ptr<std::list<ChunkIter>>> chunk_iters_;
