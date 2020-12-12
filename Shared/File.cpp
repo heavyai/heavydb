@@ -201,10 +201,10 @@ void renameForDelete(const std::string directoryName) {
       std::thread th([newDirectoryPath]() {
         boost::system::error_code ec;
         boost::filesystem::remove_all(newDirectoryPath, ec);
-        if (ec.value() != boost::system::errc::success) {
-          LOG(ERROR) << "Failed to remove directory " << newDirectoryPath << " error was "
-                     << ec;
-        }
+        // We dont check error on remove here as we cant log the
+        // issue fromdetached thrad, its not safe to LOG from here
+        // This is under investigation as clang detects TSAN issue data race
+        // the main system wide file_delete_thread will clean up any missed files
       });
       // let it run free so we can return
       // if it fails the file_delete_thread in DBHandler will clean up
