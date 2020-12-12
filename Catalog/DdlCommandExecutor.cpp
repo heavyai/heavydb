@@ -226,7 +226,7 @@ DdlCommandExecutor::DdlCommandExecutor(
   CHECK(!ddl_statement.empty());
   VLOG(2) << "Parsing JSON DDL from Calcite: " << ddl_statement;
   ddl_query_.Parse(ddl_statement);
-  CHECK(ddl_query_.IsObject());
+  CHECK(ddl_query_.IsObject()) << ddl_statement;
   CHECK(ddl_query_.HasMember("payload"));
   CHECK(ddl_query_["payload"].IsObject());
   const auto& payload = ddl_query_["payload"].GetObject();
