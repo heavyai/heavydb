@@ -1378,6 +1378,22 @@ TEST_P(CreateTableTest, InvalidSyntax) {
   }
 }
 
+TEST_P(CreateTableTest, InvalidColumnDefinition) {
+  std::string query =
+      getCreateTableQuery(GetParam(), "test_table", "(str TEXT ENCODING DICT(8), test)");
+  try {
+    sql(query);
+    FAIL() << "An exception should have been thrown for this test case.";
+  } catch (const TOmniSciException& e) {
+    if (GetParam() == ddl_utils::TableType::TABLE) {
+      ASSERT_TRUE(
+          e.error_msg.find(
+              "Exception: Exception occurred: Column definition for table test_table") !=
+          std::string::npos);
+    }
+  }
+}
+
 TEST_P(CreateTableTest, RealAlias) {
   // TODO(vancouver: support for FSI)
   if (GetParam() == ddl_utils::TableType::FOREIGN_TABLE) {

@@ -18,6 +18,8 @@ package com.mapd.parser.extension.ddl;
 
 import com.mapd.parser.extension.ddl.omnisci.OmniSciOptionsMap;
 
+import org.apache.calcite.runtime.CalciteException;
+import org.apache.calcite.sql.SqlCall;
 import org.apache.calcite.sql.SqlCreate;
 import org.apache.calcite.sql.SqlIdentifier;
 import org.apache.calcite.sql.SqlKind;
@@ -100,6 +102,11 @@ public class SqlCreateTable extends SqlCreate {
 
     List<Object> elements_list = jsonBuilder.list();
     for (SqlNode elementNode : this.columnList) {
+      if (!(elementNode instanceof SqlCall)) {
+        throw new CalciteException("Column definition for table " + this.name.toString()
+                        + " is invalid: " + elementNode.toString(),
+                null);
+      }
       elements_list.add(elementNode);
     }
     jsonBuilder.put(map, "elements", elements_list);
