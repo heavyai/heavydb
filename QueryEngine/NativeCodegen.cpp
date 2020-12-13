@@ -280,7 +280,7 @@ bool check_module_requires_libdevice(llvm::Module* module) {
       return true;
     }
   }
-  LOG(INFO) << "module does not require linking against libdevice";
+  LOG(DEBUG1) << "module does not require linking against libdevice";
   return false;
 }
 
