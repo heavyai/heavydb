@@ -263,6 +263,12 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateLiteral(
                                    rex_literal->getTypeScale(),
                                    rex_literal->getTypePrecision());
   switch (rex_literal->getType()) {
+    case kINT:
+    case kBIGINT: {
+      Datum d;
+      d.bigintval = rex_literal->getVal<int64_t>();
+      return makeExpr<Analyzer::Constant>(rex_literal->getType(), false, d);
+    }
     case kDECIMAL: {
       const auto val = rex_literal->getVal<int64_t>();
       const int precision = rex_literal->getPrecision();
@@ -526,9 +532,9 @@ std::shared_ptr<Analyzer::Expr> get_in_values_expr(std::shared_ptr<Analyzer::Exp
 }  // namespace
 
 // Creates an Analyzer expression for an IN subquery which subsequently goes through the
-// regular Executor::codegen() mechanism. The creation of the expression out of subquery's
-// result set is parallelized whenever possible. In addition, take advantage of additional
-// information that elements in the right hand side are constants; see
+// regular Executor::codegen() mechanism. The creation of the expression out of
+// subquery's result set is parallelized whenever possible. In addition, take advantage
+// of additional information that elements in the right hand side are constants; see
 // getInIntegerSetExpr().
 std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateInOper(
     const RexOperator* rex_operator) const {
@@ -663,8 +669,8 @@ void fill_integer_in_vals(std::vector<int64_t>& in_vals,
 // therefore it won't be able to handle a right-hand side sub-query with a CASE
 // returning literals on some branches. That case isn't hard too handle either, but
 // it's not clear it's actually important in practice.
-// RelAlgTranslator::getInIntegerSetExpr makes sure, by checking the encodings, that this
-// function isn't called in such cases.
+// RelAlgTranslator::getInIntegerSetExpr makes sure, by checking the encodings, that
+// this function isn't called in such cases.
 void fill_dictionary_encoded_in_vals(
     std::vector<int64_t>& in_vals,
     std::atomic<size_t>& total_in_vals_count,
@@ -1085,7 +1091,8 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateDatePlusMinus(
     if (datetime_ti.is_high_precision_timestamp() ||
         rhs_ti.is_high_precision_timestamp()) {
       throw std::runtime_error(
-          "High Precision timestamps are not supported for TIMESTAMPDIFF operation. Use "
+          "High Precision timestamps are not supported for TIMESTAMPDIFF operation. "
+          "Use "
           "DATEDIFF.");
     }
     auto bigint_ti = SQLTypeInfo(kBIGINT, false);

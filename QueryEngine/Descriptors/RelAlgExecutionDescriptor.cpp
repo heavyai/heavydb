@@ -21,6 +21,12 @@
 #include "QueryEngine/GroupByAndAggregate.h"
 #include "QueryEngine/RelAlgDagBuilder.h"
 
+ExecutionResult::ExecutionResult()
+    : result_(), targets_meta_(), filter_push_down_enabled_(false) {
+  std::vector<TargetInfo> target_infos;
+  result_ = nullptr;
+}
+
 ExecutionResult::ExecutionResult(const std::shared_ptr<ResultSet>& rows,
                                  const std::vector<TargetMetaInfo>& targets_meta)
     : result_(rows), targets_meta_(targets_meta), filter_push_down_enabled_(false) {}

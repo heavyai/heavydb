@@ -18,12 +18,17 @@
 
 #include <boost/algorithm/string/predicate.hpp>
 
+// Note: avoid adding #include(s) that require thrift
+
 #include "Catalog/Catalog.h"
 #include "Catalog/SysCatalog.h"
 #include "DataMgr/ForeignStorage/ForeignTableRefresh.h"
 #include "LockMgr/LockMgr.h"
 #include "Parser/ParserNode.h"
 #include "Shared/StringTransform.h"
+
+#include "QueryEngine/Execute.h"  // Executor::getArenaBlockSize()
+#include "QueryEngine/ResultSetBuilder.h"
 
 extern bool g_enable_fsi;
 
@@ -32,53 +37,6 @@ bool DdlCommand::isDefaultServer(const std::string& server_name) {
 }
 
 namespace {
-
-// TODO: Update the following functions to use the result set builder when it
-// is available
-void set_headers(TQueryResult& _return, const std::vector<std::string>& headers) {
-  TRowDescriptor row_descriptor;
-  for (const auto& header : headers) {
-    TColumnType column_type{};
-    column_type.col_name = header;
-    column_type.col_type.type = TDatumType::type::STR;
-    row_descriptor.push_back(column_type);
-
-    _return.row_set.columns.emplace_back();
-  }
-  _return.row_set.row_desc = row_descriptor;
-  _return.row_set.is_columnar = true;
-}
-
-void set_headers_with_type(TQueryResult& _return,
-                           const std::vector<std::pair<std::string, SQLTypes>>& headers) {
-  TRowDescriptor row_descriptor;
-  for (const auto& header : headers) {
-    TColumnType column_type{};
-    column_type.col_name = header.first;
-    if (header.second == kBIGINT) {
-      column_type.col_type.type = TDatumType::type::BIGINT;
-    } else if (header.second == kTEXT) {
-      column_type.col_type.type = TDatumType::type::STR;
-    } else if (header.second == kBOOLEAN) {
-      column_type.col_type.type = TDatumType::type::BOOL;
-    } else {
-      UNREACHABLE() << "Unsupported type provided for header. SQL type: "
-                    << to_string(header.second);
-    }
-    row_descriptor.push_back(column_type);
-    _return.row_set.columns.emplace_back();
-  }
-  _return.row_set.row_desc = row_descriptor;
-  _return.row_set.is_columnar = true;
-}
-
-void add_row(TQueryResult& _return, const std::vector<std::string>& row) {
-  for (size_t i = 0; i < row.size(); i++) {
-    _return.row_set.columns[i].data.str_col.emplace_back(row[i]);
-    _return.row_set.columns[i].nulls.emplace_back(false);
-  }
-}
-
 template <class LockType>
 std::tuple<const TableDescriptor*,
            std::unique_ptr<lockmgr::TableSchemaLockContainer<LockType>>>
@@ -164,57 +122,84 @@ AggregratedStorageStats get_agg_storage_stats(const TableDescriptor* td,
   return agg_storage_stats.value();
 }
 
-void add_table_details(TQueryResult& _return,
+std::unique_ptr<RexLiteral> genLiteralStr(std::string val) {
+  return std::unique_ptr<RexLiteral>(
+      new RexLiteral(val, SQLTypes::kTEXT, SQLTypes::kTEXT, 0, 0, 0, 0));
+}
+
+std::unique_ptr<RexLiteral> genLiteralTimestamp(time_t val) {
+  return std::unique_ptr<RexLiteral>(new RexLiteral(
+      (int64_t)val, SQLTypes::kTIMESTAMP, SQLTypes::kTIMESTAMP, 0, 8, 0, 8));
+}
+
+std::unique_ptr<RexLiteral> genLiteralBigInt(int64_t val) {
+  return std::unique_ptr<RexLiteral>(
+      new RexLiteral(val, SQLTypes::kBIGINT, SQLTypes::kBIGINT, 0, 8, 0, 8));
+}
+
+std::unique_ptr<RexLiteral> genLiteralBoolean(bool val) {
+  return std::unique_ptr<RexLiteral>(
+      // new RexLiteral(val, SQLTypes::kBOOLEAN, SQLTypes::kBOOLEAN, 0, 0, 0, 0));
+      new RexLiteral(
+          (int64_t)(val ? 1 : 0), SQLTypes::kBIGINT, SQLTypes::kBIGINT, 0, 8, 0, 8));
+}
+
+void set_headers_with_type(
+    std::vector<TargetMetaInfo>& label_infos,
+    const std::vector<std::tuple<std::string, SQLTypes, bool>>& headers) {
+  for (const auto& header : headers) {
+    auto [_val, _type, _notnull] = header;
+    if (_type == kBIGINT || _type == kTEXT || _type == kTIMESTAMP || _type == kBOOLEAN) {
+      label_infos.emplace_back(_val, SQLTypeInfo(_type, _notnull));
+    } else {
+      UNREACHABLE() << "Unsupported type provided for header. SQL type: "
+                    << to_string(_type);
+    }
+  }
+}
+
+void add_table_details(std::vector<RelLogicalValues::RowValues>& logical_values,
                        const TableDescriptor* logical_table,
                        const AggregratedStorageStats& agg_storage_stats) {
-  CHECK_EQ(static_cast<size_t>(20), _return.row_set.columns.size());
-  for (auto& column : _return.row_set.columns) {
-    column.nulls.emplace_back(false);
-  }
-
   bool is_sharded_table = (logical_table->nShards > 0);
-  _return.row_set.columns[0].data.int_col.emplace_back(logical_table->tableId);
-  _return.row_set.columns[1].data.str_col.emplace_back(logical_table->tableName);
-  _return.row_set.columns[2].data.int_col.emplace_back(logical_table->nColumns);
-  _return.row_set.columns[3].data.int_col.emplace_back(is_sharded_table);
-  _return.row_set.columns[4].data.int_col.emplace_back(logical_table->nShards);
-  _return.row_set.columns[5].data.int_col.emplace_back(logical_table->maxRows);
-  _return.row_set.columns[6].data.int_col.emplace_back(logical_table->maxFragRows);
-  _return.row_set.columns[7].data.int_col.emplace_back(logical_table->maxRollbackEpochs);
-  _return.row_set.columns[8].data.int_col.emplace_back(agg_storage_stats.min_epoch);
-  _return.row_set.columns[9].data.int_col.emplace_back(agg_storage_stats.max_epoch);
-  _return.row_set.columns[10].data.int_col.emplace_back(
-      agg_storage_stats.min_epoch_floor);
-  _return.row_set.columns[11].data.int_col.emplace_back(
-      agg_storage_stats.max_epoch_floor);
-  _return.row_set.columns[12].data.int_col.emplace_back(
-      agg_storage_stats.metadata_file_count);
-  _return.row_set.columns[13].data.int_col.emplace_back(
-      agg_storage_stats.total_metadata_file_size);
-  _return.row_set.columns[14].data.int_col.emplace_back(
-      agg_storage_stats.total_metadata_page_count);
+  logical_values.emplace_back(RelLogicalValues::RowValues{});
+  logical_values.back().emplace_back(genLiteralBigInt(logical_table->tableId));
+  logical_values.back().emplace_back(genLiteralStr(logical_table->tableName));
+  logical_values.back().emplace_back(genLiteralBigInt(logical_table->nColumns));
+  logical_values.back().emplace_back(genLiteralBoolean(is_sharded_table));
+  logical_values.back().emplace_back(genLiteralBigInt(logical_table->nShards));
+  logical_values.back().emplace_back(genLiteralBigInt(logical_table->maxRows));
+  logical_values.back().emplace_back(genLiteralBigInt(logical_table->maxFragRows));
+  logical_values.back().emplace_back(genLiteralBigInt(logical_table->maxRollbackEpochs));
+  logical_values.back().emplace_back(genLiteralBigInt(agg_storage_stats.min_epoch));
+  logical_values.back().emplace_back(genLiteralBigInt(agg_storage_stats.max_epoch));
+  logical_values.back().emplace_back(genLiteralBigInt(agg_storage_stats.min_epoch_floor));
+  logical_values.back().emplace_back(genLiteralBigInt(agg_storage_stats.max_epoch_floor));
+  logical_values.back().emplace_back(
+      genLiteralBigInt(agg_storage_stats.metadata_file_count));
+  logical_values.back().emplace_back(
+      genLiteralBigInt(agg_storage_stats.total_metadata_file_size));
+  logical_values.back().emplace_back(
+      genLiteralBigInt(agg_storage_stats.total_metadata_page_count));
 
   if (agg_storage_stats.total_free_metadata_page_count) {
-    _return.row_set.columns[15].data.int_col.emplace_back(
-        agg_storage_stats.total_free_metadata_page_count.value());
+    logical_values.back().emplace_back(
+        genLiteralBigInt(agg_storage_stats.total_free_metadata_page_count.value()));
   } else {
-    _return.row_set.columns[15].data.int_col.emplace_back(NULL_BIGINT);
-    _return.row_set.columns[15].nulls.back() = true;
+    logical_values.back().emplace_back(genLiteralBigInt(NULL_BIGINT));
   }
 
-  _return.row_set.columns[16].data.int_col.emplace_back(
-      agg_storage_stats.data_file_count);
-  _return.row_set.columns[17].data.int_col.emplace_back(
-      agg_storage_stats.total_data_file_size);
-  _return.row_set.columns[18].data.int_col.emplace_back(
-      agg_storage_stats.total_data_page_count);
+  logical_values.back().emplace_back(genLiteralBigInt(agg_storage_stats.data_file_count));
+  logical_values.back().emplace_back(
+      genLiteralBigInt(agg_storage_stats.total_data_file_size));
+  logical_values.back().emplace_back(
+      genLiteralBigInt(agg_storage_stats.total_data_page_count));
 
   if (agg_storage_stats.total_free_data_page_count) {
-    _return.row_set.columns[19].data.int_col.emplace_back(
-        agg_storage_stats.total_free_data_page_count.value());
+    logical_values.back().emplace_back(
+        genLiteralBigInt(agg_storage_stats.total_free_data_page_count.value()));
   } else {
-    _return.row_set.columns[19].data.int_col.emplace_back(NULL_BIGINT);
-    _return.row_set.columns[19].nulls.back() = true;
+    logical_values.back().emplace_back(genLiteralBigInt(NULL_BIGINT));
   }
 }
 }  // namespace
@@ -232,21 +217,22 @@ DdlCommandExecutor::DdlCommandExecutor(
   const auto& payload = ddl_query_["payload"].GetObject();
   CHECK(payload.HasMember("command"));
   CHECK(payload["command"].IsString());
+  ddl_command_ = payload["command"].GetString();
 }
 
-void DdlCommandExecutor::execute(TQueryResult& _return) {
+ExecutionResult DdlCommandExecutor::execute() {
+  ExecutionResult result;
   const auto& payload = ddl_query_["payload"].GetObject();
-  const auto& ddl_command = std::string_view(payload["command"].GetString());
 
   // the following commands use parser node locking to ensure safe concurrent access
-  if (ddl_command == "CREATE_TABLE") {
+  if (ddl_command_ == "CREATE_TABLE") {
     auto create_table_stmt = Parser::CreateTableStmt(payload);
     create_table_stmt.execute(*session_ptr_);
-    return;
-  } else if (ddl_command == "CREATE_VIEW") {
+    return result;
+  } else if (ddl_command_ == "CREATE_VIEW") {
     auto create_view_stmt = Parser::CreateViewStmt(payload);
     create_view_stmt.execute(*session_ptr_);
-    return;
+    return result;
   }
 
   // the following commands require a global unique lock until proper table locking has
@@ -256,33 +242,33 @@ void DdlCommandExecutor::execute(TQueryResult& _return) {
           legacylockmgr::ExecutorOuterLock, true));
   // TODO(vancouver): add appropriate table locking
 
-  if (ddl_command == "CREATE_SERVER") {
-    CreateForeignServerCommand{payload, session_ptr_}.execute(_return);
-  } else if (ddl_command == "DROP_SERVER") {
-    DropForeignServerCommand{payload, session_ptr_}.execute(_return);
-  } else if (ddl_command == "CREATE_FOREIGN_TABLE") {
-    CreateForeignTableCommand{payload, session_ptr_}.execute(_return);
-  } else if (ddl_command == "DROP_FOREIGN_TABLE") {
-    DropForeignTableCommand{payload, session_ptr_}.execute(_return);
-  } else if (ddl_command == "SHOW_TABLES") {
-    ShowTablesCommand{payload, session_ptr_}.execute(_return);
-  } else if (ddl_command == "SHOW_TABLE_DETAILS") {
-    ShowTableDetailsCommand{payload, session_ptr_}.execute(_return);
-  } else if (ddl_command == "SHOW_DATABASES") {
-    ShowDatabasesCommand{payload, session_ptr_}.execute(_return);
-  } else if (ddl_command == "SHOW_SERVERS") {
-    ShowForeignServersCommand{payload, session_ptr_}.execute(_return);
-  } else if (ddl_command == "ALTER_SERVER") {
-    AlterForeignServerCommand{payload, session_ptr_}.execute(_return);
-  } else if (ddl_command == "ALTER_FOREIGN_TABLE") {
-    AlterForeignTableCommand{payload, session_ptr_}.execute(_return);
-  } else if (ddl_command == "REFRESH_FOREIGN_TABLES") {
-    RefreshForeignTablesCommand{payload, session_ptr_}.execute(_return);
-  } else if (ddl_command == "SHOW_QUERIES") {
+  if (ddl_command_ == "CREATE_SERVER") {
+    result = CreateForeignServerCommand{payload, session_ptr_}.execute();
+  } else if (ddl_command_ == "DROP_SERVER") {
+    result = DropForeignServerCommand{payload, session_ptr_}.execute();
+  } else if (ddl_command_ == "CREATE_FOREIGN_TABLE") {
+    result = CreateForeignTableCommand{payload, session_ptr_}.execute();
+  } else if (ddl_command_ == "DROP_FOREIGN_TABLE") {
+    result = DropForeignTableCommand{payload, session_ptr_}.execute();
+  } else if (ddl_command_ == "SHOW_TABLES") {
+    result = ShowTablesCommand{payload, session_ptr_}.execute();
+  } else if (ddl_command_ == "SHOW_TABLE_DETAILS") {
+    result = ShowTableDetailsCommand{payload, session_ptr_}.execute();
+  } else if (ddl_command_ == "SHOW_DATABASES") {
+    result = ShowDatabasesCommand{payload, session_ptr_}.execute();
+  } else if (ddl_command_ == "SHOW_SERVERS") {
+    result = ShowForeignServersCommand{payload, session_ptr_}.execute();
+  } else if (ddl_command_ == "ALTER_SERVER") {
+    result = AlterForeignServerCommand{payload, session_ptr_}.execute();
+  } else if (ddl_command_ == "ALTER_FOREIGN_TABLE") {
+    result = AlterForeignTableCommand{payload, session_ptr_}.execute();
+  } else if (ddl_command_ == "REFRESH_FOREIGN_TABLES") {
+    result = RefreshForeignTablesCommand{payload, session_ptr_}.execute();
+  } else if (ddl_command_ == "SHOW_QUERIES") {
     LOG(ERROR) << "SHOW QUERIES DDL is not ready yet!\n";
-  } else if (ddl_command == "SHOW_DISK_CACHE_USAGE") {
-    ShowDiskCacheUsageCommand{payload, session_ptr_}.execute(_return);
-  } else if (ddl_command == "KILL_QUERY") {
+  } else if (ddl_command_ == "SHOW_DISK_CACHE_USAGE") {
+    result = ShowDiskCacheUsageCommand{payload, session_ptr_}.execute();
+  } else if (ddl_command_ == "KILL_QUERY") {
     CHECK(payload.HasMember("querySession"));
     const std::string& querySessionPayload = payload["querySession"].GetString();
     auto querySession = querySessionPayload.substr(1, 8);
@@ -293,34 +279,28 @@ void DdlCommandExecutor::execute(TQueryResult& _return) {
   } else {
     throw std::runtime_error("Unsupported DDL command");
   }
+
+  return result;
 }
 
 bool DdlCommandExecutor::isShowUserSessions() {
-  const auto& payload = ddl_query_["payload"].GetObject();
-  const auto& ddl_command = std::string_view(payload["command"].GetString());
-  return (ddl_command == "SHOW_USER_SESSIONS");
+  return (ddl_command_ == "SHOW_USER_SESSIONS");
 }
 
 bool DdlCommandExecutor::isShowQueries() {
-  const auto& payload = ddl_query_["payload"].GetObject();
-  const auto& ddl_command = std::string_view(payload["command"].GetString());
-  return (ddl_command == "SHOW_QUERIES");
+  return (ddl_command_ == "SHOW_QUERIES");
 }
 
 bool DdlCommandExecutor::isKillQuery() {
-  const auto& payload = ddl_query_["payload"].GetObject();
-  const auto& ddl_command = std::string_view(payload["command"].GetString());
-  return (ddl_command == "KILL_QUERY");
+  return (ddl_command_ == "KILL_QUERY");
 }
 
 DistributedExecutionDetails DdlCommandExecutor::getDistributedExecutionDetails() {
-  const auto& payload = ddl_query_["payload"].GetObject();
-  const auto& ddl_command = std::string_view(payload["command"].GetString());
   DistributedExecutionDetails execution_details;
-  if (ddl_command == "CREATE_TABLE" || ddl_command == "CREATE_VIEW") {
+  if (ddl_command_ == "CREATE_TABLE" || ddl_command_ == "CREATE_VIEW") {
     execution_details.execution_location = ExecutionLocation::ALL_NODES;
     execution_details.aggregation_type = AggregationType::NONE;
-  } else if (ddl_command == "SHOW_TABLE_DETAILS") {
+  } else if (ddl_command_ == "SHOW_TABLE_DETAILS") {
     execution_details.execution_location = ExecutionLocation::LEAVES_ONLY;
     execution_details.aggregation_type = AggregationType::UNION;
   } else {
@@ -347,6 +327,18 @@ const std::string DdlCommandExecutor::getTargetQuerySessionToKill() {
   return query_session;
 }
 
+const std::string DdlCommandExecutor::commandStr() {
+  return ddl_command_;
+}
+
+static const rapidjson::Value* extractFilters(const rapidjson::Value& payload) {
+  const rapidjson::Value* filters = nullptr;
+  if (payload.HasMember("filters") && payload["filters"].IsArray()) {
+    filters = &payload["filters"];
+  }
+  return filters;
+}
+
 CreateForeignServerCommand::CreateForeignServerCommand(
     const rapidjson::Value& ddl_payload,
     std::shared_ptr<Catalog_Namespace::SessionInfo const> session_ptr)
@@ -361,7 +353,9 @@ CreateForeignServerCommand::CreateForeignServerCommand(
   CHECK(ddl_payload["ifNotExists"].IsBool());
 }
 
-void CreateForeignServerCommand::execute(TQueryResult& _return) {
+ExecutionResult CreateForeignServerCommand::execute() {
+  ExecutionResult result;
+
   std::string server_name = ddl_payload_["serverName"].GetString();
   if (isDefaultServer(server_name)) {
     throw std::runtime_error{"Server names cannot start with \"omnisci\"."};
@@ -369,7 +363,7 @@ void CreateForeignServerCommand::execute(TQueryResult& _return) {
   bool if_not_exists = ddl_payload_["ifNotExists"].GetBool();
   if (session_ptr_->getCatalog().getForeignServer(server_name)) {
     if (if_not_exists) {
-      return;
+      return result;
     } else {
       throw std::runtime_error{"A foreign server with name \"" + server_name +
                                "\" already exists."};
@@ -395,6 +389,8 @@ void CreateForeignServerCommand::execute(TQueryResult& _return) {
                               ddl_payload_["ifNotExists"].GetBool());
   Catalog_Namespace::SysCatalog::instance().createDBObject(
       current_user, server_name, ServerDBObjectType, catalog);
+
+  return result;
 }
 
 AlterForeignServerCommand::AlterForeignServerCommand(
@@ -422,7 +418,7 @@ AlterForeignServerCommand::AlterForeignServerCommand(
   }
 }
 
-void AlterForeignServerCommand::execute(TQueryResult& _return) {
+ExecutionResult AlterForeignServerCommand::execute() {
   std::string server_name = ddl_payload_["serverName"].GetString();
   if (isDefaultServer(server_name)) {
     throw std::runtime_error{"OmniSci default servers cannot be altered."};
@@ -445,6 +441,8 @@ void AlterForeignServerCommand::execute(TQueryResult& _return) {
   } else if (alter_type == "RENAME_SERVER") {
     renameForeignServer();
   }
+
+  return ExecutionResult();
 }
 
 void AlterForeignServerCommand::changeForeignServerOwner() {
@@ -549,7 +547,7 @@ DropForeignServerCommand::DropForeignServerCommand(
   CHECK(ddl_payload["ifExists"].IsBool());
 }
 
-void DropForeignServerCommand::execute(TQueryResult& _return) {
+ExecutionResult DropForeignServerCommand::execute() {
   std::string server_name = ddl_payload_["serverName"].GetString();
   if (isDefaultServer(server_name)) {
     throw std::runtime_error{"OmniSci default servers cannot be dropped."};
@@ -557,7 +555,7 @@ void DropForeignServerCommand::execute(TQueryResult& _return) {
   bool if_exists = ddl_payload_["ifExists"].GetBool();
   if (!session_ptr_->getCatalog().getForeignServer(server_name)) {
     if (if_exists) {
-      return;
+      return ExecutionResult();
     } else {
       throw std::runtime_error{"Foreign server with name \"" + server_name +
                                "\" can not be dropped. Server does not exist."};
@@ -572,6 +570,8 @@ void DropForeignServerCommand::execute(TQueryResult& _return) {
   Catalog_Namespace::SysCatalog::instance().revokeDBObjectPrivilegesFromAll(
       DBObject(server_name, ServerDBObjectType), session_ptr_->get_catalog_ptr().get());
   session_ptr_->getCatalog().dropForeignServer(ddl_payload_["serverName"].GetString());
+
+  return ExecutionResult();
 }
 
 SQLTypes JsonColumnSqlType::getSqlType(const rapidjson::Value& data_type) {
@@ -733,7 +733,7 @@ CreateForeignTableCommand::CreateForeignTableCommand(
   CHECK(ddl_payload["columns"].IsArray());
 }
 
-void CreateForeignTableCommand::execute(TQueryResult& _return) {
+ExecutionResult CreateForeignTableCommand::execute() {
   auto& catalog = session_ptr_->getCatalog();
 
   const std::string& table_name = ddl_payload_["tableName"].GetString();
@@ -746,7 +746,7 @@ void CreateForeignTableCommand::execute(TQueryResult& _return) {
 
   bool if_not_exists = ddl_payload_["ifNotExists"].GetBool();
   if (!catalog.validateNonExistentTableOrView(table_name, if_not_exists)) {
-    return;
+    return ExecutionResult();
   }
 
   foreign_storage::ForeignTable foreign_table{};
@@ -762,6 +762,8 @@ void CreateForeignTableCommand::execute(TQueryResult& _return) {
       foreign_table.tableName,
       TableDBObjectType,
       catalog);
+
+  return ExecutionResult();
 }
 
 void CreateForeignTableCommand::setTableDetails(const std::string& table_name,
@@ -842,7 +844,7 @@ DropForeignTableCommand::DropForeignTableCommand(
   CHECK(ddl_payload["ifExists"].IsBool());
 }
 
-void DropForeignTableCommand::execute(TQueryResult& _return) {
+ExecutionResult DropForeignTableCommand::execute() {
   auto& catalog = session_ptr_->getCatalog();
   const std::string& table_name = ddl_payload_["tableName"].GetString();
   const TableDescriptor* td{nullptr};
@@ -859,7 +861,7 @@ void DropForeignTableCommand::execute(TQueryResult& _return) {
     // TODO(Misiu): This should not just swallow any exception, it should only catch
     // exceptions that stem from the table not existing.
     if (ddl_payload_["ifExists"].GetBool()) {
-      return;
+      return ExecutionResult();
     } else {
       throw e;
     }
@@ -878,6 +880,8 @@ void DropForeignTableCommand::execute(TQueryResult& _return) {
   auto table_data_write_lock =
       lockmgr::TableDataLockMgr::getWriteLockForTable(catalog, table_name);
   catalog.dropTable(td);
+
+  return ExecutionResult();
 }
 
 ShowTablesCommand::ShowTablesCommand(
@@ -885,16 +889,33 @@ ShowTablesCommand::ShowTablesCommand(
     std::shared_ptr<Catalog_Namespace::SessionInfo const> session_ptr)
     : DdlCommand(ddl_payload, session_ptr) {}
 
-void ShowTablesCommand::execute(TQueryResult& _return) {
+ExecutionResult ShowTablesCommand::execute() {
   // Get all table names in the same way as OmniSql \t command
-  auto cat_ptr = session_ptr_->get_catalog_ptr();
-  auto table_names =
-      cat_ptr->getTableNamesForUser(session_ptr_->get_currentUser(), GET_PHYSICAL_TABLES);
-  set_headers(_return, std::vector<std::string>{"table_name"});
-  // Place table names in query result
-  for (auto& table_name : table_names) {
-    add_row(_return, std::vector<std::string>{table_name});
+
+  // label_infos -> column labels
+  std::vector<std::string> labels{"table_name"};
+  std::vector<TargetMetaInfo> label_infos;
+  for (const auto& label : labels) {
+    label_infos.emplace_back(label, SQLTypeInfo(kTEXT, true));
   }
+
+  // Get all table names
+  auto cat_ptr = session_ptr_->get_catalog_ptr();
+  auto cur_user = session_ptr_->get_currentUser();
+  auto table_names = cat_ptr->getTableNamesForUser(cur_user, GET_PHYSICAL_TABLES);
+
+  // logical_values -> table data
+  std::vector<RelLogicalValues::RowValues> logical_values;
+  for (auto table_name : table_names) {
+    logical_values.emplace_back(RelLogicalValues::RowValues{});
+    logical_values.back().emplace_back(genLiteralStr(table_name));
+  }
+
+  // Create ResultSet
+  std::shared_ptr<ResultSet> rSet = std::shared_ptr<ResultSet>(
+      ResultSetLogicalValuesBuilder::create(label_infos, logical_values));
+
+  return ExecutionResult(rSet, label_infos);
 }
 
 ShowTableDetailsCommand::ShowTableDetailsCommand(
@@ -909,36 +930,47 @@ ShowTableDetailsCommand::ShowTableDetailsCommand(
   }
 }
 
-void ShowTableDetailsCommand::execute(TQueryResult& _return) {
+ExecutionResult ShowTableDetailsCommand::execute() {
   const auto catalog = session_ptr_->get_catalog_ptr();
   std::vector<std::string> filtered_table_names = getFilteredTableNames();
-  set_headers_with_type(_return,
-                        {{"table_id", kBIGINT},
-                         {"table_name", kTEXT},
-                         {"column_count", kBIGINT},
-                         {"is_sharded_table", kBOOLEAN},
-                         {"shard_count", kBIGINT},
-                         {"max_rows", kBIGINT},
-                         {"fragment_size", kBIGINT},
-                         {"max_rollback_epochs", kBIGINT},
-                         {"min_epoch", kBIGINT},
-                         {"max_epoch", kBIGINT},
-                         {"min_epoch_floor", kBIGINT},
-                         {"max_epoch_floor", kBIGINT},
-                         {"metadata_file_count", kBIGINT},
-                         {"total_metadata_file_size", kBIGINT},
-                         {"total_metadata_page_count", kBIGINT},
-                         {"total_free_metadata_page_count", kBIGINT},
-                         {"data_file_count", kBIGINT},
-                         {"total_data_file_size", kBIGINT},
-                         {"total_data_page_count", kBIGINT},
-                         {"total_free_data_page_count", kBIGINT}});
+
+  std::vector<TargetMetaInfo> label_infos;
+  set_headers_with_type(label_infos,
+                        {// { label, type, notNull }
+                         {"table_id", kBIGINT, true},
+                         {"table_name", kTEXT, true},
+                         {"column_count", kBIGINT, true},
+                         {"is_sharded_table", kBOOLEAN, true},
+                         {"shard_count", kBIGINT, true},
+                         {"max_rows", kBIGINT, true},
+                         {"fragment_size", kBIGINT, true},
+                         {"max_rollback_epochs", kBIGINT, true},
+                         {"min_epoch", kBIGINT, true},
+                         {"max_epoch", kBIGINT, true},
+                         {"min_epoch_floor", kBIGINT, true},
+                         {"max_epoch_floor", kBIGINT, true},
+                         {"metadata_file_count", kBIGINT, true},
+                         {"total_metadata_file_size", kBIGINT, true},
+                         {"total_metadata_page_count", kBIGINT, true},
+                         {"total_free_metadata_page_count", kBIGINT, false},
+                         {"data_file_count", kBIGINT, true},
+                         {"total_data_file_size", kBIGINT, true},
+                         {"total_data_page_count", kBIGINT, true},
+                         {"total_free_data_page_count", kBIGINT, false}});
+
+  std::vector<RelLogicalValues::RowValues> logical_values;
   for (const auto& table_name : filtered_table_names) {
     auto [td, td_with_lock] =
         get_table_descriptor_with_lock<lockmgr::ReadLock>(*catalog, table_name, false);
     auto agg_storage_stats = get_agg_storage_stats(td, catalog.get());
-    add_table_details(_return, td, agg_storage_stats);
+    add_table_details(logical_values, td, agg_storage_stats);
   }
+
+  // Create ResultSet
+  std::shared_ptr<ResultSet> rSet = std::shared_ptr<ResultSet>(
+      ResultSetLogicalValuesBuilder::create(label_infos, logical_values));
+
+  return ExecutionResult(rSet, label_infos);
 }
 
 std::vector<std::string> ShowTableDetailsCommand::getFilteredTableNames() {
@@ -987,14 +1019,32 @@ ShowDatabasesCommand::ShowDatabasesCommand(
     std::shared_ptr<Catalog_Namespace::SessionInfo const> session_ptr)
     : DdlCommand(ddl_payload, session_ptr) {}
 
-void ShowDatabasesCommand::execute(TQueryResult& _return) {
-  const auto& user = session_ptr_->get_currentUser();
-  const Catalog_Namespace::DBSummaryList db_summaries =
-      Catalog_Namespace::SysCatalog::instance().getDatabaseListForUser(user);
-  set_headers(_return, {"Database", "Owner"});
-  for (const auto& db_summary : db_summaries) {
-    add_row(_return, {db_summary.dbName, db_summary.dbOwnerName});
+ExecutionResult ShowDatabasesCommand::execute() {
+  // label_infos -> column labels
+  std::vector<std::string> labels{"Database", "Owner"};
+  std::vector<TargetMetaInfo> label_infos;
+  for (const auto& label : labels) {
+    label_infos.emplace_back(label, SQLTypeInfo(kTEXT, true));
   }
+
+  // Get all table names
+  auto cur_user = session_ptr_->get_currentUser();
+  const Catalog_Namespace::DBSummaryList db_summaries =
+      Catalog_Namespace::SysCatalog::instance().getDatabaseListForUser(cur_user);
+
+  // logical_values -> table data
+  std::vector<RelLogicalValues::RowValues> logical_values;
+  for (const auto& db_summary : db_summaries) {
+    logical_values.emplace_back(RelLogicalValues::RowValues{});
+    logical_values.back().emplace_back(genLiteralStr(db_summary.dbName));
+    logical_values.back().emplace_back(genLiteralStr(db_summary.dbOwnerName));
+  }
+
+  // Create ResultSet
+  std::shared_ptr<ResultSet> rSet = std::shared_ptr<ResultSet>(
+      ResultSetLogicalValuesBuilder::create(label_infos, logical_values));
+
+  return ExecutionResult(rSet, label_infos);
 }
 
 ShowForeignServersCommand::ShowForeignServersCommand(
@@ -1028,35 +1078,39 @@ ShowForeignServersCommand::ShowForeignServersCommand(
   }
 }
 
-void ShowForeignServersCommand::execute(TQueryResult& _return) {
-  const std::vector<std::string> col_names{
-      "server_name", "data_wrapper", "created_at", "options"};
+ExecutionResult ShowForeignServersCommand::execute() {
+  std::vector<TargetMetaInfo> label_infos;
+
+  // label_infos -> column labels
+  std::vector<std::string> labels{"server_name", "data_wrapper", "created_at", "options"};
+  label_infos.emplace_back(labels[0], SQLTypeInfo(kTEXT, true));
+  label_infos.emplace_back(labels[1], SQLTypeInfo(kTEXT, true));
+  // created_at is a TIMESTAMP
+  label_infos.emplace_back(labels[2], SQLTypeInfo(kTIMESTAMP, true));
+  label_infos.emplace_back(labels[3], SQLTypeInfo(kTEXT, true));
+
+  const auto& user = session_ptr_->get_currentUser();
 
   std::vector<const foreign_storage::ForeignServer*> results;
-  const auto& user = session_ptr_->get_currentUser();
-  if (ddl_payload_.HasMember("filters")) {
-    session_ptr_->getCatalog().getForeignServersForUser(
-        &ddl_payload_["filters"], user, results);
-  } else {
-    session_ptr_->getCatalog().getForeignServersForUser(nullptr, user, results);
-  }
-  set_headers(_return, col_names);
 
-  _return.row_set.row_desc[2].col_type.type = TDatumType::type::TIMESTAMP;
+  session_ptr_->getCatalog().getForeignServersForUser(
+      extractFilters(ddl_payload_), user, results);
 
+  // logical_values -> table data
+  std::vector<RelLogicalValues::RowValues> logical_values;
   for (auto const& server_ptr : results) {
-    _return.row_set.columns[0].data.str_col.emplace_back(server_ptr->name);
-
-    _return.row_set.columns[1].data.str_col.emplace_back(server_ptr->data_wrapper_type);
-
-    _return.row_set.columns[2].data.int_col.push_back(server_ptr->creation_time);
-
-    _return.row_set.columns[3].data.str_col.emplace_back(
-        server_ptr->getOptionsAsJsonString());
-
-    for (size_t i = 0; i < _return.row_set.columns.size(); i++)
-      _return.row_set.columns[i].nulls.emplace_back(false);
+    logical_values.emplace_back(RelLogicalValues::RowValues{});
+    logical_values.back().emplace_back(genLiteralStr(server_ptr->name));
+    logical_values.back().emplace_back(genLiteralStr(server_ptr->data_wrapper_type));
+    logical_values.back().emplace_back(genLiteralTimestamp(server_ptr->creation_time));
+    logical_values.back().emplace_back(
+        genLiteralStr(server_ptr->getOptionsAsJsonString()));
   }
+
+  std::shared_ptr<ResultSet> rSet = std::shared_ptr<ResultSet>(
+      ResultSetLogicalValuesBuilder::create(label_infos, logical_values));
+
+  return ExecutionResult(rSet, label_infos);
 }
 
 RefreshForeignTablesCommand::RefreshForeignTablesCommand(
@@ -1070,7 +1124,7 @@ RefreshForeignTablesCommand::RefreshForeignTablesCommand(
   }
 }
 
-void RefreshForeignTablesCommand::execute(TQueryResult& _return) {
+ExecutionResult RefreshForeignTablesCommand::execute() {
   bool evict_cached_entries{false};
   foreign_storage::OptionsContainer opt;
   if (ddl_payload_.HasMember("options") && !ddl_payload_["options"].IsNull()) {
@@ -1117,6 +1171,8 @@ void RefreshForeignTablesCommand::execute(TQueryResult& _return) {
     std::string table_name = table_name_json.GetString();
     foreign_storage::refresh_foreign_table(cat, table_name, evict_cached_entries);
   }
+
+  return ExecutionResult();
 }
 
 AlterForeignTableCommand::AlterForeignTableCommand(
@@ -1144,7 +1200,7 @@ AlterForeignTableCommand::AlterForeignTableCommand(
   }
 }
 
-void AlterForeignTableCommand::execute(TQueryResult& _return) {
+ExecutionResult AlterForeignTableCommand::execute() {
   auto& catalog = session_ptr_->getCatalog();
   const std::string& table_name = ddl_payload_["tableName"].GetString();
   auto [td, td_with_lock] =
@@ -1171,6 +1227,8 @@ void AlterForeignTableCommand::execute(TQueryResult& _return) {
   } else if (alter_type == "ALTER_OPTIONS") {
     alterOptions(foreign_table);
   }
+
+  return ExecutionResult();
 }
 
 void AlterForeignTableCommand::renameTable(
@@ -1254,17 +1312,23 @@ std::vector<std::string> ShowDiskCacheUsageCommand::getFilteredTableNames() {
   }
 }
 
-void ShowDiskCacheUsageCommand::execute(TQueryResult& _return) {
+ExecutionResult ShowDiskCacheUsageCommand::execute() {
   auto cat_ptr = session_ptr_->get_catalog_ptr();
   auto table_names = getFilteredTableNames();
-
-  set_headers(_return, std::vector<std::string>{"table name", "current cache size"});
-  _return.row_set.row_desc[1].col_type.type = TDatumType::type::BIGINT;
 
   const auto disk_cache = cat_ptr->getDataMgr().getPersistentStorageMgr()->getDiskCache();
   if (!disk_cache) {
     throw std::runtime_error{"Disk cache not enabled.  Cannot show disk cache usage."};
   }
+
+  // label_infos -> column labels
+  std::vector<std::string> labels{"table name", "current cache size"};
+  std::vector<TargetMetaInfo> label_infos;
+  label_infos.emplace_back(labels[0], SQLTypeInfo(kTEXT, true));
+  label_infos.emplace_back(labels[1], SQLTypeInfo(kBIGINT, true));
+
+  std::vector<RelLogicalValues::RowValues> logical_values;
+
   for (auto& table_name : table_names) {
     auto [td, td_with_lock] =
         get_table_descriptor_with_lock<lockmgr::ReadLock>(*cat_ptr, table_name, false);
@@ -1272,15 +1336,20 @@ void ShowDiskCacheUsageCommand::execute(TQueryResult& _return) {
     const auto mgr = dynamic_cast<File_Namespace::FileMgr*>(
         disk_cache->getGlobalFileMgr()->findFileMgr(cat_ptr->getDatabaseId(),
                                                     td->tableId));
+
     // NOTE: This size does not include datawrapper metadata that is on disk.
     // If a mgr does not exist it means a cache is not enabled/created for the given
     // table.
     auto table_cache_size = mgr ? mgr->getTotalFileSize() : 0;
 
-    _return.row_set.columns[0].data.str_col.emplace_back(table_name);
-    _return.row_set.columns[1].data.int_col.emplace_back(table_cache_size);
-
-    for (size_t i = 0; i < _return.row_set.columns.size(); i++)
-      _return.row_set.columns[i].nulls.emplace_back(false);
+    // logical_values -> table data
+    logical_values.emplace_back(RelLogicalValues::RowValues{});
+    logical_values.back().emplace_back(genLiteralStr(table_name));
+    logical_values.back().emplace_back(genLiteralBigInt(table_cache_size));
   }
+
+  std::shared_ptr<ResultSet> rSet = std::shared_ptr<ResultSet>(
+      ResultSetLogicalValuesBuilder::create(label_infos, logical_values));
+
+  return ExecutionResult(rSet, label_infos);
 }

@@ -35,9 +35,21 @@ ResultSet* ResultSetBuilder::makeResultSet(
                        device_type,
                        query_mem_desc,
                        row_set_mem_owner,
-                       executor->getCatalog(),
-                       executor->blockSize(),
-                       executor->gridSize());
+                       executor ? executor->getCatalog() : nullptr,
+                       executor ? executor->blockSize() : 0,
+                       executor ? executor->gridSize() : 0);
+}
+
+void ResultSetBuilder::addVarlenBuffer(ResultSet* result_set,
+                                       std::vector<std::string>& varlen_storage) {
+  CHECK(result_set->serialized_varlen_buffer_.size() == 0);
+
+  // init with an empty vector
+  result_set->serialized_varlen_buffer_.emplace_back(std::vector<std::string>());
+
+  // copy the values into the empty vector
+  result_set->serialized_varlen_buffer_.front().assign(varlen_storage.begin(),
+                                                       varlen_storage.end());
 }
 
 ResultSetDefaultBuilder::ResultSetDefaultBuilder(
@@ -86,6 +98,8 @@ ResultSet* ResultSetLogicalValuesBuilder::build() {
   if (logical_values && logical_values->hasRows()) {
     CHECK_EQ(logical_values->getRowsSize(), logical_values->size());
 
+    std::vector<std::string> separate_varlen_storage;
+
     auto storage = rs->allocateStorage();
     auto buff = storage->getUnderlyingBuffer();
 
@@ -108,17 +122,77 @@ ResultSet* ResultSetLogicalValuesBuilder::build() {
           const auto ti = constant->get_type_info();
           const auto datum = constant->get_constval();
 
-          // Initialize the entire 8-byte slot
-          *reinterpret_cast<int64_t*>(ptr) = EMPTY_KEY_64;
+          if (ti.is_string()) {
+            // get string from datum and push to vector
+            separate_varlen_storage.push_back(*(datum.stringval));
 
-          const auto sz = ti.get_size();
-          CHECK_GE(sz, int(0));
-          std::memcpy(ptr, &datum, sz);
+            // store the index/offset in ResultSet's storage
+            //   (the # of the string in the varlen_storage, not strLen)
+            *reinterpret_cast<int64_t*>(ptr) =
+                static_cast<int64_t>(separate_varlen_storage.size() - 1);
+
+          } else {
+            // Initialize the entire 8-byte slot
+            *reinterpret_cast<int64_t*>(ptr) = EMPTY_KEY_64;
+
+            const auto sz = ti.get_size();
+            CHECK_GE(sz, int(0));
+            std::memcpy(ptr, &datum, sz);
+          }
         }
         ptr += 8;
       }
     }
+
+    // store the varlen data (ex. strings) into the ResultSet
+    if (separate_varlen_storage.size()) {
+      ResultSetBuilder::addVarlenBuffer(rs, separate_varlen_storage);
+      rs->setSeparateVarlenStorageValid(true);
+    }
   }
 
   return rs;
+}
+
+// static
+ResultSet* ResultSetLogicalValuesBuilder::create(
+    std::vector<TargetMetaInfo>& label_infos,
+    std::vector<RelLogicalValues::RowValues>& logical_values) {
+  // check to see if number of columns matches (at least the first row)
+  size_t numCols =
+      logical_values.size() ? logical_values.front().size() : label_infos.size();
+  CHECK_EQ(label_infos.size(), numCols);
+
+  size_t numRows = logical_values.size();
+
+  QueryMemoryDescriptor query_mem_desc(/*executor=*/nullptr,
+                                       /*entry_count=*/numRows,
+                                       QueryDescriptionType::Projection,
+                                       /*is_table_function=*/false);
+
+  // target_infos -> defines the table columns
+  std::vector<TargetInfo> target_infos;
+  SQLTypeInfo str_ti(kTEXT, true, kENCODING_NONE);
+  for (size_t col = 0; col < numCols; col++) {
+    SQLTypeInfo colType = label_infos[col].get_type_info();
+    target_infos.push_back(TargetInfo{false, kSAMPLE, colType, colType, true, false});
+    query_mem_desc.addColSlotInfo({std::make_tuple(colType.get_size(), 8)});
+  }
+
+  std::shared_ptr<RelLogicalValues> rel_logical_values =
+      std::make_shared<RelLogicalValues>(label_infos, logical_values);
+
+  const auto row_set_mem_owner =
+      std::make_shared<RowSetMemoryOwner>(Executor::getArenaBlockSize());
+
+  // Construct ResultSet
+  ResultSet* rsp(ResultSetLogicalValuesBuilder(rel_logical_values.get(),
+                                               target_infos,
+                                               ExecutorDeviceType::CPU,
+                                               query_mem_desc,
+                                               row_set_mem_owner,
+                                               nullptr)
+                     .build());
+
+  return rsp;
 }

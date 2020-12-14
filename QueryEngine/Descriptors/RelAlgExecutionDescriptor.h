@@ -27,6 +27,8 @@ class ResultSet;
 
 class ExecutionResult {
  public:
+  ExecutionResult();
+
   ExecutionResult(const std::shared_ptr<ResultSet>& rows,
                   const std::vector<TargetMetaInfo>& targets_meta);
 

@@ -726,6 +726,13 @@ class DBHandler : public OmniSciIf {
                     const int32_t first_n,
                     const int32_t at_most_n) const;
 
+  // Use ExecutionResult to populate a TQueryResult
+  //    calls convert_rows, but after some setup using session_info
+  void convert_result_set(ExecutionResult& result,
+                          const Catalog_Namespace::SessionInfo& session_info,
+                          const std::string& query_state_str,
+                          TQueryResult& _return);
+
   void create_simple_result(TQueryResult& _return,
                             const ResultSet& results,
                             const bool column_format,
@@ -876,13 +883,14 @@ class DBHandler : public OmniSciIf {
   bool isInMemoryCalciteSession(const Catalog_Namespace::UserMetadata user_meta);
   void removeInMemoryCalciteSession(const std::string& session_id);
 
-  void getUserSessions(const Catalog_Namespace::SessionInfo& session_info,
-                       TQueryResult& _return);
+  ExecutionResult getUserSessions(
+      std::shared_ptr<Catalog_Namespace::SessionInfo const> session_ptr);
 
-  // this function returns a set of queries queued in the DB
-  // that belongs to the same DB in the caller's session
-  void getQueries(const Catalog_Namespace::SessionInfo& session_info,
-                  TQueryResult& _return);
+  // getQueries returns a set of queries queued in the DB
+  //    that belongs to the same DB in the caller's session
+
+  ExecutionResult getQueries(
+      std::shared_ptr<Catalog_Namespace::SessionInfo const> session_ptr);
 
   // this function passes the interrupt request to the DB executor
   void interruptQuery(const Catalog_Namespace::SessionInfo& session_info,

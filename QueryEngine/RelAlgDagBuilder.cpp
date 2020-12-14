@@ -694,6 +694,8 @@ std::unique_ptr<RexLiteral> parse_literal(const rapidjson::Value& expr) {
     return std::unique_ptr<RexLiteral>(new RexLiteral(target_type));
   }
   switch (type) {
+    case kINT:
+    case kBIGINT:
     case kDECIMAL:
     case kINTERVAL_DAY_TIME:
     case kINTERVAL_YEAR_MONTH:

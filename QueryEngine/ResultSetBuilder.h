@@ -45,6 +45,7 @@ class ResultSetBuilder {
                            const QueryMemoryDescriptor& query_mem_desc,
                            const std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
                            const Executor* executor);
+  void addVarlenBuffer(ResultSet* result_set, std::vector<std::string>& varlen_storage);
 
  public:
   virtual ResultSet* build() = 0;
@@ -86,6 +87,13 @@ class ResultSetLogicalValuesBuilder : public ResultSetBuilder {
       const Executor* executor);
 
   ResultSet* build();
+
+  // A simplified/common pre-packaged use case for this builder that creates a ResultSet
+  //     ExecutorDeviceType is "CPU"
+  //     QueryMemoryDescriptor is "Projection"
+  //     RowSetMemoryOwner is default
+  static ResultSet* create(std::vector<TargetMetaInfo>& label_infos,
+                           std::vector<RelLogicalValues::RowValues>& logical_values);
 };
 
 #endif  // QUERYENGINE_RESULTSETBUILDER_H

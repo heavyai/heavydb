@@ -18,16 +18,14 @@
 
 #include <string>
 
-#include "rapidjson/document.h"
-
-#include "Catalog/SessionInfo.h"
-#include "gen-cpp/omnisci_types.h"
+// Note: avoid adding #include(s) that require thrift
 
 #include "Catalog/ColumnDescriptor.h"
 #include "Catalog/SessionInfo.h"
 #include "Catalog/TableDescriptor.h"
+#include "QueryEngine/Descriptors/RelAlgExecutionDescriptor.h"
 #include "Utils/DdlUtils.h"
-#include "gen-cpp/omnisci_types.h"
+#include "rapidjson/document.h"
 
 class DdlCommand {
  public:
@@ -40,7 +38,7 @@ class DdlCommand {
    *
    * @param _return result of DDL command execution (if applicable)
    */
-  virtual void execute(TQueryResult& _return) = 0;
+  virtual ExecutionResult execute() = 0;
 
  protected:
   const rapidjson::Value& ddl_payload_;
@@ -54,7 +52,7 @@ class CreateForeignServerCommand : public DdlCommand {
       const rapidjson::Value& ddl_payload,
       std::shared_ptr<Catalog_Namespace::SessionInfo const> session_ptr);
 
-  void execute(TQueryResult& _return) override;
+  ExecutionResult execute() override;
 };
 
 class AlterForeignServerCommand : public DdlCommand {
@@ -63,7 +61,7 @@ class AlterForeignServerCommand : public DdlCommand {
       const rapidjson::Value& ddl_payload,
       std::shared_ptr<Catalog_Namespace::SessionInfo const> session_ptr);
 
-  void execute(TQueryResult& _return) override;
+  ExecutionResult execute() override;
 
  private:
   void changeForeignServerOwner();
@@ -79,7 +77,7 @@ class DropForeignServerCommand : public DdlCommand {
       const rapidjson::Value& ddl_payload,
       std::shared_ptr<Catalog_Namespace::SessionInfo const> session_ptr);
 
-  void execute(TQueryResult& _return) override;
+  ExecutionResult execute() override;
 };
 
 class JsonColumnSqlType : public ddl_utils::SqlType {
@@ -116,7 +114,7 @@ class CreateForeignTableCommand : public DdlCommand {
       const rapidjson::Value& ddl_payload,
       std::shared_ptr<Catalog_Namespace::SessionInfo const> session_ptr);
 
-  void execute(TQueryResult& _return) override;
+  ExecutionResult execute() override;
 
  private:
   void setTableDetails(const std::string& table_name,
@@ -130,7 +128,7 @@ class DropForeignTableCommand : public DdlCommand {
   DropForeignTableCommand(
       const rapidjson::Value& ddl_payload,
       std::shared_ptr<Catalog_Namespace::SessionInfo const> session_ptr);
-  void execute(TQueryResult& _return) override;
+  ExecutionResult execute() override;
 };
 
 class AlterForeignTableCommand : public DdlCommand {
@@ -138,7 +136,7 @@ class AlterForeignTableCommand : public DdlCommand {
   AlterForeignTableCommand(
       const rapidjson::Value& ddl_payload,
       std::shared_ptr<Catalog_Namespace::SessionInfo const> session_ptr);
-  void execute(TQueryResult& _return) override;
+  ExecutionResult execute() override;
 
  private:
   void alterOptions(const foreign_storage::ForeignTable* foreign_table);
@@ -151,7 +149,8 @@ class ShowForeignServersCommand : public DdlCommand {
   ShowForeignServersCommand(
       const rapidjson::Value& ddl_payload,
       std::shared_ptr<Catalog_Namespace::SessionInfo const> session_ptr);
-  void execute(TQueryResult& _return) override;
+
+  ExecutionResult execute() override;
 };
 
 class ShowTablesCommand : public DdlCommand {
@@ -159,7 +158,7 @@ class ShowTablesCommand : public DdlCommand {
   ShowTablesCommand(const rapidjson::Value& ddl_payload,
                     std::shared_ptr<Catalog_Namespace::SessionInfo const> session_ptr);
 
-  void execute(TQueryResult& _return) override;
+  ExecutionResult execute() override;
 };
 
 class ShowTableDetailsCommand : public DdlCommand {
@@ -168,7 +167,7 @@ class ShowTableDetailsCommand : public DdlCommand {
       const rapidjson::Value& ddl_payload,
       std::shared_ptr<Catalog_Namespace::SessionInfo const> session_ptr);
 
-  void execute(TQueryResult& _return) override;
+  ExecutionResult execute() override;
 
  private:
   std::vector<std::string> getFilteredTableNames();
@@ -179,7 +178,7 @@ class ShowDatabasesCommand : public DdlCommand {
   ShowDatabasesCommand(const rapidjson::Value& ddl_payload,
                        std::shared_ptr<Catalog_Namespace::SessionInfo const> session_ptr);
 
-  void execute(TQueryResult& _return) override;
+  ExecutionResult execute() override;
 };
 
 class ShowDiskCacheUsageCommand : public DdlCommand {
@@ -188,7 +187,7 @@ class ShowDiskCacheUsageCommand : public DdlCommand {
       const rapidjson::Value& ddl_payload,
       std::shared_ptr<Catalog_Namespace::SessionInfo const> session_ptr);
 
-  void execute(TQueryResult& _return) override;
+  ExecutionResult execute() override;
 
  private:
   std::vector<std::string> getFilteredTableNames();
@@ -200,7 +199,7 @@ class RefreshForeignTablesCommand : public DdlCommand {
       const rapidjson::Value& ddl_payload,
       std::shared_ptr<Catalog_Namespace::SessionInfo const> session_ptr);
 
-  void execute(TQueryResult& _return) override;
+  ExecutionResult execute() override;
 };
 
 enum class ExecutionLocation { ALL_NODES, AGGREGATOR_ONLY, LEAVES_ONLY };
@@ -220,9 +219,9 @@ class DdlCommandExecutor {
    * Parses given JSON string and routes resulting payload to appropriate DDL command
    * class for execution.
    *
-   * @param _return result of DDL command execution (if applicable)
+   * @param return ExecutionResult of DDL command execution (if applicable)
    */
-  void execute(TQueryResult& _return);
+  ExecutionResult execute();
 
   /**
    * Returns true if this command is SHOW USER SESSIONS
@@ -251,7 +250,13 @@ class DdlCommandExecutor {
    */
   DistributedExecutionDetails getDistributedExecutionDetails();
 
+  /**
+   * Returns command string, can be useful for logging, conversion
+   */
+  const std::string commandStr();
+
  private:
   rapidjson::Document ddl_query_;
+  std::string ddl_command_;  // extracted from ddl_query
   std::shared_ptr<Catalog_Namespace::SessionInfo const> session_ptr_;
 };

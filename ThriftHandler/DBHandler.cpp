@@ -61,6 +61,7 @@
 #include "QueryEngine/JoinFilterPushDown.h"
 #include "QueryEngine/JsonAccessors.h"
 #include "QueryEngine/QueryDispatchQueue.h"
+#include "QueryEngine/ResultSetBuilder.h"
 #include "QueryEngine/TableFunctions/TableFunctionsFactory.h"
 #include "QueryEngine/TableOptimizer.h"
 #include "QueryEngine/ThriftSerializers.h"
@@ -6356,53 +6357,85 @@ void DBHandler::register_runtime_extension_functions(
   ExtensionFunctionsWhitelist::addRTUdfs(whitelist);
 }
 
-void DBHandler::getUserSessions(const Catalog_Namespace::SessionInfo& session_info,
-                                TQueryResult& _return) {
-  if (!session_info.get_currentUser().isSuper) {
-    throw std::runtime_error(
-        "SHOW USER SESSIONS failed, because it can only be executed by super user.");
-  } else {
-    mapd_lock_guard<mapd_shared_mutex> read_lock(sessions_mutex_);
-    const std::vector<std::string> col_names{
-        "session_id", "login_name", "client_address", "db_name"};
+void DBHandler::convert_result_set(ExecutionResult& result,
+                                   const Catalog_Namespace::SessionInfo& session_info,
+                                   const std::string& query_state_str,
+                                   TQueryResult& _return) {
+  // Stuff ResultSet into _return (which is a TQueryResult)
+  // calls convert_rows, but after some setup using session_info
 
-    // Make columns for TQueryResult
-    TRowDescriptor row_desc;
-    for (const auto& col : col_names) {
-      TColumnType columnType;
-      columnType.col_name = col;
-      columnType.col_type.type = TDatumType::STR;
-      row_desc.push_back(columnType);
-      _return.row_set.columns.emplace_back(TColumn());
-    }
-    _return.row_set.row_desc = row_desc;
-    _return.row_set.is_columnar = true;
+  auto session_ptr = get_session_ptr(session_info.get_session_id());
+  auto qs = create_query_state(session_ptr, query_state_str);
+  QueryStateProxy qsp = qs->createQueryStateProxy();
 
-    if (!sessions_.empty()) {
-      for (auto sessions = sessions_.begin(); sessions_.end() != sessions; sessions++) {
-        const auto id = sessions->first;
-        const auto show_session_ptr = sessions->second;
-        int col_num = 0;
-        _return.row_set.columns[col_num++].data.str_col.emplace_back(
-            show_session_ptr->get_public_session_id());
-        _return.row_set.columns[col_num++].data.str_col.emplace_back(
-            show_session_ptr->get_currentUser().userName);
-        _return.row_set.columns[col_num++].data.str_col.emplace_back(
-            show_session_ptr->get_connection_info());
-        _return.row_set.columns[col_num++].data.str_col.emplace_back(
-            show_session_ptr->getCatalog().getCurrentDB().dbName);
+  // omnisql only accepts column format as being 'VALID",
+  //   assume that omnisci_server should only return column format
+  int32_t nRows = result.getDataPtr()->rowCount();
 
-        for (auto& col : _return.row_set.columns) {
-          col.nulls.push_back(false);
-        }
-      }
-    }
-  }
+  convert_rows(_return,
+               qsp,
+               result.getTargetsMeta(),
+               *result.getDataPtr(),
+               /*column_format=*/true,
+               /*first_n=*/nRows,
+               /*at_most_n=*/nRows);
 }
 
-void DBHandler::getQueries(const Catalog_Namespace::SessionInfo& session_info,
-                           TQueryResult& _return) {
-  if (!session_info.get_currentUser().isSuper) {
+static std::unique_ptr<RexLiteral> genLiteralStr(std::string val) {
+  return std::unique_ptr<RexLiteral>(
+      new RexLiteral(val, SQLTypes::kTEXT, SQLTypes::kTEXT, 0, 0, 0, 0));
+}
+
+ExecutionResult DBHandler::getUserSessions(
+    std::shared_ptr<Catalog_Namespace::SessionInfo const> session_ptr) {
+  std::shared_ptr<ResultSet> rSet = nullptr;
+  std::vector<TargetMetaInfo> label_infos;
+
+  if (!session_ptr->get_currentUser().isSuper) {
+    throw std::runtime_error(
+        "SHOW USER SESSIONS failed, because it can only be executed by super user.");
+
+  } else {
+    // label_infos -> column labels
+    std::vector<std::string> labels{
+        "session_id", "login_name", "client_address", "db_name"};
+    for (const auto& label : labels) {
+      label_infos.emplace_back(label, SQLTypeInfo(kTEXT, true));
+    }
+
+    // logical_values -> table data
+    std::vector<RelLogicalValues::RowValues> logical_values;
+
+    if (!sessions_.empty()) {
+      mapd_lock_guard<mapd_shared_mutex> read_lock(sessions_mutex_);
+
+      for (auto sessions = sessions_.begin(); sessions_.end() != sessions; sessions++) {
+        const auto show_session_ptr = sessions->second;
+        logical_values.emplace_back(RelLogicalValues::RowValues{});
+        logical_values.back().emplace_back(
+            genLiteralStr(show_session_ptr->get_public_session_id()));
+        logical_values.back().emplace_back(
+            genLiteralStr(show_session_ptr->get_currentUser().userName));
+        logical_values.back().emplace_back(
+            genLiteralStr(show_session_ptr->get_connection_info()));
+        logical_values.back().emplace_back(
+            genLiteralStr(show_session_ptr->getCatalog().getCurrentDB().dbName));
+      }
+    }
+
+    // Create ResultSet
+    rSet = std::shared_ptr<ResultSet>(
+        ResultSetLogicalValuesBuilder::create(label_infos, logical_values));
+  }
+  return ExecutionResult(rSet, label_infos);
+}
+
+ExecutionResult DBHandler::getQueries(
+    std::shared_ptr<Catalog_Namespace::SessionInfo const> session_ptr) {
+  std::shared_ptr<ResultSet> rSet = nullptr;
+  std::vector<TargetMetaInfo> label_infos;
+
+  if (!session_ptr->get_currentUser().isSuper) {
     throw std::runtime_error(
         "SHOW QUERIES failed, because it can only be executed by super user.");
   } else if (!g_enable_runtime_query_interrupt) {
@@ -6410,33 +6443,24 @@ void DBHandler::getQueries(const Catalog_Namespace::SessionInfo& session_info,
         "SHOW QUERIES failed, because runtime query interrupt is disabled.");
   } else {
     mapd_lock_guard<mapd_shared_mutex> read_lock(sessions_mutex_);
-    const std::vector<std::string> col_names{"query_session_id",
-                                             "current_status",
-                                             "executor_id",
-                                             "submitted",
-                                             "query_str",
-                                             "login_name",
-                                             "client_address",
-                                             "db_name",
-                                             "exec_device_type"};
-
-    // Make columns for TQueryResult
-    TRowDescriptor row_desc;
-    for (const auto& col : col_names) {
-      TColumnType columnType;
-      columnType.col_name = col;
-      columnType.col_type.type = TDatumType::STR;
-      row_desc.push_back(columnType);
-      _return.row_set.columns.emplace_back(TColumn());
+    std::vector<std::string> labels{"query_session_id",
+                                    "current_status",
+                                    "executor_id",
+                                    "submitted",
+                                    "query_str",
+                                    "login_name",
+                                    "client_address",
+                                    "db_name",
+                                    "exec_device_type"};
+    for (const auto& label : labels) {
+      label_infos.emplace_back(label, SQLTypeInfo(kTEXT, true));
     }
-    _return.row_set.row_desc = row_desc;
-    _return.row_set.is_columnar = true;
 
+    std::vector<RelLogicalValues::RowValues> logical_values;
     if (!sessions_.empty()) {
-      for (auto sessions = sessions_.begin(); sessions_.end() != sessions; sessions++) {
-        const auto id = sessions->first;
-        const auto query_session_ptr = sessions->second;
-
+      for (auto session = sessions_.begin(); sessions_.end() != session; session++) {
+        const auto id = session->first;
+        const auto query_session_ptr = session->second;
         auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID,
                                               jit_debug_ ? "/tmp" : "",
                                               jit_debug_ ? "mapdquery" : "",
@@ -6448,36 +6472,35 @@ void DBHandler::getQueries(const Catalog_Namespace::SessionInfo& session_info,
         session_read_lock.unlock();
         // if there exists query info fired from this session we report it to user
         for (QuerySessionStatus& query_info : query_infos) {
-          int col_num = 0;
-          _return.row_set.columns[col_num++].data.str_col.emplace_back(
-              query_session_ptr->get_public_session_id());
-          _return.row_set.columns[col_num++].data.str_col.emplace_back(
-              query_info.getQueryStatus());
-          _return.row_set.columns[col_num++].data.str_col.emplace_back(
-              ::toString(query_info.getExecutorId()));
-          _return.row_set.columns[col_num++].data.str_col.emplace_back(
-              ::toString(query_info.getQuerySubmittedTime()));
-          _return.row_set.columns[col_num++].data.str_col.emplace_back(
-              query_info.getQueryStr());
-          _return.row_set.columns[col_num++].data.str_col.emplace_back(
-              query_session_ptr->get_currentUser().userName);
-          _return.row_set.columns[col_num++].data.str_col.emplace_back(
-              query_session_ptr->get_connection_info());
-          _return.row_set.columns[col_num++].data.str_col.emplace_back(
-              query_session_ptr->getCatalog().getCurrentDB().dbName);
-          std::string exec_device_type =
-              query_session_ptr->get_executor_device_type() == ExecutorDeviceType::GPU
-                  ? "GPU"
-                  : "CPU";
-          _return.row_set.columns[col_num++].data.str_col.emplace_back(exec_device_type);
-
-          for (auto& col : _return.row_set.columns) {
-            col.nulls.push_back(false);
+          logical_values.emplace_back(RelLogicalValues::RowValues{});
+          logical_values.back().emplace_back(
+              genLiteralStr(query_session_ptr->get_public_session_id()));
+          logical_values.back().emplace_back(genLiteralStr(query_info.getQueryStatus()));
+          logical_values.back().emplace_back(
+              genLiteralStr(::toString(query_info.getExecutorId())));
+          logical_values.back().emplace_back(
+              genLiteralStr(::toString(query_info.getQuerySubmittedTime())));
+          logical_values.back().emplace_back(genLiteralStr(query_info.getQueryStr()));
+          logical_values.back().emplace_back(
+              genLiteralStr(query_session_ptr->get_currentUser().userName));
+          logical_values.back().emplace_back(
+              genLiteralStr(query_session_ptr->get_connection_info()));
+          logical_values.back().emplace_back(
+              genLiteralStr(query_session_ptr->getCatalog().getCurrentDB().dbName));
+          if (query_session_ptr->get_executor_device_type() == ExecutorDeviceType::GPU) {
+            logical_values.back().emplace_back(genLiteralStr("GPU"));
+          } else {
+            logical_values.back().emplace_back(genLiteralStr("CPU"));
           }
         }
       }
     }
+
+    rSet = std::shared_ptr<ResultSet>(
+        ResultSetLogicalValuesBuilder::create(label_infos, logical_values));
   }
+
+  return ExecutionResult(rSet, label_infos);
 }
 
 void DBHandler::interruptQuery(const Catalog_Namespace::SessionInfo& session_info,
@@ -6514,13 +6537,31 @@ void DBHandler::executeDdl(
     const std::string& query_ra,
     std::shared_ptr<Catalog_Namespace::SessionInfo const> session_ptr) {
   DdlCommandExecutor executor = DdlCommandExecutor(query_ra, session_ptr);
-  if (executor.isShowUserSessions()) {
-    getUserSessions(*session_ptr, _return);
-  } else if (executor.isShowQueries()) {
-    getQueries(*session_ptr, _return);
-  } else if (executor.isKillQuery()) {
+  std::string commandStr = executor.commandStr();
+
+  if (executor.isKillQuery()) {
     interruptQuery(*session_ptr, executor.getTargetQuerySessionToKill());
   } else {
-    executor.execute(_return);
+    ExecutionResult result;
+
+    if (executor.isShowQueries()) {
+      // getQueries still requires Thrift cannot be nested into DdlCommandExecutor
+      _return.execution_time_ms +=
+          measure<>::execution([&]() { result = getQueries(session_ptr); });
+    } else if (executor.isShowUserSessions()) {
+      // getUserSessions still requires Thrift cannot be nested into DdlCommandExecutor
+      _return.execution_time_ms +=
+          measure<>::execution([&]() { result = getUserSessions(session_ptr); });
+    } else {
+      _return.execution_time_ms +=
+          measure<>::execution([&]() { result = executor.execute(); });
+    }
+
+    if (!result.empty()) {
+      // reduce execution time by the time spent during queue waiting
+      _return.execution_time_ms -= result.getRows()->getQueueTime();
+
+      convert_result_set(result, *session_ptr, commandStr, _return);
+    }
   }
 }
