@@ -1124,7 +1124,7 @@ void DBHandler::sql_execute_df(TDataFrame& _return,
   mapd_shared_lock<mapd_shared_mutex> executeReadLock(
       *legacylockmgr::LockMgr<mapd_shared_mutex, bool>::getMutex(
           legacylockmgr::ExecutorOuterLock, true));
-
+  auto query_state_proxy = query_state->createQueryStateProxy();
   try {
     ParserWrapper pw{query_str};
     if (!pw.is_ddl && !pw.is_update_dml &&
@@ -1133,20 +1133,31 @@ void DBHandler::sql_execute_df(TDataFrame& _return,
       lockmgr::LockedTableDescriptors locks;
       _return.execution_time_ms += measure<>::execution([&]() {
         TPlanResult result;
-        std::tie(result, locks) = parse_to_ra(query_state->createQueryStateProxy(),
-                                              query_str,
-                                              {},
-                                              true,
-                                              system_parameters_);
+        std::tie(result, locks) =
+            parse_to_ra(query_state_proxy, query_str, {}, true, system_parameters_);
         query_ra = result.plan_result;
       });
 
       if (pw.isCalciteExplain()) {
         throw std::runtime_error("explain is not unsupported by current thrift API");
       }
+      if (g_enable_runtime_query_interrupt) {
+        auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID);
+        mapd_unique_lock<mapd_shared_mutex> session_write_lock(
+            executor->getSessionLock());
+        auto submitted_time = std::chrono::system_clock::now();
+        query_state_proxy.getQueryState().setQuerySubmittedTime(submitted_time);
+        executor->addToQuerySessionList(session_ptr->get_session_id(),
+                                        query_str,
+                                        submitted_time,
+                                        Executor::UNITARY_EXECUTOR_ID,
+                                        "PENDING_QUEUE",
+                                        session_write_lock);
+        session_write_lock.unlock();
+      }
       execute_rel_alg_df(_return,
                          query_ra,
-                         query_state->createQueryStateProxy(),
+                         query_state_proxy,
                          *session_ptr,
                          device_type == TDeviceType::CPU ? ExecutorDeviceType::CPU
                                                          : ExecutorDeviceType::GPU,
@@ -5429,7 +5440,7 @@ void DBHandler::sql_execute_impl(TQueryResult& _return,
           }
         });
     CHECK(dispatch_queue_);
-    {
+    if (g_enable_runtime_query_interrupt) {
       auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID);
       mapd_unique_lock<mapd_shared_mutex> session_write_lock(executor->getSessionLock());
       auto submitted_time = std::chrono::system_clock::now();
