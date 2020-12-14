@@ -394,6 +394,8 @@ class OmniSciPreparedStatement implements PreparedStatement {
                       "Column " + paramName.toLowerCase() + " does not exist");
             }
           }
+        } else {
+          listOfFields = new String[0];
         }
 
         rows = new ArrayList(5000);
