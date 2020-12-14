@@ -410,6 +410,21 @@ include_directories(${CMAKE_SOURCE_DIR}
 
 ## Dependencies
 
+# Intel ITT notify
+option(ENABLE_ITT "Enable Intel ittnotify for VTune and Advisor" OFF)
+if(ENABLE_ITT)
+  find_package(ITTnotify REQUIRED)
+  add_definitions(-DENABLE_ITT)
+  include_directories("${ITTnotify_INCLUDE_DIRS}/")
+  set(VT_LIBS ${ITTnotify_LIBRARIES} dl)
+  option(ENABLE_INTEL_JIT_LISTENER "Enable Intel Vtune JIT Listener" ON)
+else()
+  option(ENABLE_INTEL_JIT_LISTENER "Enable Intel Vtune JIT Listener" OFF)
+endif(ENABLE_ITT)
+if(ENABLE_INTEL_JIT_LISTENER)
+  add_definitions(-DENABLE_INTEL_JIT_LISTENER)
+endif()
+
 # LLVM
 if(${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
   list(APPEND CMAKE_PREFIX_PATH "/usr/local/opt/llvm")
@@ -428,7 +443,6 @@ find_library(LLVM_LIB LLVM)
 if (${CMAKE_SYSTEM_NAME} STREQUAL "Darwin" OR NOT LLVM_LIB)
   set(LLVM_COMPONENTS support mcjit core irreader option linker)
 
-  option(ENABLE_INTEL_JIT_LISTENER "Enable Intel Vtune JIT Listener" OFF)
   if(ENABLE_INTEL_JIT_LISTENER)
     list(APPEND LLVM_COMPONENTS inteljitevents)
   endif()
@@ -844,7 +858,7 @@ add_custom_target(rerun_cmake ALL
   )
 add_dependencies(omnisci_server rerun_cmake)
 
-target_link_libraries(omnisci_server mapd_thrift thrift_handler ${MAPD_LIBRARIES} ${Boost_LIBRARIES} ${CMAKE_DL_LIBS} ${CUDA_LIBRARIES} ${PROFILER_LIBS} ${ZLIB_LIBRARIES} ${LOCALE_LINK_FLAG})
+target_link_libraries(omnisci_server mapd_thrift thrift_handler ${MAPD_LIBRARIES} ${Boost_LIBRARIES} ${CMAKE_DL_LIBS} ${CUDA_LIBRARIES} ${PROFILER_LIBS} ${ZLIB_LIBRARIES} ${LOCALE_LINK_FLAG} ${VT_LIBS})
 
 target_link_libraries(initdb mapd_thrift thrift_handler ${MAPD_LIBRARIES} ${Boost_LIBRARIES} ${CMAKE_DL_LIBS}
     ${CUDA_LIBRARIES} ${PROFILER_LIBS} ${ZLIB_LIBRARIES} ${BLOSC_LIBRARIES}
