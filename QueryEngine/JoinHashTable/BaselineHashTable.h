@@ -76,7 +76,7 @@ class BaselineHashTable : public HashTable {
     return gpu_hash_table_buff_ ? gpu_hash_table_buff_->getMemoryPtr() : nullptr;
   }
 
-  size_t getHashTableBufferSize(const ExecutorDeviceType device_type) const {
+  size_t getHashTableBufferSize(const ExecutorDeviceType device_type) const override {
     if (device_type == ExecutorDeviceType::CPU) {
       return cpu_hash_table_buff_.size() *
              sizeof(decltype(cpu_hash_table_buff_)::value_type);

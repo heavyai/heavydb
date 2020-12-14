@@ -89,7 +89,6 @@ class PerfectHashTable : public HashTable {
   Data_Namespace::AbstractBuffer* gpu_hash_table_buff_{nullptr};
   const Catalog_Namespace::Catalog* catalog_;
   std::vector<int32_t> cpu_hash_table_buff_;
-  const size_t device_id_{0};
 
   HashType layout_;
   size_t entry_count_;         // number of keys in the hash table
