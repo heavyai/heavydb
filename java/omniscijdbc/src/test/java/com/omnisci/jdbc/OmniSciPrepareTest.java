@@ -194,4 +194,60 @@ public class OmniSciPrepareTest {
     }
     assertEquals(i, 5);
   }
+
+  @Test
+  public void partialBatchTest() throws Exception {
+    Statement stmt = m_conn.createStatement();
+    stmt.executeUpdate("DROP TABLE IF EXISTS partial_batch_tbl");
+    stmt.executeUpdate("CREATE TABLE partial_batch_tbl ("
+            + "i INTEGER,"
+            + "ia INTEGER[],"
+            + "s TEXT ENCODING DICT,"
+            + "ls LINESTRING)");
+    PreparedStatement ps = m_conn.prepareStatement("INSERT INTO partial_batch_tbl(i, ia)"
+            + " VALUES(?, ?)");
+    Integer[] is = {1, 2, null, 4};
+    Integer[][] ias = {{1, 2, 3}, {10, 20, 30}, null, {1000, 2000, 3000}};
+    String[] ss = {null, null, "One", "Two"};
+    String[] lss = {"NULL", "NULL", "LINESTRING (0 1,2 2)", "LINESTRING (4 1,5 3)"};
+    ps.setInt(1, is[0]);
+    ps.setArray(2, m_conn.createArrayOf("INT", ias[0]));
+    ps.addBatch();
+    ps.setInt(1, is[1]);
+    ps.setArray(2, m_conn.createArrayOf("INT", ias[1]));
+    ps.addBatch();
+    ps.executeBatch();
+    ps.close();
+    ps = m_conn.prepareStatement("INSERT INTO partial_batch_tbl(s, ls)"
+            + " VALUES(?, ?)");
+    ps.setString(1, ss[2]);
+    ps.setString(2, lss[2]);
+    ps.addBatch();
+    ps.executeBatch();
+    ps.close();
+    ps = m_conn.prepareStatement("INSERT INTO partial_batch_tbl(i, ia, s, ls)"
+            + " VALUES(?, ?, ?, ?)");
+    ps.setInt(1, is[3]);
+    ps.setArray(2, m_conn.createArrayOf("INT", ias[3]));
+    ps.setString(3, ss[3]);
+    ps.setString(4, lss[3]);
+    ps.addBatch();
+    ps.executeBatch();
+    ps.close();
+
+    ResultSet rs = stmt.executeQuery("SELECT i, ia, s, ls FROM partial_batch_tbl");
+    int i = 0;
+    while (rs.next()) {
+      assertEquals(rs.getObject("i"), is[i] == null ? null : is[i].longValue());
+      if (ias[i] == null) {
+        assertNull(rs.getArray("ia"));
+      } else {
+        assertArrayEquals((Integer[]) rs.getArray("ia").getArray(), ias[i]);
+      }
+      assertEquals(rs.getString("s"), ss[i]);
+      assertEquals(rs.getString("ls"), lss[i]);
+      i++;
+    }
+    assertEquals(i, 4);
+  }
 }
