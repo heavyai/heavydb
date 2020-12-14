@@ -1148,17 +1148,17 @@ std::string JoinHashTable::toString(const ExecutorDeviceType device_type,
   auto ptr2 = ptr1 + offsetBufferOff();
   auto ptr3 = ptr1 + countBufferOff();
   auto ptr4 = ptr1 + payloadBufferOff();
-  return HashJoin::toString("perfect",
-                            getHashTypeString(hash_type_),
-                            0,
-                            0,
-                            hash_entry_count_,
-                            ptr1,
-                            ptr2,
-                            ptr3,
-                            ptr4,
-                            buffer_size,
-                            raw);
+  return HashTable::toString("perfect",
+                             getHashTypeString(hash_type_),
+                             0,
+                             0,
+                             hash_entry_count_,
+                             ptr1,
+                             ptr2,
+                             ptr3,
+                             ptr4,
+                             buffer_size,
+                             raw);
 }
 
 std::set<DecodedJoinHashBufferEntry> JoinHashTable::toSet(
@@ -1184,7 +1184,7 @@ std::set<DecodedJoinHashBufferEntry> JoinHashTable::toSet(
   auto ptr2 = ptr1 + offsetBufferOff();
   auto ptr3 = ptr1 + countBufferOff();
   auto ptr4 = ptr1 + payloadBufferOff();
-  return HashJoin::toSet(0, 0, hash_entry_count_, ptr1, ptr2, ptr3, ptr4, buffer_size);
+  return HashTable::toSet(0, 0, hash_entry_count_, ptr1, ptr2, ptr3, ptr4, buffer_size);
 }
 
 llvm::Value* JoinHashTable::codegenSlot(const CompilationOptions& co,

@@ -219,8 +219,7 @@ class PerfectJoinHashTableBuilder {
     int thread_count = cpu_threads();
     std::vector<std::thread> init_cpu_buff_threads;
     for (int thread_idx = 0; thread_idx < thread_count; ++thread_idx) {
-      init_cpu_buff_threads.emplace_back([this,
-                                          hash_entry_info,
+      init_cpu_buff_threads.emplace_back([hash_entry_info,
                                           hash_join_invalid_val,
                                           thread_idx,
                                           thread_count,
@@ -238,8 +237,7 @@ class PerfectJoinHashTableBuilder {
     init_cpu_buff_threads.clear();
     std::atomic<int> err{0};
     for (int thread_idx = 0; thread_idx < thread_count; ++thread_idx) {
-      init_cpu_buff_threads.emplace_back([this,
-                                          hash_join_invalid_val,
+      init_cpu_buff_threads.emplace_back([hash_join_invalid_val,
                                           &join_column,
                                           sd_inner_proxy,
                                           sd_outer_proxy,

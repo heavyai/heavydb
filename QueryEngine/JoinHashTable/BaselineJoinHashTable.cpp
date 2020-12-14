@@ -202,7 +202,7 @@ std::string BaselineJoinHashTable::toString(const ExecutorDeviceType device_type
   auto ptr4 = ptr1 + payloadBufferOff();
   CHECK(hash_table);
   const auto layout = getHashType();
-  return HashJoin::toString(
+  return HashTable::toString(
       !condition_->is_overlaps_oper() ? "keyed" : "geo",
       getHashTypeString(layout),
       getKeyComponentCount() + (layout == HashType::OneToOne ? 1 : 0),
@@ -242,14 +242,14 @@ std::set<DecodedJoinHashBufferEntry> BaselineJoinHashTable::toSet(
   auto ptr3 = ptr1 + countBufferOff();
   auto ptr4 = ptr1 + payloadBufferOff();
   const auto layout = getHashType();
-  return HashJoin::toSet(getKeyComponentCount() + (layout == HashType::OneToOne ? 1 : 0),
-                         getKeyComponentWidth(),
-                         entry_count_,
-                         ptr1,
-                         ptr2,
-                         ptr3,
-                         ptr4,
-                         buffer_size);
+  return HashTable::toSet(getKeyComponentCount() + (layout == HashType::OneToOne ? 1 : 0),
+                          getKeyComponentWidth(),
+                          entry_count_,
+                          ptr1,
+                          ptr2,
+                          ptr3,
+                          ptr4,
+                          buffer_size);
 }
 
 CompositeKeyInfo BaselineJoinHashTable::getCompositeKeyInfo() const {

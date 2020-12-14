@@ -57,6 +57,7 @@ set(query_engine_source_files
     JoinHashTable/BaselineJoinHashTable.cpp
     JoinHashTable/JoinHashTable.cpp
     JoinHashTable/HashJoin.cpp
+    JoinHashTable/HashTable.cpp
     JoinHashTable/OverlapsJoinHashTable.cpp
     JoinHashTable/Runtime/HashJoinRuntime.cpp
     LogicalIR.cpp

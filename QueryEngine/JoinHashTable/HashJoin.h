@@ -79,21 +79,6 @@ struct HashJoinMatchingSet {
   llvm::Value* slot;
 };
 
-struct DecodedJoinHashBufferEntry {
-  std::vector<int64_t> key;
-  std::set<int32_t> payload;
-
-  bool operator<(const DecodedJoinHashBufferEntry& other) const {
-    return std::tie(key, payload) < std::tie(other.key, other.payload);
-  }
-
-  bool operator==(const DecodedJoinHashBufferEntry& other) const {
-    return key == other.key && payload == other.payload;
-  }
-};
-
-using DecodedJoinHashBufferSet = std::set<DecodedJoinHashBufferEntry>;
-
 using InnerOuter = std::pair<const Analyzer::ColumnVar*, const Analyzer::Expr*>;
 
 class DeviceAllocator;
@@ -162,31 +147,6 @@ class HashJoin {
       std::vector<std::shared_ptr<void>>& malloc_owner,
       Executor* executor,
       ColumnCacheMap* column_cache);
-
-  //! Decode hash table into a std::set for easy inspection and validation.
-  static DecodedJoinHashBufferSet toSet(
-      size_t key_component_count,  // number of key parts
-      size_t key_component_width,  // width of a key part
-      size_t entry_count,          // number of hashable entries
-      const int8_t* ptr1,          // hash entries
-      const int8_t* ptr2,          // offsets
-      const int8_t* ptr3,          // counts
-      const int8_t* ptr4,          // payloads (rowids)
-      size_t buffer_size);
-
-  //! Decode hash table into a human-readable string.
-  static std::string toString(
-      const std::string& type,         // perfect, keyed, or geo
-      const std::string& layout_type,  // one-to-one, one-to-many, many-to-many
-      size_t key_component_count,      // number of key parts
-      size_t key_component_width,      // width of a key part
-      size_t entry_count,              // number of hashable entries
-      const int8_t* ptr1,              // hash entries
-      const int8_t* ptr2,              // offsets
-      const int8_t* ptr3,              // counts
-      const int8_t* ptr4,              // payloads (rowids)
-      size_t buffer_size,
-      bool raw = false);
 
   //! Make hash table from an in-flight SQL query's parse tree etc.
   static std::shared_ptr<HashJoin> getInstance(
