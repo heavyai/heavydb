@@ -20,6 +20,7 @@
 #include <boost/filesystem.hpp>
 #include <boost/process.hpp>
 #include <boost/range/combine.hpp>
+#include <boost/version.hpp>
 #include <cerrno>
 #include <cstdio>
 #include <cstring>
@@ -48,6 +49,7 @@ constexpr static char const* table_schema_filename = "_table.sql";
 constexpr static char const* table_oldinfo_filename = "_table.oldinfo";
 constexpr static char const* table_epoch_filename = "_table.epoch";
 
+#if BOOST_VERSION < 107300
 namespace std {
 
 template <typename T, typename U>
@@ -58,6 +60,7 @@ struct tuple_element<I, boost::tuples::cons<T, U>>
     : boost::tuples::element<I, boost::tuples::cons<T, U>> {};
 
 }  // namespace std
+#endif
 
 namespace {
 

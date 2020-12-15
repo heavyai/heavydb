@@ -29,6 +29,7 @@
 #include <boost/algorithm/string.hpp>
 #include <boost/dynamic_bitset.hpp>
 #include <boost/filesystem.hpp>
+#include <boost/geometry.hpp>
 #include <boost/variant.hpp>
 #include <csignal>
 #include <cstdio>

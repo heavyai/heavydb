@@ -19,6 +19,7 @@
 #include <algorithm>
 #include <condition_variable>
 #include <mutex>
+#include <queue>
 
 #include <rapidjson/document.h>
 #include <boost/filesystem.hpp>
