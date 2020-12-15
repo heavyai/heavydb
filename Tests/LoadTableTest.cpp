@@ -19,6 +19,8 @@
 #include <arrow/ipc/api.h>
 #include <arrow/ipc/writer.h>
 #include <gtest/gtest.h>
+
+#include "Shared/ArrowUtil.h"
 #include "Tests/DBHandlerTestHelpers.h"
 #include "Tests/TestHelpers.h"
 
@@ -423,8 +425,8 @@ class ArrowStreamBuilder {
     auto records = arrow::RecordBatch::Make(schema_, length, columns_);
     auto out_stream = *arrow::io::BufferOutputStream::Create();
     auto stream_writer = *arrow::ipc::NewStreamWriter(out_stream.get(), schema_);
-    stream_writer->WriteRecordBatch(*records);
-    stream_writer->Close();
+    ARROW_THROW_NOT_OK(stream_writer->WriteRecordBatch(*records));
+    ARROW_THROW_NOT_OK(stream_writer->Close());
     auto buffer = *out_stream->Finish();
     columns_.clear();
     return buffer->ToString();
@@ -446,13 +448,13 @@ class ArrowStreamBuilder {
     CHECK(is_null.empty() || values.size() == is_null.size());
     for (size_t i = 0; i < values.size(); ++i) {
       if (!is_null.empty() && is_null[i]) {
-        builder.AppendNull();
+        ARROW_THROW_NOT_OK(builder.AppendNull());
       } else {
-        builder.Append(values[i]);
+        ARROW_THROW_NOT_OK(builder.Append(values[i]));
       }
     }
     columns_.push_back(nullptr);
-    builder.Finish(&columns_.back());
+    ARROW_THROW_NOT_OK(builder.Finish(&columns_.back()));
   }
 
   std::shared_ptr<arrow::Schema> schema_;

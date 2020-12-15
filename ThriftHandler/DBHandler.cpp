@@ -65,6 +65,7 @@
 #include "QueryEngine/TableFunctions/TableFunctionsFactory.h"
 #include "QueryEngine/TableOptimizer.h"
 #include "QueryEngine/ThriftSerializers.h"
+#include "Shared/ArrowUtil.h"
 #include "Shared/StringTransform.h"
 #include "Shared/import_helpers.h"
 #include "Shared/mapd_shared_mutex.h"
@@ -2803,8 +2804,8 @@ void DBHandler::load_table_binary_arrow(const TSessionId& session,
   std::shared_ptr<arrow::Array> empty_array;
   {
     arrow::BooleanBuilder builder;
-    builder.Resize(batch->num_rows());
-    builder.AppendNulls(batch->num_rows());
+    ARROW_THROW_NOT_OK(builder.Resize(batch->num_rows()));
+    ARROW_THROW_NOT_OK(builder.AppendNulls(batch->num_rows()));
     auto status = builder.Finish(&empty_array);
     if (!status.ok()) {
       THROW_MAPD_EXCEPTION("Failed to load data: " + status.message());
