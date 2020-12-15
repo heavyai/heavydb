@@ -98,6 +98,10 @@ By default, tests are not included in the build. To include tests use:
 
 `RUN_TESTS=1 bash scripts/conda/build-install-all.sh`
 
+For debug build use (default is Release):
+
+`CMAKE_BUILD_TYPE=Debug bash scripts/conda/build-install-all.sh`
+
 # Testing
 
 OmniSciDB uses [Google Test](https://github.com/google/googletest) as its main testing framework. Tests reside under the [Tests](Tests) directory.
