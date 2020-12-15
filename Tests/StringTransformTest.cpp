@@ -212,11 +212,15 @@ TEST(StringTransform, toString) {
     class A1 : public A {
      public:
       std::string toString() const override { return "A1"; };
+
+      virtual ~A1() {}
     };
 
     class A2 : public A1 {
      public:
       std::string toString() const override { return "A2"; };
+
+      virtual ~A2() {}
     };
 
     A1 a1;
