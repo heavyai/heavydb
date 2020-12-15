@@ -1248,7 +1248,6 @@ void AlterForeignTableCommand::renameTable(
 void AlterForeignTableCommand::renameColumn(
     const foreign_storage::ForeignTable* foreign_table) {
   auto& cat = session_ptr_->getCatalog();
-  const std::string& table_name = ddl_payload_["tableName"].GetString();
   const std::string& old_column_name = ddl_payload_["oldColumnName"].GetString();
   const std::string& new_column_name = ddl_payload_["newColumnName"].GetString();
   auto column = cat.getMetadataForColumn(foreign_table->tableId, old_column_name);
