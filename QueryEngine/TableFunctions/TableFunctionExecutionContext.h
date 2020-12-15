@@ -45,11 +45,13 @@ class TableFunctionExecutionContext {
   ResultSetPtr launchCpuCode(const TableFunctionExecutionUnit& exe_unit,
                              const TableFunctionCompilationContext* compilation_context,
                              std::vector<const int8_t*>& col_buf_ptrs,
+                             std::vector<int64_t>& col_sizes,
                              const size_t elem_count,
                              Executor* executor);
   ResultSetPtr launchGpuCode(const TableFunctionExecutionUnit& exe_unit,
                              const TableFunctionCompilationContext* compilation_context,
                              std::vector<const int8_t*>& col_buf_ptrs,
+                             std::vector<int64_t>& col_sizes,
                              const size_t elem_count,
                              const int device_id,
                              Executor* executor);

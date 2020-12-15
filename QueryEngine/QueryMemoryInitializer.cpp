@@ -816,7 +816,7 @@ GpuGroupByBuffers QueryMemoryInitializer::setupTableFunctionGpuBuffers(
   CHECK_GT(num_columns, size_t(0));
 
   const size_t column_size = num_rows_ * sizeof(int64_t);
-  const size_t groups_buffer_size = num_columns * column_size;
+  const size_t groups_buffer_size = num_columns * (column_size == 0 ? 1 : column_size);
   const size_t mem_size =
       groups_buffer_size * (query_mem_desc.blocksShareMemory() ? 1 : grid_size_x);
 

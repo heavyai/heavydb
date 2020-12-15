@@ -89,7 +89,8 @@ ResultSetPtr TableFunctionExecutionContext::execute(
     device_allocator.reset(new CudaAllocator(&data_mgr, device_id));
   }
   std::vector<const int8_t*> col_buf_ptrs;
-  std::optional<size_t> element_count;
+  std::vector<int64_t> col_sizes;
+  std::optional<size_t> output_column_size;
   for (const auto& input_expr : exe_unit.input_exprs) {
     if (auto col_var = dynamic_cast<Analyzer::ColumnVar*>(input_expr)) {
       auto table_id = col_var->get_table_id();
@@ -108,15 +109,18 @@ ResultSetPtr TableFunctionExecutionContext::execute(
           device_allocator.get(),
           chunks_owner,
           column_fetcher.columnarized_table_cache_);
-      if (!element_count) {
-        element_count = buf_elem_count;
-      } else {
-        CHECK(element_count && (buf_elem_count == *element_count));
+
+      // We use the size of the first column to be the size of the output column
+      if (!output_column_size) {
+        output_column_size = buf_elem_count;
       }
+
+      col_sizes.push_back(buf_elem_count);
       col_buf_ptrs.push_back(col_buf);
     } else if (const auto& constant_val = dynamic_cast<Analyzer::Constant*>(input_expr)) {
       // TODO(adb): Unify literal handling with rest of system, either in Codegen or as a
       // separate serialization component
+      col_sizes.push_back(0);
       const auto const_val_datum = constant_val->get_constval();
       const auto& ti = constant_val->get_type_info();
       if (ti.is_fp()) {
@@ -172,17 +176,23 @@ ResultSetPtr TableFunctionExecutionContext::execute(
     }
   }
   CHECK_EQ(col_buf_ptrs.size(), exe_unit.input_exprs.size());
+  CHECK_EQ(col_sizes.size(), exe_unit.input_exprs.size());
+  CHECK(output_column_size);
 
-  CHECK(element_count);
   switch (device_type) {
     case ExecutorDeviceType::CPU:
-      return launchCpuCode(
-          exe_unit, compilation_context, col_buf_ptrs, *element_count, executor);
+      return launchCpuCode(exe_unit,
+                           compilation_context,
+                           col_buf_ptrs,
+                           col_sizes,
+                           *output_column_size,
+                           executor);
     case ExecutorDeviceType::GPU:
       return launchGpuCode(exe_unit,
                            compilation_context,
                            col_buf_ptrs,
-                           *element_count,
+                           col_sizes,
+                           *output_column_size,
                            /*device_id=*/0,
                            executor);
   }
@@ -194,6 +204,7 @@ ResultSetPtr TableFunctionExecutionContext::launchCpuCode(
     const TableFunctionExecutionUnit& exe_unit,
     const TableFunctionCompilationContext* compilation_context,
     std::vector<const int8_t*>& col_buf_ptrs,
+    std::vector<int64_t>& col_sizes,
     const size_t elem_count,
     Executor* executor) {
   // setup the inputs
@@ -236,11 +247,8 @@ ResultSetPtr TableFunctionExecutionContext::launchCpuCode(
   }
 
   // execute
-  const auto kernel_element_count = static_cast<int64_t>(elem_count);
-  const auto err = compilation_context->getFuncPtr()(byte_stream_ptr,
-                                                     &kernel_element_count,
-                                                     output_col_buf_ptrs.data(),
-                                                     &output_row_count);
+  const auto err = compilation_context->getFuncPtr()(
+      byte_stream_ptr, col_sizes.data(), output_col_buf_ptrs.data(), &output_row_count);
   if (err) {
     throw std::runtime_error("Error executing table function: " + std::to_string(err));
   }
@@ -280,7 +288,7 @@ namespace {
 enum {
   ERROR_BUFFER,
   COL_BUFFERS,
-  INPUT_ROW_COUNT,
+  COL_SIZES,
   OUTPUT_BUFFERS,
   OUTPUT_ROW_COUNT,
   KERNEL_PARAM_COUNT,
@@ -291,6 +299,7 @@ ResultSetPtr TableFunctionExecutionContext::launchGpuCode(
     const TableFunctionExecutionUnit& exe_unit,
     const TableFunctionCompilationContext* compilation_context,
     std::vector<const int8_t*>& col_buf_ptrs,
+    std::vector<int64_t>& col_sizes,
     const size_t elem_count,
     const int device_id,
     Executor* executor) {
@@ -306,11 +315,13 @@ ResultSetPtr TableFunctionExecutionContext::launchGpuCode(
                               reinterpret_cast<int8_t*>(col_buf_ptrs.data()),
                               col_buf_ptrs.size() * sizeof(int64_t));
   kernel_params[COL_BUFFERS] = reinterpret_cast<CUdeviceptr>(byte_stream_ptr);
-  kernel_params[INPUT_ROW_COUNT] =
-      reinterpret_cast<CUdeviceptr>(gpu_allocator->alloc(sizeof(elem_count)));
-  gpu_allocator->copyToDevice(reinterpret_cast<int8_t*>(kernel_params[INPUT_ROW_COUNT]),
-                              reinterpret_cast<const int8_t*>(&elem_count),
-                              sizeof(elem_count));
+
+  auto col_sizes_ptr = gpu_allocator->alloc(col_sizes.size() * sizeof(int64_t));
+  gpu_allocator->copyToDevice(col_sizes_ptr,
+                              reinterpret_cast<int8_t*>(col_sizes.data()),
+                              col_sizes.size() * sizeof(int64_t));
+  kernel_params[COL_SIZES] = reinterpret_cast<CUdeviceptr>(col_sizes_ptr);
+
   kernel_params[ERROR_BUFFER] =
       reinterpret_cast<CUdeviceptr>(gpu_allocator->alloc(sizeof(int32_t)));
   // initialize output memory
