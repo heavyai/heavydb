@@ -1,0 +1,32 @@
+From 08653321c51b9520f0a093ae36a7502f124d5772 Mon Sep 17 00:00:00 2001
+From: Chiyang Wan <chiyang10000@gmail.com>
+Date: Thu, 19 Nov 2020 13:55:15 +0100
+Subject: [PATCH] ARROW-10651: [C++] Fix alloc-dealloc-mismatch in S3-related
+ factory
+
+aws-sdk-cpp requires to use matched Aws::New and Aws::Delete. Since the
+AwsWriteableStreamFactory provides an Aws::IOStreamFactory object that
+would be called inside aws-sdk-cpp, it is supposed to use an Aws::New
+instead of the native cpp new operator.
+
+Closes #8712 from chiyang10000/s3-sdk-mem-sanitize
+
+Authored-by: Chiyang Wan <chiyang10000@gmail.com>
+Signed-off-by: Antoine Pitrou <antoine@python.org>
+---
+ cpp/src/arrow/filesystem/s3fs.cc | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/cpp/src/arrow/filesystem/s3fs.cc b/cpp/src/arrow/filesystem/s3fs.cc
+index 3cde8edd909..0218faf7895 100644
+--- a/cpp/src/arrow/filesystem/s3fs.cc
++++ b/cpp/src/arrow/filesystem/s3fs.cc
+@@ -608,7 +608,7 @@ class StringViewStream : Aws::Utils::Stream::PreallocatedStreamBuf, public std::
+ // See https://github.com/aws/aws-sdk-cpp/issues/64 for an alternative but
+ // functionally similar recipe.
+ Aws::IOStreamFactory AwsWriteableStreamFactory(void* data, int64_t nbytes) {
+-  return [=]() { return new StringViewStream(data, nbytes); };
++  return [=]() { return Aws::New<StringViewStream>("", data, nbytes); };
+ }
+ 
+ Result<S3Model::GetObjectResult> GetObjectRange(Aws::S3::S3Client* client,
