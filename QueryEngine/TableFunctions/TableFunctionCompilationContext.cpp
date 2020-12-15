@@ -47,8 +47,8 @@ llvm::Function* generate_entry_point(const CgenState* cgen_state) {
   auto arg_it = func->arg_begin();
   const auto input_cols_arg = &*arg_it;
   input_cols_arg->setName("input_col_buffers");
-  const auto input_row_count = &*(++arg_it);
-  input_row_count->setName("input_row_count");
+  const auto input_row_counts = &*(++arg_it);
+  input_row_counts->setName("input_row_counts");
   const auto output_buffers = &*(++arg_it);
   output_buffers->setName("output_buffers");
   const auto output_row_count = &*(++arg_it);
@@ -178,7 +178,7 @@ void TableFunctionCompilationContext::generateEntryPoint(
   CHECK(entry_point_func_);
   auto arg_it = entry_point_func_->arg_begin();
   const auto input_cols_arg = &*arg_it;
-  const auto input_row_count = &*(++arg_it);
+  const auto input_row_counts_arg = &*(++arg_it);
   const auto output_buffers_arg = &*(++arg_it);
   const auto output_row_count_ptr = &*(++arg_it);
 
@@ -199,6 +199,9 @@ void TableFunctionCompilationContext::generateEntryPoint(
       exe_unit.input_exprs.size(), input_cols_arg, cgen_state->ir_builder_, ctx);
   CHECK_EQ(exe_unit.input_exprs.size(), col_heads.size());
 
+  auto row_count_heads = generate_column_heads_load(
+      exe_unit.input_exprs.size(), input_row_counts_arg, cgen_state->ir_builder_, ctx);
+
   // The column arguments of C++ UDTFs processed by clang must be
   // passed by reference, see rbc issue 200.
   auto pass_column_by_value = exe_unit.table_func.isRuntime();
@@ -218,7 +221,7 @@ void TableFunctionCompilationContext::generateEntryPoint(
       auto col = alloc_column(std::string("input_col.") + std::to_string(i),
                               ti.get_elem_type(),
                               col_heads[i],
-                              input_row_count,
+                              row_count_heads[i],
                               ctx,
                               cgen_state_->ir_builder_,
                               pass_column_by_value);
