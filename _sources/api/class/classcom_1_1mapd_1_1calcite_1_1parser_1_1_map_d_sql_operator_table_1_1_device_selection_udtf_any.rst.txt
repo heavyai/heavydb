@@ -1,0 +1,9 @@
+Class com::mapd::calcite::parser::MapDSqlOperatorTable::DeviceSelectionUdtfAny
+==============================================================================
+
+.. doxygenclass:: com::mapd::calcite::parser::MapDSqlOperatorTable::DeviceSelectionUdtfAny
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

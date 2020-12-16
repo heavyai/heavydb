@@ -1,0 +1,9 @@
+Struct TableDescriptorUpdateParams
+==================================
+
+.. doxygenstruct:: TableDescriptorUpdateParams
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

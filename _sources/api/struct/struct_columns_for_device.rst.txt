@@ -1,0 +1,9 @@
+Struct ColumnsForDevice
+=======================
+
+.. doxygenstruct:: ColumnsForDevice
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

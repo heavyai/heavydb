@@ -1,0 +1,9 @@
+Class omnisci::thrift::ttypes::TServerPermissions
+=================================================
+
+.. doxygenclass:: omnisci::thrift::ttypes::TServerPermissions
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

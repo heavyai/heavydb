@@ -1,0 +1,9 @@
+Struct Parser::PositiveOrZeroValidate
+=====================================
+
+.. doxygenstruct:: Parser::PositiveOrZeroValidate
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

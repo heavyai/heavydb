@@ -1,0 +1,9 @@
+Class system_validator::SingleNodeValidator
+===========================================
+
+.. doxygenclass:: system_validator::SingleNodeValidator
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

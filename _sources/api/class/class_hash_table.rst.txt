@@ -1,0 +1,9 @@
+Class HashTable
+===============
+
+.. doxygenclass:: HashTable
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

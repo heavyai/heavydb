@@ -1,0 +1,9 @@
+Struct anonymous_namespace{DdlCommandExecutor.cpp}::AggregratedStorageStats
+===========================================================================
+
+.. doxygenstruct:: anonymous_namespace{DdlCommandExecutor.cpp}::AggregratedStorageStats
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

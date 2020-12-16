@@ -1,0 +1,9 @@
+Class com::mapd::tests::ForeignStorageConcurrencyTest
+=====================================================
+
+.. doxygenclass:: com::mapd::tests::ForeignStorageConcurrencyTest
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

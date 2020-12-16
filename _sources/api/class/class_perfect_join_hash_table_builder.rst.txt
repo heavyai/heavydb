@@ -1,0 +1,9 @@
+Class PerfectJoinHashTableBuilder
+=================================
+
+.. doxygenclass:: PerfectJoinHashTableBuilder
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

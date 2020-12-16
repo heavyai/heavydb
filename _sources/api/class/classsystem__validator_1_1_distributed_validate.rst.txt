@@ -1,0 +1,9 @@
+Class system_validator::DistributedValidate
+===========================================
+
+.. doxygenclass:: system_validator::DistributedValidate
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

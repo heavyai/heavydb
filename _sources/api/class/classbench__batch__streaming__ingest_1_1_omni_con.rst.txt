@@ -1,0 +1,9 @@
+Class bench_batch_streaming_ingest::OmniCon
+===========================================
+
+.. doxygenclass:: bench_batch_streaming_ingest::OmniCon
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

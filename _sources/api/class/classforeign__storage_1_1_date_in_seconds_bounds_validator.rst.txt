@@ -1,0 +1,9 @@
+Class foreign_storage::DateInSecondsBoundsValidator
+===================================================
+
+.. doxygenclass:: foreign_storage::DateInSecondsBoundsValidator
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

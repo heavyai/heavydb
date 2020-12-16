@@ -1,0 +1,9 @@
+Class foreign_storage::ForeignStorageException
+==============================================
+
+.. doxygenclass:: foreign_storage::ForeignStorageException
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

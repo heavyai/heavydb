@@ -1,0 +1,9 @@
+Struct File_Namespace::EpochedPage
+==================================
+
+.. doxygenstruct:: File_Namespace::EpochedPage
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:
