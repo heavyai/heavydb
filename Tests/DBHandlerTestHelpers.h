@@ -67,6 +67,8 @@ class AssertValueEqualsVisitor : public boost::static_visitor<> {
 
   void operator()(const std::string& value) const {
     auto str_value = datum_.val.str_val;
+    EXPECT_TRUE(!datum_.is_null)
+        << boost::format("At row: %d, column: %d") % row_ % column_;
     auto type = column_type_.col_type.type;
     if (isGeo(type) && !datum_.val.arr_val.empty()) {
       throw std::runtime_error{

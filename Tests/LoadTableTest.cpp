@@ -157,7 +157,7 @@ TEST_F(LoadTableTest, OmitGeoColumn) {
   row.cols = {getSV("1"), getSV("s"), getSV("nns"), getSV(MULTIPOLYGON)};
   handler->load_table(session, "geo_load_test", {row}, column_names);
   sqlAndCompareResult("SELECT i1, s, nns, mp, ls FROM geo_load_test",
-                      {{i(1), "s", "nns", MULTIPOLYGON, "NULL"}});
+                      {{i(1), "s", "nns", MULTIPOLYGON, (void*)0}});
 }
 
 TEST_F(LoadTableTest, DuplicateColumns) {
@@ -367,7 +367,7 @@ TEST_F(LoadTableTest, ColumnarOmitGeoColumn) {
                                       {i1_column, s_column, nns_column, mp_column},
                                       column_names);
   sqlAndCompareResult("SELECT i1, s, nns, mp, ls FROM geo_load_test",
-                      {{i(1), "s", "nns", MULTIPOLYGON, "NULL"}});
+                      {{i(1), "s", "nns", MULTIPOLYGON, (void*)0}});
 }
 
 TEST_F(LoadTableTest, ColumnarDuplicateColumns) {

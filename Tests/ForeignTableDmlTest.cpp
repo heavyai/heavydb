@@ -664,27 +664,27 @@ TEST_F(SelectQueryTest, ParquetStringsAllNullPlacementPermutations) {
         { i(1), "txt1", "txt1", "txt1", "txt1"},
         { i(2), "txt2", "txt2", "txt2", "txt2"},
         { i(3), "txt3", "txt3", "txt3", "txt3"},
-        { i(4), "", "", "", "" },
+        { i(4), (void*)0, (void*)0, (void*)0, (void*)0 },
         { i(5), "txt5", "txt5", "txt5", "txt5"},
         { i(6), "txt6", "txt6", "txt6", "txt6"},
         { i(7), "txt7", "txt7", "txt7", "txt7"},
-        { i(8), "", "", "", "" },
+        { i(8), (void*)0, (void*)0, (void*)0, (void*)0 },
         { i(9), "txt9", "txt9", "txt9", "txt9"},
         { i(10), "txt10", "txt10", "txt10", "txt10"},
         { i(11), "txt11", "txt11", "txt11", "txt11"},
-        { i(12), "", "", "", "" },
-        { i(13), "", "", "", "" },
-        { i(14), "", "", "", "" },
+        { i(12), (void*)0, (void*)0, (void*)0, (void*)0 },
+        { i(13), (void*)0, (void*)0, (void*)0, (void*)0 },
+        { i(14), (void*)0, (void*)0, (void*)0, (void*)0 },
         { i(15), "txt15", "txt15", "txt15", "txt15"},
-        { i(16), "", "", "", "" },
+        { i(16), (void*)0, (void*)0, (void*)0, (void*)0 },
         { i(17), "txt17", "txt17", "txt17", "txt17"},
-        { i(18), "", "", "", "" },
+        { i(18), (void*)0, (void*)0, (void*)0, (void*)0 },
         { i(19), "txt19", "txt19", "txt19", "txt19"},
-        { i(20), "", "", "", "" },
-        { i(21), "", "", "", "" },
-        { i(22), "", "", "", "" },
-        { i(23), "", "", "", "" },
-        { i(24), "", "", "", "" }
+        { i(20), (void*)0, (void*)0, (void*)0, (void*)0 },
+        { i(21), (void*)0, (void*)0, (void*)0, (void*)0 },
+        { i(22), (void*)0, (void*)0, (void*)0, (void*)0 },
+        { i(23), (void*)0, (void*)0, (void*)0, (void*)0 },
+        { i(24), (void*)0, (void*)0, (void*)0, (void*)0 }
       },
       result);
   // clang-format on
@@ -2851,7 +2851,7 @@ TEST_F(SelectQueryTest, ParquetNullCompressedGeoTypes) {
         "0.999999982770532,0 0))",
         "MULTIPOLYGON (((0 0,0.999999940861017 0.0,0.0 0.999999982770532,0 0)))"},
       {
-        i(2), "NULL", "NULL", "NULL", "NULL"
+        i(2), (void*)0, (void*)0, (void*)0, (void*)0
       },
       {
         i(3),
@@ -2877,7 +2877,7 @@ TEST_F(SelectQueryTest, ParquetNullCompressedGeoTypes) {
         "0.0,0.0 1.99999996554106,0 0)))",
       },
       {
-        i(5), "NULL", "NULL", "NULL", "NULL",
+        i(5), (void*)0, (void*)0, (void*)0, (void*)0
       },
   },
   result);
@@ -2901,7 +2901,7 @@ TEST_F(SelectQueryTest, ParquetNullGeoTypes) {
       "MULTIPOLYGON (((0 0,1 0,0 1,0 0)))"
     },
     {
-      i(2), "NULL", "NULL", "NULL", "NULL"
+      i(2), (void*)0, (void*)0, (void*)0, (void*)0
     },
     {
       i(3), "POINT (1 1)", "LINESTRING (1 1,2 2,3 3)", "POLYGON ((5 4,7 4,6 5,5 4))",
@@ -2912,7 +2912,7 @@ TEST_F(SelectQueryTest, ParquetNullGeoTypes) {
       "MULTIPOLYGON (((0 0,3 0,0 3,0 0)),((0 0,1 0,0 1,0 0)),((0 0,2 0,0 2,0 0)))"
     },
     {
-      i(5), "NULL", "NULL", "NULL", "NULL"
+      i(5), (void*)0, (void*)0, (void*)0, (void*)0
     }},
     result);
   // clang-format on

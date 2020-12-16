@@ -1300,27 +1300,47 @@ void check_geo_import() {
     )");
   auto crt_row = rows->getNextRow(true, true);
   CHECK_EQ(size_t(8), crt_row.size());
-  const auto p1 = boost::get<std::string>(v<NullableString>(crt_row[0]));
-  ASSERT_TRUE(p1 == "NULL" ||
-              Geospatial::GeoPoint("POINT (1 1)") == Geospatial::GeoPoint(p1));
-  const auto linestring = boost::get<std::string>(v<NullableString>(crt_row[1]));
-  ASSERT_TRUE(linestring == "NULL" ||
-              Geospatial::GeoLineString("LINESTRING (1 0,2 2,3 3)") ==
-                  Geospatial::GeoLineString(linestring));
-  const auto poly = boost::get<std::string>(v<NullableString>(crt_row[2]));
-  ASSERT_TRUE(Geospatial::GeoPolygon("POLYGON ((0 0,2 0,0 2,0 0))") ==
-              Geospatial::GeoPolygon(poly));
-  const auto mpoly = boost::get<std::string>(v<NullableString>(crt_row[3]));
-  ASSERT_TRUE(mpoly == "NULL" ||
-              Geospatial::GeoMultiPolygon("MULTIPOLYGON (((0 0,2 0,0 2,0 0)))") ==
-                  Geospatial::GeoMultiPolygon(mpoly));
-  const auto p2 = boost::get<std::string>(v<NullableString>(crt_row[4]));
-  ASSERT_TRUE(p2 == "NULL" ||
-              Geospatial::GeoPoint("POINT (1 1)") == Geospatial::GeoPoint(p2));
-  const auto p3 = boost::get<std::string>(v<NullableString>(crt_row[5]));
-  ASSERT_TRUE(Geospatial::GeoPoint("POINT (1 1)") == Geospatial::GeoPoint(p3));
-  const auto p4 = boost::get<std::string>(v<NullableString>(crt_row[6]));
-  ASSERT_TRUE(Geospatial::GeoPoint("POINT (1 1)") == Geospatial::GeoPoint(p4));
+  const auto p1 = v<NullableString>(crt_row[0]);
+  const auto p1_v = boost::get<void*>(&p1);
+  const auto p1_s = boost::get<std::string>(&p1);
+  ASSERT_TRUE(
+      (p1_v && *p1_v == nullptr) ||
+      (p1_s && Geospatial::GeoPoint("POINT (1 1)") == Geospatial::GeoPoint(*p1_s)));
+  const auto linestring = v<NullableString>(crt_row[1]);
+  const auto linestring_v = boost::get<void*>(&linestring);
+  const auto linestring_s = boost::get<std::string>(&linestring);
+  ASSERT_TRUE((linestring_v && *linestring_v == nullptr) ||
+              (linestring_s && Geospatial::GeoLineString("LINESTRING (1 0,2 2,3 3)") ==
+                                   Geospatial::GeoLineString(*linestring_s)));
+  const auto poly = v<NullableString>(crt_row[2]);
+  const auto poly_v = boost::get<void*>(&poly);
+  const auto poly_s = boost::get<std::string>(&poly);
+  ASSERT_TRUE(!poly_v && poly_s &&
+              Geospatial::GeoPolygon("POLYGON ((0 0,2 0,0 2,0 0))") ==
+                  Geospatial::GeoPolygon(*poly_s));
+  const auto mpoly = v<NullableString>(crt_row[3]);
+  const auto mpoly_v = boost::get<void*>(&mpoly);
+  const auto mpoly_s = boost::get<std::string>(&mpoly);
+  ASSERT_TRUE(
+      (mpoly_v && *mpoly_v == nullptr) ||
+      (mpoly_s && Geospatial::GeoMultiPolygon("MULTIPOLYGON (((0 0,2 0,0 2,0 0)))") ==
+                      Geospatial::GeoMultiPolygon(*mpoly_s)));
+  const auto p2 = v<NullableString>(crt_row[4]);
+  const auto p2_v = boost::get<void*>(&p2);
+  const auto p2_s = boost::get<std::string>(&p2);
+  ASSERT_TRUE(
+      (p2_v && *p2_v == nullptr) ||
+      (p2_s && Geospatial::GeoPoint("POINT (1 1)") == Geospatial::GeoPoint(*p2_s)));
+  const auto p3 = v<NullableString>(crt_row[5]);
+  const auto p3_v = boost::get<void*>(&p3);
+  const auto p3_s = boost::get<std::string>(&p3);
+  ASSERT_TRUE(!p3_v && p3_s &&
+              Geospatial::GeoPoint("POINT (1 1)") == Geospatial::GeoPoint(*p3_s));
+  const auto p4 = v<NullableString>(crt_row[6]);
+  const auto p4_v = boost::get<void*>(&p4);
+  const auto p4_s = boost::get<std::string>(&p4);
+  ASSERT_TRUE(!p4_v && p4_s &&
+              Geospatial::GeoPoint("POINT (1 1)") == Geospatial::GeoPoint(*p4_s));
   const auto trip_distance = v<double>(crt_row[7]);
   ASSERT_NEAR(1.0, trip_distance, 1e-7);
 }

@@ -98,9 +98,15 @@ bool alter_common(const std::string& table,
       if (0 == crt_row.size()) {
         break;
       }
-      auto geo = boost::get<std::string>(v<NullableString>(crt_row[0]));
+      auto geo = v<NullableString>(crt_row[0]);
+      auto geo_s = boost::get<std::string>(&geo);
+      auto geo_v = boost::get<void*>(&geo);
+
 #if 1
-      if (geo == val2) {
+      if (!geo_s && geo_v && *geo_v == nullptr && val2 == "NULL") {
+        ++r_cnt;
+      }
+      if (!geo_v && geo_s && *geo_s == val2) {
         ++r_cnt;
       }
 #else

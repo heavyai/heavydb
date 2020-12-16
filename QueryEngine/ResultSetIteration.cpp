@@ -1032,8 +1032,8 @@ struct GeoTargetValueBuilder {
       }
       case ResultSet::GeoReturnType::WktString: {
         if (!geo_ti.get_notnull() && ad_arr[0]->is_null) {
-          // May need to generate EMPTY wkt instead of NULL
-          return NullableString("NULL");
+          // Generating NULL wkt string to represent NULL geo
+          return NullableString(nullptr);
         }
         return GeoReturnTypeTraits<ResultSet::GeoReturnType::WktString,
                                    GEO_SOURCE_TYPE>::GeoSerializerType::serialize(geo_ti,

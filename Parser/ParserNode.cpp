@@ -1706,6 +1706,10 @@ void InsertValuesStmt::analyze(const Catalog_Namespace::Catalog& catalog,
           throw std::runtime_error("Cannot read geometry to insert into column " +
                                    cd->columnName);
         }
+        if (coords.empty()) {
+          // Importing from geo_string WKT resulted in empty coords: dealing with a NULL
+          is_null = true;
+        }
         if (cd->columnType.get_type() != import_ti.get_type()) {
           // allow POLYGON to be inserted into MULTIPOLYGON column
           if (!(import_ti.get_type() == SQLTypes::kPOLYGON &&

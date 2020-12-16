@@ -6846,7 +6846,7 @@ void import_geospatial_null_test() {
     run_multiple_agg(gen(i,
                          (i % 2 == 0) ? "NULL" : point,
                          (i == 1) ? "NULL" : linestring,
-                         (i == 2) ? "NULL" : poly,
+                         (i == 2) ? "'NULL'" : poly,
                          (i == 3) ? "NULL" : mpoly,
                          point,
                          (i == 4) ? "NULL" : point,
@@ -17133,9 +17133,16 @@ TEST(Select, GeoSpatial_Null) {
     ASSERT_EQ("POINT (1 1)",
               boost::get<std::string>(v<NullableString>(run_simple_agg(
                   "SELECT p FROM geospatial_null_test WHERE id = 1;", dt, false))));
-    ASSERT_EQ("NULL",
-              boost::get<std::string>(v<NullableString>(run_simple_agg(
-                  "SELECT p FROM geospatial_null_test WHERE id = 2;", dt, false))));
+    auto p = v<NullableString>(
+        run_simple_agg("SELECT p FROM geospatial_null_test WHERE id = 2;", dt, false));
+    auto p_v = boost::get<void*>(&p);
+    auto p_s = boost::get<std::string>(&p);
+    ASSERT_TRUE(p_v && *p_v == nullptr && !p_s);
+    p = v<NullableString>(
+        run_simple_agg("SELECT poly FROM geospatial_null_test WHERE id = 2;", dt, false));
+    p_v = boost::get<void*>(&p);
+    p_s = boost::get<std::string>(&p);
+    ASSERT_TRUE(p_v && *p_v == nullptr && !p_s);
     ASSERT_EQ(static_cast<int64_t>(1),
               v<int64_t>(run_simple_agg(
                   "SELECT ST_Contains(poly,p) FROM geospatial_null_test WHERE id=1;",
