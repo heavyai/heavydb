@@ -26,10 +26,10 @@
 #include "DataMgr/ForeignStorage/CsvFileBufferParser.h"
 #include "DataMgr/ForeignStorage/CsvReader.h"
 #include "DataMgr/ForeignStorage/ForeignTableSchema.h"
+#include "FsiJsonUtils.h"
 #include "ImportExport/DelimitedParserUtils.h"
 #include "ImportExport/Importer.h"
 #include "Utils/DdlUtils.h"
-#include "FsiJsonUtils.h"
 
 namespace foreign_storage {
 CsvDataWrapper::CsvDataWrapper(const int db_id, const ForeignTable* foreign_table)

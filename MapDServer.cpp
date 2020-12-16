@@ -54,8 +54,8 @@
 #include <thread>
 #include <vector>
 
-#include "MapDRelease.h"
 #include "DataMgr/ForeignStorage/ForeignTableRefresh.h"
+#include "MapDRelease.h"
 #include "Shared/Compressor.h"
 #include "Shared/SystemParameters.h"
 #include "Shared/file_delete.h"

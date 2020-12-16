@@ -23,7 +23,7 @@
 #include "../UsedColumnsVisitor.h"
 #include "ColSlotContext.h"
 
-bool g_enable_smem_group_by{true };
+bool g_enable_smem_group_by{true};
 extern bool g_enable_columnar_output;
 
 namespace {

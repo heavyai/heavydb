@@ -873,7 +873,8 @@ boost::optional<int> CommandLineOptions::parse_command_line(
     if (!trim_and_check_file_exists(authMetadata.ca_file_name, "ca file name")) {
       return 1;
     }
-    if (!trim_and_check_file_exists(system_parameters.ssl_trust_store, "ssl trust store")) {
+    if (!trim_and_check_file_exists(system_parameters.ssl_trust_store,
+                                    "ssl trust store")) {
       return 1;
     }
     if (!trim_and_check_file_exists(system_parameters.ssl_keystore, "ssl key store")) {
