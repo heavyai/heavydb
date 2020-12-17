@@ -65,7 +65,7 @@
             
             
               <div class="version">
-                5.5.0dev 1249738
+                5.6.0dev 51069cb
               </div>
             
           
@@ -1886,12 +1886,12 @@
 <dd></dd></dl>
 
 <dl class="function">
-<dt id="_CPPv4N18DdlCommandExecutor7executeER12TQueryResult">
-<span id="_CPPv3N18DdlCommandExecutor7executeER12TQueryResult"></span><span id="_CPPv2N18DdlCommandExecutor7executeER12TQueryResult"></span><span id="DdlCommandExecutor::execute__TQueryResultR"></span><span class="target" id="class_ddl_command_executor_1aac4da1480bc345bc12c0160c655f740d"></span>void <code class="sig-name descname">execute</code><span class="sig-paren">(</span>TQueryResult &amp;<em>_return</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N18DdlCommandExecutor7executeER12TQueryResult" title="Permalink to this definition">¶</a><br /></dt>
+<dt id="_CPPv4N18DdlCommandExecutor7executeEv">
+<span id="_CPPv3N18DdlCommandExecutor7executeEv"></span><span id="_CPPv2N18DdlCommandExecutor7executeEv"></span><span id="DdlCommandExecutor::execute"></span><span class="target" id="class_ddl_command_executor_1a1edbd10008b36d3d40d7914d6e0e4d73"></span><a class="reference internal" href="class_execution_result.html#_CPPv415ExecutionResult" title="ExecutionResult">ExecutionResult</a> <code class="sig-name descname">execute</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N18DdlCommandExecutor7executeEv" title="Permalink to this definition">¶</a><br /></dt>
 <dd><p>Parses given JSON string and routes resulting payload to appropriate DDL command class for execution.</p>
 <p><dl class="simple">
 <dt><strong>Parameters</strong></dt><dd><ul class="breatheparameterlist simple">
-<li><p><code class="docutils literal notranslate"><span class="pre">_return</span></code>: result of DDL command execution (if applicable) </p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">return</span></code>: <a class="reference internal" href="class_execution_result.html#class_execution_result"><span class="std std-ref">ExecutionResult</span></a> of DDL command execution (if applicable) </p></li>
 </ul>
 </dd>
 </dl>
@@ -1928,12 +1928,23 @@
 <dd><p>Returns an object indicating where command execution should take place and how results should be aggregated for distributed setups. </p>
 </dd></dl>
 
+<dl class="function">
+<dt id="_CPPv4N18DdlCommandExecutor10commandStrEv">
+<span id="_CPPv3N18DdlCommandExecutor10commandStrEv"></span><span id="_CPPv2N18DdlCommandExecutor10commandStrEv"></span><span id="DdlCommandExecutor::commandStr"></span><span class="target" id="class_ddl_command_executor_1a1abb73f2b9e074139dc404d38ce7b6f8"></span><em class="property">const</em> std::string <code class="sig-name descname">commandStr</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N18DdlCommandExecutor10commandStrEv" title="Permalink to this definition">¶</a><br /></dt>
+<dd><p>Returns command string, can be useful for logging, conversion </p>
+</dd></dl>
+
 </div>
 <div class="breathe-sectiondef docutils container">
 <p class="breathe-sectiondef-title rubric">Private Members</p>
 <dl class="member">
 <dt id="_CPPv4N18DdlCommandExecutor10ddl_query_E">
 <span id="_CPPv3N18DdlCommandExecutor10ddl_query_E"></span><span id="_CPPv2N18DdlCommandExecutor10ddl_query_E"></span><span id="DdlCommandExecutor::ddl_query___rapidjson::Document"></span><span class="target" id="class_ddl_command_executor_1a39fe1e66b1dfdd4c109923f47200259f"></span>rapidjson::Document <code class="sig-name descname">ddl_query_</code><a class="headerlink" href="#_CPPv4N18DdlCommandExecutor10ddl_query_E" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="member">
+<dt id="_CPPv4N18DdlCommandExecutor12ddl_command_E">
+<span id="_CPPv3N18DdlCommandExecutor12ddl_command_E"></span><span id="_CPPv2N18DdlCommandExecutor12ddl_command_E"></span><span id="DdlCommandExecutor::ddl_command___ss"></span><span class="target" id="class_ddl_command_executor_1ae1a257123c8b308a1f0ee2d339d3bed9"></span>std::string <code class="sig-name descname">ddl_command_</code><a class="headerlink" href="#_CPPv4N18DdlCommandExecutor12ddl_command_E" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 <dl class="member">
