@@ -292,7 +292,6 @@ ParseFileRegionResult parse_file_regions(
     const size_t start_index,
     const size_t end_index,
     CsvReader& csv_reader,
-    std::mutex& file_access_mutex,
     csv_file_buffer_parser::ParseBufferRequest& parse_file_request,
     const std::map<int, Chunk_NS::Chunk>& column_id_to_chunk_map) {
   ParseFileRegionResult load_file_region_result{};
@@ -304,7 +303,6 @@ ParseFileRegionResult parse_file_regions(
     CHECK(file_regions[i].region_size <= parse_file_request.buffer_size);
     size_t read_size;
     {
-      std::lock_guard<std::mutex> lock(file_access_mutex);
       read_size = csv_reader.readRegion(parse_file_request.buffer.get(),
                                         file_regions[i].first_row_file_offset,
                                         file_regions[i].region_size);
@@ -402,19 +400,35 @@ void CsvDataWrapper::populateChunks(
   for (const auto& pair : column_id_to_chunk_map) {
     column_filter_set.insert(pair.first);
   }
+
+  std::vector<std::unique_ptr<CsvReader>> csv_readers;
+  rapidjson::Value reader_metadata(rapidjson::kObjectType);
+  rapidjson::Document d;
+  auto& server_options = foreign_table_->foreign_server->options;
+  csv_reader_->serialize(reader_metadata, d.GetAllocator());
+  const auto csv_file_path = foreign_table_->getFullFilePath();
+
   for (size_t i = 0; i < file_regions.size(); i += batch_size) {
     parse_file_requests.emplace_back(
         buffer_size, copy_params, db_id_, foreign_table_, column_filter_set);
     auto start_index = i;
     auto end_index =
         std::min<size_t>(start_index + batch_size - 1, file_regions.size() - 1);
+
+    if (server_options.find(ForeignServer::STORAGE_TYPE_KEY)->second ==
+        ForeignServer::LOCAL_FILE_STORAGE_TYPE) {
+      csv_readers.emplace_back(std::make_unique<LocalMultiFileReader>(
+          csv_file_path, copy_params, reader_metadata));
+    } else {
+      UNREACHABLE();
+    }
+
     futures.emplace_back(std::async(std::launch::async,
                                     parse_file_regions,
                                     std::ref(file_regions),
                                     start_index,
                                     end_index,
-                                    std::ref((*csv_reader_)),
-                                    std::ref(file_access_mutex_),
+                                    std::ref(*(csv_readers.back())),
                                     std::ref(parse_file_requests.back()),
                                     std::ref(column_id_to_chunk_map)));
   }
