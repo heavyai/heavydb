@@ -28,25 +28,6 @@
 
 namespace foreign_storage {
 
-inline int64_t get_time_conversion_denominator(
-    const parquet::LogicalType::TimeUnit::unit time_unit) {
-  int64_t conversion_denominator = 0;
-  switch (time_unit) {
-    case parquet::LogicalType::TimeUnit::MILLIS:
-      conversion_denominator = 1000L;
-      break;
-    case parquet::LogicalType::TimeUnit::MICROS:
-      conversion_denominator = 1000L * 1000L;
-      break;
-    case parquet::LogicalType::TimeUnit::NANOS:
-      conversion_denominator = 1000L * 1000L * 1000L;
-      break;
-    default:
-      UNREACHABLE();
-  }
-  return conversion_denominator;
-}
-
 class ParquetInPlaceEncoder : public ParquetScalarEncoder {
  public:
   ParquetInPlaceEncoder(Data_Namespace::AbstractBuffer* buffer,

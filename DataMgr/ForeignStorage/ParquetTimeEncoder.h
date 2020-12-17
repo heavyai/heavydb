@@ -19,7 +19,19 @@
 #include "ParquetInPlaceEncoder.h"
 
 namespace foreign_storage {
-template <typename V, typename T>
+
+// The following semantics apply to the templated types below.
+//
+// V - type of omnisci data
+// T - physical type of parquet data
+// conversion_denominator - the denominator constant used in converting parquet to omnisci
+// data
+//
+// The `conversion_denominator` template is used instead of a class member to
+// specify it at compile-time versus run-time. In testing this has a major
+// impact on the runtime of the conversion performed by this encoder since the
+// compiler can significantly optimize if this is known at compile time.
+template <typename V, typename T, T conversion_denominator>
 class ParquetTimeEncoder : public TypedParquetInPlaceEncoder<V, T> {
  public:
   ParquetTimeEncoder(Data_Namespace::AbstractBuffer* buffer,
@@ -28,22 +40,15 @@ class ParquetTimeEncoder : public TypedParquetInPlaceEncoder<V, T> {
       : TypedParquetInPlaceEncoder<V, T>(buffer,
                                          column_desciptor,
                                          parquet_column_descriptor) {
-    auto time_logical_type = dynamic_cast<const parquet::TimeLogicalType*>(
-        parquet_column_descriptor->logical_type().get());
-    CHECK(time_logical_type);
-    conversion_denominator_ =
-        get_time_conversion_denominator(time_logical_type->time_unit());
+    CHECK(parquet_column_descriptor->logical_type()->is_time());
   }
 
   void encodeAndCopy(const int8_t* parquet_data_bytes,
                      int8_t* omnisci_data_bytes) override {
     const auto& parquet_data_value = reinterpret_cast<const T*>(parquet_data_bytes)[0];
     auto& omnisci_data_value = reinterpret_cast<V*>(omnisci_data_bytes)[0];
-    omnisci_data_value = parquet_data_value / conversion_denominator_;
+    omnisci_data_value = parquet_data_value / conversion_denominator;
   }
-
- private:
-  T conversion_denominator_;
 };
 
 }  // namespace foreign_storage

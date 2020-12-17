@@ -422,6 +422,61 @@ std::shared_ptr<ParquetEncoder> create_parquet_none_type_encoder(
   return {};
 }
 
+template <typename V, typename T>
+std::shared_ptr<ParquetEncoder> create_parquet_timestamp_encoder_with_types(
+    const ColumnDescriptor* omnisci_column,
+    const parquet::ColumnDescriptor* parquet_column,
+    AbstractBuffer* buffer) {
+  if (auto timestamp_logical_type = dynamic_cast<const parquet::TimestampLogicalType*>(
+          parquet_column->logical_type().get())) {
+    switch (timestamp_logical_type->time_unit()) {
+      case parquet::LogicalType::TimeUnit::MILLIS:
+        return std::make_shared<ParquetTimestampEncoder<V, T, 1000L>>(
+            buffer, omnisci_column, parquet_column);
+      case parquet::LogicalType::TimeUnit::MICROS:
+        return std::make_shared<ParquetTimestampEncoder<V, T, 1000L * 1000L>>(
+            buffer, omnisci_column, parquet_column);
+      case parquet::LogicalType::TimeUnit::NANOS:
+        return std::make_shared<ParquetTimestampEncoder<V, T, 1000L * 1000L * 1000L>>(
+            buffer, omnisci_column, parquet_column);
+      default:
+        UNREACHABLE();
+    }
+  } else {
+    UNREACHABLE();
+  }
+  return {};
+}
+
+template <typename V, typename T>
+std::shared_ptr<ParquetEncoder> create_parquet_date_from_timestamp_encoder_with_types(
+    const ColumnDescriptor* omnisci_column,
+    const parquet::ColumnDescriptor* parquet_column,
+    AbstractBuffer* buffer) {
+  if (auto timestamp_logical_type = dynamic_cast<const parquet::TimestampLogicalType*>(
+          parquet_column->logical_type().get())) {
+    switch (timestamp_logical_type->time_unit()) {
+      case parquet::LogicalType::TimeUnit::MILLIS:
+        return std::make_shared<
+            ParquetDateFromTimestampEncoder<V, T, 1000L * kSecsPerDay>>(
+            buffer, omnisci_column, parquet_column);
+      case parquet::LogicalType::TimeUnit::MICROS:
+        return std::make_shared<
+            ParquetDateFromTimestampEncoder<V, T, 1000L * 1000L * kSecsPerDay>>(
+            buffer, omnisci_column, parquet_column);
+      case parquet::LogicalType::TimeUnit::NANOS:
+        return std::make_shared<
+            ParquetDateFromTimestampEncoder<V, T, 1000L * 1000L * 1000L * kSecsPerDay>>(
+            buffer, omnisci_column, parquet_column);
+      default:
+        UNREACHABLE();
+    }
+  } else {
+    UNREACHABLE();
+  }
+  return {};
+}
+
 std::shared_ptr<ParquetEncoder> create_parquet_timestamp_encoder(
     const ColumnDescriptor* omnisci_column,
     const parquet::ColumnDescriptor* parquet_column,
@@ -432,8 +487,8 @@ std::shared_ptr<ParquetEncoder> create_parquet_timestamp_encoder(
   if (parquet_column->logical_type()->is_timestamp()) {
     if (column_type.get_compression() == kENCODING_NONE) {
       if (precision == 0) {
-        return std::make_shared<ParquetTimestampEncoder<int64_t, int64_t>>(
-            buffer, omnisci_column, parquet_column);
+        return create_parquet_timestamp_encoder_with_types<int64_t, int64_t>(
+            omnisci_column, parquet_column, buffer);
       } else {
         return std::make_shared<ParquetFixedLengthEncoder<int64_t, int64_t>>(
             buffer, omnisci_column, parquet_column);
@@ -441,11 +496,11 @@ std::shared_ptr<ParquetEncoder> create_parquet_timestamp_encoder(
     } else if (column_type.get_compression() == kENCODING_FIXED) {
       CHECK(column_type.get_comp_param() == 32);
       if (is_metadata_scan) {
-        return std::make_shared<ParquetTimestampEncoder<int64_t, int64_t>>(
-            buffer, omnisci_column, parquet_column);
+        return create_parquet_timestamp_encoder_with_types<int64_t, int64_t>(
+            omnisci_column, parquet_column, buffer);
       } else {
-        return std::make_shared<ParquetTimestampEncoder<int32_t, int64_t>>(
-            buffer, omnisci_column, parquet_column);
+        return create_parquet_timestamp_encoder_with_types<int32_t, int64_t>(
+            omnisci_column, parquet_column, buffer);
       }
     }
   } else if (parquet_column->logical_type()->is_none() && column_type.is_timestamp()) {
@@ -480,6 +535,32 @@ std::shared_ptr<ParquetEncoder> create_parquet_timestamp_encoder(
   return {};
 }
 
+template <typename V, typename T>
+std::shared_ptr<ParquetEncoder> create_parquet_time_encoder_with_types(
+    const ColumnDescriptor* omnisci_column,
+    const parquet::ColumnDescriptor* parquet_column,
+    AbstractBuffer* buffer) {
+  if (auto time_logical_type = dynamic_cast<const parquet::TimeLogicalType*>(
+          parquet_column->logical_type().get())) {
+    switch (time_logical_type->time_unit()) {
+      case parquet::LogicalType::TimeUnit::MILLIS:
+        return std::make_shared<ParquetTimeEncoder<V, T, 1000L>>(
+            buffer, omnisci_column, parquet_column);
+      case parquet::LogicalType::TimeUnit::MICROS:
+        return std::make_shared<ParquetTimeEncoder<V, T, 1000L * 1000L>>(
+            buffer, omnisci_column, parquet_column);
+      case parquet::LogicalType::TimeUnit::NANOS:
+        return std::make_shared<ParquetTimeEncoder<V, T, 1000L * 1000L * 1000L>>(
+            buffer, omnisci_column, parquet_column);
+      default:
+        UNREACHABLE();
+    }
+  } else {
+    UNREACHABLE();
+  }
+  return {};
+}
+
 std::shared_ptr<ParquetEncoder> create_parquet_time_encoder(
     const ColumnDescriptor* omnisci_column,
     const parquet::ColumnDescriptor* parquet_column,
@@ -490,40 +571,40 @@ std::shared_ptr<ParquetEncoder> create_parquet_time_encoder(
           parquet_column->logical_type().get())) {
     if (column_type.get_compression() == kENCODING_NONE) {
       if (time_logical_column->time_unit() == parquet::LogicalType::TimeUnit::MILLIS) {
-        return std::make_shared<ParquetTimeEncoder<int64_t, int32_t>>(
-            buffer, omnisci_column, parquet_column);
+        return create_parquet_time_encoder_with_types<int64_t, int32_t>(
+            omnisci_column, parquet_column, buffer);
       } else {
-        return std::make_shared<ParquetTimeEncoder<int64_t, int64_t>>(
-            buffer, omnisci_column, parquet_column);
+        return create_parquet_time_encoder_with_types<int64_t, int64_t>(
+            omnisci_column, parquet_column, buffer);
       }
     } else if (column_type.get_compression() == kENCODING_FIXED) {
       if (is_metadata_scan) {
         if (time_logical_column->time_unit() == parquet::LogicalType::TimeUnit::MILLIS) {
           CHECK(parquet_column->physical_type() == parquet::Type::INT32);
-          return std::make_shared<ParquetTimeEncoder<int64_t, int32_t>>(
-              buffer, omnisci_column, parquet_column);
+          return create_parquet_time_encoder_with_types<int64_t, int32_t>(
+              omnisci_column, parquet_column, buffer);
         } else {
           CHECK(time_logical_column->time_unit() ==
                     parquet::LogicalType::TimeUnit::MICROS ||
                 time_logical_column->time_unit() ==
                     parquet::LogicalType::TimeUnit::NANOS);
           CHECK(parquet_column->physical_type() == parquet::Type::INT64);
-          return std::make_shared<ParquetTimeEncoder<int64_t, int64_t>>(
-              buffer, omnisci_column, parquet_column);
+          return create_parquet_time_encoder_with_types<int64_t, int64_t>(
+              omnisci_column, parquet_column, buffer);
         }
       } else {
         if (time_logical_column->time_unit() == parquet::LogicalType::TimeUnit::MILLIS) {
           CHECK(parquet_column->physical_type() == parquet::Type::INT32);
-          return std::make_shared<ParquetTimeEncoder<int32_t, int32_t>>(
-              buffer, omnisci_column, parquet_column);
+          return create_parquet_time_encoder_with_types<int32_t, int32_t>(
+              omnisci_column, parquet_column, buffer);
         } else {
           CHECK(time_logical_column->time_unit() ==
                     parquet::LogicalType::TimeUnit::MICROS ||
                 time_logical_column->time_unit() ==
                     parquet::LogicalType::TimeUnit::NANOS);
           CHECK(parquet_column->physical_type() == parquet::Type::INT64);
-          return std::make_shared<ParquetTimeEncoder<int32_t, int64_t>>(
-              buffer, omnisci_column, parquet_column);
+          return create_parquet_time_encoder_with_types<int32_t, int64_t>(
+              omnisci_column, parquet_column, buffer);
         }
       }
     } else {
@@ -542,16 +623,16 @@ std::shared_ptr<ParquetEncoder> create_parquet_date_from_timestamp_encoder(
   if (parquet_column->logical_type()->is_timestamp() && column_type.is_date()) {
     CHECK(column_type.get_compression() == kENCODING_DATE_IN_DAYS);
     if (is_metadata_scan) {
-      return std::make_shared<ParquetTimestampEncoder<int64_t, int64_t>>(
-          buffer, omnisci_column, parquet_column);
+      return create_parquet_timestamp_encoder_with_types<int64_t, int64_t>(
+          omnisci_column, parquet_column, buffer);
     } else {
       if (column_type.get_comp_param() ==
           0) {  // DATE ENCODING FIXED (32) uses comp param 0
-        return std::make_shared<ParquetDateFromTimestampEncoder<int32_t, int64_t>>(
-            buffer, omnisci_column, parquet_column);
+        return create_parquet_date_from_timestamp_encoder_with_types<int32_t, int64_t>(
+            omnisci_column, parquet_column, buffer);
       } else if (column_type.get_comp_param() == 16) {
-        return std::make_shared<ParquetDateFromTimestampEncoder<int16_t, int64_t>>(
-            buffer, omnisci_column, parquet_column);
+        return create_parquet_date_from_timestamp_encoder_with_types<int16_t, int64_t>(
+            omnisci_column, parquet_column, buffer);
       } else {
         UNREACHABLE();
       }

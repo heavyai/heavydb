@@ -19,17 +19,29 @@
 #include "ParquetTimestampEncoder.h"
 
 namespace foreign_storage {
-template <typename V, typename T>
-class ParquetDateFromTimestampEncoder : public ParquetTimestampEncoder<V, T> {
+
+// The following semantics apply to the templated types below.
+//
+// V - type of omnisci data
+// T - physical type of parquet data
+// conversion_denominator - the denominator constant used in converting parquet to omnisci
+// data
+//
+// The `conversion_denominator` template is used instead of a class member to
+// specify it at compile-time versus run-time. In testing this has a major
+// impact on the runtime of the conversion performed by this encoder since the
+// compiler can significantly optimize if this is known at compile time.
+template <typename V, typename T, T conversion_denominator>
+class ParquetDateFromTimestampEncoder
+    : public ParquetTimestampEncoder<V, T, conversion_denominator> {
  public:
   ParquetDateFromTimestampEncoder(
       Data_Namespace::AbstractBuffer* buffer,
       const ColumnDescriptor* column_desciptor,
       const parquet::ColumnDescriptor* parquet_column_descriptor)
-      : ParquetTimestampEncoder<V, T>(buffer,
-                                      column_desciptor,
-                                      parquet_column_descriptor) {
-    ParquetTimestampEncoder<V, T>::conversion_denominator_ *= kSecsPerDay;
+      : ParquetTimestampEncoder<V, T, conversion_denominator>(buffer,
+                                                              column_desciptor,
+                                                              parquet_column_descriptor) {
   }
 };
 }  // namespace foreign_storage
