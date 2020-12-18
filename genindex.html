@@ -64,7 +64,7 @@
             
             
               <div class="version">
-                5.6.0dev 51069cb
+                5.6.0dev 7d2afa8
               </div>
             
           
@@ -3464,6 +3464,8 @@
 </li>
       <li><a href="api/class/class_arrow_foreign_storage_base.html#_CPPv4I0EN23ArrowForeignStorageBase13setNullValuesEvRKNSt6vectorI4FragEENSt10shared_ptrIN5arrow12ChunkedArrayEEE">ArrowForeignStorageBase::setNullValues (C++ function)</a>
 </li>
+      <li><a href="api/class/class_arrow_foreign_storage_base.html#_CPPv4N23ArrowForeignStorageBase11tryZeroCopyERK8ChunkKeyRK11SQLTypeInfoK6size_t">ArrowForeignStorageBase::tryZeroCopy (C++ function)</a>
+</li>
       <li><a href="api/struct/struct_arrow_fragment.html#_CPPv413ArrowFragment">ArrowFragment (C++ class)</a>
 </li>
       <li><a href="api/struct/struct_arrow_fragment.html#_CPPv4N13ArrowFragment6chunksE">ArrowFragment::chunks (C++ member)</a>
@@ -3957,6 +3959,8 @@
       <li><a href="api/class/class_buffer___namespace_1_1_buffer.html#_CPPv4NK16Buffer_Namespace6Buffer12reservedSizeEv">Buffer_Namespace::Buffer::reservedSize (C++ function)</a>
 </li>
       <li><a href="api/class/class_buffer___namespace_1_1_buffer.html#_CPPv4N16Buffer_Namespace6Buffer7seg_it_E">Buffer_Namespace::Buffer::seg_it_ (C++ member)</a>
+</li>
+      <li><a href="api/class/class_buffer___namespace_1_1_buffer.html#_CPPv4N16Buffer_Namespace6Buffer12setMemoryPtrEP6int8_t">Buffer_Namespace::Buffer::setMemoryPtr (C++ function)</a>
 </li>
       <li><a href="api/class/class_buffer___namespace_1_1_buffer.html#_CPPv4N16Buffer_Namespace6Buffer5unPinEv">Buffer_Namespace::Buffer::unPin (C++ function)</a>
 </li>
@@ -6776,6 +6780,8 @@
 </li>
       <li><a href="api/class/class_data___namespace_1_1_abstract_buffer.html#_CPPv4N14Data_Namespace14AbstractBuffer8setDirtyEv">Data_Namespace::AbstractBuffer::setDirty (C++ function)</a>
 </li>
+      <li><a href="api/class/class_data___namespace_1_1_abstract_buffer.html#_CPPv4N14Data_Namespace14AbstractBuffer12setMemoryPtrEP6int8_t">Data_Namespace::AbstractBuffer::setMemoryPtr (C++ function)</a>
+</li>
       <li><a href="api/class/class_data___namespace_1_1_abstract_buffer.html#_CPPv4N14Data_Namespace14AbstractBuffer7setSizeEK6size_t">Data_Namespace::AbstractBuffer::setSize (C++ function)</a>
 </li>
       <li><a href="api/class/class_data___namespace_1_1_abstract_buffer.html#_CPPv4N14Data_Namespace14AbstractBuffer10setSqlTypeERK11SQLTypeInfo">Data_Namespace::AbstractBuffer::setSqlType (C++ function)</a>
@@ -7364,10 +7370,10 @@
 </li>
       <li><a href="api/class/class_d_b_handler.html#_CPPv4NK9DBHandler17getConnectionInfoEv">DBHandler::getConnectionInfo (C++ function)</a>
 </li>
-      <li><a href="api/class/class_d_b_handler.html#_CPPv4NK9DBHandler19getInvalidSessionIdEv">DBHandler::getInvalidSessionId (C++ function)</a>
-</li>
   </ul></td>
   <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="api/class/class_d_b_handler.html#_CPPv4NK9DBHandler19getInvalidSessionIdEv">DBHandler::getInvalidSessionId (C++ function)</a>
+</li>
       <li><a href="api/class/class_d_b_handler.html#_CPPv4N9DBHandler10getQueriesENSt10shared_ptrIKN17Catalog_Namespace11SessionInfoEEE">DBHandler::getQueries (C++ function)</a>
 </li>
       <li><a href="api/class/class_d_b_handler.html#_CPPv4NK9DBHandler17getTargetMetaInfoERKNSt6vectorINSt10shared_ptrIN8Analyzer11TargetEntryEEEEE">DBHandler::getTargetMetaInfo (C++ function)</a>
@@ -10492,7 +10498,7 @@
 </li>
       <li><a href="api/class/classforeign__storage_1_1_parquet_data_wrapper.html#_CPPv4N15foreign_storage18ParquetDataWrapper15validateOptionsEPK12ForeignTable">foreign_storage::ParquetDataWrapper::validateOptions (C++ function)</a>
 </li>
-      <li><a href="api/class/classforeign__storage_1_1_parquet_date_from_timestamp_encoder.html#_CPPv4I00EN15foreign_storage31ParquetDateFromTimestampEncoderE">foreign_storage::ParquetDateFromTimestampEncoder (C++ class)</a>
+      <li><a href="api/class/classforeign__storage_1_1_parquet_date_from_timestamp_encoder.html#_CPPv4I00_1TEN15foreign_storage31ParquetDateFromTimestampEncoderE">foreign_storage::ParquetDateFromTimestampEncoder (C++ class)</a>
 </li>
       <li><a href="api/class/classforeign__storage_1_1_parquet_date_from_timestamp_encoder.html#_CPPv4N15foreign_storage31ParquetDateFromTimestampEncoder31ParquetDateFromTimestampEncoderEPN14Data_Namespace14AbstractBufferEPK16ColumnDescriptorPKN7parquet16ColumnDescriptorE">foreign_storage::ParquetDateFromTimestampEncoder::ParquetDateFromTimestampEncoder (C++ function)</a>
 </li>
@@ -10740,17 +10746,13 @@
 </li>
       <li><a href="api/class/classforeign__storage_1_1_parquet_string_none_encoder.html#_CPPv4N15foreign_storage24ParquetStringNoneEncoder30writeInitialOffsetIfApplicableEv">foreign_storage::ParquetStringNoneEncoder::writeInitialOffsetIfApplicable (C++ function)</a>
 </li>
-      <li><a href="api/class/classforeign__storage_1_1_parquet_time_encoder.html#_CPPv4I00EN15foreign_storage18ParquetTimeEncoderE">foreign_storage::ParquetTimeEncoder (C++ class)</a>
-</li>
-      <li><a href="api/class/classforeign__storage_1_1_parquet_time_encoder.html#_CPPv4N15foreign_storage18ParquetTimeEncoder23conversion_denominator_E">foreign_storage::ParquetTimeEncoder::conversion_denominator_ (C++ member)</a>
+      <li><a href="api/class/classforeign__storage_1_1_parquet_time_encoder.html#_CPPv4I00_1TEN15foreign_storage18ParquetTimeEncoderE">foreign_storage::ParquetTimeEncoder (C++ class)</a>
 </li>
       <li><a href="api/class/classforeign__storage_1_1_parquet_time_encoder.html#_CPPv4N15foreign_storage18ParquetTimeEncoder13encodeAndCopyEPK6int8_tP6int8_t">foreign_storage::ParquetTimeEncoder::encodeAndCopy (C++ function)</a>
 </li>
       <li><a href="api/class/classforeign__storage_1_1_parquet_time_encoder.html#_CPPv4N15foreign_storage18ParquetTimeEncoder18ParquetTimeEncoderEPN14Data_Namespace14AbstractBufferEPK16ColumnDescriptorPKN7parquet16ColumnDescriptorE">foreign_storage::ParquetTimeEncoder::ParquetTimeEncoder (C++ function)</a>
 </li>
-      <li><a href="api/class/classforeign__storage_1_1_parquet_timestamp_encoder.html#_CPPv4I00EN15foreign_storage23ParquetTimestampEncoderE">foreign_storage::ParquetTimestampEncoder (C++ class)</a>
-</li>
-      <li><a href="api/class/classforeign__storage_1_1_parquet_timestamp_encoder.html#_CPPv4N15foreign_storage23ParquetTimestampEncoder23conversion_denominator_E">foreign_storage::ParquetTimestampEncoder::conversion_denominator_ (C++ member)</a>
+      <li><a href="api/class/classforeign__storage_1_1_parquet_timestamp_encoder.html#_CPPv4I00_1TEN15foreign_storage23ParquetTimestampEncoderE">foreign_storage::ParquetTimestampEncoder (C++ class)</a>
 </li>
       <li><a href="api/class/classforeign__storage_1_1_parquet_timestamp_encoder.html#_CPPv4NK15foreign_storage23ParquetTimestampEncoder7convertERK1T">foreign_storage::ParquetTimestampEncoder::convert (C++ function)</a>
 </li>
@@ -10901,6 +10903,8 @@
       <li><a href="api/class/class_foreign_storage_buffer.html#_CPPv4N20ForeignStorageBuffer7reserveE6size_t">ForeignStorageBuffer::reserve (C++ function)</a>, <a href="api/class/classforeign__storage_1_1_foreign_storage_buffer.html#_CPPv4N20ForeignStorageBuffer7reserveE6size_t">[1]</a>
 </li>
       <li><a href="api/class/class_foreign_storage_buffer.html#_CPPv4NK20ForeignStorageBuffer12reservedSizeEv">ForeignStorageBuffer::reservedSize (C++ function)</a>, <a href="api/class/classforeign__storage_1_1_foreign_storage_buffer.html#_CPPv4NK20ForeignStorageBuffer12reservedSizeEv">[1]</a>
+</li>
+      <li><a href="api/class/class_foreign_storage_buffer.html#_CPPv4N20ForeignStorageBuffer11tryZeroCopyEK6size_t">ForeignStorageBuffer::tryZeroCopy (C++ function)</a>
 </li>
       <li><a href="api/class/class_foreign_storage_buffer.html#_CPPv4N20ForeignStorageBuffer5writeEP6int8_tK6size_tK6size_tKN14Data_Namespace11MemoryLevelEKi">ForeignStorageBuffer::write (C++ function)</a>, <a href="api/class/classforeign__storage_1_1_foreign_storage_buffer.html#_CPPv4N20ForeignStorageBuffer5writeEP6int8_tK6size_tK6size_tK11MemoryLevelKi">[1]</a>
 </li>
@@ -15976,10 +15980,10 @@
 </li>
       <li><a href="api/class/class_parser_1_1_oper_expr.html#_CPPv4N6Parser8OperExprE">Parser::OperExpr (C++ class)</a>
 </li>
-  </ul></td>
-  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="api/class/class_parser_1_1_oper_expr.html#_CPPv4NK6Parser8OperExpr7analyzeERKN17Catalog_Namespace7CatalogERN8Analyzer5QueryE12TlistRefType">Parser::OperExpr::analyze (C++ function)</a>
 </li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="api/class/class_parser_1_1_oper_expr.html#_CPPv4NK6Parser8OperExpr8get_leftEv">Parser::OperExpr::get_left (C++ function)</a>
 </li>
       <li><a href="api/class/class_parser_1_1_oper_expr.html#_CPPv4NK6Parser8OperExpr10get_optypeEv">Parser::OperExpr::get_optype (C++ function)</a>
@@ -16673,6 +16677,8 @@
       <li><a href="api/class/class_persistent_foreign_storage_interface.html#_CPPv4N33PersistentForeignStorageInterface4readERK8ChunkKeyRK11SQLTypeInfoP6int8_tK6size_t">PersistentForeignStorageInterface::read (C++ function)</a>
 </li>
       <li><a href="api/class/class_persistent_foreign_storage_interface.html#_CPPv4N33PersistentForeignStorageInterface13registerTableEPN17Catalog_Namespace7CatalogENSt4pairIiiEERKNSt6stringERK15TableDescriptorRKNSt4listI16ColumnDescriptorEEPN14Data_Namespace17AbstractBufferMgrE">PersistentForeignStorageInterface::registerTable (C++ function)</a>
+</li>
+      <li><a href="api/class/class_persistent_foreign_storage_interface.html#_CPPv4N33PersistentForeignStorageInterface11tryZeroCopyERK8ChunkKeyRK11SQLTypeInfoK6size_t">PersistentForeignStorageInterface::tryZeroCopy (C++ function)</a>
 </li>
       <li><a href="api/class/class_persistent_foreign_storage_interface.html#_CPPv4N33PersistentForeignStorageInterfaceD0Ev">PersistentForeignStorageInterface::~PersistentForeignStorageInterface (C++ function)</a>
 </li>
