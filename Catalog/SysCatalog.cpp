@@ -743,7 +743,6 @@ std::shared_ptr<Catalog> SysCatalog::login(std::string& dbname,
   // can reset it. The username isn't const because SamlServer's
   // login()/authenticate_user() can reset it.
 
-  sys_write_lock write_lock(this);
   if (check_password) {
     loginImpl(username, password, user_meta);
   } else {  // not checking for password so user must exist
@@ -1229,6 +1228,7 @@ bool SysCatalog::checkPasswordForUser(const std::string& passwd,
 bool SysCatalog::checkPasswordForUserImpl(const std::string& passwd,
                                           std::string& name,
                                           UserMetadata& user) {
+  sys_read_lock read_lock(this);
   if (!getMetadataForUser(name, user)) {
     // Check password against some fake hash just to waste time so that response times
     // for invalid password and invalid user are similar and a caller can't say the
@@ -1268,6 +1268,7 @@ static bool parseUserMetadataFromSQLite(const std::unique_ptr<SqliteConnector>& 
 }
 
 bool SysCatalog::getMetadataForUser(const string& name, UserMetadata& user) {
+  sys_read_lock read_lock(this);
   sys_sqlite_lock sqlite_lock(this);
   sqliteConnector_->query_with_text_param(
       "SELECT userid, name, passwd_hash, issuper, default_db, can_login FROM mapd_users "
@@ -1350,6 +1351,7 @@ void SysCatalog::getMetadataWithDefaultDB(std::string& dbname,
                                           const std::string& username,
                                           Catalog_Namespace::DBMetadata& db_meta,
                                           UserMetadata& user_meta) {
+  sys_read_lock read_lock(this);
   if (!getMetadataForUser(username, user_meta)) {
     throw std::runtime_error("Invalid credentials.");
   }
@@ -1382,6 +1384,7 @@ void SysCatalog::getMetadataWithDefaultDB(std::string& dbname,
 }
 
 bool SysCatalog::getMetadataForDB(const string& name, DBMetadata& db) {
+  sys_read_lock read_lock(this);
   sys_sqlite_lock sqlite_lock(this);
   sqliteConnector_->query_with_text_param(
       "SELECT dbid, name, owner FROM mapd_databases WHERE name = ?", name);
@@ -2355,6 +2358,11 @@ void SysCatalog::syncUserWithRemoteProvider(const std::string& user_name,
                                             bool* is_super) {
   UserMetadata user_meta;
   bool is_super_user = is_super ? *is_super : false;
+  // need to escalate to a write lock
+  // need to unlock the read lock
+  sys_read_lock read_lock(this);
+  read_lock.unlock();
+  sys_write_lock write_lock(this);
   if (!getMetadataForUser(user_name, user_meta)) {
     createUser(user_name, generate_random_string(72), is_super_user, "", true);
     LOG(INFO) << "User " << user_name << " has been created by remote identity provider"
