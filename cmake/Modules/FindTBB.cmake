@@ -394,11 +394,18 @@ findpkg_finish(TBB_MALLOC_PROXY tbbmalloc_proxy)
 if(NOT TBB_VERSION)
 
  #only read the start of the file
- file(STRINGS
-      "${TBB_INCLUDE_DIR}/tbb/tbb_stddef.h"
-      TBB_VERSION_CONTENTS
-      REGEX "VERSION")
-
+ if(EXISTS "${TBB_INCLUDE_DIR}/tbb/version.h")
+  file(STRINGS
+        "${TBB_INCLUDE_DIR}/tbb/version.h"
+        TBB_VERSION_CONTENTS
+        REGEX "VERSION")
+  else()
+    file(STRINGS
+        "${TBB_INCLUDE_DIR}/tbb/tbb_stddef.h"
+        TBB_VERSION_CONTENTS
+        REGEX "VERSION")
+  endif()
+  
   string(REGEX REPLACE
     ".*#define TBB_VERSION_MAJOR ([0-9]+).*" "\\1"
     TBB_VERSION_MAJOR "${TBB_VERSION_CONTENTS}")

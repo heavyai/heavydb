@@ -8,6 +8,9 @@ race:google::RawLog__SetLastTime
 race:apache::thrift::transport::TServerSocket
 race:apache::thrift::server
 thread:libcuda.so
+race:libtbbmalloc*
+race:tbb::detail::*
+# TODO: remove TSAN wildcard after TSAN-enabled TBB deps go out 
 race:^tbb*
 # mktime in libarchive uses tzset
 race:^tzset
