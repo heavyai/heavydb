@@ -209,7 +209,7 @@ public class OmniSciPrepareTest {
     Integer[] is = {1, 2, null, 4};
     Integer[][] ias = {{1, 2, 3}, {10, 20, 30}, null, {1000, 2000, 3000}};
     String[] ss = {null, null, "One", "Two"};
-    String[] lss = {"NULL", "NULL", "LINESTRING (0 1,2 2)", "LINESTRING (4 1,5 3)"};
+    String[] lss = {null, null, "LINESTRING (0 1,2 2)", "LINESTRING (4 1,5 3)"};
     ps.setInt(1, is[0]);
     ps.setArray(2, m_conn.createArrayOf("INT", ias[0]));
     ps.addBatch();
