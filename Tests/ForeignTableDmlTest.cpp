@@ -2339,17 +2339,28 @@ INSTANTIATE_TEST_SUITE_P(
                                "parquet_string_dir",
                                "parquet_string_dir",
                                false},
-        AppendRefreshTestParam{2,  // Fragments are created during the append
+        AppendRefreshTestParam{5,  // Incomplete fragments created during the append
                                "parquet",
                                "parquet_string_dir",
                                "parquet_string_dir",
                                false},
+        AppendRefreshTestParam{
+            2,  // Complete + Incomplete fragments are created during the append
+            "parquet",
+            "parquet_string_dir",
+            "parquet_string_dir",
+            false},
         AppendRefreshTestParam{32000000,  // Fragment is modified during append
                                "csv",
                                "csv_string_dir",
                                "csv_string_dir",
                                false},
-        AppendRefreshTestParam{2,  // Fragments are created during the append
+        AppendRefreshTestParam{5,  // Incomplete fragments created during the append
+                               "csv",
+                               "csv_string_dir",
+                               "csv_string_dir",
+                               false},
+        AppendRefreshTestParam{2,  // Fragment is modified during append
                                "csv",
                                "csv_string_dir",
                                "csv_string_dir",
