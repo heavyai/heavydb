@@ -912,21 +912,21 @@ void add_placeholder_metadata(
     const ForeignTable* foreign_table,
     const int db_id,
     const size_t start_row,
-    const size_t num_rows,
+    const size_t total_num_rows,
     std::map<ChunkKey, std::shared_ptr<ChunkMetadata>>& chunk_metadata_map) {
   ChunkKey chunk_key = {db_id, foreign_table->tableId, column->columnId, 0};
   if (column->columnType.is_varlen_indeed()) {
     chunk_key.emplace_back(1);
   }
 
-  // Check for row == 0 so we create at least one fragment needed by the fragmenter
-  for (size_t row = start_row; (row < num_rows) || (row == 0 && num_rows == 0);
-       row += foreign_table->maxFragRows) {
-    int fragment_id = row / foreign_table->maxFragRows;
-    size_t num_elements =
-        (static_cast<size_t>(foreign_table->maxFragRows * (fragment_id + 1)) > num_rows)
-            ? num_rows % foreign_table->maxFragRows
-            : foreign_table->maxFragRows;
+  // Create placeholder metadata for every fragment touched by this scan
+  int start_fragment = start_row / foreign_table->maxFragRows;
+  int end_fragment = total_num_rows / foreign_table->maxFragRows;
+  for (int fragment_id = start_fragment; fragment_id <= end_fragment; fragment_id++) {
+    size_t num_elements = (static_cast<size_t>(foreign_table->maxFragRows *
+                                               (fragment_id + 1)) > total_num_rows)
+                              ? total_num_rows % foreign_table->maxFragRows
+                              : foreign_table->maxFragRows;
 
     ForeignStorageBuffer empty_buffer;
     // Use default encoder metadata as in parquet wrapper
