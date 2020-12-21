@@ -24,6 +24,9 @@
 #include <gtest/gtest.h>
 #include <picosha2.h>
 
+#ifdef HAVE_AWS_S3
+#include "DataMgr/OmniSciAwsSdk.h"
+#endif  // HAVE_AWS_S3
 #include "Tests/DBHandlerTestHelpers.h"
 #include "Tests/TestHelpers.h"
 #include "Utils/DdlUtils.h"
@@ -345,6 +348,10 @@ class DBHandlerFilePathTest
 
  protected:
   static void SetUpTestSuite() {
+#ifdef HAVE_AWS_S3
+    omnisci_aws_sdk::init_sdk();
+#endif  // HAVE_AWS_S3
+
     createDBHandler();
     sql("CREATE TABLE IF NOT EXISTS test_table (col1 TEXT);");
     sql("CREATE TABLE IF NOT EXISTS test_table_2 (omnisci_geo POINT);");
@@ -355,6 +362,10 @@ class DBHandlerFilePathTest
     sql("DROP TABLE IF EXISTS test_table;");
     sql("DROP TABLE IF EXISTS test_table_2;");
     boost::filesystem::remove_all(getImportPath());
+
+#ifdef HAVE_AWS_S3
+    omnisci_aws_sdk::shutdown_sdk();
+#endif  // HAVE_AWS_S3
   }
 
   static boost::filesystem::path getImportPath() {

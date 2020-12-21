@@ -38,18 +38,6 @@
 class S3Archive : public Archive {
  public:
   S3Archive(const std::string& url, const bool plain_text) : Archive(url, plain_text) {
-// init aws api should be singleton because because
-// it's bad to call Aws::InitAPI and Aws::ShutdownAPI
-// multiple times.
-#ifdef HAVE_AWS_S3
-    {
-      std::unique_lock<std::mutex> lck(awsapi_mtx);
-      if (0 == awsapi_count++) {
-        Aws::InitAPI(awsapi_options);
-      }
-    }
-#endif  // HAVE_AWS_S3
-
     // these envs are on server side so are global settings
     // which make few senses in case of private s3 resources
     char* env;
@@ -91,10 +79,6 @@ class S3Archive : public Archive {
       if (thread.joinable()) {
         thread.join();
       }
-    }
-    std::unique_lock<std::mutex> lck(awsapi_mtx);
-    if (0 == --awsapi_count) {
-      Aws::ShutdownAPI(awsapi_options);
     }
 #endif  // HAVE_AWS_S3
   }

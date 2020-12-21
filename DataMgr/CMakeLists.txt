@@ -42,6 +42,25 @@ if(ENABLE_AWS_S3)
 endif()
 endif()
 
+# On Linux, Arrow internally links symbols for its dependency libraries (such as the C++ AWS SDK)
+# when it is built as a shared library. In this case, set a flag that would be used to determine
+# how to handle AWS SDK initialization and shutdown.
+function(set_arrow_has_private_aws_sdk)
+  if(${CMAKE_SYSTEM_NAME} MATCHES "Linux")
+    foreach(LIB_PATH ${Arrow_LIBRARIES})
+      get_filename_component(LIB_NAME ${LIB_PATH} NAME)
+      if (${LIB_NAME} STREQUAL "${CMAKE_SHARED_LIBRARY_PREFIX}arrow${CMAKE_SHARED_LIBRARY_SUFFIX}")
+        add_definitions("-DARROW_HAS_PRIVATE_AWS_SDK")
+      endif()
+    endforeach()
+  endif()
+endfunction()
+
+if(ENABLE_AWS_S3)
+  list(APPEND datamgr_source_files OmniSciAwsSdk.cpp)
+  set_arrow_has_private_aws_sdk()
+endif()
+
 add_library(DataMgr ${datamgr_source_files})
 
 target_link_libraries(DataMgr CudaMgr Shared ${Boost_THREAD_LIBRARY} ${TBB_LIBS})

@@ -28,10 +28,6 @@
 
 #include "Logger/Logger.h"
 
-int S3Archive::awsapi_count;
-std::mutex S3Archive::awsapi_mtx;
-Aws::SDKOptions S3Archive::awsapi_options;
-
 void S3Archive::init_for_read() {
   boost::filesystem::create_directories(s3_temp_dir);
   if (!boost::filesystem::is_directory(s3_temp_dir)) {

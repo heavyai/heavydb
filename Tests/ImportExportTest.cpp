@@ -33,6 +33,9 @@
 
 #include "Archive/PosixFileArchive.h"
 #include "Catalog/Catalog.h"
+#ifdef HAVE_AWS_S3
+#include "DataMgr/OmniSciAwsSdk.h"
+#endif
 #include "Geospatial/GDAL.h"
 #include "Geospatial/Types.h"
 #include "ImportExport/DelimitedParserUtils.h"
@@ -944,6 +947,12 @@ const char* create_table_with_quoted_fields = R"(
 
 class ImportTest : public ::testing::Test {
  protected:
+#ifdef HAVE_AWS_S3
+  static void SetUpTestSuite() { omnisci_aws_sdk::init_sdk(); }
+
+  static void TearDownTestSuite() { omnisci_aws_sdk::shutdown_sdk(); }
+#endif
+
   void SetUp() override {
     ASSERT_NO_THROW(run_ddl_statement("drop table if exists trips;"););
     ASSERT_NO_THROW(run_ddl_statement(create_table_trips););
