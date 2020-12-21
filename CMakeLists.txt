@@ -841,6 +841,7 @@ if(NOT MVN_EXECUTABLE)
   message(FATAL_ERROR "mvn not found. Install Apache Maven.")
 endif()
 file(GLOB_RECURSE JAVA_POM RELATIVE ${CMAKE_SOURCE_DIR} java/**/pom.xml)
+file(GLOB_RECURSE JAVA_FTL RELATIVE ${CMAKE_SOURCE_DIR} java/calcite/src/main/codegen/includes/*.ftl)
 file(GLOB_RECURSE JAVA_SOURCES RELATIVE ${CMAKE_SOURCE_DIR} java/**/*.java)
 list(FILTER JAVA_SOURCES EXCLUDE REGEX ".*/gen/.*")
 list(FILTER JAVA_SOURCES EXCLUDE REGEX ".*/generated-sources/.*")
@@ -872,10 +873,12 @@ add_custom_command(
   DEPENDS
     ${CMAKE_SOURCE_DIR}/java/thrift/src/gen/com/omnisci/thrift/server/OmniSci.java
     ${CMAKE_SOURCE_DIR}/java/thrift/src/gen/com/omnisci/thrift/calciteserver/CalciteServer.java
+    ${CMAKE_SOURCE_DIR}/java/calcite/src/main/codegen/config.fmpp
     ${CMAKE_SOURCE_DIR}/java/pom.xml
     ${CMAKE_SOURCE_DIR}/omnisci.thrift
     ${JAVA_POM}
     ${JAVA_SOURCES}
+    ${JAVA_FTL}
   )
 add_custom_target(mapd_java_components ALL DEPENDS
   ${CMAKE_BINARY_DIR}/bin/mapd-1.0-SNAPSHOT-jar-with-dependencies.jar
