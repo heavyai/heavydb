@@ -124,6 +124,17 @@ class HashJoin {
     return HashTypeStrings[static_cast<int>(ht)];
   };
 
+  static HashJoinMatchingSet codegenMatchingSet(
+      const std::vector<llvm::Value*>& hash_join_idx_args_in,
+      const bool is_sharded,
+      const bool col_is_nullable,
+      const bool is_bw_eq,
+      const int64_t sub_buff_size,
+      Executor* executor,
+      const bool is_bucketized = false);
+
+  static llvm::Value* codegenHashTableLoad(const size_t table_idx, Executor* executor);
+
   virtual Data_Namespace::MemoryLevel getMemoryLevel() const noexcept = 0;
 
   virtual int getDeviceCount() const noexcept = 0;
@@ -260,3 +271,15 @@ size_t get_shard_count(const Analyzer::BinOper* join_condition, const Executor* 
 size_t get_shard_count(
     std::pair<const Analyzer::ColumnVar*, const Analyzer::Expr*> equi_pair,
     const Executor* executor);
+
+// Swap the columns if needed and make the inner column the first component.
+InnerOuter normalize_column_pair(const Analyzer::Expr* lhs,
+                                 const Analyzer::Expr* rhs,
+                                 const Catalog_Namespace::Catalog& cat,
+                                 const TemporaryTables* temporary_tables,
+                                 const bool is_overlaps_join = false);
+
+// Normalize each expression tuple
+std::vector<InnerOuter> normalize_column_pairs(const Analyzer::BinOper* condition,
+                                               const Catalog_Namespace::Catalog& cat,
+                                               const TemporaryTables* temporary_tables);

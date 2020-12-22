@@ -55,10 +55,10 @@ set(query_engine_source_files
     InputMetadata.cpp
     JoinFilterPushDown.cpp
     JoinHashTable/BaselineJoinHashTable.cpp
-    JoinHashTable/JoinHashTable.cpp
     JoinHashTable/HashJoin.cpp
     JoinHashTable/HashTable.cpp
     JoinHashTable/OverlapsJoinHashTable.cpp
+    JoinHashTable/PerfectJoinHashTable.cpp
     JoinHashTable/Runtime/HashJoinRuntime.cpp
     LogicalIR.cpp
     LLVMFunctionAttributesUtil.cpp

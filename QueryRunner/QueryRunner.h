@@ -28,7 +28,7 @@
 #include "LeafAggregator.h"
 #include "QueryEngine/CompilationOptions.h"
 #include "QueryEngine/JoinHashTable/BaselineJoinHashTable.h"
-#include "QueryEngine/JoinHashTable/JoinHashTable.h"
+#include "QueryEngine/JoinHashTable/HashJoin.h"
 #include "QueryEngine/JoinHashTable/OverlapsJoinHashTable.h"
 #include "QueryEngine/QueryDispatchQueue.h"
 #include "QueryEngine/QueryHint.h"

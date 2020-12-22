@@ -20,8 +20,9 @@
 #include "QueryEngine/EquiJoinCondition.h"
 #include "QueryEngine/Execute.h"
 #include "QueryEngine/JoinHashTable/BaselineJoinHashTable.h"
-#include "QueryEngine/JoinHashTable/JoinHashTable.h"
 #include "QueryEngine/JoinHashTable/OverlapsJoinHashTable.h"
+#include "QueryEngine/JoinHashTable/PerfectJoinHashTable.h"
+#include "QueryEngine/RangeTableIndexVisitor.h"
 #include "QueryEngine/RuntimeFunctions.h"
 #include "QueryEngine/ScalarExprVisitor.h"
 
@@ -142,6 +143,77 @@ std::ostream& operator<<(std::ostream& os, const DecodedJoinHashBufferSet& s) {
   return os;
 }
 
+HashJoinMatchingSet HashJoin::codegenMatchingSet(
+    const std::vector<llvm::Value*>& hash_join_idx_args_in,
+    const bool is_sharded,
+    const bool col_is_nullable,
+    const bool is_bw_eq,
+    const int64_t sub_buff_size,
+    Executor* executor,
+    bool is_bucketized) {
+  AUTOMATIC_IR_METADATA(executor->cgen_state_.get());
+  using namespace std::string_literals;
+
+  std::string fname(is_bucketized ? "bucketized_hash_join_idx"s : "hash_join_idx"s);
+
+  if (is_bw_eq) {
+    fname += "_bitwise";
+  }
+  if (is_sharded) {
+    fname += "_sharded";
+  }
+  if (!is_bw_eq && col_is_nullable) {
+    fname += "_nullable";
+  }
+
+  const auto slot_lv = executor->cgen_state_->emitCall(fname, hash_join_idx_args_in);
+  const auto slot_valid_lv = executor->cgen_state_->ir_builder_.CreateICmpSGE(
+      slot_lv, executor->cgen_state_->llInt(int64_t(0)));
+
+  auto pos_ptr = hash_join_idx_args_in[0];
+  CHECK(pos_ptr);
+
+  auto count_ptr = executor->cgen_state_->ir_builder_.CreateAdd(
+      pos_ptr, executor->cgen_state_->llInt(sub_buff_size));
+  auto hash_join_idx_args = hash_join_idx_args_in;
+  hash_join_idx_args[0] = executor->cgen_state_->ir_builder_.CreatePtrToInt(
+      count_ptr, llvm::Type::getInt64Ty(executor->cgen_state_->context_));
+
+  const auto row_count_lv = executor->cgen_state_->ir_builder_.CreateSelect(
+      slot_valid_lv,
+      executor->cgen_state_->emitCall(fname, hash_join_idx_args),
+      executor->cgen_state_->llInt(int64_t(0)));
+  auto rowid_base_i32 = executor->cgen_state_->ir_builder_.CreateIntToPtr(
+      executor->cgen_state_->ir_builder_.CreateAdd(
+          pos_ptr, executor->cgen_state_->llInt(2 * sub_buff_size)),
+      llvm::Type::getInt32PtrTy(executor->cgen_state_->context_));
+  auto rowid_ptr_i32 =
+      executor->cgen_state_->ir_builder_.CreateGEP(rowid_base_i32, slot_lv);
+  return {rowid_ptr_i32, row_count_lv, slot_lv};
+}
+
+llvm::Value* HashJoin::codegenHashTableLoad(const size_t table_idx, Executor* executor) {
+  AUTOMATIC_IR_METADATA(executor->cgen_state_.get());
+  llvm::Value* hash_ptr = nullptr;
+  const auto total_table_count =
+      executor->plan_state_->join_info_.join_hash_tables_.size();
+  CHECK_LT(table_idx, total_table_count);
+  if (total_table_count > 1) {
+    auto hash_tables_ptr =
+        get_arg_by_name(executor->cgen_state_->row_func_, "join_hash_tables");
+    auto hash_pptr =
+        table_idx > 0 ? executor->cgen_state_->ir_builder_.CreateGEP(
+                            hash_tables_ptr,
+                            executor->cgen_state_->llInt(static_cast<int64_t>(table_idx)))
+                      : hash_tables_ptr;
+    hash_ptr = executor->cgen_state_->ir_builder_.CreateLoad(hash_pptr);
+  } else {
+    hash_ptr = get_arg_by_name(executor->cgen_state_->row_func_, "join_hash_tables");
+  }
+  CHECK(hash_ptr);
+  return hash_ptr;
+}
+
 //! Make hash table from an in-flight SQL query's parse tree etc.
 std::shared_ptr<HashJoin> HashJoin::getInstance(
     const std::shared_ptr<Analyzer::BinOper> qual_bin_oper,
@@ -175,13 +247,13 @@ std::shared_ptr<HashJoin> HashJoin::getInstance(
   } else {
     try {
       VLOG(1) << "Trying to build perfect hash table:";
-      join_hash_table = JoinHashTable::getInstance(qual_bin_oper,
-                                                   query_infos,
-                                                   memory_level,
-                                                   preferred_hash_type,
-                                                   device_count,
-                                                   column_cache,
-                                                   executor);
+      join_hash_table = PerfectJoinHashTable::getInstance(qual_bin_oper,
+                                                          query_infos,
+                                                          memory_level,
+                                                          preferred_hash_type,
+                                                          device_count,
+                                                          column_cache,
+                                                          executor);
     } catch (TooManyHashEntries&) {
       const auto join_quals = coalesce_singleton_equi_join(qual_bin_oper);
       CHECK_EQ(join_quals.size(), size_t(1));
@@ -463,4 +535,171 @@ size_t get_shard_count(const Analyzer::BinOper* join_condition,
     return 0;
   }
   return get_shard_count({inner_col, outer_col}, executor);
+}
+
+InnerOuter normalize_column_pair(const Analyzer::Expr* lhs,
+                                 const Analyzer::Expr* rhs,
+                                 const Catalog_Namespace::Catalog& cat,
+                                 const TemporaryTables* temporary_tables,
+                                 const bool is_overlaps_join) {
+  const auto& lhs_ti = lhs->get_type_info();
+  const auto& rhs_ti = rhs->get_type_info();
+  if (!is_overlaps_join) {
+    if (lhs_ti.get_type() != rhs_ti.get_type()) {
+      throw HashJoinFail("Equijoin types must be identical, found: " +
+                         lhs_ti.get_type_name() + ", " + rhs_ti.get_type_name());
+    }
+    if (!lhs_ti.is_integer() && !lhs_ti.is_time() && !lhs_ti.is_string() &&
+        !lhs_ti.is_decimal()) {
+      throw HashJoinFail("Cannot apply hash join to inner column type " +
+                         lhs_ti.get_type_name());
+    }
+    // Decimal types should be identical.
+    if (lhs_ti.is_decimal() && (lhs_ti.get_scale() != rhs_ti.get_scale() ||
+                                lhs_ti.get_precision() != rhs_ti.get_precision())) {
+      throw HashJoinFail("Equijoin with different decimal types");
+    }
+  }
+
+  const auto lhs_cast = dynamic_cast<const Analyzer::UOper*>(lhs);
+  const auto rhs_cast = dynamic_cast<const Analyzer::UOper*>(rhs);
+  if (lhs_ti.is_string() && (static_cast<bool>(lhs_cast) != static_cast<bool>(rhs_cast) ||
+                             (lhs_cast && lhs_cast->get_optype() != kCAST) ||
+                             (rhs_cast && rhs_cast->get_optype() != kCAST))) {
+    throw HashJoinFail("Cannot use hash join for given expression");
+  }
+  // Casts to decimal are not suported.
+  if (lhs_ti.is_decimal() && (lhs_cast || rhs_cast)) {
+    throw HashJoinFail("Cannot use hash join for given expression");
+  }
+  const auto lhs_col =
+      lhs_cast ? dynamic_cast<const Analyzer::ColumnVar*>(lhs_cast->get_operand())
+               : dynamic_cast<const Analyzer::ColumnVar*>(lhs);
+  const auto rhs_col =
+      rhs_cast ? dynamic_cast<const Analyzer::ColumnVar*>(rhs_cast->get_operand())
+               : dynamic_cast<const Analyzer::ColumnVar*>(rhs);
+  if (!lhs_col && !rhs_col) {
+    throw HashJoinFail("Cannot use hash join for given expression");
+  }
+  const Analyzer::ColumnVar* inner_col{nullptr};
+  const Analyzer::ColumnVar* outer_col{nullptr};
+  auto outer_ti = lhs_ti;
+  auto inner_ti = rhs_ti;
+  const Analyzer::Expr* outer_expr{lhs};
+  if ((!lhs_col || (rhs_col && lhs_col->get_rte_idx() < rhs_col->get_rte_idx())) &&
+      (!rhs_col || (!lhs_col || lhs_col->get_rte_idx() < rhs_col->get_rte_idx()))) {
+    inner_col = rhs_col;
+    outer_col = lhs_col;
+  } else {
+    if (lhs_col && lhs_col->get_rte_idx() == 0) {
+      throw HashJoinFail("Cannot use hash join for given expression");
+    }
+    inner_col = lhs_col;
+    outer_col = rhs_col;
+    std::swap(outer_ti, inner_ti);
+    outer_expr = rhs;
+  }
+  if (!inner_col) {
+    throw HashJoinFail("Cannot use hash join for given expression");
+  }
+  if (!outer_col) {
+    MaxRangeTableIndexVisitor rte_idx_visitor;
+    int outer_rte_idx = rte_idx_visitor.visit(outer_expr);
+    // The inner column candidate is not actually inner; the outer
+    // expression contains columns which are at least as deep.
+    if (inner_col->get_rte_idx() <= outer_rte_idx) {
+      throw HashJoinFail("Cannot use hash join for given expression");
+    }
+  }
+  // We need to fetch the actual type information from the catalog since Analyzer
+  // always reports nullable as true for inner table columns in left joins.
+  const auto inner_col_cd = get_column_descriptor_maybe(
+      inner_col->get_column_id(), inner_col->get_table_id(), cat);
+  const auto inner_col_real_ti = get_column_type(inner_col->get_column_id(),
+                                                 inner_col->get_table_id(),
+                                                 inner_col_cd,
+                                                 temporary_tables);
+  const auto& outer_col_ti =
+      !(dynamic_cast<const Analyzer::FunctionOper*>(lhs)) && outer_col
+          ? outer_col->get_type_info()
+          : outer_ti;
+  // Casts from decimal are not supported.
+  if ((inner_col_real_ti.is_decimal() || outer_col_ti.is_decimal()) &&
+      (lhs_cast || rhs_cast)) {
+    throw HashJoinFail("Cannot use hash join for given expression");
+  }
+  if (is_overlaps_join) {
+    if (!inner_col_real_ti.is_array()) {
+      throw HashJoinFail(
+          "Overlaps join only supported for inner columns with array type");
+    }
+    auto is_bounds_array = [](const auto ti) {
+      return ti.is_fixlen_array() && ti.get_size() == 32;
+    };
+    if (!is_bounds_array(inner_col_real_ti)) {
+      throw HashJoinFail(
+          "Overlaps join only supported for 4-element double fixed length arrays");
+    }
+    if (!(outer_col_ti.get_type() == kPOINT || is_bounds_array(outer_col_ti))) {
+      throw HashJoinFail(
+          "Overlaps join only supported for geometry outer columns of type point or "
+          "geometry columns with bounds");
+    }
+  } else {
+    if (!(inner_col_real_ti.is_integer() || inner_col_real_ti.is_time() ||
+          inner_col_real_ti.is_decimal() ||
+          (inner_col_real_ti.is_string() &&
+           inner_col_real_ti.get_compression() == kENCODING_DICT))) {
+      throw HashJoinFail(
+          "Can only apply hash join to integer-like types and dictionary encoded "
+          "strings");
+    }
+  }
+
+  auto normalized_inner_col = inner_col;
+  auto normalized_outer_col = outer_col ? outer_col : outer_expr;
+
+  const auto& normalized_inner_ti = normalized_inner_col->get_type_info();
+  const auto& normalized_outer_ti = normalized_outer_col->get_type_info();
+
+  if (normalized_inner_ti.is_string() != normalized_outer_ti.is_string()) {
+    throw HashJoinFail(std::string("Could not build hash tables for incompatible types " +
+                                   normalized_inner_ti.get_type_name() + " and " +
+                                   normalized_outer_ti.get_type_name()));
+  }
+
+  return {normalized_inner_col, normalized_outer_col};
+}
+
+std::vector<InnerOuter> normalize_column_pairs(const Analyzer::BinOper* condition,
+                                               const Catalog_Namespace::Catalog& cat,
+                                               const TemporaryTables* temporary_tables) {
+  std::vector<InnerOuter> result;
+  const auto lhs_tuple_expr =
+      dynamic_cast<const Analyzer::ExpressionTuple*>(condition->get_left_operand());
+  const auto rhs_tuple_expr =
+      dynamic_cast<const Analyzer::ExpressionTuple*>(condition->get_right_operand());
+
+  CHECK_EQ(static_cast<bool>(lhs_tuple_expr), static_cast<bool>(rhs_tuple_expr));
+  if (lhs_tuple_expr) {
+    const auto& lhs_tuple = lhs_tuple_expr->getTuple();
+    const auto& rhs_tuple = rhs_tuple_expr->getTuple();
+    CHECK_EQ(lhs_tuple.size(), rhs_tuple.size());
+    for (size_t i = 0; i < lhs_tuple.size(); ++i) {
+      result.push_back(normalize_column_pair(lhs_tuple[i].get(),
+                                             rhs_tuple[i].get(),
+                                             cat,
+                                             temporary_tables,
+                                             condition->is_overlaps_oper()));
+    }
+  } else {
+    CHECK(!lhs_tuple_expr && !rhs_tuple_expr);
+    result.push_back(normalize_column_pair(condition->get_left_operand(),
+                                           condition->get_right_operand(),
+                                           cat,
+                                           temporary_tables,
+                                           condition->is_overlaps_oper()));
+  }
+
+  return result;
 }

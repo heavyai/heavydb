@@ -27,7 +27,6 @@
 #include "ExecutionKernel.h"
 #include "GpuSharedMemoryContext.h"
 #include "GroupByAndAggregate.h"
-#include "JoinHashTable/JoinHashTable.h"
 #include "LoopControlFlow/JoinLoop.h"
 #include "NvidiaKernel.h"
 #include "PlanState.h"
@@ -39,6 +38,7 @@
 #include "WindowContext.h"
 
 #include "QueryEngine/Descriptors/QueryCompilationDescriptor.h"
+#include "QueryEngine/JoinHashTable/HashJoin.h"
 
 #include "../Logger/Logger.h"
 #include "../Shared/SystemParameters.h"
@@ -1068,6 +1068,7 @@ class Executor {
   friend class CodeGenerator;
   friend class ColumnFetcher;
   friend class ExecutionKernel;
+  friend class HashJoin;  // cgen_state_
   friend class OverlapsJoinHashTable;
   friend class GroupByAndAggregate;
   friend class QueryCompilationDescriptor;
@@ -1077,8 +1078,8 @@ class Executor {
   friend class QueryExecutionContext;
   friend class ResultSet;
   friend class InValuesBitmap;
-  friend class JoinHashTable;
   friend class LeafAggregator;
+  friend class PerfectJoinHashTable;
   friend class QueryRewriter;
   friend class PendingExecutionClosure;
   friend class RelAlgExecutor;

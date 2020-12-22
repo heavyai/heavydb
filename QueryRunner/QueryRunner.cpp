@@ -623,7 +623,7 @@ std::shared_ptr<ExecutionResult> QueryRunner::runSelectQuery(
 }
 
 const int32_t* QueryRunner::getCachedJoinHashTable(size_t idx) {
-  auto hash_table_cache = JoinHashTable::getHashTableCache();
+  auto hash_table_cache = PerfectJoinHashTable::getHashTableCache();
   CHECK(hash_table_cache);
   auto hash_table = hash_table_cache->getCachedHashTable(idx);
   CHECK(hash_table);
@@ -647,7 +647,7 @@ size_t QueryRunner::getEntryCntCachedBaselineHashTable(size_t idx) {
 }
 
 size_t QueryRunner::getNumberOfCachedJoinHashTables() {
-  auto hash_table_cache = JoinHashTable::getHashTableCache();
+  auto hash_table_cache = PerfectJoinHashTable::getHashTableCache();
   CHECK(hash_table_cache);
   return hash_table_cache->getNumberOfCachedHashTables();
 };

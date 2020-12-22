@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 MapD Technologies, Inc.
+ * Copyright 2017 OmniSci, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,11 +18,9 @@
  * @file    JoinHashTable.h
  * @author  Alex Suhan <alex@mapd.com>
  *
- * Copyright (c) 2015 MapD Technologies, Inc.  All rights reserved.
  */
 
-#ifndef QUERYENGINE_JOINHASHTABLE_H
-#define QUERYENGINE_JOINHASHTABLE_H
+#pragma once
 
 #include "Analyzer/Analyzer.h"
 #include "Catalog/Catalog.h"
@@ -49,12 +47,12 @@
 
 struct HashEntryInfo;
 
-class JoinHashTable : public HashJoin {
+class PerfectJoinHashTable : public HashJoin {
  public:
   using HashTableCacheValue = std::shared_ptr<PerfectHashTable>;
 
   //! Make hash table from an in-flight SQL query's parse tree etc.
-  static std::shared_ptr<JoinHashTable> getInstance(
+  static std::shared_ptr<PerfectJoinHashTable> getInstance(
       const std::shared_ptr<Analyzer::BinOper> qual_bin_oper,
       const std::vector<InputTableInfo>& query_infos,
       const Data_Namespace::MemoryLevel memory_level,
@@ -99,17 +97,6 @@ class JoinHashTable : public HashJoin {
 
   std::string getHashJoinType() const final { return "Perfect"; }
 
-  static HashJoinMatchingSet codegenMatchingSet(
-      const std::vector<llvm::Value*>& hash_join_idx_args_in,
-      const bool is_sharded,
-      const bool col_is_nullable,
-      const bool is_bw_eq,
-      const int64_t sub_buff_size,
-      Executor* executor,
-      const bool is_bucketized = false);
-
-  static llvm::Value* codegenHashTableLoad(const size_t table_idx, Executor* executor);
-
   static auto getHashTableCache() { return hash_table_cache_.get(); }
 
   static auto getCacheInvalidator() -> std::function<void()> {
@@ -117,7 +104,7 @@ class JoinHashTable : public HashJoin {
     return hash_table_cache_->getCacheInvalidator();
   }
 
-  virtual ~JoinHashTable() {}
+  virtual ~PerfectJoinHashTable() {}
 
  private:
   // Equijoin API
@@ -145,15 +132,15 @@ class JoinHashTable : public HashJoin {
   std::vector<InnerOuter> inner_outer_pairs_;
   Catalog_Namespace::Catalog* catalog_;
 
-  JoinHashTable(const std::shared_ptr<Analyzer::BinOper> qual_bin_oper,
-                const Analyzer::ColumnVar* col_var,
-                const std::vector<InputTableInfo>& query_infos,
-                const Data_Namespace::MemoryLevel memory_level,
-                const HashType preferred_hash_type,
-                const ExpressionRange& col_range,
-                ColumnCacheMap& column_cache,
-                Executor* executor,
-                const int device_count)
+  PerfectJoinHashTable(const std::shared_ptr<Analyzer::BinOper> qual_bin_oper,
+                       const Analyzer::ColumnVar* col_var,
+                       const std::vector<InputTableInfo>& query_infos,
+                       const Data_Namespace::MemoryLevel memory_level,
+                       const HashType preferred_hash_type,
+                       const ExpressionRange& col_range,
+                       ColumnCacheMap& column_cache,
+                       Executor* executor,
+                       const int device_count)
       : qual_bin_oper_(qual_bin_oper)
       , col_var_(std::dynamic_pointer_cast<Analyzer::ColumnVar>(col_var->deep_copy()))
       , query_infos_(query_infos)
@@ -234,18 +221,6 @@ bool needs_dictionary_translation(const Analyzer::ColumnVar* inner_col,
                                   const Analyzer::Expr* outer_col,
                                   const Executor* executor);
 
-// Swap the columns if needed and make the inner column the first component.
-InnerOuter normalize_column_pair(const Analyzer::Expr* lhs,
-                                 const Analyzer::Expr* rhs,
-                                 const Catalog_Namespace::Catalog& cat,
-                                 const TemporaryTables* temporary_tables,
-                                 const bool is_overlaps_join = false);
-
-// Normalize each expression tuple
-std::vector<InnerOuter> normalize_column_pairs(const Analyzer::BinOper* condition,
-                                               const Catalog_Namespace::Catalog& cat,
-                                               const TemporaryTables* temporary_tables);
-
 std::vector<Fragmenter_Namespace::FragmentInfo> only_shards_for_device(
     const std::vector<Fragmenter_Namespace::FragmentInfo>& fragments,
     const int device_id,
@@ -259,5 +234,3 @@ size_t get_entries_per_device(const size_t total_entries,
                               const size_t shard_count,
                               const size_t device_count,
                               const Data_Namespace::MemoryLevel memory_level);
-
-#endif  // QUERYENGINE_JOINHASHTABLE_H

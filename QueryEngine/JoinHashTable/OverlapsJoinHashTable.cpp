@@ -21,7 +21,7 @@
 #include "QueryEngine/ExpressionRewrite.h"
 #include "QueryEngine/JoinHashTable/Builders/BaselineHashTableBuilder.h"
 #include "QueryEngine/JoinHashTable/HashJoin.h"
-#include "QueryEngine/JoinHashTable/JoinHashTable.h"  // codegenmatchingset
+#include "QueryEngine/JoinHashTable/PerfectJoinHashTable.h"
 #include "QueryEngine/JoinHashTable/Runtime/HashJoinKeyHandlers.h"
 #include "QueryEngine/JoinHashTable/Runtime/JoinHashTableGpuUtils.h"
 
@@ -792,7 +792,7 @@ HashJoinMatchingSet OverlapsJoinHashTable::codegenMatchingSet(
     const auto key_component_width = getKeyComponentWidth();
     CHECK(key_component_width == 4 || key_component_width == 8);
     auto many_to_many_args = codegenManyKey(co);
-    auto hash_ptr = JoinHashTable::codegenHashTableLoad(index, executor_);
+    auto hash_ptr = HashJoin::codegenHashTableLoad(index, executor_);
     const auto composite_dict_ptr_type =
         llvm::Type::getIntNPtrTy(LL_CONTEXT, key_component_width * 8);
     const auto composite_key_dict =
@@ -858,7 +858,7 @@ HashJoinMatchingSet OverlapsJoinHashTable::codegenMatchingSet(
     CHECK(key_component_width == 4 || key_component_width == 8);
     auto key_buff_lv = codegenKey(co);
     CHECK(getHashType() == HashType::OneToMany);
-    auto hash_ptr = JoinHashTable::codegenHashTableLoad(index, executor_);
+    auto hash_ptr = HashJoin::codegenHashTableLoad(index, executor_);
     const auto composite_dict_ptr_type =
         llvm::Type::getIntNPtrTy(LL_CONTEXT, key_component_width * 8);
     const auto composite_key_dict =
@@ -883,7 +883,7 @@ HashJoinMatchingSet OverlapsJoinHashTable::codegenMatchingSet(
     const auto composite_key_dict_size = offsetBufferOff();
     one_to_many_ptr =
         LL_BUILDER.CreateAdd(one_to_many_ptr, LL_INT(composite_key_dict_size));
-    return JoinHashTable::codegenMatchingSet(
+    return HashJoin::codegenMatchingSet(
         std::vector<llvm::Value*>{
             one_to_many_ptr, key, LL_INT(int64_t(0)), LL_INT(getEntryCount() - 1)},
         false,
