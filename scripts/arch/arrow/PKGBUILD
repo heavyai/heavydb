@@ -1,13 +1,13 @@
 # Maintainer: Guillaume Horel <guillaume.horel@gmail.com>
 
 pkgname='arrow'
-pkgver=1.0.0
+pkgver=1.0.1
 pkgrel=10
 pkgdesc="A columnar in-memory analytics layer for big data."
 arch=('x86_64')
 url="https://arrow.apache.org"
 license=('Apache')
-depends=('boost-libs' 'double-conversion' 'c-ares-cmake' 'gflags' 'google-glog' 'lz4' 'protobuf' 'rapidjson' 'thrift' 'uriparser' 'zstd')
+depends=('boost-libs' 'double-conversion' 'c-ares-cmake' 'gflags' 'google-glog' 'libutf8proc' 'lz4' 'protobuf' 'rapidjson' 'thrift' 'uriparser' 'zstd')
 checkdepends=('git')
 optdepends=()
 provides=('parquet-cpp')

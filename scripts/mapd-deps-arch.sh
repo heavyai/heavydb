@@ -14,10 +14,12 @@ yay -S \
     aws-sdk-cpp \
     blosc \
     boost \
+    c-ares-cmake \
     clang \
     cmake \
     cuda \
     doxygen \
+    flex \
     gcc \
     gdal \
     geos \
