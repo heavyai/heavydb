@@ -4299,20 +4299,20 @@ class AlterForeignTableTest : public ScheduledRefreshTest {
 };
 
 TEST_F(AlterForeignTableTest, RefreshUpdateTypeAllToAppend) {
-  createScheduledTable("scheduled", "1S", "all", 1);
+  createScheduledTable("manual", "", "all");
   assertOptionEquals("REFRESH_UPDATE_TYPE", "ALL");
   sqlAlterTable("refresh_update_type", "append");
   assertOptionEquals("REFRESH_UPDATE_TYPE", "APPEND");
 }
 TEST_F(AlterForeignTableTest, RefreshUpdateTypeAppendToAll) {
-  createScheduledTable("scheduled", "1S", "append", 1);
+  createScheduledTable("manual", "", "append");
   assertOptionEquals("REFRESH_UPDATE_TYPE", "APPEND");
   sqlAlterTable("REFRESH_UPDATE_TYPE", "all");
   assertOptionEquals("REFRESH_UPDATE_TYPE", "ALL");
 }
 
 TEST_F(AlterForeignTableTest, RefreshIntervalDaysToSeconds) {
-  createScheduledTable("scheduled", "1D", "all", 1);
+  createScheduledTable("scheduled", "1D", "all", 60);
   assertOptionEquals("REFRESH_INTERVAL", "1D");
   sqlAlterTable("REFRESH_INTERVAL", "1S");
   assertOptionEquals("REFRESH_INTERVAL", "1S");
@@ -4320,21 +4320,21 @@ TEST_F(AlterForeignTableTest, RefreshIntervalDaysToSeconds) {
 
 TEST_F(AlterForeignTableTest, RefreshIntervalDaysToSecondsWithIntervalDisabled) {
   g_enable_seconds_refresh = false;
-  createScheduledTable("scheduled", "1D", "all", 1);
+  createScheduledTable("scheduled", "1D", "all", 60);
   assertOptionEquals("REFRESH_INTERVAL", "1D");
   queryAndAssertException(
       "ALTER FOREIGN TABLE test_foreign_table SET (REFRESH_INTERVAL = '1S');",
       "Exception: Invalid value provided for the REFRESH_INTERVAL option.");
 }
 
-TEST_F(AlterForeignTableTest, RefreshIntervalSecondsToHoursLowerCase) {
-  createScheduledTable("scheduled", "1S", "all", 1);
+TEST_F(AlterForeignTableTest, RefreshIntervalSecondsToDaysLowerCase) {
+  createScheduledTable("scheduled", "1S", "all", 60);
   assertOptionEquals("REFRESH_INTERVAL", "1S");
   sqlAlterTable("REFRESH_INTERVAL", "2d");
   assertOptionEquals("REFRESH_INTERVAL", "2D");
 }
 TEST_F(AlterForeignTableTest, RefreshIntervalSecondsToInvalid) {
-  createScheduledTable("scheduled", "1S", "all", 1);
+  createScheduledTable("scheduled", "1S", "all", 60);
   assertOptionEquals("REFRESH_INTERVAL", "1S");
   queryAndAssertException(
       "ALTER FOREIGN TABLE test_foreign_table SET (REFRESH_INTERVAL = 'SCHEDULED');",
@@ -4362,20 +4362,20 @@ TEST_F(AlterForeignTableTest, RefreshTimingType_ManualToScheduled_StartDate) {
   assertOptionEquals("REFRESH_START_DATE_TIME", start_time);
 }
 TEST_F(AlterForeignTableTest, RefreshTimingTypeScheduledToManual) {
-  createScheduledTable("scheduled", "1S", "all", 1);
+  createScheduledTable("scheduled", "1S", "all", 60);
   sqlAndCompareResult("SELECT * FROM test_foreign_table;", {{i(1)}});
   assertOptionEquals("REFRESH_TIMING_TYPE", "SCHEDULED");
   sqlAlterTable("REFRESH_TIMING_TYPE", "MANUAL");
   assertOptionEquals("REFRESH_TIMING_TYPE", "MANUAL");
 }
 TEST_F(AlterForeignTableTest, RefreshTimingTypeScheduledToManualLowerCase) {
-  createScheduledTable("scheduled", "1S", "all", 1);
+  createScheduledTable("scheduled", "1S", "all", 60);
   assertOptionEquals("REFRESH_TIMING_TYPE", "SCHEDULED");
   sqlAlterTable("REFRESH_TIMING_TYPE", "manual");
   assertOptionEquals("REFRESH_TIMING_TYPE", "MANUAL");
 }
 TEST_F(AlterForeignTableTest, RefreshTimingTypeScheduledToInvalid) {
-  createScheduledTable("scheduled", "1S", "all", 1);
+  createScheduledTable("scheduled", "1S", "all", 60);
   assertOptionEquals("REFRESH_TIMING_TYPE", "SCHEDULED");
   queryAndAssertException(
       "ALTER FOREIGN TABLE test_foreign_table SET (REFRESH_TIMING_TYPE = '2D');",
@@ -4385,20 +4385,20 @@ TEST_F(AlterForeignTableTest, RefreshTimingTypeScheduledToInvalid) {
 }
 
 TEST_F(AlterForeignTableTest, RefreshStartDateTime) {
-  createScheduledTable("scheduled", "1S", "all", 4);
-  auto start_time = getCurrentTimeString(1);
+  createScheduledTable("scheduled", "1S", "all", 120);
+  auto start_time = getCurrentTimeString(60);
   sqlAlterTable("REFRESH_START_DATE_TIME", start_time);
   assertOptionEquals("REFRESH_START_DATE_TIME", start_time);
 }
 TEST_F(AlterForeignTableTest, RefreshStartDateTimeLowerCase) {
-  createScheduledTable("scheduled", "1S", "all", 4);
-  auto start_time = getCurrentTimeString(1);
+  createScheduledTable("scheduled", "1S", "all", 120);
+  auto start_time = getCurrentTimeString(60);
   boost::algorithm::to_lower(start_time);
   sqlAlterTable("REFRESH_START_DATE_TIME", start_time);
   assertOptionEquals("REFRESH_START_DATE_TIME", start_time);
 }
 TEST_F(AlterForeignTableTest, RefreshStartDateTimeScheduledInPastError) {
-  createScheduledTable("scheduled", "1S", "all", 1);
+  createScheduledTable("scheduled", "1S", "all", 60);
   auto start_time = getCurrentTimeString(-10);
   queryAndAssertException(
       "ALTER FOREIGN TABLE test_foreign_table SET (REFRESH_START_DATE_TIME = '" +
@@ -4641,7 +4641,7 @@ class AlterForeignTablePermissionTest : public AlterForeignTableTest {
 };
 
 TEST_F(AlterForeignTablePermissionTest, NoPermission) {
-  createScheduledTable("scheduled", "1S", "all", 1);
+  createScheduledTable("manual", "", "all");
   sql("CREATE USER test_user (password = 'test_pass');");
   sql("GRANT ACCESS ON DATABASE omnisci TO test_user;");
   login("test_user", "test_pass");
