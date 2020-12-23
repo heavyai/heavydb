@@ -5,10 +5,10 @@ SCRIPTS_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 
 if [ "$TSAN" = "true" ]; then
   ARROW_TSAN="-DARROW_JEMALLOC=OFF -DARROW_USE_TSAN=ON"
-  TBB_TSAN="-fsanitize=thread -fPIC -O1 -fno-omit-frame-pointer -Wno-error=deprecated-copy"
+  TBB_TSAN="-fsanitize=thread -fPIC -O1 -fno-omit-frame-pointer"
 elif [ "$TSAN" = "false" ]; then
   ARROW_TSAN="-DARROW_JEMALLOC=BUNDLED"
-  TBB_TSAN="-Wno-error=deprecated-copy"
+  TBB_TSAN=""
 fi
 
 function download() {
@@ -294,32 +294,22 @@ function install_maven() {
     mv apache-maven-${MAVEN_VERSION} $PREFIX/maven
 }
 
-TBB_VERSION=2021.1.1
+TBB_VERSION=2020.3
 
 function install_tbb() {
   download https://github.com/oneapi-src/oneTBB/archive/v${TBB_VERSION}.tar.gz
   extract v${TBB_VERSION}.tar.gz
   pushd oneTBB-${TBB_VERSION}
-  patch -p1 < ${SCRIPTS_DIR}/0001-Add-option-to-build-TBB-statically.patch
-  mkdir build
-  cd build
   if [ "$1" == "static" ]; then
-    cmake \
-      -DCMAKE_BUILD_TYPE=Release \
-      -DCMAKE_INSTALL_PREFIX=$PREFIX \
-      -DTBB_TEST=off -DBUILD_SHARED_LIBS=off \
-      ${TBB_TSAN} \
-      ..
+    make CXXFLAGS="${TBB_TSAN}" extra_inc=big_iron.inc
+    install -d $PREFIX/lib
+    install -m755 build/linux_*/*.a* $PREFIX/lib
   else
-    cmake \
-      -DCMAKE_BUILD_TYPE=Release \
-      -DCMAKE_INSTALL_PREFIX=$PREFIX \
-      -DTBB_TEST=off \
-      -DBUILD_SHARED_LIBS=on \
-      ${TBB_TSAN} \
-      ..
+    make CXXFLAGS="${TBB_TSAN}"
+    install -d $PREFIX/lib
+    install -m755 build/linux_*/*.so* $PREFIX/lib
   fi
-  makej
-  make install
+  install -d $PREFIX/include
+  cp -R include/tbb $PREFIX/include
   popd
 }
