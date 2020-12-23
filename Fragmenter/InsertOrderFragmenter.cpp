@@ -659,43 +659,40 @@ void InsertOrderFragmenter::insertDataImpl(InsertData& insertDataStruct) {
     CHECK_GT(numRowsToInsert, size_t(0));  // would put us into an endless loop as we'd
                                            // never be able to insert anything
 
-    // for each column, append the data in the appropriate insert buffer
-    for (size_t i = 0; i < insertDataStruct.columnIds.size(); ++i) {
-      int columnId = insertDataStruct.columnIds[i];
-      auto colMapIt = columnMap_.find(columnId);
-      CHECK(colMapIt != columnMap_.end());
-      currentFragment->shadowChunkMetadataMap[columnId] =
-          colMapIt->second.appendData(dataCopy[i], numRowsToInsert, numRowsInserted);
-      auto varLenColInfoIt = varLenColInfo_.find(columnId);
-      if (varLenColInfoIt != varLenColInfo_.end()) {
-        varLenColInfoIt->second = colMapIt->second.getBuffer()->size();
-      }
-    }
-    if (hasMaterializedRowId_) {
-      size_t startId = maxFragmentRows_ * currentFragment->fragmentId +
-                       currentFragment->shadowNumTuples;
-      auto row_id_data = std::make_unique<int64_t[]>(numRowsToInsert);
-      for (size_t i = 0; i < numRowsToInsert; ++i) {
-        row_id_data[i] = i + startId;
-      }
-      DataBlockPtr rowIdBlock;
-      rowIdBlock.numbersPtr = reinterpret_cast<int8_t*>(row_id_data.get());
-      auto colMapIt = columnMap_.find(rowIdColId_);
-      currentFragment->shadowChunkMetadataMap[rowIdColId_] =
-          colMapIt->second.appendData(rowIdBlock, numRowsToInsert, numRowsInserted);
-    }
+    {
+      mapd_unique_lock<mapd_shared_mutex> writeLock(fragmentInfoMutex_);
 
-    currentFragment->shadowNumTuples =
-        fragmentInfoVec_.back()->getPhysicalNumTuples() + numRowsToInsert;
-    numRowsLeft -= numRowsToInsert;
-    numRowsInserted += numRowsToInsert;
-  }
-  {
-    // Only take the fragment info lock when updating fragment info map. Otherwise,
-    // potential deadlock can occur after SELECT has locked TableReadLock and COPY_FROM
-    // has locked fragmentInfoMutex_ while SELECT waits for fragmentInfoMutex_ and
-    // COPY_FROM waits for TableWriteLock
-    mapd_unique_lock<mapd_shared_mutex> writeLock(fragmentInfoMutex_);
+      // for each column, append the data in the appropriate insert buffer
+      for (size_t i = 0; i < insertDataStruct.columnIds.size(); ++i) {
+        int columnId = insertDataStruct.columnIds[i];
+        auto colMapIt = columnMap_.find(columnId);
+        CHECK(colMapIt != columnMap_.end());
+        currentFragment->shadowChunkMetadataMap[columnId] =
+            colMapIt->second.appendData(dataCopy[i], numRowsToInsert, numRowsInserted);
+        auto varLenColInfoIt = varLenColInfo_.find(columnId);
+        if (varLenColInfoIt != varLenColInfo_.end()) {
+          varLenColInfoIt->second = colMapIt->second.getBuffer()->size();
+        }
+      }
+      if (hasMaterializedRowId_) {
+        size_t startId = maxFragmentRows_ * currentFragment->fragmentId +
+                         currentFragment->shadowNumTuples;
+        auto row_id_data = std::make_unique<int64_t[]>(numRowsToInsert);
+        for (size_t i = 0; i < numRowsToInsert; ++i) {
+          row_id_data[i] = i + startId;
+        }
+        DataBlockPtr rowIdBlock;
+        rowIdBlock.numbersPtr = reinterpret_cast<int8_t*>(row_id_data.get());
+        auto colMapIt = columnMap_.find(rowIdColId_);
+        currentFragment->shadowChunkMetadataMap[rowIdColId_] =
+            colMapIt->second.appendData(rowIdBlock, numRowsToInsert, numRowsInserted);
+      }
+
+      currentFragment->shadowNumTuples =
+          fragmentInfoVec_.back()->getPhysicalNumTuples() + numRowsToInsert;
+      numRowsLeft -= numRowsToInsert;
+      numRowsInserted += numRowsToInsert;
+    }
     for (auto partIt = fragmentInfoVec_.begin() + startFragment;
          partIt != fragmentInfoVec_.end();
          ++partIt) {
