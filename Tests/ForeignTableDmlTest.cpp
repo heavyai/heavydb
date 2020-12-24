@@ -4439,7 +4439,8 @@ TEST_F(AlterForeignTableTest, NonExistantOption) {
 TEST_F(AlterForeignTableTest, TableDoesNotExist) {
   queryAndAssertException(
       "ALTER FOREIGN TABLE test_foreign_table RENAME TO renamed_table;",
-      "Exception: Table/View test_foreign_table does not exist.");
+      "Exception: Table/View test_foreign_table for catalog omnisci does not exist, "
+      "could not generate chunk key");
 }
 
 TEST_F(AlterForeignTableTest, Table) {

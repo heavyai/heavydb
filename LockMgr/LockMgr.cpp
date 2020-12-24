@@ -35,7 +35,9 @@ ChunkKey chunk_key_for_table(const Catalog_Namespace::Catalog& cat,
     ChunkKey chunk_key{cat.getCurrentDB().dbId, tdp->tableId};
     return chunk_key;
   } else {
-    throw std::runtime_error("Table/View " + tableName + " does not exist.");
+    throw std::runtime_error("Table/View " + tableName + " for catalog " +
+                             cat.getCurrentDB().dbName +
+                             " does not exist, could not generate chunk key");
   }
 }
 
