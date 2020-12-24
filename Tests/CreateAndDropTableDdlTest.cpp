@@ -1329,7 +1329,9 @@ TEST_P(DropTableTest, NonExistingTableWithIfExists) {
 
 TEST_P(DropTableTest, NonExistentTableWithoutIfExists) {
   std::string query = getDropTableQuery(GetParam(), "test_table_2");
-  queryAndAssertException(query, "Exception: Table/View test_table_2 does not exist.");
+  queryAndAssertException(query,
+                          "Exception: Table/View test_table_2 for catalog omnisci does "
+                          "not exist, could not generate chunk key");
 }
 
 TEST_P(DropTableTest, UnauthorizedUser) {

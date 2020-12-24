@@ -55,7 +55,7 @@ public class DistributedConcurrencyTest {
           throws Exception {
     int num_threads = 5;
     final int runs = 5;
-    final int num_rows = 400;
+    final int max_num_rows = 400;
     final int fragment_size = 25;
     Exception exceptions[] = new Exception[num_threads];
 
@@ -78,9 +78,14 @@ public class DistributedConcurrencyTest {
               MapdTestClient user =
                       MapdTestClient.getClient("localhost", 6274, db, dbUser, dbPassword);
 
-              user.runSql("CREATE TABLE " + tableName
+              sql = "CREATE TABLE " + tableName
                       + "(x BIGINT, y INTEGER, z SMALLINT, a TINYINT, f FLOAT, d DOUBLE, deci DECIMAL(18,6), str TEXT ENCODING NONE) WITH (FRAGMENT_SIZE = "
-                      + fragment_size + ")");
+                      + fragment_size + ")";
+              logger.info(logPrefix + " " + sql);
+              user.runSql(sql);
+
+              Random rand = new Random(tid);
+              int num_rows = rand.nextInt(max_num_rows);
 
               for (int i = 0; i < num_rows; i++) {
                 final String integer_val = Integer.toString(i);
@@ -97,11 +102,13 @@ public class DistributedConcurrencyTest {
                         fp_val,
                         deci_val,
                         str_val);
-                user.runSql("INSERT INTO " + tableName + " VALUES "
-                        + "(" + values_string + ")");
+                sql = "INSERT INTO " + tableName + " VALUES "
+                        + "(" + values_string + ")";
+                user.runSql(sql);
+                if (i == 0) {
+                  logger.info(logPrefix + " " + sql);
+                }
               }
-
-              Random rand = new Random(tid);
 
               sql = "ALTER TABLE " + tableName + " ADD COLUMN zz TEXT ENCODING DICT(8);";
               logger.info(logPrefix + " " + sql);
@@ -117,8 +124,11 @@ public class DistributedConcurrencyTest {
               logger.info(logPrefix + " " + sql);
               user.runSql(sql);
 
+              sql = "status";
               user.get_status();
+              sql = "hardware";
               user.get_hardware_info();
+              sql = "memory";
               user.get_memory("cpu");
 
               sql = "DELETE FROM " + tableName + " WHERE y = " + rand.nextInt(num_rows)
@@ -148,8 +158,10 @@ public class DistributedConcurrencyTest {
               user.runSql(sql);
 
             } catch (Exception e) {
-              logger.error(logPrefix + " Caught Exception: " + e.getMessage(), e);
-              exceptions[threadId] = e;
+              logger.error(logPrefix + " While running query '" + sql
+                      + "' it threw this: " + e.getMessage());
+              exceptions[threadId] = new Exception(
+                      " While running query '" + sql + "' it threw this: " + e);
             }
           }
         }
@@ -164,7 +176,7 @@ public class DistributedConcurrencyTest {
 
     for (Exception e : exceptions) {
       if (null != e) {
-        logger.error("Exception: " + e.getMessage(), e);
+        logger.error("Exception during threaded runs: " + e.getMessage());
         throw e;
       }
     }
