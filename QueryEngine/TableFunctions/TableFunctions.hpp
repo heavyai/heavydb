@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+#include <chrono>
+#include "../../Logger/Logger.h"
 #include "../../QueryEngine/OmniSciTypes.h"
 #include "../../Shared/funcannotations.h"
 #include "daal.h"
@@ -194,6 +196,10 @@ EXTENSION_NOINLINE int32_t k_means(const Column<float>& input_col0,
   using namespace daal::algorithms;
   using namespace daal::data_management;
 
+  using Clock = std::chrono::steady_clock;
+
+  const auto t0 = Clock::now();
+
   // Data dimensions
   const size_t num_rows = input_col0.getSize();
   constexpr size_t num_columns = 20;
@@ -215,6 +221,8 @@ EXTENSION_NOINLINE int32_t k_means(const Column<float>& input_col0,
   for (size_t i = 0; i < num_columns; ++i) {
     dataTable->setArray<float>(inputs[i]->ptr, i);
   }
+
+  const auto t1 = Clock::now();
 
   // Initialization phase of K-Means
   kmeans::init::Batch<float, kmeans::init::randomDense> init(num_clusters);
@@ -240,12 +248,29 @@ EXTENSION_NOINLINE int32_t k_means(const Column<float>& input_col0,
   algorithm.setResult(result);
   algorithm.compute();
 
+  const auto t2 = Clock::now();
+
   // Assign output columns
   for (size_t i = 0; i < num_rows; ++i) {
     for (size_t j = 0; j < num_columns; ++j) {
       (*(outputs[j]))[i] = (*(inputs[j]))[i];
     }
   }
+
+  const auto t3 = Clock::now();
+
+  LOG(INFO) << "k_means UDTF finished in "
+            << std::chrono::duration_cast<std::chrono::milliseconds>(t3 - t0).count()
+            << " ms";
+  LOG(INFO) << "   k_means inputs preparation took "
+            << std::chrono::duration_cast<std::chrono::milliseconds>(t1 - t0).count()
+            << " ms";
+  LOG(INFO) << "   k_means algorithm took "
+            << std::chrono::duration_cast<std::chrono::milliseconds>(t2 - t1).count()
+            << " ms";
+  LOG(INFO) << "   k_means output columns assignment took "
+            << std::chrono::duration_cast<std::chrono::milliseconds>(t3 - t2).count()
+            << " ms";
 
   return num_rows;
 }
