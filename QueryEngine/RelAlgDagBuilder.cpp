@@ -2353,11 +2353,9 @@ class RelAlgDispatcher {
               throw std::runtime_error(
                   "Table functions currently only support one ResultSet input");
             }
-
-            const auto prior_node = prev(table_func_ra);
-            CHECK(prior_node);
-            // Forward the values from the prior node as RexInputs
-            for (size_t i = 0; i < prior_node->size(); i++) {
+            auto pos = field(expr_operands[0], "input").GetInt();
+            CHECK_LT(pos, inputs.size());
+            for (size_t i = inputs[pos]->size(); i > 0; i--) {
               table_func_inputs.emplace_back(
                   std::make_unique<RexAbstractInput>(col_inputs.size()));
               col_inputs.emplace_back(table_func_inputs.back().get());
@@ -2384,7 +2382,6 @@ class RelAlgDispatcher {
       table_function_projected_outputs.emplace_back(std::make_unique<RexRef>(i));
       fields.emplace_back("");
     }
-
     return std::make_shared<RelTableFunction>(op_name.GetString(),
                                               inputs,
                                               fields,
@@ -2686,6 +2683,12 @@ std::string RexSubQuery::toString() const {
 }
 
 std::string RexInput::toString() const {
+  const auto scan_node = dynamic_cast<const RelScan*>(node_);
+  if (scan_node) {
+    auto field_name = scan_node->getFieldName(getIndex());
+    auto table_name = scan_node->getTableDescriptor()->tableName;
+    return ::typeName(this) + "(" + table_name + "." + field_name + ")";
+  }
   return cat(::typeName(this),
              "(node=",
              ::toString(node_),
