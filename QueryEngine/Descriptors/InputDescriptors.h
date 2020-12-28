@@ -19,6 +19,7 @@
 
 #include "../Catalog/TableDescriptor.h"
 #include "Logger/Logger.h"
+#include "Shared/toString.h"
 
 #include <memory>
 
@@ -39,6 +40,11 @@ class InputDescriptor {
 
   InputSourceType getSourceType() const {
     return table_id_ > 0 ? InputSourceType::TABLE : InputSourceType::RESULT;
+  }
+
+  std::string toString() const {
+    return ::typeName(this) + "(table_id=" + std::to_string(table_id_) +
+           ", nest_level=" + std::to_string(nest_level_) + ")";
   }
 
  private:
@@ -74,6 +80,11 @@ class InputColDescriptor {
   const InputDescriptor& getScanDesc() const { return input_desc_; }
 
   virtual ~InputColDescriptor() {}
+
+  std::string toString() const {
+    return ::typeName(this) + "(col_id=" + std::to_string(col_id_) +
+           ", input_desc=" + ::toString(input_desc_) + ")";
+  }
 
  private:
   const int col_id_;

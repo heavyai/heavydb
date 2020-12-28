@@ -174,7 +174,8 @@ std::string toString(const T& v) {
   } else if constexpr (has_toString_v<T>) {
     return v.toString();
   } else if constexpr (get_has_toString_v<T>) {
-    return v.get()->toString();
+    auto ptr = v.get();
+    return (ptr == NULL ? "NULL" : "&" + ptr->toString());
   } else if constexpr (std::is_same_v<T, void*>) {
     std::ostringstream ss;
     ss << std::hex << (uintptr_t)v;
@@ -225,6 +226,21 @@ std::string toString(const std::unordered_map<T1, T2>& v) {
     i++;
   }
   result += "}";
+  return result;
+}
+
+template <typename T>
+std::string toString(const std::list<T>& v) {
+  auto result = std::string("[");
+  size_t i = 0;
+  for (const auto& p : v) {
+    if (i) {
+      result += ", ";
+    }
+    result += toString(p);
+    i++;
+  }
+  result += "]";
   return result;
 }
 
