@@ -22,6 +22,7 @@
 #include "QueryEngine/JoinFilterPushDown.h"
 #include "QueryEngine/ResultSet.h"
 #include "Shared/TargetInfo.h"
+#include "Shared/toString.h"
 
 class ResultSet;
 
@@ -58,6 +59,11 @@ class ExecutionResult {
   void setQueueTime(const int64_t queue_time_ms) {
     CHECK(result_);
     result_->setQueueTime(queue_time_ms);
+  }
+
+  std::string toString() const {
+    return ::typeName(this) + "(" + ::toString(result_) + ", " +
+           ::toString(targets_meta_) + ")";
   }
 
  private:
