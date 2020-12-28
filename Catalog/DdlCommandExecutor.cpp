@@ -18,6 +18,8 @@
 
 #include <boost/algorithm/string/predicate.hpp>
 
+#include "rapidjson/document.h"
+
 // Note: avoid adding #include(s) that require thrift
 
 #include "Catalog/Catalog.h"
@@ -202,6 +204,107 @@ void add_table_details(std::vector<RelLogicalValues::RowValues>& logical_values,
     logical_values.back().emplace_back(genLiteralBigInt(NULL_BIGINT));
   }
 }
+
+// -----------------------------------------------------------------------
+// class: JsonColumnSqlType
+//   Defined & Implemented here to avoid exposing rapidjson in the header file
+// -----------------------------------------------------------------------
+
+/// declare this class scoped local to avoid exposing rapidjson in the header file
+class JsonColumnSqlType : public ddl_utils::SqlType {
+ public:
+  JsonColumnSqlType(const rapidjson::Value& data_type)
+      : ddl_utils::SqlType(getSqlType(data_type),
+                           getParam1(data_type),
+                           getParam2(data_type),
+                           isArray(data_type),
+                           getArraySize(data_type)) {}
+
+ private:
+  static SQLTypes getSqlType(const rapidjson::Value& data_type);
+  static SQLTypes getSqlType(const std::string& type);
+  static int getParam1(const rapidjson::Value& data_type);
+  static int getParam2(const rapidjson::Value& data_type);
+  static bool isArray(const rapidjson::Value& data_type);
+  static int getArraySize(const rapidjson::Value& data_type);
+};
+
+class JsonColumnEncoding : public ddl_utils::Encoding {
+ public:
+  JsonColumnEncoding(const rapidjson::Value& data_type)
+      : ddl_utils::Encoding(getEncodingName(data_type), getEncodingParam(data_type)) {}
+
+ private:
+  static std::string* getEncodingName(const rapidjson::Value& data_type);
+  static int getEncodingParam(const rapidjson::Value& data_type);
+};
+
+// -----------------------------------------------------------------------
+// class DdlCommandDataImpl:
+//
+// Concrete class to cache parse data
+//   Defined & Implemented here to avoid exposing rapidjson in the header file
+//   Helper/access fns available to get useful pieces of cache data
+// -----------------------------------------------------------------------
+class DdlCommandDataImpl : public DdlCommandData {
+ public:
+  DdlCommandDataImpl(const std::string& ddl_statement);
+  ~DdlCommandDataImpl();
+
+  // The full query available for futher analysis
+  const rapidjson::Value& query() const;
+
+  // payload as extracted from the query
+  const rapidjson::Value& payload() const;
+
+  // commandStr extracted from the payload
+  virtual std::string commandStr() override;
+
+  rapidjson::Document ddl_query;
+};
+
+DdlCommandDataImpl::DdlCommandDataImpl(const std::string& ddl_statement)
+    : DdlCommandData(ddl_statement) {
+  ddl_query.Parse(ddl_statement);
+}
+
+DdlCommandDataImpl::~DdlCommandDataImpl() {}
+
+const rapidjson::Value& DdlCommandDataImpl::query() const {
+  return ddl_query;
+}
+
+const rapidjson::Value& DdlCommandDataImpl::payload() const {
+  CHECK(ddl_query.HasMember("payload"));
+  CHECK(ddl_query["payload"].IsObject());
+  return ddl_query["payload"];
+}
+
+std::string DdlCommandDataImpl::commandStr() {
+  if (ddl_query.IsObject() && ddl_query.HasMember("payload") &&
+      ddl_query["payload"].IsObject()) {
+    auto& payload = ddl_query["payload"];
+    if (payload.HasMember("command") && payload["command"].IsString()) {
+      return payload["command"].GetString();
+    }
+  }
+  return "";
+}
+
+// Helper Fn to get the payload from the abstract base class
+const rapidjson::Value& extractPayload(const DdlCommandData& ddl_data) {
+  const DdlCommandDataImpl* data = static_cast<const DdlCommandDataImpl*>(&ddl_data);
+  return data->payload();
+}
+
+const rapidjson::Value* extractFilters(const rapidjson::Value& payload) {
+  const rapidjson::Value* filters = nullptr;
+  if (payload.HasMember("filters") && payload["filters"].IsArray()) {
+    filters = &payload["filters"];
+  }
+  return filters;
+}
+
 }  // namespace
 
 DdlCommandExecutor::DdlCommandExecutor(
@@ -209,12 +312,20 @@ DdlCommandExecutor::DdlCommandExecutor(
     std::shared_ptr<Catalog_Namespace::SessionInfo const> session_ptr)
     : session_ptr_(session_ptr) {
   CHECK(!ddl_statement.empty());
+  ddl_statement_ = ddl_statement;
+
+  // parse the incoming query,
+  //    cache the parsed rapidjson object inside a DdlCommandDataImpl
+  //    store the "abstract/base class" reference in ddl_data_
+  DdlCommandDataImpl* ddl_query_data = new DdlCommandDataImpl(ddl_statement);
+  ddl_data_ = std::unique_ptr<DdlCommandData>(ddl_query_data);
+
   VLOG(2) << "Parsing JSON DDL from Calcite: " << ddl_statement;
-  ddl_query_.Parse(ddl_statement);
-  CHECK(ddl_query_.IsObject()) << ddl_statement;
-  CHECK(ddl_query_.HasMember("payload"));
-  CHECK(ddl_query_["payload"].IsObject());
-  const auto& payload = ddl_query_["payload"].GetObject();
+  auto& ddl_query = ddl_query_data->query();
+  CHECK(ddl_query.IsObject()) << ddl_statement;
+  CHECK(ddl_query.HasMember("payload"));
+  CHECK(ddl_query["payload"].IsObject());
+  const auto& payload = ddl_query["payload"].GetObject();
   CHECK(payload.HasMember("command"));
   CHECK(payload["command"].IsString());
   ddl_command_ = payload["command"].GetString();
@@ -222,15 +333,14 @@ DdlCommandExecutor::DdlCommandExecutor(
 
 ExecutionResult DdlCommandExecutor::execute() {
   ExecutionResult result;
-  const auto& payload = ddl_query_["payload"].GetObject();
 
   // the following commands use parser node locking to ensure safe concurrent access
   if (ddl_command_ == "CREATE_TABLE") {
-    auto create_table_stmt = Parser::CreateTableStmt(payload);
+    auto create_table_stmt = Parser::CreateTableStmt(extractPayload(*ddl_data_));
     create_table_stmt.execute(*session_ptr_);
     return result;
   } else if (ddl_command_ == "CREATE_VIEW") {
-    auto create_view_stmt = Parser::CreateViewStmt(payload);
+    auto create_view_stmt = Parser::CreateViewStmt(extractPayload(*ddl_data_));
     create_view_stmt.execute(*session_ptr_);
     return result;
   }
@@ -243,34 +353,35 @@ ExecutionResult DdlCommandExecutor::execute() {
   // TODO(vancouver): add appropriate table locking
 
   if (ddl_command_ == "CREATE_SERVER") {
-    result = CreateForeignServerCommand{payload, session_ptr_}.execute();
+    result = CreateForeignServerCommand{*ddl_data_, session_ptr_}.execute();
   } else if (ddl_command_ == "DROP_SERVER") {
-    result = DropForeignServerCommand{payload, session_ptr_}.execute();
+    result = DropForeignServerCommand{*ddl_data_, session_ptr_}.execute();
   } else if (ddl_command_ == "CREATE_FOREIGN_TABLE") {
-    result = CreateForeignTableCommand{payload, session_ptr_}.execute();
+    result = CreateForeignTableCommand{*ddl_data_, session_ptr_}.execute();
   } else if (ddl_command_ == "DROP_FOREIGN_TABLE") {
-    result = DropForeignTableCommand{payload, session_ptr_}.execute();
+    result = DropForeignTableCommand{*ddl_data_, session_ptr_}.execute();
   } else if (ddl_command_ == "SHOW_TABLES") {
-    result = ShowTablesCommand{payload, session_ptr_}.execute();
+    result = ShowTablesCommand{*ddl_data_, session_ptr_}.execute();
   } else if (ddl_command_ == "SHOW_TABLE_DETAILS") {
-    result = ShowTableDetailsCommand{payload, session_ptr_}.execute();
+    result = ShowTableDetailsCommand{*ddl_data_, session_ptr_}.execute();
   } else if (ddl_command_ == "SHOW_DATABASES") {
-    result = ShowDatabasesCommand{payload, session_ptr_}.execute();
+    result = ShowDatabasesCommand{*ddl_data_, session_ptr_}.execute();
   } else if (ddl_command_ == "SHOW_SERVERS") {
-    result = ShowForeignServersCommand{payload, session_ptr_}.execute();
+    result = ShowForeignServersCommand{*ddl_data_, session_ptr_}.execute();
   } else if (ddl_command_ == "ALTER_SERVER") {
-    result = AlterForeignServerCommand{payload, session_ptr_}.execute();
+    result = AlterForeignServerCommand{*ddl_data_, session_ptr_}.execute();
   } else if (ddl_command_ == "ALTER_FOREIGN_TABLE") {
-    result = AlterForeignTableCommand{payload, session_ptr_}.execute();
+    result = AlterForeignTableCommand{*ddl_data_, session_ptr_}.execute();
   } else if (ddl_command_ == "REFRESH_FOREIGN_TABLES") {
-    result = RefreshForeignTablesCommand{payload, session_ptr_}.execute();
+    result = RefreshForeignTablesCommand{*ddl_data_, session_ptr_}.execute();
   } else if (ddl_command_ == "SHOW_QUERIES") {
     LOG(ERROR) << "SHOW QUERIES DDL is not ready yet!\n";
   } else if (ddl_command_ == "SHOW_DISK_CACHE_USAGE") {
-    result = ShowDiskCacheUsageCommand{payload, session_ptr_}.execute();
+    result = ShowDiskCacheUsageCommand{*ddl_data_, session_ptr_}.execute();
   } else if (ddl_command_ == "KILL_QUERY") {
-    CHECK(payload.HasMember("querySession"));
-    const std::string& querySessionPayload = payload["querySession"].GetString();
+    auto& ddl_payload = extractPayload(*ddl_data_);
+    CHECK(ddl_payload.HasMember("querySession"));
+    const std::string& querySessionPayload = ddl_payload["querySession"].GetString();
     auto querySession = querySessionPayload.substr(1, 8);
     CHECK_EQ(querySession.length(),
              (unsigned long)8);  // public_session_id's length + two quotes
@@ -313,10 +424,10 @@ DistributedExecutionDetails DdlCommandExecutor::getDistributedExecutionDetails()
 const std::string DdlCommandExecutor::getTargetQuerySessionToKill() {
   // caller should check whether DDL indicates KillQuery request
   // i.e., use isKillQuery() before calling this function
-  const auto& payload = ddl_query_["payload"].GetObject();
+  auto& ddl_payload = extractPayload(*ddl_data_);
   CHECK(isKillQuery());
-  CHECK(payload.HasMember("querySession"));
-  const std::string& query_session = payload["querySession"].GetString();
+  CHECK(ddl_payload.HasMember("querySession"));
+  const std::string& query_session = ddl_payload["querySession"].GetString();
   // regex matcher for public_session: start_time{3}-session_id{4} (Example:819-4RDo)
   boost::regex session_id_regex{R"([0-9]{3}-[a-zA-Z0-9]{4})",
                                 boost::regex::extended | boost::regex::icase};
@@ -331,18 +442,11 @@ const std::string DdlCommandExecutor::commandStr() {
   return ddl_command_;
 }
 
-static const rapidjson::Value* extractFilters(const rapidjson::Value& payload) {
-  const rapidjson::Value* filters = nullptr;
-  if (payload.HasMember("filters") && payload["filters"].IsArray()) {
-    filters = &payload["filters"];
-  }
-  return filters;
-}
-
 CreateForeignServerCommand::CreateForeignServerCommand(
-    const rapidjson::Value& ddl_payload,
+    const DdlCommandData& ddl_data,
     std::shared_ptr<Catalog_Namespace::SessionInfo const> session_ptr)
-    : DdlCommand(ddl_payload, session_ptr) {
+    : DdlCommand(ddl_data, session_ptr) {
+  auto& ddl_payload = extractPayload(ddl_data_);
   CHECK(ddl_payload.HasMember("serverName"));
   CHECK(ddl_payload["serverName"].IsString());
   CHECK(ddl_payload.HasMember("dataWrapper"));
@@ -356,11 +460,12 @@ CreateForeignServerCommand::CreateForeignServerCommand(
 ExecutionResult CreateForeignServerCommand::execute() {
   ExecutionResult result;
 
-  std::string server_name = ddl_payload_["serverName"].GetString();
+  auto& ddl_payload = extractPayload(ddl_data_);
+  std::string server_name = ddl_payload["serverName"].GetString();
   if (isDefaultServer(server_name)) {
     throw std::runtime_error{"Server names cannot start with \"omnisci\"."};
   }
-  bool if_not_exists = ddl_payload_["ifNotExists"].GetBool();
+  bool if_not_exists = ddl_payload["ifNotExists"].GetBool();
   if (session_ptr_->getCatalog().getForeignServer(server_name)) {
     if (if_not_exists) {
       return result;
@@ -378,15 +483,15 @@ ExecutionResult CreateForeignServerCommand::execute() {
 
   auto& current_user = session_ptr_->get_currentUser();
   auto foreign_server = std::make_unique<foreign_storage::ForeignServer>();
-  foreign_server->data_wrapper_type = to_upper(ddl_payload_["dataWrapper"].GetString());
+  foreign_server->data_wrapper_type = to_upper(ddl_payload["dataWrapper"].GetString());
   foreign_server->name = server_name;
   foreign_server->user_id = current_user.userId;
-  foreign_server->populateOptionsMap(ddl_payload_["options"]);
+  foreign_server->populateOptionsMap(ddl_payload["options"]);
   foreign_server->validate();
 
   auto& catalog = session_ptr_->getCatalog();
   catalog.createForeignServer(std::move(foreign_server),
-                              ddl_payload_["ifNotExists"].GetBool());
+                              ddl_payload["ifNotExists"].GetBool());
   Catalog_Namespace::SysCatalog::instance().createDBObject(
       current_user, server_name, ServerDBObjectType, catalog);
 
@@ -394,9 +499,10 @@ ExecutionResult CreateForeignServerCommand::execute() {
 }
 
 AlterForeignServerCommand::AlterForeignServerCommand(
-    const rapidjson::Value& ddl_payload,
+    const DdlCommandData& ddl_data,
     std::shared_ptr<const Catalog_Namespace::SessionInfo> session_ptr)
-    : DdlCommand(ddl_payload, session_ptr) {
+    : DdlCommand(ddl_data, session_ptr) {
+  auto& ddl_payload = extractPayload(ddl_data_);
   CHECK(ddl_payload.HasMember("serverName"));
   CHECK(ddl_payload["serverName"].IsString());
   CHECK(ddl_payload.HasMember("alterType"));
@@ -419,7 +525,8 @@ AlterForeignServerCommand::AlterForeignServerCommand(
 }
 
 ExecutionResult AlterForeignServerCommand::execute() {
-  std::string server_name = ddl_payload_["serverName"].GetString();
+  auto& ddl_payload = extractPayload(ddl_data_);
+  std::string server_name = ddl_payload["serverName"].GetString();
   if (isDefaultServer(server_name)) {
     throw std::runtime_error{"OmniSci default servers cannot be altered."};
   }
@@ -431,7 +538,7 @@ ExecutionResult AlterForeignServerCommand::execute() {
     throw std::runtime_error("Server " + server_name +
                              " can not be altered. User has no ALTER SERVER privileges.");
   }
-  std::string alter_type = ddl_payload_["alterType"].GetString();
+  std::string alter_type = ddl_payload["alterType"].GetString();
   if (alter_type == "CHANGE_OWNER") {
     changeForeignServerOwner();
   } else if (alter_type == "SET_DATA_WRAPPER") {
@@ -446,8 +553,9 @@ ExecutionResult AlterForeignServerCommand::execute() {
 }
 
 void AlterForeignServerCommand::changeForeignServerOwner() {
-  std::string server_name = ddl_payload_["serverName"].GetString();
-  std::string new_owner = ddl_payload_["newOwner"].GetString();
+  auto& ddl_payload = extractPayload(ddl_data_);
+  std::string server_name = ddl_payload["serverName"].GetString();
+  std::string new_owner = ddl_payload["newOwner"].GetString();
   auto& sys_cat = Catalog_Namespace::SysCatalog::instance();
   if (!session_ptr_->get_currentUser().isSuper) {
     throw std::runtime_error(
@@ -481,8 +589,9 @@ void AlterForeignServerCommand::changeForeignServerOwner() {
 }
 
 void AlterForeignServerCommand::renameForeignServer() {
-  std::string server_name = ddl_payload_["serverName"].GetString();
-  std::string new_server_name = ddl_payload_["newServerName"].GetString();
+  auto& ddl_payload = extractPayload(ddl_data_);
+  std::string server_name = ddl_payload["serverName"].GetString();
+  std::string new_server_name = ddl_payload["newServerName"].GetString();
   if (isDefaultServer(new_server_name)) {
     throw std::runtime_error{"OmniSci prefix can not be used for new name of server."};
   }
@@ -512,19 +621,21 @@ void AlterForeignServerCommand::renameForeignServer() {
 }
 
 void AlterForeignServerCommand::setForeignServerOptions() {
-  std::string server_name = ddl_payload_["serverName"].GetString();
+  auto& ddl_payload = extractPayload(ddl_data_);
+  std::string server_name = ddl_payload["serverName"].GetString();
   auto& cat = session_ptr_->getCatalog();
   // update catalog
   const auto foreign_server = cat.getForeignServer(server_name);
   foreign_storage::OptionsContainer opt;
   opt.populateOptionsMap(foreign_server->getOptionsAsJsonString());
-  opt.populateOptionsMap(ddl_payload_["options"]);
+  opt.populateOptionsMap(ddl_payload["options"]);
   cat.setForeignServerOptions(server_name, opt.getOptionsAsJsonString());
 }
 
 void AlterForeignServerCommand::setForeignServerDataWrapper() {
-  std::string server_name = ddl_payload_["serverName"].GetString();
-  std::string data_wrapper = ddl_payload_["dataWrapper"].GetString();
+  auto& ddl_payload = extractPayload(ddl_data_);
+  std::string server_name = ddl_payload["serverName"].GetString();
+  std::string data_wrapper = ddl_payload["dataWrapper"].GetString();
   auto& cat = session_ptr_->getCatalog();
   // update catalog
   cat.setForeignServerDataWrapper(server_name, data_wrapper);
@@ -532,15 +643,17 @@ void AlterForeignServerCommand::setForeignServerDataWrapper() {
 
 bool AlterForeignServerCommand::hasAlterServerPrivileges() {
   // TODO: implement `GRANT/REVOKE ALTER_SERVER` DDL commands
-  std::string server_name = ddl_payload_["serverName"].GetString();
+  auto& ddl_payload = extractPayload(ddl_data_);
+  std::string server_name = ddl_payload["serverName"].GetString();
   return session_ptr_->checkDBAccessPrivileges(
       DBObjectType::ServerDBObjectType, AccessPrivileges::ALTER_SERVER, server_name);
 }
 
 DropForeignServerCommand::DropForeignServerCommand(
-    const rapidjson::Value& ddl_payload,
+    const DdlCommandData& ddl_data,
     std::shared_ptr<Catalog_Namespace::SessionInfo const> session_ptr)
-    : DdlCommand(ddl_payload, session_ptr) {
+    : DdlCommand(ddl_data, session_ptr) {
+  auto& ddl_payload = extractPayload(ddl_data_);
   CHECK(ddl_payload.HasMember("serverName"));
   CHECK(ddl_payload["serverName"].IsString());
   CHECK(ddl_payload.HasMember("ifExists"));
@@ -548,11 +661,12 @@ DropForeignServerCommand::DropForeignServerCommand(
 }
 
 ExecutionResult DropForeignServerCommand::execute() {
-  std::string server_name = ddl_payload_["serverName"].GetString();
+  auto& ddl_payload = extractPayload(ddl_data_);
+  std::string server_name = ddl_payload["serverName"].GetString();
   if (isDefaultServer(server_name)) {
     throw std::runtime_error{"OmniSci default servers cannot be dropped."};
   }
-  bool if_exists = ddl_payload_["ifExists"].GetBool();
+  bool if_exists = ddl_payload["ifExists"].GetBool();
   if (!session_ptr_->getCatalog().getForeignServer(server_name)) {
     if (if_exists) {
       return ExecutionResult();
@@ -569,7 +683,7 @@ ExecutionResult DropForeignServerCommand::execute() {
   }
   Catalog_Namespace::SysCatalog::instance().revokeDBObjectPrivilegesFromAll(
       DBObject(server_name, ServerDBObjectType), session_ptr_->get_catalog_ptr().get());
-  session_ptr_->getCatalog().dropForeignServer(ddl_payload_["serverName"].GetString());
+  session_ptr_->getCatalog().dropForeignServer(ddl_payload["serverName"].GetString());
 
   return ExecutionResult();
 }
@@ -720,9 +834,10 @@ int JsonColumnEncoding::getEncodingParam(const rapidjson::Value& data_type) {
 }
 
 CreateForeignTableCommand::CreateForeignTableCommand(
-    const rapidjson::Value& ddl_payload,
+    const DdlCommandData& ddl_data,
     std::shared_ptr<Catalog_Namespace::SessionInfo const> session_ptr)
-    : DdlCommand(ddl_payload, session_ptr) {
+    : DdlCommand(ddl_data, session_ptr) {
+  auto& ddl_payload = extractPayload(ddl_data);
   CHECK(ddl_payload.HasMember("serverName"));
   CHECK(ddl_payload["serverName"].IsString());
   CHECK(ddl_payload.HasMember("tableName"));
@@ -735,8 +850,9 @@ CreateForeignTableCommand::CreateForeignTableCommand(
 
 ExecutionResult CreateForeignTableCommand::execute() {
   auto& catalog = session_ptr_->getCatalog();
+  auto& ddl_payload = extractPayload(ddl_data_);
 
-  const std::string& table_name = ddl_payload_["tableName"].GetString();
+  const std::string& table_name = ddl_payload["tableName"].GetString();
   if (!session_ptr_->checkDBAccessPrivileges(DBObjectType::TableDBObjectType,
                                              AccessPrivileges::CREATE_TABLE)) {
     throw std::runtime_error(
@@ -744,7 +860,7 @@ ExecutionResult CreateForeignTableCommand::execute() {
         "\" will not be created. User has no CREATE TABLE privileges.");
   }
 
-  bool if_not_exists = ddl_payload_["ifNotExists"].GetBool();
+  bool if_not_exists = ddl_payload["ifNotExists"].GetBool();
   if (!catalog.validateNonExistentTableOrView(table_name, if_not_exists)) {
     return ExecutionResult();
   }
@@ -777,8 +893,9 @@ void CreateForeignTableCommand::setTableDetails(const std::string& table_name,
   td.fragments = "";
   td.partitions = "";
 
+  auto& ddl_payload = extractPayload(ddl_data_);
   auto& foreign_table = dynamic_cast<foreign_storage::ForeignTable&>(td);
-  const std::string server_name = ddl_payload_["serverName"].GetString();
+  const std::string server_name = ddl_payload["serverName"].GetString();
   foreign_table.foreign_server = session_ptr_->getCatalog().getForeignServer(server_name);
   if (!foreign_table.foreign_server) {
     throw std::runtime_error{
@@ -787,9 +904,9 @@ void CreateForeignTableCommand::setTableDetails(const std::string& table_name,
         "\" does not exist."};
   }
 
-  if (ddl_payload_.HasMember("options") && !ddl_payload_["options"].IsNull()) {
-    CHECK(ddl_payload_["options"].IsObject());
-    foreign_table.initializeOptions(ddl_payload_["options"]);
+  if (ddl_payload.HasMember("options") && !ddl_payload["options"].IsNull()) {
+    CHECK(ddl_payload["options"].IsObject());
+    foreign_table.initializeOptions(ddl_payload["options"]);
   } else {
     // Initialize options even if none were provided to verify a legal state.
     // This is necessary because some options (like "file_path") are optional only if a
@@ -804,8 +921,9 @@ void CreateForeignTableCommand::setTableDetails(const std::string& table_name,
 }
 
 void CreateForeignTableCommand::setColumnDetails(std::list<ColumnDescriptor>& columns) {
+  auto& ddl_payload = extractPayload(ddl_data_);
   std::unordered_set<std::string> column_names{};
-  for (auto& column_def : ddl_payload_["columns"].GetArray()) {
+  for (auto& column_def : ddl_payload["columns"].GetArray()) {
     CHECK(column_def.IsObject());
     CHECK(column_def.HasMember("name"));
     CHECK(column_def["name"].IsString());
@@ -835,9 +953,10 @@ void CreateForeignTableCommand::setColumnDetails(std::list<ColumnDescriptor>& co
 }
 
 DropForeignTableCommand::DropForeignTableCommand(
-    const rapidjson::Value& ddl_payload,
+    const DdlCommandData& ddl_data,
     std::shared_ptr<Catalog_Namespace::SessionInfo const> session_ptr)
-    : DdlCommand(ddl_payload, session_ptr) {
+    : DdlCommand(ddl_data, session_ptr) {
+  auto& ddl_payload = extractPayload(ddl_data_);
   CHECK(ddl_payload.HasMember("tableName"));
   CHECK(ddl_payload["tableName"].IsString());
   CHECK(ddl_payload.HasMember("ifExists"));
@@ -846,7 +965,9 @@ DropForeignTableCommand::DropForeignTableCommand(
 
 ExecutionResult DropForeignTableCommand::execute() {
   auto& catalog = session_ptr_->getCatalog();
-  const std::string& table_name = ddl_payload_["tableName"].GetString();
+  auto& ddl_payload = extractPayload(ddl_data_);
+
+  const std::string& table_name = ddl_payload["tableName"].GetString();
   const TableDescriptor* td{nullptr};
   std::unique_ptr<lockmgr::TableSchemaLockContainer<lockmgr::WriteLock>> td_with_lock;
 
@@ -860,7 +981,7 @@ ExecutionResult DropForeignTableCommand::execute() {
   } catch (const std::runtime_error& e) {
     // TODO(Misiu): This should not just swallow any exception, it should only catch
     // exceptions that stem from the table not existing.
-    if (ddl_payload_["ifExists"].GetBool()) {
+    if (ddl_payload["ifExists"].GetBool()) {
       return ExecutionResult();
     } else {
       throw e;
@@ -885,9 +1006,9 @@ ExecutionResult DropForeignTableCommand::execute() {
 }
 
 ShowTablesCommand::ShowTablesCommand(
-    const rapidjson::Value& ddl_payload,
+    const DdlCommandData& ddl_data,
     std::shared_ptr<Catalog_Namespace::SessionInfo const> session_ptr)
-    : DdlCommand(ddl_payload, session_ptr) {}
+    : DdlCommand(ddl_data, session_ptr) {}
 
 ExecutionResult ShowTablesCommand::execute() {
   // Get all table names in the same way as OmniSql \t command
@@ -919,9 +1040,10 @@ ExecutionResult ShowTablesCommand::execute() {
 }
 
 ShowTableDetailsCommand::ShowTableDetailsCommand(
-    const rapidjson::Value& ddl_payload,
+    const DdlCommandData& ddl_data,
     std::shared_ptr<Catalog_Namespace::SessionInfo const> session_ptr)
-    : DdlCommand(ddl_payload, session_ptr) {
+    : DdlCommand(ddl_data, session_ptr) {
+  auto& ddl_payload = extractPayload(ddl_data_);
   if (ddl_payload.HasMember("tableNames")) {
     CHECK(ddl_payload["tableNames"].IsArray());
     for (const auto& table_name : ddl_payload["tableNames"].GetArray()) {
@@ -975,13 +1097,14 @@ ExecutionResult ShowTableDetailsCommand::execute() {
 
 std::vector<std::string> ShowTableDetailsCommand::getFilteredTableNames() {
   const auto catalog = session_ptr_->get_catalog_ptr();
+  auto& ddl_payload = extractPayload(ddl_data_);
   auto all_table_names =
       catalog->getTableNamesForUser(session_ptr_->get_currentUser(), GET_PHYSICAL_TABLES);
   std::vector<std::string> filtered_table_names;
-  if (ddl_payload_.HasMember("tableNames")) {
+  if (ddl_payload.HasMember("tableNames")) {
     std::set<std::string> all_table_names_set(all_table_names.begin(),
                                               all_table_names.end());
-    for (const auto& table_name_json : ddl_payload_["tableNames"].GetArray()) {
+    for (const auto& table_name_json : ddl_payload["tableNames"].GetArray()) {
       std::string table_name = table_name_json.GetString();
       if (all_table_names_set.find(table_name) == all_table_names_set.end()) {
         throw std::runtime_error{"Unable to show table details for table: " + table_name +
@@ -1015,9 +1138,9 @@ std::vector<std::string> ShowTableDetailsCommand::getFilteredTableNames() {
 }
 
 ShowDatabasesCommand::ShowDatabasesCommand(
-    const rapidjson::Value& ddl_payload,
+    const DdlCommandData& ddl_data,
     std::shared_ptr<Catalog_Namespace::SessionInfo const> session_ptr)
-    : DdlCommand(ddl_payload, session_ptr) {}
+    : DdlCommand(ddl_data, session_ptr) {}
 
 ExecutionResult ShowDatabasesCommand::execute() {
   // label_infos -> column labels
@@ -1048,13 +1171,14 @@ ExecutionResult ShowDatabasesCommand::execute() {
 }
 
 ShowForeignServersCommand::ShowForeignServersCommand(
-    const rapidjson::Value& ddl_payload,
+    const DdlCommandData& ddl_data,
     std::shared_ptr<Catalog_Namespace::SessionInfo const> session_ptr)
-    : DdlCommand(ddl_payload, session_ptr) {
+    : DdlCommand(ddl_data, session_ptr) {
   if (!g_enable_fsi) {
     throw std::runtime_error("Unsupported command: SHOW FOREIGN SERVERS");
   }
   // Verify that members are valid
+  auto& ddl_payload = extractPayload(ddl_data_);
   CHECK(ddl_payload.HasMember("command"));
   if (ddl_payload.HasMember("filters")) {
     CHECK(ddl_payload["filters"].IsArray());
@@ -1080,6 +1204,7 @@ ShowForeignServersCommand::ShowForeignServersCommand(
 
 ExecutionResult ShowForeignServersCommand::execute() {
   std::vector<TargetMetaInfo> label_infos;
+  auto& ddl_payload = extractPayload(ddl_data_);
 
   // label_infos -> column labels
   std::vector<std::string> labels{"server_name", "data_wrapper", "created_at", "options"};
@@ -1094,7 +1219,7 @@ ExecutionResult ShowForeignServersCommand::execute() {
   std::vector<const foreign_storage::ForeignServer*> results;
 
   session_ptr_->getCatalog().getForeignServersForUser(
-      extractFilters(ddl_payload_), user, results);
+      extractFilters(ddl_payload), user, results);
 
   // logical_values -> table data
   std::vector<RelLogicalValues::RowValues> logical_values;
@@ -1114,9 +1239,10 @@ ExecutionResult ShowForeignServersCommand::execute() {
 }
 
 RefreshForeignTablesCommand::RefreshForeignTablesCommand(
-    const rapidjson::Value& ddl_payload,
+    const DdlCommandData& ddl_data,
     std::shared_ptr<Catalog_Namespace::SessionInfo const> session_ptr)
-    : DdlCommand(ddl_payload, session_ptr) {
+    : DdlCommand(ddl_data, session_ptr) {
+  auto& ddl_payload = extractPayload(ddl_data_);
   CHECK(ddl_payload.HasMember("tableNames"));
   CHECK(ddl_payload["tableNames"].IsArray());
   for (auto const& tablename_def : ddl_payload["tableNames"].GetArray()) {
@@ -1127,8 +1253,9 @@ RefreshForeignTablesCommand::RefreshForeignTablesCommand(
 ExecutionResult RefreshForeignTablesCommand::execute() {
   bool evict_cached_entries{false};
   foreign_storage::OptionsContainer opt;
-  if (ddl_payload_.HasMember("options") && !ddl_payload_["options"].IsNull()) {
-    opt.populateOptionsMap(ddl_payload_["options"]);
+  auto& ddl_payload = extractPayload(ddl_data_);
+  if (ddl_payload.HasMember("options") && !ddl_payload["options"].IsNull()) {
+    opt.populateOptionsMap(ddl_payload["options"]);
     for (const auto& entry : opt.options) {
       if (entry.first != "EVICT") {
         throw std::runtime_error{
@@ -1154,7 +1281,7 @@ ExecutionResult RefreshForeignTablesCommand::execute() {
   const auto& current_user = session_ptr_->get_currentUser();
   /* verify object ownership if not suser */
   if (!current_user.isSuper) {
-    for (const auto& table_name_json : ddl_payload_["tableNames"].GetArray()) {
+    for (const auto& table_name_json : ddl_payload["tableNames"].GetArray()) {
       std::string table_name = table_name_json.GetString();
       if (!Catalog_Namespace::SysCatalog::instance().verifyDBObjectOwnership(
               current_user, DBObject(table_name, TableDBObjectType), cat)) {
@@ -1167,7 +1294,7 @@ ExecutionResult RefreshForeignTablesCommand::execute() {
     }
   }
 
-  for (const auto& table_name_json : ddl_payload_["tableNames"].GetArray()) {
+  for (const auto& table_name_json : ddl_payload["tableNames"].GetArray()) {
     std::string table_name = table_name_json.GetString();
     foreign_storage::refresh_foreign_table(cat, table_name, evict_cached_entries);
   }
@@ -1176,9 +1303,10 @@ ExecutionResult RefreshForeignTablesCommand::execute() {
 }
 
 AlterForeignTableCommand::AlterForeignTableCommand(
-    const rapidjson::Value& ddl_payload,
+    const DdlCommandData& ddl_data,
     std::shared_ptr<const Catalog_Namespace::SessionInfo> session_ptr)
-    : DdlCommand(ddl_payload, session_ptr) {
+    : DdlCommand(ddl_data, session_ptr) {
+  auto& ddl_payload = extractPayload(ddl_data_);
   CHECK(ddl_payload.HasMember("tableName"));
   CHECK(ddl_payload["tableName"].IsString());
   CHECK(ddl_payload.HasMember("alterType"));
@@ -1201,8 +1329,9 @@ AlterForeignTableCommand::AlterForeignTableCommand(
 }
 
 ExecutionResult AlterForeignTableCommand::execute() {
+  auto& ddl_payload = extractPayload(ddl_data_);
   auto& catalog = session_ptr_->getCatalog();
-  const std::string& table_name = ddl_payload_["tableName"].GetString();
+  const std::string& table_name = ddl_payload["tableName"].GetString();
   auto [td, td_with_lock] =
       get_table_descriptor_with_lock<lockmgr::WriteLock>(catalog, table_name, false);
 
@@ -1219,7 +1348,7 @@ ExecutionResult AlterForeignTableCommand::execute() {
   auto foreign_table = dynamic_cast<const foreign_storage::ForeignTable*>(td);
   CHECK(foreign_table);
 
-  std::string alter_type = ddl_payload_["alterType"].GetString();
+  std::string alter_type = ddl_payload["alterType"].GetString();
   if (alter_type == "RENAME_TABLE") {
     renameTable(foreign_table);
   } else if (alter_type == "RENAME_COLUMN") {
@@ -1233,9 +1362,10 @@ ExecutionResult AlterForeignTableCommand::execute() {
 
 void AlterForeignTableCommand::renameTable(
     const foreign_storage::ForeignTable* foreign_table) {
+  auto& ddl_payload = extractPayload(ddl_data_);
   auto& cat = session_ptr_->getCatalog();
-  const std::string& table_name = ddl_payload_["tableName"].GetString();
-  const std::string& new_table_name = ddl_payload_["newTableName"].GetString();
+  const std::string& table_name = ddl_payload["tableName"].GetString();
+  const std::string& new_table_name = ddl_payload["newTableName"].GetString();
   if (cat.getForeignTable(new_table_name)) {
     throw std::runtime_error("Foreign table with name \"" + table_name +
                              "\" can not be renamed to \"" + new_table_name + "\". " +
@@ -1247,9 +1377,11 @@ void AlterForeignTableCommand::renameTable(
 
 void AlterForeignTableCommand::renameColumn(
     const foreign_storage::ForeignTable* foreign_table) {
+  auto& ddl_payload = extractPayload(ddl_data_);
   auto& cat = session_ptr_->getCatalog();
-  const std::string& old_column_name = ddl_payload_["oldColumnName"].GetString();
-  const std::string& new_column_name = ddl_payload_["newColumnName"].GetString();
+  const std::string& table_name = ddl_payload["tableName"].GetString();
+  const std::string& old_column_name = ddl_payload["oldColumnName"].GetString();
+  const std::string& new_column_name = ddl_payload["newColumnName"].GetString();
   auto column = cat.getMetadataForColumn(foreign_table->tableId, old_column_name);
   if (!column) {
     throw std::runtime_error("Column with name \"" + old_column_name +
@@ -1268,19 +1400,21 @@ void AlterForeignTableCommand::renameColumn(
 
 void AlterForeignTableCommand::alterOptions(
     const foreign_storage::ForeignTable* foreign_table) {
-  const std::string& table_name = ddl_payload_["tableName"].GetString();
+  auto& ddl_payload = extractPayload(ddl_data_);
+  const std::string& table_name = ddl_payload["tableName"].GetString();
   auto& cat = session_ptr_->getCatalog();
   auto new_options_map =
-      foreign_storage::ForeignTable::create_options_map(ddl_payload_["options"]);
+      foreign_storage::ForeignTable::create_options_map(ddl_payload["options"]);
   foreign_table->validateSupportedOptionKeys(new_options_map);
   foreign_storage::ForeignTable::validate_alter_options(new_options_map);
   cat.setForeignTableOptions(table_name, new_options_map, false);
 }
 
 ShowDiskCacheUsageCommand::ShowDiskCacheUsageCommand(
-    const rapidjson::Value& ddl_payload,
+    const DdlCommandData& ddl_data,
     std::shared_ptr<Catalog_Namespace::SessionInfo const> session_ptr)
-    : DdlCommand(ddl_payload, session_ptr) {
+    : DdlCommand(ddl_data, session_ptr) {
+  auto& ddl_payload = extractPayload(ddl_data_);
   if (ddl_payload.HasMember("tableNames")) {
     CHECK(ddl_payload["tableNames"].IsArray());
     for (auto const& tablename_def : ddl_payload["tableNames"].GetArray()) {
@@ -1293,9 +1427,10 @@ std::vector<std::string> ShowDiskCacheUsageCommand::getFilteredTableNames() {
   auto table_names = session_ptr_->get_catalog_ptr()->getTableNamesForUser(
       session_ptr_->get_currentUser(), GET_PHYSICAL_TABLES);
 
-  if (ddl_payload_.HasMember("tableNames")) {
+  auto& ddl_payload = extractPayload(ddl_data_);
+  if (ddl_payload.HasMember("tableNames")) {
     std::vector<std::string> filtered_names;
-    for (const auto& tablename_def : ddl_payload_["tableNames"].GetArray()) {
+    for (const auto& tablename_def : ddl_payload["tableNames"].GetArray()) {
       std::string filter_name = tablename_def.GetString();
       if (std::find(table_names.begin(), table_names.end(), filter_name) !=
           table_names.end()) {
