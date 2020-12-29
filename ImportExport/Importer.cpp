@@ -72,6 +72,10 @@
 
 #include "gen-cpp/OmniSci.h"
 
+size_t g_max_import_threads =
+    32;  // Max number of default import threads to use (num hardware threads will be used
+         // if lower, and can also be explicitly overriden in copy statement with threads
+         // option)
 size_t g_archive_read_buf_size = 1 << 20;
 
 inline auto get_filesize(const std::string& file_path) {
@@ -3518,7 +3522,10 @@ void Importer::import_local_parquet(const std::string& file_path) {
                      std::to_string(column_list.size() - num_physical_cols) +
                      " columns in table.");
   // slice each group to import slower columns faster, eg. geo or string
-  max_threads = copy_params.threads ? copy_params.threads : cpu_threads();
+  max_threads = copy_params.threads
+                    ? copy_params.threads
+                    : std::min(static_cast<size_t>(cpu_threads()), g_max_import_threads);
+  VLOG(1) << "Parquet import # threads: " << max_threads;
   const int num_slices = std::max<decltype(max_threads)>(max_threads, num_columns);
   // init row estimate for this file
   const auto filesize = get_filesize(file_path);
@@ -3994,10 +4001,12 @@ ImportStatus Importer::importDelimited(const std::string& file_path,
   }
 
   if (copy_params.threads == 0) {
-    max_threads = static_cast<size_t>(sysconf(_SC_NPROCESSORS_CONF));
+    max_threads = std::min(static_cast<size_t>(sysconf(_SC_NPROCESSORS_CONF)),
+                           g_max_import_threads);
   } else {
     max_threads = static_cast<size_t>(copy_params.threads);
   }
+  VLOG(1) << "Delimited import # threads: " << max_threads;
 
   // deal with small files
   size_t alloc_size = copy_params.buffer_size;
@@ -4803,11 +4812,14 @@ ImportStatus Importer::importGDAL(
   // how many threads to use
   size_t max_threads = 0;
   if (copy_params.threads == 0) {
-    max_threads = sysconf(_SC_NPROCESSORS_CONF);
+    max_threads = std::min(static_cast<size_t>(sysconf(_SC_NPROCESSORS_CONF)),
+                           g_max_import_threads);
   } else {
     max_threads = copy_params.threads;
   }
 #endif
+
+  VLOG(1) << "GDAL import # threads: " << max_threads;
 
   // make an import buffer for each thread
   CHECK_EQ(import_buffers_vec.size(), 0u);

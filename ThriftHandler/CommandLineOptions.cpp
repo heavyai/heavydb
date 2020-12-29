@@ -266,6 +266,11 @@ void CommandLineOptions::fillOptions() {
       po::value<size_t>(&num_reader_threads)->default_value(num_reader_threads),
       "Number of reader threads to use.");
   help_desc.add_options()(
+      "max-import-threads",
+      po::value<size_t>(&g_max_import_threads)->default_value(g_max_import_threads),
+      "Max number of default import threads to use (num hardware threads will be used "
+      "instead if lower). Can be overriden with copy statement threads option).");
+  help_desc.add_options()(
       "overlaps-max-table-size-bytes",
       po::value<size_t>(&g_overlaps_max_table_size_bytes)
           ->default_value(g_overlaps_max_table_size_bytes),
@@ -991,6 +996,15 @@ boost::optional<int> CommandLineOptions::parse_command_line(
       LOG(INFO) << " HA shared data is " << system_parameters.ha_shared_data;
     }
   }
+
+  if (g_max_import_threads < 1) {
+    std::cerr << "max-import-threads must be >= 1 (was set to " << g_max_import_threads
+              << ")." << std::endl;
+    return 8;
+  } else {
+    LOG(INFO) << " Max import threads " << g_max_import_threads;
+  }
+
   LOG(INFO) << " cuda block size " << system_parameters.cuda_block_size;
   LOG(INFO) << " cuda grid size  " << system_parameters.cuda_grid_size;
   LOG(INFO) << " Min CPU buffer pool slab size " << system_parameters.min_cpu_slab_size;
