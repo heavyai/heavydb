@@ -4807,10 +4807,9 @@ ImportStatus Importer::importGDAL(
 
 #if DISABLE_MULTI_THREADED_SHAPEFILE_IMPORT
   // just one "thread"
-  size_t max_threads = 1;
+  max_threads = 1;
 #else
   // how many threads to use
-  size_t max_threads = 0;
   if (copy_params.threads == 0) {
     max_threads = std::min(static_cast<size_t>(sysconf(_SC_NPROCESSORS_CONF)),
                            g_max_import_threads);
