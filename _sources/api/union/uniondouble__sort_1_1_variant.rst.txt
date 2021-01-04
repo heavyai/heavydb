@@ -1,0 +1,5 @@
+Union double_sort::Variant
+==========================
+
+.. doxygenunion:: double_sort::Variant
+   :project: OmniSciDB

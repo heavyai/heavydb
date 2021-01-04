@@ -65,7 +65,7 @@
             
             
               <div class="version">
-                5.6.0dev 7d2afa8
+                5.6.0dev edde735
               </div>
             
           
@@ -243,7 +243,11 @@
 <li class="toctree-l4"><a class="reference internal" href="../../execution/codegen.html#code-cache">7.4.5.3. Code Cache</a></li>
 </ul>
 </li>
-<li class="toctree-l3"><a class="reference internal" href="../../execution/codegen.html#troubleshooting">7.4.6. Troubleshooting</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../execution/codegen.html#troubleshooting">7.4.6. Troubleshooting</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../execution/codegen.html#log-files">7.4.6.1. Log Files</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../execution/codegen.html#automatic-llvm-ir-metadata">7.4.6.2. Automatic LLVM IR Metadata</a></li>
+</ul>
+</li>
 </ul>
 </li>
 <li class="toctree-l2"><a class="reference internal" href="../../execution/kernels.html">7.5. Execution Kernels</a><ul>
@@ -396,6 +400,7 @@
 <li class="toctree-l2"><a class="reference internal" href="class_date_time_translator.html">Class DateTimeTranslator</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_date_trunc_expr.html">Class DateTruncExpr</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_ddl_command.html">Class DdlCommand</a></li>
+<li class="toctree-l2"><a class="reference internal" href="class_ddl_command_data.html">Class DdlCommandData</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_ddl_command_executor.html">Class DdlCommandExecutor</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_decimal_overflow_validator.html">Class DecimalOverflowValidator</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_decoder.html">Class Decoder</a></li>
@@ -487,11 +492,8 @@
 <li class="toctree-l2"><a class="reference internal" href="class_intervals.html">Class Intervals</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_intervals_1_1_iterator.html">Class Intervals::Iterator</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_join_covered_qual_visitor.html">Class JoinCoveredQualVisitor</a></li>
-<li class="toctree-l2"><a class="reference internal" href="class_join_hash_table.html">Class JoinHashTable</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_join_loop.html">Class JoinLoop</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_join_target_rebaser.html">Class JoinTargetRebaser</a></li>
-<li class="toctree-l2"><a class="reference internal" href="class_json_column_encoding.html">Class JsonColumnEncoding</a></li>
-<li class="toctree-l2"><a class="reference internal" href="class_json_column_sql_type.html">Class JsonColumnSqlType</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_ldap_server.html">Class LdapServer</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_leaf_aggregator.html">Class LeafAggregator</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_leaf_host_info.html">Class LeafHostInfo</a></li>
@@ -612,6 +614,7 @@
 <li class="toctree-l2"><a class="reference internal" href="class_parser_1_1_validate_stmt.html">Class Parser::ValidateStmt</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_parser_wrapper.html">Class ParserWrapper</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_perfect_hash_table.html">Class PerfectHashTable</a></li>
+<li class="toctree-l2"><a class="reference internal" href="class_perfect_join_hash_table.html">Class PerfectJoinHashTable</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_perfect_join_hash_table_builder.html">Class PerfectJoinHashTableBuilder</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_persistent_foreign_storage_interface.html">Class PersistentForeignStorageInterface</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_persistent_storage_mgr.html">Class PersistentStorageMgr</a></li>
@@ -750,6 +753,7 @@
 <li class="toctree-l2"><a class="reference internal" href="class_used_columns_visitor.html">Class UsedColumnsVisitor</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_user.html">Class User</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_value.html">Class Value</a></li>
+<li class="toctree-l2"><a class="reference internal" href="class_vector_view.html">Class VectorView</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_watchdog_exception.html">Class WatchdogException</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_window_function_context.html">Class WindowFunctionContext</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_window_project_node_context.html">Class WindowProjectNodeContext</a></li>
@@ -758,6 +762,9 @@
 <li class="toctree-l2"><a class="reference internal" href="classanalyze__benchmark_1_1_benchmark_loader.html">Class analyze_benchmark::BenchmarkLoader</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classanalyze__benchmark_1_1_pretty_print.html">Class analyze_benchmark::PrettyPrint</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classanonymous__namespace_02_arrow_result_set_converter_8cpp_03_1_1null__type.html">Class anonymous_namespace{ArrowResultSetConverter.cpp}::null_type</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classanonymous__namespace_02_ddl_command_executor_8cpp_03_1_1_ddl_command_data_impl.html">Class anonymous_namespace{DdlCommandExecutor.cpp}::DdlCommandDataImpl</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classanonymous__namespace_02_ddl_command_executor_8cpp_03_1_1_json_column_encoding.html">Class anonymous_namespace{DdlCommandExecutor.cpp}::JsonColumnEncoding</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classanonymous__namespace_02_ddl_command_executor_8cpp_03_1_1_json_column_sql_type.html">Class anonymous_namespace{DdlCommandExecutor.cpp}::JsonColumnSqlType</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classanonymous__namespace_02_execute_8cpp_03_1_1_out_vec_owner.html">Class anonymous_namespace{Execute.cpp}::OutVecOwner</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classanonymous__namespace_02_expression_rewrite_8cpp_03_1_1_array_element_string_literal_encoding_visitor.html">Class anonymous_namespace{ExpressionRewrite.cpp}::ArrayElementStringLiteralEncodingVisitor</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classanonymous__namespace_02_expression_rewrite_8cpp_03_1_1_constant_folding_visitor.html">Class anonymous_namespace{ExpressionRewrite.cpp}::ConstantFoldingVisitor</a></li>
@@ -808,6 +815,7 @@
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_sql_operator_table_1_1_all.html">Class com::mapd::calcite::parser::MapDSqlOperatorTable::All</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_sql_operator_table_1_1_any.html">Class com::mapd::calcite::parser::MapDSqlOperatorTable::Any</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_sql_operator_table_1_1_approx_count_distinct.html">Class com::mapd::calcite::parser::MapDSqlOperatorTable::ApproxCountDistinct</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_sql_operator_table_1_1_approx_median.html">Class com::mapd::calcite::parser::MapDSqlOperatorTable::ApproxMedian</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_sql_operator_table_1_1_array_length.html">Class com::mapd::calcite::parser::MapDSqlOperatorTable::ArrayLength</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_sql_operator_table_1_1_cast_to_geography.html">Class com::mapd::calcite::parser::MapDSqlOperatorTable::CastToGeography</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_sql_operator_table_1_1_char_length.html">Class com::mapd::calcite::parser::MapDSqlOperatorTable::CharLength</a></li>
@@ -1401,6 +1409,10 @@
 <li class="toctree-l2"><a class="reference internal" href="classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1_1_no_op_sub_query_converter.html">Class org::apache::calcite::sql2rel::SqlToRelConverter::NoOpSubQueryConverter</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1_1_rex_access_shuttle.html">Class org::apache::calcite::sql2rel::SqlToRelConverter::RexAccessShuttle</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classorg_1_1apache_1_1calcite_1_1util_1_1_escaped_string_json_builder.html">Class org::apache::calcite::util::EscapedStringJsonBuilder</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classquantile_1_1detail_1_1_centroids_memory.html">Class quantile::detail::CentroidsMemory</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classquantile_1_1detail_1_1_centroids_merger.html">Class quantile::detail::CentroidsMerger</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classquantile_1_1detail_1_1_t_digest.html">Class quantile::detail::TDigest</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classquantile_1_1detail_1_1anonymous__namespace_02quantile_8h_03_1_1_skipped.html">Class quantile::detail::anonymous_namespace{quantile.h}::Skipped</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classquery__state_1_1_query_state.html">Class query_state::QueryState</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classquery__state_1_1_query_state_proxy.html">Class query_state::QueryStateProxy</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classquery__state_1_1_query_states.html">Class query_state::QueryStates</a></li>
@@ -1592,7 +1604,6 @@
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_join_column_typed.html">Struct JoinColumnTyped</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_join_column_typed_1_1_slice.html">Struct JoinColumnTyped::Slice</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_join_condition.html">Struct JoinCondition</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../struct/struct_join_hash_table_1_1_join_hash_table_cache_key.html">Struct JoinHashTable::JoinHashTableCacheKey</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_join_info.html">Struct JoinInfo</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_join_loop_domain.html">Struct JoinLoopDomain</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_key_accessor.html">Struct KeyAccessor</a></li>
@@ -1620,6 +1631,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_parser_1_1_should_invalidate_sessions_by_user.html">Struct Parser::ShouldInvalidateSessionsByUser</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_parser_1_1_should_invalidate_sessions_by_user_3_01_drop_user_stmt_01_4.html">Struct Parser::ShouldInvalidateSessionsByUser&lt; DropUserStmt &gt;</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_parser_1_1_should_invalidate_sessions_by_user_3_01_rename_user_stmt_01_4.html">Struct Parser::ShouldInvalidateSessionsByUser&lt; RenameUserStmt &gt;</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/struct_perfect_join_hash_table_1_1_join_hash_table_cache_key.html">Struct PerfectJoinHashTable::JoinHashTableCacheKey</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_physical_input.html">Struct PhysicalInput</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_plan_state.html">Struct PlanState</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_pod_order_entry.html">Struct PodOrderEntry</a></li>
@@ -1712,6 +1724,8 @@
 <li class="toctree-l2"><a class="reference internal" href="../struct/structanonymous__namespace_02_types_8cpp_03_1_1_bounding_box.html">Struct anonymous_namespace{Types.cpp}::BoundingBox</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structanonymous__namespace_02_types_8cpp_03_1_1_coords.html">Struct anonymous_namespace{Types.cpp}::Coords</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structdict__ref__t.html">Struct dict_ref_t</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/structdouble__sort_1_1_iterator.html">Struct double_sort::Iterator</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/structdouble__sort_1_1_value.html">Struct double_sort::Value</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structforeign__storage_1_1_column_type.html">Struct foreign_storage::ColumnType</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structforeign__storage_1_1_data_wrapper_type.html">Struct foreign_storage::DataWrapperType</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structforeign__storage_1_1_file_region.html">Struct foreign_storage::FileRegion</a></li>
@@ -1738,6 +1752,10 @@
 <li class="toctree-l2"><a class="reference internal" href="../struct/structlogger_1_1_log_shutdown.html">Struct logger::LogShutdown</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structmeasure.html">Struct measure</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structomnisci_1_1_device_identifier.html">Struct omnisci::DeviceIdentifier</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/structquantile_1_1detail_1_1_centroid.html">Struct quantile::detail::Centroid</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/structquantile_1_1detail_1_1_centroids.html">Struct quantile::detail::Centroids</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/structquantile_1_1detail_1_1anonymous__namespace_02quantile_8h_03_1_1_order_by_mean_asc_count_desc.html">Struct quantile::detail::anonymous_namespace{quantile.h}::OrderByMeanAscCountDesc</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/structquantile_1_1detail_1_1anonymous__namespace_02quantile_8h_03_1_1_skipped_1_1_data.html">Struct quantile::detail::anonymous_namespace{quantile.h}::Skipped::Data</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structquery__state_1_1_event.html">Struct query_state::Event</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structquery__state_1_1_quote_formatter.html">Struct query_state::QuoteFormatter</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structquery__state_1_1_session_data.html">Struct query_state::SessionData</a></li>
@@ -1769,6 +1787,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../union/union_data_block_ptr.html">Union DataBlockPtr</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../union/union_datum.html">Union Datum</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../union/union_reduction_interpreter_1_1_eval_value.html">Union ReductionInterpreter::EvalValue</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../union/uniondouble__sort_1_1_variant.html">Union double_sort::Variant</a></li>
 </ul>
 </li>
 </ul>
@@ -2056,11 +2075,6 @@
 <dd></dd></dl>
 
 <dl class="function">
-<dt id="_CPPv4N8Executor22setCurrentQuerySessionERKNSt6stringER16mapd_unique_lockI17mapd_shared_mutexE">
-<span id="_CPPv3N8Executor22setCurrentQuerySessionERKNSt6stringER16mapd_unique_lockI17mapd_shared_mutexE"></span><span id="_CPPv2N8Executor22setCurrentQuerySessionERKNSt6stringER16mapd_unique_lockI17mapd_shared_mutexE"></span><span id="Executor::setCurrentQuerySession__ssCR.mapd_unique_lock:mapd_shared_mutex:R"></span><span class="target" id="class_executor_1abdb871f5682b558358888bce3843428b"></span>void <code class="sig-name descname">setCurrentQuerySession</code><span class="sig-paren">(</span><em class="property">const</em> std::string &amp;<em>query_session</em>, mapd_unique_lock&lt;mapd_shared_mutex&gt; &amp;<em>write_lock</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N8Executor22setCurrentQuerySessionERKNSt6stringER16mapd_unique_lockI17mapd_shared_mutexE" title="Permalink to this definition">¶</a><br /></dt>
-<dd></dd></dl>
-
-<dl class="function">
 <dt id="_CPPv4N8Executor22getCurrentQuerySessionER16mapd_shared_lockI17mapd_shared_mutexE">
 <span id="_CPPv3N8Executor22getCurrentQuerySessionER16mapd_shared_lockI17mapd_shared_mutexE"></span><span id="_CPPv2N8Executor22getCurrentQuerySessionER16mapd_shared_lockI17mapd_shared_mutexE"></span><span id="Executor::getCurrentQuerySession__mapd_shared_lock:mapd_shared_mutex:R"></span><span class="target" id="class_executor_1a7fd9e8ad0720c553efb0f5913d6b9352"></span>std::string &amp;<code class="sig-name descname">getCurrentQuerySession</code><span class="sig-paren">(</span>mapd_shared_lock&lt;mapd_shared_mutex&gt; &amp;<em>read_lock</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N8Executor22getCurrentQuerySessionER16mapd_shared_lockI17mapd_shared_mutexE" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
@@ -2081,48 +2095,78 @@
 <dd></dd></dl>
 
 <dl class="function">
-<dt id="_CPPv4N8Executor21addToQuerySessionListERKNSt6stringERKNSt6stringEKNSt6chrono10time_pointINSt6chrono12system_clockEEEK6size_tKNSt6stringER16mapd_unique_lockI17mapd_shared_mutexE">
-<span id="_CPPv3N8Executor21addToQuerySessionListERKNSt6stringERKNSt6stringEKNSt6chrono10time_pointINSt6chrono12system_clockEEEK6size_tKNSt6stringER16mapd_unique_lockI17mapd_shared_mutexE"></span><span id="_CPPv2N8Executor21addToQuerySessionListERKNSt6stringERKNSt6stringEKNSt6chrono10time_pointINSt6chrono12system_clockEEEK6size_tKNSt6stringER16mapd_unique_lockI17mapd_shared_mutexE"></span><span id="Executor::addToQuerySessionList__ssCR.ssCR.std::chrono::time_point:std::chrono::system_clock:C.sC.ssC.mapd_unique_lock:mapd_shared_mutex:R"></span><span class="target" id="class_executor_1a8436ac5d78b146fc7d20f9b022699ed8"></span>bool <code class="sig-name descname">addToQuerySessionList</code><span class="sig-paren">(</span><em class="property">const</em> std::string &amp;<em>query_session</em>, <em class="property">const</em> std::string &amp;<em>query_str</em>, <em class="property">const</em> std::chrono::time_point&lt;std::chrono::system_clock&gt; <em>submitted</em>, <em class="property">const</em> size_t <em>executor_id</em>, <em class="property">const</em> std::string <em>query_status</em>, mapd_unique_lock&lt;mapd_shared_mutex&gt; &amp;<em>write_lock</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N8Executor21addToQuerySessionListERKNSt6stringERKNSt6stringEKNSt6chrono10time_pointINSt6chrono12system_clockEEEK6size_tKNSt6stringER16mapd_unique_lockI17mapd_shared_mutexE" title="Permalink to this definition">¶</a><br /></dt>
+<dt id="_CPPv4N8Executor21addToQuerySessionListERK14QuerySessionIdRKNSt6stringEKNSt6chrono10time_pointINSt6chrono12system_clockEEEK6size_tKN18QuerySessionStatus11QueryStatusER16mapd_unique_lockI17mapd_shared_mutexE">
+<span id="_CPPv3N8Executor21addToQuerySessionListERK14QuerySessionIdRKNSt6stringEKNSt6chrono10time_pointINSt6chrono12system_clockEEEK6size_tKN18QuerySessionStatus11QueryStatusER16mapd_unique_lockI17mapd_shared_mutexE"></span><span id="_CPPv2N8Executor21addToQuerySessionListERK14QuerySessionIdRKNSt6stringEKNSt6chrono10time_pointINSt6chrono12system_clockEEEK6size_tKN18QuerySessionStatus11QueryStatusER16mapd_unique_lockI17mapd_shared_mutexE"></span><span id="Executor::addToQuerySessionList__QuerySessionIdCR.ssCR.std::chrono::time_point:std::chrono::system_clock:C.sC.QuerySessionStatus::QueryStatusC.mapd_unique_lock:mapd_shared_mutex:R"></span><span class="target" id="class_executor_1aefcfe556a2d83a8420c216ae20735ae5"></span>bool <code class="sig-name descname">addToQuerySessionList</code><span class="sig-paren">(</span><em class="property">const</em> QuerySessionId &amp;<em>query_session</em>, <em class="property">const</em> std::string &amp;<em>query_str</em>, <em class="property">const</em> std::chrono::time_point&lt;std::chrono::system_clock&gt; <em>submitted</em>, <em class="property">const</em> size_t <em>executor_id</em>, <em class="property">const</em> <a class="reference internal" href="class_query_session_status.html#_CPPv418QuerySessionStatus" title="QuerySessionStatus">QuerySessionStatus</a>::<a class="reference internal" href="class_query_session_status.html#_CPPv4N18QuerySessionStatus11QueryStatusE" title="QuerySessionStatus::QueryStatus">QueryStatus</a> <em>query_status</em>, mapd_unique_lock&lt;mapd_shared_mutex&gt; &amp;<em>write_lock</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N8Executor21addToQuerySessionListERK14QuerySessionIdRKNSt6stringEKNSt6chrono10time_pointINSt6chrono12system_clockEEEK6size_tKN18QuerySessionStatus11QueryStatusER16mapd_unique_lockI17mapd_shared_mutexE" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 <dl class="function">
-<dt id="_CPPv4N8Executor26removeFromQuerySessionListERKNSt6stringER16mapd_unique_lockI17mapd_shared_mutexE">
-<span id="_CPPv3N8Executor26removeFromQuerySessionListERKNSt6stringER16mapd_unique_lockI17mapd_shared_mutexE"></span><span id="_CPPv2N8Executor26removeFromQuerySessionListERKNSt6stringER16mapd_unique_lockI17mapd_shared_mutexE"></span><span id="Executor::removeFromQuerySessionList__ssCR.mapd_unique_lock:mapd_shared_mutex:R"></span><span class="target" id="class_executor_1abe03164a617763c069023337dcac0810"></span>bool <code class="sig-name descname">removeFromQuerySessionList</code><span class="sig-paren">(</span><em class="property">const</em> std::string &amp;<em>query_session</em>, mapd_unique_lock&lt;mapd_shared_mutex&gt; &amp;<em>write_lock</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N8Executor26removeFromQuerySessionListERKNSt6stringER16mapd_unique_lockI17mapd_shared_mutexE" title="Permalink to this definition">¶</a><br /></dt>
+<dt id="_CPPv4N8Executor26removeFromQuerySessionListERK14QuerySessionIdKNSt6chrono10time_pointINSt6chrono12system_clockEEER16mapd_unique_lockI17mapd_shared_mutexE">
+<span id="_CPPv3N8Executor26removeFromQuerySessionListERK14QuerySessionIdKNSt6chrono10time_pointINSt6chrono12system_clockEEER16mapd_unique_lockI17mapd_shared_mutexE"></span><span id="_CPPv2N8Executor26removeFromQuerySessionListERK14QuerySessionIdKNSt6chrono10time_pointINSt6chrono12system_clockEEER16mapd_unique_lockI17mapd_shared_mutexE"></span><span id="Executor::removeFromQuerySessionList__QuerySessionIdCR.std::chrono::time_point:std::chrono::system_clock:C.mapd_unique_lock:mapd_shared_mutex:R"></span><span class="target" id="class_executor_1a3a4f73c7e56263f40b907d34a15a77f0"></span>bool <code class="sig-name descname">removeFromQuerySessionList</code><span class="sig-paren">(</span><em class="property">const</em> QuerySessionId &amp;<em>query_session</em>, <em class="property">const</em> std::chrono::time_point&lt;std::chrono::system_clock&gt; <em>submitted</em>, mapd_unique_lock&lt;mapd_shared_mutex&gt; &amp;<em>write_lock</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N8Executor26removeFromQuerySessionListERK14QuerySessionIdKNSt6chrono10time_pointINSt6chrono12system_clockEEER16mapd_unique_lockI17mapd_shared_mutexE" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 <dl class="function">
-<dt id="_CPPv4N8Executor28setQuerySessionAsInterruptedERKNSt6stringER16mapd_unique_lockI17mapd_shared_mutexE">
-<span id="_CPPv3N8Executor28setQuerySessionAsInterruptedERKNSt6stringER16mapd_unique_lockI17mapd_shared_mutexE"></span><span id="_CPPv2N8Executor28setQuerySessionAsInterruptedERKNSt6stringER16mapd_unique_lockI17mapd_shared_mutexE"></span><span id="Executor::setQuerySessionAsInterrupted__ssCR.mapd_unique_lock:mapd_shared_mutex:R"></span><span class="target" id="class_executor_1a5427bb15a57aa8676485d5bc3e296100"></span>void <code class="sig-name descname">setQuerySessionAsInterrupted</code><span class="sig-paren">(</span><em class="property">const</em> std::string &amp;<em>query_session</em>, mapd_unique_lock&lt;mapd_shared_mutex&gt; &amp;<em>write_lock</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N8Executor28setQuerySessionAsInterruptedERKNSt6stringER16mapd_unique_lockI17mapd_shared_mutexE" title="Permalink to this definition">¶</a><br /></dt>
+<dt id="_CPPv4N8Executor28setQuerySessionAsInterruptedERK14QuerySessionIdR16mapd_unique_lockI17mapd_shared_mutexE">
+<span id="_CPPv3N8Executor28setQuerySessionAsInterruptedERK14QuerySessionIdR16mapd_unique_lockI17mapd_shared_mutexE"></span><span id="_CPPv2N8Executor28setQuerySessionAsInterruptedERK14QuerySessionIdR16mapd_unique_lockI17mapd_shared_mutexE"></span><span id="Executor::setQuerySessionAsInterrupted__QuerySessionIdCR.mapd_unique_lock:mapd_shared_mutex:R"></span><span class="target" id="class_executor_1a9007ccd87fd75d6db41b4ef734b05743"></span>void <code class="sig-name descname">setQuerySessionAsInterrupted</code><span class="sig-paren">(</span><em class="property">const</em> QuerySessionId &amp;<em>query_session</em>, mapd_unique_lock&lt;mapd_shared_mutex&gt; &amp;<em>write_lock</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N8Executor28setQuerySessionAsInterruptedERK14QuerySessionIdR16mapd_unique_lockI17mapd_shared_mutexE" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 <dl class="function">
-<dt id="_CPPv4N8Executor30checkIsQuerySessionInterruptedERKNSt6stringER16mapd_shared_lockI17mapd_shared_mutexE">
-<span id="_CPPv3N8Executor30checkIsQuerySessionInterruptedERKNSt6stringER16mapd_shared_lockI17mapd_shared_mutexE"></span><span id="_CPPv2N8Executor30checkIsQuerySessionInterruptedERKNSt6stringER16mapd_shared_lockI17mapd_shared_mutexE"></span><span id="Executor::checkIsQuerySessionInterrupted__ssCR.mapd_shared_lock:mapd_shared_mutex:R"></span><span class="target" id="class_executor_1a5a848f381d92b3c1ea348580df90a811"></span>bool <code class="sig-name descname">checkIsQuerySessionInterrupted</code><span class="sig-paren">(</span><em class="property">const</em> std::string &amp;<em>query_session</em>, mapd_shared_lock&lt;mapd_shared_mutex&gt; &amp;<em>read_lock</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N8Executor30checkIsQuerySessionInterruptedERKNSt6stringER16mapd_shared_lockI17mapd_shared_mutexE" title="Permalink to this definition">¶</a><br /></dt>
+<dt id="_CPPv4N8Executor30checkIsQuerySessionInterruptedERK14QuerySessionIdR16mapd_shared_lockI17mapd_shared_mutexE">
+<span id="_CPPv3N8Executor30checkIsQuerySessionInterruptedERK14QuerySessionIdR16mapd_shared_lockI17mapd_shared_mutexE"></span><span id="_CPPv2N8Executor30checkIsQuerySessionInterruptedERK14QuerySessionIdR16mapd_shared_lockI17mapd_shared_mutexE"></span><span id="Executor::checkIsQuerySessionInterrupted__QuerySessionIdCR.mapd_shared_lock:mapd_shared_mutex:R"></span><span class="target" id="class_executor_1a8e728620f18d5a3510d8efd65a61313e"></span>bool <code class="sig-name descname">checkIsQuerySessionInterrupted</code><span class="sig-paren">(</span><em class="property">const</em> QuerySessionId &amp;<em>query_session</em>, mapd_shared_lock&lt;mapd_shared_mutex&gt; &amp;<em>read_lock</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N8Executor30checkIsQuerySessionInterruptedERK14QuerySessionIdR16mapd_shared_lockI17mapd_shared_mutexE" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 <dl class="function">
-<dt id="_CPPv4N8Executor27checkIsQuerySessionEnrolledERKNSt6stringER16mapd_shared_lockI17mapd_shared_mutexE">
-<span id="_CPPv3N8Executor27checkIsQuerySessionEnrolledERKNSt6stringER16mapd_shared_lockI17mapd_shared_mutexE"></span><span id="_CPPv2N8Executor27checkIsQuerySessionEnrolledERKNSt6stringER16mapd_shared_lockI17mapd_shared_mutexE"></span><span id="Executor::checkIsQuerySessionEnrolled__ssCR.mapd_shared_lock:mapd_shared_mutex:R"></span><span class="target" id="class_executor_1a1cf15106cd17ebe29de3d3fc80b3239d"></span>bool <code class="sig-name descname">checkIsQuerySessionEnrolled</code><span class="sig-paren">(</span><em class="property">const</em> std::string &amp;<em>query_session</em>, mapd_shared_lock&lt;mapd_shared_mutex&gt; &amp;<em>read_lock</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N8Executor27checkIsQuerySessionEnrolledERKNSt6stringER16mapd_shared_lockI17mapd_shared_mutexE" title="Permalink to this definition">¶</a><br /></dt>
+<dt id="_CPPv4N8Executor27checkIsQuerySessionEnrolledERK14QuerySessionIdR16mapd_shared_lockI17mapd_shared_mutexE">
+<span id="_CPPv3N8Executor27checkIsQuerySessionEnrolledERK14QuerySessionIdR16mapd_shared_lockI17mapd_shared_mutexE"></span><span id="_CPPv2N8Executor27checkIsQuerySessionEnrolledERK14QuerySessionIdR16mapd_shared_lockI17mapd_shared_mutexE"></span><span id="Executor::checkIsQuerySessionEnrolled__QuerySessionIdCR.mapd_shared_lock:mapd_shared_mutex:R"></span><span class="target" id="class_executor_1a1a160ab608571bbc2c66333212a2cc47"></span>bool <code class="sig-name descname">checkIsQuerySessionEnrolled</code><span class="sig-paren">(</span><em class="property">const</em> QuerySessionId &amp;<em>query_session</em>, mapd_shared_lock&lt;mapd_shared_mutex&gt; &amp;<em>read_lock</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N8Executor27checkIsQuerySessionEnrolledERK14QuerySessionIdR16mapd_shared_lockI17mapd_shared_mutexE" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 <dl class="function">
-<dt id="_CPPv4N8Executor24updateQuerySessionStatusERKNSt6stringEKNSt6chrono10time_pointINSt6chrono12system_clockEEEKNSt6stringER16mapd_unique_lockI17mapd_shared_mutexE">
-<span id="_CPPv3N8Executor24updateQuerySessionStatusERKNSt6stringEKNSt6chrono10time_pointINSt6chrono12system_clockEEEKNSt6stringER16mapd_unique_lockI17mapd_shared_mutexE"></span><span id="_CPPv2N8Executor24updateQuerySessionStatusERKNSt6stringEKNSt6chrono10time_pointINSt6chrono12system_clockEEEKNSt6stringER16mapd_unique_lockI17mapd_shared_mutexE"></span><span id="Executor::updateQuerySessionStatus__ssCR.std::chrono::time_point:std::chrono::system_clock:C.ssC.mapd_unique_lock:mapd_shared_mutex:R"></span><span class="target" id="class_executor_1a06b8c4aa42a8984a74f1003164269efb"></span>bool <code class="sig-name descname">updateQuerySessionStatus</code><span class="sig-paren">(</span><em class="property">const</em> std::string &amp;<em>query_session</em>, <em class="property">const</em> std::chrono::time_point&lt;std::chrono::system_clock&gt; <em>submitted</em>, <em class="property">const</em> std::string <em>updated_query_status</em>, mapd_unique_lock&lt;mapd_shared_mutex&gt; &amp;<em>write_lock</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N8Executor24updateQuerySessionStatusERKNSt6stringEKNSt6chrono10time_pointINSt6chrono12system_clockEEEKNSt6stringER16mapd_unique_lockI17mapd_shared_mutexE" title="Permalink to this definition">¶</a><br /></dt>
+<dt id="_CPPv4N8Executor32updateQuerySessionStatusWithLockERK14QuerySessionIdKNSt6chrono10time_pointINSt6chrono12system_clockEEEKN18QuerySessionStatus11QueryStatusER16mapd_unique_lockI17mapd_shared_mutexE">
+<span id="_CPPv3N8Executor32updateQuerySessionStatusWithLockERK14QuerySessionIdKNSt6chrono10time_pointINSt6chrono12system_clockEEEKN18QuerySessionStatus11QueryStatusER16mapd_unique_lockI17mapd_shared_mutexE"></span><span id="_CPPv2N8Executor32updateQuerySessionStatusWithLockERK14QuerySessionIdKNSt6chrono10time_pointINSt6chrono12system_clockEEEKN18QuerySessionStatus11QueryStatusER16mapd_unique_lockI17mapd_shared_mutexE"></span><span id="Executor::updateQuerySessionStatusWithLock__QuerySessionIdCR.std::chrono::time_point:std::chrono::system_clock:C.QuerySessionStatus::QueryStatusC.mapd_unique_lock:mapd_shared_mutex:R"></span><span class="target" id="class_executor_1a13240683aed316c0f189803b43dd14a3"></span>bool <code class="sig-name descname">updateQuerySessionStatusWithLock</code><span class="sig-paren">(</span><em class="property">const</em> QuerySessionId &amp;<em>query_session</em>, <em class="property">const</em> std::chrono::time_point&lt;std::chrono::system_clock&gt; <em>submitted</em>, <em class="property">const</em> <a class="reference internal" href="class_query_session_status.html#_CPPv418QuerySessionStatus" title="QuerySessionStatus">QuerySessionStatus</a>::<a class="reference internal" href="class_query_session_status.html#_CPPv4N18QuerySessionStatus11QueryStatusE" title="QuerySessionStatus::QueryStatus">QueryStatus</a> <em>updated_query_status</em>, mapd_unique_lock&lt;mapd_shared_mutex&gt; &amp;<em>write_lock</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N8Executor32updateQuerySessionStatusWithLockERK14QuerySessionIdKNSt6chrono10time_pointINSt6chrono12system_clockEEEKN18QuerySessionStatus11QueryStatusER16mapd_unique_lockI17mapd_shared_mutexE" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 <dl class="function">
-<dt id="_CPPv4N8Executor36updateQuerySessionExecutorAssignmentERKNSt6stringEKNSt6chrono10time_pointINSt6chrono12system_clockEEEK6size_tR16mapd_unique_lockI17mapd_shared_mutexE">
-<span id="_CPPv3N8Executor36updateQuerySessionExecutorAssignmentERKNSt6stringEKNSt6chrono10time_pointINSt6chrono12system_clockEEEK6size_tR16mapd_unique_lockI17mapd_shared_mutexE"></span><span id="_CPPv2N8Executor36updateQuerySessionExecutorAssignmentERKNSt6stringEKNSt6chrono10time_pointINSt6chrono12system_clockEEEK6size_tR16mapd_unique_lockI17mapd_shared_mutexE"></span><span id="Executor::updateQuerySessionExecutorAssignment__ssCR.std::chrono::time_point:std::chrono::system_clock:C.sC.mapd_unique_lock:mapd_shared_mutex:R"></span><span class="target" id="class_executor_1a291981d5d3f040d145c70769a1a7b8dc"></span>bool <code class="sig-name descname">updateQuerySessionExecutorAssignment</code><span class="sig-paren">(</span><em class="property">const</em> std::string &amp;<em>query_session</em>, <em class="property">const</em> std::chrono::time_point&lt;std::chrono::system_clock&gt; <em>submitted</em>, <em class="property">const</em> size_t <em>executor_id</em>, mapd_unique_lock&lt;mapd_shared_mutex&gt; &amp;<em>write_lock</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N8Executor36updateQuerySessionExecutorAssignmentERKNSt6stringEKNSt6chrono10time_pointINSt6chrono12system_clockEEEK6size_tR16mapd_unique_lockI17mapd_shared_mutexE" title="Permalink to this definition">¶</a><br /></dt>
+<dt id="_CPPv4N8Executor36updateQuerySessionExecutorAssignmentERK14QuerySessionIdKNSt6chrono10time_pointINSt6chrono12system_clockEEEK6size_tR16mapd_unique_lockI17mapd_shared_mutexE">
+<span id="_CPPv3N8Executor36updateQuerySessionExecutorAssignmentERK14QuerySessionIdKNSt6chrono10time_pointINSt6chrono12system_clockEEEK6size_tR16mapd_unique_lockI17mapd_shared_mutexE"></span><span id="_CPPv2N8Executor36updateQuerySessionExecutorAssignmentERK14QuerySessionIdKNSt6chrono10time_pointINSt6chrono12system_clockEEEK6size_tR16mapd_unique_lockI17mapd_shared_mutexE"></span><span id="Executor::updateQuerySessionExecutorAssignment__QuerySessionIdCR.std::chrono::time_point:std::chrono::system_clock:C.sC.mapd_unique_lock:mapd_shared_mutex:R"></span><span class="target" id="class_executor_1af75aef4c063379b4e029138cfc41b9b9"></span>bool <code class="sig-name descname">updateQuerySessionExecutorAssignment</code><span class="sig-paren">(</span><em class="property">const</em> QuerySessionId &amp;<em>query_session</em>, <em class="property">const</em> std::chrono::time_point&lt;std::chrono::system_clock&gt; <em>submitted</em>, <em class="property">const</em> size_t <em>executor_id</em>, mapd_unique_lock&lt;mapd_shared_mutex&gt; &amp;<em>write_lock</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N8Executor36updateQuerySessionExecutorAssignmentERK14QuerySessionIdKNSt6chrono10time_pointINSt6chrono12system_clockEEEK6size_tR16mapd_unique_lockI17mapd_shared_mutexE" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 <dl class="function">
-<dt id="_CPPv4N8Executor19getQuerySessionInfoERKNSt6stringER16mapd_shared_lockI17mapd_shared_mutexE">
-<span id="_CPPv3N8Executor19getQuerySessionInfoERKNSt6stringER16mapd_shared_lockI17mapd_shared_mutexE"></span><span id="_CPPv2N8Executor19getQuerySessionInfoERKNSt6stringER16mapd_shared_lockI17mapd_shared_mutexE"></span><span id="Executor::getQuerySessionInfo__ssCR.mapd_shared_lock:mapd_shared_mutex:R"></span><span class="target" id="class_executor_1a0a24797c957eca3956029991ee21950f"></span>std::vector&lt;<a class="reference internal" href="class_query_session_status.html#_CPPv418QuerySessionStatus" title="QuerySessionStatus">QuerySessionStatus</a>&gt; <code class="sig-name descname">getQuerySessionInfo</code><span class="sig-paren">(</span><em class="property">const</em> std::string &amp;<em>query_session</em>, mapd_shared_lock&lt;mapd_shared_mutex&gt; &amp;<em>read_lock</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N8Executor19getQuerySessionInfoERKNSt6stringER16mapd_shared_lockI17mapd_shared_mutexE" title="Permalink to this definition">¶</a><br /></dt>
+<dt id="_CPPv4N8Executor19getQuerySessionInfoERK14QuerySessionIdR16mapd_shared_lockI17mapd_shared_mutexE">
+<span id="_CPPv3N8Executor19getQuerySessionInfoERK14QuerySessionIdR16mapd_shared_lockI17mapd_shared_mutexE"></span><span id="_CPPv2N8Executor19getQuerySessionInfoERK14QuerySessionIdR16mapd_shared_lockI17mapd_shared_mutexE"></span><span id="Executor::getQuerySessionInfo__QuerySessionIdCR.mapd_shared_lock:mapd_shared_mutex:R"></span><span class="target" id="class_executor_1aaffbef38ec9a1c9910e0639a9086f4f5"></span>std::vector&lt;<a class="reference internal" href="class_query_session_status.html#_CPPv418QuerySessionStatus" title="QuerySessionStatus">QuerySessionStatus</a>&gt; <code class="sig-name descname">getQuerySessionInfo</code><span class="sig-paren">(</span><em class="property">const</em> QuerySessionId &amp;<em>query_session</em>, mapd_shared_lock&lt;mapd_shared_mutex&gt; &amp;<em>read_lock</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N8Executor19getQuerySessionInfoERK14QuerySessionIdR16mapd_shared_lockI17mapd_shared_mutexE" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 <dl class="function">
 <dt id="_CPPv4N8Executor14getSessionLockEv">
 <span id="_CPPv3N8Executor14getSessionLockEv"></span><span id="_CPPv2N8Executor14getSessionLockEv"></span><span id="Executor::getSessionLock"></span><span class="target" id="class_executor_1a0b65e7b87509d004a5b90eee272e0bed"></span>mapd_shared_mutex &amp;<code class="sig-name descname">getSessionLock</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N8Executor14getSessionLockEv" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="_CPPv4N8Executor28attachExecutorToQuerySessionERNSt10shared_ptrIKN11query_state10QueryStateEEE">
+<span id="_CPPv3N8Executor28attachExecutorToQuerySessionERNSt10shared_ptrIKN11query_state10QueryStateEEE"></span><span id="_CPPv2N8Executor28attachExecutorToQuerySessionERNSt10shared_ptrIKN11query_state10QueryStateEEE"></span><span id="Executor::attachExecutorToQuerySession__std::shared_ptr:query_state::QueryStateC:R"></span><span class="target" id="class_executor_1ae5368cb943ff9ae9ea5550c616290bc7"></span>CurrentQueryStatus <code class="sig-name descname">attachExecutorToQuerySession</code><span class="sig-paren">(</span>std::shared_ptr&lt;<em class="property">const</em> <a class="reference internal" href="#_CPPv4N8Executor28attachExecutorToQuerySessionERNSt10shared_ptrIKN11query_state10QueryStateEEE" title="Executor::attachExecutorToQuerySession::query_state">query_state</a>::QueryState&gt; &amp;<em>query_state</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N8Executor28attachExecutorToQuerySessionERNSt10shared_ptrIKN11query_state10QueryStateEEE" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="_CPPv4N8Executor23checkPendingQueryStatusERK14QuerySessionId">
+<span id="_CPPv3N8Executor23checkPendingQueryStatusERK14QuerySessionId"></span><span id="_CPPv2N8Executor23checkPendingQueryStatusERK14QuerySessionId"></span><span id="Executor::checkPendingQueryStatus__QuerySessionIdCR"></span><span class="target" id="class_executor_1ab9adcdc04b4b6ce7e6c0c542e78624e0"></span>void <code class="sig-name descname">checkPendingQueryStatus</code><span class="sig-paren">(</span><em class="property">const</em> QuerySessionId &amp;<em>query_session</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N8Executor23checkPendingQueryStatusERK14QuerySessionId" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="_CPPv4N8Executor23clearQuerySessionStatusERK14QuerySessionIdKNSt6chrono10time_pointINSt6chrono12system_clockEEEb">
+<span id="_CPPv3N8Executor23clearQuerySessionStatusERK14QuerySessionIdKNSt6chrono10time_pointINSt6chrono12system_clockEEEb"></span><span id="_CPPv2N8Executor23clearQuerySessionStatusERK14QuerySessionIdKNSt6chrono10time_pointINSt6chrono12system_clockEEEb"></span><span id="Executor::clearQuerySessionStatus__QuerySessionIdCR.std::chrono::time_point:std::chrono::system_clock:C.b"></span><span class="target" id="class_executor_1adec2afab384c0fb9020a388c15d26356"></span>void <code class="sig-name descname">clearQuerySessionStatus</code><span class="sig-paren">(</span><em class="property">const</em> QuerySessionId &amp;<em>query_session</em>, <em class="property">const</em> std::chrono::time_point&lt;std::chrono::system_clock&gt; <em>submitted</em>, bool <em>acquire_spin_lock</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N8Executor23clearQuerySessionStatusERK14QuerySessionIdKNSt6chrono10time_pointINSt6chrono12system_clockEEEb" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="_CPPv4N8Executor24updateQuerySessionStatusERNSt10shared_ptrIKN11query_state10QueryStateEEEKN18QuerySessionStatus11QueryStatusE">
+<span id="_CPPv3N8Executor24updateQuerySessionStatusERNSt10shared_ptrIKN11query_state10QueryStateEEEKN18QuerySessionStatus11QueryStatusE"></span><span id="_CPPv2N8Executor24updateQuerySessionStatusERNSt10shared_ptrIKN11query_state10QueryStateEEEKN18QuerySessionStatus11QueryStatusE"></span><span id="Executor::updateQuerySessionStatus__std::shared_ptr:query_state::QueryStateC:R.QuerySessionStatus::QueryStatusC"></span><span class="target" id="class_executor_1a109f6317a375f6bfa27880d3f9df75d9"></span>void <code class="sig-name descname">updateQuerySessionStatus</code><span class="sig-paren">(</span>std::shared_ptr&lt;<em class="property">const</em> <a class="reference internal" href="#_CPPv4N8Executor24updateQuerySessionStatusERNSt10shared_ptrIKN11query_state10QueryStateEEEKN18QuerySessionStatus11QueryStatusE" title="Executor::updateQuerySessionStatus::query_state">query_state</a>::QueryState&gt; &amp;<em>query_state</em>, <em class="property">const</em> <a class="reference internal" href="class_query_session_status.html#_CPPv418QuerySessionStatus" title="QuerySessionStatus">QuerySessionStatus</a>::<a class="reference internal" href="class_query_session_status.html#_CPPv4N18QuerySessionStatus11QueryStatusE" title="QuerySessionStatus::QueryStatus">QueryStatus</a> <em>new_query_status</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N8Executor24updateQuerySessionStatusERNSt10shared_ptrIKN11query_state10QueryStateEEEKN18QuerySessionStatus11QueryStatusE" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="_CPPv4N8Executor24updateQuerySessionStatusERK14QuerySessionIdKNSt6chrono10time_pointINSt6chrono12system_clockEEEKN18QuerySessionStatus11QueryStatusE">
+<span id="_CPPv3N8Executor24updateQuerySessionStatusERK14QuerySessionIdKNSt6chrono10time_pointINSt6chrono12system_clockEEEKN18QuerySessionStatus11QueryStatusE"></span><span id="_CPPv2N8Executor24updateQuerySessionStatusERK14QuerySessionIdKNSt6chrono10time_pointINSt6chrono12system_clockEEEKN18QuerySessionStatus11QueryStatusE"></span><span id="Executor::updateQuerySessionStatus__QuerySessionIdCR.std::chrono::time_point:std::chrono::system_clock:C.QuerySessionStatus::QueryStatusC"></span><span class="target" id="class_executor_1aff817ae0839bb9af3a74729e7c5cd2ce"></span>void <code class="sig-name descname">updateQuerySessionStatus</code><span class="sig-paren">(</span><em class="property">const</em> QuerySessionId &amp;<em>query_session</em>, <em class="property">const</em> std::chrono::time_point&lt;std::chrono::system_clock&gt; <em>submitted</em>, <em class="property">const</em> <a class="reference internal" href="class_query_session_status.html#_CPPv418QuerySessionStatus" title="QuerySessionStatus">QuerySessionStatus</a>::<a class="reference internal" href="class_query_session_status.html#_CPPv4N18QuerySessionStatus11QueryStatusE" title="QuerySessionStatus::QueryStatus">QueryStatus</a> <em>new_query_status</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N8Executor24updateQuerySessionStatusERK14QuerySessionIdKNSt6chrono10time_pointINSt6chrono12system_clockEEEKN18QuerySessionStatus11QueryStatusE" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="_CPPv4N8Executor18enrollQuerySessionERK14QuerySessionIdRKNSt6stringEKNSt6chrono10time_pointINSt6chrono12system_clockEEEK6size_tKN18QuerySessionStatus11QueryStatusE">
+<span id="_CPPv3N8Executor18enrollQuerySessionERK14QuerySessionIdRKNSt6stringEKNSt6chrono10time_pointINSt6chrono12system_clockEEEK6size_tKN18QuerySessionStatus11QueryStatusE"></span><span id="_CPPv2N8Executor18enrollQuerySessionERK14QuerySessionIdRKNSt6stringEKNSt6chrono10time_pointINSt6chrono12system_clockEEEK6size_tKN18QuerySessionStatus11QueryStatusE"></span><span id="Executor::enrollQuerySession__QuerySessionIdCR.ssCR.std::chrono::time_point:std::chrono::system_clock:C.sC.QuerySessionStatus::QueryStatusC"></span><span class="target" id="class_executor_1a1907d8f489f9d140d00f5dea48e4d3ef"></span>void <code class="sig-name descname">enrollQuerySession</code><span class="sig-paren">(</span><em class="property">const</em> QuerySessionId &amp;<em>query_session</em>, <em class="property">const</em> std::string &amp;<em>query_str</em>, <em class="property">const</em> std::chrono::time_point&lt;std::chrono::system_clock&gt; <em>submitted</em>, <em class="property">const</em> size_t <em>executor_id</em>, <em class="property">const</em> <a class="reference internal" href="class_query_session_status.html#_CPPv418QuerySessionStatus" title="QuerySessionStatus">QuerySessionStatus</a>::<a class="reference internal" href="class_query_session_status.html#_CPPv4N18QuerySessionStatus11QueryStatusE" title="QuerySessionStatus::QueryStatus">QueryStatus</a> <em>query_session_status</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N8Executor18enrollQuerySessionERK14QuerySessionIdRKNSt6stringEKNSt6chrono10time_pointINSt6chrono12system_clockEEEK6size_tKN18QuerySessionStatus11QueryStatusE" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 <dl class="function">
@@ -2880,6 +2924,11 @@
 
 <dl class="function">
 <dt>
+<span class="target" id="class_executor_1a4a83399317de7b4c7b7e73fe49a533fe"></span><em class="property">friend </em><code class="sig-name descname">Executor::HashJoin</code></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt>
 <span class="target" id="class_executor_1a4a2494b895cab0f0850b461cc56b8ea8"></span><em class="property">friend </em><code class="sig-name descname">Executor::OverlapsJoinHashTable</code></dt>
 <dd></dd></dl>
 
@@ -2925,12 +2974,12 @@
 
 <dl class="function">
 <dt>
-<span class="target" id="class_executor_1ace4e326c328b8c8cd53a750b6fad9770"></span><em class="property">friend </em><code class="sig-name descname">Executor::JoinHashTable</code></dt>
+<span class="target" id="class_executor_1a528efe7fca78b5a55a06dfa231eb94ea"></span><em class="property">friend </em><code class="sig-name descname">Executor::LeafAggregator</code></dt>
 <dd></dd></dl>
 
 <dl class="function">
 <dt>
-<span class="target" id="class_executor_1a528efe7fca78b5a55a06dfa231eb94ea"></span><em class="property">friend </em><code class="sig-name descname">Executor::LeafAggregator</code></dt>
+<span class="target" id="class_executor_1a51255a2da9658b4b72c7681496ae1bde"></span><em class="property">friend </em><code class="sig-name descname">Executor::PerfectJoinHashTable</code></dt>
 <dd></dd></dl>
 
 <dl class="function">

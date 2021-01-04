@@ -1,0 +1,9 @@
+Struct double_sort::Value
+=========================
+
+.. doxygenstruct:: double_sort::Value
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

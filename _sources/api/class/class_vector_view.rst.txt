@@ -1,0 +1,9 @@
+Class VectorView
+================
+
+.. doxygenclass:: VectorView
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

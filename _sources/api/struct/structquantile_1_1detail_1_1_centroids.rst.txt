@@ -1,0 +1,9 @@
+Struct quantile::detail::Centroids
+==================================
+
+.. doxygenstruct:: quantile::detail::Centroids
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

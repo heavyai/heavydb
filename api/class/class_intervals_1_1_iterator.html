@@ -65,7 +65,7 @@
             
             
               <div class="version">
-                5.6.0dev 7d2afa8
+                5.6.0dev edde735
               </div>
             
           
@@ -243,7 +243,11 @@
 <li class="toctree-l4"><a class="reference internal" href="../../execution/codegen.html#code-cache">7.4.5.3. Code Cache</a></li>
 </ul>
 </li>
-<li class="toctree-l3"><a class="reference internal" href="../../execution/codegen.html#troubleshooting">7.4.6. Troubleshooting</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../execution/codegen.html#troubleshooting">7.4.6. Troubleshooting</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../execution/codegen.html#log-files">7.4.6.1. Log Files</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../execution/codegen.html#automatic-llvm-ir-metadata">7.4.6.2. Automatic LLVM IR Metadata</a></li>
+</ul>
+</li>
 </ul>
 </li>
 <li class="toctree-l2"><a class="reference internal" href="../../execution/kernels.html">7.5. Execution Kernels</a><ul>
@@ -396,6 +400,7 @@
 <li class="toctree-l2"><a class="reference internal" href="class_date_time_translator.html">Class DateTimeTranslator</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_date_trunc_expr.html">Class DateTruncExpr</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_ddl_command.html">Class DdlCommand</a></li>
+<li class="toctree-l2"><a class="reference internal" href="class_ddl_command_data.html">Class DdlCommandData</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_ddl_command_executor.html">Class DdlCommandExecutor</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_decimal_overflow_validator.html">Class DecimalOverflowValidator</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_decoder.html">Class Decoder</a></li>
@@ -487,11 +492,8 @@
 <li class="toctree-l2"><a class="reference internal" href="class_intervals.html">Class Intervals</a></li>
 <li class="toctree-l2 current"><a class="current reference internal" href="#">Class Intervals::Iterator</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_join_covered_qual_visitor.html">Class JoinCoveredQualVisitor</a></li>
-<li class="toctree-l2"><a class="reference internal" href="class_join_hash_table.html">Class JoinHashTable</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_join_loop.html">Class JoinLoop</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_join_target_rebaser.html">Class JoinTargetRebaser</a></li>
-<li class="toctree-l2"><a class="reference internal" href="class_json_column_encoding.html">Class JsonColumnEncoding</a></li>
-<li class="toctree-l2"><a class="reference internal" href="class_json_column_sql_type.html">Class JsonColumnSqlType</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_ldap_server.html">Class LdapServer</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_leaf_aggregator.html">Class LeafAggregator</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_leaf_host_info.html">Class LeafHostInfo</a></li>
@@ -612,6 +614,7 @@
 <li class="toctree-l2"><a class="reference internal" href="class_parser_1_1_validate_stmt.html">Class Parser::ValidateStmt</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_parser_wrapper.html">Class ParserWrapper</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_perfect_hash_table.html">Class PerfectHashTable</a></li>
+<li class="toctree-l2"><a class="reference internal" href="class_perfect_join_hash_table.html">Class PerfectJoinHashTable</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_perfect_join_hash_table_builder.html">Class PerfectJoinHashTableBuilder</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_persistent_foreign_storage_interface.html">Class PersistentForeignStorageInterface</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_persistent_storage_mgr.html">Class PersistentStorageMgr</a></li>
@@ -750,6 +753,7 @@
 <li class="toctree-l2"><a class="reference internal" href="class_used_columns_visitor.html">Class UsedColumnsVisitor</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_user.html">Class User</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_value.html">Class Value</a></li>
+<li class="toctree-l2"><a class="reference internal" href="class_vector_view.html">Class VectorView</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_watchdog_exception.html">Class WatchdogException</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_window_function_context.html">Class WindowFunctionContext</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_window_project_node_context.html">Class WindowProjectNodeContext</a></li>
@@ -758,6 +762,9 @@
 <li class="toctree-l2"><a class="reference internal" href="classanalyze__benchmark_1_1_benchmark_loader.html">Class analyze_benchmark::BenchmarkLoader</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classanalyze__benchmark_1_1_pretty_print.html">Class analyze_benchmark::PrettyPrint</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classanonymous__namespace_02_arrow_result_set_converter_8cpp_03_1_1null__type.html">Class anonymous_namespace{ArrowResultSetConverter.cpp}::null_type</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classanonymous__namespace_02_ddl_command_executor_8cpp_03_1_1_ddl_command_data_impl.html">Class anonymous_namespace{DdlCommandExecutor.cpp}::DdlCommandDataImpl</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classanonymous__namespace_02_ddl_command_executor_8cpp_03_1_1_json_column_encoding.html">Class anonymous_namespace{DdlCommandExecutor.cpp}::JsonColumnEncoding</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classanonymous__namespace_02_ddl_command_executor_8cpp_03_1_1_json_column_sql_type.html">Class anonymous_namespace{DdlCommandExecutor.cpp}::JsonColumnSqlType</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classanonymous__namespace_02_execute_8cpp_03_1_1_out_vec_owner.html">Class anonymous_namespace{Execute.cpp}::OutVecOwner</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classanonymous__namespace_02_expression_rewrite_8cpp_03_1_1_array_element_string_literal_encoding_visitor.html">Class anonymous_namespace{ExpressionRewrite.cpp}::ArrayElementStringLiteralEncodingVisitor</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classanonymous__namespace_02_expression_rewrite_8cpp_03_1_1_constant_folding_visitor.html">Class anonymous_namespace{ExpressionRewrite.cpp}::ConstantFoldingVisitor</a></li>
@@ -808,6 +815,7 @@
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_sql_operator_table_1_1_all.html">Class com::mapd::calcite::parser::MapDSqlOperatorTable::All</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_sql_operator_table_1_1_any.html">Class com::mapd::calcite::parser::MapDSqlOperatorTable::Any</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_sql_operator_table_1_1_approx_count_distinct.html">Class com::mapd::calcite::parser::MapDSqlOperatorTable::ApproxCountDistinct</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_sql_operator_table_1_1_approx_median.html">Class com::mapd::calcite::parser::MapDSqlOperatorTable::ApproxMedian</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_sql_operator_table_1_1_array_length.html">Class com::mapd::calcite::parser::MapDSqlOperatorTable::ArrayLength</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_sql_operator_table_1_1_cast_to_geography.html">Class com::mapd::calcite::parser::MapDSqlOperatorTable::CastToGeography</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_sql_operator_table_1_1_char_length.html">Class com::mapd::calcite::parser::MapDSqlOperatorTable::CharLength</a></li>
@@ -1401,6 +1409,10 @@
 <li class="toctree-l2"><a class="reference internal" href="classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1_1_no_op_sub_query_converter.html">Class org::apache::calcite::sql2rel::SqlToRelConverter::NoOpSubQueryConverter</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1_1_rex_access_shuttle.html">Class org::apache::calcite::sql2rel::SqlToRelConverter::RexAccessShuttle</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classorg_1_1apache_1_1calcite_1_1util_1_1_escaped_string_json_builder.html">Class org::apache::calcite::util::EscapedStringJsonBuilder</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classquantile_1_1detail_1_1_centroids_memory.html">Class quantile::detail::CentroidsMemory</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classquantile_1_1detail_1_1_centroids_merger.html">Class quantile::detail::CentroidsMerger</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classquantile_1_1detail_1_1_t_digest.html">Class quantile::detail::TDigest</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classquantile_1_1detail_1_1anonymous__namespace_02quantile_8h_03_1_1_skipped.html">Class quantile::detail::anonymous_namespace{quantile.h}::Skipped</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classquery__state_1_1_query_state.html">Class query_state::QueryState</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classquery__state_1_1_query_state_proxy.html">Class query_state::QueryStateProxy</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classquery__state_1_1_query_states.html">Class query_state::QueryStates</a></li>
@@ -1592,7 +1604,6 @@
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_join_column_typed.html">Struct JoinColumnTyped</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_join_column_typed_1_1_slice.html">Struct JoinColumnTyped::Slice</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_join_condition.html">Struct JoinCondition</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../struct/struct_join_hash_table_1_1_join_hash_table_cache_key.html">Struct JoinHashTable::JoinHashTableCacheKey</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_join_info.html">Struct JoinInfo</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_join_loop_domain.html">Struct JoinLoopDomain</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_key_accessor.html">Struct KeyAccessor</a></li>
@@ -1620,6 +1631,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_parser_1_1_should_invalidate_sessions_by_user.html">Struct Parser::ShouldInvalidateSessionsByUser</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_parser_1_1_should_invalidate_sessions_by_user_3_01_drop_user_stmt_01_4.html">Struct Parser::ShouldInvalidateSessionsByUser&lt; DropUserStmt &gt;</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_parser_1_1_should_invalidate_sessions_by_user_3_01_rename_user_stmt_01_4.html">Struct Parser::ShouldInvalidateSessionsByUser&lt; RenameUserStmt &gt;</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/struct_perfect_join_hash_table_1_1_join_hash_table_cache_key.html">Struct PerfectJoinHashTable::JoinHashTableCacheKey</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_physical_input.html">Struct PhysicalInput</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_plan_state.html">Struct PlanState</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_pod_order_entry.html">Struct PodOrderEntry</a></li>
@@ -1712,6 +1724,8 @@
 <li class="toctree-l2"><a class="reference internal" href="../struct/structanonymous__namespace_02_types_8cpp_03_1_1_bounding_box.html">Struct anonymous_namespace{Types.cpp}::BoundingBox</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structanonymous__namespace_02_types_8cpp_03_1_1_coords.html">Struct anonymous_namespace{Types.cpp}::Coords</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structdict__ref__t.html">Struct dict_ref_t</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/structdouble__sort_1_1_iterator.html">Struct double_sort::Iterator</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/structdouble__sort_1_1_value.html">Struct double_sort::Value</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structforeign__storage_1_1_column_type.html">Struct foreign_storage::ColumnType</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structforeign__storage_1_1_data_wrapper_type.html">Struct foreign_storage::DataWrapperType</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structforeign__storage_1_1_file_region.html">Struct foreign_storage::FileRegion</a></li>
@@ -1738,6 +1752,10 @@
 <li class="toctree-l2"><a class="reference internal" href="../struct/structlogger_1_1_log_shutdown.html">Struct logger::LogShutdown</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structmeasure.html">Struct measure</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structomnisci_1_1_device_identifier.html">Struct omnisci::DeviceIdentifier</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/structquantile_1_1detail_1_1_centroid.html">Struct quantile::detail::Centroid</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/structquantile_1_1detail_1_1_centroids.html">Struct quantile::detail::Centroids</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/structquantile_1_1detail_1_1anonymous__namespace_02quantile_8h_03_1_1_order_by_mean_asc_count_desc.html">Struct quantile::detail::anonymous_namespace{quantile.h}::OrderByMeanAscCountDesc</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/structquantile_1_1detail_1_1anonymous__namespace_02quantile_8h_03_1_1_skipped_1_1_data.html">Struct quantile::detail::anonymous_namespace{quantile.h}::Skipped::Data</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structquery__state_1_1_event.html">Struct query_state::Event</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structquery__state_1_1_quote_formatter.html">Struct query_state::QuoteFormatter</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structquery__state_1_1_session_data.html">Struct query_state::SessionData</a></li>
@@ -1769,6 +1787,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../union/union_data_block_ptr.html">Union DataBlockPtr</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../union/union_datum.html">Union Datum</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../union/union_reduction_interpreter_1_1_eval_value.html">Union ReductionInterpreter::EvalValue</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../union/uniondouble__sort_1_1_variant.html">Union double_sort::Variant</a></li>
 </ul>
 </li>
 </ul>
@@ -1877,45 +1896,55 @@
 <h1>Class Intervals::Iterator<a class="headerlink" href="#class-intervals-iterator" title="Permalink to this headline">¶</a></h1>
 <dl class="class">
 <dt id="_CPPv4N9Intervals8IteratorE">
-<span id="_CPPv3N9Intervals8IteratorE"></span><span id="_CPPv2N9Intervals8IteratorE"></span><span id="Intervals::Iterator"></span><span class="target" id="class_intervals_1_1_iterator"></span><em class="property">class </em><code class="sig-name descname">Iterator</code><br /></dt>
+<span id="_CPPv3N9Intervals8IteratorE"></span><span id="_CPPv2N9Intervals8IteratorE"></span><span id="Intervals::Iterator"></span><span class="target" id="class_intervals_1_1_iterator"></span><em class="property">class </em><code class="sig-name descname">Iterator</code> : <em class="property">public</em> std::iterator&lt;std::input_iterator_tag, Interval&lt;T&gt;&gt;<br /></dt>
 <dd><div class="breathe-sectiondef docutils container">
 <p class="breathe-sectiondef-title rubric">Public Functions</p>
 <dl class="function">
-<dt id="_CPPv4IEN9IntervalsI1TE8Iterator8IteratorE1T8Unsigned8Unsigned">
-<span id="_CPPv3IEN9IntervalsI1TE8Iterator8IteratorE1T8Unsigned8Unsigned"></span><span id="_CPPv2IEN9IntervalsI1TE8Iterator8IteratorE1T8Unsigned8Unsigned"></span><span class="target" id="class_intervals_1_1_iterator_1abcc694b275408917240961317aadd544"></span>template&lt;&gt;<br /><code class="sig-name descname">Iterator</code><span class="sig-paren">(</span>T <em>begin</em>, <a class="reference internal" href="class_intervals.html#_CPPv4IEN9IntervalsI1TE8UnsignedE" title="Intervals&lt;T&gt;::Unsigned">Unsigned</a> <em>quot</em>, <a class="reference internal" href="class_intervals.html#_CPPv4IEN9IntervalsI1TE8UnsignedE" title="Intervals&lt;T&gt;::Unsigned">Unsigned</a> <em>rem</em><span class="sig-paren">)</span><br /></dt>
+<dt id="_CPPv4IEN9IntervalsI1T1UE8Iterator8IteratorE1T1U1U">
+<span id="_CPPv3IEN9IntervalsI1T1UE8Iterator8IteratorE1T1U1U"></span><span id="_CPPv2IEN9IntervalsI1T1UE8Iterator8IteratorE1T1U1U"></span><span class="target" id="class_intervals_1_1_iterator_1a840cfe89604b0f6a7839819445e21b4f"></span>template&lt;&gt;<br /><code class="sig-name descname">Iterator</code><span class="sig-paren">(</span>T <em>begin</em>, U <em>quot</em>, U <em>rem</em><span class="sig-paren">)</span><br /></dt>
 <dd></dd></dl>
 
 <dl class="function">
-<dt id="_CPPv4IENK9IntervalsI1TE8IteratormlE8IntervalI1TEv">
-<span id="_CPPv3IENK9IntervalsI1TE8IteratormlEv"></span><span id="_CPPv2IENK9IntervalsI1TE8IteratormlEv"></span><span class="target" id="class_intervals_1_1_iterator_1a62f601b5f7d077a3de744ec6f07c5b4c"></span>template&lt;&gt;<br />Interval&lt;T&gt; <code class="sig-name descname">operator*</code><span class="sig-paren">(</span><span class="sig-paren">)</span> <em class="property">const</em><br /></dt>
+<dt id="_CPPv4IENK9IntervalsI1T1UE8IteratormlE8IntervalI1TEv">
+<span id="_CPPv3IENK9IntervalsI1T1UE8IteratormlEv"></span><span id="_CPPv2IENK9IntervalsI1T1UE8IteratormlEv"></span><span class="target" id="class_intervals_1_1_iterator_1af1a7d10c7d3b8b9cbb3e7504b7142d32"></span>template&lt;&gt;<br />Interval&lt;T&gt; <code class="sig-name descname">operator*</code><span class="sig-paren">(</span><span class="sig-paren">)</span> <em class="property">const</em><br /></dt>
 <dd></dd></dl>
 
 <dl class="function">
-<dt id="_CPPv4IEN9IntervalsI1TE8IteratorppEvv">
-<span id="_CPPv3IEN9IntervalsI1TE8IteratorppEv"></span><span id="_CPPv2IEN9IntervalsI1TE8IteratorppEv"></span><span class="target" id="class_intervals_1_1_iterator_1a0a2251e9faba3c4cd12edab0488ff915"></span>template&lt;&gt;<br />void <code class="sig-name descname">operator++</code><span class="sig-paren">(</span><span class="sig-paren">)</span><br /></dt>
+<dt id="_CPPv4IEN9IntervalsI1T1UE8IteratorppEvv">
+<span id="_CPPv3IEN9IntervalsI1T1UE8IteratorppEv"></span><span id="_CPPv2IEN9IntervalsI1T1UE8IteratorppEv"></span><span class="target" id="class_intervals_1_1_iterator_1a61403f0a2c946ea169b65e0fa5d0cce3"></span>template&lt;&gt;<br />void <code class="sig-name descname">operator++</code><span class="sig-paren">(</span><span class="sig-paren">)</span><br /></dt>
 <dd></dd></dl>
 
 <dl class="function">
-<dt id="_CPPv4IENK9IntervalsI1TE8IteratorneEbRK8Iterator">
-<span id="_CPPv3IENK9IntervalsI1TE8IteratorneERK8Iterator"></span><span id="_CPPv2IENK9IntervalsI1TE8IteratorneERK8Iterator"></span><span class="target" id="class_intervals_1_1_iterator_1a58082c21c3da260df42fe1971ec7fa89"></span>template&lt;&gt;<br />bool <code class="sig-name descname">operator!=</code><span class="sig-paren">(</span>Iterator <em class="property">const</em> &amp;<em>rhs</em><span class="sig-paren">)</span> <em class="property">const</em><br /></dt>
+<dt id="_CPPv4IENK9IntervalsI1T1UE8IteratoreqEbRK8Iterator">
+<span id="_CPPv3IENK9IntervalsI1T1UE8IteratoreqERK8Iterator"></span><span id="_CPPv2IENK9IntervalsI1T1UE8IteratoreqERK8Iterator"></span><span class="target" id="class_intervals_1_1_iterator_1a3b2fc313b381048232cbe651e99fbccb"></span>template&lt;&gt;<br />bool <code class="sig-name descname">operator==</code><span class="sig-paren">(</span>Iterator <em class="property">const</em> &amp;<em>rhs</em><span class="sig-paren">)</span> <em class="property">const</em><br /></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="_CPPv4IENK9IntervalsI1T1UE8IteratorneEbRK8Iterator">
+<span id="_CPPv3IENK9IntervalsI1T1UE8IteratorneERK8Iterator"></span><span id="_CPPv2IENK9IntervalsI1T1UE8IteratorneERK8Iterator"></span><span class="target" id="class_intervals_1_1_iterator_1aaec87f85c7cac24f0864d271d5425884"></span>template&lt;&gt;<br />bool <code class="sig-name descname">operator!=</code><span class="sig-paren">(</span>Iterator <em class="property">const</em> &amp;<em>rhs</em><span class="sig-paren">)</span> <em class="property">const</em><br /></dt>
 <dd></dd></dl>
 
 </div>
 <div class="breathe-sectiondef docutils container">
 <p class="breathe-sectiondef-title rubric">Private Members</p>
 <dl class="member">
-<dt id="_CPPv4IEN9IntervalsI1TE8Iterator6begin_E">
-<span id="_CPPv3IEN9IntervalsI1TE8Iterator6begin_E"></span><span id="_CPPv2IEN9IntervalsI1TE8Iterator6begin_E"></span>template&lt;&gt;<br /><span class="target" id="class_intervals_1_1_iterator_1ad5e1f5887045f82b6837f797114bbb30"></span>T <code class="sig-name descname">begin_</code><br /></dt>
+<dt id="_CPPv4IEN9IntervalsI1T1UE8Iterator6begin_E">
+<span id="_CPPv3IEN9IntervalsI1T1UE8Iterator6begin_E"></span><span id="_CPPv2IEN9IntervalsI1T1UE8Iterator6begin_E"></span>template&lt;&gt;<br /><span class="target" id="class_intervals_1_1_iterator_1a2012aa255d06129022e95bce060052ed"></span>T <code class="sig-name descname">begin_</code><br /></dt>
 <dd></dd></dl>
 
 <dl class="member">
-<dt id="_CPPv4IEN9IntervalsI1TE8Iterator5quot_E">
-<span id="_CPPv3IEN9IntervalsI1TE8Iterator5quot_E"></span><span id="_CPPv2IEN9IntervalsI1TE8Iterator5quot_E"></span>template&lt;&gt;<br /><span class="target" id="class_intervals_1_1_iterator_1afc8d714403c2eca42c3831f7f1771d1c"></span><a class="reference internal" href="class_intervals.html#_CPPv4IEN9IntervalsI1TE8UnsignedE" title="Intervals&lt;T&gt;::Unsigned">Unsigned</a> <em class="property">const</em> <code class="sig-name descname">quot_</code><br /></dt>
+<dt id="_CPPv4IEN9IntervalsI1T1UE8Iterator5quot_E">
+<span id="_CPPv3IEN9IntervalsI1T1UE8Iterator5quot_E"></span><span id="_CPPv2IEN9IntervalsI1T1UE8Iterator5quot_E"></span>template&lt;&gt;<br /><span class="target" id="class_intervals_1_1_iterator_1a3816e6285235c4ec4d52189ab57f4ecc"></span>U <em class="property">const</em> <code class="sig-name descname">quot_</code><br /></dt>
 <dd></dd></dl>
 
 <dl class="member">
-<dt id="_CPPv4IEN9IntervalsI1TE8Iterator4rem_E">
-<span id="_CPPv3IEN9IntervalsI1TE8Iterator4rem_E"></span><span id="_CPPv2IEN9IntervalsI1TE8Iterator4rem_E"></span>template&lt;&gt;<br /><span class="target" id="class_intervals_1_1_iterator_1a73a85e2b5104991e192ea28233e6f263"></span><a class="reference internal" href="class_intervals.html#_CPPv4IEN9IntervalsI1TE8UnsignedE" title="Intervals&lt;T&gt;::Unsigned">Unsigned</a> <code class="sig-name descname">rem_</code><br /></dt>
+<dt id="_CPPv4IEN9IntervalsI1T1UE8Iterator4rem_E">
+<span id="_CPPv3IEN9IntervalsI1T1UE8Iterator4rem_E"></span><span id="_CPPv2IEN9IntervalsI1T1UE8Iterator4rem_E"></span>template&lt;&gt;<br /><span class="target" id="class_intervals_1_1_iterator_1a864bea82fc15e17554697a13a46f2a83"></span>U <code class="sig-name descname">rem_</code><br /></dt>
+<dd></dd></dl>
+
+<dl class="member">
+<dt id="_CPPv4IEN9IntervalsI1T1UE8Iterator5indexE">
+<span id="_CPPv3IEN9IntervalsI1T1UE8Iterator5indexE"></span><span id="_CPPv2IEN9IntervalsI1T1UE8Iterator5indexE"></span>template&lt;&gt;<br /><span class="target" id="class_intervals_1_1_iterator_1a35d7e4b5c1be57598a965ed7b57bd533"></span>U <code class="sig-name descname">index</code> = {0}<br /></dt>
 <dd></dd></dl>
 
 </div>

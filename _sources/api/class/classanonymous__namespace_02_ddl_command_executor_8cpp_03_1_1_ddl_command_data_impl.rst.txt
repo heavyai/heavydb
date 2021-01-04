@@ -1,0 +1,9 @@
+Class anonymous_namespace{DdlCommandExecutor.cpp}::DdlCommandDataImpl
+=====================================================================
+
+.. doxygenclass:: anonymous_namespace{DdlCommandExecutor.cpp}::DdlCommandDataImpl
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

@@ -1,0 +1,9 @@
+Class quantile::detail::CentroidsMemory
+=======================================
+
+.. doxygenclass:: quantile::detail::CentroidsMemory
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

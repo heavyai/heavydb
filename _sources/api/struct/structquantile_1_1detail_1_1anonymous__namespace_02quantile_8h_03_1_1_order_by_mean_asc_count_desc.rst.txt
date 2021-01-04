@@ -1,0 +1,9 @@
+Struct quantile::detail::anonymous_namespace{quantile.h}::OrderByMeanAscCountDesc
+=================================================================================
+
+.. doxygenstruct:: quantile::detail::anonymous_namespace{quantile.h}::OrderByMeanAscCountDesc
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

@@ -1,0 +1,9 @@
+Class quantile::detail::anonymous_namespace{quantile.h}::Skipped
+================================================================
+
+.. doxygenclass:: quantile::detail::anonymous_namespace{quantile.h}::Skipped
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

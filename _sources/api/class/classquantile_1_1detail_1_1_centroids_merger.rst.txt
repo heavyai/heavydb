@@ -1,0 +1,9 @@
+Class quantile::detail::CentroidsMerger
+=======================================
+
+.. doxygenclass:: quantile::detail::CentroidsMerger
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

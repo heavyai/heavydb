@@ -1,0 +1,9 @@
+Struct quantile::detail::anonymous_namespace{quantile.h}::Skipped::Data
+=======================================================================
+
+.. doxygenstruct:: quantile::detail::anonymous_namespace{quantile.h}::Skipped::Data
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:
