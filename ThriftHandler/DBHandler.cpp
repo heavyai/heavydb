@@ -1144,17 +1144,13 @@ void DBHandler::sql_execute_df(TDataFrame& _return,
       }
       if (g_enable_runtime_query_interrupt) {
         auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID);
-        mapd_unique_lock<mapd_shared_mutex> session_write_lock(
-            executor->getSessionLock());
         auto submitted_time = std::chrono::system_clock::now();
         query_state_proxy.getQueryState().setQuerySubmittedTime(submitted_time);
-        executor->addToQuerySessionList(session_ptr->get_session_id(),
-                                        query_str,
-                                        submitted_time,
-                                        Executor::UNITARY_EXECUTOR_ID,
-                                        "PENDING_QUEUE",
-                                        session_write_lock);
-        session_write_lock.unlock();
+        executor->enrollQuerySession(session_ptr->get_session_id(),
+                                     query_str,
+                                     submitted_time,
+                                     Executor::UNITARY_EXECUTOR_ID,
+                                     QuerySessionStatus::QueryStatus::PENDING_QUEUE);
       }
       execute_rel_alg_df(_return,
                          query_ra,
@@ -4973,6 +4969,8 @@ std::vector<PushedDownFilterInfo> DBHandler::execute_rel_alg(
       explain_info.explain_optimized ? ExecutorExplainType::Optimized
                                      : ExecutorExplainType::Default,
       intel_jit_profile_};
+  auto validate_or_explain_query =
+      explain_info.justExplain() || explain_info.justCalciteExplain() || just_validate;
   ExecutionOptions eo = {g_enable_columnar_output,
                          allow_multifrag_,
                          explain_info.justExplain(),
@@ -4985,7 +4983,11 @@ std::vector<PushedDownFilterInfo> DBHandler::execute_rel_alg(
                          find_push_down_candidates,
                          explain_info.justCalciteExplain(),
                          system_parameters_.gpu_input_mem_limit,
-                         g_enable_runtime_query_interrupt,
+                         g_enable_runtime_query_interrupt && !validate_or_explain_query &&
+                             !query_state_proxy.getQueryState()
+                                  .getConstSessionInfo()
+                                  ->get_session_id()
+                                  .empty(),
                          g_pending_query_interrupt_freq};
   ExecutionResult result{std::make_shared<ResultSet>(std::vector<TargetInfo>{},
                                                      ExecutorDeviceType::CPU,
@@ -5047,20 +5049,24 @@ void DBHandler::execute_rel_alg_df(TDataFrame& _return,
                            /*filter_on_deleted_column=*/true,
                            ExecutorExplainType::Default,
                            intel_jit_profile_};
-  ExecutionOptions eo = {g_enable_columnar_output,
-                         allow_multifrag_,
-                         false,
-                         allow_loop_joins_,
-                         g_enable_watchdog,
-                         jit_debug_,
-                         false,
-                         g_enable_dynamic_watchdog,
-                         g_dynamic_watchdog_time_limit,
-                         false,
-                         false,
-                         system_parameters_.gpu_input_mem_limit,
-                         g_enable_runtime_query_interrupt,
-                         g_pending_query_interrupt_freq};
+  ExecutionOptions eo = {
+      g_enable_columnar_output,
+      allow_multifrag_,
+      false,
+      allow_loop_joins_,
+      g_enable_watchdog,
+      jit_debug_,
+      false,
+      g_enable_dynamic_watchdog,
+      g_dynamic_watchdog_time_limit,
+      false,
+      false,
+      system_parameters_.gpu_input_mem_limit,
+      g_enable_runtime_query_interrupt && !query_state_proxy.getQueryState()
+                                               .getConstSessionInfo()
+                                               ->get_session_id()
+                                               .empty(),
+      g_pending_query_interrupt_freq};
   ExecutionResult result{std::make_shared<ResultSet>(std::vector<TargetInfo>{},
                                                      ExecutorDeviceType::CPU,
                                                      QueryMemoryDescriptor(),
@@ -5441,18 +5447,15 @@ void DBHandler::sql_execute_impl(TQueryResult& _return,
           }
         });
     CHECK(dispatch_queue_);
-    if (g_enable_runtime_query_interrupt) {
+    if (g_enable_runtime_query_interrupt && !session_ptr->get_session_id().empty()) {
       auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID);
-      mapd_unique_lock<mapd_shared_mutex> session_write_lock(executor->getSessionLock());
       auto submitted_time = std::chrono::system_clock::now();
       query_state_proxy.getQueryState().setQuerySubmittedTime(submitted_time);
-      executor->addToQuerySessionList(session_ptr->get_session_id(),
-                                      query_str,
-                                      submitted_time,
-                                      Executor::UNITARY_EXECUTOR_ID,
-                                      "PENDING_QUEUE",
-                                      session_write_lock);
-      session_write_lock.unlock();
+      executor->enrollQuerySession(session_ptr->get_session_id(),
+                                   query_str,
+                                   submitted_time,
+                                   Executor::UNITARY_EXECUTOR_ID,
+                                   QuerySessionStatus::QueryStatus::PENDING_QUEUE);
     }
     dispatch_queue_->submit(execute_rel_alg_task,
                             pw.getDMLType() == ParserWrapper::DMLType::Update ||
@@ -6483,11 +6486,14 @@ ExecutionResult DBHandler::getQueries(
             query_session_ptr->get_session_id(), session_read_lock);
         session_read_lock.unlock();
         // if there exists query info fired from this session we report it to user
+        const std::string getQueryStatusStr[] = {
+            "UNDEFINED", "PENDING_QUEUE", "PENDING_EXECUTOR", "RUNNING"};
         for (QuerySessionStatus& query_info : query_infos) {
           logical_values.emplace_back(RelLogicalValues::RowValues{});
           logical_values.back().emplace_back(
               genLiteralStr(query_session_ptr->get_public_session_id()));
-          logical_values.back().emplace_back(genLiteralStr(query_info.getQueryStatus()));
+          logical_values.back().emplace_back(
+              genLiteralStr(getQueryStatusStr[query_info.getQueryStatus()]));
           logical_values.back().emplace_back(
               genLiteralStr(::toString(query_info.getExecutorId())));
           logical_values.back().emplace_back(
@@ -6517,16 +6523,45 @@ ExecutionResult DBHandler::getQueries(
 
 void DBHandler::interruptQuery(const Catalog_Namespace::SessionInfo& session_info,
                                const std::string& target_session) {
+  // capture the interrupt request from user and then pass to the query runtime (executor)
+  // Basic-flow that each query session gets through:
+  // Enroll --> Update (query session info / executor) --> Running -> Cleanup
+
+  // 1. We have to separate 1) "target" query session to interrupt and 2) request session
+  // Here, we have to focus on "target" session: all interruption management is based on
+  // the "target" session
+  // 2. Session info and its required data structures are global to executor, so
+  // we can manage the interrupt status via UNITARY_EXECUTOR (note that the actual query
+  // is processed by specific executor but can also access the global data structure)
+  // 3. Three target session's status: PENDING_QUEUE / PENDING_EXECUTOR / RUNNING
+  // (for now we can interrupt a query at "PENDING_EXECUTOR" and "RUNNING")
+  // 4. each session has 1) a list of queries that the session tries to initiate and
+  // 2) a interrupt flag map that indicates whether the session is interrupted
+  // If a session is interrupted, we turn the flag for the session on so as to Executor
+  // can know about the user's interrupt request on the query (after all queries are
+  // removed then the session's query list and its flag are also deleted). And those
+  // info is managed by Executor's global data structure
+  // 5. To interrupt queries at "PENDING_EXECUTOR", corresponding Executor regularly
+  // checks the interrupt flag of the session, and throws an exception if got interrupted
+  // For the case of running query, we also turn the flag in device memory on in async
+  // manner so as to inform the query kernel about the latest interrupt flag status
+  // (it also checks the flag regularly during the query kernel execution and
+  // query threads return with the error code if necessary -->
+  // for this we inject interrupt flag checking logic in the generated query kernel)
+  // 6. Interruption are implemented by throwing runtime_error that contains a visible
+  // error message like "Query has been interrupted"
+
   if (!g_enable_runtime_query_interrupt) {
     // todo(yoonmin): change this to allow per-query interruptability
-    throw std::runtime_error(
-        "KILL QUERY failed because runtime query interrupt is disabled.");
+    throw std::runtime_error("KILL QUERY failed: runtime query interrupt is disabled.");
   }
   if (!session_info.get_currentUser().isSuper.load()) {
     throw std::runtime_error(
-        "Only super user can interrupt the query via KILL QUERY command.");
+        "KILL QUERY failed (only super user can interrupt the query via KILL QUERY "
+        "command)");
   }
   CHECK_EQ(target_session.length(), (unsigned long)8);
+  bool found_valid_session = false;
   for (auto& kv : sessions_) {
     if (kv.second->get_public_session_id() == target_session) {
       auto target_query_session = kv.second->get_session_id();
@@ -6539,8 +6574,12 @@ void DBHandler::interruptQuery(const Catalog_Namespace::SessionInfo& session_inf
         leaf_aggregator_.interrupt(target_query_session, session_info.get_session_id());
       }
       executor->interrupt(target_query_session, session_info.get_session_id());
+      found_valid_session = true;
       break;
     }
+  }
+  if (!found_valid_session) {
+    throw std::runtime_error("KILL QUERY failed (invalid query session is given)");
   }
 }
 

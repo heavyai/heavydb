@@ -232,8 +232,7 @@ TEST(Interrupt, Kill_RunningQuery) {
       }
     } catch (const std::runtime_error& e) {
       std::string received_err_msg = e.what();
-      CHECK((pending_query_interrupted_msg.compare(received_err_msg) == 0) ||
-            (running_query_interrupted_msg.compare(received_err_msg) == 0))
+      CHECK(running_query_interrupted_msg.compare(received_err_msg) == 0)
           << received_err_msg;
     }
   }
@@ -243,6 +242,7 @@ TEST(Interrupt, Kill_PendingQuery) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     std::future<std::shared_ptr<ResultSet>> query_thread1;
     std::future<std::shared_ptr<ResultSet>> query_thread2;
+    QR::get()->resizeDispatchQueue(2);
     auto executor = QR::get()->getExecutor();
     executor->enableRuntimeQueryInterrupt(RUNNING_QUERY_INTERRUPT_CHECK_FREQ,
                                           PENDING_QUERY_INTERRUPT_CHECK_FREQ);
@@ -285,6 +285,15 @@ TEST(Interrupt, Kill_PendingQuery) {
         }
         return res;
       });
+      bool s2_enrolled = false;
+      while (!s2_enrolled) {
+        mapd_shared_lock<mapd_shared_mutex> session_read_lock(executor->getSessionLock());
+        s2_enrolled = executor->checkIsQuerySessionEnrolled(session2, session_read_lock);
+        session_read_lock.unlock();
+        if (s2_enrolled) {
+          break;
+        }
+      }
       // then, we try to interrupt the pending query
       // by providing the interrupt signal with the pending query's session info
       if (startQueryExec) {
@@ -305,8 +314,8 @@ TEST(Interrupt, Kill_PendingQuery) {
       // and compare thrown message to confirm that
       // this exception comes from our interrupt request
       std::string received_err_msg = e.what();
-      CHECK((pending_query_interrupted_msg.compare(received_err_msg) == 0) ||
-            (running_query_interrupted_msg.compare(received_err_msg) == 0))
+      std::cout << received_err_msg << "\n";
+      CHECK(pending_query_interrupted_msg.compare(received_err_msg) == 0)
           << received_err_msg;
     }
     // check running query's result
@@ -321,6 +330,7 @@ TEST(Interrupt, Make_PendingQuery_Run) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     std::future<std::shared_ptr<ResultSet>> query_thread1;
     std::future<std::shared_ptr<ResultSet>> query_thread2;
+    QR::get()->resizeDispatchQueue(2);
     auto executor = QR::get()->getExecutor();
     executor->enableRuntimeQueryInterrupt(RUNNING_QUERY_INTERRUPT_CHECK_FREQ,
                                           PENDING_QUERY_INTERRUPT_CHECK_FREQ);
@@ -385,8 +395,7 @@ TEST(Interrupt, Make_PendingQuery_Run) {
       // and compare thrown message to confirm that
       // this exception comes from our interrupt request
       std::string received_err_msg = e.what();
-      CHECK((pending_query_interrupted_msg.compare(received_err_msg) == 0) ||
-            (running_query_interrupted_msg.compare(received_err_msg) == 0))
+      CHECK(running_query_interrupted_msg.compare(received_err_msg) == 0)
           << received_err_msg;
     }
     // check running query's result

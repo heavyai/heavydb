@@ -405,7 +405,7 @@ std::shared_ptr<ResultSet> QueryRunner::runSQLWithAllowingInterrupt(
                                     query_str,
                                     submitted_time,
                                     Executor::UNITARY_EXECUTOR_ID,
-                                    "PENDING_QUEUE",
+                                    QuerySessionStatus::QueryStatus::PENDING_QUEUE,
                                     session_write_lock);
     session_write_lock.unlock();
   }

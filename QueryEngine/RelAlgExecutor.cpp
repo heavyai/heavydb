@@ -264,66 +264,57 @@ ExecutionResult RelAlgExecutor::executeRelAlgQueryNoRetry(const CompilationOptio
   }
   std::string query_session = "";
   std::string query_str = "N/A";
-  if (!render_info &&
-      (eo.allow_runtime_query_interrupt || g_enable_runtime_query_interrupt)) {
-    // a request of query execution without session id can happen, i.e., test query
-    // if so, we turn back to the original way: a runtime query interrupt
-    // without per-session management (as similar to dynamic watchdog)
-    mapd_shared_lock<mapd_shared_mutex> session_read_lock(
-        executor_->executor_session_mutex_);
-    if (query_state_ != nullptr && query_state_->getConstSessionInfo() != nullptr) {
-      query_session = query_state_->getConstSessionInfo()->get_session_id();
-      query_str = query_state_->getQueryStr();
-    } else if (executor_->getCurrentQuerySession(session_read_lock) != query_session) {
-      query_session = executor_->getCurrentQuerySession(session_read_lock);
+  bool acquire_spin_lock = false;
+  auto validate_or_explain_query =
+      just_explain_plan || eo.just_validate || eo.just_explain || eo.just_calcite_explain;
+  ScopeGuard clearRuntimeInterruptStatus = [this,
+                                            &query_session,
+                                            &render_info,
+                                            &eo,
+                                            &acquire_spin_lock,
+                                            &validate_or_explain_query] {
+    // reset the runtime query interrupt status after the end of query execution
+    if (!render_info && !query_session.empty() && eo.allow_runtime_query_interrupt &&
+        !validate_or_explain_query) {
+      executor_->clearQuerySessionStatus(
+          query_session, query_state_->getQuerySubmittedTime(), acquire_spin_lock);
     }
+  };
 
-    session_read_lock.unlock();
-    if (query_session != "") {
-      if (query_state_) {
-        // if session is valid, then we allow per-session runtime query interrupt
-        mapd_unique_lock<mapd_shared_mutex> session_write_lock(
-            executor_->executor_session_mutex_);
-        executor_->updateQuerySessionStatus(
-            query_state_->getConstSessionInfo()->get_session_id(),
-            query_state_->getQuerySubmittedTime(),
-            "PENDING_EXECUTOR",
-            session_write_lock);
-        executor_->updateQuerySessionExecutorAssignment(
-            query_state_->getConstSessionInfo()->get_session_id(),
-            query_state_->getQuerySubmittedTime(),
-            executor_->executor_id_,
-            session_write_lock);
-        session_write_lock.unlock();
-      }
-      // hybrid spinlock.  if it fails to acquire a lock, then
-      // it sleeps {g_pending_query_interrupt_freq} millisecond.
+  if (!render_info && eo.allow_runtime_query_interrupt && !validate_or_explain_query) {
+    // if we reach here, the current query which was waiting an idle executor
+    // within the dispatch queue is now scheduled to the specific executor
+    // (not UNITARY_EXECUTOR)
+    // so we update the query session's status with the executor that takes this query
+    std::tie(query_session, query_str) =
+        executor_->attachExecutorToQuerySession(query_state_);
+
+    // For now we can run a single query at a time, so if other query is already
+    // executed by different executor (i.e., when we turn on parallel executor),
+    // we can check the possibility of running this query by using the spinlock.
+    // If it fails to acquire a lock, it sleeps {g_pending_query_interrupt_freq} ms.
+    // And then try to get the lock (and again and again...)
+    if (!query_session.empty()) {
       while (executor_->execute_spin_lock_.test_and_set(std::memory_order_acquire)) {
-        // failed to get the spinlock: check whether query is interrupted
-        mapd_shared_lock<mapd_shared_mutex> session_read_lock(
-            executor_->executor_session_mutex_);
-        bool isQueryInterrupted =
-            executor_->checkIsQuerySessionInterrupted(query_session, session_read_lock);
-        session_read_lock.unlock();
-        if (isQueryInterrupted) {
-          mapd_unique_lock<mapd_shared_mutex> session_write_lock(
-              executor_->executor_session_mutex_);
-          executor_->removeFromQuerySessionList(query_session, session_write_lock);
-          session_write_lock.unlock();
-          throw std::runtime_error(
-              "Query execution has been interrupted (pending query)");
+        try {
+          executor_->checkPendingQueryStatus(query_session);
+        } catch (QueryExecutionError& e) {
+          if (e.getErrorCode() == Executor::ERR_INTERRUPTED) {
+            throw std::runtime_error(
+                "Query execution has been interrupted (pending query)");
+          }
+          throw e;
+        } catch (...) {
+          throw std::runtime_error("Checking pending query status failed: unknown error");
         }
-        // here it fails to acquire the lock
+        // here it fails to acquire the lock, so sleep...
         std::this_thread::sleep_for(
             std::chrono::milliseconds(g_pending_query_interrupt_freq));
-      };
+      }
     }
-    // currently, atomic_flag does not provide a way to get its current status,
-    // i.e., spinlock.is_locked(), so we additionally lock the execute_mutex_
-    // right after acquiring spinlock to let other part of the code can know
-    // whether there exists a running query on the executor
   }
-  auto aquire_execute_mutex = [](Executor* executor) -> ExecutorMutexHolder {
+  auto aquire_execute_mutex =
+      [&acquire_spin_lock](Executor* executor) -> ExecutorMutexHolder {
     ExecutorMutexHolder ret;
     if (executor->executor_id_ == Executor::UNITARY_EXECUTOR_ID) {
       // Only one unitary executor can run at a time
@@ -331,60 +322,36 @@ ExecutionResult RelAlgExecutor::executeRelAlgQueryNoRetry(const CompilationOptio
     } else {
       ret.shared_lock = mapd_shared_lock<mapd_shared_mutex>(executor->execute_mutex_);
     }
+    acquire_spin_lock = true;
     return ret;
   };
+  // now we get the spinlock that means this query is ready to run by the executor
+  // so we acquire executor lock in here to make sure that this executor holds
+  // all necessary resources and at the same time protect them against other executor
   auto lock = aquire_execute_mutex(executor_);
-  ScopeGuard clearRuntimeInterruptStatus = [this, &render_info, &eo] {
-    // reset the runtime query interrupt status
-    if (!render_info &&
-        (g_enable_runtime_query_interrupt || eo.allow_runtime_query_interrupt)) {
-      mapd_shared_lock<mapd_shared_mutex> session_read_lock(
-          executor_->executor_session_mutex_);
-      std::string curSession = executor_->getCurrentQuerySession(session_read_lock);
-      session_read_lock.unlock();
-      mapd_unique_lock<mapd_shared_mutex> session_write_lock(
-          executor_->executor_session_mutex_);
-      executor_->invalidateRunningQuerySession(session_write_lock);
-      executor_->removeFromQuerySessionList(curSession, session_write_lock);
-      executor_->execute_spin_lock_.clear(std::memory_order_release);
-      session_write_lock.unlock();
-      executor_->resetInterrupt();
-      VLOG(1) << "RESET runtime query interrupt status of Executor " << this;
-    }
-  };
 
-  if (!render_info &&
-      (g_enable_runtime_query_interrupt || eo.allow_runtime_query_interrupt)) {
-    // check whether this query session is already interrupted
+  if (!render_info && !query_session.empty() && eo.allow_runtime_query_interrupt &&
+      !validate_or_explain_query) {
+    // check whether this query session is "already" interrupted
     // this case occurs when there is very short gap between being interrupted and
     // taking the execute lock
-    // if so we interrupt the query session and remove it from the running session list
-    mapd_shared_lock<mapd_shared_mutex> session_read_lock(
-        executor_->executor_session_mutex_);
-    bool isAlreadyInterrupted =
-        executor_->checkIsQuerySessionInterrupted(query_session, session_read_lock);
-    session_read_lock.unlock();
-    if (isAlreadyInterrupted) {
-      mapd_unique_lock<mapd_shared_mutex> session_write_lock(
-          executor_->executor_session_mutex_);
-      executor_->removeFromQuerySessionList(query_session, session_write_lock);
-      session_write_lock.unlock();
-      throw std::runtime_error("Query execution has been interrupted");
+    // for instance, the session can fire multiple queries that other queries are waiting
+    // in the spinlock but the user can request the query interruption
+    // if so we have to remove "all" queries initiated by this session and we do in here
+    // without running the query
+    try {
+      executor_->checkPendingQueryStatus(query_session);
+    } catch (QueryExecutionError& e) {
+      if (e.getErrorCode() == Executor::ERR_INTERRUPTED) {
+        throw std::runtime_error("Query execution has been interrupted (pending query)");
+      }
+      throw e;
+    } catch (...) {
+      throw std::runtime_error("Checking pending query status failed: unknown error");
     }
-
-    // make sure to set the running session ID
-    mapd_unique_lock<mapd_shared_mutex> session_write_lock(
-        executor_->executor_session_mutex_);
-    executor_->invalidateRunningQuerySession(session_write_lock);
-    executor_->setCurrentQuerySession(query_session, session_write_lock);
-    if (query_state_) {
-      executor_->updateQuerySessionStatus(
-          query_state_->getConstSessionInfo()->get_session_id(),
-          query_state_->getQuerySubmittedTime(),
-          "RUNNING",
-          session_write_lock);
-    }
-    session_write_lock.unlock();
+    // now the query is going to be executed, so update the status as "RUNNING"
+    executor_->updateQuerySessionStatus(query_state_,
+                                        QuerySessionStatus::QueryStatus::RUNNING);
   }
 
   // Notify foreign tables to load prior to caching

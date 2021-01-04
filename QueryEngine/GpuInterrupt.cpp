@@ -46,39 +46,38 @@ void Executor::unregisterActiveModule(void* module, const int device_id) const {
 
 void Executor::interrupt(const std::string& query_session,
                          const std::string& interrupt_session) {
-  VLOG(1) << "Receive INTERRUPT request on the Executor " << this;
-  interrupted_.store(true);
   if (g_enable_runtime_query_interrupt) {
+    bool is_running_query = false;
     {
-      // We first check the query session is enrolled (as running query or pending query)
-      // If not, this interrupt request is a false alarm
+      // here we validate the requested query session is valid (is already enrolled)
+      // if not, we skip the interrupt request
       mapd_shared_lock<mapd_shared_mutex> session_read_lock(executor_session_mutex_);
       if (!checkIsQuerySessionEnrolled(query_session, session_read_lock)) {
-        session_read_lock.unlock();
-        interrupted_.store(false);
-        VLOG(1) << "INTERRUPT request on the Executor " << this << " is skipped";
+        VLOG(1) << "Skip the interrupt request (no query has been submitted from the "
+                   "given query session)";
         return;
       }
-      session_read_lock.unlock();
+      if (checkIsQuerySessionInterrupted(query_session, session_read_lock)) {
+        VLOG(1) << "Skip the interrupt request (already interrupted query session)";
+        return;
+      }
+      // if a query is pending query, we just need to turn interrupt flag for the session
+      // on (not sending interrupt signal to "RUNNING" kernel, see the below code)
+      is_running_query = checkCurrentQuerySession(query_session, session_read_lock);
     }
-    // We have to cover interrupt request from *any* session because we don't know
-    // whether the request is for the running query or pending query.
-    // So we first check the session has been interrupted
-    mapd_unique_lock<mapd_shared_mutex> session_write_lock(executor_session_mutex_);
-    this->setQuerySessionAsInterrupted(query_session, session_write_lock);
-    session_write_lock.unlock();
-
-    // if this request is not for running session, all we need is turning the interrupt
-    // flag on for the target query session (do not need to send interrupt signal to
-    // the running kernel)
-    mapd_shared_lock<mapd_shared_mutex> session_read_lock(executor_session_mutex_);
-    bool isRunningSession =
-        this->checkCurrentQuerySession(query_session, session_read_lock);
-    session_read_lock.unlock();
-    if (!isRunningSession) {
-      interrupted_.store(false);
+    {
+      // We have to cover interrupt request from *any* session because we don't know
+      // whether the request is for the running query or pending query
+      // (or just false alarm that indicates unregistered session in a queue).
+      // So we try to set a session has been interrupted once we confirm
+      // the session has been enrolled and is not interrupted at this moment
+      mapd_unique_lock<mapd_shared_mutex> session_write_lock(executor_session_mutex_);
+      setQuerySessionAsInterrupted(query_session, session_write_lock);
+    }
+    if (!is_running_query) {
       return;
     }
+    interrupted_.store(true);
   }
 
   bool CPU_execution_mode = true;
@@ -88,7 +87,7 @@ void Executor::interrupt(const std::string& query_session,
   // It is also possible that user forces to use CPU-mode even if the user has GPU(s).
   // In this case, we should not execute the code in below to avoid runtime failure
   auto cuda_mgr = Catalog_Namespace::SysCatalog::instance().getDataMgr().getCudaMgr();
-  if (cuda_mgr) {
+  if (cuda_mgr && (g_enable_dynamic_watchdog || g_enable_runtime_query_interrupt)) {
     CHECK_GE(cuda_mgr->getDeviceCount(), 1);
     std::lock_guard<std::mutex> lock(gpu_active_modules_mutex_);
     VLOG(1) << "Executor " << this << ": Interrupting Active Modules: mask 0x" << std::hex
@@ -109,12 +108,7 @@ void Executor::interrupt(const std::string& query_session,
                 << std::hex << gpu_active_modules_device_mask_ << " on device "
                 << std::to_string(device_id);
 
-        if (catalog_) {
-          catalog_->getDataMgr().getCudaMgr()->setContext(device_id);
-        } else {
-          Catalog_Namespace::SysCatalog::instance().getDataMgr().getCudaMgr()->setContext(
-              device_id);
-        }
+        cuda_mgr->setContext(device_id);
 
         // Create high priority non-blocking communication stream
         CUstream cu_stream1;
@@ -139,8 +133,8 @@ void Executor::interrupt(const std::string& query_session,
                                               cu_stream1));
 
             if (device_id == 0) {
-              LOG(INFO) << "GPU: Async Abort submitted to Device "
-                        << std::to_string(device_id);
+              VLOG(1) << "GPU: Async Abort submitted to Device "
+                      << std::to_string(device_id);
             }
           }
         }
@@ -161,19 +155,28 @@ void Executor::interrupt(const std::string& query_session,
                                               sizeof(int32_t),
                                               cu_stream1));
             if (device_id == 0) {
-              LOG(INFO) << "GPU: Async Abort submitted to Device "
-                        << std::to_string(device_id);
+              VLOG(1) << "GPU: Async Abort submitted to Device "
+                      << std::to_string(device_id);
             }
           } else if (status == CUDA_ERROR_NOT_FOUND) {
             std::runtime_error(
-                "Runtime query interruption is failed: "
-                "a interrupt flag on GPU does not be initialized.");
+                "Runtime query interrupt has failed: an interrupt flag on the GPU could "
+                "not be initialized (CUDA_ERROR_CODE: CUDA_ERROR_NOT_FOUND)");
           } else {
             // if we reach here, query runtime interrupt is failed due to
             // one of the following error: CUDA_ERROR_NOT_INITIALIZED,
             // CUDA_ERROR_DEINITIALIZED. CUDA_ERROR_INVALID_CONTEXT, and
             // CUDA_ERROR_INVALID_VALUE. All those error codes are due to device failure.
-            std::runtime_error("Runtime interrupt is failed due to device-related issue");
+            const char* error_ret_str = nullptr;
+            cuGetErrorName(status, &error_ret_str);
+            if (!error_ret_str) {
+              error_ret_str = "UNKNOWN";
+            }
+            std::string error_str(error_ret_str);
+            std::runtime_error(
+                "Runtime interrupt has failed due to a device related issue "
+                "(CUDA_ERROR_CODE: " +
+                error_str + ")");
           }
 
           cuEventRecord(stop, cu_stream1);
@@ -182,7 +185,7 @@ void Executor::interrupt(const std::string& query_session,
           cuEventElapsedTime(&milliseconds, start, stop);
           VLOG(1) << "Device " << std::to_string(device_id)
                   << ": submitted async request to abort SUCCESS: "
-                  << std::to_string(milliseconds) << " ms\n";
+                  << std::to_string(milliseconds) << " ms";
           checkCudaErrors(cuStreamDestroy(cu_stream1));
         }
       }
@@ -210,20 +213,6 @@ void Executor::resetInterrupt() {
     dynamic_watchdog_init(static_cast<unsigned>(DW_RESET));
   } else if (g_enable_runtime_query_interrupt) {
     check_interrupt_init(static_cast<unsigned>(INT_RESET));
-  }
-
-  if (g_cluster) {
-    bool interrupted_session = false;
-    mapd_shared_lock<mapd_shared_mutex> session_read_lock(executor_session_mutex_);
-    std::string cur_session = getCurrentQuerySession(session_read_lock);
-    interrupted_session = checkIsQuerySessionInterrupted(cur_session, session_read_lock);
-    session_read_lock.unlock();
-    if (!cur_session.empty() || interrupted_session) {
-      mapd_unique_lock<mapd_shared_mutex> session_write_lock(executor_session_mutex_);
-      removeFromQuerySessionList(cur_session, session_write_lock);
-      invalidateRunningQuerySession(session_write_lock);
-      session_write_lock.unlock();
-    }
   }
 
   if (interrupted_.load()) {

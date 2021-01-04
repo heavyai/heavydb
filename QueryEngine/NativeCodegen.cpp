@@ -1779,6 +1779,14 @@ void Executor::createErrorCheckControlFlow(
     run_with_allowing_runtime_interrupt = false;
   }
 
+  {
+    // disable injecting query interrupt checker if the session info is invalid
+    mapd_shared_lock<mapd_shared_mutex> session_read_lock(executor_session_mutex_);
+    if (current_query_session_.empty()) {
+      run_with_allowing_runtime_interrupt = false;
+    }
+  }
+
   llvm::Value* row_count = nullptr;
   if ((run_with_dynamic_watchdog || run_with_allowing_runtime_interrupt) &&
       device_type == ExecutorDeviceType::GPU) {
@@ -1904,17 +1912,24 @@ void Executor::createErrorCheckControlFlow(
                 // So, needs to check the interrupt status more frequently? make K smaller
                 auto max_inc = uint64_t(
                     floor(num_outer_table_tuples / (gridSize() * blockSize() * 2)));
+                if (max_inc < 2) {
+                  // too small `max_inc`, so this correction is necessary to make
+                  // `interrupt_checking_freq` be valid (i.e., larger than zero)
+                  max_inc = 2;
+                }
                 auto calibrated_inc = uint64_t(floor(max_inc * (1 - freq_control_knob)));
                 interrupt_checking_freq =
                     uint64_t(pow(2, shared::getExpOfTwo(calibrated_inc)));
-                if (interrupt_checking_freq < 4) {
-                  interrupt_checking_freq = 4;
-                }
                 // add the coverage when interrupt_checking_freq > K
                 // if so, some threads still cannot be branched to the interrupt checker
                 // so we manually use smaller but close to the max_inc as freq
                 if (interrupt_checking_freq > max_inc) {
                   interrupt_checking_freq = max_inc / 2;
+                }
+                if (interrupt_checking_freq < 8) {
+                  // such small freq incurs too frequent interrupt status checking,
+                  // so we fixup to the minimum freq value at some reasonable degree
+                  interrupt_checking_freq = 8;
                 }
               }
             }

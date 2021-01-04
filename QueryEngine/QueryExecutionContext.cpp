@@ -227,7 +227,8 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(
   cuEventCreate(&start2, 0);
   cuEventCreate(&stop2, 0);
 
-  if (g_enable_dynamic_watchdog || g_enable_runtime_query_interrupt) {
+  if (g_enable_dynamic_watchdog ||
+      (g_enable_runtime_query_interrupt && !render_allocator)) {
     cuEventRecord(start0, 0);
   }
 
@@ -235,7 +236,7 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(
     initializeDynamicWatchdog(native_code.second, device_id);
   }
 
-  if (g_enable_runtime_query_interrupt) {
+  if (g_enable_runtime_query_interrupt && !render_allocator) {
     initializeRuntimeInterrupter(native_code.second, device_id);
   }
 
@@ -293,7 +294,8 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(
       param_ptrs.push_back(&param);
     }
 
-    if (g_enable_dynamic_watchdog || g_enable_runtime_query_interrupt) {
+    if (g_enable_dynamic_watchdog ||
+        (g_enable_runtime_query_interrupt && !render_allocator)) {
       cuEventRecord(stop0, 0);
       cuEventSynchronize(stop0);
       float milliseconds0 = 0;
@@ -330,7 +332,8 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(
                                      &param_ptrs[0],
                                      nullptr));
     }
-    if (g_enable_dynamic_watchdog || g_enable_runtime_query_interrupt) {
+    if (g_enable_dynamic_watchdog ||
+        (g_enable_runtime_query_interrupt && !render_allocator)) {
       executor_->registerActiveModule(native_code.second, device_id);
       cuEventRecord(stop1, 0);
       cuEventSynchronize(stop1);
@@ -464,7 +467,8 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(
       param_ptrs.push_back(&param);
     }
 
-    if (g_enable_dynamic_watchdog || g_enable_runtime_query_interrupt) {
+    if (g_enable_dynamic_watchdog ||
+        (g_enable_runtime_query_interrupt && !render_allocator)) {
       cuEventRecord(stop0, 0);
       cuEventSynchronize(stop0);
       float milliseconds0 = 0;
@@ -501,7 +505,8 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(
                                      nullptr));
     }
 
-    if (g_enable_dynamic_watchdog || g_enable_runtime_query_interrupt) {
+    if (g_enable_dynamic_watchdog ||
+        (g_enable_runtime_query_interrupt && !render_allocator)) {
       executor_->registerActiveModule(native_code.second, device_id);
       cuEventRecord(stop1, 0);
       cuEventSynchronize(stop1);
@@ -547,7 +552,8 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(
                   device_id);
   }
 
-  if (g_enable_dynamic_watchdog || g_enable_runtime_query_interrupt) {
+  if (g_enable_dynamic_watchdog ||
+      (g_enable_runtime_query_interrupt && !render_allocator)) {
     cuEventRecord(stop2, 0);
     cuEventSynchronize(stop2);
     float milliseconds2 = 0;

@@ -45,6 +45,7 @@
 #include "../Shared/mapd_shared_mutex.h"
 #include "../Shared/measure.h"
 #include "../Shared/thread_count.h"
+#include "../Shared/toString.h"
 #include "../StringDictionary/LruCache.hpp"
 #include "../StringDictionary/StringDictionary.h"
 #include "../StringDictionary/StringDictionaryProxy.h"
@@ -74,20 +75,25 @@
 using QueryCompilationDescriptorOwned = std::unique_ptr<QueryCompilationDescriptor>;
 class QueryMemoryDescriptor;
 using QueryMemoryDescriptorOwned = std::unique_ptr<QueryMemoryDescriptor>;
-using InterruptFlagMap = std::map<std::string, bool>;
+using QuerySessionId = std::string;
+using CurrentQueryStatus = std::pair<QuerySessionId, std::string>;
+using InterruptFlagMap = std::map<QuerySessionId, bool>;
 class QuerySessionStatus {
+  // A class that is used to describe the query session's info
  public:
+  enum QueryStatus { UNDEFINED = 0, PENDING_QUEUE, PENDING_EXECUTOR, RUNNING };
+
   QuerySessionStatus(
-      const std::string& query_session,
+      const QuerySessionId& query_session,
       const std::string& query_str,
       const std::chrono::time_point<std::chrono::system_clock> submitted_time)
       : query_session_(query_session)
       , executor_id_(0)
       , query_str_(query_str)
       , submitted_time_(submitted_time)
-      , query_status_("N/A") {}
+      , query_status_(QueryStatus::UNDEFINED) {}
   QuerySessionStatus(
-      const std::string& query_session,
+      const QuerySessionId& query_session,
       const size_t executor_id,
       const std::string& query_str,
       const std::chrono::time_point<std::chrono::system_clock> submitted_time)
@@ -95,56 +101,48 @@ class QuerySessionStatus {
       , executor_id_(executor_id)
       , query_str_(query_str)
       , submitted_time_(submitted_time)
-      , query_status_("N/A") {}
+      , query_status_(QueryStatus::UNDEFINED) {}
   QuerySessionStatus(
-      const std::string& query_session,
+      const QuerySessionId& query_session,
       const size_t executor_id,
       const std::string& query_str,
       const std::chrono::time_point<std::chrono::system_clock> submitted_time,
-      const std::string& query_status)
+      const QuerySessionStatus::QueryStatus& query_status)
       : query_session_(query_session)
       , executor_id_(executor_id)
       , query_str_(query_str)
       , submitted_time_(submitted_time)
       , query_status_(query_status) {}
 
-  const std::string getQuerySession() { return query_session_; }
+  const QuerySessionId getQuerySession() { return query_session_; }
   const std::string getQueryStr() { return query_str_; }
   const size_t getExecutorId() { return executor_id_; }
   const std::chrono::time_point<std::chrono::system_clock> getQuerySubmittedTime() {
     return submitted_time_;
   }
-  const std::string getQueryStatus() { return query_status_; }
-  void setQueryStatus(const std::string& status) { query_status_ = status; }
+  const QuerySessionStatus::QueryStatus getQueryStatus() { return query_status_; }
+  void setQueryStatus(const QuerySessionStatus::QueryStatus& status) {
+    query_status_ = status;
+  }
   void setExecutorId(const size_t executor_id) { executor_id_ = executor_id; }
-  void setQueryStatusAsRunning() { query_status_ = "RUNNING"; }
-  std::string toString() {
-    std::ostringstream oss;
-    oss << "QuerySessionStatus: {session: " << query_session_ << ", ";
-    oss << "executor_id: " << executor_id_ << ", ";
-    oss << "query_str: " << query_str_ << ", ";
-    std::string s(30, '\0');
-    std::time_t ts = std::chrono::system_clock::to_time_t(submitted_time_);
-    std::strftime(&s[0], s.size(), "%Y-%m-%d %H:%M:%S", std::localtime(&ts));
-    oss << "submitted_time: " << s << ", ";
-    oss << "query_status: " << query_status_ << "}";
-    return oss.str();
+  void setQueryStatusAsRunning() {
+    query_status_ = QuerySessionStatus::QueryStatus::RUNNING;
   }
 
  private:
-  const std::string query_session_;
+  const QuerySessionId query_session_;
   size_t executor_id_;
   const std::string query_str_;
   const std::chrono::time_point<std::chrono::system_clock> submitted_time_;
-  // [three query status]
+  // Currently we use three query status:
   // 1) PENDING_IN_QUEUE: a task is submitted to the dispatch_queue but hangs due to no
   // existing worker (= executor) 2) PENDING_IN_EXECUTOR: a task is assigned to the
   // specific executor but waits to get the resource to run 3) RUNNING: a task is assigned
   // to the specific executor and its execution has been successfully started
-  std::string query_status_;
+  QuerySessionStatus::QueryStatus query_status_;
 };
 using QuerySessionMap =
-    std::map<const std::string, std::map<std::string, QuerySessionStatus>>;
+    std::map<const QuerySessionId, std::map<std::string, QuerySessionStatus>>;
 extern void read_udf_gpu_module(const std::string& udf_ir_filename);
 extern void read_udf_cpu_module(const std::string& udf_ir_filename);
 extern bool is_udf_module_present(bool cpu_only = false);
@@ -905,43 +903,63 @@ class Executor {
     agg_col_range_cache_ = aggregated_col_range;
   }
 
-  void setCurrentQuerySession(const std::string& query_session,
-                              mapd_unique_lock<mapd_shared_mutex>& write_lock);
-  std::string& getCurrentQuerySession(mapd_shared_lock<mapd_shared_mutex>& read_lock);
+  QuerySessionId& getCurrentQuerySession(mapd_shared_lock<mapd_shared_mutex>& read_lock);
   size_t getRunningExecutorId(mapd_shared_lock<mapd_shared_mutex>& read_lock);
   bool checkCurrentQuerySession(const std::string& candidate_query_session,
                                 mapd_shared_lock<mapd_shared_mutex>& read_lock);
   void invalidateRunningQuerySession(mapd_unique_lock<mapd_shared_mutex>& write_lock);
   bool addToQuerySessionList(
-      const std::string& query_session,
+      const QuerySessionId& query_session,
       const std::string& query_str,
       const std::chrono::time_point<std::chrono::system_clock> submitted,
       const size_t executor_id,
-      const std::string query_status,
+      const QuerySessionStatus::QueryStatus query_status,
       mapd_unique_lock<mapd_shared_mutex>& write_lock);
-  bool removeFromQuerySessionList(const std::string& query_session,
-                                  mapd_unique_lock<mapd_shared_mutex>& write_lock);
-  void setQuerySessionAsInterrupted(const std::string& query_session,
-                                    mapd_unique_lock<mapd_shared_mutex>& write_lock);
-  bool checkIsQuerySessionInterrupted(const std::string& query_session,
-                                      mapd_shared_lock<mapd_shared_mutex>& read_lock);
-  bool checkIsQuerySessionEnrolled(const std::string& query_session,
-                                   mapd_shared_lock<mapd_shared_mutex>& read_lock);
-  bool updateQuerySessionStatus(
-      const std::string& query_session,
+  bool removeFromQuerySessionList(
+      const QuerySessionId& query_session,
       const std::chrono::time_point<std::chrono::system_clock> submitted,
-      const std::string updated_query_status,
+      mapd_unique_lock<mapd_shared_mutex>& write_lock);
+  void setQuerySessionAsInterrupted(const QuerySessionId& query_session,
+                                    mapd_unique_lock<mapd_shared_mutex>& write_lock);
+  bool checkIsQuerySessionInterrupted(const QuerySessionId& query_session,
+                                      mapd_shared_lock<mapd_shared_mutex>& read_lock);
+  bool checkIsQuerySessionEnrolled(const QuerySessionId& query_session,
+                                   mapd_shared_lock<mapd_shared_mutex>& read_lock);
+  bool updateQuerySessionStatusWithLock(
+      const QuerySessionId& query_session,
+      const std::chrono::time_point<std::chrono::system_clock> submitted,
+      const QuerySessionStatus::QueryStatus updated_query_status,
       mapd_unique_lock<mapd_shared_mutex>& write_lock);
   bool updateQuerySessionExecutorAssignment(
-      const std::string& query_session,
+      const QuerySessionId& query_session,
       const std::chrono::time_point<std::chrono::system_clock> submitted,
       const size_t executor_id,
       mapd_unique_lock<mapd_shared_mutex>& write_lock);
-
   std::vector<QuerySessionStatus> getQuerySessionInfo(
-      const std::string& query_session,
+      const QuerySessionId& query_session,
       mapd_shared_lock<mapd_shared_mutex>& read_lock);
+
   mapd_shared_mutex& getSessionLock();
+  CurrentQueryStatus attachExecutorToQuerySession(
+      std::shared_ptr<const query_state::QueryState>& query_state);
+  void checkPendingQueryStatus(const QuerySessionId& query_session);
+  void clearQuerySessionStatus(
+      const QuerySessionId& query_session,
+      const std::chrono::time_point<std::chrono::system_clock> submitted,
+      bool acquire_spin_lock);
+  void updateQuerySessionStatus(
+      std::shared_ptr<const query_state::QueryState>& query_state,
+      const QuerySessionStatus::QueryStatus new_query_status);
+  void updateQuerySessionStatus(
+      const QuerySessionId& query_session,
+      const std::chrono::time_point<std::chrono::system_clock> submitted,
+      const QuerySessionStatus::QueryStatus new_query_status);
+  void enrollQuerySession(
+      const QuerySessionId& query_session,
+      const std::string& query_str,
+      const std::chrono::time_point<std::chrono::system_clock> submitted,
+      const size_t executor_id,
+      const QuerySessionStatus::QueryStatus query_session_status);
 
   // true when we have matched cardinality, and false otherwise
   using CachedCardinality = std::pair<bool, size_t>;
@@ -1024,11 +1042,13 @@ class Executor {
   AggregatedColRange agg_col_range_cache_;
   TableGenerations table_generations_;
   static mapd_shared_mutex executor_session_mutex_;
-  static std::string current_query_session_;
+  // a query session that currently is running
+  static QuerySessionId current_query_session_;
+  // an executor's id that executes the running query
   static size_t running_query_executor_id_;
-  // a pair of <query_session, interrupted_flag>
+  // a pair of <QuerySessionId, interrupted_flag>
   static InterruptFlagMap queries_interrupt_flag_;
-  // a pair of <query_session, query_session_status>
+  // a pair of <QuerySessionId, query_session_status>
   static QuerySessionMap queries_session_map_;
 
   static std::map<int, std::shared_ptr<Executor>> executors_;
