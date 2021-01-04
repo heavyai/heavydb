@@ -22,6 +22,7 @@
 #include "Shared/DateTimeParser.h"
 
 bool g_enable_seconds_refresh{false};
+bool g_enable_s3_fsi{false};
 
 namespace foreign_storage {
 ForeignTable::ForeignTable()

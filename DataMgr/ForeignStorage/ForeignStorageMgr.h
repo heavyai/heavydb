@@ -113,6 +113,8 @@ class ForeignStorageMgr : public AbstractBufferMgr {
                               const ChunkKey& chunk_key,
                               const std::set<ChunkKey>& required_chunk_keys);
 
+  static void checkIfS3NeedsToBeEnabled(const ChunkKey& chunk_key);
+
   std::shared_mutex data_wrapper_mutex_;
   std::map<ChunkKey, std::shared_ptr<ForeignDataWrapper>> data_wrapper_map_;
 

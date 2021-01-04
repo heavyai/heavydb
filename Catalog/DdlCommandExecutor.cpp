@@ -33,6 +33,7 @@
 #include "QueryEngine/ResultSetBuilder.h"
 
 extern bool g_enable_fsi;
+extern bool g_enable_s3_fsi;
 
 bool DdlCommand::isDefaultServer(const std::string& server_name) {
   return boost::iequals(server_name.substr(0, 7), "omnisci");

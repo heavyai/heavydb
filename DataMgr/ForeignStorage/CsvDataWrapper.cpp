@@ -271,7 +271,8 @@ void CsvDataWrapper::updateMetadata(
 }
 
 /**
- * Data structure containing data and metadata gotten from parsing a set of file regions.
+ * Data structure containing data and metadata gotten from parsing a set of file
+ * regions.
  */
 struct ParseFileRegionResult {
   size_t file_offset;

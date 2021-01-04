@@ -58,6 +58,7 @@ const std::string ParserWrapper::optimize_str = {"optimize"};
 const std::string ParserWrapper::validate_str = {"validate"};
 
 extern bool g_enable_fsi;
+extern bool g_enable_s3_fsi;
 extern bool g_enable_calcite_ddl_parser;
 
 ParserWrapper::ParserWrapper(std::string query_string) {

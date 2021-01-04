@@ -32,6 +32,7 @@
 #endif
 
 extern bool g_enable_fsi;
+extern bool g_enable_s3_fsi;
 
 class FsiSchemaTest : public testing::Test {
  protected:
@@ -41,6 +42,7 @@ class FsiSchemaTest : public testing::Test {
             boost::filesystem::absolute("mapd_catalogs", BASE_PATH).string()) {}
 
   static void SetUpTestSuite() {
+    g_enable_s3_fsi = true;
     Catalog_Namespace::SysCatalog::instance().init(
         BASE_PATH, nullptr, {}, nullptr, false, false, {});
   }

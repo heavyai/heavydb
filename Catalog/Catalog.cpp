@@ -89,6 +89,7 @@ using std::vector;
 
 int g_test_against_columnId_gap{0};
 bool g_enable_fsi{false};
+extern bool g_enable_s3_fsi;
 extern bool g_cache_string_hash;
 
 // Serialize temp tables to a json file in the Catalogs directory for Calcite parsing

@@ -18,8 +18,11 @@
 
 #include "Catalog/ForeignTable.h"
 #include "CsvDataWrapper.h"
+#include "ForeignStorageException.h"
 #include "ForeignTableSchema.h"
 #include "ParquetDataWrapper.h"
+
+extern bool g_enable_s3_fsi;
 
 namespace foreign_storage {
 ForeignStorageMgr::ForeignStorageMgr() : AbstractBufferMgr(0), data_wrapper_map_({}) {}
@@ -30,9 +33,27 @@ AbstractBuffer* ForeignStorageMgr::getBuffer(const ChunkKey& chunk_key,
   return nullptr;  // Added to avoid "no return statement" compiler warning
 }
 
+void ForeignStorageMgr::checkIfS3NeedsToBeEnabled(const ChunkKey& chunk_key) {
+  CHECK(has_table_prefix(chunk_key));
+  auto foreign_table = Catalog_Namespace::SysCatalog::instance()
+                           .checkedGetCatalog(chunk_key[CHUNK_KEY_DB_IDX])
+                           ->getForeignTableUnlocked(chunk_key[CHUNK_KEY_TABLE_IDX]);
+  auto storage_type_entry =
+      foreign_table->foreign_server->options.find(ForeignServer::STORAGE_TYPE_KEY);
+  CHECK(storage_type_entry != foreign_table->foreign_server->options.end());
+  bool is_s3_storage_type =
+      (storage_type_entry->second == ForeignServer::S3_STORAGE_TYPE);
+  if (is_s3_storage_type) {
+    throw ForeignStorageException{
+        "Query cannot be executed for S3 backed foreign table because AWS S3 support is "
+        "currently disabled."};
+  }
+}
+
 void ForeignStorageMgr::fetchBuffer(const ChunkKey& chunk_key,
                                     AbstractBuffer* destination_buffer,
                                     const size_t num_bytes) {
+  checkIfS3NeedsToBeEnabled(chunk_key);
   CHECK(destination_buffer);
   CHECK(!destination_buffer->isDirty());
   // Use a temp buffer if we have no cache buffers and have one mapped for this chunk.
@@ -118,10 +139,11 @@ bool ForeignStorageMgr::fetchBufferIfTempBufferMapEntryExists(
 
 void ForeignStorageMgr::getChunkMetadataVecForKeyPrefix(
     ChunkMetadataVector& chunk_metadata,
-    const ChunkKey& keyPrefix) {
-  CHECK(is_table_key(keyPrefix));
-  createDataWrapperIfNotExists(keyPrefix);
-  getDataWrapper(keyPrefix)->populateChunkMetadata(chunk_metadata);
+    const ChunkKey& key_prefix) {
+  CHECK(is_table_key(key_prefix));
+  checkIfS3NeedsToBeEnabled(key_prefix);
+  createDataWrapperIfNotExists(key_prefix);
+  getDataWrapper(key_prefix)->populateChunkMetadata(chunk_metadata);
 }
 
 void ForeignStorageMgr::removeTableRelatedDS(const int db_id, const int table_id) {

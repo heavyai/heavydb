@@ -102,6 +102,7 @@ void CachingForeignStorageMgr::recoverDataWrapperFromDisk(
 void CachingForeignStorageMgr::refreshTable(const ChunkKey& table_key,
                                             const bool evict_cached_entries) {
   CHECK(is_table_key(table_key));
+  ForeignStorageMgr::checkIfS3NeedsToBeEnabled(table_key);
   clearTempChunkBufferMapEntriesForTable(table_key);
   evict_cached_entries ? disk_cache_->clearForTablePrefix(table_key)
                        : refreshTableInCache(table_key);

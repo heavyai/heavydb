@@ -794,6 +794,7 @@ void CommandLineOptions::validate() {
   ddl_utils::FilePathBlacklist::addToBlacklist(base_path + "/mapd_catalogs");
   ddl_utils::FilePathBlacklist::addToBlacklist(base_path + "/mapd_data");
   ddl_utils::FilePathBlacklist::addToBlacklist(base_path + "/mapd_log");
+  g_enable_s3_fsi = false;
 
   if (disk_cache_level == "foreign_tables") {
     if (g_enable_fsi) {

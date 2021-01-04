@@ -29,16 +29,19 @@
 #endif
 
 extern bool g_enable_fsi;
+extern bool g_enable_s3_fsi;
 
 class CreateForeignServerTest : public DBHandlerTestFixture {
  protected:
   void SetUp() override {
     g_enable_fsi = true;
+    g_enable_s3_fsi = true;
     DBHandlerTestFixture::SetUp();
     getCatalog().dropForeignServer("test_server");
   }
 
   void TearDown() override {
+    g_enable_s3_fsi = true;
     getCatalog().dropForeignServer("test_server");
     DBHandlerTestFixture::TearDown();
   }
@@ -1154,6 +1157,7 @@ TEST_F(AlterForeignServerTest, InvalidDataWrapper) {
 
 int main(int argc, char** argv) {
   g_enable_fsi = true;
+  g_enable_s3_fsi = true;
   TestHelpers::init_logger_stderr_only(argc, argv);
   testing::InitGoogleTest(&argc, argv);
 

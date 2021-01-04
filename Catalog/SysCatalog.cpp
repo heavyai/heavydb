@@ -59,6 +59,7 @@ using std::vector;
 using namespace std::string_literals;
 
 extern bool g_enable_fsi;
+extern bool g_enable_s3_fsi;
 
 namespace {
 

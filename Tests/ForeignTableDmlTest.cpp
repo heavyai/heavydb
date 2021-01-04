@@ -36,6 +36,7 @@
 #endif
 
 extern bool g_enable_fsi;
+extern bool g_enable_s3_fsi;
 extern bool g_enable_seconds_refresh;
 
 std::string test_binary_file_path;
@@ -5320,6 +5321,7 @@ TEST_F(SelectQueryTest, ParquetNotNullWithNull) {
 
 int main(int argc, char** argv) {
   g_enable_fsi = true;
+  g_enable_s3_fsi = true;
   TestHelpers::init_logger_stderr_only(argc, argv);
   testing::InitGoogleTest(&argc, argv);
 

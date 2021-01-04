@@ -26,6 +26,8 @@
 #include "Catalog/OptionsContainer.h"
 #include "Shared/StringTransform.h"
 
+extern bool g_enable_s3_fsi;
+
 namespace foreign_storage {
 /**
  * @type DataWrapperType
@@ -47,7 +49,6 @@ struct ForeignServer : public OptionsContainer {
       LOCAL_FILE_STORAGE_TYPE};
   static constexpr std::array<std::string_view, 2> all_option_keys{STORAGE_TYPE_KEY,
                                                                    BASE_PATH_KEY};
-
   int32_t id;
   std::string name;
   std::string data_wrapper_type;
@@ -101,10 +102,14 @@ struct ForeignServer : public OptionsContainer {
       throw std::runtime_error{"Foreign server options must contain \"STORAGE_TYPE\"."};
     }
 
-    if (std::find(supported_storage_types.begin(),
-                  supported_storage_types.end(),
-                  options.find(STORAGE_TYPE_KEY)->second) ==
-        supported_storage_types.end()) {
+    const auto& storage_type = options.find(STORAGE_TYPE_KEY)->second;
+    if (!g_enable_s3_fsi && storage_type == S3_STORAGE_TYPE) {
+      throw std::runtime_error{
+          "Foreign server storage type value of \"" + std::string{S3_STORAGE_TYPE} +
+          "\" is not allowed because FSI S3 support is currently disabled."};
+    } else if (std::find(supported_storage_types.begin(),
+                         supported_storage_types.end(),
+                         storage_type) == supported_storage_types.end()) {
       std::string error_message =
           "Invalid storage type value. Value must be one of the following: " +
           join(supported_storage_types, ", ") + ".";
