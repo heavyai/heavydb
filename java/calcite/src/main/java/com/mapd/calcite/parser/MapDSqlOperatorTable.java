@@ -235,6 +235,7 @@ public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
     opTab.addOperator(new CastToGeography());
     opTab.addOperator(new OffsetInFragment());
     opTab.addOperator(new ApproxCountDistinct());
+    opTab.addOperator(new ApproxMedian());
     opTab.addOperator(new MapDAvg());
     opTab.addOperator(new Sample());
     opTab.addOperator(new LastSample());
@@ -1932,9 +1933,9 @@ public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
     }
   }
 
-  static class MapDAvg extends SqlAggFunction {
-    MapDAvg() {
-      super("AVG",
+  static class ApproxMedian extends SqlAggFunction {
+    ApproxMedian() {
+      super("APPROX_MEDIAN",
               null,
               SqlKind.OTHER_FUNCTION,
               null,
@@ -1944,6 +1945,24 @@ public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
               false,
               false,
               Optionality.FORBIDDEN);
+    }
+
+    @Override
+    public RelDataType inferReturnType(SqlOperatorBinding opBinding) {
+      final RelDataTypeFactory typeFactory = opBinding.getTypeFactory();
+      return typeFactory.createSqlType(SqlTypeName.DOUBLE);
+    }
+  }
+
+  static class MapDAvg extends SqlAggFunction {
+    MapDAvg() {
+      super("AVG",
+              null,
+              SqlKind.OTHER_FUNCTION,
+              null,
+              null,
+              OperandTypes.family(SqlTypeFamily.NUMERIC),
+              SqlFunctionCategory.SYSTEM);
     }
 
     @Override

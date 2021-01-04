@@ -42,7 +42,9 @@
 
 #include <llvm/Transforms/Utils/BasicBlockUtils.h>
 
+#include <cstring>  // strcat()
 #include <numeric>
+#include <string_view>
 #include <thread>
 
 bool g_cluster{false};
@@ -1787,6 +1789,31 @@ void GroupByAndAggregate::codegenCountDistinct(
     executor_->cgen_state_->emitExternalCall(
         agg_fname, llvm::Type::getVoidTy(LL_CONTEXT), agg_args);
   }
+}
+
+void GroupByAndAggregate::codegenApproxMedian(const size_t target_idx,
+                                              const Analyzer::Expr* target_expr,
+                                              std::vector<llvm::Value*>& agg_args,
+                                              const QueryMemoryDescriptor& query_mem_desc,
+                                              const ExecutorDeviceType device_type) {
+  if (device_type == ExecutorDeviceType::GPU) {
+    throw QueryMustRunOnCpu();
+  }
+  AUTOMATIC_IR_METADATA(executor_->cgen_state_.get());
+  auto const arg_ti =
+      static_cast<const Analyzer::AggExpr*>(target_expr)->get_arg()->get_type_info();
+  if (!arg_ti.is_fp()) {
+    agg_args.back() = executor_->castToFP(agg_args.back());
+  }
+  constexpr size_t MAXLEN = std::string_view("agg_approx_median_skip_val_gpu").size();
+  char agg_fname[MAXLEN + 1] = "agg_approx_median";
+  auto const agg_info = get_target_info(target_expr, g_bigint_count);
+  if (agg_info.skip_null_val) {
+    strcat(agg_fname, "_skip_val");
+    auto* skip_val = executor_->cgen_state_->intNullValue(SQLTypeInfo(kDOUBLE), 64);
+    agg_args.push_back(skip_val);
+  }
+  emitCall(agg_fname, agg_args);
 }
 
 llvm::Value* GroupByAndAggregate::getAdditionalLiteral(const int32_t off) {

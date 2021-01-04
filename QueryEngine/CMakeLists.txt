@@ -178,7 +178,7 @@ else()
 endif()
 
 add_custom_command(
-    DEPENDS RuntimeFunctions.cpp JoinHashTable/Runtime/JoinHashTableQueryRuntime.cpp RuntimeFunctions.h ${CMAKE_SOURCE_DIR}/Utils/StringLike.cpp GroupByRuntime.cpp TopKRuntime.cpp
+    DEPENDS RuntimeFunctions.h RuntimeFunctions.cpp DecodersImpl.h JoinHashTable/Runtime/JoinHashTableQueryRuntime.cpp ${CMAKE_SOURCE_DIR}/Utils/StringLike.cpp GroupByRuntime.cpp TopKRuntime.cpp
     OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/RuntimeFunctions.bc
     COMMAND ${llvm_clangpp_cmd}
     ARGS -std=c++14 ${RT_OPT_FLAGS} -c -emit-llvm

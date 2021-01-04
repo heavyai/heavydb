@@ -23,8 +23,8 @@
 #include "Execute.h"
 #include "IRCodegenUtils.h"
 #include "LLVMFunctionAttributesUtil.h"
-
 #include "Shared/likely.h"
+#include "Shared/quantile.h"
 
 #include <llvm/Bitcode/BitcodeReader.h>
 #include <llvm/IR/Function.h>
@@ -454,6 +454,16 @@ extern "C" void count_distinct_set_union_jit_rt(const int64_t new_set_handle,
   CHECK(old_count_distinct_desc.impl_type_ == new_count_distinct_desc.impl_type_);
   count_distinct_set_union(
       new_set_handle, old_set_handle, new_count_distinct_desc, old_count_distinct_desc);
+}
+
+extern "C" void approx_median_jit_rt(const int64_t new_set_handle,
+                                     const int64_t old_set_handle,
+                                     const void* that_qmd_handle,
+                                     const void* this_qmd_handle,
+                                     const int64_t target_logical_idx) {
+  auto* accumulator = reinterpret_cast<quantile::TDigest*>(old_set_handle);
+  auto* incoming = reinterpret_cast<quantile::TDigest*>(new_set_handle);
+  accumulator->mergeTDigest(*incoming);
 }
 
 extern "C" void get_group_value_reduction_rt(int8_t* groups_buffer,
@@ -1130,6 +1140,11 @@ void ResultSetReductionJIT::reduceOneAggregateSlot(Value* this_ptr1,
       emit_aggregate_one_count(this_ptr1, that_ptr1, chosen_bytes, ir_reduce_one_entry);
       break;
     }
+    case kAPPROX_MEDIAN:
+      CHECK_EQ(chosen_bytes, static_cast<int8_t>(sizeof(int64_t)));
+      reduceOneApproxMedianSlot(
+          this_ptr1, that_ptr1, target_logical_idx, ir_reduce_one_entry);
+      break;
     case kAVG: {
       // Ignore float argument compaction for count component for fear of its overflow
       emit_aggregate_one_count(this_ptr2,
@@ -1185,6 +1200,28 @@ void ResultSetReductionJIT::reduceOneCountDistinctSlot(
   const auto that_qmd_arg = ir_reduce_one_entry->arg(3);
   ir_reduce_one_entry->add<ExternalCall>(
       "count_distinct_set_union_jit_rt",
+      Type::Void,
+      std::vector<const Value*>{
+          new_set_handle,
+          old_set_handle,
+          that_qmd_arg,
+          this_qmd_arg,
+          ir_reduce_one_entry->addConstant<ConstantInt>(target_logical_idx, Type::Int64)},
+      "");
+}
+
+void ResultSetReductionJIT::reduceOneApproxMedianSlot(
+    Value* this_ptr1,
+    Value* that_ptr1,
+    const size_t target_logical_idx,
+    Function* ir_reduce_one_entry) const {
+  CHECK_LT(target_logical_idx, query_mem_desc_.getCountDistinctDescriptorsSize());
+  const auto old_set_handle = emit_load_i64(this_ptr1, ir_reduce_one_entry);
+  const auto new_set_handle = emit_load_i64(that_ptr1, ir_reduce_one_entry);
+  const auto this_qmd_arg = ir_reduce_one_entry->arg(2);
+  const auto that_qmd_arg = ir_reduce_one_entry->arg(3);
+  ir_reduce_one_entry->add<ExternalCall>(
+      "approx_median_jit_rt",
       Type::Void,
       std::vector<const Value*>{
           new_set_handle,

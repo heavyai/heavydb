@@ -2246,6 +2246,54 @@ TEST(Select, ApproxCountDistinct) {
   }
 }
 
+// Additional unit tests for APPROX_MEDIAN are in Quantile/.
+// TODO
+//  * Don't core dump on tinyint and smallint.
+//  * Fix conversion from decimal to double (seems to just take the int representation.)
+//  * Don't use null sentinel logic on columns that are NOT NULL.
+TEST(Select, ApproxMedianSanity) {
+  if (g_aggregator) {
+    LOG(WARNING) << "Skipping ApproxMedianSanity tests in distributed mode.";
+  } else {
+    auto dt = ExecutorDeviceType::CPU;
+    auto approx_median = [dt](std::string const col) {
+      std::string const query = "SELECT APPROX_MEDIAN(" + col + ") FROM test;";
+      // std::cout << __FILE__ << " +" << __LINE__ << ' ' << __func__
+      //          << ' ' << query << std::endl;
+      return v<double>(run_simple_agg(query, dt));
+    };
+    // TODO EXPECT_EQ(7.0, approx_median("x"));  // sig11
+    // TODO "w" Execute.cpp:3161 Unsupported FP width: 8 Aborted (core dumped)
+    EXPECT_EQ(42.5, approx_median("y"));
+    // TODO "z" Execute.cpp:3161 Unsupported FP width: 16 Aborted (core dumped)
+    EXPECT_EQ(1001.5, approx_median("t"));
+    // "b" Exception: Exception occurred:
+    // org.apache.calcite.runtime.CalciteContextException: From line 1, column 8 to line
+    // 1, column 27: Cannot apply 'APPROX_MEDIAN' to arguments of type
+    // 'APPROX_MEDIAN(<BOOLEAN>)'. Supported form(s): 'APPROX_MEDIAN(<NUMERIC>)'
+    EXPECT_NEAR(1.15, approx_median("f"), 1e-7);
+    EXPECT_NEAR(51.15, approx_median("ff"), 51e-7);
+    EXPECT_NEAR(-550.75, approx_median("fn"), 550e-7);
+    EXPECT_NEAR(2.3, approx_median("d"), 2e-14);
+    EXPECT_NEAR(-1111.5, approx_median("dn"), 1111e-14);
+    // TODO EXPECT_EQ(166.65, approx_median("dd"));  // 16665
+    // TODO EXPECT_EQ(166.65, approx_median("dd_notnull"));  // 16665
+    EXPECT_EQ(NULL_DOUBLE, approx_median("u"));
+    // TODO EXPECT_EQ(2147483647.0, approx_median("ofd"));
+    // This should be exact, but int(2147483647) is getting cast to float(2147483648)
+    // before getting cast to double(2147483648). If the int was cast directly to
+    // double then no precision would be lost.
+    // TODO EXPECT_NEAR(2147483647.0, approx_median("ofd"), 1.0);  // sig11
+    // TODO -0.5 : -2147483648 incorrectly converted to double null sentinel.
+    // EXPECT_EQ(-2147483647.5, approx_median("ufd"));
+    EXPECT_NEAR(4611686018427387904.0, approx_median("ofq"), 4611686018427387904e-14);
+    // TODO -0.5 : -9223372036854775808 incorrectly converted to double null sentinel.
+    // EXPECT_NEAR(-4611686018427387904.5, approx_median("ufq"), 4611686018427387904e-14);
+    // TODO "smallint_nulls" Execute.cpp:3161 Unsupported FP width: 16 Aborted (core
+    // dumped)
+  }
+}
+
 TEST(Select, ScanNoAggregation) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();

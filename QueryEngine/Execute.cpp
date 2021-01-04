@@ -125,6 +125,9 @@ bool g_enable_smem_non_grouped_agg{
 bool g_is_test_env{false};  // operating under a unit test environment. Currently only
                             // limits the allocation for the output buffer arena
 
+size_t g_approx_quantile_buffer{1000};
+size_t g_approx_quantile_centroids{300};
+
 extern bool g_cache_string_hash;
 
 int const Executor::max_gpu_count;
@@ -233,6 +236,17 @@ StringDictionaryProxy* RowSetMemoryOwner::getOrAddStringDictProxy(
     lit_str_dict_proxy_.reset(new StringDictionaryProxy(tsd, 0));
   }
   return lit_str_dict_proxy_.get();
+}
+
+quantile::TDigest* RowSetMemoryOwner::newTDigest() {
+  std::lock_guard<std::mutex> lock(state_mutex_);
+  auto& td = t_digests_.emplace_back(std::make_unique<quantile::TDigest>());
+  // Separating TDigests from their buffers allows for flexibile memory management.
+  // The incoming Buffer is used to collect and sort incoming data,
+  // and used as scratch space during its merging into the main Centroids buffer.
+  td->setBuffer(t_digest_buffers_.emplace_back(g_approx_quantile_buffer));
+  td->setCentroids(t_digest_buffers_.emplace_back(g_approx_quantile_centroids));
+  return td.get();
 }
 
 bool Executor::isCPUOnly() const {

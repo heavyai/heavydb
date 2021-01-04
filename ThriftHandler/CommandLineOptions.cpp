@@ -43,6 +43,8 @@ extern size_t g_large_ndv_multiplier;
 extern int64_t g_bitmap_memory_limit;
 extern bool g_enable_calcite_ddl_parser;
 extern bool g_enable_seconds_refresh;
+extern size_t g_approx_quantile_buffer;
+extern size_t g_approx_quantile_centroids;
 
 unsigned connect_timeout{20000};
 unsigned recv_timeout{300000};
@@ -622,6 +624,12 @@ void CommandLineOptions::fillAdvancedOptions() {
   developer_desc.add_options()(
       "large-ndv-multiplier",
       po::value<size_t>(&g_large_ndv_multiplier)->default_value(g_large_ndv_multiplier));
+  developer_desc.add_options()("approx_quantile_buffer",
+                               po::value<size_t>(&g_approx_quantile_buffer)
+                                   ->default_value(g_approx_quantile_buffer));
+  developer_desc.add_options()("approx_quantile_centroids",
+                               po::value<size_t>(&g_approx_quantile_centroids)
+                                   ->default_value(g_approx_quantile_centroids));
   developer_desc.add_options()(
       "bitmap-memory-limit",
       po::value<int64_t>(&g_bitmap_memory_limit)->default_value(g_bitmap_memory_limit),

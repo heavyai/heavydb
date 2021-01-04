@@ -23,12 +23,14 @@
 #include "BufferCompaction.h"
 #include "HyperLogLogRank.h"
 #include "MurmurHash.h"
+#include "Shared/quantile.h"
 #include "TypePunning.h"
 
 #include <algorithm>
 #include <atomic>
 #include <chrono>
 #include <cmath>
+#include <cstdio>
 #include <cstring>
 #include <thread>
 #include <tuple>
@@ -333,6 +335,19 @@ extern "C" GPU_RT_STUB void agg_approximate_count_distinct_gpu(int64_t*,
                                                                const uint32_t,
                                                                const int64_t,
                                                                const int64_t) {}
+
+extern "C" NEVER_INLINE void agg_approx_median(int64_t* agg, const double val) {
+  auto* t_digest = reinterpret_cast<quantile::TDigest*>(*agg);
+  t_digest->add(val);
+}
+
+extern "C" ALWAYS_INLINE void agg_approx_median_skip_val(int64_t* agg,
+                                                         const double val,
+                                                         const int64_t skip_val) {
+  if (*reinterpret_cast<int64_t const*>(may_alias_ptr(&val)) != skip_val) {
+    agg_approx_median(agg, val);
+  }
+}
 
 extern "C" ALWAYS_INLINE int8_t bit_is_set(const int64_t bitset,
                                            const int64_t val,

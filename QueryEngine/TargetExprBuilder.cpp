@@ -63,6 +63,8 @@ std::vector<std::string> agg_fn_base_names(const TargetInfo& target_info) {
       return {"agg_sum"};
     case kAPPROX_COUNT_DISTINCT:
       return {"agg_approximate_count_distinct"};
+    case kAPPROX_MEDIAN:
+      return {"agg_approx_median"};
     case kSINGLE_VALUE:
       return {"checked_single_agg_id"};
     case kSAMPLE:
@@ -407,6 +409,10 @@ void TargetExprCodegen::codegenAggregate(
       CHECK_EQ(agg_chosen_bytes, sizeof(int64_t));
       CHECK(!chosen_type.is_fp());
       group_by_and_agg->codegenCountDistinct(
+          target_idx, target_expr, agg_args, query_mem_desc, co.device_type);
+    } else if (target_info.agg_kind == kAPPROX_MEDIAN) {
+      CHECK_EQ(agg_chosen_bytes, sizeof(int64_t));
+      group_by_and_agg->codegenApproxMedian(
           target_idx, target_expr, agg_args, query_mem_desc, co.device_type);
     } else {
       const auto& arg_ti = target_info.agg_arg_type;

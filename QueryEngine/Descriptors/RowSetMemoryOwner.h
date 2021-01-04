@@ -18,6 +18,7 @@
 
 #include <boost/noncopyable.hpp>
 #include <list>
+#include <memory>
 #include <mutex>
 #include <set>
 #include <string>
@@ -30,6 +31,7 @@
 #include "DataMgr/DataMgr.h"
 #include "Logger/Logger.h"
 #include "QueryEngine/StringDictionaryGenerations.h"
+#include "Shared/quantile.h"
 #include "StringDictionary/StringDictionaryProxy.h"
 
 class ResultSet;
@@ -184,6 +186,8 @@ class RowSetMemoryOwner : boost::noncopyable {
     return string_dictionary_generations_;
   }
 
+  quantile::TDigest* newTDigest();
+
  private:
   struct CountDistinctBitmapBuffer {
     int8_t* ptr;
@@ -202,6 +206,8 @@ class RowSetMemoryOwner : boost::noncopyable {
   StringDictionaryGenerations string_dictionary_generations_;
   std::vector<void*> col_buffers_;
   std::vector<Data_Namespace::AbstractBuffer*> varlen_input_buffers_;
+  std::vector<std::unique_ptr<quantile::TDigest>> t_digests_;
+  std::vector<quantile::TDigest::Memory> t_digest_buffers_;
 
   size_t arena_block_size_;  // for cloning
   std::unique_ptr<Arena> allocator_;

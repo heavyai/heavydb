@@ -786,6 +786,8 @@ declare void @linear_probabilistic_count(i8*, i32, i8*, i32);
 declare void @agg_count_distinct_bitmap_gpu(i64*, i64, i64, i64, i64, i64, i64);
 declare void @agg_count_distinct_bitmap_skip_val_gpu(i64*, i64, i64, i64, i64, i64, i64, i64);
 declare void @agg_approximate_count_distinct_gpu(i64*, i64, i32, i64, i64);
+declare void @agg_approx_median(i64*, double);
+declare void @agg_approx_median_skip_val(i64*, double, i64);
 declare void @record_error_code(i32, i32*);
 declare i32 @get_error_code(i32*);
 declare i1 @dynamic_watchdog();
@@ -1603,6 +1605,9 @@ std::vector<std::string> get_agg_fnames(const std::vector<Analyzer::Expr*>& targ
       }
       case kAPPROX_COUNT_DISTINCT:
         result.emplace_back("agg_approximate_count_distinct");
+        break;
+      case kAPPROX_MEDIAN:
+        result.emplace_back("agg_approx_median");
         break;
       default:
         CHECK(false);

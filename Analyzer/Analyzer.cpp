@@ -2653,6 +2653,9 @@ std::string AggExpr::toString() const {
     case kAPPROX_COUNT_DISTINCT:
       agg = "APPROX_COUNT_DISTINCT";
       break;
+    case kAPPROX_MEDIAN:
+      agg = "APPROX_MEDIAN";
+      break;
     case kSINGLE_VALUE:
       agg = "SINGLE_VALUE";
       break;

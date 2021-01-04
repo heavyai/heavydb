@@ -29,8 +29,8 @@
 #include "ResultSetReductionJIT.h"
 #include "RuntimeFunctions.h"
 #include "Shared/SqlTypesLayout.h"
-
 #include "Shared/likely.h"
+#include "Shared/quantile.h"
 #include "Shared/thread_count.h"
 
 #include <llvm/ExecutionEngine/GenericValue.h>
@@ -1447,7 +1447,7 @@ void ResultSetStorage::reduceOneSlot(
   const bool float_argument_input = takes_float_argument(target_info);
   const auto chosen_bytes = result_set::get_width_for_slot(
       target_slot_idx, float_argument_input, query_mem_desc_);
-  auto init_val = target_init_vals_[init_agg_val_idx];
+  int64_t init_val = target_init_vals_[init_agg_val_idx];  // skip_val for nullable types
 
   if (target_info.is_agg && target_info.agg_kind == kSINGLE_VALUE) {
     reduceOneSlotSingleValue(
@@ -1497,8 +1497,12 @@ void ResultSetStorage::reduceOneSlot(
         }
         break;
       }
+      case kAPPROX_MEDIAN:
+        CHECK_EQ(static_cast<int8_t>(sizeof(int64_t)), chosen_bytes);
+        reduceOneApproxMedianSlot(this_ptr1, that_ptr1, target_logical_idx, that);
+        break;
       default:
-        CHECK(false);
+        UNREACHABLE() << toString(target_info.agg_kind);
     }
   } else {
     switch (chosen_bytes) {
@@ -1564,6 +1568,23 @@ void ResultSetStorage::reduceOneSlot(
         LOG(FATAL) << "Invalid slot width: " << chosen_bytes;
     }
   }
+}
+
+void ResultSetStorage::reduceOneApproxMedianSlot(int8_t* this_ptr1,
+                                                 const int8_t* that_ptr1,
+                                                 const size_t target_logical_idx,
+                                                 const ResultSetStorage& that) const {
+  CHECK_LT(target_logical_idx, query_mem_desc_.getCountDistinctDescriptorsSize());
+  static_assert(sizeof(int64_t) == sizeof(quantile::TDigest*));
+  auto* accumulator = *reinterpret_cast<quantile::TDigest**>(this_ptr1);
+  auto* incoming = *reinterpret_cast<quantile::TDigest* const*>(that_ptr1);
+  CHECK(accumulator) << "this_ptr1=" << (void*)this_ptr1
+                     << ", that_ptr1=" << (void const*)that_ptr1
+                     << ", target_logical_idx=" << target_logical_idx;
+  CHECK(incoming) << "this_ptr1=" << (void*)this_ptr1
+                  << ", that_ptr1=" << (void const*)that_ptr1
+                  << ", target_logical_idx=" << target_logical_idx;
+  accumulator->mergeTDigest(*incoming);
 }
 
 void ResultSetStorage::reduceOneCountDistinctSlot(int8_t* this_ptr1,

@@ -58,59 +58,65 @@
 
 #pragma once
 
+#include <iterator>
 #include <limits>
 #include <type_traits>
 
-template <typename T>
+template <typename T, typename U = typename std::make_unsigned<T>::type>
 struct Interval {
   T const begin;
   T const end;
+  U const index;  // [0, n_workers)
 };
 
-template <typename T>
+template <typename T, typename U = typename std::make_unsigned<T>::type>
 class Intervals {
-  using Unsigned = typename std::make_unsigned<T>::type;
   T const begin_;
-  Unsigned const total_size_;
-  Unsigned const quot_;
-  Unsigned const rem_;
+  U const total_size_;
+  U const quot_;
+  U const rem_;
 
-  Intervals(T begin, T end, Unsigned n_workers)
+  Intervals(T begin, T end, U n_workers)
       : begin_(begin)
       , total_size_(begin < end && n_workers ? end - begin : 0)
       , quot_(n_workers ? total_size_ / n_workers : 0)
       , rem_(n_workers ? total_size_ % n_workers : 0) {
-    static_assert(std::is_integral_v<T>);
+    static_assert(std::is_integral<T>::value);
   }
 
  public:
-  class Iterator {
+  class Iterator : public std::iterator<std::input_iterator_tag, Interval<T>> {
     T begin_;
-    Unsigned const quot_;
-    Unsigned rem_;
+    U const quot_;
+    U rem_;
+    U index{0};
 
    public:
-    Iterator(T begin, Unsigned quot, Unsigned rem)
-        : begin_(begin), quot_(quot), rem_(rem) {}
-    // bool in arithmetic context is 0 or 1.
-    Interval<T> operator*() const { return {begin_, T(begin_ + quot_ + bool(rem_))}; }
-    void operator++() { begin_ += quot_ + (rem_ && rem_--); }
+    Iterator(T begin, U quot, U rem) : begin_(begin), quot_(quot), rem_(rem) {}
+    Interval<T> operator*() const {
+      return {begin_, T(begin_ + quot_ + bool(rem_)), index};
+    }
+    void operator++() {
+      begin_ += quot_ + (rem_ && rem_--);
+      ++index;
+    }
+    bool operator==(Iterator const& rhs) const { return begin_ == rhs.begin_; }
     bool operator!=(Iterator const& rhs) const { return begin_ != rhs.begin_; }
   };
 
-  Iterator begin() { return {begin_, quot_, rem_}; }
-  Iterator end() { return {static_cast<T>(begin_ + total_size_), quot_, 0}; }
-  template <typename U>
-  friend Intervals<U> makeIntervals(U begin, U end, std::size_t n_workers);
+  bool empty() const { return !total_size_; }
+  Iterator begin() const { return {begin_, quot_, rem_}; }
+  Iterator end() const { return {static_cast<T>(begin_ + total_size_), quot_, 0}; }
+  template <typename T1, typename U1>
+  friend Intervals<T1> makeIntervals(T1 begin, T1 end, std::size_t n_workers);
 };
 
-template <typename T>
+template <typename T, typename U = typename std::make_unsigned<T>::type>
 Intervals<T> makeIntervals(T begin, T end, std::size_t n_workers) {
-  using Unsigned = typename std::make_unsigned<T>::type;
-  if constexpr (sizeof(Unsigned) < sizeof(std::size_t)) {
-    if (std::numeric_limits<Unsigned>::max() < n_workers) {
-      n_workers = std::numeric_limits<Unsigned>::max();
+  if constexpr (sizeof(U) < sizeof(std::size_t)) {
+    if (std::numeric_limits<U>::max() < n_workers) {
+      n_workers = std::numeric_limits<U>::max();
     }
   }
-  return {begin, end, static_cast<Unsigned>(n_workers)};
+  return {begin, end, static_cast<U>(n_workers)};
 }

@@ -315,6 +315,8 @@ struct CgenState {
 
   void emitErrorCheck(llvm::Value* condition, llvm::Value* errorCode, std::string label);
 
+  llvm::Value* intNullValue(SQLTypeInfo const&, size_t const nbits);
+
   llvm::Module* module_;
   llvm::Function* row_func_;
   llvm::Function* filter_func_;

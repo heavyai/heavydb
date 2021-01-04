@@ -191,6 +191,7 @@ QueryMemoryInitializer::QueryMemoryInitializer(
 
   if (render_allocator_map || !query_mem_desc.isGroupBy()) {
     allocateCountDistinctBuffers(query_mem_desc, false, executor);
+    allocateTDigests(query_mem_desc, false, executor);
     if (render_info && render_info->useCudaBuffers()) {
       return;
     }
@@ -413,6 +414,7 @@ void QueryMemoryInitializer::initGroups(const QueryMemoryDescriptor& query_mem_d
   const size_t col_base_off{query_mem_desc.getColOffInBytes(0)};
 
   auto agg_bitmap_size = allocateCountDistinctBuffers(query_mem_desc, true, executor);
+  auto tdigest_deferred = allocateTDigests(query_mem_desc, true, executor);
   auto buffer_ptr = reinterpret_cast<int8_t*>(groups_buffer);
 
   const auto query_mem_desc_fixedup =
@@ -428,7 +430,8 @@ void QueryMemoryInitializer::initGroups(const QueryMemoryDescriptor& query_mem_d
                          &buffer_ptr[col_base_off],
                          bin,
                          init_vals,
-                         agg_bitmap_size);
+                         agg_bitmap_size,
+                         tdigest_deferred);
       }
     }
     return;
@@ -442,7 +445,8 @@ void QueryMemoryInitializer::initGroups(const QueryMemoryDescriptor& query_mem_d
                      &buffer_ptr[col_base_off],
                      bin,
                      init_vals,
-                     agg_bitmap_size);
+                     agg_bitmap_size,
+                     tdigest_deferred);
   }
 }
 
@@ -527,24 +531,30 @@ void QueryMemoryInitializer::initColumnPerRow(const QueryMemoryDescriptor& query
                                               int8_t* row_ptr,
                                               const size_t bin,
                                               const std::vector<int64_t>& init_vals,
-                                              const std::vector<int64_t>& bitmap_sizes) {
+                                              const std::vector<int64_t>& bitmap_sizes,
+                                              const std::vector<bool>& tdigest_deferred) {
   int8_t* col_ptr = row_ptr;
   size_t init_vec_idx = 0;
   for (size_t col_idx = 0; col_idx < query_mem_desc.getSlotCount();
        col_ptr += query_mem_desc.getNextColOffInBytes(col_ptr, bin, col_idx++)) {
     const int64_t bm_sz{bitmap_sizes[col_idx]};
     int64_t init_val{0};
-    if (!bm_sz || !query_mem_desc.isGroupBy()) {
-      if (query_mem_desc.getPaddedSlotWidthBytes(col_idx) > 0) {
-        CHECK_LT(init_vec_idx, init_vals.size());
-        init_val = init_vals[init_vec_idx++];
-      }
-    } else {
+    if (bm_sz && query_mem_desc.isGroupBy()) {
+      // COUNT DISTINCT / APPROX_COUNT_DISTINCT
       CHECK_EQ(static_cast<size_t>(query_mem_desc.getPaddedSlotWidthBytes(col_idx)),
                sizeof(int64_t));
       init_val =
           bm_sz > 0 ? allocateCountDistinctBitmap(bm_sz) : allocateCountDistinctSet();
       ++init_vec_idx;
+    } else if (query_mem_desc.isGroupBy() && tdigest_deferred[col_idx]) {
+      // APPROX_MEDIAN
+      init_val = reinterpret_cast<int64_t>(row_set_mem_owner_->newTDigest());
+      ++init_vec_idx;
+    } else {
+      if (query_mem_desc.getPaddedSlotWidthBytes(col_idx) > 0) {
+        CHECK_LT(init_vec_idx, init_vals.size());
+        init_val = init_vals[init_vec_idx++];
+      }
     }
     switch (query_mem_desc.getPaddedSlotWidthBytes(col_idx)) {
       case 1:
@@ -662,6 +672,36 @@ int64_t QueryMemoryInitializer::allocateCountDistinctSet() {
   auto count_distinct_set = new std::set<int64_t>();
   row_set_mem_owner_->addCountDistinctSet(count_distinct_set);
   return reinterpret_cast<int64_t>(count_distinct_set);
+}
+
+std::vector<bool> QueryMemoryInitializer::allocateTDigests(
+    const QueryMemoryDescriptor& query_mem_desc,
+    const bool deferred,
+    const Executor* executor) {
+  size_t const slot_count = query_mem_desc.getSlotCount();
+  size_t const ntargets = executor->plan_state_->target_exprs_.size();
+  CHECK_GE(slot_count, ntargets);
+  std::vector<bool> tdigest_deferred(deferred ? slot_count : 0);
+
+  for (size_t target_idx = 0; target_idx < ntargets; ++target_idx) {
+    auto const target_expr = executor->plan_state_->target_exprs_[target_idx];
+    if (auto const agg_expr = dynamic_cast<const Analyzer::AggExpr*>(target_expr)) {
+      if (agg_expr->get_aggtype() == kAPPROX_MEDIAN) {
+        size_t const agg_col_idx =
+            query_mem_desc.getSlotIndexForSingleSlotCol(target_idx);
+        CHECK_LT(agg_col_idx, slot_count);
+        CHECK_EQ(query_mem_desc.getLogicalSlotWidthBytes(agg_col_idx),
+                 static_cast<int8_t>(sizeof(int64_t)));
+        if (deferred) {
+          tdigest_deferred[agg_col_idx] = true;
+        } else {
+          init_agg_vals_[agg_col_idx] =
+              reinterpret_cast<int64_t>(row_set_mem_owner_->newTDigest());
+        }
+      }
+    }
+  }
+  return tdigest_deferred;
 }
 
 #ifdef HAVE_CUDA
