@@ -5,52 +5,62 @@ We welcome and encourage developer contributions to the project. Please see the 
 ## Database
 
 #### Completed
-- Top k sort on GPU. Ability to efficiently order by a projected column (Completed 3.2.2)
-- JOIN improvements. Additional join types and performance improvements (Completed 3.2)
-- JOIN improvements.  Table orderings and optimizations for larger numbers of tables (Ongoing improvements)
-- TRUNCATE. Efficiently remove contents of table or part of table (Completed v3.2)
-- Batched UPDATE and DELETE (Completed 4.0)
-- Interval type, and TIMESTAMP_ADD, TIMESTAMP_DIFF (Completed v3.2)
-- Table Sharding. Table sharding types in addition to the existing round robin (Completed v3.2)
-- Table-level security, GRANT, REVOKE. Ability to grant and revoke table access to users/roles (Testing in 3.2.3, released in 4.0)
+- Update via subquery (Completed 5.0)
+- Binary/dump restore of tables (Completed 5.0)
+- In-memory temporary tables (Completed 5.1)
+- Support for SQL VALUES syntax, allowing literals to be used inline in SQL queries (Completed 5.1.2)
+- More performant multi-fragment joins (Completed 5.2)
+- `ALTER TABLE DROP COLUMN` (Completed 5.2)
+- `SQL SHOW` Commands (Completed 5.2)
+- Import of compressed parquet files (Completed 5.2)
+- Initial support for UNION ALL (Completed 5.3)
+- Initial support of multiple executors for improved concurrency (Completed 5.3+)
+- Query hint framework, initially allowing `/*+ cpu_mode */ hint (Completed 5.3.1)
+- Support for implicit casting for `INSERT AS SELECT` queries to match existing table types when possible
+- Concurrent `UPDATE` and `SELECT` on the same table (Completed 5.5)
+- Allow none-encoded inputs into user defined functions (Completed 5.5)
+- Initial foreign Server/Table support for CSV and Parquet (Completed 5.4-5.5) 
+- Query interrupt improvements (Completed 5.5 and ongoing)
+
 
 #### Upcoming
+- `APPROX_MEDIAN` and `APPROX_PERCENTILE` operators
+- Additional string function support
+- Queryable system metadata tables
+- Accelerated range joins
+- Query interrupt improvements
+- Query/subquery result set recycling for greater performance
 
-- Use of shared memory to accelerate certain group by operations
-- More efficient memory layout for certain group by operations
-- More efficient range joins
-- Better usage of both GPU and CPU, depending on memory requirements of queries
-- Create table as select (CTAS) improvements (performance, and handling variable length data)
-- Update improvements, including handling variable length data, update via subquery, and more efficient columnar output
-- Delete improvements, including immediate/delayed vacuum capability
-- More granular timestamp support (to nanoseconds)
-- Row-level User Defined Functions (UDFs)
 
-## GIS
+## Geospatial/GIS
 
 #### Completed
 - Basic Geo Types constructed from column coordinates, WKT or geo files (Point, Line, Polygon) (Completed 4.0)
-- Basic Geo functions (ST_Contains, ST_Distance) (Completed 4.0)
-- Feature construction from columnar data ST_MakePoint (Completed 5.0)
-- Additional Geo functions (ST_Within, ST_Area, ST_Perimiter) (Completed 5.0)
+- Basic Geo functions (`ST_Contains`, `ST_Distance`) (Completed 4.0)
+- Feature construction from columnar data `ST_MakePoint` (Completed 5.0)
+- Additional Geo functions (`ST_Within`, `ST_Area`, `ST_Perimiter`) (Completed 5.0)
 - Geodatabase import (Completed 5.0)
+- OGC full "simple features" constructive geospatial operators (`ST_Buffer`, `ST_Intersects`, `ST_Union`, etc) (Completed 5.2+)
+- Null support for geo types (5.2)
+- `ST_Centroid` operator (5.5)
 
 #### Upcoming
 - Additional OGC mulitpart geospatial types: Multi(Point|Line)
-- Additional geometric constructors (ST_Line, ST_Polygon, etc.)
-- OGC full "simple features" constructive geospatial operators (ST_Buffer, ST_Intersects, ST_Union, etc)
+- Additional geometric constructors (`ST_Line`, `ST_Polygon`, etc.)
 - Accelerated geospatial joins (with dynamic spatial hashing, not relying purely on brute force loop joins)
-- Fixed length arrays for POINT datatype to conserve memory
 - OGC Geopackage import
-- Additional WMS support
-- Parallel scrolling maps
 
 ## Data Science/[GPU Data Frame (GDF)](http://gpuopenanalytics.com/#/)/[Apache Arrow](https://arrow.apache.org/)
 
 #### Completed
-- Data frame as input to MapD. Ability to insert into a table from a data frame (Completed 3.2.4)
 - [PyMapD DB-API Python client](https://github.com/mapd/pymapd)
 - [Ibis backend for MapD](https://github.com/ibis-project/ibis)
+- Support for Arrow result sets over the wire (in addition to existing in-situ Arrow egress) (Completed 5.5)
+- Basic user-defined row and table functions (Completed 5.0, with ongoing improvements)
+- User-defined table function (Completed UDTF) improvements (multiple column/query inputs, composability, lazy linking, function redefinition) (Completed 5.4-5.5) 
+- `CREATE DATAFRAME` temporary table creation from csv via Arrow (Completed 5.4 and ongoing)
 
 #### Upcoming
-- Increase efficiency of Arrow serialization
+- Further increase efficiency of Arrow serialization
+- Additional UDF/UDTF improvements (dictionary-encoded text column support, variadic types, performance on large inputs, semantics)
+- Experimental ML operators built on UDTFs

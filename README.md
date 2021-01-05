@@ -3,6 +3,7 @@ OmniSciDB (formerly MapD Core)
 
 OmniSciDB is an open source SQL-based, relational, columnar database engine that leverages the full performance and parallelism of modern hardware (both CPUs and GPUs) to enable querying of multi-billion row datasets in milliseconds, without the need for indexing, pre-aggregation, or downsampling.  OmniSciDB can be run on hybrid CPU/GPU systems (Nvidia GPUs are currently supported), as well as on CPU-only systems featuring X86, Power, and ARM (experimental support) architectures. To achieve maximum performance, OmniSciDB features multi-tiered caching of data between storage, CPU memory, and GPU memory, and an innovative Just-In-Time (JIT) query compilation framework.
 
+For usage info, see the [product documentation](https://docs.omnisci.com/latest/), and for more details about the system's internal architecture, check out the [developer documentation](https://omnisci.github.io/omniscidb/). Further technical discussion can be found on the [OmniSci Community Forum](https://community.omnisci.com).
 
 The repository includes a number of third party packages provided under separate licenses. Details about these packages and their respective licenses is at [ThirdParty/licenses/index.md](ThirdParty/licenses/index.md).
 
