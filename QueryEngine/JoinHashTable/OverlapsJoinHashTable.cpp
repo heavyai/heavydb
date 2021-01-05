@@ -409,8 +409,7 @@ std::pair<size_t, size_t> OverlapsJoinHashTable::approximateTupleCount(
          &count_distinct_desc,
          &data_mgr,
          &host_hll_buffers,
-         &emitted_keys_count_device_threads,
-         this] {
+         &emitted_keys_count_device_threads] {
           CudaAllocator allocator(&data_mgr, device_id);
           auto device_hll_buffer =
               allocator.alloc(count_distinct_desc.bitmapPaddedSizeBytes());
@@ -446,9 +445,7 @@ std::pair<size_t, size_t> OverlapsJoinHashTable::approximateTupleCount(
               count_distinct_desc.bitmap_sz_bits,
               reinterpret_cast<int32_t*>(row_counts_buffer),
               key_handler_gpu,
-              columns_for_device.join_columns[0].num_elems,
-              executor_->blockSize(),
-              executor_->gridSize());
+              columns_for_device.join_columns[0].num_elems);
 
           auto& host_emitted_keys_count = emitted_keys_count_device_threads[device_id];
           copy_from_gpu(&data_mgr,
@@ -565,9 +562,12 @@ int OverlapsJoinHashTable::initHashTableForDevice(
                                      getKeyComponentCount(),
                                      entry_count_,
                                      emitted_keys_count_,
-                                     device_id,
-                                     block_size_,
-                                     grid_size_);
+                                     device_id);
+    if (err) {
+      throw HashJoinFail(
+          std::string("Unrecognized error when initializing overlaps hash table (") +
+          std::to_string(err) + std::string(")"));
+    }
     CHECK_LT(size_t(device_id), hash_tables_for_device_.size());
     hash_tables_for_device_[device_id] = builder.getHashTable();
 #else
@@ -874,9 +874,7 @@ void OverlapsJoinHashTable::computeBucketSizes(
     compute_bucket_sizes_on_device(device_bucket_sizes_gpu,
                                    join_column_gpu,
                                    join_column_type_gpu,
-                                   overlaps_hashjoin_bucket_threshold_,
-                                   executor_->blockSize(),
-                                   executor_->gridSize());
+                                   overlaps_hashjoin_bucket_threshold_);
     allocator.copyFromDevice(reinterpret_cast<int8_t*>(local_bucket_sizes.data()),
                              reinterpret_cast<int8_t*>(device_bucket_sizes_gpu),
                              local_bucket_sizes.size() * sizeof(double));

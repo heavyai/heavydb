@@ -1205,9 +1205,13 @@ template <size_t N>
 GLOBAL void SUFFIX(compute_bucket_sizes_impl)(double* bucket_sizes_for_thread,
                                               const JoinColumn* join_column,
                                               const JoinColumnTypeInfo* type_info,
-                                              const double bucket_sz_threshold,
+                                              const double bucket_sz_threshold
+#ifndef __CUDACC__
+                                              ,
                                               const int32_t cpu_thread_idx,
-                                              const int32_t cpu_thread_count) {
+                                              const int32_t cpu_thread_count
+#endif
+) {
 #ifdef __CUDACC__
   int32_t start = threadIdx.x + blockDim.x * blockIdx.x;
   int32_t step = blockDim.x * gridDim.x;
