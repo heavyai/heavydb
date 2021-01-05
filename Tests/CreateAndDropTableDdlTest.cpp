@@ -122,9 +122,13 @@ class CreateAndDropTableDdlTest : public DBHandlerTestFixture {
     return bf::canonical("../../Tests/FsiDataFiles/example_1.csv").string();
   }
 
-  void createTestUser() {
+  int createTestUser() {
     sql("CREATE USER test_user (password = 'test_pass');");
     sql("GRANT ACCESS ON DATABASE omnisci TO test_user;");
+    Catalog_Namespace::UserMetadata user_metadata;
+    Catalog_Namespace::SysCatalog::instance().getMetadataForUser("test_user",
+                                                                 user_metadata);
+    return user_metadata.userId;
   }
 
   void dropTestUser() {
@@ -168,7 +172,7 @@ class CreateTableTest : public CreateAndDropTableDdlTest,
                           const ddl_utils::TableType table_type,
                           const std::string& table_name,
                           const int column_count,
-                          const int user_id = 0,
+                          const int user_id = OMNISCI_ROOT_USER_ID,
                           const int max_fragment_size = DEFAULT_FRAGMENT_ROWS) {
     EXPECT_EQ(table_name, td->tableName);
     EXPECT_EQ(Fragmenter_Namespace::FragmenterType::INSERT_ORDER, td->fragType);
@@ -1057,7 +1061,7 @@ TEST_P(CreateTableTest, UnauthorizedUser) {
 }
 
 TEST_P(CreateTableTest, AuthorizedUser) {
-  createTestUser();
+  auto user_id = createTestUser();
   sql("GRANT CREATE TABLE ON DATABASE omnisci TO test_user;");
   login("test_user", "test_pass");
 
@@ -1065,7 +1069,7 @@ TEST_P(CreateTableTest, AuthorizedUser) {
 
   auto& catalog = getCatalog();
   auto table = catalog.getMetadataForTable("test_table", false);
-  assertTableDetails(table, GetParam(), "test_table", 1, 1);
+  assertTableDetails(table, GetParam(), "test_table", 1, user_id);
 
   auto column = catalog.getMetadataForColumn(table->tableId, "col1");
   ColumnAttributes expected_attributes{};
