@@ -73,12 +73,16 @@ void executeAllScenarios(TEST_BODY fn) {
 }
 
 // clang-format off
-const auto init_stmts_ddl = {
+const auto cleanup_stmts = {
     R"(drop table if exists does_intersect_a;)",
     R"(drop table if exists does_intersect_b;)",
     R"(drop table if exists does_not_intersect_a;)",
     R"(drop table if exists does_not_intersect_b;)",
-    R"(drop table if exists empty_table;)",
+    R"(drop table if exists empty_table;)"
+};
+
+// clang-format off
+const auto init_stmts_ddl = {
     R"(create table does_intersect_a (id int,
                                       poly geometry(polygon, 4326),
                                       mpoly geometry(multipolygon, 4326),
@@ -167,12 +171,22 @@ const auto init_stmts_dml = {
 class OverlapsTest : public ::testing::Test {
  protected:
   static void SetUpTestSuite() {
+    for (const auto& stmt : cleanup_stmts) {
+      QR::get()->runDDLStatement(stmt);
+    }
+
     for (const auto& stmt : init_stmts_ddl) {
       QR::get()->runDDLStatement(stmt);
     }
 
     for (const auto& stmt : init_stmts_dml) {
       QR::get()->runSQL(stmt, ExecutorDeviceType::CPU);
+    }
+  }
+
+  static void TearDownTestSuite() {
+    for (const auto& stmt : cleanup_stmts) {
+      QR::get()->runDDLStatement(stmt);
     }
   }
 };
@@ -408,10 +422,6 @@ TEST_F(OverlapsTest, EmptyPolyPolyJoin) {
         "SELECT count(*) FROM does_not_intersect_a as a "
         "JOIN empty_table as b "
         "ON ST_Intersects(a.poly, b.poly);";
-    // TODO(jclay): Empty table causes a crash on GPU.
-    if (g_enable_overlaps_hashjoin && dt == ExecutorDeviceType::GPU) {
-      return;
-    }
     ASSERT_EQ(static_cast<int64_t>(0), v<int64_t>(execSQL(sql, dt)));
   });
 }

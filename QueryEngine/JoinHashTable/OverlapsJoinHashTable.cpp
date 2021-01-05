@@ -364,6 +364,9 @@ std::pair<size_t, size_t> OverlapsJoinHashTable::approximateTupleCount(
   const auto padded_size_bytes = count_distinct_desc.bitmapPaddedSizeBytes();
 
   CHECK(!columns_per_device.empty() && !columns_per_device.front().join_columns.empty());
+  if (columns_per_device.front().join_columns.front().num_elems == 0) {
+    return {0, 0};
+  }
   // Number of keys must match dimension of buckets
   CHECK_EQ(columns_per_device.front().join_columns.size(),
            columns_per_device.front().join_buckets.size());
