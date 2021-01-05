@@ -230,8 +230,6 @@ class BaselineJoinHashTable : public HashJoin {
   std::vector<InnerOuter> inner_outer_pairs_;
   const Catalog_Namespace::Catalog* catalog_;
   const int device_count_;
-  unsigned block_size_;
-  unsigned grid_size_;
 
   std::optional<HashType>
       layout_override_;  // allows us to use a 1:many hash table for many:many

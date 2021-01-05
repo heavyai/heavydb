@@ -107,9 +107,7 @@ void fill_baseline_hash_join_buff_on_device(int8_t* hash_buff,
                                             const bool with_val_slot,
                                             int* dev_err_buff,
                                             const KEY_HANDLER* key_handler,
-                                            const size_t num_elems,
-                                            const size_t block_size_x,
-                                            const size_t grid_size_x) {
+                                            const size_t num_elems) {
   if constexpr (std::is_same<KEY_HANDLER, GenericKeyHandler>::value) {
     fill_baseline_hash_join_buff_on_device_32(hash_buff,
                                               entry_count,
@@ -118,9 +116,7 @@ void fill_baseline_hash_join_buff_on_device(int8_t* hash_buff,
                                               with_val_slot,
                                               dev_err_buff,
                                               key_handler,
-                                              num_elems,
-                                              block_size_x,
-                                              grid_size_x);
+                                              num_elems);
   } else {
     static_assert(std::is_same<KEY_HANDLER, OverlapsKeyHandler>::value,
                   "Only Generic or Overlaps Key Handlers are supported.");
@@ -138,9 +134,7 @@ void fill_baseline_hash_join_buff_on_device(int8_t* hash_buff,
                                             const bool with_val_slot,
                                             int* dev_err_buff,
                                             const KEY_HANDLER* key_handler,
-                                            const size_t num_elems,
-                                            const size_t block_size_x,
-                                            const size_t grid_size_x) {
+                                            const size_t num_elems) {
   if constexpr (std::is_same<KEY_HANDLER, GenericKeyHandler>::value) {
     fill_baseline_hash_join_buff_on_device_64(hash_buff,
                                               entry_count,
@@ -149,9 +143,7 @@ void fill_baseline_hash_join_buff_on_device(int8_t* hash_buff,
                                               with_val_slot,
                                               dev_err_buff,
                                               key_handler,
-                                              num_elems,
-                                              block_size_x,
-                                              grid_size_x);
+                                              num_elems);
   } else {
     static_assert(std::is_same<KEY_HANDLER, OverlapsKeyHandler>::value,
                   "Only Generic or Overlaps Key Handlers are supported.");
@@ -162,9 +154,7 @@ void fill_baseline_hash_join_buff_on_device(int8_t* hash_buff,
                                                        with_val_slot,
                                                        dev_err_buff,
                                                        key_handler,
-                                                       num_elems,
-                                                       block_size_x,
-                                                       grid_size_x);
+                                                       num_elems);
   }
 }
 
@@ -177,9 +167,7 @@ void fill_one_to_many_baseline_hash_table_on_device(int32_t* buff,
                                                     const int32_t invalid_slot_val,
                                                     const size_t key_component_count,
                                                     const KEY_HANDLER* key_handler,
-                                                    const size_t num_elems,
-                                                    const size_t block_size_x,
-                                                    const size_t grid_size_x) {
+                                                    const size_t num_elems) {
   if constexpr (std::is_same<KEY_HANDLER, GenericKeyHandler>::value) {
     fill_one_to_many_baseline_hash_table_on_device_32(buff,
                                                       composite_key_dict,
@@ -187,9 +175,7 @@ void fill_one_to_many_baseline_hash_table_on_device(int32_t* buff,
                                                       invalid_slot_val,
                                                       key_component_count,
                                                       key_handler,
-                                                      num_elems,
-                                                      block_size_x,
-                                                      grid_size_x);
+                                                      num_elems);
   } else {
     static_assert(std::is_same<KEY_HANDLER, OverlapsKeyHandler>::value,
                   "Only Generic or Overlaps Key Handlers are supported.");
@@ -206,18 +192,14 @@ void fill_one_to_many_baseline_hash_table_on_device(int32_t* buff,
                                                     const int32_t invalid_slot_val,
                                                     const size_t key_component_count,
                                                     const KEY_HANDLER* key_handler,
-                                                    const size_t num_elems,
-                                                    const size_t block_size_x,
-                                                    const size_t grid_size_x) {
+                                                    const size_t num_elems) {
   if constexpr (std::is_same<KEY_HANDLER, GenericKeyHandler>::value) {
     fill_one_to_many_baseline_hash_table_on_device_64(buff,
                                                       composite_key_dict,
                                                       hash_entry_count,
                                                       invalid_slot_val,
                                                       key_handler,
-                                                      num_elems,
-                                                      block_size_x,
-                                                      grid_size_x);
+                                                      num_elems);
   } else {
     static_assert(std::is_same<KEY_HANDLER, OverlapsKeyHandler>::value,
                   "Only Generic or Overlaps Key Handlers are supported.");
@@ -226,9 +208,7 @@ void fill_one_to_many_baseline_hash_table_on_device(int32_t* buff,
                                                                hash_entry_count,
                                                                invalid_slot_val,
                                                                key_handler,
-                                                               num_elems,
-                                                               block_size_x,
-                                                               grid_size_x);
+                                                               num_elems);
   }
 }
 
@@ -459,9 +439,7 @@ class BaselineJoinHashTableBuilder {
                          const size_t key_component_count,
                          const size_t keyspace_entry_count,
                          const size_t emitted_keys_count,
-                         const int device_id,
-                         const unsigned block_size,
-                         const unsigned grid_size) {
+                         const int device_id) {
     auto timer = DEBUG_TIMER(__func__);
     int err = 0;
 #ifdef HAVE_CUDA
@@ -489,18 +467,14 @@ class BaselineJoinHashTableBuilder {
                                                   keyspace_entry_count,
                                                   key_component_count,
                                                   layout == HashType::OneToOne,
-                                                  -1,
-                                                  block_size,
-                                                  grid_size);
+                                                  -1);
         break;
       case 8:
         init_baseline_hash_join_buff_on_device_64(gpu_hash_table_buff,
                                                   keyspace_entry_count,
                                                   key_component_count,
                                                   layout == HashType::OneToOne,
-                                                  -1,
-                                                  block_size,
-                                                  grid_size);
+                                                  -1);
         break;
       default:
         UNREACHABLE();
@@ -516,9 +490,7 @@ class BaselineJoinHashTableBuilder {
             layout == HashType::OneToOne,
             reinterpret_cast<int*>(dev_err_buff),
             key_handler_gpu,
-            join_columns.front().num_elems,
-            block_size,
-            grid_size);
+            join_columns.front().num_elems);
         copy_from_gpu(&data_mgr, &err, dev_err_buff, sizeof(err), device_id);
         break;
       }
@@ -531,9 +503,7 @@ class BaselineJoinHashTableBuilder {
             layout == HashType::OneToOne,
             reinterpret_cast<int*>(dev_err_buff),
             key_handler_gpu,
-            join_columns.front().num_elems,
-            block_size,
-            grid_size);
+            join_columns.front().num_elems);
         copy_from_gpu(&data_mgr, &err, dev_err_buff, sizeof(err), device_id);
         break;
       }
@@ -547,8 +517,7 @@ class BaselineJoinHashTableBuilder {
       const auto entry_size = key_component_count * key_component_width;
       auto one_to_many_buff = reinterpret_cast<int32_t*>(
           gpu_hash_table_buff + keyspace_entry_count * entry_size);
-      init_hash_join_buff_on_device(
-          one_to_many_buff, keyspace_entry_count, -1, block_size, grid_size);
+      init_hash_join_buff_on_device(one_to_many_buff, keyspace_entry_count, -1);
       switch (key_component_width) {
         case 4: {
           const auto composite_key_dict = reinterpret_cast<int32_t*>(gpu_hash_table_buff);
@@ -559,9 +528,7 @@ class BaselineJoinHashTableBuilder {
               -1,
               key_component_count,
               key_handler_gpu,
-              join_columns.front().num_elems,
-              block_size,
-              grid_size);
+              join_columns.front().num_elems);
 
           break;
         }
@@ -574,9 +541,7 @@ class BaselineJoinHashTableBuilder {
               -1,
               key_component_count,
               key_handler_gpu,
-              join_columns.front().num_elems,
-              block_size,
-              grid_size);
+              join_columns.front().num_elems);
 
           break;
         }

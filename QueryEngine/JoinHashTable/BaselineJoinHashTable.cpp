@@ -127,13 +127,7 @@ BaselineJoinHashTable::BaselineJoinHashTable(
     , column_cache_(column_cache)
     , inner_outer_pairs_(inner_outer_pairs)
     , catalog_(executor->getCatalog())
-    , device_count_(device_count)
-    , block_size_(memory_level == Data_Namespace::MemoryLevel::GPU_LEVEL
-                      ? executor->blockSize()
-                      : 0)
-    , grid_size_(memory_level == Data_Namespace::MemoryLevel::GPU_LEVEL
-                     ? executor->gridSize()
-                     : 0) {
+    , device_count_(device_count) {
   CHECK_GT(device_count_, 0);
   hash_tables_for_device_.resize(std::max(device_count_, 1));
 }
@@ -390,8 +384,7 @@ std::pair<size_t, size_t> BaselineJoinHashTable::approximateTupleCount(
          &columns_per_device,
          &count_distinct_desc,
          &data_mgr,
-         &host_hll_buffers,
-         this] {
+         &host_hll_buffers] {
           CudaAllocator allocator(&data_mgr, device_id);
           auto device_hll_buffer =
               allocator.alloc(count_distinct_desc.bitmapPaddedSizeBytes());
@@ -415,9 +408,7 @@ std::pair<size_t, size_t> BaselineJoinHashTable::approximateTupleCount(
               reinterpret_cast<uint8_t*>(device_hll_buffer),
               count_distinct_desc.bitmap_sz_bits,
               key_handler_gpu,
-              columns_for_device.join_columns[0].num_elems,
-              block_size_,
-              grid_size_);
+              columns_for_device.join_columns[0].num_elems);
 
           auto& host_hll_buffer = host_hll_buffers[device_id];
           copy_from_gpu(&data_mgr,
@@ -654,9 +645,7 @@ int BaselineJoinHashTable::initHashTableForDevice(
                                      getKeyComponentCount(),
                                      entry_count_,
                                      emitted_keys_count_,
-                                     device_id,
-                                     block_size_,
-                                     grid_size_);
+                                     device_id);
     CHECK_LT(size_t(device_id), hash_tables_for_device_.size());
     hash_tables_for_device_[device_id] = builder.getHashTable();
 #else

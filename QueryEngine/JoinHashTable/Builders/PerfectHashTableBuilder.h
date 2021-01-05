@@ -87,9 +87,7 @@ class PerfectJoinHashTableBuilder {
 
     init_hash_join_buff_on_device(reinterpret_cast<int32_t*>(gpu_hash_table_buff),
                                   hash_entry_info.getNormalizedHashEntryCount(),
-                                  hash_join_invalid_val,
-                                  executor->blockSize(),
-                                  executor->gridSize());
+                                  hash_join_invalid_val);
     if (chunk_key.empty()) {
       return;
     }
@@ -121,8 +119,6 @@ class PerfectJoinHashTableBuilder {
               join_column,
               type_info,
               shard_info,
-              executor->blockSize(),
-              executor->gridSize(),
               hash_entry_info.bucket_normalization);
         } else {
           fill_one_to_many_hash_table_on_device_sharded(
@@ -131,9 +127,7 @@ class PerfectJoinHashTableBuilder {
               hash_join_invalid_val,
               join_column,
               type_info,
-              shard_info,
-              executor->blockSize(),
-              executor->gridSize());
+              shard_info);
         }
       }
     } else {
@@ -144,8 +138,6 @@ class PerfectJoinHashTableBuilder {
             reinterpret_cast<int*>(dev_err_buff),
             join_column,
             type_info,
-            executor->blockSize(),
-            executor->gridSize(),
             hash_entry_info.bucket_normalization);
       } else {
         if (use_bucketization) {
@@ -154,18 +146,14 @@ class PerfectJoinHashTableBuilder {
               hash_entry_info,
               hash_join_invalid_val,
               join_column,
-              type_info,
-              executor->blockSize(),
-              executor->gridSize());
+              type_info);
         } else {
           fill_one_to_many_hash_table_on_device(
               reinterpret_cast<int32_t*>(gpu_hash_table_buff),
               hash_entry_info,
               hash_join_invalid_val,
               join_column,
-              type_info,
-              executor->blockSize(),
-              executor->gridSize());
+              type_info);
         }
       }
     }

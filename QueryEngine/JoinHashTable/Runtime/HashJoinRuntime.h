@@ -67,9 +67,7 @@ void init_hash_join_buff(int32_t* buff,
 
 void init_hash_join_buff_on_device(int32_t* buff,
                                    const int64_t entry_count,
-                                   const int32_t invalid_slot_val,
-                                   const size_t block_size_x,
-                                   const size_t grid_size_x);
+                                   const int32_t invalid_slot_val);
 
 void init_baseline_hash_join_buff_32(int8_t* hash_join_buff,
                                      const int64_t entry_count,
@@ -91,17 +89,13 @@ void init_baseline_hash_join_buff_on_device_32(int8_t* hash_join_buff,
                                                const int64_t entry_count,
                                                const size_t key_component_count,
                                                const bool with_val_slot,
-                                               const int32_t invalid_slot_val,
-                                               const size_t block_size_x,
-                                               const size_t grid_size_x);
+                                               const int32_t invalid_slot_val);
 
 void init_baseline_hash_join_buff_on_device_64(int8_t* hash_join_buff,
                                                const int64_t entry_count,
                                                const size_t key_component_count,
                                                const bool with_val_slot,
-                                               const int32_t invalid_slot_val,
-                                               const size_t block_size_x,
-                                               const size_t grid_size_x);
+                                               const int32_t invalid_slot_val);
 
 enum ColumnType { SmallDate = 0, Signed = 1, Unsigned = 2, Double = 3 };
 
@@ -166,16 +160,12 @@ void fill_hash_join_buff_on_device(int32_t* buff,
                                    const int32_t invalid_slot_val,
                                    int* dev_err_buff,
                                    const JoinColumn join_column,
-                                   const JoinColumnTypeInfo type_info,
-                                   const size_t block_size_x,
-                                   const size_t grid_size_x);
+                                   const JoinColumnTypeInfo type_info);
 void fill_hash_join_buff_on_device_bucketized(int32_t* buff,
                                               const int32_t invalid_slot_val,
                                               int* dev_err_buff,
                                               const JoinColumn join_column,
                                               const JoinColumnTypeInfo type_info,
-                                              const size_t block_size_x,
-                                              const size_t grid_size_x,
                                               const int64_t bucket_normalization);
 
 struct ShardInfo {
@@ -190,9 +180,7 @@ void fill_hash_join_buff_on_device_sharded(int32_t* buff,
                                            int* dev_err_buff,
                                            const JoinColumn join_column,
                                            const JoinColumnTypeInfo type_info,
-                                           const ShardInfo shard_info,
-                                           const size_t block_size_x,
-                                           const size_t grid_size_x);
+                                           const ShardInfo shard_info);
 
 void fill_hash_join_buff_on_device_sharded_bucketized(int32_t* buff,
                                                       const int32_t invalid_slot_val,
@@ -200,8 +188,6 @@ void fill_hash_join_buff_on_device_sharded_bucketized(int32_t* buff,
                                                       const JoinColumn join_column,
                                                       const JoinColumnTypeInfo type_info,
                                                       const ShardInfo shard_info,
-                                                      const size_t block_size_x,
-                                                      const size_t grid_size_x,
                                                       const int64_t bucket_normalization);
 
 void fill_one_to_many_hash_table(int32_t* buff,
@@ -236,26 +222,21 @@ void fill_one_to_many_hash_table_on_device(int32_t* buff,
                                            const HashEntryInfo hash_entry_info,
                                            const int32_t invalid_slot_val,
                                            const JoinColumn& join_column,
-                                           const JoinColumnTypeInfo& type_info,
-                                           const size_t block_size_x,
-                                           const size_t grid_size_x);
+                                           const JoinColumnTypeInfo& type_info);
 
-void fill_one_to_many_hash_table_on_device_bucketized(int32_t* buff,
-                                                      const HashEntryInfo hash_entry_info,
-                                                      const int32_t invalid_slot_val,
-                                                      const JoinColumn& join_column,
-                                                      const JoinColumnTypeInfo& type_info,
-                                                      const size_t block_size_x,
-                                                      const size_t grid_size_x);
+void fill_one_to_many_hash_table_on_device_bucketized(
+    int32_t* buff,
+    const HashEntryInfo hash_entry_info,
+    const int32_t invalid_slot_val,
+    const JoinColumn& join_column,
+    const JoinColumnTypeInfo& type_info);
 
 void fill_one_to_many_hash_table_on_device_sharded(int32_t* buff,
                                                    const HashEntryInfo hash_entry_info,
                                                    const int32_t invalid_slot_val,
                                                    const JoinColumn& join_column,
                                                    const JoinColumnTypeInfo& type_info,
-                                                   const ShardInfo& shard_info,
-                                                   const size_t block_size_x,
-                                                   const size_t grid_size_x);
+                                                   const ShardInfo& shard_info);
 
 int fill_baseline_hash_join_buff_32(int8_t* hash_buff,
                                     const int64_t entry_count,
@@ -304,9 +285,7 @@ void fill_baseline_hash_join_buff_on_device_32(int8_t* hash_buff,
                                                const bool with_val_slot,
                                                int* dev_err_buff,
                                                const GenericKeyHandler* key_handler,
-                                               const int64_t num_elems,
-                                               const size_t block_size_x,
-                                               const size_t grid_size_x);
+                                               const int64_t num_elems);
 
 void fill_baseline_hash_join_buff_on_device_64(int8_t* hash_buff,
                                                const int64_t entry_count,
@@ -315,9 +294,7 @@ void fill_baseline_hash_join_buff_on_device_64(int8_t* hash_buff,
                                                const bool with_val_slot,
                                                int* dev_err_buff,
                                                const GenericKeyHandler* key_handler,
-                                               const int64_t num_elems,
-                                               const size_t block_size_x,
-                                               const size_t grid_size_x);
+                                               const int64_t num_elems);
 
 void overlaps_fill_baseline_hash_join_buff_on_device_64(
     int8_t* hash_buff,
@@ -327,9 +304,7 @@ void overlaps_fill_baseline_hash_join_buff_on_device_64(
     const bool with_val_slot,
     int* dev_err_buff,
     const OverlapsKeyHandler* key_handler,
-    const int64_t num_elems,
-    const size_t block_size_x,
-    const size_t grid_size_x);
+    const int64_t num_elems);
 
 void fill_one_to_many_baseline_hash_table_32(
     int32_t* buff,
@@ -364,9 +339,7 @@ void fill_one_to_many_baseline_hash_table_on_device_32(
     const int32_t invalid_slot_val,
     const size_t key_component_count,
     const GenericKeyHandler* key_handler,
-    const int64_t num_elems,
-    const size_t block_size_x,
-    const size_t grid_size_x);
+    const int64_t num_elems);
 
 void fill_one_to_many_baseline_hash_table_on_device_64(
     int32_t* buff,
@@ -374,9 +347,7 @@ void fill_one_to_many_baseline_hash_table_on_device_64(
     const int64_t hash_entry_count,
     const int32_t invalid_slot_val,
     const GenericKeyHandler* key_handler,
-    const int64_t num_elems,
-    const size_t block_size_x,
-    const size_t grid_size_x);
+    const int64_t num_elems);
 
 void overlaps_fill_one_to_many_baseline_hash_table_on_device_64(
     int32_t* buff,
@@ -384,9 +355,7 @@ void overlaps_fill_one_to_many_baseline_hash_table_on_device_64(
     const int64_t hash_entry_count,
     const int32_t invalid_slot_val,
     const OverlapsKeyHandler* key_handler,
-    const int64_t num_elems,
-    const size_t block_size_x,
-    const size_t grid_size_x);
+    const int64_t num_elems);
 
 void approximate_distinct_tuples(uint8_t* hll_buffer_all_cpus,
                                  const uint32_t b,
@@ -408,17 +377,13 @@ void approximate_distinct_tuples_overlaps(
 void approximate_distinct_tuples_on_device(uint8_t* hll_buffer,
                                            const uint32_t b,
                                            const GenericKeyHandler* key_handler,
-                                           const int64_t num_elems,
-                                           const size_t block_size_x,
-                                           const size_t grid_size_x);
+                                           const int64_t num_elems);
 
 void approximate_distinct_tuples_on_device_overlaps(uint8_t* hll_buffer,
                                                     const uint32_t b,
                                                     int32_t* row_counts_buffer,
                                                     const OverlapsKeyHandler* key_handler,
-                                                    const int64_t num_elems,
-                                                    const size_t block_size_x,
-                                                    const size_t grid_size_x);
+                                                    const int64_t num_elems);
 
 void compute_bucket_sizes(std::vector<double>& bucket_sizes_for_dimension,
                           const JoinColumn& join_column,
@@ -429,8 +394,6 @@ void compute_bucket_sizes(std::vector<double>& bucket_sizes_for_dimension,
 void compute_bucket_sizes_on_device(double* bucket_sizes_buffer,
                                     const JoinColumn* join_column,
                                     const JoinColumnTypeInfo* type_info,
-                                    const double bucket_sz_threshold,
-                                    const size_t block_size_x,
-                                    const size_t grid_size_x);
+                                    const double bucket_sz_threshold);
 
 #endif  // QUERYENGINE_HASHJOINRUNTIME_H

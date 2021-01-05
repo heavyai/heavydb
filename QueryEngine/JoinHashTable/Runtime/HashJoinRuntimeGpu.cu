@@ -63,8 +63,6 @@ void fill_hash_join_buff_on_device_bucketized(int32_t* buff,
                                               int* dev_err_buff,
                                               const JoinColumn join_column,
                                               const JoinColumnTypeInfo type_info,
-                                              const size_t block_size_x,
-                                              const size_t grid_size_x,
                                               const int64_t bucket_normalization) {
   cuda_kernel_launch_wrapper(fill_hash_join_buff_bucketized_wrapper,
                              buff,
@@ -79,9 +77,7 @@ void fill_hash_join_buff_on_device(int32_t* buff,
                                    const int32_t invalid_slot_val,
                                    int* dev_err_buff,
                                    const JoinColumn join_column,
-                                   const JoinColumnTypeInfo type_info,
-                                   const size_t block_size_x,
-                                   const size_t grid_size_x) {
+                                   const JoinColumnTypeInfo type_info) {
   cuda_kernel_launch_wrapper(fill_hash_join_buff_wrapper,
                              buff,
                              invalid_slot_val,
@@ -129,8 +125,6 @@ void fill_hash_join_buff_on_device_sharded_bucketized(
     const JoinColumn join_column,
     const JoinColumnTypeInfo type_info,
     const ShardInfo shard_info,
-    const size_t block_size_x,
-    const size_t grid_size_x,
     const int64_t bucket_normalization) {
   cuda_kernel_launch_wrapper(fill_hash_join_buff_wrapper_sharded_bucketized,
                              buff,
@@ -147,9 +141,7 @@ void fill_hash_join_buff_on_device_sharded(int32_t* buff,
                                            int* dev_err_buff,
                                            const JoinColumn join_column,
                                            const JoinColumnTypeInfo type_info,
-                                           const ShardInfo shard_info,
-                                           const size_t block_size_x,
-                                           const size_t grid_size_x) {
+                                           const ShardInfo shard_info) {
   cuda_kernel_launch_wrapper(fill_hash_join_buff_wrapper_sharded,
                              buff,
                              invalid_slot_val,
@@ -167,9 +159,7 @@ __global__ void init_hash_join_buff_wrapper(int32_t* buff,
 
 void init_hash_join_buff_on_device(int32_t* buff,
                                    const int64_t hash_entry_count,
-                                   const int32_t invalid_slot_val,
-                                   const size_t block_size_x,
-                                   const size_t grid_size_x) {
+                                   const int32_t invalid_slot_val) {
   cuda_kernel_launch_wrapper(
       init_hash_join_buff_wrapper, buff, hash_entry_count, invalid_slot_val);
 }
@@ -206,8 +196,6 @@ void fill_one_to_many_hash_table_on_device_impl(int32_t* buff,
                                                 const int32_t invalid_slot_val,
                                                 const JoinColumn& join_column,
                                                 const JoinColumnTypeInfo& type_info,
-                                                const size_t block_size_x,
-                                                const size_t grid_size_x,
                                                 COUNT_MATCHES_FUNCTOR count_matches_func,
                                                 FILL_ROW_IDS_FUNCTOR fill_row_ids_func) {
   int32_t* pos_buff = buff;
@@ -230,13 +218,9 @@ void fill_one_to_many_hash_table_on_device(int32_t* buff,
                                            const HashEntryInfo hash_entry_info,
                                            const int32_t invalid_slot_val,
                                            const JoinColumn& join_column,
-                                           const JoinColumnTypeInfo& type_info,
-                                           const size_t block_size_x,
-                                           const size_t grid_size_x) {
+                                           const JoinColumnTypeInfo& type_info) {
   auto hash_entry_count = hash_entry_info.hash_entry_count;
   auto count_matches_func = [hash_entry_count,
-                             grid_size_x,
-                             block_size_x,
                              count_buff = buff + hash_entry_count,
                              invalid_slot_val,
                              join_column,
@@ -245,43 +229,33 @@ void fill_one_to_many_hash_table_on_device(int32_t* buff,
         SUFFIX(count_matches), count_buff, invalid_slot_val, join_column, type_info);
   };
 
-  auto fill_row_ids_func = [grid_size_x,
-                            block_size_x,
-                            buff,
-                            hash_entry_count,
-                            invalid_slot_val,
-                            join_column,
-                            type_info] {
-    cuda_kernel_launch_wrapper(SUFFIX(fill_row_ids),
-                               buff,
-                               hash_entry_count,
-                               invalid_slot_val,
-                               join_column,
-                               type_info);
-  };
+  auto fill_row_ids_func =
+      [buff, hash_entry_count, invalid_slot_val, join_column, type_info] {
+        cuda_kernel_launch_wrapper(SUFFIX(fill_row_ids),
+                                   buff,
+                                   hash_entry_count,
+                                   invalid_slot_val,
+                                   join_column,
+                                   type_info);
+      };
 
   fill_one_to_many_hash_table_on_device_impl(buff,
                                              hash_entry_count,
                                              invalid_slot_val,
                                              join_column,
                                              type_info,
-                                             block_size_x,
-                                             grid_size_x,
                                              count_matches_func,
                                              fill_row_ids_func);
 }
 
-void fill_one_to_many_hash_table_on_device_bucketized(int32_t* buff,
-                                                      const HashEntryInfo hash_entry_info,
-                                                      const int32_t invalid_slot_val,
-                                                      const JoinColumn& join_column,
-                                                      const JoinColumnTypeInfo& type_info,
-                                                      const size_t block_size_x,
-                                                      const size_t grid_size_x) {
+void fill_one_to_many_hash_table_on_device_bucketized(
+    int32_t* buff,
+    const HashEntryInfo hash_entry_info,
+    const int32_t invalid_slot_val,
+    const JoinColumn& join_column,
+    const JoinColumnTypeInfo& type_info) {
   auto hash_entry_count = hash_entry_info.getNormalizedHashEntryCount();
-  auto count_matches_func = [grid_size_x,
-                             block_size_x,
-                             count_buff = buff + hash_entry_count,
+  auto count_matches_func = [count_buff = buff + hash_entry_count,
                              invalid_slot_val,
                              join_column,
                              type_info,
@@ -295,9 +269,7 @@ void fill_one_to_many_hash_table_on_device_bucketized(int32_t* buff,
                                bucket_normalization);
   };
 
-  auto fill_row_ids_func = [grid_size_x,
-                            block_size_x,
-                            buff,
+  auto fill_row_ids_func = [buff,
                             hash_entry_count =
                                 hash_entry_info.getNormalizedHashEntryCount(),
                             invalid_slot_val,
@@ -318,8 +290,6 @@ void fill_one_to_many_hash_table_on_device_bucketized(int32_t* buff,
                                              invalid_slot_val,
                                              join_column,
                                              type_info,
-                                             block_size_x,
-                                             grid_size_x,
                                              count_matches_func,
                                              fill_row_ids_func);
 }
@@ -329,9 +299,7 @@ void fill_one_to_many_hash_table_on_device_sharded(int32_t* buff,
                                                    const int32_t invalid_slot_val,
                                                    const JoinColumn& join_column,
                                                    const JoinColumnTypeInfo& type_info,
-                                                   const ShardInfo& shard_info,
-                                                   const size_t block_size_x,
-                                                   const size_t grid_size_x) {
+                                                   const ShardInfo& shard_info) {
   auto hash_entry_count = hash_entry_info.hash_entry_count;
   int32_t* pos_buff = buff;
   int32_t* count_buff = buff + hash_entry_count;
@@ -365,9 +333,7 @@ void fill_one_to_many_baseline_hash_table_on_device(int32_t* buff,
                                                     const int64_t hash_entry_count,
                                                     const int32_t invalid_slot_val,
                                                     const KEY_HANDLER* key_handler,
-                                                    const size_t num_elems,
-                                                    const size_t block_size_x,
-                                                    const size_t grid_size_x) {
+                                                    const size_t num_elems) {
   auto pos_buff = buff;
   auto count_buff = buff + hash_entry_count;
   cudaMemset(count_buff, 0, hash_entry_count * sizeof(int32_t));
@@ -414,9 +380,7 @@ void init_baseline_hash_join_buff_on_device_32(int8_t* hash_join_buff,
                                                const int64_t entry_count,
                                                const size_t key_component_count,
                                                const bool with_val_slot,
-                                               const int32_t invalid_slot_val,
-                                               const size_t block_size_x,
-                                               const size_t grid_size_x) {
+                                               const int32_t invalid_slot_val) {
   cuda_kernel_launch_wrapper(init_baseline_hash_join_buff_wrapper<int32_t>,
                              hash_join_buff,
                              entry_count,
@@ -429,9 +393,7 @@ void init_baseline_hash_join_buff_on_device_64(int8_t* hash_join_buff,
                                                const int64_t entry_count,
                                                const size_t key_component_count,
                                                const bool with_val_slot,
-                                               const int32_t invalid_slot_val,
-                                               const size_t block_size_x,
-                                               const size_t grid_size_x) {
+                                               const int32_t invalid_slot_val) {
   cuda_kernel_launch_wrapper(init_baseline_hash_join_buff_wrapper<int64_t>,
                              hash_join_buff,
                              entry_count,
@@ -468,9 +430,7 @@ void fill_baseline_hash_join_buff_on_device_32(int8_t* hash_buff,
                                                const bool with_val_slot,
                                                int* dev_err_buff,
                                                const GenericKeyHandler* key_handler,
-                                               const int64_t num_elems,
-                                               const size_t block_size_x,
-                                               const size_t grid_size_x) {
+                                               const int64_t num_elems) {
   cuda_kernel_launch_wrapper(
       fill_baseline_hash_join_buff_wrapper<int32_t, GenericKeyHandler>,
       hash_buff,
@@ -490,9 +450,7 @@ void fill_baseline_hash_join_buff_on_device_64(int8_t* hash_buff,
                                                const bool with_val_slot,
                                                int* dev_err_buff,
                                                const GenericKeyHandler* key_handler,
-                                               const int64_t num_elems,
-                                               const size_t block_size_x,
-                                               const size_t grid_size_x) {
+                                               const int64_t num_elems) {
   cuda_kernel_launch_wrapper(
       fill_baseline_hash_join_buff_wrapper<unsigned long long, GenericKeyHandler>,
       hash_buff,
@@ -513,9 +471,7 @@ void overlaps_fill_baseline_hash_join_buff_on_device_64(
     const bool with_val_slot,
     int* dev_err_buff,
     const OverlapsKeyHandler* key_handler,
-    const int64_t num_elems,
-    const size_t block_size_x,
-    const size_t grid_size_x) {
+    const int64_t num_elems) {
   cuda_kernel_launch_wrapper(
       fill_baseline_hash_join_buff_wrapper<unsigned long long, OverlapsKeyHandler>,
       hash_buff,
@@ -535,17 +491,13 @@ void fill_one_to_many_baseline_hash_table_on_device_32(
     const int32_t invalid_slot_val,
     const size_t key_component_count,
     const GenericKeyHandler* key_handler,
-    const int64_t num_elems,
-    const size_t block_size_x,
-    const size_t grid_size_x) {
+    const int64_t num_elems) {
   fill_one_to_many_baseline_hash_table_on_device<int32_t>(buff,
                                                           composite_key_dict,
                                                           hash_entry_count,
                                                           invalid_slot_val,
                                                           key_handler,
-                                                          num_elems,
-                                                          block_size_x,
-                                                          grid_size_x);
+                                                          num_elems);
 }
 
 void fill_one_to_many_baseline_hash_table_on_device_64(
@@ -554,17 +506,13 @@ void fill_one_to_many_baseline_hash_table_on_device_64(
     const int64_t hash_entry_count,
     const int32_t invalid_slot_val,
     const GenericKeyHandler* key_handler,
-    const int64_t num_elems,
-    const size_t block_size_x,
-    const size_t grid_size_x) {
+    const int64_t num_elems) {
   fill_one_to_many_baseline_hash_table_on_device<int64_t>(buff,
                                                           composite_key_dict,
                                                           hash_entry_count,
                                                           invalid_slot_val,
                                                           key_handler,
-                                                          num_elems,
-                                                          block_size_x,
-                                                          grid_size_x);
+                                                          num_elems);
 }
 
 void overlaps_fill_one_to_many_baseline_hash_table_on_device_64(
@@ -573,26 +521,20 @@ void overlaps_fill_one_to_many_baseline_hash_table_on_device_64(
     const int64_t hash_entry_count,
     const int32_t invalid_slot_val,
     const OverlapsKeyHandler* key_handler,
-    const int64_t num_elems,
-    const size_t block_size_x,
-    const size_t grid_size_x) {
+    const int64_t num_elems) {
   fill_one_to_many_baseline_hash_table_on_device<int64_t>(buff,
                                                           composite_key_dict,
                                                           hash_entry_count,
                                                           invalid_slot_val,
                                                           key_handler,
-                                                          num_elems,
-                                                          block_size_x,
-                                                          grid_size_x);
+                                                          num_elems);
 }
 
 void approximate_distinct_tuples_on_device_overlaps(uint8_t* hll_buffer,
                                                     const uint32_t b,
                                                     int32_t* row_counts_buffer,
                                                     const OverlapsKeyHandler* key_handler,
-                                                    const int64_t num_elems,
-                                                    const size_t block_size_x,
-                                                    const size_t grid_size_x) {
+                                                    const int64_t num_elems) {
   cuda_kernel_launch_wrapper(approximate_distinct_tuples_impl_gpu<OverlapsKeyHandler>,
                              hll_buffer,
                              row_counts_buffer,
@@ -608,9 +550,7 @@ void approximate_distinct_tuples_on_device_overlaps(uint8_t* hll_buffer,
 void approximate_distinct_tuples_on_device(uint8_t* hll_buffer,
                                            const uint32_t b,
                                            const GenericKeyHandler* key_handler,
-                                           const int64_t num_elems,
-                                           const size_t block_size_x,
-                                           const size_t grid_size_x) {
+                                           const int64_t num_elems) {
   cuda_kernel_launch_wrapper(approximate_distinct_tuples_impl_gpu<GenericKeyHandler>,
                              hll_buffer,
                              nullptr,
@@ -622,14 +562,10 @@ void approximate_distinct_tuples_on_device(uint8_t* hll_buffer,
 void compute_bucket_sizes_on_device(double* bucket_sizes_buffer,
                                     const JoinColumn* join_column,
                                     const JoinColumnTypeInfo* type_info,
-                                    const double bucket_sz_threshold,
-                                    const size_t block_size_x,
-                                    const size_t grid_size_x) {
+                                    const double bucket_sz_threshold) {
   cuda_kernel_launch_wrapper(compute_bucket_sizes_impl_gpu<2>,
                              bucket_sizes_buffer,
                              join_column,
                              type_info,
-                             bucket_sz_threshold,
-                             block_size_x,
-                             grid_size_x);
+                             bucket_sz_threshold);
 }
