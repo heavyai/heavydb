@@ -702,9 +702,12 @@ public final class MapDParser {
       }
     }
 
+    // The magical number here when processing the projection
+    // is skipping the OFFSET_IN_FRAGMENT() expression used by
+    // update and delete
     int idx = 0;
-    for (RexNode exp : project.getChildExps()) {
-      if (applyRexCast && idx + 1 < project.getChildExps().size()) {
+    for (RexNode exp : project.getProjects()) {
+      if (applyRexCast && idx + 1 < project.getProjects().size()) {
         RelDataType expectedFieldType =
                 targetTableType.getField(fields.get(idx), false, false).getType();
         if (!exp.getType().equals(expectedFieldType) && !exp.isA(ARRAY_VALUE)) {
