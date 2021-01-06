@@ -5319,6 +5319,27 @@ TEST_F(SelectQueryTest, ParquetNotNullWithNull) {
           file_name + "'.");
 }
 
+TEST_F(ParquetCoercionTest, Float64ToFloat32) {
+  createForeignTableWithCoercion("FLOAT", "ParquetCoercionTypes/coercible_float64");
+  sqlAndCompareResult("SELECT * FROM test_foreign_table;", {{1e-3f}});
+}
+
+TEST_F(ParquetCoercionTest, Float64ToFloat32InformationLoss) {
+  const std::string base_file_name = "ParquetCoercionTypes/non_coercible_float64";
+  createForeignTableWithCoercion("FLOAT", base_file_name);
+  queryAndAssertException(
+      "SELECT * FROM test_foreign_table",
+      getCoercionException(
+          "-340282346638528859811704183484516925440.000000",
+          "340282346638528859811704183484516925440.000000",
+          "179769000000000006323030492138942643493033036433685336215410983289126434148906"
+          "289940615299632196609445533816320312774433484859900046491141051651091672734470"
+          "972759941382582304802812882753059262973637182942535982636884444611376868582636"
+          "745405553206881859340916340092953230149901406738427651121855107737424232448."
+          "000000",
+          base_file_name));
+}
+
 int main(int argc, char** argv) {
   g_enable_fsi = true;
   g_enable_s3_fsi = true;

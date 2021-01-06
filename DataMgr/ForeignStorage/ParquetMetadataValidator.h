@@ -37,11 +37,16 @@ inline V get_null_value() {
   return inline_fp_null_value<V>();
 }
 
-template <typename D>
+template <typename D, std::enable_if_t<std::is_integral<D>::value, int> = 0>
 inline std::pair<D, D> get_min_max_bounds() {
   static_assert(std::is_signed<D>::value,
                 "'get_min_max_bounds' is only valid for signed types");
   return {get_null_value<D>() + 1, std::numeric_limits<D>::max()};
+}
+
+template <typename D, std::enable_if_t<std::is_floating_point<D>::value, int> = 0>
+inline std::pair<D, D> get_min_max_bounds() {
+  return {std::numeric_limits<D>::lowest(), std::numeric_limits<D>::max()};
 }
 
 template <typename D, typename T>
@@ -288,4 +293,60 @@ class DateInSecondsBoundsValidator {
             datetime_to_string(kSecsPerDay * max_value, column_type)};
   }
 };
+
+template <typename T>
+class FloatPointValidator {
+  static_assert(std::is_floating_point<T>::value,
+                "FloatPointValidator is only defined for floating point types.");
+
+ public:
+  template <typename D>
+  static void validateValue(const D& data_value, const SQLTypeInfo& column_type) {
+    if (!valueWithinBounds(data_value, column_type)) {
+      auto [min_allowed_value, max_allowed_value] = getMinMaxBoundsAsStrings(column_type);
+      throw_parquet_metadata_out_of_bounds_error(
+          min_allowed_value, max_allowed_value, std::to_string(data_value));
+    }
+  }
+
+ private:
+  static bool valueWithinBounds(const T& value, const SQLTypeInfo& column_type) {
+    CHECK(column_type.is_fp());
+    switch (column_type.get_size()) {
+      case 4:
+        return checkBounds<float>(value);
+      case 8:
+        return checkBounds<double>(value);
+      default:
+        UNREACHABLE();
+    }
+    return {};
+  }
+
+  static std::pair<std::string, std::string> getMinMaxBoundsAsStrings(
+      const SQLTypeInfo& column_type) {
+    CHECK(column_type.is_fp());
+    switch (column_type.get_size()) {
+      case 4:
+        return getMinMaxBoundsAsStrings<float>();
+      case 8:
+        return getMinMaxBoundsAsStrings<double>();
+      default:
+        UNREACHABLE();
+    }
+    return {};
+  }
+
+  template <typename D>
+  static bool checkBounds(const T& value) {
+    return check_bounds<D>(value);
+  }
+
+  template <typename D>
+  static std::pair<std::string, std::string> getMinMaxBoundsAsStrings() {
+    auto [min_value, max_value] = get_min_max_bounds<D>();
+    return {std::to_string(min_value), std::to_string(max_value)};
+  }
+};
+
 }  // namespace foreign_storage

@@ -394,23 +394,48 @@ std::shared_ptr<ParquetEncoder> create_parquet_integral_encoder(
   return {};
 }
 
+std::shared_ptr<ParquetEncoder> create_parquet_floating_point_encoder(
+    const ColumnDescriptor* omnisci_column,
+    const parquet::ColumnDescriptor* parquet_column,
+    AbstractBuffer* buffer) {
+  auto column_type = omnisci_column->columnType;
+  if (!column_type.is_fp()) {
+    return {};
+  }
+  CHECK_EQ(column_type.get_compression(), kENCODING_NONE);
+  switch (column_type.get_type()) {
+    case kFLOAT:
+      switch (parquet_column->physical_type()) {
+        case parquet::Type::FLOAT:
+          return std::make_shared<ParquetFixedLengthEncoder<float, float>>(
+              buffer, omnisci_column, parquet_column);
+        case parquet::Type::DOUBLE:
+          return std::make_shared<ParquetFixedLengthEncoder<float, double>>(
+              buffer, omnisci_column, parquet_column);
+        default:
+          UNREACHABLE();
+      }
+    case kDOUBLE:
+      CHECK(parquet_column->physical_type() == parquet::Type::DOUBLE);
+      return std::make_shared<ParquetFixedLengthEncoder<double, double>>(
+          buffer, omnisci_column, parquet_column);
+    default:
+      UNREACHABLE();
+  }
+  return {};
+}
+
 std::shared_ptr<ParquetEncoder> create_parquet_none_type_encoder(
     const ColumnDescriptor* omnisci_column,
     const parquet::ColumnDescriptor* parquet_column,
     AbstractBuffer* buffer) {
   auto column_type = omnisci_column->columnType;
   if (parquet_column->logical_type()->is_none() &&
-      !omnisci_column->columnType.is_string()) {  // boolean, int32, int64, float & double
+      !omnisci_column->columnType.is_string()) {  // boolean
     if (column_type.get_compression() == kENCODING_NONE) {
       switch (column_type.get_type()) {
         case kBOOLEAN:
           return std::make_shared<ParquetFixedLengthEncoder<int8_t, bool>>(
-              buffer, omnisci_column, parquet_column);
-        case kFLOAT:
-          return std::make_shared<ParquetFixedLengthEncoder<float, float>>(
-              buffer, omnisci_column, parquet_column);
-        case kDOUBLE:
-          return std::make_shared<ParquetFixedLengthEncoder<double, double>>(
               buffer, omnisci_column, parquet_column);
         default:
           UNREACHABLE();
@@ -763,13 +788,13 @@ std::shared_ptr<ParquetEncoder> create_parquet_array_encoder(
  *
  * Notes:
  *
- * - In the case of a metadata scan, the types of encoder created may
+ * - In the case of a metadata scan, the type of the encoder created may
  *   significantly change (for example in bit width.) This is because it is
- *   common for OmniSci to store metadata in a different format alltogether
+ *   common for OmniSci to store metadata in a different format altogether
  *   than the data itself (see for example FixedLengthEncoder.)
  * - This function and the function `isColumnMappingSupported` work in
  *   conjunction with each other. For example, once a mapping is known to be
- *   allowed through (since `isColumnMappingSupported` returned true) this
+ *   allowed (since `isColumnMappingSupported` returned true) this
  *   function does not have to check many corner cases exhaustively as it would
  *   be redundant with what was checked in `isColumnMappingSupported`.
  */
@@ -799,6 +824,10 @@ std::shared_ptr<ParquetEncoder> create_parquet_encoder(
   }
   if (auto encoder = create_parquet_integral_encoder(
           omnisci_column, parquet_column, buffer, is_metadata_scan)) {
+    return encoder;
+  }
+  if (auto encoder =
+          create_parquet_floating_point_encoder(omnisci_column, parquet_column, buffer)) {
     return encoder;
   }
   if (auto encoder = create_parquet_timestamp_encoder(
@@ -1031,6 +1060,22 @@ bool validate_decimal_mapping(const ColumnDescriptor* omnisci_column,
   return false;
 }
 
+bool validate_floating_point_mapping(const ColumnDescriptor* omnisci_column,
+                                     const parquet::ColumnDescriptor* parquet_column) {
+  if (!omnisci_column->columnType.is_fp()) {
+    return false;
+  }
+  // check if mapping is a valid coerced or non-coerced floating point mapping
+  // with no annotation (floating point columns have no annotation in the
+  // Parquet specification)
+  if (omnisci_column->columnType.get_compression() == kENCODING_NONE) {
+    return (parquet_column->physical_type() == parquet::Type::DOUBLE) ||
+           (parquet_column->physical_type() == parquet::Type::FLOAT &&
+            omnisci_column->columnType.get_type() == kFLOAT);
+  }
+  return false;
+}
+
 bool validate_integral_mapping(const ColumnDescriptor* omnisci_column,
                                const parquet::ColumnDescriptor* parquet_column) {
   if (!omnisci_column->columnType.is_integer()) {
@@ -1089,12 +1134,8 @@ bool validate_none_type_mapping(const ColumnDescriptor* omnisci_column,
                                 const parquet::ColumnDescriptor* parquet_column) {
   bool is_none_encoded_mapping =
       omnisci_column->columnType.get_compression() == kENCODING_NONE &&
-      ((parquet_column->physical_type() == parquet::Type::BOOLEAN &&
-        omnisci_column->columnType.get_type() == kBOOLEAN) ||
-       (parquet_column->physical_type() == parquet::Type::FLOAT &&
-        omnisci_column->columnType.get_type() == kFLOAT) ||
-       (parquet_column->physical_type() == parquet::Type::DOUBLE &&
-        omnisci_column->columnType.get_type() == kDOUBLE));
+      (parquet_column->physical_type() == parquet::Type::BOOLEAN &&
+       omnisci_column->columnType.get_type() == kBOOLEAN);
   return parquet_column->logical_type()->is_none() && is_none_encoded_mapping;
 }
 
@@ -1408,6 +1449,9 @@ bool LazyParquetChunkLoader::isColumnMappingSupported(
     return true;
   }
   if (validate_decimal_mapping(omnisci_column, parquet_column)) {
+    return true;
+  }
+  if (validate_floating_point_mapping(omnisci_column, parquet_column)) {
     return true;
   }
   if (validate_integral_mapping(omnisci_column, parquet_column)) {

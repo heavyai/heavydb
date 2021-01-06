@@ -61,7 +61,7 @@ class ParquetFixedLengthEncoder : public TypedParquetInPlaceEncoder<V, T>,
 
   void validate(std::shared_ptr<parquet::Statistics> stats,
                 const SQLTypeInfo& column_type) const override {
-    validateIntegralValue(stats, column_type);
+    validateIntegralOrFloatingPointValue(stats, column_type);
   }
 
   bool encodingIsIdentityForSameTypes() const override { return true; }
@@ -69,20 +69,34 @@ class ParquetFixedLengthEncoder : public TypedParquetInPlaceEncoder<V, T>,
  private:
   template <
       typename TT = T,
-      std::enable_if_t<!std::is_integral<TT>::value || std::is_same<TT, bool>::value,
+      std::enable_if_t<(!std::is_integral<TT>::value || std::is_same<TT, bool>::value) &&
+                           !std::is_floating_point<TT>::value,
                        int> = 0>
-  void validateIntegralValue(std::shared_ptr<parquet::Statistics> stats,
-                             const SQLTypeInfo& column_type) const {
-    // do nothing when type `T` is non-integral (cases for which this can
-    // happen are when `T` is float, double or bool)
+  void validateIntegralOrFloatingPointValue(std::shared_ptr<parquet::Statistics> stats,
+                                            const SQLTypeInfo& column_type) const {
+    // do nothing when type `T` is non-integral and non-floating-point (case
+    // for which this can happen are when `T` is bool)
+  }
+
+  template <typename TT = T, std::enable_if_t<std::is_floating_point<TT>::value, int> = 0>
+  void validateIntegralOrFloatingPointValue(std::shared_ptr<parquet::Statistics> stats,
+                                            const SQLTypeInfo& column_type) const {
+    auto [unencoded_stats_min, unencoded_stats_max] =
+        TypedParquetInPlaceEncoder<V, T>::getUnencodedStats(stats);
+    if (column_type.is_fp()) {
+      FloatPointValidator<T>::validateValue(unencoded_stats_max, column_type);
+      FloatPointValidator<T>::validateValue(unencoded_stats_min, column_type);
+    } else {
+      UNREACHABLE();
+    }
   }
 
   template <
       typename TT = T,
       std::enable_if_t<std::is_integral<TT>::value && !std::is_same<TT, bool>::value,
                        int> = 0>
-  void validateIntegralValue(std::shared_ptr<parquet::Statistics> stats,
-                             const SQLTypeInfo& column_type) const {
+  void validateIntegralOrFloatingPointValue(std::shared_ptr<parquet::Statistics> stats,
+                                            const SQLTypeInfo& column_type) const {
     if (!column_type.is_integer() && !column_type.is_timestamp()) {
       return;
     }
