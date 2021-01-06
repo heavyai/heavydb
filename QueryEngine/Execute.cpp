@@ -3645,7 +3645,16 @@ void Executor::checkPendingQueryStatus(const QuerySessionId& query_session) {
   if (queries_interrupt_flag_.find(query_session) == queries_interrupt_flag_.end()) {
     // something goes wrong since we assume this is caller's responsibility
     // (call this function only for enrolled query session)
-    CHECK(false);
+    if (!queries_session_map_.count(query_session)) {
+      VLOG(1) << "Interrupting pending query is not available since the query session is "
+                 "not enrolled";
+    } else {
+      // here the query session is enrolled but the interrupt flag is not registered
+      VLOG(1)
+          << "Interrupting pending query is not available since its interrupt flag is "
+             "not registered";
+    }
+    return;
   }
   if (queries_interrupt_flag_[query_session]) {
     throw QueryExecutionError(Executor::ERR_INTERRUPTED);
