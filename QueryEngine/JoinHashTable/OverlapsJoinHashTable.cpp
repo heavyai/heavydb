@@ -99,14 +99,16 @@ std::shared_ptr<OverlapsJoinHashTable> OverlapsJoinHashTable::getInstance(
     join_hash_table->reify(layout);
   } catch (const HashJoinFail& e) {
     throw HashJoinFail(std::string("Could not build a 1-to-1 correspondence for columns "
-                                   "involved in equijoin | ") +
+                                   "involved in overlaps join | ") +
                        e.what());
   } catch (const ColumnarConversionNotSupported& e) {
-    throw HashJoinFail(std::string("Could not build hash tables for equijoin | ") +
+    throw HashJoinFail(std::string("Could not build hash tables for overlaps join | "
+                                   "Inner table too big. Attempt manual table reordering "
+                                   "or create a single fragment inner table. | ") +
                        e.what());
   } catch (const std::exception& e) {
-    LOG(FATAL) << "Fatal error while attempting to build hash tables for join: "
-               << e.what();
+    throw HashJoinFail(std::string("Failed to build hash tables for overlaps join | ") +
+                       e.what());
   }
   if (VLOGGING(1)) {
     ts2 = std::chrono::steady_clock::now();
