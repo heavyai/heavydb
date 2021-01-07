@@ -1,0 +1,9 @@
+Struct serialize_detail::IntType< 4 >
+=====================================
+
+.. doxygenstruct:: serialize_detail::IntType< 4 >
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:
