@@ -1508,20 +1508,7 @@ ResultSetPtr Executor::executeWorkUnitImpl(
                                      render_info,
                                      available_gpus,
                                      available_cpus);
-        if (g_use_tbb_pool) {
-#ifdef HAVE_TBB
-          VLOG(1) << "Using TBB thread pool for kernel dispatch.";
-          launchKernels<threadpool::TbbThreadPool<void>>(shared_context,
-                                                         std::move(kernels));
-#else
-          throw std::runtime_error(
-              "This build is not TBB enabled. Restart the server with "
-              "\"enable-modern-thread-pool\" disabled.");
-#endif
-        } else {
-          launchKernels<threadpool::FuturesThreadPool<void>>(shared_context,
-                                                             std::move(kernels));
-        }
+        launchKernels(shared_context, std::move(kernels));
       } catch (QueryExecutionError& e) {
         if (eo.with_dynamic_watchdog && interrupted_.load() &&
             e.getErrorCode() == ERR_OUT_OF_TIME) {
@@ -2120,26 +2107,28 @@ std::vector<std::unique_ptr<ExecutionKernel>> Executor::createKernels(
   return execution_kernels;
 }
 
-template <typename THREAD_POOL>
 void Executor::launchKernels(SharedKernelContext& shared_context,
                              std::vector<std::unique_ptr<ExecutionKernel>>&& kernels) {
   auto clock_begin = timer_start();
   std::lock_guard<std::mutex> kernel_lock(kernel_mutex_);
   kernel_queue_time_ms_ += timer_stop(clock_begin);
 
-  THREAD_POOL thread_pool;
+  std::vector<std::future<void>> kernel_threads;
   VLOG(1) << "Launching " << kernels.size() << " kernels for query.";
   for (auto& kernel : kernels) {
-    thread_pool.spawn(
+    kernel_threads.push_back(std::async(
+        std::launch::async,
         [this, &shared_context, parent_thread_id = logger::thread_id()](
             ExecutionKernel* kernel) {
           CHECK(kernel);
           DEBUG_TIMER_NEW_THREAD(parent_thread_id);
           kernel->run(this, shared_context);
         },
-        kernel.get());
+        kernel.get()));
   }
-  thread_pool.join();
+  for (auto& kernel_thread : kernel_threads) {
+    kernel_thread.get();
+  }
 }
 
 std::vector<size_t> Executor::getTableFragmentIndices(

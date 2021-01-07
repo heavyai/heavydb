@@ -604,7 +604,6 @@ class Executor {
    * Launches execution kernels created by `createKernels` asynchronously using a thread
    * pool.
    */
-  template <typename THREAD_POOL>
   void launchKernels(SharedKernelContext& shared_context,
                      std::vector<std::unique_ptr<ExecutionKernel>>&& kernels);
 
