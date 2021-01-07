@@ -62,6 +62,7 @@ extern bool g_enable_calcite_view_optimize;
 extern bool g_enable_bump_allocator;
 extern bool g_enable_interop;
 extern bool g_enable_union;
+extern size_t g_num_kernel_threads;
 
 extern size_t g_leaf_count;
 extern bool g_cluster;
@@ -22424,6 +22425,10 @@ int main(int argc, char** argv) {
                          ->default_value(g_use_tbb_pool)
                          ->implicit_value(true),
                      "Use TBB thread pool implementation for query dispatch.");
+  desc.add_options()(
+      "num-kernel-threads",
+      po::value<size_t>(&g_num_kernel_threads)->default_value(g_num_kernel_threads),
+      "Number of threads for kernel launch.");
 
   desc.add_options()(
       "test-help",

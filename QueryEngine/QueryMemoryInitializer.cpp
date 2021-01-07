@@ -437,10 +437,10 @@ void QueryMemoryInitializer::initGroups(const QueryMemoryDescriptor& query_mem_d
     return;
   }
 
+  const auto key_width = query_mem_desc.getEffectiveKeyWidth();
   for (size_t bin = 0; bin < static_cast<size_t>(groups_buffer_entry_count);
        ++bin, buffer_ptr += row_size) {
-    result_set::fill_empty_key(
-        buffer_ptr, key_count, query_mem_desc.getEffectiveKeyWidth());
+    result_set::fill_empty_key(buffer_ptr, key_count, key_width);
     initColumnPerRow(query_mem_desc_fixedup,
                      &buffer_ptr[col_base_off],
                      bin,

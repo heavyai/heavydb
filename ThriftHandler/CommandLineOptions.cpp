@@ -45,6 +45,7 @@ extern bool g_enable_calcite_ddl_parser;
 extern bool g_enable_seconds_refresh;
 extern size_t g_approx_quantile_buffer;
 extern size_t g_approx_quantile_centroids;
+extern size_t g_num_kernel_threads;
 
 namespace Catalog_Namespace {
 extern bool g_log_user_id;
@@ -671,6 +672,10 @@ void CommandLineOptions::fillAdvancedOptions() {
           ->default_value(g_enable_seconds_refresh)
           ->implicit_value(true),
       "Enable foreign table seconds refresh interval for testing purposes.");
+  developer_desc.add_options()(
+      "num-kernel-threads",
+      po::value<size_t>(&g_num_kernel_threads)->default_value(g_num_kernel_threads),
+      "Number of threads for kernel execution thread pool.");
 }
 
 namespace {
@@ -792,6 +797,8 @@ void CommandLineOptions::validate() {
     LOG(INFO) << " A frequency of checking running query interrupt request is set to "
               << running_query_interrupt_freq << " (0.0 ~ 1.0)";
   }
+
+  LOG(INFO) << " Num kernel threads is set to " << g_num_kernel_threads;
 
   LOG(INFO) << " Debug Timer is set to " << g_enable_debug_timer;
   LOG(INFO) << " LogUserId is set to " << Catalog_Namespace::g_log_user_id;

@@ -16,31 +16,31 @@
 
 #include "Execute.h"
 
-#include "AggregateUtils.h"
-#include "CodeGenerator.h"
-#include "ColumnFetcher.h"
-#include "Descriptors/QueryCompilationDescriptor.h"
-#include "Descriptors/QueryFragmentDescriptor.h"
-#include "DynamicWatchdog.h"
-#include "EquiJoinCondition.h"
-#include "ErrorHandling.h"
-#include "ExpressionRewrite.h"
-#include "ExternalCacheInvalidators.h"
-#include "GpuMemUtils.h"
-#include "InPlaceSort.h"
-#include "JoinHashTable/BaselineJoinHashTable.h"
-#include "JoinHashTable/OverlapsJoinHashTable.h"
-#include "JsonAccessors.h"
-#include "OutputBufferInitialization.h"
+#include "QueryEngine/AggregateUtils.h"
+#include "QueryEngine/CodeGenerator.h"
+#include "QueryEngine/ColumnFetcher.h"
+#include "QueryEngine/Descriptors/QueryCompilationDescriptor.h"
+#include "QueryEngine/Descriptors/QueryFragmentDescriptor.h"
+#include "QueryEngine/DynamicWatchdog.h"
+#include "QueryEngine/EquiJoinCondition.h"
+#include "QueryEngine/ErrorHandling.h"
+#include "QueryEngine/ExpressionRewrite.h"
+#include "QueryEngine/ExternalCacheInvalidators.h"
+#include "QueryEngine/GpuMemUtils.h"
+#include "QueryEngine/InPlaceSort.h"
+#include "QueryEngine/JoinHashTable/BaselineJoinHashTable.h"
+#include "QueryEngine/JoinHashTable/OverlapsJoinHashTable.h"
+#include "QueryEngine/JsonAccessors.h"
+#include "QueryEngine/KernelThreadPool.h"
+#include "QueryEngine/OutputBufferInitialization.h"
 #include "QueryEngine/QueryDispatchQueue.h"
-#include "QueryRewrite.h"
-#include "QueryTemplateGenerator.h"
-#include "ResultSetReductionJIT.h"
-#include "RuntimeFunctions.h"
-#include "SpeculativeTopN.h"
-
-#include "TableFunctions/TableFunctionCompilationContext.h"
-#include "TableFunctions/TableFunctionExecutionContext.h"
+#include "QueryEngine/QueryRewrite.h"
+#include "QueryEngine/QueryTemplateGenerator.h"
+#include "QueryEngine/ResultSetReductionJIT.h"
+#include "QueryEngine/RuntimeFunctions.h"
+#include "QueryEngine/SpeculativeTopN.h"
+#include "QueryEngine/TableFunctions/TableFunctionCompilationContext.h"
+#include "QueryEngine/TableFunctions/TableFunctionExecutionContext.h"
 
 #include "CudaMgr/CudaMgr.h"
 #include "DataMgr/BufferMgr/BufferMgr.h"
@@ -52,7 +52,6 @@
 #include "Shared/misc.h"
 #include "Shared/scope.h"
 #include "Shared/shard_key.h"
-#include "Shared/threadpool.h"
 
 #include "AggregatedColRange.h"
 #include "StringDictionaryGenerations.h"
@@ -127,6 +126,8 @@ bool g_is_test_env{false};  // operating under a unit test environment. Currentl
 
 size_t g_approx_quantile_buffer{1000};
 size_t g_approx_quantile_centroids{300};
+
+size_t g_num_kernel_threads{std::thread::hardware_concurrency()};
 
 extern bool g_cache_string_hash;
 
@@ -1508,7 +1509,9 @@ ResultSetPtr Executor::executeWorkUnitImpl(
                                      render_info,
                                      available_gpus,
                                      available_cpus);
-        launchKernels(shared_context, std::move(kernels));
+        launchKernels(shared_context,
+                      std::move(kernels),
+                      device_type == ExecutorDeviceType::GPU ? available_gpus.size() : 0);
       } catch (QueryExecutionError& e) {
         if (eo.with_dynamic_watchdog && interrupted_.load() &&
             e.getErrorCode() == ERR_OUT_OF_TIME) {
@@ -2107,27 +2110,74 @@ std::vector<std::unique_ptr<ExecutionKernel>> Executor::createKernels(
   return execution_kernels;
 }
 
+static std::unique_ptr<KernelThreadPool> cpu_thread_pool;
+static std::unique_ptr<KernelThreadPool> gpu_thread_pool;
+
 void Executor::launchKernels(SharedKernelContext& shared_context,
-                             std::vector<std::unique_ptr<ExecutionKernel>>&& kernels) {
+                             std::vector<std::unique_ptr<ExecutionKernel>>&& kernels,
+                             const size_t device_count) {
   auto clock_begin = timer_start();
   std::lock_guard<std::mutex> kernel_lock(kernel_mutex_);
   kernel_queue_time_ms_ += timer_stop(clock_begin);
 
-  std::vector<std::future<void>> kernel_threads;
-  VLOG(1) << "Launching " << kernels.size() << " kernels for query.";
-  for (auto& kernel : kernels) {
-    kernel_threads.push_back(std::async(
-        std::launch::async,
-        [this, &shared_context, parent_thread_id = logger::thread_id()](
-            ExecutionKernel* kernel) {
-          CHECK(kernel);
-          DEBUG_TIMER_NEW_THREAD(parent_thread_id);
-          kernel->run(this, shared_context);
-        },
-        kernel.get()));
+  KernelThreadPool* thread_pool;
+  if (device_count > 0) {
+    // use gpu thread pool
+    if (!gpu_thread_pool) {
+      VLOG(1) << "Instantiating GPU thread pool with " << device_count << " threads.";
+      gpu_thread_pool = std::make_unique<KernelThreadPool>(device_count);
+    }
+    thread_pool = gpu_thread_pool.get();
+  } else {
+    // use cpu thread pool
+    if (!cpu_thread_pool) {
+      VLOG(1) << "Instantiating CPU thread pool with " << g_num_kernel_threads
+              << " threads.";
+      cpu_thread_pool = std::make_unique<KernelThreadPool>(g_num_kernel_threads);
+    }
+    thread_pool = cpu_thread_pool.get();
   }
-  for (auto& kernel_thread : kernel_threads) {
-    kernel_thread.get();
+  CHECK(thread_pool);
+
+  VLOG(1) << "Launching " << kernels.size() << " kernels for query.";
+  std::vector<std::future<void>> execution_kernel_futures;
+
+  // batch mode for cpu
+  if (!(device_count > 0)) {
+    std::vector<KernelThreadPool::Task> tasks;
+    tasks.reserve(kernels.size());
+    for (auto& kernel : kernels) {
+      tasks.emplace_back([this, &kernel, &shared_context]() {
+        CHECK(kernel);
+        // TODO: handle debug timer...
+        //                  DEBUG_TIMER_NEW_THREAD(parent_thread_id);
+        kernel->run(this, shared_context);
+      });
+    }
+    execution_kernel_futures = thread_pool->submitBatch(std::move(tasks));
+  } else {
+    // single submissions mode for gpu
+    execution_kernel_futures.reserve(kernels.size());
+    for (auto& kernel : kernels) {
+      execution_kernel_futures.emplace_back(
+          thread_pool->submit(KernelThreadPool::Task([this, &kernel, &shared_context]() {
+            CHECK(kernel);
+            // TODO: handle debug timer...
+            //                  DEBUG_TIMER_NEW_THREAD(parent_thread_id);
+            kernel->run(this, shared_context);
+          })));
+    }
+  }
+
+  // wait first to ensure all threads exit before reading exceptions
+  for (auto& future : execution_kernel_futures) {
+    future.wait();
+  }
+
+  // get() reads exceptions and may terminate early. the clear queue scope guard will
+  // ensure all tasks get cleaned up upon termination.
+  for (auto& future : execution_kernel_futures) {
+    future.get();
   }
 }
 

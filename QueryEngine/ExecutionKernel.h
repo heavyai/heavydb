@@ -50,7 +50,7 @@ class ExecutionKernel {
  public:
   ExecutionKernel(const RelAlgExecutionUnit& ra_exe_unit,
                   const ExecutorDeviceType chosen_device_type,
-                  int chosen_device_id,
+                  const int chosen_device_id,
                   const ExecutionOptions& eo,
                   const ColumnFetcher& column_fetcher,
                   const QueryCompilationDescriptor& query_comp_desc,
@@ -60,33 +60,31 @@ class ExecutionKernel {
                   RenderInfo* render_info,
                   const int64_t rowid_lookup_key)
       : ra_exe_unit_(ra_exe_unit)
-      , chosen_device_type(chosen_device_type)
-      , chosen_device_id(chosen_device_id)
-      , eo(eo)
-      , column_fetcher(column_fetcher)
-      , query_comp_desc(query_comp_desc)
-      , query_mem_desc(query_mem_desc)
-      , frag_list(frag_list)
-      , kernel_dispatch_mode(kernel_dispatch_mode)
+      , chosen_device_type_(chosen_device_type)
+      , chosen_device_id_(chosen_device_id)
+      , eo_(eo)
+      , column_fetcher_(column_fetcher)
+      , query_comp_desc_(query_comp_desc)
+      , query_mem_desc_(query_mem_desc)
+      , frag_list_(frag_list)
+      , kernel_dispatch_mode_(kernel_dispatch_mode)
       , render_info_(render_info)
-      , rowid_lookup_key(rowid_lookup_key) {}
+      , rowid_lookup_key_(rowid_lookup_key) {}
 
   void run(Executor* executor, SharedKernelContext& shared_context);
 
  private:
   const RelAlgExecutionUnit& ra_exe_unit_;
-  const ExecutorDeviceType chosen_device_type;
-  int chosen_device_id;
-  const ExecutionOptions& eo;
-  const ColumnFetcher& column_fetcher;
-  const QueryCompilationDescriptor& query_comp_desc;
-  const QueryMemoryDescriptor& query_mem_desc;
-  const FragmentsList frag_list;
-  const ExecutorDispatchMode kernel_dispatch_mode;
+  const ExecutorDeviceType chosen_device_type_;
+  const int chosen_device_id_;
+  const ExecutionOptions& eo_;
+  const ColumnFetcher& column_fetcher_;
+  const QueryCompilationDescriptor& query_comp_desc_;
+  const QueryMemoryDescriptor& query_mem_desc_;
+  const FragmentsList frag_list_;
+  const ExecutorDispatchMode kernel_dispatch_mode_;
   RenderInfo* render_info_;
-  const int64_t rowid_lookup_key;
-
-  ResultSetPtr device_results_;
+  const int64_t rowid_lookup_key_;
 
   void runImpl(Executor* executor, SharedKernelContext& shared_context);
 };

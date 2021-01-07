@@ -605,7 +605,8 @@ class Executor {
    * pool.
    */
   void launchKernels(SharedKernelContext& shared_context,
-                     std::vector<std::unique_ptr<ExecutionKernel>>&& kernels);
+                     std::vector<std::unique_ptr<ExecutionKernel>>&& kernels,
+                     const size_t device_count);
 
   std::vector<size_t> getTableFragmentIndices(
       const RelAlgExecutionUnit& ra_exe_unit,
