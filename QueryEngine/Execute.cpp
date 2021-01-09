@@ -4109,6 +4109,15 @@ std::pair<bool, int64_t> Executor::skipFragment(
         return {false, -1};
       }
     }
+    if (lhs_col->get_type_info().is_timestamp() && rhs_const->get_type_info().is_date()) {
+      // It is obvious that a cast from timestamp to date is happening here,
+      // so we have to correct the chunk min and max values to lower the precision as of
+      // the date
+      chunk_min = truncate_high_precision_timestamp_to_date(
+          chunk_min, pow(10, lhs_col->get_type_info().get_dimension()));
+      chunk_max = truncate_high_precision_timestamp_to_date(
+          chunk_max, pow(10, lhs_col->get_type_info().get_dimension()));
+    }
     llvm::LLVMContext local_context;
     CgenState local_cgen_state(local_context);
     CodeGenerator code_generator(&local_cgen_state, nullptr);

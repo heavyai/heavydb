@@ -7184,6 +7184,26 @@ TEST_F(Select, TimeRedux) {
         v<int64_t>(run_simple_agg(
             R"(SELECT COUNT(*) FROM test WHERE o = (DATE '1999-09-01') OR CAST(o AS TIMESTAMP) = (TIMESTAMP '1999-09-09 00:00:00.000');)",
             dt)));
+    EXPECT_EQ(
+        15,
+        v<int64_t>(run_simple_agg(
+            R"(SELECT COUNT(*) FROM test WHERE CAST(m AS DATE) = (DATE '2014-12-13');)",
+            dt)));
+    EXPECT_EQ(
+        15,
+        v<int64_t>(run_simple_agg(
+            R"(SELECT COUNT(*) FROM test WHERE CAST(m_3 AS DATE) = (DATE '2014-12-13');)",
+            dt)));
+    EXPECT_EQ(
+        10,
+        v<int64_t>(run_simple_agg(
+            R"(SELECT COUNT(*) FROM test WHERE CAST(m_6 AS DATE) = (DATE '1999-07-11');)",
+            dt)));
+    EXPECT_EQ(
+        10,
+        v<int64_t>(run_simple_agg(
+            R"(SELECT COUNT(*) FROM test WHERE CAST(m_9 AS DATE) = (DATE '2006-04-26');)",
+            dt)));
   }
 }
 
