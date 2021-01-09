@@ -180,6 +180,19 @@ ParserWrapper::ParserWrapper(std::string query_string) {
           is_legacy_ddl_ = false;
           return;
         }
+      } else if (ddl == "DROP") {
+        query_type_ = QueryType::SchemaRead;
+        boost::regex drop_table_regex{R"(DROP\s+TABLE.*)",
+                                      boost::regex::extended | boost::regex::icase};
+        boost::regex drop_view_regex{R"(DROP\s+VIEW.*)",
+                                     boost::regex::extended | boost::regex::icase};
+        if (g_enable_calcite_ddl_parser &&
+            (boost::regex_match(query_string, drop_table_regex) ||
+             boost::regex_match(query_string, drop_view_regex))) {
+          is_calcite_ddl_ = true;
+          is_legacy_ddl_ = false;
+          return;
+        }
       } else if (ddl == "KILL") {
         query_type_ = QueryType::Unknown;
         is_calcite_ddl_ = true;

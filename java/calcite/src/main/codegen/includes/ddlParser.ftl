@@ -470,6 +470,27 @@ SqlCreate SqlCreateTable(Span s, boolean replace) :
     }
 }
 
+
+/*
+ * Drop a table using the following syntax:
+ *
+ * DROP TABLE [ IF EXISTS ] <table_name>
+ */
+SqlDrop SqlDropTable(Span s, boolean replace) :
+{
+    final boolean ifExists;
+    final SqlIdentifier tableName;
+}
+{
+    <TABLE>
+    ifExists = IfExistsOpt()
+    tableName = CompoundIdentifier()
+    {
+        return new SqlDropTable(s.end(this), ifExists, tableName.toString());
+    }
+}
+
+
 SqlCreate SqlCreateView(Span s, boolean replace) :
 {
     final boolean ifNotExists;
@@ -488,3 +509,23 @@ SqlCreate SqlCreateView(Span s, boolean replace) :
             query);
     }
 }
+
+/*
+ * Drop a view using the following syntax:
+ *
+ * DROP VIEW [ IF EXISTS ] <view_name>
+ */
+SqlDrop SqlDropView(Span s, boolean replace) :
+{
+    final boolean ifExists;
+    final SqlIdentifier viewName;
+}
+{
+    <VIEW>
+    ifExists = IfExistsOpt()
+    viewName = CompoundIdentifier()
+    {
+        return new SqlDropView(s.end(this), ifExists, viewName.toString());
+    }
+}
+

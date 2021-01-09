@@ -3284,6 +3284,16 @@ void CreateTableAsSelectStmt::execute(const Catalog_Namespace::SessionInfo& sess
   }
 }
 
+DropTableStmt::DropTableStmt(const rapidjson::Value& payload) {
+  CHECK(payload.HasMember("tableName"));
+  table = std::make_unique<std::string>(json_str(payload["tableName"]));
+
+  if_exists = false;
+  if (payload.HasMember("ifExists")) {
+    if_exists = json_bool(payload["ifExists"]);
+  }
+}
+
 void DropTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   auto& catalog = session.getCatalog();
 
@@ -4911,6 +4921,16 @@ void CreateViewStmt::execute(const Catalog_Namespace::SessionInfo& session) {
       session.get_currentUser(), view_name_, ViewDBObjectType, catalog);
 }
 
+DropViewStmt::DropViewStmt(const rapidjson::Value& payload) {
+  CHECK(payload.HasMember("viewName"));
+  view_name = std::make_unique<std::string>(json_str(payload["viewName"]));
+
+  if_exists = false;
+  if (payload.HasMember("ifExists")) {
+    if_exists = json_bool(payload["ifExists"]);
+  }
+}
+
 void DropViewStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   auto& catalog = session.getCatalog();
 
@@ -5176,9 +5196,15 @@ void execute_calcite_ddl(
   if (ddl_command == "CREATE_TABLE") {
     auto create_table_stmt = Parser::CreateTableStmt(payload);
     create_table_stmt.execute(*session_ptr);
+  } else if (ddl_command == "DROP_TABLE") {
+    auto drop_table_stmt = Parser::DropTableStmt(payload);
+    drop_table_stmt.execute(*session_ptr);
   } else if (ddl_command == "CREATE_VIEW") {
     auto create_view_stmt = Parser::CreateViewStmt(payload);
     create_view_stmt.execute(*session_ptr);
+  } else if (ddl_command == "DROP_VIEW") {
+    auto drop_view_stmt = Parser::DropViewStmt(payload);
+    drop_view_stmt.execute(*session_ptr);
   } else {
     throw std::runtime_error("Unsupported DDL command");
   }

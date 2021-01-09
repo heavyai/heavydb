@@ -31,7 +31,9 @@ data: {
         "com.mapd.parser.extension.ddl.omnisci.*"
         "com.mapd.parser.extension.ddl.SqlDdlNodes"
         "com.mapd.parser.extension.ddl.SqlCreateTable"
+        "com.mapd.parser.extension.ddl.SqlDropTable"
         "com.mapd.parser.extension.ddl.SqlCreateView"
+        "com.mapd.parser.extension.ddl.SqlDropView"
         "com.mapd.parser.extension.ddl.SqlCreateServer"
         "com.mapd.parser.extension.ddl.SqlDropServer"
         "com.mapd.parser.extension.ddl.SqlShowTables"
@@ -490,6 +492,8 @@ data: {
       # List of methods for parsing extensions to "DROP" calls.
       # Each must accept arguments "(SqlParserPos pos)".
       dropStatementParserMethods: [
+        "SqlDropTable"
+        "SqlDropView"
         "SqlDropServer"
         "SqlDropForeignTable"
         "SqlDropUserMapping"

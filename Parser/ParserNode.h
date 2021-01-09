@@ -1146,6 +1146,8 @@ class CreateTableAsSelectStmt : public InsertIntoTableAsSelectStmt {
 class DropTableStmt : public DDLStmt {
  public:
   DropTableStmt(std::string* tab, bool i) : table(tab), if_exists(i) {}
+  DropTableStmt(const rapidjson::Value& payload);
+
   const std::string* get_table() const { return table.get(); }
   void execute(const Catalog_Namespace::SessionInfo& session) override;
 
@@ -1881,6 +1883,8 @@ class CreateViewStmt : public DDLStmt {
 class DropViewStmt : public DDLStmt {
  public:
   DropViewStmt(std::string* v, bool i) : view_name(v), if_exists(i) {}
+  DropViewStmt(const rapidjson::Value& payload);
+
   const std::string* get_view_name() const { return view_name.get(); }
   void execute(const Catalog_Namespace::SessionInfo& session) override;
 
