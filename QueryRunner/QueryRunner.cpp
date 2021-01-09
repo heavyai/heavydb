@@ -398,16 +398,13 @@ std::shared_ptr<ResultSet> QueryRunner::runSQLWithAllowingInterrupt(
       });
   {
     auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID);
-    mapd_unique_lock<mapd_shared_mutex> session_write_lock(executor->getSessionLock());
     auto submitted_time = std::chrono::system_clock::now();
     query_state->setQuerySubmittedTime(submitted_time);
-    executor->addToQuerySessionList(session_id,
-                                    query_str,
-                                    submitted_time,
-                                    Executor::UNITARY_EXECUTOR_ID,
-                                    QuerySessionStatus::QueryStatus::PENDING_QUEUE,
-                                    session_write_lock);
-    session_write_lock.unlock();
+    executor->enrollQuerySession(session_id,
+                                 query_str,
+                                 submitted_time,
+                                 Executor::UNITARY_EXECUTOR_ID,
+                                 QuerySessionStatus::QueryStatus::PENDING_QUEUE);
   }
   CHECK(dispatch_queue_);
   dispatch_queue_->submit(query_launch_task, /*is_update_delete=*/false);
