@@ -1379,6 +1379,9 @@ ResultSetPtr Executor::executeWorkUnit(size_t& max_groups_buffer_entry_guess,
     if (result) {
       result->setKernelQueueTime(kernel_queue_time_ms_);
       result->addCompilationQueueTime(compilation_queue_time_ms_);
+      if (eo.just_validate) {
+        result->setValidationOnlyRes();
+      }
     }
     return result;
   } catch (const CompilationRetryNewScanLimit& e) {
@@ -1398,6 +1401,9 @@ ResultSetPtr Executor::executeWorkUnit(size_t& max_groups_buffer_entry_guess,
     if (result) {
       result->setKernelQueueTime(kernel_queue_time_ms_);
       result->addCompilationQueueTime(compilation_queue_time_ms_);
+      if (eo.just_validate) {
+        result->setValidationOnlyRes();
+      }
     }
     return result;
   }

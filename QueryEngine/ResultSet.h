@@ -307,6 +307,9 @@ class ResultSet {
 
   bool isExplain() const;
 
+  void setValidationOnlyRes();
+  bool isValidationOnlyRes() const;
+
   bool isGeoColOnGpu(const size_t col_idx) const;
   int getDeviceId() const;
 
@@ -737,6 +740,7 @@ class ResultSet {
   bool separate_varlen_storage_valid_;
   std::string explanation_;
   const bool just_explain_;
+  bool for_validation_only_;
   mutable std::atomic<int64_t> cached_row_count_;
   mutable std::mutex row_iteration_mutex_;
 

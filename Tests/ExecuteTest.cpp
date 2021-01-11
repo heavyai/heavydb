@@ -8013,6 +8013,77 @@ TEST(Select, Subqueries) {
   }
 }
 
+TEST(Select, Export_Via_Query_Having_Scalar_Subquery) {
+  // EXPORT stmt needs "validation_query" to gather some info from the query
+  // before doing the actual data export
+  // Here, if we do export via custom query having scalar subquery,
+  // we throw "Exception: Scalar sub-query returned no results"
+  // since RexSubquery Analyzer does not know about the validation query
+  // so we have to let subquery analyzer know about that we do process validation query
+  // and keep doing processing instead of throwing the exception
+  if (g_cluster) {
+    // Those queries are executed successfully in both single and dist mode
+    // but in dist test environment, DistributedQueryRunner fails to parse those COPY stmt
+    // with scalar subquery so we skip this in dist test, but see if we can relax this
+    return;
+  }
+  std::string base_path = BASE_PATH;
+  std::string tmp_output_path_str = base_path + "/export_via_subquery.csv";
+  const auto tmp_output_path = boost::filesystem::path(tmp_output_path_str);
+  if (boost::filesystem::exists(tmp_output_path)) {
+    boost::filesystem::remove(tmp_output_path);
+  }
+  const auto query_has_single_res_row =
+      "SELECT x, SUM(f * ff) AS val FROM test GROUP BY x HAVING SUM(f * ff) < (SELECT "
+      "SUM(f * ff) * 0.1 FROM test) ORDER BY val DESC";
+  const auto query_has_empty_res_row =
+      "SELECT x, SUM(f * ff) AS val FROM test GROUP BY x HAVING SUM(f * ff) < (SELECT "
+      "SUM(f * ff) * 0.001 FROM test) ORDER BY val DESC";
+  std::ostringstream oss1;
+  oss1 << "COPY (" << query_has_single_res_row << ") TO \'" << tmp_output_path_str
+       << "\' WITH(header=\'false\');";
+  const auto copy_to_case1 = oss1.str();
+  EXPECT_NO_THROW(run_ddl_statement(copy_to_case1));
+  boost::filesystem::remove(tmp_output_path);
+
+  std::ostringstream oss2;
+  oss2 << "COPY (" << query_has_empty_res_row << ") TO \'" << tmp_output_path_str
+       << "\' WITH(header=\'false\');";
+  const auto copy_to_case2 = oss2.str();
+  EXPECT_NO_THROW(run_ddl_statement(copy_to_case2));
+  boost::filesystem::remove(tmp_output_path);
+
+  run_ddl_statement("DROP VIEW IF EXISTS export_via_subquery;");
+
+  std::ostringstream oss3;
+  oss3 << "CREATE VIEW export_via_subquery AS " << query_has_single_res_row << ";";
+  const auto view_case1 = oss3.str();
+  EXPECT_NO_THROW(run_ddl_statement(view_case1));
+
+  std::ostringstream oss4;
+  oss4 << "COPY ("
+       << "SELECT * FROM export_via_subquery) TO \'" << tmp_output_path_str
+       << "\' WITH(header=\'false\');";
+  const auto copy_via_view_case1 = oss4.str();
+  EXPECT_NO_THROW(run_ddl_statement(copy_via_view_case1));
+  run_ddl_statement("DROP VIEW export_via_subquery;");
+  boost::filesystem::remove(tmp_output_path);
+
+  std::ostringstream oss5;
+  oss5 << "CREATE VIEW export_via_subquery AS " << query_has_empty_res_row << ";";
+  const auto view_case2 = oss5.str();
+  EXPECT_NO_THROW(run_ddl_statement(view_case2));
+
+  std::ostringstream oss6;
+  oss6 << "COPY ("
+       << "SELECT * FROM export_via_subquery) TO \'" << tmp_output_path_str
+       << "\' WITH(header=\'false\');";
+  const auto copy_via_view_case2 = oss6.str();
+  EXPECT_NO_THROW(run_ddl_statement(copy_via_view_case2));
+  run_ddl_statement("DROP VIEW export_via_subquery;");
+  boost::filesystem::remove(tmp_output_path);
+}
+
 TEST(Select, Joins_Arrays) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();

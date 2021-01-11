@@ -75,6 +75,7 @@ ResultSet::ResultSet(const std::vector<TargetInfo>& targets,
     , data_mgr_(nullptr)
     , separate_varlen_storage_valid_(false)
     , just_explain_(false)
+    , for_validation_only_(false)
     , cached_row_count_(-1)
     , geo_return_type_(GeoReturnType::WktString) {}
 
@@ -109,6 +110,7 @@ ResultSet::ResultSet(const std::vector<TargetInfo>& targets,
     , data_mgr_(nullptr)
     , separate_varlen_storage_valid_(false)
     , just_explain_(false)
+    , for_validation_only_(false)
     , cached_row_count_(-1)
     , geo_return_type_(GeoReturnType::WktString) {}
 
@@ -124,6 +126,7 @@ ResultSet::ResultSet(const std::shared_ptr<const Analyzer::Estimator> estimator,
     , data_mgr_(data_mgr)
     , separate_varlen_storage_valid_(false)
     , just_explain_(false)
+    , for_validation_only_(false)
     , cached_row_count_(-1)
     , geo_return_type_(GeoReturnType::WktString) {
   if (device_type == ExecutorDeviceType::GPU) {
@@ -145,6 +148,7 @@ ResultSet::ResultSet(const std::string& explanation)
     , separate_varlen_storage_valid_(false)
     , explanation_(explanation)
     , just_explain_(true)
+    , for_validation_only_(false)
     , cached_row_count_(-1)
     , geo_return_type_(GeoReturnType::WktString) {}
 
@@ -158,6 +162,7 @@ ResultSet::ResultSet(int64_t queue_time_ms,
     , timings_(QueryExecutionTimings{queue_time_ms, render_time_ms, 0, 0})
     , separate_varlen_storage_valid_(false)
     , just_explain_(true)
+    , for_validation_only_(false)
     , cached_row_count_(-1)
     , geo_return_type_(GeoReturnType::WktString){};
 
@@ -460,6 +465,14 @@ bool ResultSet::isTruncated() const {
 
 bool ResultSet::isExplain() const {
   return just_explain_;
+}
+
+void ResultSet::setValidationOnlyRes() {
+  for_validation_only_ = true;
+}
+
+bool ResultSet::isValidationOnlyRes() const {
+  return for_validation_only_;
 }
 
 int ResultSet::getDeviceId() const {

@@ -346,6 +346,10 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateScalarSubquery(
     throw std::runtime_error("Scalar sub-query returned multiple rows");
   }
   if (row_count == size_t(0)) {
+    if (row_set->isValidationOnlyRes()) {
+      Datum d{0};
+      return makeExpr<Analyzer::Constant>(rex_subquery->getType(), false, d);
+    }
     throw std::runtime_error("Scalar sub-query returned no results");
   }
   CHECK_EQ(row_count, size_t(1));
