@@ -230,7 +230,7 @@ VERS=1.6.21
 # http://download.sourceforge.net/libpng/libpng-$VERS.tar.xz
 download_make_install ${HTTP_DEPS}/libpng-$VERS.tar.xz
 
-VERS=3.0.2
+VERS=3.1.0
 download https://github.com/cginternals/glbinding/archive/v$VERS.tar.gz
 extract v$VERS.tar.gz
 BDIR="glbinding-$VERS/build"

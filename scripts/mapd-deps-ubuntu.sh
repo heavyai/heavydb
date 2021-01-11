@@ -186,7 +186,7 @@ install_arrow
 # Go
 install_go
 
-VERS=3.0.2
+VERS=3.1.0
 wget --continue https://github.com/cginternals/glbinding/archive/v$VERS.tar.gz
 tar xvf v$VERS.tar.gz
 mkdir -p glbinding-$VERS/build
