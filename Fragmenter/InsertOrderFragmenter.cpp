@@ -692,13 +692,13 @@ void InsertOrderFragmenter::insertDataImpl(InsertData& insertDataStruct) {
           fragmentInfoVec_.back()->getPhysicalNumTuples() + numRowsToInsert;
       numRowsLeft -= numRowsToInsert;
       numRowsInserted += numRowsToInsert;
-    }
-    for (auto partIt = fragmentInfoVec_.begin() + startFragment;
-         partIt != fragmentInfoVec_.end();
-         ++partIt) {
-      auto fragment_ptr = partIt->get();
-      fragment_ptr->setPhysicalNumTuples(fragment_ptr->shadowNumTuples);
-      fragment_ptr->setChunkMetadataMap(fragment_ptr->shadowChunkMetadataMap);
+      for (auto partIt = fragmentInfoVec_.begin() + startFragment;
+           partIt != fragmentInfoVec_.end();
+           ++partIt) {
+        auto fragment_ptr = partIt->get();
+        fragment_ptr->setPhysicalNumTuples(fragment_ptr->shadowNumTuples);
+        fragment_ptr->setChunkMetadataMap(fragment_ptr->shadowChunkMetadataMap);
+      }
     }
   }
   numTuples_ += insertDataStruct.numRows;
