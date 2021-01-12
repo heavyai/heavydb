@@ -35,20 +35,21 @@ We welcome and encourage developer contributions to the project. Please see the 
 ## Geospatial/GIS
 
 #### Completed
-- Basic Geo Types constructed from column coordinates, WKT or geo files (Point, Line, Polygon) (Completed 4.0)
-- Basic Geo functions (`ST_Contains`, `ST_Distance`) (Completed 4.0)
-- Feature construction from columnar data `ST_MakePoint` (Completed 5.0)
-- Additional Geo functions (`ST_Within`, `ST_Area`, `ST_Perimiter`) (Completed 5.0)
-- Geodatabase import (Completed 5.0)
 - OGC full "simple features" constructive geospatial operators (`ST_Buffer`, `ST_Intersects`, `ST_Union`, etc) (Completed 5.2+)
 - Null support for geo types (5.2)
+- Export of conventional and line-oriented geoJSON in geoSQL (5.4)
+- Geopandas dataframe generation through Ibis (https://github.com/ibis-project/ibis)
+- Support for well-known binary (WKB) in columnar loading for increased import performance (5.5)
+- Support for CSV file reprojection on import (5.5)
+- ST_Buffer support for automatic planar projections in meters (5.5)
 - `ST_Centroid` operator (5.5)
 
 #### Upcoming
-- Additional OGC mulitpart geospatial types: Multi(Point|Line)
+- Additional OGC multipart geospatial types: Multi(Point|Line)
 - Additional geometric constructors (`ST_Line`, `ST_Polygon`, etc.)
-- Accelerated geospatial joins (with dynamic spatial hashing, not relying purely on brute force loop joins)
-- OGC Geopackage import
+- Accelerated geospatial joins (with dynamic spatial hashing)
+- OGC Geopackage import and export
+- GPU-accelerated transforms between supported coordinate systems
 
 ## Data Science/[GPU Data Frame (GDF)](http://gpuopenanalytics.com/#/)/[Apache Arrow](https://arrow.apache.org/)
 
