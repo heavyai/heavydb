@@ -45,6 +45,7 @@ struct ForeignServer : public OptionsContainer {
   static constexpr std::string_view STORAGE_TYPE_KEY = "STORAGE_TYPE";
   static constexpr std::string_view BASE_PATH_KEY = "BASE_PATH";
   static constexpr std::string_view LOCAL_FILE_STORAGE_TYPE = "LOCAL_FILE";
+  static constexpr std::string_view S3_STORAGE_TYPE = "AWS_S3";
   static constexpr std::array<std::string_view, 1> supported_storage_types{
       LOCAL_FILE_STORAGE_TYPE};
   static constexpr std::array<std::string_view, 2> all_option_keys{STORAGE_TYPE_KEY,
