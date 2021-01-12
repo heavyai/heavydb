@@ -1,0 +1,9 @@
+Class foreign_storage::FloatPointValidator
+==========================================
+
+.. doxygenclass:: foreign_storage::FloatPointValidator
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

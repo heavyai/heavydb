@@ -1,0 +1,9 @@
+Class com::mapd::parser::extension::ddl::SqlDropTable
+=====================================================
+
+.. doxygenclass:: com::mapd::parser::extension::ddl::SqlDropTable
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

@@ -64,7 +64,7 @@
             
             
               <div class="version">
-                5.6.0dev dc14d38
+                5.6.0dev bf83d84
               </div>
             
           
@@ -938,7 +938,9 @@
 <li class="toctree-l2"><a class="reference internal" href="api/class/classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_ddl_nodes.html">Class com::mapd::parser::extension::ddl::SqlDdlNodes</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_drop_foreign_table.html">Class com::mapd::parser::extension::ddl::SqlDropForeignTable</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_drop_server.html">Class com::mapd::parser::extension::ddl::SqlDropServer</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/class/classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_drop_table.html">Class com::mapd::parser::extension::ddl::SqlDropTable</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_drop_user_mapping.html">Class com::mapd::parser::extension::ddl::SqlDropUserMapping</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/class/classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_drop_view.html">Class com::mapd::parser::extension::ddl::SqlDropView</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_filter.html">Class com::mapd::parser::extension::ddl::SqlFilter</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_key_constraint.html">Class com::mapd::parser::extension::ddl::SqlKeyConstraint</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_kill_query.html">Class com::mapd::parser::extension::ddl::SqlKillQuery</a></li>
@@ -1046,6 +1048,7 @@
 <li class="toctree-l2"><a class="reference internal" href="api/class/classforeign__storage_1_1_csv_data_wrapper.html">Class foreign_storage::CsvDataWrapper</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/classforeign__storage_1_1_csv_reader.html">Class foreign_storage::CsvReader</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/classforeign__storage_1_1_date_in_seconds_bounds_validator.html">Class foreign_storage::DateInSecondsBoundsValidator</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/class/classforeign__storage_1_1_float_point_validator.html">Class foreign_storage::FloatPointValidator</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/classforeign__storage_1_1_foreign_data_wrapper.html">Class foreign_storage::ForeignDataWrapper</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/classforeign__storage_1_1_foreign_storage_buffer.html">Class foreign_storage::ForeignStorageBuffer</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/classforeign__storage_1_1_foreign_storage_cache.html">Class foreign_storage::ForeignStorageCache</a></li>
@@ -9984,6 +9987,16 @@
 </li>
       <li><a href="api/struct/structforeign__storage_1_1_file_region.html#_CPPv4N15foreign_storage10FileRegion9row_countE">foreign_storage::FileRegion::row_count (C++ member)</a>
 </li>
+      <li><a href="api/class/classforeign__storage_1_1_float_point_validator.html#_CPPv4I0EN15foreign_storage19FloatPointValidatorE">foreign_storage::FloatPointValidator (C++ class)</a>
+</li>
+      <li><a href="api/class/classforeign__storage_1_1_float_point_validator.html#_CPPv4I0EN15foreign_storage19FloatPointValidator11checkBoundsEbRK1T">foreign_storage::FloatPointValidator::checkBounds (C++ function)</a>
+</li>
+      <li><a href="api/class/classforeign__storage_1_1_float_point_validator.html#_CPPv4I0EN15foreign_storage19FloatPointValidator24getMinMaxBoundsAsStringsENSt4pairINSt6stringENSt6stringEEEv">foreign_storage::FloatPointValidator::getMinMaxBoundsAsStrings (C++ function)</a>, <a href="api/class/classforeign__storage_1_1_float_point_validator.html#_CPPv4N15foreign_storage19FloatPointValidator24getMinMaxBoundsAsStringsERK11SQLTypeInfo">[1]</a>
+</li>
+      <li><a href="api/class/classforeign__storage_1_1_float_point_validator.html#_CPPv4I0EN15foreign_storage19FloatPointValidator13validateValueEvRK1DRK11SQLTypeInfo">foreign_storage::FloatPointValidator::validateValue (C++ function)</a>
+</li>
+      <li><a href="api/class/classforeign__storage_1_1_float_point_validator.html#_CPPv4N15foreign_storage19FloatPointValidator17valueWithinBoundsERK1TRK11SQLTypeInfo">foreign_storage::FloatPointValidator::valueWithinBounds (C++ function)</a>
+</li>
       <li><a href="api/class/classforeign__storage_1_1_foreign_data_wrapper.html#_CPPv4N15foreign_storage18ForeignDataWrapperE">foreign_storage::ForeignDataWrapper (C++ class)</a>
 </li>
       <li><a href="api/class/classforeign__storage_1_1_foreign_data_wrapper.html#_CPPv4N15foreign_storage18ForeignDataWrapper18ForeignDataWrapperEv">foreign_storage::ForeignDataWrapper::ForeignDataWrapper (C++ function)</a>
@@ -10017,6 +10030,8 @@
       <li><a href="api/struct/structforeign__storage_1_1_foreign_server.html#_CPPv4N15foreign_storage13ForeignServer23LOCAL_FILE_STORAGE_TYPEE">foreign_storage::ForeignServer::LOCAL_FILE_STORAGE_TYPE (C++ member)</a>
 </li>
       <li><a href="api/struct/structforeign__storage_1_1_foreign_server.html#_CPPv4N15foreign_storage13ForeignServer4nameE">foreign_storage::ForeignServer::name (C++ member)</a>
+</li>
+      <li><a href="api/struct/structforeign__storage_1_1_foreign_server.html#_CPPv4N15foreign_storage13ForeignServer15S3_STORAGE_TYPEE">foreign_storage::ForeignServer::S3_STORAGE_TYPE (C++ member)</a>
 </li>
       <li><a href="api/struct/structforeign__storage_1_1_foreign_server.html#_CPPv4N15foreign_storage13ForeignServer16STORAGE_TYPE_KEYE">foreign_storage::ForeignServer::STORAGE_TYPE_KEY (C++ member)</a>
 </li>
@@ -10121,6 +10136,8 @@
       <li><a href="api/class/classforeign__storage_1_1_foreign_storage_mgr.html#_CPPv4N15foreign_storage17ForeignStorageMgr5allocEK6size_t">foreign_storage::ForeignStorageMgr::alloc (C++ function)</a>
 </li>
       <li><a href="api/class/classforeign__storage_1_1_foreign_storage_mgr.html#_CPPv4N15foreign_storage17ForeignStorageMgr28allocateTempBuffersForChunksERKNSt3setI8ChunkKeyEE">foreign_storage::ForeignStorageMgr::allocateTempBuffersForChunks (C++ function)</a>
+</li>
+      <li><a href="api/class/classforeign__storage_1_1_foreign_storage_mgr.html#_CPPv4N15foreign_storage17ForeignStorageMgr25checkIfS3NeedsToBeEnabledERK8ChunkKey">foreign_storage::ForeignStorageMgr::checkIfS3NeedsToBeEnabled (C++ function)</a>
 </li>
       <li><a href="api/class/classforeign__storage_1_1_foreign_storage_mgr.html#_CPPv4N15foreign_storage17ForeignStorageMgr10checkpointEKiKi">foreign_storage::ForeignStorageMgr::checkpoint (C++ function)</a>, <a href="api/class/classforeign__storage_1_1_foreign_storage_mgr.html#_CPPv4N15foreign_storage17ForeignStorageMgr10checkpointEv">[1]</a>
 </li>
@@ -10258,6 +10275,8 @@
 </li>
       <li><a href="api/struct/structforeign__storage_1_1_foreign_table.html#_CPPv4NK15foreign_storage12ForeignTable20validateOptionValuesEv">foreign_storage::ForeignTable::validateOptionValues (C++ function)</a>
 </li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="api/struct/structforeign__storage_1_1_foreign_table.html#_CPPv4NK15foreign_storage12ForeignTable27validateRefreshOptionValuesEv">foreign_storage::ForeignTable::validateRefreshOptionValues (C++ function)</a>
 </li>
       <li><a href="api/struct/structforeign__storage_1_1_foreign_table.html#_CPPv4NK15foreign_storage12ForeignTable27validateSupportedOptionKeysERK10OptionsMap">foreign_storage::ForeignTable::validateSupportedOptionKeys (C++ function)</a>
@@ -10266,8 +10285,6 @@
 </li>
       <li><a href="api/class/classforeign__storage_1_1_foreign_table_refresh_scheduler.html#_CPPv4N15foreign_storage28ForeignTableRefreshScheduler20has_refreshed_table_E">foreign_storage::ForeignTableRefreshScheduler::has_refreshed_table_ (C++ member)</a>
 </li>
-  </ul></td>
-  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="api/class/classforeign__storage_1_1_foreign_table_refresh_scheduler.html#_CPPv4N15foreign_storage28ForeignTableRefreshScheduler17hasRefreshedTableEv">foreign_storage::ForeignTableRefreshScheduler::hasRefreshedTable (C++ function)</a>
 </li>
       <li><a href="api/class/classforeign__storage_1_1_foreign_table_refresh_scheduler.html#_CPPv4N15foreign_storage28ForeignTableRefreshScheduler21is_scheduler_running_E">foreign_storage::ForeignTableRefreshScheduler::is_scheduler_running_ (C++ member)</a>
@@ -10628,7 +10645,7 @@
 </li>
       <li><a href="api/class/classforeign__storage_1_1_parquet_fixed_length_encoder.html#_CPPv4NK15foreign_storage25ParquetFixedLengthEncoder8validateENSt10shared_ptrIN7parquet10StatisticsEEERK11SQLTypeInfo">foreign_storage::ParquetFixedLengthEncoder::validate (C++ function)</a>
 </li>
-      <li><a href="api/class/classforeign__storage_1_1_parquet_fixed_length_encoder.html#_CPPv4I0_NSt11enable_if_tIXaaNSt11is_integralI2TTE5valueEntNSt7is_sameI2TTbE5valueEEiEEENK15foreign_storage25ParquetFixedLengthEncoder21validateIntegralValueEvNSt10shared_ptrIN7parquet10StatisticsEEERK11SQLTypeInfo">foreign_storage::ParquetFixedLengthEncoder::validateIntegralValue (C++ function)</a>, <a href="api/class/classforeign__storage_1_1_parquet_fixed_length_encoder.html#_CPPv4I0_NSt11enable_if_tIXoontNSt11is_integralI2TTE5valueENSt7is_sameI2TTbE5valueEEiEEENK15foreign_storage25ParquetFixedLengthEncoder21validateIntegralValueEvNSt10shared_ptrIN7parquet10StatisticsEEERK11SQLTypeInfo">[1]</a>
+      <li><a href="api/class/classforeign__storage_1_1_parquet_fixed_length_encoder.html#_CPPv4I0_NSt11enable_if_tINSt17is_floating_pointI2TTE5valueEiEEENK15foreign_storage25ParquetFixedLengthEncoder36validateIntegralOrFloatingPointValueEvNSt10shared_ptrIN7parquet10StatisticsEEERK11SQLTypeInfo">foreign_storage::ParquetFixedLengthEncoder::validateIntegralOrFloatingPointValue (C++ function)</a>, <a href="api/class/classforeign__storage_1_1_parquet_fixed_length_encoder.html#_CPPv4I0_NSt11enable_if_tIXaaNSt11is_integralI2TTE5valueEntNSt7is_sameI2TTbE5valueEEiEEENK15foreign_storage25ParquetFixedLengthEncoder36validateIntegralOrFloatingPointValueEvNSt10shared_ptrIN7parquet10StatisticsEEERK11SQLTypeInfo">[1]</a>, <a href="api/class/classforeign__storage_1_1_parquet_fixed_length_encoder.html#_CPPv4I0_NSt11enable_if_tIXaaoontNSt11is_integralI2TTE5valueENSt7is_sameI2TTbE5valueEntNSt17is_floating_pointI2TTE5valueEEiEEENK15foreign_storage25ParquetFixedLengthEncoder36validateIntegralOrFloatingPointValueEvNSt10shared_ptrIN7parquet10StatisticsEEERK11SQLTypeInfo">[2]</a>
 </li>
       <li><a href="api/class/classforeign__storage_1_1_parquet_geospatial_encoder.html#_CPPv4N15foreign_storage24ParquetGeospatialEncoderE">foreign_storage::ParquetGeospatialEncoder (C++ class)</a>
 </li>
@@ -15566,7 +15583,7 @@
 </li>
       <li><a href="api/class/class_parser_1_1_drop_table_stmt.html#_CPPv4N6Parser13DropTableStmtE">Parser::DropTableStmt (C++ class)</a>
 </li>
-      <li><a href="api/class/class_parser_1_1_drop_table_stmt.html#_CPPv4N6Parser13DropTableStmt13DropTableStmtEPNSt6stringEb">Parser::DropTableStmt::DropTableStmt (C++ function)</a>
+      <li><a href="api/class/class_parser_1_1_drop_table_stmt.html#_CPPv4N6Parser13DropTableStmt13DropTableStmtEPNSt6stringEb">Parser::DropTableStmt::DropTableStmt (C++ function)</a>, <a href="api/class/class_parser_1_1_drop_table_stmt.html#_CPPv4N6Parser13DropTableStmt13DropTableStmtERKN9rapidjson5ValueE">[1]</a>
 </li>
       <li><a href="api/class/class_parser_1_1_drop_table_stmt.html#_CPPv4N6Parser13DropTableStmt7executeERKN17Catalog_Namespace11SessionInfoE">Parser::DropTableStmt::execute (C++ function)</a>
 </li>
@@ -15588,7 +15605,7 @@
 </li>
       <li><a href="api/class/class_parser_1_1_drop_view_stmt.html#_CPPv4N6Parser12DropViewStmtE">Parser::DropViewStmt (C++ class)</a>
 </li>
-      <li><a href="api/class/class_parser_1_1_drop_view_stmt.html#_CPPv4N6Parser12DropViewStmt12DropViewStmtEPNSt6stringEb">Parser::DropViewStmt::DropViewStmt (C++ function)</a>
+      <li><a href="api/class/class_parser_1_1_drop_view_stmt.html#_CPPv4N6Parser12DropViewStmt12DropViewStmtEPNSt6stringEb">Parser::DropViewStmt::DropViewStmt (C++ function)</a>, <a href="api/class/class_parser_1_1_drop_view_stmt.html#_CPPv4N6Parser12DropViewStmt12DropViewStmtERKN9rapidjson5ValueE">[1]</a>
 </li>
       <li><a href="api/class/class_parser_1_1_drop_view_stmt.html#_CPPv4N6Parser12DropViewStmt7executeERKN17Catalog_Namespace11SessionInfoE">Parser::DropViewStmt::execute (C++ function)</a>
 </li>
@@ -19022,12 +19039,12 @@
 </li>
       <li><a href="api/class/class_render_info.html#_CPPv4N10RenderInfo18render_query_opts_E">RenderInfo::render_query_opts_ (C++ member)</a>
 </li>
-  </ul></td>
-  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="api/class/class_render_info.html#_CPPv4N10RenderInfo14render_sessionE">RenderInfo::render_session (C++ member)</a>
 </li>
       <li><a href="api/class/class_render_info.html#_CPPv4N10RenderInfo18RendererBufferModeE">RenderInfo::RendererBufferMode (C++ enum)</a>
 </li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="api/class/class_render_info.html#_CPPv4N10RenderInfo10RenderInfoEKNSt10shared_ptrIKN13QueryRenderer13RenderSessionEEENSt8optionalI18RenderQueryOptionsEEKb">RenderInfo::RenderInfo (C++ function)</a>
 </li>
       <li><a href="api/class/class_render_info.html#_CPPv4N10RenderInfo5resetENSt8optionalI18RenderQueryOptionsEEKbKb">RenderInfo::reset (C++ function)</a>
@@ -19157,6 +19174,8 @@
       <li><a href="api/class/class_result_set.html#_CPPv4N9ResultSet26fixupCountDistinctPointersEv">ResultSet::fixupCountDistinctPointers (C++ function)</a>
 </li>
       <li><a href="api/class/class_result_set.html#_CPPv4N9ResultSet26fixupQueryMemoryDescriptorERK21QueryMemoryDescriptor">ResultSet::fixupQueryMemoryDescriptor (C++ function)</a>
+</li>
+      <li><a href="api/class/class_result_set.html#_CPPv4N9ResultSet20for_validation_only_E">ResultSet::for_validation_only_ (C++ member)</a>
 </li>
       <li><a href="api/class/class_result_set.html#_CPPv4N9ResultSet13frag_offsets_E">ResultSet::frag_offsets_ (C++ member)</a>
 </li>
@@ -19290,6 +19309,8 @@
 </li>
       <li><a href="api/class/class_result_set.html#_CPPv4NK9ResultSet11isTruncatedEv">ResultSet::isTruncated (C++ function)</a>
 </li>
+      <li><a href="api/class/class_result_set.html#_CPPv4NK9ResultSet19isValidationOnlyResEv">ResultSet::isValidationOnlyRes (C++ function)</a>
+</li>
       <li><a href="api/class/class_result_set.html#_CPPv4NK9ResultSet36isZeroCopyColumnarConversionPossibleE6size_t">ResultSet::isZeroCopyColumnarConversionPossible (C++ function)</a>
 </li>
       <li><a href="api/class/class_result_set.html#_CPPv4N9ResultSet13just_explain_E">ResultSet::just_explain_ (C++ member)</a>
@@ -19413,6 +19434,8 @@
       <li><a href="api/class/class_result_set.html#_CPPv4N9ResultSet12setQueueTimeEK7int64_t">ResultSet::setQueueTime (C++ function)</a>
 </li>
       <li><a href="api/class/class_result_set.html#_CPPv4N9ResultSet29setSeparateVarlenStorageValidEKb">ResultSet::setSeparateVarlenStorageValid (C++ function)</a>
+</li>
+      <li><a href="api/class/class_result_set.html#_CPPv4N9ResultSet20setValidationOnlyResEv">ResultSet::setValidationOnlyRes (C++ function)</a>
 </li>
       <li><a href="api/class/class_result_set.html#_CPPv4N9ResultSet4sortERKNSt4listIN8Analyzer10OrderEntryEEEK6size_tPK8Executor">ResultSet::sort (C++ function)</a>
 </li>
