@@ -65,7 +65,7 @@
             
             
               <div class="version">
-                5.6.0dev 0b001f3
+                5.6.0dev c1d7a5d
               </div>
             
           
@@ -1900,7 +1900,7 @@
   <div class="section" id="memory-layout">
 <h1>4.3. Memory  Layout<a class="headerlink" href="#memory-layout" title="Permalink to this headline">¶</a></h1>
 <p>Once data is loaded from disk (see <a class="reference internal" href="physical_layout.html"><span class="doc">Physical Data Layout</span></a>), the higher level memory hierarchies in the <cite>BufferMgr</cite> take over. Data must pass between hierarchies; i.e. data must travel from disk to CPU to GPU, and can not be loaded directly from disk into GPU (note that this design directly mimics the way data is loaded to modern GPUs over the PCI-E bus). Additionally, not all data from CPU is required to be loaded to GPU for a given query.</p>
-<p>Data buffers in the in-memory levels of the BufferMgr hierarchy are backed by <cite>slabs</cite> and managed by the <cite>DataMgr</cite>. CPU Memory is allocated in 4GB slabs, while GPU memory allocations are currently limited to 2GB slabs. When a request comes in to allocate memory (e.g. for an input chunk, query parameter, or output buffer) the <cite>DataMgr</cite> will search for the first open space in the slab that can fulfill the rqeuest. If the current slab is full, a new slab is allocated. Note that this means utilities like <cite>htop</cite> or <cite>nvtop</cite> may show OmniSciDB exhausting all available GPU memory, when in reality memory is still available to the DB from the slab allocations. The <cite>omnisql</cite> commands <cite>memory_summary</cite>, <cite>memory_gpu</cite> and <cite>memory_cpu</cite> show information about allocated slabs and current slab occupany.</p>
+<p>Data buffers in the in-memory levels of the BufferMgr hierarchy are backed by <cite>slabs</cite> and managed by the <cite>DataMgr</cite>. CPU Memory is allocated in 4GB slabs, while GPU memory allocations are currently limited to 2GB slabs. When a request comes in to allocate memory (e.g. for an input chunk, query parameter, or output buffer) the <cite>DataMgr</cite> will search for the first open space in the slab that can fulfill the request. If the current slab is full, a new slab is allocated. Note that this means utilities like <cite>htop</cite> or <cite>nvtop</cite> may show OmniSciDB exhausting all available GPU memory, when in reality memory is still available to the DB from the slab allocations. The <cite>omnisql</cite> commands <cite>memory_summary</cite>, <cite>memory_gpu</cite> and <cite>memory_cpu</cite> show information about allocated slabs and current slab occupany.</p>
 <p>Internally, slabs are divided into 512 byte pages. Allocations within a slab are aligned to a 512 byte boundary; therefore, all top-level OmniSciDB allocations are aligned to 512 bytes.</p>
 <p>Buffers within a slab contain access counters to track the last access to the buffer and allow for a last-recently used caching mechanism to evict data from a slab if it is no longer needed. Buffers may also be <em>pinned</em> to a slab, preventing them from being evicted.</p>
 </div>
