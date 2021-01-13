@@ -84,6 +84,7 @@
 #include <boost/program_options.hpp>
 #include <boost/regex.hpp>
 #include <boost/tokenizer.hpp>
+#include <chrono>
 #include <cmath>
 #include <csignal>
 #include <fstream>
@@ -5061,6 +5062,9 @@ void DBHandler::sql_execute_impl(TQueryResult& _return,
                                  const ExecutorDeviceType executor_device_type,
                                  const int32_t first_n,
                                  const int32_t at_most_n) {
+  using Clock = std::chrono::steady_clock;
+  const auto t0 = Clock::now();
+
   if (leaf_handler_) {
     leaf_handler_->flush_queue();
   }
@@ -5106,7 +5110,14 @@ void DBHandler::sql_execute_impl(TQueryResult& _return,
       break;
     }
   }
+
+  const auto t1 = Clock::now();
+  LOG(INFO) << "[Averbukh] Part 0 of sql_execute_impl finished in "
+            << std::chrono::duration_cast<std::chrono::milliseconds>(t1 - t0).count()
+            << " ms";
+
   if (pw.isCalcitePathPermissable(read_only_)) {
+    const auto tt0 = Clock::now();
     // run DDL before the locks as DDL statements should handle their own locking
     if (pw.isCalciteDdl()) {
       std::string query_ra;
@@ -5118,8 +5129,23 @@ void DBHandler::sql_execute_impl(TQueryResult& _return,
       });
 
       executeDdl(_return, query_ra, session_ptr);
+      const auto ttt1 = Clock::now();
+      LOG(INFO) << "[Averbukh] Branching into Part 1 of sql_execute_impl finished in "
+                << std::chrono::duration_cast<std::chrono::milliseconds>(tt0 - t1).count()
+                << " ms";
+
+      LOG(INFO)
+          << "[Averbukh] Part 1 of sql_execute_impl finished in "
+          << std::chrono::duration_cast<std::chrono::milliseconds>(ttt1 - tt0).count()
+          << " ms";
+
       return;
     }
+
+    const auto tt1 = Clock::now();
+    LOG(INFO) << "[Averbukh] Call to isCalciteDdl of sql_execute_impl finished in "
+              << std::chrono::duration_cast<std::chrono::milliseconds>(tt1 - t1).count()
+              << " ms";
 
     executeReadLock = mapd_shared_lock<mapd_shared_mutex>(
         *legacylockmgr::LockMgr<mapd_shared_mutex, bool>::getMutex(
@@ -5132,6 +5158,11 @@ void DBHandler::sql_execute_impl(TQueryResult& _return,
           parse_to_ra(query_state_proxy, query_str, {}, true, system_parameters_);
       query_ra = result.plan_result;
     });
+
+    const auto tt2 = Clock::now();
+    LOG(INFO) << "[Averbukh] Part 1.1 of sql_execute_impl finished in "
+              << std::chrono::duration_cast<std::chrono::milliseconds>(tt2 - tt1).count()
+              << " ms";
 
     std::string query_ra_calcite_explain;
     if (pw.isCalciteExplain() && (!g_enable_filter_push_down || g_cluster)) {
@@ -5148,6 +5179,12 @@ void DBHandler::sql_execute_impl(TQueryResult& _return,
           parse_to_ra(query_state_proxy, temp_query_str, {}, false, system_parameters_)
               .first.plan_result;
     }
+
+    const auto tt3 = Clock::now();
+    LOG(INFO) << "[Averbukh] Part 1.2 of sql_execute_impl finished in "
+              << std::chrono::duration_cast<std::chrono::milliseconds>(tt3 - tt2).count()
+              << " ms";
+
     const auto explain_info = pw.getExplainInfo();
     std::vector<PushedDownFilterInfo> filter_push_down_requests;
     auto execute_rel_alg_task = std::make_shared<QueryDispatchQueue::Task>(
@@ -5210,11 +5247,29 @@ void DBHandler::sql_execute_impl(TQueryResult& _return,
                             pw.getDMLType() == ParserWrapper::DMLType::Update ||
                                 pw.getDMLType() == ParserWrapper::DMLType::Delete);
     auto result_future = execute_rel_alg_task->get_future();
+
+    const auto tt4 = Clock::now();
+    LOG(INFO) << "[Averbukh] Part 1.3 of sql_execute_impl finished in "
+              << std::chrono::duration_cast<std::chrono::milliseconds>(tt4 - tt3).count()
+              << " ms";
+
     result_future.get();
+
+    const auto tt5 = Clock::now();
+    LOG(INFO) << "[Averbukh] Part 1.4 of sql_execute_impl finished in "
+              << std::chrono::duration_cast<std::chrono::milliseconds>(tt5 - tt4).count()
+              << " ms";
+
     return;
   } else if (pw.is_optimize || pw.is_validate) {
+    const auto tt0 = Clock::now();
     // Get the Stmt object
     DBHandler::parser_with_error_handler(query_str, parse_trees);
+
+    const auto tt1 = Clock::now();
+    LOG(INFO) << "[Averbukh] Part 2.1 of sql_execute_impl finished in "
+              << std::chrono::duration_cast<std::chrono::milliseconds>(tt1 - tt0).count()
+              << " ms";
 
     if (pw.is_optimize) {
       const auto optimize_stmt =
@@ -5251,6 +5306,12 @@ void DBHandler::sql_execute_impl(TQueryResult& _return,
 
       return;
     }
+
+    const auto tt2 = Clock::now();
+    LOG(INFO) << "[Averbukh] Part 2.2 of sql_execute_impl finished in "
+              << std::chrono::duration_cast<std::chrono::milliseconds>(tt2 - tt1).count()
+              << " ms";
+
     if (pw.is_validate) {
       // check user is superuser
       if (!session_ptr->get_currentUser().isSuper) {
@@ -5280,6 +5341,12 @@ void DBHandler::sql_execute_impl(TQueryResult& _return,
         output = "Not running on a cluster nothing to validate";
       }
       convert_result(_return, ResultSet(output), true);
+      const auto tt3 = Clock::now();
+      LOG(INFO)
+          << "[Averbukh] Part 2.3 of sql_execute_impl finished in "
+          << std::chrono::duration_cast<std::chrono::milliseconds>(tt3 - tt2).count()
+          << " ms";
+
       return;
     }
   }
