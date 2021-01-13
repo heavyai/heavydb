@@ -3,11 +3,20 @@ from codecs import open
 
 from setuptools import setup, find_packages
 
+CONDA_BUILD = int(os.environ.get('CONDA_BUILD', '0'))
+
 here = os.path.abspath(os.path.dirname(__file__))
 
 # Get the long description from the README file
 with open(os.path.join(here, "README.rst"), encoding="utf-8") as f:
     long_description = f.read()
+
+import importlib.util
+spec = importlib.util.spec_from_file_location("omnisci_version", os.path.join(here, 'omnisci', 'version.py'))
+version_module = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(version_module)
+VERSION = version_module.get_source_version()  # gets version from ../CMakeLists.txt
+assert VERSION is not None
 
 install_requires = [
     "thrift == 0.13.0",
@@ -15,7 +24,7 @@ install_requires = [
     "sqlalchemy >= 1.3",
     "packaging >= 20.0",
     "requests >= 2.23.0",
-    "rbc-project == 0.2.2",
+    "rbc-project >= 0.2.2",
 ]
 
 # Optional Requirements
@@ -29,7 +38,7 @@ extra_requires = {
     "test": test_requires,
     "dev": dev_requires,
     "complete": complete_requires,
-}
+} if not CONDA_BUILD else {}  # CONDA deps are specified in meta.yaml
 
 setup(
     name="pyomniscidb",
@@ -50,10 +59,11 @@ setup(
         "Programming Language :: Python :: 3",
         "Programming Language :: Python :: 3.6",
         "Programming Language :: Python :: 3.7",
+        "Programming Language :: Python :: 3.8",
         "Programming Language :: Python :: 3 :: Only",
     ],
     packages=find_packages(),
-    version="5.4.0",
+    version=VERSION,
     install_requires=install_requires,
     extras_require=extra_requires,
 )
