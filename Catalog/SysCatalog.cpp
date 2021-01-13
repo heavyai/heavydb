@@ -1154,6 +1154,10 @@ void SysCatalog::createDatabase(const string& name, int owner) {
   }
   sqliteConnector_->query("END TRANSACTION");
 
+  // force a migration on the new database
+  removeCatalog(name);
+  cat = getCatalog(basePath_, db, dataMgr_, string_dict_hosts_, calciteMgr_, false);
+
   if (g_enable_fsi) {
     try {
       cat->createDefaultServersIfNotExists();
