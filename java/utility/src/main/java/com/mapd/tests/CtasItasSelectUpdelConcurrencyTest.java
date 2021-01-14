@@ -175,6 +175,11 @@ public class CtasItasSelectUpdelConcurrencyTest {
             logger.info(logPrefix + " " + sql);
             user.runSql(sql);
 
+            sql = "UPDATE " + tableName + " SET str = (SELECT count(*) > 0 FROM "
+                    + tableName + ");";
+            logger.info(logPrefix + " " + sql);
+            user.runSql(sql);
+
             sql = "TRUNCATE TABLE " + tableName + ";";
             logger.info(logPrefix + " " + sql);
             user.runSql(sql);
