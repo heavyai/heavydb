@@ -158,7 +158,7 @@ TEST_F(CreateForeignServerTest, InvalidDataWrapper) {
       "(storage_type = 'LOCAL_FILE', base_path = '/test_path/');"};
   std::string error_message{
       "Exception: Invalid data wrapper type \"INVALID_WRAPPER\". "
-      "Data wrapper type must be one of the following: OMNISCI_CSV, OMNISCI_PARQUET."};
+      "Data wrapper type must be one of the following: OMNISCI_PARQUET, OMNISCI_CSV."};
   queryAndAssertException(query, error_message);
 }
 
@@ -1149,7 +1149,7 @@ TEST_F(AlterForeignServerTest, InvalidDataWrapper) {
   std::string query{"ALTER SERVER test_server SET FOREIGN DATA WRAPPER invalid_wrapper;"};
   std::string error_message{
       "Exception: Invalid data wrapper type \"INVALID_WRAPPER\". "
-      "Data wrapper type must be one of the following: OMNISCI_CSV, OMNISCI_PARQUET."};
+      "Data wrapper type must be one of the following: OMNISCI_PARQUET, OMNISCI_CSV."};
   queryAndAssertException(query, error_message);
   assertExpectedForeignServer(
       createExpectedForeignServer("test_server", "omnisci_csv", DEFAULT_OPTIONS));
