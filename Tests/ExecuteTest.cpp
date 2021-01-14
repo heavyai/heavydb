@@ -3439,11 +3439,20 @@ TEST(Select, Time) {
             "SELECT COUNT(*) FROM test WHERE CAST('10/09/1999' AS DATE) > o;", dt)));
     ASSERT_EQ(static_cast<int64_t>(g_num_rows + g_num_rows / 2),
               v<int64_t>(run_simple_agg(
+                  "SELECT COUNT(*) FROM test WHERE CAST('10/09/99' AS DATE) > o;", dt)));
+    ASSERT_EQ(static_cast<int64_t>(g_num_rows + g_num_rows / 2),
+              v<int64_t>(run_simple_agg(
                   "SELECT COUNT(*) FROM test WHERE CAST('10-Sep-99' AS DATE) > o;", dt)));
+    ASSERT_EQ(static_cast<int64_t>(g_num_rows + g_num_rows / 2),
+              v<int64_t>(run_simple_agg(
+                  "SELECT COUNT(*) FROM test WHERE CAST('9/10/99' AS DATE) > o;", dt)));
     ASSERT_EQ(
         static_cast<int64_t>(g_num_rows + g_num_rows / 2),
         v<int64_t>(run_simple_agg(
             "SELECT COUNT(*) FROM test WHERE CAST('31/Oct/2013' AS DATE) > o;", dt)));
+    ASSERT_EQ(static_cast<int64_t>(g_num_rows + g_num_rows / 2),
+              v<int64_t>(run_simple_agg(
+                  "SELECT COUNT(*) FROM test WHERE CAST('10/31/13' AS DATE) > o;", dt)));
     // check TIME FORMATS
     ASSERT_EQ(static_cast<int64_t>(2 * g_num_rows),
               v<int64_t>(run_simple_agg(

@@ -4037,7 +4037,7 @@ TEST_F(ScheduledRefreshTest, InvalidStartDateTime) {
       "refresh_timing_type = 'scheduled', refresh_start_date_time = "
       "'invalid_date_time');";
   queryAndAssertException(query,
-                          "Exception: Invalid DATE/TIMESTAMP string (INVALID_DATE_TIME)");
+                          "Exception: Invalid TIMESTAMP string (INVALID_DATE_TIME)");
 }
 
 TEST_F(ScheduledRefreshTest, SchedulerStop) {

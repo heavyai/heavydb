@@ -360,7 +360,7 @@ TEST(Detect, Numeric) {
   d(kFLOAT, "1.2345678");
   // d(kDOUBLE, "1.2345678901");
   // d(kDOUBLE, "1.23456789012345678901234567890");
-  d(kTEXT, "1.22.22");
+  d(kTIME, "1.22.22");
 }
 
 const char* create_table_trips_to_skip_header = R"(

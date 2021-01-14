@@ -73,21 +73,21 @@ int64_t daysFromCivil(int64_t y, unsigned const m, unsigned const d) {
 
 // Order of entries correspond to enum class FormatType { Date, Time, Timezone }.
 std::vector<std::vector<std::string_view>> formatViews() {
-  return {{{"%Y-%m-%d", "%m/%d/%Y", "%Y/%m/%d", "%d-%b-%y", "%d/%b/%Y"},
+  return {{{"%Y-%m-%d", "%m/%d/%y", "%m/%d/%Y", "%Y/%m/%d", "%d-%b-%y", "%d/%b/%Y"},
            {"%I:%M:%S %p",
             "%H:%M:%S",
             "%I:%M %p",
             "%H:%M",
             "%H%M%S",
-            "%I %p",
-            "%I . %M . %S %p"},
+            "%I . %M . %S %p",
+            "%I %p"},
            {"%z"}}};
 }
 
 // Optionally eat month name after first 3 letters.  Assume first 3 letters are correct.
 void eatMonth(unsigned const month, std::string_view& str) {
   str.remove_prefix(3);
-  std::string_view const& suffix = month_suffixes[month];
+  std::string_view const suffix = month_suffixes[month];
   if (boost::algorithm::istarts_with(str, suffix)) {
     str.remove_prefix(suffix.size());
   }
@@ -116,22 +116,24 @@ std::optional<T> fromChars(std::string_view& str,
   }
 }
 
-// Parse str into int64_t or throw exception.
-int64_t unixTime(std::string_view const& str) {
+std::optional<int64_t> unixTime(std::string_view const str) {
   int64_t time{0};
   auto const result = std::from_chars(str.data(), str.data() + str.size(), time);
-  if (result.ec == std::errc()) {
-    return time;
-  } else {
-    throw std::runtime_error(cat("Invalid DATE/TIMESTAMP string (", str, ')'));
-  }
+  // is_valid = str =~ /^-?\d+(\.\d*)$/
+  bool const is_valid = result.ec == std::errc() &&
+                        (result.ptr == str.data() + str.size() ||
+                         (*result.ptr == '.' &&
+                          std::all_of(result.ptr + 1, str.data() + str.size(), isdigit)));
+  return is_valid ? std::make_optional(time) : std::nullopt;
 }
+
 }  // namespace
 
 // Interpret str according to DateTimeParser::FormatType::Time.
 // Return number of (s,ms,us,ns) since midnight based on dim in (0,3,6,9) resp.
 template <>
-int64_t dateTimeParse<kTIME>(std::string_view str, unsigned const dim) {
+std::optional<int64_t> dateTimeParseOptional<kTIME>(std::string_view str,
+                                                    unsigned const dim) {
   if (!str.empty() && str.front() == 'T') {
     str.remove_prefix(1);
   }
@@ -139,14 +141,14 @@ int64_t dateTimeParse<kTIME>(std::string_view str, unsigned const dim) {
   parser.setFormatType(DateTimeParser::FormatType::Time);
   std::optional<int64_t> time = parser.parse(str, dim);
   if (!time) {
-    throw std::runtime_error(cat("Invalid TIME string (", str, ')'));
+    return std::nullopt;
   }
   // Parse optional timezone
   std::string_view timezone = parser.unparsed();
   parser.setFormatType(DateTimeParser::FormatType::Timezone);
   std::optional<int64_t> tz = parser.parse(timezone, dim);
   if (!parser.unparsed().empty()) {
-    throw std::runtime_error(cat("Invalid TIME string (", str, ')'));
+    return std::nullopt;
   }
   return *time + tz.value_or(0);
 }
@@ -154,7 +156,8 @@ int64_t dateTimeParse<kTIME>(std::string_view str, unsigned const dim) {
 // Interpret str according to DateTimeParser::FormatType::Date and Time.
 // Return number of (s,ms,us,ns) since epoch based on dim in (0,3,6,9) resp.
 template <>
-int64_t dateTimeParse<kTIMESTAMP>(std::string_view str, unsigned const dim) {
+std::optional<int64_t> dateTimeParseOptional<kTIMESTAMP>(std::string_view str,
+                                                         unsigned const dim) {
   if (!str.empty() && str.front() == 'T') {
     str.remove_prefix(1);
   }
@@ -165,10 +168,10 @@ int64_t dateTimeParse<kTIMESTAMP>(std::string_view str, unsigned const dim) {
   if (!date) {
     return unixTime(str);
   }
-  // Parse optional time-of-day
+  // Parse time-of-day
   std::string_view time_of_day = parser.unparsed();
   if (time_of_day.empty()) {
-    throw std::runtime_error(cat("TIMESTAMP requires a time-of-day (", str, ')'));
+    return std::nullopt;
   } else if (time_of_day.front() == 'T' || time_of_day.front() == ':') {
     time_of_day.remove_prefix(1);
   }
@@ -184,7 +187,8 @@ int64_t dateTimeParse<kTIMESTAMP>(std::string_view str, unsigned const dim) {
 // Interpret str according to DateTimeParser::FormatType::Date.
 // Return number of (s,ms,us,ns) since epoch based on dim in (0,3,6,9) resp.
 template <>
-int64_t dateTimeParse<kDATE>(std::string_view str, unsigned const dim) {
+std::optional<int64_t> dateTimeParseOptional<kDATE>(std::string_view str,
+                                                    unsigned const dim) {
   DateTimeParser parser;
   // Parse date
   parser.setFormatType(DateTimeParser::FormatType::Date);
@@ -235,10 +239,10 @@ bool DateTimeParser::parseWithFormat(std::string_view format, std::string_view& 
 // Return number of (s,ms,us,ns) since epoch based on dim in (0,3,6,9) resp.
 // or std::nullopt if no format matches str.
 // In either case, update unparsed_ to the remaining part of str that was not matched.
-std::optional<int64_t> DateTimeParser::parse(std::string_view const& str, unsigned dim) {
+std::optional<int64_t> DateTimeParser::parse(std::string_view const str, unsigned dim) {
   static std::vector<std::vector<std::string_view>> const& format_views = formatViews();
   auto const& formats = format_views.at(static_cast<int>(format_type_));
-  for (std::string_view const& format : formats) {
+  for (std::string_view const format : formats) {
     std::string_view str_unparsed = str;
     if (parseWithFormat(format, str_unparsed)) {
       unparsed_ = str_unparsed;
@@ -273,9 +277,14 @@ bool DateTimeParser::updateDateTimeAndStr(char const field, std::string_view& st
       }
       return false;
     case 'y':
-      if (2 <= str.size() && isdigit(str[0]) && isdigit(str[1])) {
-        if (auto const year = fromChars<unsigned>(str, 2)) {
-          dt_.Y = (*year < 69 ? 2000 : 1900) + *year;
+      // %y matches 1 or 2 digits. If 3 or more digits are provided,
+      // then it is considered an unsuccessful parse.
+      if (auto const year = fromChars<unsigned>(str)) {
+        if (*year < 69) {
+          dt_.Y = 2000 + *year;
+          return true;
+        } else if (*year < 100) {
+          dt_.Y = 1900 + *year;
           return true;
         }
       }

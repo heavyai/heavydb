@@ -61,6 +61,7 @@
 #include "Logger/Logger.h"
 #include "OSDependent/omnisci_glob.h"
 #include "QueryEngine/TypePunning.h"
+#include "Shared/DateTimeParser.h"
 #include "Shared/SqlTypesLayout.h"
 #include "Shared/import_helpers.h"
 #include "Shared/measure.h"
@@ -3004,18 +3005,6 @@ bool try_cast(const std::string& str) {
   return true;
 }
 
-inline char* try_strptimes(const char* str, const std::vector<std::string>& formats) {
-  std::tm tm_struct;
-  char* buf;
-  for (auto format : formats) {
-    buf = strptime(str, format.c_str(), &tm_struct);
-    if (buf) {
-      return buf;
-    }
-  }
-  return nullptr;
-}
-
 SQLTypes Detector::detect_sqltype(const std::string& str) {
   SQLTypes type = kTEXT;
   if (try_cast<double>(str)) {
@@ -3085,25 +3074,13 @@ SQLTypes Detector::detect_sqltype(const std::string& str) {
 
   // check for time types
   if (type == kTEXT) {
-    // @TODO
-    // make these tests more robust so they don't match stuff they should not
-    char* buf;
-    buf = try_strptimes(str.c_str(),
-                        {"%Y-%m-%d", "%m/%d/%Y", "%Y/%m/%d", "%d-%b-%y", "%d/%b/%Y"});
-    if (buf) {
+    // This won't match unix timestamp, since floats and ints were checked above.
+    if (dateTimeParseOptional<kTIME>(str, 0)) {
+      type = kTIME;
+    } else if (dateTimeParseOptional<kTIMESTAMP>(str, 0)) {
+      type = kTIMESTAMP;
+    } else if (dateTimeParseOptional<kDATE>(str, 0)) {
       type = kDATE;
-      if (*buf == 'T' || *buf == ' ' || *buf == ':') {
-        buf++;
-      }
-    }
-    buf = try_strptimes(buf == nullptr ? str.c_str() : buf,
-                        {"%T %z", "%T", "%H%M%S", "%R"});
-    if (buf) {
-      if (type == kDATE) {
-        type = kTIMESTAMP;
-      } else {
-        type = kTIME;
-      }
     }
   }
 
