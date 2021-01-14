@@ -1637,11 +1637,12 @@ class TCopyParams(object):
      - s3_endpoint
      - geo_assign_render_groups
      - geo_explode_collections
+     - source_srid
 
     """
 
 
-    def __init__(self, delimiter=None, null_str=None, has_header=0, quoted=None, quote=None, escape=None, line_delim=None, array_delim=None, array_begin=None, array_end=None, threads=None, file_type=0, s3_access_key=None, s3_secret_key=None, s3_region=None, geo_coords_encoding=6, geo_coords_comp_param=32, geo_coords_type=18, geo_coords_srid=4326, sanitize_column_names=True, geo_layer_name=None, s3_endpoint=None, geo_assign_render_groups=True, geo_explode_collections=False,):
+    def __init__(self, delimiter=None, null_str=None, has_header=0, quoted=None, quote=None, escape=None, line_delim=None, array_delim=None, array_begin=None, array_end=None, threads=None, file_type=0, s3_access_key=None, s3_secret_key=None, s3_region=None, geo_coords_encoding=6, geo_coords_comp_param=32, geo_coords_type=18, geo_coords_srid=4326, sanitize_column_names=True, geo_layer_name=None, s3_endpoint=None, geo_assign_render_groups=True, geo_explode_collections=False, source_srid=0,):
         self.delimiter = delimiter
         self.null_str = null_str
         self.has_header = has_header
@@ -1666,6 +1667,7 @@ class TCopyParams(object):
         self.s3_endpoint = s3_endpoint
         self.geo_assign_render_groups = geo_assign_render_groups
         self.geo_explode_collections = geo_explode_collections
+        self.source_srid = source_srid
 
     def read(self, iprot):
         if iprot._fast_decode is not None and isinstance(iprot.trans, TTransport.CReadableTransport) and self.thrift_spec is not None:
@@ -1796,6 +1798,11 @@ class TCopyParams(object):
                     self.geo_explode_collections = iprot.readBool()
                 else:
                     iprot.skip(ftype)
+            elif fid == 25:
+                if ftype == TType.I32:
+                    self.source_srid = iprot.readI32()
+                else:
+                    iprot.skip(ftype)
             else:
                 iprot.skip(ftype)
             iprot.readFieldEnd()
@@ -1901,6 +1908,10 @@ class TCopyParams(object):
         if self.geo_explode_collections is not None:
             oprot.writeFieldBegin('geo_explode_collections', TType.BOOL, 24)
             oprot.writeBool(self.geo_explode_collections)
+            oprot.writeFieldEnd()
+        if self.source_srid is not None:
+            oprot.writeFieldBegin('source_srid', TType.I32, 25)
+            oprot.writeI32(self.source_srid)
             oprot.writeFieldEnd()
         oprot.writeFieldStop()
         oprot.writeStructEnd()
@@ -6229,6 +6240,7 @@ TCopyParams.thrift_spec = (
     (22, TType.STRING, 's3_endpoint', 'UTF8', None, ),  # 22
     (23, TType.BOOL, 'geo_assign_render_groups', None, True, ),  # 23
     (24, TType.BOOL, 'geo_explode_collections', None, False, ),  # 24
+    (25, TType.I32, 'source_srid', None, 0, ),  # 25
 )
 all_structs.append(TCreateParams)
 TCreateParams.thrift_spec = (
