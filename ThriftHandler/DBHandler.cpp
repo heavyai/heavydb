@@ -5731,43 +5731,51 @@ std::pair<TPlanResult, lockmgr::LockedTableDescriptors> DBHandler::parse_to_ra(
     process_calcite_request();
     lockmgr::LockedTableDescriptors locks;
     if (acquire_locks) {
-      std::set<std::string> read_only_tables;
-      for (const auto& table : result.resolved_accessed_objects.tables_selected_from) {
-        read_only_tables.insert(table);
-      }
+      std::set<std::string> write_only_tables;
       std::vector<std::string> tables;
-      tables.insert(tables.end(),
-                    result.resolved_accessed_objects.tables_selected_from.begin(),
-                    result.resolved_accessed_objects.tables_selected_from.end());
-      tables.insert(tables.end(),
-                    result.resolved_accessed_objects.tables_inserted_into.begin(),
-                    result.resolved_accessed_objects.tables_inserted_into.end());
+
       tables.insert(tables.end(),
                     result.resolved_accessed_objects.tables_updated_in.begin(),
                     result.resolved_accessed_objects.tables_updated_in.end());
       tables.insert(tables.end(),
                     result.resolved_accessed_objects.tables_deleted_from.begin(),
                     result.resolved_accessed_objects.tables_deleted_from.end());
+
+      // Collect the tables that need a write lock
+      for (const auto& table : tables) {
+        write_only_tables.insert(table);
+      }
+
+      tables.insert(tables.end(),
+                    result.resolved_accessed_objects.tables_selected_from.begin(),
+                    result.resolved_accessed_objects.tables_selected_from.end());
+      tables.insert(tables.end(),
+                    result.resolved_accessed_objects.tables_inserted_into.begin(),
+                    result.resolved_accessed_objects.tables_inserted_into.end());
+
       // avoid deadlocks by enforcing a deterministic locking sequence
       // first, obtain table schema locks
       // then, obtain table data locks
       std::sort(tables.begin(), tables.end());
+      // In the case of self-join and possibly other cases, we will
+      // have duplicate tables. Ensure we only take one for locking below.
+      tables.erase(unique(tables.begin(), tables.end()), tables.end());
       for (const auto& table : tables) {
         locks.emplace_back(
             std::make_unique<lockmgr::TableSchemaLockContainer<lockmgr::ReadLock>>(
                 lockmgr::TableSchemaLockContainer<
                     lockmgr::ReadLock>::acquireTableDescriptor(*cat.get(), table)));
-        if (read_only_tables.count(table)) {
-          locks.emplace_back(
-              std::make_unique<lockmgr::TableDataLockContainer<lockmgr::ReadLock>>(
-                  lockmgr::TableDataLockContainer<lockmgr::ReadLock>::acquire(
-                      cat->getDatabaseId(), (*locks.back())())));
-        } else {
+        if (write_only_tables.count(table)) {
           // Aquire an insert data lock for updates/deletes, consistent w/ insert. The
           // table data lock will be aquired in the fragmenter during checkpoint.
           locks.emplace_back(
               std::make_unique<lockmgr::TableInsertLockContainer<lockmgr::WriteLock>>(
                   lockmgr::TableInsertLockContainer<lockmgr::WriteLock>::acquire(
+                      cat->getDatabaseId(), (*locks.back())())));
+        } else {
+          locks.emplace_back(
+              std::make_unique<lockmgr::TableDataLockContainer<lockmgr::ReadLock>>(
+                  lockmgr::TableDataLockContainer<lockmgr::ReadLock>::acquire(
                       cat->getDatabaseId(), (*locks.back())())));
         }
       }
