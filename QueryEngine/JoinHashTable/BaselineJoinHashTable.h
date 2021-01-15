@@ -158,7 +158,6 @@ class BaselineJoinHashTable : public HashJoin {
   BaselineJoinHashTable(const std::shared_ptr<Analyzer::BinOper> condition,
                         const std::vector<InputTableInfo>& query_infos,
                         const Data_Namespace::MemoryLevel memory_level,
-                        const size_t entry_count,
                         ColumnCacheMap& column_cache,
                         Executor* executor,
                         const std::vector<InnerOuter>& inner_outer_pairs,
@@ -196,6 +195,8 @@ class BaselineJoinHashTable : public HashJoin {
   virtual void reifyForDevice(const ColumnsForDevice& columns_for_device,
                               const HashType layout,
                               const int device_id,
+                              const size_t entry_count,
+                              const size_t emitted_keys_count,
                               const logger::ThreadId parent_thread_id);
 
   virtual int initHashTableForDevice(
@@ -204,6 +205,8 @@ class BaselineJoinHashTable : public HashJoin {
       const std::vector<JoinBucketInfo>& join_buckets,
       const HashType layout,
       const Data_Namespace::MemoryLevel effective_memory_level,
+      const size_t entry_count,
+      const size_t emitted_keys_count,
       const int device_id);
 
   llvm::Value* hashPtr(const size_t index);
@@ -221,8 +224,6 @@ class BaselineJoinHashTable : public HashJoin {
   const std::shared_ptr<Analyzer::BinOper> condition_;
   const std::vector<InputTableInfo>& query_infos_;
   const Data_Namespace::MemoryLevel memory_level_;
-  size_t entry_count_;         // number of keys in the hash table
-  size_t emitted_keys_count_;  // number of keys emitted across all rows
   Executor* executor_;
   ColumnCacheMap& column_cache_;
   std::mutex cpu_hash_table_buff_mutex_;
