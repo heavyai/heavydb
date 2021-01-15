@@ -5151,6 +5151,12 @@ void DBHandler::sql_execute_impl(TQueryResult& _return,
         *legacylockmgr::LockMgr<mapd_shared_mutex, bool>::getMutex(
             legacylockmgr::ExecutorOuterLock, true));
 
+    const auto tt1_0 = Clock::now();
+    LOG(INFO)
+        << "[Averbukh] Part 1.1.1 of sql_execute_impl finished in "
+        << std::chrono::duration_cast<std::chrono::milliseconds>(tt1_0 - tt1).count()
+        << " ms";
+
     std::string query_ra;
     _return.execution_time_ms += measure<>::execution([&]() {
       TPlanResult result;
