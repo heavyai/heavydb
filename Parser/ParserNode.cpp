@@ -3364,7 +3364,7 @@ void TruncateTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   privObjects.push_back(dbObject);
   if (!SysCatalog::instance().checkPrivileges(session.get_currentUser(), privObjects)) {
     throw std::runtime_error("Table " + *table + " will not be truncated. User " +
-                             session.get_currentUser().userName +
+                             session.get_currentUser().userLoggable() +
                              " has no proper privileges.");
   }
 
@@ -3858,7 +3858,7 @@ void CopyTableStmt::execute(const Catalog_Namespace::SessionInfo& session,
     privObjects.push_back(dbObject);
     if (!SysCatalog::instance().checkPrivileges(session.get_currentUser(), privObjects)) {
       throw std::runtime_error("Violation of access privileges: user " +
-                               session.get_currentUser().userName +
+                               session.get_currentUser().userLoggable() +
                                " has no insert privileges for table " + *table + ".");
     }
   }

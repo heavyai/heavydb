@@ -480,7 +480,7 @@ void DBHandler::internal_connect(TSessionId& session,
   std::vector<DBObject> dbObjects;
   dbObjects.push_back(dbObject);
   if (!SysCatalog::instance().checkPrivileges(user_meta, dbObjects)) {
-    THROW_MAPD_EXCEPTION("Unauthorized Access: user " + username +
+    THROW_MAPD_EXCEPTION("Unauthorized Access: user " + user_meta.userLoggable() +
                          " is not allowed to access database " + dbname2 + ".");
   }
   connect_impl(session, std::string(), dbname2, user_meta, cat, stdlog);
@@ -518,7 +518,7 @@ void DBHandler::connect(TSessionId& session,
   if (!SysCatalog::instance().checkPrivileges(user_meta, dbObjects)) {
     stdlog.appendNameValuePairs(
         "user", username, "db", dbname, "exception", "Missing Privileges");
-    THROW_MAPD_EXCEPTION("Unauthorized Access: user " + username +
+    THROW_MAPD_EXCEPTION("Unauthorized Access: user " + user_meta.userLoggable() +
                          " is not allowed to access database " + dbname2 + ".");
   }
   connect_impl(session, passwd, dbname2, user_meta, cat, stdlog);
@@ -540,7 +540,7 @@ std::shared_ptr<Catalog_Namespace::SessionInfo> DBHandler::create_new_session(
                             cat, user_meta, executor_device_type_, session));
   CHECK(emplace_retval.second);
   auto& session_ptr = emplace_retval.first->second;
-  LOG(INFO) << "User " << user_meta.userName << " connected to database " << dbname;
+  LOG(INFO) << "User " << user_meta.userLoggable() << " connected to database " << dbname;
   return session_ptr;
 }
 
@@ -583,7 +583,7 @@ void DBHandler::disconnect(const TSessionId& session) {
   stdlog.setSessionInfo(session_it->second);
   const auto dbname = session_it->second->getCatalog().getCurrentDB().dbName;
 
-  LOG(INFO) << "User " << session_it->second->get_currentUser().userName
+  LOG(INFO) << "User " << session_it->second->get_currentUser().userLoggable()
             << " disconnected from database " << dbname
             << " with public_session_id: " << session_it->second->get_public_session_id();
 
@@ -671,15 +671,15 @@ void DBHandler::interrupt(const TSessionId& query_session,
     VLOG(1) << "Received interrupt: "
             << "Session " << *session_it->second << ", Executor " << executor
             << ", leafCount " << leaf_aggregator_.leafCount() << ", User "
-            << session_it->second->get_currentUser().userName << ", Database " << dbname
-            << std::endl;
+            << session_it->second->get_currentUser().userLoggable() << ", Database "
+            << dbname << std::endl;
 
     if (leaf_aggregator_.leafCount() > 0) {
       leaf_aggregator_.interrupt(query_session, interrupt_session);
     }
     executor->interrupt(query_session, interrupt_session);
 
-    LOG(INFO) << "User " << session_it->second->get_currentUser().userName
+    LOG(INFO) << "User " << session_it->second->get_currentUser().userLoggable()
               << " interrupted session with database " << dbname << std::endl;
   }
 }
@@ -4899,8 +4899,8 @@ void DBHandler::check_table_load_privileges(
   privObjects.push_back(dbObject);
   if (!SysCatalog::instance().checkPrivileges(user_metadata, privObjects)) {
     THROW_MAPD_EXCEPTION("Violation of access privileges: user " +
-                         user_metadata.userName + " has no insert privileges for table " +
-                         table_name + ".");
+                         user_metadata.userLoggable() +
+                         " has no insert privileges for table " + table_name + ".");
   }
 }
 
@@ -4912,7 +4912,7 @@ void DBHandler::check_table_load_privileges(const TSessionId& session,
 
 void DBHandler::set_execution_mode_nolock(Catalog_Namespace::SessionInfo* session_ptr,
                                           const TExecuteMode::type mode) {
-  const std::string& user_name = session_ptr->get_currentUser().userName;
+  const std::string user_name = session_ptr->get_currentUser().userLoggable();
   switch (mode) {
     case TExecuteMode::GPU:
       if (cpu_mode_only_) {
