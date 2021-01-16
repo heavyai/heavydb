@@ -92,7 +92,7 @@ class RowToColumnLoader {
 
   void createConnection(const ThriftClientConnection& con);
   void closeConnection();
-  void wait_disconnet_reconnnect_retry(size_t tries,
+  void wait_disconnect_reconnect_retry(size_t tries,
                                        import_export::CopyParams copy_params);
 };
 

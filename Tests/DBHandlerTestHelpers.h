@@ -351,6 +351,31 @@ class DBHandlerTestFixture : public testing::Test {
     ASSERT_EQ(error_message, e.what());
   }
 
+  // sometime error message have non deterministic portions
+  // used to check a meaningful portion of an error message
+  template <typename Lambda>
+  void executeLambdaAndAssertPartialException(Lambda lambda,
+                                              const std::string& error_message) {
+    try {
+      lambda();
+      FAIL() << "An exception should have been thrown for this test case.";
+    } catch (const TOmniSciException& e) {
+      assertPartialExceptionMessage(e, error_message);
+    } catch (const std::runtime_error& e) {
+      assertPartialExceptionMessage(e, error_message);
+    }
+  }
+
+  void assertPartialExceptionMessage(const TOmniSciException& e,
+                                     const std::string& error_message) {
+    ASSERT_TRUE(e.error_msg.find(error_message) != std::string::npos);
+  }
+
+  void assertPartialExceptionMessage(const std::runtime_error& e,
+                                     const std::string& error_message) {
+    ASSERT_TRUE(std::string(e.what()).find(error_message) != std::string::npos);
+  }
+
   void queryAndAssertException(const std::string& sql_statement,
                                const std::string& error_message) {
     executeLambdaAndAssertException([&] { sql(sql_statement); }, error_message);

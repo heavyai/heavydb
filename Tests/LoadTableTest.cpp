@@ -36,7 +36,7 @@ class LoadTableTest : public DBHandlerTestFixture {
     sql("DROP TABLE IF EXISTS geo_load_test");
     sql("CREATE TABLE geo_load_test(i1 INTEGER, ls LINESTRING, s TEXT, mp MULTIPOLYGON, "
         "nns TEXT not null)");
-    sql("CREATE TABLE load_test(i1 INTEGER, s TEXT, nns TEXT not null)");
+    sql("CREATE TABLE load_test(i1 INTEGER, s TEXT ENCODING DICT(8), nns TEXT not null)");
     initData();
   }
 
@@ -212,6 +212,29 @@ TEST_F(LoadTableTest, BinaryAllColumnsNoGeo) {
   row.cols = {i1_datum, s_datum, nns_datum};
   handler->load_table_binary(session, "load_test", {row}, {});
   sqlAndCompareResult("SELECT * FROM load_test", {{i(1), "s", "nns"}});
+}
+
+TEST_F(LoadTableTest, DictOutOfBounds) {
+  auto* handler = getDbHandlerAndSessionId().first;
+  auto& session = getDbHandlerAndSessionId().second;
+  std::vector<TRow> rows;
+  for (int i = 0; i < 300; i++) {
+    TRow row;
+    TDatum str_datum;
+    str_datum.is_null = false;
+    i1_datum.val.int_val = 1;
+    str_datum.val.str_val = std::to_string(i);
+
+    row.cols = {i1_datum, str_datum, nns_datum};
+    rows.emplace_back(row);
+  }
+  executeLambdaAndAssertPartialException(
+      [&]() { handler->load_table_binary(session, "load_test", rows, {}); },
+      "has exceeded its limit of 8 bits (255 unique values). There was an attempt to add "
+      "the new string '255'. Table will need to be recreated with larger String "
+      "Dictionary Capacity");
+
+  sqlAndCompareResult("SELECT count(*) FROM load_test", {{i(0)}});
 }
 
 // TODO(max): load_table_binary doesn't support tables with geo columns yet

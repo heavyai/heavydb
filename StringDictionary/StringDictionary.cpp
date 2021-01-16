@@ -97,7 +97,8 @@ StringDictionary::StringDictionary(const std::string& folder,
                                    const bool recover,
                                    const bool materializeHashes,
                                    size_t initial_capacity)
-    : str_count_(0)
+    : folder_(folder)
+    , str_count_(0)
     , string_id_string_dict_hash_table_(initial_capacity, INVALID_STR_ID)
     , hash_cache_(initial_capacity)
     , isTemp_(isTemp)
@@ -261,7 +262,9 @@ size_t StringDictionary::getNumStringsFromStorage(const size_t storage_slots) co
 }
 
 StringDictionary::StringDictionary(const LeafHostInfo& host, const DictRef dict_ref)
-    : strings_cache_(nullptr)
+    : folder_("DB_" + std::to_string(dict_ref.dbId) + "_DICT_" +
+              std::to_string(dict_ref.dictId))
+    , strings_cache_(nullptr)
     , client_(new StringDictionaryClient(host, dict_ref, true))
     , client_no_timeout_(new StringDictionaryClient(host, dict_ref, false)) {}
 
@@ -300,10 +303,15 @@ int32_t StringDictionary::getOrAdd(const std::string& str) noexcept {
 namespace {
 
 template <class T>
-void log_encoding_error(std::string_view str) {
-  LOG(ERROR) << "Could not encode string: " << str
-             << ", the encoded value doesn't fit in " << sizeof(T) * 8
-             << " bits. Will store NULL instead.";
+void throw_encoding_error(std::string_view str, std::string_view folder) {
+  std::ostringstream oss;
+  oss << "The text encoded column stored at " << folder << ", has exceeded its limit of "
+      << sizeof(T) * 8 << " bits (" << static_cast<size_t>(max_valid_int_value<T>() + 1)
+      << " unique values)."
+      << " There was an attempt to add the new string '" << str
+      << "'. Table will need to be recreated with larger String Dictionary Capacity";
+  LOG(ERROR) << oss.str();
+  throw std::runtime_error(oss.str());
 }
 
 }  // namespace
@@ -379,10 +387,8 @@ void StringDictionary::getOrAddBulk(const std::vector<String>& input_strings,
     }
     // need to add record to dictionary
     // check there is room
-    if (str_count_ == static_cast<size_t>(max_valid_int_value<T>())) {
-      log_encoding_error<T>(input_string);
-      output_string_ids[idx++] = inline_int_null_value<T>();
-      continue;
+    if (str_count_ > static_cast<size_t>(max_valid_int_value<T>())) {
+      throw_encoding_error<T>(input_string, folder_);
     }
     CHECK_LT(str_count_, MAX_STRCOUNT)
         << "Maximum number (" << str_count_
@@ -469,10 +475,8 @@ void StringDictionary::getOrAddBulkParallel(const std::vector<String>& input_str
     }
     // Did not find string, so need to add record to dictionary
     // First check there is room
-    if (shadow_str_count == static_cast<size_t>(max_valid_int_value<T>())) {
-      log_encoding_error<T>(input_string);
-      output_string_ids[input_string_idx++] = inline_int_null_value<T>();
-      continue;
+    if (shadow_str_count > static_cast<size_t>(max_valid_int_value<T>())) {
+      throw_encoding_error<T>(input_string, folder_);
     }
     CHECK_LT(shadow_str_count, MAX_STRCOUNT)
         << "Maximum number (" << shadow_str_count
@@ -525,7 +529,7 @@ void StringDictionary::getOrAddBulkRemote(const std::vector<String>& string_vec,
     const bool invalid = string_id > max_valid_int_value<T>();
     if (invalid || string_id == inline_int_null_value<int32_t>()) {
       if (invalid) {
-        log_encoding_error<T>(string_vec[i]);
+        throw_encoding_error<T>(string_vec[i], folder_);
       }
       encoded_vec[out_idx++] = inline_int_null_value<T>();
       continue;
@@ -1379,6 +1383,10 @@ void StringDictionary::invalidateInvertedIndex() noexcept {
   compare_cache_.invalidateInvertedIndex();
 }
 
+// TODO 5 Mar 2021 Nothing will undo the writes to dictionary currently on a failed
+// load.  The next write to the dictionary that does checkpoint will make the
+// uncheckpointed data be written to disk. Only option is a table truncate, and thats
+// assuming not replicated dictionary
 bool StringDictionary::checkpoint() noexcept {
   if (client_) {
     try {

@@ -562,6 +562,7 @@ class Loader {
   void setAddingColumns(const bool adding_columns) { adding_columns_ = adding_columns; }
   bool isAddingColumns() const { return adding_columns_; }
   void dropColumns(const std::vector<int>& columns);
+  std::string getErrorMessage() { return error_msg_; };
 
  protected:
   void init(const bool use_catalog_locks);
@@ -613,6 +614,7 @@ class Loader {
 
   bool adding_columns_ = false;
   std::mutex loader_mutex_;
+  std::string error_msg_;
 };
 
 struct ImportStatus {
@@ -622,22 +624,24 @@ struct ImportStatus {
   size_t rows_estimated;
   size_t rows_rejected;
   std::chrono::duration<size_t, std::milli> elapsed;
-  bool load_truncated;
+  bool load_failed = false;
+  std::string load_msg;
   int thread_id;  // to recall thread_id after thread exit
-  bool interrupted;
   ImportStatus()
       : start(std::chrono::steady_clock::now())
       , rows_completed(0)
       , rows_estimated(0)
       , rows_rejected(0)
       , elapsed(0)
-      , load_truncated(0)
-      , thread_id(0)
-      , interrupted(0) {}
+      , thread_id(0) {}
 
   ImportStatus& operator+=(const ImportStatus& is) {
     rows_completed += is.rows_completed;
     rows_rejected += is.rows_rejected;
+    if (is.load_failed) {
+      load_failed = true;
+      load_msg = is.load_msg;
+    }
 
     return *this;
   }
@@ -670,8 +674,8 @@ class DataStreamSink {
   CopyParams copy_params;
   const std::string file_path;
   FILE* p_file = nullptr;
-  ImportStatus import_status;
-  bool load_failed = false;
+  ImportStatus import_status_;
+  mapd_shared_mutex import_mutex_;
   size_t total_file_size{0};
   std::vector<size_t> file_offsets;
   std::mutex file_offsets_mutex;

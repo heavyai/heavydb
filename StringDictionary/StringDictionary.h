@@ -203,6 +203,7 @@ class StringDictionary {
   void mergeSortedCache(std::vector<int32_t>& temp_sorted_cache);
   compare_cache_value_t* binary_search_cache(const std::string& pattern) const;
 
+  const std::string folder_;
   size_t str_count_;
   size_t collisions_;
   std::vector<int32_t> string_id_string_dict_hash_table_;

@@ -177,7 +177,6 @@ Importer::Importer(Loader* providedLoader, const std::string& f, const CopyParam
   p_file = nullptr;
   buffer[0] = nullptr;
   buffer[1] = nullptr;
-  interrupted = false;
   // we may be overallocating a little more memory here due to dropping phy cols.
   // it shouldn't be an issue because iteration of it is not supposed to go OOB.
   auto is_array = std::unique_ptr<bool[]>(new bool[loader->get_column_descs().size()]);
@@ -491,25 +490,37 @@ void TypedImportBuffer::addDictEncodedString(const std::vector<std::string>& str
   string_view_vec.reserve(string_vec.size());
   for (const auto& str : string_vec) {
     if (str.size() > StringDictionary::MAX_STRLEN) {
-      throw std::runtime_error("String too long for dictionary encoding.");
+      std::ostringstream oss;
+      oss << "while processing dictionary for column " << getColumnDesc()->columnName
+          << " a string was detected too long for encoding, string length = "
+          << str.size() << ", first 100 characters are '" << str.substr(0, 100) << "'";
+      throw std::runtime_error(oss.str());
     }
     string_view_vec.push_back(str);
   }
-  switch (column_desc_->columnType.get_size()) {
-    case 1:
-      string_dict_i8_buffer_->resize(string_view_vec.size());
-      string_dict_->getOrAddBulk(string_view_vec, string_dict_i8_buffer_->data());
-      break;
-    case 2:
-      string_dict_i16_buffer_->resize(string_view_vec.size());
-      string_dict_->getOrAddBulk(string_view_vec, string_dict_i16_buffer_->data());
-      break;
-    case 4:
-      string_dict_i32_buffer_->resize(string_view_vec.size());
-      string_dict_->getOrAddBulk(string_view_vec, string_dict_i32_buffer_->data());
-      break;
-    default:
-      CHECK(false);
+  try {
+    switch (column_desc_->columnType.get_size()) {
+      case 1:
+        string_dict_i8_buffer_->resize(string_view_vec.size());
+        string_dict_->getOrAddBulk(string_view_vec, string_dict_i8_buffer_->data());
+        break;
+      case 2:
+        string_dict_i16_buffer_->resize(string_view_vec.size());
+        string_dict_->getOrAddBulk(string_view_vec, string_dict_i16_buffer_->data());
+        break;
+      case 4:
+        string_dict_i32_buffer_->resize(string_view_vec.size());
+        string_dict_->getOrAddBulk(string_view_vec, string_dict_i32_buffer_->data());
+        break;
+      default:
+        CHECK(false);
+    }
+  } catch (std::exception& e) {
+    std::ostringstream oss;
+    oss << "while processing dictionary for column " << getColumnDesc()->columnName
+        << " : " << e.what();
+    LOG(ERROR) << oss.str();
+    throw std::runtime_error(oss.str());
   }
 }
 
@@ -1818,13 +1829,16 @@ static ImportStatus import_thread_delimited(
     size_t first_row_index_this_buffer,
     const Catalog_Namespace::SessionInfo* session_info,
     Executor* executor) {
-  ImportStatus import_status;
+  ImportStatus thread_import_status;
   int64_t total_get_row_time_us = 0;
   int64_t total_str_to_val_time_us = 0;
   auto query_session = session_info ? session_info->get_session_id() : "";
   CHECK(scratch_buffer);
   auto buffer = scratch_buffer.get();
   auto load_ms = measure<>::execution([]() {});
+
+  thread_import_status.thread_id = thread_id;
+
   auto ms = measure<>::execution([&]() {
     const CopyParams& copy_params = importer->get_copy_params();
     const std::list<const ColumnDescriptor*>& col_descs = importer->get_column_descs();
@@ -1881,10 +1895,10 @@ static ImportStatus import_thread_delimited(
       row_index_plus_one++;
       // Each POINT could consume two separate coords instead of a single WKT
       if (row.size() < num_cols || (num_cols + point_cols) < row.size()) {
-        import_status.rows_rejected++;
+        thread_import_status.rows_rejected++;
         LOG(ERROR) << "Incorrect Row (expected " << num_cols << " columns, has "
                    << row.size() << "): " << shared::printContainer(row);
-        if (import_status.rows_rejected > copy_params.max_reject) {
+        if (thread_import_status.rows_rejected > copy_params.max_reject) {
           break;
         }
         continue;
@@ -2091,24 +2105,29 @@ static ImportStatus import_thread_delimited(
               }
             }
           }
-          if (UNLIKELY((import_status.rows_completed & 0xFFFF) == 0 &&
+          if (UNLIKELY((thread_import_status.rows_completed & 0xFFFF) == 0 &&
                        checkInterrupt(query_session, executor))) {
-            mapd_lock_guard<mapd_shared_mutex> write_lock(status_mutex);
-            import_status.interrupted = true;
-            throw QueryExecutionError(Executor::ERR_INTERRUPTED);
+            thread_import_status.load_failed = true;
+            thread_import_status.load_msg =
+                "Table load was cancelled via Query Interrupt";
+            return;
           }
-          import_status.rows_completed++;
-        } catch (QueryExecutionError& e) {
-          throw e;
+          thread_import_status.rows_completed++;
         } catch (const std::exception& e) {
           for (size_t col_idx_to_pop = 0; col_idx_to_pop < col_idx; ++col_idx_to_pop) {
             import_buffers[col_idx_to_pop]->pop_value();
           }
-          import_status.rows_rejected++;
+          thread_import_status.rows_rejected++;
           LOG(ERROR) << "Input exception thrown: " << e.what()
                      << ". Row discarded. Data: " << shared::printContainer(row);
+          if (thread_import_status.rows_rejected > copy_params.max_reject) {
+            LOG(ERROR) << "Load was cancelled due to max reject rows being reached";
+            thread_import_status.load_failed = true;
+            thread_import_status.load_msg =
+                "Load was cancelled due to max reject rows being reached";
+          }
         }
-      };
+      };  // End of lambda
 
       if (copy_params.geo_explode_collections) {
         // explode and import
@@ -2137,27 +2156,30 @@ static ImportStatus import_thread_delimited(
         us = measure<std::chrono::microseconds>::execution(
             [&] { execute_import_row(nullptr); });
       }
+
+      if (thread_import_status.load_failed) {
+        break;
+      }
     }  // end thread
     total_str_to_val_time_us += us;
-    if (import_status.rows_completed > 0) {
+    if (!thread_import_status.load_failed && thread_import_status.rows_completed > 0) {
       load_ms = measure<>::execution([&]() {
-        importer->load(import_buffers, import_status.rows_completed, session_info);
+        importer->load(import_buffers, thread_import_status.rows_completed, session_info);
       });
     }
-  });
-  if (DEBUG_TIMING && import_status.rows_completed > 0) {
+  });  // end execution
+
+  if (DEBUG_TIMING && !thread_import_status.load_failed &&
+      thread_import_status.rows_completed > 0) {
     LOG(INFO) << "Thread" << std::this_thread::get_id() << ":"
-              << import_status.rows_completed << " rows inserted in "
+              << thread_import_status.rows_completed << " rows inserted in "
               << (double)ms / 1000.0 << "sec, Insert Time: " << (double)load_ms / 1000.0
               << "sec, get_row: " << (double)total_get_row_time_us / 1000000.0
               << "sec, str_to_val: " << (double)total_str_to_val_time_us / 1000000.0
               << "sec" << std::endl;
   }
 
-  import_status.thread_id = thread_id;
-  // LOG(INFO) << " return " << import_status.thread_id << std::endl;
-
-  return import_status;
+  return thread_import_status;
 }
 
 static ImportStatus import_thread_shapefile(
@@ -2172,7 +2194,7 @@ static ImportStatus import_thread_shapefile(
     const ColumnIdToRenderGroupAnalyzerMapType& columnIdToRenderGroupAnalyzerMap,
     const Catalog_Namespace::SessionInfo* session_info,
     Executor* executor) {
-  ImportStatus import_status;
+  ImportStatus thread_import_status;
   const CopyParams& copy_params = importer->get_copy_params();
   const std::list<const ColumnDescriptor*>& col_descs = importer->get_column_descs();
   std::vector<std::unique_ptr<TypedImportBuffer>>& import_buffers =
@@ -2224,8 +2246,10 @@ static ImportStatus import_thread_shapefile(
     auto execute_import_feature = [&](OGRGeometry* import_geometry) {
       size_t col_idx = 0;
       try {
-        if (UNLIKELY((import_status.rows_completed & 0xFFFF) == 0 &&
+        if (UNLIKELY((thread_import_status.rows_completed & 0xFFFF) == 0 &&
                      checkInterrupt(query_session, executor))) {
+          thread_import_status.load_failed = true;
+          thread_import_status.load_msg = "Table load was cancelled via Query Interrupt";
           throw QueryExecutionError(Executor::ERR_INTERRUPTED);
         }
         for (auto cd_it = col_descs.begin(); cd_it != col_descs.end(); cd_it++) {
@@ -2234,10 +2258,10 @@ static ImportStatus import_thread_shapefile(
           // is this a geo column?
           const auto& col_ti = cd->columnType;
           if (col_ti.is_geometry()) {
-            // Note that this assumes there is one and only one geo column in the table.
-            // Currently, the importer only supports reading a single geospatial feature
-            // from an input shapefile / geojson file, but this code will need to be
-            // modified if that changes
+            // Note that this assumes there is one and only one geo column in the
+            // table. Currently, the importer only supports reading a single
+            // geospatial feature from an input shapefile / geojson file, but this
+            // code will need to be modified if that changes
             SQLTypes col_type = col_ti.get_type();
 
             // store null string in the base column
@@ -2474,7 +2498,7 @@ static ImportStatus import_thread_shapefile(
             ++col_idx;
           }
         }
-        import_status.rows_completed++;
+        thread_import_status.rows_completed++;
       } catch (QueryExecutionError& e) {
         if (e.getErrorCode() == Executor::ERR_INTERRUPTED) {
           throw e;
@@ -2483,32 +2507,23 @@ static ImportStatus import_thread_shapefile(
         for (size_t col_idx_to_pop = 0; col_idx_to_pop < col_idx; ++col_idx_to_pop) {
           import_buffers[col_idx_to_pop]->pop_value();
         }
-        import_status.rows_rejected++;
+        thread_import_status.rows_rejected++;
         LOG(ERROR) << "Input exception thrown: " << e.what() << ". Row discarded.";
       }
     };
 
-    try {
-      if (pGeometry && copy_params.geo_explode_collections) {
-        // explode and import
-        auto const [collection_idx_type_name,
-                    collection_child_type,
-                    collection_col_name] = explode_collections_step1(col_descs);
-        explode_collections_step2(pGeometry,
-                                  collection_child_type,
-                                  collection_col_name,
-                                  firstFeature + iFeature + 1,
-                                  execute_import_feature);
-      } else {
-        // import non-collection or null feature just once
-        execute_import_feature(pGeometry);
-      }
-    } catch (QueryExecutionError& e) {
-      if (e.getErrorCode() == Executor::ERR_INTERRUPTED) {
-        mapd_lock_guard<mapd_shared_mutex> write_lock(status_mutex);
-        import_status.interrupted = true;
-        return import_status;
-      }
+    if (pGeometry && copy_params.geo_explode_collections) {
+      // explode and import
+      auto const [collection_idx_type_name, collection_child_type, collection_col_name] =
+          explode_collections_step1(col_descs);
+      explode_collections_step2(pGeometry,
+                                collection_child_type,
+                                collection_col_name,
+                                firstFeature + iFeature + 1,
+                                execute_import_feature);
+    } else {
+      // import non-collection or null feature just once
+      execute_import_feature(pGeometry);
     }
   }  // end features
 
@@ -2518,9 +2533,9 @@ static ImportStatus import_thread_shapefile(
       1000.0f;
 
   float load_ms = 0.0f;
-  if (import_status.rows_completed > 0) {
+  if (thread_import_status.rows_completed > 0) {
     auto load_timer = timer_start();
-    importer->load(import_buffers, import_status.rows_completed, session_info);
+    importer->load(import_buffers, thread_import_status.rows_completed, session_info);
     load_ms =
         float(
             timer_stop<std::chrono::steady_clock::time_point, std::chrono::microseconds>(
@@ -2528,12 +2543,12 @@ static ImportStatus import_thread_shapefile(
         1000.0f;
   }
 
-  if (DEBUG_TIMING && import_status.rows_completed > 0) {
+  if (DEBUG_TIMING && thread_import_status.rows_completed > 0) {
     LOG(INFO) << "DEBUG:      Process " << convert_ms << "ms";
     LOG(INFO) << "DEBUG:      Load " << load_ms << "ms";
   }
 
-  import_status.thread_id = thread_id;
+  thread_import_status.thread_id = thread_id;
 
   if (DEBUG_TIMING) {
     LOG(INFO) << "DEBUG:      Total "
@@ -2543,7 +2558,7 @@ static ImportStatus import_thread_shapefile(
               << "ms";
   }
 
-  return import_status;
+  return thread_import_status;
 }
 
 bool Loader::loadNoCheckpoint(
@@ -2709,12 +2724,7 @@ void Loader::distributeToShardsExistingColumns(
     shard_column_input_buffer->addDictEncodedString(*payloads_ptr);
   }
 
-  Executor* executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID).get();
-  auto query_session = session_info ? session_info->get_session_id() : "";
   for (size_t i = 0; i < row_count; ++i) {
-    if (UNLIKELY(checkInterrupt(query_session, executor))) {
-      throw QueryExecutionError(Executor::ERR_INTERRUPTED);
-    }
     const size_t shard =
         SHARD_FOR_KEY(int_value_at(*shard_column_input_buffer, i), shard_count);
     auto& shard_output_buffers = all_shard_import_buffers[shard];
@@ -2732,18 +2742,14 @@ void Loader::distributeToShardsNewColumns(
     const Catalog_Namespace::SessionInfo* session_info) {
   const auto shard_tds = catalog_.getPhysicalTablesDescriptors(table_desc_);
   CHECK(shard_tds.size() == shard_count);
-  Executor* executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID).get();
-  auto query_session = session_info ? session_info->get_session_id() : "";
+
   for (size_t shard = 0; shard < shard_count; ++shard) {
-    if (UNLIKELY(checkInterrupt(query_session, executor))) {
-      throw QueryExecutionError(Executor::ERR_INTERRUPTED);
-    }
     auto& shard_output_buffers = all_shard_import_buffers[shard];
     if (row_count != 0) {
       fillShardRow(0, shard_output_buffers, import_buffers);
     }
-    // when replicating a column, row count of a shard == replicate count of the column on
-    // the shard
+    // when replicating a column, row count of a shard == replicate count of the column
+    // on the shard
     all_shard_row_counts[shard] = shard_tds[shard]->fragmenter->getNumRows();
   }
 }
@@ -2883,7 +2889,18 @@ bool Loader::loadToShard(
   std::unique_lock<std::mutex> loader_lock(loader_mutex_);
   Fragmenter_Namespace::InsertData ins_data(insert_data_);
   ins_data.numRows = row_count;
-  ins_data.data = TypedImportBuffer::get_data_block_pointers(import_buffers);
+  bool success = false;
+  try {
+    ins_data.data = TypedImportBuffer::get_data_block_pointers(import_buffers);
+  } catch (std::exception& e) {
+    std::ostringstream oss;
+    oss << "Exception when loading Table " << shard_table->tableName << ", issue was "
+        << e.what();
+
+    LOG(ERROR) << oss.str();
+    error_msg_ = oss.str();
+    return success;
+  }
   if (isAddingColumns()) {
     // when Adding columns we omit any columns except the ones being added
     ins_data.columnIds.clear();
@@ -2898,7 +2915,7 @@ bool Loader::loadToShard(
   // release loader_lock so that in InsertOrderFragmenter::insertDat
   // we can have multiple threads sort/shuffle InsertData
   loader_lock.unlock();
-  bool success = true;
+  success = true;
   {
     try {
       if (checkpoint) {
@@ -2907,7 +2924,13 @@ bool Loader::loadToShard(
         shard_table->fragmenter->insertDataNoCheckpoint(ins_data);
       }
     } catch (std::exception& e) {
-      LOG(ERROR) << "Fragmenter Insert Exception: " << e.what();
+      std::ostringstream oss;
+      oss << "Fragmenter Insert Exception when processing Table  "
+          << shard_table->tableName << " issue was " << e.what();
+
+      LOG(ERROR) << oss.str();
+      loader_lock.lock();
+      error_msg_ = oss.str();
       success = false;
     }
   }
@@ -2994,9 +3017,9 @@ ImportStatus Detector::importDelimited(
       raw_data += line;
       raw_data += copy_params.line_delim;
       line.clear();
-      ++import_status.rows_completed;
+      ++import_status_.rows_completed;
       if (std::chrono::steady_clock::now() > end_time) {
-        if (import_status.rows_completed > 10000) {
+        if (import_status_.rows_completed > 10000) {
           break;
         }
       }
@@ -3004,13 +3027,12 @@ ImportStatus Detector::importDelimited(
   } catch (std::exception& e) {
   }
 
-  // as if load truncated
-  import_status.load_truncated = true;
-  load_failed = true;
+  mapd_lock_guard<mapd_shared_mutex> write_lock(import_mutex_);
+  import_status_.load_failed = true;
 
   fclose(p_file);
   p_file = nullptr;
-  return import_status;
+  return import_status_;
 }
 
 void Detector::read_file() {
@@ -3327,14 +3349,17 @@ void Importer::load(const std::vector<std::unique_ptr<TypedImportBuffer>>& impor
                     size_t row_count,
                     const Catalog_Namespace::SessionInfo* session_info) {
   if (!loader->loadNoCheckpoint(import_buffers, row_count, session_info)) {
-    load_failed = true;
+    mapd_lock_guard<mapd_shared_mutex> write_lock(import_mutex_);
+    import_status_.load_failed = true;
+    import_status_.load_msg = loader->getErrorMessage();
   }
 }
 
 void Importer::checkpoint(
     const std::vector<Catalog_Namespace::TableEpochInfo>& table_epochs) {
   if (loader->getTableDesc()->storageType != StorageType::FOREIGN_TABLE) {
-    if (load_failed) {
+    mapd_lock_guard<mapd_shared_mutex> read_lock(import_mutex_);
+    if (import_status_.load_failed) {
       // rollback to starting epoch - undo all the added records
       loader->setTableEpochs(table_epochs);
     } else {
@@ -3343,14 +3368,17 @@ void Importer::checkpoint(
   }
 
   if (loader->getTableDesc()->persistenceLevel ==
-      Data_Namespace::MemoryLevel::DISK_LEVEL) {  // only checkpoint disk-resident tables
+      Data_Namespace::MemoryLevel::DISK_LEVEL) {  // only checkpoint disk-resident
+                                                  // tables
     auto ms = measure<>::execution([&]() {
-      if (!load_failed) {
+      mapd_lock_guard<mapd_shared_mutex> write_lock(import_mutex_);
+      if (!import_status_.load_failed) {
         for (auto& p : import_buffers_vec[0]) {
           if (!p->stringDictCheckpoint()) {
             LOG(ERROR) << "Checkpointing Dictionary for Column "
                        << p->getColumnDesc()->columnName << " failed.";
-            load_failed = true;
+            import_status_.load_failed = true;
+            import_status_.load_msg = "Dictionary checkpoint failed";
             break;
           }
         }
@@ -3399,15 +3427,7 @@ ImportStatus DataStreamSink::archivePlumber(
     import_compressed(file_paths, session_info);
   }
 
-  auto query_session = session_info ? session_info->get_session_id() : "";
-  auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID).get();
-  if (checkInterrupt(query_session, executor)) {
-    // to catch the missing interrupted import
-    mapd_lock_guard<mapd_shared_mutex> write_lock(status_mutex);
-    import_status.interrupted = true;
-  }
-
-  return import_status;
+  return import_status_;
 }
 
 #ifdef ENABLE_IMPORT_PARQUET
@@ -3487,10 +3507,11 @@ void Detector::import_local_parquet(const std::string& file_path,
         }
       }
       raw_data += copy_params.line_delim;
-      if (++import_status.rows_completed >= 10000) {
+      mapd_lock_guard<mapd_shared_mutex> write_lock(import_mutex_);
+      if (++import_status_.rows_completed >= 10000) {
         // as if load truncated
-        import_status.load_truncated = true;
-        load_failed = true;
+        import_status_.load_failed = true;
+        import_status_.load_msg = "Detector processed 10000 records";
         return;
       }
     }
@@ -3593,13 +3614,19 @@ void Importer::import_local_parquet(const std::string& file_path,
   // load a file = nested iteration of row groups, row slices and logical columns
   auto query_session = session_info ? session_info->get_session_id() : "";
   auto ms_load_a_file = measure<>::execution([&]() {
-    for (int row_group = 0; row_group < num_row_groups && !load_failed; ++row_group) {
+    for (int row_group = 0; row_group < num_row_groups; ++row_group) {
+      {
+        mapd_shared_lock<mapd_shared_mutex> read_lock(import_mutex_);
+        if (import_status_.load_failed) {
+          break;
+        }
+      }
       // a sliced row group will be handled like a (logic) parquet file, with
       // a entirely clean set of bad_rows_tracker, import_buffers_vec, ... etc
       if (UNLIKELY(checkInterrupt(query_session, executor))) {
-        mapd_lock_guard<mapd_shared_mutex> write_lock(status_mutex);
-        import_status.interrupted = true;
-        throw QueryExecutionError(Executor::ERR_INTERRUPTED);
+        mapd_lock_guard<mapd_shared_mutex> write_lock(import_mutex_);
+        import_status_.load_failed = true;
+        import_status_.load_msg = "Table load was cancelled via Query Interrupt";
       }
       import_buffers_vec.resize(num_slices);
       for (int slice = 0; slice < num_slices; slice++) {
@@ -3637,9 +3664,9 @@ void Importer::import_local_parquet(const std::string& file_path,
         ThreadController_NS::SimpleThreadController<void> thread_controller(num_slices);
         for (int slice = 0; slice < num_slices; ++slice) {
           if (UNLIKELY(checkInterrupt(query_session, executor))) {
-            mapd_lock_guard<mapd_shared_mutex> write_lock(status_mutex);
-            import_status.interrupted = true;
-            throw QueryExecutionError(Executor::ERR_INTERRUPTED);
+            mapd_lock_guard<mapd_shared_mutex> write_lock(import_mutex_);
+            import_status_.load_failed = true;
+            import_status_.load_msg = "Table load was cancelled via Query Interrupt";
           }
           thread_controller.startThread([&, slice] {
             const auto slice_offset = slice % num_slices;
@@ -3687,14 +3714,17 @@ void Importer::import_local_parquet(const std::string& file_path,
       const auto nrow_dropped = nrow_original - nrow_imported;
       LOG(INFO) << "row group " << row_group << ": add " << nrow_imported
                 << " rows, drop " << nrow_dropped << " rows.";
-      mapd_lock_guard<mapd_shared_mutex> write_lock(status_mutex);
-      import_status.rows_completed += nrow_imported;
-      import_status.rows_rejected += nrow_dropped;
-      if (import_status.rows_rejected > copy_params.max_reject) {
-        import_status.load_truncated = true;
-        load_failed = true;
-        LOG(ERROR) << "Maximum (" << copy_params.max_reject
-                   << ") rows rejected exceeded. Halting load.";
+      {
+        mapd_lock_guard<mapd_shared_mutex> write_lock(import_mutex_);
+        import_status_.rows_completed += nrow_imported;
+        import_status_.rows_rejected += nrow_dropped;
+        if (import_status_.rows_rejected > copy_params.max_reject) {
+          import_status_.load_failed = true;
+          import_status_.load_msg = "Maximum (" + std::to_string(copy_params.max_reject) +
+                                    ") rows rejected exceeded. Halting load.";
+          LOG(ERROR) << "Maximum (" << copy_params.max_reject
+                     << ") rows rejected exceeded. Halting load.";
+        }
       }
       // row estimate
       std::unique_lock<std::mutex> lock(file_offsets_mutex);
@@ -3706,10 +3736,10 @@ void Importer::import_local_parquet(const std::string& file_path,
           std::accumulate(file_offsets.begin(), file_offsets.end(), 0);
       // estimate number of rows per current total file offset
       if (total_file_offset) {
-        import_status.rows_estimated =
-            (float)total_file_size / total_file_offset * import_status.rows_completed;
-        VLOG(3) << "rows_completed " << import_status.rows_completed
-                << ", rows_estimated " << import_status.rows_estimated
+        import_status_.rows_estimated =
+            (float)total_file_size / total_file_offset * import_status_.rows_completed;
+        VLOG(3) << "rows_completed " << import_status_.rows_completed
+                << ", rows_estimated " << import_status_.rows_estimated
                 << ", total_file_size " << total_file_size << ", total_file_offset "
                 << total_file_offset;
       }
@@ -3772,11 +3802,9 @@ void DataStreamSink::import_parquet(std::vector<std::string>& file_paths,
           }
           throw;
         }
-        if (import_status.load_truncated) {
+        mapd_shared_lock<mapd_shared_mutex> read_lock(import_mutex_);
+        if (import_status_.load_failed) {
           break;
-        }
-        if (import_status.interrupted) {
-          throw QueryExecutionError(Executor::ERR_INTERRUPTED);
         }
       }
     }
@@ -3784,17 +3812,10 @@ void DataStreamSink::import_parquet(std::vector<std::string>& file_paths,
     if (teptr) {
       std::rethrow_exception(teptr);
     }
-  } catch (const QueryExecutionError& e) {
-    if (e.getErrorCode() == Executor::ERR_INTERRUPTED) {
-      throw std::runtime_error(
-          "A query has been interrupted while performing data importing.");
-    }
-    throw e;
-  } catch (...) {
-    load_failed = true;
-    if (!import_status.load_truncated) {
-      throw;
-    }
+  } catch (const std::exception& e) {
+    mapd_lock_guard<mapd_shared_mutex> write_lock(import_mutex_);
+    import_status_.load_failed = true;
+    import_status_.load_msg = e.what();
   }
 
   if (importer) {
@@ -3821,9 +3842,7 @@ void DataStreamSink::import_compressed(
   std::exception_ptr teptr;
   // create a thread to read uncompressed byte stream out of pipe and
   // feed into importDelimited()
-  ImportStatus ret;
-  auto query_session = session_info ? session_info->get_session_id() : "";
-  auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID).get();
+  ImportStatus ret1;
   auto th_pipe_reader = std::thread([&]() {
     try {
       // importDelimited will read from FILE* p_file
@@ -3834,10 +3853,8 @@ void DataStreamSink::import_compressed(
 
       // in future, depending on data types of this uncompressed stream
       // it can be feed into other function such like importParquet, etc
-      ret = importDelimited(file_path, true, session_info);
-      if (ret.interrupted || checkInterrupt(query_session, executor)) {
-        throw QueryExecutionError(Executor::ERR_INTERRUPTED);
-      }
+      ret1 = importDelimited(file_path, true, session_info);
+
     } catch (...) {
       if (!teptr) {  // no replace
         teptr = std::current_exception();
@@ -3935,11 +3952,6 @@ void DataStreamSink::import_compressed(
               std::unique_lock<std::mutex> lock(file_offsets_mutex);
               file_offsets.back() = offset;
             }
-            if (UNLIKELY((num_block_read & 0x7f) == 0) &&
-                checkInterrupt(query_session, executor)) {
-              stop = true;
-              break;
-            }
             if (!ok) {
               break;
             }
@@ -3965,11 +3977,11 @@ void DataStreamSink::import_compressed(
                 first_text_header_skipped = true;
               }
             }
-            // In very rare occasions the write pipe somehow operates in a mode similar to
-            // non-blocking while pipe(fds) should behave like pipe2(fds, 0) which means
-            // blocking mode. On such a unreliable blocking mode, a possible fix is to
-            // loop reading till no bytes left, otherwise the annoying `failed to write
-            // pipe: Success`...
+            // In very rare occasions the write pipe somehow operates in a mode similar
+            // to non-blocking while pipe(fds) should behave like pipe2(fds, 0) which
+            // means blocking mode. On such a unreliable blocking mode, a possible fix
+            // is to loop reading till no bytes left, otherwise the annoying `failed to
+            // write pipe: Success`...
             if (size2 > 0) {
               int nremaining = size2;
               while (nremaining > 0) {
@@ -3995,9 +4007,8 @@ void DataStreamSink::import_compressed(
                 nremaining -= nwritten;
                 buf2 += nwritten;
                 // no exception when too many rejected
-                // @simon.eves how would this get set? from the other thread? mutex
-                // needed?
-                if (import_status.load_truncated) {
+                mapd_shared_lock<mapd_shared_mutex> read_lock(import_mutex_);
+                if (import_status_.load_failed) {
                   stop = true;
                   break;
                 }
@@ -4040,11 +4051,11 @@ void DataStreamSink::import_compressed(
         // when import is aborted because too many data errors or because end of a
         // detection, any exception thrown by s3 sdk or libarchive is okay and should be
         // suppressed.
-        mapd_shared_lock<mapd_shared_mutex> read_lock(status_mutex);
-        if (import_status.load_truncated) {
+        mapd_shared_lock<mapd_shared_mutex> read_lock(import_mutex_);
+        if (import_status_.load_failed) {
           break;
         }
-        if (import_status.rows_completed > 0) {
+        if (import_status_.rows_completed > 0) {
           if (nullptr != dynamic_cast<Detector*>(this)) {
             break;
           }
@@ -4077,9 +4088,7 @@ ImportStatus Importer::importDelimited(
     const std::string& file_path,
     const bool decompressed,
     const Catalog_Namespace::SessionInfo* session_info) {
-  bool load_truncated = false;
-  bool importer_interrupted = false;
-  set_import_status(import_id, import_status);
+  set_import_status(import_id, import_status_);
   auto query_session = session_info ? session_info->get_session_id() : "";
 
   if (!p_file) {
@@ -4209,18 +4218,16 @@ ImportStatus Importer::importDelimited(
         for (std::list<std::future<ImportStatus>>::iterator it = threads.begin();
              it != threads.end();) {
           auto& p = *it;
-          std::chrono::milliseconds span(
-              0);  //(std::distance(it, threads.end()) == 1? 1: 0);
+          std::chrono::milliseconds span(0);
           if (p.wait_for(span) == std::future_status::ready) {
             auto ret_import_status = p.get();
-            if (UNLIKELY(ret_import_status.interrupted)) {
-              mapd_lock_guard<mapd_shared_mutex> write_lock(status_mutex);
-              importer_interrupted = true;
-              import_status.interrupted = true;
-              set_import_status(import_id, import_status);
-              break;
+            {
+              mapd_lock_guard<mapd_shared_mutex> write_lock(import_mutex_);
+              import_status_ += ret_import_status;
+              if (ret_import_status.load_failed) {
+                set_import_status(import_id, import_status_);
+              }
             }
-            import_status += ret_import_status;
             // sum up current total file offsets
             size_t total_file_offset{0};
             if (decompressed) {
@@ -4231,16 +4238,16 @@ ImportStatus Importer::importDelimited(
             }
             // estimate number of rows per current total file offset
             if (decompressed ? total_file_offset : current_pos) {
-              import_status.rows_estimated =
+              import_status_.rows_estimated =
                   (decompressed ? (float)total_file_size / total_file_offset
                                 : (float)file_size / current_pos) *
-                  import_status.rows_completed;
+                  import_status_.rows_completed;
             }
-            VLOG(3) << "rows_completed " << import_status.rows_completed
-                    << ", rows_estimated " << import_status.rows_estimated
+            VLOG(3) << "rows_completed " << import_status_.rows_completed
+                    << ", rows_estimated " << import_status_.rows_estimated
                     << ", total_file_size " << total_file_size << ", total_file_offset "
                     << total_file_offset;
-            set_import_status(import_id, import_status);
+            set_import_status(import_id, import_status_);
             // recall thread_id for reuse
             stack_thread_ids.push(ret_import_status.thread_id);
             threads.erase(it++);
@@ -4264,23 +4271,21 @@ ImportStatus Importer::importDelimited(
         if (threads.size() < max_threads) {
           break;
         }
-        if (importer_interrupted) {
+        mapd_shared_lock<mapd_shared_mutex> read_lock(import_mutex_);
+        if (import_status_.load_failed) {
           break;
         }
       }
-      if (importer_interrupted) {
-        break;
-      }
-      if (import_status.rows_rejected > copy_params.max_reject) {
-        load_truncated = true;
-        load_failed = true;
+      mapd_unique_lock<mapd_shared_mutex> write_lock(import_mutex_);
+      if (import_status_.rows_rejected > copy_params.max_reject) {
+        import_status_.load_failed = true;
+        // todo use better message
+        import_status_.load_msg = "Maximum rows rejected exceeded. Halting load";
         LOG(ERROR) << "Maximum rows rejected exceeded. Halting load";
         break;
       }
-      if (load_failed) {
-        load_truncated = true;
-        LOG(ERROR) << "A call to the Loader::load failed, Please review the logs for "
-                      "more details";
+      if (import_status_.load_failed) {
+        LOG(ERROR) << "Load failed, the issue was: " + import_status_.load_msg;
         break;
       }
     }
@@ -4291,25 +4296,17 @@ ImportStatus Importer::importDelimited(
     }
   }
 
-  if (importer_interrupted) {
-    return import_status;
-  }
-
   checkpoint(table_epochs);
 
-  // must set import_status.load_truncated before closing this end of pipe
-  // otherwise, the thread on the other end would throw an unwanted 'write()'
-  // exception
-  mapd_lock_guard<mapd_shared_mutex> write_lock(status_mutex);
-  import_status.load_truncated = load_truncated;
   fclose(p_file);
   p_file = nullptr;
-  return import_status;
+  return import_status_;
 }
 
 void Loader::checkpoint() {
   if (getTableDesc()->persistenceLevel ==
-      Data_Namespace::MemoryLevel::DISK_LEVEL) {  // only checkpoint disk-resident tables
+      Data_Namespace::MemoryLevel::DISK_LEVEL) {  // only checkpoint disk-resident
+                                                  // tables
     getCatalog().checkpointWithAutoRollback(getTableDesc()->tableId);
   }
 }
@@ -4421,8 +4418,8 @@ OGRDataSource* Importer::openGDALDataset(const std::string& file_name,
   if (poDS == nullptr) {
     LOG(ERROR) << "openGDALDataset Error: " << CPLGetLastErrorMsg();
   }
-  // NOTE(adb): If extending this function, refactor to ensure any errors will not result
-  // in a memory leak if GDAL successfully opened the input dataset.
+  // NOTE(adb): If extending this function, refactor to ensure any errors will not
+  // result in a memory leak if GDAL successfully opened the input dataset.
   return poDS;
 }
 
@@ -4880,8 +4877,7 @@ std::vector<Importer::GeoFileLayerInfo> Importer::gdalGetLayersInGeoFile(
 ImportStatus Importer::importGDAL(ColumnNameToSourceNameMapType columnNameToSourceNameMap,
                                   const Catalog_Namespace::SessionInfo* session_info) {
   // initial status
-  bool load_truncated = false;
-  set_import_status(import_id, import_status);
+  set_import_status(import_id, import_status_);
   OGRDataSourceUqPtr poDS(openGDALDataset(file_path, copy_params));
   if (poDS == nullptr) {
     throw std::runtime_error("openGDALDataset Error: Unable to open geo file " +
@@ -5065,16 +5061,17 @@ ImportStatus Importer::importGDAL(ColumnNameToSourceNameMapType columnNameToSour
             0);  //(std::distance(it, threads.end()) == 1? 1: 0);
         if (p.wait_for(span) == std::future_status::ready) {
           auto ret_import_status = p.get();
-          import_status += ret_import_status;
-          import_status.rows_estimated =
-              ((float)firstFeatureThisChunk / (float)numFeatures) *
-              import_status.rows_completed;
-          if (ret_import_status.interrupted) {
-            import_status.interrupted = true;
-            set_import_status(import_id, import_status);
-            break;
+          {
+            mapd_lock_guard<mapd_shared_mutex> write_lock(import_mutex_);
+            import_status_ += ret_import_status;
+            import_status_.rows_estimated =
+                ((float)firstFeatureThisChunk / (float)numFeatures) *
+                import_status_.rows_completed;
+            set_import_status(import_id, import_status_);
+            if (import_status_.load_failed) {
+              break;
+            }
           }
-          set_import_status(import_id, import_status);
           // recall thread_id for reuse
           stack_thread_ids.push(ret_import_status.thread_id);
 
@@ -5083,10 +5080,6 @@ ImportStatus Importer::importGDAL(ColumnNameToSourceNameMapType columnNameToSour
         } else {
           ++it;
         }
-      }
-
-      if (import_status.interrupted) {
-        throw std::runtime_error("COPY statement has been interrupted");
       }
 
       if (nready == 0) {
@@ -5102,18 +5095,18 @@ ImportStatus Importer::importGDAL(ColumnNameToSourceNameMapType columnNameToSour
 #endif
 
     // out of rows?
-    if (import_status.rows_rejected > copy_params.max_reject) {
-      load_truncated = true;
-      load_failed = true;
+
+    mapd_unique_lock<mapd_shared_mutex> write_lock(import_mutex_);
+    if (import_status_.rows_rejected > copy_params.max_reject) {
+      import_status_.load_failed = true;
+      // todo use better message
+      import_status_.load_msg = "Maximum rows rejected exceeded. Halting load";
       LOG(ERROR) << "Maximum rows rejected exceeded. Halting load";
       break;
     }
-
-    // failed?
-    if (load_failed) {
-      load_truncated = true;
-      LOG(ERROR)
-          << "A call to the Loader::load failed, Please review the logs for more details";
+    if (import_status_.load_failed) {
+      LOG(ERROR) << "A call to the Loader failed in GDAL, Please review the logs for "
+                    "more details";
       break;
     }
 
@@ -5128,20 +5121,16 @@ ImportStatus Importer::importGDAL(ColumnNameToSourceNameMapType columnNameToSour
       p.wait();
       // get the result and update the final import status
       auto ret_import_status = p.get();
-      import_status += ret_import_status;
-      import_status.rows_estimated = import_status.rows_completed;
-      set_import_status(import_id, import_status);
+      import_status_ += ret_import_status;
+      import_status_.rows_estimated = import_status_.rows_completed;
+      set_import_status(import_id, import_status_);
     }
   }
 #endif
 
   checkpoint(table_epochs);
 
-  // must set import_status.load_truncated before closing this end of pipe
-  // otherwise, the thread on the other end would throw an unwanted 'write()'
-  // exception
-  import_status.load_truncated = load_truncated;
-  return import_status;
+  return import_status_;
 }
 
 //

@@ -799,6 +799,16 @@ class DBHandler : public OmniSciIf {
       std::vector<std::string>& table_names,
       query_state::StdLog& stdlog);
 
+  std::unique_ptr<lockmgr::AbstractLockContainer<const TableDescriptor*>>
+  prepare_loader_generic(
+      const Catalog_Namespace::SessionInfo& session_info,
+      const std::string& table_name,
+      size_t num_cols,
+      std::unique_ptr<import_export::Loader>* loader,
+      std::vector<std::unique_ptr<import_export::TypedImportBuffer>>* import_buffers,
+      const std::vector<std::string>& column_names,
+      std::string load_type);
+
   query_state::QueryStates query_states_;
   SessionMap sessions_;
 

@@ -4080,10 +4080,7 @@ void CopyTableStmt::execute(const Catalog_Namespace::SessionInfo& session,
         *file_pattern, ddl_utils::DataTransferType::IMPORT, true);
   }
 
-  size_t rows_completed = 0;
-  size_t rows_rejected = 0;
   size_t total_time = 0;
-  bool load_truncated = false;
 
   // Prevent simultaneous import / truncate (see TruncateTableStmt::execute)
   const auto execute_read_lock = mapd_shared_lock<mapd_shared_mutex>(
@@ -4453,45 +4450,29 @@ void CopyTableStmt::execute(const Catalog_Namespace::SessionInfo& session,
               executor->clearQuerySessionStatus(query_session, start_time, false);
             }
           };
-
-      auto ms = measure<>::execution([&]() {
-        try {
-          auto res = importer->import(&session);
-          if (res.interrupted) {
-            throw QueryExecutionError(Executor::ERR_INTERRUPTED);
-          }
-          rows_completed += res.rows_completed;
-          rows_rejected += res.rows_rejected;
-          load_truncated = res.load_truncated;
-        } catch (QueryExecutionError& e) {
-          if (e.getErrorCode() == Executor::ERR_INTERRUPTED) {
-            importer->getLoader()->setTableEpochs(prev_table_epoch);
-            executor->resetInterrupt();
-            throw std::runtime_error("COPY statement has been interrupted");
-          }
-          throw e;
-        } catch (...) {
-          throw;
-        }
-      });
+      import_export::ImportStatus import_result;
+      auto ms =
+          measure<>::execution([&]() { import_result = importer->import(&session); });
       total_time += ms;
       // results
-      if (load_truncated || rows_rejected > copy_params.max_reject) {
+      if (!import_result.load_failed &&
+          import_result.rows_rejected > copy_params.max_reject) {
         LOG(ERROR) << "COPY exited early due to reject records count during multi file "
                       "processing ";
         // if we have crossed the truncated load threshold
-        load_truncated = true;
+        import_result.load_failed = true;
+        import_result.load_msg =
+            "COPY exited early due to reject records count during multi file "
+            "processing ";
         success = false;
       }
-      if (!load_truncated) {
-        tr = std::string("Loaded: " + std::to_string(rows_completed) +
-                         " recs, Rejected: " + std::to_string(rows_rejected) +
-                         " recs in " + std::to_string((double)total_time / 1000.0) +
-                         " secs");
+      if (!import_result.load_failed) {
+        tr = std::string(
+            "Loaded: " + std::to_string(import_result.rows_completed) +
+            " recs, Rejected: " + std::to_string(import_result.rows_rejected) +
+            " recs in " + std::to_string((double)total_time / 1000.0) + " secs");
       } else {
-        tr = std::string("Loader truncated due to reject count.  Processed : " +
-                         std::to_string(rows_completed) + " recs, Rejected: " +
-                         std::to_string(rows_rejected) + " recs in " +
+        tr = std::string("Loader Failed due to : " + import_result.load_msg + " in " +
                          std::to_string((double)total_time / 1000.0) + " secs");
       }
     } else {

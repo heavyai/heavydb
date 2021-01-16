@@ -393,7 +393,7 @@ void RowToColumnLoader::closeConnection() {
   }
 }
 
-void RowToColumnLoader::wait_disconnet_reconnnect_retry(
+void RowToColumnLoader::wait_disconnect_reconnect_retry(
     size_t tries,
     import_export::CopyParams copy_params) {
   std::cout << "  Waiting  " << copy_params.retry_wait
@@ -426,10 +426,10 @@ void RowToColumnLoader::do_load(int& nrows,
       return;
     } catch (TOmniSciException& e) {
       std::cerr << "Exception trying to insert data " << e.error_msg << std::endl;
-      wait_disconnet_reconnnect_retry(tries, copy_params);
+      exit(2);
     } catch (TException& te) {
       std::cerr << "Exception trying to insert data " << te.what() << std::endl;
-      wait_disconnet_reconnnect_retry(tries, copy_params);
+      wait_disconnect_reconnect_retry(tries, copy_params);
     }
   }
   std::cerr << "Retries exhausted program terminated" << std::endl;
