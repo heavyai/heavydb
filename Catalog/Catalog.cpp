@@ -2756,7 +2756,7 @@ int32_t Catalog::getTableEpoch(const int32_t db_id, const int32_t table_id) cons
     bool are_epochs_inconsistent{false};
     for (size_t i = 0; i < physicalTables.size(); i++) {
       int32_t physical_tb_id = physicalTables[i];
-      const TableDescriptor* phys_td = getMetadataForTable(physical_tb_id);
+      const TableDescriptor* phys_td = getMetadataForTable(physical_tb_id, false);
       CHECK(phys_td);
 
       curr_epoch = dataMgr_->getTableEpoch(db_id, physical_tb_id);
@@ -2814,7 +2814,7 @@ void Catalog::setTableEpoch(const int db_id, const int table_id, int new_epoch) 
     CHECK(!physicalTables.empty());
     for (size_t i = 0; i < physicalTables.size(); i++) {
       const int32_t physical_tb_id = physicalTables[i];
-      const TableDescriptor* phys_td = getMetadataForTable(physical_tb_id);
+      const TableDescriptor* phys_td = getMetadataForTable(physical_tb_id, false);
       CHECK(phys_td);
       LOG(INFO) << "Set sharded table epoch db:" << db_id << " Table ID  "
                 << physical_tb_id << " back to new epoch " << new_epoch;
