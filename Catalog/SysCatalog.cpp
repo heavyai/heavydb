@@ -79,6 +79,12 @@ using sys_read_lock = read_lock<SysCatalog>;
 using sys_write_lock = write_lock<SysCatalog>;
 using sys_sqlite_lock = sqlite_lock<SysCatalog>;
 
+bool g_log_user_id{false};  // --log-user-id
+
+std::string UserMetadata::userLoggable() const {
+  return g_log_user_id ? std::to_string(userId) : userName;
+}
+
 auto CommonFileOperations::assembleCatalogName(std::string const& name) {
   return base_path_ + "/mapd_catalogs/" + name;
 };
@@ -779,7 +785,7 @@ std::shared_ptr<Catalog> SysCatalog::switchDatabase(std::string& dbname,
   dbObject.loadKey();
   dbObject.setPrivileges(AccessPrivileges::ACCESS);
   if (!checkPrivileges(user_meta, std::vector<DBObject>{dbObject})) {
-    throw std::runtime_error("Unauthorized Access: user " + username +
+    throw std::runtime_error("Unauthorized Access: user " + user_meta.userLoggable() +
                              " is not allowed to access database " + dbname + ".");
   }
 
@@ -804,12 +810,13 @@ void SysCatalog::createUser(const string& name,
 
   UserMetadata user;
   if (getMetadataForUser(name, user)) {
-    throw runtime_error("User " + name + " already exists.");
+    throw runtime_error("User " + user.userLoggable() + " already exists.");
   }
   if (getGrantee(name)) {
+    std::string const loggable = g_log_user_id ? std::string("") : name + ' ';
     throw runtime_error(
-        "User name " + name +
-        " is same as one of existing grantees. User and role names should be unique.");
+        "User " + loggable +
+        "is same as one of existing grantees. User and role names should be unique.");
   }
   sqliteConnector_->query("BEGIN TRANSACTION");
   try {
@@ -854,7 +861,8 @@ void SysCatalog::dropUser(const string& name) {
   try {
     UserMetadata user;
     if (!getMetadataForUser(name, user)) {
-      throw runtime_error("Cannot drop user. User " + name + " does not exist.");
+      std::string const loggable = g_log_user_id ? std::string("") : name + ' ';
+      throw runtime_error("Cannot drop user. User " + loggable + "does not exist.");
     }
     dropRole_unsafe(name);
     deleteObjectDescriptorMap(name);
@@ -981,18 +989,20 @@ void SysCatalog::renameUser(std::string const& old_name, std::string const& new_
 
   UserMetadata old_user;
   if (!getMetadataForUser(old_name, old_user)) {
-    throw std::runtime_error("User " + old_name + " doesn't exist.");
+    std::string const loggable = g_log_user_id ? std::string("") : old_name + ' ';
+    throw std::runtime_error("User " + loggable + "doesn't exist.");
   }
 
   UserMetadata new_user;
   if (getMetadataForUser(new_name, new_user)) {
-    throw std::runtime_error("User " + new_name + " already exists.");
+    throw std::runtime_error("User " + new_user.userLoggable() + " already exists.");
   }
 
   if (getGrantee(new_name)) {
+    std::string const loggable = g_log_user_id ? std::string("") : new_name + ' ';
     throw runtime_error(
-        "User name " + new_name +
-        " is same as one of existing grantees. User and role names should be unique.");
+        "Username " + loggable +
+        "is same as one of existing grantees. User and role names should be unique.");
   }
 
   auto transaction_streamer = yieldTransactionStreamer();
@@ -1248,9 +1258,10 @@ static bool parseUserMetadataFromSQLite(const std::unique_ptr<SqliteConnector>& 
   user.defaultDbId = conn->isNull(0, 4) ? -1 : conn->getData<int>(0, 4);
   if (conn->isNull(0, 5)) {
     LOG(WARNING)
-        << "User property 'can_login' not set for user " << user.userName
+        << "User property 'can_login' not set for user " << user.userLoggable()
         << ". Disabling login ability. Set the users login ability with \"ALTER USER "
-        << user.userName << " (can_login='true');\".";
+        << (g_log_user_id ? std::string("[username]") : user.userName)
+        << " (can_login='true');\".";
   }
   user.can_login = conn->isNull(0, 5) ? false : conn->getData<bool>(0, 5);
   return true;
@@ -1351,10 +1362,11 @@ void SysCatalog::getMetadataWithDefaultDB(std::string& dbname,
   } else {
     if (user_meta.defaultDbId != -1) {
       if (!getMetadataForDBById(user_meta.defaultDbId, db_meta)) {
+        std::string loggable = g_log_user_id ? std::string("") : ' ' + user_meta.userName;
         throw std::runtime_error(
-            "Server error: User #" + std::to_string(user_meta.userId) + " " +
-            user_meta.userName + " has invalid default_db #" +
-            std::to_string(user_meta.defaultDbId) + " which does not exist.");
+            "Server error: User #" + std::to_string(user_meta.userId) + loggable +
+            " has invalid default_db #" + std::to_string(user_meta.defaultDbId) +
+            " which does not exist.");
       }
       dbname = db_meta.dbName;
       // loaded the user's default database
@@ -1454,7 +1466,7 @@ void SysCatalog::createDBObject(const UserMetadata& user,
       grantDBObjectPrivileges_unsafe(user.userName, object, catalog);
       auto* grantee = instance().getUserGrantee(user.userName);
       if (!grantee) {
-        throw runtime_error("Cannot create DBObject. User " + user.userName +
+        throw runtime_error("Cannot create DBObject. User " + user.userLoggable() +
                             " does not exist.");
       }
       grantee->grantPrivileges(object);
@@ -1961,8 +1973,8 @@ bool SysCatalog::hasAnyPrivileges(const UserMetadata& user,
   }
   auto* user_rl = instance().getUserGrantee(user.userName);
   if (!user_rl) {
-    throw runtime_error("Cannot check privileges. User " + user.userName +
-                        "  does not exist.");
+    throw runtime_error("Cannot check privileges. User " + user.userLoggable() +
+                        " does not exist.");
   }
   for (std::vector<DBObject>::iterator objectIt = privObjects.begin();
        objectIt != privObjects.end();
@@ -1983,8 +1995,8 @@ bool SysCatalog::checkPrivileges(const UserMetadata& user,
 
   auto* user_rl = instance().getUserGrantee(user.userName);
   if (!user_rl) {
-    throw runtime_error("Cannot check privileges. User " + user.userName +
-                        "  does not exist.");
+    throw runtime_error("Cannot check privileges. User " + user.userLoggable() +
+                        " does not exist.");
   }
   for (auto& object : privObjects) {
     if (!user_rl->checkPrivileges(object)) {
@@ -1998,8 +2010,9 @@ bool SysCatalog::checkPrivileges(const std::string& userName,
                                  const std::vector<DBObject>& privObjects) const {
   UserMetadata user;
   if (!instance().getMetadataForUser(userName, user)) {
-    throw runtime_error("Request to check privileges for user " + userName +
-                        " failed because user with this name does not exist.");
+    std::string const loggable = g_log_user_id ? std::string("") : userName + ' ';
+    throw runtime_error("Request to check privileges for user " + loggable +
+                        "failed because user with this name does not exist.");
   }
   return (checkPrivileges(user, privObjects));
 }

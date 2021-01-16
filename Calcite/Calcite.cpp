@@ -448,7 +448,7 @@ void checkPermissionForTables(const Catalog_Namespace::SessionInfo& session_info
     if (!Catalog_Namespace::SysCatalog::instance().checkPrivileges(
             session_info.get_currentUser(), privObjects)) {
       throw std::runtime_error("Violation of access privileges: user " +
-                               session_info.get_currentUser().userName +
+                               session_info.get_currentUser().userLoggable() +
                                " has no proper privileges for object " + tableOrViewName);
     }
   }

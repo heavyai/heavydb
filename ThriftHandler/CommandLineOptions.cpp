@@ -44,6 +44,10 @@ extern int64_t g_bitmap_memory_limit;
 extern bool g_enable_calcite_ddl_parser;
 extern bool g_enable_seconds_refresh;
 
+namespace Catalog_Namespace {
+extern bool g_log_user_id;
+}
+
 unsigned connect_timeout{20000};
 unsigned recv_timeout{300000};
 unsigned send_timeout{300000};
@@ -367,6 +371,12 @@ void CommandLineOptions::fillOptions() {
           ->default_value(g_enable_stringdict_parallel)
           ->implicit_value(true),
       "Allow StringDictionary to parallelize loads using multiple threads");
+  help_desc.add_options()(
+      "log-user-id",
+      po::value<bool>(&Catalog_Namespace::g_log_user_id)
+          ->default_value(Catalog_Namespace::g_log_user_id)
+          ->implicit_value(true),
+      "Log userId integer in place of the userName (when available).");
   help_desc.add_options()("log-user-origin",
                           po::value<bool>(&log_user_origin)
                               ->default_value(log_user_origin)
@@ -771,9 +781,8 @@ void CommandLineOptions::validate() {
   }
 
   LOG(INFO) << " Debug Timer is set to " << g_enable_debug_timer;
-
+  LOG(INFO) << " LogUserId is set to " << Catalog_Namespace::g_log_user_id;
   LOG(INFO) << " Maximum Idle session duration " << idle_session_duration;
-
   LOG(INFO) << " Maximum active session duration " << max_session_duration;
 
   ddl_utils::FilePathWhitelist::initializeFromConfigFile(system_parameters.config_file);

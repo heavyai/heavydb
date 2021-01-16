@@ -96,6 +96,9 @@ struct UserMetadata {
   std::atomic<bool> isSuper{false};
   int32_t defaultDbId;
   bool can_login{true};
+
+  // Return a string that is safe to log for the username based on --log-user-id.
+  std::string userLoggable() const;
 };
 
 /*
