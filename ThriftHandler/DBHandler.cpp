@@ -5547,8 +5547,9 @@ void DBHandler::sql_execute_impl(TQueryResult& _return,
 
   const auto result = apply_copy_to_shim(query_str);
   DBHandler::parser_with_error_handler(result, parse_trees);
-  auto handle_ddl = [&query_state_proxy, &session_ptr, &_return, &locks, this](
-                        Parser::DDLStmt* ddl) -> bool {
+  auto handle_ddl =
+      [&query_state_proxy, &session_ptr, &_return, &locks, &executeWriteLock, this](
+          Parser::DDLStmt* ddl) -> bool {
     if (!ddl) {
       return false;
     }
@@ -5600,6 +5601,14 @@ void DBHandler::sql_execute_impl(TQueryResult& _return,
       CHECK(locks.empty());
       std::tie(result, locks) =
           parse_to_ra(query_state_proxy, query_string, {}, true, system_parameters_);
+    }
+    auto ctas = dynamic_cast<Parser::CreateTableAsSelectStmt*>(ddl);
+    auto itas = dynamic_cast<Parser::InsertIntoTableAsSelectStmt*>(ddl);
+    if (ctas || itas) {
+      // block all other queries until we fix CTAS/ITAS locking
+      executeWriteLock = mapd_unique_lock<mapd_shared_mutex>(
+          *legacylockmgr::LockMgr<mapd_shared_mutex, bool>::getMutex(
+              legacylockmgr::ExecutorOuterLock, true));
     }
     _return.execution_time_ms += measure<>::execution([&]() {
       ddl->execute(*session_ptr);
