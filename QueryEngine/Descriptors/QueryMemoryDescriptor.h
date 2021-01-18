@@ -137,6 +137,7 @@ class QueryMemoryDescriptor {
       std::shared_ptr<RowSetMemoryOwner>,
       const bool output_columnar,
       const bool sort_on_gpu,
+      const size_t thread_idx,
       RenderInfo*) const;
 
   static bool many_entries(const int64_t max_val,

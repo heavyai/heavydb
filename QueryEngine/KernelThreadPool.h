@@ -32,7 +32,7 @@
  */
 class KernelThreadPool {
  public:
-  using Task = std::packaged_task<void()>;
+  using Task = std::packaged_task<void(size_t)>;  // void task(const size_t thread_idx)
 
   KernelThreadPool(const size_t num_hardware_threads)
       : threads_(num_hardware_threads), workers_(num_hardware_threads) {
@@ -111,7 +111,7 @@ class KernelThreadPool {
         worker.lock.clear(std::memory_order_release);
 
         for (auto& task : tasks) {
-          task();
+          task(thread_idx);
         }
 
         VLOG(1) << "Thread " << thread_idx << " finished task in "

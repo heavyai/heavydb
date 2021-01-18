@@ -403,7 +403,8 @@ bool window_function_requires_peer_handling(const Analyzer::WindowFunction* wind
 void WindowFunctionContext::compute() {
   CHECK(!output_);
   output_ = static_cast<int8_t*>(row_set_mem_owner_->allocate(
-      elem_count_ * window_function_buffer_element_size(window_func_->getKind())));
+      elem_count_ * window_function_buffer_element_size(window_func_->getKind()),
+      /*thread_idx=*/0));
   if (window_function_is_aggregate(window_func_->getKind())) {
     fillPartitionStart();
     if (window_function_requires_peer_handling(window_func_)) {

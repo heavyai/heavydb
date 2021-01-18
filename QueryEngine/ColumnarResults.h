@@ -64,12 +64,14 @@ class ColumnarResults {
                   const ResultSet& rows,
                   const size_t num_columns,
                   const std::vector<SQLTypeInfo>& target_types,
+                  const size_t thread_idx,
                   const bool is_parallel_execution_enforced = false);
 
   ColumnarResults(const std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
                   const int8_t* one_col_buffer,
                   const size_t num_rows,
-                  const SQLTypeInfo& target_type);
+                  const SQLTypeInfo& target_type,
+                  const size_t thread_idx);
 
   static std::unique_ptr<ColumnarResults> mergeResults(
       const std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
@@ -188,10 +190,10 @@ class ColumnarResults {
                              const std::vector<bool>& targets_to_skip = {});
 
   const std::vector<SQLTypeInfo> target_types_;
-  bool parallel_conversion_;  // multi-threaded execution of columnar conversion
-  bool
-      direct_columnar_conversion_;  // whether columnar conversion might happen directly
-                                    // with minimal ussage of result set's iterator access
+  bool parallel_conversion_;         // multi-threaded execution of columnar conversion
+  bool direct_columnar_conversion_;  // whether columnar conversion might happen directly
+  // with minimal ussage of result set's iterator access
+  size_t thread_idx_;
 };
 
 using ColumnCacheMap =

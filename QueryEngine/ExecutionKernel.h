@@ -71,7 +71,9 @@ class ExecutionKernel {
       , render_info_(render_info)
       , rowid_lookup_key_(rowid_lookup_key) {}
 
-  void run(Executor* executor, SharedKernelContext& shared_context);
+  void run(Executor* executor,
+           const size_t thread_idx,
+           SharedKernelContext& shared_context);
 
  private:
   const RelAlgExecutionUnit& ra_exe_unit_;
@@ -86,5 +88,7 @@ class ExecutionKernel {
   RenderInfo* render_info_;
   const int64_t rowid_lookup_key_;
 
-  void runImpl(Executor* executor, SharedKernelContext& shared_context);
+  void runImpl(Executor* executor,
+               const size_t thread_idx,
+               SharedKernelContext& shared_context);
 };

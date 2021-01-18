@@ -46,9 +46,11 @@
 #include <numeric>
 
 bool g_skip_intermediate_count{true};
-extern bool g_enable_bump_allocator;
 bool g_enable_interop{false};
 bool g_enable_union{false};
+
+extern size_t g_num_kernel_threads;
+extern bool g_enable_bump_allocator;
 
 namespace {
 
@@ -566,8 +568,8 @@ void RelAlgExecutor::prepareLeafExecution(
     executor_->resetInterrupt();
   }
   queue_time_ms_ = timer_stop(clock_begin);
-  executor_->row_set_mem_owner_ =
-      std::make_shared<RowSetMemoryOwner>(Executor::getArenaBlockSize());
+  executor_->row_set_mem_owner_ = std::make_shared<RowSetMemoryOwner>(
+      Executor::getArenaBlockSize(), g_num_kernel_threads);
   executor_->row_set_mem_owner_->setDictionaryGenerations(string_dictionary_generations);
   executor_->table_generations_ = table_generations;
   executor_->agg_col_range_cache_ = agg_col_range;
@@ -1921,6 +1923,7 @@ std::unique_ptr<WindowFunctionContext> RelAlgExecutor::createWindowFunctionConte
                                             memory_level,
                                             0,
                                             nullptr,
+                                            /*thread_idx=*/0,
                                             chunks_owner,
                                             column_cache_map);
     CHECK_EQ(join_col_elem_count, elem_count);

@@ -47,7 +47,7 @@ BENCHMARK_DEFINE_F(ThreadPoolFixture, TasksEqualThreadsBatch)(benchmark::State& 
     std::vector<KernelThreadPool::Task> tasks;
     tasks.reserve(thread_pool_size);
     for (size_t i = 0; i < thread_pool_size; i++) {
-      tasks.emplace_back([]() {
+      tasks.emplace_back([](const size_t thread_idx) {
         int x = 0;
         for (size_t i = 0; i < 1000000; i++) {
           benchmark::DoNotOptimize(x = x + 1);
@@ -83,7 +83,7 @@ BENCHMARK_DEFINE_F(ThreadPoolFixture, Tasks10xThreadsBatch)(benchmark::State& st
     std::vector<KernelThreadPool::Task> tasks;
     tasks.reserve(10 * thread_pool_size);
     for (size_t i = 0; i < 10 * thread_pool_size; i++) {
-      tasks.emplace_back([]() {
+      tasks.emplace_back([](const size_t thread_idx) {
         int x = 0;
         for (size_t i = 0; i < 1000000; i++) {
           benchmark::DoNotOptimize(x = x + 1);
