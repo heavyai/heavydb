@@ -275,15 +275,17 @@ struct ArrowValue<void*> : ArrowValueBase<void*> {
   using VALUE_TYPE = void*;
   ArrowValue(const DataBufferBase& data, const VALUE_TYPE& v)
       : ArrowValueBase<VALUE_TYPE>(data, v) {}
-  template <typename DATA_TYPE, typename = enable_if_integral<DATA_TYPE>>
-  explicit operator const DATA_TYPE() const {
-    return inline_fixed_encoding_null_val(data.cd->columnType);
-  }
-  template <typename DATA_TYPE, typename = enable_if_floating<DATA_TYPE>>
+
+  template <typename DATA_TYPE>
   explicit operator DATA_TYPE() const {
-    return inline_fp_null_val(data.cd->columnType);
+    if constexpr (std::is_integral<DATA_TYPE>::value) {
+      return inline_fixed_encoding_null_val(data.cd->columnType);
+    } else if constexpr (std::is_floating_point<DATA_TYPE>::value) {
+      return inline_fp_null_val(data.cd->columnType);
+    } else if constexpr (std::is_same<DATA_TYPE, std::string>::value) {
+      return std::string();
+    }
   }
-  explicit operator const std::string() const { return std::string(); }
 };
 
 template <>
@@ -291,18 +293,20 @@ struct ArrowValue<bool> : ArrowValueBase<bool> {
   using VALUE_TYPE = bool;
   ArrowValue(const DataBufferBase& data, const VALUE_TYPE& v)
       : ArrowValueBase<VALUE_TYPE>(data, v) {}
-  template <typename DATA_TYPE, typename = enable_if_integral<DATA_TYPE>>
-  explicit operator const DATA_TYPE() const {
-    if (!(data.cd->columnType.is_number() || data.cd->columnType.is_boolean())) {
-      type_conversion_error("bool", data.cd, data.bad_rows_tracker);
-    }
-    return v;
-  }
-  template <typename DATA_TYPE, typename = enable_if_floating<DATA_TYPE>>
+
+  template <typename DATA_TYPE>
   explicit operator DATA_TYPE() const {
-    return v ? 1 : 0;
+    if constexpr (std::is_integral<DATA_TYPE>::value) {
+      if (!(data.cd->columnType.is_number() || data.cd->columnType.is_boolean())) {
+        type_conversion_error("bool", data.cd, data.bad_rows_tracker);
+      }
+      return v;
+    } else if constexpr (std::is_floating_point<DATA_TYPE>::value) {
+      return v ? 1 : 0;
+    } else if constexpr (std::is_same<DATA_TYPE, std::string>::value) {
+      return v ? "T" : "F";
+    }
   }
-  explicit operator const std::string() const { return v ? "T" : "F"; }
 };
 
 template <>
@@ -310,21 +314,23 @@ struct ArrowValue<float> : ArrowValueBase<float> {
   using VALUE_TYPE = float;
   ArrowValue(const DataBufferBase& data, const VALUE_TYPE& v)
       : ArrowValueBase<VALUE_TYPE>(data, v) {}
-  template <typename DATA_TYPE, typename = enable_if_integral<DATA_TYPE>>
-  explicit operator const DATA_TYPE() const {
-    const auto ti = data.cd->columnType;
-    DATA_TYPE v = ti.is_decimal() ? this->v * pow(10, ti.get_scale()) : this->v;
-    if (!(std::numeric_limits<DATA_TYPE>::lowest() < v &&
-          v <= std::numeric_limits<DATA_TYPE>::max())) {
-      data_conversion_error<DATA_TYPE>(v, data.cd, data.bad_rows_tracker);
-    }
-    return v;
-  }
-  template <typename DATA_TYPE, typename = enable_if_floating<DATA_TYPE>>
+
+  template <typename DATA_TYPE>
   explicit operator DATA_TYPE() const {
-    return v;
+    if constexpr (std::is_integral<DATA_TYPE>::value) {
+      const auto ti = data.cd->columnType;
+      DATA_TYPE v = ti.is_decimal() ? this->v * pow(10, ti.get_scale()) : this->v;
+      if (!(std::numeric_limits<DATA_TYPE>::lowest() < v &&
+            v <= std::numeric_limits<DATA_TYPE>::max())) {
+        data_conversion_error<DATA_TYPE>(v, data.cd, data.bad_rows_tracker);
+      }
+      return v;
+    } else if constexpr (std::is_floating_point<DATA_TYPE>::value) {
+      return v;
+    } else if constexpr (std::is_same<DATA_TYPE, std::string>::value) {
+      return std::to_string(v);
+    }
   }
-  explicit operator const std::string() const { return std::to_string(v); }
 };
 
 template <>
@@ -332,27 +338,29 @@ struct ArrowValue<double> : ArrowValueBase<double> {
   using VALUE_TYPE = double;
   ArrowValue(const DataBufferBase& data, const VALUE_TYPE& v)
       : ArrowValueBase<VALUE_TYPE>(data, v) {}
-  template <typename DATA_TYPE, typename = enable_if_integral<DATA_TYPE>>
-  explicit operator const DATA_TYPE() const {
-    const auto ti = data.cd->columnType;
-    DATA_TYPE v = ti.is_decimal() ? this->v * pow(10, ti.get_scale()) : this->v;
-    if (!(std::numeric_limits<DATA_TYPE>::lowest() < v &&
-          v <= std::numeric_limits<DATA_TYPE>::max())) {
-      data_conversion_error<DATA_TYPE>(v, data.cd, data.bad_rows_tracker);
-    }
-    return v;
-  }
-  template <typename DATA_TYPE, typename = enable_if_floating<DATA_TYPE>>
+
+  template <typename DATA_TYPE>
   explicit operator DATA_TYPE() const {
-    if (std::is_same<DATA_TYPE, float>::value) {
-      if (!(std::numeric_limits<float>::lowest() < v &&
-            v <= std::numeric_limits<float>::max())) {
-        data_conversion_error<float>(v, data.cd, data.bad_rows_tracker);
+    if constexpr (std::is_integral<DATA_TYPE>::value) {
+      const auto ti = data.cd->columnType;
+      DATA_TYPE v = ti.is_decimal() ? this->v * pow(10, ti.get_scale()) : this->v;
+      if (!(std::numeric_limits<DATA_TYPE>::lowest() < v &&
+            v <= std::numeric_limits<DATA_TYPE>::max())) {
+        data_conversion_error<DATA_TYPE>(v, data.cd, data.bad_rows_tracker);
       }
+      return v;
+    } else if constexpr (std::is_floating_point<DATA_TYPE>::value) {
+      if (std::is_same<DATA_TYPE, float>::value) {
+        if (!(std::numeric_limits<float>::lowest() < v &&
+              v <= std::numeric_limits<float>::max())) {
+          data_conversion_error<float>(v, data.cd, data.bad_rows_tracker);
+        }
+      }
+      return v;
+    } else if constexpr (std::is_same<DATA_TYPE, std::string>::value) {
+      return std::to_string(v);
     }
-    return v;
   }
-  explicit operator const std::string() const { return std::to_string(v); }
 };
 
 template <>
@@ -360,51 +368,52 @@ struct ArrowValue<int64_t> : ArrowValueBase<int64_t> {
   using VALUE_TYPE = int64_t;
   ArrowValue(const DataBufferBase& data, const VALUE_TYPE& v)
       : ArrowValueBase<VALUE_TYPE>(data, v) {}
-  template <typename DATA_TYPE, typename = enable_if_integral<DATA_TYPE>>
-  explicit operator const DATA_TYPE() const {
-    int64_t v = this->v;
-    if (std::is_same<int64_t, DATA_TYPE>::value) {
-    } else if (std::numeric_limits<DATA_TYPE>::lowest() < v &&
-               v <= std::numeric_limits<DATA_TYPE>::max()) {
-    } else {
-      data_conversion_error<DATA_TYPE>(v, data.cd, data.bad_rows_tracker);
-    }
-    if (data.cd->columnType.is_time()) {
-      v = this->resolve_time(v);
-    }
-    return v;
-  }
-  template <typename DATA_TYPE, typename = enable_if_floating<DATA_TYPE>>
+
+  template <typename DATA_TYPE>
   explicit operator DATA_TYPE() const {
-    return v;
-  }
-  explicit operator const std::string() const {
-    const auto& type_id = data.arrow_type.id();
-    if (type_id == arrow::Type::DATE32 || type_id == arrow::Type::DATE64) {
-      auto& date_type = static_cast<const arrow::DateType&>(data.arrow_type);
-      SQLTypeInfo ti(kDATE);
-      Datum datum{.bigintval = date_type.unit() == arrow::DateUnit::MILLI
-                                   ? v / kMicrosecondsInSecond
-                                   : v};
-      return DatumToString(datum, ti);
-    } else if (type_id == arrow::Type::TIME32 || type_id == arrow::Type::TIME64 ||
-               type_id == arrow::Type::TIMESTAMP) {
-      auto& time_type = static_cast<const arrow::TimeType&>(data.arrow_type);
-      const auto result =
-          _precision_scale_lookup.find(std::make_pair(0, time_type.unit()));
-      int64_t divisor{1};
-      if (result != _precision_scale_lookup.end()) {
-        divisor = result->second.second;
+    if constexpr (std::is_integral<DATA_TYPE>::value) {
+      int64_t v = this->v;
+      if (std::is_same<int64_t, DATA_TYPE>::value) {
+      } else if (std::numeric_limits<DATA_TYPE>::lowest() < v &&
+                 v <= std::numeric_limits<DATA_TYPE>::max()) {
+      } else {
+        data_conversion_error<DATA_TYPE>(v, data.cd, data.bad_rows_tracker);
       }
-      SQLTypeInfo ti(kTIMESTAMP);
-      Datum datum{.bigintval = v / divisor};
-      auto time_str = DatumToString(datum, ti);
-      if (divisor != 1 && v % divisor) {
-        time_str += "." + std::to_string(v % divisor);
+      if (data.cd->columnType.is_time()) {
+        v = this->resolve_time(v);
       }
-      return time_str;
+      return v;
+    } else if constexpr (std::is_floating_point<DATA_TYPE>::value) {
+      return v;
+    } else if constexpr (std::is_same<DATA_TYPE, std::string>::value) {
+      const auto& type_id = data.arrow_type.id();
+      if (type_id == arrow::Type::DATE32 || type_id == arrow::Type::DATE64) {
+        auto& date_type = static_cast<const arrow::DateType&>(data.arrow_type);
+        SQLTypeInfo ti(kDATE);
+        Datum datum;
+        datum.bigintval =
+            date_type.unit() == arrow::DateUnit::MILLI ? v / kMicrosecondsInSecond : v;
+        return DatumToString(datum, ti);
+      } else if (type_id == arrow::Type::TIME32 || type_id == arrow::Type::TIME64 ||
+                 type_id == arrow::Type::TIMESTAMP) {
+        auto& time_type = static_cast<const arrow::TimeType&>(data.arrow_type);
+        const auto result =
+            _precision_scale_lookup.find(std::make_pair(0, time_type.unit()));
+        int64_t divisor{1};
+        if (result != _precision_scale_lookup.end()) {
+          divisor = result->second.second;
+        }
+        SQLTypeInfo ti(kTIMESTAMP);
+        Datum datum;
+        datum.bigintval = v / divisor;
+        auto time_str = DatumToString(datum, ti);
+        if (divisor != 1 && v % divisor) {
+          time_str += "." + std::to_string(v % divisor);
+        }
+        return time_str;
+      }
+      return std::to_string(v);
     }
-    return std::to_string(v);
   }
 };
 
@@ -413,38 +422,39 @@ struct ArrowValue<std::string> : ArrowValueBase<std::string> {
   using VALUE_TYPE = std::string;
   ArrowValue(const DataBufferBase& data, const VALUE_TYPE& v)
       : ArrowValueBase<VALUE_TYPE>(data, v) {}
-  explicit operator const bool() const {
-    if (v.size() == 0) {
-      return inline_int_null_value<int8_t>();
-    }
-    try {
-      SQLTypeInfo ti(kBOOLEAN);
-      auto datum = StringToDatum(v, ti);
-      return datum.boolval;
-    } catch (...) {
-      data_conversion_error(v, data.cd, data.bad_rows_tracker);
-      return false;
-    }
-  }
-  template <typename DATA_TYPE, typename = enable_if_integral_not_bool<DATA_TYPE>>
-  explicit operator const DATA_TYPE() const {
-    if (v.size() == 0) {
-      return inline_fixed_encoding_null_val(data.cd->columnType);
-    }
-    try {
-      auto ti = data.cd->columnType;
-      auto datum = StringToDatum(v, ti);
-      return datum.bigintval;
-    } catch (...) {
-      data_conversion_error(v, data.cd, data.bad_rows_tracker);
-      return 0;
-    }
-  }
-  template <typename DATA_TYPE, typename = enable_if_floating<DATA_TYPE>>
+
+  template <typename DATA_TYPE>
   explicit operator DATA_TYPE() const {
-    return atof(v.data());
+    if constexpr (std::is_same<DATA_TYPE, bool>::value) {
+      if (v.size() == 0) {
+        return inline_int_null_value<int8_t>();
+      }
+      try {
+        SQLTypeInfo ti(kBOOLEAN);
+        auto datum = StringToDatum(v, ti);
+        return datum.boolval;
+      } catch (...) {
+        data_conversion_error(v, data.cd, data.bad_rows_tracker);
+        return false;
+      }
+    } else if constexpr (std::is_integral<DATA_TYPE>::value) {
+      if (v.size() == 0) {
+        return inline_fixed_encoding_null_val(data.cd->columnType);
+      }
+      try {
+        auto ti = data.cd->columnType;
+        auto datum = StringToDatum(v, ti);
+        return datum.bigintval;
+      } catch (...) {
+        data_conversion_error(v, data.cd, data.bad_rows_tracker);
+        return 0;
+      }
+    } else if constexpr (std::is_floating_point<DATA_TYPE>::value) {
+      return atof(v.data());
+    } else if constexpr (std::is_same<DATA_TYPE, std::string>::value) {
+      return v;
+    }
   }
-  explicit operator const std::string() const { return v; }
 };
 
 template <>
@@ -457,30 +467,30 @@ struct ArrowValue<arrow::Decimal128> : ArrowValueBase<arrow::Decimal128> {
                    error_context(data.cd, data.bad_rows_tracker) +
                        "Truncation error on Arrow Decimal128 value");
   }
-  template <typename DATA_TYPE, typename = enable_if_integral<DATA_TYPE>>
-  explicit operator const DATA_TYPE() const {
-    int64_t v = static_cast<int64_t>(this->v);
-    if (data.cd->columnType.is_decimal()) {
-      return convert_decimal_value_to_scale(v, data.old_type, data.new_type);
-    }
-    if (data.arrow_decimal_scale) {
-      v = std::llround(v / pow(10, data.arrow_decimal_scale));
-    }
-    if (std::is_same<int64_t, DATA_TYPE>::value) {
-    } else if (std::numeric_limits<DATA_TYPE>::lowest() < v &&
-               v <= std::numeric_limits<DATA_TYPE>::max()) {
-    } else {
-      data_conversion_error<DATA_TYPE>(v, data.cd, data.bad_rows_tracker);
-    }
-    return v;
-  }
-  template <typename DATA_TYPE, typename = enable_if_floating<DATA_TYPE>>
+
+  template <typename DATA_TYPE>
   explicit operator DATA_TYPE() const {
-    int64_t v = static_cast<int64_t>(this->v);
-    return data.arrow_decimal_scale ? v / pow(10, data.arrow_decimal_scale) : v;
-  }
-  explicit operator const std::string() const {
-    return v.ToString(data.arrow_decimal_scale);
+    if constexpr (std::is_integral<DATA_TYPE>::value) {
+      int64_t v = static_cast<int64_t>(this->v);
+      if (data.cd->columnType.is_decimal()) {
+        return convert_decimal_value_to_scale(v, data.old_type, data.new_type);
+      }
+      if (data.arrow_decimal_scale) {
+        v = std::llround(v / pow(10, data.arrow_decimal_scale));
+      }
+      if (std::is_same<int64_t, DATA_TYPE>::value) {
+      } else if (std::numeric_limits<DATA_TYPE>::lowest() < v &&
+                 v <= std::numeric_limits<DATA_TYPE>::max()) {
+      } else {
+        data_conversion_error<DATA_TYPE>(v, data.cd, data.bad_rows_tracker);
+      }
+      return v;
+    } else if constexpr (std::is_floating_point<DATA_TYPE>::value) {
+      int64_t v = static_cast<int64_t>(this->v);
+      return data.arrow_decimal_scale ? v / pow(10, data.arrow_decimal_scale) : v;
+    } else if constexpr (std::is_same<DATA_TYPE, std::string>::value) {
+      return v.ToString(data.arrow_decimal_scale);
+    }
   }
 };
 
