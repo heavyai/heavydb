@@ -19,6 +19,7 @@
 #include <boost/variant.hpp>
 #include <iostream>
 #include "Catalog/Catalog.h"
+#include "CudaMgr/CudaMgr.h"
 #include "Logger/Logger.h"
 #include "QueryEngine/CompilationOptions.h"
 #include "QueryEngine/ResultSet.h"
@@ -127,8 +128,9 @@ class DBEngineImpl : public DBEngine {
       SystemParameters system_parameters;
       std::string data_path = base_path_ + OMNISCI_DATA_PATH;
       data_mgr_ = std::make_shared<Data_Namespace::DataMgr>(
-          data_path, system_parameters, false, 0);
-      auto calcite = std::make_shared<Calcite>(-1, CALCITEPORT, base_path_, 1024, 5000);
+          data_path, system_parameters, nullptr, false, 0);
+      auto calcite =
+          std::make_shared<Calcite>(-1, CALCITEPORT, base_path_, 1024, 5000, false);
       auto& sys_cat = Catalog_Namespace::SysCatalog::instance();
       sys_cat.init(base_path_, data_mgr_, {}, calcite, false, false, {});
       if (!sys_cat.getSqliteConnector()) {
