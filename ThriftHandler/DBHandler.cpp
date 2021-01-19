@@ -1024,8 +1024,6 @@ void DBHandler::sql_execute(TQueryResult& _return,
                                     at_most_n);
       });
     }
-    LOG(INFO) << "[Averbukh] _return.total_time_ms = " << _return.total_time_ms;
-    LOG(INFO) << "[Averbukh] _return.execution_time_ms = " << _return.execution_time_ms;
 
     // if the SQL statement we just executed was a geo COPY FROM, the import
     // parameters were captured, and this flag set, so we do the actual import here
