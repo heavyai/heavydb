@@ -201,11 +201,15 @@ bool ForeignStorageMgr::createDataWrapperIfNotExists(const ChunkKey& chunk_key) 
         foreign_storage::DataWrapperType::CSV) {
       data_wrapper_map_[table_key] =
           std::make_shared<CsvDataWrapper>(db_id, foreign_table);
-    } else if (foreign_table->foreign_server->data_wrapper_type ==
+    }
+#ifdef ENABLE_IMPORT_PARQUET
+    else if (foreign_table->foreign_server->data_wrapper_type ==
                foreign_storage::DataWrapperType::PARQUET) {
       data_wrapper_map_[table_key] =
           std::make_shared<ParquetDataWrapper>(db_id, foreign_table);
-    } else {
+    }
+#endif
+    else {
       throw std::runtime_error("Unsupported data wrapper");
     }
     return true;

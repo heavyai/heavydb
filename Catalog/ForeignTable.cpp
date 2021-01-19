@@ -34,10 +34,13 @@ ForeignTable::ForeignTable()
 std::vector<std::string_view> ForeignTable::getSupportedDataWrapperOptions() const {
   if (foreign_server->data_wrapper_type == foreign_storage::DataWrapperType::CSV) {
     return foreign_storage::CsvDataWrapper::getSupportedOptions();
-  } else if (foreign_server->data_wrapper_type ==
-             foreign_storage::DataWrapperType::PARQUET) {
+  }
+#ifdef ENABLE_IMPORT_PARQUET
+  else if (foreign_server->data_wrapper_type ==
+           foreign_storage::DataWrapperType::PARQUET) {
     return foreign_storage::ParquetDataWrapper::getSupportedOptions();
   }
+#endif
   return {};
 }
 
@@ -175,9 +178,13 @@ void ForeignTable::validateDataWrapperOptions() const {
   const auto wrapper_type = foreign_server->data_wrapper_type;
   if (wrapper_type == foreign_storage::DataWrapperType::CSV) {
     foreign_storage::CsvDataWrapper::validateOptions(this);
-  } else if (wrapper_type == foreign_storage::DataWrapperType::PARQUET) {
+  }
+#ifdef ENABLE_IMPORT_PARQUET
+  else if (wrapper_type == foreign_storage::DataWrapperType::PARQUET) {
     foreign_storage::ParquetDataWrapper::validateOptions(this);
-  } else {
+  }
+#endif
+  else {
     UNREACHABLE() << "Unknown data wrapper type";
   }
 }
