@@ -510,10 +510,12 @@ class DBHandlerTestFixture : public testing::Test {
   static std::string default_pass_;
   static std::string default_db_name_;
   static std::vector<std::string> udf_compiler_options_;
-  static std::string cluster_config_file_path_;
 #ifdef ENABLE_GEOS
   static std::string libgeos_so_filename_;
 #endif
+
+ public:
+  static std::string cluster_config_file_path_;
 };
 
 TSessionId DBHandlerTestFixture::session_id_{};
