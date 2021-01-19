@@ -285,7 +285,10 @@ struct ParseBufferRequest {
   }
 
   inline std::shared_ptr<Catalog_Namespace::Catalog> getCatalog() const {
-    return Catalog_Namespace::SysCatalog::instance().checkedGetCatalog(db_id);
+    // MAT are we really doing any good wrapping this?
+    auto catalog = Catalog_Namespace::SysCatalog::instance().getCatalog(db_id);
+    CHECK(catalog);
+    return catalog;
   }
 
   inline std::list<const ColumnDescriptor*> getColumns() const {

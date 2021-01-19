@@ -138,8 +138,8 @@ void ParquetDataWrapper::resetParquetMetadata() {
 
 std::list<const ColumnDescriptor*> ParquetDataWrapper::getColumnsToInitialize(
     const Interval<ColumnType>& column_interval) {
-  const auto catalog =
-      Catalog_Namespace::SysCatalog::instance().checkedGetCatalog(db_id_);
+  const auto catalog = Catalog_Namespace::SysCatalog::instance().getCatalog(db_id_);
+  CHECK(catalog);
   const auto& columns = schema_->getLogicalAndPhysicalColumns();
   auto column_start = column_interval.start;
   auto column_end = column_interval.end;
@@ -251,7 +251,8 @@ void ParquetDataWrapper::addNewFile(const std::string& file_path) {
 }
 
 void ParquetDataWrapper::fetchChunkMetadata() {
-  auto catalog = Catalog_Namespace::SysCatalog::instance().checkedGetCatalog(db_id_);
+  auto catalog = Catalog_Namespace::SysCatalog::instance().getCatalog(db_id_);
+  CHECK(catalog);
   std::set<std::string> new_file_paths;
   auto processed_file_paths = getProcessedFilePaths();
   if (foreign_table_->isAppendMode() && !processed_file_paths.empty()) {
@@ -422,7 +423,8 @@ void ParquetDataWrapper::loadBuffersUsingLazyParquetChunkLoader(
     const int logical_column_id,
     const int fragment_id,
     std::map<ChunkKey, AbstractBuffer*>& required_buffers) {
-  auto catalog = Catalog_Namespace::SysCatalog::instance().checkedGetCatalog(db_id_);
+  auto catalog = Catalog_Namespace::SysCatalog::instance().getCatalog(db_id_);
+  CHECK(catalog);
   const ColumnDescriptor* logical_column =
       schema_->getColumnDescriptor(logical_column_id);
   auto parquet_column_index = schema_->getParquetColumnIndex(logical_column_id);

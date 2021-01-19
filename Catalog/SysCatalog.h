@@ -309,7 +309,6 @@ class SysCatalog : private CommonFileOperations {
 
   std::shared_ptr<Catalog> getCatalog(const std::string& dbName);
   std::shared_ptr<Catalog> getCatalog(const int32_t db_id);
-  std::shared_ptr<Catalog> checkedGetCatalog(const int32_t db_id);
   std::shared_ptr<Catalog> getCatalog(const std::string& basePath,
                                       const DBMetadata& curDB,
                                       std::shared_ptr<Data_Namespace::DataMgr> dataMgr,

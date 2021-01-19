@@ -35,9 +35,10 @@ AbstractBuffer* ForeignStorageMgr::getBuffer(const ChunkKey& chunk_key,
 
 void ForeignStorageMgr::checkIfS3NeedsToBeEnabled(const ChunkKey& chunk_key) {
   CHECK(has_table_prefix(chunk_key));
-  auto foreign_table = Catalog_Namespace::SysCatalog::instance()
-                           .checkedGetCatalog(chunk_key[CHUNK_KEY_DB_IDX])
-                           ->getForeignTableUnlocked(chunk_key[CHUNK_KEY_TABLE_IDX]);
+  auto catalog =
+      Catalog_Namespace::SysCatalog::instance().getCatalog(chunk_key[CHUNK_KEY_DB_IDX]);
+  CHECK(catalog);
+  auto foreign_table = catalog->getForeignTableUnlocked(chunk_key[CHUNK_KEY_TABLE_IDX]);
   auto storage_type_entry =
       foreign_table->foreign_server->options.find(ForeignServer::STORAGE_TYPE_KEY);
   CHECK(storage_type_entry != foreign_table->foreign_server->options.end());
@@ -78,8 +79,9 @@ void ForeignStorageMgr::fetchBuffer(const ChunkKey& chunk_key,
 
   // Use hints to prefetch other chunks in fragment
   std::map<ChunkKey, AbstractBuffer*> optional_buffers;
-  auto catalog = Catalog_Namespace::SysCatalog::instance().checkedGetCatalog(
-      chunk_key[CHUNK_KEY_DB_IDX]);
+  auto catalog =
+      Catalog_Namespace::SysCatalog::instance().getCatalog(chunk_key[CHUNK_KEY_DB_IDX]);
+  CHECK(catalog);
   auto foreign_table = catalog->getForeignTableUnlocked(chunk_key[CHUNK_KEY_TABLE_IDX]);
   if (foreign_table->foreign_server->data_wrapper_type ==
       foreign_storage::DataWrapperType::CSV)  // optimization only useful for column
@@ -193,9 +195,9 @@ bool ForeignStorageMgr::createDataWrapperIfNotExists(const ChunkKey& chunk_key) 
   ChunkKey table_key{chunk_key[CHUNK_KEY_DB_IDX], chunk_key[CHUNK_KEY_TABLE_IDX]};
   if (data_wrapper_map_.find(table_key) == data_wrapper_map_.end()) {
     auto db_id = chunk_key[CHUNK_KEY_DB_IDX];
-    auto foreign_table = Catalog_Namespace::SysCatalog::instance()
-                             .checkedGetCatalog(db_id)
-                             ->getForeignTableUnlocked(chunk_key[CHUNK_KEY_TABLE_IDX]);
+    auto catalog = Catalog_Namespace::SysCatalog::instance().getCatalog(db_id);
+    CHECK(catalog);
+    auto foreign_table = catalog->getForeignTableUnlocked(chunk_key[CHUNK_KEY_TABLE_IDX]);
 
     if (foreign_table->foreign_server->data_wrapper_type ==
         foreign_storage::DataWrapperType::CSV) {
@@ -336,9 +338,9 @@ std::set<ChunkKey> get_keys_set_from_table(const ChunkKey& destination_chunk_key
   auto table_id = destination_chunk_key[CHUNK_KEY_TABLE_IDX];
   auto destination_column_id = destination_chunk_key[CHUNK_KEY_COLUMN_IDX];
   auto fragment_id = destination_chunk_key[CHUNK_KEY_FRAGMENT_IDX];
-  auto foreign_table = Catalog_Namespace::SysCatalog::instance()
-                           .checkedGetCatalog(db_id)
-                           ->getForeignTableUnlocked(table_id);
+  auto catalog = Catalog_Namespace::SysCatalog::instance().getCatalog(db_id);
+  CHECK(catalog);
+  auto foreign_table = catalog->getForeignTableUnlocked(table_id);
 
   ForeignTableSchema schema{db_id, foreign_table};
   auto logical_column = schema.getLogicalColumn(destination_column_id);
@@ -368,9 +370,9 @@ std::vector<ChunkKey> get_keys_vec_from_table(const ChunkKey& destination_chunk_
   auto table_id = destination_chunk_key[CHUNK_KEY_TABLE_IDX];
   auto destination_column_id = destination_chunk_key[CHUNK_KEY_COLUMN_IDX];
   auto fragment_id = destination_chunk_key[CHUNK_KEY_FRAGMENT_IDX];
-  auto foreign_table = Catalog_Namespace::SysCatalog::instance()
-                           .checkedGetCatalog(db_id)
-                           ->getForeignTableUnlocked(table_id);
+  auto catalog = Catalog_Namespace::SysCatalog::instance().getCatalog(db_id);
+  CHECK(catalog);
+  auto foreign_table = catalog->getForeignTableUnlocked(table_id);
 
   ForeignTableSchema schema{db_id, foreign_table};
   auto logical_column = schema.getLogicalColumn(destination_column_id);

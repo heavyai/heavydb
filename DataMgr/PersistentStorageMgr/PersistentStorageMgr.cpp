@@ -199,7 +199,16 @@ bool PersistentStorageMgr::isForeignStorage(const ChunkKey& chunk_key) const {
   CHECK(has_table_prefix(chunk_key));
   auto db_id = chunk_key[CHUNK_KEY_DB_IDX];
   auto table_id = chunk_key[CHUNK_KEY_TABLE_IDX];
-  auto catalog = Catalog_Namespace::SysCatalog::instance().checkedGetCatalog(db_id);
+  auto catalog = Catalog_Namespace::SysCatalog::instance().getCatalog(db_id);
+
+  // if catalog doesnt exist at this point we must be in an old migration.
+  // Old migration can not, at this point 5.5.1, be using foreign storage
+  // so this hack is to avoid the crash, when migrating old
+  // catalogs that have not been upgraded over time due to issue
+  // [BE-5728]
+  if (!catalog) {
+    return false;
+  }
 
   auto table = catalog->getMetadataForTableImpl(table_id, false);
   CHECK(table);

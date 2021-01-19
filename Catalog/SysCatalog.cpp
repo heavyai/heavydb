@@ -2462,12 +2462,6 @@ std::shared_ptr<Catalog> SysCatalog::getCatalog(const int32_t db_id) {
   return nullptr;
 }
 
-std::shared_ptr<Catalog> SysCatalog::checkedGetCatalog(const int32_t db_id) {
-  auto catalog = getCatalog(db_id);
-  CHECK(catalog);
-  return catalog;
-}
-
 std::shared_ptr<Catalog> SysCatalog::getCatalog(
     const string& basePath,
     const DBMetadata& curDB,
