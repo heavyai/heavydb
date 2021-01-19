@@ -72,6 +72,11 @@
 
 #include "gen-cpp/OmniSci.h"
 
+#ifdef _WIN32
+#include <fcntl.h>
+#include <io.h>
+#endif
+
 size_t g_max_import_threads =
     32;  // Max number of default import threads to use (num hardware threads will be used
          // if lower, and can also be explicitly overriden in copy statement with threads
@@ -3004,7 +3009,8 @@ bool try_cast(const std::string& str) {
   return true;
 }
 
-inline const char* try_strptimes(const char* str, const std::vector<std::string>& formats) {
+inline const char* try_strptimes(const char* str,
+                                 const std::vector<std::string>& formats) {
   std::tm tm_struct;
   const char* buf;
   for (auto format : formats) {
@@ -3734,17 +3740,25 @@ void DataStreamSink::import_parquet(std::vector<std::string>& file_paths) {
 #endif  // ENABLE_IMPORT_PARQUET
 
 void DataStreamSink::import_compressed(std::vector<std::string>& file_paths) {
-#ifdef _MSC_VER
-  throw std::runtime_error("CSV Import not yet supported on Windows.");
-#else
   // a new requirement is to have one single input stream into
   // Importer::importDelimited, so need to move pipe related
   // stuff to the outmost block.
   int fd[2];
-  if (pipe(fd) < 0) {
+#ifdef _WIN32
+  // For some reason when folly is used to create the pipe, reader can
+  // read nothing.
+  auto pipe_res =
+      _pipe(fd, static_cast<unsigned int>(copy_params.buffer_size), _O_BINARY);
+#else
+  auto pipe_res = pipe(fd);
+#endif
+  if (pipe_res < 0) {
     throw std::runtime_error(std::string("failed to create a pipe: ") + strerror(errno));
   }
+
+#ifndef _WIN32
   signal(SIGPIPE, SIG_IGN);
+#endif
 
   std::exception_ptr teptr;
   // create a thread to read uncompressed byte stream out of pipe and
@@ -3980,7 +3994,6 @@ void DataStreamSink::import_compressed(std::vector<std::string>& file_paths) {
   if (teptr) {
     std::rethrow_exception(teptr);
   }
-#endif
 }
 
 ImportStatus Importer::import() {

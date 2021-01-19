@@ -286,25 +286,25 @@ class TypedImportBuffer : boost::noncopyable {
   int8_t* getAsBytes() const {
     switch (column_desc_->columnType.get_type()) {
       case kBOOLEAN:
-        return reinterpret_cast<int8_t*>(&((*bool_buffer_)[0]));
+        return reinterpret_cast<int8_t*>(bool_buffer_->data());
       case kTINYINT:
-        return reinterpret_cast<int8_t*>(&((*tinyint_buffer_)[0]));
+        return reinterpret_cast<int8_t*>(tinyint_buffer_->data());
       case kSMALLINT:
-        return reinterpret_cast<int8_t*>(&((*smallint_buffer_)[0]));
+        return reinterpret_cast<int8_t*>(smallint_buffer_->data());
       case kINT:
-        return reinterpret_cast<int8_t*>(&((*int_buffer_)[0]));
+        return reinterpret_cast<int8_t*>(int_buffer_->data());
       case kBIGINT:
       case kNUMERIC:
       case kDECIMAL:
-        return reinterpret_cast<int8_t*>(&((*bigint_buffer_)[0]));
+        return reinterpret_cast<int8_t*>(bigint_buffer_->data());
       case kFLOAT:
-        return reinterpret_cast<int8_t*>(&((*float_buffer_)[0]));
+        return reinterpret_cast<int8_t*>(float_buffer_->data());
       case kDOUBLE:
-        return reinterpret_cast<int8_t*>(&((*double_buffer_)[0]));
+        return reinterpret_cast<int8_t*>(double_buffer_->data());
       case kDATE:
       case kTIME:
       case kTIMESTAMP:
-        return reinterpret_cast<int8_t*>(&((*bigint_buffer_)[0]));
+        return reinterpret_cast<int8_t*>(bigint_buffer_->data());
       default:
         abort();
     }
@@ -354,11 +354,11 @@ class TypedImportBuffer : boost::noncopyable {
   int8_t* getStringDictBuffer() const {
     switch (column_desc_->columnType.get_size()) {
       case 1:
-        return reinterpret_cast<int8_t*>(&((*string_dict_i8_buffer_)[0]));
+        return reinterpret_cast<int8_t*>(string_dict_i8_buffer_->data());
       case 2:
-        return reinterpret_cast<int8_t*>(&((*string_dict_i16_buffer_)[0]));
+        return reinterpret_cast<int8_t*>(string_dict_i16_buffer_->data());
       case 4:
-        return reinterpret_cast<int8_t*>(&((*string_dict_i32_buffer_)[0]));
+        return reinterpret_cast<int8_t*>(string_dict_i32_buffer_->data());
       default:
         abort();
     }
