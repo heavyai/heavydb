@@ -3004,11 +3004,16 @@ bool try_cast(const std::string& str) {
   return true;
 }
 
-inline char* try_strptimes(const char* str, const std::vector<std::string>& formats) {
+inline const char* try_strptimes(const char* str, const std::vector<std::string>& formats) {
   std::tm tm_struct;
-  char* buf;
+  const char* buf;
   for (auto format : formats) {
     buf = strptime(str, format.c_str(), &tm_struct);
+#ifdef _WIN32
+    if (buf == (str - 1)) {
+      buf = str + strlen(str);
+    }
+#endif
     if (buf) {
       return buf;
     }
@@ -3087,7 +3092,7 @@ SQLTypes Detector::detect_sqltype(const std::string& str) {
   if (type == kTEXT) {
     // @TODO
     // make these tests more robust so they don't match stuff they should not
-    char* buf;
+    const char* buf;
     buf = try_strptimes(str.c_str(),
                         {"%Y-%m-%d", "%m/%d/%Y", "%Y/%m/%d", "%d-%b-%y", "%d/%b/%Y"});
     if (buf) {
