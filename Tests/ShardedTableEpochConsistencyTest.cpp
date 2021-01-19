@@ -880,9 +880,28 @@ TEST_F(EpochValidationTest, DifferentTableTypes) {
 }
 
 int main(int argc, char** argv) {
-  TestHelpers::init_logger_stderr_only(argc, argv);
   testing::InitGoogleTest(&argc, argv);
-  DBHandlerTestFixture::initTestArgs(argc, argv);
+
+  po::options_description desc("Options");
+  // these two are here to allow passing correctly google testing parameters
+  desc.add_options()("gtest_list_tests", "list all test");
+  desc.add_options()("gtest_filter", "filters tests, use --help for details");
+
+  desc.add_options()(
+      "cluster",
+      po::value<std::string>(&DBHandlerTestFixture::cluster_config_file_path_),
+      "Path to data leaves list JSON file.");
+
+  logger::LogOptions log_options(argv[0]);
+  log_options.severity_ = logger::Severity::FATAL;
+  log_options.set_options();  // update default values
+  desc.add(log_options.get_options());
+
+  po::variables_map vm;
+  po::store(po::command_line_parser(argc, argv).options(desc).run(), vm);
+  po::notify(vm);
+
+  logger::init(log_options);
 
   int err{0};
   try {

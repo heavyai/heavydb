@@ -5751,7 +5751,14 @@ std::pair<TPlanResult, lockmgr::LockedTableDescriptors> DBHandler::parse_to_ra(
       // avoid deadlocks by enforcing a deterministic locking sequence
       // first, obtain table schema locks
       // then, obtain table data locks
-      std::sort(tables.begin(), tables.end());
+      // force sort into tableid order in case of name change to guarantee fixed order of
+      // mutex access
+      std::sort(tables.begin(),
+                tables.end(),
+                [&cat](const std::string& a, const std::string& b) {
+                  return cat->getMetadataForTable(a, false)->tableId <
+                         cat->getMetadataForTable(b, false)->tableId;
+                });
       // In the case of self-join and possibly other cases, we will
       // have duplicate tables. Ensure we only take one for locking below.
       tables.erase(unique(tables.begin(), tables.end()), tables.end());

@@ -221,8 +221,18 @@ ExecutionResult RelAlgExecutor::executeRelAlgQuery(const CompilationOptions& co,
   auto timer = DEBUG_TIMER(__func__);
   INJECT_TIMER(executeRelAlgQuery);
 
+  auto run_query = [&](const CompilationOptions& co_in) {
+    auto execution_result =
+        executeRelAlgQueryNoRetry(co_in, eo, just_explain_plan, render_info);
+    if (post_execution_callback_) {
+      VLOG(1) << "Running post execution callback.";
+      (*post_execution_callback_)();
+    }
+    return execution_result;
+  };
+
   try {
-    return executeRelAlgQueryNoRetry(co, eo, just_explain_plan, render_info);
+    return run_query(co);
   } catch (const QueryMustRunOnCpu&) {
     if (!g_allow_cpu_retry) {
       throw;
@@ -234,7 +244,7 @@ ExecutionResult RelAlgExecutor::executeRelAlgQuery(const CompilationOptions& co,
   if (render_info) {
     render_info->setForceNonInSituData();
   }
-  return executeRelAlgQueryNoRetry(co_cpu, eo, just_explain_plan, render_info);
+  return run_query(co_cpu);
 }
 
 namespace {
@@ -333,25 +343,10 @@ ExecutionResult RelAlgExecutor::executeRelAlgQueryNoRetry(const CompilationOptio
     }
     return ret;
   };
+  // now we get the spinlock that means this query is ready to run by the executor
+  // so we acquire executor lock in here to make sure that this executor holds
+  // all necessary resources and at the same time protect them against other executor
   auto lock = aquire_execute_mutex(executor_);
-  ScopeGuard clearRuntimeInterruptStatus = [this, &render_info, &eo] {
-    // reset the runtime query interrupt status
-    if (!render_info &&
-        (g_enable_runtime_query_interrupt || eo.allow_runtime_query_interrupt)) {
-      mapd_shared_lock<mapd_shared_mutex> session_read_lock(
-          executor_->executor_session_mutex_);
-      std::string curSession = executor_->getCurrentQuerySession(session_read_lock);
-      session_read_lock.unlock();
-      mapd_unique_lock<mapd_shared_mutex> session_write_lock(
-          executor_->executor_session_mutex_);
-      executor_->invalidateRunningQuerySession(session_write_lock);
-      executor_->removeFromQuerySessionList(curSession, session_write_lock);
-      executor_->execute_spin_lock_.clear(std::memory_order_release);
-      session_write_lock.unlock();
-      executor_->resetInterrupt();
-      VLOG(1) << "RESET runtime query interrupt status of Executor " << this;
-    }
-  };
 
   if (!render_info &&
       (g_enable_runtime_query_interrupt || eo.allow_runtime_query_interrupt)) {
@@ -514,6 +509,7 @@ QueryStepExecutionResult RelAlgExecutor::executeRelAlgQuerySingleStep(
     const ExecutionOptions& eo,
     RenderInfo* render_info) {
   INJECT_TIMER(executeRelAlgQueryStep);
+
   auto exe_desc_ptr = seq.getDescriptor(step_idx);
   CHECK(exe_desc_ptr);
   const auto sort = dynamic_cast<const RelSort*>(exe_desc_ptr->getBody());
@@ -561,15 +557,21 @@ QueryStepExecutionResult RelAlgExecutor::executeRelAlgQuerySingleStep(
       }
     }
   }
-  return {executeRelAlgSubSeq(seq,
-                              std::make_pair(step_idx, step_idx + 1),
-                              co,
-                              eo,
-                              render_info,
-                              queue_time_ms_),
-          merge_type(exe_desc_ptr->getBody()),
-          exe_desc_ptr->getBody()->getId(),
-          false};
+  QueryStepExecutionResult result{
+      executeRelAlgSubSeq(seq,
+                          std::make_pair(step_idx, step_idx + 1),
+                          co,
+                          eo,
+                          render_info,
+                          queue_time_ms_),
+      merge_type(exe_desc_ptr->getBody()),
+      exe_desc_ptr->getBody()->getId(),
+      false};
+  if (post_execution_callback_) {
+    VLOG(1) << "Running post execution callback.";
+    (*post_execution_callback_)();
+  }
+  return result;
 }
 
 void RelAlgExecutor::prepareLeafExecution(
@@ -1493,69 +1495,79 @@ void RelAlgExecutor::executeUpdate(const RelAlgNode* node,
   co.hoist_literals = false;  // disable literal hoisting as it interferes with dict
                               // encoded string updates
 
-  auto execute_update_for_node =
-      [this, &co, &eo_in](const auto node, auto& work_unit, const bool is_aggregate) {
-        UpdateTransactionParameters update_params(node->getModifiedTableDescriptor(),
-                                                  node->getTargetColumns(),
-                                                  node->getOutputMetainfo(),
-                                                  node->isVarlenUpdateRequired());
+  auto execute_update_for_node = [this, &co, &eo_in](const auto node,
+                                                     auto& work_unit,
+                                                     const bool is_aggregate) {
+    dml_transaction_parameters_ =
+        std::make_unique<UpdateTransactionParameters>(node->getModifiedTableDescriptor(),
+                                                      node->getTargetColumns(),
+                                                      node->getOutputMetainfo(),
+                                                      node->isVarlenUpdateRequired());
 
-        const auto table_infos = get_table_infos(work_unit.exe_unit, executor_);
+    const auto table_infos = get_table_infos(work_unit.exe_unit, executor_);
 
-        auto execute_update_ra_exe_unit =
-            [this, &co, &eo_in, &table_infos, &update_params](
-                const RelAlgExecutionUnit& ra_exe_unit, const bool is_aggregate) {
-              CompilationOptions co_project = CompilationOptions::makeCpuOnly(co);
+    auto execute_update_ra_exe_unit = [this, &co, &eo_in, &table_infos](
+                                          const RelAlgExecutionUnit& ra_exe_unit,
+                                          const bool is_aggregate) {
+      CompilationOptions co_project = CompilationOptions::makeCpuOnly(co);
 
-              auto eo = eo_in;
-              if (update_params.tableIsTemporary()) {
-                eo.output_columnar_hint = true;
-                co_project.allow_lazy_fetch = false;
-                co_project.filter_on_deleted_column =
-                    false;  // project the entire delete column for columnar update
-              }
+      auto eo = eo_in;
+      if (dml_transaction_parameters_->tableIsTemporary()) {
+        eo.output_columnar_hint = true;
+        co_project.allow_lazy_fetch = false;
+        co_project.filter_on_deleted_column =
+            false;  // project the entire delete column for columnar update
+      }
 
-              auto update_callback = yieldUpdateCallback(update_params);
-              executor_->executeUpdate(ra_exe_unit,
-                                       table_infos,
-                                       co_project,
-                                       eo,
-                                       cat_,
-                                       executor_->row_set_mem_owner_,
-                                       update_callback,
-                                       is_aggregate);
-              update_params.finalizeTransaction();
-            };
-
-        if (update_params.tableIsTemporary()) {
-          // hold owned target exprs during execution if rewriting
-          auto query_rewrite = std::make_unique<QueryRewriter>(table_infos, executor_);
-          // rewrite temp table updates to generate the full column by moving the where
-          // clause into a case if such a rewrite is not possible, bail on the update
-          // operation build an expr for the update target
-          const auto td = update_params.getTableDescriptor();
-          CHECK(td);
-          const auto update_column_names = update_params.getUpdateColumnNames();
-          if (update_column_names.size() > 1) {
-            throw std::runtime_error(
-                "Multi-column update is not yet supported for temporary tables.");
-          }
-
-          auto cd = cat_.getMetadataForColumn(td->tableId, update_column_names.front());
-          CHECK(cd);
-          auto projected_column_to_update =
-              makeExpr<Analyzer::ColumnVar>(cd->columnType, td->tableId, cd->columnId, 0);
-          const auto rewritten_exe_unit = query_rewrite->rewriteColumnarUpdate(
-              work_unit.exe_unit, projected_column_to_update);
-          if (rewritten_exe_unit.target_exprs.front()->get_type_info().is_varlen()) {
-            throw std::runtime_error(
-                "Variable length updates not yet supported on temporary tables.");
-          }
-          execute_update_ra_exe_unit(rewritten_exe_unit, is_aggregate);
-        } else {
-          execute_update_ra_exe_unit(work_unit.exe_unit, is_aggregate);
-        }
+      auto update_transaction_parameters =
+          dynamic_cast<UpdateTransactionParameters*>(dml_transaction_parameters_.get());
+      CHECK(update_transaction_parameters);
+      auto update_callback = yieldUpdateCallback(*update_transaction_parameters);
+      executor_->executeUpdate(ra_exe_unit,
+                               table_infos,
+                               co_project,
+                               eo,
+                               cat_,
+                               executor_->row_set_mem_owner_,
+                               update_callback,
+                               is_aggregate);
+      post_execution_callback_ = [this]() {
+        dml_transaction_parameters_->finalizeTransaction();
       };
+    };
+
+    if (dml_transaction_parameters_->tableIsTemporary()) {
+      // hold owned target exprs during execution if rewriting
+      auto query_rewrite = std::make_unique<QueryRewriter>(table_infos, executor_);
+      // rewrite temp table updates to generate the full column by moving the where
+      // clause into a case if such a rewrite is not possible, bail on the update
+      // operation build an expr for the update target
+      auto update_transaction_params =
+          dynamic_cast<UpdateTransactionParameters*>(dml_transaction_parameters_.get());
+      CHECK(update_transaction_params);
+      const auto td = update_transaction_params->getTableDescriptor();
+      CHECK(td);
+      const auto update_column_names = update_transaction_params->getUpdateColumnNames();
+      if (update_column_names.size() > 1) {
+        throw std::runtime_error(
+            "Multi-column update is not yet supported for temporary tables.");
+      }
+
+      auto cd = cat_.getMetadataForColumn(td->tableId, update_column_names.front());
+      CHECK(cd);
+      auto projected_column_to_update =
+          makeExpr<Analyzer::ColumnVar>(cd->columnType, td->tableId, cd->columnId, 0);
+      const auto rewritten_exe_unit = query_rewrite->rewriteColumnarUpdate(
+          work_unit.exe_unit, projected_column_to_update);
+      if (rewritten_exe_unit.target_exprs.front()->get_type_info().is_varlen()) {
+        throw std::runtime_error(
+            "Variable length updates not yet supported on temporary tables.");
+      }
+      execute_update_ra_exe_unit(rewritten_exe_unit, is_aggregate);
+    } else {
+      execute_update_ra_exe_unit(work_unit.exe_unit, is_aggregate);
+    }
+  };
 
   if (auto compound = dynamic_cast<const RelCompound*>(node)) {
     auto work_unit =
@@ -1607,12 +1619,16 @@ void RelAlgExecutor::executeDelete(const RelAlgNode* node,
     auto execute_delete_ra_exe_unit =
         [this, &table_infos, &table_descriptor, &eo_in, &co](const auto& exe_unit,
                                                              const bool is_aggregate) {
-          DeleteTransactionParameters delete_params(table_is_temporary(table_descriptor));
-          auto delete_callback = yieldDeleteCallback(delete_params);
+          dml_transaction_parameters_ = std::make_unique<DeleteTransactionParameters>(
+              table_is_temporary(table_descriptor));
+          auto delete_params = dynamic_cast<DeleteTransactionParameters*>(
+              dml_transaction_parameters_.get());
+          CHECK(delete_params);
+          auto delete_callback = yieldDeleteCallback(*delete_params);
           CompilationOptions co_delete = CompilationOptions::makeCpuOnly(co);
 
           auto eo = eo_in;
-          if (delete_params.tableIsTemporary()) {
+          if (dml_transaction_parameters_->tableIsTemporary()) {
             eo.output_columnar_hint = true;
             co_delete.filter_on_deleted_column =
                 false;  // project the entire delete column for columnar update
@@ -1628,7 +1644,9 @@ void RelAlgExecutor::executeDelete(const RelAlgNode* node,
                                    executor_->row_set_mem_owner_,
                                    delete_callback,
                                    is_aggregate);
-          delete_params.finalizeTransaction();
+          post_execution_callback_ = [this]() {
+            dml_transaction_parameters_->finalizeTransaction();
+          };
         };
 
     if (table_is_temporary(table_descriptor)) {
@@ -3185,6 +3203,13 @@ std::string RelAlgExecutor::getErrorMessageFromCode(const int32_t error_code) {
       return "Geos call failure";
   }
   return "Other error: code " + std::to_string(error_code);
+}
+
+void RelAlgExecutor::executePostExecutionCallback() {
+  if (post_execution_callback_) {
+    VLOG(1) << "Running post execution callback.";
+    (*post_execution_callback_)();
+  }
 }
 
 RelAlgExecutor::WorkUnit RelAlgExecutor::createWorkUnit(const RelAlgNode* node,
