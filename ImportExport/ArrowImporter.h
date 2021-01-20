@@ -201,9 +201,9 @@ struct DataBuffer : DataBufferBase {
       : DataBufferBase(cd, array, bad_rows_tracker), buffer(buffer) {}
 };
 
-constexpr int64_t kMillisecondsInSecond = 1000L;
-constexpr int64_t kMicrosecondsInSecond = 1000L * 1000L;
-constexpr int64_t kNanosecondsinSecond = 1000L * 1000L * 1000L;
+constexpr int64_t kMillisecondsInSecond = 1000LL;
+constexpr int64_t kMicrosecondsInSecond = 1000LL * 1000LL;
+constexpr int64_t kNanosecondsinSecond = 1000LL * 1000LL * 1000LL;
 constexpr int32_t kSecondsInDay = 86400;
 
 static const std::map<std::pair<int32_t, arrow::TimeUnit::type>,
