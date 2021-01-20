@@ -641,6 +641,7 @@ int32_t FileMgr::openAndReadLegacyEpochFile(const std::string& epochFileName) {
   FILE* legacyEpochFile = open(epochFilePath);
   int32_t epoch;
   read(legacyEpochFile, 0, sizeof(int32_t), (int8_t*)&epoch);
+  close(legacyEpochFile);
   return epoch;
 }
 
