@@ -32,9 +32,11 @@ class SysAllocator {
   template <class U>
   constexpr SysAllocator(const SysAllocator<U>&) noexcept {}
 
-  [[nodiscard]] T* allocate(size_t count) { return checked_malloc(count); }
+  [[nodiscard]] T* allocate(size_t count) {
+    return static_cast<T*>(checked_malloc(count));
+  }
 
-  void deallocate(T* p, size_t /* count */) { free(p); }
+  void deallocate(void* p, size_t /* count */) { free(p); }
 
   friend bool operator==(Self const&, Self const&) noexcept { return true; }
   friend bool operator!=(Self const&, Self const&) noexcept { return false; }
@@ -45,18 +47,42 @@ class SysAllocator {
 #include <folly/Memory.h>
 #include <folly/memory/Arena.h>
 
-constexpr size_t kArenaBlockOverhead = folly::Arena<::SysAllocator<void>>::kBlockOverhead;
+/**
+ * Folly arena has some weird code which looks broken and most
+ * probably works on some copilers only. On Linux and Windows we
+ * use different folly versions with different issues and have
+ * to use different workarounds.
+ *
+ * On Linux we use folly version which passes Arena::Block* to
+ * std::allocator_traits<A>::deallocate instead of A::pointer*.
+ * This can cause a build failure but works fine when T = void.
+ *
+ * On Windows we have another version which uses allocator traits
+ * rebound to char type and casts Arena::Block* to char*.
+ * Unfortunately, it passes the original allocator to this rebound
+ * traits and MSVC doesn't allow that. It works if the original
+ * traits and the rebound one have the same type and therefore we
+ * use char as a base type.
+ */
+#ifdef _WIN32
+using AllocT = char;
+#else
+using AllocT = void;
+#endif  // _WIN32
+
+constexpr size_t kArenaBlockOverhead =
+    folly::Arena<::SysAllocator<AllocT>>::kBlockOverhead;
 
 /**
  * Arena allocator using checked_malloc with default allocation size 2GB. Note that the
  * allocator only frees memory on destruction.
  */
-class Arena : public folly::Arena<::SysAllocator<void>> {
+class Arena : public folly::Arena<::SysAllocator<AllocT>> {
  public:
-  explicit Arena(size_t min_block_size = static_cast<size_t>(1UL << 32) + kBlockOverhead,
+  explicit Arena(size_t min_block_size = static_cast<size_t>(1ULL << 32) + kBlockOverhead,
                  size_t size_limit = kNoSizeLimit,
                  size_t max_align = kDefaultMaxAlign)
-      : folly::Arena<SysAllocator<void>>({}, min_block_size, size_limit, max_align) {}
+      : folly::Arena<SysAllocator<AllocT>>({}, min_block_size, size_limit, max_align) {}
 
   void* allocateAndZero(const size_t size) {
     auto ret = allocate(size);
@@ -66,8 +92,8 @@ class Arena : public folly::Arena<::SysAllocator<void>> {
 };
 
 template <>
-struct folly::ArenaAllocatorTraits<::SysAllocator<void>> {
-  static size_t goodSize(const ::SysAllocator<void>& /* alloc */, size_t size) {
+struct folly::ArenaAllocatorTraits<::SysAllocator<AllocT>> {
+  static size_t goodSize(const ::SysAllocator<AllocT>& /* alloc */, size_t size) {
     return folly::goodMallocSize(size);
   }
 };
