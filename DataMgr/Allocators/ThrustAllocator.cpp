@@ -17,7 +17,6 @@
 #include "DataMgr/Allocators/ThrustAllocator.h"
 
 #define BOOST_STACKTRACE_GNU_SOURCE_NOT_REQUIRED 1
-#include <boost/stacktrace.hpp>
 
 #include <cstdint>
 
@@ -25,6 +24,7 @@
 #include "DataMgr/Allocators/CudaAllocator.h"
 #include "DataMgr/DataMgr.h"
 #include "Logger/Logger.h"
+#include "Shared/boost_stacktrace.hpp"
 
 int8_t* ThrustAllocator::allocate(std::ptrdiff_t num_bytes) {
   VLOG(1) << "Thrust allocation: Device #" << device_id_ << " Allocation #"

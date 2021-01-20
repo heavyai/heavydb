@@ -16,9 +16,9 @@
 
 #include "CudaMgr/CudaMgr.h"
 #include "QueryEngine/NvidiaKernel.h"
+#include "Shared/boost_stacktrace.hpp"
 
 #include <algorithm>
-#include <boost/stacktrace.hpp>
 #include <cassert>
 #include <iostream>
 #include <stdexcept>

@@ -18,8 +18,9 @@
 
 #define BOOST_STACKTRACE_GNU_SOURCE_NOT_REQUIRED 1
 
+#include "Shared/boost_stacktrace.hpp"
+
 #include <boost/algorithm/string.hpp>
-#include <boost/stacktrace.hpp>
 
 std::string getCurrentStackTrace(uint32_t num_frames_to_skip,
                                  const char* stop_at_this_frame,
