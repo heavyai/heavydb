@@ -47,7 +47,7 @@
 #include "../Shared/measure.h"
 #include "MapDRelease.h"
 #include "RWLocks.h"
-#include "bcrypt.h"
+#include "include/bcrypt.h"
 
 using std::list;
 using std::map;
