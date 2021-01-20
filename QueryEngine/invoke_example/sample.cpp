@@ -65,7 +65,7 @@ int main(int argc, char** argv) {
   // Get kernel function
   checkCudaErrors(cuModuleGetFunction(&function, cudaModule, "kernel"));
 
-  int64_t N = 1000000000L;
+  int64_t N = 1000000000LL;
   int8_t* byte_stream_col_0 = new int8_t[N];
   memset(byte_stream_col_0, 42, N);
 
