@@ -414,7 +414,7 @@ std::unique_ptr<QueryMemoryDescriptor> GroupByAndAggregate::initQueryMemoryDescr
     if (query_mem_desc->sortOnGpu() &&
         (query_mem_desc->getBufferSizeBytes(device_type_) +
          align_to_int64(query_mem_desc->getEntryCount() * sizeof(int32_t))) >
-            2 * 1024 * 1024 * 1024L) {
+            2 * 1024 * 1024 * 1024LL) {
       must_use_baseline_sort = true;
       sort_on_gpu_hint = false;
     } else {
@@ -656,7 +656,7 @@ CountDistinctDescriptors GroupByAndAggregate::initCountDistinctDescriptors() {
         count_distinct_impl_type = CountDistinctImplType::Bitmap;
         if (agg_info.agg_kind == kCOUNT) {
           bitmap_sz_bits = arg_range_info.max - arg_range_info.min + 1;
-          const int64_t MAX_BITMAP_BITS{8 * 1000 * 1000 * 1000L};
+          const int64_t MAX_BITMAP_BITS{8 * 1000 * 1000 * 1000LL};
           if (bitmap_sz_bits <= 0 || bitmap_sz_bits > MAX_BITMAP_BITS) {
             count_distinct_impl_type = CountDistinctImplType::StdSet;
           }
