@@ -140,7 +140,7 @@ inline int64_t inline_fixed_encoding_null_val(const SQLTypeInfo& ti) {
   CHECK_EQ(kENCODING_FIXED, ti.get_compression());
   CHECK(ti.is_integer() || ti.is_time() || ti.is_decimal());
   CHECK_EQ(0, ti.get_comp_param() % 8);
-  return -(1L << (ti.get_comp_param() - 1));
+  return -(1LL << (ti.get_comp_param() - 1));
 }
 
 inline double inline_fp_null_val(const SQLTypeInfo& ti) {
