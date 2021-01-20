@@ -15,11 +15,27 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
+#ifdef _WIN32
+#elif _WIN64
+#else
 #include <unistd.h>
+#endif
 #include <errno.h>
 
+#if defined(_WIN32) || defined(_WIN64)
+// On windows we need to generate random bytes differently.
+typedef __int64 ssize_t;
+#define BCRYPT_HASHSIZE 64
+
+#include <windows.h>
+#include <wincrypt.h> /* CryptAcquireContext, CryptGenRandom */
+
 #include "bcrypt.h"
+
+#else
+#include "include/bcrypt.h"
 #include "crypt_blowfish/ow-crypt.h"
+#endif
 
 #define RANDBYTES (16)
 
@@ -101,6 +117,25 @@ int bcrypt_gensalt(int factor, char salt[BCRYPT_HASHSIZE])
 	int workf;
 	char *aux;
 
+	// Note: Windows does not have /dev/urandom sadly.
+#ifdef _WIN32 || _WIN64
+	HCRYPTPROV p;
+	ULONG     i;
+
+	// Acquire a crypt context for generating random bytes.
+	if (CryptAcquireContext(&p, NULL, NULL, PROV_RSA_FULL, CRYPT_VERIFYCONTEXT) == FALSE) {
+		return 1;
+	}
+
+	if (CryptGenRandom(p, RANDBYTES, (BYTE*)input) == FALSE) {
+		return 2;
+	}
+
+	if (CryptReleaseContext(p, 0) == FALSE) {
+		return 3;
+	}
+#else
+	// Get random bytes on Unix/Linux.
 	fd = open("/dev/urandom", O_RDONLY);
 	if (fd == -1)
 		return 1;
@@ -113,6 +148,7 @@ int bcrypt_gensalt(int factor, char salt[BCRYPT_HASHSIZE])
 
 	if (try_close(fd) != 0)
 		return 3;
+#endif
 
 	/* Generate salt. */
 	workf = (factor < 4 || factor > 31)?12:factor;
