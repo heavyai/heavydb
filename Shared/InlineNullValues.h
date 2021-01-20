@@ -185,7 +185,7 @@ inline int64_t inline_fixed_encoding_null_val(const SQL_TYPE_INFO& ti) {
   CHECK_EQ(kENCODING_FIXED, ti.get_compression());
   CHECK(ti.is_integer() || ti.is_time() || ti.is_decimal());
   CHECK_EQ(0, ti.get_comp_param() % 8);
-  return -(1L << (ti.get_comp_param() - 1));
+  return -(1LL << (ti.get_comp_param() - 1));
 }
 
 template <typename SQL_TYPE_INFO>
@@ -292,9 +292,9 @@ inline int64_t inline_fixed_encoding_null_array_val(const SQL_TYPE_INFO& ti) {
   CHECK(ti.is_integer() || ti.is_time() || ti.is_decimal());
   CHECK_EQ(0, ti.get_comp_param() % 8);
   // The value of the NULL sentinel for fixed encoding is:
-  //   -(1L << (ti.get_comp_param() - 1))
+  //   -(1LL << (ti.get_comp_param() - 1))
   // NULL_ARRAY sentinel would have to be the value just above NULL:
-  return -(1L << (ti.get_comp_param() - 1)) + 1;
+  return -(1LL << (ti.get_comp_param() - 1)) + 1;
 }
 
 #endif  // NO_BOOST
