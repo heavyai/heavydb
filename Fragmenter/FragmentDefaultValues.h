@@ -16,7 +16,7 @@
 
 #pragma once
 
-#define DEFAULT_FRAGMENT_ROWS 32000000     // in tuples
-#define DEFAULT_PAGE_SIZE 2097152          // in bytes
-#define DEFAULT_MAX_ROWS (1L) << 62        // in rows
-#define DEFAULT_MAX_CHUNK_SIZE 1073741824  // in bytes
+#define DEFAULT_FRAGMENT_ROWS 32000000ULL     // in tuples
+#define DEFAULT_PAGE_SIZE 2097152ULL          // in bytes
+#define DEFAULT_MAX_ROWS ((1LL) << 62)        // in rows
+#define DEFAULT_MAX_CHUNK_SIZE 1073741824ULL  // in bytes
