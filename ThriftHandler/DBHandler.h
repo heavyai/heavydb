@@ -189,7 +189,7 @@ class DBHandler : public OmniSciIf {
   void initialize();
   ~DBHandler() override;
 
-  static inline size_t max_bytes_for_thrift() { return 2 * 1000 * 1000 * 1000L; }
+  static inline size_t max_bytes_for_thrift() { return 2 * 1000 * 1000 * 1000LL; }
 
   // Important ****
   //         This block must be keep in sync with mapd.thrift and HAHandler.h
