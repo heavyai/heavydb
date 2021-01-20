@@ -27,7 +27,7 @@
 #include <Shared/checked_alloc.h>
 
 // 8 GB, the limit of perfect hash group by under normal conditions
-int64_t g_bitmap_memory_limit{8 * 1000 * 1000 * 1000L};
+int64_t g_bitmap_memory_limit{8LL * 1000 * 1000 * 1000};
 
 namespace {
 
