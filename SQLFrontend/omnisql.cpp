@@ -58,7 +58,7 @@
 #include "Shared/misc.h"
 #include "gen-cpp/OmniSci.h"
 
-#include "linenoise.h"
+#include "include/linenoise.h"
 
 #include "ClientContext.h"
 #include "CommandFunctors.h"
