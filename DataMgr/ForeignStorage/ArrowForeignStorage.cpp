@@ -908,7 +908,7 @@ static std::shared_ptr<arrow::DataType> getArrowImportType(const SQLTypeInfo typ
   }
   switch (ktype) {
     case kBOOLEAN:
-      return boolean();
+      return arrow::boolean();
     case kFLOAT:
       return float32();
     case kDOUBLE:
