@@ -1342,7 +1342,7 @@ void fill_one_to_many_hash_table_impl(int32_t* buff,
 
   std::vector<int32_t> count_copy(hash_entry_count, 0);
   CHECK_GT(hash_entry_count, int64_t(0));
-  memcpy(&count_copy[1], count_buff, (hash_entry_count - 1) * sizeof(int32_t));
+  memcpy(count_copy.data() + 1, count_buff, (hash_entry_count - 1) * sizeof(int32_t));
 #if HAVE_CUDA
   thrust::inclusive_scan(count_copy.begin(), count_copy.end(), count_copy.begin());
 #else

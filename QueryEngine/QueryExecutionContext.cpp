@@ -588,7 +588,7 @@ std::vector<int64_t*> QueryExecutionContext::launchCpuCode(
 
   std::vector<const int8_t**> multifrag_col_buffers;
   for (auto& col_buffer : col_buffers) {
-    multifrag_col_buffers.push_back(&col_buffer[0]);
+    multifrag_col_buffers.push_back(col_buffer.empty() ? nullptr : col_buffer.data());
   }
   const int8_t*** multifrag_cols_ptr{
       multifrag_col_buffers.empty() ? nullptr : &multifrag_col_buffers[0]};
@@ -657,12 +657,12 @@ std::vector<int64_t*> QueryExecutionContext::launchCpuCode(
       reinterpret_cast<agg_query>(native_code->func())(
           multifrag_cols_ptr,
           &num_fragments,
-          &literal_buff[0],
+          literal_buff.data(),
           num_rows_ptr,
-          &flatened_frag_offsets[0],
+          flatened_frag_offsets.data(),
           &scan_limit,
           &total_matched_init,
-          &cmpt_val_buff[0],
+          cmpt_val_buff.data(),
           query_buffers_->getGroupByBuffersPtr(),
           error_code,
           &num_tables,
@@ -670,13 +670,13 @@ std::vector<int64_t*> QueryExecutionContext::launchCpuCode(
     } else {
       reinterpret_cast<agg_query>(native_code->func())(multifrag_cols_ptr,
                                                        &num_fragments,
-                                                       &literal_buff[0],
+                                                       literal_buff.data(),
                                                        num_rows_ptr,
-                                                       &flatened_frag_offsets[0],
+                                                       flatened_frag_offsets.data(),
                                                        &scan_limit,
                                                        &total_matched_init,
-                                                       &init_agg_vals[0],
-                                                       &out_vec[0],
+                                                       init_agg_vals.data(),
+                                                       out_vec.data(),
                                                        error_code,
                                                        &num_tables,
                                                        join_hash_tables_ptr);
@@ -698,10 +698,10 @@ std::vector<int64_t*> QueryExecutionContext::launchCpuCode(
           multifrag_cols_ptr,
           &num_fragments,
           num_rows_ptr,
-          &flatened_frag_offsets[0],
+          flatened_frag_offsets.data(),
           &scan_limit,
           &total_matched_init,
-          &cmpt_val_buff[0],
+          cmpt_val_buff.data(),
           query_buffers_->getGroupByBuffersPtr(),
           error_code,
           &num_tables,
@@ -710,11 +710,11 @@ std::vector<int64_t*> QueryExecutionContext::launchCpuCode(
       reinterpret_cast<agg_query>(native_code->func())(multifrag_cols_ptr,
                                                        &num_fragments,
                                                        num_rows_ptr,
-                                                       &flatened_frag_offsets[0],
+                                                       flatened_frag_offsets.data(),
                                                        &scan_limit,
                                                        &total_matched_init,
-                                                       &init_agg_vals[0],
-                                                       &out_vec[0],
+                                                       init_agg_vals.data(),
+                                                       out_vec.data(),
                                                        error_code,
                                                        &num_tables,
                                                        join_hash_tables_ptr);
