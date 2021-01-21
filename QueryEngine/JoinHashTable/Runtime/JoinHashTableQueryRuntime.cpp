@@ -226,7 +226,7 @@ get_row_id_buffer_ptr(int64_t* hash_table_ptr,
       get_composite_key_index_64(key, key_component_count, hash_table_ptr, entry_count);
 
   if (key_idx < -1) {
-    return BufferRange{.buffer = nullptr, .element_count = 0};
+    return BufferRange{nullptr, 0};
   }
 
   int8_t* one_to_many_ptr = reinterpret_cast<int8_t*>(hash_table_ptr);
@@ -236,7 +236,7 @@ get_row_id_buffer_ptr(int64_t* hash_table_ptr,
   const auto slot = overlaps_hash_join_idx(
       reinterpret_cast<int64_t>(one_to_many_ptr), key_idx, min_key, max_key);
   if (slot < 0) {
-    return BufferRange{.buffer = nullptr, .element_count = 0};
+    return BufferRange{nullptr, 0};
   }
 
   // Offset into the row count section of buffer
@@ -249,7 +249,7 @@ get_row_id_buffer_ptr(int64_t* hash_table_ptr,
   int32_t* rowid_buffer = (int32_t*)(one_to_many_ptr + 2 * sub_buff_size);
   const auto rowidoff_ptr = &rowid_buffer[slot];
 
-  return BufferRange{.buffer = rowidoff_ptr, .element_count = matched_row_count};
+  return BufferRange{rowidoff_ptr, matched_row_count};
 }
 
 struct Bounds {
@@ -300,8 +300,7 @@ get_candidate_rows(int32_t* out_arr,
 
   size_t elem_count = 0;
 
-  const auto bounds =
-      Bounds{.min_X = range[0], .min_Y = range[1], .max_X = range[2], .max_Y = range[3]};
+  const auto bounds = Bounds{range[0], range[1], range[2], range[3]};
 
   for (int64_t x = floor(bounds.min_X * bucket_size_x);
        x <= floor(bounds.max_X * bucket_size_x);
