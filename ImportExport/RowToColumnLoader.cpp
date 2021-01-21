@@ -27,6 +27,9 @@
 #include "ImportExport/DelimitedParserUtils.h"
 #include "Logger/Logger.h"
 
+#include <chrono>
+#include <thread>
+
 using namespace ::apache::thrift;
 
 SQLTypes get_sql_types(const TColumnType& ct) {
@@ -399,7 +402,7 @@ void RowToColumnLoader::wait_disconnect_reconnect_retry(
   std::cout << "  Waiting  " << copy_params.retry_wait
             << " secs to retry Inserts , will try " << (copy_params.retry_count - tries)
             << " times more " << std::endl;
-  sleep(copy_params.retry_wait);
+  std::this_thread::sleep_for(std::chrono::seconds(copy_params.retry_wait));
 
   closeConnection();
   createConnection(conn_details_);
