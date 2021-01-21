@@ -3017,13 +3017,13 @@ void InsertIntoTableAsSelectStmt::populateData(QueryStateProxy query_state_proxy
         size_t leaf_count = leafs_connector_->leafCount();
 
         size_t max_number_of_rows_per_package =
-            std::min(num_rows / leaf_count, 64UL * 1024UL);
+            std::min(num_rows / leaf_count, size_t(64 * 1024));
 
         size_t start_row = 0;
         size_t num_rows_to_process = std::min(num_rows, max_number_of_rows_per_package);
 
         // ensure that at least one row is being processed
-        num_rows_to_process = std::max(num_rows_to_process, 1UL);
+        num_rows_to_process = std::max(num_rows_to_process, size_t(1));
 
         std::vector<std::unique_ptr<TargetValueConverter>> value_converters;
 

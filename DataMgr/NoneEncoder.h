@@ -125,7 +125,7 @@ class NoneEncoder : public Encoder {
     const T* data = reinterpret_cast<const T*>(dst_data);
 
     std::tie(dataMin, dataMax, has_nulls) = tbb::parallel_reduce(
-        tbb::blocked_range(0UL, num_elements),
+        tbb::blocked_range(size_t(0), num_elements),
         std::tuple(dataMin, dataMax, has_nulls),
         [&](const auto& range, auto init) {
           auto [min, max, nulls] = init;

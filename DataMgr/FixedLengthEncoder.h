@@ -121,7 +121,7 @@ class FixedLengthEncoder : public Encoder {
     const V* data = reinterpret_cast<const V*>(dst_data);
 
     std::tie(dataMin, dataMax, has_nulls) = tbb::parallel_reduce(
-        tbb::blocked_range(0UL, num_elements),
+        tbb::blocked_range(size_t(0), num_elements),
         std::tuple(static_cast<V>(dataMin), static_cast<V>(dataMax), has_nulls),
         [&](const auto& range, auto init) {
           auto [min, max, nulls] = init;
