@@ -47,7 +47,7 @@ static const ChunkKey table_prefix2 = {1, 2};
 
 class ForeignStorageCacheUnitTest : public testing::Test {
  protected:
-  inline static GlobalFileMgr* gfm_;
+  inline static File_Namespace::GlobalFileMgr* gfm_;
   inline static std::unique_ptr<ForeignStorageCache> cache_;
   inline static std::string cache_path_;
 
@@ -126,7 +126,7 @@ class ForeignStorageCacheUnitTest : public testing::Test {
   }
 
   static void reinitializeCache(std::unique_ptr<ForeignStorageCache>& cache,
-                                GlobalFileMgr*& gfm,
+                                File_Namespace::GlobalFileMgr*& gfm,
                                 const DiskCacheConfig& config) {
     cache = std::make_unique<ForeignStorageCache>(config);
     gfm = cache->getGlobalFileMgr();
@@ -387,7 +387,7 @@ TEST_F(ForeignStorageCacheFileTest, FileCreation) {
   boost::filesystem::remove_all(cache_path_);
   {
     ForeignStorageCache cache{{cache_path_, DiskCacheLevel::fsi}};
-    GlobalFileMgr* gfm = cache.getGlobalFileMgr();
+    auto* gfm = cache.getGlobalFileMgr();
     ASSERT_TRUE(boost::filesystem::exists(cache_path_));
     ASSERT_FALSE(boost::filesystem::exists(cache_path_ + "/table_1_1"));
     ASSERT_EQ(cache.getCachedChunkIfExists(chunk_key1), nullptr);
