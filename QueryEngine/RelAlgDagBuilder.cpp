@@ -1611,7 +1611,7 @@ void coalesce_nodes(std::vector<std::shared_ptr<RelAlgNode>>& nodes,
 
   auto reset_state = [&crt_pattern, &crt_state]() {
     crt_state = CoalesceState::Initial;
-    decltype(crt_pattern)().swap(crt_pattern);
+    std::vector<size_t>().swap(crt_pattern);
   };
 
   for (RANodeIterator nodeIt(nodes); !nodeIt.allVisited();) {
