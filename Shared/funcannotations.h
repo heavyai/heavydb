@@ -71,3 +71,9 @@
 #else
 #define SUFFIX(name) name
 #endif
+
+#ifdef _WIN32
+#define RUNTIME_EXPORT __declspec(dllexport)
+#else
+#define RUNTIME_EXPORT
+#endif

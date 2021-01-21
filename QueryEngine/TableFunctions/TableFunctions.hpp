@@ -17,8 +17,8 @@
 #include "../../QueryEngine/OmniSciTypes.h"
 #include "../../Shared/funcannotations.h"
 
-#define EXTENSION_INLINE extern "C" ALWAYS_INLINE DEVICE
-#define EXTENSION_NOINLINE extern "C" NEVER_INLINE DEVICE
+#define EXTENSION_INLINE extern "C" RUNTIME_EXPORT ALWAYS_INLINE DEVICE
+#define EXTENSION_NOINLINE extern "C" RUNTIME_EXPORT NEVER_INLINE DEVICE
 
 EXTENSION_NOINLINE int32_t row_copier(const Column<double>& input_col,
                                       int copy_multiplier,

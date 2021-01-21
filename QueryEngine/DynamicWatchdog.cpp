@@ -33,7 +33,7 @@ static FORCE_INLINE uint64_t read_cycle_counter(void) {
 #endif
 }
 
-extern "C" uint64_t dynamic_watchdog_init(unsigned ms_budget) {
+extern "C" RUNTIME_EXPORT uint64_t dynamic_watchdog_init(unsigned ms_budget) {
   static uint64_t dw_cycle_start = 0ULL;
   static uint64_t dw_cycle_budget = 0ULL;
   static std::atomic_bool dw_abort{false};
@@ -67,7 +67,7 @@ extern "C" uint64_t dynamic_watchdog_init(unsigned ms_budget) {
 }
 
 // timeout detection
-extern "C" bool dynamic_watchdog() {
+extern "C" RUNTIME_EXPORT bool dynamic_watchdog() {
   auto clock = read_cycle_counter();
   auto dw_deadline = dynamic_watchdog_init(static_cast<unsigned>(DW_DEADLINE));
   if (clock > dw_deadline) {

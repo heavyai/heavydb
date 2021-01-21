@@ -17,13 +17,12 @@
 #include "JoinHashTable/Runtime/JoinHashImpl.h"
 #include "MurmurHash.h"
 
-extern "C" ALWAYS_INLINE DEVICE uint32_t key_hash(const int64_t* key,
-                                                  const uint32_t key_count,
-                                                  const uint32_t key_byte_width) {
+extern "C" RUNTIME_EXPORT ALWAYS_INLINE DEVICE uint32_t
+key_hash(const int64_t* key, const uint32_t key_count, const uint32_t key_byte_width) {
   return MurmurHash1(key, key_byte_width * key_count, 0);
 }
 
-extern "C" NEVER_INLINE DEVICE int64_t* get_group_value(
+extern "C" RUNTIME_EXPORT NEVER_INLINE DEVICE int64_t* get_group_value(
     int64_t* groups_buffer,
     const uint32_t groups_buffer_entry_count,
     const int64_t* key,
@@ -48,9 +47,9 @@ extern "C" NEVER_INLINE DEVICE int64_t* get_group_value(
   return NULL;
 }
 
-extern "C" NEVER_INLINE DEVICE bool dynamic_watchdog();
+extern "C" RUNTIME_EXPORT NEVER_INLINE DEVICE bool dynamic_watchdog();
 
-extern "C" NEVER_INLINE DEVICE int64_t* get_group_value_with_watchdog(
+extern "C" RUNTIME_EXPORT NEVER_INLINE DEVICE int64_t* get_group_value_with_watchdog(
     int64_t* groups_buffer,
     const uint32_t groups_buffer_entry_count,
     const int64_t* key,
@@ -82,7 +81,7 @@ extern "C" NEVER_INLINE DEVICE int64_t* get_group_value_with_watchdog(
   return NULL;
 }
 
-extern "C" NEVER_INLINE DEVICE int32_t
+extern "C" RUNTIME_EXPORT NEVER_INLINE DEVICE int32_t
 get_group_value_columnar_slot(int64_t* groups_buffer,
                               const uint32_t groups_buffer_entry_count,
                               const int64_t* key,
@@ -106,7 +105,7 @@ get_group_value_columnar_slot(int64_t* groups_buffer,
   return -1;
 }
 
-extern "C" NEVER_INLINE DEVICE int32_t
+extern "C" RUNTIME_EXPORT NEVER_INLINE DEVICE int32_t
 get_group_value_columnar_slot_with_watchdog(int64_t* groups_buffer,
                                             const uint32_t groups_buffer_entry_count,
                                             const int64_t* key,
@@ -137,7 +136,7 @@ get_group_value_columnar_slot_with_watchdog(int64_t* groups_buffer,
   return -1;
 }
 
-extern "C" NEVER_INLINE DEVICE int64_t* get_group_value_columnar(
+extern "C" RUNTIME_EXPORT NEVER_INLINE DEVICE int64_t* get_group_value_columnar(
     int64_t* groups_buffer,
     const uint32_t groups_buffer_entry_count,
     const int64_t* key,
@@ -160,11 +159,11 @@ extern "C" NEVER_INLINE DEVICE int64_t* get_group_value_columnar(
   return NULL;
 }
 
-extern "C" NEVER_INLINE DEVICE int64_t* get_group_value_columnar_with_watchdog(
-    int64_t* groups_buffer,
-    const uint32_t groups_buffer_entry_count,
-    const int64_t* key,
-    const uint32_t key_qw_count) {
+extern "C" RUNTIME_EXPORT NEVER_INLINE DEVICE int64_t*
+get_group_value_columnar_with_watchdog(int64_t* groups_buffer,
+                                       const uint32_t groups_buffer_entry_count,
+                                       const int64_t* key,
+                                       const uint32_t key_qw_count) {
   uint32_t h = key_hash(key, key_qw_count, sizeof(int64_t)) % groups_buffer_entry_count;
   int64_t* matching_group = get_matching_group_value_columnar(
       groups_buffer, h, key, key_qw_count, groups_buffer_entry_count);
@@ -190,7 +189,7 @@ extern "C" NEVER_INLINE DEVICE int64_t* get_group_value_columnar_with_watchdog(
   return NULL;
 }
 
-extern "C" ALWAYS_INLINE DEVICE int64_t* get_group_value_fast(
+extern "C" RUNTIME_EXPORT ALWAYS_INLINE DEVICE int64_t* get_group_value_fast(
     int64_t* groups_buffer,
     const int64_t key,
     const int64_t min_key,
@@ -207,13 +206,13 @@ extern "C" ALWAYS_INLINE DEVICE int64_t* get_group_value_fast(
   return groups_buffer + off + 1;
 }
 
-extern "C" ALWAYS_INLINE DEVICE int64_t* get_group_value_fast_with_original_key(
-    int64_t* groups_buffer,
-    const int64_t key,
-    const int64_t orig_key,
-    const int64_t min_key,
-    const int64_t bucket,
-    const uint32_t row_size_quad) {
+extern "C" RUNTIME_EXPORT ALWAYS_INLINE DEVICE int64_t*
+get_group_value_fast_with_original_key(int64_t* groups_buffer,
+                                       const int64_t key,
+                                       const int64_t orig_key,
+                                       const int64_t min_key,
+                                       const int64_t bucket,
+                                       const uint32_t row_size_quad) {
   int64_t key_diff = key - min_key;
   if (bucket) {
     key_diff /= bucket;
@@ -225,7 +224,7 @@ extern "C" ALWAYS_INLINE DEVICE int64_t* get_group_value_fast_with_original_key(
   return groups_buffer + off + 1;
 }
 
-extern "C" ALWAYS_INLINE DEVICE uint32_t
+extern "C" RUNTIME_EXPORT ALWAYS_INLINE DEVICE uint32_t
 get_columnar_group_bin_offset(int64_t* key_base_ptr,
                               const int64_t key,
                               const int64_t min_key,
@@ -240,7 +239,7 @@ get_columnar_group_bin_offset(int64_t* key_base_ptr,
   return off;
 }
 
-extern "C" ALWAYS_INLINE DEVICE int64_t* get_scan_output_slot(
+extern "C" RUNTIME_EXPORT ALWAYS_INLINE DEVICE int64_t* get_scan_output_slot(
     int64_t* output_buffer,
     const uint32_t output_buffer_entry_count,
     const uint32_t pos,
@@ -254,7 +253,7 @@ extern "C" ALWAYS_INLINE DEVICE int64_t* get_scan_output_slot(
   return NULL;
 }
 
-extern "C" ALWAYS_INLINE DEVICE int32_t
+extern "C" RUNTIME_EXPORT ALWAYS_INLINE DEVICE int32_t
 get_columnar_scan_output_offset(int64_t* output_buffer,
                                 const uint32_t output_buffer_entry_count,
                                 const uint32_t pos,
@@ -266,7 +265,7 @@ get_columnar_scan_output_offset(int64_t* output_buffer,
   return -1;
 }
 
-extern "C" ALWAYS_INLINE DEVICE int64_t
+extern "C" RUNTIME_EXPORT ALWAYS_INLINE DEVICE int64_t
 bucketized_hash_join_idx(int64_t hash_buff,
                          int64_t const key,
                          int64_t const min_key,
@@ -279,17 +278,18 @@ bucketized_hash_join_idx(int64_t hash_buff,
   return -1;
 }
 
-extern "C" ALWAYS_INLINE DEVICE int64_t hash_join_idx(int64_t hash_buff,
-                                                      const int64_t key,
-                                                      const int64_t min_key,
-                                                      const int64_t max_key) {
+extern "C" RUNTIME_EXPORT ALWAYS_INLINE DEVICE int64_t
+hash_join_idx(int64_t hash_buff,
+              const int64_t key,
+              const int64_t min_key,
+              const int64_t max_key) {
   if (key >= min_key && key <= max_key) {
     return *SUFFIX(get_hash_slot)(reinterpret_cast<int32_t*>(hash_buff), key, min_key);
   }
   return -1;
 }
 
-extern "C" ALWAYS_INLINE DEVICE int64_t
+extern "C" RUNTIME_EXPORT ALWAYS_INLINE DEVICE int64_t
 bucketized_hash_join_idx_nullable(int64_t hash_buff,
                                   const int64_t key,
                                   const int64_t min_key,
@@ -301,15 +301,16 @@ bucketized_hash_join_idx_nullable(int64_t hash_buff,
                          : -1;
 }
 
-extern "C" ALWAYS_INLINE DEVICE int64_t hash_join_idx_nullable(int64_t hash_buff,
-                                                               const int64_t key,
-                                                               const int64_t min_key,
-                                                               const int64_t max_key,
-                                                               const int64_t null_val) {
+extern "C" RUNTIME_EXPORT ALWAYS_INLINE DEVICE int64_t
+hash_join_idx_nullable(int64_t hash_buff,
+                       const int64_t key,
+                       const int64_t min_key,
+                       const int64_t max_key,
+                       const int64_t null_val) {
   return key != null_val ? hash_join_idx(hash_buff, key, min_key, max_key) : -1;
 }
 
-extern "C" ALWAYS_INLINE DEVICE int64_t
+extern "C" RUNTIME_EXPORT ALWAYS_INLINE DEVICE int64_t
 bucketized_hash_join_idx_bitwise(int64_t hash_buff,
                                  const int64_t key,
                                  const int64_t min_key,
@@ -326,7 +327,7 @@ bucketized_hash_join_idx_bitwise(int64_t hash_buff,
                                                     bucket_normalization);
 }
 
-extern "C" ALWAYS_INLINE DEVICE int64_t
+extern "C" RUNTIME_EXPORT ALWAYS_INLINE DEVICE int64_t
 hash_join_idx_bitwise(int64_t hash_buff,
                       const int64_t key,
                       const int64_t min_key,
@@ -338,7 +339,7 @@ hash_join_idx_bitwise(int64_t hash_buff,
              : hash_join_idx(hash_buff, translated_val, min_key, translated_val);
 }
 
-extern "C" ALWAYS_INLINE DEVICE int64_t
+extern "C" RUNTIME_EXPORT ALWAYS_INLINE DEVICE int64_t
 hash_join_idx_sharded(int64_t hash_buff,
                       const int64_t key,
                       const int64_t min_key,
@@ -357,7 +358,7 @@ hash_join_idx_sharded(int64_t hash_buff,
   return -1;
 }
 
-extern "C" ALWAYS_INLINE DEVICE int64_t
+extern "C" RUNTIME_EXPORT ALWAYS_INLINE DEVICE int64_t
 hash_join_idx_sharded_nullable(int64_t hash_buff,
                                const int64_t key,
                                const int64_t min_key,
@@ -376,7 +377,7 @@ hash_join_idx_sharded_nullable(int64_t hash_buff,
                          : -1;
 }
 
-extern "C" ALWAYS_INLINE DEVICE int64_t
+extern "C" RUNTIME_EXPORT ALWAYS_INLINE DEVICE int64_t
 hash_join_idx_bitwise_sharded(int64_t hash_buff,
                               const int64_t key,
                               const int64_t min_key,
@@ -402,13 +403,13 @@ hash_join_idx_bitwise_sharded(int64_t hash_buff,
                                                  device_count);
 }
 
-#define DEF_TRANSLATE_NULL_KEY(key_type)                                           \
-  extern "C" NEVER_INLINE DEVICE int64_t translate_null_key_##key_type(            \
-      const key_type key, const key_type null_val, const int64_t translated_val) { \
-    if (key == null_val) {                                                         \
-      return translated_val;                                                       \
-    }                                                                              \
-    return key;                                                                    \
+#define DEF_TRANSLATE_NULL_KEY(key_type)                                               \
+  extern "C" RUNTIME_EXPORT NEVER_INLINE DEVICE int64_t translate_null_key_##key_type( \
+      const key_type key, const key_type null_val, const int64_t translated_val) {     \
+    if (key == null_val) {                                                             \
+      return translated_val;                                                           \
+    }                                                                                  \
+    return key;                                                                        \
   }
 
 DEF_TRANSLATE_NULL_KEY(int8_t)

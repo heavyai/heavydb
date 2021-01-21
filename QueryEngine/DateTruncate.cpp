@@ -30,19 +30,20 @@
 #include <iostream>
 #include <limits>
 
-extern "C" ALWAYS_INLINE DEVICE int64_t datetrunc_minute(int64_t timeval) {
+extern "C" RUNTIME_EXPORT ALWAYS_INLINE DEVICE int64_t datetrunc_minute(int64_t timeval) {
   return timeval - unsigned_mod(timeval, kSecsPerMin);
 }
 
-extern "C" ALWAYS_INLINE DEVICE int64_t datetrunc_hour(int64_t timeval) {
+extern "C" RUNTIME_EXPORT ALWAYS_INLINE DEVICE int64_t datetrunc_hour(int64_t timeval) {
   return timeval - unsigned_mod(timeval, kSecsPerHour);
 }
 
-extern "C" ALWAYS_INLINE DEVICE int64_t datetrunc_quarterday(int64_t timeval) {
+extern "C" RUNTIME_EXPORT ALWAYS_INLINE DEVICE int64_t
+datetrunc_quarterday(int64_t timeval) {
   return timeval - unsigned_mod(timeval, kSecsPerQuarterDay);
 }
 
-extern "C" ALWAYS_INLINE DEVICE int64_t datetrunc_day(int64_t timeval) {
+extern "C" RUNTIME_EXPORT ALWAYS_INLINE DEVICE int64_t datetrunc_day(int64_t timeval) {
   return timeval - unsigned_mod(timeval, kSecsPerDay);
 }
 
@@ -59,20 +60,23 @@ ALWAYS_INLINE DEVICE int64_t datetrunc_week(int64_t timeval) {
   return timeval - unsigned_mod(timeval + OFFSET * kSecsPerDay, 7 * kSecsPerDay);
 }
 
-extern "C" ALWAYS_INLINE DEVICE int64_t datetrunc_week_monday(int64_t timeval) {
+extern "C" RUNTIME_EXPORT ALWAYS_INLINE DEVICE int64_t
+datetrunc_week_monday(int64_t timeval) {
   return datetrunc_week<dtMONDAY>(timeval);
 }
 
-extern "C" ALWAYS_INLINE DEVICE int64_t datetrunc_week_sunday(int64_t timeval) {
+extern "C" RUNTIME_EXPORT ALWAYS_INLINE DEVICE int64_t
+datetrunc_week_sunday(int64_t timeval) {
   return datetrunc_week<dtSUNDAY>(timeval);
 }
 
-extern "C" ALWAYS_INLINE DEVICE int64_t datetrunc_week_saturday(int64_t timeval) {
+extern "C" RUNTIME_EXPORT ALWAYS_INLINE DEVICE int64_t
+datetrunc_week_saturday(int64_t timeval) {
   return datetrunc_week<dtSATURDAY>(timeval);
 }
 
-extern "C" ALWAYS_INLINE DEVICE int64_t datetrunc_month(int64_t timeval) {
-  if (timeval >= 0L && timeval <= UINT32_MAX - (kEpochOffsetYear1900)) {
+extern "C" RUNTIME_EXPORT ALWAYS_INLINE DEVICE int64_t datetrunc_month(int64_t timeval) {
+  if (timeval >= 0LL && timeval <= UINT32_MAX - (kEpochOffsetYear1900)) {
     STATIC_QUAL const uint32_t cumulative_month_epoch_starts[kMonsPerYear] = {0,
                                                                               2678400,
                                                                               5270400,
@@ -119,8 +123,9 @@ extern "C" ALWAYS_INLINE DEVICE int64_t datetrunc_month(int64_t timeval) {
   }
 }
 
-extern "C" ALWAYS_INLINE DEVICE int64_t datetrunc_quarter(int64_t timeval) {
-  if (timeval >= 0L && timeval <= UINT32_MAX - kEpochOffsetYear1900) {
+extern "C" RUNTIME_EXPORT ALWAYS_INLINE DEVICE int64_t
+datetrunc_quarter(int64_t timeval) {
+  if (timeval >= 0LL && timeval <= UINT32_MAX - kEpochOffsetYear1900) {
     STATIC_QUAL const uint32_t cumulative_quarter_epoch_starts[4] = {
         0, 7776000, 15638400, 23587200};
     STATIC_QUAL const uint32_t cumulative_quarter_epoch_starts_leap_year[4] = {
@@ -162,8 +167,8 @@ extern "C" ALWAYS_INLINE DEVICE int64_t datetrunc_quarter(int64_t timeval) {
   }
 }
 
-extern "C" ALWAYS_INLINE DEVICE int64_t datetrunc_year(int64_t timeval) {
-  if (timeval >= 0L && timeval <= UINT32_MAX - kEpochOffsetYear1900) {
+extern "C" RUNTIME_EXPORT ALWAYS_INLINE DEVICE int64_t datetrunc_year(int64_t timeval) {
+  if (timeval >= 0LL && timeval <= UINT32_MAX - kEpochOffsetYear1900) {
     // Handles times from Thu 01 Jan 1970 00:00:00 - Thu 07 Feb 2036 06:28:15.
     uint32_t seconds_1900 = static_cast<uint32_t>(timeval) + kEpochOffsetYear1900;
     uint32_t leap_years = (seconds_1900 - kSecsJanToMar1900) / kSecondsPer4YearCycle;
@@ -187,7 +192,7 @@ extern "C" ALWAYS_INLINE DEVICE int64_t datetrunc_year(int64_t timeval) {
   }
 }
 
-extern "C" ALWAYS_INLINE DEVICE int64_t datetrunc_decade(int64_t timeval) {
+extern "C" RUNTIME_EXPORT ALWAYS_INLINE DEVICE int64_t datetrunc_decade(int64_t timeval) {
   // Number of days from x00301 to (x+1)00101. Always includes exactly two leap days.
   constexpr unsigned decmarjan = MARJAN + 9 * 365 + 2;
   int64_t const day = floor_div(timeval, kSecsPerDay);
@@ -205,7 +210,8 @@ extern "C" ALWAYS_INLINE DEVICE int64_t datetrunc_decade(int64_t timeval) {
   return (day - days_after_decade) * kSecsPerDay;
 }
 
-extern "C" ALWAYS_INLINE DEVICE int64_t datetrunc_century(int64_t timeval) {
+extern "C" RUNTIME_EXPORT ALWAYS_INLINE DEVICE int64_t
+datetrunc_century(int64_t timeval) {
   int64_t const day = floor_div(timeval, kSecsPerDay);
   unsigned const doe = unsigned_mod(day - kEpochAdjustedDays, kDaysPer400Years);
   // Day-of-century = Days since last 010101 (Jan 1 1901, 2001, 2101, etc.)
@@ -213,7 +219,8 @@ extern "C" ALWAYS_INLINE DEVICE int64_t datetrunc_century(int64_t timeval) {
   return (day - doc) * kSecsPerDay;
 }
 
-extern "C" ALWAYS_INLINE DEVICE int64_t datetrunc_millennium(int64_t timeval) {
+extern "C" RUNTIME_EXPORT ALWAYS_INLINE DEVICE int64_t
+datetrunc_millennium(int64_t timeval) {
   constexpr unsigned millennium2001 = 365242;  // Days from Jan 1 2001 to 3001.
   int64_t const day = floor_div(timeval, kSecsPerDay);
   // lcm(400, 1000) = 2000 so use 5*400-year eras at a time.
@@ -274,12 +281,12 @@ int64_t DateTruncate(DatetruncField field, const int64_t timeval) {
 }
 
 // scale is 10^{3,6,9}
-extern "C" ALWAYS_INLINE DEVICE int64_t
+extern "C" RUNTIME_EXPORT ALWAYS_INLINE DEVICE int64_t
 DateTruncateHighPrecisionToDate(const int64_t timeval, const int64_t scale) {
   return floor_div(timeval, scale * kSecsPerDay) * kSecsPerDay;
 }
 
-extern "C" ALWAYS_INLINE DEVICE int64_t
+extern "C" RUNTIME_EXPORT ALWAYS_INLINE DEVICE int64_t
 DateTruncateHighPrecisionToDateNullable(const int64_t timeval,
                                         const int64_t scale,
                                         const int64_t null_val) {
@@ -386,9 +393,9 @@ struct EraTime {
 
 }  // namespace
 
-extern "C" DEVICE int64_t DateDiff(const DatetruncField datepart,
-                                   const int64_t startdate,
-                                   const int64_t enddate) {
+extern "C" RUNTIME_EXPORT DEVICE int64_t DateDiff(const DatetruncField datepart,
+                                                  const int64_t startdate,
+                                                  const int64_t enddate) {
   switch (datepart) {
     case dtNANOSECOND:
       return (enddate - startdate) * kNanoSecsPerSec;
@@ -415,11 +422,12 @@ extern "C" DEVICE int64_t DateDiff(const DatetruncField datepart,
   }
 }
 
-extern "C" DEVICE int64_t DateDiffHighPrecision(const DatetruncField datepart,
-                                                const int64_t startdate,
-                                                const int64_t enddate,
-                                                const int32_t start_dim,
-                                                const int32_t end_dim) {
+extern "C" RUNTIME_EXPORT DEVICE int64_t
+DateDiffHighPrecision(const DatetruncField datepart,
+                      const int64_t startdate,
+                      const int64_t enddate,
+                      const int32_t start_dim,
+                      const int32_t end_dim) {
   // Return pow(10,i). Only valid for i = 0, 3, 6, 9.
   constexpr int pow10[10]{1, 0, 0, 1000, 0, 0, 1000 * 1000, 0, 0, 1000 * 1000 * 1000};
   switch (datepart) {
@@ -450,22 +458,23 @@ extern "C" DEVICE int64_t DateDiffHighPrecision(const DatetruncField datepart,
   }
 }
 
-extern "C" DEVICE int64_t DateDiffNullable(const DatetruncField datepart,
-                                           const int64_t startdate,
-                                           const int64_t enddate,
-                                           const int64_t null_val) {
+extern "C" RUNTIME_EXPORT DEVICE int64_t DateDiffNullable(const DatetruncField datepart,
+                                                          const int64_t startdate,
+                                                          const int64_t enddate,
+                                                          const int64_t null_val) {
   if (startdate == null_val || enddate == null_val) {
     return null_val;
   }
   return DateDiff(datepart, startdate, enddate);
 }
 
-extern "C" DEVICE int64_t DateDiffHighPrecisionNullable(const DatetruncField datepart,
-                                                        const int64_t startdate,
-                                                        const int64_t enddate,
-                                                        const int32_t start_dim,
-                                                        const int32_t end_dim,
-                                                        const int64_t null_val) {
+extern "C" RUNTIME_EXPORT DEVICE int64_t
+DateDiffHighPrecisionNullable(const DatetruncField datepart,
+                              const int64_t startdate,
+                              const int64_t enddate,
+                              const int32_t start_dim,
+                              const int32_t end_dim,
+                              const int64_t null_val) {
   if (startdate == null_val || enddate == null_val) {
     return null_val;
   }

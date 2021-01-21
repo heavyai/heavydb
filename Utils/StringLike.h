@@ -42,61 +42,61 @@
  * @return true if str matchs pattern, false otherwise.  error condition
  * not handled for now.
  */
-extern "C" DEVICE bool string_like(const char* str,
-                                   int str_len,
-                                   const char* pattern,
-                                   int pat_len,
-                                   char escape_char);
+extern "C" RUNTIME_EXPORT DEVICE bool string_like(const char* str,
+                                                  int str_len,
+                                                  const char* pattern,
+                                                  int pat_len,
+                                                  char escape_char);
 
-extern "C" DEVICE bool string_ilike(const char* str,
-                                    int str_len,
-                                    const char* pattern,
-                                    int pat_len,
-                                    char escape_char);
+extern "C" RUNTIME_EXPORT DEVICE bool string_ilike(const char* str,
+                                                   int str_len,
+                                                   const char* pattern,
+                                                   int pat_len,
+                                                   char escape_char);
 
-extern "C" DEVICE bool string_like_simple(const char* str,
-                                          const int32_t str_len,
-                                          const char* pattern,
-                                          const int32_t pat_len);
+extern "C" RUNTIME_EXPORT DEVICE bool string_like_simple(const char* str,
+                                                         const int32_t str_len,
+                                                         const char* pattern,
+                                                         const int32_t pat_len);
 
-extern "C" DEVICE bool string_ilike_simple(const char* str,
-                                           const int32_t str_len,
-                                           const char* pattern,
-                                           const int32_t pat_len);
+extern "C" RUNTIME_EXPORT DEVICE bool string_ilike_simple(const char* str,
+                                                          const int32_t str_len,
+                                                          const char* pattern,
+                                                          const int32_t pat_len);
 
-extern "C" DEVICE bool string_lt(const char* lhs,
-                                 const int32_t lhs_len,
-                                 const char* rhs,
-                                 const int32_t rhs_len);
+extern "C" RUNTIME_EXPORT DEVICE bool string_lt(const char* lhs,
+                                                const int32_t lhs_len,
+                                                const char* rhs,
+                                                const int32_t rhs_len);
 
-extern "C" DEVICE bool string_le(const char* lhs,
-                                 const int32_t lhs_len,
-                                 const char* rhs,
-                                 const int32_t rhs_len);
+extern "C" RUNTIME_EXPORT DEVICE bool string_le(const char* lhs,
+                                                const int32_t lhs_len,
+                                                const char* rhs,
+                                                const int32_t rhs_len);
 
-extern "C" DEVICE bool string_eq(const char* lhs,
-                                 const int32_t lhs_len,
-                                 const char* rhs,
-                                 const int32_t rhs_len);
+extern "C" RUNTIME_EXPORT DEVICE bool string_eq(const char* lhs,
+                                                const int32_t lhs_len,
+                                                const char* rhs,
+                                                const int32_t rhs_len);
 
-extern "C" DEVICE bool string_ne(const char* lhs,
-                                 const int32_t lhs_len,
-                                 const char* rhs,
-                                 const int32_t rhs_len);
+extern "C" RUNTIME_EXPORT DEVICE bool string_ne(const char* lhs,
+                                                const int32_t lhs_len,
+                                                const char* rhs,
+                                                const int32_t rhs_len);
 
-extern "C" DEVICE bool string_ge(const char* lhs,
-                                 const int32_t lhs_len,
-                                 const char* rhs,
-                                 const int32_t rhs_len);
+extern "C" RUNTIME_EXPORT DEVICE bool string_ge(const char* lhs,
+                                                const int32_t lhs_len,
+                                                const char* rhs,
+                                                const int32_t rhs_len);
 
-extern "C" DEVICE bool string_gt(const char* lhs,
-                                 const int32_t lhs_len,
-                                 const char* rhs,
-                                 const int32_t rhs_len);
+extern "C" RUNTIME_EXPORT DEVICE bool string_gt(const char* lhs,
+                                                const int32_t lhs_len,
+                                                const char* rhs,
+                                                const int32_t rhs_len);
 
-extern "C" DEVICE int32_t StringCompare(const char* s1,
-                                        const int32_t s1_len,
-                                        const char* s2,
-                                        const int32_t s2_len);
+extern "C" RUNTIME_EXPORT DEVICE int32_t StringCompare(const char* s1,
+                                                       const int32_t s1_len,
+                                                       const char* s2,
+                                                       const int32_t s2_len);
 
 #endif  // STRING_LIKE_H

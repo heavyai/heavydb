@@ -25,6 +25,7 @@
 #include "QueryEngine/RuntimeFunctions.h"
 #include "QueryEngine/TypePunning.h"
 #include "Shared/checked_alloc.h"
+#include "Shared/funcannotations.h"
 
 WindowFunctionContext::WindowFunctionContext(
     const Analyzer::WindowFunction* window_func,
@@ -305,38 +306,38 @@ void apply_window_pending_outputs_int(const int64_t handle,
 
 }  // namespace
 
-extern "C" void apply_window_pending_outputs_int64(const int64_t handle,
-                                                   const int64_t value,
-                                                   const int64_t bitset,
-                                                   const int64_t pos) {
+extern "C" RUNTIME_EXPORT void apply_window_pending_outputs_int64(const int64_t handle,
+                                                                  const int64_t value,
+                                                                  const int64_t bitset,
+                                                                  const int64_t pos) {
   apply_window_pending_outputs_int<int64_t>(handle, value, bitset, pos);
 }
 
-extern "C" void apply_window_pending_outputs_int32(const int64_t handle,
-                                                   const int64_t value,
-                                                   const int64_t bitset,
-                                                   const int64_t pos) {
+extern "C" RUNTIME_EXPORT void apply_window_pending_outputs_int32(const int64_t handle,
+                                                                  const int64_t value,
+                                                                  const int64_t bitset,
+                                                                  const int64_t pos) {
   apply_window_pending_outputs_int<int32_t>(handle, value, bitset, pos);
 }
 
-extern "C" void apply_window_pending_outputs_int16(const int64_t handle,
-                                                   const int64_t value,
-                                                   const int64_t bitset,
-                                                   const int64_t pos) {
+extern "C" RUNTIME_EXPORT void apply_window_pending_outputs_int16(const int64_t handle,
+                                                                  const int64_t value,
+                                                                  const int64_t bitset,
+                                                                  const int64_t pos) {
   apply_window_pending_outputs_int<int16_t>(handle, value, bitset, pos);
 }
 
-extern "C" void apply_window_pending_outputs_int8(const int64_t handle,
-                                                  const int64_t value,
-                                                  const int64_t bitset,
-                                                  const int64_t pos) {
+extern "C" RUNTIME_EXPORT void apply_window_pending_outputs_int8(const int64_t handle,
+                                                                 const int64_t value,
+                                                                 const int64_t bitset,
+                                                                 const int64_t pos) {
   apply_window_pending_outputs_int<int8_t>(handle, value, bitset, pos);
 }
 
-extern "C" void apply_window_pending_outputs_double(const int64_t handle,
-                                                    const double value,
-                                                    const int64_t bitset,
-                                                    const int64_t pos) {
+extern "C" RUNTIME_EXPORT void apply_window_pending_outputs_double(const int64_t handle,
+                                                                   const double value,
+                                                                   const int64_t bitset,
+                                                                   const int64_t pos) {
   if (!pos_is_set(bitset, pos)) {
     return;
   }
@@ -347,10 +348,10 @@ extern "C" void apply_window_pending_outputs_double(const int64_t handle,
   pending_output_slots.clear();
 }
 
-extern "C" void apply_window_pending_outputs_float(const int64_t handle,
-                                                   const float value,
-                                                   const int64_t bitset,
-                                                   const int64_t pos) {
+extern "C" RUNTIME_EXPORT void apply_window_pending_outputs_float(const int64_t handle,
+                                                                  const float value,
+                                                                  const int64_t bitset,
+                                                                  const int64_t pos) {
   if (!pos_is_set(bitset, pos)) {
     return;
   }
@@ -361,10 +362,11 @@ extern "C" void apply_window_pending_outputs_float(const int64_t handle,
   pending_output_slots.clear();
 }
 
-extern "C" void apply_window_pending_outputs_float_columnar(const int64_t handle,
-                                                            const float value,
-                                                            const int64_t bitset,
-                                                            const int64_t pos) {
+extern "C" RUNTIME_EXPORT void apply_window_pending_outputs_float_columnar(
+    const int64_t handle,
+    const float value,
+    const int64_t bitset,
+    const int64_t pos) {
   if (!pos_is_set(bitset, pos)) {
     return;
   }
@@ -376,7 +378,8 @@ extern "C" void apply_window_pending_outputs_float_columnar(const int64_t handle
 }
 
 // Add a pending output slot to be written back at the end of a peer row group.
-extern "C" void add_window_pending_output(void* pending_output, const int64_t handle) {
+extern "C" RUNTIME_EXPORT void add_window_pending_output(void* pending_output,
+                                                         const int64_t handle) {
   reinterpret_cast<std::vector<void*>*>(handle)->push_back(pending_output);
 }
 
