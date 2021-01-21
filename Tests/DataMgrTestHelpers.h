@@ -89,11 +89,11 @@ class TestBuffer : public AbstractBuffer {
   MemoryLevel getType() const override { return Data_Namespace::CPU_LEVEL; }
 
   bool compare(AbstractBuffer* buffer, size_t num_bytes) {
-    int8_t left_array[num_bytes];
-    int8_t right_array[num_bytes];
-    read(left_array, num_bytes);
-    buffer->read(right_array, num_bytes);
-    if ((std::memcmp(left_array, right_array, num_bytes) == 0) &&
+    std::vector<int8_t> left_array(num_bytes);
+    std::vector<int8_t> right_array(num_bytes);
+    read(left_array.data(), num_bytes);
+    buffer->read(right_array.data(), num_bytes);
+    if ((std::memcmp(left_array.data(), right_array.data(), num_bytes) == 0) &&
         (hasEncoder() == buffer->hasEncoder())) {
       return true;
     }

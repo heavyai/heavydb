@@ -85,11 +85,11 @@ class FileMgrTest : public DBHandlerTestFixture {
   void compareBuffers(AbstractBuffer* left_buffer,
                       AbstractBuffer* right_buffer,
                       size_t num_bytes) {
-    int8_t left_array[num_bytes];
-    int8_t right_array[num_bytes];
-    left_buffer->read(left_array, num_bytes);
-    right_buffer->read(right_array, num_bytes);
-    ASSERT_EQ(std::memcmp(left_array, right_array, num_bytes), 0);
+    std::vector<int8_t> left_array(num_bytes);
+    std::vector<int8_t> right_array(num_bytes);
+    left_buffer->read(left_array.data(), num_bytes);
+    right_buffer->read(right_array.data(), num_bytes);
+    ASSERT_EQ(std::memcmp(left_array.data(), right_array.data(), num_bytes), 0);
     ASSERT_EQ(left_buffer->hasEncoder(), right_buffer->hasEncoder());
   }
 

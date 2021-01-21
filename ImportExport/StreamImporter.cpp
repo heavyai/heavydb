@@ -68,8 +68,9 @@ void stream_insert(
 
   auto row_desc = row_loader.get_row_descriptor();
 
-  const std::pair<std::unique_ptr<boost::regex>, std::unique_ptr<std::string>>*
-      xforms[row_desc.size()];
+  std::vector<
+      const std::pair<std::unique_ptr<boost::regex>, std::unique_ptr<std::string>>*>
+      xforms(row_desc.size());
   for (size_t i = 0; i < row_desc.size(); i++) {
     auto it = transformations.find(row_desc[i].col_name);
     if (it != transformations.end()) {
