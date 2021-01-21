@@ -412,6 +412,8 @@ struct CgenState {
     return literal_bytes_[device_id] - lit_bytes;
   }
 
+  void maybeCloneFunctionRecursive(llvm::Function* fn);
+
   std::unordered_map<int, LiteralValues> literals_;
   std::unordered_map<int, size_t> literal_bytes_;
 };

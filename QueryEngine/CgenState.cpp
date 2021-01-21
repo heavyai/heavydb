@@ -17,6 +17,7 @@
 #include "CgenState.h"
 #include "OutputBufferInitialization.h"
 
+#include <llvm/IR/InstIterator.h>
 #include <llvm/Transforms/Utils/Cloning.h>
 
 extern std::unique_ptr<llvm::Module> g_rt_module;
@@ -139,26 +140,45 @@ llvm::Value* CgenState::castToTypeIn(llvm::Value* val, const size_t dst_bits) {
   return ir_builder_.CreateFPCast(val, dst_type);
 }
 
+void CgenState::maybeCloneFunctionRecursive(llvm::Function* fn) {
+  CHECK(fn);
+  if (!fn->isDeclaration()) {
+    return;
+  }
+
+  // Get the implementation from the runtime module.
+  auto func_impl = g_rt_module->getFunction(fn->getName());
+  CHECK(func_impl) << fn->getName().str();
+
+  if (func_impl->isDeclaration()) {
+    return;
+  }
+
+  auto DestI = fn->arg_begin();
+  for (auto arg_it = func_impl->arg_begin(); arg_it != func_impl->arg_end(); ++arg_it) {
+    DestI->setName(arg_it->getName());
+    vmap_[&*arg_it] = &*DestI++;
+  }
+
+  llvm::SmallVector<llvm::ReturnInst*, 8> Returns;  // Ignore returns cloned.
+  llvm::CloneFunctionInto(fn, func_impl, vmap_, /*ModuleLevelChanges=*/true, Returns);
+
+  for (auto it = llvm::inst_begin(fn), e = llvm::inst_end(fn); it != e; ++it) {
+    if (llvm::isa<llvm::CallInst>(*it)) {
+      auto& call = llvm::cast<llvm::CallInst>(*it);
+      maybeCloneFunctionRecursive(call.getCalledFunction());
+    }
+  }
+}
+
 llvm::Value* CgenState::emitCall(const std::string& fname,
                                  const std::vector<llvm::Value*>& args) {
-  // Get the implementation from the runtime module.
-  auto func_impl = g_rt_module->getFunction(fname);
-  CHECK(func_impl) << fname;
   // Get the function reference from the query module.
   auto func = module_->getFunction(fname);
   CHECK(func);
   // If the function called isn't external, clone the implementation from the runtime
   // module.
-  if (func->isDeclaration() && !func_impl->isDeclaration()) {
-    auto DestI = func->arg_begin();
-    for (auto arg_it = func_impl->arg_begin(); arg_it != func_impl->arg_end(); ++arg_it) {
-      DestI->setName(arg_it->getName());
-      vmap_[&*arg_it] = &*DestI++;
-    }
-
-    llvm::SmallVector<llvm::ReturnInst*, 8> Returns;  // Ignore returns cloned.
-    llvm::CloneFunctionInto(func, func_impl, vmap_, /*ModuleLevelChanges=*/true, Returns);
-  }
+  maybeCloneFunctionRecursive(func);
 
   return ir_builder_.CreateCall(func, args);
 }
