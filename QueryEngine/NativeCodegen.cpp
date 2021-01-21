@@ -3052,12 +3052,14 @@ bool Executor::compileBody(const RelAlgExecutionUnit& ra_exe_unit,
       cgen_state_->ir_builder_.CreateRet(cgen_state_->llInt<int32_t>(0));
     }
 
-    redeclareFilterFunction();
-
     cgen_state_->ir_builder_.SetInsertPoint(cgen_state_->row_func_bb_);
     cgen_state_->current_func_ = cgen_state_->row_func_;
     cgen_state_->filter_func_call_ =
         cgen_state_->ir_builder_.CreateCall(cgen_state_->filter_func_, {});
+
+    // Create real filter function declaration after placeholder call
+    // is emitted.
+    redeclareFilterFunction();
 
     if (cgen_state_->row_func_bb_->getName() == "loop_body") {
       auto loop_done_true = llvm::BasicBlock::Create(
