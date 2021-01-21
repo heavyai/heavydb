@@ -21,9 +21,16 @@
 #include <string>
 #include <utility>
 
-#include <pwd.h>
 #include <sys/types.h>
+#ifdef _WIN32
+#include <folly/portability/unistd.h>
+#include <shlobj_core.h>
+#include "Shared/cleanup_global_namespace.h"
+using namespace folly::portability::unistd;
+#else
+#include <pwd.h>
 #include <unistd.h>
+#endif
 
 inline constexpr char const* const getDefaultHistoryFilename() {
   return ".omnisql_history";
@@ -32,16 +39,53 @@ inline constexpr char const* const getDefaultHistoryFilename() {
 class DefaultEnvResolver {
  public:
   auto getuid() const { return ::getuid(); }
+#ifndef _WIN32
   auto const* getpwuid(decltype(::getuid()) uid) const { return ::getpwuid(uid); }
+#endif
 
-#ifdef __APPLE__
+  const char* getpwdir(decltype(::getuid()) uid) const {
+#ifdef _WIN32
+    if (uid != getuid()) {
+      return nullptr;
+    }
+#ifdef _UNICODE
+    wchar_t home_dir_w[MAX_PATH];
+    if (SUCCEEDED(SHGetFolderPath(NULL, CSIDL_PERSONAL, NULL, 0, home_dir_w))) {
+      wcstombs(home_dir_, home_dir_w, MAX_PATH);
+      return home_dir_;
+    }
+#else
+    if (SUCCEEDED(SHGetFolderPath(NULL, CSIDL_PERSONAL, NULL, 0, home_dir))) {
+      return home_dir_;
+    }
+#endif
+#else
+    auto* p = getpwuid(uid);
+    if (p) {
+      return p->pw_dir;
+    }
+#endif
+    return nullptr;
+  }
+
+#if defined(_APPLE__) || defined(_WIN32)
   auto const* getenv(char const* env_var_name) const { return ::getenv(env_var_name); }
 #else
   auto const* getenv(char const* env_var_name) const {
     return ::secure_getenv(env_var_name);
   }
 #endif
+
+ private:
+#ifdef _WIN32
+  mutable char home_dir_[MAX_PATH];
+#endif
 };
+
+std::string getHomeDirectory() {
+  DefaultEnvResolver r;
+  return r.getpwdir(r.getuid());
+}
 
 template <typename ENV_RESOLVER>
 class CommandHistoryFileImpl : private ENV_RESOLVER {
@@ -60,19 +104,16 @@ class CommandHistoryFileImpl : private ENV_RESOLVER {
                                          CommandHistoryFileImpl<ER> const& cmd_file);
 
  private:
-  auto resolveHomeDirectory() const {
+  const char* resolveHomeDirectory() const {
     auto* home_env = this->getenv("HOME");
     if (home_env == nullptr) {
-      auto* passwd_entry = ENV_RESOLVER::getpwuid(ENV_RESOLVER::getuid());
-      if (passwd_entry != nullptr) {
-        home_env = passwd_entry->pw_dir;
-      }
+      return ENV_RESOLVER::getpwdir(ENV_RESOLVER::getuid());
     }
     return home_env;
   }
 
   std::string const resolveCommandFile() const {
-    auto* home_dir = resolveHomeDirectory();
+    auto home_dir = resolveHomeDirectory();
     if (home_dir == nullptr) {  // Just use default command history file name in current
                                 // dir in this scenario
       return std::string(getDefaultHistoryFilename());
