@@ -73,7 +73,18 @@ void close(const int fd) {
 
 ::FILE* fopen(const char* filename, const char* mode) {
   FILE* f;
-  const auto err = fopen_s(&f, filename, mode);
+  auto err = fopen_s(&f, filename, mode);
+  // Handle 'too many open files' error
+  if (err == EMFILE) {
+    auto max_handles = _getmaxstdio();
+    if (max_handles < 8192) {
+      auto res = _setmaxstdio(8192);
+      if (res < 0) {
+        LOG(FATAL) << "Cannot increase maximum number of open files";
+      }
+      err = fopen_s(&f, filename, mode);
+    }
+  }
   CHECK(!err);
   return f;
 }
