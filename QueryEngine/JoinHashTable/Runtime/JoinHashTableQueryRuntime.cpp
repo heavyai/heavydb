@@ -80,7 +80,7 @@ FORCE_INLINE DEVICE int64_t baseline_hash_join_idx_impl(const int8_t* hash_buff,
   return kNoMatch;
 }
 
-extern "C" NEVER_INLINE DEVICE int64_t
+extern "C" RUNTIME_EXPORT NEVER_INLINE DEVICE int64_t
 baseline_hash_join_idx_32(const int8_t* hash_buff,
                           const int8_t* key,
                           const size_t key_bytes,
@@ -88,7 +88,7 @@ baseline_hash_join_idx_32(const int8_t* hash_buff,
   return baseline_hash_join_idx_impl<int32_t>(hash_buff, key, key_bytes, entry_count);
 }
 
-extern "C" NEVER_INLINE DEVICE int64_t
+extern "C" RUNTIME_EXPORT NEVER_INLINE DEVICE int64_t
 baseline_hash_join_idx_64(const int8_t* hash_buff,
                           const int8_t* key,
                           const size_t key_bytes,
@@ -102,7 +102,7 @@ FORCE_INLINE DEVICE int64_t get_bucket_key_for_value_impl(const T value,
   return static_cast<int64_t>(floor(static_cast<double>(value) * bucket_size));
 }
 
-extern "C" NEVER_INLINE DEVICE int64_t
+extern "C" RUNTIME_EXPORT NEVER_INLINE DEVICE int64_t
 get_bucket_key_for_range_double(const int8_t* range_bytes,
                                 const size_t range_component_index,
                                 const double bucket_size) {
@@ -126,7 +126,7 @@ get_bucket_key_for_range_compressed_impl(const int8_t* range,
   }
 }
 
-extern "C" NEVER_INLINE DEVICE int64_t
+extern "C" RUNTIME_EXPORT NEVER_INLINE DEVICE int64_t
 get_bucket_key_for_range_compressed(const int8_t* range,
                                     const size_t range_component_index,
                                     const double bucket_size) {
@@ -158,7 +158,7 @@ FORCE_INLINE DEVICE int64_t get_composite_key_index_impl(const T* key,
   return -1;
 }
 
-extern "C" NEVER_INLINE DEVICE int64_t
+extern "C" RUNTIME_EXPORT NEVER_INLINE DEVICE int64_t
 get_composite_key_index_32(const int32_t* key,
                            const size_t key_component_count,
                            const int32_t* composite_key_dict,
@@ -167,7 +167,7 @@ get_composite_key_index_32(const int32_t* key,
       key, key_component_count, composite_key_dict, entry_count);
 }
 
-extern "C" NEVER_INLINE DEVICE int64_t
+extern "C" RUNTIME_EXPORT NEVER_INLINE DEVICE int64_t
 get_composite_key_index_64(const int64_t* key,
                            const size_t key_component_count,
                            const int64_t* composite_key_dict,
@@ -176,9 +176,9 @@ get_composite_key_index_64(const int64_t* key,
       key, key_component_count, composite_key_dict, entry_count);
 }
 
-extern "C" NEVER_INLINE DEVICE int32_t insert_sorted(int32_t* arr,
-                                                     size_t elem_count,
-                                                     int32_t elem) {
+extern "C" RUNTIME_EXPORT NEVER_INLINE DEVICE int32_t insert_sorted(int32_t* arr,
+                                                                    size_t elem_count,
+                                                                    int32_t elem) {
   for (size_t i = 0; i < elem_count; i++) {
     if (elem == arr[i])
       return 0;
@@ -197,10 +197,11 @@ extern "C" NEVER_INLINE DEVICE int32_t insert_sorted(int32_t* arr,
   return 1;
 }
 
-extern "C" ALWAYS_INLINE DEVICE int64_t overlaps_hash_join_idx(int64_t hash_buff,
-                                                               const int64_t key,
-                                                               const int64_t min_key,
-                                                               const int64_t max_key) {
+extern "C" RUNTIME_EXPORT ALWAYS_INLINE DEVICE int64_t
+overlaps_hash_join_idx(int64_t hash_buff,
+                       const int64_t key,
+                       const int64_t min_key,
+                       const int64_t max_key) {
   if (key >= min_key && key <= max_key) {
     return *(reinterpret_cast<int32_t*>(hash_buff) + (key - min_key));
   }
@@ -283,7 +284,7 @@ struct Bounds {
 /// Unique Row IDs are placed on the fixed size stack array that is passed
 /// in as out_arr.
 /// The number of row ids in this array is returned.
-extern "C" NEVER_INLINE DEVICE int64_t
+extern "C" RUNTIME_EXPORT NEVER_INLINE DEVICE int64_t
 get_candidate_rows(int32_t* out_arr,
                    const uint32_t max_arr_size,
                    const int8_t* range_bytes,
@@ -333,7 +334,7 @@ get_candidate_rows(int32_t* out_arr,
 // /// Given the bounding box and the bucket size,
 // /// return the number of buckets the bounding box
 // /// will be split into.
-extern "C" NEVER_INLINE DEVICE int32_t
+extern "C" RUNTIME_EXPORT NEVER_INLINE DEVICE int32_t
 get_num_buckets_for_bounds(const int8_t* range_bytes,
                            const int32_t range_component_index,
                            const double bucket_size_x,

@@ -23,8 +23,8 @@
 #include "../Shared/InlineNullValues.h"
 #include "../Shared/funcannotations.h"
 
-#define EXTENSION_INLINE extern "C" ALWAYS_INLINE DEVICE
-#define EXTENSION_NOINLINE extern "C" NEVER_INLINE DEVICE
+#define EXTENSION_INLINE extern "C" RUNTIME_EXPORT ALWAYS_INLINE DEVICE
+#define EXTENSION_NOINLINE extern "C" RUNTIME_EXPORT NEVER_INLINE DEVICE
 
 EXTENSION_NOINLINE int8_t* allocate_varlen_buffer(int64_t element_count,
                                                   int64_t element_size);

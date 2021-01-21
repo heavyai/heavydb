@@ -17,6 +17,8 @@
 #ifndef QUERYENGINE_RUNTIMEFUNCTIONS_H
 #define QUERYENGINE_RUNTIMEFUNCTIONS_H
 
+#include "Shared/funcannotations.h"
+
 #include <cassert>
 #include <cstdint>
 #include <ctime>
@@ -116,24 +118,11 @@ extern "C" void agg_count_distinct_bitmap(int64_t* agg,
 #define EMPTY_KEY_16 std::numeric_limits<int16_t>::max()
 #define EMPTY_KEY_8 std::numeric_limits<int8_t>::max()
 
-extern "C" uint32_t key_hash(const int64_t* key,
-                             const uint32_t key_qw_count,
-                             const uint32_t key_byte_width);
+extern "C" RUNTIME_EXPORT uint32_t key_hash(const int64_t* key,
+                                            const uint32_t key_qw_count,
+                                            const uint32_t key_byte_width);
 
-extern "C" int64_t* get_group_value(int64_t* groups_buffer,
-                                    const uint32_t groups_buffer_entry_count,
-                                    const int64_t* key,
-                                    const uint32_t key_count,
-                                    const uint32_t key_width,
-                                    const uint32_t row_size_quad);
-
-enum RuntimeInterruptFlags { INT_CHECK = 0, INT_ABORT = -1, INT_RESET = -2 };
-
-extern "C" bool check_interrupt();
-
-extern "C" bool check_interrupt_init(unsigned command);
-
-extern "C" int64_t* get_group_value_with_watchdog(
+extern "C" RUNTIME_EXPORT int64_t* get_group_value(
     int64_t* groups_buffer,
     const uint32_t groups_buffer_entry_count,
     const int64_t* key,
@@ -141,34 +130,50 @@ extern "C" int64_t* get_group_value_with_watchdog(
     const uint32_t key_width,
     const uint32_t row_size_quad);
 
-extern "C" int64_t* get_group_value_columnar(int64_t* groups_buffer,
-                                             const uint32_t groups_buffer_entry_count,
-                                             const int64_t* key,
-                                             const uint32_t key_qw_count);
+enum RuntimeInterruptFlags { INT_CHECK = 0, INT_ABORT = -1, INT_RESET = -2 };
 
-extern "C" int64_t* get_group_value_columnar_with_watchdog(
+extern "C" bool check_interrupt();
+
+extern "C" bool check_interrupt_init(unsigned command);
+
+extern "C" RUNTIME_EXPORT int64_t* get_group_value_with_watchdog(
+    int64_t* groups_buffer,
+    const uint32_t groups_buffer_entry_count,
+    const int64_t* key,
+    const uint32_t key_count,
+    const uint32_t key_width,
+    const uint32_t row_size_quad);
+
+extern "C" RUNTIME_EXPORT int64_t* get_group_value_columnar(
     int64_t* groups_buffer,
     const uint32_t groups_buffer_entry_count,
     const int64_t* key,
     const uint32_t key_qw_count);
 
-extern "C" int64_t* get_group_value_fast(int64_t* groups_buffer,
-                                         const int64_t key,
-                                         const int64_t min_key,
-                                         const int64_t bucket,
-                                         const uint32_t row_size_quad);
+extern "C" RUNTIME_EXPORT int64_t* get_group_value_columnar_with_watchdog(
+    int64_t* groups_buffer,
+    const uint32_t groups_buffer_entry_count,
+    const int64_t* key,
+    const uint32_t key_qw_count);
 
-extern "C" int64_t* get_group_value_fast_with_original_key(int64_t* groups_buffer,
-                                                           const int64_t key,
-                                                           const int64_t orig_key,
-                                                           const int64_t min_key,
-                                                           const int64_t bucket,
-                                                           const uint32_t row_size_quad);
+extern "C" RUNTIME_EXPORT int64_t* get_group_value_fast(int64_t* groups_buffer,
+                                                        const int64_t key,
+                                                        const int64_t min_key,
+                                                        const int64_t bucket,
+                                                        const uint32_t row_size_quad);
 
-extern "C" uint32_t get_columnar_group_bin_offset(int64_t* key_base_ptr,
-                                                  const int64_t key,
-                                                  const int64_t min_key,
-                                                  const int64_t bucket);
+extern "C" RUNTIME_EXPORT int64_t* get_group_value_fast_with_original_key(
+    int64_t* groups_buffer,
+    const int64_t key,
+    const int64_t orig_key,
+    const int64_t min_key,
+    const int64_t bucket,
+    const uint32_t row_size_quad);
+
+extern "C" RUNTIME_EXPORT uint32_t get_columnar_group_bin_offset(int64_t* key_base_ptr,
+                                                                 const int64_t key,
+                                                                 const int64_t min_key,
+                                                                 const int64_t bucket);
 
 extern "C" int64_t* get_matching_group_value_perfect_hash(int64_t* groups_buffer,
                                                           const uint32_t h,

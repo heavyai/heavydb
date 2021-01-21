@@ -221,7 +221,8 @@ bool ext_func_call_requires_nullcheck(const Analyzer::FunctionOper* function_ope
 
 }  // namespace
 
-extern "C" void register_buffer_with_executor_rsm(int64_t exec, int8_t* buffer) {
+extern "C" RUNTIME_EXPORT void register_buffer_with_executor_rsm(int64_t exec,
+                                                                 int8_t* buffer) {
   Executor* exec_ptr = reinterpret_cast<Executor*>(exec);
   if (buffer != nullptr) {
     exec_ptr->getRowSetMemoryOwner()->addVarlenBuffer(buffer);

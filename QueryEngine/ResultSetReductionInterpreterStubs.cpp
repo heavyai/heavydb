@@ -18,6 +18,8 @@
 #include "CodeGenerator.h"
 #include "ResultSetReductionCodegen.h"
 
+#include "Shared/funcannotations.h"
+
 namespace {
 
 // Creates an empty stub function, with the fixed signature required by the interpreter.
@@ -115,50 +117,59 @@ bool is_pointer_type(const Type type) {
 // The following read_stub_arg_* functions read the argument at the given position from
 // the list of wrapped inputs passed from the interpreter.
 
-extern "C" int64_t read_stub_arg_int(const void* inputs_handle, const int32_t i) {
+extern "C" RUNTIME_EXPORT int64_t read_stub_arg_int(const void* inputs_handle,
+                                                    const int32_t i) {
   const auto& inputs = *reinterpret_cast<const StubGenerator::InputsType*>(inputs_handle);
   CHECK_LT(static_cast<size_t>(i), inputs.size());
   return inputs[i].int_val;
 }
 
-extern "C" float read_stub_arg_float(const void* inputs_handle, const int32_t i) {
+extern "C" RUNTIME_EXPORT float read_stub_arg_float(const void* inputs_handle,
+                                                    const int32_t i) {
   const auto& inputs = *reinterpret_cast<const StubGenerator::InputsType*>(inputs_handle);
   CHECK_LT(static_cast<size_t>(i), inputs.size());
   return inputs[i].float_val;
 }
 
-extern "C" double read_stub_arg_double(const void* inputs_handle, const int32_t i) {
+extern "C" RUNTIME_EXPORT double read_stub_arg_double(const void* inputs_handle,
+                                                      const int32_t i) {
   const auto& inputs = *reinterpret_cast<const StubGenerator::InputsType*>(inputs_handle);
   CHECK_LT(static_cast<size_t>(i), inputs.size());
   return inputs[i].double_val;
 }
 
-extern "C" const void* read_stub_arg_pvoid(const void* inputs_handle, const int32_t i) {
+extern "C" RUNTIME_EXPORT const void* read_stub_arg_pvoid(const void* inputs_handle,
+                                                          const int32_t i) {
   const auto& inputs = *reinterpret_cast<const StubGenerator::InputsType*>(inputs_handle);
   CHECK_LT(static_cast<size_t>(i), inputs.size());
   return inputs[i].ptr;
 }
 
-extern "C" const int8_t* read_stub_arg_pi8(const void* inputs_handle, const int32_t i) {
+extern "C" RUNTIME_EXPORT const int8_t* read_stub_arg_pi8(const void* inputs_handle,
+                                                          const int32_t i) {
   return static_cast<const int8_t*>(read_stub_arg_pvoid(inputs_handle, i));
 }
 
-extern "C" const int32_t* read_stub_arg_pi32(const void* inputs_handle, const int32_t i) {
+extern "C" RUNTIME_EXPORT const int32_t* read_stub_arg_pi32(const void* inputs_handle,
+                                                            const int32_t i) {
   return static_cast<const int32_t*>(read_stub_arg_pvoid(inputs_handle, i));
 }
 
-extern "C" const int32_t* read_stub_arg_pi64(const void* inputs_handle, const int32_t i) {
+extern "C" RUNTIME_EXPORT const int32_t* read_stub_arg_pi64(const void* inputs_handle,
+                                                            const int32_t i) {
   return static_cast<const int32_t*>(read_stub_arg_pvoid(inputs_handle, i));
 }
 
-extern "C" const int64_t* const* read_stub_arg_ppi64(const void* inputs_handle,
-                                                     const int32_t i) {
+extern "C" RUNTIME_EXPORT const int64_t* const* read_stub_arg_ppi64(
+    const void* inputs_handle,
+    const int32_t i) {
   return static_cast<const int64_t* const*>(read_stub_arg_pvoid(inputs_handle, i));
 }
 
 // Writes back the value returned by the runtime function to the wrapped output value used
 // from the interpreter.
-extern "C" void write_stub_result_int(void* output_handle, const int64_t int_val) {
+extern "C" RUNTIME_EXPORT void write_stub_result_int(void* output_handle,
+                                                     const int64_t int_val) {
   auto output = reinterpret_cast<ReductionInterpreter::EvalValue*>(output_handle);
   output->int_val = int_val;
 }

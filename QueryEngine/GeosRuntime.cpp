@@ -268,35 +268,36 @@ GEOSGeometry* postprocess(GEOSContextHandle_t context, GEOSGeometry* g) {
 }
 #endif
 
-extern "C" bool Geos_Wkb_Wkb(int op,
-                             int arg1_type,
-                             int8_t* arg1_coords,
-                             int64_t arg1_coords_size,
-                             int32_t* arg1_meta1,
-                             int64_t arg1_meta1_size,
-                             int32_t* arg1_meta2,
-                             int64_t arg1_meta2_size,
-                             // TODO: add meta3 args to support generic geometries
-                             int32_t arg1_ic,
-                             int32_t arg1_srid,
-                             int arg2_type,
-                             int8_t* arg2_coords,
-                             int64_t arg2_coords_size,
-                             int32_t* arg2_meta1,
-                             int64_t arg2_meta1_size,
-                             int32_t* arg2_meta2,
-                             int64_t arg2_meta2_size,
-                             // TODO: add meta3 args to support generic geometries
-                             int32_t arg2_ic,
-                             int32_t arg2_srid,
-                             // TODO: add transform args
-                             int* result_type,
-                             int8_t** result_coords,
-                             int64_t* result_coords_size,
-                             int32_t** result_meta1,
-                             int64_t* result_meta1_size,
-                             int32_t** result_meta2,
-                             int64_t* result_meta2_size) {
+extern "C" RUNTIME_EXPORT bool Geos_Wkb_Wkb(
+    int op,
+    int arg1_type,
+    int8_t* arg1_coords,
+    int64_t arg1_coords_size,
+    int32_t* arg1_meta1,
+    int64_t arg1_meta1_size,
+    int32_t* arg1_meta2,
+    int64_t arg1_meta2_size,
+    // TODO: add meta3 args to support generic geometries
+    int32_t arg1_ic,
+    int32_t arg1_srid,
+    int arg2_type,
+    int8_t* arg2_coords,
+    int64_t arg2_coords_size,
+    int32_t* arg2_meta1,
+    int64_t arg2_meta1_size,
+    int32_t* arg2_meta2,
+    int64_t arg2_meta2_size,
+    // TODO: add meta3 args to support generic geometries
+    int32_t arg2_ic,
+    int32_t arg2_srid,
+    // TODO: add transform args
+    int* result_type,
+    int8_t** result_coords,
+    int64_t* result_coords_size,
+    int32_t** result_meta1,
+    int64_t* result_meta1_size,
+    int32_t** result_meta2,
+    int64_t* result_meta2_size) {
 #ifndef __CUDACC__
   // Get the result geo
   // What if intersection is not a POLYGON? POINT? LINESTRING, MULTIPOLYGON?
@@ -376,26 +377,27 @@ extern "C" bool Geos_Wkb_Wkb(int op,
 #endif
 }
 
-extern "C" bool Geos_Wkb_double(int op,
-                                int arg1_type,
-                                int8_t* arg1_coords,
-                                int64_t arg1_coords_size,
-                                int32_t* arg1_meta1,
-                                int64_t arg1_meta1_size,
-                                int32_t* arg1_meta2,
-                                int64_t arg1_meta2_size,
-                                // TODO: add meta3 args to support generic geometries
-                                int32_t arg1_ic,
-                                int32_t arg1_srid,
-                                double arg2,
-                                // TODO: add transform args
-                                int* result_type,
-                                int8_t** result_coords,
-                                int64_t* result_coords_size,
-                                int32_t** result_meta1,
-                                int64_t* result_meta1_size,
-                                int32_t** result_meta2,
-                                int64_t* result_meta2_size) {
+extern "C" RUNTIME_EXPORT bool Geos_Wkb_double(
+    int op,
+    int arg1_type,
+    int8_t* arg1_coords,
+    int64_t arg1_coords_size,
+    int32_t* arg1_meta1,
+    int64_t arg1_meta1_size,
+    int32_t* arg1_meta2,
+    int64_t arg1_meta2_size,
+    // TODO: add meta3 args to support generic geometries
+    int32_t arg1_ic,
+    int32_t arg1_srid,
+    double arg2,
+    // TODO: add transform args
+    int* result_type,
+    int8_t** result_coords,
+    int64_t* result_coords_size,
+    int32_t** result_meta1,
+    int64_t* result_meta1_size,
+    int32_t** result_meta2,
+    int64_t* result_meta2_size) {
 #ifndef __CUDACC__
   int32_t best_planar_srid;
   int32_t* best_planar_srid_ptr = nullptr;
@@ -460,18 +462,19 @@ extern "C" bool Geos_Wkb_double(int op,
 #endif
 }
 
-extern "C" bool Geos_Wkb(int op,
-                         int arg_type,
-                         int8_t* arg_coords,
-                         int64_t arg_coords_size,
-                         int32_t* arg_meta1,
-                         int64_t arg_meta1_size,
-                         int32_t* arg_meta2,
-                         int64_t arg_meta2_size,
-                         // TODO: add meta3 args to support generic geometries
-                         int32_t arg_ic,
-                         int32_t arg_srid,
-                         bool* result) {
+extern "C" RUNTIME_EXPORT bool Geos_Wkb(
+    int op,
+    int arg_type,
+    int8_t* arg_coords,
+    int64_t arg_coords_size,
+    int32_t* arg_meta1,
+    int64_t arg_meta1_size,
+    int32_t* arg_meta2,
+    int64_t arg_meta2_size,
+    // TODO: add meta3 args to support generic geometries
+    int32_t arg_ic,
+    int32_t arg_srid,
+    bool* result) {
 #ifndef __CUDACC__
   WKB wkb1{};
   if (!result || !toWkb(wkb1,

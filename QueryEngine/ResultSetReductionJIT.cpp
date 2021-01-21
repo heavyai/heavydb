@@ -411,7 +411,7 @@ void varlen_buffer_sample(int8_t* this_ptr1,
 
 }  // namespace
 
-extern "C" void serialized_varlen_buffer_sample(
+extern "C" RUNTIME_EXPORT void serialized_varlen_buffer_sample(
     const void* serialized_varlen_buffer_handle,
     int8_t* this_ptr1,
     int8_t* this_ptr2,
@@ -441,11 +441,12 @@ extern "C" void serialized_varlen_buffer_sample(
 // Wrappers to be called from the generated code, sharing implementation with the rest of
 // the system.
 
-extern "C" void count_distinct_set_union_jit_rt(const int64_t new_set_handle,
-                                                const int64_t old_set_handle,
-                                                const void* that_qmd_handle,
-                                                const void* this_qmd_handle,
-                                                const int64_t target_logical_idx) {
+extern "C" RUNTIME_EXPORT void count_distinct_set_union_jit_rt(
+    const int64_t new_set_handle,
+    const int64_t old_set_handle,
+    const void* that_qmd_handle,
+    const void* this_qmd_handle,
+    const int64_t target_logical_idx) {
   const auto that_qmd = reinterpret_cast<const QueryMemoryDescriptor*>(that_qmd_handle);
   const auto this_qmd = reinterpret_cast<const QueryMemoryDescriptor*>(this_qmd_handle);
   const auto& new_count_distinct_desc =
@@ -458,11 +459,11 @@ extern "C" void count_distinct_set_union_jit_rt(const int64_t new_set_handle,
       new_set_handle, old_set_handle, new_count_distinct_desc, old_count_distinct_desc);
 }
 
-extern "C" void approx_median_jit_rt(const int64_t new_set_handle,
-                                     const int64_t old_set_handle,
-                                     const void* that_qmd_handle,
-                                     const void* this_qmd_handle,
-                                     const int64_t target_logical_idx) {
+extern "C" RUNTIME_EXPORT void approx_median_jit_rt(const int64_t new_set_handle,
+                                                    const int64_t old_set_handle,
+                                                    const void* that_qmd_handle,
+                                                    const void* this_qmd_handle,
+                                                    const int64_t target_logical_idx) {
   auto* incoming = reinterpret_cast<quantile::TDigest*>(new_set_handle);
   if (incoming->centroids().capacity()) {
     auto* accumulator = reinterpret_cast<quantile::TDigest*>(old_set_handle);
@@ -471,16 +472,17 @@ extern "C" void approx_median_jit_rt(const int64_t new_set_handle,
   }
 }
 
-extern "C" void get_group_value_reduction_rt(int8_t* groups_buffer,
-                                             const int8_t* key,
-                                             const uint32_t key_count,
-                                             const void* this_qmd_handle,
-                                             const int8_t* that_buff,
-                                             const uint32_t that_entry_idx,
-                                             const uint32_t that_entry_count,
-                                             const uint32_t row_size_bytes,
-                                             int64_t** buff_out,
-                                             uint8_t* empty) {
+extern "C" RUNTIME_EXPORT void get_group_value_reduction_rt(
+    int8_t* groups_buffer,
+    const int8_t* key,
+    const uint32_t key_count,
+    const void* this_qmd_handle,
+    const int8_t* that_buff,
+    const uint32_t that_entry_idx,
+    const uint32_t that_entry_count,
+    const uint32_t row_size_bytes,
+    int64_t** buff_out,
+    uint8_t* empty) {
   const auto& this_qmd = *reinterpret_cast<const QueryMemoryDescriptor*>(this_qmd_handle);
   const auto gvi =
       result_set::get_group_value_reduction(reinterpret_cast<int64_t*>(groups_buffer),
@@ -497,7 +499,7 @@ extern "C" void get_group_value_reduction_rt(int8_t* groups_buffer,
   *empty = gvi.second;
 }
 
-extern "C" uint8_t check_watchdog_rt(const size_t sample_seed) {
+extern "C" RUNTIME_EXPORT uint8_t check_watchdog_rt(const size_t sample_seed) {
   if (UNLIKELY(g_enable_dynamic_watchdog && (sample_seed & 0x3F) == 0 &&
                dynamic_watchdog())) {
     return true;

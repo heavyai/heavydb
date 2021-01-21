@@ -40,10 +40,10 @@ DEVICE static int inline lowercase(char c) {
   return c;
 }
 
-extern "C" DEVICE bool string_like_simple(const char* str,
-                                          const int32_t str_len,
-                                          const char* pattern,
-                                          const int32_t pat_len) {
+extern "C" RUNTIME_EXPORT DEVICE bool string_like_simple(const char* str,
+                                                         const int32_t str_len,
+                                                         const char* pattern,
+                                                         const int32_t pat_len) {
   int i, j;
   int search_len = str_len - pat_len + 1;
   for (i = 0; i < search_len; ++i) {
@@ -56,10 +56,10 @@ extern "C" DEVICE bool string_like_simple(const char* str,
   return false;
 }
 
-extern "C" DEVICE bool string_ilike_simple(const char* str,
-                                           const int32_t str_len,
-                                           const char* pattern,
-                                           const int32_t pat_len) {
+extern "C" RUNTIME_EXPORT DEVICE bool string_ilike_simple(const char* str,
+                                                          const int32_t str_len,
+                                                          const char* pattern,
+                                                          const int32_t pat_len) {
   int i, j;
   int search_len = str_len - pat_len + 1;
   for (i = 0; i < search_len; ++i) {
@@ -72,16 +72,16 @@ extern "C" DEVICE bool string_ilike_simple(const char* str,
   return false;
 }
 
-#define STR_LIKE_SIMPLE_NULLABLE(base_func)                               \
-  extern "C" DEVICE int8_t base_func##_nullable(const char* lhs,          \
-                                                const int32_t lhs_len,    \
-                                                const char* rhs,          \
-                                                const int32_t rhs_len,    \
-                                                const int8_t bool_null) { \
-    if (!lhs || !rhs) {                                                   \
-      return bool_null;                                                   \
-    }                                                                     \
-    return base_func(lhs, lhs_len, rhs, rhs_len) ? 1 : 0;                 \
+#define STR_LIKE_SIMPLE_NULLABLE(base_func)                                              \
+  extern "C" RUNTIME_EXPORT DEVICE int8_t base_func##_nullable(const char* lhs,          \
+                                                               const int32_t lhs_len,    \
+                                                               const char* rhs,          \
+                                                               const int32_t rhs_len,    \
+                                                               const int8_t bool_null) { \
+    if (!lhs || !rhs) {                                                                  \
+      return bool_null;                                                                  \
+    }                                                                                    \
+    return base_func(lhs, lhs_len, rhs, rhs_len) ? 1 : 0;                                \
   }
 
 STR_LIKE_SIMPLE_NULLABLE(string_like_simple)
@@ -243,32 +243,32 @@ DEVICE static LikeStatus string_like_match(const char* str,
  * @return true if str matchs pattern, false otherwise.  error condition
  * not handled for now.
  */
-extern "C" DEVICE bool string_like(const char* str,
-                                   const int32_t str_len,
-                                   const char* pattern,
-                                   const int32_t pat_len,
-                                   const char escape_char) {
+extern "C" RUNTIME_EXPORT DEVICE bool string_like(const char* str,
+                                                  const int32_t str_len,
+                                                  const char* pattern,
+                                                  const int32_t pat_len,
+                                                  const char escape_char) {
   // @TODO(wei/alex) add runtime error handling
   LikeStatus status =
       string_like_match(str, str_len, pattern, pat_len, escape_char, false);
   return status == kLIKE_TRUE;
 }
 
-extern "C" DEVICE bool string_ilike(const char* str,
-                                    const int32_t str_len,
-                                    const char* pattern,
-                                    const int32_t pat_len,
-                                    const char escape_char) {
+extern "C" RUNTIME_EXPORT DEVICE bool string_ilike(const char* str,
+                                                   const int32_t str_len,
+                                                   const char* pattern,
+                                                   const int32_t pat_len,
+                                                   const char escape_char) {
   // @TODO(wei/alex) add runtime error handling
   LikeStatus status =
       string_like_match(str, str_len, pattern, pat_len, escape_char, true);
   return status == kLIKE_TRUE;
 }
 
-extern "C" DEVICE int32_t StringCompare(const char* s1,
-                                        const int32_t s1_len,
-                                        const char* s2,
-                                        const int32_t s2_len) {
+extern "C" RUNTIME_EXPORT DEVICE int32_t StringCompare(const char* s1,
+                                                       const int32_t s1_len,
+                                                       const char* s2,
+                                                       const int32_t s2_len) {
   const char* s1_ = s1;
   const char* s2_ = s2;
 
@@ -283,17 +283,17 @@ extern "C" DEVICE int32_t StringCompare(const char* s1,
   return c1 - c2;
 }
 
-#define STR_LIKE_NULLABLE(base_func)                                      \
-  extern "C" DEVICE int8_t base_func##_nullable(const char* lhs,          \
-                                                const int32_t lhs_len,    \
-                                                const char* rhs,          \
-                                                const int32_t rhs_len,    \
-                                                const char escape_char,   \
-                                                const int8_t bool_null) { \
-    if (!lhs || !rhs) {                                                   \
-      return bool_null;                                                   \
-    }                                                                     \
-    return base_func(lhs, lhs_len, rhs, rhs_len, escape_char) ? 1 : 0;    \
+#define STR_LIKE_NULLABLE(base_func)                                                     \
+  extern "C" RUNTIME_EXPORT DEVICE int8_t base_func##_nullable(const char* lhs,          \
+                                                               const int32_t lhs_len,    \
+                                                               const char* rhs,          \
+                                                               const int32_t rhs_len,    \
+                                                               const char escape_char,   \
+                                                               const int8_t bool_null) { \
+    if (!lhs || !rhs) {                                                                  \
+      return bool_null;                                                                  \
+    }                                                                                    \
+    return base_func(lhs, lhs_len, rhs, rhs_len, escape_char) ? 1 : 0;                   \
   }
 
 STR_LIKE_NULLABLE(string_like)
@@ -301,58 +301,58 @@ STR_LIKE_NULLABLE(string_ilike)
 
 #undef STR_LIKE_NULLABLE
 
-extern "C" DEVICE bool string_lt(const char* lhs,
-                                 const int32_t lhs_len,
-                                 const char* rhs,
-                                 const int32_t rhs_len) {
+extern "C" RUNTIME_EXPORT DEVICE bool string_lt(const char* lhs,
+                                                const int32_t lhs_len,
+                                                const char* rhs,
+                                                const int32_t rhs_len) {
   return StringCompare(lhs, lhs_len, rhs, rhs_len) < 0;
 }
 
-extern "C" DEVICE bool string_le(const char* lhs,
-                                 const int32_t lhs_len,
-                                 const char* rhs,
-                                 const int32_t rhs_len) {
+extern "C" RUNTIME_EXPORT DEVICE bool string_le(const char* lhs,
+                                                const int32_t lhs_len,
+                                                const char* rhs,
+                                                const int32_t rhs_len) {
   return StringCompare(lhs, lhs_len, rhs, rhs_len) <= 0;
 }
 
-extern "C" DEVICE bool string_gt(const char* lhs,
-                                 const int32_t lhs_len,
-                                 const char* rhs,
-                                 const int32_t rhs_len) {
+extern "C" RUNTIME_EXPORT DEVICE bool string_gt(const char* lhs,
+                                                const int32_t lhs_len,
+                                                const char* rhs,
+                                                const int32_t rhs_len) {
   return StringCompare(lhs, lhs_len, rhs, rhs_len) > 0;
 }
 
-extern "C" DEVICE bool string_ge(const char* lhs,
-                                 const int32_t lhs_len,
-                                 const char* rhs,
-                                 const int32_t rhs_len) {
+extern "C" RUNTIME_EXPORT DEVICE bool string_ge(const char* lhs,
+                                                const int32_t lhs_len,
+                                                const char* rhs,
+                                                const int32_t rhs_len) {
   return StringCompare(lhs, lhs_len, rhs, rhs_len) >= 0;
 }
 
-extern "C" DEVICE bool string_eq(const char* lhs,
-                                 const int32_t lhs_len,
-                                 const char* rhs,
-                                 const int32_t rhs_len) {
+extern "C" RUNTIME_EXPORT DEVICE bool string_eq(const char* lhs,
+                                                const int32_t lhs_len,
+                                                const char* rhs,
+                                                const int32_t rhs_len) {
   return StringCompare(lhs, lhs_len, rhs, rhs_len) == 0;
 }
 
-extern "C" DEVICE bool string_ne(const char* lhs,
-                                 const int32_t lhs_len,
-                                 const char* rhs,
-                                 const int32_t rhs_len) {
+extern "C" RUNTIME_EXPORT DEVICE bool string_ne(const char* lhs,
+                                                const int32_t lhs_len,
+                                                const char* rhs,
+                                                const int32_t rhs_len) {
   return StringCompare(lhs, lhs_len, rhs, rhs_len) != 0;
 }
 
-#define STR_CMP_NULLABLE(base_func)                                       \
-  extern "C" DEVICE int8_t base_func##_nullable(const char* lhs,          \
-                                                const int32_t lhs_len,    \
-                                                const char* rhs,          \
-                                                const int32_t rhs_len,    \
-                                                const int8_t bool_null) { \
-    if (!lhs || !rhs) {                                                   \
-      return bool_null;                                                   \
-    }                                                                     \
-    return base_func(lhs, lhs_len, rhs, rhs_len) ? 1 : 0;                 \
+#define STR_CMP_NULLABLE(base_func)                                                      \
+  extern "C" RUNTIME_EXPORT DEVICE int8_t base_func##_nullable(const char* lhs,          \
+                                                               const int32_t lhs_len,    \
+                                                               const char* rhs,          \
+                                                               const int32_t rhs_len,    \
+                                                               const int8_t bool_null) { \
+    if (!lhs || !rhs) {                                                                  \
+      return bool_null;                                                                  \
+    }                                                                                    \
+    return base_func(lhs, lhs_len, rhs, rhs_len) ? 1 : 0;                                \
   }
 
 STR_CMP_NULLABLE(string_lt)

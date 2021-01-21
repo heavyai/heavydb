@@ -38,11 +38,11 @@
  * @param escape_char the escape character.  '\\' is expected by default.
  * @return true if str matches pattern, false otherwise.
  */
-extern "C" DEVICE bool regexp_like(const char* str,
-                                   const int32_t str_len,
-                                   const char* pattern,
-                                   const int32_t pat_len,
-                                   const char escape_char) {
+extern "C" RUNTIME_EXPORT DEVICE bool regexp_like(const char* str,
+                                                  const int32_t str_len,
+                                                  const char* pattern,
+                                                  const int32_t pat_len,
+                                                  const char escape_char) {
 #ifndef __CUDACC__
   bool result;
   try {
@@ -59,12 +59,12 @@ extern "C" DEVICE bool regexp_like(const char* str,
 #endif
 }
 
-extern "C" DEVICE int8_t regexp_like_nullable(const char* str,
-                                              const int32_t str_len,
-                                              const char* pattern,
-                                              const int32_t pat_len,
-                                              const char escape_char,
-                                              const int8_t bool_null) {
+extern "C" RUNTIME_EXPORT DEVICE int8_t regexp_like_nullable(const char* str,
+                                                             const int32_t str_len,
+                                                             const char* pattern,
+                                                             const int32_t pat_len,
+                                                             const char escape_char,
+                                                             const int8_t bool_null) {
   if (!str || !pattern) {
     return bool_null;
   }

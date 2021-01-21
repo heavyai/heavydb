@@ -17,12 +17,13 @@
 #include "CodeGenerator.h"
 #include "Execute.h"
 
+#include "../Shared/funcannotations.h"
 #include "../Shared/sqldefs.h"
 #include "Parser/ParserNode.h"
 
 #include <boost/locale/conversion.hpp>
 
-extern "C" uint64_t string_decode(int8_t* chunk_iter_, int64_t pos) {
+extern "C" RUNTIME_EXPORT uint64_t string_decode(int8_t* chunk_iter_, int64_t pos) {
   auto chunk_iter = reinterpret_cast<ChunkIter*>(chunk_iter_);
   VarlenDatum vd;
   bool is_end;
@@ -33,8 +34,8 @@ extern "C" uint64_t string_decode(int8_t* chunk_iter_, int64_t pos) {
                           (static_cast<uint64_t>(vd.length) << 48);
 }
 
-extern "C" uint64_t string_decompress(const int32_t string_id,
-                                      const int64_t string_dict_handle) {
+extern "C" RUNTIME_EXPORT uint64_t string_decompress(const int32_t string_id,
+                                                     const int64_t string_dict_handle) {
   if (string_id == NULL_INT) {
     return 0;
   }
@@ -46,8 +47,8 @@ extern "C" uint64_t string_decompress(const int32_t string_id,
          (static_cast<uint64_t>(string_bytes.second) << 48);
 }
 
-extern "C" int32_t string_compress(const int64_t ptr_and_len,
-                                   const int64_t string_dict_handle) {
+extern "C" RUNTIME_EXPORT int32_t string_compress(const int64_t ptr_and_len,
+                                                  const int64_t string_dict_handle) {
   std::string raw_str(reinterpret_cast<char*>(extract_str_ptr_noinline(ptr_and_len)),
                       extract_str_len_noinline(ptr_and_len));
   auto string_dict_proxy =
@@ -55,7 +56,8 @@ extern "C" int32_t string_compress(const int64_t ptr_and_len,
   return string_dict_proxy->getIdOfString(raw_str);
 }
 
-extern "C" int32_t lower_encoded(int32_t string_id, int64_t string_dict_proxy_address) {
+extern "C" RUNTIME_EXPORT int32_t lower_encoded(int32_t string_id,
+                                                int64_t string_dict_proxy_address) {
   StringDictionaryProxy* string_dict_proxy =
       reinterpret_cast<StringDictionaryProxy*>(string_dict_proxy_address);
   auto str = string_dict_proxy->getString(string_id);

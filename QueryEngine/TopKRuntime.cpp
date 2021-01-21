@@ -235,26 +235,26 @@ ALWAYS_INLINE DEVICE int64_t* get_bin_from_k_heap_impl(int64_t* heaps,
   }
 }
 
-#define DEF_GET_BIN_FROM_K_HEAP(key_type)                                 \
-  extern "C" NEVER_INLINE DEVICE int64_t* get_bin_from_k_heap_##key_type( \
-      int64_t* heaps,                                                     \
-      const uint32_t k,                                                   \
-      const uint32_t row_size_quad,                                       \
-      const uint32_t key_offset,                                          \
-      const bool min_heap,                                                \
-      const bool has_null,                                                \
-      const bool nulls_first,                                             \
-      const key_type null_key,                                            \
-      const key_type curr_key) {                                          \
-    return get_bin_from_k_heap_impl(heaps,                                \
-                                    k,                                    \
-                                    row_size_quad,                        \
-                                    key_offset,                           \
-                                    min_heap,                             \
-                                    has_null,                             \
-                                    nulls_first,                          \
-                                    null_key,                             \
-                                    curr_key);                            \
+#define DEF_GET_BIN_FROM_K_HEAP(key_type)                                                \
+  extern "C" RUNTIME_EXPORT NEVER_INLINE DEVICE int64_t* get_bin_from_k_heap_##key_type( \
+      int64_t* heaps,                                                                    \
+      const uint32_t k,                                                                  \
+      const uint32_t row_size_quad,                                                      \
+      const uint32_t key_offset,                                                         \
+      const bool min_heap,                                                               \
+      const bool has_null,                                                               \
+      const bool nulls_first,                                                            \
+      const key_type null_key,                                                           \
+      const key_type curr_key) {                                                         \
+    return get_bin_from_k_heap_impl(heaps,                                               \
+                                    k,                                                   \
+                                    row_size_quad,                                       \
+                                    key_offset,                                          \
+                                    min_heap,                                            \
+                                    has_null,                                            \
+                                    nulls_first,                                         \
+                                    null_key,                                            \
+                                    curr_key);                                           \
   }
 
 DEF_GET_BIN_FROM_K_HEAP(int32_t)

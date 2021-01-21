@@ -31,6 +31,7 @@
 
 #include "../CudaMgr/CudaMgr.h"
 #include "../Shared/checked_alloc.h"
+#include "../Shared/funcannotations.h"
 #include "../Utils/ChunkIter.h"
 #include "DataMgr/BufferMgr/BufferMgr.h"
 #include "Execute.h"
@@ -1710,19 +1711,19 @@ void GroupByAndAggregate::codegenEstimator(
            {bitmap, &*bitmap_size_lv, key_bytes, &*estimator_comp_bytes_lv});
 }
 
-extern "C" void agg_count_distinct(int64_t* agg, const int64_t val) {
+extern "C" RUNTIME_EXPORT void agg_count_distinct(int64_t* agg, const int64_t val) {
   reinterpret_cast<std::set<int64_t>*>(*agg)->insert(val);
 }
 
-extern "C" void agg_count_distinct_skip_val(int64_t* agg,
-                                            const int64_t val,
-                                            const int64_t skip_val) {
+extern "C" RUNTIME_EXPORT void agg_count_distinct_skip_val(int64_t* agg,
+                                                           const int64_t val,
+                                                           const int64_t skip_val) {
   if (val != skip_val) {
     agg_count_distinct(agg, val);
   }
 }
 
-extern "C" void agg_approx_median(int64_t* agg, const double val) {
+extern "C" RUNTIME_EXPORT void agg_approx_median(int64_t* agg, const double val) {
   auto* t_digest = reinterpret_cast<quantile::TDigest*>(*agg);
   t_digest->allocate();
   t_digest->add(val);
