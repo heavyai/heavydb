@@ -964,8 +964,10 @@ extern "C" NEVER_INLINE const int64_t* init_shared_mem_nop(
 extern "C" NEVER_INLINE void write_back_nop(int64_t* dest,
                                             int64_t* src,
                                             const int32_t sz) {
+#ifndef _WIN32
   // the body is not really needed, just make sure the call is not optimized away
   assert(dest);
+#endif
 }
 
 extern "C" int64_t* init_shared_mem(const int64_t* global_groups_buffer,
@@ -981,8 +983,10 @@ extern "C" NEVER_INLINE void init_group_by_buffer_gpu(
     const uint32_t agg_col_count,
     const bool keyless,
     const int8_t warp_size) {
+#ifndef _WIN32
   // the body is not really needed, just make sure the call is not optimized away
   assert(groups_buffer);
+#endif
 }
 
 extern "C" NEVER_INLINE void init_columnar_group_by_buffer_gpu(
@@ -994,8 +998,10 @@ extern "C" NEVER_INLINE void init_columnar_group_by_buffer_gpu(
     const bool keyless,
     const bool blocks_share_memory,
     const int32_t frag_idx) {
+#ifndef _WIN32
   // the body is not really needed, just make sure the call is not optimized away
   assert(groups_buffer);
+#endif
 }
 
 extern "C" NEVER_INLINE void init_group_by_buffer_impl(
@@ -1006,8 +1012,10 @@ extern "C" NEVER_INLINE void init_group_by_buffer_impl(
     const uint32_t agg_col_count,
     const bool keyless,
     const int8_t warp_size) {
+#ifndef _WIN32
   // the body is not really needed, just make sure the call is not optimized away
   assert(groups_buffer);
+#endif
 }
 
 template <typename T>
@@ -1320,9 +1328,11 @@ extern "C" NEVER_INLINE void query_stub_hoisted_literals(const int8_t** col_buff
                                                          const int64_t* join_hash_tables,
                                                          int32_t* error_code,
                                                          int32_t* total_matched) {
+#ifndef _WIN32
   assert(col_buffers || literals || num_rows || frag_row_offsets || max_matched ||
          init_agg_value || out || frag_idx || error_code || join_hash_tables ||
          total_matched);
+#endif
 }
 
 extern "C" void multifrag_query_hoisted_literals(const int8_t*** col_buffers,
@@ -1362,8 +1372,10 @@ extern "C" NEVER_INLINE void query_stub(const int8_t** col_buffers,
                                         const int64_t* join_hash_tables,
                                         int32_t* error_code,
                                         int32_t* total_matched) {
+#ifndef _WIN32
   assert(col_buffers || num_rows || frag_row_offsets || max_matched || init_agg_value ||
          out || frag_idx || error_code || join_hash_tables || total_matched);
+#endif
 }
 
 extern "C" void multifrag_query(const int8_t*** col_buffers,
