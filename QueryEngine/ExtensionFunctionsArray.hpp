@@ -23,6 +23,18 @@ DEVICE ALWAYS_INLINE Array<T> array_append_impl(const Array<T> in_arr, T val) {
 
 #endif
 
+#ifdef _WIN32
+// MSVC doesn't allow extern "C" function using template type
+// without explicit instantiation
+template struct Array<bool>;
+template struct Array<int8_t>;
+template struct Array<int16_t>;
+template struct Array<int32_t>;
+template struct Array<int64_t>;
+template struct Array<float>;
+template struct Array<double>;
+#endif
+
 EXTENSION_NOINLINE Array<int64_t> array_append(const Array<int64_t> in_arr,
                                                const int64_t val) {
 #ifndef __CUDACC__
