@@ -2686,6 +2686,15 @@ FetchResult Executor::fetchUnionChunks(
     all_frag_offsets.insert(
         all_frag_offsets.end(), frag_offsets.begin(), frag_offsets.end());
   }
+  // The hack below assumes a particular table traversal order which is not
+  // always achieved due to unordered map in the outermost loop. According
+  // to the code below we expect NULLs in even positions of all_frag_col_buffers[0]
+  // and odd positions of all_frag_col_buffers[1]. As an additional hack we
+  // swap these vectors if NULLs are not on expected positions.
+  if (all_frag_col_buffers[0].size() > 1 && all_frag_col_buffers[0][0] &&
+      !all_frag_col_buffers[0][1]) {
+    std::swap(all_frag_col_buffers[0], all_frag_col_buffers[1]);
+  }
   // UNION ALL hacks.
   VLOG(2) << "all_frag_col_buffers=" << shared::printContainer(all_frag_col_buffers);
   for (size_t i = 0; i < all_frag_col_buffers.front().size(); ++i) {
