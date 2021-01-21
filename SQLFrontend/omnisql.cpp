@@ -1275,7 +1275,7 @@ int main(int argc, char** argv) {
    * pointer with a custom free() deleter; no need to free this memory explicitly. */
 
   while (true) {
-    using LineType = std::remove_pointer<__decltype(linenoise(prompt.c_str()))>::type;
+    using LineType = std::remove_pointer<decltype(linenoise(prompt.c_str()))>::type;
     using LineTypePtr = LineType*;
 
     std::unique_ptr<LineType, std::function<void(LineTypePtr)>> smart_line(
