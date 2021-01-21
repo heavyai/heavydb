@@ -92,6 +92,9 @@ void shutdown_handler() {
 }
 
 void register_signal_handler(int signum, void (*handler)(int)) {
+#ifdef _WIN32
+  signal(signum, handler);
+#else
   struct sigaction act;
   memset(&act, 0, sizeof(act));
   if (handler != SIG_DFL && handler != SIG_IGN) {
@@ -100,6 +103,7 @@ void register_signal_handler(int signum, void (*handler)(int)) {
   }
   act.sa_handler = handler;
   sigaction(signum, &act, NULL);
+#endif
 }
 
 // Signal handler to set a global flag telling the server to exit.
@@ -127,7 +131,11 @@ void omnisci_signal_handler(int signum) {
   // because on some systems, some signals will execute their default
   // action immediately when and if the signal handler returns.
   // We would like to do some emergency cleanup before core dump.
-  if (signum == SIGQUIT || signum == SIGABRT || signum == SIGSEGV || signum == SIGFPE) {
+  if (signum == SIGABRT || signum == SIGSEGV || signum == SIGFPE
+#ifndef _WIN32
+      || signum == SIGQUIT
+#endif
+  ) {
     // Wait briefly to give heartbeat() a chance to flush the logs and
     // do any other emergency shutdown tasks.
     std::this_thread::sleep_for(std::chrono::seconds(2));
@@ -137,7 +145,11 @@ void omnisci_signal_handler(int signum) {
     // Signals are currently blocked so this new signal will be queued
     // until this signal handler returns.
     register_signal_handler(signum, SIG_DFL);
+#ifdef _WIN32
+    raise(signum);
+#else
     kill(getpid(), signum);
+#endif
     std::this_thread::sleep_for(std::chrono::seconds(5));
 
 #ifndef __APPLE__
@@ -151,13 +163,17 @@ void omnisci_signal_handler(int signum) {
 
 void register_signal_handlers() {
   register_signal_handler(SIGINT, omnisci_signal_handler);
+#ifndef _WIN32
   register_signal_handler(SIGQUIT, omnisci_signal_handler);
   register_signal_handler(SIGHUP, omnisci_signal_handler);
+#endif
   register_signal_handler(SIGTERM, omnisci_signal_handler);
   register_signal_handler(SIGSEGV, omnisci_signal_handler);
   register_signal_handler(SIGABRT, omnisci_signal_handler);
+#ifndef _WIN32
   // Thrift secure socket can cause problems with SIGPIPE
   register_signal_handler(SIGPIPE, SIG_IGN);
+#endif
 }
 
 void start_server(TThreadedServer& server, const int port) {
@@ -256,6 +272,7 @@ void run_warmup_queries(mapd::shared_ptr<DBHandler> handler,
 }
 
 void heartbeat() {
+#ifndef _WIN32
   // Block all signals for this heartbeat thread, only.
   sigset_t set;
   sigfillset(&set);
@@ -263,6 +280,7 @@ void heartbeat() {
   if (result != 0) {
     throw std::runtime_error("heartbeat() thread startup failed");
   }
+#endif
 
   // Sleep until omnisci_signal_handler or anything clears the g_running flag.
   VLOG(1) << "heartbeat thread starting";
@@ -279,7 +297,11 @@ void heartbeat() {
   }
 
   // if dumping core, try to do some quick stuff
-  if (signum == SIGQUIT || signum == SIGABRT || signum == SIGSEGV || signum == SIGFPE) {
+  if (signum == SIGABRT || signum == SIGSEGV || signum == SIGFPE
+#ifndef _WIN32
+      || signum == SIGQUIT
+#endif
+  ) {
     if (g_mapd_handler) {
       std::call_once(g_shutdown_once_flag,
                      []() { g_mapd_handler->emergency_shutdown(); });

@@ -631,7 +631,9 @@ void omnisql_signal_handler(int signal_number) {
 
 void register_signal_handler() {
   signal(SIGTERM, omnisql_signal_handler);
+#ifndef _WIN32
   signal(SIGKILL, omnisql_signal_handler);
+#endif
   signal(SIGINT, omnisql_signal_handler);
 }
 
