@@ -22,7 +22,13 @@
  **/
 
 #include <rapidjson/document.h>
+#ifndef _WIN32
 #include <termios.h>
+#else
+#include <Shlobj.h>
+#include <windows.h>
+#include "Shared/cleanup_global_namespace.h"
+#endif
 #include <boost/algorithm/string.hpp>
 #include <boost/algorithm/string/join.hpp>
 #include <boost/algorithm/string/predicate.hpp>
@@ -529,19 +535,23 @@ TDatum columnar_val_to_datum(const TColumn& col,
 
 // based on http://www.gnu.org/software/libc/manual/html_node/getpass.html
 std::string mapd_getpass() {
+#ifndef _WIN32
   struct termios origterm, tmpterm;
 
   tcgetattr(STDIN_FILENO, &origterm);
   tmpterm = origterm;
   tmpterm.c_lflag &= ~ECHO;
   tcsetattr(STDIN_FILENO, TCSAFLUSH, &tmpterm);
+#endif
 
   std::cout << "Password: ";
   std::string password;
   std::getline(std::cin, password);
   std::cout << std::endl;
 
+#ifndef _WIN32
   tcsetattr(STDIN_FILENO, TCSAFLUSH, &origterm);
+#endif
 
   return password;
 }
