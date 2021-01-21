@@ -81,12 +81,12 @@ using Catalog_Namespace::SysCatalog;
 using namespace std::string_literals;
 
 using TableDefFuncPtr = boost::function<void(TableDescriptor&,
-                                             const NameValueAssign*,
+                                             const Parser::NameValueAssign*,
                                              const std::list<ColumnDescriptor>& columns)>;
 
 using DataframeDefFuncPtr =
     boost::function<void(DataframeTableDescriptor&,
-                         const NameValueAssign*,
+                         const Parser::NameValueAssign*,
                          const std::list<ColumnDescriptor>& columns)>;
 
 namespace Parser {
