@@ -501,10 +501,6 @@ int PerfectJoinHashTable::initHashTableForDevice(
 #ifndef HAVE_CUDA
   CHECK_EQ(Data_Namespace::CPU_LEVEL, effective_memory_level);
 #endif
-  if (!device_id) {
-    hash_entry_count_ = hash_entry_info.getNormalizedHashEntryCount();
-  }
-
   int err{0};
   const int32_t hash_join_invalid_val{-1};
   if (effective_memory_level == Data_Namespace::CPU_LEVEL) {
@@ -801,11 +797,21 @@ size_t PerfectJoinHashTable::payloadBufferOff() const noexcept {
 }
 
 size_t PerfectJoinHashTable::getComponentBufferSize() const noexcept {
-  if (hash_type_ == HashType::OneToMany) {
-    return hash_entry_count_ * sizeof(int32_t);
+  if (hash_tables_for_device_.empty()) {
+    return 0;
+  }
+  auto hash_table = hash_tables_for_device_.front();
+  CHECK(hash_table);
+  if (hash_table->getLayout() == HashType::OneToMany) {
+    return hash_table->getEntryCount() * sizeof(int32_t);
   } else {
     return 0;
   }
+}
+
+HashTable* PerfectJoinHashTable::getHashTableForDevice(const size_t device_id) const {
+  CHECK_LT(device_id, hash_tables_for_device_.size());
+  return hash_tables_for_device_[device_id].get();
 }
 
 std::string PerfectJoinHashTable::toString(const ExecutorDeviceType device_type,
@@ -813,6 +819,7 @@ std::string PerfectJoinHashTable::toString(const ExecutorDeviceType device_type,
                                            bool raw) const {
   auto buffer = getJoinHashBuffer(device_type, device_id);
   auto buffer_size = getJoinHashBufferSize(device_type, device_id);
+  auto hash_table = getHashTableForDevice(device_id);
 #ifdef HAVE_CUDA
   std::unique_ptr<int8_t[]> buffer_copy;
   if (device_type == ExecutorDeviceType::GPU) {
@@ -835,7 +842,7 @@ std::string PerfectJoinHashTable::toString(const ExecutorDeviceType device_type,
                              getHashTypeString(hash_type_),
                              0,
                              0,
-                             hash_entry_count_,
+                             hash_table ? hash_table->getEntryCount() : 0,
                              ptr1,
                              ptr2,
                              ptr3,
@@ -849,6 +856,7 @@ std::set<DecodedJoinHashBufferEntry> PerfectJoinHashTable::toSet(
     const int device_id) const {
   auto buffer = getJoinHashBuffer(device_type, device_id);
   auto buffer_size = getJoinHashBufferSize(device_type, device_id);
+  auto hash_table = getHashTableForDevice(device_id);
 #ifdef HAVE_CUDA
   std::unique_ptr<int8_t[]> buffer_copy;
   if (device_type == ExecutorDeviceType::GPU) {
@@ -867,7 +875,14 @@ std::set<DecodedJoinHashBufferEntry> PerfectJoinHashTable::toSet(
   auto ptr2 = ptr1 + offsetBufferOff();
   auto ptr3 = ptr1 + countBufferOff();
   auto ptr4 = ptr1 + payloadBufferOff();
-  return HashTable::toSet(0, 0, hash_entry_count_, ptr1, ptr2, ptr3, ptr4, buffer_size);
+  return HashTable::toSet(0,
+                          0,
+                          hash_table ? hash_table->getEntryCount() : 0,
+                          ptr1,
+                          ptr2,
+                          ptr3,
+                          ptr4,
+                          buffer_size);
 }
 
 llvm::Value* PerfectJoinHashTable::codegenSlot(const CompilationOptions& co,

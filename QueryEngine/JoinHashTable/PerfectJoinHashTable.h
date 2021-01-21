@@ -146,7 +146,6 @@ class PerfectJoinHashTable : public HashJoin {
       , query_infos_(query_infos)
       , memory_level_(memory_level)
       , hash_type_(preferred_hash_type)
-      , hash_entry_count_(0)
       , col_range_(col_range)
       , executor_(executor)
       , column_cache_(column_cache)
@@ -185,12 +184,13 @@ class PerfectJoinHashTable : public HashJoin {
 
   size_t getComponentBufferSize() const noexcept override;
 
+  HashTable* getHashTableForDevice(const size_t device_id) const;
+
   std::shared_ptr<Analyzer::BinOper> qual_bin_oper_;
   std::shared_ptr<Analyzer::ColumnVar> col_var_;
   const std::vector<InputTableInfo>& query_infos_;
   const Data_Namespace::MemoryLevel memory_level_;
   HashType hash_type_;
-  size_t hash_entry_count_;
 
   std::mutex cpu_hash_table_buff_mutex_;
   ExpressionRange col_range_;
