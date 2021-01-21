@@ -672,12 +672,12 @@ void print_memory_summary(ClientContext& context, std::string memory_level) {
       tss << "            MAX            USE      ALLOCATED           FREE" << std::endl;
     }
   }
-  u_int16_t gpu_num = 0;
+  uint16_t gpu_num = 0;
   for (auto& nodeIt : memory_info) {
     int MB = 1024 * 1024;
-    u_int64_t page_count = 0;
-    u_int64_t free_page_count = 0;
-    u_int64_t used_page_count = 0;
+    uint64_t page_count = 0;
+    uint64_t free_page_count = 0;
+    uint64_t used_page_count = 0;
     for (auto& segIt : nodeIt.node_memory_data) {
       page_count += segIt.num_pages;
       if (segIt.is_free) {
