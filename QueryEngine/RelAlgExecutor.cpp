@@ -347,6 +347,24 @@ ExecutionResult RelAlgExecutor::executeRelAlgQueryNoRetry(const CompilationOptio
   // so we acquire executor lock in here to make sure that this executor holds
   // all necessary resources and at the same time protect them against other executor
   auto lock = aquire_execute_mutex(executor_);
+  ScopeGuard clearRuntimeInterruptStatus = [this, &render_info, &eo] {
+    // reset the runtime query interrupt status
+    if (!render_info &&
+        (g_enable_runtime_query_interrupt || eo.allow_runtime_query_interrupt)) {
+      mapd_shared_lock<mapd_shared_mutex> session_read_lock(
+          executor_->executor_session_mutex_);
+      std::string curSession = executor_->getCurrentQuerySession(session_read_lock);
+      session_read_lock.unlock();
+      mapd_unique_lock<mapd_shared_mutex> session_write_lock(
+          executor_->executor_session_mutex_);
+      executor_->invalidateRunningQuerySession(session_write_lock);
+      executor_->removeFromQuerySessionList(curSession, session_write_lock);
+      executor_->execute_spin_lock_.clear(std::memory_order_release);
+      session_write_lock.unlock();
+      executor_->resetInterrupt();
+      VLOG(1) << "RESET runtime query interrupt status of Executor " << this;
+    }
+  };
 
   if (!render_info &&
       (g_enable_runtime_query_interrupt || eo.allow_runtime_query_interrupt)) {
