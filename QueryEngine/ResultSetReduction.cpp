@@ -156,14 +156,14 @@ void run_reduction_code(const ReductionCode& reduction_code,
     std::lock_guard<std::mutex> compilation_lock(Executor::compilation_mutex_);
     auto ret = ReductionInterpreter::run(
         reduction_code.ir_reduce_loop.get(),
-        {ReductionInterpreter::EvalValue{.ptr = this_buff},
-         ReductionInterpreter::EvalValue{.ptr = that_buff},
-         ReductionInterpreter::EvalValue{.int_val = start_entry_index},
-         ReductionInterpreter::EvalValue{.int_val = end_entry_index},
-         ReductionInterpreter::EvalValue{.int_val = that_entry_count},
-         ReductionInterpreter::EvalValue{.ptr = this_qmd},
-         ReductionInterpreter::EvalValue{.ptr = that_qmd},
-         ReductionInterpreter::EvalValue{.ptr = serialized_varlen_buffer}});
+        {ReductionInterpreter::MakeEvalValue(this_buff),
+         ReductionInterpreter::MakeEvalValue(that_buff),
+         ReductionInterpreter::MakeEvalValue(start_entry_index),
+         ReductionInterpreter::MakeEvalValue(end_entry_index),
+         ReductionInterpreter::MakeEvalValue(that_entry_count),
+         ReductionInterpreter::MakeEvalValue(this_qmd),
+         ReductionInterpreter::MakeEvalValue(that_qmd),
+         ReductionInterpreter::MakeEvalValue(serialized_varlen_buffer)});
     err = ret.int_val;
   }
   if (err) {

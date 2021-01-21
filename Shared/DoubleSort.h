@@ -53,10 +53,10 @@ struct Value {
   // thrust::sort() copies Values, std::sort() moves Values.
 #ifdef __CUDACC__
   DEVICE Value() : ref_(false) {}
-  DEVICE Value(Value const& b)
-      : v0_{.value_ = b.ref_ ? *b.v0_.ptr_ : b.v0_.value_}
-      , v1_{.value_ = b.ref_ ? *b.v1_.ptr_ : b.v1_.value_}
-      , ref_(false) {}
+  DEVICE Value(Value const& b) : ref_(false) {
+    v0_.value_ = b.ref_ ? *b.v0_.ptr_ : b.v0_.value_;
+    v1_.value_ = b.ref_ ? *b.v1_.ptr_ : b.v1_.value_;
+  }
   DEVICE Value& operator=(Value const& b) {
     // Both branches are used by thrust::sort().
     if (ref_) {
@@ -69,10 +69,10 @@ struct Value {
     return *this;
   }
 #else
-  Value(Value&& b)
-      : v0_{.value_ = b.ref_ ? std::move(*b.v0_.ptr_) : std::move(b.v0_.value_)}
-      , v1_{.value_ = b.ref_ ? std::move(*b.v1_.ptr_) : std::move(b.v1_.value_)}
-      , ref_(false) {}
+  Value(Value&& b) : ref_(false) {
+    v0_.value_ = b.ref_ ? std::move(*b.v0_.ptr_) : std::move(b.v0_.value_);
+    v1_.value_ = b.ref_ ? std::move(*b.v1_.ptr_) : std::move(b.v1_.value_);
+  }
   Value& operator=(Value&& b) {
     if (ref_) {
       *v0_.ptr_ = b.ref_ ? std::move(*b.v0_.ptr_) : std::move(b.v0_.value_);

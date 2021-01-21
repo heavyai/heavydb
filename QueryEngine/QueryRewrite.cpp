@@ -276,8 +276,10 @@ RelAlgExecutionUnit QueryRewriter::rewriteColumnarUpdate(
         // Codegen expects a string value. The string will be
         // resolved to its ID during Constant codegen. Copy the string from the
         // original expr
-        Datum new_string_datum{.stringval = new std::string(
-                                   *original_constant_expr->get_constval().stringval)};
+        Datum datum;
+        datum.stringval =
+            new std::string(*original_constant_expr->get_constval().stringval);
+        Datum new_string_datum{datum};
 
         new_column_value =
             makeExpr<Analyzer::Constant>(column_to_update->get_type_info(),
@@ -393,7 +395,8 @@ RelAlgExecutionUnit QueryRewriter::rewriteColumnarDelete(
     throw std::runtime_error("Delete via join not yet supported for temporary tables.");
   }
 
-  const auto true_datum = Datum{.boolval = true};
+  Datum true_datum;
+  true_datum.boolval = true;
   const auto deleted_constant =
       makeExpr<Analyzer::Constant>(delete_column->get_type_info(), false, true_datum);
 
