@@ -2830,8 +2830,8 @@ TEST(Select, Strings) {
     c("SELECT COUNT(*) FROM test WHERE str LIKE '%ba%';", dt);
     c("SELECT * FROM test WHERE str LIKE '%' ORDER BY x ASC, y ASC;", dt);
     c("SELECT * FROM test WHERE str LIKE 'f%%' ORDER BY x ASC, y ASC;", dt);
-    c("SELECT * FROM test WHERE str LIKE 'f%\%' ORDER BY x ASC, y ASC;", dt);
-    c("SELECT * FROM test WHERE ss LIKE 'f%\%' ORDER BY x ASC, y ASC;", dt);
+    c("SELECT * FROM test WHERE str LIKE 'f%%' ORDER BY x ASC, y ASC;", dt);
+    c("SELECT * FROM test WHERE ss LIKE 'f%%' ORDER BY x ASC, y ASC;", dt);
     c("SELECT * FROM test WHERE str LIKE '@f%%' ESCAPE '@' ORDER BY x ASC, y ASC;", dt);
     c(R"(SELECT COUNT(*) FROM test WHERE real_str LIKE '%foo' OR real_str LIKE '%"bar"';)",
       dt);
@@ -2967,8 +2967,8 @@ TEST(Select, SharedDictionary) {
     c("SELECT COUNT(*) FROM test WHERE shared_dict LIKE '%ba%';", dt);
     c("SELECT * FROM test WHERE shared_dict LIKE '%' ORDER BY x ASC, y ASC;", dt);
     c("SELECT * FROM test WHERE shared_dict LIKE 'f%%' ORDER BY x ASC, y ASC;", dt);
-    c("SELECT * FROM test WHERE shared_dict LIKE 'f%\%' ORDER BY x ASC, y ASC;", dt);
-    c("SELECT * FROM test WHERE ss LIKE 'f%\%' ORDER BY x ASC, y ASC;", dt);
+    c("SELECT * FROM test WHERE shared_dict LIKE 'f%%' ORDER BY x ASC, y ASC;", dt);
+    c("SELECT * FROM test WHERE ss LIKE 'f%%' ORDER BY x ASC, y ASC;", dt);
     c("SELECT * FROM test WHERE shared_dict LIKE '@f%%' ESCAPE '@' ORDER BY x ASC, y "
       "ASC;",
       dt);
@@ -3143,7 +3143,7 @@ TEST(Select, StringsNoneEncoding) {
     c("SELECT * FROM test_lots_cols WHERE real_str LIKE '%' ORDER BY x0 ASC;", dt);
     c("SELECT * FROM test WHERE real_str LIKE '%' ORDER BY x ASC, y ASC;", dt);
     c("SELECT * FROM test WHERE real_str LIKE 'real_f%%' ORDER BY x ASC, y ASC;", dt);
-    c("SELECT * FROM test WHERE real_str LIKE 'real_f%\%' ORDER BY x ASC, y ASC;", dt);
+    c("SELECT * FROM test WHERE real_str LIKE 'real_f%%' ORDER BY x ASC, y ASC;", dt);
     c("SELECT * FROM test WHERE real_str LIKE 'real_@f%%' ESCAPE '@' ORDER BY x ASC, y "
       "ASC;",
       dt);
@@ -3193,7 +3193,7 @@ TEST(Select, StringsNoneEncoding) {
     SKIP_ON_AGGREGATOR(ASSERT_EQ(
         0,
         v<int64_t>(run_simple_agg(
-            "SELECT COUNT(*) FROM test WHERE real_str REGEXP 'real_f.+\%';", dt))));
+            "SELECT COUNT(*) FROM test WHERE real_str REGEXP 'real_f.+%';", dt))));
     EXPECT_THROW(
         run_multiple_agg("SELECT COUNT(*) FROM test WHERE real_str LIKE str;", dt),
         std::runtime_error);
