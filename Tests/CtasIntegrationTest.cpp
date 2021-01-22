@@ -766,7 +766,7 @@ void exportTestBody(std::string sourcePartitionScheme = ")") {
   boost::filesystem::path temp =
       boost::filesystem::temp_directory_path() / boost::filesystem::unique_path();
 
-  std::string export_file_name = temp.native() + ".csv";
+  std::string export_file_name = temp.make_preferred().string() + ".csv";
 
   // execute CTAS
   std::string export_sql = "COPY (SELECT * FROM EXPORT_SOURCE) TO '" + export_file_name +
