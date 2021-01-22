@@ -113,7 +113,9 @@ struct Iterator : public std::iterator<std::input_iterator_tag, Value<T0, T1>> {
     return *this;
   }
   // Returns a reference object by reference
-  DEVICE Value<T0, T1>& operator*() { return this_; }
+  DEVICE Value<T0, T1>& operator*() const {
+    return const_cast<Iterator<T0, T1>*>(this)->this_;
+  }
   // Required by thrust::sort().
   // Returns a reference object by value
   DEVICE Value<T0, T1> operator[](int i) const { return operator+(i).this_; }
