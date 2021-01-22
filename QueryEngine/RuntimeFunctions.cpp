@@ -338,7 +338,7 @@ extern "C" GPU_RT_STUB void agg_approximate_count_distinct_gpu(int64_t*,
 
 extern "C" NEVER_INLINE void agg_approx_median(int64_t* agg, const double val) {
   auto* t_digest = reinterpret_cast<quantile::TDigest*>(*agg);
-  t_digest->add(val);
+  quantile::digest_add(t_digest, val);
 }
 
 extern "C" ALWAYS_INLINE void agg_approx_median_skip_val(int64_t* agg,

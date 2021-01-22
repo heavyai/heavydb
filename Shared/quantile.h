@@ -28,6 +28,7 @@
 #include "DoubleSort.h"
 #include "VectorView.h"
 #include "gpu_enabled.h"
+#include "funcannotations.h"
 
 #ifndef __CUDACC__
 #include <iomanip>
@@ -785,5 +786,7 @@ DEVICE RealType TDigest<RealType, IndexType>::slope(IndexType idx1, IndexType id
 }  // namespace detail
 
 using TDigest = detail::TDigest<double, size_t>;
+
+RUNTIME_EXPORT void digest_add(TDigest* digest, double val);
 
 }  // namespace quantile
