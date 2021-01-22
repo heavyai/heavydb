@@ -643,6 +643,7 @@ int8_t QueryMemoryDescriptor::pick_target_compact_width(
     return sizeof(int64_t);
   }
   int8_t compact_width{0};
+  /*
   auto col_it = ra_exe_unit.input_col_descs.begin();
   int unnest_array_col_id{std::numeric_limits<int>::min()};
   for (const auto& groupby_expr : ra_exe_unit.groupby_exprs) {
@@ -660,13 +661,14 @@ int8_t QueryMemoryDescriptor::pick_target_compact_width(
     }
     ++col_it;
   }
+  */
   if (!compact_width &&
       (ra_exe_unit.groupby_exprs.size() != 1 || !ra_exe_unit.groupby_exprs.front())) {
     compact_width = crt_min_byte_width;
   }
   if (!compact_width) {
-    col_it = ra_exe_unit.input_col_descs.begin();
-    std::advance(col_it, ra_exe_unit.groupby_exprs.size());
+    //col_it = ra_exe_unit.input_col_descs.begin();
+    //std::advance(col_it, ra_exe_unit.groupby_exprs.size());
     for (const auto target : ra_exe_unit.target_exprs) {
       const auto& ti = target->get_type_info();
       const auto agg = dynamic_cast<const Analyzer::AggExpr*>(target);
@@ -678,16 +680,17 @@ int8_t QueryMemoryDescriptor::pick_target_compact_width(
       if (agg) {
         CHECK_EQ(kCOUNT, agg->get_aggtype());
         CHECK(!agg->get_is_distinct());
-        ++col_it;
+        //++col_it;
         continue;
       }
 
       if (is_int_and_no_bigger_than(ti, 4) ||
           (ti.is_string() && ti.get_compression() == kENCODING_DICT)) {
-        ++col_it;
+        //++col_it;
         continue;
       }
 
+      /*
       const auto uoper = dynamic_cast<Analyzer::UOper*>(target);
       if (uoper && uoper->get_optype() == kUNNEST &&
           (*col_it)->getColId() == unnest_array_col_id) {
@@ -699,6 +702,7 @@ int8_t QueryMemoryDescriptor::pick_target_compact_width(
           continue;
         }
       }
+      */
 
       compact_width = crt_min_byte_width;
       break;
@@ -709,8 +713,8 @@ int8_t QueryMemoryDescriptor::pick_target_compact_width(
     for (const auto& qi : query_infos) {
       total_tuples += qi.info.getNumTuples();
     }
-    return total_tuples <= static_cast<size_t>(std::numeric_limits<uint32_t>::max()) ||
-                   unnest_array_col_id != std::numeric_limits<int>::min()
+    return total_tuples <= static_cast<size_t>(std::numeric_limits<uint32_t>::max())
+      // || unnest_array_col_id != std::numeric_limits<int>::min()
                ? 4
                : crt_min_byte_width;
   } else {
