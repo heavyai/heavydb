@@ -48,7 +48,11 @@ SUFFIX(fixed_width_int_decode)(const int8_t* byte_stream,
 #ifdef __CUDACC__
       return -1;
 #else
+#ifdef _WIN32
+      return LLONG_MIN + 1;
+#else
       return std::numeric_limits<int64_t>::min() + 1;
+#endif
 #endif
   }
 }
@@ -74,7 +78,11 @@ SUFFIX(fixed_width_unsigned_decode)(const int8_t* byte_stream,
 #ifdef __CUDACC__
       return -1;
 #else
+#ifdef _WIN32
+      return LLONG_MIN + 1;
+#else
       return std::numeric_limits<int64_t>::min() + 1;
+#endif
 #endif
   }
 }
