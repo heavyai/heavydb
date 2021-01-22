@@ -2559,7 +2559,7 @@ TEST(Select, GroupByPushDownFilterIntoExprRange) {
         size_t(1),
         rows->rowCount());  // Sqlite does not have a boolean type, so do this for now
     c("SELECT x, COUNT(*) AS n FROM test WHERE x > 7 GROUP BY x ORDER BY x", dt);
-    c("SELECT y, COUNT(*) AS n FROM test WHERE y <= 43 GROUP BY y ORDER BY n DESC", dt);
+    c("SELECT y, COUNT(*) AS n FROM test WHERE y <= 43 GROUP BY y ORDER BY y DESC", dt);
     c("SELECT z, COUNT(*) AS n FROM test WHERE z <= 43 AND y > 10 GROUP BY z ORDER BY n "
       "DESC",
       dt);
