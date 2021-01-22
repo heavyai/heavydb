@@ -170,9 +170,15 @@ void CgenState::emitErrorCheck(llvm::Value* condition,
   ir_builder_.SetInsertPoint(check_ok);
 }
 
-llvm::Value* CgenState::intNullValue(SQLTypeInfo const& ti, size_t const nbits) {
-  auto value = ti.is_fp() ? static_cast<llvm::Value*>(inlineFpNull(ti))
-                          : static_cast<llvm::Value*>(inlineIntNull(ti));
-  return ir_builder_.CreateBitCast(castToTypeIn(value, nbits),
-                                   get_int_type(nbits, context_));
+llvm::Value* CgenState::nullValueAsDouble(SQLTypeInfo const& ti) {
+  if (ti.is_fp()) {
+    return ti.get_size() == sizeof(double)
+               ? inlineFpNull(ti)
+               : ir_builder_.CreateFPCast(
+                     castToTypeIn(inlineFpNull(ti), 8 * sizeof(double)),
+                     llvm::Type::getDoubleTy(context_));
+  } else {
+    return ir_builder_.CreateSIToFP(castToTypeIn(inlineIntNull(ti), 8 * sizeof(double)),
+                                    llvm::Type::getDoubleTy(context_));
+  }
 }

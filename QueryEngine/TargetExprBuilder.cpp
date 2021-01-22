@@ -357,7 +357,7 @@ void TargetExprCodegen::codegenAggregate(
       if (need_skip_null && !is_agg_domain_range_equivalent(target_info.agg_kind)) {
         target_lv = group_by_and_agg->convertNullIfAny(arg_type, target_info, target_lv);
       } else if (is_fp_arg) {
-        target_lv = executor->castToFP(target_lv);
+        target_lv = executor->castToFP(target_lv, arg_type, target_info.sql_type);
       }
       if (!dynamic_cast<const Analyzer::AggExpr*>(target_expr) || arg_expr) {
         target_lv =
@@ -526,7 +526,8 @@ void TargetExprCodegenBuilder::operator()(const Analyzer::Expr* target_expr,
   auto target_info = get_target_info(target_expr, g_bigint_count);
   auto arg_expr = agg_arg(target_expr);
   if (arg_expr) {
-    if (target_info.agg_kind == kSINGLE_VALUE || target_info.agg_kind == kSAMPLE) {
+    if (target_info.agg_kind == kSINGLE_VALUE || target_info.agg_kind == kSAMPLE ||
+        target_info.agg_kind == kAPPROX_MEDIAN) {
       target_info.skip_null_val = false;
     } else if (query_mem_desc.getQueryDescriptionType() ==
                    QueryDescriptionType::NonGroupedAggregate &&

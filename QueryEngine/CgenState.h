@@ -315,7 +315,9 @@ struct CgenState {
 
   void emitErrorCheck(llvm::Value* condition, llvm::Value* errorCode, std::string label);
 
-  llvm::Value* intNullValue(SQLTypeInfo const&, size_t const nbits);
+  // Convert null sentinel of given type into a double by value (not by bits).
+  // Example: for type SMALLINT, return -32768.0 as a double value.
+  llvm::Value* nullValueAsDouble(SQLTypeInfo const&);
 
   llvm::Module* module_;
   llvm::Function* row_func_;

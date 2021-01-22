@@ -869,7 +869,9 @@ class Executor {
                                          std::stack<llvm::BasicBlock*>&,
                                          const bool thread_mem_shared);
 
-  llvm::Value* castToFP(llvm::Value* val);
+  llvm::Value* castToFP(llvm::Value*,
+                        SQLTypeInfo const& from_ti,
+                        SQLTypeInfo const& to_ti);
   llvm::Value* castToIntPtrTyIn(llvm::Value* val, const size_t bit_width);
 
   std::tuple<RelAlgExecutionUnit, PlanState::DeletedColumnsMap> addDeletedColumn(

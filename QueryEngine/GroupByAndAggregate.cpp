@@ -1485,7 +1485,7 @@ llvm::Value* GroupByAndAggregate::convertNullIfAny(const SQLTypeInfo& arg_type,
     if (agg_type.is_fp()) {
       agg_null = executor_->cgen_state_->inlineFpNull(agg_type);
       need_conversion = true;
-      target_to_cast = executor_->castToFP(target);
+      target_to_cast = executor_->castToFP(target, arg_type, agg_type);
     } else {
       agg_null = executor_->cgen_state_->inlineIntNull(agg_type);
       if ((static_cast<llvm::ConstantInt*>(arg_null)->getBitWidth() !=
@@ -1800,17 +1800,17 @@ void GroupByAndAggregate::codegenApproxMedian(const size_t target_idx,
     throw QueryMustRunOnCpu();
   }
   AUTOMATIC_IR_METADATA(executor_->cgen_state_.get());
-  auto const arg_ti =
-      static_cast<const Analyzer::AggExpr*>(target_expr)->get_arg()->get_type_info();
-  if (!arg_ti.is_fp()) {
-    agg_args.back() = executor_->castToFP(agg_args.back());
-  }
   constexpr size_t MAXLEN = std::string_view("agg_approx_median_skip_val_gpu").size();
   char agg_fname[MAXLEN + 1] = "agg_approx_median";
   auto const agg_info = get_target_info(target_expr, g_bigint_count);
-  if (agg_info.skip_null_val) {
+  auto const arg_ti =
+      static_cast<const Analyzer::AggExpr*>(target_expr)->get_arg()->get_type_info();
+  if (!arg_ti.is_fp()) {
+    agg_args.back() = executor_->castToFP(agg_args.back(), arg_ti, agg_info.sql_type);
+  }
+  if (!arg_ti.get_notnull()) {
     strcat(agg_fname, "_skip_val");
-    auto* skip_val = executor_->cgen_state_->intNullValue(SQLTypeInfo(kDOUBLE), 64);
+    auto* skip_val = executor_->cgen_state_->nullValueAsDouble(arg_ti);
     agg_args.push_back(skip_val);
   }
   emitCall(agg_fname, agg_args);

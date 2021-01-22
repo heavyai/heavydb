@@ -3192,25 +3192,31 @@ int64_t Executor::deviceCycles(int milliseconds) const {
   return static_cast<int64_t>(dev_props.front().clockKhz) * milliseconds;
 }
 
-llvm::Value* Executor::castToFP(llvm::Value* val) {
+llvm::Value* Executor::castToFP(llvm::Value* value,
+                                SQLTypeInfo const& from_ti,
+                                SQLTypeInfo const& to_ti) {
   AUTOMATIC_IR_METADATA(cgen_state_.get());
-  if (!val->getType()->isIntegerTy()) {
-    return val;
+  if (value->getType()->isIntegerTy() && from_ti.is_number() && to_ti.is_fp() &&
+      (!from_ti.is_fp() || from_ti.get_size() != to_ti.get_size())) {
+    llvm::Type* fp_type{nullptr};
+    switch (to_ti.get_size()) {
+      case 4:
+        fp_type = llvm::Type::getFloatTy(cgen_state_->context_);
+        break;
+      case 8:
+        fp_type = llvm::Type::getDoubleTy(cgen_state_->context_);
+        break;
+      default:
+        LOG(FATAL) << "Unsupported FP size: " << to_ti.get_size();
+    }
+    value = cgen_state_->ir_builder_.CreateSIToFP(value, fp_type);
+    if (from_ti.get_scale()) {
+      value = cgen_state_->ir_builder_.CreateFDiv(
+          value,
+          llvm::ConstantFP::get(value->getType(), exp_to_scale(from_ti.get_scale())));
+    }
   }
-
-  auto val_width = static_cast<llvm::IntegerType*>(val->getType())->getBitWidth();
-  llvm::Type* dest_ty{nullptr};
-  switch (val_width) {
-    case 32:
-      dest_ty = llvm::Type::getFloatTy(cgen_state_->context_);
-      break;
-    case 64:
-      dest_ty = llvm::Type::getDoubleTy(cgen_state_->context_);
-      break;
-    default:
-      LOG(FATAL) << "Unsupported FP width: " << std::to_string(val_width);
-  }
-  return cgen_state_->ir_builder_.CreateSIToFP(val, dest_ty);
+  return value;
 }
 
 llvm::Value* Executor::castToIntPtrTyIn(llvm::Value* val, const size_t bitWidth) {

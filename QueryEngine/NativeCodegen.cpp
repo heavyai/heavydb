@@ -788,7 +788,7 @@ declare void @agg_count_distinct_bitmap_gpu(i64*, i64, i64, i64, i64, i64, i64);
 declare void @agg_count_distinct_bitmap_skip_val_gpu(i64*, i64, i64, i64, i64, i64, i64, i64);
 declare void @agg_approximate_count_distinct_gpu(i64*, i64, i32, i64, i64);
 declare void @agg_approx_median(i64*, double);
-declare void @agg_approx_median_skip_val(i64*, double, i64);
+declare void @agg_approx_median_skip_val(i64*, double, double);
 declare void @record_error_code(i32, i32*);
 declare i32 @get_error_code(i32*);
 declare i1 @dynamic_watchdog();
