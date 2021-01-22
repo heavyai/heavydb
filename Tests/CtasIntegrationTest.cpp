@@ -331,11 +331,17 @@ class DateTimeColumnDescriptor : public TestColumnDescriptor {
   }
 
   std::string getValueAsString(int row) {
-    std::tm tm_struct;
-    time_t t = offset + (scale * row);
-    gmtime_r(&t, &tm_struct);
     char buf[128];
+    time_t t = offset + (scale * row);
+#ifdef _WIN32
+    // On Windows gmtime is thread safe.
+    auto* tm_struct = gmtime(&t);
+    strftime(buf, 128, format.c_str(), tm_struct);
+#else
+    std::tm tm_struct;
+    gmtime_r(&t, &tm_struct);
     strftime(buf, 128, format.c_str(), &tm_struct);
+#endif
     return std::string(buf);
   }
 };
