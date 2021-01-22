@@ -785,28 +785,31 @@ void CommandLineOptions::validate() {
     const auto lock_file = boost::filesystem::path(base_path) / "omnisci_server_pid.lck";
     auto pid = std::to_string(getpid());
 
-    int pid_fd = open(lock_file.c_str(), O_RDWR | O_CREAT, 0644);
+    int pid_fd = open(lock_file.string().c_str(), O_RDWR | O_CREAT, 0644);
     if (pid_fd == -1) {
-      auto err = std::string("Failed to open PID file ") + lock_file.c_str() + ". " +
-                 strerror(errno) + ".";
+      auto err = std::string("Failed to open PID file ") + lock_file.string().c_str() +
+                 ". " + strerror(errno) + ".";
       throw std::runtime_error(err);
     }
+// TODO: support lock on Windows
+#ifndef _WIN32
     if (lockf(pid_fd, F_TLOCK, 0) == -1) {
-      close(pid_fd);
+      ::close(pid_fd);
       auto err = std::string("Another OmniSci Server is using data directory ") +
                  base_path + ".";
       throw std::runtime_error(err);
     }
+#endif
     if (ftruncate(pid_fd, 0) == -1) {
-      close(pid_fd);
-      auto err = std::string("Failed to truncate PID file ") + lock_file.c_str() + ". " +
-                 strerror(errno) + ".";
+      ::close(pid_fd);
+      auto err = std::string("Failed to truncate PID file ") +
+                 lock_file.string().c_str() + ". " + strerror(errno) + ".";
       throw std::runtime_error(err);
     }
     if (write(pid_fd, pid.c_str(), pid.length()) == -1) {
-      close(pid_fd);
-      auto err = std::string("Failed to write PID file ") + lock_file.c_str() + ". " +
-                 strerror(errno) + ".";
+      ::close(pid_fd);
+      auto err = std::string("Failed to write PID file ") + lock_file.string().c_str() +
+                 ". " + strerror(errno) + ".";
       throw std::runtime_error(err);
     }
   }
