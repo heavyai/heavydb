@@ -1873,8 +1873,8 @@ const std::shared_ptr<TestColumnDescriptor> STRING_NONE_BASE =
       std::make_shared<ArrayColumnDescriptor>(definition, name, 3);    \
   INSTANTIATE_DATA_INGESTION_TEST(name##_FIXED_LEN_ARRAY)
 
-BOOLEAN_COLUMN_TEST(BOOLEAN, int64_t, "BOOLEAN", kBOOLEAN, NULL_TINYINT);
-ARRAY_COLUMN_TEST(BOOLEAN, "BOOLEAN");
+BOOLEAN_COLUMN_TEST(Boolean, int64_t, "BOOLEAN", kBOOLEAN, NULL_TINYINT);
+ARRAY_COLUMN_TEST(Boolean, "BOOLEAN");
 
 NUMBER_COLUMN_TEST(TINYINT, int64_t, "TINYINT", kTINYINT, NULL_TINYINT);
 ARRAY_COLUMN_TEST(TINYINT, "TINYINT");
@@ -1898,11 +1898,11 @@ NUMBER_COLUMN_TEST(BIGINT_16, int64_t, "BIGINT ENCODING FIXED(16)", kBIGINT, NUL
 NUMBER_COLUMN_TEST(BIGINT_32, int64_t, "BIGINT ENCODING FIXED(32)", kBIGINT, NULL_BIGINT);
 ARRAY_COLUMN_TEST(BIGINT, "BIGINT");
 
-NUMBER_COLUMN_TEST(FLOAT, float, "FLOAT", kFLOAT, NULL_FLOAT);
-ARRAY_COLUMN_TEST(FLOAT, "FLOAT");
+NUMBER_COLUMN_TEST(Float, float, "FLOAT", kFLOAT, NULL_FLOAT);
+ARRAY_COLUMN_TEST(Float, "FLOAT");
 
-NUMBER_COLUMN_TEST(DOUBLE, double, "DOUBLE", kDOUBLE, NULL_DOUBLE);
-ARRAY_COLUMN_TEST(DOUBLE, "DOUBLE");
+NUMBER_COLUMN_TEST(DoubleTest, double, "DOUBLE", kDOUBLE, NULL_DOUBLE);
+ARRAY_COLUMN_TEST(DoubleTest, "DOUBLE");
 
 NUMBER_COLUMN_TEST(NUMERIC, int64_t, "NUMERIC(18)", kNUMERIC, NULL_BIGINT);
 NUMBER_COLUMN_TEST(NUMERIC_32,
@@ -1917,7 +1917,7 @@ NUMBER_COLUMN_TEST(NUMERIC_16,
                    NULL_BIGINT);
 ARRAY_COLUMN_TEST(NUMERIC, "NUMERIC(18)");
 
-NUMBER_COLUMN_TEST(DECIMAL, int64_t, "DECIMAL(18,9)", kDECIMAL, NULL_BIGINT);
+NUMBER_COLUMN_TEST(Decimal, int64_t, "DECIMAL(18,9)", kDECIMAL, NULL_BIGINT);
 NUMBER_COLUMN_TEST(DECIMAL_32,
                    int64_t,
                    "DECIMAL(9,2) ENCODING FIXED(32)",
@@ -1928,14 +1928,14 @@ NUMBER_COLUMN_TEST(DECIMAL_16,
                    "DECIMAL(4,2) ENCODING FIXED(16)",
                    kDECIMAL,
                    NULL_BIGINT);
-ARRAY_COLUMN_TEST(DECIMAL, "DECIMAL(18,9)");
+ARRAY_COLUMN_TEST(Decimal, "DECIMAL(18,9)");
 
-STRING_COLUMN_TEST(CHAR, "CHAR(100)", kCHAR);
+STRING_COLUMN_TEST(Char, "CHAR(100)", kCHAR);
 STRING_COLUMN_TEST(CHAR_DICT, "CHAR(100) ENCODING DICT", kCHAR);
 STRING_COLUMN_TEST(CHAR_DICT_8, "CHAR(100) ENCODING DICT(8)", kCHAR);
 STRING_COLUMN_TEST(CHAR_DICT_16, "CHAR(100) ENCODING DICT(16)", kCHAR);
 STRING_COLUMN_TEST(CHAR_NONE, "CHAR(100) ENCODING NONE", kCHAR);
-ARRAY_COLUMN_TEST(CHAR, "CHAR(100)");
+ARRAY_COLUMN_TEST(Char, "CHAR(100)");
 
 STRING_COLUMN_TEST(VARCHAR, "VARCHAR(100)", kCHAR);
 STRING_COLUMN_TEST(VARCHAR_DICT, "VARCHAR(100) ENCODING DICT", kCHAR);
@@ -1955,9 +1955,9 @@ TIME_COLUMN_TEST(TIME, "TIME", kTIME, "%T", 0, 1);
 TIME_COLUMN_TEST(TIME_32, "TIME ENCODING FIXED(32)", kTIME, "%T", 0, 1);
 ARRAY_COLUMN_TEST(TIME, "TIME");
 
-TIME_COLUMN_TEST(DATE, "DATE", kDATE, "%F", 0, 160 * 60 * 100);
+TIME_COLUMN_TEST(Date, "DATE", kDATE, "%F", 0, 160 * 60 * 100);
 TIME_COLUMN_TEST(DATE_16, "DATE ENCODING FIXED(16)", kDATE, "%F", 0, 160 * 60 * 100);
-ARRAY_COLUMN_TEST(DATE, "DATE");
+ARRAY_COLUMN_TEST(Date, "DATE");
 
 TIME_COLUMN_TEST(TIMESTAMP, "TIMESTAMP", kTIMESTAMP, "%F %T", 0, 160 * 60 * 100);
 TIME_COLUMN_TEST(TIMESTAMP_32,
@@ -1986,9 +1986,9 @@ const std::shared_ptr<TestColumnDescriptor> GEO_MULTI_POLYGON =
 INSTANTIATE_DATA_INGESTION_TEST(GEO_MULTI_POLYGON);
 
 const std::vector<std::shared_ptr<TestColumnDescriptor>> ALL = {STRING_NONE_BASE,
-                                                                BOOLEAN,
-                                                                BOOLEAN_ARRAY,
-                                                                BOOLEAN_FIXED_LEN_ARRAY,
+                                                                Boolean,
+                                                                Boolean_ARRAY,
+                                                                Boolean_FIXED_LEN_ARRAY,
                                                                 TINYINT,
                                                                 TINYINT_ARRAY,
                                                                 TINYINT_FIXED_LEN_ARRAY,
@@ -2007,12 +2007,12 @@ const std::vector<std::shared_ptr<TestColumnDescriptor>> ALL = {STRING_NONE_BASE
                                                                 BIGINT,
                                                                 BIGINT_ARRAY,
                                                                 BIGINT_FIXED_LEN_ARRAY,
-                                                                FLOAT,
-                                                                FLOAT_ARRAY,
-                                                                FLOAT_FIXED_LEN_ARRAY,
-                                                                DOUBLE,
-                                                                DOUBLE_ARRAY,
-                                                                DOUBLE_FIXED_LEN_ARRAY,
+                                                                Float,
+                                                                Float_ARRAY,
+                                                                Float_FIXED_LEN_ARRAY,
+                                                                DoubleTest,
+                                                                DoubleTest_ARRAY,
+                                                                DoubleTest_FIXED_LEN_ARRAY,
                                                                 NUMERIC_16,
                                                                 NUMERIC_32,
                                                                 NUMERIC,
@@ -2020,9 +2020,9 @@ const std::vector<std::shared_ptr<TestColumnDescriptor>> ALL = {STRING_NONE_BASE
                                                                 NUMERIC_FIXED_LEN_ARRAY,
                                                                 DECIMAL_16,
                                                                 DECIMAL_32,
-                                                                DECIMAL,
-                                                                DECIMAL_ARRAY,
-                                                                DECIMAL_FIXED_LEN_ARRAY,
+                                                                Decimal,
+                                                                Decimal_ARRAY,
+                                                                Decimal_FIXED_LEN_ARRAY,
                                                                 TEXT_NONE,
                                                                 TEXT_DICT,
                                                                 TEXT_DICT_8,
@@ -2035,9 +2035,9 @@ const std::vector<std::shared_ptr<TestColumnDescriptor>> ALL = {STRING_NONE_BASE
                                                                 TIME_ARRAY,
                                                                 TIME_FIXED_LEN_ARRAY,
                                                                 DATE_16,
-                                                                DATE,
-                                                                DATE_ARRAY,
-                                                                DATE_FIXED_LEN_ARRAY,
+                                                                Date,
+                                                                Date_ARRAY,
+                                                                Date_FIXED_LEN_ARRAY,
                                                                 TIMESTAMP_32,
                                                                 TIMESTAMP,
                                                                 TIMESTAMP_ARRAY,
@@ -2056,8 +2056,8 @@ INSTANTIATE_TEST_SUITE_P(
     Update,
     testing::Values(std::vector<std::shared_ptr<TestColumnDescriptor>>{
         STRING_NONE_BASE,
-        BOOLEAN_ARRAY,
-        BOOLEAN_FIXED_LEN_ARRAY,
+        Boolean_ARRAY,
+        Boolean_FIXED_LEN_ARRAY,
         TINYINT_ARRAY,
         TINYINT_FIXED_LEN_ARRAY,
         SMALLINT_ARRAY,
@@ -2073,8 +2073,8 @@ INSTANTIATE_TEST_SUITE_P(
         TEXT_FIXED_LEN_ARRAY,
         TIME_ARRAY,
         TIME_FIXED_LEN_ARRAY,
-        DATE_ARRAY,
-        DATE_FIXED_LEN_ARRAY,
+        Date_ARRAY,
+        Date_FIXED_LEN_ARRAY,
         TIMESTAMP_ARRAY,
         TIMESTAMP_FIXED_LEN_ARRAY
 
@@ -2082,7 +2082,7 @@ INSTANTIATE_TEST_SUITE_P(
 
 TEST(Itas, InsertIntoTempTableFromSelect) {
   std::vector<std::shared_ptr<TestColumnDescriptor>> columnDescriptors = {
-      BOOLEAN,
+      Boolean,
       TINYINT,
       SMALLINT,
       INTEGER,
@@ -2090,7 +2090,7 @@ TEST(Itas, InsertIntoTempTableFromSelect) {
       NUMERIC,
       TEXT,
       TIME,
-      DATE,
+      Date,
       TIMESTAMP,
   };
 

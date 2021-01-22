@@ -1025,8 +1025,8 @@ const std::shared_ptr<TestColumnDescriptor> STRING_NONE_BASE =
       std::make_shared<ArrayColumnDescriptor>(definition, name, 3);    \
   INSTANTIATE_DATA_INGESTION_TEST(name##_FIXED_LEN_ARRAY)
 
-BOOLEAN_COLUMN_TEST(BOOLEAN, int64_t, "BOOLEAN", kBOOLEAN, NULL_TINYINT);
-ARRAY_COLUMN_TEST(BOOLEAN, "BOOLEAN");
+BOOLEAN_COLUMN_TEST(Boolean, int64_t, "BOOLEAN", kBOOLEAN, NULL_TINYINT);
+ARRAY_COLUMN_TEST(Boolean, "BOOLEAN");
 
 NUMBER_COLUMN_TEST(TINYINT, int64_t, "TINYINT", kTINYINT, NULL_TINYINT);
 ARRAY_COLUMN_TEST(TINYINT, "TINYINT");
@@ -1050,11 +1050,11 @@ NUMBER_COLUMN_TEST(BIGINT_16, int64_t, "BIGINT ENCODING FIXED(16)", kBIGINT, NUL
 NUMBER_COLUMN_TEST(BIGINT_32, int64_t, "BIGINT ENCODING FIXED(32)", kBIGINT, NULL_BIGINT);
 ARRAY_COLUMN_TEST(BIGINT, "BIGINT");
 
-NUMBER_COLUMN_TEST(FLOAT, float, "FLOAT", kFLOAT, NULL_FLOAT);
-ARRAY_COLUMN_TEST(FLOAT, "FLOAT");
+NUMBER_COLUMN_TEST(Float, float, "FLOAT", kFLOAT, NULL_FLOAT);
+ARRAY_COLUMN_TEST(Float, "FLOAT");
 
-NUMBER_COLUMN_TEST(DOUBLE, double, "DOUBLE", kDOUBLE, NULL_DOUBLE);
-ARRAY_COLUMN_TEST(DOUBLE, "DOUBLE");
+NUMBER_COLUMN_TEST(Double, double, "DOUBLE", kDOUBLE, NULL_DOUBLE);
+ARRAY_COLUMN_TEST(Double, "DOUBLE");
 
 NUMBER_COLUMN_TEST(NUMERIC, double, "NUMERIC(18)", kNUMERIC, NULL_DOUBLE);
 NUMBER_COLUMN_TEST(NUMERIC_32,
@@ -1069,7 +1069,7 @@ NUMBER_COLUMN_TEST(NUMERIC_16,
                    NULL_DOUBLE);
 ARRAY_COLUMN_TEST(NUMERIC, "NUMERIC(18)");
 
-NUMBER_COLUMN_TEST(DECIMAL, double, "DECIMAL(18,9)", kDECIMAL, NULL_DOUBLE);
+NUMBER_COLUMN_TEST(Decimal, double, "DECIMAL(18,9)", kDECIMAL, NULL_DOUBLE);
 NUMBER_COLUMN_TEST(DECIMAL_32,
                    double,
                    "DECIMAL(9,2) ENCODING FIXED(32)",
@@ -1080,14 +1080,14 @@ NUMBER_COLUMN_TEST(DECIMAL_16,
                    "DECIMAL(4,2) ENCODING FIXED(16)",
                    kDECIMAL,
                    NULL_DOUBLE);
-ARRAY_COLUMN_TEST(DECIMAL, "DECIMAL(18,9)");
+ARRAY_COLUMN_TEST(Decimal, "DECIMAL(18,9)");
 
-STRING_COLUMN_TEST(CHAR, "CHAR(100)", kCHAR);
+STRING_COLUMN_TEST(Char, "CHAR(100)", kCHAR);
 STRING_COLUMN_TEST(CHAR_DICT, "CHAR(100) ENCODING DICT", kCHAR);
 STRING_COLUMN_TEST(CHAR_DICT_8, "CHAR(100) ENCODING DICT(8)", kCHAR);
 STRING_COLUMN_TEST(CHAR_DICT_16, "CHAR(100) ENCODING DICT(16)", kCHAR);
 STRING_COLUMN_TEST(CHAR_NONE, "CHAR(100) ENCODING NONE", kCHAR);
-ARRAY_COLUMN_TEST(CHAR, "CHAR(100)");
+ARRAY_COLUMN_TEST(Char, "CHAR(100)");
 
 STRING_COLUMN_TEST(VARCHAR, "VARCHAR(100)", kCHAR);
 STRING_COLUMN_TEST(VARCHAR_DICT, "VARCHAR(100) ENCODING DICT", kCHAR);
@@ -1140,16 +1140,16 @@ INSTANTIATE_DATA_INGESTION_TEST(GEO_MULTI_POLYGON);
 INSTANTIATE_TEST_SUITE_P(
     MIXED_NO_GEO,
     Ctas,
-    testing::Values(std::vector<std::shared_ptr<TestColumnDescriptor>>{BOOLEAN,
+    testing::Values(std::vector<std::shared_ptr<TestColumnDescriptor>>{Boolean,
                                                                        TINYINT,
                                                                        SMALLINT,
                                                                        INTEGER,
                                                                        BIGINT,
-                                                                       FLOAT,
-                                                                       DOUBLE,
+                                                                       Float,
+                                                                       Double,
                                                                        NUMERIC,
-                                                                       DECIMAL,
-                                                                       CHAR,
+                                                                       Decimal,
+                                                                       Char,
                                                                        VARCHAR,
                                                                        TEXT,
                                                                        TIME,
@@ -1159,16 +1159,16 @@ INSTANTIATE_TEST_SUITE_P(
 INSTANTIATE_TEST_SUITE_P(
     MIXED_NO_GEO,
     Itas,
-    testing::Values(std::vector<std::shared_ptr<TestColumnDescriptor>>{BOOLEAN,
+    testing::Values(std::vector<std::shared_ptr<TestColumnDescriptor>>{Boolean,
                                                                        TINYINT,
                                                                        SMALLINT,
                                                                        INTEGER,
                                                                        BIGINT,
-                                                                       FLOAT,
-                                                                       DOUBLE,
+                                                                       Float,
+                                                                       Double,
                                                                        NUMERIC,
-                                                                       DECIMAL,
-                                                                       CHAR,
+                                                                       Decimal,
+                                                                       Char,
                                                                        VARCHAR,
                                                                        TEXT,
                                                                        TIME,
@@ -1180,7 +1180,7 @@ INSTANTIATE_TEST_SUITE_P(
     Update,
     testing::Values(std::vector<std::shared_ptr<TestColumnDescriptor>>{TEXT,
                                                                        INTEGER,
-                                                                       DOUBLE,
+                                                                       Double,
                                                                        GEO_POINT,
                                                                        GEO_LINESTRING,
                                                                        GEO_POLYGON,
