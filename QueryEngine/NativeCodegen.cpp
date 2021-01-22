@@ -1340,7 +1340,11 @@ bool CodeGenerator::alwaysCloneRuntimeFunction(const llvm::Function* func) {
          func->getName() == "fixed_width_double_decode" ||
          func->getName() == "fixed_width_float_decode" ||
          func->getName() == "fixed_width_small_date_decode" ||
-         func->getName() == "record_error_code" || func->getName() == "get_error_code";
+         func->getName() == "record_error_code" || func->getName() == "get_error_code" ||
+         func->getName() == "pos_start_impl" || func->getName() == "pos_step_impl" ||
+         func->getName() == "group_buff_idx_impl" ||
+         func->getName() == "init_shared_mem" ||
+         func->getName() == "init_shared_mem_nop" || func->getName() == "write_back_nop";
 }
 
 llvm::Module* read_template_module(llvm::LLVMContext& context) {
