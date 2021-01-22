@@ -367,7 +367,7 @@ class SQLiteComparator {
                 int fs = 0;
                 if (*end_str == '.') {
                   end_str++;
-                  uint frac_num;
+                  unsigned int frac_num;
                   int ntotal;
                   sscanf(end_str, "%d%n", &frac_num, &ntotal);
                   fs = parse_fractional_seconds(frac_num, ntotal, omnisci_ti);
