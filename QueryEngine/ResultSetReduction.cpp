@@ -593,10 +593,10 @@ void ResultSetStorage::rewriteAggregateBufferOffsets(
 namespace {
 
 #ifdef _MSC_VER
-#define mapd_cas(address, compare, val)                                 \
-  InterlockedCompareExchange(reinterpret_cast<volatile long*>(address), \
-                             static_cast<long>(val),                    \
-                             static_cast<long>(compare))
+#define mapd_cas(address, compare, val)                                      \
+  InterlockedCompareExchange64(reinterpret_cast<volatile int64_t*>(address), \
+                               static_cast<int64_t>(val),                    \
+                               static_cast<int64_t>(compare))
 #else
 #define mapd_cas(address, compare, val) __sync_val_compare_and_swap(address, compare, val)
 #endif
@@ -652,15 +652,42 @@ GroupValueInfo get_group_value_columnar_reduction(
 }
 
 #ifdef _MSC_VER
-#define cas_cst(ptr, expected, desired)                                      \
-  (InterlockedCompareExchangePointer(reinterpret_cast<void* volatile*>(ptr), \
-                                     reinterpret_cast<void*>(&desired),      \
-                                     expected) == expected)
-#define store_cst(ptr, val)                                          \
-  InterlockedExchangePointer(reinterpret_cast<void* volatile*>(ptr), \
-                             reinterpret_cast<void*>(val))
-#define load_cst(ptr) \
-  InterlockedCompareExchange(reinterpret_cast<volatile long*>(ptr), 0, 0)
+template <typename T>
+bool cas_cst(T* ptr, T* expected, T desired) {
+  if constexpr (sizeof(T) == 4) {
+    return InterlockedCompareExchange(reinterpret_cast<volatile long*>(ptr),
+                                      static_cast<long>(desired),
+                                      static_cast<long>(*expected)) ==
+           static_cast<long>(*expected);
+  } else if constexpr (sizeof(T) == 8) {
+    return InterlockedCompareExchange64(
+               reinterpret_cast<volatile int64_t*>(ptr), desired, *expected) == *expected;
+  } else {
+    LOG(FATAL) << "Unsupported atomic operation";
+  }
+}
+
+template <typename T>
+void store_cst(T* ptr, T val) {
+  if constexpr (sizeof(T) == 4) {
+    InterlockedExchange(reinterpret_cast<volatile long*>(ptr), static_cast<long>(val));
+  } else if constexpr (sizeof(T) == 8) {
+    InterlockedExchange64(reinterpret_cast<volatile int64_t*>(ptr), val);
+  } else {
+    LOG(FATAL) << "Unsupported atomic operation";
+  }
+}
+
+template <typename T>
+T load_cst(T* ptr) {
+  if constexpr (sizeof(T) == 4) {
+    return InterlockedCompareExchange(reinterpret_cast<volatile long*>(ptr), 0, 0);
+  } else if constexpr (sizeof(T) == 8) {
+    return InterlockedCompareExchange64(reinterpret_cast<volatile int64_t*>(ptr), 0, 0);
+  } else {
+    LOG(FATAL) << "Unsupported atomic operation";
+  }
+}
 #else
 #define cas_cst(ptr, expected, desired) \
   __atomic_compare_exchange_n(          \
@@ -711,9 +738,11 @@ GroupValueInfo get_matching_group_value_reduction(
   return {groups_buffer + off + slot_off_quad, false};
 }
 
+#ifndef _MSC_VER
 #undef load_cst
 #undef store_cst
 #undef cas_cst
+#endif
 
 inline GroupValueInfo get_matching_group_value_reduction(
     int64_t* groups_buffer,
