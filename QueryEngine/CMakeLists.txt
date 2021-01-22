@@ -1,6 +1,10 @@
 set(EXECUTABLE_OUTPUT_PATH ${CMAKE_CURRENT_BINARY_DIR})
 
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -D__STDC_LIMIT_MACROS -D__STDC_CONSTANT_MACROS -Wall -Wno-attributes")
+if(MSVC)
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -D__STDC_LIMIT_MACROS -D__STDC_CONSTANT_MACROS /permissive")
+else()
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -D__STDC_LIMIT_MACROS -D__STDC_CONSTANT_MACROS -Wall -Wno-attributes")
+endif()
 set_source_files_properties(RuntimeFunctionsCodegenWithIncludes.cpp PROPERTIES COMPILE_FLAGS -O0)
 set(query_engine_source_files
     AggregatedColRange.cpp
@@ -245,9 +249,13 @@ set(QUERY_ENGINE_LIBS
   Utils
   Logger
   Shared
-  sqlite3
   ${Arrow_LIBRARIES}
 )
+if (MSVC)
+    list(APPEND QUERY_ENGINE_LIBS ${SQLite3_LIBRARIES})
+else()
+    list(APPEND QUERY_ENGINE_LIBS sqlite3)
+endif()
 
 list(APPEND QUERY_ENGINE_LIBS ${clang_libs})
 list(APPEND QUERY_ENGINE_LIBS ${llvm_libs} ${ZLIB_LIBRARIES})

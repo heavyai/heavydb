@@ -8,5 +8,8 @@ target_link_libraries(omnisql mapd_thrift Logger Shared ThriftClient linenoise $
 if(ENABLE_KRB5)
   target_link_libraries(omnisql krb5_gss)
 endif()
+if(MSVC)
+  target_link_libraries(omnisql ${Folly_LIBRARIES})
+endif()
 
 install(TARGETS omnisql DESTINATION bin COMPONENT "exe")
