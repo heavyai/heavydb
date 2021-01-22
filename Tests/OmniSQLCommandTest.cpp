@@ -864,7 +864,11 @@ TEST(OmniSQLTest, ExportDashboardCommandTest_SimpleDashSimpleFilename) {
   static const char* test_filename = "export_unlikely_file_to_over_be_opened_1234.txt";
   std::string fake_input = std::string("\\export_dashboard simpledash ") + test_filename;
 
+#ifdef _WIN32
+  auto result = mkdir(test_filename);
+#else
   auto result = mkdir(test_filename, 0700);
+#endif
   EXPECT_EQ(result, 0);
 
   std::ostringstream test_capture_stream;
@@ -878,7 +882,7 @@ TEST(OmniSQLTest, ExportDashboardCommandTest_SimpleDashSimpleFilename) {
                                test_capture_stream)
           .is_resolved();
 
-  result = rmdir(test_filename);
+  result = ::rmdir(test_filename);
   EXPECT_EQ(result, 0);
 
   EXPECT_TRUE(resolution);
