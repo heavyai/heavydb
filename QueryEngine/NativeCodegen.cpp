@@ -215,7 +215,7 @@ void scan_function_calls(llvm::Function& F,
         } else {
           if (defined.find(F2name) == defined.end()) {
             defined.emplace(F2name);
-            scan_function_calls(*F2, defined, undefined, ignored);
+            scan_function_calls<T>(*F2, defined, undefined, ignored);
           }
         }
       }
