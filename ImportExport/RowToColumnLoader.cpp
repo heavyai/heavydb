@@ -296,7 +296,7 @@ bool RowToColumnLoader::convert_string_to_column(
     std::vector<TStringValue> row,
     const import_export::CopyParams& copy_params) {
   // create datum and push data to column structure from row data
-  uint curr_col = 0;
+  uint64_t curr_col = 0;
   for (TStringValue ts : row) {
     try {
       switch (column_type_info_[curr_col].get_type()) {
