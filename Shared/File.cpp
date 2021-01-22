@@ -227,6 +227,23 @@ void renameForDelete(const std::string directoryName) {
                                              std::to_string(ms.count()) + "_DELETE_ME");
     boost::filesystem::rename(directoryPath, newDirectoryPath, ec);
 
+#ifdef _WIN32
+    // On Windows we sometimes fail to rename a directory with System: 5 error
+    // code (access denied). An attempt to stop in debugger and look for opened
+    // handles for some of directory content shows no opened handles and actually
+    // allows renaming to execute successfully. It's not clear why, but a short
+    // pause allows to rename directory successfully. Until reasons are known,
+    // use this retry loop as a workaround.
+    int tries = 10;
+    while (ec.value() != boost::system::errc::success && tries) {
+      LOG(ERROR) << "Failed to rename directory " << directoryPath << " error was " << ec
+                 << " (" << tries << " attempts left)";
+      std::this_thread::sleep_for(std::chrono::milliseconds(100 / tries));
+      tries--;
+      boost::filesystem::rename(directoryPath, newDirectoryPath, ec);
+    }
+#endif
+
     if (ec.value() == boost::system::errc::success) {
       std::thread th([newDirectoryPath]() {
         boost::system::error_code ec;
