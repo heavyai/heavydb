@@ -443,6 +443,13 @@ ExecutionEngineWrapper CodeGenerator::generateNativeCPUCode(
     eb.setOptLevel(llvm::CodeGenOpt::None);
   }
 
+#ifdef _WIN32
+  // TODO: workaround for data layout mismatch crash for now
+  auto target_machine = eb.selectTarget();
+  CHECK(target_machine);
+  module->setDataLayout(target_machine->createDataLayout());
+#endif
+
   ExecutionEngineWrapper execution_engine(eb.create(), co);
   CHECK(execution_engine.get());
   LOG(ASM) << assemblyForCPU(execution_engine, module);
