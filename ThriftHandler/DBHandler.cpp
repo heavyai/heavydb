@@ -74,10 +74,10 @@
 
 #include <fcntl.h>
 #include <picosha2.h>
-#include <sys/time.h>
+//#include <sys/time.h>
 #include <sys/types.h>
-#include <sys/wait.h>
-#include <unistd.h>
+//#include <sys/wait.h>
+//#include <unistd.h>
 #include <algorithm>
 #include <boost/algorithm/string.hpp>
 #include <boost/filesystem.hpp>
